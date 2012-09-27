@@ -322,6 +322,13 @@ Blank lines and lines beginning with ``#'' are ignored.
    session.  Otherwise, the missing mailbox is treated as empty while
    in use by the client.*/
 
+{ "dkim_domain", NULL, STRING }
+/* The domain to be reported as doing DKIM signing. */
+
+{ "dkim_selector", NULL, STRING }
+/* Name of the selector subdividing the domain namespace.  This
+   specifies the actual key used for DKIM signing within the domain. */
+
 { "duplicate_db", "skiplist", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql")}
 /* The cyrusdb backend to use for the duplicate delivery suppression
    and sieve. */

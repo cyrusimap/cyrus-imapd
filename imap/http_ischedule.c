@@ -434,8 +434,8 @@ int isched_send(struct sched_param *sparam, icalcomponent *ical,
 	if (dkim_lib &&
 	    (dkim = dkim_sign(dkim_lib, NULL /* id */, NULL,
 			      (dkim_sigkey_t) buf_cstring(&privkey),
-			      (const u_char *) "cyrus",
-			      (const u_char *) "example.com",
+			      (const u_char *) config_getstring(IMAPOPT_DKIM_SELECTOR),
+			      (const u_char *) config_getstring(IMAPOPT_DKIM_DOMAIN),
 			      DKIM_CANON_RELAXED, DKIM_CANON_SIMPLE,
 			      DKIM_SIGN_RSASHA256, -1 /* entire body */,
 			      &stat))) {
