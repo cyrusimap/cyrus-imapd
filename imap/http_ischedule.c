@@ -88,7 +88,7 @@ static int isched_recv(struct transaction_t *txn);
 
 const struct namespace_t namespace_ischedule = {
   URL_NS_ISCHEDULE, "/ischedule", ISCHED_WELLKNOWN_URI, 0 /* auth */,
-    (ALLOW_READ | ALLOW_POST), HTTP_ISCHEDULE,
+    (ALLOW_READ | ALLOW_POST | ALLOW_ISCHEDULE),
 #ifdef WITH_DKIM
     isched_init, NULL, NULL, isched_shutdown,
 #else

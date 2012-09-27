@@ -116,7 +116,8 @@ enum {
     ALLOW_DAV =		(1<<2),	/* WebDAV specific methods/features */
     ALLOW_CAL =		(1<<3),	/* CalDAV specific methods/features */
     ALLOW_CARD =	(1<<4),	/* CardDAV specific methods/features */
-    ALLOW_POST =	(1<<5)	/* Post to a URL */
+    ALLOW_POST =	(1<<5),	/* Post to a URL */
+    ALLOW_ISCHEDULE =	(1<<6)	/* iSchedule specific methods/features */
 };
 
 #define MAX_QUERY_LEN	100
@@ -215,8 +216,7 @@ enum {
     HTTP_CHUNKED =	(1<<3),	/* Response payload will be chunked */
     HTTP_NOCACHE =	(1<<4),	/* Response should NOT be cached */
     HTTP_NOTRANSFORM =	(1<<5),	/* Response should NOT be transformed */
-    HTTP_RANGES =	(1<<6),	/* Accept range requests for resource */
-    HTTP_ISCHEDULE =	(1<<7),	/* iSchedule response */
+    HTTP_RANGES =	(1<<6)	/* Accept range requests for resource */
 };
 
 typedef int (*method_proc_t)(struct transaction_t *txn);
@@ -239,7 +239,6 @@ struct namespace_t {
     const char *well_known;	/* Any /.well-known/ URI */
     unsigned need_auth;		/* Do we need to auth for this namespace? */
     unsigned long allow;	/* Bitmask of allowed features/methods */
-    unsigned long flags;	/* Bitmask of txn flags */
     void (*init)(struct buf *serverinfo);
     void (*auth)(const char *userid);
     void (*reset)(void);

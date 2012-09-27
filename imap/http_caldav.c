@@ -143,7 +143,7 @@ int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
 /* Namespace for CalDAV collections */
 const struct namespace_t namespace_calendar = {
     URL_NS_CALENDAR, "/calendars", "/.well-known/caldav", 1 /* auth */,
-    (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DAV | ALLOW_CAL), 0,
+    (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DAV | ALLOW_CAL),
     &my_caldav_init, &my_caldav_auth, my_caldav_reset, &my_caldav_shutdown,
     { 
 	{ &meth_acl,		0		},	/* ACL		*/
@@ -166,7 +166,7 @@ const struct namespace_t namespace_calendar = {
 /* Namespace for WebDAV principals */
 const struct namespace_t namespace_principal = {
     URL_NS_PRINCIPAL, "/principals", NULL, 1 /* auth */,
-    (ALLOW_DAV | ALLOW_CAL | ALLOW_CARD), 0,
+    (ALLOW_DAV | ALLOW_CAL | ALLOW_CARD),
     NULL, NULL, NULL, NULL,
     {
 	{ NULL,			0		},	/* ACL		*/
@@ -3804,10 +3804,10 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
 	org_authstate = auth_newstate(sparam.userid);
 
     /* Start construction of our schedule-response */
-    if (!(root = init_xml_response("schedule-response",
-				   (txn->flags & HTTP_ISCHEDULE) ? NS_ISCHED :
-				   NS_CALDAV,
-				   NULL, ns))) {
+    if (!(root =
+	  init_xml_response("schedule-response",
+			    (txn->req_tgt.allow & ALLOW_ISCHEDULE) ? NS_ISCHED :
+			    NS_CALDAV, NULL, ns))) {
 	ret = HTTP_SERVER_ERROR;
 	txn->error.desc = "Unable to create XML response\r\n";
 	goto done;
@@ -3842,7 +3842,7 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
 
 	resp = xmlNewChild(root, NULL, BAD_CAST "response", NULL);
 	recip = xmlNewChild(resp, NULL, BAD_CAST "recipient", NULL);
-	if (txn->flags & HTTP_ISCHEDULE) {
+	if (txn->req_tgt.allow & ALLOW_ISCHEDULE) {
 	    xmlNodeAddContent(recip, BAD_CAST attendee);
 	}
 	else {

@@ -105,7 +105,7 @@ static void fetch_part(struct transaction_t *txn, struct body *body,
 
 /* Namespace for RSS feeds of mailboxes */
 const struct namespace_t namespace_rss = {
-    URL_NS_RSS, "/rss", NULL, 1 /* auth */, ALLOW_READ, 0,
+    URL_NS_RSS, "/rss", NULL, 1 /* auth */, ALLOW_READ,
     NULL, NULL, NULL, NULL,
     {
 	{ NULL,			0		},	/* ACL		*/

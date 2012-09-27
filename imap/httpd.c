@@ -250,7 +250,7 @@ const char *http_methods[] = {
 
 /* Namespace to fetch static content from filesystem */
 const struct namespace_t namespace_default = {
-    URL_NS_DEFAULT, "", NULL, 0 /* no auth */, ALLOW_READ, 0,
+    URL_NS_DEFAULT, "", NULL, 0 /* no auth */, ALLOW_READ,
     NULL, NULL, NULL, NULL,
     {
 	{ NULL,			0		},	/* ACL		*/
@@ -1087,7 +1087,6 @@ static void cmdloop(void)
 	    if ((namespace = namespaces[i])) {
 		txn.req_tgt.namespace = namespace->id;
 		txn.req_tgt.allow = namespace->allow;
-		txn.flags |= namespace->flags;
 	    } else {
 		/* XXX  Should never get here */
 		ret = HTTP_SERVER_ERROR;
@@ -1589,9 +1588,6 @@ void response_header(long code, struct transaction_t *txn)
 		    (code == HTTP_UPGRADE) ? ", Upgrade" : "");
     }
 
-    if (txn->flags & HTTP_ISCHEDULE) {
-	prot_printf(httpd_out, "iSchedule-Version: 1.0\r\n");
-    }
     if (txn->flags & (HTTP_NOCACHE | HTTP_NOTRANSFORM)) {
 	/* Construct Cache-Control header */
 	const char *sep = "";
@@ -1635,6 +1631,9 @@ void response_header(long code, struct transaction_t *txn)
 		    txn->flags & HTTP_RANGES ? "bytes" : "none");
     }
 
+    if (txn->req_tgt.allow & ALLOW_ISCHEDULE) {
+	prot_printf(httpd_out, "iSchedule-Version: 1.0\r\n");
+    }
     if (txn->req_tgt.allow & ALLOW_DAV) {
 	/* Construct DAV header(s) based on namespace of request URL */
 	prot_printf(httpd_out, "DAV: 1, 3");
