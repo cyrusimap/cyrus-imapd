@@ -2544,7 +2544,7 @@ EXPORTED int index_convmultisort(struct index_state *state,
     ptrarray_init(&sr.folders);
     construct_hash_table(&sr.folders_by_name, 128, 0);
     bx = search_begin_search(state->mailbox, /*single*/0,
-			     index_multi_search_hit, &sr, /*verbose*/3);
+			     index_multi_search_hit, &sr, /*verbose*/0);
     if (!bx) {
 	r = IMAP_INTERNAL;
 	goto out;
