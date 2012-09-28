@@ -176,6 +176,7 @@ static int indexd_setup_config(indexd_t *id)
 	"    binlog_path = $sphinxdir/binlog\n"
 	"    compat_sphinxql_magics = 0\n"
 	"    workers = threads\n"
+	"    max_matches = " SPHINX_MAX_MATCHES "\n"
 	"}\n";
     char *sphinx_config = NULL;
     int fd = -1;

@@ -420,7 +420,9 @@ static int end_search(search_builder_t *bx)
 
     buf_appendcstr(&bb->query, "')");
     // get sphinx to sort by most recent date first
-    buf_appendcstr(&bb->query, " ORDER BY "COL_CYRUSID" DESC LIMIT 1000000000");
+    buf_appendcstr(&bb->query, " ORDER BY "COL_CYRUSID" DESC "
+			       " LIMIT " SPHINX_MAX_MATCHES
+			       " OPTION max_matches=" SPHINX_MAX_MATCHES);
     buf_cstring(&bb->query);
 
     if (bb->verbose)
