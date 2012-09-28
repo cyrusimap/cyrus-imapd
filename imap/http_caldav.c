@@ -1760,9 +1760,6 @@ int meth_propfind(struct transaction_t *txn)
     /* Make sure its a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED;
 
-    /* In case namespace didn't enforce auth - Needed for Evolution */
-    if (!httpd_userid) return HTTP_UNAUTHORIZED;
-
     /* Parse the path */
     if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 

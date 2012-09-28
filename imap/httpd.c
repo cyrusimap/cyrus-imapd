@@ -2469,8 +2469,10 @@ int meth_options(struct transaction_t *txn)
 int meth_propfind_root(struct transaction_t *txn)
 {
 #ifdef WITH_CALDAV
-    /* Apple iCal checks "/" */
+    /* Apple iCal and Evolution both check "/" */
     if (!strcmp(txn->req_tgt.path, "/")) {
+	if (!httpd_userid) return HTTP_UNAUTHORIZED;
+
 	txn->req_tgt.allow |= ALLOW_DAV;
 	return meth_propfind(txn);
     }
