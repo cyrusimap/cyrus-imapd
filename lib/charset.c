@@ -1880,7 +1880,7 @@ EXPORTED int charset_searchfile(const char *substr, comp_pat *pat,
 
     /* implement the loop here so we can check on the search each time */
     for (i = 0; i < len; i++) {
-	convert_putc(input, msg_base[i]);
+	convert_putc(input, (unsigned char)msg_base[i]);
 	if (search_havematch(tosearch)) break;
     }
 
