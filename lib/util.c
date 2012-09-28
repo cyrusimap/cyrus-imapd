@@ -608,9 +608,8 @@ void buf_appendcstr(struct buf *buf, const char *str)
 
 void buf_appendbit32(struct buf *buf, bit32 num)
 {
-    char item[4];
-    *((bit32 *)item) = htonl(num);
-    buf_appendmap(buf, item, 4);
+    bit32 nbit32 = htonl(num);
+    buf_appendmap(buf, (const char *) &nbit32, sizeof(bit32));
 }
 
 void buf_appendmap(struct buf *buf, const char *base, int len)
