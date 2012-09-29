@@ -3763,7 +3763,7 @@ static int caladdress_lookup(const char *addr, struct sched_param *param)
 }
 
 
-/* Send and iMIP request for attendees in 'ical' */
+/* Send an iMIP request for attendees in 'ical' */
 static int imip_send(icalcomponent *ical)
 {
     icalcomponent *comp;
