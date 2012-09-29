@@ -63,6 +63,8 @@
 #include <libical/ical.h>
 #include <libxml/tree.h>
 #include <libxml/uri.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 #include "acl.h"
 #include "append.h"
@@ -81,6 +83,7 @@
 #include "message_guid.h"
 #include "proxy.h"
 #include "rfc822date.h"
+#include "smtpclient.h"
 #include "spool.h"
 #include "stristr.h"
 #include "tok.h"
@@ -3699,6 +3702,7 @@ static int caladdress_lookup(const char *addr, struct sched_param *param)
 {
     char *p;
     int islocal = 1, found = 1;
+    static char userid[MAX_MAILBOX_BUFFER];
 
     memset(param, 0, sizeof(struct sched_param));
 
@@ -3708,6 +3712,9 @@ static int caladdress_lookup(const char *addr, struct sched_param *param)
     if (!strncmp(addr, "mailto:", 7)) p += 7;
 
     /* XXX  Do LDAP/DB/socket lookup to see if user is local */
+    /* XXX  Hack until real lookup stuff is written */
+    strlcpy(userid, p, sizeof(userid));
+    if ((p = strchr(userid, '@'))) *p++ = '\0';
 
     if (islocal) {
 	/* User is in a local domain */
@@ -3716,15 +3723,7 @@ static int caladdress_lookup(const char *addr, struct sched_param *param)
 	char mailboxname[MAX_MAILBOX_BUFFER];
 
 	if (!found) return HTTP_NOT_FOUND;
-	else {
-	    /* XXX  Hack until real lookup stuff is written */
-	    static char userid[MAX_MAILBOX_BUFFER];
-
-	    strlcpy(userid, p, sizeof(userid));
-	    if ((p = strchr(userid, '@'))) *p = '\0';
-
-	    param->userid = userid;
-	}
+	else param->userid = userid;
 
 	/* Lookup user's cal-home-set to see if its on this server */
 	if (!calendarprefix) {
@@ -3764,14 +3763,226 @@ static int caladdress_lookup(const char *addr, struct sched_param *param)
 }
 
 
+/* Send and iMIP request for attendees in 'ical' */
+static int imip_send(icalcomponent *ical)
+{
+    icalcomponent *comp;
+    icalproperty *prop;
+    icalproperty_method meth;
+    icalcomponent_kind kind;
+    const char *argv[8], *organizer, *subject;
+    FILE *sm;
+    pid_t pid;
+    int r;
+    time_t t = time(NULL);
+    char datestr[80];
+    static unsigned send_count = 0;
+
+    meth = icalcomponent_get_method(ical);
+    comp = icalcomponent_get_first_real_component(ical);
+    kind = icalcomponent_isa(comp);
+    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    organizer = icalproperty_get_organizer(prop) + 7;
+
+    argv[0] = "sendmail";
+    argv[1] = "-f";
+    argv[2] = organizer;
+    argv[3] = "-i";
+    argv[4] = "-N";
+    argv[5] = "failure,delay";
+    argv[6] = "-t";
+    argv[7] = NULL;
+    pid = open_sendmail(argv, &sm);
+
+    if (sm == NULL) return HTTP_UNAVAILABLE;
+
+    /* Create iMIP message */
+    fprintf(sm, "From: %s\r\n", organizer);
+
+    for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+	 prop;
+	 prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
+	fprintf(sm, "To: %s\r\n", icalproperty_get_attendee(prop) + 7);
+    }
+
+    subject = icalcomponent_get_summary(comp);
+    if (!subject) {
+	fprintf(sm, "Subject: %s %s\r\n", icalcomponent_kind_to_string(kind),
+		icalproperty_method_to_string(meth));
+    }
+    else fprintf(sm, "Subject: %s\r\n", subject);
+
+    rfc822date_gen(datestr, sizeof(datestr), t);
+    fprintf(sm, "Date: %s\r\n", datestr);
+
+    fprintf(sm, "Message-ID: <cmu-httpd-%u-%ld-%u@%s>\r\n",
+	    getpid(), t, send_count++, config_servername);
+
+    fprintf(sm, "Content-Type: text/calendar; charset=utf-8");
+    fprintf(sm, "; method=%s; component=%s \r\n",
+	    icalproperty_method_to_string(meth),
+	    icalcomponent_kind_to_string(kind));
+
+    fputs("Content-Disposition: inline\r\n", sm);
+
+    fputs("MIME-Version: 1.0\r\n", sm);
+    fputs("\r\n", sm);
+
+    fputs(icalcomponent_as_ical_string(ical), sm);
+
+    fclose(sm);
+
+    while (waitpid(pid, &r, 0) < 0);
+
+    return r;
+}
+
+
+/* Add a <response> XML element for 'recipient' to 'root' */
+static xmlNodePtr xml_add_schedresponse(xmlNodePtr root, xmlNsPtr dav_ns,
+					xmlChar *recipient, xmlChar *status)
+{
+    xmlNodePtr resp, recip;
+
+    resp = xmlNewChild(root, NULL, BAD_CAST "response", NULL);
+    recip = xmlNewChild(resp, NULL, BAD_CAST "recipient", NULL);
+
+    if (dav_ns) xmlNewChild(recip, dav_ns, BAD_CAST "href", recipient);
+    else xmlNodeAddContent(recip, recipient);
+
+    if (status)
+	xmlNewChild(resp, NULL, BAD_CAST "request-status", status);
+
+    return resp;
+}
+
+
+#define REQSTAT_PENDING		"1.0;Pending"
+#define REQSTAT_SENT		"1.1;Sent"
+#define REQSTAT_DELIVERED	"1.2;Delivered"
+#define REQSTAT_SUCCESS		"2.0;Success"
+#define REQSTAT_NOUSER		"3.7;Invalid calendar user"
+#define REQSTAT_NOPRIVS		"3.8;Noauthority"
+#define REQSTAT_TEMPFAIL	"5.1;Service unavailable"
+#define REQSTAT_PERMFAIL	"5.2;Invalid calendar service"
+#define REQSTAT_REJECTED	"5.3;No scheduling support for user"
+
+struct remote_rock {
+    struct transaction_t *txn;
+    icalcomponent *ical;
+    xmlNodePtr root;
+    xmlNsPtr *ns;
+};
+
+/* Send an iTIP busytime request to remote attendees via iMIP or iSchedule */
+static void busytime_query_remote(char *server __attribute__((unused)),
+				  void *data, void *rock)
+{
+    struct sched_param *remote = (struct sched_param *) data;
+    struct remote_rock *rrock = (struct remote_rock *) rock;
+    icalcomponent *comp;
+    struct proplist *list;
+    xmlNodePtr resp;
+    const char *status = NULL;
+    int r;
+
+    comp = icalcomponent_get_first_real_component(rrock->ical);
+
+    /* Add the attendees to the iTIP request */
+    for (list = remote->props; list; list = list->next) {
+	icalcomponent_add_property(comp, list->prop);
+    }
+
+    if (remote->flags == SCHEDTYPE_REMOTE) {
+	/* Use iMIP */
+
+	r = imip_send(rrock->ical);
+
+	if (!r) status = REQSTAT_SENT;
+	else status = REQSTAT_TEMPFAIL;
+    }
+    else {
+	/* Use iSchedule */
+	xmlNodePtr xml;
+
+	r = isched_send(remote, rrock->ical, &xml);
+	if (r) status = REQSTAT_TEMPFAIL;
+	else {
+	    xmlNodePtr cur;
+
+	    /* Process each response element */
+	    for (cur = xmlFirstElementChild(xml); cur;
+		 cur = xmlNextElementSibling(cur)) {
+		xmlNodePtr node;
+		xmlChar *recip, *status;
+
+		node = xmlFirstElementChild(cur);   /* recipient */
+		recip = xmlNodeGetContent(node);
+
+		node = xmlNextElementSibling(node); /* request-status */
+		status = xmlNodeGetContent(node);
+
+		resp =
+		    xml_add_schedresponse(rrock->root,
+					  !(rrock->txn->req_tgt.allow & ALLOW_ISCHEDULE) ?
+					  rrock->ns[NS_DAV] : NULL,
+					  recip, status);
+
+		xmlFree(status);
+		xmlFree(recip);
+
+		node = xmlNextElementSibling(node); /* calendar-data? */
+		if (node &&
+		    !xmlStrcmp(node->name, BAD_CAST "calendar-data")) {
+		    xmlChar *content = xmlNodeGetContent(node);
+		    xmlNodePtr cdata =
+			xmlNewTextChild(resp, NULL,
+					BAD_CAST "calendar-data", NULL);
+		    xmlAddChild(cdata,
+				xmlNewCDataBlock(rrock->root->doc,
+						 content,
+						 xmlStrlen(content)));
+		    xmlFree(content);
+
+		    /* iCal data in resp SHOULD NOT be transformed */
+		    rrock->txn->flags |= HTTP_NOTRANSFORM;
+		}
+	    }
+
+	    xmlFreeDoc(xml->doc);
+	}
+    }
+
+    /* Report request-status (if necesary)
+     * Remove the attendees from the iTIP request and hash bucket
+     */
+    for (list = remote->props; list; list = list->next) {
+	if (status) {
+	    const char *attendee = icalproperty_get_attendee(list->prop);
+	    xml_add_schedresponse(rrock->root,
+				  !(rrock->txn->req_tgt.allow & ALLOW_ISCHEDULE) ?
+				  rrock->ns[NS_DAV] : NULL,
+				  BAD_CAST attendee,
+				  BAD_CAST status);
+	}
+
+	icalcomponent_remove_property(comp, list->prop);
+	icalproperty_free(list->prop);
+    }
+
+    if (remote->server) free(remote->server);
+}
+
+
 /* Perform a Busy Time query based on given VFREEBUSY component */
+/* NOTE: This function is destructive of 'ical' */
 int busytime_query(struct transaction_t *txn, icalcomponent *ical)
 {
     int ret = 0;
     static const char *calendarprefix = NULL;
     icalcomponent *comp;
     char mailboxname[MAX_MAILBOX_BUFFER];
-    icalproperty *prop = NULL;
+    icalproperty *prop = NULL, *next;
     const char *uid = NULL, *organizer = NULL;
     struct sched_param sparam;
     struct auth_state *org_authstate = NULL;
@@ -3779,6 +3990,8 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
     xmlNsPtr ns[NUM_NAMESPACE];
     struct propfind_ctx fctx;
     struct calquery_filter filter;
+    struct hash_table remote_table;
+    struct sched_param *remote = NULL;
 
     if (!calendarprefix) {
 	calendarprefix = config_getstring(IMAPOPT_CALENDARPREFIX);
@@ -3807,13 +4020,13 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
 	goto done;
     }
 
+    /* Populate our filter and propfind context for local attendees */
     memset(&filter, 0, sizeof(struct calquery_filter));
     filter.comp = CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY;
     filter.start = icalcomponent_get_dtstart(comp);
     filter.end = icalcomponent_get_dtend(comp);
     filter.check_transp = 1;
 
-    /* Populate our propfind context */
     memset(&fctx, 0, sizeof(struct propfind_ctx));
     fctx.req_tgt = &txn->req_tgt;
     fctx.depth = 2;
@@ -3826,36 +4039,80 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
     fctx.ret = &ret;
     fctx.fetcheddata = 0;
 
+    /* Create hash table for any remote attendee servers */
+    construct_hash_table(&remote_table, 10, 1);
+
+    /* Process each attendee */
     for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
 	 prop;
-	 prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
+	 prop = next) {
 	const char *attendee;
-	xmlNodePtr resp, recip;
+	int r;
 
+	next = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY);
+
+	/* Remove each attendee so we can add in only those
+	   that reside on a given remote server later */
+	icalcomponent_remove_property(comp, prop);
+
+	/* Is attendee remote or local? */
 	attendee = icalproperty_get_attendee(prop);
+	r = caladdress_lookup(attendee, &sparam);
 
-	resp = xmlNewChild(root, NULL, BAD_CAST "response", NULL);
-	recip = xmlNewChild(resp, NULL, BAD_CAST "recipient", NULL);
-	if (txn->req_tgt.allow & ALLOW_ISCHEDULE) {
-	    xmlNodeAddContent(recip, BAD_CAST attendee);
+	/* Don't allow scheduling of remote users via an iSchedule request */
+	if ((sparam.flags & SCHEDTYPE_REMOTE) &&
+	    (txn->req_tgt.allow & ALLOW_ISCHEDULE)) {
+	    r = HTTP_FORBIDDEN;
+	}
+
+	if (r) {
+	    xml_add_schedresponse(root,
+				  !(txn->req_tgt.allow & ALLOW_ISCHEDULE) ?
+				  ns[NS_DAV] : NULL,
+				  BAD_CAST attendee, BAD_CAST REQSTAT_NOUSER);
+	}
+	else if (sparam.flags) {
+	    /* Remote attendee */
+	    struct proplist *newprop;
+	    const char *key;
+
+	    if (sparam.flags == SCHEDTYPE_REMOTE) {
+		/* iMIP - collect attendees under empty key (no server) */
+		key = "";
+	    }
+	    else {
+		/* iSchedule - collect attendees by server */
+		key = sparam.server;
+	    }
+
+	    remote = hash_lookup(key, &remote_table);
+	    if (!remote) {
+		/* New remote - add it to the hash table */
+		remote = xzmalloc(sizeof(struct sched_param));
+		if (sparam.server) remote->server = xstrdup(sparam.server);
+		remote->port = sparam.port;
+		remote->flags = sparam.flags;
+		hash_insert(key, remote, &remote_table);
+	    }
+	    newprop = xmalloc(sizeof(struct proplist));
+	    newprop->prop = prop;
+	    newprop->next = remote->props;
+	    remote->props = newprop;
 	}
 	else {
-	    xmlNewChild(recip, ns[NS_DAV], BAD_CAST "href", BAD_CAST attendee);
-	}
-
-	if (caladdress_lookup(attendee, &sparam)) {
-	    xmlNewChild(resp, NULL, BAD_CAST "request-status",
-			BAD_CAST "3.7;Invalid calendar user");
-	    continue;
-	}
-
-	/* Is user remote or local? */
-	if (!sparam.flags) {
 	    /* Local attendee on this server */
+	    xmlNodePtr resp;
 	    const char *userid = sparam.userid;
 	    struct mboxlist_entry mbentry;
-	    int r, rights;
+	    int rights;
 	    icalcomponent *busy = NULL;
+
+	    resp =
+		xml_add_schedresponse(root,
+				      !(txn->req_tgt.allow & ALLOW_ISCHEDULE) ?
+				      ns[NS_DAV] : NULL,
+				      BAD_CAST attendee, NULL);
+				 
 
 	    /* Check ACL of ORGANIZER on attendee's Scheduling Inbox */
 	    snprintf(mailboxname, sizeof(mailboxname),
@@ -3865,7 +4122,7 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
 		syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
 		       mailboxname, error_message(r));
 		xmlNewChild(resp, NULL, BAD_CAST "request-status",
-			    BAD_CAST "5.3;No scheduling support for user");
+			    BAD_CAST REQSTAT_REJECTED);
 		continue;
 	    }
 
@@ -3873,7 +4130,7 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
 		mbentry.acl ? cyrus_acl_myrights(org_authstate, mbentry.acl) : 0;
 	    if (!(rights & DACL_SCHED)) {
 		xmlNewChild(resp, NULL, BAD_CAST "request-status",
-			    BAD_CAST "3.8;No authority");
+			    BAD_CAST REQSTAT_NOPRIVS);
 		continue;
 	    }
 
@@ -3895,88 +4152,30 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
 		icalcomponent_free(busy);
 
 		xmlNewChild(resp, NULL, BAD_CAST "request-status",
-			    BAD_CAST "2.0;Success");
+			    BAD_CAST REQSTAT_SUCCESS);
+
 		cdata = xmlNewTextChild(resp, NULL,
 					BAD_CAST "calendar-data", NULL);
 
 		xmlAddChild(cdata,
-			    xmlNewCDataBlock(root->doc,
-					     BAD_CAST fb_str, strlen(fb_str)));
+			    xmlNewCDataBlock(root->doc, BAD_CAST fb_str,
+					     strlen(fb_str)));
 
 		/* iCalendar data in response should not be transformed */
 		txn->flags |= HTTP_NOTRANSFORM;
 	    }
 	    else {
 		xmlNewChild(resp, NULL, BAD_CAST "request-status",
-			    BAD_CAST "3.7;Invalid calendar user");
-	    }
-	}
-	else {
-	    /* Remote attendee - send request elsewhere */
-	    if (sparam.flags == SCHEDTYPE_REMOTE) {
-		/* Use iMIP */
-		syslog(LOG_INFO, "Use iMIP");
-	    }
-	    else {
-		/* Use iSchedule */
-		int r;
-		icalcomponent *copy;
-		xmlNodePtr xml;
-
-		/* Clone a working copy of the iCal object */
-		copy = icalcomponent_new_clone(ical);
-
-		r = isched_send(&sparam, copy, &xml);
-		if (!r) {
-		    xmlNodePtr cur, node;
-		    xmlChar *content;
-
-		    /* Process each response element */
-		    for (cur = xmlFirstElementChild(xml); cur;
-			 cur = xmlNextElementSibling(cur)) {
-			int match;
-
-			node = xmlFirstElementChild(cur);   /* recipient */
-			content = xmlNodeGetContent(node);
-			match = !xmlStrcmp(content, BAD_CAST attendee);
-			xmlFree(content);
-			if (!match) continue;
-
-			node = xmlNextElementSibling(node); /* request-status */
-			content = xmlNodeGetContent(node);
-			xmlNewChild(resp, NULL, BAD_CAST "request-status",
-				    content);
-			xmlFree(content);
-
-			node = xmlNextElementSibling(node); /* calendar-data? */
-			if (node &&
-			    !xmlStrcmp(node->name, BAD_CAST "calendar-data")) {
-			    xmlNodePtr cdata =
-				xmlNewTextChild(resp, NULL,
-						BAD_CAST "calendar-data", NULL);
-			    content = xmlNodeGetContent(node);
-			    xmlAddChild(cdata,
-					xmlNewCDataBlock(root->doc,
-							 content,
-							 xmlStrlen(content)));
-			    xmlFree(content);
-
-			    /* iCal data in resp SHOULD NOT be transformed */
-			    txn->flags |= HTTP_NOTRANSFORM;
-			}
-		    }
-
-		    xmlFreeDoc(xml->doc);
-		}
-		else if (r == HTTP_UNAVAILABLE) {
-		    xmlNewChild(resp, NULL, BAD_CAST "request-status",
-				BAD_CAST "5.1;Service unavailable");
-		}
-
-		icalcomponent_free(copy);
+			    BAD_CAST REQSTAT_NOUSER);
 	    }
 	}
     }
+
+    if (remote) {
+	struct remote_rock rrock = { txn, ical, root, ns };
+	hash_enumerate(&remote_table, busytime_query_remote, &rrock);
+    }
+    free_hash_table(&remote_table, free);
 
     /* Output the XML response */
     if (!ret) xml_response(HTTP_OK, txn, root->doc);

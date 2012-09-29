@@ -252,19 +252,6 @@ struct namespace_t {
 				 */
 };
 
-/* Scheduling protocol flags */
-#define SCHEDTYPE_REMOTE	(1<<0)
-#define SCHEDTYPE_ISCHEDULE	(1<<1)
-#define SCHEDTYPE_SSL		(1<<2)
-
-/* Each calendar user address has the following scheduling protocol params */
-struct sched_param {
-    char *userid;	/* Userid corresponding to calendar address */ 
-    char *server;	/* Remote server user lives on */
-    unsigned port;	/* Remote server port, default = 80 */
-    unsigned flags;	/* Flags dictating protocol to use for scheduling */
-};
-
 extern const struct namespace_t namespace_calendar;
 extern const struct namespace_t namespace_principal;
 extern const struct namespace_t namespace_ischedule;
@@ -310,6 +297,25 @@ extern int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root);
 
 #ifdef WITH_CALDAV_SCHED
 #include <libical/ical.h>
+
+/* Scheduling protocol flags */
+#define SCHEDTYPE_REMOTE	(1<<0)
+#define SCHEDTYPE_ISCHEDULE	(1<<1)
+#define SCHEDTYPE_SSL		(1<<2)
+
+struct proplist {
+    icalproperty *prop;
+    struct proplist *next;
+};
+
+/* Each calendar user address has the following scheduling protocol params */
+struct sched_param {
+    char *userid;	/* Userid corresponding to calendar address */ 
+    char *server;	/* Remote server user lives on */
+    unsigned port;	/* Remote server port, default = 80 */
+    unsigned flags;	/* Flags dictating protocol to use for scheduling */
+    struct proplist *props; /* List of attendee iCal properties */
+};
 
 extern int isched_send(struct sched_param *sparam, icalcomponent *ical,
 		       xmlNodePtr *xml);

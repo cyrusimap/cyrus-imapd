@@ -63,7 +63,7 @@ CPPFLAGS = -I.. -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @SIEVE_CPPFLAGS@ @CPPFLAGS
 IMAP_LIBS = @IMAP_LIBS@ @LIB_RT@
 
 RSS_OBJS = http_rss.o
-CALDAV_OBJS = http_caldav.o dav_prop.o caldav_db.o dav_db.o
+CALDAV_OBJS = http_caldav.o dav_prop.o caldav_db.o dav_db.o smtpclient.o
 ISCHED_OBJS = http_ischedule.o
 HTTP_OBJS = httpd.o http_err.o http_proxy.o @HTTP_OBJS@
 HTTP_LIBS = @XML2_LIBS@ @ICAL_LIBS@ @SQLITE3_LIBS@ @DKIM_LIBS@
