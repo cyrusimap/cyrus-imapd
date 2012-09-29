@@ -330,16 +330,15 @@ out:
 }
 
 static search_builder_t *begin_search(struct mailbox *mailbox,
-				      int single,
-				      search_hit_cb_t proc, void *rock,
-				      int verbose)
+				      int opts,
+				      search_hit_cb_t proc, void *rock)
 {
     SquatBuilderData *bb;
     SquatSearchIndex* index;
     char *fname;
     int fd;
 
-    if (!single) {
+    if ((opts & SEARCH_MULTIPLE)) {
 	syslog(LOG_ERR, "Squat does not support multiple-folder searches, sorry");
 	/* although it could with some extra work, but why bother */
 	return NULL;
@@ -367,7 +366,7 @@ static search_builder_t *begin_search(struct mailbox *mailbox,
     bb->mailbox = mailbox;
     bb->proc = proc;
     bb->rock = rock;
-    bb->verbose = verbose;
+    bb->verbose = (opts & _SEARCH_VERBOSE_MASK);
     bb->index = index;
     bb->fd = fd;
 

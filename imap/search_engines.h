@@ -63,10 +63,15 @@ struct search_builder {
 struct search_engine {
     const char *name;
     unsigned int flags;
-    search_builder_t *(*begin_search)(struct mailbox *,
-				      int single,
-				      search_hit_cb_t proc, void *rock,
-				      int verbose);
+#define _SEARCH_VERBOSE_MASK	(0x7)
+#define SEARCH_VERBOSE(v)	((v)&_SEARCH_VERBOSE_MASK)
+#define SEARCH_MULTIPLE		(1<<3)	/* return results from
+					 * multiple folders */
+#define SEARCH_UNINDEXED	(1<<4)	/* return unindexed messages
+					 * as hits (doesn't work
+					 * with MULTIPLE) */
+    search_builder_t *(*begin_search)(struct mailbox *, int opts,
+				      search_hit_cb_t proc, void *rock);
     int (*end_search)(search_builder_t *);
     search_text_receiver_t *(*begin_update)(int verbose);
     int (*end_update)(search_text_receiver_t *);
@@ -81,9 +86,8 @@ struct search_engine {
  * folder in the same conversation scope (i.e. the same user) as
  * reported.
  */
-extern search_builder_t *search_begin_search(struct mailbox *, int single,
-					     search_hit_cb_t proc, void *rock,
-					     int verbose);
+extern search_builder_t *search_begin_search(struct mailbox *, int opts,
+					     search_hit_cb_t proc, void *rock);
 extern int search_end_search(search_builder_t *);
 
 search_text_receiver_t *search_begin_update(int verbose);

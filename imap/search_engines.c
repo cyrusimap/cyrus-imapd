@@ -88,14 +88,12 @@ static const struct search_engine *engine(void)
     }
 }
 
-EXPORTED search_builder_t *search_begin_search(struct mailbox *mailbox,
-					       int single,
-					       search_hit_cb_t proc, void *rock,
-					       int verbose)
+EXPORTED search_builder_t *search_begin_search(struct mailbox *mailbox, int opts,
+					       search_hit_cb_t proc, void *rock)
 {
     const struct search_engine *se = engine();
     return (se->begin_search ?
-	    se->begin_search(mailbox, single, proc, rock, verbose) : NULL);
+	    se->begin_search(mailbox, opts, proc, rock) : NULL);
 }
 
 EXPORTED int search_end_search(search_builder_t *bx)

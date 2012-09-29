@@ -433,6 +433,10 @@ static void do_search(const char *query, int single, const strarray_t *mboxnames
     int i;
     int r;
     search_builder_t *bx;
+    int opts = SEARCH_VERBOSE(verbose);
+
+    if (!single)
+	opts |= SEARCH_MULTIPLE;
 
     for (i = 0 ; i < mboxnames->count ; i++) {
 	const char *mboxname = mboxnames->data[i];
@@ -446,7 +450,8 @@ static void do_search(const char *query, int single, const strarray_t *mboxnames
 	if (single)
 	    printf("mailbox %s\n", mboxname);
 
-	bx = search_begin_search(mailbox, single, print_search_hit, &single, verbose);
+	bx = search_begin_search(mailbox, opts,
+				 print_search_hit, &single);
 	if (bx) {
 	    r = squatter_build_query(bx, query);
 

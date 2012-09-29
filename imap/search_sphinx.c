@@ -237,8 +237,7 @@ struct sphinx_builder {
     struct mailbox *mailbox;
     search_hit_cb_t proc;
     void *rock;
-    int single;
-    int verbose;
+    int opts;
     struct buf query;
     int depth;
     int alloc;
@@ -274,7 +273,7 @@ static void begin_boolean(search_builder_t *bx, int op)
     sphinx_builder_t *bb = (sphinx_builder_t *)bx;
     struct opstack *top;
 
-//     if (bb->verbose)
+//     if (SEARCH_VERBOSE(bb->opts))
 // 	syslog(LOG_NOTICE, "begin_boolean(%s)", search_op_as_string(op));
 
     begin_child(bb);
@@ -298,7 +297,7 @@ static void end_boolean(search_builder_t *bx, int op __attribute__((unused)))
     sphinx_builder_t *bb = (sphinx_builder_t *)bx;
     struct opstack *top = opstack_top(bb);
 
-//     if (bb->verbose)
+//     if (SEARCH_VERBOSE(bb->opts))
 // 	syslog(LOG_NOTICE, "end_boolean(%s)", search_op_as_string(op));
 
     if (top->idx)
@@ -330,9 +329,8 @@ static void match(search_builder_t *bx, int part, const char *str)
 }
 
 static search_builder_t *begin_search(struct mailbox *mailbox,
-				      int single,
-				      search_hit_cb_t proc, void *rock,
-				      int verbose)
+				      int opts,
+				      search_hit_cb_t proc, void *rock)
 {
     sphinx_builder_t *bb;
 
@@ -341,11 +339,10 @@ static search_builder_t *begin_search(struct mailbox *mailbox,
     bb->super.end_boolean = end_boolean;
     bb->super.match = match;
 
-    bb->verbose = verbose;
     bb->mailbox = mailbox;
     bb->proc = proc;
     bb->rock = rock;
-    bb->single = single;
+    bb->opts = opts;
     buf_init_ro_cstr(&bb->query, "SELECT "COL_CYRUSID" FROM rt WHERE MATCH('");
 
     return &bb->super;
@@ -367,7 +364,7 @@ static int read_latest_search(sphinx_builder_t *bb,
 		       "LIMIT 10000",
 		       bb->mailbox->i.uidvalidity);
 
-    r = doquery(conn, bb->verbose, &query);
+    r = doquery(conn, SEARCH_VERBOSE(bb->opts), &query);
     if (r) goto out;
 
     res = mysql_store_result(conn->mysql);
@@ -409,7 +406,7 @@ static int end_search(search_builder_t *bx)
     r = get_connection(bb->mailbox->name, &conn);
     if (r) goto out;
 
-    if (bb->single) {
+    if ((bb->opts & SEARCH_UNINDEXED)) {
 	/* To avoid races, we want the 'latest' uid we use to be
 	 * an underestimate, because the caller can handle false
 	 * positives but not false negatives.  So we fetch it
@@ -425,7 +422,7 @@ static int end_search(search_builder_t *bx)
 			       " OPTION max_matches=" SPHINX_MAX_MATCHES);
     buf_cstring(&bb->query);
 
-    if (bb->verbose)
+    if (SEARCH_VERBOSE(bb->opts))
 	syslog(LOG_NOTICE, "Sphinx query %s", bb->query.s);
 
     r = mysql_real_query(conn.mysql, bb->query.s, bb->query.len);
@@ -441,12 +438,12 @@ static int end_search(search_builder_t *bx)
 	const char *mboxname;
 	unsigned int uidvalidity;
 	unsigned int uid;
-	if (bb->verbose > 1)
+	if (SEARCH_VERBOSE(bb->opts) > 1)
 	    syslog(LOG_NOTICE, "Sphinx row cyrusid=%s", row[0]);
 	if (!parse_cyrusid(row[0], &mboxname, &uidvalidity, &uid))
 	    // TODO: whine
 	    continue;
-	if (bb->single) {
+	if (!(bb->opts & SEARCH_MULTIPLE)) {
 	    if (strcmp(mboxname, bb->mailbox->name))
 		continue;
 	    if (uidvalidity != bb->mailbox->i.uidvalidity)
@@ -457,7 +454,7 @@ static int end_search(search_builder_t *bx)
     }
     r = 0;
 
-    if (bb->single) {
+    if ((bb->opts & SEARCH_UNINDEXED)) {
 	/* add in the unindexed uids as false positives */
 	for (uid = latest+1 ; uid <= bb->mailbox->i.last_uid ; uid++) {
 	    r = bb->proc(bb->mailbox->name, bb->mailbox->i.uidvalidity, uid, bb->rock);

@@ -1541,8 +1541,8 @@ static int index_prefilter_messages(unsigned* msg_list,
     sr.msg_list = msg_list;
     sr.msg_count = 0;
 
-    bx = search_begin_search(state->mailbox, /*single*/1,
-			     index_search_hit, &sr, /*verbose*/0);
+    bx = search_begin_search(state->mailbox, SEARCH_UNINDEXED,
+			     index_search_hit, &sr);
     if (!bx) {
 	r = IMAP_TRIVIAL_SEARCH;
 	goto out;
@@ -2543,8 +2543,8 @@ EXPORTED int index_convmultisort(struct index_state *state,
     memset(&sr, 0, sizeof(sr));
     ptrarray_init(&sr.folders);
     construct_hash_table(&sr.folders_by_name, 128, 0);
-    bx = search_begin_search(state->mailbox, /*single*/0,
-			     index_multi_search_hit, &sr, /*verbose*/0);
+    bx = search_begin_search(state->mailbox, SEARCH_MULTIPLE,
+			     index_multi_search_hit, &sr);
     if (!bx) {
 	r = IMAP_INTERNAL;
 	goto out;
