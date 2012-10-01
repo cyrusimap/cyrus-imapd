@@ -405,6 +405,7 @@ static void cmd_xconvfetch(const char *tag);
 static int do_xconvfetch(struct dlist *cidlist,
 			 modseq_t ifchangedsince,
 			 struct fetchargs *fetchargs);
+static void cmd_xsnippets(char *tag);
 
 #ifdef HAVE_SSL
 static void cmd_urlfetch(char *tag);
@@ -453,6 +454,8 @@ static int getsearchprogram(const char *tag, struct searchargs *searchargs,
 			int *charsetp, int is_search_cmd);
 static int getsearchcriteria(const char *tag, struct searchargs *searchargs,
 			 int *charsetp, int *searchstatep);
+static int get_snippetargs(struct snippetargs **sap);
+static void free_snippetargs(struct snippetargs **sap);
 static int getsearchdate(time_t *start, time_t *end);
 static int getsortcriteria(char *tag, struct sortcrit **sortcrit);
 static char *sortcrit_as_string(const struct sortcrit *sortcrit);
@@ -2251,6 +2254,13 @@ static void cmdloop(void)
 		if (!arg1.len || !imparse_issequence(arg1.s)) goto badsequence;
 		cmd_xrunannotator(tag.s, arg1.s, usinguid);
 // 		snmp_increment(XRUNANNOTATOR_COUNT, 1);
+	    }
+	    else if (!strcmp(cmd.s, "Xsnippets")) {
+		if (c != ' ') goto missingargs;
+		if (!imapd_index && !backend_current) goto nomailbox;
+		cmd_xsnippets(tag.s);
+
+// 		snmp_increment(XSNIPPETS_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Xwarmup")) {
 		/* XWARMUP doesn't need a mailbox to be selected */
@@ -5767,6 +5777,91 @@ error:
     goto out;
 }
 
+static void cmd_xsnippets(char *tag)
+{
+    int c;
+    static struct buf arg;
+    int charset = 0;
+    struct searchargs *searchargs = NULL;
+    struct snippetargs *snippetargs = NULL;
+    clock_t start = clock();
+    char mytime[100];
+    int r;
+
+    if (backend_current) {
+	/* remote mailbox */
+	const char *cmd = "Xsnippets";
+
+	prot_printf(backend_current->out, "%s %s ", tag, cmd);
+	if (!pipe_command(backend_current, 65536)) {
+	    pipe_including_tag(backend_current, tag, 0);
+	}
+	return;
+    }
+    assert(imapd_index);
+
+    c = get_snippetargs(&snippetargs);
+    if (c == EOF) {
+	prot_printf(imapd_out, "%s BAD Syntax error in snippet arguments\r\n", tag);
+	goto error;
+    }
+    if (c != ' ') {
+	prot_printf(imapd_out,
+		    "%s BAD Unexpected arguments in Xsnippets\r\n", tag);
+	goto error;
+    }
+
+    c = getcharset(imapd_in, imapd_out, &arg);
+    if (c != ' ') goto error;
+
+    /* arg contains the charset */
+    lcase(arg.s);
+    charset = charset_lookupname(arg.s);
+
+    if (charset == -1) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag,
+	       error_message(IMAP_UNRECOGNIZED_CHARSET));
+	goto error;
+    }
+
+    /* need index loaded to even parse searchargs! */
+    searchargs = (struct searchargs *)xzmalloc(sizeof(struct searchargs));
+
+    c = getsearchprogram(tag, searchargs, &charset, 0);
+    if (c == EOF) goto error;
+    searchargs->namespace = &imapd_namespace;
+    searchargs->userid = imapd_userid;
+    searchargs->authstate = imapd_authstate;
+
+    if (c == '\r') c = prot_getc(imapd_in);
+    if (c != '\n') {
+	prot_printf(imapd_out,
+		    "%s BAD Unexpected extra arguments to Xsnippets\r\n", tag);
+	goto error;
+    }
+
+    r = index_snippets(imapd_index, snippetargs, searchargs);
+
+    if (r < 0) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag,
+		    error_message(r));
+	goto error;
+    }
+
+    snprintf(mytime, sizeof(mytime), "%2.3f",
+	     (clock() - start) / (double) CLOCKS_PER_SEC);
+    prot_printf(imapd_out, "%s OK %s (in %s secs)\r\n", tag,
+		error_message(IMAP_OK_COMPLETED), mytime);
+
+out:
+    freesearchargs(searchargs);
+    free_snippetargs(&snippetargs);
+    return;
+
+error:
+    eatline(imapd_in, (c == EOF ? ' ' : c));
+    goto out;
+}
 
 /*
  * Perform a THREAD/UID THREAD command
@@ -10607,6 +10702,83 @@ static int getsearchcriteria(const char *tag, struct searchargs *searchargs,
     prot_printf(imapd_out, "%s BAD Invalid interval in Search command\r\n", tag);
     if (c != EOF) prot_ungetc(c, imapd_in);
     return EOF;
+}
+
+static void free_snippetargs(struct snippetargs **sap)
+{
+    while (*sap) {
+	struct snippetargs *sa = *sap;
+	*sap = sa->next;
+	free(sa->mboxname);
+	free(sa->uids.data);
+	free(sa);
+    }
+}
+
+static int get_snippetargs(struct snippetargs **sap)
+{
+    int r;
+    int c;
+    struct snippetargs **prevp = sap;
+    struct snippetargs *sa = NULL;
+    struct buf arg = BUF_INITIALIZER;
+    uint32_t uid;
+    char mboxname[MAX_MAILBOX_NAME];
+
+    c = prot_getc(imapd_in);
+    if (c != '(') goto syntax_error;
+
+    for (;;) {
+	c = prot_getc(imapd_in);
+	if (c == ')') break;
+	if (c != '(') goto syntax_error;
+
+	c = getastring(imapd_in, imapd_out, &arg);
+	if (c != ' ') goto syntax_error;
+
+	r = imapd_namespace.mboxname_tointernal(&imapd_namespace, buf_cstring(&arg),
+						imapd_userid, mboxname);
+	if (r) goto out;
+
+	/* allocate a new snippetargs */
+	sa = xzmalloc(sizeof(struct snippetargs));
+	sa->mboxname = xstrdup(mboxname);
+	/* append to the list */
+	*prevp = sa;
+	prevp = &sa->next;
+
+	c = getuint32(imapd_in, &sa->uidvalidity);
+	if (c != ' ') goto syntax_error;
+
+	c = prot_getc(imapd_in);
+	if (c != '(') break;
+	for (;;) {
+	    c = getuint32(imapd_in, &uid);
+	    if (c != ' ' && c != ')') goto syntax_error;
+	    if (sa->uids.count + 1 > sa->uids.alloc) {
+		sa->uids.alloc += 64;
+		sa->uids.data = xrealloc(sa->uids.data,
+					 sizeof(uint32_t) * sa->uids.alloc);
+	    }
+	    sa->uids.data[sa->uids.count++] = uid;
+	    if (c == ')') break;
+	}
+
+	c = prot_getc(imapd_in);
+	if (c != ')') goto syntax_error;
+    }
+
+    c = prot_getc(imapd_in);
+    if (c != ' ') goto syntax_error;
+
+out:
+    buf_free(&arg);
+    return c;
+
+syntax_error:
+    free_snippetargs(sap);
+    c = EOF;
+    goto out;
 }
 
 static void cmd_dump(char *tag, char *name, int uid_start)

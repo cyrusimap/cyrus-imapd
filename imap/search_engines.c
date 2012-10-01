@@ -69,6 +69,9 @@ static const struct search_engine default_search_engine = {
     NULL,
     NULL,
     NULL,
+    NULL,
+    NULL,
+    NULL,
     NULL
 };
 
@@ -116,6 +119,28 @@ EXPORTED int search_end_update(search_text_receiver_t *rx)
     /* We don't fallback to the default search engine here
      * because the default behaviour is not to index anything */
     return (se->end_update ? se->end_update(rx) : 0);
+}
+
+EXPORTED search_text_receiver_t *search_begin_snippets(void *internalised,
+						       int verbose,
+						       search_snippet_cb_t proc,
+						       void *rock)
+{
+    const struct search_engine *se = engine();
+    return (se->begin_snippets ? se->begin_snippets(internalised,
+				    verbose, proc, rock) : NULL);
+}
+
+EXPORTED int search_end_snippets(search_text_receiver_t *rx)
+{
+    const struct search_engine *se = engine();
+    return (se->end_snippets ? se->end_snippets(rx) : 0);
+}
+
+EXPORTED void search_free_internalised(void *internalised)
+{
+    const struct search_engine *se = engine();
+    if (se->free_internalised) se->free_internalised(internalised);
 }
 
 EXPORTED int search_start_daemon(int verbose, const char *mboxname)

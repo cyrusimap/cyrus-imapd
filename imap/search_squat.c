@@ -995,6 +995,9 @@ const struct search_engine squat_search_engine = {
     end_search,
     begin_update,
     end_update,
+    /* begin_snippets */NULL,
+    /* end_snippets */NULL,
+    /* free_snippet_state */NULL,
     /* start_daemon */NULL,
     /* stop_daemon */NULL
 };

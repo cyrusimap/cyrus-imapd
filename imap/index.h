@@ -228,6 +228,9 @@ extern int index_convsort(struct index_state *state, struct sortcrit *sortcrit,
 extern int index_convmultisort(struct index_state *state, struct sortcrit *sortcrit,
 			       struct searchargs *searchargs,
 			       const struct windowargs * windowargs);
+extern int index_snippets(struct index_state *state,
+			  const struct snippetargs *snippetargs,
+			  struct searchargs *searchargs);
 extern int index_convupdates(struct index_state *state, struct sortcrit *sortcrit,
 		      struct searchargs *searchargs,
 		      const struct windowargs * windowargs);

@@ -333,6 +333,18 @@ struct windowargs {
 				 * specified.  */
 };
 
+struct snippetargs
+{
+    struct snippetargs *next;
+    char *mboxname;		/* internal */
+    uint32_t uidvalidity;
+    struct {
+	uint32_t *data;
+	int count;
+	int alloc;
+    } uids;
+};
+
 /* Bitmask for status queries */
 enum {
     STATUS_MESSAGES =		(1<<0),

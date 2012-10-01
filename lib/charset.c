@@ -1941,6 +1941,16 @@ EXPORTED int charset_searchfile(const char *substr, comp_pat *pat,
     return res;
 }
 
+EXPORTED const char *search_part_as_string(int part)
+{
+    static const char *names[SEARCH_NUM_PARTS] = {
+	/* ANY */NULL, "FROM", "TO", "CC",
+	"BCC", "SUBJECT", "HEADERS", "BODY"
+    };
+
+    return (part < 0 || part >= SEARCH_NUM_PARTS ? NULL : names[part]);
+}
+
 /* This is based on charset_searchfile above. */
 EXPORTED int charset_extract(search_text_receiver_t *receiver,
 			     const struct buf *data,

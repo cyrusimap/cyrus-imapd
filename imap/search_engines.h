@@ -48,6 +48,9 @@
 
 typedef int (*search_hit_cb_t)(const char *mboxname, uint32_t uidvalidity,
 			       uint32_t uid, void *rock);
+typedef int (*search_snippet_cb_t)(struct mailbox *, uint32_t uid,
+				   /* SEARCH_PART_* constants */int part,
+				   const char *snippet, void *rock);
 
 typedef struct search_builder search_builder_t;
 struct search_builder {
@@ -57,6 +60,7 @@ struct search_builder {
     void (*begin_boolean)(search_builder_t *, int op);
     void (*end_boolean)(search_builder_t *, int op);
     void (*match)(search_builder_t *, int part, const char *str);
+    void *(*get_internalised)(search_builder_t *);
 };
 
 #define SEARCH_FLAG_CAN_BATCH	(1<<0)
@@ -70,11 +74,20 @@ struct search_engine {
 #define SEARCH_UNINDEXED	(1<<4)	/* return unindexed messages
 					 * as hits (doesn't work
 					 * with MULTIPLE) */
+#define SEARCH_DRYRUN		(1<<5)	/* don't run the query just
+					 * build an internalised query,
+					 * useful for getting snippets */
     search_builder_t *(*begin_search)(struct mailbox *, int opts,
 				      search_hit_cb_t proc, void *rock);
     int (*end_search)(search_builder_t *);
     search_text_receiver_t *(*begin_update)(int verbose);
     int (*end_update)(search_text_receiver_t *);
+    search_text_receiver_t *(*begin_snippets)(void *internalised,
+					      int verbose,
+					      search_snippet_cb_t,
+					      void *rock);
+    int (*end_snippets)(search_text_receiver_t *);
+    void (*free_internalised)(void *);
     int (*start_daemon)(int verbose, const char *mboxname);
     int (*stop_daemon)(int verbose, const char *mboxname);
 };
@@ -92,6 +105,12 @@ extern int search_end_search(search_builder_t *);
 
 search_text_receiver_t *search_begin_update(int verbose);
 int search_end_update(search_text_receiver_t *rx);
+search_text_receiver_t *search_begin_snippets(void *internalised,
+					      int verbose,
+					      search_snippet_cb_t proc,
+					      void *rock);
+int search_end_snippets(search_text_receiver_t *rx);
+void search_free_internalised(void *internalised);
 int search_start_daemon(int verbose, const char *mboxname);
 int search_stop_daemon(int verbose, const char *mboxname);
 int search_batch_size(void);

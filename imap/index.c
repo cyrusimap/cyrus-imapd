@@ -2787,6 +2787,111 @@ out:
     return r;
 }
 
+struct snippet_rock {
+    struct protstream *out;
+    struct namespace *namespace;
+    const char *userid;
+};
+
+static int emit_snippet(struct mailbox *mailbox, uint32_t uid,
+			int part, const char *snippet, void *rock)
+{
+    struct snippet_rock *sr = (struct snippet_rock *)rock;
+    const char *partname = search_part_as_string(part);
+    int r;
+    char extname[MAX_MAILBOX_BUFFER];
+
+    if (!partname) return 0;
+
+    r = sr->namespace->mboxname_toexternal(sr->namespace, mailbox->name,
+					   sr->userid, extname);
+    if (r) return r;
+
+    prot_printf(sr->out, "* SNIPPET ");
+    prot_printstring(sr->out, extname);
+    prot_printf(sr->out, " %u %u %s ", mailbox->i.uidvalidity, uid, partname);
+    prot_printstring(sr->out, snippet);
+    prot_printf(sr->out, "\r\n");
+    return 0;
+}
+
+EXPORTED int index_snippets(struct index_state *state,
+			    const struct snippetargs *snippetargs,
+			    struct searchargs *searchargs)
+{
+    void *intquery = NULL;
+    search_builder_t *bx = NULL;
+    search_text_receiver_t *rx = NULL;
+    struct mailbox *mailbox = NULL;
+    int i;
+    int r = 0;
+    struct snippet_rock srock;
+
+    bx = search_begin_search(state->mailbox,
+			     SEARCH_DRYRUN|SEARCH_MULTIPLE,
+			     NULL, NULL);
+    if (!bx) {
+	r = IMAP_INTERNAL;
+	goto out;
+    }
+
+    build_query(bx, searchargs);
+    intquery = bx->get_internalised(bx);
+    r = search_end_search(bx);
+    if (r) goto out;
+
+    srock.out = state->out;
+    srock.namespace = searchargs->namespace;
+    srock.userid = searchargs->userid;
+    rx = search_begin_snippets(intquery, 3/*verbose*/,
+			       emit_snippet, &srock);
+
+    for ( ; snippetargs ; snippetargs = snippetargs->next) {
+
+	mailbox = NULL;
+	if (!strcmp(snippetargs->mboxname, state->mailbox->name)) {
+	    mailbox = state->mailbox;
+	}
+	else {
+	    r = mailbox_open_iwl(snippetargs->mboxname, &mailbox);
+	    if (r) goto out;
+	}
+
+	if (snippetargs->uidvalidity &&
+	    snippetargs->uidvalidity != mailbox->i.uidvalidity) {
+	    r = IMAP_NOTFOUND;
+	    goto out;
+	}
+
+	r = rx->begin_mailbox(rx, mailbox, /*incremental*/0);
+
+	for (i = 0 ; i < snippetargs->uids.count ; i++) {
+	    uint32_t uid = snippetargs->uids.data[i];
+	    struct index_record record;
+	    message_t *msg;
+
+	    /* This UID didn't appear in the old index file */
+	    r = mailbox_find_index_record(mailbox, uid, &record, NULL);
+	    if (r) goto out;
+
+	    msg = message_new_from_record(mailbox, &record);
+	    index_getsearchtext(msg, rx, /*snippet*/1);
+	    message_unref(&msg);
+	}
+
+	r = rx->end_mailbox(rx, mailbox);
+	if (r) goto out;
+	if (mailbox != state->mailbox)
+	    mailbox_close(&mailbox);
+    }
+
+out:
+    if (rx) search_end_snippets(rx);
+    if (intquery) search_free_internalised(intquery);
+    if (mailbox != state->mailbox)
+	mailbox_close(&mailbox);
+    return r;
+}
 
 static modseq_t get_modseq_of(struct index_record *record,
 			      struct conversations_state *cstate)

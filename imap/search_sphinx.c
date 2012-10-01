@@ -238,7 +238,7 @@ struct sphinx_builder {
     search_hit_cb_t proc;
     void *rock;
     int opts;
-    struct buf query;
+    struct buf query;	    /* Spinx extended query syntax, not SphinxQL */
     int depth;
     int alloc;
     struct opstack *stack;
@@ -328,6 +328,27 @@ static void match(search_builder_t *bx, int part, const char *str)
     append_escaped(&bb->query, &e1);
 }
 
+static void *get_internalised(search_builder_t *bx)
+{
+    sphinx_builder_t *bb = (sphinx_builder_t *)bx;
+    void *internalised;
+
+    buf_cstring(&bb->query);
+    internalised = xmemdup(&bb->query, sizeof(bb->query));
+    memset(&bb->query, 0, sizeof(bb->query));
+    return internalised;
+}
+
+static void free_internalised(void *internalised)
+{
+    struct buf *query = (struct buf *)internalised;
+
+    if (query) {
+	buf_free(query);
+	free(query);
+    }
+}
+
 static search_builder_t *begin_search(struct mailbox *mailbox,
 				      int opts,
 				      search_hit_cb_t proc, void *rock)
@@ -338,12 +359,12 @@ static search_builder_t *begin_search(struct mailbox *mailbox,
     bb->super.begin_boolean = begin_boolean;
     bb->super.end_boolean = end_boolean;
     bb->super.match = match;
+    bb->super.get_internalised = get_internalised;
 
     bb->mailbox = mailbox;
     bb->proc = proc;
     bb->rock = rock;
     bb->opts = opts;
-    buf_init_ro_cstr(&bb->query, "SELECT "COL_CYRUSID" FROM rt WHERE MATCH('");
 
     return &bb->super;
 }
@@ -385,11 +406,14 @@ static int end_search(search_builder_t *bx)
 {
     sphinx_builder_t *bb = (sphinx_builder_t *)bx;
     struct connection conn = CONNECTION_INITIALIZER;
+    struct buf query = BUF_INITIALIZER;	/* SphinxQL query */
     MYSQL_RES *res = NULL;
     MYSQL_ROW row;
     uint32_t uid;
     uint32_t latest = 0;
     int r = 0;
+
+    if ((bb->opts & SEARCH_DRYRUN)) goto out;
 
     if (!bb->nmatches) {
 	/* The search expression has no match clauses, which means it
@@ -415,20 +439,22 @@ static int end_search(search_builder_t *bx)
 	if (r) goto out;
     }
 
-    buf_appendcstr(&bb->query, "')");
+    buf_init_ro_cstr(&query, "SELECT "COL_CYRUSID" FROM rt WHERE MATCH('");
+    buf_append(&query, &bb->query);
+    buf_appendcstr(&query, "')");
     // get sphinx to sort by most recent date first
-    buf_appendcstr(&bb->query, " ORDER BY "COL_CYRUSID" DESC "
+    buf_appendcstr(&query, " ORDER BY "COL_CYRUSID" DESC "
 			       " LIMIT " SPHINX_MAX_MATCHES
 			       " OPTION max_matches=" SPHINX_MAX_MATCHES);
-    buf_cstring(&bb->query);
+    buf_cstring(&query);
 
     if (SEARCH_VERBOSE(bb->opts))
-	syslog(LOG_NOTICE, "Sphinx query %s", bb->query.s);
+	syslog(LOG_NOTICE, "Sphinx query %s", query.s);
 
-    r = mysql_real_query(conn.mysql, bb->query.s, bb->query.len);
+    r = mysql_real_query(conn.mysql, query.s, query.len);
     if (r) {
 	syslog(LOG_ERR, "IOERROR: Sphinx query %s failed: %s",
-	       bb->query.s, mysql_error(conn.mysql));
+	       query.s, mysql_error(conn.mysql));
 	r = IMAP_IOERROR;
 	goto out;
     }
@@ -467,6 +493,7 @@ out:
     close_connection(&conn);
     free(bb->stack);
     buf_free(&bb->query);
+    buf_free(&query);
     free(bx);
     return r;
 }
@@ -494,6 +521,11 @@ struct sphinx_receiver
     uint32_t lastid;	    /* largest document ID in the 'tr' table,
 			     * used to assign new document IDs when
 			     * INSERTing into the table */
+    struct {
+	struct buf *query;
+	search_snippet_cb_t proc;
+	void *rock;
+    } snippet;
 };
 
 /* This is carefully aligned with the default search_batchsize so that
@@ -921,6 +953,112 @@ static int end_update(search_text_receiver_t *rx)
     return r;
 }
 
+static int begin_mailbox_snippets(search_text_receiver_t *rx,
+			 struct mailbox *mailbox,
+			 int incremental __attribute__((unused)))
+{
+    sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
+    int r;
+
+    r = get_connection(mailbox->name, &tr->conn);
+    if (r) return r;
+
+    tr->mailbox = mailbox;
+
+    return 0;
+}
+
+static int end_message_snippets(search_text_receiver_t *rx)
+{
+    sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
+    struct buf query = BUF_INITIALIZER;
+    MYSQL_RES *res = NULL;
+    MYSQL_ROW row;
+    int i;
+    int r;
+
+    if (!tr->conn.mysql) {
+	r = IMAP_INTERNAL;	    /* need to call begin_mailbox() */
+	goto out;
+    }
+    if (!tr->snippet.query) {
+	r = 0;
+	goto out;
+    }
+
+    buf_appendcstr(&query, "CALL SNIPPETS((");
+    for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
+	if (i) buf_putc(&query, ',');
+	buf_putc(&query, '\'');
+	append_escaped(&query, &tr->parts[i]);
+	buf_putc(&query, '\'');
+    }
+    buf_appendcstr(&query, "), 'rt', '");
+    buf_append(&query, tr->snippet.query);
+    buf_appendcstr(&query, "', 1 AS query_mode, 1 AS allow_empty)");
+    r = doquery(&tr->conn, tr->verbose, &query);
+    if (r) goto out;
+
+    res = mysql_use_result(tr->conn.mysql);
+    i = 0;
+    while ((row = mysql_fetch_row(res))) {
+	if (tr->verbose > 1)
+	    syslog(LOG_ERR, "snippet [%d] \"%s\"", i, row[0]);
+	if (row[0][0]) {
+	    r = tr->snippet.proc(tr->mailbox, tr->uid, i, row[0], tr->snippet.rock);
+	    if (r) break;
+	}
+	i++;
+    }
+
+out:
+    if (res) mysql_free_result(res);
+    buf_free(&query);
+    return r;
+}
+
+static int end_mailbox_snippets(search_text_receiver_t *rx,
+			       struct mailbox *mailbox
+				    __attribute__((unused)))
+{
+    sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
+
+    if (tr->conn.mysql)
+	close_connection(&tr->conn);
+
+    tr->mailbox = NULL;
+
+    return 0;
+}
+
+static search_text_receiver_t *begin_snippets(void *snippet_state,
+					      int verbose,
+					      search_snippet_cb_t proc,
+					      void *rock)
+{
+    sphinx_receiver_t *tr;
+
+    tr = xzmalloc(sizeof(sphinx_receiver_t));
+    tr->super.begin_mailbox = begin_mailbox_snippets;
+    tr->super.begin_message = begin_message;
+    tr->super.begin_part = begin_part;
+    tr->super.append_text = append_text;
+    tr->super.end_part = end_part;
+    tr->super.end_message = end_message_snippets;
+    tr->super.end_mailbox = end_mailbox_snippets;
+
+    tr->verbose = verbose;
+    tr->snippet.query = (struct buf *)snippet_state;
+    tr->snippet.proc = proc;
+    tr->snippet.rock = rock;
+
+    return &tr->super;
+}
+
+static int end_snippets(search_text_receiver_t *rx)
+{
+    return end_update(rx);
+}
 
 static int start_daemon(int verbose __attribute__((unused)),
 			const char *mboxname)
@@ -948,6 +1086,9 @@ const struct search_engine sphinx_search_engine = {
     end_search,
     begin_update,
     end_update,
+    begin_snippets,
+    end_snippets,
+    free_internalised,
     start_daemon,
     stop_daemon
 };
