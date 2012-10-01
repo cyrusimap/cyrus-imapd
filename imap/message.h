@@ -203,10 +203,12 @@ enum message_format
     MESSAGE_RAW=	1,
     /* Unfolded and RFC2047 decoded */
     MESSAGE_DECODED,
+    /* Unfolded, RFC2047 decoded, and HTML-escaped */
+    MESSAGE_SNIPPET,
     /* Unfolded, RFC2047 decoded, and search-normalised */
     MESSAGE_SEARCH,
 
-#define _MESSAGE_FORMAT_MASK	(0x3)
+#define _MESSAGE_FORMAT_MASK	(0x7)
 
     /* This flag can be OR'd into the format argument to request that
      * the field name and a colon ':' are left in the result.  Normally

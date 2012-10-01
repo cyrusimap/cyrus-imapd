@@ -288,7 +288,8 @@ extern int index_expunge(struct index_state *state, char *uidsequence,
 
 /* See lib/charset.h for the definition of receiver. */
 extern void index_getsearchtext(struct message *,
-				search_text_receiver_t *receiver);
+				search_text_receiver_t *receiver,
+				int snippet);
 
 extern int index_getuidsequence(struct index_state *state,
 				struct searchargs *searchargs,

@@ -633,6 +633,52 @@ static void uni2searchform(struct convert_rock *rock, int c)
     }
 }
 
+/*
+ * Given a Unicode codepoint, emit one or more Unicode codepoints in
+ * HTML form, suitable for generating search snippets.
+ */
+static void uni2html(struct convert_rock *rock, int c)
+{
+    struct canon_state *s = (struct canon_state *)rock->state;
+
+    if (c == U_REPLACEMENT) {
+	convert_putc(rock->next, c);
+	return;
+    }
+
+    if (c == '<') {
+	convert_cat(rock->next, "&lt;");
+	return;
+    }
+
+    if (c == '>') {
+	convert_cat(rock->next, "&gt;");
+	return;
+    }
+
+    if (c == '&') {
+	convert_cat(rock->next, "&amp;");
+	return;
+    }
+
+    /* special case: whitespace or control characters */
+    if (c == ' ' || c == '\r' || c == '\n') {
+	if (s->flags & CHARSET_SKIPSPACE) {
+	    return;
+	}
+	if (s->flags & CHARSET_MERGESPACE) {
+	    if (s->seenspace)
+		return;
+	    s->seenspace = 1;
+	    c = ' '; /* one SPACE char */
+	}
+    }
+    else
+	s->seenspace = 0;
+
+    convert_putc(rock->next, c);
+}
+
 /* Given a Unicode codepoint, emit valid UTF-8 encoded octets */
 static void uni2utf8(struct convert_rock *rock, int c)
 {
@@ -1253,6 +1299,7 @@ static const char *convert_name(struct convert_rock *rock)
     if (rock->f == unfold2uni) return "unfold2uni";
     if (rock->f == table2uni) return "table2uni";
     if (rock->f == uni2searchform) return "uni2searchform";
+    if (rock->f == uni2html) return "uni2html";
     if (rock->f == uni2utf8) return "uni2utf8";
     if (rock->f == utf7_2uni) return "utf7_2uni";
     if (rock->f == utf8_2uni) return "utf8_2uni";
@@ -1394,7 +1441,10 @@ static struct convert_rock *canon_init(int flags, struct convert_rock *next)
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
     struct canon_state *s = xzmalloc(sizeof(struct canon_state));
     s->flags = flags;
-    rock->f = uni2searchform;
+    if ((flags & CHARSET_SNIPPET))
+	rock->f = uni2html;
+    else
+	rock->f = uni2searchform;
     rock->state = s;
     rock->next = next;
     return rock;

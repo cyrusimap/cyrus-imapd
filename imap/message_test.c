@@ -281,7 +281,7 @@ static int dump_text_receiver(message_t *message)
     rx.end_part = dump_rx_end_part;
     rx.end_message = dump_rx_end_message;
 
-    index_getsearchtext(message, &rx);
+    index_getsearchtext(message, &rx, 0);
     return 0;
 }
 

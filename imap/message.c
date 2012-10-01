@@ -5052,6 +5052,10 @@ static void extract_one(struct buf *buf,
 	p = charset_parse_mimeheader(buf_cstring(raw));
 	buf_appendcstr(buf, p);
 	break;
+    case MESSAGE_SNIPPET:
+	p = charset_decode_mimeheader(buf_cstring(raw), CHARSET_SNIPPET);
+	buf_appendcstr(buf, p);
+	break;
     case MESSAGE_SEARCH:
 	/* TODO: need a variant of decode_mimeheader() which
 	 * takes two struct buf* and a search flag */

@@ -5289,6 +5289,7 @@ struct getsearchtext_rock
 {
     search_text_receiver_t *receiver;
     int partcount;
+    int charset_flags;
 };
 
 static void stuff_part(search_text_receiver_t *receiver,
@@ -5309,7 +5310,7 @@ static int getsearchtext_cb(int partno, int charset, int encoding,
 
     if (!partno) {
 	/* header-like */
-	q = charset_decode_mimeheader(buf_cstring(data), charset_flags);
+	q = charset_decode_mimeheader(buf_cstring(data), str->charset_flags);
 	buf_init_ro_cstr(&text, q);
 	if (++str->partcount == 1) {
 	    stuff_part(str->receiver, SEARCH_PART_HEADERS, &text);
@@ -5322,43 +5323,53 @@ static int getsearchtext_cb(int partno, int charset, int encoding,
     }
     else {
 	/* body-like */
-	charset_extract(str->receiver, data, charset, encoding, subtype, charset_flags);
+	charset_extract(str->receiver, data, charset, encoding, subtype,
+			str->charset_flags);
     }
 
     return 0;
 }
 
 EXPORTED void index_getsearchtext(message_t *msg,
-			 search_text_receiver_t *receiver)
+			 search_text_receiver_t *receiver,
+			 int snippet)
 {
     struct getsearchtext_rock str;
     struct buf buf = BUF_INITIALIZER;
     uint32_t uid = 0;
+    int format = MESSAGE_SEARCH;
 
     message_get_uid(msg, &uid);
     receiver->begin_message(receiver, uid);
 
     str.receiver = receiver;
     str.partcount = 0;
+    str.charset_flags = charset_flags;
+
+    if (snippet) {
+	str.charset_flags |= CHARSET_SNIPPET;
+	format = MESSAGE_SNIPPET;
+    }
+
     message_foreach_text_section(msg, getsearchtext_cb, &str);
     receiver->end_part(receiver, SEARCH_PART_BODY);
 
-    if (!message_get_field(msg, "From", MESSAGE_SEARCH, &buf))
+    if (!message_get_field(msg, "From", format, &buf))
 	stuff_part(receiver, SEARCH_PART_FROM, &buf);
 
-    if (!message_get_field(msg, "To", MESSAGE_SEARCH, &buf))
+    if (!message_get_field(msg, "To", format, &buf))
 	stuff_part(receiver, SEARCH_PART_TO, &buf);
 
-    if (!message_get_field(msg, "Cc", MESSAGE_SEARCH, &buf))
+    if (!message_get_field(msg, "Cc", format, &buf))
 	stuff_part(receiver, SEARCH_PART_CC, &buf);
 
-    if (!message_get_field(msg, "Bcc", MESSAGE_SEARCH, &buf))
+    if (!message_get_field(msg, "Bcc", format, &buf))
 	stuff_part(receiver, SEARCH_PART_BCC, &buf);
 
-    if (!message_get_field(msg, "Subject", MESSAGE_SEARCH, &buf))
+    if (!message_get_field(msg, "Subject", format, &buf))
 	stuff_part(receiver, SEARCH_PART_SUBJECT, &buf);
 
-    receiver->end_message(receiver, uid);
+    receiver->end_message(receiver);
     buf_free(&buf);
 }
 

@@ -150,7 +150,7 @@ static int squat_single(struct mailbox *mailbox, int incremental,
 	    continue;
 
 	msg = message_new_from_record(mailbox, &record);
-	index_getsearchtext(msg, rx);
+	index_getsearchtext(msg, rx, 0);
 	message_unref(&msg);
 
 	if (++nbatch >= batch_size) {
