@@ -61,6 +61,7 @@
 #include "tok.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
 #include <sasl/saslutil.h>
 
 #define ISCHED_WELLKNOWN_URI "/.well-known/ischedule"
@@ -85,6 +86,7 @@ static void isched_cachehdr(const char *name, const char *contents, void *rock);
 extern int busytime_query(struct transaction_t *txn, icalcomponent *comp);
 static int isched_capa(struct transaction_t *txn);
 static int isched_recv(struct transaction_t *txn);
+static int meth_getkey(struct transaction_t *txn);
 
 const struct namespace_t namespace_ischedule = {
   URL_NS_ISCHEDULE, "/ischedule", ISCHED_WELLKNOWN_URI, 0 /* auth */,
@@ -105,6 +107,27 @@ const struct namespace_t namespace_ischedule = {
 	{ NULL,			0		},	/* MOVE		*/
 	{ &meth_options,	METH_NOBODY	},	/* OPTIONS	*/
 	{ &isched_recv,		0		},	/* POST		*/
+	{ NULL,			0		},	/* PROPFIND	*/
+	{ NULL,			0		},	/* PROPPATCH	*/
+	{ NULL,			0		},	/* PUT		*/
+	{ NULL,			0		}	/* REPORT	*/
+    }
+};
+
+const struct namespace_t namespace_domainkey = {
+  URL_NS_DOMAINKEY, "/domainkey", "/.well-known/domainkey", 0 /* auth */,
+  ALLOW_READ, NULL, NULL, NULL, NULL,
+    {
+	{ NULL,			0		},	/* ACL		*/
+	{ NULL,			0		},	/* COPY		*/
+	{ NULL,			0		},	/* DELETE	*/
+	{ &meth_getkey,		METH_NOBODY	},	/* GET		*/
+	{ &meth_getkey,		METH_NOBODY	},	/* HEAD		*/
+	{ NULL,			0		},	/* MKCALENDAR	*/
+	{ NULL,			0		},	/* MKCOL	*/
+	{ NULL,			0		},	/* MOVE		*/
+	{ &meth_options,	METH_NOBODY	},	/* OPTIONS	*/
+	{ NULL,			0		},	/* POST		*/
 	{ NULL,			0		},	/* PROPFIND	*/
 	{ NULL,			0		},	/* PROPPATCH	*/
 	{ NULL,			0		},	/* PUT		*/
@@ -686,3 +709,12 @@ static void isched_cachehdr(const char *name, const char *contents, void *rock)
 		(u_char *) buf_cstring(hdrfield), buf_len(hdrfield));
 }
 #endif /* WITH_DKIM */
+
+
+/* Perform a GET/HEAD request for a domainkey */
+static int meth_getkey(struct transaction_t *txn)
+{
+    txn->resp_body.type = "text/plain";
+
+    return get_doc(txn, NULL);
+}

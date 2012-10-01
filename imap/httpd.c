@@ -278,6 +278,7 @@ const struct namespace_t *namespaces[] = {
     &namespace_principal,
 #ifdef WITH_CALDAV_SCHED
     &namespace_ischedule,
+    &namespace_domainkey,
 #endif
 #endif
 #ifdef WITH_RSS
@@ -1056,19 +1057,22 @@ static void cmdloop(void)
 	if (!ret) {
 	    for (i = 0; namespaces[i]; i++) {
 		const char *path = txn.req_tgt.path;
+		const char *query = txn.req_tgt.query;
 		size_t len;
 
 		/* Handle any /.well-known/ bootstrapping */
 		if (namespaces[i]->well_known) {
 		    len = strlen(namespaces[i]->well_known);
 		    if (!strncmp(path, namespaces[i]->well_known, len) &&
-			(!path[len] || !strcmp(path+len, "/"))) {
+			(path[len] == '\0' || path[len] == '/')) {
 			ret = HTTP_MOVED;
 		    
 			hdr = spool_getheader(txn.req_hdrs, "Host");
-			buf_printf(&txn.buf, "%s://%s%s/",
+			buf_printf(&txn.buf, "%s://%s%s%s",
 				   https ? "https" : "http", hdr[0],
-				   namespaces[i]->prefix);
+				   namespaces[i]->prefix,
+				   path + len);
+			if (*query) buf_printf(&txn.buf, "?%s", query);
 			txn.location = buf_cstring(&txn.buf);
 			break;
 		    }
@@ -2399,7 +2403,10 @@ int get_doc(struct transaction_t *txn, filter_proc_t filter)
     resp_body->lastmod = sbuf.st_mtime;
     resp_body->len = msg_size;
 
-    if ((ext = strrchr(txn->req_tgt.path, '.'))) {
+    if (resp_body->type) {
+	/* Caller has specified the Content-Type */
+    }
+    else if ((ext = strrchr(txn->req_tgt.path, '.'))) {
 	/* Try to use filename extension to identity Content-Type */
 	if (!strcmp(ext, ".text") || !strcmp(ext, ".txt"))
 	    resp_body->type = "text/plain";
@@ -2419,7 +2426,7 @@ int get_doc(struct transaction_t *txn, filter_proc_t filter)
 	    resp_body->type = "application/octet-stream";
     }
     else {
-	/* Try to usr filetype signatures to identity Content-Type */
+	/* Try to use filetype signatures to identity Content-Type */
 	if (msg_size >= 8 &&
 	    !memcmp(msg_base, "\x89\x50\x4E\x47\x0D\x0A\x1A\x0A", 8)) {
 	    resp_body->type = "image/png";

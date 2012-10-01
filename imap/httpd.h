@@ -106,7 +106,8 @@ enum {
     URL_NS_CALENDAR,
     URL_NS_ADDRESSBOOK,
     URL_NS_RSS,
-    URL_NS_ISCHEDULE
+    URL_NS_ISCHEDULE,
+    URL_NS_DOMAINKEY
 };
 
 /* Bitmask of features/methods to allow, based on URL */
@@ -255,6 +256,7 @@ struct namespace_t {
 extern const struct namespace_t namespace_calendar;
 extern const struct namespace_t namespace_principal;
 extern const struct namespace_t namespace_ischedule;
+extern const struct namespace_t namespace_domainkey;
 extern const struct namespace_t namespace_rss;
 extern const struct namespace_t namespace_default;
 
