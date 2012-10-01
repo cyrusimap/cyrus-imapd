@@ -321,6 +321,22 @@ static void match(search_builder_t *bx, int part, const char *str)
 	buf_appendcstr(&bb->query, column_by_part[part]);
 	buf_appendcstr(&bb->query, " ");
     }
+    else if (config_getswitch(IMAPOPT_SPHINX_TEXT_EXCLUDES_ODD_HEADERS)) {
+	/* This horrible hack makes TEXT searches match FROM, TO, CC, BCC
+	 * and SUBJECT but not any other random headers, which is more
+	 * like what users expect. */
+	int i;
+	const char *sep = "(";
+	buf_appendcstr(&bb->query, "@");
+	for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
+	    if (column_by_part[i] && i != SEARCH_PART_HEADERS) {
+		buf_appendcstr(&bb->query, sep);
+		buf_appendcstr(&bb->query, column_by_part[i]);
+		sep = ",";
+	    }
+	}
+	buf_appendcstr(&bb->query, ") ");
+    }
 
     buf_init_ro_cstr(&f, str);
     buf_reset(&e1);
