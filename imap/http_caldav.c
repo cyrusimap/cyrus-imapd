@@ -3911,16 +3911,22 @@ static void busytime_query_remote(char *server __attribute__((unused)),
 	    xmlNodePtr cur;
 
 	    /* Process each response element */
-	    for (cur = xmlFirstElementChild(xml); cur;
-		 cur = xmlNextElementSibling(cur)) {
+	    for (cur = xml->children; cur; cur = cur->next) {
 		xmlNodePtr node;
-		xmlChar *recip, *status;
+		xmlChar *recip = NULL, *status = NULL, *content = NULL;
 
-		node = xmlFirstElementChild(cur);   /* recipient */
-		recip = xmlNodeGetContent(node);
+		if (cur->type != XML_ELEMENT_NODE) continue;
 
-		node = xmlNextElementSibling(node); /* request-status */
-		status = xmlNodeGetContent(node);
+		for (node = cur->children; node; node = node->next) {
+		    if (node->type != XML_ELEMENT_NODE) continue;
+
+		    if (!xmlStrcmp(node->name, BAD_CAST "recipient"))
+			recip = xmlNodeGetContent(node);
+		    else if (!xmlStrcmp(node->name, BAD_CAST "request-status"))
+			status = xmlNodeGetContent(node);
+		    else if (!xmlStrcmp(node->name, BAD_CAST "calendar-data"))
+			content = xmlNodeGetContent(node);
+		}
 
 		resp =
 		    xml_add_schedresponse(rrock->root,
@@ -3931,10 +3937,7 @@ static void busytime_query_remote(char *server __attribute__((unused)),
 		xmlFree(status);
 		xmlFree(recip);
 
-		node = xmlNextElementSibling(node); /* calendar-data? */
-		if (node &&
-		    !xmlStrcmp(node->name, BAD_CAST "calendar-data")) {
-		    xmlChar *content = xmlNodeGetContent(node);
+		if (content) {
 		    xmlNodePtr cdata =
 			xmlNewTextChild(resp, NULL,
 					BAD_CAST "calendar-data", NULL);
