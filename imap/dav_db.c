@@ -122,14 +122,20 @@ sqlite3 *dav_open(const char *userid, const char *cmds)
     sqlite3 *db = NULL;
 
     dav_getpath(&fname, userid);
+#if SQLITE_VERSION_NUMBER >= 3006000
     rc = sqlite3_open_v2(buf_cstring(&fname), &db,
 			 SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL);
+#else
+    rc = sqlite3_open(buf_cstring(&fname), &db);
+#endif
     if (rc != SQLITE_OK) {
 	syslog(LOG_ERR, "dav_open(%s) open: %s",
 	       userid, db ? sqlite3_errmsg(db) : "failed");
     }
     else {
+#if SQLITE_VERSION_NUMBER >= 3006000
 	sqlite3_extended_result_codes(db, 1);
+#endif
 	sqlite3_trace(db, dav_debug, (void *) userid);
 
 	if (cmds) {
@@ -177,7 +183,11 @@ int dav_exec(sqlite3 *davdb, const char *cmd, struct bind_val bval[],
 
     if (!*stmt) {
 	/* prepare new statement */
+#if SQLITE_VERSION_NUMBER >= 3006000
 	rc = sqlite3_prepare_v2(davdb, cmd, -1, stmt, NULL);
+#else
+	rc = sqlite3_prepare_v2(davdb, cmd, -1, stmt, NULL);
+#endif
 	if (rc != SQLITE_OK) {
 	    syslog(LOG_ERR, "dav_exec() prepare: %s", sqlite3_errmsg(davdb));
 	    return CYRUSDB_INTERNAL;
