@@ -615,8 +615,8 @@ static void isched_init(struct buf *serverinfo)
 {
     int fd;
     struct buf keypath = BUF_INITIALIZER;
-    unsigned flags = DKIM_LIBFLAGS_BADSIGHANDLES | DKIM_LIBFLAGS_CACHE |
-	DKIM_LIBFLAGS_VERIFYONE;
+    unsigned flags = ( DKIM_LIBFLAGS_BADSIGHANDLES | DKIM_LIBFLAGS_CACHE |
+		       DKIM_LIBFLAGS_VERIFYONE );
     uint64_t ttl = 3600;  /* 1 hour */
     const char *requiredhdrs[] = { "Content-Type", "Host", "iSchedule-Version",
 				   "Originator", "Recipient", NULL };
@@ -648,7 +648,7 @@ static void isched_init(struct buf *serverinfo)
 
     /* Setup iSchedule DKIM options */
 #ifdef TEST
-    flags |= DKIM_LIBFLAGS_ZTAGS;
+    flags |= ( DKIM_LIBFLAGS_SIGNLEN | DKIM_LIBFLAGS_ZTAGS );
 #endif
     dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_FLAGS,
 		 &flags, sizeof(flags));
