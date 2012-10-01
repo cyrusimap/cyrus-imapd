@@ -791,14 +791,13 @@ static void end_part(search_text_receiver_t *rx,
     tr->part = 0;
 }
 
-static void end_message(search_text_receiver_t *rx,
-			uint32_t uid __attribute__((unused)))
+static int end_message(search_text_receiver_t *rx)
 {
     sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
     int i;
     int r;
 
-    if (!tr->conn.mysql) return;
+    if (!tr->conn.mysql) return IMAP_INTERNAL;
 
     buf_reset(&tr->query);
     buf_appendcstr(&tr->query, "INSERT INTO rt (id,"COL_CYRUSID);
@@ -833,6 +832,7 @@ static void end_message(search_text_receiver_t *rx,
 
 out:
     tr->uid = 0;
+    return 0;
 }
 
 static int begin_mailbox(search_text_receiver_t *rx,

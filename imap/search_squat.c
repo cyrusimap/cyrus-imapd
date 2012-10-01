@@ -679,12 +679,12 @@ static void end_part(search_text_receiver_t *rx,
     buf_reset(&d->pending_text);
 }
 
-static void end_message(search_text_receiver_t *rx,
-			uint32_t uid __attribute__((unused)))
+static int end_message(search_text_receiver_t *rx)
 {
     SquatReceiverData *d = (SquatReceiverData *) rx;
 
     d->uid = 0;
+    return 0;
 }
 
 /* Let SQUAT tell us what's going on in the expensive

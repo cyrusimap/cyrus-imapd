@@ -265,10 +265,10 @@ static void dump_rx_end_part(
     printf("END_PART part=%d\n", part);
 }
 
-static void dump_rx_end_message(
-    search_text_receiver_t *rx __attribute__((unused)), uint32_t uid)
+static int dump_rx_end_message(search_text_receiver_t *rx __attribute__((unused)))
 {
-    printf("END_MESSAGE uid=%u\n", uid);
+    printf("END_MESSAGE\n");
+    return 0;
 }
 
 static int dump_text_receiver(message_t *message)

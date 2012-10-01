@@ -127,7 +127,7 @@ struct search_text_receiver {
     void (*begin_part)(search_text_receiver_t *, int part);
     void (*append_text)(search_text_receiver_t *, const struct buf *);
     void (*end_part)(search_text_receiver_t *, int part);
-    void (*end_message)(search_text_receiver_t *, uint32_t uid);
+    int (*end_message)(search_text_receiver_t *);
     int (*end_mailbox)(search_text_receiver_t *,
 		       struct mailbox *);
 };
