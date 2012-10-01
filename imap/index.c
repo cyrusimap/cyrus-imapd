@@ -2738,7 +2738,9 @@ EXPORTED int index_convmultisort(struct index_state *state,
 						       extname);
 	    if (sf->id)
 		prot_printf(state->out, " ");
+	    prot_printf(state->out, "(");
 	    prot_printstring(state->out, extname);
+	    prot_printf(state->out, " %u)", sf->uidvalidity);
 	}
 	prot_printf(state->out, ") (");
 	for (i = 0 ; i < results.count ; i++) {
@@ -2759,8 +2761,6 @@ out:
 	prot_printf(state->out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "]\r\n",
 		    MAX(xconvmodseq, state->mailbox->i.highestmodseq));
 #if 0
-	prot_printf(state->out, "* OK [UIDVALIDITY %u]\r\n",
-		    state->mailbox->i.uidvalidity);
 	prot_printf(state->out, "* OK [UIDNEXT %u]\r\n",
 		    state->mailbox->i.last_uid + 1);
 #endif
