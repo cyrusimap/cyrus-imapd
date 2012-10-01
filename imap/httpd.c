@@ -2375,7 +2375,7 @@ int get_doc(struct transaction_t *txn, filter_proc_t filter)
     path = buf_cstring(&pathbuf);
 
     /* See if file exists and get Content-Length & Last-Modified time */
-    if (stat(path, &sbuf)) return HTTP_NOT_FOUND;
+    if (stat(path, &sbuf) || !S_ISREG(sbuf.st_mode)) return HTTP_NOT_FOUND;
 
     /* Open the file */
     fd = open(path, O_RDONLY);
