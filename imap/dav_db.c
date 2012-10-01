@@ -186,7 +186,7 @@ int dav_exec(sqlite3 *davdb, const char *cmd, struct bind_val bval[],
 #if SQLITE_VERSION_NUMBER >= 3006000
 	rc = sqlite3_prepare_v2(davdb, cmd, -1, stmt, NULL);
 #else
-	rc = sqlite3_prepare_v2(davdb, cmd, -1, stmt, NULL);
+	rc = sqlite3_prepare(davdb, cmd, -1, stmt, NULL);
 #endif
 	if (rc != SQLITE_OK) {
 	    syslog(LOG_ERR, "dav_exec() prepare: %s", sqlite3_errmsg(davdb));
