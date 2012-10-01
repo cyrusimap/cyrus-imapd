@@ -115,7 +115,7 @@ const struct namespace_t namespace_ischedule = {
 };
 
 const struct namespace_t namespace_domainkey = {
-  URL_NS_DOMAINKEY, "/domainkey", "/.well-known/domainkey", 0 /* auth */,
+  URL_NS_DOMAINKEY, "/domainkeys", "/.well-known/domainkey", 0 /* auth */,
   ALLOW_READ, NULL, NULL, NULL, NULL,
     {
 	{ NULL,			0		},	/* ACL		*/
@@ -579,7 +579,8 @@ static DKIM_CBSTAT isched_get_key(DKIM *dkim, DKIM_SIGINFO *sig,
 	    if (!prefix) continue;
 
 	    buf_setcstr(&path, prefix);
-	    buf_printf(&path, "/domainkey/%s/%s", domain, selector);
+	    buf_printf(&path, "%s/%s/%s",
+		       namespace_domainkey.prefix, domain, selector);
 
 	    if (!(f = fopen(buf_cstring(&path), "r"))) {
 		syslog(LOG_NOTICE, "%s: fopen(): %s",
