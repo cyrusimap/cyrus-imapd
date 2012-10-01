@@ -216,7 +216,9 @@ int dav_exec(sqlite3 *davdb, const char *cmd, struct bind_val bval[],
 
     /* reset statement and clear all bindings */
     sqlite3_reset(*stmt);
+#if SQLITE_VERSION_NUMBER >= 3006000
     sqlite3_clear_bindings(*stmt);
+#endif
 
     if (!r && rc != SQLITE_DONE) {
 	syslog(LOG_ERR, "dav_exec() step: %s", sqlite3_errmsg(davdb));
