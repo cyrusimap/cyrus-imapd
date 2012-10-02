@@ -73,7 +73,6 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 		 sasl_callback_t *cb, const char **status);
 static int ping(struct backend *s);
 static int logout(struct backend *s __attribute__((unused)));
-static int starttls(struct backend *s);
 
 
 struct protocol_t http_protocol =
@@ -249,7 +248,7 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 
 	switch (code) {
 	case 101: /* Switching Protocols */
-	    if (starttls(s)) {
+	    if (backend_starttls(s, NULL)) {
 		r = HTTP_UNAVAILABLE;
 		break;
 	    }
@@ -463,39 +462,6 @@ static int logout(struct backend *s __attribute__((unused)))
 {
     /* Nothing to send, client just closes connection */
     return 0;
-}
-
-
-static int starttls(struct backend *s)
-{
-#ifndef HAVE_SSL
-    return -1;
-#else
-    int r;
-    int *layerp;
-    char *auth_id;
-    sasl_ssf_t ssf;
-
-    r = tls_init_clientengine(5, "", "");
-    if (r == -1) return -1;
-
-    /* SASL and openssl have different ideas about whether ssf is signed */
-    layerp = (int *) &ssf;
-    r = tls_start_clienttls(s->in->fd, s->out->fd, layerp, &auth_id,
-			    &s->tlsconn, &s->tlssess);
-    if (r == -1) return -1;
-
-    r = sasl_setprop(s->saslconn, SASL_SSF_EXTERNAL, &ssf);
-    if (r == SASL_OK)
-	r = sasl_setprop(s->saslconn, SASL_AUTH_EXTERNAL, auth_id);
-    if (auth_id) free(auth_id);
-    if (r != SASL_OK) return -1;
-
-    prot_settls(s->in,  s->tlsconn);
-    prot_settls(s->out, s->tlsconn);
-
-    return 0;
-#endif /* HAVE_SSL */
 }
 
 

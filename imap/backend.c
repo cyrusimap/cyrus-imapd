@@ -177,7 +177,7 @@ static int do_compress(struct backend *s, struct simple_cmd_t *compress_cmd)
 #endif /* HAVE_ZLIB */
 }
 
-static int do_starttls(struct backend *s, struct tls_cmd_t *tls_cmd)
+int backend_starttls(struct backend *s, struct tls_cmd_t *tls_cmd)
 {
 #ifndef HAVE_SSL
     return -1;
@@ -381,7 +381,7 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
 
 	/* If we don't have a usable mech, do TLS and try again */
     } while (r == SASL_NOMECH && CAPA(s, CAPA_STARTTLS) &&
-	     do_starttls(s, &prot->u.std.tls_cmd) != -1 &&
+	     backend_starttls(s, &prot->u.std.tls_cmd) != -1 &&
 	     (*mechlist = ask_capability(s->out, s->in, prot,
 					 &s->capability, NULL,
 					 prot->u.std.tls_cmd.auto_capa)));
@@ -687,7 +687,7 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
     prot_setisclient(ret->out, 1);
 
     /* Start TLS if required */
-    if (do_tls) r = do_starttls(ret, NULL);
+    if (do_tls) r = backend_starttls(ret, NULL);
 
     /* Login to the server */
     if (!r) {
