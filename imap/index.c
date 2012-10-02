@@ -2431,13 +2431,15 @@ static struct search_folder *search_folder_get(struct search_multi_rock *sr,
     return sf;
 }
 
-static void search_folder_add_uid(struct search_folder *sf, uint32_t uid)
+/* can be called with either uid or msgno depending which phase
+ * calls it */
+static void search_folder_add_num(struct search_folder *sf, uint32_t num)
 {
     if (sf->msg_count + 1 >= sf->alloc) {
 	sf->alloc += 50;
 	sf->msg_list = xrealloc(sf->msg_list, sizeof(uint32_t)*sf->alloc);
     }
-    sf->msg_list[sf->msg_count++] = uid;
+    sf->msg_list[sf->msg_count++] = num;
 }
 
 static int index_multi_search_hit(const char *mboxname, uint32_t uidvalidity,
@@ -2455,13 +2457,13 @@ static int index_multi_search_hit(const char *mboxname, uint32_t uidvalidity,
 	/* do not remember any old data */
 	return 0;
     }
-    search_folder_add_uid(sf, uid);
+    search_folder_add_num(sf, uid);
     return 0;
 }
 
 /* convert UIDs to MSNs in-place */
-static void find_uids(struct index_state *state,
-		      struct search_folder *sf)
+static void uids_to_msgnos(struct index_state *state,
+			   struct search_folder *sf)
 {
     unsigned int in, out;
     unsigned int uid;
@@ -2470,11 +2472,13 @@ static void find_uids(struct index_state *state,
     if (!sf->uidvalidity) {
 	/* list all messages in the folder */
 	for (msgno = 1; msgno <= state->exists; msgno++)
-	    search_folder_add_uid(sf, msgno);
+	    search_folder_add_num(sf, msgno);
 	sf->uidvalidity = state->mailbox->i.uidvalidity;
 	return;
     }
 
+    /* we only keep UIDs which are still in the index,
+     * and since we just ran an EXPUNGE, they must be valid */
     for (in = 0, out = 0 ; in < sf->msg_count ; in++) {
 	uid = sf->msg_list[in];
 	msgno = index_finduid(state, uid);
@@ -2630,7 +2634,7 @@ EXPORTED int index_convmultisort(struct index_state *state,
 	if (r) goto out;
 
 	/* convert from UIDs to MSNs */
-	find_uids(state2, sf);
+	uids_to_msgnos(state2, sf);
 	if (!sf->msg_count) continue;
 
 	anchor = 0;
