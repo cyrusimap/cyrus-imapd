@@ -206,28 +206,31 @@ static const struct buf *make_cyrusid(struct mailbox *mailbox, uint32_t uid)
  *	characters to make them easier to read in log files.
  */
 static void append_escaped_map(struct buf *buf,
-			       const char *base, unsigned int len)
+			       const char *base, unsigned int len,
+			       int quote)
 {
     buf_ensure(buf, len+1);
 
+    buf_putc(buf, quote);
     for ( ; len ; len--, base++) {
 	int c = *(unsigned char *)base;
 	if (c == '\\' || c == '\'' || c == '"')
 	    buf_putc(buf, '\\');
 	buf_putc(buf, c);
     }
+    buf_putc(buf, quote);
     buf_cstring(buf);
 }
 
-static void append_escaped(struct buf *to, const struct buf *from)
+static void append_escaped(struct buf *to, const struct buf *from, int quote)
 {
-    append_escaped_map(to, from->s, from->len);
+    append_escaped_map(to, from->s, from->len, quote);
 }
 
-static void append_escaped_cstr(struct buf *to, const char *str)
+static void append_escaped_cstr(struct buf *to, const char *str, int quote)
 {
     if (str)
-	append_escaped_map(to, str, strlen(str));
+	append_escaped_map(to, str, strlen(str), quote);
 }
 
 struct opstack {
@@ -345,8 +348,7 @@ static void match(search_builder_t *bx, int part, const char *str)
 
     buf_init_ro_cstr(&f, str);
     buf_reset(&e1);
-    append_escaped(&e1, &f);
-    append_escaped(&bb->query, &e1);
+    append_escaped(&bb->query, &f, '"');
 }
 
 static void *get_internalised(search_builder_t *bx)
@@ -465,9 +467,9 @@ static int end_search(search_builder_t *bx)
 	if (r) goto out;
     }
 
-    buf_init_ro_cstr(&query, "SELECT "COL_CYRUSID" FROM rt WHERE MATCH('");
-    buf_append(&query, &bb->query);
-    buf_appendcstr(&query, "')");
+    buf_init_ro_cstr(&query, "SELECT "COL_CYRUSID" FROM rt WHERE MATCH(");
+    append_escaped(&query, &bb->query, '\'');
+    buf_appendcstr(&query, ")");
     // get sphinx to sort by most recent date first
     buf_appendcstr(&query, " ORDER BY "COL_CYRUSID" DESC "
 			       " LIMIT " SPHINX_MAX_MATCHES
@@ -572,15 +574,14 @@ static const char *describe_query(struct buf *desc,
 				  unsigned maxlen)
 {
     buf_reset(desc);
-    buf_appendcstr(desc, "Sphinx query \"");
+    buf_appendcstr(desc, "Sphinx query ");
     if (maxlen && query->len > maxlen) {
 	buf_appendmap(desc, query->s, maxlen);
 	buf_appendcstr(desc, "...");
     }
     else {
-	append_escaped(desc, query);
+	append_escaped(desc, query, '"');
     }
-    buf_appendcstr(desc, "\"");
     return buf_cstring(desc);
 }
 
@@ -713,9 +714,9 @@ static int write_latest(sphinx_receiver_t *tr)
 	buf_appendcstr(&query, "INSERT INTO latest "
 			       "(id,mboxname,uidvalidity,uid) "
 			       "VALUES (");
-	buf_printf(&query, "%u,'", id);
-	append_escaped_cstr(&query, tr->mailbox->name);
-	buf_printf(&query, "',%u,%u)",
+	buf_printf(&query, "%u,", id);
+	append_escaped_cstr(&query, tr->mailbox->name, '\'');
+	buf_printf(&query, ",%u,%u)",
 		   tr->mailbox->i.uidvalidity, tr->latest);
     }
 
@@ -870,14 +871,12 @@ static int end_message(search_text_receiver_t *rx)
 	}
     }
     buf_appendcstr(&tr->query, ") VALUES (");
-    buf_printf(&tr->query, "%u,'", ++tr->lastid);
-    append_escaped(&tr->query, make_cyrusid(tr->mailbox, tr->uid));
-    buf_appendcstr(&tr->query, "'");
+    buf_printf(&tr->query, "%u,", ++tr->lastid);
+    append_escaped(&tr->query, make_cyrusid(tr->mailbox, tr->uid), '\'');
     for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
 	if (tr->parts[i].len) {
-	    buf_appendcstr(&tr->query, ",'");
-	    append_escaped(&tr->query, &tr->parts[i]);
-	    buf_appendcstr(&tr->query, "'");
+	    buf_appendcstr(&tr->query, ",");
+	    append_escaped(&tr->query, &tr->parts[i], '\'');
 	}
     }
     /* apparently Sphinx doesn't let you explicitly INSERT a NULL */
@@ -1019,9 +1018,7 @@ static int end_message_snippets(search_text_receiver_t *rx)
     buf_appendcstr(&query, "CALL SNIPPETS((");
     for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
 	if (i) buf_putc(&query, ',');
-	buf_putc(&query, '\'');
-	append_escaped(&query, &tr->parts[i]);
-	buf_putc(&query, '\'');
+	append_escaped(&query, &tr->parts[i], '\'');
     }
     buf_appendcstr(&query, "), 'rt', '");
     buf_append(&query, tr->snippet.query);
