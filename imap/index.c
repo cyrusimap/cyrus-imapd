@@ -139,7 +139,7 @@ static int index_searchheader(char *name, char *substr, comp_pat *pat,
 static int index_searchcacheheader(struct index_state *state, uint32_t msgno, char *name, char *substr,
 				   comp_pat *pat);
 static int _index_search(unsigned **msgno_list, struct index_state *state,
-			 const struct searchargs *searchargs,
+			 struct searchargs *searchargs,
 			 modseq_t *highestmodseq);
 
 static int index_copysetup(struct index_state *state, uint32_t msgno,
@@ -1456,34 +1456,44 @@ out:
     return r;
 }
 
-static void build_query(search_builder_t *bx,
-			const struct searchargs *searchargs)
+static void build_query_part(search_builder_t *bx,
+			     struct strlist **slp,
+			     int part, int remove)
 {
     struct strlist *s;
+
+    for (s = (*slp) ; s ; s = s->next)
+	bx->match(bx, part, s->s);
+
+    if (remove) {
+	freestrlist(*slp);
+	*slp = NULL;
+    }
+}
+
+static void build_query(search_builder_t *bx,
+			struct searchargs *searchargs,
+			int remove)
+{
     struct searchsub* sub;
 
     bx->begin_boolean(bx, SEARCH_OP_AND);
 
-    for (s = searchargs->from ; s ; s = s->next)
-	bx->match(bx, SEARCH_PART_FROM, s->s);
-    for (s = searchargs->to ; s ; s = s->next)
-	bx->match(bx, SEARCH_PART_TO, s->s);
-    for (s = searchargs->cc ; s ; s = s->next)
-	bx->match(bx, SEARCH_PART_CC, s->s);
-    for (s = searchargs->bcc ; s ; s = s->next)
-	bx->match(bx, SEARCH_PART_BCC, s->s);
-    for (s = searchargs->subject ; s ; s = s->next)
-	bx->match(bx, SEARCH_PART_SUBJECT, s->s);
-    for (s = searchargs->header_name ; s ; s = s->next)
-	bx->match(bx, SEARCH_PART_HEADERS, s->s);
-    for (s = searchargs->header ; s ; s = s->next)
-	bx->match(bx, SEARCH_PART_HEADERS, s->s);
-    for (s = searchargs->body ; s ; s = s->next)
-	bx->match(bx, SEARCH_PART_BODY, s->s);
-    for (s = searchargs->text ; s ; s = s->next)
-	bx->match(bx, SEARCH_PART_ANY, s->s);
+    build_query_part(bx, &searchargs->from, SEARCH_PART_FROM, remove);
+    build_query_part(bx, &searchargs->to, SEARCH_PART_TO, remove);
+    build_query_part(bx, &searchargs->cc, SEARCH_PART_CC, remove);
+    build_query_part(bx, &searchargs->bcc, SEARCH_PART_BCC, remove);
+    build_query_part(bx, &searchargs->subject, SEARCH_PART_SUBJECT, remove);
+    /* Note - we cannot remove when searching headers, as we need
+     * to match both the header field name and value, which always
+     * requires a post filter pass */
+    build_query_part(bx, &searchargs->header_name, SEARCH_PART_HEADERS, 0);
+    build_query_part(bx, &searchargs->header, SEARCH_PART_HEADERS, 0);
+    build_query_part(bx, &searchargs->body, SEARCH_PART_BODY, remove);
+    build_query_part(bx, &searchargs->text, SEARCH_PART_ANY, remove);
 
     for (sub = searchargs->sublist ; sub ; sub = sub->next) {
+	assert(!remove);
 	if (sub->sub2 == NULL) {
 	    /* do nothing; because our search is conservative (may include false
 	       positives) we can't compute the NOT (since the result might include
@@ -1492,8 +1502,8 @@ static void build_query(search_builder_t *bx,
 	       false positives. */
 	} else {
 	    bx->begin_boolean(bx, SEARCH_OP_OR);
-	    build_query(bx, sub->sub1);
-	    build_query(bx, sub->sub2);
+	    build_query(bx, sub->sub1, remove);
+	    build_query(bx, sub->sub2, remove);
 	    bx->end_boolean(bx, SEARCH_OP_OR);
 	}
     }
@@ -1531,7 +1541,7 @@ static int index_search_hit(const char *mboxname __attribute__((unused)),
 
 static int index_prefilter_messages(unsigned* msg_list,
 				    struct index_state *state,
-				    const struct searchargs *searchargs)
+				    struct searchargs *searchargs)
 {
     int r;
     unsigned int i;
@@ -1549,7 +1559,7 @@ static int index_prefilter_messages(unsigned* msg_list,
 	goto out;
     }
 
-    build_query(bx, searchargs);
+    build_query(bx, searchargs, 0);
 
     r = search_end_search(bx);
     /* Note: do not complain if r == IMAP_TRIVIAL_SEARCH */
@@ -1657,7 +1667,7 @@ EXPORTED message_t *index_get_message(struct index_state *state, uint32_t msgno)
  * SEARCH, SORT and THREAD.
  */
 static int _index_search(unsigned **msgno_list, struct index_state *state,
-			 const struct searchargs *searchargs,
+			 struct searchargs *searchargs,
 			 modseq_t *highestmodseq)
 {
     uint32_t msgno;
@@ -2551,7 +2561,19 @@ EXPORTED int index_convmultisort(struct index_state *state,
 	goto out;
     }
 
-    build_query(bx, searchargs);
+    /*
+     * Queries which are simple conjuctions without disjunctions
+     * or negations, even if they are a mix of text and non-text
+     * clauses, can be optimised by removing the text clauses
+     * from the searchargs to avoid having to read the entire
+     * message to evaluate the text clause in imapd.  Note that
+     * this only works if the search engine is precise, i.e. does
+     * not return false positives, which is only true when we're
+     * using Sphinx in multi-folder mode.  Oh the tangled web
+     * we weave when first we practice to optimise.
+     */
+    build_query(bx, searchargs, (searchargs->sublist == NULL));
+
     r = search_end_search(bx);
     if (r == IMAP_TRIVIAL_SEARCH) {
 	char *usermbox = mboxname_user_mbox(mboxname_to_userid(state->mailbox->name), NULL);
@@ -2838,7 +2860,7 @@ EXPORTED int index_snippets(struct index_state *state,
 	goto out;
     }
 
-    build_query(bx, searchargs);
+    build_query(bx, searchargs, 0);
     intquery = bx->get_internalised(bx);
     r = search_end_search(bx);
     if (r) goto out;
