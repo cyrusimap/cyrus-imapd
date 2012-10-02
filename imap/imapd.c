@@ -10381,7 +10381,7 @@ static int getsearchcriteria(const char *tag, struct searchargs *searchargs,
 	    if (c == EOF) goto missingarg;
 	    imapd_namespace.mboxname_tointernal(&imapd_namespace, arg.s,
 						imapd_userid, mboxname);
-	    appendstrlist(&searchargs->from, mboxname);
+	    appendstrlist(&searchargs->folder, mboxname);
 	}
 	else if (!strcmp(criteria.s, "from")) {
 	    if (c != ' ') goto missingarg;		
