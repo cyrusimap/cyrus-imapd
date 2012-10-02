@@ -1527,8 +1527,9 @@ static int index_search_hit(const char *mboxname __attribute__((unused)),
     /* We know the mboxname and uidvalidity are correct, they were
      * checked in the search code because we passed single=1. */
 
+    /* if it doesn't exist any more, skip it */
     msgno = index_finduid(sr->state, uid);
-    assert(msgno > 0);
+    if (!msgno) return 0;
 
     /* Weed out UIDs reported by the indexer which no longer exist
      * in the index_state; index_finduid() doesn't. */
