@@ -2467,14 +2467,11 @@ static void find_uids(struct index_state *state,
     unsigned int in, out;
     unsigned int uid;
     unsigned int msgno;
-    struct index_map *im;
 
     if (!sf->uidvalidity) {
 	/* list all messages in the folder */
-	for (msgno = 1; msgno <= state->exists; msgno++) {
-	    im = &state->map[msgno-1];
-	    search_folder_add_uid(sf, im->record.uid);
-	}
+	for (msgno = 1; msgno <= state->exists; msgno++)
+	    search_folder_add_uid(sf, msgno);
 	sf->msg_orig_count = sf->msg_count;
 	sf->uidvalidity = state->mailbox->i.uidvalidity;
 	return;
