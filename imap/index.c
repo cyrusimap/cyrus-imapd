@@ -2483,8 +2483,7 @@ static void find_uids(struct index_state *state,
     for (in = 0, out = 0 ; in < sf->msg_count ; in++) {
 	uid = sf->msg_list[in];
 	msgno = index_finduid(state, uid);
-	assert(msgno > 0);
-	if (index_getuid(state, msgno) == uid)
+	if (msgno > 0 && index_getuid(state, msgno) == uid)
 	    sf->msg_list[out++] = msgno;
     }
 
