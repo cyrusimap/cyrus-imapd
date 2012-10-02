@@ -76,6 +76,7 @@
 #include "xstrlcat.h"
 #include "iptostring.h"
 #include "util.h"
+#include "tok.h"
 
 enum {
     AUTO_CAPA_BANNER = -1,
@@ -181,35 +182,39 @@ static int do_starttls(struct backend *s, struct tls_cmd_t *tls_cmd)
 #ifndef HAVE_SSL
     return -1;
 #else
-    char buf[2048];
     int r;
     int *layerp;
     char *auth_id;
-    sasl_ssf_t ssf;
 
-    /* send starttls command */
-    prot_printf(s->out, "%s\r\n", tls_cmd->cmd);
-    prot_flush(s->out);
+    if (tls_cmd) {
+	char buf[2048];
 
-    /* check response */
-    if (!prot_fgets(buf, sizeof(buf), s->in) ||
-	strncmp(buf, tls_cmd->ok, strlen(tls_cmd->ok)))
-	return -1;
+	/* send starttls command */
+	prot_printf(s->out, "%s\r\n", tls_cmd->cmd);
+	prot_flush(s->out);
+
+	/* check response */
+	if (!prot_fgets(buf, sizeof(buf), s->in) ||
+	    strncmp(buf, tls_cmd->ok, strlen(tls_cmd->ok)))
+	    return -1;
+    }
 
     r = tls_init_clientengine(5, "", "");
     if (r == -1) return -1;
 
     /* SASL and openssl have different ideas about whether ssf is signed */
-    layerp = (int *) &ssf;
+    layerp = (int *) &s->ext_ssf;
     r = tls_start_clienttls(s->in->fd, s->out->fd, layerp, &auth_id,
 			    &s->tlsconn, &s->tlssess);
     if (r == -1) return -1;
 
-    r = sasl_setprop(s->saslconn, SASL_SSF_EXTERNAL, &ssf);
-    if (r == SASL_OK)
-	r = sasl_setprop(s->saslconn, SASL_AUTH_EXTERNAL, auth_id);
-    if (auth_id) free(auth_id);
-    if (r != SASL_OK) return -1;
+    if (s->saslconn) {
+	r = sasl_setprop(s->saslconn, SASL_SSF_EXTERNAL, &s->ext_ssf);
+	if (r == SASL_OK)
+	    r = sasl_setprop(s->saslconn, SASL_AUTH_EXTERNAL, auth_id);
+	if (auth_id) free(auth_id);
+	if (r != SASL_OK) return -1;
+    }
 
     prot_settls(s->in,  s->tlsconn);
     prot_settls(s->out, s->tlsconn);
@@ -329,6 +334,7 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
     }
 
     r = sasl_setprop(s->saslconn, SASL_SEC_PROPS, &secprops);
+    if (!r) r = sasl_setprop(s->saslconn, SASL_SSF_EXTERNAL, &s->ext_ssf);
     if (r != SASL_OK) {
 	if (local_cb) free_callbacks(cb);
 	return r;
@@ -534,8 +540,8 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
 {
     /* need to (re)establish connection to server or create one */
     int sock = -1;
-    int r;
-    int err = 0;
+    int r = 0;
+    int err = 0, do_tls = 0;
     struct addrinfo hints, *res0 = NULL, *res;
     struct sockaddr_un sunsock;
     struct backend *ret;
@@ -569,10 +575,32 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
 	strlcpy(ret->hostname, config_servername, sizeof(ret->hostname));
     }
     else { /* inet socket */
+	char host[1024], *p;
+	const char *service = prot->service;
+
+	/* Parse server string for possible port and options */
+	strlcpy(host, server, sizeof(host));
+	if ((p = strchr(host, ':'))) {
+	    *p++ = '\0';
+	    service = p;
+
+	    if ((p = strchr(service, '/'))) {
+		tok_t tok;
+		char *opt;
+
+		*p++ = '\0';
+		tok_initm(&tok, p, "/", 0);
+		while ((opt = tok_next(&tok))) {
+		    if (!strcmp(opt, "tls")) do_tls = 1;
+		}
+		tok_fini(&tok);
+	    }
+	}
+
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = PF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
-	err = getaddrinfo(server, prot->service, &hints, &res0);
+	err = getaddrinfo(host, service, &hints, &res0);
 	if (err) {
 	    syslog(LOG_ERR, "getaddrinfo(%s) failed: %s",
 		   server, gai_strerror(err));
@@ -658,10 +686,16 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
     prot_setisclient(ret->in, 1);
     prot_setisclient(ret->out, 1);
 
-    if (prot->type == TYPE_SPEC)
-	r = prot->u.spec.login(ret, server, prot, userid, cb, auth_status);
-    else
-	r = backend_login(ret, server, prot, userid, cb, auth_status);
+    /* Start TLS if required */
+    if (do_tls) r = do_starttls(ret, NULL);
+
+    /* Login to the server */
+    if (!r) {
+	if (prot->type == TYPE_SPEC)
+	    r = prot->u.spec.login(ret, server, prot, userid, cb, auth_status);
+	else
+	    r = backend_login(ret, server, prot, userid, cb, auth_status);
+    }
 
     if (r) {
 	if (!ret_backend) free(ret);
