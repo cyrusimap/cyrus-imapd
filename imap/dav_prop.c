@@ -262,12 +262,16 @@ xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
     xmlNsPtr ns[NUM_NAMESPACE];
     xmlNodePtr error, node;
     const struct precond_t *precond = &preconds[err->precond];
+    unsigned err_ns = NS_DAV;
+    const char *resp_desc = "responsedescription";
+
+    if (precond->ns == NS_ISCHED) {
+	err_ns = NS_ISCHED;
+	resp_desc = "response-description";
+    }
 
     if (!root) {
-	error = root =
-	    init_xml_response("error", 
-			      precond->ns == NS_ISCHED ? NS_ISCHED : NS_DAV,
-			      NULL, ns);
+	error = root = init_xml_response("error", err_ns, NULL, ns);
 	avail_ns = ns;
     }
     else error = xmlNewChild(root, NULL, BAD_CAST "error", NULL);
@@ -304,8 +308,7 @@ xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
     }
 
     if (err->desc) {
-	xmlNewTextChild(error, NULL, BAD_CAST "responsedescription",
-			BAD_CAST err->desc);
+	xmlNewTextChild(error, NULL, BAD_CAST resp_desc, BAD_CAST err->desc);
     }
 
     return root;
