@@ -941,7 +941,10 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/userdeny_db.c \
 	imap/userdeny.h \
 	imap/version.c \
-	imap/version.h
+	imap/version.h \
+	imap/xstats.c \
+	imap/xstats.h \
+	imap/xstats_metrics.h
 
 if USE_SQUAT
 imap_libcyrus_imap_la_SOURCES += \

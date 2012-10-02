@@ -113,6 +113,7 @@
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 #include "ptrarray.h"
+#include "xstats.h"
 
 #include "imap/pushstats.h"		/* SNMP interface */
 
@@ -406,6 +407,7 @@ static int do_xconvfetch(struct dlist *cidlist,
 			 modseq_t ifchangedsince,
 			 struct fetchargs *fetchargs);
 static void cmd_xsnippets(char *tag);
+static void cmd_xstats(char *tag, int c);
 
 #ifdef HAVE_SSL
 static void cmd_urlfetch(char *tag);
@@ -2261,6 +2263,9 @@ static void cmdloop(void)
 		cmd_xsnippets(tag.s);
 
 // 		snmp_increment(XSNIPPETS_COUNT, 1);
+	    }
+	    else if (!strcmp(cmd.s, "Xstats")) {
+		cmd_xstats(tag.s, c);
 	    }
 	    else if (!strcmp(cmd.s, "Xwarmup")) {
 		/* XWARMUP doesn't need a mailbox to be selected */
@@ -5861,6 +5866,46 @@ out:
 error:
     eatline(imapd_in, (c == EOF ? ' ' : c));
     goto out;
+}
+
+static void cmd_xstats(char *tag, int c)
+{
+    int metric;
+    int r;
+
+    if (backend_current) {
+	/* remote mailbox */
+	const char *cmd = "Xstats";
+
+	prot_printf(backend_current->out, "%s %s ", tag, cmd);
+	if (!pipe_command(backend_current, 65536)) {
+	    pipe_including_tag(backend_current, tag, 0);
+	}
+	return;
+    }
+
+    if (c == EOF) {
+	prot_printf(imapd_out, "%s BAD Syntax error in Xstats arguments\r\n", tag);
+	goto error;
+    }
+    if (c == '\r') c = prot_getc(imapd_in);
+    if (c != '\n') {
+	prot_printf(imapd_out,
+		    "%s BAD Unexpected extra arguments to Xstats\r\n", tag);
+	goto error;
+    }
+
+    prot_printf(imapd_out, "* XSTATS");
+    for (metric = 0 ; metric < XSTATS_NUM_METRICS ; metric++)
+	prot_printf(imapd_out, " %s %u", xstats_names[metric], xstats[metric]);
+    prot_printf(imapd_out, "\r\n");
+
+    prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		error_message(IMAP_OK_COMPLETED));
+    return;
+
+error:
+    eatline(imapd_in, (c == EOF ? ' ' : c));
 }
 
 /*

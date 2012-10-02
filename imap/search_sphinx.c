@@ -62,6 +62,7 @@
 #include "xstrlcat.h"
 #include "bitvector.h"
 #include "mboxlist.h"
+#include "xstats.h"
 #include "search_engines.h"
 #include "sphinxmgr_client.h"
 
@@ -111,11 +112,13 @@ static int get_connection(const char *mboxname, struct connection *conn)
     conn->socket_path = NULL;
 
     if (conn->mysql) {
+	xstats_inc(SPHINX_CLOSE);
 	mysql_close(conn->mysql);
 	mysql_library_end();
 	conn->mysql = NULL;
     }
 
+    xstats_inc(SPHINX_CONNECT);
     c = mysql_init(NULL);
 
     if (!mysql_real_connect(c,
@@ -143,6 +146,7 @@ static void close_connection(struct connection *conn)
     conn->socket_path = NULL;
 
     if (conn->mysql) {
+	xstats_inc(SPHINX_CLOSE);
 	mysql_close(conn->mysql);
 	conn->mysql = NULL;
 	mysql_library_end();
@@ -315,6 +319,7 @@ static void match(search_builder_t *bx, int part, const char *str)
 
     begin_child(bb);
     if (str) bb->nmatches++;
+    if (str) xstats_inc(SPHINX_MATCH);
 
     if (column_by_part[part]) {
 	buf_appendcstr(&bb->query, "@");
@@ -381,6 +386,11 @@ static search_builder_t *begin_search(struct mailbox *mailbox,
     bb->proc = proc;
     bb->rock = rock;
     bb->opts = opts;
+
+    if ((opts & SEARCH_MULTIPLE))
+	xstats_inc(SPHINX_MULTIPLE);
+    else
+	xstats_inc(SPHINX_SINGLE);
 
     return &bb->super;
 }
@@ -466,6 +476,7 @@ static int end_search(search_builder_t *bx)
 
     if (SEARCH_VERBOSE(bb->opts))
 	syslog(LOG_NOTICE, "Sphinx query %s", query.s);
+    xstats_inc(SPHINX_QUERY);
 
     r = mysql_real_query(conn.mysql, query.s, query.len);
     if (r) {
@@ -482,6 +493,7 @@ static int end_search(search_builder_t *bx)
 	unsigned int uid;
 	if (SEARCH_VERBOSE(bb->opts) > 1)
 	    syslog(LOG_NOTICE, "Sphinx row cyrusid=%s", row[0]);
+	xstats_inc(SPHINX_ROW);
 	if (!parse_cyrusid(row[0], &mboxname, &uidvalidity, &uid))
 	    // TODO: whine
 	    continue;
@@ -491,6 +503,7 @@ static int end_search(search_builder_t *bx)
 	    if (uidvalidity != bb->mailbox->i.uidvalidity)
 		continue;
 	}
+	xstats_inc(SPHINX_RESULT);
 	r = bb->proc(mboxname, uidvalidity, uid, bb->rock);
 	if (r) goto out;
     }
@@ -499,6 +512,7 @@ static int end_search(search_builder_t *bx)
     if ((bb->opts & SEARCH_UNINDEXED)) {
 	/* add in the unindexed uids as false positives */
 	for (uid = latest+1 ; uid <= bb->mailbox->i.last_uid ; uid++) {
+	    xstats_inc(SPHINX_UNINDEXED);
 	    r = bb->proc(bb->mailbox->name, bb->mailbox->i.uidvalidity, uid, bb->rock);
 	    if (r) goto out;
 	}

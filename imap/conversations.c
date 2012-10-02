@@ -79,6 +79,7 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "xstats.h"
 #include "times.h"
 
 #include "conversations.h"
@@ -825,6 +826,7 @@ EXPORTED int conversation_save(struct conversations_state *state,
     /* old pre-conversations message, nothing to do */
     if (!cid)
 	return 0;
+    xstats_inc(CONV_SAVE);
 
     snprintf(bkey, sizeof(bkey), "B" CONV_FMT, cid);
 
@@ -1077,6 +1079,7 @@ EXPORTED int conversation_load(struct conversations_state *state,
     } else if (r != CYRUSDB_OK) {
 	return r;
     }
+    xstats_inc(CONV_LOAD);
 
     r = conversation_parse(state, data, datalen, convp);
     if (r) {
@@ -1141,6 +1144,7 @@ EXPORTED int conversation_get_modseq(struct conversations_state *state,
     } else if (r != CYRUSDB_OK) {
 	return r;
     }
+    xstats_inc(CONV_GET_MODSEQ);
 
     r = _conversation_load_modseq(data, datalen, modseqp);
     if (r) {
@@ -1406,6 +1410,7 @@ EXPORTED conversation_t *conversation_new(struct conversations_state *state)
     if (state->counted_flags)
 	conv->counts = xzmalloc(sizeof(uint32_t) * state->counted_flags->count);
     conv->dirty = 1;
+    xstats_inc(CONV_NEW);
 
     return conv;
 }
