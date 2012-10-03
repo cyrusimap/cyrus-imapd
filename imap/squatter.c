@@ -96,6 +96,8 @@ static int recursive_flag = 0;
 static int annotation_flag = 0;
 static search_text_receiver_t *rx = NULL;
 
+static void shut_down(int code) __attribute__((noreturn));
+
 static int usage(const char *name)
 {
     fprintf(stderr,
@@ -607,6 +609,8 @@ static void do_rolling(const char *channel)
     slr = sync_log_reader_create_with_channel(channel);
     for (;;) {
 	signals_poll();
+	if (shutdown_file(NULL, 0))
+	    shut_down(EC_TEMPFAIL);
 
 	if (!queue) {
 	    /* have successfully drained the queue, go see
@@ -643,7 +647,6 @@ static void do_rolling(const char *channel)
     sync_log_reader_free(slr);
 }
 
-static void shut_down(int code) __attribute__((noreturn));
 static void shut_down(int code)
 {
     seen_done();
