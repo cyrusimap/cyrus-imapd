@@ -477,7 +477,7 @@ struct qitem
 };
 /* Initial delay is very short to make retries fast when
  * racing against lmtpd.  */
-#define INIT_DELAY_MS    (32)		    /* 50 millisec */
+#define INIT_DELAY_MS    (32)		    /* 32 millisec */
 #define MAX_DELAY_MS     (1000)		    /* 1 sec */
 #define MAX_ELAPSED_MS	 (10 * 60 * 1000)   /* 10 min */
 
