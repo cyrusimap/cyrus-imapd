@@ -209,10 +209,14 @@ static void my_caldav_init(struct buf *serverinfo)
 static void my_caldav_auth(const char *userid)
 {
     if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
-	/* proxy-only server */
+	/* proxy-only server - won't have DAV databases */
 	return;
     }
-    else if (httpd_userisadmin) return;
+    else if (httpd_userisadmin ||
+	     global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
+	/* admin or proxy from frontend - won't have DAV database */
+	return;
+    }
 
     auth_caldavdb = caldav_open(userid, CALDAV_CREATE);
     if (!auth_caldavdb) fatal("Unable to open CalDAV DB", EC_IOERR);

@@ -247,7 +247,11 @@ static int isched_recv(struct transaction_t *txn)
     }
 
     /* Check authorization */
-    if (httpd_userid) authd = httpd_userisadmin;
+    if (httpd_userid) {
+	/* Allow admins or proxyservers to auth and use iSchedule */
+	authd = httpd_userisadmin ||
+	    global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS);
+    }
     else if (!spool_getheader(txn->req_hdrs, "DKIM-Signature")) {
 	txn->error.desc = "No signature";
     }
