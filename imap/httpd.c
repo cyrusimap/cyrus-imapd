@@ -1439,6 +1439,12 @@ int read_body(struct protstream *pin,
 
     } while (chunk);  /* Continue until we get last-chunk */
 
+    /* Decode representation, if necessary */
+    if ((hdr = spool_getheader(hdrs, "Content-Encoding"))) {
+	*errstr = "Specified Content-Encoding not accepted\r\n";
+	return HTTP_BAD_MEDIATYPE;
+    }
+
     return 0;
 }
 
