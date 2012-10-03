@@ -495,19 +495,17 @@ static void qitem_delete(qitem_t *item)
     free(item);
 }
 
-#if 0
-static void queue_dump(qitem_t **headp)
+static void debug_dump(void)
 {
     qitem_t *item;
 
     syslog(LOG_INFO, "queue {");
-    for (item = *headp ; item ; item = item->next) {
+    for (item = queue ; item ; item = item->next) {
 	syslog(LOG_INFO, "    delta_ms=%d delay_ms=%d mboxname=%s",
 		item->delta_ms, item->delay_ms, item->mboxname);
     }
     syslog(LOG_INFO, "} queue");
 }
-#endif
 
 static qitem_t *queue_remove_by_name(qitem_t **headp, const char *mboxname)
 {
@@ -608,7 +606,12 @@ static void do_rolling(const char *channel)
 
     slr = sync_log_reader_create_with_channel(channel);
     for (;;) {
-	signals_poll();
+	r = signals_poll();
+	if (r == SIGHUP) {
+	    debug_dump();
+	    signals_clear(SIGHUP);
+	    continue;
+	}
 	if (shutdown_file(NULL, 0))
 	    shut_down(EC_TEMPFAIL);
 
