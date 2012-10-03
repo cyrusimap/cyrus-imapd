@@ -472,12 +472,14 @@ struct qitem
     qitem_t *next;
     int delta_ms;	/* time after previous item */
     int delay_ms;	/* how much to delay */
+    int elapsed_ms;	/* total elapsed delays */
     char *mboxname;
 };
 /* Initial delay is very short to make retries fast when
  * racing against lmtpd.  */
-#define INIT_DELAY_MS    (50)	    /* 50 millisec */
-#define MAX_DELAY_MS     (300000)   /* 5 min */
+#define INIT_DELAY_MS    (32)		    /* 50 millisec */
+#define MAX_DELAY_MS     (1000)		    /* 1 sec */
+#define MAX_ELAPSED_MS	 (10 * 60 * 1000)   /* 10 min */
 
 static qitem_t *queue;
 
@@ -552,8 +554,18 @@ static void queue_delay(qitem_t **headp, qitem_t *item)
     int delta_ms;
 
     delta_ms = item->delay_ms;
-    if (item->delay_ms < MAX_DELAY_MS)
-	item->delay_ms *= 2;    /* exponential backoff */
+
+    item->elapsed_ms += delta_ms;
+    if (item->elapsed_ms > MAX_ELAPSED_MS) {
+	syslog(LOG_ERR, "IOERROR Unable to open mailbox %s for indexing "
+			"after %d.%03d second of delays, giving up",
+			item->mboxname,
+			item->elapsed_ms / 1000, item->elapsed_ms % 1000);
+	qitem_delete(item);
+	return;
+    }
+
+    item->delay_ms = MIN(item->delay_ms * 2, MAX_DELAY_MS);
 
     if (verbose > 1)
 	syslog(LOG_INFO, "queue_delay(%s, %d ms)", item->mboxname, delta_ms);
