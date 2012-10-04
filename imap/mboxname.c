@@ -156,8 +156,11 @@ static void remove_lockitem(struct mboxlocklist *remitem)
 		previtem->next = item->next;
 	    else
 		open_mboxlocks = item->next;
-	    if (item->l.lock_fd != -1)
+	    if (item->l.lock_fd != -1) {
+		if (item->l.locktype)
+		    lock_unlock(item->l.lock_fd, item->l.name);
 		close(item->l.lock_fd);
+	    }
 	    free(item->l.name);
 	    free(item);
 	    return;
