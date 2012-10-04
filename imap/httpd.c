@@ -1951,7 +1951,7 @@ void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
     switch (code) {
     case HTTP_OK:
     case HTTP_CREATED:
-    case HTTP_NOCONTENT:
+    case HTTP_NO_CONTENT:
     case HTTP_MULTI_STATUS:
 	break;
 
