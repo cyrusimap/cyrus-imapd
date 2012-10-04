@@ -1183,11 +1183,27 @@ static void zfree(voidpf opaque __attribute__((unused)),
     free(address);
 }
 
-EXPORTED int buf_inflate(struct buf *src)
+EXPORTED int buf_inflate(struct buf *src, int scheme)
 {
     struct buf localbuf = BUF_INITIALIZER;
     int zr = Z_OK;
     z_stream *zstrm = (z_stream *) xmalloc(sizeof(z_stream));
+    int windowBits;
+
+    switch (scheme) {
+    case DEFLATE_RAW:
+	windowBits = -MAX_WBITS;	/* raw deflate */
+	break;
+
+    case DEFLATE_GZIP:
+	windowBits = 16+MAX_WBITS;	/* gzip header */
+	break;
+
+    case DEFLATE_ZLIB:
+    default:
+	windowBits = MAX_WBITS;		/* zlib header */
+	break;
+    }
 
     zstrm->zalloc = zalloc;
     zstrm->zfree = zfree;
@@ -1195,7 +1211,7 @@ EXPORTED int buf_inflate(struct buf *src)
 
     zstrm->next_in = Z_NULL;
     zstrm->avail_in = 0;
-    zr = inflateInit2(zstrm, -MAX_WBITS);	/* raw inflate */
+    zr = inflateInit2(zstrm, windowBits);
     if (zr != Z_OK) goto err;
 
     /* set up the source */
@@ -1227,18 +1243,33 @@ EXPORTED int buf_inflate(struct buf *src)
     return -1;
 }
 
-EXPORTED int buf_deflate(struct buf *src)
+EXPORTED int buf_deflate(struct buf *src, int compLevel, int scheme)
 {
     struct buf localbuf = BUF_INITIALIZER;
     int zr = Z_OK;
     z_stream *zstrm = (z_stream *) xmalloc(sizeof(z_stream));
+    int windowBits;
+
+    switch (scheme) {
+    case DEFLATE_RAW:
+	windowBits = -MAX_WBITS;	/* raw deflate */
+	break;
+
+    case DEFLATE_GZIP:
+	windowBits = 16+MAX_WBITS;	/* gzip header */
+	break;
+
+    case DEFLATE_ZLIB:
+    default:
+	windowBits = MAX_WBITS;		/* zlib header */
+	break;
+    }
 
     zstrm->zalloc = zalloc;
     zstrm->zfree = zfree;
     zstrm->opaque = Z_NULL;
 
-    zr = deflateInit2(zstrm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
-		      -MAX_WBITS,		/* raw deflate */
+    zr = deflateInit2(zstrm, compLevel, Z_DEFLATED, windowBits,
 		      MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY);
     if (zr != Z_OK) goto err;
 

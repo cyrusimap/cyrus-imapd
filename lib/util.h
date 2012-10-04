@@ -271,9 +271,14 @@ int hex_to_bin(const char *hex, size_t hexlen, void *bin);
 #endif
 
 #ifdef HAVE_ZLIB
-int buf_inflate(struct buf *buf);
-/* XXX - compression level controls? */
-int buf_deflate(struct buf *buf);
+enum {
+    DEFLATE_RAW,
+    DEFLATE_GZIP,
+    DEFLATE_ZLIB
+};
+
+int buf_inflate(struct buf *buf, int scheme);
+int buf_deflate(struct buf *buf, int compLevel, int scheme);
 #endif
 
 #endif /* INCLUDED_UTIL_H */
