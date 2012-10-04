@@ -471,6 +471,7 @@ struct qitem
     int delta_ms;	/* time after previous item */
     int delay_ms;	/* how much to delay */
     int elapsed_ms;	/* total elapsed delays */
+    int retries;	/* number of times we have failed to index */
     char *mboxname;
 };
 /* Initial delay is very short to make retries fast when
@@ -480,6 +481,7 @@ struct qitem
 #define MAX_ELAPSED_MS	 (10 * 60 * 1000)   /* 10 min */
 
 static qitem_t *queue;
+static int n_unretried = 0;
 
 static qitem_t *qitem_new(const char *mboxname)
 {
@@ -501,23 +503,22 @@ static void debug_dump(void)
 
     syslog(LOG_INFO, "queue {");
     for (item = queue ; item ; item = item->next) {
-	syslog(LOG_INFO, "    delta_ms=%d delay_ms=%d mboxname=%s",
-		item->delta_ms, item->delay_ms, item->mboxname);
+	syslog(LOG_INFO, "    delta_ms=%d delay_ms=%d mboxname=%s retries=%d",
+		item->delta_ms, item->delay_ms, item->mboxname, item->retries);
     }
     syslog(LOG_INFO, "} queue");
+    syslog(LOG_INFO, "n_unretried=%d", n_unretried);
 }
+
+static qitem_t *_queue_detach(qitem_t **prevp);
 
 static qitem_t *queue_remove_by_name(qitem_t **headp, const char *mboxname)
 {
     qitem_t **prevp;
 
     for (prevp = headp ; *prevp ; prevp = &((*prevp)->next)) {
-	qitem_t *item = *prevp;
-	if (!strcmp(item->mboxname, mboxname)) {
-	    *prevp = item->next;
-	    item->next = NULL;
-	    return item;
-	}
+	if (!strcmp((*prevp)->mboxname, mboxname))
+	    return _queue_detach(prevp);
     }
     return NULL;
 }
@@ -528,6 +529,7 @@ static qitem_t *_queue_detach(qitem_t **prevp)
     if (item) {
 	*prevp = item->next;
 	item->next = NULL;
+	if (!item->retries) n_unretried--;
     }
     return item;
 }
@@ -536,6 +538,7 @@ static void _queue_insert(qitem_t **prevp, qitem_t *item)
 {
     item->next = *prevp;
     *prevp = item;
+    if (!item->retries) n_unretried++;
 }
 
 static qitem_t *queue_remove_due(qitem_t **headp)
@@ -599,6 +602,8 @@ static void read_sync_log_items(sync_log_reader_t *slr)
 	    if (!item)
 		item = qitem_new(args[1]);
 	    item->delay_ms = INIT_DELAY_MS;
+	    item->retries = 0;
+	    item->elapsed_ms = 0;
 	    queue_delay(&queue, item);
 	}
     }
@@ -625,9 +630,10 @@ static void do_rolling(const char *channel)
 	if (shutdown_file(NULL, 0))
 	    shut_down(EC_TEMPFAIL);
 
-	if (!queue) {
-	    /* have successfully drained the queue, go see
-	     * if there's some more to be had in the sync log */
+	if (!n_unretried) {
+	    /* Have successfully drained the queue of items which are on
+	     * their first pass around, go see if there's some more to
+	     * be had in the sync log */
 	    r = sync_log_reader_begin(slr);
 	    if (r && r != IMAP_AGAIN)
 		break;
@@ -635,15 +641,18 @@ static void do_rolling(const char *channel)
 		read_sync_log_items(slr);
 	    }
 	}
-	else if (queue_next_due(&queue) <= 0) {
+
+	if (queue_next_due(&queue) <= 0) {
 	    /* have some due items in the queue, try to index them */
 	    rx = search_begin_update(verbose);
 	    while ((item = queue_remove_due(&queue))) {
 		if (verbose > 1)
 		    syslog(LOG_INFO, "do_rolling: indexing %s", item->mboxname);
 		r = index_one(item->mboxname, /*blocking*/0);
-		if (r == IMAP_AGAIN || r == IMAP_MAILBOX_LOCKED)
+		if (r == IMAP_AGAIN || r == IMAP_MAILBOX_LOCKED) {
+		    item->retries++;
 		    queue_delay(&queue, item);
+		}
 		else
 		    qitem_delete(item);
 	    }
