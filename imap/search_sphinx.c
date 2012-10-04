@@ -247,7 +247,6 @@ struct sphinx_builder {
     int depth;
     int alloc;
     struct opstack *stack;
-    int nmatches;
 };
 
 static struct opstack *opstack_top(sphinx_builder_t *bb)
@@ -319,7 +318,6 @@ static void match(search_builder_t *bx, int part, const char *str)
     static struct buf e1 = BUF_INITIALIZER;
 
     begin_child(bb);
-    if (str) bb->nmatches++;
     if (str) xstats_inc(SPHINX_MATCH);
 
     if (column_by_part[part]) {
@@ -437,18 +435,6 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
     uint32_t uid;
     uint32_t latest = 0;
     int r = 0;
-
-    if (!bb->nmatches) {
-	/* The search expression has no match clauses, which means it
-	 * won't be using Sphinx's text search capabilities.  The best
-	 * we can hope for from Sphinx is that it will tell us every
-	 * indexed message, and our caller will add the unindexed
-	 * messages and post-filter all of that to enforce the actual
-	 * search criteria.  So let's just short-circuit all that by
-	 * returning an error, which forces our caller to fall back. */
-	r = IMAP_TRIVIAL_SEARCH;
-	goto out;
-    }
 
     r = get_connection(bb->mailbox->name, &conn);
     if (r) goto out;

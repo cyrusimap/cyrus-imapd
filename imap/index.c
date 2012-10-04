@@ -1458,12 +1458,15 @@ out:
 
 static void build_query_part(search_builder_t *bx,
 			     struct strlist **slp,
-			     int part, int remove)
+			     int part, int remove,
+			     int *nmatchesp)
 {
     struct strlist *s;
 
-    for (s = (*slp) ; s ; s = s->next)
+    for (s = (*slp) ; s ; s = s->next) {
 	bx->match(bx, part, s->s);
+	(*nmatchesp)++;
+    }
 
     if (remove) {
 	freestrlist(*slp);
@@ -1473,24 +1476,25 @@ static void build_query_part(search_builder_t *bx,
 
 static void build_query(search_builder_t *bx,
 			struct searchargs *searchargs,
-			int remove)
+			int remove,
+			int *nmatchesp)
 {
     struct searchsub* sub;
 
     bx->begin_boolean(bx, SEARCH_OP_AND);
 
-    build_query_part(bx, &searchargs->from, SEARCH_PART_FROM, remove);
-    build_query_part(bx, &searchargs->to, SEARCH_PART_TO, remove);
-    build_query_part(bx, &searchargs->cc, SEARCH_PART_CC, remove);
-    build_query_part(bx, &searchargs->bcc, SEARCH_PART_BCC, remove);
-    build_query_part(bx, &searchargs->subject, SEARCH_PART_SUBJECT, remove);
+    build_query_part(bx, &searchargs->from, SEARCH_PART_FROM, remove, nmatchesp);
+    build_query_part(bx, &searchargs->to, SEARCH_PART_TO, remove, nmatchesp);
+    build_query_part(bx, &searchargs->cc, SEARCH_PART_CC, remove, nmatchesp);
+    build_query_part(bx, &searchargs->bcc, SEARCH_PART_BCC, remove, nmatchesp);
+    build_query_part(bx, &searchargs->subject, SEARCH_PART_SUBJECT, remove, nmatchesp);
     /* Note - we cannot remove when searching headers, as we need
      * to match both the header field name and value, which always
      * requires a post filter pass */
-    build_query_part(bx, &searchargs->header_name, SEARCH_PART_HEADERS, 0);
-    build_query_part(bx, &searchargs->header, SEARCH_PART_HEADERS, 0);
-    build_query_part(bx, &searchargs->body, SEARCH_PART_BODY, remove);
-    build_query_part(bx, &searchargs->text, SEARCH_PART_ANY, remove);
+    build_query_part(bx, &searchargs->header_name, SEARCH_PART_HEADERS, 0, nmatchesp);
+    build_query_part(bx, &searchargs->header, SEARCH_PART_HEADERS, 0, nmatchesp);
+    build_query_part(bx, &searchargs->body, SEARCH_PART_BODY, remove, nmatchesp);
+    build_query_part(bx, &searchargs->text, SEARCH_PART_ANY, remove, nmatchesp);
 
     for (sub = searchargs->sublist ; sub ; sub = sub->next) {
 	assert(!remove);
@@ -1502,8 +1506,8 @@ static void build_query(search_builder_t *bx,
 	       false positives. */
 	} else {
 	    bx->begin_boolean(bx, SEARCH_OP_OR);
-	    build_query(bx, sub->sub1, remove);
-	    build_query(bx, sub->sub2, remove);
+	    build_query(bx, sub->sub1, remove, nmatchesp);
+	    build_query(bx, sub->sub2, remove, nmatchesp);
 	    bx->end_boolean(bx, SEARCH_OP_OR);
 	}
     }
@@ -1544,9 +1548,10 @@ static int index_prefilter_messages(unsigned* msg_list,
 				    struct index_state *state,
 				    struct searchargs *searchargs)
 {
-    int r;
+    int r = -1;	    /* we start in error so we can fall back */
     unsigned int i;
     search_builder_t *bx;
+    int nmatches = 0;
     struct search_rock sr;
 
     sr.state = state;
@@ -1554,28 +1559,27 @@ static int index_prefilter_messages(unsigned* msg_list,
     sr.msg_count = 0;
 
     bx = search_begin_search(state->mailbox, SEARCH_UNINDEXED);
-    if (!bx) {
-	r = IMAP_TRIVIAL_SEARCH;
-	goto out;
+    if (bx) {
+	build_query(bx, searchargs, 0, &nmatches);
+
+	/* Only run the search engine query if there are any match terms
+	 * to give it, otherwise just shortcut and return a result set
+	 * comprising all messages */
+	if (nmatches)
+	    r = bx->run(bx, index_search_hit, &sr);
+
+	search_end_search(bx);
     }
+    if (!r) return sr.msg_count;
 
-    build_query(bx, searchargs, 0);
+    xstats_inc(SEARCH_TRIVIAL);
 
-    r = bx->run(bx, index_search_hit, &sr);
-    search_end_search(bx);
-    /* Note: do not complain if r == IMAP_TRIVIAL_SEARCH */
+    /* Just put in all possible messages. This falls back to Cyrus' default
+     * search. */
 
-out:
-    if (r) {
-	/* Just put in all possible messages. This falls back to Cyrus' default
-	 * search. */
-
-	for (i = 0; i < state->exists; i++)
-	    msg_list[i] = i + 1;
-	return state->exists;
-    }
-
-    return sr.msg_count;
+    for (i = 0; i < state->exists; i++)
+	msg_list[i] = i + 1;
+    return state->exists;
 }
 
 static int index_scan_work(const char *s, unsigned long len,
@@ -2530,6 +2534,7 @@ EXPORTED int index_convmultisort(struct index_state *state,
     struct search_multi_rock sr;
     struct index_state *state2 = NULL;
     int found_any = 0;
+    int nmatches = 0;
     char extname[MAX_MAILBOX_BUFFER];
 
     assert(windowargs);
@@ -2572,11 +2577,11 @@ EXPORTED int index_convmultisort(struct index_state *state,
      * using Sphinx in multi-folder mode.  Oh the tangled web
      * we weave when first we practice to optimise.
      */
-    build_query(bx, searchargs, (searchargs->sublist == NULL));
+    build_query(bx, searchargs, (searchargs->sublist == NULL), &nmatches);
 
-    r = bx->run(bx, index_multi_search_hit, &sr);
-    search_end_search(bx);
-    if (r == IMAP_TRIVIAL_SEARCH) {
+    if (nmatches)
+	r = bx->run(bx, index_multi_search_hit, &sr);
+    else {
 	char *usermbox = mboxname_user_mbox(mboxname_to_userid(state->mailbox->name), NULL);
 	char *pattern = strconcat(usermbox, ".*", NULL);
 	mboxlist_findall(searchargs->namespace, pattern,
@@ -2588,6 +2593,7 @@ EXPORTED int index_convmultisort(struct index_state *state,
 	r = 0;
 	xstats_inc(SEARCH_TRIVIAL);
     }
+    search_end_search(bx);
     if (r) goto out;
 
 #if 0
@@ -2851,6 +2857,7 @@ EXPORTED int index_snippets(struct index_state *state,
     struct mailbox *mailbox = NULL;
     int i;
     int r = 0;
+    int nmatches = 0;
     struct snippet_rock srock;
 
     bx = search_begin_search(state->mailbox, SEARCH_MULTIPLE);
@@ -2859,7 +2866,7 @@ EXPORTED int index_snippets(struct index_state *state,
 	goto out;
     }
 
-    build_query(bx, searchargs, 0);
+    build_query(bx, searchargs, 0, &nmatches);
     intquery = bx->get_internalised(bx);
     search_end_search(bx);
     if (!intquery) goto out;

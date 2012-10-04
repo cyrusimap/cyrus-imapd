@@ -84,7 +84,6 @@ typedef struct {
     int depth;
     int alloc;
     struct opstack *stack;
-    int nmatches;
 } SquatBuilderData;
 
 static const char *squat_strerror(int err);
@@ -301,7 +300,6 @@ static void match(search_builder_t *bx, int part, const char *str)
 	return;
     if (parent && parent->op == SEARCH_OP_NOT)
 	return;
-    if (str) bb->nmatches++;
 
     top = opstack_push(bb, /*doesn't matter*/0);
     bb->part_types = doctypes_by_part[part];
@@ -427,11 +425,6 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
     if (bb->verbose > 1)
 	syslog(LOG_NOTICE, "Squat end_search()");
 #endif
-
-    if (!bb->nmatches) {
-	r = IMAP_TRIVIAL_SEARCH;
-	goto out;
-    }
 
     /* check we had balanced ->begin_boolean and ->end_boolean calls */
     if (bb->depth != 1)
