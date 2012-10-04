@@ -1604,9 +1604,10 @@ int mailbox_find_index_record(struct mailbox *mailbox, uint32_t uid,
  */
 static int mailbox_lock_index_internal(struct mailbox *mailbox, int locktype)
 {
-    char *fname;
     struct stat sbuf;
     int r = 0;
+    const char *header_fname = mailbox_meta_fname(mailbox, META_HEADER);
+    const char *index_fname = mailbox_meta_fname(mailbox, META_INDEX);
 
     assert(mailbox->index_fd != -1);
     assert(!mailbox->index_locktype);
@@ -1619,10 +1620,10 @@ restart:
 	    mailbox->is_readonly = 0;
 	    r = mailbox_open_index(mailbox);
 	}
-	if (!r) r = lock_blocking(mailbox->index_fd);
+	if (!r) r = lock_blocking(mailbox->index_fd, index_fname);
     }
     else if (locktype == LOCK_SHARED) {
-	r = lock_shared(mailbox->index_fd);
+	r = lock_shared(mailbox->index_fd, index_fname);
     }
     else {
 	fatal("invalid locktype for index", EC_SOFTWARE);
@@ -1636,7 +1637,7 @@ restart:
 	else if (mailbox->index_size < OFFSET_NUM_RECORDS)
 	    r = IMAP_MAILBOX_BADFORMAT;
 	if (r)
-	    lock_unlock(mailbox->index_fd);
+	    lock_unlock(mailbox->index_fd, index_fname);
     }
 
     if (r) {
@@ -1648,11 +1649,10 @@ restart:
     mailbox->index_locktype = locktype;
     gettimeofday(&mailbox->starttime, 0);
 
-    fname = mailbox_meta_fname(mailbox, META_HEADER);
-    r = stat(fname, &sbuf);
+    r = stat(header_fname, &sbuf);
     if (r == -1) {
 	syslog(LOG_ERR, "IOERROR: stating header %s for %s: %m",
-	       fname, mailbox->name);
+	       header_fname, mailbox->name);
 	mailbox_unlock_index(mailbox, NULL);
 	return IMAP_IOERROR;
     }
@@ -1762,6 +1762,7 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
     struct timeval endtime;
     double timediff;
     int r;
+    const char *index_fname = mailbox_meta_fname(mailbox, META_INDEX);
 
     /* naughty - you can't unlock a dirty mailbox! */
     r = mailbox_commit(mailbox);
@@ -1784,7 +1785,7 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
     }
 
     if (mailbox->index_locktype) {
-	if (lock_unlock(mailbox->index_fd))
+	if (lock_unlock(mailbox->index_fd, index_fname))
 	    syslog(LOG_ERR, "IOERROR: unlocking index of %s: %m", 
 		mailbox->name);
 	mailbox->index_locktype = 0;
@@ -3256,7 +3257,7 @@ EXPORTED int mailbox_create(const char *name,
     int r = 0;
     char quotaroot[MAX_MAILBOX_BUFFER];
     int hasquota;
-    char *fname;
+    const char *fname;
     struct mailbox *mailbox = NULL;
     int n;
     uint32_t generation_buf;
@@ -3323,7 +3324,7 @@ EXPORTED int mailbox_create(const char *name,
 	r = IMAP_IOERROR;
 	goto done;
     }
-    r = lock_blocking(mailbox->index_fd);
+    r = lock_blocking(mailbox->index_fd, fname);
     if (r) {
 	syslog(LOG_ERR, "IOERROR: locking %s: %m", fname);
 	r = IMAP_IOERROR;

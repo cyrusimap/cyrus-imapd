@@ -210,15 +210,15 @@ HIDDEN int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
 
     switch (locktype) {
     case LOCK_SHARED:
-	r = lock_shared(lockitem->l.lock_fd);
+	r = lock_shared(lockitem->l.lock_fd, fname);
 	if (!r) lockitem->l.locktype = LOCK_SHARED;
 	break;
     case LOCK_EXCLUSIVE:
-	r = lock_blocking(lockitem->l.lock_fd);
+	r = lock_blocking(lockitem->l.lock_fd, fname);
 	if (!r) lockitem->l.locktype = LOCK_EXCLUSIVE;
 	break;
     case LOCK_NONBLOCKING:
-	r = lock_nonblocking(lockitem->l.lock_fd);
+	r = lock_nonblocking(lockitem->l.lock_fd, fname);
 	if (r == -1) r = IMAP_MAILBOX_LOCKED;
 	else if (!r) lockitem->l.locktype = LOCK_EXCLUSIVE;
 	break;

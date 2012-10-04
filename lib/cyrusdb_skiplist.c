@@ -684,20 +684,20 @@ static int read_lock(struct dbengine *db)
 
     assert(db->lock_status == UNLOCKED);
     for (;;) {
-	if (lock_shared(db->fd) < 0) {
+	if (lock_shared(db->fd, db->fname) < 0) {
 	    syslog(LOG_ERR, "IOERROR: lock_shared %s: %m", db->fname);
 	    return CYRUSDB_IOERROR;
 	}
 
 	if (fstat(db->fd, &sbuf) == -1) {
 	    syslog(LOG_ERR, "IOERROR: fstat %s: %m", db->fname);
-	    lock_unlock(db->fd);
+	    lock_unlock(db->fd, db->fname);
 	    return CYRUSDB_IOERROR;
 	}
 
 	if (stat(db->fname, &sbuffile) == -1) {
 	    syslog(LOG_ERR, "IOERROR: stat %s: %m", db->fname);
-	    lock_unlock(db->fd);
+	    lock_unlock(db->fd, db->fname);
 	    return CYRUSDB_IOERROR;
 	}
 	if (sbuf.st_ino == sbuffile.st_ino) break;
@@ -705,7 +705,7 @@ static int read_lock(struct dbengine *db)
 	newfd = open(db->fname, O_RDWR, 0644);
 	if (newfd == -1) {
 	    syslog(LOG_ERR, "IOERROR: open %s: %m", db->fname);
-	    lock_unlock(db->fd);
+	    lock_unlock(db->fd, db->fname);
 	    return CYRUSDB_IOERROR;
 	}
 	
@@ -742,7 +742,7 @@ static int unlock(struct dbengine *db)
     if (db->lock_status == UNLOCKED) {
 	syslog(LOG_NOTICE, "skiplist: unlock while not locked");
     }
-    if (lock_unlock(db->fd) < 0) {
+    if (lock_unlock(db->fd, db->fname) < 0) {
 	syslog(LOG_ERR, "IOERROR: lock_unlock %s: %m", db->fname);
 	return CYRUSDB_IOERROR;
     }

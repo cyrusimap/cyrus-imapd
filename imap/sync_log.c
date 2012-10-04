@@ -146,7 +146,7 @@ static void sync_log_base(const char *channel, const char *string)
 	    return;
 	}
 
-	if (lock_blocking(fd) == -1) {
+	if (lock_blocking(fd, fname) == -1) {
 	    syslog(LOG_ERR, "sync_log(): Failed to lock %s for %s: %m",
 		   fname, string);
 	    xclose(fd);
@@ -159,6 +159,7 @@ static void sync_log_base(const char *channel, const char *string)
 	    (sbuffd.st_ino == sbuffile.st_ino))
 	    break;
 
+	lock_unlock(fd, fname);
 	xclose(fd);
     }
     if (retries >= SYNC_LOG_RETRIES) {
@@ -174,6 +175,7 @@ static void sync_log_base(const char *channel, const char *string)
 	       fname, strerror(errno));
 
     (void)fsync(fd); /* paranoia */
+    lock_unlock(fd, fname);
     xclose(fd);
 }
 
@@ -429,7 +431,7 @@ EXPORTED int sync_log_reader_begin(sync_log_reader_t *slr)
 	    return IMAP_IOERROR;
 	}
 
-	if (lock_blocking(fd) < 0) {
+	if (lock_blocking(fd, slr->work_file) < 0) {
 	    syslog(LOG_ERR, "Failed to lock %s: %m", slr->work_file);
 	    close(fd);
 	    return IMAP_IOERROR;
@@ -465,6 +467,7 @@ EXPORTED int sync_log_reader_end(sync_log_reader_t *slr)
     }
 
     if (slr->fd_is_ours && slr->fd >= 0) {
+	lock_unlock(slr->fd, slr->work_file);
 	close(slr->fd);
 	slr->fd = -1;
     }

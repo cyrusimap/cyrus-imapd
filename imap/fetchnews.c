@@ -407,7 +407,7 @@ int main(int argc, char *argv[])
 	    syslog(LOG_ERR, "cannot open %s", sfile);
 	    goto quit;
 	}
-	if (lock_nonblocking(fd) == -1) {
+	if (lock_nonblocking(fd, sfile) == -1) {
 	    syslog(LOG_ERR, "cannot lock %s: %m", sfile);
 	    goto quit;
 	}
@@ -496,7 +496,7 @@ int main(int argc, char *argv[])
 	lseek(fd, 0, SEEK_SET);
 	if (write(fd, &stamp, sizeof(stamp)) < (int) sizeof(stamp))
 	    syslog(LOG_ERR, "error writing %s", sfile);
-	lock_unlock(fd);
+	lock_unlock(fd, sfile);
 	close(fd);
     }
     else {

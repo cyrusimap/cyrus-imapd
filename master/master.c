@@ -2031,7 +2031,7 @@ int main(int argc, char **argv)
 	    syslog(LOG_ERR, "can't open pidfile lock: %s (%m)", pidfile_lock);
 	    exit(EX_OSERR);
 	} else {
-	    if(lock_nonblocking(pidlock_fd)) {
+	    if(lock_nonblocking(pidlock_fd, pidfile)) {
 		syslog(LOG_ERR, "can't get exclusive lock on %s",
 		       pidfile_lock);
 		exit(EX_TEMPFAIL);
@@ -2102,7 +2102,7 @@ int main(int argc, char **argv)
     } else {
 	char buf[100];
 
-	if(lock_nonblocking(pidfd)) {
+	if(lock_nonblocking(pidfd, pidfile)) {
 	    int exit_result = EX_OSERR;
 
 	    /* Tell our parent that we failed. */
