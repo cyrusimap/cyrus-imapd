@@ -1669,7 +1669,7 @@ static bit64 mboxname_setval(const char *mboxname, const char *metaname,
 	    syslog(LOG_ERR, "IOERROR: failed to create %s: %m", fname);
 	    goto done;
 	}
-	if (lock_blocking(fd)) {
+	if (lock_blocking(fd, fname)) {
 	    syslog(LOG_ERR, "IOERROR: failed to lock %s: %m", fname);
 	    goto done;
 	}
@@ -1682,6 +1682,7 @@ static bit64 mboxname_setval(const char *mboxname, const char *metaname,
 	    goto done;
 	}
 	if (sbuf.st_ino == fbuf.st_ino) break;
+	lock_unlock(fd, fname);
 	close(fd);
 	fd = -1;
     }
@@ -1730,7 +1731,10 @@ static bit64 mboxname_setval(const char *mboxname, const char *metaname,
 
  done:
     if (newfd != -1) close(newfd);
-    if (fd != -1) close(fd);
+    if (fd != -1) {
+	lock_unlock(fd, fname);
+	close(fd);
+    }
     mboxname_free_parts(&parts);
     free(fname);
     return retval;

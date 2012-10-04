@@ -526,6 +526,7 @@ EXPORTED int sync_log_reader_end(sync_log_reader_t *slr)
     }
 
     if (slr->fd_is_ours && slr->fd >= 0) {
+	lock_unlock(slr->fd, slr->work_file);
 	close(slr->fd);
 	slr->fd = -1;
     }
