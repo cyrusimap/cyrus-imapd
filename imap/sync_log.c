@@ -439,6 +439,12 @@ EXPORTED int sync_log_reader_begin(sync_log_reader_t *slr)
 
 	slr->fd = fd;
 	slr->fd_is_ours = 1;
+
+	/* we can unlock immediately, since we have serialised
+	 * any process which held the lock over the rename.  All
+	 * future attempts to lock this inode will stat and notice
+	 * the rename, so they won't write any more */
+	lock_unlock(slr->fd, slr->work_file);
     }
 
     slr->input = prot_new(slr->fd, /*write*/0);
@@ -467,7 +473,6 @@ EXPORTED int sync_log_reader_end(sync_log_reader_t *slr)
     }
 
     if (slr->fd_is_ours && slr->fd >= 0) {
-	lock_unlock(slr->fd, slr->work_file);
 	close(slr->fd);
 	slr->fd = -1;
     }
