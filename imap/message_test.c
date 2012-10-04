@@ -57,6 +57,7 @@
 #include "global.h"
 #include "imap_err.h"
 #include "index.h"
+#include "search_engines.h"
 #include "conversations.h"
 #include "mailbox.h"
 #include "mboxlist.h"

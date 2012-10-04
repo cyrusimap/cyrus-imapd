@@ -5440,6 +5440,12 @@ static void stuff_part(search_text_receiver_t *receiver,
     receiver->end_part(receiver, part);
 }
 
+static void extract_cb(const struct buf *text, void *rock)
+{
+    struct getsearchtext_rock *str = (struct getsearchtext_rock *)rock;
+    str->receiver->append_text(str->receiver, text);
+}
+
 static int getsearchtext_cb(int partno, int charset, int encoding,
 			    const char *subtype, struct buf *data,
 			    void *rock)
@@ -5463,7 +5469,7 @@ static int getsearchtext_cb(int partno, int charset, int encoding,
     }
     else {
 	/* body-like */
-	charset_extract(str->receiver, data, charset, encoding, subtype,
+	charset_extract(extract_cb, str, data, charset, encoding, subtype,
 			str->charset_flags);
     }
 

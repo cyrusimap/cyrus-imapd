@@ -55,6 +55,8 @@
 
 #define CHARSET_UNKNOWN_CHARSET (-1)
 
+#include "util.h"
+
 typedef int comp_pat;
 typedef int charset_index;
 
@@ -87,58 +89,12 @@ extern int charset_search_mimeheader(const char *substr, comp_pat *pat, const ch
 
 extern char *charset_encode_mimeheader(const char *header, size_t len);
 
-/* These constants are passed into the search_text_receiver_t.begin_part callback to
-   tell it which part of the message is being sent down */
-#define SEARCH_PART_ANY	    0
-#define SEARCH_PART_FROM    1
-#define SEARCH_PART_TO      2
-#define SEARCH_PART_CC      3
-#define SEARCH_PART_BCC     4
-#define SEARCH_PART_SUBJECT 5
-#define SEARCH_PART_HEADERS 6 /* headers OTHER than the above headers */
-#define SEARCH_PART_BODY    7
-#define SEARCH_NUM_PARTS    8
-
-extern const char *search_part_as_string(int part);
-
-/* The functions in search_text_receiver_t get called at least once for each part of every message.
-   The invocations form a sequence:
-       begin_message(<uid>)
-       receiver->begin_part(<part1>)
-       receiver->append_text(<text>)     (1 or more times)
-       receiver->end_part(<part1>)
-       ...
-       receiver->begin_part(<partN>)
-       receiver->append_text(<text>)     (1 or more times)
-       receiver->end_part(<partN>)
-       receiver->end_message(<uid>)
-
-   The parts need not arrive in any particular order, but each part
-   can only participate in one begin_part ... append_text ... end_part
-   sequence, and the sequences for different parts cannot be interleaved.
-*/
-struct buf;
-struct mailbox;
-typedef struct search_text_receiver search_text_receiver_t;
-struct search_text_receiver {
-    int (*begin_mailbox)(search_text_receiver_t *,
-			 struct mailbox *, int incremental);
-    uint32_t (*first_unindexed_uid)(search_text_receiver_t *);
-    int (*is_indexed)(search_text_receiver_t *, uint32_t uid);
-    void (*begin_message)(search_text_receiver_t *, uint32_t uid);
-    void (*begin_part)(search_text_receiver_t *, int part);
-    void (*append_text)(search_text_receiver_t *, const struct buf *);
-    void (*end_part)(search_text_receiver_t *, int part);
-    int (*end_message)(search_text_receiver_t *);
-    int (*end_mailbox)(search_text_receiver_t *,
-		       struct mailbox *);
-};
-
 /* Extract the body text for the message denoted by 'uid', convert its
    text to the canonical form for searching, and pass the converted text
-   down in a series of invocations of receiver->append_text().  This is
+   down in a series of invocations of the callback 'cb'.  This is
    called by index_getsearchtext to extract the MIME body parts. */
-extern int charset_extract(search_text_receiver_t *receiver,
+extern int charset_extract(void (*cb)(const struct buf *text, void *rock),
+			   void *rock,
 			   const struct buf *data,
 			   charset_index charset, int encoding,
 			   const char *subtype, int flags);

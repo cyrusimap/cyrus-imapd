@@ -91,6 +91,17 @@ static const struct search_engine *engine(void)
     }
 }
 
+EXPORTED const char *search_part_as_string(int part)
+{
+    static const char *names[SEARCH_NUM_PARTS] = {
+	/* ANY */NULL, "FROM", "TO", "CC",
+	"BCC", "SUBJECT", "HEADERS", "BODY"
+    };
+
+    return (part < 0 || part >= SEARCH_NUM_PARTS ? NULL : names[part]);
+}
+
+
 EXPORTED search_builder_t *search_begin_search(struct mailbox *mailbox, int opts,
 					       search_hit_cb_t proc, void *rock)
 {

@@ -1941,18 +1941,9 @@ EXPORTED int charset_searchfile(const char *substr, comp_pat *pat,
     return res;
 }
 
-EXPORTED const char *search_part_as_string(int part)
-{
-    static const char *names[SEARCH_NUM_PARTS] = {
-	/* ANY */NULL, "FROM", "TO", "CC",
-	"BCC", "SUBJECT", "HEADERS", "BODY"
-    };
-
-    return (part < 0 || part >= SEARCH_NUM_PARTS ? NULL : names[part]);
-}
-
 /* This is based on charset_searchfile above. */
-EXPORTED int charset_extract(search_text_receiver_t *receiver,
+EXPORTED int charset_extract(void (*cb)(const struct buf *, void *),
+			     void *rock,
 			     const struct buf *data,
 			     int charset, int encoding,
 			     const char *subtype, int flags)
@@ -2015,12 +2006,12 @@ EXPORTED int charset_extract(search_text_receiver_t *receiver,
 
 	/* process a block of output every so often */
 	if (buf_len(out) > 4096) {
-	    receiver->append_text(receiver, out);
+	    cb(out, rock);
 	    buf_reset(out);
 	}
     }
     if (out->len) { /* finish it */
-	receiver->append_text(receiver, out);
+	cb(out, rock);
     }
 
     convert_free(input);
