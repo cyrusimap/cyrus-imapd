@@ -189,6 +189,14 @@ struct resp_body_t {
     const char *etag;	/* ETag             */
     time_t lastmod;	/* Last-Modified    */
     const char *stag;	/* Schedule-Tag     */
+    unsigned vary;	/* Vary */
+};
+
+/* Vary header fields */
+enum {
+    VARY_AE =		(1<<0),	/* Accept-Encoding: gzip */
+    VARY_BRIEF =	(1<<1),	/* Brief: t */
+    VARY_PREFER =	(1<<2)	/* Prefer: return-min|return-rep|depth-noroot */
 };
 
 /* Transaction context */

@@ -1223,6 +1223,7 @@ static void cmdloop(void)
 	    for (e = enc; e && e->token; e++) {
 		if (!strcmp(e->token, "gzip") || !strcmp(e->token, "x-gzip")) {
 		    txn.flags |= HTTP_GZIP;
+		    txn.resp_body.vary |= VARY_AE;
 		}
 		/* XXX  Do we want to support deflate even though M$
 		   doesn't implement it correctly (raw deflate vs. zlib)? */
@@ -1555,9 +1556,8 @@ void response_header(long code, struct transaction_t *txn)
     prot_printf(httpd_out, "%s\r\n", http_statusline(code));
 
 
-    /* General Header Fields */
+    /* Connection Management Header Fields */
     switch (code) {
-	/* Construct any Connection and associated header(s) */
     case HTTP_SWITCH_PROT:
 	prot_printf(httpd_out, "Upgrade: TLS/1.0\r\n");
 	prot_printf(httpd_out, "Connection: Upgrade\r\n");
@@ -1593,22 +1593,6 @@ void response_header(long code, struct transaction_t *txn)
 	/* Complete Connection header */
 	prot_printf(httpd_out, "%s\r\n",
 		    (code == HTTP_UPGRADE) ? ", Upgrade" : "");
-    }
-
-    if (txn->flags & (HTTP_NOCACHE | HTTP_NOTRANSFORM)) {
-	/* Construct Cache-Control header */
-	const char *sep = "";
-
-	prot_printf(httpd_out, "Cache-Control:");
-	if (txn->flags & HTTP_NOCACHE) {
-	    prot_printf(httpd_out, "%s no-cache", sep);
-	    sep = ",";
-	}
-	if (txn->flags & HTTP_NOTRANSFORM) {
-	    prot_printf(httpd_out, "%s no-transform", sep);
-	    sep = ",";
-	}
-	prot_printf(httpd_out, "\r\n");
     }
 
 
@@ -1736,12 +1720,50 @@ void response_header(long code, struct transaction_t *txn)
 	}
     }
 
+    /* Caching Header Fields */
+    if (txn->flags & (HTTP_NOCACHE | HTTP_NOTRANSFORM)) {
+	/* Construct Cache-Control header */
+	const char *sep = "";
 
-    /* Payload Header Fields */
+	prot_printf(httpd_out, "Cache-Control:");
+	if (txn->flags & HTTP_NOCACHE) {
+	    prot_printf(httpd_out, "%s no-cache", sep);
+	    sep = ",";
+	}
+	if (txn->flags & HTTP_NOTRANSFORM) {
+	    prot_printf(httpd_out, "%s no-transform", sep);
+	    sep = ",";
+	}
+	prot_printf(httpd_out, "\r\n");
+    }
+
+    if (resp_body->vary) {
+	/* Construct Vary header */
+	unsigned vary = resp_body->vary;
+	const char *sep = "";
+
+	prot_printf(httpd_out, "Vary:");
+	if (vary & VARY_AE) {
+	    prot_printf(httpd_out, "%s Accept-Encoding", sep);
+	    sep = ",";
+	}
+	if (vary & VARY_BRIEF) {
+	    prot_printf(httpd_out, "%s Brief", sep);
+	    sep = ",";
+	}
+	if (vary & VARY_PREFER) {
+	    prot_printf(httpd_out, "%s Prefer", sep);
+	    sep = ",";
+	}
+	prot_printf(httpd_out, "\r\n");
+    }
+
+
+    /* Body Header Fields */
     switch (code) {
     case HTTP_NO_CONTENT:
     case HTTP_NOT_MODIFIED:
-	/* MUST NOT include a payload */
+	/* MUST NOT include a body */
 	break;
 
     default:
@@ -1754,7 +1776,6 @@ void response_header(long code, struct transaction_t *txn)
 
     /* Representation Header Fields */
     if (resp_body->enc) {
-	prot_printf(httpd_out, "Vary: Accept-Encoding\r\n");
 	prot_printf(httpd_out, "Content-Encoding: %s\r\n", resp_body->enc);
     }
     if (resp_body->lang) {
@@ -1927,6 +1948,18 @@ void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
     xmlChar *buf;
     int bufsiz;
 
+    switch (code) {
+    case HTTP_OK:
+    case HTTP_CREATED:
+    case HTTP_NOCONTENT:
+    case HTTP_MULTI_STATUS:
+	break;
+
+    default:
+	/* Neither Brief nor Prefer affect error response bodies */
+	txn->resp_body.vary &= ~(VARY_BRIEF|VARY_PREFER);
+    }
+
     /* Dump XML response tree into a text buffer */
     xmlDocDumpFormatMemoryEnc(xml, &buf, &bufsiz, "utf-8", DEBUG ? 1 : 0);
 
@@ -1950,6 +1983,9 @@ void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
 /* Output an HTTP error response with optional XML or text body */
 void error_response(long code, struct transaction_t *txn)
 {
+    /* Neither Brief nor Prefer affect error response bodies */
+    txn->resp_body.vary &= ~(VARY_BRIEF|VARY_PREFER);
+
 #ifdef WITH_CALDAV
     if (txn->error.precond) {
 	xmlNodePtr root = xml_add_error(NULL, &txn->error, NULL);

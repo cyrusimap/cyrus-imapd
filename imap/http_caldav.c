@@ -120,7 +120,7 @@ static int meth_post(struct transaction_t *txn);
 static int meth_put(struct transaction_t *txn);
 static int meth_report(struct transaction_t *txn);
 static int parse_path(struct request_target_t *tgt, const char **errstr);
-static unsigned get_preferences(hdrcache_t hdrcache);
+static unsigned get_preferences(struct transaction_t *txn);
 static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			  struct mailbox *mailbox, const char *resource,
 			  struct caldav_db *caldavdb, int overwrite,
@@ -1876,7 +1876,7 @@ int meth_propfind(struct transaction_t *txn)
     /* Populate our propfind context */
     fctx.req_tgt = &txn->req_tgt;
     fctx.depth = depth;
-    fctx.prefer = get_preferences(txn->req_hdrs);
+    fctx.prefer = get_preferences(txn);
     fctx.userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = httpd_authstate;
@@ -2096,7 +2096,7 @@ static int meth_proppatch(struct transaction_t *txn)
 
     /* Output the XML response */
     if (!ret) {
-	if (get_preferences(txn->req_hdrs) & PREFER_MIN) ret = HTTP_OK;
+	if (get_preferences(txn) & PREFER_MIN) ret = HTTP_OK;
 	else xml_response(HTTP_MULTI_STATUS, txn, outdoc);
     }
 
@@ -2439,7 +2439,7 @@ static int meth_put(struct transaction_t *txn)
 #endif /* WITH_CALDAV_SCHED */
 
     flags = NEW_STAG;
-    if (get_preferences(txn->req_hdrs) & PREFER_REP) flags |= PREFER_REP;
+    if (get_preferences(txn) & PREFER_REP) flags |= PREFER_REP;
 
     /* Store resource at target */
     ret = store_resource(txn, ical, mailbox, txn->req_tgt.resource,
@@ -3210,7 +3210,7 @@ static int meth_report(struct transaction_t *txn)
     /* Populate our propfind context */
     fctx.req_tgt = &txn->req_tgt;
     fctx.depth = depth;
-    fctx.prefer = get_preferences(txn->req_hdrs);
+    fctx.prefer = get_preferences(txn);
     fctx.userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = httpd_authstate;
@@ -3667,19 +3667,13 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     return ret;
 }
 
-static unsigned get_preferences(hdrcache_t hdrcache)
+static unsigned get_preferences(struct transaction_t *txn)
 {
     unsigned prefs = 0;
     const char **hdr;
 
-    /* Check for Brief header */
-    if ((hdr = spool_getheader(hdrcache, "Brief")) &&
-	!strcasecmp(hdr[0], "t")) {
-	prefs |= PREFER_MIN;
-    }
-
     /* Check for Prefer header(s) */
-    if ((hdr = spool_getheader(hdrcache, "Prefer"))) {
+    if ((hdr = spool_getheader(txn->req_hdrs, "Prefer"))) {
 	int i;
 	for (i = 0; hdr[i]; i++) {
 	    tok_t tok;
@@ -3696,6 +3690,15 @@ static unsigned get_preferences(hdrcache_t hdrcache)
 	    }
 	    tok_fini(&tok);
 	}
+
+	if (prefs) txn->resp_body.vary |= VARY_PREFER;
+    }
+
+    /* Check for Brief header */
+    if ((hdr = spool_getheader(txn->req_hdrs, "Brief")) &&
+	!strcasecmp(hdr[0], "t")) {
+	prefs |= PREFER_MIN;
+	txn->resp_body.vary |= VARY_BRIEF;
     }
 
     return prefs;
