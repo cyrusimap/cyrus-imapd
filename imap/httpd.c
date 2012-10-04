@@ -1412,14 +1412,14 @@ int read_body(struct protstream *pin,
 
 	/* Read chunk-data */ 
 	while (len) {
-	    if (!(n = prot_read(pin, buf,
-				len > PROT_BUFSIZE ? PROT_BUFSIZE : len))) {
+	    if (body) n = prot_readbuf(pin, body, len);
+	    else n = prot_read(pin, buf, MIN(len, sizeof(buf)));
+	    if (!n) {
 		syslog(LOG_ERR, "prot_read() error");
 		*errstr = "Unable to read body data\r\n";
 		return HTTP_BAD_REQUEST;
 	    }
 
-	    if (body) buf_appendmap(body, buf, n);
 	    len -= n;
 	}
 
