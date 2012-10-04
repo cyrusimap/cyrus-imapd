@@ -156,6 +156,7 @@ static int indexd_setup_config(indexd_t *id)
 	"    rt_field = header_subject\n"
 	"    rt_field = headers\n"
 	"    rt_field = body\n"
+	"    preopen = 0\n"
 	"}\n"
 	"\n"
 	"index latest\n"
@@ -166,6 +167,7 @@ static int indexd_setup_config(indexd_t *id)
 	"    rt_attr_uint = uidvalidity\n"
 	"    rt_attr_uint = uid\n"
 	"    rt_field = dummy\n"
+	"    preopen = 1\n"
 	"}\n"
 	"\n"
 	"searchd\n"
@@ -177,6 +179,7 @@ static int indexd_setup_config(indexd_t *id)
 	"    compat_sphinxql_magics = 0\n"
 	"    workers = threads\n"
 	"    max_matches = " SPHINX_MAX_MATCHES "\n"
+	"    preopen_indexes = 0\n"
 	"}\n";
     char *sphinx_config = NULL;
     int fd = -1;
