@@ -60,6 +60,7 @@ struct search_builder {
     void (*end_boolean)(search_builder_t *, int op);
     void (*match)(search_builder_t *, int part, const char *str);
     void *(*get_internalised)(search_builder_t *);
+    int (*run)(search_builder_t *, search_hit_cb_t proc, void *rock);
 };
 
 /* These constants are passed into the search_text_receiver_t.begin_part callback to
@@ -118,12 +119,8 @@ struct search_engine {
 #define SEARCH_UNINDEXED	(1<<4)	/* return unindexed messages
 					 * as hits (doesn't work
 					 * with MULTIPLE) */
-#define SEARCH_DRYRUN		(1<<5)	/* don't run the query just
-					 * build an internalised query,
-					 * useful for getting snippets */
-    search_builder_t *(*begin_search)(struct mailbox *, int opts,
-				      search_hit_cb_t proc, void *rock);
-    int (*end_search)(search_builder_t *);
+    search_builder_t *(*begin_search)(struct mailbox *, int opts);
+    void (*end_search)(search_builder_t *);
     search_text_receiver_t *(*begin_update)(int verbose);
     int (*end_update)(search_text_receiver_t *);
     search_text_receiver_t *(*begin_snippets)(void *internalised,
@@ -143,9 +140,8 @@ struct search_engine {
  * folder in the same conversation scope (i.e. the same user) as
  * reported.
  */
-extern search_builder_t *search_begin_search(struct mailbox *, int opts,
-					     search_hit_cb_t proc, void *rock);
-extern int search_end_search(search_builder_t *);
+extern search_builder_t *search_begin_search(struct mailbox *, int opts);
+extern void search_end_search(search_builder_t *);
 
 search_text_receiver_t *search_begin_update(int verbose);
 int search_end_update(search_text_receiver_t *rx);

@@ -242,8 +242,6 @@ typedef struct sphinx_builder sphinx_builder_t;
 struct sphinx_builder {
     search_builder_t super;
     struct mailbox *mailbox;
-    search_hit_cb_t proc;
-    void *rock;
     int opts;
     struct buf query;	    /* Spinx extended query syntax, not SphinxQL */
     int depth;
@@ -372,9 +370,9 @@ static void free_internalised(void *internalised)
     }
 }
 
-static search_builder_t *begin_search(struct mailbox *mailbox,
-				      int opts,
-				      search_hit_cb_t proc, void *rock)
+static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock);
+
+static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
 {
     sphinx_builder_t *bb;
 
@@ -383,10 +381,9 @@ static search_builder_t *begin_search(struct mailbox *mailbox,
     bb->super.end_boolean = end_boolean;
     bb->super.match = match;
     bb->super.get_internalised = get_internalised;
+    bb->super.run = run;
 
     bb->mailbox = mailbox;
-    bb->proc = proc;
-    bb->rock = rock;
     bb->opts = opts;
 
     if ((opts & SEARCH_MULTIPLE))
@@ -430,7 +427,7 @@ out:
     return r;
 }
 
-static int end_search(search_builder_t *bx)
+static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
 {
     sphinx_builder_t *bb = (sphinx_builder_t *)bx;
     struct connection conn = CONNECTION_INITIALIZER;
@@ -440,8 +437,6 @@ static int end_search(search_builder_t *bx)
     uint32_t uid;
     uint32_t latest = 0;
     int r = 0;
-
-    if ((bb->opts & SEARCH_DRYRUN)) goto out;
 
     if (!bb->nmatches) {
 	/* The search expression has no match clauses, which means it
@@ -506,7 +501,7 @@ static int end_search(search_builder_t *bx)
 		continue;
 	}
 	xstats_inc(SPHINX_RESULT);
-	r = bb->proc(mboxname, uidvalidity, uid, bb->rock);
+	r = proc(mboxname, uidvalidity, uid, rock);
 	if (r) goto out;
     }
     r = 0;
@@ -515,7 +510,7 @@ static int end_search(search_builder_t *bx)
 	/* add in the unindexed uids as false positives */
 	for (uid = latest+1 ; uid <= bb->mailbox->i.last_uid ; uid++) {
 	    xstats_inc(SPHINX_UNINDEXED);
-	    r = bb->proc(bb->mailbox->name, bb->mailbox->i.uidvalidity, uid, bb->rock);
+	    r = proc(bb->mailbox->name, bb->mailbox->i.uidvalidity, uid, rock);
 	    if (r) goto out;
 	}
     }
@@ -523,11 +518,17 @@ static int end_search(search_builder_t *bx)
 out:
     if (res) mysql_free_result(res);
     close_connection(&conn);
+    buf_free(&query);
+    return r;
+}
+
+static void end_search(search_builder_t *bx)
+{
+    sphinx_builder_t *bb = (sphinx_builder_t *)bx;
+
     free(bb->stack);
     buf_free(&bb->query);
-    buf_free(&query);
     free(bx);
-    return r;
 }
 
 typedef struct sphinx_receiver sphinx_receiver_t;

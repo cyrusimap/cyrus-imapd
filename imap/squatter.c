@@ -452,14 +452,12 @@ static void do_search(const char *query, int single, const strarray_t *mboxnames
 	if (single)
 	    printf("mailbox %s\n", mboxname);
 
-	bx = search_begin_search(mailbox, opts,
-				 print_search_hit, &single);
+	bx = search_begin_search(mailbox, opts);
 	if (bx) {
 	    r = squatter_build_query(bx, query);
-
-	    /* We have to call end_search anyway.  Should really
-	     * have an abort_search() interface */
-	    r = search_end_search(bx);
+	    if (!r)
+		r = bx->run(bx, print_search_hit, &single);
+	    search_end_search(bx);
 	}
 
 	mailbox_close(&mailbox);

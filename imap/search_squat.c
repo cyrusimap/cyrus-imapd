@@ -76,8 +76,6 @@ struct opstack {
 typedef struct {
     search_builder_t super;
     struct mailbox *mailbox;
-    search_hit_cb_t proc;
-    void *rock;
     int verbose;
     SquatSearchIndex *index;
     int fd;
@@ -329,9 +327,15 @@ out:
     opstack_pop(bb);
 }
 
-static search_builder_t *begin_search(struct mailbox *mailbox,
-				      int opts,
-				      search_hit_cb_t proc, void *rock)
+static void *get_internalised(search_builder_t *bx
+				__attribute__((unused)))
+{
+    return NULL;
+}
+
+static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock);
+
+static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
 {
     SquatBuilderData *bb;
     SquatSearchIndex* index;
@@ -362,10 +366,10 @@ static search_builder_t *begin_search(struct mailbox *mailbox,
     bb->super.begin_boolean = begin_boolean;
     bb->super.end_boolean = end_boolean;
     bb->super.match = match;
+    bb->super.get_internalised = get_internalised;
+    bb->super.run = run;
 
     bb->mailbox = mailbox;
-    bb->proc = proc;
-    bb->rock = rock;
     bb->verbose = (opts & _SEARCH_VERBOSE_MASK);
     bb->index = index;
     bb->fd = fd;
@@ -413,7 +417,7 @@ out:
     return r;
 }
 
-static int end_search(search_builder_t *bx)
+static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
 {
     SquatBuilderData *bb = (SquatBuilderData *)bx;
     unsigned int uid;
@@ -439,21 +443,26 @@ static int end_search(search_builder_t *bx)
     /* Flatten out the final bit vector into a sequence */
     for (uid = 1 ; uid <= bb->mailbox->i.last_uid; uid++) {
 	if (bv_isset(&bb->stack[0].msg_vector, uid)) {
-	    r = bb->proc(bb->mailbox->name,
-			 bb->mailbox->i.uidvalidity,
-			 uid, bb->rock);
+	    r = proc(bb->mailbox->name,
+		     bb->mailbox->i.uidvalidity,
+		     uid, rock);
 	    if (r) goto out;
 	}
     }
-    r = 0;
 
 out:
-    opstack_pop(bb);
-    free(bb->stack);
-    squat_search_close(bb->index);
-    close(bb->fd);
-    free(bx);
     return r;
+}
+
+static void end_search(search_builder_t *bx)
+{
+    SquatBuilderData *bb = (SquatBuilderData *)bx;
+
+    while (bb->depth) opstack_pop(bb);
+    free(bb->stack);
+    if (bb->index) squat_search_close(bb->index);
+    if (bb->fd >= 0) close(bb->fd);
+    free(bx);
 }
 
 

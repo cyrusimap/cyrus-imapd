@@ -102,18 +102,17 @@ EXPORTED const char *search_part_as_string(int part)
 }
 
 
-EXPORTED search_builder_t *search_begin_search(struct mailbox *mailbox, int opts,
-					       search_hit_cb_t proc, void *rock)
+EXPORTED search_builder_t *search_begin_search(struct mailbox *mailbox, int opts)
 {
     const struct search_engine *se = engine();
     return (se->begin_search ?
-	    se->begin_search(mailbox, opts, proc, rock) : NULL);
+	    se->begin_search(mailbox, opts) : NULL);
 }
 
-EXPORTED int search_end_search(search_builder_t *bx)
+EXPORTED void search_end_search(search_builder_t *bx)
 {
     const struct search_engine *se = engine();
-    return (se->end_search ? se->end_search(bx) : -1);
+    if (se->end_search) se->end_search(bx);
 }
 
 EXPORTED search_text_receiver_t *search_begin_update(int verbose)
