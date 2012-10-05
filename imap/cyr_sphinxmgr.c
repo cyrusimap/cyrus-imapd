@@ -664,6 +664,10 @@ int main(int argc, char **argv)
     /* create idle table */
     construct_hash_table(&itable, 1024, 1);
 
+    /* initialise the linked list */
+    indexroot.prev = &indexroot;
+    indexroot.next = &indexroot;
+
     server_sock = create_server_socket();
 
     /* fork unless we were given the -f option */
