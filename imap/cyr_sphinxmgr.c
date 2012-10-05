@@ -81,6 +81,7 @@ extern char *optarg;
 static int verbose = 0;
 static int server_sock;
 static int sphinx_timeout;
+static int max_children;
 static const char *syslog_prefix;
 
 typedef struct indexd indexd_t;
@@ -89,9 +90,12 @@ struct indexd {
     char *socketpath;
     time_t started;
     time_t used;
+    struct indexd *prev;
+    struct indexd *next;
 };
 static struct hash_table itable;
 
+static struct indexd indexroot;
 
 static void shut_down(int code) __attribute__((noreturn));
 
@@ -365,6 +369,16 @@ out:
     return r;
 }
 
+static void kill_child(indexd_t *id)
+{
+    indexd_stop(id);
+    /* unstitch */
+    id->prev->next = id->next;
+    id->next->prev = id->prev;
+    hash_del(id->basedir, &itable);
+    indexd_free(id);
+}
+
 static int indexd_get(const char *mboxname, indexd_t **idp, int create)
 {
     indexd_t *id;
@@ -381,6 +395,13 @@ static int indexd_get(const char *mboxname, indexd_t **idp, int create)
 	    r = IMAP_NOTFOUND;
 	    goto out;
 	}
+	if (max_children && indexroot.next != &indexroot) {
+	    if (hash_numrecords(&itable) >= max_children - 1) {
+		syslog(LOG_NOTICE, "hit limit %d, killing oldest %s",
+		       max_children, indexroot.next->basedir);
+		kill_child(indexroot.next);
+	    }
+	}
 	id = xzmalloc(sizeof(*id));
 	id->basedir = basedir;
 	basedir = NULL;
@@ -392,7 +413,22 @@ static int indexd_get(const char *mboxname, indexd_t **idp, int create)
 	    return r;
 	}
 	hash_insert(id->basedir, id, &itable);
+	id->prev = indexroot.prev;
+	id->next = &indexroot;
+	id->prev->next = id;
+	id->next->prev = id;
     }
+    else {
+	/* remove from the list */
+	id->prev->next = id->next;
+	id->next->prev = id->prev;
+	/* move to the end */
+	id->prev = indexroot.prev;
+	id->next = &indexroot;
+	id->prev->next = id;
+	id->next->prev = id;
+    }
+
     id->used = time(NULL);
     *idp = id;
     r = 0;
@@ -408,11 +444,8 @@ static void expire_indexd(const char *key __attribute__((unused)),
 {
     indexd_t *id = (indexd_t *)data;
 
-    if (time(NULL) > id->used + sphinx_timeout) {
-	indexd_stop(id);
-	hash_del(id->basedir, &itable);
-	indexd_free(id);
-    }
+    if (time(NULL) > id->used + sphinx_timeout)
+	kill_child(id);
 }
 
 static int create_server_socket(void)
@@ -623,6 +656,7 @@ int main(int argc, char **argv)
 
     /* Set inactivity timer (convert from minutes to seconds) */
     sphinx_timeout = config_getint(IMAPOPT_SPHINXMGR_TIMEOUT);
+    max_children = config_getint(IMAPOPT_SPHINXMGR_MAX_CHILDREN);
 
     signals_add_handlers(0);
     signals_set_shutdown(shut_down);
