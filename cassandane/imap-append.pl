@@ -53,10 +53,10 @@ sub usage
 
 my %imap_params = (
 	type => 'imap',
-	host => 'storet1m.internal',
-	port => 2143,
+	host => 'localhost',
+	port => 9100,
 	folder => 'inbox',
-	username => 'muttster@vmtom.com',
+	username => 'cassandane',
 	password => 'testpw',
 );
 my %mbox_params;

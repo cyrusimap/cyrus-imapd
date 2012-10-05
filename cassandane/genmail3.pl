@@ -60,10 +60,10 @@ my $mode = 'sequence';
 my $maxmessages;
 my %params = (
 	type => 'imap',
-	host => 'storet1m.internal',
-	port => 2143,
+	host => 'localhost',
+	port => 9100,
 	folder => 'inbox',
-	username => 'muttster@vmtom.com',
+	username => 'cassandane',
 	password => 'testpw',
 	verbose => 0,
 );
