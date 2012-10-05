@@ -1549,7 +1549,7 @@ static int index_prefilter_messages(unsigned* msg_list,
 				    struct searchargs *searchargs)
 {
     int r = -1;	    /* we start in error so we can fall back */
-    unsigned int i;
+    unsigned int msgno;
     search_builder_t *bx;
     int nmatches = 0;
     struct search_rock sr;
@@ -1577,8 +1577,8 @@ static int index_prefilter_messages(unsigned* msg_list,
     /* Just put in all possible messages. This falls back to Cyrus' default
      * search. */
 
-    for (i = 0; i < state->exists; i++)
-	msg_list[i] = i + 1;
+    for (msgno = 1; msgno <= state->exists; msgno++)
+	msg_list[msgno-1] = msgno;
     return state->exists;
 }
 
