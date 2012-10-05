@@ -906,9 +906,6 @@ static void cmdloop(void)
 	memset(&txn.error, 0, sizeof(struct error_t));
 	memset(&txn.resp_body, 0, sizeof(struct resp_body_t));
 	buf_reset(&txn.buf);
-#ifdef HAVE_ZLIB
-	deflateReset(&txn.zstrm);
-#endif
 
 	/* Flush any buffered output */
 	prot_flush(httpd_out);
@@ -1894,6 +1891,8 @@ void write_body(long code, struct transaction_t *txn,
     if (txn->flags & HTTP_GZIP) {
 	char zbuf[PROT_BUFSIZE];
 	unsigned flush, out;
+
+	deflateReset(&txn->zstrm);
 
 	/* don't flush until last chunk */
 	flush = (is_chunked && len) ? Z_NO_FLUSH : Z_FINISH;
