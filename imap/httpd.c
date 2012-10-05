@@ -873,7 +873,7 @@ static int reset_saslconn(sasl_conn_t **conn)
  */
 static void cmdloop(void)
 {
-    int c, ret, r, i, gzip_enabled = 0;
+    int ret, r, i, gzip_enabled = 0;
     tok_t tok;
     char buf[1024], *p, *meth, *uri, *ver;
     const char **hdr;
@@ -1017,9 +1017,7 @@ static void cmdloop(void)
 	}
 
 	/* Read CRLF separating headers and body */
-	c = prot_getc(httpd_in);
-	if (c == '\r') c = prot_getc(httpd_in);
-	if (c != '\n') {
+	if (!prot_fgets(buf, sizeof(buf), httpd_in)) {
 	    ret = HTTP_BAD_REQUEST;
 	    txn.flags |= HTTP_CLOSE;
 	    txn.error.desc = "Missing separator between headers and body\r\n";
@@ -1431,10 +1429,8 @@ int read_body(struct protstream *pin,
 	    }
 
 	    /* Read CRLF terminating the chunk */
-	    *buf = prot_getc(pin);
-	    if (*buf == '\r') *buf = prot_getc(pin);
-	    if (*buf != '\n') {
-		*errstr = "Missing CRLF in body\r\n";
+	    if (!prot_fgets(buf, sizeof(buf), pin)) {
+		*errstr = "Missing CRLF following trailers\r\n";
 		return HTTP_BAD_REQUEST;
 	    }
 	}
