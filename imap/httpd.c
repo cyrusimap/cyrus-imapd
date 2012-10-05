@@ -1400,8 +1400,8 @@ int read_body(struct protstream *pin,
 
 	if (is_chunked) {
 	    /* Read chunk-size and any chunk-ext */
-	    prot_fgets(buf, PROT_BUFSIZE-2, pin);
-	    if (sscanf(buf, "%lx", &chunk) != 1) {
+	    if (!prot_fgets(buf, PROT_BUFSIZE, pin) ||
+		sscanf(buf, "%lx", &chunk) != 1) {
 		*errstr = "Unable to read chunk size\r\n";
 		return HTTP_BAD_REQUEST;
 	    }
@@ -1430,7 +1430,7 @@ int read_body(struct protstream *pin,
 
 	    /* Read CRLF terminating the chunk */
 	    if (!prot_fgets(buf, sizeof(buf), pin)) {
-		*errstr = "Missing CRLF following trailers\r\n";
+		*errstr = "Missing CRLF following chunk\r\n";
 		return HTTP_BAD_REQUEST;
 	    }
 	}
