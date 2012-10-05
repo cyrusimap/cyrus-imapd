@@ -2417,6 +2417,7 @@ struct search_folder {
 struct search_multi_rock {
     hash_table folders_by_name;
     ptrarray_t folders;
+    int prefixlen;
 };
 
 static struct search_folder *search_folder_get(struct search_multi_rock *sr,
@@ -2500,7 +2501,8 @@ static int add_default_search_folder(char *match,
 				     void *rock)
 {
     struct search_multi_rock *sr = (struct search_multi_rock *)rock;
-    search_folder_get(sr, match);
+    if (match[sr->prefixlen] == '\0' || match[sr->prefixlen] == '.')
+	search_folder_get(sr, match);
     return 0;
 }
 
@@ -2583,13 +2585,12 @@ EXPORTED int index_convmultisort(struct index_state *state,
 	r = bx->run(bx, index_multi_search_hit, &sr);
     else {
 	char *usermbox = mboxname_user_mbox(mboxname_to_userid(state->mailbox->name), NULL);
-	char *pattern = strconcat(usermbox, ".*", NULL);
-	mboxlist_findall(searchargs->namespace, pattern,
+	sr.prefixlen = strlen(usermbox);
+	mboxlist_findall(searchargs->namespace, usermbox,
 			 searchargs->namespace->isadmin,
 			 searchargs->userid, searchargs->authstate,
 			 add_default_search_folder, &sr);
 	free(usermbox);
-	free(pattern);
 	r = 0;
 	xstats_inc(SEARCH_TRIVIAL);
     }
