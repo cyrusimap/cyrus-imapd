@@ -65,6 +65,7 @@
 #include "xstats.h"
 #include "search_engines.h"
 #include "sphinxmgr_client.h"
+#include "cyr_lock.h"
 
 #include <mysql/mysql.h>
 
@@ -74,6 +75,8 @@ struct connection
     char *socket_path;
 };
 #define CONNECTION_INITIALIZER	{ 0, 0 }
+
+#define INDEXING_LOCK_SUFFIX	".indexing.lock"
 
 static int doquery(struct connection *, int, const struct buf *);
 
@@ -540,6 +543,7 @@ struct sphinx_receiver
     uint32_t lastid;	    /* largest document ID in the 'tr' table,
 			     * used to assign new document IDs when
 			     * INSERTing into the table */
+    int indexing_lock_fd;
     struct {
 	struct buf *query;
 	search_snippet_cb_t proc;
@@ -883,6 +887,56 @@ out:
     return 0;
 }
 
+static const char *indexing_lockpath(struct mailbox *mailbox)
+{
+    char *usermbox = mboxname_user_mbox(mboxname_to_userid(mailbox->name), NULL);
+    const char *lockpath = mboxname_lockpath_suffix(usermbox, INDEXING_LOCK_SUFFIX);
+    free(usermbox);
+    return lockpath;
+}
+
+static int indexing_lock(struct mailbox *mailbox, int *fdp)
+{
+    const char *lockpath = indexing_lockpath(mailbox);
+    int fd;
+    int r;
+
+    fd = open(lockpath, O_WRONLY|O_CREAT, 0600);
+    if (fd < 0) {
+	syslog(LOG_ERR, "IOERROR unable to create %s: %m", lockpath);
+	return IMAP_IOERROR;
+    }
+
+    r = lock_blocking(fd, lockpath);
+    if (r < 0) {
+	syslog(LOG_ERR, "IOERROR unable to lock %s: %m",
+		lockpath);
+	close(fd);
+	return IMAP_IOERROR;
+    }
+
+    *fdp = fd;
+    return 0;
+}
+
+static int indexing_unlock(struct mailbox *mailbox, int *fdp)
+{
+    const char *lockpath = indexing_lockpath(mailbox);
+    int r;
+
+    if (*fdp < 0)
+	return 0;	/* not locked */
+
+    r = lock_unlock(*fdp, lockpath);
+    if (r < 0)
+	syslog(LOG_ERR, "IOERROR unable to unlock %s: %m",
+		lockpath);
+
+    close(*fdp);
+    *fdp = -1;
+    return 0;
+}
+
 static int begin_mailbox(search_text_receiver_t *rx,
 			 struct mailbox *mailbox,
 			 int incremental __attribute__((unused)))
@@ -894,6 +948,9 @@ static int begin_mailbox(search_text_receiver_t *rx,
     if (r) return r;
 
     tr->mailbox = mailbox;
+
+    r = indexing_lock(mailbox, &tr->indexing_lock_fd);
+    if (r) return r;
 
     r = read_lastid(tr);
     if (r) return r;
@@ -927,6 +984,7 @@ static int end_mailbox(search_text_receiver_t *rx,
 
     if (tr->conn.mysql) {
 	r = flush(tr, /*force*/1);
+	indexing_unlock(tr->mailbox, &tr->indexing_lock_fd);
 	close_connection(&tr->conn);
     }
 
@@ -950,6 +1008,7 @@ static search_text_receiver_t *begin_update(int verbose)
     tr->super.end_message = end_message;
     tr->super.end_mailbox = end_mailbox;
 
+    tr->indexing_lock_fd = -1;
     tr->verbose = verbose;
 
     return &tr->super;
@@ -961,6 +1020,7 @@ static int end_update(search_text_receiver_t *rx)
     int i;
     int r = 0;
 
+    if (tr->indexing_lock_fd >= 0) close(tr->indexing_lock_fd);
     for (i = 0 ; i < SEARCH_NUM_PARTS ; i++)
 	buf_free(&tr->parts[i]);
     buf_free(&tr->query);

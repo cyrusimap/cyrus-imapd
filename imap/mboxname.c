@@ -1398,6 +1398,12 @@ EXPORTED char *mboxname_datapath(const char *partition, const char *mboxname, un
 
 char *mboxname_lockpath(const char *mboxname)
 {
+    return mboxname_lockpath_suffix(mboxname, ".lock");
+}
+
+char *mboxname_lockpath_suffix(const char *mboxname,
+			       const char *suffix)
+{
     static char lockresult[MAX_MAILBOX_PATH+1];
     char basepath[MAX_MAILBOX_PATH+1];
     const char *root = config_getstring(IMAPOPT_MBOXNAME_LOCKPATH);
@@ -1411,7 +1417,7 @@ char *mboxname_lockpath(const char *mboxname)
     mboxname_hash(lockresult, MAX_MAILBOX_PATH, root, mboxname);
 
     len = strlen(lockresult);
-    snprintf(lockresult + len, MAX_MAILBOX_PATH - len, "%s", ".lock");
+    snprintf(lockresult + len, MAX_MAILBOX_PATH - len, "%s", suffix);
     lockresult[MAX_MAILBOX_PATH] = '\0';
 
     if (strlen(lockresult) == MAX_MAILBOX_PATH)
