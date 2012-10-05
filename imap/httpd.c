@@ -1094,6 +1094,8 @@ static void cmdloop(void)
 	if (!ret) {
 	    if (!(meth_proc = namespace->methods[txn.meth].proc))
 		ret = HTTP_NOT_ALLOWED;
+
+	    /* Check if method expects a body */
 	    else if ((namespace->methods[txn.meth].flags & METH_NOBODY) &&
 		     spool_getheader(txn.req_hdrs, "Content-Type"))
 		ret = HTTP_BAD_MEDIATYPE;
@@ -1228,8 +1230,6 @@ static void cmdloop(void)
 	    }
 	    if (enc) free(enc);
 	}
-
-	/* XXX  Check if method expects a body.  If not, return 415 */
 
 	/* Process the requested method */
 	if (!ret) {
