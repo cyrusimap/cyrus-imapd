@@ -93,6 +93,22 @@ while (my $a = shift)
 	my $vv = shift || usage;
 	push(@services, $vv);
     }
+    elsif ($a eq '--latest')
+    {
+	usage() if defined $name;
+	my @cmd = ('ls', '-t', Cassandane::Instance::_rootdir());
+	open LSROOT, '-|', @cmd
+	    or die "Cannot run ls: $!";
+	while (<LSROOT>)
+	{
+	    chomp;
+	    next unless m/^[0-9]+$/;
+	    $name = $_;
+	    last;
+	}
+	close LSROOT;
+	die "No latest instance, sorry" unless $name;
+    }
     elsif ($a =~ m/^-/)
     {
 	printf STDERR "Unknown option $a\n";
