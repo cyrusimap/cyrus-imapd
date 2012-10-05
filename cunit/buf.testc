@@ -999,11 +999,11 @@ static void test_compress(void)
     buf_printf(&b, "%s", DATA0);
     CU_ASSERT_STRING_EQUAL(buf_cstring(&b), DATA0);
 
-    r = buf_deflate(&b);
+    r = buf_deflate(&b, Z_DEFAULT_COMPRESSION, DEFLATE_RAW);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_STRING_NOT_EQUAL(buf_cstring(&b), DATA0);
 
-    r = buf_inflate(&b);
+    r = buf_inflate(&b, DEFLATE_RAW);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_STRING_EQUAL(buf_cstring(&b), DATA0);
 
