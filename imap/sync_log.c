@@ -289,6 +289,28 @@ EXPORTED void sync_log(const char *fmt, ...)
  */
 struct sync_log_reader
 {
+    /*
+     * This object works in three modes:
+     *
+     * - initialised with a sync log channel
+     *	    - standard mode used by sync_client
+     *	    - slr->log_file != NULL
+     *	    - slr->work_file is the name of a rename()d
+     *	      file that needs to be unlink()ed.
+     *
+     * - initialised with a saved file name
+     *	    - used by the sync_client -f option
+     *	    - slr->log_file = NULL
+     *	    - slr->work_file is the file given us by the user
+     *	      which it's important that we do not unlink()
+     *
+     * - initialised with a file descriptor
+     *	    - slr->log_file = NULL
+     *	    - slr->work_file = NULL
+     *	    - slr->fd is a file descriptor, probably stdin,
+     *	      and possibly a pipe
+     *	    - we cannot unlink() anything even if we wanted to.
+     */
     char *log_file;
     char *work_file;
     int fd;
@@ -477,10 +499,15 @@ EXPORTED int sync_log_reader_end(sync_log_reader_t *slr)
 	slr->fd = -1;
     }
 
-    /* Remove the work log */
-    if (slr->log_file && unlink(slr->work_file) < 0) {
-	syslog(LOG_ERR, "Unlink %s failed: %m", slr->work_file);
-	return IMAP_IOERROR;
+    if (slr->log_file) {
+	/* We were initialised with a sync log channel, whose
+	 * log file we rename()d to the work file.  Now that
+	 * we've done with the work file we can unlink it.
+	 * Further checks at this point are just paranoia. */
+	if (slr->work_file && unlink(slr->work_file) < 0) {
+	    syslog(LOG_ERR, "Unlink %s failed: %m", slr->work_file);
+	    return IMAP_IOERROR;
+	}
     }
 
     return 0;
