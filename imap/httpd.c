@@ -1414,6 +1414,7 @@ int read_body(struct protstream *pin,
 	while (len) {
 	    if (body) n = prot_readbuf(pin, body, len);
 	    else n = prot_read(pin, buf, MIN(len, sizeof(buf)));
+
 	    if (!n) {
 		syslog(LOG_ERR, "prot_read() error");
 		*errstr = "Unable to read body data\r\n";
@@ -1440,10 +1441,33 @@ int read_body(struct protstream *pin,
 
     } while (chunk);  /* Continue until we get last-chunk */
 
-    /* Decode representation, if necessary */
-    if ((hdr = spool_getheader(hdrs, "Content-Encoding"))) {
-	*errstr = "Specified Content-Encoding not accepted\r\n";
-	return HTTP_BAD_MEDIATYPE;
+
+    /* Decode the body, if necessary */
+    if (body && (hdr = spool_getheader(hdrs, "Content-Encoding"))) {
+	int r = HTTP_BAD_MEDIATYPE;
+
+#ifdef HAVE_ZLIB
+	if (!strcmp(hdr[0], "deflate")) {
+	    const char **ua = spool_getheader(hdrs, "User-Agent");
+
+	    /* Try to detect Microsoft's broken deflate */
+	    if (ua && strstr(ua[0], "; MSIE "))
+		r = buf_inflate(body, DEFLATE_RAW);
+	    else
+		r = buf_inflate(body, DEFLATE_ZLIB);
+	}
+	else if (!strcmp(hdr[0], "gzip") || !strcmp(hdr[0], "x-gzip"))
+	    r = buf_inflate(body, DEFLATE_GZIP);
+#endif
+
+	if (r == HTTP_BAD_MEDIATYPE) {
+	    *errstr = "Specified Content-Encoding not accepted\r\n";
+	    return HTTP_BAD_MEDIATYPE;
+	}
+	else if (r) {
+	    *errstr = "Error decoding content\r\n";
+	    return HTTP_BAD_REQUEST;
+	}
     }
 
     return 0;
