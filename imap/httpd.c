@@ -1022,6 +1022,7 @@ static void cmdloop(void)
 	}
 
 	/* Check for mandatory Host header */
+	/* XXX  Should we check this against servername? */
 	if (!ret && !(hdr = spool_getheader(txn.req_hdrs, "Host"))) {
 	    ret = HTTP_BAD_REQUEST;
 	    txn.error.desc = "Missing Host header\r\n";
