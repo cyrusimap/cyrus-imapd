@@ -43,7 +43,8 @@
 #ifndef INCLUDED_SEARCH_ENGINES_H
 #define INCLUDED_SEARCH_ENGINES_H
 
-#include "index.h"
+#include "mailbox.h"
+#include "util.h"
 
 typedef int (*search_hit_cb_t)(const char *mboxname, uint32_t uidvalidity,
 			       uint32_t uid, void *rock);
