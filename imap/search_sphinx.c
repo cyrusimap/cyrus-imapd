@@ -207,17 +207,21 @@ static const struct buf *make_cyrusid(struct mailbox *mailbox, uint32_t uid)
  *	the quote character used to quote the string in the query
  *	be escaped. mysql_real_escape_string() quotes the other
  *	characters to make them easier to read in log files.
+ *
+ * Note that we need to escape a number of SphinxQL extended query
+ * syntax metacharacters like ^ and $.
  */
 static void append_escaped_map(struct buf *buf,
 			       const char *base, unsigned int len,
 			       int quote)
 {
+    static const char metacharacters[] = "!\"$'-/<=@[\\]^|~";
     buf_ensure(buf, len+1);
 
     buf_putc(buf, quote);
     for ( ; len ; len--, base++) {
 	int c = *(unsigned char *)base;
-	if (c == '\\' || c == '\'' || c == '"')
+	if (strchr(metacharacters, c))
 	    buf_putc(buf, '\\');
 	buf_putc(buf, c);
     }
