@@ -46,6 +46,12 @@ use base qw(Cassandane::Cyrus::TestCase);
 use IO::File;
 use Cassandane::Util::Log;
 
+Cassandane::Cyrus::TestCase::magic(DuplicateSuppressionOff => sub {
+    shift->config_set(duplicatesuppression => 0);
+});
+Cassandane::Cyrus::TestCase::magic(DuplicateSuppressionOn => sub {
+    shift->config_set(duplicatesuppression => 1);
+});
 sub new
 {
     my $class = shift;
@@ -66,14 +72,8 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
-sub config_duplicate_suppression_off
-{
-    my ($self, $conf) = @_;
-    xlog "Clearing duplicatesuppression";
-    $conf->set(duplicatesuppression => 0);
-}
-
 sub test_duplicate_suppression_off
+    :DuplicateSuppressionOff
 {
     my ($self) = @_;
 
@@ -108,14 +108,9 @@ sub test_duplicate_suppression_off
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 }
 
-sub config_duplicate_suppression_on
-{
-    my ($self, $conf) = @_;
-    xlog "Setting duplicatesuppression";
-    $conf->set(duplicatesuppression => 1);
-}
 
 sub test_duplicate_suppression_on
+    :DuplicateSuppressionOn
 {
     my ($self) = @_;
 
@@ -161,14 +156,8 @@ sub test_duplicate_suppression_on
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 }
 
-sub config_duplicate_suppression_on_delete
-{
-    my ($self, $conf) = @_;
-    xlog "Setting duplicatesuppression";
-    $conf->set(duplicatesuppression => 1);
-}
-
 sub test_duplicate_suppression_on_delete
+    :DuplicateSuppressionOn
 {
     my ($self) = @_;
 
@@ -213,14 +202,8 @@ sub test_duplicate_suppression_on_delete
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 }
 
-sub config_duplicate_suppression_on_badmbox
-{
-    my ($self, $conf) = @_;
-    xlog "Setting duplicatesuppression";
-    $conf->set(duplicatesuppression => 1);
-}
-
 sub test_duplicate_suppression_on_badmbox
+    :DuplicateSuppressionOn
 {
     my ($self) = @_;
 

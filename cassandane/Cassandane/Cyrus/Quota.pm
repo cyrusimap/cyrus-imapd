@@ -1786,6 +1786,7 @@ sub XXtest_replication_multiple
 }
 
 sub test_using_annotstorage_msg_copy_exdel
+    :DelayedExpunge
 {
     my ($self) = @_;
 
@@ -1885,14 +1886,8 @@ sub test_using_annotstorage_msg_copy_exdel
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
 }
 
-sub config_using_annotstorage_msg_copy_eximm
-{
-    my ($self, $conf) = @_;
-    xlog "Setting expunge_mode=immediate";
-    $conf->set(expunge_mode => 'immediate');
-}
-
 sub test_using_annotstorage_msg_copy_eximm
+    :ImmediateExpunge
 {
     my ($self) = @_;
 
@@ -1988,6 +1983,7 @@ sub test_using_annotstorage_msg_copy_eximm
 }
 
 sub test_using_annotstorage_msg_copy_dedel
+    :DelayedDelete
 {
     my ($self) = @_;
 
@@ -2086,14 +2082,8 @@ sub test_using_annotstorage_msg_copy_dedel
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
 }
 
-sub config_using_annotstorage_msg_copy_deimm
-{
-    my ($self, $conf) = @_;
-    xlog "Setting delete_mode=immediate";
-    $conf->set(delete_mode => 'immediate');
-}
-
 sub test_using_annotstorage_msg_copy_deimm
+    :ImmediateDelete
 {
     my ($self) = @_;
 
@@ -2438,16 +2428,16 @@ sub test_reconstruct_orphans
     );
 }
 
-sub config_bug3735
-{
-    my ($self, $conf) = @_;
-    $conf->set(quota_db => 'quotalegacy');
-    $conf->set(hashimapspool => 1);
-    $conf->set(fulldirhash => 1);
-    $conf->set(virtdomains => 0);
-}
+Cassandane::Cyrus::TestCase::magic(Bug3735 => sub {
+    my ($testcase) = @_;
+    $testcase->config_set(quota_db => 'quotalegacy');
+    $testcase->config_set(hashimapspool => 1);
+    $testcase->config_set(fulldirhash => 1);
+    $testcase->config_set(virtdomains => 0);
+});
 
 sub test_bug3735
+    :Bug3735
 {
     my ($self) = @_;
     $self->{instance}->create_user("a");

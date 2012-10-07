@@ -43,6 +43,8 @@ use strict;
 use warnings;
 package Cassandane::Cyrus::TestCase;
 use base qw(Cassandane::Unit::TestCase);
+use Scalar::Util qw(refaddr);
+use attributes;
 use Cassandane::Util::Log;
 use Cassandane::Util::Words;
 use Cassandane::Generator;
@@ -51,6 +53,26 @@ use Cassandane::Instance;
 use Cassandane::PortManager;
 
 my @stores = qw(store adminstore replica_store replica_adminstore);
+my %magic_handlers;
+
+# This code for storing function attributes is from
+# http://stackoverflow.com/questions/987059/how-do-perl-method-attributes-work
+
+my %attrs; # package variable to store attribute lists by coderef address
+
+sub MODIFY_CODE_ATTRIBUTES
+{
+    my ($package, $subref, @attrs) = @_;
+    $attrs{refaddr $subref} = \@attrs;
+    return;
+}
+
+sub FETCH_CODE_ATTRIBUTES
+{
+    my ($package, $subref) = @_;
+    my $attrs = $attrs{refaddr $subref} || [];
+    return @$attrs;
+}
 
 sub new
 {
@@ -95,25 +117,111 @@ sub new
     return $self;
 }
 
+# will magically cause some special actions to be taken during test
+# setup.  This used to be a horrible hack to enable a replica instance
+# if the test name contained the word "replication", but now it's more
+# general.  The handler function is called near the start of set_up(),
+# before Cyrus instances are created, and can call want() to add to the
+# set of features wanted by this test, or config_set() to set additional
+# imapd.conf variables for all instances.
+sub magic
+{
+    my ($name, $handler) = @_;
+    $name = lc($name);
+    die "Magic \"$name\" registered twice"
+	if defined $magic_handlers{$name};
+    $magic_handlers{$name} = $handler;
+}
+
+sub _who_wants_it
+{
+    my ($self) = @_;
+    return $self->{_current_magic}
+	if defined $self->{_current_magic} ;
+    return "Test " . $self->{_name};
+}
+
+sub want
+{
+    my ($self, $name, $value) = @_;
+    $value = 1 if !defined $value;
+    $self->{_want}->{$name} = $value;
+    xlog $self->_who_wants_it() .  " wants $name = $value";
+}
+
+sub config_set
+{
+    my ($self, %pairs) = @_;
+    $self->{_config}->set(%pairs);
+    while (my ($n, $v) = each %pairs)
+    {
+	xlog $self->_who_wants_it() . " sets config $n = $v";
+    }
+}
+
+magic(replication => sub { shift->want('replica'); });
+magic(ImmediateDelete => sub {
+    shift->config_set(delete_mode => 'immediate');
+});
+magic(DelayedDelete => sub {
+    shift->config_set(delete_mode => 'delayed');
+});
+magic(UnixHierarchySep => sub {
+    shift->config_set(unixhierarchysep => 'yes');
+});
+magic(ImmediateExpunge => sub {
+    shift->config_set(expunge_mode => 'immediate');
+});
+magic(DelayedExpunge => sub {
+    shift->config_set(expunge_mode => 'delayed');
+});
+
+# Run any magic handlers indicated by the test name or attributes
+sub _run_magic
+{
+    my ($self) = @_;
+
+    my %seen;
+
+    foreach my $m (split(/_/, $self->{_name}))
+    {
+	next if $seen{$m};
+	next unless defined $magic_handlers{$m};
+	$self->{_current_magic} = "Magic word $m in name";
+	$magic_handlers{$m}->($self);
+	$self->{_current_magic} = undef;
+	$seen{$m} = 1;
+    }
+
+    foreach my $a (attributes::get($self->can($self->{_name})))
+    {
+	my $m = lc($a);
+	die "Unknown attribute $a"
+	    unless defined $magic_handlers{$m};
+	next if $seen{$m};
+	$self->{_current_magic} = "Magic attribute $a";
+	$magic_handlers{$m}->($self);
+	$self->{_current_magic} = undef;
+	$seen{$m} = 1;
+    }
+}
+
 sub _create_instances
 {
     my ($self) = @_;
     my $port;
+
+    $self->{_config} = $self->{_instance_params}->{config} || Cassandane::Config->default();
+    $self->{_config} = $self->{_config}->clone();
+
+    $self->_run_magic();
+
     my $want = $self->{_want};
     my %instance_params = %{$self->{_instance_params}};
 
-    # This is a downright dirty hack; if the test name contains the word
-    # 'replication' then enable the replica unless requested otherwise
-    if (grep { m/^replication$/ } split(/_/,$self->{_name}))
-    {
-	xlog "magically enabling replica because test name contains 'replication'";
-	$want->{replica} = 1;
-    }
-
     if ($want->{instance})
     {
-	my $conf = $instance_params{config} || Cassandane::Config->default();
-	$conf = $conf->clone();
+	my $conf = $self->{_config}->clone();
 
 	if ($want->{replica})
 	{
@@ -130,11 +238,10 @@ sub _create_instances
 	    );
 	}
 
-	# Allow the individual test to futz with the config
 	my $sub = $self->{_name};
 	if ($sub =~ s/^test_/config_/ && $self->can($sub))
 	{
-	    $self->$sub($conf);
+	    die 'Use of config_<testname> subs is not supported anymore';
 	}
 
 	$instance_params{config} = $conf;

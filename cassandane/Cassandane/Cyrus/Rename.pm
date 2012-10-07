@@ -46,6 +46,17 @@ use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Instance;
 
+Cassandane::Cyrus::TestCase::magic(Partition2 => sub {
+    shift->config_set('partition-p2' => '@basedir@/data-p2');
+});
+Cassandane::Cyrus::TestCase::magic(MetaPartition => sub {
+    shift->config_set(
+	'metapartition-default' => '@basedir@/meta',
+	'metapartition_files' => 'header index'
+    );
+});
+
+
 sub new
 {
     my $class = shift;
@@ -144,14 +155,8 @@ sub test_rename_inbox
     $self->assert_num_equals(1, scalar @postdata);
 }
 
-sub config_rename_user
-{
-    my ($self, $conf) = @_;
-    xlog "Setting up partition p2";
-    $conf->set('partition-p2' => '@basedir@/data-p2');
-}
-
 sub test_rename_user
+    :Partition2
 {
     my ($self) = @_;
     my $admintalk = $self->{adminstore}->get_client();
@@ -164,15 +169,8 @@ sub test_rename_user
     $admintalk->rename('user.cassandane', 'user.cassandane', 'p2') || die; # partition move
 }
 
-sub config_rename_paths
-{
-    my ($self, $conf) = @_;
-    xlog "Setting up metapartition";
-    $conf->set('metapartition-default' => '@basedir@/meta');
-    $conf->set('metapartition_files' => 'header index');
-}
-
 sub test_rename_paths
+    :MetaPartition
 {
     my ($self) = @_;
     my $basedir = $self->{instance}->{basedir};

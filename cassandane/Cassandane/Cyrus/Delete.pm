@@ -135,14 +135,8 @@ sub check_folder_not_ondisk
     }
 }
 
-sub config_self_inbox_imm
-{
-    my ($self, $conf) = @_;
-    xlog "Setting delete_mode = immediate";
-    $conf->set(delete_mode => 'immediate');
-}
-
 sub test_self_inbox_imm
+    :ImmediateDelete
 {
     my ($self) = @_;
 
@@ -209,14 +203,8 @@ sub test_self_inbox_imm
     $self->check_folder_not_ondisk($subfolder, deleted => 1);
 }
 
-sub config_self_inbox_del
-{
-    my ($self, $conf) = @_;
-    xlog "Setting delete_mode = delayed";
-    $conf->set(delete_mode => 'delayed');
-}
-
 sub test_self_inbox_del
+    :DelayedDelete
 {
     my ($self) = @_;
 
@@ -290,14 +278,8 @@ sub test_self_inbox_del
     $self->check_folder_not_ondisk($subfolder, deleted => 1);
 }
 
-sub config_admin_inbox_imm
-{
-    my ($self, $conf) = @_;
-    xlog "Setting delete_mode = immediate";
-    $conf->set(delete_mode => 'immediate');
-}
-
 sub test_admin_inbox_imm
+    :ImmediateDelete
 {
     my ($self) = @_;
 
@@ -371,14 +353,8 @@ sub test_admin_inbox_imm
     $self->check_folder_not_ondisk($subfolder, deleted => 1);
 }
 
-sub config_admin_inbox_del
-{
-    my ($self, $conf) = @_;
-    xlog "Setting delete_mode = delayed";
-    $conf->set(delete_mode => 'delayed');
-}
-
 sub test_admin_inbox_del
+    :DelayedDelete
 {
     my ($self) = @_;
 

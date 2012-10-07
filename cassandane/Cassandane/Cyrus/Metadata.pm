@@ -48,6 +48,10 @@ use File::Temp qw(:POSIX);
 use Config;
 use Cassandane::Util::Log;
 
+Cassandane::Cyrus::TestCase::magic(AnnotationAllowUndefined => sub {
+    shift->config_set(annotation_allow_undefined => 1);
+});
+
 sub new
 {
     my ($class, @args) = @_;
@@ -585,14 +589,8 @@ sub test_size
     # TODO: removing a message doesn't reduce the value until (possibly delayed) expunge
 }
 
-sub config_uniqueid
-{
-    my ($self, $conf) = @_;
-    xlog "Setting delete_mode = immediate";
-    $conf->set(delete_mode => 'immediate');
-}
-
 sub test_uniqueid
+    :ImmediateDelete
 {
     my ($self) = @_;
 
@@ -889,14 +887,8 @@ sub test_permessage_unknown
 	    $res);
 }
 
-sub config_permessage_unknown_allowed
-{
-    my ($self, $conf) = @_;
-    xlog "Setting annotation_allow_undefined";
-    $conf->set(annotation_allow_undefined => 1);
-}
-
 sub test_permessage_unknown_allowed
+    :AnnotationAllowUndefined
 {
     my ($self) = @_;
 
@@ -2497,14 +2489,8 @@ sub folder_delete_msg_common
     $self->check_messages(\%exp);
 }
 
-sub config_folder_delete_mboxa_dmimm
-{
-    my ($self, $conf) = @_;
-    xlog "Setting delete_mode = immediate";
-    $conf->set(delete_mode => 'immediate');
-}
-
 sub test_folder_delete_mboxa_dmimm
+    :ImmediateDelete
 {
     my ($self) = @_;
 
@@ -2518,6 +2504,7 @@ sub test_folder_delete_mboxa_dmimm
 }
 
 sub test_folder_delete_mboxa_dmdel
+    :DelayedDelete
 {
     my ($self) = @_;
 
@@ -2530,14 +2517,8 @@ sub test_folder_delete_mboxa_dmdel
     $self->folder_delete_mboxa_common();
 }
 
-sub config_folder_delete_mboxm_dmimm
-{
-    my ($self, $conf) = @_;
-    xlog "Setting delete_mode = immediate";
-    $conf->set(delete_mode => 'immediate');
-}
-
 sub test_folder_delete_mboxm_dmimm
+    :ImmediateDelete
 {
     my ($self) = @_;
 
@@ -2551,6 +2532,7 @@ sub test_folder_delete_mboxm_dmimm
 }
 
 sub test_folder_delete_mboxm_dmdel
+    :DelayedDelete
 {
     my ($self) = @_;
 
@@ -2563,14 +2545,8 @@ sub test_folder_delete_mboxm_dmdel
     $self->folder_delete_mboxm_common();
 }
 
-sub config_folder_delete_msg_dmimm
-{
-    my ($self, $conf) = @_;
-    xlog "Setting delete_mode = immediate";
-    $conf->set(delete_mode => 'immediate');
-}
-
 sub test_folder_delete_msg_dmimm
+    :ImmediateDelete
 {
     my ($self) = @_;
 
@@ -2584,6 +2560,7 @@ sub test_folder_delete_msg_dmimm
 }
 
 sub test_folder_delete_msg_dmdel
+    :DelayedDelete
 {
     my ($self) = @_;
 

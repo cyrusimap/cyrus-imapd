@@ -128,15 +128,12 @@ sub test_info_lint
     $self->assert_deep_equals([], \@output);
 }
 
-sub config_info_lint_junk
-{
-    my ($self, $conf) = @_;
-    # test data from hipsteripsum.me
-    xlog "Setting trust_fund: street art";
-    $conf->set(trust_fund => 'street art');
-}
+Cassandane::Cyrus::TestCase::magic(ConfigJunk => sub {
+    shift->config_set(trust_fund => 'street art');
+});
 
 sub test_info_lint_junk
+    :ConfigJunk
 {
     my ($self) = @_;
 

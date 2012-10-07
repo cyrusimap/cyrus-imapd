@@ -47,6 +47,10 @@ use DateTime;
 use Net::POP3;
 use Cassandane::Util::Log;
 
+Cassandane::Cyrus::TestCase::magic(PopSubFolders => sub {
+    shift->config_set(popsubfolders => 1);
+});
+
 sub new
 {
     my ($class, @args) = @_;
@@ -134,13 +138,8 @@ sub test_top_args
     $self->assert_matches(qr/Unexpected extra argument/, $client->message());
 }
 
-sub config_subfolder_login
-{
-    my ($self, $conf) = @_;
-    $conf->set(popsubfolders => 1);
-}
-
 sub test_subfolder_login
+    :PopSubFolders
 {
     my ($self) = @_;
 

@@ -414,14 +414,8 @@ EOF
     $self->check_messages({ 1 => $msg1 }, check_guid => 0);
 }
 
-sub config_deliver_fileinto_dot
-{
-    my ($self, $conf) = @_;
-    xlog "Setting unixhierarchysep = yes";
-    $conf->set(unixhierarchysep => 'yes');
-}
-
 sub test_deliver_fileinto_dot
+    :UnixHierarchySep
 {
     my ($self) = @_;
 

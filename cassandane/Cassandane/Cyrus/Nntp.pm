@@ -117,15 +117,13 @@ sub test_cve_2011_3208_list_active
     }
 }
 
-sub config_cve_2011_3208_newnews
-{
-    my ($self, $conf) = @_;
     # The NEWNEWS command is disabled by default.
-    xlog "Setting allownewnews=1";
-    $conf->set(allownewnews => 1);
-}
+Cassandane::Cyrus::TestCase::magic(AllowNewNews => sub {
+    shift->config_set(allownewnews => 1);
+});
 
 sub test_cve_2011_3208_newnews
+    :AllowNewNews
 {
     my ($self) = @_;
 
