@@ -1901,7 +1901,7 @@ void write_body(long code, struct transaction_t *txn,
 	char zbuf[PROT_BUFSIZE];
 	unsigned flush, out;
 
-	deflateReset(&txn->zstrm);
+	if (code) deflateReset(&txn->zstrm);
 
 	/* don't flush until last chunk */
 	flush = (is_chunked && len) ? Z_NO_FLUSH : Z_FINISH;
