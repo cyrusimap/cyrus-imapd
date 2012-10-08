@@ -585,7 +585,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     int max_age, max_items, max_len, ttl, nitems;
     time_t age_mark = 0;
     char datestr[80];
-    struct buf url = BUF_INITIALIZER;
+    struct buf *url = &txn->buf;
     struct buf *buf = &txn->resp_body.payload;
 
     /* Check any preconditions */
@@ -681,15 +681,16 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	prot = https ? "https" : "http";
 	host = *spool_getheader(txn->req_hdrs, "Host");
     }
-    buf_printf(&url, "%s://%.*s%s",
+    buf_reset(url);
+    buf_printf(url, "%s://%.*s%s",
 	       prot, strcspn(host, " \r\n"), host, txn->req_tgt.path);
-    url_len = buf_len(&url);
+    url_len = buf_len(url);
 
-    buf_printf(buf, "<link>%s</link>\n", buf_cstring(&url));
+    buf_printf(buf, "<link>%s</link>\n", buf_cstring(url));
 
     /* Recommended by http://www.rssboard.org/rss-profile */
     buf_printf(buf, "<atom:link href=\"%s\" rel=\"self\""
-	       " type=\"application/rss+xml\"/>\n", buf_cstring(&url));
+	       " type=\"application/rss+xml\"/>\n", buf_cstring(url));
 
     /* XXX  Use /comment annotation as description? */
     buf_appendcstr(buf, "<description/>\n");
@@ -761,9 +762,9 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	buf_appendcstr(buf, "</title>\n");
 	free(subj);
 
-	buf_truncate(&url, url_len);
-	buf_printf(&url, "?uid=%u", record.uid);
-	buf_printf(buf, "<link>%s</link>\n", buf_cstring(&url));
+	buf_truncate(url, url_len);
+	buf_printf(url, "?uid=%u", record.uid);
+	buf_printf(buf, "<link>%s</link>\n", buf_cstring(url));
 
 	if (body->from || body->sender) {
 	    struct address *addr;
@@ -827,8 +828,6 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
     /* End of output */
     write_body(0, txn, NULL, 0);
-
-    buf_free(&url);
 
     return 0;
 }
