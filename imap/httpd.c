@@ -1118,7 +1118,7 @@ static void cmdloop(void)
 		sasl_http_request_t sasl_http_req;
 
 		txn.flags |= HTTP_READBODY;
-		if ((r = read_body(httpd_in, txn.req_hdrs, &txn.req_body,
+		if ((r = read_body(httpd_in, txn.req_hdrs, &txn.req_body, 1,
 				   &txn.error.desc))) {
 		    txn.flags |= HTTP_CLOSE;
 		    ret = r;
@@ -1247,7 +1247,7 @@ static void cmdloop(void)
       done:
 	/* If we haven't the read body, read and discard it */
 	if (txn.req_hdrs && !(txn.flags & HTTP_READBODY) &&
-	    read_body(httpd_in, txn.req_hdrs, NULL, &txn.error.desc)) {
+	    read_body(httpd_in, txn.req_hdrs, NULL, 0, &txn.error.desc)) {
 	    txn.flags |= HTTP_CLOSE;
 	}
 
@@ -1342,8 +1342,8 @@ int is_mediatype(const char *hdr, const char *type)
  * Read the body of a request or response.
  * Handles identity and chunked encoding only.
  */
-int read_body(struct protstream *pin,
-	      hdrcache_t hdrs, struct buf *body, const char **errstr)
+int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
+	      int decompress, const char **errstr)
 {
     const char **hdr;
     unsigned long len = 0, chunk;
@@ -1445,7 +1445,8 @@ int read_body(struct protstream *pin,
 
 
     /* Decode the body, if necessary */
-    if (body && (hdr = spool_getheader(hdrs, "Content-Encoding"))) {
+    if (decompress && body &&
+	(hdr = spool_getheader(hdrs, "Content-Encoding"))) {
 	int r = HTTP_BAD_MEDIATYPE;
 
 #ifdef HAVE_ZLIB

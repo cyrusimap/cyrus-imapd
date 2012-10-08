@@ -302,8 +302,8 @@ extern int get_doc(struct transaction_t *txn, filter_proc_t filter);
 extern int meth_propfind(struct transaction_t *txn);
 extern int check_precond(unsigned meth, const char *stag, const char *etag,
 			 time_t lastmod, hdrcache_t hdrcache);
-extern int read_body(struct protstream *pin,
-		     hdrcache_t hdrs, struct buf *body, const char **errstr);
+extern int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
+		     int decompress, const char **errstr);
 extern int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root);
 
 #ifdef WITH_CALDAV_SCHED

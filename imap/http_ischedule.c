@@ -233,7 +233,8 @@ static int isched_recv(struct transaction_t *txn)
     /* Read body */
     if (!(txn->flags & HTTP_READBODY)) {
 	txn->flags |= HTTP_READBODY;
-	r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, &txn->error.desc);
+	r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, 1,
+		      &txn->error.desc);
 	if (r) {
 	    txn->flags |= HTTP_CLOSE;
 	    return r;
@@ -505,7 +506,7 @@ int isched_send(struct sched_param *sparam, icalcomponent *ical,
 
     /* Read response (req_hdr and req_body are actually the response) */
     r = http_read_response(be, METH_POST, &code, NULL,
-			   &txn.req_hdrs, &txn.req_body, &txn.error.desc);
+			   &txn.req_hdrs, &txn.req_body, 1, &txn.error.desc);
     if (!r) {
 	switch (code) {
 	case 200:  /* Successful */

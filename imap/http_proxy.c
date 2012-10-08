@@ -233,7 +233,7 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 
       response:
 	r = http_read_response(s, METH_OPTIONS, &code, NULL,
-			       &hdrs, NULL, &errstr);
+			       &hdrs, NULL, 0, &errstr);
 	if (r) {
 	    if (status) *status = errstr;
 	    goto cleanup;
@@ -441,7 +441,7 @@ static int ping(struct backend *s)
 
     do {
 	r = http_read_response(s, METH_OPTIONS, &code, NULL,
-			       &hdrs, NULL, &errstr);
+			       &hdrs, NULL, 0, &errstr);
 
 	/* Check if this is a non-persistent connection */
 	if (!r && (hdr = spool_getheader(hdrs, "Connection")) &&
@@ -538,7 +538,7 @@ static void write_cachehdr(const char *name, const char *contents, void *rock)
 int http_read_response(struct backend *be, unsigned meth,
 		       unsigned *code, const char **statline,
 		       hdrcache_t *resp_hdrs, struct buf *resp_body,
-		       const char **errstr)
+		       int decompress, const char **errstr)
 {
     static char statbuf[2048];
     int c = EOF;
@@ -574,7 +574,7 @@ int http_read_response(struct backend *be, unsigned meth,
 	if (meth == METH_HEAD) return 0;
     }
 
-    if (read_body(be->in, *resp_hdrs, resp_body, errstr)) {
+    if (read_body(be->in, *resp_hdrs, resp_body, decompress, errstr)) {
 	return HTTP_UNAVAILABLE;
     }
 
@@ -672,14 +672,14 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     do {
 	/* Read response from backend */
 	r = http_read_response(be, txn->meth, &code, &statline,
-			  &resp_hdrs, &resp_body, &txn->error.desc);
+			       &resp_hdrs, &resp_body, 0, &txn->error.desc);
 
 	if (!r && (code == 100)) { /* Continue */
 	    /* Read body */
 	    if (!(txn->flags & HTTP_READBODY)) {
 		txn->flags |= HTTP_READBODY;
 		r = read_body(httpd_in, txn->req_hdrs,
-			      &txn->req_body, &txn->error.desc);
+			      &txn->req_body, 0, &txn->error.desc);
 	    }
 	    if (r) {
 		/* Couldn't get the body and can't finish request */
@@ -755,7 +755,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 
     /* Read response from source backend */
     r = http_read_response(src_be, METH_HEAD, &code, &statline,
-			   &resp_hdrs, NULL, &txn->error.desc);
+			   &resp_hdrs, NULL, 0, &txn->error.desc);
     if (r) goto cleanup;
 
     if (code == 200) {  /* OK */
@@ -791,7 +791,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 
 	/* Read response from dest backend */
 	r = http_read_response(dest_be, METH_PUT, &code, &statline,
-			       &resp_hdrs, &resp_body, &txn->error.desc);
+			       &resp_hdrs, &resp_body, 1, &txn->error.desc);
 	if (r) goto cleanup;
 
 	if (code == 100) {  /* Continue */
@@ -813,7 +813,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 
 	    /* Read response from source backend */
 	    r = http_read_response(src_be, METH_GET, &code, &statline,
-				   &resp_hdrs, &resp_body, &txn->error.desc);
+				   &resp_hdrs, &resp_body, 1, &txn->error.desc);
 	    if (r) goto cleanup;
 
 	    if (code == 200) {  /* OK */
@@ -825,7 +825,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 
 		/* Read final response from dest backend */
 		r = http_read_response(dest_be, METH_PUT, &code, &statline,
-				       &resp_hdrs, &resp_body, &txn->error.desc);
+				       &resp_hdrs, &resp_body, 1, &txn->error.desc);
 		if (r) goto cleanup;
 	    }
 	    else {
@@ -860,7 +860,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 
 	/* Read response from source backend */
 	http_read_response(src_be, METH_DELETE, &code, &statline,
-			   &resp_hdrs, &resp_body, &txn->error.desc);
+			   &resp_hdrs, &resp_body, 1, &txn->error.desc);
     }
 
   cleanup:

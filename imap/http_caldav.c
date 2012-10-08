@@ -2294,8 +2294,8 @@ static int meth_put(struct transaction_t *txn)
     /* Read body */
     if (!(txn->flags & HTTP_READBODY)) {
 	txn->flags |= HTTP_READBODY;
-	ret = read_body(httpd_in, txn->req_hdrs,
-			&txn->req_body, &txn->error.desc);
+	ret = read_body(httpd_in, txn->req_hdrs, &txn->req_body, 1,
+			&txn->error.desc);
 	if (ret) {
 	    txn->flags |= HTTP_CLOSE;
 	    goto done;
@@ -3336,7 +3336,8 @@ int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
     /* Read body */
     if (!(txn->flags & HTTP_READBODY)) {
 	txn->flags |= HTTP_READBODY;
-	r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, &txn->error.desc);
+	r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, 1,
+		      &txn->error.desc);
 	if (r) {
 	    txn->flags |= HTTP_CLOSE;
 	    return r;
@@ -4248,7 +4249,8 @@ static int sched_busytime(struct transaction_t *txn)
     /* Read body */
     if (!(txn->flags & HTTP_READBODY)) {
 	txn->flags |= HTTP_READBODY;
-	r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, &txn->error.desc);
+	r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, 1,
+		      &txn->error.desc);
 	if (r) {
 	    txn->flags |= HTTP_CLOSE;
 	    return r;
