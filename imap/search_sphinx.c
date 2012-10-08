@@ -1125,6 +1125,7 @@ static search_text_receiver_t *begin_snippets(void *snippet_state,
     tr->super.end_message = end_message_snippets;
     tr->super.end_mailbox = end_mailbox_snippets;
 
+    tr->indexing_lock_fd = -1;
     tr->verbose = verbose;
     tr->snippet.query = (struct buf *)snippet_state;
     tr->snippet.proc = proc;
