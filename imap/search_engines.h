@@ -54,9 +54,11 @@ typedef int (*search_snippet_cb_t)(struct mailbox *, uint32_t uid,
 
 typedef struct search_builder search_builder_t;
 struct search_builder {
-#define SEARCH_OP_AND	    1
-#define SEARCH_OP_OR	    2
-#define SEARCH_OP_NOT	    3
+/* These values are carefully chosen a) not to clash with the
+ * SEARCH_PART_* constants, and b) to reflect operator precedence */
+#define SEARCH_OP_AND	    101
+#define SEARCH_OP_OR	    102
+#define SEARCH_OP_NOT	    103
     void (*begin_boolean)(search_builder_t *, int op);
     void (*end_boolean)(search_builder_t *, int op);
     void (*match)(search_builder_t *, int part, const char *str);

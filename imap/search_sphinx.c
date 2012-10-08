@@ -60,6 +60,7 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "ptrarray.h"
 #include "bitvector.h"
 #include "mboxlist.h"
 #include "xstats.h"
@@ -240,9 +241,11 @@ static void append_escaped_cstr(struct buf *to, const char *str, int quote)
 	append_escaped_map(to, str, strlen(str), quote);
 }
 
-struct opstack {
-    int idx;	/* index of next child in parent node */
-    int op;	/* op of the parent node */
+struct opnode {
+    int op;	/* SEARCH_OP_* or SEARCH_PART_* constant */
+    char *arg;
+    struct opnode *next;
+    struct opnode *children;
 };
 
 typedef struct sphinx_builder sphinx_builder_t;
@@ -250,119 +253,158 @@ struct sphinx_builder {
     search_builder_t super;
     struct mailbox *mailbox;
     int opts;
-    struct buf query;	    /* Spinx extended query syntax, not SphinxQL */
-    int depth;
-    int alloc;
-    struct opstack *stack;
+    struct opnode *root;
+    ptrarray_t stack;	    /* points to opnode* */
 };
 
-static struct opstack *opstack_top(sphinx_builder_t *bb)
+struct opnode *opnode_new(int op, const char *arg)
 {
-    return (bb->depth ? &bb->stack[bb->depth-1] : NULL);
+    struct opnode *on = xzmalloc(sizeof(struct opnode));
+    on->op = op;
+    on->arg = xstrdupnull(arg);
+    return on;
 }
 
-static void begin_child(sphinx_builder_t *bb)
+void opnode_delete(struct opnode *on)
 {
-    struct opstack *top = opstack_top(bb);
+    struct opnode *child;
 
-    if (top) {
-	/* operator precedence in the Sphinx text searching language
-	 * is not what we would expect, so over-compensate by always
-	 * using parentheses */
-	if (!top->idx)
-	    buf_appendcstr(&bb->query, "(");
-	else if (top->op == SEARCH_OP_AND)
-	    buf_appendcstr(&bb->query, " ");
-	else
-	    buf_appendcstr(&bb->query, "|");
-	top->idx++;
-    }
+    for (child = on->children ; child ; child = child->next)
+	opnode_delete(child);
+    free(on->arg);
+    free(on);
+}
+
+void opnode_append_child(struct opnode *parent, struct opnode *child)
+{
+    struct opnode **tailp;
+
+    for (tailp = &parent->children ; *tailp ; tailp = &((*tailp)->next))
+	;
+    *tailp = child;
+    child->next = NULL;
 }
 
 static void begin_boolean(search_builder_t *bx, int op)
 {
     sphinx_builder_t *bb = (sphinx_builder_t *)bx;
-    struct opstack *top;
-
-//     if (SEARCH_VERBOSE(bb->opts))
-// 	syslog(LOG_NOTICE, "begin_boolean(%s)", search_op_as_string(op));
-
-    begin_child(bb);
-
-    if (op == SEARCH_OP_NOT)
-	buf_appendcstr(&bb->query, "!");
-
-    /* push a new op on the stack */
-    if (bb->depth+1 > bb->alloc) {
-	bb->alloc += 16;
-	bb->stack = xrealloc(bb->stack, bb->alloc * sizeof(struct opstack));
-    }
-
-    top = &bb->stack[bb->depth++];
-    top->op = op;
-    top->idx = 0;
+    struct opnode *top = ptrarray_tail(&bb->stack);
+    struct opnode *on = opnode_new(op, NULL);
+    if (top)
+	opnode_append_child(top, on);
+    else
+	bb->root = on;
+    ptrarray_push(&bb->stack, on);
 }
 
 static void end_boolean(search_builder_t *bx, int op __attribute__((unused)))
 {
     sphinx_builder_t *bb = (sphinx_builder_t *)bx;
-    struct opstack *top = opstack_top(bb);
-
-//     if (SEARCH_VERBOSE(bb->opts))
-// 	syslog(LOG_NOTICE, "end_boolean(%s)", search_op_as_string(op));
-
-    if (top->idx)
-	buf_appendcstr(&bb->query, ")");
-
-    /* op the last operator off the stack */
-    bb->depth--;
+    ptrarray_pop(&bb->stack);
 }
 
 static void match(search_builder_t *bx, int part, const char *str)
 {
     sphinx_builder_t *bb = (sphinx_builder_t *)bx;
-    static struct buf f = BUF_INITIALIZER;
-    static struct buf e1 = BUF_INITIALIZER;
+    struct opnode *top = ptrarray_tail(&bb->stack);
+    struct opnode *on;
 
-    begin_child(bb);
-    if (str) xstats_inc(SPHINX_MATCH);
+    if (!str) return;
 
-    if (column_by_part[part]) {
-	buf_appendcstr(&bb->query, "@");
-	buf_appendcstr(&bb->query, column_by_part[part]);
-	buf_appendcstr(&bb->query, " ");
-    }
-    else if (config_getswitch(IMAPOPT_SPHINX_TEXT_EXCLUDES_ODD_HEADERS)) {
-	/* This horrible hack makes TEXT searches match FROM, TO, CC, BCC
-	 * and SUBJECT but not any other random headers, which is more
-	 * like what users expect. */
-	int i;
-	const char *sep = "(";
-	buf_appendcstr(&bb->query, "@");
-	for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
-	    if (column_by_part[i] && i != SEARCH_PART_HEADERS) {
-		buf_appendcstr(&bb->query, sep);
-		buf_appendcstr(&bb->query, column_by_part[i]);
-		sep = ",";
-	    }
+    xstats_inc(SPHINX_MATCH);
+
+    on = opnode_new(part, str);
+    if (top)
+	opnode_append_child(top, on);
+    else
+	bb->root = on;
+}
+
+/* Spinx extended query syntax, not SphinxQL */
+static void generate_query(struct buf *query,
+			   struct opnode *on,
+			   struct opnode *parent)
+{
+    struct opnode *child;
+    struct buf arg = BUF_INITIALIZER;
+    int need_paren;
+    int sep;
+
+    buf_init_ro_cstr(&arg, on->arg);
+
+    switch (on->op) {
+
+    case SEARCH_OP_NOT:
+	if (on->children) buf_appendcstr(query, "!");
+	/* fall through - note we treat multiple children to a NOT
+	 * node as if they were ANDed together because that's the
+	 * closest match to IMAP semantics. */
+    case SEARCH_OP_OR:
+    case SEARCH_OP_AND:
+
+	need_paren = 0;
+	if (parent && parent->op > on->op)
+	    need_paren = 1;
+	if (on->op == SEARCH_OP_NOT)
+	    need_paren = 1;
+	/* Note that we might have 0, 1, or >1 children, the caller will
+	 * not have optimised the silly cases out. */
+	if (!on->children || !on->children->next)
+	    need_paren = 0;
+
+	sep = (on->op == SEARCH_OP_OR ? '|' : ' ');
+
+	if (need_paren) buf_putc(query, '(');
+	for (child = on->children ; child ; child = child->next) {
+	    generate_query(query, child, on);
+	    if (child->next) buf_putc(query, sep);
 	}
-	buf_appendcstr(&bb->query, ") ");
+	if (need_paren) buf_putc(query, ')');
+	break;
+
+    case SEARCH_PART_ANY:
+	assert(on->children == NULL);
+	if (config_getswitch(IMAPOPT_SPHINX_TEXT_EXCLUDES_ODD_HEADERS)) {
+	    /* This horrible hack makes TEXT searches match FROM, TO, CC, BCC
+	     * and SUBJECT but not any other random headers, which is more
+	     * like what users expect. */
+	    int i;
+	    const char *sep = "(";
+	    buf_appendcstr(query, "@");
+	    for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
+		if (column_by_part[i] && i != SEARCH_PART_HEADERS) {
+		    buf_appendcstr(query, sep);
+		    buf_appendcstr(query, column_by_part[i]);
+		    sep = ",";
+		}
+	    }
+	    buf_appendcstr(query, ") ");
+	}
+	append_escaped(query, &arg, '"');
+	break;
+
+    default:
+	/* other SEARCH_PART_* constants */
+	assert(on->op >= 0 && on->op < SEARCH_NUM_PARTS);
+	assert(on->children == NULL);
+	buf_appendcstr(query, "@");
+	buf_appendcstr(query, column_by_part[on->op]);
+	buf_appendcstr(query, " ");
+	append_escaped(query, &arg, '"');
+	break;
     }
 
-    buf_init_ro_cstr(&f, str);
-    buf_reset(&e1);
-    append_escaped(&bb->query, &f, '"');
+    buf_free(&arg);
 }
 
 static void *get_internalised(search_builder_t *bx)
 {
     sphinx_builder_t *bb = (sphinx_builder_t *)bx;
-    void *internalised;
+    struct buf *query = xzmalloc(sizeof(struct buf));
 
-    buf_cstring(&bb->query);
-    internalised = xmemdup(&bb->query, sizeof(bb->query));
-    memset(&bb->query, 0, sizeof(bb->query));
-    return internalised;
+    generate_query(query, bb->root, NULL);
+    buf_cstring(query);
+    return query;
 }
 
 static void free_internalised(void *internalised)
@@ -437,6 +479,7 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
     sphinx_builder_t *bb = (sphinx_builder_t *)bx;
     struct connection conn = CONNECTION_INITIALIZER;
     struct buf query = BUF_INITIALIZER;	/* SphinxQL query */
+    struct buf inner_query = BUF_INITIALIZER;	/* Sphinx extended match syntax  */
     MYSQL_RES *res = NULL;
     MYSQL_ROW row;
     uint32_t uid;
@@ -455,8 +498,10 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
 	if (r) goto out;
     }
 
+    generate_query(&inner_query, bb->root, NULL);
+
     buf_init_ro_cstr(&query, "SELECT "COL_CYRUSID" FROM rt WHERE MATCH(");
-    append_escaped(&query, &bb->query, '\'');
+    append_escaped(&query, &inner_query, '\'');
     buf_appendcstr(&query, ")");
     // get sphinx to sort by most recent date first
     buf_appendcstr(&query, " ORDER BY "COL_CYRUSID" DESC "
@@ -512,6 +557,7 @@ out:
     if (res) mysql_free_result(res);
     close_connection(&conn);
     buf_free(&query);
+    buf_free(&inner_query);
     return r;
 }
 
@@ -519,8 +565,8 @@ static void end_search(search_builder_t *bx)
 {
     sphinx_builder_t *bb = (sphinx_builder_t *)bx;
 
-    free(bb->stack);
-    buf_free(&bb->query);
+    ptrarray_fini(&bb->stack);
+    opnode_delete(bb->root);
     free(bx);
 }
 
