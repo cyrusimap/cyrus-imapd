@@ -343,7 +343,6 @@ struct node {
 
 struct list_rock {
     struct transaction_t *txn;
-    struct buf *buf;
     struct node *last;
 };
 
@@ -351,6 +350,7 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
 {
     struct list_rock *lrock = (struct list_rock *) rock;
     struct node *last = lrock->last;
+    struct buf *buf = &lrock->txn->resp_body.payload;
 
     if (name) {
 	char *acl;
@@ -376,19 +376,19 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
 	char *cp, *shortname, path[MAX_MAILBOX_PATH+1], *href = NULL;
 
 	/* Send a body chunk once in a while */
-	if (lrock->buf->len > PROT_BUFSIZE) {
-	    write_body(0, lrock->txn, lrock->buf->s, lrock->buf->len);
-	    buf_reset(lrock->buf);
+	if (buf_len(buf) > PROT_BUFSIZE) {
+	    write_body(0, lrock->txn, buf_cstring(buf), buf_len(buf));
+	    buf_reset(buf);
 	}
 
 	if (last->child) {
 	    /* Reuse our sibling */
-	    buf_printf(lrock->buf, "</li>\n");
+	    buf_printf(buf, "</li>\n");
 	    node = last->child;
 	}
 	else {
 	    /* Create first child */
-	    buf_printf(lrock->buf, "\n<ul%s>\n",
+	    buf_printf(buf, "\n<ul%s>\n",
 		       last->parent ? "" : " id='feed'"); /* needed by CSS */
 	    node = xmalloc(sizeof(struct node));
 	}
@@ -413,12 +413,12 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
 	    /* Add selectable feed with link */
 	    snprintf(path, sizeof(path), ".rss.%s", node->name);
 	    mboxname_hiersep_toexternal(&httpd_namespace, href, 0);
-	    buf_printf(lrock->buf, "<li><a href=\"%s\">%s</a>",
+	    buf_printf(buf, "<li><a href=\"%s\">%s</a>",
 		       href, shortname);
 	}
 	else {
 	    /* Add missing ancestor and recurse down the tree */
-	    buf_printf(lrock->buf, "<li>%s", shortname);
+	    buf_printf(buf, "<li>%s", shortname);
 
 	    list_cb(name, matchlen, maycreate, rock);
 	}
@@ -426,7 +426,7 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
     else {
 	/* Remove child */
 	if (last->child) {
-	    buf_printf(lrock->buf, "</li>\n</ul>\n");
+	    buf_printf(buf, "</li>\n</ul>\n");
 	    free(last->child);
 	    last->child = NULL;
 	}
@@ -456,7 +456,7 @@ static int list_feeds(struct transaction_t *txn,
     txn->flags |= HTTP_CHUNKED;
 
     /* Flush representation headers from template doc and set Content-Type */
-    memset(&txn->resp_body, 0, sizeof(struct resp_body_t));
+    memset(&txn->resp_body, 0, sizeof(struct resp_body_t) - sizeof(struct buf));
     txn->resp_body.type = "text/html; charset=utf-8";
 
     /* XXX  Can we get an ETag or Last-Modified from mailboxes.db? */
@@ -469,14 +469,14 @@ static int list_feeds(struct transaction_t *txn,
 
     if (!var) write_body(HTTP_OK, txn, base, len);
     else {
-	struct buf buf = BUF_INITIALIZER;
+	struct buf *buf = &txn->resp_body.payload;
 	struct list_rock lrock;
 	struct node root = { "", 0, NULL, NULL };
 
 	write_body(HTTP_OK, txn, base, var - base);
 	lrock.txn = txn;
-	lrock.buf = &buf;
 	lrock.last = &root;
+	buf_reset(buf);
 
 	/* generate tree view of feeds */
 	mboxlist_findall(NULL, "*", httpd_userisadmin, NULL, httpd_authstate,
@@ -484,11 +484,9 @@ static int list_feeds(struct transaction_t *txn,
 
 	/* close out the tree */
 	list_cb(NULL, 0, 0, &lrock);
-	if (buf.len) write_body(0, txn, buf.s, buf.len);
+	if (buf_len(buf)) write_body(0, txn, buf_cstring(buf), buf_len(buf));
 
 	write_body(0, txn, var+varlen, len - varlen - (var - base));
-
-	buf_free(&buf);
     }
 
     /* End of output */
@@ -587,7 +585,8 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     int max_age, max_items, max_len, ttl, nitems;
     time_t age_mark = 0;
     char datestr[80];
-    struct buf url = BUF_INITIALIZER, buf = BUF_INITIALIZER;
+    struct buf url = BUF_INITIALIZER;
+    struct buf *buf = &txn->resp_body.payload;
 
     /* Check any preconditions */
     time_t lastmod = mailbox->i.last_appenddate;
@@ -657,13 +656,13 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 #endif
 
     /* Start XML */
-    buf_appendcstr(&buf, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n");
+    buf_setcstr(buf, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n");
 
     /* Set up the RSS <channel> response for the mailbox */
-    buf_appendcstr(&buf, "<rss xmlns:atom=\"" XML_NS_ATOM
+    buf_appendcstr(buf, "<rss xmlns:atom=\"" XML_NS_ATOM
 		   "\" version=\"2.0\">\n");
-    buf_appendcstr(&buf, "<channel>\n");
-    buf_printf(&buf, "<title>%s</title>\n", mailbox->name);
+    buf_appendcstr(buf, "<channel>\n");
+    buf_printf(buf, "<title>%s</title>\n", mailbox->name);
 
     /* Construct base URL */
     if ((via = spool_getheader(txn->req_hdrs, "Via"))) {
@@ -686,36 +685,36 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	       prot, strcspn(host, " \r\n"), host, txn->req_tgt.path);
     url_len = buf_len(&url);
 
-    buf_printf(&buf, "<link>%s</link>\n", buf_cstring(&url));
+    buf_printf(buf, "<link>%s</link>\n", buf_cstring(&url));
 
     /* Recommended by http://www.rssboard.org/rss-profile */
-    buf_printf(&buf, "<atom:link href=\"%s\" rel=\"self\""
+    buf_printf(buf, "<atom:link href=\"%s\" rel=\"self\""
 	       " type=\"application/rss+xml\"/>\n", buf_cstring(&url));
 
     /* XXX  Use /comment annotation as description? */
-    buf_appendcstr(&buf, "<description/>\n");
+    buf_appendcstr(buf, "<description/>\n");
 
     if ((webmaster = config_getstring(IMAPOPT_RSS_WEBMASTER))) {
-      buf_printf(&buf, "<webMaster>%s</webMaster>\n", webmaster);
+      buf_printf(buf, "<webMaster>%s</webMaster>\n", webmaster);
     }
 
     rfc822date_gen(datestr, sizeof(datestr), time(NULL));
-    buf_printf(&buf, "<pubDate>%s</pubDate>\n", datestr);
+    buf_printf(buf, "<pubDate>%s</pubDate>\n", datestr);
 
     rfc822date_gen(datestr, sizeof(datestr), lastmod);
-    buf_printf(&buf, "<lastBuildDate>%s</lastBuildDate>\n", datestr);
+    buf_printf(buf, "<lastBuildDate>%s</lastBuildDate>\n", datestr);
 
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	buf_printf(&buf, "<generator>Cyrus HTTP %s</generator>\n",
+	buf_printf(buf, "<generator>Cyrus HTTP %s</generator>\n",
 		   cyrus_version());
     }
 
-    buf_printf(&buf, "<docs>%s</docs>\n", RSS_SPEC);
+    buf_printf(buf, "<docs>%s</docs>\n", RSS_SPEC);
 
-    if (ttl) buf_printf(&buf, "<ttl>%d</ttl>\n", ttl);
+    if (ttl) buf_printf(buf, "<ttl>%d</ttl>\n", ttl);
 
-    write_body(HTTP_OK, txn, buf.s, buf.len);
-    buf_reset(&buf);
+    write_body(HTTP_OK, txn, buf_cstring(buf), buf_len(buf));
+    buf_reset(buf);
 
     /* Add an <item> for each message */
     for (recno = mailbox->i.num_records, nitems = 0;
@@ -730,9 +729,9 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	struct bodypart **parts;
 
 	/* Send a body chunk once in a while */
-	if (buf_len(&buf) > PROT_BUFSIZE) {
-	    write_body(0, txn, buf.s, buf.len);
-	    buf_reset(&buf);
+	if (buf_len(buf) > PROT_BUFSIZE) {
+	    write_body(0, txn, buf_cstring(buf), buf_len(buf));
+	    buf_reset(buf);
 	}
 
 	/* Fetch the message */
@@ -754,17 +753,17 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	/* Feeding this message, increment counter */
 	nitems++;
 
-	buf_appendcstr(&buf, "<item>\n");
+	buf_appendcstr(buf, "<item>\n");
 
 	subj = charset_parse_mimeheader(body->subject);
-	buf_appendcstr(&buf, "<title>");
-	buf_escapestr(&buf, subj && *subj ? subj : "[Untitled]", 0, 0);
-	buf_appendcstr(&buf, "</title>\n");
+	buf_appendcstr(buf, "<title>");
+	buf_escapestr(buf, subj && *subj ? subj : "[Untitled]", 0, 0);
+	buf_appendcstr(buf, "</title>\n");
 	free(subj);
 
 	buf_truncate(&url, url_len);
 	buf_printf(&url, "?uid=%u", record.uid);
-	buf_printf(&buf, "<link>%s</link>\n", buf_cstring(&url));
+	buf_printf(buf, "<link>%s</link>\n", buf_cstring(&url));
 
 	if (body->from || body->sender) {
 	    struct address *addr;
@@ -773,24 +772,24 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	    else addr = body->sender;
 
 	    if (*addr->mailbox) {
-		buf_appendcstr(&buf, "<author>");
-		buf_escapestr(&buf, addr->mailbox, 0, 0);
-		buf_putc(&buf, '@');
-		buf_escapestr(&buf, addr->domain, 0, 0);
+		buf_appendcstr(buf, "<author>");
+		buf_escapestr(buf, addr->mailbox, 0, 0);
+		buf_putc(buf, '@');
+		buf_escapestr(buf, addr->domain, 0, 0);
 		if (addr->name) {
-		    buf_appendcstr(&buf, " (");
-		    buf_escapestr(&buf, addr->name, 0, 0);
-		    buf_putc(&buf, ')');
+		    buf_appendcstr(buf, " (");
+		    buf_escapestr(buf, addr->name, 0, 0);
+		    buf_putc(buf, ')');
 		}
-		buf_appendcstr(&buf, "</author>\n");
+		buf_appendcstr(buf, "</author>\n");
 	    }
 	}
 
-	buf_printf(&buf, "<guid isPermaLink=\"false\">%s</guid>\n",
+	buf_printf(buf, "<guid isPermaLink=\"false\">%s</guid>\n",
 		   message_guid_encode(&record.guid));
 
 	rfc822date_gen(datestr, sizeof(datestr), record.gmtime);
-	buf_printf(&buf, "<pubDate>%s</pubDate>\n", datestr);
+	buf_printf(buf, "<pubDate>%s</pubDate>\n", datestr);
 
 	/* Find and use the first text/ part as the <description> */
 	content.base = msg_base;
@@ -799,12 +798,12 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	message_fetch_part(&content, content_types, &parts);
 
 	if (parts && *parts) {
-	    buf_appendcstr(&buf, "<description><![CDATA[");
-	    buf_escapestr(&buf, parts[0]->decoded_body, max_len, 1);
-	    buf_appendcstr(&buf, "]]></description>\n");
+	    buf_appendcstr(buf, "<description><![CDATA[");
+	    buf_escapestr(buf, parts[0]->decoded_body, max_len, 1);
+	    buf_appendcstr(buf, "]]></description>\n");
 	}
 
-	buf_appendcstr(&buf, "</item>\n");
+	buf_appendcstr(buf, "</item>\n");
 
 	/* free the results */
 	if (parts) {
@@ -823,13 +822,12 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     }
 
     /* End of RSS <channel> */
-    buf_appendcstr(&buf, "</channel>\n</rss>\n");
-    write_body(0, txn, buf.s, buf.len);
+    buf_appendcstr(buf, "</channel>\n</rss>\n");
+    write_body(0, txn, buf_cstring(buf), buf_len(buf));
 
     /* End of output */
     write_body(0, txn, NULL, 0);
 
-    buf_free(&buf);
     buf_free(&url);
 
     return 0;
@@ -846,10 +844,11 @@ static void display_address(struct buf *buf, struct address *addr,
 }
 
 
-static void display_part(struct transaction_t *txn, struct buf *buf,
+static void display_part(struct transaction_t *txn,
 			 struct body *body, uint32_t uid,
 			 const char *cursection, const char *msg_base)
 {
+    struct buf *buf = &txn->resp_body.payload;
     char nextsection[MAX_SECTION_LEN+1];
 
     if (!strcmp(body->type, "MULTIPART")) {
@@ -865,7 +864,7 @@ static void display_part(struct transaction_t *txn, struct buf *buf,
 	    }
 	    snprintf(nextsection, sizeof(nextsection), "%s%s%d",
 		     cursection, *cursection ? "." : "", i+1);
-	    display_part(txn, buf, &body->subpart[i],
+	    display_part(txn, &body->subpart[i],
 			 uid, nextsection, msg_base);
 	}
 	else {
@@ -873,7 +872,7 @@ static void display_part(struct transaction_t *txn, struct buf *buf,
 	    for (i = 0; i < body->numparts; i++) {
 		snprintf(nextsection, sizeof(nextsection), "%s%s%d",
 			 cursection, *cursection ? "." : "", i+1);
-		display_part(txn, buf, &body->subpart[i],
+		display_part(txn, &body->subpart[i],
 			     uid, nextsection, msg_base);
 	    }
 	}
@@ -940,7 +939,7 @@ static void display_part(struct transaction_t *txn, struct buf *buf,
 	/* Display subpart */
 	snprintf(nextsection, sizeof(nextsection), "%s%s%d",
 		 cursection, *cursection ? "." : "", 1);
-	display_part(txn, buf, subpart, uid, nextsection, msg_base);
+	display_part(txn, subpart, uid, nextsection, msg_base);
     }
     else {
 	/* Leaf part - display something */
@@ -956,7 +955,7 @@ static void display_part(struct transaction_t *txn, struct buf *buf,
 		charset_to_utf8(msg_base + body->content_offset,
 				body->content_size, charset, encoding);
 	    if (!ishtml) buf_printf(buf, "<pre>");
-	    write_body(0, txn, buf->s, buf->len);
+	    write_body(0, txn, buf_cstring(buf), buf_len(buf));
 	    buf_reset(buf);
 
 	    write_body(0, txn, body->decoded_body, strlen(body->decoded_body));
@@ -1014,7 +1013,7 @@ static void display_message(struct transaction_t *txn,
 			    struct body *body, const char *msg_base)
 {
     struct body toplevel;
-    struct buf buf = BUF_INITIALIZER;
+    struct buf *buf = &txn->resp_body.payload;
 
     /* Setup for chunked response */
     txn->flags |= HTTP_CHUNKED;
@@ -1027,18 +1026,18 @@ static void display_message(struct transaction_t *txn,
     }
 
     /* Start HTML */
-    buf_printf(&buf, HTML_DOCTYPE);
-    buf_printf(&buf, "<html><head><title>%s:%u</title></head><body>\n",
+    buf_setcstr(buf, HTML_DOCTYPE);
+    buf_printf(buf, "<html><head><title>%s:%u</title></head><body>\n",
 	       mboxname, uid);
 
     /* Create link to message source */
-    buf_printf(&buf, "<div align=center>");
-    buf_printf(&buf, "<a href=\"%s?uid=%u;section=0\" type=\"plain/text\">",
+    buf_printf(buf, "<div align=center>");
+    buf_printf(buf, "<a href=\"%s?uid=%u;section=0\" type=\"plain/text\">",
 	       txn->req_tgt.path, uid);
-    buf_printf(&buf, "[View message source]</a></div><hr>\n");
+    buf_printf(buf, "[View message source]</a></div><hr>\n");
 
-    write_body(HTTP_OK, txn, buf.s, buf.len);
-    buf_reset(&buf);
+    write_body(HTTP_OK, txn, buf_cstring(buf), buf_len(buf));
+    buf_reset(buf);
 
     /* Encapsulate our body in a message/rfc822 to display toplevel hdrs */
     memset(&toplevel, 0, sizeof(struct body));
@@ -1046,16 +1045,14 @@ static void display_message(struct transaction_t *txn,
     toplevel.subtype = "RFC822";
     toplevel.subpart = body;
 
-    display_part(txn, &buf, &toplevel, uid, "", msg_base);
+    display_part(txn, &toplevel, uid, "", msg_base);
 
     /* End of HTML */
-    buf_printf(&buf, "</body></html>");
-    write_body(0, txn, buf.s, buf.len);
+    buf_printf(buf, "</body></html>");
+    write_body(0, txn, buf_cstring(buf), buf_len(buf));
 
     /* End of output */
     write_body(0, txn, NULL, 0);
-
-    buf_free(&buf);
 }
 
 
@@ -1088,7 +1085,6 @@ static void fetch_part(struct transaction_t *txn, struct body *body,
 	int encoding = body->charset_cte & 0xff;
 	const char *outbuf;
 	size_t outsize;
-	struct buf buf = BUF_INITIALIZER;
 
 	outbuf = charset_decode_mimebody(msg_base + body->content_offset,
 					 body->content_size, encoding,
@@ -1101,11 +1097,10 @@ static void fetch_part(struct transaction_t *txn, struct body *body,
 
 	}
 
-	buf_printf(&buf, "%s/%s", body->type, body->subtype);
-	txn->resp_body.type = buf.s;
+	buf_reset(&txn->buf);
+	buf_printf(&txn->buf, "%s/%s", body->type, body->subtype);
+	txn->resp_body.type = buf_cstring(&txn->buf);
 
 	write_body(HTTP_OK, txn, outbuf, outsize);
-
-	buf_free(&buf);
     }
 }
