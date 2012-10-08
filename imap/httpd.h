@@ -189,7 +189,8 @@ struct resp_body_t {
     const char *etag;	/* ETag             */
     time_t lastmod;	/* Last-Modified    */
     const char *stag;	/* Schedule-Tag     */
-    unsigned vary;	/* Vary */
+    unsigned vary;	/* Vary		    */
+    struct buf payload;	/* Payload	    */
 };
 
 /* Vary header fields */

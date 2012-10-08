@@ -904,7 +904,8 @@ static void cmdloop(void)
 	txn.req_hdrs = NULL;
 	txn.location = NULL;
 	memset(&txn.error, 0, sizeof(struct error_t));
-	memset(&txn.resp_body, 0, sizeof(struct resp_body_t));
+	memset(&txn.resp_body, 0,  /* Don't zero the response payload buffer */
+	       sizeof(struct resp_body_t) - sizeof(struct buf));
 	buf_reset(&txn.buf);
 
 	/* Flush any buffered output */
@@ -1174,16 +1175,23 @@ static void cmdloop(void)
 
 	    if (httpd_tls_required) {
 		/* We only support TLS+Basic, so tell client to use TLS */
-		struct buf html = BUF_INITIALIZER;
+		const char *path = txn.req_tgt.path;
+		const char *query = txn.req_tgt.query;
+		struct buf *html = &txn.resp_body.payload;
 		long code;
 
 		/* Create https URL */
 		hdr = spool_getheader(txn.req_hdrs, "Host");
-		buf_printf(&txn.buf, "https://%s%s", hdr[0], txn.req_tgt.path);
+		buf_printf(&txn.buf, "https://%s", hdr[0]);
+		if (strcmp(path, "*")) {
+		    buf_appendcstr(&txn.buf, path);
+		    if (*query) buf_printf(&txn.buf, "?%s", query);
+		}
 		txn.location = buf_cstring(&txn.buf);
 
 		/* Create HTML body */
-		buf_printf(&html, tls_message,
+		buf_reset(html);
+		buf_printf(html, tls_message,
 			   buf_cstring(&txn.buf), buf_cstring(&txn.buf));
 
 		/* Check which response is required */
@@ -1199,9 +1207,8 @@ static void cmdloop(void)
 
 		/* Output our HTML response */
 		txn.resp_body.type = "text/html; charset=utf-8";
-		write_body(code, &txn, buf_cstring(&html), buf_len(&html));
+		write_body(code, &txn, buf_cstring(html), buf_len(html));
 
-		buf_free(&html);
 		goto done;
 	    }
 	    else {
@@ -1253,6 +1260,7 @@ static void cmdloop(void)
 
 	if (txn.flags & HTTP_CLOSE) {
 	    buf_free(&txn.req_body);
+	    buf_free(&txn.resp_body.payload);
 #ifdef HAVE_ZLIB
 	    deflateEnd(&txn.zstrm);
 #endif
