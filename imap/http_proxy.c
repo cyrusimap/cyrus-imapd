@@ -644,7 +644,7 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     unsigned code;
     const char *statline;
     hdrcache_t resp_hdrs = NULL;
-    struct buf resp_body = BUF_INITIALIZER;
+    struct buf *resp_body = &txn->resp_body.payload;
 
     /*
      * Send client request to backend:
@@ -672,7 +672,7 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     do {
 	/* Read response from backend */
 	r = http_read_response(be, txn->meth, &code, &statline,
-			       &resp_hdrs, &resp_body, 0, &txn->error.desc);
+			       &resp_hdrs, resp_body, 0, &txn->error.desc);
 
 	if (!r && (code == 100)) { /* Continue */
 	    /* Read body */
@@ -699,11 +699,10 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     } while (!r && (code < 200));
 
     /* Send response to client */
-    if (!r) send_response(httpd_out, statline, resp_hdrs, &resp_body,
+    if (!r) send_response(httpd_out, statline, resp_hdrs, resp_body,
 			  txn->flags);
 
     if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
-    buf_free(&resp_body);
 
     return r;
 }
@@ -725,7 +724,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
     char *etag = NULL;
     const char **hdr, *statline;
     hdrcache_t resp_hdrs = NULL;
-    struct buf resp_body = BUF_INITIALIZER;
+    struct buf *resp_body = &txn->resp_body.payload;
 
     /*
      * Send a HEAD request to source backend to test conditionals:
@@ -791,7 +790,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 
 	/* Read response from dest backend */
 	r = http_read_response(dest_be, METH_PUT, &code, &statline,
-			       &resp_hdrs, &resp_body, 1, &txn->error.desc);
+			       &resp_hdrs, resp_body, 1, &txn->error.desc);
 	if (r) goto cleanup;
 
 	if (code == 100) {  /* Continue */
@@ -813,19 +812,19 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 
 	    /* Read response from source backend */
 	    r = http_read_response(src_be, METH_GET, &code, &statline,
-				   &resp_hdrs, &resp_body, 1, &txn->error.desc);
+				   &resp_hdrs, resp_body, 1, &txn->error.desc);
 	    if (r) goto cleanup;
 
 	    if (code == 200) {  /* OK */
 		/* Send single-chunk body to dest backend to complete the PUT */
-		prot_printf(dest_be->out, "%x\r\n", buf_len(&resp_body));
-		prot_putbuf(dest_be->out, &resp_body);
+		prot_printf(dest_be->out, "%x\r\n", buf_len(resp_body));
+		prot_putbuf(dest_be->out, resp_body);
 		prot_printf(dest_be->out, "\r\n0\r\n\r\n");
 		prot_flush(dest_be->out);
 
 		/* Read final response from dest backend */
 		r = http_read_response(dest_be, METH_PUT, &code, &statline,
-				       &resp_hdrs, &resp_body, 1, &txn->error.desc);
+				       &resp_hdrs, resp_body, 1, &txn->error.desc);
 		if (r) goto cleanup;
 	    }
 	    else {
@@ -836,7 +835,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
     }
 
     /* Send response to client */
-    send_response(httpd_out, statline, resp_hdrs, &resp_body, txn->flags);
+    send_response(httpd_out, statline, resp_hdrs, resp_body, txn->flags);
 
     if ((txn->meth == METH_MOVE) && (code < 300)) {
 	/*
@@ -860,13 +859,12 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 
 	/* Read response from source backend */
 	http_read_response(src_be, METH_DELETE, &code, &statline,
-			   &resp_hdrs, &resp_body, 1, &txn->error.desc);
+			   &resp_hdrs, resp_body, 1, &txn->error.desc);
     }
 
   cleanup:
     if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
     if (etag) free(etag);
-    buf_free(&resp_body);
 
     return r;
 }
