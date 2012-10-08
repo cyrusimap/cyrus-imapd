@@ -306,9 +306,12 @@ VALGRIND = valgrind --tool=memcheck --leak-check=full --suppressions=vg.supp
 check-local:
 	@echo "Running unit tests"
 	@vg= ; test -z "$$VG" || vg="$(VALGRIND)" ;\
+	f="-v" ; test "x$$CUFORMAT" = xjunit && f="-x" ;\
 	cd cunit ;\
-	$$vg ./unit -x ;\
-	$(RM) -rf reports ; mkdir reports ; ./cunit-to-junit.pl
+	$$vg ./unit $$f ;\
+	if [ "x$$CUFORMAT" = xjunit ] ; then \
+	$(RM) -rf reports ; mkdir reports ; ./cunit-to-junit.pl ;\
+	fi
 endif
 
 doc_text_htmlstrip_SOURCE = doc/text/htmlstrip.c
