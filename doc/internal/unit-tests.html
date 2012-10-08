@@ -24,6 +24,8 @@
   <li><a href="#configure-scripts">3.2 Configure Script</a></li>
   <li><a href="#running-the-tests">3.3 Make</a></li>
   <li><a href="#using-valgrind">3.4 Using Valgrind</a></li>
+  <li><a href="#the-tests-are-failing">3.5 The Tests Are Failing</a></li>
+  <li><a href="#debugging-a-test">3.6 Debugging A Test</a></li>
   </ul>
 </li>
 <li><a href="#adding-your-own-tests">4. Adding Your Own Tests</a>
@@ -130,38 +132,37 @@ target.</p>
 tests.</p>
 
 <blockquote class="cmds">me@mybox&gt; <b>make check</b>
+ cd . &amp;&amp; /bin/bash /home/me/cyrus-imapd/missing --run automake-1.11 --foreign Makefile
+ cd . &amp;&amp; /bin/bash ./config.status Makefile depfiles <span class="note">(a)</span>
+config.status: creating Makefile
+config.status: executing depfiles commands
 ...
-### Making check in /home/gnb/software/cyrus/imapd/lib  <span class="note">(a)</span>
-make[1]: Entering directory `/home/gnb/software/cyrus/imapd/lib'
-make[1]: Nothing to be done for `check'.
-make[1]: Leaving directory `/home/gnb/software/cyrus/imapd/lib'
-### Done with /home/gnb/software/cyrus/imapd/lib
+make[3]: Entering directory `/home/me/cyrus-imapd'
+make[3]: `sieve/test' is up to date.
+cunit/cunit.pl --project cunit/default.cunit --generate-wrapper cunit/mboxname.testc   <span class="note">(b)</span>
+gcc -DHAVE_CONFIG_H ... -c -o cunit/mboxname.o cunit/mboxname.testc-cunit.c
+rm -f cunit/mboxname.testc-cunit.c
+/bin/bash ./libtool --tag=CC --mode=link gcc -fPIC  -g -O2 -o cunit/unit
+cunit/unit.o ... lib/libcyrus_min.la ...  <span class="note">(c)</span>
 ...
-make[1]: Entering directory `/home/gnb/software/cyrus/imapd/cunit'   <span class="note">(b)</span>
-...
-../cunit/cunit.pl [...] --generate-wrapper mboxname.c   <span class="note">(c)</span>
-gcc -c [...] -g -O2 .cunit-mboxname.c
-...
-gcc [...] -o unit unit.o [...] .cunit-mboxname.o [...] \  <span class="note">(d)</span>
-    ../imap/libcyrus_imap.la ../lib/libcyrus.la [...]
-./unit -v   <span class="note">(e)</span>
+Running unit tests		<span class="note">(d)</span>
 
 
      CUnit - A Unit testing framework for C - Version 2.1-0
      http://cunit.sourceforge.net/
 
 ...
-Suite: mboxname   <span class="note">(f)</span>
+Suite: mboxname   <span class="note">(e)</span>
+  Test: dir_hash_c ... passed
   Test: to_parts ... passed
   Test: to_userid ... passed
-  Test: same_userid ... passed
-  Test: same_userid_domain ... passed
+  Test: to_usermbox ... passed
 ...
---Run Summary: Type      Total     Ran  Passed  Failed  <span class="note">(g)</span>
-               suites        9       9     n/a       0
-               tests        51      51      50       1
-               asserts     474     474     473       1
-make[1]: Leaving directory `/home/gnb/software/cyrus/imapd/cunit'
+--Run Summary: Type      Total     Ran  Passed  Failed  <span class="note">(f)</span>
+               suites       34      34     n/a       0
+               tests       323     323     323       0
+               asserts 1079745 1079745 1079745       0
+make[1]: Leaving directory `/home/me/cyrus-imapd/cunit'
 </blockquote>
 
 <p>Let&apos;s take a closer look at what's happening here.</p>
@@ -169,35 +170,35 @@ make[1]: Leaving directory `/home/gnb/software/cyrus/imapd/cunit'
 <dl>
 
 <dt><span class="note">(a)</span></dt>
-<dd>The <tt>check:</tt> target recurses into each subdirectory, which
-is normal behaviour for most targets in a top-level Makefile but actually
-rather useless in this case.</dd>
+<dd>The <tt>check:</tt> target causes automake to re-run itself.  This
+is normal automake behaviour.  Note that the older build system used
+to run make recursively in sub-directories, the newer automake-based
+system builds everything from the top directory.</dd>
 
 <dt><span class="note">(b)</span></dt>
-<dd>Finally, the <tt>check:</tt> target recurses into the <tt>cunit/</tt>
-directory, which is where all the interesting stuff happens.</dd>
-
-<dt><span class="note">(c)</span></dt>
 <dd>The <tt>cunit/</tt> directory contains a number of C source files
+(called, for reasons too complicated to explain here,  <i>whatever</i>.testc)
 with test code in them.  For each of those, a small wrapper C source
 file is generated and then compiled into an object file.</dd>
 
-<dt><span class="note">(d)</span></dt>
+<dt><span class="note">(c)</span></dt>
 <dd>Finally, all the compiled object files are linked into an executable,
 with a <tt>main()</tt> routine from <tt>unit.c</tt>, and a number of
 libraries and object files from other parts of the Cyrus tree.</dd>
 
+<dt><span class="note">(d)</span></dt>
+<dd>The resulting executable is then run.</dd>
+
 <dt><span class="note">(e)</span></dt>
-<dd>The resulting executable is then run.  The <tt>-v</tt> flag tells
-it to be verbose.</dd>
+<dd>The test executable runs all the built tests one by one, telling
+us which ones passed and which ones failed as it runs them.
+You can also run it manually with the name of a test as an argument,
+and it will run only the named test.</dd>
 
 <dt><span class="note">(f)</span></dt>
-<dd>With no other arguments, the test executable runs all the built
-tests one by one, telling us which ones passed and which ones failed.</dd>
-
-<dt><span class="note">(g)</span></dt>
 <dd>At the end, the text executable prints a summary of how many
-tests it ran and how many passed and failed.</dd>
+tests it ran and how many passed and failed.  The key thing to look
+at here is the rightmost column, it should be all zero.</dd>
 
 </dl>
 
@@ -268,6 +269,69 @@ useful.  I would have made running the tests under Valgrind the only
 option for the <tt>check:</tt> target, except that Valgrind is not
 available on all of Cyrus' supported platforms.</p>
 
+<a name="the-tests-are-failing"/><h3>3.5 The Tests Are Failing</h3>
+
+<p>So you've noticed that some of the tests are failing.  Let me make
+the guiding principle of unit testing as clear as possible:
+<b>THE UNIT TESTS SHOULD NOT FAIL</b>.  All of the tests are designed to
+pass all the time, in everyone's environment.  The unit tests are
+run automatically every twelve hours on the Cyrus
+<a href="http://ci.cyrusimap.org/">Continuous Integration server</a>,
+and a failing test fails the whole build and makes people unhappy.</p>
+
+<p>There are a few rules which you should follow to help
+us all get the most benefit out of unit testing</p>
+
+<ul>
+<li>If you see a test failing, investigate it.
+<li>If you can't investigate, complain on the mailing list or raise a bug
+    so that somebody else can investigate.
+<li>When writing tests, write them to work in all environments and all
+    combinations of <tt>configure</tt> script options.  It's ok to
+    have a test which is empty in some circumstances; it's not ok
+    to have a test that fails.
+<li>When adding code, write new tests for the new code.
+<li>When modifying code, write new tests for the new behaviour.
+<li>When looking at old code, also take a look at the
+    <a href="http://ci.cyrusimap.org/job/cyrus-imapd-master/887/cobertura/">coverage report</a>
+    and consider writing tests for the existing code.
+</ul>
+
+<a name="debugging-a-test"/><h2>3.6 Debugging A Test</h2>
+
+<p>With the new Cyrus build system, the file <tt>cunit/unit</tt> is no longer
+an executable, it's a shell script which sets up some environment variables
+before running the real executable which is hidden away.  This makes debugging
+a failing test somewhat challenging.  The solution is:</p>
+
+<blockquote class="cmds">me@mybox&gt; <b>( cd cunit ; libtool --mode=execute gdb --args unit -t crc32 )</b>
+...
+Reading symbols from /home/me/cyrus-imapd/cunit/.libs/lt-unit...done.
+(gdb) <b>list crc32.testc:1</b>
+1	/* Unit test for lib/crc32.c */
+2	#include "cunit/cunit.h"
+3	#include "crc32.h"
+...
+(gdb) <b>break test_map</b>
+Breakpoint 1 at 0x44a2f8: file ./cunit/crc32.testc, line 11.
+(gdb) <b>run</b>
+Starting program: /home/me/cyrus-imapd/cunit/.libs/lt-unit -t -v crc32
+[Thread debugging using libthread_db enabled]
+
+
+     CUnit - A Unit testing framework for C - Version 2.1-0
+     http://cunit.sourceforge.net/
+
+
+Suite: crc32
+  Test: map ... 
+Breakpoint 1, test_map () at ./cunit/crc32.testc:11
+11	    c = crc32_map(TEXT, sizeof(TEXT)-1);
+(gdb) 
+</blockquote>
+
+<p>Note the <b>-t</b> option.  This turns off test timeouts, which is very useful
+for manual debugging.</p>
 
 <a name="adding-your-own-tests"/><h2>4. Adding Your Own Tests</h2>
 
@@ -276,13 +340,15 @@ available on all of Cyrus' supported platforms.</p>
 <a name="where-to-put-your-tests"/><h2>4.1 Where To Put Your Tests</h2>
 
 <p>The unit test code in Cyrus is contained in a set of C source files
-in the <tt>cunit</tt> directory.  If you look closely, you will see
+in the <tt>cunit</tt> directory.  For reasons too complex to go into
+here, these are named <i>whatever</i>.testc instead of the more usual
+<i>whatever</i>.c.  If you look closely, you will see
 that each of those C source files maps to a "Suite" in CUnit parlance.
-For example, <tt>cunit/glob.c</tt> is listed as the Suite "glob" in
+For example, <tt>cunit/glob.testc</tt> is listed as the Suite "glob" in
 CUnit's runtime output.</p>
 
 <p>Typically, each Suite tests a single module or a related set of
-functions; for example, <tt>cunit/glob.c</tt> contains tests for
+functions; for example, <tt>cunit/glob.testc</tt> contains tests for
 the glob module in <tt>lib/glob.c</tt>.</p>
 
 <p>So, if you want to add a new test for a module which already has
@@ -298,7 +364,7 @@ Your first step is to create a new C source file.  For this example,
 you'll create a new Suite to test the CRC32 routines which live
 in <tt>lib/crc32.c</tt>.</p>
 
-<blockquote class="cmds">me@mybox&gt; <b>vi cunit/crc32.c</b>
+<blockquote class="cmds">me@mybox&gt; <b>vi cunit/crc32.testc</b>
 ...
 </blockquote>
 
@@ -376,49 +442,46 @@ online CUnit documentation</a> for more details.
 
 </dl>
 
-<p>Now you need to tell the Cyrus makefiles about your new Suite.</p>
+<p>Now you need to tell the Cyrus build system about your new Suite.</p>
 
-<blockquote class="cmds">me@mybox&gt; <b>vi cunit/Makefile.in</b>
+<blockquote class="cmds">me@mybox&gt; <b>vi Makefile.am</b>
 ...
 </blockquote>
 
 <p>You need to add the filename of your new test to the definition
-of the <tt>TESTSOURCES</tt> variable.</p>
+of the <tt>cunit_TESTS</tt> variable.</p>
 
-<blockquote class="src">PROGS = unit
-
-TESTSOURCES = times.c glob.c md5.c parseaddr.c message.c \
-            strconcat.c conversations.c msgid.c mboxname.c <b>\</b>
-	    <b>crc32.c</b>
-TESTLIBS = @top_srcdir@/imap/mutex_fake.o @top_srcdir@/imap/libcyrus_imap.la \
-        @top_srcdir@/lib/libcyrus.la @top_srcdir@/lib/libcyrus_min.la
-
+<blockquote class="src">cunit_TESTS = \
+        cunit/annotate.testc \
+        cunit/backend.testc \
+        cunit/binhex.testc \
+        cunit/bitvector.testc \
+        cunit/buf.testc \
+        cunit/byteorder64.testc \
+        cunit/charset.testc \
+        cunit/<b>crc32</b>.testc \
+        cunit/db.testc \
+        cunit/dlist.testc \
+        cunit/duplicate.testc \
 </blockquote>
 
-<p>Now you need to use <tt>autoconf</tt> to build <tt>cunit/Makefile</tt>
-from <tt>cunit/Makefile.in</tt>.  The easiest way to do this is to run
-the <tt>config.status</tt> shell script which is one of the files
-that <tt>autoconf</tt> generates. Alternately, you could re-run
-the <tt>configure</tt> script (but that would be a lot slower).</p>
+<p>At this point you should be able to just rebuild and rerun using <b>make check</b>.
+You can also just rebuild without rerunning by using the command <b>make cunit/unit</b>.
+</p>
 
-<blockquote class="cmds">me@mybox&gt; <b>./config.status</b>
-...
-config.status: creating cunit/Makefile
-...
-</blockquote>
-
-<p>Now, you finally get to build and run your new test code.  Run
-<tt>make check</tt> and you should see your new code being
-built and run.</p>
+<p>
+Note that sometimes this doesn't quite work right, and you may be able to work
+around this problem using the command <b>rm cunit/default.cunit</b>.
+</p>
 
 <blockquote class="cmds">me@mybox&gt; <b>make check</b>
 ...
-../cunit/cunit.pl [...] --add-sources [...] <b>crc32.c</b>
+../cunit/cunit.pl [...] --add-sources [...] <b>crc32.testc</b>
 ...
-../cunit/cunit.pl [...] --generate-wrapper <b>crc32.c</b>
+../cunit/cunit.pl [...] --generate-wrapper <b>crc32.testc</b>
 gcc -c [...] -g -O2 <b>.cunit-crc32.c</b>
 gcc [...] -o unit [...] <b>.cunit-crc32.o</b> ...
-./unit -v
+Running unit tests
 
 
      CUnit - A Unit testing framework for C - Version 2.1-0
@@ -427,7 +490,7 @@ gcc [...] -o unit [...] <b>.cunit-crc32.o</b> ...
 ...
 Suite: <b>crc32</b>
   Test: <b>map</b> ... FAILED
-    1. crc32.c:12  - CU_ASSERT_EQUAL(c=1926722702,CRC32=0)
+    1. crc32.testc:12  - CU_ASSERT_EQUAL(c=1926722702,CRC32=0)
 
 </blockquote>
 
@@ -444,10 +507,10 @@ rebuilt and rerun, and this time passing.</p>
 
 <blockquote class="cmds">me@mybox&gt; <b>make check</b>
 ...
-../cunit/cunit.pl [...] --generate-wrapper <b>crc32.c</b>
+../cunit/cunit.pl [...] --generate-wrapper <b>crc32.testc</b>
 gcc -c [...] -g -O2 <b>.cunit-crc32.c</b>
 gcc [...] -o unit [...] <b>.cunit-crc32.o</b> ...
-./unit -v
+Running unit tests
 
 
      CUnit - A Unit testing framework for C - Version 2.1-0
@@ -465,7 +528,7 @@ do is add a new function to an existing C source file in the
 <tt>cunit/</tt> directory.  As an example, let's add a test for
 the <tt>crc_iovec()</tt> function.</p>
 
-<blockquote class="cmds">me@mybox&gt; <b>vi cunit/crc32.c</b>
+<blockquote class="cmds">me@mybox&gt; <b>vi cunit/crc32.testc</b>
 ...
 </blockquote>
 
@@ -534,10 +597,10 @@ online CUnit documentation</a> for more details.
 
 <blockquote class="cmds">me@mybox&gt; <b>make check</b>
 ...
-../cunit/cunit.pl [...] --generate-wrapper <b>crc32.c</b>
+../cunit/cunit.pl [...] --generate-wrapper <b>crc32.testc</b>
 gcc -c [...] -g -O2 <b>.cunit-crc32.c</b>
 gcc [...] -o unit [...] <b>.cunit-crc32.o</b> ...
-./unit -v
+Running unit tests
 
 
      CUnit - A Unit testing framework for C - Version 2.1-0
@@ -550,7 +613,7 @@ Suite: crc32
 
 </blockquote>
 
-<a name="suite-init-and-cleanup"/><h2>4.3 Suite Init And Cleanup</h2>
+<a name="suite-init-and-cleanup"/><h2>4.3 Suite Setup And Teardown</h2>
 
 <p>Sometimes the behaviour of the functions under test depend on
 external influences such as environment variables, global variables,
@@ -569,30 +632,30 @@ two functions that you write and which live in the suite source.
 They are called from CUnit respectively before any of the tests in
 the suite is run, and after all tests from that suite are run.</p>
 
-<p>Here's how to use them.  The suite initialisation function should
+<p>Here's how to use them.  The suite setup function should
 set up any global state that the functions under test rely on, in
 such a way that their state is predictable and always the same no
 matter who runs the test or when or how many times.  Similarly the
-suite cleanup function should clean up any state which might possibly
+suite teardown function should clean up any state which might possibly
 interfere with other test suites.  Note that some suites will need
-an initialisation function but not necessarily a cleanup function.</p>
+an setup function but not necessarily a teardown function.</p>
 
 <p>Adding these functions is very easy: you just write functions
 of the appropriate signature (names, arguments and return type) and
 the Cyrus unit test infrastructure will automatically discover them
 and arrange for them to be called.  The functions should look like
-(actual example taken from <tt>cunit/mboxname.c</tt>) this:</p>
+(actual example taken from <tt>cunit/mboxname.testc</tt>) this:</p>
 
 <blockquote class="cmds">static enum enum_value old_config_virtdomains;
 
-<b>static int init(void)</b>
+<b>static int set_up(void)</b>
 {
     old_config_virtdomains = config_virtdomains;
     config_virtdomains = IMAP_ENUM_VIRTDOMAINS_ON;
     return 0;
 }
 
-<b>static int cleanup(void)</b>
+<b>static int tear_down(void)</b>
 {
     config_virtdomains = old_config_virtdomains;
     return 0;
@@ -601,6 +664,10 @@ and arrange for them to be called.  The functions should look like
 
 <p>The functions should return 0 on success, and non-zero on error.  They
 must not call and <tt>CU_*</tt> functions or macros.</p>
+
+<p>Good luck and good testing!</p>
+
+<!-- TODO: describe parameters -->
 
 </body>
 </html>
