@@ -257,7 +257,7 @@ struct sphinx_builder {
     ptrarray_t stack;	    /* points to opnode* */
 };
 
-struct opnode *opnode_new(int op, const char *arg)
+static struct opnode *opnode_new(int op, const char *arg)
 {
     struct opnode *on = xzmalloc(sizeof(struct opnode));
     on->op = op;
@@ -265,7 +265,7 @@ struct opnode *opnode_new(int op, const char *arg)
     return on;
 }
 
-void opnode_delete(struct opnode *on)
+static void opnode_delete(struct opnode *on)
 {
     struct opnode *child;
 
@@ -275,7 +275,20 @@ void opnode_delete(struct opnode *on)
     free(on);
 }
 
-void opnode_append_child(struct opnode *parent, struct opnode *child)
+static void opnode_detach_child(struct opnode *parent, struct opnode *child)
+{
+    struct opnode **prevp;
+
+    for (prevp = &parent->children ; *prevp ; prevp = &((*prevp)->next)) {
+	if (*prevp == child) {
+	    *prevp = child->next;
+	    child->next = NULL;
+	    return;
+	}
+    }
+}
+
+static void opnode_append_child(struct opnode *parent, struct opnode *child)
 {
     struct opnode **tailp;
 
@@ -283,6 +296,14 @@ void opnode_append_child(struct opnode *parent, struct opnode *child)
 	;
     *tailp = child;
     child->next = NULL;
+}
+
+static void opnode_insert_child(struct opnode *parent,
+				struct opnode *after,
+				struct opnode *child)
+{
+    child->next = after->next;
+    after->next = child;
 }
 
 static void begin_boolean(search_builder_t *bx, int op)
@@ -295,11 +316,15 @@ static void begin_boolean(search_builder_t *bx, int op)
     else
 	bb->root = on;
     ptrarray_push(&bb->stack, on);
+    if (SEARCH_VERBOSE(bb->opts))
+	syslog(LOG_INFO, "begin_boolean(op=%s)", search_op_as_string(op));
 }
 
 static void end_boolean(search_builder_t *bx, int op __attribute__((unused)))
 {
     sphinx_builder_t *bb = (sphinx_builder_t *)bx;
+    if (SEARCH_VERBOSE(bb->opts))
+	syslog(LOG_INFO, "end_boolean");
     ptrarray_pop(&bb->stack);
 }
 
@@ -310,6 +335,9 @@ static void match(search_builder_t *bx, int part, const char *str)
     struct opnode *on;
 
     if (!str) return;
+    if (SEARCH_VERBOSE(bb->opts))
+	syslog(LOG_INFO, "match(part=%s, str=\"%s\")",
+	       search_part_as_string(part), str);
 
     xstats_inc(SPHINX_MATCH);
 
@@ -318,6 +346,36 @@ static void match(search_builder_t *bx, int part, const char *str)
 	opnode_append_child(top, on);
     else
 	bb->root = on;
+}
+
+static void optimise_nodes(struct opnode *parent, struct opnode *on)
+{
+    struct opnode *child;
+
+    switch (on->op) {
+    case SEARCH_OP_NOT:
+    case SEARCH_OP_OR:
+    case SEARCH_OP_AND:
+	for (child = on->children ; child ; child = child->next)
+	    optimise_nodes(on, child);
+	if (parent) {
+	    if (!on->children) {
+		/* empty node - remove it */
+		opnode_detach_child(parent, on);
+		opnode_delete(on);
+	    }
+	    else if (on->op != SEARCH_OP_NOT && !on->children->next) {
+		/* logical AND or OR with only one child - replace
+		 * the node with its child */
+		struct opnode *child = on->children;
+		opnode_detach_child(on, child);
+		opnode_insert_child(parent, on, child);
+		opnode_detach_child(parent, on);
+		opnode_delete(on);
+	    }
+	}
+	break;
+    }
 }
 
 /* Spinx extended query syntax, not SphinxQL */
@@ -402,6 +460,7 @@ static void *get_internalised(search_builder_t *bx)
     sphinx_builder_t *bb = (sphinx_builder_t *)bx;
     struct buf *query = xzmalloc(sizeof(struct buf));
 
+    optimise_nodes(NULL, bb->root);
     generate_query(query, bb->root, NULL);
     buf_cstring(query);
     return query;
@@ -498,6 +557,7 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
 	if (r) goto out;
     }
 
+    optimise_nodes(NULL, bb->root);
     generate_query(&inner_query, bb->root, NULL);
 
     buf_init_ro_cstr(&query, "SELECT "COL_CYRUSID" FROM rt WHERE MATCH(");

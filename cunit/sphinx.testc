@@ -203,6 +203,20 @@ static void test_builder(void)
     bx->end_boolean(bx, SEARCH_OP_OR);
     END("\"tobe\"|!\"tobe\"");
 
+    /* IRIS-2012 */
+    BEGIN;
+    bx->begin_boolean(bx, SEARCH_OP_AND);
+	bx->begin_boolean(bx, SEARCH_OP_OR);
+	    bx->begin_boolean(bx, SEARCH_OP_AND);
+		bx->match(bx, SEARCH_PART_FROM, "MARIANH");
+		bx->match(bx, SEARCH_PART_SUBJECT, "TEST");
+	    bx->end_boolean(bx, SEARCH_OP_AND);
+	    bx->begin_boolean(bx, SEARCH_OP_AND);
+	    bx->end_boolean(bx, SEARCH_OP_AND);
+	bx->end_boolean(bx, SEARCH_OP_OR);
+    bx->end_boolean(bx, SEARCH_OP_AND);
+    END("@header_from \"MARIANH\" @header_subject \"TEST\"");
+
     mailbox_close(&mailbox);
 #undef BEGIN
 #undef END
