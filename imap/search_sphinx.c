@@ -621,7 +621,7 @@ static const char *describe_query(struct buf *desc,
 	buf_appendcstr(desc, "...");
     }
     else {
-	append_escaped(desc, query, '"');
+	buf_append(desc, query);
     }
     return buf_cstring(desc);
 }
