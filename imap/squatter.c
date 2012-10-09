@@ -184,12 +184,12 @@ static int index_one(const char *name, int blocking)
     /* Skip remote mailboxes */
     r = mboxlist_lookup(name, &mbentry, NULL);
     if (r) {
-        if (verbose) {
-            printf("error opening looking up %s: %s\n",
+	if (verbose) {
+	    printf("error looking up %s: %s\n",
 		   extname, error_message(r));
-        }
-        syslog(LOG_INFO, "error opening looking up %s: %s\n",
-               extname, error_message(r));
+	}
+	syslog(LOG_INFO, "error looking up %s: %s\n",
+	       extname, error_message(r));
 
 	return r;
     }
