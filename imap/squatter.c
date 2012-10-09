@@ -246,7 +246,10 @@ static int index_one(const char *name, int blocking)
 	    r = mailbox_open_irl(name, &mailbox);
 	else
 	    r = mailbox_open_irlnb(name, &mailbox);
-	if (r == IMAP_MAILBOX_LOCKED) return r;
+	if (r == IMAP_MAILBOX_LOCKED) {
+	    if (verbose) syslog(LOG_INFO, "mailbox %s locked, retrying", extname);
+	    return r;
+	}
 	if (r) {
 	    if (verbose) {
 		printf("error opening %s: %s\n", extname, error_message(r));
@@ -486,7 +489,6 @@ static int n_unretried = 0;
 static qitem_t *qitem_new(const char *mboxname)
 {
     qitem_t *item = xzmalloc(sizeof(qitem_t));
-    item->delay_ms = INIT_DELAY_MS;
     item->mboxname = xstrdup(mboxname);
     return item;
 }
@@ -566,7 +568,10 @@ static void queue_delay(qitem_t **headp, qitem_t *item)
 	return;
     }
 
-    item->delay_ms = MIN(item->delay_ms * 2, MAX_DELAY_MS);
+    if (!item->delay_ms)
+	item->delay_ms = INIT_DELAY_MS;
+    else
+	item->delay_ms = MIN(item->delay_ms * 2, MAX_DELAY_MS);
 
     if (verbose > 1)
 	syslog(LOG_INFO, "queue_delay(%s, %d ms)", item->mboxname, delta_ms);
@@ -601,7 +606,7 @@ static void read_sync_log_items(sync_log_reader_t *slr)
 	    item = queue_remove_by_name(&queue, args[1]);
 	    if (!item)
 		item = qitem_new(args[1]);
-	    item->delay_ms = INIT_DELAY_MS;
+	    item->delay_ms = 0;
 	    item->retries = 0;
 	    item->elapsed_ms = 0;
 	    queue_delay(&queue, item);
