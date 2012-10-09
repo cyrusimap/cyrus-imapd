@@ -243,9 +243,9 @@ static int index_one(const char *name, int blocking)
 
     do {
 	if (blocking)
-	    r = mailbox_open_iwl(name, &mailbox);
+	    r = mailbox_open_irl(name, &mailbox);
 	else
-	    r = mailbox_open_iwlnb(name, &mailbox);
+	    r = mailbox_open_irlnb(name, &mailbox);
 	if (r == IMAP_MAILBOX_LOCKED) return r;
 	if (r) {
 	    if (verbose) {

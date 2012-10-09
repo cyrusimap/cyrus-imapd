@@ -98,7 +98,8 @@ enum meta_filename {
 #define LOCK_NONE 0
 #define LOCK_SHARED 1
 #define LOCK_EXCLUSIVE 2
-#define LOCK_NONBLOCKING 3
+#define LOCK_NONBLOCK	4   /* flag to OR in */
+#define LOCK_NONBLOCKING (LOCK_NONBLOCK|LOCK_EXCLUSIVE)
 
 #define NUM_CACHE_FIELDS 10
 
@@ -463,7 +464,7 @@ struct buf *cacheitem_buf(struct index_record *record, int field);
 /* opening and closing */
 extern int mailbox_open_iwl(const char *name,
 			    struct mailbox **mailboxptr);
-extern int mailbox_open_iwlnb(const char *name, struct mailbox **);
+extern int mailbox_open_irlnb(const char *name, struct mailbox **);
 extern int mailbox_open_irl(const char *name,
 			    struct mailbox **mailboxptr);
 extern int mailbox_open_exclusive(const char *name,

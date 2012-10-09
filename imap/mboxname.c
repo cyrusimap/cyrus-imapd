@@ -179,6 +179,10 @@ EXPORTED int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
     const char *fname;
     int r = 0;
     struct mboxlocklist *lockitem;
+    int nonblock;
+
+    nonblock = !!(locktype & LOCK_NONBLOCK);
+    locktype &= ~LOCK_NONBLOCK;
 
     fname = mboxname_lockpath(mboxname);
     if (!fname)
@@ -188,8 +192,6 @@ EXPORTED int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
 
     /* already open?  just use this one */
     if (lockitem) {
-	if (locktype == LOCK_NONBLOCKING)
-	    locktype = LOCK_EXCLUSIVE;
 	/* can't change locktype! */
 	if (lockitem->l.locktype != locktype)
 	    return IMAP_MAILBOX_LOCKED;
@@ -216,23 +218,12 @@ EXPORTED int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
 	goto done;
     }
 
-    switch (locktype) {
-    case LOCK_SHARED:
-	r = lock_shared(lockitem->l.lock_fd, fname);
-	if (!r) lockitem->l.locktype = LOCK_SHARED;
-	break;
-    case LOCK_EXCLUSIVE:
-	r = lock_blocking(lockitem->l.lock_fd, fname);
-	if (!r) lockitem->l.locktype = LOCK_EXCLUSIVE;
-	break;
-    case LOCK_NONBLOCKING:
-	r = lock_nonblocking(lockitem->l.lock_fd, fname);
-	if (r == -1) r = IMAP_MAILBOX_LOCKED;
-	else if (!r) lockitem->l.locktype = LOCK_EXCLUSIVE;
-	break;
-    default:
-	fatal("unknown lock type", EC_SOFTWARE);
-    }
+    r = lock_setlock(lockitem->l.lock_fd,
+		     locktype == LOCK_EXCLUSIVE,
+		     nonblock, fname);
+    if (!r) lockitem->l.locktype = locktype;
+    else if (errno == EWOULDBLOCK) r = IMAP_MAILBOX_LOCKED;
+    else r = errno;
 
 done:
     if (r) remove_lockitem(lockitem);
