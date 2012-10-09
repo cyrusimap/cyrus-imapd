@@ -895,6 +895,32 @@ static void end_part(search_text_receiver_t *rx,
     tr->part = 0;
 }
 
+static void log_keywords(sphinx_receiver_t *tr)
+{
+    int i;
+    int r;
+    struct buf query = BUF_INITIALIZER;
+    MYSQL_RES *res = NULL;
+    MYSQL_ROW row = NULL;
+
+    for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
+	if (!tr->parts[i].len) continue;
+	buf_reset(&query);
+	buf_appendcstr(&query, "CALL KEYWORDS(");
+	append_escaped(&query, &tr->parts[i], '\'');
+	buf_appendcstr(&query, ",'rt',0)");
+	r = doquery(&tr->conn, tr->verbose, &query);
+
+	res = mysql_use_result(tr->conn.mysql);
+	if (!res) continue;
+
+	while ((row = mysql_fetch_row(res)))
+	    syslog(LOG_INFO, "keyword %s\n", row[0]);
+	mysql_free_result(res);
+    }
+    buf_free(&query);
+}
+
 static int end_message(search_text_receiver_t *rx)
 {
     sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
@@ -925,6 +951,8 @@ static int end_message(search_text_receiver_t *rx)
 
     r = doquery(&tr->conn, tr->verbose, &tr->query);
     if (r) goto out; /* TODO: propagate error to the user */
+
+    if (tr->verbose > 3) log_keywords(tr);
 
     ++tr->uncommitted;
     tr->latest = tr->uid;
