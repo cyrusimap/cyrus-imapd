@@ -558,7 +558,7 @@ static void queue_delay(qitem_t **headp, qitem_t *item)
 
     item->elapsed_ms += delta_ms;
     if (item->elapsed_ms > MAX_ELAPSED_MS) {
-	syslog(LOG_ERR, "IOERROR Unable to open mailbox %s for indexing "
+	syslog(LOG_ERR, "IOERROR: Unable to open mailbox %s for indexing "
 			"after %d.%03d second of delays, giving up",
 			item->mboxname,
 			item->elapsed_ms / 1000, item->elapsed_ms % 1000);

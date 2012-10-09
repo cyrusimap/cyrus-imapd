@@ -1041,13 +1041,13 @@ static int indexing_lock(struct mailbox *mailbox, int *fdp)
 
     fd = open(lockpath, O_WRONLY|O_CREAT, 0600);
     if (fd < 0) {
-	syslog(LOG_ERR, "IOERROR unable to create %s: %m", lockpath);
+	syslog(LOG_ERR, "IOERROR: unable to create %s: %m", lockpath);
 	return IMAP_IOERROR;
     }
 
     r = lock_blocking(fd, lockpath);
     if (r < 0) {
-	syslog(LOG_ERR, "IOERROR unable to lock %s: %m",
+	syslog(LOG_ERR, "IOERROR: unable to lock %s: %m",
 		lockpath);
 	close(fd);
 	return IMAP_IOERROR;
@@ -1067,7 +1067,7 @@ static int indexing_unlock(struct mailbox *mailbox, int *fdp)
 
     r = lock_unlock(*fdp, lockpath);
     if (r < 0)
-	syslog(LOG_ERR, "IOERROR unable to unlock %s: %m",
+	syslog(LOG_ERR, "IOERROR: unable to unlock %s: %m",
 		lockpath);
 
     close(*fdp);
