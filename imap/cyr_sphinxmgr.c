@@ -76,6 +76,9 @@
 #define SPHINX_PIDFILE	    "/searchd.pid"
 #define SEARCHD		    "/usr/bin/searchd"
 
+#define STOPWAIT_DELAY_MS   50	/* 50 millisec */
+#define STOPWAIT_MAX_TRIES  (20*1000/STOPWAIT_DELAY_MS)	/* 20 sec */
+
 extern int optind;
 extern char *optarg;
 
@@ -87,10 +90,14 @@ static const char *syslog_prefix;
 
 typedef struct indexd indexd_t;
 struct indexd {
+    /* There is no visible STARTING state because
+     * starting searchd is synchronous */
+    enum { STOPPED, STARTED, STOPPING } state;
     char *basedir;	/* also used as the key */
     char *socketpath;
-    time_t started;
+    time_t started;	/* for debugging */
     time_t used;
+    time_t stopped;	/* when entered STOPPING state; for debugging */
     struct indexd *prev;
     struct indexd *next;
 };
@@ -99,6 +106,7 @@ static struct hash_table itable;
 static struct indexd indexroot;
 
 static void shut_down(int code) __attribute__((noreturn));
+static int indexd_is_running(indexd_t *id);
 
 void fatal(const char *msg, int err)
 {
@@ -654,10 +662,26 @@ out:
     return r;
 }
 
+/* Wait until the searchd finishes shutting down.
+ * Returns 0 if all went well, or a system error code.  */
+static int indexd_stopwait(indexd_t *id)
+{
+    int tries = 0;
+
+    while (tries++ < STOPWAIT_MAX_TRIES) {
+	if (indexd_is_running(id) != 0)
+	    return 0;
+	poll(NULL, 0, STOPWAIT_DELAY_MS);
+    }
+    return ETIMEDOUT;
+}
+
 static int indexd_start(indexd_t *id)
 {
     char *config_file = NULL;
     int r;
+
+    assert(id->state == STOPPED);
 
     r = indexd_setup_tree(id);
     if (r) goto out;
@@ -674,6 +698,7 @@ static int indexd_start(indexd_t *id)
     if (r) goto out;
 
     id->started = time(NULL);
+    id->state = STARTED;
     r = 0;
 
 out:
@@ -685,6 +710,8 @@ static int indexd_stop(indexd_t *id)
 {
     char *config_file = NULL;
     int r;
+
+    if (id->state != STARTED) return 0;	/* nothing to do */
 
     if (verbose)
 	syslog(LOG_NOTICE, "Sphinx stopping searchd, "
@@ -698,6 +725,8 @@ static int indexd_stop(indexd_t *id)
     if (r) goto out;
 
     unlink(id->socketpath);
+    id->state = STOPPING;
+    id->stopped = time(NULL);
 
     r = 0;
 
@@ -829,9 +858,27 @@ static int indexd_get(const char *mboxname, indexd_t **idp, int create)
 
     id = (indexd_t *)hash_lookup(basedir, &itable);
 
+    if (id && id->state == STOPPING) {
+	syslog(LOG_NOTICE, "searchd %s is still shutting down, "
+			   "waiting to start a new one",
+			   id->basedir);
+	r = indexd_stopwait(id);
+	if (r) {
+	    syslog(LOG_ERR, "IOERROR: failed to wait for "
+			    "searchd %s to shut down: %s",
+			    id->basedir, error_message(r));
+	    return r;
+	}
+	id->state = STOPPED;
+	indexd_detach(id);
+	indexd_free(id);
+	id = NULL;
+    }
+
     if (id && indexd_is_running(id) != 0) {
 	syslog(LOG_NOTICE, "searchd %s is no longer running, forgetting",
 			   id->basedir);
+	id->state == STOPPED;
 	indexd_detach(id);
 	indexd_free(id);
 	id = NULL;
@@ -894,10 +941,26 @@ static void expire_indexd(const char *key __attribute__((unused)),
 {
     indexd_t *id = (indexd_t *)data;
 
-    if (time(NULL) > id->used + sphinx_timeout) {
-	indexd_stop(id);
-	indexd_detach(id);
-	indexd_free(id);
+    switch (id->state) {
+    case STARTED:
+	if (time(NULL) > id->used + sphinx_timeout) {
+	    indexd_stop(id);
+	    indexd_detach(id);
+	    indexd_free(id);
+	    return;
+	}
+	break;
+    case STOPPING:
+	if (indexd_is_running(id) != 0) {
+	    if (verbose)
+		syslog(LOG_INFO, "searchd %s finished shutting down after %d sec",
+				 id->basedir,
+				 (int)(time(NULL) - id->stopped));
+	    id->state = STOPPED;
+	    indexd_detach(id);
+	    indexd_free(id);
+	}
+	break;
     }
 }
 
