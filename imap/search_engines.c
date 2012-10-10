@@ -147,6 +147,13 @@ EXPORTED int search_end_snippets(search_text_receiver_t *rx)
     return (se->end_snippets ? se->end_snippets(rx) : 0);
 }
 
+EXPORTED char *search_describe_internalised(void *internalised)
+{
+    const struct search_engine *se = engine();
+    return (se->describe_internalised ?
+	    se->describe_internalised(internalised) : 0);
+}
+
 EXPORTED void search_free_internalised(void *internalised)
 {
     const struct search_engine *se = engine();

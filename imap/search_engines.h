@@ -131,6 +131,7 @@ struct search_engine {
 					      search_snippet_cb_t,
 					      void *rock);
     int (*end_snippets)(search_text_receiver_t *);
+    char *(*describe_internalised)(void *);
     void (*free_internalised)(void *);
     int (*start_daemon)(int verbose, const char *mboxname);
     int (*stop_daemon)(int verbose, const char *mboxname);
@@ -153,6 +154,9 @@ search_text_receiver_t *search_begin_snippets(void *internalised,
 					      search_snippet_cb_t proc,
 					      void *rock);
 int search_end_snippets(search_text_receiver_t *rx);
+/* Returns a new string which describes the internalised query, and must
+ * be free()d by the caller.  Only useful for whitebox testing.  */
+char *search_describe_internalised(void *internalised);
 void search_free_internalised(void *internalised);
 int search_start_daemon(int verbose, const char *mboxname);
 int search_stop_daemon(int verbose, const char *mboxname);

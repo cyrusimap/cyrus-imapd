@@ -21,15 +21,14 @@ static void test_builder(void)
     { \
 	search_builder_t *bx = search_begin_search(mailbox, 0); \
 	CU_ASSERT_PTR_NOT_NULL(bx)
-    /* This is naughty: extracting the generated SphinxQL query
-     * using the get_internalised() API which is carefully designed
-     * to *hide* internal details like that. */
 #define END(exp) \
 	{ \
 	    static const char _exp[] = (exp); \
 	    void *intquery = bx->get_internalised(bx); \
-	    const char *s = ((struct buf *)intquery)->s; \
+	    char *s = search_describe_internalised(intquery); \
 	    CU_ASSERT_STRING_EQUAL(s, _exp); \
+	    free(s); \
+	    search_free_internalised(intquery); \
 	} \
 	search_end_search(bx); \
     }

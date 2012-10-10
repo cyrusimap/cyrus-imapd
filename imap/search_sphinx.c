@@ -384,7 +384,7 @@ static void optimise_nodes(struct opnode *parent, struct opnode *on)
     }
 }
 
-/* Spinx extended query syntax, not SphinxQL */
+/* Sphinx extended query syntax, not SphinxQL */
 static void generate_query(struct buf *query,
 			   struct opnode *on,
 			   struct opnode *parent)
@@ -464,22 +464,25 @@ static void generate_query(struct buf *query,
 static void *get_internalised(search_builder_t *bx)
 {
     sphinx_builder_t *bb = (sphinx_builder_t *)bx;
-    struct buf *query = xzmalloc(sizeof(struct buf));
+    struct opnode *on = bb->root;
+    bb->root = NULL;
+    optimise_nodes(NULL, on);
+    return on;
+}
 
-    optimise_nodes(NULL, bb->root);
-    generate_query(query, bb->root, NULL);
-    buf_cstring(query);
-    return query;
+char *describe_internalised(void *internalised)
+{
+    struct opnode *on = (struct opnode *)internalised;
+    struct buf buf = BUF_INITIALIZER;
+
+    generate_query(&buf, on, NULL);
+    return buf_release(&buf);
 }
 
 static void free_internalised(void *internalised)
 {
-    struct buf *query = (struct buf *)internalised;
-
-    if (query) {
-	buf_free(query);
-	free(query);
-    }
+    struct opnode *on = (struct opnode *)internalised;
+    if (on) opnode_delete(on);
 }
 
 static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock);
@@ -632,7 +635,7 @@ static void end_search(search_builder_t *bx)
     sphinx_builder_t *bb = (sphinx_builder_t *)bx;
 
     ptrarray_fini(&bb->stack);
-    opnode_delete(bb->root);
+    if (bb->root) opnode_delete(bb->root);
     free(bx);
 }
 
@@ -661,7 +664,7 @@ struct sphinx_receiver
 			     * INSERTing into the table */
     int indexing_lock_fd;
     struct {
-	struct buf *query;
+	struct opnode *root;
 	search_snippet_cb_t proc;
 	void *rock;
     } snippet;
@@ -1174,8 +1177,8 @@ static int end_update(search_text_receiver_t *rx)
 }
 
 static int begin_mailbox_snippets(search_text_receiver_t *rx,
-			 struct mailbox *mailbox,
-			 int incremental __attribute__((unused)))
+				  struct mailbox *mailbox,
+				  int incremental __attribute__((unused)))
 {
     sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
     int r;
@@ -1188,10 +1191,59 @@ static int begin_mailbox_snippets(search_text_receiver_t *rx,
     return 0;
 }
 
+/* Generate Sphinx extended query syntax, not SphinxQL, customised for
+ * using CALL SNIPPETS.  This differs from the regular query because
+ * CALL SNIPPETS will silently ignore @field modifiers instead of
+ * enforcing them.  So we have to emit one CALL SNIPPETS for every
+ * field that may be mentioned in the original query, with a munged
+ * query that contains a disjunction of all the search terms that
+ * might apply to that part.  Thanks heaps Sphinx. [IRIS-2038] */
+static void generate_snippet_query(struct buf *query,
+				   int part,
+				   struct opnode *on)
+{
+    struct opnode *child;
+    struct buf arg = BUF_INITIALIZER;
+
+    buf_init_ro_cstr(&arg, on->arg);
+
+    switch (on->op) {
+
+    case SEARCH_OP_NOT:
+    case SEARCH_OP_OR:
+    case SEARCH_OP_AND:
+	for (child = on->children ; child ; child = child->next)
+	    generate_snippet_query(query, part, child);
+	break;
+
+    case SEARCH_PART_ANY:
+	assert(on->children == NULL);
+	if (part != SEARCH_PART_HEADERS ||
+	    !config_getswitch(IMAPOPT_SPHINX_TEXT_EXCLUDES_ODD_HEADERS)) {
+	    if (query->len) buf_putc(query, '|');
+	    append_escaped(query, &arg, '"');
+	}
+	break;
+
+    default:
+	/* other SEARCH_PART_* constants */
+	assert(on->op >= 0 && on->op < SEARCH_NUM_PARTS);
+	assert(on->children == NULL);
+	if (part == on->op) {
+	    if (query->len) buf_putc(query, '|');
+	    append_escaped(query, &arg, '"');
+	}
+	break;
+    }
+
+    buf_free(&arg);
+}
+
 static int end_message_snippets(search_text_receiver_t *rx)
 {
     sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
     struct buf query = BUF_INITIALIZER;
+    struct buf inner_query = BUF_INITIALIZER;
     MYSQL_RES *res = NULL;
     MYSQL_ROW row;
     int i;
@@ -1201,37 +1253,52 @@ static int end_message_snippets(search_text_receiver_t *rx)
 	r = IMAP_INTERNAL;	    /* need to call begin_mailbox() */
 	goto out;
     }
-    if (!tr->snippet.query) {
+    if (!tr->snippet.root) {
 	r = 0;
 	goto out;
     }
 
-    buf_appendcstr(&query, "CALL SNIPPETS((");
     for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
-	if (i) buf_putc(&query, ',');
-	append_escaped(&query, &tr->parts[i], '\'');
-    }
-    buf_appendcstr(&query, "), 'rt', '");
-    buf_append(&query, tr->snippet.query);
-    buf_appendcstr(&query, "', 1 AS query_mode, 1 AS allow_empty)");
-    r = doquery(&tr->conn, tr->verbose, &query);
-    if (r) goto out;
+	if (res) {
+	    mysql_free_result(res);
+	    res = NULL;
+	}
+	if (i == SEARCH_PART_ANY) continue;
 
-    res = mysql_use_result(tr->conn.mysql);
-    i = 0;
-    while ((row = mysql_fetch_row(res))) {
+	if (!tr->parts[i].len) continue;
+
+	buf_reset(&inner_query);
+	generate_snippet_query(&inner_query, i, tr->snippet.root);
+	if (!inner_query.len) continue;
+
+	buf_reset(&query);
+	buf_appendcstr(&query, "CALL SNIPPETS(");
+	append_escaped(&query, &tr->parts[i], '\'');
+	buf_appendcstr(&query, ", 'rt', ");
+	append_escaped(&query, &inner_query, '\'');
+	buf_appendcstr(&query, ", 1 AS query_mode, 1 AS allow_empty)");
+
+	r = doquery(&tr->conn, tr->verbose, &query);
+	if (r) goto out;
+
+	res = mysql_store_result(tr->conn.mysql);
+	if (!res) continue;
+
+	row = mysql_fetch_row(res);
+	if (!row) continue;
+
 	if (tr->verbose > 1)
 	    syslog(LOG_ERR, "snippet [%d] \"%s\"", i, row[0]);
-	if (row[0][0]) {
-	    r = tr->snippet.proc(tr->mailbox, tr->uid, i, row[0], tr->snippet.rock);
-	    if (r) break;
-	}
-	i++;
+
+	if (!row[0][0]) continue;
+	r = tr->snippet.proc(tr->mailbox, tr->uid, i, row[0], tr->snippet.rock);
+	if (r) break;
     }
 
 out:
     if (res) mysql_free_result(res);
     buf_free(&query);
+    buf_free(&inner_query);
     return r;
 }
 
@@ -1249,7 +1316,7 @@ static int end_mailbox_snippets(search_text_receiver_t *rx,
     return 0;
 }
 
-static search_text_receiver_t *begin_snippets(void *snippet_state,
+static search_text_receiver_t *begin_snippets(void *internalised,
 					      int verbose,
 					      search_snippet_cb_t proc,
 					      void *rock)
@@ -1267,7 +1334,7 @@ static search_text_receiver_t *begin_snippets(void *snippet_state,
 
     tr->indexing_lock_fd = -1;
     tr->verbose = verbose;
-    tr->snippet.query = (struct buf *)snippet_state;
+    tr->snippet.root = (struct opnode *)internalised;
     tr->snippet.proc = proc;
     tr->snippet.rock = rock;
 
@@ -1307,6 +1374,7 @@ const struct search_engine sphinx_search_engine = {
     end_update,
     begin_snippets,
     end_snippets,
+    describe_internalised,
     free_internalised,
     start_daemon,
     stop_daemon
