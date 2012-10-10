@@ -1873,42 +1873,54 @@ void write_body(long code, struct transaction_t *txn,
 {
 #define GZIP_MIN_LEN 300
 
-    unsigned is_chunked = txn->flags.te;
+    unsigned is_chunked = (txn->flags.te == TE_CHUNKED);
 
     if (code) {
-	if ((!is_chunked && len < GZIP_MIN_LEN) ||
-	    is_incompressible(txn->resp_body.type)) txn->flags.ce = CE_IDENTITY;
+	/* Initial call - prepare response header based on CE and TE */
 
-	if (txn->flags.ce == CE_GZIP) {
-	    txn->resp_body.enc = "gzip";
-	    txn->flags.te = TE_CHUNKED;  /* always chunk gzipped output */
+	if ((!is_chunked && len < GZIP_MIN_LEN) ||
+	    is_incompressible(txn->resp_body.type)) {
+	    /* Don't compress small or imcompressible bodies */
+	    txn->flags.ce = CE_IDENTITY;
+	}
+
+	if (txn->flags.ce) {
+	    /* set content-encoding */
+	    if (txn->flags.ce == CE_GZIP)
+		txn->resp_body.enc = "gzip";
+	    else if (txn->flags.ce == CE_DEFLATE)
+		txn->resp_body.enc = "deflate";
+
+	    /* compressed output will be always chunked (streamed) */
+	    txn->flags.te = TE_CHUNKED;
 	}
 	else if (!is_chunked) txn->resp_body.len = len;
 
 	response_header(code, txn);
+
+	/* MUST NOT send a body for 1xx/204/304 response or any HEAD response */
+	switch (code) {
+	case HTTP_CONTINUE:
+	case HTTP_SWITCH_PROT:
+	case HTTP_PROCESSING:
+	case HTTP_NO_CONTENT:
+	case HTTP_NOT_MODIFIED:
+	    return;
+
+	default:
+	    if (txn->meth == METH_HEAD) return;
+	}
     }
 
-    /* MUST NOT send a body for 1xx/204/304 response or any HEAD response */
-    switch (code) {
-    case HTTP_CONTINUE:
-    case HTTP_SWITCH_PROT:
-    case HTTP_PROCESSING:
-    case HTTP_NO_CONTENT:
-    case HTTP_NOT_MODIFIED:
-	return;
-
-    default:
-	if (txn->meth == METH_HEAD) return;
-    }
-
+    /* Send [partial] body based on CE and TE */
+    if (txn->flags.ce) {
 #ifdef HAVE_ZLIB
-    if (txn->flags.ce == CE_GZIP) {
 	char zbuf[PROT_BUFSIZE];
 	unsigned flush, out;
 
 	if (code) deflateReset(&txn->zstrm);
 
-	/* don't flush until last chunk */
+	/* don't flush until last (zero-length) or only chunk */
 	flush = (is_chunked && len) ? Z_NO_FLUSH : Z_FINISH;
 
 	txn->zstrm.next_in = (Bytef *) buf;
@@ -1930,16 +1942,24 @@ void write_body(long code, struct transaction_t *txn,
 
 	} while (!txn->zstrm.avail_out);
 
-	if (flush == Z_FINISH) prot_printf(httpd_out, "0\r\n\r\n");
-
-	return;
-    }
+	if (flush == Z_FINISH) {
+	    /* terminate the body with a zero-length chunk */
+	    prot_printf(httpd_out, "0\r\n");
+	    /* empty trailer */
+	    prot_printf(httpd_out, "\r\n");
+	}
+#else
+	/* XXX should never get here */
+	fatal("Content-Encoding requested, but no zlib", EC_SOFTWARE);
 #endif /* HAVE_ZLIB */
-
-    if (is_chunked) {
+    }
+    else if (is_chunked) {
 	/* chunk */
 	prot_printf(httpd_out, "%x\r\n", len);
-	prot_write(httpd_out, buf, len);
+	if (len) prot_write(httpd_out, buf, len);
+	else {
+	    /* empty trailer */
+	}
 	prot_printf(httpd_out, "\r\n");
     }
     else {
