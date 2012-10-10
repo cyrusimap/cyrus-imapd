@@ -314,7 +314,7 @@ static int meth_acl(struct transaction_t *txn)
     /* Local Mailbox */
 
     /* Response should not be cached */
-    txn->flags |= HTTP_NOCACHE;
+    txn->flags.cc |= CC_NOCACHE;
 
     /* Open mailbox for writing */
     if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_EXCLUSIVE))) {
@@ -619,7 +619,7 @@ static int meth_copy(struct transaction_t *txn)
     icalcomponent *ical = NULL;
 
     /* Response should not be cached */
-    txn->flags |= HTTP_NOCACHE;
+    txn->flags.cc |= CC_NOCACHE;
 
     /* Make sure source is a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED;
@@ -1198,7 +1198,7 @@ static int meth_get(struct transaction_t *txn)
 	mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
 
 	/* iCalendar data in response should not be transformed */
-	txn->flags |= HTTP_NOTRANSFORM;
+	txn->flags.cc |= CC_NOTRANSFORM;
     }
 
     write_body(HTTP_OK, txn,
@@ -1280,7 +1280,7 @@ static int meth_mkcol(struct transaction_t *txn)
     /* Local Mailbox */
 
     /* Response should not be cached */
-    txn->flags |= HTTP_NOCACHE;
+    txn->flags.cc |= CC_NOCACHE;
 
     /* Construct mailbox name corresponding to request target URI */
     (void) target_to_mboxname(&txn->req_tgt, mailboxname);
@@ -1942,7 +1942,7 @@ int meth_propfind(struct transaction_t *txn)
     /* Output the XML response */
     if (!ret) {
 	/* iCalendar data in response should not be transformed */
-	if (fctx.fetcheddata) txn->flags |= HTTP_NOTRANSFORM;
+	if (fctx.fetcheddata) txn->flags.cc |= CC_NOTRANSFORM;
 
 	xml_response(HTTP_MULTI_STATUS, txn, outdoc);
     }
@@ -2036,7 +2036,7 @@ static int meth_proppatch(struct transaction_t *txn)
     /* Local Mailbox */
 
     /* Response should not be cached */
-    txn->flags |= HTTP_NOCACHE;
+    txn->flags.cc |= CC_NOCACHE;
 
     /* Parse the PROPPATCH body */
     ret = parse_xml_body(txn, &root);
@@ -2119,7 +2119,7 @@ static int meth_post(struct transaction_t *txn)
     char *p;
 
     /* Response should not be cached */
-    txn->flags |= HTTP_NOCACHE;
+    txn->flags.cc |= CC_NOCACHE;
 
     /* Make sure its a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
@@ -2292,12 +2292,12 @@ static int meth_put(struct transaction_t *txn)
     }
 
     /* Read body */
-    if (!(txn->flags & HTTP_READBODY)) {
-	txn->flags |= HTTP_READBODY;
+    if (!txn->flags.havebody) {
+	txn->flags.havebody = 1;
 	ret = read_body(httpd_in, txn->req_hdrs, &txn->req_body, 1,
 			&txn->error.desc);
 	if (ret) {
-	    txn->flags |= HTTP_CLOSE;
+	    txn->flags.close = 1;
 	    goto done;
 	}
     }
@@ -2811,7 +2811,7 @@ static int report_fb_query(struct transaction_t *txn,
 	txn->resp_body.type = "text/calendar; charset=utf-8";
 
 	/* iCalendar data in response should not be transformed */
-	txn->flags |= HTTP_NOTRANSFORM;
+	txn->flags.cc |= CC_NOTRANSFORM;
 
 	write_body(HTTP_OK, txn, cal_str, strlen(cal_str));
     }
@@ -3234,7 +3234,7 @@ static int meth_report(struct transaction_t *txn)
     /* Output the XML response */
     if (!ret && outroot) {
 	/* iCalendar data in response should not be transformed */
-	if (fctx.fetcheddata) txn->flags |= HTTP_NOTRANSFORM;
+	if (fctx.fetcheddata) txn->flags.cc |= CC_NOTRANSFORM;
 
 	xml_response(HTTP_MULTI_STATUS, txn, outroot->doc);
     }
@@ -3334,12 +3334,12 @@ int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
     *root = NULL;
 
     /* Read body */
-    if (!(txn->flags & HTTP_READBODY)) {
-	txn->flags |= HTTP_READBODY;
+    if (!txn->flags.havebody) {
+	txn->flags.havebody = 1;
 	r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, 1,
 		      &txn->error.desc);
 	if (r) {
-	    txn->flags |= HTTP_CLOSE;
+	    txn->flags.close = 1;
 	    return r;
 	}
     }
@@ -3650,7 +3650,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			resp_body->len = strlen(ics);
 
 			/* iCalendar data in response should not be transformed */
-			txn->flags |= HTTP_NOTRANSFORM;
+			txn->flags.cc |= CC_NOTRANSFORM;
 
 			write_body(ret, txn, ics, strlen(ics));
 			ret = 0;
@@ -3673,6 +3673,8 @@ static unsigned get_preferences(struct transaction_t *txn)
     unsigned prefs = 0;
     const char **hdr;
 
+    txn->flags.vary |= (VARY_BRIEF | VARY_PREFER);
+
     /* Check for Prefer header(s) */
     if ((hdr = spool_getheader(txn->req_hdrs, "Prefer"))) {
 	int i;
@@ -3691,15 +3693,12 @@ static unsigned get_preferences(struct transaction_t *txn)
 	    }
 	    tok_fini(&tok);
 	}
-
-	if (prefs) txn->resp_body.vary |= VARY_PREFER;
     }
 
     /* Check for Brief header */
     if ((hdr = spool_getheader(txn->req_hdrs, "Brief")) &&
 	!strcasecmp(hdr[0], "t")) {
 	prefs |= PREFER_MIN;
-	txn->resp_body.vary |= VARY_BRIEF;
     }
 
     return prefs;
@@ -3956,7 +3955,7 @@ static void busytime_query_remote(char *server __attribute__((unused)),
 		    xmlFree(content);
 
 		    /* iCal data in resp SHOULD NOT be transformed */
-		    rrock->txn->flags |= HTTP_NOTRANSFORM;
+		    rrock->txn->flags.cc |= CC_NOTRANSFORM;
 		}
 	    }
 
@@ -4173,7 +4172,7 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
 					     strlen(fb_str)));
 
 		/* iCalendar data in response should not be transformed */
-		txn->flags |= HTTP_NOTRANSFORM;
+		txn->flags.cc |= CC_NOTRANSFORM;
 	    }
 	    else {
 		xmlNewChild(resp, NULL, BAD_CAST "request-status",
@@ -4247,12 +4246,12 @@ static int sched_busytime(struct transaction_t *txn)
     }
 
     /* Read body */
-    if (!(txn->flags & HTTP_READBODY)) {
-	txn->flags |= HTTP_READBODY;
+    if (!txn->flags.havebody) {
+	txn->flags.havebody = 1;
 	r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, 1,
 		      &txn->error.desc);
 	if (r) {
-	    txn->flags |= HTTP_CLOSE;
+	    txn->flags.close = 1;
 	    return r;
 	}
     }

@@ -221,7 +221,7 @@ static int isched_recv(struct transaction_t *txn)
     const char *uid = NULL;
 
     /* Response should not be cached */
-    txn->flags |= HTTP_NOCACHE;
+    txn->flags.cc |= CC_NOCACHE;
 
     /* Check Content-Type */
     if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
@@ -231,12 +231,12 @@ static int isched_recv(struct transaction_t *txn)
     }
 
     /* Read body */
-    if (!(txn->flags & HTTP_READBODY)) {
-	txn->flags |= HTTP_READBODY;
+    if (!txn->flags.havebody) {
+	txn->flags.havebody = 1;
 	r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, 1,
 		      &txn->error.desc);
 	if (r) {
-	    txn->flags |= HTTP_CLOSE;
+	    txn->flags.close = 1;
 	    return r;
 	}
     }
@@ -510,7 +510,7 @@ int isched_send(struct sched_param *sparam, icalcomponent *ical,
     if (!r) {
 	switch (code) {
 	case 200:  /* Successful */
-	    txn.flags |= HTTP_READBODY;
+	    txn.flags.havebody = 1;
 	    r = parse_xml_body(&txn, xml);
 	    break;
 

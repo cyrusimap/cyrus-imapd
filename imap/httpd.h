@@ -189,22 +189,25 @@ struct resp_body_t {
     const char *etag;	/* ETag             */
     time_t lastmod;	/* Last-Modified    */
     const char *stag;	/* Schedule-Tag     */
-    unsigned vary;	/* Vary		    */
     struct buf payload;	/* Payload	    */
 };
 
-/* Vary header fields */
-enum {
-    VARY_AE =		(1<<0),	/* Accept-Encoding: gzip */
-    VARY_BRIEF =	(1<<1),	/* Brief: t */
-    VARY_PREFER =	(1<<2)	/* Prefer: return-min|return-rep|depth-noroot */
+/* Transaction flags */
+struct txn_flags_t {
+    unsigned long havebody	: 1;	/* Has body of request has been read? */
+    unsigned long close		: 1;	/* Close connection after response */
+    unsigned long te		: 2;	/* Transfer-Encoding for resp */
+    unsigned long ce		: 2;	/* Content-Encoding for resp */
+    unsigned long cc		: 4;	/* Cache-Control directives for resp */
+    unsigned long ranges	: 1;	/* Accept range requests for resource */
+    unsigned long vary		: 5;	/* Headers on which response varied */
 };
 
 /* Transaction context */
 struct transaction_t {
     char reqline[MAX_REQ_LINE+1];	/* Request Line */
     unsigned meth;			/* Index of Method to be performed */
-    unsigned flags;			/* Flags for this txn */
+    struct txn_flags_t flags;		/* Flags for this txn */
     struct request_target_t req_tgt;	/* Parsed target URL */
     hdrcache_t req_hdrs;    		/* Cached HTTP headers */
     struct buf req_body;		/* Buffered request body */
@@ -218,15 +221,33 @@ struct transaction_t {
     struct buf buf;	    		/* Working buffer */
 };
 
-/* Transaction flags */
+/* Transfer-Encoding flags (coding of response payload) */
 enum {
-    HTTP_READBODY =	(1<<0),	/* Body of request has been read */
-    HTTP_CLOSE =	(1<<1),	/* Close connection after response */
-    HTTP_GZIP =	  	(1<<2),	/* Gzip the representation */
-    HTTP_CHUNKED =	(1<<3),	/* Response payload will be chunked */
-    HTTP_NOCACHE =	(1<<4),	/* Response should NOT be cached */
-    HTTP_NOTRANSFORM =	(1<<5),	/* Response should NOT be transformed */
-    HTTP_RANGES =	(1<<6)	/* Accept range requests for resource */
+    TE_NONE =		0,
+    TE_CHUNKED =	1,
+    TE_GZIP =		2,	/* Implies TE_CHUNKED as final coding */
+    TE_DEFLATE =	3	/* Implies TE_CHUNKED as final coding */
+};
+
+/* Content-Encoding flags (coding of representation) */
+enum {
+    CE_IDENTITY =	0,
+    CE_GZIP =		1,
+    CE_DEFLATE =	2
+};
+
+/* Cache-Control directives */
+enum {
+    CC_NOCACHE =	(1<<0),
+    CC_NOTRANSFORM =	(1<<1),
+    CC_PRIVATE =	(1<<2)
+};
+
+/* Vary header flags (headers used in selecting/producing representation) */
+enum {
+    VARY_AE =		(1<<0),	/* Accept-Encoding */
+    VARY_BRIEF =	(1<<1),
+    VARY_PREFER =	(1<<2)
 };
 
 typedef int (*method_proc_t)(struct transaction_t *txn);

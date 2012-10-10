@@ -899,7 +899,9 @@ static void cmdloop(void)
 	meth = uri = ver = NULL;
 	memset(&tok, 0, sizeof(tok));
 	txn.meth = METH_UNKNOWN;
-	txn.flags = !httpd_timeout ? HTTP_CLOSE : 0;
+	memset(&txn.flags, 0, sizeof(struct txn_flags_t));
+	txn.flags.close = !httpd_timeout;
+	txn.flags.vary = gzip_enabled ? VARY_AE : 0;
 	txn.auth_chal.param = NULL;
 	txn.req_hdrs = NULL;
 	txn.location = NULL;
@@ -917,7 +919,7 @@ static void cmdloop(void)
 	    (httpd_userid &&
 	     userdeny(httpd_userid, config_ident, buf, sizeof(buf)))) {
 	    txn.error.desc = buf;
-	    txn.flags |= HTTP_CLOSE;
+	    txn.flags.close = 1;
 	    response_header(HTTP_UNAVAILABLE, &txn);
 	    shut_down(0);
 	}
@@ -939,7 +941,7 @@ static void cmdloop(void)
 		syslog(LOG_WARNING, "%s, closing connection", txn.error.desc);
 	    }
 	    /* client closed connection or timed out */
-	    txn.flags |= HTTP_CLOSE;
+	    txn.flags.close = 1;
 	    goto done;
 	}
 	p = txn.reqline + strlen(txn.reqline);
@@ -1005,7 +1007,7 @@ static void cmdloop(void)
 	syslog(LOG_DEBUG, "read & parse headers");
 	if (!(txn.req_hdrs = spool_new_hdrcache())) {
 	    ret = HTTP_SERVER_ERROR;
-	    txn.flags |= HTTP_CLOSE;
+	    txn.flags.close = 1;
 	    txn.error.desc = "Unable to create header cache\r\n";
 	    goto done;
 	}
@@ -1017,7 +1019,7 @@ static void cmdloop(void)
 	/* Read CRLF separating headers and body */
 	if (!prot_fgets(buf, sizeof(buf), httpd_in)) {
 	    ret = HTTP_BAD_REQUEST;
-	    txn.flags |= HTTP_CLOSE;
+	    txn.flags.close = 1;
 	    txn.error.desc = "Missing separator between headers and body\r\n";
 	    goto done;
 	}
@@ -1034,7 +1036,7 @@ static void cmdloop(void)
 	    /* Check if this is a non-persistent connection */
 	    if (!strcmp(hdr[0], "close")) {
 		syslog(LOG_DEBUG, "non-persistent connection");
-		txn.flags |= HTTP_CLOSE;
+		txn.flags.close = 1;
 	    }
 
 	    /* Check if we need to start TLS */
@@ -1117,10 +1119,10 @@ static void cmdloop(void)
 		/* Setup SASL HTTP request in case we need it */
 		sasl_http_request_t sasl_http_req;
 
-		txn.flags |= HTTP_READBODY;
+		txn.flags.havebody = 1;
 		if ((r = read_body(httpd_in, txn.req_hdrs, &txn.req_body, 1,
 				   &txn.error.desc))) {
-		    txn.flags |= HTTP_CLOSE;
+		    txn.flags.close = 1;
 		    ret = r;
 		    goto done;
 		}
@@ -1128,7 +1130,7 @@ static void cmdloop(void)
 		sasl_http_req.uri = uri;
 		sasl_http_req.entity = (u_char *) buf_cstring(&txn.req_body);
 		sasl_http_req.elen = buf_len(&txn.req_body);
-		sasl_http_req.non_persist = (txn.flags & HTTP_CLOSE);
+		sasl_http_req.non_persist = txn.flags.close;
 		sasl_setprop(httpd_saslconn, SASL_HTTP_REQUEST, &sasl_http_req);
 #endif /* SASL_HTTP_REQUEST */
 
@@ -1227,8 +1229,7 @@ static void cmdloop(void)
 
 	    for (e = enc; e && e->token; e++) {
 		if (!strcmp(e->token, "gzip") || !strcmp(e->token, "x-gzip")) {
-		    txn.flags |= HTTP_GZIP;
-		    txn.resp_body.vary |= VARY_AE;
+		    txn.flags.ce = CE_GZIP;
 		}
 		/* XXX  Do we want to support deflate even though M$
 		   doesn't implement it correctly (raw deflate vs. zlib)? */
@@ -1246,9 +1247,9 @@ static void cmdloop(void)
 
       done:
 	/* If we haven't the read body, read and discard it */
-	if (txn.req_hdrs && !(txn.flags & HTTP_READBODY) &&
+	if (txn.req_hdrs && !txn.flags.havebody &&
 	    read_body(httpd_in, txn.req_hdrs, NULL, 0, &txn.error.desc)) {
-	    txn.flags |= HTTP_CLOSE;
+	    txn.flags.close = 1;
 	}
 
 	/* Handle errors (success responses handled by method functions) */
@@ -1258,7 +1259,7 @@ static void cmdloop(void)
 	if (txn.req_hdrs) spool_free_hdrcache(txn.req_hdrs);
 	tok_fini(&tok);
 
-	if (txn.flags & HTTP_CLOSE) {
+	if (txn.flags.close) {
 	    buf_free(&txn.req_body);
 	    buf_free(&txn.resp_body.payload);
 #ifdef HAVE_ZLIB
@@ -1547,6 +1548,20 @@ const char *http_statusline(long code)
     if (param) prot_printf(httpd_out, " %s", param);		\
     prot_printf(httpd_out, "\r\n")
 
+static void comma_list_hdr(const char *hdr, const char *vals[], unsigned flags)
+{
+    const char *sep = "";
+    int i;
+
+    prot_printf(httpd_out, "%s:", hdr);
+    for (i = 0; vals[i]; i++) {
+	if (flags & (1 << i)) {
+	    prot_printf(httpd_out, "%s %s", sep, vals[i]);
+	    sep = ",";
+	}
+    }
+    prot_printf(httpd_out, "\r\n");
+}
 
 void response_header(long code, struct transaction_t *txn)
 {
@@ -1611,12 +1626,13 @@ void response_header(long code, struct transaction_t *txn)
 
     default:
 	/* Final response */
-	if (txn->flags & HTTP_CLOSE)
+	if (txn->flags.close)
 	    prot_printf(httpd_out, "Connection: close");
 	else {
 	    prot_printf(httpd_out, "Keep-Alive: timeout=%d\r\n", httpd_timeout);
 	    prot_printf(httpd_out, "Connection: Keep-Alive");
 	}
+
 	/* Complete Connection header */
 	prot_printf(httpd_out, "%s\r\n",
 		    (code == HTTP_UPGRADE) ? ", Upgrade" : "");
@@ -1646,7 +1662,7 @@ void response_header(long code, struct transaction_t *txn)
     case METH_HEAD:
 	/* Add Accept-Ranges header for OPTIONS, GET, HEAD responses */
 	prot_printf(httpd_out, "Accept-Ranges: %s\r\n",
-		    txn->flags & HTTP_RANGES ? "bytes" : "none");
+		    txn->flags.ranges ? "bytes" : "none");
     }
 
     if (txn->req_tgt.allow & ALLOW_ISCHEDULE) {
@@ -1683,7 +1699,7 @@ void response_header(long code, struct transaction_t *txn)
 		/* Only advertise what is available and
 		   can work with the type of connection */
 		if ((avail_auth_schemes & (1 << scheme->idx)) &&
-		    (!(txn->flags & HTTP_CLOSE) || !scheme->need_persist)) {
+		    (!txn->flags.close || !scheme->need_persist)) {
 		    auth_chal->param = NULL;
 
 		    if (scheme->is_server_first) {
@@ -1748,41 +1764,22 @@ void response_header(long code, struct transaction_t *txn)
     }
 
     /* Caching Header Fields */
-    if (txn->flags & (HTTP_NOCACHE | HTTP_NOTRANSFORM)) {
+    if (txn->flags.cc) {
 	/* Construct Cache-Control header */
-	const char *sep = "";
+	const char *cc_dirs[] = {
+	    "no-cache", "no-transform", "private", NULL
+	};
 
-	prot_printf(httpd_out, "Cache-Control:");
-	if (txn->flags & HTTP_NOCACHE) {
-	    prot_printf(httpd_out, "%s no-cache", sep);
-	    sep = ",";
-	}
-	if (txn->flags & HTTP_NOTRANSFORM) {
-	    prot_printf(httpd_out, "%s no-transform", sep);
-	    sep = ",";
-	}
-	prot_printf(httpd_out, "\r\n");
+	comma_list_hdr("Cache-Control", cc_dirs, txn->flags.cc);
     }
 
-    if (resp_body->vary) {
+    if (txn->flags.vary) {
 	/* Construct Vary header */
-	unsigned vary = resp_body->vary;
-	const char *sep = "";
+	const char *vary_hdrs[] = {
+	    "Accept-Encoding", "Brief", "Prefer", NULL
+	};
 
-	prot_printf(httpd_out, "Vary:");
-	if (vary & VARY_AE) {
-	    prot_printf(httpd_out, "%s Accept-Encoding", sep);
-	    sep = ",";
-	}
-	if (vary & VARY_BRIEF) {
-	    prot_printf(httpd_out, "%s Brief", sep);
-	    sep = ",";
-	}
-	if (vary & VARY_PREFER) {
-	    prot_printf(httpd_out, "%s Prefer", sep);
-	    sep = ",";
-	}
-	prot_printf(httpd_out, "\r\n");
+	comma_list_hdr("Vary", vary_hdrs, txn->flags.vary);
     }
 
 
@@ -1794,10 +1791,17 @@ void response_header(long code, struct transaction_t *txn)
 	break;
 
     default:
-	if (txn->flags & HTTP_CHUNKED)
-	    prot_printf(httpd_out, "Transfer-Encoding: chunked\r\n");
-	else
-	    prot_printf(httpd_out, "Content-Length: %lu\r\n", resp_body->len);
+	if (txn->flags.te) {
+	    prot_printf(httpd_out, "Transfer-Encoding:");
+	    if (txn->flags.te == TE_GZIP)
+		prot_printf(httpd_out, " gzip,");
+	    else if (txn->flags.te == TE_DEFLATE)
+		prot_printf(httpd_out, " deflate,");
+
+	    /* Any TE implies "chunked", which is always last */
+	    prot_printf(httpd_out, " chunked\r\n");
+	}
+	else prot_printf(httpd_out, "Content-Length: %lu\r\n", resp_body->len);
     }
 
 
@@ -1869,15 +1873,15 @@ void write_body(long code, struct transaction_t *txn,
 {
 #define GZIP_MIN_LEN 300
 
-    unsigned is_chunked = (txn->flags & HTTP_CHUNKED);
+    unsigned is_chunked = txn->flags.te;
 
     if (code) {
 	if ((!is_chunked && len < GZIP_MIN_LEN) ||
-	    is_incompressible(txn->resp_body.type)) txn->flags &= ~HTTP_GZIP;
+	    is_incompressible(txn->resp_body.type)) txn->flags.ce = CE_IDENTITY;
 
-	if (txn->flags & HTTP_GZIP) {
+	if (txn->flags.ce == CE_GZIP) {
 	    txn->resp_body.enc = "gzip";
-	    txn->flags |= HTTP_CHUNKED;  /* always chunk gzipped output */
+	    txn->flags.te = TE_CHUNKED;  /* always chunk gzipped output */
 	}
 	else if (!is_chunked) txn->resp_body.len = len;
 
@@ -1898,7 +1902,7 @@ void write_body(long code, struct transaction_t *txn,
     }
 
 #ifdef HAVE_ZLIB
-    if (txn->flags & HTTP_GZIP) {
+    if (txn->flags.ce == CE_GZIP) {
 	char zbuf[PROT_BUFSIZE];
 	unsigned flush, out;
 
@@ -1986,7 +1990,7 @@ void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
 
     default:
 	/* Neither Brief nor Prefer affect error response bodies */
-	txn->resp_body.vary &= ~(VARY_BRIEF|VARY_PREFER);
+	txn->flags.vary &= ~(VARY_BRIEF | VARY_PREFER);
     }
 
     /* Dump XML response tree into a text buffer */
@@ -2013,7 +2017,7 @@ void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
 void error_response(long code, struct transaction_t *txn)
 {
     /* Neither Brief nor Prefer affect error response bodies */
-    txn->resp_body.vary &= ~(VARY_BRIEF|VARY_PREFER);
+    txn->flags.vary &= ~(VARY_BRIEF | VARY_PREFER);
 
 #ifdef WITH_CALDAV
     if (txn->error.precond) {
@@ -2527,7 +2531,10 @@ int get_doc(struct transaction_t *txn, filter_proc_t filter)
 int meth_options(struct transaction_t *txn)
 {
     /* Response should not be cached */
-    txn->flags |= HTTP_NOCACHE;
+    txn->flags.cc |= CC_NOCACHE;
+
+    /* Response doesn't have a body, so no Vary */
+    txn->flags.vary = 0;
 
     /* Special case "*" - show all features/methods available on server */
     if (!strcmp(txn->req_tgt.path, "*")) {

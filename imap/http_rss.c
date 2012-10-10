@@ -450,10 +450,10 @@ static int list_feeds(struct transaction_t *txn,
     const char *var = (const char *) memmem(base, len, FEEDLIST_VAR, varlen);
 
     /* Dynamic response should not be cached */
-    txn->flags |= HTTP_NOCACHE;
+    txn->flags.cc |= CC_NOCACHE;
 
     /* Setup for chunked response */
-    txn->flags |= HTTP_CHUNKED;
+    txn->flags.te = TE_CHUNKED;
 
     /* Flush representation headers from template doc and set Content-Type */
     memset(&txn->resp_body, 0, sizeof(struct resp_body_t) - sizeof(struct buf));
@@ -601,7 +601,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     txn->resp_body.lastmod = lastmod;
 
     /* Setup for chunked response */
-    txn->flags |= HTTP_CHUNKED;
+    txn->flags.te = TE_CHUNKED;
     txn->resp_body.type = "application/xml; charset=utf-8";
 
     /* Short-circuit for HEAD request */
@@ -1015,7 +1015,7 @@ static void display_message(struct transaction_t *txn,
     struct buf *buf = &txn->resp_body.payload;
 
     /* Setup for chunked response */
-    txn->flags |= HTTP_CHUNKED;
+    txn->flags.te = TE_CHUNKED;
     txn->resp_body.type = "text/html; charset=utf-8";
 
     /* Short-circuit for HEAD request */
