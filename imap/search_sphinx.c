@@ -268,9 +268,12 @@ static struct opnode *opnode_new(int op, const char *arg)
 static void opnode_delete(struct opnode *on)
 {
     struct opnode *child;
+    struct opnode *next;
 
-    for (child = on->children ; child ; child = child->next)
+    for (child = on->children ; child ; child = next) {
+	next = child->next;
 	opnode_delete(child);
+    }
     free(on->arg);
     free(on);
 }
@@ -351,13 +354,16 @@ static void match(search_builder_t *bx, int part, const char *str)
 static void optimise_nodes(struct opnode *parent, struct opnode *on)
 {
     struct opnode *child;
+    struct opnode *next;
 
     switch (on->op) {
     case SEARCH_OP_NOT:
     case SEARCH_OP_OR:
     case SEARCH_OP_AND:
-	for (child = on->children ; child ; child = child->next)
+	for (child = on->children ; child ; child = next) {
+	    next = child->next;
 	    optimise_nodes(on, child);
+	}
 	if (parent) {
 	    if (!on->children) {
 		/* empty node - remove it */
