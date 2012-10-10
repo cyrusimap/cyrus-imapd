@@ -87,7 +87,7 @@ struct namespace {
 struct mboxlock {
     char *name;
     int lock_fd;
-    int locktype;
+    int locktype;	/* LOCK_NONE or LOCK_SHARED or LOCK_EXCLUSIVE */
 };
 
 struct mboxname_parts {

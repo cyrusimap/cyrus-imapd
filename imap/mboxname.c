@@ -174,15 +174,16 @@ static void remove_lockitem(struct mboxlocklist *remitem)
 /* name locking support */
 
 EXPORTED int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
-		  int locktype)
+		  int locktype_and_flags)
 {
     const char *fname;
     int r = 0;
     struct mboxlocklist *lockitem;
     int nonblock;
+    int locktype;
 
     nonblock = !!(locktype & LOCK_NONBLOCK);
-    locktype &= ~LOCK_NONBLOCK;
+    locktype = (locktype_and_flags & ~LOCK_NONBLOCK);
 
     fname = mboxname_lockpath(mboxname);
     if (!fname)
