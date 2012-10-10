@@ -73,6 +73,7 @@
 /* Various locations, relative to the Sphinx base directory */
 #define SOCKET_PATH	    "/searchd.sock"
 #define SPHINX_CONFIG	    "/sphinx.conf"
+#define SPHINX_PIDFILE	    "/searchd.pid"
 #define SEARCHD		    "/usr/bin/searchd"
 
 extern int optind;
@@ -596,7 +597,7 @@ static int indexd_setup_config(indexd_t *id)
 	"{\n"
 	"    listen = $sphinxsock:mysql41\n"
 	"    log = syslog\n"
-	"    pid_file = $sphinxdir/searchd.pid\n"
+	"    pid_file = $sphinxdir" SPHINX_PIDFILE "\n"
 	"    binlog_path = $sphinxdir/binlog\n"
 	"    compat_sphinxql_magics = 0\n"
 	"    workers = threads\n"
@@ -787,14 +788,33 @@ out:
     return r;
 }
 
-static void kill_child(indexd_t *id)
+static void indexd_detach(indexd_t *id)
 {
-    indexd_stop(id);
     /* unstitch */
     id->prev->next = id->next;
     id->next->prev = id->prev;
     hash_del(id->basedir, &itable);
-    indexd_free(id);
+}
+
+/* Checks to see if the searchd is still running.
+ * Returns 0 if still running or a system error code */
+static int indexd_is_running(indexd_t *id)
+{
+    char *pidfile = strconcat(id->basedir, SPHINX_PIDFILE, (char *)NULL);
+    int r;
+    struct stat sb;
+
+    r = stat(pidfile, &sb);
+    if (r < 0) r = errno;
+
+    /* TODO: could also read the pidfile send the process named there a
+     * signal 0 to see if it's still alive.  But that would be a lot of
+     * work to detect and hide abnormal shutdowns, which don't seem to
+     * happen; sphinx seems pretty good about cleaning up after itself.
+     * So just check for the existance of the pidfile. */
+
+    free(pidfile);
+    return r;
 }
 
 static int indexd_get(const char *mboxname, indexd_t **idp, int create)
@@ -808,6 +828,15 @@ static int indexd_get(const char *mboxname, indexd_t **idp, int create)
     if (r) return r;
 
     id = (indexd_t *)hash_lookup(basedir, &itable);
+
+    if (id && indexd_is_running(id) != 0) {
+	syslog(LOG_NOTICE, "searchd %s is no longer running, forgetting",
+			   id->basedir);
+	indexd_detach(id);
+	indexd_free(id);
+	id = NULL;
+    }
+
     if (!id) {
 	if (!create) {
 	    r = IMAP_NOTFOUND;
@@ -815,9 +844,12 @@ static int indexd_get(const char *mboxname, indexd_t **idp, int create)
 	}
 	if (max_children && indexroot.next != &indexroot) {
 	    if (hash_numrecords(&itable) >= max_children - 1) {
+		indexd_t *oldest = indexroot.next;
 		syslog(LOG_NOTICE, "hit limit %d, killing oldest %s",
-		       max_children, indexroot.next->basedir);
-		kill_child(indexroot.next);
+		       max_children, oldest->basedir);
+		indexd_stop(oldest);
+		indexd_detach(oldest);
+		indexd_free(oldest);
 	    }
 	}
 	id = xzmalloc(sizeof(*id));
@@ -862,8 +894,11 @@ static void expire_indexd(const char *key __attribute__((unused)),
 {
     indexd_t *id = (indexd_t *)data;
 
-    if (time(NULL) > id->used + sphinx_timeout)
-	kill_child(id);
+    if (time(NULL) > id->used + sphinx_timeout) {
+	indexd_stop(id);
+	indexd_detach(id);
+	indexd_free(id);
+    }
 }
 
 static int create_server_socket(void)
