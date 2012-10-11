@@ -381,7 +381,7 @@ const char *cache_base(struct index_record *record)
     return base + record->crec.offset;
 }
 
-unsigned cache_size(struct index_record *record)
+size_t cache_len(struct index_record *record)
 {
     return record->crec.len;
 }
@@ -392,7 +392,7 @@ struct buf *cache_buf(struct index_record *record)
 
     buf_init_ro(&staticbuf,
 		cache_base(record),
-		cache_size(record));
+		cache_len(record));
 
     return &staticbuf;
 }
@@ -423,17 +423,17 @@ EXPORTED struct buf *cacheitem_buf(struct index_record *record, int field)
 /* parse a single cache record from the mapped file - creates buf
  * records which point into the map, so you can't free it while
  * you still have them around! */
-int cache_parserecord(struct buf *cachebase, unsigned cache_offset,
+int cache_parserecord(struct buf *cachebase, size_t cache_offset,
 		      struct cacherecord *crec)
 {
-    unsigned cache_ent;
-    unsigned offset;
+    int cache_ent;
+    size_t offset;
     const char *cacheitem, *next;
 
     offset = cache_offset;
 
     if (offset >= cachebase->len) {
-	syslog(LOG_ERR, "IOERROR: offset greater than cache size %u %u",
+	syslog(LOG_ERR, "IOERROR: offset greater than cache size %lu %lu",
 	       offset, cachebase->len);
 	return IMAP_IOERROR;
     }
@@ -453,7 +453,8 @@ int cache_parserecord(struct buf *cachebase, unsigned cache_offset,
 
 	offset = next - cachebase->s;
 	if (offset > cachebase->len) {
-	    syslog(LOG_ERR, "IOERROR: offset greater than cache size %u %u (%d)",
+	    syslog(LOG_ERR, "IOERROR: offset greater than cache size "
+		   SIZE_T_FMT " " SIZE_T_FMT "(%d)",
 		   offset, cachebase->len, cache_ent);
 	    return IMAP_IOERROR;
 	}
@@ -467,7 +468,7 @@ int cache_parserecord(struct buf *cachebase, unsigned cache_offset,
     return 0;
 }
 
-HIDDEN int mailbox_ensure_cache(struct mailbox *mailbox, unsigned offset)
+HIDDEN int mailbox_ensure_cache(struct mailbox *mailbox, size_t len)
 {
     struct stat sbuf;
     unsigned generation;
@@ -493,7 +494,7 @@ HIDDEN int mailbox_ensure_cache(struct mailbox *mailbox, unsigned offset)
 	mailbox->cache_buf.len = 0;
     }
 
-    if (offset >= mailbox->cache_buf.len) {
+    if (len >= mailbox->cache_buf.len) {
 	/* get the size and inode */
 	if (fstat(mailbox->cache_fd, &sbuf) == -1) {
 	    syslog(LOG_ERR, "IOERROR: fstating cache %s: %m", mailbox->name);
@@ -560,7 +561,7 @@ fail:
 		continue;
 	    lseek(mailbox->cache_fd, offset, SEEK_SET);
 	    retry_write(mailbox->cache_fd, cache_base(&record),
-			cache_size(&record));
+			cache_len(&record));
 	}
 	(void)fsync(mailbox->cache_fd);
 
@@ -668,8 +669,8 @@ done:
 
 int cache_append_record(int fd, struct index_record *record)
 {
-    unsigned offset;
-    unsigned size = cache_size(record);
+    size_t offset;
+    size_t len = cache_len(record);
     int n;
 
     /* no parsed cache present */
@@ -684,9 +685,9 @@ int cache_append_record(int fd, struct index_record *record)
 	return IMAP_MAILBOX_CHECKSUM;
 
     offset = lseek(fd, 0L, SEEK_END);
-    n = retry_write(fd, cache_base(record), size);
+    n = retry_write(fd, cache_base(record), len);
     if (n < 0) {
-	syslog(LOG_ERR, "failed to append %u bytes to cache", size);
+	syslog(LOG_ERR, "failed to append " SIZE_T_FMT " bytes to cache", len);
 	return IMAP_IOERROR;
     }
 
@@ -2414,7 +2415,7 @@ EXPORTED void mailbox_annot_changed(struct mailbox *mailbox,
     }
 
     /* corruption prevention - check we don't go negative */
-    if (mailbox->i.quota_annot_used > oldval->len)
+    if (mailbox->i.quota_annot_used > (quota_t)oldval->len)
 	mailbox->i.quota_annot_used -= oldval->len;
     else
 	mailbox->i.quota_annot_used = 0;
@@ -4196,11 +4197,11 @@ static int records_match(const char *mboxname,
     if (old->cache_crc != new->cache_crc) {
 	match = 0;
     }
-    if (cache_size(old) != cache_size(new)) {
+    if (cache_len(old) != cache_len(new)) {
 	match = 0;
     }
     /* only compare cache records if size matches */
-    else if (memcmp(cache_base(old), cache_base(new), cache_size(new))) {
+    else if (memcmp(cache_base(old), cache_base(new), cache_len(new))) {
 	match = 0;
     }
 

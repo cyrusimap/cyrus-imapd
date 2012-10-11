@@ -726,19 +726,28 @@ EXPORTED int parsehex(const char *p, const char **ptr, int maxlen, bit64 *res)
 
 /* buffer handling functions */
 
-#define BUF_GROW 1024
+static size_t roundup(size_t size)
+{
+    if (size < 32)
+	return 32;
+    if (size < 64)
+	return 64;
+    if (size < 128)
+	return 128;
+    if (size < 256)
+	return 256;
+    if (size < 512)
+	return 512;
+    size += 1024;
+    return size & ~((size_t)1024);
+}
+
 EXPORTED void buf_ensure(struct buf *buf, size_t n)
 {
-    size_t newlen;
+    size_t newlen = roundup(buf->len + n);
 
-    assert(buf->len < UINT_MAX - n);
-
-    newlen = buf->len + n;
-    if (buf->alloc >= newlen)
-	return;
-
-    if (newlen < UINT_MAX - BUF_GROW)
-	newlen += BUF_GROW;
+    /* protect against wrap */
+    assert(newlen >= buf->len);
 
     if (buf->alloc) {
 	buf->s = xrealloc(buf->s, newlen);

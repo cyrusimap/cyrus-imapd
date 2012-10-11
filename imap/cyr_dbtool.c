@@ -221,7 +221,7 @@ done:
     if (r) {
 	if (tid) cyrusdb_abort(db, tid);
 	fprintf(stderr, "FAILED: line %d at cmd %.*s with error %s\n",
-	        line, cmd.len, cmd.s, error_message(r));
+	        line, (int)cmd.len, cmd.s, error_message(r));
     }
 }
 

@@ -44,7 +44,7 @@ static void test_map(void)
 #define WORD1	"ipsum"
     struct buf b = BUF_INITIALIZER;
     const char *map;
-    int len;
+    size_t len;
 
     CU_ASSERT_EQUAL(b.len, 0);
     CU_ASSERT(b.alloc >= b.len);

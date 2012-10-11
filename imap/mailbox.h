@@ -428,9 +428,9 @@ extern void mailbox_unmap_message(struct mailbox *mailbox,
 				  const char **basep, size_t *lenp);
 
 /* cache record API */
-int mailbox_ensure_cache(struct mailbox *mailbox, unsigned offset);
+int mailbox_ensure_cache(struct mailbox *mailbox, size_t len);
 int cache_parserecord(struct buf *cachebase,
-		      unsigned cache_offset, struct cacherecord *crec);
+		      size_t cache_offset, struct cacherecord *crec);
 int mailbox_cacherecord(struct mailbox *mailbox,
 			struct index_record *record);
 int cache_append_record(int fd, struct index_record *record);
@@ -440,7 +440,7 @@ const char *cacheitem_base(struct index_record *record, int field);
 unsigned cacheitem_size(struct index_record *record, int field);
 struct buf *cacheitem_buf(struct index_record *record, int field);
 const char *cache_base(struct index_record *record);
-unsigned cache_size(struct index_record *record);
+size_t cache_len(struct index_record *record);
 struct buf *cache_buf(struct index_record *record);
 /* opening and closing */
 extern int mailbox_open_iwl(const char *name,

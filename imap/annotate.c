@@ -1324,7 +1324,7 @@ static void output_entryatt(annotate_state_t *state, const char *entry,
 
 	if ((state->attribs & ATTRIB_SIZE_SHARED)) {
 	    buf_reset(&buf);
-	    buf_printf(&buf, "%u", value->len);
+	    buf_printf(&buf, SIZE_T_FMT, value->len);
 	    appendattvalue(&state->attvalues, "size.shared", &buf);
 	    state->found |= ATTRIB_SIZE_SHARED;
 	}
@@ -1337,7 +1337,7 @@ static void output_entryatt(annotate_state_t *state, const char *entry,
 
 	if ((state->attribs & ATTRIB_SIZE_PRIV)) {
 	    buf_reset(&buf);
-	    buf_printf(&buf, "%u", value->len);
+	    buf_printf(&buf, SIZE_T_FMT, value->len);
 	    appendattvalue(&state->attvalues, "size.priv", &buf);
 	    state->found |= ATTRIB_SIZE_PRIV;
 	}

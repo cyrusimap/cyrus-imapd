@@ -353,7 +353,7 @@ static int callout_send_args(int fd, const struct buf *args)
     char lenbuf[32];
     int r = 0;
 
-    snprintf(lenbuf, sizeof(lenbuf), "%u\n", args->len);
+    snprintf(lenbuf, sizeof(lenbuf), "%u\n", (unsigned)args->len);
     r = retry_write(fd, lenbuf, strlen(lenbuf));
     if (r < 0)
 	goto out;
