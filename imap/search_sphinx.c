@@ -1050,6 +1050,13 @@ static int indexing_lock(struct mailbox *mailbox, int *fdp)
 
     fd = open(lockpath, O_WRONLY|O_CREAT, 0600);
     if (fd < 0) {
+	if (cyrus_mkdir(lockpath, 0755) < 0) {
+	    syslog(LOG_ERR, "IOERROR: unable to cyrus_mkdir %s: %m", lockpath);
+	    return IMAP_IOERROR;
+	}
+	fd = open(lockpath, O_WRONLY|O_CREAT, 0600);
+    }
+    if (fd < 0) {
 	syslog(LOG_ERR, "IOERROR: unable to create %s: %m", lockpath);
 	return IMAP_IOERROR;
     }
