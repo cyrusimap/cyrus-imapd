@@ -954,8 +954,7 @@ static int indexd_get(const char *mboxname, indexd_t **idp, int create)
 		syslog(LOG_NOTICE, "hit limit %d, killing oldest %s",
 		       max_children, oldest->basedir);
 		indexd_stop(oldest);
-		indexd_detach(oldest);
-		indexd_free(oldest);
+		/* will be detached and freed later */
 	    }
 	}
 	id = xzmalloc(sizeof(*id));
@@ -1007,9 +1006,7 @@ static void expire_indexd(const char *key __attribute__((unused)),
 		syslog(LOG_INFO, "searchd %s has been idle for %d sec",
 				 id->basedir, (int)(now - id->used));
 	    indexd_stop(id);
-	    indexd_detach(id);
-	    indexd_free(id);
-	    return;
+	    /* will be detached and freed later */
 	}
 	break;
     case STOPPING:
