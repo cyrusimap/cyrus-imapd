@@ -65,6 +65,7 @@
 
 #include <sys/socket.h>
 #include <errno.h>
+#include <assert.h>
 
 #include "exitcodes.h"
 #include "map.h"
@@ -726,12 +727,18 @@ EXPORTED int parsehex(const char *p, const char **ptr, int maxlen, bit64 *res)
 /* buffer handling functions */
 
 #define BUF_GROW 1024
-EXPORTED void buf_ensure(struct buf *buf, int n)
+EXPORTED void buf_ensure(struct buf *buf, unsigned n)
 {
-    int newlen = (buf->len + n + BUF_GROW);  /* XXX - size mod logic? */
+    unsigned newlen;
 
-    if (buf->alloc >= (buf->len + n))
+    assert(buf->len < UINT_MAX - n);
+
+    newlen = buf->len + n;
+    if (buf->alloc >= newlen)
 	return;
+
+    if (newlen < UINT_MAX - BUF_GROW)
+	newlen += BUF_GROW;
 
     if (buf->alloc) {
 	buf->s = xrealloc(buf->s, newlen);
@@ -776,7 +783,7 @@ EXPORTED char *buf_release(struct buf *buf)
     return ret;
 }
 
-EXPORTED void buf_getmap(struct buf *buf, const char **base, int *len)
+EXPORTED void buf_getmap(struct buf *buf, const char **base, unsigned *len)
 {
     *base = buf->s;
     *len = buf->len;
@@ -834,7 +841,7 @@ EXPORTED void buf_setcstr(struct buf *buf, const char *str)
     buf_setmap(buf, str, strlen(str));
 }
 
-EXPORTED void buf_setmap(struct buf *buf, const char *base, int len)
+EXPORTED void buf_setmap(struct buf *buf, const char *base, unsigned len)
 {
     buf_reset(buf);
     if (len) {
@@ -865,7 +872,7 @@ EXPORTED void buf_appendbit32(struct buf *buf, bit32 num)
     buf_appendmap(buf, (char *)&item, 4);
 }
 
-EXPORTED void buf_appendmap(struct buf *buf, const char *base, int len)
+EXPORTED void buf_appendmap(struct buf *buf, const char *base, unsigned len)
 {
     if (len) {
 	buf_ensure(buf, len);
@@ -1062,7 +1069,7 @@ EXPORTED void buf_init(struct buf *buf)
  * setting buf->alloc=0 which indicates CoW is in effect, i.e. the data
  * pointed to needs to be copied should it ever be modified.
  */
-EXPORTED void buf_init_ro(struct buf *buf, const char *base, int len)
+EXPORTED void buf_init_ro(struct buf *buf, const char *base, unsigned len)
 {
     buf->alloc = 0;
     buf->len = len;
