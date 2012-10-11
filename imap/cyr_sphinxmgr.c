@@ -881,8 +881,15 @@ static int indexd_is_running(indexd_t *id)
     int r;
     struct stat sb;
 
-    r = stat(pidfile, &sb);
-    if (r < 0) r = errno;
+    do {
+	r = stat(pidfile, &sb);
+    } while (r < 0 && errno == EINTR);
+
+    if (r < 0) {
+	r = errno;
+	if (errno != ENOENT)
+	    syslog(LOG_ERR, "cannot stat %s: %m", pidfile);
+    }
 
     /* TODO: could also read the pidfile send the process named there a
      * signal 0 to see if it's still alive.  But that would be a lot of
