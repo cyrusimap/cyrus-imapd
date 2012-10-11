@@ -991,14 +991,14 @@ out:
 }
 
 static void expire_indexd(const char *key __attribute__((unused)),
-			  void *data,
-			  void *rock __attribute__((unused)))
+			  void *data, void *rock)
 {
     indexd_t *id = (indexd_t *)data;
+    time_t now = *(time_t *)rock;
 
     switch (id->state) {
     case STARTED:
-	if (time(NULL) > id->used + sphinx_timeout) {
+	if (now > id->used + sphinx_timeout) {
 	    indexd_stop(id);
 	    indexd_detach(id);
 	    indexd_free(id);
@@ -1010,7 +1010,7 @@ static void expire_indexd(const char *key __attribute__((unused)),
 	    if (verbose)
 		syslog(LOG_INFO, "searchd %s finished shutting down after %d sec",
 				 id->basedir,
-				 (int)(time(NULL) - id->stopped));
+				 (int)(now - id->stopped));
 	    id->state = STOPPED;
 	    indexd_detach(id);
 	    indexd_free(id);
@@ -1275,6 +1275,7 @@ int main(int argc, char **argv)
 
     for (;;) {
 	int n;
+	time_t now = time(NULL);
 
 	signals_poll();
 
@@ -1282,7 +1283,7 @@ int main(int argc, char **argv)
 	if (shutdown_file(NULL, 0))
 	    shut_down(0);
 
-	hash_enumerate(&itable, expire_indexd, NULL);
+	hash_enumerate(&itable, expire_indexd, &now);
 
 	memset(&pfd, 0, sizeof(pfd));
 	pfd.fd = server_sock;
