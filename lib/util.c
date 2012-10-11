@@ -727,9 +727,9 @@ EXPORTED int parsehex(const char *p, const char **ptr, int maxlen, bit64 *res)
 /* buffer handling functions */
 
 #define BUF_GROW 1024
-EXPORTED void buf_ensure(struct buf *buf, unsigned n)
+EXPORTED void buf_ensure(struct buf *buf, size_t n)
 {
-    unsigned newlen;
+    size_t newlen;
 
     assert(buf->len < UINT_MAX - n);
 
@@ -783,7 +783,7 @@ EXPORTED char *buf_release(struct buf *buf)
     return ret;
 }
 
-EXPORTED void buf_getmap(struct buf *buf, const char **base, unsigned *len)
+EXPORTED void buf_getmap(struct buf *buf, const char **base, size_t *len)
 {
     *base = buf->s;
     *len = buf->len;
@@ -813,7 +813,7 @@ EXPORTED int buf_getline(struct buf *buf, FILE *fp)
     return (!(buf->len == 0 && c == EOF));
 }
 
-EXPORTED unsigned buf_len(const struct buf *buf)
+EXPORTED size_t buf_len(const struct buf *buf)
 {
     return buf->len;
 }
@@ -824,11 +824,11 @@ EXPORTED void buf_reset(struct buf *buf)
     buf->flags &= ~BUF_CSTRING;
 }
 
-EXPORTED void buf_truncate(struct buf *buf, unsigned int len)
+EXPORTED void buf_truncate(struct buf *buf, size_t len)
 {
     if (len > buf->alloc) {
 	/* grow the buffer and zero-fill the new bytes */
-	unsigned int more = len - buf->len;
+	size_t more = len - buf->len;
 	buf_ensure(buf, more);
 	memset(buf->s + buf->len, 0, more);
     }
@@ -841,7 +841,7 @@ EXPORTED void buf_setcstr(struct buf *buf, const char *str)
     buf_setmap(buf, str, strlen(str));
 }
 
-EXPORTED void buf_setmap(struct buf *buf, const char *base, unsigned len)
+EXPORTED void buf_setmap(struct buf *buf, const char *base, size_t len)
 {
     buf_reset(buf);
     if (len) {
@@ -872,7 +872,7 @@ EXPORTED void buf_appendbit32(struct buf *buf, bit32 num)
     buf_appendmap(buf, (char *)&item, 4);
 }
 
-EXPORTED void buf_appendmap(struct buf *buf, const char *base, unsigned len)
+EXPORTED void buf_appendmap(struct buf *buf, const char *base, size_t len)
 {
     if (len) {
 	buf_ensure(buf, len);
@@ -920,8 +920,8 @@ EXPORTED void buf_printf(struct buf *buf, const char *fmt, ...)
 }
 
 static void buf_replace_buf(struct buf *buf,
-			    unsigned int offset,
-			    unsigned int length,
+			    size_t offset,
+			    size_t length,
 			    const struct buf *replace)
 {
     /* we need buf to be a nul terminated string now please */
@@ -947,13 +947,13 @@ static void buf_replace_buf(struct buf *buf,
  * instances of @match.
  * Returns: the number of substitutions made.
  */
-EXPORTED unsigned int buf_replace_all(struct buf *buf, const char *match,
+EXPORTED int buf_replace_all(struct buf *buf, const char *match,
 			     const char *replace)
 {
-    unsigned int n = 0;
+    size_t n = 0;
     int matchlen = strlen(match);
     struct buf replace_buf = BUF_INITIALIZER;
-    unsigned int off;
+    size_t off;
     char *p;
 
     if (replace)
@@ -981,7 +981,7 @@ EXPORTED unsigned int buf_replace_all(struct buf *buf, const char *match,
  * in the replace text.
  * Returns: the number of substitutions made (0 or 1)
  */
-EXPORTED unsigned int buf_replace_one_re(struct buf *buf, const regex_t *preg,
+EXPORTED int buf_replace_one_re(struct buf *buf, const regex_t *preg,
 				const char *replace)
 {
     struct buf replace_buf = BUF_INITIALIZER;
@@ -1008,13 +1008,13 @@ EXPORTED unsigned int buf_replace_one_re(struct buf *buf, const regex_t *preg,
  * in the replace text.
  * Returns: the number of substitutions made.
  */
-EXPORTED unsigned int buf_replace_all_re(struct buf *buf, const regex_t *preg,
+EXPORTED int buf_replace_all_re(struct buf *buf, const regex_t *preg,
 				const char *replace)
 {
-    unsigned int n = 0;
+    int n = 0;
     struct buf replace_buf = BUF_INITIALIZER;
     regmatch_t rm;
-    unsigned int off;
+    size_t off;
 
     if (replace)
 	buf_init_ro(&replace_buf, replace, strlen(replace));
@@ -1040,7 +1040,7 @@ EXPORTED unsigned int buf_replace_all_re(struct buf *buf, const regex_t *preg,
  */
 EXPORTED int buf_cmp(const struct buf *a, const struct buf *b)
 {
-    unsigned len = MIN(a->len, b->len);
+    size_t len = MIN(a->len, b->len);
     int r = 0;
 
     if (len)
@@ -1069,7 +1069,7 @@ EXPORTED void buf_init(struct buf *buf)
  * setting buf->alloc=0 which indicates CoW is in effect, i.e. the data
  * pointed to needs to be copied should it ever be modified.
  */
-EXPORTED void buf_init_ro(struct buf *buf, const char *base, unsigned len)
+EXPORTED void buf_init_ro(struct buf *buf, const char *base, size_t len)
 {
     buf->alloc = 0;
     buf->len = len;

@@ -206,41 +206,41 @@ extern clock_t sclock(void);
 
 struct buf {
     char *s;
-    unsigned len;
-    unsigned alloc;
-    int flags;
+    size_t len;
+    size_t alloc;
+    unsigned flags;
 };
 #define BUF_INITIALIZER	{ NULL, 0, 0, 0 }
 
 const char *buf_cstring(struct buf *buf);
-void buf_ensure(struct buf *buf, int morebytes);
+void buf_ensure(struct buf *buf, size_t morebytes);
 char *buf_release(struct buf *buf);
-void buf_getmap(struct buf *buf, const char **base, int *len);
+void buf_getmap(struct buf *buf, const char **base, size_t *len);
 int buf_getline(struct buf *buf, FILE *fp);
-unsigned buf_len(const struct buf *buf);
+size_t buf_len(const struct buf *buf);
 void buf_reset(struct buf *buf);
-void buf_truncate(struct buf *buf, unsigned int len);
+void buf_truncate(struct buf *buf, size_t len);
 void buf_setcstr(struct buf *buf, const char *str);
-void buf_setmap(struct buf *buf, const char *base, unsigned len);
+void buf_setmap(struct buf *buf, const char *base, size_t len);
 void buf_copy(struct buf *dst, const struct buf *src);
 void buf_append(struct buf *dst, const struct buf *src);
 void buf_appendcstr(struct buf *buf, const char *str);
 void buf_appendbit32(struct buf *buf, bit32 num);
-void buf_appendmap(struct buf *buf, const char *base, unsigned len);
+void buf_appendmap(struct buf *buf, const char *base, size_t len);
 void buf_putc(struct buf *buf, char c);
 void buf_printf(struct buf *buf, const char *fmt, ...)
-    __attribute__((format(printf,2,3)));
-unsigned int buf_replace_all(struct buf *buf, const char *match,
-			     const char *replace);
+	        __attribute__((format(printf,2,3)));
+int buf_replace_all(struct buf *buf, const char *match,
+		    const char *replace);
 #ifdef ENABLE_REGEX
-unsigned int buf_replace_all_re(struct buf *buf, const regex_t *,
-				const char *replace);
-unsigned int buf_replace_one_re(struct buf *buf, const regex_t *,
-				const char *replace);
+int buf_replace_all_re(struct buf *buf, const regex_t *,
+		       const char *replace);
+int buf_replace_one_re(struct buf *buf, const regex_t *,
+		       const char *replace);
 #endif
 int buf_cmp(const struct buf *, const struct buf *);
 void buf_init(struct buf *buf);
-void buf_init_ro(struct buf *buf, const char *base, unsigned len);
+void buf_init_ro(struct buf *buf, const char *base, size_t len);
 void buf_free(struct buf *buf);
 void buf_move(struct buf *dst, struct buf *src);
 
