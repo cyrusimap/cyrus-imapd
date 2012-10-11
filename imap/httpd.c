@@ -1341,14 +1341,18 @@ int is_mediatype(const char *hdr, const char *type)
 
 /*
  * Read the body of a request or response.
- * Handles identity and chunked encoding only.
+ * Handles identity and chunked TE only.
+ * Handles close-delimited bodies (no Content-Length specified) 
+ * Handles gzip and deflate CE only.
  */
 int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 	      int decompress, const char **errstr)
 {
     const char **hdr;
-    unsigned long len = 0, chunk;
-    unsigned need_cont = 0, is_chunked;
+    unsigned long len = 0;
+    unsigned need_cont = 0, len_delim, max_msgsize, n;
+    char buf[PROT_BUFSIZE];
+    enum { LEN_DELIM_LENGTH, LEN_DELIM_CHUNKED, LEN_DELIM_CLOSE };
 
     syslog(LOG_DEBUG, "read body(dump = %d)", body != NULL);
 
@@ -1368,11 +1372,16 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 	return 0;
     }
 
+    max_msgsize = config_getint(IMAPOPT_MAXMESSAGESIZE);
+
+    /* If max_msgsize is 0, allow any size */
+    if (!max_msgsize) max_msgsize = INT_MAX;
+
     /* Check for Transfer-Encoding */
     if ((hdr = spool_getheader(hdrs, "Transfer-Encoding"))) {
 	if (!strcasecmp(hdr[0], "chunked")) {
 	    /* "chunked" encoding */
-	    is_chunked = 1;
+	    len_delim = LEN_DELIM_CHUNKED;
 	}
 	/* XXX  Should we handle compress/deflate/gzip? */
 	else {
@@ -1381,17 +1390,23 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 	}
     }
     else {
-	/* "identity" encoding - treat it as a single chunk of size "len" */
-	is_chunked = 0;
-	len = chunk = 0;
+	/* "identity" encoding */
+	len_delim = LEN_DELIM_LENGTH;
 
 	/* Check for Content-Length */
 	if ((hdr = spool_getheader(hdrs, "Content-Length"))) {
+	    /* length-delimited body */
 	    len = strtoul(hdr[0], NULL, 10);
-	    /* XXX  Should we sanity check and/or limit the body len? */
+	    if (len > max_msgsize) return HTTP_TOO_LARGE;
 	}
 	else if ((hdr = spool_getheader(hdrs, "Content-Type"))) {
-	    return HTTP_LENGTH_REQUIRED;
+	    /* Check if this is a non-persistent connection */
+	    if ((hdr = spool_getheader(hdrs, "Connection")) &&
+		!strcmp(hdr[0], "close")) {
+		/* close-delimited body */
+		len_delim = LEN_DELIM_CLOSE;
+	    }
+	    else return HTTP_LENGTH_REQUIRED;
 	}
     }
 
@@ -1401,51 +1416,75 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
     }
 
     /* Read and buffer the body */
-    do {
-	char buf[PROT_BUFSIZE];
-	unsigned long n;
+    if (len_delim == LEN_DELIM_CHUNKED) {
+	unsigned last = 0;
 
-	if (is_chunked) {
-	    /* Read chunk-size and any chunk-ext */
+	/* Read chunks until last-chunk (zero chunk-size) */
+	do {
+	    unsigned chunk;
+
+	    /* Read chunk-size */
 	    if (!prot_fgets(buf, PROT_BUFSIZE, pin) ||
-		sscanf(buf, "%lx", &chunk) != 1) {
+		sscanf(buf, "%x", &chunk) != 1) {
 		*errstr = "Unable to read chunk size\r\n";
 		return HTTP_BAD_REQUEST;
 	    }
-	    len = chunk;
-	}
+	    if ((len += chunk) > max_msgsize) return HTTP_TOO_LARGE;
 
-	/* Read chunk-data */ 
-	while (len) {
+	    if (!chunk) {
+		/* last-chunk */
+		last = 1;
+
+		/* Read/parse any trailing headers */
+		spool_fill_hdrcache(pin, NULL, hdrs, NULL);
+	    }
+	    
+	    /* Read 'chunk' octets */ 
+	    for (; chunk; chunk -= n) {
+		if (body) n = prot_readbuf(pin, body, chunk);
+		else n = prot_read(pin, buf, MIN(chunk, PROT_BUFSIZE));
+		
+		if (!n) {
+		    syslog(LOG_ERR, "prot_read() error");
+		    *errstr = "Unable to read body data\r\n";
+		    return HTTP_BAD_REQUEST;
+		}
+	    }
+
+	    /* Read CRLF terminating the chunk/trailer */
+	    if (!prot_fgets(buf, sizeof(buf), pin)) {
+		*errstr = "Missing CRLF following chunk/trailer\r\n";
+		return HTTP_BAD_REQUEST;
+	    }
+
+	} while (!last);
+    }
+    else if (len_delim == LEN_DELIM_CLOSE) {
+	/* Read until EOF */
+	do {
+	    if (body) n = prot_readbuf(pin, body, PROT_BUFSIZE);
+	    else n = prot_read(pin, buf, PROT_BUFSIZE);
+
+	    if ((len += n) > max_msgsize) return HTTP_TOO_LARGE;
+
+	} while (n);
+    }
+    else {
+	/* Read 'len' octets */
+	for (; len; len -= n) {
 	    if (body) n = prot_readbuf(pin, body, len);
-	    else n = prot_read(pin, buf, MIN(len, sizeof(buf)));
+	    else n = prot_read(pin, buf, MIN(len, PROT_BUFSIZE));
 
 	    if (!n) {
 		syslog(LOG_ERR, "prot_read() error");
 		*errstr = "Unable to read body data\r\n";
 		return HTTP_BAD_REQUEST;
 	    }
-
-	    len -= n;
 	}
-
-	if (is_chunked) {
-	    if (!chunk) {
-		/* last-chunk: Read/parse any trailing headers */
-		spool_fill_hdrcache(pin, NULL, hdrs, NULL);
-	    }
-
-	    /* Read CRLF terminating the chunk */
-	    if (!prot_fgets(buf, sizeof(buf), pin)) {
-		*errstr = "Missing CRLF following chunk\r\n";
-		return HTTP_BAD_REQUEST;
-	    }
-	}
-
-    } while (chunk);  /* Continue until we get last-chunk */
+    }
 
 
-    /* Decode the body, if necessary */
+    /* Decode the representation, if necessary */
     if (decompress && body &&
 	(hdr = spool_getheader(hdrs, "Content-Encoding"))) {
 	int r = HTTP_BAD_MEDIATYPE;
