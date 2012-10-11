@@ -64,6 +64,7 @@
 
 #include <sys/socket.h>
 #include <errno.h>
+#include <assert.h>
 
 #include "exitcodes.h"
 #include "util.h"
@@ -519,12 +520,18 @@ int parseuint32(const char *p, const char **ptr, uint32_t *res)
 /* buffer handling functions */
 
 #define BUF_GROW 1024
-void buf_ensure(struct buf *buf, int n)
+void buf_ensure(struct buf *buf, unsigned n)
 {
-    int newlen = (buf->len + n + BUF_GROW);  /* XXX - size mod logic? */
+    unsigned newlen;
 
-    if (buf->alloc >= (buf->len + n))
+    assert(buf->len < UINT_MAX - n);
+
+    newlen = buf->len + n;
+    if (buf->alloc >= newlen)
 	return;
+
+    if (newlen < UINT_MAX - BUF_GROW)
+	newlen += BUF_GROW;
 
     if (buf->alloc) {
 	buf->s = xrealloc(buf->s, newlen);
@@ -550,7 +557,7 @@ const char *buf_cstring(struct buf *buf)
     return buf->s;
 }
 
-void buf_getmap(struct buf *buf, const char **base, int *len)
+void buf_getmap(struct buf *buf, const char **base, unsigned *len)
 {
     *base = buf->s;
     *len = buf->len;
@@ -584,7 +591,7 @@ void buf_setcstr(struct buf *buf, const char *str)
     buf_setmap(buf, str, strlen(str));
 }
 
-void buf_setmap(struct buf *buf, const char *base, int len)
+void buf_setmap(struct buf *buf, const char *base, unsigned len)
 {
     buf_reset(buf);
     if (len) {
@@ -615,7 +622,7 @@ void buf_appendbit32(struct buf *buf, bit32 num)
     buf_appendmap(buf, (const char *) &nbit32, sizeof(bit32));
 }
 
-void buf_appendmap(struct buf *buf, const char *base, int len)
+void buf_appendmap(struct buf *buf, const char *base, unsigned len)
 {
     if (len) {
 	buf_ensure(buf, len);
@@ -736,7 +743,7 @@ void buf_init(struct buf *buf)
  * setting buf->alloc=0 which indicates CoW is in effect, i.e. the data
  * pointed to needs to be copied should it ever be modified.
  */
-void buf_init_ro(struct buf *buf, const char *base, int len)
+void buf_init_ro(struct buf *buf, const char *base, unsigned len)
 {
     buf->alloc = 0;
     buf->len = len;
