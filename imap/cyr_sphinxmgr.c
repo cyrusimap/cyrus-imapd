@@ -681,7 +681,7 @@ static int indexd_setup_config(indexd_t *id)
 #endif
 
     if (verbose)
-	syslog(LOG_NOTICE, "Sphinx writing config file %s", sphinx_config);
+	syslog(LOG_INFO, "Sphinx writing config file %s", sphinx_config);
 
     fd = open(sphinx_config, O_WRONLY|O_CREAT|O_TRUNC, 0600);
     if (fd < 0) {
@@ -738,7 +738,7 @@ static int indexd_start(indexd_t *id)
     if (r) goto out;
 
     if (verbose)
-	syslog(LOG_NOTICE, "Sphinx starting searchd");
+	syslog(LOG_INFO, "Sphinx starting searchd %s", id->basedir);
 
     config_file = strconcat(id->basedir, SPHINX_CONFIG, (char *)NULL);
     r = run_command(SEARCHD, "--config", config_file,
@@ -762,9 +762,8 @@ static int indexd_stop(indexd_t *id)
     if (id->state != STARTED) return 0;	/* nothing to do */
 
     if (verbose)
-	syslog(LOG_NOTICE, "Sphinx stopping searchd, "
-			   "base directory %s socket %s",
-			   id->basedir, id->socketpath);
+	syslog(LOG_INFO, "Sphinx stopping searchd %s",
+			   id->basedir);
 
     config_file = strconcat(id->basedir, SPHINX_CONFIG, (char *)NULL);
     r = run_command(SEARCHD, "--config", config_file,
@@ -867,6 +866,11 @@ out:
 
 static void indexd_detach(indexd_t *id)
 {
+    if (id->state != STOPPED)
+	syslog(LOG_ERR, "IOERROR: internal error, state=%d in "
+			"indexd_detach for basedir %s",
+			id->state, id->basedir);
+
     /* unstitch */
     id->prev->next = id->next;
     id->next->prev = id->prev;
@@ -999,6 +1003,9 @@ static void expire_indexd(const char *key __attribute__((unused)),
     switch (id->state) {
     case STARTED:
 	if (now > id->used + sphinx_timeout) {
+	    if (verbose)
+		syslog(LOG_INFO, "searchd %s has been idle for %d sec",
+				 id->basedir, (int)(now - id->used));
 	    indexd_stop(id);
 	    indexd_detach(id);
 	    indexd_free(id);
