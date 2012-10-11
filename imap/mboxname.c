@@ -182,7 +182,7 @@ EXPORTED int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
     int nonblock;
     int locktype;
 
-    nonblock = !!(locktype & LOCK_NONBLOCK);
+    nonblock = !!(locktype_and_flags & LOCK_NONBLOCK);
     locktype = (locktype_and_flags & ~LOCK_NONBLOCK);
 
     fname = mboxname_lockpath(mboxname);
