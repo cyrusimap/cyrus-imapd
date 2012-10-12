@@ -218,7 +218,19 @@ struct transaction_t {
 #ifdef HAVE_ZLIB
     z_stream zstrm;			/* Compression context */
 #endif
-    struct buf buf;	    		/* Working buffer */
+    struct buf buf;	    		/* Working buffer - currently used for:
+					   httpd:
+					     - error desc string
+					     - Location hdr on redirects
+					     - Etag for static docs
+					   http_rss:
+					     - Content-Type fpr MIME parts
+					     - URL for feed & items
+					   http_caldav:
+					     - precond error resource URL
+					   http_ischedule:
+					     - error desc string
+					*/
 };
 
 /* Transfer-Encoding flags (coding of response payload) */
