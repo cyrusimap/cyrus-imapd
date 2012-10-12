@@ -1766,6 +1766,13 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
 	if (updatenotifier) updatenotifier(mailbox->name);
 	sync_log_mailbox(mailbox->name);
 	statuscache_invalidate(mailbox->name, sdata);
+
+	if (config_auditlog)
+	    syslog(LOG_NOTICE, "auditlog: modseq sessionid=<%s> "
+		   "mailbox=<%s> uniqueid=<%s> highestmodseq=<" MODSEQ_FMT ">",
+		session_id(), mailbox->name, mailbox->uniqueid,
+		mailbox->i.highestmodseq);
+
 	mailbox->has_changed = 0;
     }
     else if (sdata) {
