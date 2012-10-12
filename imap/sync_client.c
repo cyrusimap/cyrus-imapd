@@ -2384,6 +2384,8 @@ static int do_sync(sync_log_reader_t *slr)
 	    sync_action_list_add(meta_list, NULL, args[1]);
 	else if (!strcmp(args[0], "SIEVE"))
 	    sync_action_list_add(meta_list, NULL, args[1]);
+	else if (!strcmp(args[0], "APPEND")) /* just a mailbox event */
+	    sync_action_list_add(mailbox_list, args[1], NULL);
 	else if (!strcmp(args[0], "MAILBOX"))
 	    sync_action_list_add(mailbox_list, args[1], NULL);
 	else if (!strcmp(args[0], "UNMAILBOX"))
