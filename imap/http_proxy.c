@@ -585,7 +585,7 @@ int http_read_response(struct backend *be, unsigned meth,
 /* Send a cached response to the client */
 static void send_response(struct protstream *pout,
 			  const char *statline, hdrcache_t hdrs,
-			  struct buf *body, unsigned flags)
+			  struct buf *body, struct txn_flags_t *flags)
 {
     unsigned long len;
 
@@ -601,7 +601,7 @@ static void send_response(struct protstream *pout,
      */
     prot_printf(pout, "%s", statline);
     write_via_hdr(pout, hdrs);
-    if (flags & HTTP_CLOSE)
+    if (flags->close)
 	prot_printf(pout, "Connection: close\r\n");
     else {
 	prot_printf(pout, "Keep-Alive: timeout=%d\r\n", httpd_timeout);
@@ -610,7 +610,7 @@ static void send_response(struct protstream *pout,
     if (httpd_tls_done) {
 	prot_printf(httpd_out, "Strict-Transport-Security: max-age=600\r\n");
     }
-    if (flags & HTTP_NOCACHE) {
+    if (flags->cc & CC_NOCACHE) {
 	prot_printf(pout, "Cache-Control: no-cache\r\n");
     }
     spool_enum_hdrcache(hdrs, &write_cachehdr, pout);
@@ -676,14 +676,14 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 
 	if (!r && (code == 100)) { /* Continue */
 	    /* Read body */
-	    if (!(txn->flags & HTTP_READBODY)) {
-		txn->flags |= HTTP_READBODY;
+	    if (!txn->flags.havebody) {
+		txn->flags.havebody = 1;
 		r = read_body(httpd_in, txn->req_hdrs,
 			      &txn->req_body, 0, &txn->error.desc);
 	    }
 	    if (r) {
 		/* Couldn't get the body and can't finish request */
-		txn->flags |= HTTP_CLOSE;
+		txn->flags.close = 1;
 		proxy_downserver(be);
 	    }
 	    else {
@@ -700,7 +700,7 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 
     /* Send response to client */
     if (!r) send_response(httpd_out, statline, resp_hdrs, resp_body,
-			  txn->flags);
+			  &txn->flags);
 
     if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
 
@@ -835,7 +835,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
     }
 
     /* Send response to client */
-    send_response(httpd_out, statline, resp_hdrs, resp_body, txn->flags);
+    send_response(httpd_out, statline, resp_hdrs, resp_body, &txn->flags);
 
     if ((txn->meth == METH_MOVE) && (code < 300)) {
 	/*
