@@ -86,6 +86,7 @@ static int verbose = 0;
 static int server_sock;
 static int sphinx_timeout;
 static int max_children;
+static int num_started;	/* number of children in STARTED state */
 static const char *syslog_prefix;
 
 typedef struct indexd indexd_t;
@@ -119,6 +120,19 @@ static void indexd_free(indexd_t *id)
     free(id->basedir);
     free(id->socketpath);
     free(id);
+}
+
+static void indexd_set_state(indexd_t *id, int state)
+{
+    if (id->state != state) {
+	if (id->state == STARTED)
+	    num_started--;
+
+	id->state = state;
+
+	if (id->state == STARTED)
+	    num_started++;
+    }
 }
 
 static int indexd_setup_tree(indexd_t *id)
@@ -746,7 +760,7 @@ static int indexd_start(indexd_t *id)
     if (r) goto out;
 
     id->started = time(NULL);
-    id->state = STARTED;
+    indexd_set_state(id, STARTED);
     r = 0;
 
 out:
@@ -772,7 +786,7 @@ static int indexd_stop(indexd_t *id)
     if (r) goto out;
 
     unlink(id->socketpath);
-    id->state = STOPPING;
+    indexd_set_state(id, STOPPING);
     id->stopped = time(NULL);
 
     r = 0;
@@ -928,7 +942,7 @@ static int indexd_get(const char *mboxname, indexd_t **idp, int create)
 			    id->basedir, error_message(r));
 	    return r;
 	}
-	id->state = STOPPED;
+	indexd_set_state(id, STOPPED);
 	indexd_detach(id);
 	indexd_free(id);
 	id = NULL;
@@ -937,7 +951,7 @@ static int indexd_get(const char *mboxname, indexd_t **idp, int create)
     if (id && indexd_is_running(id) != 0) {
 	syslog(LOG_NOTICE, "searchd %s is no longer running, forgetting",
 			   id->basedir);
-	id->state == STOPPED;
+	indexd_set_state(id, STOPPED);
 	indexd_detach(id);
 	indexd_free(id);
 	id = NULL;
@@ -948,9 +962,14 @@ static int indexd_get(const char *mboxname, indexd_t **idp, int create)
 	    r = IMAP_NOTFOUND;
 	    goto out;
 	}
-	if (max_children && indexroot.next != &indexroot) {
-	    if (hash_numrecords(&itable) >= max_children - 1) {
-		indexd_t *oldest = indexroot.next;
+	if (max_children && num_started >= max_children) {
+	    /* stop the oldest STARTED child */
+	    indexd_t *oldest;
+	    for (oldest = indexroot.next ;
+		 oldest != &indexroot && oldest->state != STARTED ;
+		 oldest = oldest->next)
+		;
+	    if (oldest->state == STARTED) {
 		syslog(LOG_NOTICE, "hit limit %d, killing oldest %s",
 		       max_children, oldest->basedir);
 		indexd_stop(oldest);
@@ -1015,7 +1034,7 @@ static void expire_indexd(const char *key __attribute__((unused)),
 		syslog(LOG_INFO, "searchd %s finished shutting down after %d sec",
 				 id->basedir,
 				 (int)(now - id->stopped));
-	    id->state = STOPPED;
+	    indexd_set_state(id, STOPPED);
 	    indexd_detach(id);
 	    indexd_free(id);
 	}
