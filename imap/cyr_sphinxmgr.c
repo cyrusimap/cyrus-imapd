@@ -1039,6 +1039,8 @@ static void expire_indexd(const char *key __attribute__((unused)),
 	    indexd_free(id);
 	}
 	break;
+    case STOPPED:
+	abort();
     }
 }
 
