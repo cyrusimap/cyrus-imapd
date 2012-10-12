@@ -603,7 +603,7 @@ static void read_sync_log_items(sync_log_reader_t *slr)
     qitem_t *item = NULL;
 
     while (sync_log_reader_getitem(slr, args) == 0) {
-	if (!strcmp(args[0], "MAILBOX")) {
+	if (!strcmp(args[0], "APPEND")) {
 	    item = queue_remove_by_name(&queue, args[1]);
 	    if (!item)
 		item = qitem_new(args[1]);
