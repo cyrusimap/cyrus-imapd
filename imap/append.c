@@ -62,6 +62,8 @@
 #include "message.h"
 #include "append.h"
 #include "global.h"
+#include "prot.h"
+#include "sync_log.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
@@ -252,7 +254,7 @@ static void append_free(struct appendstate *as)
 EXPORTED int append_commit(struct appendstate *as)
 {
     int r = 0;
-    
+
     if (as->s == APPEND_DONE) return 0;
 
     if (as->nummsg) {
@@ -261,6 +263,9 @@ EXPORTED int append_commit(struct appendstate *as)
 
 	/* the cache will be dirty even if we hand added the records */
 	as->mailbox->cache_dirty = 1;
+
+	/* log the append so rolling squatter can index this mailbox */
+	sync_log_append(as->mailbox->name);
 
 	/* set seen state */
 	if (as->userid[0])
