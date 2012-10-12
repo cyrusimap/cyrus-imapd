@@ -122,7 +122,7 @@ static void indexd_free(indexd_t *id)
     free(id);
 }
 
-static void indexd_set_state(indexd_t *id, int state)
+static void indexd_set_state(indexd_t *id, unsigned state)
 {
     if (id->state != state) {
 	if (id->state == STARTED)
