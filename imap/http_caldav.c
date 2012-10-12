@@ -261,6 +261,9 @@ static int meth_acl(struct transaction_t *txn)
     struct mailbox *mailbox = NULL;
     struct buf acl = BUF_INITIALIZER;
 
+    /* Response should not be cached */
+    txn->flags.cc |= CC_NOCACHE;
+
     /* Make sure its a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
 
@@ -312,9 +315,6 @@ static int meth_acl(struct transaction_t *txn)
     }
 
     /* Local Mailbox */
-
-    /* Response should not be cached */
-    txn->flags.cc |= CC_NOCACHE;
 
     /* Open mailbox for writing */
     if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_EXCLUSIVE))) {
@@ -889,6 +889,9 @@ static int meth_delete(struct transaction_t *txn)
     const char *etag = NULL, *userid;
     time_t lastmod = 0;
 
+    /* Response should not be cached */
+    txn->flags.cc |= CC_NOCACHE;
+
     /* Make sure its a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
 
@@ -1235,6 +1238,9 @@ static int meth_mkcol(struct transaction_t *txn)
 
     memset(&pctx, 0, sizeof(struct proppatch_ctx));
 
+    /* Response should not be cached */
+    txn->flags.cc |= CC_NOCACHE;
+
     /* Make sure its a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
 
@@ -1278,9 +1284,6 @@ static int meth_mkcol(struct transaction_t *txn)
     }
 
     /* Local Mailbox */
-
-    /* Response should not be cached */
-    txn->flags.cc |= CC_NOCACHE;
 
     /* Construct mailbox name corresponding to request target URI */
     (void) target_to_mboxname(&txn->req_tgt, mailboxname);
@@ -1983,6 +1986,9 @@ static int meth_proppatch(struct transaction_t *txn)
 
     memset(&pctx, 0, sizeof(struct proppatch_ctx));
 
+    /* Response should not be cached */
+    txn->flags.cc |= CC_NOCACHE;
+
     /* Make sure its a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
 
@@ -2034,9 +2040,6 @@ static int meth_proppatch(struct transaction_t *txn)
     }
 
     /* Local Mailbox */
-
-    /* Response should not be cached */
-    txn->flags.cc |= CC_NOCACHE;
 
     /* Parse the PROPPATCH body */
     ret = parse_xml_body(txn, &root);
@@ -2188,6 +2191,9 @@ static int meth_put(struct transaction_t *txn)
     icalcomponent_kind kind;
     icalproperty *prop;
     unsigned flags;
+
+    /* Response should not be cached */
+    txn->flags.cc |= CC_NOCACHE;
 
     /* Make sure its a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
