@@ -2493,7 +2493,6 @@ int get_doc(struct transaction_t *txn, filter_proc_t filter)
     struct stat sbuf;
     const char *msg_base = NULL;
     unsigned long msg_size = 0;
-    struct message_guid guid;
     struct resp_body_t *resp_body = &txn->resp_body;
 
     /* Serve up static pages */
@@ -2515,11 +2514,10 @@ int get_doc(struct transaction_t *txn, filter_proc_t filter)
     fd = open(path, O_RDONLY);
     if (fd == -1) return HTTP_NOT_FOUND;
 
-    map_refresh(fd, 1, &msg_base, &msg_size, sbuf.st_size, path, NULL);
-
-    /* Fill in Etag */
-    message_guid_generate(&guid, msg_base, msg_size);
-    resp_body->etag = message_guid_encode(&guid);
+    /* Generate Etag */
+    buf_reset(&txn->buf);
+    buf_printf(&txn->buf, "%ld-%ld", (long) sbuf.st_mtime, (long) sbuf.st_size);
+    resp_body->etag = buf_cstring(&txn->buf);
 
     /* Check any preconditions */
     precond = check_precond(txn->meth, NULL, resp_body->etag,
@@ -2527,11 +2525,12 @@ int get_doc(struct transaction_t *txn, filter_proc_t filter)
 
     /* We failed a precondition - don't perform the request */
     if (precond != HTTP_OK) {
-	map_free(&msg_base, &msg_size);
 	close(fd);
 
 	return precond;
     }
+
+    map_refresh(fd, 1, &msg_base, &msg_size, sbuf.st_size, path, NULL);
 
     /* Fill in Last-Modified, and Content-Length */
     resp_body->lastmod = sbuf.st_mtime;
