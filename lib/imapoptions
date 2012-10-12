@@ -1742,9 +1742,9 @@ product version in the capabilities */
    does a search, in case the user wants to do another search
    (default: 10 minutes). */
 
-{ "sphinxmgr_max_children", 64, INT }
+{ "sphinxmgr_max_children", 256, INT }
 /* Maximum number of searchd instances to keep running, to protect
-   against a DOS.  Default 64.  Set to zero for no limit */
+   against a DOS.  Default 256.  Set to zero for no limit */
 
 { "sql_database", NULL, STRING }
 /* Name of the database which contains the cyrusdb table(s). */
