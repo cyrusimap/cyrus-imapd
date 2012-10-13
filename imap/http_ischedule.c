@@ -87,14 +87,16 @@ extern int busytime_query(struct transaction_t *txn, icalcomponent *comp);
 static int isched_capa(struct transaction_t *txn);
 static int isched_recv(struct transaction_t *txn);
 static int meth_getkey(struct transaction_t *txn);
+static void calc_compile_time(struct buf *serverinfo);
+static time_t compile_time;
 
 const struct namespace_t namespace_ischedule = {
-  URL_NS_ISCHEDULE, "/ischedule", ISCHED_WELLKNOWN_URI, 0 /* auth */,
+    URL_NS_ISCHEDULE, "/ischedule", ISCHED_WELLKNOWN_URI, 0 /* auth */,
     (ALLOW_READ | ALLOW_POST | ALLOW_ISCHEDULE),
 #ifdef WITH_DKIM
     isched_init, NULL, NULL, isched_shutdown,
 #else
-    NULL, NULL, NULL, NULL,
+    calc_compile_time, NULL, NULL, NULL,
 #endif
     {
 	{ NULL,			0		},	/* ACL		*/
@@ -115,8 +117,8 @@ const struct namespace_t namespace_ischedule = {
 };
 
 const struct namespace_t namespace_domainkey = {
-  URL_NS_DOMAINKEY, "/domainkeys", "/.well-known/domainkey", 0 /* auth */,
-  ALLOW_READ, NULL, NULL, NULL, NULL,
+    URL_NS_DOMAINKEY, "/domainkeys", "/.well-known/domainkey", 0 /* auth */,
+    ALLOW_READ, NULL, NULL, NULL, NULL,
     {
 	{ NULL,			0		},	/* ACL		*/
 	{ NULL,			0		},	/* COPY		*/
@@ -136,11 +138,35 @@ const struct namespace_t namespace_domainkey = {
 };
 
 
+/* Calculate compile time of this file for use as Etag for capabilities */
+static void calc_compile_time(struct buf *serverinfo __attribute__((unused)))
+{
+    struct tm tm;
+    char month[4];
+    const char *monthname[] = {
+	"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+	"Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+    };
+
+    memset(&tm, 0, sizeof(struct tm));
+    tm.tm_isdst = -1;
+    sscanf(__TIME__, "%02d:%02d:%02d", &tm.tm_hour, &tm.tm_min, &tm.tm_sec);
+    sscanf(__DATE__, "%s %2d %4d", month, &tm.tm_mday, &tm.tm_year);
+    tm.tm_year -= 1900;
+    for (tm.tm_mon = 0; tm.tm_mon < 12; tm.tm_mon++) {
+	if (!strcmp(month, monthname[tm.tm_mon])) break;
+    }
+
+    compile_time = mktime(&tm);
+}
+
+
 /* iSchedule Receiver Capabilities */
 static int isched_capa(struct transaction_t *txn)
 {
     int precond;
-    struct stat sbuf;
+    struct message_guid guid;
+    const char *etag;
     xmlNodePtr root, capa, node, comp, meth;
     xmlNsPtr ns[NUM_NAMESPACE];
 
@@ -148,19 +174,23 @@ static int isched_capa(struct transaction_t *txn)
     if (strcmp(txn->req_tgt.query, "action=capabilities"))
 	return HTTP_NOT_FOUND;
 
-    /* Get Last-Modified time of config file */
-    /* XXX  Need to check program binary too */
-    stat(config_filename, &sbuf);
+    /* Generate ETag based on compile date/time of this source file.
+     * Extend this to include config file size/mtime if we add run-time options.
+     */
+    assert(!buf_len(&txn->buf));
+    buf_printf(&txn->buf, "%ld", (long) compile_time);
+    message_guid_generate(&guid, buf_cstring(&txn->buf), buf_len(&txn->buf));
+    etag = message_guid_encode(&guid);
 
     /* Check any preconditions */
-    precond = check_precond(txn->meth, NULL, NULL,
-			    sbuf.st_mtime, txn->req_hdrs);
+    precond = check_precond(txn->meth, NULL, etag, compile_time, txn->req_hdrs);
 
     /* We failed a precondition - don't perform the request */
     if (precond != HTTP_OK) return precond;
 
-    /* Fill in Last-Modified */
-    txn->resp_body.lastmod = sbuf.st_mtime;
+    /* Fill in Etag and Last-Modified */
+    txn->resp_body.etag = etag;
+    txn->resp_body.lastmod = compile_time;
 
     /* Start construction of our query-result */
     if (!(root = init_xml_response("query-result", NS_ISCHED, NULL, ns))) {
@@ -635,6 +665,8 @@ static void isched_init(struct buf *serverinfo)
     const char *senderhdrs[] = { "Originator", NULL };
     const char *oversignhdrs[] = { "Recipient", NULL };
     uint32_t ver = dkim_libversion();
+
+    calc_compile_time(serverinfo);
 
     /* Add OpenDKIM version to serverinfo string */
     buf_printf(serverinfo, " OpenDKIM/%u.%u.%u",
