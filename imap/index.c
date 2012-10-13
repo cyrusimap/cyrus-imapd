@@ -1941,10 +1941,10 @@ EXPORTED int index_sort(struct index_state *state,
 	       const struct sortcrit *sortcrit,
 	       struct searchargs *searchargs, int usinguid)
 {
-    unsigned *msgno_list;
+    unsigned *msgno_list = NULL;
     MsgData **msgdata = NULL;
     int mi;
-    int nmsg;
+    int nmsg = 0;
     modseq_t highestmodseq = 0;
     int i, modseq = 0;
 
