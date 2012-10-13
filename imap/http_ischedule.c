@@ -307,6 +307,7 @@ static int isched_recv(struct transaction_t *txn)
 				(void *) buf_cstring(&keyfile),
 				buf_len(&keyfile));
 #endif
+#if 0  /* XXX  Not using http= tag anymore */
 	    /* Base64-encode the HTTP request line
 	       and set as the user context (for prescreening sigs) */
 	    buf_reset(reqline);
@@ -319,6 +320,7 @@ static int isched_recv(struct transaction_t *txn)
 	    sasl_encode64(buf_cstring(reqline), buf_len(reqline),
 			  b64req.s, b64req.alloc, &b64req.len);
 	    dkim_set_user_context(dkim, (void *) buf_cstring(&b64req));
+#endif
 
 	    /* Process the cached headers and body */
 	    spool_enum_hdrcache(txn->req_hdrs, &isched_cachehdr, dkim);
@@ -502,6 +504,7 @@ int isched_send(struct sched_param *sparam, icalcomponent *ical,
 	    stat = dkim_add_querymethod(dkim, "http", "well-known");
 	    stat = dkim_add_querymethod(dkim, "dns", "txt");
 
+#if 0  /* XXX  Not using http= tag anymore */
 	    /* Base64 encode the HTTP request line and add as an "http" tag */
 	    buf_reset(reqline);
 	    buf_printf(reqline, "POST:%s", uri);
@@ -509,6 +512,7 @@ int isched_send(struct sched_param *sparam, icalcomponent *ical,
 	    sasl_encode64(buf_cstring(reqline), buf_len(reqline),
 			  b64req.s, b64req.alloc, &b64req.len);
 	    dkim_add_xtag(dkim, "http", buf_cstring(&b64req));
+#endif
 
 	    /* Process the headers and body */
 	    stat = dkim_chunk(dkim,
@@ -565,6 +569,7 @@ int isched_send(struct sched_param *sparam, icalcomponent *ical,
 
 
 #ifdef WITH_DKIM
+#if 0  /* XXX  Not using http= tag anymore */
 /* Compare HTTP request-line in signature to actual received request-line */
 static DKIM_CBSTAT isched_prescreen(DKIM *dkim, DKIM_SIGINFO **sigs, int nsigs)
 {
@@ -581,6 +586,7 @@ static DKIM_CBSTAT isched_prescreen(DKIM *dkim, DKIM_SIGINFO **sigs, int nsigs)
 
     return DKIM_CBSTAT_REJECT;
 }
+#endif
 
 
 static DKIM_CBSTAT isched_get_key(DKIM *dkim, DKIM_SIGINFO *sig,
@@ -655,7 +661,7 @@ static void isched_init(struct buf *serverinfo)
     unsigned flags = ( DKIM_LIBFLAGS_BADSIGHANDLES | DKIM_LIBFLAGS_CACHE |
 		       DKIM_LIBFLAGS_VERIFYONE );
     uint64_t ttl = 3600;  /* 1 hour */
-    const char *requiredhdrs[] = { "Content-Type", "Host", "iSchedule-Version",
+    const char *requiredhdrs[] = { "Content-Type", "iSchedule-Version",
 				   "Originator", "Recipient", NULL };
     const char *signhdrs[] = { "iSchedule-Message-ID", "User-Agent", NULL };
     const char *skiphdrs[] = { "Connection", "Content-Length", "Keep-Alive",
@@ -679,8 +685,10 @@ static void isched_init(struct buf *serverinfo)
 	return;
     }
 
+#if 0  /* XXX  Not using http= tage anymore */
     /* Install our callback for validating "http" tag */
     dkim_set_prescreen(dkim_lib, isched_prescreen);
+#endif
 
     /* Install our callback for doing key lookups */
     dkim_set_key_lookup(dkim_lib, isched_get_key);
