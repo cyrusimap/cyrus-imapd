@@ -224,7 +224,7 @@ struct transaction_t {
 					     - Location hdr on redirects
 					     - Etag for static docs
 					   http_rss:
-					     - Content-Type fpr MIME parts
+					     - Content-Type for MIME parts
 					     - URL for feed & items
 					   http_caldav:
 					     - precond error resource URL
