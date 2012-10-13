@@ -496,6 +496,11 @@ static void utf7_2uni (struct convert_rock *rock, int c)
 {
     struct table_state *s = (struct table_state *)rock->state;
 
+    if (c == U_REPLACEMENT) {
+	convert_putc(rock->next, c);
+	return;
+    }
+
     assert((unsigned)c <= 0xff);
 
     if (c & 0x80) { /* skip 8-bit chars */
