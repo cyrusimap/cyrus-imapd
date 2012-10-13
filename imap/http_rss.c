@@ -681,7 +681,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	prot = https ? "https" : "http";
 	host = *spool_getheader(txn->req_hdrs, "Host");
     }
-    buf_reset(url);
+    assert(!buf_len(url));
     buf_printf(url, "%s://%.*s%s",
 	       prot, strcspn(host, " \r\n"), host, txn->req_tgt.path);
     url_len = buf_len(url);
@@ -1096,7 +1096,7 @@ static void fetch_part(struct transaction_t *txn, struct body *body,
 
 	}
 
-	buf_reset(&txn->buf);
+	assert(!buf_len(&txn->buf));
 	buf_printf(&txn->buf, "%s/%s", body->type, body->subtype);
 	txn->resp_body.type = buf_cstring(&txn->buf);
 

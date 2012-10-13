@@ -317,6 +317,7 @@ static int isched_recv(struct transaction_t *txn)
 			sigerr = dkim_sig_geterrorstr(err);
 		    }
 
+		    assert(!buf_len(&txn->buf));
 		    buf_printf(&txn->buf, "%s: %s",
 			       dkim_getresultstr(stat), sigerr);
 		    txn->error.desc = buf_cstring(&txn->buf);

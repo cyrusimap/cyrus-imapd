@@ -2515,7 +2515,7 @@ int get_doc(struct transaction_t *txn, filter_proc_t filter)
     if (fd == -1) return HTTP_NOT_FOUND;
 
     /* Generate Etag */
-    buf_reset(&txn->buf);
+    assert(!buf_len(&txn->buf));
     buf_printf(&txn->buf, "%ld-%ld", (long) sbuf.st_mtime, (long) sbuf.st_size);
     resp_body->etag = buf_cstring(&txn->buf);
 

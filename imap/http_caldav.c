@@ -1020,6 +1020,7 @@ static int meth_delete(struct transaction_t *txn)
 	    txn->error.precond = DAV_NEED_PRIVS;
 	    txn->error.rights = DACL_SCHED;
 
+	    assert(!buf_len(&txn->buf));
 	    buf_printf(&txn->buf, "/calendars/user/%s/%s", userid, SCHED_OUTBOX);
 	    txn->error.resource = buf_cstring(&txn->buf);
 	    ret = HTTP_FORBIDDEN;
@@ -2389,6 +2390,7 @@ static int meth_put(struct transaction_t *txn)
 	    txn->error.precond = DAV_NEED_PRIVS;
 	    txn->error.rights = DACL_SCHED;
 
+	    assert(!buf_len(&txn->buf));
 	    buf_printf(&txn->buf, "/calendars/user/%s/%s", userid, SCHED_OUTBOX);
 	    txn->error.resource = buf_cstring(&txn->buf);
 	    ret = HTTP_FORBIDDEN;
@@ -2406,6 +2408,7 @@ static int meth_put(struct transaction_t *txn)
 	    /* CALDAV:unique-scheduling-object-resource */
 
 	    txn->error.precond = CALDAV_UNIQUE_OBJECT;
+	    assert(!buf_len(&txn->buf));
 	    buf_printf(&txn->buf, "/calendars/user/%s/%s/%s",
 		       userid, strrchr(cdata.mailbox, '.')+1, cdata.resource);
 	    txn->error.resource = buf_cstring(&txn->buf);
@@ -3479,6 +3482,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 	strcmp(cdata.resource, resource)) {
 	/* CALDAV:no-uid-conflict */
 	txn->error.precond = CALDAV_UID_CONFLICT;
+	assert(!buf_len(&txn->buf));
 	buf_printf(&txn->buf, "/calendars/user/%s/%s/%s",
 		   mboxname_to_userid(cdata.mailbox),
 		   strrchr(cdata.mailbox, '.')+1, cdata.resource);
