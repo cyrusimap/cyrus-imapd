@@ -300,7 +300,8 @@ static int addmbox(char *name,
 		   void *rock)
 {
     strarray_t *sa = (strarray_t *) rock;
-    strarray_append(sa, name);
+    if (!mboxname_isdeletedmailbox(name, NULL))
+	strarray_append(sa, name);
     return 0;
 }
 
