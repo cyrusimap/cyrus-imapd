@@ -307,21 +307,6 @@ static int isched_recv(struct transaction_t *txn)
 				(void *) buf_cstring(&keyfile),
 				buf_len(&keyfile));
 #endif
-#if 0  /* XXX  Not using http= tag anymore */
-	    /* Base64-encode the HTTP request line
-	       and set as the user context (for prescreening sigs) */
-	    buf_reset(reqline);
-	    buf_printf(reqline, "%s:%s",
-		       http_methods[txn->meth], txn->req_tgt.path);
-	    if (*txn->req_tgt.query) {
-		buf_printf(reqline, "?%s", txn->req_tgt.query);
-	    }
-	    buf_truncate(&b64req, BASE64_LEN(buf_len(reqline)) + 1);
-	    sasl_encode64(buf_cstring(reqline), buf_len(reqline),
-			  b64req.s, b64req.alloc, &b64req.len);
-	    dkim_set_user_context(dkim, (void *) buf_cstring(&b64req));
-#endif
-
 	    /* Process the cached headers and body */
 	    spool_enum_hdrcache(txn->req_hdrs, &isched_cachehdr, dkim);
 	    stat = dkim_eoh(dkim);
@@ -504,16 +489,6 @@ int isched_send(struct sched_param *sparam, icalcomponent *ical,
 	    stat = dkim_add_querymethod(dkim, "http", "well-known");
 	    stat = dkim_add_querymethod(dkim, "dns", "txt");
 
-#if 0  /* XXX  Not using http= tag anymore */
-	    /* Base64 encode the HTTP request line and add as an "http" tag */
-	    buf_reset(reqline);
-	    buf_printf(reqline, "POST:%s", uri);
-	    buf_truncate(&b64req, BASE64_LEN(buf_len(reqline)) + 1);
-	    sasl_encode64(buf_cstring(reqline), buf_len(reqline),
-			  b64req.s, b64req.alloc, &b64req.len);
-	    dkim_add_xtag(dkim, "http", buf_cstring(&b64req));
-#endif
-
 	    /* Process the headers and body */
 	    stat = dkim_chunk(dkim,
 			      (u_char *) buf_cstring(&hdrs), buf_len(&hdrs));
@@ -569,26 +544,6 @@ int isched_send(struct sched_param *sparam, icalcomponent *ical,
 
 
 #ifdef WITH_DKIM
-#if 0  /* XXX  Not using http= tag anymore */
-/* Compare HTTP request-line in signature to actual received request-line */
-static DKIM_CBSTAT isched_prescreen(DKIM *dkim, DKIM_SIGINFO **sigs, int nsigs)
-{
-    const char *reqline = (const char *) dkim_get_user_context(dkim);
-    int i;
-
-    for (i = 0; i < nsigs; i++) {
-	/* Get the "http" tag value and compare */
-	const char *http =
-	    (const char *) dkim_sig_gettagvalue(sigs[i], 0, (u_char *) "http");
-
-	if (http && !strcmp(http, reqline)) return DKIM_CBSTAT_CONTINUE;
-    }
-
-    return DKIM_CBSTAT_REJECT;
-}
-#endif
-
-
 static DKIM_CBSTAT isched_get_key(DKIM *dkim, DKIM_SIGINFO *sig,
 				  u_char *buf, size_t buflen)
 {
@@ -684,11 +639,6 @@ static void isched_init(struct buf *serverinfo)
 	syslog(LOG_ERR, "unable to initialize libopendkim");
 	return;
     }
-
-#if 0  /* XXX  Not using http= tage anymore */
-    /* Install our callback for validating "http" tag */
-    dkim_set_prescreen(dkim_lib, isched_prescreen);
-#endif
 
     /* Install our callback for doing key lookups */
     dkim_set_key_lookup(dkim_lib, isched_get_key);
