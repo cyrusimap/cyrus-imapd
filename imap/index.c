@@ -1517,8 +1517,7 @@ static void build_query(search_builder_t *bx,
 
 struct search_rock {
     struct index_state *state;
-    unsigned int *msg_list;
-    unsigned int msg_count;
+    char *match;
 };
 
 static int index_search_hit(const char *mboxname __attribute__((unused)),
@@ -1540,7 +1539,7 @@ static int index_search_hit(const char *mboxname __attribute__((unused)),
     if (index_getuid(sr->state, msgno) != uid)
 	return 0;
 
-    sr->msg_list[sr->msg_count++] = msgno;
+    sr->match[msgno-1] = 1;
     return 0;
 }
 
@@ -1551,26 +1550,36 @@ static int index_prefilter_messages(unsigned* msg_list,
     int r = -1;	    /* we start in error so we can fall back */
     unsigned int msgno;
     search_builder_t *bx;
-    int nmatches = 0;
-    struct search_rock sr;
-
-    sr.state = state;
-    sr.msg_list = msg_list;
-    sr.msg_count = 0;
 
     bx = search_begin_search(state->mailbox, SEARCH_UNINDEXED);
     if (bx) {
+	struct search_rock sr;
+	int nmatches = 0;
+	int count = 0;
+
 	build_query(bx, searchargs, 0, &nmatches);
 
 	/* Only run the search engine query if there are any match terms
 	 * to give it, otherwise just shortcut and return a result set
 	 * comprising all messages */
-	if (nmatches)
+	if (nmatches) {
+	    sr.state = state;
+	    sr.match = xzmalloc(state->exists);
 	    r = bx->run(bx, index_search_hit, &sr);
+	    if (!r) {
+		/* only take matching messages */
+		for (msgno = 1; msgno <= state->exists; msgno++) {
+		    if (sr.match[msgno-1])
+			msg_list[count++] = msgno;
+		}
+	    }
+	    free(sr.match);
+	}
 
 	search_end_search(bx);
+
+	if (!r) return count;
     }
-    if (!r) return sr.msg_count;
 
     xstats_inc(SEARCH_TRIVIAL);
 
