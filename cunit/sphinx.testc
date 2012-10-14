@@ -3,6 +3,7 @@
 #include "xmalloc.h"
 #include "util.h"
 #include "retry.h"
+#include "libconfig.h"
 #include "libcyr_cfg.h"
 #include "imap/mboxlist.h"
 #include "imap/search_engines.h"
