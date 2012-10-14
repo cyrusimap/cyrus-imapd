@@ -148,6 +148,9 @@ extern search_builder_t *search_begin_search(struct mailbox *, int opts);
 extern void search_end_search(search_builder_t *);
 
 search_text_receiver_t *search_begin_update(int verbose);
+int search_update_mailbox(search_text_receiver_t *rx,
+			  struct mailbox *mailbox,
+			  int incremental);
 int search_end_update(search_text_receiver_t *rx);
 search_text_receiver_t *search_begin_snippets(void *internalised,
 					      int verbose,
@@ -160,7 +163,6 @@ char *search_describe_internalised(void *internalised);
 void search_free_internalised(void *internalised);
 int search_start_daemon(int verbose, const char *mboxname);
 int search_stop_daemon(int verbose, const char *mboxname);
-int search_batch_size(void);
 
 /* for debugging */
 extern const char *search_op_as_string(int op);

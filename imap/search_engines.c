@@ -50,7 +50,9 @@
 #include <unistd.h>
 #endif
 
+#include "imap_err.h"
 #include "index.h"
+#include "message.h"
 #include "global.h"
 #include "search_engines.h"
 
@@ -124,6 +126,66 @@ EXPORTED search_text_receiver_t *search_begin_update(int verbose)
     return (se->begin_update ? se->begin_update(verbose) : NULL);
 }
 
+static int search_batch_size(void)
+{
+    const struct search_engine *se = engine();
+    return (se->flags & SEARCH_FLAG_CAN_BATCH ?
+	    config_getint(IMAPOPT_SEARCH_BATCHSIZE) : INT_MAX);
+}
+
+EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
+				   struct mailbox *mailbox,
+				   int incremental)
+{
+    uint32_t uid;
+    message_t *msg;
+    int r = 0;			/* Using IMAP_* not SQUAT_* return codes here */
+    int first = 1;
+    int batch_size = search_batch_size();
+    int nbatch = 0;
+    struct index_record record;
+
+    r = rx->begin_mailbox(rx, mailbox, incremental);
+    if (r) return r;
+
+    for (uid = rx->first_unindexed_uid(rx) ;
+	 uid <= mailbox->i.last_uid ;
+	 uid++) {
+
+	if (rx->is_indexed(rx, uid))
+	    continue;
+
+	/* This UID didn't appear in the old index file */
+	r = mailbox_find_index_record(mailbox, uid, &record,
+				      (first ? NULL : &record));
+	if (r == IMAP_NOTFOUND) continue;
+	if (r) break;
+	first = 0;
+	if (record.system_flags & (FLAG_EXPUNGED|FLAG_UNLINKED))
+	    continue;
+
+	msg = message_new_from_record(mailbox, &record);
+	index_getsearchtext(msg, rx, 0);
+	message_unref(&msg);
+
+	if (++nbatch >= batch_size) {
+	    int locktype = mailbox->index_locktype;
+	    syslog(LOG_INFO, "search_update_mailbox batching %s after %d messages",
+		   mailbox->name, nbatch);
+	    /* give someone else a change */
+	    mailbox_unlock_index(mailbox, NULL);
+	    r = mailbox_lock_index(mailbox, locktype);
+	    if (r) break;
+	    nbatch = 0;
+	}
+    }
+
+    r = rx->end_mailbox(rx, mailbox);
+    if (r) return r;
+
+    return r;
+}
+
 EXPORTED int search_end_update(search_text_receiver_t *rx)
 {
     const struct search_engine *se = engine();
@@ -171,13 +233,6 @@ EXPORTED int search_stop_daemon(int verbose, const char *mboxname)
 {
     const struct search_engine *se = engine();
     return (se->stop_daemon ? se->stop_daemon(verbose, mboxname) : 0);
-}
-
-EXPORTED int search_batch_size(void)
-{
-    const struct search_engine *se = engine();
-    return (se->flags & SEARCH_FLAG_CAN_BATCH ?
-	    config_getint(IMAPOPT_SEARCH_BATCHSIZE) : INT_MAX);
 }
 
 const char *search_op_as_string(int op)

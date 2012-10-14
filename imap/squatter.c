@@ -119,63 +119,12 @@ static int usage(const char *name)
 
 /* ====================================================================== */
 
-/* Squat a single open mailbox */
-static int squat_single(struct mailbox *mailbox, int incremental,
-			int *morep)
-{
-    uint32_t uid;
-    message_t *msg;
-    int r = 0;			/* Using IMAP_* not SQUAT_* return codes here */
-    int first = 1;
-    int batch_size = search_batch_size();
-    int nbatch = 0;
-    struct index_record record;
-
-    *morep = 0;
-
-    r = rx->begin_mailbox(rx, mailbox, incremental);
-    if (r) return r;
-
-    for (uid = rx->first_unindexed_uid(rx) ;
-	 uid <= mailbox->i.last_uid ;
-	 uid++) {
-
-	if (rx->is_indexed(rx, uid))
-	    continue;
-
-	/* This UID didn't appear in the old index file */
-	r = mailbox_find_index_record(mailbox, uid, &record,
-				      (first ? NULL : &record));
-	if (r == IMAP_NOTFOUND) continue;
-	if (r) break;
-	first = 0;
-	if (record.system_flags & (FLAG_EXPUNGED|FLAG_UNLINKED))
-	    continue;
-
-	msg = message_new_from_record(mailbox, &record);
-	index_getsearchtext(msg, rx, 0);
-	message_unref(&msg);
-
-	if (++nbatch >= batch_size) {
-	    *morep = 1;
-	    break;
-	}
-    }
-
-    r = rx->end_mailbox(rx, mailbox);
-    if (r) return r;
-
-    return r;
-}
-
 /* This is called once for each mailbox we're told to index. */
 static int index_one(const char *name, int blocking)
 {
     mbentry_t *mbentry = NULL;
     struct mailbox *mailbox = NULL;
     int r;
-    int more;
-    int nbatches = 0;
     char extname[MAX_MAILBOX_BUFFER];
 
     /* Convert internal name to external */
@@ -242,55 +191,47 @@ static int index_one(const char *name, int blocking)
 	buf_free(&attrib);
     }
 
-    do {
-	if (blocking)
-	    r = mailbox_open_irl(name, &mailbox);
-	else
-	    r = mailbox_open_irlnb(name, &mailbox);
-	if (r == IMAP_MAILBOX_LOCKED) {
-	    if (verbose) syslog(LOG_INFO, "mailbox %s locked, retrying", extname);
-	    return r;
+    if (blocking)
+	r = mailbox_open_irl(name, &mailbox);
+    else
+	r = mailbox_open_irlnb(name, &mailbox);
+
+    if (r == IMAP_MAILBOX_LOCKED) {
+	if (verbose) syslog(LOG_INFO, "mailbox %s locked, retrying", extname);
+	return r;
+    }
+    if (r) {
+	if (verbose) {
+	    printf("error opening %s: %s\n", extname, error_message(r));
 	}
-	if (r) {
-	    if (verbose) {
-		printf("error opening %s: %s\n", extname, error_message(r));
-	    }
-	    syslog(LOG_INFO, "error opening %s: %s\n", extname, error_message(r));
+	syslog(LOG_INFO, "error opening %s: %s\n", extname, error_message(r));
 
-	    return r;
-	}
+	return r;
+    }
 
-	if (!nbatches++ ) {
-	    /* process only changed mailboxes if skip option delected. */
-	    if (skip_unmodified) {
-		char *fname = mailbox_meta_fname(mailbox, META_SQUAT);
-		struct stat sbuf;
-		if (!stat(fname, &sbuf) &&
-		    SKIP_FUZZ + mailbox->index_mtime < sbuf.st_mtime) {
-		    syslog(LOG_DEBUG, "skipping mailbox %s", extname);
-		    if (verbose > 0) {
-			printf("Skipping mailbox %s\n", extname);
-		    }
-		    mailbox_close(&mailbox);
-		    return IMAP_AGAIN;
-		}
-	    }
-
-	    syslog(LOG_INFO, "indexing mailbox %s... ", extname);
+    /* process only changed mailboxes if skip option delected. */
+    if (skip_unmodified) {
+	char *fname = mailbox_meta_fname(mailbox, META_SQUAT);
+	struct stat sbuf;
+	if (!stat(fname, &sbuf) &&
+	    SKIP_FUZZ + mailbox->index_mtime < sbuf.st_mtime) {
+	    syslog(LOG_DEBUG, "skipping mailbox %s", extname);
 	    if (verbose > 0) {
-	      printf("Indexing mailbox %s... ", extname);
+		printf("Skipping mailbox %s\n", extname);
 	    }
+	    mailbox_close(&mailbox);
+	    return IMAP_AGAIN;
 	}
-	else {
-	    if (verbose)
-		syslog(LOG_INFO, "starting another batch for mailbox %s... ", extname);
-	}
+    }
 
-	r = squat_single(mailbox, incremental_mode, &more);
+    syslog(LOG_INFO, "indexing mailbox %s... ", extname);
+    if (verbose > 0) {
+	printf("Indexing mailbox %s... ", extname);
+    }
 
-	mailbox_close(&mailbox);
-	if (r) break;
-    } while (more);
+    r = search_update_mailbox(rx, mailbox, incremental_mode);
+
+    mailbox_close(&mailbox);
 
     return 0;
 }
