@@ -63,33 +63,73 @@ squatter \- create SQUAT indexes for mailboxes
 .B \-v
 ]
 .IR mailbox ...
+.br
+.B squatter
+[
+.B \-C
+.I config-file
+]
+[
+.B -v
+]
+[
+.B -s
+]
+[
+.B -d
+]
+[
+.B -n
+.I channel
+]
+.B -R
 .SH DESCRIPTION
-.I Squatter
-creates a new SQUAT index for one or more IMAP mailboxes.  The SQUAT
+.B Squatter
+creates a new text index for one or more IMAP mailboxes.  The
 index is a unified index of all of the header and body text of each
-message a given mailbox.  This index is used to significantly reduce
+message in a given mailbox.  This index is used to significantly reduce
 IMAP SEARCH times on a mailbox.
 .PP
-.I Squatter
+The name \fBsquatter\fP is a historical relic from the days when the
+only indexing engine supported by Cyrus was SQUAT.  Today the
+\fIsearch_engine\fP setting in \fIimapd.conf\fP determines which
+search engine is used.
+.PP
+In the first synposis
+.B squatter
 creates an index of ALL messages in the mailbox, not just those since
-the last time that it was run (i.e., it does NOT do incremental
-updates).  Any messages appended to the mailbox after
-.I squatter
+the last time that it was run.  The \fB-i\fP option is used to select
+incremental updates.
+Any messages appended to the mailbox after
+.B squatter
 is run, will NOT be included in the index.  To include new messages in
 the index,
-.I squatter
+.B squatter
 must be run again.
-For large and active mailboxes, it is recommended to run
-.I squatter
+.PP
+In the second synopsis, \fBsquatter\fP runs in rolling mode.  In this mode
+\fBsquatter\fP backgrounds itself and runs as a daemon, listening to a sync
+log channel (chosen using \fB-n\fP option, and set up using the
+\fIsync_log_channels\fP setting in \fIimapd.conf\fP).  Very soon after
+messages are delivered or uploaded to mailboxes \fBsquatter\fP will
+incrementally index the affected mailbox.
+.PP
+Note that incremental updates are very inefficient with the SQUAT
+search engine.
+If using SQUAT for large and active mailboxes, you should run
+.B squatter
 periodically as an EVENT in
-.IR cyrus.conf (5)
-.
+.IR cyrus.conf (5).
+Incremental updates are much more efficient with Sphinx, so if using
+Sphinx you should run \fBsquatter -R\fP as a START in \fIcyrus.conf\fP(5).
 .PP
 .B NOTE:
-Messages and mailboxes that have not been indexed CAN still be
-SEARCHed, just not as quickly as those with a SQUAT index.
+Messages and mailboxes that have not been indexed can still be
+SEARCHed, just not as quickly as those with an index.  Also, some
+advanced features of Sphinx like stemming will not work unless
+messages have been indexed.
 .PP
-.I Squatter
+.B Squatter
 reads its configuration options out of the
 .IR imapd.conf (5)
 file unless specified otherwise by \fB-C\fR.
@@ -97,6 +137,19 @@ file unless specified otherwise by \fB-C\fR.
 .TP
 .BI \-C " config-file"
 Read configuration options from \fIconfig-file\fR.
+.TP
+.B \-R
+Run in rolling mode; \fBsquatter\fP runs as a daemon listening to
+a sync log channel and continuously incrementally indexing mailboxes.
+See also \fB-d\fP and \fB-n\fP.
+.TP
+.B \-d
+In rolling mode, don't background and do emit log messages on standard
+error.  Useful for debugging.
+.TP
+.BI \-n " channel"
+In rolling mode, specify the name of the sync log channel that
+\fBsquatter\fP will listen to.  The default is "squatter".
 .TP
 .B \-r
 Recursively create indexes for all sub-mailboxes of the mailboxes or
@@ -107,7 +160,7 @@ Skip mailboxes whose index file is older than their current squat file
 (within a small time delta).
 .TP
 .B \-i
-Incremental updates where squat indexes already exist.
+Incremental updates where indexes already exist.
 .TP
 .B \-a
 Only create indexes for mailboxes which have the shared
