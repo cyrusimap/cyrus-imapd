@@ -83,6 +83,20 @@ squatter \- create SQUAT indexes for mailboxes
 .I channel
 ]
 .B -R
+.br
+.B squatter
+[
+.B \-C
+.I config-file
+]
+[
+.B -v
+]
+[
+.B -s
+]
+.B -f
+.I synclogfile
 .SH DESCRIPTION
 .B Squatter
 creates a new text index for one or more IMAP mailboxes.  The
@@ -123,6 +137,10 @@ periodically as an EVENT in
 Incremental updates are much more efficient with Sphinx, so if using
 Sphinx you should run \fBsquatter -R\fP as a START in \fIcyrus.conf\fP(5).
 .PP
+In the third synopsis, \fBsquatter\fP reads a single sync log file
+and performs incremental indexing on the mailboxes listed therein.  This is
+sometimes useful for cleaning up after problems with rolling mode.
+.PP
 .B NOTE:
 Messages and mailboxes that have not been indexed can still be
 SEARCHed, just not as quickly as those with an index.  Also, some
@@ -146,6 +164,10 @@ See also \fB-d\fP and \fB-n\fP.
 .B \-d
 In rolling mode, don't background and do emit log messages on standard
 error.  Useful for debugging.
+.TP
+.BI \-f " synclogfile"
+Read the \fIsynclogfile\fP and incrementally index all the mailboxes
+listed therein, then exit.
 .TP
 .BI \-n " channel"
 In rolling mode, specify the name of the sync log channel that

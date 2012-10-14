@@ -109,6 +109,9 @@ static int usage(const char *name)
     fprintf(stderr,
 	    "       %s [-C <alt_config>] [-v] [-s] [-d] [-n channel] -R\n",
 	    name);
+    fprintf(stderr,
+	    "       %s [-C <alt_config>] [-v] [-s] -f synclogfile\n",
+	    name);
 
     exit(EC_USAGE);
 }
@@ -615,6 +618,51 @@ static void read_sync_log_items(sync_log_reader_t *slr)
     /* TODO: save the queue to a file at this point */
 }
 
+static void do_synclogfile(const char *synclogfile)
+{
+    sync_log_reader_t *slr;
+    qitem_t *item;
+    int delay_ms;
+    int r;
+
+    slr = sync_log_reader_create_with_filename(synclogfile);
+    r = sync_log_reader_begin(slr);
+    if (r) goto out;
+    read_sync_log_items(slr);
+    sync_log_reader_end(slr);
+
+    while (queue) {
+	signals_poll();
+
+	if (queue_next_due(&queue) <= 0) {
+	    /* have some due items in the queue, try to index them */
+	    rx = search_begin_update(verbose);
+	    while ((item = queue_remove_due(&queue))) {
+		if (verbose > 1)
+		    syslog(LOG_INFO, "do_synclogfile: indexing %s", item->mboxname);
+		r = index_one(item->mboxname, /*blocking*/0);
+		if (r == IMAP_AGAIN || r == IMAP_MAILBOX_LOCKED) {
+		    item->retries++;
+		    queue_delay(&queue, item);
+		}
+		else
+		    qitem_delete(item);
+	    }
+	    search_end_update(rx);
+	    rx = NULL;
+	}
+
+	delay_ms = queue_next_due(&queue);
+	if (delay_ms && delay_ms != INT_MAX) {
+	    poll(NULL, 0, delay_ms);
+	    queue_slept(&queue, delay_ms);
+	}
+    }
+
+out:
+    sync_log_reader_free(slr);
+}
+
 static void do_rolling(const char *channel)
 {
     sync_log_reader_t *slr;
@@ -624,6 +672,7 @@ static void do_rolling(const char *channel)
     int r;
 
     slr = sync_log_reader_create_with_channel(channel);
+
     for (;;) {
 	r = signals_poll();
 	if (r == SIGHUP) {
@@ -695,9 +744,10 @@ int main(int argc, char **argv)
     const char *query = NULL;
     int background = 1;
     const char *channel = "squatter";
+    const char *synclogfile = NULL;
     int init_flags = CYRUSINIT_PERROR;
     int multi_folder = 0;
-    enum { UNKNOWN, INDEXER, SEARCH, ROLLING, START_DAEMON, STOP_DAEMON } mode = UNKNOWN;
+    enum { UNKNOWN, INDEXER, SEARCH, ROLLING, SYNCLOG, START_DAEMON, STOP_DAEMON } mode = UNKNOWN;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
 	fatal("must run as the Cyrus user", EC_USAGE);
@@ -705,7 +755,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:Rc:de:mn:rsiav")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:Rc:de:f:mn:rsiav")) != EOF) {
 	switch (opt) {
 	case 'C':		/* alt config file */
 	    alt_config = optarg;
@@ -727,6 +777,10 @@ int main(int argc, char **argv)
 		usage(argv[0]);
 	    break;
 
+	case 'd':		/* foreground (with -R) */
+	    background = 0;
+	    break;
+
 	/* This option is deliberately undocumented, for testing only */
 	case 'e':		/* add a search term */
 	    if (mode != UNKNOWN && mode != SEARCH) usage(argv[0]);
@@ -734,8 +788,9 @@ int main(int argc, char **argv)
 	    mode = SEARCH;
 	    break;
 
-	case 'd':		/* foreground (with -R) */
-	    background = 0;
+	case 'f': /* alternate synclogfile used in SYNCLOG mode */
+	    synclogfile = optarg;
+	    mode = SYNCLOG;
 	    break;
 
 	/* This option is deliberately undocumented, for testing only */
@@ -827,7 +882,7 @@ int main(int argc, char **argv)
     mboxlist_init(0);
     mboxlist_open(NULL);
 
-    if (mode == ROLLING) {
+    if (mode == ROLLING || mode == SYNCLOG) {
 	signals_set_shutdown(&shut_down);
 	signals_add_handlers(0);
     }
@@ -850,6 +905,9 @@ int main(int argc, char **argv)
 	break;
     case ROLLING:
 	do_rolling(channel);
+	break;
+    case SYNCLOG:
+	do_synclogfile(synclogfile);
 	break;
     case START_DAEMON:
 	/* daemon control requires exactly one mailbox */
