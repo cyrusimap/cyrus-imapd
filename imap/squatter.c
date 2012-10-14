@@ -73,6 +73,7 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "ptrarray.h"
 #include "tok.h"
 #include "acl.h"
 #include "seen.h"
@@ -501,6 +502,13 @@ static void qitem_delete(qitem_t *item)
     free(item);
 }
 
+static int qitem_compare(const void *v1, const void *v2)
+{
+    const qitem_t *item1 = *(const qitem_t **)v1;
+    const qitem_t *item2 = *(const qitem_t **)v2;
+    return strcmp(item1->mboxname, item2->mboxname);
+}
+
 static void debug_dump(void)
 {
     qitem_t *item;
@@ -602,18 +610,31 @@ static void read_sync_log_items(sync_log_reader_t *slr)
 {
     const char *args[3];
     qitem_t *item = NULL;
+    int i;
+    ptrarray_t items = PTRARRAY_INITIALIZER;
 
     while (sync_log_reader_getitem(slr, args) == 0) {
 	if (!strcmp(args[0], "APPEND")) {
 	    item = queue_remove_by_name(&queue, args[1]);
 	    if (!item)
 		item = qitem_new(args[1]);
-	    item->delay_ms = 0;
-	    item->retries = 0;
-	    item->elapsed_ms = 0;
-	    queue_delay(&queue, item);
+	    ptrarray_append(&items, item);
 	}
     }
+
+    /* sort the mailboxes to get locality of reference
+     * for searchd startups */
+    qsort(items.data, items.count, sizeof(qitem_t*), qitem_compare);
+
+    for (i = 0 ; i < items.count ; i++) {
+	item = ptrarray_nth(&items, i);
+	item->delay_ms = 0;
+	item->retries = 0;
+	item->elapsed_ms = 0;
+	queue_delay(&queue, item);
+    }
+
+    ptrarray_fini(&items);
 
     /* TODO: save the queue to a file at this point */
 }
