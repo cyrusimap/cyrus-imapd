@@ -94,7 +94,7 @@ static const char * const column_by_part[SEARCH_NUM_PARTS] = {
     "body"
 };
 
-static int get_connection(const char *mboxname, struct connection *conn)
+static int get_connection(struct mailbox *mailbox, struct connection *conn)
 {
     MYSQL *c = NULL;
     char *socket_path = NULL;
@@ -104,7 +104,7 @@ static int get_connection(const char *mboxname, struct connection *conn)
      * it's the same mboxname as last time - this lets
      * sphinxmgr know that the index daemon is being
      * used and so not to expire it */
-    r = sphinxmgr_getsock(mboxname, &socket_path);
+    r = sphinxmgr_getsock(mailbox->name, &socket_path);
     if (r) return r;
 
     if (conn->socket_path && !strcmp(socket_path, conn->socket_path)) {
@@ -554,7 +554,7 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
     uint32_t latest = 0;
     int r = 0;
 
-    r = get_connection(bb->mailbox->name, &conn);
+    r = get_connection(bb->mailbox, &conn);
     if (r) goto out;
 
     if ((bb->opts & SEARCH_UNINDEXED)) {
@@ -1098,7 +1098,7 @@ static int begin_mailbox(search_text_receiver_t *rx,
     sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
     int r;
 
-    r = get_connection(mailbox->name, &tr->conn);
+    r = get_connection(mailbox, &tr->conn);
     if (r) return r;
 
     tr->mailbox = mailbox;
@@ -1190,7 +1190,7 @@ static int begin_mailbox_snippets(search_text_receiver_t *rx,
     sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
     int r;
 
-    r = get_connection(mailbox->name, &tr->conn);
+    r = get_connection(mailbox, &tr->conn);
     if (r) return r;
 
     tr->mailbox = mailbox;
