@@ -708,7 +708,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:Rc:e:fmn:rsiav")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:Rc:de:mn:rsiav")) != EOF) {
 	switch (opt) {
 	case 'C':		/* alt config file */
 	    alt_config = optarg;
@@ -735,7 +735,7 @@ int main(int argc, char **argv)
 	    mode = SEARCH;
 	    break;
 
-	case 'f':		/* foreground (with -R) */
+	case 'd':		/* foreground (with -R) */
 	    background = 0;
 	    break;
 
