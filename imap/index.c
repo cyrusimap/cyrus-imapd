@@ -1520,8 +1520,8 @@ struct search_rock {
     char *match;
 };
 
-static int index_search_hit(const char *mboxname __attribute__((unused)),
-			    uint32_t uidvalidity __attribute__((unused)),
+static int index_search_hit(const char *mboxname,
+			    uint32_t uidvalidity,
 			    uint32_t uid, void *rock)
 {
     struct search_rock *sr = (struct search_rock *)rock;
@@ -1529,6 +1529,8 @@ static int index_search_hit(const char *mboxname __attribute__((unused)),
 
     /* We know the mboxname and uidvalidity are correct, they were
      * checked in the search code because we passed single=1. */
+    assert(uidvalidity == sr->state->mailbox->i.uidvalidity);
+    assert(!strcmp(mboxname, sr->state->mailbox->name));
 
     /* if it doesn't exist any more, skip it */
     msgno = index_finduid(sr->state, uid);
