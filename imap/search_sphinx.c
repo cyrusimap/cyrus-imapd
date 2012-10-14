@@ -301,7 +301,7 @@ static void opnode_append_child(struct opnode *parent, struct opnode *child)
     child->next = NULL;
 }
 
-static void opnode_insert_child(struct opnode *parent,
+static void opnode_insert_child(struct opnode *parent __attribute__((unused)),
 				struct opnode *after,
 				struct opnode *child)
 {
@@ -542,6 +542,52 @@ out:
     return r;
 }
 
+struct update_index_rock {
+    struct mailbox *mailbox;
+    search_text_receiver_t *rx;
+};
+
+static int update_index_cb(void *rock,
+			   const char *key, size_t keylen,
+			   const char *val, size_t vallen)
+{
+    struct update_index_rock *ir = (struct update_index_rock *)rock;
+    char *name = xstrndup(key, keylen);
+    struct mailbox *mailbox = NULL;
+    int r;
+
+    /* special case the mailbox we already have open */
+    if (!strcmp(ir->mailbox->name, name)) {
+	r = search_update_mailbox(ir->rx, ir->mailbox, /*incremental*/1);
+    }
+    else {
+	r = mailbox_open_irl(name, &mailbox);
+	if (r) goto done;
+	r = search_update_mailbox(ir->rx, mailbox, /*incremental*/1);
+	mailbox_close(&mailbox);
+    }
+
+done:
+    free(name);
+    return r;
+}
+
+static int update_indexes(struct mailbox *mailbox)
+{
+    const char *user = mboxname_to_userid(mailbox->name);
+    struct update_index_rock rock;
+    int r;
+
+    rock.mailbox = mailbox;
+    rock.rx = search_begin_update(1); /* verbose for now */
+
+    r = mboxlist_allusermbox(user, update_index_cb, &rock, /*withdeleted*/0);
+
+    search_end_update(rock.rx);
+
+    return r;
+}
+
 static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
 {
     sphinx_builder_t *bb = (sphinx_builder_t *)bx;
@@ -553,6 +599,9 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
     uint32_t uid;
     uint32_t latest = 0;
     int r = 0;
+
+    r = update_indexes(bb->mailbox);
+    if (r) goto out;
 
     r = get_connection(bb->mailbox, &conn);
     if (r) goto out;
