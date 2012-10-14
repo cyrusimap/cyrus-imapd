@@ -191,6 +191,8 @@ int mboxlist_findall_alt(struct namespace *namespace,
 /* direct access to subs DB */
 int mboxlist_allsubs(const char *userid, foreach_cb *proc, void *rock);
 int mboxlist_allmbox(const char *prefix, foreach_cb *proc, void *rock);
+int mboxlist_allusermbox(const char *userid, foreach_cb *proc, void *rock,
+			 int include_deleted);
 
 /* Find subscribed mailboxes that match 'pattern'. */
 int mboxlist_findsub(struct namespace *namespace,

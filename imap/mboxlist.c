@@ -2198,6 +2198,42 @@ EXPORTED int mboxlist_allmbox(const char *prefix, foreach_cb *proc, void *rock)
     return r;
 }
 
+EXPORTED int mboxlist_allusermbox(const char *userid, foreach_cb *proc,
+				  void *rock, int include_deleted)
+{
+    char *inbox = mboxname_user_mbox(userid, 0);
+    size_t inboxlen = strlen(inbox);
+    char *search = strconcat(inbox, ".", (char *)NULL);
+    const char *data = NULL;
+    size_t datalen = 0;
+    int r;
+
+    r = cyrusdb_fetch(mbdb, inbox, inboxlen, &data, &datalen, NULL);
+    if (r) goto done;
+
+    /* process inbox first */
+    r = proc(rock, inbox, inboxlen, data, datalen);
+    if (r) goto done;
+
+    /* process all the sub folders */
+    r = cyrusdb_foreach(mbdb, search, strlen(search), NULL, proc, rock, 0);
+    if (r) goto done;
+
+    /* don't check if delayed delete is enabled, maybe the caller wants to
+     * clean up deleted stuff after it's been turned off */
+    if (include_deleted) {
+	const char *prefix = config_getstring(IMAPOPT_DELETEDPREFIX);
+	char *name = strconcat(prefix, ".", inbox, ".", (char *)NULL);
+	r = cyrusdb_foreach(mbdb, name, strlen(name), NULL, proc, rock, 0);
+	free(name);
+    }
+
+done:
+    free(search);
+    free(inbox);
+    return r;
+}
+
 /*
  * Find all mailboxes that match 'pattern'.
  * 'isadmin' is nonzero if user is a mailbox admin.  'userid'
