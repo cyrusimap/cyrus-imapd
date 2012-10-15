@@ -2416,6 +2416,61 @@ out:
     return r;
 }
 
+struct update_index_rock {
+    struct mailbox *mailbox;
+    search_text_receiver_t *rx;
+};
+
+static int update_index_cb(void *rock,
+			   const char *key, size_t keylen,
+			   const char *val, size_t vallen)
+{
+    struct update_index_rock *ir = (struct update_index_rock *)rock;
+    char *name = xstrndup(key, keylen);
+    struct mailbox *mailbox = NULL;
+    int r;
+
+    /* special case the mailbox we already have open */
+    if (!strcmp(ir->mailbox->name, name)) {
+	/* it might be unlocked - this is normal for the SELECTed
+	 * mailbox */
+	int old_locktype = ir->mailbox->index_locktype;
+	if (!old_locktype) {
+	    r = mailbox_lock_index(ir->mailbox, LOCK_SHARED);
+	    if (r) goto done;
+	}
+	r = search_update_mailbox(ir->rx, ir->mailbox, /*incremental*/1);
+	if (!old_locktype)
+	    mailbox_unlock_index(ir->mailbox, NULL);
+    }
+    else {
+	r = mailbox_open_irl(name, &mailbox);
+	if (r) goto done;
+	r = search_update_mailbox(ir->rx, mailbox, /*incremental*/1);
+	mailbox_close(&mailbox);
+    }
+
+done:
+    free(name);
+    return r;
+}
+
+static int update_indexes(struct mailbox *mailbox)
+{
+    const char *user = mboxname_to_userid(mailbox->name);
+    struct update_index_rock rock;
+    int r;
+
+    rock.mailbox = mailbox;
+    rock.rx = search_begin_update(1); /* verbose for now */
+
+    r = mboxlist_allusermbox(user, update_index_cb, &rock, /*withdeleted*/0);
+
+    search_end_update(rock.rx);
+
+    return r;
+}
+
 struct search_folder {
     char *mboxname;
     unsigned int uidvalidity;
@@ -2593,8 +2648,14 @@ EXPORTED int index_convmultisort(struct index_state *state,
      */
     build_query(bx, searchargs, (searchargs->sublist == NULL), &nmatches);
 
-    if (nmatches)
+    if (nmatches) {
+	r = update_indexes(state->mailbox);
+	if (r) {
+	    search_end_search(bx);
+	    goto out;
+	}
 	r = bx->run(bx, index_multi_search_hit, &sr);
+    }
     else {
 	char *usermbox = mboxname_user_mbox(mboxname_to_userid(state->mailbox->name), NULL);
 	sr.prefixlen = strlen(usermbox);
