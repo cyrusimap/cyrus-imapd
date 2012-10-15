@@ -1104,6 +1104,8 @@ static int begin_mailbox(search_text_receiver_t *rx,
 
     if (r) return r;
 
+    tr->mailbox = mailbox;
+
     r = indexing_lock(mailbox, &tr->indexing_lock_fd);
     if (r) return r;
 
@@ -1192,6 +1194,7 @@ static int begin_mailbox_snippets(search_text_receiver_t *rx,
     int r;
 
     r = get_connection(mailbox, &tr->conn);
+    if (r == IMAP_MAILBOX_EXISTS) r = 0; /* we're reusing one */
     if (r) return r;
 
     tr->mailbox = mailbox;
