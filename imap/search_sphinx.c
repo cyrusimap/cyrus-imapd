@@ -558,7 +558,16 @@ static int update_index_cb(void *rock,
 
     /* special case the mailbox we already have open */
     if (!strcmp(ir->mailbox->name, name)) {
+	/* it might be unlocked - this is normal for the SELECTed
+	 * mailbox */
+	int old_locktype = ir->mailbox->index_locktype;
+	if (!old_locktype) {
+	    r = mailbox_lock_index(ir->mailbox, LOCK_SHARED);
+	    if (r) goto done;
+	}
 	r = search_update_mailbox(ir->rx, ir->mailbox, /*incremental*/1);
+	if (!old_locktype)
+	    mailbox_unlock_index(ir->mailbox, NULL);
     }
     else {
 	r = mailbox_open_irl(name, &mailbox);
