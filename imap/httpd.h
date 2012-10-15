@@ -324,6 +324,7 @@ extern int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
 extern int http_mailbox_open(const char *name, struct mailbox **mailbox,
 			     int locktype);
 extern const char *http_statusline(long code);
+extern void httpdate_gen(char *buf, size_t len, time_t t);
 extern void response_header(long code, struct transaction_t *txn);
 extern void error_response(long code, struct transaction_t *txn);
 extern void html_response(long code, struct transaction_t *txn, xmlDocPtr html);

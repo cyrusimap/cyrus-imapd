@@ -499,9 +499,9 @@ static int propfind_getlastmod(xmlNodePtr prop,
 			       void *rock __attribute__((unused)))
 {
     if (fctx->record) {
-	buf_ensure(&fctx->buf, 80);
-	rfc822date_gen(fctx->buf.s, fctx->buf.alloc,
-		       fctx->record->internaldate);
+	buf_ensure(&fctx->buf, 30);
+	httpdate_gen(fctx->buf.s, fctx->buf.alloc,
+		     fctx->record->internaldate);
 
 	xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 		     prop, BAD_CAST fctx->buf.s, 0);

@@ -1559,6 +1559,23 @@ static struct accept *parse_accept(const char *hdr)
 /****************************  Response Routines  *****************************/
 
 
+/* Create HTTP-date ('buf' must be at least 30 characters) */
+void httpdate_gen(char *buf, size_t len, time_t t)
+{
+    struct tm *tm;
+    static char *month[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+			     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+    static char *wday[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+
+    tm = gmtime(&t);
+
+    snprintf(buf, len, "%3s, %02d %3s %4d %02d:%02d:%02d GMT",
+	     wday[tm->tm_wday], 
+	     tm->tm_mday, month[tm->tm_mon], tm->tm_year + 1900,
+	     tm->tm_hour, tm->tm_min, tm->tm_sec);
+}
+
+
 /* Create an HTTP Status-Line given response code */
 const char *http_statusline(long code)
 {
@@ -1604,7 +1621,7 @@ static void comma_list_hdr(const char *hdr, const char *vals[], unsigned flags)
 
 void response_header(long code, struct transaction_t *txn)
 {
-    char datestr[80];
+    char datestr[30];
     struct auth_challenge_t *auth_chal = &txn->auth_chal;
     struct resp_body_t *resp_body = &txn->resp_body;
     static struct buf log = BUF_INITIALIZER;
@@ -1679,7 +1696,7 @@ void response_header(long code, struct transaction_t *txn)
 
 
     /* Response Header Fields */
-    rfc822date_gen(datestr, sizeof(datestr), time(0));
+    httpdate_gen(datestr, sizeof(datestr), time(0));
     prot_printf(httpd_out, "Date: %s\r\n", datestr);
 
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
@@ -1861,7 +1878,7 @@ void response_header(long code, struct transaction_t *txn)
 	prot_printf(httpd_out, "ETag: \"%s\"\r\n", resp_body->etag);
     }
     if (resp_body->lastmod) {
-	rfc822date_gen(datestr, sizeof(datestr), resp_body->lastmod);
+	httpdate_gen(datestr, sizeof(datestr), resp_body->lastmod);
 	prot_printf(httpd_out, "Last-Modified: %s\r\n", datestr);
     }
     if (resp_body->stag) {
