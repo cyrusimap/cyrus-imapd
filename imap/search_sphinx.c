@@ -94,6 +94,19 @@ static const char * const column_by_part[SEARCH_NUM_PARTS] = {
     "body"
 };
 
+static void close_connection(struct connection *conn)
+{
+    free(conn->socket_path);
+    conn->socket_path = NULL;
+
+    if (conn->mysql) {
+	xstats_inc(SPHINX_CLOSE);
+	mysql_close(conn->mysql);
+	conn->mysql = NULL;
+	mysql_library_end();
+    }
+}
+
 static int get_connection(struct mailbox *mailbox, struct connection *conn)
 {
     MYSQL *c = NULL;
@@ -109,18 +122,10 @@ static int get_connection(struct mailbox *mailbox, struct connection *conn)
 
     if (conn->socket_path && !strcmp(socket_path, conn->socket_path)) {
 	free(socket_path);
-	return 0;
+	return IMAP_MAILBOX_EXISTS; /* evil error code repurposing */
     }
 
-    free(conn->socket_path);
-    conn->socket_path = NULL;
-
-    if (conn->mysql) {
-	xstats_inc(SPHINX_CLOSE);
-	mysql_close(conn->mysql);
-	mysql_library_end();
-	conn->mysql = NULL;
-    }
+    close_connection(conn);
 
     xstats_inc(SPHINX_CONNECT);
     c = mysql_init(NULL);
@@ -142,19 +147,6 @@ static int get_connection(struct mailbox *mailbox, struct connection *conn)
     conn->socket_path = socket_path;
     conn->mysql = c;
     return 0;
-}
-
-static void close_connection(struct connection *conn)
-{
-    free(conn->socket_path);
-    conn->socket_path = NULL;
-
-    if (conn->mysql) {
-	xstats_inc(SPHINX_CLOSE);
-	mysql_close(conn->mysql);
-	conn->mysql = NULL;
-	mysql_library_end();
-    }
 }
 
 static int parse_cyrusid(const char *cyrusid,
@@ -555,6 +547,7 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
     int r = 0;
 
     r = get_connection(bb->mailbox, &conn);
+    if (r == IMAP_MAILBOX_EXISTS) r = 0; /* we're reusing one */
     if (r) goto out;
 
     if ((bb->opts & SEARCH_UNINDEXED)) {
@@ -1048,6 +1041,11 @@ static int indexing_lock(struct mailbox *mailbox, int *fdp)
     int fd;
     int r;
 
+    if (*fdp >= 0) {
+	close(*fdp);
+	*fdp = -1;
+    }
+
     fd = open(lockpath, O_WRONLY|O_CREAT, 0600);
     if (fd < 0) {
 	if (cyrus_mkdir(lockpath, 0755) < 0) {
@@ -1099,9 +1097,12 @@ static int begin_mailbox(search_text_receiver_t *rx,
     int r;
 
     r = get_connection(mailbox, &tr->conn);
-    if (r) return r;
+    if (r == IMAP_MAILBOX_EXISTS) {
+	tr->mailbox = mailbox;
+	return 0;
+    }
 
-    tr->mailbox = mailbox;
+    if (r) return r;
 
     r = indexing_lock(mailbox, &tr->indexing_lock_fd);
     if (r) return r;
@@ -1136,11 +1137,8 @@ static int end_mailbox(search_text_receiver_t *rx,
     sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
     int r = 0;
 
-    if (tr->conn.mysql) {
+    if (tr->conn.mysql)
 	r = flush(tr, /*force*/1);
-	indexing_unlock(tr->mailbox, &tr->indexing_lock_fd);
-	close_connection(&tr->conn);
-    }
 
     tr->mailbox = NULL;
 
@@ -1174,10 +1172,13 @@ static int end_update(search_text_receiver_t *rx)
     int i;
     int r = 0;
 
+    close_connection(&tr->conn);
+
     if (tr->indexing_lock_fd >= 0) close(tr->indexing_lock_fd);
     for (i = 0 ; i < SEARCH_NUM_PARTS ; i++)
 	buf_free(&tr->parts[i]);
     buf_free(&tr->query);
+
     free(tr);
 
     return r;
@@ -1314,9 +1315,6 @@ static int end_mailbox_snippets(search_text_receiver_t *rx,
 				    __attribute__((unused)))
 {
     sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
-
-    if (tr->conn.mysql)
-	close_connection(&tr->conn);
 
     tr->mailbox = NULL;
 
