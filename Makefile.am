@@ -598,6 +598,7 @@ cunit_TESTS = \
 	cunit/buf.testc \
 	cunit/byteorder64.testc \
 	cunit/charset.testc \
+	cunit/command.testc \
 	cunit/crc32.testc \
 	cunit/db.testc \
 	cunit/dlist.testc \
