@@ -1515,36 +1515,6 @@ static void build_query(search_builder_t *bx,
     bx->end_boolean(bx, SEARCH_OP_AND);
 }
 
-struct search_rock {
-    struct index_state *state;
-    char *match;
-};
-
-static int index_search_hit(const char *mboxname,
-			    uint32_t uidvalidity,
-			    uint32_t uid, void *rock)
-{
-    struct search_rock *sr = (struct search_rock *)rock;
-    unsigned int msgno;
-
-    /* We know the mboxname and uidvalidity are correct, they were
-     * checked in the search code because we passed single=1. */
-    assert(uidvalidity == sr->state->mailbox->i.uidvalidity);
-    assert(!strcmp(mboxname, sr->state->mailbox->name));
-
-    /* if it doesn't exist any more, skip it */
-    msgno = index_finduid(sr->state, uid);
-    if (!msgno) return 0;
-
-    /* Weed out UIDs reported by the indexer which no longer exist
-     * in the index_state; index_finduid() doesn't. */
-    if (index_getuid(sr->state, msgno) != uid)
-	return 0;
-
-    sr->match[msgno-1] = 1;
-    return 0;
-}
-
 static int index_prefilter_messages(unsigned* msg_list,
 				    struct index_state *state,
 				    struct searchargs *searchargs)
