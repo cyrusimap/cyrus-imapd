@@ -171,6 +171,7 @@ static int indexd_setup_config(indexd_t *id)
 	"index rt\n"
 	"{\n"
 	"    type = rt\n"
+	"    source = fmindex\n"
 	"    path = $sphinxdir/rt\n"
 	"    morphology = stem_en\n"
 	"    charset_type = utf-8\n"
@@ -673,6 +674,20 @@ static int indexd_setup_config(indexd_t *id)
 	"    workers = threads\n"
 	"    max_matches = " SPHINX_MAX_MATCHES "\n"
 	"    preopen_indexes = 0\n"
+	"}\n"
+	"\n"
+	"source fmindex\n"
+	"{\n"
+	"    type = xmlpipe2\n"
+	"    xmlpipe_command = stdin\n"
+	"    xmlpipe_attr_string = cyrusid\n"
+	"    xmlpipe_field = header_from\n"
+	"    xmlpipe_field = header_to\n"
+	"    xmlpipe_field = header_cc\n"
+	"    xmlpipe_field = header_bcc\n"
+	"    xmlpipe_field = header_subject\n"
+	"    xmlpipe_field = headers\n"
+	"    xmlpipe_field = body\n"
 	"}\n";
     char *sphinx_config = NULL;
     int fd = -1;

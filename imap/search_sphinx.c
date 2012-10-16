@@ -77,6 +77,8 @@ struct connection
 };
 #define CONNECTION_INITIALIZER	{ 0, 0 }
 
+#define FMINDEX			"/usr/bin/fmindex"
+
 #define INDEXING_LOCK_SUFFIX	".indexing.lock"
 
 static int doquery(struct connection *, int, const struct buf *);
@@ -231,6 +233,30 @@ static void append_escaped_cstr(struct buf *to, const char *str, int quote)
 {
     if (str)
 	append_escaped_map(to, str, strlen(str), quote);
+}
+
+static void xml_escape_map(struct buf *buf,
+			   const char *base, unsigned int len)
+{
+    buf_ensure(buf, len+1);
+
+    for ( ; len ; len--, base++) {
+	int c = *(unsigned char *)base;
+	if (c == '<')
+	    buf_appendcstr(buf, "&lt;");
+	else if (c == '>')
+	    buf_appendcstr(buf, "&gt;");
+	else if (c == '&')
+	    buf_appendcstr(buf, "&amp;");
+	else
+	    buf_putc(buf, c);
+    }
+    buf_cstring(buf);
+}
+
+static void xml_escape(struct buf *out, const struct buf *in)
+{
+    xml_escape_map(out, in->s, in->len);
 }
 
 struct opnode {
@@ -652,7 +678,6 @@ typedef struct sphinx_update_receiver sphinx_update_receiver_t;
 struct sphinx_update_receiver
 {
     sphinx_receiver_t super;
-    struct connection conn;
     int indexing_lock_fd;
     unsigned int uncommitted;
     uint32_t latest;
@@ -764,6 +789,7 @@ static void dump_result(MYSQL_RES *res)
  */
 static int read_latest(sphinx_update_receiver_t *tr)
 {
+    struct connection conn = CONNECTION_INITIALIZER;
     struct buf query = BUF_INITIALIZER;
     MYSQL_RES *res = NULL;
     MYSQL_ROW row;
@@ -773,16 +799,19 @@ static int read_latest(sphinx_update_receiver_t *tr)
     tr->latest_id = 0;
     tr->latest_lastid = 0;
 
+    r = get_connection(tr->super.mailbox, &conn);
+    if (r) goto out;
+
     buf_printf(&query, "SELECT id,mboxname,uid "
 		       "FROM latest "
 		       "WHERE uidvalidity=%u "
 		       "LIMIT 10000",
 		       tr->super.mailbox->i.uidvalidity);
 
-    r = doquery(&tr->conn, tr->super.verbose, &query);
+    r = doquery(&conn, tr->super.verbose, &query);
     if (r) goto out;
 
-    res = mysql_store_result(tr->conn.mysql);
+    res = mysql_store_result(conn.mysql);
     while ((row = mysql_fetch_row(res))) {
 	if (!strcmp(tr->super.mailbox->name, row[1])) {
 	    tr->latest_id = strtoul(row[0], NULL, 10);
@@ -799,10 +828,10 @@ static int read_latest(sphinx_update_receiver_t *tr)
      * rows with all N valid ids..., rather than one row with the max */
     buf_appendcstr(&query, "SELECT max(id) FROM latest ORDER BY id DESC LIMIT 1;");
 
-    r = doquery(&tr->conn, tr->super.verbose, &query);
+    r = doquery(&conn, tr->super.verbose, &query);
     if (r) goto out;
 
-    res = mysql_store_result(tr->conn.mysql);
+    res = mysql_store_result(conn.mysql);
     if (!res) goto out;
     row = mysql_fetch_row(res);
     if (row)
@@ -810,15 +839,20 @@ static int read_latest(sphinx_update_receiver_t *tr)
 
 out:
     if (res) mysql_free_result(res);
+    close_connection(&conn);
     buf_free(&query);
     return r;
 }
 
 static int write_latest(sphinx_update_receiver_t *tr)
 {
+    struct connection conn = CONNECTION_INITIALIZER;
     struct buf query = BUF_INITIALIZER;
     int r;
     uint32_t id = tr->latest_id;
+
+    r = get_connection(tr->super.mailbox, &conn);
+    if (r) goto out;
 
     if (id) {
 	buf_printf(&query, "UPDATE latest "
@@ -837,12 +871,13 @@ static int write_latest(sphinx_update_receiver_t *tr)
 		   tr->super.mailbox->i.uidvalidity, tr->latest);
     }
 
-    r = doquery(&tr->conn, tr->super.verbose, &query);
+    r = doquery(&conn, tr->super.verbose, &query);
     if (r) goto out;
 
     tr->latest_id = id;
 
 out:
+    close_connection(&conn);
     buf_free(&query);
     return 0;
 }
@@ -860,6 +895,7 @@ out:
  */
 static int read_lastid(sphinx_update_receiver_t *tr)
 {
+    struct connection conn = CONNECTION_INITIALIZER;
     struct buf query = BUF_INITIALIZER;
     MYSQL_RES *res = NULL;
     MYSQL_ROW row;
@@ -867,12 +903,15 @@ static int read_lastid(sphinx_update_receiver_t *tr)
 
     tr->lastid = 0;
 
-    buf_appendcstr(&query, "SELECT max(id) FROM rt ORDER BY id DESC LIMIT 1;");
-
-    r = doquery(&tr->conn, tr->super.verbose, &query);
+    r = get_connection(tr->super.mailbox, &conn);
     if (r) goto out;
 
-    res = mysql_store_result(tr->conn.mysql);
+    buf_appendcstr(&query, "SELECT max(id) FROM rt ORDER BY id DESC LIMIT 1;");
+
+    r = doquery(&conn, tr->super.verbose, &query);
+    if (r) goto out;
+
+    res = mysql_store_result(conn.mysql);
     if (!res) goto out;
 #if 0
     if (tr->verbose > 1) dump_result(res);
@@ -887,6 +926,7 @@ static int read_lastid(sphinx_update_receiver_t *tr)
 
 out:
     if (res) mysql_free_result(res);
+    close_connection(&conn);
     buf_free(&query);
     return r;
 }
@@ -895,29 +935,60 @@ out:
 static int flush(sphinx_update_receiver_t *tr, int force)
 {
     int r = 0;
+    char *config = NULL;
+    struct command *cmd = NULL;
+    static const char prologue[] =
+	"<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+	"<sphinx:docset>\n";
+    static const char epilogue[] =
+	"</sphinx:docset>\n";
 
     if (!force && tr->uncommitted < MAX_UNCOMMITTED) return 0;
+    if (!tr->uncommitted) return 0;
 
-    if (tr->uncommitted) {
-	r = write_latest(tr);
-	if (r) return r;
-    }
+    r = write_latest(tr);
+    if (r) return r;
+
+    r = sphinxmgr_getconf(tr->super.mailbox->name, &config);
+    if (r) goto out;
+    r = sphinxmgr_stop(tr->super.mailbox->name);
+    if (r) return r;
 
     if (tr->super.verbose > 1)
-	syslog(LOG_NOTICE, "Sphinx committing");
+	syslog(LOG_NOTICE, "Sphinx sending to fmindex");
+    if (tr->super.verbose > 3) {
+	fwrite(prologue, 1, sizeof(prologue)-1, stderr);
+	fwrite(tr->super.tmp.s, 1, tr->super.tmp.len, stderr);
+	fwrite(epilogue, 1, sizeof(epilogue)-1, stderr);
+    }
 
-    r = mysql_commit(tr->conn.mysql);
+    r = command_popen(&cmd, "w",
+		      FMINDEX, "--config", config, "rt", NULL);
+    if (r) goto out;
+
+    r = prot_write(cmd->stdin_prot, prologue, sizeof(prologue)-1);
+    if (r) goto out;
+    r = prot_putbuf(cmd->stdin_prot, &tr->super.tmp);
+    if (r) goto out;
+    r = prot_write(cmd->stdin_prot, epilogue, sizeof(epilogue)-1);
+    if (r) goto out;
+
+    r = command_pclose(&cmd);
     if (r) {
-	syslog(LOG_ERR, "IOERROR: Sphinx COMMIT failed for "
+	syslog(LOG_ERR, "IOERROR: Sphinx "FMINDEX" failed for "
 			"mailbox %s, %u messages ending at uid %u: %s",
 			tr->super.mailbox->name,
 			tr->uncommitted,
 			tr->super.uid,
-			mysql_error(tr->conn.mysql));
+			error_message(r));
 	return IMAP_IOERROR;
     }
     tr->uncommitted = 0;
+    buf_reset(&tr->super.tmp);
 
+out:
+    r = command_pclose(&cmd);
+    free(config);
     return r;
 }
 
@@ -973,65 +1044,28 @@ static void end_part(search_text_receiver_t *rx,
     tr->part = 0;
 }
 
-static void log_keywords(sphinx_update_receiver_t *tr)
-{
-    int i;
-    int r;
-    struct buf query = BUF_INITIALIZER;
-    MYSQL_RES *res = NULL;
-    MYSQL_ROW row = NULL;
-
-    for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
-	if (!tr->super.parts[i].len) continue;
-	buf_reset(&query);
-	buf_appendcstr(&query, "CALL KEYWORDS(");
-	append_escaped(&query, &tr->super.parts[i], '\'');
-	buf_appendcstr(&query, ",'rt',0)");
-	r = doquery(&tr->conn, tr->super.verbose, &query);
-
-	res = mysql_use_result(tr->conn.mysql);
-	if (!res) continue;
-
-	while ((row = mysql_fetch_row(res)))
-	    syslog(LOG_INFO, "keyword %s\n", row[0]);
-	mysql_free_result(res);
-    }
-    buf_free(&query);
-}
-
 static int end_message_update(search_text_receiver_t *rx)
 {
     sphinx_update_receiver_t *tr = (sphinx_update_receiver_t *)rx;
+    struct buf *xml = &tr->super.tmp;
     int i;
     int r;
-    struct buf *query = &tr->super.tmp;
 
-    if (!tr->conn.mysql) return IMAP_INTERNAL;
+    buf_printf(xml, "<sphinx:document id=\"%u\">\n", ++tr->lastid);
 
-    buf_reset(query);
-    buf_appendcstr(query, "INSERT INTO rt (id,"COL_CYRUSID);
+    buf_printf(xml, "<cyrusid>");
+    xml_escape(xml, make_cyrusid(tr->super.mailbox, tr->super.uid));
+    buf_printf(xml, "</cyrusid>\n");
+
     for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
 	if (tr->super.parts[i].len) {
-	    buf_appendcstr(query, ",");
-	    buf_appendcstr(query, column_by_part[i]);
+	    buf_printf(xml, "<%s>", column_by_part[i]);
+	    xml_escape(xml, &tr->super.parts[i]);
+	    buf_printf(xml, "</%s>\n", column_by_part[i]);
 	}
     }
-    buf_appendcstr(query, ") VALUES (");
-    buf_printf(query, "%u,", ++tr->lastid);
-    append_escaped(query, make_cyrusid(tr->super.mailbox, tr->super.uid), '\'');
-    for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
-	if (tr->super.parts[i].len) {
-	    buf_appendcstr(query, ",");
-	    append_escaped(query, &tr->super.parts[i], '\'');
-	}
-    }
-    /* apparently Sphinx doesn't let you explicitly INSERT a NULL */
-    buf_appendcstr(query, ")");
 
-    r = doquery(&tr->conn, tr->super.verbose, query);
-    if (r) goto out; /* TODO: propagate error to the user */
-
-    if (tr->super.verbose > 3) log_keywords(tr);
+    buf_printf(xml, "</sphinx:document>\n");
 
     ++tr->uncommitted;
     tr->latest = tr->super.uid;
@@ -1100,14 +1134,6 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     sphinx_update_receiver_t *tr = (sphinx_update_receiver_t *)rx;
     int r;
 
-    r = get_connection(mailbox, &tr->conn);
-    if (r == IMAP_MAILBOX_EXISTS) {
-	tr->super.mailbox = mailbox;
-	return 0;
-    }
-
-    if (r) return r;
-
     tr->super.mailbox = mailbox;
 
     r = indexing_lock(mailbox, &tr->indexing_lock_fd);
@@ -1143,8 +1169,7 @@ static int end_mailbox_update(search_text_receiver_t *rx,
     sphinx_update_receiver_t *tr = (sphinx_update_receiver_t *)rx;
     int r = 0;
 
-    if (tr->conn.mysql)
-	r = flush(tr, /*force*/1);
+    r = flush(tr, /*force*/1);
 
     tr->super.mailbox = NULL;
 
@@ -1190,7 +1215,6 @@ static int end_update(search_text_receiver_t *rx)
 {
     sphinx_update_receiver_t *tr = (sphinx_update_receiver_t *)rx;
 
-    close_connection(&tr->conn);
     indexing_unlock(&tr->indexing_lock_fd);
     return free_receiver(&tr->super);
 }
