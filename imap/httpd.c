@@ -2389,7 +2389,8 @@ int http_mailbox_open(const char *name, struct mailbox **mailbox, int locktype)
 /* Compare an etag in a header to a resource etag.
  * Returns 0 if a match, non-zero otherwise.
  */
-static int etagcmp(const char *hdr, const char *etag) {
+static int etagcmp(const char *hdr, const char *etag)
+{
     size_t len;
 
     if (!etag) return -1;		/* no representation	   */
@@ -2399,6 +2400,27 @@ static int etagcmp(const char *hdr, const char *etag) {
     if (strlen(hdr) != len+2) return 1;	/* make sure lengths match */
     if (hdr[0] != '\"') return 1;    	/* match open DQUOTE 	   */
     return strncmp(hdr+1, etag, len);   /* skip DQUOTE		   */
+}
+
+
+/* Compare a resource etag to a comma-separated list and/or multiple headers
+ * looking for a match.  Returns 1 if a match is found, 0 otherwise.
+ */
+static unsigned etag_match(const char *hdr[], const char *etag)
+{
+    unsigned i, match = 0;
+    tok_t tok;
+    char *token;
+
+    for (i = 0; !match && hdr[i]; i++) {
+	tok_init(&tok, hdr[i], ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+	while (!match && (token = tok_next(&tok))) {
+	    if (!etagcmp(token, etag)) match = 1;
+	}
+	tok_fini(&tok);
+    }
+
+    return match;
 }
 
 
@@ -2436,7 +2458,7 @@ int check_precond(unsigned meth, const char *stag, const char *etag,
 
     /* Step 1 */
     else if ((hdr = spool_getheader(hdrcache, "If-Match"))) {
-	if (etagcmp(hdr[0], etag)) return HTTP_PRECOND_FAILED;
+	if (!etag_match(hdr, etag)) return HTTP_PRECOND_FAILED;
 
 	/* Continue to step 3 */
     }
@@ -2478,7 +2500,7 @@ int check_precond(unsigned meth, const char *stag, const char *etag,
 
     /* Step 4 */
     if ((hdr = spool_getheader(hdrcache, "If-None-Match"))) {
-	if (!etagcmp(hdr[0], etag))
+	if (etag_match(hdr, etag))
 	    return (is_get_or_head ? HTTP_NOT_MODIFIED : HTTP_PRECOND_FAILED);
     }
 
