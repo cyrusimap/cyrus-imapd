@@ -169,12 +169,10 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
 	message_unref(&msg);
 
 	if (++nbatch >= batch_size) {
-	    int locktype = mailbox->index_locktype;
 	    syslog(LOG_INFO, "search_update_mailbox batching %s after %d messages",
 		   mailbox->name, nbatch);
 	    /* give someone else a chance */
-	    mailbox_unlock_index(mailbox, NULL);
-	    r = mailbox_lock_index(mailbox, locktype);
+	    r = mailbox_yield_index(mailbox);
 	    if (r) break;
 	    nbatch = 0;
 	}
