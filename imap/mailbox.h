@@ -516,6 +516,8 @@ extern int mailbox_expunge(struct mailbox *mailbox,
 extern int mailbox_cleanup(struct mailbox *mailbox, int iscurrentdir,
 			   mailbox_decideproc_t *decideproc, void *deciderock);
 extern void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *sd);
+/* unlock and immediately lock again with the same type */
+extern int mailbox_yield_index(struct mailbox *mailbox);
 
 extern int mailbox_create(const char *name, uint32_t mbtype, const char *part, const char *acl,
 			  const char *uniqueid, int options, unsigned uidvalidity,
