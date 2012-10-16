@@ -632,19 +632,28 @@ static void end_search(search_builder_t *bx)
     free(bx);
 }
 
+/* base class for both update and snippet receivers */
 typedef struct sphinx_receiver sphinx_receiver_t;
 struct sphinx_receiver
 {
     search_text_receiver_t super;
     int verbose;
-    struct connection conn;
     struct mailbox *mailbox;
     uint32_t uid;
     int part;
     unsigned int parts_total;
     int truncate_warning;
     struct buf parts[SEARCH_NUM_PARTS];
-    struct buf query;
+    struct buf tmp;		/* SphinxQL query */
+};
+
+/* receiver used for updating the index */
+typedef struct sphinx_update_receiver sphinx_update_receiver_t;
+struct sphinx_update_receiver
+{
+    sphinx_receiver_t super;
+    struct connection conn;
+    int indexing_lock_fd;
     unsigned int uncommitted;
     uint32_t latest;
     uint32_t latest_id;	    /* The 'id' attribute of the row in the
@@ -655,12 +664,17 @@ struct sphinx_receiver
     uint32_t lastid;	    /* largest document ID in the 'tr' table,
 			     * used to assign new document IDs when
 			     * INSERTing into the table */
-    int indexing_lock_fd;
-    struct {
-	struct opnode *root;
-	search_snippet_cb_t proc;
-	void *rock;
-    } snippet;
+};
+
+/* receiver used for extracting snippets after a search */
+typedef struct sphinx_snippet_receiver sphinx_snippet_receiver_t;
+struct sphinx_snippet_receiver
+{
+    sphinx_receiver_t super;
+    struct connection conn;
+    struct opnode *root;
+    search_snippet_cb_t proc;
+    void *rock;
 };
 
 /* This is carefully aligned with the default search_batchsize so that
@@ -748,7 +762,7 @@ static void dump_result(MYSQL_RES *res)
  * Updates tr->latest, tr->latest_id, tr->latest_lastid
  * Returns 0 on success or an IMAP error code.
  */
-static int read_latest(sphinx_receiver_t *tr)
+static int read_latest(sphinx_update_receiver_t *tr)
 {
     struct buf query = BUF_INITIALIZER;
     MYSQL_RES *res = NULL;
@@ -763,14 +777,14 @@ static int read_latest(sphinx_receiver_t *tr)
 		       "FROM latest "
 		       "WHERE uidvalidity=%u "
 		       "LIMIT 10000",
-		       tr->mailbox->i.uidvalidity);
+		       tr->super.mailbox->i.uidvalidity);
 
-    r = doquery(&tr->conn, tr->verbose, &query);
+    r = doquery(&tr->conn, tr->super.verbose, &query);
     if (r) goto out;
 
     res = mysql_store_result(tr->conn.mysql);
     while ((row = mysql_fetch_row(res))) {
-	if (!strcmp(tr->mailbox->name, row[1])) {
+	if (!strcmp(tr->super.mailbox->name, row[1])) {
 	    tr->latest_id = strtoul(row[0], NULL, 10);
 	    tr->latest = strtoul(row[2], NULL, 10);
 	    break;
@@ -785,7 +799,7 @@ static int read_latest(sphinx_receiver_t *tr)
      * rows with all N valid ids..., rather than one row with the max */
     buf_appendcstr(&query, "SELECT max(id) FROM latest ORDER BY id DESC LIMIT 1;");
 
-    r = doquery(&tr->conn, tr->verbose, &query);
+    r = doquery(&tr->conn, tr->super.verbose, &query);
     if (r) goto out;
 
     res = mysql_store_result(tr->conn.mysql);
@@ -800,7 +814,7 @@ out:
     return r;
 }
 
-static int write_latest(sphinx_receiver_t *tr)
+static int write_latest(sphinx_update_receiver_t *tr)
 {
     struct buf query = BUF_INITIALIZER;
     int r;
@@ -818,12 +832,12 @@ static int write_latest(sphinx_receiver_t *tr)
 			       "(id,mboxname,uidvalidity,uid) "
 			       "VALUES (");
 	buf_printf(&query, "%u,", id);
-	append_escaped_cstr(&query, tr->mailbox->name, '\'');
+	append_escaped_cstr(&query, tr->super.mailbox->name, '\'');
 	buf_printf(&query, ",%u,%u)",
-		   tr->mailbox->i.uidvalidity, tr->latest);
+		   tr->super.mailbox->i.uidvalidity, tr->latest);
     }
 
-    r = doquery(&tr->conn, tr->verbose, &query);
+    r = doquery(&tr->conn, tr->super.verbose, &query);
     if (r) goto out;
 
     tr->latest_id = id;
@@ -844,7 +858,7 @@ out:
  * Updates tr->lastid
  * Returns: 0 on success or an IMAP error code.
  */
-static int read_lastid(sphinx_receiver_t *tr)
+static int read_lastid(sphinx_update_receiver_t *tr)
 {
     struct buf query = BUF_INITIALIZER;
     MYSQL_RES *res = NULL;
@@ -855,7 +869,7 @@ static int read_lastid(sphinx_receiver_t *tr)
 
     buf_appendcstr(&query, "SELECT max(id) FROM rt ORDER BY id DESC LIMIT 1;");
 
-    r = doquery(&tr->conn, tr->verbose, &query);
+    r = doquery(&tr->conn, tr->super.verbose, &query);
     if (r) goto out;
 
     res = mysql_store_result(tr->conn.mysql);
@@ -868,7 +882,7 @@ static int read_lastid(sphinx_receiver_t *tr)
     if (row)
 	tr->lastid = strtoul(row[0], NULL, 10);
 
-    if (tr->verbose > 1)
+    if (tr->super.verbose > 1)
 	syslog(LOG_NOTICE, "Sphinx read_lastid: %u", tr->lastid);
 
 out:
@@ -878,7 +892,7 @@ out:
 }
 
 
-static int flush(sphinx_receiver_t *tr, int force)
+static int flush(sphinx_update_receiver_t *tr, int force)
 {
     int r = 0;
 
@@ -889,14 +903,16 @@ static int flush(sphinx_receiver_t *tr, int force)
 	if (r) return r;
     }
 
-    if (tr->verbose > 1)
+    if (tr->super.verbose > 1)
 	syslog(LOG_NOTICE, "Sphinx committing");
 
     r = mysql_commit(tr->conn.mysql);
     if (r) {
 	syslog(LOG_ERR, "IOERROR: Sphinx COMMIT failed for "
 			"mailbox %s, %u messages ending at uid %u: %s",
-			tr->mailbox->name, tr->uncommitted, tr->uid,
+			tr->super.mailbox->name,
+			tr->uncommitted,
+			tr->super.uid,
 			mysql_error(tr->conn.mysql));
 	return IMAP_IOERROR;
     }
@@ -957,7 +973,7 @@ static void end_part(search_text_receiver_t *rx,
     tr->part = 0;
 }
 
-static void log_keywords(sphinx_receiver_t *tr)
+static void log_keywords(sphinx_update_receiver_t *tr)
 {
     int i;
     int r;
@@ -966,12 +982,12 @@ static void log_keywords(sphinx_receiver_t *tr)
     MYSQL_ROW row = NULL;
 
     for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
-	if (!tr->parts[i].len) continue;
+	if (!tr->super.parts[i].len) continue;
 	buf_reset(&query);
 	buf_appendcstr(&query, "CALL KEYWORDS(");
-	append_escaped(&query, &tr->parts[i], '\'');
+	append_escaped(&query, &tr->super.parts[i], '\'');
 	buf_appendcstr(&query, ",'rt',0)");
-	r = doquery(&tr->conn, tr->verbose, &query);
+	r = doquery(&tr->conn, tr->super.verbose, &query);
 
 	res = mysql_use_result(tr->conn.mysql);
 	if (!res) continue;
@@ -983,47 +999,48 @@ static void log_keywords(sphinx_receiver_t *tr)
     buf_free(&query);
 }
 
-static int end_message(search_text_receiver_t *rx)
+static int end_message_update(search_text_receiver_t *rx)
 {
-    sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
+    sphinx_update_receiver_t *tr = (sphinx_update_receiver_t *)rx;
     int i;
     int r;
+    struct buf *query = &tr->super.tmp;
 
     if (!tr->conn.mysql) return IMAP_INTERNAL;
 
-    buf_reset(&tr->query);
-    buf_appendcstr(&tr->query, "INSERT INTO rt (id,"COL_CYRUSID);
+    buf_reset(query);
+    buf_appendcstr(query, "INSERT INTO rt (id,"COL_CYRUSID);
     for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
-	if (tr->parts[i].len) {
-	    buf_appendcstr(&tr->query, ",");
-	    buf_appendcstr(&tr->query, column_by_part[i]);
+	if (tr->super.parts[i].len) {
+	    buf_appendcstr(query, ",");
+	    buf_appendcstr(query, column_by_part[i]);
 	}
     }
-    buf_appendcstr(&tr->query, ") VALUES (");
-    buf_printf(&tr->query, "%u,", ++tr->lastid);
-    append_escaped(&tr->query, make_cyrusid(tr->mailbox, tr->uid), '\'');
+    buf_appendcstr(query, ") VALUES (");
+    buf_printf(query, "%u,", ++tr->lastid);
+    append_escaped(query, make_cyrusid(tr->super.mailbox, tr->super.uid), '\'');
     for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
-	if (tr->parts[i].len) {
-	    buf_appendcstr(&tr->query, ",");
-	    append_escaped(&tr->query, &tr->parts[i], '\'');
+	if (tr->super.parts[i].len) {
+	    buf_appendcstr(query, ",");
+	    append_escaped(query, &tr->super.parts[i], '\'');
 	}
     }
     /* apparently Sphinx doesn't let you explicitly INSERT a NULL */
-    buf_appendcstr(&tr->query, ")");
+    buf_appendcstr(query, ")");
 
-    r = doquery(&tr->conn, tr->verbose, &tr->query);
+    r = doquery(&tr->conn, tr->super.verbose, query);
     if (r) goto out; /* TODO: propagate error to the user */
 
-    if (tr->verbose > 3) log_keywords(tr);
+    if (tr->super.verbose > 3) log_keywords(tr);
 
     ++tr->uncommitted;
-    tr->latest = tr->uid;
+    tr->latest = tr->super.uid;
 
     r = flush(tr, /*force*/0);
     /* TODO: propagate error to the user */
 
 out:
-    tr->uid = 0;
+    tr->super.uid = 0;
     return 0;
 }
 
@@ -1089,22 +1106,22 @@ static int indexing_unlock(struct mailbox *mailbox, int *fdp)
     return 0;
 }
 
-static int begin_mailbox(search_text_receiver_t *rx,
-			 struct mailbox *mailbox,
-			 int incremental __attribute__((unused)))
+static int begin_mailbox_update(search_text_receiver_t *rx,
+				struct mailbox *mailbox,
+				int incremental __attribute__((unused)))
 {
-    sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
+    sphinx_update_receiver_t *tr = (sphinx_update_receiver_t *)rx;
     int r;
 
     r = get_connection(mailbox, &tr->conn);
     if (r == IMAP_MAILBOX_EXISTS) {
-	tr->mailbox = mailbox;
+	tr->super.mailbox = mailbox;
 	return 0;
     }
 
     if (r) return r;
 
-    tr->mailbox = mailbox;
+    tr->super.mailbox = mailbox;
 
     r = indexing_lock(mailbox, &tr->indexing_lock_fd);
     if (r) return r;
@@ -1120,84 +1137,89 @@ static int begin_mailbox(search_text_receiver_t *rx,
 
 static uint32_t first_unindexed_uid(search_text_receiver_t *rx)
 {
-    sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
+    sphinx_update_receiver_t *tr = (sphinx_update_receiver_t *)rx;
 
     return tr->latest+1;
 }
 
 static int is_indexed(search_text_receiver_t *rx, uint32_t uid)
 {
-    sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
+    sphinx_update_receiver_t *tr = (sphinx_update_receiver_t *)rx;
 
     return (uid <= tr->latest);
 }
 
-static int end_mailbox(search_text_receiver_t *rx,
-		       struct mailbox *mailbox
+static int end_mailbox_update(search_text_receiver_t *rx,
+			      struct mailbox *mailbox
 			    __attribute__((unused)))
 {
-    sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
+    sphinx_update_receiver_t *tr = (sphinx_update_receiver_t *)rx;
     int r = 0;
 
     if (tr->conn.mysql)
 	r = flush(tr, /*force*/1);
 
-    tr->mailbox = NULL;
+    tr->super.mailbox = NULL;
 
     return r;
 }
 
 static search_text_receiver_t *begin_update(int verbose)
 {
-    sphinx_receiver_t *tr;
+    sphinx_update_receiver_t *tr;
 
-    tr = xzmalloc(sizeof(sphinx_receiver_t));
-    tr->super.begin_mailbox = begin_mailbox;
-    tr->super.first_unindexed_uid = first_unindexed_uid;
-    tr->super.is_indexed = is_indexed;
-    tr->super.begin_message = begin_message;
-    tr->super.begin_part = begin_part;
-    tr->super.append_text = append_text;
-    tr->super.end_part = end_part;
-    tr->super.end_message = end_message;
-    tr->super.end_mailbox = end_mailbox;
+    tr = xzmalloc(sizeof(sphinx_update_receiver_t));
+    tr->super.super.begin_mailbox = begin_mailbox_update;
+    tr->super.super.first_unindexed_uid = first_unindexed_uid;
+    tr->super.super.is_indexed = is_indexed;
+    tr->super.super.begin_message = begin_message;
+    tr->super.super.begin_part = begin_part;
+    tr->super.super.append_text = append_text;
+    tr->super.super.end_part = end_part;
+    tr->super.super.end_message = end_message_update;
+    tr->super.super.end_mailbox = end_mailbox_update;
 
     tr->indexing_lock_fd = -1;
-    tr->verbose = verbose;
+    tr->super.verbose = verbose;
 
-    return &tr->super;
+    return &tr->super.super;
 }
 
-static int end_update(search_text_receiver_t *rx)
+static int free_receiver(sphinx_receiver_t *tr)
 {
-    sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
     int i;
     int r = 0;
 
-    close_connection(&tr->conn);
-
-    if (tr->indexing_lock_fd >= 0) close(tr->indexing_lock_fd);
     for (i = 0 ; i < SEARCH_NUM_PARTS ; i++)
 	buf_free(&tr->parts[i]);
-    buf_free(&tr->query);
+    buf_free(&tr->tmp);
 
     free(tr);
 
     return r;
 }
 
+static int end_update(search_text_receiver_t *rx)
+{
+    sphinx_update_receiver_t *tr = (sphinx_update_receiver_t *)rx;
+
+    close_connection(&tr->conn);
+    if (tr->indexing_lock_fd >= 0) close(tr->indexing_lock_fd);
+    return free_receiver(&tr->super);
+}
+
 static int begin_mailbox_snippets(search_text_receiver_t *rx,
 				  struct mailbox *mailbox,
 				  int incremental __attribute__((unused)))
 {
-    sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
+    sphinx_snippet_receiver_t *tr = (sphinx_snippet_receiver_t *)rx;
     int r;
 
     r = get_connection(mailbox, &tr->conn);
     if (r == IMAP_MAILBOX_EXISTS) r = 0; /* we're reusing one */
     if (r) return r;
 
-    tr->mailbox = mailbox;
+    tr->super.mailbox = mailbox;
 
     return 0;
 }
@@ -1252,7 +1274,7 @@ static void generate_snippet_query(struct buf *query,
 
 static int end_message_snippets(search_text_receiver_t *rx)
 {
-    sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
+    sphinx_snippet_receiver_t *tr = (sphinx_snippet_receiver_t *)rx;
     struct buf query = BUF_INITIALIZER;
     struct buf inner_query = BUF_INITIALIZER;
     MYSQL_RES *res = NULL;
@@ -1264,7 +1286,7 @@ static int end_message_snippets(search_text_receiver_t *rx)
 	r = IMAP_INTERNAL;	    /* need to call begin_mailbox() */
 	goto out;
     }
-    if (!tr->snippet.root) {
+    if (!tr->root) {
 	r = 0;
 	goto out;
     }
@@ -1276,20 +1298,20 @@ static int end_message_snippets(search_text_receiver_t *rx)
 	}
 	if (i == SEARCH_PART_ANY) continue;
 
-	if (!tr->parts[i].len) continue;
+	if (!tr->super.parts[i].len) continue;
 
 	buf_reset(&inner_query);
-	generate_snippet_query(&inner_query, i, tr->snippet.root);
+	generate_snippet_query(&inner_query, i, tr->root);
 	if (!inner_query.len) continue;
 
 	buf_reset(&query);
 	buf_appendcstr(&query, "CALL SNIPPETS(");
-	append_escaped(&query, &tr->parts[i], '\'');
+	append_escaped(&query, &tr->super.parts[i], '\'');
 	buf_appendcstr(&query, ", 'rt', ");
 	append_escaped(&query, &inner_query, '\'');
 	buf_appendcstr(&query, ", 1 AS query_mode, 1 AS allow_empty)");
 
-	r = doquery(&tr->conn, tr->verbose, &query);
+	r = doquery(&tr->conn, tr->super.verbose, &query);
 	if (r) goto out;
 
 	res = mysql_store_result(tr->conn.mysql);
@@ -1298,11 +1320,11 @@ static int end_message_snippets(search_text_receiver_t *rx)
 	row = mysql_fetch_row(res);
 	if (!row) continue;
 
-	if (tr->verbose > 1)
+	if (tr->super.verbose > 1)
 	    syslog(LOG_ERR, "snippet [%d] \"%s\"", i, row[0]);
 
 	if (!row[0][0]) continue;
-	r = tr->snippet.proc(tr->mailbox, tr->uid, i, row[0], tr->snippet.rock);
+	r = tr->proc(tr->super.mailbox, tr->super.uid, i, row[0], tr->rock);
 	if (r) break;
     }
 
@@ -1314,12 +1336,12 @@ out:
 }
 
 static int end_mailbox_snippets(search_text_receiver_t *rx,
-			       struct mailbox *mailbox
+				struct mailbox *mailbox
 				    __attribute__((unused)))
 {
-    sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
+    sphinx_snippet_receiver_t *tr = (sphinx_snippet_receiver_t *)rx;
 
-    tr->mailbox = NULL;
+    tr->super.mailbox = NULL;
 
     return 0;
 }
@@ -1329,29 +1351,31 @@ static search_text_receiver_t *begin_snippets(void *internalised,
 					      search_snippet_cb_t proc,
 					      void *rock)
 {
-    sphinx_receiver_t *tr;
+    sphinx_snippet_receiver_t *tr;
 
-    tr = xzmalloc(sizeof(sphinx_receiver_t));
-    tr->super.begin_mailbox = begin_mailbox_snippets;
-    tr->super.begin_message = begin_message;
-    tr->super.begin_part = begin_part;
-    tr->super.append_text = append_text;
-    tr->super.end_part = end_part;
-    tr->super.end_message = end_message_snippets;
-    tr->super.end_mailbox = end_mailbox_snippets;
+    tr = xzmalloc(sizeof(sphinx_snippet_receiver_t));
+    tr->super.super.begin_mailbox = begin_mailbox_snippets;
+    tr->super.super.begin_message = begin_message;
+    tr->super.super.begin_part = begin_part;
+    tr->super.super.append_text = append_text;
+    tr->super.super.end_part = end_part;
+    tr->super.super.end_message = end_message_snippets;
+    tr->super.super.end_mailbox = end_mailbox_snippets;
 
-    tr->indexing_lock_fd = -1;
-    tr->verbose = verbose;
-    tr->snippet.root = (struct opnode *)internalised;
-    tr->snippet.proc = proc;
-    tr->snippet.rock = rock;
+    tr->super.verbose = verbose;
+    tr->root = (struct opnode *)internalised;
+    tr->proc = proc;
+    tr->rock = rock;
 
-    return &tr->super;
+    return &tr->super.super;
 }
 
 static int end_snippets(search_text_receiver_t *rx)
 {
-    return end_update(rx);
+    sphinx_snippet_receiver_t *tr = (sphinx_snippet_receiver_t *)rx;
+
+    close_connection(&tr->conn);
+    return free_receiver(&tr->super);
 }
 
 static int start_daemon(int verbose __attribute__((unused)),
