@@ -2196,6 +2196,10 @@ static int meth_put(struct transaction_t *txn)
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
 
+    /* Make sure Content-Range isn't specified */
+    if (spool_getheader(txn->req_hdrs, "Content-Range"))
+	return HTTP_BAD_REQUEST;
+
     /* Make sure its a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
 
