@@ -48,6 +48,7 @@
 #include "mailbox.h"
 
 int sphinxmgr_getsock(const char *mboxname, char **socknamep);
+int sphinxmgr_getconf(const char *mboxname, char **configp);
 int sphinxmgr_stop(const char *mboxname);
 
 #endif

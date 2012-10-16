@@ -1099,6 +1099,22 @@ static int handle_getsock(char *mboxname, char *reply, size_t maxreply)
 }
 
 /*
+ * Command is: GETCONF <internal-mboxname>
+ */
+static int handle_getconf(char *mboxname, char *reply, size_t maxreply)
+{
+    indexd_t *id = NULL;
+    int r;
+
+    if (!mboxname || !*mboxname) return IMAP_PROTOCOL_BAD_PARAMETERS;
+
+    r = indexd_get(mboxname, &id, /*create*/0);
+    if (!r)
+	snprintf(reply, maxreply, "%s%s", id->basedir, SPHINX_CONFIG);
+    return r;
+}
+
+/*
  * Command is: STOP <internal-mboxname>
  */
 static int handle_stop(char *mboxname,
@@ -1167,6 +1183,8 @@ static void process_command(int ss)
 
     if (!strcmp(cmd, "GETSOCK"))
 	handler = handle_getsock;
+    if (!strcmp(cmd, "GETCONF"))
+	handler = handle_getconf;
     else if (!strcmp(cmd, "STOP"))
 	handler = handle_stop;
 

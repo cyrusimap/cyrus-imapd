@@ -126,6 +126,25 @@ int sphinxmgr_getsock(const char *mboxname, char **socknamep)
     return 0;
 }
 
+int sphinxmgr_getconf(const char *mboxname, char **configp)
+{
+    int r;
+    char *p;
+    char buf[1024];
+
+    snprintf(buf, sizeof(buf),  "GETCONF %s\n", mboxname);
+    r = sphinxmgr_request(buf, strlen(buf), buf, sizeof(buf));
+    if (r) return r;
+    if (strncmp(buf, "OK ", 3)) {
+	syslog(LOG_ERR, "sphinxmgr returned failure: %s", buf);
+	return IMAP_IOERROR;
+    }
+    p = strpbrk(buf+3, " \t\n\r");
+    if (p) *p = '\0';
+    *configp = xstrdup(buf+3);
+    return 0;
+}
+
 int sphinxmgr_stop(const char *mboxname)
 {
     int r;
