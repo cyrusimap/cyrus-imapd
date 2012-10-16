@@ -209,7 +209,7 @@ static int index_one(const char *name, int blocking)
 	return r;
     }
 
-    /* process only changed mailboxes if skip option delected. */
+    /* process only changed mailboxes if skip option detected. */
     if (skip_unmodified) {
 	char *fname = mailbox_meta_fname(mailbox, META_SQUAT);
 	struct stat sbuf;
