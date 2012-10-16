@@ -1550,40 +1550,7 @@ static int index_prefilter_messages(unsigned* msg_list,
 				    struct searchargs *searchargs)
 {
     unsigned int msgno;
-#if 0
-    int r = -1;	    /* we start in error so we can fall back */
-    search_builder_t *bx;
 
-    bx = search_begin_search(state->mailbox, SEARCH_UNINDEXED);
-    if (bx) {
-	struct search_rock sr;
-	int nmatches = 0;
-	int count = 0;
-
-	build_query(bx, searchargs, 0, &nmatches);
-
-	/* Only run the search engine query if there are any match terms
-	 * to give it, otherwise just shortcut and return a result set
-	 * comprising all messages */
-	if (nmatches) {
-	    sr.state = state;
-	    sr.match = xzmalloc(state->exists);
-	    r = bx->run(bx, index_search_hit, &sr);
-	    if (!r) {
-		/* only take matching messages */
-		for (msgno = 1; msgno <= state->exists; msgno++) {
-		    if (sr.match[msgno-1])
-			msg_list[count++] = msgno;
-		}
-	    }
-	    free(sr.match);
-	}
-
-	search_end_search(bx);
-
-	if (!r) return count;
-    }
-#endif
     xstats_inc(SEARCH_TRIVIAL);
 
     /* Just put in all possible messages. This falls back to Cyrus' default
@@ -1591,6 +1558,7 @@ static int index_prefilter_messages(unsigned* msg_list,
 
     for (msgno = 1; msgno <= state->exists; msgno++)
 	msg_list[msgno-1] = msgno;
+
     return state->exists;
 }
 
