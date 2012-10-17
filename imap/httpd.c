@@ -1654,7 +1654,7 @@ void response_header(long code, struct transaction_t *txn)
     prot_printf(httpd_out, "%s\r\n", http_statusline(code));
 
 
-    /* Connection Management Header Fields */
+    /* Connection Management */
     switch (code) {
     case HTTP_SWITCH_PROT:
 	prot_printf(httpd_out, "Upgrade: TLS/1.0\r\n");
@@ -1695,16 +1695,29 @@ void response_header(long code, struct transaction_t *txn)
     }
 
 
-    /* Response Header Fields */
+    /* Control Data */
     httpdate_gen(datestr, sizeof(datestr), time(0));
     prot_printf(httpd_out, "Date: %s\r\n", datestr);
 
-    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	prot_printf(httpd_out, "Server: %s\r\n", buf_cstring(&serverinfo));
-    }
-
     if (httpd_tls_done) {
 	prot_printf(httpd_out, "Strict-Transport-Security: max-age=600\r\n");
+    }
+    if (txn->flags.cc) {
+	/* Construct Cache-Control header */
+	const char *cc_dirs[] = {
+	    "no-cache", "no-transform", "private", NULL
+	};
+
+	comma_list_hdr("Cache-Control", cc_dirs, txn->flags.cc);
+    }
+    if (txn->location) {
+	prot_printf(httpd_out, "Location: %s\r\n", txn->location);
+    }
+
+
+    /* Informative Header Fields */
+    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
+	prot_printf(httpd_out, "Server: %s\r\n", buf_cstring(&serverinfo));
     }
 
     switch (txn->meth) {
@@ -1726,22 +1739,19 @@ void response_header(long code, struct transaction_t *txn)
     }
     if (txn->req_tgt.allow & ALLOW_DAV) {
 	/* Construct DAV header(s) based on namespace of request URL */
-	prot_printf(httpd_out, "DAV: 1, 3");
-	if (txn->req_tgt.allow & ALLOW_WRITE) {
-	    prot_printf(httpd_out, ", access-control, extended-mkcol");
-	}
+	prot_printf(httpd_out, "DAV: 1, 3%s\r\n",
+		    (txn->req_tgt.allow & ALLOW_WRITE) ?
+		    ", access-control, extended-mkcol" : "");
 	if (txn->req_tgt.allow & ALLOW_CAL) {
-	    prot_printf(httpd_out, "\r\nDAV: calendar-access");
+	    const char *sched = "";
 #ifdef WITH_CALDAV_SCHED
-	    prot_printf(httpd_out, ", calendar-auto-schedule");
+	    sched = ", calendar-auto-schedule";
 #endif
+	    prot_printf(httpd_out, "DAV: calendar-access%s\r\n", sched);
 	}
-#ifdef WITH_CARDDAV
 	if (txn->req_tgt.allow & ALLOW_CARD) {
-	    prot_printf(httpd_out, ", addressbook");
+	    prot_printf(httpd_out, "DAV: addressbook\r\n");
 	}
-#endif
-	prot_printf(httpd_out, "\r\n");
     }
 
     switch (code) {
@@ -1813,33 +1823,10 @@ void response_header(long code, struct transaction_t *txn)
 		WWW_Authenticate(auth_chal->scheme->name, auth_chal->param);
 	    }
 	}
-
-	if (txn->location) {
-	    prot_printf(httpd_out, "Location: %s\r\n", txn->location);
-	}
-    }
-
-    /* Caching Header Fields */
-    if (txn->flags.cc) {
-	/* Construct Cache-Control header */
-	const char *cc_dirs[] = {
-	    "no-cache", "no-transform", "private", NULL
-	};
-
-	comma_list_hdr("Cache-Control", cc_dirs, txn->flags.cc);
-    }
-
-    if (txn->flags.vary) {
-	/* Construct Vary header */
-	const char *vary_hdrs[] = {
-	    "Accept-Encoding", "Brief", "Prefer", NULL
-	};
-
-	comma_list_hdr("Vary", vary_hdrs, txn->flags.vary);
     }
 
 
-    /* Body Header Fields */
+    /* Payload */
     switch (code) {
     case HTTP_NO_CONTENT:
     case HTTP_NOT_MODIFIED:
@@ -1861,18 +1848,17 @@ void response_header(long code, struct transaction_t *txn)
     }
 
 
-    /* Representation Header Fields */
-    if (resp_body->enc) {
-	prot_printf(httpd_out, "Content-Encoding: %s\r\n", resp_body->enc);
+    /* Selected Representation */
+    if (txn->flags.vary) {
+	/* Construct Vary header */
+	const char *vary_hdrs[] = {
+	    "Accept-Encoding", "Brief", "Prefer", NULL
+	};
+
+	comma_list_hdr("Vary", vary_hdrs, txn->flags.vary);
     }
-    if (resp_body->lang) {
-	prot_printf(httpd_out, "Content-Language: %s\r\n", resp_body->lang);
-    }
-    if (resp_body->loc && resp_body->len) {
-	prot_printf(httpd_out, "Content-Location: %s\r\n", resp_body->loc);
-    }
-    if (resp_body->type) {
-	prot_printf(httpd_out, "Content-Type: %s\r\n", resp_body->type);
+    if (resp_body->stag) {
+	prot_printf(httpd_out, "Schedule-Tag: \"%s\"\r\n", resp_body->stag);
     }
     if (resp_body->etag) {
 	prot_printf(httpd_out, "ETag: \"%s\"\r\n", resp_body->etag);
@@ -1881,8 +1867,21 @@ void response_header(long code, struct transaction_t *txn)
 	httpdate_gen(datestr, sizeof(datestr), resp_body->lastmod);
 	prot_printf(httpd_out, "Last-Modified: %s\r\n", datestr);
     }
-    if (resp_body->stag) {
-	prot_printf(httpd_out, "Schedule-Tag: \"%s\"\r\n", resp_body->stag);
+
+
+    /* Representation Metadata */
+    if (resp_body->type) {
+	prot_printf(httpd_out, "Content-Type: %s\r\n", resp_body->type);
+
+	if (resp_body->enc) {
+	    prot_printf(httpd_out, "Content-Encoding: %s\r\n", resp_body->enc);
+	}
+	if (resp_body->lang) {
+	    prot_printf(httpd_out, "Content-Language: %s\r\n", resp_body->lang);
+	}
+	if (resp_body->loc && resp_body->len) {
+	    prot_printf(httpd_out, "Content-Location: %s\r\n", resp_body->loc);
+	}
     }
 
 
