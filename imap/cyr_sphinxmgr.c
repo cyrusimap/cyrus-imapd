@@ -653,17 +653,6 @@ static int indexd_setup_config(indexd_t *id)
 	"    preopen = 0\n"
 	"}\n"
 	"\n"
-	"index latest\n"
-	"{\n"
-	"    type = rt\n"
-	"    path = $sphinxdir/latest\n"
-	"    rt_attr_string = mboxname\n"
-	"    rt_attr_uint = uidvalidity\n"
-	"    rt_attr_uint = uid\n"
-	"    rt_field = dummy\n"
-	"    preopen = 1\n"
-	"}\n"
-	"\n"
 	"searchd\n"
 	"{\n"
 	"    listen = $sphinxsock:mysql41\n"
@@ -759,12 +748,6 @@ static int indexd_start(indexd_t *id)
     int r;
 
     assert(id->state == STOPPED);
-
-    r = indexd_setup_tree(id);
-    if (r) goto out;
-
-    r = indexd_setup_config(id);
-    if (r) goto out;
 
     if (verbose)
 	syslog(LOG_INFO, "Sphinx starting searchd %s", id->basedir);
@@ -934,7 +917,10 @@ static int indexd_is_running(indexd_t *id)
     return r;
 }
 
-static int indexd_get(const char *mboxname, indexd_t **idp, int create)
+#define ID_NONE		0
+#define ID_SETUP	1
+#define ID_START	2
+static int indexd_get(const char *mboxname, indexd_t **idp, int action)
 {
     indexd_t *id;
     char *basedir = NULL;
@@ -973,11 +959,11 @@ static int indexd_get(const char *mboxname, indexd_t **idp, int create)
     }
 
     if (!id) {
-	if (!create) {
+	if (action == ID_NONE) {
 	    r = IMAP_NOTFOUND;
 	    goto out;
 	}
-	if (max_children && num_started >= max_children) {
+	if (action == ID_START && max_children && num_started >= max_children) {
 	    /* stop the oldest STARTED child */
 	    indexd_t *oldest;
 	    for (oldest = indexroot.next ;
@@ -996,11 +982,27 @@ static int indexd_get(const char *mboxname, indexd_t **idp, int create)
 	basedir = NULL;
 	id->socketpath = socketpath;
 	socketpath = NULL;
-	r = indexd_start(id);
+
+	r = indexd_setup_tree(id);
 	if (r) {
 	    indexd_free(id);
 	    return r;
 	}
+
+	r = indexd_setup_config(id);
+	if (r) {
+	    indexd_free(id);
+	    return r;
+	}
+
+	if (action == ID_START) {
+	    r = indexd_start(id);
+	    if (r) {
+		indexd_free(id);
+		return r;
+	    }
+	}
+
 	hash_insert(id->basedir, id, &itable);
 	id->prev = indexroot.prev;
 	id->next = &indexroot;
@@ -1107,7 +1109,7 @@ static int handle_getsock(char *mboxname, char *reply, size_t maxreply)
 
     if (!mboxname || !*mboxname) return IMAP_PROTOCOL_BAD_PARAMETERS;
 
-    r = indexd_get(mboxname, &id, /*create*/1);
+    r = indexd_get(mboxname, &id, ID_START);
     if (!r)
 	snprintf(reply, maxreply, "%s", id->socketpath);
     return r;
@@ -1123,9 +1125,14 @@ static int handle_getconf(char *mboxname, char *reply, size_t maxreply)
 
     if (!mboxname || !*mboxname) return IMAP_PROTOCOL_BAD_PARAMETERS;
 
-    r = indexd_get(mboxname, &id, /*create*/0);
+    r = indexd_get(mboxname, &id, ID_SETUP);
     if (!r)
 	snprintf(reply, maxreply, "%s%s", id->basedir, SPHINX_CONFIG);
+    if (id->state == STOPPED) {
+	/* This index_t was just created to return the basedir to us */
+	indexd_detach(id);
+	indexd_free(id);
+    }
     return r;
 }
 
@@ -1141,7 +1148,7 @@ static int handle_stop(char *mboxname,
 
     if (!mboxname || !*mboxname) return IMAP_PROTOCOL_BAD_PARAMETERS;
 
-    r = indexd_get(mboxname, &id, /*create*/0);
+    r = indexd_get(mboxname, &id, ID_NONE);
     if (!r)
 	indexd_stop(id);
     return r;

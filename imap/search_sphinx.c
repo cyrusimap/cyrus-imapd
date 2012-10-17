@@ -77,10 +77,26 @@ struct connection
 };
 #define CONNECTION_INITIALIZER	{ 0, 0 }
 
+struct latestdb
+{
+    struct db *db;
+    char *path;
+    char *config;
+};
+#define LATESTDB_INITIALIZER { 0, 0 }
+#define LATESTDB_VERSION	1
+#define LATESTDB_FNAME		"/latest.db"
+#define LATESTDB_LASTID_KEY	"LASTID"
+
+
 #define FMINDEX			"/usr/bin/fmindex"
 
 #define INDEXING_LOCK_SUFFIX	".indexing.lock"
 
+static int open_latest(struct mailbox *, struct latestdb *);
+static void close_latest(struct latestdb *);
+static int read_latest(struct latestdb *, struct mailbox *, uint32_t *, int);
+static int write_latest(struct latestdb *, struct mailbox *, uint32_t, int);
 static int doquery(struct connection *, int, const struct buf *);
 
 /* Name of columns */
@@ -527,39 +543,6 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     return &bb->super;
 }
 
-/* Yes, we read the latest uid in two separate functions.  Meh */
-static int read_latest_search(sphinx_builder_t *bb,
-			      struct connection *conn,
-			      uint32_t *latestp)
-{
-    struct buf query = BUF_INITIALIZER;
-    MYSQL_RES *res = NULL;
-    MYSQL_ROW row;
-    int r = 0;
-
-    buf_printf(&query, "SELECT mboxname,uid "
-		       "FROM latest "
-		       "WHERE uidvalidity=%u "
-		       "LIMIT 10000",
-		       bb->mailbox->i.uidvalidity);
-
-    r = doquery(conn, SEARCH_VERBOSE(bb->opts), &query);
-    if (r) goto out;
-
-    res = mysql_store_result(conn->mysql);
-    while ((row = mysql_fetch_row(res))) {
-	if (!strcmp(bb->mailbox->name, row[0])) {
-	    *latestp = strtoul(row[1], NULL, 10);
-	    break;
-	}
-    }
-
-out:
-    if (res) mysql_free_result(res);
-    buf_free(&query);
-    return r;
-}
-
 static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
 {
     sphinx_builder_t *bb = (sphinx_builder_t *)bx;
@@ -581,7 +564,12 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
 	 * an underestimate, because the caller can handle false
 	 * positives but not false negatives.  So we fetch it
 	 * first before the main query. */
-	r = read_latest_search(bb, &conn, &latest);
+	struct latestdb ldb = LATESTDB_INITIALIZER;
+	r = open_latest(bb->mailbox, &ldb);
+	if (!r) goto out;
+	r = read_latest(&ldb, bb->mailbox, &latest,
+			SEARCH_VERBOSE(bb->opts));
+	close_latest(&ldb);
 	if (r) goto out;
     }
 
@@ -681,11 +669,7 @@ struct sphinx_update_receiver
     int indexing_lock_fd;
     unsigned int uncommitted;
     uint32_t latest;
-    uint32_t latest_id;	    /* The 'id' attribute of the row in the
-			     * 'latest' table which describes the
-			     * current mailbox, or 0 */
-    uint32_t latest_lastid; /* The largest document ID in the 'latest'
-			     * table, used when INSERTing */
+    struct latestdb latestdb;
     uint32_t lastid;	    /* largest document ID in the 'tr' table,
 			     * used to assign new document IDs when
 			     * INSERTing into the table */
@@ -774,168 +758,244 @@ static void dump_result(MYSQL_RES *res)
 }
 #endif
 
+static int open_latest(struct mailbox *mailbox, struct latestdb *ldb)
+{
+    char *config = NULL;
+    char *p;
+    char *path = NULL;
+    int r;
+
+    /* note, we always go through sphinxmgr so that it can
+     * prepare the directory if necessary */
+    r = sphinxmgr_getconf(mailbox->name, &config);
+    if (r) return r;
+
+    /* temporarily chop off the filename component of the config path */
+    p = strrchr(config, '/');
+    assert(p != NULL);	/* should always be an absolute path */
+    *p = '\0';
+    path = strconcat(config, LATESTDB_FNAME, NULL);
+    *p = '/';
+
+    if (!strcmpsafe(path, ldb->path)) {
+	free(path);
+	free(config);
+	return 0;
+    }
+
+    /* need to open a new DB */
+
+    close_latest(ldb);
+
+    r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_LATEST_DB),
+		     path, CYRUSDB_CREATE, &ldb->db);
+    if (r) {
+	syslog(LOG_ERR, "DBERROR: opening %s: %s",
+	       path, cyrusdb_strerror(r));
+	r = IMAP_IOERROR;
+    }
+
+out:
+    if (r) {
+	free(path);
+	free(config);
+    }
+    else {
+	ldb->path = path;
+	ldb->config = config;
+    }
+    return r;
+}
+
+static void close_latest(struct latestdb *ldb)
+{
+    free(ldb->path);
+    ldb->path = NULL;
+
+    free(ldb->config);
+    ldb->config = NULL;
+
+    if (ldb->db) {
+	cyrusdb_close(ldb->db);
+	ldb->db = NULL;
+    }
+}
 
 /*
  * Read the most recently indexed UID for the current mailboxfrom the
- * 'latest' table in the Sphinx searchd.  This is a bit of a shemozzle
- * because Sphinx does not let us write a WHERE clause in a SELECT or
- * UPDATE statement which matches against a string attribute, so we
- * can't just do the obvious SQL statements.  Instead we have to SELECT
- * on the uidvalidity only and then filter the results manually for
- * mboxname.  The same limitation makes write_latest() a real challange
- * too.
- * Updates tr->latest, tr->latest_id, tr->latest_lastid
+ * 'latest' DB in the Sphinx directory.
  * Returns 0 on success or an IMAP error code.
  */
-static int read_latest(sphinx_update_receiver_t *tr)
+static int read_latest(struct latestdb *ldb,
+		       struct mailbox *mailbox,
+		       uint32_t *latestp,
+		       int verbose)
 {
-    struct connection conn = CONNECTION_INITIALIZER;
-    struct buf query = BUF_INITIALIZER;
-    MYSQL_RES *res = NULL;
-    MYSQL_ROW row;
+    struct buf key = BUF_INITIALIZER;
+    struct buf buf = BUF_INITIALIZER;
+    const char *data = NULL;
+    size_t datalen = 0;
     int r = 0;
+    unsigned int version = 0;
+    unsigned int uid = 0;
 
-    tr->latest = 0;
-    tr->latest_id = 0;
-    tr->latest_lastid = 0;
+    *latestp = 0;
+    if (verbose > 1)
+	syslog(LOG_INFO, "read_latest db=%s mailbox=%s uidvalidity=%u",
+	       ldb->path, mailbox->name, mailbox->i.uidvalidity);
 
-    r = get_connection(tr->super.mailbox, &conn);
+    buf_printf(&key, "%s.%u", mailbox->name, mailbox->i.uidvalidity);
+
+    r = cyrusdb_fetch(ldb->db,
+		      key.s, key.len,
+		      &data, &datalen,
+		      (struct txn **)NULL);
+    if (r == CYRUSDB_NOTFOUND) {
+	if (verbose > 1) syslog(LOG_INFO, "read_latest defaults to 0");
+	r = 0;
+	goto out;
+    }
     if (r) goto out;
+    buf_init_ro(&buf, data, datalen);
+    buf_cstring(&buf);
 
-    buf_printf(&query, "SELECT id,mboxname,uid "
-		       "FROM latest "
-		       "WHERE uidvalidity=%u "
-		       "LIMIT 10000",
-		       tr->super.mailbox->i.uidvalidity);
-
-    r = doquery(&conn, tr->super.verbose, &query);
-    if (r) goto out;
-
-    res = mysql_store_result(conn.mysql);
-    while ((row = mysql_fetch_row(res))) {
-	if (!strcmp(tr->super.mailbox->name, row[1])) {
-	    tr->latest_id = strtoul(row[0], NULL, 10);
-	    tr->latest = strtoul(row[2], NULL, 10);
-	    break;
-	}
+    r = sscanf(buf.s, "%u %u", &version, &uid);
+    if (r != 2 || version != LATESTDB_VERSION) {
+	r = IMAP_MAILBOX_BADFORMAT;
+	goto out;
     }
 
-    mysql_free_result(res);
-    res = NULL;
-
-    buf_reset(&query);
-    /* Guess what.. the query 'SELECT MAX(id) FROM latest' returns N
-     * rows with all N valid ids..., rather than one row with the max */
-    buf_appendcstr(&query, "SELECT max(id) FROM latest ORDER BY id DESC LIMIT 1;");
-
-    r = doquery(&conn, tr->super.verbose, &query);
-    if (r) goto out;
-
-    res = mysql_store_result(conn.mysql);
-    if (!res) goto out;
-    row = mysql_fetch_row(res);
-    if (row)
-	tr->latest_lastid = strtoul(row[0], NULL, 10);
+    if (verbose > 1) syslog(LOG_INFO, "read_latest uid=%u", uid);
+    *latestp = uid;
+    r = 0;
 
 out:
-    if (res) mysql_free_result(res);
-    close_connection(&conn);
-    buf_free(&query);
+    buf_free(&key);
+    buf_free(&buf);
     return r;
 }
 
-static int write_latest(sphinx_update_receiver_t *tr)
+static int write_latest(struct latestdb *ldb,
+			struct mailbox *mailbox,
+			uint32_t uid,
+			int verbose)
 {
-    struct connection conn = CONNECTION_INITIALIZER;
-    struct buf query = BUF_INITIALIZER;
-    int r;
-    uint32_t id = tr->latest_id;
+    struct buf key = BUF_INITIALIZER;
+    struct buf data = BUF_INITIALIZER;
+    struct txn *txn = NULL;
+    int r = 0;
 
-    r = get_connection(tr->super.mailbox, &conn);
-    if (r) goto out;
+    if (verbose)
+	syslog(LOG_INFO, "write_latest db=%s mailbox=%s uidvalidity=%u uid=%u",
+	       ldb->path, mailbox->name, mailbox->i.uidvalidity, uid);
 
-    if (id) {
-	buf_printf(&query, "UPDATE latest "
-			   "SET uid=%u "
-			   "WHERE id=%u",
-			   tr->latest, id);
-    }
-    else {
-	id = tr->latest_lastid+1;
-	buf_appendcstr(&query, "INSERT INTO latest "
-			       "(id,mboxname,uidvalidity,uid) "
-			       "VALUES (");
-	buf_printf(&query, "%u,", id);
-	append_escaped_cstr(&query, tr->super.mailbox->name, '\'');
-	buf_printf(&query, ",%u,%u)",
-		   tr->super.mailbox->i.uidvalidity, tr->latest);
-    }
+    buf_printf(&key, "%s.%u", mailbox->name, mailbox->i.uidvalidity);
+    buf_printf(&data, "%u %u", LATESTDB_VERSION, uid);
 
-    r = doquery(&conn, tr->super.verbose, &query);
-    if (r) goto out;
+    do {
+	r = cyrusdb_store(ldb->db,
+			  key.s, key.len,
+			  data.s, data.len,
+			  &txn);
+    } while (r == CYRUSDB_AGAIN);
+    if (!r)
+	r = cyrusdb_commit(ldb->db, txn);
+    else
+	cyrusdb_abort(ldb->db, txn);
 
-    tr->latest_id = id;
-
-out:
-    close_connection(&conn);
-    buf_free(&query);
-    return 0;
+    buf_free(&data);
+    buf_free(&key);
+    return r;
 }
 
 /*
- * Read the last document ID from Sphinx.  Currently this is very dumb
- * and just SELECTs MAX(id), in the hope that this is efficient on the
- * server side (the documentation does not make that clear).  This has
- * the behaviour that document IDs might get re-used if the last
- * document is DELETEd; we don't really care because the only thing we
- * use the document IDs for is INSERTing a new row.
+ * Read the last document ID from the "latest" DB.  This is a
+ * temporary measure until we can get autoincrement behaviour
+ * working for Sphinx.
  *
- * Updates tr->lastid
  * Returns: 0 on success or an IMAP error code.
  */
-static int read_lastid(sphinx_update_receiver_t *tr)
+static int read_lastid(struct latestdb *ldb,
+		       uint32_t *lastidp,
+		       int verbose)
 {
-    struct connection conn = CONNECTION_INITIALIZER;
-    struct buf query = BUF_INITIALIZER;
-    MYSQL_RES *res = NULL;
-    MYSQL_ROW row;
+    struct buf key = BUF_INITIALIZER;
+    struct buf buf = BUF_INITIALIZER;
+    const char *data = NULL;
+    size_t datalen = 0;
     int r = 0;
+    unsigned int version = 0;
+    unsigned int id = 0;
 
-    tr->lastid = 0;
+    *lastidp = 0;
+    if (verbose > 1) syslog(LOG_INFO, "read_lastid db=%s", ldb->path);
 
-    r = get_connection(tr->super.mailbox, &conn);
+    buf_init_ro_cstr(&key, LATESTDB_LASTID_KEY);
+
+    r = cyrusdb_fetch(ldb->db,
+		      key.s, key.len,
+		      &data, &datalen,
+		      (struct txn **)NULL);
+    if (r == CYRUSDB_NOTFOUND) {
+	if (verbose > 1) syslog(LOG_INFO, "read_lastid defaults to 0");
+	r = 0;
+	goto out;
+    }
     if (r) goto out;
+    buf_init_ro(&buf, data, datalen);
+    buf_cstring(&buf);
 
-    buf_appendcstr(&query, "SELECT max(id) FROM rt ORDER BY id DESC LIMIT 1;");
+    r = sscanf(buf.s, "%u %u", &version, &id);
+    if (r != 2 || version != LATESTDB_VERSION) {
+	r = IMAP_MAILBOX_BADFORMAT;
+	goto out;
+    }
 
-    r = doquery(&conn, tr->super.verbose, &query);
-    if (r) goto out;
-
-    res = mysql_store_result(conn.mysql);
-    if (!res) goto out;
-#if 0
-    if (tr->verbose > 1) dump_result(res);
-#endif
-    row = mysql_fetch_row(res);
-
-    if (row)
-	tr->lastid = strtoul(row[0], NULL, 10);
-
-    if (tr->super.verbose > 1)
-	syslog(LOG_NOTICE, "Sphinx read_lastid: %u", tr->lastid);
+    if (verbose > 1) syslog(LOG_INFO, "read_lastid id=%u", id);
+    *lastidp = id;
+    r = 0;
 
 out:
-    if (res) mysql_free_result(res);
-    close_connection(&conn);
-    buf_free(&query);
+    buf_free(&key);
+    buf_free(&buf);
     return r;
 }
 
+static int write_lastid(struct latestdb *ldb,
+			uint32_t lastid,
+			int verbose)
+{
+    struct buf key = BUF_INITIALIZER;
+    struct buf data = BUF_INITIALIZER;
+    struct txn *txn = NULL;
+    int r = 0;
+
+    if (verbose > 1)
+	syslog(LOG_INFO, "write_lastid db=%s lastid=%u", ldb->path, lastid);
+
+    buf_init_ro_cstr(&key, LATESTDB_LASTID_KEY);
+    buf_printf(&data, "%u %u", LATESTDB_VERSION, lastid);
+
+    do {
+	r = cyrusdb_store(ldb->db,
+			  key.s, key.len,
+			  data.s, data.len,
+			  &txn);
+    } while (r == CYRUSDB_AGAIN);
+    if (!r)
+	r = cyrusdb_commit(ldb->db, txn);
+    else
+	cyrusdb_abort(ldb->db, txn);
+
+
+    buf_free(&data);
+    buf_free(&key);
+    return r;
+}
 
 static int flush(sphinx_update_receiver_t *tr, int force)
 {
     int r = 0;
-    char *config = NULL;
     struct command *cmd = NULL;
     static const char prologue[] =
 	"<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
@@ -946,12 +1006,9 @@ static int flush(sphinx_update_receiver_t *tr, int force)
     if (!force && tr->uncommitted < MAX_UNCOMMITTED) return 0;
     if (!tr->uncommitted) return 0;
 
-    r = write_latest(tr);
-    if (r) return r;
-
-    r = sphinxmgr_getconf(tr->super.mailbox->name, &config);
-    if (r) goto out;
-    r = sphinxmgr_stop(tr->super.mailbox->name);
+    /* We write the lastid out first, to avoid a future instance
+     * allocating a duplicate Sphinx document id should we crash */
+    r = write_lastid(&tr->latestdb, tr->lastid, tr->super.verbose);
     if (r) return r;
 
     if (tr->super.verbose > 1)
@@ -963,7 +1020,7 @@ static int flush(sphinx_update_receiver_t *tr, int force)
     }
 
     r = command_popen(&cmd, "w",
-		      FMINDEX, "--config", config, "rt", NULL);
+		      FMINDEX, "--config", tr->latestdb.config, "rt", NULL);
     if (r) goto out;
 
     r = prot_write(cmd->stdin_prot, prologue, sizeof(prologue)-1);
@@ -981,14 +1038,22 @@ static int flush(sphinx_update_receiver_t *tr, int force)
 			tr->uncommitted,
 			tr->super.uid,
 			error_message(r));
-	return IMAP_IOERROR;
+	r = IMAP_IOERROR;
+	goto out;
     }
+
+    /* We write out the latestid for the mailbox only after successfully
+     * updating the index, to avoid a future instance not realising that
+     * there are unindexed messages should we fail to index */
+    r = write_latest(&tr->latestdb, tr->super.mailbox, tr->latest,
+		     tr->super.verbose);
+    if (r) goto out;
+
     tr->uncommitted = 0;
     buf_reset(&tr->super.tmp);
 
 out:
-    r = command_pclose(&cmd);
-    free(config);
+    if (cmd) r = command_pclose(&cmd);
     return r;
 }
 
@@ -1139,10 +1204,13 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     r = indexing_lock(mailbox, &tr->indexing_lock_fd);
     if (r) return r;
 
-    r = read_lastid(tr);
+    r = open_latest(mailbox, &tr->latestdb);
     if (r) return r;
 
-    r = read_latest(tr);
+    r = read_lastid(&tr->latestdb, &tr->lastid, tr->super.verbose);
+    if (r) return r;
+
+    r = read_latest(&tr->latestdb, mailbox, &tr->latest, tr->super.verbose);
     if (r) return r;
 
     return 0;
@@ -1215,6 +1283,7 @@ static int end_update(search_text_receiver_t *rx)
 {
     sphinx_update_receiver_t *tr = (sphinx_update_receiver_t *)rx;
 
+    close_latest(&tr->latestdb);
     indexing_unlock(&tr->indexing_lock_fd);
     return free_receiver(&tr->super);
 }
