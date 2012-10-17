@@ -610,9 +610,7 @@ static void send_response(struct protstream *pout,
     if (httpd_tls_done) {
 	prot_printf(httpd_out, "Strict-Transport-Security: max-age=600\r\n");
     }
-    if (flags->cc & CC_NOCACHE) {
-	prot_printf(pout, "Cache-Control: no-cache\r\n");
-    }
+
     spool_enum_hdrcache(hdrs, &write_cachehdr, pout);
 
     if (!(len = buf_len(body))) {
