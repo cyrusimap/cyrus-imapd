@@ -169,7 +169,11 @@ const struct namespace_t namespace_calendar = {
 /* Namespace for WebDAV principals */
 const struct namespace_t namespace_principal = {
     URL_NS_PRINCIPAL, "/principals", NULL, 1 /* auth */,
+#ifdef WITH_CARDDAV
     (ALLOW_DAV | ALLOW_CAL | ALLOW_CARD),
+#else
+    (ALLOW_DAV | ALLOW_CAL),
+#endif
     NULL, NULL, NULL, NULL,
     {
 	{ NULL,			0		},	/* ACL		*/
