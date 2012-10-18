@@ -973,7 +973,12 @@ static int indexd_get(const char *mboxname, indexd_t **idp, int action)
 	    if (oldest->state == STARTED) {
 		syslog(LOG_NOTICE, "hit limit %d, killing oldest %s",
 		       max_children, oldest->basedir);
-		indexd_stop(oldest);
+		if (indexd_is_running(oldest) != 0 || indexd_stop(oldest) != 0) {
+		    /* not running or failed to initiate shut down */
+		    indexd_set_state(oldest, STOPPED);
+		    indexd_detach(oldest);
+		    indexd_free(oldest);
+		}
 		/* will be detached and freed later */
 	    }
 	}
@@ -1041,8 +1046,13 @@ static void expire_indexd(const char *key __attribute__((unused)),
 	    if (verbose)
 		syslog(LOG_INFO, "searchd %s has been idle for %d sec",
 				 id->basedir, (int)(now - id->used));
-	    indexd_stop(id);
-	    /* will be detached and freed later */
+	    if (indexd_is_running(id) != 0 || indexd_stop(id) != 0) {
+		/* not running or failed to initiate shut down */
+		indexd_set_state(id, STOPPED);
+		indexd_detach(id);
+		indexd_free(id);
+	    }
+	    /* or, will be detached and freed later */
 	}
 	break;
     case STOPPING:
