@@ -668,7 +668,7 @@ static int indexd_setup_config(indexd_t *id)
 	"source fmindex\n"
 	"{\n"
 	"    type = xmlpipe2\n"
-	"    xmlpipe_command = stdin\n"
+	"    xmlpipe_command = cat $sphinxdir/fmindex.xml\n"
 	"    xmlpipe_attr_string = cyrusid\n"
 	"    xmlpipe_field = header_from\n"
 	"    xmlpipe_field = header_to\n"

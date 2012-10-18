@@ -90,6 +90,9 @@ struct latestdb
 
 
 #define FMINDEX			"/usr/bin/fmindex"
+/* This has to match the filename in the sphinx.conf
+ * written in cyr_sphinxmgr.c */
+#define FMINDEX_XML_FNAME	"/fmindex.xml"
 
 #define INDEXING_LOCK_SUFFIX	".indexing.lock"
 
@@ -996,7 +999,10 @@ static int write_lastid(struct latestdb *ldb,
 static int flush(sphinx_update_receiver_t *tr, int force)
 {
     int r = 0;
-    struct command *cmd = NULL;
+    char *xmlfile = NULL;
+    char *sphinxdir;
+    char *p;
+    int fd;
     static const char prologue[] =
 	"<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
 	"<sphinx:docset>\n";
@@ -1019,18 +1025,29 @@ static int flush(sphinx_update_receiver_t *tr, int force)
 	fwrite(epilogue, 1, sizeof(epilogue)-1, stderr);
     }
 
-    r = command_popen(&cmd, "w",
-		      FMINDEX, "--config", tr->latestdb.config, "rt", NULL);
-    if (r) goto out;
+    sphinxdir = xstrdup(tr->latestdb.config);
+    p = strrchr(sphinxdir, '/');
+    assert(p != NULL);
+    *p = '\0';
+    xmlfile = strconcat(sphinxdir, FMINDEX_XML_FNAME, (char *) NULL);
+    free(sphinxdir);
 
-    r = prot_write(cmd->stdin_prot, prologue, sizeof(prologue)-1);
-    if (r) goto out;
-    r = prot_putbuf(cmd->stdin_prot, &tr->super.tmp);
-    if (r) goto out;
-    r = prot_write(cmd->stdin_prot, epilogue, sizeof(epilogue)-1);
-    if (r) goto out;
+    fd = open(xmlfile, O_WRONLY|O_CREAT|O_TRUNC, 0600);
+    if (fd < 0) {
+	syslog(LOG_ERR, "Failed to open %s: %m", xmlfile);
+	goto out;
+    }
+    r = retry_write(fd, prologue, sizeof(prologue)-1);
+    if (r > 0) retry_write(fd, tr->super.tmp.s, tr->super.tmp.len);
+    if (r > 0) retry_write(fd, epilogue, sizeof(epilogue)-1);
+    if (r < 0) {
+	syslog(LOG_ERR, "Failed to write %s: %m", xmlfile);
+	close(fd);
+	goto out;
+    }
+    close(fd);
 
-    r = command_pclose(&cmd);
+    r = run_command(FMINDEX, "--config", tr->latestdb.config, "rt", NULL);
     if (r) {
 	syslog(LOG_ERR, "IOERROR: Sphinx "FMINDEX" failed for "
 			"mailbox %s, %u messages ending at uid %u: %s",
@@ -1053,7 +1070,8 @@ static int flush(sphinx_update_receiver_t *tr, int force)
     buf_reset(&tr->super.tmp);
 
 out:
-    if (cmd) r = command_pclose(&cmd);
+    if (xmlfile) unlink(xmlfile);
+    free(xmlfile);
     return r;
 }
 
