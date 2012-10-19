@@ -174,12 +174,16 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
 	}
 
 	if (++nbatch >= batch_size) {
+	    r = rx->end_mailbox(rx, mailbox);
+	    if (r) return r;
 	    syslog(LOG_INFO, "search_update_mailbox batching %s after %d messages",
 		   mailbox->name, nbatch);
 	    /* give someone else a chance */
 	    r = mailbox_yield_index(mailbox);
 	    if (r) break;
 	    nbatch = 0;
+	    r = rx->begin_mailbox(rx, mailbox, incremental);
+	    if (r) break;
 	}
     }
 
