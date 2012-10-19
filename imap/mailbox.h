@@ -274,6 +274,9 @@ struct mailbox {
 			  /*  record size remains the same */
 #define OFFSET_SYNC_CRC_VERS 120 /* version of algorithm used for SYNC_CRC field */
 #define OFFSET_HEADER_CRC 124 /* includes all zero for the spares! */
+/* NEXT UPDATE - add Bug #3562 "TOTAL_MAILBOX_USED" field, 64 bit
+ * value which counts the total size of all files included expunged
+ * files.  This will need a header size change, hence putting it off */
 
 /* Offsets of index_record fields in index/expunge file
  *
