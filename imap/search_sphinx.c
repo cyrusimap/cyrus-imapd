@@ -1070,7 +1070,23 @@ static int flush(sphinx_update_receiver_t *tr, int force)
     buf_reset(&tr->super.tmp);
 
 out:
-    if (xmlfile) unlink(xmlfile);
+    if (xmlfile) {
+	if (r) {
+	    /* failed, leave the xmlfile around for debugging */
+	    char *x2;
+	    struct timeval now;
+	    char stamp[64];
+	    gettimeofday(&now, NULL);
+	    snprintf(stamp, sizeof(stamp), "%u.%06u",
+		    (unsigned)now.tv_sec, (unsigned)now.tv_usec);
+	    x2 = strconcat(xmlfile, stamp, NULL);
+	    rename(xmlfile, x2);
+	    syslog(LOG_INFO, "Saved XML as %s", x2);
+	    free(x2);
+	}
+	else
+	    unlink(xmlfile);
+    }
     free(xmlfile);
     return r;
 }
