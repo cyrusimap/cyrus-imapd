@@ -449,7 +449,8 @@ static void utf8_2uni(struct convert_rock *rock, int c)
     struct table_state *s = (struct table_state *)rock->state;
 
     if (c == U_REPLACEMENT) {
-	convert_putc(rock->next, c);
+emit_replacement:
+	convert_putc(rock->next, U_REPLACEMENT);
 	s->bytesleft = 0;
 	s->codepoint = 0;
 	return;
@@ -457,18 +458,55 @@ static void utf8_2uni(struct convert_rock *rock, int c)
 
     assert((unsigned)c <= 0xff);
 
+    /*
+     * The following bytes are never valid in UTF-8 streams:
+     *
+     * C0-C1	could only be used for overlong encoding of
+     *		basic ASCII characters
+     * F5-FD	start bytes of sequences that could only encode
+     *		numbers larger than the 0x10FFFF limit of Unicode
+     * FE-FF	not valid start bytes or anything else
+     *
+     * Thanks to http://en.wikipedia.org/wiki/UTF-8
+     *
+     * These checks are interspersed with bitwise checks below.
+     *
+     * When we see a valid leading character but a sequence has
+     * not finished, we have detected an ill-formed sequence.  The
+     * correct thing to do according to Section 3.9 of the Unicode
+     * standard 6.0 is to jettison the current sequence, emit the
+     * Replacement character and begin a new sequence with the new
+     * character.  From the standard:
+     *
+     *	    For example, with the input UTF-8 code unit sequence
+     *	    <C2 41 42>, such a UTF-8 conversion process must not
+     *	    return <U+FFFD> or <U+FFFD, U+0042>, because either of
+     *	    those outputs would be the result of misinterpreting
+     *	    a well-formed subsequence as being part of the ill-formed
+     *	    subsequence. The expected return value for such a process
+     *	    would instead be <U+FFFD, U+0041, U+0042>.
+     */
+
     if ((c & 0xf8) == 0xf0) { /* 11110xxx */
 	/* first of a 4 char sequence */
+	if (s->bytesleft)	/* incomplete sequence */
+	    convert_putc(rock->next, U_REPLACEMENT);
+	if (c >= 0xf5 && c <= 0xf7) goto emit_replacement;
 	s->bytesleft = 3;
 	s->codepoint = c & 0x07; /* 00000111 */
     }
     else if ((c & 0xf0) == 0xe0) { /* 1110xxxx */
 	/* first of a 3 char sequence */
+	if (s->bytesleft)	/* incomplete sequence */
+	    convert_putc(rock->next, U_REPLACEMENT);
 	s->bytesleft = 2;
 	s->codepoint = c & 0x0f; /* 00001111 */
     }
     else if ((c & 0xe0) == 0xc0) { /* 110xxxxx */
 	/* first of a 2 char sequence */
+	if (s->bytesleft)	/* incomplete sequence */
+	    convert_putc(rock->next, U_REPLACEMENT);
+	if (c == 0xc0 || c == 0xc1) goto emit_replacement;
 	s->bytesleft = 1;
 	s->codepoint = c & 0x1f; /* 00011111 */
     }
@@ -478,12 +516,19 @@ static void utf8_2uni(struct convert_rock *rock, int c)
 	    s->codepoint = (s->codepoint << 6) + (c & 0x3f); /* 00111111 */
 	    s->bytesleft--;
 	    if (!s->bytesleft) {
-	        convert_putc(rock->next, s->codepoint);
+		convert_putc(rock->next, s->codepoint);
 		s->codepoint = 0;
 	    }
 	}
+	else
+	    goto emit_replacement;
+    }
+    else if (c >= 0xf8 && c <= 0xff) {
+	goto emit_replacement;
     }
     else { /* plain ASCII char */
+	if (s->bytesleft)	/* incomplete sequence */
+	    convert_putc(rock->next, U_REPLACEMENT);
 	convert_putc(rock->next, c);
 	s->bytesleft = 0;
 	s->codepoint = 0;

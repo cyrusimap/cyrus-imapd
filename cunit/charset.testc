@@ -379,6 +379,49 @@ static void test_extract(void)
 	     0, ENCODING_NONE, "PLAIN",
 	     "YOU PROBABLY HAVEN'T HEARD OF THEM");
 
+    /* invalid UTF-8 bytes become the Replacement character */
+    TESTCASE("a\300b", 0, ENCODING_NONE, "PLAIN", /* 0xC0 */
+	     "A"UTF8_REPLACEMENT"B");
+    TESTCASE("a\301b", 0, ENCODING_NONE, "PLAIN", /* 0xC1 */
+	     "A"UTF8_REPLACEMENT"B");
+    TESTCASE("a\365b", 0, ENCODING_NONE, "PLAIN", /* 0xF5 */
+	     "A"UTF8_REPLACEMENT"B");
+    TESTCASE("a\366b", 0, ENCODING_NONE, "PLAIN", /* 0xF6 */
+	     "A"UTF8_REPLACEMENT"B");
+    TESTCASE("a\367b", 0, ENCODING_NONE, "PLAIN", /* 0xF7 */
+	     "A"UTF8_REPLACEMENT"B");
+    TESTCASE("a\370b", 0, ENCODING_NONE, "PLAIN", /* 0xF8 */
+	     "A"UTF8_REPLACEMENT"B");
+    TESTCASE("a\371b", 0, ENCODING_NONE, "PLAIN", /* 0xF9 */
+	     "A"UTF8_REPLACEMENT"B");
+    TESTCASE("a\372b", 0, ENCODING_NONE, "PLAIN", /* 0xFA */
+	     "A"UTF8_REPLACEMENT"B");
+    TESTCASE("a\373b", 0, ENCODING_NONE, "PLAIN", /* 0xFB */
+	     "A"UTF8_REPLACEMENT"B");
+    TESTCASE("a\374b", 0, ENCODING_NONE, "PLAIN", /* 0xFC */
+	     "A"UTF8_REPLACEMENT"B");
+    TESTCASE("a\375b", 0, ENCODING_NONE, "PLAIN", /* 0xFD */
+	     "A"UTF8_REPLACEMENT"B");
+    TESTCASE("a\376b", 0, ENCODING_NONE, "PLAIN", /* 0xFE */
+	     "A"UTF8_REPLACEMENT"B");
+    TESTCASE("a\377b", 0, ENCODING_NONE, "PLAIN", /* 0xFF */
+	     "A"UTF8_REPLACEMENT"B");
+
+    /* ill-formed UTF-8 sequences become the Replacement character */
+
+    /* 2-byte sequence lead byte then a non-continuation byte */
+    TESTCASE("a\302bcd", 0, ENCODING_NONE, "PLAIN",
+	     "A"UTF8_REPLACEMENT"BCD");
+    /* 3-byte sequence lead byte then a non-continuation byte */
+    TESTCASE("a\340bcde", 0, ENCODING_NONE, "PLAIN",
+	     "A"UTF8_REPLACEMENT"BCDE");
+    /* 4-byte sequence lead byte then a non-continuation byte */
+    TESTCASE("a\360bcdef", 0, ENCODING_NONE, "PLAIN",
+	     "A"UTF8_REPLACEMENT"BCDEF");
+    /* unexpected continuation byte */
+    TESTCASE("a\240bc", 0, ENCODING_NONE, "PLAIN",
+	     "A"UTF8_REPLACEMENT"BC");
+
     /* HTML: correctly formed balanced tag pairs */
     TESTCASE("<bold>Photo</bold> <em>booth</em>",
 	0, ENCODING_NONE, "HTML",
