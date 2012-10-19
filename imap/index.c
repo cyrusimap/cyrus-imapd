@@ -2495,7 +2495,7 @@ EXPORTED int index_convmultisort(struct index_state *state,
 	sf->msg_count = sf->alloc = state2->exists;
 	sf->msg_list = xmalloc(sf->alloc * sizeof(int));
 
-	if (!strcmp(windowargs->anchorfolder, sf->mboxname))
+	if (!strcmpsafe(windowargs->anchorfolder, sf->mboxname))
 	    sf->is_anchorfolder = 1;
 
 	anchor = sf->is_anchorfolder ? windowargs->anchor : 0;
