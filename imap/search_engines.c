@@ -165,8 +165,13 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
 	    continue;
 
 	msg = message_new_from_record(mailbox, &record);
-	index_getsearchtext(msg, rx, 0);
+	r = index_getsearchtext(msg, rx, 0);
 	message_unref(&msg);
+
+	if (r) {
+	    rx->end_mailbox(rx, mailbox);
+	    return r;
+	}
 
 	if (++nbatch >= batch_size) {
 	    syslog(LOG_INFO, "search_update_mailbox batching %s after %d messages",

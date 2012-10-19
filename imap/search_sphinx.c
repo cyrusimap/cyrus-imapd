@@ -1170,11 +1170,10 @@ static int end_message_update(search_text_receiver_t *rx)
     tr->latest = tr->super.uid;
 
     r = flush(tr, /*force*/0);
-    /* TODO: propagate error to the user */
 
 out:
     tr->super.uid = 0;
-    return 0;
+    return r;
 }
 
 static const char *indexing_lockpath(struct mailbox *mailbox)

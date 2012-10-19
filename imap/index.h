@@ -290,7 +290,7 @@ void freesequencelist(struct seqset *l);
 extern int index_expunge(struct index_state *state, char *uidsequence,
 			 int need_deleted);
 
-extern void index_getsearchtext(struct message *,
+extern int index_getsearchtext(struct message *,
 				struct search_text_receiver *receiver,
 				int snippet);
 

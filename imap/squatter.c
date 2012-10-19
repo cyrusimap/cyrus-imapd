@@ -233,7 +233,7 @@ static int index_one(const char *name, int blocking)
 
     mailbox_close(&mailbox);
 
-    return 0;
+    return r;
 }
 
 static int addmbox(char *name,

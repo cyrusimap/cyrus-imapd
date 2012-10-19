@@ -5498,7 +5498,7 @@ static int getsearchtext_cb(int partno, int charset, int encoding,
     return 0;
 }
 
-EXPORTED void index_getsearchtext(message_t *msg,
+EXPORTED int index_getsearchtext(message_t *msg,
 			 search_text_receiver_t *receiver,
 			 int snippet)
 {
@@ -5506,6 +5506,7 @@ EXPORTED void index_getsearchtext(message_t *msg,
     struct buf buf = BUF_INITIALIZER;
     uint32_t uid = 0;
     int format = MESSAGE_SEARCH;
+    int r;
 
     message_get_uid(msg, &uid);
     receiver->begin_message(receiver, uid);
@@ -5537,8 +5538,9 @@ EXPORTED void index_getsearchtext(message_t *msg,
     if (!message_get_field(msg, "Subject", format, &buf))
 	stuff_part(receiver, SEARCH_PART_SUBJECT, &buf);
 
-    receiver->end_message(receiver);
+    r = receiver->end_message(receiver);
     buf_free(&buf);
+    return r;
 }
 
 /*
