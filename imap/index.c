@@ -2435,6 +2435,7 @@ EXPORTED int index_convmultisort(struct index_state *state,
     struct index_state *state2 = NULL;
     int found_any = 0;
     int anchor_folderid = -1;
+    unsigned msgno;
     char extname[MAX_MAILBOX_BUFFER];
 
     assert(windowargs);
@@ -2494,6 +2495,9 @@ EXPORTED int index_convmultisort(struct index_state *state,
 
 	sf->msg_count = sf->alloc = state2->exists;
 	sf->msg_list = xmalloc(sf->alloc * sizeof(int));
+	for (msgno = 1; msgno <= sf->msg_count; msgno++) {
+	    sf->msg_list[msgno-1] = msgno;
+	}
 
 	if (!strcmpsafe(windowargs->anchorfolder, sf->mboxname))
 	    sf->is_anchorfolder = 1;
