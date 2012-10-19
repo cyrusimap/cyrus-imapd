@@ -2387,10 +2387,10 @@ static int add_search_folder(void *rock,
     
     if (!sr->include_lowvalue) {
 	/* XXX - better skipping logic */
-	if (!strcmp(parts.box, "Trash"))
+	if (!strcmpsafe(parts.box, "Trash"))
 	    goto done;
 
-	if (!strcmp(parts.box, "Junk Mail"))
+	if (!strcmpsafe(parts.box, "Junk Mail"))
 	    goto done;
     }
 
