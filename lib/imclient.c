@@ -1914,7 +1914,7 @@ EXPORTED int imclient_starttls(struct imclient *imclient,
 #ifdef HAVE_SSL
   int result;
   struct authresult theresult;
-  unsigned ssf;
+  sasl_ssf_t ssf;
   char *auth_id;
   
   imclient_send(imclient, tlsresult, (void *)&theresult,
