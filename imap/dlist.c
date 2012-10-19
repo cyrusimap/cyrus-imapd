@@ -154,7 +154,11 @@ EXPORTED const char *dlist_reserve_path(const char *part, struct message_guid *g
 		  config_partitiondir(part), (unsigned long)getpid(),
 		  message_guid_encode(guid));
     /* gotta make sure we can create files */
-    cyrus_mkdir(buf, 0755);
+    if (cyrus_mkdir(buf, 0755)) {
+	/* it's going to fail later, but at least this will help */
+	syslog(LOG_ERR, "IOERROR: failed to create %s/%lu/ for reserve: %m",
+	       config_partitiondir(part), (unsigned long)getpid());
+    }
     return buf;
 }
 
