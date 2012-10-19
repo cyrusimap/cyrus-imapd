@@ -1052,16 +1052,21 @@ static const char *indexing_lockpath(struct mailbox *mailbox)
     return lockpath;
 }
 
+static void indexing_unlock(int *fdp)
+{
+    if (*fdp >= 0) {
+	close(*fdp);
+	*fdp = -1;
+    }
+}
+
 static int indexing_lock(struct mailbox *mailbox, int *fdp)
 {
     const char *lockpath = indexing_lockpath(mailbox);
     int fd;
     int r;
 
-    if (*fdp >= 0) {
-	close(*fdp);
-	*fdp = -1;
-    }
+    indexing_unlock(fdp);
 
     fd = open(lockpath, O_WRONLY|O_CREAT, 0600);
     if (fd < 0) {
@@ -1085,24 +1090,6 @@ static int indexing_lock(struct mailbox *mailbox, int *fdp)
     }
 
     *fdp = fd;
-    return 0;
-}
-
-static int indexing_unlock(struct mailbox *mailbox, int *fdp)
-{
-    const char *lockpath = indexing_lockpath(mailbox);
-    int r;
-
-    if (*fdp < 0)
-	return 0;	/* not locked */
-
-    r = lock_unlock(*fdp, lockpath);
-    if (r < 0)
-	syslog(LOG_ERR, "IOERROR: unable to unlock %s: %m",
-		lockpath);
-
-    close(*fdp);
-    *fdp = -1;
     return 0;
 }
 
@@ -1204,7 +1191,7 @@ static int end_update(search_text_receiver_t *rx)
     sphinx_update_receiver_t *tr = (sphinx_update_receiver_t *)rx;
 
     close_connection(&tr->conn);
-    if (tr->indexing_lock_fd >= 0) close(tr->indexing_lock_fd);
+    indexing_unlock(&tr->indexing_lock_fd);
     return free_receiver(&tr->super);
 }
 
