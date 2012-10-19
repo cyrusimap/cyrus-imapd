@@ -254,6 +254,9 @@ static void append_escaped_cstr(struct buf *to, const char *str, int quote)
 	append_escaped_map(to, str, strlen(str), quote);
 }
 
+#define invalid_xml_char(c) \
+    ((c) < 0x20 && !((c) == '\t' || (c) == '\n' || (c) == '\r'))
+
 static void xml_escape_map(struct buf *buf,
 			   const char *base, unsigned int len)
 {
@@ -267,7 +270,7 @@ static void xml_escape_map(struct buf *buf,
 	    buf_appendcstr(buf, "&gt;");
 	else if (c == '&')
 	    buf_appendcstr(buf, "&amp;");
-	else
+	else if (!invalid_xml_char(c))
 	    buf_putc(buf, c);
     }
     buf_cstring(buf);
