@@ -48,6 +48,7 @@
 #endif
 #include <ctype.h>
 #include <syslog.h>
+#include <assert.h>
 
 #include "acl.h"
 #include "charset.h"
