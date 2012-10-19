@@ -1452,6 +1452,11 @@ product version in the capabilities */
 { "syslog_prefix", NULL, STRING }
 /* String to be prepended to the process name in syslog entries. */
 
+{ "syslog_facility", NULL, STRING }
+/* Configure a syslog facility.  The default is whatever is compiled
+   in.  Allowed values are: DAEMON, MAIL, NEWS, USER, and LOCAL0 
+   through to LOCAL7 */
+
 { "tcp_keepalive", 0, SWITCH }
 /* Enable keepalive on TCP connections */
 

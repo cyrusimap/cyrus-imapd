@@ -114,6 +114,41 @@ static int session_id_count = 0;
 
 static strarray_t *suppressed_capabilities = NULL;
 
+static int get_facility(const char *name)
+{
+    if (!strcasecmp(name, "DAEMON"))
+	return LOG_DAEMON;
+    if (!strcasecmp(name, "MAIL"))
+	return LOG_MAIL;
+    if (!strcasecmp(name, "NEWS"))
+	return LOG_NEWS;
+    if (!strcasecmp(name, "USER"))
+	return LOG_USER;
+    if (!strcasecmp(name, "LOCAL0"))
+	return LOG_LOCAL0;
+    if (!strcasecmp(name, "LOCAL1"))
+	return LOG_LOCAL1;
+    if (!strcasecmp(name, "LOCAL2"))
+	return LOG_LOCAL2;
+    if (!strcasecmp(name, "LOCAL3"))
+	return LOG_LOCAL3;
+    if (!strcasecmp(name, "LOCAL4"))
+	return LOG_LOCAL4;
+    if (!strcasecmp(name, "LOCAL5"))
+	return LOG_LOCAL5;
+    if (!strcasecmp(name, "LOCAL6"))
+	return LOG_LOCAL6;
+    if (!strcasecmp(name, "LOCAL7"))
+	return LOG_LOCAL7;
+
+    /* fall back to the default.  This will work because we already have
+       this log open when we call out */
+
+    syslog(LOG_ERR, "config error: syslog name %s not recognised", name);
+
+    return SYSLOG_FACILITY;
+}
+
 /* Called before a cyrus application starts (but after command line parameters
  * are read) */
 EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flags, int config_need_data)
@@ -123,6 +158,7 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     const char *prefix;
     int umaskval = 0;
     int syslog_opts = LOG_PID;
+    int facility;
 
     if(cyrus_init_run != NOT_RUNNING) {
 	fatal("cyrus_init called twice!", EC_CONFIG);
@@ -152,18 +188,20 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     config_read(alt_config, config_need_data);
 
     prefix = config_getstring(IMAPOPT_SYSLOG_PREFIX);
+    facility = config_getstring(IMAPOPT_SYSLOG_FACILITY);
 
     /* Reopen the log with the new prefix, if needed  */    
-    if(prefix) {
+    if (prefix || facility) {
 	int size = strlen(prefix) + 1 + strlen(ident) + 1;
 	char *ident_buf = xmalloc(size);
+	int facnum = facility ? get_facility(facility) : SYSLOG_FACILITY;
 	
 	strlcpy(ident_buf, prefix, size);
 	strlcat(ident_buf, "/", size);
 	strlcat(ident_buf, ident, size);
 
 	closelog();
-	openlog(ident_buf, syslog_opts, SYSLOG_FACILITY);
+	openlog(ident_buf, syslog_opts, facnum);
 
 	/* don't free the openlog() string! */
     }
