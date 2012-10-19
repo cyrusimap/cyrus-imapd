@@ -11945,8 +11945,6 @@ static int getsortcriteria(char *tag, struct sortcrit **sortcrit)
 	    if (c == EOF) goto missingarg;
 	    (*sortcrit)[n].args.flag.name = xstrdup(criteria.s);
 	}
-	else if (!strcmp(criteria.s, "folder"))
-	    (*sortcrit)[n].key = SORT_FOLDER;
 	else {
 	    prot_printf(imapd_out, "%s BAD Invalid Sort criterion %s\r\n",
 			tag, criteria.s);

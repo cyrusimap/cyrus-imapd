@@ -294,7 +294,6 @@ enum {
     SORT_CONVEXISTS,
     SORT_CONVSIZE,
     SORT_HASCONVFLAG,
-    SORT_FOLDER
     /* values > 255 are reserved for internal use */
 };
 
