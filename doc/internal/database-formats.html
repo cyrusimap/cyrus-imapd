@@ -161,7 +161,7 @@ Data: &lt;Version&gt;TAB&lt;Deny List (comma-separated wildmat patterns)&gt;TAB&
 
 <h2>Seen State (&lt;userid&gt;.seen)</h2>
 
-This database is a per-user database and maintains the list of
+This database is per-user and maintains the list of
 messages that the user has read in each mailbox.  The database is
 indexed by mailbox unique-id and each data record contains the
 database version number, the timestamp of when a message was last
@@ -177,7 +177,7 @@ Data: &lt;Version&gt;SP&lt;Last Read Time&gt;SP&lt;Last Read UID&gt;SP&lt;Last C
 
 <h2>Subscriptions (&lt;userid&gt;.sub)</h2>
 
-<p>This database is a per-user database and contains the list of
+<p>This database is per-user and contains the list of
 mailboxes to which the user has subscribed.  The database is indexed
 by mailbox name and each data record contains no data.  The format of
 each record is follows:</p>
@@ -191,7 +191,7 @@ Data: None
 
 <h2>Mailbox Keys (&lt;userid&gt;.mboxkey)</h2>
 
-<p>This database is a per-user database and contains the list of
+<p>This database is per-user and contains the list of
 mailbox access keys which are used for generating URLAUTH-authorized
 URLs.  The database is indexed by mailbox name and each data record
 contains the database version number and the associated access key.
@@ -204,18 +204,64 @@ Data: &lt;Version (2 bytes)&gt;&lt;Access Key (multi-byte)&gt;
 </pre>
 
 
-<h2>CalDAV Index (cyrus.caldav)</h2>
+<h2>DAV Index (&lt;userid&gt;.dav)</h2>
 
-<p>This database is a per-mailbox database and contains a mapping of
-  client-supplied resource names (URLs) and the corresponding message
-  UIDs.  The database is indexed by resource name and each data record
-  contains the database version number and the associated message UID.
-  The format of each record is as follows:</p>
+<p>This SQLite database is per-user and primarily maintains a
+  mapping from DAV resource names (URLs) to the corresponding Cyrus
+  mailboxes and IMAP message UIDs.  The database is designed to have
+  one table per resource type (iCalendar, vCard, etc) with each table
+  containing metadata specific to that resource type.</p>
+
+<h3>CalDAV</h3>
+
+<p>The format of the iCalendar table used by CalDAV is as follows:</p>
 
 <pre>
-Key: &lt;Resource Name&gt;
+CREATE TABLE ical_objs (
+ rowid INTEGER PRIMARY KEY,
+ mailbox TEXT NOT NULL,
+ resource TEXT NOT NULL,
+ imap_uid INTEGER,
+ ical_uid TEXT,
+ comp_type INTEGER,
+ organizer TEXT,
+ sched_tag TEXT,
+ dtstart TEXT,
+ dtend TEXT,
+ recurring INTEGER,
+ transp INTEGER,
+ UNIQUE( mailbox, resource )
+);
+</pre>
 
-Data: &lt;Version&gt;SP&lt;Message UID&gt;
+<p>Because CalDAV Scheduling requires the server to locate a resource
+  by iCalendar UID regardless of which calendar collection (mailbox)
+  it resides in, the iCalendar table has an additional index as follows:</p>
+
+<pre>
+CREATE INDEX idx_ical_uid ON ical_objs ( ical_uid );
+</pre>
+
+<h3>CardDAV</h3>
+
+<p>The format of the vCard table used by CardDAV is as follows (work
+  in progress):</p>
+
+<pre>
+CREATE TABLE vcard_objs (
+ rowid INTEGER PRIMARY KEY,
+ mailbox TEXT NOT NULL,
+ resource TEXT NOT NULL,
+ imap_uid INTEGER,
+ vcard_uid TEXT,
+ version INTEGER,
+ kind INTEGER,
+ fname TEXT,
+ name TEXT,
+ nickname TEXT,
+ email TEXT,
+ UNIQUE( mailbox, resource )
+);
 </pre>
 
 </body>
