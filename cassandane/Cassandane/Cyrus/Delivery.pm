@@ -113,8 +113,6 @@ sub config_duplicate_suppression_on
     my ($self, $conf) = @_;
     xlog "Setting duplicatesuppression";
     $conf->set(duplicatesuppression => 1);
-    xlog "Setting duplicate_mailbox_mode to (default)";
-    $conf->set(duplicate_mailbox_mode => 'name');
 }
 
 sub test_duplicate_suppression_on
@@ -122,66 +120,6 @@ sub test_duplicate_suppression_on
     my ($self) = @_;
 
     xlog "Testing behaviour with duplicate suppression on";
-
-    # test data from hipsteripsum.me
-    my $folder1 = "INBOX.mustache";
-    my $folder2 = "INBOX.freegan";
-
-    xlog "Create the target folder";
-    my $imaptalk = $self->{store}->get_client();
-    $imaptalk->create($folder1)
-	or die "Cannot create $folder1: $@";
-    $self->{store}->set_fetch_attributes('uid');
-
-    xlog "Deliver a message";
-    my %msgs;
-    $msgs{1} = $self->{gen}->generate(subject => "Message 1");
-    $msgs{1}->set_attribute(uid => 1);
-    $self->{instance}->deliver($msgs{1}, folder => $folder1);
-
-    xlog "Check that the message made it";
-    $self->{store}->set_folder($folder1);
-    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
-
-    xlog "Try to deliver the same message again";
-    $self->{instance}->deliver($msgs{1}, folder => $folder1);
-
-    xlog "Check that second copy of the message didn't make it";
-    $self->{store}->set_folder($folder1);
-    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
-
-    xlog "Rename the folder";
-    $imaptalk->rename($folder1, $folder2)
-	or die "Cannot rename $folder1 to $folder2: $@";
-
-    xlog "Try to deliver the same message again";
-    $self->{instance}->deliver($msgs{1}, folder => $folder2);
-
-    xlog "Check that third copy of the message DID make it";
-    # This is perhaps surprising but is the expected behaviour
-    # for duplicate_mailbox_mode = name.
-    $msgs{3} = $msgs{1}->clone();
-    $msgs{3}->set_attribute(uid => 2);
-    $self->{store}->set_folder($folder2);
-    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
-}
-
-sub config_duplicate_suppression_on_uniqueid
-{
-    my ($self, $conf) = @_;
-    xlog "Setting duplicatesuppression";
-    $conf->set(duplicatesuppression => 1);
-    xlog "Setting duplicate_mailbox_mode to uniqueid";
-    $conf->set(duplicate_mailbox_mode => 'uniqueid');
-}
-
-sub test_duplicate_suppression_on_uniqueid
-{
-    my ($self) = @_;
-
-    xlog "Testing behaviour with duplicate suppression on";
-    xlog "and duplicate_mailbox_mode = uniqueid and ";
-    xlog "interaction with RENAME";
 
     # test data from hipsteripsum.me
     my $folder1 = "INBOX.sustainable";
@@ -223,21 +161,18 @@ sub test_duplicate_suppression_on_uniqueid
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 }
 
-sub config_duplicate_suppression_on_uniqueid_delete
+sub config_duplicate_suppression_on_delete
 {
     my ($self, $conf) = @_;
     xlog "Setting duplicatesuppression";
     $conf->set(duplicatesuppression => 1);
-    xlog "Setting duplicate_mailbox_mode to uniqueid";
-    $conf->set(duplicate_mailbox_mode => 'uniqueid');
 }
 
-sub test_duplicate_suppression_on_uniqueid_delete
+sub test_duplicate_suppression_on_delete
 {
     my ($self) = @_;
 
     xlog "Testing behaviour with duplicate suppression on";
-    xlog "and duplicate_mailbox_mode = uniqueid and";
     xlog "interaction with DELETE + CREATE [IRIS-723]";
 
     # test data from hipsteripsum.me
@@ -278,21 +213,18 @@ sub test_duplicate_suppression_on_uniqueid_delete
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 }
 
-sub config_duplicate_suppression_on_uniqueid_badmbox
+sub config_duplicate_suppression_on_badmbox
 {
     my ($self, $conf) = @_;
     xlog "Setting duplicatesuppression";
     $conf->set(duplicatesuppression => 1);
-    xlog "Setting duplicate_mailbox_mode=uniqueid";
-    $conf->set(duplicate_mailbox_mode => 'uniqueid');
 }
 
-sub test_duplicate_suppression_on_uniqueid_badmbox
+sub test_duplicate_suppression_on_badmbox
 {
     my ($self) = @_;
 
     xlog "Testing behaviour with duplicate suppression on";
-    xlog "and duplicate_mailbox_mode = uniqueid and";
     xlog "interaction with attempted delivery to a";
     xlog "non-existant mailbox";
 
