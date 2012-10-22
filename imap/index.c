@@ -2354,102 +2354,88 @@ out:
     return r;
 }
 
-struct search_multi_rock {
-    ptrarray_t folders;
-    int include_lowvalue;
-};
-
 static int add_search_folder(void *rock,
 			     const char *key,
 			     size_t keylen,
 			     const char *val __attribute((unused)),
 			     size_t vallen __attribute((unused)))
 {
-    struct search_multi_rock *sr = (struct search_multi_rock *)rock;
-    char *name = xstrndup(key, keylen);
-    struct mboxname_parts parts;
-    SearchFolder *sf = NULL;
-    int r = 0;
+    ptrarray_t *folders = (ptrarray_t *)rock;
+    SearchFolder *sf = xzmalloc(sizeof(SearchFolder));
 
-    r = mboxname_to_parts(name, &parts);
-    if (r) goto done;
-    
-    if (!sr->include_lowvalue) {
-	/* XXX - better skipping logic */
-	if (!strcmpsafe(parts.box, "Trash"))
-	    goto done;
-
-	if (!strcmpsafe(parts.box, "Junk Mail"))
-	    goto done;
-    }
-
-    sf = (SearchFolder *)xzmalloc(sizeof(SearchFolder));
-    sf->mboxname = xstrdup(name);
+    sf->mboxname = xstrndup(key, keylen);
     sf->id = -1; /* unassigned */
-    ptrarray_append(&sr->folders, sf);
+    ptrarray_append(folders, sf);
 
-done:
-    mboxname_free_parts(&parts);
-    free(name);
-    return r;
+    return 0;
 }
 
-/*
- * Performs a XCONVMULTISORT command
- */
-EXPORTED int index_convmultisort(struct index_state *state,
-				 struct sortcrit *sortcrit,
-				 struct searchargs *searchargs,
-				 const struct windowargs *windowargs)
+struct multisort_item {
+    modseq_t cid;
+    int32_t folderid; /* can be -1 */
+    uint32_t uid;
+};
+
+struct multisort_folder {
+    char *name;
+    uint32_t uidvalidity;
+};
+
+struct multisort_result {
+    struct multisort_folder *folders;
+    struct multisort_item *msgs;
+    uint32_t nfolders;
+    uint32_t nmsgs;
+};
+
+static int folder_may_be_in_search(const char *mboxname,
+				   struct searchargs *searchargs)
 {
-    unsigned int mi;
-    unsigned int fi;
-    int next_folder_id = 0;
-    modseq_t xconvmodseq = 0;
-    int i;
-    hashu64_table seen_cids = HASHU64_TABLE_INITIALIZER;
-    uint32_t pos = 0;
-    int found_anchor = 0;
-    uint32_t anchor;
-    uint32_t anchor_pos = 0;
-    uint32_t first_pos = 0;
-    unsigned int ninwindow = 0;
-    ptrarray_t results = PTRARRAY_INITIALIZER;
+    struct searchsub *s;
+    struct strlist *l;
+
+    for (l = searchargs->folder; l; l = l->next) {
+	if (strcmpsafe(l->s, mboxname)) return 0;
+    }
+
+    for (s = searchargs->sublist; s; s = s->next) {
+	if (folder_may_be_in_search(mboxname, s->sub1)) {
+	    if (!s->sub2) return 0;
+	}
+	else {
+	    if (s->sub2 && !folder_may_be_in_search(mboxname, s->sub1))
+		return 0;
+	}
+    }
+
+    return 1;
+}
+
+static struct multisort_result *multisort_run(struct index_state *state,
+					      struct sortcrit *sortcrit,
+					      struct searchargs *searchargs)
+{
+    int fi;
+    int mi;
+    int nfolders = 0;
+    ptrarray_t folders = PTRARRAY_INITIALIZER;
     ptrarray_t merged_msgdata = PTRARRAY_INITIALIZER;
-    int total = UNPREDICTABLE;
     int r = 0;
-    struct conversations_state *cstate = NULL;
-    SearchFolder *sf = NULL;
-    struct search_multi_rock sr;
     struct index_state *state2 = NULL;
-    int found_any = 0;
-    int anchor_folderid = -1;
     unsigned msgno;
-    char extname[MAX_MAILBOX_BUFFER];
-
-    assert(windowargs);
-    assert(!windowargs->changedsince);
-    assert(!windowargs->upto);
-
-    /* Client needs to have specified MULTIANCHOR which includes
-     * the folder name instead of just ANCHOR.  Check that here
-     * 'cos it's easier than doing so during parsing */
-    if (windowargs->anchor && !windowargs->anchorfolder)
-	return IMAP_PROTOCOL_BAD_PARAMETERS;
-
-    cstate = conversations_get_mbox(state->mailbox->name);
-    if (!cstate)
-	return IMAP_INTERNAL;
-
-    memset(&sr.folders, 0, sizeof(ptrarray_t));
-    sr.include_lowvalue = 0; /* XXX - parameter? */
+    struct multisort_result *result = NULL;
 
     r = mboxlist_allusermbox(mboxname_to_userid(state->mailbox->name),
-			     add_search_folder, &sr, /*include deleted*/0);
-    if (r) goto out;
+			     add_search_folder, &folders, /*+deleted*/0);
+    if (r) return NULL;
 
-    for (fi = 0 ; fi < (unsigned)sr.folders.count ; fi++) {
-	sf = ptrarray_nth(&sr.folders, fi);
+    for (fi = 0; fi < folders.count; fi++) {
+	SearchFolder *sf = ptrarray_nth(&folders, fi);
+	unsigned int *msgs;
+	int count = 0;
+
+	if (!folder_may_be_in_search(sf->mboxname, searchargs))
+	    continue;
 
 	if (state2 && state2 != state)
 	    index_close(&state2);
@@ -2467,10 +2453,7 @@ EXPORTED int index_convmultisort(struct index_state *state,
 	    init.out = state->out;
 
 	    r = index_open(sf->mboxname, &init, &state2);
-	    if (r == IMAP_MAILBOX_NONEXISTENT)
-		continue;
-	    if (r)
-		goto out;
+	    if (r) continue;
 
 	    index_checkflags(state2, 0, 0);
 	}
@@ -2478,90 +2461,455 @@ EXPORTED int index_convmultisort(struct index_state *state,
 	/* make sure \Deleted messages are expunged.  Will also lock the
 	 * mailbox state and read any new information */
 	r = index_expunge(state2, NULL, 1);
-	if (r) goto out;
+	if (r) continue;
 
 	if (!state2->exists) continue;
 
-	sf->msg_count = sf->alloc = state2->exists;
-	sf->msg_list = xmalloc(sf->alloc * sizeof(int));
-	for (msgno = 1; msgno <= sf->msg_count; msgno++) {
-	    sf->msg_list[msgno-1] = msgno;
-	}
-
-	if (!strcmpsafe(windowargs->anchorfolder, sf->mboxname))
-	    sf->is_anchorfolder = 1;
-
-	anchor = sf->is_anchorfolder ? windowargs->anchor : 0;
-
-	/* Create/load the msgdata array. */
-	sf->msgdata = index_msgdata_load(state2, sf->msg_list, sf->msg_count,
-					 sortcrit,
-					 anchor, (anchor ? &found_anchor : 0));
+	msgs = xmalloc(state2->exists * sizeof(uint32_t));
 
 	/* One pass through the folder's message list */
-	found_any = 0;
-	for (mi = 0 ; mi < sf->msg_count ; mi++) {
-	    MsgData *msg = sf->msgdata[mi];
-	    struct index_record *record = &state2->map[msg->msgno-1].record;
+	for (msgno = 1 ; msgno <= state2->exists ; msgno++) {
+	    struct index_record *record = &state2->map[msgno-1].record;
 
 	    /* can happen if we didn't "tellchanges" yet */
 	    if (record->system_flags & FLAG_EXPUNGED)
 		continue;
 
 	    /* run the search program */
-	    if (!index_search_evaluate(state2, searchargs, msg->msgno, NULL))
+	    if (!index_search_evaluate(state2, searchargs, msgno, NULL))
 		continue;
 
-	    /* Delay assigning ids to folders until we can be
-	    * certain that any results will be reported for
-	    * the folder */
-	    if (!found_any)
-		sf->id = next_folder_id++;
-
-	    msg->folder = sf;
-
-	    ptrarray_append(&merged_msgdata, msg);
-	    found_any = 1;
+	    msgs[count++] = msgno;
 	}
 
-	if (sf->is_anchorfolder)
-	    anchor_folderid = sf->id; /* may still be -1 */
+	/* Delay assigning ids to folders until we can be
+	 * certain that any results will be reported for
+	 * the folder */
+	if (count) {
+	    sf->id = nfolders++;
+	    sf->uidvalidity = state2->mailbox->i.uidvalidity;
+
+	    /* Create/load the msgdata array. */
+	    sf->msgdata = index_msgdata_load(state2, msgs, count,
+					     sortcrit, 0, 0);
+	    for (mi = 0; mi < count; mi++) {
+		sf->msgdata[mi]->folder = sf;
+		/* merged_msgdata is now "owner" of the pointer */
+		ptrarray_append(&merged_msgdata, sf->msgdata[mi]);
+	    }
+	}
+
+	free(msgs);
     }
 
     if (state2 && state2 != state)
 	index_close(&state2);
-
-    if (windowargs->anchor && !found_anchor) {
-	r = IMAP_ANCHOR_NOT_FOUND;
-	goto out;
-    }
 
     /* Sort the merged messages based on the given criteria */
     the_sortcrit = sortcrit;
     qsort(merged_msgdata.data, merged_msgdata.count,
 	  sizeof(MsgData *), index_sort_compare_qsort);
 
-    construct_hashu64_table(&seen_cids, merged_msgdata.count/4+4, 0);
+    /* convert the result for caching */
+    result = xzmalloc(sizeof(struct multisort_result));
+
+    result->nmsgs = merged_msgdata.count;
+    result->msgs = xmalloc(result->nmsgs * sizeof(struct multisort_item));
+    for (mi = 0; mi < merged_msgdata.count; mi++) {
+	MsgData *msg = ptrarray_nth(&merged_msgdata, mi);
+	result->msgs[mi].folderid = msg->folder->id;
+	result->msgs[mi].uid = msg->uid;
+	result->msgs[mi].cid = msg->cid;
+    }
+
+    result->nfolders = nfolders;
+    result->folders = xmalloc(result->nmsgs * sizeof(struct multisort_folder));
+    for (fi = 0; fi < folders.count; fi++) {
+	SearchFolder *sf = ptrarray_nth(&folders, fi);
+	if (sf->id >= 0) {
+	    result->folders[sf->id].name = xstrdup(sf->mboxname);
+	    result->folders[sf->id].uidvalidity = sf->uidvalidity;
+	}
+	free(sf->mboxname);
+	free(sf->msgdata);
+	free(sf);
+    }
+
+    /* free all our temporary data */
+    ptrarray_fini(&folders);
+    ptrarray_fini(&merged_msgdata);
+
+    return result;
+}
+
+static void index_format_search(struct dlist *parent,
+				const struct searchargs *searchargs)
+{
+    struct dlist *sublist;
+    struct strlist *l, *h;
+    struct searchannot *sa;
+    struct searchsub *s;
+    struct seqset *seq;
+    int i, have_one;
+
+    if (searchargs->flags & SEARCH_RECENT_SET)
+	dlist_setatom(parent, NULL, "RECENT");
+    if (searchargs->flags & SEARCH_RECENT_UNSET)
+	dlist_setatom(parent, NULL, "UNRECENT");
+    if (searchargs->flags & SEARCH_SEEN_SET)
+	dlist_setatom(parent, NULL, "SEEN");
+    if (searchargs->flags & SEARCH_SEEN_UNSET)
+	dlist_setatom(parent, NULL, "UNSEEN");
+
+    if (searchargs->smaller) {
+	dlist_setatom(parent, NULL, "SMALLER");
+	dlist_setnum64(parent, NULL, searchargs->smaller);
+    }
+    if (searchargs->larger) {
+	dlist_setatom(parent, NULL, "LARGER");
+	dlist_setnum64(parent, NULL, searchargs->larger);
+    }
+
+    if (searchargs->after) {
+	dlist_setatom(parent, NULL, "AFTER");
+	dlist_setdate(parent, NULL, searchargs->after);
+    }
+    if (searchargs->before) {
+	dlist_setatom(parent, NULL, "BEFORE");
+	dlist_setdate(parent, NULL, searchargs->before);
+    }
+    if (searchargs->sentafter) {
+	dlist_setatom(parent, NULL, "SENTAFTER");
+	dlist_setdate(parent, NULL, searchargs->sentafter);
+    }
+    if (searchargs->sentbefore) {
+	dlist_setatom(parent, NULL, "SENTBEFORE");
+	dlist_setdate(parent, NULL, searchargs->sentbefore);
+    }
+
+    if (searchargs->modseq) {
+	dlist_setatom(parent, NULL, "MODSEQ");
+	dlist_setnum64(parent, NULL, searchargs->modseq);
+    }
+
+    if (searchargs->system_flags_set) {
+	dlist_setatom(parent, NULL, "SYSTEM_FLAGS");
+	dlist_setnum32(parent, NULL, searchargs->system_flags_set);
+    }
+
+    if (searchargs->system_flags_unset) {
+	dlist_setatom(parent, NULL, "UNSYSTEM_FLAGS");
+	dlist_setnum32(parent, NULL, searchargs->system_flags_unset);
+    }
+
+    have_one = 0;
+    for (i = 0; i < (MAX_USER_FLAGS/32); i++)
+	if (searchargs->user_flags_set[i]) have_one = 1;
+    if (have_one) {
+	dlist_setatom(parent, NULL, "USER_FLAGS");
+	sublist = dlist_newkvlist(parent, NULL);
+	for (i = 0; i < (MAX_USER_FLAGS/32); i++)
+	    dlist_setnum32(sublist, NULL, searchargs->user_flags_set[i]);
+    }
+
+    have_one = 0;
+    for (i = 0; i < (MAX_USER_FLAGS/32); i++)
+	if (searchargs->user_flags_unset[i]) have_one = 1;
+    if (have_one) {
+	dlist_setatom(parent, NULL, "UNUSER_FLAGS");
+	sublist = dlist_newkvlist(parent, NULL);
+	for (i = 0; i < (MAX_USER_FLAGS/32); i++)
+	    dlist_setnum32(sublist, NULL, searchargs->user_flags_unset[i]);
+    }
+
+    for (seq = searchargs->sequence; seq; seq = seq->nextseq) {
+	char *str = seqset_cstring(seq);
+	dlist_setatom(parent, NULL, str);
+	free(str);
+    }
+
+    for (seq = searchargs->uidsequence; seq; seq = seq->nextseq) {
+	char *str = seqset_cstring(seq);
+	dlist_setatom(parent, NULL, "UID");
+	dlist_setatom(parent, NULL, str);
+	free(str);
+    }
+
+    for (l = searchargs->folder; l; l = l->next) {
+	dlist_setatom(parent, NULL, "FOLDER");
+	dlist_setatom(parent, NULL, l->s);
+    }
+
+    for (l = searchargs->from; l; l = l->next) {
+	dlist_setatom(parent, NULL, "FROM");
+	dlist_setatom(parent, NULL, l->s);
+    }
+
+    for (l = searchargs->to; l; l = l->next) {
+	dlist_setatom(parent, NULL, "TO");
+	dlist_setatom(parent, NULL, l->s);
+    }
+
+    for (l = searchargs->cc; l; l = l->next) {
+	dlist_setatom(parent, NULL, "CC");
+	dlist_setatom(parent, NULL, l->s);
+    }
+
+    for (l = searchargs->bcc; l; l = l->next) {
+	dlist_setatom(parent, NULL, "BCC");
+	dlist_setatom(parent, NULL, l->s);
+    }
+
+    for (l = searchargs->subject; l; l = l->next) {
+	dlist_setatom(parent, NULL, "SUBJECT");
+	dlist_setatom(parent, NULL, l->s);
+    }
+
+    for (l = searchargs->messageid; l; l = l->next) {
+	dlist_setatom(parent, NULL, "MESSAGEID");
+	dlist_setatom(parent, NULL, l->s);
+    }
+
+    for (sa = searchargs->annotations ; sa ; sa = sa->next) {
+	dlist_setatom(parent, NULL, "ANNOTATION");
+	sublist = dlist_newlist(parent, NULL);
+	dlist_setatom(sublist, NULL, sa->entry);
+	dlist_setatom(sublist, NULL, sa->attrib);
+	dlist_setmap(sublist, NULL, sa->value.s, sa->value.len);
+    }
+
+    for (s = searchargs->sublist; s; s = s->next) {
+	dlist_setatom(parent, NULL, "OR");
+	sublist = dlist_newlist(parent, NULL);
+	index_format_search(sublist, s->sub1);
+	sublist = dlist_newlist(parent, NULL);
+	index_format_search(sublist, s->sub2);
+    }
+
+    for (l = searchargs->body; l; l = l->next) {
+	dlist_setatom(parent, NULL, "BODY");
+	dlist_setatom(parent, NULL, l->s);
+    }
+
+    for (l = searchargs->text; l; l = l->next) {
+	dlist_setatom(parent, NULL, "TEXT");
+	dlist_setatom(parent, NULL, l->s);
+    }
+
+    h = searchargs->header_name;
+    for (l = searchargs->header; l; (l = l->next), (h = h->next)) {
+	dlist_setatom(parent, NULL, "HEADER");
+	dlist_setatom(parent, NULL, h->s);
+	dlist_setatom(parent, NULL, l->s);
+    }
+
+    if (searchargs->convmodseq) {
+	dlist_setatom(parent, NULL, "CONVMODSEQ");
+	dlist_setnum64(parent, NULL, searchargs->convmodseq);
+    }
+
+    if (searchargs->flags & SEARCH_CONVSEEN_SET)
+	dlist_setatom(parent, NULL, "CONVSEEN");
+
+    if (searchargs->flags & SEARCH_CONVSEEN_UNSET)
+	dlist_setatom(parent, NULL, "UNCONVSEEN");
+
+    for (l = searchargs->convflags; l; l = l->next) {
+	dlist_setatom(parent, NULL, "CONVFLAG");
+	dlist_setatom(parent, NULL, l->s);
+    }
+}
+
+static void index_format_sort(struct dlist *parent,
+			      struct sortcrit *sortcrit)
+{
+    int i = 0;
+
+    do {
+	/* determine sort order from reverse flag bit */
+	if (sortcrit[i].flags & SORT_REVERSE)
+	    dlist_setatom(parent, NULL, "REVERSE");
+
+	switch (sortcrit[i].key) {
+	case SORT_SEQUENCE:
+	    /* nothing to say here unless it's the only thing */
+	    if (!i) dlist_setatom(parent, NULL, "SEQUENCE");
+	    break;
+	case SORT_ARRIVAL:
+	    dlist_setatom(parent, NULL, "ARRIVAL");
+	    break;
+	case SORT_CC:
+	    dlist_setatom(parent, NULL, "CC");
+	    break;
+	case SORT_DATE:
+	    dlist_setatom(parent, NULL, "DATE");
+	    break;
+	case SORT_FROM:
+	    dlist_setatom(parent, NULL, "FROM");
+	    break;
+	case SORT_SIZE:
+	    dlist_setatom(parent, NULL, "SIZE");
+	    break;
+	case SORT_SUBJECT:
+	    dlist_setatom(parent, NULL, "SUBJECT");
+	    break;
+	case SORT_TO:
+	    dlist_setatom(parent, NULL, "TO");
+	    break;
+	case SORT_ANNOTATION:
+	    dlist_setatom(parent, NULL, "ANNOTATION");
+	    dlist_setatom(parent, NULL, sortcrit[i].args.annot.entry);
+	    dlist_setatom(parent, NULL, sortcrit[i].args.annot.userid);
+	    break;
+	case SORT_MODSEQ:
+	    dlist_setatom(parent, NULL, "MODSEQ");
+	    break;
+	case SORT_DISPLAYFROM:
+	    dlist_setatom(parent, NULL, "DISPLAYFROM");
+	    break;
+	case SORT_DISPLAYTO:
+	    dlist_setatom(parent, NULL, "DISPLAYTO");
+	    break;
+	case SORT_UID:
+	    dlist_setatom(parent, NULL, "UID");
+	    break;
+	case SORT_CONVMODSEQ:
+	    dlist_setatom(parent, NULL, "CONVMODSEQ");
+	    break;
+	case SORT_CONVEXISTS:
+	    dlist_setatom(parent, NULL, "CONVEXISTS");
+	    break;
+	case SORT_CONVSIZE:
+	    dlist_setatom(parent, NULL, "CONVSIZE");
+	    break;
+	case SORT_HASFLAG:
+	    dlist_setatom(parent, NULL, "FLAG");
+	    dlist_setatom(parent, NULL, sortcrit[i].args.flag.name);
+	    break;
+	case SORT_HASCONVFLAG:
+	    dlist_setatom(parent, NULL, "CONVFLAG");
+	    dlist_setatom(parent, NULL, sortcrit[i].args.flag.name);
+	    break;
+	case SORT_FOLDER:
+	    dlist_setatom(parent, NULL, "FOLDER");
+	    break;
+	}
+    } while (sortcrit[i++].key != SORT_SEQUENCE);
+}
+
+static char *multisort_cachekey(struct sortcrit *sortcrit,
+				struct searchargs *searchargs)
+{
+    struct buf b = BUF_INITIALIZER;
+    struct dlist *dl = dlist_newlist(NULL, NULL);
+    struct dlist *sc = dlist_newlist(dl, NULL);
+    struct dlist *sa = dlist_newlist(dl, NULL);
+
+    index_format_sort(sc, sortcrit);
+    index_format_search(sa, searchargs);
+
+    dlist_printbuf(dl, 0, &b);
+
+    dlist_free(&dl);
+
+    return buf_release(&b);
+}
+
+static struct multisort_result *multisort_cache_load(struct index_state *state,
+						     modseq_t hms,
+						     const char *cachekey)
+{
+    return NULL;
+}
+
+static void multisort_cache_save(struct index_state *state,
+				 modseq_t hms,
+				 const char *cachekey,
+				 struct multisort_result *sortres)
+{
+    return;
+}
+
+/*
+ * Performs a XCONVMULTISORT command
+ */
+EXPORTED int index_convmultisort(struct index_state *state,
+				 struct sortcrit *sortcrit,
+				 struct searchargs *searchargs,
+				 const struct windowargs *windowargs)
+{
+    unsigned int mi;
+    unsigned int fi;
+    int i;
+    hashu64_table seen_cids = HASHU64_TABLE_INITIALIZER;
+    uint32_t pos = 0;
+    uint32_t anchor_pos = 0;
+    uint32_t first_pos = 0;
+    unsigned int ninwindow = 0;
+    ptrarray_t results = PTRARRAY_INITIALIZER;
+    int total = UNPREDICTABLE;
+    int r = 0;
+    int32_t anchor_folderid = -1;
+    char extname[MAX_MAILBOX_BUFFER];
+    modseq_t hms;
+    struct multisort_result *sortres = NULL;
+    char *cachekey;
+
+    assert(windowargs);
+    assert(!windowargs->changedsince);
+    assert(!windowargs->upto);
+
+    /* Client needs to have specified MULTIANCHOR which includes
+     * the folder name instead of just ANCHOR.  Check that here
+     * 'cos it's easier than doing so during parsing */
+    if (windowargs->anchor && !windowargs->anchorfolder)
+	return IMAP_PROTOCOL_BAD_PARAMETERS;
+
+    hms = mboxname_readmodseq(state->mailbox->name);
+    cachekey = multisort_cachekey(sortcrit, searchargs);
+
+    syslog(LOG_NOTICE, "CACHEKEY %llu %s", hms, cachekey);
+
+    sortres = multisort_cache_load(state, hms, cachekey);
+    if (!sortres) {
+	sortres = multisort_run(state, sortcrit, searchargs);
+	/* OK if it fails */
+	multisort_cache_save(state, hms, cachekey, sortres);
+    }
+
+    if (windowargs->anchorfolder) {
+	for (fi = 0; fi < sortres->nfolders; fi++) {
+	    if (strcmpsafe(windowargs->anchorfolder, sortres->folders[fi].name))
+		continue;
+	    anchor_folderid = fi;
+	    break;
+	}
+    }
+
+    construct_hashu64_table(&seen_cids, sortres->nmsgs/4+4, 0);
+
+    if (!windowargs->conversations)
+	total = sortres->nmsgs;
 
     /* Another pass through the merged message list */
-    for (mi = 0 ; mi < (unsigned)merged_msgdata.count ; mi++) {
-	MsgData *msg = ptrarray_nth(&merged_msgdata, mi);
+    for (mi = 0; mi < sortres->nmsgs; mi++) {
+	struct multisort_item *item = &sortres->msgs[mi];
 
 	/* figure out whether this message is an exemplar */
 	if (windowargs->conversations) {
 	    /* in conversations mode => only the first message seen
 	     * with each unique CID is an exemplar */
-	    if (hashu64_lookup(msg->cid, &seen_cids))
+	    if (hashu64_lookup(item->cid, &seen_cids))
 		continue;
-	    hashu64_insert(msg->cid, (void *)1, &seen_cids);
+	    hashu64_insert(item->cid, (void *)1, &seen_cids);
 	}
 	/* else not in conversations mode => all messages are exemplars */
 
 	pos++;
 
 	if (!anchor_pos &&
-	    windowargs->anchor == msg->uid &&
-	    anchor_folderid == msg->folder->id) {
+	    windowargs->anchor == item->uid &&
+	    anchor_folderid == item->folderid) {
 	    /* we've found the anchor's position, rejoice! */
 	    anchor_pos = pos;
 	}
@@ -2588,7 +2936,7 @@ EXPORTED int index_convmultisort(struct index_state *state,
 
 	if (!first_pos)
 	    first_pos = pos;
-	ptrarray_push(&results, msg);
+	ptrarray_push(&results, item);
     }
 
     if (total == UNPREDICTABLE) {
@@ -2597,7 +2945,7 @@ EXPORTED int index_convmultisort(struct index_state *state,
     }
 
     if (windowargs->anchor && !anchor_pos) {
-	/* the anchor was present but not an exemplar */
+	/* the anchor was not found */
 	assert(results.count == 0);
 	r = IMAP_ANCHOR_NOT_FOUND;
 	goto out;
@@ -2612,25 +2960,25 @@ EXPORTED int index_convmultisort(struct index_state *state,
 	 * response matching /sort/i is assumed to be a sequence of
 	 * numeric uids.  Meh. */
 	prot_printf(state->out, "* XCONVMULTI (");
-	for (fi = 0 ; fi < (unsigned)sr.folders.count ; fi++) {
-	    sf = ptrarray_nth(&sr.folders, fi);
+	for (fi = 0 ; fi < sortres->nfolders ; fi++) {
+	    struct multisort_folder *mf = &sortres->folders[fi];
 
-	    if (sf->id < 0) continue;
 	    searchargs->namespace->mboxname_toexternal(searchargs->namespace,
-						       sf->mboxname, searchargs->userid,
+						       mf->name,
+						       searchargs->userid,
 						       extname);
-	    if (sf->id)
+	    if (fi)
 		prot_printf(state->out, " ");
 	    prot_printf(state->out, "(");
 	    prot_printstring(state->out, extname);
-	    prot_printf(state->out, " %u)", sf->uidvalidity);
+	    prot_printf(state->out, " %u)", mf->uidvalidity);
 	}
 	prot_printf(state->out, ") (");
 	for (i = 0 ; i < results.count ; i++) {
-	    MsgData *msg = results.data[i];
+	    struct multisort_item *item = results.data[i];
 	    if (i)
 		prot_printf(state->out, " ");
-	    prot_printf(state->out, "(%u %u)", msg->folder->id, msg->uid);
+	    prot_printf(state->out, "(%u %u)", item->folderid, item->uid);
 	}
 	prot_printf(state->out, ")\r\n");
     }
@@ -2641,7 +2989,7 @@ out:
 	    prot_printf(state->out, "* OK [POSITION %u]\r\n", first_pos);
 
 	prot_printf(state->out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "]\r\n",
-		    MAX(xconvmodseq, state->mailbox->i.highestmodseq));
+		    hms);
 #if 0
 	prot_printf(state->out, "* OK [UIDNEXT %u]\r\n",
 		    state->mailbox->i.last_uid + 1);
@@ -2651,19 +2999,14 @@ out:
     }
 
     /* free all our temporary data */
-    for (fi = 0 ; fi < (unsigned)sr.folders.count ; fi++) {
-	sf = ptrarray_nth(&sr.folders, fi);
-	index_msgdata_free(sf->msgdata, sf->msg_count);
-	free(sf->mboxname);
-	free(sf->msg_list);
-	free(sf);
-    }
     ptrarray_fini(&results);
-    ptrarray_fini(&merged_msgdata);
+    for (fi = 0 ; fi < sortres->nfolders ; fi++) {
+	free(sortres->folders[fi].name);
+    }
+    free(sortres->folders);
+    free(sortres->msgs);
+    free(sortres);
     free_hashu64_table(&seen_cids, NULL);
-    ptrarray_fini(&sr.folders);
-    if (state2 && state2 != state)
-	index_close(&state2);
 
     return r;
 }

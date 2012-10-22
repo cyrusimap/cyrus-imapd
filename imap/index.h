@@ -181,12 +181,8 @@ typedef struct thread {
 
 typedef struct search_folder {
     char *mboxname;
-    bit32 uidvalidity;
-    int id;		    /* index used for formatting output */
-    unsigned int *msg_list;
-    unsigned int msg_count;
-    unsigned int alloc;
-    int is_anchorfolder;
+    int id;	   /* index used for formatting output */
+    uint32_t uidvalidity;
     MsgData **msgdata;
 } SearchFolder;
 
