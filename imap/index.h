@@ -135,16 +135,31 @@ struct copyargs {
     int msgalloc;
 };
 
+struct search_folder;
+
 typedef struct msgdata {
+    struct search_folder *folder; /* search folder (can be NULL) */
+
+    /* items from the index_record */
     bit32 uid;                  /* UID for output purposes */
     uint32_t msgno;		/* message number */
-    char *msgid;		/* message ID */
+    conversation_id_t cid;	/* conversation id */
     strarray_t ref;		/* array of references */
-    time_t date;		/* sent date & time of message
+    time_t sentdate;		/* sent date & time of message
 				   from Date: header (adjusted by time zone) */
     time_t internaldate;        /* internaldate */
     size_t size;                /* message size */
     modseq_t modseq;            /* modseq of record*/
+    bit32 hasflag;		/* hasflag values (up to 32 of them) */
+
+    /* items from the conversations database */
+    modseq_t convmodseq;	/* modseq of conversation */
+    uint32_t convexists;	/* exists count of conversation */
+    uint32_t convsize;		/* total size of messages in conversation */
+    bit32 hasconvflag;		/* hasconvflag values (up to 32 of them) */
+
+    /* items from the cache record */
+    char *msgid;		/* message ID */
     char *cc;			/* local-part of first "cc" address */
     char *from;			/* local-part of first "from" address */
     char *to;			/* local-part of first "to" address */
@@ -155,13 +170,6 @@ typedef struct msgdata {
     int is_refwd;		/* is message a reply or forward? */
     strarray_t annot;		/* array of annotation attribute values
 				   (stored in order of sortcrit) */
-    modseq_t convmodseq;	/* modseq of conversation */
-    uint32_t convexists;	/* exists count of conversation */
-    uint32_t convsize;		/* total size of messages in conversation */
-    bit32 hasflag;		/* hasflag values (up to 32 of them) */
-    bit32 hasconvflag;		/* hasconvflag values (up to 32 of them) */
-    int folderid;		/* search folder number */
-    conversation_id_t cid;	/* conversation id */
 } MsgData;
 
 typedef struct thread {
@@ -170,6 +178,17 @@ typedef struct thread {
     struct thread *child;	/* first child message */
     struct thread *next;	/* next sibling message */
 } Thread;
+
+typedef struct search_folder {
+    char *mboxname;
+    bit32 uidvalidity;
+    int id;		    /* index used for formatting output */
+    unsigned int *msg_list;
+    unsigned int msg_count;
+    unsigned int alloc;
+    int is_anchorfolder;
+    MsgData **msgdata;
+} SearchFolder;
 
 struct rootset {
     Thread *root;
