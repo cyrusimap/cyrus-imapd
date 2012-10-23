@@ -3799,7 +3799,7 @@ index_fetchcacheheader(struct index_state *state, struct index_record *record,
     buf_cstring(&buf);
 
     message_pruneheader(buf.s, headers, 0);
-    size = buf.len;
+    size = strlen(buf.s); /* not buf.len, it has been pruned */
 
     /* partial fetch: adjust 'size' */
     if (octet_count) {
