@@ -74,4 +74,7 @@ int user_deletequotaroots(const char *user);
 /* find the subscriptions file for user */
 char *user_hash_subs(const char *user);
 
+/* find any sort of file for the user */
+char *user_hash_meta(const char *userid, const char *suffix);
+
 #endif

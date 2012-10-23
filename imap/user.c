@@ -84,8 +84,6 @@
 
 #define FNAME_SUBSSUFFIX "sub"
 
-static char *user_hash_meta(const char *userid, const char *suffix);
-
 #if 0
 static int user_deleteacl(char *name, int matchlen, int maycreate, void* rock)
 {
@@ -497,7 +495,7 @@ int user_deletequotaroots(const char *user)
     return r;
 }
 
-static char *user_hash_meta(const char *userid, const char *suffix)
+EXPORTED char *user_hash_meta(const char *userid, const char *suffix)
 {
     struct mboxname_parts parts;
     const char *domain;
