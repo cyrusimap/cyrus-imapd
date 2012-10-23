@@ -158,7 +158,7 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     const char *prefix;
     int umaskval = 0;
     int syslog_opts = LOG_PID;
-    int facility;
+    const char *facility;
 
     if(cyrus_init_run != NOT_RUNNING) {
 	fatal("cyrus_init called twice!", EC_CONFIG);
