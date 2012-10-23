@@ -75,6 +75,7 @@
 #include "seen.h"
 #include "statuscache.h"
 #include "strhash.h"
+#include "user.h"
 #include "util.h"
 #include "xstats.h"
 #include "ptrarray.h"
@@ -2388,6 +2389,40 @@ struct multisort_result {
     uint32_t nmsgs;
 };
 
+static struct db *sortcache_db(const char *userid, int create)
+{
+    char *fname = user_hash_meta(userid, "sortcache");
+    int flags = create ? CYRUSDB_CREATE : 0;
+    struct db *db = NULL;
+    int r = cyrusdb_open("twoskip", fname, flags, &db);
+
+    free(fname);
+
+    return r ? NULL : db;
+}
+
+struct sortcache_cleanup_rock {
+    struct db *db;
+    const char *prefix;
+    size_t prefixlen;
+};
+
+static int sortcache_cleanup_cb(void *rock,
+				const char *key,
+				size_t keylen,
+				const char *val __attribute__((unused)),
+				size_t vallen __attribute__((unused)))
+{
+    struct sortcache_cleanup_rock *scr = (struct sortcache_cleanup_rock *)rock;
+
+    if (keylen < scr->prefixlen || memcmp(key, scr->prefix, scr->prefixlen)) {
+	/* doesn't match the prefix, remove it */
+	cyrusdb_delete(scr->db, key, keylen, NULL, /*force*/1);
+    }
+
+    return 0;
+}
+
 static int folder_may_be_in_search(const char *mboxname,
 				   struct searchargs *searchargs)
 {
@@ -2819,7 +2854,73 @@ static struct multisort_result *multisort_cache_load(struct index_state *state,
 						     modseq_t hms,
 						     const char *cachekey)
 {
-    return NULL;
+    struct sortcache_cleanup_rock rock;
+    const char *userid = mboxname_to_userid(state->mailbox->name);
+    struct multisort_result *sortres = NULL;
+    struct buf prefix = BUF_INITIALIZER;
+    const char *val = NULL;
+    size_t vallen = 0;
+    struct dlist *dl = NULL;
+    struct dlist *dc;
+    struct dlist *di;
+    int i;
+
+    memset(&rock, 0, sizeof(struct sortcache_cleanup_rock));
+
+    rock.db = sortcache_db(userid, 0);
+    if (!rock.db) goto done;
+
+    buf_printf(&prefix, MODSEQ_FMT " ", hms);
+    rock.prefix = prefix.s;
+    rock.prefixlen = prefix.len;
+
+    if (cyrusdb_foreach(rock.db, "", 0, NULL,
+			sortcache_cleanup_cb, &rock, NULL))
+	goto done;
+
+    buf_appendcstr(&prefix, cachekey);
+
+    if (cyrusdb_fetch(rock.db, prefix.s, prefix.len, &val, &vallen, NULL))
+	goto done;
+
+    /* OK, we have found value! */
+    if (dlist_parsemap(&dl, 0, val, vallen))
+	goto done;
+
+    sortres = xzmalloc(sizeof(struct multisort_result));
+    dlist_getnum32(dl, "NFOLDERS", &sortres->nfolders);
+    dlist_getnum32(dl, "NMSGS", &sortres->nmsgs);
+    sortres->folders = xzmalloc(sortres->nfolders * sizeof(struct multisort_folder));
+    sortres->msgs = xzmalloc(sortres->nmsgs * sizeof(struct multisort_item));
+
+    dc = dlist_getchild(dl, "FOLDERS");
+    i = 0;
+    for (di = dc->head; di; di = di->next) {
+	struct dlist *item = di->head;
+	sortres->folders[i].name = xstrdup(dlist_cstring(item));
+	item = item->next;
+	sortres->folders[i].uidvalidity = dlist_num(item);
+	i++;
+    }
+
+    dc = dlist_getchild(dl, "MSGS");
+    i = 0;
+    for (di = dc->head; di; di = di->next) {
+	struct dlist *item = di->head;
+	sortres->msgs[i].folderid = dlist_num(item);
+	item = item->next;
+	sortres->msgs[i].uid = dlist_num(item);
+	item = item->next;
+	sortres->msgs[i].cid = dlist_num(item);
+	i++;
+    }
+
+done:
+    if (rock.db)
+	cyrusdb_close(rock.db);
+    dlist_free(&dl);
+    buf_free(&prefix);
+    return sortres;
 }
 
 static void multisort_cache_save(struct index_state *state,
@@ -2827,7 +2928,48 @@ static void multisort_cache_save(struct index_state *state,
 				 const char *cachekey,
 				 struct multisort_result *sortres)
 {
-    return;
+    const char *userid = mboxname_to_userid(state->mailbox->name);
+    struct db *db = NULL;
+    struct buf prefix = BUF_INITIALIZER;
+    struct buf result = BUF_INITIALIZER;
+    struct dlist *dl = NULL;
+    struct dlist *dc;
+    struct dlist *di;
+    int i;
+
+    db = sortcache_db(userid, 1);
+    if (!db) goto done;
+
+    buf_printf(&prefix, MODSEQ_FMT " %s", hms, cachekey);
+
+    dl = dlist_newkvlist(NULL, NULL);
+    dlist_setnum32(dl, "NFOLDERS", sortres->nfolders);
+    dlist_setnum32(dl, "NMSGS", sortres->nmsgs);
+    dc = dlist_newlist(dl, "FOLDERS");
+    for (i = 0; i < (int)sortres->nfolders; i++) {
+	di = dlist_newlist(dc, NULL);
+	dlist_setatom(di, NULL, sortres->folders[i].name);
+	dlist_setnum32(di, NULL, sortres->folders[i].uidvalidity);
+    }
+    dc = dlist_newlist(dl, "MSGS");
+    for (i = 0; i < (int)sortres->nmsgs; i++) {
+	di = dlist_newlist(dc, NULL);
+	dlist_setnum32(di, NULL, sortres->msgs[i].folderid);
+	dlist_setnum32(di, NULL, sortres->msgs[i].uid);
+	dlist_setnum64(di, NULL, sortres->msgs[i].cid);
+    }
+
+    dlist_printbuf(dl, 0, &result);
+
+    if (cyrusdb_store(db, prefix.s, prefix.len, result.s, result.len, NULL))
+	goto done;
+
+done:
+    if (db)
+	cyrusdb_close(db);
+    dlist_free(&dl);
+    buf_free(&prefix);
+    buf_free(&result);
 }
 
 /*
