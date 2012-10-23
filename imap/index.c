@@ -2714,11 +2714,18 @@ static void index_format_search(struct dlist *parent,
     }
 
     for (s = searchargs->sublist; s; s = s->next) {
-	dlist_setatom(parent, NULL, "OR");
-	sublist = dlist_newlist(parent, NULL);
-	index_format_search(sublist, s->sub1);
-	sublist = dlist_newlist(parent, NULL);
-	index_format_search(sublist, s->sub2);
+	if (s->sub2) {
+	    dlist_setatom(parent, NULL, "OR");
+	    sublist = dlist_newlist(parent, NULL);
+	    index_format_search(sublist, s->sub1);
+	    sublist = dlist_newlist(parent, NULL);
+	    index_format_search(sublist, s->sub2);
+	}
+	else {
+	    dlist_setatom(parent, NULL, "NOT");
+	    sublist = dlist_newlist(parent, NULL);
+	    index_format_search(sublist, s->sub1);
+	}
     }
 
     for (l = searchargs->body; l; l = l->next) {
