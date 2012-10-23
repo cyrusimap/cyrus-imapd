@@ -244,7 +244,7 @@ static const struct precond_t {
     { "supported-filter", NS_CALDAV },
     { "valid-filter", NS_CALDAV },
 
-    /* CalDAV Scheduling (draft-desruisseaux-caldav-sched) preconditions */
+    /* CalDAV Scheduling (RFC 6638) preconditions */
     { "valid-scheduling-message", NS_CALDAV },
     { "valid-organizer", NS_CALDAV },
     { "unique-scheduling-object-resource", NS_CALDAV },
@@ -1763,7 +1763,7 @@ static const struct prop_entry {
     { "max-attendees-per-instance", XML_NS_CALDAV, 0, NULL, NULL, NULL },
 
 #ifdef WITH_CALDAV_SCHED
-    /* CalDAV Scheduling properties */
+    /* CalDAV Scheduling (RFC 6638) properties */
     { "schedule-tag", XML_NS_CALDAV, 0, propfind_schedtag, NULL, NULL },
     { "schedule-inbox-URL", XML_NS_CALDAV, 0,
       propfind_calurl, NULL, SCHED_INBOX },
