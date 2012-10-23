@@ -2884,6 +2884,10 @@ EXPORTED int index_convmultisort(struct index_state *state,
 	    anchor_folderid = fi;
 	    break;
 	}
+	if (anchor_folderid < 0) {
+	    r = IMAP_ANCHOR_NOT_FOUND;
+	    goto out;
+	}
     }
 
     construct_hashu64_table(&seen_cids, sortres->nmsgs/4+4, 0);
