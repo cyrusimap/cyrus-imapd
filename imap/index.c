@@ -2868,13 +2868,15 @@ EXPORTED int index_convmultisort(struct index_state *state,
     hms = mboxname_readmodseq(state->mailbox->name);
     cachekey = multisort_cachekey(sortcrit, searchargs);
 
-    syslog(LOG_NOTICE, "CACHEKEY %llu %s", hms, cachekey);
-
     sortres = multisort_cache_load(state, hms, cachekey);
-    if (!sortres) {
+    if (sortres) {
+	syslog(LOG_NOTICE, "CACHEKEY HIT %llu %s", hms, cachekey);
+    }
+    else {
 	sortres = multisort_run(state, sortcrit, searchargs);
 	/* OK if it fails */
 	multisort_cache_save(state, hms, cachekey, sortres);
+	syslog(LOG_NOTICE, "CACHEKEY MISS %llu %s", hms, cachekey);
     }
 
     if (windowargs->anchorfolder) {
