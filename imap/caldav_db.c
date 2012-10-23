@@ -60,7 +60,8 @@
 
 
 enum {
-    STMT_SELECT,
+    STMT_SELRSRC,
+    STMT_SELUID,
     STMT_SELMBOX,
     STMT_INSERT,
     STMT_UPDATE,
@@ -71,7 +72,7 @@ enum {
     STMT_ROLLBACK
 };
 
-#define NUM_STMT 9
+#define NUM_STMT 10
 
 struct caldav_db {
     sqlite3 *db;			/* DB handle */
@@ -253,46 +254,76 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 }
 
 
-#define CMD_SELECT							\
+#define CMD_BEGIN "BEGIN TRANSACTION;"
+
+#define CMD_SELRSRC							\
     "SELECT rowid, mailbox, resource, imap_uid, ical_uid, comp_type,"	\
     "  organizer, sched_tag, dtstart, dtend, recurring, transp"		\
     " FROM ical_objs"							\
-    " WHERE ( mailbox = :mailbox AND resource = :resource )"		\
-    "  OR ( ical_uid = :ical_uid AND mailbox != :inbox);"
+    " WHERE ( mailbox = :mailbox AND resource = :resource );"
 
-int caldav_read(struct caldav_db *caldavdb, struct caldav_data *cdata)
+int caldav_lookup_resource(struct caldav_db *caldavdb,
+			   const char *mailbox, const char *resource,
+			   int lock, struct caldav_data **result)
 {
     struct bind_val bval[] = {
-	{ ":mailbox",  SQLITE_TEXT, { .s = cdata->mailbox	 } },
-	{ ":resource", SQLITE_TEXT, { .s = cdata->resource	 } },
-	{ ":ical_uid", SQLITE_TEXT, { .s = cdata->ical_uid	 } },
-	{ ":inbox",    SQLITE_TEXT, { .s = caldavdb->sched_inbox } },
-	{ NULL,	       SQLITE_NULL, { .s = NULL			 } } };
-    struct read_rock rrock = { caldavdb, cdata, NULL, NULL };
+	{ ":mailbox",  SQLITE_TEXT, { .s = mailbox	 } },
+	{ ":resource", SQLITE_TEXT, { .s = resource	 } },
+	{ NULL,	       SQLITE_NULL, { .s = NULL		 } } };
+    static struct caldav_data cdata;
+    struct read_rock rrock = { caldavdb, &cdata, NULL, NULL };
     int r;
 
-    cdata->rowid = 0;
-    r = dav_exec(caldavdb->db, CMD_SELECT, bval, &read_cb, &rrock,
-		 &caldavdb->stmt[STMT_SELECT]);
-    if (!r && !cdata->rowid) r = CYRUSDB_NOTFOUND;
+    *result = &cdata;
+
+    if (lock) {
+	/* begin a transaction */
+	r = dav_exec(caldavdb->db, CMD_BEGIN, NULL, NULL, NULL,
+		     &caldavdb->stmt[STMT_BEGIN]);
+	if (r) return r;
+    }
+
+    cdata.rowid = 0;
+    r = dav_exec(caldavdb->db, CMD_SELRSRC, bval, &read_cb, &rrock,
+		 &caldavdb->stmt[STMT_SELRSRC]);
+    if (!r && !cdata.rowid) r = CYRUSDB_NOTFOUND;
 
     return r;
 }
 
 
-#define CMD_BEGIN "BEGIN TRANSACTION;"
+#define CMD_SELUID							\
+    "SELECT rowid, mailbox, resource, imap_uid, ical_uid, comp_type,"	\
+    "  organizer, sched_tag, dtstart, dtend, recurring, transp"		\
+    " FROM ical_objs"							\
+    " WHERE ( ical_uid = :ical_uid AND mailbox != :inbox);"
 
-int caldav_lockread(struct caldav_db *caldavdb, struct caldav_data *cdata)
+int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
+		      int lock, struct caldav_data **result)
 {
+    struct bind_val bval[] = {
+	{ ":ical_uid", SQLITE_TEXT, { .s = ical_uid		 } },
+	{ ":inbox",    SQLITE_TEXT, { .s = caldavdb->sched_inbox } },
+	{ NULL,	       SQLITE_NULL, { .s = NULL			 } } };
+    static struct caldav_data cdata;
+    struct read_rock rrock = { caldavdb, &cdata, NULL, NULL };
     int r;
 
-    /* begin a transaction */
-    r = dav_exec(caldavdb->db, CMD_BEGIN, NULL, NULL, NULL,
-		 &caldavdb->stmt[STMT_BEGIN]);
-    if (r) return r;
+    *result = &cdata;
 
-    /* do the actual read */
-    return caldav_read(caldavdb, cdata);
+    if (lock) {
+	/* begin a transaction */
+	r = dav_exec(caldavdb->db, CMD_BEGIN, NULL, NULL, NULL,
+		     &caldavdb->stmt[STMT_BEGIN]);
+	if (r) return r;
+    }
+
+    cdata.rowid = 0;
+    r = dav_exec(caldavdb->db, CMD_SELUID, bval, &read_cb, &rrock,
+		 &caldavdb->stmt[STMT_SELUID]);
+    if (!r && !cdata.rowid) r = CYRUSDB_NOTFOUND;
+
+    return r;
 }
 
 
@@ -381,11 +412,11 @@ int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata)
 
 #define CMD_DELETE "DELETE FROM ical_objs WHERE rowid = :rowid;"
 
-int caldav_delete(struct caldav_db *caldavdb, struct caldav_data *cdata)
+int caldav_delete(struct caldav_db *caldavdb, unsigned rowid)
 {
     struct bind_val bval[] = {
-	{ ":rowid", SQLITE_INTEGER, { .i = cdata->rowid } },
-	{ NULL,	    SQLITE_NULL,    { .s = NULL         } } };
+	{ ":rowid", SQLITE_INTEGER, { .i = rowid } },
+	{ NULL,	    SQLITE_NULL,    { .s = NULL  } } };
 
     return dav_exec(caldavdb->db, CMD_DELETE, bval, NULL, NULL,
 		    &caldavdb->stmt[STMT_DELETE]);

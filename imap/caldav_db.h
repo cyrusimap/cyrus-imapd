@@ -82,11 +82,16 @@ struct caldav_db *caldav_open(const char *userid, int flags);
 /* close this handle */
 int caldav_close(struct caldav_db *caldavdb);
 
-/* read an entry from 'caldavdb' */
-int caldav_read(struct caldav_db *caldavdb, struct caldav_data *cdata);
+/* lookup an entry from 'caldavdb' by resource
+   (optionally inside a transaction for updates) */
+int caldav_lookup_resource(struct caldav_db *caldavdb,
+			   const char *mailbox, const char *resource,
+			   int lock, struct caldav_data **result);
 
-/* read an entry from 'caldavdb' and begin a transaction for updates */
-int caldav_lockread(struct caldav_db *caldavdb, struct caldav_data *cdata);
+/* lookup an entry from 'caldavdb' by iCal UID
+   (optionally inside a transaction for updates) */
+int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
+		      int lock, struct caldav_data **result);
 
 /* process each entry for 'mailbox' in 'caldavdb' with cb() */
 int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
@@ -97,7 +102,7 @@ int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
 int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata);
 
 /* delete an entry from 'caldavdb' */
-int caldav_delete(struct caldav_db *caldavdb, struct caldav_data *cdata);
+int caldav_delete(struct caldav_db *caldavdb, unsigned rowid);
 
 /* delete all entries for 'mailbox' from 'caldavdb' */
 int caldav_delmbox(struct caldav_db *caldavdb, const char *mailbox);
