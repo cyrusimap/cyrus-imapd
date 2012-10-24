@@ -83,7 +83,7 @@ struct latestdb
     char *path;
     char *config;
 };
-#define LATESTDB_INITIALIZER { 0, 0 }
+#define LATESTDB_INITIALIZER { 0, 0, 0 }
 #define LATESTDB_VERSION	1
 #define LATESTDB_FNAME		"/latest.db"
 #define LATESTDB_LASTID_KEY	"LASTID"
@@ -248,11 +248,13 @@ static void append_escaped(struct buf *to, const struct buf *from, int quote)
     append_escaped_map(to, from->s, from->len, quote);
 }
 
+#if 0
 static void append_escaped_cstr(struct buf *to, const char *str, int quote)
 {
     if (str)
 	append_escaped_map(to, str, strlen(str), quote);
 }
+#endif
 
 #define invalid_xml_char(c) \
     ((c) < 0x20 && !((c) == '\t' || (c) == '\n' || (c) == '\r'))
@@ -801,7 +803,6 @@ static int open_latest(struct mailbox *mailbox, struct latestdb *ldb)
 	r = IMAP_IOERROR;
     }
 
-out:
     if (r) {
 	free(path);
 	free(config);
@@ -1174,7 +1175,6 @@ static int end_message_update(search_text_receiver_t *rx)
 
     r = flush(tr, /*force*/0);
 
-out:
     tr->super.uid = 0;
     return r;
 }
