@@ -274,7 +274,7 @@ int caldav_lookup_resource(struct caldav_db *caldavdb,
     struct read_rock rrock = { caldavdb, &cdata, NULL, NULL };
     int r;
 
-    *result = &cdata;
+    *result = memset(&cdata, 0, sizeof(struct caldav_data));
 
     if (lock) {
 	/* begin a transaction */
@@ -283,7 +283,6 @@ int caldav_lookup_resource(struct caldav_db *caldavdb,
 	if (r) return r;
     }
 
-    cdata.dav.rowid = 0;
     r = dav_exec(caldavdb->db, CMD_SELRSRC, bval, &read_cb, &rrock,
 		 &caldavdb->stmt[STMT_SELRSRC]);
     if (!r && !cdata.dav.rowid) r = CYRUSDB_NOTFOUND;
@@ -309,7 +308,7 @@ int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
     struct read_rock rrock = { caldavdb, &cdata, NULL, NULL };
     int r;
 
-    *result = &cdata;
+    *result = memset(&cdata, 0, sizeof(struct caldav_data));
 
     if (lock) {
 	/* begin a transaction */
@@ -318,7 +317,6 @@ int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
 	if (r) return r;
     }
 
-    cdata.dav.rowid = 0;
     r = dav_exec(caldavdb->db, CMD_SELUID, bval, &read_cb, &rrock,
 		 &caldavdb->stmt[STMT_SELUID]);
     if (!r && !cdata.dav.rowid) r = CYRUSDB_NOTFOUND;
