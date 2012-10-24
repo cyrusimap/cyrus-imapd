@@ -46,6 +46,13 @@
 
 #include <sqlite3.h>
 
+struct dav_data {
+    unsigned rowid;
+    const char *mailbox;
+    const char *resource;
+    uint32_t imap_uid;
+};
+
 struct bind_val {
     const char *name;
     int type;

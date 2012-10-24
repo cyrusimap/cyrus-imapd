@@ -56,10 +56,7 @@ struct caldav_db;
 #define CALDAV_TRUNC  0x02
 
 struct caldav_data {
-    unsigned rowid;
-    const char *mailbox;
-    const char *resource;
-    uint32_t imap_uid;
+    struct dav_data dav;  /* MUST be first so we can typecast */
     const char *ical_uid;
     unsigned comp_type;
     const char *organizer;

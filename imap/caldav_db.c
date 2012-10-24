@@ -206,16 +206,16 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 
     memset(cdata, 0, sizeof(struct caldav_data));
 
-    cdata->rowid = sqlite3_column_int(stmt, 0);
-    cdata->imap_uid = sqlite3_column_int(stmt, 3);
+    cdata->dav.rowid = sqlite3_column_int(stmt, 0);
+    cdata->dav.imap_uid = sqlite3_column_int(stmt, 3);
     cdata->comp_type = sqlite3_column_int(stmt, 5);
     cdata->recurring = sqlite3_column_int(stmt, 10);
     cdata->transp = sqlite3_column_int(stmt, 11);
 
     if (rrock->cb) {
 	/* We can use the column data directly for the callback */
-	cdata->mailbox = (const char *) sqlite3_column_text(stmt, 1);
-	cdata->resource = (const char *) sqlite3_column_text(stmt, 2);
+	cdata->dav.mailbox = (const char *) sqlite3_column_text(stmt, 1);
+	cdata->dav.resource = (const char *) sqlite3_column_text(stmt, 2);
 	cdata->ical_uid = (const char *) sqlite3_column_text(stmt, 4);
 	cdata->organizer = (const char *) sqlite3_column_text(stmt, 6);
 	cdata->sched_tag = (const char *) sqlite3_column_text(stmt, 7);
@@ -227,10 +227,10 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 	/* For single row SELECTs like caldav_read(),
 	 * we need to make a copy of the column data before
 	 * it gets flushed by sqlite3_step() or sqlite3_reset() */
-	cdata->mailbox =
+	cdata->dav.mailbox =
 	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 1),
 			       &db->mailbox);
-	cdata->resource =
+	cdata->dav.resource =
 	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 2),
 			       &db->resource);
 	cdata->ical_uid =
@@ -283,10 +283,10 @@ int caldav_lookup_resource(struct caldav_db *caldavdb,
 	if (r) return r;
     }
 
-    cdata.rowid = 0;
+    cdata.dav.rowid = 0;
     r = dav_exec(caldavdb->db, CMD_SELRSRC, bval, &read_cb, &rrock,
 		 &caldavdb->stmt[STMT_SELRSRC]);
-    if (!r && !cdata.rowid) r = CYRUSDB_NOTFOUND;
+    if (!r && !cdata.dav.rowid) r = CYRUSDB_NOTFOUND;
 
     return r;
 }
@@ -318,10 +318,10 @@ int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
 	if (r) return r;
     }
 
-    cdata.rowid = 0;
+    cdata.dav.rowid = 0;
     r = dav_exec(caldavdb->db, CMD_SELUID, bval, &read_cb, &rrock,
 		 &caldavdb->stmt[STMT_SELUID]);
-    if (!r && !cdata.rowid) r = CYRUSDB_NOTFOUND;
+    if (!r && !cdata.dav.rowid) r = CYRUSDB_NOTFOUND;
 
     return r;
 }
@@ -371,7 +371,7 @@ int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
 int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata)
 {
     struct bind_val bval[] = {
-	{ ":imap_uid",	 SQLITE_INTEGER, { .i = cdata->imap_uid  } },
+	{ ":imap_uid",	 SQLITE_INTEGER, { .i = cdata->dav.imap_uid  } },
 	{ ":ical_uid",	 SQLITE_TEXT,	 { .s = cdata->ical_uid  } },
 	{ ":comp_type",	 SQLITE_INTEGER, { .i = cdata->comp_type } },
 	{ ":organizer",	 SQLITE_TEXT,	 { .s = cdata->organizer } },
@@ -386,13 +386,13 @@ int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata)
     const char *cmd;
     sqlite3_stmt **stmt;
 
-    if (cdata->rowid) {
+    if (cdata->dav.rowid) {
 	cmd = CMD_UPDATE;
 	stmt = &caldavdb->stmt[STMT_UPDATE];
 
 	bval[9].name = ":rowid";
 	bval[9].type = SQLITE_INTEGER;
-	bval[9].val.i = cdata->rowid;
+	bval[9].val.i = cdata->dav.rowid;
     }
     else {
 	cmd = CMD_INSERT;
@@ -400,10 +400,10 @@ int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata)
 
 	bval[9].name = ":mailbox";
 	bval[9].type = SQLITE_TEXT;
-	bval[9].val.s = cdata->mailbox;
+	bval[9].val.s = cdata->dav.mailbox;
 	bval[10].name = ":resource";
 	bval[10].type = SQLITE_TEXT;
-	bval[10].val.s = cdata->resource;
+	bval[10].val.s = cdata->dav.resource;
     }
 
     return dav_exec(caldavdb->db, cmd, bval, NULL, NULL, stmt);
