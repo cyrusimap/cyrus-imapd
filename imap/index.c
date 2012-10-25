@@ -2460,9 +2460,18 @@ static struct multisort_result *multisort_run(struct index_state *state,
     unsigned msgno;
     struct multisort_result *result = NULL;
 
-    r = mboxlist_allusermbox(mboxname_to_userid(state->mailbox->name),
-			     add_search_folder, &folders, /*+deleted*/0);
-    if (r) return NULL;
+    if (searchargs->folder) {
+	struct strlist *l;
+	for (l = searchargs->folder; l; l = l->next) {
+	    syslog(LOG_NOTICE, "DOING %s", l->s);
+	    add_search_folder(&folders, l->s, strlen(l->s), NULL, NULL);
+	}
+    }
+    else {
+	r = mboxlist_allusermbox(mboxname_to_userid(state->mailbox->name),
+				add_search_folder, &folders, /*+deleted*/0);
+	if (r) return NULL;
+    }
 
     for (fi = 0; fi < folders.count; fi++) {
 	SearchFolder *sf = ptrarray_nth(&folders, fi);
