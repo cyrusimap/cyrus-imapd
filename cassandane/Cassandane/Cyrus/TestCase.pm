@@ -275,16 +275,12 @@ sub set_up
 {
     my ($self) = @_;
 
-    xlog_set_listener(sub {
-	my ($msg) = @_;
-	$self->annotate("$msg\n");
-    });
+    xlog "---------- BEGIN $self->{_name} ----------";
 
     $self->_create_instances();
     $self->_start_instances()
 	if $self->{_want}->{start_instances};
-
-    xlog "---------- BEGIN $self->{_name} ----------";
+    xlog "Calling test function";
 }
 
 sub _start_instances
@@ -356,7 +352,7 @@ sub tear_down
 {
     my ($self) = @_;
 
-    xlog "---------- END $self->{_name} ----------";
+    xlog "Beginning tear_down";
 
     foreach my $s (@stores)
     {
@@ -381,8 +377,7 @@ sub tear_down
 	$self->{replica}->cleanup();
 	$self->{replica} = undef;
     }
-
-    xlog_set_listener(undef);
+    xlog "---------- END $self->{_name} ----------";
 }
 
 sub _save_message

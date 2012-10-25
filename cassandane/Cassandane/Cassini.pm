@@ -62,7 +62,7 @@ sub new
     my $inifile = new Config::IniFiles();
     if ( -f $filename)
     {
-	xlog "Reading $filename";
+	xlog "Reading $filename" if get_verbose;
 	$inifile->SetFileName($filename);
 	if (!$inifile->ReadConfig())
 	{

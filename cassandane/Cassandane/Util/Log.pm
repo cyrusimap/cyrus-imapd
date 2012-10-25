@@ -47,11 +47,10 @@ use Sys::Syslog qw(:standard :macros);
 use Exporter ();
 our @ISA = qw(Exporter);
 our @EXPORT = qw(
-    &xlog &set_verbose &get_verbose &xlog_set_listener
+    &xlog &set_verbose &get_verbose
     );
 
 my $verbose = 0;
-my $listener;
 
 openlog('cassandane', '', LOG_LOCAL6)
     or die "Cannot openlog";
@@ -61,9 +60,8 @@ sub xlog
     my ($pkg, $file, $line) = caller;
     $pkg =~ s/^Cassandane:://;
     my $msg = "=====> " . $pkg . "[" . $line . "] " . join(' ', @_);
-    print STDERR "$msg\n" if $verbose;
+    print STDERR "$msg\n";
     syslog(LOG_ERR, "$msg");
-    $listener->($msg) if (defined $listener);
 }
 
 sub set_verbose
@@ -75,12 +73,6 @@ sub set_verbose
 sub get_verbose
 {
     return $verbose;
-}
-
-sub xlog_set_listener
-{
-    my ($ll) = @_;
-    $listener = $ll;
 }
 
 1;

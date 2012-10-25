@@ -73,4 +73,20 @@ sub filter
     };
 }
 
+sub annotate_from_file
+{
+    my ($self, $filename) = @_;
+    return if !defined $filename;
+
+    open LOG, '<', $filename
+	or die "Cannot open $filename for reading: $!";
+    while (<LOG>)
+    {
+	$self->annotate($_);
+    }
+    close LOG;
+}
+
+
+
 1;

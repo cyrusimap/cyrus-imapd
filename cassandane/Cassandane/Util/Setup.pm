@@ -62,11 +62,11 @@ sub become_cyrus
     my $uid = getuid();
     if ($uid == $pw->uid)
     {
-	xlog "already running as user $cyrus";
+	xlog "already running as user $cyrus" if get_verbose;
     }
     elsif ($uid == 0)
     {
-	xlog "setuid from root to $cyrus";
+	xlog "setuid from root to $cyrus" if get_verbose;
 	setgid($pw->gid)
 	    or die "Cannot setgid to group $pw->gid: $!";
 	setuid($pw->uid)
@@ -74,7 +74,7 @@ sub become_cyrus
     }
     else
     {
-	xlog "using sudo to re-run as user $cyrus";
+	xlog "using sudo to re-run as user $cyrus" if get_verbose;
 	my @cmd = ( qw(sudo -u), $cyrus, $me, @saved_argv );
 	exec(@cmd);
     }

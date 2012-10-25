@@ -43,9 +43,7 @@ package Cassandane::Unit::Runner;
 use strict;
 use warnings;
 use base qw(Test::Unit::TestRunner);
-use Cassandane::Unit::SyslogListener;
 use Test::Unit::Result;
-# use Carp qw(cluck);
 
 sub new
 {
@@ -56,9 +54,7 @@ sub new
 sub create_test_result
 {
     my ($self) = @_;
-#     cluck "create_test_result";
     $self->{_result} = Test::Unit::Result->new();
-    $self->{_result}->add_listener(Cassandane::Unit::SyslogListener->new());
     return $self->{_result};
 }
 

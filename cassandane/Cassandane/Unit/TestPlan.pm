@@ -384,6 +384,7 @@ sub DESTROY
 
 package Cassandane::Unit::WorkerListener;
 use base qw(Test::Unit::Listener);
+use Cassandane::Util::Log;
 
 sub new
 {
@@ -452,6 +453,8 @@ sub add_pass
 }
 
 package Cassandane::Unit::TestPlan;
+use File::Temp qw(tempfile);
+use Cassandane::Util::Log;
 
 my @test_roots = (
     'Cassandane/Test',
@@ -604,6 +607,7 @@ sub _get_schedule
 		testname => $name,
 		result => 'unknown',
 		exception => undef,
+		logfile => undef,
 	    });
 	}
     }
@@ -625,21 +629,84 @@ sub list
     return @res;
 }
 
+sub _setup_logfile
+{
+    my ($self, $witem) = @_;
+
+    # Flush the old stdout/stderr
+    ${\*STDOUT}->flush;
+    ${\*STDERR}->flush;
+
+    # Save the old stdout/stderr - this is important
+    # for the single threaded case where inter-test
+    # messages go to the original stdout.
+    open my $oldout, '>&', \*STDOUT
+	or die "Cannot save STDOUT";
+    open my $olderr, '>&', \*STDERR
+	or die "Cannot save STDERR";
+
+    # Create a per-test temporary logfile
+    my ($logfh, $logfile) = tempfile();
+
+    # Redirect both STDOUT and STDERR to the log file
+    open STDOUT, '>&', $logfh
+	or die "Cannot redirect STDOUT";
+    open STDERR, '>&', $logfh
+	or die "Cannot redirect STDERR";
+    close $logfh;
+
+    $witem->{logfile} = $logfile;
+    $self->{oldout} = $oldout;
+    $self->{olderr} = $olderr;
+}
+
+# Redirect STDOUT and STDERR back to their original fds
+sub _restore_stdout
+{
+    my ($self) = @_;
+
+    ${\*STDOUT}->flush;
+    open STDOUT, '>&', $self->{oldout}
+	or die "Cannot restore STDOUT";
+    close $self->{oldout};
+    $self->{oldout} = undef;
+
+    ${\*STDERR}->flush;
+    open STDERR, '>&', $self->{olderr}
+	or die "Cannot restore STDERR";
+    close $self->{olderr};
+    $self->{olderr} = undef;
+}
+
+sub _get_suite_and_test
+{
+    my ($self, $witem) = @_;
+    my $suite = $self->_get_item($witem->{suite})->_get_loaded_suite();
+    my ($test) = grep { $_->name() eq 'test_' . $witem->{testname}; } @{$suite->tests()};
+    return ($suite, $test);
+}
+
 sub _run_workitem
 {
-    my ($self, $witem, $result, $runner) = @_;
+    my ($self, $witem, $result, $runner, $annotate_flag) = @_;
 
-    my $suite = $self->_get_item($witem->{suite})->_get_loaded_suite();
+    my ($suite, $test) = $self->_get_suite_and_test($witem);
     Cassandane::Unit::TestCase->enable_test($witem->{testname});
+    $self->_setup_logfile($witem);
     $suite->run($result, $runner);
+    $self->_restore_stdout();
+    if ($annotate_flag)
+    {
+	$test->annotate_from_file($witem->{logfile});
+	unlink($witem->{logfile});
+    }
     $self->{post_test_handler}->($result, $runner);
 }
 
 sub _finish_workitem
 {
     my ($self, $witem, $result, $runner) = @_;
-    my $suite = $self->_get_item($witem->{suite})->_get_loaded_suite();
-    my ($test) = grep { $_->name() eq 'test_' . $witem->{testname}; } @{$suite->tests()};;
+    my ($suite, $test) = $self->_get_suite_and_test($witem);
 
     $result->start_test($test);
     if ($runner->can('fake_start_time'))
@@ -647,8 +714,11 @@ sub _finish_workitem
 	$runner->fake_start_time($test, $witem->{start_time});
     }
 
+    $test->annotate_from_file($witem->{logfile});
+    unlink($witem->{logfile});
+
     if ($witem->{result} eq 'pass' ||
-        $witem->{result} eq 'unknown')
+	$witem->{result} eq 'unknown')
     {
 	$result->add_pass($test);
     }
@@ -716,7 +786,7 @@ sub run
 		my ($witem) = @_;
 		$wlistener->{witem} = $witem;
 		_setup_worker_listeners($result, $wlistener);
-		$self->_run_workitem($witem, $result, $runner);
+		$self->_run_workitem($witem, $result, $runner, 0);
 	    },
 	);
 	my $witem;
@@ -741,7 +811,7 @@ sub run
 	# single threaded case: just run it all in-process
 	foreach my $witem (@workitems)
 	{
-	    $self->_run_workitem($witem, $result, $runner);
+	    $self->_run_workitem($witem, $result, $runner, 1);
 	    last if (!($self->{keep_going} || $result->was_successful()));
 	}
     }
