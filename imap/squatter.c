@@ -872,17 +872,13 @@ int main(int argc, char **argv)
 	do_synclogfile(synclogfile);
 	break;
     case START_DAEMON:
-	/* daemon control requires exactly one mailbox */
-	if (optind != argc-1) usage("squatter");
-	expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind);
-	if (search_start_daemon(verbose, mboxnames.data[0]))
+	if (optind != argc) usage("squatter");
+	if (search_start_daemon(verbose))
 	    exit(EC_TEMPFAIL);
 	break;
     case STOP_DAEMON:
-	/* daemon control requires exactly one mailbox */
-	if (optind != argc-1) usage("squatter");
-	expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind);
-	if (search_stop_daemon(verbose, mboxnames.data[0]))
+	if (optind != argc) usage("squatter");
+	if (search_stop_daemon(verbose))
 	    exit(EC_TEMPFAIL);
 	break;
     }

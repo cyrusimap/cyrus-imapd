@@ -1736,18 +1736,12 @@ product version in the capabilities */
    is contrary to the RFC but a more useful behaviour for most
    users.  Default: disabled. */
 
-{ "sphinxmgr_socket", "{configdirectory}/socket/sphinxmgr", STRING }
-/* Unix domain socket that the Cyrus manager for Sphinx index
+{ "sphinx_socket", "{configdirectory}/socket/sphinx", STRING }
+/* Unix domain socket that the Sphinx searchd
    daemons listens on. */
 
-{ "sphinxmgr_timeout", 600, INT }
-/* How long a Sphinx index daemon will be kept running after the user
-   does a search, in case the user wants to do another search
-   (default: 10 minutes). */
-
-{ "sphinxmgr_max_children", 256, INT }
-/* Maximum number of searchd instances to keep running, to protect
-   against a DOS.  Default 256.  Set to zero for no limit */
+{ "sphinx_pidfile", "/var/run/sphinx.pid", STRING }
+/* File where the Sphinx searchd daemon writes its pid. */
 
 { "sql_database", NULL, STRING }
 /* Name of the database which contains the cyrusdb table(s). */

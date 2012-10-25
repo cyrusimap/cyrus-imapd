@@ -230,16 +230,16 @@ EXPORTED void search_free_internalised(void *internalised)
     if (se->free_internalised) se->free_internalised(internalised);
 }
 
-EXPORTED int search_start_daemon(int verbose, const char *mboxname)
+EXPORTED int search_start_daemon(int verbose)
 {
     const struct search_engine *se = engine();
-    return (se->start_daemon ? se->start_daemon(verbose, mboxname) : 0);
+    return (se->start_daemon ? se->start_daemon(verbose) : 0);
 }
 
-EXPORTED int search_stop_daemon(int verbose, const char *mboxname)
+EXPORTED int search_stop_daemon(int verbose)
 {
     const struct search_engine *se = engine();
-    return (se->stop_daemon ? se->stop_daemon(verbose, mboxname) : 0);
+    return (se->stop_daemon ? se->stop_daemon(verbose) : 0);
 }
 
 const char *search_op_as_string(int op)

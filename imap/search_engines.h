@@ -133,8 +133,8 @@ struct search_engine {
     int (*end_snippets)(search_text_receiver_t *);
     char *(*describe_internalised)(void *);
     void (*free_internalised)(void *);
-    int (*start_daemon)(int verbose, const char *mboxname);
-    int (*stop_daemon)(int verbose, const char *mboxname);
+    int (*start_daemon)(int verbose);
+    int (*stop_daemon)(int verbose);
 };
 
 /*
@@ -161,8 +161,8 @@ int search_end_snippets(search_text_receiver_t *rx);
  * be free()d by the caller.  Only useful for whitebox testing.  */
 char *search_describe_internalised(void *internalised);
 void search_free_internalised(void *internalised);
-int search_start_daemon(int verbose, const char *mboxname);
-int search_stop_daemon(int verbose, const char *mboxname);
+int search_start_daemon(int verbose);
+int search_stop_daemon(int verbose);
 
 /* for debugging */
 extern const char *search_op_as_string(int op);
