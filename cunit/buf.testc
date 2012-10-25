@@ -1541,6 +1541,111 @@ static void test_replace_cow_cstr(void)
     buf_free(&b);
 }
 
+static void test_findline(void)
+{
+    struct buf b = BUF_INITIALIZER;
+    int r;
+#define WORD0 "etsy"
+#define WORD1 "quinoa"
+#define WORD2 "dreamcatcher"
+#define WORD3 "shoreditch"
+#define WORD4 "williamsburg"
+#define WORD5 "brooklyn"
+#define WORDU "banksy"
+
+    buf_appendcstr(&b, WORD0"\n"WORD1"\n"WORD2"\n"WORD3" "WORD4"\n"WORD5"\n");
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0)+sizeof(WORD1)+sizeof(WORD2)+
+			   sizeof(WORD3)+sizeof(WORD4)+sizeof(WORD5));
+
+    /* a zero length line is always unfound */
+    r = buf_findline(&b, "");
+    CU_ASSERT_EQUAL(r, -1);
+    r = buf_findline(&b, "\n");
+    CU_ASSERT_EQUAL(r, -1);
+
+    /* a line which is not present is unfound */
+    r = buf_findline(&b, WORDU);
+    CU_ASSERT_EQUAL(r, -1);
+    r = buf_findline(&b, WORDU"\n");
+    CU_ASSERT_EQUAL(r, -1);
+
+    /* only the first line of the needle is searched for */
+    r = buf_findline(&b, WORD1"\n"WORD3"\n");
+    CU_ASSERT_EQUAL(r, sizeof(WORD0));
+
+    /* the very first line is found */
+    r = buf_findline(&b, WORD0);
+    CU_ASSERT_EQUAL(r, 0);
+    r = buf_findline(&b, WORD0"\n");
+    CU_ASSERT_EQUAL(r, 0);
+
+    /* a line which is neither first nor last is found */
+    r = buf_findline(&b, WORD1);
+    CU_ASSERT_EQUAL(r, sizeof(WORD0));
+    r = buf_findline(&b, WORD1"\n");
+    CU_ASSERT_EQUAL(r, sizeof(WORD0));
+
+    /* a word which is a subset of a present line, is unfound */
+    r = buf_findline(&b, WORD3);
+    CU_ASSERT_EQUAL(r, -1);
+    r = buf_findline(&b, WORD3"\n");
+    CU_ASSERT_EQUAL(r, -1);
+    r = buf_findline(&b, WORD4);
+    CU_ASSERT_EQUAL(r, -1);
+    r = buf_findline(&b, WORD4"\n");
+    CU_ASSERT_EQUAL(r, -1);
+
+    /* the very last line is found */
+    r = buf_findline(&b, WORD5);
+    CU_ASSERT_EQUAL(r, sizeof(WORD0)+sizeof(WORD1)+sizeof(WORD2)+
+		       sizeof(WORD3)+sizeof(WORD4));
+    r = buf_findline(&b, WORD5"\n");
+    CU_ASSERT_EQUAL(r, sizeof(WORD0)+sizeof(WORD1)+sizeof(WORD2)+
+		       sizeof(WORD3)+sizeof(WORD4));
+
+    /* a word which is a subset of an earlier line, but
+     * matches a later present line, is found */
+    buf_reset(&b);
+    buf_appendcstr(&b, WORD0"\n"WORD1" "WORD2"\n"WORD1"\n"WORD2"\n"WORD5"\n");
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0)+sizeof(WORD1)+sizeof(WORD2)+
+			   sizeof(WORD1)+sizeof(WORD2)+sizeof(WORD5));
+    r = buf_findline(&b, WORD1);
+    CU_ASSERT_EQUAL(r, sizeof(WORD0)+sizeof(WORD1)+sizeof(WORD2));
+    r = buf_findline(&b, WORD1"\n");
+    CU_ASSERT_EQUAL(r, sizeof(WORD0)+sizeof(WORD1)+sizeof(WORD2));
+    r = buf_findline(&b, WORD2);
+    CU_ASSERT_EQUAL(r, sizeof(WORD0)+sizeof(WORD1)+sizeof(WORD2)+
+		       sizeof(WORD1));
+    r = buf_findline(&b, WORD2"\n");
+    CU_ASSERT_EQUAL(r, sizeof(WORD0)+sizeof(WORD1)+sizeof(WORD2)+
+		       sizeof(WORD1));
+
+    /* a word which is the first subset of the first line, is unfound */
+    buf_reset(&b);
+    buf_appendcstr(&b, WORD0" "WORD1"\n"WORD2" "WORD3"\n");
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0)+sizeof(WORD1)+sizeof(WORD2)+
+			   sizeof(WORD3));
+    r = buf_findline(&b, WORD0);
+    CU_ASSERT_EQUAL(r, -1);
+    r = buf_findline(&b, WORD0"\n");
+    CU_ASSERT_EQUAL(r, -1);
+
+    /* a word which is the last subset of the last line, is unfound */
+    r = buf_findline(&b, WORD3);
+    CU_ASSERT_EQUAL(r, -1);
+    r = buf_findline(&b, WORD3"\n");
+    CU_ASSERT_EQUAL(r, -1);
+
+    buf_free(&b);
+#undef WORD0
+#undef WORD1
+#undef WORD2
+#undef WORD3
+#undef WORD4
+#undef WORD5
+#undef WORDU
+}
+
 /* TODO: test the Copy-On-Write feature of buf_ensure()...if anyone
  * actually uses it */
 /* vim: set ft=c: */
