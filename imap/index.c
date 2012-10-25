@@ -2979,6 +2979,11 @@ done:
     buf_free(&result);
 }
 
+struct multisort_response {
+    struct multisort_item *item;
+    ptrarray_t cidother;
+};
+
 /*
  * Performs a XCONVMULTISORT command
  */
@@ -2996,6 +3001,7 @@ EXPORTED int index_convmultisort(struct index_state *state,
     uint32_t first_pos = 0;
     unsigned int ninwindow = 0;
     ptrarray_t results = PTRARRAY_INITIALIZER;
+    struct multisort_response dummy_response;
     int total = UNPREDICTABLE;
     int r = 0;
     int32_t anchor_folderid = -1;
@@ -3041,22 +3047,29 @@ EXPORTED int index_convmultisort(struct index_state *state,
 	}
     }
 
-    construct_hashu64_table(&seen_cids, sortres->nmsgs/4+4, 0);
-
-    if (!windowargs->conversations)
+    /* going to need to do conversation-level breakdown */
+    if (windowargs->conversations)
+	construct_hashu64_table(&seen_cids, sortres->nmsgs/4+4, 0);
+    /* no need */
+    else
 	total = sortres->nmsgs;
 
     /* Another pass through the merged message list */
     for (mi = 0; mi < sortres->nmsgs; mi++) {
 	struct multisort_item *item = &sortres->msgs[mi];
+	struct multisort_response *response = NULL;
 
 	/* figure out whether this message is an exemplar */
 	if (windowargs->conversations) {
+	    response = hashu64_lookup(item->cid, &seen_cids);
 	    /* in conversations mode => only the first message seen
 	     * with each unique CID is an exemplar */
-	    if (hashu64_lookup(item->cid, &seen_cids))
+	    if (response) {
+		if (response != &dummy_response)
+		    ptrarray_append(&response->cidother, item);
 		continue;
-	    hashu64_insert(item->cid, (void *)1, &seen_cids);
+	    }
+	    hashu64_insert(item->cid, &dummy_response, &seen_cids);
 	}
 	/* else not in conversations mode => all messages are exemplars */
 
@@ -3091,7 +3104,14 @@ EXPORTED int index_convmultisort(struct index_state *state,
 
 	if (!first_pos)
 	    first_pos = pos;
-	ptrarray_push(&results, item);
+
+	response = xzmalloc(sizeof(struct multisort_response));
+	response->item = item;
+	ptrarray_push(&results, response);
+
+	if (windowargs->conversations) {
+	    hashu64_insert(item->cid, response, &seen_cids);
+	}
     }
 
     if (total == UNPREDICTABLE) {
@@ -3130,10 +3150,22 @@ EXPORTED int index_convmultisort(struct index_state *state,
 	}
 	prot_printf(state->out, ") (");
 	for (i = 0 ; i < results.count ; i++) {
-	    struct multisort_item *item = results.data[i];
+	    struct multisort_response *response = results.data[i];
+	    int j;
 	    if (i)
 		prot_printf(state->out, " ");
-	    prot_printf(state->out, "(%u %u)", item->folderid, item->uid);
+	    prot_printf(state->out, "(%u %u %llu (", response->item->folderid,
+			response->item->uid, response->item->cid);
+	    for (j = 0; j < response->cidother.count; j++) {
+		struct multisort_item *item = response->cidother.data[j];
+		if (j)
+		    prot_printf(state->out, " ");
+		prot_printf(state->out, "(%u %u)", item->folderid, item->uid);
+	    }
+	    prot_printf(state->out, "))");
+	    /* clean up here */
+	    ptrarray_fini(&response->cidother);
+	    free(response);
 	}
 	prot_printf(state->out, ")\r\n");
     }
