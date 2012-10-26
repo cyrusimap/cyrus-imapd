@@ -2459,6 +2459,7 @@ static struct multisort_result *multisort_run(struct index_state *state,
     struct index_state *state2 = NULL;
     unsigned msgno;
     struct multisort_result *result = NULL;
+    struct searchargs *converted_searchargs;
 
     if (searchargs->folder) {
 	struct strlist *l;
@@ -2588,7 +2589,6 @@ static void index_format_search(struct dlist *parent,
 				struct index_state *state,
 				const struct searchargs *searchargs)
 {
-    struct dlist *sublist;
     struct strlist *l, *h;
     struct searchannot *sa;
     struct searchsub *s;
@@ -2659,7 +2659,7 @@ static void index_format_search(struct dlist *parent,
 	    flagmask = searchargs->user_flags_set[flag/32];
 	}
 	if (state->flagname[flag] && (flagmask & (1<<(flag & 31)))) {
-	    dlist_setatom(parent, NULL, "KEYWORD";
+	    dlist_setatom(parent, NULL, "KEYWORD");
 	    dlist_setatom(parent, NULL, state->flagname[flag]);
 	}
     }
@@ -2669,7 +2669,7 @@ static void index_format_search(struct dlist *parent,
 	    flagmask = searchargs->user_flags_unset[flag/32];
 	}
 	if (state->flagname[flag] && (flagmask & (1<<(flag & 31)))) {
-	    dlist_setatom(parent, NULL, "UNKEYWORD";
+	    dlist_setatom(parent, NULL, "UNKEYWORD");
 	    dlist_setatom(parent, NULL, state->flagname[flag]);
 	}
     }
@@ -2724,24 +2724,20 @@ static void index_format_search(struct dlist *parent,
 
     for (sa = searchargs->annotations ; sa ; sa = sa->next) {
 	dlist_setatom(parent, NULL, "ANNOTATION");
-	sublist = dlist_newlist(parent, NULL);
-	dlist_setatom(sublist, NULL, sa->entry);
-	dlist_setatom(sublist, NULL, sa->attrib);
-	dlist_setmap(sublist, NULL, sa->value.s, sa->value.len);
+	dlist_setatom(parent, NULL, sa->entry);
+	dlist_setatom(parent, NULL, sa->attrib);
+	dlist_setmap(parent, NULL, sa->value.s, sa->value.len);
     }
 
     for (s = searchargs->sublist; s; s = s->next) {
 	if (s->sub2) {
 	    dlist_setatom(parent, NULL, "OR");
-	    sublist = dlist_newlist(parent, NULL);
-	    index_format_search(sublist, state, s->sub1);
-	    sublist = dlist_newlist(parent, NULL);
-	    index_format_search(sublist, state, s->sub2);
+	    index_format_search(parent, state, s->sub1);
+	    index_format_search(parent, state, s->sub2);
 	}
 	else {
 	    dlist_setatom(parent, NULL, "NOT");
-	    sublist = dlist_newlist(parent, NULL);
-	    index_format_search(sublist, state, s->sub1);
+	    index_format_search(parent, state, s->sub1);
 	}
     }
 
@@ -4584,6 +4580,30 @@ static int index_fetchannotations(struct index_state *state,
 			     0);
 
     return r;
+}
+
+static const char *index_system_flagname(unsigned flagnum)
+{
+    switch (flagnum) {
+	case FLAG_ANSWERED:
+	    return "\\Answered";
+	    break;
+	case FLAG_FLAGGED:
+	    return "\\Flagged";
+	    break;
+	case FLAG_DRAFT:
+	    return "\\Draft";
+	    break;
+	case FLAG_DELETED:
+	    return "\\Deleted";
+	    break;
+	case FLAG_SEEN:
+	    return "\\Seen";
+	    break;
+	default:
+	    break;
+    }
+    fatal("Unknown flag", EC_SOFTWARE);
 }
 
 /*
