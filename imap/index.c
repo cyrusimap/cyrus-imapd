@@ -2521,23 +2521,23 @@ static struct searchargs *index_copy_search(struct index_state *state,
 
     /* strlistpat for most fields */
     for (l = searchargs->from; l; l = l->next)
-	appendstrlistpat(&out->from, l->s);
+	appendstrlistpat(&out->from, xstrdup(l->s));
     for (l = searchargs->to; l; l = l->next)
-	appendstrlistpat(&out->folder, l->s);
+	appendstrlistpat(&out->folder, xstrdup(l->s));
     for (l = searchargs->cc; l; l = l->next)
-	appendstrlistpat(&out->cc, l->s);
+	appendstrlistpat(&out->cc, xstrdup(l->s));
     for (l = searchargs->bcc; l; l = l->next)
-	appendstrlistpat(&out->bcc, l->s);
+	appendstrlistpat(&out->bcc, xstrdup(l->s));
     for (l = searchargs->subject; l; l = l->next)
-	appendstrlistpat(&out->subject, l->s);
+	appendstrlistpat(&out->subject, xstrdup(l->s));
     for (l = searchargs->messageid; l; l = l->next)
-	appendstrlistpat(&out->messageid, l->s);
+	appendstrlistpat(&out->messageid, xstrdup(l->s));
     for (l = searchargs->header; l; l = l->next)
-	appendstrlistpat(&out->header, l->s);
+	appendstrlistpat(&out->header, xstrdup(l->s));
     for (l = searchargs->body; l; l = l->next)
-	appendstrlistpat(&out->body, l->s);
+	appendstrlistpat(&out->body, xstrdup(l->s));
     for (l = searchargs->text; l; l = l->next)
-	appendstrlistpat(&out->text, l->s);
+	appendstrlistpat(&out->text, xstrdup(l->s));
 
     /* only strlist, not strlistpat for header NAMES */
     for (l = searchargs->header_name; l; l = l->next)
