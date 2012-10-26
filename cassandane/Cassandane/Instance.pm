@@ -834,7 +834,7 @@ sub _check_cores
 }
 
 # Stop a given PID.  Returns 1 if the process died
-# gracefully (i.e. soon after receiving SIGQUIT)
+# gracefully (i.e. soon after receiving SIGTERM)
 # or wasn't even running beforehand.
 sub _stop_pid
 {
@@ -843,7 +843,7 @@ sub _stop_pid
     # Try to be nice, but leave open the option of not being nice should
     # that be necessary.  The signals we send are:
     #
-    # SIGQUIT - The standard Cyrus graceful shutdown signal, should
+    # SIGTERM - The standard Cyrus graceful shutdown signal, should
     #           be handled and propagated by master.
     # SIGILL - Not handled by master; kernel's default action is to
     #	       dump a core.  We use this to try to get a core when
@@ -852,7 +852,7 @@ sub _stop_pid
     #           let's take off and nuke it from orbit.  We just don't
     #           want to leave processes around cluttering up the place.
     #
-    my @sigs = ( SIGQUIT, SIGILL, SIGKILL );
+    my @sigs = ( SIGTERM, SIGILL, SIGKILL );
     my $r = 1;
 
     foreach my $sig (@sigs)
