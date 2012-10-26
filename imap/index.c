@@ -2446,145 +2446,6 @@ static int folder_may_be_in_search(const char *mboxname,
     return 1;
 }
 
-static struct multisort_result *multisort_run(struct index_state *state,
-					      struct sortcrit *sortcrit,
-					      struct searchargs *searchargs)
-{
-    int fi;
-    int mi;
-    int nfolders = 0;
-    ptrarray_t folders = PTRARRAY_INITIALIZER;
-    ptrarray_t merged_msgdata = PTRARRAY_INITIALIZER;
-    int r = 0;
-    struct index_state *state2 = NULL;
-    unsigned msgno;
-    struct multisort_result *result = NULL;
-    struct searchargs *converted_searchargs;
-
-    if (searchargs->folder) {
-	struct strlist *l;
-	for (l = searchargs->folder; l; l = l->next)
-	    add_search_folder(&folders, l->s, strlen(l->s), NULL, 0);
-    }
-    else {
-	r = mboxlist_allusermbox(mboxname_to_userid(state->mailbox->name),
-				add_search_folder, &folders, /*+deleted*/0);
-	if (r) return NULL;
-    }
-
-    for (fi = 0; fi < folders.count; fi++) {
-	SearchFolder *sf = ptrarray_nth(&folders, fi);
-	unsigned int *msgs;
-	int count = 0;
-
-	if (!folder_may_be_in_search(sf->mboxname, searchargs))
-	    continue;
-
-	if (state2 && state2 != state)
-	    index_close(&state2);
-
-	/* open an index_state */
-	if (!strcmp(state->mailbox->name, sf->mboxname)) {
-	    state2 = state;
-	}
-	else {
-	    struct index_init init;
-
-	    memset(&init, 0, sizeof(struct index_init));
-	    init.userid = searchargs->userid;
-	    init.authstate = searchargs->authstate;
-	    init.out = state->out;
-
-	    r = index_open(sf->mboxname, &init, &state2);
-	    if (r) continue;
-
-	    index_checkflags(state2, 0, 0);
-	}
-
-	/* make sure \Deleted messages are expunged.  Will also lock the
-	 * mailbox state and read any new information */
-	r = index_expunge(state2, NULL, 1);
-	if (r) continue;
-
-	if (!state2->exists) continue;
-
-	msgs = xmalloc(state2->exists * sizeof(uint32_t));
-
-	/* One pass through the folder's message list */
-	for (msgno = 1 ; msgno <= state2->exists ; msgno++) {
-	    struct index_record *record = &state2->map[msgno-1].record;
-
-	    /* can happen if we didn't "tellchanges" yet */
-	    if (record->system_flags & FLAG_EXPUNGED)
-		continue;
-
-	    /* run the search program */
-	    if (!index_search_evaluate(state2, searchargs, msgno, NULL))
-		continue;
-
-	    msgs[count++] = msgno;
-	}
-
-	/* Delay assigning ids to folders until we can be
-	 * certain that any results will be reported for
-	 * the folder */
-	if (count) {
-	    sf->id = nfolders++;
-	    sf->uidvalidity = state2->mailbox->i.uidvalidity;
-
-	    /* Create/load the msgdata array. */
-	    sf->msgdata = index_msgdata_load(state2, msgs, count,
-					     sortcrit, 0, 0);
-	    for (mi = 0; mi < count; mi++) {
-		sf->msgdata[mi]->folder = sf;
-		/* merged_msgdata is now "owner" of the pointer */
-		ptrarray_append(&merged_msgdata, sf->msgdata[mi]);
-	    }
-	}
-
-	free(msgs);
-    }
-
-    if (state2 && state2 != state)
-	index_close(&state2);
-
-    /* Sort the merged messages based on the given criteria */
-    the_sortcrit = sortcrit;
-    qsort(merged_msgdata.data, merged_msgdata.count,
-	  sizeof(MsgData *), index_sort_compare_qsort);
-
-    /* convert the result for caching */
-    result = xzmalloc(sizeof(struct multisort_result));
-
-    result->nmsgs = merged_msgdata.count;
-    result->msgs = xmalloc(result->nmsgs * sizeof(struct multisort_item));
-    for (mi = 0; mi < merged_msgdata.count; mi++) {
-	MsgData *msg = ptrarray_nth(&merged_msgdata, mi);
-	result->msgs[mi].folderid = msg->folder->id;
-	result->msgs[mi].uid = msg->uid;
-	result->msgs[mi].cid = msg->cid;
-    }
-
-    result->nfolders = nfolders;
-    result->folders = xmalloc(result->nmsgs * sizeof(struct multisort_folder));
-    for (fi = 0; fi < folders.count; fi++) {
-	SearchFolder *sf = ptrarray_nth(&folders, fi);
-	if (sf->id >= 0) {
-	    result->folders[sf->id].name = xstrdup(sf->mboxname);
-	    result->folders[sf->id].uidvalidity = sf->uidvalidity;
-	}
-	free(sf->mboxname);
-	free(sf->msgdata);
-	free(sf);
-    }
-
-    /* free all our temporary data */
-    ptrarray_fini(&folders);
-    ptrarray_fini(&merged_msgdata);
-
-    return result;
-}
-
 /* NOTE: tostate MAY be the same as state - we still copy with magic
  * folder processing logic */
 static struct searchargs *index_copy_search(struct index_state *state,
@@ -2737,6 +2598,157 @@ nevermatch:
     /* generate an item which can never match anything */
     out->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
     return out;
+}
+
+static struct multisort_result *multisort_run(struct index_state *state,
+					      struct sortcrit *sortcrit,
+					      struct searchargs *searchargs)
+{
+    int fi;
+    int mi;
+    int nfolders = 0;
+    ptrarray_t folders = PTRARRAY_INITIALIZER;
+    ptrarray_t merged_msgdata = PTRARRAY_INITIALIZER;
+    int r = 0;
+    struct index_state *state2 = NULL;
+    unsigned msgno;
+    struct multisort_result *result = NULL;
+    struct searchargs *searchargs2 = NULL;
+
+    if (searchargs->folder) {
+	struct strlist *l;
+	for (l = searchargs->folder; l; l = l->next)
+	    add_search_folder(&folders, l->s, strlen(l->s), NULL, 0);
+    }
+    else {
+	r = mboxlist_allusermbox(mboxname_to_userid(state->mailbox->name),
+				add_search_folder, &folders, /*+deleted*/0);
+	if (r) return NULL;
+    }
+
+    for (fi = 0; fi < folders.count; fi++) {
+	SearchFolder *sf = ptrarray_nth(&folders, fi);
+	unsigned int *msgs;
+	int count = 0;
+
+	if (!folder_may_be_in_search(sf->mboxname, searchargs))
+	    continue;
+
+	if (state2 && state2 != state)
+	    index_close(&state2);
+
+	if (searchargs2)
+	    freesearchargs(searchargs2);
+
+	/* open an index_state */
+	if (!strcmp(state->mailbox->name, sf->mboxname)) {
+	    state2 = state;
+	}
+	else {
+	    struct index_init init;
+
+	    memset(&init, 0, sizeof(struct index_init));
+	    init.userid = searchargs->userid;
+	    init.authstate = searchargs->authstate;
+	    init.out = state->out;
+
+	    r = index_open(sf->mboxname, &init, &state2);
+	    if (r) continue;
+
+	    index_checkflags(state2, 0, 0);
+	}
+
+	/* make sure \Deleted messages are expunged.  Will also lock the
+	 * mailbox state and read any new information */
+	r = index_expunge(state2, NULL, 1);
+	if (r) continue;
+
+	if (!state2->exists) continue;
+
+	msgs = xmalloc(state2->exists * sizeof(uint32_t));
+
+	/* we need to copy the searchargs to:
+	 * a) change user flag numbers to match up
+	 * b) make the "folder" match efficient
+	 */
+	searchargs2 = index_copy_search(state, searchargs, state2);
+
+	/* One pass through the folder's message list */
+	for (msgno = 1 ; msgno <= state2->exists ; msgno++) {
+	    struct index_record *record = &state2->map[msgno-1].record;
+
+	    /* can happen if we didn't "tellchanges" yet */
+	    if (record->system_flags & FLAG_EXPUNGED)
+		continue;
+
+	    /* run the search program */
+	    if (!index_search_evaluate(state2, searchargs2, msgno, NULL))
+		continue;
+
+	    msgs[count++] = msgno;
+	}
+
+	/* Delay assigning ids to folders until we can be
+	 * certain that any results will be reported for
+	 * the folder */
+	if (count) {
+	    sf->id = nfolders++;
+	    sf->uidvalidity = state2->mailbox->i.uidvalidity;
+
+	    /* Create/load the msgdata array. */
+	    sf->msgdata = index_msgdata_load(state2, msgs, count,
+					     sortcrit, 0, 0);
+	    for (mi = 0; mi < count; mi++) {
+		sf->msgdata[mi]->folder = sf;
+		/* merged_msgdata is now "owner" of the pointer */
+		ptrarray_append(&merged_msgdata, sf->msgdata[mi]);
+	    }
+	}
+
+	free(msgs);
+    }
+
+    if (state2 && state2 != state)
+	index_close(&state2);
+
+    if (searchargs2)
+	freesearchargs(searchargs2);
+
+    /* Sort the merged messages based on the given criteria */
+    the_sortcrit = sortcrit;
+    qsort(merged_msgdata.data, merged_msgdata.count,
+	  sizeof(MsgData *), index_sort_compare_qsort);
+
+    /* convert the result for caching */
+    result = xzmalloc(sizeof(struct multisort_result));
+
+    result->nmsgs = merged_msgdata.count;
+    result->msgs = xmalloc(result->nmsgs * sizeof(struct multisort_item));
+    for (mi = 0; mi < merged_msgdata.count; mi++) {
+	MsgData *msg = ptrarray_nth(&merged_msgdata, mi);
+	result->msgs[mi].folderid = msg->folder->id;
+	result->msgs[mi].uid = msg->uid;
+	result->msgs[mi].cid = msg->cid;
+    }
+
+    result->nfolders = nfolders;
+    result->folders = xmalloc(result->nmsgs * sizeof(struct multisort_folder));
+    for (fi = 0; fi < folders.count; fi++) {
+	SearchFolder *sf = ptrarray_nth(&folders, fi);
+	if (sf->id >= 0) {
+	    result->folders[sf->id].name = xstrdup(sf->mboxname);
+	    result->folders[sf->id].uidvalidity = sf->uidvalidity;
+	}
+	free(sf->mboxname);
+	free(sf->msgdata);
+	free(sf);
+    }
+
+    /* free all our temporary data */
+    ptrarray_fini(&folders);
+    ptrarray_fini(&merged_msgdata);
+
+    return result;
 }
 
 static void index_format_search(struct dlist *parent,
