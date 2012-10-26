@@ -2462,10 +2462,8 @@ static struct multisort_result *multisort_run(struct index_state *state,
 
     if (searchargs->folder) {
 	struct strlist *l;
-	for (l = searchargs->folder; l; l = l->next) {
-	    syslog(LOG_NOTICE, "DOING %s", l->s);
+	for (l = searchargs->folder; l; l = l->next)
 	    add_search_folder(&folders, l->s, strlen(l->s), NULL, 0);
-	}
     }
     else {
 	r = mboxlist_allusermbox(mboxname_to_userid(state->mailbox->name),
