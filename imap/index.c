@@ -2636,8 +2636,10 @@ static struct multisort_result *multisort_run(struct index_state *state,
 	if (state2 && state2 != state)
 	    index_close(&state2);
 
-	if (searchargs2)
+	if (searchargs2) {
 	    freesearchargs(searchargs2);
+	    searchargs2 = NULL;
+	}
 
 	/* open an index_state */
 	if (!strcmp(state->mailbox->name, sf->mboxname)) {
@@ -2710,8 +2712,10 @@ static struct multisort_result *multisort_run(struct index_state *state,
     if (state2 && state2 != state)
 	index_close(&state2);
 
-    if (searchargs2)
+    if (searchargs2) {
 	freesearchargs(searchargs2);
+	searchargs2 = NULL;
+    }
 
     /* Sort the merged messages based on the given criteria */
     the_sortcrit = sortcrit;
