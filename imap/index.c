@@ -2585,6 +2585,7 @@ static struct multisort_result *multisort_run(struct index_state *state,
 }
 
 static void index_format_search(struct dlist *parent,
+				struct index_state *state,
 				const struct searchargs *searchargs)
 {
     struct dlist *sublist;
@@ -2724,14 +2725,14 @@ static void index_format_search(struct dlist *parent,
 	if (s->sub2) {
 	    dlist_setatom(parent, NULL, "OR");
 	    sublist = dlist_newlist(parent, NULL);
-	    index_format_search(sublist, s->sub1);
+	    index_format_search(sublist, state, s->sub1);
 	    sublist = dlist_newlist(parent, NULL);
-	    index_format_search(sublist, s->sub2);
+	    index_format_search(sublist, state, s->sub2);
 	}
 	else {
 	    dlist_setatom(parent, NULL, "NOT");
 	    sublist = dlist_newlist(parent, NULL);
-	    index_format_search(sublist, s->sub1);
+	    index_format_search(sublist, state, s->sub1);
 	}
     }
 
@@ -2847,6 +2848,7 @@ static void index_format_sort(struct dlist *parent,
 }
 
 static char *multisort_cachekey(struct sortcrit *sortcrit,
+				struct index_state *state,
 				struct searchargs *searchargs)
 {
     struct buf b = BUF_INITIALIZER;
@@ -2855,7 +2857,7 @@ static char *multisort_cachekey(struct sortcrit *sortcrit,
     struct dlist *sa = dlist_newlist(dl, NULL);
 
     index_format_sort(sc, sortcrit);
-    index_format_search(sa, searchargs);
+    index_format_search(sa, state, searchargs);
 
     dlist_printbuf(dl, 0, &b);
 
@@ -3028,7 +3030,7 @@ EXPORTED int index_convmultisort(struct index_state *state,
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
     hms = mboxname_readmodseq(state->mailbox->name);
-    cachekey = multisort_cachekey(sortcrit, searchargs);
+    cachekey = multisort_cachekey(sortcrit, state, searchargs);
 
     sortres = multisort_cache_load(state, hms, cachekey);
     if (!sortres) {
