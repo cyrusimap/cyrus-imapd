@@ -2464,7 +2464,7 @@ static struct multisort_result *multisort_run(struct index_state *state,
 	struct strlist *l;
 	for (l = searchargs->folder; l; l = l->next) {
 	    syslog(LOG_NOTICE, "DOING %s", l->s);
-	    add_search_folder(&folders, l->s, strlen(l->s), NULL, NULL);
+	    add_search_folder(&folders, l->s, strlen(l->s), NULL, 0);
 	}
     }
     else {
