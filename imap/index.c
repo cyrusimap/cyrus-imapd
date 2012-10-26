@@ -3156,21 +3156,19 @@ EXPORTED int index_convmultisort(struct index_state *state,
 	prot_printf(state->out, ") (");
 	for (i = 0 ; i < results.count ; i++) {
 	    struct multisort_response *response = results.data[i];
+	    struct multisort_item *item = response->item;
 	    int j;
 	    if (i)
 		prot_printf(state->out, " ");
-	    prot_printf(state->out, "(%u %u %llu (", response->item->folderid,
-			response->item->uid, response->item->cid);
+	    prot_printf(state->out, "(%lu", item->cid);
+	    /* exemplar item */
+	    prot_printf(state->out, " (%u %u)", item->folderid, item->uid);
+	    /* rest of the items too */
 	    for (j = 0; j < response->cidother.count; j++) {
-		struct multisort_item *item = response->cidother.data[j];
-		if (j)
-		    prot_printf(state->out, " ");
-		prot_printf(state->out, "(%u %u)", item->folderid, item->uid);
+		item = response->cidother.data[j];
+		prot_printf(state->out, " (%u %u)", item->folderid, item->uid);
 	    }
-	    prot_printf(state->out, "))");
-	    /* clean up here */
-	    ptrarray_fini(&response->cidother);
-	    free(response);
+	    prot_printf(state->out, ")");
 	}
 	prot_printf(state->out, ")\r\n");
     }
@@ -3191,6 +3189,12 @@ out:
     }
 
     /* free all our temporary data */
+    free_hashu64_table(&seen_cids, NULL);
+    for (i = 0 ; i < results.count ; i++) {
+	struct multisort_response *response = results.data[i];
+	ptrarray_fini(&response->cidother);
+	free(response);
+    }
     ptrarray_fini(&results);
     for (fi = 0 ; fi < sortres->nfolders ; fi++) {
 	free(sortres->folders[fi].name);
@@ -3198,7 +3202,6 @@ out:
     free(sortres->folders);
     free(sortres->msgs);
     free(sortres);
-    free_hashu64_table(&seen_cids, NULL);
 
     return r;
 }
