@@ -2585,6 +2585,160 @@ static struct multisort_result *multisort_run(struct index_state *state,
     return result;
 }
 
+/* NOTE: tostate MAY be the same as state - we still copy with magic
+ * folder processing logic */
+static struct searchargs *index_copy_search(struct index_state *state,
+					    const struct searchargs *searchargs,
+					    struct index_state *tostate)
+{
+    struct searchargs *out = xzmalloc(sizeof(struct searchargs));
+    struct strlist *l, *h;
+    struct searchannot *sa;
+    struct searchsub *s;
+    struct seqset *seq;
+    int i, have_one;
+    unsigned flag, flagmask;
+
+    out->flags = searchargs->flags;
+    out->smaller = searchargs->smaller;
+    out->larger = searchargs->larger;
+    out->before = searchargs->before;
+    out->after = searchargs->after;
+    out->sentbefore = searchargs->sentbefore;
+    out->sentafter = searchargs->sentafter;
+    out->system_flags_set = searchargs->system_flags_set;
+    out->system_flags_unset = searchargs->system_flags_unset;
+
+    /* need to convert locations of named flags */
+    for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
+	if ((flag & 31) == 0) {
+	    flagmask = searchargs->user_flags_set[flag/32];
+	}
+	if (state->flagname[flag] && (flagmask & (1<<(flag & 31)))) {
+	    const char *name = state->flagname[flag];
+	    unsigned toflag;
+	    for (toflag = 0; toflag < MAX_USER_FLAGS; toflag++) {
+		if (!strcasecmpsafe(tostate->flagname[toflag], name))
+		    break;
+	    }
+	    if (toflag < MAX_USER_FLAGS) /* found it */
+		out->user_flags_set[toflag/32] |= 1<<(toflag&31);
+	    else
+		goto nevermatch; /* can never match */
+	}
+    }
+
+    /* same for unflags */
+    for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
+	if ((flag & 31) == 0) {
+	    flagmask = searchargs->user_flags_unset[flag/32];
+	}
+	if (state->flagname[flag] && (flagmask & (1<<(flag & 31)))) {
+	    const char *name = state->flagname[flag];
+	    unsigned toflag;
+	    for (toflag = 0; toflag < MAX_USER_FLAGS; toflag++) {
+		if (!strcasecmpsafe(tostate->flagname[toflag], name))
+		    break;
+	    }
+	    if (toflag < MAX_USER_FLAGS) /* found it */
+		out->user_flags_unset[toflag/32] |= 1<<(toflag&31);
+	    /* otherwise we always match */
+	}
+    }
+
+    for (seq = searchargs->sequence; seq; seq = seq->nextseq) {
+	char *str = seqset_cstring(seq);
+	appendsequencelist(tostate, &out->sequence, str, 0);
+	free(str);
+    }
+
+    for (seq = searchargs->uidsequence; seq; seq = seq->nextseq) {
+	char *str = seqset_cstring(seq);
+	appendsequencelist(tostate, &out->uidsequence, str, 1);
+	free(str);
+    }
+
+    /* strlistpat for most fields */
+    for (l = searchargs->from; l; l = l->next)
+	appendstrlistpat(&out->from, l->s);
+    for (l = searchargs->to; l; l = l->next)
+	appendstrlistpat(&out->folder, l->s);
+    for (l = searchargs->cc; l; l = l->next)
+	appendstrlistpat(&out->cc, l->s);
+    for (l = searchargs->bcc; l; l = l->next)
+	appendstrlistpat(&out->bcc, l->s);
+    for (l = searchargs->subject; l; l = l->next)
+	appendstrlistpat(&out->subject, l->s);
+    for (l = searchargs->messageid; l; l = l->next)
+	appendstrlistpat(&out->messageid, l->s);
+    for (l = searchargs->header; l; l = l->next)
+	appendstrlistpat(&out->header, l->s);
+    for (l = searchargs->body; l; l = l->next)
+	appendstrlistpat(&out->body, l->s);
+    for (l = searchargs->text; l; l = l->next)
+	appendstrlistpat(&out->text, l->s);
+
+    /* only strlist, not strlistpat for header NAMES */
+    for (l = searchargs->header_name; l; l = l->next)
+	appendstrlist(&out->header_name, l->s);
+
+    /* special folder logic */
+    for (l = searchargs->folder; l; l = l->next) {
+	/* not a match */
+	if (strcmpsafe(tostate->mailbox->name, l->s))
+	    out->flags |= (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
+	/* otherwise will always match - no rule needed */
+    }
+
+    for (s = searchargs->sublist; s; s = s->next) {
+	struct searchsub **tail = &out->sublist;
+	while (*tail) tail = &(*tail)->next;
+
+	*tail = xzmalloc(sizeof(struct searchsub));
+	(*tail)->sub1 = index_copy_search(state, s->sub1, tostate);
+	if (s->sub2)
+	    (*tail)->sub2 = index_copy_search(state, s->sub2, tostate);
+    }
+
+    out->modseq = searchargs->modseq;
+
+    for (sa = searchargs->annotations ; sa ; sa = sa->next) {
+	struct searchannot **tail = &out->annotations;
+	while (*tail) tail = &(*tail)->next;
+
+	*tail = xzmalloc(sizeof(struct searchannot));
+	(*tail)->entry = xstrdupnull(sa->entry);
+	(*tail)->attrib = xstrdupnull(sa->attrib);
+	(*tail)->namespace = sa->namespace;
+	(*tail)->isadmin = sa->isadmin;
+	(*tail)->userid = sa->userid; /* reference to external, not cleaned up */
+	(*tail)->auth_state = sa->auth_state;
+	buf_copy(&(*tail)->value, &sa->value);
+    }
+
+    for (l = searchargs->convflags; l; l = l->next)
+	appendstrlist(&out->convflags, l->s);
+
+    out->convmodseq = searchargs->convmodseq;
+
+    out->cache_atleast = searchargs->cache_atleast;
+
+    out->tag = searchargs->tag;
+    out->returnopts = searchargs->returnopts;
+    out->namespace = searchargs->namespace;
+    out->userid = searchargs->userid;
+    out->authstate = searchargs->authstate;
+
+    return out;
+
+nevermatch:
+    freesearchargs(out);
+    out = xzmalloc(sizeof(struct searchargs));
+    /* generate an item which can never match anything */
+    out->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
+    return out;
+}
+
 static void index_format_search(struct dlist *parent,
 				struct index_state *state,
 				const struct searchargs *searchargs)
