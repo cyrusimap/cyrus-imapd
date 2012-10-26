@@ -302,6 +302,9 @@ extern int index_copy_remote(struct index_state *state, char *sequence,
 void appendsequencelist(struct index_state *state, struct seqset **l,
 			char *sequence, int usinguid);
 void freesequencelist(struct seqset *l);
+void freesearchargs(struct searchargs *s);
+void freesortcrit(struct sortcrit *s);
+
 extern int index_expunge(struct index_state *state, char *uidsequence,
 			 int need_deleted);
 

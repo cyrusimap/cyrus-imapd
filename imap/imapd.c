@@ -472,8 +472,6 @@ static void freefieldlist(struct fieldlist *l);
 void freestrlist(struct strlist *l);
 static void appendsearchargs(struct searchargs *s, struct searchargs *s1,
 			 struct searchargs *s2);
-static void freesearchargs(struct searchargs *s);
-static void freesortcrit(struct sortcrit *s);
 
 static int set_haschildren(char *name, int matchlen, int maycreate,
 			   int *attributes);
@@ -12445,67 +12443,6 @@ static void appendsearchargs(struct searchargs *s,
     (*tail)->sub1 = s1;
     (*tail)->sub2 = s2;
     (*tail)->next = 0;
-}
-
-
-/*
- * Free the searchargs 's'
- */
-static void freesearchargs(struct searchargs *s)
-{
-    struct searchsub *sub, *n;
-    struct searchannot *sa;
-
-    if (!s) return;
-
-    freesequencelist(s->sequence);
-    freesequencelist(s->uidsequence);
-    freestrlist(s->from);
-    freestrlist(s->to);
-    freestrlist(s->cc);
-    freestrlist(s->bcc);
-    freestrlist(s->subject);
-    freestrlist(s->body);
-    freestrlist(s->text);
-    freestrlist(s->header_name);
-    freestrlist(s->header);
-    freestrlist(s->folder);
-
-    while ((sa = s->annotations)) {
-	s->annotations = sa->next;
-	free(sa->entry);
-	free(sa->attrib);
-	buf_free(&sa->value);
-	free(sa);
-    }
-
-    for (sub = s->sublist; sub; sub = n) {
-	n = sub->next;
-	freesearchargs(sub->sub1);
-	freesearchargs(sub->sub2);
-	free(sub);
-    }
-    free(s);
-}
-
-/*
- * Free an array of sortcrit
- */
-static void freesortcrit(struct sortcrit *s)
-{
-    int i = 0;
-
-    if (!s) return;
-    do {
-	switch (s[i].key) {
-	case SORT_ANNOTATION:
-	    free(s[i].args.annot.entry);
-	    free(s[i].args.annot.userid);
-	    break;
-	}
-	i++;
-    } while (s[i].key != SORT_SEQUENCE);
-    free(s);
 }
 
 static int set_haschildren(char *name, int matchlen,
