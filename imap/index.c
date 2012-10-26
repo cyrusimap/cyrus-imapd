@@ -3033,14 +3033,10 @@ EXPORTED int index_convmultisort(struct index_state *state,
     cachekey = multisort_cachekey(sortcrit, searchargs);
 
     sortres = multisort_cache_load(state, hms, cachekey);
-    if (sortres) {
-	syslog(LOG_NOTICE, "CACHEKEY HIT %llu %s", hms, cachekey);
-    }
-    else {
+    if (!sortres) {
 	sortres = multisort_run(state, sortcrit, searchargs);
 	/* OK if it fails */
 	multisort_cache_save(state, hms, cachekey, sortres);
-	syslog(LOG_NOTICE, "CACHEKEY MISS %llu %s", hms, cachekey);
     }
 
     if (windowargs->anchorfolder) {
