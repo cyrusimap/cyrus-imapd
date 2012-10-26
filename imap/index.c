@@ -2594,6 +2594,7 @@ static void index_format_search(struct dlist *parent,
     struct searchsub *s;
     struct seqset *seq;
     int i, have_one;
+    unsigned flag, flagmask;
 
     if (searchargs->flags & SEARCH_RECENT_SET)
 	dlist_setatom(parent, NULL, "RECENT");
@@ -2635,34 +2636,42 @@ static void index_format_search(struct dlist *parent,
 	dlist_setnum64(parent, NULL, searchargs->modseq);
     }
 
-    if (searchargs->system_flags_set) {
-	dlist_setatom(parent, NULL, "SYSTEM_FLAGS");
-	dlist_setnum32(parent, NULL, searchargs->system_flags_set);
+    if (searchargs->system_flags_set & FLAG_ANSWERED)
+	dlist_setatom(parent, NULL, "ANSWERED");
+    if (searchargs->system_flags_set & FLAG_DELETED)
+	dlist_setatom(parent, NULL, "DELETED");
+    if (searchargs->system_flags_set & FLAG_DRAFT)
+	dlist_setatom(parent, NULL, "DRAFT");
+    if (searchargs->system_flags_set & FLAG_FLAGGED)
+	dlist_setatom(parent, NULL, "FLAGGED");
+
+    if (searchargs->system_flags_unset & FLAG_ANSWERED)
+	dlist_setatom(parent, NULL, "UNANSWERED");
+    if (searchargs->system_flags_unset & FLAG_DELETED)
+	dlist_setatom(parent, NULL, "UNDELETED");
+    if (searchargs->system_flags_unset & FLAG_DRAFT)
+	dlist_setatom(parent, NULL, "UNDRAFT");
+    if (searchargs->system_flags_unset & FLAG_FLAGGED)
+	dlist_setatom(parent, NULL, "UNFLAGGED");
+
+    for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
+	if ((flag & 31) == 0) {
+	    flagmask = searchargs->user_flags_set[flag/32];
+	}
+	if (state->flagname[flag] && (flagmask & (1<<(flag & 31)))) {
+	    dlist_setatom(parent, NULL, "KEYWORD";
+	    dlist_setatom(parent, NULL, state->flagname[flag]);
+	}
     }
 
-    if (searchargs->system_flags_unset) {
-	dlist_setatom(parent, NULL, "UNSYSTEM_FLAGS");
-	dlist_setnum32(parent, NULL, searchargs->system_flags_unset);
-    }
-
-    have_one = 0;
-    for (i = 0; i < (MAX_USER_FLAGS/32); i++)
-	if (searchargs->user_flags_set[i]) have_one = 1;
-    if (have_one) {
-	dlist_setatom(parent, NULL, "USER_FLAGS");
-	sublist = dlist_newkvlist(parent, NULL);
-	for (i = 0; i < (MAX_USER_FLAGS/32); i++)
-	    dlist_setnum32(sublist, NULL, searchargs->user_flags_set[i]);
-    }
-
-    have_one = 0;
-    for (i = 0; i < (MAX_USER_FLAGS/32); i++)
-	if (searchargs->user_flags_unset[i]) have_one = 1;
-    if (have_one) {
-	dlist_setatom(parent, NULL, "UNUSER_FLAGS");
-	sublist = dlist_newkvlist(parent, NULL);
-	for (i = 0; i < (MAX_USER_FLAGS/32); i++)
-	    dlist_setnum32(sublist, NULL, searchargs->user_flags_unset[i]);
+    for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
+	if ((flag & 31) == 0) {
+	    flagmask = searchargs->user_flags_unset[flag/32];
+	}
+	if (state->flagname[flag] && (flagmask & (1<<(flag & 31)))) {
+	    dlist_setatom(parent, NULL, "UNKEYWORD";
+	    dlist_setatom(parent, NULL, state->flagname[flag]);
+	}
     }
 
     for (seq = searchargs->sequence; seq; seq = seq->nextseq) {
