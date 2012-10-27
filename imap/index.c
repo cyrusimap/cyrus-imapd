@@ -3332,7 +3332,7 @@ EXPORTED int index_convmultisort(struct index_state *state,
 	    int j;
 	    if (i)
 		prot_printf(state->out, " ");
-	    prot_printf(state->out, "(" MODSEQ_FMT, item->cid);
+	    prot_printf(state->out, "(%s" , conversation_id_encode(item->cid));
 	    /* exemplar item */
 	    prot_printf(state->out, " (%u %u)", item->folderid, item->uid);
 	    /* rest of the items too */
