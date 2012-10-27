@@ -428,14 +428,12 @@ static int fix_modseqs(struct conversations_state *a,
 	if (rb || keydelta < 0) {
 	    if (ra) break;
 	    if (ca.key[0] == 'F') {
-		modseq_t modseq;
-		uint32_t exists;
+		conv_status_t status = CONV_STATUS_INIT;
 		/* need to add record if it's zero */
-		r = conversation_parsestatus(ca.data, ca.datalen,
-					     &modseq, &exists, NULL);
+		r = conversation_parsestatus(ca.data, ca.datalen, &status);
 		if (r) return r;
-		if (exists == 0) {
-		    r = conversation_storestatus(b, ca.key, ca.keylen, modseq, 0, 0);
+		if (status.exists == 0) {
+		    r = conversation_storestatus(b, ca.key, ca.keylen, &status);
 		    if (r) {
 			fprintf(stderr, "Failed to store conversations "
 					"record \"%.*s\" to %s: %s, giving up\n",
@@ -458,13 +456,10 @@ static int fix_modseqs(struct conversations_state *a,
 	/* folders?  Just modseq check */
 	if (ca.key[0] == 'F') {
 	    /* check if modseq is higher for real */
-	    modseq_t realmodseq;
-	    modseq_t modseq;
-	    uint32_t exists;
-	    uint32_t unseen;
+	    conv_status_t statusa = CONV_STATUS_INIT;
+	    conv_status_t statusb = CONV_STATUS_INIT;
 	    /* need to add record if it's zero */
-	    r = conversation_parsestatus(ca.data, ca.datalen,
-					 &realmodseq, NULL, NULL);
+	    r = conversation_parsestatus(ca.data, ca.datalen, &statusa);
 	    if (r) {
 		fprintf(stderr, "Failed to parse conversations "
 				"record \"%.*s\" in %s: %s\n",
@@ -475,8 +470,7 @@ static int fix_modseqs(struct conversations_state *a,
 		 * also pick up the same problem */
 		goto next;
 	    }
-	    r = conversation_parsestatus(cb.data, cb.datalen,
-					 &modseq, &exists, &unseen);
+	    r = conversation_parsestatus(cb.data, cb.datalen, &statusb);
 	    if (r) {
 		fprintf(stderr, "Failed to parse conversations "
 				"record \"%.*s\" in %s: %s\n",
@@ -484,8 +478,9 @@ static int fix_modseqs(struct conversations_state *a,
 				b->path, error_message(r));
 		goto next;
 	    }
-	    if (realmodseq > modseq) {
-		r = conversation_storestatus(b, cb.key, cb.keylen, realmodseq, exists, unseen);
+	    if (statusa.modseq > statusb.modseq) {
+		statusb.modseq = statusa.modseq;
+		r = conversation_storestatus(b, cb.key, cb.keylen, &statusb);
 		if (r) {
 		    fprintf(stderr, "Failed to store conversations "
 				    "record \"%.*s\" to %s: %s, giving up\n",

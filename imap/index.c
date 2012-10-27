@@ -2152,19 +2152,19 @@ static int search_predict_total(struct index_state *state,
 				int conversations,
 				modseq_t *xconvmodseqp)
 {
-    uint32_t convexists = 0;
-    uint32_t convunseen = 0;
+    conv_status_t convstatus = CONV_STATUS_INIT;
 
     /* always grab xconvmodseq, so we report a growing
      * highestmodseq to all callers */
     if (conversations)
-	conversation_getstatus(cstate, state->mailbox->name,
-			       xconvmodseqp, &convexists, &convunseen);
+	conversation_getstatus(cstate, state->mailbox->name, &convstatus);
+
+    if (xconvmodseqp) *xconvmodseqp = convstatus.modseq;
 
     switch (search_countability(searchargs)) {
     case 0:
 	return (conversations ?
-		    convexists :
+		    convstatus.exists :
 		    state->exists - state->num_expunged);
     /* we don't try to optimise searches on \Recent */
     case SEARCH_SEEN_SET:
@@ -2176,11 +2176,11 @@ static int search_predict_total(struct index_state *state,
 	return state->numunseen;
     case SEARCH_CONVSEEN_SET:
     case SEARCH_CONVSEEN_UNSET|SEARCH_NOT:
-	assert(convexists >= convunseen);
-	return convexists - convunseen;
+	assert(convstatus.exists >= convstatus.unseen);
+	return convstatus.exists - convstatus.unseen;
     case SEARCH_CONVSEEN_UNSET:
     case SEARCH_CONVSEEN_SET|SEARCH_NOT:
-	return convunseen;
+	return convstatus.unseen;
     default:
 	return UNPREDICTABLE;
     }

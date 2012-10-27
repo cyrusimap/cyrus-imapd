@@ -613,9 +613,7 @@ static int folder_number_rename(struct conversations_state *state,
 
 EXPORTED int conversation_storestatus(struct conversations_state *state,
 			     const char *key, size_t keylen,
-			     modseq_t modseq,
-			     uint32_t exists,
-			     uint32_t unseen)
+			     conv_status_t *status)
 {
     struct dlist *dl = NULL;
     struct buf buf = BUF_INITIALIZER;
@@ -623,9 +621,9 @@ EXPORTED int conversation_storestatus(struct conversations_state *state,
     int r;
 
     dl = dlist_newlist(NULL, NULL);
-    dlist_setnum64(dl, "MODSEQ", modseq);
-    dlist_setnum32(dl, "EXISTS", exists);
-    dlist_setnum32(dl, "UNSEEN", unseen);
+    dlist_setnum64(dl, "MODSEQ", status->modseq);
+    dlist_setnum32(dl, "EXISTS", status->exists);
+    dlist_setnum32(dl, "UNSEEN", status->unseen);
 
     buf_printf(&buf, "%d ", version);
     dlist_printbuf(dl, 0, &buf);
@@ -642,16 +640,13 @@ EXPORTED int conversation_storestatus(struct conversations_state *state,
 }
 
 EXPORTED int conversation_setstatus(struct conversations_state *state,
-			   const char *mboxname,
-			   modseq_t modseq,
-			   uint32_t exists,
-			   uint32_t unseen)
+				    const char *mboxname,
+				    conv_status_t *status)
 {
     char *key = strconcat("F", mboxname, (char *)NULL);
     int r;
 
-    r = conversation_storestatus(state, key, strlen(key),
-				 modseq, exists, unseen);
+    r = conversation_storestatus(state, key, strlen(key), status);
 
     free(key);
 
@@ -746,9 +741,7 @@ static int _conversation_save(struct conversations_state *state,
 	const char *mboxname = strarray_nth(state->folder_names, folder->number);
 	int exists_diff = 0;
 	int unseen_diff = 0;
-	modseq_t modseq;
-	uint32_t exists;
-	uint32_t unseen;
+	conv_status_t status = CONV_STATUS_INIT;
 
 	/* case: full removal of conversation - make sure to remove
 	 * unseen as well */
@@ -777,15 +770,14 @@ static int _conversation_save(struct conversations_state *state,
 	 * every cid in every folder in the transaction.  Big
 	 * wins available by caching these in memory and writing
 	 * once at the end of the transaction */
-	r = conversation_getstatus(state, mboxname,
-				   &modseq, &exists, &unseen);
+	r = conversation_getstatus(state, mboxname, &status);
 	if (r) goto done;
-	if (exists_diff || unseen_diff || modseq < conv->modseq) {
-	    if (modseq < conv->modseq) modseq = conv->modseq;
-	    exists += exists_diff;
-	    unseen += unseen_diff;
-	    r = conversation_setstatus(state, mboxname,
-				       modseq, exists, unseen);
+	if (exists_diff || unseen_diff || status.modseq < conv->modseq) {
+	    if (status.modseq < conv->modseq)
+		status.modseq = conv->modseq;
+	    status.exists += exists_diff;
+	    status.unseen += unseen_diff;
+	    r = conversation_setstatus(state, mboxname, &status);
 	    if (r) goto done;
 	}
     }
@@ -834,9 +826,7 @@ EXPORTED int conversation_save(struct conversations_state *state,
 }
 
 EXPORTED int conversation_parsestatus(const char *data, size_t datalen,
-			     modseq_t *modseqp,
-			     uint32_t *existsp,
-			     uint32_t *unseenp)
+				      conv_status_t *status)
 {
     bit64 version;
     const char *rest;
@@ -844,6 +834,10 @@ EXPORTED int conversation_parsestatus(const char *data, size_t datalen,
     struct dlist *dl = NULL;
     struct dlist *n;
     int r;
+
+    status->modseq = 0;
+    status->exists = 0;
+    status->unseen = 0;
 
     r = parsenum(data, &rest, datalen, &version);
     if (r) return IMAP_MAILBOX_BADFORMAT;
@@ -861,34 +855,31 @@ EXPORTED int conversation_parsestatus(const char *data, size_t datalen,
     r = dlist_parsemap(&dl, 0, rest, restlen);
     if (r) return r;
 
-    n = dlist_getchildn(dl, 0);
-    if (modseqp && n)
-	*modseqp = dlist_num(n);
-    n = dlist_getchildn(dl, 1);
-    if (existsp && n)
-	*existsp = dlist_num(n);
-    n = dlist_getchildn(dl, 2);
-    if (unseenp && n)
-	*unseenp = dlist_num(n);
+    n = dl->head;
+    if (n) {
+	status->modseq = dlist_num(n);
+	n = n->next;
+    }
+    if (n) {
+	status->exists = dlist_num(n);
+	n = n->next;
+    }
+    if (n) {
+	status->unseen = dlist_num(n);
+    }
 
     dlist_free(&dl);
     return 0;
 }
 
 EXPORTED int conversation_getstatus(struct conversations_state *state,
-			   const char *mboxname,
-			   modseq_t *modseqp,
-			   uint32_t *existsp,
-			   uint32_t *unseenp)
+				    const char *mboxname,
+				    conv_status_t *status)
 {
     char *key = strconcat("F", mboxname, (char *)NULL);
     const char *data;
     size_t datalen;
     int r = IMAP_IOERROR;
-
-    if (modseqp) *modseqp = 0;
-    if (existsp) *existsp = 0;
-    if (unseenp) *unseenp = 0;
 
     if (!state->db)
 	goto done;
@@ -905,7 +896,7 @@ EXPORTED int conversation_getstatus(struct conversations_state *state,
     }
     if (r) goto done;
 
-    r = conversation_parsestatus(data, datalen, modseqp, existsp, unseenp);
+    r = conversation_parsestatus(data, datalen, status);
 
  done:
     if (r)

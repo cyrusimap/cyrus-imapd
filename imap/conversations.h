@@ -74,6 +74,7 @@ struct conversations_open *open_conversations;
 typedef struct conversation conversation_t;
 typedef struct conv_folder  conv_folder_t;
 typedef struct conv_sender  conv_sender_t;
+typedef struct conv_status  conv_status_t;
 
 #define MAX_CONVERSATION_FLAGS 256
 
@@ -95,6 +96,13 @@ struct conv_sender {
     time_t	    lastseen;
     uint32_t	    exists;
 };
+
+struct conv_status {
+    modseq_t modseq;
+    uint32_t exists;
+    uint32_t unseen;
+};
+#define CONV_STATUS_INIT {0, 0, 0}
 
 struct conversation {
     modseq_t	    modseq;
@@ -143,26 +151,20 @@ extern conv_folder_t *conversation_get_folder(conversation_t *conv,
 
 extern void conversation_normalise_subject(struct buf *);
 
-/* functions for CONVDB_COUNTS only */
+/* F record items */
 extern int conversation_getstatus(struct conversations_state *state,
 				  const char *mboxname,
-				  modseq_t *modseqp,
-				  uint32_t *existsp,
-				  uint32_t *unseenp);
+				  conv_status_t *status);
 extern int conversation_setstatus(struct conversations_state *state,
 				  const char *mboxname,
-				  modseq_t modseq,
-				  uint32_t exists,
-				  uint32_t unseen);
+				  conv_status_t *status);
 extern int conversation_storestatus(struct conversations_state *state,
 				    const char *key, size_t keylen,
-				    modseq_t modseq,
-				    uint32_t exists,
-				    uint32_t unseen);
+				    conv_status_t *status);
 extern int conversation_parsestatus(const char *data, size_t datalen,
-				    modseq_t *modseqp,
-				    uint32_t *existsp,
-				    uint32_t *unseenp);
+				    conv_status_t *status);
+
+/* B record items */
 extern int conversation_get_modseq(struct conversations_state *state,
 				   conversation_id_t cid,
 				   modseq_t *modseqp);

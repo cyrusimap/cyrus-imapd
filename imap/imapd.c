@@ -8502,15 +8502,15 @@ static int print_statusline(const char *extname, unsigned statusitems,
 	sepchar = ' ';
     }
     if (statusitems & STATUS_XCONVEXISTS) {
-	prot_printf(imapd_out, "%cXCONVEXISTS %u", sepchar, sd->xconvexists);
+	prot_printf(imapd_out, "%cXCONVEXISTS %u", sepchar, sd->xconv.exists);
 	sepchar = ' ';
     }
     if (statusitems & STATUS_XCONVUNSEEN) {
-	prot_printf(imapd_out, "%cXCONVUNSEEN %u", sepchar, sd->xconvunseen);
+	prot_printf(imapd_out, "%cXCONVUNSEEN %u", sepchar, sd->xconv.unseen);
 	sepchar = ' ';
     }
     if (statusitems & STATUS_XCONVMODSEQ) {
-	prot_printf(imapd_out, "%cXCONVMODSEQ " MODSEQ_FMT, sepchar, sd->xconvmodseq);
+	prot_printf(imapd_out, "%cXCONVMODSEQ " MODSEQ_FMT, sepchar, sd->xconv.modseq);
 	sepchar = ' ';
     }
 
@@ -8541,9 +8541,7 @@ static int imapd_statusdata(const char *mailboxname, unsigned statusitems,
 	r = conversations_open_mbox(mailboxname, &state);
 	if (r) goto out;
 
-	r = conversation_getstatus(state, mailboxname, &sd->xconvmodseq,
-				   &sd->xconvexists, &sd->xconvunseen);
-	conversations_commit(&state);
+	r = conversation_getstatus(state, mailboxname, &sd->xconv);
     }
 
 out:

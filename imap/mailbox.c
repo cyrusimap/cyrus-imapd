@@ -2899,6 +2899,9 @@ EXPORTED int mailbox_update_conversations(struct mailbox *mailbox,
 
 EXPORTED int mailbox_get_xconvmodseq(struct mailbox *mailbox, modseq_t *modseqp)
 {
+    conv_status_t status = CONV_STATUS_INIT;
+    int r;
+
     if (modseqp)
 	*modseqp = 0;
 
@@ -2908,17 +2911,18 @@ EXPORTED int mailbox_get_xconvmodseq(struct mailbox *mailbox, modseq_t *modseqp)
     if (!mailbox->local_cstate)
 	return IMAP_INTERNAL;
 
-    return conversation_getstatus(mailbox->local_cstate,
-				  mailbox->name,
-				  modseqp, NULL, NULL);
+    r = conversation_getstatus(mailbox->local_cstate, mailbox->name, &status);
+    if (r) return r;
+
+    *modseqp = status.modseq;
+
+    return 0;
 }
 
 /* Used in replication */
 EXPORTED int mailbox_update_xconvmodseq(struct mailbox *mailbox, modseq_t newmodseq)
 {
-    modseq_t modseq;
-    uint32_t exists;
-    uint32_t unseen;
+    conv_status_t status = CONV_STATUS_INIT;
     int r;
 
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
@@ -2927,15 +2931,14 @@ EXPORTED int mailbox_update_xconvmodseq(struct mailbox *mailbox, modseq_t newmod
     if (!mailbox->local_cstate)
 	return IMAP_INTERNAL;
 
-    r = conversation_getstatus(mailbox->local_cstate,
-			       mailbox->name,
-			       &modseq, &exists, &unseen);
+    r = conversation_getstatus(mailbox->local_cstate, mailbox->name, &status);
     if (r) return r;
 
-    if (newmodseq > modseq)
-	r = conversation_setstatus(mailbox->local_cstate,
-				   mailbox->name,
-				   newmodseq, exists, unseen);
+    if (newmodseq > status.modseq) {
+	status.modseq = newmodseq;
+	r = conversation_setstatus(mailbox->local_cstate, mailbox->name, &status);
+    }
+
     return r;
 }
 

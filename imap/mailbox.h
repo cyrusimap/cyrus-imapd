@@ -125,9 +125,7 @@ struct statusdata {
     uint32_t uidvalidity;
     uint32_t unseen;
     modseq_t highestmodseq;
-    uint32_t xconvexists;
-    uint32_t xconvunseen;
-    modseq_t xconvmodseq;
+    conv_status_t xconv;
 };
 
 struct index_record {
