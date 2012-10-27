@@ -49,6 +49,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include "hash.h"
 #include "strarray.h"
 #include "util.h"
 
@@ -61,6 +62,7 @@ struct conversations_state {
     struct txn *txn;
     strarray_t *counted_flags;
     strarray_t *folder_names;
+    hash_table folderstatus;
     char *path;
 };
 
