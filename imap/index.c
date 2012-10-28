@@ -2522,7 +2522,7 @@ static struct searchargs *index_copy_search(struct index_state *state,
     for (l = searchargs->from; l; l = l->next)
 	appendstrlistpat(&out->from, xstrdup(l->s));
     for (l = searchargs->to; l; l = l->next)
-	appendstrlistpat(&out->folder, xstrdup(l->s));
+	appendstrlistpat(&out->to, xstrdup(l->s));
     for (l = searchargs->cc; l; l = l->next)
 	appendstrlistpat(&out->cc, xstrdup(l->s));
     for (l = searchargs->bcc; l; l = l->next)
