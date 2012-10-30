@@ -1657,16 +1657,6 @@ static int propfind_by_collection(char *mboxname, int matchlen,
        with matchlen == 0, this is the root resource of the PROPFIND */
     root = !matchlen;
 
-    if (fctx->calfilter && fctx->calfilter->check_transp) {
-	/* Check if the collection is marked as transparent */
-	struct annotation_data attrib;
-	const char *prop_annot =
-	    ANNOT_NS "CALDAV:schedule-calendar-transp";
-
-	if (!annotatemore_lookup(mboxname, prop_annot, /* shared */ "", &attrib)
-	    && attrib.value && !strcmp(attrib.value, "transparent")) return 0;
-    }
-
     /* Check ACL on mailbox for current user */
     if ((r = mboxlist_lookup(mboxname, &mbentry, NULL))) {
 	syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
@@ -2660,6 +2650,26 @@ static int busytime_by_resource(void *rock, void *data)
 }
 
 
+/* mboxlist_findall() callback to find busytime of a collection */
+static int busytime_by_collection(char *mboxname, int matchlen,
+				  int maycreate, void *rock)
+{
+    struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
+
+    if (fctx->calfilter && fctx->calfilter->check_transp) {
+	/* Check if the collection is marked as transparent */
+	struct annotation_data attrib;
+	const char *prop_annot =
+	    ANNOT_NS "CALDAV:schedule-calendar-transp";
+
+	if (!annotatemore_lookup(mboxname, prop_annot, /* shared */ "", &attrib)
+	    && attrib.value && !strcmp(attrib.value, "transparent")) return 0;
+    }
+
+    return propfind_by_collection(mboxname, matchlen, maycreate, rock);
+}
+
+
 /* Compare start times of busytime period -- used for sorting */
 static int compare_busytime(const void *b1, const void *b2)
 {
@@ -2692,14 +2702,14 @@ static icalcomponent *busytime(struct transaction_t *txn,
 
 	if (txn->req_tgt.collection) {
 	    /* Get busytime for target calendar collection */
-	    propfind_by_collection(mailboxname, 0, 0, fctx);
+	    busytime_by_collection(mailboxname, 0, 0, fctx);
 	}
 	else {
 	    /* Get busytime for all contained calendar collections */
 	    strlcat(mailboxname, ".%", sizeof(mailboxname));
 	    mboxlist_findall(NULL,  /* internal namespace */
 			     mailboxname, 1, httpd_userid, 
-			     httpd_authstate, propfind_by_collection, fctx);
+			     httpd_authstate, busytime_by_collection, fctx);
 	}
     }
 
