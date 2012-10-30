@@ -1603,7 +1603,7 @@ static int propfind_by_resource(void *rock, void *data)
     fctx->req_tgt->resource = p;
     fctx->req_tgt->reslen = strlen(p);
 
-    fctx->cdata = data;
+    fctx->data = data;
     if (ddata->imap_uid && !fctx->record) {
 	/* Fetch index record for the resource */
 	r = mailbox_find_index_record(fctx->mailbox, ddata->imap_uid,
@@ -1636,7 +1636,7 @@ static int propfind_by_resource(void *rock, void *data)
     fctx->msg_base = NULL;
     fctx->msg_size = 0;
     fctx->record = NULL;
-    fctx->cdata = NULL;
+    fctx->data = NULL;
 
     return ret;
 }
@@ -1716,7 +1716,7 @@ static int propfind_by_collection(char *mboxname, int matchlen,
 	    struct caldav_data *cdata;
 
 	    /* Find message UID for the resource */
-	    caldav_lookup_resource(fctx->caldavdb,
+	    caldav_lookup_resource(fctx->davdb,
 				   mboxname, fctx->req_tgt->resource, 0, &cdata);
 	    /* XXX  Check errors */
 
@@ -1724,7 +1724,7 @@ static int propfind_by_collection(char *mboxname, int matchlen,
 	}
 	else {
 	    /* Add responses for all contained resources */
-	    caldav_foreach(fctx->caldavdb, mboxname, fctx->proc_by_resource, rock);
+	    caldav_foreach(fctx->davdb, mboxname, fctx->proc_by_resource, rock);
 
 	    /* Started with NULL resource, end with NULL resource */
 	    fctx->req_tgt->resource = NULL;
@@ -1870,7 +1870,7 @@ int meth_propfind(struct transaction_t *txn)
     fctx.userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = httpd_authstate;
-    fctx.caldavdb = auth_caldavdb;
+    fctx.davdb = auth_caldavdb;
     fctx.mailbox = NULL;
     fctx.record = NULL;
     fctx.reqd_privs = DACL_READ;
@@ -3229,7 +3229,7 @@ static int meth_report(struct transaction_t *txn)
     fctx.userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = httpd_authstate;
-    fctx.caldavdb = auth_caldavdb;
+    fctx.davdb = auth_caldavdb;
     fctx.mailbox = NULL;
     fctx.record = NULL;
     fctx.reqd_privs = report->reqd_privs;
@@ -4161,13 +4161,13 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
 	    snprintf(mailboxname, sizeof(mailboxname),
 		     "user.%s.%s", userid, calendarprefix);
 
-	    fctx.caldavdb = caldav_open(userid, CALDAV_CREATE);
+	    fctx.davdb = caldav_open(userid, CALDAV_CREATE);
 	    fctx.req_tgt->collection = NULL;
 	    fctx.busytime.len = 0;
 	    busy = busytime(txn, &fctx, mailboxname,
 			    ICAL_METHOD_REPLY, uid, organizer, attendee);
 
-	    caldav_close(fctx.caldavdb);
+	    caldav_close(fctx.davdb);
 
 	    if (busy) {
 		xmlNodePtr cdata;

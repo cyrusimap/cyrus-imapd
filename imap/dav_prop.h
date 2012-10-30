@@ -232,11 +232,11 @@ struct propfind_ctx {
     const char *userid;			/* userid client has logged in as */
     int userisadmin;			/* is userid an admin */
     struct auth_state *authstate;	/* authorization state for userid */
-    struct caldav_db *caldavdb;		/* CalDAV DB corresponding to userid */
+    void *davdb;			/* DAV DB corresponding to userid */
     struct mailbox *mailbox;		/* mailbox correspondng to collection */
     struct quota quota;			/* quota info for collection */
     struct index_record *record;	/* cyrus.index record for resource */
-    struct caldav_data *cdata;		/* caldav record for resource */
+    void *data;				/* DAV record for resource */
     const char *msg_base;		/* base of mmap()'d resource file */
     unsigned long msg_size;		/* size of mmap()'d resource file */
     unsigned long reqd_privs;		/* privileges req'd on collections */

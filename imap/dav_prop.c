@@ -1398,11 +1398,13 @@ static int propfind_schedtag(xmlNodePtr prop,
 			     struct propstat propstat[],
 			     void *rock __attribute__((unused)))
 {
+    struct caldav_data *cdata = (struct caldav_data *) fctx->data;
+
     ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
-    if (fctx->cdata->sched_tag) {
+    if (cdata->sched_tag) {
 	/* add DQUOTEs */
 	buf_reset(&fctx->buf);
-	buf_printf(&fctx->buf, "\"%s\"", fctx->cdata->sched_tag);
+	buf_printf(&fctx->buf, "\"%s\"", cdata->sched_tag);
 
 	xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 		     prop, BAD_CAST buf_cstring(&fctx->buf), 0);
