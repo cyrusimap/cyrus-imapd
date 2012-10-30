@@ -242,7 +242,7 @@ struct propfind_ctx {
     unsigned long reqd_privs;		/* privileges req'd on collections */
     struct calquery_filter *calfilter;	/* criteria to filter cal resources */
     int (*proc_by_resource)(void *rock,	/* Callback to process a resource */
-			    struct caldav_data *cdata);
+			    void *data);
     struct propfind_entry_list *elist;	/* List of props to fetch w/callbacks */
     struct busytime busytime;    	/* array of found busytime periods */
     xmlNodePtr root;			/* root node to add to XML tree */

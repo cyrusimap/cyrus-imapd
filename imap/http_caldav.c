@@ -1430,8 +1430,9 @@ static void add_busytime(icalcomponent *comp, struct icaltime_span *span,
 /* See if the current resource matches the specified filter
  * (comp-type and/or time-range).  Returns 1 if match, 0 otherwise.
  */
-static int apply_calfilter(struct propfind_ctx *fctx, struct caldav_data *cdata)
+static int apply_calfilter(struct propfind_ctx *fctx, void *data)
 {
+    struct caldav_data *cdata = (struct caldav_data *) data;
     int match = 1;
 
     if (fctx->calfilter->comp) {
@@ -1575,9 +1576,10 @@ static int apply_calfilter(struct propfind_ctx *fctx, struct caldav_data *cdata)
 
 
 /* caldav_foreach() callback to find props on a resource */
-static int propfind_by_resource(void *rock, struct caldav_data *cdata)
+static int propfind_by_resource(void *rock, void *data)
 {
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
+    struct dav_data *ddata = (struct dav_data *) data;
     struct index_record record;
     char *p;
     size_t len;
@@ -1597,21 +1599,21 @@ static int propfind_by_resource(void *rock, struct caldav_data *cdata)
 	*p++ = '/';
 	len++;
     }
-    strlcpy(p, cdata->dav.resource, MAX_MAILBOX_PATH - len);
+    strlcpy(p, ddata->resource, MAX_MAILBOX_PATH - len);
     fctx->req_tgt->resource = p;
     fctx->req_tgt->reslen = strlen(p);
 
-    fctx->cdata = cdata;
-    if (cdata->dav.imap_uid && !fctx->record) {
+    fctx->cdata = data;
+    if (ddata->imap_uid && !fctx->record) {
 	/* Fetch index record for the resource */
-	r = mailbox_find_index_record(fctx->mailbox, cdata->dav.imap_uid,
+	r = mailbox_find_index_record(fctx->mailbox, ddata->imap_uid,
 				      &record);
 	/* XXX  Check errors */
 
 	fctx->record = r ? NULL : &record;
     }
 
-    if (!cdata->dav.imap_uid || !fctx->record) {
+    if (!ddata->imap_uid || !fctx->record) {
 	/* Add response for missing target */
 	ret = xml_add_response(fctx, HTTP_NOT_FOUND);
     }
@@ -1619,7 +1621,7 @@ static int propfind_by_resource(void *rock, struct caldav_data *cdata)
 	int add_it = 1;
 
 	fctx->busytime.len = 0;
-	if (fctx->calfilter) add_it = apply_calfilter(fctx, cdata);
+	if (fctx->calfilter) add_it = apply_calfilter(fctx, data);
 
 	if (add_it) {
 	    /* Add response for target */
@@ -1628,7 +1630,7 @@ static int propfind_by_resource(void *rock, struct caldav_data *cdata)
     }
 
     if (fctx->msg_base) {
-	mailbox_unmap_message(fctx->mailbox, cdata->dav.imap_uid,
+	mailbox_unmap_message(fctx->mailbox, ddata->imap_uid,
 			      &fctx->msg_base, &fctx->msg_size);
     }
     fctx->msg_base = NULL;
@@ -2630,21 +2632,21 @@ static int report_cal_multiget(struct transaction_t *txn,
 
 
 /* caldav_foreach() callback to find busytime of a resource */
-static int busytime_by_resource(void *rock,
-				struct caldav_data *cdata)
+static int busytime_by_resource(void *rock, void *data)
 {
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
+    struct dav_data *ddata = (struct dav_data *) data;
     struct index_record record;
     int r;
 
-    if (!cdata->dav.imap_uid) return 0;
+    if (!ddata->imap_uid) return 0;
 
     /* Fetch index record for the resource */
-    r = mailbox_find_index_record(fctx->mailbox, cdata->dav.imap_uid, &record);
+    r = mailbox_find_index_record(fctx->mailbox, ddata->imap_uid, &record);
     if (r) return 0;
 
     fctx->record = &record;
-    (void) apply_calfilter(fctx, cdata);
+    (void) apply_calfilter(fctx, data);
 
     if (fctx->msg_base) {
 	mailbox_unmap_message(fctx->mailbox, fctx->record->uid,
