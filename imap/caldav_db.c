@@ -331,7 +331,7 @@ int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
     " FROM ical_objs WHERE mailbox = :mailbox;"
 
 int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
-		   int (*cb)(void *rock, struct caldav_data *cdata),
+		   int (*cb)(void *rock, void *data),
 		   void *rock)
 {
     struct bind_val bval[] = {

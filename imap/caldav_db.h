@@ -92,7 +92,7 @@ int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
 
 /* process each entry for 'mailbox' in 'caldavdb' with cb() */
 int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
-		   int (*cb)(void *rock, struct caldav_data *cdata),
+		   int (*cb)(void *rock, void *data),
 		   void *rock);
 
 /* write an entry to 'caldavdb' */
