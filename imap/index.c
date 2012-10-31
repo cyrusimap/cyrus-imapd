@@ -3053,6 +3053,8 @@ static struct multisort_result *multisort_cache_load(struct index_state *state,
     struct dlist *di;
     int i;
 
+    if (!userid) return NULL;
+
     memset(&rock, 0, sizeof(struct sortcache_cleanup_rock));
 
     rock.db = sortcache_db(userid, 0);
@@ -3124,6 +3126,8 @@ static void multisort_cache_save(struct index_state *state,
     struct dlist *dc;
     struct dlist *di;
     int i;
+
+    if (!userid) return;
 
     db = sortcache_db(userid, 1);
     if (!db) goto done;
