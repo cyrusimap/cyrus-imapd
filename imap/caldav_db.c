@@ -183,7 +183,7 @@ int caldav_close(struct caldav_db *caldavdb)
 struct read_rock {
     struct caldav_db *db;
     struct caldav_data *cdata;
-    int (*cb)(void *rock, struct caldav_data *cdata);
+    int (*cb)(void *rock, void *data);
     void *rock;
 };
 
