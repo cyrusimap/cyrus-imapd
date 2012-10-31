@@ -241,6 +241,15 @@ struct propfind_ctx {
     unsigned long msg_size;		/* size of mmap()'d resource file */
     unsigned long reqd_privs;		/* privileges req'd on collections */
     struct calquery_filter *calfilter;	/* criteria to filter cal resources */
+    int (*lookup_resource)(void *davdb,
+			   const char *mailbox,
+			   const char *resource,
+			   int lock,
+			   void **data);
+    int (*foreach_resource)(void *davdb,
+			    const char *mailbox,
+			    int (*cb)(void *rock, void *data),
+			    void *rock);
     int (*proc_by_resource)(void *rock,	/* Callback to process a resource */
 			    void *data);
     struct propfind_entry_list *elist;	/* List of props to fetch w/callbacks */

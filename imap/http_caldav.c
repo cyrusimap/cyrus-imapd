@@ -1713,18 +1713,19 @@ static int propfind_by_collection(char *mboxname, int matchlen,
 
 	if (fctx->req_tgt->resource) {
 	    /* Add response for target resource */
-	    struct caldav_data *cdata;
+	    void *data;
 
 	    /* Find message UID for the resource */
-	    caldav_lookup_resource(fctx->davdb,
-				   mboxname, fctx->req_tgt->resource, 0, &cdata);
+	    fctx->lookup_resource(fctx->davdb,
+				  mboxname, fctx->req_tgt->resource, 0, &data);
 	    /* XXX  Check errors */
 
-	    r = fctx->proc_by_resource(rock, cdata);
+	    r = fctx->proc_by_resource(rock, data);
 	}
 	else {
 	    /* Add responses for all contained resources */
-	    caldav_foreach(fctx->davdb, mboxname, fctx->proc_by_resource, rock);
+	    fctx->foreach_resource(fctx->davdb, mboxname,
+				   fctx->proc_by_resource, rock);
 
 	    /* Started with NULL resource, end with NULL resource */
 	    fctx->req_tgt->resource = NULL;
@@ -1875,6 +1876,8 @@ int meth_propfind(struct transaction_t *txn)
     fctx.record = NULL;
     fctx.reqd_privs = DACL_READ;
     fctx.calfilter = NULL;
+    fctx.lookup_resource = &caldav_lookup_resource;
+    fctx.foreach_resource = &caldav_foreach;
     fctx.proc_by_resource = &propfind_by_resource;
     fctx.elist = NULL;
     fctx.root = root;
@@ -2515,6 +2518,8 @@ static int report_cal_query(struct transaction_t *txn,
     xmlNodePtr node;
     struct calquery_filter filter;
 
+    fctx->lookup_resource = &caldav_lookup_resource;
+    fctx->foreach_resource = &caldav_foreach;
     fctx->proc_by_resource = &propfind_by_resource;
 
     /* Parse children element of report */
@@ -2692,6 +2697,8 @@ static icalcomponent *busytime(struct transaction_t *txn,
     struct busytime *busytime = &fctx->busytime;
     icalcomponent *cal = NULL;
 
+    fctx->lookup_resource = &caldav_lookup_resource;
+    fctx->foreach_resource = &caldav_foreach;
     fctx->proc_by_resource = &busytime_by_resource;
 
     /* Gather up all of the busytime */
