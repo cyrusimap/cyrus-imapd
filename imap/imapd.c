@@ -8535,13 +8535,23 @@ static int imapd_statusdata(const char *mailboxname, unsigned statusitems,
 
     if (statusitems & (STATUS_XCONVEXISTS | STATUS_XCONVUNSEEN
 		    | STATUS_XCONVMODSEQ)) {
-	/* can only get for ourselves for now */
 	struct conversations_state *state = NULL;
 
-	r = conversations_open_mbox(mailboxname, &state);
-	if (r) goto out;
+	/* use the existing state if possible */
+	state = conversations_get_mbox(mailboxname);
+	if (state) {
+	    r = conversation_getstatus(state, mailboxname, &sd->xconv);
+	    if (r) goto out;
+	}
 
-	r = conversation_getstatus(state, mailboxname, &sd->xconv);
+	/* otherwise fetch a new one and just use for this one thing! */
+	else {
+	    r = conversations_open_mbox(mailboxname, &state);
+	    if (r) goto out;
+	    r = conversation_getstatus(state, mailboxname, &sd->xconv);
+	    conversations_abort(&state);
+	    if (r) goto out;
+	}
     }
 
 out:
