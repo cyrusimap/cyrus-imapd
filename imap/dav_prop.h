@@ -212,19 +212,6 @@ enum {
 /* Context for fetching properties */
 struct propfind_entry_list;
 
-struct calquery_filter {
-    unsigned comp;
-    struct icaltimetype start;
-    struct icaltimetype end;
-    unsigned check_transp;
-};
-
-struct busytime {
-    struct icalperiodtype *busy;
-    unsigned len;
-    unsigned alloc;
-};
-
 struct propfind_ctx {
     struct request_target_t *req_tgt;	/* parsed request target URL */
     unsigned depth;	    		/* 0 = root, 1 = calendar, 2 = resrc */
@@ -255,7 +242,6 @@ struct propfind_ctx {
     int (*proc_by_resource)(void *rock,	/* Callback to process a resource */
 			    void *data);
     struct propfind_entry_list *elist;	/* List of props to fetch w/callbacks */
-    struct busytime busytime;    	/* array of found busytime periods */
     xmlNodePtr root;			/* root node to add to XML tree */
     xmlNsPtr *ns;			/* Array of our supported namespaces */
     const char **errstr;		/* Error string to pass up to caller */

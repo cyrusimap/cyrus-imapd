@@ -103,6 +103,21 @@ enum {
     OVERWRITE_YES
 };
 
+struct busytime {
+    struct icalperiodtype *busy;
+    unsigned len;
+    unsigned alloc;
+};
+
+struct calquery_filter {
+    unsigned comp;
+    struct icaltimetype start;
+    struct icaltimetype end;
+    unsigned check_transp;
+    unsigned save_busytime;
+    struct busytime busytime;    	/* array of found busytime periods */
+};
+
 static struct caldav_db *auth_caldavdb = NULL;
 
 static void my_caldav_init(struct buf *serverinfo);
@@ -1455,8 +1470,9 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
 	    /* Component is later than range */
 	    return 0;
 	}
-	else if (!cdata->recurring) {
-	    /* Component is within range and non-recurring */
+	else if (!cdata->recurring && !calfilter->save_busytime) {
+	    /* Component is within range, non-recurring,
+	       and we don't need to save busytime */
 	    return 1;
 	}
 	else {
@@ -1464,6 +1480,7 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
 	     * Need to mmap() and parse iCalendar object
 	     * to perform complete check of each recurrence.
 	     */
+	    struct busytime *busytime = &calfilter->busytime;
 	    icalcomponent *ical, *comp;
 	    icalcomponent_kind kind;
 	    icaltimezone *utc = icaltimezone_get_utc_timezone();
@@ -1492,17 +1509,15 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
 		icaltime_as_timet_with_zone(calfilter->end, utc);
 
 	    /* Mark start of where recurrences will be added */
-	    firstr = fctx->busytime.len;
+	    firstr = busytime->len;
 
 	    /* Add all recurring busytime in specified time-range */
 	    icalcomponent_foreach_recurrence(comp,
-					     calfilter->start,
-					     calfilter->end,
-					     add_busytime,
-					     &fctx->busytime);
+					     calfilter->start, calfilter->end,
+					     add_busytime, busytime);
 
 	    /* Mark end of where recurrences were added */
-	    lastr = fctx->busytime.len;
+	    lastr = busytime->len;
 
 	    /* XXX  Should we sort busytime array, so we can use bsearch()? */
 
@@ -1542,15 +1557,14 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
 		/* XXX  Should we replace this linear search with bsearch() */
 		for (n = firstr; n < lastr; n++) {
 		    if (!icaltime_compare(recurid,
-					  fctx->busytime.busy[n].start)) {
+					  busytime->busy[n].start)) {
 			/* Remove the instance
 			   by sliding all future instances into its place */
 			/* XXX  Doesn't handle the RANGE=THISANDFUTURE param */
-			fctx->busytime.len--;
-			memmove(&fctx->busytime.busy[n],
-				&fctx->busytime.busy[n+1],
+			busytime->len--;
+			memmove(&busytime->busy[n], &busytime->busy[n+1],
 				sizeof(struct icalperiodtype) *
-				(fctx->busytime.len - n));
+				(busytime->len - n));
 			lastr--;
 
 			break;
@@ -1563,11 +1577,13 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
 
 		if (icaltime_span_overlaps(&recurspan, &rangespan)) {
 		    /* Add this instance to the array */
-		    add_busytime(comp, &recurspan, &fctx->busytime);
+		    add_busytime(comp, &recurspan, busytime);
 		}
 	    }
 
-	    if (!fctx->busytime.len) match = 0;
+	    if (lastr == firstr) match = 0;
+
+	    if (!calfilter->save_busytime) busytime->len = 0;
 
 	    icalcomponent_free(ical);
 	}
@@ -1622,7 +1638,6 @@ static int propfind_by_resource(void *rock, void *data)
     else {
 	int add_it = 1;
 
-	fctx->busytime.len = 0;
 	if (fctx->filter) add_it = fctx->filter(fctx, data);
 
 	if (add_it) {
@@ -1952,7 +1967,6 @@ int meth_propfind(struct transaction_t *txn)
 	free(freeme);
     }
 
-    if (fctx.busytime.busy) free(fctx.busytime.busy);
     buf_free(&fctx.buf);
 
     if (outdoc) xmlFreeDoc(outdoc);
@@ -2704,7 +2718,7 @@ static icalcomponent *busytime(struct transaction_t *txn,
 {
     struct calquery_filter *calfilter =
 	(struct calquery_filter *) fctx->filter_crit;
-    struct busytime *busytime = &fctx->busytime;
+    struct busytime *busytime = &calfilter->busytime;
     icalcomponent *cal = NULL;
 
     fctx->lookup_resource = &caldav_lookup_resource;
@@ -2816,6 +2830,7 @@ static int report_fb_query(struct transaction_t *txn,
     calfilter.comp = CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY;
     calfilter.start = icaltime_from_timet_with_zone(INT_MIN, 0, NULL);
     calfilter.end = icaltime_from_timet_with_zone(INT_MAX, 0, NULL);
+    calfilter.save_busytime = 1;
     fctx->filter = apply_calfilter;
     fctx->filter_crit = &calfilter;
 
@@ -2835,6 +2850,8 @@ static int report_fb_query(struct transaction_t *txn,
     }
 
     cal = busytime(txn, fctx, mailboxname, 0, NULL, NULL, NULL);
+
+    if (calfilter.busytime.busy) free(calfilter.busytime.busy);
 
     if (cal) {
 	/* Output the iCalendar object as text/calendar */
@@ -3281,7 +3298,6 @@ static int meth_report(struct transaction_t *txn)
 	free(freeme);
     }
 
-    if (fctx.busytime.busy) free(fctx.busytime.busy);
     buf_free(&fctx.buf);
 
     if (inroot) xmlFreeDoc(inroot->doc);
@@ -4067,6 +4083,7 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
     calfilter.start = icalcomponent_get_dtstart(comp);
     calfilter.end = icalcomponent_get_dtend(comp);
     calfilter.check_transp = 1;
+    calfilter.save_busytime = 1;
 
     memset(&fctx, 0, sizeof(struct propfind_ctx));
     fctx.req_tgt = &txn->req_tgt;
@@ -4182,7 +4199,7 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
 
 	    fctx.davdb = caldav_open(userid, CALDAV_CREATE);
 	    fctx.req_tgt->collection = NULL;
-	    fctx.busytime.len = 0;
+	    calfilter.busytime.len = 0;
 	    busy = busytime(txn, &fctx, mailboxname,
 			    ICAL_METHOD_REPLY, uid, organizer, attendee);
 
@@ -4224,7 +4241,7 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
 
   done:
     if (org_authstate) auth_freestate(org_authstate);
-    if (fctx.busytime.busy) free(fctx.busytime.busy);
+    if (calfilter.busytime.busy) free(calfilter.busytime.busy);
     if (root) xmlFree(root->doc);
 
     return ret;
