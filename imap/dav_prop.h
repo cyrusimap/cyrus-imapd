@@ -240,7 +240,9 @@ struct propfind_ctx {
     const char *msg_base;		/* base of mmap()'d resource file */
     unsigned long msg_size;		/* size of mmap()'d resource file */
     unsigned long reqd_privs;		/* privileges req'd on collections */
-    struct calquery_filter *calfilter;	/* criteria to filter cal resources */
+    int (*filter)(struct propfind_ctx *,
+		  void *data);		/* callback to filter resources */
+    void *filter_crit;			/* criteria to filter resources */
     int (*lookup_resource)(void *davdb,
 			   const char *mailbox,
 			   const char *resource,

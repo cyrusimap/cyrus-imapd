@@ -1432,24 +1432,26 @@ static void add_busytime(icalcomponent *comp, struct icaltime_span *span,
  */
 static int apply_calfilter(struct propfind_ctx *fctx, void *data)
 {
+    struct calquery_filter *calfilter =
+	(struct calquery_filter *) fctx->filter_crit;
     struct caldav_data *cdata = (struct caldav_data *) data;
     int match = 1;
 
-    if (fctx->calfilter->comp) {
+    if (calfilter->comp) {
 	/* Perform CALDAV:comp-filter filtering */
-	if (!(cdata->comp_type & fctx->calfilter->comp)) return 0;
+	if (!(cdata->comp_type & calfilter->comp)) return 0;
     }
 
-    if (!icaltime_is_null_time(fctx->calfilter->start)) {
+    if (!icaltime_is_null_time(calfilter->start)) {
 	/* Perform CALDAV:time-range filtering */
 	struct icaltimetype dtstart = icaltime_from_string(cdata->dtstart);
 	struct icaltimetype dtend = icaltime_from_string(cdata->dtend);
 
-	if (icaltime_compare(dtend, fctx->calfilter->start) <= 0) {
+	if (icaltime_compare(dtend, calfilter->start) <= 0) {
 	    /* Component is earlier than range */
 	    return 0;
 	}
-	else if (icaltime_compare(dtstart, fctx->calfilter->end) >= 0) {
+	else if (icaltime_compare(dtstart, calfilter->end) >= 0) {
 	    /* Component is later than range */
 	    return 0;
 	}
@@ -1485,17 +1487,17 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
 
 	    /* Create a span for the given time-range */
 	    rangespan.start =
-		icaltime_as_timet_with_zone(fctx->calfilter->start, utc);
+		icaltime_as_timet_with_zone(calfilter->start, utc);
 	    rangespan.end =
-		icaltime_as_timet_with_zone(fctx->calfilter->end, utc);
+		icaltime_as_timet_with_zone(calfilter->end, utc);
 
 	    /* Mark start of where recurrences will be added */
 	    firstr = fctx->busytime.len;
 
 	    /* Add all recurring busytime in specified time-range */
 	    icalcomponent_foreach_recurrence(comp,
-					     fctx->calfilter->start,
-					     fctx->calfilter->end,
+					     calfilter->start,
+					     calfilter->end,
 					     add_busytime,
 					     &fctx->busytime);
 
@@ -1621,7 +1623,7 @@ static int propfind_by_resource(void *rock, void *data)
 	int add_it = 1;
 
 	fctx->busytime.len = 0;
-	if (fctx->calfilter) add_it = apply_calfilter(fctx, data);
+	if (fctx->filter) add_it = fctx->filter(fctx, data);
 
 	if (add_it) {
 	    /* Add response for target */
@@ -1703,7 +1705,7 @@ static int propfind_by_collection(char *mboxname, int matchlen,
 
 	/* If not filtering by calendar resource, and not excluding root,
 	   add response for collection */
-	if (!fctx->calfilter &&
+	if (!fctx->filter &&
 	    (!root || (fctx->depth == 1) || !(fctx->prefer & PREFER_NOROOT)) &&
 	    (r = xml_add_response(fctx, 0))) goto done;
     }
@@ -1875,7 +1877,8 @@ int meth_propfind(struct transaction_t *txn)
     fctx.mailbox = NULL;
     fctx.record = NULL;
     fctx.reqd_privs = DACL_READ;
-    fctx.calfilter = NULL;
+    fctx.filter = NULL;
+    fctx.filter_crit = NULL;
     fctx.lookup_resource = &caldav_lookup_resource;
     fctx.foreach_resource = &caldav_foreach;
     fctx.proc_by_resource = &propfind_by_resource;
@@ -2516,7 +2519,7 @@ static int report_cal_query(struct transaction_t *txn,
 {
     int ret = 0;
     xmlNodePtr node;
-    struct calquery_filter filter;
+    struct calquery_filter calfilter;
 
     fctx->lookup_resource = &caldav_lookup_resource;
     fctx->foreach_resource = &caldav_foreach;
@@ -2526,9 +2529,12 @@ static int report_cal_query(struct transaction_t *txn,
     for (node = inroot->children; node; node = node->next) {
 	if (node->type == XML_ELEMENT_NODE) {
 	    if (!xmlStrcmp(node->name, BAD_CAST "filter")) {
-		memset(&filter, 0, sizeof(struct calquery_filter));
-		ret = parse_comp_filter(node->children, &filter, &txn->error);
-		if (!ret) fctx->calfilter = &filter;
+		memset(&calfilter, 0, sizeof(struct calquery_filter));
+		ret = parse_comp_filter(node->children, &calfilter, &txn->error);
+		if (!ret) {
+		    fctx->filter = apply_calfilter;
+		    fctx->filter_crit = &calfilter;
+		}
 	    }
 	    else if (!xmlStrcmp(node->name, BAD_CAST "timezone")) {
 		syslog(LOG_WARNING, "REPORT calendar-query w/timezone");
@@ -2660,8 +2666,10 @@ static int busytime_by_collection(char *mboxname, int matchlen,
 				  int maycreate, void *rock)
 {
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
+    struct calquery_filter *calfilter =
+	(struct calquery_filter *) fctx->filter_crit;
 
-    if (fctx->calfilter && fctx->calfilter->check_transp) {
+    if (calfilter && calfilter->check_transp) {
 	/* Check if the collection is marked as transparent */
 	struct annotation_data attrib;
 	const char *prop_annot =
@@ -2694,6 +2702,8 @@ static icalcomponent *busytime(struct transaction_t *txn,
 			       const char *organizer,
 			       const char *attendee)
 {
+    struct calquery_filter *calfilter =
+	(struct calquery_filter *) fctx->filter_crit;
     struct busytime *busytime = &fctx->busytime;
     icalcomponent *cal = NULL;
 
@@ -2743,8 +2753,8 @@ static icalcomponent *busytime(struct transaction_t *txn,
 					 now,
 					 0,
 					 icaltimezone_get_utc_timezone())),
-				 icalproperty_new_dtstart(fctx->calfilter->start),
-				 icalproperty_new_dtend(fctx->calfilter->end),
+				 icalproperty_new_dtstart(calfilter->start),
+				 icalproperty_new_dtend(calfilter->end),
 				 0);
 
 	if (uid) icalcomponent_set_uid(fb, uid);
@@ -2795,18 +2805,19 @@ static int report_fb_query(struct transaction_t *txn,
 			   char mailboxname[])
 {
     int ret = 0;
-    struct calquery_filter filter;
+    struct calquery_filter calfilter;
     xmlNodePtr node;
     icalcomponent *cal;
 
     /* Can not be run against a collection */
     if (txn->req_tgt.resource) return HTTP_FORBIDDEN;
 
-    memset(&filter, 0, sizeof(struct calquery_filter));
-    filter.comp = CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY;
-    filter.start = icaltime_from_timet_with_zone(INT_MIN, 0, NULL);
-    filter.end = icaltime_from_timet_with_zone(INT_MAX, 0, NULL);
-    fctx->calfilter = &filter;
+    memset(&calfilter, 0, sizeof(struct calquery_filter));
+    calfilter.comp = CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY;
+    calfilter.start = icaltime_from_timet_with_zone(INT_MIN, 0, NULL);
+    calfilter.end = icaltime_from_timet_with_zone(INT_MAX, 0, NULL);
+    fctx->filter = apply_calfilter;
+    fctx->filter_crit = &calfilter;
 
     /* Parse children element of report */
     for (node = inroot->children; node; node = node->next) {
@@ -2815,10 +2826,10 @@ static int report_fb_query(struct transaction_t *txn,
 		const char *start, *end;
 
 		start = (const char *) xmlGetProp(node, BAD_CAST "start");
-		if (start) filter.start = icaltime_from_string(start);
+		if (start) calfilter.start = icaltime_from_string(start);
 
 		end = (const char *) xmlGetProp(node, BAD_CAST "end");
-		if (end) filter.end = icaltime_from_string(end);
+		if (end) calfilter.end = icaltime_from_string(end);
 	    }
 	}
     }
@@ -4019,7 +4030,7 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
     xmlNodePtr root = NULL;
     xmlNsPtr ns[NUM_NAMESPACE];
     struct propfind_ctx fctx;
-    struct calquery_filter filter;
+    struct calquery_filter calfilter;
     struct hash_table remote_table;
     struct sched_param *remote = NULL;
 
@@ -4051,11 +4062,11 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
     }
 
     /* Populate our filter and propfind context for local attendees */
-    memset(&filter, 0, sizeof(struct calquery_filter));
-    filter.comp = CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY;
-    filter.start = icalcomponent_get_dtstart(comp);
-    filter.end = icalcomponent_get_dtend(comp);
-    filter.check_transp = 1;
+    memset(&calfilter, 0, sizeof(struct calquery_filter));
+    calfilter.comp = CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY;
+    calfilter.start = icalcomponent_get_dtstart(comp);
+    calfilter.end = icalcomponent_get_dtend(comp);
+    calfilter.check_transp = 1;
 
     memset(&fctx, 0, sizeof(struct propfind_ctx));
     fctx.req_tgt = &txn->req_tgt;
@@ -4064,7 +4075,8 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = org_authstate;
     fctx.reqd_privs = 0;  /* handled by CALDAV:schedule-deliver on Inbox */
-    fctx.calfilter = &filter;
+    fctx.filter = apply_calfilter;
+    fctx.filter_crit = &calfilter;
     fctx.errstr = &txn->error.desc;
     fctx.ret = &ret;
     fctx.fetcheddata = 0;
