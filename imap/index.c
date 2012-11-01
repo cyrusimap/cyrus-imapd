@@ -2153,34 +2153,46 @@ static int search_predict_total(struct index_state *state,
 				modseq_t *xconvmodseqp)
 {
     conv_status_t convstatus = CONV_STATUS_INIT;
+    uint32_t exists;
 
-    /* always grab xconvmodseq, so we report a growing
-     * highestmodseq to all callers */
-    if (conversations)
+    if (conversations) {
 	conversation_getstatus(cstate, state->mailbox->name, &convstatus);
-
-    if (xconvmodseqp) *xconvmodseqp = convstatus.modseq;
+	/* always grab xconvmodseq, so we report a growing
+	 * highestmodseq to all callers */
+	if (xconvmodseqp) *xconvmodseqp = convstatus.modseq;
+	exists = convstatus.exists;
+    }
+    else {
+	if (xconvmodseqp) *xconvmodseqp = state->highestmodseq;
+	/* we may be in xconvupdates, where expunged are present */
+	exists = state->exists - state->num_expunged;
+    }
 
     switch (search_countability(searchargs)) {
     case 0:
-	return (conversations ?
-		    convstatus.exists :
-		    state->exists - state->num_expunged);
+	return exists;
+
     /* we don't try to optimise searches on \Recent */
     case SEARCH_SEEN_SET:
     case SEARCH_SEEN_UNSET|SEARCH_NOT:
 	assert(state->exists >= state->numunseen);
 	return state->exists - state->numunseen;
+
     case SEARCH_SEEN_UNSET:
     case SEARCH_SEEN_SET|SEARCH_NOT:
 	return state->numunseen;
+
     case SEARCH_CONVSEEN_SET:
     case SEARCH_CONVSEEN_UNSET|SEARCH_NOT:
+	assert(conversations);
 	assert(convstatus.exists >= convstatus.unseen);
 	return convstatus.exists - convstatus.unseen;
+
     case SEARCH_CONVSEEN_UNSET:
     case SEARCH_CONVSEEN_SET|SEARCH_NOT:
+	assert(conversations);
 	return convstatus.unseen;
+
     default:
 	return UNPREDICTABLE;
     }
@@ -2190,9 +2202,9 @@ static int search_predict_total(struct index_state *state,
  * Performs a XCONVSORT command
  */
 EXPORTED int index_convsort(struct index_state *state,
-		   struct sortcrit *sortcrit,
-		   struct searchargs *searchargs,
-		   const struct windowargs *windowargs)
+			    struct sortcrit *sortcrit,
+			    struct searchargs *searchargs,
+			    const struct windowargs *windowargs)
 {
     MsgData **msgdata = NULL;
     unsigned int mi;
@@ -2217,7 +2229,6 @@ EXPORTED int index_convsort(struct index_state *state,
     if (windowargs->anchor && windowargs->anchorfolder)
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
-
     /* make sure \Deleted messages are expunged.  Will also lock the
      * mailbox state and read any new information */
     r = index_expunge(state, NULL, 1);
@@ -2229,16 +2240,20 @@ EXPORTED int index_convsort(struct index_state *state,
 	    return IMAP_INTERNAL;
     }
 
+    /* this works both with and without conversations */
     total = search_predict_total(state, cstate, searchargs,
 				windowargs->conversations,
 				&xconvmodseq);
+    /* not going to match anything? bonus */
     if (!total)
 	goto out;
 
     construct_hashu64_table(&seen_cids, state->exists/4+4, 0);
 
     /* Create/load the msgdata array.
-     * load data for ALL messages always */
+     * load data for ALL messages always.  We sort before searching so
+     * we can take advantage of the window arguments to stop searching
+     * early */
     msgdata = index_msgdata_load(state, NULL, state->exists, sortcrit,
 			         windowargs->anchor, &found_anchor);
     if (windowargs->anchor && !found_anchor) {
