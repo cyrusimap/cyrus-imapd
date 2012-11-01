@@ -6704,7 +6704,7 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
 	    ret = numcmp(md1->convexists, md2->convexists);
 	    break;
 	case SORT_CONVSIZE:
-	    ret = numcmp(md1->size, md2->convsize);
+	    ret = numcmp(md1->convsize, md2->convsize);
 	    break;
 	case SORT_HASFLAG:
 	    if (i < 31)
