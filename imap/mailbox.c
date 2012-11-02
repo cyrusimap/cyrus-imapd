@@ -1018,7 +1018,6 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
     int flag;
     struct mailbox *mailbox = *mailboxptr;
     struct mailboxlist *listitem;
-    int expunge_days = config_getint(IMAPOPT_EXPUNGE_DAYS);
 
     /* be safe against double-close */
     if (!mailbox) return;
@@ -1035,20 +1034,6 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
 	return;
     }
 
-    /* auto-cleanup */
-    if (mailbox->i.first_expunged &&
-	(mailbox->index_locktype == LOCK_EXCLUSIVE)) {
-	time_t floor = time(NULL) - (expunge_days * 86400);
-	/* but only if we're more than a full week older than 
-	 * the expunge time, * so it doesn't turn into lots
-	 * of bitty rewrites.
-	 * Also, cyr_expire can get first bite if it's been set
-	 * to run... */
-	if (mailbox->i.first_expunged < floor - (8 * 86400)) {
-	    mailbox_expunge_cleanup(mailbox, floor, NULL);
-	    /* XXX - handle error code? */
-	}
-    }
     /* get a re-read of the options field for cleanup purposes */
     if (mailbox->index_fd != -1) {
 	if (!mailbox->index_locktype)

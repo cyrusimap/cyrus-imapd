@@ -568,12 +568,6 @@ Blank lines and lines beginning with ``#'' are ignored.
    EXPUNGE and should result in greater responsiveness for the client,
    especially when expunging a large number of messages. */
 
-{ "expunge_days", 7, INT }
-/* Number of days to retain expunged messages before cleaning up their
-   index records.  The default is 7.  This is necessary for QRESYNC
-   to work correctly.  If combined with delayed expunge (above) you
-   will also be able to unexpunge messages during this time. */
-
 { "failedloginpause", 3, INT }
 /* Number of seconds to pause after a failed login. */
 

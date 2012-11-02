@@ -313,12 +313,6 @@ flag.  If this is set, then before the index gets unlocked:</p>
 
 <h3>then: close</h3>
 
-<p>First close looks to see if the first_expunged date is old
-(based on the configuration variable <tt>expunge_days</tt>),
-if so - and there's an exclusive index lock - then it will
-attempt an expunge cleanup.  This allows for "automatic"
-cleanup rather than running cyr_expire if wanted.</p>
-
 <p>next the index is unlocked (see above)</p>
 
 <p>third, any "unlink" commands scheduled for email files are
