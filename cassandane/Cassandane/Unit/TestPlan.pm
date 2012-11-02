@@ -454,6 +454,7 @@ sub add_pass
 
 package Cassandane::Unit::TestPlan;
 use File::Temp qw(tempfile);
+use File::Path qw(mkpath);
 use Cassandane::Util::Log;
 
 my @test_roots = (
@@ -467,6 +468,7 @@ sub new
     my $self = {
 	schedule => {},
 	keep_going => delete $opts{keep_going} || 0,
+	log_directory => delete $opts{log_directory},
 	maxworkers => delete $opts{maxworkers},
 	post_test_handler => delete $opts{post_test_handler} || sub {},
     };
@@ -645,8 +647,28 @@ sub _setup_logfile
     open my $olderr, '>&', \*STDERR
 	or die "Cannot save STDERR";
 
-    # Create a per-test temporary logfile
-    my ($logfh, $logfile) = tempfile();
+    my $logfh;
+    my $logfile;
+    if (defined $self->{log_directory})
+    {
+	# Log directory specified so create the log file
+	# there with a semi-obvious name
+	if (! -d $self->{log_directory})
+	{
+	    mkpath($self->{log_directory})
+		or die "Cannot create directory $self->{log_directory}: $!";
+	}
+	my $template = $witem->{suite} .  '.' .  $witem->{testname} .  '.XXXXXX';
+	$template =~ s/::/./g;
+	($logfh, $logfile) = tempfile($template,
+				      DIR => $self->{log_directory},
+				      SUFFIX => '.log');
+    }
+    else
+    {
+	# Create a per-test temporary logfile
+	($logfh, $logfile) = tempfile();
+    }
 
     # Redirect both STDOUT and STDERR to the log file
     open STDOUT, '>&', $logfh
@@ -698,7 +720,7 @@ sub _run_workitem
     if ($annotate_flag)
     {
 	$test->annotate_from_file($witem->{logfile});
-	unlink($witem->{logfile});
+	unlink($witem->{logfile}) if (!defined $self->{log_directory});
     }
     $self->{post_test_handler}->($result, $runner);
 }
@@ -715,7 +737,7 @@ sub _finish_workitem
     }
 
     $test->annotate_from_file($witem->{logfile});
-    unlink($witem->{logfile});
+    unlink($witem->{logfile}) if (!defined $self->{log_directory});
 
     if ($witem->{result} eq 'pass' ||
 	$witem->{result} eq 'unknown')

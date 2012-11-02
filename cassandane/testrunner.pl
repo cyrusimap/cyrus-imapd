@@ -55,6 +55,7 @@ my $output_dir = 'reports';
 my $do_list = 0;
 # The default really should be --no-keep-going like make
 my $keep_going = 1;
+my $log_directory;
 my @names;
 my $jobs;
 
@@ -191,6 +192,11 @@ while (my $a = shift)
 	$jobs = shift;
 	usage unless defined $jobs;
     }
+    elsif ($a eq '-L' || $a eq '--log-directory')
+    {
+	$log_directory = shift;
+	usage unless defined $log_directory;
+    }
     elsif ($a eq '-l' || $a eq '--list')
     {
 	$do_list++;
@@ -229,6 +235,7 @@ Cassandane::Instance::cleanup_leftovers()
 my $plan = Cassandane::Unit::TestPlan->new(
 	keep_going => $keep_going,
 	maxworkers => $jobs,
+	log_directory => $log_directory,
 	post_test_handler => sub {
 	    Cassandane::PortManager::assert_all_free();
 	},
