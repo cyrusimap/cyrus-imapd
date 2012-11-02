@@ -2823,7 +2823,7 @@ static int report_fb_query(struct transaction_t *txn,
     xmlNodePtr node;
     icalcomponent *cal;
 
-    /* Can not be run against a collection */
+    /* Can not be run against a resource */
     if (txn->req_tgt.resource) return HTTP_FORBIDDEN;
 
     memset(&calfilter, 0, sizeof(struct calquery_filter));
