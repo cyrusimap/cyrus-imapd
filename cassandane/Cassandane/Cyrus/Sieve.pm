@@ -433,7 +433,10 @@ sub test_deliver_fileinto_dot
     my $imaptalk = $self->{store}->get_client();
 
     xlog "Create the target folder";
-    my $target = $self->{instance}->mboxname('inbox', 'target');
+
+    my $target = Cassandane::Mboxname->new(config => $self->{instance}->{config},
+					   userid => $user,
+					   box => 'target')->to_external();
     $imaptalk->create($target)
 	 or die "Cannot create $target: $@";
 

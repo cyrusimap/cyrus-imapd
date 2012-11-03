@@ -53,6 +53,7 @@ use Cwd qw(abs_path getcwd);
 use Cassandane::Util::DateTime qw(to_iso8601);
 use Cassandane::Util::Log;
 use Cassandane::Util::Wait;
+use Cassandane::Mboxname;
 use Cassandane::Config;
 use Cassandane::Service;
 use Cassandane::ServiceFactory;
@@ -682,30 +683,25 @@ sub copy_logins
 	if ($self->{_started});
 }
 
-sub mboxname
-{
-    my ($self, @args) = @_;
-    my $sep = $self->{config}->get_bool('unixhierarchysep', 'off') ? '/' : '.';
-    my @comps;
-    # Flatten out any array refs and stringify
-    foreach my $c (@args)
-    {
-	if (ref $c && ref $c eq 'ARRAY')
-	{
-	    map { push(@comps, "" . $_); } @$c;
-	}
-	elsif (!ref $c)
-	{
-	    push(@comps, "" . $c);
-	}
-    }
-    map { die "Bad mboxname component \"$_\"" if index($_, $sep) >= 0; } @comps;
-    return join($sep, @comps);
-}
-
+#
+# Create a user, with a home folder and a login entry.
+#
+# Argument 'user' may be of the form 'user' or 'user@domain'.
+# Following that are optional named parameters
+#
+#   password	    string, default is "testpw"
+#
+#   subdirs	    array of strings, lists folders
+#		    to be created, relative to the new
+#		    home folder
+#
+# Returns void, or dies if something went wrong
+#
 sub create_user
 {
     my ($self, $user, %params) = @_;
+
+    my $mb = Cassandane::Mboxname->new(config => $self->{config}, username => $user);
 
     xlog "create user $user";
 
@@ -718,8 +714,8 @@ sub create_user
     my $adminstore = $srv->create_store(username => 'admin');
     my $adminclient = $adminstore->get_client();
 
-    my @mboxes = ( $self->mboxname('user', $user) );
-    map { push(@mboxes, $self->mboxname('user', $user, $_)); } @{$params{subdirs}}
+    my @mboxes = ( $mb->to_external() );
+    map { push(@mboxes, $mb->make_child($_)->to_external()); } @{$params{subdirs}}
 	if ($params{subdirs});
 
     foreach my $mb (@mboxes)
