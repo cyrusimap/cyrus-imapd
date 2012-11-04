@@ -54,6 +54,16 @@ my $re_use_dir = 1;
 my @services = ( 'imap' );
 $start_flag = 1 if $0 =~ m/start-instance/;
 
+sub latest_instance
+{
+    my @infos = Cassandane::Instance::list();
+    die "No instances, sorry" unless scalar @infos;
+    @infos = sort {
+		$b->{ctime} <=> $a->{ctime}
+	    } @infos;
+    return shift(@infos)->{name};
+}
+
 sub usage
 {
     if ($start_flag)
@@ -96,18 +106,7 @@ while (my $a = shift)
     elsif ($a eq '--latest')
     {
 	usage() if defined $name;
-	my @cmd = ('ls', '-t', Cassandane::Instance::_rootdir());
-	open LSROOT, '-|', @cmd
-	    or die "Cannot run ls: $!";
-	while (<LSROOT>)
-	{
-	    chomp;
-	    next unless m/^[0-9]+$/;
-	    $name = $_;
-	    last;
-	}
-	close LSROOT;
-	die "No latest instance, sorry" unless $name;
+	$name = latest_instance();
     }
     elsif ($a =~ m/^-/)
     {
@@ -120,17 +119,31 @@ while (my $a = shift)
 	$name = $a;
     }
 }
-$name = 'casscmd' unless defined $name;
+$name ||= 'casscmd';
 
 become_cyrus();
 
-my $instance = Cassandane::Instance->new(
-		name => $name,
-		config => $config,
-		re_use_dir => $re_use_dir,
-		persistent => $start_flag ? 1 : 0,
+my $iinfo = Cassandane::Instance::exists($name);
+exit(0) if (!$iinfo && !$start_flag);	# nothing to stop
+my $instance;
+if ($iinfo && $re_use_dir)
+{
+    $instance = Cassandane::Instance->new(
+		    name => $iinfo->{name},
+		    basedir => $iinfo->{basedir},
+		    re_use_dir => 1,
+		    persistent => $start_flag ? 1 : 0,
 	       );
-$instance->add_services(@services);
+}
+else
+{
+    $instance = Cassandane::Instance->new(
+		    name => $name,
+		    config => $config,
+		    persistent => $start_flag ? 1 : 0,
+	       );
+    $instance->add_services(@services);
+}
 
 if ($start_flag)
 {
