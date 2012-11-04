@@ -46,6 +46,7 @@ use Config;
 use File::Path qw(mkpath rmtree);
 use File::Find qw(find);
 use File::Basename;
+use File::stat;
 use POSIX qw(geteuid :signal_h :sys_wait_h :errno_h);
 use DateTime;
 use BSD::Resource;
@@ -138,7 +139,26 @@ sub _rootdir
     return $__cached_rootdir;
 }
 
-sub _make_unique_basedir_and_name
+sub _make_instance_info
+{
+    my ($name, $basedir) = @_;
+
+    die "Need either a name or a basename"
+	if !defined $name && !defined $basedir;
+    $name ||= basename($basedir);
+    $basedir ||= _rootdir() . '/' . $name;
+
+    my $sb = stat($basedir);
+    die "Cannot stat $basedir: $!" if !defined $sb && $! != ENOENT;
+
+    return {
+	name => $name,
+	basedir => $basedir,
+	ctime => ($sb ? $sb->ctime : undef),
+    };
+}
+
+sub _make_unique_instance_info
 {
     if (!defined $stamp)
     {
@@ -164,35 +184,53 @@ sub _make_unique_basedir_and_name
 	last if mkdir($basedir);
 	die "Cannot create $basedir: $!" if ($! != EEXIST);
     }
-    return ($name, $basedir);
+    return _make_instance_info($name, $basedir);
+}
+
+sub list
+{
+    my $rootdir = _rootdir();
+    opendir ROOT, $rootdir
+	or die "Cannot open $rootdir for reading: $!";
+    my @instances;
+    while ($_ = readdir(ROOT))
+    {
+	next unless m/^[0-9]+[A-Z]?$/;
+	push(@instances, _make_instance_info($_));
+    }
+    closedir ROOT;
+    return @instances;
+}
+
+sub exists
+{
+    my ($name) = @_;
+    return if ( ! -d _rootdir() . '/' . $name );
+    return _make_instance_info($name);
 }
 
 sub _init_basedir_and_name
 {
     my ($self) = @_;
 
+    my $info;
     my $which = (defined $self->{name} ? 1 : 0) |
 		(defined $self->{basedir} ? 2 : 0);
     if ($which == 0)
     {
 	# have neither name nor basedir
 	# usual first time case for test instances
-	my ($name, $basedir) = _make_unique_basedir_and_name();
-	$self->{name} = $name;
-	$self->{basedir} = $basedir;
+	$info = _make_unique_instance_info();
     }
-    elsif ($which == 1)
+    else
     {
 	# have name but not basedir
 	# usual first time case for start-instance.pl
-	$self->{basedir} = _rootdir() . '/' . $self->{name};
+	# or basedir but not name, which doesn't happen
+	$info = _make_instance_info($self->{name}, $self->{basedir});
     }
-    elsif ($which == 2)
-    {
-	# have basedir but not name
-	# this could happen if the caller did odd things
-	$self->{name} = basename($self->{basedir});
-    }
+    $self->{name} = $info->{name};
+    $self->{basedir} = $info->{basedir};
 }
 
 # Remove on-disk traces of any previous instances
