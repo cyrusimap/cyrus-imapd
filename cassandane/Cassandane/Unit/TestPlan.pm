@@ -663,6 +663,7 @@ sub _setup_logfile
 	($logfh, $logfile) = tempfile($template,
 				      DIR => $self->{log_directory},
 				      SUFFIX => '.log');
+	chmod(0644, $logfile);
     }
     else
     {
