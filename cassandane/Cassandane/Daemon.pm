@@ -138,6 +138,40 @@ sub address
     return join('', @parts);
 }
 
+sub parse_address
+{
+    my ($s) = @_;
+    my $host;
+    my $port;
+
+    if ($s =~ m/^\//)
+    {
+	# UNIX domain socket
+	$port = $s;
+    }
+    if (!defined $port)
+    {
+	# syntax '[ipv6address]:port'
+	($host, $port) = ($s =~ m/^\[([^]]+)\]:([^:]+)$/);
+    }
+    if (!defined $port)
+    {
+	# syntax 'host:port'
+	($host, $port) = ($s =~ m/^([^:]+):([^:]+)$/);
+    }
+    if (!defined $port)
+    {
+	# syntax 'port'
+	($port) = ($s =~ m/^([^:]+)$/);
+    }
+    if (!defined $port)
+    {
+	die "Cannot parse \"$s\" as socket address"
+    }
+
+    return { host => $host, port => $port };
+}
+
 my %netstat_match = (
     #     # netstat -ln -Ainet
     #     Active Internet connections (only servers)
