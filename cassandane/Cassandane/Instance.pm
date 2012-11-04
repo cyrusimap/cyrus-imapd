@@ -527,6 +527,75 @@ sub _generate_master_conf
     close MASTER;
 }
 
+sub _add_services_from_cyrus_conf
+{
+    my ($self) = @_;
+
+    my $filename = $self->_master_conf();
+    open MASTER,'<',$filename
+	or die "Cannot open $filename for reading: $!";
+
+    my $in;
+    while (<MASTER>)
+    {
+	chomp;
+	s/\s*#.*//;		# strip comments
+	next if m/^\s*$/;	# skip empty lines
+	my ($m) = m/^(START|SERVICES|EVENTS)\s*{/;
+	if ($m)
+	{
+	    $in = $m;
+	    next;
+	}
+	if ($in && m/^\s*}\s*$/)
+	{
+	    $in = undef;
+	    next;
+	}
+	next if !defined $in;
+
+	my ($name, $rem) = m/^\s*([a-zA-Z0-9]+)\s+(.*)$/;
+	$_ = $rem;
+	my %params;
+	while (length $_)
+	{
+	    my ($k, $rem2) = m/^([a-zA-Z0-9]+)=(.*)/;
+	    die "Bad parameter name" if !defined $k;
+	    $_ = $rem2;
+
+	    my ($v, $rem3) = m/^"([^"]*)"(.*)/;
+	    if (!defined $v)
+	    {
+		($v, $rem3) = m/^(\S*)(.*)/;
+	    }
+	    die "Bad parameter value" if !defined $v;
+	    $_ = $rem3;
+
+	    if ($k eq 'listen')
+	    {
+		my $aa = Cassandane::Daemon::parse_address($v);
+		$params{host} = $aa->{host};
+		$params{port} = $aa->{port};
+	    }
+	    elsif ($k eq 'cmd')
+	    {
+		$params{argv} = [ split(/\s+/, $v) ];
+	    }
+	    else
+	    {
+		$params{$k} = $v;
+	    }
+	    s/^\s+//;
+	}
+	if ($in eq 'SERVICES')
+	{
+	    $self->add_service(name => $name, %params);
+	}
+    }
+
+    close MASTER;
+}
+
 sub _fix_ownership
 {
     my ($self, $path) = @_;
@@ -794,6 +863,10 @@ sub start
 	# Ensure sasldb2 is created and contains 'admin'
 	$self->_flush_logins();
 	$self->_fix_ownership();
+    }
+    else
+    {
+	$self->_add_services_from_cyrus_conf();
     }
     $self->_start_master();
     $self->{_stopped} = 0;
