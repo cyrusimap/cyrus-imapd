@@ -46,7 +46,6 @@ use base qw(Cassandane::MasterEntry);
 use Cassandane::Daemon;
 use Cassandane::Util::Log;
 use Cassandane::MessageStoreFactory;
-use Cassandane::PortManager;
 use Cassandane::Util::Socket;
 
 sub new

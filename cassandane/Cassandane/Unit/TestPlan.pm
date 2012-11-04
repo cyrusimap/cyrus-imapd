@@ -470,7 +470,6 @@ sub new
 	keep_going => delete $opts{keep_going} || 0,
 	log_directory => delete $opts{log_directory},
 	maxworkers => delete $opts{maxworkers},
-	post_test_handler => delete $opts{post_test_handler} || sub {},
     };
     die "Unknown options: " . join(' ', keys %opts)
 	if scalar %opts;
@@ -712,18 +711,31 @@ sub _get_suite_and_test
 sub _run_workitem
 {
     my ($self, $witem, $result, $runner, $annotate_flag) = @_;
-
     my ($suite, $test) = $self->_get_suite_and_test($witem);
     Cassandane::Unit::TestCase->enable_test($witem->{testname});
     $self->_setup_logfile($witem);
     $suite->run($result, $runner);
+
+    if ($test->can('post_tear_down'))
+    {
+	eval
+	{
+	    $test->post_tear_down();
+	};
+	my $ex = $@;
+	if ($ex)
+	{
+	    $result->add_error($test,
+			       Test::Unit::Error->make_new_from_error($ex));
+	}
+    }
+
     $self->_restore_stdout();
     if ($annotate_flag)
     {
 	$test->annotate_from_file($witem->{logfile});
 	unlink($witem->{logfile}) if (!defined $self->{log_directory});
     }
-    $self->{post_test_handler}->($result, $runner);
 }
 
 sub _finish_workitem

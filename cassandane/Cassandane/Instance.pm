@@ -864,7 +864,7 @@ sub start
 	$self->_flush_logins();
 	$self->_fix_ownership();
     }
-    else
+    elsif (!scalar $self->{services})
     {
 	$self->_add_services_from_cyrus_conf();
     }

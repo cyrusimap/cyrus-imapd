@@ -70,12 +70,6 @@ sub new
     }, $class;
 }
 
-sub DESTROY
-{
-    my ($self) = @_;
-    Cassandane::PortManager::free($self->{port});
-}
-
 sub set_config
 {
     my ($self, $config) = @_;
@@ -172,62 +166,122 @@ sub parse_address
     return { host => $host, port => $port };
 }
 
-my %netstat_match = (
+my %netstat_parse = (
     #     # netstat -ln -Ainet
     #     Active Internet connections (only servers)
     #     Proto Recv-Q Send-Q Local Address           Foreign Address State
     #     tcp        0      0 0.0.0.0:56686           0.0.0.0:* LISTEN
+    #
+    #     # netstat -lnp -Ainet
+    #     Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name
+    #	  tcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN      1058/sshd
     inet => sub
     {
-	my ($self, $line) = @_;
+	my ($line, $wantpid) = @_;
 
 	my @a = split(/\s+/, $line);
-	return 0 unless scalar(@a) == 6;
-	return 0 unless $a[0] eq 'tcp';
-	return 0 unless $a[5] eq 'LISTEN';
-	my $host = $self->{host} || '0.0.0.0';
-	return 0 unless $a[3] eq "$host:$self->{port}";
-	return 1;
+	return unless scalar(@a) == 6 + ($wantpid ? 1 : 0);
+
+	my ($addr, $port) = ($a[3] =~ m/^(.*):([0-9]+)$/);
+	return unless defined $port;
+	$addr = 'any' if ($addr eq '0.0.0.0');
+	$addr = 'localhost' if ($addr eq '127.0.0.1');
+
+	my $pid;
+	my $cmd;
+	($pid, $cmd) = ($a[6] =~ m/^([0-9]+)\/(.*)$/) if ($wantpid);
+
+	return {
+	    address_family => 'inet',
+	    protocol => $a[0],	    # 'tcp'
+	    state => $a[5],	    # 'LISTEN'
+	    local_addr => $addr,    # numeric
+	    local_port => $port,    # numeric
+	    pid => $pid,	    # numeric or undef
+	    cmd => $cmd,	    # string or undef
+	};
     },
 
     #  # netstat -ln -Ainet6
     #  Active Internet connections (only servers)
     #  Proto Recv-Q Send-Q Local Address           Foreign Address         State
     #  tcp6       0      0 :::22                   :::*                    LISTEN
+    #
+    #  # netstat -lnp -Ainet6
+    #  Proto Recv-Q Send-Q Local Address           Foreign Address	   State       PID/Program name
+    #  tcp6       0      0 :::22                   :::*                    LISTEN      1058/sshd
     inet6 => sub
     {
-	my ($self, $line) = @_;
+	my ($line, $wantpid) = @_;
 
 	my @a = split(/\s+/, $line);
-	return 0 unless scalar(@a) == 6;
-	return 0 unless ($a[0] eq 'tcp' || $a[0] eq 'tcp6');
-	return 0 unless $a[5] eq 'LISTEN';
-	# Note that we don't use $self->address() because it formats
-	# the address in Cyrus format which is different to what netstat
-	# reports, in the IPv6 case.
-	my $host = $self->{host} || '::';
-	return 0 unless $a[3] eq "$host:$self->{port}";
-	return 1;
+	return unless scalar(@a) == 6 + ($wantpid ? 1 : 0);
+
+	my $prot = $a[0];	# tcp or tcp6
+	$prot =~ s/6$//;
+
+	my ($addr, $port) = ($a[3] =~ m/^(.*):([0-9]+)$/);
+	return unless defined $port;
+	$addr = 'any' if ($addr eq '::');
+	$addr = 'localhost' if ($addr eq '::1');
+
+	my $pid;
+	my $cmd;
+	($pid, $cmd) = ($a[6] =~ m/^([0-9]+)\/(.*)$/) if ($wantpid);
+
+	return {
+	    address_family => 'inet6',
+	    protocol => $prot,	    # 'tcp'
+	    state => $a[5],	    # 'LISTEN'
+	    local_addr => $addr,    # numeric
+	    local_port => $port,    # numeric
+	    pid => $pid,	    # numeric or undef
+	    cmd => $cmd,	    # string or undef
+	};
     },
 
     #  # netstat -ln -Aunix
     #  Active UNIX domain sockets (only servers)
     #  Proto RefCnt Flags       Type       State         I-Node   Path
     #  unix  2      [ ACC ]     STREAM     LISTENING     7941     /var/run/dbus/system_bus_socket
+    #
+    #  # netstat -lnp -Aunix
+    #  Active UNIX domain sockets (only servers)
+    #  Proto RefCnt Flags       Type       State         I-Node   PID/Program name    Path
+    #  unix  2      [ ACC ]     STREAM     LISTENING     13317    2016/gconf-helper   /tmp/orbit-gnb/linc-7e0-0-6044c14eae22e
     unix => sub
     {
-	my ($self, $line) = @_;
+	my ($line, $wantpid) = @_;
 
 	# Compress the Flags field to eliminate spaces and make split()
 	# return a predictable number of fields.
 	$line =~ s/\[[^]]*\]/[]/;
 
 	my @a = split(/\s+/, $line);
-	return 0 unless scalar(@a) == 7;
-	return 0 unless $a[0] eq 'unix';
-	return 0 unless $a[4] eq 'LISTENING';
-	return 0 unless $a[6] eq $self->{port};
-	return 1;
+	return unless scalar(@a) == 7 + ($wantpid ? 1 : 0);
+
+	my $state = $a[4];
+	$state =~ s/^LISTENING$/LISTEN/;
+
+	return if $a[0] ne 'unix';
+	my $prot;
+	$prot = 'tcp' if ($a[3] eq 'STREAM');
+	$prot = 'udp' if ($a[3] eq 'DGRAM');
+	return if !defined $prot;
+
+	my $pid;
+	my $cmd;
+	($pid, $cmd) = ($a[6] =~ m/^([0-9]+)\/(.*)$/) if ($wantpid);
+
+	return {
+	    address_family => 'unix',
+	    protocol => $prot,	    # 'tcp'
+	    state => $state,	    # 'LISTEN'
+	    local_addr => 'any',
+	    local_port => $a[-1],   # bound socket path
+	    pid => $pid,	    # numeric or undef
+	    cmd => $cmd,	    # string or undef
+	};
     },
 );
 
@@ -269,16 +323,25 @@ sub is_listening
 	'-n',		# numeric output
 	"-A$af",
 	);
-
-    my $matcher = $netstat_match{$af};
-    my $found;
+    my $parser = $netstat_parse{$af};
+    my $found = 0;
     open NETSTAT,'-|',@cmd
 	or die "Cannot run netstat to check for service: $!";
+
+    my $host = $self->{host};
+    $host = 'any' if !defined $host;
+    $host = 'localhost' if $host eq '127.0.0.1';
+    $host = 'localhost' if $host eq '::1';
 
     while (<NETSTAT>)
     {
 	chomp;
-	next unless $self->$matcher($_);
+	my $ii = $parser->($_, 0);
+	next unless $ii;
+	next if ($ii->{protocol} ne 'tcp');
+	next if ($ii->{state} ne 'LISTEN');
+	next if ($ii->{local_port} ne "$self->{port}");
+	next if ($ii->{local_addr} ne $host && $ii->{local_addr} ne 'any');
 	$found = 1;
 	last;
     }
@@ -289,6 +352,53 @@ sub is_listening
 	if ($found);
 
     return $found;
+}
+
+sub kill_processes_on_ports
+{
+    my (@ports) = @_;
+
+    return if !scalar(@ports);
+    xlog "checking for stray processes on ports: " . join(' ', @ports);
+
+    my %portshash;
+    map { $portshash{$_} = 1; } @ports;
+
+    # We don't care about UNIX sockets here
+    # although we probably should
+    my @found;
+    foreach my $af ('inet', 'inet6')
+    {
+	# Silly netstat -p on Linux prints a warning to stderr
+	# -n	    numeric output
+	# -p	    show pid & program
+	my $cmd = "netstat -np -A$af 2>/dev/null";
+
+	my $parser = $netstat_parse{$af};
+	open NETSTAT,'-|',$cmd
+	    or die "Cannot run netstat to check for stray processes: $!";
+
+	while (<NETSTAT>)
+	{
+	    chomp;
+	    my $ii = $parser->($_, 1);
+	    next unless $ii;
+	    next unless $portshash{$ii->{local_port}};
+# xlog "XXX stray socket: " . Data::Dumper::Dumper($ii);
+	    next if !defined $ii->{pid};    # we don't have permission,
+					    # or there is no process,
+					    # e.g. in TIME_WAIT state
+	    push(@found, $ii);
+	}
+	close NETSTAT;
+    }
+
+    foreach my $ii (@found)
+    {
+	xlog "ERROR!! killing stray process $ii->{cmd} on port $ii->{local_port}";
+	Cassandane::Instance::_stop_pid($ii->{pid});
+    }
+    return scalar(@found);
 }
 
 sub describe

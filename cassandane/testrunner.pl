@@ -48,7 +48,6 @@ use Cassandane::Unit::TestPlan;
 use Cassandane::Util::Log;
 use Cassandane::Cassini;
 use Cassandane::Instance;
-use Cassandane::PortManager;
 
 my $format = 'tap';
 my $output_dir = 'reports';
@@ -236,9 +235,6 @@ my $plan = Cassandane::Unit::TestPlan->new(
 	keep_going => $keep_going,
 	maxworkers => $jobs,
 	log_directory => $log_directory,
-	post_test_handler => sub {
-	    Cassandane::PortManager::assert_all_free();
-	},
     );
 
 if ($do_list)

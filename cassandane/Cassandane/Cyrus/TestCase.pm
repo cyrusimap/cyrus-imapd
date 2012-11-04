@@ -380,6 +380,15 @@ sub tear_down
     xlog "---------- END $self->{_name} ----------";
 }
 
+sub post_tear_down
+{
+    my ($self) = @_;
+
+    die "Found some stray processes"
+	if (Cassandane::Daemon::kill_processes_on_ports(
+		    Cassandane::PortManager::free_all()));
+}
+
 sub _save_message
 {
     my ($self, $msg, $store) = @_;

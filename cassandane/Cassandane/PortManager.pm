@@ -42,15 +42,11 @@
 package Cassandane::PortManager;
 use strict;
 use warnings;
-use Error qw(:try);
-use Cassandane::Util::Log;
-use Cassandane::MessageStoreFactory;
 
 my $base_port;
 my $max_ports = 10;
 my $next_port = 0;
 my %allocated;
-my %trace;
 
 sub alloc
 {
@@ -68,43 +64,26 @@ sub alloc
 	{
 	    $allocated{$port} = 1;
 	    $next_port++;
-	    $trace{$port} = Carp::longmess('');
 	    return $port;
 	}
     }
     die "No ports remaining";
 }
 
-sub free
-{
-    my ($port) = @_;
-    return unless defined $port;
-    return unless ($port =~ m/^\d+$/);
-    $allocated{$port} = 0;
-    $trace{$port} = undef;
-}
-
-sub assert_all_free
+sub free_all
 {
     return unless defined $base_port;
+    my @freed;
     for (my $i = 0 ; $i < $max_ports ; $i++)
     {
 	my $port = $base_port + $i;
 	if ($allocated{$port})
 	{
-# 	    print STDERR "WARNING: Port $port never freed.  Allocated " . $trace{$port};
 	    $allocated{$port} = 0;
-	    $trace{$port} = undef;
+	    push(@freed, $port);
 	}
     }
-# We could just 'die' here with the trace in the die argument,
-# but the global string die handler carefully strips out the file
-# and line number from $@, and the stack trace from Carp matches
-# that regexp.  Throwing an Error avoids that.
-# 	throw Error::Simple($message);
-# Woops, it turns out we can't really throw any kind of exception
-# at all, because if the test fails we end up seeing only the
-# PortManager complaint and not the original failure.
+    return @freed;
 }
 
 1;
