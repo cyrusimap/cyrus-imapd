@@ -229,6 +229,8 @@ struct searchargs {
     time_t sentbefore, sentafter;
     bit32 system_flags_set;
     bit32 system_flags_unset;
+    struct strlist *keywords;
+    struct strlist *unkeywords;
     bit32 user_flags_set[MAX_USER_FLAGS/32];
     bit32 user_flags_unset[MAX_USER_FLAGS/32];
     struct seqset *sequence;

@@ -10248,7 +10248,7 @@ static int getsearchcriteria(const char *tag, struct searchargs *searchargs,
     static struct buf criteria, arg;
     struct searchargs *sub1, *sub2;
     char *p, *str;
-    int c, flag;
+    int c;
     unsigned size;
     time_t start, end, now = time(0);
     int keep_charset = 0;
@@ -10457,17 +10457,7 @@ static int getsearchcriteria(const char *tag, struct searchargs *searchargs,
 	    if (c != ' ') goto missingarg;		
 	    c = getword(imapd_in, &arg);
 	    if (!imparse_isatom(arg.s)) goto badflag;
-	    lcase(arg.s);
-	    for (flag=0; flag < MAX_USER_FLAGS; flag++) {
-		if (imapd_index->flagname[flag] &&
-		    !strcasecmp(imapd_index->flagname[flag], arg.s)) break;
-	    }
-	    if (flag == MAX_USER_FLAGS) {
-		/* Force failure */
-		searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
-		break;
-	    }
-	    searchargs->user_flags_set[flag/32] |= 1<<(flag&31);
+	    appendstrlist(&searchargs->keywords, arg.s);
 	}
 	else goto badcri;
 	break;
@@ -10688,14 +10678,7 @@ static int getsearchcriteria(const char *tag, struct searchargs *searchargs,
 	    if (c != ' ') goto missingarg;		
 	    c = getword(imapd_in, &arg);
 	    if (!imparse_isatom(arg.s)) goto badflag;
-	    lcase(arg.s);
-	    for (flag=0; flag < MAX_USER_FLAGS; flag++) {
-		if (imapd_index->flagname[flag] &&
-		    !strcasecmp(imapd_index->flagname[flag], arg.s)) break;
-	    }
-	    if (flag != MAX_USER_FLAGS) {
-		searchargs->user_flags_unset[flag/32] |= 1<<(flag&31);
-	    }
+	    appendstrlist(&searchargs->unkeywords, arg.s);
 	}
 	else goto badcri;
 	break;

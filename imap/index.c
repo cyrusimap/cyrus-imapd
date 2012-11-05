@@ -1809,6 +1809,39 @@ static void index_unlock(struct index_state *state)
     mailbox_unlock_index(state->mailbox, NULL);
 }
 
+static int index_calcsearchflags(struct index_state *state, struct searchargs *searchargs)
+{
+    struct strlist *l;
+    int flag;
+
+    for (l = searchargs->keywords; l; l = l->next) {
+	for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
+	    if (!strcasecmpsafe(state->flagname[flag], l->s))
+		break;
+	}
+	if (flag == MAX_USER_FLAGS) {
+	    /* Force failure */
+	    searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
+	    break;
+	}
+	searchargs->user_flags_set[flag/32] |= 1<<(flag&31);
+    }
+
+    for (l = searchargs->unkeywords; l; l = l->next) {
+	for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
+	    if (!strcasecmpsafe(state->flagname[flag], l->s))
+		break;
+	}
+	if (flag == MAX_USER_FLAGS) {
+	    /* Obviously OK */
+	    break;
+	}
+	searchargs->user_flags_unset[flag/32] |= 1<<(flag&31);
+    }
+
+    return 0;
+}
+
 /*
  * Performs a SEARCH command.
  * This is a wrapper around _index_search() which simply prints the results.
@@ -1822,6 +1855,10 @@ EXPORTED int index_search(struct index_state *state, struct searchargs *searchar
 
     /* update the index */
     if (index_check(state, 0, 0))
+	return 0;
+
+    /* calculate the user flags */
+    if (index_calcsearchflags(state, searchargs))
 	return 0;
 
     /* now do the search */
@@ -1901,6 +1938,10 @@ EXPORTED int index_sort(struct index_state *state,
 
     /* update the index */
     if (index_check(state, 0, 0))
+	return 0;
+
+    /* calculate the user flags */
+    if (index_calcsearchflags(state, searchargs))
 	return 0;
 
     if (searchargs->modseq) modseq = 1;
@@ -2240,6 +2281,10 @@ EXPORTED int index_convsort(struct index_state *state,
 	    return IMAP_INTERNAL;
     }
 
+    /* calculate the user flags */
+    if (index_calcsearchflags(state, searchargs))
+	return 0;
+
     /* this works both with and without conversations */
     total = search_predict_total(state, cstate, searchargs,
 				windowargs->conversations,
@@ -2472,7 +2517,6 @@ static struct searchargs *index_copy_search(struct index_state *state,
     struct searchannot *sa;
     struct searchsub *s;
     struct seqset *seq;
-    unsigned flag, flagmask;
 
     out->flags = searchargs->flags;
     out->smaller = searchargs->smaller;
@@ -2484,42 +2528,12 @@ static struct searchargs *index_copy_search(struct index_state *state,
     out->system_flags_set = searchargs->system_flags_set;
     out->system_flags_unset = searchargs->system_flags_unset;
 
-    /* need to convert locations of named flags */
-    for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
-	if ((flag & 31) == 0) {
-	    flagmask = searchargs->user_flags_set[flag/32];
-	}
-	if (state->flagname[flag] && (flagmask & (1<<(flag & 31)))) {
-	    const char *name = state->flagname[flag];
-	    unsigned toflag;
-	    for (toflag = 0; toflag < MAX_USER_FLAGS; toflag++) {
-		if (!strcasecmpsafe(tostate->flagname[toflag], name))
-		    break;
-	    }
-	    if (toflag < MAX_USER_FLAGS) /* found it */
-		out->user_flags_set[toflag/32] |= 1<<(toflag&31);
-	    else
-		goto nevermatch; /* can never match */
-	}
-    }
-
-    /* same for unflags */
-    for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
-	if ((flag & 31) == 0) {
-	    flagmask = searchargs->user_flags_unset[flag/32];
-	}
-	if (state->flagname[flag] && (flagmask & (1<<(flag & 31)))) {
-	    const char *name = state->flagname[flag];
-	    unsigned toflag;
-	    for (toflag = 0; toflag < MAX_USER_FLAGS; toflag++) {
-		if (!strcasecmpsafe(tostate->flagname[toflag], name))
-		    break;
-	    }
-	    if (toflag < MAX_USER_FLAGS) /* found it */
-		out->user_flags_unset[toflag/32] |= 1<<(toflag&31);
-	    /* otherwise we always match */
-	}
-    }
+    /* for user flags, they will need to be converted to the bitmap
+     * again after calling this function */
+    for (l = searchargs->keywords; l; l = l->next)
+	appendstrlist(&out->keywords, l->s);
+    for (l = searchargs->unkeywords; l; l = l->next)
+	appendstrlist(&out->unkeywords, l->s);
 
     for (seq = searchargs->sequence; seq; seq = seq->nextseq) {
 	char *str = seqset_cstring(seq);
@@ -2605,13 +2619,6 @@ static struct searchargs *index_copy_search(struct index_state *state,
     out->authstate = searchargs->authstate;
 
     return out;
-
-nevermatch:
-    freesearchargs(out);
-    out = xzmalloc(sizeof(struct searchargs));
-    /* generate an item which can never match anything */
-    out->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
-    return out;
 }
 
 static struct multisort_result *multisort_run(struct index_state *state,
@@ -2688,6 +2695,10 @@ static struct multisort_result *multisort_run(struct index_state *state,
 	 * b) make the "folder" match efficient
 	 */
 	searchargs2 = index_copy_search(state, searchargs, state2);
+
+	/* calculate the user flags */
+	if (index_calcsearchflags(state2, searchargs2))
+	    continue;
 
 	/* One pass through the folder's message list */
 	for (msgno = 1 ; msgno <= state2->exists ; msgno++) {
@@ -2777,7 +2788,6 @@ static void index_format_search(struct dlist *parent,
     struct searchannot *sa;
     struct searchsub *s;
     struct seqset *seq;
-    unsigned flag, flagmask;
 
     if (searchargs->flags & SEARCH_RECENT_SET)
 	dlist_setatom(parent, NULL, "RECENT");
@@ -2837,24 +2847,14 @@ static void index_format_search(struct dlist *parent,
     if (searchargs->system_flags_unset & FLAG_FLAGGED)
 	dlist_setatom(parent, NULL, "UNFLAGGED");
 
-    for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
-	if ((flag & 31) == 0) {
-	    flagmask = searchargs->user_flags_set[flag/32];
-	}
-	if (state->flagname[flag] && (flagmask & (1<<(flag & 31)))) {
-	    dlist_setatom(parent, NULL, "KEYWORD");
-	    dlist_setatom(parent, NULL, state->flagname[flag]);
-	}
+    for (l = searchargs->keywords; l; l = l->next) {
+	dlist_setatom(parent, NULL, "KEYWORD");
+	dlist_setatom(parent, NULL, l->s);
     }
 
-    for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
-	if ((flag & 31) == 0) {
-	    flagmask = searchargs->user_flags_unset[flag/32];
-	}
-	if (state->flagname[flag] && (flagmask & (1<<(flag & 31)))) {
-	    dlist_setatom(parent, NULL, "UNKEYWORD");
-	    dlist_setatom(parent, NULL, state->flagname[flag]);
-	}
+    for (l = searchargs->unkeywords; l; l = l->next) {
+	dlist_setatom(parent, NULL, "UNKEYWORD");
+	dlist_setatom(parent, NULL, l->s);
     }
 
     for (seq = searchargs->sequence; seq; seq = seq->nextseq) {
@@ -3555,6 +3555,10 @@ EXPORTED int index_convupdates(struct index_state *state,
     if (!cstate)
 	return IMAP_INTERNAL;
 
+    /* calculate the user flags */
+    if (index_calcsearchflags(state, searchargs))
+	return 0;
+
     total = search_predict_total(state, cstate, searchargs,
 				windowargs->conversations,
 				&xconvmodseq);
@@ -3730,6 +3734,10 @@ EXPORTED int index_thread(struct index_state *state, int algorithm,
 
     /* update the index */
     if (index_check(state, 0, 0))
+	return 0;
+
+    /* calculate the user flags */
+    if (index_calcsearchflags(state, searchargs))
 	return 0;
     
     if(CONFIG_TIMING_VERBOSE)
