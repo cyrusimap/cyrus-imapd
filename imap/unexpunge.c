@@ -71,6 +71,7 @@ static struct namespace unex_namespace;
 
 static int verbose = 0;
 static int unsetdeleted = 0;
+static char *addflag = NULL;
 
 static void usage(void)
 {
@@ -229,6 +230,14 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
 	r = mailbox_copyfile(oldfname, fname, 0);
 	if (r) return r;
 
+	/* add the flag if requested */
+	if (addflag) {
+	    int userflag = -1;
+	    r = mailbox_user_flag(mailbox, addflag, &userflag, 1);
+	    if (r) return r;
+	    record.user_flags[userflag/32] |= 1<<(userflag&31);
+	}
+
 	/* and append the new record */
 	mailbox_append_index_record(mailbox, &record);
 
@@ -261,7 +270,7 @@ int main(int argc, char *argv[])
 	fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((opt = getopt(argc, argv, "C:laudt:v")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:laudt:f:v")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -312,6 +321,10 @@ int main(int argc, char *argv[])
 	    unsetdeleted = 1;
 	    break;
 
+	case 'f':
+	    addflag = optarg;
+	    break;
+
 	case 'v':
 	    verbose = 1;
 	    break;
@@ -336,6 +349,11 @@ int main(int argc, char *argv[])
     quotadb_open(NULL);
 
     sync_log_init();
+
+    if (addflag && addflag[0] == '\\') {
+	syslog(LOG_ERR, "can't set a system flag");
+	fatal("can't set a system flag", EC_SOFTWARE);
+    }
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&unex_namespace, 1)) != 0) {
