@@ -259,6 +259,12 @@ if test "$gssapi" != no; then
   LIBS="$LIBS $GSSAPIBASE_LIBS"
   AC_CHECK_FUNCS(gsskrb5_register_acceptor_identity)
   LIBS="$cmu_save_LIBS"
+
+  cmu_save_LIBS="$LIBS"
+  LIBS="$LIBS $GSSAPIBASE_LIBS"
+  AC_CHECK_FUNCS(gss_get_name_attribute)
+  LIBS="$cmu_save_LIBS"
+
 else
   AC_MSG_RESULT([disabled])
 fi
