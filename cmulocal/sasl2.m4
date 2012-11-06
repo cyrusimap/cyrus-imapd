@@ -1,6 +1,6 @@
 # sasl2.m4--sasl2 libraries and includes
 # Rob Siemborski
-# $Id: sasl2.m4,v 1.57 2011/03/25 11:55:08 mel Exp $
+# $Id: sasl2.m4,v 1.58 2011/04/13 11:46:43 mel Exp $
 
 # SASL2_CRYPT_CHK
 # ---------------
@@ -242,11 +242,13 @@ if test "$gssapi" != "no"; then
                     [AC_DEFINE(HAVE_GSS_C_NT_USER_NAME,,
                                [Define if your GSSAPI implimentation defines GSS_C_NT_USER_NAME])])
     AC_EGREP_HEADER(gss_inquire_attrs_for_mech, gssapi.h, rfc5587=yes)
+    AC_EGREP_HEADER(gss_inquire_mech_for_saslname, gssapi.h, rfc5801=yes)
   elif test "$ac_cv_header_gssapi_gssapi_h"; then
     AC_EGREP_HEADER(GSS_C_NT_USER_NAME, gssapi/gssapi.h,
                     [AC_DEFINE(HAVE_GSS_C_NT_USER_NAME,,
                                [Define if your GSSAPI implimentation defines GSS_C_NT_USER_NAME])])
     AC_EGREP_HEADER(gss_inquire_attrs_for_mech, gssapi/gssapi.h, rfc5587=yes)
+    AC_EGREP_HEADER(gss_inquire_mech_for_saslname, gssapi.h, rfc5801=yes)
   fi
 fi
 
@@ -258,7 +260,7 @@ if test "$gssapi" != no; then
   SASL_MECHS="$SASL_MECHS libgssapiv2.la"
   SASL_STATIC_OBJS="$SASL_STATIC_OBJS gssapi.o"
   SASL_STATIC_SRCS="$SASL_STATIC_SRCS \$(top_srcdir)/plugins/gssapi.c"
-  if test "$rfc5587" = "yes"; then
+  if test "$rfc5587" = "yes" -a "$rfc5801" = "yes"; then
     SASL_MECHS="$SASL_MECHS libgs2.la"
     SASL_STATIC_OBJS="$SASL_STATIC_OBJS gs2.o"
     SASL_STATIC_SRCS="$SASL_STATIC_SRCS \$(top_srcdir)/plugins/gs2.c"
