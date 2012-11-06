@@ -1,6 +1,6 @@
 # sasl2.m4--sasl2 libraries and includes
 # Rob Siemborski
-# $Id: sasl2.m4,v 1.58 2011/04/13 11:46:43 mel Exp $
+# $Id: sasl2.m4,v 1.59 2011/04/13 11:48:57 mel Exp $
 
 # SASL2_CRYPT_CHK
 # ---------------
@@ -215,17 +215,17 @@ if test "$gssapi" != "no"; then
                     hostbased_service_gss_nt_yes
                   #endif],
                  [AC_DEFINE(HAVE_GSS_C_NT_HOSTBASED_SERVICE,,
-                            [Define if your GSSAPI implimentation defines GSS_C_NT_HOSTBASED_SERVICE])],
+                            [Define if your GSSAPI implementation defines GSS_C_NT_HOSTBASED_SERVICE])],
                  [AC_WARN([Cybersafe define not found])])
 
   elif test "$ac_cv_header_gssapi_h" = "yes"; then
     AC_EGREP_HEADER(GSS_C_NT_HOSTBASED_SERVICE, gssapi.h,
                     [AC_DEFINE(HAVE_GSS_C_NT_HOSTBASED_SERVICE,,
-                               [Define if your GSSAPI implimentation defines GSS_C_NT_HOSTBASED_SERVICE])])
+                               [Define if your GSSAPI implementation defines GSS_C_NT_HOSTBASED_SERVICE])])
   elif test "$ac_cv_header_gssapi_gssapi_h"; then
     AC_EGREP_HEADER(GSS_C_NT_HOSTBASED_SERVICE, gssapi/gssapi.h,
                     [AC_DEFINE(HAVE_GSS_C_NT_HOSTBASED_SERVICE,,
-                               [Define if your GSSAPI implimentation defines GSS_C_NT_HOSTBASED_SERVICE])])
+                               [Define if your GSSAPI implementation defines GSS_C_NT_HOSTBASED_SERVICE])])
   fi
 
   if test "$gss_impl" = "cybersafe" -o "$gss_impl" = "cybersafe03"; then
@@ -235,18 +235,18 @@ if test "$gssapi" != "no"; then
                    user_name_yes_gss_nt
                   #endif],
                  [AC_DEFINE(HAVE_GSS_C_NT_USER_NAME,,
-                            [Define if your GSSAPI implimentation defines GSS_C_NT_USER_NAME])],
+                            [Define if your GSSAPI implementation defines GSS_C_NT_USER_NAME])],
                  [AC_WARN([Cybersafe define not found])])
   elif test "$ac_cv_header_gssapi_h" = "yes"; then
     AC_EGREP_HEADER(GSS_C_NT_USER_NAME, gssapi.h,
                     [AC_DEFINE(HAVE_GSS_C_NT_USER_NAME,,
-                               [Define if your GSSAPI implimentation defines GSS_C_NT_USER_NAME])])
+                               [Define if your GSSAPI implementation defines GSS_C_NT_USER_NAME])])
     AC_EGREP_HEADER(gss_inquire_attrs_for_mech, gssapi.h, rfc5587=yes)
     AC_EGREP_HEADER(gss_inquire_mech_for_saslname, gssapi.h, rfc5801=yes)
   elif test "$ac_cv_header_gssapi_gssapi_h"; then
     AC_EGREP_HEADER(GSS_C_NT_USER_NAME, gssapi/gssapi.h,
                     [AC_DEFINE(HAVE_GSS_C_NT_USER_NAME,,
-                               [Define if your GSSAPI implimentation defines GSS_C_NT_USER_NAME])])
+                               [Define if your GSSAPI implementation defines GSS_C_NT_USER_NAME])])
     AC_EGREP_HEADER(gss_inquire_attrs_for_mech, gssapi/gssapi.h, rfc5587=yes)
     AC_EGREP_HEADER(gss_inquire_mech_for_saslname, gssapi.h, rfc5801=yes)
   fi
