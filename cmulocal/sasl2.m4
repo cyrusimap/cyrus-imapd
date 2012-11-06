@@ -267,6 +267,9 @@ if test "$gssapi" != no; then
   cmu_save_LIBS="$LIBS"
   LIBS="$LIBS $GSSAPIBASE_LIBS"
   AC_CHECK_FUNCS(gsskrb5_register_acceptor_identity)
+  AC_CHECK_FUNCS(gss_decapsulate_token)
+  AC_CHECK_FUNCS(gss_encapsulate_token)
+  AC_CHECK_FUNCS(gss_oid_equal)
   LIBS="$cmu_save_LIBS"
 
   cmu_save_LIBS="$LIBS"
