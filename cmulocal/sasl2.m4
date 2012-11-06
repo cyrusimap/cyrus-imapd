@@ -1,6 +1,6 @@
 # sasl2.m4--sasl2 libraries and includes
 # Rob Siemborski
-# $Id: sasl2.m4,v 1.59 2011/04/13 11:48:57 mel Exp $
+# $Id: sasl2.m4,v 1.60 2011/05/23 14:47:11 mel Exp $
 
 # SASL2_CRYPT_CHK
 # ---------------
@@ -269,6 +269,9 @@ if test "$gssapi" != no; then
   cmu_save_LIBS="$LIBS"
   LIBS="$LIBS $GSSAPIBASE_LIBS"
   AC_CHECK_FUNCS(gsskrb5_register_acceptor_identity)
+  AC_CHECK_FUNCS(gss_decapsulate_token)
+  AC_CHECK_FUNCS(gss_encapsulate_token)
+  AC_CHECK_FUNCS(gss_oid_equal)
   LIBS="$cmu_save_LIBS"
 
   cmu_save_LIBS="$LIBS"
