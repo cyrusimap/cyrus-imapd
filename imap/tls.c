@@ -307,6 +307,20 @@ static int verify_callback(int ok, X509_STORE_CTX * ctx)
 }
 
 
+static int servername_callback(SSL *ssl, int *ad __attribute__((unused)),
+			       void *arg __attribute__((unused)))
+{
+    const char *servername = SSL_get_servername(ssl, TLSEXT_NAMETYPE_host_name);
+
+    if (servername) {
+	syslog(LOG_DEBUG, "TLS Server Name Indication (SNI) Extension: \"%s\"",
+	       servername);
+    }
+
+    return SSL_TLSEXT_ERR_OK;
+}
+
+
 /*
  * taken from OpenSSL crypto/bio/b_dump.c, modified to save a lot of strcpy
  * and strcat by Matti Aarnio.
@@ -745,6 +759,8 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 	verify_flags |= SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT
 	    | SSL_VERIFY_CLIENT_ONCE;
     SSL_CTX_set_verify(s_ctx, verify_flags, verify_callback);
+
+    SSL_CTX_set_tlsext_servername_callback(s_ctx, servername_callback);
 
     if (askcert || requirecert) {
       if (CAfile == NULL) {
