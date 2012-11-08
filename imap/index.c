@@ -1813,6 +1813,7 @@ static void index_calcsearchflags(struct index_state *state, struct searchargs *
 {
     struct strlist *l;
     int flag;
+    struct searchsub *sub;
 
     for (l = searchargs->keywords; l; l = l->next) {
 	for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
@@ -1837,6 +1838,11 @@ static void index_calcsearchflags(struct index_state *state, struct searchargs *
 	    break;
 	}
 	searchargs->user_flags_unset[flag/32] |= 1<<(flag&31);
+    }
+
+    for (sub = searchargs->sublist; sub; sub = sub->next) {
+	if (sub->sub1) index_calcsearchflags(state, sub->sub1);
+	if (sub->sub2) index_calcsearchflags(state, sub->sub2);
     }
 }
 
