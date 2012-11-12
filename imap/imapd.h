@@ -254,6 +254,9 @@ struct searchargs {
     modseq_t convmodseq;
 
     bit32 cache_atleast;
+    int charset;
+    int state;
+    struct searchargs *base;
 
     /* For ESEARCH & XCONVMULTISORT */
     const char *tag;
