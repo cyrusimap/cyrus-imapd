@@ -125,7 +125,6 @@ static int get_connection(struct connection *conn)
 {
     MYSQL *c = NULL;
     const char *socket_path = config_getstring(IMAPOPT_SPHINX_SOCKET);
-    int r;
 
     if (conn->mysql) return 0;	    /* already open */
 
