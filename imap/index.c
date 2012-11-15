@@ -2452,10 +2452,11 @@ struct multisort_result {
 
 static struct db *sortcache_db(const char *userid, int create)
 {
+    const char *dbtype = config_getstring(IMAPOPT_SORTCACHE_DB);
     char *fname = user_hash_meta(userid, "sortcache");
     int flags = create ? CYRUSDB_CREATE : 0;
     struct db *db = NULL;
-    int r = cyrusdb_open("twoskip", fname, flags, &db);
+    int r = cyrusdb_open(dbtype, fname, flags, &db);
 
     free(fname);
 
