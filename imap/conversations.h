@@ -159,10 +159,10 @@ extern int conversation_getstatus(struct conversations_state *state,
 				  conv_status_t *status);
 extern int conversation_setstatus(struct conversations_state *state,
 				  const char *mboxname,
-				  conv_status_t *status);
+				  const conv_status_t *status);
 extern int conversation_storestatus(struct conversations_state *state,
 				    const char *key, size_t keylen,
-				    conv_status_t *status);
+				    const conv_status_t *status);
 extern int conversation_parsestatus(const char *data, size_t datalen,
 				    conv_status_t *status);
 

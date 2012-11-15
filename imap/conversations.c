@@ -638,7 +638,7 @@ static int folder_number_rename(struct conversations_state *state,
 
 EXPORTED int conversation_storestatus(struct conversations_state *state,
 			     const char *key, size_t keylen,
-			     conv_status_t *status)
+			     const conv_status_t *status)
 {
     struct dlist *dl = NULL;
     struct buf buf = BUF_INITIALIZER;
@@ -666,7 +666,7 @@ EXPORTED int conversation_storestatus(struct conversations_state *state,
 
 EXPORTED int conversation_setstatus(struct conversations_state *state,
 				    const char *mboxname,
-				    conv_status_t *status)
+				    const conv_status_t *status)
 {
     char *key = strconcat("F", mboxname, (char *)NULL);
     conv_status_t *cachestatus = NULL;
