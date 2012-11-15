@@ -209,8 +209,10 @@ int dlist_parsemap(struct dlist **dlp, int parsekeys,
 
 void dlist_stitch(struct dlist *parent, struct dlist *child);
 void dlist_unstitch(struct dlist *parent, struct dlist *child);
-void dlist_remove(struct dlist *parent, struct dlist *child);
 struct dlist *dlist_splice(struct dlist *parent, int num);
+
+/* splat: convert a list into its child elements */
+void dlist_splat(struct dlist *parent, struct dlist *child);
 
 struct dlist *dlist_getchild(struct dlist *dl, const char *name);
 struct dlist *dlist_getchildn(struct dlist *dl, int num);

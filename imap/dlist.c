@@ -242,7 +242,7 @@ void dlist_unstitch(struct dlist *parent, struct dlist *child)
     assert(replace);
 
     if (prev) prev->next = child->next;
-    else (parent->head) = child->next;
+    else parent->head = child->next;
 
     if (parent->tail == child) parent->tail = prev;
 
@@ -846,6 +846,39 @@ EXPORTED struct dlist *dlist_splice(struct dlist *dl, int num)
     }
 
     return ret;
+}
+
+EXPORTED void dlist_splat(struct dlist *parent, struct dlist *child)
+{
+    struct dlist *prev = NULL;
+    struct dlist *replace;
+
+    /* find old record */
+    for (replace = parent->head; replace; replace = replace->next) {
+	if (replace == child) break;
+	prev = replace;
+    }
+
+    assert(replace);
+
+    if (child->head) {
+	/* stitch in children */
+	if (prev) prev->next = child->head;
+	else parent->head = child->head;
+	if (child->next) child->tail->next = child->next;
+	else parent->tail = child->tail;
+    }
+    else {
+	/* just remove the record */
+	if (prev) prev->next = child->next;
+	else parent->head = child->next;
+	if (!child->next) parent->tail = prev;
+    }
+    /* remove the node itself, carefully blanking out
+     * the now unlinked children */
+    child->head = NULL;
+    child->tail = NULL;
+    dlist_free(&child);
 }
 
 struct dlist *dlist_getkvchild_bykey(struct dlist *dl,

@@ -212,4 +212,172 @@ static void test_splice_over(void)
     buf_free(&b2);
 }
 
+static void test_splat_start(void)
+{
+    struct dlist *dl = NULL;
+    struct dlist *sub = NULL;
+    struct buf b = BUF_INITIALIZER;
+    struct buf b2 = BUF_INITIALIZER;
+    int r;
+
+    buf_printf(&b, "((a b) (c d) (e f))");
+
+    r = dlist_parsemap(&dl, 0, b.s, b.len);
+
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NOT_NULL(dl);
+
+    sub = dlist_getchildn(dl, 0);
+
+    dlist_splat(dl, sub);
+
+    dlist_printbuf(dl, 0, &b2);
+
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&b2), "(a b (c d) (e f))");
+
+    dlist_free(&dl);
+    buf_free(&b);
+    buf_free(&b2);
+}
+
+static void test_splat_middle(void)
+{
+    struct dlist *dl = NULL;
+    struct dlist *sub = NULL;
+    struct buf b = BUF_INITIALIZER;
+    struct buf b2 = BUF_INITIALIZER;
+    int r;
+
+    buf_printf(&b, "((a b) (c d) (e f))");
+
+    r = dlist_parsemap(&dl, 0, b.s, b.len);
+
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NOT_NULL(dl);
+
+    sub = dlist_getchildn(dl, 1);
+
+    dlist_splat(dl, sub);
+
+    dlist_printbuf(dl, 0, &b2);
+
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&b2), "((a b) c d (e f))");
+
+    dlist_free(&dl);
+    buf_free(&b);
+    buf_free(&b2);
+}
+
+static void test_splat_end(void)
+{
+    struct dlist *dl = NULL;
+    struct dlist *sub = NULL;
+    struct buf b = BUF_INITIALIZER;
+    struct buf b2 = BUF_INITIALIZER;
+    int r;
+
+    buf_printf(&b, "((a b) (c d) (e f))");
+
+    r = dlist_parsemap(&dl, 0, b.s, b.len);
+
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NOT_NULL(dl);
+
+    sub = dlist_getchildn(dl, 2);
+
+    dlist_splat(dl, sub);
+
+    dlist_printbuf(dl, 0, &b2);
+
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&b2), "((a b) (c d) e f)");
+
+    dlist_free(&dl);
+    buf_free(&b);
+    buf_free(&b2);
+}
+
+static void test_splat_short(void)
+{
+    struct dlist *dl = NULL;
+    struct dlist *sub = NULL;
+    struct buf b = BUF_INITIALIZER;
+    struct buf b2 = BUF_INITIALIZER;
+    int r;
+
+    buf_printf(&b, "((a b) (c) (d e))");
+
+    r = dlist_parsemap(&dl, 0, b.s, b.len);
+
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NOT_NULL(dl);
+
+    sub = dlist_getchildn(dl, 1);
+
+    dlist_splat(dl, sub);
+
+    dlist_printbuf(dl, 0, &b2);
+
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&b2), "((a b) c (d e))");
+
+    dlist_free(&dl);
+    buf_free(&b);
+    buf_free(&b2);
+}
+
+static void test_splat_empty(void)
+{
+    struct dlist *dl = NULL;
+    struct dlist *sub = NULL;
+    struct buf b = BUF_INITIALIZER;
+    struct buf b2 = BUF_INITIALIZER;
+    int r;
+
+    buf_printf(&b, "((a b) () (c d))");
+
+    r = dlist_parsemap(&dl, 0, b.s, b.len);
+
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NOT_NULL(dl);
+
+    sub = dlist_getchildn(dl, 1);
+
+    dlist_splat(dl, sub);
+
+    dlist_printbuf(dl, 0, &b2);
+
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&b2), "((a b) (c d))");
+
+    dlist_free(&dl);
+    buf_free(&b);
+    buf_free(&b2);
+}
+
+static void test_splat_nonlist(void)
+{
+    struct dlist *dl = NULL;
+    struct dlist *sub = NULL;
+    struct buf b = BUF_INITIALIZER;
+    struct buf b2 = BUF_INITIALIZER;
+    int r;
+
+    buf_printf(&b, "(a b c d e)");
+
+    r = dlist_parsemap(&dl, 0, b.s, b.len);
+
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NOT_NULL(dl);
+
+    sub = dlist_getchildn(dl, 2);
+
+    dlist_splat(dl, sub);
+
+    dlist_printbuf(dl, 0, &b2);
+
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&b2), "(a b d e)");
+
+    dlist_free(&dl);
+    buf_free(&b);
+    buf_free(&b2);
+}
+
 /* vim: set ft=c: */
