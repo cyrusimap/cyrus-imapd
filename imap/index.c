@@ -2645,10 +2645,12 @@ static struct multisort_result *multisort_run(struct index_state *state,
     struct multisort_result *result = NULL;
     struct searchargs *searchargs2 = NULL;
 
-    if (searchargs->folder) {
-	struct strlist *l;
-	for (l = searchargs->folder; l; l = l->next)
-	    add_search_folder(&folders, l->s, strlen(l->s), NULL, 0);
+    /* in the case where the search can only match a single folder
+     * at the top level, we can optimise.  Otherwise we do a listing
+     * to find potentially matching folders */
+    if (searchargs->folder && !searchargs->folder->next) {
+	const char *s = searchargs->folder->s;
+	add_search_folder(&folders, s, strlen(s), NULL, 0);
     }
     else {
 	r = mboxlist_allusermbox(mboxname_to_userid(state->mailbox->name),
