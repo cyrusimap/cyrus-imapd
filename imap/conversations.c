@@ -339,8 +339,10 @@ EXPORTED int conversations_abort(struct conversations_state **statep)
 
     if (!state) return 0;
     
+    /* clean up the cache first */
+    conversations_abortcache(state);
+
     if (state->db) {
-	conversations_abortcache(state);
 	if (state->txn)
 	    cyrusdb_abort(state->db, state->txn);
 	cyrusdb_close(state->db);
@@ -358,8 +360,10 @@ EXPORTED int conversations_commit(struct conversations_state **statep)
 
     if (!state) return 0;
 
+    /* clean up the cache first, it may write to the DB */
+    conversations_commitcache(state);
+
     if (state->db) {
-	conversations_commitcache(state);
 	if (state->txn)
 	    r = cyrusdb_commit(state->db, state->txn);
 	cyrusdb_close(state->db);
