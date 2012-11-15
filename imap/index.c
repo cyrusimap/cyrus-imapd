@@ -2790,87 +2790,125 @@ static struct multisort_result *multisort_run(struct index_state *state,
     return result;
 }
 
-static void index_format_search(struct dlist *parent,
-				struct index_state *state,
-				const struct searchargs *searchargs)
+static int index_format_search(struct dlist *parent,
+			       struct index_state *state,
+			       const struct searchargs *searchargs)
 {
     struct strlist *l, *h;
     struct searchannot *sa;
     struct searchsub *s;
     struct seqset *seq;
+    int count = 0;
 
-    if (searchargs->flags & SEARCH_RECENT_SET)
+    if (searchargs->flags & SEARCH_RECENT_SET) {
 	dlist_setatom(parent, NULL, "RECENT");
-    if (searchargs->flags & SEARCH_RECENT_UNSET)
+	count++;
+    }
+    if (searchargs->flags & SEARCH_RECENT_UNSET) {
 	dlist_setatom(parent, NULL, "UNRECENT");
-    if (searchargs->flags & SEARCH_SEEN_SET)
+	count++;
+    }
+    if (searchargs->flags & SEARCH_SEEN_SET) {
 	dlist_setatom(parent, NULL, "SEEN");
-    if (searchargs->flags & SEARCH_SEEN_UNSET)
+	count++;
+    }
+    if (searchargs->flags & SEARCH_SEEN_UNSET) {
 	dlist_setatom(parent, NULL, "UNSEEN");
-    if (searchargs->flags & SEARCH_CONVSEEN_SET)
+	count++;
+    }
+    if (searchargs->flags & SEARCH_CONVSEEN_SET) {
 	dlist_setatom(parent, NULL, "CONVSEEN");
-    if (searchargs->flags & SEARCH_CONVSEEN_UNSET)
+	count++;
+    }
+    if (searchargs->flags & SEARCH_CONVSEEN_UNSET) {
 	dlist_setatom(parent, NULL, "UNCONVSEEN");
+	count++;
+    }
 
     if (searchargs->smaller) {
 	dlist_setatom(parent, NULL, "SMALLER");
 	dlist_setnum64(parent, NULL, searchargs->smaller);
+	count++;
     }
     if (searchargs->larger) {
 	dlist_setatom(parent, NULL, "LARGER");
 	dlist_setnum64(parent, NULL, searchargs->larger);
+	count++;
     }
 
     if (searchargs->before) {
 	dlist_setatom(parent, NULL, "BEFORE");
 	dlist_setdate(parent, NULL, searchargs->before);
+	count++;
     }
     if (searchargs->after) {
 	dlist_setatom(parent, NULL, "AFTER");
 	dlist_setdate(parent, NULL, searchargs->after);
+	count++;
     }
 
     if (searchargs->sentbefore) {
 	dlist_setatom(parent, NULL, "SENTBEFORE");
 	dlist_setdate(parent, NULL, searchargs->sentbefore);
+	count++;
     }
     if (searchargs->sentafter) {
 	dlist_setatom(parent, NULL, "SENTAFTER");
 	dlist_setdate(parent, NULL, searchargs->sentafter);
+	count++;
     }
 
-    if (searchargs->system_flags_set & FLAG_ANSWERED)
+    if (searchargs->system_flags_set & FLAG_ANSWERED) {
 	dlist_setatom(parent, NULL, "ANSWERED");
-    if (searchargs->system_flags_set & FLAG_DELETED)
+	count++;
+    }
+    if (searchargs->system_flags_set & FLAG_DELETED) {
 	dlist_setatom(parent, NULL, "DELETED");
-    if (searchargs->system_flags_set & FLAG_DRAFT)
+	count++;
+    }
+    if (searchargs->system_flags_set & FLAG_DRAFT) {
 	dlist_setatom(parent, NULL, "DRAFT");
-    if (searchargs->system_flags_set & FLAG_FLAGGED)
+	count++;
+    }
+    if (searchargs->system_flags_set & FLAG_FLAGGED) {
 	dlist_setatom(parent, NULL, "FLAGGED");
+	count++;
+    }
 
-    if (searchargs->system_flags_unset & FLAG_ANSWERED)
+    if (searchargs->system_flags_unset & FLAG_ANSWERED) {
 	dlist_setatom(parent, NULL, "UNANSWERED");
-    if (searchargs->system_flags_unset & FLAG_DELETED)
+	count++;
+    }
+    if (searchargs->system_flags_unset & FLAG_DELETED) {
 	dlist_setatom(parent, NULL, "UNDELETED");
-    if (searchargs->system_flags_unset & FLAG_DRAFT)
+	count++;
+    }
+    if (searchargs->system_flags_unset & FLAG_DRAFT) {
 	dlist_setatom(parent, NULL, "UNDRAFT");
-    if (searchargs->system_flags_unset & FLAG_FLAGGED)
+	count++;
+    }
+    if (searchargs->system_flags_unset & FLAG_FLAGGED) {
 	dlist_setatom(parent, NULL, "UNFLAGGED");
+	count++;
+    }
 
     for (l = searchargs->keywords; l; l = l->next) {
 	dlist_setatom(parent, NULL, "KEYWORD");
 	dlist_setatom(parent, NULL, l->s);
+	count++;
     }
 
     for (l = searchargs->unkeywords; l; l = l->next) {
 	dlist_setatom(parent, NULL, "UNKEYWORD");
 	dlist_setatom(parent, NULL, l->s);
+	count++;
     }
 
     for (seq = searchargs->sequence; seq; seq = seq->nextseq) {
 	char *str = seqset_cstring(seq);
 	dlist_setatom(parent, NULL, str);
 	free(str);
+	count++;
     }
 
     for (seq = searchargs->uidsequence; seq; seq = seq->nextseq) {
@@ -2878,46 +2916,55 @@ static void index_format_search(struct dlist *parent,
 	dlist_setatom(parent, NULL, "UID");
 	dlist_setatom(parent, NULL, str);
 	free(str);
+	count++;
     }
 
     for (l = searchargs->from; l; l = l->next) {
 	dlist_setatom(parent, NULL, "FROM");
 	dlist_setatom(parent, NULL, l->s);
+	count++;
     }
 
     for (l = searchargs->to; l; l = l->next) {
 	dlist_setatom(parent, NULL, "TO");
 	dlist_setatom(parent, NULL, l->s);
+	count++;
     }
 
     for (l = searchargs->cc; l; l = l->next) {
 	dlist_setatom(parent, NULL, "CC");
 	dlist_setatom(parent, NULL, l->s);
+	count++;
     }
 
     for (l = searchargs->bcc; l; l = l->next) {
 	dlist_setatom(parent, NULL, "BCC");
 	dlist_setatom(parent, NULL, l->s);
+	count++;
     }
 
     for (l = searchargs->subject; l; l = l->next) {
 	dlist_setatom(parent, NULL, "SUBJECT");
 	dlist_setatom(parent, NULL, l->s);
+	count++;
     }
 
     for (l = searchargs->messageid; l; l = l->next) {
 	dlist_setatom(parent, NULL, "MESSAGEID");
 	dlist_setatom(parent, NULL, l->s);
+	count++;
     }
 
     for (l = searchargs->body; l; l = l->next) {
 	dlist_setatom(parent, NULL, "BODY");
 	dlist_setatom(parent, NULL, l->s);
+	count++;
     }
 
     for (l = searchargs->text; l; l = l->next) {
 	dlist_setatom(parent, NULL, "TEXT");
 	dlist_setatom(parent, NULL, l->s);
+	count++;
     }
 
     h = searchargs->header_name;
@@ -2925,28 +2972,42 @@ static void index_format_search(struct dlist *parent,
 	dlist_setatom(parent, NULL, "HEADER");
 	dlist_setatom(parent, NULL, h->s);
 	dlist_setatom(parent, NULL, l->s);
+	count++;
     }
 
     for (l = searchargs->folder; l; l = l->next) {
 	dlist_setatom(parent, NULL, "FOLDER");
 	dlist_setatom(parent, NULL, l->s);
+	count++;
     }
 
     for (s = searchargs->sublist; s; s = s->next) {
-	if (s->sub2) {
+	struct dlist *child;
+	int count;
+	if (s->sub2)
 	    dlist_setatom(parent, NULL, "OR");
-	    index_format_search(parent, state, s->sub1);
-	    index_format_search(parent, state, s->sub2);
-	}
-	else {
+	else
 	    dlist_setatom(parent, NULL, "NOT");
-	    index_format_search(parent, state, s->sub1);
+
+	child = dlist_newlist(parent, NULL);
+	count = index_format_search(child, state, s->sub1);
+	if (count == 1)
+	    dlist_splat(parent, child);
+
+	if (s->sub2) {
+	    child = dlist_newlist(parent, NULL);
+	    count = index_format_search(child, state, s->sub2);
+	    if (count == 1)
+		dlist_splat(parent, child);
 	}
+
+	count++;
     }
 
     if (searchargs->modseq) {
 	dlist_setatom(parent, NULL, "MODSEQ");
 	dlist_setnum64(parent, NULL, searchargs->modseq);
+	count++;
     }
 
     for (sa = searchargs->annotations ; sa ; sa = sa->next) {
@@ -2954,17 +3015,22 @@ static void index_format_search(struct dlist *parent,
 	dlist_setatom(parent, NULL, sa->entry);
 	dlist_setatom(parent, NULL, sa->attrib);
 	dlist_setmap(parent, NULL, sa->value.s, sa->value.len);
+	count++;
     }
 
     for (l = searchargs->convflags; l; l = l->next) {
 	dlist_setatom(parent, NULL, "CONVFLAG");
 	dlist_setatom(parent, NULL, l->s);
+	count++;
     }
 
     if (searchargs->convmodseq) {
 	dlist_setatom(parent, NULL, "CONVMODSEQ");
 	dlist_setnum64(parent, NULL, searchargs->convmodseq);
+	count++;
     }
+
+    return count;
 }
 
 static void index_format_sort(struct dlist *parent,
