@@ -63,7 +63,8 @@ unexpunge \- restore expunged (but yet unremoved) messages
 .B \-v
 ]
 [
-.B \-f flagname
+.B \-f 
+.I flagname
 ]
 .I mailbox
 .br
@@ -80,7 +81,8 @@ unexpunge \- restore expunged (but yet unremoved) messages
 .B \-v
 ]
 [
-.B \-f flagname
+.B \-f
+.I flagname
 ]
 .I mailbox
 .br
@@ -97,7 +99,8 @@ unexpunge \- restore expunged (but yet unremoved) messages
 .B \-v
 ]
 [
-.B \-f flagname
+.B \-f
+.I flagname
 ]
 .IR "mailbox uid" ...
 .SH DESCRIPTION
@@ -133,9 +136,11 @@ mailbox.
 .B \-d
 Unset the \fI\\Deleted\fR flag on any restored messages.
 .TP
-.B \-f flagname
-Set the user flag 'flagname' on any restored messages.  This can make
-it easy to batch operate on just the restored messages afterwards.
+.BI \-f " flagname"
+Set the user flag 
+.I flagname
+on any restored messages.  This can make it easy to batch operate on
+just the restored messages afterwards.
 .TP
 .B \-v
 Enable verbose output/logging.

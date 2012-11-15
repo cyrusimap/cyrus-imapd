@@ -71,15 +71,15 @@ static struct namespace unex_namespace;
 
 static int verbose = 0;
 static int unsetdeleted = 0;
-static char *addflag = NULL;
+static const char *addflag = NULL;
 
 static void usage(void)
 {
     fprintf(stderr,
 	    "unexpunge [-C <altconfig>] -l <mailbox>\n"
-            "unexpunge [-C <altconfig>] -t time-interval [ -d ] [ -v ] mailbox\n"
-	    "unexpunge [-C <altconfig>] -a [-d] [-v] <mailbox>\n"
-	    "unexpunge [-C <altconfig>] -u [-d] [-v] <mailbox> <uid>...\n");
+            "unexpunge [-C <altconfig>] -t time-interval [-d] [-v] [-f flag] mailbox\n"
+	    "unexpunge [-C <altconfig>] -a [-d] [-v] [-f flag] <mailbox>\n"
+	    "unexpunge [-C <altconfig>] -u [-d] [-v] [-f flag] <mailbox> <uid>...\n");
     exit(-1);
 }
 
