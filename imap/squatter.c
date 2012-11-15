@@ -95,6 +95,7 @@ static int skip_unmodified = 0;
 static int incremental_mode = 0;
 static int recursive_flag = 0;
 static int annotation_flag = 0;
+static int running_daemon = 0;
 static search_text_receiver_t *rx = NULL;
 
 static void shut_down(int code) __attribute__((noreturn));
@@ -684,8 +685,35 @@ static void do_rolling(const char *channel)
     sync_log_reader_free(slr);
 }
 
+/*
+ * Run a search daemon in such a way that the natural shutdown
+ * mechanism for Cyrus (sending a SIGTERM to the master process)
+ * will cleanly shut down the search daemon too.  For Sphinx
+ * this currently means running a loop in a forked process whose
+ * job it is to live in the master process' process group and thus
+ * receive the SIGTERM that master re-sends.
+ */
+static void do_run_daemon(void)
+{
+    int r;
+
+    r = search_start_daemon(verbose);
+    if (r) exit(EC_TEMPFAIL);
+
+    /* tell shut_down() to shut down the searchd too */
+    running_daemon = 1;
+
+    for (;;) {
+	signals_poll();		/* will call shut_down() after SIGTERM */
+	poll(NULL, 0, -1);	/* sleeps until signalled */
+    }
+}
+
+
 static void shut_down(int code)
 {
+    if (running_daemon)
+	search_stop_daemon(verbose);
     seen_done();
     mboxlist_close();
     mboxlist_done();
@@ -709,7 +737,8 @@ int main(int argc, char **argv)
     const char *synclogfile = NULL;
     int init_flags = CYRUSINIT_PERROR;
     int multi_folder = 0;
-    enum { UNKNOWN, INDEXER, SEARCH, ROLLING, SYNCLOG, START_DAEMON, STOP_DAEMON } mode = UNKNOWN;
+    enum { UNKNOWN, INDEXER, SEARCH, ROLLING, SYNCLOG,
+	   START_DAEMON, STOP_DAEMON, RUN_DAEMON } mode = UNKNOWN;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
 	fatal("must run as the Cyrus user", EC_USAGE);
@@ -735,6 +764,8 @@ int main(int argc, char **argv)
 		mode = START_DAEMON;
 	    else if (!strcmp(optarg, "stop"))
 		mode = STOP_DAEMON;
+	    else if (!strcmp(optarg, "run"))
+		mode = RUN_DAEMON;
 	    else
 		usage(argv[0]);
 	    break;
@@ -803,7 +834,7 @@ int main(int argc, char **argv)
 	mode = INDEXER;
 
     /* fork and close fds if required */
-    if (mode == ROLLING && background) {
+    if ((mode == ROLLING || mode == RUN_DAEMON) && background) {
 	pid_t pid;
 	int nfds = getdtablesize();
 	int nullfd;
@@ -844,7 +875,7 @@ int main(int argc, char **argv)
     mboxlist_init(0);
     mboxlist_open(NULL);
 
-    if (mode == ROLLING || mode == SYNCLOG) {
+    if (mode == ROLLING || mode == SYNCLOG || mode == RUN_DAEMON) {
 	signals_set_shutdown(&shut_down);
 	signals_add_handlers(0);
     }
@@ -880,6 +911,10 @@ int main(int argc, char **argv)
 	if (optind != argc) usage("squatter");
 	if (search_stop_daemon(verbose))
 	    exit(EC_TEMPFAIL);
+	break;
+    case RUN_DAEMON:
+	if (optind != argc) usage("squatter");
+	do_run_daemon();
 	break;
     }
 
