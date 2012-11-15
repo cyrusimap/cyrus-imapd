@@ -2517,9 +2517,9 @@ static int folder_may_be_in_search(const char *mboxname,
 
 /* NOTE: tostate MAY be the same as state - we still copy with magic
  * folder processing logic */
-static struct searchargs *index_copy_search(struct index_state *state,
-					    const struct searchargs *searchargs,
-					    struct index_state *tostate)
+static struct searchargs *dupsearchargs(struct index_state *state,
+					const struct searchargs *searchargs,
+					struct index_state *tostate)
 {
     struct searchargs *out = xzmalloc(sizeof(struct searchargs));
     struct strlist *l;
@@ -2593,9 +2593,9 @@ static struct searchargs *index_copy_search(struct index_state *state,
 	while (*tail) tail = &(*tail)->next;
 
 	*tail = xzmalloc(sizeof(struct searchsub));
-	(*tail)->sub1 = index_copy_search(state, s->sub1, tostate);
+	(*tail)->sub1 = dupsearchargs(state, s->sub1, tostate);
 	if (s->sub2)
-	    (*tail)->sub2 = index_copy_search(state, s->sub2, tostate);
+	    (*tail)->sub2 = dupsearchargs(state, s->sub2, tostate);
     }
 
     out->modseq = searchargs->modseq;
@@ -2705,7 +2705,7 @@ static struct multisort_result *multisort_run(struct index_state *state,
 	 * a) change user flag numbers to match up
 	 * b) make the "folder" match efficient
 	 */
-	searchargs2 = index_copy_search(state, searchargs, state2);
+	searchargs2 = dupsearchargs(state, searchargs, state2);
 
 	/* calculate the user flags */
 	index_calcsearchflags(state2, searchargs2);
