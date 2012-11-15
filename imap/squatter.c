@@ -120,6 +120,36 @@ static int usage(const char *name)
 
 /* ====================================================================== */
 
+static void become_daemon(void)
+{
+    pid_t pid;
+    int nfds = getdtablesize();
+    int nullfd;
+    int fd;
+
+    nullfd = open("/dev/null", O_RDWR, 0);
+    if (nullfd < 0) {
+	perror("/dev/null");
+	exit(1);
+    }
+    dup2(nullfd, 0);
+    dup2(nullfd, 1);
+    dup2(nullfd, 2);
+    for (fd = 3 ; fd < nfds ; fd++)
+	close(fd);	    /* this will close nullfd too */
+
+    pid = fork();
+    if (pid == -1) {
+	perror("fork");
+	exit(1);
+    }
+
+    if (pid)
+	exit(0); /* parent */
+}
+
+/* ====================================================================== */
+
 /* This is called once for each mailbox we're told to index. */
 static int index_one(const char *name, int blocking)
 {
@@ -697,18 +727,25 @@ static void do_run_daemon(void)
 {
     int r;
 
+    /* We start the daemon before forking.  This eliminates a
+     * race condition during slot startup by ensuring that
+     * Sphinx is fully running before the rolling squatter
+     * tries to use it. */
     r = search_start_daemon(verbose);
     if (r) exit(EC_TEMPFAIL);
 
     /* tell shut_down() to shut down the searchd too */
     running_daemon = 1;
 
+    become_daemon();
+    signals_set_shutdown(&shut_down);
+    signals_add_handlers(0);
+
     for (;;) {
 	signals_poll();		/* will call shut_down() after SIGTERM */
 	poll(NULL, 0, -1);	/* sleeps until signalled */
     }
 }
-
 
 static void shut_down(int code)
 {
@@ -834,32 +871,9 @@ int main(int argc, char **argv)
 	mode = INDEXER;
 
     /* fork and close fds if required */
-    if ((mode == ROLLING || mode == RUN_DAEMON) && background) {
-	pid_t pid;
-	int nfds = getdtablesize();
-	int nullfd;
-	int fd;
-
-	nullfd = open("/dev/null", O_RDWR, 0);
-	if (nullfd < 0) {
-	    perror("/dev/null");
-	    exit(1);
-	}
-	dup2(nullfd, 0);
-	dup2(nullfd, 1);
-	dup2(nullfd, 2);
-	for (fd = 3 ; fd < nfds ; fd++)
-	    close(fd);	    /* this will close nullfd too */
+    if (mode == ROLLING && background) {
+	become_daemon();
 	init_flags &= ~CYRUSINIT_PERROR;
-
-	pid = fork();
-	if (pid == -1) {
-	    perror("fork");
-	    exit(1);
-	}
-
-	if (pid)
-	    exit(0); /* parent */
     }
 
     cyrus_init(alt_config, "squatter", init_flags, CONFIG_NEED_PARTITION_DATA);
@@ -875,7 +889,7 @@ int main(int argc, char **argv)
     mboxlist_init(0);
     mboxlist_open(NULL);
 
-    if (mode == ROLLING || mode == SYNCLOG || mode == RUN_DAEMON) {
+    if (mode == ROLLING || mode == SYNCLOG) {
 	signals_set_shutdown(&shut_down);
 	signals_add_handlers(0);
     }
