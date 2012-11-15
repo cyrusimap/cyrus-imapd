@@ -3075,7 +3075,7 @@ static struct multisort_result *multisort_cache_load(struct db *db,
     struct dlist *dl = NULL;
     struct dlist *dc;
     struct dlist *di;
-    int i;
+    unsigned i;
 
     if (!db) goto done;
 
@@ -3109,16 +3109,19 @@ static struct multisort_result *multisort_cache_load(struct db *db,
     i = 0;
     for (di = dc->head; di; di = di->next) {
 	struct dlist *item = di->head;
+	if (i >= sortres->nfolders) goto err;
 	sortres->folders[i].name = xstrdup(dlist_cstring(item));
 	item = item->next;
 	sortres->folders[i].uidvalidity = dlist_num(item);
 	i++;
     }
+    if (i != sortres->nfolders) goto err;
 
     dc = dlist_getchild(dl, "MSGS");
     i = 0;
     for (di = dc->head; di; di = di->next) {
 	struct dlist *item = di->head;
+	if (i >= sortres->nmsgs) goto err;
 	sortres->msgs[i].folderid = dlist_num(item);
 	item = item->next;
 	sortres->msgs[i].uid = dlist_num(item);
@@ -3126,11 +3129,29 @@ static struct multisort_result *multisort_cache_load(struct db *db,
 	sortres->msgs[i].cid = dlist_num(item);
 	i++;
     }
+    if (i != sortres->nmsgs) goto err;
 
 done:
     dlist_free(&dl);
     buf_free(&prefix);
     return sortres;
+
+err:
+    dlist_free(&dl);
+    buf_free(&prefix);
+
+    syslog(LOG_ERR, "invalid search cache record %s %.*s",
+	   cachekey, (int)vallen, val);
+
+    /* clean up memory */
+    for (i = 0; i < sortres->nfolders; i++) {
+	free(sortres->folders[i].name);
+    }
+    free(sortres->folders);
+    free(sortres->msgs);
+    free(sortres);
+
+    return NULL;
 }
 
 static void multisort_cache_save(struct db *db,
