@@ -4112,10 +4112,6 @@ EXPORTED int mailbox_add_conversations(struct mailbox *mailbox)
 	if (!record.cid)
 	    continue;
 
-	/* unlinked, skip */
-	if (record.system_flags & FLAG_UNLINKED)
-	    continue;
-
 	r = mailbox_update_conversations(mailbox, NULL, &record);
 	if (r) return r;
     }
@@ -4144,10 +4140,6 @@ static int mailbox_delete_conversations(struct mailbox *mailbox)
 
 	/* not assigned, skip */
 	if (!record.cid)
-	    continue;
-
-	/* unlinked, skip */
-	if (record.system_flags & FLAG_UNLINKED)
 	    continue;
 
 	r = mailbox_update_conversations(mailbox, &record, NULL);

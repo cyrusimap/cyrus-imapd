@@ -271,7 +271,7 @@ static int recalc_counts_cb(const char *mboxname,
     if (verbose)
 	printf("%s\n", mboxname);
 
-    r = mailbox_add_conversations(mailbox);
+    r = mailbox_add_conversations(mailbox); 
 
     mailbox_close(&mailbox);
     return r;
