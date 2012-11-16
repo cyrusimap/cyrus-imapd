@@ -498,6 +498,7 @@ static int fix_modseqs(struct conversations_state *a,
 	    conversation_t *convb = NULL;
 	    conv_folder_t *foldera;
 	    conv_folder_t *folderb;
+	    conv_sender_t *sendera;
 
 	    r = conversation_parse(a, ca.data, ca.datalen, &conva);
 	    if (r) {
@@ -526,6 +527,17 @@ static int fix_modseqs(struct conversations_state *a,
 		folderb = conversation_get_folder(convb, foldera->number, 1);
 		if (folderb->modseq < foldera->modseq)
 		    folderb->modseq = foldera->modseq;
+	    }
+
+	    /* senders are timestamped, and the timestamp might be for a
+	     * deleted message! */
+	    for (sendera = conva->senders; sendera; sendera = sendera->next) {
+		/* always update!  The delta logic will ensure we don't add
+		 * the record if it's not already at least present in the
+		 * other conversation */
+		conversation_update_sender(convb, sendera->name, sendera->route,
+					   sendera->mailbox, sendera->domain,
+					   sendera->lastseen, /*delta_count*/0);
 	    }
 
 	    /* be nice to know if this is needed, but at least twoskip
