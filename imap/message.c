@@ -3217,9 +3217,9 @@ continue2:
 	    goto out;
     }
 
-    /* Update the subject header */
-    free(conv->subject);
-    conv->subject = xstrdupnull(msubj);
+    /* Create the subject header if not already set */
+    if (!conv->subject)
+	conv->subject = xstrdupnull(msubj);
 
     record->cid = newcid;
 
