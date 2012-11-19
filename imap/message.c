@@ -3143,9 +3143,7 @@ continue2:
 	     * linked, ignore any difference in Subject: header fields.  */
 	    if (i != 3) {
 		/* Check to see if the conversation has an incompatible
-		 * subject.  We treat a missing S-record as compatible
-		 * with anything for backwards compatibility with older
-		 * conversations DBs. */
+		 * subject. */
 		r = conversation_load(state, cid, &conv);
 		if (r) goto out;
 		if (conv && strcmpsafe(conv->subject, msubj)) {
