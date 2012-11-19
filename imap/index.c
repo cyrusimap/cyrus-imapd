@@ -2983,21 +2983,21 @@ static int index_format_search(struct dlist *parent,
 
     for (s = searchargs->sublist; s; s = s->next) {
 	struct dlist *child;
-	int count;
+	int nchildren;
 	if (s->sub2)
 	    dlist_setatom(parent, NULL, "OR");
 	else
 	    dlist_setatom(parent, NULL, "NOT");
 
 	child = dlist_newlist(parent, NULL);
-	count = index_format_search(child, state, s->sub1);
-	if (count == 1)
+	nchildren = index_format_search(child, state, s->sub1);
+	if (nchildren == 1)
 	    dlist_splat(parent, child);
 
 	if (s->sub2) {
 	    child = dlist_newlist(parent, NULL);
-	    count = index_format_search(child, state, s->sub2);
-	    if (count == 1)
+	    nchildren = index_format_search(child, state, s->sub2);
+	    if (nchildren == 1)
 		dlist_splat(parent, child);
 	}
 
