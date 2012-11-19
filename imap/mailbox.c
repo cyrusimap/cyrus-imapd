@@ -2826,7 +2826,8 @@ EXPORTED int mailbox_update_conversations(struct mailbox *mailbox,
 	if (!(old->system_flags & FLAG_EXPUNGED)) {
 	    delta_exists--;
 	    delta_size -= old->size;
-	    /* drafts are never unseen */
+	    /* drafts don't update the 'unseen' counter so that
+	     * they never turn a conversation "unread" */
 	    if (!(old->system_flags & (FLAG_SEEN|FLAG_DRAFT)))
 		delta_unseen--;
 	    if (cstate->counted_flags) {
@@ -2845,7 +2846,8 @@ EXPORTED int mailbox_update_conversations(struct mailbox *mailbox,
 	if (!(new->system_flags & FLAG_EXPUNGED)) {
 	    delta_exists++;
 	    delta_size += new->size;
-	    /* drafts are never unseen */
+	    /* drafts don't update the 'unseen' counter so that
+	     * they never turn a conversation "unread" */
 	    if (!(new->system_flags & (FLAG_SEEN|FLAG_DRAFT)))
 		delta_unseen++;
 	    if (cstate->counted_flags) {
