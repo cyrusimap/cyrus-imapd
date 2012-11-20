@@ -69,15 +69,15 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 
-static int sync_log_enabled = 0;
+static int sync_log_suppressed = 0;
 static strarray_t *channels = NULL;
+static strarray_t *unsuppressable = NULL;
 
 EXPORTED void sync_log_init(void)
 {
     const char *conf;
     int i;
 
-    sync_log_enabled = config_getswitch(IMAPOPT_SYNC_LOG);
 
     /* sync_log_init() may be called more than once */
     if (channels) strarray_free(channels);
@@ -94,17 +94,26 @@ EXPORTED void sync_log_init(void)
     i = strarray_find(channels, "\"\"", 0);
     if (i >= 0)
 	strarray_set(channels, i, NULL);
+
+    strarray_free(unsuppressable);
+    unsuppressable = NULL;
+    conf = config_getstring(IMAPOPT_SYNC_LOG_UNSUPPRESSABLE_CHANNELS);
+    if (conf)
+	unsuppressable = strarray_split(conf, " ", 0);
 }
 
 EXPORTED void sync_log_suppress(void)
 {
-    sync_log_enabled = 0;
+    sync_log_suppressed = 1;
 }
 
 EXPORTED void sync_log_done(void)
 {
     strarray_free(channels);
     channels = NULL;
+
+    strarray_free(unsuppressable);
+    unsuppressable = NULL;
 }
 
 static char *sync_log_fname(const char *channel)
@@ -121,6 +130,17 @@ static char *sync_log_fname(const char *channel)
     return buf;
 }
 
+static int sync_log_enabled(const char *channel)
+{
+    if (!config_getswitch(IMAPOPT_SYNC_LOG))
+	return 0;	/* entire mechanism is disabled */
+    if (!sync_log_suppressed)
+	return 1;	/* _suppress() wasn't called */
+    if (unsuppressable && strarray_find(unsuppressable, channel, 0) >= 0)
+	return 1;	/* channel is unsuppressable */
+    return 0;		/* suppressed */
+}
+
 static void sync_log_base(const char *channel, const char *string)
 {
     int fd;
@@ -129,7 +149,7 @@ static void sync_log_base(const char *channel, const char *string)
     const char *fname;
 
     /* are we being supressed? */
-    if (!sync_log_enabled) return;
+    if (!sync_log_enabled(channel)) return;
 
     fname = sync_log_fname(channel);
 

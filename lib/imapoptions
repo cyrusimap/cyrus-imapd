@@ -1449,6 +1449,12 @@ product version in the capabilities */
    other machine. You can use "" (the two-character string U+22 U+22)
    to mean the default sync channel. */
 
+{ "sync_log_unsuppressable_channels", "squatter", STRING }
+/* If specified, the named channels are exempt from the effect of setting
+   sync_log_chain:off, i.e. they are always logged to by the sync_server
+   process.  This is only really useful to allow rolling search indexing
+   on a replica. */
+
 { "sync_password", NULL, STRING }
 /* The default password to use when authenticating to a sync server.
    Prefix with a channel name to only apply for that channel */
