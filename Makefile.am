@@ -923,6 +923,8 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/saslserver.c \
 	imap/search_engines.c \
 	imap/search_engines.h \
+	imap/search_expr.c \
+	imap/search_expr.h \
 	imap/seen.h \
 	imap/seen_db.c \
 	imap/sequence.c \

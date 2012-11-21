@@ -46,8 +46,10 @@
 #include "annotate.h"
 #include "hash.h"
 #include "mailbox.h"
+#include "message.h"
 #include "prot.h"
 #include "strarray.h"
+#include "search_expr.h"
 #include "conversations.h"
 
 /* Userid client has logged in as */
@@ -185,6 +187,7 @@ struct searchannot {
     struct buf value;
 };
 
+#if 1
 struct searchsub {
     struct searchsub *next;
     struct searchargs *sub1;
@@ -194,6 +197,7 @@ struct searchsub {
      */
     struct searchargs *sub2;
 };
+#endif
 
 /* Bitmasks for search flags */
 enum {
@@ -223,6 +227,7 @@ enum {
 
 /* Things that may be searched for */
 struct searchargs {
+#if 1
     bit32 flags;
     unsigned smaller, larger;
     time_t before, after;
@@ -254,9 +259,10 @@ struct searchargs {
     modseq_t convmodseq;
 
     bit32 cache_atleast;
+#endif
+    struct search_expr *root;
     int charset;
     int state;
-    struct searchargs *base;
 
     /* For ESEARCH & XCONVMULTISORT */
     const char *tag;

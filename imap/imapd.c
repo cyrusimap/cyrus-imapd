@@ -210,6 +210,7 @@ static struct index_state *imapd_index;
 /* current namespace */
 struct namespace imapd_namespace;
 
+#if 0 /*TODO:gnb*/
 static const char *monthname[] = {
     "jan", "feb", "mar", "apr", "may", "jun",
     "jul", "aug", "sep", "oct", "nov", "dec"
@@ -219,6 +220,7 @@ static const int max_monthdays[] = {
     31, 29, 31, 30, 31, 30,
     31, 31, 30, 31, 30, 31
 };
+#endif
 
 /* track if we're idling */
 static int idling = 0;
@@ -455,10 +457,12 @@ static int getlistretopts(char *tag, struct listargs *args);
 static int getsearchreturnopts(struct searchargs *searchargs);
 static struct searchargs *new_searchargs(const char *tag, int state);
 static int get_search_program(struct searchargs *searchargs);
-static int get_search_criterion(struct searchargs *searchargs, struct searchargs *base);
+static int get_search_criterion(search_expr_t *parent, struct searchargs *base);
 static int get_snippetargs(struct snippetargs **sap);
 static void free_snippetargs(struct snippetargs **sap);
+#if 0 /*TODO:gnb*/
 static int getsearchdate(time_t *start, time_t *end);
+#endif
 static int getsortcriteria(char *tag, struct sortcrit **sortcrit);
 static char *sortcrit_as_string(const struct sortcrit *sortcrit);
 static int getdatetime(time_t *date);
@@ -470,8 +474,6 @@ static void appendfieldlist(struct fieldlist **l, char *section,
 		     void *d, size_t size);
 static void freefieldlist(struct fieldlist *l);
 void freestrlist(struct strlist *l);
-static void appendsearchargs(struct searchargs *s, struct searchargs *s1,
-			 struct searchargs *s2);
 
 static int set_haschildren(char *name, int matchlen, int maycreate,
 			   int *attributes);
@@ -859,6 +861,8 @@ int service_init(int argc, char **argv, char **envp)
 
     /* setup for mailbox event notifications */
     mboxevent_init();
+
+    search_attr_init();
 
     /* create connection to the SNMP listener, if available. */
     snmp_connect(); /* ignore return code */
@@ -10010,6 +10014,7 @@ out_noprint:
     buf_free(&arg);
 }
 
+#if 0 /*TODO:gnb*/
 /*
  * Parse a ANNOTATION item for SEARCH (RFC5257) into a struct
  * searchannot and append it to the chain of such structures at *lp.
@@ -10071,6 +10076,7 @@ out:
     buf_free(&value);
     return c;
 }
+#endif
 
 /*
  * Parse search return options
@@ -10149,31 +10155,55 @@ static int get_search_program(struct searchargs *searchargs)
 {
     int c;
 
+    searchargs->root = search_expr_new(NULL, SEOP_AND);
+
     do {
-	c = get_search_criterion(searchargs, searchargs);
+	c = get_search_criterion(searchargs->root, searchargs);
     } while (c == ' ');
 
     searchargs->namespace = &imapd_namespace;
     searchargs->userid = imapd_userid;
     searchargs->authstate = imapd_authstate;
 
+search_expr_dump(searchargs->root);
+
+    return c;
+}
+
+static int string_match(search_expr_t *parent, const char *aname, struct searchargs *base)
+{
+    int c;
+    search_expr_t *e;
+    static struct buf arg = BUF_INITIALIZER;
+
+    c = getastring(imapd_in, imapd_out, &arg);
+    if (c == EOF) return EOF;
+    e = search_expr_new(parent, SEOP_MATCH);
+    e->attr = search_attr_find(aname);
+    e->value.s = charset_convert(arg.s, base->charset, charset_flags);
+    if (!e->value.s) {
+	e->op = SEOP_FALSE;
+	e->attr = NULL;
+    }
     return c;
 }
 
 /*
  * Parse a single search criterion
  */
-static int get_search_criterion(struct searchargs *searchargs, struct searchargs *base)
+static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 {
     static struct buf criteria, arg;
-    struct searchargs *sub1, *sub2;
-    char *p, *str;
+    search_expr_t *e;
     int c;
+    int keep_charset = 0;
+#if 0
+    char *p, *str;
     unsigned size;
     time_t start, end, now = time(0);
-    int keep_charset = 0;
     int hasconv = config_getswitch(IMAPOPT_CONVERSATIONS);
     char mboxname[MAX_MAILBOX_NAME];
+#endif
 
     if (base->state & GETSEARCH_CHARSET_FIRST) {
 	c = getcharset(imapd_in, imapd_out, &arg);
@@ -10189,8 +10219,9 @@ static int get_search_criterion(struct searchargs *searchargs, struct searchargs
     switch (criteria.s[0]) {
     case '\0':
 	if (c != '(') goto badcri;
+	e = search_expr_new(parent, SEOP_AND);
 	do {
-	    c = get_search_criterion(searchargs, base);
+	    c = get_search_criterion(e, base);
 	} while (c == ' ');
 	if (c == EOF) return EOF;
 	if (c != ')') {
@@ -10206,26 +10237,37 @@ static int get_search_criterion(struct searchargs *searchargs, struct searchargs
     case '5': case '6': case '7': case '8': case '9':
     case '*':
 	if (imparse_issequence(criteria.s)) {
+#if 0 /*TODO:gnb*/
+/* sequence cannot be properly parsed at this time, it requires an open
+ * index, so we need to save a string and delay until internalisation */
 	    appendsequencelist(imapd_index, &searchargs->sequence, criteria.s, 0);
+#endif
 	}
 	else goto badcri;
 	break;
 
     case 'a':
+#if 0 /*TODO:gnb*/
 	if (!strcmp(criteria.s, "answered")) {
 	    searchargs->system_flags_set |= FLAG_ANSWERED;
 	}
-	else if (!strcmp(criteria.s, "all")) {
+	else
+#endif
+	if (!strcmp(criteria.s, "all")) {
+	    search_expr_new(parent, SEOP_TRUE);
 	    break;
 	}
+#if 0 /*TODO:gnb*/
 	else if (!strcmp(criteria.s, "annotation")) {
 	    c = parse_search_annotation(c, &searchargs->annotations);
 	    if (c == EOF)
 		goto badcri;
 	}
+#endif
 	else goto badcri;
 	break;
 
+#if 0 /*TODO:gnb*/
     case 'b':
 	if (!strcmp(criteria.s, "before")) {
 	    if (c != ' ') goto missingarg;		
@@ -10235,34 +10277,28 @@ static int get_search_criterion(struct searchargs *searchargs, struct searchargs
 		searchargs->before = start;
 	    }
 	}
-	else if (!strcmp(criteria.s, "bcc")) {
-	    if (c != ' ') goto missingarg;		
-	    c = getastring(imapd_in, imapd_out, &arg);
+	else
+#endif
+	if (!strcmp(criteria.s, "bcc")) {
+	    if (c != ' ') goto missingarg;
+	    c = string_match(parent, criteria.s, base);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, base->charset, charset_flags);
-	    if (str) appendstrlistpat(&searchargs->bcc, str);
-	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
 	else if (!strcmp(criteria.s, "body")) {
-	    if (c != ' ') goto missingarg;		
-	    c = getastring(imapd_in, imapd_out, &arg);
+	    if (c != ' ') goto missingarg;
+	    c = string_match(parent, criteria.s, base);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, base->charset, charset_flags);
-	    if (str) appendstrlistpat(&searchargs->body, str);
-	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
 	else goto badcri;
 	break;
 
     case 'c':
 	if (!strcmp(criteria.s, "cc")) {
-	    if (c != ' ') goto missingarg;		
-	    c = getastring(imapd_in, imapd_out, &arg);
+	    if (c != ' ') goto missingarg;
+	    c = string_match(parent, criteria.s, base);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, base->charset, charset_flags);
-	    if (str) appendstrlistpat(&searchargs->cc, str);
-	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
+#if 0 /*TODO:gnb*/
 	else if (hasconv && !strcmp(criteria.s, "convflag")) {
 	    if (c != ' ') goto missingarg;
 	    c = getword(imapd_in, &arg);
@@ -10287,7 +10323,9 @@ static int get_search_criterion(struct searchargs *searchargs, struct searchargs
 	    c = getmodseq(imapd_in, &searchargs->convmodseq);
 	    if (c == EOF) goto badnumber;
 	}
-	else if ((base->state & GETSEARCH_CHARSET_KEYWORD)
+	else
+#endif
+	if ((base->state & GETSEARCH_CHARSET_KEYWORD)
 	      && !strcmp(criteria.s, "charset")) {
 	    if (c != ' ') goto missingcharset;
 	    c = getcharset(imapd_in, imapd_out, &arg);
@@ -10299,6 +10337,7 @@ static int get_search_criterion(struct searchargs *searchargs, struct searchargs
 	else goto badcri;
 	break;
 
+#if 0 /*TODO:gnb*/
     case 'd':
 	if (!strcmp(criteria.s, "deleted")) {
 	    searchargs->system_flags_set |= FLAG_DELETED;
@@ -10308,8 +10347,10 @@ static int get_search_criterion(struct searchargs *searchargs, struct searchargs
 	}
 	else goto badcri;
 	break;
+#endif
 
     case 'f':
+#if 0 /*TODO:gnb*/
 	if (!strcmp(criteria.s, "flagged")) {
 	    searchargs->system_flags_set |= FLAG_FLAGGED;
 	}
@@ -10321,20 +10362,18 @@ static int get_search_criterion(struct searchargs *searchargs, struct searchargs
 						imapd_userid, mboxname);
 	    appendstrlist(&searchargs->folder, mboxname);
 	}
-	else if (!strcmp(criteria.s, "from")) {
-	    if (c != ' ') goto missingarg;		
-	    c = getastring(imapd_in, imapd_out, &arg);
+	else
+#endif
+	if (!strcmp(criteria.s, "from")) {
+	    if (c != ' ') goto missingarg;
+	    c = string_match(parent, criteria.s, base);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, base->charset, charset_flags);
-	    if (str) appendstrlistpat(&searchargs->from, str);
-	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
 	else goto badcri;
 	break;
 
     case 'h':
 	if (!strcmp(criteria.s, "header")) {
-	    struct strlist **patlist;
 
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(imapd_in, imapd_out, &arg);
@@ -10342,27 +10381,17 @@ static int get_search_criterion(struct searchargs *searchargs, struct searchargs
 	    lcase(arg.s);
 
 	    /* some headers can be reduced to search terms */
-            if (!strcmp(arg.s, "bcc")) {
-                patlist = &searchargs->bcc;
-            }
-            else if (!strcmp(arg.s, "cc")) {
-		patlist = &searchargs->cc;
-            }
-	    else if (!strcmp(arg.s, "to")) {
-		patlist = &searchargs->to;
-            }
-	    else if (!strcmp(arg.s, "from")) {
-		patlist = &searchargs->from;
-            }
-	    else if (!strcmp(arg.s, "subject")) {
-		patlist = &searchargs->subject;
+            if (!strcmp(arg.s, "bcc") ||
+                !strcmp(arg.s, "cc") ||
+                !strcmp(arg.s, "to") ||
+                !strcmp(arg.s, "from") ||
+                !strcmp(arg.s, "subject") ||
+                !strcmp(arg.s, "message-id")) {
+		c = string_match(parent, arg.s, base);
+		if (c == EOF) goto missingarg;
             }
 
-	    /* we look message-id up in the envelope */
-	    else if (!strcmp(arg.s, "message-id")) {
-		patlist = &searchargs->messageid;
-	    }
-
+#if 0 /*TODO:gnb*/
 	    /* all other headers we handle normally */
 	    else {
 		if (searchargs->cache_atleast < BIT32_MAX) {
@@ -10380,10 +10409,14 @@ static int get_search_criterion(struct searchargs *searchargs, struct searchargs
 	    str = charset_convert(arg.s, base->charset, charset_flags);
 	    if (str) appendstrlistpat(patlist, str);
 	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
+#else
+	    else goto badcri;
+#endif
 	}
 	else goto badcri;
 	break;
 
+#if 0 /*TODO:gnb*/
     case 'k':
 	if (!strcmp(criteria.s, "keyword")) {
 	    if (c != ' ') goto missingarg;		
@@ -10424,44 +10457,34 @@ static int get_search_criterion(struct searchargs *searchargs, struct searchargs
 	}
 	else goto badcri;
 	break;
+#endif
 
     case 'n':
 	if (!strcmp(criteria.s, "not")) {
 	    if (c != ' ') goto missingarg;		
-	    sub1 = new_searchargs(NULL, 0);
-	    c = get_search_criterion(sub1, base);
-	    if (c == EOF) {
-		freesearchargs(sub1);
-		return EOF;
-	    }
-
-	    appendsearchargs(searchargs, sub1, (struct searchargs *)0);
+	    e = search_expr_new(parent, SEOP_NOT);
+	    c = get_search_criterion(e, base);
+	    if (c == EOF) return EOF;
 	}
+#if 0 /*TODO:gnb*/
 	else if (!strcmp(criteria.s, "new")) {
 	    searchargs->flags |= (SEARCH_SEEN_UNSET|SEARCH_RECENT_SET);
 	}
+#endif
 	else goto badcri;
 	break;
 
     case 'o':
 	if (!strcmp(criteria.s, "or")) {
-	    if (c != ' ') goto missingarg;		
-	    sub1 = new_searchargs(NULL, 0);
-	    c = get_search_criterion(sub1, base);
-	    if (c == EOF) {
-		freesearchargs(sub1);
-		return EOF;
-	    }
-	    if (c != ' ') goto missingarg;		
-	    sub2 = new_searchargs(NULL, 0);
-	    c = get_search_criterion(sub2, base);
-	    if (c == EOF) {
-		freesearchargs(sub1);
-		freesearchargs(sub2);
-		return EOF;
-	    }
-	    appendsearchargs(searchargs, sub1, sub2);
+	    if (c != ' ') goto missingarg;
+	    e = search_expr_new(parent, SEOP_OR);
+	    c = get_search_criterion(e, base);
+	    if (c == EOF) return EOF;
+	    if (c != ' ') goto missingarg;
+	    c = get_search_criterion(e, base);
+	    if (c == EOF) return EOF;
 	}
+#if 0 /*TODO:gnb*/
 	else if (!strcmp(criteria.s, "old")) {
 	    searchargs->flags |= SEARCH_RECENT_UNSET;
 	}
@@ -10485,14 +10508,18 @@ static int get_search_criterion(struct searchargs *searchargs, struct searchargs
 		searchargs->after = start;
 	    }
 	}
+#endif
 	else goto badcri;
 	break;
 
     case 'r':
+#if 0 /*TODO:gnb*/
 	if (!strcmp(criteria.s, "recent")) {
 	    searchargs->flags |= SEARCH_RECENT_SET;
 	}
-	else if ((base->state & GETSEARCH_RETURN) && 
+	else
+#endif
+	if ((base->state & GETSEARCH_RETURN) && 
 		 !strcmp(criteria.s, "return")) {
 	    c = getsearchreturnopts(base);
 	    if (c == EOF) return EOF;
@@ -10502,6 +10529,7 @@ static int get_search_criterion(struct searchargs *searchargs, struct searchargs
 	break;
 
     case 's':
+#if 0 /*TODO:gnb*/
 	if (!strcmp(criteria.s, "seen")) {
 	    searchargs->flags |= SEARCH_SEEN_SET;
 	}
@@ -10553,26 +10581,23 @@ static int get_search_criterion(struct searchargs *searchargs, struct searchargs
 	    if (!searchargs->smaller || size < searchargs->smaller)
 	      searchargs->smaller = size;
 	}
-	else if (!strcmp(criteria.s, "subject")) {
-	    if (c != ' ') goto missingarg;		
-	    c = getastring(imapd_in, imapd_out, &arg);
+	else
+#endif
+	if (!strcmp(criteria.s, "subject")) {
+	    if (c != ' ') goto missingarg;
+	    c = string_match(parent, criteria.s, base);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, base->charset, charset_flags);
-	    if (str) appendstrlistpat(&searchargs->subject, str);
-	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
 	else goto badcri;
 	break;
 
     case 't':
 	if (!strcmp(criteria.s, "to")) {
-	    if (c != ' ') goto missingarg;		
-	    c = getastring(imapd_in, imapd_out, &arg);
+	    if (c != ' ') goto missingarg;
+	    c = string_match(parent, criteria.s, base);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, base->charset, charset_flags);
-	    if (str) appendstrlistpat(&searchargs->to, str);
-	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
+#if 0 /*TODO:gnb*/
 	else if (!strcmp(criteria.s, "text")) {
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(imapd_in, imapd_out, &arg);
@@ -10581,9 +10606,11 @@ static int get_search_criterion(struct searchargs *searchargs, struct searchargs
 	    if (str) appendstrlistpat(&searchargs->text, str);
 	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
+#endif
 	else goto badcri;
 	break;
 
+#if 0 /*TODO:gnb*/
     case 'u':
 	if (!strcmp(criteria.s, "uid")) {
 	    if (c != ' ') goto missingarg;
@@ -10647,6 +10674,7 @@ static int get_search_criterion(struct searchargs *searchargs, struct searchargs
 	}
 	else goto badcri;
 	break;
+#endif
 
     default:
     badcri:
@@ -10667,6 +10695,7 @@ static int get_search_criterion(struct searchargs *searchargs, struct searchargs
     if (c != EOF) prot_ungetc(c, imapd_in);
     return EOF;
 
+#if 0 /*TODO:gnb*/
  badflag:
     prot_printf(imapd_out, "%s BAD Invalid flag name %s in Search command\r\n",
 		base->tag, arg.s);
@@ -10690,6 +10719,7 @@ static int get_search_criterion(struct searchargs *searchargs, struct searchargs
 		base->tag);
     if (c != EOF) prot_ungetc(c, imapd_in);
     return EOF;
+#endif
 
  missingcharset:
     prot_printf(imapd_out, "%s BAD Missing charset\r\n",
@@ -11714,6 +11744,7 @@ done:
     return;
 }
 
+#if 0 /*TODO:gnb*/
 /*
  * Parse a "date", for SEARCH criteria
  * The time_t's pointed to by 'start' and 'end' are set to the
@@ -11802,6 +11833,7 @@ static int getsearchdate(time_t *start, time_t *end)
     prot_ungetc(c, imapd_in);
     return EOF;
 }
+#endif
 
 #define SORTGROWSIZE	10
 
@@ -12385,23 +12417,6 @@ static void freefieldlist(struct fieldlist *l)
 	free((char *)l);
 	l = n;
     }
-}
-
-/*
- * Append the searchargs 's1' and 's2' to the sublist of 's'
- */
-static void appendsearchargs(struct searchargs *s,
-		      struct searchargs *s1,
-		      struct searchargs *s2)
-{
-    struct searchsub **tail = &s->sublist;
-
-    while (*tail) tail = &(*tail)->next;
-
-    *tail = (struct searchsub *)xmalloc(sizeof(struct searchsub));
-    (*tail)->sub1 = s1;
-    (*tail)->sub2 = s2;
-    (*tail)->next = 0;
 }
 
 static int set_haschildren(char *name, int matchlen,
