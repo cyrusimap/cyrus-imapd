@@ -10237,11 +10237,9 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
     case '5': case '6': case '7': case '8': case '9':
     case '*':
 	if (imparse_issequence(criteria.s)) {
-#if 0 /*TODO:gnb*/
-/* sequence cannot be properly parsed at this time, it requires an open
- * index, so we need to save a string and delay until internalisation */
-	    appendsequencelist(imapd_index, &searchargs->sequence, criteria.s, 0);
-#endif
+	    e = search_expr_new(parent, SEOP_MATCH);
+	    e->attr = search_attr_find("msgno");
+	    e->value.seq = seqset_parse(criteria.s, NULL, /*maxval*/0);
 	}
 	else goto badcri;
 	break;
@@ -10610,14 +10608,16 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 	else goto badcri;
 	break;
 
-#if 0 /*TODO:gnb*/
     case 'u':
 	if (!strcmp(criteria.s, "uid")) {
 	    if (c != ' ') goto missingarg;
 	    c = getword(imapd_in, &arg);
 	    if (!imparse_issequence(arg.s)) goto badcri;
-	    appendsequencelist(imapd_index, &searchargs->uidsequence, arg.s, 1);
+	    e = search_expr_new(parent, SEOP_MATCH);
+	    e->attr = search_attr_find(criteria.s);
+	    e->value.seq = seqset_parse(arg.s, NULL, /*maxval*/0);
 	}
+#if 0 /*TODO:gnb*/
 	else if (!strcmp(criteria.s, "unseen")) {
 	    searchargs->flags |= SEARCH_SEEN_UNSET;
 	}
@@ -10672,9 +10672,9 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 		searchargs->after = start;
 	    }
 	}
+#endif
 	else goto badcri;
 	break;
-#endif
 
     default:
     badcri:

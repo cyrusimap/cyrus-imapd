@@ -72,6 +72,7 @@ union search_value {
     long long i;
     char *s;
     struct searchannot *annot;
+    struct seqset *seq;
 };
 
 typedef struct search_attr search_attr_t;

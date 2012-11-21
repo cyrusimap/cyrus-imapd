@@ -267,6 +267,36 @@ static void search_string_free(union search_value *v)
     v->s = NULL;
 }
 
+static int search_seq_match(message_t *m, const union search_value *v,
+			    void *internalised __attribute__((unused)),
+			    void *data1)
+{
+    int r;
+    uint32_t u;
+    int (*getter)(message_t *, uint32_t *) = (int(*)(message_t *, uint32_t *))data1;
+
+    r = getter(m, &u);
+    if (!r)
+	r = seqset_ismember(v->seq, u);
+    else
+	r = 0;
+
+    return r;
+}
+
+static void search_seq_describe(struct buf *b, const union search_value *v)
+{
+    char *ss = seqset_cstring(v->seq);
+    buf_appendcstr(b, ss);
+    free(ss);
+}
+
+static void search_seq_free(union search_value *v)
+{
+    seqset_free(v->seq);
+    v->seq = NULL;
+}
+
 static hash_table attrs_by_name = HASH_TABLE_INITIALIZER;
 
 EXPORTED void search_attr_init(void)
@@ -322,6 +352,22 @@ EXPORTED void search_attr_init(void)
 	    search_string_describe,
 	    search_string_free,
 	    (void *)message_get_to
+	},{
+	    "msgno",
+	    /*internalise*/NULL,
+	    /*cmp*/NULL,
+	    search_seq_match,
+	    search_seq_describe,
+	    search_seq_free,
+	    (void *)message_get_msgno
+	},{
+	    "uid",
+	    /*internalise*/NULL,
+	    /*cmp*/NULL,
+	    search_seq_match,
+	    search_seq_describe,
+	    search_seq_free,
+	    (void *)message_get_uid
 	}
     };
 
