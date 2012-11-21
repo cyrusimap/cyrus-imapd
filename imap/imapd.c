@@ -10188,6 +10188,28 @@ static int string_match(search_expr_t *parent, const char *aname, struct searcha
     return c;
 }
 
+static void systemflag_match(search_expr_t *parent, unsigned int flag, int not)
+{
+    search_expr_t *e;
+
+    if (not)
+	parent = search_expr_new(parent, SEOP_NOT);
+    e = search_expr_new(parent, SEOP_MATCH);
+    e->attr = search_attr_find("systemflags");
+    e->value.i = flag;
+}
+
+static void indexflag_match(search_expr_t *parent, unsigned int flag, int not)
+{
+    search_expr_t *e;
+
+    if (not)
+	parent = search_expr_new(parent, SEOP_NOT);
+    e = search_expr_new(parent, SEOP_MATCH);
+    e->attr = search_attr_find("indexflags");
+    e->value.i = flag;
+}
+
 /*
  * Parse a single search criterion
  */
@@ -10245,13 +10267,10 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 	break;
 
     case 'a':
-#if 0 /*TODO:gnb*/
 	if (!strcmp(criteria.s, "answered")) {
-	    searchargs->system_flags_set |= FLAG_ANSWERED;
+	    systemflag_match(parent, FLAG_ANSWERED, /*not*/0);
 	}
-	else
-#endif
-	if (!strcmp(criteria.s, "all")) {
+	else if (!strcmp(criteria.s, "all")) {
 	    search_expr_new(parent, SEOP_TRUE);
 	    break;
 	}
@@ -10335,23 +10354,21 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 	else goto badcri;
 	break;
 
-#if 0 /*TODO:gnb*/
     case 'd':
 	if (!strcmp(criteria.s, "deleted")) {
-	    searchargs->system_flags_set |= FLAG_DELETED;
+	    systemflag_match(parent, FLAG_DELETED, /*not*/0);
 	}
 	else if (!strcmp(criteria.s, "draft")) {
-	    searchargs->system_flags_set |= FLAG_DRAFT;
+	    systemflag_match(parent, FLAG_DRAFT, /*not*/0);
 	}
 	else goto badcri;
 	break;
-#endif
 
     case 'f':
-#if 0 /*TODO:gnb*/
 	if (!strcmp(criteria.s, "flagged")) {
-	    searchargs->system_flags_set |= FLAG_FLAGGED;
+	    systemflag_match(parent, FLAG_FLAGGED, /*not*/0);
 	}
+#if 0 /*TODO:gnb*/
 	else if (!strcmp(criteria.s, "folder")) {
 	    if (c != ' ') goto missingarg;
 	    c = getastring(imapd_in, imapd_out, &arg);
@@ -10360,9 +10377,8 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 						imapd_userid, mboxname);
 	    appendstrlist(&searchargs->folder, mboxname);
 	}
-	else
 #endif
-	if (!strcmp(criteria.s, "from")) {
+	else if (!strcmp(criteria.s, "from")) {
 	    if (c != ' ') goto missingarg;
 	    c = string_match(parent, criteria.s, base);
 	    if (c == EOF) goto missingarg;
@@ -10379,15 +10395,15 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 	    lcase(arg.s);
 
 	    /* some headers can be reduced to search terms */
-            if (!strcmp(arg.s, "bcc") ||
-                !strcmp(arg.s, "cc") ||
-                !strcmp(arg.s, "to") ||
-                !strcmp(arg.s, "from") ||
-                !strcmp(arg.s, "subject") ||
-                !strcmp(arg.s, "message-id")) {
+	    if (!strcmp(arg.s, "bcc") ||
+		!strcmp(arg.s, "cc") ||
+		!strcmp(arg.s, "to") ||
+		!strcmp(arg.s, "from") ||
+		!strcmp(arg.s, "subject") ||
+		!strcmp(arg.s, "message-id")) {
 		c = string_match(parent, arg.s, base);
 		if (c == EOF) goto missingarg;
-            }
+	    }
 
 #if 0 /*TODO:gnb*/
 	    /* all other headers we handle normally */
@@ -10464,11 +10480,11 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 	    c = get_search_criterion(e, base);
 	    if (c == EOF) return EOF;
 	}
-#if 0 /*TODO:gnb*/
 	else if (!strcmp(criteria.s, "new")) {
-	    searchargs->flags |= (SEARCH_SEEN_UNSET|SEARCH_RECENT_SET);
+	    e = search_expr_new(parent, SEOP_AND);
+	    indexflag_match(e, MESSAGE_SEEN, /*not*/1);
+	    indexflag_match(e, MESSAGE_RECENT, /*not*/0);
 	}
-#endif
 	else goto badcri;
 	break;
 
@@ -10482,10 +10498,10 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 	    c = get_search_criterion(e, base);
 	    if (c == EOF) return EOF;
 	}
-#if 0 /*TODO:gnb*/
 	else if (!strcmp(criteria.s, "old")) {
-	    searchargs->flags |= SEARCH_RECENT_UNSET;
+	    indexflag_match(parent, MESSAGE_RECENT, /*not*/1);
 	}
+#if 0 /*TODO:gnb*/
 	else if (!strcmp(criteria.s, "older")) {
 	    if (c != ' ') goto missingarg;		
 	    c = getword(imapd_in, &arg);
@@ -10511,13 +10527,10 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 	break;
 
     case 'r':
-#if 0 /*TODO:gnb*/
 	if (!strcmp(criteria.s, "recent")) {
-	    searchargs->flags |= SEARCH_RECENT_SET;
+	    indexflag_match(parent, MESSAGE_RECENT, /*not*/0);
 	}
-	else
-#endif
-	if ((base->state & GETSEARCH_RETURN) && 
+	else if ((base->state & GETSEARCH_RETURN) &&
 		 !strcmp(criteria.s, "return")) {
 	    c = getsearchreturnopts(base);
 	    if (c == EOF) return EOF;
@@ -10527,10 +10540,10 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 	break;
 
     case 's':
-#if 0 /*TODO:gnb*/
 	if (!strcmp(criteria.s, "seen")) {
-	    searchargs->flags |= SEARCH_SEEN_SET;
+	    indexflag_match(parent, MESSAGE_SEEN, /*not*/0);
 	}
+#if 0 /*TODO:gnb*/
 	else if (!strcmp(criteria.s, "sentbefore")) {
 	    if (c != ' ') goto missingarg;		
 	    c = getsearchdate(&start, &end);
@@ -10579,9 +10592,8 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 	    if (!searchargs->smaller || size < searchargs->smaller)
 	      searchargs->smaller = size;
 	}
-	else
 #endif
-	if (!strcmp(criteria.s, "subject")) {
+	else if (!strcmp(criteria.s, "subject")) {
 	    if (c != ' ') goto missingarg;
 	    c = string_match(parent, criteria.s, base);
 	    if (c == EOF) goto missingarg;
@@ -10617,22 +10629,22 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 	    e->attr = search_attr_find(criteria.s);
 	    e->value.seq = seqset_parse(arg.s, NULL, /*maxval*/0);
 	}
-#if 0 /*TODO:gnb*/
 	else if (!strcmp(criteria.s, "unseen")) {
-	    searchargs->flags |= SEARCH_SEEN_UNSET;
+	    indexflag_match(parent, MESSAGE_SEEN, /*not*/1);
 	}
 	else if (!strcmp(criteria.s, "unanswered")) {
-	    searchargs->system_flags_unset |= FLAG_ANSWERED;
+	    systemflag_match(parent, FLAG_ANSWERED, /*not*/1);
 	}
 	else if (!strcmp(criteria.s, "undeleted")) {
-	    searchargs->system_flags_unset |= FLAG_DELETED;
+	    systemflag_match(parent, FLAG_DELETED, /*not*/1);
 	}
 	else if (!strcmp(criteria.s, "undraft")) {
-	    searchargs->system_flags_unset |= FLAG_DRAFT;
+	    systemflag_match(parent, FLAG_DRAFT, /*not*/1);
 	}
 	else if (!strcmp(criteria.s, "unflagged")) {
-	    searchargs->system_flags_unset |= FLAG_FLAGGED;
+	    systemflag_match(parent, FLAG_FLAGGED, /*not*/1);
 	}
+#if 0 /*TODO:gnb*/
 	else if (!strcmp(criteria.s, "unkeyword")) {
 	    if (c != ' ') goto missingarg;		
 	    c = getword(imapd_in, &arg);

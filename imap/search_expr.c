@@ -297,6 +297,45 @@ static void search_seq_free(union search_value *v)
     v->seq = NULL;
 }
 
+static int search_flags_match(message_t *m, const union search_value *v,
+			      void *internalised __attribute__((unused)),
+			      void *data1)
+{
+    int r;
+    uint32_t u;
+    int (*getter)(message_t *, uint32_t *) = (int(*)(message_t *, uint32_t *))data1;
+
+    r = getter(m, &u);
+    if (!r)
+	r = !!(v->i & u);
+    else
+	r = 0;
+
+    return r;
+}
+
+static void search_systemflags_describe(struct buf *b, const union search_value *v)
+{
+    if ((v->i & FLAG_ANSWERED))
+	buf_appendcstr(b, "\\Answered");
+    if ((v->i & FLAG_FLAGGED))
+	buf_appendcstr(b, "\\Flagged");
+    if ((v->i & FLAG_DELETED))
+	buf_appendcstr(b, "\\Deleted");
+    if ((v->i & FLAG_DRAFT))
+	buf_appendcstr(b, "\\Draft");
+    if ((v->i & FLAG_SEEN))
+	buf_appendcstr(b, "\\Seen");
+}
+
+static void search_indexflags_describe(struct buf *b, const union search_value *v)
+{
+    if ((v->i & MESSAGE_SEEN))
+	buf_appendcstr(b, "\\Seen");
+    if ((v->i & MESSAGE_RECENT))
+	buf_appendcstr(b, "\\Recent");
+}
+
 static hash_table attrs_by_name = HASH_TABLE_INITIALIZER;
 
 EXPORTED void search_attr_init(void)
@@ -368,6 +407,22 @@ EXPORTED void search_attr_init(void)
 	    search_seq_describe,
 	    search_seq_free,
 	    (void *)message_get_uid
+	},{
+	    "systemflags",
+	    /*internalise*/NULL,
+	    /*cmp*/NULL,
+	    search_flags_match,
+	    search_systemflags_describe,
+	    /*free*/NULL,
+	    (void *)message_get_systemflags
+	},{
+	    "indexflags",
+	    /*internalise*/NULL,
+	    /*cmp*/NULL,
+	    search_flags_match,
+	    search_indexflags_describe,
+	    /*free*/NULL,
+	    (void *)message_get_indexflags
 	}
     };
 
