@@ -79,7 +79,11 @@ enum segment_id {
     ID_DATE,
     ID_LIST_ID,
     ID_MAILING_LIST,
-#define ID_PREALLOCATED_LAST	ID_MAILING_LIST
+    ID_TO,
+    ID_FROM,
+    ID_BCC,
+    ID_CC,
+#define ID_PREALLOCATED_LAST	ID_CC
 
     ID_UNFINISHED =		T_SPECIAL|1,
     ID_HEADER,

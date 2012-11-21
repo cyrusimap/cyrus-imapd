@@ -3444,12 +3444,12 @@ static void field_desc_init_builtins(void)
 	{ "x-me-message-id", 4, 0, -1, -1 },
 
 	/* things to never cache */
-	{ "bcc", BIT32_MAX, 0, CACHE_BCC, ENV_BCC },
-	{ "cc", BIT32_MAX, 0, CACHE_CC, ENV_CC },
+	{ "bcc", BIT32_MAX, ID_BCC, CACHE_BCC, ENV_BCC },
+	{ "cc", BIT32_MAX, ID_CC, CACHE_CC, ENV_CC },
 	{ "date", BIT32_MAX, ID_DATE, -1, ENV_DATE },
 	{ "delivery-date", BIT32_MAX, 0, -1, -1 },
 	{ "envelope-to", BIT32_MAX, 0, -1, -1 },
-	{ "from", BIT32_MAX, 0, CACHE_FROM, ENV_FROM },
+	{ "from", BIT32_MAX, ID_FROM, CACHE_FROM, ENV_FROM },
 	{ "in-reply-to", BIT32_MAX, ID_IN_REPLY_TO, -1, ENV_INREPLYTO },
 	{ "mime-version", BIT32_MAX, ID_MIME_VERSION, -1, -1 },
 	{ "content-type", BIT32_MAX, ID_CONTENT_TYPE, -1, -1 },
@@ -3463,7 +3463,7 @@ static void field_desc_init_builtins(void)
 	 * field is decoded and we want the raw value which is in
 	 * the cached envelope. */
 	{ "subject", BIT32_MAX, ID_SUBJECT, -1, ENV_SUBJECT },
-	{ "to", BIT32_MAX, 0, CACHE_TO, ENV_TO },
+	{ "to", BIT32_MAX, ID_TO, CACHE_TO, ENV_TO },
 
 	/* signatures tend to be large, and are useless without the body */
 	{ "dkim-signature", BIT32_MAX, 0, -1, -1 },
@@ -5539,6 +5539,34 @@ EXPORTED int message_get_mailinglist(message_t *m, struct buf *buf)
 {
     return message_extract_field(m, m->segs,
 				 field_desc_get_byid(ID_MAILING_LIST),
+				 MESSAGE_RAW, buf);
+}
+
+EXPORTED int message_get_from(message_t *m, struct buf *buf)
+{
+    return message_extract_field(m, m->segs,
+				 field_desc_get_byid(ID_FROM),
+				 MESSAGE_RAW, buf);
+}
+
+EXPORTED int message_get_to(message_t *m, struct buf *buf)
+{
+    return message_extract_field(m, m->segs,
+				 field_desc_get_byid(ID_TO),
+				 MESSAGE_RAW, buf);
+}
+
+EXPORTED int message_get_bcc(message_t *m, struct buf *buf)
+{
+    return message_extract_field(m, m->segs,
+				 field_desc_get_byid(ID_BCC),
+				 MESSAGE_RAW, buf);
+}
+
+EXPORTED int message_get_cc(message_t *m, struct buf *buf)
+{
+    return message_extract_field(m, m->segs,
+				 field_desc_get_byid(ID_CC),
 				 MESSAGE_RAW, buf);
 }
 
