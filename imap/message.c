@@ -371,6 +371,8 @@ int message_parse_binary_file(FILE *infile, struct body **body)
     message_parse_body(&msg, *body,
 		       DEFAULT_CONTENT_TYPE, (struct boundary *)0);
 
+    message_guid_generate(&(*body)->guid, msg.base, msg.len);
+
     lseek(fd, 0L, SEEK_SET);
     n = retry_write(fd, msg.base, msg.len);
 
