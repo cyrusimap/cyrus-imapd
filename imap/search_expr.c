@@ -336,6 +336,43 @@ static void search_indexflags_describe(struct buf *b, const union search_value *
 	buf_appendcstr(b, "\\Recent");
 }
 
+static void search_keyword_internalise(struct mailbox *mailbox,
+				       const union search_value *v,
+				       void **internalisedp)
+{
+    int r;
+    int num = 0;
+
+    r = mailbox_user_flag(mailbox, v->s, &num, /*create*/0);
+    if (!r)
+	num++;
+    else
+	num = 0;
+    *internalisedp = (void*)(unsigned long)num;
+}
+
+static int search_keyword_match(message_t *m,
+				const union search_value *v __attribute__((unused)),
+				void *internalised,
+				void *data1 __attribute__((unused)))
+{
+    int r;
+    int num = (int)(unsigned long)internalised;
+    uint32_t flags[MAX_USER_FLAGS/32];
+
+    if (!num)
+	return 0;   /* not a valid flag for this mailbox */
+    num--;
+
+    r = message_get_userflags(m, flags);
+    if (!r)
+	r = !!(flags[num/32] & (1<<(num % 32)));
+    else
+	r = 0;
+
+    return r;
+}
+
 static hash_table attrs_by_name = HASH_TABLE_INITIALIZER;
 
 EXPORTED void search_attr_init(void)
@@ -423,6 +460,14 @@ EXPORTED void search_attr_init(void)
 	    search_indexflags_describe,
 	    /*free*/NULL,
 	    (void *)message_get_indexflags
+	},{
+	    "keyword",
+	    search_keyword_internalise,
+	    /*cmp*/NULL,
+	    search_keyword_match,
+	    search_string_describe,
+	    search_string_free,
+	    NULL
 	}
     };
 

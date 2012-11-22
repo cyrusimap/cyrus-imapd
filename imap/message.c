@@ -5676,7 +5676,7 @@ EXPORTED int message_get_userflags(message_t *m, uint32_t *flagsp)
 {
     int r = message_need(m, M_RECORD);
     if (r) return r;
-    memcpy(flagsp, m->record.user_flags, MAX_USER_FLAGS/8);
+    memcpy(flagsp, m->record.user_flags, MAX_USER_FLAGS/32);
     return 0;
 }
 

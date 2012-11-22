@@ -10430,17 +10430,19 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 	else goto badcri;
 	break;
 
-#if 0 /*TODO:gnb*/
     case 'k':
 	if (!strcmp(criteria.s, "keyword")) {
-	    if (c != ' ') goto missingarg;		
+	    if (c != ' ') goto missingarg;
 	    c = getword(imapd_in, &arg);
 	    if (!imparse_isatom(arg.s)) goto badflag;
-	    appendstrlist(&searchargs->keywords, arg.s);
+	    e = search_expr_new(parent, SEOP_MATCH);
+	    e->attr = search_attr_find("keyword");
+	    e->value.s = xstrdup(arg.s);
 	}
 	else goto badcri;
 	break;
 
+#if 0 /*TODO:gnb*/
     case 'l':
 	if (!strcmp(criteria.s, "larger")) {
 	    if (c != ' ') goto missingarg;		
@@ -10644,16 +10646,19 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 	else if (!strcmp(criteria.s, "unflagged")) {
 	    systemflag_match(parent, FLAG_FLAGGED, /*not*/1);
 	}
-#if 0 /*TODO:gnb*/
 	else if (!strcmp(criteria.s, "unkeyword")) {
-	    if (c != ' ') goto missingarg;		
+	    if (c != ' ') goto missingarg;
 	    c = getword(imapd_in, &arg);
 	    if (!imparse_isatom(arg.s)) goto badflag;
-	    appendstrlist(&searchargs->unkeywords, arg.s);
+	    e = search_expr_new(parent, SEOP_NOT);
+	    e = search_expr_new(e, SEOP_MATCH);
+	    e->attr = search_attr_find("keyword");
+	    e->value.s = xstrdup(arg.s);
 	}
 	else goto badcri;
 	break;
 
+#if 0 /*TODO:gnb*/
     case 'x':
 	if (!strcmp(criteria.s, "xlistid")) {
 	    if (c != ' ') goto missingarg;
@@ -10684,9 +10689,9 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 		searchargs->after = start;
 	    }
 	}
-#endif
 	else goto badcri;
 	break;
+#endif
 
     default:
     badcri:
@@ -10707,12 +10712,12 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
     if (c != EOF) prot_ungetc(c, imapd_in);
     return EOF;
 
-#if 0 /*TODO:gnb*/
  badflag:
     prot_printf(imapd_out, "%s BAD Invalid flag name %s in Search command\r\n",
 		base->tag, arg.s);
     if (c != EOF) prot_ungetc(c, imapd_in);
     return EOF;
+#if 0 /*TODO:gnb*/
 
  baddate:
     prot_printf(imapd_out, "%s BAD Invalid date in Search command\r\n",
