@@ -352,11 +352,13 @@ static void search_keyword_internalise(struct mailbox *mailbox,
     int r;
     int num = 0;
 
-    r = mailbox_user_flag(mailbox, v->s, &num, /*create*/0);
-    if (!r)
-	num++;
-    else
-	num = 0;
+    if (mailbox) {
+	r = mailbox_user_flag(mailbox, v->s, &num, /*create*/0);
+	if (!r)
+	    num++;
+	else
+	    num = 0;
+    }
     *internalisedp = (void*)(unsigned long)num;
 }
 
@@ -419,7 +421,8 @@ static void search_folder_internalise(struct mailbox *mailbox,
 				      const union search_value *v,
 				      void **internalisedp)
 {
-    *internalisedp = (void *)(unsigned long)(!strcmp(mailbox->name, v->s));
+    if (mailbox)
+	*internalisedp = (void *)(unsigned long)(!strcmp(mailbox->name, v->s));
 }
 
 static int search_folder_match(message_t *m __attribute__((unused)),
