@@ -10217,8 +10217,8 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
     char *p, *str;
     unsigned size;
     time_t start, end, now = time(0);
-    int hasconv = config_getswitch(IMAPOPT_CONVERSATIONS);
 #endif
+    int hasconv = config_getswitch(IMAPOPT_CONVERSATIONS);
     char mboxname[MAX_MAILBOX_NAME];
 
     if (base->state & GETSEARCH_CHARSET_FIRST) {
@@ -10311,34 +10311,44 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 	    c = string_match(parent, criteria.s, base);
 	    if (c == EOF) goto missingarg;
 	}
-#if 0 /*TODO:gnb*/
 	else if (hasconv && !strcmp(criteria.s, "convflag")) {
 	    if (c != ' ') goto missingarg;
 	    c = getword(imapd_in, &arg);
-	    if (!imparse_isatom(arg.s)) goto badflag;
 	    lcase(arg.s);
-	    appendstrlist(&searchargs->convflags, arg.s);
+	    e = search_expr_new(parent, SEOP_MATCH);
+	    e->attr = search_attr_find("convflags");
+	    e->value.s = xstrdup(arg.s);
 	}
 	else if (hasconv && !strcmp(criteria.s, "convread")) {
-	    searchargs->flags |= SEARCH_CONVSEEN_SET;
+	    e = search_expr_new(parent, SEOP_MATCH);
+	    e->attr = search_attr_find("convflags");
+	    e->value.s = xstrdup("\\Seen");
 	}
 	else if (hasconv && !strcmp(criteria.s, "convunread")) {
-	    searchargs->flags |= SEARCH_CONVSEEN_UNSET;
+	    e = search_expr_new(parent, SEOP_NOT);
+	    e = search_expr_new(e, SEOP_MATCH);
+	    e->attr = search_attr_find("convflags");
+	    e->value.s = xstrdup("\\Seen");
 	}
 	else if (hasconv && !strcmp(criteria.s, "convseen")) {
-	    searchargs->flags |= SEARCH_CONVSEEN_SET;
+	    e = search_expr_new(parent, SEOP_MATCH);
+	    e->attr = search_attr_find("convflags");
+	    e->value.s = xstrdup("\\Seen");
 	}
 	else if (hasconv && !strcmp(criteria.s, "convunseen")) {
-	    searchargs->flags |= SEARCH_CONVSEEN_UNSET;
+	    e = search_expr_new(parent, SEOP_NOT);
+	    e = search_expr_new(e, SEOP_MATCH);
+	    e->attr = search_attr_find("convflags");
+	    e->value.s = xstrdup("\\Seen");
 	}
+#if 0 /*TODO:gnb*/
 	else if (hasconv && !strcmp(criteria.s, "convmodseq")) {
 	    if (c != ' ') goto missingarg;
 	    c = getmodseq(imapd_in, &searchargs->convmodseq);
 	    if (c == EOF) goto badnumber;
 	}
-	else
 #endif
-	if ((base->state & GETSEARCH_CHARSET_KEYWORD)
+	else if ((base->state & GETSEARCH_CHARSET_KEYWORD)
 	      && !strcmp(criteria.s, "charset")) {
 	    if (c != ' ') goto missingcharset;
 	    c = getcharset(imapd_in, imapd_out, &arg);

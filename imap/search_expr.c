@@ -539,6 +539,80 @@ static void search_annotation_free(union search_value *v)
 
 /* ====================================================================== */
 
+struct convflags_rock {
+    struct conversations_state *cstate;
+    int cstate_is_ours;
+    int num;	    /* -1=invalid, 0=\Seen, 1+=index into cstate->counted_flags+1 */
+};
+
+static void search_convflags_internalise(struct mailbox *mailbox,
+					 const union search_value *v,
+					 void **internalisedp)
+{
+    struct convflags_rock *rock;
+    int r;
+
+    if (*internalisedp) {
+	rock = (struct convflags_rock *)(*internalisedp);
+	if (rock->cstate_is_ours)
+	    conversations_abort(&rock->cstate);
+	free(rock);
+    }
+
+    if (mailbox) {
+	rock = xzmalloc(sizeof(struct convflags_rock));
+
+	rock->cstate = conversations_get_mbox(mailbox->name);
+	if (!rock->cstate) {
+	    r = conversations_open_mbox(mailbox->name, &rock->cstate);
+	    if (r)
+		rock->num = -1;	    /* invalid */
+	    else
+		rock->cstate_is_ours = 1;
+	}
+
+	if (rock->cstate) {
+	    if (!strcasecmp(v->s, "\\Seen"))
+		rock->num = 0;
+	    else {
+		rock->num = strarray_find_case(rock->cstate->counted_flags, v->s, 0);
+		/* rock->num might be -1 invalid */
+		if (rock->num >= 0)
+		    rock->num++;
+	    }
+	}
+
+	*internalisedp = rock;
+    }
+}
+
+static int search_convflags_match(message_t *m, const union search_value *v,
+				  void *internalised, void *data1 __attribute__((unused)))
+{
+    struct convflags_rock *rock = (struct convflags_rock *)internalised;
+    conversation_id_t cid = NULLCONVERSATION;
+    conversation_t *conv = NULL;
+    int r;
+
+    if (!rock->cstate) return 0;
+
+    message_get_cid(m, &cid);
+    if (conversation_load(rock->cstate, cid, &conv)) return 0;
+    if (!conv) return 0;
+
+    if (rock->num < 0)
+	r = 0;	    /* invalid flag name */
+    else if (rock->num == 0)
+	r = !conv->unseen;
+    else if (rock->num > 0)
+	r = !!conv->counts[rock->num-1];
+
+    conversation_free(conv);
+    return r;
+}
+
+/* ====================================================================== */
+
 static hash_table attrs_by_name = HASH_TABLE_INITIALIZER;
 
 EXPORTED void search_attr_init(void)
@@ -631,6 +705,14 @@ EXPORTED void search_attr_init(void)
 	    search_keyword_internalise,
 	    /*cmp*/NULL,
 	    search_keyword_match,
+	    search_string_describe,
+	    search_string_free,
+	    NULL
+	},{
+	    "convflags",
+	    search_convflags_internalise,
+	    /*cmp*/NULL,
+	    search_convflags_match,
 	    search_string_describe,
 	    search_string_free,
 	    NULL
