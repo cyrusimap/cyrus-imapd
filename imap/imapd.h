@@ -177,13 +177,13 @@ enum {
 };
 
 struct searchannot {
-    struct searchannot *next;
+    struct searchannot *next;	    /* gnb:TODO remove */
     char *entry;
     char *attrib;
-    struct namespace *namespace;
-    int isadmin;
-    const char *userid;
-    struct auth_state *auth_state;
+    struct namespace *namespace;    /* gnb:TODO get this from searchargs */
+    int isadmin;		    /* gnb:TODO get this from searchargs */
+    const char *userid;		    /* gnb:TODO get this from searchargs */
+    struct auth_state *auth_state;  /* gnb:TODO get this from searchargs */
     struct buf value;
 };
 

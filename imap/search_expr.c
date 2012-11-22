@@ -54,6 +54,7 @@
 #include "search_expr.h"
 #include "message.h"
 #include "charset.h"
+#include "annotate.h"
 #include "global.h"
 #include "xstrlcpy.h"
 #include "xmalloc.h"
@@ -216,12 +217,14 @@ EXPORTED int search_expr_evaluate(message_t *m, const search_expr_t *e)
     return 0;
 }
 
+/* ====================================================================== */
+
 static int search_string_cmp(message_t *m, const union search_value *v, void *data1)
 {
     int r;
     struct buf buf = BUF_INITIALIZER;
     int (*getter)(message_t *, struct buf *) = (int(*)(message_t *, struct buf *))data1;
-    
+
     r = getter(m, &buf);
     if (!r)
 	r = strcmp(buf_cstring(&buf), v->s);
@@ -267,6 +270,8 @@ static void search_string_free(union search_value *v)
     v->s = NULL;
 }
 
+/* ====================================================================== */
+
 static int search_seq_match(message_t *m, const union search_value *v,
 			    void *internalised __attribute__((unused)),
 			    void *data1)
@@ -296,6 +301,8 @@ static void search_seq_free(union search_value *v)
     seqset_free(v->seq);
     v->seq = NULL;
 }
+
+/* ====================================================================== */
 
 static int search_flags_match(message_t *m, const union search_value *v,
 			      void *internalised __attribute__((unused)),
@@ -336,6 +343,8 @@ static void search_indexflags_describe(struct buf *b, const union search_value *
 	buf_appendcstr(b, "\\Recent");
 }
 
+/* ====================================================================== */
+
 static void search_keyword_internalise(struct mailbox *mailbox,
 				       const union search_value *v,
 				       void **internalisedp)
@@ -373,6 +382,8 @@ static int search_keyword_match(message_t *m,
     return r;
 }
 
+/* ====================================================================== */
+
 static int search_uint64_match(message_t *m, const union search_value *v,
 			       void *internalised __attribute__((unused)),
 			       void *data1)
@@ -395,10 +406,14 @@ static void search_uint64_describe(struct buf *b, const union search_value *v)
     buf_printf(b, "%llu", (unsigned long long)v->u);
 }
 
+/* ====================================================================== */
+
 static void search_cid_describe(struct buf *b, const union search_value *v)
 {
     buf_appendcstr(b, conversation_id_encode(v->u));
 }
+
+/* ====================================================================== */
 
 static void search_folder_internalise(struct mailbox *mailbox,
 				      const union search_value *v,
@@ -413,6 +428,113 @@ static int search_folder_match(message_t *m __attribute__((unused)),
 {
     return (int)(unsigned long)internalised;
 }
+
+/* ====================================================================== */
+
+static void search_annotation_internalise(struct mailbox *mailbox,
+					  const union search_value *v __attribute__((unused)),
+					  void **internalisedp)
+{
+    *internalisedp = mailbox;
+}
+
+struct search_annot_rock {
+    int result;
+    const struct buf *match;
+};
+
+static int _search_annot_match(const struct buf *match,
+			       const struct buf *value)
+{
+    /* These cases are not explicitly defined in RFC5257 */
+
+    /* NIL matches NIL and nothing else */
+    if (match->s == NULL)
+	return (value->s == NULL);
+    if (value->s == NULL)
+	return 0;
+
+    /* empty matches empty and nothing else */
+    if (match->len == 0)
+	return (value->len == 0);
+    if (value->len == 0)
+	return 0;
+
+    /* RFC5257 seems to define a simple CONTAINS style search */
+    return !!memmem(value->s, value->len,
+		    match->s, match->len);
+}
+
+static void _search_annot_callback(const char *mboxname __attribute__((unused)),
+				   uint32_t uid __attribute__((unused)),
+				   const char *entry __attribute__((unused)),
+				   struct attvaluelist *attvalues, void *rock)
+{
+    struct search_annot_rock *sarock = rock;
+    struct attvaluelist *l;
+
+    for (l = attvalues ; l ; l = l->next) {
+	if (_search_annot_match(sarock->match, &l->value))
+	    sarock->result = 1;
+    }
+}
+
+static int search_annotation_match(message_t *m, const union search_value *v,
+				   void *internalised, void *data1 __attribute__((unused)))
+{
+    struct mailbox *mailbox = (struct mailbox *)internalised;
+    struct searchannot *sa = v->annot;
+    strarray_t entries = STRARRAY_INITIALIZER;
+    strarray_t attribs = STRARRAY_INITIALIZER;
+    annotate_state_t *astate = NULL;
+    struct search_annot_rock rock;
+    uint32_t uid;
+    int r;
+
+    strarray_append(&entries, sa->entry);
+    strarray_append(&attribs, sa->attrib);
+
+    message_get_uid(m, &uid);
+
+    r = mailbox_get_annotate_state(mailbox, uid, &astate);
+    if (r) goto out;
+    annotate_state_set_auth(astate, sa->isadmin,
+			    sa->userid, sa->auth_state);
+
+    memset(&rock, 0, sizeof(rock));
+    rock.match = &sa->value;
+
+    r = annotate_state_fetch(astate,
+			     &entries, &attribs,
+			     _search_annot_callback, &rock,
+			     0);
+    if (r >= 0)
+	r = rock.result;
+
+out:
+    strarray_fini(&entries);
+    strarray_fini(&attribs);
+    return r;
+}
+
+static void search_annotation_describe(struct buf *b, const union search_value *v)
+{
+    buf_printf(b, " entry \"%s\" attrib \"%s\" value \"%s\"",
+		v->annot->entry, v->annot->attrib, buf_cstring(&v->annot->value));
+}
+
+static void search_annotation_free(union search_value *v)
+{
+    if (v->annot) {
+	free(v->annot->entry);
+	free(v->annot->attrib);
+	buf_free(&v->annot->value);
+	free(v->annot);
+	v->annot = NULL;
+    }
+}
+
+/* ====================================================================== */
 
 static hash_table attrs_by_name = HASH_TABLE_INITIALIZER;
 
@@ -532,6 +654,14 @@ EXPORTED void search_attr_init(void)
 	    search_folder_match,
 	    search_string_describe,
 	    search_string_free,
+	    (void *)NULL
+	},{
+	    "annotation",
+	    search_annotation_internalise,
+	    /*cmp*/NULL,
+	    search_annotation_match,
+	    search_annotation_describe,
+	    search_annotation_free,
 	    (void *)NULL
 	}
     };
