@@ -10196,7 +10196,7 @@ static void systemflag_match(search_expr_t *parent, unsigned int flag, int not)
 	parent = search_expr_new(parent, SEOP_NOT);
     e = search_expr_new(parent, SEOP_MATCH);
     e->attr = search_attr_find("systemflags");
-    e->value.i = flag;
+    e->value.u = flag;
 }
 
 static void indexflag_match(search_expr_t *parent, unsigned int flag, int not)
@@ -10207,7 +10207,7 @@ static void indexflag_match(search_expr_t *parent, unsigned int flag, int not)
 	parent = search_expr_new(parent, SEOP_NOT);
     e = search_expr_new(parent, SEOP_MATCH);
     e->attr = search_attr_find("indexflags");
-    e->value.i = flag;
+    e->value.u = flag;
 }
 
 /*

@@ -69,7 +69,7 @@ enum search_op {
 };
 
 union search_value {
-    long long i;
+    uint64_t u;
     char *s;
     struct searchannot *annot;
     struct seqset *seq;

@@ -307,7 +307,7 @@ static int search_flags_match(message_t *m, const union search_value *v,
 
     r = getter(m, &u);
     if (!r)
-	r = !!(v->i & u);
+	r = !!(v->u & u);
     else
 	r = 0;
 
@@ -316,23 +316,23 @@ static int search_flags_match(message_t *m, const union search_value *v,
 
 static void search_systemflags_describe(struct buf *b, const union search_value *v)
 {
-    if ((v->i & FLAG_ANSWERED))
+    if ((v->u & FLAG_ANSWERED))
 	buf_appendcstr(b, "\\Answered");
-    if ((v->i & FLAG_FLAGGED))
+    if ((v->u & FLAG_FLAGGED))
 	buf_appendcstr(b, "\\Flagged");
-    if ((v->i & FLAG_DELETED))
+    if ((v->u & FLAG_DELETED))
 	buf_appendcstr(b, "\\Deleted");
-    if ((v->i & FLAG_DRAFT))
+    if ((v->u & FLAG_DRAFT))
 	buf_appendcstr(b, "\\Draft");
-    if ((v->i & FLAG_SEEN))
+    if ((v->u & FLAG_SEEN))
 	buf_appendcstr(b, "\\Seen");
 }
 
 static void search_indexflags_describe(struct buf *b, const union search_value *v)
 {
-    if ((v->i & MESSAGE_SEEN))
+    if ((v->u & MESSAGE_SEEN))
 	buf_appendcstr(b, "\\Seen");
-    if ((v->i & MESSAGE_RECENT))
+    if ((v->u & MESSAGE_RECENT))
 	buf_appendcstr(b, "\\Recent");
 }
 
