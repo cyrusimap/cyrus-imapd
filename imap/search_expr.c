@@ -400,6 +400,20 @@ static void search_cid_describe(struct buf *b, const union search_value *v)
     buf_appendcstr(b, conversation_id_encode(v->u));
 }
 
+static void search_folder_internalise(struct mailbox *mailbox,
+				      const union search_value *v,
+				      void **internalisedp)
+{
+    *internalisedp = (void *)(unsigned long)(!strcmp(mailbox->name, v->s));
+}
+
+static int search_folder_match(message_t *m __attribute__((unused)),
+			       const union search_value *v __attribute__((unused)),
+			       void *internalised, void *data1 __attribute__((unused)))
+{
+    return (int)(unsigned long)internalised;
+}
+
 static hash_table attrs_by_name = HASH_TABLE_INITIALIZER;
 
 EXPORTED void search_attr_init(void)
@@ -511,6 +525,14 @@ EXPORTED void search_attr_init(void)
 	    search_cid_describe,
 	    /*free*/NULL,
 	    (void *)message_get_cid
+	},{
+	    "folder",
+	    search_folder_internalise,
+	    /*cmp*/NULL,
+	    search_folder_match,
+	    search_string_describe,
+	    search_string_free,
+	    (void *)NULL
 	}
     };
 

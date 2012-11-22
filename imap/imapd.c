@@ -10224,8 +10224,8 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
     unsigned size;
     time_t start, end, now = time(0);
     int hasconv = config_getswitch(IMAPOPT_CONVERSATIONS);
-    char mboxname[MAX_MAILBOX_NAME];
 #endif
+    char mboxname[MAX_MAILBOX_NAME];
 
     if (base->state & GETSEARCH_CHARSET_FIRST) {
 	c = getcharset(imapd_in, imapd_out, &arg);
@@ -10378,16 +10378,16 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 	if (!strcmp(criteria.s, "flagged")) {
 	    systemflag_match(parent, FLAG_FLAGGED, /*not*/0);
 	}
-#if 0 /*TODO:gnb*/
 	else if (!strcmp(criteria.s, "folder")) {
 	    if (c != ' ') goto missingarg;
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
 	    imapd_namespace.mboxname_tointernal(&imapd_namespace, arg.s,
 						imapd_userid, mboxname);
-	    appendstrlist(&searchargs->folder, mboxname);
+	    e = search_expr_new(parent, SEOP_MATCH);
+	    e->attr = search_attr_find("folder");
+	    e->value.s = xstrdup(mboxname);
 	}
-#endif
 	else if (!strcmp(criteria.s, "from")) {
 	    if (c != ' ') goto missingarg;
 	    c = string_match(parent, criteria.s, base);
