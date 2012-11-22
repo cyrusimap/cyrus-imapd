@@ -2790,7 +2790,7 @@ EXPORTED int mailbox_update_conversations(struct mailbox *mailbox,
 	}
     }
 
-    if (!old && new) {
+    if (new && !new->cid) {
 	/* add the conversation */
 	mailbox_cacherecord(mailbox, new); /* make sure it's loaded */
 	r = message_update_conversations(cstate, new, &conv);
