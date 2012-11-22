@@ -373,6 +373,33 @@ static int search_keyword_match(message_t *m,
     return r;
 }
 
+static int search_uint64_match(message_t *m, const union search_value *v,
+			       void *internalised __attribute__((unused)),
+			       void *data1)
+{
+    int r;
+    uint64_t u;
+    int (*getter)(message_t *, uint64_t *) = (int(*)(message_t *, uint64_t *))data1;
+
+    r = getter(m, &u);
+    if (!r)
+	r = (v->u == u);
+    else
+	r = 0;
+
+    return r;
+}
+
+static void search_uint64_describe(struct buf *b, const union search_value *v)
+{
+    buf_printf(b, "%llu", (unsigned long long)v->u);
+}
+
+static void search_cid_describe(struct buf *b, const union search_value *v)
+{
+    buf_appendcstr(b, conversation_id_encode(v->u));
+}
+
 static hash_table attrs_by_name = HASH_TABLE_INITIALIZER;
 
 EXPORTED void search_attr_init(void)
@@ -468,6 +495,22 @@ EXPORTED void search_attr_init(void)
 	    search_string_describe,
 	    search_string_free,
 	    NULL
+	},{
+	    "modseq",
+	    /*internalise*/NULL,
+	    /*cmp*/NULL,
+	    search_uint64_match,
+	    search_uint64_describe,
+	    /*free*/NULL,
+	    (void *)message_get_modseq
+	},{
+	    "cid",
+	    /*internalise*/NULL,
+	    /*cmp*/NULL,
+	    search_uint64_match,
+	    search_cid_describe,
+	    /*free*/NULL,
+	    (void *)message_get_cid
 	}
     };
 
