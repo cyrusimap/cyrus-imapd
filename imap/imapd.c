@@ -210,7 +210,6 @@ static struct index_state *imapd_index;
 /* current namespace */
 struct namespace imapd_namespace;
 
-#if 0 /*TODO:gnb*/
 static const char *monthname[] = {
     "jan", "feb", "mar", "apr", "may", "jun",
     "jul", "aug", "sep", "oct", "nov", "dec"
@@ -220,7 +219,6 @@ static const int max_monthdays[] = {
     31, 29, 31, 30, 31, 30,
     31, 31, 30, 31, 30, 31
 };
-#endif
 
 /* track if we're idling */
 static int idling = 0;
@@ -460,9 +458,7 @@ static int get_search_program(struct searchargs *searchargs);
 static int get_search_criterion(search_expr_t *parent, struct searchargs *base);
 static int get_snippetargs(struct snippetargs **sap);
 static void free_snippetargs(struct snippetargs **sap);
-#if 0 /*TODO:gnb*/
 static int getsearchdate(time_t *start, time_t *end);
-#endif
 static int getsortcriteria(char *tag, struct sortcrit **sortcrit);
 static char *sortcrit_as_string(const struct sortcrit *sortcrit);
 static int getdatetime(time_t *date);
@@ -10204,6 +10200,23 @@ static void indexflag_match(search_expr_t *parent, unsigned int flag, int not)
     e->value.u = flag;
 }
 
+static void date_range(search_expr_t *parent, const char *aname,
+		       time_t start, time_t end)
+{
+    search_expr_t *e;
+    const search_attr_t *attr = search_attr_find(aname);
+
+    parent = search_expr_new(parent, SEOP_AND);
+
+    e = search_expr_new(parent, SEOP_LT);
+    e->attr = attr;
+    e->value.u = end;
+
+    e = search_expr_new(parent, SEOP_GE);
+    e->attr = attr;
+    e->value.u = start;
+}
+
 /*
  * Parse a single search criterion
  */
@@ -10213,11 +10226,12 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
     search_expr_t *e;
     int c;
     int keep_charset = 0;
+    char *str;
 #if 0
-    char *p, *str;
-    unsigned size;
-    time_t start, end, now = time(0);
+    char *p;
 #endif
+    time_t start, end, now = time(0);
+    uint32_t u;
     int hasconv = config_getswitch(IMAPOPT_CONVERSATIONS);
     char mboxname[MAX_MAILBOX_NAME];
 
@@ -10280,19 +10294,16 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 	else goto badcri;
 	break;
 
-#if 0 /*TODO:gnb*/
     case 'b':
 	if (!strcmp(criteria.s, "before")) {
 	    if (c != ' ') goto missingarg;
 	    c = getsearchdate(&start, &end);
 	    if (c == EOF) goto baddate;
-	    if (!searchargs->before || searchargs->before > start) {
-		searchargs->before = start;
-	    }
+	    e = search_expr_new(parent, SEOP_LT);
+	    e->attr = search_attr_find("internaldate");
+	    e->value.u = start;
 	}
-	else
-#endif
-	if (!strcmp(criteria.s, "bcc")) {
+	else if (!strcmp(criteria.s, "bcc")) {
 	    if (c != ' ') goto missingarg;
 	    c = string_match(parent, criteria.s, base);
 	    if (c == EOF) goto missingarg;
@@ -10458,22 +10469,17 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 	else goto badcri;
 	break;
 
-#if 0 /*TODO:gnb*/
     case 'l':
 	if (!strcmp(criteria.s, "larger")) {
-	    if (c != ' ') goto missingarg;		
-	    c = getword(imapd_in, &arg);
-	    size = 0;
-	    for (p = arg.s; *p && Uisdigit(*p); p++) {
-		size = size * 10 + *p - '0';
-                /* if (size < 0) goto badnumber; */
-	    }
-	    if (!arg.s || *p) goto badnumber;
-	    if (size > searchargs->larger) searchargs->larger = size;
+	    if (c != ' ') goto missingarg;
+	    c = getint32(imapd_in, &u);
+	    if (c == EOF) goto badnumber;
+	    e = search_expr_new(parent, SEOP_GT);
+	    e->attr = search_attr_find("size");
+	    e->value.u = u;
 	}
 	else goto badcri;
 	break;
-#endif
 
     case 'm':
 	if (!strcmp(criteria.s, "modseq")) {
@@ -10497,7 +10503,7 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 
     case 'n':
 	if (!strcmp(criteria.s, "not")) {
-	    if (c != ' ') goto missingarg;		
+	    if (c != ' ') goto missingarg;
 	    e = search_expr_new(parent, SEOP_NOT);
 	    c = get_search_criterion(e, base);
 	    if (c == EOF) return EOF;
@@ -10523,28 +10529,20 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 	else if (!strcmp(criteria.s, "old")) {
 	    indexflag_match(parent, MESSAGE_RECENT, /*not*/1);
 	}
-#if 0 /*TODO:gnb*/
 	else if (!strcmp(criteria.s, "older")) {
-	    if (c != ' ') goto missingarg;		
-	    c = getword(imapd_in, &arg);
-	    if (c == EOF || !imparse_isnumber(arg.s)) goto badinterval;
-	    start = now - atoi(arg.s);
-	    if (!searchargs->before || searchargs->before > start) {
-		searchargs->before = start;
-	    }
+	    if (c != ' ') goto missingarg;
+	    c = getint32(imapd_in, &u);
+	    if (c == EOF) goto badinterval;
+	    e = search_expr_new(parent, SEOP_LT);
+	    e->attr = search_attr_find("internaldate");
+	    e->value.u = now - u;
 	}
 	else if (!strcmp(criteria.s, "on")) {
-	    if (c != ' ') goto missingarg;		
+	    if (c != ' ') goto missingarg;
 	    c = getsearchdate(&start, &end);
 	    if (c == EOF) goto baddate;
-	    if (!searchargs->before || searchargs->before > end) {
-		searchargs->before = end;
-	    }
-	    if (!searchargs->after || searchargs->after < start) {
-		searchargs->after = start;
-	    }
+	    date_range(parent, "internaldate", start, end);
 	}
-#endif
 	else goto badcri;
 	break;
 
@@ -10565,56 +10563,44 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 	if (!strcmp(criteria.s, "seen")) {
 	    indexflag_match(parent, MESSAGE_SEEN, /*not*/0);
 	}
-#if 0 /*TODO:gnb*/
 	else if (!strcmp(criteria.s, "sentbefore")) {
-	    if (c != ' ') goto missingarg;		
+	    if (c != ' ') goto missingarg;
 	    c = getsearchdate(&start, &end);
 	    if (c == EOF) goto baddate;
-	    if (!searchargs->sentbefore || searchargs->sentbefore > start) {
-		searchargs->sentbefore = start;
-	    }
+	    e = search_expr_new(parent, SEOP_LT);
+	    e->attr = search_attr_find("sentdate");
+	    e->value.u = start;
 	}
 	else if (!strcmp(criteria.s, "senton")) {
-	    if (c != ' ') goto missingarg;		
+	    if (c != ' ') goto missingarg;
 	    c = getsearchdate(&start, &end);
 	    if (c == EOF) goto baddate;
-	    if (!searchargs->sentbefore || searchargs->sentbefore > end) {
-		searchargs->sentbefore = end;
-	    }
-	    if (!searchargs->sentafter || searchargs->sentafter < start) {
-		searchargs->sentafter = start;
-	    }
+	    date_range(parent, "sentdate", start, end);
 	}
 	else if (!strcmp(criteria.s, "sentsince")) {
-	    if (c != ' ') goto missingarg;		
+	    if (c != ' ') goto missingarg;
 	    c = getsearchdate(&start, &end);
 	    if (c == EOF) goto baddate;
-	    if (!searchargs->sentafter || searchargs->sentafter < start) {
-		searchargs->sentafter = start;
-	    }
+	    e = search_expr_new(parent, SEOP_GE);
+	    e->attr = search_attr_find("sentdate");
+	    e->value.u = start;
 	}
 	else if (!strcmp(criteria.s, "since")) {
-	    if (c != ' ') goto missingarg;		
+	    if (c != ' ') goto missingarg;
 	    c = getsearchdate(&start, &end);
 	    if (c == EOF) goto baddate;
-	    if (!searchargs->after || searchargs->after < start) {
-		searchargs->after = start;
-	    }
+	    e = search_expr_new(parent, SEOP_GE);
+	    e->attr = search_attr_find("internaldate");
+	    e->value.u = start;
 	}
 	else if (!strcmp(criteria.s, "smaller")) {
-	    if (c != ' ') goto missingarg;		
-	    c = getword(imapd_in, &arg);
-	    size = 0;
-	    for (p = arg.s; *p && Uisdigit(*p); p++) {
-		size = size * 10 + *p - '0';
-                /* if (size < 0) goto badnumber; */
-	    }
-	    if (!arg.s || *p) goto badnumber;
-	    if (size == 0) size = 1;
-	    if (!searchargs->smaller || size < searchargs->smaller)
-	      searchargs->smaller = size;
+	    if (c != ' ') goto missingarg;
+	    c = getint32(imapd_in, &u);
+	    if (c == EOF) goto badnumber;
+	    e = search_expr_new(parent, SEOP_LT);
+	    e->attr = search_attr_find("size");
+	    e->value.u = u;
 	}
-#endif
 	else if (!strcmp(criteria.s, "subject")) {
 	    if (c != ' ') goto missingarg;
 	    c = string_match(parent, criteria.s, base);
@@ -10678,7 +10664,7 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 	else goto badcri;
 	break;
 
-#if 0 /*TODO:gnb*/
+#if 0
     case 'x':
 	if (!strcmp(criteria.s, "xlistid")) {
 	    if (c != ' ') goto missingarg;
@@ -10698,20 +10684,19 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 	}
 	else goto badcri;
 	break;
+#endif
 
     case 'y':
 	if (!strcmp(criteria.s, "younger")) {
-	    if (c != ' ') goto missingarg;		
-	    c = getword(imapd_in, &arg);
-	    if (c == EOF || !imparse_isnumber(arg.s)) goto badinterval;
-	    start = now - atoi(arg.s);
-	    if (!searchargs->after || searchargs->after < start) {
-		searchargs->after = start;
-	    }
+	    if (c != ' ') goto missingarg;
+	    c = getint32(imapd_in, &u);
+	    if (c == EOF) goto badinterval;
+	    e = search_expr_new(parent, SEOP_GE);
+	    e->attr = search_attr_find("internaldate");
+	    e->value.u = now - u;
 	}
 	else goto badcri;
 	break;
-#endif
 
     default:
     badcri:
@@ -10738,14 +10723,11 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
     if (c != EOF) prot_ungetc(c, imapd_in);
     return EOF;
 
-#if 0 /*TODO:gnb*/
-
  baddate:
     prot_printf(imapd_out, "%s BAD Invalid date in Search command\r\n",
 		base->tag);
     if (c != EOF) prot_ungetc(c, imapd_in);
     return EOF;
-#endif
 
  badnumber:
     prot_printf(imapd_out, "%s BAD Invalid number in Search command\r\n",
@@ -10753,13 +10735,11 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
     if (c != EOF) prot_ungetc(c, imapd_in);
     return EOF;
 
-#if 0 /*TODO:gnb*/
  badinterval:
     prot_printf(imapd_out, "%s BAD Invalid interval in Search command\r\n",
 		base->tag);
     if (c != EOF) prot_ungetc(c, imapd_in);
     return EOF;
-#endif
 
  missingcharset:
     prot_printf(imapd_out, "%s BAD Missing charset\r\n",
@@ -11784,7 +11764,6 @@ done:
     return;
 }
 
-#if 0 /*TODO:gnb*/
 /*
  * Parse a "date", for SEARCH criteria
  * The time_t's pointed to by 'start' and 'end' are set to the
@@ -11873,7 +11852,6 @@ static int getsearchdate(time_t *start, time_t *end)
     prot_ungetc(c, imapd_in);
     return EOF;
 }
-#endif
 
 #define SORTGROWSIZE	10
 

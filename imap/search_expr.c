@@ -611,6 +611,51 @@ static int search_convflags_match(message_t *m, const union search_value *v,
 
 /* ====================================================================== */
 
+static int search_uint32_cmp(message_t *m, const union search_value *v,
+			     void *internalised __attribute__((unused)),
+			     void *data1)
+{
+    int r;
+    uint32_t u;
+    int (*getter)(message_t *, uint32_t *) = (int(*)(message_t *, uint32_t *))data1;
+
+    r = getter(m, &u);
+    if (!r) {
+	if (u < v->u)
+	    r = -1;
+	else if (u == v->u)
+	    r = 0;
+	else
+	    r = 1;
+    }
+    else
+	r = 0;
+    return r;
+}
+
+static int search_uint32_match(message_t *m, const union search_value *v,
+			       void *internalised __attribute__((unused)),
+			       void *data1)
+{
+    int r;
+    uint32_t u;
+    int (*getter)(message_t *, uint32_t *) = (int(*)(message_t *, uint32_t *))data1;
+
+    r = getter(m, &u);
+    if (!r)
+	r = (v->u == u);
+    else
+	r = 0;
+    return r;
+}
+
+static void search_uint32_describe(struct buf *b, const union search_value *v)
+{
+    buf_printf(b, " %u", (uint32_t)v->u);
+}
+
+/* ====================================================================== */
+
 static hash_table attrs_by_name = HASH_TABLE_INITIALIZER;
 
 EXPORTED void search_attr_init(void)
@@ -746,6 +791,30 @@ EXPORTED void search_attr_init(void)
 	    search_annotation_describe,
 	    search_annotation_free,
 	    (void *)NULL
+	},{
+	    "size",
+	    /*internalise*/NULL,
+	    search_uint32_cmp,
+	    search_uint32_match,
+	    search_uint32_describe,
+	    /*free*/NULL,
+	    (void *)message_get_size
+	},{
+	    "internaldate",
+	    /*internalise*/NULL,
+	    search_uint32_cmp,
+	    search_uint32_match,
+	    search_uint32_describe,
+	    /*free*/NULL,
+	    (void *)message_get_internaldate
+	},{
+	    "sentdate",
+	    /*internalise*/NULL,
+	    search_uint32_cmp,
+	    search_uint32_match,
+	    search_uint32_describe,
+	    /*free*/NULL,
+	    (void *)message_get_sentdate
 	}
     };
 
