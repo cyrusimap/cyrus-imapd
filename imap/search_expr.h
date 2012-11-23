@@ -54,11 +54,11 @@ enum search_op {
     SEOP_TRUE,
     SEOP_FALSE,
 
-    /* operators for ordinal types: dates, sizes, modseqs */
-    SEOP_EQ,
-    SEOP_NE,
+    /* operators for ordinal types: dates, sizes */
     SEOP_LT,
+    SEOP_LE,
     SEOP_GT,
+    SEOP_GE,
 
     /* operators for nonordinal types: strings, uid sequences */
     SEOP_MATCH,
@@ -80,7 +80,7 @@ struct search_attr {
     const char *name;
     void (*internalise)(struct mailbox *, const union search_value *,
 		       void **internalisedp);
-    int (*cmp)(message_t *, const union search_value *, void *data1);
+    int (*cmp)(message_t *, const union search_value *, void *internalised, void *data1);
     int (*match)(message_t *, const union search_value *, void *internalised, void *data1);
     void (*describe)(struct buf *, const union search_value *);
     void (*free)(union search_value *);

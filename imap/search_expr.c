@@ -135,10 +135,10 @@ static const char *op_as_string(enum search_op op)
     case SEOP_UNKNOWN: return "UNKNOWN";
     case SEOP_TRUE: return "TRUE";
     case SEOP_FALSE: return "FALSE";
-    case SEOP_EQ: return "EQ";
-    case SEOP_NE: return "NE";
     case SEOP_LT: return "LT";
+    case SEOP_LE: return "LE";
     case SEOP_GT: return "GT";
+    case SEOP_GE: return "GE";
     case SEOP_MATCH: return "MATCH";
     case SEOP_AND: return "AND";
     case SEOP_OR: return "OR";
@@ -192,10 +192,22 @@ EXPORTED int search_expr_evaluate(message_t *m, const search_expr_t *e)
     case SEOP_UNKNOWN: assert(0); return 1;
     case SEOP_TRUE: return 1;
     case SEOP_FALSE: return 0;
-    case SEOP_EQ: assert(0); return 1;
-    case SEOP_NE: assert(0); return 1;
-    case SEOP_LT: assert(0); return 1;
-    case SEOP_GT: assert(0); return 1;
+    case SEOP_LT:
+	assert(e->attr);
+	assert(e->attr->cmp);
+	return (e->attr->cmp(m, &e->value, e->internalised, e->attr->data1) < 0);
+    case SEOP_LE:
+	assert(e->attr);
+	assert(e->attr->cmp);
+	return (e->attr->cmp(m, &e->value, e->internalised, e->attr->data1) <= 0);
+    case SEOP_GT:
+	assert(e->attr);
+	assert(e->attr->cmp);
+	return (e->attr->cmp(m, &e->value, e->internalised, e->attr->data1) > 0);
+    case SEOP_GE:
+	assert(e->attr);
+	assert(e->attr->cmp);
+	return (e->attr->cmp(m, &e->value, e->internalised, e->attr->data1) >= 0);
     case SEOP_MATCH:
 	assert(e->attr);
 	assert(e->attr->match);
@@ -218,20 +230,6 @@ EXPORTED int search_expr_evaluate(message_t *m, const search_expr_t *e)
 }
 
 /* ====================================================================== */
-
-static int search_string_cmp(message_t *m, const union search_value *v, void *data1)
-{
-    int r;
-    struct buf buf = BUF_INITIALIZER;
-    int (*getter)(message_t *, struct buf *) = (int(*)(message_t *, struct buf *))data1;
-
-    r = getter(m, &buf);
-    if (!r)
-	r = strcmp(buf_cstring(&buf), v->s);
-    buf_free(&buf);
-
-    return r;
-}
 
 static int search_string_match(message_t *m, const union search_value *v,
 				void *internalised, void *data1)
@@ -623,7 +621,7 @@ EXPORTED void search_attr_init(void)
 	{
 	    "bcc",
 	    search_string_internalise,
-	    search_string_cmp,
+	    /*cmp*/NULL,
 	    search_string_match,
 	    search_string_describe,
 	    search_string_free,
@@ -631,7 +629,7 @@ EXPORTED void search_attr_init(void)
 	},{
 	    "cc",
 	    search_string_internalise,
-	    search_string_cmp,
+	    /*cmp*/NULL,
 	    search_string_match,
 	    search_string_describe,
 	    search_string_free,
@@ -639,7 +637,7 @@ EXPORTED void search_attr_init(void)
 	},{
 	    "from",
 	    search_string_internalise,
-	    search_string_cmp,
+	    /*cmp*/NULL,
 	    search_string_match,
 	    search_string_describe,
 	    search_string_free,
@@ -647,7 +645,7 @@ EXPORTED void search_attr_init(void)
 	},{
 	    "message-id",
 	    search_string_internalise,
-	    search_string_cmp,
+	    /*cmp*/NULL,
 	    search_string_match,
 	    search_string_describe,
 	    search_string_free,
@@ -655,7 +653,7 @@ EXPORTED void search_attr_init(void)
 	},{
 	    "subject",
 	    search_string_internalise,
-	    search_string_cmp,
+	    /*cmp*/NULL,
 	    search_string_match,
 	    search_string_describe,
 	    search_string_free,
@@ -663,7 +661,7 @@ EXPORTED void search_attr_init(void)
 	},{
 	    "to",
 	    search_string_internalise,
-	    search_string_cmp,
+	    /*cmp*/NULL,
 	    search_string_match,
 	    search_string_describe,
 	    search_string_free,
