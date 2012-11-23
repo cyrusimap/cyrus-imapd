@@ -862,6 +862,10 @@ nodist_imap_libcyrus_imap_la_SOURCES = \
 
 dist_imap_libcyrus_imap_la_SOURCES =
 
+imap_libcyrus_imap_la_LIBADD = $(COM_ERR_LIBS) $(LIB_UUID) lib/libcyrus_min.la lib/libcyrus.la
+imap_libcyrus_imap_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
+imap_libcyrus_imap_la_CXXFLAGS =
+
 imap_libcyrus_imap_la_SOURCES = \
 	imap/annotate.c \
 	imap/annotate.h \
@@ -959,9 +963,6 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/search_sphinx.c
 endif
 
-imap_libcyrus_imap_la_LIBADD = $(COM_ERR_LIBS) $(LIB_UUID) lib/libcyrus_min.la lib/libcyrus.la
-imap_libcyrus_imap_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
-
 if JANSSON
 imap_libcyrus_imap_la_LIBADD += $(JANSSON_LIBS)
 imap_libcyrus_imap_la_CFLAGS += $(JANSSON_CFLAGS)
@@ -1010,6 +1011,15 @@ nodist_imap_libcyrus_imap_la_SOURCES += \
 	imap/tz_err.c
 
 endif # HTTPD
+
+if USE_XAPIAN
+imap_libcyrus_imap_la_SOURCES += \
+	imap/search_xapian.c \
+	imap/xapian_wrap.h \
+	imap/xapian_wrap.cpp
+imap_libcyrus_imap_la_LIBADD += $(XAPIAN_LIBS)
+imap_libcyrus_imap_la_CXXFLAGS += $(XAPIAN_CXXFLAGS)
+endif
 
 imap_lmtpd_SOURCES = \
 	imap/lmtpd.c \

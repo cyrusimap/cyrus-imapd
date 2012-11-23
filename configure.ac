@@ -141,6 +141,7 @@ fi
 AC_DEFINE_UNQUOTED(SYSCONFDIR,"$sysconfdir",[Config File Location])
 
 AC_PROG_CC
+AC_PROG_CXX
 AM_PROG_CC_C_O
 AC_PROG_LN_S
 AC_PROG_MAKE_SET
@@ -406,8 +407,26 @@ if test "$enable_sphinx" = yes -a "$with_mysql" = no ; then
     enable_sphinx=no
 fi
 
+dnl
+dnl Search engines - Xapian
+dnl
+
+AC_ARG_ENABLE(xapian,
+	[  --enable-xapian         enable Xapian support],[
+	    enable_xapian=$enableval
+	],[
+	    enable_xapian=no
+	])
+if test "x$enable_xapian" != xno ; then
+    XO_LIB_XAPIAN([
+	AC_DEFINE(USE_XAPIAN,[],[Build in Xapian support?])
+    ])
+fi
+AM_CONDITIONAL([USE_XAPIAN], [test "${enable_xapian}" != "no"])
+
+
 AM_CONDITIONAL([SQUATTER],
-    [test "${enable_squat}" != "no" -o "${enable_sphinx}" != "no" ])
+    [test "${enable_squat}" != "no" -o "${enable_sphinx}" != "no" -o "${enable_xapian}" != "no" ])
 
 AC_ARG_ENABLE(sieve,
         [AS_HELP_STRING([--disable-sieve], [disable Sieve support])],,[enable_sieve="yes";])
