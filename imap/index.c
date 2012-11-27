@@ -3535,6 +3535,7 @@ EXPORTED int index_snippets(struct index_state *state,
     }
 
     build_query(bx, searchargs, 0, &nmatches);
+    if (!bx->get_internalised) goto out;
     intquery = bx->get_internalised(bx);
     search_end_search(bx);
     if (!intquery) goto out;
@@ -3544,6 +3545,7 @@ EXPORTED int index_snippets(struct index_state *state,
     srock.userid = searchargs->userid;
     rx = search_begin_snippets(intquery, 0/*verbose*/,
 			       emit_snippet, &srock);
+    if (!rx) goto out;
 
     for ( ; snippetargs ; snippetargs = snippetargs->next) {
 
