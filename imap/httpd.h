@@ -76,7 +76,11 @@
 
 
 /* Array of HTTP methods known by our server. */
-extern const char *http_methods[];
+struct known_meth_t {
+    const char *name;
+    unsigned flags;
+};
+extern const struct known_meth_t http_methods[];
 
 /* Index into known HTTP methods - needs to stay in sync with array */
 enum {
@@ -262,18 +266,13 @@ enum {
     VARY_PREFER =	(1<<2)
 };
 
-typedef int (*method_proc_t)(struct transaction_t *txn);
+typedef int (*method_proc_t)(struct transaction_t *txn, void *params);
 typedef int (*filter_proc_t)(struct transaction_t *txn,
 			     const char *base, unsigned long len);
 
 struct method_t {
     method_proc_t proc;		/* Function to perform the method */
-    unsigned flags;		/* Method-specific flags */
-};
-
-/* Method flags */
-enum {
-    METH_NOBODY =	(1<<0),	/* Method does not expect a body */
+    void *params;		/* Parameters to pass to the method */
 };
 
 struct namespace_t {
@@ -288,7 +287,7 @@ struct namespace_t {
     void (*shutdown)(void);
     struct method_t methods[];	/* Array of functions to perform HTTP methods.
 				 * MUST be an entry for EACH method listed,
-				 * and in the SAME ORDER, in which they appear
+				 * and in the SAME ORDER in which they appear,
 				 * in the http_methods[] array.
 				 * If the method is not supported,
 				 * the function pointer MUST be NULL.
@@ -331,9 +330,9 @@ extern void html_response(long code, struct transaction_t *txn, xmlDocPtr html);
 extern void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml);
 extern void write_body(long code, struct transaction_t *txn,
 		       const char *buf, unsigned len);
-extern int meth_options(struct transaction_t *txn);
+extern int meth_options(struct transaction_t *txn, void *params);
 extern int get_doc(struct transaction_t *txn, filter_proc_t filter);
-extern int meth_propfind(struct transaction_t *txn);
+extern int meth_propfind(struct transaction_t *txn, void *params);
 extern int check_precond(unsigned meth, const char *stag, const char *etag,
 			 time_t lastmod, hdrcache_t hdrcache);
 extern int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,

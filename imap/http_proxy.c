@@ -654,7 +654,7 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
      * - Body will be sent using "chunked" TE
      */
     uri = xmlURIEscapeStr(BAD_CAST txn->req_tgt.path, BAD_CAST "/");
-    prot_printf(be->out, "%s %s", http_methods[txn->meth], uri);
+    prot_printf(be->out, "%s %s", http_methods[txn->meth].name, uri);
     free(uri);
     if (*txn->req_tgt.query) {
 	prot_printf(be->out, "?%s", txn->req_tgt.query);

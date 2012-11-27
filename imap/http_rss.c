@@ -84,7 +84,7 @@ static const char def_template[] =
     FEEDLIST_VAR
     "</body>\n</html>\n";
 
-static int meth_get(struct transaction_t *txn);
+static int meth_get(struct transaction_t *txn, void *params);
 static int rss_to_mboxname(struct request_target_t *req_tgt,
 			   char *mboxname, uint32_t *uid,
 			   char *section);
@@ -109,25 +109,26 @@ const struct namespace_t namespace_rss = {
     URL_NS_RSS, "/rss", NULL, 1 /* auth */, ALLOW_READ,
     NULL, NULL, NULL, NULL,
     {
-	{ NULL,			0		},	/* ACL		*/
-	{ NULL,			0		},	/* COPY		*/
-	{ NULL,			0		},	/* DELETE	*/
-	{ &meth_get,		METH_NOBODY	},	/* GET		*/
-	{ &meth_get,		METH_NOBODY	},	/* HEAD		*/
-	{ NULL,			0		},	/* MKCALENDAR	*/
-	{ NULL,			0		},	/* MKCOL	*/
-	{ NULL,			0		},	/* MOVE		*/
-	{ &meth_options,	METH_NOBODY	},	/* OPTIONS	*/
-	{ NULL,			0		},	/* POST		*/
-	{ NULL,			0		},	/* PROPFIND	*/
-	{ NULL,			0		},	/* PROPPATCH	*/
-	{ NULL,			0		},	/* PUT		*/
-	{ NULL,			0		}	/* REPORT	*/
+	{ NULL,			NULL },	/* ACL		*/
+	{ NULL,			NULL },	/* COPY		*/
+	{ NULL,			NULL },	/* DELETE	*/
+	{ &meth_get,		NULL },	/* GET		*/
+	{ &meth_get,		NULL },	/* HEAD		*/
+	{ NULL,			NULL },	/* MKCALENDAR	*/
+	{ NULL,			NULL },	/* MKCOL	*/
+	{ NULL,			NULL },	/* MOVE		*/
+	{ &meth_options,	NULL },	/* OPTIONS	*/
+	{ NULL,			NULL },	/* POST		*/
+	{ NULL,			NULL },	/* PROPFIND	*/
+	{ NULL,			NULL },	/* PROPPATCH	*/
+	{ NULL,			NULL },	/* PUT		*/
+	{ NULL,			NULL }	/* REPORT	*/
     }
 };
 
 /* Perform a GET/HEAD request */
-static int meth_get(struct transaction_t *txn)
+static int meth_get(struct transaction_t *txn,
+		    void *params __attribute__((unused)))
 {
     int ret = 0, r;
     char *server, mailboxname[MAX_MAILBOX_BUFFER+1], section[MAX_SECTION_LEN+1];

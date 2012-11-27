@@ -125,15 +125,15 @@ static void my_caldav_auth(const char *userid);
 static void my_caldav_reset(void);
 static void my_caldav_shutdown(void);
 
-static int meth_acl(struct transaction_t *txn);
-static int meth_copy(struct transaction_t *txn);
-static int meth_delete(struct transaction_t *txn);
-static int meth_get(struct transaction_t *txn);
-static int meth_mkcol(struct transaction_t *txn);
-static int meth_proppatch(struct transaction_t *txn);
-static int meth_post(struct transaction_t *txn);
-static int meth_put(struct transaction_t *txn);
-static int meth_report(struct transaction_t *txn);
+static int meth_acl(struct transaction_t *txn, void *params);
+static int meth_copy(struct transaction_t *txn, void *params);
+static int meth_delete(struct transaction_t *txn, void *params);
+static int meth_get(struct transaction_t *txn, void *params);
+static int meth_mkcol(struct transaction_t *txn, void *params);
+static int meth_proppatch(struct transaction_t *txn, void *params);
+static int meth_post(struct transaction_t *txn, void *params);
+static int meth_put(struct transaction_t *txn, void *params);
+static int meth_report(struct transaction_t *txn, void *params);
 static int parse_path(struct request_target_t *tgt, const char **errstr);
 static unsigned get_preferences(struct transaction_t *txn);
 static int store_resource(struct transaction_t *txn, icalcomponent *ical,
@@ -164,20 +164,20 @@ const struct namespace_t namespace_calendar = {
     (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DAV | ALLOW_CAL),
     &my_caldav_init, &my_caldav_auth, my_caldav_reset, &my_caldav_shutdown,
     { 
-	{ &meth_acl,		0		},	/* ACL		*/
-	{ &meth_copy,		METH_NOBODY	},	/* COPY		*/
-	{ &meth_delete,		METH_NOBODY	},	/* DELETE	*/
-	{ &meth_get,		METH_NOBODY	},	/* GET		*/
-	{ &meth_get,		METH_NOBODY	},	/* HEAD		*/
-	{ &meth_mkcol,		0		},	/* MKCALENDAR	*/
-	{ &meth_mkcol,		0		},	/* MKCOL	*/
-	{ &meth_copy,		METH_NOBODY	},	/* MOVE		*/
-	{ &meth_options,	METH_NOBODY	},	/* OPTIONS	*/
-	{ &meth_post,		0		},	/* POST		*/
-	{ &meth_propfind,	0		},	/* PROPFIND	*/
-	{ &meth_proppatch,	0		},	/* PROPPATCH	*/
-	{ &meth_put,		0		},	/* PUT		*/
-	{ &meth_report,		0		}	/* REPORT	*/
+	{ &meth_acl,		NULL },	/* ACL		*/
+	{ &meth_copy,		NULL },	/* COPY		*/
+	{ &meth_delete,		NULL },	/* DELETE	*/
+	{ &meth_get,		NULL },	/* GET		*/
+	{ &meth_get,		NULL },	/* HEAD		*/
+	{ &meth_mkcol,		NULL },	/* MKCALENDAR	*/
+	{ &meth_mkcol,		NULL },	/* MKCOL	*/
+	{ &meth_copy,		NULL },	/* MOVE		*/
+	{ &meth_options,	NULL },	/* OPTIONS	*/
+	{ &meth_post,		NULL },	/* POST		*/
+	{ &meth_propfind,	NULL },	/* PROPFIND	*/
+	{ &meth_proppatch,	NULL },	/* PROPPATCH	*/
+	{ &meth_put,		NULL },	/* PUT		*/
+	{ &meth_report,		NULL }	/* REPORT	*/
     }
 };
 
@@ -191,20 +191,20 @@ const struct namespace_t namespace_principal = {
 #endif
     NULL, NULL, NULL, NULL,
     {
-	{ NULL,			0		},	/* ACL		*/
-	{ NULL,			0		},	/* COPY		*/
-	{ NULL,			0		},	/* DELETE	*/
-	{ &meth_get,		METH_NOBODY	},	/* GET		*/
-	{ &meth_get,		METH_NOBODY	},	/* HEAD		*/
-	{ NULL,			0		},	/* MKCALENDAR	*/
-	{ NULL,			0		},	/* MKCOL	*/
-	{ NULL,			0		},	/* MOVE		*/
-	{ &meth_options,	METH_NOBODY	},	/* OPTIONS	*/
-	{ NULL,			0		},	/* POST		*/
-	{ &meth_propfind,	0		},	/* PROPFIND	*/
-	{ NULL,			0		},	/* PROPPATCH	*/
-	{ NULL,			0		},	/* PUT		*/
-	{ &meth_report,		0		}	/* REPORT	*/
+	{ NULL,			NULL },	/* ACL		*/
+	{ NULL,			NULL },	/* COPY		*/
+	{ NULL,			NULL },	/* DELETE	*/
+	{ &meth_get,		NULL },	/* GET		*/
+	{ &meth_get,		NULL },	/* HEAD		*/
+	{ NULL,			NULL },	/* MKCALENDAR	*/
+	{ NULL,			NULL },	/* MKCOL	*/
+	{ NULL,			NULL },	/* MOVE		*/
+	{ &meth_options,	NULL },	/* OPTIONS	*/
+	{ NULL,			NULL },	/* POST		*/
+	{ &meth_propfind,	NULL },	/* PROPFIND	*/
+	{ NULL,			NULL },	/* PROPPATCH	*/
+	{ NULL,			NULL },	/* PUT		*/
+	{ &meth_report,		NULL }	/* REPORT	*/
     }
 };
 
@@ -271,7 +271,8 @@ static void my_caldav_shutdown(void)
  *   DAV:recognized-principal
  *   DAV:allowed-principal
  */
-static int meth_acl(struct transaction_t *txn)
+static int meth_acl(struct transaction_t *txn,
+		    void *params __attribute__((unused)))
 {
     int ret = 0, r, rights, is_inbox = 0, is_outbox = 0;
     xmlDocPtr indoc = NULL;
@@ -619,7 +620,8 @@ static int meth_acl(struct transaction_t *txn)
  *   CALDAV:max-instances
  *   CALDAV:max-attendees-per-instance
  */
-static int meth_copy(struct transaction_t *txn)
+static int meth_copy(struct transaction_t *txn,
+		     void *params __attribute__((unused)))
 {
     int ret = HTTP_CREATED, r, precond, rights, overwrite = OVERWRITE_YES;
     size_t plen;
@@ -893,7 +895,8 @@ static int meth_copy(struct transaction_t *txn)
 
 
 /* Perform a DELETE request */
-static int meth_delete(struct transaction_t *txn)
+static int meth_delete(struct transaction_t *txn,
+		       void *params __attribute__((unused)))
 {
     int ret = HTTP_NO_CONTENT, r, precond, rights;
     char *server, *acl, mailboxname[MAX_MAILBOX_BUFFER];
@@ -1113,7 +1116,8 @@ static int meth_delete(struct transaction_t *txn)
 
 
 /* Perform a GET/HEAD request */
-static int meth_get(struct transaction_t *txn)
+static int meth_get(struct transaction_t *txn,
+		    void *params __attribute__((unused)))
 {
     int ret = 0, r, precond, rights;
     const char *msg_base = NULL;
@@ -1238,7 +1242,8 @@ static int meth_get(struct transaction_t *txn)
  *   CALDAV:calendar-collection-location-ok
  *   CALDAV:valid-calendar-data (CALDAV:calendar-timezone)
  */
-static int meth_mkcol(struct transaction_t *txn)
+static int meth_mkcol(struct transaction_t *txn,
+		      void *params __attribute__((unused)))
 {
     int ret = 0, r = 0;
     xmlDocPtr indoc = NULL, outdoc = NULL;
@@ -1758,7 +1763,8 @@ static int propfind_by_collection(char *mboxname, int matchlen,
 
 
 /* Perform a PROPFIND request */
-int meth_propfind(struct transaction_t *txn)
+int meth_propfind(struct transaction_t *txn,
+		  void *params __attribute__((unused)))
 {
     int ret = 0, r;
     const char **hdr;
@@ -1982,7 +1988,8 @@ int meth_propfind(struct transaction_t *txn)
  *   DAV:cannot-modify-protected-property
  *   CALDAV:valid-calendar-data (CALDAV:calendar-timezone)
  */
-static int meth_proppatch(struct transaction_t *txn)
+static int meth_proppatch(struct transaction_t *txn,
+			  void *params __attribute__((unused)))
 {
     int ret = 0, r = 0, rights;
     xmlDocPtr indoc = NULL, outdoc = NULL;
@@ -2121,7 +2128,8 @@ static int meth_proppatch(struct transaction_t *txn)
 
 
 /* Perform a POST request */
-static int meth_post(struct transaction_t *txn)
+static int meth_post(struct transaction_t *txn,
+		     void *params __attribute__((unused)))
 {
     static unsigned post_count = 0;
     int r, ret;
@@ -2161,7 +2169,7 @@ static int meth_post(struct transaction_t *txn)
     /* Tell client where to find the new resource */
     txn->location = txn->req_tgt.path;
 
-    ret = meth_put(txn);
+    ret = meth_put(txn, NULL);
 
     if (ret != HTTP_CREATED) txn->location = NULL;
 
@@ -2183,7 +2191,8 @@ static int meth_post(struct transaction_t *txn)
  *   CALDAV:max-instances
  *   CALDAV:max-attendees-per-instance
  */
-static int meth_put(struct transaction_t *txn)
+static int meth_put(struct transaction_t *txn,
+		    void *params __attribute__((unused)))
 {
     int ret, r, precond, rights;
     char *server, *acl, mailboxname[MAX_MAILBOX_BUFFER];
@@ -3113,7 +3122,8 @@ static const struct report_type_t {
 
 
 /* Perform a REPORT request */
-static int meth_report(struct transaction_t *txn)
+static int meth_report(struct transaction_t *txn,
+		       void *params __attribute__((unused)))
 {
     int ret = 0, r;
     const char **hdr;

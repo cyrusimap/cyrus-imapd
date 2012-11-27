@@ -206,8 +206,8 @@ static int http_auth(const char *creds, const char *authzid,
 static void log_cachehdr(const char *name, const char *contents, void *rock);
 static void keep_alive(int sig);
 
-static int meth_get(struct transaction_t *txn);
-static int meth_propfind_root(struct transaction_t *txn);
+static int meth_get(struct transaction_t *txn, void *params);
+static int meth_propfind_root(struct transaction_t *txn, void *params);
 
 
 static struct {
@@ -230,23 +230,28 @@ struct accept {
     struct accept *next;
 };
 
+/* Flags for known methods*/
+enum {
+    METH_NOBODY =	(1<<0),	/* Method does not expect a body */
+};
+
 /* Array of HTTP methods known by our server. */
-const char *http_methods[] = {
-    "ACL",
-    "COPY",
-    "DELETE",
-    "GET",
-    "HEAD",
-    "MKCALENDAR",
-    "MKCOL",
-    "MOVE",
-    "OPTIONS",
-    "POST",
-    "PROPFIND",
-    "PROPPATCH",
-    "PUT",
-    "REPORT",
-    NULL
+const struct known_meth_t http_methods[] = {
+    { "ACL",		0 },
+    { "COPY",	   	METH_NOBODY },
+    { "DELETE",	   	METH_NOBODY },
+    { "GET",	   	METH_NOBODY },
+    { "HEAD",	   	METH_NOBODY },
+    { "MKCALENDAR",	0 },
+    { "MKCOL",		0 },
+    { "MOVE",		METH_NOBODY },
+    { "OPTIONS",	METH_NOBODY },
+    { "POST",		0 },
+    { "PROPFIND",	0 },
+    { "PROPPATCH",	0 },
+    { "PUT",		0 },
+    { "REPORT",		0 },
+    { NULL,		0 }
 };
 
 /* Namespace to fetch static content from filesystem */
@@ -254,20 +259,20 @@ const struct namespace_t namespace_default = {
     URL_NS_DEFAULT, "", NULL, 0 /* no auth */, ALLOW_READ,
     NULL, NULL, NULL, NULL,
     {
-	{ NULL,			0		},	/* ACL		*/
-	{ NULL,			0		},	/* COPY		*/
-	{ NULL,			0		},	/* DELETE	*/
-	{ &meth_get,		METH_NOBODY	},	/* GET		*/
-	{ &meth_get,		METH_NOBODY	},	/* HEAD		*/
-	{ NULL,			0		},	/* MKCALENDAR	*/
-	{ NULL,			0		},	/* MKCOL	*/
-	{ NULL,			0		},	/* MOVE		*/
-	{ &meth_options,	METH_NOBODY	},	/* OPTIONS	*/
-	{ NULL,			0		},	/* POST		*/
-	{ &meth_propfind_root,	0		},	/* PROPFIND	*/
-	{ NULL,			0		},	/* PROPPATCH	*/
-	{ NULL,			0		},	/* PUT		*/
-	{ NULL,			0		}	/* REPORT	*/
+	{ NULL,			NULL },	/* ACL		*/
+	{ NULL,			NULL },	/* COPY		*/
+	{ NULL,			NULL },	/* DELETE	*/
+	{ &meth_get,		NULL },	/* GET		*/
+	{ &meth_get,		NULL },	/* HEAD		*/
+	{ NULL,			NULL },	/* MKCALENDAR	*/
+	{ NULL,			NULL },	/* MKCOL	*/
+	{ NULL,			NULL },	/* MOVE		*/
+	{ &meth_options,	NULL },	/* OPTIONS	*/
+	{ NULL,			NULL },	/* POST		*/
+	{ &meth_propfind_root,	NULL },	/* PROPFIND	*/
+	{ NULL,			NULL },	/* PROPPATCH	*/
+	{ NULL,			NULL },	/* PUT		*/
+	{ NULL,			NULL }	/* REPORT	*/
     }
 };
 
@@ -879,7 +884,7 @@ static void cmdloop(void)
     const char **hdr;
     struct transaction_t txn;
     const struct namespace_t *namespace;
-    method_proc_t meth_proc;
+    const struct method_t *meth_t;
 
     /* Start with an empty (clean) transaction */
     memset(&txn, 0, sizeof(struct transaction_t));
@@ -991,7 +996,7 @@ static void cmdloop(void)
 	/* Check Method against our list of known methods */
 	if (!ret) {
 	    for (txn.meth = 0; (txn.meth < METH_UNKNOWN) &&
-		     strcmp(http_methods[txn.meth], meth);
+		     strcmp(http_methods[txn.meth].name, meth);
 		 txn.meth++);
 
 	    if (txn.meth == METH_UNKNOWN) ret = HTTP_NOT_IMPLEMENTED;
@@ -1087,6 +1092,8 @@ static void cmdloop(void)
 	    if ((namespace = namespaces[i])) {
 		txn.req_tgt.namespace = namespace->id;
 		txn.req_tgt.allow = namespace->allow;
+
+		meth_t = &namespace->methods[txn.meth];
 	    } else {
 		/* XXX  Should never get here */
 		ret = HTTP_SERVER_ERROR;
@@ -1095,11 +1102,10 @@ static void cmdloop(void)
 
 	/* Check Method against list of supported methods in the namespace */
 	if (!ret) {
-	    if (!(meth_proc = namespace->methods[txn.meth].proc))
-		ret = HTTP_NOT_ALLOWED;
+	    if (!meth_t->proc) ret = HTTP_NOT_ALLOWED;
 
 	    /* Check if method expects a body */
-	    else if ((namespace->methods[txn.meth].flags & METH_NOBODY) &&
+	    else if ((http_methods[txn.meth].flags & METH_NOBODY) &&
 		     spool_getheader(txn.req_hdrs, "Content-Type"))
 		ret = HTTP_BAD_MEDIATYPE;
 	}
@@ -1126,7 +1132,7 @@ static void cmdloop(void)
 		    ret = r;
 		    goto done;
 		}
-		sasl_http_req.method = http_methods[txn.meth];
+		sasl_http_req.method = http_methods[txn.meth].name;
 		sasl_http_req.uri = uri;
 		sasl_http_req.entity = (u_char *) buf_cstring(&txn.req_body);
 		sasl_http_req.elen = buf_len(&txn.req_body);
@@ -1150,7 +1156,7 @@ static void cmdloop(void)
 		    fprintf(logf, "<%ld<", time(NULL));
 		    /* request-line */
 		    fprintf(logf, "%s %s",
-			    http_methods[txn.meth], txn.req_tgt.path);
+			    http_methods[txn.meth].name, txn.req_tgt.path);
 		    if (*txn.req_tgt.query)
 			fprintf(logf, "?%s", txn.req_tgt.query);
 		    fprintf(logf, " %s\r\n", HTTP_VERSION);
@@ -1241,7 +1247,7 @@ static void cmdloop(void)
 
 	/* Process the requested method */
 	if (!ret) {
-	    ret = (*meth_proc)(&txn);
+	    ret = (*meth_t->proc)(&txn, meth_t->params);
 	    if (ret == HTTP_UNAUTHORIZED) goto need_auth;
 	}
 
@@ -2518,7 +2524,8 @@ int check_precond(unsigned meth, const char *stag, const char *etag,
 
 
 /* Perform a GET/HEAD request */
-static int meth_get(struct transaction_t *txn)
+static int meth_get(struct transaction_t *txn,
+		    void *params __attribute__((unused)))
 {
     return get_doc(txn, NULL);
 }
@@ -2624,7 +2631,8 @@ int get_doc(struct transaction_t *txn, filter_proc_t filter)
 
 
 /* Perform an OPTIONS request */
-int meth_options(struct transaction_t *txn)
+int meth_options(struct transaction_t *txn,
+		 void *params __attribute__((unused)))
 {
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
@@ -2647,7 +2655,8 @@ int meth_options(struct transaction_t *txn)
 
 
 /* Perform an PROPFIND request on "/" iff we support CalDAV */
-int meth_propfind_root(struct transaction_t *txn)
+int meth_propfind_root(struct transaction_t *txn,
+		       void *params __attribute__((unused)))
 {
 #ifdef WITH_CALDAV
     /* Apple iCal and Evolution both check "/" */
@@ -2655,7 +2664,7 @@ int meth_propfind_root(struct transaction_t *txn)
 	if (!httpd_userid) return HTTP_UNAUTHORIZED;
 
 	txn->req_tgt.allow |= ALLOW_DAV;
-	return meth_propfind(txn);
+	return meth_propfind(txn, NULL);
     }
 #endif
     return HTTP_NOT_ALLOWED;

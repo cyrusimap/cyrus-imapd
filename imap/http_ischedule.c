@@ -84,9 +84,9 @@ static void isched_cachehdr(const char *name, const char *contents, void *rock);
 #endif /* WITH_DKIM */
 
 extern int busytime_query(struct transaction_t *txn, icalcomponent *comp);
-static int isched_capa(struct transaction_t *txn);
-static int isched_recv(struct transaction_t *txn);
-static int meth_getkey(struct transaction_t *txn);
+static int isched_capa(struct transaction_t *txn, void *params);
+static int isched_recv(struct transaction_t *txn, void *params);
+static int meth_getkey(struct transaction_t *txn, void *params);
 static void calc_compile_time(struct buf *serverinfo);
 static time_t compile_time;
 
@@ -99,20 +99,20 @@ const struct namespace_t namespace_ischedule = {
     calc_compile_time, NULL, NULL, NULL,
 #endif
     {
-	{ NULL,			0		},	/* ACL		*/
-	{ NULL,			0		},	/* COPY		*/
-	{ NULL,			0		},	/* DELETE	*/
-	{ &isched_capa,		METH_NOBODY	},	/* GET		*/
-	{ &isched_capa,		METH_NOBODY	},	/* HEAD		*/
-	{ NULL,			0		},	/* MKCALENDAR	*/
-	{ NULL,			0		},	/* MKCOL	*/
-	{ NULL,			0		},	/* MOVE		*/
-	{ &meth_options,	METH_NOBODY	},	/* OPTIONS	*/
-	{ &isched_recv,		0		},	/* POST		*/
-	{ NULL,			0		},	/* PROPFIND	*/
-	{ NULL,			0		},	/* PROPPATCH	*/
-	{ NULL,			0		},	/* PUT		*/
-	{ NULL,			0		}	/* REPORT	*/
+	{ NULL,			NULL },	/* ACL		*/
+	{ NULL,			NULL },	/* COPY		*/
+	{ NULL,			NULL },	/* DELETE	*/
+	{ &isched_capa,		NULL },	/* GET		*/
+	{ &isched_capa,		NULL },	/* HEAD		*/
+	{ NULL,			NULL },	/* MKCALENDAR	*/
+	{ NULL,			NULL },	/* MKCOL	*/
+	{ NULL,			NULL },	/* MOVE		*/
+	{ &meth_options,	NULL },	/* OPTIONS	*/
+	{ &isched_recv,		NULL },	/* POST		*/
+	{ NULL,			NULL },	/* PROPFIND	*/
+	{ NULL,			NULL },	/* PROPPATCH	*/
+	{ NULL,			NULL },	/* PUT		*/
+	{ NULL,			NULL }	/* REPORT	*/
     }
 };
 
@@ -120,20 +120,20 @@ const struct namespace_t namespace_domainkey = {
     URL_NS_DOMAINKEY, "/domainkeys", "/.well-known/domainkey", 0 /* auth */,
     ALLOW_READ, NULL, NULL, NULL, NULL,
     {
-	{ NULL,			0		},	/* ACL		*/
-	{ NULL,			0		},	/* COPY		*/
-	{ NULL,			0		},	/* DELETE	*/
-	{ &meth_getkey,		METH_NOBODY	},	/* GET		*/
-	{ &meth_getkey,		METH_NOBODY	},	/* HEAD		*/
-	{ NULL,			0		},	/* MKCALENDAR	*/
-	{ NULL,			0		},	/* MKCOL	*/
-	{ NULL,			0		},	/* MOVE		*/
-	{ &meth_options,	METH_NOBODY	},	/* OPTIONS	*/
-	{ NULL,			0		},	/* POST		*/
-	{ NULL,			0		},	/* PROPFIND	*/
-	{ NULL,			0		},	/* PROPPATCH	*/
-	{ NULL,			0		},	/* PUT		*/
-	{ NULL,			0		}	/* REPORT	*/
+	{ NULL,			NULL },	/* ACL		*/
+	{ NULL,			NULL },	/* COPY		*/
+	{ NULL,			NULL },	/* DELETE	*/
+	{ &meth_getkey,		NULL },	/* GET		*/
+	{ &meth_getkey,		NULL },	/* HEAD		*/
+	{ NULL,			NULL },	/* MKCALENDAR	*/
+	{ NULL,			NULL },	/* MKCOL	*/
+	{ NULL,			NULL },	/* MOVE		*/
+	{ &meth_options,	NULL },	/* OPTIONS	*/
+	{ NULL,			NULL },	/* POST		*/
+	{ NULL,			NULL },	/* PROPFIND	*/
+	{ NULL,			NULL },	/* PROPPATCH	*/
+	{ NULL,			NULL },	/* PUT		*/
+	{ NULL,			NULL }	/* REPORT	*/
     }
 };
 
@@ -162,7 +162,8 @@ static void calc_compile_time(struct buf *serverinfo __attribute__((unused)))
 
 
 /* iSchedule Receiver Capabilities */
-static int isched_capa(struct transaction_t *txn)
+static int isched_capa(struct transaction_t *txn,
+		       void *params __attribute__((unused)))
 {
     int precond;
     struct message_guid guid;
@@ -240,7 +241,8 @@ static int isched_capa(struct transaction_t *txn)
 
 
 /* iSchedule Receiver */
-static int isched_recv(struct transaction_t *txn)
+static int isched_recv(struct transaction_t *txn,
+		       void *params __attribute__((unused)))
 {
     int ret = 0, r, authd = 0;
     const char **hdr;
@@ -709,7 +711,8 @@ static void isched_cachehdr(const char *name, const char *contents, void *rock)
 
 
 /* Perform a GET/HEAD request for a domainkey */
-static int meth_getkey(struct transaction_t *txn)
+static int meth_getkey(struct transaction_t *txn,
+		       void *params __attribute__((unused)))
 {
     txn->resp_body.type = "text/plain";
 
