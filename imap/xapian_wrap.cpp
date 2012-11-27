@@ -11,6 +11,8 @@ extern "C" {
 
 #include <xapian.h>
 
+#define SLOT_CYRUSID	    0
+
 struct xapian_dbw
 {
     Xapian::WritableDatabase *database;
@@ -106,7 +108,7 @@ int xapian_dbw_begin_doc(xapian_dbw_t *dbw, const char *cyrusid)
 	    dbw->document = 0;
 	}
 	dbw->document = new Xapian::Document();
-	dbw->document->add_value(0, cyrusid);
+	dbw->document->add_value(SLOT_CYRUSID, cyrusid);
 	dbw->term_generator->set_document(*dbw->document);
 	dbw->term_generator->set_termpos(1);
     }
