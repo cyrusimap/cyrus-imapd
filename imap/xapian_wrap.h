@@ -46,7 +46,10 @@
 #include "util.h"
 
 typedef struct xapian_dbw xapian_dbw_t;
+typedef struct xapian_db xapian_db_t;
+typedef struct xapian_query xapian_query_t;
 
+/* write-side interface */
 extern xapian_dbw_t *xapian_dbw_open(const char *path);
 extern void xapian_dbw_close(xapian_dbw_t *dbw);
 extern int xapian_dbw_begin_txn(xapian_dbw_t *dbw);
@@ -55,5 +58,14 @@ extern int xapian_dbw_cancel_txn(xapian_dbw_t *dbw);
 extern int xapian_dbw_begin_doc(xapian_dbw_t *dbw, const char *cyrusid);
 extern int xapian_dbw_doc_part(xapian_dbw_t *dbw, const struct buf *part, const char *prefix);
 extern int xapian_dbw_end_doc(xapian_dbw_t *dbw);
+
+/* query-side interface */
+extern xapian_db_t *xapian_db_open(const char *path);
+extern void xapian_db_close(xapian_db_t *);
+extern xapian_query_t *xapian_query_new_match(const xapian_db_t *, const char *prefix, const char *term);
+extern xapian_query_t *xapian_query_new_compound(const xapian_db_t *, int is_or, xapian_query_t **children, int n);
+extern void xapian_query_free(xapian_query_t *);
+extern int xapian_query_run(const xapian_db_t *, const xapian_query_t *,
+			    int (*cb)(const char *cyrusid, void *rock), void *rock);
 
 #endif

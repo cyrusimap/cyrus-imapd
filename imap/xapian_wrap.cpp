@@ -151,3 +151,126 @@ int xapian_dbw_end_doc(xapian_dbw_t *dbw)
     }
     return r;
 }
+
+/* ====================================================================== */
+
+struct xapian_db
+{
+    Xapian::Database *database;
+    Xapian::Stem *stemmer;
+};
+
+// there is no struct xapian_query, we just typedef
+// to it in order to hide Xapian::Query
+
+xapian_db_t *xapian_db_open(const char *path)
+{
+    xapian_db_t *db = NULL;
+    try {
+	db = (xapian_db_t *)xzmalloc(sizeof(xapian_db_t));
+	db->database = new Xapian::Database(path);
+	db->stemmer = new Xapian::Stem("en");
+    }
+    catch (const Xapian::Error &err) {
+	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+		    path, err.get_description().c_str());
+	db = NULL;
+    }
+    return db;
+}
+
+void xapian_db_close(xapian_db_t *db)
+{
+    try {
+	delete db->database;
+	delete db->stemmer;
+	free(db);
+    }
+    catch (const Xapian::Error &err) {
+	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+		    err.get_context().c_str(), err.get_description().c_str());
+    }
+}
+
+xapian_query_t *xapian_query_new_match(const xapian_db_t *db, const char *prefix, const char *str)
+{
+    try {
+	/* Unicode-safe lowercase */
+	std::string lcase;
+	for (Xapian::Utf8Iterator i = Xapian::Utf8Iterator(str) ;
+	     i != Xapian::Utf8Iterator() ;
+	     ++i)
+	    Xapian::Unicode::append_utf8(lcase, Xapian::Unicode::tolower(*i));
+
+	std::string term;
+	if (prefix) term += prefix;
+	term += (*db->stemmer)(lcase);
+	return (xapian_query_t *)new Xapian::Query(term);
+    }
+    catch (const Xapian::Error &err) {
+	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+		    err.get_context().c_str(), err.get_description().c_str());
+    }
+}
+
+xapian_query_t *xapian_query_new_compound(const xapian_db_t *db __attribute__((unused)),
+					  int is_or, xapian_query_t **children, int n)
+{
+    try {
+	// I want to use std::initializer_list<Xapian::Query*> here
+	// but that requires "experimental" gcc C++0x support :(
+	std::vector<Xapian::Query*> v;
+	for (int i = 0 ; i < n ; i++)
+	    v.push_back((Xapian::Query *)children[i]);
+	Xapian::Query *compound = new Xapian::Query(
+				    is_or ?  Xapian::Query::OP_OR : Xapian::Query::OP_AND,
+				    v.begin(), v.end());
+	// 'compound' owns a refcount on each child.  We need to
+	// drop the one we got when we allocated the children
+	for (int i = 0 ; i < n ; i++)
+	    delete (Xapian::Query *)children[i];
+	return (xapian_query_t *)compound;
+    }
+    catch (const Xapian::Error &err) {
+	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+		    err.get_context().c_str(), err.get_description().c_str());
+	return 0;
+    }
+}
+
+void xapian_query_free(xapian_query_t *qq)
+{
+    try {
+	Xapian::Query *query = (Xapian::Query *)qq;
+	delete query;
+    }
+    catch (const Xapian::Error &err) {
+	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+		    err.get_context().c_str(), err.get_description().c_str());
+    }
+}
+
+int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq,
+		     int (*cb)(const char *cyrusid, void *rock), void *rock)
+{
+    const Xapian::Query *query = (const Xapian::Query *)qq;
+    int r = 0;
+
+    try {
+	Xapian::Enquire enquire(*db->database);
+	enquire.set_query(*query);
+	Xapian::MSet matches = enquire.get_mset(0, db->database->get_doccount());
+	for (Xapian::MSetIterator i = matches.begin() ; i != matches.end() ; ++i) {
+	    std::string cyrusid = i.get_document().get_value(SLOT_CYRUSID);
+	    r = cb(cyrusid.c_str(), rock);
+	    if (r) break;
+	}
+    }
+    catch (const Xapian::Error &err) {
+	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+		    err.get_context().c_str(), err.get_description().c_str());
+	r = IMAP_IOERROR;
+    }
+
+    return r;
+}

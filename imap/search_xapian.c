@@ -54,6 +54,7 @@
 
 #include "imap_err.h"
 #include "global.h"
+#include "ptrarray.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
@@ -79,6 +80,7 @@ static int open_latest(struct mailbox *, struct latestdb *);
 static void close_latest(struct latestdb *);
 static int read_latest(struct latestdb *, struct mailbox *, uint32_t *, int);
 static int write_latest(struct latestdb *, struct mailbox *, uint32_t, int);
+static int xapian_basedir(const struct mailbox *mailbox, char **basedirp);
 
 /* Name of columns */
 #define COL_CYRUSID	"cyrusid"
@@ -93,7 +95,6 @@ static const char * const prefix_by_part[SEARCH_NUM_PARTS] = {
     "D",		/* BODY */
 };
 
-#if 0
 static int parse_cyrusid(const char *cyrusid,
 			 const char **mboxnamep,
 			 unsigned int *uidvalidityp,
@@ -122,7 +123,6 @@ static int parse_cyrusid(const char *cyrusid,
 
     return 1;
 }
-#endif
 
 static const char *make_cyrusid(struct mailbox *mailbox, uint32_t uid)
 {
@@ -135,6 +135,324 @@ static const char *make_cyrusid(struct mailbox *mailbox, uint32_t uid)
 		     uid);
     return buf_cstring(&buf);
 }
+
+/* ====================================================================== */
+
+struct opnode
+{
+    int op;	/* SEARCH_OP_* or SEARCH_PART_* constant */
+    char *arg;
+    struct opnode *next;
+    struct opnode *children;
+};
+
+typedef struct xapian_builder xapian_builder_t;
+struct xapian_builder {
+    search_builder_t super;
+    struct mailbox *mailbox;
+    xapian_db_t *db;
+    int opts;
+    struct opnode *root;
+    ptrarray_t stack;	    /* points to opnode* */
+    int (*proc)(const char *, uint32_t, uint32_t, void *);
+    void *rock;
+};
+
+static struct opnode *opnode_new(int op, const char *arg)
+{
+    struct opnode *on = xzmalloc(sizeof(struct opnode));
+    on->op = op;
+    on->arg = xstrdupnull(arg);
+    return on;
+}
+
+static void opnode_delete(struct opnode *on)
+{
+    struct opnode *child;
+    struct opnode *next;
+
+    for (child = on->children ; child ; child = next) {
+	next = child->next;
+	opnode_delete(child);
+    }
+    free(on->arg);
+    free(on);
+}
+
+static void opnode_detach_child(struct opnode *parent, struct opnode *child)
+{
+    struct opnode **prevp;
+
+    for (prevp = &parent->children ; *prevp ; prevp = &((*prevp)->next)) {
+	if (*prevp == child) {
+	    *prevp = child->next;
+	    child->next = NULL;
+	    return;
+	}
+    }
+}
+
+static void opnode_append_child(struct opnode *parent, struct opnode *child)
+{
+    struct opnode **tailp;
+
+    for (tailp = &parent->children ; *tailp ; tailp = &((*tailp)->next))
+	;
+    *tailp = child;
+    child->next = NULL;
+}
+
+static void opnode_insert_child(struct opnode *parent __attribute__((unused)),
+				struct opnode *after,
+				struct opnode *child)
+{
+    child->next = after->next;
+    after->next = child;
+}
+
+static void optimise_nodes(struct opnode *parent, struct opnode *on)
+{
+    struct opnode *child;
+    struct opnode *next;
+
+    switch (on->op) {
+    case SEARCH_OP_NOT:
+    case SEARCH_OP_OR:
+    case SEARCH_OP_AND:
+	for (child = on->children ; child ; child = next) {
+	    next = child->next;
+	    optimise_nodes(on, child);
+	}
+	if (parent) {
+	    if (!on->children) {
+		/* empty node - remove it */
+		opnode_detach_child(parent, on);
+		opnode_delete(on);
+	    }
+	    else if (on->op != SEARCH_OP_NOT && !on->children->next) {
+		/* logical AND or OR with only one child - replace
+		 * the node with its child */
+		struct opnode *child = on->children;
+		opnode_detach_child(on, child);
+		opnode_insert_child(parent, on, child);
+		opnode_detach_child(parent, on);
+		opnode_delete(on);
+	    }
+	}
+	break;
+    }
+}
+
+static xapian_query_t *opnode_to_query(const xapian_db_t *db, struct opnode *on)
+{
+    struct opnode *child;
+    xapian_query_t *qq = NULL;
+    int i;
+    ptrarray_t childqueries = PTRARRAY_INITIALIZER;
+
+    switch (on->op) {
+    case SEARCH_OP_NOT:
+	/* Xapian does not have an OP_NOT.  WTF?  We may be able
+	 * to fake it with OP_AND_NOT where the left child is MatchAll
+	 * but that will have to wait. */
+	assert(0);
+	break;
+    case SEARCH_OP_OR:
+    case SEARCH_OP_AND:
+	for (child = on->children ; child ; child = child->next) {
+	    qq = opnode_to_query(db, child);
+	    if (qq) ptrarray_push(&childqueries, qq);
+	}
+	qq = NULL;
+	if (childqueries.count)
+	    qq = xapian_query_new_compound(db, (on->op == SEARCH_OP_OR),
+					   (xapian_query_t **)childqueries.data,
+					   childqueries.count);
+	break;
+    case SEARCH_PART_ANY:
+	/* Xapian does not have a convenient way of search for "any
+	 * field"; instead we fake it by explicitly searching for
+	 * all of the available prefixes */
+	for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
+	    if (prefix_by_part[i] != NULL)
+		ptrarray_push(&childqueries,
+			      xapian_query_new_match(db, prefix_by_part[i], on->arg));
+	}
+	qq = xapian_query_new_compound(db, /*is_or*/1,
+				       (xapian_query_t **)childqueries.data,
+				       childqueries.count);
+	break;
+    default:
+	assert(on->arg != NULL);
+	assert(on->children == NULL);
+	qq = xapian_query_new_match(db, prefix_by_part[on->op], on->arg);
+	break;
+    }
+    ptrarray_fini(&childqueries);
+    return qq;
+}
+
+static int xapian_run_cb(const char *cyrusid, void *rock)
+{
+    xapian_builder_t *bb = (xapian_builder_t *)rock;
+    int r;
+    const char *mboxname;
+    unsigned int uidvalidity;
+    unsigned int uid;
+
+    r = parse_cyrusid(cyrusid, &mboxname, &uidvalidity, &uid);
+    if (!r) {
+	syslog(LOG_ERR, "IOERROR: Cannot parse \"%s\" as cyrusid", cyrusid);
+	return IMAP_IOERROR;
+    }
+
+    if (!(bb->opts & SEARCH_MULTIPLE)) {
+	if (strcmp(mboxname, bb->mailbox->name))
+	    return 0;
+	if (uidvalidity != bb->mailbox->i.uidvalidity)
+	    return 0;
+    }
+
+    xstats_inc(SPHINX_RESULT);
+    return bb->proc(mboxname, uidvalidity, uid, bb->rock);
+}
+
+static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
+{
+    xapian_builder_t *bb = (xapian_builder_t *)bx;
+    xapian_query_t *qq = NULL;
+    uint32_t uid;
+    uint32_t latest = 0;
+    int r = 0;
+
+    if (bb->db == NULL)
+	return IMAP_NOTFOUND;	    /* there's no index for this user */
+
+    if ((bb->opts & SEARCH_UNINDEXED)) {
+	/* To avoid races, we want the 'latest' uid we use to be
+	 * an underestimate, because the caller can handle false
+	 * positives but not false negatives.  So we fetch it
+	 * first before the main query. */
+	struct latestdb ldb = LATESTDB_INITIALIZER;
+	r = open_latest(bb->mailbox, &ldb);
+	if (!r) goto out;
+	r = read_latest(&ldb, bb->mailbox, &latest,
+			SEARCH_VERBOSE(bb->opts));
+	close_latest(&ldb);
+	if (r) goto out;
+    }
+
+    optimise_nodes(NULL, bb->root);
+    qq = opnode_to_query(bb->db, bb->root);
+
+    bb->proc = proc;
+    bb->rock = rock;
+
+    r = xapian_query_run(bb->db, qq, xapian_run_cb, bb);
+    if (r) goto out;
+
+    if ((bb->opts & SEARCH_UNINDEXED)) {
+	/* add in the unindexed uids as false positives */
+	for (uid = latest+1 ; uid <= bb->mailbox->i.last_uid ; uid++) {
+	    xstats_inc(SPHINX_UNINDEXED);
+	    r = proc(bb->mailbox->name, bb->mailbox->i.uidvalidity, uid, rock);
+	    if (r) goto out;
+	}
+    }
+
+out:
+    if (qq) xapian_query_free(qq);
+    return r;
+}
+
+static void begin_boolean(search_builder_t *bx, int op)
+{
+    xapian_builder_t *bb = (xapian_builder_t *)bx;
+    struct opnode *top = ptrarray_tail(&bb->stack);
+    struct opnode *on = opnode_new(op, NULL);
+    if (top)
+	opnode_append_child(top, on);
+    else
+	bb->root = on;
+    ptrarray_push(&bb->stack, on);
+    if (SEARCH_VERBOSE(bb->opts))
+	syslog(LOG_INFO, "begin_boolean(op=%s)", search_op_as_string(op));
+}
+
+static void end_boolean(search_builder_t *bx, int op __attribute__((unused)))
+{
+    xapian_builder_t *bb = (xapian_builder_t *)bx;
+    if (SEARCH_VERBOSE(bb->opts))
+	syslog(LOG_INFO, "end_boolean");
+    ptrarray_pop(&bb->stack);
+}
+
+static void match(search_builder_t *bx, int part, const char *str)
+{
+    xapian_builder_t *bb = (xapian_builder_t *)bx;
+    struct opnode *top = ptrarray_tail(&bb->stack);
+    struct opnode *on;
+
+    if (!str) return;
+    if (SEARCH_VERBOSE(bb->opts))
+	syslog(LOG_INFO, "match(part=%s, str=\"%s\")",
+	       search_part_as_string(part), str);
+
+    xstats_inc(SPHINX_MATCH);
+
+    on = opnode_new(part, str);
+    if (top)
+	opnode_append_child(top, on);
+    else
+	bb->root = on;
+}
+
+static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
+{
+    xapian_builder_t *bb;
+    char *basedir = NULL;
+    char *dir;
+    int r = 0;
+
+    bb = xzmalloc(sizeof(xapian_builder_t));
+    bb->super.begin_boolean = begin_boolean;
+    bb->super.end_boolean = end_boolean;
+    bb->super.match = match;
+//     bb->super.get_internalised = get_internalised;
+    bb->super.run = run;
+
+    bb->mailbox = mailbox;
+    bb->opts = opts;
+
+    r = xapian_basedir(mailbox, &basedir);
+    if (r) goto out;
+    dir = strconcat(basedir, XAPIAN_DIRNAME, NULL);
+
+    bb->db = xapian_db_open(dir);
+    if (!bb->db) goto out;
+
+    if ((opts & SEARCH_MULTIPLE))
+	xstats_inc(SPHINX_MULTIPLE);
+    else
+	xstats_inc(SPHINX_SINGLE);
+
+out:
+    free(basedir);
+    free(dir);
+    return &bb->super;
+}
+
+static void end_search(search_builder_t *bx)
+{
+    xapian_builder_t *bb = (xapian_builder_t *)bx;
+
+    ptrarray_fini(&bb->stack);
+    if (bb->root) opnode_delete(bb->root);
+    if (bb->db) xapian_db_close(bb->db);
+    free(bx);
+}
+
+/* ====================================================================== */
 
 /* base class for both update and snippet receivers */
 typedef struct xapian_receiver xapian_receiver_t;
@@ -698,8 +1016,8 @@ static int end_update(search_text_receiver_t *rx)
 const struct search_engine xapian_search_engine = {
     "Xapian",
     SEARCH_FLAG_CAN_BATCH,
-    /*begin_search*/NULL,
-    /*end_search*/NULL,
+    begin_search,
+    end_search,
     begin_update,
     end_update,
     /*begin_snippets*/NULL,
