@@ -464,7 +464,7 @@ static void *get_internalised(search_builder_t *bx)
     return on;
 }
 
-char *describe_internalised(void *internalised)
+static char *describe_internalised(void *internalised)
 {
     struct opnode *on = (struct opnode *)internalised;
     struct buf buf = BUF_INITIALIZER;
