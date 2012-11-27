@@ -30,6 +30,7 @@ xapian_dbw_t *xapian_dbw_open(const char *path)
 	dbw->term_generator = new Xapian::TermGenerator();
 	dbw->stemmer = new Xapian::Stem("en");
 	dbw->term_generator->set_stemmer(*dbw->stemmer);
+	dbw->term_generator->set_stemming_strategy(Xapian::TermGenerator::STEM_ALL);
     }
     catch (const Xapian::Error &err) {
 	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
