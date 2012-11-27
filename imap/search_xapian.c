@@ -84,13 +84,13 @@ static int write_latest(struct latestdb *, struct mailbox *, uint32_t, int);
 #define COL_CYRUSID	"cyrusid"
 static const char * const prefix_by_part[SEARCH_NUM_PARTS] = {
     NULL,
-    "Xfen",		/* FROM, English */
-    "Xten",		/* TO, English */
-    "Xcen",		/* CC, English */
-    "Xben",		/* BCC, English */
-    "Xsen",		/* SUBJECT, English */
-    "Xhen",		/* HEADERS, English */
-    "Xden",		/* BODY, English */
+    "F",		/* FROM */
+    "T",		/* TO */
+    "C",		/* CC */
+    "B",		/* BCC */
+    "S",		/* SUBJECT */
+    "H",		/* HEADERS */
+    "D",		/* BODY */
 };
 
 #if 0
