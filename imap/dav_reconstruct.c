@@ -171,7 +171,7 @@ int do_reconstruct(char *mboxname,
     char ext_name_buf[MAX_MAILBOX_PATH+1];
     struct mailbox *mailbox = NULL;
     struct index_record record;
-    struct caldav_data cdata;
+    struct caldav_data *cdata;
     
     signals_poll();
 
@@ -199,8 +199,7 @@ int do_reconstruct(char *mboxname,
     printf("\n Message Info:\n");
 
     /* Begin new transaction for each mailbox */
-    memset(&cdata, 0, sizeof(struct caldav_data));
-    caldav_lockread(caldavdb, &cdata);
+    caldav_lookup_resource(caldavdb, NULL, NULL, 1, &cdata);
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	struct body *body;
@@ -221,9 +220,9 @@ int do_reconstruct(char *mboxname,
 	mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
 	if (!ical) continue;
 
-	memset(&cdata, 0, sizeof(struct caldav_data));
-	cdata.mailbox = mboxname;
-	cdata.imap_uid = record.uid;
+	memset(cdata, 0, sizeof(struct caldav_data));
+	cdata->dav.mailbox = mboxname;
+	cdata->dav.imap_uid = record.uid;
 
 	/* Get resource URL from filename param in Content-Disposition header */
 	message_read_bodystructure(&record, &body);
@@ -233,11 +232,15 @@ int do_reconstruct(char *mboxname,
 		break;
 	    }
 	}
-	cdata.resource = resource;
+	cdata->dav.resource = resource;
 
-	caldav_make_entry(ical, &cdata);
+	caldav_make_entry(ical, cdata);
 
-	caldav_write(caldavdb, &cdata);
+	/* XXX  Do we need to do something with Schedule-Tag?
+	   Perhaps we need to keep it in resource.
+	*/
+
+	caldav_write(caldavdb, cdata);
 
 	message_free_body(body); free(body);
 	icalcomponent_free(ical);
