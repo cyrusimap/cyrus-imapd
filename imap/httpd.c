@@ -259,20 +259,20 @@ const struct namespace_t namespace_default = {
     URL_NS_DEFAULT, "", NULL, 0 /* no auth */, ALLOW_READ,
     NULL, NULL, NULL, NULL,
     {
-	{ NULL,			NULL },	/* ACL		*/
-	{ NULL,			NULL },	/* COPY		*/
-	{ NULL,			NULL },	/* DELETE	*/
-	{ &meth_get,		NULL },	/* GET		*/
-	{ &meth_get,		NULL },	/* HEAD		*/
-	{ NULL,			NULL },	/* MKCALENDAR	*/
-	{ NULL,			NULL },	/* MKCOL	*/
-	{ NULL,			NULL },	/* MOVE		*/
-	{ &meth_options,	NULL },	/* OPTIONS	*/
-	{ NULL,			NULL },	/* POST		*/
-	{ &meth_propfind_root,	NULL },	/* PROPFIND	*/
-	{ NULL,			NULL },	/* PROPPATCH	*/
-	{ NULL,			NULL },	/* PUT		*/
-	{ NULL,			NULL }	/* REPORT	*/
+	{ NULL,			NULL },			/* ACL		*/
+	{ NULL,			NULL },			/* COPY		*/
+	{ NULL,			NULL },			/* DELETE	*/
+	{ &meth_get,		NULL },			/* GET		*/
+	{ &meth_get,		NULL },			/* HEAD		*/
+	{ NULL,			NULL },			/* MKCALENDAR	*/
+	{ NULL,			NULL },			/* MKCOL	*/
+	{ NULL,			NULL },			/* MOVE		*/
+	{ &meth_options,	NULL },			/* OPTIONS	*/
+	{ NULL,			NULL },			/* POST		*/
+	{ &meth_propfind_root,	NULL },			/* PROPFIND	*/
+	{ NULL,			NULL },			/* PROPPATCH	*/
+	{ NULL,			NULL },			/* PUT		*/
+	{ NULL,			NULL }			/* REPORT	*/
     }
 };
 
@@ -2655,8 +2655,7 @@ int meth_options(struct transaction_t *txn,
 
 
 /* Perform an PROPFIND request on "/" iff we support CalDAV */
-int meth_propfind_root(struct transaction_t *txn,
-		       void *params __attribute__((unused)))
+int meth_propfind_root(struct transaction_t *txn, void *params)
 {
 #ifdef WITH_CALDAV
     /* Apple iCal and Evolution both check "/" */
@@ -2664,8 +2663,9 @@ int meth_propfind_root(struct transaction_t *txn,
 	if (!httpd_userid) return HTTP_UNAUTHORIZED;
 
 	txn->req_tgt.allow |= ALLOW_DAV;
-	return meth_propfind(txn, NULL);
+	return meth_propfind(txn, params);
     }
 #endif
+
     return HTTP_NOT_ALLOWED;
 }

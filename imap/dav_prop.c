@@ -69,10 +69,92 @@
 #include "caldav_db.h"
 #include "global.h"
 #include "http_err.h"
-#include "xmalloc.h"
+#include "http_proxy.h"
+#include "imap_err.h"
+#include "index.h"
+#include "proxy.h"
 #include "rfc822date.h"
+#include "tok.h"
+#include "xmalloc.h"
+#include "xstrlcat.h"
+#include "xstrlcpy.h"
 
 #include <libxml/uri.h>
+
+
+/* Namespace for WebDAV principals */
+const struct namespace_t namespace_principal = {
+    URL_NS_PRINCIPAL, "/principals", NULL, 1 /* auth */,
+#ifdef WITH_CALDAV
+    ALLOW_CAL |
+#endif
+#ifdef WITH_CARDDAV
+    ALLOW_CARD |
+#endif
+    ALLOW_DAV,
+    NULL, NULL, NULL, NULL,
+    {
+	{ NULL,			NULL },			/* ACL		*/
+	{ NULL,			NULL },			/* COPY		*/
+	{ NULL,			NULL },			/* DELETE	*/
+	{ NULL,			NULL },			/* GET		*/
+	{ NULL,			NULL },			/* HEAD		*/
+	{ NULL,			NULL },			/* MKCALENDAR	*/
+	{ NULL,			NULL },			/* MKCOL	*/
+	{ NULL,			NULL },			/* MOVE		*/
+	{ &meth_options,	NULL },			/* OPTIONS	*/
+	{ NULL,			NULL },			/* POST		*/
+	{ &meth_propfind,	NULL },			/* PROPFIND	*/
+	{ NULL,			NULL },			/* PROPPATCH	*/
+	{ NULL,			NULL },			/* PUT		*/
+	{ &meth_report,		NULL }			/* REPORT	*/
+    }
+};
+
+
+/* Structure for property status */
+struct propstat {
+    xmlNodePtr root;
+    long status;
+    unsigned precond;
+};
+
+/* Index into propstat array */
+enum {
+    PROPSTAT_OK = 0,
+    PROPSTAT_UNAUTH,
+    PROPSTAT_FORBID,
+    PROPSTAT_NOTFOUND,
+    PROPSTAT_CONFLICT,
+    PROPSTAT_FAILEDDEP,
+    PROPSTAT_ERROR,
+    PROPSTAT_OVERQUOTA
+};
+#define NUM_PROPSTAT 8
+
+/* Linked-list of properties for fetching */
+struct propfind_entry_list {
+    xmlNodePtr prop;			/* Property */
+    int (*get)(xmlNodePtr node,		/* Callback to fetch property */
+	       struct propfind_ctx *fctx, xmlNodePtr resp,
+	       struct propstat propstat[], void *rock);
+    void *rock;				/* Add'l data to pass to callback */
+    struct propfind_entry_list *next;
+};
+
+
+/* Context for patching (writing) properties */
+struct proppatch_ctx {
+    struct request_target_t *req_tgt;	/* parsed request target URL */
+    unsigned meth;	    		/* requested Method */
+    const char *mailboxname;		/* mailbox correspondng to collection */
+    xmlNodePtr root;			/* root node to add to XML tree */
+    xmlNsPtr *ns;			/* Array of our supported namespaces */
+    struct txn *tid;			/* Transaction ID for annot writes */
+    const char **errstr;		/* Error string to pass up to caller */
+    int *ret;  				/* Return code to pass up to caller */
+    struct buf buf;			/* Working buffer */
+};
 
 
 static const struct cal_comp_t {
@@ -95,7 +177,204 @@ enum {
     PRIV_OUTBOX =		(1<<2)
 };
 
-extern int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
+
+/* Array of precondition/postcondition errors */
+static const struct precond_t {
+    const char *name;			/* Property name */
+    unsigned ns;			/* Index into known namespace array */
+} preconds[] = {
+    /* Placeholder for zero (no) precondition code */
+    { NULL, 0 },
+
+    /* WebDAV (RFC 4918) preconditons */
+    { "cannot-modify-protected-property", NS_DAV },
+
+    /* WebDAV Versioning (RFC 3253) preconditions */
+    { "supported-report", NS_DAV },
+    { "resource-must-be-null", NS_DAV },
+
+    /* WebDAV ACL (RFC 3744) preconditions */
+    { "need-privileges", NS_DAV },
+    { "no-invert", NS_DAV },
+    { "no-abstract", NS_DAV },
+    { "not-supported-privilege", NS_DAV },
+    { "recognized-principal", NS_DAV },
+
+    /* WebDAV Quota (RFC 4331) preconditions */
+    { "quota-not-exceeded", NS_DAV },
+    { "sufficient-disk-space", NS_DAV },
+
+    /* WebDAV Extended MKCOL (RFC 5689) preconditions */
+    { "valid-resourcetype", NS_DAV },
+
+    /* WebDAV Sync (RFC 6578) preconditions */
+    { "valid-sync-token", NS_DAV },
+    { "number-of-matches-within-limits", NS_DAV },
+
+    /* CalDAV (RFC 4791) preconditions */
+    { "supported-calendar-data", NS_CALDAV },
+    { "valid-calendar-data", NS_CALDAV },
+    { "valid-calendar-object-resource", NS_CALDAV },
+    { "supported-calendar-component", NS_CALDAV },
+    { "calendar-collection-location-ok", NS_CALDAV },
+    { "no-uid-conflict", NS_CALDAV },
+    { "supported-filter", NS_CALDAV },
+    { "valid-filter", NS_CALDAV },
+
+    /* CalDAV Scheduling (RFC 6638) preconditions */
+    { "valid-scheduling-message", NS_CALDAV },
+    { "valid-organizer", NS_CALDAV },
+    { "unique-scheduling-object-resource", NS_CALDAV },
+    { "same-organizer-in-all-components", NS_CALDAV },
+    { "allowed-organizer-scheduling-object-change", NS_CALDAV },
+    { "allowed-attendee-scheduling-object-change", NS_CALDAV },
+
+    /* iSchedule (draft-desruisseaux-ischedule) preconditions */
+    { "verification-failed", NS_ISCHED }
+};
+
+
+/* Parse request-target path */
+/* XXX  THIS NEEDS TO BE COMPLETELY REWRITTEN
+   AND MAYBE COMBINED WITH target_to_mboxname() */
+int parse_path(struct request_target_t *tgt, const char **errstr)
+{
+    char *p = tgt->path;
+    size_t len;
+
+    if (!*p || !*++p) return 0;
+
+    /* Skip namespace */
+    len = strcspn(p, "/");
+    p += len;
+    if (!*p || !*++p) return 0;
+
+    /* Check if we're in user space */
+    len = strcspn(p, "/");
+    if (!strncmp(p, "user", len)) {
+	p += len;
+	if (!*p || !*++p) return 0;
+
+	/* Get user id */
+	len = strcspn(p, "/");
+	tgt->user = p;
+	tgt->userlen = len;
+
+	p += len;
+	if (!*p || !*++p) return 0;
+
+	if (tgt->namespace == URL_NS_PRINCIPAL) goto done;
+
+	len = strcspn(p, "/");
+    }
+    else if (tgt->namespace == URL_NS_PRINCIPAL) {
+	return HTTP_NOT_FOUND;  /* need to specify a userid */
+    }
+
+    /* Get collection */
+    tgt->collection = p;
+    tgt->collen = len;
+
+    p += len;
+    if (!*p || !*++p) {
+	/* Make sure collection is terminated with '/' */
+	if (p[-1] != '/') *p++ = '/';
+	return 0;
+    }
+
+    /* Get resource */
+    len = strcspn(p, "/");
+    tgt->resource = p;
+    tgt->reslen = len;
+
+    p += len;
+
+  done:
+    if (*p) {
+	*errstr = "Too many segments in request target path";
+	return HTTP_FORBIDDEN;
+    }
+
+    return 0;
+}
+
+
+/* Create a mailbox name from the request URL */ 
+int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname)
+{
+    static const char *calendarprefix = NULL;
+    char *p;
+    size_t siz, len;
+
+    if (!calendarprefix) {
+	calendarprefix = config_getstring(IMAPOPT_CALENDARPREFIX);
+    }
+
+    p = mboxname;
+    siz = MAX_MAILBOX_BUFFER - 1;
+    if (req_tgt->user) {
+	len = snprintf(p, siz, "user");
+	p += len;
+	siz -= len;
+
+	if (req_tgt->userlen) {
+	    len = snprintf(p, siz, ".%.*s",
+			   req_tgt->userlen, req_tgt->user);
+	    p += len;
+	    siz -= len;
+	}
+    }
+    len = snprintf(p, siz, "%s%s", p != mboxname ? "." : "",
+		   req_tgt->namespace == URL_NS_CALENDAR ? calendarprefix :
+		   "#addressbooks");
+    p += len;
+    siz -= len;
+    if (req_tgt->collection) {
+	snprintf(p, siz, ".%.*s",
+		 req_tgt->collen, req_tgt->collection);
+    }
+
+    return 0;
+}
+
+
+unsigned get_preferences(struct transaction_t *txn)
+{
+    unsigned prefs = 0;
+    const char **hdr;
+
+    txn->flags.vary |= (VARY_BRIEF | VARY_PREFER);
+
+    /* Check for Prefer header(s) */
+    if ((hdr = spool_getheader(txn->req_hdrs, "Prefer"))) {
+	int i;
+	for (i = 0; hdr[i]; i++) {
+	    tok_t tok;
+	    char *token;
+
+	    tok_init(&tok, hdr[i], ",\r\n", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+	    while ((token = tok_next(&tok))) {
+		if (!strcmp(token, "return-minimal"))
+		    prefs |= PREFER_MIN;
+		else if (!strcmp(token, "return-representation"))
+		    prefs |= PREFER_REP;
+		else if (!strcmp(token, "depth-noroot"))
+		    prefs |= PREFER_NOROOT;
+	    }
+	    tok_fini(&tok);
+	}
+    }
+
+    /* Check for Brief header */
+    if ((hdr = spool_getheader(txn->req_hdrs, "Brief")) &&
+	!strcasecmp(hdr[0], "t")) {
+	prefs |= PREFER_MIN;
+    }
+
+    return prefs;
+}
+
+
 static int add_privs(int rights, unsigned flags,
 		     xmlNodePtr parent, xmlNodePtr root, xmlNsPtr *ns);
 
@@ -201,61 +480,6 @@ static xmlNodePtr xml_add_href(xmlNodePtr parent, xmlNsPtr ns,
     return node;
 }
 
-/* Array of precondition/postcondition errors */
-static const struct precond_t {
-    const char *name;			/* Property name */
-    unsigned ns;			/* Index into known namespace array */
-} preconds[] = {
-    /* Placeholder for zero (no) precondition code */
-    { NULL, 0 },
-
-    /* WebDAV (RFC 4918) preconditons */
-    { "cannot-modify-protected-property", NS_DAV },
-
-    /* WebDAV Versioning (RFC 3253) preconditions */
-    { "supported-report", NS_DAV },
-    { "resource-must-be-null", NS_DAV },
-
-    /* WebDAV ACL (RFC 3744) preconditions */
-    { "need-privileges", NS_DAV },
-    { "no-invert", NS_DAV },
-    { "no-abstract", NS_DAV },
-    { "not-supported-privilege", NS_DAV },
-    { "recognized-principal", NS_DAV },
-
-    /* WebDAV Quota (RFC 4331) preconditions */
-    { "quota-not-exceeded", NS_DAV },
-    { "sufficient-disk-space", NS_DAV },
-
-    /* WebDAV Extended MKCOL (RFC 5689) preconditions */
-    { "valid-resourcetype", NS_DAV },
-
-    /* WebDAV Sync (RFC 6578) preconditions */
-    { "valid-sync-token", NS_DAV },
-    { "number-of-matches-within-limits", NS_DAV },
-
-    /* CalDAV (RFC 4791) preconditions */
-    { "supported-calendar-data", NS_CALDAV },
-    { "valid-calendar-data", NS_CALDAV },
-    { "valid-calendar-object-resource", NS_CALDAV },
-    { "supported-calendar-component", NS_CALDAV },
-    { "calendar-collection-location-ok", NS_CALDAV },
-    { "no-uid-conflict", NS_CALDAV },
-    { "supported-filter", NS_CALDAV },
-    { "valid-filter", NS_CALDAV },
-
-    /* CalDAV Scheduling (RFC 6638) preconditions */
-    { "valid-scheduling-message", NS_CALDAV },
-    { "valid-organizer", NS_CALDAV },
-    { "unique-scheduling-object-resource", NS_CALDAV },
-    { "same-organizer-in-all-components", NS_CALDAV },
-    { "allowed-organizer-scheduling-object-change", NS_CALDAV },
-    { "allowed-attendee-scheduling-object-change", NS_CALDAV },
-
-    /* iSchedule (draft-desruisseaux-ischedule) preconditions */
-    { "verification-failed", NS_ISCHED }
-};
-
 xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
 			 xmlNsPtr *avail_ns)
 {
@@ -342,7 +566,7 @@ static xmlNodePtr xml_add_prop(long status, xmlNsPtr davns,
 
 /* Add a response tree to 'root' for the specified href and 
    either error code or property list */
-int xml_add_response(struct propfind_ctx *fctx, long code)
+static int xml_add_response(struct propfind_ctx *fctx, long code)
 {
     xmlNodePtr resp;
 
@@ -1734,8 +1958,6 @@ static const struct prop_entry {
     { "group", XML_NS_DAV, 0, NULL, NULL, NULL },
     { "supported-privilege-set", XML_NS_DAV, 0,
       propfind_supprivset, NULL, NULL },
-    { "current-user-principal", XML_NS_DAV, 0,
-      propfind_curprin, NULL, NULL },
     { "current-user-privilege-set", XML_NS_DAV, 0,
       propfind_curprivset, NULL, NULL },
     { "acl", XML_NS_DAV, 0, propfind_acl, NULL, NULL },
@@ -1743,6 +1965,9 @@ static const struct prop_entry {
     { "inherited-acl-set", XML_NS_DAV, 0, NULL, NULL, NULL },
     { "principal-collection-set", XML_NS_DAV, 0,
       propfind_princolset, NULL, NULL },
+
+    /* WebDAV Current Principal (RFC 5397) properties */
+    { "current-user-principal", XML_NS_DAV, 0, propfind_curprin, NULL, NULL },
 
     /* WebDAV Quota (RFC 4331) properties */
     { "quota-available-bytes", XML_NS_DAV, 0, propfind_quota, NULL, NULL },
@@ -1796,7 +2021,7 @@ static const struct prop_entry {
 /* Parse the requested properties and create a linked list of fetch callbacks.
  * The list gets reused for each href if Depth > 0
  */
-int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
+static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 {
     xmlNodePtr prop;
     const struct prop_entry *entry;
@@ -1835,7 +2060,7 @@ int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 
 
 /* Execute the given property patch instructions */
-int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
+static int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
 {
     struct propstat propstat[NUM_PROPSTAT];
     int i;
@@ -1926,4 +2151,1127 @@ int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
     }
 
     return 0;
+}
+
+
+/* Perform a MKCOL/MKCALENDAR request */
+/*
+ * preconditions:
+ *   DAV:resource-must-be-null
+ *   DAV:need-privileges
+ *   DAV:valid-resourcetype
+ *   CALDAV:calendar-collection-location-ok
+ *   CALDAV:valid-calendar-data (CALDAV:calendar-timezone)
+ */
+int meth_mkcol(struct transaction_t *txn, void *params)
+{
+    int ret = 0, r = 0;
+    xmlDocPtr indoc = NULL, outdoc = NULL;
+    xmlNodePtr root = NULL, instr = NULL;
+    xmlNsPtr ns[NUM_NAMESPACE];
+    char *server, mailboxname[MAX_MAILBOX_BUFFER], *partition = NULL;
+    struct proppatch_ctx pctx;
+    unsigned mbtype = params ? *(unsigned *) params : 0;
+
+    memset(&pctx, 0, sizeof(struct proppatch_ctx));
+
+    /* Response should not be cached */
+    txn->flags.cc |= CC_NOCACHE;
+
+    /* Make sure its a DAV resource */
+    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
+
+    /* Parse the path */
+    if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) {
+	txn->error.precond = CALDAV_LOCATION_OK;
+	return HTTP_FORBIDDEN;
+    }
+
+    /* Make sure its a home-set collection */
+    if (!txn->req_tgt.collection || txn->req_tgt.resource) {
+	txn->error.precond = CALDAV_LOCATION_OK;
+	return HTTP_FORBIDDEN;
+    }
+
+    /* Construct mailbox name corresponding to calendar-home-set */
+    r = caldav_mboxname("", httpd_userid, mailboxname);
+
+    /* Locate the mailbox */
+    if ((r = http_mlookup(mailboxname, &server, NULL, NULL))) {
+	syslog(LOG_ERR, "mlookup(%s) failed: %s",
+	       mailboxname, error_message(r));
+	txn->error.desc = error_message(r);
+
+	switch (r) {
+	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	default: return HTTP_SERVER_ERROR;
+	}
+    }
+
+    if (server) {
+	/* Remote mailbox */
+	struct backend *be;
+
+	be = proxy_findserver(server, &http_protocol, httpd_userid,
+			      &backend_cached, NULL, NULL, httpd_in);
+	if (!be) return HTTP_UNAVAILABLE;
+
+	return http_pipe_req_resp(be, txn);
+    }
+
+    /* Local Mailbox */
+
+    /* Construct mailbox name corresponding to request target URI */
+    (void) target_to_mboxname(&txn->req_tgt, mailboxname);
+
+    /* Check if we are allowed to create the mailbox */
+    r = mboxlist_createmailboxcheck(mailboxname, 0, NULL,
+				    httpd_userisadmin || httpd_userisproxyadmin,
+				    httpd_userid, httpd_authstate,
+				    NULL, &partition, 0);
+
+    if (r == IMAP_PERMISSION_DENIED) return HTTP_FORBIDDEN;
+    else if (r == IMAP_MAILBOX_EXISTS) {
+	txn->error.precond = DAV_RSRC_EXISTS;
+	return HTTP_FORBIDDEN;
+    }
+    else if (r) return HTTP_SERVER_ERROR;
+
+    /* Parse the MKCOL/MKCALENDAR body, if exists */
+    ret = parse_xml_body(txn, &root);
+    if (ret) goto done;
+
+    if (root) {
+	const char *root_elem = "mkcol";
+
+	if (txn->meth == METH_MKCALENDAR) root_elem = "mkcalendar";
+
+	/* Check for correct root element */
+	if (xmlStrcmp(root->name, BAD_CAST root_elem)) {
+	    txn->error.desc = "Incorrect root element in XML request\r\n";
+	    return HTTP_BAD_MEDIATYPE;
+	}
+
+	indoc = root->doc;
+	instr = root->children;
+    }
+
+    if (instr) {
+	/* Start construction of our mkcol/mkcalendar response */
+	if (txn->meth == METH_MKCALENDAR)
+	    root = init_xml_response("mkcalendar-response", NS_CALDAV,
+				     root, ns);
+	else
+	    root = init_xml_response("mkcol-response", NS_DAV,
+				     root, ns);
+	if (!root) {
+	    ret = HTTP_SERVER_ERROR;
+	    txn->error.desc = "Unable to create XML response\r\n";
+	    goto done;
+	}
+
+	outdoc = root->doc;
+
+	/* Populate our proppatch context */
+	pctx.req_tgt = &txn->req_tgt;
+	pctx.meth = txn->meth;
+	pctx.mailboxname = mailboxname;
+	pctx.root = root;
+	pctx.ns = ns;
+	pctx.tid = NULL;
+	pctx.errstr = &txn->error.desc;
+	pctx.ret = &r;
+
+	/* Execute the property patch instructions */
+	ret = do_proppatch(&pctx, instr);
+
+	if (ret || r) {
+	    /* Something failed.  Abort the txn and change the OK status */
+	    annotatemore_abort(pctx.tid);
+
+	    if (!ret) {
+		/* Output the XML response */
+		xml_response(HTTP_FORBIDDEN, txn, outdoc);
+		ret = 0;
+	    }
+
+	    goto done;
+	}
+    }
+
+    /* Create the mailbox */
+    r = mboxlist_createmailbox(mailboxname, mbtype, partition, 
+			       httpd_userisadmin || httpd_userisproxyadmin,
+			       httpd_userid, httpd_authstate,
+			       0, 0, 0);
+
+    if (!r) ret = HTTP_CREATED;
+    else if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
+    else if (r == IMAP_MAILBOX_EXISTS) {
+	txn->error.precond = DAV_RSRC_EXISTS;
+	ret = HTTP_FORBIDDEN;
+    }
+    else if (r) {
+	txn->error.desc = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+    }
+
+    if (instr) {
+	if (r) {
+	    /* Failure.  Abort the txn */
+	    annotatemore_abort(pctx.tid);
+	}
+	else {
+	    /* Success.  Commit the txn */
+	    annotatemore_commit(pctx.tid);
+	}
+    }
+
+  done:
+    buf_free(&pctx.buf);
+
+    if (outdoc) xmlFreeDoc(outdoc);
+    if (indoc) xmlFreeDoc(indoc);
+
+    return ret;
+}
+
+
+/* dav_foreach() callback to find props on a resource */
+int propfind_by_resource(void *rock, void *data)
+{
+    struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
+    struct dav_data *ddata = (struct dav_data *) data;
+    struct index_record record;
+    char *p;
+    size_t len;
+    int r, ret = 0;
+
+    /* Append resource name to URL path */
+    if (!fctx->req_tgt->resource) {
+	len = strlen(fctx->req_tgt->path);
+	p = fctx->req_tgt->path + len;
+    }
+    else {
+	p = fctx->req_tgt->resource;
+	len = p - fctx->req_tgt->path;
+    }
+
+    if (p[-1] != '/') {
+	*p++ = '/';
+	len++;
+    }
+    strlcpy(p, ddata->resource, MAX_MAILBOX_PATH - len);
+    fctx->req_tgt->resource = p;
+    fctx->req_tgt->reslen = strlen(p);
+
+    fctx->data = data;
+    if (ddata->imap_uid && !fctx->record) {
+	/* Fetch index record for the resource */
+	r = mailbox_find_index_record(fctx->mailbox, ddata->imap_uid,
+				      &record);
+	/* XXX  Check errors */
+
+	fctx->record = r ? NULL : &record;
+    }
+
+    if (!ddata->imap_uid || !fctx->record) {
+	/* Add response for missing target */
+	ret = xml_add_response(fctx, HTTP_NOT_FOUND);
+    }
+    else {
+	int add_it = 1;
+
+	if (fctx->filter) add_it = fctx->filter(fctx, data);
+
+	if (add_it) {
+	    /* Add response for target */
+	    ret = xml_add_response(fctx, 0);
+	}
+    }
+
+    if (fctx->msg_base) {
+	mailbox_unmap_message(fctx->mailbox, ddata->imap_uid,
+			      &fctx->msg_base, &fctx->msg_size);
+    }
+    fctx->msg_base = NULL;
+    fctx->msg_size = 0;
+    fctx->record = NULL;
+    fctx->data = NULL;
+
+    return ret;
+}
+
+
+/* mboxlist_findall() callback to find props on a collection */
+int propfind_by_collection(char *mboxname, int matchlen,
+			   int maycreate __attribute__((unused)),
+			   void *rock)
+{
+    struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
+    struct mboxlist_entry mbentry;
+    struct mailbox *mailbox = NULL;
+    char *p;
+    size_t len;
+    int r = 0, rights, root;
+
+    /* If this function is called outside of mboxlist_findall()
+       with matchlen == 0, this is the root resource of the PROPFIND */
+    root = !matchlen;
+
+    /* Check ACL on mailbox for current user */
+    if ((r = mboxlist_lookup(mboxname, &mbentry, NULL))) {
+	syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
+	       mboxname, error_message(r));
+	*fctx->errstr = error_message(r);
+	*fctx->ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
+    rights = mbentry.acl ? cyrus_acl_myrights(httpd_authstate, mbentry.acl) : 0;
+    if ((rights & fctx->reqd_privs) != fctx->reqd_privs) goto done;
+
+    /* Open mailbox for reading */
+    if ((r = mailbox_open_irl(mboxname, &mailbox))) {
+	syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
+	       mboxname, error_message(r));
+	*fctx->errstr = error_message(r);
+	*fctx->ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
+    fctx->mailbox = mailbox;
+    fctx->record = NULL;
+
+    if (!fctx->req_tgt->resource) {
+	/* Append collection name to URL path */
+	if (!fctx->req_tgt->collection) {
+	    len = strlen(fctx->req_tgt->path);
+	    p = fctx->req_tgt->path + len;
+	}
+	else {
+	    p = fctx->req_tgt->collection;
+	    len = p - fctx->req_tgt->path;
+	}
+
+	if (p[-1] != '/') {
+	    *p++ = '/';
+	    len++;
+	}
+	strlcpy(p, strrchr(mboxname, '.') + 1, MAX_MAILBOX_PATH - len);
+	strlcat(p, "/", MAX_MAILBOX_PATH - len - 1);
+	fctx->req_tgt->collection = p;
+	fctx->req_tgt->collen = strlen(p);
+
+	/* If not filtering by calendar resource, and not excluding root,
+	   add response for collection */
+	if (!fctx->filter &&
+	    (!root || (fctx->depth == 1) || !(fctx->prefer & PREFER_NOROOT)) &&
+	    (r = xml_add_response(fctx, 0))) goto done;
+    }
+
+    if (fctx->depth > 1) {
+	/* Resource(s) */
+
+	if (fctx->req_tgt->resource) {
+	    /* Add response for target resource */
+	    void *data;
+
+	    /* Find message UID for the resource */
+	    fctx->lookup_resource(fctx->davdb,
+				  mboxname, fctx->req_tgt->resource, 0, &data);
+	    /* XXX  Check errors */
+
+	    r = fctx->proc_by_resource(rock, data);
+	}
+	else {
+	    /* Add responses for all contained resources */
+	    fctx->foreach_resource(fctx->davdb, mboxname,
+				   fctx->proc_by_resource, rock);
+
+	    /* Started with NULL resource, end with NULL resource */
+	    fctx->req_tgt->resource = NULL;
+	    fctx->req_tgt->reslen = 0;
+	}
+    }
+
+  done:
+    if (mailbox) mailbox_close(&mailbox);
+
+    return r;
+}
+
+
+/* Perform a PROPFIND request */
+int meth_propfind(struct transaction_t *txn, void *params)
+{
+    int ret = 0, r;
+    const char **hdr;
+    unsigned depth;
+    xmlDocPtr indoc = NULL, outdoc = NULL;
+    xmlNodePtr root, cur = NULL;
+    xmlNsPtr ns[NUM_NAMESPACE];
+    char mailboxname[MAX_MAILBOX_BUFFER] = "";
+    struct propfind_params *fparams = (struct propfind_params *) params;
+    struct propfind_ctx fctx;
+    struct propfind_entry_list *elist = NULL;
+
+    memset(&fctx, 0, sizeof(struct propfind_ctx));
+
+    /* Make sure its a DAV resource */
+    if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED;
+
+    /* Parse the path */
+    if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+
+    /* Check Depth */
+    hdr = spool_getheader(txn->req_hdrs, "Depth");
+    if (!hdr || !strcmp(hdr[0], "infinity")) {
+	depth = 2;
+    }
+    else if (hdr && ((sscanf(hdr[0], "%u", &depth) != 1) || (depth > 1))) {
+	txn->error.desc = "Illegal Depth value\r\n";
+	return HTTP_BAD_REQUEST;
+    }
+
+    if ((txn->req_tgt.allow & ALLOW_WRITE) && txn->req_tgt.user) {
+	char *server, *acl;
+	int rights;
+
+	/* Construct mailbox name corresponding to request target URI */
+	(void) target_to_mboxname(&txn->req_tgt, mailboxname);
+
+	/* Locate the mailbox */
+	if ((r = http_mlookup(mailboxname, &server, &acl, NULL))) {
+	    syslog(LOG_ERR, "mlookup(%s) failed: %s",
+		   mailboxname, error_message(r));
+	    txn->error.desc = error_message(r);
+
+	    switch (r) {
+	    case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	    case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	    default: return HTTP_SERVER_ERROR;
+	    }
+	}
+
+	/* Check ACL for current user */
+	rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
+	if ((rights & DACL_READ) != DACL_READ) {
+	    /* DAV:need-privileges */
+	    txn->error.precond = DAV_NEED_PRIVS;
+	    txn->error.resource = txn->req_tgt.path;
+	    txn->error.rights = DACL_READ;
+	    ret = HTTP_FORBIDDEN;
+	    goto done;
+	}
+
+	if (server) {
+	    /* Remote mailbox */
+	    struct backend *be;
+
+	    be = proxy_findserver(server, &http_protocol, httpd_userid,
+				  &backend_cached, NULL, NULL, httpd_in);
+	    if (!be) return HTTP_UNAVAILABLE;
+
+	    return http_pipe_req_resp(be, txn);
+	}
+
+	/* Local Mailbox */
+    }
+
+    /* Principal or Local Mailbox */
+
+    /* Normalize depth so that:
+     * 0 = home-set collection, 1+ = calendar collection, 2+ = calendar resource
+     */
+    if (txn->req_tgt.collection) depth++;
+    if (txn->req_tgt.resource) depth++;
+
+    /* Parse the PROPFIND body, if exists */
+    ret = parse_xml_body(txn, &root);
+    if (ret) goto done;
+
+    if (!root) {
+	/* XXX allprop request */
+    }
+    else {
+	indoc = root->doc;
+
+	/* XXX  Need to support propname request too! */
+
+	/* Make sure its a propfind element */
+	if (xmlStrcmp(root->name, BAD_CAST "propfind")) {
+	    txn->error.desc = "Missing propfind element in PROFIND request\r\n";
+	    ret = HTTP_BAD_REQUEST;
+	    goto done;
+	}
+
+	/* Find child element of propfind */
+	for (cur = root->children;
+	     cur && cur->type != XML_ELEMENT_NODE; cur = cur->next);
+
+	/* Make sure its a prop element */
+	/* XXX  TODO: Check for allprop and propname too */
+	if (!cur || xmlStrcmp(cur->name, BAD_CAST "prop")) {
+	    ret = HTTP_BAD_REQUEST;
+	    goto done;
+	}
+    }
+
+    /* Start construction of our multistatus response */
+    if (!(root = init_xml_response("multistatus", NS_DAV, root, ns))) {
+	ret = HTTP_SERVER_ERROR;
+	txn->error.desc = "Unable to create XML response\r\n";
+	goto done;
+    }
+
+    outdoc = root->doc;
+
+    /* Populate our propfind context */
+    fctx.req_tgt = &txn->req_tgt;
+    fctx.depth = depth;
+    fctx.prefer = get_preferences(txn);
+    fctx.userid = httpd_userid;
+    fctx.userisadmin = httpd_userisadmin;
+    fctx.authstate = httpd_authstate;
+    fctx.mailbox = NULL;
+    fctx.record = NULL;
+    fctx.reqd_privs = DACL_READ;
+    fctx.filter = NULL;
+    fctx.filter_crit = NULL;
+    if (fparams) {
+	fctx.davdb = *fparams->davdb;
+	fctx.lookup_resource = fparams->lookup;
+	fctx.foreach_resource = fparams->foreach;
+    }
+    fctx.proc_by_resource = &propfind_by_resource;
+    fctx.elist = NULL;
+    fctx.root = root;
+    fctx.ns = ns;
+    fctx.errstr = &txn->error.desc;
+    fctx.ret = &ret;
+    fctx.fetcheddata = 0;
+
+    /* Parse the list of properties and build a list of callbacks */
+    preload_proplist(cur->children, &fctx);
+
+    if (!txn->req_tgt.collection &&
+	(!depth || !(fctx.prefer & PREFER_NOROOT))) {
+	/* Add response for principal or home-set collection */
+	struct mailbox *mailbox = NULL;
+
+	if (*mailboxname) {
+	    /* Open mailbox for reading */
+	    if ((r = mailbox_open_irl(mailboxname, &mailbox))) {
+		syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
+		       mailboxname, error_message(r));
+		txn->error.desc = error_message(r);
+		ret = HTTP_SERVER_ERROR;
+		goto done;
+	    }
+	    fctx.mailbox = mailbox;
+	}
+
+	xml_add_response(&fctx, 0);
+
+	mailbox_close(&mailbox);
+    }
+
+    if (depth > 0) {
+	/* Calendar collection(s) */
+
+	/* Construct mailbox name corresponding to request target URI */
+	(void) target_to_mboxname(&txn->req_tgt, mailboxname);
+
+	if (txn->req_tgt.collection) {
+	    /* Add response for target calendar collection */
+	    propfind_by_collection(mailboxname, 0, 0, &fctx);
+	}
+	else {
+	    /* Add responses for all contained calendar collections */
+	    strlcat(mailboxname, ".%", sizeof(mailboxname));
+	    r = mboxlist_findall(NULL,  /* internal namespace */
+				 mailboxname, 1, httpd_userid, 
+				 httpd_authstate, propfind_by_collection, &fctx);
+	}
+
+	ret = *fctx.ret;
+    }
+
+    /* Output the XML response */
+    if (!ret) {
+	/* iCalendar data in response should not be transformed */
+	if (fctx.fetcheddata) txn->flags.cc |= CC_NOTRANSFORM;
+
+	xml_response(HTTP_MULTI_STATUS, txn, outdoc);
+    }
+
+  done:
+    /* Free the entry list */
+    elist = fctx.elist;
+    while (elist) {
+	struct propfind_entry_list *freeme = elist;
+	elist = elist->next;
+	free(freeme);
+    }
+
+    buf_free(&fctx.buf);
+
+    if (outdoc) xmlFreeDoc(outdoc);
+    if (indoc) xmlFreeDoc(indoc);
+
+    return ret;
+}
+
+
+/* Perform a PROPPATCH request
+ *
+ * preconditions:
+ *   DAV:cannot-modify-protected-property
+ *   CALDAV:valid-calendar-data (CALDAV:calendar-timezone)
+ */
+int meth_proppatch(struct transaction_t *txn,
+		   void *params __attribute__((unused)))
+{
+    int ret = 0, r = 0, rights;
+    xmlDocPtr indoc = NULL, outdoc = NULL;
+    xmlNodePtr root, instr, resp;
+    xmlNsPtr ns[NUM_NAMESPACE];
+    char *server, *acl, mailboxname[MAX_MAILBOX_BUFFER];
+    struct proppatch_ctx pctx;
+
+    memset(&pctx, 0, sizeof(struct proppatch_ctx));
+
+    /* Response should not be cached */
+    txn->flags.cc |= CC_NOCACHE;
+
+    /* Make sure its a DAV resource */
+    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
+
+    /* Parse the path */
+    if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+
+    /* Make sure its a collection */
+    if (txn->req_tgt.resource) {
+	txn->error.desc =
+	    "Properties can only be updated on collections\r\n";
+	return HTTP_FORBIDDEN;
+    }
+
+    /* Construct mailbox name corresponding to request target URI */
+    (void) target_to_mboxname(&txn->req_tgt, mailboxname);
+
+    /* Locate the mailbox */
+    if ((r = http_mlookup(mailboxname, &server, &acl, NULL))) {
+	syslog(LOG_ERR, "mlookup(%s) failed: %s",
+	       mailboxname, error_message(r));
+	txn->error.desc = error_message(r);
+
+	switch (r) {
+	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	default: return HTTP_SERVER_ERROR;
+	}
+    }
+
+    /* Check ACL for current user */
+    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
+    if (!(rights & DACL_WRITEPROPS)) {
+	/* DAV:need-privileges */
+	txn->error.precond = DAV_NEED_PRIVS;
+	txn->error.resource = txn->req_tgt.path;
+	txn->error.rights = DACL_WRITEPROPS;
+	return HTTP_FORBIDDEN;
+    }
+
+    if (server) {
+	/* Remote mailbox */
+	struct backend *be;
+
+	be = proxy_findserver(server, &http_protocol, httpd_userid,
+			      &backend_cached, NULL, NULL, httpd_in);
+	if (!be) return HTTP_UNAVAILABLE;
+
+	return http_pipe_req_resp(be, txn);
+    }
+
+    /* Local Mailbox */
+
+    /* Parse the PROPPATCH body */
+    ret = parse_xml_body(txn, &root);
+    if (!root) {
+	txn->error.desc = "Missing request body\r\n";
+	return HTTP_BAD_REQUEST;
+    }
+    if (ret) goto done;
+
+    indoc = root->doc;
+
+    /* Make sure its a propertyupdate element */
+    if (xmlStrcmp(root->name, BAD_CAST "propertyupdate")) {
+	txn->error.desc =
+	    "Missing propertyupdate element in PROPPATCH request\r\n";
+	return HTTP_BAD_REQUEST;
+    }
+    instr = root->children;
+
+    /* Start construction of our multistatus response */
+    if (!(root = init_xml_response("multistatus", NS_DAV, root, ns))) {
+	ret = HTTP_SERVER_ERROR;
+	txn->error.desc = "Unable to create XML response\r\n";
+	goto done;
+    }
+
+    outdoc = root->doc;
+
+    /* Add a response tree to 'root' for the specified href */
+    resp = xmlNewChild(root, NULL, BAD_CAST "response", NULL);
+    if (!resp) syslog(LOG_ERR, "new child response failed");
+    xmlNewChild(resp, NULL, BAD_CAST "href", BAD_CAST txn->req_tgt.path);
+
+    /* Populate our proppatch context */
+    pctx.req_tgt = &txn->req_tgt;
+    pctx.meth = txn->meth;
+    pctx.mailboxname = mailboxname;
+    pctx.root = resp;
+    pctx.ns = ns;
+    pctx.tid = NULL;
+    pctx.errstr = &txn->error.desc;
+    pctx.ret = &r;
+
+    /* Execute the property patch instructions */
+    ret = do_proppatch(&pctx, instr);
+
+    if (ret || r) {
+	/* Something failed.  Abort the txn and change the OK status */
+	annotatemore_abort(pctx.tid);
+
+	if (ret) goto done;
+    }
+    else {
+	/* Success.  Commit the txn */
+	annotatemore_commit(pctx.tid);
+    }
+
+    /* Output the XML response */
+    if (!ret) {
+	if (get_preferences(txn) & PREFER_MIN) ret = HTTP_OK;
+	else xml_response(HTTP_MULTI_STATUS, txn, outdoc);
+    }
+
+  done:
+    buf_free(&pctx.buf);
+
+    if (outdoc) xmlFreeDoc(outdoc);
+    if (indoc) xmlFreeDoc(indoc);
+
+    return ret;
+}
+
+
+/* Compare modseq in index maps -- used for sorting */
+static int map_modseq_cmp(const struct index_map *m1,
+			  const struct index_map *m2)
+{
+    if (m1->record.modseq < m2->record.modseq) return -1;
+    if (m1->record.modseq > m2->record.modseq) return 1;
+    return 0;
+}
+
+
+int report_sync_col(struct transaction_t *txn __attribute__((unused)),
+		    xmlNodePtr inroot, struct propfind_ctx *fctx,
+		    char mailboxname[])
+{
+    int ret = 0, r, userflag;
+    struct mailbox *mailbox = NULL;
+    uint32_t uidvalidity = 0;
+    modseq_t syncmodseq = 0, highestmodseq;
+    uint32_t limit = -1, recno, nresp;
+    xmlNodePtr node;
+    struct index_state istate;
+    struct index_record *record;
+    char tokenuri[MAX_MAILBOX_PATH+1];
+
+    /* XXX  Handle Depth (cal-home-set at toplevel) */
+
+    istate.map = NULL;
+
+    /* Open mailbox for reading */
+    if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_SHARED))) {
+	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+	       mailboxname, error_message(r));
+	txn->error.desc = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
+    fctx->mailbox = mailbox;
+
+    highestmodseq = mailbox->i.highestmodseq;
+    if (mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag)) userflag = -1;
+
+    /* Parse children element of report */
+    for (node = inroot->children; node; node = node->next) {
+	xmlNodePtr node2;
+	xmlChar *str;
+	if (node->type == XML_ELEMENT_NODE) {
+	    if (!xmlStrcmp(node->name, BAD_CAST "sync-token") &&
+		(str = xmlNodeListGetString(inroot->doc, node->children, 1))) {
+		if (xmlStrncmp(str, BAD_CAST XML_NS_CYRUS "sync/",
+			       strlen(XML_NS_CYRUS "sync/")) ||
+		    (sscanf(strrchr((char *) str, '/') + 1,
+			    "%u-" MODSEQ_FMT,
+			    &uidvalidity, &syncmodseq) != 2) ||
+		    !syncmodseq ||
+		    (uidvalidity != mailbox->i.uidvalidity) ||
+		    (syncmodseq < mailbox->i.deletedmodseq) ||
+		    (syncmodseq > highestmodseq)) {
+		    /* DAV:valid-sync-token */
+		    *fctx->errstr = "Invalid sync-token";
+		    ret = HTTP_FORBIDDEN;
+		    goto done;
+		}
+	    }
+	    if (!xmlStrcmp(node->name, BAD_CAST "sync-level") &&
+		(str = xmlNodeListGetString(inroot->doc, node->children, 1))) {
+		if (!strcmp((char *) str, "infinity")) {
+		    *fctx->errstr =
+			"This server DOES NOT support infinite depth requests";
+		    ret = HTTP_SERVER_ERROR;
+		    goto done;
+		}
+		else if ((sscanf((char *) str, "%u", &fctx->depth) != 1) ||
+			 (fctx->depth != 1)) {
+		    *fctx->errstr = "Illegal sync-level";
+		    ret = HTTP_BAD_REQUEST;
+		    goto done;
+		}
+	    }
+	    if (!xmlStrcmp(node->name, BAD_CAST "limit")) {
+		for (node2 = node->children; node2; node2 = node2->next) {
+		    if ((node2->type == XML_ELEMENT_NODE) &&
+			!xmlStrcmp(node2->name, BAD_CAST "nresults") &&
+			(!(str = xmlNodeListGetString(inroot->doc,
+						      node2->children, 1)) ||
+			 (sscanf((char *) str, "%u", &limit) != 1))) {
+			*fctx->errstr = "Invalid limit";
+			ret = HTTP_FORBIDDEN;
+			goto done;
+		    }
+		}
+	    }
+	}
+    }
+
+    /* Check Depth */
+    if (!fctx->depth) {
+	*fctx->errstr = "Illegal sync-level";
+	ret = HTTP_BAD_REQUEST;
+	goto done;
+    }
+
+
+    /* Construct array of records for sorting and/or fetching cached header */
+    istate.mailbox = mailbox;
+    istate.map = xzmalloc(mailbox->i.num_records *
+			  sizeof(struct index_map));
+
+    /* Find which resources we need to report */
+    for (nresp = 0, recno = 1; recno <= mailbox->i.num_records; recno++) {
+
+	record = &istate.map[nresp].record;
+	if (mailbox_read_index_record(mailbox, recno, record)) {
+	    /* XXX  Corrupted record?  Should we bail? */
+	    continue;
+	}
+
+	if (record->modseq <= syncmodseq) {
+	    /* Resource not added/removed since last sync */
+	    continue;
+	}
+
+	if ((userflag >= 0) &&
+	    record->user_flags[userflag / 32] & (1 << (userflag & 31))) {
+	    /* Resource replaced by a PUT, COPY, or MOVE - ignore it */
+	    continue;
+	}
+
+	if (!syncmodseq && (record->system_flags & FLAG_EXPUNGED)) {
+	    /* Initial sync - ignore unmapped resources */
+	    continue;
+	}
+
+	nresp++;
+    }
+
+    if (limit < nresp) {
+	/* Need to truncate the responses */
+	struct index_map *map = istate.map;
+
+	/* Sort the response records by modseq */
+	qsort(map, nresp, sizeof(struct index_map),
+	      (int (*)(const void *, const void *)) &map_modseq_cmp);
+
+	/* Our last response MUST be the last record with its modseq */
+	for (nresp = limit;
+	     nresp && map[nresp-1].record.modseq == map[nresp].record.modseq;
+	     nresp--);
+
+	if (!nresp) {
+	    /* DAV:number-of-matches-within-limits */
+	    *fctx->errstr = "Unable to truncate results";
+	    ret = HTTP_FORBIDDEN;  /* HTTP_NO_STORAGE ? */
+	    goto done;
+	}
+
+	/* highestmodseq will be modseq of last record we return */
+	highestmodseq = map[nresp-1].record.modseq;
+
+	/* Tell client we truncated the responses */
+	xml_add_response(fctx, HTTP_NO_STORAGE);
+    }
+
+    /* Report the resources within the client requested limit (if any) */
+    for (recno = 1; recno <= nresp; recno++) {
+	char *p, *resource = NULL;
+	struct caldav_data cdata;
+
+	record = &istate.map[recno-1].record;
+
+	/* Get resource filename from Content-Disposition header */
+	if ((p = index_getheader(&istate, recno, "Content-Disposition"))) {
+	    resource = strstr(p, "filename=") + 9;
+	}
+	if (!resource) continue;  /* No filename */
+
+	if (*resource == '\"') {
+	    resource++;
+	    if ((p = strchr(resource, '\"'))) *p = '\0';
+	}
+	else if ((p = strchr(resource, ';'))) *p = '\0';
+
+	memset(&cdata, 0, sizeof(struct caldav_data));
+	cdata.dav.resource = resource;
+
+	if (record->system_flags & FLAG_EXPUNGED) {
+	    /* report as NOT FOUND
+	       IMAP UID of 0 will cause index record to be ignored
+	       propfind_by_resource() will append our resource name */
+	    propfind_by_resource(fctx, &cdata);
+	}
+	else {
+	    fctx->record = record;
+	    cdata.dav.imap_uid = record->uid;
+	    propfind_by_resource(fctx, &cdata);
+	}
+    }
+
+    /* Add sync-token element */
+    snprintf(tokenuri, MAX_MAILBOX_PATH,
+	     XML_NS_CYRUS "sync/%u-" MODSEQ_FMT,
+	     mailbox->i.uidvalidity, highestmodseq);
+    xmlNewChild(fctx->root, NULL, BAD_CAST "sync-token", BAD_CAST tokenuri);
+
+  done:
+    if (istate.map) free(istate.map);
+    if (mailbox) mailbox_unlock_index(mailbox, NULL);
+
+    return ret;
+}
+
+
+/* Perform a REPORT request */
+int meth_report(struct transaction_t *txn, void *params)
+{
+    int ret = 0, r;
+    const char **hdr;
+    unsigned depth = 0;
+    xmlNodePtr inroot = NULL, outroot = NULL, cur, prop = NULL;
+    struct report_type_t *report_types = (struct report_type_t *) params;
+    const struct report_type_t *report = NULL;
+    xmlNsPtr ns[NUM_NAMESPACE];
+    char mailboxname[MAX_MAILBOX_BUFFER];
+    struct propfind_ctx fctx;
+    struct propfind_entry_list *elist = NULL;
+
+    memset(&fctx, 0, sizeof(struct propfind_ctx));
+
+    /* Make sure its a DAV resource */
+    if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED; 
+
+    /* Parse the path */
+    if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+
+    /* Check Depth */
+    if ((hdr = spool_getheader(txn->req_hdrs, "Depth"))) {
+	if (!strcmp(hdr[0], "infinity")) {
+	    depth = 2;
+	}
+	else if ((sscanf(hdr[0], "%u", &depth) != 1) || (depth > 1)) {
+	    txn->error.desc = "Illegal Depth value\r\n";
+	    return HTTP_BAD_REQUEST;
+	}
+    }
+
+    /* Normalize depth so that:
+     * 0 = home-set collection, 1+ = calendar collection, 2+ = calendar resource
+     */
+    if (txn->req_tgt.collection) depth++;
+    if (txn->req_tgt.resource) depth++;
+
+    /* Parse the REPORT body */
+    ret = parse_xml_body(txn, &inroot);
+    if (!inroot) {
+	txn->error.desc = "Missing request body\r\n";
+	return HTTP_BAD_REQUEST;
+    }
+    if (ret) goto done;
+
+    /* Check the report type against our supported list */
+    for (report = report_types; report && report->name; report++) {
+	if (!xmlStrcmp(inroot->name, BAD_CAST report->name)) break;
+    }
+    if (!report || !report->name) {
+	syslog(LOG_WARNING, "REPORT %s", inroot->name);
+	/* DAV:supported-report */
+	txn->error.precond = DAV_SUPP_REPORT;
+	ret = HTTP_FORBIDDEN;
+	goto done;
+    }
+
+    if (report->flags & REPORT_NEED_MBOX) {
+	char *server, *acl;
+	int rights;
+
+	/* Construct mailbox name corresponding to request target URI */
+	(void) target_to_mboxname(&txn->req_tgt, mailboxname);
+
+	/* Locate the mailbox */
+	if ((r = http_mlookup(mailboxname, &server, &acl, NULL))) {
+	    syslog(LOG_ERR, "mlookup(%s) failed: %s",
+		   mailboxname, error_message(r));
+	    txn->error.desc = error_message(r);
+
+	    switch (r) {
+	    case IMAP_PERMISSION_DENIED: ret = HTTP_FORBIDDEN;
+	    case IMAP_MAILBOX_NONEXISTENT: ret = HTTP_NOT_FOUND;
+	    default: ret = HTTP_SERVER_ERROR;
+	    }
+	    goto done;
+	}
+
+	/* Check ACL for current user */
+	rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
+	if ((rights & report->reqd_privs) != report->reqd_privs) {
+	    if (report->reqd_privs == DACL_READFB) ret = HTTP_NOT_FOUND;
+	    else {
+		/* DAV:need-privileges */
+		txn->error.precond = DAV_NEED_PRIVS;
+		txn->error.resource = txn->req_tgt.path;
+		txn->error.rights = report->reqd_privs;
+		ret = HTTP_FORBIDDEN;
+	    }
+	    goto done;
+	}
+
+	if (server) {
+	    /* Remote mailbox */
+	    struct backend *be;
+
+	    be = proxy_findserver(server, &http_protocol, httpd_userid,
+				  &backend_cached, NULL, NULL, httpd_in);
+	    if (!be) ret = HTTP_UNAVAILABLE;
+	    else ret = http_pipe_req_resp(be, txn);
+	    goto done;
+	}
+
+	/* Local Mailbox */
+    }
+
+    /* Principal or Local Mailbox */
+
+    /* Parse children element of report */
+    for (cur = inroot->children; cur; cur = cur->next) {
+	if (cur->type == XML_ELEMENT_NODE) {
+	    if (!xmlStrcmp(cur->name, BAD_CAST "allprop")) {
+		syslog(LOG_WARNING, "REPORT %s w/allprop", report->name);
+		txn->error.desc = "Unsupported REPORT option <allprop>\r\n";
+		ret = HTTP_NOT_IMPLEMENTED;
+		goto done;
+	    }
+	    else if (!xmlStrcmp(cur->name, BAD_CAST "propname")) {
+		syslog(LOG_WARNING, "REPORT %s w/propname", report->name);
+		txn->error.desc = "Unsupported REPORT option <propname>\r\n";
+		ret = HTTP_NOT_IMPLEMENTED;
+		goto done;
+	    }
+	    else if (!xmlStrcmp(cur->name, BAD_CAST "prop")) {
+		prop = cur;
+		break;
+	    }
+	}
+    }
+
+    if (!prop && (report->flags & REPORT_NEED_PROPS)) {
+	txn->error.desc = "Missing <prop> element in REPORT\r\n";
+	ret = HTTP_BAD_REQUEST;
+	goto done;
+    }
+
+    /* Start construction of our multistatus response */
+    if ((report->flags & REPORT_MULTISTATUS) &&
+	!(outroot = init_xml_response("multistatus", NS_DAV, inroot, ns))) {
+	txn->error.desc = "Unable to create XML response\r\n";
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
+    /* Populate our propfind context */
+    fctx.req_tgt = &txn->req_tgt;
+    fctx.depth = depth;
+    fctx.prefer = get_preferences(txn);
+    fctx.userid = httpd_userid;
+    fctx.userisadmin = httpd_userisadmin;
+    fctx.authstate = httpd_authstate;
+    fctx.mailbox = NULL;
+    fctx.record = NULL;
+    fctx.reqd_privs = report->reqd_privs;
+    fctx.elist = NULL;
+    fctx.root = outroot;
+    fctx.ns = ns;
+    fctx.errstr = &txn->error.desc;
+    fctx.ret = &ret;
+    fctx.fetcheddata = 0;
+
+    /* Parse the list of properties and build a list of callbacks */
+    if (prop) preload_proplist(prop->children, &fctx);
+
+    /* Process the requested report */
+    ret = (*report->proc)(txn, inroot, &fctx, mailboxname);
+
+    /* Output the XML response */
+    if (!ret && outroot) {
+	/* iCalendar data in response should not be transformed */
+	if (fctx.fetcheddata) txn->flags.cc |= CC_NOTRANSFORM;
+
+	xml_response(HTTP_MULTI_STATUS, txn, outroot->doc);
+    }
+
+  done:
+    /* Free the entry list */
+    elist = fctx.elist;
+    while (elist) {
+	struct propfind_entry_list *freeme = elist;
+	elist = elist->next;
+	free(freeme);
+    }
+
+    buf_free(&fctx.buf);
+
+    if (inroot) xmlFreeDoc(inroot->doc);
+    if (outroot) xmlFreeDoc(outroot->doc);
+
+    return ret;
 }

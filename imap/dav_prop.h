@@ -53,6 +53,8 @@
 #include <libxml/tree.h>
 
 
+#define DFLAG_UNBIND	"DAV:unbind"
+
 #define ANNOT_NS	"/vendor/cmu/cyrus-imapd/"
 
 #define SCHED_INBOX	"Inbox/"
@@ -182,26 +184,6 @@ enum {
     ISCHED_VERIFICATION_FAILED
 };
 
-/* Structure for property status */
-struct propstat {
-    xmlNodePtr root;
-    long status;
-    unsigned precond;
-};
-
-/* Index into propstat array */
-enum {
-    PROPSTAT_OK = 0,
-    PROPSTAT_UNAUTH,
-    PROPSTAT_FORBID,
-    PROPSTAT_NOTFOUND,
-    PROPSTAT_CONFLICT,
-    PROPSTAT_FAILEDDEP,
-    PROPSTAT_ERROR,
-    PROPSTAT_OVERQUOTA
-};
-#define NUM_PROPSTAT 8
-
 /* Preference bits */
 enum {
     PREFER_MIN    = (1<<0),
@@ -211,6 +193,11 @@ enum {
 
 /* Context for fetching properties */
 struct propfind_entry_list;
+
+typedef int (*lookup_proc_t)(void *davdb, const char *mailbox,
+			     const char *resource, int lock, void **data);
+typedef int (*foreach_proc_t)(void *davdb, const char *mailbox,
+			      int (*cb)(void *rock, void *data), void *rock);
 
 struct propfind_ctx {
     struct request_target_t *req_tgt;	/* parsed request target URL */
@@ -230,15 +217,8 @@ struct propfind_ctx {
     int (*filter)(struct propfind_ctx *,
 		  void *data);		/* callback to filter resources */
     void *filter_crit;			/* criteria to filter resources */
-    int (*lookup_resource)(void *davdb,
-			   const char *mailbox,
-			   const char *resource,
-			   int lock,
-			   void **data);
-    int (*foreach_resource)(void *davdb,
-			    const char *mailbox,
-			    int (*cb)(void *rock, void *data),
-			    void *rock);
+    lookup_proc_t lookup_resource;
+    foreach_proc_t foreach_resource;
     int (*proc_by_resource)(void *rock,	/* Callback to process a resource */
 			    void *data);
     struct propfind_entry_list *elist;	/* List of props to fetch w/callbacks */
@@ -251,33 +231,37 @@ struct propfind_ctx {
 };
 
 
-/* Context for patching (writing) properties */
-struct proppatch_ctx {
-    struct request_target_t *req_tgt;	/* parsed request target URL */
-    unsigned meth;	    		/* requested Method */
-    const char *mailboxname;		/* mailbox correspondng to collection */
-    xmlNodePtr root;			/* root node to add to XML tree */
-    xmlNsPtr *ns;			/* Array of our supported namespaces */
-    struct txn *tid;			/* Transaction ID for annot writes */
-    const char **errstr;		/* Error string to pass up to caller */
-    int *ret;  				/* Return code to pass up to caller */
-    struct buf buf;			/* Working buffer */
+struct propfind_params {
+    void **davdb;
+    lookup_proc_t lookup;
+    foreach_proc_t foreach;
 };
 
+typedef int (*report_proc_t)(struct transaction_t *txn, xmlNodePtr inroot,
+			     struct propfind_ctx *fctx,
+			     char mailboxname[]);
 
-/* Linked-list of properties for fetching */
-struct propfind_entry_list {
-    xmlNodePtr prop;			/* Property */
-    int (*get)(xmlNodePtr node,		/* Callback to fetch property */
-	       struct propfind_ctx *fctx, xmlNodePtr resp,
-	       struct propstat propstat[], void *rock);
-    void *rock;				/* Add'l data to pass to callback */
-    struct propfind_entry_list *next;
+struct report_type_t {
+    const char *name;
+    report_proc_t proc;
+    unsigned long reqd_privs;
+    unsigned flags;
 };
 
+/* Report flags */
+enum {
+    REPORT_NEED_MBOX	= (1<<0),
+    REPORT_NEED_PROPS 	= (1<<1),
+    REPORT_MULTISTATUS	= (1<<2)
+};
 
-/* Parse the requested properties and create a linked list of fetch callbacks */
-int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx);
+int report_sync_col(struct transaction_t *txn, xmlNodePtr inroot,
+		    struct propfind_ctx *fctx, char mailboxname[]);
+
+
+int parse_path(struct request_target_t *tgt, const char **errstr);
+int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
+unsigned get_preferences(struct transaction_t *txn);
 
 /* Initialize an XML tree */
 xmlNodePtr init_xml_response(const char *resp, int ns,
@@ -287,10 +271,14 @@ struct error_t;
 xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
 			 xmlNsPtr *avail_ns);
 
-/* Add a response tree to 'root' for the specified href and property list */
-int xml_add_response(struct propfind_ctx *fctx, long code);
+int propfind_by_resource(void *rock, void *data);
+int propfind_by_collection(char *mboxname, int matchlen,
+			   int maycreate, void *rock);
 
-/* Execute given property patch instructions */
-int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr);
+/* DAV method processing functions */
+int meth_mkcol(struct transaction_t *txn, void *params);
+int meth_propfind(struct transaction_t *txn, void *params);
+int meth_proppatch(struct transaction_t *txn, void *params);
+int meth_report(struct transaction_t *txn, void *params);
 
 #endif /* DAV_PROP_H */

@@ -1,4 +1,4 @@
-/* httpd.h -- Common state for HTTP/WebDAV/CalDAV daemon
+/* httpd.h -- Common state for HTTP/RSS/WebDAV/CalDAV/iSchedule daemon
  *
  * Copyright (c) 1994-2011 Carnegie Mellon University.  All rights reserved.
  *
@@ -319,7 +319,6 @@ extern struct namespace httpd_namespace;
 extern int parse_uri(unsigned meth, const char *uri,
 		     struct request_target_t *tgt, const char **errstr);
 extern int is_mediatype(const char *hdr, const char *type);
-extern int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
 extern int http_mailbox_open(const char *name, struct mailbox **mailbox,
 			     int locktype);
 extern const char *http_statusline(long code);
@@ -332,7 +331,6 @@ extern void write_body(long code, struct transaction_t *txn,
 		       const char *buf, unsigned len);
 extern int meth_options(struct transaction_t *txn, void *params);
 extern int get_doc(struct transaction_t *txn, filter_proc_t filter);
-extern int meth_propfind(struct transaction_t *txn, void *params);
 extern int check_precond(unsigned meth, const char *stag, const char *etag,
 			 time_t lastmod, hdrcache_t hdrcache);
 extern int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
