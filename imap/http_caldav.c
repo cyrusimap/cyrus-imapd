@@ -86,7 +86,6 @@
 #include "smtpclient.h"
 #include "spool.h"
 #include "stristr.h"
-#include "tok.h"
 #include "util.h"
 #include "version.h"
 #include "xmalloc.h"
@@ -2154,60 +2153,6 @@ static int report_fb_query(struct transaction_t *txn,
     else ret = HTTP_NOT_FOUND;
 
     return ret;
-}
-
-
-/* Parse an XML body into a tree */
-int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
-{
-    const char **hdr;
-    xmlParserCtxtPtr ctxt;
-    xmlDocPtr doc = NULL;
-    int r = 0;
-
-    *root = NULL;
-
-    /* Read body */
-    if (!txn->flags.havebody) {
-	txn->flags.havebody = 1;
-	r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, 1,
-		      &txn->error.desc);
-	if (r) {
-	    txn->flags.close = 1;
-	    return r;
-	}
-    }
-
-    if (!buf_len(&txn->req_body)) return 0;
-
-    /* Check Content-Type */
-    if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
-	(!is_mediatype(hdr[0], "text/xml") &&
-	 !is_mediatype(hdr[0], "application/xml"))) {
-	txn->error.desc = "This method requires an XML body\r\n";
-	return HTTP_BAD_MEDIATYPE;
-    }
-
-    /* Parse the XML request */
-    ctxt = xmlNewParserCtxt();
-    if (ctxt) {
-	doc = xmlCtxtReadMemory(ctxt, buf_cstring(&txn->req_body),
-				buf_len(&txn->req_body), NULL, NULL,
-				XML_PARSE_NOWARNING);
-	xmlFreeParserCtxt(ctxt);
-    }
-    if (!doc) {
-	txn->error.desc = "Unable to parse XML body\r\n";
-	return HTTP_BAD_REQUEST;
-    }
-
-    /* Get the root element of the XML request */
-    if (!(*root = xmlDocGetRootElement(doc))) {
-	txn->error.desc = "Missing root element in request\r\n";
-	return HTTP_BAD_REQUEST;
-    }
-
-    return 0;
 }
 
 

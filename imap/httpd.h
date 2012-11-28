@@ -335,7 +335,6 @@ extern int check_precond(unsigned meth, const char *stag, const char *etag,
 			 time_t lastmod, hdrcache_t hdrcache);
 extern int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 		     int decompress, const char **errstr);
-extern int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root);
 
 #ifdef WITH_CALDAV_SCHED
 #include <libical/ical.h>

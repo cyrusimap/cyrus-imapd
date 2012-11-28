@@ -263,6 +263,8 @@ int parse_path(struct request_target_t *tgt, const char **errstr);
 int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
 unsigned get_preferences(struct transaction_t *txn);
 
+int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root);
+
 /* Initialize an XML tree */
 xmlNodePtr init_xml_response(const char *resp, int ns,
 			     xmlNodePtr req, xmlNsPtr *respNs);
