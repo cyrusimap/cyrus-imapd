@@ -1068,9 +1068,8 @@ static void cmdloop(void)
 		if (namespaces[i]->well_known) {
 		    len = strlen(namespaces[i]->well_known);
 		    if (!strncmp(path, namespaces[i]->well_known, len) &&
-			(path[len] == '\0' || path[len] == '/')) {
-			ret = HTTP_MOVED;
-		    
+			(!path[len] || path[len] == '/')) {
+			
 			hdr = spool_getheader(txn.req_hdrs, "Host");
 			buf_printf(&txn.buf, "%s://%s%s%s",
 				   https ? "https" : "http", hdr[0],
@@ -1078,13 +1077,15 @@ static void cmdloop(void)
 				   path + len);
 			if (*query) buf_printf(&txn.buf, "?%s", query);
 			txn.location = buf_cstring(&txn.buf);
-			break;
+
+			ret = HTTP_MOVED;
+			goto done;
 		    }
 		}
 
 		/* See if the prefix matches - terminated with NUL or '/' */
 		len = strlen(namespaces[i]->prefix);
-		if (!strncmp(namespaces[i]->prefix, path, len) &&
+		if (!strncmp(path, namespaces[i]->prefix, len) &&
 		    (!path[len] || (path[len] == '/') || !strcmp(path, "*"))) {
 		    break;
 		}
@@ -1093,21 +1094,18 @@ static void cmdloop(void)
 		txn.req_tgt.namespace = namespace->id;
 		txn.req_tgt.allow = namespace->allow;
 
+		/* Check if method is supported in this namespace */
 		meth_t = &namespace->methods[txn.meth];
+		if (!meth_t->proc) ret = HTTP_NOT_ALLOWED;
+
+		/* Check if method expects a body */
+		else if ((http_methods[txn.meth].flags & METH_NOBODY) &&
+			 spool_getheader(txn.req_hdrs, "Content-Type"))
+		    ret = HTTP_BAD_MEDIATYPE;
 	    } else {
 		/* XXX  Should never get here */
 		ret = HTTP_SERVER_ERROR;
 	    }
-	}
-
-	/* Check Method against list of supported methods in the namespace */
-	if (!ret) {
-	    if (!meth_t->proc) ret = HTTP_NOT_ALLOWED;
-
-	    /* Check if method expects a body */
-	    else if ((http_methods[txn.meth].flags & METH_NOBODY) &&
-		     spool_getheader(txn.req_hdrs, "Content-Type"))
-		ret = HTTP_BAD_MEDIATYPE;
 	}
 
 	if (ret) goto done;
