@@ -1,4 +1,4 @@
-/* dav_prop.h -- Routines for dealing with DAV properties in httpd
+/* http_dav.h -- Routines for dealing with DAV properties in httpd
  *
  * Copyright (c) 1994-2011 Carnegie Mellon University.  All rights reserved.
  *
@@ -41,8 +41,8 @@
  *
  */
 
-#ifndef DAV_PROP_H
-#define DAV_PROP_H
+#ifndef HTTP_DAV_H
+#define HTTP_DAV_H
 
 #include "caldav_db.h"
 #include "httpd.h"
@@ -281,4 +281,4 @@ int meth_propfind(struct transaction_t *txn, void *params);
 int meth_proppatch(struct transaction_t *txn, void *params);
 int meth_report(struct transaction_t *txn, void *params);
 
-#endif /* DAV_PROP_H */
+#endif /* HTTP_DAV_H */

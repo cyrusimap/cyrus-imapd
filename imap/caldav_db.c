@@ -50,8 +50,8 @@
 
 #include "caldav_db.h"
 #include "cyrusdb.h"
-#include "dav_prop.h"
 #include "httpd.h"
+#include "http_dav.h"
 #include "libconfig.h"
 #include "mboxname.h"
 #include "util.h"

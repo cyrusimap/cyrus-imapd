@@ -1,4 +1,4 @@
-/* dav_prop.c -- Routines for dealing with DAV properties in httpd
+/* http_dav.c -- Routines for dealing with DAV properties in httpd
  *
  * Copyright (c) 1994-2011 Carnegie Mellon University.  All rights reserved.
  *
@@ -63,7 +63,7 @@
  */
 
 
-#include "dav_prop.h"
+#include "http_dav.h"
 #include "annotate.h"
 #include "acl.h"
 #include "caldav_db.h"

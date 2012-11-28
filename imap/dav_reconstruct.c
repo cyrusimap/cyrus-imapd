@@ -54,8 +54,8 @@
 
 #include "annotate.h"
 #include "caldav_db.h"
-#include "dav_prop.h"
 #include "global.h"
+#include "http_dav.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "message.h"

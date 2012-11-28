@@ -92,7 +92,7 @@
 #include "tok.h"
 
 #ifdef WITH_CALDAV
-#include "dav_prop.h"
+#include "http_dav.h"
 #endif
 
 #include <libxml/tree.h>

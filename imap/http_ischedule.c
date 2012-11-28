@@ -51,9 +51,9 @@
 
 #include <libical/ical.h>
 
-#include "dav_prop.h"
 #include "global.h"
 #include "httpd.h"
+#include "http_dav.h"
 #include "http_err.h"
 #include "http_proxy.h"
 #include "map.h"
