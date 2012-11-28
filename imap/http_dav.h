@@ -111,7 +111,10 @@ enum {
 #define DACL_READFB	ACL_USER9	/* CALDAV:read-free-busy
 					   (implicit if user has DAV:read) */
 
-/* CalDAV scheduling (draft-desruisseaux-caldav-sched) privileges */
+/* CalDAV Scheduling (RFC 6638) privileges */
+/* XXX  Can/should we use the same ACL for both schedule-deliver & schedule-send
+   and can/should we use the same ACL as read-free-busy?
+*/
 #define DACL_SCHED	ACL_USER8	/* For Scheduling Inbox:
 					   CALDAV:schedule-deliver (aggregates
 					   CALDAV:schedule-deliver-invite,
