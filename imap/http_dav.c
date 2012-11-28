@@ -2225,7 +2225,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
     xmlNsPtr ns[NUM_NAMESPACE];
     char *server, mailboxname[MAX_MAILBOX_BUFFER], *partition = NULL;
     struct proppatch_ctx pctx;
-    unsigned mbtype = params ? *(unsigned *) params : 0;
+    struct mkcol_params *mparams = (struct mkcol_params *) params;
 
     memset(&pctx, 0, sizeof(struct proppatch_ctx));
 
@@ -2248,7 +2248,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
     }
 
     /* Construct mailbox name corresponding to calendar-home-set */
-    r = caldav_mboxname("", httpd_userid, mailboxname);
+    r = mparams->mboxname("", httpd_userid, mailboxname);
 
     /* Locate the mailbox */
     if ((r = http_mlookup(mailboxname, &server, NULL, NULL))) {
@@ -2297,28 +2297,20 @@ int meth_mkcol(struct transaction_t *txn, void *params)
     if (ret) goto done;
 
     if (root) {
-	const char *root_elem = "mkcol";
-
-	if (txn->meth == METH_MKCALENDAR) root_elem = "mkcalendar";
-
 	/* Check for correct root element */
-	if (xmlStrcmp(root->name, BAD_CAST root_elem)) {
+	indoc = root->doc;
+
+	if (xmlStrcmp(root->name, BAD_CAST mparams->xml_req)) {
 	    txn->error.desc = "Incorrect root element in XML request\r\n";
 	    return HTTP_BAD_MEDIATYPE;
 	}
 
-	indoc = root->doc;
 	instr = root->children;
     }
 
     if (instr) {
 	/* Start construction of our mkcol/mkcalendar response */
-	if (txn->meth == METH_MKCALENDAR)
-	    root = init_xml_response("mkcalendar-response", NS_CALDAV,
-				     root, ns);
-	else
-	    root = init_xml_response("mkcol-response", NS_DAV,
-				     root, ns);
+	root = init_xml_response(mparams->xml_resp, mparams->xml_ns, root, ns);
 	if (!root) {
 	    ret = HTTP_SERVER_ERROR;
 	    txn->error.desc = "Unable to create XML response\r\n";
@@ -2355,7 +2347,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
     }
 
     /* Create the mailbox */
-    r = mboxlist_createmailbox(mailboxname, mbtype, partition, 
+    r = mboxlist_createmailbox(mailboxname, mparams->mbtype, partition, 
 			       httpd_userisadmin || httpd_userisproxyadmin,
 			       httpd_userid, httpd_authstate,
 			       0, 0, 0);

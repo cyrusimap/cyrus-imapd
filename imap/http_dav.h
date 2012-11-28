@@ -231,6 +231,14 @@ struct propfind_ctx {
 };
 
 
+struct mkcol_params {
+    unsigned mbtype;
+    int (*mboxname)(const char *name, const char *userid, char *result);
+    const char *xml_req;
+    const char *xml_resp;
+    unsigned xml_ns;
+};
+
 struct propfind_params {
     void **davdb;
     lookup_proc_t lookup;

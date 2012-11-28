@@ -155,7 +155,15 @@ static int sched_reply(icalcomponent *oldical, icalcomponent *newical,
 		       const char *userid);
 #endif /* WITH_CALDAV_SCHED */
 
-static unsigned mbtype = MBTYPE_CALENDAR;
+static struct mkcol_params mkcalendar_params = {
+    MBTYPE_CALENDAR, &caldav_mboxname,
+    "mkcalendar", "mkcalendar-response", NS_CALDAV
+};
+
+static struct mkcol_params mkcol_params = {
+    MBTYPE_CALENDAR, &caldav_mboxname,
+    "mkcol", "mkcol-response", NS_DAV
+};
 
 static struct propfind_params propfind_params = {
     (void **) &auth_caldavdb,
@@ -187,8 +195,8 @@ const struct namespace_t namespace_calendar = {
 	{ &meth_delete,		NULL },			/* DELETE	*/
 	{ &meth_get,		NULL },			/* GET		*/
 	{ &meth_get,		NULL },			/* HEAD		*/
-	{ &meth_mkcol,		&mbtype },		/* MKCALENDAR	*/
-	{ &meth_mkcol,		&mbtype },		/* MKCOL	*/
+	{ &meth_mkcol,		&mkcalendar_params },	/* MKCALENDAR	*/
+	{ &meth_mkcol,		&mkcol_params },	/* MKCOL	*/
 	{ &meth_copy,		NULL },			/* MOVE		*/
 	{ &meth_options,	NULL },			/* OPTIONS	*/
 	{ &meth_post,		NULL },			/* POST		*/
