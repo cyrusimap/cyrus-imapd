@@ -197,8 +197,10 @@ enum {
 /* Context for fetching properties */
 struct propfind_entry_list;
 
+/* Function to lookup DAV mailbox+resource (w/ optional lock) and return data */
 typedef int (*lookup_proc_t)(void *davdb, const char *mailbox,
 			     const char *resource, int lock, void **data);
+/* Function to process each DAV resource in mailbox with cb() */
 typedef int (*foreach_proc_t)(void *davdb, const char *mailbox,
 			      int (*cb)(void *rock, void *data), void *rock);
 
@@ -233,19 +235,33 @@ struct propfind_ctx {
     struct buf buf;			/* Working buffer */
 };
 
-
-struct mkcol_params {
-    unsigned mbtype;
-    int (*mboxname)(const char *name, const char *userid, char *result);
-    const char *xml_req;
-    const char *xml_resp;
-    unsigned xml_ns;
+/* meth_acl() parameters */
+struct acl_params {
+    int (*acl_proc)(struct transaction_t *txn,
+		    xmlNodePtr priv,
+		    int *rights);	/* Process priv, augmenting *rights.
+					 * Returns 1 if processing complete.
+					 * Returns 0 if processing should
+					 * continue in meth_acl()
+					 */
 };
 
+/* meth_mkcol() parameters */
+struct mkcol_params {
+    unsigned mbtype;			/* mbtype to use for created mailbox */
+    int (*mboxname)(const char *name,
+		    const char *userid,
+		    char *result);	/* create mboxname from name & userid */
+    const char *xml_req;		/* toplevel XML request element */
+    const char *xml_resp;		/* toplevel XML response element */
+    unsigned xml_ns;			/* namespace of response element */
+};
+
+/* meth_propfind() parameters */
 struct propfind_params {
-    void **davdb;
-    lookup_proc_t lookup;
-    foreach_proc_t foreach;
+    void **davdb;			/* DAV DB to use for lookup/foreach */
+    lookup_proc_t lookup;		/* lookup a specific resource */
+    foreach_proc_t foreach;		/* process all resources in a mailbox */
 };
 
 typedef int (*report_proc_t)(struct transaction_t *txn, xmlNodePtr inroot,
@@ -253,10 +269,10 @@ typedef int (*report_proc_t)(struct transaction_t *txn, xmlNodePtr inroot,
 			     char mailboxname[]);
 
 struct report_type_t {
-    const char *name;
-    report_proc_t proc;
-    unsigned long reqd_privs;
-    unsigned flags;
+    const char *name;			/* report name */
+    report_proc_t proc;			/* function to generate the report */
+    unsigned long reqd_privs;		/* privileges required to run report */
+    unsigned flags;			/* report-specific flags */
 };
 
 /* Report flags */
@@ -289,6 +305,7 @@ int propfind_by_collection(char *mboxname, int matchlen,
 			   int maycreate, void *rock);
 
 /* DAV method processing functions */
+int meth_acl(struct transaction_t *txn, void *params);
 int meth_mkcol(struct transaction_t *txn, void *params);
 int meth_propfind(struct transaction_t *txn, void *params);
 int meth_proppatch(struct transaction_t *txn, void *params);

@@ -166,7 +166,14 @@ struct request_target_t {
     size_t collen;
     char *resource;		/* ptr to resource name */
     size_t reslen;
+    unsigned flags;		/* target-specific flags/meta-data */
     unsigned long allow;	/* bitmask of allowed features/methods */
+};
+
+/* Request target flags */
+enum {
+    TGT_SCHED_INBOX = 1,
+    TGT_SCHED_OUTBOX
 };
 
 /* Auth challenge context */

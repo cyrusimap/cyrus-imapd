@@ -275,6 +275,13 @@ int parse_path(struct request_target_t *tgt, const char **errstr)
     tgt->collection = p;
     tgt->collen = len;
 
+    if (tgt->namespace == URL_NS_CALENDAR) {
+	if (!strcmp(tgt->collection, SCHED_INBOX))
+	    tgt->flags = TGT_SCHED_INBOX;
+	else if (!strcmp(tgt->collection, SCHED_OUTBOX))
+	    tgt->flags = TGT_SCHED_OUTBOX;
+    }
+
     p += len;
     if (!*p || !*++p) {
 	/* Make sure collection is terminated with '/' */
@@ -2205,6 +2212,318 @@ int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
     }
 
     return 0;
+}
+
+
+/* Perform an ACL request
+ *
+ * preconditions:
+ *   DAV:no-ace-conflict
+ *   DAV:no-protected-ace-conflict
+ *   DAV:no-inherited-ace-conflict
+ *   DAV:limited-number-of-aces
+ *   DAV:deny-before-grant
+ *   DAV:grant-only
+ *   DAV:no-invert
+ *   DAV:no-abstract
+ *   DAV:not-supported-privilege
+ *   DAV:missing-required-principal
+ *   DAV:recognized-principal
+ *   DAV:allowed-principal
+ */
+int meth_acl(struct transaction_t *txn, void *params)
+{
+    int ret = 0, r, rights;
+    xmlDocPtr indoc = NULL;
+    xmlNodePtr root, ace;
+    char *server, *aclstr, mailboxname[MAX_MAILBOX_BUFFER];
+    struct mailbox *mailbox = NULL;
+    struct buf acl = BUF_INITIALIZER;
+    struct acl_params *aparams = (struct acl_params *) params;
+
+    /* Response should not be cached */
+    txn->flags.cc |= CC_NOCACHE;
+
+    /* Make sure its a DAV resource */
+    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
+
+    /* Parse the path */
+    if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+
+    /* Make sure its a calendar collection */
+    if (!txn->req_tgt.collection || txn->req_tgt.resource) {
+	txn->error.desc = "ACLs can only be set on calendar collections\r\n";
+	syslog(LOG_DEBUG, "Tried to set ACL on non-calendar collection");
+	return HTTP_NOT_ALLOWED;
+    }
+
+    /* Construct mailbox name corresponding to request target URI */
+    (void) target_to_mboxname(&txn->req_tgt, mailboxname);
+
+    /* Locate the mailbox */
+    if ((r = http_mlookup(mailboxname, &server, &aclstr, NULL))) {
+	syslog(LOG_ERR, "mlookup(%s) failed: %s",
+	       mailboxname, error_message(r));
+	txn->error.desc = error_message(r);
+
+	switch (r) {
+	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	default: return HTTP_SERVER_ERROR;
+	}
+    }
+
+    /* Check ACL for current user */
+    rights =  aclstr ? cyrus_acl_myrights(httpd_authstate, aclstr) : 0;
+    if (!(rights & DACL_ADMIN)) {
+	/* DAV:need-privileges */
+	txn->error.precond = DAV_NEED_PRIVS;
+	txn->error.resource = txn->req_tgt.path;
+	txn->error.rights = DACL_ADMIN;
+	return HTTP_FORBIDDEN;
+    }
+
+    if (server) {
+	/* Remote mailbox */
+	struct backend *be;
+
+	be = proxy_findserver(server, &http_protocol, httpd_userid,
+			      &backend_cached, NULL, NULL, httpd_in);
+	if (!be) return HTTP_UNAVAILABLE;
+
+	return http_pipe_req_resp(be, txn);
+    }
+
+    /* Local Mailbox */
+
+    /* Open mailbox for writing */
+    if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_EXCLUSIVE))) {
+	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+	       mailboxname, error_message(r));
+	txn->error.desc = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
+    /* Parse the ACL body */
+    ret = parse_xml_body(txn, &root);
+    if (!root) {
+	txn->error.desc = "Missing request body\r\n";
+	ret = HTTP_BAD_REQUEST;
+    }
+    if (ret) goto done;
+
+    indoc = root->doc;
+
+    /* Make sure its an DAV:acl element */
+    if (xmlStrcmp(root->name, BAD_CAST "acl")) {
+	txn->error.desc = "Missing acl element in ACL request\r\n";
+	ret = HTTP_BAD_REQUEST;
+	goto done;
+    }
+
+    /* Parse the DAV:ace elements */
+    for (ace = root->children; ace; ace = ace->next) {
+	if (ace->type == XML_ELEMENT_NODE) {
+	    xmlNodePtr child = NULL, prin = NULL, privs = NULL;
+	    const char *userid = NULL;
+	    int deny = 0, rights = 0;
+	    char rightstr[100];
+
+	    for (child = ace->children; child; child = child->next) {
+		if (child->type == XML_ELEMENT_NODE) {
+		    if (!xmlStrcmp(child->name, BAD_CAST "principal")) {
+			if (prin) {
+			    txn->error.desc = "Multiple principals in ACE\r\n";
+			    ret = HTTP_BAD_REQUEST;
+			    goto done;
+			}
+
+			for (prin = child->children;
+			     prin->type != XML_ELEMENT_NODE; prin = prin->next);
+		    }
+		    else if (!xmlStrcmp(child->name, BAD_CAST "grant")) {
+			if (privs) {
+			    txn->error.desc = "Multiple grant|deny in ACE\r\n";
+			    ret = HTTP_BAD_REQUEST;
+			    goto done;
+			}
+
+			for (privs = child->children;
+			     privs->type != XML_ELEMENT_NODE; privs = privs->next);
+		    }
+		    else if (!xmlStrcmp(child->name, BAD_CAST "deny")) {
+			if (privs) {
+			    txn->error.desc = "Multiple grant|deny in ACE\r\n";
+			    ret = HTTP_BAD_REQUEST;
+			    goto done;
+			}
+
+			for (privs = child->children;
+			     privs->type != XML_ELEMENT_NODE; privs = privs->next);
+			deny = 1;
+		    }
+		    else if (!xmlStrcmp(child->name, BAD_CAST "invert")) {
+			/* DAV:no-invert */
+			txn->error.precond = DAV_NO_INVERT;
+			ret = HTTP_FORBIDDEN;
+			goto done;
+		    }
+		    else {
+			txn->error.desc = "Unknown element in ACE\r\n";
+			ret = HTTP_BAD_REQUEST;
+			goto done;
+		    }
+		}
+	    }
+
+	    if (!xmlStrcmp(prin->name, BAD_CAST "self")) {
+		userid = httpd_userid;
+	    }
+#if 0  /* XXX  Do we need to support this? */
+	    else if (!xmlStrcmp(prin->name, BAD_CAST "owner")) {
+		/* XXX construct userid from mailbox name */
+	    }
+#endif
+	    else if (!xmlStrcmp(prin->name, BAD_CAST "authenticated")) {
+		userid = "anyone";
+	    }
+	    else if (!xmlStrcmp(prin->name, BAD_CAST "href")) {
+		xmlChar *href = xmlNodeGetContent(prin);
+		struct request_target_t uri;
+		const char *errstr = NULL;
+
+		r = parse_uri(METH_UNKNOWN, (const char *) href, &uri, &errstr);
+		if (!r &&
+		    !strncmp("/principals/", uri.path, strlen("/principals/"))) {
+		    uri.namespace = URL_NS_PRINCIPAL;
+		    r = parse_path(&uri, &errstr);
+		    if (!r && uri.user) userid = uri.user;
+		}
+		xmlFree(href);
+	    }
+
+	    if (!userid) {
+		/* DAV:recognized-principal */
+		txn->error.precond = DAV_RECOG_PRINC;
+		ret = HTTP_FORBIDDEN;
+		goto done;
+	    }
+
+	    for (; privs; privs = privs->next) {
+		if (privs->type == XML_ELEMENT_NODE) {
+		    xmlNodePtr priv = privs->children;
+		    for (; priv->type != XML_ELEMENT_NODE; priv = priv->next);
+
+		    if (aparams && aparams->acl_proc &&
+			aparams->acl_proc(txn, priv, &rights)) {
+			/* Extension (CalDAV) privileges */
+			if (txn->error.precond) {
+			    ret = HTTP_FORBIDDEN;
+			    goto done;
+			}
+		    }
+		    else if (!xmlStrcmp(priv->ns->href,
+					BAD_CAST XML_NS_DAV)) {
+			/* WebDAV privileges */
+			if (!xmlStrcmp(priv->name,
+				       BAD_CAST "all"))
+			    rights |= DACL_ALL;
+			else if (!xmlStrcmp(priv->name,
+					    BAD_CAST "read"))
+			    rights |= DACL_READ;
+			else if (!xmlStrcmp(priv->name,
+					    BAD_CAST "write"))
+			    rights |= DACL_WRITE;
+			else if (!xmlStrcmp(priv->name,
+					    BAD_CAST "write-content"))
+			    rights |= DACL_WRITECONT;
+			else if (!xmlStrcmp(priv->name,
+					    BAD_CAST "write-properties"))
+			    rights |= DACL_WRITEPROPS;
+			else if (!xmlStrcmp(priv->name,
+					    BAD_CAST "bind"))
+			    rights |= DACL_BIND;
+			else if (!xmlStrcmp(priv->name,
+					    BAD_CAST "unbind"))
+			    rights |= DACL_UNBIND;
+			else if (!xmlStrcmp(priv->name,
+					    BAD_CAST "read-current-user-privilege-set")
+				 || !xmlStrcmp(priv->name,
+					       BAD_CAST "read-acl")
+				 || !xmlStrcmp(priv->name,
+					       BAD_CAST "write-acl")
+				 || !xmlStrcmp(priv->name,
+					       BAD_CAST "unlock")) {
+			    /* DAV:no-abstract */
+			    txn->error.precond = DAV_NO_ABSTRACT;
+			    ret = HTTP_FORBIDDEN;
+			    goto done;
+			}
+			else {
+			    /* DAV:not-supported-privilege */
+			    txn->error.precond = DAV_SUPP_PRIV;
+			    ret = HTTP_FORBIDDEN;
+			    goto done;
+			}
+		    }
+		    else if (!xmlStrcmp(priv->ns->href,
+				   BAD_CAST XML_NS_CYRUS)) {
+			/* Cyrus-specific privileges */
+			if (!xmlStrcmp(priv->name,
+				       BAD_CAST "make-collection"))
+			    rights |= DACL_MKCOL;
+			else if (!xmlStrcmp(priv->name,
+				       BAD_CAST "remove-collection"))
+			    rights |= DACL_RMCOL;
+			else if (!xmlStrcmp(priv->name,
+				       BAD_CAST "add-resource"))
+			    rights |= DACL_ADDRSRC;
+			else if (!xmlStrcmp(priv->name,
+				       BAD_CAST "remove-resource"))
+			    rights |= DACL_RMRSRC;
+			else if (!xmlStrcmp(priv->name,
+				       BAD_CAST "admin"))
+			    rights |= DACL_ADMIN;
+			else {
+			    /* DAV:not-supported-privilege */
+			    txn->error.precond = DAV_SUPP_PRIV;
+			    ret = HTTP_FORBIDDEN;
+			    goto done;
+			}
+		    }
+		    else {
+			/* DAV:not-supported-privilege */
+			txn->error.precond = DAV_SUPP_PRIV;
+			ret = HTTP_FORBIDDEN;
+			goto done;
+		    }
+		}
+	    }
+
+	    cyrus_acl_masktostr(rights, rightstr);
+	    buf_printf(&acl, "%s%s\t%s\t",
+		       deny ? "-" : "", userid, rightstr);
+	}
+    }
+
+    if ((r = mboxlist_sync_setacls(mailboxname, buf_cstring(&acl)))) {
+	syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
+	       mailboxname, error_message(r));
+	txn->error.desc = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+    mailbox_set_acl(mailbox, buf_cstring(&acl), 0);
+
+    response_header(HTTP_OK, txn);
+
+  done:
+    buf_free(&acl);
+    if (indoc) xmlFreeDoc(indoc);
+    if (mailbox) mailbox_unlock_index(mailbox, NULL);
+
+    return ret;
 }
 
 
