@@ -919,13 +919,10 @@ static int mailbox_open_advanced(const char *name,
 	if (listitem->m.index_locktype)
 	    return IMAP_MAILBOX_LOCKED;   
 
-	r = mailbox_lock_index(&listitem->m, index_locktype);
-	if (r) return r;
-
 	listitem->nopen++;
 	mailbox = &listitem->m;
 
-	goto done;
+	goto lockindex;
     }
 
     listitem = create_listitem(name);
@@ -968,6 +965,7 @@ static int mailbox_open_advanced(const char *name,
 	goto done;
     }
 
+lockindex:
     /* this will open, map and parse the header file */
     r = mailbox_lock_index_internal(mailbox, index_locktype);
     if (r) {
