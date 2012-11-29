@@ -94,6 +94,10 @@ Cassandane needs the following software to work:
     Ubuntu package libfile-chdir-perl
     RH/CentOS package perl-File-chdir
 
+ * IO::Stringy
+    I/O on in-core objects like strings and arrays
+    Ubuntu package libio-stringy-perl
+
 
 Debian/Ubuntu copypasta:
   sudo apt-get -y install liburi-perl libdigest-sha-perl \
@@ -102,4 +106,4 @@ Debian/Ubuntu copypasta:
        libencode-imaputf7-perl libconfig-inifiles-perl \
        libio-socket-inet6-perl libnet-server-perl \
        libunix-syslog-perl libnews-nntpclient-perl \
-       libfile-chdir-perl
+       libfile-chdir-perl libio-stringy-perl
