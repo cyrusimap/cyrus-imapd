@@ -2239,7 +2239,7 @@ int meth_acl(struct transaction_t *txn, void *params)
     char *server, *aclstr, mailboxname[MAX_MAILBOX_BUFFER];
     struct mailbox *mailbox = NULL;
     struct buf acl = BUF_INITIALIZER;
-    struct acl_params *aparams = (struct acl_params *) params;
+    acl_proc_t acl_ext_proc = (acl_proc_t) params;
 
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
@@ -2415,8 +2415,7 @@ int meth_acl(struct transaction_t *txn, void *params)
 		    xmlNodePtr priv = privs->children;
 		    for (; priv->type != XML_ELEMENT_NODE; priv = priv->next);
 
-		    if (aparams && aparams->acl_proc &&
-			aparams->acl_proc(txn, priv, &rights)) {
+		    if (acl_ext_proc && acl_ext_proc(txn, priv, &rights)) {
 			/* Extension (CalDAV) privileges */
 			if (txn->error.precond) {
 			    ret = HTTP_FORBIDDEN;

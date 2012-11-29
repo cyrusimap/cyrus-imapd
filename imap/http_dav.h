@@ -194,15 +194,18 @@ enum {
     PREFER_NOROOT = (1<<2)
 };
 
-/* Context for fetching properties */
-struct propfind_entry_list;
-
-/* Function to lookup DAV mailbox+resource (w/ optional lock) and return data */
+/* Function to lookup DAV 'resource' in 'mailbox', with optional 'lock',
+ * placing the record in 'data'
+ */
 typedef int (*lookup_proc_t)(void *davdb, const char *mailbox,
 			     const char *resource, int lock, void **data);
-/* Function to process each DAV resource in mailbox with cb() */
+
+/* Function to process each DAV resource in 'mailbox' with 'cb' */
 typedef int (*foreach_proc_t)(void *davdb, const char *mailbox,
 			      int (*cb)(void *rock, void *data), void *rock);
+
+/* Context for fetching properties */
+struct propfind_entry_list;
 
 struct propfind_ctx {
     struct request_target_t *req_tgt;	/* parsed request target URL */
@@ -235,16 +238,14 @@ struct propfind_ctx {
     struct buf buf;			/* Working buffer */
 };
 
-/* meth_acl() parameters */
-struct acl_params {
-    int (*acl_proc)(struct transaction_t *txn,
-		    xmlNodePtr priv,
-		    int *rights);	/* Process priv, augmenting *rights.
-					 * Returns 1 if processing complete.
-					 * Returns 0 if processing should
-					 * continue in meth_acl()
-					 */
-};
+/* meth_acl() parameter
+ *
+ * Process 'priv', augmenting 'rights' as necessary.
+ * Returns 1 if processing is complete.
+ * Returns 0 if processing should continue in meth_acl()
+ */
+typedef int (*acl_proc_t)(struct transaction_t *txn, xmlNodePtr priv,
+			  int *rights);
 
 /* meth_mkcol() parameters */
 struct mkcol_params {
@@ -264,9 +265,9 @@ struct propfind_params {
     foreach_proc_t foreach;		/* process all resources in a mailbox */
 };
 
+/* meth_report() parameters */
 typedef int (*report_proc_t)(struct transaction_t *txn, xmlNodePtr inroot,
-			     struct propfind_ctx *fctx,
-			     char mailboxname[]);
+			     struct propfind_ctx *fctx, char mailboxname[]);
 
 struct report_type_t {
     const char *name;			/* report name */
@@ -305,10 +306,15 @@ int propfind_by_collection(char *mboxname, int matchlen,
 			   int maycreate, void *rock);
 
 /* DAV method processing functions */
-int meth_acl(struct transaction_t *txn, void *params);
-int meth_mkcol(struct transaction_t *txn, void *params);
-int meth_propfind(struct transaction_t *txn, void *params);
-int meth_proppatch(struct transaction_t *txn, void *params);
-int meth_report(struct transaction_t *txn, void *params);
+int meth_acl(struct transaction_t *txn,
+	     void *params /* acl_proc_t */);
+int meth_mkcol(struct transaction_t *txn,
+	       void *params /* struct mkcol_params* */);
+int meth_propfind(struct transaction_t *txn,
+		  void *params /* struct propfind_params* */);
+int meth_proppatch(struct transaction_t *txn,
+		   void *params __attribute__((unused)));
+int meth_report(struct transaction_t *txn,
+		void *params /* struct report_type_t[] */);
 
 #endif /* HTTP_DAV_H */

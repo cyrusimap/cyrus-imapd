@@ -156,10 +156,6 @@ static int sched_reply(icalcomponent *oldical, icalcomponent *newical,
 		       const char *userid);
 #endif /* WITH_CALDAV_SCHED */
 
-static struct acl_params acl_params = {
-    &caldav_acl
-};
-
 static struct mkcol_params mkcalendar_params = {
     MBTYPE_CALENDAR, &caldav_mboxname,
     "mkcalendar", "mkcalendar-response", NS_CALDAV
@@ -195,7 +191,7 @@ const struct namespace_t namespace_calendar = {
     (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DAV | ALLOW_CAL),
     &my_caldav_init, &my_caldav_auth, my_caldav_reset, &my_caldav_shutdown,
     { 
-	{ &meth_acl,		&acl_params },		/* ACL		*/
+	{ &meth_acl,		&caldav_acl },		/* ACL		*/
 	{ &meth_copy,		NULL },			/* COPY		*/
 	{ &meth_delete,		NULL },			/* DELETE	*/
 	{ &meth_get,		NULL },			/* GET		*/
