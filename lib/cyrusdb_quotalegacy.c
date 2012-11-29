@@ -126,12 +126,14 @@ static int compar_qr(const void *v1, const void *v2);
 static int compar_qr_mbox(const void *v1, const void *v2);
 
 /* hash the prefix - either with or without 'user.' part */
-static char name_to_hashchar(const char *name)
+static char name_to_hashchar(const char *name, int isprefix)
 {
     int config_fulldirhash = libcyrus_config_getswitch(CYRUSOPT_FULLDIRHASH);
     const char *idx;
 
     if (!*name) return '\0';
+    /* you can't actually prefix with a fulldirhash character! (Bug 3735) */
+    if (config_fulldirhash && isprefix) return '\0';
 
     idx = strchr(name, '.'); /* skip past user. */
     if (idx == NULL) {
@@ -180,7 +182,7 @@ static void hash_quota(char *buf, size_t size, const char *qr, char *path)
 	}
     }
 
-    c = name_to_hashchar(qr);
+    c = name_to_hashchar(qr, 0);
 
     if (snprintf(buf, size, "%s%c/%s", FNAME_QUOTADIR, c, qr) >= (int) size) {
 	fatal("insufficient buffer size in hash_quota", EC_TEMPFAIL);
@@ -549,7 +551,7 @@ static void scan_qr_dir(char *quota_path, char *prefix, struct qr_path *pathbuf)
 
     /* check for path restriction - if there's a prefix we only
      * need to scan a single directory */
-    onlyc = name_to_hashchar(prefix);
+    onlyc = name_to_hashchar(prefix, 1);
 
     c = config_fulldirhash ? 'A' : 'a';
     for (i = 0; i < 26; i++, c++) {
