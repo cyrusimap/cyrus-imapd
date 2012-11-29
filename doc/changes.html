@@ -8,6 +8,30 @@
 </head>
 <body>
 
+<h1>Changes to the Cyrus IMAP Server since 2.4.16</h1>
+<ul>
+<li>A bunch of cleanups and fixes to compiling</li>
+<li>A bunch of sieve cleanups</li>
+<li>Fixed bug #3691: unixhierarchysep is now obeyed when printing the
+    mailbox name in unexpunge</li>
+<li>Fixed bug #3718: crashes fetching message parts</li>
+<li>Fixed bug #3719: pop3 seen update of final message in a mailbox</li>
+<li>Improved documentation of "proxyservers" option</li>
+<li>Fixed bug #3737: lost emails in XFER delivery race</li>
+<li>Fixed bug #3725: inefficient statuscache use in some cases</li>
+<li>Fixed bug #3484: use of sasl property types (compile fix)</li>
+<li>Fixed bug #3754: failure to support binary append.  This was
+    found by a popular library switching to using binary appends</li>
+<li>Fixed bug #3735: user prefix searching now works with fulldirhash</li>
+<li>Fixed bug #3696: can no longer rename the same mailbox twice, which
+    left things in a corrupted state if you caught the race.</li>
+<li>Fixed bug #3715: using berkeley for mailboxes.db was very
+    broken.  It now works.</li>
+<li>Fixed bug #3733: reconstruct with missing cyrus.index will use
+    file timestamps for internaldate rather than setting it to NOW if 
+    internaldate_heuristic is set to standard</li>
+</ul>
+
 <h1>Changes to the Cyrus IMAP Server since 2.4.15</h1>
 <ul>
 <li>Bug #3651 - 64 bit dirhash breaks existing systems. NOTE this includes a fix to
