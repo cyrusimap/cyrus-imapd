@@ -50,6 +50,7 @@ use Cassandane::Util::Log;
 use Cassandane::Util::NetString;
 use Data::Dumper;
 
+
 sub new
 {
     my $class = shift;
@@ -2435,6 +2436,40 @@ sub test_reconstruct_orphans
 	message => $expected_message,
 	'x-annotation-storage' => int($expected_annotation_storage/1024),
     );
+}
+
+sub config_bug3735
+{
+    my ($self, $conf) = @_;
+    $conf->set(quota_db => 'quotalegacy');
+    $conf->set(hashimapspool => 1);
+    $conf->set(fulldirhash => 1);
+    $conf->set(virtdomains => 0);
+}
+
+sub test_bug3735
+{
+    my ($self) = @_;
+    $self->{instance}->create_user("a");
+    $self->{instance}->create_user("ab");
+    $self->_set_quotaroot('user.a');
+    $self->_set_limits(storage => 12345);
+    $self->_set_quotaroot('user.ab');
+    $self->_set_limits(storage => 12345);
+
+    my $filename = $self->{instance}->{basedir} . "/bug3735.out";
+
+    $self->{instance}->run_command({
+	cyrus => 1,
+	redirects => { stdout => $filename },
+    }, 'quota', "user.a");
+
+    open RESULTS, '<', $filename
+	or die "Cannot open $filename for reading: $!";
+    my @res = <RESULTS>;
+    close RESULTS;
+
+    $self->assert(grep { m/user\.ab/ } @res);
 }
 
 1;
