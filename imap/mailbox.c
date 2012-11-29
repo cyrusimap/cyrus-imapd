@@ -4412,6 +4412,10 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid,
     r = message_parse(fname, &record);
     if (r) return r;
 
+    /* copy the timestamp from the file if not calculated */
+    if (!record.internaldate)
+	record.internaldate = sbuf.st_mtime;
+
     if (uid > mailbox->i.last_uid) {
 	printf("%s uid %u found - adding\n", mailbox->name, uid);
 	syslog(LOG_ERR, "%s uid %u found - adding", mailbox->name, uid);
