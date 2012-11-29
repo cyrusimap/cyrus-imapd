@@ -582,7 +582,7 @@ int mboxlist_createmailbox_full(const char *name, int mbtype,
 	/* 2. verify ACL's to best of ability (CRASH: abort) */
 	r = mboxlist_mycreatemailboxcheck(name, mbtype, partition, isadmin, 
 					  userid, auth_state, 
-					  &acl, &newpartition, 1, localonly,
+					  &acl, &newpartition, 0, localonly,
 					  forceuser, NULL);
 	if (r) goto done;
     }
