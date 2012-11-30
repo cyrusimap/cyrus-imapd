@@ -308,17 +308,11 @@ static void test_sync_done(const char *mboxname)
  * A quotaroot was found, add it to our list
  */
 static int fixquota_addroot(struct quota *q,
-			    void *rock)
+			    void *rock __attribute__((unused)))
 {
-    const char *prefix = (const char *)rock;
-    int prefixlen = (prefix ? strlen(prefix) : 0);
     struct quota localq;
     struct txn *tid = NULL;
     int r;
-
-    assert(prefixlen <= (int)strlen(q->root));
-    if (prefixlen && q->root[prefixlen] && q->root[prefixlen] != '.')
-	return 0;
 
     if (quota_num == quota_alloc) {
 	/* Create new qr list entry */
@@ -454,9 +448,6 @@ static int fixquota_dombox(void *rock,
     char *mboxname = xstrndup(name, namelen);
     struct txn *txn = NULL;
 
-    assert(prefixlen <= namelen);
-    if (prefixlen && mboxname[prefixlen] && mboxname[prefixlen] != '.') goto done;
-
     while (quota_todo < quota_num) {
 	const char *root = quotaroots[quota_todo].name;
 
@@ -492,6 +483,8 @@ static int fixquota_dombox(void *rock,
 	/* no matching quotaroot exists, remove from
 	 * mailbox if present */
 	if (mailbox->quotaroot) {
+	    /* unless it's outside the current prefix of course */
+	    if (strlen(mailbox->quotaroot) < prefixlen) goto done;
 	    r = fixquota_fixroot(mailbox, NULL);
 	    if (r) goto done;
 	}
