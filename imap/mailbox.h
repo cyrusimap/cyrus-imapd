@@ -523,6 +523,7 @@ extern int mailbox_rename_cleanup(struct mailbox **mailboxptr, int isinbox);
 extern int mailbox_copyfile(const char *from, const char *to, int nolink);
 
 extern int mailbox_reconstruct(const char *name, int flags);
+extern void mailbox_make_uniqueid(struct mailbox *mailbox);
 
 /* for upgrade index */
 extern int mailbox_buf_to_index_record(const char *buf,

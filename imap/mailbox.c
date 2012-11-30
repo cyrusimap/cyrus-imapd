@@ -740,7 +740,7 @@ mailbox_notifyproc_t *mailbox_get_updatenotifier(void)
  * hex.
  */
 
-static void mailbox_make_uniqueid(struct mailbox *mailbox)
+EXPORTED void mailbox_make_uniqueid(struct mailbox *mailbox)
 {
 #ifdef HAVE_LIBUUID
     uuid_t uu;

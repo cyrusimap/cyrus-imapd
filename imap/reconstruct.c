@@ -83,6 +83,7 @@
 #include "acl.h"
 #include "assert.h"
 #include "crc32.h"
+#include "hash.h"
 #include "imparse.h"
 #include "global.h"
 #include "exitcodes.h"
@@ -107,6 +108,8 @@
 
 extern int optind;
 extern char *optarg;
+
+hash_table unqid_table;
 
 /* current namespace */
 static struct namespace recon_namespace;
@@ -140,6 +143,8 @@ int main(int argc, char **argv)
     /* Ensure we're up-to-date on the index file format */
     assert(INDEX_HEADER_SIZE == (OFFSET_HEADER_CRC+4));
     assert(INDEX_RECORD_SIZE == (OFFSET_RECORD_CRC+4));
+
+    construct_hash_table(&unqid_table, 2047, 1);
 
     while ((opt = getopt(argc, argv, "C:kp:rmfsxgGqRUoOn")) != EOF) {
 	switch (opt) {
@@ -361,6 +366,8 @@ int main(int argc, char **argv)
 	free(name);
     }
 
+    free_hash_table(&unqid_table, free);
+
     sync_log_done();
 
     mboxlist_close();
@@ -396,6 +403,7 @@ static int do_reconstruct(char *name,
     int r;
     char buf[MAX_MAILBOX_NAME];
     static char lastname[MAX_MAILBOX_NAME] = "";
+    char *other;
     struct mailbox *mailbox = NULL;
     char outpath[MAX_MAILBOX_PATH];
 
@@ -423,6 +431,16 @@ static int do_reconstruct(char *name,
 	com_err(lastname, r, "Failed to open after reconstruct");
 	return 0;
     }
+
+    other = hash_lookup(mailbox->uniqueid, &unqid_table);
+    if (other) {
+	syslog (LOG_ERR, "uniqueid clash with %s for %s - changing %s",
+		other, mailbox->uniqueid, mailbox->name);
+	/* uniqueid change required! */
+	mailbox_make_uniqueid(mailbox);
+    }
+
+    hash_insert(mailbox->uniqueid, xstrdup(mailbox->name), &unqid_table);
 
     /* Convert internal name to external */
     (*recon_namespace.mboxname_toexternal)(&recon_namespace, lastname,
