@@ -84,6 +84,7 @@
 #include "assert.h"
 #include "bsearch.h"
 #include "crc32.h"
+#include "hash.h"
 #include "imparse.h"
 #include "global.h"
 #include "exitcodes.h"
@@ -112,14 +113,9 @@ extern char *optarg;
 struct discovered {
     char *name;
     struct discovered *next;
-};       
-struct uniqmailid {
-    char * uniqmbxid;
-    char *uniqname;
-    struct uniqmailid *uniqnext;
 };
 
-struct uniqmailid *uniqmid_head;
+hash_table unqid_table;
 
 /* current namespace */
 static struct namespace recon_namespace;
@@ -133,8 +129,6 @@ int do_reconstruct(char *name, int matchlen, int maycreate, void *rock);
 int reconstruct(char *name, struct discovered *l);
 void usage(void);
 char * getmailname (char * mailboxname);
-struct uniqmailid * add_uniqid (char * mailboxname, char * mailboxid);
-struct uniqmailid * find_uniqid (char * mailboxname, char * mailboxid);
 
 extern cyrus_acl_canonproc_t mboxlist_ensureOwnerRights;
 
@@ -162,6 +156,8 @@ int main(int argc, char **argv)
     /* Ensure we're up-to-date on the index file format */
     assert(INDEX_HEADER_SIZE == (OFFSET_HEADER_CRC+4));
     assert(INDEX_RECORD_SIZE == (OFFSET_RECORD_CRC+4));
+
+    construct_hash_table(&unqid_table, 2047, 1);
 
     while ((opt = getopt(argc, argv, "C:kp:rmfsxgGqRUoOn")) != EOF) {
 	switch (opt) {
@@ -387,6 +383,8 @@ int main(int argc, char **argv)
 	free(p);
     }
 
+    free_hash_table(&unqid_table, free);
+
     sync_log_done();
 
     mboxlist_close();
@@ -421,6 +419,7 @@ do_reconstruct(char *name,
     int r;
     char buf[MAX_MAILBOX_NAME];
     static char lastname[MAX_MAILBOX_NAME] = "";
+    char *other;
     struct mailbox *mailbox = NULL;
     char outpath[MAX_MAILBOX_PATH];
 
@@ -449,10 +448,15 @@ do_reconstruct(char *name,
 	return 0;
     }
 
-    if (!add_uniqid(lastname, mailbox->uniqueid)) {
-	syslog (LOG_ERR, "Failed adding mailbox: %s unique id: %s\n",
-		mailbox->name, mailbox->uniqueid );
+    other = hash_lookup(mailbox->uniqueid, &unqid_table);
+    if (other) {
+	syslog (LOG_ERR, "uniqueid clash with %s for %s - changing %s",
+		other, mailbox->uniqueid, mailbox->name);
+	/* uniqueid change required! */
+	mailbox_make_uniqueid(mailbox);
     }
+
+    hash_insert(mailbox->uniqueid, xstrdup(mailbox->name), &unqid_table);
 
     /* Convert internal name to external */
     (*recon_namespace.mboxname_toexternal)(&recon_namespace, lastname,
@@ -520,58 +524,6 @@ do_reconstruct(char *name,
     }
 
     return 0;
-}
-
-char *getmailname(char *mailboxname) 
-{
-    static char namebuf[MAX_MAILBOX_PATH + 1];
-
-    char * pname;
-
-    strlcpy (namebuf, mailboxname, sizeof (namebuf));
-    pname = strchr (namebuf, '.');
-    if (pname) {
-	pname = strchr(pname + 1, '.');
-	if (pname)
-	    *pname = '\0';
-    }
-    return (namebuf);
-}
-
-struct uniqmailid * 
-find_uniqid ( char * mailboxname, char * mailboxid) 
-{
-    struct uniqmailid *puniq;
-    char * nameptr;
-    
-    nameptr = getmailname (mailboxname);
-    for (puniq = uniqmid_head; puniq != NULL; puniq = puniq->uniqnext) {
-	if  (strcmp (puniq->uniqmbxid, mailboxid) == 0) {
-	    if (strcmp (puniq->uniqname, nameptr) == 0) {
-		return (puniq);
-	    }
-	}
-    }
-
-    return NULL;
-}
-
-struct uniqmailid * 
-add_uniqid ( char * mailboxname, char * mailboxid)
-{
-    struct uniqmailid *puniq;
-    char *pboxname;
-
-    pboxname = getmailname (mailboxname);
-
-    puniq = xmalloc (sizeof (struct uniqmailid));
-    puniq->uniqmbxid = xstrdup(mailboxid);
-    puniq->uniqname = xstrdup(pboxname);
-    
-    puniq->uniqnext = uniqmid_head;
-    uniqmid_head = puniq;
-
-    return (puniq);
 }
 
 /*
