@@ -407,6 +407,26 @@ static void match(search_builder_t *bx, int part, const char *str)
 	bb->root = on;
 }
 
+static void *get_internalised(search_builder_t *bx)
+{
+    xapian_builder_t *bb = (xapian_builder_t *)bx;
+    struct opnode *on = bb->root;
+    bb->root = NULL;
+    optimise_nodes(NULL, on);
+    return on;
+}
+
+static char *describe_internalised(void *internalised __attribute__((unused)))
+{
+    return xstrdup("--xapian query--");
+}
+
+static void free_internalised(void *internalised)
+{
+    struct opnode *on = (struct opnode *)internalised;
+    if (on) opnode_delete(on);
+}
+
 static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
 {
     xapian_builder_t *bb;
@@ -418,7 +438,7 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     bb->super.begin_boolean = begin_boolean;
     bb->super.end_boolean = end_boolean;
     bb->super.match = match;
-//     bb->super.get_internalised = get_internalised;
+    bb->super.get_internalised = get_internalised;
     bb->super.run = run;
 
     bb->mailbox = mailbox;
@@ -480,18 +500,16 @@ struct xapian_update_receiver
     struct latestdb latestdb;
 };
 
-#if 0
 /* receiver used for extracting snippets after a search */
 typedef struct xapian_snippet_receiver xapian_snippet_receiver_t;
 struct xapian_snippet_receiver
 {
     xapian_receiver_t super;
-    struct connection conn;
+    xapian_snipgen_t *snipgen;
     struct opnode *root;
     search_snippet_cb_t proc;
     void *rock;
 };
-#endif
 
 /* This is carefully aligned with the default search_batchsize so that
  * we get the minimum number of commits with default parameters */
@@ -1013,6 +1031,140 @@ static int end_update(search_text_receiver_t *rx)
     return free_receiver(&tr->super);
 }
 
+static int begin_mailbox_snippets(search_text_receiver_t *rx,
+				  struct mailbox *mailbox,
+				  int incremental __attribute__((unused)))
+{
+    xapian_snippet_receiver_t *tr = (xapian_snippet_receiver_t *)rx;
+
+    tr->super.mailbox = mailbox;
+
+    return 0;
+}
+
+/* Find match terms for the given part and add them to the Xapian
+ * snippet generator.  */
+static void generate_snippet_terms(xapian_snipgen_t *snipgen,
+				   int part,
+				   struct opnode *on)
+{
+    struct opnode *child;
+
+    switch (on->op) {
+
+    case SEARCH_OP_NOT:
+    case SEARCH_OP_OR:
+    case SEARCH_OP_AND:
+	for (child = on->children ; child ; child = child->next)
+	    generate_snippet_terms(snipgen, part, child);
+	break;
+
+    case SEARCH_PART_ANY:
+	assert(on->children == NULL);
+	if (part != SEARCH_PART_HEADERS ||
+	    !config_getswitch(IMAPOPT_SPHINX_TEXT_EXCLUDES_ODD_HEADERS)) {
+	    xapian_snipgen_add_match(snipgen, on->arg);
+	}
+	break;
+
+    default:
+	/* other SEARCH_PART_* constants */
+	assert(on->op >= 0 && on->op < SEARCH_NUM_PARTS);
+	assert(on->children == NULL);
+	if (part == on->op) {
+	    xapian_snipgen_add_match(snipgen, on->arg);
+	}
+	break;
+    }
+}
+
+static int end_message_snippets(search_text_receiver_t *rx)
+{
+    xapian_snippet_receiver_t *tr = (xapian_snippet_receiver_t *)rx;
+    struct buf snippets = BUF_INITIALIZER;
+    int i;
+    int r;
+
+    if (!tr->snipgen) {
+	r = IMAP_INTERNAL;	    /* need to call begin_mailbox() */
+	goto out;
+    }
+    if (!tr->root) {
+	r = 0;
+	goto out;
+    }
+
+    for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
+	if (i == SEARCH_PART_ANY) continue;
+
+	if (!tr->super.parts[i].len) continue;
+
+	r = xapian_snipgen_begin_doc(tr->snipgen);
+	if (r) break;
+
+	generate_snippet_terms(tr->snipgen, i, tr->root);
+
+	r = xapian_snipgen_doc_part(tr->snipgen, &tr->super.parts[i]);
+	if (r) break;
+
+	r = xapian_snipgen_end_doc(tr->snipgen, &snippets);
+	if (r) break;
+
+	if (snippets.len) {
+	    r = tr->proc(tr->super.mailbox, tr->super.uid, i, snippets.s, tr->rock);
+	    if (r) break;
+	}
+    }
+
+out:
+    buf_free(&snippets);
+    return r;
+}
+
+static int end_mailbox_snippets(search_text_receiver_t *rx,
+				struct mailbox *mailbox
+				    __attribute__((unused)))
+{
+    xapian_snippet_receiver_t *tr = (xapian_snippet_receiver_t *)rx;
+
+    tr->super.mailbox = NULL;
+
+    return 0;
+}
+
+static search_text_receiver_t *begin_snippets(void *internalised,
+					      int verbose,
+					      search_snippet_cb_t proc,
+					      void *rock)
+{
+    xapian_snippet_receiver_t *tr;
+
+    tr = xzmalloc(sizeof(xapian_snippet_receiver_t));
+    tr->super.super.begin_mailbox = begin_mailbox_snippets;
+    tr->super.super.begin_message = begin_message;
+    tr->super.super.begin_part = begin_part;
+    tr->super.super.append_text = append_text;
+    tr->super.super.end_part = end_part;
+    tr->super.super.end_message = end_message_snippets;
+    tr->super.super.end_mailbox = end_mailbox_snippets;
+
+    tr->super.verbose = verbose;
+    tr->root = (struct opnode *)internalised;
+    tr->snipgen = xapian_snipgen_new();
+    tr->proc = proc;
+    tr->rock = rock;
+
+    return &tr->super.super;
+}
+
+static int end_snippets(search_text_receiver_t *rx)
+{
+    xapian_snippet_receiver_t *tr = (xapian_snippet_receiver_t *)rx;
+
+    if (tr->snipgen) xapian_snipgen_free(tr->snipgen);
+    return free_receiver(&tr->super);
+}
+
 const struct search_engine xapian_search_engine = {
     "Xapian",
     SEARCH_FLAG_CAN_BATCH,
@@ -1020,10 +1172,10 @@ const struct search_engine xapian_search_engine = {
     end_search,
     begin_update,
     end_update,
-    /*begin_snippets*/NULL,
-    /*end_snippets*/NULL,
-    /*describe_internalised*/NULL,
-    /*free_internalised*/NULL,
+    begin_snippets,
+    end_snippets,
+    describe_internalised,
+    free_internalised,
     /*start_daemon*/NULL,
     /*stop_daemon*/NULL
 };

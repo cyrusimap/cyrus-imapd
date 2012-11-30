@@ -274,3 +274,108 @@ int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq,
 
     return r;
 }
+
+struct xapian_snipgen
+{
+    Xapian::Stem *stemmer;
+    Xapian::SnippetGenerator *snippet_generator;
+};
+
+xapian_snipgen_t *xapian_snipgen_new(void)
+{
+    xapian_snipgen_t *snipgen = NULL;
+
+    try {
+	snipgen = (xapian_snipgen_t *)xzmalloc(sizeof(xapian_snipgen_t));
+
+	snipgen->stemmer = new Xapian::Stem("en");
+	snipgen->snippet_generator = new Xapian::SnippetGenerator;
+	snipgen->snippet_generator->set_stemmer(*snipgen->stemmer);
+    }
+    catch (const Xapian::Error &err) {
+	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+		    err.get_context().c_str(), err.get_description().c_str());
+    }
+
+    return snipgen;
+}
+
+void xapian_snipgen_free(xapian_snipgen_t *snipgen)
+{
+    try {
+	delete snipgen->snippet_generator;
+	delete snipgen->stemmer;
+	free(snipgen);
+    }
+    catch (const Xapian::Error &err) {
+	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+		    err.get_context().c_str(), err.get_description().c_str());
+    }
+}
+
+int xapian_snipgen_add_match(xapian_snipgen_t *snipgen, const char *match)
+{
+    int r = 0;
+
+    try {
+	snipgen->snippet_generator->add_match(match);
+    }
+    catch (const Xapian::Error &err) {
+	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+		    err.get_context().c_str(), err.get_description().c_str());
+	r = IMAP_IOERROR;
+    }
+
+    return r;
+}
+
+int xapian_snipgen_begin_doc(xapian_snipgen_t *snipgen)
+{
+    int r = 0;
+
+    try {
+	snipgen->snippet_generator->reset();
+    }
+    catch (const Xapian::Error &err) {
+	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+		    err.get_context().c_str(), err.get_description().c_str());
+	r = IMAP_IOERROR;
+    }
+
+    return r;
+}
+
+int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen, const struct buf *part)
+{
+    int r = 0;
+
+    try {
+	snipgen->snippet_generator->accept_text(Xapian::Utf8Iterator(part->s, part->len));
+    }
+    catch (const Xapian::Error &err) {
+	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+		    err.get_context().c_str(), err.get_description().c_str());
+	r = IMAP_IOERROR;
+    }
+
+    return r;
+}
+
+int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
+{
+    int r = 0;
+
+    try {
+	buf_reset(buf);
+	buf_appendcstr(buf, snipgen->snippet_generator->get_snippets().c_str());
+	buf_cstring(buf);
+    }
+    catch (const Xapian::Error &err) {
+	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+		    err.get_context().c_str(), err.get_description().c_str());
+	r = IMAP_IOERROR;
+    }
+
+    return r;
+}
+
