@@ -1278,11 +1278,11 @@ sub test_quota_f_prefix
     xlog "Run quota -f on user.base only";
     $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f', 'user.base');
 
-    xlog "Check that only the user.base quotas were fixed";
+    xlog "Check that only the user.base and user.baseplus quotas were fixed";
     $self->_check_usages(quotaroot => 'user.base',
 			 storage => int($exp_base/1024));
     $self->_check_usages(quotaroot => 'user.baseplus',
-			 storage => int($bogus_baseplus/1024));
+			 storage => int($exp_baseplus/1024));
 
     xlog "Write incorrect values to the quota db";
     $self->_zap_quota(quotaroot => "user.base",
