@@ -912,6 +912,9 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     if (r) return r;
     dir = strconcat(basedir, XAPIAN_DIRNAME, NULL);
 
+    r = indexing_lock(mailbox, &tr->indexing_lock_fd);
+    if (r) goto out;
+
     r = check_directory(dir, tr->super.verbose, /*create*/1);
     if (r) goto out;
 
@@ -922,9 +925,6 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     }
 
     tr->super.mailbox = mailbox;
-
-    r = indexing_lock(mailbox, &tr->indexing_lock_fd);
-    if (r) goto out;
 
     r = open_latest(mailbox, &tr->latestdb);
     if (r) goto out;
