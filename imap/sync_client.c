@@ -1306,7 +1306,10 @@ static int update_mailbox_once(struct sync_folder *local,
     r = mailbox_open_irl(local->name, &mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	/* been deleted in the meanwhile... */
-	r = folder_delete(remote->name);
+	if (remote)
+	    r = folder_delete(remote->name);
+	else
+	    r = 0;
 	goto done;
     }
     else if (r)
