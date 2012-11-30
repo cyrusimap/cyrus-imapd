@@ -1399,7 +1399,7 @@ product version in the capabilities */
    can be taken from GMail's XLIST documents or RFC 6154.
    Attribute name in the configuration key should be defined in
    lowercase. The attribute value is case sensitive, may contain
-   whitespace and and must valid UTF7-IMAP string.  It must
+   whitespace and must be valid UTF7-IMAP string.  It must
    exactly match the name of the subfolder of a user's INBOX.
 
    Example: xlist-drafts: My Drafts
