@@ -356,6 +356,8 @@ done:
     quota_free(&localq);
     if (r) {
 	quota_abort(&tid);
+	free(quotaroots[quota_num].name);
+	quotaroots[quota_num].name = NULL;
     }
     else {
 	quota_commit(&tid);
