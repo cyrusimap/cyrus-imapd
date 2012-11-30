@@ -75,7 +75,6 @@ CLEANFILES =
 
 if COM_ERR
 COMPILE_ET_DEP = com_err/et/compile_et
-COM_ERR_LIBS += com_err/et/libcyrus_com_err.la
 BUILT_SOURCES += com_err/et/compile_et
 lib_LTLIBRARIES += com_err/et/libcyrus_com_err.la
 endif

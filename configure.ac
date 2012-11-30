@@ -1076,6 +1076,8 @@ dnl
 dnl Try and find a system version of com_err.
 dnl If we see something that looks a little wacky, ignore it (there are many
 dnl deficient installs of com_err, unfortunately, which leave out compile_et)
+dnl There is also a broken re-implementation of compile_et, apparently derived
+dnl from the Kerberos project, being shipped in /usr/bin on MacOS X, see Bug #3711.
 dnl
 AC_ARG_WITH(com_err,
 	[AS_HELP_STRING([--with-com_err=DIR], [use com_err from path -- includes in DIR/include, libs in DIR/lib, and compile_et in DIR/bin])])
@@ -1112,21 +1114,53 @@ if test -z "$with_com_err"; then
 	  AC_MSG_WARN([Will build com_err from included sources.])
 	  with_com_err="yes" # build it ourselves
 	fi
-else
-	if test "${with_com_err}" = "no"; then
-	  AC_MSG_WARN([com_err is required; included version will be used.])
-	  with_com_err="yes"
+fi
+
+dnl Set up $COMPILE_ET first, we need to test it
+case "$with_com_err" in
+    # built-in et
+    yes) # use the com_err we're gonna build
+	COMPILE_ET="\${abs_top_builddir}/com_err/et/compile_et"
+	;;
+    "")	# no problem, we already have it in the paths
+	# we do nothing to pick it up
+	;;
+    *)	# use whatever they told us, or whatever we found
+	COMPILE_ET="${with_com_err}/bin/compile_et"
+	;;
+esac
+
+if test "$with_com_err" != yes ; then
+    dnl Test that the specified compile_et produces correct output
+    dnl See bug #3711 for why this is necessary
+    TEST1=".cyrus-configure-test-$$"
+    /bin/rm -f $TEST1.et $TEST1.h $TEST1.c
+    echo "error_table imap" >> $TEST1.et
+    echo "ec IMAP_TESTING," >> $TEST1.et
+    echo "   \"Testing\"" >> $TEST1.et
+    echo "end" >> $TEST1.et
+    "${COMPILE_ET}" $TEST1.et > /dev/null
+    compile_et_ok=no
+    if test -f $TEST1.h ; then
+	if test `awk '/IMAP_TESTING/{print $3}' $TEST1.h 2>/dev/null` = "(-1904809472L)" ; then
+	    compile_et_ok=yes
 	fi
+	dnl Broken compile_et produces (2390157824L)
+    fi
+    /bin/rm -f $TEST1.et $TEST1.h $TEST1.c
+    if test "$compile_et_ok" = no ; then
+	# revert to the built-in compile_et
+	AC_MSG_WARN([It seems $COMPILE_ET is buggy, building our own])
+	with_com_err=yes
+	COMPILE_ET="\${abs_top_builddir}/com_err/et/compile_et"
+    fi
 fi
 
 case "$with_com_err" in
   # built-in et
   yes) # use the com_err we're gonna build
-	  # COMPILE_ET needs to be absolute because we use it
-	  # in subdirectories, but LIBS and CPPFLAGS are only
-	  # used when compiling from top_builddir anyway.
-	  COMPILE_ET="\${abs_top_builddir}/com_err/et/compile_et"
-	  COM_ERR_CPPFLAGS="-Icom_err/et"
+	  COM_ERR_LIBS="com_err/et/libcyrus_com_err.la"
+	  COM_ERR_CPPFLAGS="-I\${top_srcdir}/com_err/et"
 	  ;;
   "")   # no problem, we already have it in the paths
 	# we do nothing to pick it up
@@ -1135,15 +1169,12 @@ case "$with_com_err" in
 	COM_ERR_CPPFLAGS=""
       ;;
   *) # use whatever they told us, or whatever we found
-     COMPILE_ET="${with_com_err}/bin/compile_et"
-     COM_ERR_LIBS="-L${with_com_err}/lib -lcom_err"
+     COM_ERR_LIBS="${with_com_err}/lib/libcom_err.a"
      COM_ERR_CPPFLAGS="-I${with_com_err}/include"
      # Ever get the feeling people hide this stuff on purpose?
      if test -d "${with_com_err}/include/et" ; then
        COM_ERR_CPPFLAGS="-I${with_com_err}/include/et"
      fi
-dnl     CMU_ADD_LIBPATH_TO(${with_com_err}/lib, COM_ERR_LDFLAGS)
-     COMPILE_ET="${with_com_err}/bin/compile_et"
 esac
 AM_CONDITIONAL([COM_ERR], [test "$with_com_err" = "yes"])
 if test "$with_com_err" = "yes"; then
