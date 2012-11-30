@@ -837,7 +837,7 @@ int index_fetch(struct index_state *state,
 {
     struct seqset *seq;
     struct seqset *vanishedlist = NULL;
-    uint32_t msgno;
+    uint32_t msgno, start, end;
     unsigned checkval;
     int r;
     struct index_map *im;
@@ -848,9 +848,35 @@ int index_fetch(struct index_state *state,
 
     seq = _parse_sequence(state, sequence, usinguid);
 
+    start = 1;
+    end = state->exists;
+
+    /* compress the search range down if a sequence was given */
+    if (seq) {
+	unsigned first = seqset_first(seq);
+	unsigned last = seqset_last(seq);
+
+	if (usinguid) {
+	    if (first > 1)
+		start = index_finduid(state, first);
+	    if (first == last)
+		end = start;
+	    else if (last < state->last_uid)
+		end = index_finduid(state, last);
+	}
+	else {
+	    start = first;
+	    end = last;
+	}
+    }
+
+    /* make sure we didn't go outside the range! */
+    if (start < 1) start = 1;
+    if (end > state->exists) end = state->exists;
+
     /* set the \Seen flag if necessary - while we still have the lock */
     if (fetchargs->fetchitems & FETCH_SETSEEN && !state->examining) {
-	for (msgno = 1; msgno <= state->exists; msgno++) {
+	for (msgno = start; msgno <= end; msgno++) {
 	    im = &state->map[msgno-1];
 	    checkval = usinguid ? im->record.uid : msgno;
 	    if (!seqset_ismember(seq, checkval))
@@ -882,7 +908,7 @@ int index_fetch(struct index_state *state,
 
     seqset_free(vanishedlist);
 
-    for (msgno = 1; msgno <= state->exists; msgno++) {
+    for (msgno = start; msgno <= end; msgno++) {
 	im = &state->map[msgno-1];
 	checkval = usinguid ? im->record.uid : msgno;
 	if (!seqset_ismember(seq, checkval))
