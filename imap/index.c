@@ -1414,8 +1414,10 @@ static int _index_search(unsigned **msgno_list, struct index_state *state,
     return n;
 }
 
-EXPORTED unsigned index_getuid(struct index_state *state, uint32_t msgno) {
-  return state->map[msgno-1].record.uid;
+EXPORTED uint32_t index_getuid(struct index_state *state, uint32_t msgno)
+{
+    assert(msgno <= state->exists);
+    return state->map[msgno-1].record.uid;
 }
 
 /* 'uid_list' is malloc'd string representing the hits from searchargs;
@@ -1887,7 +1889,7 @@ EXPORTED int index_copy_remote(struct index_state *state, char *sequence,
  * If no message with UID 'uid', returns the message with
  * the higest UID not greater than 'uid'.
  */
-EXPORTED unsigned index_finduid(struct index_state *state, unsigned uid)
+EXPORTED uint32_t index_finduid(struct index_state *state, uint32_t uid)
 {
     unsigned low = 1;
     unsigned high = state->exists;
