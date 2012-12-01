@@ -835,6 +835,7 @@ static int meth_get(struct transaction_t *txn,
     struct mailbox *mailbox = NULL;
     struct caldav_data *cdata;
     struct index_record record;
+    const char *etag = NULL;
     time_t lastmod = 0;
 
     /* Parse the path */
@@ -904,19 +905,25 @@ static int meth_get(struct transaction_t *txn,
     }
 
     /* Check any preconditions */
-    resp_body->etag = message_guid_encode(&record.guid);
+    etag = message_guid_encode(&record.guid);
     lastmod = record.internaldate;
     precond = check_precond(txn->meth, cdata->sched_tag,
-			    resp_body->etag, lastmod, txn->req_hdrs);
+			    etag, lastmod, txn->req_hdrs);
 
     if (precond != HTTP_OK) {
 	/* We failed a precondition - don't perform the request */
+	if (precond == HTTP_NOT_MODIFIED) {
+	    /* Fill in ETag for 304 response */
+	    resp_body->etag = etag;
+	}
 	ret = precond;
 	goto done;
     }
 
-    /* Fill in Last-Modified, and Content-Length */
+    /* Fill in Last-Modified, ETag, Schedule-Tag, and Content-Type */
     resp_body->lastmod = lastmod;
+    resp_body->etag = etag;
+    resp_body->stag = cdata->sched_tag;
     resp_body->type = "text/calendar; charset=utf-8";
 
     if (txn->meth == METH_GET) {
