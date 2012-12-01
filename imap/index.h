@@ -91,8 +91,12 @@ struct index_init {
 };
 
 struct index_map {
-    struct index_record record;
+    modseq_t modseq;
     modseq_t told_modseq;
+    uint32_t uid;
+    uint32_t recno;
+    uint32_t system_flags;
+    uint32_t user_flags[MAX_USER_FLAGS/32];
     int isseen:1;
     int isrecent:1;
 };
