@@ -275,18 +275,11 @@ int parse_path(struct request_target_t *tgt, const char **errstr)
     tgt->collection = p;
     tgt->collen = len;
 
-    if (tgt->namespace == URL_NS_CALENDAR) {
-	if (!strcmp(tgt->collection, SCHED_INBOX))
-	    tgt->flags = TGT_SCHED_INBOX;
-	else if (!strcmp(tgt->collection, SCHED_OUTBOX))
-	    tgt->flags = TGT_SCHED_OUTBOX;
-    }
-
     p += len;
     if (!*p || !*++p) {
 	/* Make sure collection is terminated with '/' */
 	if (p[-1] != '/') *p++ = '/';
-	return 0;
+	goto done;
     }
 
     /* Get resource */
@@ -300,6 +293,13 @@ int parse_path(struct request_target_t *tgt, const char **errstr)
     if (*p) {
 	*errstr = "Too many segments in request target path";
 	return HTTP_FORBIDDEN;
+    }
+
+    if (tgt->namespace == URL_NS_CALENDAR) {
+	if (!strcmp(tgt->collection, SCHED_INBOX))
+	    tgt->flags = TGT_SCHED_INBOX;
+	else if (!strcmp(tgt->collection, SCHED_OUTBOX))
+	    tgt->flags = TGT_SCHED_OUTBOX;
     }
 
     return 0;
