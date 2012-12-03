@@ -40,6 +40,17 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
+/*
+ * Issues to consider if we want to support HTTP/1.0:
+ *
+ * - HTTP/1.0 requests to not require a Host: header field.
+ * - HTTP/1.0 requests are non-persistent by default. The non-standard
+ *   Connection:Keep-Alive header field can be used to request/signal
+ *   a persistent connection.
+ * - HTTP/1.0 does not support Transfer-Encoding, therefore we can not have
+ *   "chunked" responses.  Any dynamically generated content and/or
+ *   gzipped content will have to be close-delimited.
+ */
 
 #include <config.h>
 
