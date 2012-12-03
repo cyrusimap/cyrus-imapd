@@ -13,6 +13,20 @@ extern "C" {
 
 #define SLOT_CYRUSID	    0
 
+/* ====================================================================== */
+
+void xapian_init(void)
+{
+    static int init = 0;
+
+    if (!init) {
+	putenv("XAPIAN_CJK_NGRAM=1"); /* enable CJK N-grams */
+	init = 1;
+    }
+}
+
+/* ====================================================================== */
+
 struct xapian_dbw
 {
     Xapian::WritableDatabase *database;

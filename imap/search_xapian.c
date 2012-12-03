@@ -434,6 +434,8 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     char *dir;
     int r = 0;
 
+    xapian_init();
+
     bb = xzmalloc(sizeof(xapian_builder_t));
     bb->super.begin_boolean = begin_boolean;
     bb->super.end_boolean = end_boolean;
@@ -992,6 +994,8 @@ static search_text_receiver_t *begin_update(int verbose)
 {
     xapian_update_receiver_t *tr;
 
+    xapian_init();
+
     tr = xzmalloc(sizeof(xapian_update_receiver_t));
     tr->super.super.begin_mailbox = begin_mailbox_update;
     tr->super.super.first_unindexed_uid = first_unindexed_uid;
@@ -1138,6 +1142,8 @@ static search_text_receiver_t *begin_snippets(void *internalised,
 					      void *rock)
 {
     xapian_snippet_receiver_t *tr;
+
+    xapian_init();
 
     tr = xzmalloc(sizeof(xapian_snippet_receiver_t));
     tr->super.super.begin_mailbox = begin_mailbox_snippets;

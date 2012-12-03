@@ -50,6 +50,8 @@ typedef struct xapian_db xapian_db_t;
 typedef struct xapian_query xapian_query_t;
 typedef struct xapian_snipgen xapian_snipgen_t;
 
+extern void xapian_init(void);
+
 /* write-side interface */
 extern xapian_dbw_t *xapian_dbw_open(const char *path);
 extern void xapian_dbw_close(xapian_dbw_t *dbw);
