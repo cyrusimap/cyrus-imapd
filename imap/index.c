@@ -6113,6 +6113,10 @@ struct getsearchtext_rock
 static void stuff_part(search_text_receiver_t *receiver,
 		       int part, const struct buf *buf)
 {
+    if (part == SEARCH_PART_HEADERS &&
+	!config_getswitch(IMAPOPT_SEARCH_INDEX_HEADERS))
+	return;
+
     receiver->begin_part(receiver, part);
     receiver->append_text(receiver, buf);
     receiver->end_part(receiver, part);

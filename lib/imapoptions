@@ -1556,6 +1556,14 @@ If all partitions are over that limit, this feature is not used anymore.
 { "search_engine", "none", ENUM("none", "squat", "sphinx", "xapian") }
 /* The indexing engine used to speed up searching.  */
 
+{ "search_index_headers", 1, SWITCH }
+/* Whether to index headers other than From, To, Cc, Bcc, and Subject.
+ * Experiment shows that some headers such as Received and DKIM-Signature
+ * can contribute up to 2/3rds of the index size but almost nothing to
+ * the utility of searching.  Note that is header indexing is disabled,
+ * headers can still be searched, the searches will just be slower.
+ */
+
 { "search_latest_db", "twoskip", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist", "twoskip")}
 /* The cyrusdb backend to use for the search latest indexed uid state. */
 
