@@ -611,6 +611,64 @@ static int search_convflags_match(message_t *m, const union search_value *v,
 
 /* ====================================================================== */
 
+/* TODO: share this code with the convflags above */
+struct convmodseq_rock {
+    struct conversations_state *cstate;
+    int cstate_is_ours;
+};
+
+static void search_convmodseq_internalise(struct mailbox *mailbox,
+					  const union search_value *v,
+					  void **internalisedp)
+{
+    struct convmodseq_rock *rock;
+    int r;
+
+    if (*internalisedp) {
+	rock = (struct convmodseq_rock *)(*internalisedp);
+	if (rock->cstate_is_ours)
+	    conversations_abort(&rock->cstate);
+	free(rock);
+    }
+
+    if (mailbox) {
+	rock = xzmalloc(sizeof(struct convmodseq_rock));
+
+	rock->cstate = conversations_get_mbox(mailbox->name);
+	if (!rock->cstate) {
+	    r = conversations_open_mbox(mailbox->name, &rock->cstate);
+	    if (r)
+		rock->cstate = NULL;
+	    else
+		rock->cstate_is_ours = 1;
+	}
+
+	*internalisedp = rock;
+    }
+}
+
+static int search_convmodseq_match(message_t *m, const union search_value *v,
+				   void *internalised, void *data1 __attribute__((unused)))
+{
+    struct convmodseq_rock *rock = (struct convmodseq_rock *)internalised;
+    conversation_id_t cid = NULLCONVERSATION;
+    conversation_t *conv = NULL;
+    int r;
+
+    if (!rock->cstate) return 0;
+
+    message_get_cid(m, &cid);
+    if (conversation_load(rock->cstate, cid, &conv)) return 0;
+    if (!conv) return 0;
+
+    r = (v->u == conv->modseq);
+
+    conversation_free(conv);
+    return r;
+}
+
+/* ====================================================================== */
+
 static int search_uint32_cmp(message_t *m, const union search_value *v,
 			     void *internalised __attribute__((unused)),
 			     void *data1)
@@ -758,6 +816,14 @@ EXPORTED void search_attr_init(void)
 	    search_convflags_match,
 	    search_string_describe,
 	    search_string_free,
+	    NULL
+	},{
+	    "convmodseq",
+	    search_convmodseq_internalise,
+	    /*cmp*/NULL,
+	    search_convmodseq_match,
+	    search_uint64_describe,
+	    /*free*/NULL,
 	    NULL
 	},{
 	    "modseq",

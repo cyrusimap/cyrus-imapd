@@ -10352,13 +10352,15 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 	    e->attr = search_attr_find("convflags");
 	    e->value.s = xstrdup("\\Seen");
 	}
-#if 0 /*TODO:gnb*/
 	else if (hasconv && !strcmp(criteria.s, "convmodseq")) {
+	    modseq_t ms;
 	    if (c != ' ') goto missingarg;
-	    c = getmodseq(imapd_in, &searchargs->convmodseq);
+	    c = getmodseq(imapd_in, &ms);
 	    if (c == EOF) goto badnumber;
+	    e = search_expr_new(parent, SEOP_MATCH);
+	    e->attr = search_attr_find("convmodseq");
+	    e->value.u = ms;
 	}
-#endif
 	else if ((base->state & GETSEARCH_CHARSET_KEYWORD)
 	      && !strcmp(criteria.s, "charset")) {
 	    if (c != ' ') goto missingcharset;
