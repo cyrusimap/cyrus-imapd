@@ -132,9 +132,6 @@ static int index_search_evaluate(struct index_state *state,
 				 const struct searchargs *searchargs,
 				 uint32_t msgno);
 #if 0 /*TODO:gnb*/
-static int index_searchmsg(struct index_record *, const struct buf *msgfile,
-			   const char *substr, comp_pat *pat, int skipheader);
->>>>>>> Introduce search_expr
 static int index_searchheader(char *name, char *substr, comp_pat *pat,
 			      struct buf *buf,
 			      int size);
@@ -5974,60 +5971,6 @@ zero:
     return r;
 #endif
 }
-
-#if 0 /*TODO:gnb*/
-/*
- * Search part of a message for a substring.
- */
-struct searchmsg_rock
-{
-    const char *substr;
-    comp_pat *pat;
-    int skipheader;
-};
-
-static int searchmsg_cb(int partno, int charset, int encoding,
-			struct buf *data, void *rock)
-{
-    struct searchmsg_rock *sr = (struct searchmsg_rock *)rock;
-
-    if (!partno) {
-	/* header-like */
-	if (sr->skipheader) {
-	    sr->skipheader = 0; /* Only skip top-level message header */
-	    return 0;
-	}
-	return charset_search_mimeheader(sr->substr, sr->pat,
-					 buf_cstring(data), charset_flags);
-    }
-    else {
-	/* body-like */
-	if (charset < 0 || charset == 0xffff)
-		return 0;
-	return charset_searchfile(sr->substr, sr->pat,
-				  data->s, data->len,
-				  charset, encoding, charset_flags);
-    }
-}
-#endif
-
-
-#if 0 /*TODO:gnb*/
-static int index_searchmsg(struct index_record *record,
-			   const struct buf *buf,
-			   const char *substr,
-			   comp_pat *pat,
-			   int skipheader)
-{
-    struct searchmsg_rock sr;
-
-    xstats_inc(SEARCH_BODY);
-    sr.substr = substr;
-    sr.pat = pat;
-    sr.skipheader = skipheader;
-    return message_foreach_part(record, buf, searchmsg_cb, &sr);
-}
-#endif
 
 #if 0 /*TODO:gnb*/
 /*

@@ -714,6 +714,56 @@ static void search_uint32_describe(struct buf *b, const union search_value *v)
 
 /* ====================================================================== */
 
+/*
+ * Search part of a message for a substring.
+ */
+
+struct searchmsg_rock
+{
+    const char *substr;
+    comp_pat *pat;
+    int skipheader;
+};
+
+static int searchmsg_cb(int partno, int charset, int encoding,
+			const char *subtype __attribute((unused)),
+			struct buf *data, void *rock)
+{
+    struct searchmsg_rock *sr = (struct searchmsg_rock *)rock;
+
+    if (!partno) {
+	/* header-like */
+	if (sr->skipheader) {
+	    sr->skipheader = 0; /* Only skip top-level message header */
+	    return 0;
+	}
+	return charset_search_mimeheader(sr->substr, sr->pat,
+					 buf_cstring(data), charset_flags);
+    }
+    else {
+	/* body-like */
+	if (charset < 0 || charset == 0xffff)
+		return 0;
+	return charset_searchfile(sr->substr, sr->pat,
+				  data->s, data->len,
+				  charset, encoding, charset_flags);
+    }
+}
+
+static int search_text_match(message_t *m, const union search_value *v,
+			     void *internalised, void *data1)
+{
+    int r;
+    struct searchmsg_rock sr;
+
+    sr.substr = v->s;
+    sr.pat = (comp_pat *)internalised;
+    sr.skipheader = (int)(unsigned long)data1;
+    return message_foreach_text_section(m, searchmsg_cb, &sr);
+}
+
+/* ====================================================================== */
+
 static hash_table attrs_by_name = HASH_TABLE_INITIALIZER;
 
 EXPORTED void search_attr_init(void)
@@ -881,6 +931,22 @@ EXPORTED void search_attr_init(void)
 	    search_uint32_describe,
 	    /*free*/NULL,
 	    (void *)message_get_sentdate
+	},{
+	    "body",
+	    search_string_internalise,
+	    /*cmp*/NULL,
+	    search_text_match,
+	    search_string_describe,
+	    search_string_free,
+	    (void *)1	    /* skipheader flag */
+	},{
+	    "text",
+	    search_string_internalise,
+	    /*cmp*/NULL,
+	    search_text_match,
+	    search_string_describe,
+	    search_string_free,
+	    (void *)0	    /* skipheader flag */
 	}
     };
 
