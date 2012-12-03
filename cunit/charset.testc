@@ -423,12 +423,12 @@ static void test_extract(void)
 	     "A"UTF8_REPLACEMENT"BC");
 
     /* HTML: correctly formed balanced tag pairs */
-    TESTCASE("<bold>Photo</bold> <em>booth</em>",
+    TESTCASE("<b>Photo</b> <em>booth</em>",
 	0, ENCODING_NONE, "HTML",
 	"PHOTO BOOTH");
 
     /* HTML: unbalanced tags */
-    TESTCASE("<bold>American<bold> <bold>Apparel</bold>",
+    TESTCASE("<b>American<b> <b>Apparel</b>",
 	0, ENCODING_NONE, "HTML",
 	"AMERICAN APPAREL");
 
@@ -511,7 +511,7 @@ static void test_extract(void)
 	"\"TWEE & KEYTAR\" <DREAMCATCHER@UMAMI.ORG>");
 
     /* HTML: naked & is emitted */
-    TESTCASE("gentrify&<bold>sartorial</bold>",
+    TESTCASE("gentrify&<b>sartorial</b>",
 	0, ENCODING_NONE, "HTML",
 	"GENTRIFY&SARTORIAL");
 
