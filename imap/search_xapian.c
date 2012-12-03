@@ -828,8 +828,8 @@ static void end_part(search_text_receiver_t *rx,
     xapian_receiver_t *tr = (xapian_receiver_t *)rx;
 
     if (tr->verbose > 1)
-	syslog(LOG_NOTICE, "Xapian: %u bytes in part %d",
-	       tr->parts[tr->part].len, tr->part);
+	syslog(LOG_NOTICE, "Xapian: %u bytes in part %s",
+	       tr->parts[tr->part].len, search_part_as_string(tr->part));
 
     tr->part = 0;
 }
