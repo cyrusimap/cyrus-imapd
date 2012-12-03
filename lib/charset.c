@@ -47,6 +47,7 @@
 #include "charset.h"
 #include "xmalloc.h"
 #include "chartable.h"
+#include "hash.h"
 #include "htmlchar.h"
 #include "util.h"
 
@@ -988,10 +989,35 @@ static enum html_state html_top(struct striphtml_state *s)
     return s->stack[s->depth-1];
 }
 
-static void html_saw_tag(struct striphtml_state *s)
+static int is_phrasing(char *tag)
 {
-    const char *tag = buf_cstring(&s->name);
+    static const char * const phrasing_tags[] = {
+	"a", "q", "cite", "em", "strong", "small",
+	"mark", "dfn", "abbr", "time", "progress",
+	"meter", "code", "var", "samp", "kbd",
+	"sub", "sup", "span", "i", "b", "bdo",
+	"ruby", "ins", "del"
+    };
+    static struct hash_table hash = HASH_TABLE_INITIALIZER;
+
+    if (hash.table == NULL) {
+	unsigned int i;
+	construct_hash_table(&hash, VECTOR_SIZE(phrasing_tags), 0);
+	for (i = 0 ; i < VECTOR_SIZE(phrasing_tags) ; i++)
+	    hash_insert(phrasing_tags[i], (void *)1, &hash);
+    }
+
+    return (hash_lookup(lcase(tag), &hash) == (void *)1);
+}
+
+static void html_saw_tag(struct convert_rock *rock)
+{
+    struct striphtml_state *s = (struct striphtml_state *)rock->state;
+    char *tag;
     enum html_state state = html_top(s);
+
+    buf_cstring(&s->name);
+    tag = s->name.s;
 
     if (charset_debug)
 	fprintf(stderr, "html_saw_tag() state=%s tag=\"%s\" ends=%s,%s\n",
@@ -1014,6 +1040,9 @@ static void html_saw_tag(struct striphtml_state *s)
 	else if (state == HSTYLEDATA && s->ends == HEND)
 	    html_go(s, HDATA);
 	/* BEGIN,END pair is doesn't affect state */
+    }
+    else if (!is_phrasing(tag)) {
+	convert_putc(rock->next, ' ');
     }
     /* otherwise, no change */
 }
@@ -1232,7 +1261,7 @@ restart:
 	}
 	else if (c == '>') {
 	    html_pop(s);
-	    html_saw_tag(s);
+	    html_saw_tag(rock);
 	}
 	else if (html_isalpha(c)) {
 	    buf_putc(&s->name, c);
@@ -1247,7 +1276,7 @@ restart:
 	if (c == '>') {
 	    s->ends = HBEGIN|HEND;
 	    html_pop(s);
-	    html_saw_tag(s);
+	    html_saw_tag(rock);
 	}
 	else {
 	    /* whatever, keep stripping tag parameters */
@@ -1258,7 +1287,7 @@ restart:
     case HTAGPARAMS:	    /* ignores all text until next '>' */
 	if (c == '>') {
 	    html_pop(s);
-	    html_saw_tag(s);
+	    html_saw_tag(rock);
 	}
 	else if (c == '/') {
 	    html_go(s, HSCTAG);

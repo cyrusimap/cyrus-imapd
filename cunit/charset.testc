@@ -435,7 +435,18 @@ static void test_extract(void)
     /* HTML: OMITTAG tags with and without end tags */
     TESTCASE("<hr>Terry<hr> <hr>Richardson</hr>",
 	0, ENCODING_NONE, "HTML",
-	"TERRY RICHARDSON");
+	" TERRY RICHARDSON ");
+
+    /* HTML: non-phrasing tags are replaced with whitespace */
+    TESTCASE("hella<br>mlkshk",
+	0, ENCODING_NONE, "HTML",
+	"HELLA MLKSHK");
+    TESTCASE("godard<br/>synth",
+	0, ENCODING_NONE, "HTML",
+	"GODARD SYNTH");
+    TESTCASE("<div>vinyl</div><div>narwhal</div>",
+	0, ENCODING_NONE, "HTML",
+	" VINYL NARWHAL ");
 
     /* HTML: quoted tag parameters */
     TESTCASE("<a href=\"foo.html\">leggings</a> <img src\"beer.jpg\">gastropub",
