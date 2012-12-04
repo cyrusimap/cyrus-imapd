@@ -292,7 +292,6 @@ static int isched_recv(struct transaction_t *txn,
 #ifdef WITH_DKIM
 	DKIM *dkim = NULL;
 	DKIM_STAT stat;
-	struct buf *reqline = &tmpbuf;
 
 	if (dkim_lib &&
 	    (dkim = dkim_verify(dkim_lib, NULL /* id */, NULL, &stat))) {
@@ -472,7 +471,6 @@ int isched_send(struct sched_param *sparam, icalcomponent *ical,
 #ifdef WITH_DKIM
 	DKIM *dkim = NULL;
 	DKIM_STAT stat;
-	struct buf *reqline = &tmpbuf;
 	unsigned char *sig = NULL;
 	size_t siglen;
 
