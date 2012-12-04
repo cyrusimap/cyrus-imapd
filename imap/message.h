@@ -55,6 +55,7 @@
 
 #include "prot.h"
 #include "mailbox.h"
+#include "strarray.h"
 #include "util.h"
 
 /*
@@ -293,6 +294,7 @@ extern int message_foreach_text_section(message_t *m,
 		   int (*proc)(int partno, int charset, int encoding,
 			       const char *subtype, struct buf *data, void *rock),
 		   void *rock);
+extern int message_get_leaf_types(message_t *m, strarray_t *types);
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 

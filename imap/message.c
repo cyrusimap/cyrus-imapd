@@ -5406,6 +5406,34 @@ static int part_foreach_text_section(part_t *part,
     return 0;
 }
 
+static int part_get_leaf_types(part_t *part, strarray_t *types)
+{
+    segment_t *body;
+    segment_t *s;
+    int r;
+
+    r = message2_expand_segment(part->message, to_segment(part));
+    if (r) return r;
+
+    body = segment_find_child(to_segment(part), ID_BODY);
+    if (body) {
+	r = message2_expand_segment(part->message, body);
+	if (r) return r;
+
+	if (strcmpsafe(part->type, "MULTIPART") &&
+	    strcmpsafe(part->type, "MESSAGE")) {
+	    strarray_append(types, part->type);
+	    strarray_append(types, part->subtype);
+	}
+	for (s = body->children ; s ; s = s->next) {
+	    r = part_get_leaf_types(get_part(s), types);
+	    if (r) return r;
+	}
+    }
+
+    return 0;
+}
+
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 
 /*
@@ -5658,6 +5686,18 @@ EXPORTED int message_foreach_text_section(message_t *m,
     int r = message_need(m, M_SEGS|M_BODY|M_MAP);
     if (r) return r;
     return part_foreach_text_section(get_part(m->segs), proc, rock);
+}
+
+/*
+ * Get the MIME content types of all leaf sections, i.e. sections whose
+ * type is not multipart or message.  Strings are added to the array in
+ * pairs, type first then subtype.
+ */
+EXPORTED int message_get_leaf_types(message_t *m, strarray_t *types)
+{
+    int r = message_need(m, M_SEGS|M_BODY|M_MAP);
+    if (r) return r;
+    return part_get_leaf_types(get_part(m->segs), types);
 }
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
