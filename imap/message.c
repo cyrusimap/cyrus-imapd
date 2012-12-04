@@ -4113,7 +4113,9 @@ static int message2_expand_segment(message_t *m, segment_t *s)
 	else
 	    segment_finish(s);
     }
-    else if (is_part(s)) {
+    else if (s->id == ID_HEADER || is_part(s)) {
+	/* ID_HEADER happens if we've read a message's segments from
+	 * cyrus.cache and not parsed the header in detail. */
 	struct buf map = BUF_INITIALIZER;
 	r = message2_map_segment(m, s, &map);
 	if (r) return r;
@@ -4811,9 +4813,12 @@ static int message2_parse_header(part_t *part, const struct buf *map)
     int i;
     int r = IMAP_MESSAGE_BADHEADER;
 
-    header = segment_new(ID_HEADER);
-    segment_bud(to_segment(part), header);
-    segment_finish(header);
+    header = segment_find_child(to_segment(part), ID_HEADER);
+    if (!header) {
+	header = segment_new(ID_HEADER);
+	segment_bud(to_segment(part), header);
+	segment_finish(header);
+    }
 
     memset(mime_fields, 0, sizeof(mime_fields));
 
@@ -5131,6 +5136,9 @@ static int message_extract_field(message_t *m,
     r = IMAP_NOTFOUND;
     if (s) {
 	s = segment_find_child(s, ID_HEADER);
+	r = message2_expand_segment(m, s);
+	if (r) goto out;
+	r = IMAP_NOTFOUND;
 	for (s = (s ? s->children : NULL) ; s ; s = s->next) {
 	    if (s->id != (unsigned)desc->id)
 		continue;
