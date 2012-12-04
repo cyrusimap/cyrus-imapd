@@ -5128,7 +5128,7 @@ static int message_extract_field(message_t *m,
 	}
     }
 
-    r = 0;	/* not found */
+    r = IMAP_NOTFOUND;
     if (s) {
 	s = segment_find_child(s, ID_HEADER);
 	for (s = (s ? s->children : NULL) ; s ; s = s->next) {
@@ -5137,7 +5137,7 @@ static int message_extract_field(message_t *m,
 	    buf_init_ro(&raw, map->s + s->offset, s->length);
 	    extract_one(buf, desc, format, /*has_name*/1, &raw);
 	    buf_free(&raw);
-	    r++;
+	    r = 0;	/* found */
 	    if (!(format & MESSAGE_MULTIPLE))
 		break;
 	}
@@ -5402,8 +5402,7 @@ static int part_foreach_text_section(part_t *part,
  * 'buf' may be CoW so the caller should use buf_cstring() before
  * assuming that there is a NUL terminator.  The 'format' argument is
  * flags from enum message_format which control how the result is
- * formatted.  Returns the number of header fields extracted, or
- * negative error.
+ * formatted.  Returns zero on success, or an IMAP error number.
  */
 EXPORTED int message_get_field(message_t *m, const char *name,
 			       int format, struct buf *buf)
