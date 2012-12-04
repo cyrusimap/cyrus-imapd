@@ -372,6 +372,10 @@ static int squatter_build_query(search_builder_t *bx, const char *query)
 	    part = SEARCH_PART_BCC;
 	else if (!strncasecmp(p, "subject:", 8))
 	    part = SEARCH_PART_SUBJECT;
+	else if (!strncasecmp(p, "listid:", 7))
+	    part = SEARCH_PART_LISTID;
+	else if (!strncasecmp(p, "contenttype:", 12))
+	    part = SEARCH_PART_TYPE;
 	else if (!strncasecmp(p, "header:", 7))
 	    part = SEARCH_PART_HEADERS;
 	else if (!strncasecmp(p, "body:", 5))

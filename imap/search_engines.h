@@ -74,9 +74,11 @@ struct search_builder {
 #define SEARCH_PART_CC      3
 #define SEARCH_PART_BCC     4
 #define SEARCH_PART_SUBJECT 5
-#define SEARCH_PART_HEADERS 6 /* headers OTHER than the above headers */
-#define SEARCH_PART_BODY    7
-#define SEARCH_NUM_PARTS    8
+#define SEARCH_PART_LISTID  6	/* List-Id or Mailing-List fields */
+#define SEARCH_PART_TYPE    7	/* MIME Content-Type except multipart */
+#define SEARCH_PART_HEADERS 8 /* headers OTHER than the above headers */
+#define SEARCH_PART_BODY    9
+#define SEARCH_NUM_PARTS    10
 
 extern const char *search_part_as_string(int part);
 

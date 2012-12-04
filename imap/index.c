@@ -1495,6 +1495,8 @@ static void build_query(search_builder_t *bx,
     build_query_part(bx, &searchargs->header_name, SEARCH_PART_HEADERS, 0, nmatchesp);
     build_query_part(bx, &searchargs->header, SEARCH_PART_HEADERS, 0, nmatchesp);
     build_query_part(bx, &searchargs->body, SEARCH_PART_BODY, remove, nmatchesp);
+    build_query_part(bx, &searchargs->listid, SEARCH_PART_LISTID, remove, nmatchesp);
+    build_query_part(bx, &searchargs->contenttype, SEARCH_PART_TYPE, remove, nmatchesp);
     build_query_part(bx, &searchargs->text, SEARCH_PART_ANY, remove, nmatchesp);
 
     for (sub = searchargs->sublist ; sub ; sub = sub->next) {
@@ -5748,6 +5750,39 @@ out:
     return r;
 }
 
+static int _search_contenttype(const char *str, struct buf *bodystructure)
+{
+    const char *p = NULL;
+    comp_pat *xpat = NULL;
+    int r = 0;
+    struct buf xstr = BUF_INITIALIZER;
+
+    /* Adjust the pattern to mostly almost match what's in the
+     * BODYSTRUCTURE.  This is a quick and nasty hack, you really
+     * should be using the search engine support for indexing
+     * content-types instead.  */
+
+    buf_putc(&xstr, '"');
+    p = strchr(str, '_');
+    if (p) {
+	buf_appendmap(&xstr, str, p-str);
+	buf_appendcstr(&xstr, "\" \"");
+	buf_appendcstr(&xstr, p+1);
+    }
+    else {
+	buf_appendcstr(&xstr, str);
+    }
+    buf_putc(&xstr, '"');
+    buf_cstring(&xstr);
+    xpat = charset_compilepat(buf_cstring(&xstr));
+
+    r = _search_searchbuf(xstr.s, xpat, bodystructure);
+
+    charset_freepat(xpat);
+    buf_free(&xstr);
+    return r;
+}
+
 /*
  * Evaluate a searchargs structure on a msgno
  *
@@ -5825,7 +5860,8 @@ static int index_search_evaluate(struct index_state *state,
     }
 
     if (searchargs->from || searchargs->to || searchargs->cc ||
-	searchargs->bcc || searchargs->subject || searchargs->messageid) {
+	searchargs->bcc || searchargs->subject || searchargs->messageid ||
+	searchargs->contenttype) {
 
 	if (mailbox_cacherecord(state->mailbox, &record))
 	    goto zero;
@@ -5894,6 +5930,11 @@ static int index_search_evaluate(struct index_state *state,
 		!_search_searchbuf(l->s, l->p, cacheitem_buf(&record, CACHE_SUBJECT)))
 		goto zero;
 	}
+
+	for (l = searchargs->contenttype; l; l = l->next) {
+	    if (!_search_contenttype(l->s, cacheitem_buf(&im->record, CACHE_BODYSTRUCTURE)))
+		goto zero;
+	}
     }
 
     for (sa = searchargs->annotations ; sa ; sa = sa->next) {
@@ -5912,7 +5953,7 @@ static int index_search_evaluate(struct index_state *state,
 	}
     }
 
-    if (searchargs->body || searchargs->text ||
+    if (searchargs->body || searchargs->text || searchargs->listid ||
 	searchargs->cache_atleast > record.cache_version) {
 	if (!buf->len) { /* Map the message in if we haven't before */
 	    if (mailbox_map_record(state->mailbox, &record, buf))
@@ -5925,7 +5966,15 @@ static int index_search_evaluate(struct index_state *state,
 				    record.header_size)) goto zero;
 	}
 
-	if (mailbox_cacherecord(state->mailbox, &record))
+	for (l = searchargs->listid; l; l = l->next) {
+	    if (!index_searchheader("List-Id", l->s, l->p, msgfile,
+				    record.header_size) &&
+		!index_searchheader("Mailing-List", l->s, l->p, msgfile,
+				    record.header_size))
+		goto zero;
+	}
+
+	if (mailbox_cacherecord(mailbox, &record))
 	    goto zero;
 
 	for (l = searchargs->body; l; l = l->next) {
@@ -6158,6 +6207,16 @@ static int getsearchtext_cb(int partno, int charset, int encoding,
     return 0;
 }
 
+static void append_alnum(struct buf *buf, const char *ss)
+{
+    const unsigned char *s = (const unsigned char *)ss;
+
+    for ( ; *s ; ++s) {
+	if (Uisalnum(*s))
+	    buf_putc(buf, *s);
+    }
+}
+
 EXPORTED int index_getsearchtext(message_t *msg,
 			 search_text_receiver_t *receiver,
 			 int snippet)
@@ -6166,6 +6225,8 @@ EXPORTED int index_getsearchtext(message_t *msg,
     struct buf buf = BUF_INITIALIZER;
     uint32_t uid = 0;
     int format = MESSAGE_SEARCH;
+    strarray_t types = STRARRAY_INITIALIZER;
+    int i;
     int r;
 
     message_get_uid(msg, &uid);
@@ -6198,8 +6259,43 @@ EXPORTED int index_getsearchtext(message_t *msg,
     if (!message_get_field(msg, "Subject", format, &buf))
 	stuff_part(receiver, SEARCH_PART_SUBJECT, &buf);
 
+    if (!message_get_field(msg, "List-Id", format, &buf))
+	stuff_part(receiver, SEARCH_PART_LISTID, &buf);
+    if (!message_get_field(msg, "Mailing-List", format, &buf))
+	stuff_part(receiver, SEARCH_PART_LISTID, &buf);
+
+    if (!message_get_leaf_types(msg, &types) && types.count) {
+	/* We add three search terms: the type, subtype, and a combined
+	 * type+subtype string.  We carefully control punctuation to
+	 * ensure that each word in indexed as a single term.  For
+	 * example if the original message has "application/x-pdf" then
+	 * we index "APPLICATION" "XPDF" "APPLICATION_XPDF".  */
+
+	receiver->begin_part(receiver, SEARCH_PART_TYPE);
+	for (i = 0 ; i < types.count ; i+= 2) {
+	    buf_reset(&buf);
+
+	    if (i) buf_putc(&buf, ' ');
+
+	    /* type */
+	    append_alnum(&buf, types.data[i]);
+	    buf_putc(&buf, ' ');
+	    /* subtype */
+	    append_alnum(&buf, types.data[i+1]);
+	    buf_putc(&buf, ' ');
+	    /* combined type_subtype */
+	    append_alnum(&buf, types.data[i]);
+	    buf_putc(&buf, '_');
+	    append_alnum(&buf, types.data[i+1]);
+
+	    receiver->append_text(receiver, &buf);
+	}
+	receiver->end_part(receiver, SEARCH_PART_TYPE);
+    }
+
     r = receiver->end_message(receiver);
     buf_free(&buf);
+    strarray_fini(&types);
     return r;
 }
 
@@ -6854,6 +6950,8 @@ static void index_msgdata_free(MsgData **msgdata, unsigned int n)
 	free(md->displayto);
 	free(md->xsubj);
 	free(md->msgid);
+	free(md->listid);
+	free(md->contenttype);
 	strarray_fini(&md->ref);
 	strarray_fini(&md->annot);
     }
@@ -7927,6 +8025,8 @@ EXPORTED void freesearchargs(struct searchargs *s)
     freestrlist(s->bcc);
     freestrlist(s->subject);
     freestrlist(s->messageid);
+    freestrlist(s->listid);
+    freestrlist(s->contenttype);
     freestrlist(s->body);
     freestrlist(s->text);
     freestrlist(s->header_name);

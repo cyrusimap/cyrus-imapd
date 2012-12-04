@@ -241,6 +241,8 @@ struct searchargs {
     struct strlist *bcc;
     struct strlist *subject;
     struct strlist *messageid;
+    struct strlist *listid;
+    struct strlist *contenttype;
     struct strlist *body;
     struct strlist *text;
     struct strlist *header_name, *header;

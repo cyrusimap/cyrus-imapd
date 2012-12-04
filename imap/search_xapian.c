@@ -91,6 +91,8 @@ static const char * const prefix_by_part[SEARCH_NUM_PARTS] = {
     "C",		/* CC */
     "B",		/* BCC */
     "S",		/* SUBJECT */
+    "L",		/* LISTID */
+    "Y",		/* TYPE */
     "H",		/* HEADERS */
     "D",		/* BODY */
 };

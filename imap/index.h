@@ -160,6 +160,8 @@ typedef struct msgdata {
 
     /* items from the cache record */
     char *msgid;		/* message ID */
+    char *listid;		/* List-Id and Mailing-List fields */
+    char *contenttype;		/* all MIME Content-Types except multipart */
     char *cc;			/* local-part of first "cc" address */
     char *from;			/* local-part of first "from" address */
     char *to;			/* local-part of first "to" address */

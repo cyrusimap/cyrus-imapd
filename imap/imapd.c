@@ -10683,6 +10683,26 @@ static int getsearchcriteria(const char *tag, struct searchargs *searchargs,
 	else goto badcri;
 	break;
 
+    case 'x':
+	if (!strcmp(criteria.s, "xlistid")) {
+	    if (c != ' ') goto missingarg;
+	    c = getastring(imapd_in, imapd_out, &arg);
+	    if (c == EOF) goto missingarg;
+	    str = charset_convert(arg.s, *charsetp, charset_flags);
+	    if (str) appendstrlistpat(&searchargs->listid, str);
+	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
+	}
+	else if (!strcmp(criteria.s, "xcontenttype")) {
+	    if (c != ' ') goto missingarg;
+	    c = getastring(imapd_in, imapd_out, &arg);
+	    if (c == EOF) goto missingarg;
+	    str = charset_convert(arg.s, *charsetp, charset_flags);
+	    if (str) appendstrlistpat(&searchargs->contenttype, str);
+	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
+	}
+	else goto badcri;
+	break;
+
     case 'y':
 	if (!strcmp(criteria.s, "younger")) {
 	    if (c != ' ') goto missingarg;		

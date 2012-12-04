@@ -107,6 +107,8 @@ static const char * const column_by_part[SEARCH_NUM_PARTS] = {
     "header_cc",
     "header_bcc",
     "header_subject",
+    "header_listid",
+    "header_type",
     "headers",
     "body"
 };
@@ -1430,6 +1432,8 @@ static int sphinx_setup(const struct mailbox *mailbox, int verbose, int create)
 	"    rt_field = header_cc\n"
 	"    rt_field = header_bcc\n"
 	"    rt_field = header_subject\n"
+	"    rt_field = header_listid\n"
+	"    rt_field = header_type\n"
 	"    rt_field = headers\n"
 	"    rt_field = body\n"
 	"}\n"
