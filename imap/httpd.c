@@ -2403,7 +2403,7 @@ int http_mailbox_open(const char *name, struct mailbox **mailbox, int locktype)
 /* Compare an etag in a header to a resource etag.
  * Returns 0 if a match, non-zero otherwise.
  */
-static int etagcmp(const char *hdr, const char *etag)
+int etagcmp(const char *hdr, const char *etag)
 {
     size_t len;
 
@@ -2440,26 +2440,19 @@ static unsigned etag_match(const char *hdr[], const char *etag)
 
 /* Check headers for any preconditions.
  *
- * Interaction (if any) is complex and is documented in RFC 6638, RFC 4918,
- * and Section 5 of HTTPbis, Part 4.
+ * Interaction is complex and is documented in RFC 4918 and
+ * Section 5 of HTTPbis, Part 4.
  */
-int check_precond(unsigned meth, const char *stag, const char *etag,
-		  time_t lastmod, hdrcache_t hdrcache)
+int check_precond(unsigned meth,
+		  const void *data __attribute__((unused)),
+		  const char *etag, time_t lastmod, hdrcache_t hdrcache)
 {
     long resp = HTTP_OK;
     unsigned is_get_or_head = 0;
     const char **hdr;
     time_t since;
 
-    /* Per RFC 6638,
-       If-Schedule-Tag-Match supercedes any ETag-based precondition tests */
-    if ((hdr = spool_getheader(hdrcache, "If-Schedule-Tag-Match"))) {
-	if (etagcmp(hdr[0], stag)) return HTTP_PRECOND_FAILED;
-
-	return HTTP_OK;  /* Ignore remaining conditionals */
-    }
-
-    /* Per RFC 4918, If supercedes If-Match */
+    /* Step 0 - Per RFC 4918, If supercedes If-Match */
     if ((hdr = spool_getheader(hdrcache, "If"))) {
 	/* State tokens (sync-token, lock-token) and Etags */
 	syslog(LOG_WARNING, "If: %s", hdr[0]);

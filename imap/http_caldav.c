@@ -255,6 +255,30 @@ static void my_caldav_shutdown(void)
 }
 
 
+/* Check headers for any preconditions */
+static int caldav_check_precond(unsigned meth, const void *data,
+				const char *etag, time_t lastmod,
+				hdrcache_t hdrcache)
+{
+    const struct caldav_data *cdata = (const struct caldav_data *) data;
+    const char **hdr;
+
+syslog(LOG_INFO, "caldav_check_precond(%s, %s, %ld)", cdata->sched_tag, etag, lastmod);
+    /* Per RFC 6638,
+       If-Schedule-Tag-Match supercedes any ETag-based precondition tests */
+    if ((hdr = spool_getheader(hdrcache, "If-Schedule-Tag-Match"))) {
+	if (cdata && etagcmp(hdr[0], cdata->sched_tag))
+	    return HTTP_PRECOND_FAILED;
+
+	return HTTP_OK;  /* Ignore remaining conditionals */
+    }
+    else {
+	/* Do normal WebDAV and/or HTTP checks */
+	return check_precond(meth, NULL, etag, lastmod, hdrcache);
+    }
+}
+
+
 static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights)
 {
     if (!xmlStrcmp(priv->ns->href, BAD_CAST XML_NS_CALDAV)) {
@@ -530,8 +554,8 @@ static int meth_copy(struct transaction_t *txn,
     /* Check any preconditions on source */
     etag = message_guid_encode(&src_rec.guid);
     lastmod = src_rec.internaldate;
-    precond = check_precond(txn->meth, cdata->sched_tag,
-			    etag, lastmod, txn->req_hdrs);
+    precond = caldav_check_precond(txn->meth, cdata,
+				   etag, lastmod, txn->req_hdrs);
 
     if (precond != HTTP_OK) {
 	/* We failed a precondition - don't perform the request */
@@ -707,8 +731,8 @@ static int meth_delete(struct transaction_t *txn,
     lastmod = record.internaldate;
 
     /* Check any preconditions */
-    precond = check_precond(txn->meth, cdata->sched_tag,
-			    etag, lastmod, txn->req_hdrs);
+    precond = caldav_check_precond(txn->meth, cdata,
+				   etag, lastmod, txn->req_hdrs);
 
     /* We failed a precondition - don't perform the request */
     if (precond != HTTP_OK) {
@@ -907,8 +931,8 @@ static int meth_get(struct transaction_t *txn,
     /* Check any preconditions */
     etag = message_guid_encode(&record.guid);
     lastmod = record.internaldate;
-    precond = check_precond(txn->meth, cdata->sched_tag,
-			    etag, lastmod, txn->req_hdrs);
+    precond = caldav_check_precond(txn->meth, cdata,
+				   etag, lastmod, txn->req_hdrs);
 
     if (precond != HTTP_OK) {
 	/* We failed a precondition - don't perform the request */
@@ -1303,8 +1327,8 @@ static int meth_put(struct transaction_t *txn,
     mailbox_unlock_index(mailbox, NULL);
 
     /* Check any preconditions */
-    precond = check_precond(txn->meth, cdata->sched_tag,
-			    etag, lastmod, txn->req_hdrs);
+    precond = caldav_check_precond(txn->meth, cdata,
+				   etag, lastmod, txn->req_hdrs);
 
     if (precond != HTTP_OK) {
 	/* We failed a precondition - don't perform the request */
@@ -2050,9 +2074,9 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			/* Check any preconditions */
 			const char *etag = message_guid_encode(&oldrecord.guid);
 			time_t lastmod = oldrecord.internaldate;
-			int precond = check_precond(txn->meth, cdata->sched_tag,
-						    etag, lastmod,
-						    txn->req_hdrs);
+			int precond = caldav_check_precond(txn->meth, cdata,
+							   etag, lastmod,
+							   txn->req_hdrs);
 
 			overwrite = (precond == HTTP_OK);
 		    }
