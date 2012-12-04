@@ -3476,6 +3476,10 @@ static void field_desc_init_builtins(void)
 	 * threading so we can avoid parsing the envelope] */
 	{ "message-id", BIT32_MAX, ID_MESSAGE_ID, -1, ENV_MSGID },
 
+	/* Not cached in any way, but we will be looking them up */
+	{ "list-id", BIT32_MAX, ID_LIST_ID, -1, -1 },
+	{ "mailing-list", BIT32_MAX, ID_MAILING_LIST, -1, -1 },
+
 	{ NULL, 0, 0, 0, 0 }
     };
 
@@ -5490,6 +5494,20 @@ EXPORTED int message_get_messageid(message_t *m, struct buf *buf)
 {
     return message_extract_field(m, m->segs,
 				 field_desc_get_byid(ID_MESSAGE_ID),
+				 MESSAGE_RAW, buf);
+}
+
+EXPORTED int message_get_listid(message_t *m, struct buf *buf)
+{
+    return message_extract_field(m, m->segs,
+				 field_desc_get_byid(ID_LIST_ID),
+				 MESSAGE_RAW, buf);
+}
+
+EXPORTED int message_get_mailinglist(message_t *m, struct buf *buf)
+{
+    return message_extract_field(m, m->segs,
+				 field_desc_get_byid(ID_MAILING_LIST),
 				 MESSAGE_RAW, buf);
 }
 

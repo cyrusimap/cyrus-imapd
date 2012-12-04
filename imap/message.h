@@ -272,6 +272,8 @@ extern int message_get_num_parts(message_t *m, unsigned int *np);
 extern int message_get_part(message_t *m, unsigned int id, part_t **partp);
 extern int message_get_root_part(message_t *m, part_t **partp);
 extern int message_get_messageid(message_t *m, struct buf *buf);
+extern int message_get_listid(message_t *m, struct buf *buf);
+extern int message_get_mailinglist(message_t *m, struct buf *buf);
 extern int message_get_inreplyto(message_t *m, struct buf *buf);
 extern int message_get_references(message_t *m, struct buf *buf);
 extern int message_get_subject(message_t *m, struct buf *buf);
