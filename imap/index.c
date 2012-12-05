@@ -1864,8 +1864,11 @@ EXPORTED int index_search(struct index_state *state, struct searchargs *searchar
     if (index_check(state, 0, 0))
 	return 0;
 
+#if 0
     /* calculate the user flags */
     index_calcsearchflags(state, searchargs);
+#endif
+    search_expr_internalise(state->mailbox, searchargs->root);
 
     /* now do the search */
     n = _index_search(&list, state, searchargs, 
