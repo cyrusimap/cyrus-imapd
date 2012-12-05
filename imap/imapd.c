@@ -10661,16 +10661,13 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 	else goto badcri;
 	break;
 
-#if 0
     case 'x':
 	if (!strcmp(criteria.s, "xlistid")) {
 	    if (c != ' ') goto missingarg;
-	    c = getastring(imapd_in, imapd_out, &arg);
+	    c = string_match(parent, "listid", base);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, base->charset, charset_flags);
-	    if (str) appendstrlistpat(&searchargs->listid, str);
-	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
+#if 0
 	else if (!strcmp(criteria.s, "xcontenttype")) {
 	    if (c != ' ') goto missingarg;
 	    c = getastring(imapd_in, imapd_out, &arg);
@@ -10679,9 +10676,9 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 	    if (str) appendstrlistpat(&searchargs->contenttype, str);
 	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
+#endif
 	else goto badcri;
 	break;
-#endif
 
     case 'y':
 	if (!strcmp(criteria.s, "younger")) {

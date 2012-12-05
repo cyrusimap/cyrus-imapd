@@ -274,6 +274,35 @@ static void search_string_free(union search_value *v)
 
 /* ====================================================================== */
 
+static int search_listid_match(message_t *m, const union search_value *v,
+			       void *internalised,
+			       void *data1 __attribute__((unused)))
+{
+    int r;
+    struct buf buf = BUF_INITIALIZER;
+    comp_pat *pat = (comp_pat *)internalised;
+
+    r = message_get_listid(m, &buf);
+    if (!r) {
+	r = charset_searchstring(v->s, pat, buf.s, buf.len, charset_flags);
+	if (r) goto out;    // success
+    }
+
+    r = message_get_mailinglist(m, &buf);
+    if (!r) {
+	r = charset_searchstring(v->s, pat, buf.s, buf.len, charset_flags);
+	if (r) goto out;    // success
+    }
+
+    r = 0;  // failure
+
+out:
+    buf_free(&buf);
+    return r;
+}
+
+/* ====================================================================== */
+
 static int search_seq_match(message_t *m, const union search_value *v,
 			    void *internalised __attribute__((unused)),
 			    void *data1)
@@ -807,6 +836,14 @@ EXPORTED void search_attr_init(void)
 	    search_string_describe,
 	    search_string_free,
 	    (void *)message_get_messageid
+	},{
+	    "listid",
+	    search_string_internalise,
+	    /*cmp*/NULL,
+	    search_listid_match,
+	    search_string_describe,
+	    search_string_free,
+	    NULL
 	},{
 	    "subject",
 	    search_string_internalise,
