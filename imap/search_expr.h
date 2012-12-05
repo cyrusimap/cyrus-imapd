@@ -107,5 +107,6 @@ extern int search_expr_evaluate(message_t *m, const search_expr_t *);
 
 extern void search_attr_init(void);
 extern const search_attr_t *search_attr_find(const char *);
+extern const search_attr_t *search_attr_find_field(const char *field);
 
 #endif

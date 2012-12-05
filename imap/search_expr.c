@@ -342,6 +342,27 @@ out:
 
 /* ====================================================================== */
 
+static int search_header_match(message_t *m, const union search_value *v,
+			       void *internalised, void *data1)
+{
+    int r;
+    struct buf buf = BUF_INITIALIZER;
+    const char *field = (const char *)data1;
+    comp_pat *pat = (comp_pat *)internalised;
+
+    r = message_get_field(m, field, MESSAGE_DECODED, &buf);
+    if (!r) {
+	r = charset_searchstring(v->s, pat, buf.s, buf.len, charset_flags);
+    }
+    else
+	r = 0;
+    buf_free(&buf);
+
+    return r;
+}
+
+/* ====================================================================== */
+
 static int search_seq_match(message_t *m, const union search_value *v,
 			    void *internalised __attribute__((unused)),
 			    void *data1)
@@ -1050,4 +1071,43 @@ EXPORTED const search_attr_t *search_attr_find(const char *name)
     strlcpy(tmp, name, sizeof(tmp));
     lcase(tmp);
     return hash_lookup(tmp, &attrs_by_name);
+}
+
+EXPORTED const search_attr_t *search_attr_find_field(const char *field)
+{
+    search_attr_t *attr;
+    char *key = NULL;
+    static const search_attr_t proto = {
+	"name",
+	search_string_internalise,
+	/*cmp*/NULL,
+	search_header_match,
+	search_string_describe,
+	search_string_free,
+	NULL
+    };
+
+    /* some header fields can be reduced to search terms */
+    if (!strcasecmp(field, "bcc") ||
+	!strcasecmp(field, "cc") ||
+	!strcasecmp(field, "to") ||
+	!strcasecmp(field, "from") ||
+	!strcasecmp(field, "subject") ||
+	!strcasecmp(field, "message-id"))
+	return search_attr_find(field);
+
+    key = lcase(strconcat("header:", field, (char *)NULL));
+    attr = (search_attr_t *)hash_lookup(key, &attrs_by_name);
+
+    if (!attr) {
+	attr = (search_attr_t *)xzmalloc(sizeof(search_attr_t));
+	*attr = proto;
+	attr->name = key;
+	attr->data1 = strchr(key, ':')+1;
+	hash_insert(attr->name, (void *)attr, &attrs_by_name);
+	key = NULL;	/* attr takes this over */
+    }
+
+    free(key);
+    return attr;
 }

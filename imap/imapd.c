@@ -10222,7 +10222,7 @@ static void date_range(search_expr_t *parent, const char *aname,
  */
 static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 {
-    static struct buf criteria, arg;
+    static struct buf criteria, arg, arg2;
     search_expr_t *e;
     int c;
     int keep_charset = 0;
@@ -10417,44 +10417,19 @@ static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
 
     case 'h':
 	if (!strcmp(criteria.s, "header")) {
-
 	    if (c != ' ') goto missingarg;
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c != ' ') goto missingarg;
-	    lcase(arg.s);
-
-	    /* some headers can be reduced to search terms */
-	    if (!strcmp(arg.s, "bcc") ||
-		!strcmp(arg.s, "cc") ||
-		!strcmp(arg.s, "to") ||
-		!strcmp(arg.s, "from") ||
-		!strcmp(arg.s, "subject") ||
-		!strcmp(arg.s, "message-id")) {
-		c = string_match(parent, arg.s, base);
-		if (c == EOF) goto missingarg;
-	    }
-
-#if 0 /*TODO:gnb*/
-	    /* all other headers we handle normally */
-	    else {
-		if (searchargs->cache_atleast < BIT32_MAX) {
-		    bit32 this_ver =
-			mailbox_cached_header(arg.s);
-		    if(this_ver > searchargs->cache_atleast)
-			searchargs->cache_atleast = this_ver;
-		}
-		appendstrlist(&searchargs->header_name, arg.s);
-		patlist = &searchargs->header;
-	    }
-
-	    c = getastring(imapd_in, imapd_out, &arg);
+	    c = getastring(imapd_in, imapd_out, &arg2);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, base->charset, charset_flags);
-	    if (str) appendstrlistpat(patlist, str);
-	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
-#else
-	    else goto badcri;
-#endif
+
+	    e = search_expr_new(parent, SEOP_MATCH);
+	    e->attr = search_attr_find_field(arg.s);
+	    e->value.s = charset_convert(arg2.s, base->charset, charset_flags);
+	    if (!e->value.s) {
+		e->op = SEOP_FALSE;
+		e->attr = NULL;
+	    }
 	}
 	else goto badcri;
 	break;
