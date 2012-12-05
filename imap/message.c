@@ -5056,7 +5056,10 @@ static void extract_one(struct buf *buf,
 	 * by setting it up as a CoW buffer.  This means that
 	 * the caller will need to call buf_cstring() if they
 	 * need a C string. */
-	buf_cowappendmap(buf, raw->s, raw->len);
+	if (!raw->alloc)
+	    buf_cowappendmap(buf, raw->s, raw->len);
+	else
+	    buf_append(buf, raw);
 	break;
     case MESSAGE_DECODED:
 	p = charset_parse_mimeheader(buf_cstring(raw));
@@ -5193,7 +5196,10 @@ static int part_extract_header(part_t *part,
 	 * by setting it up as a CoW buffer.  This means that
 	 * the caller will need to call buf_cstring() if they
 	 * need a C string. */
-	buf_cowappendmap(buf, raw.s, raw.len);
+	if (!raw.alloc)
+	    buf_cowappendmap(buf, raw.s, raw.len);
+	else
+	    buf_append(buf, &raw);
 	break;
     case MESSAGE_DECODED:
 	p = charset_parse_mimeheader(buf_cstring(&raw));
