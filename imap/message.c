@@ -5457,7 +5457,7 @@ EXPORTED int message_get_field(message_t *m, const char *name,
 			       int format, struct buf *buf)
 {
     return message_extract_field(m, m->segs,
-				 field_desc_get_byname(name, 0, /*create*/0),
+				 field_desc_get_byname(name, 0, /*create*/1),
 				 format, buf);
 }
 
