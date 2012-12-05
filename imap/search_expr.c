@@ -257,9 +257,13 @@ static void search_string_describe(struct buf *b, const union search_value *v)
 static void search_string_internalise(struct mailbox *mailbox __attribute__((unused)),
 				      const union search_value *v, void **internalisedp)
 {
-    if (*internalisedp)
+    if (*internalisedp) {
 	charset_freepat(*internalisedp);
-    *internalisedp = (v ? charset_compilepat(v->s) : NULL);
+	*internalisedp = NULL;
+    }
+    if (v) {
+	*internalisedp = charset_compilepat(v->s);
+    }
 }
 
 static void search_string_free(union search_value *v)
