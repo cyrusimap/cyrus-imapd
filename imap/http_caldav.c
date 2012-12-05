@@ -263,7 +263,6 @@ static int caldav_check_precond(unsigned meth, const void *data,
     const struct caldav_data *cdata = (const struct caldav_data *) data;
     const char **hdr;
 
-syslog(LOG_INFO, "caldav_check_precond(%s, %s, %ld)", cdata->sched_tag, etag, lastmod);
     /* Per RFC 6638,
        If-Schedule-Tag-Match supercedes any ETag-based precondition tests */
     if ((hdr = spool_getheader(hdrcache, "If-Schedule-Tag-Match"))) {
