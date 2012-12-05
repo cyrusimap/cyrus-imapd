@@ -303,6 +303,45 @@ out:
 
 /* ====================================================================== */
 
+static int search_contenttype_match(message_t *m, const union search_value *v,
+				    void *internalised,
+				    void *data1 __attribute__((unused)))
+{
+    int r;
+    comp_pat *pat = (comp_pat *)internalised;
+    strarray_t types = STRARRAY_INITIALIZER;
+    int i;
+    char combined[128];
+
+    if (!message_get_leaf_types(m, &types)) {
+	for (i = 0 ; i < types.count ; i+= 2) {
+	    const char *type = types.data[i];
+	    const char *subtype = types.data[i+1];
+
+	    /* match against type */
+	    r = charset_searchstring(v->s, pat, type, strlen(type), charset_flags);
+	    if (r) goto out;	// success
+
+	    /* match against subtype */
+	    r = charset_searchstring(v->s, pat, subtype, strlen(subtype), charset_flags);
+	    if (r) goto out;	// success
+
+	    /* match against combined type_subtype */
+	    snprintf(combined, sizeof(combined), "%s_%s", type, subtype);
+	    r = charset_searchstring(v->s, pat, combined, strlen(combined), charset_flags);
+	    if (r) goto out;	// success
+	}
+    }
+
+    r = 0;  // failure
+
+out:
+    strarray_fini(&types);
+    return r;
+}
+
+/* ====================================================================== */
+
 static int search_seq_match(message_t *m, const union search_value *v,
 			    void *internalised __attribute__((unused)),
 			    void *data1)
@@ -841,6 +880,14 @@ EXPORTED void search_attr_init(void)
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_listid_match,
+	    search_string_describe,
+	    search_string_free,
+	    NULL
+	},{
+	    "contenttype",
+	    search_string_internalise,
+	    /*cmp*/NULL,
+	    search_contenttype_match,
 	    search_string_describe,
 	    search_string_free,
 	    NULL
