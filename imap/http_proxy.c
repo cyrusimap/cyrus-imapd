@@ -200,7 +200,7 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 #endif
 
 	/* Base64 encode any client response, if necessary */
-	if (clientout && scheme && scheme->do_base64) {
+	if (clientout && scheme && (scheme->flags & AUTH_BASE64)) {
 	    r = sasl_encode64(clientout, clientoutlen,
 			      base64, BASE64_BUF_SIZE, &clientoutlen);
 	    if (r != SASL_OK) goto cleanup;
@@ -285,7 +285,8 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 
 			for (scheme = auth_schemes; scheme->name; scheme++) {
 			    if (!strncmp(scheme->name, hdr[i], len) &&
-				!(scheme->need_persist && non_persist)) {
+				!((scheme->flags & AUTH_NEED_PERSIST) &&
+				  non_persist)) {
 				/* Tag the scheme as available */
 				avail_auth_schemes |= (1 << scheme->idx);
 
@@ -377,7 +378,7 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 		}
 		else {
 		    /* Base64 decode any server challenge, if necessary */
-		    if (serverin && scheme->do_base64) {
+		    if (serverin && (scheme->flags & AUTH_BASE64)) {
 			r = sasl_decode64(serverin, serverinlen,
 					  base64, BASE64_BUF_SIZE, &serverinlen);
 			if (r != SASL_OK) break;

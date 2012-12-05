@@ -66,7 +66,7 @@
     "\"http://www.w3.org/TR/html4/loose.dtd\">\n"
 
 /* SASL usage based on availability */
-#ifdef SASL_NEED_HTTP
+#if defined(SASL_NEED_HTTP) && defined(SASL_HTTP_REQUEST)
   #define HTTP_DIGEST_MECH "DIGEST-MD5"
   #define SASL_USAGE_FLAGS (SASL_NEED_HTTP | SASL_SUCCESS_DATA)
 #else
@@ -131,9 +131,7 @@ struct auth_scheme_t {
     unsigned idx;		/* Index value of the scheme */
     const char *name;		/* HTTP auth scheme name */
     const char *saslmech;	/* Corresponding SASL mech name */
-    unsigned need_persist;	/* Need persistent connection? */
-    unsigned is_server_first;	/* Is SASL mech server-first? */
-    unsigned do_base64;		/* Base64 encode/decode auth data? */
+    unsigned flags;		/* Bitmask of requirements/features */
     	     			/* Optional function to send success data */
     void (*send_success)(const char *name, const char *data);
     	     			/* Optional function to recv success data */
@@ -146,6 +144,14 @@ enum {
     AUTH_DIGEST,
     AUTH_SPNEGO,
     AUTH_NTLM
+};
+
+/* Auth scheme flags */
+enum {
+    AUTH_NEED_PERSIST =	(1<<0),	/* Persistent connection required */
+    AUTH_NEED_BODY =	(1<<1),	/* Request body required */
+    AUTH_SERVER_FIRST =	(1<<2),	/* SASL mech is server-first */
+    AUTH_BASE64 =	(1<<3)	/* Base64 encode/decode auth data */
 };
 
 /* List of HTTP auth schemes that we support */
@@ -216,8 +222,8 @@ struct txn_flags_t {
 
 /* Transaction context */
 struct transaction_t {
-    char reqline[MAX_REQ_LINE+1];	/* Request Line */
     unsigned meth;			/* Index of Method to be performed */
+    const char *uri;			/* Original URI in request */
     struct txn_flags_t flags;		/* Flags for this txn */
     struct request_target_t req_tgt;	/* Parsed target URL */
     hdrcache_t req_hdrs;    		/* Cached HTTP headers */
@@ -231,6 +237,7 @@ struct transaction_t {
 #endif
     struct buf buf;	    		/* Working buffer - currently used for:
 					   httpd:
+					     - telemetry of auth'd request
 					     - error desc string
 					     - Location hdr on redirects
 					     - Etag for static docs

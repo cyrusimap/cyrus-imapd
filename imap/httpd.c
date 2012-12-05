@@ -154,7 +154,7 @@ static sasl_ssf_t extprops_ssf = 0;
 int https = 0;
 int httpd_tls_done = 0;
 int httpd_tls_required = 0;
-unsigned avail_auth_schemes = 0; /* bitmask of available aith schemes */
+unsigned avail_auth_schemes = 0; /* bitmask of available auth schemes */
 
 struct buf serverinfo = BUF_INITIALIZER;
 
@@ -166,12 +166,12 @@ static void digest_send_success(const char *name __attribute__((unused)),
 
 /* List of HTTP auth schemes that we support */
 struct auth_scheme_t auth_schemes[] = {
-    { AUTH_BASIC, "Basic", NULL, 0, 1, 1, NULL, NULL },
-    { AUTH_DIGEST, "Digest", HTTP_DIGEST_MECH, 0, 1, 0,
+    { AUTH_BASIC, "Basic", NULL, AUTH_SERVER_FIRST | AUTH_BASE64, NULL, NULL },
+    { AUTH_DIGEST, "Digest", HTTP_DIGEST_MECH, AUTH_NEED_BODY|AUTH_SERVER_FIRST,
       &digest_send_success, digest_recv_success },
-    { AUTH_SPNEGO, "Negotiate", "GSS-SPNEGO", 0, 0, 1, NULL, NULL },
-    { AUTH_NTLM, "NTLM", "NTLM", 1, 0, 1, NULL, NULL },
-    { -1, NULL, NULL, -1, -1, -1, NULL, NULL }
+    { AUTH_SPNEGO, "Negotiate", "GSS-SPNEGO", AUTH_BASE64, NULL, NULL },
+    { AUTH_NTLM, "NTLM", "NTLM", AUTH_NEED_PERSIST | AUTH_BASE64, NULL, NULL },
+    { -1, NULL, NULL, 0, NULL, NULL }
 };
 
 
@@ -212,9 +212,7 @@ static int reset_saslconn(sasl_conn_t **conn);
 
 static void cmdloop(void);
 static struct accept *parse_accept(const char *hdr);
-static int http_auth(const char *creds, const char *authzid,
-		     struct auth_challenge_t *chal);
-static void log_cachehdr(const char *name, const char *contents, void *rock);
+static int http_auth(const char *creds, struct transaction_t *txn);
 static void keep_alive(int sig);
 
 static int meth_get(struct transaction_t *txn, void *params);
@@ -891,7 +889,7 @@ static void cmdloop(void)
 {
     int ret, r, i, gzip_enabled = 0;
     tok_t tok;
-    char buf[1024], *p, *meth, *uri, *ver;
+    char reqline[MAX_REQ_LINE+1], buf[1024], *p, *meth, *ver;
     const char **hdr;
     struct transaction_t txn;
     const struct namespace_t *namespace;
@@ -912,9 +910,9 @@ static void cmdloop(void)
     for (;;) {
 	/* Reset state */
 	ret = 0;
-	meth = uri = ver = NULL;
-	memset(&tok, 0, sizeof(tok));
+	meth = ver = NULL;
 	txn.meth = METH_UNKNOWN;
+	txn.uri = NULL;
 	memset(&txn.flags, 0, sizeof(struct txn_flags_t));
 	txn.flags.close = !httpd_timeout;
 	txn.flags.vary = gzip_enabled ? VARY_AE : 0;
@@ -951,7 +949,7 @@ static void cmdloop(void)
 
 	/* Read request-line */
 	syslog(LOG_DEBUG, "read & parse request-line");
-	if (!prot_fgets(txn.reqline, sizeof(txn.reqline), httpd_in)) {
+	if (!prot_fgets(reqline, sizeof(reqline), httpd_in)) {
 	    txn.error.desc = prot_error(httpd_in);
 	    if (txn.error.desc && strcmp(txn.error.desc, PROT_EOF_STRING)) {
 		syslog(LOG_WARNING, "%s, closing connection", txn.error.desc);
@@ -960,15 +958,15 @@ static void cmdloop(void)
 	    txn.flags.close = 1;
 	    goto done;
 	}
-	p = txn.reqline + strlen(txn.reqline);
+	p = reqline + strlen(reqline);
 
 	/* Parse request-line = method SP request-target SP HTTP-version CRLF */
-	tok_init(&tok, txn.reqline, " \r\n", 0);
+	tok_initm(&tok, reqline, " \r\n", 0);
 	if (!(meth = tok_next(&tok))) {
 	    ret = HTTP_BAD_REQUEST;
 	    txn.error.desc = "Missing method in request-line\r\n";
 	}
-	else if (!(uri = tok_next(&tok))) {
+	else if (!(txn.uri = tok_next(&tok))) {
 	    ret = HTTP_BAD_REQUEST;
 	    txn.error.desc = "Missing request-target in request-line\r\n";
 	}
@@ -980,14 +978,14 @@ static void cmdloop(void)
 	    ret = HTTP_TOO_LONG;
 	    buf_printf(&txn.buf,
 		       "Length of request-line MUST be less than than %u octets\r\n",
-		       sizeof(txn.reqline));
+		       sizeof(reqline));
 	    txn.error.desc = buf_cstring(&txn.buf);
 	}
 	else if (!ver) {
 	    ret = HTTP_BAD_REQUEST;
 	    txn.error.desc = "Missing HTTP-version in request-line\r\n";
 	}
-	else if (txn.reqline[tok_offset(&tok) + strlen(ver)] == ' ') {
+	else if (reqline[tok_offset(&tok) + strlen(ver)] == ' ') {
 	    ret = HTTP_BAD_REQUEST;
 	    txn.error.desc = "Unexpected extra argument(s) in request-line\r\n";
 	}
@@ -1015,7 +1013,7 @@ static void cmdloop(void)
 
 	/* Parse request-target URI */
 	if (!ret &&
-	    (r = parse_uri(txn.meth, uri, &txn.req_tgt, &txn.error.desc))) {
+	    (r = parse_uri(txn.meth, txn.uri, &txn.req_tgt, &txn.error.desc))) {
 	    ret = r;
 	}
 
@@ -1121,60 +1119,18 @@ static void cmdloop(void)
 
 	if (ret) goto done;
 
-	/* Start method processing alarm */
-	alarm(httpd_keepalive);
-
 	if (!httpd_userid) {
-	    const char **creds, **authzid;
-
 	    /* Perform authentication, if necessary */
-	    if ((creds = spool_getheader(txn.req_hdrs, "Authorization"))) {
+	    if ((hdr = spool_getheader(txn.req_hdrs, "Authorization"))) {
 		/* Check the auth credentials */
-#ifdef SASL_HTTP_REQUEST
-		/* Setup SASL HTTP request in case we need it */
-		sasl_http_request_t sasl_http_req;
 
-		txn.flags.havebody = 1;
-		if ((r = read_body(httpd_in, txn.req_hdrs, &txn.req_body, 1,
-				   &txn.error.desc))) {
-		    txn.flags.close = 1;
-		    ret = r;
-		    goto done;
-		}
-		sasl_http_req.method = http_methods[txn.meth].name;
-		sasl_http_req.uri = uri;
-		sasl_http_req.entity = (u_char *) buf_cstring(&txn.req_body);
-		sasl_http_req.elen = buf_len(&txn.req_body);
-		sasl_http_req.non_persist = txn.flags.close;
-		sasl_setprop(httpd_saslconn, SASL_HTTP_REQUEST, &sasl_http_req);
-#endif /* SASL_HTTP_REQUEST */
-
-		authzid = spool_getheader(txn.req_hdrs, "Authorization-Id");
-		r = http_auth(creds[0],
-			      authzid ? authzid[0] : NULL, &txn.auth_chal);
+		r = http_auth(hdr[0], &txn);
 		if ((r < 0) || !txn.auth_chal.scheme) {
 		    /* Auth failed - reinitialize */
 		    syslog(LOG_DEBUG, "auth failed - reinit");
 		    reset_saslconn(&httpd_saslconn);
 		    txn.auth_chal.scheme = NULL;
 		    r = SASL_FAIL;
-		}
-		else if ((r == SASL_OK) && (httpd_logfd != -1)) {
-		    /* Auth succeeded - log request to userid telemetry */
-		    FILE *logf = fdopen(httpd_logfd, "a");
-		    fprintf(logf, "<%ld<", time(NULL));
-		    /* request-line */
-		    fprintf(logf, "%s %s",
-			    http_methods[txn.meth].name, txn.req_tgt.path);
-		    if (*txn.req_tgt.query)
-			fprintf(logf, "?%s", txn.req_tgt.query);
-		    fprintf(logf, " %s\r\n", HTTP_VERSION);
-		    /* request headers */
-		    spool_enum_hdrcache(txn.req_hdrs, &log_cachehdr, logf);
-		    /* request body */
-		    fprintf(logf, "\r\n%s", buf_cstring(&txn.req_body));
-		    fwrite(httpd_in->ptr, httpd_in->cnt, 1, logf);
-		    fflush(logf);
 		}
 	    }
 	    else if (txn.auth_chal.scheme) {
@@ -1256,6 +1212,9 @@ static void cmdloop(void)
 
 	/* Process the requested method */
 	if (!ret) {
+	    /* Start method processing alarm */
+	    alarm(httpd_keepalive);
+
 	    ret = (*meth_t->proc)(&txn, meth_t->params);
 	    if (ret == HTTP_UNAUTHORIZED) goto need_auth;
 	}
@@ -1369,7 +1328,7 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
     char buf[PROT_BUFSIZE];
     enum { LEN_DELIM_LENGTH, LEN_DELIM_CHUNKED, LEN_DELIM_CLOSE };
 
-    syslog(LOG_DEBUG, "read body(dump = %d)", body != NULL);
+    syslog(LOG_DEBUG, "read_body(%s)", body == NULL ? "discard" : "");
 
     /* Check if client expects 100 (Continue) status before sending body */
     if ((hdr = spool_getheader(hdrs, "Expect"))) {
@@ -1653,7 +1612,7 @@ void response_header(long code, struct transaction_t *txn)
 	if ((hdr = spool_getheader(txn->req_hdrs, "User-Agent"))) {
 	    buf_printf(&log, " with \"%s\"", hdr[0]);
 	}
-	buf_printf(&log, "; \"%s\"", txn->reqline);
+	buf_printf(&log, "; \"%s %s\"", http_methods[txn->meth].name, txn->uri);
 	if ((hdr = spool_getheader(txn->req_hdrs, "Destination"))) {
 	    buf_printf(&log, " (%s)", hdr[0]);
 	}
@@ -1780,12 +1739,12 @@ void response_header(long code, struct transaction_t *txn)
 		/* Only advertise what is available and
 		   can work with the type of connection */
 		if ((avail_auth_schemes & (1 << scheme->idx)) &&
-		    (!txn->flags.close || !scheme->need_persist)) {
+		    !(txn->flags.close && (scheme->flags & AUTH_NEED_PERSIST))) {
 		    auth_chal->param = NULL;
 
-		    if (scheme->is_server_first) {
+		    if (scheme->flags & AUTH_SERVER_FIRST) {
 			/* Generate the initial challenge */
-			http_auth(scheme->name, NULL, auth_chal);
+			http_auth(scheme->name, txn);
 
 			if (!auth_chal->param) continue;  /* If fail, skip it */
 		    }
@@ -2127,6 +2086,22 @@ void error_response(long code, struct transaction_t *txn)
 }
 
 
+/* Write cached header (redacting authorization credentials) to buffer. */
+static void log_cachehdr(const char *name, const char *contents, void *rock)
+{
+    struct buf *buf = (struct buf *) rock;
+
+    buf_printf(buf, "%c%s: ", toupper(name[0]), name+1);
+    if (!strcmp(name, "authorization")) {
+	/* Replace authorization credentials with an ellipsis */
+	const char *creds = strchr(contents, ' ') + 1;
+	buf_printf(buf, "%.*s%-*s\r\n",
+		   creds - contents, contents, strlen(creds), "...");
+    }
+    else buf_printf(buf, "%s\r\n", contents);
+}
+
+
 /* Perform HTTP Authentication based on the given credentials ('creds').
  * Returns the selected auth scheme and any server challenge in 'chal'.
  * May be called multiple times if auth scheme requires multiple steps.
@@ -2134,9 +2109,9 @@ void error_response(long code, struct transaction_t *txn)
  */
 #define BASE64_BUF_SIZE 21848	/* per RFC 4422: ((16K / 3) + 1) * 4  */
 
-static int http_auth(const char *creds, const char *authzid,
-		     struct auth_challenge_t *chal)
+static int http_auth(const char *creds, struct transaction_t *txn)
 {
+    struct auth_challenge_t *chal = &txn->auth_chal;
     static int status = SASL_OK;
     size_t slen;
     const char *clientin = NULL, *user;
@@ -2144,6 +2119,7 @@ static int http_auth(const char *creds, const char *authzid,
     struct auth_scheme_t *scheme;
     static char base64[BASE64_BUF_SIZE+1];
     const void *canon_user;
+    const char **authzid = spool_getheader(txn->req_hdrs, "Authorization-Id");
     int i;
 
     chal->param = NULL;
@@ -2156,7 +2132,7 @@ static int http_auth(const char *creds, const char *authzid,
 	   "http_auth: status=%d   scheme='%s'   creds='%.*s%s'   authzid='%s'",
 	   status, chal->scheme ? chal->scheme->name : "",
 	   slen, creds, clientin ? " <response>" : "",
-	   authzid ? authzid : "");
+	   authzid ? authzid[0] : "");
 
     if (chal->scheme) {
 	/* Use current scheme, if possible */
@@ -2193,7 +2169,7 @@ static int http_auth(const char *creds, const char *authzid,
     }
 
     /* Base64 decode any client response, if necesary */
-    if (clientin && scheme->do_base64) {
+    if (clientin && (scheme->flags & AUTH_BASE64)) {
 	int r = sasl_decode64(clientin, clientinlen,
 			      base64, BASE64_BUF_SIZE, &clientinlen);
 	if (r != SASL_OK) {
@@ -2203,6 +2179,26 @@ static int http_auth(const char *creds, const char *authzid,
 	}
 	clientin = base64;
     }
+
+#ifdef SASL_HTTP_REQUEST
+    /* Setup SASL HTTP request, if necessary */
+    if (scheme->flags & AUTH_NEED_BODY) {
+	sasl_http_request_t sasl_http_req;
+
+	txn->flags.havebody = 1;
+	if (read_body(httpd_in, txn->req_hdrs, &txn->req_body, 1,
+		      &txn->error.desc)) {
+	    txn->flags.close = 1;
+	    return SASL_FAIL;
+	}
+	sasl_http_req.method = http_methods[txn->meth].name;
+	sasl_http_req.uri = txn->uri;
+	sasl_http_req.entity = (u_char *) buf_cstring(&txn->req_body);
+	sasl_http_req.elen = buf_len(&txn->req_body);
+	sasl_http_req.non_persist = txn->flags.close;
+	sasl_setprop(httpd_saslconn, SASL_HTTP_REQUEST, &sasl_http_req);
+    }
+#endif /* SASL_HTTP_REQUEST */
 
     if (scheme->idx == AUTH_BASIC) {
 	/* Basic (plaintext) authentication */
@@ -2271,7 +2267,7 @@ static int http_auth(const char *creds, const char *authzid,
 	}
 
 	/* Base64 encode any server challenge, if necesary */
-	if (serverout && scheme->do_base64) {
+	if (serverout && (scheme->flags & AUTH_BASE64)) {
 	    int r = sasl_encode64(serverout, serveroutlen,
 				   base64, BASE64_BUF_SIZE, NULL);
 	    if (r != SASL_OK) {
@@ -2303,38 +2299,36 @@ static int http_auth(const char *creds, const char *authzid,
 	return status;
     }
 
-    if (authzid && *authzid) {
+    if (authzid && *authzid[0]) {
 	/* Trying to proxy as another user */
 	char authzbuf[MAX_MAILBOX_BUFFER];
 	unsigned authzlen;
 
 	/* Canonify the authzid */
 	status = mysasl_canon_user(httpd_saslconn, NULL,
-				   authzid, strlen(authzid),
+				   authzid[0], strlen(authzid[0]),
 				   SASL_CU_AUTHZID, NULL,
 				   authzbuf, sizeof(authzbuf), &authzlen);
 	if (status) {
-	    syslog(LOG_NOTICE, "badlogin: %s Basic %s invalid user",
-		   httpd_clienthost, beautify_string(authzid));
+	    syslog(LOG_NOTICE, "badlogin: %s %s %s invalid user",
+		   httpd_clienthost, scheme->name, beautify_string(authzid[0]));
 	    return status;
 	}
-	authzid = authzbuf;
 	user = (const char *) canon_user;
 
 	/* See if user is allowed to proxy */
-	status = mysasl_proxy_policy(httpd_saslconn,
-				     &httpd_proxyctx,
-				     authzid, authzlen,
-				     user, strlen(user),
+	status = mysasl_proxy_policy(httpd_saslconn, &httpd_proxyctx,
+				     authzbuf, authzlen, user, strlen(user),
 				     NULL, 0, NULL);
 
 	if (status) {
-	    syslog(LOG_NOTICE, "badlogin: %s Basic %s %s",
-		   httpd_clienthost, user, sasl_errdetail(httpd_saslconn));
+	    syslog(LOG_NOTICE, "badlogin: %s %s %s %s",
+		   httpd_clienthost, scheme->name, user,
+		   sasl_errdetail(httpd_saslconn));
 	    return status;
 	}
 
-	canon_user = authzid;
+	canon_user = authzbuf;
     }
 
     httpd_userid = xstrdup((const char *) canon_user);
@@ -2345,29 +2339,43 @@ static int http_auth(const char *creds, const char *authzid,
 	   httpd_clienthost, httpd_userid, scheme->name,
 	   httpd_tls_done ? "+TLS" : "", "User logged in");
 
-    /* Close IP-based telemetry log and create new log based on userid */
-    if (httpd_logfd != -1) close(httpd_logfd);
-    httpd_logfd = telemetry_log(httpd_userid, httpd_in, httpd_out, 0);
 
-    /* do any namespace specific post-auth processing */
+    /* Recreate telemetry log entry for request (w/ credentials redacted) */
+    assert(!buf_len(&txn->buf));
+    buf_printf(&txn->buf, "<%ld<", time(NULL));		/* timestamp */
+    buf_printf(&txn->buf, "%s %s %s\r\n",		/* request-line*/
+	       http_methods[txn->meth].name, txn->uri, HTTP_VERSION);
+    spool_enum_hdrcache(txn->req_hdrs,			/* header fields */
+			&log_cachehdr, &txn->buf);
+    buf_appendcstr(&txn->buf, "\r\n");			/* CRLF */
+    buf_append(&txn->buf, &txn->req_body);		/* message body */
+    buf_appendmap(&txn->buf,				/* buffered input */
+		  (const char *) httpd_in->ptr, httpd_in->cnt);
+
+    /* Close IP-based telemetry log */
+    if (httpd_logfd != -1) {
+	/* Rewind log to current request and overwrite with redacted version */
+	ftruncate(httpd_logfd,
+		  lseek(httpd_logfd, -buf_len(&txn->buf), SEEK_END));
+	write(httpd_logfd, buf_cstring(&txn->buf), buf_len(&txn->buf));
+	close(httpd_logfd);
+    }
+
+    /* Create new telemetry log based on userid */
+    httpd_logfd = telemetry_log(httpd_userid, httpd_in, httpd_out, 0);
+    if (httpd_logfd != -1) {
+	/* Log credential-redacted request */
+	write(httpd_logfd, buf_cstring(&txn->buf), buf_len(&txn->buf));
+    }
+
+    buf_reset(&txn->buf);
+
+    /* Do any namespace specific post-auth processing */
     for (i = 0; namespaces[i]; i++) {
 	if (namespaces[i]->auth) namespaces[i]->auth(httpd_userid);
     }
 
     return status;
-}
-
-
-/* Write cached header (removing auth creds) to telemetry log. */
-static void log_cachehdr(const char *name, const char *contents, void *rock)
-{
-    FILE *logf = (FILE *) rock;
-
-    fprintf(logf, "%c%s: ", toupper(name[0]), name+1);
-    if (!strcmp(name, "authorization"))
-	fprintf(logf, "%.*s ...\r\n", strcspn(contents, " \t\r\n"), contents);
-    else
-	fprintf(logf, "%s\r\n", contents);
 }
 
 
