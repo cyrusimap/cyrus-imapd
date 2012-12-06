@@ -752,7 +752,7 @@ static const char *sphinx_rootdir(const char *partition)
     const char *root;
     if (!partition)
 	partition = config_getstring(IMAPOPT_DEFAULTPARTITION);
-    confkey = strconcat("sphinxpartition-", partition, NULL);
+    confkey = strconcat("searchpartition-", partition, NULL);
     root = config_getoverflowstring(confkey, NULL);
     free(confkey);
     return root;
