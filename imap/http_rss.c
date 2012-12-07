@@ -84,13 +84,14 @@ static const char def_template[] =
     FEEDLIST_VAR
     "</body>\n</html>\n";
 
+static time_t compile_time;
+static void calc_compile_time(struct buf *serverinfo);
 static int meth_get(struct transaction_t *txn, void *params);
 static int rss_to_mboxname(struct request_target_t *req_tgt,
 			   char *mboxname, uint32_t *uid,
 			   char *section);
 static int is_feed(const char *mbox);
-static int list_feeds(struct transaction_t *txn,
-		      const char *base, unsigned long len);
+static int list_feeds(struct transaction_t *txn);
 static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
 			 unsigned recno, uint32_t uid,
 			 struct index_record *record, struct body **body,
@@ -107,7 +108,7 @@ static void fetch_part(struct transaction_t *txn, struct body *body,
 /* Namespace for RSS feeds of mailboxes */
 const struct namespace_t namespace_rss = {
     URL_NS_RSS, "/rss", NULL, 1 /* auth */, ALLOW_READ,
-    NULL, NULL, NULL, NULL,
+    calc_compile_time, NULL, NULL, NULL,
     {
 	{ NULL,			NULL },	/* ACL		*/
 	{ NULL,			NULL },	/* COPY		*/
@@ -126,6 +127,29 @@ const struct namespace_t namespace_rss = {
     }
 };
 
+/* Calculate compile time of this file for use as ETag for capabilities */
+static void calc_compile_time(struct buf *serverinfo __attribute__((unused)))
+{
+    struct tm tm;
+    char month[4];
+    const char *monthname[] = {
+	"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+	"Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+    };
+
+    memset(&tm, 0, sizeof(struct tm));
+    tm.tm_isdst = -1;
+    sscanf(__TIME__, "%02d:%02d:%02d", &tm.tm_hour, &tm.tm_min, &tm.tm_sec);
+    sscanf(__DATE__, "%s %2d %4d", month, &tm.tm_mday, &tm.tm_year);
+    tm.tm_year -= 1900;
+    for (tm.tm_mon = 0; tm.tm_mon < 12; tm.tm_mon++) {
+	if (!strcmp(month, monthname[tm.tm_mon])) break;
+    }
+
+    compile_time = mktime(&tm);
+}
+
+
 /* Perform a GET/HEAD request */
 static int meth_get(struct transaction_t *txn,
 		    void *params __attribute__((unused)))
@@ -142,16 +166,7 @@ static int meth_get(struct transaction_t *txn,
     }
 
     /* If no mailboxname, list all available feeds */
-    if (!*mailboxname) {
-	const char *template = config_getstring(IMAPOPT_RSS_FEEDLIST_TEMPLATE);
-
-	if (template) {
-	    snprintf(txn->req_tgt.path, sizeof(txn->req_tgt.path), "%s%s",
-		     (*template == '/') ? "" : "/", template);
-	    return get_doc(txn, &list_feeds);
-	}
-	else return list_feeds(txn, def_template, strlen(def_template));
-    }
+    if (!*mailboxname) return list_feeds(txn);
 
     /* Make sure its a mailbox that we are treating as an RSS feed */
     if (!is_feed(mailboxname)) return HTTP_NOT_FOUND;
@@ -212,15 +227,16 @@ static int meth_get(struct transaction_t *txn,
 				  &record, &body, &msg_base, &msg_size))) {
 	    int precond;
 	    time_t lastmod = 0;
-	    static struct buf etag = BUF_INITIALIZER;
 	    struct resp_body_t *resp_body = &txn->resp_body;
 
 	    /* Check any preconditions */
-	    buf_setcstr(&etag, message_guid_encode(&record.guid));
-	    if (!*section) buf_appendcstr(&etag, ".html");
-	    else if (strcmp(section, "0")) buf_printf(&etag, ".%s", section);
+	    buf_setcstr(&txn->buf, message_guid_encode(&record.guid));
+	    if (!*section)
+		buf_appendcstr(&txn->buf, ".html");
+	    else if (strcmp(section, "0"))
+		buf_printf(&txn->buf, ".%s", section);
 
-	    resp_body->etag = buf_cstring(&etag);
+	    resp_body->etag = buf_cstring(&txn->buf);
 	    lastmod = record.internaldate;
 	    precond = check_precond(txn->meth, NULL, resp_body->etag,
 				    lastmod, txn->req_hdrs);
@@ -445,56 +461,113 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
 
 
 /* Create a HTML document listing all RSS feeds available to the user */
-static int list_feeds(struct transaction_t *txn,
-		      const char *base, unsigned long len)
+static int list_feeds(struct transaction_t *txn)
 {
+    const char *template = config_getstring(IMAPOPT_RSS_FEEDLIST_TEMPLATE);
+    const char *msg_base = NULL;
+    unsigned long msg_size = 0, template_len;
+    int fd = -1;
+    const char *var = NULL;
     size_t varlen = strlen(FEEDLIST_VAR);
-    const char *var = (const char *) memmem(base, len, FEEDLIST_VAR, varlen);
+    struct message_guid guid;
+    time_t lastmod;
+    char mboxlist[MAX_MAILBOX_PATH+1];
+    struct stat sbuf;
+    int ret = 0, precond;
+    struct buf *body = &txn->resp_body.payload;
+    struct list_rock lrock;
+    struct node root = { "", 0, NULL, NULL };
 
-    /* Dynamic response should not be cached */
-    txn->flags.cc |= CC_NOCACHE;
+    if (template) {
+	/* See if template exists and contains feedlist variable */
+	if (!stat(template, &sbuf) && S_ISREG(sbuf.st_mode) &&
+	    (fd = open(template, O_RDONLY)) != -1) {
+	    map_refresh(fd, 1, &msg_base, &msg_size, sbuf.st_size,
+			template, NULL);
+	    var = (const char *) memmem(msg_base, msg_size,
+					FEEDLIST_VAR, varlen);
+	    if (var) {
+		template = msg_base;
+		template_len = msg_size;
+		lastmod = sbuf.st_mtime;
+	    }
+	}
+    }
+
+    if (!var) {
+	/* No usable template specified, use our default */
+	template = def_template;
+	template_len = strlen(def_template);
+	var = (const char *) memmem(template, template_len,
+				    FEEDLIST_VAR, varlen);
+	lastmod = compile_time;
+    }
+
+    /* Begin to generate ETag */
+    message_guid_generate(&guid, template, template_len);
+    buf_setcstr(&txn->buf, message_guid_encode(&guid));
+
+    /* stat() mailboxes.db for Last-Modified and ETag */
+    snprintf(mboxlist, MAX_MAILBOX_PATH, "%s%s", config_dir, FNAME_MBOXLIST);
+    stat(mboxlist, &sbuf);
+    lastmod = MAX(lastmod, sbuf.st_mtime);
+    buf_printf(&txn->buf, "-%ld-%ld", sbuf.st_mtime, sbuf.st_size);
+
+    /* stat() imapd.conf for Last-Modified and ETag */
+    stat(config_filename, &sbuf);
+    lastmod = MAX(lastmod, sbuf.st_mtime);
+    buf_printf(&txn->buf, "-%ld-%ld", sbuf.st_mtime, sbuf.st_size);
+
+    /* Check any preconditions */
+    txn->resp_body.etag = buf_cstring(&txn->buf);
+    precond = check_precond(txn->meth, NULL, txn->resp_body.etag,
+			    lastmod, txn->req_hdrs);
+    if (precond != HTTP_OK) {
+	/* We failed a precondition - don't perform the request */
+	ret = precond;
+	goto done;
+    }
+
+    /* Fill in Last-Modified and Content-Type */
+    txn->resp_body.lastmod = lastmod;
+    txn->resp_body.type = "text/html; charset=utf-8";
 
     /* Setup for chunked response */
     txn->flags.te = TE_CHUNKED;
 
-    /* Flush representation headers from template doc and set Content-Type */
-    memset(&txn->resp_body, 0, sizeof(struct resp_body_t) - sizeof(struct buf));
-    txn->resp_body.type = "text/html; charset=utf-8";
-
-    /* XXX  Can we get an ETag or Last-Modified from mailboxes.db? */
-
     /* Short-circuit for HEAD request */
     if (txn->meth == METH_HEAD) {
 	response_header(HTTP_OK, txn);
-	return 0;
+	goto done;
     }
 
-    if (!var) write_body(HTTP_OK, txn, base, len);
-    else {
-	struct buf *buf = &txn->resp_body.payload;
-	struct list_rock lrock;
-	struct node root = { "", 0, NULL, NULL };
+    /* Send beginning of template */
+    write_body(HTTP_OK, txn, template, var - template);
 
-	write_body(HTTP_OK, txn, base, var - base);
-	lrock.txn = txn;
-	lrock.last = &root;
-	buf_reset(buf);
+    /* Generate tree view of feeds */
+    buf_reset(body);
+    lrock.txn = txn;
+    lrock.last = &root;
+    mboxlist_findall(NULL, "*", httpd_userisadmin, NULL, httpd_authstate,
+		     list_cb, &lrock);
 
-	/* generate tree view of feeds */
-	mboxlist_findall(NULL, "*", httpd_userisadmin, NULL, httpd_authstate,
-			 list_cb, &lrock);
+    /* Close out the tree */
+    list_cb(NULL, 0, 0, &lrock);
+    if (buf_len(body)) write_body(0, txn, buf_cstring(body), buf_len(body));
 
-	/* close out the tree */
-	list_cb(NULL, 0, 0, &lrock);
-	if (buf_len(buf)) write_body(0, txn, buf_cstring(buf), buf_len(buf));
-
-	write_body(0, txn, var+varlen, len - varlen - (var - base));
-    }
+    /* Send rest of template */
+    write_body(0, txn, var + varlen, template_len - (var - template) - varlen);
 
     /* End of output */
     write_body(0, txn, NULL, 0);
 
-    return 0;
+  done:
+    if (fd != -1) {
+	map_free(&msg_base, &msg_size);
+	close(fd);
+    }
+
+    return ret;
 }
 
 

@@ -343,8 +343,8 @@ extern void html_response(long code, struct transaction_t *txn, xmlDocPtr html);
 extern void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml);
 extern void write_body(long code, struct transaction_t *txn,
 		       const char *buf, unsigned len);
+extern int meth_get_doc(struct transaction_t *txn, void *params);
 extern int meth_options(struct transaction_t *txn, void *params);
-extern int get_doc(struct transaction_t *txn, filter_proc_t filter);
 extern int etagcmp(const char *hdr, const char *etag);
 extern int check_precond(unsigned meth, const void *data,
 			 const char *etag, time_t lastmod, hdrcache_t hdrcache);

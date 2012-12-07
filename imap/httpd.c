@@ -215,7 +215,6 @@ static struct accept *parse_accept(const char *hdr);
 static int http_auth(const char *creds, struct transaction_t *txn);
 static void keep_alive(int sig);
 
-static int meth_get(struct transaction_t *txn, void *params);
 static int meth_propfind_root(struct transaction_t *txn, void *params);
 
 
@@ -271,8 +270,8 @@ const struct namespace_t namespace_default = {
 	{ NULL,			NULL },			/* ACL		*/
 	{ NULL,			NULL },			/* COPY		*/
 	{ NULL,			NULL },			/* DELETE	*/
-	{ &meth_get,		NULL },			/* GET		*/
-	{ &meth_get,		NULL },			/* HEAD		*/
+	{ &meth_get_doc,	NULL },			/* GET		*/
+	{ &meth_get_doc,	NULL },			/* HEAD		*/
 	{ NULL,			NULL },			/* MKCALENDAR	*/
 	{ NULL,			NULL },			/* MKCOL	*/
 	{ NULL,			NULL },			/* MOVE		*/
@@ -1119,11 +1118,10 @@ static void cmdloop(void)
 
 	if (ret) goto done;
 
+	/* Perform authentication, if necessary */
 	if (!httpd_userid) {
-	    /* Perform authentication, if necessary */
 	    if ((hdr = spool_getheader(txn.req_hdrs, "Authorization"))) {
 		/* Check the auth credentials */
-
 		r = http_auth(hdr[0], &txn);
 		if ((r < 0) || !txn.auth_chal.scheme) {
 		    /* Auth failed - reinitialize */
@@ -2534,13 +2532,8 @@ int check_precond(unsigned meth,
 
 
 /* Perform a GET/HEAD request */
-static int meth_get(struct transaction_t *txn,
-		    void *params __attribute__((unused)))
-{
-    return get_doc(txn, NULL);
-}
-
-int get_doc(struct transaction_t *txn, filter_proc_t filter)
+int meth_get_doc(struct transaction_t *txn,
+		 void *params __attribute__((unused)))
 {
     int ret = 0, fd, precond;
     const char *prefix, *path, *ext;
@@ -2565,10 +2558,6 @@ int get_doc(struct transaction_t *txn, filter_proc_t filter)
     /* See if file exists and get Content-Length & Last-Modified time */
     if (stat(path, &sbuf) || !S_ISREG(sbuf.st_mode)) return HTTP_NOT_FOUND;
 
-    /* Open the file */
-    fd = open(path, O_RDONLY);
-    if (fd == -1) return HTTP_NOT_FOUND;
-
     /* Generate Etag */
     assert(!buf_len(&txn->buf));
     buf_printf(&txn->buf, "%ld-%ld", (long) sbuf.st_mtime, (long) sbuf.st_size);
@@ -2579,12 +2568,10 @@ int get_doc(struct transaction_t *txn, filter_proc_t filter)
 			    sbuf.st_mtime, txn->req_hdrs);
 
     /* We failed a precondition - don't perform the request */
-    if (precond != HTTP_OK) {
-	close(fd);
+    if (precond != HTTP_OK) return precond;
 
-	return precond;
-    }
-
+    /* Open and mmap the file */
+    if ((fd = open(path, O_RDONLY)) == -1) return HTTP_SERVER_ERROR;
     map_refresh(fd, 1, &msg_base, &msg_size, sbuf.st_size, path, NULL);
 
     /* Fill in Last-Modified, and Content-Length */
@@ -2630,8 +2617,7 @@ int get_doc(struct transaction_t *txn, filter_proc_t filter)
 	}
     }
 
-    if (filter) ret = (*filter)(txn, msg_base, msg_size);
-    else write_body(HTTP_OK, txn, msg_base, msg_size);
+    write_body(HTTP_OK, txn, msg_base, msg_size);
 
     map_free(&msg_base, &msg_size);
     close(fd);

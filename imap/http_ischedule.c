@@ -86,7 +86,7 @@ static void isched_cachehdr(const char *name, const char *contents, void *rock);
 extern int busytime_query(struct transaction_t *txn, icalcomponent *comp);
 static int isched_capa(struct transaction_t *txn, void *params);
 static int isched_recv(struct transaction_t *txn, void *params);
-static int meth_getkey(struct transaction_t *txn, void *params);
+static int meth_get_domainkey(struct transaction_t *txn, void *params);
 static void calc_compile_time(struct buf *serverinfo);
 static time_t compile_time;
 
@@ -123,8 +123,8 @@ const struct namespace_t namespace_domainkey = {
 	{ NULL,			NULL },	/* ACL		*/
 	{ NULL,			NULL },	/* COPY		*/
 	{ NULL,			NULL },	/* DELETE	*/
-	{ &meth_getkey,		NULL },	/* GET		*/
-	{ &meth_getkey,		NULL },	/* HEAD		*/
+	{ &meth_get_domainkey,	NULL },	/* GET		*/
+	{ &meth_get_domainkey,	NULL },	/* HEAD		*/
 	{ NULL,			NULL },	/* MKCALENDAR	*/
 	{ NULL,			NULL },	/* MKCOL	*/
 	{ NULL,			NULL },	/* MOVE		*/
@@ -709,10 +709,10 @@ static void isched_cachehdr(const char *name, const char *contents, void *rock)
 
 
 /* Perform a GET/HEAD request for a domainkey */
-static int meth_getkey(struct transaction_t *txn,
-		       void *params __attribute__((unused)))
+static int meth_get_domainkey(struct transaction_t *txn,
+			      void *params __attribute__((unused)))
 {
     txn->resp_body.type = "text/plain";
 
-    return get_doc(txn, NULL);
+    return meth_get_doc(txn, NULL);
 }
