@@ -101,7 +101,7 @@ struct search_expr {
 extern search_expr_t *search_expr_new(search_expr_t *parent,
 				      enum search_op);
 extern void search_expr_free(search_expr_t *);
-extern void search_expr_dump(const search_expr_t *);
+extern char *search_expr_serialise(const search_expr_t *);
 extern void search_expr_internalise(struct mailbox *, search_expr_t *);
 extern int search_expr_evaluate(message_t *m, const search_expr_t *);
 

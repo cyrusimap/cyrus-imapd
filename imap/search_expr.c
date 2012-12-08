@@ -134,45 +134,52 @@ EXPORTED void search_expr_free(search_expr_t *e)
 static const char *op_as_string(enum search_op op)
 {
     switch (op) {
-    case SEOP_UNKNOWN: return "UNKNOWN";
-    case SEOP_TRUE: return "TRUE";
-    case SEOP_FALSE: return "FALSE";
-    case SEOP_LT: return "LT";
-    case SEOP_LE: return "LE";
-    case SEOP_GT: return "GT";
-    case SEOP_GE: return "GE";
-    case SEOP_MATCH: return "MATCH";
-    case SEOP_AND: return "AND";
-    case SEOP_OR: return "OR";
-    case SEOP_NOT: return "NOT";
+    case SEOP_UNKNOWN: return "unknown";
+    case SEOP_TRUE: return "true";
+    case SEOP_FALSE: return "false";
+    case SEOP_LT: return "lt";
+    case SEOP_LE: return "le";
+    case SEOP_GT: return "gt";
+    case SEOP_GE: return "ge";
+    case SEOP_MATCH: return "match";
+    case SEOP_AND: return "and";
+    case SEOP_OR: return "or";
+    case SEOP_NOT: return "not";
     }
     return "WTF??";
 }
 
-static void dump2(const search_expr_t *e, int indent)
+static void serialise(const search_expr_t *e, struct buf *buf)
 {
-    int i;
     const search_expr_t *child;
-    static struct buf buf = BUF_INITIALIZER;
 
-    buf_reset(&buf);
-    for (i = 0 ; i < indent ; i++)
-	buf_appendcstr(&buf, "  ");
-    buf_printf(&buf, "%s", op_as_string(e->op));
+    buf_putc(buf, '(');
+    buf_appendcstr(buf, op_as_string(e->op));
     if (e->attr) {
-	buf_printf(&buf, " %s ", e->attr->name);
-	if (e->attr->describe) e->attr->describe(&buf, &e->value);
+	buf_putc(buf, ' ');
+	buf_appendcstr(buf, e->attr->name);
+	buf_putc(buf, ' ');
+	if (e->attr->describe) e->attr->describe(buf, &e->value);
     }
-    syslog(LOG_INFO, "EXPR %s", buf_cstring(&buf));
-    for (child = e->children ; child ; child = child->next)
-	dump2(child, indent+1);
+    for (child = e->children ; child ; child = child->next) {
+	buf_putc(buf, ' ');
+	serialise(child, buf);
+    }
+    buf_putc(buf, ')');
 }
 
-EXPORTED void search_expr_dump(const search_expr_t *e)
+/*
+ * Given an expression tree, return a string which uniquely describes
+ * the tree.  The string is designed to be used as a cache key and for
+ * unit tests, not for human readability.
+ *
+ * Returns a new string which must be free()d by the caller.
+ */
+EXPORTED char *search_expr_serialise(const search_expr_t *e)
 {
-    syslog(LOG_INFO, "EXPR {");
-    dump2(e, 0);
-    syslog(LOG_INFO, "EXPR }");
+    struct buf buf = BUF_INITIALIZER;
+    serialise(e, &buf);
+    return buf_release(&buf);
 }
 
 EXPORTED void search_expr_internalise(struct mailbox *mailbox, search_expr_t *e)
@@ -615,7 +622,7 @@ out:
 
 static void search_annotation_describe(struct buf *b, const union search_value *v)
 {
-    buf_printf(b, " entry \"%s\" attrib \"%s\" value \"%s\"",
+    buf_printf(b, "(entry \"%s\" attrib \"%s\" value \"%s\")",
 		v->annot->entry, v->annot->attrib, buf_cstring(&v->annot->value));
 }
 
@@ -806,7 +813,7 @@ static int search_uint32_match(message_t *m, const union search_value *v,
 
 static void search_uint32_describe(struct buf *b, const union search_value *v)
 {
-    buf_printf(b, " %u", (uint32_t)v->u);
+    buf_printf(b, "%u", (uint32_t)v->u);
 }
 
 /* ====================================================================== */
