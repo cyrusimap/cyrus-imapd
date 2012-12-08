@@ -51,51 +51,9 @@
 #include <assert.h>
 #include "cunit/cunit.h"
 #include "times.h"
-
-#define TZ_UTC		"UTC+00"
-#define TZ_NEWYORK	"EST+05"
-#define TZ_MELBOURNE	"AEST-11"
+#include "cunit/timezones.h"
 
 #define UNINIT_TIMET ((time_t)0xdeadbeef)
-
-#define MAX_TZ_STACK	5
-static int n_tz_stack = 0;
-static char *tz_stack[MAX_TZ_STACK];
-
-static inline void xxputenv(char *s, const char *f)
-{
-    if (verbose > 1)
-	fprintf(stderr, "\n%s:putenv(\"%s\")\n", f, s);
-    putenv(s);
-}
-#define putenv(s) xxputenv((s), __FUNCTION__)
-
-static char *stash_tz(const char *tz)
-{
-    char *s = malloc(4+(tz == NULL ? 0 : strlen(tz)));
-    assert(s);
-    sprintf(s, "TZ=%s", (tz == NULL ? "" : tz));
-    assert(n_tz_stack < MAX_TZ_STACK-1);
-    return tz_stack[n_tz_stack++] = s;
-}
-
-static void push_tz(const char *tz)
-{
-    if (n_tz_stack == 0)
-	stash_tz(getenv("TZ"));
-    putenv(stash_tz(tz));
-    tzset();
-}
-
-static void pop_tz(void)
-{
-    char *old;
-    assert(n_tz_stack > 1);
-    old = tz_stack[--n_tz_stack];
-    putenv(tz_stack[n_tz_stack-1]);
-    tzset();
-    free(old);
-}
 
 static int set_up(void)
 {
@@ -111,9 +69,7 @@ static int set_up(void)
 
 static int tear_down(void)
 {
-    pop_tz();
-    if (n_tz_stack != 1)
-	return -1;
+    restore_tz();
     return 0;
 }
 

@@ -587,7 +587,9 @@ cunit_FRAMEWORK = \
 	cunit/syslog.c \
 	cunit/cunit-syslog.h \
 	cunit/timeout.c \
-	cunit/timeout.h
+	cunit/timeout.h \
+	cunit/timezones.c \
+	cunit/timezones.h
 
 cunit_TESTS = \
 	cunit/annotate.testc \
