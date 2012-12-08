@@ -85,6 +85,7 @@ static search_expr_t *detach(search_expr_t *parent, search_expr_t *child)
     return child;
 }
 
+#if 0
 /* Replace the node 'child' with it's children, i.e. reparent them.
  * Apparently this operation is called "splat" but I think that's
  * a damn silly name */
@@ -109,6 +110,7 @@ static search_expr_t *elide(search_expr_t *parent, search_expr_t *child)
 
     return child;
 }
+#endif
 
 EXPORTED search_expr_t *search_expr_new(search_expr_t *parent, enum search_op op)
 {
@@ -677,8 +679,10 @@ static void search_convflags_internalise(struct mailbox *mailbox,
     }
 }
 
-static int search_convflags_match(message_t *m, const union search_value *v,
-				  void *internalised, void *data1 __attribute__((unused)))
+static int search_convflags_match(message_t *m,
+				  const union search_value *v __attribute__((unused)),
+				  void *internalised,
+				  void *data1 __attribute__((unused)))
 {
     struct convflags_rock *rock = (struct convflags_rock *)internalised;
     conversation_id_t cid = NULLCONVERSATION;
@@ -711,7 +715,7 @@ struct convmodseq_rock {
 };
 
 static void search_convmodseq_internalise(struct mailbox *mailbox,
-					  const union search_value *v,
+					  const union search_value *v __attribute__((unused)),
 					  void **internalisedp)
 {
     struct convmodseq_rock *rock;
@@ -846,7 +850,6 @@ static int searchmsg_cb(int partno, int charset, int encoding,
 static int search_text_match(message_t *m, const union search_value *v,
 			     void *internalised, void *data1)
 {
-    int r;
     struct searchmsg_rock sr;
 
     sr.substr = v->s;
