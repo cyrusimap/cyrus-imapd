@@ -112,6 +112,11 @@ static search_expr_t *elide(search_expr_t *parent, search_expr_t *child)
 }
 #endif
 
+/*
+ * Create a new node in a search expression tree, with the given
+ * operation.  If 'parent' is not NULL, the new node is attached as the
+ * last child of 'parent'.  Returns a new node, never returns NULL.
+ */
 EXPORTED search_expr_t *search_expr_new(search_expr_t *parent, enum search_op op)
 {
     search_expr_t *e = xzmalloc(sizeof(search_expr_t));
@@ -120,6 +125,10 @@ EXPORTED search_expr_t *search_expr_new(search_expr_t *parent, enum search_op op
     return e;
 }
 
+/*
+ * Recursively free a search expression tree including the given node
+ * and all descendant nodes.
+ */
 EXPORTED void search_expr_free(search_expr_t *e)
 {
     while (e->children)
@@ -182,6 +191,9 @@ EXPORTED char *search_expr_serialise(const search_expr_t *e)
     return buf_release(&buf);
 }
 
+/*
+ * Prepare the given expression for use with the given mailbox.
+ */
 EXPORTED void search_expr_internalise(struct mailbox *mailbox, search_expr_t *e)
 {
     search_expr_t *child;
@@ -193,6 +205,10 @@ EXPORTED void search_expr_internalise(struct mailbox *mailbox, search_expr_t *e)
 	search_expr_internalise(mailbox, child);
 }
 
+/*
+ * Evaluate the given search expression for the given message,
+ * Returns nonzero if the expression is true, 0 otherwise.
+ */
 EXPORTED int search_expr_evaluate(message_t *m, const search_expr_t *e)
 {
     search_expr_t *child;
@@ -869,6 +885,10 @@ static int search_text_match(message_t *m, const union search_value *v,
 
 static hash_table attrs_by_name = HASH_TABLE_INITIALIZER;
 
+/*
+ * Call search_attr_init() before doing any work with search
+ * expressions.
+ */
 EXPORTED void search_attr_init(void)
 {
     unsigned int i;
@@ -1074,6 +1094,12 @@ EXPORTED void search_attr_init(void)
 	hash_insert(attrs[i].name, (void *)&attrs[i], &attrs_by_name);
 }
 
+/*
+ * Find and return a search attribute by name.  Used when building
+ * comparison nodes in a search expression tree.  Name comparison is
+ * case insensitive.  Returns a pointer to static data or NULL if there
+ * is no attribute of the given name.
+ */
 EXPORTED const search_attr_t *search_attr_find(const char *name)
 {
     char tmp[128];
@@ -1083,6 +1109,13 @@ EXPORTED const search_attr_t *search_attr_find(const char *name)
     return hash_lookup(tmp, &attrs_by_name);
 }
 
+/*
+ * Find and return a search attribute for the named header field.  Used
+ * when building comparison nodes for the HEADER search criterion in a
+ * search expression tree.  Field name comparison is case insensitive.
+ * Returns a pointer to internally managed data or NULL if there is no
+ * attribute of the given name.
+ */
 EXPORTED const search_attr_t *search_attr_find_field(const char *field)
 {
     search_attr_t *attr;
