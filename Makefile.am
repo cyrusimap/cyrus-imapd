@@ -589,7 +589,9 @@ cunit_FRAMEWORK = \
 	cunit/timeout.c \
 	cunit/timeout.h \
 	cunit/timezones.c \
-	cunit/timezones.h
+	cunit/timezones.h \
+	cunit/timeofday.c \
+	cunit/timeofday.h
 
 cunit_TESTS = \
 	cunit/annotate.testc \
