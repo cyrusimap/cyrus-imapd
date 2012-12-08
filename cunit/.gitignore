@@ -3,3 +3,4 @@ default.cunit
 registers.h
 reports
 unit
+.cunit-*.c
