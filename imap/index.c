@@ -7904,6 +7904,30 @@ EXPORTED void freesequencelist(struct seqset *l)
 }
 
 /*
+ * Create a new search program.
+ */
+EXPORTED struct searchargs *new_searchargs(const char *tag, int state,
+					   struct namespace *namespace,
+					   const char *userid,
+					   struct auth_state *authstate,
+					   int isadmin)
+{
+    struct searchargs *sa;
+
+    sa = (struct searchargs *)xzmalloc(sizeof(struct searchargs));
+    sa->tag = tag;
+    sa->state = state;
+    /* default charset is US-ASCII which is always 0 */
+
+    sa->namespace = namespace;
+    sa->userid = userid;
+    sa->authstate = authstate;
+    sa->isadmin = isadmin;
+
+    return sa;
+}
+
+/*
  * Free the searchargs 's'
  */
 EXPORTED void freesearchargs(struct searchargs *s)

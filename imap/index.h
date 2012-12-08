@@ -301,6 +301,12 @@ extern unsigned long index_getlines(struct index_state *state, uint32_t msgno);
 extern int index_copy_remote(struct index_state *state, char *sequence, 
 			     int usinguid, struct protstream *pout);
 
+struct searchargs *new_searchargs(const char *tag, int state,
+				  struct namespace *namespace,
+				  const char *userid,
+				  struct auth_state *authstate,
+				  int isadmin);
+
 void freesequencelist(struct seqset *l);
 void freesearchargs(struct searchargs *s);
 void freesortcrit(struct sortcrit *s);

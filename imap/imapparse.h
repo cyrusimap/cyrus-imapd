@@ -45,6 +45,7 @@
 
 #include "libconfig.h"
 #include "prot.h"
+#include "index.h"
 
 /* imap parsing functions (imapparse.c) */
 int getword(struct protstream *in, struct buf *buf);
@@ -87,5 +88,7 @@ int getuint32(struct protstream *pin, unsigned int *num);
 int getmodseq(struct protstream *pin, modseq_t *num);
 
 void eatline(struct protstream *pin, int c);
+
+int get_search_program(struct protstream *pin, struct protstream *pout, struct searchargs *searchargs);
 
 #endif /* __CYRUS_IMAP_PARSE_H__ */

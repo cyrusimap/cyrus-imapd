@@ -210,16 +210,6 @@ static struct index_state *imapd_index;
 /* current namespace */
 struct namespace imapd_namespace;
 
-static const char *monthname[] = {
-    "jan", "feb", "mar", "apr", "may", "jun",
-    "jul", "aug", "sep", "oct", "nov", "dec"
-};
-
-static const int max_monthdays[] = {
-    31, 29, 31, 30, 31, 30,
-    31, 31, 30, 31, 30, 31
-};
-
 /* track if we're idling */
 static int idling = 0;
 
@@ -342,12 +332,6 @@ static struct capa_struct base_capabilities[] = {
     { 0,                       0 }
 };
 
-enum {
-    GETSEARCH_CHARSET_KEYWORD = 0x01,
-    GETSEARCH_RETURN = 0x02,
-    GETSEARCH_CHARSET_FIRST = 0x04,
-};
-
 
 static void motd_file(void);
 void shut_down(int code);
@@ -452,13 +436,8 @@ static int parse_metadata_store_data(const char *tag,
 static int getlistselopts(char *tag, struct listargs *args);
 static int getlistretopts(char *tag, struct listargs *args);
 
-static int getsearchreturnopts(struct searchargs *searchargs);
-static struct searchargs *new_searchargs(const char *tag, int state);
-static int get_search_program(struct searchargs *searchargs);
-static int get_search_criterion(search_expr_t *parent, struct searchargs *base);
 static int get_snippetargs(struct snippetargs **sap);
 static void free_snippetargs(struct snippetargs **sap);
-static int getsearchdate(time_t *start, time_t *end);
 static int getsortcriteria(char *tag, struct sortcrit **sortcrit);
 static char *sortcrit_as_string(const struct sortcrit *sortcrit);
 static int getdatetime(time_t *date);
@@ -5399,8 +5378,10 @@ static void cmd_search(char *tag, int usinguid)
     }
 
     /* local mailbox */
-    searchargs = new_searchargs(tag, GETSEARCH_CHARSET_KEYWORD|GETSEARCH_RETURN);
-    c = get_search_program(searchargs);
+    searchargs = new_searchargs(tag, GETSEARCH_CHARSET_KEYWORD|GETSEARCH_RETURN,
+				&imapd_namespace, imapd_userid, imapd_authstate,
+				imapd_userisadmin || imapd_userisproxyadmin);
+    c = get_search_program(imapd_in, searchargs);
     if (c == EOF) {
 	eatline(imapd_in, ' ');
 	freesearchargs(searchargs);
@@ -5457,8 +5438,10 @@ static void cmd_sort(char *tag, int usinguid)
     c = getsortcriteria(tag, &sortcrit);
     if (c == EOF) goto error;
 
-    searchargs = new_searchargs(tag, GETSEARCH_CHARSET_FIRST);
-    c = get_search_program(searchargs);
+    searchargs = new_searchargs(tag, GETSEARCH_CHARSET_FIRST,
+				&imapd_namespace, imapd_userid, imapd_authstate,
+				imapd_userisadmin || imapd_userisproxyadmin);
+    c = get_search_program(imapd_in, searchargs);
     if (c == EOF) goto error;
 
     if (c == '\r') c = prot_getc(imapd_in);
@@ -5563,8 +5546,10 @@ void cmd_xconvsort(char *tag, int updates)
     }
 
     /* need index loaded to even parse searchargs! */
-    searchargs = new_searchargs(tag, GETSEARCH_CHARSET_FIRST);
-    c = get_search_program(searchargs);
+    searchargs = new_searchargs(tag, GETSEARCH_CHARSET_FIRST,
+				&imapd_namespace, imapd_userid, imapd_authstate,
+				imapd_userisadmin || imapd_userisproxyadmin);
+    c = get_search_program(imapd_in, searchargs);
     if (c == EOF) goto error;
 
     if (c == '\r') c = prot_getc(imapd_in);
@@ -5681,8 +5666,10 @@ static void cmd_xconvmultisort(char *tag)
     conversations_open_mbox(imapd_index->mailbox->name, &cstate);
 
     /* need index loaded to even parse searchargs! */
-    searchargs = new_searchargs(tag, GETSEARCH_CHARSET_FIRST);
-    c = get_search_program(searchargs);
+    searchargs = new_searchargs(tag, GETSEARCH_CHARSET_FIRST,
+				&imapd_namespace, imapd_userid, imapd_authstate,
+				imapd_userisadmin || imapd_userisproxyadmin);
+    c = get_search_program(imapd_in, searchargs);
     if (c == EOF) goto error;
 
     if (c == '\r') c = prot_getc(imapd_in);
@@ -5757,8 +5744,10 @@ static void cmd_xsnippets(char *tag)
     }
 
     /* need index loaded to even parse searchargs! */
-    searchargs = new_searchargs(tag, GETSEARCH_CHARSET_FIRST);
-    c = get_search_program(searchargs);
+    searchargs = new_searchargs(tag, GETSEARCH_CHARSET_FIRST,
+				&imapd_namespace, imapd_userid, imapd_authstate,
+				imapd_userisadmin || imapd_userisproxyadmin);
+    c = get_search_program(imapd_in, searchargs);
     if (c == EOF) goto error;
 
     if (c == '\r') c = prot_getc(imapd_in);
@@ -5870,8 +5859,10 @@ static void cmd_thread(char *tag, int usinguid)
 	return;
     }
 
-    searchargs = new_searchargs(tag, GETSEARCH_CHARSET_FIRST);
-    c = get_search_program(searchargs);
+    searchargs = new_searchargs(tag, GETSEARCH_CHARSET_FIRST,
+				&imapd_namespace, imapd_userid, imapd_authstate,
+				imapd_userisadmin || imapd_userisproxyadmin);
+    c = get_search_program(imapd_in, searchargs);
     if (c == EOF) {
 	eatline(imapd_in, ' ');
 	freesearchargs(searchargs);
@@ -10010,714 +10001,6 @@ out_noprint:
     buf_free(&arg);
 }
 
-/*
- * Parse a ANNOTATION item for SEARCH (RFC5257) into a struct
- * searchannot and append it to the chain of such structures at *lp.
- * Returns the next character.
- */
-static int parse_search_annotation(int c, struct searchannot **lp)
-{
-    struct searchannot *sa;
-    struct buf entry = BUF_INITIALIZER;
-    struct buf attrib = BUF_INITIALIZER;
-    struct buf value = BUF_INITIALIZER;
-
-    if (c != ' ')
-	return EOF;
-
-    /* parse the entry */
-    c = getastring(imapd_in, imapd_out, &entry);
-    if (!entry.len || c != ' ') {
-	c = EOF;
-	goto out;
-    }
-
-    /* parse the attrib */
-    c = getastring(imapd_in, imapd_out, &attrib);
-    if (!attrib.len || c != ' ') {
-	c = EOF;
-	goto out;
-    }
-    if (strcmp(attrib.s, "value") &&
-	strcmp(attrib.s, "value.shared") &&
-	strcmp(attrib.s, "value.priv")) {
-	c = EOF;
-	goto out;
-    }
-
-    /* parse the value */
-    c = getbnstring(imapd_in, imapd_out, &value);
-    if (c == EOF)
-	goto out;
-
-    sa = xzmalloc(sizeof(*sa));
-    sa->entry = buf_release(&entry);
-    sa->attrib = buf_release(&attrib);
-    sa->namespace = &imapd_namespace;
-    sa->isadmin = imapd_userisadmin || imapd_userisproxyadmin;
-    sa->userid = imapd_userid;
-    sa->auth_state = imapd_authstate;
-    buf_move(&sa->value, &value);
-
-    *lp = sa;
-
-out:
-    buf_free(&entry);
-    buf_free(&attrib);
-    buf_free(&value);
-    return c;
-}
-
-/*
- * Parse search return options
- */
-static int getsearchreturnopts(struct searchargs *searchargs)
-{
-    int c;
-    static struct buf opt;
-
-    c = prot_getc(imapd_in);
-    if (c != '(') {
-        prot_printf(imapd_out,
-                    "%s BAD Missing return options in Search\r\n", searchargs->tag);
-        return EOF;
-    }
-
-    do {
-        c = getword(imapd_in, &opt);
-        if (!opt.s[0]) break;
-
-        lcase(opt.s);
-        if (!strcmp(opt.s, "min")) {
-            searchargs->returnopts |= SEARCH_RETURN_MIN;
-        }
-        else if (!strcmp(opt.s, "max")) {
-            searchargs->returnopts |= SEARCH_RETURN_MAX;
-        }
-        else if (!strcmp(opt.s, "all")) {
-            searchargs->returnopts |= SEARCH_RETURN_ALL;
-        }
-        else if (!strcmp(opt.s, "count")) {
-            searchargs->returnopts |= SEARCH_RETURN_COUNT;
-        }
-        else {
-            prot_printf(imapd_out,
-			"%s BAD Invalid Search return option %s\r\n",
-                        searchargs->tag, opt.s);
-            return EOF;
-        }
-
-    } while (c == ' ');
-
-    if (c != ')') {
-        prot_printf(imapd_out,
-                    "%s BAD Missing close parenthesis in Search\r\n",
-		    searchargs->tag);
-        return EOF;
-    }
-
-    if (!searchargs->returnopts) searchargs->returnopts = SEARCH_RETURN_ALL;
-
-    c = prot_getc(imapd_in);
-
-    return c;
-}
-
-/*
- * Create a new search program.
- */
-static struct searchargs *new_searchargs(const char *tag, int state)
-{
-    struct searchargs *sa;
-
-    sa = (struct searchargs *)xzmalloc(sizeof(struct searchargs));
-    sa->tag = tag;
-    sa->state = state;
-    /* default charset is US-ASCII which is always 0 */
-
-    return sa;
-}
-
-/*
- * Parse a search program
- */
-static int get_search_program(struct searchargs *searchargs)
-{
-    int c;
-
-    searchargs->root = search_expr_new(NULL, SEOP_AND);
-
-    do {
-	c = get_search_criterion(searchargs->root, searchargs);
-    } while (c == ' ');
-
-    searchargs->namespace = &imapd_namespace;
-    searchargs->userid = imapd_userid;
-    searchargs->authstate = imapd_authstate;
-
-search_expr_dump(searchargs->root);
-
-    return c;
-}
-
-static int string_match(search_expr_t *parent, const char *aname, struct searchargs *base)
-{
-    int c;
-    search_expr_t *e;
-    static struct buf arg = BUF_INITIALIZER;
-
-    c = getastring(imapd_in, imapd_out, &arg);
-    if (c == EOF) return EOF;
-    e = search_expr_new(parent, SEOP_MATCH);
-    e->attr = search_attr_find(aname);
-    e->value.s = charset_convert(arg.s, base->charset, charset_flags);
-    if (!e->value.s) {
-	e->op = SEOP_FALSE;
-	e->attr = NULL;
-    }
-    return c;
-}
-
-static void systemflag_match(search_expr_t *parent, unsigned int flag, int not)
-{
-    search_expr_t *e;
-
-    if (not)
-	parent = search_expr_new(parent, SEOP_NOT);
-    e = search_expr_new(parent, SEOP_MATCH);
-    e->attr = search_attr_find("systemflags");
-    e->value.u = flag;
-}
-
-static void indexflag_match(search_expr_t *parent, unsigned int flag, int not)
-{
-    search_expr_t *e;
-
-    if (not)
-	parent = search_expr_new(parent, SEOP_NOT);
-    e = search_expr_new(parent, SEOP_MATCH);
-    e->attr = search_attr_find("indexflags");
-    e->value.u = flag;
-}
-
-static void date_range(search_expr_t *parent, const char *aname,
-		       time_t start, time_t end)
-{
-    search_expr_t *e;
-    const search_attr_t *attr = search_attr_find(aname);
-
-    parent = search_expr_new(parent, SEOP_AND);
-
-    e = search_expr_new(parent, SEOP_LT);
-    e->attr = attr;
-    e->value.u = end;
-
-    e = search_expr_new(parent, SEOP_GE);
-    e->attr = attr;
-    e->value.u = start;
-}
-
-/*
- * Parse a single search criterion
- */
-static int get_search_criterion(search_expr_t *parent, struct searchargs *base)
-{
-    static struct buf criteria, arg, arg2;
-    search_expr_t *e;
-    int c;
-    int keep_charset = 0;
-    char *str;
-#if 0
-    char *p;
-#endif
-    time_t start, end, now = time(0);
-    uint32_t u;
-    int hasconv = config_getswitch(IMAPOPT_CONVERSATIONS);
-    char mboxname[MAX_MAILBOX_NAME];
-
-    if (base->state & GETSEARCH_CHARSET_FIRST) {
-	c = getcharset(imapd_in, imapd_out, &arg);
-	if (c != ' ') goto missingcharset;
-	lcase(arg.s);
-	base->charset = charset_lookupname(arg.s);
-	if (base->charset == -1) goto badcharset;
-	base->state &= ~GETSEARCH_CHARSET_FIRST;
-    }
-
-    c = getword(imapd_in, &criteria);
-    lcase(criteria.s);
-    switch (criteria.s[0]) {
-    case '\0':
-	if (c != '(') goto badcri;
-	e = search_expr_new(parent, SEOP_AND);
-	do {
-	    c = get_search_criterion(e, base);
-	} while (c == ' ');
-	if (c == EOF) return EOF;
-	if (c != ')') {
-	    prot_printf(imapd_out, "%s BAD Missing required close paren in Search command\r\n",
-		   base->tag);
-	    if (c != EOF) prot_ungetc(c, imapd_in);
-	    return EOF;
-	}
-	c = prot_getc(imapd_in);
-	break;
-
-    case '0': case '1': case '2': case '3': case '4':
-    case '5': case '6': case '7': case '8': case '9':
-    case '*':
-	if (imparse_issequence(criteria.s)) {
-	    e = search_expr_new(parent, SEOP_MATCH);
-	    e->attr = search_attr_find("msgno");
-	    e->value.seq = seqset_parse(criteria.s, NULL, /*maxval*/0);
-	}
-	else goto badcri;
-	break;
-
-    case 'a':
-	if (!strcmp(criteria.s, "answered")) {
-	    systemflag_match(parent, FLAG_ANSWERED, /*not*/0);
-	}
-	else if (!strcmp(criteria.s, "all")) {
-	    search_expr_new(parent, SEOP_TRUE);
-	    break;
-	}
-	else if (!strcmp(criteria.s, "annotation")) {
-	    struct searchannot *annot = NULL;
-	    c = parse_search_annotation(c, &annot);
-	    if (c == EOF)
-		goto badcri;
-	    e = search_expr_new(parent, SEOP_MATCH);
-	    e->attr = search_attr_find("annotation");
-	    e->value.annot = annot;
-	}
-	else goto badcri;
-	break;
-
-    case 'b':
-	if (!strcmp(criteria.s, "before")) {
-	    if (c != ' ') goto missingarg;
-	    c = getsearchdate(&start, &end);
-	    if (c == EOF) goto baddate;
-	    e = search_expr_new(parent, SEOP_LT);
-	    e->attr = search_attr_find("internaldate");
-	    e->value.u = start;
-	}
-	else if (!strcmp(criteria.s, "bcc")) {
-	    if (c != ' ') goto missingarg;
-	    c = string_match(parent, criteria.s, base);
-	    if (c == EOF) goto missingarg;
-	}
-	else if (!strcmp(criteria.s, "body")) {
-	    if (c != ' ') goto missingarg;
-	    c = string_match(parent, criteria.s, base);
-	    if (c == EOF) goto missingarg;
-	}
-	else goto badcri;
-	break;
-
-    case 'c':
-	if (!strcmp(criteria.s, "cc")) {
-	    if (c != ' ') goto missingarg;
-	    c = string_match(parent, criteria.s, base);
-	    if (c == EOF) goto missingarg;
-	}
-	else if (hasconv && !strcmp(criteria.s, "convflag")) {
-	    if (c != ' ') goto missingarg;
-	    c = getword(imapd_in, &arg);
-	    lcase(arg.s);
-	    e = search_expr_new(parent, SEOP_MATCH);
-	    e->attr = search_attr_find("convflags");
-	    e->value.s = xstrdup(arg.s);
-	}
-	else if (hasconv && !strcmp(criteria.s, "convread")) {
-	    e = search_expr_new(parent, SEOP_MATCH);
-	    e->attr = search_attr_find("convflags");
-	    e->value.s = xstrdup("\\Seen");
-	}
-	else if (hasconv && !strcmp(criteria.s, "convunread")) {
-	    e = search_expr_new(parent, SEOP_NOT);
-	    e = search_expr_new(e, SEOP_MATCH);
-	    e->attr = search_attr_find("convflags");
-	    e->value.s = xstrdup("\\Seen");
-	}
-	else if (hasconv && !strcmp(criteria.s, "convseen")) {
-	    e = search_expr_new(parent, SEOP_MATCH);
-	    e->attr = search_attr_find("convflags");
-	    e->value.s = xstrdup("\\Seen");
-	}
-	else if (hasconv && !strcmp(criteria.s, "convunseen")) {
-	    e = search_expr_new(parent, SEOP_NOT);
-	    e = search_expr_new(e, SEOP_MATCH);
-	    e->attr = search_attr_find("convflags");
-	    e->value.s = xstrdup("\\Seen");
-	}
-	else if (hasconv && !strcmp(criteria.s, "convmodseq")) {
-	    modseq_t ms;
-	    if (c != ' ') goto missingarg;
-	    c = getmodseq(imapd_in, &ms);
-	    if (c == EOF) goto badnumber;
-	    e = search_expr_new(parent, SEOP_MATCH);
-	    e->attr = search_attr_find("convmodseq");
-	    e->value.u = ms;
-	}
-	else if ((base->state & GETSEARCH_CHARSET_KEYWORD)
-	      && !strcmp(criteria.s, "charset")) {
-	    if (c != ' ') goto missingcharset;
-	    c = getcharset(imapd_in, imapd_out, &arg);
-	    if (c != ' ') goto missingcharset;
-	    lcase(arg.s);
-	    base->charset = charset_lookupname(arg.s);
-	    if (base->charset == -1) goto badcharset;
-	}
-	else if (!strcmp(criteria.s, "cid")) {
-	    conversation_id_t cid;
-	    if (c != ' ') goto missingarg;
-	    c = getword(imapd_in, &arg);
-	    if (c == EOF) goto badnumber;
-	    if (!conversation_id_decode(&cid, arg.s)) goto badnumber;
-	    e = search_expr_new(parent, SEOP_MATCH);
-	    e->attr = search_attr_find("cid");
-	    e->value.u = cid;
-	}
-	else goto badcri;
-	break;
-
-    case 'd':
-	if (!strcmp(criteria.s, "deleted")) {
-	    systemflag_match(parent, FLAG_DELETED, /*not*/0);
-	}
-	else if (!strcmp(criteria.s, "draft")) {
-	    systemflag_match(parent, FLAG_DRAFT, /*not*/0);
-	}
-	else goto badcri;
-	break;
-
-    case 'f':
-	if (!strcmp(criteria.s, "flagged")) {
-	    systemflag_match(parent, FLAG_FLAGGED, /*not*/0);
-	}
-	else if (!strcmp(criteria.s, "folder")) {
-	    if (c != ' ') goto missingarg;
-	    c = getastring(imapd_in, imapd_out, &arg);
-	    if (c == EOF) goto missingarg;
-	    imapd_namespace.mboxname_tointernal(&imapd_namespace, arg.s,
-						imapd_userid, mboxname);
-	    e = search_expr_new(parent, SEOP_MATCH);
-	    e->attr = search_attr_find("folder");
-	    e->value.s = xstrdup(mboxname);
-	}
-	else if (!strcmp(criteria.s, "from")) {
-	    if (c != ' ') goto missingarg;
-	    c = string_match(parent, criteria.s, base);
-	    if (c == EOF) goto missingarg;
-	}
-	else goto badcri;
-	break;
-
-    case 'h':
-	if (!strcmp(criteria.s, "header")) {
-	    if (c != ' ') goto missingarg;
-	    c = getastring(imapd_in, imapd_out, &arg);
-	    if (c != ' ') goto missingarg;
-	    c = getastring(imapd_in, imapd_out, &arg2);
-	    if (c == EOF) goto missingarg;
-
-	    e = search_expr_new(parent, SEOP_MATCH);
-	    e->attr = search_attr_find_field(arg.s);
-	    e->value.s = charset_convert(arg2.s, base->charset, charset_flags);
-	    if (!e->value.s) {
-		e->op = SEOP_FALSE;
-		e->attr = NULL;
-	    }
-	}
-	else goto badcri;
-	break;
-
-    case 'k':
-	if (!strcmp(criteria.s, "keyword")) {
-	    if (c != ' ') goto missingarg;
-	    c = getword(imapd_in, &arg);
-	    if (!imparse_isatom(arg.s)) goto badflag;
-	    e = search_expr_new(parent, SEOP_MATCH);
-	    e->attr = search_attr_find("keyword");
-	    e->value.s = xstrdup(arg.s);
-	}
-	else goto badcri;
-	break;
-
-    case 'l':
-	if (!strcmp(criteria.s, "larger")) {
-	    if (c != ' ') goto missingarg;
-	    c = getint32(imapd_in, &u);
-	    if (c == EOF) goto badnumber;
-	    e = search_expr_new(parent, SEOP_GT);
-	    e->attr = search_attr_find("size");
-	    e->value.u = u;
-	}
-	else goto badcri;
-	break;
-
-    case 'm':
-	if (!strcmp(criteria.s, "modseq")) {
-	    modseq_t modseq;
-	    if (c != ' ') goto missingarg;
-	    /* Check for optional search-modseq-ext */
-	    c = getqstring(imapd_in, imapd_out, &arg);
-	    if (c != EOF) {
-		if (c != ' ') goto missingarg;
-		c = getword(imapd_in, &arg);
-		if (c != ' ') goto missingarg;
-	    }
-	    c = getmodseq(imapd_in, &modseq);
-	    if (c == EOF) goto badnumber;
-	    e = search_expr_new(parent, SEOP_MATCH);
-	    e->attr = search_attr_find("modseq");
-	    e->value.u = modseq;
-	}
-	else goto badcri;
-	break;
-
-    case 'n':
-	if (!strcmp(criteria.s, "not")) {
-	    if (c != ' ') goto missingarg;
-	    e = search_expr_new(parent, SEOP_NOT);
-	    c = get_search_criterion(e, base);
-	    if (c == EOF) return EOF;
-	}
-	else if (!strcmp(criteria.s, "new")) {
-	    e = search_expr_new(parent, SEOP_AND);
-	    indexflag_match(e, MESSAGE_SEEN, /*not*/1);
-	    indexflag_match(e, MESSAGE_RECENT, /*not*/0);
-	}
-	else goto badcri;
-	break;
-
-    case 'o':
-	if (!strcmp(criteria.s, "or")) {
-	    if (c != ' ') goto missingarg;
-	    e = search_expr_new(parent, SEOP_OR);
-	    c = get_search_criterion(e, base);
-	    if (c == EOF) return EOF;
-	    if (c != ' ') goto missingarg;
-	    c = get_search_criterion(e, base);
-	    if (c == EOF) return EOF;
-	}
-	else if (!strcmp(criteria.s, "old")) {
-	    indexflag_match(parent, MESSAGE_RECENT, /*not*/1);
-	}
-	else if (!strcmp(criteria.s, "older")) {
-	    if (c != ' ') goto missingarg;
-	    c = getint32(imapd_in, &u);
-	    if (c == EOF) goto badinterval;
-	    e = search_expr_new(parent, SEOP_LT);
-	    e->attr = search_attr_find("internaldate");
-	    e->value.u = now - u;
-	}
-	else if (!strcmp(criteria.s, "on")) {
-	    if (c != ' ') goto missingarg;
-	    c = getsearchdate(&start, &end);
-	    if (c == EOF) goto baddate;
-	    date_range(parent, "internaldate", start, end);
-	}
-	else goto badcri;
-	break;
-
-    case 'r':
-	if (!strcmp(criteria.s, "recent")) {
-	    indexflag_match(parent, MESSAGE_RECENT, /*not*/0);
-	}
-	else if ((base->state & GETSEARCH_RETURN) &&
-		 !strcmp(criteria.s, "return")) {
-	    c = getsearchreturnopts(base);
-	    if (c == EOF) return EOF;
-	    keep_charset = 1;
-	}
-	else goto badcri;
-	break;
-
-    case 's':
-	if (!strcmp(criteria.s, "seen")) {
-	    indexflag_match(parent, MESSAGE_SEEN, /*not*/0);
-	}
-	else if (!strcmp(criteria.s, "sentbefore")) {
-	    if (c != ' ') goto missingarg;
-	    c = getsearchdate(&start, &end);
-	    if (c == EOF) goto baddate;
-	    e = search_expr_new(parent, SEOP_LT);
-	    e->attr = search_attr_find("sentdate");
-	    e->value.u = start;
-	}
-	else if (!strcmp(criteria.s, "senton")) {
-	    if (c != ' ') goto missingarg;
-	    c = getsearchdate(&start, &end);
-	    if (c == EOF) goto baddate;
-	    date_range(parent, "sentdate", start, end);
-	}
-	else if (!strcmp(criteria.s, "sentsince")) {
-	    if (c != ' ') goto missingarg;
-	    c = getsearchdate(&start, &end);
-	    if (c == EOF) goto baddate;
-	    e = search_expr_new(parent, SEOP_GE);
-	    e->attr = search_attr_find("sentdate");
-	    e->value.u = start;
-	}
-	else if (!strcmp(criteria.s, "since")) {
-	    if (c != ' ') goto missingarg;
-	    c = getsearchdate(&start, &end);
-	    if (c == EOF) goto baddate;
-	    e = search_expr_new(parent, SEOP_GE);
-	    e->attr = search_attr_find("internaldate");
-	    e->value.u = start;
-	}
-	else if (!strcmp(criteria.s, "smaller")) {
-	    if (c != ' ') goto missingarg;
-	    c = getint32(imapd_in, &u);
-	    if (c == EOF) goto badnumber;
-	    e = search_expr_new(parent, SEOP_LT);
-	    e->attr = search_attr_find("size");
-	    e->value.u = u;
-	}
-	else if (!strcmp(criteria.s, "subject")) {
-	    if (c != ' ') goto missingarg;
-	    c = string_match(parent, criteria.s, base);
-	    if (c == EOF) goto missingarg;
-	}
-	else goto badcri;
-	break;
-
-    case 't':
-	if (!strcmp(criteria.s, "to")) {
-	    if (c != ' ') goto missingarg;
-	    c = string_match(parent, criteria.s, base);
-	    if (c == EOF) goto missingarg;
-	}
-	else if (!strcmp(criteria.s, "text")) {
-	    if (c != ' ') goto missingarg;
-	    c = string_match(parent, criteria.s, base);
-	    if (c == EOF) goto missingarg;
-	}
-	else goto badcri;
-	break;
-
-    case 'u':
-	if (!strcmp(criteria.s, "uid")) {
-	    if (c != ' ') goto missingarg;
-	    c = getword(imapd_in, &arg);
-	    if (!imparse_issequence(arg.s)) goto badcri;
-	    e = search_expr_new(parent, SEOP_MATCH);
-	    e->attr = search_attr_find(criteria.s);
-	    e->value.seq = seqset_parse(arg.s, NULL, /*maxval*/0);
-	}
-	else if (!strcmp(criteria.s, "unseen")) {
-	    indexflag_match(parent, MESSAGE_SEEN, /*not*/1);
-	}
-	else if (!strcmp(criteria.s, "unanswered")) {
-	    systemflag_match(parent, FLAG_ANSWERED, /*not*/1);
-	}
-	else if (!strcmp(criteria.s, "undeleted")) {
-	    systemflag_match(parent, FLAG_DELETED, /*not*/1);
-	}
-	else if (!strcmp(criteria.s, "undraft")) {
-	    systemflag_match(parent, FLAG_DRAFT, /*not*/1);
-	}
-	else if (!strcmp(criteria.s, "unflagged")) {
-	    systemflag_match(parent, FLAG_FLAGGED, /*not*/1);
-	}
-	else if (!strcmp(criteria.s, "unkeyword")) {
-	    if (c != ' ') goto missingarg;
-	    c = getword(imapd_in, &arg);
-	    if (!imparse_isatom(arg.s)) goto badflag;
-	    e = search_expr_new(parent, SEOP_NOT);
-	    e = search_expr_new(e, SEOP_MATCH);
-	    e->attr = search_attr_find("keyword");
-	    e->value.s = xstrdup(arg.s);
-	}
-	else goto badcri;
-	break;
-
-    case 'x':
-	if (!strcmp(criteria.s, "xlistid")) {
-	    if (c != ' ') goto missingarg;
-	    c = string_match(parent, "listid", base);
-	    if (c == EOF) goto missingarg;
-	}
-	else if (!strcmp(criteria.s, "xcontenttype")) {
-	    if (c != ' ') goto missingarg;
-	    c = string_match(parent, "contenttype", base);
-	    if (c == EOF) goto missingarg;
-	}
-	else goto badcri;
-	break;
-
-    case 'y':
-	if (!strcmp(criteria.s, "younger")) {
-	    if (c != ' ') goto missingarg;
-	    c = getint32(imapd_in, &u);
-	    if (c == EOF) goto badinterval;
-	    e = search_expr_new(parent, SEOP_GE);
-	    e->attr = search_attr_find("internaldate");
-	    e->value.u = now - u;
-	}
-	else goto badcri;
-	break;
-
-    default:
-    badcri:
-	prot_printf(imapd_out, "%s BAD Invalid Search criteria\r\n", base->tag);
-	if (c != EOF) prot_ungetc(c, imapd_in);
-	return EOF;
-    }
-
-    if (!keep_charset)
-	base->state &= ~GETSEARCH_CHARSET_KEYWORD;
-    base->state &= ~GETSEARCH_RETURN;
-
-    return c;
-
- missingarg:
-    prot_printf(imapd_out, "%s BAD Missing required argument to Search %s\r\n",
-		base->tag, criteria.s);
-    if (c != EOF) prot_ungetc(c, imapd_in);
-    return EOF;
-
- badflag:
-    prot_printf(imapd_out, "%s BAD Invalid flag name %s in Search command\r\n",
-		base->tag, arg.s);
-    if (c != EOF) prot_ungetc(c, imapd_in);
-    return EOF;
-
- baddate:
-    prot_printf(imapd_out, "%s BAD Invalid date in Search command\r\n",
-		base->tag);
-    if (c != EOF) prot_ungetc(c, imapd_in);
-    return EOF;
-
- badnumber:
-    prot_printf(imapd_out, "%s BAD Invalid number in Search command\r\n",
-		base->tag);
-    if (c != EOF) prot_ungetc(c, imapd_in);
-    return EOF;
-
- badinterval:
-    prot_printf(imapd_out, "%s BAD Invalid interval in Search command\r\n",
-		base->tag);
-    if (c != EOF) prot_ungetc(c, imapd_in);
-    return EOF;
-
- missingcharset:
-    prot_printf(imapd_out, "%s BAD Missing charset\r\n",
-		base->tag);
-    if (c != EOF) prot_ungetc(c, imapd_in);
-    return EOF;
-
- badcharset:
-    prot_printf(imapd_out, "%s BAD %s\r\n", base->tag,
-	       error_message(IMAP_UNRECOGNIZED_CHARSET));
-    if (c != EOF) prot_ungetc(c, imapd_in);
-    return EOF;
-}
-
 static void free_snippetargs(struct snippetargs **sap)
 {
     while (*sap) {
@@ -11726,95 +11009,6 @@ done:
     }
 
     return;
-}
-
-/*
- * Parse a "date", for SEARCH criteria
- * The time_t's pointed to by 'start' and 'end' are set to the
- * times of the start and end of the parsed date.
- */
-static int getsearchdate(time_t *start, time_t *end)
-{
-    int c;
-    struct tm tm;
-    int quoted = 0;
-    char month[4];
-
-    memset(&tm, 0, sizeof tm);
-
-    c = prot_getc(imapd_in);
-    if (c == '\"') {
-	quoted++;
-	c = prot_getc(imapd_in);
-    }
-
-    /* Day of month */
-    if (!isdigit(c)) goto baddate;
-    tm.tm_mday = c - '0';
-    c = prot_getc(imapd_in);
-    if (isdigit(c)) {
-	tm.tm_mday = tm.tm_mday * 10 + c - '0';
-	c = prot_getc(imapd_in);
-    }
-    
-    if (c != '-') goto baddate;
-    c = prot_getc(imapd_in);
-
-    /* Month name */
-    if (!isalpha(c)) goto baddate;
-    month[0] = c;
-    c = prot_getc(imapd_in);
-    if (!isalpha(c)) goto baddate;
-    month[1] = c;
-    c = prot_getc(imapd_in);
-    if (!isalpha(c)) goto baddate;
-    month[2] = c;
-    c = prot_getc(imapd_in);
-    month[3] = '\0';
-    lcase(month);
-
-    for (tm.tm_mon = 0; tm.tm_mon < 12; tm.tm_mon++) {
-	if (!strcmp(month, monthname[tm.tm_mon])) break;
-    }
-    if (tm.tm_mon == 12) goto baddate;
-
-    if (c != '-') goto baddate;
-    c = prot_getc(imapd_in);
-
-    /* Year */
-    if (!isdigit(c)) goto baddate;
-    tm.tm_year = c - '0';
-    c = prot_getc(imapd_in);
-    if (!isdigit(c)) goto baddate;
-    tm.tm_year = tm.tm_year * 10 + c - '0';
-    c = prot_getc(imapd_in);
-    if (isdigit(c)) {
-	if (tm.tm_year < 19) goto baddate;
-	tm.tm_year -= 19;
-	tm.tm_year = tm.tm_year * 10 + c - '0';
-	c = prot_getc(imapd_in);
-	if (!isdigit(c)) goto baddate;
-	tm.tm_year = tm.tm_year * 10 + c - '0';
-	c = prot_getc(imapd_in);
-    }
-
-    if (quoted) {
-	if (c != '\"') goto baddate;
-	c = prot_getc(imapd_in);
-    }
-
-    tm.tm_isdst = -1;
-    *start = mktime(&tm);
-
-    tm.tm_hour = 24;
-    tm.tm_isdst = -1;
-    *end = mktime(&tm);
-
-    return c;
-
- baddate:
-    prot_ungetc(c, imapd_in);
-    return EOF;
 }
 
 #define SORTGROWSIZE	10
