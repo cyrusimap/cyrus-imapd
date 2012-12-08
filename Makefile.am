@@ -620,7 +620,8 @@ cunit_TESTS = \
 	cunit/prot.testc \
 	cunit/ptrarray.testc \
 	cunit/quota.testc \
-	cunit/rfc822tok.testc
+	cunit/rfc822tok.testc \
+	cunit/search_expr.testc
 
 if SIEVE
 cunit_TESTS += cunit/sieve.testc

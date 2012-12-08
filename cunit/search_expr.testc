@@ -1,0 +1,458 @@
+#include "config.h"
+#include "cunit/cunit.h"
+#include "prot.h"
+#include "xmalloc.h"
+#include "imap/imapd.h"
+#include "imap/index.h"
+#include "imap/imapparse.h"
+#include "util.h"
+#include "cunit/timezones.h"
+
+static struct namespace ns;
+static const char *userid = "fred";
+static struct auth_state *authstate = NULL;
+static int isadmin = 0;
+
+#define DATE1_RFC3501	"8-Dec-2012"
+#define DATE1_BEGIN	"1354885200"
+#define DATE1_MID	"1354928400"
+#define DATE1_END	"1354971600"
+#define DATE1_MID_TIME	1354928400
+
+static void test_get_search_program(void)
+{
+/*TODO: test initial state */
+/*TODO: test charset */
+#define TESTCASE(in, exp_out) \
+    { \
+	static const char _in[] = in; \
+	static const char expected_out[] = exp_out; \
+	static const char expected_errs[] = ""; \
+	struct searchargs *searchargs; \
+	int c; \
+	char *actual_out = NULL; \
+	struct protstream *pin; \
+	struct protstream *pout; \
+	struct buf actual_errs = BUF_INITIALIZER; \
+ \
+	searchargs = new_searchargs(".", 0, &ns, userid, authstate, isadmin); \
+	pin = prot_readmap(_in, sizeof(_in)-1); \
+	pout = prot_writebuf(&actual_errs); \
+	c = get_search_program(pin, pout, searchargs); \
+	CU_ASSERT_EQUAL(c, '\r'); \
+	buf_cstring(&actual_errs); \
+	CU_ASSERT_STRING_EQUAL(actual_errs.s, expected_errs); \
+	if (c != EOF) { \
+	    CU_ASSERT_EQUAL(searchargs->charset, 0); \
+	    CU_ASSERT_PTR_NOT_NULL(searchargs->root); \
+	    actual_out = search_expr_serialise(searchargs->root); \
+	    CU_ASSERT_STRING_EQUAL(actual_out, expected_out); \
+	} \
+ \
+	free(actual_out); \
+	buf_free(&actual_errs); \
+	prot_free(pin); \
+	prot_free(pout); \
+	freesearchargs(searchargs); \
+    }
+
+    /*
+     * Search criteria from RFC 3501
+     */
+
+    /* <sequence set> */
+    TESTCASE("1\r\n",
+	     "(and (match msgno 1))");
+    TESTCASE("1:4\r\n",
+	     "(and (match msgno 1:4))");
+    TESTCASE("1:*\r\n",
+	     "(and (match msgno 1:*))");
+    TESTCASE("1,3,5\r\n",
+	     "(and (match msgno 1,3,5))");
+    TESTCASE("1,3,5:7\r\n",
+	     "(and (match msgno 1,3,5:7))");
+
+    /* ALL */
+    TESTCASE("all\r\n",
+	     "(and (true))");
+
+    /* ANSWERED */
+    TESTCASE("answered\r\n",
+	     "(and (match systemflags \\Answered))");
+
+    /* BCC <string> */
+    TESTCASE("bcc \"shoreditch\"\r\n",
+	     "(and (match bcc \"SHOREDITCH\"))");
+
+    /* BEFORE <date> */
+    TESTCASE("before "DATE1_RFC3501"\r\n",
+	     "(and (lt internaldate "DATE1_BEGIN"))");
+
+    /* BODY <string> */
+    TESTCASE("body \"williamsburg\"\r\n",
+	     "(and (match body \"WILLIAMSBURG\"))");
+
+    /* CC <string> */
+    TESTCASE("cc \"brooklyn\"\r\n",
+	     "(and (match cc \"BROOKLYN\"))");
+
+    /* DELETED */
+    TESTCASE("deleted\r\n",
+	     "(and (match systemflags \\Deleted))");
+
+    /* DRAFT */
+    TESTCASE("draft\r\n",
+	     "(and (match systemflags \\Draft))");
+
+    /* FLAGGED */
+    TESTCASE("flagged\r\n",
+	     "(and (match systemflags \\Flagged))");
+
+    /* FROM <string> */
+    TESTCASE("from \"dreamcatcher\"\r\n",
+	     "(and (match from \"DREAMCATCHER\"))");
+
+    /* HEADER <field-name> <string> */
+    TESTCASE("header \"Cosby\" \"Sweater\"\r\n",
+	     "(and (match header:cosby \"SWEATER\"))");
+
+    /* KEYWORD <flag> */
+    TESTCASE("keyword $Mustache\r\n",
+	     "(and (match keyword \"$Mustache\"))");
+
+    /* LARGER <n> */
+    TESTCASE("larger 123\r\n",
+	     "(and (gt size 123))");
+
+    /* NEW */
+    TESTCASE("new\r\n",
+	     "(and "
+		"(and "
+		    "(not "
+			"(match indexflags \\Seen)"
+		    ")"
+		    " "
+		    "(match indexflags \\Recent)"
+		")"
+	     ")");
+
+    /* NOT <search-key> */
+    TESTCASE("not subject \"tumblr\"\r\n",
+	     "(and (not (match subject \"TUMBLR\")))");
+
+    /* OLD */
+    /* inexplicably, the RFC specifies OLD != NOT NEW */
+    TESTCASE("old\r\n",
+	     "(and (not (match indexflags \\Recent)))");
+
+    /* ON <date> */
+    TESTCASE("on "DATE1_RFC3501"\r\n",
+	     "(and "
+		 "(and "
+		    "(lt internaldate "DATE1_END")"
+		    " "
+		    "(ge internaldate "DATE1_BEGIN")"
+		 ")"
+	     ")");
+
+    /* OR <search-key> <search-key> */
+    TESTCASE("or subject \"black\" subject \"white\"\r\n",
+	     "(and "
+		"(or "
+		    "(match subject \"BLACK\")"
+		    " "
+		    "(match subject \"WHITE\")"
+		")"
+	     ")");
+
+    /* RECENT */
+    TESTCASE("recent\r\n",
+	     "(and (match indexflags \\Recent))");
+
+    /* SEEN */
+    TESTCASE("seen\r\n",
+	     "(and (match indexflags \\Seen))");
+
+    /* SENTBEFORE <date> */
+    TESTCASE("sentbefore "DATE1_RFC3501"\r\n",
+	     "(and (lt sentdate "DATE1_BEGIN"))");
+
+    /* SENTON <date> */
+    TESTCASE("senton "DATE1_RFC3501"\r\n",
+	     "(and "
+		 "(and "
+		    "(lt sentdate "DATE1_END")"
+		    " "
+		    "(ge sentdate "DATE1_BEGIN")"
+		 ")"
+	     ")");
+
+    /* SENTSINCE <date> */
+    /* SENTSINCE, like SINCE, includes the given date */
+    TESTCASE("sentsince "DATE1_RFC3501"\r\n",
+	     "(and (ge sentdate "DATE1_BEGIN"))");
+
+    /* SINCE <date> */
+    /* Note: BEFORE excludes the date, SINCE includes it */
+    TESTCASE("since "DATE1_RFC3501"\r\n",
+	     "(and (ge internaldate "DATE1_BEGIN"))");
+
+    /* SMALLER <n> */
+    /* Note: neither LARGER nor SMALLER includes the exact size */
+    TESTCASE("smaller 456\r\n",
+	     "(and (lt size 456))");
+
+    /* SUBJECT <string> */
+    TESTCASE("subject \"selvage\"\r\n",
+	     "(and (match subject \"SELVAGE\"))");
+
+    /* TEXT <string> */
+    TESTCASE("text \"letterpress\"\r\n",
+	     "(and (match text \"LETTERPRESS\"))");
+
+    /* TO <string> */
+    TESTCASE("to \"readymade\"\r\n",
+	     "(and (match to \"READYMADE\"))");
+
+    /* UID <sequence set> */
+    TESTCASE("uid 1\r\n",
+	     "(and (match uid 1))");
+    TESTCASE("uid 1:4\r\n",
+	     "(and (match uid 1:4))");
+    TESTCASE("uid 1:*\r\n",
+	     "(and (match uid 1:*))");
+    TESTCASE("uid 1,3,5\r\n",
+	     "(and (match uid 1,3,5))");
+    TESTCASE("uid 1,3,5:7\r\n",
+	     "(and (match uid 1,3,5:7))");
+
+    /* UNANSWERED */
+    TESTCASE("unanswered\r\n",
+	     "(and (not (match systemflags \\Answered)))");
+
+    /* UNDELETED */
+    TESTCASE("undeleted\r\n",
+	     "(and (not (match systemflags \\Deleted)))");
+
+    /* UNDRAFT */
+    TESTCASE("undraft\r\n",
+	     "(and (not (match systemflags \\Draft)))");
+
+    /* UNFLAGGED */
+    TESTCASE("unflagged\r\n",
+	     "(and (not (match systemflags \\Flagged)))");
+
+    /* UNKEYWORD <flag> */
+    TESTCASE("unkeyword $Viral\r\n",
+	     "(and (not (match keyword \"$Viral\")))");
+
+    /* UNSEEN */
+    TESTCASE("unseen\r\n",
+	     "(and (not (match indexflags \\Seen)))");
+
+    /* ( <search-key>* ) */
+    TESTCASE("(subject \"bicycle\" to \"rights\")\r\n",
+	     "(and "
+		"(and "
+		    "(match subject \"BICYCLE\")"
+		    " "
+		    "(match to \"RIGHTS\")"
+		")"
+	     ")");
+    TESTCASE("not (subject \"bicycle\" to \"rights\")\r\n",
+	     "(and "
+		"(not "
+		    "(and "
+			"(match subject \"BICYCLE\")"
+			" "
+			"(match to \"RIGHTS\")"
+		    ")"
+		")"
+	     ")");
+    TESTCASE("or (subject \"bicycle\" to \"rights\") from \"quinoa\"\r\n",
+	     "(and "
+		"(or "
+		    "(and "
+			"(match subject \"BICYCLE\")"
+			" "
+			"(match to \"RIGHTS\")"
+		    ")"
+		    " "
+		    "(match from \"QUINOA\")"
+		")"
+	     ")");
+
+    /*
+     * Search criteria from RFC 4551
+     */
+
+    /* MODSEQ <modseq>
+     * Note, the full RFC syntax is
+     * MODSEQ [<entry-name> <entry-type-req>] <mod-sequence-valzer>
+     * but we don't support the optional but in the middle */
+/*TODO: negative should fail*/
+    TESTCASE("modseq 0\r\n",	    /* not a valid modseq but we can search on it */
+	     "(and (ge modseq 0))");
+    TESTCASE("modseq 1\r\n",
+	     "(and (ge modseq 1))");
+    TESTCASE("modseq 12345\r\n",
+	     "(and (ge modseq 12345))");
+    TESTCASE("modseq 12345678\r\n",
+	     "(and (ge modseq 12345678))");
+    /* MODSEQ is a 64b value */
+    TESTCASE("modseq 12345678901\r\n",
+	     "(and (ge modseq 12345678901))");
+    TESTCASE("modseq 2147483647\r\n",	/* 0x7fff_ffff */
+	     "(and (ge modseq 2147483647))");
+    TESTCASE("modseq 2147483648\r\n",	/* 0x8000_0000 */
+	     "(and (ge modseq 2147483648))");
+    TESTCASE("modseq 4294967295\r\n",	/* 0xffff_ffff */
+	     "(and (ge modseq 4294967295))");
+    TESTCASE("modseq 4294967296\r\n",	/* 0x1_0000_0000 */
+	     "(and (ge modseq 4294967296))");
+    TESTCASE("modseq 12345678901234\r\n",
+	     "(and (ge modseq 12345678901234))");
+    TESTCASE("modseq 18446744073709551615\r\n", /* 0xffff_ffff_ffff_ffff */
+	     "(and (ge modseq 18446744073709551615))");
+
+    /*
+     * Search criteria from RFC 5032
+     */
+
+    /* OLDER <nz-number> in seconds ago */
+    /* YOUNGER <nz-number> in seconds ago */
+    /* Inexplicably, the RFC defines that *both*  YOUNGER and OLDER
+     * include the specified second */
+    time_push_fixed(DATE1_MID_TIME);
+    TESTCASE("older 0\r\n",
+	     "(and (le internaldate "DATE1_MID"))");
+    TESTCASE("older 43200\r\n",
+	     "(and (le internaldate "DATE1_BEGIN"))");
+    TESTCASE("younger 0\r\n",
+	     "(and (ge internaldate "DATE1_MID"))");
+    TESTCASE("younger 43200\r\n",
+	     "(and (ge internaldate "DATE1_BEGIN"))");
+    time_pop();
+
+    /*
+     * Search criteria from RFC 5257
+     */
+    /* ANNOTATION <entry> <attrib> </value> */
+    TESTCASE("annotation /comment value \"stumptown\"\r\n",
+	     "(and (match annotation (entry \"/comment\" attrib \"value\" value \"stumptown\")))");
+    TESTCASE("annotation /comment value.priv \"stumptown\"\r\n",
+	     "(and (match annotation (entry \"/comment\" attrib \"value.priv\" value \"stumptown\")))");
+    TESTCASE("annotation /comment value.shared \"stumptown\"\r\n",
+	     "(and (match annotation (entry \"/comment\" attrib \"value.shared\" value \"stumptown\")))");
+
+    /*
+     * Cyrus vendor specific search criteria
+     */
+    /* FOLDER <mboxname> */
+    TESTCASE("folder INBOX\r\n",
+	     "(and (match folder \"user.fred\"))");
+    TESTCASE("folder inbox\r\n",
+	     "(and (match folder \"user.fred\"))");
+    TESTCASE("folder inbox.GastroPub\r\n",
+	     "(and (match folder \"user.fred.GastroPub\"))");
+
+    /* XLISTID <string> */
+    TESTCASE("xlistid \"semiotics\"\r\n",
+	     "(and (match listid \"SEMIOTICS\"))");
+
+    /* XCONTENTTYPE <string> */
+    TESTCASE("xcontenttype text\r\n",
+	     "(and (match contenttype \"TEXT\"))");
+    TESTCASE("xcontenttype \"text\"\r\n",
+	     "(and (match contenttype \"TEXT\"))");
+    TESTCASE("xcontenttype \"plain\"\r\n",
+	     "(and (match contenttype \"PLAIN\"))");
+    TESTCASE("xcontenttype \"text_plain\"\r\n",
+	     "(and (match contenttype \"TEXT_PLAIN\"))");
+
+/* TODO: test that conv* are rejected if conversations:off */
+    /* CONVFLAG <flag> */
+    TESTCASE("convflag $Forage\r\n",
+	     "(and (match convflags \"$forage\"))");
+
+    /* CONVREAD */
+    TESTCASE("convread\r\n",
+	     "(and (match convflags \"\\Seen\"))");
+
+    /* CONVUNREAD */
+    TESTCASE("convunread\r\n",
+	     "(and (not (match convflags \"\\Seen\")))");
+
+    /* CONVSEEN */
+    TESTCASE("convseen\r\n",
+	     "(and (match convflags \"\\Seen\"))");
+
+    /* CONVUNSEEN */
+    TESTCASE("convunseen\r\n",
+	     "(and (not (match convflags \"\\Seen\")))");
+
+    /* CONVMODSEQ <modseq> */
+    TESTCASE("convmodseq 0\r\n",	    /* not a valid modseq but we can search on it */
+	     "(and (ge convmodseq 0))");
+    TESTCASE("convmodseq 1\r\n",
+	     "(and (ge convmodseq 1))");
+    TESTCASE("convmodseq 12345\r\n",
+	     "(and (ge convmodseq 12345))");
+    TESTCASE("convmodseq 12345678\r\n",
+	     "(and (ge convmodseq 12345678))");
+    /* MODSEQ is a 64b value */
+    TESTCASE("convmodseq 12345678901\r\n",
+	     "(and (ge convmodseq 12345678901))");
+    TESTCASE("convmodseq 2147483647\r\n",	/* 0x7fff_ffff */
+	     "(and (ge convmodseq 2147483647))");
+    TESTCASE("convmodseq 2147483648\r\n",	/* 0x8000_0000 */
+	     "(and (ge convmodseq 2147483648))");
+    TESTCASE("convmodseq 4294967295\r\n",	/* 0xffff_ffff */
+	     "(and (ge convmodseq 4294967295))");
+    TESTCASE("convmodseq 4294967296\r\n",	/* 0x1_0000_0000 */
+	     "(and (ge convmodseq 4294967296))");
+    TESTCASE("convmodseq 12345678901234\r\n",
+	     "(and (ge convmodseq 12345678901234))");
+    TESTCASE("convmodseq 18446744073709551615\r\n", /* 0xffff_ffff_ffff_ffff */
+	     "(and (ge convmodseq 18446744073709551615))");
+
+    /* CID <cid> */
+    TESTCASE("cid NIL\r\n",
+	     "(and (match cid NIL))");
+    TESTCASE("cid 0000000000000000\r\n",
+	     "(and (match cid NIL))");
+    TESTCASE("cid 0123456789abcdef\r\n",
+	     "(and (match cid 0123456789abcdef))");
+
+    /* TODO: charset */
+    /* TODO: return */
+    /* TODO: return */
+
+#undef TESTCASE
+}
+
+static int set_up(void)
+{
+    int r;
+
+    search_attr_init();
+
+    r = mboxname_init_namespace(&ns, isadmin);
+    if (r) return r;
+
+    push_tz(TZ_MELBOURNE);
+
+    imapopts[IMAPOPT_CONVERSATIONS].val.b = 1;
+
+    return 0;
+}
+
+static int tear_down(void)
+{
+    imapopts[IMAPOPT_CONVERSATIONS].val.b = 0;
+    restore_tz();
+    time_restore();
+    return 0;
+}
+
+/* vim: set ft=c: */
