@@ -998,7 +998,7 @@ static int get_search_criterion(struct protstream *pin,
 	    if (c != ' ') goto missingarg;
 	    c = getint32(pin, &u);
 	    if (c == EOF) goto badinterval;
-	    e = search_expr_new(parent, SEOP_LT);
+	    e = search_expr_new(parent, SEOP_LE);
 	    e->attr = search_attr_find("internaldate");
 	    e->value.u = now - u;
 	}
