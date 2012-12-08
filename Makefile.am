@@ -887,6 +887,7 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/idlemsg.c \
 	imap/idlemsg.h \
 	imap/imapparse.c \
+	imap/imapparse.h \
 	imap/index.c \
 	imap/index.h \
 	imap/mailbox.c \
