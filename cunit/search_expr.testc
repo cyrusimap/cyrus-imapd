@@ -431,6 +431,133 @@ static void test_get_search_program(void)
 #undef TESTCASE
 }
 
+static void test_unserialise(void)
+{
+    search_expr_t *e;
+    char *s;
+
+    e = search_expr_unserialise("(true)");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(e);
+    CU_ASSERT_EQUAL(e->op, SEOP_TRUE);
+    CU_ASSERT_PTR_NULL(e->attr);
+    CU_ASSERT_PTR_NULL(e->next);
+    CU_ASSERT_PTR_NULL(e->children);
+    CU_ASSERT_PTR_NULL(e->parent);
+    search_expr_free(e);
+
+    e = search_expr_unserialise("(false)");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(e);
+    CU_ASSERT_EQUAL(e->op, SEOP_FALSE);
+    CU_ASSERT_PTR_NULL(e->attr);
+    CU_ASSERT_PTR_NULL(e->next);
+    CU_ASSERT_PTR_NULL(e->children);
+    CU_ASSERT_PTR_NULL(e->parent);
+    search_expr_free(e);
+
+    e = search_expr_unserialise("(not (false))");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(e);
+    CU_ASSERT_EQUAL(e->op, SEOP_NOT);
+    CU_ASSERT_PTR_NULL(e->attr);
+    CU_ASSERT_PTR_NULL(e->next);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(e->children);
+    CU_ASSERT_PTR_NULL(e->parent);
+    CU_ASSERT_EQUAL(e->children->op, SEOP_FALSE);
+    CU_ASSERT_PTR_NULL(e->children->attr);
+    CU_ASSERT_PTR_NULL(e->children->next);
+    CU_ASSERT_PTR_NULL(e->children->children);
+    CU_ASSERT_PTR_EQUAL(e->children->parent, e);
+    search_expr_free(e);
+
+    e = search_expr_unserialise("(and (false) (true))");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(e);
+    CU_ASSERT_EQUAL(e->op, SEOP_AND);
+    CU_ASSERT_PTR_NULL(e->attr);
+    CU_ASSERT_PTR_NULL(e->next);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(e->children);
+    CU_ASSERT_PTR_NULL(e->parent);
+    CU_ASSERT_EQUAL(e->children->op, SEOP_FALSE);
+    CU_ASSERT_PTR_NULL(e->children->attr);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(e->children->next);
+    CU_ASSERT_PTR_NULL(e->children->children);
+    CU_ASSERT_PTR_EQUAL(e->children->parent, e);
+    CU_ASSERT_EQUAL(e->children->next->op, SEOP_TRUE);
+    CU_ASSERT_PTR_NULL(e->children->next->attr);
+    CU_ASSERT_PTR_NULL(e->children->next->next);
+    CU_ASSERT_PTR_NULL(e->children->next->children);
+    CU_ASSERT_PTR_EQUAL(e->children->next->parent, e);
+    search_expr_free(e);
+
+    e = search_expr_unserialise("(or (false) (true))");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(e);
+    CU_ASSERT_EQUAL(e->op, SEOP_OR);
+    CU_ASSERT_PTR_NULL(e->attr);
+    CU_ASSERT_PTR_NULL(e->next);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(e->children);
+    CU_ASSERT_PTR_NULL(e->parent);
+    CU_ASSERT_EQUAL(e->children->op, SEOP_FALSE);
+    CU_ASSERT_PTR_NULL(e->children->attr);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(e->children->next);
+    CU_ASSERT_PTR_NULL(e->children->children);
+    CU_ASSERT_PTR_EQUAL(e->children->parent, e);
+    CU_ASSERT_EQUAL(e->children->next->op, SEOP_TRUE);
+    CU_ASSERT_PTR_NULL(e->children->next->attr);
+    CU_ASSERT_PTR_NULL(e->children->next->next);
+    CU_ASSERT_PTR_NULL(e->children->next->children);
+    CU_ASSERT_PTR_EQUAL(e->children->next->parent, e);
+    search_expr_free(e);
+
+    e = search_expr_unserialise("(match subject ETSY)");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(e);
+    CU_ASSERT_EQUAL(e->op, SEOP_MATCH);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(e->attr);
+    CU_ASSERT_STRING_EQUAL(e->attr->name, "subject");
+    CU_ASSERT_STRING_EQUAL(e->value.s, "ETSY");
+    CU_ASSERT_PTR_NULL(e->next);
+    CU_ASSERT_PTR_NULL(e->children);
+    CU_ASSERT_PTR_NULL(e->parent);
+    search_expr_free(e);
+
+    e = search_expr_unserialise("(ge size 123)");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(e);
+    CU_ASSERT_EQUAL(e->op, SEOP_GE);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(e->attr);
+    CU_ASSERT_STRING_EQUAL(e->attr->name, "size");
+    CU_ASSERT_EQUAL(e->value.u, 123);
+    CU_ASSERT_PTR_NULL(e->next);
+    CU_ASSERT_PTR_NULL(e->children);
+    CU_ASSERT_PTR_NULL(e->parent);
+    search_expr_free(e);
+
+    e = search_expr_unserialise("(match uid 1:4,7:*)");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(e);
+    CU_ASSERT_EQUAL(e->op, SEOP_MATCH);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(e->attr);
+    CU_ASSERT_STRING_EQUAL(e->attr->name, "uid");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(e->value.seq);
+    s = seqset_cstring(e->value.seq);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(s);
+    CU_ASSERT_STRING_EQUAL(s, "1:4,7:*");
+    CU_ASSERT_PTR_NULL(e->next);
+    CU_ASSERT_PTR_NULL(e->children);
+    CU_ASSERT_PTR_NULL(e->parent);
+    free(s);
+    search_expr_free(e);
+
+    e = search_expr_unserialise("(match annotation (entry \"/comment\" attrib \"value\" value \"Brooklyn\"))");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(e);
+    CU_ASSERT_EQUAL(e->op, SEOP_MATCH);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(e->attr);
+    CU_ASSERT_STRING_EQUAL(e->attr->name, "annotation");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(e->value.annot);
+    CU_ASSERT_STRING_EQUAL(e->value.annot->entry, "/comment");
+    CU_ASSERT_STRING_EQUAL(e->value.annot->attrib, "value");
+    CU_ASSERT_STRING_EQUAL(e->value.annot->value.s, "Brooklyn");
+    CU_ASSERT_PTR_NULL(e->next);
+    CU_ASSERT_PTR_NULL(e->children);
+    CU_ASSERT_PTR_NULL(e->parent);
+    search_expr_free(e);
+}
+
 static int set_up(void)
 {
     int r;

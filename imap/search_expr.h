@@ -49,6 +49,8 @@
 #include "message.h"
 #include "util.h"
 
+struct protstream;
+
 enum search_op {
     SEOP_UNKNOWN,
     SEOP_TRUE,
@@ -82,7 +84,8 @@ struct search_attr {
 		       void **internalisedp);
     int (*cmp)(message_t *, const union search_value *, void *internalised, void *data1);
     int (*match)(message_t *, const union search_value *, void *internalised, void *data1);
-    void (*describe)(struct buf *, const union search_value *);
+    void (*serialise)(struct buf *, const union search_value *);
+    int (*unserialise)(struct protstream*, union search_value *);
     void (*free)(union search_value *);
     void *data1;	/* extra data for the functions above */
 };
@@ -102,6 +105,7 @@ extern search_expr_t *search_expr_new(search_expr_t *parent,
 				      enum search_op);
 extern void search_expr_free(search_expr_t *);
 extern char *search_expr_serialise(const search_expr_t *);
+extern search_expr_t *search_expr_unserialise(const char *s);
 extern void search_expr_internalise(struct mailbox *, search_expr_t *);
 extern int search_expr_evaluate(message_t *m, const search_expr_t *);
 
