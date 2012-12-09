@@ -149,9 +149,11 @@ static char *statuscache_buildkey(const char *mailboxname, const char *userid,
 
     /* Build statuscache key */
     len = strlcpy(key, mailboxname, sizeof(key));
+    /* double % is a safe separator, it can't exist in a mailboxname */
     key[len++] = '%';
     key[len++] = '%';
-    len += strlcpy(key + len, userid, sizeof(key) - len);
+    if (userid)
+	len += strlcpy(key + len, userid, sizeof(key) - len);
 
     *keylen = len;
 
@@ -401,12 +403,11 @@ HIDDEN int statuscache_invalidate(const char *mboxname, struct statusdata *sdata
     drock.db = statuscachedb;
     drock.tid = NULL;
 
-    key = statuscache_buildkey(mboxname, "", &keylen);
+    key = statuscache_buildkey(mboxname, /*userid*/NULL, &keylen);
 
-    /* strip off the second NULL that buildkey added, so we match 
-     * the entries for all users */
-    r = cyrusdb_foreach(drock.db, key, keylen - 1, NULL, delete_cb,
+    r = cyrusdb_foreach(drock.db, key, keylen, NULL, delete_cb,
 		    &drock, &drock.tid);
+
     if (r != CYRUSDB_OK) {
 	syslog(LOG_ERR, "DBERROR: error invalidating: %s (%s)",
 	       mboxname, cyrusdb_strerror(r));
