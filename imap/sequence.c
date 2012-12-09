@@ -461,6 +461,21 @@ EXPORTED char *seqset_cstring(const struct seqset *seq)
 }
 
 /*
+ * Duplicate the given seqset.
+ */
+EXPORTED struct seqset *seqset_dup(const struct seqset *l)
+{
+    struct seqset *newl;
+
+    newl = (struct seqset *)xmemdup(l, sizeof(*l));
+    newl->set = (struct seq_range *)xmemdup(newl->set,
+		    newl->alloc * sizeof(struct seq_range));
+    newl->nextseq = NULL;
+
+    return newl;
+}
+
+/*
  * Free the given seqset (and any others chained to it)
  */
 EXPORTED void seqset_free(struct seqset *l)

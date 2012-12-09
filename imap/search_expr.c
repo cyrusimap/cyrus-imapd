@@ -142,6 +142,28 @@ EXPORTED void search_expr_free(search_expr_t *e)
     free(e);
 }
 
+/*
+ * Create and return a new search expression tree which is an
+ * exact duplicate of the given tree.
+ */
+EXPORTED search_expr_t *search_expr_duplicate(const search_expr_t *e)
+{
+    search_expr_t *newe;
+    search_expr_t *child;
+
+    newe = search_expr_new(NULL, e->op);
+    newe->attr = e->attr;
+    if (newe->attr && newe->attr->duplicate)
+	newe->attr->duplicate(&newe->value, &e->value);
+    else
+	newe->value = e->value;
+
+    for (child = e->children ; child ; child = child->next)
+	append(newe, search_expr_duplicate(child));
+
+    return newe;
+}
+
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 
 static const char *op_strings[] = {
@@ -449,6 +471,12 @@ static void search_string_internalise(struct mailbox *mailbox __attribute__((unu
     }
 }
 
+static void search_string_duplicate(union search_value *new,
+				    const union search_value *old)
+{
+    new->s = xstrdup(old->s);
+}
+
 static void search_string_free(union search_value *v)
 {
     free(v->s);
@@ -578,6 +606,12 @@ static int search_seq_unserialise(struct protstream *prot, union search_value *v
     c = getseword(prot, tmp, sizeof(tmp));
     v->seq = seqset_parse(tmp, NULL, /*maxval*/0);
     return c;
+}
+
+static void search_seq_duplicate(union search_value *new,
+				 const union search_value *old)
+{
+    new->seq = seqset_dup(old->seq);
 }
 
 static void search_seq_free(union search_value *v)
@@ -912,6 +946,16 @@ static int search_annotation_unserialise(struct protstream *prot, union search_v
     return c;
 }
 
+static void search_annotation_duplicate(union search_value *new,
+					const union search_value *old)
+{
+    new->annot = (struct searchannot *)xmemdup(old->annot, sizeof(*old->annot));
+    new->annot->entry = xstrdup(new->annot->entry);
+    new->annot->attrib = xstrdup(new->annot->attrib);
+    buf_init(&new->annot->value);
+    buf_append(&new->annot->value, &old->annot->value);
+}
+
 static void search_annotation_free(union search_value *v)
 {
     if (v->annot) {
@@ -1181,6 +1225,7 @@ EXPORTED void search_attr_init(void)
 	    search_string_match,
 	    search_string_serialise,
 	    search_string_unserialise,
+	    search_string_duplicate,
 	    search_string_free,
 	    (void *)message_get_bcc
 	},{
@@ -1190,6 +1235,7 @@ EXPORTED void search_attr_init(void)
 	    search_string_match,
 	    search_string_serialise,
 	    search_string_unserialise,
+	    search_string_duplicate,
 	    search_string_free,
 	    (void *)message_get_cc
 	},{
@@ -1199,6 +1245,7 @@ EXPORTED void search_attr_init(void)
 	    search_string_match,
 	    search_string_serialise,
 	    search_string_unserialise,
+	    search_string_duplicate,
 	    search_string_free,
 	    (void *)message_get_from
 	},{
@@ -1208,6 +1255,7 @@ EXPORTED void search_attr_init(void)
 	    search_string_match,
 	    search_string_serialise,
 	    search_string_unserialise,
+	    search_string_duplicate,
 	    search_string_free,
 	    (void *)message_get_messageid
 	},{
@@ -1217,6 +1265,7 @@ EXPORTED void search_attr_init(void)
 	    search_listid_match,
 	    search_string_serialise,
 	    search_string_unserialise,
+	    search_string_duplicate,
 	    search_string_free,
 	    NULL
 	},{
@@ -1226,6 +1275,7 @@ EXPORTED void search_attr_init(void)
 	    search_contenttype_match,
 	    search_string_serialise,
 	    search_string_unserialise,
+	    search_string_duplicate,
 	    search_string_free,
 	    NULL
 	},{
@@ -1235,6 +1285,7 @@ EXPORTED void search_attr_init(void)
 	    search_string_match,
 	    search_string_serialise,
 	    search_string_unserialise,
+	    search_string_duplicate,
 	    search_string_free,
 	    (void *)message_get_subject
 	},{
@@ -1244,6 +1295,7 @@ EXPORTED void search_attr_init(void)
 	    search_string_match,
 	    search_string_serialise,
 	    search_string_unserialise,
+	    search_string_duplicate,
 	    search_string_free,
 	    (void *)message_get_to
 	},{
@@ -1253,6 +1305,7 @@ EXPORTED void search_attr_init(void)
 	    search_seq_match,
 	    search_seq_serialise,
 	    search_seq_unserialise,
+	    search_seq_duplicate,
 	    search_seq_free,
 	    (void *)message_get_msgno
 	},{
@@ -1262,6 +1315,7 @@ EXPORTED void search_attr_init(void)
 	    search_seq_match,
 	    search_seq_serialise,
 	    search_seq_unserialise,
+	    search_seq_duplicate,
 	    search_seq_free,
 	    (void *)message_get_uid
 	},{
@@ -1271,6 +1325,7 @@ EXPORTED void search_attr_init(void)
 	    search_flags_match,
 	    search_systemflags_serialise,
 	    search_systemflags_unserialise,
+	    /*duplicate*/NULL,
 	    /*free*/NULL,
 	    (void *)message_get_systemflags
 	},{
@@ -1280,6 +1335,7 @@ EXPORTED void search_attr_init(void)
 	    search_flags_match,
 	    search_indexflags_serialise,
 	    search_indexflags_unserialise,
+	    /*duplicate*/NULL,
 	    /*free*/NULL,
 	    (void *)message_get_indexflags
 	},{
@@ -1289,6 +1345,7 @@ EXPORTED void search_attr_init(void)
 	    search_keyword_match,
 	    search_string_serialise,
 	    search_string_unserialise,
+	    search_string_duplicate,
 	    search_string_free,
 	    NULL
 	},{
@@ -1298,6 +1355,7 @@ EXPORTED void search_attr_init(void)
 	    search_convflags_match,
 	    search_string_serialise,
 	    search_string_unserialise,
+	    search_string_duplicate,
 	    search_string_free,
 	    NULL
 	},{
@@ -1307,6 +1365,7 @@ EXPORTED void search_attr_init(void)
 	    search_convmodseq_match,
 	    search_uint64_serialise,
 	    search_uint64_unserialise,
+	    /*duplicate*/NULL,
 	    /*free*/NULL,
 	    NULL
 	},{
@@ -1316,6 +1375,7 @@ EXPORTED void search_attr_init(void)
 	    search_uint64_match,
 	    search_uint64_serialise,
 	    search_uint64_unserialise,
+	    /*duplicate*/NULL,
 	    /*free*/NULL,
 	    (void *)message_get_modseq
 	},{
@@ -1325,6 +1385,7 @@ EXPORTED void search_attr_init(void)
 	    search_uint64_match,
 	    search_cid_serialise,
 	    search_cid_unserialise,
+	    /*duplicate*/NULL,
 	    /*free*/NULL,
 	    (void *)message_get_cid
 	},{
@@ -1334,6 +1395,7 @@ EXPORTED void search_attr_init(void)
 	    search_folder_match,
 	    search_string_serialise,
 	    search_string_unserialise,
+	    search_string_duplicate,
 	    search_string_free,
 	    (void *)NULL
 	},{
@@ -1343,6 +1405,7 @@ EXPORTED void search_attr_init(void)
 	    search_annotation_match,
 	    search_annotation_serialise,
 	    search_annotation_unserialise,
+	    search_annotation_duplicate,
 	    search_annotation_free,
 	    (void *)NULL
 	},{
@@ -1352,6 +1415,7 @@ EXPORTED void search_attr_init(void)
 	    search_uint32_match,
 	    search_uint32_serialise,
 	    search_uint32_unserialise,
+	    /*duplicate*/NULL,
 	    /*free*/NULL,
 	    (void *)message_get_size
 	},{
@@ -1361,6 +1425,7 @@ EXPORTED void search_attr_init(void)
 	    search_uint32_match,
 	    search_uint32_serialise,
 	    search_uint32_unserialise,
+	    /*duplicate*/NULL,
 	    /*free*/NULL,
 	    (void *)message_get_internaldate
 	},{
@@ -1370,6 +1435,7 @@ EXPORTED void search_attr_init(void)
 	    search_uint32_match,
 	    search_uint32_serialise,
 	    search_uint32_unserialise,
+	    /*duplicate*/NULL,
 	    /*free*/NULL,
 	    (void *)message_get_sentdate
 	},{
@@ -1379,6 +1445,7 @@ EXPORTED void search_attr_init(void)
 	    search_text_match,
 	    search_string_serialise,
 	    search_string_unserialise,
+	    search_string_duplicate,
 	    search_string_free,
 	    (void *)1	    /* skipheader flag */
 	},{
@@ -1388,6 +1455,7 @@ EXPORTED void search_attr_init(void)
 	    search_text_match,
 	    search_string_serialise,
 	    search_string_unserialise,
+	    search_string_duplicate,
 	    search_string_free,
 	    (void *)0	    /* skipheader flag */
 	}
@@ -1431,6 +1499,7 @@ EXPORTED const search_attr_t *search_attr_find_field(const char *field)
 	search_header_match,
 	search_string_serialise,
 	search_string_unserialise,
+	search_string_duplicate,
 	search_string_free,
 	NULL
     };

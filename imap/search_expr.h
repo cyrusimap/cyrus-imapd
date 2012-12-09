@@ -86,6 +86,7 @@ struct search_attr {
     int (*match)(message_t *, const union search_value *, void *internalised, void *data1);
     void (*serialise)(struct buf *, const union search_value *);
     int (*unserialise)(struct protstream*, union search_value *);
+    void (*duplicate)(union search_value *, const union search_value *);
     void (*free)(union search_value *);
     void *data1;	/* extra data for the functions above */
 };
@@ -104,6 +105,7 @@ struct search_expr {
 extern search_expr_t *search_expr_new(search_expr_t *parent,
 				      enum search_op);
 extern void search_expr_free(search_expr_t *);
+extern search_expr_t *search_expr_duplicate(const search_expr_t *e);
 extern char *search_expr_serialise(const search_expr_t *);
 extern search_expr_t *search_expr_unserialise(const char *s);
 extern void search_expr_internalise(struct mailbox *, search_expr_t *);

@@ -558,6 +558,50 @@ static void test_unserialise(void)
     search_expr_free(e);
 }
 
+static void test_duplicate(void)
+{
+#define TESTCASE(in) \
+    { \
+	static const char _in[] = (in); \
+	search_expr_t *e; \
+	search_expr_t *edup; \
+	char *s; \
+	char *sdup; \
+ \
+	e = search_expr_unserialise(_in); \
+	CU_ASSERT_PTR_NOT_NULL_FATAL(e); \
+	edup = search_expr_duplicate(e); \
+	CU_ASSERT_PTR_NOT_NULL_FATAL(edup); \
+	CU_ASSERT_PTR_NOT_EQUAL(e, edup); \
+	s = search_expr_serialise(e); \
+	CU_ASSERT_STRING_EQUAL(s, _in); \
+	free(s); \
+	sdup = search_expr_serialise(edup); \
+	CU_ASSERT_STRING_EQUAL(sdup, _in); \
+	free(sdup); \
+	search_expr_free(e); \
+	sdup = search_expr_serialise(edup); \
+	CU_ASSERT_STRING_EQUAL(sdup, _in); \
+	free(sdup); \
+	search_expr_free(edup); \
+    }
+
+    TESTCASE("(false)");
+    TESTCASE("(true)");
+    TESTCASE("(not (false))");
+    TESTCASE("(and (false) (true))");
+    TESTCASE("(or (false) (true))");
+    TESTCASE("(match subject \"ETSY\")");
+    TESTCASE("(ge size 123)");
+    TESTCASE("(gt size 456)");
+    TESTCASE("(le size 789)");
+    TESTCASE("(lt size 120)");
+    TESTCASE("(match uid 1:4,7:*)");
+    TESTCASE("(match annotation (entry \"/comment\" attrib \"value\" value \"Brooklyn\"))");
+
+#undef TESTCASE
+}
+
 static int set_up(void)
 {
     int r;
