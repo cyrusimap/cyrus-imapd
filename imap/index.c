@@ -7419,6 +7419,41 @@ EXPORTED void freesearchargs(struct searchargs *s)
     free(s);
 }
 
+EXPORTED char *sortcrit_as_string(const struct sortcrit *sortcrit)
+{
+    struct buf b = BUF_INITIALIZER;
+    static const char * const key_names[] = {
+	"SEQUENCE", "ARRIVAL", "CC", "DATE",
+	"DISPLAYFROM", "DISPLAYTO", "FROM",
+	"SIZE", "SUBJECT", "TO", "ANNOTATION",
+	"MODSEQ", "UID", "HASFLAG", "CONVMODSEQ",
+	"CONVEXISTS", "CONVSIZE", "HASCONVFLAG",
+	"FOLDER"
+    };
+
+    for ( ; sortcrit->key ; sortcrit++) {
+	if (b.len)
+	    buf_putc(&b, ' ');
+	if (sortcrit->flags & SORT_REVERSE)
+	    buf_appendcstr(&b, "REVERSE ");
+
+	if (sortcrit->key < VECTOR_SIZE(key_names))
+	    buf_appendcstr(&b, key_names[sortcrit->key]);
+	else
+	    buf_printf(&b, "UNKNOWN%u", sortcrit->key);
+
+	switch (sortcrit->key) {
+	case SORT_ANNOTATION:
+	    buf_printf(&b, " \"%s\" \"%s\"",
+		       sortcrit->args.annot.entry,
+		       *sortcrit->args.annot.userid ?
+			    "value.priv" : "value.shared");
+	    break;
+	}
+    }
+    return buf_release(&b);
+}
+
 /*
  * Free an array of sortcrit
  */

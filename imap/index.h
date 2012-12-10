@@ -309,6 +309,7 @@ struct searchargs *new_searchargs(const char *tag, int state,
 
 void freesequencelist(struct seqset *l);
 void freesearchargs(struct searchargs *s);
+char *sortcrit_as_string(const struct sortcrit *sortcrit);
 void freesortcrit(struct sortcrit *s);
 
 extern int index_expunge(struct index_state *state, char *uidsequence,
