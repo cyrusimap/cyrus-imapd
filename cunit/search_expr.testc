@@ -7,6 +7,7 @@
 #include "imap/imapparse.h"
 #include "util.h"
 #include "cunit/timezones.h"
+#include "cunit/timeofday.h"
 
 static struct namespace ns;
 static const char *userid = "fred";
