@@ -56,10 +56,18 @@
 #include "charset.h"
 #include "annotate.h"
 #include "global.h"
+#include "lsort.h"
 #include "xstrlcpy.h"
 #include "xmalloc.h"
 
-#define DEBUG 1
+#define DEBUG 0
+
+#if DEBUG
+static search_expr_t **the_rootp;
+static search_expr_t *the_focus;
+#endif
+
+/*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 
 static search_expr_t *append(search_expr_t *parent, search_expr_t *child)
 {
@@ -74,45 +82,69 @@ static search_expr_t *append(search_expr_t *parent, search_expr_t *child)
     return child;
 }
 
+static search_expr_t *detachp(search_expr_t **prevp)
+{
+    search_expr_t *child = *prevp;
+
+    if (child) {
+	*prevp = child->next;
+	child->next = NULL;
+	child->parent = NULL;
+    }
+
+    return child;
+}
+
 static search_expr_t *detach(search_expr_t *parent, search_expr_t *child)
 {
     search_expr_t **prevp;
 
     for (prevp = &parent->children ; *prevp && *prevp != child; prevp = &(*prevp)->next)
 	;
-    *prevp = child->next;
-    child->next = NULL;
-    child->parent = NULL;
-
-    return child;
+    return detachp(prevp);
 }
 
-#if 0
-/* Replace the node 'child' with it's children, i.e. reparent them.
+/*
+ * Detach the node '*prevp' from the tree, and reparent its children to
+ * '*prevp' parent, preseving '*prevp's location and its children's
+ * order.
+ *
  * Apparently this operation is called "splat" but I think that's
- * a damn silly name */
-static search_expr_t *elide(search_expr_t *parent, search_expr_t *child)
+ * a damn silly name.
+ */
+static search_expr_t *elide(search_expr_t **prevp)
 {
-    search_expr_t **prevp;
-    search_expr_t *grand;
+    search_expr_t *e = *prevp;
+    search_expr_t *child;
 
-    for (prevp = &parent->children ; *prevp && *prevp != child; prevp = &(*prevp)->next)
-	;
-    *prevp = child->children;
+    *prevp = e->children;
 
-    for (grand = child->children ; grand ; grand = grand->next) {
-	grand->parent = parent;
-	prevp = &grand->next;
+    for (child = e->children ; child ; child = child->next) {
+	child->parent = e->parent;
+	prevp = &child->next;
     }
-    *prevp = child->next;
+    *prevp = e->next;
 
-    child->next = NULL;
-    child->children = NULL;
-    child->parent = NULL;
+    e->next = NULL;
+    e->children = NULL;
+    e->parent = NULL;
 
-    return child;
+    return e;
 }
-#endif
+
+static search_expr_t *interpolate(search_expr_t **prevp, enum search_op op)
+{
+    search_expr_t *e = search_expr_new(NULL, op);
+
+    e->parent = (*prevp)->parent;
+    e->children = (*prevp);
+    e->next = (*prevp)->next;
+    (*prevp)->next = NULL;
+    (*prevp)->parent = e;
+    *prevp = e;
+
+    return e;
+}
 
 /*
  * Create a new node in a search expression tree, with the given
@@ -172,16 +204,18 @@ static const char *op_strings[] = {
     "and", "or", "not"
 };
 
-static const char *op_as_string(enum search_op op)
+static const char *op_as_string(unsigned int op)
 {
-    return (op >= 0 && op < VECTOR_SIZE(op_strings)
-		? op_strings[op] : "WTF?");
+    return (op < VECTOR_SIZE(op_strings) ? op_strings[op] : "WTF?");
 }
 
 static void serialise(const search_expr_t *e, struct buf *buf)
 {
     const search_expr_t *child;
 
+#if DEBUG
+    if (e == the_focus) buf_putc(buf, '<');
+#endif
     buf_putc(buf, '(');
     buf_appendcstr(buf, op_as_string(e->op));
     if (e->attr) {
@@ -195,6 +229,9 @@ static void serialise(const search_expr_t *e, struct buf *buf)
 	serialise(child, buf);
     }
     buf_putc(buf, ')');
+#if DEBUG
+    if (e == the_focus) buf_putc(buf, '>');
+#endif
 }
 
 /*
@@ -243,7 +280,7 @@ static search_expr_t *unserialise(search_expr_t *parent,
 {
     int c;
     search_expr_t *e = NULL;
-    int op;
+    unsigned int op;
     char tmp[128];
 
     c = prot_getc(prot);
@@ -357,6 +394,276 @@ EXPORTED search_expr_t *search_expr_unserialise(const char *s)
 
     prot_free(prot);
     return root;
+}
+
+/*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
+
+enum {
+    DNF_OR, DNF_AND, DNF_NOT, DNF_CMP
+};
+
+/* expected depth, in a full tree.  0 is rootmost, 3 is leafmost */
+static int dnf_depth(const search_expr_t *e)
+{
+    switch (e->op) {
+    case SEOP_TRUE:
+    case SEOP_FALSE:
+    case SEOP_LT:
+    case SEOP_LE:
+    case SEOP_GT:
+    case SEOP_GE:
+    case SEOP_MATCH:
+	return DNF_CMP;
+    case SEOP_AND:
+	return DNF_AND;
+    case SEOP_OR:
+	return DNF_OR;
+    case SEOP_NOT:
+	return DNF_NOT;
+    default: assert(0); return -1;
+    }
+    return -1;
+}
+
+static int has_enough_children(const search_expr_t *e)
+{
+    const search_expr_t *child;
+    int min;
+    int n = 0;
+
+    switch (e->op) {
+    case SEOP_OR:
+    case SEOP_AND:
+	min = 2;
+	break;
+    case SEOP_NOT:
+	min = 1;
+	break;
+    default:
+	return 1;
+    }
+
+    for (child = e->children ; child ; child = child->next)
+	if (++n >= min) return 1;
+    return 0;
+}
+
+static void apply_demorgan(search_expr_t **ep, search_expr_t **prevp)
+{
+    search_expr_t *child = *prevp;
+    search_expr_t **grandp;
+
+    /* NOT nodes have exactly one child */
+    assert(*prevp != NULL);
+    assert((*prevp)->next == NULL);
+
+    child->op = (child->op == SEOP_AND ? SEOP_OR : SEOP_AND);
+    for (grandp = &child->children ; *grandp ; grandp = &(*grandp)->next)
+	interpolate(grandp, SEOP_NOT);
+    search_expr_free(elide(ep));
+}
+
+static void apply_distribution(search_expr_t **ep, search_expr_t **prevp)
+{
+    search_expr_t *newor;
+    search_expr_t *or;
+    search_expr_t *and;
+    search_expr_t *orchild;
+    search_expr_t *newand;
+
+    newor = interpolate(ep, SEOP_OR);
+    and = detachp(&newor->children);
+    or = detachp(prevp);
+
+    while ((orchild = detachp(&or->children)) != NULL) {
+	newand = search_expr_duplicate(and);
+	append(newand, orchild);
+	append(newor, newand);
+    }
+
+    search_expr_free(and);
+    search_expr_free(or);
+}
+
+static void invert(search_expr_t **ep, search_expr_t **prevp)
+{
+    if ((*ep)->op == SEOP_NOT)
+	apply_demorgan(ep, prevp);
+    else
+	apply_distribution(ep, prevp);
+}
+
+/* combine compatible boolean parent and child nodes */
+static void combine(search_expr_t **ep, search_expr_t **prevp)
+{
+    switch ((*ep)->op) {
+    case SEOP_NOT:
+	search_expr_free(elide(prevp));
+	search_expr_free(elide(ep));
+	break;
+    case SEOP_AND:
+    case SEOP_OR:
+	search_expr_free(elide(prevp));
+	break;
+    default:
+	break;
+    }
+}
+
+static int normalise(search_expr_t **ep)
+{
+    search_expr_t **prevp;
+    int depth;
+    int changed = -1;
+
+restart:
+    changed++;
+
+#if DEBUG
+    the_focus = *ep;
+    {
+	char *s = search_expr_serialise(*the_rootp);
+	fprintf(stderr, "normalise: tree=%s\n", s);
+	free(s);
+    }
+#endif
+
+    if (!has_enough_children(*ep)) {
+	/* eliminate trivial nodes: AND and ORs with
+	 * a single child, NOTs with none */
+	search_expr_free(elide(ep));
+	goto restart;
+    }
+
+    depth = dnf_depth(*ep);
+    for (prevp = &(*ep)->children ; *prevp ; prevp = &(*prevp)->next)
+    {
+	int child_depth = dnf_depth(*prevp);
+	if (child_depth == depth) {
+	    combine(ep, prevp);
+	    goto restart;
+	}
+	if (child_depth < depth) {
+	    invert(ep, prevp);
+	    goto restart;
+	}
+	if (normalise(prevp))
+	    goto restart;
+    }
+
+    return changed;
+}
+
+static void *getnext(void *p)
+{
+    return ((search_expr_t *)p)->next;
+}
+
+static void setnext(void *p, void *next)
+{
+    ((search_expr_t *)p)->next = next;
+}
+
+static int compare(void *p1, void *p2, void *calldata)
+{
+    const search_expr_t *e1 = p1;
+    const search_expr_t *e2 = p2;
+    int r;
+
+    r = dnf_depth(e2) - dnf_depth(e1);
+
+    if (!r)
+	r = strcasecmp(e1->attr ? e1->attr->name : "zzz",
+		       e2->attr ? e2->attr->name : "zzz");
+
+    if (!r)
+	r = (int)e1->op - (int)e2->op;
+
+    if (!r) {
+	struct buf b1 = BUF_INITIALIZER;
+	struct buf b2 = BUF_INITIALIZER;
+	if (e1->attr && e1->attr->serialise)
+	    e1->attr->serialise(&b1, &e1->value);
+	if (e2->attr && e2->attr->serialise)
+	    e2->attr->serialise(&b2, &e2->value);
+	r = strcmp(buf_cstring(&b1), buf_cstring(&b2));
+	buf_free(&b1);
+	buf_free(&b2);
+    }
+
+    if (!r) {
+	if (e1->children || e2->children)
+	    r = compare((void *)(e1->children ? e1->children : e1),
+		        (void *)(e2->children ? e2->children : e2),
+			calldata);
+    }
+
+    return r;
+}
+
+static void sort_children(search_expr_t *e)
+{
+    search_expr_t *child;
+
+    for (child = e->children ; child ; child = child->next)
+	sort_children(child);
+
+    e->children = lsort(e->children, getnext, setnext, compare, NULL);
+}
+
+/*
+ * Reorganise a search expression tree into Disjunctive Normal Form.
+ * This form is useful for picking out cacheable and runnable sub-queries.
+ *
+ * An expression in DNF has a number of constraints:
+ *
+ * - it contains at most one OR node
+ * - if present the OR node is the root
+ * - NOT nodes if present have only comparisons as children
+ * - it contains at most 4 levels of nodes
+ * - nodes have a strict order of types, down from the root
+ *   they are: OR, AND, NOT, comparisons.
+ *
+ * DNF is useful for running queries.  Each of the children of the
+ * root OR node can be run as a separate sub-query, and cached
+ * independently because their results are just accumulated together
+ * without any further processing.  Each of those children is a single
+ * conjuctive clause which can implemented using an index lookup (or a
+ * scan of all messages) followed by a filtering step.  Finally, each of
+ * those conjunctive clauses can be analysed to discover which folders
+ * will need to be opened: no folders, a single specific folder,
+ * all folders, or all folders except some specific folders.
+ *
+ * We also enforce a fixed order on child nodes of any node, so
+ * that all logically equivalent trees are the same shape.  This
+ * helps when constructing a cache key from a tree.  The sorting
+ * criteria are:
+ *
+ * - NOT nodes after un-negated comparison nodes, then
+ * - comparison nodes sorted lexically on attribute, then
+ * - comparison nodes sorted lexically on stringified value
+ *
+ * Note that IMAP search syntax, when translated most directly into an
+ * expression tree, defines trees whose outermost node is always an AND.
+ * Those trees are not in any kind of normal form but more closely
+ * resemble Conjunctive Normal Form than DNF.  Any IMAP search program
+ * containing an OR criterion will require significant juggling to
+ * achieve DNF.
+ *
+ * Takes the root of the tree in *'ep' and returns a possibly reshaped
+ * tree whose root is stored in *'ep'.
+ */
+EXPORTED void search_expr_normalise(search_expr_t **ep)
+{
+#if DEBUG
+    the_rootp = ep;
+#endif
+    normalise(ep);
+    sort_children(*ep);
+#if DEBUG
+    the_rootp = NULL;
+    the_focus = NULL;
+#endif
 }
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/

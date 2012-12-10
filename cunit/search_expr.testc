@@ -603,6 +603,427 @@ static void test_duplicate(void)
 #undef TESTCASE
 }
 
+
+static void test_normalise(void)
+{
+#define TESTCASE(in, exp_out) \
+    { \
+	static const char _in[] = (in); \
+	static const char expected_out[] = (exp_out); \
+	search_expr_t *e; \
+	char *s; \
+ \
+	e = search_expr_unserialise(_in); \
+	CU_ASSERT_PTR_NOT_NULL_FATAL(e); \
+	search_expr_normalise(&e); \
+	CU_ASSERT_PTR_NOT_NULL_FATAL(e); \
+	s = search_expr_serialise(e); \
+	CU_ASSERT_STRING_EQUAL(s, expected_out); \
+	search_expr_free(e); \
+    }
+
+    /*
+     * A tree comprising a single comparison node
+     * is already in DNF.
+     */
+    TESTCASE("(false)",
+	     "(false)");
+    TESTCASE("(true)",
+	     "(true)");
+    TESTCASE("(match subject \"ETSY\")",
+	     "(match subject \"ETSY\")");
+    TESTCASE("(le size 123)",
+	     "(le size 123)");
+    TESTCASE("(lt size 123)",
+	     "(lt size 123)");
+    TESTCASE("(ge size 123)",
+	     "(ge size 123)");
+    TESTCASE("(gt size 123)",
+	     "(gt size 123)");
+
+    /*
+     * A tree comprising a single comparison node
+     * under a NOT node is already in DNF.
+     */
+    TESTCASE("(not (false))",
+	     "(not (false))");
+    TESTCASE("(not (true))",
+	     "(not (true))");
+    TESTCASE("(not (match subject \"ETSY\"))",
+	     "(not (match subject \"ETSY\"))");
+    TESTCASE("(not (le size 123))",
+	     "(not (le size 123))");
+    TESTCASE("(not (lt size 123))",
+	     "(not (lt size 123))");
+    TESTCASE("(not (ge size 123))",
+	     "(not (ge size 123))");
+    TESTCASE("(not (gt size 123))",
+	     "(not (gt size 123))");
+
+    /*
+     * Ordering of nodes.
+     */
+    TESTCASE("(and "
+		"(match subject \"ALPHA\")"
+		" "
+		"(match subject \"BETA\")"
+		" "
+		"(match subject \"GAMMA\")"
+	     ")",
+	     "(and "
+		"(match subject \"ALPHA\")"
+		" "
+		"(match subject \"BETA\")"
+		" "
+		"(match subject \"GAMMA\")"
+	     ")");
+    TESTCASE("(and "
+		"(match subject \"GAMMA\")"
+		" "
+		"(match subject \"BETA\")"
+		" "
+		"(match subject \"ALPHA\")"
+	     ")",
+	     "(and "
+		"(match subject \"ALPHA\")"
+		" "
+		"(match subject \"BETA\")"
+		" "
+		"(match subject \"GAMMA\")"
+	     ")");
+    TESTCASE("(and "
+		"(match subject \"GAMMA\")"
+		" "
+		"(match subject \"ALPHA\")"
+		" "
+		"(match subject \"BETA\")"
+	     ")",
+	     "(and "
+		"(match subject \"ALPHA\")"
+		" "
+		"(match subject \"BETA\")"
+		" "
+		"(match subject \"GAMMA\")"
+	     ")");
+
+    /*
+     * A tree comprising a single conjunctive node
+     * whose children are all comparison nodes or
+     * negations of comparison nodes, is already in DNF.
+     */
+    TESTCASE("(and (le size 123) (match subject \"ETSY\"))",
+	     "(and (le size 123) (match subject \"ETSY\"))");
+    TESTCASE("(and (not (le size 123)) (match subject \"ETSY\"))",
+	     "(and (match subject \"ETSY\") (not (le size 123)))");
+    TESTCASE("(and (le size 123) (not (match subject \"ETSY\")))",
+	     "(and (le size 123) (not (match subject \"ETSY\")))");
+
+    /*
+     * A tree comprising a single disjunctive node
+     * whose children are all comparison nodes or
+     * negations of comparison nodes, is already in DNF.
+     */
+    TESTCASE("(or (le size 123) (match subject \"ETSY\"))",
+	     "(or (le size 123) (match subject \"ETSY\"))");
+    TESTCASE("(or (not (le size 123)) (match subject \"ETSY\"))",
+	     "(or (match subject \"ETSY\") (not (le size 123)))");
+    TESTCASE("(or (le size 123) (not (match subject \"ETSY\")))",
+	     "(or (le size 123) (not (match subject \"ETSY\")))");
+
+    /*
+     * A tree already in fully populated DNF: one disjunctive
+     * node, then multiple conjunctive nodes, then negations,
+     * then comparisons.
+     */
+    TESTCASE("(or "
+		"(and "
+		    "(le size 123)"
+		    " "
+		    "(not "
+			"(match subject \"ETSY\")"
+		    ")"
+		")"
+		" "
+		"(and "
+		    "(not "
+			"(le size 456)"
+		    ")"
+		    " "
+		    "(match subject \"TUMBLR\")"
+		")"
+	     ")",
+	     "(or "
+		"(and "
+		    "(le size 123)"
+		    " "
+		    "(not "
+			"(match subject \"ETSY\")"
+		    ")"
+		")"
+		" "
+		"(and "
+		    "(match subject \"TUMBLR\")"
+		    " "
+		    "(not "
+			"(le size 456)"
+		    ")"
+		")"
+	     ")");
+
+    /*
+     * Elimination of trivial nodes
+     */
+    TESTCASE("(and "
+		"(match subject \"COSBY\")"
+	     ")",
+	    "(match subject \"COSBY\")");
+    TESTCASE("(or "
+		"(match subject \"COSBY\")"
+	     ")",
+	    "(match subject \"COSBY\")");
+    TESTCASE("(and (not) (match subject \"COSBY\"))",
+	    "(match subject \"COSBY\")");
+    TESTCASE("(or (not) (match subject \"COSBY\"))",
+	    "(match subject \"COSBY\")");
+
+    /*
+     * Combining similar parent & child nodes
+     */
+    TESTCASE("(and "
+		"(match subject \"COSBY\")"
+		" "
+		"(and "
+		    "(le size 123)"
+		    " "
+		    "(match subject \"TUMBLR\")"
+		")"
+		" "
+		"(match subject \"SWEATER\")"
+	     ")",
+	    "(and "
+		"(le size 123)"
+		" "
+		"(match subject \"COSBY\")"
+		" "
+		"(match subject \"SWEATER\")"
+		" "
+		"(match subject \"TUMBLR\")"
+	     ")");
+    TESTCASE("(or "
+		"(match subject \"COSBY\")"
+		" "
+		"(or "
+		    "(le size 123)"
+		    " "
+		    "(match subject \"TUMBLR\")"
+		")"
+		" "
+		"(match subject \"SWEATER\")"
+	     ")",
+	     "(or "
+		"(le size 123)"
+		" "
+		"(match subject \"COSBY\")"
+		" "
+		"(match subject \"SWEATER\")"
+		" "
+		"(match subject \"TUMBLR\")"
+	     ")");
+    TESTCASE("(not "
+		"(not "
+		    "(match subject \"SELVAGE\")"
+		")"
+	     ")",
+	     "(match subject \"SELVAGE\")");
+    TESTCASE("(not "
+		"(not "
+		    "(not "
+			"(match subject \"SELVAGE\")"
+		    ")"
+		")"
+	     ")",
+	     "(not "
+		"(match subject \"SELVAGE\")"
+	     ")");
+    TESTCASE("(not "
+		"(not "
+		    "(not "
+			"(not "
+			    "(match subject \"SELVAGE\")"
+			")"
+		    ")"
+		")"
+	     ")",
+	     "(match subject \"SELVAGE\")");
+
+    /*
+     * Applying DeMorgan's laws to invert an AND or OR
+     * which is a child or a NOT.
+     */
+    TESTCASE("(not "
+		"(and "
+		    "(le size 123)"
+		    " "
+		    "(match subject \"ETSY\")"
+		")"
+	     ")",
+	     "(or "
+		"(not "
+		    "(le size 123)"
+		")"
+		" "
+		"(not "
+		    "(match subject \"ETSY\")"
+		")"
+	     ")");
+    TESTCASE("(not "
+		"(or "
+		    "(le size 123)"
+		    " "
+		    "(match subject \"ETSY\")"
+		")"
+	     ")",
+	     "(and "
+		"(not "
+		    "(le size 123)"
+		")"
+		" "
+		"(not "
+		    "(match subject \"ETSY\")"
+		")"
+	     ")");
+
+    /*
+     * DeMorgan's laws plus combination of similar nodes
+     */
+    TESTCASE("(not "
+		"(and "
+		    "(not "
+			"(le size 123)"
+		    ")"
+		    " "
+		    "(match subject \"ETSY\")"
+		")"
+	     ")",
+	     "(or "
+		"(le size 123)"
+		" "
+		"(not "
+		    "(match subject \"ETSY\")"
+		")"
+	     ")");
+    TESTCASE("(not "
+		"(or "
+		    "(not "
+			"(le size 123)"
+		    ")"
+		    " "
+		    "(match subject \"ETSY\")"
+		")"
+	     ")",
+	     "(and "
+		"(le size 123)"
+		" "
+		"(not "
+		    "(match subject \"ETSY\")"
+		")"
+	     ")");
+
+    /*
+     * Distribution.
+     */
+    TESTCASE("(and "
+		"(match subject \"TUMBLR\")"
+		" "
+		"(or "
+		    "(le size 123)"
+		    " "
+		    "(match subject \"ETSY\")"
+		")"
+	     ")",
+	     "(or "
+		"(and "
+		    "(le size 123)"
+		    " "
+		    "(match subject \"TUMBLR\")"
+		")"
+		" "
+		"(and "
+		    "(match subject \"ETSY\")"
+		    " "
+		    "(match subject \"TUMBLR\")"
+		")"
+	     ")");
+    TESTCASE("(and "
+		"(or "
+		    "(le size 123)"
+		    " "
+		    "(match subject \"ETSY\")"
+		")"
+		" "
+		"(match subject \"TUMBLR\")"
+	     ")",
+	     "(or "
+		"(and "
+		    "(le size 123)"
+		    " "
+		    "(match subject \"TUMBLR\")"
+		")"
+		" "
+		"(and "
+		    "(match subject \"ETSY\")"
+		    " "
+		    "(match subject \"TUMBLR\")"
+		")"
+	     ")");
+    TESTCASE("(and "
+		"(match subject \"COSBY\")"
+		" "
+		"(or "
+		    "(le size 123)"
+		    " "
+		    "(match subject \"ETSY\")"
+		")"
+		" "
+		"(match subject \"SWEATER\")"
+	     ")",
+	     "(or "
+		"(and "
+		    "(le size 123)"
+		    " "
+		    "(match subject \"COSBY\")"
+		    " "
+		    "(match subject \"SWEATER\")"
+		")"
+		" "
+		"(and "
+		    "(match subject \"COSBY\")"
+		    " "
+		    "(match subject \"ETSY\")"
+		    " "
+		    "(match subject \"SWEATER\")"
+		")"
+	     ")");
+
+    /*
+     * Distribution plus elimination of trivial nodes
+     */
+    TESTCASE("(and "
+		"(or "
+		    "(le size 123)"
+		    " "
+		    "(match subject \"ETSY\")"
+		")"
+	     ")",
+	     "(or "
+		"(le size 123)"
+		" "
+		"(match subject \"ETSY\")"
+	     ")");
+
+#undef TESTCASE
+}
+
 static int set_up(void)
 {
     int r;
