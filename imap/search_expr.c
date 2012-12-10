@@ -796,6 +796,63 @@ EXPORTED int search_expr_is_mutable(const search_expr_t *e)
 
 /* ====================================================================== */
 
+/*
+ * Analyse the search expression to discover how countable the results are
+ * going to be.  By "countable" we mean "predictable from stored state,
+ * without searching every message".  Currently that means
+ *
+ * in message mode:
+ *    - total number of messages
+ *    - number unseen messages
+ *    - number seen messages (by inference)
+ *    - number recent messages
+ *    - number unrecent messages (by inference)
+ * in conversation mode:
+ *    - total number of conversations
+ *    - number of conversations with unseen messages
+ *    - number of conversations with no unseen messages (by inference)
+ *
+ * Returns a mask of SEC_* constants (e.g. SEC_SEEN) describing which
+ * countable attributes are specified by the expression. The special value
+ * SEC_UNCOUNTED means that at least one uncounted attribute was found.
+ * Mask values with more than one bit set are effectively uncountable.
+ *
+ * Note: the heuristics used here are intended for normalised search
+ * expressions, and may not work correctly otherwise.  In particular,
+ * SEC_NOT doesn't do quite what you expect.
+ */
+
+EXPORTED unsigned int search_expr_get_countability(const search_expr_t *e)
+{
+    const search_expr_t *child;
+    unsigned int mask = 0;
+
+    if (!e)
+	return 0;
+
+    if (e->op == SEOP_TRUE)
+	return SEC_EXISTS;
+    if (e->op == SEOP_FALSE)
+	return SEC_EXISTS|SEC_NOT;
+
+    if (e->op == SEOP_NOT)
+	mask |= SEC_NOT;
+
+    if (e->attr) {
+	if (e->attr->get_countability)
+	    mask |= e->attr->get_countability(&e->value);
+	else
+	    mask |= SEC_UNCOUNTED;
+    }
+
+    for (child = e->children ; child ; child = child->next)
+	mask |= search_expr_get_countability(child);
+
+    return mask;
+}
+
+/* ====================================================================== */
+
 static int search_string_match(message_t *m, const union search_value *v,
 				void *internalised, void *data1)
 {
@@ -1069,6 +1126,15 @@ static int search_indexflags_unserialise(struct protstream *prot, union search_v
     return c;
 }
 
+unsigned int search_indexflags_get_countability(const union search_value *v)
+{
+    switch (v->u) {
+    case MESSAGE_SEEN: return SEC_SEEN;
+    case MESSAGE_RECENT: return SEC_RECENT;
+    default: return SEC_UNCOUNTED;
+    }
+}
+
 /* ====================================================================== */
 
 static void search_keyword_internalise(struct mailbox *mailbox,
@@ -1179,6 +1245,12 @@ static int search_folder_match(message_t *m __attribute__((unused)),
 			       void *internalised, void *data1 __attribute__((unused)))
 {
     return (int)(unsigned long)internalised;
+}
+
+unsigned int search_folder_get_countability(const union search_value *v
+					    __attribute__((unused)))
+{
+    return 0;
 }
 
 /* ====================================================================== */
@@ -1401,6 +1473,13 @@ static int search_convflags_match(message_t *m,
     return r;
 }
 
+unsigned int search_convflags_get_countability(const union search_value *v)
+{
+    if (!strcasecmp(v->s, "\\Seen"))
+	return SEC_CONVSEEN;
+    return SEC_UNCOUNTED;
+}
+
 static void search_convmodseq_internalise(struct mailbox *mailbox,
 					  const union search_value *v __attribute__((unused)),
 					  void **internalisedp)
@@ -1587,6 +1666,7 @@ EXPORTED void search_attr_init(void)
 	    search_string_match,
 	    search_string_serialise,
 	    search_string_unserialise,
+	    /*get_countability*/NULL,
 	    search_string_duplicate,
 	    search_string_free,
 	    (void *)message_get_bcc
@@ -1598,6 +1678,7 @@ EXPORTED void search_attr_init(void)
 	    search_string_match,
 	    search_string_serialise,
 	    search_string_unserialise,
+	    /*get_countability*/NULL,
 	    search_string_duplicate,
 	    search_string_free,
 	    (void *)message_get_cc
@@ -1609,6 +1690,7 @@ EXPORTED void search_attr_init(void)
 	    search_string_match,
 	    search_string_serialise,
 	    search_string_unserialise,
+	    /*get_countability*/NULL,
 	    search_string_duplicate,
 	    search_string_free,
 	    (void *)message_get_from
@@ -1620,6 +1702,7 @@ EXPORTED void search_attr_init(void)
 	    search_string_match,
 	    search_string_serialise,
 	    search_string_unserialise,
+	    /*get_countability*/NULL,
 	    search_string_duplicate,
 	    search_string_free,
 	    (void *)message_get_messageid
@@ -1631,6 +1714,7 @@ EXPORTED void search_attr_init(void)
 	    search_listid_match,
 	    search_string_serialise,
 	    search_string_unserialise,
+	    /*get_countability*/NULL,
 	    search_string_duplicate,
 	    search_string_free,
 	    NULL
@@ -1642,6 +1726,7 @@ EXPORTED void search_attr_init(void)
 	    search_contenttype_match,
 	    search_string_serialise,
 	    search_string_unserialise,
+	    /*get_countability*/NULL,
 	    search_string_duplicate,
 	    search_string_free,
 	    NULL
@@ -1653,6 +1738,7 @@ EXPORTED void search_attr_init(void)
 	    search_string_match,
 	    search_string_serialise,
 	    search_string_unserialise,
+	    /*get_countability*/NULL,
 	    search_string_duplicate,
 	    search_string_free,
 	    (void *)message_get_subject
@@ -1664,6 +1750,7 @@ EXPORTED void search_attr_init(void)
 	    search_string_match,
 	    search_string_serialise,
 	    search_string_unserialise,
+	    /*get_countability*/NULL,
 	    search_string_duplicate,
 	    search_string_free,
 	    (void *)message_get_to
@@ -1675,6 +1762,7 @@ EXPORTED void search_attr_init(void)
 	    search_seq_match,
 	    search_seq_serialise,
 	    search_seq_unserialise,
+	    /*get_countability*/NULL,
 	    search_seq_duplicate,
 	    search_seq_free,
 	    (void *)message_get_msgno
@@ -1686,6 +1774,7 @@ EXPORTED void search_attr_init(void)
 	    search_seq_match,
 	    search_seq_serialise,
 	    search_seq_unserialise,
+	    /*get_countability*/NULL,
 	    search_seq_duplicate,
 	    search_seq_free,
 	    (void *)message_get_uid
@@ -1697,6 +1786,7 @@ EXPORTED void search_attr_init(void)
 	    search_flags_match,
 	    search_systemflags_serialise,
 	    search_systemflags_unserialise,
+	    /*get_countability*/NULL,
 	    /*duplicate*/NULL,
 	    /*free*/NULL,
 	    (void *)message_get_systemflags
@@ -1708,6 +1798,7 @@ EXPORTED void search_attr_init(void)
 	    search_flags_match,
 	    search_indexflags_serialise,
 	    search_indexflags_unserialise,
+	    search_indexflags_get_countability,
 	    /*duplicate*/NULL,
 	    /*free*/NULL,
 	    (void *)message_get_indexflags
@@ -1719,6 +1810,7 @@ EXPORTED void search_attr_init(void)
 	    search_keyword_match,
 	    search_string_serialise,
 	    search_string_unserialise,
+	    /*get_countability*/NULL,
 	    search_string_duplicate,
 	    search_string_free,
 	    NULL
@@ -1730,6 +1822,7 @@ EXPORTED void search_attr_init(void)
 	    search_convflags_match,
 	    search_string_serialise,
 	    search_string_unserialise,
+	    search_convflags_get_countability,
 	    search_string_duplicate,
 	    search_string_free,
 	    NULL
@@ -1741,6 +1834,7 @@ EXPORTED void search_attr_init(void)
 	    search_convmodseq_match,
 	    search_uint64_serialise,
 	    search_uint64_unserialise,
+	    /*get_countability*/NULL,
 	    /*duplicate*/NULL,
 	    /*free*/NULL,
 	    NULL
@@ -1752,6 +1846,7 @@ EXPORTED void search_attr_init(void)
 	    search_uint64_match,
 	    search_uint64_serialise,
 	    search_uint64_unserialise,
+	    /*get_countability*/NULL,
 	    /*duplicate*/NULL,
 	    /*free*/NULL,
 	    (void *)message_get_modseq
@@ -1763,6 +1858,7 @@ EXPORTED void search_attr_init(void)
 	    search_uint64_match,
 	    search_cid_serialise,
 	    search_cid_unserialise,
+	    /*get_countability*/NULL,
 	    /*duplicate*/NULL,
 	    /*free*/NULL,
 	    (void *)message_get_cid
@@ -1774,6 +1870,7 @@ EXPORTED void search_attr_init(void)
 	    search_folder_match,
 	    search_string_serialise,
 	    search_string_unserialise,
+	    search_folder_get_countability,
 	    search_string_duplicate,
 	    search_string_free,
 	    (void *)NULL
@@ -1785,6 +1882,7 @@ EXPORTED void search_attr_init(void)
 	    search_annotation_match,
 	    search_annotation_serialise,
 	    search_annotation_unserialise,
+	    /*get_countability*/NULL,
 	    search_annotation_duplicate,
 	    search_annotation_free,
 	    (void *)NULL
@@ -1796,6 +1894,7 @@ EXPORTED void search_attr_init(void)
 	    search_uint32_match,
 	    search_uint32_serialise,
 	    search_uint32_unserialise,
+	    /*get_countability*/NULL,
 	    /*duplicate*/NULL,
 	    /*free*/NULL,
 	    (void *)message_get_size
@@ -1807,6 +1906,7 @@ EXPORTED void search_attr_init(void)
 	    search_uint32_match,
 	    search_uint32_serialise,
 	    search_uint32_unserialise,
+	    /*get_countability*/NULL,
 	    /*duplicate*/NULL,
 	    /*free*/NULL,
 	    (void *)message_get_internaldate
@@ -1818,6 +1918,7 @@ EXPORTED void search_attr_init(void)
 	    search_uint32_match,
 	    search_uint32_serialise,
 	    search_uint32_unserialise,
+	    /*get_countability*/NULL,
 	    /*duplicate*/NULL,
 	    /*free*/NULL,
 	    (void *)message_get_sentdate
@@ -1829,6 +1930,7 @@ EXPORTED void search_attr_init(void)
 	    search_text_match,
 	    search_string_serialise,
 	    search_string_unserialise,
+	    /*get_countability*/NULL,
 	    search_string_duplicate,
 	    search_string_free,
 	    (void *)1	    /* skipheader flag */
@@ -1840,6 +1942,7 @@ EXPORTED void search_attr_init(void)
 	    search_text_match,
 	    search_string_serialise,
 	    search_string_unserialise,
+	    /*get_countability*/NULL,
 	    search_string_duplicate,
 	    search_string_free,
 	    (void *)0	    /* skipheader flag */
@@ -1885,6 +1988,7 @@ EXPORTED const search_attr_t *search_attr_find_field(const char *field)
 	search_header_match,
 	search_string_serialise,
 	search_string_unserialise,
+	/*get_countability*/NULL,
 	search_string_duplicate,
 	search_string_free,
 	NULL

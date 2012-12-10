@@ -92,6 +92,7 @@ struct search_attr {
     int (*match)(message_t *, const union search_value *, void *internalised, void *data1);
     void (*serialise)(struct buf *, const union search_value *);
     int (*unserialise)(struct protstream*, union search_value *);
+    unsigned int (*get_countability)(const union search_value *);
     void (*duplicate)(union search_value *, const union search_value *);
     void (*free)(union search_value *);
     void *data1;	/* extra data for the functions above */
@@ -108,6 +109,16 @@ struct search_expr {
     void *internalised;
 };
 
+/* flags for search_expr_get_countability */
+enum {
+    SEC_EXISTS =	    (1<<0),
+    SEC_RECENT =	    (1<<1),
+    SEC_SEEN =		    (1<<2),
+    SEC_CONVSEEN =	    (1<<3),
+    SEC_NOT =		    (1<<29),
+    SEC_UNCOUNTED =	    (1<<30),
+};
+
 extern search_expr_t *search_expr_new(search_expr_t *parent,
 				      enum search_op);
 extern void search_expr_free(search_expr_t *);
@@ -119,6 +130,7 @@ extern void search_expr_internalise(struct mailbox *, search_expr_t *);
 extern int search_expr_evaluate(message_t *m, const search_expr_t *);
 extern int search_expr_uses_attr(const search_expr_t *, const char *);
 extern int search_expr_is_mutable(const search_expr_t *);
+extern unsigned int search_expr_get_countability(const search_expr_t *);
 
 extern void search_attr_init(void);
 extern const search_attr_t *search_attr_find(const char *);

@@ -1024,6 +1024,45 @@ static void test_normalise(void)
 #undef TESTCASE
 }
 
+static void test_countability(void)
+{
+#define TESTCASE(in, exp) \
+    { \
+	static const char _in[] = (in); \
+	unsigned int expected = (exp); \
+	search_expr_t *e; \
+	unsigned int actual; \
+ \
+	e = search_expr_unserialise(_in); \
+	CU_ASSERT_PTR_NOT_NULL_FATAL(e); \
+	actual = search_expr_get_countability(e); \
+	CU_ASSERT_EQUAL(actual, expected); \
+	search_expr_free(e); \
+    }
+
+    TESTCASE("(true)", SEC_EXISTS);
+    TESTCASE("(not (true))", SEC_EXISTS|SEC_NOT);
+    // The case (not (false)) doesn't work properly, but this
+    // doesn't matter because it will not occur in trees
+    // generated from IMAP syntax.
+    TESTCASE("(match indexflags \\Recent)", SEC_RECENT);
+    TESTCASE("(not (match indexflags \\Recent))", SEC_RECENT|SEC_NOT);
+    TESTCASE("(match indexflags \\Seen)", SEC_SEEN);
+    TESTCASE("(not (match indexflags \\Seen))", SEC_SEEN|SEC_NOT);
+    TESTCASE("(match convflags \\Seen)", SEC_CONVSEEN);
+    TESTCASE("(not (match convflags \\Seen))", SEC_CONVSEEN|SEC_NOT);
+    TESTCASE("(match subject \"ETSY\")", SEC_UNCOUNTED);
+    TESTCASE("(not (match subject \"ETSY\"))", SEC_UNCOUNTED|SEC_NOT);
+    TESTCASE("(and (match indexflags \\Seen) (match subject \"ETSY\"))",
+	     SEC_UNCOUNTED|SEC_SEEN);
+    TESTCASE("(not (and (match indexflags \\Seen) (match subject \"ETSY\")))",
+	     SEC_UNCOUNTED|SEC_SEEN|SEC_NOT);
+    TESTCASE("(and (not (match indexflags \\Seen)) (match subject \"ETSY\"))",
+	     SEC_UNCOUNTED|SEC_SEEN|SEC_NOT);
+
+#undef TESTCASE
+}
+
 static int set_up(void)
 {
     int r;

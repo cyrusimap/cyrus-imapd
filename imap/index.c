@@ -2002,111 +2002,6 @@ static int is_mutable_ordering(struct sortcrit *sortcrit,
     return 0;
 }
 
-/*
- * Analyse @searchargs to discover how countable the results are
- * going to be.  By "countable" we mean "predictable from stored
- * state, without searching every message".  Currently that means
- *
- * in message mode:
- *    - total number of messages
- *    - number unseen messages
- *    - number seen messages (by inference)
- *    - number recent messages
- *    - number unrecent messages (by inference)
- * in conversation mode:
- *    - total number of conversations
- *    - number of conversations with unseen messages
- *    - number of conversations with no unseen messages (by inference)
- *
- * Returns a mask of SEARCH_* constants (e.g. SEARCH_SEEN_SET)
- * describing which countable attributes are specified by @searchargs.
- * The special value SEARCH_UNCOUNTED means that at least one uncounted
- * attribute was found.  Mask values with more than one bit set are
- * effectively uncountable.  A mask value of zero means that the search
- * program is empty, which is countable.
- */
-
-#define SEARCH_NOT		(1<<29)
-#define SEARCH_UNCOUNTED	(1<<30)
-static unsigned int search_countability(const struct searchargs *searchargs)
-{
-    int i;
-    unsigned int mask = 0;
-    const struct searchsub *sub;
-
-    if (!searchargs)
-	return 0;
-
-    /*
-     * TODO: for SEARCH_SEEN_SET, SEARCH_SEEN_UNSET this is only correct
-     * if the user is looking at his own mailbox.
-     */
-    mask |= (searchargs->flags & SEARCH_COUNTEDFLAGS);
-    if ((searchargs->flags & ~SEARCH_COUNTEDFLAGS))
-	mask |= SEARCH_UNCOUNTED;
-
-    /* time and size based searches are not counted */
-    if (searchargs->smaller || searchargs->larger)
-	mask |= SEARCH_UNCOUNTED;
-    if (searchargs->before || searchargs->after)
-	mask |= SEARCH_UNCOUNTED;
-    if (searchargs->sentbefore || searchargs->sentafter)
-	mask |= SEARCH_UNCOUNTED;
-
-    /* flags are not counted */
-    if (searchargs->system_flags_set)
-	mask |= SEARCH_UNCOUNTED;
-    if (searchargs->system_flags_unset)
-	mask |= SEARCH_UNCOUNTED;
-    for (i = 0; i < MAX_USER_FLAGS/32; i++) {
-	if (searchargs->user_flags_set[i])
-	    mask |= SEARCH_UNCOUNTED;
-	if (searchargs->user_flags_unset[i])
-	    mask |= SEARCH_UNCOUNTED;
-    }
-    if (searchargs->convflags)
-	mask |= SEARCH_UNCOUNTED;
-
-    /* sequences are not counted, because the sequence might
-     * run off the end of the mailbox or might include expunged
-     * messages */
-    if (searchargs->sequence || searchargs->uidsequence)
-	mask |= SEARCH_UNCOUNTED;
-
-    /* searches on body or headers are not counted */
-    if (searchargs->from ||
-        searchargs->to ||
-        searchargs->cc ||
-        searchargs->bcc ||
-        searchargs->subject ||
-        searchargs->messageid ||
-        searchargs->body ||
-        searchargs->text ||
-        searchargs->header_name ||
-        searchargs->header)
-	mask |= SEARCH_UNCOUNTED;
-
-    /* classify sub expressions too */
-    for (sub = searchargs->sublist; sub; sub = sub->next) {
-	mask |= search_countability(sub->sub1);
-	mask |= search_countability(sub->sub2);
-	if (!sub->sub2)
-	    mask ^= SEARCH_NOT;
-    }
-
-    /* modseq is not counted */
-    if (searchargs->modseq)
-	mask |= SEARCH_UNCOUNTED;
-    if (searchargs->convmodseq)
-	mask |= SEARCH_UNCOUNTED;
-
-    /* annotations are not counted */
-    if (searchargs->annotations)
-	mask |= SEARCH_UNCOUNTED;
-
-    return mask;
-}
-
 #define UNPREDICTABLE	    (-1)
 static int search_predict_total(struct index_state *state,
 				struct conversations_state *cstate,
@@ -2130,28 +2025,27 @@ static int search_predict_total(struct index_state *state,
 	exists = state->exists - state->num_expunged;
     }
 
-    switch (search_countability(searchargs)) {
-    case 0:
+    switch (search_expr_get_countability(searchargs->root)) {
+    case SEC_EXISTS:
 	return exists;
 
+    case SEC_EXISTS|SEC_NOT:
+	return 0;
+
     /* we don't try to optimise searches on \Recent */
-    case SEARCH_SEEN_SET:
-    case SEARCH_SEEN_UNSET|SEARCH_NOT:
+    case SEC_SEEN:
 	assert(state->exists >= state->numunseen);
 	return state->exists - state->numunseen;
 
-    case SEARCH_SEEN_UNSET:
-    case SEARCH_SEEN_SET|SEARCH_NOT:
+    case SEC_SEEN|SEC_NOT:
 	return state->numunseen;
 
-    case SEARCH_CONVSEEN_SET:
-    case SEARCH_CONVSEEN_UNSET|SEARCH_NOT:
+    case SEC_CONVSEEN:
 	assert(conversations);
 	assert(convstatus.exists >= convstatus.unseen);
 	return convstatus.exists - convstatus.unseen;
 
-    case SEARCH_CONVSEEN_UNSET:
-    case SEARCH_CONVSEEN_SET|SEARCH_NOT:
+    case SEC_CONVSEEN|SEC_NOT:
 	assert(conversations);
 	return convstatus.unseen;
 
