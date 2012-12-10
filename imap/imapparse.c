@@ -681,6 +681,17 @@ static void indexflag_match(search_expr_t *parent, unsigned int flag, int not)
     e->value.u = flag;
 }
 
+static void convflag_match(search_expr_t *parent, const char *flagname, int not)
+{
+    search_expr_t *e;
+
+    if (not)
+	parent = search_expr_new(parent, SEOP_NOT);
+    e = search_expr_new(parent, SEOP_MATCH);
+    e->attr = search_attr_find("convflags");
+    e->value.s = xstrdup(flagname);
+}
+
 static void date_range(search_expr_t *parent, const char *aname,
 		       time_t start, time_t end)
 {
@@ -809,31 +820,19 @@ static int get_search_criterion(struct protstream *pin,
 	    if (c != ' ') goto missingarg;
 	    c = getword(pin, &arg);
 	    lcase(arg.s);
-	    e = search_expr_new(parent, SEOP_MATCH);
-	    e->attr = search_attr_find("convflags");
-	    e->value.s = xstrdup(arg.s);
+	    convflag_match(parent, arg.s, /*not*/0);
 	}
 	else if (hasconv && !strcmp(criteria.s, "convread")) {
-	    e = search_expr_new(parent, SEOP_MATCH);
-	    e->attr = search_attr_find("convflags");
-	    e->value.s = xstrdup("\\Seen");
+	    convflag_match(parent, "\\Seen", /*not*/0);
 	}
 	else if (hasconv && !strcmp(criteria.s, "convunread")) {
-	    e = search_expr_new(parent, SEOP_NOT);
-	    e = search_expr_new(e, SEOP_MATCH);
-	    e->attr = search_attr_find("convflags");
-	    e->value.s = xstrdup("\\Seen");
+	    convflag_match(parent, "\\Seen", /*not*/1);
 	}
 	else if (hasconv && !strcmp(criteria.s, "convseen")) {
-	    e = search_expr_new(parent, SEOP_MATCH);
-	    e->attr = search_attr_find("convflags");
-	    e->value.s = xstrdup("\\Seen");
+	    convflag_match(parent, "\\Seen", /*not*/0);
 	}
 	else if (hasconv && !strcmp(criteria.s, "convunseen")) {
-	    e = search_expr_new(parent, SEOP_NOT);
-	    e = search_expr_new(e, SEOP_MATCH);
-	    e->attr = search_attr_find("convflags");
-	    e->value.s = xstrdup("\\Seen");
+	    convflag_match(parent, "\\Seen", /*not*/1);
 	}
 	else if (hasconv && !strcmp(criteria.s, "convmodseq")) {
 	    modseq_t ms;
