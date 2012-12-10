@@ -131,13 +131,6 @@ static void index_fetchflags(struct index_state *state, uint32_t msgno);
 static int index_search_evaluate(struct index_state *state,
 				 const struct searchargs *searchargs,
 				 uint32_t msgno);
-#if 0 /*TODO:gnb*/
-static int index_searchheader(char *name, char *substr, comp_pat *pat,
-			      struct buf *buf,
-			      int size);
-static int index_searchcacheheader(struct index_state *state, uint32_t msgno, char *name, char *substr,
-				   comp_pat *pat);
-#endif
 static int _index_search(unsigned **msgno_list, struct index_state *state,
 			 struct searchargs *searchargs,
 			 modseq_t *highestmodseq);
@@ -5645,6 +5638,7 @@ static int index_store_annotation(struct index_state *state,
     int r;
 
     r = index_reload_record(state, msgno, &record);
+    if (r) goto out;
 
     oldmodseq = record.modseq;
 
@@ -5671,49 +5665,6 @@ out:
 }
 
 
-#if 0
-static int _search_searchbuf(char *s, comp_pat *p, struct buf *b)
-{
-    if (!b->len)
-	return 0;
-
-    return charset_searchstring(s, p, b->s, b->len, charset_flags);
-}
-
-static int _search_contenttype(const char *str, struct buf *bodystructure)
-{
-    const char *p = NULL;
-    comp_pat *xpat = NULL;
-    int r = 0;
-    struct buf xstr = BUF_INITIALIZER;
-
-    /* Adjust the pattern to mostly almost match what's in the
-     * BODYSTRUCTURE.  This is a quick and nasty hack, you really
-     * should be using the search engine support for indexing
-     * content-types instead.  */
-
-    buf_putc(&xstr, '"');
-    p = strchr(str, '_');
-    if (p) {
-	buf_appendmap(&xstr, str, p-str);
-	buf_appendcstr(&xstr, "\" \"");
-	buf_appendcstr(&xstr, p+1);
-    }
-    else {
-	buf_appendcstr(&xstr, str);
-    }
-    buf_putc(&xstr, '"');
-    buf_cstring(&xstr);
-    xpat = charset_compilepat(buf_cstring(&xstr));
-
-    r = _search_searchbuf(xstr.s, xpat, bodystructure);
-
-    charset_freepat(xpat);
-    buf_free(&xstr);
-    return r;
-}
-#endif
-
 /*
  * Evaluate a searchargs structure on a msgno
  */
@@ -5721,332 +5672,24 @@ static int index_search_evaluate(struct index_state *state,
 				 const struct searchargs *searchargs,
 				 uint32_t msgno)
 {
-#if 0
-    unsigned i;
-    struct strlist *l, *h;
-    struct searchsub *s;
-    struct seqset *seq;
-    struct index_map *im = &state->map[msgno-1];
-    struct index_record record;
-    conversation_t *conv = NULL;
-    struct searchannot *sa;
-    struct buf localbuf = BUF_INITIALIZER;
-    int retval = 0;
-
-    if (index_reload_record(state, msgno, &record))
-	goto zero;
-
-    if (!buf) xstats_inc(SEARCH_EVALUATE);
-    if (!buf) buf = &localbuf;
-
-    if ((searchargs->flags & SEARCH_RECENT_SET) && !im->isrecent)
-	goto zero;
-    if ((searchargs->flags & SEARCH_RECENT_UNSET) && im->isrecent)
-	goto zero;
-    if ((searchargs->flags & SEARCH_SEEN_SET) && !im->isseen)
-	goto zero;
-    if ((searchargs->flags & SEARCH_SEEN_UNSET) && im->isseen)
-	goto zero;
-
-    if (searchargs->smaller && record.size >= searchargs->smaller)
-	goto zero;
-    if (searchargs->larger && record.size <= searchargs->larger)
-	goto zero;
-
-    if (searchargs->after && record.internaldate < searchargs->after)
-	goto zero;
-    if (searchargs->before && record.internaldate >= searchargs->before)
-	goto zero;
-    if (searchargs->sentafter && record.sentdate < searchargs->sentafter)
-	goto zero;
-    if (searchargs->sentbefore && record.sentdate >= searchargs->sentbefore)
-	goto zero;
-
-    if (searchargs->modseq && record.modseq < searchargs->modseq)
-	goto zero;
-
-    if (~record.system_flags & searchargs->system_flags_set)
-	goto zero;
-    if (record.system_flags & searchargs->system_flags_unset)
-	goto zero;
-
-    for (i = 0; i < (MAX_USER_FLAGS/32); i++) {
-	if (~record.user_flags[i] & searchargs->user_flags_set[i])
-	    goto zero;
-	if (record.user_flags[i] & searchargs->user_flags_unset[i])
-	    goto zero;
-    }
-
-    for (seq = searchargs->sequence; seq; seq = seq->nextseq) {
-	if (!seqset_ismember(seq, msgno)) goto zero;
-    }
-    for (seq = searchargs->uidsequence; seq; seq = seq->nextseq) {
-	if (!seqset_ismember(seq, record.uid)) goto zero;
-    }
-
-    for (l = searchargs->folder; l; l = l->next) {
-	if (strcmpsafe(l->s, state->mailbox->name)) goto zero;
-    }
-
-    if (searchargs->from || searchargs->to || searchargs->cc ||
-	searchargs->bcc || searchargs->subject || searchargs->messageid ||
-	searchargs->contenttype) {
-
-	if (mailbox_cacherecord(state->mailbox, &record))
-	    goto zero;
-
-	if (searchargs->messageid) {
-	    char *tmpenv;
-	    char *envtokens[NUMENVTOKENS];
-	    char *msgid;
-	    int msgidlen;
-
-	    /* must be long enough to actually HAVE some contents */
-	    if (cacheitem_size(&record, CACHE_ENVELOPE) <= 2)
-		goto zero;
-
-	    /* get msgid out of the envelope */
-
-	    /* get a working copy; strip outer ()'s */
-	    /* +1 -> skip the leading paren */
-	    /* -2 -> don't include the size of the outer parens */
-	    tmpenv = xstrndup(cacheitem_base(&record, CACHE_ENVELOPE) + 1, 
-			      cacheitem_size(&record, CACHE_ENVELOPE) - 2);
-	    parse_cached_envelope(tmpenv, envtokens, VECTOR_SIZE(envtokens));
-
-	    if (!envtokens[ENV_MSGID]) {
-		/* free stuff */
-		free(tmpenv);
-		goto zero;
-	    }
-
-	    msgid = lcase(envtokens[ENV_MSGID]);
-	    msgidlen = strlen(msgid);
-	    for (l = searchargs->messageid; l; l = l->next) {
-		if (!charset_searchstring(l->s, l->p, msgid, msgidlen, charset_flags))
-		    break;
-	    }
-
-	    /* free stuff */
-	    free(tmpenv);
-
-	    if (l) goto zero;
-	}
-
-	for (l = searchargs->from; l; l = l->next) {
-	    if (!_search_searchbuf(l->s, l->p, cacheitem_buf(&record, CACHE_FROM)))
-		goto zero;
-	}
-
-	for (l = searchargs->to; l; l = l->next) {
-	    if (!_search_searchbuf(l->s, l->p, cacheitem_buf(&record, CACHE_TO)))
-		goto zero;
-	}
-
-	for (l = searchargs->cc; l; l = l->next) {
-	    if (!_search_searchbuf(l->s, l->p, cacheitem_buf(&record, CACHE_CC)))
-		goto zero;
-	}
-
-	for (l = searchargs->bcc; l; l = l->next) {
-	    if (!_search_searchbuf(l->s, l->p, cacheitem_buf(&record, CACHE_BCC)))
-		goto zero;
-	}
-
-	for (l = searchargs->subject; l; l = l->next) {
-	    if ((cacheitem_size(&record, CACHE_SUBJECT) == 3 && 
-		!strncmp(cacheitem_base(&record, CACHE_SUBJECT), "NIL", 3)) ||
-		!_search_searchbuf(l->s, l->p, cacheitem_buf(&record, CACHE_SUBJECT)))
-		goto zero;
-	}
-
-	for (l = searchargs->contenttype; l; l = l->next) {
-	    if (!_search_contenttype(l->s, cacheitem_buf(&im->record, CACHE_BODYSTRUCTURE)))
-		goto zero;
-	}
-    }
-
-    for (sa = searchargs->annotations ; sa ; sa = sa->next) {
-	if (!_search_annotation(state, msgno, sa))
-	    goto zero;
-    }
-
-    for (s = searchargs->sublist; s; s = s->next) {
-	if (index_search_evaluate(state, s->sub1, msgno, buf)) {
-	    if (!s->sub2) goto zero;
-	}
-	else {
-	    if (s->sub2 &&
-		!index_search_evaluate(state, s->sub2, msgno, buf))
-	      goto zero;
-	}
-    }
-
-    if (searchargs->body || searchargs->text || searchargs->listid ||
-	searchargs->cache_atleast > record.cache_version) {
-	if (!buf->len) { /* Map the message in if we haven't before */
-	    if (mailbox_map_record(state->mailbox, &record, buf))
-		goto zero;
-	}
-
-	h = searchargs->header_name;
-	for (l = searchargs->header; l; (l = l->next), (h = h->next)) {
-	    if (!index_searchheader(h->s, l->s, l->p, buf,
-				    record.header_size)) goto zero;
-	}
-
-	for (l = searchargs->listid; l; l = l->next) {
-	    if (!index_searchheader("List-Id", l->s, l->p, msgfile,
-				    record.header_size) &&
-		!index_searchheader("Mailing-List", l->s, l->p, msgfile,
-				    record.header_size))
-		goto zero;
-	}
-
-	if (mailbox_cacherecord(mailbox, &record))
-	    goto zero;
-
-	for (l = searchargs->body; l; l = l->next) {
-	    if (!index_searchmsg(&record, buf, l->s, l->p, 1)) goto zero;
-	}
-	for (l = searchargs->text; l; l = l->next) {
-	    if (!index_searchmsg(&record, buf, l->s, l->p, 0)) goto zero;
-	}
-    }
-    else if (searchargs->header_name) {
-	h = searchargs->header_name;
-	for (l = searchargs->header; l; (l = l->next), (h = h->next)) {
-	    if (!index_searchcacheheader(state, msgno, h->s, l->s, l->p))
-		goto zero;
-	}
-    }
-
-    if (searchargs->convmodseq || searchargs->convflags ||
-	searchargs->flags & (SEARCH_CONVSEEN_SET | SEARCH_CONVSEEN_UNSET)) {
-	struct conversations_state *cstate = conversations_get_mbox(state->mailbox->name);
-	if (!cstate) goto zero;
-	if (conversation_load(cstate, record.cid, &conv))
-	    goto zero;
-	if (!conv) conv = conversation_new(cstate);
-
-	/* got a conversation, let's check it */
-	if (searchargs->convmodseq && conv->modseq < searchargs->convmodseq)
-	    goto zero;
-
-	if ((searchargs->flags & SEARCH_CONVSEEN_SET) && conv->unseen)
-	    goto zero;
-
-	if ((searchargs->flags & SEARCH_CONVSEEN_UNSET) && !conv->unseen)
-	    goto zero;
-
-	for (l = searchargs->convflags; l; l = l->next) {
-	    int idx = strarray_find_case(cstate->counted_flags, l->s, 0);
-	    if (idx < 0)
-		goto zero;
-	    if (!conv->counts[idx])
-		goto zero;
-	}
-    }
-
-    retval = 1;
-
-zero:
-    /* free conversation data */
-    conversation_free(conv);
-
-    /* unmap if we mapped it */
-    buf_free(&localbuf);
-
-    return retval;
-#else
     struct index_map *im = &state->map[msgno-1];
     int r;
     message_t *m;
+    struct index_record record;
+
+    r = index_reload_record(state, msgno, &record);
+    if (r) return r;
 
     xstats_inc(SEARCH_EVALUATE);
 
-    m = message_new_from_index(state->mailbox, &im->record, msgno,
+    m = message_new_from_index(state->mailbox, &record, msgno,
 			       (im->isrecent ? MESSAGE_RECENT : 0) |
 			       (im->isseen ? MESSAGE_SEEN : 0));
     r = search_expr_evaluate(m, searchargs->root);
     message_unref(&m);
 
     return r;
-#endif
 }
-
-#if 0 /*TODO:gnb*/
-/*
- * Search named header of a message for a substring
- */
-static int index_searchheader(char *name,
-			      char *substr,
-			      comp_pat *pat,
-			      struct buf *buf,
-			      int size)
-{
-    char *p;
-    strarray_t header = STRARRAY_INITIALIZER;
-
-    xstats_inc(SEARCH_HEADER);
-
-    strarray_append(&header, name);
-
-    p = index_readheader(buf->s, buf->len, 0, size);
-    message_pruneheader(p, &header, 0);
-    strarray_fini(&header);
-
-    if (!*p) return 0;		/* Header not present, fail */
-    if (!*substr) return 1;	/* Only checking existence, succeed */
-
-    return charset_search_mimeheader(substr, pat, strchr(p, ':') + 1, charset_flags);
-}
-
-/*
- * Search named cached header of a message for a substring
- */
-static int index_searchcacheheader(struct index_state *state, uint32_t msgno,
-				   char *name, char *substr, comp_pat *pat)
-{
-    strarray_t header = STRARRAY_INITIALIZER;
-    static char *buf;
-    static unsigned bufsize;
-    unsigned size;
-    int r;
-    struct mailbox *mailbox = state->mailbox;
-    struct index_record record;
-
-    r = index_reload_record(state, msgno, &record);
-    if (r) return 0;
-
-    xstats_inc(SEARCH_CACHE_HEADER);
-
-    r = mailbox_cacherecord(mailbox, &record);
-    if (r) return 0;
-
-    size = cacheitem_size(&record, CACHE_HEADERS);
-    if (!size) return 0;	/* No cached headers, fail */
-    
-    if (bufsize < size+2) {
-	bufsize = size+100;
-	buf = xrealloc(buf, bufsize);
-    }
-
-    /* Copy this item to the buffer */
-    memcpy(buf, cacheitem_base(&record, CACHE_HEADERS), size);
-    buf[size] = '\0';
-
-    strarray_append(&header, name);
-    message_pruneheader(buf, &header, 0);
-    strarray_fini(&header);
-
-    if (!*buf) return 0;	/* Header not present, fail */
-    if (!*substr) return 1;	/* Only checking existence, succeed */
-
-    return charset_search_mimeheader(substr, pat, strchr(buf, ':') + 1, charset_flags);
-}
-#endif
-
 
 struct getsearchtext_rock
 {

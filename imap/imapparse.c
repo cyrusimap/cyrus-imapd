@@ -710,10 +710,6 @@ static int get_search_criterion(struct protstream *pin,
     search_expr_t *e;
     int c;
     int keep_charset = 0;
-    char *str;
-#if 0
-    char *p;
-#endif
     time_t start, end, now = time(0);
     uint32_t u;
     int hasconv = config_getswitch(IMAPOPT_CONVERSATIONS);
