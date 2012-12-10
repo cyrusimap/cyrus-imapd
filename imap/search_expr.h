@@ -77,9 +77,15 @@ union search_value {
     struct seqset *seq;
 };
 
+/* search_attr.flags */
+enum {
+    SEA_MUTABLE =	(1<<0),
+};
+
 typedef struct search_attr search_attr_t;
 struct search_attr {
     const char *name;
+    int flags;
     void (*internalise)(struct mailbox *, const union search_value *,
 		       void **internalisedp);
     int (*cmp)(message_t *, const union search_value *, void *internalised, void *data1);
@@ -112,6 +118,7 @@ extern void search_expr_normalise(search_expr_t **);
 extern void search_expr_internalise(struct mailbox *, search_expr_t *);
 extern int search_expr_evaluate(message_t *m, const search_expr_t *);
 extern int search_expr_uses_attr(const search_expr_t *, const char *);
+extern int search_expr_is_mutable(const search_expr_t *);
 
 extern void search_attr_init(void);
 extern const search_attr_t *search_attr_find(const char *);

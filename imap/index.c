@@ -1987,58 +1987,6 @@ static int is_mutable_sort(struct sortcrit *sortcrit)
     return 0;
 }
 
-static int is_mutable_search(struct searchargs *searchargs)
-{
-    int i;
-    struct searchsub *sub;
-
-    if (!searchargs) return 0;
-
-    /* flags are mutable */
-    if (searchargs->system_flags_set)
-	return 1;
-    if (searchargs->system_flags_unset)
-	return 1;
-    for (i = 0; i < MAX_USER_FLAGS/32; i++) {
-	if (searchargs->user_flags_set[i])
-	    return 1;
-	if (searchargs->user_flags_unset[i])
-	    return 1;
-    }
-    if (searchargs->convflags)
-	return 1;
-
-    /* searches by per-user fields are mutable */
-    if (searchargs->flags & SEARCH_MUTABLEFLAGS)
-	return 1;
-
-    /* modseq is mutable */
-    if (searchargs->modseq)
-	return 1;
-    if (searchargs->convmodseq)
-	return 1;
-
-    /* annotations are mutable */
-    if (searchargs->annotations)
-	return 1;
-
-    /* if any sub expression is mutable, this is mutable */
-    for (sub = searchargs->sublist; sub; sub = sub->next) {
-	if (is_mutable_search(sub->sub1))
-	    return 1;
-	if (is_mutable_search(sub->sub2))
-	    return 1;
-    }
-
-    /* NOTE: older than 'N' days will be a mutable search of course,
-     * but that fact isn't available down here - we only know the
-     * date range itself, and that isn't mutable.  So if you need
-     * immutable results, you'll need to maintain a fixed date range
-     * up in the higher level */
-
-    return 0;
-}
-
 /* This function will return a TRUE value if anything in the
  * sort or search criteria returns a MUTABLE ordering, i.e.
  * the user can take actions which will change the order in
@@ -2049,7 +1997,7 @@ static int is_mutable_ordering(struct sortcrit *sortcrit,
 {
     if (is_mutable_sort(sortcrit))
 	return 1;
-    if (is_mutable_search(searchargs))
+    if (search_expr_is_mutable(searchargs->root))
 	return 1;
     return 0;
 }

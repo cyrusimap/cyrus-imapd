@@ -761,6 +761,41 @@ EXPORTED int search_expr_uses_attr(const search_expr_t *e, const char *name)
 
 /* ====================================================================== */
 
+    /* NOTE: older than 'N' days will be a mutable search of course,
+     * but that fact isn't available down here - we only know the
+     * date range itself, and that isn't mutable.  So if you need
+     * immutable results, you'll need to maintain a fixed date range
+     * up in the higher level */
+
+
+/*
+ * Return non-zero if the search expression is mutable, i.e. it might
+ * return a different set of messages if run again, assuming that
+ *
+ * a) no folders covered by the search have received new messages, and
+ * b) uidvalidities of folders covered by the search have not changed.
+ *
+ * Basically, mutable searches are on attributes of a message which are
+ * not derived solely from the message text itself and can be changed after
+ * the message is inserted.  For example: system flags are mutable, the
+ * From: header field is not.
+ */
+EXPORTED int search_expr_is_mutable(const search_expr_t *e)
+{
+    const search_expr_t *child;
+
+    if (e->attr && (e->attr->flags & SEA_MUTABLE))
+	return 1;
+
+    for (child = e->children ; child ; child = child->next)
+	if (search_expr_is_mutable(child))
+	    return 1;
+
+    return 0;
+}
+
+/* ====================================================================== */
+
 static int search_string_match(message_t *m, const union search_value *v,
 				void *internalised, void *data1)
 {
@@ -1555,6 +1590,7 @@ EXPORTED void search_attr_init(void)
     static const search_attr_t attrs[] = {
 	{
 	    "bcc",
+	    /*flags*/0,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_string_match,
@@ -1565,6 +1601,7 @@ EXPORTED void search_attr_init(void)
 	    (void *)message_get_bcc
 	},{
 	    "cc",
+	    /*flags*/0,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_string_match,
@@ -1575,6 +1612,7 @@ EXPORTED void search_attr_init(void)
 	    (void *)message_get_cc
 	},{
 	    "from",
+	    /*flags*/0,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_string_match,
@@ -1585,6 +1623,7 @@ EXPORTED void search_attr_init(void)
 	    (void *)message_get_from
 	},{
 	    "message-id",
+	    /*flags*/0,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_string_match,
@@ -1595,6 +1634,7 @@ EXPORTED void search_attr_init(void)
 	    (void *)message_get_messageid
 	},{
 	    "listid",
+	    /*flags*/0,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_listid_match,
@@ -1605,6 +1645,7 @@ EXPORTED void search_attr_init(void)
 	    NULL
 	},{
 	    "contenttype",
+	    /*flags*/0,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_contenttype_match,
@@ -1615,6 +1656,7 @@ EXPORTED void search_attr_init(void)
 	    NULL
 	},{
 	    "subject",
+	    /*flags*/0,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_string_match,
@@ -1625,6 +1667,7 @@ EXPORTED void search_attr_init(void)
 	    (void *)message_get_subject
 	},{
 	    "to",
+	    /*flags*/0,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_string_match,
@@ -1635,6 +1678,7 @@ EXPORTED void search_attr_init(void)
 	    (void *)message_get_to
 	},{
 	    "msgno",
+	    SEA_MUTABLE,
 	    /*internalise*/NULL,
 	    /*cmp*/NULL,
 	    search_seq_match,
@@ -1645,6 +1689,7 @@ EXPORTED void search_attr_init(void)
 	    (void *)message_get_msgno
 	},{
 	    "uid",
+	    /*flags*/0,
 	    /*internalise*/NULL,
 	    /*cmp*/NULL,
 	    search_seq_match,
@@ -1655,6 +1700,7 @@ EXPORTED void search_attr_init(void)
 	    (void *)message_get_uid
 	},{
 	    "systemflags",
+	    SEA_MUTABLE,
 	    /*internalise*/NULL,
 	    /*cmp*/NULL,
 	    search_flags_match,
@@ -1665,6 +1711,7 @@ EXPORTED void search_attr_init(void)
 	    (void *)message_get_systemflags
 	},{
 	    "indexflags",
+	    SEA_MUTABLE,
 	    /*internalise*/NULL,
 	    /*cmp*/NULL,
 	    search_flags_match,
@@ -1675,6 +1722,7 @@ EXPORTED void search_attr_init(void)
 	    (void *)message_get_indexflags
 	},{
 	    "keyword",
+	    SEA_MUTABLE,
 	    search_keyword_internalise,
 	    /*cmp*/NULL,
 	    search_keyword_match,
@@ -1685,6 +1733,7 @@ EXPORTED void search_attr_init(void)
 	    NULL
 	},{
 	    "convflags",
+	    SEA_MUTABLE,
 	    search_convflags_internalise,
 	    /*cmp*/NULL,
 	    search_convflags_match,
@@ -1695,6 +1744,7 @@ EXPORTED void search_attr_init(void)
 	    NULL
 	},{
 	    "convmodseq",
+	    SEA_MUTABLE,
 	    search_convmodseq_internalise,
 	    /*cmp*/NULL,
 	    search_convmodseq_match,
@@ -1705,6 +1755,7 @@ EXPORTED void search_attr_init(void)
 	    NULL
 	},{
 	    "modseq",
+	    SEA_MUTABLE,
 	    /*internalise*/NULL,
 	    /*cmp*/NULL,
 	    search_uint64_match,
@@ -1715,6 +1766,7 @@ EXPORTED void search_attr_init(void)
 	    (void *)message_get_modseq
 	},{
 	    "cid",
+	    SEA_MUTABLE,
 	    /*internalise*/NULL,
 	    /*cmp*/NULL,
 	    search_uint64_match,
@@ -1725,6 +1777,7 @@ EXPORTED void search_attr_init(void)
 	    (void *)message_get_cid
 	},{
 	    "folder",
+	    /*flags*/0,
 	    search_folder_internalise,
 	    /*cmp*/NULL,
 	    search_folder_match,
@@ -1735,6 +1788,7 @@ EXPORTED void search_attr_init(void)
 	    (void *)NULL
 	},{
 	    "annotation",
+	    SEA_MUTABLE,
 	    search_annotation_internalise,
 	    /*cmp*/NULL,
 	    search_annotation_match,
@@ -1745,6 +1799,7 @@ EXPORTED void search_attr_init(void)
 	    (void *)NULL
 	},{
 	    "size",
+	    /*flags*/0,
 	    /*internalise*/NULL,
 	    search_uint32_cmp,
 	    search_uint32_match,
@@ -1755,6 +1810,7 @@ EXPORTED void search_attr_init(void)
 	    (void *)message_get_size
 	},{
 	    "internaldate",
+	    /*flags*/0,
 	    /*internalise*/NULL,
 	    search_uint32_cmp,
 	    search_uint32_match,
@@ -1765,6 +1821,7 @@ EXPORTED void search_attr_init(void)
 	    (void *)message_get_internaldate
 	},{
 	    "sentdate",
+	    /*flags*/0,
 	    /*internalise*/NULL,
 	    search_uint32_cmp,
 	    search_uint32_match,
@@ -1775,6 +1832,7 @@ EXPORTED void search_attr_init(void)
 	    (void *)message_get_sentdate
 	},{
 	    "body",
+	    /*flags*/0,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_text_match,
@@ -1785,6 +1843,7 @@ EXPORTED void search_attr_init(void)
 	    (void *)1	    /* skipheader flag */
 	},{
 	    "text",
+	    /*flags*/0,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_text_match,
@@ -1829,6 +1888,7 @@ EXPORTED const search_attr_t *search_attr_find_field(const char *field)
     char *key = NULL;
     static const search_attr_t proto = {
 	"name",
+	/*flags*/0,
 	search_string_internalise,
 	/*cmp*/NULL,
 	search_header_match,
