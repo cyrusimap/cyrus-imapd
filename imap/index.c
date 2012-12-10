@@ -1806,6 +1806,30 @@ static void index_unlock(struct index_state *state)
 }
 
 /*
+ * RFC 4551 says:
+ * If client specifies a MODSEQ criterion in a SEARCH command
+ * and the server returns a non-empty SEARCH result, the server
+ * MUST also append (to the end of the untagged SEARCH response)
+ * the highest mod-sequence for all messages being returned.
+ */
+static int needs_modseq(const struct searchargs *searchargs,
+			const struct sortcrit *sortcrit)
+{
+    int i;
+
+    if (search_expr_uses_attr(searchargs->root, "modseq"))
+	return 1;
+
+    if (sortcrit) {
+	for (i = 0 ; sortcrit[i].key != SORT_SEQUENCE ; i++)
+	    if (sortcrit[i].key == SORT_MODSEQ)
+		return 1;
+    }
+
+    return 0;
+}
+
+/*
  * Performs a SEARCH command.
  * This is a wrapper around _index_search() which simply prints the results.
  */
@@ -1823,8 +1847,9 @@ EXPORTED int index_search(struct index_state *state, struct searchargs *searchar
     search_expr_internalise(state->mailbox, searchargs->root);
 
     /* now do the search */
-    n = _index_search(&list, state, searchargs, 
-		      searchargs->modseq ? &highestmodseq : NULL);
+    n = _index_search(&list, state, searchargs,
+		      needs_modseq(searchargs, NULL)
+			? &highestmodseq : NULL);
 
     /* replace the values now */
     if (usinguid)
@@ -1895,27 +1920,17 @@ EXPORTED int index_sort(struct index_state *state,
     int mi;
     int nmsg = 0;
     modseq_t highestmodseq = 0;
-    int i;
-    int modseq = 0;
 
     /* update the index */
     if (index_check(state, 0, 0))
 	return 0;
 
-    if (searchargs->modseq) modseq = 1;
-    else {
-	for (i = 0; sortcrit[i].key != SORT_SEQUENCE; i++) {
-	    if (sortcrit[i].key == SORT_MODSEQ) {
-		modseq = 1;
-		break;
-	    }
-	}
-    }
     search_expr_internalise(state->mailbox, searchargs->root);
 
     /* Search for messages based on the given criteria */
     nmsg = _index_search(&msgno_list, state, searchargs,
-			 modseq ? &highestmodseq : NULL);
+			 needs_modseq(searchargs, sortcrit) ?
+			    &highestmodseq : NULL);
 
     prot_printf(state->out, "* SORT");
 
@@ -3787,7 +3802,8 @@ EXPORTED int index_thread(struct index_state *state, int algorithm,
 
     /* Search for messages based on the given criteria */
     nmsg = _index_search(&msgno_list, state, searchargs,
-			 searchargs->modseq ? &highestmodseq : NULL);
+			 needs_modseq(searchargs, NULL) ?
+			    &highestmodseq : NULL);
 
     if (nmsg) {
 	/* Thread messages using given algorithm */

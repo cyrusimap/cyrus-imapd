@@ -111,6 +111,7 @@ extern search_expr_t *search_expr_unserialise(const char *s);
 extern void search_expr_normalise(search_expr_t **);
 extern void search_expr_internalise(struct mailbox *, search_expr_t *);
 extern int search_expr_evaluate(message_t *m, const search_expr_t *);
+extern int search_expr_uses_attr(const search_expr_t *, const char *);
 
 extern void search_attr_init(void);
 extern const search_attr_t *search_attr_find(const char *);

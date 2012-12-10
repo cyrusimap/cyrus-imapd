@@ -733,6 +733,34 @@ EXPORTED int search_expr_evaluate(message_t *m, const search_expr_t *e)
 
 /* ====================================================================== */
 
+static int uses_attr(const search_expr_t *e, const search_attr_t *attr)
+{
+    const search_expr_t *child;
+
+    if (e->attr == attr)
+	return 1;
+
+    for (child = e->children ; child ; child = child->next)
+	if (uses_attr(child, attr))
+	    return 1;
+
+    return 0;
+}
+
+/*
+ * Returns non-zero if any comparison node in the given search
+ * expression tree uses the attribute with the given name.
+ */
+EXPORTED int search_expr_uses_attr(const search_expr_t *e, const char *name)
+{
+    const search_attr_t *attr = search_attr_find(name);
+
+    if (!name) return 0;
+    return uses_attr(e, attr);
+}
+
+/* ====================================================================== */
+
 static int search_string_match(message_t *m, const union search_value *v,
 				void *internalised, void *data1)
 {
