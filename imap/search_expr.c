@@ -1339,38 +1339,28 @@ static void search_annotation_free(union search_value *v)
 
 /* ====================================================================== */
 
-struct convflags_rock {
+struct conv_rock {
     struct conversations_state *cstate;
     int cstate_is_ours;
     int num;	    /* -1=invalid, 0=\Seen, 1+=index into cstate->counted_flags+1 */
 };
 
+static void conv_rock_new(struct mailbox *mailbox,
+			  struct conv_rock **rockp);
+static void conv_rock_free(struct conv_rock **rockp);
+
 static void search_convflags_internalise(struct mailbox *mailbox,
 					 const union search_value *v,
 					 void **internalisedp)
 {
-    struct convflags_rock *rock;
-    int r;
+    struct conv_rock **rockp = (struct conv_rock **)internalisedp;
+    struct conv_rock *rock;
 
-    if (*internalisedp) {
-	rock = (struct convflags_rock *)(*internalisedp);
-	if (rock->cstate_is_ours)
-	    conversations_abort(&rock->cstate);
-	free(rock);
-    }
+    conv_rock_free(rockp);
 
     if (mailbox) {
-	rock = xzmalloc(sizeof(struct convflags_rock));
-
-	rock->cstate = conversations_get_mbox(mailbox->name);
-	if (!rock->cstate) {
-	    r = conversations_open_mbox(mailbox->name, &rock->cstate);
-	    if (r)
-		rock->num = -1;	    /* invalid */
-	    else
-		rock->cstate_is_ours = 1;
-	}
-
+	conv_rock_new(mailbox, rockp);
+	rock = *rockp;
 	if (rock->cstate) {
 	    if (!strcasecmp(v->s, "\\Seen"))
 		rock->num = 0;
@@ -1381,8 +1371,6 @@ static void search_convflags_internalise(struct mailbox *mailbox,
 		    rock->num++;
 	    }
 	}
-
-	*internalisedp = rock;
     }
 }
 
@@ -1391,7 +1379,7 @@ static int search_convflags_match(message_t *m,
 				  void *internalised,
 				  void *data1 __attribute__((unused)))
 {
-    struct convflags_rock *rock = (struct convflags_rock *)internalised;
+    struct conv_rock *rock = (struct conv_rock *)internalised;
     conversation_id_t cid = NULLCONVERSATION;
     conversation_t *conv = NULL;
     int r;
@@ -1413,48 +1401,23 @@ static int search_convflags_match(message_t *m,
     return r;
 }
 
-/* ====================================================================== */
-
-/* TODO: share this code with the convflags above */
-struct convmodseq_rock {
-    struct conversations_state *cstate;
-    int cstate_is_ours;
-};
-
 static void search_convmodseq_internalise(struct mailbox *mailbox,
 					  const union search_value *v __attribute__((unused)),
 					  void **internalisedp)
 {
-    struct convmodseq_rock *rock;
-    int r;
+    struct conv_rock **rockp = (struct conv_rock **)internalisedp;
 
-    if (*internalisedp) {
-	rock = (struct convmodseq_rock *)(*internalisedp);
-	if (rock->cstate_is_ours)
-	    conversations_abort(&rock->cstate);
-	free(rock);
-    }
+    conv_rock_free(rockp);
 
     if (mailbox) {
-	rock = xzmalloc(sizeof(struct convmodseq_rock));
-
-	rock->cstate = conversations_get_mbox(mailbox->name);
-	if (!rock->cstate) {
-	    r = conversations_open_mbox(mailbox->name, &rock->cstate);
-	    if (r)
-		rock->cstate = NULL;
-	    else
-		rock->cstate_is_ours = 1;
-	}
-
-	*internalisedp = rock;
+	conv_rock_new(mailbox, rockp);
     }
 }
 
 static int search_convmodseq_match(message_t *m, const union search_value *v,
 				   void *internalised, void *data1 __attribute__((unused)))
 {
-    struct convmodseq_rock *rock = (struct convmodseq_rock *)internalised;
+    struct conv_rock *rock = (struct conv_rock *)internalised;
     conversation_id_t cid = NULLCONVERSATION;
     conversation_t *conv = NULL;
     int r;
@@ -1470,6 +1433,34 @@ static int search_convmodseq_match(message_t *m, const union search_value *v,
     conversation_free(conv);
     return r;
 }
+
+static void conv_rock_new(struct mailbox *mailbox,
+			  struct conv_rock **rockp)
+{
+    struct conv_rock *rock = xzmalloc(sizeof(*rock));
+
+    rock->cstate = conversations_get_mbox(mailbox->name);
+    if (!rock->cstate) {
+	if (conversations_open_mbox(mailbox->name, &rock->cstate))
+	    rock->num = -1;	    /* invalid */
+	else
+	    rock->cstate_is_ours = 1;
+    }
+
+    *rockp = rock;
+}
+
+static void conv_rock_free(struct conv_rock **rockp)
+{
+    struct conv_rock *rock = *rockp;
+    if (rock) {
+	if (rock->cstate_is_ours)
+	    conversations_abort(&rock->cstate);
+	free(rock);
+	*rockp = NULL;
+    }
+}
+
 
 /* ====================================================================== */
 
