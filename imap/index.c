@@ -1805,43 +1805,6 @@ static void index_unlock(struct index_state *state)
     mailbox_unlock_index(state->mailbox, NULL);
 }
 
-static void index_calcsearchflags(struct index_state *state, struct searchargs *searchargs)
-{
-    struct strlist *l;
-    int flag;
-    struct searchsub *sub;
-
-    for (l = searchargs->keywords; l; l = l->next) {
-	for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
-	    if (!strcasecmpsafe(state->flagname[flag], l->s))
-		break;
-	}
-	if (flag == MAX_USER_FLAGS) {
-	    /* Force failure */
-	    searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
-	    break;
-	}
-	searchargs->user_flags_set[flag/32] |= 1<<(flag&31);
-    }
-
-    for (l = searchargs->unkeywords; l; l = l->next) {
-	for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
-	    if (!strcasecmpsafe(state->flagname[flag], l->s))
-		break;
-	}
-	if (flag == MAX_USER_FLAGS) {
-	    /* Obviously OK */
-	    break;
-	}
-	searchargs->user_flags_unset[flag/32] |= 1<<(flag&31);
-    }
-
-    for (sub = searchargs->sublist; sub; sub = sub->next) {
-	if (sub->sub1) index_calcsearchflags(state, sub->sub1);
-	if (sub->sub2) index_calcsearchflags(state, sub->sub2);
-    }
-}
-
 /*
  * Performs a SEARCH command.
  * This is a wrapper around _index_search() which simply prints the results.
@@ -1857,10 +1820,6 @@ EXPORTED int index_search(struct index_state *state, struct searchargs *searchar
     if (index_check(state, 0, 0))
 	return 0;
 
-#if 0
-    /* calculate the user flags */
-    index_calcsearchflags(state, searchargs);
-#endif
     search_expr_internalise(state->mailbox, searchargs->root);
 
     /* now do the search */
@@ -1936,18 +1895,12 @@ EXPORTED int index_sort(struct index_state *state,
     int mi;
     int nmsg = 0;
     modseq_t highestmodseq = 0;
-#if 0 /*TODO:gnb*/
     int i;
-#endif
     int modseq = 0;
 
     /* update the index */
     if (index_check(state, 0, 0))
 	return 0;
-
-#if 0
-    /* calculate the user flags */
-    index_calcsearchflags(state, searchargs);
 
     if (searchargs->modseq) modseq = 1;
     else {
@@ -1958,7 +1911,6 @@ EXPORTED int index_sort(struct index_state *state,
 	    }
 	}
     }
-#endif
     search_expr_internalise(state->mailbox, searchargs->root);
 
     /* Search for messages based on the given criteria */
@@ -2288,8 +2240,7 @@ EXPORTED int index_convsort(struct index_state *state,
 	    return IMAP_INTERNAL;
     }
 
-    /* calculate the user flags */
-    index_calcsearchflags(state, searchargs);
+    search_expr_internalise(state->mailbox, searchargs->root);
 
     /* this works both with and without conversations */
     total = search_predict_total(state, cstate, searchargs,
@@ -2712,8 +2663,7 @@ static struct multisort_result *multisort_run(struct index_state *state,
 	 */
 	searchargs2 = dupsearchargs(state, searchargs, state2);
 
-	/* calculate the user flags */
-	index_calcsearchflags(state2, searchargs2);
+	search_expr_internalise(state2->mailbox, searchargs2->root);
 
 	/* One pass through the folder's message list */
 	for (msgno = 1 ; msgno <= state2->exists ; msgno++) {
@@ -3651,8 +3601,7 @@ EXPORTED int index_convupdates(struct index_state *state,
     if (!cstate)
 	return IMAP_INTERNAL;
 
-    /* calculate the user flags */
-    index_calcsearchflags(state, searchargs);
+    search_expr_internalise(state->mailbox, searchargs->root);
 
     total = search_predict_total(state, cstate, searchargs,
 				windowargs->conversations,
@@ -3831,9 +3780,8 @@ EXPORTED int index_thread(struct index_state *state, int algorithm,
     if (index_check(state, 0, 0))
 	return 0;
 
-    /* calculate the user flags */
-    index_calcsearchflags(state, searchargs);
-    
+    search_expr_internalise(state->mailbox, searchargs->root);
+
     if(CONFIG_TIMING_VERBOSE)
 	start = clock();
 
