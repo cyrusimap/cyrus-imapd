@@ -2293,26 +2293,45 @@ static int sortcache_cleanup_cb(void *rock,
 }
 
 static int folder_may_be_in_search(const char *mboxname,
-				   struct searchargs *searchargs)
+				   const search_expr_t *e)
 {
-    struct searchsub *s;
-    struct strlist *l;
+    const search_expr_t *child;
 
-    for (l = searchargs->folder; l; l = l->next) {
-	if (strcmpsafe(l->s, mboxname)) return 0;
+    if (e->op == SEOP_MATCH &&
+	e->attr &&
+	!strcasecmp(e->attr->name, "folder"))
+	return !strcmp(mboxname, e->value.s);
+
+    if (e->op == SEOP_NOT)
+	return !folder_may_be_in_search(mboxname, e->children);
+
+    for (child = e->children ; child ; child = child->next)
+	if (folder_may_be_in_search(mboxname, child))
+	    return 1;
+
+    return 0;
+}
+
+static int find_search_folder(const char **mboxnamep,
+			      const search_expr_t *e)
+{
+    const search_expr_t *child;
+    int n = 0;
+
+    if (e->op == SEOP_MATCH &&
+	e->attr &&
+	!strcasecmp(e->attr->name, "folder")) {
+	*mboxnamep = e->value.s;
+	return 1;
     }
 
-    for (s = searchargs->sublist; s; s = s->next) {
-	if (folder_may_be_in_search(mboxname, s->sub1)) {
-	    if (!s->sub2) return 0;
-	}
-	else {
-	    if (s->sub2 && !folder_may_be_in_search(mboxname, s->sub1))
-		return 0;
-	}
-    }
+    if (e->op == SEOP_NOT)
+	return 0;
 
-    return 1;
+    for (child = e->children ; child ; child = child->next)
+	n += find_search_folder(mboxnamep, child);
+
+    return n;
 }
 
 static struct searchargs *dupsearchargs(const struct searchargs *searchargs)
@@ -2337,13 +2356,13 @@ static struct multisort_result *multisort_run(struct index_state *state,
     unsigned msgno;
     struct multisort_result *result = NULL;
     struct searchargs *searchargs2 = NULL;
+    const char *mboxname = NULL;
 
     /* in the case where the search can only match a single folder
      * at the top level, we can optimise.  Otherwise we do a listing
      * to find potentially matching folders */
-    if (searchargs->folder && !searchargs->folder->next) {
-	const char *s = searchargs->folder->s;
-	add_search_folder(&folders, s, strlen(s), NULL, 0);
+    if (find_search_folder(&mboxname, searchargs->root) == 1) {
+	add_search_folder(&folders, mboxname, strlen(mboxname), NULL, 0);
     }
     else {
 	r = mboxlist_allusermbox(mboxname_to_userid(state->mailbox->name),
@@ -2356,7 +2375,7 @@ static struct multisort_result *multisort_run(struct index_state *state,
 	unsigned int *msgs;
 	int count = 0;
 
-	if (!folder_may_be_in_search(sf->mboxname, searchargs))
+	if (!folder_may_be_in_search(sf->mboxname, searchargs->root))
 	    continue;
 
 	if (state2 && state2 != state)
