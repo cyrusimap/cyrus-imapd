@@ -122,14 +122,15 @@ static void my_caldav_auth(const char *userid);
 static void my_caldav_reset(void);
 static void my_caldav_shutdown(void);
 
+static int caldav_parse_path(struct request_target_t *tgt, const char **errstr);
 static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights);
 
 static int report_cal_query(struct transaction_t *txn, xmlNodePtr inroot,
-			    struct propfind_ctx *fctx, char mailboxname[]);
+			    struct propfind_ctx *fctx);
 static int report_cal_multiget(struct transaction_t *txn, xmlNodePtr inroot,
-			       struct propfind_ctx *fctx, char mailboxname[]);
+			       struct propfind_ctx *fctx);
 static int report_fb_query(struct transaction_t *txn, xmlNodePtr inroot,
-			   struct propfind_ctx *fctx, char mailboxname[]);
+			   struct propfind_ctx *fctx);
 
 static int meth_copy(struct transaction_t *txn, void *params);
 static int meth_delete(struct transaction_t *txn, void *params);
@@ -156,32 +157,42 @@ static int sched_reply(icalcomponent *oldical, icalcomponent *newical,
 		       const char *userid);
 #endif /* WITH_CALDAV_SCHED */
 
+static struct acl_params acl_params = {
+    &caldav_parse_path, &caldav_acl
+};
+
 static struct mkcol_params mkcalendar_params = {
-    MBTYPE_CALENDAR, &caldav_mboxname,
-    "mkcalendar", "mkcalendar-response", NS_CALDAV
+    &caldav_parse_path,
+    MBTYPE_CALENDAR, "mkcalendar", "mkcalendar-response", NS_CALDAV
 };
 
 static struct mkcol_params mkcol_params = {
-    MBTYPE_CALENDAR, &caldav_mboxname,
-    "mkcol", "mkcol-response", NS_DAV
+    &caldav_parse_path,
+    MBTYPE_CALENDAR, "mkcol", "mkcol-response", NS_DAV
 };
 
 static struct propfind_params propfind_params = {
+    &caldav_parse_path,
     (void **) &auth_caldavdb,
     (lookup_proc_t) &caldav_lookup_resource,
     (foreach_proc_t) &caldav_foreach,
 };
 
-static struct report_type_t report_types[] = {
-    { "calendar-query", &report_cal_query, DACL_READ,
-      REPORT_NEED_MBOX | REPORT_MULTISTATUS },
-    { "calendar-multiget", &report_cal_multiget, DACL_READ,
-      REPORT_NEED_MBOX | REPORT_MULTISTATUS },
-    { "free-busy-query", &report_fb_query, DACL_READFB,
-      REPORT_NEED_MBOX },
-    { "sync-collection", &report_sync_col, DACL_READ,
-      REPORT_NEED_MBOX | REPORT_MULTISTATUS | REPORT_NEED_PROPS },
-    { NULL, NULL, 0, 0 }
+static struct proppatch_params proppatch_params = {
+    &caldav_parse_path
+};
+
+static struct report_params report_params = {
+    &caldav_parse_path,
+    { { "calendar-query", &report_cal_query, DACL_READ,
+	REPORT_NEED_MBOX | REPORT_MULTISTATUS },
+      { "calendar-multiget", &report_cal_multiget, DACL_READ,
+	REPORT_NEED_MBOX | REPORT_MULTISTATUS },
+      { "free-busy-query", &report_fb_query, DACL_READFB,
+	REPORT_NEED_MBOX },
+      { "sync-collection", &report_sync_col, DACL_READ,
+	REPORT_NEED_MBOX | REPORT_MULTISTATUS | REPORT_NEED_PROPS },
+      { NULL, NULL, 0, 0 } }
 };
 
 
@@ -191,7 +202,7 @@ const struct namespace_t namespace_calendar = {
     (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DAV | ALLOW_CAL),
     &my_caldav_init, &my_caldav_auth, my_caldav_reset, &my_caldav_shutdown,
     { 
-	{ &meth_acl,		&caldav_acl },		/* ACL		*/
+	{ &meth_acl,		&acl_params },		/* ACL		*/
 	{ &meth_copy,		NULL },			/* COPY		*/
 	{ &meth_delete,		NULL },			/* DELETE	*/
 	{ &meth_get,		NULL },			/* GET		*/
@@ -202,9 +213,9 @@ const struct namespace_t namespace_calendar = {
 	{ &meth_options,	NULL },			/* OPTIONS	*/
 	{ &meth_post,		NULL },			/* POST		*/
 	{ &meth_propfind,	&propfind_params },	/* PROPFIND	*/
-	{ &meth_proppatch,	NULL },		 	/* PROPPATCH	*/
+	{ &meth_proppatch,	&proppatch_params },	/* PROPPATCH	*/
 	{ &meth_put,		NULL },			/* PUT		*/
-	{ &meth_report,		report_types }		/* REPORT	*/
+	{ &meth_report,		&report_params }	/* REPORT	*/
     }
 };
 
@@ -252,6 +263,105 @@ static void my_caldav_reset(void)
 static void my_caldav_shutdown(void)
 {
     caldav_done();
+}
+
+
+/* Parse request-target path in /calendars namespace */
+static int caldav_parse_path(struct request_target_t *tgt, const char **errstr)
+{
+    char *p = tgt->path;
+    size_t len, siz;
+    static const char *prefix = NULL;
+
+    if (!*p || !*++p) return 0;
+
+    /* Sanity check namespace */
+    len = strcspn(p, "/");
+    if (len != strlen(namespace_calendar.prefix)-1 ||
+	strncmp(namespace_calendar.prefix+1, p, len)) {
+	*errstr = "Namespace mismatch request target path";
+	return HTTP_FORBIDDEN;
+    }
+
+    /* Skip namespace */
+    p += len;
+    if (!*p || !*++p) return 0;
+
+    /* Check if we're in user space */
+    len = strcspn(p, "/");
+    if (!strncmp(p, "user", len)) {
+	p += len;
+	if (!*p || !*++p) return 0;
+
+	/* Get user id */
+	len = strcspn(p, "/");
+	tgt->user = p;
+	tgt->userlen = len;
+
+	p += len;
+	if (!*p || !*++p) goto done;
+
+	len = strcspn(p, "/");
+    }
+
+    /* Get collection */
+    tgt->collection = p;
+    tgt->collen = len;
+
+    p += len;
+    if (!*p || !*++p) {
+	/* Make sure collection is terminated with '/' */
+	if (p[-1] != '/') *p++ = '/';
+	goto done;
+    }
+
+    /* Get resource */
+    len = strcspn(p, "/");
+    tgt->resource = p;
+    tgt->reslen = len;
+
+    p += len;
+
+    if (*p) {
+	*errstr = "Too many segments in request target path";
+	return HTTP_FORBIDDEN;
+    }
+
+  done:
+    /* Determine if this is a scheduling Inbox/Outbox */
+    if (tgt->collection) {
+	if (!strcmp(tgt->collection, SCHED_INBOX))
+	    tgt->flags = TGT_SCHED_INBOX;
+	else if (!strcmp(tgt->collection, SCHED_OUTBOX))
+	    tgt->flags = TGT_SCHED_OUTBOX;
+    }
+
+    /* Create mailbox name from the parsed path */ 
+    if (!prefix) prefix = config_getstring(IMAPOPT_CALENDARPREFIX);
+
+    p = tgt->mboxname;
+    siz = MAX_MAILBOX_BUFFER;
+    if (tgt->user) {
+	len = snprintf(p, siz, "user");
+	p += len;
+	siz -= len;
+
+	if (tgt->userlen) {
+	    len = snprintf(p, siz, ".%.*s", tgt->userlen, tgt->user);
+	    p += len;
+	    siz -= len;
+	}
+    }
+
+    len = snprintf(p, siz, "%s%s", p != tgt->mboxname ? "." : "", prefix);
+    p += len;
+    siz -= len;
+
+    if (tgt->collection) {
+	snprintf(p, siz, ".%.*s", tgt->collen, tgt->collection);
+    }
+
+    return 0;
 }
 
 
@@ -355,10 +465,8 @@ static int meth_copy(struct transaction_t *txn,
 		     void *params __attribute__((unused)))
 {
     int ret = HTTP_CREATED, r, precond, rights, overwrite = OVERWRITE_YES;
-    size_t plen;
     const char **hdr;
     struct request_target_t dest;  /* Parsed destination URL */
-    char src_mboxname[MAX_MAILBOX_BUFFER], dest_mboxname[MAX_MAILBOX_BUFFER];
     char *server, *acl;
     struct backend *src_be = NULL, *dest_be = NULL;
     struct mailbox *src_mbox = NULL, *dest_mbox = NULL;
@@ -376,8 +484,8 @@ static int meth_copy(struct transaction_t *txn,
     /* Make sure source is a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED;
 
-    /* Parse the path */
-    if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+    /* Parse the source path */
+    if ((r = caldav_parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
     /* We don't yet handle COPY/MOVE on collections */
     if (!txn->req_tgt.resource) return HTTP_NOT_ALLOWED;
@@ -391,32 +499,23 @@ static int meth_copy(struct transaction_t *txn,
     /* Parse destination URI */
     if ((r = parse_uri(METH_UNKNOWN, hdr[0], &dest, &txn->error.desc))) return r;
 
-    /* Check namespace of destination */
-    plen = strlen(namespace_calendar.prefix);
-    if (strncmp(namespace_calendar.prefix, dest.path, plen) ||
-	dest.path[plen] != '/') {
-	return HTTP_FORBIDDEN;
-    }
-
-    dest.namespace = URL_NS_CALENDAR;
-    if ((r = parse_path(&dest, &txn->error.desc))) return r;
-
-    /* Make sure dest resource is in same namespace as source */
-    if (txn->req_tgt.namespace != dest.namespace) return HTTP_FORBIDDEN;
-
     /* Make sure source and dest resources are NOT the same */
     if (!strcmp(txn->req_tgt.path, dest.path)) {
 	txn->error.desc = "Source and destination resources are the same\r\n";
 	return HTTP_FORBIDDEN;
     }
 
-    /* Construct source mailbox name corresponding to request target URI */
-    (void) target_to_mboxname(&txn->req_tgt, src_mboxname);
+    /* Parse the destination path */
+    if ((r = caldav_parse_path(&dest, &txn->error.desc))) return r;
+    dest.namespace = txn->req_tgt.namespace;
+
+    /* We don't yet handle COPY/MOVE on collections */
+    if (!dest.resource) return HTTP_NOT_ALLOWED;
 
     /* Locate the source mailbox */
-    if ((r = http_mlookup(src_mboxname, &server, &acl, NULL))) {
+    if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
 	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       src_mboxname, error_message(r));
+	       txn->req_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
 
 	switch (r) {
@@ -445,13 +544,10 @@ static int meth_copy(struct transaction_t *txn,
 	if (!src_be) return HTTP_UNAVAILABLE;
     }
 
-    /* Construct dest mailbox name corresponding to destination URI */
-    (void) target_to_mboxname(&dest, dest_mboxname);
-
     /* Locate the destination mailbox */
-    if ((r = http_mlookup(dest_mboxname, &server, &acl, NULL))) {
+    if ((r = http_mlookup(dest.mboxname, &server, &acl, NULL))) {
 	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       dest_mboxname, error_message(r));
+	       dest.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
 
 	switch (r) {
@@ -501,9 +597,9 @@ static int meth_copy(struct transaction_t *txn,
     /* Local Mailbox */
 
     /* Open dest mailbox for reading */
-    if ((r = mailbox_open_irl(dest_mboxname, &dest_mbox))) {
+    if ((r = mailbox_open_irl(dest.mboxname, &dest_mbox))) {
 	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
-	       dest_mboxname, error_message(r));
+	       dest.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
@@ -511,7 +607,7 @@ static int meth_copy(struct transaction_t *txn,
 
     /* Find message UID for the dest resource, if exists */
     caldav_lookup_resource(auth_caldavdb,
-			   dest_mboxname, dest.resource, 0, &cdata);
+			   dest.mboxname, dest.resource, 0, &cdata);
     /* XXX  Check errors */
 
     /* Finished our initial read of dest mailbox */
@@ -530,9 +626,9 @@ static int meth_copy(struct transaction_t *txn,
     }
 
     /* Open source mailbox for reading */
-    if ((r = http_mailbox_open(src_mboxname, &src_mbox, LOCK_SHARED))) {
+    if ((r = http_mailbox_open(txn->req_tgt.mboxname, &src_mbox, LOCK_SHARED))) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-	       src_mboxname, error_message(r));
+	       txn->req_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
@@ -540,7 +636,7 @@ static int meth_copy(struct transaction_t *txn,
 
     /* Find message UID for the source resource */
     caldav_lookup_resource(auth_caldavdb,
-			   src_mboxname, txn->req_tgt.resource, 0, &cdata);
+			   txn->req_tgt.mboxname, txn->req_tgt.resource, 0, &cdata);
     /* XXX  Check errors */
 
     /* Fetch index record for the source resource */
@@ -582,7 +678,7 @@ static int meth_copy(struct transaction_t *txn,
 
 	/* Find message UID for the source resource */
 	caldav_lookup_resource(auth_caldavdb,
-			       src_mboxname, txn->req_tgt.resource, 1, &cdata);
+			       txn->req_tgt.mboxname, txn->req_tgt.resource, 1, &cdata);
 	/* XXX  Check errors */
 
 	/* Fetch index record for the source resource */
@@ -594,7 +690,7 @@ static int meth_copy(struct transaction_t *txn,
 	    src_rec.system_flags |= FLAG_EXPUNGED;
 	    if ((r = mailbox_rewrite_index_record(src_mbox, &src_rec))) {
 		syslog(LOG_ERR, "expunging src record (%s) failed: %s",
-		       src_mboxname, error_message(r));
+		       txn->req_tgt.mboxname, error_message(r));
 		txn->error.desc = error_message(r);
 		ret = HTTP_SERVER_ERROR;
 		goto done;
@@ -630,7 +726,7 @@ static int meth_delete(struct transaction_t *txn,
 		       void *params __attribute__((unused)))
 {
     int ret = HTTP_NO_CONTENT, r, precond, rights;
-    char *server, *acl, mailboxname[MAX_MAILBOX_BUFFER];
+    char *server, *acl;
     struct mailbox *mailbox = NULL;
     struct caldav_data *cdata;
     struct index_record record;
@@ -644,16 +740,15 @@ static int meth_delete(struct transaction_t *txn,
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
 
     /* Parse the path */
-    if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+    if ((r = caldav_parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
-    /* Construct mailbox name corresponding to request target URI */
-    (void) target_to_mboxname(&txn->req_tgt, mailboxname);
-    userid = mboxname_to_userid(mailboxname);
+    /* Construct userid corresponding to mailbox */
+    userid = mboxname_to_userid(txn->req_tgt.mboxname);
 
     /* Locate the mailbox */
-    if ((r = http_mlookup(mailboxname, &server, &acl, NULL))) {
+    if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
 	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       mailboxname, error_message(r));
+	       txn->req_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
 
 	switch (r) {
@@ -689,12 +784,12 @@ static int meth_delete(struct transaction_t *txn,
 
     if (!txn->req_tgt.resource) {
 	/* DELETE collection */
-	r = mboxlist_deletemailbox(mailboxname,
+	r = mboxlist_deletemailbox(txn->req_tgt.mboxname,
 				   httpd_userisadmin || httpd_userisproxyadmin,
 				   httpd_userid, httpd_authstate,
 				   1, 0, 0);
 
-	if (!r) caldav_delmbox(auth_caldavdb, mailboxname);
+	if (!r) caldav_delmbox(auth_caldavdb, txn->req_tgt.mboxname);
 	else if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
 	else if (r == IMAP_MAILBOX_NONEXISTENT) ret = HTTP_NOT_FOUND;
 	else if (r) ret = HTTP_SERVER_ERROR;
@@ -706,17 +801,17 @@ static int meth_delete(struct transaction_t *txn,
     /* DELETE resource */
 
     /* Open mailbox for writing */
-    if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_EXCLUSIVE))) {
+    if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_EXCLUSIVE))) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-	       mailboxname, error_message(r));
+	       txn->req_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
 
     /* Find message UID for the resource */
-    caldav_lookup_resource(auth_caldavdb,
-			   mailboxname, txn->req_tgt.resource, 1, &cdata);
+    caldav_lookup_resource(auth_caldavdb, txn->req_tgt.mboxname,
+			   txn->req_tgt.resource, 1, &cdata);
     /* XXX  Check errors */
 
     /* Fetch index record for the resource */
@@ -781,7 +876,7 @@ static int meth_delete(struct transaction_t *txn,
 	if (!ical) {
 	    syslog(LOG_ERR,
 		   "meth_delete: failed to parse iCalendar object %s:%u",
-		   mailboxname, record.uid);
+		   txn->req_tgt.mboxname, record.uid);
 	    ret = HTTP_SERVER_ERROR;
 	    goto done;
 	}
@@ -795,7 +890,7 @@ static int meth_delete(struct transaction_t *txn,
 	    syslog(LOG_ERR,
 		   "meth_delete: failed to process scheduling message in %s"
 		   " (org=%s, att=%s)",
-		   mailboxname, organizer, userid);
+		   txn->req_tgt.mboxname, organizer, userid);
 	    txn->error.desc = "Failed to lookup organizer address\r\n";
 	    ret = HTTP_SERVER_ERROR;
 	    goto done;
@@ -816,7 +911,7 @@ static int meth_delete(struct transaction_t *txn,
 	    syslog(LOG_ERR,
 		   "meth_delete: failed to process scheduling message in %s"
 		   " (org=%s, att=%s)",
-		   mailboxname, organizer, userid);
+		   txn->req_tgt.mboxname, organizer, userid);
 	    txn->error.desc = "Failed to process scheduling message\r\n";
 	    ret = HTTP_SERVER_ERROR;
 	    goto done;
@@ -829,7 +924,7 @@ static int meth_delete(struct transaction_t *txn,
 
     if ((r = mailbox_rewrite_index_record(mailbox, &record))) {
 	syslog(LOG_ERR, "expunging record (%s) failed: %s",
-	       mailboxname, error_message(r));
+	       txn->req_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
@@ -854,7 +949,7 @@ static int meth_get(struct transaction_t *txn,
     const char *msg_base = NULL;
     unsigned long msg_size = 0;
     struct resp_body_t *resp_body = &txn->resp_body;
-    char *server, *acl, mailboxname[MAX_MAILBOX_BUFFER];
+    char *server, *acl;
     struct mailbox *mailbox = NULL;
     struct caldav_data *cdata;
     struct index_record record;
@@ -862,18 +957,15 @@ static int meth_get(struct transaction_t *txn,
     time_t lastmod = 0;
 
     /* Parse the path */
-    if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+    if ((r = caldav_parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
     /* We don't handle GET on a calendar collection (yet) */
     if (!txn->req_tgt.resource) return HTTP_NO_CONTENT;
 
-    /* Construct mailbox name corresponding to request target URI */
-    (void) target_to_mboxname(&txn->req_tgt, mailboxname);
-
     /* Locate the mailbox */
-    if ((r = http_mlookup(mailboxname, &server, &acl, NULL))) {
+    if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
 	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       mailboxname, error_message(r));
+	       txn->req_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
 
 	switch (r) {
@@ -907,17 +999,17 @@ static int meth_get(struct transaction_t *txn,
     /* Local Mailbox */
 
     /* Open mailbox for reading */
-    if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_SHARED))) {
+    if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_SHARED))) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-	       mailboxname, error_message(r));
+	       txn->req_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
 
     /* Find message UID for the resource */
-    caldav_lookup_resource(auth_caldavdb,
-			   mailboxname, txn->req_tgt.resource, 0, &cdata);
+    caldav_lookup_resource(auth_caldavdb, txn->req_tgt.mboxname,
+			   txn->req_tgt.resource, 0, &cdata);
     /* XXX  Check errors */
 
     /* Fetch index record for the resource */
@@ -1163,7 +1255,7 @@ static int meth_post(struct transaction_t *txn,
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
 
     /* Parse the path */
-    if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+    if ((r = caldav_parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
     /* We only handle POST on calendar collections */
     if (!txn->req_tgt.collection ||
@@ -1215,7 +1307,7 @@ static int meth_put(struct transaction_t *txn,
 		    void *params __attribute__((unused)))
 {
     int ret, r, precond, rights;
-    char *server, *acl, mailboxname[MAX_MAILBOX_BUFFER];
+    char *server, *acl;
     struct mailbox *mailbox = NULL;
     struct caldav_data *cdata;
     struct index_record oldrecord;
@@ -1239,7 +1331,7 @@ static int meth_put(struct transaction_t *txn,
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
 
     /* Parse the path */
-    if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+    if ((r = caldav_parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
     /* We only handle PUT on resources */
     if (!txn->req_tgt.resource) return HTTP_NOT_ALLOWED;
@@ -1251,14 +1343,13 @@ static int meth_put(struct transaction_t *txn,
 	return HTTP_FORBIDDEN;
     }
 
-    /* Construct mailbox name corresponding to request target URI */
-    (void) target_to_mboxname(&txn->req_tgt, mailboxname);
-    userid = mboxname_to_userid(mailboxname);
+    /* Construct userid corresponding to mailbox */
+    userid = mboxname_to_userid(txn->req_tgt.mboxname);
 
     /* Locate the mailbox */
-    if ((r = http_mlookup(mailboxname, &server, &acl, NULL))) {
+    if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
 	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       mailboxname, error_message(r));
+	       txn->req_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
 
 	switch (r) {
@@ -1293,17 +1384,17 @@ static int meth_put(struct transaction_t *txn,
     /* Local Mailbox */
 
     /* Open mailbox for reading */
-    if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_SHARED))) {
+    if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_SHARED))) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-	       mailboxname, error_message(r));
+	       txn->req_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
 
     /* Find message UID for the resource, if exists */
-    caldav_lookup_resource(auth_caldavdb,
-			   mailboxname, txn->req_tgt.resource, 0, &cdata);
+    caldav_lookup_resource(auth_caldavdb, txn->req_tgt.mboxname,
+			   txn->req_tgt.resource, 0, &cdata);
     /* XXX  Check errors */
 
     if (cdata->dav.imap_uid) {
@@ -1355,7 +1446,7 @@ static int meth_put(struct transaction_t *txn,
     }
 
     /* Check if we can append a new iMIP message to calendar mailbox */
-    if ((r = append_check(mailboxname, httpd_authstate, ACL_INSERT, size))) {
+    if ((r = append_check(txn->req_tgt.mboxname, httpd_authstate, ACL_INSERT, size))) {
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
@@ -1439,7 +1530,7 @@ static int meth_put(struct transaction_t *txn,
 	/* XXX  Check errors */
 
 	if (cdata->dav.mailbox &&
-	    (strcmp(cdata->dav.mailbox, mailboxname) ||
+	    (strcmp(cdata->dav.mailbox, txn->req_tgt.mboxname) ||
 	     strcmp(cdata->dav.resource, txn->req_tgt.resource))) {
 	    /* CALDAV:unique-scheduling-object-resource */
 
@@ -1457,7 +1548,7 @@ static int meth_put(struct transaction_t *txn,
 	    syslog(LOG_ERR,
 		   "meth_delete: failed to process scheduling message in %s"
 		   " (org=%s, att=%s)",
-		   mailboxname, organizer, userid);
+		   txn->req_tgt.mboxname, organizer, userid);
 	    txn->error.desc = "Failed to lookup organizer address\r\n";
 	    ret = HTTP_SERVER_ERROR;
 	    goto done;
@@ -1476,7 +1567,7 @@ static int meth_put(struct transaction_t *txn,
 	    syslog(LOG_ERR,
 		   "meth_put: failed to process scheduling message in %s"
 		   " (org=%s, att=%s)",
-		   mailboxname, organizer, userid);
+		   txn->req_tgt.mboxname, organizer, userid);
 	    txn->error.desc = "Failed to process scheduling message\r\n";
 	    ret = HTTP_SERVER_ERROR;
 	    goto done;
@@ -1557,8 +1648,7 @@ static int parse_comp_filter(xmlNodePtr root, struct calquery_filter *filter,
 
 
 static int report_cal_query(struct transaction_t *txn,
-			    xmlNodePtr inroot, struct propfind_ctx *fctx,
-			    char mailboxname[])
+			    xmlNodePtr inroot, struct propfind_ctx *fctx)
 {
     int ret = 0;
     xmlNodePtr node;
@@ -1590,13 +1680,13 @@ static int report_cal_query(struct transaction_t *txn,
 	/* Calendar collection(s) */
 	if (txn->req_tgt.collection) {
 	    /* Add response for target calendar collection */
-	    propfind_by_collection(mailboxname, 0, 0, fctx);
+	    propfind_by_collection(txn->req_tgt.mboxname, 0, 0, fctx);
 	}
 	else {
 	    /* Add responses for all contained calendar collections */
-	    strlcat(mailboxname, ".%", sizeof(mailboxname));
+	    strlcat(txn->req_tgt.mboxname, ".%", sizeof(txn->req_tgt.mboxname));
 	    mboxlist_findall(NULL,  /* internal namespace */
-			     mailboxname, 1, httpd_userid, 
+			     txn->req_tgt.mboxname, 1, httpd_userid, 
 			     httpd_authstate, propfind_by_collection, fctx);
 	}
 
@@ -1608,8 +1698,7 @@ static int report_cal_query(struct transaction_t *txn,
 
 
 static int report_cal_multiget(struct transaction_t *txn,
-			       xmlNodePtr inroot, struct propfind_ctx *fctx,
-			       char mailboxname[])
+			       xmlNodePtr inroot, struct propfind_ctx *fctx)
 {
     int r, ret = 0;
     struct request_target_t tgt;
@@ -1633,23 +1722,21 @@ static int report_cal_multiget(struct transaction_t *txn,
 
 	    /* Parse the path */
 	    strlcpy(tgt.path, uri.s, sizeof(tgt.path));
-	    if ((r = parse_path(&tgt, fctx->errstr))) {
+	    if ((r = caldav_parse_path(&tgt, fctx->errstr))) {
 		ret = r;
 		goto done;
 	    }
 
 	    fctx->req_tgt = &tgt;
 
-	    target_to_mboxname(&tgt, mailboxname);
-
 	    /* Check if we already have this mailbox open */
-	    if (!mailbox || strcmp(mailbox->name, mailboxname)) {
+	    if (!mailbox || strcmp(mailbox->name, tgt.mboxname)) {
 		if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
 		/* Open mailbox for reading */
-		if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_SHARED))) {
+		if ((r = http_mailbox_open(tgt.mboxname, &mailbox, LOCK_SHARED))) {
 		    syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-			   mailboxname, error_message(r));
+			   tgt.mboxname, error_message(r));
 		    txn->error.desc = error_message(r);
 		    ret = HTTP_SERVER_ERROR;
 		    goto done;
@@ -1660,7 +1747,7 @@ static int report_cal_multiget(struct transaction_t *txn,
 
 	    /* Find message UID for the resource */
 	    caldav_lookup_resource(auth_caldavdb,
-				   mailboxname, tgt.resource, 0, &cdata);
+				   tgt.mboxname, tgt.resource, 0, &cdata);
 	    cdata->dav.resource = tgt.resource;
 	    /* XXX  Check errors */
 
@@ -1847,8 +1934,7 @@ static icalcomponent *busytime(struct transaction_t *txn,
 
 
 static int report_fb_query(struct transaction_t *txn,
-			   xmlNodePtr inroot, struct propfind_ctx *fctx,
-			   char mailboxname[])
+			   xmlNodePtr inroot, struct propfind_ctx *fctx)
 {
     int ret = 0;
     struct calquery_filter calfilter;
@@ -1881,7 +1967,7 @@ static int report_fb_query(struct transaction_t *txn,
 	}
     }
 
-    cal = busytime(txn, fctx, mailboxname, 0, NULL, NULL, NULL);
+    cal = busytime(txn, fctx, txn->req_tgt.mboxname, 0, NULL, NULL, NULL);
 
     if (calfilter.busytime.busy) free(calfilter.busytime.busy);
 
@@ -2655,7 +2741,7 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
 static int sched_busytime(struct transaction_t *txn)
 {
     int ret = 0, r, rights;
-    char *acl, mailboxname[MAX_MAILBOX_BUFFER];
+    char *acl;
     const char **hdr;
     icalcomponent *ical, *comp;
     icalcomponent_kind kind = 0;
@@ -2671,13 +2757,10 @@ static int sched_busytime(struct transaction_t *txn)
 	return HTTP_BAD_REQUEST;
     }
 
-    /* Construct mailbox name corresponding to request target URI */
-    (void) target_to_mboxname(&txn->req_tgt, mailboxname);
-
     /* Locate the mailbox */
-    if ((r = http_mlookup(mailboxname, NULL, &acl, NULL))) {
+    if ((r = http_mlookup(txn->req_tgt.mboxname, NULL, &acl, NULL))) {
 	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       mailboxname, error_message(r));
+	       txn->req_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
 
 	switch (r) {

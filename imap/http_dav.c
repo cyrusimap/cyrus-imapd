@@ -82,6 +82,12 @@
 #include <libxml/uri.h>
 
 
+static int prin_parse_path(struct request_target_t *tgt, const char **errstr);
+
+static struct propfind_params propfind_params = {
+    &prin_parse_path, NULL, NULL, NULL
+};
+
 /* Namespace for WebDAV principals */
 const struct namespace_t namespace_principal = {
     URL_NS_PRINCIPAL, "/principals", NULL, 1 /* auth */,
@@ -104,7 +110,7 @@ const struct namespace_t namespace_principal = {
 	{ NULL,			NULL },			/* MOVE		*/
 	{ &meth_options,	NULL },			/* OPTIONS	*/
 	{ NULL,			NULL },			/* POST		*/
-	{ &meth_propfind,	NULL },			/* PROPFIND	*/
+	{ &meth_propfind,	&propfind_params },	/* PROPFIND	*/
 	{ NULL,			NULL },			/* PROPPATCH	*/
 	{ NULL,			NULL },			/* PUT		*/
 	{ &meth_report,		NULL }			/* REPORT	*/
@@ -234,10 +240,8 @@ static const struct precond_t {
 };
 
 
-/* Parse request-target path */
-/* XXX  THIS NEEDS TO BE COMPLETELY REWRITTEN
-   AND MAYBE COMBINED WITH target_to_mboxname() */
-int parse_path(struct request_target_t *tgt, const char **errstr)
+/* Parse request-target path in /principals namespace */
+static int prin_parse_path(struct request_target_t *tgt, const char **errstr)
 {
     char *p = tgt->path;
     size_t len;
@@ -262,83 +266,12 @@ int parse_path(struct request_target_t *tgt, const char **errstr)
 
 	p += len;
 	if (!*p || !*++p) return 0;
-
-	if (tgt->namespace == URL_NS_PRINCIPAL) goto done;
-
-	len = strcspn(p, "/");
     }
-    else if (tgt->namespace == URL_NS_PRINCIPAL) {
-	return HTTP_NOT_FOUND;  /* need to specify a userid */
-    }
+    else return HTTP_NOT_FOUND;  /* need to specify a userid */
 
-    /* Get collection */
-    tgt->collection = p;
-    tgt->collen = len;
-
-    p += len;
-    if (!*p || !*++p) {
-	/* Make sure collection is terminated with '/' */
-	if (p[-1] != '/') *p++ = '/';
-	goto done;
-    }
-
-    /* Get resource */
-    len = strcspn(p, "/");
-    tgt->resource = p;
-    tgt->reslen = len;
-
-    p += len;
-
-  done:
     if (*p) {
 	*errstr = "Too many segments in request target path";
 	return HTTP_FORBIDDEN;
-    }
-
-    if (tgt->namespace == URL_NS_CALENDAR) {
-	if (!strcmp(tgt->collection, SCHED_INBOX))
-	    tgt->flags = TGT_SCHED_INBOX;
-	else if (!strcmp(tgt->collection, SCHED_OUTBOX))
-	    tgt->flags = TGT_SCHED_OUTBOX;
-    }
-
-    return 0;
-}
-
-
-/* Create a mailbox name from the request URL */ 
-int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname)
-{
-    static const char *calendarprefix = NULL;
-    char *p;
-    size_t siz, len;
-
-    if (!calendarprefix) {
-	calendarprefix = config_getstring(IMAPOPT_CALENDARPREFIX);
-    }
-
-    p = mboxname;
-    siz = MAX_MAILBOX_BUFFER - 1;
-    if (req_tgt->user) {
-	len = snprintf(p, siz, "user");
-	p += len;
-	siz -= len;
-
-	if (req_tgt->userlen) {
-	    len = snprintf(p, siz, ".%.*s",
-			   req_tgt->userlen, req_tgt->user);
-	    p += len;
-	    siz -= len;
-	}
-    }
-    len = snprintf(p, siz, "%s%s", p != mboxname ? "." : "",
-		   req_tgt->namespace == URL_NS_CALENDAR ? calendarprefix :
-		   "#addressbooks");
-    p += len;
-    siz -= len;
-    if (req_tgt->collection) {
-	snprintf(p, siz, ".%.*s",
-		 req_tgt->collen, req_tgt->collection);
     }
 
     return 0;
@@ -1369,10 +1302,7 @@ static int propfind_quota(xmlNodePtr prop,
     }
     else {
 	/* Find the quotaroot governing this hierarchy */
-	char mboxname[MAX_MAILBOX_BUFFER];
-	
-	(void) target_to_mboxname(fctx->req_tgt, mboxname);
-	if (quota_findroot(foundroot, sizeof(foundroot), mboxname)) {
+	if (quota_findroot(foundroot, sizeof(foundroot), fctx->req_tgt->mboxname)) {
 	    qr = foundroot;
 	}
     }
@@ -2236,10 +2166,10 @@ int meth_acl(struct transaction_t *txn, void *params)
     int ret = 0, r, rights;
     xmlDocPtr indoc = NULL;
     xmlNodePtr root, ace;
-    char *server, *aclstr, mailboxname[MAX_MAILBOX_BUFFER];
+    char *server, *aclstr;
     struct mailbox *mailbox = NULL;
     struct buf acl = BUF_INITIALIZER;
-    acl_proc_t acl_ext_proc = (acl_proc_t) params;
+    struct acl_params *aparams = (struct acl_params *) params;
 
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
@@ -2248,7 +2178,7 @@ int meth_acl(struct transaction_t *txn, void *params)
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
 
     /* Parse the path */
-    if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+    if ((r = aparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
     /* Make sure its a calendar collection */
     if (!txn->req_tgt.collection || txn->req_tgt.resource) {
@@ -2257,13 +2187,10 @@ int meth_acl(struct transaction_t *txn, void *params)
 	return HTTP_NOT_ALLOWED;
     }
 
-    /* Construct mailbox name corresponding to request target URI */
-    (void) target_to_mboxname(&txn->req_tgt, mailboxname);
-
     /* Locate the mailbox */
-    if ((r = http_mlookup(mailboxname, &server, &aclstr, NULL))) {
+    if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &aclstr, NULL))) {
 	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       mailboxname, error_message(r));
+	       txn->req_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
 
 	switch (r) {
@@ -2297,9 +2224,9 @@ int meth_acl(struct transaction_t *txn, void *params)
     /* Local Mailbox */
 
     /* Open mailbox for writing */
-    if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_EXCLUSIVE))) {
+    if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_EXCLUSIVE))) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-	       mailboxname, error_message(r));
+	       txn->req_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
@@ -2397,7 +2324,7 @@ int meth_acl(struct transaction_t *txn, void *params)
 		if (!r &&
 		    !strncmp("/principals/", uri.path, strlen("/principals/"))) {
 		    uri.namespace = URL_NS_PRINCIPAL;
-		    r = parse_path(&uri, &errstr);
+		    r = aparams->parse_path(&uri, &errstr);
 		    if (!r && uri.user) userid = uri.user;
 		}
 		xmlFree(href);
@@ -2415,7 +2342,8 @@ int meth_acl(struct transaction_t *txn, void *params)
 		    xmlNodePtr priv = privs->children;
 		    for (; priv->type != XML_ELEMENT_NODE; priv = priv->next);
 
-		    if (acl_ext_proc && acl_ext_proc(txn, priv, &rights)) {
+		    if (aparams->acl_ext &&
+			aparams->acl_ext(txn, priv, &rights)) {
 			/* Extension (CalDAV) privileges */
 			if (txn->error.precond) {
 			    ret = HTTP_FORBIDDEN;
@@ -2506,9 +2434,9 @@ int meth_acl(struct transaction_t *txn, void *params)
 	}
     }
 
-    if ((r = mboxlist_sync_setacls(mailboxname, buf_cstring(&acl)))) {
+    if ((r = mboxlist_sync_setacls(txn->req_tgt.mboxname, buf_cstring(&acl)))) {
 	syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
-	       mailboxname, error_message(r));
+	       txn->req_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
@@ -2541,7 +2469,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
     xmlDocPtr indoc = NULL, outdoc = NULL;
     xmlNodePtr root = NULL, instr = NULL;
     xmlNsPtr ns[NUM_NAMESPACE];
-    char *server, mailboxname[MAX_MAILBOX_BUFFER], *partition = NULL;
+    char *partition = NULL;
     struct proppatch_ctx pctx;
     struct mkcol_params *mparams = (struct mkcol_params *) params;
 
@@ -2554,7 +2482,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
 
     /* Parse the path */
-    if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) {
+    if ((r = mparams->parse_path(&txn->req_tgt, &txn->error.desc))) {
 	txn->error.precond = CALDAV_LOCATION_OK;
 	return HTTP_FORBIDDEN;
     }
@@ -2565,40 +2493,8 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 	return HTTP_FORBIDDEN;
     }
 
-    /* Construct mailbox name corresponding to calendar-home-set */
-    r = mparams->mboxname("", httpd_userid, mailboxname);
-
-    /* Locate the mailbox */
-    if ((r = http_mlookup(mailboxname, &server, NULL, NULL))) {
-	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       mailboxname, error_message(r));
-	txn->error.desc = error_message(r);
-
-	switch (r) {
-	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	default: return HTTP_SERVER_ERROR;
-	}
-    }
-
-    if (server) {
-	/* Remote mailbox */
-	struct backend *be;
-
-	be = proxy_findserver(server, &http_protocol, httpd_userid,
-			      &backend_cached, NULL, NULL, httpd_in);
-	if (!be) return HTTP_UNAVAILABLE;
-
-	return http_pipe_req_resp(be, txn);
-    }
-
-    /* Local Mailbox */
-
-    /* Construct mailbox name corresponding to request target URI */
-    (void) target_to_mboxname(&txn->req_tgt, mailboxname);
-
     /* Check if we are allowed to create the mailbox */
-    r = mboxlist_createmailboxcheck(mailboxname, 0, NULL,
+    r = mboxlist_createmailboxcheck(txn->req_tgt.mboxname, 0, NULL,
 				    httpd_userisadmin || httpd_userisproxyadmin,
 				    httpd_userid, httpd_authstate,
 				    NULL, &partition, 0);
@@ -2609,6 +2505,24 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 	return HTTP_FORBIDDEN;
     }
     else if (r) return HTTP_SERVER_ERROR;
+
+    if (!config_partitiondir(partition)) {
+	/* Invalid partition, assume its a server (remote mailbox) */
+	char *server = partition, *p;
+	struct backend *be;
+
+	/* Trim remote partition */
+	p = strchr(server, '!');
+	if (p) *p++ = '\0';
+
+	be = proxy_findserver(server, &http_protocol, httpd_userid,
+			      &backend_cached, NULL, NULL, httpd_in);
+	if (!be) return HTTP_UNAVAILABLE;
+
+	return http_pipe_req_resp(be, txn);
+    }
+
+    /* Local Mailbox */
 
     /* Parse the MKCOL/MKCALENDAR body, if exists */
     ret = parse_xml_body(txn, &root);
@@ -2640,7 +2554,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 	/* Populate our proppatch context */
 	pctx.req_tgt = &txn->req_tgt;
 	pctx.meth = txn->meth;
-	pctx.mailboxname = mailboxname;
+	pctx.mailboxname = txn->req_tgt.mboxname;
 	pctx.root = root;
 	pctx.ns = ns;
 	pctx.tid = NULL;
@@ -2665,7 +2579,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
     }
 
     /* Create the mailbox */
-    r = mboxlist_createmailbox(mailboxname, mparams->mbtype, partition, 
+    r = mboxlist_createmailbox(txn->req_tgt.mboxname, mparams->mbtype, partition, 
 			       httpd_userisadmin || httpd_userisproxyadmin,
 			       httpd_userid, httpd_authstate,
 			       0, 0, 0);
@@ -2876,7 +2790,6 @@ int meth_propfind(struct transaction_t *txn, void *params)
     xmlDocPtr indoc = NULL, outdoc = NULL;
     xmlNodePtr root, cur = NULL;
     xmlNsPtr ns[NUM_NAMESPACE];
-    char mailboxname[MAX_MAILBOX_BUFFER] = "";
     struct propfind_params *fparams = (struct propfind_params *) params;
     struct propfind_ctx fctx;
     struct propfind_entry_list *elist = NULL;
@@ -2887,7 +2800,7 @@ int meth_propfind(struct transaction_t *txn, void *params)
     if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED;
 
     /* Parse the path */
-    if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+    if ((r = fparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
     /* Check Depth */
     hdr = spool_getheader(txn->req_hdrs, "Depth");
@@ -2903,13 +2816,10 @@ int meth_propfind(struct transaction_t *txn, void *params)
 	char *server, *acl;
 	int rights;
 
-	/* Construct mailbox name corresponding to request target URI */
-	(void) target_to_mboxname(&txn->req_tgt, mailboxname);
-
 	/* Locate the mailbox */
-	if ((r = http_mlookup(mailboxname, &server, &acl, NULL))) {
+	if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
 	    syslog(LOG_ERR, "mlookup(%s) failed: %s",
-		   mailboxname, error_message(r));
+		   txn->req_tgt.mboxname, error_message(r));
 	    txn->error.desc = error_message(r);
 
 	    switch (r) {
@@ -3004,7 +2914,7 @@ int meth_propfind(struct transaction_t *txn, void *params)
     fctx.reqd_privs = DACL_READ;
     fctx.filter = NULL;
     fctx.filter_crit = NULL;
-    if (fparams) {
+    if (fparams->davdb) {
 	fctx.davdb = *fparams->davdb;
 	fctx.lookup_resource = fparams->lookup;
 	fctx.foreach_resource = fparams->foreach;
@@ -3025,11 +2935,11 @@ int meth_propfind(struct transaction_t *txn, void *params)
 	/* Add response for principal or home-set collection */
 	struct mailbox *mailbox = NULL;
 
-	if (*mailboxname) {
+	if (*txn->req_tgt.mboxname) {
 	    /* Open mailbox for reading */
-	    if ((r = mailbox_open_irl(mailboxname, &mailbox))) {
+	    if ((r = mailbox_open_irl(txn->req_tgt.mboxname, &mailbox))) {
 		syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
-		       mailboxname, error_message(r));
+		       txn->req_tgt.mboxname, error_message(r));
 		txn->error.desc = error_message(r);
 		ret = HTTP_SERVER_ERROR;
 		goto done;
@@ -3045,18 +2955,15 @@ int meth_propfind(struct transaction_t *txn, void *params)
     if (depth > 0) {
 	/* Calendar collection(s) */
 
-	/* Construct mailbox name corresponding to request target URI */
-	(void) target_to_mboxname(&txn->req_tgt, mailboxname);
-
 	if (txn->req_tgt.collection) {
 	    /* Add response for target calendar collection */
-	    propfind_by_collection(mailboxname, 0, 0, &fctx);
+	    propfind_by_collection(txn->req_tgt.mboxname, 0, 0, &fctx);
 	}
 	else {
 	    /* Add responses for all contained calendar collections */
-	    strlcat(mailboxname, ".%", sizeof(mailboxname));
+	    strlcat(txn->req_tgt.mboxname, ".%", sizeof(txn->req_tgt.mboxname));
 	    r = mboxlist_findall(NULL,  /* internal namespace */
-				 mailboxname, 1, httpd_userid, 
+				 txn->req_tgt.mboxname, 1, httpd_userid, 
 				 httpd_authstate, propfind_by_collection, &fctx);
 	}
 
@@ -3095,15 +3002,15 @@ int meth_propfind(struct transaction_t *txn, void *params)
  *   DAV:cannot-modify-protected-property
  *   CALDAV:valid-calendar-data (CALDAV:calendar-timezone)
  */
-int meth_proppatch(struct transaction_t *txn,
-		   void *params __attribute__((unused)))
+int meth_proppatch(struct transaction_t *txn,  void *params)
 {
     int ret = 0, r = 0, rights;
     xmlDocPtr indoc = NULL, outdoc = NULL;
     xmlNodePtr root, instr, resp;
     xmlNsPtr ns[NUM_NAMESPACE];
-    char *server, *acl, mailboxname[MAX_MAILBOX_BUFFER];
+    char *server, *acl;
     struct proppatch_ctx pctx;
+    struct proppatch_params *pparams = (struct proppatch_params *) params;
 
     memset(&pctx, 0, sizeof(struct proppatch_ctx));
 
@@ -3114,7 +3021,7 @@ int meth_proppatch(struct transaction_t *txn,
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
 
     /* Parse the path */
-    if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+    if ((r = pparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
     /* Make sure its a collection */
     if (txn->req_tgt.resource) {
@@ -3123,13 +3030,10 @@ int meth_proppatch(struct transaction_t *txn,
 	return HTTP_FORBIDDEN;
     }
 
-    /* Construct mailbox name corresponding to request target URI */
-    (void) target_to_mboxname(&txn->req_tgt, mailboxname);
-
     /* Locate the mailbox */
-    if ((r = http_mlookup(mailboxname, &server, &acl, NULL))) {
+    if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
 	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       mailboxname, error_message(r));
+	       txn->req_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
 
 	switch (r) {
@@ -3197,7 +3101,7 @@ int meth_proppatch(struct transaction_t *txn,
     /* Populate our proppatch context */
     pctx.req_tgt = &txn->req_tgt;
     pctx.meth = txn->meth;
-    pctx.mailboxname = mailboxname;
+    pctx.mailboxname = txn->req_tgt.mboxname;
     pctx.root = resp;
     pctx.ns = ns;
     pctx.tid = NULL;
@@ -3244,9 +3148,8 @@ static int map_modseq_cmp(const struct index_map *m1,
 }
 
 
-int report_sync_col(struct transaction_t *txn __attribute__((unused)),
-		    xmlNodePtr inroot, struct propfind_ctx *fctx,
-		    char mailboxname[])
+int report_sync_col(struct transaction_t *txn,
+		    xmlNodePtr inroot, struct propfind_ctx *fctx)
 {
     int ret = 0, r, userflag;
     struct mailbox *mailbox = NULL;
@@ -3263,9 +3166,9 @@ int report_sync_col(struct transaction_t *txn __attribute__((unused)),
     istate.map = NULL;
 
     /* Open mailbox for reading */
-    if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_SHARED))) {
+    if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_SHARED))) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-	       mailboxname, error_message(r));
+	       txn->req_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
@@ -3453,12 +3356,11 @@ int meth_report(struct transaction_t *txn, void *params)
     const char **hdr;
     unsigned depth = 0;
     xmlNodePtr inroot = NULL, outroot = NULL, cur, prop = NULL;
-    struct report_type_t *report_types = (struct report_type_t *) params;
     const struct report_type_t *report = NULL;
     xmlNsPtr ns[NUM_NAMESPACE];
-    char mailboxname[MAX_MAILBOX_BUFFER];
     struct propfind_ctx fctx;
     struct propfind_entry_list *elist = NULL;
+    struct report_params *rparams = (struct report_params *) params;
 
     memset(&fctx, 0, sizeof(struct propfind_ctx));
 
@@ -3466,7 +3368,7 @@ int meth_report(struct transaction_t *txn, void *params)
     if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED; 
 
     /* Parse the path */
-    if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+    if ((r = rparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
     /* Check Depth */
     if ((hdr = spool_getheader(txn->req_hdrs, "Depth"))) {
@@ -3494,7 +3396,7 @@ int meth_report(struct transaction_t *txn, void *params)
     if (ret) goto done;
 
     /* Check the report type against our supported list */
-    for (report = report_types; report && report->name; report++) {
+    for (report = rparams->reports; report && report->name; report++) {
 	if (!xmlStrcmp(inroot->name, BAD_CAST report->name)) break;
     }
     if (!report || !report->name) {
@@ -3509,13 +3411,10 @@ int meth_report(struct transaction_t *txn, void *params)
 	char *server, *acl;
 	int rights;
 
-	/* Construct mailbox name corresponding to request target URI */
-	(void) target_to_mboxname(&txn->req_tgt, mailboxname);
-
 	/* Locate the mailbox */
-	if ((r = http_mlookup(mailboxname, &server, &acl, NULL))) {
+	if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
 	    syslog(LOG_ERR, "mlookup(%s) failed: %s",
-		   mailboxname, error_message(r));
+		   txn->req_tgt.mboxname, error_message(r));
 	    txn->error.desc = error_message(r);
 
 	    switch (r) {
@@ -3613,7 +3512,7 @@ int meth_report(struct transaction_t *txn, void *params)
     if (prop) preload_proplist(prop->children, &fctx);
 
     /* Process the requested report */
-    ret = (*report->proc)(txn, inroot, &fctx, mailboxname);
+    ret = (*report->proc)(txn, inroot, &fctx);
 
     /* Output the XML response */
     if (!ret && outroot) {

@@ -174,6 +174,7 @@ struct request_target_t {
     size_t reslen;
     unsigned flags;		/* target-specific flags/meta-data */
     unsigned long allow;	/* bitmask of allowed features/methods */
+    char mboxname[MAX_MAILBOX_BUFFER+1];
 };
 
 /* Request target flags */

@@ -238,8 +238,10 @@ struct propfind_ctx {
     struct buf buf;			/* Working buffer */
 };
 
-/* meth_acl() parameter
- *
+typedef int (*parse_path_t)(struct request_target_t *tgt, const char **errstr);
+
+/* meth_acl() parameters */
+/*
  * Process 'priv', augmenting 'rights' as necessary.
  * Returns 1 if processing is complete.
  * Returns 0 if processing should continue in meth_acl()
@@ -247,12 +249,15 @@ struct propfind_ctx {
 typedef int (*acl_proc_t)(struct transaction_t *txn, xmlNodePtr priv,
 			  int *rights);
 
+struct acl_params {
+    parse_path_t parse_path;
+    acl_proc_t acl_ext;
+};
+
 /* meth_mkcol() parameters */
 struct mkcol_params {
+    parse_path_t parse_path;
     unsigned mbtype;			/* mbtype to use for created mailbox */
-    int (*mboxname)(const char *name,
-		    const char *userid,
-		    char *result);	/* create mboxname from name & userid */
     const char *xml_req;		/* toplevel XML request element */
     const char *xml_resp;		/* toplevel XML response element */
     unsigned xml_ns;			/* namespace of response element */
@@ -260,20 +265,31 @@ struct mkcol_params {
 
 /* meth_propfind() parameters */
 struct propfind_params {
+    parse_path_t parse_path;
     void **davdb;			/* DAV DB to use for lookup/foreach */
     lookup_proc_t lookup;		/* lookup a specific resource */
     foreach_proc_t foreach;		/* process all resources in a mailbox */
 };
 
+/* meth_proppatch() parameters */
+struct proppatch_params {
+    parse_path_t parse_path;
+};
+
 /* meth_report() parameters */
 typedef int (*report_proc_t)(struct transaction_t *txn, xmlNodePtr inroot,
-			     struct propfind_ctx *fctx, char mailboxname[]);
+			     struct propfind_ctx *fctx);
 
 struct report_type_t {
     const char *name;			/* report name */
     report_proc_t proc;			/* function to generate the report */
     unsigned long reqd_privs;		/* privileges required to run report */
     unsigned flags;			/* report-specific flags */
+};
+
+struct report_params {
+    parse_path_t parse_path;
+    struct report_type_t reports[];
 };
 
 /* Report flags */
@@ -284,7 +300,7 @@ enum {
 };
 
 int report_sync_col(struct transaction_t *txn, xmlNodePtr inroot,
-		    struct propfind_ctx *fctx, char mailboxname[]);
+		    struct propfind_ctx *fctx);
 
 
 int parse_path(struct request_target_t *tgt, const char **errstr);
