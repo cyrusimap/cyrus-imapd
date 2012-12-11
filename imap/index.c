@@ -6932,41 +6932,8 @@ EXPORTED struct searchargs *new_searchargs(const char *tag, int state,
  */
 EXPORTED void freesearchargs(struct searchargs *s)
 {
-    struct searchsub *sub, *n;
-    struct searchannot *sa;
-
     if (!s) return;
 
-    freesequencelist(s->sequence);
-    freesequencelist(s->uidsequence);
-    freestrlist(s->from);
-    freestrlist(s->to);
-    freestrlist(s->cc);
-    freestrlist(s->bcc);
-    freestrlist(s->subject);
-    freestrlist(s->messageid);
-    freestrlist(s->listid);
-    freestrlist(s->contenttype);
-    freestrlist(s->body);
-    freestrlist(s->text);
-    freestrlist(s->header_name);
-    freestrlist(s->header);
-    freestrlist(s->folder);
-
-    while ((sa = s->annotations)) {
-	s->annotations = sa->next;
-	free(sa->entry);
-	free(sa->attrib);
-	buf_free(&sa->value);
-	free(sa);
-    }
-
-    for (sub = s->sublist; sub; sub = n) {
-	n = sub->next;
-	freesearchargs(sub->sub1);
-	freesearchargs(sub->sub2);
-	free(sub);
-    }
     search_expr_free(s->root);
     free(s);
 }
