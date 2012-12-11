@@ -932,7 +932,7 @@ static int get_search_criterion(struct protstream *pin,
     case 'l':
 	if (!strcmp(criteria.s, "larger")) {
 	    if (c != ' ') goto missingarg;
-	    c = getint32(pin, &u);
+	    c = getint32(pin, (int32_t *)&u);
 	    if (c == EOF) goto badnumber;
 	    e = search_expr_new(parent, SEOP_GT);
 	    e->attr = search_attr_find("size");
@@ -991,7 +991,7 @@ static int get_search_criterion(struct protstream *pin,
 	}
 	else if (!strcmp(criteria.s, "older")) {
 	    if (c != ' ') goto missingarg;
-	    c = getint32(pin, &u);
+	    c = getint32(pin, (int32_t *)&u);
 	    if (c == EOF) goto badinterval;
 	    e = search_expr_new(parent, SEOP_LE);
 	    e->attr = search_attr_find("internaldate");
@@ -1055,7 +1055,7 @@ static int get_search_criterion(struct protstream *pin,
 	}
 	else if (!strcmp(criteria.s, "smaller")) {
 	    if (c != ' ') goto missingarg;
-	    c = getint32(pin, &u);
+	    c = getint32(pin, (int32_t *)&u);
 	    if (c == EOF) goto badnumber;
 	    e = search_expr_new(parent, SEOP_LT);
 	    e->attr = search_attr_find("size");
@@ -1141,7 +1141,7 @@ static int get_search_criterion(struct protstream *pin,
     case 'y':
 	if (!strcmp(criteria.s, "younger")) {
 	    if (c != ' ') goto missingarg;
-	    c = getint32(pin, &u);
+	    c = getint32(pin, (int32_t *)&u);
 	    if (c == EOF) goto badinterval;
 	    e = search_expr_new(parent, SEOP_GE);
 	    e->attr = search_attr_find("internaldate");
