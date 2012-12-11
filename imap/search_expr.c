@@ -853,6 +853,20 @@ EXPORTED unsigned int search_expr_get_countability(const search_expr_t *e)
 
 /* ====================================================================== */
 
+/*
+ * Neutralise a node: make it always return success.  Useful for
+ * changing the logic of an expression without reshaping it.
+ */
+EXPORTED void search_expr_neutralise(search_expr_t *e)
+{
+    /* Leave the children and attribute in place.  This might be
+     * wrong, but we are only called for MATCH nodes at the moment
+     * and they seem to be able to tolerate such weirdness. */
+    e->op = SEOP_TRUE;
+}
+
+/* ====================================================================== */
+
 static int search_string_match(message_t *m, const union search_value *v,
 				void *internalised, void *data1)
 {
@@ -1661,6 +1675,7 @@ EXPORTED void search_attr_init(void)
 	{
 	    "bcc",
 	    /*flags*/0,
+	    SEARCH_PART_BCC,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_string_match,
@@ -1673,6 +1688,7 @@ EXPORTED void search_attr_init(void)
 	},{
 	    "cc",
 	    /*flags*/0,
+	    SEARCH_PART_CC,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_string_match,
@@ -1685,6 +1701,7 @@ EXPORTED void search_attr_init(void)
 	},{
 	    "from",
 	    /*flags*/0,
+	    SEARCH_PART_FROM,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_string_match,
@@ -1697,6 +1714,7 @@ EXPORTED void search_attr_init(void)
 	},{
 	    "message-id",
 	    /*flags*/0,
+	    SEARCH_PART_NONE,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_string_match,
@@ -1709,6 +1727,7 @@ EXPORTED void search_attr_init(void)
 	},{
 	    "listid",
 	    /*flags*/0,
+	    SEARCH_PART_LISTID,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_listid_match,
@@ -1721,6 +1740,7 @@ EXPORTED void search_attr_init(void)
 	},{
 	    "contenttype",
 	    /*flags*/0,
+	    SEARCH_PART_TYPE,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_contenttype_match,
@@ -1733,6 +1753,7 @@ EXPORTED void search_attr_init(void)
 	},{
 	    "subject",
 	    /*flags*/0,
+	    SEARCH_PART_SUBJECT,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_string_match,
@@ -1745,6 +1766,7 @@ EXPORTED void search_attr_init(void)
 	},{
 	    "to",
 	    /*flags*/0,
+	    SEARCH_PART_TO,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_string_match,
@@ -1757,6 +1779,7 @@ EXPORTED void search_attr_init(void)
 	},{
 	    "msgno",
 	    SEA_MUTABLE,
+	    SEARCH_PART_NONE,
 	    /*internalise*/NULL,
 	    /*cmp*/NULL,
 	    search_seq_match,
@@ -1769,6 +1792,7 @@ EXPORTED void search_attr_init(void)
 	},{
 	    "uid",
 	    /*flags*/0,
+	    SEARCH_PART_NONE,
 	    /*internalise*/NULL,
 	    /*cmp*/NULL,
 	    search_seq_match,
@@ -1781,6 +1805,7 @@ EXPORTED void search_attr_init(void)
 	},{
 	    "systemflags",
 	    SEA_MUTABLE,
+	    SEARCH_PART_NONE,
 	    /*internalise*/NULL,
 	    /*cmp*/NULL,
 	    search_flags_match,
@@ -1793,6 +1818,7 @@ EXPORTED void search_attr_init(void)
 	},{
 	    "indexflags",
 	    SEA_MUTABLE,
+	    SEARCH_PART_NONE,
 	    /*internalise*/NULL,
 	    /*cmp*/NULL,
 	    search_flags_match,
@@ -1805,6 +1831,7 @@ EXPORTED void search_attr_init(void)
 	},{
 	    "keyword",
 	    SEA_MUTABLE,
+	    SEARCH_PART_NONE,
 	    search_keyword_internalise,
 	    /*cmp*/NULL,
 	    search_keyword_match,
@@ -1817,6 +1844,7 @@ EXPORTED void search_attr_init(void)
 	},{
 	    "convflags",
 	    SEA_MUTABLE,
+	    SEARCH_PART_NONE,
 	    search_convflags_internalise,
 	    /*cmp*/NULL,
 	    search_convflags_match,
@@ -1829,6 +1857,7 @@ EXPORTED void search_attr_init(void)
 	},{
 	    "convmodseq",
 	    SEA_MUTABLE,
+	    SEARCH_PART_NONE,
 	    search_convmodseq_internalise,
 	    /*cmp*/NULL,
 	    search_convmodseq_match,
@@ -1841,6 +1870,7 @@ EXPORTED void search_attr_init(void)
 	},{
 	    "modseq",
 	    SEA_MUTABLE,
+	    SEARCH_PART_NONE,
 	    /*internalise*/NULL,
 	    /*cmp*/NULL,
 	    search_uint64_match,
@@ -1853,6 +1883,7 @@ EXPORTED void search_attr_init(void)
 	},{
 	    "cid",
 	    SEA_MUTABLE,
+	    SEARCH_PART_NONE,
 	    /*internalise*/NULL,
 	    /*cmp*/NULL,
 	    search_uint64_match,
@@ -1865,6 +1896,7 @@ EXPORTED void search_attr_init(void)
 	},{
 	    "folder",
 	    /*flags*/0,
+	    SEARCH_PART_NONE,
 	    search_folder_internalise,
 	    /*cmp*/NULL,
 	    search_folder_match,
@@ -1877,6 +1909,7 @@ EXPORTED void search_attr_init(void)
 	},{
 	    "annotation",
 	    SEA_MUTABLE,
+	    SEARCH_PART_NONE,
 	    search_annotation_internalise,
 	    /*cmp*/NULL,
 	    search_annotation_match,
@@ -1889,6 +1922,7 @@ EXPORTED void search_attr_init(void)
 	},{
 	    "size",
 	    /*flags*/0,
+	    SEARCH_PART_NONE,
 	    /*internalise*/NULL,
 	    search_uint32_cmp,
 	    search_uint32_match,
@@ -1901,6 +1935,7 @@ EXPORTED void search_attr_init(void)
 	},{
 	    "internaldate",
 	    /*flags*/0,
+	    SEARCH_PART_NONE,
 	    /*internalise*/NULL,
 	    search_uint32_cmp,
 	    search_uint32_match,
@@ -1913,6 +1948,7 @@ EXPORTED void search_attr_init(void)
 	},{
 	    "sentdate",
 	    /*flags*/0,
+	    SEARCH_PART_NONE,
 	    /*internalise*/NULL,
 	    search_uint32_cmp,
 	    search_uint32_match,
@@ -1925,6 +1961,7 @@ EXPORTED void search_attr_init(void)
 	},{
 	    "body",
 	    /*flags*/0,
+	    SEARCH_PART_BODY,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_text_match,
@@ -1937,6 +1974,7 @@ EXPORTED void search_attr_init(void)
 	},{
 	    "text",
 	    /*flags*/0,
+	    SEARCH_PART_ANY,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_text_match,
@@ -1983,6 +2021,7 @@ EXPORTED const search_attr_t *search_attr_find_field(const char *field)
     static const search_attr_t proto = {
 	"name",
 	/*flags*/0,
+	SEARCH_PART_NONE,
 	search_string_internalise,
 	/*cmp*/NULL,
 	search_header_match,
@@ -2010,6 +2049,8 @@ EXPORTED const search_attr_t *search_attr_find_field(const char *field)
 	attr = (search_attr_t *)xzmalloc(sizeof(search_attr_t));
 	*attr = proto;
 	attr->name = key;
+	attr->part = (config_getswitch(IMAPOPT_SEARCH_INDEX_HEADERS)
+			? SEARCH_PART_HEADERS : -1);
 	attr->data1 = strchr(key, ':')+1;
 	hash_insert(attr->name, (void *)attr, &attrs_by_name);
 	key = NULL;	/* attr takes this over */

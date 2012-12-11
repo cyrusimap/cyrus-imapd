@@ -1449,65 +1449,55 @@ out:
     return r;
 }
 
-static void build_query_part(search_builder_t *bx,
-			     struct strlist **slp,
-			     int part, int remove,
-			     int *nmatchesp)
-{
-    struct strlist *s;
-
-    for (s = (*slp) ; s ; s = s->next) {
-	bx->match(bx, part, s->s);
-	(*nmatchesp)++;
-    }
-
-    if (remove) {
-	freestrlist(*slp);
-	*slp = NULL;
-    }
-}
-
 static void build_query(search_builder_t *bx,
-			struct searchargs *searchargs,
+			search_expr_t *e,
 			int remove,
 			int *nmatchesp)
 {
-    struct searchsub* sub;
+    search_expr_t *child;
+    int bop = -1;
 
-    bx->begin_boolean(bx, SEARCH_OP_AND);
+    switch (e->op) {
 
-    build_query_part(bx, &searchargs->from, SEARCH_PART_FROM, remove, nmatchesp);
-    build_query_part(bx, &searchargs->to, SEARCH_PART_TO, remove, nmatchesp);
-    build_query_part(bx, &searchargs->cc, SEARCH_PART_CC, remove, nmatchesp);
-    build_query_part(bx, &searchargs->bcc, SEARCH_PART_BCC, remove, nmatchesp);
-    build_query_part(bx, &searchargs->subject, SEARCH_PART_SUBJECT, remove, nmatchesp);
-    /* Note - we cannot remove when searching headers, as we need
-     * to match both the header field name and value, which always
-     * requires a post filter pass */
-    build_query_part(bx, &searchargs->header_name, SEARCH_PART_HEADERS, 0, nmatchesp);
-    build_query_part(bx, &searchargs->header, SEARCH_PART_HEADERS, 0, nmatchesp);
-    build_query_part(bx, &searchargs->body, SEARCH_PART_BODY, remove, nmatchesp);
-    build_query_part(bx, &searchargs->listid, SEARCH_PART_LISTID, remove, nmatchesp);
-    build_query_part(bx, &searchargs->contenttype, SEARCH_PART_TYPE, remove, nmatchesp);
-    build_query_part(bx, &searchargs->text, SEARCH_PART_ANY, remove, nmatchesp);
+    case SEOP_NOT:
+	bop = SEARCH_OP_NOT;
+	break;
 
-    for (sub = searchargs->sublist ; sub ; sub = sub->next) {
-	assert(!remove);
-	if (sub->sub2 == NULL) {
-	    /* do nothing; because our search is conservative (may include false
-	       positives) we can't compute the NOT (since the result might include
-	       false negatives, which we do not allow) */
-	    /* Note that it's OK to do nothing. We'll just be returning more
-	       false positives. */
-	} else {
-	    bx->begin_boolean(bx, SEARCH_OP_OR);
-	    build_query(bx, sub->sub1, remove, nmatchesp);
-	    build_query(bx, sub->sub2, remove, nmatchesp);
-	    bx->end_boolean(bx, SEARCH_OP_OR);
+    case SEOP_AND:
+	bop = SEARCH_OP_AND;
+	break;
+
+    case SEOP_OR:
+	bop = SEARCH_OP_OR;
+	break;
+
+    case SEOP_MATCH:
+	if (e->attr && e->attr->part >= 0) {
+	    bx->match(bx, e->attr->part, e->value.s);
+	    (*nmatchesp)++;
+	    if (remove && e->attr->part != SEARCH_PART_HEADERS) {
+		/*
+		 * We're relying on the search engine to correctly
+		 * find matching messages, so we don't need to
+		 * keep this node in the expression tree anymore.
+		 * Rather than remove it we neuter it.
+		 */
+		search_expr_neutralise(e);
+	    }
 	}
+	return;
+
+    default:
+	return;
     }
 
-    bx->end_boolean(bx, SEARCH_OP_AND);
+    if (e->children) {
+	assert(bop != -1);
+	bx->begin_boolean(bx, bop);
+	for (child = e->children ; child ; child = child->next)
+	    build_query(bx, child, remove, nmatchesp);
+	bx->end_boolean(bx, bop);
+    }
 }
 
 static int index_prefilter_messages(unsigned* msg_list,
@@ -2915,7 +2905,7 @@ EXPORTED int index_snippets(struct index_state *state,
 	goto out;
     }
 
-    build_query(bx, searchargs, 0, &nmatches);
+    build_query(bx, searchargs->root, 0, &nmatches);
     if (!bx->get_internalised) goto out;
     intquery = bx->get_internalised(bx);
     search_end_search(bx);

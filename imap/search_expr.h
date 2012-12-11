@@ -86,6 +86,7 @@ typedef struct search_attr search_attr_t;
 struct search_attr {
     const char *name;
     int flags;
+    int part;
     void (*internalise)(struct mailbox *, const union search_value *,
 		       void **internalisedp);
     int (*cmp)(message_t *, const union search_value *, void *internalised, void *data1);
@@ -131,6 +132,7 @@ extern int search_expr_evaluate(message_t *m, const search_expr_t *);
 extern int search_expr_uses_attr(const search_expr_t *, const char *);
 extern int search_expr_is_mutable(const search_expr_t *);
 extern unsigned int search_expr_get_countability(const search_expr_t *);
+extern void search_expr_neutralise(search_expr_t *);
 
 extern void search_attr_init(void);
 extern const search_attr_t *search_attr_find(const char *);
