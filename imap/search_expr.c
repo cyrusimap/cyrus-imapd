@@ -165,6 +165,7 @@ EXPORTED search_expr_t *search_expr_new(search_expr_t *parent, enum search_op op
  */
 EXPORTED void search_expr_free(search_expr_t *e)
 {
+    if (!e) return;
     while (e->children)
 	search_expr_free(detach(e, e->children));
     if (e->attr) {
@@ -874,75 +875,136 @@ static int is_folder_node(const search_expr_t *e)
 	    !strcasecmp(e->attr->name, "folder"));
 }
 
+static int is_indexed_node(const search_expr_t *e)
+{
+    if (e->op == SEOP_NOT)
+	return is_indexed_node(e->children);
+    return (e->op == SEOP_MATCH &&
+	    e->attr &&
+	    e->attr->part != SEARCH_PART_NONE);
+}
+
 /*
- * Split a search expression into one or more expressions, each of which
- * applies to only a single named folder or to all the user's folders.
- * Destroys the original expression as a side effect.  The callback
- * function 'cb' is called one or more times with a folder name and
- * an expression tree which has just been detached from the original
- * expression tree.  The callback is responsible for freeing the
- * expression using search_expr_free().  The folder name may be NULL,
- * meaning the expression applies to all folders.  The callback may
- * be called multiple times with the same folder, in which case the
- * expressions should be considered logicallay ORed together.  Each
- * expression will be normalised and will contain no OR nodes, and
- * at most one AND node at the root.
+ * Split a search expression into one or more parts, each of which
+ * satisfies the earliest of these conditions:
+ *
+ *  - contains at least one indexed match node
+ *	(the callback's 'indexed' is non-NULL), or
+ *
+ *  - is limited to exactly one folder by a positive folder match node
+ *	(the callback's 'mboxname' is non-NULL), or
+ *
+ *  - applies to all folders and is not indexed
+ *	(both the callback's 'mboxname' and 'indexed' are NULL)
+ *
+ * Destroys the original expression as a side effect.
+ *
+ * The callback function 'cb' is called one or more times with up to two
+ * expression trees which have just been detached from the original expression
+ * tree.  Both of these trees will be in DNF and will be at most a
+ * conjuctive node, i.e. no disjunctions.
+ *
+ * The 'indexed' tree, if not NULL, contains all the indexed search terms.
+ * The 'scan' tree will never be NULL, although it may be a trivial tree
+ * comprising a single (true) node.  It contains an expression that must be
+ * matched by every message reported by the index or the folder scan.
+ *
+ * The callback is responsible for freeing the expression using
+ * search_expr_free().  The callback may be called multiple times with
+ * the same folder/index combination, in which case the expressions should
+ * be considered logicallay ORed together.
  *
  * Works on normalised expressions only.
  */
-EXPORTED void search_expr_split_by_folder(search_expr_t *e,
-					  void (*cb)(const char *, search_expr_t *, void *),
-					  void *rock)
+EXPORTED void search_expr_split_by_folder_and_index(search_expr_t *e,
+		  void (*cb)(const char *, search_expr_t *, search_expr_t *, void *),
+		  void *rock)
 {
     search_expr_t *child;
 
     if (e->op == SEOP_OR) {
 	/* top level node */
 	while ((child = detachp(&e->children)) != NULL)
-	    search_expr_split_by_folder(child, cb, rock);
+	    search_expr_split_by_folder_and_index(child, cb, rock);
 	search_expr_free(e);
     }
     else if (e->op == SEOP_AND) {
 	search_expr_t **prevp;
-	search_expr_t **the_prevp = NULL;
-
-	/* gnb:TODO need to uniquify the (match folder) nodes
-	 * before this will work properly */
+	search_expr_t **folder_prevp = NULL;
+	int nfolders = 0;
+	int nindexes = 0;
 
 	for (prevp = &e->children ; *prevp ; prevp = &(*prevp)->next) {
+	    if (is_indexed_node(*prevp)) {
+		nindexes++;
+	    }
 	    if (is_folder_node(*prevp)) {
-		if (the_prevp) {
-		    /* Two or more positive folder matches; this expression
-		     * will never match any messages because messages belong
-		     * to exactly one folder, so just delete it.  */
-		    search_expr_free(e);
-		    return;
-		}
-		the_prevp = prevp;
+		nfolders++;
+		folder_prevp = prevp;
 	    }
 	}
-	if (!the_prevp) {
+	if (nindexes) {
+	    /*
+	     * The presence of indexable fields overrides all other
+	     * considerations; we assume it's easier to consult the
+	     * index and then filter out folders later.  Note that this
+	     * assumption is broken for SQUAT which is per-folder.
+	     *
+	     * We remove the indexed matches from the conjunction and
+	     * build a new conjunction containing only those matches.
+	     * Note that this assumes the search engine does not give
+	     * false positives, which is also broken for SQUAT.
+	     */
+	    search_expr_t *indexed = search_expr_new(NULL, SEOP_AND);
+
+	    for (prevp = &e->children ; *prevp ; ) {
+		if (is_indexed_node(*prevp))
+		    append(indexed, detachp(prevp));
+		else
+		    prevp = &(*prevp)->next;
+	    }
+	    search_expr_normalise(&indexed);	/* in case of a trivial AND */
+	    if (!e->children) {
+		search_expr_free(e);
+		e = search_expr_new(NULL, SEOP_TRUE);
+	    }
+	    else
+		search_expr_normalise(&e);
+	    cb(NULL, indexed, e, rock);
+	}
+	else if (!nfolders) {
 	    /* No positive folder match: whole expression applies
 	     * to all folders */
-	    cb(NULL, e, rock);
+	    cb(NULL, NULL, e, rock);
 	}
-	else {
+	else if (nfolders == 1) {
 	    /* Exactly one positive folder match: remainder of expression
 	     * applies to this specific folder */
-	    child = detachp(the_prevp);
+	    child = detachp(folder_prevp);
 	    /* normalise the remaining subtree - the top node might be
 	     * trivial now that we've detached the folder match */
 	    search_expr_normalise(&e);
-	    cb(child->value.s, e, rock);
+	    cb(child->value.s, NULL, e, rock);
 	    search_expr_free(child);
+	}
+	else {
+	    /* Two or more positive folder matches; this expression
+	     * will never match any messages because messages belong
+	     * to exactly one folder, so just delete it.
+	     * TODO need to uniquify the (match folder) nodes
+	     * before this will work properly */
+	    search_expr_free(e);
 	}
     }
     else if (is_folder_node(e)) {
-	cb(e->value.s, search_expr_new(NULL, SEOP_TRUE), rock);
+	cb(e->value.s, NULL, search_expr_new(NULL, SEOP_TRUE), rock);
 	search_expr_free(e);
     }
+    else if (is_indexed_node(e)) {
+	cb(NULL, e, search_expr_new(NULL, SEOP_TRUE), rock);
+    }
     else {
-	cb(NULL, e, rock);
+	cb(NULL, NULL, e, rock);
     }
 }
 

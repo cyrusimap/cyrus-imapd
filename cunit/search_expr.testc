@@ -1063,23 +1063,32 @@ static void test_countability(void)
 #undef TESTCASE
 }
 
-static void add_expr(const char *mboxname, search_expr_t *e, void *rock)
+static void add_subquery(const char *mboxname, search_expr_t *indexed, search_expr_t *e, void *rock)
 {
     struct buf *buf = rock;
-    char *s = search_expr_serialise(e);
+    char *s;
 
     if (mboxname)
-	buf_printf(buf, "\"%s\"", mboxname);
-    else
-	buf_appendcstr(buf, "NULL");
-    buf_printf(buf, ": %s\n", s);
+	buf_printf(buf, "mboxname \"%s\" ", mboxname);
+
+    if (indexed) {
+	s = search_expr_serialise(indexed);
+	buf_printf(buf, "indexed %s ", s);
+	free(s);
+    }
+
+    s = search_expr_serialise(e);
+    buf_appendcstr(buf, s);
+    free(s);
+
+    buf_putc(buf, '\n');
     buf_cstring(buf);
 
-    free(s);
     search_expr_free(e);
+    search_expr_free(indexed);
 }
 
-static void test_split_by_folder(void)
+static void test_split_by_folder_and_index(void)
 {
 #define TESTCASE(in, exp) \
     { \
@@ -1090,79 +1099,128 @@ static void test_split_by_folder(void)
  \
 	e = search_expr_unserialise(_in); \
 	CU_ASSERT_PTR_NOT_NULL_FATAL(e); \
-	search_expr_split_by_folder(e, add_expr, &actual); \
+	search_expr_split_by_folder_and_index(e, add_subquery, &actual); \
 	CU_ASSERT_STRING_EQUAL(actual.s, expected); \
 	buf_free(&actual); \
     }
 
+    /* Note, we use message-id because it's not indexable */
+
     /* comparison nodes and negations of comparison nodes, which don't
      * match any folders, get a NULL mboxname */
     TESTCASE("(false)",
-	     "NULL: (false)\n");
+	     "(false)\n");
     TESTCASE("(true)",
-	     "NULL: (true)\n");
-    TESTCASE("(match subject \"ETSY\")",
-	     "NULL: (match subject \"ETSY\")\n");
-    TESTCASE("(not (match subject \"ETSY\"))",
-	     "NULL: (not (match subject \"ETSY\"))\n");
+	     "(true)\n");
+    TESTCASE("(match message-id \"ETSY\")",
+	     "(match message-id \"ETSY\")\n");
+    TESTCASE("(not (match message-id \"ETSY\"))",
+	     "(not (match message-id \"ETSY\"))\n");
 
     /* a folder match node a (true) node and that mboxname */
     TESTCASE("(match folder \"inbox.Cosby.Sweater\")",
-	     "\"inbox.Cosby.Sweater\": (true)\n");
+	     "mboxname \"inbox.Cosby.Sweater\" (true)\n");
 
     /* negation of a folder match node gets a NULL mboxname - it's
      * supposed to match every folder *EXCEPT* the named one */
     TESTCASE("(not (match folder \"inbox.Cosby.Sweater\"))",
-	     "NULL: (not (match folder \"inbox.Cosby.Sweater\"))\n");
-    TESTCASE("(and (match subject \"ETSY\") (not (match folder \"inbox.Cosby.Sweater\")))",
-	     "NULL: (and (match subject \"ETSY\") (not (match folder \"inbox.Cosby.Sweater\")))\n");
+	     "(not (match folder \"inbox.Cosby.Sweater\"))\n");
+    TESTCASE("(and (match message-id \"ETSY\") (not (match folder \"inbox.Cosby.Sweater\")))",
+	     "(and (match message-id \"ETSY\") (not (match folder \"inbox.Cosby.Sweater\")))\n");
 
     /* a conjuctive node which doesn't match folders
      * gets a NULL mboxname */
-    TESTCASE("(and (le size 123) (match subject \"ETSY\"))",
-	     "NULL: (and (le size 123) (match subject \"ETSY\"))\n");
-    TESTCASE("(and (not (le size 123)) (match subject \"ETSY\"))",
-	     "NULL: (and (not (le size 123)) (match subject \"ETSY\"))\n");
-    TESTCASE("(and (le size 123) (not (match subject \"ETSY\")))",
-	     "NULL: (and (le size 123) (not (match subject \"ETSY\")))\n");
+    TESTCASE("(and (le size 123) (match message-id \"ETSY\"))",
+	     "(and (le size 123) (match message-id \"ETSY\"))\n");
+    TESTCASE("(and (not (le size 123)) (match message-id \"ETSY\"))",
+	     "(and (not (le size 123)) (match message-id \"ETSY\"))\n");
+    TESTCASE("(and (le size 123) (not (match message-id \"ETSY\")))",
+	     "(and (le size 123) (not (match message-id \"ETSY\")))\n");
 
     /* a conjuctive node which does match a folder gets the remainder
      * of the expression and that named mboxname */
-    TESTCASE("(and (match folder \"inbox.Cosby.Sweater\") (match subject \"ETSY\"))",
-	     "\"inbox.Cosby.Sweater\": (match subject \"ETSY\")\n");
-    TESTCASE("(and (match folder \"inbox.Cosby.Sweater\") (not (match subject \"ETSY\")))",
-	     "\"inbox.Cosby.Sweater\": (not (match subject \"ETSY\"))\n");
-    TESTCASE("(and (match subject \"ETSY\") (match folder \"inbox.Cosby.Sweater\"))",
-	     "\"inbox.Cosby.Sweater\": (match subject \"ETSY\")\n");
-    TESTCASE("(and (not (match subject \"ETSY\")) (match folder \"inbox.Cosby.Sweater\"))",
-	     "\"inbox.Cosby.Sweater\": (not (match subject \"ETSY\"))\n");
+    TESTCASE("(and (match folder \"inbox.Cosby.Sweater\") (match message-id \"ETSY\"))",
+	     "mboxname \"inbox.Cosby.Sweater\" (match message-id \"ETSY\")\n");
+    TESTCASE("(and (match folder \"inbox.Cosby.Sweater\") (not (match message-id \"ETSY\")))",
+	     "mboxname \"inbox.Cosby.Sweater\" (not (match message-id \"ETSY\"))\n");
+    TESTCASE("(and (match message-id \"ETSY\") (match folder \"inbox.Cosby.Sweater\"))",
+	     "mboxname \"inbox.Cosby.Sweater\" (match message-id \"ETSY\")\n");
+    TESTCASE("(and (not (match message-id \"ETSY\")) (match folder \"inbox.Cosby.Sweater\"))",
+	     "mboxname \"inbox.Cosby.Sweater\" (not (match message-id \"ETSY\"))\n");
 
     /* a disjuctive node which doesn't match folders
      * gets split into two expressions each with a NULL mboxname*/
-    TESTCASE("(or (le size 123) (match subject \"ETSY\"))",
-	     "NULL: (le size 123)\n"
-	     "NULL: (match subject \"ETSY\")\n");
-    TESTCASE("(or (not (le size 123)) (match subject \"ETSY\"))",
-	     "NULL: (not (le size 123))\n"
-	     "NULL: (match subject \"ETSY\")\n");
-    TESTCASE("(or (le size 123) (not (match subject \"ETSY\")))",
-	     "NULL: (le size 123)\n"
-	     "NULL: (not (match subject \"ETSY\"))\n");
+    TESTCASE("(or (le size 123) (match message-id \"ETSY\"))",
+	     "(le size 123)\n"
+	     "(match message-id \"ETSY\")\n");
+    TESTCASE("(or (not (le size 123)) (match message-id \"ETSY\"))",
+	     "(not (le size 123))\n"
+	     "(match message-id \"ETSY\")\n");
+    TESTCASE("(or (le size 123) (not (match message-id \"ETSY\")))",
+	     "(le size 123)\n"
+	     "(not (match message-id \"ETSY\"))\n");
 
     /* a disjuctive node which does match folders gets
      * split into two expressions each with the given mboxname*/
     TESTCASE("(or (le size 123) (match folder \"inbox.Cosby.Sweater\"))",
-	     "NULL: (le size 123)\n"
-	     "\"inbox.Cosby.Sweater\": (true)\n");
+	     "(le size 123)\n"
+	     "mboxname \"inbox.Cosby.Sweater\" (true)\n");
     TESTCASE("(or (match folder \"inbox.Cosby.Sweater\") (le size 123))",
-	     "\"inbox.Cosby.Sweater\": (true)\n"
-	     "NULL: (le size 123)\n");
+	     "mboxname \"inbox.Cosby.Sweater\" (true)\n"
+	     "(le size 123)\n");
     TESTCASE("(or (match folder \"inbox.Tumblr\") (match folder \"inbox.Mlkshk\"))",
-	     "\"inbox.Tumblr\": (true)\n"
-	     "\"inbox.Mlkshk\": (true)\n");
+	     "mboxname \"inbox.Tumblr\" (true)\n"
+	     "mboxname \"inbox.Mlkshk\" (true)\n");
     TESTCASE("(or (and (le size 123) (match folder \"inbox.Tumblr\")) (and (ge size 456) (match folder \"inbox.Mlkshk\")))",
-	     "\"inbox.Tumblr\": (le size 123)\n"
-	     "\"inbox.Mlkshk\": (ge size 456)\n");
+	     "mboxname \"inbox.Tumblr\" (le size 123)\n"
+	     "mboxname \"inbox.Mlkshk\" (ge size 456)\n");
+
+    /* indexed comparison nodes and their negations, which don't
+     * match any folders, get a NULL mboxname and a trivial scan. */
+    TESTCASE("(match subject \"ETSY\")",
+	     "indexed (match subject \"ETSY\") (true)\n");
+    TESTCASE("(not (match subject \"ETSY\"))",
+	     "indexed (not (match subject \"ETSY\")) (true)\n");
+
+    /* conjunctions of indexed comparison nodes and their negations, which
+     * don't match any folders, get a NULL mboxname and a trivial scan. */
+    TESTCASE("(and (match subject \"ETSY\") (match subject \"TUMBLR\"))",
+	     "indexed (and (match subject \"ETSY\") (match subject \"TUMBLR\")) (true)\n");
+
+    /* conjunctions of indexed comparison nodes and their negations, with
+     * non-indexed nodes, which don't match any folders, get a NULL mboxname
+     * two trees with the indexed nodes separated out */
+    TESTCASE("(and (match subject \"ETSY\") (match message-id \"TUMBLR\"))",
+	     "indexed (match subject \"ETSY\") (match message-id \"TUMBLR\")\n");
+    TESTCASE("(and (match message-id \"TUMBLR\") (match subject \"ETSY\"))",
+	     "indexed (match subject \"ETSY\") (match message-id \"TUMBLR\")\n");
+
+    /* conjunctions of indexed comparison nodes and their negations, which
+     * do match folders either positively or negatively, get a NULL mboxname
+     * because we favour the index */
+    TESTCASE("(and (match subject \"ETSY\") (match folder \"inbox.Tumblr\"))",
+	     "indexed (match subject \"ETSY\") (match folder \"inbox.Tumblr\")\n");
+    TESTCASE("(and (match folder \"inbox.Tumblr\") (match subject \"ETSY\"))",
+	     "indexed (match subject \"ETSY\") (match folder \"inbox.Tumblr\")\n");
+    TESTCASE("(and (match subject \"ETSY\") (not (match folder \"inbox.Tumblr\")))",
+	     "indexed (match subject \"ETSY\") (not (match folder \"inbox.Tumblr\"))\n");
+    TESTCASE("(and (not (match folder \"inbox.Tumblr\")) (match subject \"ETSY\"))",
+	     "indexed (match subject \"ETSY\") (not (match folder \"inbox.Tumblr\"))\n");
+
+    /* a disjuctive node where one side contains indexed matches,
+     * is split into multiple callbacks, some indexed, some not */
+    TESTCASE("(or (match subject \"ETSY\") (match folder \"inbox.Cosby.Sweater\"))",
+	     "indexed (match subject \"ETSY\") (true)\n"
+	     "mboxname \"inbox.Cosby.Sweater\" (true)\n");
+    TESTCASE("(or (match folder \"inbox.Cosby.Sweater\") (match subject \"ETSY\"))",
+	     "mboxname \"inbox.Cosby.Sweater\" (true)\n"
+	     "indexed (match subject \"ETSY\") (true)\n");
+    TESTCASE("(or (match subject \"TUMBLR\") (match subject \"MLKSHK\"))",
+	     "indexed (match subject \"TUMBLR\") (true)\n"
+	     "indexed (match subject \"MLKSHK\") (true)\n");
+    TESTCASE("(or (and (le size 123) (match subject \"TUMBLR\")) (and (ge size 456) (match subject \"MLKSHK\")))",
+	     "indexed (match subject \"TUMBLR\") (le size 123)\n"
+	     "indexed (match subject \"MLKSHK\") (ge size 456)\n");
 
 #undef TESTCASE
 }
