@@ -187,35 +187,6 @@ struct searchannot {
     struct buf value;
 };
 
-#if 1
-struct searchsub {
-    struct searchsub *next;
-    struct searchargs *sub1;
-    /*
-     * If sub2 is null, then sub1 is NOT'ed.
-     * Otherwise sub1 and sub2 are OR'ed.
-     */
-    struct searchargs *sub2;
-};
-#endif
-
-/* Bitmasks for search flags */
-enum {
-    SEARCH_RECENT_SET =         (1<<0),
-    SEARCH_RECENT_UNSET	=       (1<<1),
-    SEARCH_SEEN_SET =           (1<<2),
-    SEARCH_SEEN_UNSET =	        (1<<3),
-    SEARCH_CONVSEEN_SET =       (1<<4),
-    SEARCH_CONVSEEN_UNSET =     (1<<5)
-};
-
-#define SEARCH_MUTABLEFLAGS (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET|\
-			     SEARCH_SEEN_SET|SEARCH_SEEN_UNSET|\
-			     SEARCH_CONVSEEN_SET|SEARCH_CONVSEEN_UNSET)
-#define SEARCH_COUNTEDFLAGS (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET|\
-			     SEARCH_SEEN_SET|SEARCH_SEEN_UNSET|\
-			     SEARCH_CONVSEEN_SET|SEARCH_CONVSEEN_UNSET)
-
 /* Flags for searchargs.state */
 enum {
     GETSEARCH_CHARSET_KEYWORD = 0x01,
@@ -234,39 +205,6 @@ enum {
 
 /* Things that may be searched for */
 struct searchargs {
-#if 1
-    bit32 flags;
-    unsigned smaller, larger;
-    time_t before, after;
-    time_t sentbefore, sentafter;
-    bit32 system_flags_set;
-    bit32 system_flags_unset;
-    struct strlist *keywords;
-    struct strlist *unkeywords;
-    bit32 user_flags_set[MAX_USER_FLAGS/32];
-    bit32 user_flags_unset[MAX_USER_FLAGS/32];
-    struct seqset *sequence;
-    struct seqset *uidsequence;
-    struct strlist *from;
-    struct strlist *to;
-    struct strlist *cc;
-    struct strlist *bcc;
-    struct strlist *subject;
-    struct strlist *messageid;
-    struct strlist *listid;
-    struct strlist *contenttype;
-    struct strlist *body;
-    struct strlist *text;
-    struct strlist *header_name, *header;
-    struct strlist *folder;
-    struct searchsub *sublist;
-    modseq_t modseq;
-    struct searchannot *annotations;
-    struct strlist *convflags;
-    modseq_t convmodseq;
-
-    bit32 cache_atleast;
-#endif
     struct search_expr *root;
     int charset;
     int state;
