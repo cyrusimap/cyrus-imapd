@@ -867,6 +867,87 @@ EXPORTED void search_expr_neutralise(search_expr_t *e)
 
 /* ====================================================================== */
 
+static int is_folder_node(const search_expr_t *e)
+{
+    return (e->op == SEOP_MATCH &&
+	    e->attr &&
+	    !strcasecmp(e->attr->name, "folder"));
+}
+
+/*
+ * Split a search expression into one or more expressions, each of which
+ * applies to only a single named folder or to all the user's folders.
+ * Destroys the original expression as a side effect.  The callback
+ * function 'cb' is called one or more times with a folder name and
+ * an expression tree which has just been detached from the original
+ * expression tree.  The callback is responsible for freeing the
+ * expression using search_expr_free().  The folder name may be NULL,
+ * meaning the expression applies to all folders.  The callback may
+ * be called multiple times with the same folder, in which case the
+ * expressions should be considered logicallay ORed together.  Each
+ * expression will be normalised and will contain no OR nodes, and
+ * at most one AND node at the root.
+ *
+ * Works on normalised expressions only.
+ */
+EXPORTED void search_expr_split_by_folder(search_expr_t *e,
+					  void (*cb)(const char *, search_expr_t *, void *),
+					  void *rock)
+{
+    search_expr_t *child;
+
+    if (e->op == SEOP_OR) {
+	/* top level node */
+	while ((child = detachp(&e->children)) != NULL)
+	    search_expr_split_by_folder(child, cb, rock);
+	search_expr_free(e);
+    }
+    else if (e->op == SEOP_AND) {
+	search_expr_t **prevp;
+	search_expr_t **the_prevp = NULL;
+
+	/* gnb:TODO need to uniquify the (match folder) nodes
+	 * before this will work properly */
+
+	for (prevp = &e->children ; *prevp ; prevp = &(*prevp)->next) {
+	    if (is_folder_node(*prevp)) {
+		if (the_prevp) {
+		    /* Two or more positive folder matches; this expression
+		     * will never match any messages because messages belong
+		     * to exactly one folder, so just delete it.  */
+		    search_expr_free(e);
+		    return;
+		}
+		the_prevp = prevp;
+	    }
+	}
+	if (!the_prevp) {
+	    /* No positive folder match: whole expression applies
+	     * to all folders */
+	    cb(NULL, e, rock);
+	}
+	else {
+	    /* Exactly one positive folder match: remainder of expression
+	     * applies to this specific folder */
+	    child = detachp(the_prevp);
+	    /* normalise the remaining subtree - the top node might be
+	     * trivial now that we've detached the folder match */
+	    search_expr_normalise(&e);
+	    cb(child->value.s, e, rock);
+	    search_expr_free(child);
+	}
+    }
+    else if (is_folder_node(e)) {
+	cb(e->value.s, search_expr_new(NULL, SEOP_TRUE), rock);
+	search_expr_free(e);
+    }
+    else {
+	cb(NULL, e, rock);
+    }
+}
+
+/* ====================================================================== */
+
 static int search_string_match(message_t *m, const union search_value *v,
 				void *internalised, void *data1)
 {

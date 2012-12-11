@@ -1063,6 +1063,110 @@ static void test_countability(void)
 #undef TESTCASE
 }
 
+static void add_expr(const char *mboxname, search_expr_t *e, void *rock)
+{
+    struct buf *buf = rock;
+    char *s = search_expr_serialise(e);
+
+    if (mboxname)
+	buf_printf(buf, "\"%s\"", mboxname);
+    else
+	buf_appendcstr(buf, "NULL");
+    buf_printf(buf, ": %s\n", s);
+    buf_cstring(buf);
+
+    free(s);
+    search_expr_free(e);
+}
+
+static void test_split_by_folder(void)
+{
+#define TESTCASE(in, exp) \
+    { \
+	static const char _in[] = (in); \
+	static const char expected[] = (exp); \
+	search_expr_t *e; \
+	struct buf actual = BUF_INITIALIZER; \
+ \
+	e = search_expr_unserialise(_in); \
+	CU_ASSERT_PTR_NOT_NULL_FATAL(e); \
+	search_expr_split_by_folder(e, add_expr, &actual); \
+	CU_ASSERT_STRING_EQUAL(actual.s, expected); \
+	buf_free(&actual); \
+    }
+
+    /* comparison nodes and negations of comparison nodes, which don't
+     * match any folders, get a NULL mboxname */
+    TESTCASE("(false)",
+	     "NULL: (false)\n");
+    TESTCASE("(true)",
+	     "NULL: (true)\n");
+    TESTCASE("(match subject \"ETSY\")",
+	     "NULL: (match subject \"ETSY\")\n");
+    TESTCASE("(not (match subject \"ETSY\"))",
+	     "NULL: (not (match subject \"ETSY\"))\n");
+
+    /* a folder match node a (true) node and that mboxname */
+    TESTCASE("(match folder \"inbox.Cosby.Sweater\")",
+	     "\"inbox.Cosby.Sweater\": (true)\n");
+
+    /* negation of a folder match node gets a NULL mboxname - it's
+     * supposed to match every folder *EXCEPT* the named one */
+    TESTCASE("(not (match folder \"inbox.Cosby.Sweater\"))",
+	     "NULL: (not (match folder \"inbox.Cosby.Sweater\"))\n");
+    TESTCASE("(and (match subject \"ETSY\") (not (match folder \"inbox.Cosby.Sweater\")))",
+	     "NULL: (and (match subject \"ETSY\") (not (match folder \"inbox.Cosby.Sweater\")))\n");
+
+    /* a conjuctive node which doesn't match folders
+     * gets a NULL mboxname */
+    TESTCASE("(and (le size 123) (match subject \"ETSY\"))",
+	     "NULL: (and (le size 123) (match subject \"ETSY\"))\n");
+    TESTCASE("(and (not (le size 123)) (match subject \"ETSY\"))",
+	     "NULL: (and (not (le size 123)) (match subject \"ETSY\"))\n");
+    TESTCASE("(and (le size 123) (not (match subject \"ETSY\")))",
+	     "NULL: (and (le size 123) (not (match subject \"ETSY\")))\n");
+
+    /* a conjuctive node which does match a folder gets the remainder
+     * of the expression and that named mboxname */
+    TESTCASE("(and (match folder \"inbox.Cosby.Sweater\") (match subject \"ETSY\"))",
+	     "\"inbox.Cosby.Sweater\": (match subject \"ETSY\")\n");
+    TESTCASE("(and (match folder \"inbox.Cosby.Sweater\") (not (match subject \"ETSY\")))",
+	     "\"inbox.Cosby.Sweater\": (not (match subject \"ETSY\"))\n");
+    TESTCASE("(and (match subject \"ETSY\") (match folder \"inbox.Cosby.Sweater\"))",
+	     "\"inbox.Cosby.Sweater\": (match subject \"ETSY\")\n");
+    TESTCASE("(and (not (match subject \"ETSY\")) (match folder \"inbox.Cosby.Sweater\"))",
+	     "\"inbox.Cosby.Sweater\": (not (match subject \"ETSY\"))\n");
+
+    /* a disjuctive node which doesn't match folders
+     * gets split into two expressions each with a NULL mboxname*/
+    TESTCASE("(or (le size 123) (match subject \"ETSY\"))",
+	     "NULL: (le size 123)\n"
+	     "NULL: (match subject \"ETSY\")\n");
+    TESTCASE("(or (not (le size 123)) (match subject \"ETSY\"))",
+	     "NULL: (not (le size 123))\n"
+	     "NULL: (match subject \"ETSY\")\n");
+    TESTCASE("(or (le size 123) (not (match subject \"ETSY\")))",
+	     "NULL: (le size 123)\n"
+	     "NULL: (not (match subject \"ETSY\"))\n");
+
+    /* a disjuctive node which does match folders gets
+     * split into two expressions each with the given mboxname*/
+    TESTCASE("(or (le size 123) (match folder \"inbox.Cosby.Sweater\"))",
+	     "NULL: (le size 123)\n"
+	     "\"inbox.Cosby.Sweater\": (true)\n");
+    TESTCASE("(or (match folder \"inbox.Cosby.Sweater\") (le size 123))",
+	     "\"inbox.Cosby.Sweater\": (true)\n"
+	     "NULL: (le size 123)\n");
+    TESTCASE("(or (match folder \"inbox.Tumblr\") (match folder \"inbox.Mlkshk\"))",
+	     "\"inbox.Tumblr\": (true)\n"
+	     "\"inbox.Mlkshk\": (true)\n");
+    TESTCASE("(or (and (le size 123) (match folder \"inbox.Tumblr\")) (and (ge size 456) (match folder \"inbox.Mlkshk\")))",
+	     "\"inbox.Tumblr\": (le size 123)\n"
+	     "\"inbox.Mlkshk\": (ge size 456)\n");
+
+#undef TESTCASE
+}
+
 static int set_up(void)
 {
     int r;

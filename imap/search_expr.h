@@ -133,6 +133,9 @@ extern int search_expr_uses_attr(const search_expr_t *, const char *);
 extern int search_expr_is_mutable(const search_expr_t *);
 extern unsigned int search_expr_get_countability(const search_expr_t *);
 extern void search_expr_neutralise(search_expr_t *);
+extern void search_expr_split_by_folder(search_expr_t *e,
+					void (*cb)(const char *, search_expr_t *, void *),
+					void *rock);
 
 extern void search_attr_init(void);
 extern const search_attr_t *search_attr_find(const char *);
