@@ -439,7 +439,6 @@ static int getlistretopts(char *tag, struct listargs *args);
 static int get_snippetargs(struct snippetargs **sap);
 static void free_snippetargs(struct snippetargs **sap);
 static int getsortcriteria(char *tag, struct sortcrit **sortcrit);
-static char *sortcrit_as_string(const struct sortcrit *sortcrit);
 static int getdatetime(time_t *date);
 static int parse_windowargs(const char *tag, struct windowargs **, int);
 static void free_windowargs(struct windowargs *wa);
