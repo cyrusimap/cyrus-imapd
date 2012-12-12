@@ -5543,6 +5543,8 @@ void cmd_xconvsort(char *tag, int updates)
 			error_message(r));
 	    goto error;
 	}
+
+	index_checkflags(imapd_index, 0, 0);
     }
 
     /* need index loaded to even parse searchargs! */
