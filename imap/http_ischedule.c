@@ -184,7 +184,7 @@ static int isched_capa(struct transaction_t *txn,
     etag = message_guid_encode(&guid);
 
     /* Check any preconditions */
-    precond = check_precond(txn->meth, NULL, etag, compile_time, txn->req_hdrs);
+    precond = check_precond(txn, NULL, etag, compile_time);
 
     /* We failed a precondition - don't perform the request */
     if (precond != HTTP_OK) return precond;

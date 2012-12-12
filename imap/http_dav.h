@@ -250,13 +250,25 @@ typedef int (*acl_proc_t)(struct transaction_t *txn, xmlNodePtr priv,
 			  int *rights);
 
 struct acl_params {
-    parse_path_t parse_path;
-    acl_proc_t acl_ext;
+    parse_path_t parse_path;		/* parse URI path & generate mboxname */
+    acl_proc_t acl_ext;			/* special ACL handling (extensions) */
+};
+
+/* meth_get() parameters */
+typedef int (*check_precond_t)(struct transaction_t *txn, const void *data,
+			       const char *etag, time_t lastmod);
+
+struct get_params {
+    parse_path_t parse_path;		/* parse URI path & generate mboxname */
+    void **davdb;			/* DAV DB to use for lookup/foreach */
+    lookup_proc_t lookup_resource;	/* lookup a specific resource */
+    check_precond_t check_precond;	/* check headers for preconditions */
+    const char *content_type;		/* Content-Type of resource */
 };
 
 /* meth_mkcol() parameters */
 struct mkcol_params {
-    parse_path_t parse_path;
+    parse_path_t parse_path;		/* parse URI path & generate mboxname */
     unsigned mbtype;			/* mbtype to use for created mailbox */
     const char *xml_req;		/* toplevel XML request element */
     const char *xml_resp;		/* toplevel XML response element */
@@ -265,7 +277,7 @@ struct mkcol_params {
 
 /* meth_propfind() parameters */
 struct propfind_params {
-    parse_path_t parse_path;
+    parse_path_t parse_path;		/* parse URI path & generate mboxname */
     void **davdb;			/* DAV DB to use for lookup/foreach */
     lookup_proc_t lookup;		/* lookup a specific resource */
     foreach_proc_t foreach;		/* process all resources in a mailbox */
@@ -273,7 +285,7 @@ struct propfind_params {
 
 /* meth_proppatch() parameters */
 struct proppatch_params {
-    parse_path_t parse_path;
+    parse_path_t parse_path;		/* parse URI path & generate mboxname */
 };
 
 /* meth_report() parameters */
@@ -288,8 +300,8 @@ struct report_type_t {
 };
 
 struct report_params {
-    parse_path_t parse_path;
-    struct report_type_t reports[];
+    parse_path_t parse_path;		/* parse URI path & generate mboxname */
+    struct report_type_t reports[];	/* array of reports & proc functions */
 };
 
 /* Report flags */
@@ -323,14 +335,16 @@ int propfind_by_collection(char *mboxname, int matchlen,
 
 /* DAV method processing functions */
 int meth_acl(struct transaction_t *txn,
-	     void *params /* acl_proc_t */);
+	     void *params /* struct acl_params* */);
+int meth_get_dav(struct transaction_t *txn,
+		 void *params /* struct get_params* */);
 int meth_mkcol(struct transaction_t *txn,
 	       void *params /* struct mkcol_params* */);
 int meth_propfind(struct transaction_t *txn,
 		  void *params /* struct propfind_params* */);
 int meth_proppatch(struct transaction_t *txn,
-		   void *params __attribute__((unused)));
+		   void *params /* struct proppatch_params* */);
 int meth_report(struct transaction_t *txn,
-		void *params /* struct report_type_t[] */);
+		void *params /* struct report_params* */);
 
 #endif /* HTTP_DAV_H */

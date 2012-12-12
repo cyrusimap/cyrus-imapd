@@ -123,7 +123,11 @@ static void my_caldav_reset(void);
 static void my_caldav_shutdown(void);
 
 static int caldav_parse_path(struct request_target_t *tgt, const char **errstr);
+
 static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights);
+
+static int caldav_check_precond(struct transaction_t *txn, const void *data,
+				const char *etag, time_t lastmod);
 
 static int report_cal_query(struct transaction_t *txn, xmlNodePtr inroot,
 			    struct propfind_ctx *fctx);
@@ -134,7 +138,6 @@ static int report_fb_query(struct transaction_t *txn, xmlNodePtr inroot,
 
 static int meth_copy(struct transaction_t *txn, void *params);
 static int meth_delete(struct transaction_t *txn, void *params);
-static int meth_get(struct transaction_t *txn, void *params);
 static int meth_post(struct transaction_t *txn, void *params);
 static int meth_put(struct transaction_t *txn, void *params);
 static int store_resource(struct transaction_t *txn, icalcomponent *ical,
@@ -161,6 +164,14 @@ static struct acl_params acl_params = {
     &caldav_parse_path, &caldav_acl
 };
 
+static struct get_params get_params = {
+    &caldav_parse_path,
+    (void **) &auth_caldavdb,
+    (lookup_proc_t) &caldav_lookup_resource,
+    &caldav_check_precond,
+    "text/calendar; charset=utf-8"
+};
+
 static struct mkcol_params mkcalendar_params = {
     &caldav_parse_path,
     MBTYPE_CALENDAR, "mkcalendar", "mkcalendar-response", NS_CALDAV
@@ -175,7 +186,7 @@ static struct propfind_params propfind_params = {
     &caldav_parse_path,
     (void **) &auth_caldavdb,
     (lookup_proc_t) &caldav_lookup_resource,
-    (foreach_proc_t) &caldav_foreach,
+    (foreach_proc_t) &caldav_foreach
 };
 
 static struct proppatch_params proppatch_params = {
@@ -205,8 +216,8 @@ const struct namespace_t namespace_calendar = {
 	{ &meth_acl,		&acl_params },		/* ACL		*/
 	{ &meth_copy,		NULL },			/* COPY		*/
 	{ &meth_delete,		NULL },			/* DELETE	*/
-	{ &meth_get,		NULL },			/* GET		*/
-	{ &meth_get,		NULL },			/* HEAD		*/
+	{ &meth_get_dav,	&get_params },		/* GET		*/
+	{ &meth_get_dav,	&get_params },		/* HEAD		*/
 	{ &meth_mkcol,		&mkcalendar_params },	/* MKCALENDAR	*/
 	{ &meth_mkcol,		&mkcol_params },	/* MKCOL	*/
 	{ &meth_copy,		NULL },			/* MOVE		*/
@@ -366,25 +377,36 @@ static int caldav_parse_path(struct request_target_t *tgt, const char **errstr)
 
 
 /* Check headers for any preconditions */
-static int caldav_check_precond(unsigned meth, const void *data,
-				const char *etag, time_t lastmod,
-				hdrcache_t hdrcache)
+static int caldav_check_precond(struct transaction_t *txn, const void *data,
+				const char *etag, time_t lastmod)
 {
     const struct caldav_data *cdata = (const struct caldav_data *) data;
     const char **hdr;
+    int ret;
 
     /* Per RFC 6638,
        If-Schedule-Tag-Match supercedes any ETag-based precondition tests */
-    if ((hdr = spool_getheader(hdrcache, "If-Schedule-Tag-Match"))) {
+    if ((hdr = spool_getheader(txn->req_hdrs, "If-Schedule-Tag-Match"))) {
 	if (cdata && etagcmp(hdr[0], cdata->sched_tag))
 	    return HTTP_PRECOND_FAILED;
 
-	return HTTP_OK;  /* Ignore remaining conditionals */
+	ret = HTTP_OK;  /* Ignore remaining conditionals */
     }
     else {
 	/* Do normal WebDAV and/or HTTP checks */
-	return check_precond(meth, NULL, etag, lastmod, hdrcache);
+	ret = check_precond(txn, NULL, etag, lastmod);
     }
+
+    switch (txn->meth) {
+    case METH_GET:
+    case METH_HEAD:
+	if (ret == HTTP_OK) {
+	    /* Fill in Schedule-Tag */
+	    txn->resp_body.stag = cdata->sched_tag;
+	}
+    }
+
+    return ret;
 }
 
 
@@ -649,8 +671,7 @@ static int meth_copy(struct transaction_t *txn,
     /* Check any preconditions on source */
     etag = message_guid_encode(&src_rec.guid);
     lastmod = src_rec.internaldate;
-    precond = caldav_check_precond(txn->meth, cdata,
-				   etag, lastmod, txn->req_hdrs);
+    precond = caldav_check_precond(txn, cdata, etag, lastmod);
 
     if (precond != HTTP_OK) {
 	/* We failed a precondition - don't perform the request */
@@ -825,8 +846,7 @@ static int meth_delete(struct transaction_t *txn,
     lastmod = record.internaldate;
 
     /* Check any preconditions */
-    precond = caldav_check_precond(txn->meth, cdata,
-				   etag, lastmod, txn->req_hdrs);
+    precond = caldav_check_precond(txn, cdata, etag, lastmod);
 
     /* We failed a precondition - don't perform the request */
     if (precond != HTTP_OK) {
@@ -933,128 +953,6 @@ static int meth_delete(struct transaction_t *txn,
     /* Delete mapping entry for resource name */
     caldav_delete(auth_caldavdb, cdata->dav.rowid);
     caldav_commit(auth_caldavdb);
-
-  done:
-    if (mailbox) mailbox_unlock_index(mailbox, NULL);
-
-    return ret;
-}
-
-
-/* Perform a GET/HEAD request */
-static int meth_get(struct transaction_t *txn,
-		    void *params __attribute__((unused)))
-{
-    int ret = 0, r, precond, rights;
-    const char *msg_base = NULL;
-    unsigned long msg_size = 0;
-    struct resp_body_t *resp_body = &txn->resp_body;
-    char *server, *acl;
-    struct mailbox *mailbox = NULL;
-    struct caldav_data *cdata;
-    struct index_record record;
-    const char *etag = NULL;
-    time_t lastmod = 0;
-
-    /* Parse the path */
-    if ((r = caldav_parse_path(&txn->req_tgt, &txn->error.desc))) return r;
-
-    /* We don't handle GET on a calendar collection (yet) */
-    if (!txn->req_tgt.resource) return HTTP_NO_CONTENT;
-
-    /* Locate the mailbox */
-    if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
-	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-
-	switch (r) {
-	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	default: return HTTP_SERVER_ERROR;
-	}
-    }
-
-    /* Check ACL for current user */
-    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
-    if ((rights & DACL_READ) != DACL_READ) {
-	/* DAV:need-privileges */
-	txn->error.precond = DAV_NEED_PRIVS;
-	txn->error.resource = txn->req_tgt.path;
-	txn->error.rights = DACL_READ;
-	return HTTP_FORBIDDEN;
-    }
-
-    if (server) {
-	/* Remote mailbox */
-	struct backend *be;
-
-	be = proxy_findserver(server, &http_protocol, httpd_userid,
-			      &backend_cached, NULL, NULL, httpd_in);
-	if (!be) return HTTP_UNAVAILABLE;
-
-	return http_pipe_req_resp(be, txn);
-    }
-
-    /* Local Mailbox */
-
-    /* Open mailbox for reading */
-    if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_SHARED))) {
-	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
-    }
-
-    /* Find message UID for the resource */
-    caldav_lookup_resource(auth_caldavdb, txn->req_tgt.mboxname,
-			   txn->req_tgt.resource, 0, &cdata);
-    /* XXX  Check errors */
-
-    /* Fetch index record for the resource */
-    if (!cdata->dav.imap_uid ||
-	mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record)) {
-	ret = HTTP_NOT_FOUND;
-	goto done;
-    }
-
-    /* Check any preconditions */
-    etag = message_guid_encode(&record.guid);
-    lastmod = record.internaldate;
-    precond = caldav_check_precond(txn->meth, cdata,
-				   etag, lastmod, txn->req_hdrs);
-
-    if (precond != HTTP_OK) {
-	/* We failed a precondition - don't perform the request */
-	if (precond == HTTP_NOT_MODIFIED) {
-	    /* Fill in ETag for 304 response */
-	    resp_body->etag = etag;
-	}
-	ret = precond;
-	goto done;
-    }
-
-    /* Fill in Last-Modified, ETag, Schedule-Tag, and Content-Type */
-    resp_body->lastmod = lastmod;
-    resp_body->etag = etag;
-    resp_body->stag = cdata->sched_tag;
-    resp_body->type = "text/calendar; charset=utf-8";
-
-    if (txn->meth == METH_GET) {
-	/* Load message containing the resource */
-	mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
-
-	/* iCalendar data in response should not be transformed */
-	txn->flags.cc |= CC_NOTRANSFORM;
-    }
-
-    write_body(HTTP_OK, txn,
-	       /* skip message header */
-	       msg_base + record.header_size, record.size - record.header_size);
-
-    if (msg_base)
-	mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
 
   done:
     if (mailbox) mailbox_unlock_index(mailbox, NULL);
@@ -1417,8 +1315,7 @@ static int meth_put(struct transaction_t *txn,
     mailbox_unlock_index(mailbox, NULL);
 
     /* Check any preconditions */
-    precond = caldav_check_precond(txn->meth, cdata,
-				   etag, lastmod, txn->req_hdrs);
+    precond = caldav_check_precond(txn, cdata, etag, lastmod);
 
     if (precond != HTTP_OK) {
 	/* We failed a precondition - don't perform the request */
@@ -2159,9 +2056,8 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			/* Check any preconditions */
 			const char *etag = message_guid_encode(&oldrecord.guid);
 			time_t lastmod = oldrecord.internaldate;
-			int precond = caldav_check_precond(txn->meth, cdata,
-							   etag, lastmod,
-							   txn->req_hdrs);
+			int precond = caldav_check_precond(txn, cdata,
+							   etag, lastmod);
 
 			overwrite = (precond == HTTP_OK);
 		    }

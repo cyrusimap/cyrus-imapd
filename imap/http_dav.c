@@ -2454,6 +2454,126 @@ int meth_acl(struct transaction_t *txn, void *params)
 }
 
 
+/* Perform a GET/HEAD request */
+int meth_get_dav(struct transaction_t *txn, void *params)
+{
+    int ret = 0, r, precond, rights;
+    const char *msg_base = NULL;
+    unsigned long msg_size = 0;
+    struct resp_body_t *resp_body = &txn->resp_body;
+    char *server, *acl;
+    struct mailbox *mailbox = NULL;
+    struct dav_data *ddata;
+    struct index_record record;
+    const char *etag = NULL;
+    time_t lastmod = 0;
+    struct get_params *gparams = (struct get_params *) params;
+
+    /* Parse the path */
+    if ((r = gparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+
+    /* We don't handle GET on a calendar collection (yet) */
+    if (!txn->req_tgt.resource) return HTTP_NO_CONTENT;
+
+    /* Locate the mailbox */
+    if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
+	syslog(LOG_ERR, "mlookup(%s) failed: %s",
+	       txn->req_tgt.mboxname, error_message(r));
+	txn->error.desc = error_message(r);
+
+	switch (r) {
+	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	default: return HTTP_SERVER_ERROR;
+	}
+    }
+
+    /* Check ACL for current user */
+    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
+    if ((rights & DACL_READ) != DACL_READ) {
+	/* DAV:need-privileges */
+	txn->error.precond = DAV_NEED_PRIVS;
+	txn->error.resource = txn->req_tgt.path;
+	txn->error.rights = DACL_READ;
+	return HTTP_FORBIDDEN;
+    }
+
+    if (server) {
+	/* Remote mailbox */
+	struct backend *be;
+
+	be = proxy_findserver(server, &http_protocol, httpd_userid,
+			      &backend_cached, NULL, NULL, httpd_in);
+	if (!be) return HTTP_UNAVAILABLE;
+
+	return http_pipe_req_resp(be, txn);
+    }
+
+    /* Local Mailbox */
+
+    /* Open mailbox for reading */
+    if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_SHARED))) {
+	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+	       txn->req_tgt.mboxname, error_message(r));
+	txn->error.desc = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
+    /* Find message UID for the resource */
+    gparams->lookup_resource(*gparams->davdb, txn->req_tgt.mboxname,
+			     txn->req_tgt.resource, 0, (void **) &ddata);
+    /* XXX  Check errors */
+
+    /* Fetch index record for the resource */
+    if (!ddata->imap_uid ||
+	mailbox_find_index_record(mailbox, ddata->imap_uid, &record)) {
+	ret = HTTP_NOT_FOUND;
+	goto done;
+    }
+
+    /* Check any preconditions */
+    etag = message_guid_encode(&record.guid);
+    lastmod = record.internaldate;
+    precond = gparams->check_precond(txn, (void *) ddata, etag, lastmod);
+
+    if (precond != HTTP_OK) {
+	/* We failed a precondition - don't perform the request */
+	if (precond == HTTP_NOT_MODIFIED) {
+	    /* Fill in ETag for 304 response */
+	    resp_body->etag = etag;
+	}
+	ret = precond;
+	goto done;
+    }
+
+    /* Fill in Last-Modified, ETag, and Content-Type */
+    resp_body->lastmod = lastmod;
+    resp_body->etag = etag;
+    resp_body->type = gparams->content_type;
+
+    if (txn->meth == METH_GET) {
+	/* Load message containing the resource */
+	mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
+
+	/* iCalendar data in response should not be transformed */
+	txn->flags.cc |= CC_NOTRANSFORM;
+    }
+
+    write_body(HTTP_OK, txn,
+	       /* skip message header */
+	       msg_base + record.header_size, record.size - record.header_size);
+
+    if (msg_base)
+	mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
+
+  done:
+    if (mailbox) mailbox_unlock_index(mailbox, NULL);
+
+    return ret;
+}
+
+
 /* Perform a MKCOL/MKCALENDAR request */
 /*
  * preconditions:

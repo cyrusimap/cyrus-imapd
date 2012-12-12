@@ -2449,12 +2449,13 @@ static unsigned etag_match(const char *hdr[], const char *etag)
  * Interaction is complex and is documented in RFC 4918 and
  * Section 5 of HTTPbis, Part 4.
  */
-int check_precond(unsigned meth,
+int check_precond(struct transaction_t *txn,
 		  const void *data __attribute__((unused)),
-		  const char *etag, time_t lastmod, hdrcache_t hdrcache)
+		  const char *etag, time_t lastmod)
 {
     long resp = HTTP_OK;
     unsigned is_get_or_head = 0;
+    hdrcache_t hdrcache = txn->req_hdrs;
     const char **hdr;
     time_t since;
 
@@ -2488,7 +2489,7 @@ int check_precond(unsigned meth,
     }
 
     /* Step 3 */
-    switch (meth) {
+    switch (txn->meth) {
     case METH_GET:
 #if 0  /* We don't support range requests yet */
 	if (spool_getheader(hdrcache, "Range")) {
@@ -2564,8 +2565,7 @@ int meth_get_doc(struct transaction_t *txn,
     resp_body->etag = buf_cstring(&txn->buf);
 
     /* Check any preconditions */
-    precond = check_precond(txn->meth, NULL, resp_body->etag,
-			    sbuf.st_mtime, txn->req_hdrs);
+    precond = check_precond(txn, NULL, resp_body->etag, sbuf.st_mtime);
 
     /* We failed a precondition - don't perform the request */
     if (precond != HTTP_OK) return precond;
