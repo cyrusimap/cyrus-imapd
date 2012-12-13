@@ -195,6 +195,7 @@ static int dump_me(char *name, int matchlen __attribute__((unused)),
     printf("  <nextuid>%u</nextuid>\n", state->mailbox->i.last_uid + 1);
     printf("\n");
 
+#if 0
     memset(&searchargs, 0, sizeof(struct searchargs));
     numuids = index_getuidsequence(state, &searchargs, &uids);
     print_seq("uidlist", NULL, uids, numuids);
@@ -221,6 +222,7 @@ static int dump_me(char *name, int matchlen __attribute__((unused)),
     n = index_getuidsequence(state, &searchargs, &uidseq);
     print_seq("flag", "name=\"\\Flagged\" user=\"*\"", uidseq, n);
     if (uidseq) free(uidseq);
+#endif
 
     printf("  </flags>\n");
 
