@@ -250,6 +250,7 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 	case 101: /* Switching Protocols */
 	    if (backend_starttls(s, NULL)) {
 		r = HTTP_UNAVAILABLE;
+		if (status) *status = "Unable to start TLS";
 		break;
 	    }
 	    else tls_done = 1;
