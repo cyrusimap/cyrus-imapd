@@ -186,8 +186,18 @@ static int isched_capa(struct transaction_t *txn,
     /* Check any preconditions */
     precond = check_precond(txn, NULL, etag, compile_time);
 
-    /* We failed a precondition - don't perform the request */
-    if (precond != HTTP_OK) return precond;
+    switch (precond) {
+    case HTTP_OK:
+	break;
+
+    case HTTP_NOT_MODIFIED:
+	/* Fill in ETag for 304 response */
+	txn->resp_body.etag = etag;
+
+    default:
+	/* We failed a precondition - don't perform the request */
+	return precond;
+    }
 
     /* Fill in Etag and Last-Modified */
     txn->resp_body.etag = etag;

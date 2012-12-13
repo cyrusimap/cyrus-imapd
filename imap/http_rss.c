@@ -236,17 +236,25 @@ static int meth_get(struct transaction_t *txn,
 	    else if (strcmp(section, "0"))
 		buf_printf(&txn->buf, ".%s", section);
 
-	    resp_body->etag = buf_cstring(&txn->buf);
 	    lastmod = record.internaldate;
-	    precond = check_precond(txn, NULL, resp_body->etag, lastmod);
+	    precond = check_precond(txn, NULL, buf_cstring(&txn->buf), lastmod);
 
-	    if (precond != HTTP_OK) {
+	    switch (precond) {
+	    case HTTP_OK:
+		break;
+
+	    case HTTP_NOT_MODIFIED:
+		/* Fill in ETag for 304 response */
+		resp_body->etag = buf_cstring(&txn->buf);
+
+	    default:
 		/* We failed a precondition - don't perform the request */
 		ret = precond;
 		goto done;
 	    }
 
-	    /* Fill in Last-Modified */
+	    /* Fill in ETag and Last-Modified */
+	    resp_body->etag = buf_cstring(&txn->buf);
 	    resp_body->lastmod = lastmod;
 	    
 	    if (!*section) {
@@ -518,15 +526,24 @@ static int list_feeds(struct transaction_t *txn)
     buf_printf(&txn->buf, "-%ld-%ld", sbuf.st_mtime, sbuf.st_size);
 
     /* Check any preconditions */
-    txn->resp_body.etag = buf_cstring(&txn->buf);
-    precond = check_precond(txn, NULL, txn->resp_body.etag, lastmod);
-    if (precond != HTTP_OK) {
+    precond = check_precond(txn, NULL, buf_cstring(&txn->buf), lastmod);
+
+    switch (precond) {
+    case HTTP_OK:
+	break;
+
+    case HTTP_NOT_MODIFIED:
+	/* Fill in ETag for 304 response */
+	txn->resp_body.etag = buf_cstring(&txn->buf);
+
+    default:
 	/* We failed a precondition - don't perform the request */
 	ret = precond;
 	goto done;
     }
 
-    /* Fill in Last-Modified and Content-Type */
+    /* Fill in ETag, Last-Modified, and Content-Type */
+    txn->resp_body.etag = buf_cstring(&txn->buf);
     txn->resp_body.lastmod = lastmod;
     txn->resp_body.type = "text/html; charset=utf-8";
 
@@ -665,7 +682,14 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     time_t lastmod = mailbox->i.last_appenddate;
     int precond = check_precond(txn, NULL, NULL, lastmod);
 
-    if (precond != HTTP_OK) {
+    switch (precond) {
+    case HTTP_OK:
+	break;
+
+    case HTTP_NOT_MODIFIED:
+	/* Fill in ETag for 304 response */
+
+    default:
 	/* We failed a precondition - don't perform the request */
 	return precond;
     }
