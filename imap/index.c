@@ -128,9 +128,6 @@ static void index_fetchcacheheader(struct index_state *state, struct index_recor
 				   unsigned octet_count);
 static void index_listflags(struct index_state *state);
 static void index_fetchflags(struct index_state *state, uint32_t msgno);
-static int index_search_evaluate(struct index_state *state,
-				 const struct searchargs *searchargs,
-				 uint32_t msgno);
 static int _index_search(unsigned **msgno_list, struct index_state *state,
 			 struct searchargs *searchargs,
 			 modseq_t *highestmodseq);
@@ -1646,7 +1643,7 @@ static int _index_search(unsigned **msgno_list, struct index_state *state,
 	if (!state->want_expunged && (im->system_flags & FLAG_EXPUNGED))
 	    continue;
 
-	if (index_search_evaluate(state, searchargs, msgno)) {
+	if (index_search_evaluate(state, searchargs->root, msgno)) {
 	    (*msgno_list)[n++] = msgno;
 	    if (highestmodseq && im->modseq > *highestmodseq) {
 		*highestmodseq = im->modseq;
@@ -1679,7 +1676,7 @@ static int _index_search(unsigned **msgno_list, struct index_state *state,
 	if (!state->want_expunged && (im->system_flags & FLAG_EXPUNGED))
 	    continue;
 
-	if (index_search_evaluate(state, searchargs, msgno)) {
+	if (index_search_evaluate(state, searchargs->root, msgno)) {
 	    (*msgno_list)[n++] = msgno;
 	    if (highestmodseq && im->modseq > *highestmodseq) {
 		*highestmodseq = im->modseq;
@@ -2121,7 +2118,7 @@ EXPORTED int index_convsort(struct index_state *state,
 	    continue;
 
 	/* run the search program against all messages */
-	if (!index_search_evaluate(state, searchargs, msg->msgno))
+	if (!index_search_evaluate(state, searchargs->root, msg->msgno))
 	    continue;
 
 	/* figure out whether this message is an exemplar */
@@ -3070,7 +3067,7 @@ EXPORTED int index_convupdates(struct index_state *state,
 	int is_changed = 0;
 	int in_search = 0;
 
-	in_search = index_search_evaluate(state, searchargs, msg->msgno);
+	in_search = index_search_evaluate(state, searchargs->root, msg->msgno);
 	is_deleted = !!(record->system_flags & FLAG_EXPUNGED);
 	is_new = (record->uid >= windowargs->uidnext);
 	is_changed = (record->modseq > windowargs->modseq);
@@ -5052,9 +5049,9 @@ out:
 /*
  * Evaluate a searchargs structure on a msgno
  */
-static int index_search_evaluate(struct index_state *state,
-				 const struct searchargs *searchargs,
-				 uint32_t msgno)
+int index_search_evaluate(struct index_state *state,
+			  const search_expr_t *e,
+			  uint32_t msgno)
 {
     struct index_map *im = &state->map[msgno-1];
     int r;
@@ -5069,7 +5066,7 @@ static int index_search_evaluate(struct index_state *state,
     m = message_new_from_index(state->mailbox, &record, msgno,
 			       (im->isrecent ? MESSAGE_RECENT : 0) |
 			       (im->isseen ? MESSAGE_SEEN : 0));
-    r = search_expr_evaluate(m, searchargs->root);
+    r = search_expr_evaluate(m, e);
     message_unref(&m);
 
     return r;

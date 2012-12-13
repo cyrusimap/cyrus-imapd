@@ -311,6 +311,7 @@ void freesequencelist(struct seqset *l);
 void freesearchargs(struct searchargs *s);
 char *sortcrit_as_string(const struct sortcrit *sortcrit);
 void freesortcrit(struct sortcrit *s);
+int index_search_evaluate(struct index_state *state, const search_expr_t *e, uint32_t msgno);
 
 extern int index_expunge(struct index_state *state, char *uidsequence,
 			 int need_deleted);
