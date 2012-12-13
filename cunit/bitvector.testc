@@ -2,6 +2,7 @@
 
 #include "cunit/cunit.h"
 #include "bitvector.h"
+#include "util.h"
 
 static void test_free(void)
 {
@@ -368,4 +369,47 @@ static void test_cstring(void)
     bv_free(&bv);
 }
 
+static void test_find_set(void)
+{
+#define TESTCASE(...) \
+    { \
+	static const int _in[] = {__VA_ARGS__}; \
+	bitvector_t bv = BV_INITIALIZER; \
+	int bit = -1; \
+	int i; \
+	for (i = 0 ; i < (int)VECTOR_SIZE(_in) ; i++) \
+	    bv_set(&bv, _in[i]); \
+	for (i = 0 ; i < (int)VECTOR_SIZE(_in) ; i++) { \
+	    bit = bv_find_set(&bv, bit+1); \
+	    CU_ASSERT_EQUAL(bit, _in[i]); \
+	} \
+	bit = bv_find_set(&bv, bit+1); \
+	CU_ASSERT_EQUAL(bit, -1); \
+	bv_free(&bv); \
+    }
+
+    /* empty vector never reports any set bits */
+    TESTCASE();
+
+    /* vector with a single bit reports only that bit */
+    TESTCASE(0);
+    TESTCASE(3);
+    TESTCASE(7);
+    TESTCASE(8);
+    TESTCASE(15);
+    TESTCASE(16);
+    TESTCASE(128);
+
+    /* vector with several bits reports them all */
+    TESTCASE(1,2,3,4,7,11,12,63,64,65);
+
+    /* vector with all bits reports them all */
+    TESTCASE(0,1,2,3,4,5,6,7);
+    TESTCASE(0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15);
+    TESTCASE(0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23);
+
+#undef TESTCASE
+}
+
+    /* can set bit23 and get it back */
 /* vim: set ft=c: */

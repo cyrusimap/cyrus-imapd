@@ -54,7 +54,9 @@
 #define MAX(a,b)    ((a)>(b)?(a):(b))
 #endif
 
+#define BITS_PER_UNIT	8
 #define vidx(x)		((x) >> 3)
+#define visaligned(x)	(!((x) & 0x7))
 #define vmask(x)	(1 << ((x) & 0x7))
 #define vtailmask(x)	((unsigned char)(0xff << ((x) & 0x7)))
 #define vlen(x)		vidx((x)+7)
@@ -164,6 +166,35 @@ EXPORTED void bv_oreq(bitvector_t *a, const bitvector_t *b)
     for (i = 0 ; i <= n ; i++)
 	a->bits[i] |= b->bits[i];
     a->length = MAX(a->length, b->length);
+}
+
+/*
+ * Returns the bit position of the next set bit which is after or equal
+ * to position 'start'.  Passing start = 0 returns the first set bit.
+ * Returns a bit position or -1 if there are no more set bits.
+ */
+EXPORTED int bv_find_set(const bitvector_t *bv, int start)
+{
+    int i;
+
+    if (start < 0 || start >= (int)bv->length) return -1;
+
+    for (i = start ; i < (int)bv->length && !visaligned(i) ; i++)
+	if (bv->bits[vidx(i)] & vmask(i))
+	    return i;
+
+    while (i < (int)bv->length) {
+	if (!bv->bits[vidx(i)]) {
+	    i += BITS_PER_UNIT;
+	}
+	else {
+	    if (bv->bits[vidx(i)] & vmask(i))
+		return i;
+	    i++;
+	}
+    }
+
+    return -1;
 }
 
 /* Returns a string which describes the state of the bitvector,
