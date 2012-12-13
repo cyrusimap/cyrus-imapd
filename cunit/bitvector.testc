@@ -184,6 +184,27 @@ static void test_oreq(void)
     bv_free(&b);
 }
 
+static void test_oreq_empty(void)
+{
+    bitvector_t a = BV_INITIALIZER;
+    bitvector_t b = BV_INITIALIZER;
+
+    bv_set(&b, 0);
+    bv_set(&b, 23);
+    CU_ASSERT_EQUAL(24, b.length);
+    CU_ASSERT_EQUAL(1, bv_isset(&b, 0));
+    CU_ASSERT_EQUAL(1, bv_isset(&b, 23));
+
+    bv_oreq(&a, &b);
+
+    CU_ASSERT_EQUAL(24, a.length);
+    CU_ASSERT_EQUAL(1, bv_isset(&a, 0));
+    CU_ASSERT_EQUAL(1, bv_isset(&a, 23));
+
+    bv_free(&a);
+    bv_free(&b);
+}
+
 static void test_oreq_noexpand(void)
 {
     bitvector_t a = BV_INITIALIZER;

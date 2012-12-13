@@ -160,8 +160,6 @@ EXPORTED void bv_oreq(bitvector_t *a, const bitvector_t *b)
     unsigned int i;
 
     bv_ensure(a, b->length);
-    if (!a->length)
-	return;
     n = vlen(b->length+1);
     for (i = 0 ; i <= n ; i++)
 	a->bits[i] |= b->bits[i];
