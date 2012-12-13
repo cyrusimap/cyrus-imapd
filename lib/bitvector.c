@@ -171,7 +171,7 @@ EXPORTED void bv_oreq(bitvector_t *a, const bitvector_t *b)
  * to position 'start'.  Passing start = 0 returns the first set bit.
  * Returns a bit position or -1 if there are no more set bits.
  */
-EXPORTED int bv_find_set(const bitvector_t *bv, int start)
+EXPORTED int bv_next_set(const bitvector_t *bv, int start)
 {
     int i;
 
@@ -189,6 +189,36 @@ EXPORTED int bv_find_set(const bitvector_t *bv, int start)
 	    if (bv->bits[vidx(i)] & vmask(i))
 		return i;
 	    i++;
+	}
+    }
+
+    return -1;
+}
+
+/*
+ * Returns the bit position of the previous set bit which is before or
+ * equal to position 'start'.  Passing start = bv->vector-1 returns the
+ * last set bit.  Returns a bit position or -1 if there are no more set
+ * bits.
+ */
+EXPORTED int bv_prev_set(const bitvector_t *bv, int start)
+{
+    int i;
+
+    if (start < 0 || start >= (int)bv->length) return -1;
+
+    for (i = start ; i < (int)bv->length && !visaligned(i) ; i--)
+	if (bv->bits[vidx(i)] & vmask(i))
+	    return i;
+
+    while (i >= 0) {
+	if (!bv->bits[vidx(i)]) {
+	    i -= BITS_PER_UNIT;
+	}
+	else {
+	    if (bv->bits[vidx(i)] & vmask(i))
+		return i;
+	    i--;
 	}
     }
 

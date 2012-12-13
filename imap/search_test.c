@@ -75,16 +75,16 @@ int verbose = 0;
 
 /* ====================================================================== */
 
-static void dump_one_folder(void *key, void *data, void *rock)
+static void dump_one_folder(const char *key, void *data, void *rock)
 {
     search_folder_t *folder = data;
     search_query_t *query = rock;
     int uid;
 
     printf("mailbox %s\n", folder->mboxname);
-    for (uid = bv_find_set(&folder->uids, 0) ;
+    for (uid = bv_next_set(&folder->uids, 0) ;
 	 uid != -1 ;
-	 uid = bv_find_set(&folder->uids, uid+1)) {
+	 uid = bv_next_set(&folder->uids, uid+1)) {
 	printf("uid %u\n", uid);
     }
 }
