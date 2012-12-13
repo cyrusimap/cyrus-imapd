@@ -160,6 +160,16 @@ EXPORTED search_expr_t *search_expr_new(search_expr_t *parent, enum search_op op
 }
 
 /*
+ * Append the given search expression tree 'e' to the end of the
+ * node 'parent'.  'e' must not already have a parent.
+ */
+EXPORTED void search_expr_append(search_expr_t *parent, search_expr_t *e)
+{
+    assert(e->parent == NULL);
+    append(parent, e);
+}
+
+/*
  * Recursively free a search expression tree including the given node
  * and all descendant nodes.
  */
