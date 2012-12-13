@@ -135,10 +135,16 @@ struct copyargs {
     int msgalloc;
 };
 
-struct search_folder;
+typedef struct {
+    char *mboxname;
+    int id;	   /* index used for formatting output */
+    uint32_t uidvalidity;
+    struct msgdata **msgdata;
+} SearchFolder;
+
 
 typedef struct msgdata {
-    struct search_folder *folder; /* search folder (can be NULL) */
+    SearchFolder *folder;	/* search folder (can be NULL) */
 
     /* items from the index_record */
     bit32 uid;                  /* UID for output purposes */
@@ -180,13 +186,6 @@ typedef struct thread {
     struct thread *child;	/* first child message */
     struct thread *next;	/* next sibling message */
 } Thread;
-
-typedef struct search_folder {
-    char *mboxname;
-    int id;	   /* index used for formatting output */
-    uint32_t uidvalidity;
-    MsgData **msgdata;
-} SearchFolder;
 
 struct rootset {
     Thread *root;
