@@ -75,6 +75,7 @@ extern int bv_next_set(const bitvector_t *, int start);
 extern int bv_prev_set(const bitvector_t *, int start);
 extern int bv_first_set(const bitvector_t *);
 extern int bv_last_set(const bitvector_t *);
+extern unsigned bv_count(const bitvector_t *);
 extern char *bv_cstring(const bitvector_t *);
 extern void bv_free(bitvector_t *);
 

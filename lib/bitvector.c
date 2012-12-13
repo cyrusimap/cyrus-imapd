@@ -235,6 +235,24 @@ EXPORTED int bv_last_set(const bitvector_t *bv)
     return bv_prev_set(bv, bv->length-1);
 }
 
+static unsigned int bitcount(unsigned int i)
+{
+    /* http://stackoverflow.com/questions/109023/how-to-count-the-number-of-set-bits-in-a-32-bit-integer */
+    i = i - ((i >> 1) & 0x55555555);
+    i = (i & 0x33333333) + ((i >> 2) & 0x33333333);
+    return (((i + (i >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
+}
+
+EXPORTED unsigned bv_count(const bitvector_t *bv)
+{
+    int i;
+    unsigned int n = 0;
+
+    for (i = 0 ; i < bv->length ; i += BITS_PER_UNIT)
+	n += bitcount(bv->bits[vidx(i)]);
+    return n;
+}
+
 /* Returns a string which describes the state of the bitvector,
  * useful for debugging.  Returns a new string which must be free'd
  * by the caller */

@@ -475,4 +475,42 @@ static void test_prev_set(void)
 #undef TESTCASE
 }
 
+static void test_count(void)
+{
+#define TESTCASE(...) \
+    { \
+	static const int _in[] = {__VA_ARGS__}; \
+	bitvector_t bv = BV_INITIALIZER; \
+	int count; \
+	int i; \
+	for (i = 0 ; i < (int)VECTOR_SIZE(_in) ; i++) \
+	    bv_set(&bv, _in[i]); \
+	count = bv_count(&bv); \
+	CU_ASSERT_EQUAL(count, VECTOR_SIZE(_in)); \
+	bv_free(&bv); \
+    }
+
+    /* empty vector */
+    TESTCASE();
+
+    /* vector with a single bit */
+    TESTCASE(0);
+    TESTCASE(3);
+    TESTCASE(7);
+    TESTCASE(8);
+    TESTCASE(15);
+    TESTCASE(16);
+    TESTCASE(128);
+
+    /* vector with several bits */
+    TESTCASE(1,2,3,4,7,11,12,63,64,65);
+
+    /* vector with all bits */
+    TESTCASE(0,1,2,3,4,5,6,7);
+    TESTCASE(0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15);
+    TESTCASE(0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23);
+
+#undef TESTCASE
+}
+
 /* vim: set ft=c: */
