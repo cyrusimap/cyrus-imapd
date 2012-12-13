@@ -195,11 +195,18 @@ struct error_t {
     unsigned precond;			/* [Cal]DAV precondition */
     const char *resource;		/* Resource which lacks privileges */
     int rights;  			/* Privileges needed by resource */
-};  
+};
+
+struct range {
+    ulong first;
+    ulong last;
+    ulong len;
+};
 
 /* Meta-data for response body (payload & representation headers) */
 struct resp_body_t {
     ulong len; 		/* Content-Length   */
+    struct range range;	/* Content-Range    */
     const char *enc;	/* Content-Encoding */
     const char *lang;	/* Content-Language */
     const char *loc;	/* Content-Location */

@@ -2458,8 +2458,8 @@ int meth_acl(struct transaction_t *txn, void *params)
 int meth_get_dav(struct transaction_t *txn, void *params)
 {
     int ret = 0, r, precond, rights;
-    const char *msg_base = NULL;
-    unsigned long msg_size = 0;
+    const char *msg_base = NULL, *data = NULL;
+    unsigned long msg_size = 0, datalen, offset;
     struct resp_body_t *resp_body = &txn->resp_body;
     char *server, *acl;
     struct mailbox *mailbox = NULL;
@@ -2532,17 +2532,33 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 	goto done;
     }
 
-    /* Check any preconditions */
+    /* Resource length doesn't include RFC 5322 header */
+    offset = record.header_size;
+    datalen = record.size - offset;
+
+    /* Check any preconditions, including range request */
+    txn->flags.ranges = 1;
+    resp_body->range.len = datalen;
     etag = message_guid_encode(&record.guid);
     lastmod = record.internaldate;
     precond = gparams->check_precond(txn, (void *) ddata, etag, lastmod);
 
-    if (precond != HTTP_OK) {
+    switch (precond) {
+    case HTTP_OK:
+	break;
+
+    case HTTP_PARTIAL:
+	/* Set data parameters for range */
+	offset += resp_body->range.first;
+	datalen = resp_body->range.last - resp_body->range.first + 1;
+	break;
+
+    case HTTP_NOT_MODIFIED:
+	/* Fill in ETag for 304 response */
+	resp_body->etag = etag;
+
+    default:
 	/* We failed a precondition - don't perform the request */
-	if (precond == HTTP_NOT_MODIFIED) {
-	    /* Fill in ETag for 304 response */
-	    resp_body->etag = etag;
-	}
 	ret = precond;
 	goto done;
     }
@@ -2558,11 +2574,11 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 
 	/* iCalendar data in response should not be transformed */
 	txn->flags.cc |= CC_NOTRANSFORM;
+
+	data = msg_base + offset;
     }
 
-    write_body(HTTP_OK, txn,
-	       /* skip message header */
-	       msg_base + record.header_size, record.size - record.header_size);
+    write_body(precond, txn, data, datalen);
 
     if (msg_base)
 	mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);

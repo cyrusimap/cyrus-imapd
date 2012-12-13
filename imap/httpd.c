@@ -1698,10 +1698,11 @@ void response_header(long code, struct transaction_t *txn)
 	    /* Force Allow header for successful OPTIONS request */
 	    code = HTTP_NOT_ALLOWED;
 	}
+	break;
 
     case METH_GET:
     case METH_HEAD:
-	/* Add Accept-Ranges header for OPTIONS, GET, HEAD responses */
+	/* Add Accept-Ranges header for GET and HEAD responses */
 	prot_printf(httpd_out, "Accept-Ranges: %s\r\n",
 		    txn->flags.ranges ? "bytes" : "none");
     }
@@ -1804,6 +1805,16 @@ void response_header(long code, struct transaction_t *txn)
     case HTTP_NOT_MODIFIED:
 	/* MUST NOT include a body */
 	break;
+
+    case HTTP_PARTIAL:
+    case HTTP_UNSAT_RANGE:
+	prot_printf(httpd_out, "Content-Range: bytes ");
+	if (code == HTTP_PARTIAL) {
+	    prot_printf(httpd_out, "%lu-%lu",
+			resp_body->range.first, resp_body->range.last);
+	}
+	else prot_printf(httpd_out, "*");
+	prot_printf(httpd_out, "/%lu\r\n", resp_body->range.len);
 
     default:
 	if (txn->flags.te) {
@@ -2444,6 +2455,77 @@ static unsigned etag_match(const char *hdr[], const char *etag)
 }
 
 
+static int parse_ranges(const char *hdr, struct range *range)
+{
+    ulong *first = &range->first;
+    ulong *last = &range->last;
+    ulong len = range->len;
+    char *p, *endp;
+
+    /* default to entire representation */
+    *first = 0;
+    *last = len - 1;
+
+    if (!hdr) return HTTP_OK;
+    if (strncmp(hdr, "bytes=", 6)) {
+	/* we only handle byte-unit */
+	return HTTP_OK;
+    }
+
+    hdr += 6;
+    if (!(p = strchr(hdr, '-'))) {
+	/* bad byte-range-set */
+	return HTTP_OK;
+    }
+    if (strchr(p, ',')) {
+	/* we don't handle multiple byte-range-set */
+	return HTTP_OK;
+    }
+
+    if (p == hdr) {
+	/* suffix-byte-range-spec */
+	unsigned long suffix = strtoul(++p, &endp, 10);
+	if (endp == p || *endp) {
+	    /* bad suffix-length */
+	    return HTTP_OK;
+	}
+	if (!suffix) {
+	    /* unsatisfiable suffix-length (zero) */
+	    return HTTP_UNSAT_RANGE;
+	}
+
+	/* don't start before byte zero */
+	if (suffix < len) *first = len - suffix;
+    }
+    else {
+	/* byte-range-spec */
+	*first = strtoul(hdr, &endp, 10);
+	if (endp != p) {
+	    /* bad first-byte-pos */
+	    return HTTP_OK;
+	}
+	if (*first >= len) {
+	    /* unsatisfiable first-byte-pos */
+	    return HTTP_UNSAT_RANGE;
+	}
+
+	if (*++p) {
+	    /* last-byte-pos */
+	    *last = strtoul(p, &endp, 10);
+	    if (*endp || *last < *first) {
+		/* bad last-byte-pos */
+		return HTTP_OK;
+	    }
+
+	    /* don't go past end of representation */
+	    if (*last >= len) *last = len - 1;
+	}
+    }
+
+    return HTTP_PARTIAL;
+}
+
+
 /* Check headers for any preconditions.
  *
  * Interaction is complex and is documented in RFC 4918 and
@@ -2491,11 +2573,11 @@ int check_precond(struct transaction_t *txn,
     /* Step 3 */
     switch (txn->meth) {
     case METH_GET:
-#if 0  /* We don't support range requests yet */
-	if (spool_getheader(hdrcache, "Range")) {
-	    resp = HTTP_PARTIAL;  /* Partial GET */
+	if (txn->flags.ranges && (hdr = spool_getheader(hdrcache, "Range"))) {
+	    resp = parse_ranges(hdr[0], &txn->resp_body.range);
 
-	    if ((hdr = spool_getheader(hdrcache, "If-Range"))) {
+	    if (resp != HTTP_OK &&
+		(hdr = spool_getheader(hdrcache, "If-Range"))) {
 		since = message_parse_date((char *) hdr[0],
 					   PARSE_DATE|PARSE_TIME|PARSE_ZONE|
 					   PARSE_GMT|PARSE_NOCREATE);
@@ -2506,7 +2588,6 @@ int check_precond(struct transaction_t *txn,
 		return resp;  /* Ignore remaining conditionals */
 	    }
 	}
-#endif
 
     case METH_HEAD:
 	is_get_or_head = 1;
@@ -2541,7 +2622,7 @@ int meth_get_doc(struct transaction_t *txn,
     static struct buf pathbuf = BUF_INITIALIZER;
     struct stat sbuf;
     const char *msg_base = NULL;
-    unsigned long msg_size = 0;
+    unsigned long msg_size = 0, offset = 0, datalen;
     struct resp_body_t *resp_body = &txn->resp_body;
 
     /* Serve up static pages */
@@ -2559,22 +2640,42 @@ int meth_get_doc(struct transaction_t *txn,
     /* See if file exists and get Content-Length & Last-Modified time */
     if (stat(path, &sbuf) || !S_ISREG(sbuf.st_mode)) return HTTP_NOT_FOUND;
 
+    datalen = sbuf.st_size;
+
     /* Generate Etag */
     assert(!buf_len(&txn->buf));
     buf_printf(&txn->buf, "%ld-%ld", (long) sbuf.st_mtime, (long) sbuf.st_size);
-    resp_body->etag = buf_cstring(&txn->buf);
 
-    /* Check any preconditions */
-    precond = check_precond(txn, NULL, resp_body->etag, sbuf.st_mtime);
+    /* Check any preconditions, including range request */
+    txn->flags.ranges = 1;
+    resp_body->range.len = datalen;
+    precond = check_precond(txn, NULL, buf_cstring(&txn->buf), sbuf.st_mtime);
 
-    /* We failed a precondition - don't perform the request */
-    if (precond != HTTP_OK) return precond;
+    switch (precond) {
+    case HTTP_OK:
+	break;
+
+    case HTTP_PARTIAL:
+	/* Set data parameters for range */
+	offset += resp_body->range.first;
+	datalen = resp_body->range.last - resp_body->range.first + 1;
+	break;
+
+    case HTTP_NOT_MODIFIED:
+	/* Fill in ETag for 304 response */
+	resp_body->etag = buf_cstring(&txn->buf);
+
+    default:
+	/* We failed a precondition - don't perform the request */
+	return precond;
+    }
 
     /* Open and mmap the file */
     if ((fd = open(path, O_RDONLY)) == -1) return HTTP_SERVER_ERROR;
     map_refresh(fd, 1, &msg_base, &msg_size, sbuf.st_size, path, NULL);
 
-    /* Fill in Last-Modified, and Content-Length */
+    /* Fill in ETag, Last-Modified, and Content-Length */
+    resp_body->etag = buf_cstring(&txn->buf);
     resp_body->lastmod = sbuf.st_mtime;
     resp_body->len = msg_size;
 
@@ -2617,7 +2718,7 @@ int meth_get_doc(struct transaction_t *txn,
 	}
     }
 
-    write_body(HTTP_OK, txn, msg_base, msg_size);
+    write_body(precond, txn, msg_base + offset, datalen);
 
     map_free(&msg_base, &msg_size);
     close(fd);

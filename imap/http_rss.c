@@ -228,6 +228,7 @@ static int meth_get(struct transaction_t *txn,
 	    int precond;
 	    time_t lastmod = 0;
 	    struct resp_body_t *resp_body = &txn->resp_body;
+	    unsigned long offset = 0, datalen = 0;
 
 	    /* Check any preconditions */
 	    buf_setcstr(&txn->buf, message_guid_encode(&record.guid));
@@ -235,12 +236,23 @@ static int meth_get(struct transaction_t *txn,
 		buf_appendcstr(&txn->buf, ".html");
 	    else if (strcmp(section, "0"))
 		buf_printf(&txn->buf, ".%s", section);
+	    else {
+		/* Entire raw message */
+		txn->flags.ranges = 1;
+		datalen = resp_body->range.len = msg_size;
+	    }
 
 	    lastmod = record.internaldate;
 	    precond = check_precond(txn, NULL, buf_cstring(&txn->buf), lastmod);
 
 	    switch (precond) {
 	    case HTTP_OK:
+		break;
+
+	    case HTTP_PARTIAL:
+		/* Set data parameters for range */
+		offset += resp_body->range.first;
+		datalen = resp_body->range.last - resp_body->range.first + 1;
 		break;
 
 	    case HTTP_NOT_MODIFIED:
@@ -265,7 +277,7 @@ static int meth_get(struct transaction_t *txn,
 		/* Return entire message as text/plain */
 		resp_body->type = "text/plain";
 
-		write_body(HTTP_OK, txn, msg_base, msg_size);
+		write_body(precond, txn, msg_base + offset, datalen);
 	    }
 	    else {
 		/* Fetch, decode, and return the specified MIME message part */
