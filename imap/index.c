@@ -2427,7 +2427,7 @@ static struct multisort_result *multisort_run(struct index_state *state,
 		continue;
 
 	    /* run the search program */
-	    if (!index_search_evaluate(state2, searchargs2, msgno))
+	    if (!index_search_evaluate(state2, searchargs2->root, msgno))
 		continue;
 
 	    msgs[count++] = msgno;
