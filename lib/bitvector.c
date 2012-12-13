@@ -225,6 +225,16 @@ EXPORTED int bv_prev_set(const bitvector_t *bv, int start)
     return -1;
 }
 
+EXPORTED int bv_first_set(const bitvector_t *bv)
+{
+    return bv_next_set(bv, 0);
+}
+
+EXPORTED int bv_last_set(const bitvector_t *bv)
+{
+    return bv_prev_set(bv, bv->length-1);
+}
+
 /* Returns a string which describes the state of the bitvector,
  * useful for debugging.  Returns a new string which must be free'd
  * by the caller */

@@ -73,6 +73,8 @@ extern void bv_andeq(bitvector_t *a, const bitvector_t *b);
 extern void bv_oreq(bitvector_t *a, const bitvector_t *b);
 extern int bv_next_set(const bitvector_t *, int start);
 extern int bv_prev_set(const bitvector_t *, int start);
+extern int bv_first_set(const bitvector_t *);
+extern int bv_last_set(const bitvector_t *);
 extern char *bv_cstring(const bitvector_t *);
 extern void bv_free(bitvector_t *);
 
