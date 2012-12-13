@@ -59,6 +59,7 @@ typedef struct search_folder search_folder_t;
 struct search_folder {
     char *mboxname;
     uint32_t uidvalidity;
+    uint64_t highest_modseq; /* of returned messages, not the folder */
     int id;
     bitvector_t uids;
     struct msgdata *msgdata;
@@ -123,6 +124,19 @@ extern search_query_t *search_query_new(struct index_state *state,
 extern int search_query_run(search_query_t *query,
 			    struct searchargs *searchargs);
 extern void search_query_free(search_query_t *query);
+
+extern search_folder_t *search_query_find_folder(search_query_t *query,
+						 const char *mboxname);
+extern void search_folder_use_msn(search_folder_t *, struct index_state *);
+extern struct seqset *search_folder_get_seqset(const search_folder_t *);
+extern uint32_t search_folder_get_min(const search_folder_t *);
+extern uint32_t search_folder_get_max(const search_folder_t *);
+extern unsigned int search_folder_get_count(const search_folder_t *);
+#define search_folder_foreach(folder, u) \
+    for ((u) = bv_next_set(&(folder)->uids, 0) ; \
+	 (u) != -1 ; \
+	 (u) = bv_next_set(&(folder)->uids, (u)+1))
+extern uint64_t search_folder_get_highest_modseq(const search_folder_t *);
 
 
 #endif /* __CYRUS_SEARCH_RESULT_H__ */

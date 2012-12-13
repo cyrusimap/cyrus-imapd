@@ -82,9 +82,11 @@ static void dump_one_folder(const char *key, void *data, void *rock)
     int uid;
 
     printf("mailbox %s\n", folder->mboxname);
-    for (uid = bv_next_set(&folder->uids, 0) ;
-	 uid != -1 ;
-	 uid = bv_next_set(&folder->uids, uid+1)) {
+    printf("min %u\n", search_folder_get_min(folder));
+    printf("max %u\n", search_folder_get_max(folder));
+    printf("count %u\n", search_folder_get_count(folder));
+    printf("highestmodseq %llu\n", search_folder_get_highest_modseq(folder));
+    search_folder_foreach(folder, uid) {
 	printf("uid %u\n", uid);
     }
 }

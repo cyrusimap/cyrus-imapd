@@ -113,6 +113,86 @@ EXPORTED void search_query_free(search_query_t *query)
 
 /* ====================================================================== */
 
+
+/*
+ * Find the named folder folder.  Returns NULL if there are no
+ * search results for that folder.
+ */
+EXPORTED search_folder_t *search_query_find_folder(search_query_t *query,
+						   const char *mboxname)
+{
+    return (search_folder_t *)hash_lookup(mboxname, &query->folders_by_name);
+}
+
+/*
+ * Switch the folder over to reporting MSNs rather than UIDs.
+ */
+EXPORTED void search_folder_use_msn(search_folder_t *folder, struct index_state *state)
+{
+    int uid;
+    unsigned msgno;
+    bitvector_t msns = BV_INITIALIZER;
+
+    search_folder_foreach(folder, uid) {
+	msgno = index_finduid(state, uid);
+	if (index_getuid(state, msgno) == uid)
+	    bv_set(&msns, msgno);
+    }
+    bv_free(&folder->uids);
+    folder->uids = msns;
+}
+
+/*
+ * Return the results for the given folder as a sequence of UIDs (or
+ * MSNs if search_folder_use_msn() has been called).  The caller is
+ * responsible for freeing the result using seqset_free()
+ */
+EXPORTED struct seqset *search_folder_get_seqset(const search_folder_t *folder)
+{
+    struct seqset *seq = seqset_init(0, SEQ_SPARSE);
+    int uid;
+
+    for (uid = bv_next_set(&folder->uids, 0) ;
+	 uid != -1 ;
+	 uid = bv_next_set(&folder->uids, uid+1))
+	seqset_add(seq, uid, 1);
+
+    return seq;
+}
+
+/*
+ * Return the minimum UID (or MSN if search_folder_use_msn() has been
+ * called).
+ */
+EXPORTED uint32_t search_folder_get_min(const search_folder_t *folder)
+{
+    return bv_first_set(&folder->uids);
+}
+
+/*
+ * Return the maximum UID (or MSN if search_folder_use_msn() has been
+ * called).
+ */
+EXPORTED uint32_t search_folder_get_max(const search_folder_t *folder)
+{
+    return bv_last_set(&folder->uids);
+}
+
+/*
+ * Returns the count of UIDs or MSNs.
+ */
+EXPORTED unsigned int search_folder_get_count(const search_folder_t *folder)
+{
+    return bv_count(&folder->uids);
+}
+
+EXPORTED uint64_t search_folder_get_highest_modseq(const search_folder_t *folder)
+{
+    return folder->highest_modseq;
+}
+
+/* ====================================================================== */
+
 static search_folder_t *query_get_folder(search_query_t *query, const char *mboxname)
 {
     hash_table *table;
@@ -169,6 +249,12 @@ static void folder_add_uid(search_folder_t *folder, uint32_t uid)
 static void folder_remove_uid(search_folder_t *folder, uint32_t uid)
 {
     bv_clear(&folder->uids, uid);
+}
+
+static void folder_add_modseq(search_folder_t *folder, uint64_t modseq)
+{
+    if (modseq > folder->highest_modseq)
+	folder->highest_modseq = modseq;
 }
 
 static int query_begin_index(search_query_t *query,
@@ -416,6 +502,7 @@ static int subquery_run_one_folder(search_query_t *query,
 	}
 
 	folder_add_uid(folder, record->uid);
+	folder_add_modseq(folder, record->modseq);
     }
 
     r = 0;
