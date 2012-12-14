@@ -1046,23 +1046,31 @@ static void cmdloop(void)
 
 	/* Check for connection directives */
 	if ((hdr = spool_getheader(txn.req_hdrs, "Connection"))) {
-	    /* Check if this is a non-persistent connection */
-	    if (!strcmp(hdr[0], "close")) {
-		syslog(LOG_DEBUG, "non-persistent connection");
-		txn.flags.close = 1;
-	    }
+	    /* Look for interesting connection tokens */
+	    tok_t tok = TOK_INITIALIZER(hdr[0], ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+	    char *token;
+	    int dotls = 0;
 
-	    /* Check if we need to start TLS */
-	    else if (!ret && !httpd_tls_done && tls_enabled() &&
-		     !strcmp(hdr[0], "Upgrade")) {
-		const char **upgd;
+	    while ((token = tok_next(&tok))) {
+		/* Check if this is a non-persistent connection */
+		if (!strcasecmp(token, "close")) {
+		    syslog(LOG_DEBUG, "non-persistent connection");
+		    txn.flags.close = 1;
+		}
 
-		if ((upgd = spool_getheader(txn.req_hdrs, "Upgrade")) &&
-		    !strcmp(upgd[0], "TLS/1.0")) {
-		    syslog(LOG_DEBUG, "client requested TLS");
-		    starttls(0);
+		/* Check if we need to upgrade to TLS */
+		else if (!ret && !httpd_tls_done && tls_enabled() &&
+			 !strcasecmp(token, "Upgrade")) {
+		    if ((hdr = spool_getheader(txn.req_hdrs, "Upgrade")) &&
+			!strncmp(hdr[0], "TLS/1.0", strcspn(hdr[0], " ,"))) {
+			syslog(LOG_DEBUG, "client requested TLS");
+			dotls = 1;
+		    }
 		}
 	    }
+	    tok_fini(&tok);
+
+	    if (dotls) starttls(0);
 	}
 
 	/* Find the namespace of the requested resource */
@@ -1167,7 +1175,7 @@ static void cmdloop(void)
 
 		/* Check which response is required */
 		if ((hdr = spool_getheader(txn.req_hdrs, "Upgrade")) &&
-		    !strcmp(hdr[0], "TLS/1.0")) {
+		    !strncmp(hdr[0], "TLS/1.0", strcspn(hdr[0], " ,"))) {
 		    /* Client (Murder proxy) prefers RFC 2817 (TLS upgrade) */
 		    code = HTTP_UPGRADE;
 		}
