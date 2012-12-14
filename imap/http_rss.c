@@ -226,24 +226,21 @@ static int meth_get(struct transaction_t *txn,
 	if (!(ret = fetch_message(txn, mailbox, 0, uid,
 				  &record, &body, &msg_base, &msg_size))) {
 	    int precond;
+	    const char *etag = NULL;
 	    time_t lastmod = 0;
 	    struct resp_body_t *resp_body = &txn->resp_body;
 	    unsigned long offset = 0, datalen = 0;
 
 	    /* Check any preconditions */
-	    buf_setcstr(&txn->buf, message_guid_encode(&record.guid));
-	    if (!*section)
-		buf_appendcstr(&txn->buf, ".html");
-	    else if (strcmp(section, "0"))
-		buf_printf(&txn->buf, ".%s", section);
-	    else {
+	    if (!strcmp(section, "0")) {
 		/* Entire raw message */
 		txn->flags.ranges = 1;
 		datalen = resp_body->range.len = msg_size;
 	    }
 
+	    etag = message_guid_encode(&record.guid);
 	    lastmod = record.internaldate;
-	    precond = check_precond(txn, NULL, buf_cstring(&txn->buf), lastmod);
+	    precond = check_precond(txn, NULL, etag, lastmod);
 
 	    switch (precond) {
 	    case HTTP_OK:
@@ -257,7 +254,7 @@ static int meth_get(struct transaction_t *txn,
 
 	    case HTTP_NOT_MODIFIED:
 		/* Fill in ETag for 304 response */
-		resp_body->etag = buf_cstring(&txn->buf);
+		resp_body->etag = etag;
 
 	    default:
 		/* We failed a precondition - don't perform the request */
@@ -266,7 +263,7 @@ static int meth_get(struct transaction_t *txn,
 	    }
 
 	    /* Fill in ETag and Last-Modified */
-	    resp_body->etag = buf_cstring(&txn->buf);
+	    resp_body->etag = etag;
 	    resp_body->lastmod = lastmod;
 	    
 	    if (!*section) {
