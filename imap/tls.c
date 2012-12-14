@@ -307,6 +307,7 @@ static int verify_callback(int ok, X509_STORE_CTX * ctx)
 }
 
 
+#if (OPENSSL_VERSION_NUMBER >= 0x10000000fL)
 static int servername_callback(SSL *ssl, int *ad __attribute__((unused)),
 			       void *arg __attribute__((unused)))
 {
@@ -319,6 +320,7 @@ static int servername_callback(SSL *ssl, int *ad __attribute__((unused)),
 
     return SSL_TLSEXT_ERR_OK;
 }
+#endif
 
 
 /*
@@ -760,7 +762,9 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 	    | SSL_VERIFY_CLIENT_ONCE;
     SSL_CTX_set_verify(s_ctx, verify_flags, verify_callback);
 
+#if (OPENSSL_VERSION_NUMBER >= 0x10000000fL)
     SSL_CTX_set_tlsext_servername_callback(s_ctx, servername_callback);
+#endif
 
     if (askcert || requirecert) {
       if (CAfile == NULL) {
