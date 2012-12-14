@@ -200,7 +200,8 @@ enum {
     SEARCH_RETURN_MIN =		(1<<0),
     SEARCH_RETURN_MAX =		(1<<1),
     SEARCH_RETURN_ALL =		(1<<2),
-    SEARCH_RETURN_COUNT =	(1<<3)
+    SEARCH_RETURN_COUNT =	(1<<3),
+    SEARCH_RETURN_RELEVANCY =	(1<<4)
 };
 
 /* Things that may be searched for */
@@ -208,6 +209,8 @@ struct searchargs {
     struct search_expr *root;
     int charset;
     int state;
+    /* used only during parsing */
+    int fuzzy_depth;
 
     /* For ESEARCH & XCONVMULTISORT */
     const char *tag;
@@ -253,7 +256,8 @@ enum {
     SORT_CONVEXISTS,
     SORT_CONVSIZE,
     SORT_HASCONVFLAG,
-    SORT_FOLDER
+    SORT_FOLDER,
+    SORT_RELEVANCY	/* RFC 6203 */
     /* values > 255 are reserved for internal use */
 };
 

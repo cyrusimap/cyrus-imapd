@@ -562,6 +562,9 @@ static int get_search_return_opts(struct protstream *pin,
 	else if (!strcmp(opt.s, "count")) {
 	    searchargs->returnopts |= SEARCH_RETURN_COUNT;
 	}
+	else if (!strcmp(opt.s, "relevancy")) {	/* RFC 6203 */
+	    searchargs->returnopts |= SEARCH_RETURN_RELEVANCY;
+	}
 	else {
 	    prot_printf(pout,
 			"%s BAD Invalid Search return option %s\r\n",
@@ -649,9 +652,15 @@ static void string_match(search_expr_t *parent, const char *val,
 			 const char *aname, struct searchargs *base)
 {
     search_expr_t *e;
+    const search_attr_t *attr = search_attr_find(aname);
+    enum search_op op = SEOP_MATCH;
 
-    e = search_expr_new(parent, SEOP_MATCH);
-    e->attr = search_attr_find(aname);
+    if (base->fuzzy_depth > 0 &&
+	search_attr_is_fuzzable(attr))
+	op = SEOP_FUZZYMATCH;
+
+    e = search_expr_new(parent, op);
+    e->attr = attr;
     e->value.s = charset_convert(val, base->charset, charset_flags);
     if (!e->value.s) {
 	e->op = SEOP_FALSE;
@@ -805,6 +814,14 @@ static int get_search_criterion(struct protstream *pin,
 	    c = getastring(pin, pout, &arg);
 	    if (c == EOF) goto missingarg;
 	    string_match(parent, arg.s, criteria.s, base);
+	}
+	else if (!strcmp(criteria.s, "fuzzy")) {
+	    if (c != ' ') goto missingarg;
+	    base->fuzzy_depth++;
+	    c = get_search_criterion(pin, pout, parent, base);
+	    base->fuzzy_depth--;
+	    if (c == EOF) return EOF;
+	    break;
 	}
 	else goto badcri;
 	break;

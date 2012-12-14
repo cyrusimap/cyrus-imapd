@@ -212,7 +212,7 @@ EXPORTED search_expr_t *search_expr_duplicate(const search_expr_t *e)
 static const char *op_strings[] = {
     "unknown", "true", "false",
     "lt", "le", "gt", "ge", "match",
-    "and", "or", "not"
+    "fuzzymatch", "and", "or", "not"
 };
 
 static const char *op_as_string(unsigned int op)
@@ -337,6 +337,7 @@ static search_expr_t *unserialise(search_expr_t *parent,
     case SEOP_GT:
     case SEOP_GE:
     case SEOP_MATCH:
+    case SEOP_FUZZYMATCH:
 	/* parse attribute */
 	c = getseword(prot, tmp, sizeof(tmp));
 	if (c != ' ')
@@ -424,6 +425,7 @@ static int dnf_depth(const search_expr_t *e)
     case SEOP_GT:
     case SEOP_GE:
     case SEOP_MATCH:
+    case SEOP_FUZZYMATCH:
 	return DNF_CMP;
     case SEOP_AND:
 	return DNF_AND;
@@ -721,6 +723,11 @@ EXPORTED int search_expr_evaluate(message_t *m, const search_expr_t *e)
 	assert(e->attr);
 	assert(e->attr->cmp);
 	return (e->attr->cmp(m, &e->value, e->internalised, e->attr->data1) >= 0);
+    case SEOP_FUZZYMATCH:
+	/* FUZZYMATCH should never be evaluated, as such nodes are
+	 * picked out of the expression during query optimisation and
+	 * used to drive search engine lookups.  But the nearest
+	 * approximation would be MATCH. */
     case SEOP_MATCH:
 	assert(e->attr);
 	assert(e->attr->match);
@@ -889,7 +896,7 @@ static int is_indexed_node(const search_expr_t *e)
 {
     if (e->op == SEOP_NOT)
 	return is_indexed_node(e->children);
-    return (e->op == SEOP_MATCH &&
+    return (e->op == SEOP_FUZZYMATCH &&
 	    e->attr &&
 	    e->attr->part != SEARCH_PART_NONE);
 }
@@ -1827,7 +1834,7 @@ EXPORTED void search_attr_init(void)
     static const search_attr_t attrs[] = {
 	{
 	    "bcc",
-	    /*flags*/0,
+	    SEA_FUZZABLE,
 	    SEARCH_PART_BCC,
 	    search_string_internalise,
 	    /*cmp*/NULL,
@@ -1840,7 +1847,7 @@ EXPORTED void search_attr_init(void)
 	    (void *)message_get_bcc
 	},{
 	    "cc",
-	    /*flags*/0,
+	    SEA_FUZZABLE,
 	    SEARCH_PART_CC,
 	    search_string_internalise,
 	    /*cmp*/NULL,
@@ -1853,7 +1860,7 @@ EXPORTED void search_attr_init(void)
 	    (void *)message_get_cc
 	},{
 	    "from",
-	    /*flags*/0,
+	    SEA_FUZZABLE,
 	    SEARCH_PART_FROM,
 	    search_string_internalise,
 	    /*cmp*/NULL,
@@ -1879,7 +1886,7 @@ EXPORTED void search_attr_init(void)
 	    (void *)message_get_messageid
 	},{
 	    "listid",
-	    /*flags*/0,
+	    SEA_FUZZABLE,
 	    SEARCH_PART_LISTID,
 	    search_string_internalise,
 	    /*cmp*/NULL,
@@ -1892,7 +1899,7 @@ EXPORTED void search_attr_init(void)
 	    NULL
 	},{
 	    "contenttype",
-	    /*flags*/0,
+	    SEA_FUZZABLE,
 	    SEARCH_PART_TYPE,
 	    search_string_internalise,
 	    /*cmp*/NULL,
@@ -1905,7 +1912,7 @@ EXPORTED void search_attr_init(void)
 	    NULL
 	},{
 	    "subject",
-	    /*flags*/0,
+	    SEA_FUZZABLE,
 	    SEARCH_PART_SUBJECT,
 	    search_string_internalise,
 	    /*cmp*/NULL,
@@ -1918,7 +1925,7 @@ EXPORTED void search_attr_init(void)
 	    (void *)message_get_subject
 	},{
 	    "to",
-	    /*flags*/0,
+	    SEA_FUZZABLE,
 	    SEARCH_PART_TO,
 	    search_string_internalise,
 	    /*cmp*/NULL,
@@ -2113,7 +2120,7 @@ EXPORTED void search_attr_init(void)
 	    (void *)message_get_sentdate
 	},{
 	    "body",
-	    /*flags*/0,
+	    SEA_FUZZABLE,
 	    SEARCH_PART_BODY,
 	    search_string_internalise,
 	    /*cmp*/NULL,
@@ -2126,7 +2133,7 @@ EXPORTED void search_attr_init(void)
 	    (void *)1	    /* skipheader flag */
 	},{
 	    "text",
-	    /*flags*/0,
+	    SEA_FUZZABLE,
 	    SEARCH_PART_ANY,
 	    search_string_internalise,
 	    /*cmp*/NULL,
@@ -2173,7 +2180,7 @@ EXPORTED const search_attr_t *search_attr_find_field(const char *field)
     char *key = NULL;
     static const search_attr_t proto = {
 	"name",
-	/*flags*/0,
+	SEA_FUZZABLE,
 	SEARCH_PART_NONE,
 	search_string_internalise,
 	/*cmp*/NULL,
@@ -2212,3 +2219,14 @@ EXPORTED const search_attr_t *search_attr_find_field(const char *field)
     free(key);
     return attr;
 }
+
+/*
+ * Return non-zero if the given attribute may be used with a
+ * SEOP_FUZZYMATCH operation.
+ */
+EXPORTED int search_attr_is_fuzzable(const search_attr_t *attr)
+{
+    return (attr->part != SEARCH_PART_NONE &&
+	    (attr->flags & SEA_FUZZABLE));
+}
+

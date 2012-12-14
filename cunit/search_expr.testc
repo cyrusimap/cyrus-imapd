@@ -518,6 +518,17 @@ static void test_unserialise(void)
     CU_ASSERT_PTR_NULL(e->parent);
     search_expr_free(e);
 
+    e = search_expr_unserialise("(fuzzymatch subject ETSY)");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(e);
+    CU_ASSERT_EQUAL(e->op, SEOP_FUZZYMATCH);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(e->attr);
+    CU_ASSERT_STRING_EQUAL(e->attr->name, "subject");
+    CU_ASSERT_STRING_EQUAL(e->value.s, "ETSY");
+    CU_ASSERT_PTR_NULL(e->next);
+    CU_ASSERT_PTR_NULL(e->children);
+    CU_ASSERT_PTR_NULL(e->parent);
+    search_expr_free(e);
+
     e = search_expr_unserialise("(ge size 123)");
     CU_ASSERT_PTR_NOT_NULL_FATAL(e);
     CU_ASSERT_EQUAL(e->op, SEOP_GE);
@@ -1104,7 +1115,8 @@ static void test_split_by_folder_and_index(void)
 	buf_free(&actual); \
     }
 
-    /* Note, we use message-id because it's not indexable */
+    /* Note, we expect that a (match message-id) node is NOT indexable
+     * whereas a (fuzzymatch subject) node IS indexable */
 
     /* comparison nodes and negations of comparison nodes, which don't
      * match any folders, get a NULL mboxname */
@@ -1177,50 +1189,50 @@ static void test_split_by_folder_and_index(void)
 
     /* indexed comparison nodes and their negations, which don't
      * match any folders, get a NULL mboxname and a trivial scan. */
-    TESTCASE("(match subject \"ETSY\")",
-	     "indexed (match subject \"ETSY\") (true)\n");
-    TESTCASE("(not (match subject \"ETSY\"))",
-	     "indexed (not (match subject \"ETSY\")) (true)\n");
+    TESTCASE("(fuzzymatch subject \"ETSY\")",
+	     "indexed (fuzzymatch subject \"ETSY\") (true)\n");
+    TESTCASE("(not (fuzzymatch subject \"ETSY\"))",
+	     "indexed (not (fuzzymatch subject \"ETSY\")) (true)\n");
 
     /* conjunctions of indexed comparison nodes and their negations, which
      * don't match any folders, get a NULL mboxname and a trivial scan. */
-    TESTCASE("(and (match subject \"ETSY\") (match subject \"TUMBLR\"))",
-	     "indexed (and (match subject \"ETSY\") (match subject \"TUMBLR\")) (true)\n");
+    TESTCASE("(and (fuzzymatch subject \"ETSY\") (fuzzymatch subject \"TUMBLR\"))",
+	     "indexed (and (fuzzymatch subject \"ETSY\") (fuzzymatch subject \"TUMBLR\")) (true)\n");
 
     /* conjunctions of indexed comparison nodes and their negations, with
      * non-indexed nodes, which don't match any folders, get a NULL mboxname
      * two trees with the indexed nodes separated out */
-    TESTCASE("(and (match subject \"ETSY\") (match message-id \"TUMBLR\"))",
-	     "indexed (match subject \"ETSY\") (match message-id \"TUMBLR\")\n");
-    TESTCASE("(and (match message-id \"TUMBLR\") (match subject \"ETSY\"))",
-	     "indexed (match subject \"ETSY\") (match message-id \"TUMBLR\")\n");
+    TESTCASE("(and (fuzzymatch subject \"ETSY\") (match message-id \"TUMBLR\"))",
+	     "indexed (fuzzymatch subject \"ETSY\") (match message-id \"TUMBLR\")\n");
+    TESTCASE("(and (match message-id \"TUMBLR\") (fuzzymatch subject \"ETSY\"))",
+	     "indexed (fuzzymatch subject \"ETSY\") (match message-id \"TUMBLR\")\n");
 
     /* conjunctions of indexed comparison nodes and their negations, which
      * do match folders either positively or negatively, get a NULL mboxname
      * because we favour the index */
-    TESTCASE("(and (match subject \"ETSY\") (match folder \"inbox.Tumblr\"))",
-	     "indexed (match subject \"ETSY\") (match folder \"inbox.Tumblr\")\n");
-    TESTCASE("(and (match folder \"inbox.Tumblr\") (match subject \"ETSY\"))",
-	     "indexed (match subject \"ETSY\") (match folder \"inbox.Tumblr\")\n");
-    TESTCASE("(and (match subject \"ETSY\") (not (match folder \"inbox.Tumblr\")))",
-	     "indexed (match subject \"ETSY\") (not (match folder \"inbox.Tumblr\"))\n");
-    TESTCASE("(and (not (match folder \"inbox.Tumblr\")) (match subject \"ETSY\"))",
-	     "indexed (match subject \"ETSY\") (not (match folder \"inbox.Tumblr\"))\n");
+    TESTCASE("(and (fuzzymatch subject \"ETSY\") (match folder \"inbox.Tumblr\"))",
+	     "indexed (fuzzymatch subject \"ETSY\") (match folder \"inbox.Tumblr\")\n");
+    TESTCASE("(and (match folder \"inbox.Tumblr\") (fuzzymatch subject \"ETSY\"))",
+	     "indexed (fuzzymatch subject \"ETSY\") (match folder \"inbox.Tumblr\")\n");
+    TESTCASE("(and (fuzzymatch subject \"ETSY\") (not (match folder \"inbox.Tumblr\")))",
+	     "indexed (fuzzymatch subject \"ETSY\") (not (match folder \"inbox.Tumblr\"))\n");
+    TESTCASE("(and (not (match folder \"inbox.Tumblr\")) (fuzzymatch subject \"ETSY\"))",
+	     "indexed (fuzzymatch subject \"ETSY\") (not (match folder \"inbox.Tumblr\"))\n");
 
     /* a disjuctive node where one side contains indexed matches,
      * is split into multiple callbacks, some indexed, some not */
-    TESTCASE("(or (match subject \"ETSY\") (match folder \"inbox.Cosby.Sweater\"))",
-	     "indexed (match subject \"ETSY\") (true)\n"
+    TESTCASE("(or (fuzzymatch subject \"ETSY\") (match folder \"inbox.Cosby.Sweater\"))",
+	     "indexed (fuzzymatch subject \"ETSY\") (true)\n"
 	     "mboxname \"inbox.Cosby.Sweater\" (true)\n");
-    TESTCASE("(or (match folder \"inbox.Cosby.Sweater\") (match subject \"ETSY\"))",
+    TESTCASE("(or (match folder \"inbox.Cosby.Sweater\") (fuzzymatch subject \"ETSY\"))",
 	     "mboxname \"inbox.Cosby.Sweater\" (true)\n"
-	     "indexed (match subject \"ETSY\") (true)\n");
-    TESTCASE("(or (match subject \"TUMBLR\") (match subject \"MLKSHK\"))",
-	     "indexed (match subject \"TUMBLR\") (true)\n"
-	     "indexed (match subject \"MLKSHK\") (true)\n");
-    TESTCASE("(or (and (le size 123) (match subject \"TUMBLR\")) (and (ge size 456) (match subject \"MLKSHK\")))",
-	     "indexed (match subject \"TUMBLR\") (le size 123)\n"
-	     "indexed (match subject \"MLKSHK\") (ge size 456)\n");
+	     "indexed (fuzzymatch subject \"ETSY\") (true)\n");
+    TESTCASE("(or (fuzzymatch subject \"TUMBLR\") (fuzzymatch subject \"MLKSHK\"))",
+	     "indexed (fuzzymatch subject \"TUMBLR\") (true)\n"
+	     "indexed (fuzzymatch subject \"MLKSHK\") (true)\n");
+    TESTCASE("(or (and (le size 123) (fuzzymatch subject \"TUMBLR\")) (and (ge size 456) (fuzzymatch subject \"MLKSHK\")))",
+	     "indexed (fuzzymatch subject \"TUMBLR\") (le size 123)\n"
+	     "indexed (fuzzymatch subject \"MLKSHK\") (ge size 456)\n");
 
 #undef TESTCASE
 }

@@ -64,6 +64,7 @@ enum search_op {
 
     /* operators for nonordinal types: strings, uid sequences */
     SEOP_MATCH,
+    SEOP_FUZZYMATCH,
 
     SEOP_AND,
     SEOP_OR,
@@ -80,6 +81,7 @@ union search_value {
 /* search_attr.flags */
 enum {
     SEA_MUTABLE =	(1<<0),
+    SEA_FUZZABLE =	(1<<1),
 };
 
 typedef struct search_attr search_attr_t;
@@ -144,5 +146,6 @@ extern void search_expr_split_by_folder_and_index(search_expr_t *e,
 extern void search_attr_init(void);
 extern const search_attr_t *search_attr_find(const char *);
 extern const search_attr_t *search_attr_find_field(const char *field);
+extern int search_attr_is_fuzzable(const search_attr_t *);
 
 #endif

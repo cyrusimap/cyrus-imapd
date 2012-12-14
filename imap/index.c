@@ -1468,7 +1468,7 @@ static void build_query(search_builder_t *bx,
 	bop = SEARCH_OP_OR;
 	break;
 
-    case SEOP_MATCH:
+    case SEOP_FUZZYMATCH:
 	if (e->attr && e->attr->part >= 0) {
 	    bx->match(bx, e->attr->part, e->value.s);
 	    (*nmatchesp)++;
@@ -1869,6 +1869,15 @@ EXPORTED int index_search(struct index_state *state, struct searchargs *searchar
 		}
 
 		seqset_free(seq);
+	    }
+	    if (searchargs->returnopts & SEARCH_RETURN_RELEVANCY) {
+		prot_printf(state->out, " RELEVANCY (");
+		for (i = 0; i < n; i++) {
+		    if (i) prot_putc(' ', state->out);
+		    /* for now all messages have relevancy=100 */
+		    prot_printf(state->out, "%u", 100);
+		}
+		prot_printf(state->out, ")");
 	    }
 	}
 	if (searchargs->returnopts & SEARCH_RETURN_COUNT) {
@@ -5464,6 +5473,9 @@ static MsgData **index_msgdata_load(struct index_state *state,
 	    case SORT_CONVMODSEQ:
 		cur->convmodseq = conv->modseq;
 		break;
+	    case SORT_RELEVANCY:
+		/* for now all messages have relevancy=100 */
+		break;
 	    }
 	}
 
@@ -5837,6 +5849,10 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
 	case SORT_FOLDER:
 	    if (md1->folder && md2->folder)
 		ret = strcmpsafe(md1->folder->mboxname, md2->folder->mboxname);
+	    break;
+	case SORT_RELEVANCY:
+	    ret = 0;	    /* for now all messages have relevancy=100 */
+	    break;
 	}
     } while (!ret && sortcrit[i++].key != SORT_SEQUENCE);
 
@@ -6963,7 +6979,7 @@ EXPORTED char *sortcrit_as_string(const struct sortcrit *sortcrit)
 	"SIZE", "SUBJECT", "TO", "ANNOTATION",
 	"MODSEQ", "UID", "HASFLAG", "CONVMODSEQ",
 	"CONVEXISTS", "CONVSIZE", "HASCONVFLAG",
-	"FOLDER"
+	"FOLDER", "RELEVANCY"
     };
 
     for ( ; sortcrit->key ; sortcrit++) {

@@ -379,7 +379,7 @@ void build_query(search_builder_t *bx, search_expr_t *e)
 	bop = SEARCH_OP_OR;
 	break;
 
-    case SEOP_MATCH:
+    case SEOP_FUZZYMATCH:
 	if (e->attr && e->attr->part >= 0) {
 	    bx->match(bx, e->attr->part, e->value.s);
 	}

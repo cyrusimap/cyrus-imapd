@@ -75,10 +75,11 @@ int verbose = 0;
 
 /* ====================================================================== */
 
-static void dump_one_folder(const char *key, void *data, void *rock)
+static void dump_one_folder(const char *key __attribute__((unused)),
+			    void *data,
+			    void *rock __attribute__((unused)))
 {
     search_folder_t *folder = data;
-    search_query_t *query = rock;
     int uid;
 
     printf("mailbox %s\n", folder->mboxname);
