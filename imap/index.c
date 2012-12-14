@@ -72,6 +72,7 @@
 #include "message.h"
 #include "parseaddr.h"
 #include "search_engines.h"
+#include "search_query.h"
 #include "seen.h"
 #include "statuscache.h"
 #include "strhash.h"
@@ -1815,32 +1816,43 @@ static int needs_modseq(const struct searchargs *searchargs,
 
 /*
  * Performs a SEARCH command.
- * This is a wrapper around _index_search() which simply prints the results.
+ * This is a wrapper around the search_query API which simply prints the results.
  */
-EXPORTED int index_search(struct index_state *state, struct searchargs *searchargs,
-		 int usinguid)
+EXPORTED int index_search(struct index_state *state,
+			  struct searchargs *searchargs,
+			  int usinguid)
 {
-    unsigned *list = NULL;
+    search_query_t *query = NULL;
+    search_folder_t *folder;
     int i, n;
     modseq_t highestmodseq = 0;
+    int r;
 
     /* update the index */
     if (index_check(state, 0, 0))
 	return 0;
 
-    search_expr_internalise(state->mailbox, searchargs->root);
+    highestmodseq = needs_modseq(searchargs, NULL);
 
-    /* now do the search */
-    n = _index_search(&list, state, searchargs,
-		      needs_modseq(searchargs, NULL)
-			? &highestmodseq : NULL);
+    query = search_query_new(state, /*multiple*/0);
+    r = search_query_run(query, searchargs);
+    if (r) goto out;	    /* search failed */
+    folder = search_query_find_folder(query, state->mailbox->name);
 
-    /* replace the values now */
-    if (usinguid)
-	for (i = 0; i < n; i++)
-	    list[i] = state->map[list[i]-1].uid;
+    if (folder) {
+	if (!usinguid)
+	    search_folder_use_msn(folder, state);
+	if (highestmodseq)
+	    highestmodseq = search_folder_get_highest_modseq(folder);
+	n = search_folder_get_count(folder);
+    }
+    else
+	n = 0;
 
     if (searchargs->returnopts) {
+	/*
+	 * Implement RFC 4731 return options.
+	 */
 	prot_printf(state->out, "* ESEARCH");
 	if (searchargs->tag) {
 	    prot_printf(state->out, " (TAG \"%s\")", searchargs->tag);
@@ -1848,22 +1860,16 @@ EXPORTED int index_search(struct index_state *state, struct searchargs *searchar
 	if (n) {
 	    if (usinguid) prot_printf(state->out, " UID");
 	    if (searchargs->returnopts & SEARCH_RETURN_MIN)
-		prot_printf(state->out, " MIN %u", list[0]);
+		prot_printf(state->out, " MIN %u", search_folder_get_min(folder));
 	    if (searchargs->returnopts & SEARCH_RETURN_MAX)
-		prot_printf(state->out, " MAX %u", list[n-1]);
+		prot_printf(state->out, " MAX %u", search_folder_get_max(folder));
 	    if (highestmodseq)
 		prot_printf(state->out, " MODSEQ " MODSEQ_FMT, highestmodseq);
 	    if (searchargs->returnopts & SEARCH_RETURN_ALL) {
-		struct seqset *seq;
-		char *str;
-
-		/* Create a sequence-set */
-		seq = seqset_init(0, SEQ_SPARSE);
-		for (i = 0; i < n; i++)
-		    seqset_add(seq, list[i], 1);
+		struct seqset *seq = search_folder_get_seqset(folder);
 
 		if (seq->len) {
-		    str = seqset_cstring(seq);
+		    char *str = seqset_cstring(seq);
 		    prot_printf(state->out, " ALL %s", str);
 		    free(str);
 		}
@@ -1887,17 +1893,20 @@ EXPORTED int index_search(struct index_state *state, struct searchargs *searchar
     else {
 	prot_printf(state->out, "* SEARCH");
 
-	for (i = 0; i < n; i++)
-	    prot_printf(state->out, " %u", list[i]);
+	if (n) {
+	    search_folder_foreach(folder, i) {
+		prot_printf(state->out, " %u", i);
+	    }
+	}
 
 	if (highestmodseq)
 	    prot_printf(state->out, " (MODSEQ " MODSEQ_FMT ")", highestmodseq);
     }
 
-    if (n) free(list);
-
     prot_printf(state->out, "\r\n");
 
+out:
+    search_query_free(query);
     return n;
 }
 
