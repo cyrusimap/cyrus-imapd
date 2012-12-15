@@ -1602,10 +1602,11 @@ static void comma_list_hdr(const char *hdr, const char *vals[], unsigned flags)
 void response_header(long code, struct transaction_t *txn)
 {
     char datestr[30];
+    unsigned keepalive = httpd_keepalive;
     struct auth_challenge_t *auth_chal = &txn->auth_chal;
     struct resp_body_t *resp_body = &txn->resp_body;
     static struct buf log = BUF_INITIALIZER;
-    const char **hdr;
+    const char **hdr, *upgrade = "";
 
     /* Stop method processing alarm */
     alarm(0);
@@ -1637,6 +1638,7 @@ void response_header(long code, struct transaction_t *txn)
     /* Connection Management */
     switch (code) {
     case HTTP_SWITCH_PROT:
+	keepalive = 0;  /* No alarm during TLS negotiation */
 	prot_printf(httpd_out, "Upgrade: TLS/1.0\r\n");
 	prot_printf(httpd_out, "Connection: Upgrade\r\n");
 	/* Fall through as provisional response */
@@ -1645,33 +1647,31 @@ void response_header(long code, struct transaction_t *txn)
     case HTTP_PROCESSING:
 	/* Provisional response - nothing else needed */
 
-	/* Blank line terminating the header */
+	/* CRLF terminating the header */
 	prot_printf(httpd_out, "\r\n");
 
 	/* Force the response to the client immediately */
 	prot_flush(httpd_out);
 
-	/* Restart method processing alarm if not doing TLS negotiation */
-	if (code != HTTP_SWITCH_PROT) alarm(httpd_keepalive);
+	/* Restart method processing alarm */
+	alarm(keepalive);
 
 	return;
 
     case HTTP_UPGRADE:
+	upgrade = ", Upgrade";
 	prot_printf(httpd_out, "Upgrade: TLS/1.0\r\n");
 	/* Fall through as final response */
 
     default:
 	/* Final response */
-	if (txn->flags.close)
-	    prot_printf(httpd_out, "Connection: close");
+	if (txn->flags.close) {
+	    prot_printf(httpd_out, "Connection: close%s\r\n", upgrade);
+	}
 	else {
 	    prot_printf(httpd_out, "Keep-Alive: timeout=%d\r\n", httpd_timeout);
-	    prot_printf(httpd_out, "Connection: Keep-Alive");
+	    prot_printf(httpd_out, "Connection: Keep-Alive%s\r\n", upgrade);
 	}
-
-	/* Complete Connection header */
-	prot_printf(httpd_out, "%s\r\n",
-		    (code == HTTP_UPGRADE) ? ", Upgrade" : "");
     }
 
 
@@ -1876,7 +1876,7 @@ void response_header(long code, struct transaction_t *txn)
     }
 
 
-    /* Blank line terminating the header */
+    /* CRLF terminating the header */
     prot_printf(httpd_out, "\r\n");
 }
 
