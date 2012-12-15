@@ -307,7 +307,7 @@ static int verify_callback(int ok, X509_STORE_CTX * ctx)
 }
 
 
-#if (OPENSSL_VERSION_NUMBER >= 0x10000000fL)
+#if (OPENSSL_VERSION_NUMBER >= 0x0090806fL)
 static int servername_callback(SSL *ssl, int *ad __attribute__((unused)),
 			       void *arg __attribute__((unused)))
 {
@@ -762,7 +762,7 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 	    | SSL_VERIFY_CLIENT_ONCE;
     SSL_CTX_set_verify(s_ctx, verify_flags, verify_callback);
 
-#if (OPENSSL_VERSION_NUMBER >= 0x10000000fL)
+#if (OPENSSL_VERSION_NUMBER >= 0x0090806fL)
     SSL_CTX_set_tlsext_servername_callback(s_ctx, servername_callback);
 #endif
 
