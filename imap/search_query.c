@@ -97,7 +97,6 @@ static void subquery_free(void *data)
     free(sub->mboxname);
     search_expr_free(sub->indexed);
     search_expr_free(sub->expr);
-    free_hash_table(&sub->folders_by_name, folder_free);
     free(sub);
 }
 
