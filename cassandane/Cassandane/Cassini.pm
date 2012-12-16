@@ -133,7 +133,7 @@ sub override
     my ($self, $section, $parameter, $value) = @_;
     my $ii = $self->{inifile};
 
-    if ($ii->exists($section, $parameter))
+    if (defined $ii->val($section, $parameter))
     {
 	$ii->setval($section, $parameter, $value);
     }
