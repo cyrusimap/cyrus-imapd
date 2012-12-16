@@ -89,6 +89,7 @@ struct search_query {
      */
     struct searchargs *searchargs;
     int multiple;
+    int need_ids;
     int verbose;
 
     /*
@@ -120,6 +121,13 @@ struct search_query {
     ptrarray_t merged_msgdata;
     int error;
     hash_table folders_by_name;
+    /*
+     * Some callers need a unique and contiguous 0-based set of integer
+     * ids for folders which have any results.  Note that the
+     * folders_by_name hash table may contain folders with no results in
+     * them, e.g. when the search engine returns hits for a folder which
+     * all subsequently prove to be deleted.
+     */
     ptrarray_t folders_by_id;
 };
 

@@ -57,6 +57,7 @@
 #include "message.h"
 #include "annotate.h"
 #include "global.h"
+#include "bsearch.h"
 #include "xstrlcpy.h"
 #include "xmalloc.h"
 
@@ -228,11 +229,6 @@ static search_folder_t *query_get_valid_folder(search_query_t *query,
 	folder->uidvalidity = uidvalidity;
     }
 
-    if (folder->id < 0) {
-	folder->id = query->folders_by_id.count;
-	ptrarray_append(&query->folders_by_id, folder);
-    }
-
     return folder;
 }
 
@@ -291,8 +287,50 @@ static void query_end_index(search_query_t *query,
 
 /* ====================================================================== */
 
+static void add_folder(const char *key __attribute__((unused)),
+		       void *data, void *rock)
+{
+    search_folder_t *folder = data;
+    ptrarray_t *array = rock;
 
+    ptrarray_append(array, folder);
+}
 
+static int compare_folders(const void **v1, const void **v2)
+{
+    const search_folder_t *f1 = (const search_folder_t *)*v1;
+    const search_folder_t *f2 = (const search_folder_t *)*v2;
+
+    return bsearch_compare_mbox(f1->mboxname, f2->mboxname);
+}
+
+/*
+ * Assign a contiguous 0-based sequence of folder ids to the folders
+ * that have any remaining uids in the search results, in folder name
+ * order.  The order isn't necessary but helps make the results
+ * consistent which makes testing easier.
+ */
+static void query_assign_folder_ids(search_query_t *query)
+{
+    ptrarray_t folders = PTRARRAY_INITIALIZER;
+    int i;
+
+    /* TODO: need a hash_values() function */
+    hash_enumerate(&query->folders_by_name, add_folder, &folders);
+
+    ptrarray_sort(&folders, compare_folders);
+
+    for (i = 0 ; i < folders.count ; i++) {
+	search_folder_t *folder = ptrarray_nth(&folders, i);
+
+	if (search_folder_get_count(folder) && folder->id < 0) {
+	    folder->id = query->folders_by_id.count;
+	    ptrarray_append(&query->folders_by_id, folder);
+	}
+    }
+
+    ptrarray_fini(&folders);
+}
 
 /* ====================================================================== */
 
@@ -642,8 +680,10 @@ EXPORTED int search_query_run(search_query_t *query)
 	r = query->error;
 	if (r) goto out;
     }
-    else {
-    }
+
+    if (query->need_ids)
+	query_assign_folder_ids(query);
+
 
 out:
     return r;
