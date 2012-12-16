@@ -2225,445 +2225,6 @@ out:
     return r;
 }
 
-static int add_search_folder(void *rock,
-			     const char *key,
-			     size_t keylen,
-			     const char *val __attribute((unused)),
-			     size_t vallen __attribute((unused)))
-{
-    ptrarray_t *folders = (ptrarray_t *)rock;
-    SearchFolder *sf = xzmalloc(sizeof(SearchFolder));
-
-    sf->mboxname = xstrndup(key, keylen);
-    sf->id = -1; /* unassigned */
-    ptrarray_append(folders, sf);
-
-    return 0;
-}
-
-struct multisort_item {
-    modseq_t cid;
-    int32_t folderid; /* can be -1 */
-    uint32_t uid;
-};
-
-struct multisort_folder {
-    char *name;
-    uint32_t uidvalidity;
-};
-
-struct multisort_result {
-    struct multisort_folder *folders;
-    struct multisort_item *msgs;
-    uint32_t nfolders;
-    uint32_t nmsgs;
-};
-
-static struct db *sortcache_db(struct index_state *state)
-{
-    const char *dbtype = config_getstring(IMAPOPT_SORTCACHE_DB);
-    const char *userid = mboxname_to_userid(state->mailbox->name);
-    char *fname = NULL;
-    struct db *db = NULL;
-    int r;
-
-    /* we just don't cache if there's no userid.  Alternative would
-     * be to write some global file */
-    if (!userid)
-	return NULL;
-
-    fname = user_hash_meta(userid, "sortcache");
-    r = cyrusdb_open(dbtype, fname, CYRUSDB_CREATE, &db);
-    free(fname);
-
-    return r ? NULL : db;
-}
-
-struct sortcache_cleanup_rock {
-    struct db *db;
-    const char *prefix;
-    size_t prefixlen;
-};
-
-static int sortcache_cleanup_cb(void *rock,
-				const char *key,
-				size_t keylen,
-				const char *val __attribute__((unused)),
-				size_t vallen __attribute__((unused)))
-{
-    struct sortcache_cleanup_rock *scr = (struct sortcache_cleanup_rock *)rock;
-
-    if (keylen < scr->prefixlen || memcmp(key, scr->prefix, scr->prefixlen)) {
-	/* doesn't match the prefix, remove it */
-	cyrusdb_delete(scr->db, key, keylen, NULL, /*force*/1);
-    }
-
-    return 0;
-}
-
-static int folder_may_be_in_search(const char *mboxname,
-				   const search_expr_t *e)
-{
-    const search_expr_t *child;
-
-    if (e->op == SEOP_MATCH &&
-	e->attr &&
-	!strcasecmp(e->attr->name, "folder"))
-	return !strcmp(mboxname, e->value.s);
-
-    if (e->op == SEOP_NOT)
-	return !folder_may_be_in_search(mboxname, e->children);
-
-    for (child = e->children ; child ; child = child->next)
-	if (folder_may_be_in_search(mboxname, child))
-	    return 1;
-
-    return 0;
-}
-
-static int find_search_folder(const char **mboxnamep,
-			      const search_expr_t *e)
-{
-    const search_expr_t *child;
-    int n = 0;
-
-    if (e->op == SEOP_MATCH &&
-	e->attr &&
-	!strcasecmp(e->attr->name, "folder")) {
-	*mboxnamep = e->value.s;
-	return 1;
-    }
-
-    if (e->op == SEOP_NOT)
-	return 0;
-
-    for (child = e->children ; child ; child = child->next)
-	n += find_search_folder(mboxnamep, child);
-
-    return n;
-}
-
-static struct searchargs *dupsearchargs(const struct searchargs *searchargs)
-{
-    struct searchargs *out = xzmalloc(sizeof(struct searchargs));
-    *out = *searchargs;
-    out->root = search_expr_duplicate(out->root);
-    return out;
-}
-
-static struct multisort_result *multisort_run(struct index_state *state,
-					      struct sortcrit *sortcrit,
-					      struct searchargs *searchargs)
-{
-    int fi;
-    int mi;
-    int nfolders = 0;
-    ptrarray_t folders = PTRARRAY_INITIALIZER;
-    ptrarray_t merged_msgdata = PTRARRAY_INITIALIZER;
-    int r = 0;
-    struct index_state *state2 = NULL;
-    unsigned msgno;
-    struct multisort_result *result = NULL;
-    struct searchargs *searchargs2 = NULL;
-    const char *mboxname = NULL;
-
-    /* in the case where the search can only match a single folder
-     * at the top level, we can optimise.  Otherwise we do a listing
-     * to find potentially matching folders */
-    if (find_search_folder(&mboxname, searchargs->root) == 1) {
-	add_search_folder(&folders, mboxname, strlen(mboxname), NULL, 0);
-    }
-    else {
-	r = mboxlist_allusermbox(mboxname_to_userid(state->mailbox->name),
-				add_search_folder, &folders, /*+deleted*/0);
-	if (r) return NULL;
-    }
-
-    for (fi = 0; fi < folders.count; fi++) {
-	SearchFolder *sf = ptrarray_nth(&folders, fi);
-	unsigned int *msgs;
-	int count = 0;
-
-	if (!folder_may_be_in_search(sf->mboxname, searchargs->root))
-	    continue;
-
-	if (state2 && state2 != state)
-	    index_close(&state2);
-
-	if (searchargs2) {
-	    freesearchargs(searchargs2);
-	    searchargs2 = NULL;
-	}
-
-	/* open an index_state */
-	if (!strcmp(state->mailbox->name, sf->mboxname)) {
-	    state2 = state;
-	}
-	else {
-	    struct index_init init;
-
-	    memset(&init, 0, sizeof(struct index_init));
-	    init.userid = searchargs->userid;
-	    init.authstate = searchargs->authstate;
-	    init.out = state->out;
-
-	    r = index_open(sf->mboxname, &init, &state2);
-	    if (r) continue;
-
-	    index_checkflags(state2, 0, 0);
-	}
-
-	/* make sure \Deleted messages are expunged.  Will also lock the
-	 * mailbox state and read any new information */
-	r = index_expunge(state2, NULL, 1);
-	if (r) continue;
-
-	if (!state2->exists) continue;
-
-	msgs = xmalloc(state2->exists * sizeof(uint32_t));
-
-	/* we need to copy the searchargs to:
-	 * a) change user flag numbers to match up
-	 * b) make the "folder" match efficient
-	 */
-	searchargs2 = dupsearchargs(searchargs);
-
-	search_expr_internalise(state2->mailbox, searchargs2->root);
-
-	/* One pass through the folder's message list */
-	for (msgno = 1 ; msgno <= state2->exists ; msgno++) {
-	    struct index_record *record = &state2->map[msgno-1].record;
-
-	    /* can happen if we didn't "tellchanges" yet */
-	    if (record->system_flags & FLAG_EXPUNGED)
-		continue;
-
-	    /* run the search program */
-	    if (!index_search_evaluate(state2, searchargs2->root, msgno))
-		continue;
-
-	    msgs[count++] = msgno;
-	}
-
-	/* Delay assigning ids to folders until we can be
-	 * certain that any results will be reported for
-	 * the folder */
-	if (count) {
-	    sf->id = nfolders++;
-	    sf->uidvalidity = state2->mailbox->i.uidvalidity;
-
-	    /* Create/load the msgdata array. */
-	    sf->msgdata = index_msgdata_load(state2, msgs, count,
-					     sortcrit, 0, 0);
-	    for (mi = 0; mi < count; mi++) {
-		sf->msgdata[mi]->folder = sf;
-		/* merged_msgdata is now "owner" of the pointer */
-		ptrarray_append(&merged_msgdata, sf->msgdata[mi]);
-	    }
-	}
-
-	free(msgs);
-    }
-
-    if (state2 && state2 != state)
-	index_close(&state2);
-
-    if (searchargs2) {
-	freesearchargs(searchargs2);
-	searchargs2 = NULL;
-    }
-
-    /* Sort the merged messages based on the given criteria */
-    index_msgdata_sort(merged_msgdata.data, merged_msgdata.count, sortcrit);
-
-    /* convert the result for caching */
-    result = xzmalloc(sizeof(struct multisort_result));
-
-    result->nmsgs = merged_msgdata.count;
-    result->msgs = xmalloc(result->nmsgs * sizeof(struct multisort_item));
-    for (mi = 0; mi < merged_msgdata.count; mi++) {
-	MsgData *msg = ptrarray_nth(&merged_msgdata, mi);
-	result->msgs[mi].folderid = msg->folder->id;
-	result->msgs[mi].uid = msg->uid;
-	result->msgs[mi].cid = msg->cid;
-    }
-
-    result->nfolders = nfolders;
-    result->folders = xmalloc(result->nmsgs * sizeof(struct multisort_folder));
-    for (fi = 0; fi < folders.count; fi++) {
-	SearchFolder *sf = ptrarray_nth(&folders, fi);
-	if (sf->id >= 0) {
-	    result->folders[sf->id].name = xstrdup(sf->mboxname);
-	    result->folders[sf->id].uidvalidity = sf->uidvalidity;
-	}
-	free(sf->mboxname);
-	free(sf->msgdata);
-	free(sf);
-    }
-
-    /* free all our temporary data */
-    ptrarray_fini(&folders);
-    ptrarray_fini(&merged_msgdata);
-
-    return result;
-}
-
-static char *multisort_cachekey(const struct sortcrit *sortcrit,
-				const struct searchargs *searchargs)
-{
-    struct buf b = BUF_INITIALIZER;
-    char *sortstr = sortcrit_as_string(sortcrit);
-    char *searchstr = search_expr_serialise(searchargs->root);
-
-    buf_printf(&b, "(%s) (%s)", sortstr, searchstr);
-
-    free(sortstr);
-    free(searchstr);
-    return buf_release(&b);
-}
-
-#define SORTCACHE_VERSION 0
-
-static struct multisort_result *multisort_cache_load(struct db *db,
-						     modseq_t hms,
-						     const char *cachekey)
-{
-    struct sortcache_cleanup_rock rock;
-    struct multisort_result *sortres = NULL;
-    struct buf prefix = BUF_INITIALIZER;
-    const char *val = NULL;
-    size_t vallen = 0;
-    struct dlist *dl = NULL;
-    struct dlist *dc;
-    struct dlist *di;
-    unsigned i;
-
-    if (!db) goto done;
-
-    buf_printf(&prefix, MODSEQ_FMT " %d ", hms, SORTCACHE_VERSION);
-
-    memset(&rock, 0, sizeof(struct sortcache_cleanup_rock));
-    rock.db = db;
-    rock.prefix = prefix.s;
-    rock.prefixlen = prefix.len;
-
-    if (cyrusdb_foreach(rock.db, "", 0, NULL,
-			sortcache_cleanup_cb, &rock, NULL))
-	goto done;
-
-    buf_appendcstr(&prefix, cachekey);
-
-    if (cyrusdb_fetch(rock.db, prefix.s, prefix.len, &val, &vallen, NULL))
-	goto done;
-
-    /* OK, we have found value! */
-    if (dlist_parsemap(&dl, 0, val, vallen))
-	goto done;
-
-    sortres = xzmalloc(sizeof(struct multisort_result));
-    dlist_getnum32(dl, "NFOLDERS", &sortres->nfolders);
-    dlist_getnum32(dl, "NMSGS", &sortres->nmsgs);
-    sortres->folders = xzmalloc(sortres->nfolders * sizeof(struct multisort_folder));
-    sortres->msgs = xzmalloc(sortres->nmsgs * sizeof(struct multisort_item));
-
-    dc = dlist_getchild(dl, "FOLDERS");
-    i = 0;
-    for (di = dc->head; di; di = di->next) {
-	struct dlist *item = di->head;
-	if (i >= sortres->nfolders) goto err;
-	sortres->folders[i].name = xstrdup(dlist_cstring(item));
-	item = item->next;
-	sortres->folders[i].uidvalidity = dlist_num(item);
-	i++;
-    }
-    if (i != sortres->nfolders) goto err;
-
-    dc = dlist_getchild(dl, "MSGS");
-    i = 0;
-    for (di = dc->head; di; di = di->next) {
-	struct dlist *item = di->head;
-	if (i >= sortres->nmsgs) goto err;
-	sortres->msgs[i].folderid = dlist_num(item);
-	item = item->next;
-	sortres->msgs[i].uid = dlist_num(item);
-	item = item->next;
-	sortres->msgs[i].cid = dlist_num(item);
-	i++;
-    }
-    if (i != sortres->nmsgs) goto err;
-
-done:
-    dlist_free(&dl);
-    buf_free(&prefix);
-    return sortres;
-
-err:
-    dlist_free(&dl);
-    buf_free(&prefix);
-
-    syslog(LOG_ERR, "invalid search cache record %s %.*s",
-	   cachekey, (int)vallen, val);
-
-    /* clean up memory */
-    for (i = 0; i < sortres->nfolders; i++) {
-	free(sortres->folders[i].name);
-    }
-    free(sortres->folders);
-    free(sortres->msgs);
-    free(sortres);
-
-    return NULL;
-}
-
-static void multisort_cache_save(struct db *db,
-				 modseq_t hms,
-				 const char *cachekey,
-				 struct multisort_result *sortres)
-{
-    struct buf prefix = BUF_INITIALIZER;
-    struct buf result = BUF_INITIALIZER;
-    struct dlist *dl = NULL;
-    struct dlist *dc;
-    struct dlist *di;
-    int i;
-
-    if (!db) goto done;
-
-    buf_printf(&prefix, MODSEQ_FMT " %d %s", hms, SORTCACHE_VERSION, cachekey);
-
-    dl = dlist_newkvlist(NULL, NULL);
-    dlist_setnum32(dl, "NFOLDERS", sortres->nfolders);
-    dlist_setnum32(dl, "NMSGS", sortres->nmsgs);
-    dc = dlist_newlist(dl, "FOLDERS");
-    for (i = 0; i < (int)sortres->nfolders; i++) {
-	di = dlist_newlist(dc, NULL);
-	dlist_setatom(di, NULL, sortres->folders[i].name);
-	dlist_setnum32(di, NULL, sortres->folders[i].uidvalidity);
-    }
-    dc = dlist_newlist(dl, "MSGS");
-    for (i = 0; i < (int)sortres->nmsgs; i++) {
-	di = dlist_newlist(dc, NULL);
-	dlist_setnum32(di, NULL, sortres->msgs[i].folderid);
-	dlist_setnum32(di, NULL, sortres->msgs[i].uid);
-	dlist_setnum64(di, NULL, sortres->msgs[i].cid);
-    }
-
-    dlist_printbuf(dl, 0, &result);
-
-    if (cyrusdb_store(db, prefix.s, prefix.len, result.s, result.len, NULL))
-	goto done;
-
-done:
-    dlist_free(&dl);
-    buf_free(&prefix);
-    buf_free(&result);
-}
-
-struct multisort_response {
-    struct multisort_item *item;
-    ptrarray_t cidother;
-};
-
 /*
  * Performs a XCONVMULTISORT command
  */
@@ -2672,24 +2233,27 @@ EXPORTED int index_convmultisort(struct index_state *state,
 				 struct searchargs *searchargs,
 				 const struct windowargs *windowargs)
 {
-    unsigned int mi;
-    unsigned int fi;
+    int mi;
+    int fi;
     int i;
     hashu64_table seen_cids = HASHU64_TABLE_INITIALIZER;
     uint32_t pos = 0;
     uint32_t anchor_pos = 0;
     uint32_t first_pos = 0;
     unsigned int ninwindow = 0;
+    /* array of (arrays of msgdata* with the same CID) */
     ptrarray_t results = PTRARRAY_INITIALIZER;
-    struct multisort_response dummy_response;
+    /* Used as a placeholder which provides a non-NULL entry in the
+     * seen_cids hashtable for conversations which are outside the
+     * specified window. */
+    ptrarray_t dummy_response;
     int total = UNPREDICTABLE;
     int r = 0;
-    int32_t anchor_folderid = -1;
     char extname[MAX_MAILBOX_BUFFER];
     modseq_t hms;
-    struct multisort_result *sortres = NULL;
-    char *cachekey = NULL;
-    struct db *db = NULL;
+    search_query_t *query = NULL;
+    search_folder_t *folder = NULL;
+    search_folder_t *anchor_folder = NULL;
 
     assert(windowargs);
     assert(!windowargs->changedsince);
@@ -2702,25 +2266,15 @@ EXPORTED int index_convmultisort(struct index_state *state,
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
     hms = mboxname_readmodseq(state->mailbox->name);
-    cachekey = multisort_cachekey(sortcrit, searchargs);
-
-    db = sortcache_db(state);
-
-    sortres = multisort_cache_load(db, hms, cachekey);
-    if (!sortres) {
-	sortres = multisort_run(state, sortcrit, searchargs);
-	/* OK if it fails */
-	multisort_cache_save(db, hms, cachekey, sortres);
-    }
+    query = search_query_new(state, searchargs);
+    query->multiple = 1;
+    query->need_ids = 1;
+    query->sortcrit = sortcrit;
+    r = search_query_run(query);
 
     if (windowargs->anchorfolder) {
-	for (fi = 0; fi < sortres->nfolders; fi++) {
-	    if (strcmpsafe(windowargs->anchorfolder, sortres->folders[fi].name))
-		continue;
-	    anchor_folderid = fi;
-	    break;
-	}
-	if (anchor_folderid < 0) {
+	anchor_folder = search_query_find_folder(query, windowargs->anchorfolder);
+	if (!anchor_folder) {
 	    r = IMAP_ANCHOR_NOT_FOUND;
 	    goto out;
 	}
@@ -2728,35 +2282,35 @@ EXPORTED int index_convmultisort(struct index_state *state,
 
     /* going to need to do conversation-level breakdown */
     if (windowargs->conversations)
-	construct_hashu64_table(&seen_cids, sortres->nmsgs/4+4, 0);
+	construct_hashu64_table(&seen_cids, query->merged_msgdata.count/4+4, 0);
     /* no need */
     else
-	total = sortres->nmsgs;
+	total = query->merged_msgdata.count;
 
     /* Another pass through the merged message list */
-    for (mi = 0; mi < sortres->nmsgs; mi++) {
-	struct multisort_item *item = &sortres->msgs[mi];
-	struct multisort_response *response = NULL;
+    for (mi = 0 ; mi < query->merged_msgdata.count ; mi++) {
+	MsgData *md = ptrarray_nth(&query->merged_msgdata, mi);
+	ptrarray_t *response = NULL;
 
 	/* figure out whether this message is an exemplar */
 	if (windowargs->conversations) {
-	    response = hashu64_lookup(item->cid, &seen_cids);
+	    response = hashu64_lookup(md->cid, &seen_cids);
 	    /* in conversations mode => only the first message seen
 	     * with each unique CID is an exemplar */
 	    if (response) {
 		if (response != &dummy_response)
-		    ptrarray_append(&response->cidother, item);
+		    ptrarray_append(response, md);
 		continue;
 	    }
-	    hashu64_insert(item->cid, &dummy_response, &seen_cids);
+	    hashu64_insert(md->cid, &dummy_response, &seen_cids);
 	}
 	/* else not in conversations mode => all messages are exemplars */
 
 	pos++;
 
 	if (!anchor_pos &&
-	    windowargs->anchor == item->uid &&
-	    anchor_folderid == item->folderid) {
+	    windowargs->anchor == md->uid &&
+	    anchor_folder == md->folder) {
 	    /* we've found the anchor's position, rejoice! */
 	    anchor_pos = pos;
 	}
@@ -2784,12 +2338,15 @@ EXPORTED int index_convmultisort(struct index_state *state,
 	if (!first_pos)
 	    first_pos = pos;
 
-	response = xzmalloc(sizeof(struct multisort_response));
-	response->item = item;
+	/* the message is the exemplar of a conversation which is inside
+	 * the specified window, so record a non-dummy seen_cids entry
+	 * and a results entry */
+	response = ptrarray_new();
+	ptrarray_push(response, md);
 	ptrarray_push(&results, response);
 
 	if (windowargs->conversations) {
-	    hashu64_insert(item->cid, response, &seen_cids);
+	    hashu64_insert(md->cid, response, &seen_cids);
 	}
     }
 
@@ -2814,33 +2371,30 @@ EXPORTED int index_convmultisort(struct index_state *state,
 	 * response matching /sort/i is assumed to be a sequence of
 	 * numeric uids.  Meh. */
 	prot_printf(state->out, "* XCONVMULTI (");
-	for (fi = 0 ; fi < sortres->nfolders ; fi++) {
-	    struct multisort_folder *mf = &sortres->folders[fi];
+	for (fi = 0 ; fi < query->folders_by_id.count ; fi++) {
+	    folder = ptrarray_nth(&query->folders_by_id, fi);
 
 	    searchargs->namespace->mboxname_toexternal(searchargs->namespace,
-						       mf->name,
+						       folder->mboxname,
 						       searchargs->userid,
 						       extname);
 	    if (fi)
 		prot_printf(state->out, " ");
 	    prot_printf(state->out, "(");
 	    prot_printstring(state->out, extname);
-	    prot_printf(state->out, " %u)", mf->uidvalidity);
+	    prot_printf(state->out, " %u)", folder->uidvalidity);
 	}
 	prot_printf(state->out, ") (");
 	for (i = 0 ; i < results.count ; i++) {
-	    struct multisort_response *response = results.data[i];
-	    struct multisort_item *item = response->item;
+	    ptrarray_t *response = ptrarray_nth(&results, i);
 	    int j;
 	    if (i)
 		prot_printf(state->out, " ");
-	    prot_printf(state->out, "(%s" , conversation_id_encode(item->cid));
-	    /* exemplar item */
-	    prot_printf(state->out, " (%u %u)", item->folderid, item->uid);
-	    /* rest of the items too */
-	    for (j = 0; j < response->cidother.count; j++) {
-		item = response->cidother.data[j];
-		prot_printf(state->out, " (%u %u)", item->folderid, item->uid);
+	    for (j = 0; j < response->count; j++) {
+		MsgData *md = ptrarray_nth(response, j);
+		if (!j)
+		    prot_printf(state->out, "(%s" , conversation_id_encode(md->cid));
+		prot_printf(state->out, " (%u %u)", md->folder->id, md->uid);
 	    }
 	    prot_printf(state->out, ")");
 	}
@@ -2862,24 +2416,14 @@ out:
 		    total);
     }
 
-    if (db)
-	cyrusdb_close(db);
-
     /* free all our temporary data */
     free_hashu64_table(&seen_cids, NULL);
     for (i = 0 ; i < results.count ; i++) {
-	struct multisort_response *response = results.data[i];
-	ptrarray_fini(&response->cidother);
-	free(response);
+	ptrarray_t *response = ptrarray_nth(&results, i);
+	ptrarray_free(response);
     }
     ptrarray_fini(&results);
-    for (fi = 0 ; fi < sortres->nfolders ; fi++) {
-	free(sortres->folders[fi].name);
-    }
-    free(sortres->folders);
-    free(sortres->msgs);
-    free(sortres);
-    free(cachekey);
+    search_query_free(query);
 
     return r;
 }
