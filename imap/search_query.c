@@ -172,6 +172,30 @@ EXPORTED struct seqset *search_folder_get_seqset(const search_folder_t *folder)
 }
 
 /*
+ * Return the results for a given folder as an array of UIDs (or MSNs if
+ * search_folder_use_msn() has been called).  Returns the number of
+ * results or zero, and the newly allocated array in *'arrayp'.  The
+ * caller is responsible for freeing the result using free().
+ */
+EXPORTED int search_folder_get_array(const search_folder_t *folder, unsigned int **arrayp)
+{
+    int n = search_folder_get_count(folder);
+    unsigned int *p;
+    int uid;
+
+    if (n) {
+
+	p = *arrayp = xzmalloc(sizeof(unsigned int) * n);
+	for (uid = bv_next_set(&folder->uids, 0) ;
+	     uid != -1 ;
+	     uid = bv_next_set(&folder->uids, uid+1))
+	    *p++ = (unsigned)uid;
+    }
+
+    return n;
+}
+
+/*
  * Return the minimum UID (or MSN if search_folder_use_msn() has been
  * called).
  */

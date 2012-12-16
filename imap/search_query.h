@@ -160,6 +160,7 @@ extern search_folder_t *search_query_find_folder(search_query_t *query,
 						 const char *mboxname);
 extern void search_folder_use_msn(search_folder_t *, struct index_state *);
 extern struct seqset *search_folder_get_seqset(const search_folder_t *);
+extern int search_folder_get_array(const search_folder_t *, unsigned int **);
 extern uint32_t search_folder_get_min(const search_folder_t *);
 extern uint32_t search_folder_get_max(const search_folder_t *);
 extern unsigned int search_folder_get_count(const search_folder_t *);
