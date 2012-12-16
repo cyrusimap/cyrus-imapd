@@ -580,6 +580,9 @@ static int subquery_run_one_folder(search_query_t *query,
 
     search_expr_internalise(state->mailbox, e);
 
+    if (query->sortcrit)
+	msgno_list = (unsigned *) xmalloc(state->exists * sizeof(unsigned));
+
     /* One pass through the folder's message list */
     for (msgno = 1 ; msgno <= state->exists ; msgno++) {
 	struct index_record *record = &state->map[msgno-1].record;
