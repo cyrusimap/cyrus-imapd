@@ -1830,8 +1830,8 @@ EXPORTED int index_search(struct index_state *state,
 
     highestmodseq = needs_modseq(searchargs, NULL);
 
-    query = search_query_new(state, /*multiple*/0);
-    r = search_query_run(query, searchargs);
+    query = search_query_new(state, searchargs);
+    r = search_query_run(query);
     if (r) goto out;	    /* search failed */
     folder = search_query_find_folder(query, state->mailbox->name);
 

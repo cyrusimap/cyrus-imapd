@@ -147,9 +147,10 @@ static int do_search(const char *mboxname,
 	goto out;
     }
 
-    query = search_query_new(state, multiple);
+    query = search_query_new(state, searchargs);
+    query->multiple = multiple;
     query->verbose = verbose;
-    r = search_query_run(query, searchargs);
+    r = search_query_run(query);
     if (r) {
 	fprintf(stderr, "Failed to run query: %s\n", error_message(r));
 	goto out;

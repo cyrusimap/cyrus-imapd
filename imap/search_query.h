@@ -82,6 +82,10 @@ struct search_query {
      * double-opening it.
      */
     struct index_state *state;
+    /*
+     * Input parameters of the query.  Set these after
+     * search_query_new() and before search_query_run().
+     */
     struct searchargs *searchargs;
     int multiple;
     int verbose;
@@ -120,9 +124,8 @@ struct search_query {
 };
 
 extern search_query_t *search_query_new(struct index_state *state,
-					int multiple);
-extern int search_query_run(search_query_t *query,
-			    struct searchargs *searchargs);
+					struct searchargs *);
+extern int search_query_run(search_query_t *query);
 extern void search_query_free(search_query_t *query);
 
 extern search_folder_t *search_query_find_folder(search_query_t *query,

@@ -63,13 +63,13 @@
 /* ====================================================================== */
 
 EXPORTED search_query_t *search_query_new(struct index_state *state,
-					  int multiple)
+					  struct searchargs *searchargs)
 {
     search_query_t *query;
 
     query = xzmalloc(sizeof(*query));
     query->state = state;
-    query->multiple = multiple;
+    query->searchargs = searchargs;
     construct_hash_table(&query->subs_by_folder, 128, 0);
     construct_hash_table(&query->subs_by_indexed, 128, 0);
     ptrarray_init(&query->merged_msgdata);
@@ -609,16 +609,13 @@ static void query_add_subquery(const char *mboxname,
     }
 }
 
-EXPORTED int search_query_run(search_query_t *query,
-			      struct searchargs *searchargs)
+EXPORTED int search_query_run(search_query_t *query)
 {
     int r = 0;
 
-    query->searchargs = searchargs;
-
-    search_expr_normalise(&searchargs->root);
-    search_expr_split_by_folder_and_index(searchargs->root, query_add_subquery, query);
-    searchargs->root = NULL;
+    search_expr_normalise(&query->searchargs->root);
+    search_expr_split_by_folder_and_index(query->searchargs->root, query_add_subquery, query);
+    query->searchargs->root = NULL;
 
     if (query->indexed_count) {
 	/*
