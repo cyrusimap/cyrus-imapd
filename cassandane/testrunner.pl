@@ -176,7 +176,7 @@ while (my $a = shift)
     }
     elsif ($a eq '-v' || $a eq '--verbose')
     {
-	set_verbose(1);
+	set_verbose(get_verbose()+1);
     }
     elsif ($a eq '--valgrind')
     {

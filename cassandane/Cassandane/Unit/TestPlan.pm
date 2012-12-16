@@ -706,6 +706,19 @@ sub _restore_stdout
     $self->{olderr} = undef;
 }
 
+sub _dump_logfile
+{
+    my ($logfile) = @_;
+
+    open LOGFILE, '<', $logfile
+	or die "Cannot open $logfile for reading: $!";
+    while (<LOGFILE>)
+    {
+	print STDERR $_;
+    }
+    close LOGFILE;
+}
+
 sub _get_suite_and_test
 {
     my ($self, $witem) = @_;
@@ -741,6 +754,7 @@ sub _run_workitem
     if ($annotate_flag)
     {
 	$test->annotate_from_file($witem->{logfile});
+	_dump_logfile($witem->{logfile}) if (get_verbose > 1);
 	unlink($witem->{logfile}) if (!defined $self->{log_directory});
     }
 }
@@ -757,6 +771,7 @@ sub _finish_workitem
     }
 
     $test->annotate_from_file($witem->{logfile});
+    _dump_logfile($witem->{logfile}) if (get_verbose > 1);
     unlink($witem->{logfile}) if (!defined $self->{log_directory});
 
     if ($witem->{result} eq 'pass' ||
