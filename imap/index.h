@@ -310,6 +310,11 @@ void freesequencelist(struct seqset *l);
 void freesearchargs(struct searchargs *s);
 char *sortcrit_as_string(const struct sortcrit *sortcrit);
 void freesortcrit(struct sortcrit *s);
+void index_msgdata_sort(MsgData **msgdata, int n, const struct sortcrit *sortcrit);
+void index_msgdata_free(MsgData **, unsigned int);
+MsgData **index_msgdata_load(struct index_state *state, unsigned *msgno_list, int n,
+			     const struct sortcrit *sortcrit,
+			     unsigned int anchor, int *found_anchor);
 int index_search_evaluate(struct index_state *state, const search_expr_t *e, uint32_t msgno);
 
 extern int index_expunge(struct index_state *state, char *uidsequence,
