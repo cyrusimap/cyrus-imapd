@@ -2756,24 +2756,34 @@ out:
 EXPORTED int index_thread(struct index_state *state, int algorithm,
 		 struct searchargs *searchargs, int usinguid)
 {
+    search_query_t *query = NULL;
+    search_folder_t *folder;
     unsigned *msgno_list;
-    int nmsg;
+    int nmsg = 0;
     clock_t start;
     modseq_t highestmodseq = 0;
+    int r;
 
     /* update the index */
     if (index_check(state, 0, 0))
 	return 0;
 
-    search_expr_internalise(state->mailbox, searchargs->root);
+    highestmodseq = needs_modseq(searchargs, NULL);
 
     if(CONFIG_TIMING_VERBOSE)
 	start = clock();
 
     /* Search for messages based on the given criteria */
-    nmsg = _index_search(&msgno_list, state, searchargs,
-			 needs_modseq(searchargs, NULL) ?
-			    &highestmodseq : NULL);
+    query = search_query_new(state, searchargs);
+    r = search_query_run(query);
+    if (r) goto out;	    /* search failed */
+    folder = search_query_find_folder(query, state->mailbox->name);
+
+    if (folder) {
+	if (highestmodseq)
+	    highestmodseq = search_folder_get_highest_modseq(folder);
+	nmsg = search_folder_get_array(folder, &msgno_list);
+    }
 
     if (nmsg) {
 	/* Thread messages using given algorithm */
@@ -2798,6 +2808,8 @@ EXPORTED int index_thread(struct index_state *state, int algorithm,
 	       (clock() - start) / (double) CLOCKS_PER_SEC);
     }
 
+out:
+    search_query_free(query);
     return nmsg;
 }
 
