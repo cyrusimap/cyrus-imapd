@@ -42,6 +42,7 @@
 use strict;
 use warnings;
 package Cassandane::Unit::TestCase;
+# use Cassandane::Util::Log;
 use base qw(Test::Unit::TestCase);
 
 my $enabled;
@@ -87,6 +88,100 @@ sub annotate_from_file
     close LOG;
 }
 
+my @params;
 
+sub parameter
+{
+    my ($ref, @values) = @_;
+
+    return if (!scalar(@values));
+
+    my $param = {
+	id => scalar(@params),
+	package => caller,
+	values => \@values,
+	maxvidx => scalar(@values)-1,
+	reference => $ref,
+    };
+    push(@params, $param);
+
+#     xlog "XXX registering parameter id $param->{id} in package $param->{package}";
+}
+
+sub _describe_setting
+{
+    my ($setting) = @_;
+    $setting ||= [];
+
+    my @parts;
+    my @ss = ( @$setting );
+    while (scalar @ss)
+    {
+	my $id = shift @ss;
+	my $value = $params[$id]->{values}->[shift @ss];
+	push(@parts, "$id:\"$value\"");
+    }
+    return '[' . join(' ', @parts) . ']';
+}
+
+sub make_parameter_settings
+{
+    my ($class, $package) = @_;
+
+#     xlog "XXX making parameter settings for package $package";
+
+    my @settings;
+    my @stack;
+    foreach my $param (grep { $_->{package} eq $package } @params)
+    {
+	push(@stack, { param => $param, vidx => 0 });
+    }
+    return [] if !scalar(@stack);
+
+    SETTING: while (1)
+    {
+	# save a setting
+	my $setting = [ map { $_->{param}->{id}, $_->{vidx} } @stack ];
+# 	xlog "XXX making setting " . _describe_setting($setting);
+	push(@settings, $setting);
+	# increment indexes, wrapping and overflowing
+	foreach my $s (@stack)
+	{
+	    $s->{vidx}++;
+	    if ($s->{vidx} > $s->{param}->{maxvidx})
+	    {
+		$s->{vidx} = 0;
+	    }
+	    else
+	    {
+		next SETTING;
+	    }
+	}
+	last;
+    }
+
+    return @settings;
+}
+
+sub apply_parameter_setting
+{
+    my ($class, $setting) = @_;
+
+#     xlog "XXX applying setting " . _describe_setting($setting);
+
+    foreach my $param (@params)
+    {
+	${$param->{reference}} = undef;
+    }
+
+    my @ss = ( @$setting );
+    while (scalar @ss)
+    {
+	my $param = $params[shift @ss];
+	my $value = $param->{values}->[shift @ss];
+# 	xlog "XXX setting parameter id $param->{id} to value \"$value\"";
+	${$param->{reference}} = $value;
+    }
+}
 
 1;

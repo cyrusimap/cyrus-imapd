@@ -603,13 +603,19 @@ sub _get_schedule
 	{
 	    $name =~ s/^test_//;
 	    next unless $item->_is_allowed($name);
-	    push(@res, {
-		suite => $item->{suite},
-		testname => $name,
-		result => 'unknown',
-		exception => undef,
-		logfile => undef,
-	    });
+
+	    my (@settings) = Cassandane::Unit::TestCase->make_parameter_settings($item->{suite});
+	    foreach my $setting (@settings)
+	    {
+		push(@res, {
+		    suite => $item->{suite},
+		    testname => $name,
+		    result => 'unknown',
+		    exception => undef,
+		    logfile => undef,
+		    parameter_setting => $setting,
+		});
+	    }
 	}
     }
     return @res;
@@ -714,6 +720,7 @@ sub _run_workitem
     my ($suite, $test) = $self->_get_suite_and_test($witem);
     Cassandane::Unit::TestCase->enable_test($witem->{testname});
     $self->_setup_logfile($witem);
+    Cassandane::Unit::TestCase->apply_parameter_setting($witem->{parameter_setting});
     $suite->run($result, $runner);
 
     if ($test->can('post_tear_down'))
