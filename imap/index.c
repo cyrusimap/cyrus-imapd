@@ -129,9 +129,6 @@ static void index_fetchcacheheader(struct index_state *state, struct index_recor
 				   unsigned octet_count);
 static void index_listflags(struct index_state *state);
 static void index_fetchflags(struct index_state *state, uint32_t msgno);
-static int _index_search(unsigned **msgno_list, struct index_state *state,
-			 struct searchargs *searchargs,
-			 modseq_t *highestmodseq);
 
 static int index_copysetup(struct index_state *state, uint32_t msgno,
 			   struct copyargs *copyargs, int is_same_user);
@@ -1591,105 +1588,6 @@ EXPORTED message_t *index_get_message(struct index_state *state, uint32_t msgno)
     if (im->isrecent) indexflags |= MESSAGE_RECENT;
     return message_new_from_index(state->mailbox, &record,
 				  msgno, indexflags);
-}
-
-/*
- * Guts of the SEARCH command.
- * 
- * Returns message numbers in an array.  This function is used by
- * SEARCH, SORT and THREAD.
- */
-static int _index_search(unsigned **msgno_list, struct index_state *state,
-			 struct searchargs *searchargs,
-			 modseq_t *highestmodseq)
-{
-    uint32_t msgno;
-    int n = 0;
-    int listindex, min;
-    int listcount;
-    struct index_map *im;
-
-    if (state->exists <= 0) return 0;
-
-    *msgno_list = (unsigned *) xmalloc(state->exists * sizeof(unsigned));
-
-    /* OK, so I'm being a bit clever here. We fill the msgno list with
-       a list of message IDs returned by the search engine. Then we
-       scan through the list and store matching message IDs back into the
-       list. This is OK because we only overwrite message IDs that we've
-       already looked at. */
-    listcount = index_prefilter_messages(*msgno_list, state, searchargs);
-
-    if (searchargs->returnopts == SEARCH_RETURN_MAX) {
-	/* If we only want MAX, then skip forward search,
-	   and do complete reverse search */
-	listindex = listcount;
-	min = 0;
-    } else {
-	/* Otherwise use forward search, potentially skipping reverse search */
-	listindex = 0;
-	min = listcount;
-    }
-
-    /* Forward search.  Used for everything other than MAX-only */
-    for (; listindex < listcount; listindex++) {
-	msgno = (*msgno_list)[listindex];
-	im = &state->map[msgno-1];
-
-	/* expunged messages hardly ever match */
-	if (!state->want_expunged && (im->system_flags & FLAG_EXPUNGED))
-	    continue;
-
-	if (index_search_evaluate(state, searchargs->root, msgno)) {
-	    (*msgno_list)[n++] = msgno;
-	    if (highestmodseq && im->modseq > *highestmodseq) {
-		*highestmodseq = im->modseq;
-	    }
-
-	    /* See if we should short-circuit
-	       (we want MIN, but NOT COUNT or ALL) */
-	    if ((searchargs->returnopts & SEARCH_RETURN_MIN) &&
-		!(searchargs->returnopts & SEARCH_RETURN_COUNT) &&
-		!(searchargs->returnopts & SEARCH_RETURN_ALL)) {
-
-		if (searchargs->returnopts & SEARCH_RETURN_MAX) {
-		    /* If we want MAX, setup for reverse search */
-		    min = listindex;
-		}
-		/* We're done */
-		listindex = listcount;
-		if (highestmodseq)
-		    *highestmodseq = im->modseq;
-	    }
-	}
-    }
-
-    /* Reverse search.  Stops at previously found MIN (if any) */
-    for (listindex = listcount; listindex > min; listindex--) {
-	msgno = (*msgno_list)[listindex-1];
-	im = &state->map[msgno-1];
-
-	/* expunged messages hardly ever match */
-	if (!state->want_expunged && (im->system_flags & FLAG_EXPUNGED))
-	    continue;
-
-	if (index_search_evaluate(state, searchargs->root, msgno)) {
-	    (*msgno_list)[n++] = msgno;
-	    if (highestmodseq && im->modseq > *highestmodseq) {
-		*highestmodseq = im->modseq;
-	    }
-	    /* We only care about MAX, so we're done on first match */
-	    listindex = 0;
-	}
-    }
-
-    /* if we didn't find any matches, free msgno_list */
-    if (!n && *msgno_list) {
-	free(*msgno_list);
-	*msgno_list = NULL;
-    }
-
-    return n;
 }
 
 EXPORTED uint32_t index_getuid(struct index_state *state, uint32_t msgno)
