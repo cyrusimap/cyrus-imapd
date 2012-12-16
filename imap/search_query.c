@@ -84,8 +84,8 @@ static void folder_free(void *data)
     search_folder_t *folder = data;
 
     free(folder->mboxname);
-//     _index_msgdata_free(folder->msgdata);
     bv_free(&folder->uids);
+    bv_free(&folder->unchecked_uids);
     free(folder);
 }
 
@@ -195,20 +195,14 @@ EXPORTED uint64_t search_folder_get_highest_modseq(const search_folder_t *folder
 
 static search_folder_t *query_get_folder(search_query_t *query, const char *mboxname)
 {
-    hash_table *table;
     search_folder_t *folder;
 
-    if (query->current_sub)
-	table = &query->current_sub->folders_by_name;
-    else
-	table = &query->folders_by_name;
-
-    folder = (search_folder_t *)hash_lookup(mboxname, table);
+    folder = (search_folder_t *)hash_lookup(mboxname, &query->folders_by_name);
     if (!folder) {
 	folder = xzmalloc(sizeof(*folder));
 	folder->mboxname = xstrdup(mboxname);
 	folder->id = -1;
-	hash_insert(folder->mboxname, folder, table);
+	hash_insert(folder->mboxname, folder, &query->folders_by_name);
     }
     return folder;
 }
@@ -230,6 +224,7 @@ static search_folder_t *query_get_valid_folder(search_query_t *query,
 	 * forget the old ones; or none at all and
 	 * remember the uidvalidity for later */
 	bv_clearall(&folder->uids);
+	bv_clearall(&folder->unchecked_uids);
 	folder->uidvalidity = uidvalidity;
     }
 
@@ -244,11 +239,6 @@ static search_folder_t *query_get_valid_folder(search_query_t *query,
 static void folder_add_uid(search_folder_t *folder, uint32_t uid)
 {
     bv_set(&folder->uids, uid);
-}
-
-static void folder_remove_uid(search_folder_t *folder, uint32_t uid)
-{
-    bv_clear(&folder->uids, uid);
 }
 
 static void folder_add_modseq(search_folder_t *folder, uint64_t modseq)
@@ -301,34 +291,42 @@ static void query_end_index(search_query_t *query,
 
 /* ====================================================================== */
 
-static void merge_one_folder(const char *key, void *data, void *rock)
-{
-    const char *mboxname = key;
-    search_folder_t *from_folder = data;
-    search_folder_t *to_folder;
-    search_query_t *query = rock;
 
-    to_folder = query_get_valid_folder(query, mboxname, from_folder->uidvalidity);
-    if (to_folder)
-	bv_oreq(&to_folder->uids, &from_folder->uids);
-}
 
-static void query_merge_folders(search_query_t *query, search_subquery_t *sub)
-{
-    hash_enumerate(&sub->folders_by_name, merge_one_folder, query);
-}
 
+/* ====================================================================== */
+
+struct subquery_rock {
+    search_query_t *query;
+    search_subquery_t *sub;
+};
+
+/*
+ * After an indexed subquery is run, we have accumulated a number of
+ * unchecked UID hits in folders.  Here we check those UIDs for a) not
+ * being deleted since indexing and b) matching any unindexed scan
+ * expression.
+ */
 static void subquery_post_indexed(const char *key, void *data, void *rock)
 {
     const char *mboxname = key;
     search_folder_t *folder = data;
-    search_query_t *query = rock;
-    search_subquery_t *sub = query->current_sub;
+    struct subquery_rock *qr = rock;
+    search_query_t *query = qr->query;
+    search_subquery_t *sub = qr->sub;
     struct index_state *state = NULL;
     unsigned msgno;
     int r = 0;
 
     if (query->error) return;
+    if (!folder->unchecked_dirty) return;
+
+    if (sub->expr && query->verbose) {
+	char *s = search_expr_serialise(sub->expr);
+	syslog(LOG_INFO, "Folder %s: applying scan expression: %s",
+		folder->mboxname, s);
+	free(s);
+    }
 
     r = query_begin_index(query, mboxname, &state);
     if (r) goto out;
@@ -341,7 +339,12 @@ static void subquery_post_indexed(const char *key, void *data, void *rock)
     for (msgno = 1 ; msgno <= state->exists ; msgno++) {
 	struct index_record *record = &state->map[msgno-1].record;
 
-	if (!bv_isset(&folder->uids, record->uid))
+	/* we only want to look at unchecked UIDs */
+	if (!bv_isset(&folder->unchecked_uids, record->uid))
+	    continue;
+
+	/* moot if already in the uids set */
+	if (bv_isset(&folder->uids, record->uid))
 	    continue;
 
 	/* can happen if we didn't "tellchanges" yet */
@@ -350,9 +353,15 @@ static void subquery_post_indexed(const char *key, void *data, void *rock)
 
 	/* run the search program */
 	if (!index_search_evaluate(state, sub->expr, msgno))
-	    folder_remove_uid(folder, record->uid);
+	    continue;
+
+	/* we have a new UID that needs to be merged in */
+
+	folder_add_uid(folder, record->uid);
+	folder_add_modseq(folder, record->modseq);
     }
 
+    folder->unchecked_dirty = 0;
     r = 0;
 
 out:
@@ -398,13 +407,15 @@ void build_query(search_builder_t *bx, search_expr_t *e)
     }
 }
 
-static int add_hit(const char *mboxname, uint32_t uidvalidity,
-		   uint32_t uid, void *rock)
+static int add_unchecked_uid(const char *mboxname, uint32_t uidvalidity,
+			     uint32_t uid, void *rock)
 {
     search_query_t *query = rock;
     search_folder_t *folder = query_get_valid_folder(query, mboxname, uidvalidity);
-    if (folder)
-	folder_add_uid(folder, uid);
+    if (folder) {
+	bv_set(&folder->unchecked_uids, uid);
+	folder->unchecked_dirty = 1;
+    }
     return 0;
 }
 
@@ -415,6 +426,7 @@ static void subquery_run_indexed(const char *key __attribute__((unused)),
     search_subquery_t *sub = data;
     search_query_t *query = rock;
     search_builder_t *bx;
+    struct subquery_rock qr;
     int r;
 
     if (query->error) return;
@@ -425,8 +437,6 @@ static void subquery_run_indexed(const char *key __attribute__((unused)),
 	free(s);
     }
 
-    query->current_sub = sub;
-
     bx = search_begin_search(query->state->mailbox,
 			     (query->multiple ? SEARCH_MULTIPLE : 0)|
 			     SEARCH_VERBOSE(query->verbose));
@@ -435,24 +445,13 @@ static void subquery_run_indexed(const char *key __attribute__((unused)),
 	goto out;
     }
     build_query(bx, sub->indexed);
-    r = bx->run(bx, add_hit, query);
+    r = bx->run(bx, add_unchecked_uid, query);
     search_end_search(bx);
     if (r) goto out;
 
-    if (sub->expr && sub->expr->op != SEOP_TRUE) {
-
-	if (query->verbose) {
-	    char *s = search_expr_serialise(sub->expr);
-	    syslog(LOG_INFO, "Applying scan expression: %s", s);
-	    free(s);
-	}
-
-	hash_enumerate(&sub->folders_by_name, subquery_post_indexed, query);
-    }
-
-    query->current_sub = NULL;
-
-    query_merge_folders(query, sub);
+    qr.query = query;
+    qr.sub = sub;
+    hash_enumerate(&query->folders_by_name, subquery_post_indexed, &qr);
 
 out:
     if (r) query->error = r;
@@ -469,7 +468,8 @@ static int subquery_run_one_folder(search_query_t *query,
 
     if (query->verbose) {
 	char *s = search_expr_serialise(e);
-	syslog(LOG_INFO, "Running folder scan subquery for %s: %s", mboxname, s);
+	syslog(LOG_INFO, "Folder %s: running folder scan subquery: %s",
+		mboxname, s);
 	free(s);
     }
 
@@ -556,7 +556,6 @@ static int subquery_run_global(void *rock,
 static search_subquery_t *subquery_new(void)
 {
     search_subquery_t *sub = xzmalloc(sizeof(*sub));
-    construct_hash_table(&sub->folders_by_name, 128, 0);
     return sub;
 }
 

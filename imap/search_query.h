@@ -63,13 +63,14 @@ struct search_folder {
     int id;
     bitvector_t uids;
     struct msgdata *msgdata;
+    bitvector_t unchecked_uids;
+    int unchecked_dirty;
 };
 
 struct search_subquery {
     char *mboxname;		/* may be NULL */
     search_expr_t *indexed;	/* may be NULL */
     search_expr_t *expr;
-    hash_table folders_by_name;
 };
 
 struct search_query {
@@ -120,7 +121,6 @@ struct search_query {
     int error;
     hash_table folders_by_name;
     ptrarray_t folders_by_id;
-    search_subquery_t *current_sub;
 };
 
 extern search_query_t *search_query_new(struct index_state *state,
