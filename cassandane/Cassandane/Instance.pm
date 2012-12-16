@@ -915,6 +915,32 @@ sub _check_valgrind_logs
 	if scalar @nzlogs;
 }
 
+# The 'file' program seems to consistently misreport cores
+# so we apply a heuristic that seems to work
+sub _detect_core_program
+{
+    my ($core) = @_;
+    my $lines = 0;
+    my $prog;
+
+    open STRINGS, '-|', ('strings', '-a', $core)
+	or die "Cannot run strings on $core: $!";
+    while (<STRINGS>)
+    {
+	chomp;
+	if (m/\/bin\//)
+	{
+	    $prog = $_;
+	    last;
+	}
+	$lines++;
+	last if ($lines > 10);
+    }
+    close STRINGS;
+
+    return $prog;
+}
+
 sub _check_cores
 {
     my ($self) = @_;
@@ -931,9 +957,13 @@ sub _check_cores
 	next unless m/^core(\.\d+)?$/;
 	my $core = "$coredir/$_";
 	next if -z $core;
+	chmod(0644, $core);
 	$ncores++;
 
+	my $prog = _detect_core_program($core);
+
 	xlog "Found core file $core";
+	xlog "   from program $prog" if defined $prog;
     }
     closedir CORES;
 
