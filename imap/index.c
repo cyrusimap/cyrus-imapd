@@ -1913,43 +1913,41 @@ EXPORTED int index_sort(struct index_state *state,
 	       const struct sortcrit *sortcrit,
 	       struct searchargs *searchargs, int usinguid)
 {
-    unsigned *msgno_list = NULL;
-    MsgData **msgdata = NULL;
-    int mi;
+    int i;
     int nmsg = 0;
     modseq_t highestmodseq = 0;
+    search_query_t *query = NULL;
+    search_folder_t *folder = NULL;
+    int r;
 
     /* update the index */
     if (index_check(state, 0, 0))
 	return 0;
 
-    search_expr_internalise(state->mailbox, searchargs->root);
+    highestmodseq = needs_modseq(searchargs, NULL);
 
     /* Search for messages based on the given criteria */
-    nmsg = _index_search(&msgno_list, state, searchargs,
-			 needs_modseq(searchargs, sortcrit) ?
-			    &highestmodseq : NULL);
+    query = search_query_new(state, searchargs);
+    query->sortcrit = sortcrit;
+    r = search_query_run(query);
+    if (r) goto out;	    /* search failed */
+    folder = search_query_find_folder(query, state->mailbox->name);
+
+    if (folder) {
+	if (!usinguid)
+	    search_folder_use_msn(folder, state);
+	if (highestmodseq)
+	    highestmodseq = search_folder_get_highest_modseq(folder);
+	nmsg = search_folder_get_count(folder);
+    }
 
     prot_printf(state->out, "* SORT");
 
     if (nmsg) {
-	/* Create/load the msgdata array */
-	msgdata = index_msgdata_load(state, msgno_list, nmsg, sortcrit, 0, NULL);
-	free(msgno_list);
-
-	/* Sort the messages based on the given criteria */
-	index_msgdata_sort(msgdata, nmsg, sortcrit);
-
 	/* Output the sorted messages */
-	for (mi = 0 ; mi < nmsg ; mi++) {
-	    MsgData *msg = msgdata[mi];
-	    unsigned no = usinguid ? state->map[msg->msgno-1].uid
-				   : msg->msgno;
-	    prot_printf(state->out, " %u", no);
+	search_folder_foreach(folder, i) {
+	    prot_printf(state->out, " %u", i);
 	}
-
-	/* free the msgdata array */
-	index_msgdata_free(msgdata, nmsg);
     }
 
     if (highestmodseq)
@@ -1957,6 +1955,8 @@ EXPORTED int index_sort(struct index_state *state,
 
     prot_printf(state->out, "\r\n");
 
+out:
+    search_query_free(query);
     return nmsg;
 }
 
