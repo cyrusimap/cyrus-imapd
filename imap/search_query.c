@@ -135,7 +135,7 @@ EXPORTED void search_folder_use_msn(search_folder_t *folder, struct index_state 
 
     search_folder_foreach(folder, uid) {
 	msgno = index_finduid(state, uid);
-	if (index_getuid(state, msgno) == uid)
+	if (index_getuid(state, msgno) == (unsigned)uid)
 	    bv_set(&msns, msgno);
     }
     bv_free(&folder->uids);
