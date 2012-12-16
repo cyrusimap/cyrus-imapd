@@ -1704,21 +1704,21 @@ EXPORTED int index_getuidsequence(struct index_state *state,
 			 struct searchargs *searchargs,
 			 unsigned **uid_list)
 {
-    unsigned *msgno_list;
-    int i, n;
+    search_query_t *query = NULL;
+    search_folder_t *folder = NULL;
+    int r;
+    int n = 0;
 
-    n = _index_search(&msgno_list, state, searchargs, NULL);
-    if (n == 0) {
-	*uid_list = NULL;
-	return 0;
-    }
+    query = search_query_new(state, searchargs);
+    r = search_query_run(query);
+    if (r) goto out;
+    folder = search_query_find_folder(query, state->mailbox->name);
+    if (!folder) goto out;
 
-    *uid_list = msgno_list;
+    n = search_folder_get_array(folder, uid_list);
 
-    /* filthy in-place replacement */
-    for (i = 0; i < n; i++)
-	(*uid_list)[i] = index_getuid(state, msgno_list[i]);
-
+out:
+    search_query_free(query);
     return n;
 }
 
