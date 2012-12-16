@@ -102,12 +102,23 @@ static void subquery_free(void *data)
 
 EXPORTED void search_query_free(search_query_t *query)
 {
+    int i;
+
     if (!query) return;
     free_hash_table(&query->subs_by_folder, subquery_free);
     free_hash_table(&query->subs_by_indexed, subquery_free);
     ptrarray_fini(&query->folders_by_id);
     free_hash_table(&query->folders_by_name, folder_free);
     ptrarray_fini(&query->merged_msgdata);
+
+    /* free pending MsgData arrays */
+    for (i = 0 ; i < query->saved_msgdata.count ; i++) {
+	struct search_saved_msgdata *saved = ptrarray_nth(&query->saved_msgdata, i);
+	index_msgdata_free(saved->msgdata, saved->n);
+	free(saved);
+    }
+    ptrarray_fini(&query->saved_msgdata);
+
     free(query);
 }
 
@@ -333,6 +344,30 @@ static void query_assign_folder_ids(search_query_t *query)
 
 /* ====================================================================== */
 
+static void query_load_msgdata(search_query_t *query,
+			       search_folder_t *folder,
+			       struct index_state *state,
+			       unsigned *msgno_list, unsigned nmsgs)
+{
+    unsigned i;
+    MsgData **msgdata;
+    struct search_saved_msgdata *saved;
+
+    msgdata = index_msgdata_load(state, msgno_list, nmsgs, query->sortcrit, 0, NULL);
+
+    /* add the new messages to the global list */
+    for (i = 0 ; i < nmsgs ; i++) {
+	ptrarray_append(&query->merged_msgdata, msgdata[i]);
+	msgdata[i]->folder = folder;
+    }
+
+    /* save the MsgData array for later deletion */
+    saved = xzmalloc(sizeof(*saved));
+    saved->msgdata = msgdata;
+    saved->n = nmsgs;
+    ptrarray_append(&query->saved_msgdata, saved);
+}
+
 struct subquery_rock {
     search_query_t *query;
     search_subquery_t *sub;
@@ -342,7 +377,8 @@ struct subquery_rock {
  * After an indexed subquery is run, we have accumulated a number of
  * unchecked UID hits in folders.  Here we check those UIDs for a) not
  * being deleted since indexing and b) matching any unindexed scan
- * expression.
+ * expression.  We also take advantage of having an open index_state to
+ * load some MsgData objects and save them to query->merged_msgdata.
  */
 static void subquery_post_indexed(const char *key, void *data, void *rock)
 {
@@ -353,6 +389,8 @@ static void subquery_post_indexed(const char *key, void *data, void *rock)
     search_subquery_t *sub = qr->sub;
     struct index_state *state = NULL;
     unsigned msgno;
+    unsigned nmsgs = 0;
+    unsigned *msgno_list = NULL;
     int r = 0;
 
     if (query->error) return;
@@ -364,6 +402,12 @@ static void subquery_post_indexed(const char *key, void *data, void *rock)
 		folder->mboxname, s);
 	free(s);
     }
+    if (query->sortcrit && query->verbose) {
+	char *s = sortcrit_as_string(query->sortcrit);
+	syslog(LOG_INFO, "Folder %s: loading MsgData for sort criteria %s",
+		folder->mboxname, s);
+	free(s);
+    }
 
     r = query_begin_index(query, mboxname, &state);
     if (r) goto out;
@@ -371,6 +415,9 @@ static void subquery_post_indexed(const char *key, void *data, void *rock)
     if (!state->exists) goto out;
 
     search_expr_internalise(state->mailbox, sub->expr);
+
+    if (query->sortcrit)
+	msgno_list = (unsigned *) xmalloc(state->exists * sizeof(unsigned));
 
     /* One pass through the folder's message list */
     for (msgno = 1 ; msgno <= state->exists ; msgno++) {
@@ -396,13 +443,21 @@ static void subquery_post_indexed(const char *key, void *data, void *rock)
 
 	folder_add_uid(folder, record->uid);
 	folder_add_modseq(folder, record->modseq);
+	if (query->sortcrit)
+	    msgno_list[nmsgs++] = msgno;
     }
+
+    /* msgno_list contains only the MSNs for newly
+     * checked messages */
+    if (query->sortcrit && nmsgs)
+	query_load_msgdata(query, folder, state, msgno_list, nmsgs);
 
     folder->unchecked_dirty = 0;
     r = 0;
 
 out:
     query_end_index(query, &state);
+    free(msgno_list);
     if (r) query->error = r;
 }
 
@@ -501,12 +556,20 @@ static int subquery_run_one_folder(search_query_t *query,
     struct index_state *state = NULL;
     unsigned msgno;
     search_folder_t *folder = NULL;
+    unsigned nmsgs = 0;
+    unsigned *msgno_list = NULL;
     int r = 0;
 
     if (query->verbose) {
 	char *s = search_expr_serialise(e);
 	syslog(LOG_INFO, "Folder %s: running folder scan subquery: %s",
 		mboxname, s);
+	free(s);
+    }
+    if (query->sortcrit && query->verbose) {
+	char *s = sortcrit_as_string(query->sortcrit);
+	syslog(LOG_INFO, "Folder %s: loading MsgData for sort criteria %s",
+		folder->mboxname, s);
 	free(s);
     }
 
@@ -540,12 +603,19 @@ static int subquery_run_one_folder(search_query_t *query,
 
 	folder_add_uid(folder, record->uid);
 	folder_add_modseq(folder, record->modseq);
+
+	if (query->sortcrit)
+	    msgno_list[nmsgs++] = msgno;
     }
+
+    if (query->sortcrit && nmsgs)
+	query_load_msgdata(query, folder, state, msgno_list, nmsgs);
 
     r = 0;
 
 out:
     query_end_index(query, &state);
+    free(msgno_list);
     return r;
 }
 
@@ -682,6 +752,23 @@ EXPORTED int search_query_run(search_query_t *query)
 
     if (query->need_ids)
 	query_assign_folder_ids(query);
+
+    if (query->sortcrit) {
+	/*
+	 * Do a post-search sorting phase.
+	 *
+	 * Sorts MsgData objects.  These really really need to be replaced with
+	 * either message_t objects or some new smaller object which only stores
+	 * exactly the data we need to sort with, according to sortcrit, plus a
+	 * few things we always need like folder, uid, cid etc.  But in the
+	 * interests of getting this code working before Christmas we're going
+	 * to use MsgData for now, and in the way that means the least amount of
+	 * code changes.
+	 */
+	index_msgdata_sort((MsgData **)query->merged_msgdata.data,
+			   query->merged_msgdata.count,
+			   query->sortcrit);
+    }
 
 
 out:

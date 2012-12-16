@@ -135,16 +135,8 @@ struct copyargs {
     int msgalloc;
 };
 
-typedef struct {
-    char *mboxname;
-    int id;	   /* index used for formatting output */
-    uint32_t uidvalidity;
-    struct msgdata **msgdata;
-} SearchFolder;
-
-
 typedef struct msgdata {
-    SearchFolder *folder;	/* search folder (can be NULL) */
+    struct search_folder *folder; /* search folder (can be NULL) */
 
     /* items from the index_record */
     bit32 uid;                  /* UID for output purposes */

@@ -62,7 +62,6 @@ struct search_folder {
     uint64_t highest_modseq; /* of returned messages, not the folder */
     int id;
     bitvector_t uids;
-    struct msgdata *msgdata;
     bitvector_t unchecked_uids;
     int unchecked_dirty;
 };
@@ -71,6 +70,13 @@ struct search_subquery {
     char *mboxname;		/* may be NULL */
     search_expr_t *indexed;	/* may be NULL */
     search_expr_t *expr;
+};
+
+struct search_saved_msgdata {
+    /* Used to remember MsgData** arrays returned by
+     * index_msgdata_load() for later freeing. */
+    struct msgdata **msgdata;
+    int n;
 };
 
 struct search_query {
@@ -88,6 +94,7 @@ struct search_query {
      * search_query_new() and before search_query_run().
      */
     struct searchargs *searchargs;
+    const struct sortcrit *sortcrit;
     int multiple;
     int need_ids;
     int verbose;
@@ -112,14 +119,15 @@ struct search_query {
     unsigned int folder_count;
     search_subquery_t global_sub;
 
+    /* Used as a temporary holder for errors, e.g. to pass an error from
+     * a hashtable enumeration callback back up to the caller */
+    int error;
     /*
      * Resulting messages from a search engine query or a folder scan
      * need to be organised per-folder both for the secondary scan
      * (which needs to proceed per-folder to minimise the number of
      * index_open() calls) and for reporting back to the IMAP client.
      */
-    ptrarray_t merged_msgdata;
-    int error;
     hash_table folders_by_name;
     /*
      * Some callers need a unique and contiguous 0-based set of integer
@@ -129,6 +137,18 @@ struct search_query {
      * all subsequently prove to be deleted.
      */
     ptrarray_t folders_by_id;
+    /*
+     * Array of search_saved_msgdata objects for later freeing
+     */
+    ptrarray_t saved_msgdata;
+    /*
+     * When sorting in requested, this array contains the final merged
+     * sort results as an array of MsgData*.  The MsgData objects might
+     * be "fake" ones if the results were retrieved from the cache DB,
+     * but the following fields are guaranteed to be usable: uid, cid,
+     * folder.
+     */
+    ptrarray_t merged_msgdata;
 };
 
 extern search_query_t *search_query_new(struct index_state *state,
