@@ -144,13 +144,13 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			  struct mailbox *mailbox, const char *resource,
 			  struct caldav_db *caldavdb, int overwrite,
 			  unsigned flags);
-static icalcomponent *busytime(struct transaction_t *txn,
-			       struct propfind_ctx *fctx,
-			       char mailboxname[],
-			       icalproperty_method method,
-			       const char *uid,
-			       const char *organizer,
-			       const char *attendee);
+static icalcomponent *busytime_query_local(struct transaction_t *txn,
+					   struct propfind_ctx *fctx,
+					   char mailboxname[],
+					   icalproperty_method method,
+					   const char *uid,
+					   const char *organizer,
+					   const char *attendee);
 #ifdef WITH_CALDAV_SCHED
 static int caladdress_lookup(const char *addr, struct sched_param *param);
 static int sched_busytime(struct transaction_t *txn);
@@ -1723,13 +1723,13 @@ static int compare_busytime(const void *b1, const void *b2)
 
 
 /* Create an iCalendar object containing busytime of all specified resources */
-static icalcomponent *busytime(struct transaction_t *txn,
-			       struct propfind_ctx *fctx,
-			       char mailboxname[],
-			       icalproperty_method method,
-			       const char *uid,
-			       const char *organizer,
-			       const char *attendee)
+static icalcomponent *busytime_query_local(struct transaction_t *txn,
+					   struct propfind_ctx *fctx,
+					   char mailboxname[],
+					   icalproperty_method method,
+					   const char *uid,
+					   const char *organizer,
+					   const char *attendee)
 {
     struct calquery_filter *calfilter =
 	(struct calquery_filter *) fctx->filter_crit;
@@ -1864,7 +1864,8 @@ static int report_fb_query(struct transaction_t *txn,
 	}
     }
 
-    cal = busytime(txn, fctx, txn->req_tgt.mboxname, 0, NULL, NULL, NULL);
+    cal = busytime_query_local(txn, fctx, txn->req_tgt.mboxname,
+			       0, NULL, NULL, NULL);
 
     if (calfilter.busytime.busy) free(calfilter.busytime.busy);
 
@@ -2585,8 +2586,9 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
 	    fctx.davdb = caldav_open(userid, CALDAV_CREATE);
 	    fctx.req_tgt->collection = NULL;
 	    calfilter.busytime.len = 0;
-	    busy = busytime(txn, &fctx, mailboxname,
-			    ICAL_METHOD_REPLY, uid, organizer, attendee);
+	    busy = busytime_query_local(txn, &fctx, mailboxname,
+					ICAL_METHOD_REPLY, uid,
+					organizer, attendee);
 
 	    caldav_close(fctx.davdb);
 
