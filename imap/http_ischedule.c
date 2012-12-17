@@ -84,8 +84,8 @@ static void isched_cachehdr(const char *name, const char *contents, void *rock);
 #endif /* WITH_DKIM */
 
 extern int busytime_query(struct transaction_t *txn, icalcomponent *comp);
-static int isched_capa(struct transaction_t *txn, void *params);
-static int isched_recv(struct transaction_t *txn, void *params);
+static int meth_get_isched(struct transaction_t *txn, void *params);
+static int meth_post_isched(struct transaction_t *txn, void *params);
 static int meth_get_domainkey(struct transaction_t *txn, void *params);
 static void calc_compile_time(struct buf *serverinfo);
 static time_t compile_time;
@@ -102,13 +102,13 @@ const struct namespace_t namespace_ischedule = {
 	{ NULL,			NULL },	/* ACL		*/
 	{ NULL,			NULL },	/* COPY		*/
 	{ NULL,			NULL },	/* DELETE	*/
-	{ &isched_capa,		NULL },	/* GET		*/
-	{ &isched_capa,		NULL },	/* HEAD		*/
+	{ &meth_get_isched,	NULL },	/* GET		*/
+	{ &meth_get_isched,	NULL },	/* HEAD		*/
 	{ NULL,			NULL },	/* MKCALENDAR	*/
 	{ NULL,			NULL },	/* MKCOL	*/
 	{ NULL,			NULL },	/* MOVE		*/
 	{ &meth_options,	NULL },	/* OPTIONS	*/
-	{ &isched_recv,		NULL },	/* POST		*/
+	{ &meth_post_isched,	NULL },	/* POST		*/
 	{ NULL,			NULL },	/* PROPFIND	*/
 	{ NULL,			NULL },	/* PROPPATCH	*/
 	{ NULL,			NULL },	/* PUT		*/
@@ -162,8 +162,8 @@ static void calc_compile_time(struct buf *serverinfo __attribute__((unused)))
 
 
 /* iSchedule Receiver Capabilities */
-static int isched_capa(struct transaction_t *txn,
-		       void *params __attribute__((unused)))
+static int meth_get_isched(struct transaction_t *txn,
+			   void *params __attribute__((unused)))
 {
     int precond;
     struct message_guid guid;
@@ -251,8 +251,8 @@ static int isched_capa(struct transaction_t *txn,
 
 
 /* iSchedule Receiver */
-static int isched_recv(struct transaction_t *txn,
-		       void *params __attribute__((unused)))
+static int meth_post_isched(struct transaction_t *txn,
+			    void *params __attribute__((unused)))
 {
     int ret = 0, r, authd = 0;
     const char **hdr;
