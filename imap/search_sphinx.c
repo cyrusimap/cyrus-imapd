@@ -665,10 +665,6 @@ struct sphinx_snippet_receiver
     void *rock;
 };
 
-/* This is carefully aligned with the default search_batchsize so that
- * we get the minimum number of commits with default parameters */
-#define MAX_UNCOMMITTED	    20
-
 /* Maximum size of a query, determined empirically, is a little bit
  * under 8MB.  That seems like more than enough, so let's limit the
  * total amount of parts text to 4 MB. */
@@ -1853,11 +1849,11 @@ static int write_lastid(struct latestdb *ldb,
     return r;
 }
 
-static int flush(sphinx_update_receiver_t *tr, int force)
+static int flush(search_text_receiver_t *rx)
 {
+    sphinx_update_receiver_t *tr = (sphinx_update_receiver_t *)rx;
     int r = 0;
 
-    if (!force && tr->uncommitted < MAX_UNCOMMITTED) return 0;
     if (!tr->uncommitted) return 0;
 
     /* We write the lastid out first, to avoid a future instance
@@ -1866,7 +1862,8 @@ static int flush(sphinx_update_receiver_t *tr, int force)
     if (r) return r;
 
     if (tr->super.verbose > 1)
-	syslog(LOG_NOTICE, "Sphinx committing");
+	syslog(LOG_NOTICE, "Sphinx committing %u updates",
+		tr->uncommitted);
 
     r = mysql_commit(tr->conn.mysql);
     if (r) {
@@ -2011,8 +2008,6 @@ static int end_message_update(search_text_receiver_t *rx)
     ++tr->uncommitted;
     tr->latest = tr->super.uid;
 
-    r = flush(tr, /*force*/0);
-
 out:
     tr->super.uid = 0;
     return r;
@@ -2122,7 +2117,7 @@ static int end_mailbox_update(search_text_receiver_t *rx,
     int r = 0;
 
     if (tr->conn.mysql)
-	r = flush(tr, /*force*/1);
+	r = flush(rx);
 
     tr->super.mailbox = NULL;
     free(tr->super.indexname);
@@ -2145,6 +2140,7 @@ static search_text_receiver_t *begin_update(int verbose)
     tr->super.super.end_part = end_part;
     tr->super.super.end_message = end_message_update;
     tr->super.super.end_mailbox = end_mailbox_update;
+    tr->super.super.flush = flush;
 
     tr->indexing_lock_fd = -1;
     tr->super.verbose = verbose;

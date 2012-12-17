@@ -515,10 +515,6 @@ struct xapian_snippet_receiver
     void *rock;
 };
 
-/* This is carefully aligned with the default search_batchsize so that
- * we get the minimum number of commits with default parameters */
-#define MAX_UNCOMMITTED	    20
-
 /* Maximum size of a query, determined empirically, is a little bit
  * under 8MB.  That seems like more than enough, so let's limit the
  * total amount of parts text to 4 MB. */
@@ -760,15 +756,16 @@ static int write_latest(struct latestdb *ldb,
     return r;
 }
 
-static int flush(xapian_update_receiver_t *tr, int force)
+static int flush(search_text_receiver_t *rx)
 {
+    xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
     int r = 0;
 
-    if (!force && tr->uncommitted < MAX_UNCOMMITTED) return 0;
     if (!tr->uncommitted) return 0;
 
     if (tr->super.verbose > 1)
-	syslog(LOG_NOTICE, "Xapian committing");
+	syslog(LOG_NOTICE, "Xapian committing %u updates",
+		tr->uncommitted);
 
     r = xapian_dbw_commit_txn(tr->dbw);
     if (r) goto out;
@@ -864,8 +861,6 @@ static int end_message_update(search_text_receiver_t *rx)
     if (r) goto out;
     ++tr->uncommitted;
     tr->latest = tr->super.uid;
-
-    r = flush(tr, /*force*/0);
 
 out:
     tr->super.uid = 0;
@@ -982,7 +977,7 @@ static int end_mailbox_update(search_text_receiver_t *rx,
     int r = 0;
 
     if (tr->dbw) {
-	r = flush(tr, /*force*/1);
+	r = flush(rx);
 	xapian_dbw_close(tr->dbw);
 	tr->dbw = NULL;
     }
@@ -1008,6 +1003,7 @@ static search_text_receiver_t *begin_update(int verbose)
     tr->super.super.end_part = end_part;
     tr->super.super.end_message = end_message_update;
     tr->super.super.end_mailbox = end_mailbox_update;
+    tr->super.super.flush = flush;
 
     tr->indexing_lock_fd = -1;
     tr->super.verbose = verbose;

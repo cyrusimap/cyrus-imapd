@@ -55,6 +55,7 @@
 #include "message.h"
 #include "global.h"
 #include "search_engines.h"
+#include "ptrarray.h"
 
 #ifdef USE_SQUAT
 extern const struct search_engine squat_search_engine;
@@ -141,16 +142,58 @@ static int search_batch_size(void)
 	    config_getint(IMAPOPT_SEARCH_BATCHSIZE) : INT_MAX);
 }
 
+/*
+ * Flush a batch of messages to the search engine's indexer code.  We
+ * drop the index lock during the presumably CPU and IO heavy parts of
+ * the procedure and re-acquire it afterward, to avoid delaying other
+ * processes like imapds.  The reacquisition may of course fail.
+ * Returns an IMAP error code or 0 on success.
+ */
+static int flush_batch(search_text_receiver_t *rx,
+		       struct mailbox *mailbox,
+		       ptrarray_t *batch)
+{
+    int locktype = mailbox->index_locktype;
+    int i;
+    int r = 0;
+
+    /* give someone else a chance */
+    if (locktype)
+	mailbox_unlock_index(mailbox, NULL);
+
+    for (i = 0 ; i < batch->count ; i++) {
+	message_t *msg = ptrarray_nth(batch, i);
+	if (!r)
+	    r = index_getsearchtext(msg, rx, 0);
+	message_unref(&msg);
+    }
+    ptrarray_truncate(batch, 0);
+
+    if (r) return r;
+
+    if (rx->flush) {
+	r = rx->flush(rx);
+	if (r) return r;
+    }
+
+    if (locktype) {
+	r = mailbox_lock_index(mailbox, locktype);
+	if (r) return r;
+    }
+
+    return r;
+}
+
 EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
 				   struct mailbox *mailbox,
 				   int incremental)
 {
     uint32_t uid;
-    message_t *msg;
     int r = 0;			/* Using IMAP_* not SQUAT_* return codes here */
+    int r2;
     int first = 1;
     int batch_size = search_batch_size();
-    int nbatch = 0;
+    ptrarray_t batch = PTRARRAY_INITIALIZER;
     struct index_record record;
 
     r = rx->begin_mailbox(rx, mailbox, incremental);
@@ -167,37 +210,28 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
 	r = mailbox_find_index_record(mailbox, uid, &record,
 				      (first ? NULL : &record));
 	if (r == IMAP_NOTFOUND) continue;
-	if (r) break;
+	if (r) goto out;
 	first = 0;
 	if (record.system_flags & (FLAG_EXPUNGED|FLAG_UNLINKED))
 	    continue;
 
-	msg = message_new_from_record(mailbox, &record);
-	r = index_getsearchtext(msg, rx, 0);
-	message_unref(&msg);
+	ptrarray_append(&batch, message_new_from_record(mailbox, &record));
 
-	if (r) {
-	    rx->end_mailbox(rx, mailbox);
-	    return r;
-	}
-
-	if (++nbatch >= batch_size) {
-	    r = rx->end_mailbox(rx, mailbox);
-	    if (r) return r;
-	    syslog(LOG_INFO, "search_update_mailbox batching %s after %d messages",
-		   mailbox->name, nbatch);
-	    /* give someone else a chance */
-	    r = mailbox_yield_index(mailbox);
-	    if (r) break;
-	    nbatch = 0;
-	    r = rx->begin_mailbox(rx, mailbox, incremental);
-	    if (r) break;
+	if (incremental && batch.count >= batch_size) {
+	    syslog(LOG_INFO, "search_update_mailbox batching %u messages to %s",
+		   batch.count, mailbox->name);
+	    r = flush_batch(rx, mailbox, &batch);
+	    if (r) goto out;
 	}
     }
 
-    r = rx->end_mailbox(rx, mailbox);
-    if (r) return r;
+    if (batch.count)
+	r = flush_batch(rx, mailbox, &batch);
 
+out:
+    ptrarray_fini(&batch);
+    r2 = rx->end_mailbox(rx, mailbox);
+    if (r2 && !r) r = r2;
     return r;
 }
 

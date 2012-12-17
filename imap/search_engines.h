@@ -112,6 +112,7 @@ struct search_text_receiver {
     int (*end_message)(search_text_receiver_t *);
     int (*end_mailbox)(search_text_receiver_t *,
 		       struct mailbox *);
+    int (*flush)(search_text_receiver_t *);
 };
 
 #define SEARCH_FLAG_CAN_BATCH	(1<<0)
