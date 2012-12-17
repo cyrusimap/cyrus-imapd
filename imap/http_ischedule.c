@@ -80,12 +80,12 @@ static struct buf b64req = BUF_INITIALIZER;
 
 static void isched_init(struct buf *serverinfo);
 static void isched_shutdown(void);
-static void isched_cachehdr(const char *name, const char *contents, void *rock);
 #endif /* WITH_DKIM */
 
 extern int busytime_query(struct transaction_t *txn, icalcomponent *comp);
 static int meth_get_isched(struct transaction_t *txn, void *params);
 static int meth_post_isched(struct transaction_t *txn, void *params);
+static int dkim_auth(struct transaction_t *txn);
 static int meth_get_domainkey(struct transaction_t *txn, void *params);
 static void calc_compile_time(struct buf *serverinfo);
 static time_t compile_time;
@@ -299,65 +299,7 @@ static int meth_post_isched(struct transaction_t *txn,
 	txn->error.desc = "No signature";
     }
     else {
-#ifdef WITH_DKIM
-	DKIM *dkim = NULL;
-	DKIM_STAT stat;
-
-	if (dkim_lib &&
-	    (dkim = dkim_verify(dkim_lib, NULL /* id */, NULL, &stat))) {
-#ifdef TEST
-	    /* XXX  Hack for local testing */
-	    dkim_query_t qtype = DKIM_QUERY_FILE;
-	    struct buf keyfile = BUF_INITIALIZER;
-
-	    stat = dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_QUERYMETHOD,
-				&qtype, sizeof(qtype));
-
-	    buf_printf(&keyfile, "%s/dkim.public", config_dir);
-	    stat = dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_QUERYINFO,
-				(void *) buf_cstring(&keyfile),
-				buf_len(&keyfile));
-#endif
-	    /* Process the cached headers and body */
-	    spool_enum_hdrcache(txn->req_hdrs, &isched_cachehdr, dkim);
-	    stat = dkim_eoh(dkim);
-	    if (stat == DKIM_STAT_OK) {
-		stat = dkim_body(dkim, (u_char *) buf_cstring(&txn->req_body),
-				 buf_len(&txn->req_body));
-		stat = dkim_eom(dkim, NULL);
-	    }
-	    if (stat == DKIM_STAT_OK) authd = 1;
-	    else if (stat == DKIM_STAT_CBREJECT) {
-		txn->error.desc =
-		    "Unable to verify: HTTP request-line mismatch";
-	    }
-	    else {
-		DKIM_SIGINFO *sig = dkim_getsignature(dkim);
-
-		if (sig) {
-		    const char *sigerr;
-
-		    if (dkim_sig_getbh(sig) == DKIM_SIGBH_MISMATCH)
-			sigerr = "body hash mismatch";
-		    else {
-			DKIM_SIGERROR err = dkim_sig_geterror(sig);
-
-			sigerr = dkim_sig_geterrorstr(err);
-		    }
-
-		    assert(!buf_len(&txn->buf));
-		    buf_printf(&txn->buf, "%s: %s",
-			       dkim_getresultstr(stat), sigerr);
-		    txn->error.desc = buf_cstring(&txn->buf);
-		}
-		else txn->error.desc = dkim_getresultstr(stat);
-	    }
-
-	    dkim_free(dkim);
-	}
-#else
-	syslog(LOG_WARNING, "DKIM-Signature provided, but DKIM isn't supported");
-#endif /* WITH_DKIM */
+	authd = dkim_auth(txn);
     }
 
     if (!authd) {
@@ -705,7 +647,7 @@ static void isched_shutdown(void)
 }
 
 
-static void isched_cachehdr(const char *name, const char *contents, void *rock)
+static void dkim_cachehdr(const char *name, const char *contents, void *rock)
 {
     struct buf *hdrfield = &tmpbuf;
 
@@ -714,6 +656,81 @@ static void isched_cachehdr(const char *name, const char *contents, void *rock)
 
     dkim_header((DKIM *) rock,
 		(u_char *) buf_cstring(hdrfield), buf_len(hdrfield));
+}
+
+static int dkim_auth(struct transaction_t *txn)
+{
+    int authd = 0;
+    DKIM *dkim = NULL;
+    DKIM_STAT stat;
+
+    if (!dkim_lib) return 0;
+
+    dkim = dkim_verify(dkim_lib, NULL /* id */, NULL, &stat);
+    if (!dkim) return 0;
+
+#ifdef TEST
+    {
+	/* XXX  Hack for local testing */
+	dkim_query_t qtype = DKIM_QUERY_FILE;
+	struct buf keyfile = BUF_INITIALIZER;
+
+	stat = dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_QUERYMETHOD,
+			    &qtype, sizeof(qtype));
+
+	buf_printf(&keyfile, "%s/dkim.public", config_dir);
+	stat = dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_QUERYINFO,
+			    (void *) buf_cstring(&keyfile),
+			    buf_len(&keyfile));
+    }
+#endif
+
+    /* Process the cached headers and body */
+    spool_enum_hdrcache(txn->req_hdrs, &dkim_cachehdr, dkim);
+    stat = dkim_eoh(dkim);
+    if (stat == DKIM_STAT_OK) {
+	stat = dkim_body(dkim, (u_char *) buf_cstring(&txn->req_body),
+			 buf_len(&txn->req_body));
+	stat = dkim_eom(dkim, NULL);
+    }
+
+    if (stat == DKIM_STAT_OK) authd = 1;
+    else if (stat == DKIM_STAT_CBREJECT) {
+	txn->error.desc =
+	    "Unable to verify: HTTP request-line mismatch";
+    }
+    else {
+	DKIM_SIGINFO *sig = dkim_getsignature(dkim);
+
+	if (sig) {
+	    const char *sigerr;
+
+	    if (dkim_sig_getbh(sig) == DKIM_SIGBH_MISMATCH)
+		sigerr = "body hash mismatch";
+	    else {
+		DKIM_SIGERROR err = dkim_sig_geterror(sig);
+
+		sigerr = dkim_sig_geterrorstr(err);
+	    }
+
+	    assert(!buf_len(&txn->buf));
+	    buf_printf(&txn->buf, "%s: %s",
+		       dkim_getresultstr(stat), sigerr);
+	    txn->error.desc = buf_cstring(&txn->buf);
+	}
+	else txn->error.desc = dkim_getresultstr(stat);
+    }
+
+    dkim_free(dkim);
+
+    return authd;
+}
+#else
+static int dkim_auth(struct transaction_t *txn __attribute__((unused)))
+{
+    syslog(LOG_WARNING, "DKIM-Signature provided, but DKIM isn't supported");
+
+    return 0;
 }
 #endif /* WITH_DKIM */
 
