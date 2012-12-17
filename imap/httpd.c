@@ -2082,6 +2082,11 @@ void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
 /* Output an HTTP error response with optional XML or text body */
 void error_response(long code, struct transaction_t *txn)
 {
+    const char error_body[] = HTML_DOCTYPE
+    "<html>\n<head>\n<title>HTTP Error: %s</title>\n</head>\n" \
+    "<body>\n<h2>HTTP Error: %s</h2>\n<p>%s</p>\n</body>\n</html>\n";
+    struct buf *html = &txn->resp_body.payload;
+
     /* Neither Brief nor Prefer affect error response bodies */
     txn->flags.vary &= ~(VARY_BRIEF | VARY_PREFER);
 
@@ -2097,9 +2102,11 @@ void error_response(long code, struct transaction_t *txn)
     }
 #endif
 
-    if (txn->error.desc) txn->resp_body.type = "text/plain";
-    write_body(code, txn, txn->error.desc,
-	       txn->error.desc ? strlen(txn->error.desc) : 0);
+    buf_reset(html);
+    buf_printf(html, error_body, error_message(code), error_message(code),
+	       txn->error.desc ? txn->error.desc : "");
+    txn->resp_body.type = "text/html; charset=utf-8";
+    write_body(code, txn, buf_cstring(html), buf_len(html));
 }
 
 
