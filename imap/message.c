@@ -4824,8 +4824,8 @@ static int message2_parse_header(part_t *part, const struct buf *map)
     if (!header) {
 	header = segment_new(ID_HEADER);
 	segment_bud(to_segment(part), header);
-	segment_finish(header);
     }
+    segment_finish(header);
 
     memset(mime_fields, 0, sizeof(mime_fields));
 
