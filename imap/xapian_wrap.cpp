@@ -172,6 +172,7 @@ struct xapian_db
 {
     Xapian::Database *database;
     Xapian::Stem *stemmer;
+    Xapian::QueryParser *parser;
 };
 
 // there is no struct xapian_query, we just typedef
@@ -184,6 +185,11 @@ xapian_db_t *xapian_db_open(const char *path)
 	db = (xapian_db_t *)xzmalloc(sizeof(xapian_db_t));
 	db->database = new Xapian::Database(path);
 	db->stemmer = new Xapian::Stem("en");
+	db->parser = new Xapian::QueryParser;
+	db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_ALL);
+	db->parser->set_stemmer(*db->stemmer);
+	db->parser->set_default_op(Xapian::Query::OP_AND);
+	db->parser->set_database(*db->database);
     }
     catch (const Xapian::Error &err) {
 	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
@@ -198,6 +204,7 @@ void xapian_db_close(xapian_db_t *db)
     try {
 	delete db->database;
 	delete db->stemmer;
+	delete db->parser;
 	free(db);
     }
     catch (const Xapian::Error &err) {
@@ -209,17 +216,15 @@ void xapian_db_close(xapian_db_t *db)
 xapian_query_t *xapian_query_new_match(const xapian_db_t *db, const char *prefix, const char *str)
 {
     try {
-	/* Unicode-safe lowercase */
-	std::string lcase;
-	for (Xapian::Utf8Iterator i = Xapian::Utf8Iterator(str) ;
-	     i != Xapian::Utf8Iterator() ;
-	     ++i)
-	    Xapian::Unicode::append_utf8(lcase, Xapian::Unicode::tolower(*i));
-
-	std::string term;
-	if (prefix) term += prefix;
-	term += (*db->stemmer)(lcase);
-	return (xapian_query_t *)new Xapian::Query(term);
+	// We don't use FLAG_BOOLEAN because Cyrus is doing boolean for us
+	// TODO: FLAG_AUTO_SYNONYMS
+	Xapian::Query query = db->parser->parse_query(
+				    std::string(str),
+				    (Xapian::QueryParser::FLAG_PHRASE |
+				     Xapian::QueryParser::FLAG_LOVEHATE |
+				     Xapian::QueryParser::FLAG_WILDCARD),
+				    std::string(prefix));
+	return (xapian_query_t *)new Xapian::Query(query);
     }
     catch (const Xapian::Error &err) {
 	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
