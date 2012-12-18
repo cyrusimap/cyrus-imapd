@@ -2102,10 +2102,29 @@ void error_response(long code, struct transaction_t *txn)
     }
 #endif
 
+    switch (code) {
+	/* 4xx codes */
+    case HTTP_BAD_REQUEST:
+    case HTTP_NOT_FOUND:
+    case HTTP_NOT_ALLOWED:
+    case HTTP_TIMEOUT:
+    case HTTP_GONE:
+	/* 5xx codes */
+    case HTTP_SERVER_ERROR:
+    case HTTP_NOT_IMPLEMENTED:
+    case HTTP_UNAVAILABLE:
+    case HTTP_BAD_VERSION:
+	/* Force an HTML body for these codes */
+	if (!txn->error.desc) txn->error.desc = "";
+	break;
+    }
+
     buf_reset(html);
-    buf_printf(html, error_body, error_message(code), error_message(code),
-	       txn->error.desc ? txn->error.desc : "");
-    txn->resp_body.type = "text/html; charset=utf-8";
+    if (txn->error.desc) {
+	buf_printf(html, error_body, error_message(code), error_message(code),
+		   txn->error.desc);
+	txn->resp_body.type = "text/html; charset=utf-8";
+    }
     write_body(code, txn, buf_cstring(html), buf_len(html));
 }
 
