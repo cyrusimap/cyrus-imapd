@@ -859,7 +859,7 @@ static int meth_delete(struct transaction_t *txn,
 	/* Scheduling object resource */
 	struct mboxlist_entry mbentry;
 	char outboxname[MAX_MAILBOX_BUFFER];
-	const char *msg_base = NULL, *organizer;
+	const char *msg_base = NULL, *organizer, **hdr;
 	unsigned long msg_size = 0;
 	icalcomponent *ical, *comp;
 	icalproperty *prop;
@@ -920,7 +920,8 @@ static int meth_delete(struct transaction_t *txn,
 	    /* Organizer scheduling object resource */
 	    r = sched_request(organizer, ical, NULL);
 	}
-	else {
+	else if (!(hdr = spool_getheader(txn->req_hdrs, "Schedule-Reply")) ||
+		 strcmp(hdr[0], "F")) {
 	    /* Attendee scheduling object resource */
 	    r = sched_reply(ical, NULL, userid);
 	}
