@@ -42,7 +42,7 @@
 package Cassandane::Generator;
 use strict;
 use warnings;
-use Cassandane::Util::DateTime qw(to_rfc822);
+use Cassandane::Util::DateTime qw(to_rfc822 from_iso8601);
 use Cassandane::Address;
 use Cassandane::Message;
 use Digest::MD5 qw(md5_hex);
@@ -200,6 +200,8 @@ sub _params_defaults
     #
     $params->{date} = DateTime->now()
 	unless defined $params->{date};
+    $params->{date} = from_iso8601($params->{date})
+	if ref $params->{date} eq '';
     die "Bad date: " . ref $params->{date}
 	unless ref $params->{date} eq 'DateTime';
 
