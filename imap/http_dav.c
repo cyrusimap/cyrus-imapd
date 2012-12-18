@@ -236,6 +236,14 @@ static const struct precond_t {
     { "allowed-attendee-scheduling-object-change", NS_CALDAV },
 
     /* iSchedule (draft-desruisseaux-ischedule) preconditions */
+    { "version-not-supported", NS_ISCHED },
+    { "invalid-calendar-data-type", NS_ISCHED },
+    { "invalid-calendar-data", NS_ISCHED },
+    { "invalid-scheduling-message", NS_ISCHED },
+    { "originator-missing", NS_ISCHED },
+    { "originator-invalid", NS_ISCHED },
+    { "originator-denied", NS_ISCHED },
+    { "recipient-missing", NS_ISCHED },
     { "verification-failed", NS_ISCHED }
 };
 

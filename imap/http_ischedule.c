@@ -265,12 +265,21 @@ static int meth_post_isched(struct transaction_t *txn,
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
 
+    /* Check iSchedule-Version */
+    if (!(hdr = spool_getheader(txn->req_hdrs, "iSchedule-Version")) ||
+	strcmp(hdr[0], "1.0")) {
+	txn->error.precond = ISCHED_UNSUPP_VERSION;
+	return HTTP_BAD_REQUEST;
+    }
+
     /* Check Content-Type */
     if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
 	!is_mediatype(hdr[0], "text/calendar")) {
-	txn->error.precond = CALDAV_SUPP_DATA;
+	txn->error.precond = ISCHED_UNSUPP_DATA;
 	return HTTP_BAD_REQUEST;
     }
+
+    /* XXX  Check Originator and Recipient */
 
     /* Read body */
     if (!txn->flags.havebody) {
@@ -311,7 +320,7 @@ static int meth_post_isched(struct transaction_t *txn,
     /* Parse the iCal data for important properties */
     ical = icalparser_parse_string(buf_cstring(&txn->req_body));
     if (!ical || !icalrestriction_check(ical)) {
-	txn->error.precond = CALDAV_VALID_DATA;
+	txn->error.precond = ISCHED_INVALID_DATA;
 	return HTTP_BAD_REQUEST;
     }
 
@@ -324,8 +333,8 @@ static int meth_post_isched(struct transaction_t *txn,
     }
 
     /* Check method preconditions */
-    if (!meth || meth != ICAL_METHOD_REQUEST || !uid || !prop) {
-	txn->error.precond = CALDAV_VALID_SCHED;
+    if (!meth || !uid || !prop) {
+	txn->error.precond = ISCHED_INVALID_SCHED;
 	ret = HTTP_BAD_REQUEST;
 	goto done;
     }
@@ -338,13 +347,16 @@ static int meth_post_isched(struct transaction_t *txn,
 	    break;
 
 	default:
-	    txn->error.precond = CALDAV_VALID_SCHED;
+	    txn->error.precond = ISCHED_INVALID_SCHED;
 	    ret = HTTP_BAD_REQUEST;
 	}
 	break;
 
+    case ICAL_METHOD_REPLY:
+    case ICAL_METHOD_CANCEL:
+
     default:
-	txn->error.precond = CALDAV_VALID_SCHED;
+	txn->error.precond = ISCHED_INVALID_SCHED;
 	ret = HTTP_BAD_REQUEST;
     }
 
