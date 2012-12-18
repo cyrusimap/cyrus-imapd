@@ -1736,7 +1736,6 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
     struct busytime *busytime = &calfilter->busytime;
     icalcomponent *cal = NULL;
 
-    fctx->davdb = auth_caldavdb;
     fctx->lookup_resource = (lookup_proc_t) &caldav_lookup_resource;
     fctx->foreach_resource = (foreach_proc_t) &caldav_foreach;
     fctx->proc_by_resource = &busytime_by_resource;
@@ -1848,6 +1847,7 @@ static int report_fb_query(struct transaction_t *txn,
     calfilter.save_busytime = 1;
     fctx->filter = apply_calfilter;
     fctx->filter_crit = &calfilter;
+    fctx->davdb = auth_caldavdb;
 
     /* Parse children element of report */
     for (node = inroot->children; node; node = node->next) {
