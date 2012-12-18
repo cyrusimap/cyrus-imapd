@@ -2079,7 +2079,7 @@ void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
 }
 
 
-/* Output an HTTP error response with optional XML or text body */
+/* Output an HTTP error response with optional XML or HTML body */
 void error_response(long code, struct transaction_t *txn)
 {
     const char error_body[] = HTML_DOCTYPE
