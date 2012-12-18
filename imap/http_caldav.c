@@ -2641,7 +2641,7 @@ static int sched_busytime(struct transaction_t *txn)
     int ret = 0, r, rights;
     char *acl;
     const char **hdr;
-    icalcomponent *ical, *comp;
+    icalcomponent *ical = NULL, *comp;
     icalcomponent_kind kind = 0;
     icalproperty_method meth = 0;
     icalproperty *prop = NULL;
@@ -2735,7 +2735,7 @@ static int sched_busytime(struct transaction_t *txn)
     ret = busytime_query(txn, ical);
 
   done:
-    icalcomponent_free(ical);
+    if (ical) icalcomponent_free(ical);
 
     return ret;
 }
