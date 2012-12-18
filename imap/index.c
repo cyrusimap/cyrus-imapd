@@ -1843,8 +1843,9 @@ EXPORTED int index_sort(struct index_state *state,
 
     if (nmsg) {
 	/* Output the sorted messages */
-	search_folder_foreach(folder, i) {
-	    prot_printf(state->out, " %u", i);
+	for (i = 0 ; i < query->merged_msgdata.count ; i++) {
+	    MsgData *md = ptrarray_nth(&query->merged_msgdata, i);
+	    prot_printf(state->out, " %u", md->uid);
 	}
     }
 
