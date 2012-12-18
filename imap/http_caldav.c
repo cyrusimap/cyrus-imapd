@@ -2714,7 +2714,8 @@ static int sched_busytime(struct transaction_t *txn)
     if (!meth || meth != ICAL_METHOD_REQUEST || !uid ||
 	kind != ICAL_VFREEBUSY_COMPONENT || !prop) {
 	txn->error.precond = CALDAV_VALID_SCHED;
-	return HTTP_BAD_REQUEST;
+	ret = HTTP_BAD_REQUEST;
+	goto done;
     }
 
     /* Organizer MUST be local to use CalDAV Scheduling */
@@ -2727,11 +2728,13 @@ static int sched_busytime(struct transaction_t *txn)
 
     if (!orgid || strncmp(orgid, txn->req_tgt.user, txn->req_tgt.userlen)) {
 	txn->error.precond = CALDAV_VALID_ORGANIZER;
-	return HTTP_FORBIDDEN;
+	ret = HTTP_FORBIDDEN;
+	goto done;
     }
 
     ret = busytime_query(txn, ical);
 
+  done:
     icalcomponent_free(ical);
 
     return ret;
