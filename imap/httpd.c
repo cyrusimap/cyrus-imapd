@@ -2083,8 +2083,8 @@ void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
 void error_response(long code, struct transaction_t *txn)
 {
     const char error_body[] = HTML_DOCTYPE
-    "<html>\n<head>\n<title>HTTP Error: %s</title>\n</head>\n" \
-    "<body>\n<h2>HTTP Error: %s</h2>\n<p>%s</p>\n</body>\n</html>\n";
+    "<html>\n<head>\n<title>HTTP Status: %s</title>\n</head>\n" \
+    "<body>\n<h2>HTTP Status: %s</h2>\n<p>%s</p>\n</body>\n</html>\n";
     struct buf *html = &txn->resp_body.payload;
 
     /* Neither Brief nor Prefer affect error response bodies */
