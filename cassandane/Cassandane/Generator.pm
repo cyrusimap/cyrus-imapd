@@ -286,6 +286,7 @@ sub generate
     if ($extra_lines) {
 	$extra .= "This is an extra line\r\n" x $extra_lines;
     }
+    my $size = $params->{size};
     my $msg = Cassandane::Message->new();
 
     $msg->add_header("Return-Path", "<" . $from->address() . ">");
@@ -324,6 +325,22 @@ sub generate
 	}
     }
     $msg->add_header('X-Cassandane-Unique', _generate_unique());
+    if (defined $size)
+    {
+	my $padding = "ton bear\r\n";
+	my $msg_size = $msg->size() + length($params->{body}) + length($extra);
+	my $needs = $size - $msg_size;
+	die "size $size cannot be achieved, message is already $msg_size bytes long"
+	    if $needs < 0;
+	my $npad = int($needs / length($padding)) - 1;
+	if ($npad > 0)
+	{
+	    $extra .= $padding x $npad;
+	    $needs -= length($padding) * $npad;
+	}
+	$extra .= 'X' x ($needs - 2) if ($needs >= 2);
+	$extra .= "\r\n";
+    }
     $msg->set_body($params->{body} . $extra);
     $msg->set_attributes(uid => $params->{uid});
 
