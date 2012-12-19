@@ -239,8 +239,10 @@ static void my_caldav_init(struct buf *serverinfo)
 
     caldav_init();
 
-    buf_printf(serverinfo, " libical/%s", ICAL_VERSION);
-    buf_printf(serverinfo, " SQLite/%s", sqlite3_libversion());
+    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
+	buf_printf(serverinfo, " libical/%s", ICAL_VERSION);
+	buf_printf(serverinfo, " SQLite/%s", sqlite3_libversion());
+    }
 
     /* Need to set this to parse CalDAV Scheduling parameters */
     ical_set_unknown_token_handling_setting(ICAL_ASSUME_IANA_TOKEN);
