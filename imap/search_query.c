@@ -107,6 +107,7 @@ EXPORTED void search_query_free(search_query_t *query)
     if (!query) return;
     free_hash_table(&query->subs_by_folder, subquery_free);
     free_hash_table(&query->subs_by_indexed, subquery_free);
+    search_expr_free(query->global_sub.expr);
     ptrarray_fini(&query->folders_by_id);
     free_hash_table(&query->folders_by_name, folder_free);
     ptrarray_fini(&query->merged_msgdata);
