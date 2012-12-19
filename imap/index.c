@@ -2678,6 +2678,7 @@ EXPORTED int index_thread(struct index_state *state, int algorithm,
     folder = search_query_find_folder(query, state->mailbox->name);
 
     if (folder) {
+	search_folder_use_msn(folder, state);
 	if (highestmodseq)
 	    highestmodseq = search_folder_get_highest_modseq(folder);
 	nmsg = search_folder_get_array(folder, &msgno_list);
