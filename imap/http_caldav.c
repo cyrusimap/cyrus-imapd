@@ -753,6 +753,7 @@ static int meth_delete(struct transaction_t *txn,
     struct index_record record;
     const char *etag = NULL, *userid;
     time_t lastmod = 0;
+    unsigned rowid;
 
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
@@ -805,6 +806,8 @@ static int meth_delete(struct transaction_t *txn,
 
     if (!txn->req_tgt.resource) {
 	/* DELETE collection */
+	/* XXX  Need to process any scheduling objects */
+
 	r = mboxlist_deletemailbox(txn->req_tgt.mboxname,
 				   httpd_userisadmin || httpd_userisproxyadmin,
 				   httpd_userid, httpd_authstate,
@@ -853,6 +856,9 @@ static int meth_delete(struct transaction_t *txn,
 	ret = precond;
 	goto done;
     }
+
+    /* Save rowid because cdata will be overwritten by scheduling ops */
+    rowid = cdata->dav.rowid;
 
 #ifdef WITH_CALDAV_SCHED
     if (cdata->sched_tag) {
@@ -952,7 +958,7 @@ static int meth_delete(struct transaction_t *txn,
     }
 
     /* Delete mapping entry for resource name */
-    caldav_delete(auth_caldavdb, cdata->dav.rowid);
+    caldav_delete(auth_caldavdb, rowid);
     caldav_commit(auth_caldavdb);
 
   done:
