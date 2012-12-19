@@ -139,7 +139,7 @@ static int do_search(const char *mboxname,
 
     index_checkflags(state, 0, 0);
 
-    searchargs = new_searchargs(".", /*state*/0, &ns, userid, init.authstate, /*isadmin*/0);
+    searchargs = new_searchargs(".", GETSEARCH_CHARSET_KEYWORD, &ns, userid, init.authstate, /*isadmin*/0);
 
     r = get_search_program(pin, pout, searchargs);
     if (r != '\r') {
