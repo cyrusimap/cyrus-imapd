@@ -629,6 +629,10 @@ static int subquery_run_one_folder(search_query_t *query,
 	    }
 	}
 
+	/* moot if already in the uids set */
+	if (bv_isset(&folder->uids, record->uid))
+	    continue;
+
 	folder_add_uid(folder, record->uid);
 	folder_add_modseq(folder, record->modseq);
 
