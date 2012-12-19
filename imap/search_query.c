@@ -659,35 +659,58 @@ static void subquery_run_folder(const char *key, void *data, void *rock)
     int r;
 
     if (query->error) return;
+    if (!query->multiple &&
+	strcmp(mboxname, query->state->mailbox->name))
+	return;
     r = subquery_run_one_folder(query, mboxname, sub->expr);
     if (r) query->error = r;
 }
 
-static int subquery_run_global(void *rock,
-			       const char *key, size_t keylen,
-			       const char *val __attribute((unused)),
-			       size_t vallen __attribute((unused)))
+static int subquery_run_global(search_query_t *query, const char *mboxname)
 {
-    search_query_t *query = rock;
-    char *mboxname = xstrndup(key, keylen);
     search_subquery_t *sub;
+    search_expr_t *e, *exprs[2];
+    int nexprs = 0;
     int r;
 
     sub = (search_subquery_t *)hash_lookup(mboxname, &query->subs_by_folder);
     if (sub) {
 	/* this folder also has a per-folder scan expression, OR it in */
-	search_expr_t *e = search_expr_new(NULL, SEOP_OR);
-	search_expr_append(e, sub->expr);
-	sub->expr = NULL;
-	search_expr_append(e, search_expr_duplicate(query->global_sub.expr));
-
-	r = subquery_run_one_folder(query, mboxname, e);
-	search_expr_free(e);
-    }
-    else {
-	r = subquery_run_one_folder(query, mboxname, query->global_sub.expr);
+	exprs[nexprs++] = search_expr_duplicate(sub->expr);
     }
 
+    if (query->global_sub.expr)
+	exprs[nexprs++] = search_expr_duplicate(query->global_sub.expr);
+
+    switch (nexprs) {
+    case 0:
+	e = search_expr_new(NULL, SEOP_TRUE);
+	break;
+    case 1:
+	e = exprs[0];
+	break;
+    case 2:
+	e = search_expr_new(NULL, SEOP_OR);
+	search_expr_append(e, exprs[0]);
+	search_expr_append(e, exprs[1]);
+	break;
+    }
+
+    r = subquery_run_one_folder(query, mboxname, e);
+    search_expr_free(e);
+    return r;
+}
+
+static int subquery_run_global_cb(void *rock,
+				  const char *key, size_t keylen,
+				  const char *val __attribute((unused)),
+				  size_t vallen __attribute((unused)))
+{
+    search_query_t *query = rock;
+    char *mboxname = xstrndup(key, keylen);
+    int r;
+
+    r = subquery_run_global(query, mboxname);
     free(mboxname);
     return r;
 }
@@ -770,8 +793,11 @@ EXPORTED int search_query_run(search_query_t *query)
     if (query->global_sub.expr) {
 	/* We have a scan expression which applies to all folders.
 	 * Walk over every folder, applying the scan expression. */
-	r = mboxlist_allusermbox(mboxname_to_userid(query->state->mailbox->name),
-				 subquery_run_global, query, /*+deleted*/0);
+	if (query->multiple)
+	    r = mboxlist_allusermbox(mboxname_to_userid(query->state->mailbox->name),
+				     subquery_run_global_cb, query, /*+deleted*/0);
+	else
+	    r = subquery_run_global(query, query->state->mailbox->name);
 	if (r) goto out;
     }
     else if (query->folder_count) {
