@@ -765,7 +765,7 @@ static int get_search_criterion(struct protstream *pin,
 
     case '0': case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9':
-    case '*':
+    case '*':						/* RFC 3501 */
 	if (imparse_issequence(criteria.s)) {
 	    e = search_expr_new(parent, SEOP_MATCH);
 	    e->attr = search_attr_find("msgno");
@@ -775,14 +775,14 @@ static int get_search_criterion(struct protstream *pin,
 	break;
 
     case 'a':
-	if (!strcmp(criteria.s, "answered")) {
+	if (!strcmp(criteria.s, "answered")) {		/* RFC 3501 */
 	    systemflag_match(parent, FLAG_ANSWERED, /*not*/0);
 	}
-	else if (!strcmp(criteria.s, "all")) {
+	else if (!strcmp(criteria.s, "all")) {		/* RFC 3501 */
 	    search_expr_new(parent, SEOP_TRUE);
 	    break;
 	}
-	else if (!strcmp(criteria.s, "annotation")) {
+	else if (!strcmp(criteria.s, "annotation")) {	/* RFC 5259 */
 	    struct searchannot *annot = NULL;
 	    c = get_search_annotation(pin, pout, base, c, &annot);
 	    if (c == EOF)
@@ -795,7 +795,7 @@ static int get_search_criterion(struct protstream *pin,
 	break;
 
     case 'b':
-	if (!strcmp(criteria.s, "before")) {
+	if (!strcmp(criteria.s, "before")) {	    /* RFC 3501 */
 	    if (c != ' ') goto missingarg;
 	    c = get_search_date(pin, &start, &end);
 	    if (c == EOF) goto baddate;
@@ -803,13 +803,13 @@ static int get_search_criterion(struct protstream *pin,
 	    e->attr = search_attr_find("internaldate");
 	    e->value.u = start;
 	}
-	else if (!strcmp(criteria.s, "bcc")) {
+	else if (!strcmp(criteria.s, "bcc")) {	    /* RFC 3501 */
 	    if (c != ' ') goto missingarg;
 	    c = getastring(pin, pout, &arg);
 	    if (c == EOF) goto missingarg;
 	    string_match(parent, arg.s, criteria.s, base);
 	}
-	else if (!strcmp(criteria.s, "body")) {
+	else if (!strcmp(criteria.s, "body")) {	    /* RFC 3501 */
 	    if (c != ' ') goto missingarg;
 	    c = getastring(pin, pout, &arg);
 	    if (c == EOF) goto missingarg;
@@ -827,31 +827,31 @@ static int get_search_criterion(struct protstream *pin,
 	break;
 
     case 'c':
-	if (!strcmp(criteria.s, "cc")) {
+	if (!strcmp(criteria.s, "cc")) {	    /* RFC 3501 */
 	    if (c != ' ') goto missingarg;
 	    c = getastring(pin, pout, &arg);
 	    if (c == EOF) goto missingarg;
 	    string_match(parent, arg.s, criteria.s, base);
 	}
-	else if (hasconv && !strcmp(criteria.s, "convflag")) {
+	else if (hasconv && !strcmp(criteria.s, "convflag")) {	/* nonstandard */
 	    if (c != ' ') goto missingarg;
 	    c = getword(pin, &arg);
 	    lcase(arg.s);
 	    convflag_match(parent, arg.s, /*not*/0);
 	}
-	else if (hasconv && !strcmp(criteria.s, "convread")) {
+	else if (hasconv && !strcmp(criteria.s, "convread")) {	/* nonstandard */
 	    convflag_match(parent, "\\Seen", /*not*/0);
 	}
-	else if (hasconv && !strcmp(criteria.s, "convunread")) {
+	else if (hasconv && !strcmp(criteria.s, "convunread")) {    /* nonstandard */
 	    convflag_match(parent, "\\Seen", /*not*/1);
 	}
-	else if (hasconv && !strcmp(criteria.s, "convseen")) {
+	else if (hasconv && !strcmp(criteria.s, "convseen")) {	/* nonstandard */
 	    convflag_match(parent, "\\Seen", /*not*/0);
 	}
-	else if (hasconv && !strcmp(criteria.s, "convunseen")) {
+	else if (hasconv && !strcmp(criteria.s, "convunseen")) {    /* nonstandard */
 	    convflag_match(parent, "\\Seen", /*not*/1);
 	}
-	else if (hasconv && !strcmp(criteria.s, "convmodseq")) {
+	else if (hasconv && !strcmp(criteria.s, "convmodseq")) {    /* nonstandard */
 	    modseq_t ms;
 	    if (c != ' ') goto missingarg;
 	    c = getmodseq(pin, &ms);
@@ -861,7 +861,7 @@ static int get_search_criterion(struct protstream *pin,
 	    e->value.u = ms;
 	}
 	else if ((base->state & GETSEARCH_CHARSET_KEYWORD)
-	      && !strcmp(criteria.s, "charset")) {
+	      && !strcmp(criteria.s, "charset")) {	/* RFC 3501 */
 	    if (c != ' ') goto missingcharset;
 	    c = getcharset(pin, pout, &arg);
 	    if (c != ' ') goto missingcharset;
@@ -869,7 +869,7 @@ static int get_search_criterion(struct protstream *pin,
 	    base->charset = charset_lookupname(arg.s);
 	    if (base->charset == -1) goto badcharset;
 	}
-	else if (!strcmp(criteria.s, "cid")) {
+	else if (!strcmp(criteria.s, "cid")) {		/* nonstandard */
 	    conversation_id_t cid;
 	    if (c != ' ') goto missingarg;
 	    c = getword(pin, &arg);
@@ -883,20 +883,20 @@ static int get_search_criterion(struct protstream *pin,
 	break;
 
     case 'd':
-	if (!strcmp(criteria.s, "deleted")) {
+	if (!strcmp(criteria.s, "deleted")) {		/* RFC 3501 */
 	    systemflag_match(parent, FLAG_DELETED, /*not*/0);
 	}
-	else if (!strcmp(criteria.s, "draft")) {
+	else if (!strcmp(criteria.s, "draft")) {	/* RFC 3501 */
 	    systemflag_match(parent, FLAG_DRAFT, /*not*/0);
 	}
 	else goto badcri;
 	break;
 
     case 'f':
-	if (!strcmp(criteria.s, "flagged")) {
+	if (!strcmp(criteria.s, "flagged")) {		/* RFC 3501 */
 	    systemflag_match(parent, FLAG_FLAGGED, /*not*/0);
 	}
-	else if (!strcmp(criteria.s, "folder")) {
+	else if (!strcmp(criteria.s, "folder")) {	/* nonstandard */
 	    if (c != ' ') goto missingarg;
 	    c = getastring(pin, pout, &arg);
 	    if (c == EOF) goto missingarg;
@@ -906,17 +906,24 @@ static int get_search_criterion(struct protstream *pin,
 	    e->attr = search_attr_find("folder");
 	    e->value.s = xstrdup(mboxname);
 	}
-	else if (!strcmp(criteria.s, "from")) {
+	else if (!strcmp(criteria.s, "from")) {		/* RFC 3501 */
 	    if (c != ' ') goto missingarg;
 	    c = getastring(pin, pout, &arg);
 	    if (c == EOF) goto missingarg;
 	    string_match(parent, arg.s, criteria.s, base);
 	}
+	else if (!strcmp(criteria.s, "fuzzy")) {	/* RFC 6203 */
+	    if (c != ' ') goto missingarg;
+	    base->fuzzy_depth++;
+	    c = get_search_criterion(pin, pout, parent, base);
+	    base->fuzzy_depth--;
+	    if (c == EOF) return EOF;
+	}
 	else goto badcri;
 	break;
 
     case 'h':
-	if (!strcmp(criteria.s, "header")) {
+	if (!strcmp(criteria.s, "header")) {		/* RFC 3501 */
 	    if (c != ' ') goto missingarg;
 	    c = getastring(pin, pout, &arg);
 	    if (c != ' ') goto missingarg;
@@ -935,7 +942,7 @@ static int get_search_criterion(struct protstream *pin,
 	break;
 
     case 'k':
-	if (!strcmp(criteria.s, "keyword")) {
+	if (!strcmp(criteria.s, "keyword")) {		/* RFC 3501 */
 	    if (c != ' ') goto missingarg;
 	    c = getword(pin, &arg);
 	    if (!imparse_isatom(arg.s)) goto badflag;
@@ -947,7 +954,7 @@ static int get_search_criterion(struct protstream *pin,
 	break;
 
     case 'l':
-	if (!strcmp(criteria.s, "larger")) {
+	if (!strcmp(criteria.s, "larger")) {		/* RFC 3501 */
 	    if (c != ' ') goto missingarg;
 	    c = getint32(pin, (int32_t *)&u);
 	    if (c == EOF) goto badnumber;
@@ -959,7 +966,7 @@ static int get_search_criterion(struct protstream *pin,
 	break;
 
     case 'm':
-	if (!strcmp(criteria.s, "modseq")) {
+	if (!strcmp(criteria.s, "modseq")) {		/* RFC 4551 */
 	    modseq_t modseq;
 	    if (c != ' ') goto missingarg;
 	    /* Check for optional search-modseq-ext */
@@ -979,13 +986,13 @@ static int get_search_criterion(struct protstream *pin,
 	break;
 
     case 'n':
-	if (!strcmp(criteria.s, "not")) {
+	if (!strcmp(criteria.s, "not")) {	/* RFC 3501 */
 	    if (c != ' ') goto missingarg;
 	    e = search_expr_new(parent, SEOP_NOT);
 	    c = get_search_criterion(pin, pout, e, base);
 	    if (c == EOF) return EOF;
 	}
-	else if (!strcmp(criteria.s, "new")) {
+	else if (!strcmp(criteria.s, "new")) {	/* RFC 3501 */
 	    e = search_expr_new(parent, SEOP_AND);
 	    indexflag_match(e, MESSAGE_SEEN, /*not*/1);
 	    indexflag_match(e, MESSAGE_RECENT, /*not*/0);
@@ -994,7 +1001,7 @@ static int get_search_criterion(struct protstream *pin,
 	break;
 
     case 'o':
-	if (!strcmp(criteria.s, "or")) {
+	if (!strcmp(criteria.s, "or")) {	/* RFC 3501 */
 	    if (c != ' ') goto missingarg;
 	    e = search_expr_new(parent, SEOP_OR);
 	    c = get_search_criterion(pin, pout, e, base);
@@ -1003,10 +1010,10 @@ static int get_search_criterion(struct protstream *pin,
 	    c = get_search_criterion(pin, pout, e, base);
 	    if (c == EOF) return EOF;
 	}
-	else if (!strcmp(criteria.s, "old")) {
+	else if (!strcmp(criteria.s, "old")) {	/* RFC 3501 */
 	    indexflag_match(parent, MESSAGE_RECENT, /*not*/1);
 	}
-	else if (!strcmp(criteria.s, "older")) {
+	else if (!strcmp(criteria.s, "older")) {    /* RFC 5032 */
 	    if (c != ' ') goto missingarg;
 	    c = getint32(pin, (int32_t *)&u);
 	    if (c == EOF) goto badinterval;
@@ -1014,7 +1021,7 @@ static int get_search_criterion(struct protstream *pin,
 	    e->attr = search_attr_find("internaldate");
 	    e->value.u = now - u;
 	}
-	else if (!strcmp(criteria.s, "on")) {
+	else if (!strcmp(criteria.s, "on")) {	/* RFC 3501 */
 	    if (c != ' ') goto missingarg;
 	    c = get_search_date(pin, &start, &end);
 	    if (c == EOF) goto baddate;
@@ -1024,11 +1031,11 @@ static int get_search_criterion(struct protstream *pin,
 	break;
 
     case 'r':
-	if (!strcmp(criteria.s, "recent")) {
+	if (!strcmp(criteria.s, "recent")) {	/* RFC 3501 */
 	    indexflag_match(parent, MESSAGE_RECENT, /*not*/0);
 	}
 	else if ((base->state & GETSEARCH_RETURN) &&
-		 !strcmp(criteria.s, "return")) {
+		 !strcmp(criteria.s, "return")) {   /* RFC 4731 */
 	    c = get_search_return_opts(pin, pout, base);
 	    if (c == EOF) return EOF;
 	    keep_charset = 1;
@@ -1037,10 +1044,10 @@ static int get_search_criterion(struct protstream *pin,
 	break;
 
     case 's':
-	if (!strcmp(criteria.s, "seen")) {
+	if (!strcmp(criteria.s, "seen")) {		/* RFC 3501 */
 	    indexflag_match(parent, MESSAGE_SEEN, /*not*/0);
 	}
-	else if (!strcmp(criteria.s, "sentbefore")) {
+	else if (!strcmp(criteria.s, "sentbefore")) {	/* RFC 3501 */
 	    if (c != ' ') goto missingarg;
 	    c = get_search_date(pin, &start, &end);
 	    if (c == EOF) goto baddate;
@@ -1048,13 +1055,13 @@ static int get_search_criterion(struct protstream *pin,
 	    e->attr = search_attr_find("sentdate");
 	    e->value.u = start;
 	}
-	else if (!strcmp(criteria.s, "senton")) {
+	else if (!strcmp(criteria.s, "senton")) {	/* RFC 3501 */
 	    if (c != ' ') goto missingarg;
 	    c = get_search_date(pin, &start, &end);
 	    if (c == EOF) goto baddate;
 	    date_range(parent, "sentdate", start, end);
 	}
-	else if (!strcmp(criteria.s, "sentsince")) {
+	else if (!strcmp(criteria.s, "sentsince")) {	/* RFC 3501 */
 	    if (c != ' ') goto missingarg;
 	    c = get_search_date(pin, &start, &end);
 	    if (c == EOF) goto baddate;
@@ -1062,7 +1069,7 @@ static int get_search_criterion(struct protstream *pin,
 	    e->attr = search_attr_find("sentdate");
 	    e->value.u = start;
 	}
-	else if (!strcmp(criteria.s, "since")) {
+	else if (!strcmp(criteria.s, "since")) {    /* RFC 3501 */
 	    if (c != ' ') goto missingarg;
 	    c = get_search_date(pin, &start, &end);
 	    if (c == EOF) goto baddate;
@@ -1070,7 +1077,7 @@ static int get_search_criterion(struct protstream *pin,
 	    e->attr = search_attr_find("internaldate");
 	    e->value.u = start;
 	}
-	else if (!strcmp(criteria.s, "smaller")) {
+	else if (!strcmp(criteria.s, "smaller")) {  /* RFC 3501 */
 	    if (c != ' ') goto missingarg;
 	    c = getint32(pin, (int32_t *)&u);
 	    if (c == EOF) goto badnumber;
@@ -1078,7 +1085,7 @@ static int get_search_criterion(struct protstream *pin,
 	    e->attr = search_attr_find("size");
 	    e->value.u = u;
 	}
-	else if (!strcmp(criteria.s, "subject")) {
+	else if (!strcmp(criteria.s, "subject")) {  /* RFC 3501 */
 	    if (c != ' ') goto missingarg;
 	    c = getastring(pin, pout, &arg);
 	    if (c == EOF) goto missingarg;
@@ -1088,13 +1095,13 @@ static int get_search_criterion(struct protstream *pin,
 	break;
 
     case 't':
-	if (!strcmp(criteria.s, "to")) {
+	if (!strcmp(criteria.s, "to")) {	    /* RFC 3501 */
 	    if (c != ' ') goto missingarg;
 	    c = getastring(pin, pout, &arg);
 	    if (c == EOF) goto missingarg;
 	    string_match(parent, arg.s, criteria.s, base);
 	}
-	else if (!strcmp(criteria.s, "text")) {
+	else if (!strcmp(criteria.s, "text")) {	    /* RFC 3501 */
 	    if (c != ' ') goto missingarg;
 	    c = getastring(pin, pout, &arg);
 	    if (c == EOF) goto missingarg;
@@ -1104,7 +1111,7 @@ static int get_search_criterion(struct protstream *pin,
 	break;
 
     case 'u':
-	if (!strcmp(criteria.s, "uid")) {
+	if (!strcmp(criteria.s, "uid")) {	    /* RFC 3501 */
 	    if (c != ' ') goto missingarg;
 	    c = getword(pin, &arg);
 	    if (!imparse_issequence(arg.s)) goto badcri;
@@ -1112,22 +1119,22 @@ static int get_search_criterion(struct protstream *pin,
 	    e->attr = search_attr_find(criteria.s);
 	    e->value.seq = seqset_parse(arg.s, NULL, /*maxval*/0);
 	}
-	else if (!strcmp(criteria.s, "unseen")) {
+	else if (!strcmp(criteria.s, "unseen")) {	/* RFC 3501 */
 	    indexflag_match(parent, MESSAGE_SEEN, /*not*/1);
 	}
-	else if (!strcmp(criteria.s, "unanswered")) {
+	else if (!strcmp(criteria.s, "unanswered")) {	/* RFC 3501 */
 	    systemflag_match(parent, FLAG_ANSWERED, /*not*/1);
 	}
-	else if (!strcmp(criteria.s, "undeleted")) {
+	else if (!strcmp(criteria.s, "undeleted")) {	/* RFC 3501 */
 	    systemflag_match(parent, FLAG_DELETED, /*not*/1);
 	}
-	else if (!strcmp(criteria.s, "undraft")) {
+	else if (!strcmp(criteria.s, "undraft")) {	/* RFC 3501 */
 	    systemflag_match(parent, FLAG_DRAFT, /*not*/1);
 	}
-	else if (!strcmp(criteria.s, "unflagged")) {
+	else if (!strcmp(criteria.s, "unflagged")) {	/* RFC 3501 */
 	    systemflag_match(parent, FLAG_FLAGGED, /*not*/1);
 	}
-	else if (!strcmp(criteria.s, "unkeyword")) {
+	else if (!strcmp(criteria.s, "unkeyword")) {	/* RFC 3501 */
 	    if (c != ' ') goto missingarg;
 	    c = getword(pin, &arg);
 	    if (!imparse_isatom(arg.s)) goto badflag;
@@ -1140,13 +1147,13 @@ static int get_search_criterion(struct protstream *pin,
 	break;
 
     case 'x':
-	if (!strcmp(criteria.s, "xlistid")) {
+	if (!strcmp(criteria.s, "xlistid")) {		/* nonstandard */
 	    if (c != ' ') goto missingarg;
 	    c = getastring(pin, pout, &arg);
 	    if (c == EOF) goto missingarg;
 	    string_match(parent, arg.s, "listid", base);
 	}
-	else if (!strcmp(criteria.s, "xcontenttype")) {
+	else if (!strcmp(criteria.s, "xcontenttype")) {	/* nonstandard */
 	    if (c != ' ') goto missingarg;
 	    c = getastring(pin, pout, &arg);
 	    if (c == EOF) goto missingarg;
@@ -1156,7 +1163,7 @@ static int get_search_criterion(struct protstream *pin,
 	break;
 
     case 'y':
-	if (!strcmp(criteria.s, "younger")) {
+	if (!strcmp(criteria.s, "younger")) {		/* RFC 5032 */
 	    if (c != ' ') goto missingarg;
 	    c = getint32(pin, (int32_t *)&u);
 	    if (c == EOF) goto badinterval;
