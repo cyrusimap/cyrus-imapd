@@ -2083,8 +2083,10 @@ void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
 void error_response(long code, struct transaction_t *txn)
 {
     const char error_body[] = HTML_DOCTYPE
-    "<html>\n<head>\n<title>HTTP Status: %s</title>\n</head>\n" \
-    "<body>\n<h2>HTTP Status: %s</h2>\n<p>%s</p>\n</body>\n</html>\n";
+	"<html>\n<head>\n<title>%s</title>\n</head>\n"	\
+	"<body>\n<h1>%s</h1>\n<p>%s</p>\n"		\
+	"<hr>\n<address>%s Server at %s Port %s</address>\n" \
+	"</body>\n</html>\n";
     struct buf *html = &txn->resp_body.payload;
 
     /* Neither Brief nor Prefer affect error response bodies */
@@ -2102,29 +2104,67 @@ void error_response(long code, struct transaction_t *txn)
     }
 #endif
 
-    switch (code) {
-	/* 4xx codes */
-    case HTTP_BAD_REQUEST:
-    case HTTP_NOT_FOUND:
-    case HTTP_NOT_ALLOWED:
-    case HTTP_TIMEOUT:
-    case HTTP_GONE:
-	/* 5xx codes */
-    case HTTP_SERVER_ERROR:
-    case HTTP_NOT_IMPLEMENTED:
-    case HTTP_UNAVAILABLE:
-    case HTTP_BAD_VERSION:
-	/* Force an HTML body for these codes */
-	if (!txn->error.desc) txn->error.desc = "";
-	break;
+    if (!txn->error.desc) {
+	switch (code) {
+	    /* 4xx codes */
+	case HTTP_BAD_REQUEST:
+	    txn->error.desc =
+		"The request was not understood by this server.";
+	    break;
+
+	case HTTP_NOT_FOUND:
+	    txn->error.desc =
+		"The requested URL was not found on this server.";
+	    break;
+
+	case HTTP_NOT_ALLOWED:
+	    txn->error.desc =
+		"The requested method is not allowed for the URL.";
+	    break;
+
+	case HTTP_GONE:
+	    txn->error.desc =
+		"The requested URL has been removed from this server.";
+	    break;
+
+	    /* 5xx codes */
+	case HTTP_SERVER_ERROR:
+	    txn->error.desc =
+		"The server encountered an internal error.";
+	    break;
+
+	case HTTP_NOT_IMPLEMENTED:
+	    txn->error.desc =
+		"The requested method is not implemented by this server.";
+	    break;
+
+	case HTTP_UNAVAILABLE:
+	    txn->error.desc =
+		"The server is unable to process the request at this time.";
+	    break;
+	}
     }
 
     buf_reset(html);
     if (txn->error.desc) {
-	buf_printf(html, error_body, error_message(code), error_message(code),
-		   txn->error.desc);
+	const char **hdr, *host = "";
+	char *port = NULL;
+
+	if ((hdr = spool_getheader(txn->req_hdrs, "Host")) &&
+	    hdr[0] && *hdr[0]) {
+	    host = (char *) hdr[0];
+	    if ((port = strchr(host, ':'))) *port++ = '\0';
+	}
+	else if (config_serverinfo != IMAP_ENUM_SERVERINFO_OFF) {
+	    host = config_servername;
+	}
+	if (!port) port = strchr(saslprops.iplocalport, ';')+1;
+
+	buf_printf(html, error_body, error_message(code), error_message(code)+4,
+		   txn->error.desc, buf_cstring(&serverinfo), host, port);
 	txn->resp_body.type = "text/html; charset=utf-8";
     }
+
     write_body(code, txn, buf_cstring(html), buf_len(html));
 }
 
