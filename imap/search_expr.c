@@ -1193,13 +1193,13 @@ static void internalise_sequence(const union search_value *v,
 static void search_msgno_internalise(struct index_state *state,
 				     const union search_value *v, void **internalisedp)
 {
-    internalise_sequence(v, internalisedp, state->exists);
+    internalise_sequence(v, internalisedp, (state ? state->exists : 0));
 }
 
 static void search_uid_internalise(struct index_state *state,
 				   const union search_value *v, void **internalisedp)
 {
-    internalise_sequence(v, internalisedp, state->last_uid);
+    internalise_sequence(v, internalisedp, (state ? state->last_uid : 0));
 }
 
 static int search_seq_match(message_t *m,
@@ -1438,7 +1438,8 @@ static void search_annotation_internalise(struct index_state *state,
 					  const union search_value *v __attribute__((unused)),
 					  void **internalisedp)
 {
-    *internalisedp = state->mailbox;
+    if (state)
+	*internalisedp = state->mailbox;
 }
 
 struct search_annot_rock {
