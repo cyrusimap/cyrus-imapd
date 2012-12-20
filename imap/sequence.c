@@ -408,6 +408,13 @@ EXPORTED void seqset_join(struct seqset *a, const struct seqset *b)
     seqset_simplify(a);
 }
 
+static void format_num(struct buf *buf, unsigned i)
+{
+    if (i == UINT_MAX)
+	buf_putc(buf, '*');
+    else
+	buf_printf(buf, "%u", i);
+}
 
 /*
  * Format the seqset `seq' as a string.  Returns a newly allocated
@@ -426,16 +433,14 @@ EXPORTED char *seqset_cstring(const struct seqset *seq)
 
 	/* single value only */
 	if (seq->set[i].low == seq->set[i].high)
-	    buf_printf(&buf, "%u", seq->set[i].low);
-
-	/* special case - end of the list */
-	else if (seq->set[i].high == UINT_MAX)
-	    buf_printf(&buf, "%u:*", seq->set[i].low);
+	    format_num(&buf, seq->set[i].low);
 
 	/* value range */
-	else
-	    buf_printf(&buf, "%u:%u", seq->set[i].low,
-				      seq->set[i].high);
+	else {
+	    format_num(&buf, seq->set[i].low);
+	    buf_putc(&buf, ':');
+	    format_num(&buf, seq->set[i].high);
+	}
     }
 
     return buf_release(&buf);
