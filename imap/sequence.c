@@ -408,22 +408,6 @@ EXPORTED void seqset_join(struct seqset *a, const struct seqset *b)
     seqset_simplify(a);
 }
 
-/*
- * Parse a seqset from the given string and append it to the chain
- * of seqsets at `*l'.
- */
-EXPORTED void seqset_append(struct seqset **l, char *sequence, unsigned maxval)
-{
-    struct seqset **tail = l;
-
-    while (*tail) {
-	if (!maxval) maxval = (*tail)->maxval;
-	tail = &(*tail)->nextseq;
-    }
-
-    *tail = seqset_parse(sequence, NULL, maxval);
-}
-
 #define SEQGROW 300
 
 /*
@@ -479,7 +463,6 @@ EXPORTED struct seqset *seqset_dup(const struct seqset *l)
     newl = (struct seqset *)xmemdup(l, sizeof(*l));
     newl->set = (struct seq_range *)xmemdup(newl->set,
 		    newl->alloc * sizeof(struct seq_range));
-    newl->nextseq = NULL;
 
     return newl;
 }
@@ -489,12 +472,6 @@ EXPORTED struct seqset *seqset_dup(const struct seqset *l)
  */
 EXPORTED void seqset_free(struct seqset *l)
 {
-    struct seqset *n;
-
-    while(l) {
-	n = l->nextseq;
-	free(l->set);
-	free(l);
-	l = n;
-    }
+    free(l->set);
+    free(l);
 }
