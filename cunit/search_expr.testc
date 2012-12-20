@@ -435,7 +435,6 @@ static void test_get_search_program(void)
 static void test_unserialise(void)
 {
     search_expr_t *e;
-    char *s;
 
     e = search_expr_unserialise("(true)");
     CU_ASSERT_PTR_NOT_NULL_FATAL(e);
@@ -545,14 +544,10 @@ static void test_unserialise(void)
     CU_ASSERT_EQUAL(e->op, SEOP_MATCH);
     CU_ASSERT_PTR_NOT_NULL_FATAL(e->attr);
     CU_ASSERT_STRING_EQUAL(e->attr->name, "uid");
-    CU_ASSERT_PTR_NOT_NULL_FATAL(e->value.seq);
-    s = seqset_cstring(e->value.seq);
-    CU_ASSERT_PTR_NOT_NULL_FATAL(s);
-    CU_ASSERT_STRING_EQUAL(s, "1:4,7:*");
+    CU_ASSERT_STRING_EQUAL(e->value.s, "1:4,7:*");
     CU_ASSERT_PTR_NULL(e->next);
     CU_ASSERT_PTR_NULL(e->children);
     CU_ASSERT_PTR_NULL(e->parent);
-    free(s);
     search_expr_free(e);
 
     e = search_expr_unserialise("(match annotation (entry \"/comment\" attrib \"value\" value \"Brooklyn\"))");
