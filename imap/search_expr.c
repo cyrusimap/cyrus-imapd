@@ -52,6 +52,7 @@
 
 #include "imap_err.h"
 #include "search_expr.h"
+#include "index.h"
 #include "message.h"
 #include "charset.h"
 #include "annotate.h"
@@ -684,15 +685,15 @@ EXPORTED void search_expr_normalise(search_expr_t **ep)
 /*
  * Prepare the given expression for use with the given mailbox.
  */
-EXPORTED void search_expr_internalise(struct mailbox *mailbox, search_expr_t *e)
+EXPORTED void search_expr_internalise(struct index_state *state, search_expr_t *e)
 {
     search_expr_t *child;
 
     if (e->attr && e->attr->internalise)
-	e->attr->internalise(mailbox, &e->value, &e->internalised);
+	e->attr->internalise(state, &e->value, &e->internalised);
 
     for (child = e->children ; child ; child = child->next)
-	search_expr_internalise(mailbox, child);
+	search_expr_internalise(state, child);
 }
 
 /*
@@ -1060,7 +1061,7 @@ static int search_string_unserialise(struct protstream *prot, union search_value
     return c;
 }
 
-static void search_string_internalise(struct mailbox *mailbox __attribute__((unused)),
+static void search_string_internalise(struct index_state *state __attribute__((unused)),
 				      const union search_value *v, void **internalisedp)
 {
     if (*internalisedp) {
@@ -1313,15 +1314,15 @@ unsigned int search_indexflags_get_countability(const union search_value *v)
 
 /* ====================================================================== */
 
-static void search_keyword_internalise(struct mailbox *mailbox,
+static void search_keyword_internalise(struct index_state *state,
 				       const union search_value *v,
 				       void **internalisedp)
 {
     int r;
     int num = 0;
 
-    if (mailbox) {
-	r = mailbox_user_flag(mailbox, v->s, &num, /*create*/0);
+    if (state) {
+	r = mailbox_user_flag(state->mailbox, v->s, &num, /*create*/0);
 	if (!r)
 	    num++;
 	else
@@ -1408,12 +1409,12 @@ static int search_cid_unserialise(struct protstream *prot, union search_value *v
 
 /* ====================================================================== */
 
-static void search_folder_internalise(struct mailbox *mailbox,
+static void search_folder_internalise(struct index_state *state,
 				      const union search_value *v,
 				      void **internalisedp)
 {
-    if (mailbox)
-	*internalisedp = (void *)(unsigned long)(!strcmp(mailbox->name, v->s));
+    if (state)
+	*internalisedp = (void *)(unsigned long)(!strcmp(state->mailbox->name, v->s));
 }
 
 static int search_folder_match(message_t *m __attribute__((unused)),
@@ -1431,11 +1432,11 @@ unsigned int search_folder_get_countability(const union search_value *v
 
 /* ====================================================================== */
 
-static void search_annotation_internalise(struct mailbox *mailbox,
+static void search_annotation_internalise(struct index_state *state,
 					  const union search_value *v __attribute__((unused)),
 					  void **internalisedp)
 {
-    *internalisedp = mailbox;
+    *internalisedp = state->mailbox;
 }
 
 struct search_annot_rock {
@@ -1597,7 +1598,7 @@ static void conv_rock_new(struct mailbox *mailbox,
 			  struct conv_rock **rockp);
 static void conv_rock_free(struct conv_rock **rockp);
 
-static void search_convflags_internalise(struct mailbox *mailbox,
+static void search_convflags_internalise(struct index_state *state,
 					 const union search_value *v,
 					 void **internalisedp)
 {
@@ -1606,8 +1607,8 @@ static void search_convflags_internalise(struct mailbox *mailbox,
 
     conv_rock_free(rockp);
 
-    if (mailbox) {
-	conv_rock_new(mailbox, rockp);
+    if (state) {
+	conv_rock_new(state->mailbox, rockp);
 	rock = *rockp;
 	if (rock->cstate) {
 	    if (!strcasecmp(v->s, "\\Seen"))
@@ -1656,7 +1657,7 @@ unsigned int search_convflags_get_countability(const union search_value *v)
     return SEC_UNCOUNTED;
 }
 
-static void search_convmodseq_internalise(struct mailbox *mailbox,
+static void search_convmodseq_internalise(struct index_state *state,
 					  const union search_value *v __attribute__((unused)),
 					  void **internalisedp)
 {
@@ -1664,8 +1665,8 @@ static void search_convmodseq_internalise(struct mailbox *mailbox,
 
     conv_rock_free(rockp);
 
-    if (mailbox) {
-	conv_rock_new(mailbox, rockp);
+    if (state) {
+	conv_rock_new(state->mailbox, rockp);
     }
 }
 

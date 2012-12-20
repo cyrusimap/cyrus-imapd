@@ -1552,7 +1552,7 @@ EXPORTED int index_scan(struct index_state *state, const char *contents)
     searchargs.root->value.s = charset_convert(contents, charset_lookupname("US-ASCII"),
 				charset_flags);
 
-    search_expr_internalise(mailbox, searchargs.root);
+    search_expr_internalise(state, searchargs.root);
 
     msgno_list = (unsigned *) xmalloc(state->exists * sizeof(unsigned));
 
@@ -2002,7 +2002,7 @@ EXPORTED int index_convsort(struct index_state *state,
 	    return IMAP_INTERNAL;
     }
 
-    search_expr_internalise(state->mailbox, searchargs->root);
+    search_expr_internalise(state, searchargs->root);
 
     /* this works both with and without conversations */
     total = search_predict_total(state, cstate, searchargs,
@@ -2496,7 +2496,7 @@ EXPORTED int index_convupdates(struct index_state *state,
     if (!cstate)
 	return IMAP_INTERNAL;
 
-    search_expr_internalise(state->mailbox, searchargs->root);
+    search_expr_internalise(state, searchargs->root);
 
     total = search_predict_total(state, cstate, searchargs,
 				windowargs->conversations,

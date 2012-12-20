@@ -45,11 +45,11 @@
 #ifndef __CYRUS_SEARCH_EXPR_H__
 #define __CYRUS_SEARCH_EXPR_H__
 
-#include "mailbox.h"
 #include "message.h"
 #include "util.h"
 
 struct protstream;
+struct index_state;
 
 enum search_op {
     SEOP_UNKNOWN,
@@ -89,7 +89,7 @@ struct search_attr {
     const char *name;
     int flags;
     int part;
-    void (*internalise)(struct mailbox *, const union search_value *,
+    void (*internalise)(struct index_state *, const union search_value *,
 		       void **internalisedp);
     int (*cmp)(message_t *, const union search_value *, void *internalised, void *data1);
     int (*match)(message_t *, const union search_value *, void *internalised, void *data1);
@@ -130,7 +130,7 @@ extern search_expr_t *search_expr_duplicate(const search_expr_t *e);
 extern char *search_expr_serialise(const search_expr_t *);
 extern search_expr_t *search_expr_unserialise(const char *s);
 extern void search_expr_normalise(search_expr_t **);
-extern void search_expr_internalise(struct mailbox *, search_expr_t *);
+extern void search_expr_internalise(struct index_state *, search_expr_t *);
 extern int search_expr_evaluate(message_t *m, const search_expr_t *);
 extern int search_expr_uses_attr(const search_expr_t *, const char *);
 extern int search_expr_is_mutable(const search_expr_t *);

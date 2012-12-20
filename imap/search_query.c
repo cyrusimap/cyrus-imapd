@@ -448,7 +448,7 @@ static void subquery_post_indexed(const char *key, void *data, void *rock)
 
     if (!state->exists) goto out;
 
-    search_expr_internalise(state->mailbox, sub->expr);
+    search_expr_internalise(state, sub->expr);
 
     if (query->sortcrit)
 	msgno_list = (unsigned *) xmalloc(state->exists * sizeof(unsigned));
@@ -612,7 +612,7 @@ static int subquery_run_one_folder(search_query_t *query,
 
     if (!state->exists) goto out;
 
-    search_expr_internalise(state->mailbox, e);
+    search_expr_internalise(state, e);
 
     if (query->sortcrit)
 	msgno_list = (unsigned *) xmalloc(state->exists * sizeof(unsigned));
