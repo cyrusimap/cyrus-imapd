@@ -1036,7 +1036,7 @@ static int search_string_match(message_t *m, const union search_value *v,
     comp_pat *pat = (comp_pat *)internalised;
 
     r = getter(m, &buf);
-    if (!r)
+    if (!r && buf.len)
 	r = charset_searchstring(v->s, pat, buf.s, buf.len, charset_flags);
     else
 	r = 0;
