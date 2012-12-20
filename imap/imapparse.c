@@ -767,9 +767,13 @@ static int get_search_criterion(struct protstream *pin,
     case '5': case '6': case '7': case '8': case '9':
     case '*':						/* RFC 3501 */
 	if (imparse_issequence(criteria.s)) {
+	    struct seqset *seq;
 	    e = search_expr_new(parent, SEOP_MATCH);
 	    e->attr = search_attr_find("msgno");
-	    e->value.seq = seqset_parse(criteria.s, NULL, /*maxval*/0);
+	    seq = seqset_parse(criteria.s, NULL, /*maxval*/0);
+	    if (!seq) goto badcri;
+	    seqset_free(seq);
+	    e->value.s = xstrdup(criteria.s);
 	}
 	else goto badcri;
 	break;
@@ -1112,12 +1116,16 @@ static int get_search_criterion(struct protstream *pin,
 
     case 'u':
 	if (!strcmp(criteria.s, "uid")) {	    /* RFC 3501 */
+	    struct seqset *seq;
 	    if (c != ' ') goto missingarg;
 	    c = getword(pin, &arg);
 	    if (!imparse_issequence(arg.s)) goto badcri;
 	    e = search_expr_new(parent, SEOP_MATCH);
 	    e->attr = search_attr_find(criteria.s);
-	    e->value.seq = seqset_parse(arg.s, NULL, /*maxval*/0);
+	    seq = seqset_parse(arg.s, NULL, /*maxval*/0);
+	    if (!seq) goto badcri;
+	    seqset_free(seq);
+	    e->value.s = xstrdup(arg.s);
 	}
 	else if (!strcmp(criteria.s, "unseen")) {	/* RFC 3501 */
 	    indexflag_match(parent, MESSAGE_SEEN, /*not*/1);

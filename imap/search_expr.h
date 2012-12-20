@@ -75,7 +75,6 @@ union search_value {
     uint64_t u;
     char *s;
     struct searchannot *annot;
-    struct seqset *seq;
 };
 
 /* search_attr.flags */

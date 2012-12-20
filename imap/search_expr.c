@@ -1178,17 +1178,43 @@ static int search_header_match(message_t *m, const union search_value *v,
 
 /* ====================================================================== */
 
-static int search_seq_match(message_t *m, const union search_value *v,
-			    void *internalised __attribute__((unused)),
+static void internalise_sequence(const union search_value *v,
+				 void **internalisedp, unsigned maxval)
+{
+    if (*internalisedp) {
+	seqset_free(*internalisedp);
+	*internalisedp = NULL;
+    }
+    if (v) {
+	*internalisedp = seqset_parse(v->s, NULL, maxval);
+    }
+}
+
+static void search_msgno_internalise(struct index_state *state,
+				     const union search_value *v, void **internalisedp)
+{
+    internalise_sequence(v, internalisedp, state->exists);
+}
+
+static void search_uid_internalise(struct index_state *state,
+				   const union search_value *v, void **internalisedp)
+{
+    internalise_sequence(v, internalisedp, state->last_uid);
+}
+
+static int search_seq_match(message_t *m,
+			    const union search_value *v __attribute__((unused)),
+			    void *internalised,
 			    void *data1)
 {
+    struct seqset *seq = internalised;
     int r;
     uint32_t u;
     int (*getter)(message_t *, uint32_t *) = (int(*)(message_t *, uint32_t *))data1;
 
     r = getter(m, &u);
     if (!r)
-	r = seqset_ismember(v->seq, u);
+	r = seqset_ismember(seq, u);
     else
 	r = 0;
 
@@ -1197,31 +1223,7 @@ static int search_seq_match(message_t *m, const union search_value *v,
 
 static void search_seq_serialise(struct buf *b, const union search_value *v)
 {
-    char *ss = seqset_cstring(v->seq);
-    buf_appendcstr(b, ss);
-    free(ss);
-}
-
-static int search_seq_unserialise(struct protstream *prot, union search_value *v)
-{
-    int c;
-    char tmp[1024];
-
-    c = getseword(prot, tmp, sizeof(tmp));
-    v->seq = seqset_parse(tmp, NULL, /*maxval*/0);
-    return c;
-}
-
-static void search_seq_duplicate(union search_value *new,
-				 const union search_value *old)
-{
-    new->seq = seqset_dup(old->seq);
-}
-
-static void search_seq_free(union search_value *v)
-{
-    seqset_free(v->seq);
-    v->seq = NULL;
+    buf_appendcstr(b, v->s);
 }
 
 /* ====================================================================== */
@@ -1943,27 +1945,27 @@ EXPORTED void search_attr_init(void)
 	    "msgno",
 	    SEA_MUTABLE,
 	    SEARCH_PART_NONE,
-	    /*internalise*/NULL,
+	    search_msgno_internalise,
 	    /*cmp*/NULL,
 	    search_seq_match,
 	    search_seq_serialise,
-	    search_seq_unserialise,
+	    search_string_unserialise,
 	    /*get_countability*/NULL,
-	    search_seq_duplicate,
-	    search_seq_free,
+	    search_string_duplicate,
+	    search_string_free,
 	    (void *)message_get_msgno
 	},{
 	    "uid",
 	    /*flags*/0,
 	    SEARCH_PART_NONE,
-	    /*internalise*/NULL,
+	    search_uid_internalise,
 	    /*cmp*/NULL,
 	    search_seq_match,
 	    search_seq_serialise,
-	    search_seq_unserialise,
+	    search_string_unserialise,
 	    /*get_countability*/NULL,
-	    search_seq_duplicate,
-	    search_seq_free,
+	    search_string_duplicate,
+	    search_string_free,
 	    (void *)message_get_uid
 	},{
 	    "systemflags",
