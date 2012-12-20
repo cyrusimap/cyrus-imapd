@@ -332,7 +332,7 @@ EXPORTED int seqset_ismember(struct seqset *seq, unsigned num)
  * Return the first number in the sequence, or 0
  * if the sequence is empty.
  */
-HIDDEN unsigned seqset_first(const struct seqset *seq)
+EXPORTED unsigned seqset_first(const struct seqset *seq)
 {
     return (seq->len ? seq->set[0].low : 0);
 }
@@ -412,7 +412,7 @@ EXPORTED void seqset_join(struct seqset *a, const struct seqset *b)
  * Parse a seqset from the given string and append it to the chain
  * of seqsets at `*l'.
  */
-HIDDEN void seqset_append(struct seqset **l, char *sequence, unsigned maxval)
+EXPORTED void seqset_append(struct seqset **l, char *sequence, unsigned maxval)
 {
     struct seqset **tail = l;
 
