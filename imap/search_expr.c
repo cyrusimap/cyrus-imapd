@@ -1162,7 +1162,9 @@ static int search_header_match(message_t *m, const union search_value *v,
     const char *field = (const char *)data1;
     comp_pat *pat = (comp_pat *)internalised;
 
-    r = message_get_field(m, field, MESSAGE_DECODED, &buf);
+    r = message_get_field(m, field,
+			  MESSAGE_DECODED|MESSAGE_APPEND|MESSAGE_MULTIPLE,
+			  &buf);
     if (!r) {
 	r = charset_searchstring(v->s, pat, buf.s, buf.len, charset_flags);
     }
