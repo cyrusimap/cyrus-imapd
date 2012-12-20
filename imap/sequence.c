@@ -408,7 +408,6 @@ EXPORTED void seqset_join(struct seqset *a, const struct seqset *b)
     seqset_simplify(a);
 }
 
-#define SEQGROW 300
 
 /*
  * Format the seqset `seq' as a string.  Returns a newly allocated
@@ -416,41 +415,30 @@ EXPORTED void seqset_join(struct seqset *a, const struct seqset *b)
  */
 EXPORTED char *seqset_cstring(const struct seqset *seq)
 {
-    unsigned alloc = 0;
-    unsigned offset = 0;
-    char *base = NULL;
+    struct buf buf = BUF_INITIALIZER;
     unsigned i;
 
     if (!seq) return NULL;
 
     for (i = 0; i < seq->len; i++) {
-	/* ensure we have space */
-	if (alloc < offset + 30) {
-	    alloc += SEQGROW;
-	    base = xrealloc(base, alloc);
-	}
-
 	/* join with comma if not the first item */
-	if (i) base[offset++] = ',';
+	if (i) buf_putc(&buf, ',');
 
 	/* single value only */
 	if (seq->set[i].low == seq->set[i].high)
-	    sprintf(base+offset, "%u", seq->set[i].low);
+	    buf_printf(&buf, "%u", seq->set[i].low);
 
 	/* special case - end of the list */
 	else if (seq->set[i].high == UINT_MAX)
-	    sprintf(base+offset, "%u:*", seq->set[i].low);
+	    buf_printf(&buf, "%u:*", seq->set[i].low);
 
 	/* value range */
 	else
-	    sprintf(base+offset, "%u:%u", seq->set[i].low,
-					  seq->set[i].high);
-
-	/* find the end */
-	while (base[offset]) offset++;
+	    buf_printf(&buf, "%u:%u", seq->set[i].low,
+				      seq->set[i].high);
     }
 
-    return base;
+    return buf_release(&buf);
 }
 
 /*
