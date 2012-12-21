@@ -3287,14 +3287,14 @@ static int sched_reply(icalcomponent *oldical, icalcomponent *newical,
     sched_data = xzmalloc(sizeof(struct sched_data));
     sched_data->is_reply = 1;
 
-    /* Check what kind of METHOD we are dealing with */
+    method = ICAL_METHOD_REPLY;
+
+    /* Check what kind of reply we are dealing with */
     if (!newical) {
-	method = ICAL_METHOD_CANCEL;
 	ical = oldical;
     }
     else {
 	/* XXX  Need to handle modify */
-	method = ICAL_METHOD_REPLY;
 	ical = newical;
     }
 
@@ -3335,6 +3335,8 @@ static int sched_reply(icalcomponent *oldical, icalcomponent *newical,
     /* Process each component */
     comp = icalcomponent_get_first_real_component(copy);
     kind = icalcomponent_isa(comp);
+    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    organizer = icalproperty_get_organizer(prop);
     do {
 	icalcomponent *alarm, *nextcomp;
 	icalproperty *nextprop, *myattendee = NULL;
@@ -3376,11 +3378,15 @@ static int sched_reply(icalcomponent *oldical, icalcomponent *newical,
 	    unsigned do_sched = 1;
 	    icalparameter *force_send = NULL;
 
+	    /* Grab the organizer */
+	    prop = icalcomponent_get_first_property(comp,
+						    ICAL_ORGANIZER_PROPERTY);
+
 	    /* Check CalDAV Scheduling parameters */
-	    for (param = icalproperty_get_first_parameter(myattendee,
+	    for (param = icalproperty_get_first_parameter(prop,
 							  ICAL_IANA_PARAMETER);
 		 param;
-		 param = icalproperty_get_next_parameter(myattendee,
+		 param = icalproperty_get_next_parameter(prop,
 							 ICAL_IANA_PARAMETER)) {
 		if (!strcmp(icalparameter_get_iana_name(param),
 			    "SCHEDULE-AGENT")) {
@@ -3394,7 +3400,7 @@ static int sched_reply(icalcomponent *oldical, icalcomponent *newical,
 		}
 	    }
 
-	    /* Check if we are supposed to schedule for this attendee */
+	    /* Check if we are supposed to schedule for the organizer */
 	    if (do_sched) {
 		icalcomponent *new_comp;
 
@@ -3407,6 +3413,19 @@ static int sched_reply(icalcomponent *oldical, icalcomponent *newical,
 		    icalproperty_remove_parameter_by_ref(prop, force_send);
 		}
 
+		if (!newical) {
+		    /* Attendee is deleting the object, set PARTSTAT:DECLINED */
+		    param =
+			icalproperty_get_first_parameter(myattendee,
+							 ICAL_PARTSTAT_PARAMETER);
+		    if (param) {
+			icalproperty_remove_parameter_by_ref(myattendee, param);
+		    }
+		    param = icalparameter_new(ICAL_PARTSTAT_PARAMETER);
+		    icalproperty_add_parameter(myattendee, param);
+		    icalparameter_set_partstat(param, ICAL_PARTSTAT_DECLINED);
+		}
+
 		new_comp = icalcomponent_new_clone(comp);
 		icalcomponent_add_component(sched_data->ical, new_comp);
 	    }
@@ -3414,16 +3433,13 @@ static int sched_reply(icalcomponent *oldical, icalcomponent *newical,
 
     } while ((comp = icalcomponent_get_next_component(copy, kind)));
 
-    /* Grab the organizer */
-    comp = icalcomponent_get_first_real_component(ical);
-    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-    organizer = icalproperty_get_organizer(prop);
-
     /* Attempt to deliver reply to organizer */
     sched_deliver((char *) organizer, sched_data, authstate);
 
     if (newical) {
 	/* Set SCHEDULE-STATUS for organizer in attendee object */
+	comp = icalcomponent_get_first_real_component(newical);
+	prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
 	param = icalparameter_new(ICAL_IANA_PARAMETER);
 	icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
 	icalparameter_set_iana_value(param, sched_data->status);
