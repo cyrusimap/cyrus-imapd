@@ -142,22 +142,25 @@ EXPORTED int imparse_astring(char **s, char **retval)
 }
 
 /*
- * Return nonzero if 's' matches the grammar for an atom
+ * Return nonzero if 's' matches the grammar for an atom.  If 'len' is
+ * zero then treat as a c string, \0 delimited.  Otherwise check the
+ * entire map, and consider not an natom if there's a NULL byte in the
+ * mapped space.
  */
-EXPORTED int imparse_isnatom(const char *s, int maxlen)
+EXPORTED int imparse_isnatom(const char *s, int len)
 {
-    int len = 0;
+    int count = 0;
 
     if (!*s) return 0;
-    for (; *s; s++) {
-	len++;
-	if (maxlen && len > maxlen) break;
+    for (; len || *s; s++) {
+	count++;
+	if (len && count > len) break;
 	if (*s & 0x80 || *s < 0x1f || *s == 0x7f ||
 	    *s == ' ' || *s == '{' || *s == '(' || *s == ')' ||
 	    *s == '\"' || *s == '%' || *s == '*' || *s == '\\') return 0;
     }
-    if (len >= 1024) return 0;
-    return 1;
+    if (count >= 1024) return 0;
+    return count;
 }
 
 EXPORTED int imparse_isatom(const char *s)
