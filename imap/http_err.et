@@ -139,7 +139,7 @@ ec HTTP_BAD_VERSION,
 
 
 
-# WebDAV (RFC 4918)
+# WebDAV (RFC 2518/4918)
 
 ec HTTP_PROCESSING,
    "102 Processing"
@@ -168,7 +168,7 @@ ec HTTP_PERM_REDIRECT,
 
 
 
-# draft-nottingham-new-status
+# Additional HTTP (RFC 6685)
 
 ec HTTP_PRECOND_REQUIRED,
    "412 Precondition Required"
