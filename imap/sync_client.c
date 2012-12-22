@@ -1916,20 +1916,27 @@ struct mboxinfo {
     struct sync_name_list *quotalist;
 };
 
-static int do_mailbox_info(char *name,
-			   int matchlen __attribute__((unused)),
-			   int maycreate __attribute__((unused)),
-			   void *rock)
+static int do_mailbox_info(void *rock,
+			   const char *key, size_t keylen,
+			   const char *data __attribute__((unused)),
+			   size_t datalen __attribute__((unused)))
 {
-    int r;
     struct mailbox *mailbox = NULL;
     struct mboxinfo *info = (struct mboxinfo *)rock;
+    char *name = xstrndup(key, keylen);
+    int r = 0;
 
     r = mailbox_open_irl(name, &mailbox);
     /* doesn't exist?  Probably not finished creating or removing yet */
-    if (r == IMAP_MAILBOX_NONEXISTENT) return 0;
-    if (r == IMAP_MAILBOX_RESERVED) return 0;
-    if (r) return r;
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+	r = 0;
+	goto done;
+    }
+    if (r == IMAP_MAILBOX_RESERVED) {
+	r = 0;
+	goto done;
+    }
+    if (r) goto done;
 
     if (info->quotalist && mailbox->quotaroot) {
 	if (!sync_name_lookup(info->quotalist, mailbox->quotaroot))
@@ -1940,7 +1947,10 @@ static int do_mailbox_info(char *name,
 
     addmbox(name, 0, 0, info->mboxlist);
 
-    return 0;
+done:
+    free(name);
+
+    return r;
 }
 
 static int do_user_quota(struct sync_name_list *master_quotaroots,
@@ -1985,27 +1995,23 @@ static int do_user_main(const char *user,
     info.mboxlist = mboxname_list;
     info.quotalist = master_quotaroots;
 
+    /* XXX - convert all this to an allusermbox */
+
     /* Generate full list of folders on client side */
     (sync_namespace.mboxname_tointernal)(&sync_namespace, "INBOX",
 					  user, buf);
-    do_mailbox_info(buf, 0, 0, &info);
+    do_mailbox_info(&info, buf, strlen(buf), NULL, 0);
 
     /* deleted namespace items if enabled */
     if (mboxlist_delayed_delete_isenabled()) {
 	char deletedname[MAX_MAILBOX_BUFFER];
 	mboxname_todeleted(buf, deletedname, 0);
-	strlcat(deletedname, ".*", sizeof(deletedname));
-	r = (sync_namespace.mboxlist_findall)(&sync_namespace, deletedname, 1,
-					      user, NULL, do_mailbox_info,
-					      &info);
+	r = mboxlist_allmbox(deletedname, do_mailbox_info, &info, /*incdel*/1);
     }
 
     /* subfolders */
     if (!r) {
-	strlcat(buf, ".*", sizeof(buf));
-	r = (sync_namespace.mboxlist_findall)(&sync_namespace, buf, 1,
-					      user, NULL, do_mailbox_info,
-					      &info);
+	r = mboxlist_allmbox(buf, do_mailbox_info, &info, /*incdel*/0);
     }
 
     /* we know all the folders present on the master, so it's safe to delete
