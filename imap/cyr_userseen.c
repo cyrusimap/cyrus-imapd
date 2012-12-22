@@ -70,17 +70,19 @@ static void usage(void)
 }
 
 /* Callback for use by delete_seen */
-static int deluserseen(char *name,
-		       int matchlen __attribute__((unused)),
-		       int maycreate __attribute__((unused)),
-		       void *rock __attribute__((unused)))
+static int deluserseen(void *rock __attribute__((unused)),
+		       const char *key,
+		       size_t keylen,
+		       const char *val __attribute__((unused)),
+		       size_t vallen  __attribute__((unused)))
 {
+    char *name = xstrndup(key, keylen);
     struct mailbox *mailbox = NULL;
     const char *userid;
-    int r;
+    int r = 0;
 
     r = mailbox_open_irl(name, &mailbox);
-    if (r) return r;
+    if (r) goto done;
 
     userid = mboxname_to_userid(name);
     if (userid) {
@@ -90,12 +92,13 @@ static int deluserseen(char *name,
 
     mailbox_close(&mailbox);
 
-    return 0;
+done:
+    free(name);
+    return r;
 }
 
 int main(int argc, char *argv[])
 {
-    char pattern[2] = { '*', '\0' };
     extern char *optarg;
     int opt;
     char *alt_config = NULL;
@@ -126,8 +129,7 @@ int main(int argc, char *argv[])
     mboxlist_open(NULL);
 
     /* build a list of mailboxes - we're using internal names here */
-    mboxlist_findall(NULL, pattern, 1, NULL,
-		     NULL, deluserseen, NULL);
+    mboxlist_allmbox("", deluserseen, NULL, /*incdel*/0);
 
     mboxlist_close();
     mboxlist_done();
