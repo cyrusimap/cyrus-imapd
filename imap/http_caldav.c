@@ -154,10 +154,10 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
 #ifdef WITH_CALDAV_SCHED
 static int caladdress_lookup(const char *addr, struct sched_param *param);
 static int sched_busytime(struct transaction_t *txn);
-static void sched_request(const char *organizer,
+static void sched_request(const char *organizer, struct sched_param *sparam,
 			  icalcomponent *oldical, icalcomponent *newical);
-static void sched_reply(icalcomponent *oldical, icalcomponent *newical,
-			const char *userid);
+static void sched_reply(const char *userid,
+			icalcomponent *oldical, icalcomponent *newical);
 #endif /* WITH_CALDAV_SCHED */
 
 static struct acl_params acl_params = {
@@ -926,12 +926,12 @@ static int meth_delete(struct transaction_t *txn,
 
 	if (!strcmp(sparam.userid, userid)) {
 	    /* Organizer scheduling object resource */
-	    sched_request(organizer, ical, NULL);
+	    sched_request(organizer, &sparam, ical, NULL);
 	}
 	else if (!(hdr = spool_getheader(txn->req_hdrs, "Schedule-Reply")) ||
 		 strcmp(hdr[0], "F")) {
 	    /* Attendee scheduling object resource */
-	    sched_reply(ical, NULL, userid);
+	    sched_reply(userid, ical, NULL);
 	}
 
 	icalcomponent_free(ical);
@@ -1394,32 +1394,7 @@ static int meth_put(struct transaction_t *txn,
 #ifdef WITH_CALDAV_SCHED
     if (organizer) {
 	/* Scheduling object resource */
-	struct mboxlist_entry mbentry;
-	char outboxname[MAX_MAILBOX_BUFFER];
 	struct sched_param sparam;
-
-	/* Check ACL of auth'd user on userid's Scheduling Outbox */
-	caldav_mboxname(SCHED_OUTBOX, userid, outboxname);
-
-	if ((r = mboxlist_lookup(outboxname, &mbentry, NULL))) {
-	    syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
-		   outboxname, error_message(r));
-	    mbentry.acl = NULL;
-	}
-
-	rights =
-	    mbentry.acl ? cyrus_acl_myrights(httpd_authstate, mbentry.acl) : 0;
-	if (!(rights & DACL_SCHED)) {
-	    /* DAV:need-privileges */
-	    txn->error.precond = DAV_NEED_PRIVS;
-	    txn->error.rights = DACL_SCHED;
-
-	    assert(!buf_len(&txn->buf));
-	    buf_printf(&txn->buf, "/calendars/user/%s/%s", userid, SCHED_OUTBOX);
-	    txn->error.resource = buf_cstring(&txn->buf);
-	    ret = HTTP_FORBIDDEN;
-	    goto done;
-	}
 
 	/* Make sure iCal UID is unique for this user */
 	caldav_lookup_uid(auth_caldavdb, uid, 0, &cdata);
@@ -1440,6 +1415,7 @@ static int meth_put(struct transaction_t *txn,
 	    goto done;
 	}
 
+	/* Lookup the organizer */
 	if (caladdress_lookup(organizer, &sparam)) {
 	    syslog(LOG_ERR,
 		   "meth_delete: failed to process scheduling message in %s"
@@ -1452,11 +1428,11 @@ static int meth_put(struct transaction_t *txn,
 
 	if (!strcmp(sparam.userid, userid)) {
 	    /* Organizer scheduling object resource */
-	    sched_request(organizer, NULL, ical);
+	    sched_request(organizer, &sparam, NULL, ical);
 	}
 	else {
 	    /* Attendee scheduling object resource */
-	    sched_reply(NULL, ical, userid);
+	    sched_reply(userid, NULL, ical);
 	}
     }
 
@@ -3051,20 +3027,58 @@ static void free_sched_data(void *data) {
     }
 }
 
-static void sched_request(const char *organizer,
+static void sched_request(const char *organizer, struct sched_param *sparam,
 			  icalcomponent *oldical, icalcomponent *newical)
 {
+    int r, rights;
+    struct mboxlist_entry mbentry;
+    char outboxname[MAX_MAILBOX_BUFFER];
     icalcomponent *ical;
     icalproperty_method method;
 //    icaltimezone *utc = icaltimezone_get_utc_timezone();
     static struct buf prodid = BUF_INITIALIZER;
-    struct sched_param sparam;
     struct auth_state *authstate;
     icalcomponent *req, *copy, *comp;
     icalproperty *prop;
     icalcomponent_kind kind;
     struct hash_table att_table;
     unsigned ncomp;
+
+    /* Check ACL of auth'd user on userid's Scheduling Outbox */
+    caldav_mboxname(SCHED_OUTBOX, sparam->userid, outboxname);
+
+    if ((r = mboxlist_lookup(outboxname, &mbentry, NULL))) {
+	syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
+	       outboxname, error_message(r));
+	mbentry.acl = NULL;
+    }
+
+    rights =
+	mbentry.acl ? cyrus_acl_myrights(httpd_authstate, mbentry.acl) : 0;
+    if (!(rights & DACL_SCHED)) {
+	/* DAV:need-privileges */
+	if (newical) {
+	    if (newical) {
+		/* Set SCHEDULE-STATUS for each attendee in organizer object */
+		comp = icalcomponent_get_first_real_component(newical);
+
+		for (prop =
+			 icalcomponent_get_first_property(comp,
+							  ICAL_ATTENDEE_PROPERTY);
+		     prop;
+		     prop =
+			 icalcomponent_get_next_property(comp,
+							 ICAL_ATTENDEE_PROPERTY)) {
+		    icalparameter *param = icalparameter_new(ICAL_IANA_PARAMETER);
+		    icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
+		    icalparameter_set_iana_value(param, SCHEDSTAT_NOPRIVS);
+		    icalproperty_add_parameter(prop, param);
+		}
+	    }
+	}
+
+	return;
+    }
 
     construct_hash_table(&att_table, 10, 1);
 
@@ -3110,19 +3124,16 @@ static void sched_request(const char *organizer,
 				     icalcomponent_new_clone(comp));
     }
 
-    /* Grab the organizer */
-    comp = icalcomponent_get_first_real_component(copy);
-    kind = icalcomponent_isa(comp);
-
     /* XXX  Do we need to do more checks here? */
-    if (caladdress_lookup(organizer, &sparam) ||
-	(sparam.flags & SCHEDTYPE_REMOTE))
+    if (sparam->flags & SCHEDTYPE_REMOTE)
 	authstate = auth_newstate("anonymous");
     else
-	authstate = auth_newstate(sparam.userid);
+	authstate = auth_newstate(sparam->userid);
 
     /* Process each component */
     ncomp = 0;
+    comp = icalcomponent_get_first_real_component(copy);
+    kind = icalcomponent_isa(comp);
     do {
 	icalcomponent *alarm, *next;
 
@@ -3250,9 +3261,12 @@ static void sched_request(const char *organizer,
     free_hash_table(&att_table, free_sched_data);
 }
 
-static void sched_reply(icalcomponent *oldical, icalcomponent *newical,
-			const char *userid)
+static void sched_reply(const char *userid,
+			icalcomponent *oldical, icalcomponent *newical)
 {
+    int r, rights;
+    struct mboxlist_entry mbentry;
+    char outboxname[MAX_MAILBOX_BUFFER];
     icalcomponent *ical;
     icalproperty_method method;
     static struct buf prodid = BUF_INITIALIZER;
@@ -3263,6 +3277,32 @@ static void sched_reply(icalcomponent *oldical, icalcomponent *newical,
     icalparameter *param;
     icalcomponent_kind kind;
     const char *organizer;
+
+    /* Check ACL of auth'd user on userid's Scheduling Outbox */
+    caldav_mboxname(SCHED_OUTBOX, userid, outboxname);
+
+    if ((r = mboxlist_lookup(outboxname, &mbentry, NULL))) {
+	syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
+	       outboxname, error_message(r));
+	mbentry.acl = NULL;
+    }
+
+    rights =
+	mbentry.acl ? cyrus_acl_myrights(httpd_authstate, mbentry.acl) : 0;
+    if (!(rights & DACL_SCHED)) {
+	/* DAV:need-privileges */
+	if (newical) {
+	    /* Set SCHEDULE-STATUS for organizer in attendee object */
+	    comp = icalcomponent_get_first_real_component(newical);
+	    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+	    param = icalparameter_new(ICAL_IANA_PARAMETER);
+	    icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
+	    icalparameter_set_iana_value(param, SCHEDSTAT_NOPRIVS);
+	    icalproperty_add_parameter(prop, param);
+	}
+
+	return;
+    }
 
     sched_data = xzmalloc(sizeof(struct sched_data));
     sched_data->is_reply = 1;
