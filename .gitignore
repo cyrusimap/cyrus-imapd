@@ -12,6 +12,7 @@
 *.gcda
 .deps
 .dirstamp
+.libs
 Makefile.in
 Makefile
 Makefile.bak
