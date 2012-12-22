@@ -154,10 +154,10 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
 #ifdef WITH_CALDAV_SCHED
 static int caladdress_lookup(const char *addr, struct sched_param *param);
 static int sched_busytime(struct transaction_t *txn);
-static int sched_request(const char *organizer,
-			 icalcomponent *oldical, icalcomponent *newical);
-static int sched_reply(icalcomponent *oldical, icalcomponent *newical,
-		       const char *userid);
+static void sched_request(const char *organizer,
+			  icalcomponent *oldical, icalcomponent *newical);
+static void sched_reply(icalcomponent *oldical, icalcomponent *newical,
+			const char *userid);
 #endif /* WITH_CALDAV_SCHED */
 
 static struct acl_params acl_params = {
@@ -926,25 +926,15 @@ static int meth_delete(struct transaction_t *txn,
 
 	if (!strcmp(sparam.userid, userid)) {
 	    /* Organizer scheduling object resource */
-	    r = sched_request(organizer, ical, NULL);
+	    sched_request(organizer, ical, NULL);
 	}
 	else if (!(hdr = spool_getheader(txn->req_hdrs, "Schedule-Reply")) ||
 		 strcmp(hdr[0], "F")) {
 	    /* Attendee scheduling object resource */
-	    r = sched_reply(ical, NULL, userid);
+	    sched_reply(ical, NULL, userid);
 	}
 
 	icalcomponent_free(ical);
-
-	if (r) {
-	    syslog(LOG_ERR,
-		   "meth_delete: failed to process scheduling message in %s"
-		   " (org=%s, att=%s)",
-		   txn->req_tgt.mboxname, organizer, userid);
-	    txn->error.desc = "Failed to process scheduling message\r\n";
-	    ret = HTTP_SERVER_ERROR;
-	    goto done;
-	}
     }
 #endif /* WITH_CALDAV_SCHED */
 
@@ -1225,7 +1215,7 @@ static int meth_put(struct transaction_t *txn,
     icalcomponent *ical = NULL, *comp, *nextcomp;
     icalcomponent_kind kind;
     icalproperty *prop;
-    unsigned flags;
+    unsigned flags = 0;
 
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
@@ -1462,26 +1452,17 @@ static int meth_put(struct transaction_t *txn,
 
 	if (!strcmp(sparam.userid, userid)) {
 	    /* Organizer scheduling object resource */
-	    r = sched_request(organizer, NULL, ical);
+	    sched_request(organizer, NULL, ical);
 	}
 	else {
 	    /* Attendee scheduling object resource */
-	    r = sched_reply(NULL, ical, userid);
-	}
-
-	if (r) {
-	    syslog(LOG_ERR,
-		   "meth_put: failed to process scheduling message in %s"
-		   " (org=%s, att=%s)",
-		   txn->req_tgt.mboxname, organizer, userid);
-	    txn->error.desc = "Failed to process scheduling message\r\n";
-	    ret = HTTP_SERVER_ERROR;
-	    goto done;
+	    sched_reply(NULL, ical, userid);
 	}
     }
+
+    flags |= NEW_STAG;
 #endif /* WITH_CALDAV_SCHED */
 
-    flags = NEW_STAG;
     if (get_preferences(txn) & PREFER_REP) flags |= PREFER_REP;
 
     /* Store resource at target */
@@ -3070,10 +3051,9 @@ static void free_sched_data(void *data) {
     }
 }
 
-static int sched_request(const char *organizer,
-			 icalcomponent *oldical, icalcomponent *newical)
+static void sched_request(const char *organizer,
+			  icalcomponent *oldical, icalcomponent *newical)
 {
-    int ret = 0;
     icalcomponent *ical;
     icalproperty_method method;
 //    icaltimezone *utc = icaltimezone_get_utc_timezone();
@@ -3179,6 +3159,9 @@ static int sched_request(const char *organizer,
 	    unsigned do_sched = 1;
 	    icalparameter *param, *force_send = NULL;
 
+	    /* Don't schedule attendee == organizer */
+	    if (!strcmp(attendee, organizer)) continue;
+
 	    /* Check CalDAV Scheduling parameters */
 	    for (param = icalproperty_get_first_parameter(prop,
 							  ICAL_IANA_PARAMETER);
@@ -3198,7 +3181,7 @@ static int sched_request(const char *organizer,
 	    }
 
 	    /* Check if we are supposed to schedule for this attendee */
-	    if (do_sched && strcmp(attendee, organizer)) {
+	    if (do_sched) {
 		struct sched_data *sched_data;
 		icalcomponent *new_comp;
 
@@ -3265,14 +3248,11 @@ static int sched_request(const char *organizer,
     icalcomponent_free(req);
 
     free_hash_table(&att_table, free_sched_data);
-
-    return ret;
 }
 
-static int sched_reply(icalcomponent *oldical, icalcomponent *newical,
-		       const char *userid)
+static void sched_reply(icalcomponent *oldical, icalcomponent *newical,
+			const char *userid)
 {
-    int ret = 0;
     icalcomponent *ical;
     icalproperty_method method;
     static struct buf prodid = BUF_INITIALIZER;
@@ -3450,7 +3430,5 @@ static int sched_reply(icalcomponent *oldical, icalcomponent *newical,
     auth_freestate(authstate);
     icalcomponent_free(copy);
     free_sched_data(sched_data);
-
-    return ret;
 }
 #endif /* WITH_CALDAV_SCHED */
