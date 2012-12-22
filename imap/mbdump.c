@@ -736,10 +736,11 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
     return r;
 }
 
-static int cleanup_seen_cb(char *name,
-			   int matchlen __attribute__((unused)),
-			   int maycreate __attribute__((unused)),
-			   void *rock) 
+static int cleanup_seen_cb(void *rock,
+			   const char *key,
+			   size_t keylen,
+			   const char *val __attribute__((unused)),
+			   size_t vallen __attribute__((unused)))
 {
     struct seen *seendb = (struct seen *)rock;
     int r;
@@ -748,6 +749,7 @@ static int cleanup_seen_cb(char *name,
     struct seendata sd = SEENDATA_INITIALIZER;
     unsigned recno;
     struct index_record record;
+    char *name = xstrndup(key, keylen);
 
     r = mailbox_open_iwl(name, &mailbox);
     if (r) goto done;
@@ -780,6 +782,7 @@ static int cleanup_seen_cb(char *name,
 	mailbox->i.recenttime = sd.lastread;
 
  done:
+    free(name);
     seqset_free(seq);
     mailbox_close(&mailbox);
     return r;
@@ -798,10 +801,10 @@ static int cleanup_seen_subfolders(const char *mbname)
     /* no need to do inbox, it will have upgraded OK, just
      * the subfolders */
 
-    snprintf(buf, sizeof(buf), "%s.*", mbname);
+    snprintf(buf, sizeof(buf), "%s.", mbname);
 
     r = seen_open(userid, SEEN_SILENT, &seendb);
-    if (!r) mboxlist_findall(NULL, buf, 1, NULL, NULL, cleanup_seen_cb, seendb);
+    if (!r) mboxlist_allmbox(buf, cleanup_seen_cb, seendb, /*incdel*/0);
     seen_close(&seendb);
 
     return 0;
