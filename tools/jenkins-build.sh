@@ -103,6 +103,7 @@ CONFIGURE_ARGS="\
     --with-cyrus-prefix=/usr/cyrus \
     --with-ldap \
     --with-openssl \
+    --disable-event-notification \
     --enable-sieve \
     --enable-idled \
     --enable-nntp \
