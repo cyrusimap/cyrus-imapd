@@ -1137,10 +1137,10 @@ static void test_split_by_folder_and_index(void)
 
     /* a conjuctive node which doesn't match folders
      * gets a NULL mboxname */
-    TESTCASE("(and (le size 123) (match message-id \"ETSY\"))",
-	     "(and (le size 123) (match message-id \"ETSY\"))\n");
-    TESTCASE("(and (not (le size 123)) (match message-id \"ETSY\"))",
-	     "(and (not (le size 123)) (match message-id \"ETSY\"))\n");
+    TESTCASE("(and (match message-id \"ETSY\") (le size 123))",
+	     "(and (match message-id \"ETSY\") (le size 123))\n");
+    TESTCASE("(and (match message-id \"ETSY\") (not (le size 123)))",
+	     "(and (match message-id \"ETSY\") (not (le size 123)))\n");
     TESTCASE("(and (le size 123) (not (match message-id \"ETSY\")))",
 	     "(and (le size 123) (not (match message-id \"ETSY\")))\n");
 
@@ -1157,30 +1157,27 @@ static void test_split_by_folder_and_index(void)
 
     /* a disjuctive node which doesn't match folders
      * gets split into two expressions each with a NULL mboxname*/
-    TESTCASE("(or (le size 123) (match message-id \"ETSY\"))",
-	     "(le size 123)\n"
-	     "(match message-id \"ETSY\")\n");
-    TESTCASE("(or (not (le size 123)) (match message-id \"ETSY\"))",
-	     "(not (le size 123))\n"
-	     "(match message-id \"ETSY\")\n");
+    TESTCASE("(or (match message-id \"ETSY\") (le size 123))",
+	     "(match message-id \"ETSY\")\n"
+	     "(le size 123)\n");
+    TESTCASE("(or (match message-id \"ETSY\") (not (le size 123)))",
+	     "(match message-id \"ETSY\")\n"
+	     "(not (le size 123))\n");
     TESTCASE("(or (le size 123) (not (match message-id \"ETSY\")))",
 	     "(le size 123)\n"
 	     "(not (match message-id \"ETSY\"))\n");
 
     /* a disjuctive node which does match folders gets
      * split into two expressions each with the given mboxname*/
-    TESTCASE("(or (le size 123) (match folder \"inbox.Cosby.Sweater\"))",
-	     "(le size 123)\n"
-	     "mboxname \"inbox.Cosby.Sweater\" (true)\n");
     TESTCASE("(or (match folder \"inbox.Cosby.Sweater\") (le size 123))",
 	     "mboxname \"inbox.Cosby.Sweater\" (true)\n"
 	     "(le size 123)\n");
-    TESTCASE("(or (match folder \"inbox.Tumblr\") (match folder \"inbox.Mlkshk\"))",
-	     "mboxname \"inbox.Tumblr\" (true)\n"
-	     "mboxname \"inbox.Mlkshk\" (true)\n");
-    TESTCASE("(or (and (le size 123) (match folder \"inbox.Tumblr\")) (and (ge size 456) (match folder \"inbox.Mlkshk\")))",
-	     "mboxname \"inbox.Tumblr\" (le size 123)\n"
-	     "mboxname \"inbox.Mlkshk\" (ge size 456)\n");
+    TESTCASE("(or (match folder \"inbox.Mlkshk\") (match folder \"inbox.Tumblr\"))",
+	     "mboxname \"inbox.Mlkshk\" (true)\n"
+	     "mboxname \"inbox.Tumblr\" (true)\n");
+    TESTCASE("(or (and (ge size 456) (match folder \"inbox.Mlkshk\")) (and (le size 123) (match folder \"inbox.Tumblr\")))",
+	     "mboxname \"inbox.Mlkshk\" (ge size 456)\n"
+	     "mboxname \"inbox.Tumblr\" (le size 123)\n");
 
     /* indexed comparison nodes and their negations, which don't
      * match any folders, get a NULL mboxname and a trivial scan. */
@@ -1216,15 +1213,15 @@ static void test_split_by_folder_and_index(void)
 
     /* a disjuctive node where one side contains indexed matches,
      * is split into multiple callbacks, some indexed, some not */
-    TESTCASE("(or (fuzzymatch subject \"ETSY\") (match folder \"inbox.Cosby.Sweater\"))",
-	     "indexed (fuzzymatch subject \"ETSY\") (true)\n"
-	     "mboxname \"inbox.Cosby.Sweater\" (true)\n");
     TESTCASE("(or (match folder \"inbox.Cosby.Sweater\") (fuzzymatch subject \"ETSY\"))",
 	     "mboxname \"inbox.Cosby.Sweater\" (true)\n"
 	     "indexed (fuzzymatch subject \"ETSY\") (true)\n");
-    TESTCASE("(or (fuzzymatch subject \"TUMBLR\") (fuzzymatch subject \"MLKSHK\"))",
-	     "indexed (fuzzymatch subject \"TUMBLR\") (true)\n"
-	     "indexed (fuzzymatch subject \"MLKSHK\") (true)\n");
+    TESTCASE("(or (match folder \"inbox.Cosby.Sweater\") (fuzzymatch subject \"ETSY\"))",
+	     "mboxname \"inbox.Cosby.Sweater\" (true)\n"
+	     "indexed (fuzzymatch subject \"ETSY\") (true)\n");
+    TESTCASE("(or (fuzzymatch subject \"MLKSHK\") (fuzzymatch subject \"TUMBLR\"))",
+	     "indexed (fuzzymatch subject \"MLKSHK\") (true)\n"
+	     "indexed (fuzzymatch subject \"TUMBLR\") (true)\n");
     TESTCASE("(or (and (le size 123) (fuzzymatch subject \"TUMBLR\")) (and (ge size 456) (fuzzymatch subject \"MLKSHK\")))",
 	     "indexed (fuzzymatch subject \"TUMBLR\") (le size 123)\n"
 	     "indexed (fuzzymatch subject \"MLKSHK\") (ge size 456)\n");
