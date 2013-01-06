@@ -804,6 +804,10 @@ EXPORTED int search_expr_uses_attr(const search_expr_t *e, const char *name)
      * immutable results, you'll need to maintain a fixed date range
      * up in the higher level */
 
+static int is_mutable(search_expr_t *e, void *rock __attribute__((unused)))
+{
+    return (e->attr && (e->attr->flags & SEA_MUTABLE));
+}
 
 /*
  * Return non-zero if the search expression is mutable, i.e. it might
@@ -819,16 +823,7 @@ EXPORTED int search_expr_uses_attr(const search_expr_t *e, const char *name)
  */
 EXPORTED int search_expr_is_mutable(const search_expr_t *e)
 {
-    const search_expr_t *child;
-
-    if (e->attr && (e->attr->flags & SEA_MUTABLE))
-	return 1;
-
-    for (child = e->children ; child ; child = child->next)
-	if (search_expr_is_mutable(child))
-	    return 1;
-
-    return 0;
+    return search_expr_apply((search_expr_t *)e, is_mutable, NULL);
 }
 
 /* ====================================================================== */
