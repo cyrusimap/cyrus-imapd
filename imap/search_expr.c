@@ -208,6 +208,30 @@ EXPORTED search_expr_t *search_expr_duplicate(const search_expr_t *e)
     return newe;
 }
 
+/*
+ * Apply the given callback to every node in the search expression tree,
+ * in pre-order (i.e. parent before children), as long as the callback
+ * returns zero.  Returns the first non-zero return from the callback
+ * (which is typically an error code).
+ */
+EXPORTED int search_expr_apply(search_expr_t *e,
+			       int (*cb)(search_expr_t *, void *),
+			       void *rock)
+{
+    search_expr_t *child;
+    int r;
+
+    r = cb(e, rock);
+    if (r) return r;
+
+    for (child = e->children ; child ; child = child->next) {
+	r = search_expr_apply(child, cb, rock);
+	if (r) break;
+    }
+
+    return r;
+}
+
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 
 static const char *op_strings[] = {
