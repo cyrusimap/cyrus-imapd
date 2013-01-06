@@ -107,6 +107,7 @@ static int do_search(const char *mboxname,
     search_query_t *query = NULL;
     int i;
     int r;
+    struct timeval start_time, end_time;
 
     for (i = 0 ; i < nwords ; i++) {
 	if (i) buf_putc(&querytext, ' ');
@@ -141,6 +142,8 @@ static int do_search(const char *mboxname,
 
     searchargs = new_searchargs(".", GETSEARCH_CHARSET_KEYWORD, &ns, userid, init.authstate, /*isadmin*/0);
 
+    gettimeofday(&start_time, NULL);
+
     r = get_search_program(pin, pout, searchargs);
     if (r != '\r') {
 	fprintf(stderr, "Couldn't parse IMAP search program\n");
@@ -155,8 +158,13 @@ static int do_search(const char *mboxname,
 	fprintf(stderr, "Failed to run query: %s\n", error_message(r));
 	goto out;
     }
+    gettimeofday(&end_time, NULL);
 
     hash_enumerate(&query->folders_by_name, dump_one_folder, query);
+
+    if (verbose)
+	fprintf(stderr, "search_test: ran query in %.6f sec\n",
+		timesub(&start_time, &end_time));
 
 out:
     if (pin) prot_free(pin);
