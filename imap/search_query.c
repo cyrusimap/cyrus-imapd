@@ -783,7 +783,6 @@ EXPORTED int search_query_run(search_query_t *query)
 {
     int r = 0;
 
-    search_expr_normalise(&query->searchargs->root);
     search_expr_split_by_folder_and_index(query->searchargs->root, query_add_subquery, query);
     query->searchargs->root = NULL;
 

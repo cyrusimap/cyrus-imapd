@@ -68,6 +68,10 @@ static search_expr_t **the_rootp;
 static search_expr_t *the_focus;
 #endif
 
+static void split(search_expr_t *e,
+		  void (*cb)(const char *, search_expr_t *, search_expr_t *, void *),
+		  void *rock);
+
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 
 static search_expr_t *append(search_expr_t *parent, search_expr_t *child)
@@ -945,11 +949,21 @@ static int is_indexed_node(const search_expr_t *e)
  * The callback is responsible for freeing the expression using
  * search_expr_free().  The callback may be called multiple times with
  * the same folder/index combination, in which case the expressions should
- * be considered logicallay ORed together.
+ * be considered logically ORed together.
  *
- * Works on normalised expressions only.
+ * Does not require the input expression to be normalised, and may
+ * normalise it during processing.  Expressions passed to the callback
+ * are always normalised.
  */
 EXPORTED void search_expr_split_by_folder_and_index(search_expr_t *e,
+		  void (*cb)(const char *, search_expr_t *, search_expr_t *, void *),
+		  void *rock)
+{
+    search_expr_normalise(&e);
+    split(e, cb, rock);
+}
+
+static void split(search_expr_t *e,
 		  void (*cb)(const char *, search_expr_t *, search_expr_t *, void *),
 		  void *rock)
 {
@@ -958,7 +972,7 @@ EXPORTED void search_expr_split_by_folder_and_index(search_expr_t *e,
     if (e->op == SEOP_OR) {
 	/* top level node */
 	while ((child = detachp(&e->children)) != NULL)
-	    search_expr_split_by_folder_and_index(child, cb, rock);
+	    split(child, cb, rock);
 	search_expr_free(e);
     }
     else if (e->op == SEOP_AND) {
