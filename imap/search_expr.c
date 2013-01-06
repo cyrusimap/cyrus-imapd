@@ -828,6 +828,26 @@ EXPORTED int search_expr_is_mutable(const search_expr_t *e)
 
 /* ====================================================================== */
 
+static int get_countability(search_expr_t *e, void *rock)
+{
+    unsigned int *maskp = rock;
+
+    if (e->op == SEOP_TRUE)
+	*maskp |= SEC_EXISTS;
+    else if (e->op == SEOP_FALSE)
+	*maskp |= SEC_EXISTS|SEC_NOT;
+    else if (e->op == SEOP_NOT)
+	*maskp |= SEC_NOT;
+    else if (e->attr) {
+	if (e->attr->get_countability)
+	    *maskp |= e->attr->get_countability(&e->value);
+	else
+	    *maskp |= SEC_UNCOUNTED;
+    }
+
+    return 0;
+}
+
 /*
  * Analyse the search expression to discover how countable the results are
  * going to be.  By "countable" we mean "predictable from stored state,
@@ -856,30 +876,12 @@ EXPORTED int search_expr_is_mutable(const search_expr_t *e)
 
 EXPORTED unsigned int search_expr_get_countability(const search_expr_t *e)
 {
-    const search_expr_t *child;
     unsigned int mask = 0;
 
     if (!e)
 	return 0;
 
-    if (e->op == SEOP_TRUE)
-	return SEC_EXISTS;
-    if (e->op == SEOP_FALSE)
-	return SEC_EXISTS|SEC_NOT;
-
-    if (e->op == SEOP_NOT)
-	mask |= SEC_NOT;
-
-    if (e->attr) {
-	if (e->attr->get_countability)
-	    mask |= e->attr->get_countability(&e->value);
-	else
-	    mask |= SEC_UNCOUNTED;
-    }
-
-    for (child = e->children ; child ; child = child->next)
-	mask |= search_expr_get_countability(child);
-
+    search_expr_apply((search_expr_t *)e, get_countability, &mask);
     return mask;
 }
 
