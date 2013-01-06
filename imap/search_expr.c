@@ -706,18 +706,20 @@ EXPORTED void search_expr_normalise(search_expr_t **ep)
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 
+static int internalise(search_expr_t *e, void *rock)
+{
+    struct index_state *state = rock;
+    if (e->attr && e->attr->internalise)
+	e->attr->internalise(state, &e->value, &e->internalised);
+    return 0;
+}
+
 /*
  * Prepare the given expression for use with the given mailbox.
  */
 EXPORTED void search_expr_internalise(struct index_state *state, search_expr_t *e)
 {
-    search_expr_t *child;
-
-    if (e->attr && e->attr->internalise)
-	e->attr->internalise(state, &e->value, &e->internalised);
-
-    for (child = e->children ; child ; child = child->next)
-	search_expr_internalise(state, child);
+    search_expr_apply(e, internalise, state);
 }
 
 /*
