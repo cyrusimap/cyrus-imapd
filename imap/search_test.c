@@ -177,12 +177,78 @@ out:
 
 /* ====================================================================== */
 
+static int do_serialise(char **words, int nwords)
+{
+    const char *userid = "cassandane";
+    struct buf querytext = BUF_INITIALIZER;
+    struct namespace ns;
+    struct protstream *pin = NULL;
+    struct protstream *pout = NULL;
+    struct searchargs *searchargs = NULL;
+    char *str = NULL;
+    search_expr_t *e = NULL;
+    int i;
+    int r;
+    struct timeval start_time, end_time;
+
+    for (i = 0 ; i < nwords ; i++) {
+	if (i) buf_putc(&querytext, ' ');
+	buf_appendcstr(&querytext, words[i]);
+    }
+    if (verbose)
+	fprintf(stderr, "search_test: IMAP query is \"%s\"\n", buf_cstring(&querytext));
+    buf_putc(&querytext, '\r');
+    buf_cstring(&querytext);
+
+    r = mboxname_init_namespace(&ns, /*isadmin*/0);
+    if (r) {
+	fprintf(stderr, "Failed to initialise namespace: %s\n", error_message(r));
+	goto out;
+    }
+
+    pin = prot_readmap(querytext.s, querytext.len);
+    pout = prot_new(/*fd*/0, /*write*/1);
+
+    searchargs = new_searchargs(".", GETSEARCH_CHARSET_KEYWORD, &ns, userid, auth_newstate(userid), /*isadmin*/0);
+
+    r = get_search_program(pin, pout, searchargs);
+    if (r != '\r') {
+	fprintf(stderr, "Couldn't parse IMAP search program\n");
+	goto out;
+    }
+
+    gettimeofday(&start_time, NULL);
+    str = search_expr_serialise(searchargs->root);
+    gettimeofday(&end_time, NULL);
+    if (verbose)
+	fprintf(stderr, "search_test: serialised query in %.6f sec\n",
+		timesub(&start_time, &end_time));
+
+    gettimeofday(&start_time, NULL);
+    e = search_expr_unserialise(str);
+    gettimeofday(&end_time, NULL);
+    if (verbose)
+	fprintf(stderr, "search_test: unserialised query in %.6f sec\n",
+		timesub(&start_time, &end_time));
+
+out:
+    if (pin) prot_free(pin);
+    if (pout) prot_free(pout);
+    if (searchargs) freesearchargs(searchargs);
+    if (e) search_expr_free(e);
+    free(str);
+    return !!r;
+}
+
+/* ====================================================================== */
+
 int main(int argc, char **argv)
 {
     int c;
     const char *alt_config = NULL;
     const char *userid = NULL;
     const char *mboxname = NULL;
+    enum { SEARCH, SERIALISE } mode = SEARCH;
     int multiple = 0;
     int r = 0;
 
@@ -190,11 +256,15 @@ int main(int argc, char **argv)
 	fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((c = getopt(argc, argv, "C:MSm:u:v")) != EOF) {
+    while ((c = getopt(argc, argv, "C:LMSm:u:v")) != EOF) {
 	switch (c) {
 
 	case 'C': /* alt config file */
 	    alt_config = optarg;
+	    break;
+
+	case 'L':
+	    mode = SERIALISE;
 	    break;
 
 	case 'M':
@@ -225,7 +295,7 @@ int main(int argc, char **argv)
 
     if (optind == argc)
 	usage(argv[0]);
-    if (!mboxname)
+    if (mode == SEARCH && !mboxname)
 	usage(argv[0]);
 
     cyrus_init(alt_config, "search_test",
@@ -235,13 +305,22 @@ int main(int argc, char **argv)
     mboxlist_open(NULL);
     search_attr_init();
 
-    if (!userid) {
-	userid = mboxname_to_userid(mboxname);
-	if (!userid)
-	    usage(argv[0]);
-    }
+    switch (mode) {
 
-    r = do_search(mboxname, multiple, userid, argv+optind, argc-optind);
+    case SEARCH:
+	if (!userid) {
+	    userid = mboxname_to_userid(mboxname);
+	    if (!userid)
+		usage(argv[0]);
+	}
+
+	r = do_search(mboxname, multiple, userid, argv+optind, argc-optind);
+	break;
+
+    case SERIALISE:
+	r = do_serialise(argv+optind, argc-optind);
+	break;
+    }
 
     mboxlist_close();
     mboxlist_done();
