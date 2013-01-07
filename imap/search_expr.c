@@ -917,6 +917,11 @@ static int is_indexed_node(const search_expr_t *e)
 	    e->attr->part != SEARCH_PART_NONE);
 }
 
+static int is_folder_or_indexed(search_expr_t *e, void *rock __attribute__((unused)))
+{
+    return (is_folder_node(e) || is_indexed_node(e));
+}
+
 /*
  * Split a search expression into one or more parts, each of which
  * satisfies the earliest of these conditions:
@@ -955,6 +960,21 @@ EXPORTED void search_expr_split_by_folder_and_index(search_expr_t *e,
 		  void (*cb)(const char *, search_expr_t *, search_expr_t *, void *),
 		  void *rock)
 {
+    if (!search_expr_apply(e, is_folder_or_indexed, NULL)) {
+	/* The expression contains neither a folder match node nor an
+	 * indexable node, which means we can short circuit the whole
+	 * normalisation and splitting process.  This optimisation helps
+	 * us cope with the FM web frontends generating queries with
+	 *
+	 * or or or or to "word" cc "word" bcc "word" from "word" subject "word"
+	 *
+	 * for every "word" the user types into the Search box, by
+	 * avoiding the complexity explosion due to normalising all
+	 * those OR nodes.  */
+	cb(NULL, NULL, e, rock);
+	return;
+    }
+
     search_expr_normalise(&e);
     split(e, cb, rock);
 }
