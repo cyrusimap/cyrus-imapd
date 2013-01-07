@@ -1553,6 +1553,12 @@ If all partitions are over that limit, this feature is not used anymore.
 /* The number of messages to be indexed in one batch (default 20).
    Note that long batches may delay user commands or mail delivery. */
 
+{ "search_normalisation_max", 1000, INT }
+/* A resource bound for the combinatorial explosion of search expression
+ * tree complexity caused by normalising expressions with many OR nodes.
+ * These can use more CPU time to optimise than they save IO time in scanning
+ * folders. */
+
 { "search_engine", "none", ENUM("none", "squat", "sphinx", "xapian") }
 /* The indexing engine used to speed up searching.  */
 

@@ -67,6 +67,7 @@
 static search_expr_t **the_rootp;
 static search_expr_t *the_focus;
 #endif
+static unsigned nnodes = 0;
 
 static void split(search_expr_t *e,
 		  void (*cb)(const char *, search_expr_t *, search_expr_t *, void *),
@@ -161,7 +162,14 @@ EXPORTED search_expr_t *search_expr_new(search_expr_t *parent, enum search_op op
     search_expr_t *e = xzmalloc(sizeof(search_expr_t));
     e->op = op;
     if (parent) append(parent, e);
+    nnodes++;
     return e;
+}
+
+static int complexity_check(int r)
+{
+    unsigned max = (unsigned)config_getint(IMAPOPT_SEARCH_NORMALISATION_MAX);
+    return (max && nnodes >= max ? -1 : r);
 }
 
 /*
@@ -486,7 +494,7 @@ static int has_enough_children(const search_expr_t *e)
     return 0;
 }
 
-static void apply_demorgan(search_expr_t **ep, search_expr_t **prevp)
+static int apply_demorgan(search_expr_t **ep, search_expr_t **prevp)
 {
     search_expr_t *child = *prevp;
     search_expr_t **grandp;
@@ -499,21 +507,26 @@ static void apply_demorgan(search_expr_t **ep, search_expr_t **prevp)
     for (grandp = &child->children ; *grandp ; grandp = &(*grandp)->next)
 	interpolate(grandp, SEOP_NOT);
     search_expr_free(elide(ep));
+
+    return complexity_check(1);
 }
 
-static void apply_distribution(search_expr_t **ep, search_expr_t **prevp)
+static int apply_distribution(search_expr_t **ep, search_expr_t **prevp)
 {
     search_expr_t *newor;
     search_expr_t *or;
     search_expr_t *and;
     search_expr_t *orchild;
     search_expr_t *newand;
+    int r = 1;
 
     newor = interpolate(ep, SEOP_OR);
     and = detachp(&newor->children);
     or = detachp(prevp);
 
-    while ((orchild = detachp(&or->children)) != NULL) {
+    while (complexity_check(r) >= 0) {
+	orchild = detachp(&or->children);
+	if (orchild == NULL) break;
 	newand = search_expr_duplicate(and);
 	append(newand, orchild);
 	append(newor, newand);
@@ -521,14 +534,16 @@ static void apply_distribution(search_expr_t **ep, search_expr_t **prevp)
 
     search_expr_free(and);
     search_expr_free(or);
+
+    return complexity_check(r);
 }
 
-static void invert(search_expr_t **ep, search_expr_t **prevp)
+static int invert(search_expr_t **ep, search_expr_t **prevp)
 {
     if ((*ep)->op == SEOP_NOT)
-	apply_demorgan(ep, prevp);
+	return apply_demorgan(ep, prevp);
     else
-	apply_distribution(ep, prevp);
+	return apply_distribution(ep, prevp);
 }
 
 /* combine compatible boolean parent and child nodes */
@@ -548,11 +563,16 @@ static void combine(search_expr_t **ep, search_expr_t **prevp)
     }
 }
 
+/*
+ * Top-level normalisation step.  Returns 1 if it changed the subtree, 0
+ * if it didn't, and -1 on error (such as exceeding a complexity limit).
+ */
 static int normalise(search_expr_t **ep)
 {
     search_expr_t **prevp;
     int depth;
     int changed = -1;
+    int r;
 
 restart:
     changed++;
@@ -582,14 +602,16 @@ restart:
 	    goto restart;
 	}
 	if (child_depth < depth) {
-	    invert(ep, prevp);
+	    r = invert(ep, prevp);
+	    if (r < 0) return -1;
 	    goto restart;
 	}
-	if (normalise(prevp))
-	    goto restart;
+	r = normalise(prevp);
+	if (r < 0) return -1;
+	if (r > 0) goto restart;
     }
 
-    return changed;
+    return complexity_check(changed);
 }
 
 static void *getnext(void *p)
@@ -632,7 +654,7 @@ static int compare(void *p1, void *p2, void *calldata)
     if (!r) {
 	if (e1->children || e2->children)
 	    r = compare((void *)(e1->children ? e1->children : e1),
-		        (void *)(e2->children ? e2->children : e2),
+			(void *)(e2->children ? e2->children : e2),
 			calldata);
     }
 
@@ -690,18 +712,25 @@ static void sort_children(search_expr_t *e)
  *
  * Takes the root of the tree in *'ep' and returns a possibly reshaped
  * tree whose root is stored in *'ep'.
+ *
+ * Returns 1 if the subtree was changed, 0 if it wasn't, and -1 on error
+ * (such as exceeding a complexity limit).
  */
-EXPORTED void search_expr_normalise(search_expr_t **ep)
+EXPORTED int search_expr_normalise(search_expr_t **ep)
 {
+    int r;
+
 #if DEBUG
     the_rootp = ep;
 #endif
-    normalise(ep);
-    sort_children(*ep);
+    r = normalise(ep);
+    if (r >= 0)
+	sort_children(*ep);
 #if DEBUG
     the_rootp = NULL;
     the_focus = NULL;
 #endif
+    return r;
 }
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
@@ -960,6 +989,8 @@ EXPORTED void search_expr_split_by_folder_and_index(search_expr_t *e,
 		  void (*cb)(const char *, search_expr_t *, search_expr_t *, void *),
 		  void *rock)
 {
+    search_expr_t *copy = NULL;
+
     if (!search_expr_apply(e, is_folder_or_indexed, NULL)) {
 	/* The expression contains neither a folder match node nor an
 	 * indexable node, which means we can short circuit the whole
@@ -975,8 +1006,20 @@ EXPORTED void search_expr_split_by_folder_and_index(search_expr_t *e,
 	return;
     }
 
-    search_expr_normalise(&e);
-    split(e, cb, rock);
+    copy = search_expr_duplicate(e);
+    nnodes = 0;
+    if (search_expr_normalise(&copy) < 0)
+    {
+	/* We blew the complexity limit because the expression has too
+	 * many ORs.  Rats.  Give up and scan folders with the original
+	 * expression */
+	search_expr_free(copy);
+	cb(NULL, NULL, e, rock);
+	return;
+    }
+
+    search_expr_free(e);
+    split(copy, cb, rock);
 }
 
 static void split(search_expr_t *e,

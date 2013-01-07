@@ -131,7 +131,7 @@ extern int search_expr_apply(search_expr_t *e,
 			     void *rock);
 extern char *search_expr_serialise(const search_expr_t *);
 extern search_expr_t *search_expr_unserialise(const char *s);
-extern void search_expr_normalise(search_expr_t **);
+extern int search_expr_normalise(search_expr_t **);
 extern void search_expr_internalise(struct index_state *, search_expr_t *);
 extern int search_expr_evaluate(message_t *m, const search_expr_t *);
 extern int search_expr_uses_attr(const search_expr_t *, const char *);
