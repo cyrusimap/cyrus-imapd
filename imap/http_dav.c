@@ -84,8 +84,8 @@
 
 static int prin_parse_path(struct request_target_t *tgt, const char **errstr);
 
-static struct propfind_params propfind_params = {
-    &prin_parse_path, NULL, NULL, NULL
+static struct meth_params princ_params = {
+    .parse_path = &prin_parse_path
 };
 
 /* Namespace for WebDAV principals */
@@ -111,7 +111,7 @@ const struct namespace_t namespace_principal = {
 	{ NULL,			NULL },			/* MOVE		*/
 	{ &meth_options,	NULL },			/* OPTIONS	*/
 	{ NULL,			NULL },			/* POST		*/
-	{ &meth_propfind,	&propfind_params },	/* PROPFIND	*/
+	{ &meth_propfind,	&princ_params },	/* PROPFIND	*/
 	{ NULL,			NULL },			/* PROPPATCH	*/
 	{ NULL,			NULL },			/* PUT		*/
 	{ &meth_report,		NULL },			/* REPORT	*/
@@ -2302,13 +2302,13 @@ int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
  */
 int meth_acl(struct transaction_t *txn, void *params)
 {
+    struct meth_params *aparams = (struct meth_params *) params;
     int ret = 0, r, rights;
     xmlDocPtr indoc = NULL;
     xmlNodePtr root, ace;
     char *server, *aclstr;
     struct mailbox *mailbox = NULL;
     struct buf acl = BUF_INITIALIZER;
-    struct acl_params *aparams = (struct acl_params *) params;
 
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
@@ -2596,6 +2596,7 @@ int meth_acl(struct transaction_t *txn, void *params)
 /* Perform a GET/HEAD request */
 int meth_get_dav(struct transaction_t *txn, void *params)
 {
+    struct meth_params *gparams = (struct meth_params *) params;
     int ret = 0, r, precond, rights;
     const char *msg_base = NULL, *data = NULL;
     unsigned long msg_size = 0, datalen, offset;
@@ -2606,7 +2607,6 @@ int meth_get_dav(struct transaction_t *txn, void *params)
     struct index_record record;
     const char *etag = NULL;
     time_t lastmod = 0;
-    struct get_params *gparams = (struct get_params *) params;
 
     /* Parse the path */
     if ((r = gparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
@@ -2756,6 +2756,7 @@ int meth_get_dav(struct transaction_t *txn, void *params)
  */
 int meth_lock(struct transaction_t *txn, void *params)
 {
+    struct meth_params *lparams = (struct meth_params *) params;
     int ret = HTTP_OK, r, precond, rights;
     char *server, *acl;
     struct mailbox *mailbox = NULL;
@@ -2768,7 +2769,6 @@ int meth_lock(struct transaction_t *txn, void *params)
     xmlNsPtr ns[NUM_NAMESPACE];
     xmlChar *owner = NULL;
     time_t now = time(NULL);
-    struct lock_params *lparams = (struct lock_params *) params;
 
     /* XXX  We ignore Depth and Timeout header fields */
 
@@ -3015,13 +3015,13 @@ int meth_lock(struct transaction_t *txn, void *params)
  */
 int meth_mkcol(struct transaction_t *txn, void *params)
 {
+    struct meth_params *mparams = (struct meth_params *) params;
     int ret = 0, r = 0;
     xmlDocPtr indoc = NULL, outdoc = NULL;
     xmlNodePtr root = NULL, instr = NULL;
     xmlNsPtr ns[NUM_NAMESPACE];
     char *partition = NULL;
     struct proppatch_ctx pctx;
-    struct mkcol_params *mparams = (struct mkcol_params *) params;
 
     memset(&pctx, 0, sizeof(struct proppatch_ctx));
 
@@ -3082,7 +3082,11 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 	/* Check for correct root element */
 	indoc = root->doc;
 
-	if (xmlStrcmp(root->name, BAD_CAST mparams->xml_req)) {
+	if (txn->meth == METH_MKCOL)
+	    r = xmlStrcmp(root->name, BAD_CAST "mkcol");
+	else
+	    r = xmlStrcmp(root->name, BAD_CAST mparams->mkcol.xml_req);
+	if (r) {
 	    txn->error.desc = "Incorrect root element in XML request\r\n";
 	    return HTTP_BAD_MEDIATYPE;
 	}
@@ -3092,7 +3096,11 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 
     if (instr) {
 	/* Start construction of our mkcol/mkcalendar response */
-	root = init_xml_response(mparams->xml_resp, mparams->xml_ns, root, ns);
+	if (txn->meth == METH_MKCOL)
+	    root = init_xml_response("mkcol-response", NS_DAV, root, ns);
+	else
+	    root = init_xml_response(mparams->mkcol.xml_resp,
+				     mparams->mkcol.xml_ns, root, ns);
 	if (!root) {
 	    ret = HTTP_SERVER_ERROR;
 	    txn->error.desc = "Unable to create XML response\r\n";
@@ -3129,7 +3137,8 @@ int meth_mkcol(struct transaction_t *txn, void *params)
     }
 
     /* Create the mailbox */
-    r = mboxlist_createmailbox(txn->req_tgt.mboxname, mparams->mbtype, partition, 
+    r = mboxlist_createmailbox(txn->req_tgt.mboxname, mparams->mkcol.mbtype,
+			       partition, 
 			       httpd_userisadmin || httpd_userisproxyadmin,
 			       httpd_userid, httpd_authstate,
 			       0, 0, 0);
@@ -3334,13 +3343,13 @@ int propfind_by_collection(char *mboxname, int matchlen,
 /* Perform a PROPFIND request */
 int meth_propfind(struct transaction_t *txn, void *params)
 {
+    struct meth_params *fparams = (struct meth_params *) params;
     int ret = 0, r;
     const char **hdr;
     unsigned depth;
     xmlDocPtr indoc = NULL, outdoc = NULL;
     xmlNodePtr root, cur = NULL;
     xmlNsPtr ns[NUM_NAMESPACE];
-    struct propfind_params *fparams = (struct propfind_params *) params;
     struct propfind_ctx fctx;
     struct propfind_entry_list *elist = NULL;
 
@@ -3466,8 +3475,8 @@ int meth_propfind(struct transaction_t *txn, void *params)
     fctx.filter_crit = NULL;
     if (fparams->davdb) {
 	fctx.davdb = *fparams->davdb;
-	fctx.lookup_resource = fparams->lookup;
-	fctx.foreach_resource = fparams->foreach;
+	fctx.lookup_resource = fparams->lookup_resource;
+	fctx.foreach_resource = fparams->foreach_resource;
     }
     fctx.proc_by_resource = &propfind_by_resource;
     fctx.elist = NULL;
@@ -3554,13 +3563,13 @@ int meth_propfind(struct transaction_t *txn, void *params)
  */
 int meth_proppatch(struct transaction_t *txn,  void *params)
 {
+    struct meth_params *pparams = (struct meth_params *) params;
     int ret = 0, r = 0, rights;
     xmlDocPtr indoc = NULL, outdoc = NULL;
     xmlNodePtr root, instr, resp;
     xmlNsPtr ns[NUM_NAMESPACE];
     char *server, *acl;
     struct proppatch_ctx pctx;
-    struct proppatch_params *pparams = (struct proppatch_params *) params;
 
     memset(&pctx, 0, sizeof(struct proppatch_ctx));
 
@@ -3902,6 +3911,7 @@ int report_sync_col(struct transaction_t *txn,
 /* Perform a REPORT request */
 int meth_report(struct transaction_t *txn, void *params)
 {
+    struct meth_params *rparams = (struct meth_params *) params;
     int ret = 0, r;
     const char **hdr;
     unsigned depth = 0;
@@ -3910,7 +3920,6 @@ int meth_report(struct transaction_t *txn, void *params)
     xmlNsPtr ns[NUM_NAMESPACE];
     struct propfind_ctx fctx;
     struct propfind_entry_list *elist = NULL;
-    struct report_params *rparams = (struct report_params *) params;
 
     memset(&fctx, 0, sizeof(struct propfind_ctx));
 
@@ -4098,6 +4107,7 @@ int meth_report(struct transaction_t *txn, void *params)
  */
 int meth_unlock(struct transaction_t *txn, void *params)
 {
+    struct meth_params *lparams = (struct meth_params *) params;
     int ret = HTTP_NO_CONTENT, r, precond, rights;
     const char **hdr, *token;
     char *server, *acl;
@@ -4107,7 +4117,6 @@ int meth_unlock(struct transaction_t *txn, void *params)
     const char *etag;
     time_t lastmod;
     size_t len;
-    struct lock_params *lparams = (struct lock_params *) params;
 
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;

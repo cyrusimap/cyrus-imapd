@@ -252,9 +252,19 @@ struct propfind_ctx {
     struct buf buf;			/* Working buffer */
 };
 
+/* Function to parse URI path and generate a mailbox name */
 typedef int (*parse_path_t)(struct request_target_t *tgt, const char **errstr);
 
-/* meth_acl() parameters */
+/* Function to check headers for preconditions */
+typedef int (*check_precond_t)(struct transaction_t *txn, const void *data,
+			       const char *etag, time_t lastmod);
+
+/* Function to insert/update DAV resource in 'data', optionally commiting txn */
+typedef int (*write_proc_t)(void *davdb, void *data, int commit);
+
+/* Function to delete resource in 'rowid', optionally commiting txn */
+typedef int (*delete_proc_t)(void *davdb, unsigned rowid, int commit);
+
 /*
  * Process 'priv', augmenting 'rights' as necessary.
  * Returns 1 if processing is complete.
@@ -263,59 +273,12 @@ typedef int (*parse_path_t)(struct request_target_t *tgt, const char **errstr);
 typedef int (*acl_proc_t)(struct transaction_t *txn, xmlNodePtr priv,
 			  int *rights);
 
-struct acl_params {
-    parse_path_t parse_path;		/* parse URI path & generate mboxname */
-    acl_proc_t acl_ext;			/* special ACL handling (extensions) */
-};
-
-/* meth_get() parameters */
-typedef int (*check_precond_t)(struct transaction_t *txn, const void *data,
-			       const char *etag, time_t lastmod);
-
-struct get_params {
-    parse_path_t parse_path;		/* parse URI path & generate mboxname */
-    void **davdb;			/* DAV DB to use for lookup/foreach */
-    lookup_proc_t lookup_resource;	/* lookup a specific resource */
-    check_precond_t check_precond;	/* check headers for preconditions */
-    const char *content_type;		/* Content-Type of resource */
-};
-
-/* Function to insert/update DAV resource in 'data', optionally commiting txn */
-typedef int (*write_proc_t)(void *davdb, void *data, int commit);
-
-/* Function to delete resource in 'rowid', optionally commiting txn */
-typedef int (*delete_proc_t)(void *davdb, unsigned rowid, int commit);
-
-/* meth_lock() parameters */
-struct lock_params {
-    parse_path_t parse_path;		/* parse URI path & generate mboxname */
-    void **davdb;			/* DAV DB to use for lookup/foreach */
-    lookup_proc_t lookup_resource;	/* lookup a specific resource */
-    write_proc_t write_resource;	/* write a specific resource */
-    delete_proc_t delete_resource;	/* delete a specific resource */
-    check_precond_t check_precond;	/* check headers for preconditions */
-};
-
 /* meth_mkcol() parameters */
 struct mkcol_params {
-    parse_path_t parse_path;		/* parse URI path & generate mboxname */
     unsigned mbtype;			/* mbtype to use for created mailbox */
     const char *xml_req;		/* toplevel XML request element */
     const char *xml_resp;		/* toplevel XML response element */
     unsigned xml_ns;			/* namespace of response element */
-};
-
-/* meth_propfind() parameters */
-struct propfind_params {
-    parse_path_t parse_path;		/* parse URI path & generate mboxname */
-    void **davdb;			/* DAV DB to use for lookup/foreach */
-    lookup_proc_t lookup;		/* lookup a specific resource */
-    foreach_proc_t foreach;		/* process all resources in a mailbox */
-};
-
-/* meth_proppatch() parameters */
-struct proppatch_params {
-    parse_path_t parse_path;		/* parse URI path & generate mboxname */
 };
 
 /* meth_report() parameters */
@@ -329,16 +292,25 @@ struct report_type_t {
     unsigned flags;			/* report-specific flags */
 };
 
-struct report_params {
-    parse_path_t parse_path;		/* parse URI path & generate mboxname */
-    struct report_type_t reports[];	/* array of reports & proc functions */
-};
-
 /* Report flags */
 enum {
     REPORT_NEED_MBOX	= (1<<0),
     REPORT_NEED_PROPS 	= (1<<1),
     REPORT_MULTISTATUS	= (1<<2)
+};
+
+struct meth_params {
+    const char *content_type;		/* Content-Type of resources */
+    parse_path_t parse_path;		/* parse URI path & generate mboxname */
+    check_precond_t check_precond;	/* check headers for preconditions */
+    void **davdb;			/* DAV DB to use for resources */
+    lookup_proc_t lookup_resource;	/* lookup a specific resource */
+    foreach_proc_t foreach_resource;	/* process all resources in a mailbox */
+    write_proc_t write_resource;	/* write a specific resource */
+    delete_proc_t delete_resource;	/* delete a specific resource */
+    acl_proc_t acl_ext;			/* special ACL handling (extensions) */
+    struct mkcol_params mkcol;		/* params for creating collection */
+    struct report_type_t reports[];	/* array of reports & proc functions */
 };
 
 int report_sync_col(struct transaction_t *txn, xmlNodePtr inroot,
@@ -365,21 +337,13 @@ int propfind_by_collection(char *mboxname, int matchlen,
 			   int maycreate, void *rock);
 
 /* DAV method processing functions */
-int meth_acl(struct transaction_t *txn,
-	     void *params /* struct acl_params* */);
-int meth_get_dav(struct transaction_t *txn,
-		 void *params /* struct get_params* */);
-int meth_lock(struct transaction_t *txn,
-	      void *params /* struct lock_params* */);
-int meth_mkcol(struct transaction_t *txn,
-	       void *params /* struct mkcol_params* */);
-int meth_propfind(struct transaction_t *txn,
-		  void *params /* struct propfind_params* */);
-int meth_proppatch(struct transaction_t *txn,
-		   void *params /* struct proppatch_params* */);
-int meth_report(struct transaction_t *txn,
-		void *params /* struct report_params* */);
-int meth_unlock(struct transaction_t *txn,
-		void *params /* struct lock_params* */);
+int meth_acl(struct transaction_t *txn, void *params);
+int meth_get_dav(struct transaction_t *txn, void *params);
+int meth_lock(struct transaction_t *txn, void *params);
+int meth_mkcol(struct transaction_t *txn, void *params);
+int meth_propfind(struct transaction_t *txn, void *params);
+int meth_proppatch(struct transaction_t *txn, void *params);
+int meth_report(struct transaction_t *txn, void *params);
+int meth_unlock(struct transaction_t *txn, void *params);
 
 #endif /* HTTP_DAV_H */

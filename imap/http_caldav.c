@@ -160,50 +160,17 @@ static void sched_reply(const char *userid,
 			icalcomponent *oldical, icalcomponent *newical);
 #endif /* WITH_CALDAV_SCHED */
 
-static struct acl_params acl_params = {
-    &caldav_parse_path, &caldav_acl
-};
-
-static struct get_params get_params = {
+static struct meth_params caldav_params = {
+    "text/calendar; charset=utf-8",
     &caldav_parse_path,
-    (void **) &auth_caldavdb,
-    (lookup_proc_t) &caldav_lookup_resource,
     &caldav_check_precond,
-    "text/calendar; charset=utf-8"
-};
-
-static struct lock_params lock_params = {
-    &caldav_parse_path,
     (void **) &auth_caldavdb,
     (lookup_proc_t) &caldav_lookup_resource,
+    (foreach_proc_t) &caldav_foreach,
     (write_proc_t) &caldav_write,
     (delete_proc_t) &caldav_delete,
-    &caldav_check_precond,
-};
-
-static struct mkcol_params mkcalendar_params = {
-    &caldav_parse_path,
-    MBTYPE_CALENDAR, "mkcalendar", "mkcalendar-response", NS_CALDAV
-};
-
-static struct mkcol_params mkcol_params = {
-    &caldav_parse_path,
-    MBTYPE_CALENDAR, "mkcol", "mkcol-response", NS_DAV
-};
-
-static struct propfind_params propfind_params = {
-    &caldav_parse_path,
-    (void **) &auth_caldavdb,
-    (lookup_proc_t) &caldav_lookup_resource,
-    (foreach_proc_t) &caldav_foreach
-};
-
-static struct proppatch_params proppatch_params = {
-    &caldav_parse_path
-};
-
-static struct report_params report_params = {
-    &caldav_parse_path,
+    &caldav_acl,
+    { MBTYPE_CALENDAR, "mkcalendar", "mkcalendar-response", NS_CALDAV },
     { { "calendar-query", &report_cal_query, DACL_READ,
 	REPORT_NEED_MBOX | REPORT_MULTISTATUS },
       { "calendar-multiget", &report_cal_multiget, DACL_READ,
@@ -222,22 +189,22 @@ const struct namespace_t namespace_calendar = {
     (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DAV | ALLOW_CAL),
     &my_caldav_init, &my_caldav_auth, my_caldav_reset, &my_caldav_shutdown,
     { 
-	{ &meth_acl,		&acl_params },		/* ACL		*/
+	{ &meth_acl,		&caldav_params },	/* ACL		*/
 	{ &meth_copy,		NULL },			/* COPY		*/
 	{ &meth_delete,		NULL },			/* DELETE	*/
-	{ &meth_get_dav,	&get_params },		/* GET		*/
-	{ &meth_get_dav,	&get_params },		/* HEAD		*/
-	{ &meth_lock,		&lock_params },		/* LOCK		*/
-	{ &meth_mkcol,		&mkcalendar_params },	/* MKCALENDAR	*/
-	{ &meth_mkcol,		&mkcol_params },	/* MKCOL	*/
+	{ &meth_get_dav,	&caldav_params },	/* GET		*/
+	{ &meth_get_dav,	&caldav_params },	/* HEAD		*/
+	{ &meth_lock,		&caldav_params },	/* LOCK		*/
+	{ &meth_mkcol,		&caldav_params },	/* MKCALENDAR	*/
+	{ &meth_mkcol,		&caldav_params },	/* MKCOL	*/
 	{ &meth_copy,		NULL },			/* MOVE		*/
 	{ &meth_options,	NULL },			/* OPTIONS	*/
 	{ &meth_post,		NULL },			/* POST		*/
-	{ &meth_propfind,	&propfind_params },	/* PROPFIND	*/
-	{ &meth_proppatch,	&proppatch_params },	/* PROPPATCH	*/
+	{ &meth_propfind,	&caldav_params },	/* PROPFIND	*/
+	{ &meth_proppatch,	&caldav_params },	/* PROPPATCH	*/
 	{ &meth_put,		NULL },			/* PUT		*/
-	{ &meth_report,		&report_params },	/* REPORT	*/
-	{ &meth_unlock,		&lock_params } 		/* UNLOCK	*/
+	{ &meth_report,		&caldav_params },	/* REPORT	*/
+	{ &meth_unlock,		&caldav_params } 	/* UNLOCK	*/
     }
 };
 
