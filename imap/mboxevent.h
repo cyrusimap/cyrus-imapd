@@ -102,7 +102,7 @@ enum event_param {
     EVENT_DISK_USED,
     EVENT_MAX_MESSAGES,
     EVENT_MESSAGES,
-    EVENT_NEW_MESSAGES,
+    EVENT_UNSEEN_MESSAGES,
     EVENT_UIDNEXT,
     EVENT_UIDSET,
     EVENT_MIDSET,
@@ -250,14 +250,14 @@ void mboxevent_set_numunseen(struct mboxevent *event, struct mailbox *mailbox,
  * optionally these ones depending the type of the event:
  * - messages
  * - uidnext
- * - vnd.cmu.newMessages
+ * - vnd.cmu.unseenMessages
  *
  * Must be called once per event or the notification will failed (Except for
  * Login and Logout events)
  * Mailbox must be locked to count the number of \Seen flags
  *
  * It is necessary to call this function after all changes on mailbox to get the
- * right values of messages, uidnext and vnd.cmu.newMessages event parameters
+ * right values of messages, uidnext and vnd.cmu.unseenMessages event parameters
  */
 void mboxevent_extract_mailbox(struct mboxevent *event, struct mailbox *mailbox);
 

@@ -114,7 +114,7 @@ static struct mboxevent event_template =
     { EVENT_DISK_USED, "diskUsed", EVENT_PARAM_INT, 0, 0 },
     { EVENT_MAX_MESSAGES, "maxMessages", EVENT_PARAM_INT, 0, 0 },
     { EVENT_MESSAGES, "messages", EVENT_PARAM_INT, 0, 0 },
-    { EVENT_NEW_MESSAGES, "vnd.cmu.newMessages", EVENT_PARAM_INT, 0, 0 },
+    { EVENT_UNSEEN_MESSAGES, "vnd.cmu.unseenMessages", EVENT_PARAM_INT, 0, 0 },
     { EVENT_UIDNEXT, "uidnext", EVENT_PARAM_INT, 0, 0 },
     { EVENT_UIDSET, "uidset", EVENT_PARAM_STRING, 0, 0 },
     { EVENT_MIDSET, "vnd.cmu.midset", EVENT_PARAM_STRING, 0, 0 },
@@ -372,8 +372,8 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
 	if (!(extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_MIDSET))
 	    return 0;
 	break;
-    case EVENT_NEW_MESSAGES:
-	if (!(extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_NEWMESSAGES))
+    case EVENT_UNSEEN_MESSAGES:
+	if (!(extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_UNSEENMESSAGES))
 	    return 0;
 	break;
     case EVENT_OLD_UIDSET:
@@ -399,7 +399,7 @@ EXPORTED void mboxevent_notify(struct mboxevent *mboxevents)
     event = mboxevents;
 
     /* swap FlagsSet and FlagsClear notification order depending the presence of
-     * the \Seen flag because it changes the value of vnd.cmu.newMessages */
+     * the \Seen flag because it changes the value of vnd.cmu.unseenMessages */
     if (event->type == EVENT_FLAGS_SET &&
 	event->next &&
 	event->next->type == EVENT_FLAGS_CLEAR &&
@@ -799,11 +799,11 @@ EXPORTED void mboxevent_set_numunseen(struct mboxevent *event,
     if (!event)
     	return;
 
-    if (mboxevent_expected_param(event->type, EVENT_NEW_MESSAGES)) {
+    if (mboxevent_expected_param(event->type, EVENT_UNSEEN_MESSAGES)) {
 	/* as event notification is focused on mailbox, we don't care about the
 	 * authenticated user but the mailbox's owner.
 	 * it could be a problem only if it is a shared or public folder */
-	FILL_INT_PARAM(event, EVENT_NEW_MESSAGES, numunseen >= 0 ? numunseen :
+	FILL_INT_PARAM(event, EVENT_UNSEEN_MESSAGES, numunseen >= 0 ? numunseen :
 		       mailbox_count_unseen(mailbox));
     }
 }
