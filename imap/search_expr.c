@@ -348,17 +348,13 @@ static search_expr_t *unserialise(search_expr_t *parent,
     case SEOP_NOT:
 	/* parse children */
 	for (;;) {
+	    if (unserialise(e, prot) == NULL)
+		goto bad;
 	    c = prot_getc(prot);
-	    if (c == '(') {
-		prot_ungetc(c, prot);
-		if (unserialise(e, prot) == NULL)
-		    goto bad;
-		c = prot_getc(prot);
-		if (c == ')')
-		    break;
-		if (c != ' ')
-		    goto bad;
-	    }
+	    if (c == ')')
+		break;
+	    if (c != ' ')
+		goto bad;
 	}
 	break;
     case SEOP_LT:
