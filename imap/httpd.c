@@ -250,6 +250,7 @@ const struct known_meth_t http_methods[] = {
     { "DELETE",	   	METH_NOBODY },
     { "GET",	   	METH_NOBODY },
     { "HEAD",	   	METH_NOBODY },
+    { "LOCK",		0 },
     { "MKCALENDAR",	0 },
     { "MKCOL",		0 },
     { "MOVE",		METH_NOBODY },
@@ -259,6 +260,7 @@ const struct known_meth_t http_methods[] = {
     { "PROPPATCH",	0 },
     { "PUT",		0 },
     { "REPORT",		0 },
+    { "UNLOCK",	   	METH_NOBODY },
     { NULL,		0 }
 };
 
@@ -272,6 +274,7 @@ const struct namespace_t namespace_default = {
 	{ NULL,			NULL },			/* DELETE	*/
 	{ &meth_get_doc,	NULL },			/* GET		*/
 	{ &meth_get_doc,	NULL },			/* HEAD		*/
+	{ NULL,			NULL },			/* LOCK		*/
 	{ NULL,			NULL },			/* MKCALENDAR	*/
 	{ NULL,			NULL },			/* MKCOL	*/
 	{ NULL,			NULL },			/* MOVE		*/
@@ -280,7 +283,8 @@ const struct namespace_t namespace_default = {
 	{ &meth_propfind_root,	NULL },			/* PROPFIND	*/
 	{ NULL,			NULL },			/* PROPPATCH	*/
 	{ NULL,			NULL },			/* PUT		*/
-	{ NULL,			NULL }			/* REPORT	*/
+	{ NULL,			NULL },			/* REPORT	*/
+	{ NULL,			NULL },			/* UNLOCK	*/
     }
 };
 
@@ -1720,7 +1724,7 @@ void response_header(long code, struct transaction_t *txn)
     }
     if (txn->req_tgt.allow & ALLOW_DAV) {
 	/* Construct DAV header(s) based on namespace of request URL */
-	prot_printf(httpd_out, "DAV: 1, 3%s\r\n",
+	prot_printf(httpd_out, "DAV: 1, 2, 3%s\r\n",
 		    (txn->req_tgt.allow & ALLOW_WRITE) ?
 		    ", access-control, extended-mkcol" : "");
 	if (txn->req_tgt.allow & ALLOW_CAL) {
@@ -1781,8 +1785,9 @@ void response_header(long code, struct transaction_t *txn)
 	prot_printf(httpd_out, "\r\n");
 	if (txn->req_tgt.allow & ALLOW_DAV) {
 	    prot_printf(httpd_out, "Allow: REPORT, PROPFIND");
-	    if (txn->req_tgt.allow & ALLOW_WRITE) {  /* LOCK, UNLOCK */
-		prot_printf(httpd_out, ", PROPPATCH, COPY, MOVE, ACL, MKCOL");
+	    if (txn->req_tgt.allow & ALLOW_WRITE) {
+		prot_printf(httpd_out,
+			    ", PROPPATCH, COPY, MOVE, LOCK, UNLOCK, ACL, MKCOL");
 		if (txn->req_tgt.allow & ALLOW_CAL) {
 		    prot_printf(httpd_out, ", MKCALENDAR");
 		}
@@ -1847,6 +1852,9 @@ void response_header(long code, struct transaction_t *txn)
 	};
 
 	comma_list_hdr("Vary", vary_hdrs, txn->flags.vary);
+    }
+    if (resp_body->lock) {
+	prot_printf(httpd_out, "Lock-Token: <%s>\r\n", resp_body->lock);
     }
     if (resp_body->stag) {
 	prot_printf(httpd_out, "Schedule-Tag: \"%s\"\r\n", resp_body->stag);
@@ -2529,6 +2537,60 @@ static unsigned etag_match(const char *hdr[], const char *etag)
 }
 
 
+static int eval_if(const char *hdr, const char *etag, const char *lock_token,
+		   unsigned *locked)
+{
+    int r = 0;
+    tok_t tok_l;
+    char *list;
+
+    /* Process each list until one evaluates to true */
+    tok_init(&tok_l, hdr, ")", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+    while (!r && (list = tok_next(&tok_l))) {
+	tok_t tok_c;
+	char *cond;
+
+	/* XXX  Need to handle Resource-Tag for Tagged-list (COPY/MOVE dest) */
+
+	/* Process each condition until one fails */
+	r = 1;
+	tok_initm(&tok_c, list+1, "]>", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+	while (r && (cond = tok_next(&tok_c))) {
+	    unsigned not = 0;
+
+	    if (!strncmp(cond, "Not", 3)) {
+		not = 1;
+		cond += 3;
+		while (*cond == ' ') cond++;
+	    }
+	    if (*cond == '[') {
+		/* ETag */
+		r = !etagcmp(cond+1, etag);
+	    }
+	    else {
+		/* State Token */
+		if (!lock_token) r = 0;
+		else {
+		    r = !strcmp(cond+1, lock_token);
+		    if (r) {
+			/* Correct lock-token has been provided */
+			*locked = 0;
+		    }
+		}
+	    }
+
+	    if (not) r = !r;
+	}
+
+	tok_fini(&tok_c);
+    }
+
+    tok_fini(&tok_l);
+
+    return r;
+}
+
+
 static int parse_ranges(const char *hdr, struct range *range)
 {
     ulong *first = &range->first;
@@ -2605,23 +2667,67 @@ static int parse_ranges(const char *hdr, struct range *range)
  * Interaction is complex and is documented in RFC 4918 and
  * Section 5 of HTTPbis, Part 4.
  */
-int check_precond(struct transaction_t *txn,
-		  const void *data __attribute__((unused)),
+int check_precond(struct transaction_t *txn, const void *data,
 		  const char *etag, time_t lastmod)
 {
     long resp = HTTP_OK;
-    unsigned is_get_or_head = 0;
+    struct dav_data *ddata = (struct dav_data *) data;
+    const char *lock_token = NULL;
+    unsigned locked = 0, is_get_or_head = 0;
     hdrcache_t hdrcache = txn->req_hdrs;
     const char **hdr;
     time_t since;
 
+    /* Check for a write-lock on the source */
+    if (ddata && ddata->lock_expire > time(NULL)) {
+	lock_token = ddata->lock_token;
+
+	switch (txn->meth) {
+	case METH_ACL:
+	case METH_MKCALENDAR:
+	case METH_MKCOL:
+	case METH_PROPPATCH:
+	    /* State-changing method: These operate on collections
+	       and we currently don't support locks on collections */
+	    break;
+
+	case METH_DELETE:
+	case METH_LOCK:
+	case METH_MOVE:
+	case METH_POST:
+	case METH_PUT:
+	    /* State-changing method: Only the lock owner can execute
+	       and MUST provide the correct lock-token in an If header */
+	    if (strcmp(ddata->lock_ownerid, httpd_userid)) return HTTP_LOCKED;
+
+	    locked = 1;
+	    break;
+
+	case METH_UNLOCK:
+	    /* State-changing method: Only the lock owner
+	       or a user with the DAV:unlock right can execute,
+	       and MUST provide a correct Lock-Token header.
+	       Both criteria are checked in meth_unlock() */
+	    break;
+
+	default:
+	    /* Non-state-changing method: Always allowed */
+	    break;
+	}
+    }
+
     /* Step 0 - Per RFC 4918, If supercedes If-Match */
     if ((hdr = spool_getheader(hdrcache, "If"))) {
 	/* State tokens (sync-token, lock-token) and Etags */
-	syslog(LOG_WARNING, "If: %s", hdr[0]);
-	/* If all lists evaluate to false */ return HTTP_PRECOND_FAILED;
+	if (!eval_if(hdr[0], etag, lock_token, &locked))
+	    return HTTP_PRECOND_FAILED;
 
-	/* Continue to step 3 */
+	/* Continue to step 1 */
+    }
+
+    if (locked) {
+	/* Correct lock-token was not provided in If header */
+	return HTTP_LOCKED;
     }
 
     /* Evaluate other precondition headers per Section 5 of HTTPbis, Part 4 */

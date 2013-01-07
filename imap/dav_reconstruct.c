@@ -49,6 +49,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #include <libical/ical.h>
 
@@ -171,7 +172,7 @@ int do_reconstruct(char *mboxname,
     char ext_name_buf[MAX_MAILBOX_PATH+1];
     struct mailbox *mailbox = NULL;
     struct index_record record;
-    struct caldav_data *cdata;
+    struct caldav_data cdata;
     
     signals_poll();
 
@@ -199,7 +200,7 @@ int do_reconstruct(char *mboxname,
     printf("\n Message Info:\n");
 
     /* Begin new transaction for each mailbox */
-    caldav_lookup_resource(caldavdb, NULL, NULL, 1, &cdata);
+    caldav_begin(caldavdb);
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	struct body *body;
@@ -220,9 +221,10 @@ int do_reconstruct(char *mboxname,
 	mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
 	if (!ical) continue;
 
-	memset(cdata, 0, sizeof(struct caldav_data));
-	cdata->dav.mailbox = mboxname;
-	cdata->dav.imap_uid = record.uid;
+	memset(&cdata, 0, sizeof(struct caldav_data));
+	cdata.dav.creationdate = time(NULL);
+	cdata.dav.mailbox = mboxname;
+	cdata.dav.imap_uid = record.uid;
 
 	/* Get resource URL from filename param in Content-Disposition header */
 	message_read_bodystructure(&record, &body);
@@ -232,15 +234,15 @@ int do_reconstruct(char *mboxname,
 		break;
 	    }
 	}
-	cdata->dav.resource = resource;
+	cdata.dav.resource = resource;
 
-	caldav_make_entry(ical, cdata);
+	caldav_make_entry(ical, &cdata);
 
 	/* XXX  Do we need to do something with Schedule-Tag?
 	   Perhaps we need to keep it in resource.
 	*/
 
-	caldav_write(caldavdb, cdata);
+	caldav_write(caldavdb, &cdata, 0);
 
 	message_free_body(body); free(body);
 	icalcomponent_free(ical);

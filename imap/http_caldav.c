@@ -172,6 +172,15 @@ static struct get_params get_params = {
     "text/calendar; charset=utf-8"
 };
 
+static struct lock_params lock_params = {
+    &caldav_parse_path,
+    (void **) &auth_caldavdb,
+    (lookup_proc_t) &caldav_lookup_resource,
+    (write_proc_t) &caldav_write,
+    (delete_proc_t) &caldav_delete,
+    &caldav_check_precond,
+};
+
 static struct mkcol_params mkcalendar_params = {
     &caldav_parse_path,
     MBTYPE_CALENDAR, "mkcalendar", "mkcalendar-response", NS_CALDAV
@@ -218,6 +227,7 @@ const struct namespace_t namespace_calendar = {
 	{ &meth_delete,		NULL },			/* DELETE	*/
 	{ &meth_get_dav,	&get_params },		/* GET		*/
 	{ &meth_get_dav,	&get_params },		/* HEAD		*/
+	{ &meth_lock,		&lock_params },		/* LOCK		*/
 	{ &meth_mkcol,		&mkcalendar_params },	/* MKCALENDAR	*/
 	{ &meth_mkcol,		&mkcol_params },	/* MKCOL	*/
 	{ &meth_copy,		NULL },			/* MOVE		*/
@@ -226,7 +236,8 @@ const struct namespace_t namespace_calendar = {
 	{ &meth_propfind,	&propfind_params },	/* PROPFIND	*/
 	{ &meth_proppatch,	&proppatch_params },	/* PROPPATCH	*/
 	{ &meth_put,		NULL },			/* PUT		*/
-	{ &meth_report,		&report_params }	/* REPORT	*/
+	{ &meth_report,		&report_params },	/* REPORT	*/
+	{ &meth_unlock,		&lock_params } 		/* UNLOCK	*/
     }
 };
 
@@ -383,28 +394,27 @@ static int caldav_check_precond(struct transaction_t *txn, const void *data,
 				const char *etag, time_t lastmod)
 {
     const struct caldav_data *cdata = (const struct caldav_data *) data;
+    const char *stag = cdata ? cdata->sched_tag : NULL;
     const char **hdr;
     int ret;
 
     /* Per RFC 6638,
        If-Schedule-Tag-Match supercedes any ETag-based precondition tests */
     if ((hdr = spool_getheader(txn->req_hdrs, "If-Schedule-Tag-Match"))) {
-	if (cdata && etagcmp(hdr[0], cdata->sched_tag))
-	    return HTTP_PRECOND_FAILED;
+	if (etagcmp(hdr[0], stag)) return HTTP_PRECOND_FAILED;
+    }
 
-	ret = HTTP_OK;  /* Ignore remaining conditionals */
-    }
-    else {
-	/* Do normal WebDAV and/or HTTP checks */
-	ret = check_precond(txn, NULL, etag, lastmod);
-    }
+    /* Do normal WebDAV/HTTP checks (primarily for lock-token via If header) */
+    ret = check_precond(txn, data, etag, lastmod);
 
     switch (txn->meth) {
     case METH_GET:
     case METH_HEAD:
-	if (ret == HTTP_OK) {
-	    /* Fill in Schedule-Tag */
-	    txn->resp_body.stag = cdata->sched_tag;
+	switch (ret) {
+	case HTTP_OK:
+	case HTTP_PARTIAL:
+	    /* Fill in Schedule-Tag for successful GET/HEAD */
+	    txn->resp_body.stag = stag;
 	}
     }
 
@@ -641,7 +651,7 @@ static int meth_copy(struct transaction_t *txn,
     if ((hdr = spool_getheader(txn->req_hdrs, "Overwrite")) &&
 	!strcmp(hdr[0], "F")) {
 
-	if (cdata->dav.imap_uid) {
+	if (cdata->dav.rowid) {
 	    /* Don't overwrite the destination resource */
 	    ret = HTTP_PRECOND_FAILED;
 	    goto done;
@@ -659,23 +669,43 @@ static int meth_copy(struct transaction_t *txn,
     }
 
     /* Find message UID for the source resource */
-    caldav_lookup_resource(auth_caldavdb,
-			   txn->req_tgt.mboxname, txn->req_tgt.resource, 0, &cdata);
-    /* XXX  Check errors */
-
-    /* Fetch index record for the source resource */
-    if (!cdata->dav.imap_uid ||
-	mailbox_find_index_record(src_mbox, cdata->dav.imap_uid, &src_rec)) {
+    caldav_lookup_resource(auth_caldavdb, txn->req_tgt.mboxname,
+			   txn->req_tgt.resource, 0, &cdata);
+    if (!cdata->dav.rowid) {
 	ret = HTTP_NOT_FOUND;
 	goto done;
     }
 
+    if (cdata->dav.imap_uid) {
+	/* Mapped URL - Fetch index record for the resource */
+	r = mailbox_find_index_record(src_mbox, cdata->dav.imap_uid, &src_rec);
+	if (r) {
+	    txn->error.desc = error_message(r);
+	    ret = HTTP_SERVER_ERROR;
+	    goto done;
+	}
+
+	etag = message_guid_encode(&src_rec.guid);
+	lastmod = src_rec.internaldate;
+    }
+    else {
+	/* Unmapped URL (empty resource) */
+	etag = NULL_ETAG;
+	lastmod = cdata->dav.creationdate;
+    }
+
     /* Check any preconditions on source */
-    etag = message_guid_encode(&src_rec.guid);
-    lastmod = src_rec.internaldate;
     precond = caldav_check_precond(txn, cdata, etag, lastmod);
 
-    if (precond != HTTP_OK) {
+    switch (precond) {
+    case HTTP_OK:
+	break;
+
+    case HTTP_LOCKED:
+	txn->error.precond = DAV_NEED_LOCK_TOKEN;
+	txn->error.resource = txn->req_tgt.path;
+
+    default:
 	/* We failed a precondition - don't perform the request */
 	ret = precond;
 	goto done;
@@ -700,8 +730,8 @@ static int meth_copy(struct transaction_t *txn,
 	mailbox_lock_index(src_mbox, LOCK_EXCLUSIVE);
 
 	/* Find message UID for the source resource */
-	caldav_lookup_resource(auth_caldavdb,
-			       txn->req_tgt.mboxname, txn->req_tgt.resource, 1, &cdata);
+	caldav_lookup_resource(auth_caldavdb, txn->req_tgt.mboxname,
+			       txn->req_tgt.resource, 1, &cdata);
 	/* XXX  Check errors */
 
 	/* Fetch index record for the source resource */
@@ -721,8 +751,7 @@ static int meth_copy(struct transaction_t *txn,
 	}
 
 	/* Delete mapping entry for source resource name */
-	caldav_delete(auth_caldavdb, cdata->dav.rowid);
-	caldav_commit(auth_caldavdb);
+	caldav_delete(auth_caldavdb, cdata->dav.rowid, 1);
     }
 
   done:
@@ -815,7 +844,7 @@ static int meth_delete(struct transaction_t *txn,
 				   httpd_userid, httpd_authstate,
 				   1, 0, 0);
 
-	if (!r) caldav_delmbox(auth_caldavdb, txn->req_tgt.mboxname);
+	if (!r) caldav_delmbox(auth_caldavdb, txn->req_tgt.mboxname, 0);
 	else if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
 	else if (r == IMAP_MAILBOX_NONEXISTENT) ret = HTTP_NOT_FOUND;
 	else if (r) ret = HTTP_SERVER_ERROR;
@@ -835,26 +864,46 @@ static int meth_delete(struct transaction_t *txn,
 	goto done;
     }
 
-    /* Find message UID for the resource */
+    /* Find message UID for the resource, if exists */
     caldav_lookup_resource(auth_caldavdb, txn->req_tgt.mboxname,
 			   txn->req_tgt.resource, 1, &cdata);
-    /* XXX  Check errors */
-
-    /* Fetch index record for the resource */
-    if (!cdata->dav.imap_uid ||
-	mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record)) {
+    if (!cdata->dav.rowid) {
 	ret = HTTP_NOT_FOUND;
 	goto done;
     }
 
-    etag = message_guid_encode(&record.guid);
-    lastmod = record.internaldate;
+    memset(&record, 0, sizeof(struct index_record));
+    if (cdata->dav.imap_uid) {
+	/* Mapped URL - Fetch index record for the resource */
+	r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
+	if (r) {
+	    txn->error.desc = error_message(r);
+	    ret = HTTP_SERVER_ERROR;
+	    goto done;
+	}
+
+	etag = message_guid_encode(&record.guid);
+	lastmod = record.internaldate;
+    }
+    else {
+	/* Unmapped URL (empty resource) */
+	etag = NULL_ETAG;
+	lastmod = cdata->dav.creationdate;
+    }
 
     /* Check any preconditions */
     precond = caldav_check_precond(txn, cdata, etag, lastmod);
 
-    /* We failed a precondition - don't perform the request */
-    if (precond != HTTP_OK) {
+    switch (precond) {
+    case HTTP_OK:
+	break;
+
+    case HTTP_LOCKED:
+	txn->error.precond = DAV_NEED_LOCK_TOKEN;
+	txn->error.resource = txn->req_tgt.path;
+
+    default:
+	/* We failed a precondition - don't perform the request */
 	ret = precond;
 	goto done;
     }
@@ -938,20 +987,21 @@ static int meth_delete(struct transaction_t *txn,
     }
 #endif /* WITH_CALDAV_SCHED */
 
-    /* Expunge the resource */
-    record.system_flags |= FLAG_EXPUNGED;
+    if (record.uid) {
+	/* Expunge the resource */
+	record.system_flags |= FLAG_EXPUNGED;
 
-    if ((r = mailbox_rewrite_index_record(mailbox, &record))) {
-	syslog(LOG_ERR, "expunging record (%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
+	if ((r = mailbox_rewrite_index_record(mailbox, &record))) {
+	    syslog(LOG_ERR, "expunging record (%s) failed: %s",
+		   txn->req_tgt.mboxname, error_message(r));
+	    txn->error.desc = error_message(r);
+	    ret = HTTP_SERVER_ERROR;
+	    goto done;
+	}
     }
 
     /* Delete mapping entry for resource name */
-    caldav_delete(auth_caldavdb, rowid);
-    caldav_commit(auth_caldavdb);
+    caldav_delete(auth_caldavdb, rowid, 1);
 
   done:
     if (mailbox) mailbox_unlock_index(mailbox, NULL);
@@ -1299,10 +1349,19 @@ static int meth_put(struct transaction_t *txn,
 
 	/* Fetch index record for the resource */
 	r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &oldrecord);
-	/* XXX  check for errors */
+	if (r) {
+	    txn->error.desc = error_message(r);
+	    ret = HTTP_SERVER_ERROR;
+	    goto done;
+	}
 
 	etag = message_guid_encode(&oldrecord.guid);
 	lastmod = oldrecord.internaldate;
+    }
+    else if (cdata->dav.rowid) {
+	/* Unmapped URL (empty resource) */
+	etag = NULL_ETAG;
+	lastmod = cdata->dav.creationdate;
     }
     else {
 	/* New resource */
@@ -1316,7 +1375,15 @@ static int meth_put(struct transaction_t *txn,
     /* Check any preconditions */
     precond = caldav_check_precond(txn, cdata, etag, lastmod);
 
-    if (precond != HTTP_OK) {
+    switch (precond) {
+    case HTTP_OK:
+	break;
+
+    case HTTP_LOCKED:
+	txn->error.precond = DAV_NEED_LOCK_TOKEN;
+	txn->error.resource = txn->req_tgt.path;
+
+    default:
 	/* We failed a precondition - don't perform the request */
 	ret = precond;
 	goto done;
@@ -2061,6 +2128,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 		    cdata->dav.imap_uid = newrecord.uid;
 		    caldav_make_entry(ical, cdata);
 
+		    if (!cdata->dav.creationdate) cdata->dav.creationdate = now;
 		    if (!cdata->organizer) cdata->sched_tag = NULL;
 		    else if (flags & NEW_STAG) {
 			sprintf(sched_tag, "%d-%ld-%u",
@@ -2068,8 +2136,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			cdata->sched_tag = sched_tag;
 		    }
 
-		    caldav_write(caldavdb, cdata);
-		    caldav_commit(caldavdb);
+		    caldav_write(caldavdb, cdata, 1);
 		    /* XXX  check for errors, if this fails, backout changes */
 
 		    /* Tell client about the new resource */

@@ -57,14 +57,14 @@ struct caldav_db;
 
 struct caldav_data {
     struct dav_data dav;  /* MUST be first so we can typecast */
-    const char *ical_uid;
     unsigned comp_type;
+    const char *ical_uid;
     const char *organizer;
-    const char *sched_tag;
     const char *dtstart;
     const char *dtend;
     unsigned recurring;
     unsigned transp;
+    const char *sched_tag;
 };
 
 /* prepare for caldav operations in this process */
@@ -96,13 +96,17 @@ int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
 		   void *rock);
 
 /* write an entry to 'caldavdb' */
-int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata);
+int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata,
+		 int commit);
 
 /* delete an entry from 'caldavdb' */
-int caldav_delete(struct caldav_db *caldavdb, unsigned rowid);
+int caldav_delete(struct caldav_db *caldavdb, unsigned rowid, int commit);
 
 /* delete all entries for 'mailbox' from 'caldavdb' */
-int caldav_delmbox(struct caldav_db *caldavdb, const char *mailbox);
+int caldav_delmbox(struct caldav_db *caldavdb, const char *mailbox, int commit);
+
+/* begin transaction */
+int caldav_begin(struct caldav_db *caldavdb);
 
 /* commit transaction */
 int caldav_commit(struct caldav_db *caldavdb);

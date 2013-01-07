@@ -219,17 +219,22 @@ Data: &lt;Version (2 bytes)&gt;&lt;Access Key (multi-byte)&gt;
 <pre>
 CREATE TABLE ical_objs (
  rowid INTEGER PRIMARY KEY,
+ creationdate INTEGER,
  mailbox TEXT NOT NULL,
  resource TEXT NOT NULL,
  imap_uid INTEGER,
- ical_uid TEXT,
+ lock_token TEXT,
+ lock_owner TEXT,
+ lock_ownerid TEXT,
+ lock_expire INTEGER,
  comp_type INTEGER,
+ ical_uid TEXT,
  organizer TEXT,
- sched_tag TEXT,
  dtstart TEXT,
  dtend TEXT,
  recurring INTEGER,
  transp INTEGER,
+ sched_tag TEXT,
  UNIQUE( mailbox, resource )
 );
 </pre>
@@ -250,11 +255,16 @@ CREATE INDEX idx_ical_uid ON ical_objs ( ical_uid );
 <pre>
 CREATE TABLE vcard_objs (
  rowid INTEGER PRIMARY KEY,
+ creationdate INTEGER,
  mailbox TEXT NOT NULL,
  resource TEXT NOT NULL,
  imap_uid INTEGER,
- vcard_uid TEXT,
+ lock_token TEXT,
+ lock_owner TEXT,
+ lock_ownerid TEXT,
+ lock_expire INTEGER,
  version INTEGER,
+ vcard_uid TEXT,
  kind INTEGER,
  fname TEXT,
  name TEXT,

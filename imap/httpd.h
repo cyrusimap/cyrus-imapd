@@ -89,6 +89,7 @@ enum {
     METH_DELETE,
     METH_GET,
     METH_HEAD,
+    METH_LOCK,
     METH_MKCALENDAR,
     METH_MKCOL,
     METH_MOVE,
@@ -98,6 +99,7 @@ enum {
     METH_PROPPATCH,
     METH_PUT,
     METH_REPORT,
+    METH_UNLOCK,
 
     METH_UNKNOWN,  /* MUST be last */
 };
@@ -211,6 +213,7 @@ struct resp_body_t {
     const char *lang;	/* Content-Language */
     const char *loc;	/* Content-Location */
     const char *type;	/* Content-Type     */
+    const char *lock;	/* Lock-Token       */
     const char *etag;	/* ETag             */
     time_t lastmod;	/* Last-Modified    */
     const char *stag;	/* Schedule-Tag     */

@@ -80,11 +80,14 @@ struct caldav_db {
     sqlite3_stmt *stmt[NUM_STMT];	/* prepared statements */
     struct buf mailbox;			/* buffers for copies of column text */
     struct buf resource;
+    struct buf lock_token;
+    struct buf lock_owner;
+    struct buf lock_ownerid;
     struct buf ical_uid;
     struct buf organizer;
-    struct buf sched_tag;
     struct buf dtstart;
     struct buf dtend;
+    struct buf sched_tag;
 };
 
 
@@ -115,17 +118,22 @@ int caldav_done(void)
 #define CMD_CREATE							\
     "CREATE TABLE IF NOT EXISTS ical_objs ("				\
     " rowid INTEGER PRIMARY KEY,"					\
+    " creationdate INTEGER,"						\
     " mailbox TEXT NOT NULL,"						\
     " resource TEXT NOT NULL,"						\
     " imap_uid INTEGER,"						\
-    " ical_uid TEXT,"							\
+    " lock_token TEXT,"							\
+    " lock_owner TEXT,"							\
+    " lock_ownerid TEXT,"						\
+    " lock_expire INTEGER,"						\
     " comp_type INTEGER,"						\
+    " ical_uid TEXT,"							\
     " organizer TEXT,"							\
-    " sched_tag TEXT,"							\
     " dtstart TEXT,"							\
     " dtend TEXT,"							\
     " recurring INTEGER,"						\
     " transp INTEGER,"							\
+    " sched_tag TEXT,"							\
     " UNIQUE( mailbox, resource ) );"					\
     "CREATE INDEX IF NOT EXISTS idx_ical_uid ON ical_objs ( ical_uid );"
 
@@ -161,11 +169,14 @@ int caldav_close(struct caldav_db *caldavdb)
 
     buf_free(&caldavdb->mailbox);
     buf_free(&caldavdb->resource);
+    buf_free(&caldavdb->lock_token);
+    buf_free(&caldavdb->lock_owner);
+    buf_free(&caldavdb->lock_ownerid);
     buf_free(&caldavdb->ical_uid);
     buf_free(&caldavdb->organizer);
-    buf_free(&caldavdb->sched_tag);
     buf_free(&caldavdb->dtstart);
     buf_free(&caldavdb->dtend);
+    buf_free(&caldavdb->sched_tag);
 
     for (i = 0; i < NUM_STMT; i++) {
 	sqlite3_stmt *stmt = caldavdb->stmt[i];
@@ -177,6 +188,33 @@ int caldav_close(struct caldav_db *caldavdb)
     free(caldavdb);
 
     return r;
+}
+
+
+#define CMD_BEGIN "BEGIN TRANSACTION;"
+
+int caldav_begin(struct caldav_db *caldavdb)
+{
+    return dav_exec(caldavdb->db, CMD_BEGIN, NULL, NULL, NULL,
+		    &caldavdb->stmt[STMT_BEGIN]);
+}
+
+
+#define CMD_COMMIT "COMMIT TRANSACTION;"
+
+int caldav_commit(struct caldav_db *caldavdb)
+{
+    return dav_exec(caldavdb->db, CMD_COMMIT, NULL, NULL, NULL,
+		    &caldavdb->stmt[STMT_COMMIT]);
+}
+
+
+#define CMD_ROLLBACK "ROLLBACK TRANSACTION;"
+
+int caldav_abort(struct caldav_db *caldavdb)
+{
+    return dav_exec(caldavdb->db, CMD_ROLLBACK, NULL, NULL, NULL,
+		    &caldavdb->stmt[STMT_ROLLBACK]);
 }
 
 
@@ -207,20 +245,25 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     memset(cdata, 0, sizeof(struct caldav_data));
 
     cdata->dav.rowid = sqlite3_column_int(stmt, 0);
-    cdata->dav.imap_uid = sqlite3_column_int(stmt, 3);
-    cdata->comp_type = sqlite3_column_int(stmt, 5);
-    cdata->recurring = sqlite3_column_int(stmt, 10);
-    cdata->transp = sqlite3_column_int(stmt, 11);
+    cdata->dav.creationdate = sqlite3_column_int(stmt, 1);
+    cdata->dav.imap_uid = sqlite3_column_int(stmt, 4);
+    cdata->dav.lock_expire = sqlite3_column_int(stmt, 8);
+    cdata->comp_type = sqlite3_column_int(stmt, 9);
+    cdata->recurring = sqlite3_column_int(stmt, 14);
+    cdata->transp = sqlite3_column_int(stmt, 15);
 
     if (rrock->cb) {
 	/* We can use the column data directly for the callback */
-	cdata->dav.mailbox = (const char *) sqlite3_column_text(stmt, 1);
-	cdata->dav.resource = (const char *) sqlite3_column_text(stmt, 2);
-	cdata->ical_uid = (const char *) sqlite3_column_text(stmt, 4);
-	cdata->organizer = (const char *) sqlite3_column_text(stmt, 6);
-	cdata->sched_tag = (const char *) sqlite3_column_text(stmt, 7);
-	cdata->dtstart = (const char *) sqlite3_column_text(stmt, 8);
-	cdata->dtend = (const char *) sqlite3_column_text(stmt, 9);
+	cdata->dav.mailbox = (const char *) sqlite3_column_text(stmt, 2);
+	cdata->dav.resource = (const char *) sqlite3_column_text(stmt, 3);
+	cdata->dav.lock_token = (const char *) sqlite3_column_text(stmt, 5);
+	cdata->dav.lock_owner = (const char *) sqlite3_column_text(stmt, 6);
+	cdata->dav.lock_ownerid = (const char *) sqlite3_column_text(stmt, 7);
+	cdata->ical_uid = (const char *) sqlite3_column_text(stmt, 10);
+	cdata->organizer = (const char *) sqlite3_column_text(stmt, 11);
+	cdata->dtstart = (const char *) sqlite3_column_text(stmt, 12);
+	cdata->dtend = (const char *) sqlite3_column_text(stmt, 13);
+	cdata->sched_tag = (const char *) sqlite3_column_text(stmt, 16);
 	r = rrock->cb(rrock->rock, cdata);
     }
     else {
@@ -228,37 +271,46 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 	 * we need to make a copy of the column data before
 	 * it gets flushed by sqlite3_step() or sqlite3_reset() */
 	cdata->dav.mailbox =
-	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 1),
+	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 2),
 			       &db->mailbox);
 	cdata->dav.resource =
-	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 2),
+	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 3),
 			       &db->resource);
+	cdata->dav.lock_token =
+	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 5),
+			       &db->lock_token);
+	cdata->dav.lock_owner =
+	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 6),
+			       &db->lock_owner);
+	cdata->dav.lock_ownerid =
+	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 7),
+			       &db->lock_ownerid);
 	cdata->ical_uid =
-	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 4),
+	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 10),
 			       &db->ical_uid);
 	cdata->organizer =
-	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 6),
+	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 11),
 			       &db->organizer);
-	cdata->sched_tag =
-	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 7),
-			       &db->sched_tag);
 	cdata->dtstart =
-	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 8),
+	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 12),
 			       &db->dtstart);
 	cdata->dtend =
-	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 9),
+	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 13),
 			       &db->dtend);
+	cdata->sched_tag =
+	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 16),
+			       &db->sched_tag);
     }
 
     return r;
 }
 
 
-#define CMD_BEGIN "BEGIN TRANSACTION;"
-
 #define CMD_SELRSRC							\
-    "SELECT rowid, mailbox, resource, imap_uid, ical_uid, comp_type,"	\
-    "  organizer, sched_tag, dtstart, dtend, recurring, transp"		\
+    "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
+    "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
+    "  comp_type, ical_uid, organizer, dtstart, dtend,"			\
+    "  recurring, transp, sched_tag"					\
     " FROM ical_objs"							\
     " WHERE ( mailbox = :mailbox AND resource = :resource );"
 
@@ -292,8 +344,10 @@ int caldav_lookup_resource(struct caldav_db *caldavdb,
 
 
 #define CMD_SELUID							\
-    "SELECT rowid, mailbox, resource, imap_uid, ical_uid, comp_type,"	\
-    "  organizer, sched_tag, dtstart, dtend, recurring, transp"		\
+    "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
+    "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
+    "  comp_type, ical_uid, organizer, dtstart, dtend,"			\
+    "  recurring, transp, sched_tag"					\
     " FROM ical_objs"							\
     " WHERE ( ical_uid = :ical_uid AND mailbox != :inbox);"
 
@@ -326,8 +380,10 @@ int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
 
 
 #define CMD_SELMBOX							\
-    "SELECT rowid, mailbox, resource, imap_uid, ical_uid, comp_type,"	\
-    "  organizer, sched_tag, dtstart, dtend, recurring, transp"		\
+    "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
+    "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
+    "  comp_type, ical_uid, organizer, dtstart, dtend,"			\
+    "  recurring, transp, sched_tag"					\
     " FROM ical_objs WHERE mailbox = :mailbox;"
 
 int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
@@ -347,108 +403,134 @@ int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
 
 #define CMD_INSERT							\
     "INSERT INTO ical_objs ("						\
-    "  mailbox, resource, imap_uid, ical_uid, comp_type,"		\
-    "  organizer, sched_tag, dtstart, dtend, recurring, transp )"	\
+    "  creationdate, mailbox, resource, imap_uid,"			\
+    "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
+    "  comp_type, ical_uid, organizer, dtstart, dtend,"			\
+    "  recurring, transp, sched_tag )" 	       		  	   	\
     " VALUES ("								\
-    "  :mailbox, :resource, :imap_uid, :ical_uid, :comp_type,"		\
-    "  :organizer, :sched_tag, :dtstart, :dtend, :recurring, :transp );"
+    "  :creationdate, :mailbox, :resource, :imap_uid,"			\
+    "  :lock_token, :lock_owner, :lock_ownerid, :lock_expire,"		\
+    "  :comp_type, :ical_uid, :organizer, :dtstart, :dtend,"		\
+    "  :recurring, :transp, :sched_tag );"
 
-#define CMD_UPDATE		\
-    "UPDATE ical_objs SET"	\
-    "  imap_uid  = :imap_uid,"	\
-    "  ical_uid  = :ical_uid,"	\
-    "  comp_type = :comp_type," \
-    "  organizer = :organizer," \
-    "  sched_tag = :sched_tag," \
-    "  dtstart   = :dtstart,"	\
-    "  dtend     = :dtend,"	\
-    "  recurring = :recurring," \
-    "  transp    = :transp"	\
+#define CMD_UPDATE		   	\
+    "UPDATE ical_objs SET"		\
+    "  imap_uid     = :imap_uid,"	\
+    "  lock_token   = :lock_token,"	\
+    "  lock_owner   = :lock_owner,"	\
+    "  lock_ownerid = :lock_ownerid,"	\
+    "  lock_expire = :lock_expire,"	\
+    "  comp_type    = :comp_type,"	\
+    "  ical_uid     = :ical_uid,"	\
+    "  organizer    = :organizer,"	\
+    "  dtstart      = :dtstart,"	\
+    "  dtend        = :dtend,"		\
+    "  recurring    = :recurring,"	\
+    "  transp       = :transp,"		\
+    "  sched_tag    = :sched_tag"	\
     " WHERE rowid = :rowid;"
 
-int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata)
+int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata,
+		 int commit)
 {
     struct bind_val bval[] = {
-	{ ":imap_uid",	 SQLITE_INTEGER, { .i = cdata->dav.imap_uid  } },
-	{ ":ical_uid",	 SQLITE_TEXT,	 { .s = cdata->ical_uid  } },
-	{ ":comp_type",	 SQLITE_INTEGER, { .i = cdata->comp_type } },
-	{ ":organizer",	 SQLITE_TEXT,	 { .s = cdata->organizer } },
-	{ ":sched_tag",	 SQLITE_TEXT,	 { .s = cdata->sched_tag } },
-	{ ":dtstart",	 SQLITE_TEXT,	 { .s = cdata->dtstart   } },
-	{ ":dtend",	 SQLITE_TEXT,	 { .s = cdata->dtend     } },
-	{ ":recurring",	 SQLITE_INTEGER, { .i = cdata->recurring } },
-	{ ":transp",	 SQLITE_INTEGER, { .i = cdata->transp    } },
-	{ NULL,		 SQLITE_NULL,	 { .s = NULL		 } },
-	{ NULL,		 SQLITE_NULL,	 { .s = NULL		 } },
-	{ NULL,		 SQLITE_NULL,	 { .s = NULL		 } } };
+	{ ":imap_uid",	   SQLITE_INTEGER, { .i = cdata->dav.imap_uid	  } },
+	{ ":lock_token",   SQLITE_TEXT,	   { .s = cdata->dav.lock_token	  } },
+	{ ":lock_owner",   SQLITE_TEXT,	   { .s = cdata->dav.lock_owner	  } },
+	{ ":lock_ownerid", SQLITE_TEXT,	   { .s = cdata->dav.lock_ownerid } },
+	{ ":lock_expire",  SQLITE_INTEGER, { .i = cdata->dav.lock_expire  } },
+	{ ":comp_type",	   SQLITE_INTEGER, { .i = cdata->comp_type	  } },
+	{ ":ical_uid",	   SQLITE_TEXT,	   { .s = cdata->ical_uid	  } },
+	{ ":organizer",	   SQLITE_TEXT,	   { .s = cdata->organizer	  } },
+	{ ":dtstart",	   SQLITE_TEXT,	   { .s = cdata->dtstart	  } },
+	{ ":dtend",	   SQLITE_TEXT,	   { .s = cdata->dtend		  } },
+	{ ":recurring",	   SQLITE_INTEGER, { .i = cdata->recurring	  } },
+	{ ":transp",	   SQLITE_INTEGER, { .i = cdata->transp		  } },
+	{ ":sched_tag",	   SQLITE_TEXT,	   { .s = cdata->sched_tag	  } },
+	{ NULL,		   SQLITE_NULL,	   { .s = NULL			  } },
+	{ NULL,		   SQLITE_NULL,	   { .s = NULL			  } },
+	{ NULL,		   SQLITE_NULL,	   { .s = NULL			  } },
+	{ NULL,		   SQLITE_NULL,	   { .s = NULL			  } } };
     const char *cmd;
     sqlite3_stmt **stmt;
+    int r;
 
     if (cdata->dav.rowid) {
 	cmd = CMD_UPDATE;
 	stmt = &caldavdb->stmt[STMT_UPDATE];
 
-	bval[9].name = ":rowid";
-	bval[9].type = SQLITE_INTEGER;
-	bval[9].val.i = cdata->dav.rowid;
+	bval[13].name = ":rowid";
+	bval[13].type = SQLITE_INTEGER;
+	bval[13].val.i = cdata->dav.rowid;
     }
     else {
 	cmd = CMD_INSERT;
 	stmt = &caldavdb->stmt[STMT_INSERT];
 
-	bval[9].name = ":mailbox";
-	bval[9].type = SQLITE_TEXT;
-	bval[9].val.s = cdata->dav.mailbox;
-	bval[10].name = ":resource";
-	bval[10].type = SQLITE_TEXT;
-	bval[10].val.s = cdata->dav.resource;
+	bval[13].name = ":creationdate";
+	bval[13].type = SQLITE_INTEGER;
+	bval[13].val.i = cdata->dav.creationdate;
+	bval[14].name = ":mailbox";
+	bval[14].type = SQLITE_TEXT;
+	bval[14].val.s = cdata->dav.mailbox;
+	bval[15].name = ":resource";
+	bval[15].type = SQLITE_TEXT;
+	bval[15].val.s = cdata->dav.resource;
     }
 
-    return dav_exec(caldavdb->db, cmd, bval, NULL, NULL, stmt);
+    r = dav_exec(caldavdb->db, cmd, bval, NULL, NULL, stmt);
+
+    if (!r && commit) {
+	/* commit transaction */
+	return dav_exec(caldavdb->db, CMD_COMMIT, NULL, NULL, NULL,
+			&caldavdb->stmt[STMT_COMMIT]);
+    }
+
+    return r;
 }
 
 
 #define CMD_DELETE "DELETE FROM ical_objs WHERE rowid = :rowid;"
 
-int caldav_delete(struct caldav_db *caldavdb, unsigned rowid)
+int caldav_delete(struct caldav_db *caldavdb, unsigned rowid, int commit)
 {
     struct bind_val bval[] = {
 	{ ":rowid", SQLITE_INTEGER, { .i = rowid } },
 	{ NULL,	    SQLITE_NULL,    { .s = NULL  } } };
+    int r;
 
-    return dav_exec(caldavdb->db, CMD_DELETE, bval, NULL, NULL,
-		    &caldavdb->stmt[STMT_DELETE]);
+    r = dav_exec(caldavdb->db, CMD_DELETE, bval, NULL, NULL,
+		 &caldavdb->stmt[STMT_DELETE]);
+
+    if (!r && commit) {
+	/* commit transaction */
+	return dav_exec(caldavdb->db, CMD_COMMIT, NULL, NULL, NULL,
+			&caldavdb->stmt[STMT_COMMIT]);
+    }	
+
+    return r;
 }
 
 
 #define CMD_DELMBOX "DELETE FROM ical_objs WHERE mailbox = :mailbox;"
 
-int caldav_delmbox(struct caldav_db *caldavdb, const char *mailbox)
+int caldav_delmbox(struct caldav_db *caldavdb, const char *mailbox, int commit)
 {
     struct bind_val bval[] = {
 	{ ":mailbox", SQLITE_TEXT, { .s = mailbox } },
 	{ NULL,	      SQLITE_NULL, { .s = NULL    } } };
+    int r;
 
-    return dav_exec(caldavdb->db, CMD_DELMBOX, bval, NULL, NULL,
-		    &caldavdb->stmt[STMT_DELMBOX]);
-}
+    r = dav_exec(caldavdb->db, CMD_DELMBOX, bval, NULL, NULL,
+		 &caldavdb->stmt[STMT_DELMBOX]);
 
+    if (!r && commit) {
+	/* commit transaction */
+	return dav_exec(caldavdb->db, CMD_COMMIT, NULL, NULL, NULL,
+			&caldavdb->stmt[STMT_COMMIT]);
+    }	
 
-#define CMD_COMMIT "COMMIT TRANSACTION;"
-
-int caldav_commit(struct caldav_db *caldavdb)
-{
-    return dav_exec(caldavdb->db, CMD_COMMIT, NULL, NULL, NULL,
-		    &caldavdb->stmt[STMT_COMMIT]);
-}
-
-
-#define CMD_ROLLBACK "ROLLBACK TRANSACTION;"
-
-int caldav_abort(struct caldav_db *caldavdb)
-{
-    return dav_exec(caldavdb->db, CMD_ROLLBACK, NULL, NULL, NULL,
-		    &caldavdb->stmt[STMT_ROLLBACK]);
+    return r;
 }
 
 

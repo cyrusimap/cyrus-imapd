@@ -48,9 +48,14 @@
 
 struct dav_data {
     unsigned rowid;
+    time_t creationdate;
     const char *mailbox;
     const char *resource;
-    uint32_t imap_uid;
+    uint32_t imap_uid;		/* zero (0) until URL is mapped */
+    const char *lock_token;
+    const char *lock_owner;
+    const char *lock_ownerid;
+    time_t lock_expire;
 };
 
 struct bind_val {

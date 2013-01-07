@@ -104,6 +104,7 @@ const struct namespace_t namespace_ischedule = {
 	{ NULL,			NULL },	/* DELETE	*/
 	{ &meth_get_isched,	NULL },	/* GET		*/
 	{ &meth_get_isched,	NULL },	/* HEAD		*/
+	{ NULL,			NULL },	/* LOCK		*/
 	{ NULL,			NULL },	/* MKCALENDAR	*/
 	{ NULL,			NULL },	/* MKCOL	*/
 	{ NULL,			NULL },	/* MOVE		*/
@@ -112,7 +113,8 @@ const struct namespace_t namespace_ischedule = {
 	{ NULL,			NULL },	/* PROPFIND	*/
 	{ NULL,			NULL },	/* PROPPATCH	*/
 	{ NULL,			NULL },	/* PUT		*/
-	{ NULL,			NULL }	/* REPORT	*/
+	{ NULL,			NULL },	/* REPORT	*/
+	{ NULL,			NULL }	/* UNLOCK	*/
     }
 };
 

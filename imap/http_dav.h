@@ -53,6 +53,9 @@
 #include <libxml/tree.h>
 
 
+#define NULL_ETAG	"da39a3ee5e6b4b0d3255bfef95601890afd80709"
+			/* SHA1("") */
+
 #define DFLAG_UNBIND	"DAV:unbind"
 
 #define ANNOT_NS	"/vendor/cmu/cyrus-imapd/"
@@ -142,6 +145,9 @@ enum {
 enum {
     /* WebDAV (RFC 4918) preconditons */
     DAV_PROT_PROP = 1,
+    DAV_BAD_LOCK_TOKEN,
+    DAV_NEED_LOCK_TOKEN,
+    DAV_LOCKED,
 
     /* WebDAV Versioning (RFC 3253) preconditions */
     DAV_SUPP_REPORT,
@@ -274,6 +280,22 @@ struct get_params {
     const char *content_type;		/* Content-Type of resource */
 };
 
+/* Function to insert/update DAV resource in 'data', optionally commiting txn */
+typedef int (*write_proc_t)(void *davdb, void *data, int commit);
+
+/* Function to delete resource in 'rowid', optionally commiting txn */
+typedef int (*delete_proc_t)(void *davdb, unsigned rowid, int commit);
+
+/* meth_lock() parameters */
+struct lock_params {
+    parse_path_t parse_path;		/* parse URI path & generate mboxname */
+    void **davdb;			/* DAV DB to use for lookup/foreach */
+    lookup_proc_t lookup_resource;	/* lookup a specific resource */
+    write_proc_t write_resource;	/* write a specific resource */
+    delete_proc_t delete_resource;	/* delete a specific resource */
+    check_precond_t check_precond;	/* check headers for preconditions */
+};
+
 /* meth_mkcol() parameters */
 struct mkcol_params {
     parse_path_t parse_path;		/* parse URI path & generate mboxname */
@@ -336,6 +358,7 @@ xmlNodePtr init_xml_response(const char *resp, int ns,
 struct error_t;
 xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
 			 xmlNsPtr *avail_ns);
+void xml_add_lockdisc(xmlNodePtr node, const char *path, struct dav_data *data);
 
 int propfind_by_resource(void *rock, void *data);
 int propfind_by_collection(char *mboxname, int matchlen,
@@ -346,6 +369,8 @@ int meth_acl(struct transaction_t *txn,
 	     void *params /* struct acl_params* */);
 int meth_get_dav(struct transaction_t *txn,
 		 void *params /* struct get_params* */);
+int meth_lock(struct transaction_t *txn,
+	      void *params /* struct lock_params* */);
 int meth_mkcol(struct transaction_t *txn,
 	       void *params /* struct mkcol_params* */);
 int meth_propfind(struct transaction_t *txn,
@@ -354,5 +379,7 @@ int meth_proppatch(struct transaction_t *txn,
 		   void *params /* struct proppatch_params* */);
 int meth_report(struct transaction_t *txn,
 		void *params /* struct report_params* */);
+int meth_unlock(struct transaction_t *txn,
+		void *params /* struct lock_params* */);
 
 #endif /* HTTP_DAV_H */

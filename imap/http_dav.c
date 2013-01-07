@@ -105,6 +105,7 @@ const struct namespace_t namespace_principal = {
 	{ NULL,			NULL },			/* DELETE	*/
 	{ NULL,			NULL },			/* GET		*/
 	{ NULL,			NULL },			/* HEAD		*/
+	{ NULL,			NULL },			/* LOCK		*/
 	{ NULL,			NULL },			/* MKCALENDAR	*/
 	{ NULL,			NULL },			/* MKCOL	*/
 	{ NULL,			NULL },			/* MOVE		*/
@@ -113,7 +114,8 @@ const struct namespace_t namespace_principal = {
 	{ &meth_propfind,	&propfind_params },	/* PROPFIND	*/
 	{ NULL,			NULL },			/* PROPPATCH	*/
 	{ NULL,			NULL },			/* PUT		*/
-	{ &meth_report,		NULL }			/* REPORT	*/
+	{ &meth_report,		NULL },			/* REPORT	*/
+	{ NULL,			NULL }			/* UNLOCK	*/
     }
 };
 
@@ -194,6 +196,9 @@ static const struct precond_t {
 
     /* WebDAV (RFC 4918) preconditons */
     { "cannot-modify-protected-property", NS_DAV },
+    { "lock-token-matches-request-uri", NS_DAV },
+    { "lock-token-submitted", NS_DAV },
+    { "no-conflicting-lock", NS_DAV },
 
     /* WebDAV Versioning (RFC 3253) preconditions */
     { "supported-report", NS_DAV },
@@ -421,7 +426,7 @@ xmlNodePtr init_xml_response(const char *resp, int ns,
 static xmlNodePtr xml_add_href(xmlNodePtr parent, xmlNsPtr ns,
 			       const char *href)
 {
-    xmlChar *uri = xmlURIEscapeStr(BAD_CAST href, BAD_CAST "/");
+    xmlChar *uri = xmlURIEscapeStr(BAD_CAST href, BAD_CAST ":/");
     xmlNodePtr node = xmlNewChild(parent, ns, BAD_CAST "href", uri);
 
     free(uri);
@@ -473,8 +478,7 @@ xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
 	}
 	break;
 
-    case CALDAV_UNIQUE_OBJECT:
-    case CALDAV_UID_CONFLICT:
+    default:
 	if (err->resource) xml_add_href(node, avail_ns[NS_DAV], err->resource);
 	break;
     }
@@ -486,6 +490,47 @@ xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
     return root;
 }
 
+
+void xml_add_lockdisc(xmlNodePtr node, const char *root, struct dav_data *data)
+{
+    time_t now = time(NULL);
+
+    if (data->lock_expire > now) {
+	xmlNodePtr active, node1;
+	char tbuf[30]; /* "Second-" + long int + NUL */
+
+	active = xmlNewChild(node, NULL, BAD_CAST "activelock", NULL);
+	node1 = xmlNewChild(active, NULL, BAD_CAST "lockscope", NULL);
+	xmlNewChild(node1, NULL, BAD_CAST "exclusive", NULL);
+
+	node1 = xmlNewChild(active, NULL, BAD_CAST "locktype", NULL);
+	xmlNewChild(node1, NULL, BAD_CAST "write", NULL);
+
+	xmlNewChild(active, NULL, BAD_CAST "depth", BAD_CAST "0");
+
+	if (data->lock_owner) {
+	    /* Last char of token signals href (1) or text (0) */
+	    if (data->lock_token[strlen(data->lock_token)-1] == '1') {
+		node1 = xmlNewChild(active, NULL, BAD_CAST "owner", NULL);
+		xml_add_href(node1, NULL, data->lock_owner);
+	    }
+	    else {
+		xmlNewTextChild(active, NULL, BAD_CAST "owner",
+				BAD_CAST data->lock_owner);
+	    }
+	}
+
+	snprintf(tbuf, sizeof(tbuf), "Second-%lu", data->lock_expire - now);
+	xmlNewChild(active, NULL, BAD_CAST "timeout", BAD_CAST tbuf);
+
+	node1 = xmlNewChild(active, NULL, BAD_CAST "locktoken", NULL);
+	xml_add_href(node1, NULL, data->lock_token);
+
+	node1 = xmlNewChild(active, NULL, BAD_CAST "lockroot", NULL);
+	xml_add_href(node1, NULL, root);
+    }
+}
+		      
 
 /* Add a property 'name', of namespace 'ns', with content 'content',
  * and status code/string 'status' to propstat element 'stat'.
@@ -618,6 +663,49 @@ static int propfind_addmember(xmlNodePtr prop,
 }
 
 
+/* Callback to fetch DAV:creationdate */
+static int propfind_creationdate(xmlNodePtr prop,
+				 struct propfind_ctx *fctx,
+				 xmlNodePtr resp __attribute__((unused)),
+				 struct propstat propstat[],
+				 void *rock __attribute__((unused)))
+{
+    time_t t = 0;
+
+    if (fctx->data) {
+	struct dav_data *ddata = (struct dav_data *) fctx->data;
+
+	t = ddata->creationdate;
+    }
+    else if (fctx->mailbox) {
+	struct stat sbuf;
+
+	fstat(fctx->mailbox->header_fd, &sbuf);
+
+	t = sbuf.st_ctime;
+    }
+
+    if (t) {
+	struct tm *tm = gmtime(&t);
+
+	buf_reset(&fctx->buf);
+	buf_printf(&fctx->buf, "%4d-%02d-%02dT%02d:%02d:%02dZ",
+		   tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
+		   tm->tm_hour, tm->tm_min, tm->tm_sec);
+
+	xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+		     prop, BAD_CAST buf_cstring(&fctx->buf), 0);
+
+    }
+    else {
+	xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
+		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, 0);
+    }
+
+    return 0;
+}
+
+
 /* Callback to fetch DAV:getcontentlength */
 static int propfind_getlength(xmlNodePtr prop,
 			      struct propfind_ctx *fctx,
@@ -681,6 +769,26 @@ static int propfind_getlastmod(xmlNodePtr prop,
     else {
 	xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
 		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, 0);
+    }
+
+    return 0;
+}
+
+
+/* Callback to fetch DAV:lockdiscovery */
+static int propfind_lockdisc(xmlNodePtr prop,
+			     struct propfind_ctx *fctx,
+			     xmlNodePtr resp __attribute__((unused)),
+			     struct propstat propstat[],
+			     void *rock __attribute__((unused)))
+{
+    xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
+				   &propstat[PROPSTAT_OK], prop, NULL, 0);
+
+    if (fctx->mailbox && fctx->record) {
+	struct dav_data *ddata = (struct dav_data *) fctx->data;
+
+	xml_add_lockdisc(node, fctx->req_tgt->path, ddata);
     }
 
     return 0;
@@ -780,6 +888,29 @@ static int proppatch_restype(xmlNodePtr prop, unsigned set,
 		 prop, NULL, precond);
 	     
     *pctx->ret = HTTP_FORBIDDEN;
+
+    return 0;
+}
+
+
+/* Callback to fetch DAV:supportedlock */
+static int propfind_suplock(xmlNodePtr prop,
+			    struct propfind_ctx *fctx,
+			    xmlNodePtr resp __attribute__((unused)),
+			    struct propstat propstat[],
+			    void *rock __attribute__((unused)))
+{
+    xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
+				   &propstat[PROPSTAT_OK], prop, NULL, 0);
+
+    if (fctx->mailbox && fctx->record) {
+	xmlNodePtr entry = xmlNewChild(node, NULL, BAD_CAST "lockentry", NULL);
+	xmlNodePtr scope = xmlNewChild(entry, NULL, BAD_CAST "lockscope", NULL);
+	xmlNodePtr type = xmlNewChild(entry, NULL, BAD_CAST "locktype", NULL);
+
+	xmlNewChild(scope, NULL, BAD_CAST "exclusive", NULL);
+	xmlNewChild(type, NULL, BAD_CAST "write", NULL);
+    }
 
     return 0;
 }
@@ -1877,7 +2008,7 @@ static const struct prop_entry {
 
     /* WebDAV (RFC 4918) properties */
     { "add-member", XML_NS_DAV, 0, propfind_addmember, NULL, NULL },
-    { "creationdate", XML_NS_DAV, 1, NULL, NULL, NULL },
+    { "creationdate", XML_NS_DAV, 1, propfind_creationdate, NULL, NULL },
     { "displayname", XML_NS_DAV, 1, propfind_fromdb, proppatch_todb, "DAV" },
     { "getcontentlanguage", XML_NS_DAV, 1,
       propfind_fromhdr, NULL, "Content-Language" },
@@ -1885,10 +2016,10 @@ static const struct prop_entry {
     { "getcontenttype", XML_NS_DAV, 1, propfind_fromhdr, NULL, "Content-Type" },
     { "getetag", XML_NS_DAV, 1, propfind_getetag, NULL, NULL },
     { "getlastmodified", XML_NS_DAV, 1, propfind_getlastmod, NULL, NULL },
-    { "lockdiscovery", XML_NS_DAV, 1, NULL, NULL, NULL },
+    { "lockdiscovery", XML_NS_DAV, 1, propfind_lockdisc, NULL, NULL },
     { "resourcetype", XML_NS_DAV, 1,
       propfind_restype, proppatch_restype, NULL },
-    { "supportedlock", XML_NS_DAV, 1, NULL, NULL, NULL },
+    { "supportedlock", XML_NS_DAV, 1, propfind_suplock, NULL, NULL },
     { "sync-token", XML_NS_DAV, 1, propfind_sync_token, NULL, NULL },
 
     /* WebDAV Versioning (RFC 3253) properties */
@@ -2531,24 +2662,39 @@ int meth_get_dav(struct transaction_t *txn, void *params)
     /* Find message UID for the resource */
     gparams->lookup_resource(*gparams->davdb, txn->req_tgt.mboxname,
 			     txn->req_tgt.resource, 0, (void **) &ddata);
-    /* XXX  Check errors */
-
-    /* Fetch index record for the resource */
-    if (!ddata->imap_uid ||
-	mailbox_find_index_record(mailbox, ddata->imap_uid, &record)) {
+    if (!ddata->rowid) {
 	ret = HTTP_NOT_FOUND;
 	goto done;
     }
 
-    /* Resource length doesn't include RFC 5322 header */
-    offset = record.header_size;
-    datalen = record.size - offset;
+    memset(&record, 0, sizeof(struct index_record));
+    if (ddata->imap_uid) {
+	/* Mapped URL - Fetch index record for the resource */
+	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &record);
+	if (r) {
+	    txn->error.desc = error_message(r);
+	    ret = HTTP_SERVER_ERROR;
+	    goto done;
+	}
+
+	/* Resource length doesn't include RFC 5322 header */
+	offset = record.header_size;
+	datalen = record.size - offset;
+
+	txn->flags.ranges = 1;
+	resp_body->range.len = datalen;
+	etag = message_guid_encode(&record.guid);
+	lastmod = record.internaldate;
+    }
+    else {
+	/* Unmapped URL (empty resource) */
+	offset = datalen = 0;
+	txn->flags.ranges = 0;
+	etag = NULL_ETAG;
+	lastmod = ddata->creationdate;
+    }
 
     /* Check any preconditions, including range request */
-    txn->flags.ranges = 1;
-    resp_body->range.len = datalen;
-    etag = message_guid_encode(&record.guid);
-    lastmod = record.internaldate;
     precond = gparams->check_precond(txn, (void *) ddata, etag, lastmod);
 
     switch (precond) {
@@ -2574,16 +2720,19 @@ int meth_get_dav(struct transaction_t *txn, void *params)
     /* Fill in Last-Modified, ETag, and Content-Type */
     resp_body->lastmod = lastmod;
     resp_body->etag = etag;
-    resp_body->type = gparams->content_type;
 
-    if (txn->meth == METH_GET) {
-	/* Load message containing the resource */
-	mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
+    if (record.uid) {
+	resp_body->type = gparams->content_type;
 
-	/* iCalendar data in response should not be transformed */
-	txn->flags.cc |= CC_NOTRANSFORM;
+	if (txn->meth == METH_GET) {
+	    /* Load message containing the resource */
+	    mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
 
-	data = msg_base + offset;
+	    /* iCalendar data in response should not be transformed */
+	    txn->flags.cc |= CC_NOTRANSFORM;
+
+	    data = msg_base + offset;
+	}
     }
 
     write_body(precond, txn, data, datalen);
@@ -2593,6 +2742,263 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 
   done:
     if (mailbox) mailbox_unlock_index(mailbox, NULL);
+
+    return ret;
+}
+
+
+/* Perform a LOCK request
+ *
+ * preconditions:
+ *   DAV:need-privileges
+ *   DAV:no-conflicting-lock
+ *   DAV:lock-token-submitted
+ */
+int meth_lock(struct transaction_t *txn, void *params)
+{
+    int ret = HTTP_OK, r, precond, rights;
+    char *server, *acl;
+    struct mailbox *mailbox = NULL;
+    struct dav_data *ddata;
+    struct index_record oldrecord;
+    const char *etag;
+    time_t lastmod;
+    xmlDocPtr indoc = NULL, outdoc = NULL;
+    xmlNodePtr root = NULL;
+    xmlNsPtr ns[NUM_NAMESPACE];
+    xmlChar *owner = NULL;
+    time_t now = time(NULL);
+    struct lock_params *lparams = (struct lock_params *) params;
+
+    /* XXX  We ignore Depth and Timeout header fields */
+
+    /* Response should not be cached */
+    txn->flags.cc |= CC_NOCACHE;
+
+    /* Make sure its a DAV resource */
+    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
+
+    /* Parse the path */
+    if ((r = lparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+
+    /* We only handle LOCK on resources */
+    if (!txn->req_tgt.resource) return HTTP_NOT_ALLOWED;
+
+    /* Locate the mailbox */
+    if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
+	syslog(LOG_ERR, "mlookup(%s) failed: %s",
+	       txn->req_tgt.mboxname, error_message(r));
+	txn->error.desc = error_message(r);
+
+	switch (r) {
+	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	default: return HTTP_SERVER_ERROR;
+	}
+    }
+
+    /* Check ACL for current user */
+    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
+    if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRSRC)) {
+	/* DAV:need-privileges */
+	txn->error.precond = DAV_NEED_PRIVS;
+	txn->error.resource = txn->req_tgt.path;
+	txn->error.rights =
+	    !(rights & DACL_WRITECONT) ? DACL_WRITECONT : DACL_ADDRSRC;
+	return HTTP_FORBIDDEN;
+    }
+
+    if (server) {
+	/* Remote mailbox */
+	struct backend *be;
+
+	be = proxy_findserver(server, &http_protocol, httpd_userid,
+			      &backend_cached, NULL, NULL, httpd_in);
+	if (!be) return HTTP_UNAVAILABLE;
+
+	return http_pipe_req_resp(be, txn);
+    }
+
+    /* Local Mailbox */
+
+    /* Open mailbox for reading */
+    if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_SHARED))) {
+	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+	       txn->req_tgt.mboxname, error_message(r));
+	txn->error.desc = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
+    /* Find message UID for the resource, if exists */
+    lparams->lookup_resource(*lparams->davdb, txn->req_tgt.mboxname,
+			     txn->req_tgt.resource, 1, (void *) &ddata);
+
+    if (ddata->imap_uid) {
+	/* Locking existing resource */
+
+	/* Fetch index record for the resource */
+	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &oldrecord);
+	if (r) {
+	    txn->error.desc = error_message(r);
+	    ret = HTTP_SERVER_ERROR;
+	    goto done;
+	}
+
+	etag = message_guid_encode(&oldrecord.guid);
+	lastmod = oldrecord.internaldate;
+    }
+    else if (ddata->rowid) {
+	/* Unmapped URL (empty resource) */
+	etag = NULL_ETAG;
+	lastmod = ddata->creationdate;
+    }
+    else {
+	/* New resource */
+	etag = NULL;
+	lastmod = 0;
+
+	ddata->creationdate = now;
+	ddata->mailbox = mailbox->name;
+	ddata->resource = txn->req_tgt.resource;
+    }
+
+    /* Check any preconditions */
+    precond = lparams->check_precond(txn, ddata, etag, lastmod);
+
+    switch (precond) {
+    case HTTP_OK:
+	break;
+
+    case HTTP_LOCKED:
+	if (strcmp(ddata->lock_ownerid, httpd_userid))
+	    txn->error.precond = DAV_LOCKED;
+	else
+	    txn->error.precond = DAV_NEED_LOCK_TOKEN;
+	txn->error.resource = txn->req_tgt.path;
+
+    default:
+	/* We failed a precondition - don't perform the request */
+	ret = precond;
+	goto done;
+    }
+
+    if (ddata->lock_expire <= now) {
+	/* Create new lock */
+	xmlNodePtr node, sub;
+	unsigned owner_is_href = 0;
+
+	/* Parse the required body */
+	ret = parse_xml_body(txn, &root);
+	if (ret) goto done;
+
+	if (!root) {
+	    txn->error.desc = "Missing request body";
+	    ret = HTTP_BAD_REQUEST;
+	    goto done;
+	}
+
+	/* Check for correct root element */
+	indoc = root->doc;
+	if (xmlStrcmp(root->name, BAD_CAST "lockinfo")) {
+	    txn->error.desc = "Incorrect root element in XML request\r\n";
+	    ret = HTTP_BAD_MEDIATYPE;
+	    goto done;
+	}
+
+	/* Parse elements of lockinfo */
+	for (node = root->children; node; node = node->next) {
+	    if (node->type != XML_ELEMENT_NODE) continue;
+
+	    if (!xmlStrcmp(node->name, BAD_CAST "lockscope")) {
+		/* Find child element of lockscope */
+		for (sub = node->children;
+		     sub && sub->type != XML_ELEMENT_NODE; sub = sub->next);
+		/* Make sure its an exclusive element */
+		if (!sub || xmlStrcmp(sub->name, BAD_CAST "exclusive")) {
+		    txn->error.desc = "Only exclusive locks are supported";
+		    ret = HTTP_BAD_REQUEST;
+		    goto done;
+		}
+	    }
+	    else if (!xmlStrcmp(node->name, BAD_CAST "locktype")) {
+		/* Find child element of locktype */
+		for (sub = node->children;
+		     sub && sub->type != XML_ELEMENT_NODE; sub = sub->next);
+		/* Make sure its a write element */
+		if (!sub || xmlStrcmp(sub->name, BAD_CAST "write")) {
+		    txn->error.desc = "Only write locks are supported";
+		    ret = HTTP_BAD_REQUEST;
+		    goto done;
+		}
+	    }
+	    else if (!xmlStrcmp(node->name, BAD_CAST "owner")) {
+		/* Find child element of owner */
+		for (sub = node->children;
+		     sub && sub->type != XML_ELEMENT_NODE; sub = sub->next);
+		if (!sub) {
+		    owner = xmlNodeGetContent(node);
+		}
+		/* Make sure its a href element */
+		else if (xmlStrcmp(sub->name, BAD_CAST "href")) {
+		    ret = HTTP_BAD_REQUEST;
+		    goto done;
+		}
+		else {
+		    owner_is_href = 1;
+		    owner = xmlNodeGetContent(sub);
+		}
+	    }
+	}
+
+	ddata->lock_ownerid = httpd_userid;
+	if (owner) ddata->lock_owner = (const char *) owner;
+
+	/* Construct lock-token */
+	assert(!buf_len(&txn->buf));
+	buf_printf(&txn->buf, XML_NS_CYRUS "lock/%s-%x-%u",
+		   mailbox->uniqueid, strhash(txn->req_tgt.resource),
+		   owner_is_href);
+
+	ddata->lock_token = buf_cstring(&txn->buf);
+    }
+
+    /* Update lock expiration */
+    ddata->lock_expire = now + 300;  /* 5 min */
+
+    /* Start construction of our prop response */
+    if (!(root = init_xml_response("prop", NS_DAV, root, ns))) {
+	ret = HTTP_SERVER_ERROR;
+	txn->error.desc = "Unable to create XML response\r\n";
+	goto done;
+    }
+
+    outdoc = root->doc;
+    root = xmlNewChild(root, NULL, BAD_CAST "lockdiscovery", NULL);
+    xml_add_lockdisc(root, txn->req_tgt.path, (struct dav_data *) ddata);
+
+    lparams->write_resource(*lparams->davdb, ddata, 1);
+
+    txn->resp_body.lock = ddata->lock_token;
+
+    if (!ddata->rowid) {
+	ret = HTTP_CREATED;
+
+	/* Tell client about the new resource */
+	txn->resp_body.etag = NULL_ETAG;
+
+	/* Tell client where to find the new resource */
+	txn->location = txn->req_tgt.path;
+    }
+
+    xml_response(ret, txn, outdoc);
+    ret = 0;
+
+  done:
+    if (mailbox) mailbox_unlock_index(mailbox, NULL);
+    if (outdoc) xmlFreeDoc(outdoc);
+    if (indoc) xmlFreeDoc(indoc);
+    if (owner) xmlFree(owner);
 
     return ret;
 }
@@ -3679,6 +4085,167 @@ int meth_report(struct transaction_t *txn, void *params)
 
     if (inroot) xmlFreeDoc(inroot->doc);
     if (outroot) xmlFreeDoc(outroot->doc);
+
+    return ret;
+}
+
+
+/* Perform a UNLOCK request
+ *
+ * preconditions:
+ *   DAV:need-privileges
+ *   DAV:lock-token-matches-request-uri
+ */
+int meth_unlock(struct transaction_t *txn, void *params)
+{
+    int ret = HTTP_NO_CONTENT, r, precond, rights;
+    const char **hdr, *token;
+    char *server, *acl;
+    struct mailbox *mailbox = NULL;
+    struct dav_data *ddata;
+    struct index_record record;
+    const char *etag;
+    time_t lastmod;
+    size_t len;
+    struct lock_params *lparams = (struct lock_params *) params;
+
+    /* Response should not be cached */
+    txn->flags.cc |= CC_NOCACHE;
+
+    /* Make sure its a DAV resource */
+    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
+
+    /* Parse the path */
+    if ((r = lparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+
+    /* We only handle UNLOCK on resources */
+    if (!txn->req_tgt.resource) return HTTP_NOT_ALLOWED;
+
+    /* Check for mandatory Lock-Token header */
+    if (!(hdr = spool_getheader(txn->req_hdrs, "Lock-Token"))) {
+	txn->error.desc = "Missing Lock-Token header";
+	return HTTP_BAD_REQUEST;
+    }
+    token = hdr[0];
+
+    /* Locate the mailbox */
+    if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
+	syslog(LOG_ERR, "mlookup(%s) failed: %s",
+	       txn->req_tgt.mboxname, error_message(r));
+	txn->error.desc = error_message(r);
+
+	switch (r) {
+	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	default: return HTTP_SERVER_ERROR;
+	}
+    }
+
+    if (server) {
+	/* Remote mailbox */
+	struct backend *be;
+
+	be = proxy_findserver(server, &http_protocol, httpd_userid,
+			      &backend_cached, NULL, NULL, httpd_in);
+	if (!be) return HTTP_UNAVAILABLE;
+
+	return http_pipe_req_resp(be, txn);
+    }
+
+    /* Local Mailbox */
+
+    /* Open mailbox for reading */
+    if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_SHARED))) {
+	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+	       txn->req_tgt.mboxname, error_message(r));
+	txn->error.desc = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
+    /* Find message UID for the resource, if exists */
+    lparams->lookup_resource(*lparams->davdb, txn->req_tgt.mboxname,
+			     txn->req_tgt.resource, 1, (void **) &ddata);
+    if (!ddata->rowid) {
+	ret = HTTP_NOT_FOUND;
+	goto done;
+    }
+
+    /* Check if resource is locked */
+    if (ddata->lock_expire <= time(NULL)) {
+	/* DAV:lock-token-matches-request-uri */
+	txn->error.precond = DAV_BAD_LOCK_TOKEN;
+	ret = HTTP_CONFLICT;
+	goto done;
+    }
+
+    /* Check if current user owns the lock */
+    if (strcmp(ddata->lock_ownerid, httpd_userid)) {
+	/* Check ACL for current user */
+	rights =  acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
+	if (!(rights & DACL_ADMIN)) {
+	    /* DAV:need-privileges */
+	    txn->error.precond = DAV_NEED_PRIVS;
+	    txn->error.resource = txn->req_tgt.path;
+	    txn->error.rights = DACL_ADMIN;
+	    ret = HTTP_FORBIDDEN;
+	    goto done;
+	}
+    }
+
+    /* Check if lock token matches */
+    len = strlen(ddata->lock_token);
+    if (token[0] != '<' || strlen(token) != len+2 || token[len+1] != '>' ||
+	strncmp(token+1, ddata->lock_token, len)) {
+	/* DAV:lock-token-matches-request-uri */
+	txn->error.precond = DAV_BAD_LOCK_TOKEN;
+	ret = HTTP_CONFLICT;
+	goto done;
+    }
+
+    if (ddata->imap_uid) {
+	/* Mapped URL - Fetch index record for the resource */
+	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &record);
+	if (r) {
+	    txn->error.desc = error_message(r);
+	    ret = HTTP_SERVER_ERROR;
+	    goto done;
+	}
+
+	etag = message_guid_encode(&record.guid);
+	lastmod = record.internaldate;
+    }
+    else {
+	/* Unmapped URL (empty resource) */
+	etag = NULL_ETAG;
+	lastmod = ddata->creationdate;
+    }
+
+    /* Check any preconditions */
+    precond = lparams->check_precond(txn, ddata, etag, lastmod);
+
+    if (precond != HTTP_OK) {
+	/* We failed a precondition - don't perform the request */
+	ret = precond;
+	goto done;
+    }
+
+    if (ddata->imap_uid) {
+	/* Mapped URL - Remove the lock */
+	ddata->lock_token = NULL;
+	ddata->lock_owner = NULL;
+	ddata->lock_ownerid = NULL;
+	ddata->lock_expire = 0;
+
+	lparams->write_resource(*lparams->davdb, ddata, 1);
+    }
+    else {
+	/* Unmapped URL - Treat as lock-null and delete mapping entry */
+	lparams->delete_resource(lparams->davdb, ddata->rowid, 1);
+    }
+
+  done:
+    if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
     return ret;
 }
