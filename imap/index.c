@@ -286,7 +286,7 @@ EXPORTED int index_expunge(struct index_state *state, char *sequence,
     struct seqset *seq = NULL;
     int numexpunged = 0;
 #ifdef ENABLE_MBOXEVENT
-    struct mboxevent *mboxevent;
+    struct mboxevent *mboxevent = NULL;
 #endif
 
     r = index_lock(state);
@@ -295,7 +295,10 @@ EXPORTED int index_expunge(struct index_state *state, char *sequence,
     /* XXX - earlier list if the sequence names UIDs that don't exist? */
     seq = _parse_sequence(state, sequence, 1);
 #ifdef ENABLE_MBOXEVENT
-    mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
+    /* don't notify for messages that don't need \Deleted flag because
+     * a notification should be already send (eg. MessageMove) */
+    if (need_deleted)
+	mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
 #endif
     for (msgno = 1; msgno <= state->exists; msgno++) {
 	im = &state->map[msgno-1];
@@ -1734,7 +1737,8 @@ index_copy(struct index_state *state,
 
     r = append_setup_mbox(&appendstate, destmailbox, state->userid,
 			  state->authstate, ACL_INSERT,
-			  qptr, namespace, isadmin, EVENT_MESSAGE_COPY);
+			  qptr, namespace, isadmin,
+			  ismove ? EVENT_MESSAGE_MOVE : EVENT_MESSAGE_COPY);
     if (r) return r;
 
     docopyuid = (appendstate.myrights & ACL_READ);

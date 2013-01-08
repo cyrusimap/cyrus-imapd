@@ -64,7 +64,7 @@
 
 #define MESSAGE_EVENTS (EVENT_MESSAGE_APPEND|EVENT_MESSAGE_EXPIRE|\
 			EVENT_MESSAGE_EXPUNGE|EVENT_MESSAGE_NEW|\
-			EVENT_MESSAGE_COPY)
+			EVENT_MESSAGE_COPY|EVENT_MESSAGE_MOVE)
 
 #define FLAGS_EVENTS   (EVENT_FLAGS_SET|EVENT_FLAGS_CLEAR|EVENT_MESSAGE_READ|\
                         EVENT_MESSAGE_TRASH)
@@ -348,7 +348,7 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
 	    return 0;
 	break;
     case EVENT_OLD_MAILBOX_ID:
-	return type & (EVENT_MESSAGE_COPY|EVENT_MAILBOX_RENAME);
+	return type & (EVENT_MESSAGE_COPY|EVENT_MESSAGE_MOVE|EVENT_MAILBOX_RENAME);
     case EVENT_SERVER_ADDRESS:
 	return type & (EVENT_LOGIN|EVENT_LOGOUT);
     case EVENT_SERVICE:
@@ -377,7 +377,7 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
 	    return 0;
 	break;
     case EVENT_OLD_UIDSET:
-	return type & EVENT_MESSAGE_COPY;
+	return type & (EVENT_MESSAGE_COPY|EVENT_MESSAGE_MOVE);
     }
 
     /* test if the parameter is related to a message event */
@@ -912,6 +912,8 @@ static const char *event_to_name(enum event_type type)
 	return "MessageNew";
     case EVENT_MESSAGE_COPY:
 	return "vnd.cmu.MessageCopy";
+    case EVENT_MESSAGE_MOVE:
+	return "vnd.cmu.MessageMove";
     case EVENT_QUOTA_EXCEED:
 	return "QuotaExceed";
     case EVENT_QUOTA_WITHIN:

@@ -62,23 +62,24 @@ enum event_type {
     EVENT_MESSAGE_EXPUNGE     = (1<<2),
     EVENT_MESSAGE_NEW         = (1<<3),
     EVENT_MESSAGE_COPY        = (1<<4), /* additional event type to notify IMAP COPY */
-    EVENT_QUOTA_EXCEED        = (1<<5),
-    EVENT_QUOTA_WITHIN        = (1<<6),
-    EVENT_QUOTA_CHANGE        = (1<<7),
+    EVENT_MESSAGE_MOVE        = (1<<5), /* additional event type to notify IMAP MOVE */
+    EVENT_QUOTA_EXCEED        = (1<<6),
+    EVENT_QUOTA_WITHIN        = (1<<7),
+    EVENT_QUOTA_CHANGE        = (1<<8),
     /* Message Flags */
-    EVENT_MESSAGE_READ        = (1<<8),
-    EVENT_MESSAGE_TRASH       = (1<<9),
-    EVENT_FLAGS_SET           = (1<<10),
-    EVENT_FLAGS_CLEAR         = (1<<11),
+    EVENT_MESSAGE_READ        = (1<<9),
+    EVENT_MESSAGE_TRASH       = (1<<10),
+    EVENT_FLAGS_SET           = (1<<11),
+    EVENT_FLAGS_CLEAR         = (1<<12),
     /* Access Accounting */
-    EVENT_LOGIN               = (1<<12),
-    EVENT_LOGOUT              = (1<<13),
+    EVENT_LOGIN               = (1<<13),
+    EVENT_LOGOUT              = (1<<14),
     /* Mailbox Management */
-    EVENT_MAILBOX_CREATE      = (1<<14),
-    EVENT_MAILBOX_DELETE      = (1<<15),
-    EVENT_MAILBOX_RENAME      = (1<<16),
-    EVENT_MAILBOX_SUBSCRIBE   = (1<<17),
-    EVENT_MAILBOX_UNSUBSCRIBE = (1<<18)
+    EVENT_MAILBOX_CREATE      = (1<<15),
+    EVENT_MAILBOX_DELETE      = (1<<16),
+    EVENT_MAILBOX_RENAME      = (1<<17),
+    EVENT_MAILBOX_SUBSCRIBE   = (1<<18),
+    EVENT_MAILBOX_UNSUBSCRIBE = (1<<19)
 };
 
 #define MAX_PARAM 21 /* messageContent number that is always the last */
