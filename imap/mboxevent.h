@@ -84,11 +84,6 @@ enum event_type {
     EVENT_CALENDAR            = (1<<21)
 };
 
-/* The number representing the last available position in
- * event_param, which should always be messageContent.
- */
-#define MAX_PARAM 29
-
 /*
  * event parameters defined in RFC 5423 - Internet Message Store Events
  *
@@ -127,9 +122,13 @@ enum event_param {
     /* 26 */ EVENT_ENVELOPE,
     /* 27 */ EVENT_SESSIONID,
     /* 28 */ EVENT_BODYSTRUCTURE,
-    /* 29 */ EVENT_MESSAGE_CONTENT
+    /* 29 */ EVENT_CLIENT_ID,
+    /* 30 */ EVENT_SESSION_ID,
+    /* 31 */ EVENT_MESSAGE_CONTENT
 };
 
+/* messageContent number that is always the last */
+#define MAX_PARAM EVENT_MESSAGE_CONTENT
 
 enum event_param_type {
     EVENT_PARAM_INT,
@@ -291,4 +290,11 @@ void mboxevent_extract_mailbox(struct mboxevent *event, struct mailbox *mailbox)
  */
 void mboxevent_extract_old_mailbox(struct mboxevent *event,
                                    const struct mailbox *mailbox);
+
+
+/*
+ * set the client tag used by vnd.fastmail.clientTagj
+ */
+void mboxevent_set_client_id(const char *);
+
 #endif /* _MBOXEVENT_H */

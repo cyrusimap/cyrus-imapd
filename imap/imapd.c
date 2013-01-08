@@ -2867,6 +2867,11 @@ static void cmd_id(char *tag)
 
 	for (pptr = imapd_id.params; pptr; pptr = pptr->next) {
 	    const char *val = buf_cstring(&pptr->value);
+
+	    if (!strcmp(pptr->attrib, "x_me_ajax_client_id")) {
+		mboxevent_set_client_id(val);
+	    }
+
 	    /* should we check for and format literals here ??? */
 	    buf_printf(&logbuf, " \"%s\" ", pptr->attrib);
 	    if (!val || !strcmp(val, "NIL"))
