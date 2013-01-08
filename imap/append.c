@@ -1332,8 +1332,6 @@ EXPORTED int append_copy(struct mailbox *mailbox,
 #ifdef ENABLE_MBOXEVENT
 	mboxevent_extract_record(mboxevent, as->mailbox, &record);
 	mboxevent_extract_copied_record(mboxevent, mailbox, copymsg[msg].uid);
-	mboxevent_extract_mailbox(mboxevent, as->mailbox);
-	mboxevent_set_numunseen(mboxevent, as->mailbox, -1);
 #endif
     }
 
@@ -1341,6 +1339,10 @@ out:
     free(destfname);
     if (r) append_abort(as);
 
+#ifdef ENABLE_MBOXEVENT
+    mboxevent_extract_mailbox(mboxevent, as->mailbox);
+    mboxevent_set_numunseen(mboxevent, as->mailbox, -1);
+#endif
     return r;
 }
 
