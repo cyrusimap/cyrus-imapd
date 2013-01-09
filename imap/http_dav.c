@@ -632,37 +632,6 @@ static int xml_add_response(struct propfind_ctx *fctx, long code)
 }
 
 
-/* Callback to fetch DAV:add-member */
-static int propfind_addmember(xmlNodePtr prop,
-			      struct propfind_ctx *fctx,
-			      xmlNodePtr resp __attribute__((unused)),
-			      struct propstat propstat[],
-			      void *rock __attribute__((unused)))
-{
-    if (fctx->req_tgt->collection) {
-	xmlNodePtr node;
-	size_t len;
-
-	node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			    prop, NULL, 0);
-
-	len = fctx->req_tgt->resource ?
-	    (size_t) (fctx->req_tgt->resource - fctx->req_tgt->path) :
-	    strlen(fctx->req_tgt->path);
-	buf_reset(&fctx->buf);
-	buf_printf(&fctx->buf, "%.*s", len, fctx->req_tgt->path);
-
-	xml_add_href(node, NULL, buf_cstring(&fctx->buf));
-    }
-    else {
-	xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
-		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, 0);
-    }
-
-    return 0;
-}
-
-
 /* Callback to fetch DAV:creationdate */
 static int propfind_creationdate(xmlNodePtr prop,
 				 struct propfind_ctx *fctx,
@@ -916,31 +885,6 @@ static int propfind_suplock(xmlNodePtr prop,
 }
 
 
-/* Callback to fetch DAV:sync-token and CS:getctag */
-static int propfind_sync_token(xmlNodePtr prop,
-			       struct propfind_ctx *fctx,
-			       xmlNodePtr resp __attribute__((unused)),
-			       struct propstat propstat[],
-			       void *rock __attribute__((unused)))
-{
-    if (fctx->mailbox && !fctx->record) {
-	buf_reset(&fctx->buf);
-	buf_printf(&fctx->buf, XML_NS_CYRUS "sync/%u-" MODSEQ_FMT,
-		   fctx->mailbox->i.uidvalidity,
-		   fctx->mailbox->i.highestmodseq);
-
-	xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-		     prop, BAD_CAST buf_cstring(&fctx->buf), 0);
-    }
-    else {
-	xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
-		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, 0);
-    }
-
-    return 0;
-}
-
-
 /* Callback to fetch DAV:supported-report-set */
 static int propfind_reportset(xmlNodePtr prop,
 			      struct propfind_ctx *fctx,
@@ -1126,31 +1070,6 @@ static int propfind_supprivset(xmlNodePtr prop,
 	    add_suppriv(agg, "schedule-send-freebusy", fctx->ns[NS_CALDAV], 1,
 			"Submit freebusy requests");
 	}
-    }
-
-    return 0;
-}
-
-
-/* Callback to fetch DAV:current-user-principal */
-static int propfind_curprin(xmlNodePtr prop,
-			    struct propfind_ctx *fctx,
-			    xmlNodePtr resp __attribute__((unused)),
-			    struct propstat propstat[],
-			    void *rock __attribute__((unused)))
-{
-    xmlNodePtr node;
-
-    node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			prop, NULL, 0);
-
-    if (fctx->userid) {
-	buf_reset(&fctx->buf);
-	buf_printf(&fctx->buf, "/principals/user/%s/", fctx->userid);
-	xml_add_href(node, NULL, buf_cstring(&fctx->buf));
-    }
-    else {
-	xmlNewChild(node, NULL, BAD_CAST "unauthenticated", NULL);
     }
 
     return 0;
@@ -1478,6 +1397,87 @@ static int propfind_quota(xmlNodePtr prop,
 	    /* Bytes used by entire hierarchy */
 	    buf_printf(&fctx->buf, UQUOTA_T_FMT, fctx->quota.used);
 	}
+
+	xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+		     prop, BAD_CAST buf_cstring(&fctx->buf), 0);
+    }
+    else {
+	xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
+		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, 0);
+    }
+
+    return 0;
+}
+
+
+/* Callback to fetch DAV:current-user-principal */
+static int propfind_curprin(xmlNodePtr prop,
+			    struct propfind_ctx *fctx,
+			    xmlNodePtr resp __attribute__((unused)),
+			    struct propstat propstat[],
+			    void *rock __attribute__((unused)))
+{
+    xmlNodePtr node;
+
+    node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+			prop, NULL, 0);
+
+    if (fctx->userid) {
+	buf_reset(&fctx->buf);
+	buf_printf(&fctx->buf, "/principals/user/%s/", fctx->userid);
+	xml_add_href(node, NULL, buf_cstring(&fctx->buf));
+    }
+    else {
+	xmlNewChild(node, NULL, BAD_CAST "unauthenticated", NULL);
+    }
+
+    return 0;
+}
+
+
+/* Callback to fetch DAV:add-member */
+static int propfind_addmember(xmlNodePtr prop,
+			      struct propfind_ctx *fctx,
+			      xmlNodePtr resp __attribute__((unused)),
+			      struct propstat propstat[],
+			      void *rock __attribute__((unused)))
+{
+    if (fctx->req_tgt->collection) {
+	xmlNodePtr node;
+	size_t len;
+
+	node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+			    prop, NULL, 0);
+
+	len = fctx->req_tgt->resource ?
+	    (size_t) (fctx->req_tgt->resource - fctx->req_tgt->path) :
+	    strlen(fctx->req_tgt->path);
+	buf_reset(&fctx->buf);
+	buf_printf(&fctx->buf, "%.*s", len, fctx->req_tgt->path);
+
+	xml_add_href(node, NULL, buf_cstring(&fctx->buf));
+    }
+    else {
+	xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
+		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, 0);
+    }
+
+    return 0;
+}
+
+
+/* Callback to fetch DAV:sync-token and CS:getctag */
+static int propfind_sync_token(xmlNodePtr prop,
+			       struct propfind_ctx *fctx,
+			       xmlNodePtr resp __attribute__((unused)),
+			       struct propstat propstat[],
+			       void *rock __attribute__((unused)))
+{
+    if (fctx->mailbox && !fctx->record) {
+	buf_reset(&fctx->buf);
+	buf_printf(&fctx->buf, XML_NS_CYRUS "sync/%u-" MODSEQ_FMT,
+		   fctx->mailbox->i.uidvalidity,
+		   fctx->mailbox->i.highestmodseq);
 
 	xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 		     prop, BAD_CAST buf_cstring(&fctx->buf), 0);
@@ -2007,7 +2007,6 @@ static const struct prop_entry {
 } prop_entries[] = {
 
     /* WebDAV (RFC 4918) properties */
-    { "add-member", XML_NS_DAV, 0, propfind_addmember, NULL, NULL },
     { "creationdate", XML_NS_DAV, 1, propfind_creationdate, NULL, NULL },
     { "displayname", XML_NS_DAV, 1, propfind_fromdb, proppatch_todb, "DAV" },
     { "getcontentlanguage", XML_NS_DAV, 1,
@@ -2020,7 +2019,6 @@ static const struct prop_entry {
     { "resourcetype", XML_NS_DAV, 1,
       propfind_restype, proppatch_restype, NULL },
     { "supportedlock", XML_NS_DAV, 1, propfind_suplock, NULL, NULL },
-    { "sync-token", XML_NS_DAV, 1, propfind_sync_token, NULL, NULL },
 
     /* WebDAV Versioning (RFC 3253) properties */
     { "supported-report-set", XML_NS_DAV, 0, propfind_reportset, NULL, NULL },
@@ -2042,12 +2040,18 @@ static const struct prop_entry {
     { "principal-collection-set", XML_NS_DAV, 0,
       propfind_princolset, NULL, NULL },
 
-    /* WebDAV Current Principal (RFC 5397) properties */
-    { "current-user-principal", XML_NS_DAV, 0, propfind_curprin, NULL, NULL },
-
     /* WebDAV Quota (RFC 4331) properties */
     { "quota-available-bytes", XML_NS_DAV, 0, propfind_quota, NULL, NULL },
     { "quota-used-bytes", XML_NS_DAV, 0, propfind_quota, NULL, NULL },
+
+    /* WebDAV Current Principal (RFC 5397) properties */
+    { "current-user-principal", XML_NS_DAV, 0, propfind_curprin, NULL, NULL },
+
+    /* WebDAV POST (RFC 5995) properties */
+    { "add-member", XML_NS_DAV, 0, propfind_addmember, NULL, NULL },
+
+    /* WebDAV Sync (RFC 6578) properties */
+    { "sync-token", XML_NS_DAV, 1, propfind_sync_token, NULL, NULL },
 
     /* CalDAV (RFC 4791) properties */
     { "calendar-data", XML_NS_CALDAV, 0, propfind_caldata, NULL, NULL },
@@ -2081,7 +2085,7 @@ static const struct prop_entry {
     { "calendar-user-type", XML_NS_CALDAV, 0, NULL, NULL, NULL },
 #endif /* WITH_CALDAV_SCHED */
 
-    /* Calendar Server properties */
+    /* Apple Calendar Server properties */
     { "getctag", XML_NS_CS, 1, propfind_sync_token, NULL, NULL },
 
     /* Apple iCal properties */
