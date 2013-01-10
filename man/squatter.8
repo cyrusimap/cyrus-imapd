@@ -161,6 +161,12 @@ Run in rolling mode; \fBsquatter\fP runs as a daemon listening to
 a sync log channel and continuously incrementally indexing mailboxes.
 See also \fB-d\fP and \fB-n\fP.
 .TP
+.BI \-T " directory"
+When indexing, work on a temporary copy of the search engine databases
+in \fIdirectory\fP.  That directory would typically be on some very
+fast filesystem, like an SSD or tmpfs.  This option may not work with all
+search engines, but it's only effect is to speed up initial indexing.
+.TP
 .B \-d
 In rolling mode, don't background and do emit log messages on standard
 error.  Useful for debugging.

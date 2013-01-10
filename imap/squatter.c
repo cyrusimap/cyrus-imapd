@@ -96,6 +96,7 @@ static int incremental_mode = 0;
 static int recursive_flag = 0;
 static int annotation_flag = 0;
 static int running_daemon = 0;
+static const char *temp_root_dir = NULL;
 static search_text_receiver_t *rx = NULL;
 
 static void shut_down(int code) __attribute__((noreturn));
@@ -311,6 +312,9 @@ static void do_indexer(const strarray_t *sa)
     rx = search_begin_update(verbose);
     if (rx == NULL)
 	return;	/* no indexer defined */
+
+    if (temp_root_dir && rx->use_temp_root)
+	rx->use_temp_root(rx, temp_root_dir);
 
     for (i = 0 ; i < sa->count ; i++) {
 	index_one(sa->data[i], /*blocking*/1);
@@ -787,7 +791,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:Rc:de:f:mn:rsiav")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:RT:c:de:f:mn:rsiav")) != EOF) {
 	switch (opt) {
 	case 'C':		/* alt config file */
 	    alt_config = optarg;
@@ -796,6 +800,12 @@ int main(int argc, char **argv)
 	case 'R':		/* rolling indexer */
 	    if (mode != UNKNOWN) usage(argv[0]);
 	    mode = ROLLING;
+	    break;
+
+	case 'T':		/* temporary root directory for search */
+	    if (mode != UNKNOWN && mode != INDEXER) usage(argv[0]);
+	    mode = INDEXER;
+	    temp_root_dir = optarg;
 	    break;
 
 	/* This option is deliberately undocumented, for testing only */
