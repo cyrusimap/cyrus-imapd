@@ -88,6 +88,7 @@ imap/pushstats.c
 imap/pushstats.h
 imap/quota
 imap/reconstruct
+imap/search_test
 imap/smmapd
 imap/squatter
 imap/squat_dump
