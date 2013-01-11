@@ -82,6 +82,8 @@
 #include <libxml/uri.h>
 
 
+static void my_dav_init(struct buf *serverinfo);
+
 static int prin_parse_path(struct request_target_t *tgt, const char **errstr);
 
 static struct meth_params princ_params = {
@@ -98,7 +100,7 @@ const struct namespace_t namespace_principal = {
     ALLOW_CARD |
 #endif
     ALLOW_DAV,
-    NULL, NULL, NULL, NULL,
+    &my_dav_init, NULL, NULL, NULL,
     {
 	{ NULL,			NULL },			/* ACL		*/
 	{ NULL,			NULL },			/* COPY		*/
@@ -118,6 +120,14 @@ const struct namespace_t namespace_principal = {
 	{ NULL,			NULL }			/* UNLOCK	*/
     }
 };
+
+
+static void my_dav_init(struct buf *serverinfo)
+{
+    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
+	buf_printf(serverinfo, " SQLite/%s", sqlite3_libversion());
+    }
+}
 
 
 /* Structure for property status */
@@ -249,7 +259,14 @@ static const struct precond_t {
     { "originator-invalid", NS_ISCHED },
     { "originator-denied", NS_ISCHED },
     { "recipient-missing", NS_ISCHED },
-    { "verification-failed", NS_ISCHED }
+    { "verification-failed", NS_ISCHED },
+
+    /* CardDAV (RFC 6352) preconditions */
+    { "supported-address-data", NS_CARDDAV },
+    { "valid-address-data", NS_CARDDAV },
+    { "no-uid-conflict", NS_CARDDAV },
+    { "addressbook-collection-location-ok", NS_CARDDAV },
+    { "supported-filter", NS_CARDDAV }
 };
 
 
@@ -362,6 +379,10 @@ static int xml_add_ns(xmlNodePtr req, xmlNsPtr *respNs, xmlNodePtr root)
 		    ensure_ns(respNs, NS_CALDAV, root,
 			      (const char *) nsDef->href,
 			      (const char *) nsDef->prefix);
+		else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_CARDDAV))
+		    ensure_ns(respNs, NS_CARDDAV, root,
+			      (const char *) nsDef->href,
+			      (const char *) nsDef->prefix);
 		else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_CS))
 		    ensure_ns(respNs, NS_CS, root,
 			      (const char *) nsDef->href,
@@ -453,8 +474,14 @@ xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
     }
     else error = xmlNewChild(root, NULL, BAD_CAST "error", NULL);
 
-    if (precond->ns == NS_CALDAV) {
+    switch (precond->ns) {
+    case NS_CALDAV:
 	ensure_ns(avail_ns, NS_CALDAV, root, XML_NS_CALDAV, "C");
+	break;
+
+    case NS_CARDDAV:
+	ensure_ns(avail_ns, NS_CARDDAV, root, XML_NS_CARDDAV, "C");
+	break;
     }
     node = xmlNewChild(error, avail_ns[precond->ns],
 		       BAD_CAST precond->name, NULL);
@@ -800,7 +827,7 @@ static int propfind_restype(xmlNodePtr prop,
 		}
 	    }
 	    break;
-#if 0
+
 	case URL_NS_ADDRESSBOOK:
 	    if (fctx->req_tgt->collection) {
 		ensure_ns(fctx->ns, NS_CARDDAV, resp->parent,
@@ -809,7 +836,6 @@ static int propfind_restype(xmlNodePtr prop,
 			    BAD_CAST "addressbook", NULL);
 	    }
 	    break;
-#endif
 	}
     }
 
@@ -923,6 +949,18 @@ static int propfind_reportset(xmlNodePtr prop,
 	xmlNewChild(r, fctx->ns[NS_CALDAV], BAD_CAST "free-busy-query", NULL);
     }
 
+    else if (fctx->req_tgt->namespace == URL_NS_ADDRESSBOOK) {
+	s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
+	r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
+	ensure_ns(fctx->ns, NS_CARDDAV, resp->parent, XML_NS_CARDDAV, "C");
+	xmlNewChild(r, fctx->ns[NS_CARDDAV], BAD_CAST "addressbook-query", NULL);
+
+	s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
+	r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
+	ensure_ns(fctx->ns, NS_CARDDAV, resp->parent, XML_NS_CARDDAV, "C");
+	xmlNewChild(r, fctx->ns[NS_CARDDAV], BAD_CAST "addressbook-multiget", NULL);
+    }
+
     return 0;
 }
 
@@ -969,7 +1007,9 @@ static int propfind_owner(xmlNodePtr prop,
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			prop, NULL, 0);
 
-    if ((fctx->req_tgt->namespace == URL_NS_CALENDAR) && fctx->req_tgt->user) {
+    if ((fctx->req_tgt->namespace == URL_NS_CALENDAR ||
+	 fctx->req_tgt->namespace == URL_NS_ADDRESSBOOK) &&
+	fctx->req_tgt->user) {
 	buf_reset(&fctx->buf);
 	buf_printf(&fctx->buf, "/principals/user/%.*s/",
 		   fctx->req_tgt->userlen, fctx->req_tgt->user);
@@ -1019,9 +1059,11 @@ static int propfind_supprivset(xmlNodePtr prop,
     add_suppriv(agg, "read-current-user-privilege-set", NULL, 1,
 		"Read current user privilege set");
 
-    ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
-    add_suppriv(agg, "read-free-busy", fctx->ns[NS_CALDAV], 0,
-		"Read free/busy time");
+    if (fctx->req_tgt->namespace == URL_NS_CALENDAR) {
+	ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
+	add_suppriv(agg, "read-free-busy", fctx->ns[NS_CALDAV], 0,
+		    "Read free/busy time");
+    }
 
     write = add_suppriv(all, "write", NULL, 0, "Write any object");
     add_suppriv(write, "write-content", NULL, 0, "Write resource content");
@@ -1162,7 +1204,7 @@ static int propfind_curprivset(xmlNodePtr prop,
 			       void *rock __attribute__((unused)))
 {
     int rights;
-    unsigned flags = PRIV_IMPLICIT;
+    unsigned flags = 0;
 
     if (!fctx->mailbox) {
 	xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
@@ -1190,10 +1232,14 @@ static int propfind_curprivset(xmlNodePtr prop,
 			   prop, NULL, 0);
 
 	if (fctx->req_tgt->collection) {
-	    if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX))
-		flags |= PRIV_INBOX;
-	    else if (!strcmp(fctx->req_tgt->collection, SCHED_OUTBOX))
-		flags |= PRIV_OUTBOX;
+	    if (fctx->req_tgt->namespace == URL_NS_CALENDAR) {
+		flags = PRIV_IMPLICIT;
+
+		if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX))
+		    flags |= PRIV_INBOX;
+		else if (!strcmp(fctx->req_tgt->collection, SCHED_OUTBOX))
+		    flags |= PRIV_OUTBOX;
+	    }
 
 	    add_privs(rights, flags, set, resp->parent, fctx->ns);
 	}
@@ -1225,13 +1271,17 @@ static int propfind_acl(xmlNodePtr prop,
     else {
 	xmlNodePtr acl;
 	char *aclstr, *userid;
-	unsigned flags = PRIV_IMPLICIT;
+	unsigned flags = 0;
 
-	if (fctx->req_tgt->collection) {
-	    if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX))
-		flags |= PRIV_INBOX;
-	    else if (!strcmp(fctx->req_tgt->collection, SCHED_OUTBOX))
-		flags |= PRIV_OUTBOX;
+	if (fctx->req_tgt->namespace == URL_NS_CALENDAR) {
+	    flags = PRIV_IMPLICIT;
+
+	    if (fctx->req_tgt->collection) {
+		if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX))
+		    flags |= PRIV_INBOX;
+		else if (!strcmp(fctx->req_tgt->collection, SCHED_OUTBOX))
+		    flags |= PRIV_OUTBOX;
+	    }
 	}
 
 	/* Start the acl XML response */
@@ -1491,14 +1541,13 @@ static int propfind_sync_token(xmlNodePtr prop,
 }
 
 
-/* Callback to fetch CALDAV:calendar-data */
-static int propfind_caldata(xmlNodePtr prop,
+/* Callback to fetch CALDAV:calendar-data and CARDDAV:address-data */
+static int propfind_getdata(xmlNodePtr prop,
 			    struct propfind_ctx *fctx,
-			    xmlNodePtr resp,
+			    xmlNodePtr resp __attribute__((unused)),
 			    struct propstat propstat[],
 			    void *rock __attribute__((unused)))
 {
-    ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
     if (fctx->record) {
 	xmlNodePtr data;
 
@@ -1690,6 +1739,34 @@ static int proppatch_calcompset(xmlNodePtr prop, unsigned set,
     return 0;
 }
 
+/* Callback to fetch CALDAV:supported-calendar-data */
+static int propfind_suppcaldata(xmlNodePtr prop,
+				struct propfind_ctx *fctx,
+				xmlNodePtr resp __attribute__((unused)),
+				struct propstat propstat[],
+				void *rock __attribute__((unused)))
+{
+    xmlNodePtr node;
+
+    if ((fctx->req_tgt->namespace == URL_NS_CALENDAR) &&
+	fctx->req_tgt->collection && !fctx->req_tgt->resource) {
+	node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+			    prop, NULL, 0);
+
+	node = xmlNewChild(node, fctx->ns[NS_CALDAV],
+			   BAD_CAST "calendar-data", NULL);
+	xmlNewProp(node, BAD_CAST "content-type", BAD_CAST "text/calendar");
+	xmlNewProp(node, BAD_CAST "version", BAD_CAST "2.0");
+    }
+    else {
+	xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
+		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, 0);
+    }
+
+    return 0;
+}
+
+
 #ifdef WITH_CALDAV_SCHED
 /* Callback to fetch CALDAV:schedule-tag */
 static int propfind_schedtag(xmlNodePtr prop,
@@ -1852,6 +1929,65 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
     return 0;
 }
 #endif /* WITH_CALDAV_SCHED */
+
+/* Callback to fetch CARDDAV:addressbook-home-set */
+static int propfind_abookurl(xmlNodePtr prop,
+			     struct propfind_ctx *fctx,
+			     xmlNodePtr resp,
+			     struct propstat propstat[],
+			     void *rock)
+{
+    xmlNodePtr node;
+    const char *abook = (const char *) rock;
+
+    ensure_ns(fctx->ns, NS_CARDDAV, resp->parent, XML_NS_CARDDAV, "C");
+    if (fctx->userid &&
+	(fctx->req_tgt->namespace == URL_NS_PRINCIPAL)) {
+	node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+			    prop, NULL, 0);
+
+	buf_reset(&fctx->buf);
+	buf_printf(&fctx->buf, "%s/user/%s/%s", namespace_addressbook.prefix,
+		   fctx->userid, abook ? abook : "");
+
+	xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+    }
+    else {
+	xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
+		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, 0);
+    }
+
+    return 0;
+}
+
+
+/* Callback to fetch CARDDAV:supported-address-data */
+static int propfind_suppaddrdata(xmlNodePtr prop,
+				 struct propfind_ctx *fctx,
+				 xmlNodePtr resp __attribute__((unused)),
+				 struct propstat propstat[],
+				 void *rock __attribute__((unused)))
+{
+    xmlNodePtr node;
+
+    if ((fctx->req_tgt->namespace == URL_NS_ADDRESSBOOK) &&
+	fctx->req_tgt->collection && !fctx->req_tgt->resource) {
+	node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+			    prop, NULL, 0);
+
+	node = xmlNewChild(node, fctx->ns[NS_CARDDAV],
+			   BAD_CAST "address-data-type", NULL);
+	xmlNewProp(node, BAD_CAST "content-type", BAD_CAST "text/vcard");
+	xmlNewProp(node, BAD_CAST "version", BAD_CAST "3.0");
+    }
+    else {
+	xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
+		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, 0);
+    }
+
+    return 0;
+}
+
 
 /* Callback to fetch properties from resource header */
 static int propfind_fromhdr(xmlNodePtr prop,
@@ -2054,7 +2190,7 @@ static const struct prop_entry {
     { "sync-token", XML_NS_DAV, 1, propfind_sync_token, NULL, NULL },
 
     /* CalDAV (RFC 4791) properties */
-    { "calendar-data", XML_NS_CALDAV, 0, propfind_caldata, NULL, NULL },
+    { "calendar-data", XML_NS_CALDAV, 0, propfind_getdata, NULL, NULL },
     { "calendar-description", XML_NS_CALDAV, 0,
       propfind_fromdb, proppatch_todb, "CALDAV" },
     { "calendar-home-set", XML_NS_CALDAV, 0, propfind_calurl, NULL, NULL },
@@ -2062,7 +2198,8 @@ static const struct prop_entry {
       propfind_fromdb, proppatch_todb, "CALDAV" },
     { "supported-calendar-component-set", XML_NS_CALDAV, 0,
       propfind_calcompset, proppatch_calcompset, NULL },
-    { "supported-calendar-data", XML_NS_CALDAV, 0, NULL, NULL, NULL },
+    { "supported-calendar-data", XML_NS_CALDAV, 0,
+      propfind_suppcaldata, NULL, NULL },
     { "max-resource-size", XML_NS_CALDAV, 0, NULL, NULL, NULL },
     { "min-date-time", XML_NS_CALDAV, 0, NULL, NULL, NULL },
     { "max-date-time", XML_NS_CALDAV, 0, NULL, NULL, NULL },
@@ -2084,6 +2221,16 @@ static const struct prop_entry {
       propfind_caluseraddr, NULL, NULL },
     { "calendar-user-type", XML_NS_CALDAV, 0, NULL, NULL, NULL },
 #endif /* WITH_CALDAV_SCHED */
+
+    /* CardDAV (RFC 6352) properties */
+    { "address-data", XML_NS_CARDDAV, 0, propfind_getdata, NULL, NULL },
+    { "addressbook-description", XML_NS_CARDDAV, 0,
+      propfind_fromdb, proppatch_todb, "CARDDAV" },
+    { "addressbook-home-set", XML_NS_CARDDAV, 0,
+      propfind_abookurl, NULL, NULL },
+    { "supported-address-data", XML_NS_CARDDAV, 0,
+      propfind_suppaddrdata, NULL, NULL },
+    { "max-resource-size", XML_NS_CARDDAV, 0, NULL, NULL, NULL },
 
     /* Apple Calendar Server properties */
     { "getctag", XML_NS_CS, 1, propfind_sync_token, NULL, NULL },

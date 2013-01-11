@@ -95,6 +95,12 @@ are listed with ``<none>''.
 
 # OPTIONS
 
+{ "addressbookprefix", NULL, STRING }
+/* The prefix for the addressbook mailboxes hierarchies.  The hierarchy
+   delimiter will be automatically appended.  The public addressbook
+   hierarchy will be at the toplevel of the shared namespace.  A
+   user's personal calendar hierarchy will be a child of their Inbox. */
+
 { "admins", "", STRING }
 /* The list of userids with administrative rights.  Separate each userid
    with a space.  Sites using Kerberos authentication may use

@@ -319,8 +319,9 @@ struct namespace_t {
 				 */
 };
 
-extern const struct namespace_t namespace_calendar;
 extern const struct namespace_t namespace_principal;
+extern const struct namespace_t namespace_calendar;
+extern const struct namespace_t namespace_addressbook;
 extern const struct namespace_t namespace_ischedule;
 extern const struct namespace_t namespace_domainkey;
 extern const struct namespace_t namespace_rss;

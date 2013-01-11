@@ -290,12 +290,17 @@ const struct namespace_t namespace_default = {
 
 /* Array of different namespaces and features supported by the server */
 const struct namespace_t *namespaces[] = {
+#if defined(WITH_CALDAV) || defined(WITH_CARDDAV)
+    &namespace_principal,
 #ifdef WITH_CALDAV
     &namespace_calendar,
-    &namespace_principal,
 #ifdef WITH_CALDAV_SCHED
     &namespace_ischedule,
     &namespace_domainkey,
+#endif
+#endif
+#ifdef WITH_CARDDAV
+    &namespace_addressbook,
 #endif
 #endif
 #ifdef WITH_RSS

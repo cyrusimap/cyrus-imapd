@@ -219,7 +219,6 @@ static void my_caldav_init(struct buf *serverinfo)
 
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	buf_printf(serverinfo, " libical/%s", ICAL_VERSION);
-	buf_printf(serverinfo, " SQLite/%s", sqlite3_libversion());
     }
 
     /* Need to set this to parse CalDAV Scheduling parameters */

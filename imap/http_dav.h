@@ -67,6 +67,7 @@
 /* XML namespace URIs */
 #define XML_NS_DAV	"DAV:"
 #define XML_NS_CALDAV	"urn:ietf:params:xml:ns:caldav"
+#define XML_NS_CARDDAV	"urn:ietf:params:xml:ns:carddav"
 #define XML_NS_ISCHED	"urn:ietf:params:xml:ns:ischedule"
 #define XML_NS_CS	"http://calendarserver.org/ns/"
 #define XML_NS_CYRUS	"http://cyrusimap.org/ns/"
@@ -76,12 +77,13 @@
 enum {
     NS_DAV,
     NS_CALDAV,
+    NS_CARDDAV,
     NS_ISCHED,
     NS_CS,
     NS_CYRUS,
     NS_ICAL
 };
-#define NUM_NAMESPACE 6
+#define NUM_NAMESPACE 7
 
 /* Cyrus-specific privileges */
 #define DACL_MKCOL	ACL_CREATE	/* CY:make-collection */
@@ -181,7 +183,7 @@ enum {
     CALDAV_SUPP_FILTER,
     CALDAV_VALID_FILTER,
 
-    /* CalDAV Scheduling (draft-desruisseaux-caldav-sched) preconditions */
+    /* CalDAV Scheduling (RFC 6638) preconditions */
     CALDAV_VALID_SCHED,
     CALDAV_VALID_ORGANIZER,
     CALDAV_UNIQUE_OBJECT,
@@ -198,7 +200,14 @@ enum {
     ISCHED_ORIG_INVALID,
     ISCHED_ORIG_DENIED,
     ISCHED_RECIP_MISSING,
-    ISCHED_VERIFICATION_FAILED
+    ISCHED_VERIFICATION_FAILED,
+
+    /* CardDAV (RFC 6352) preconditions */
+    CARDDAV_SUPP_DATA,
+    CARDDAV_VALID_DATA,
+    CARDDAV_UID_CONFLICT,
+    CARDDAV_LOCATION_OK,
+    CARDDAV_SUPP_FILTER
 };
 
 /* Preference bits */
