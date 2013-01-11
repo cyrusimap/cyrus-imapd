@@ -4243,7 +4243,7 @@ int report_sync_col(struct transaction_t *txn,
     /* Report the resources within the client requested limit (if any) */
     for (recno = 1; recno <= nresp; recno++) {
 	char *p, *resource = NULL;
-	struct caldav_data cdata;
+	struct dav_data ddata;
 
 	record = &istate.map[recno-1].record;
 
@@ -4259,19 +4259,19 @@ int report_sync_col(struct transaction_t *txn,
 	}
 	else if ((p = strchr(resource, ';'))) *p = '\0';
 
-	memset(&cdata, 0, sizeof(struct caldav_data));
-	cdata.dav.resource = resource;
+	memset(&ddata, 0, sizeof(struct dav_data));
+	ddata.resource = resource;
 
 	if (record->system_flags & FLAG_EXPUNGED) {
 	    /* report as NOT FOUND
 	       IMAP UID of 0 will cause index record to be ignored
 	       propfind_by_resource() will append our resource name */
-	    propfind_by_resource(fctx, &cdata);
+	    propfind_by_resource(fctx, &ddata);
 	}
 	else {
 	    fctx->record = record;
-	    cdata.dav.imap_uid = record->uid;
-	    propfind_by_resource(fctx, &cdata);
+	    ddata.imap_uid = record->uid;
+	    propfind_by_resource(fctx, &ddata);
 	}
     }
 
