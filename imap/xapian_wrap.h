@@ -53,7 +53,7 @@ typedef struct xapian_snipgen xapian_snipgen_t;
 extern void xapian_init(void);
 
 /* write-side interface */
-extern xapian_dbw_t *xapian_dbw_open(const char *path);
+extern xapian_dbw_t *xapian_dbw_open(const char *path, int incremental);
 extern void xapian_dbw_close(xapian_dbw_t *dbw);
 extern int xapian_dbw_begin_txn(xapian_dbw_t *dbw);
 extern int xapian_dbw_commit_txn(xapian_dbw_t *dbw);

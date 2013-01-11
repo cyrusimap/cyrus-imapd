@@ -35,12 +35,13 @@ struct xapian_dbw
     Xapian::Document *document;
 };
 
-xapian_dbw_t *xapian_dbw_open(const char *path)
+xapian_dbw_t *xapian_dbw_open(const char *path, int incremental)
 {
     xapian_dbw_t *dbw = 0;
     try {
 	dbw = (xapian_dbw_t *)xzmalloc(sizeof(xapian_dbw_t));
-	dbw->database = new Xapian::WritableDatabase(path, Xapian::DB_CREATE_OR_OPEN);
+	int action = (incremental ? Xapian::DB_CREATE_OR_OPEN : Xapian::DB_CREATE_OR_OVERWRITE);
+	dbw->database = new Xapian::WritableDatabase(path, action);
 	dbw->term_generator = new Xapian::TermGenerator();
 	dbw->stemmer = new Xapian::Stem("en");
 	dbw->term_generator->set_stemmer(*dbw->stemmer);

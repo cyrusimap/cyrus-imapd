@@ -155,7 +155,7 @@ static int rsync_tree(const char *fromdir, const char *todir,
 	todir_new = xstrdup(todir);
     }
 
-    if (verbose)
+    if (verbose > 1)
 	syslog(LOG_INFO, "running: rsync %s -> %s", fromdir2, todir_new);
     r = run_command("/usr/bin/rsync", (verbose ? "-av" : "-a"),
 		       fromdir2, todir_new, (char *)NULL);
@@ -165,7 +165,7 @@ static int rsync_tree(const char *fromdir, const char *todir,
 	/* this isn't really atomic because the atomic-rename trick
 	 * doesn't work on directories, but it does reduce the window */
 
-	if (verbose)
+	if (verbose > 1)
 	    syslog(LOG_INFO, "renaming %s -> %s", todir, todir_old);
 	r = rename(todir, todir_old);
 	if (r) {
@@ -175,7 +175,7 @@ static int rsync_tree(const char *fromdir, const char *todir,
 	    goto out;
 	}
 
-	if (verbose)
+	if (verbose > 1)
 	    syslog(LOG_INFO, "renaming %s -> %s", todir_new, todir);
 	r = rename(todir_new, todir);
 	if (r) {
@@ -189,7 +189,7 @@ static int rsync_tree(const char *fromdir, const char *todir,
     }
 
     if (remove) {
-	if (verbose)
+	if (verbose > 1)
 	    syslog(LOG_INFO, "Removing tree %s", fromdir);
 	run_command("/bin/rm", "-rf", fromdir, (char *)NULL);
     }
@@ -988,7 +988,7 @@ static int indexing_lock(struct mailbox *mailbox, int *fdp)
 
 static int begin_mailbox_update(search_text_receiver_t *rx,
 				struct mailbox *mailbox,
-				int incremental __attribute__((unused)))
+				int incremental)
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
     char *basedir = NULL;
@@ -1013,11 +1013,13 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
 
 	r = check_directory(real_basedir, tr->super.verbose, /*create*/1);
 	if (r) goto out;
+    }
 
-	if (strcmpsafe(basedir, tr->last_basedir)) {
-	    /* changing from one Xapian DB to another, or starting
-	     * the first Xapian DB */
+    if (strcmpsafe(basedir, tr->last_basedir)) {
+	/* changing from one Xapian DB to another, or starting
+	 * the first Xapian DB */
 
+	if (tr->temp_root) {
 	    if (tr->last_basedir && tr->commits) {
 		/* rsync back in the database we just finished */
 		r = rsync_tree(tr->last_basedir, tr->last_real_basedir,
@@ -1025,19 +1027,23 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
 		if (r) goto out;
 	    }
 
-	    /* rsync out a temporary copy of the database we're starting on */
-	    r = rsync_tree(real_basedir, basedir,
-			   tr->super.verbose, /*atomic*/0, /*remove*/0);
-	    if (r) goto out;
+	    if (incremental) {
+		/* rsync out a temporary copy of the database we're starting on */
+		r = rsync_tree(real_basedir, basedir,
+			       tr->super.verbose, /*atomic*/0, /*remove*/0);
+		if (r) goto out;
+	    }
 
 	    tr->commits = 0;
 	}
-    }
 
-    tr->dbw = xapian_dbw_open(dir);
-    if (!tr->dbw) {
-	r = IMAP_IOERROR;
-	goto out;
+	if (tr->dbw)
+	    xapian_dbw_close(tr->dbw);
+	tr->dbw = xapian_dbw_open(dir, incremental);
+	if (!tr->dbw) {
+	    r = IMAP_IOERROR;
+	    goto out;
+	}
     }
 
     tr->super.mailbox = mailbox;
@@ -1045,8 +1051,15 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     r = open_latest(mailbox, tr->temp_root, &tr->latestdb);
     if (r) goto out;
 
-    r = read_latest(&tr->latestdb, mailbox, &tr->latest, tr->super.verbose);
-    if (r) goto out;
+    if (incremental) {
+	r = read_latest(&tr->latestdb, mailbox, &tr->latest, tr->super.verbose);
+	if (r) goto out;
+    }
+    else {
+	if (tr->super.verbose > 1)
+	    syslog(LOG_INFO, "resetting latest UID to 0");
+	tr->latest = 0;
+    }
 
     free(tr->last_basedir);
     tr->last_basedir = xstrdup(basedir);
@@ -1081,11 +1094,8 @@ static int end_mailbox_update(search_text_receiver_t *rx,
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
     int r = 0;
 
-    if (tr->dbw) {
+    if (tr->dbw)
 	r = flush(rx);
-	xapian_dbw_close(tr->dbw);
-	tr->dbw = NULL;
-    }
 
     tr->super.mailbox = NULL;
 
@@ -1143,13 +1153,18 @@ static int end_update(search_text_receiver_t *rx)
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
     int r = 0;
 
+    if (tr->dbw) {
+	xapian_dbw_close(tr->dbw);
+	tr->dbw = NULL;
+    }
+    close_latest(&tr->latestdb);
+
     if (tr->temp_root) {
 	if (tr->last_basedir && tr->commits)
 	    r = rsync_tree(tr->last_basedir, tr->last_real_basedir,
 			   tr->super.verbose, /*atomic*/1, /*remove*/1);
     }
 
-    close_latest(&tr->latestdb);
     indexing_unlock(&tr->indexing_lock_fd);
     free(tr->temp_root);
     free(tr->last_basedir);
