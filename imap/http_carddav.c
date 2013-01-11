@@ -97,6 +97,9 @@ static void my_carddav_shutdown(void);
 
 static int carddav_parse_path(struct request_target_t *tgt, const char **errstr);
 
+static int carddav_put(struct transaction_t *txn, struct mailbox *mailbox,
+		       unsigned flags);
+
 static int report_card_query(struct transaction_t *txn, xmlNodePtr inroot,
 			     struct propfind_ctx *fctx);
 static int report_card_multiget(struct transaction_t *txn, xmlNodePtr inroot,
@@ -105,7 +108,6 @@ static int report_card_multiget(struct transaction_t *txn, xmlNodePtr inroot,
 static int meth_copy(struct transaction_t *txn, void *params);
 static int meth_delete(struct transaction_t *txn, void *params);
 static int meth_post(struct transaction_t *txn, void *params);
-static int meth_put(struct transaction_t *txn, void *params);
 static int store_resource(struct transaction_t *txn, VObject *vcard,
 			  struct mailbox *mailbox, const char *resource,
 			  struct carddav_db *carddavdb, int overwrite,
@@ -121,6 +123,7 @@ static struct meth_params carddav_params = {
     (delete_proc_t) &carddav_delete,
     NULL,
     { MBTYPE_ADDRESSBOOK, NULL, NULL, 0 },
+    { CARDDAV_SUPP_DATA, &carddav_put },
     { { "addressbook-query", &report_card_query, DACL_READ,
 	REPORT_NEED_MBOX | REPORT_MULTISTATUS },
       { "addressbook-multiget", &report_card_multiget, DACL_READ,
@@ -143,14 +146,14 @@ const struct namespace_t namespace_addressbook = {
 	{ &meth_get_dav,	&carddav_params },	/* GET		*/
 	{ &meth_get_dav,	&carddav_params },	/* HEAD		*/
 	{ &meth_lock,		&carddav_params },	/* LOCK		*/
-	{ NULL,			&carddav_params },	/* MKCALENDAR	*/
+	{ NULL,			NULL },			/* MKCALENDAR	*/
 	{ &meth_mkcol,		&carddav_params },	/* MKCOL	*/
 	{ &meth_copy,		NULL },			/* MOVE		*/
 	{ &meth_options,	NULL },			/* OPTIONS	*/
-	{ &meth_post,		NULL },			/* POST		*/
+	{ &meth_post,		&carddav_params },	/* POST		*/
 	{ &meth_propfind,	&carddav_params },	/* PROPFIND	*/
 	{ &meth_proppatch,	&carddav_params },	/* PROPPATCH	*/
-	{ &meth_put,		NULL },			/* PUT		*/
+	{ &meth_put,		&carddav_params },	/* PUT		*/
 	{ &meth_report,		&carddav_params },	/* REPORT	*/
 	{ &meth_unlock,		&carddav_params } 	/* UNLOCK	*/
     }
@@ -290,6 +293,42 @@ static int carddav_parse_path(struct request_target_t *tgt, const char **errstr)
 
     return 0;
 }
+
+
+/* Perform a PUT request
+ *
+ * preconditions:
+ *   CARDDAV:valid-address-data
+ *   CARDDAV:no-uid-conflict (DAV:href)
+ *   CARDDAV:max-resource-size
+ */
+static int carddav_put(struct transaction_t *txn, struct mailbox *mailbox,
+		       unsigned flags)
+{
+    int ret;
+    VObject *vcard = NULL;
+
+    /* Parse and validate the vCard data */
+    vcard = Parse_MIME(buf_cstring(&txn->req_body), buf_len(&txn->req_body));
+    if (!vcard || strcmp(vObjectName(vcard), "VCARD")) {
+	txn->error.precond = CARDDAV_VALID_DATA;
+	ret = HTTP_FORBIDDEN;
+	goto done;
+    }
+
+    /* Store resource at target */
+    ret = store_resource(txn, vcard, mailbox, txn->req_tgt.resource,
+			 auth_carddavdb, OVERWRITE_CHECK, flags);
+
+  done:
+    if (vcard) {
+	cleanVObject(vcard);
+	cleanStrTbl();
+    }
+
+    return ret;
+}
+
 
 
 /* Perform a COPY/MOVE request
@@ -739,8 +778,7 @@ static int meth_delete(struct transaction_t *txn,
 
 
 /* Perform a POST request */
-static int meth_post(struct transaction_t *txn,
-		     void *params __attribute__((unused)))
+static int meth_post(struct transaction_t *txn, void *params)
 {
     static unsigned post_count = 0;
     int r, ret;
@@ -772,205 +810,9 @@ static int meth_post(struct transaction_t *txn,
     /* Tell client where to find the new resource */
     txn->location = txn->req_tgt.path;
 
-    ret = meth_put(txn, NULL);
+    ret = meth_put(txn, params);
 
     if (ret != HTTP_CREATED) txn->location = NULL;
-
-    return ret;
-}
-
-
-/* Perform a PUT request
- *
- * preconditions:
- *   CARDDAV:supported-address-data
- *   CARDDAV:valid-address-data
- *   CARDDAV:no-uid-conflict (DAV:href)
- *   CARDDAV:max-resource-size
- */
-static int meth_put(struct transaction_t *txn,
-		    void *params __attribute__((unused)))
-{
-    int ret, r, precond, rights;
-    char *server, *acl;
-    struct mailbox *mailbox = NULL;
-    struct carddav_data *cdata;
-    struct index_record oldrecord;
-    const char *etag, *userid;
-    time_t lastmod;
-    const char **hdr;
-    uquota_t size = 0;
-    VObject *vcard = NULL;
-    unsigned flags = 0;
-
-    /* Response should not be cached */
-    txn->flags.cc |= CC_NOCACHE;
-
-    /* Make sure Content-Range isn't specified */
-    if (spool_getheader(txn->req_hdrs, "Content-Range"))
-	return HTTP_BAD_REQUEST;
-
-    /* Make sure its a DAV resource */
-    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
-
-    /* Parse the path */
-    if ((r = carddav_parse_path(&txn->req_tgt, &txn->error.desc))) return r;
-
-    /* We only handle PUT on resources */
-    if (!txn->req_tgt.resource) return HTTP_NOT_ALLOWED;
-
-    /* Check Content-Type */
-    if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
-	!is_mediatype(hdr[0], "text/vcard")) {
-	txn->error.precond = CARDDAV_SUPP_DATA;
-	return HTTP_FORBIDDEN;
-    }
-
-    /* Construct userid corresponding to mailbox */
-    userid = mboxname_to_userid(txn->req_tgt.mboxname);
-
-    /* Locate the mailbox */
-    if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
-	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-
-	switch (r) {
-	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	default: return HTTP_SERVER_ERROR;
-	}
-    }
-
-    /* Check ACL for current user */
-    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
-    if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRSRC)) {
-	/* DAV:need-privileges */
-	txn->error.precond = DAV_NEED_PRIVS;
-	txn->error.resource = txn->req_tgt.path;
-	txn->error.rights =
-	    !(rights & DACL_WRITECONT) ? DACL_WRITECONT : DACL_ADDRSRC;
-	return HTTP_FORBIDDEN;
-    }
-
-    if (server) {
-	/* Remote mailbox */
-	struct backend *be;
-
-	be = proxy_findserver(server, &http_protocol, httpd_userid,
-			      &backend_cached, NULL, NULL, httpd_in);
-	if (!be) return HTTP_UNAVAILABLE;
-
-	return http_pipe_req_resp(be, txn);
-    }
-
-    /* Local Mailbox */
-
-    /* Open mailbox for reading */
-    if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_SHARED))) {
-	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
-    }
-
-    /* Find message UID for the resource, if exists */
-    carddav_lookup_resource(auth_carddavdb, txn->req_tgt.mboxname,
-			   txn->req_tgt.resource, 0, &cdata);
-    /* XXX  Check errors */
-
-    if (cdata->dav.imap_uid) {
-	/* Overwriting existing resource */
-
-	/* Fetch index record for the resource */
-	r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &oldrecord);
-	if (r) {
-	    txn->error.desc = error_message(r);
-	    ret = HTTP_SERVER_ERROR;
-	    goto done;
-	}
-
-	etag = message_guid_encode(&oldrecord.guid);
-	lastmod = oldrecord.internaldate;
-    }
-    else if (cdata->dav.rowid) {
-	/* Unmapped URL (empty resource) */
-	etag = NULL_ETAG;
-	lastmod = cdata->dav.creationdate;
-    }
-    else {
-	/* New resource */
-	etag = NULL;
-	lastmod = 0;
-    }
-
-    /* Finished our initial read */
-    mailbox_unlock_index(mailbox, NULL);
-
-    /* Check any preconditions */
-    precond = check_precond(txn, cdata, etag, lastmod);
-
-    switch (precond) {
-    case HTTP_OK:
-	break;
-
-    case HTTP_LOCKED:
-	txn->error.precond = DAV_NEED_LOCK_TOKEN;
-	txn->error.resource = txn->req_tgt.path;
-
-    default:
-	/* We failed a precondition - don't perform the request */
-	ret = precond;
-	goto done;
-    }
-
-    /* Read body */
-    if (!txn->flags.havebody) {
-	txn->flags.havebody = 1;
-	ret = read_body(httpd_in, txn->req_hdrs, &txn->req_body, 1,
-			&txn->error.desc);
-	if (ret) {
-	    txn->flags.close = 1;
-	    goto done;
-	}
-    }
-
-    /* Make sure we have a body */
-    size = buf_len(&txn->req_body);
-    if (!size) {
-	txn->error.desc = "Missing request body\r\n";
-	ret = HTTP_BAD_REQUEST;
-	goto done;
-    }
-
-    /* Check if we can append a new iMIP message to calendar mailbox */
-    if ((r = append_check(txn->req_tgt.mboxname, httpd_authstate, ACL_INSERT, size))) {
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
-    }
-
-    /* Parse and validate the vCard data */
-    vcard = Parse_MIME(buf_cstring(&txn->req_body), buf_len(&txn->req_body));
-    if (!vcard || strcmp(vObjectName(vcard), "VCARD")) {
-	txn->error.precond = CARDDAV_VALID_DATA;
-	ret = HTTP_FORBIDDEN;
-	goto done;
-    }
-
-    if (get_preferences(txn) & PREFER_REP) flags |= PREFER_REP;
-
-    /* Store resource at target */
-    ret = store_resource(txn, vcard, mailbox, txn->req_tgt.resource,
-			 auth_carddavdb, OVERWRITE_CHECK, flags);
-
-  done:
-    if (vcard) {
-	cleanVObject(vcard);
-	cleanStrTbl();
-    }
-    if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
     return ret;
 }

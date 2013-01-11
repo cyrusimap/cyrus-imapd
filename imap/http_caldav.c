@@ -52,8 +52,6 @@
  *   - calendar-query REPORT (handle partial retrieval, prop-filter, timezone?)
  *   - free-busy-query REPORT (check ACL and transp on all calendars)
  *   - sync-collection REPORT - need to handle Depth infinity?
- *   - Use XML precondition error codes
- *   - Add WebDAV LOCKing?  Does anybody use it?
  */
 
 #include <config.h>
@@ -124,10 +122,13 @@ static void my_caldav_shutdown(void);
 
 static int caldav_parse_path(struct request_target_t *tgt, const char **errstr);
 
-static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights);
-
 static int caldav_check_precond(struct transaction_t *txn, const void *data,
 				const char *etag, time_t lastmod);
+
+static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights);
+
+static int caldav_put(struct transaction_t *txn, struct mailbox *mailbox,
+		      unsigned flags);
 
 static int report_cal_query(struct transaction_t *txn, xmlNodePtr inroot,
 			    struct propfind_ctx *fctx);
@@ -139,7 +140,6 @@ static int report_fb_query(struct transaction_t *txn, xmlNodePtr inroot,
 static int meth_copy(struct transaction_t *txn, void *params);
 static int meth_delete(struct transaction_t *txn, void *params);
 static int meth_post(struct transaction_t *txn, void *params);
-static int meth_put(struct transaction_t *txn, void *params);
 static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			  struct mailbox *mailbox, const char *resource,
 			  struct caldav_db *caldavdb, int overwrite,
@@ -171,6 +171,7 @@ static struct meth_params caldav_params = {
     (delete_proc_t) &caldav_delete,
     &caldav_acl,
     { MBTYPE_CALENDAR, "mkcalendar", "mkcalendar-response", NS_CALDAV },
+    { CALDAV_SUPP_DATA, &caldav_put },
     { { "calendar-query", &report_cal_query, DACL_READ,
 	REPORT_NEED_MBOX | REPORT_MULTISTATUS },
       { "calendar-multiget", &report_cal_multiget, DACL_READ,
@@ -199,10 +200,10 @@ const struct namespace_t namespace_calendar = {
 	{ &meth_mkcol,		&caldav_params },	/* MKCOL	*/
 	{ &meth_copy,		NULL },			/* MOVE		*/
 	{ &meth_options,	NULL },			/* OPTIONS	*/
-	{ &meth_post,		NULL },			/* POST		*/
+	{ &meth_post,		&caldav_params },	/* POST		*/
 	{ &meth_propfind,	&caldav_params },	/* PROPFIND	*/
 	{ &meth_proppatch,	&caldav_params },	/* PROPPATCH	*/
-	{ &meth_put,		NULL },			/* PUT		*/
+	{ &meth_put,		&caldav_params },	/* PUT		*/
 	{ &meth_report,		&caldav_params },	/* REPORT	*/
 	{ &meth_unlock,		&caldav_params } 	/* UNLOCK	*/
     }
@@ -443,6 +444,135 @@ static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights)
 
     /* Process this priv in meth_acl() */
     return 0;
+}
+
+
+/* Perform a PUT request
+ *
+ * preconditions:
+ *   CALDAV:valid-calendar-data
+ *   CALDAV:valid-calendar-object-resource
+ *   CALDAV:supported-calendar-component
+ *   CALDAV:no-uid-conflict (DAV:href)
+ *   CALDAV:max-resource-size
+ *   CALDAV:min-date-time
+ *   CALDAV:max-date-time
+ *   CALDAV:max-instances
+ *   CALDAV:max-attendees-per-instance
+ */
+static int caldav_put(struct transaction_t *txn, struct mailbox *mailbox,
+		      unsigned flags)
+{
+    int ret;
+    icalcomponent *ical = NULL, *comp, *nextcomp;
+    icalcomponent_kind kind;
+    icalproperty *prop;
+    const char *uid, *organizer = NULL;
+
+    /* Parse and validate the iCal data */
+    ical = icalparser_parse_string(buf_cstring(&txn->req_body));
+    if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {
+	txn->error.precond = CALDAV_VALID_DATA;
+	ret = HTTP_FORBIDDEN;
+	goto done;
+    }
+    else if (!icalrestriction_check(ical)) {
+	txn->error.precond = CALDAV_VALID_OBJECT;
+	ret = HTTP_FORBIDDEN;
+	goto done;
+    }
+
+    /* Make sure iCal UIDs [and ORGANIZERs] in all components are the same */
+    comp = icalcomponent_get_first_real_component(ical);
+    kind = icalcomponent_isa(comp);
+    uid = icalcomponent_get_uid(comp);
+    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    if (prop) organizer = icalproperty_get_organizer(prop);
+    while ((nextcomp =
+	    icalcomponent_get_next_component(ical, kind))) {
+	const char *nextuid = icalcomponent_get_uid(nextcomp);
+
+	if (!nextuid || strcmp(uid, nextuid)) {
+	    txn->error.precond = CALDAV_VALID_OBJECT;
+	    ret = HTTP_FORBIDDEN;
+	    goto done;
+	}
+
+	if (organizer) {
+	    const char *nextorg = NULL;
+
+	    prop = icalcomponent_get_first_property(nextcomp,
+						    ICAL_ORGANIZER_PROPERTY);
+	    if (prop) nextorg = icalproperty_get_organizer(prop);
+	    if (!nextorg || strcmp(organizer, nextorg)) {
+		txn->error.precond = CALDAV_SAME_ORGANIZER;
+		ret = HTTP_FORBIDDEN;
+		goto done;
+	    }
+	}
+    }
+
+#ifdef WITH_CALDAV_SCHED
+    if (organizer) {
+	/* Scheduling object resource */
+	const char *userid;
+	struct caldav_data *cdata;
+	struct sched_param sparam;
+
+	/* Construct userid corresponding to mailbox */
+	userid = mboxname_to_userid(txn->req_tgt.mboxname);
+
+	/* Make sure iCal UID is unique for this user */
+	caldav_lookup_uid(auth_caldavdb, uid, 0, &cdata);
+	/* XXX  Check errors */
+
+	if (cdata->dav.mailbox &&
+	    (strcmp(cdata->dav.mailbox, txn->req_tgt.mboxname) ||
+	     strcmp(cdata->dav.resource, txn->req_tgt.resource))) {
+	    /* CALDAV:unique-scheduling-object-resource */
+
+	    txn->error.precond = CALDAV_UNIQUE_OBJECT;
+	    assert(!buf_len(&txn->buf));
+	    buf_printf(&txn->buf, "/calendars/user/%s/%s/%s",
+		       userid, strrchr(cdata->dav.mailbox, '.')+1,
+		       cdata->dav.resource);
+	    txn->error.resource = buf_cstring(&txn->buf);
+	    ret = HTTP_FORBIDDEN;
+	    goto done;
+	}
+
+	/* Lookup the organizer */
+	if (caladdress_lookup(organizer, &sparam)) {
+	    syslog(LOG_ERR,
+		   "meth_delete: failed to process scheduling message in %s"
+		   " (org=%s, att=%s)",
+		   txn->req_tgt.mboxname, organizer, userid);
+	    txn->error.desc = "Failed to lookup organizer address\r\n";
+	    ret = HTTP_SERVER_ERROR;
+	    goto done;
+	}
+
+	if (!strcmp(sparam.userid, userid)) {
+	    /* Organizer scheduling object resource */
+	    sched_request(organizer, &sparam, NULL, ical);
+	}
+	else {
+	    /* Attendee scheduling object resource */
+	    sched_reply(userid, NULL, ical);
+	}
+    }
+
+    flags |= NEW_STAG;
+#endif /* WITH_CALDAV_SCHED */
+
+    /* Store resource at target */
+    ret = store_resource(txn, ical, mailbox, txn->req_tgt.resource,
+			 auth_caldavdb, OVERWRITE_CHECK, flags);
+
+  done:
+    if (ical) icalcomponent_free(ical);
+
+    return ret;
 }
 
 
@@ -1153,8 +1283,7 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
 
 
 /* Perform a POST request */
-static int meth_post(struct transaction_t *txn,
-		     void *params __attribute__((unused)))
+static int meth_post(struct transaction_t *txn, void *params)
 {
     static unsigned post_count = 0;
     int r, ret;
@@ -1194,293 +1323,9 @@ static int meth_post(struct transaction_t *txn,
     /* Tell client where to find the new resource */
     txn->location = txn->req_tgt.path;
 
-    ret = meth_put(txn, NULL);
+    ret = meth_put(txn, params);
 
     if (ret != HTTP_CREATED) txn->location = NULL;
-
-    return ret;
-}
-
-
-/* Perform a PUT request
- *
- * preconditions:
- *   CALDAV:supported-calendar-data
- *   CALDAV:valid-calendar-data
- *   CALDAV:valid-calendar-object-resource
- *   CALDAV:supported-calendar-component
- *   CALDAV:no-uid-conflict (DAV:href)
- *   CALDAV:max-resource-size
- *   CALDAV:min-date-time
- *   CALDAV:max-date-time
- *   CALDAV:max-instances
- *   CALDAV:max-attendees-per-instance
- */
-static int meth_put(struct transaction_t *txn,
-		    void *params __attribute__((unused)))
-{
-    int ret, r, precond, rights;
-    char *server, *acl;
-    struct mailbox *mailbox = NULL;
-    struct caldav_data *cdata;
-    struct index_record oldrecord;
-    const char *etag, *organizer = NULL, *userid;
-    time_t lastmod;
-    const char **hdr, *uid;
-    uquota_t size = 0;
-    icalcomponent *ical = NULL, *comp, *nextcomp;
-    icalcomponent_kind kind;
-    icalproperty *prop;
-    unsigned flags = 0;
-
-    /* Response should not be cached */
-    txn->flags.cc |= CC_NOCACHE;
-
-    /* Make sure Content-Range isn't specified */
-    if (spool_getheader(txn->req_hdrs, "Content-Range"))
-	return HTTP_BAD_REQUEST;
-
-    /* Make sure its a DAV resource */
-    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
-
-    /* Parse the path */
-    if ((r = caldav_parse_path(&txn->req_tgt, &txn->error.desc))) return r;
-
-    /* We only handle PUT on resources */
-    if (!txn->req_tgt.resource) return HTTP_NOT_ALLOWED;
-
-    /* Check Content-Type */
-    if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
-	!is_mediatype(hdr[0], "text/calendar")) {
-	txn->error.precond = CALDAV_SUPP_DATA;
-	return HTTP_FORBIDDEN;
-    }
-
-    /* Construct userid corresponding to mailbox */
-    userid = mboxname_to_userid(txn->req_tgt.mboxname);
-
-    /* Locate the mailbox */
-    if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
-	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-
-	switch (r) {
-	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	default: return HTTP_SERVER_ERROR;
-	}
-    }
-
-    /* Check ACL for current user */
-    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
-    if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRSRC)) {
-	/* DAV:need-privileges */
-	txn->error.precond = DAV_NEED_PRIVS;
-	txn->error.resource = txn->req_tgt.path;
-	txn->error.rights =
-	    !(rights & DACL_WRITECONT) ? DACL_WRITECONT : DACL_ADDRSRC;
-	return HTTP_FORBIDDEN;
-    }
-
-    if (server) {
-	/* Remote mailbox */
-	struct backend *be;
-
-	be = proxy_findserver(server, &http_protocol, httpd_userid,
-			      &backend_cached, NULL, NULL, httpd_in);
-	if (!be) return HTTP_UNAVAILABLE;
-
-	return http_pipe_req_resp(be, txn);
-    }
-
-    /* Local Mailbox */
-
-    /* Open mailbox for reading */
-    if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_SHARED))) {
-	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
-    }
-
-    /* Find message UID for the resource, if exists */
-    caldav_lookup_resource(auth_caldavdb, txn->req_tgt.mboxname,
-			   txn->req_tgt.resource, 0, &cdata);
-    /* XXX  Check errors */
-
-    if (cdata->dav.imap_uid) {
-	/* Overwriting existing resource */
-
-	/* Fetch index record for the resource */
-	r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &oldrecord);
-	if (r) {
-	    txn->error.desc = error_message(r);
-	    ret = HTTP_SERVER_ERROR;
-	    goto done;
-	}
-
-	etag = message_guid_encode(&oldrecord.guid);
-	lastmod = oldrecord.internaldate;
-    }
-    else if (cdata->dav.rowid) {
-	/* Unmapped URL (empty resource) */
-	etag = NULL_ETAG;
-	lastmod = cdata->dav.creationdate;
-    }
-    else {
-	/* New resource */
-	etag = NULL;
-	lastmod = 0;
-    }
-
-    /* Finished our initial read */
-    mailbox_unlock_index(mailbox, NULL);
-
-    /* Check any preconditions */
-    precond = caldav_check_precond(txn, cdata, etag, lastmod);
-
-    switch (precond) {
-    case HTTP_OK:
-	break;
-
-    case HTTP_LOCKED:
-	txn->error.precond = DAV_NEED_LOCK_TOKEN;
-	txn->error.resource = txn->req_tgt.path;
-
-    default:
-	/* We failed a precondition - don't perform the request */
-	ret = precond;
-	goto done;
-    }
-
-    /* Read body */
-    if (!txn->flags.havebody) {
-	txn->flags.havebody = 1;
-	ret = read_body(httpd_in, txn->req_hdrs, &txn->req_body, 1,
-			&txn->error.desc);
-	if (ret) {
-	    txn->flags.close = 1;
-	    goto done;
-	}
-    }
-
-    /* Make sure we have a body */
-    size = buf_len(&txn->req_body);
-    if (!size) {
-	txn->error.desc = "Missing request body\r\n";
-	ret = HTTP_BAD_REQUEST;
-	goto done;
-    }
-
-    /* Check if we can append a new iMIP message to calendar mailbox */
-    if ((r = append_check(txn->req_tgt.mboxname, httpd_authstate, ACL_INSERT, size))) {
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
-    }
-
-    /* Parse and validate the iCal data */
-    ical = icalparser_parse_string(buf_cstring(&txn->req_body));
-    if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {
-	txn->error.precond = CALDAV_VALID_DATA;
-	ret = HTTP_FORBIDDEN;
-	goto done;
-    }
-    else if (!icalrestriction_check(ical)) {
-	txn->error.precond = CALDAV_VALID_OBJECT;
-	ret = HTTP_FORBIDDEN;
-	goto done;
-    }
-
-    /* Make sure iCal UIDs [and ORGANIZERs] in all components are the same */
-    comp = icalcomponent_get_first_real_component(ical);
-    kind = icalcomponent_isa(comp);
-    uid = icalcomponent_get_uid(comp);
-    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-    if (prop) organizer = icalproperty_get_organizer(prop);
-    while ((nextcomp =
-	    icalcomponent_get_next_component(ical, kind))) {
-	const char *nextuid = icalcomponent_get_uid(nextcomp);
-
-	if (!nextuid || strcmp(uid, nextuid)) {
-	    txn->error.precond = CALDAV_VALID_OBJECT;
-	    ret = HTTP_FORBIDDEN;
-	    goto done;
-	}
-
-	if (organizer) {
-	    const char *nextorg = NULL;
-
-	    prop = icalcomponent_get_first_property(nextcomp,
-						    ICAL_ORGANIZER_PROPERTY);
-	    if (prop) nextorg = icalproperty_get_organizer(prop);
-	    if (!nextorg || strcmp(organizer, nextorg)) {
-		txn->error.precond = CALDAV_SAME_ORGANIZER;
-		ret = HTTP_FORBIDDEN;
-		goto done;
-	    }
-	}
-    }
-
-#ifdef WITH_CALDAV_SCHED
-    if (organizer) {
-	/* Scheduling object resource */
-	struct sched_param sparam;
-
-	/* Make sure iCal UID is unique for this user */
-	caldav_lookup_uid(auth_caldavdb, uid, 0, &cdata);
-	/* XXX  Check errors */
-
-	if (cdata->dav.mailbox &&
-	    (strcmp(cdata->dav.mailbox, txn->req_tgt.mboxname) ||
-	     strcmp(cdata->dav.resource, txn->req_tgt.resource))) {
-	    /* CALDAV:unique-scheduling-object-resource */
-
-	    txn->error.precond = CALDAV_UNIQUE_OBJECT;
-	    assert(!buf_len(&txn->buf));
-	    buf_printf(&txn->buf, "/calendars/user/%s/%s/%s",
-		       userid, strrchr(cdata->dav.mailbox, '.')+1,
-		       cdata->dav.resource);
-	    txn->error.resource = buf_cstring(&txn->buf);
-	    ret = HTTP_FORBIDDEN;
-	    goto done;
-	}
-
-	/* Lookup the organizer */
-	if (caladdress_lookup(organizer, &sparam)) {
-	    syslog(LOG_ERR,
-		   "meth_delete: failed to process scheduling message in %s"
-		   " (org=%s, att=%s)",
-		   txn->req_tgt.mboxname, organizer, userid);
-	    txn->error.desc = "Failed to lookup organizer address\r\n";
-	    ret = HTTP_SERVER_ERROR;
-	    goto done;
-	}
-
-	if (!strcmp(sparam.userid, userid)) {
-	    /* Organizer scheduling object resource */
-	    sched_request(organizer, &sparam, NULL, ical);
-	}
-	else {
-	    /* Attendee scheduling object resource */
-	    sched_reply(userid, NULL, ical);
-	}
-    }
-
-    flags |= NEW_STAG;
-#endif /* WITH_CALDAV_SCHED */
-
-    if (get_preferences(txn) & PREFER_REP) flags |= PREFER_REP;
-
-    /* Store resource at target */
-    ret = store_resource(txn, ical, mailbox, txn->req_tgt.resource,
-			 auth_caldavdb, OVERWRITE_CHECK, flags);
-
-  done:
-    if (ical) icalcomponent_free(ical);
-    if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
     return ret;
 }

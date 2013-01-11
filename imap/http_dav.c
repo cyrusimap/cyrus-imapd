@@ -66,6 +66,7 @@
 #include "http_dav.h"
 #include "annotate.h"
 #include "acl.h"
+#include "append.h"
 #include "caldav_db.h"
 #include "global.h"
 #include "http_err.h"
@@ -3843,6 +3844,181 @@ int meth_proppatch(struct transaction_t *txn,  void *params)
 
     if (outdoc) xmlFreeDoc(outdoc);
     if (indoc) xmlFreeDoc(indoc);
+
+    return ret;
+}
+
+
+/* Perform a PUT request
+ *
+ * preconditions:
+ *   *DAV:supported-address-data
+ */
+int meth_put(struct transaction_t *txn, void *params)
+{
+    struct meth_params *pparams = (struct meth_params *) params;
+    int ret, r, precond, rights;
+    const char **hdr, *etag;
+    char *server, *acl;
+    struct mailbox *mailbox = NULL;
+    struct dav_data *ddata;
+    struct index_record oldrecord;
+    time_t lastmod;
+    uquota_t size = 0;
+    unsigned flags = 0;
+
+    /* Response should not be cached */
+    txn->flags.cc |= CC_NOCACHE;
+
+    /* Make sure Content-Range isn't specified */
+    if (spool_getheader(txn->req_hdrs, "Content-Range"))
+	return HTTP_BAD_REQUEST;
+
+    /* Make sure its a DAV resource */
+    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
+
+    /* Parse the path */
+    if ((r = pparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+
+    /* We only handle PUT on resources */
+    if (!txn->req_tgt.resource) return HTTP_NOT_ALLOWED;
+
+    /* Check Content-Type */
+    if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
+	!is_mediatype(hdr[0], pparams->content_type)) {
+	txn->error.precond = pparams->put.supp_data_precond;
+	return HTTP_FORBIDDEN;
+    }
+
+    /* Locate the mailbox */
+    if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
+	syslog(LOG_ERR, "mlookup(%s) failed: %s",
+	       txn->req_tgt.mboxname, error_message(r));
+	txn->error.desc = error_message(r);
+
+	switch (r) {
+	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	default: return HTTP_SERVER_ERROR;
+	}
+    }
+
+    /* Check ACL for current user */
+    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
+    if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRSRC)) {
+	/* DAV:need-privileges */
+	txn->error.precond = DAV_NEED_PRIVS;
+	txn->error.resource = txn->req_tgt.path;
+	txn->error.rights =
+	    !(rights & DACL_WRITECONT) ? DACL_WRITECONT : DACL_ADDRSRC;
+	return HTTP_FORBIDDEN;
+    }
+
+    if (server) {
+	/* Remote mailbox */
+	struct backend *be;
+
+	be = proxy_findserver(server, &http_protocol, httpd_userid,
+			      &backend_cached, NULL, NULL, httpd_in);
+	if (!be) return HTTP_UNAVAILABLE;
+
+	return http_pipe_req_resp(be, txn);
+    }
+
+    /* Local Mailbox */
+
+    /* Open mailbox for reading */
+    if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_SHARED))) {
+	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+	       txn->req_tgt.mboxname, error_message(r));
+	txn->error.desc = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
+    /* Find message UID for the resource, if exists */
+    pparams->lookup_resource(*pparams->davdb, txn->req_tgt.mboxname,
+			     txn->req_tgt.resource, 0, (void *) &ddata);
+    /* XXX  Check errors */
+
+    if (ddata->imap_uid) {
+	/* Overwriting existing resource */
+
+	/* Fetch index record for the resource */
+	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &oldrecord);
+	if (r) {
+	    txn->error.desc = error_message(r);
+	    ret = HTTP_SERVER_ERROR;
+	    goto done;
+	}
+
+	etag = message_guid_encode(&oldrecord.guid);
+	lastmod = oldrecord.internaldate;
+    }
+    else if (ddata->rowid) {
+	/* Unmapped URL (empty resource) */
+	etag = NULL_ETAG;
+	lastmod = ddata->creationdate;
+    }
+    else {
+	/* New resource */
+	etag = NULL;
+	lastmod = 0;
+    }
+
+    /* Finished our initial read */
+    mailbox_unlock_index(mailbox, NULL);
+
+    /* Check any preconditions */
+    precond = pparams->check_precond(txn, ddata, etag, lastmod);
+
+    switch (precond) {
+    case HTTP_OK:
+	break;
+
+    case HTTP_LOCKED:
+	txn->error.precond = DAV_NEED_LOCK_TOKEN;
+	txn->error.resource = txn->req_tgt.path;
+
+    default:
+	/* We failed a precondition - don't perform the request */
+	ret = precond;
+	goto done;
+    }
+
+    /* Read body */
+    if (!txn->flags.havebody) {
+	txn->flags.havebody = 1;
+	ret = read_body(httpd_in, txn->req_hdrs, &txn->req_body, 1,
+			&txn->error.desc);
+	if (ret) {
+	    txn->flags.close = 1;
+	    goto done;
+	}
+    }
+
+    /* Make sure we have a body */
+    size = buf_len(&txn->req_body);
+    if (!size) {
+	txn->error.desc = "Missing request body\r\n";
+	ret = HTTP_BAD_REQUEST;
+	goto done;
+    }
+
+    /* Check if we can append a new iMIP message to calendar mailbox */
+    if ((r = append_check(txn->req_tgt.mboxname, httpd_authstate, ACL_INSERT, size))) {
+	txn->error.desc = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
+    if (get_preferences(txn) & PREFER_REP) flags |= PREFER_REP;
+
+    /* Parse, validate, and store the resource */
+    ret = pparams->put.proc(txn, mailbox, flags);
+
+  done:
+    if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
     return ret;
 }

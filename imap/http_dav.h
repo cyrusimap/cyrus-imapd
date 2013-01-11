@@ -290,6 +290,15 @@ struct mkcol_params {
     unsigned xml_ns;			/* namespace of response element */
 };
 
+/* meth_put() parameters */
+typedef int (*put_proc_t)(struct transaction_t *txn, struct mailbox *mailbox,
+			  unsigned flags);
+
+struct put_params {
+    unsigned supp_data_precond;		/* precond code for unsupported data */
+    put_proc_t proc;			/* function to process & put a rsrc */
+};
+
 /* meth_report() parameters */
 typedef int (*report_proc_t)(struct transaction_t *txn, xmlNodePtr inroot,
 			     struct propfind_ctx *fctx);
@@ -319,6 +328,7 @@ struct meth_params {
     delete_proc_t delete_resource;	/* delete a specific resource */
     acl_proc_t acl_ext;			/* special ACL handling (extensions) */
     struct mkcol_params mkcol;		/* params for creating collection */
+    struct put_params put;		/* params for putting a resource */
     struct report_type_t reports[];	/* array of reports & proc functions */
 };
 
@@ -352,6 +362,7 @@ int meth_lock(struct transaction_t *txn, void *params);
 int meth_mkcol(struct transaction_t *txn, void *params);
 int meth_propfind(struct transaction_t *txn, void *params);
 int meth_proppatch(struct transaction_t *txn, void *params);
+int meth_put(struct transaction_t *txn, void *params);
 int meth_report(struct transaction_t *txn, void *params);
 int meth_unlock(struct transaction_t *txn, void *params);
 
