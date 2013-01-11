@@ -1322,9 +1322,10 @@ int parse_uri(unsigned meth, const char *uri,
 /* Compare Content-Types */
 int is_mediatype(const char *hdr, const char *type)
 {
-    size_t len = strlen(type);
+    size_t tlen = strcspn(type, "; \r\n\0");
+    size_t hlen = strcspn(hdr, "; \r\n\0");
 
-    return (!strncasecmp(hdr, type, len) && strchr("; \t\r\n\0", hdr[len]));
+    return ((tlen == hlen) && !strncasecmp(hdr, type, tlen));
 }
 
 
