@@ -2812,8 +2812,8 @@ int meth_get_dav(struct transaction_t *txn, void *params)
     }
 
     /* Find message UID for the resource */
-    gparams->lookup_resource(*gparams->davdb, txn->req_tgt.mboxname,
-			     txn->req_tgt.resource, 0, (void **) &ddata);
+    gparams->davdb.lookup_resource(*gparams->davdb.db, txn->req_tgt.mboxname,
+				   txn->req_tgt.resource, 0, (void **) &ddata);
     if (!ddata->rowid) {
 	ret = HTTP_NOT_FOUND;
 	goto done;
@@ -2983,8 +2983,8 @@ int meth_lock(struct transaction_t *txn, void *params)
     }
 
     /* Find message UID for the resource, if exists */
-    lparams->lookup_resource(*lparams->davdb, txn->req_tgt.mboxname,
-			     txn->req_tgt.resource, 1, (void *) &ddata);
+    lparams->davdb.lookup_resource(*lparams->davdb.db, txn->req_tgt.mboxname,
+				   txn->req_tgt.resource, 1, (void *) &ddata);
 
     if (ddata->imap_uid) {
 	/* Locking existing resource */
@@ -3129,7 +3129,7 @@ int meth_lock(struct transaction_t *txn, void *params)
     root = xmlNewChild(root, NULL, BAD_CAST "lockdiscovery", NULL);
     xml_add_lockdisc(root, txn->req_tgt.path, (struct dav_data *) ddata);
 
-    lparams->write_resource(*lparams->davdb, ddata, 1);
+    lparams->davdb.write_resource(*lparams->davdb.db, ddata, 1);
 
     txn->resp_body.lock = ddata->lock_token;
 
@@ -3625,10 +3625,10 @@ int meth_propfind(struct transaction_t *txn, void *params)
     fctx.reqd_privs = DACL_READ;
     fctx.filter = NULL;
     fctx.filter_crit = NULL;
-    if (fparams->davdb) {
-	fctx.davdb = *fparams->davdb;
-	fctx.lookup_resource = fparams->lookup_resource;
-	fctx.foreach_resource = fparams->foreach_resource;
+    if (fparams->davdb.db) {
+	fctx.davdb = *fparams->davdb.db;
+	fctx.lookup_resource = fparams->davdb.lookup_resource;
+	fctx.foreach_resource = fparams->davdb.foreach_resource;
     }
     fctx.proc_by_resource = &propfind_by_resource;
     fctx.elist = NULL;
@@ -3985,8 +3985,8 @@ int meth_put(struct transaction_t *txn, void *params)
     }
 
     /* Find message UID for the resource, if exists */
-    pparams->lookup_resource(*pparams->davdb, txn->req_tgt.mboxname,
-			     txn->req_tgt.resource, 0, (void *) &ddata);
+    pparams->davdb.lookup_resource(*pparams->davdb.db, txn->req_tgt.mboxname,
+				   txn->req_tgt.resource, 0, (void *) &ddata);
     /* XXX  Check errors */
 
     if (ddata->imap_uid) {
@@ -4548,8 +4548,8 @@ int meth_unlock(struct transaction_t *txn, void *params)
     }
 
     /* Find message UID for the resource, if exists */
-    lparams->lookup_resource(*lparams->davdb, txn->req_tgt.mboxname,
-			     txn->req_tgt.resource, 1, (void **) &ddata);
+    lparams->davdb.lookup_resource(*lparams->davdb.db, txn->req_tgt.mboxname,
+				   txn->req_tgt.resource, 1, (void **) &ddata);
     if (!ddata->rowid) {
 	ret = HTTP_NOT_FOUND;
 	goto done;
@@ -4621,11 +4621,11 @@ int meth_unlock(struct transaction_t *txn, void *params)
 	ddata->lock_ownerid = NULL;
 	ddata->lock_expire = 0;
 
-	lparams->write_resource(*lparams->davdb, ddata, 1);
+	lparams->davdb.write_resource(*lparams->davdb.db, ddata, 1);
     }
     else {
 	/* Unmapped URL - Treat as lock-null and delete mapping entry */
-	lparams->delete_resource(lparams->davdb, ddata->rowid, 1);
+	lparams->davdb.delete_resource(lparams->davdb.db, ddata->rowid, 1);
     }
 
   done:

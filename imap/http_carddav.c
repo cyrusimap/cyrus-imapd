@@ -115,11 +115,11 @@ static struct meth_params carddav_params = {
     "text/vcard; charset=utf-8",
     &carddav_parse_path,
     &check_precond,
-    (void **) &auth_carddavdb,
-    (lookup_proc_t) &carddav_lookup_resource,
-    (foreach_proc_t) &carddav_foreach,
-    (write_proc_t) &carddav_write,
-    (delete_proc_t) &carddav_delete,
+    { (void **) &auth_carddavdb,
+      (db_lookup_proc_t) &carddav_lookup_resource,
+      (db_foreach_proc_t) &carddav_foreach,
+      (db_write_proc_t) &carddav_write,
+      (db_delete_proc_t) &carddav_delete },
     NULL,					/* No ACL extensions */
     { MBTYPE_ADDRESSBOOK, NULL, NULL, 0 },	/* No special MK* method */
     NULL,		  	      		/* No special POST handling */
@@ -784,8 +784,8 @@ static int report_card_query(struct transaction_t *txn,
     xmlNodePtr node;
 
     fctx->davdb = auth_carddavdb;
-    fctx->lookup_resource = (lookup_proc_t) &carddav_lookup_resource;
-    fctx->foreach_resource = (foreach_proc_t) &carddav_foreach;
+    fctx->lookup_resource = (db_lookup_proc_t) &carddav_lookup_resource;
+    fctx->foreach_resource = (db_foreach_proc_t) &carddav_foreach;
     fctx->proc_by_resource = &propfind_by_resource;
 
     /* Parse children element of report */

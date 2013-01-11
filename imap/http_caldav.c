@@ -163,11 +163,11 @@ static struct meth_params caldav_params = {
     "text/calendar; charset=utf-8",
     &caldav_parse_path,
     &caldav_check_precond,
-    (void **) &auth_caldavdb,
-    (lookup_proc_t) &caldav_lookup_resource,
-    (foreach_proc_t) &caldav_foreach,
-    (write_proc_t) &caldav_write,
-    (delete_proc_t) &caldav_delete,
+    { (void **) &auth_caldavdb,
+      (db_lookup_proc_t) &caldav_lookup_resource,
+      (db_foreach_proc_t) &caldav_foreach,
+      (db_write_proc_t) &caldav_write,
+      (db_delete_proc_t) &caldav_delete },
     &caldav_acl,
     { MBTYPE_CALENDAR, "mkcalendar", "mkcalendar-response", NS_CALDAV },
     &caldav_post,
@@ -1362,8 +1362,8 @@ static int report_cal_query(struct transaction_t *txn,
     struct calquery_filter calfilter;
 
     fctx->davdb = auth_caldavdb;
-    fctx->lookup_resource = (lookup_proc_t) &caldav_lookup_resource;
-    fctx->foreach_resource = (foreach_proc_t) &caldav_foreach;
+    fctx->lookup_resource = (db_lookup_proc_t) &caldav_lookup_resource;
+    fctx->foreach_resource = (db_foreach_proc_t) &caldav_foreach;
     fctx->proc_by_resource = &propfind_by_resource;
 
     /* Parse children element of report */
@@ -1546,8 +1546,8 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
     struct busytime *busytime = &calfilter->busytime;
     icalcomponent *cal = NULL;
 
-    fctx->lookup_resource = (lookup_proc_t) &caldav_lookup_resource;
-    fctx->foreach_resource = (foreach_proc_t) &caldav_foreach;
+    fctx->lookup_resource = (db_lookup_proc_t) &caldav_lookup_resource;
+    fctx->foreach_resource = (db_foreach_proc_t) &caldav_foreach;
     fctx->proc_by_resource = &busytime_by_resource;
 
     /* Gather up all of the busytime */

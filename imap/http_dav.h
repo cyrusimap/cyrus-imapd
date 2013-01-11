@@ -220,12 +220,12 @@ enum {
 /* Function to lookup DAV 'resource' in 'mailbox', with optional 'lock',
  * placing the record in 'data'
  */
-typedef int (*lookup_proc_t)(void *davdb, const char *mailbox,
-			     const char *resource, int lock, void **data);
+typedef int (*db_lookup_proc_t)(void *davdb, const char *mailbox,
+				const char *resource, int lock, void **data);
 
 /* Function to process each DAV resource in 'mailbox' with 'cb' */
-typedef int (*foreach_proc_t)(void *davdb, const char *mailbox,
-			      int (*cb)(void *rock, void *data), void *rock);
+typedef int (*db_foreach_proc_t)(void *davdb, const char *mailbox,
+				 int (*cb)(void *rock, void *data), void *rock);
 
 /* Context for fetching properties */
 struct propfind_entry_list;
@@ -248,8 +248,8 @@ struct propfind_ctx {
     int (*filter)(struct propfind_ctx *,
 		  void *data);		/* callback to filter resources */
     void *filter_crit;			/* criteria to filter resources */
-    lookup_proc_t lookup_resource;
-    foreach_proc_t foreach_resource;
+    db_lookup_proc_t lookup_resource;
+    db_foreach_proc_t foreach_resource;
     int (*proc_by_resource)(void *rock,	/* Callback to process a resource */
 			    void *data);
     struct propfind_entry_list *elist;	/* List of props to fetch w/callbacks */
@@ -269,10 +269,18 @@ typedef int (*check_precond_t)(struct transaction_t *txn, const void *data,
 			       const char *etag, time_t lastmod);
 
 /* Function to insert/update DAV resource in 'data', optionally commiting txn */
-typedef int (*write_proc_t)(void *davdb, void *data, int commit);
+typedef int (*db_write_proc_t)(void *davdb, void *data, int commit);
 
 /* Function to delete resource in 'rowid', optionally commiting txn */
-typedef int (*delete_proc_t)(void *davdb, unsigned rowid, int commit);
+typedef int (*db_delete_proc_t)(void *davdb, unsigned rowid, int commit);
+
+struct davdb_params {
+    void **db;				/* DAV DB to use for resources */
+    db_lookup_proc_t lookup_resource;	/* lookup a specific resource */
+    db_foreach_proc_t foreach_resource;	/* process all resources in a mailbox */
+    db_write_proc_t write_resource;	/* write a specific resource */
+    db_delete_proc_t delete_resource;	/* delete a specific resource */
+};
 
 /*
  * Process 'priv', augmenting 'rights' as necessary.
@@ -328,11 +336,7 @@ struct meth_params {
     const char *content_type;		/* Content-Type of resources */
     parse_path_t parse_path;		/* parse URI path & generate mboxname */
     check_precond_t check_precond;	/* check headers for preconditions */
-    void **davdb;			/* DAV DB to use for resources */
-    lookup_proc_t lookup_resource;	/* lookup a specific resource */
-    foreach_proc_t foreach_resource;	/* process all resources in a mailbox */
-    write_proc_t write_resource;	/* write a specific resource */
-    delete_proc_t delete_resource;	/* delete a specific resource */
+    struct davdb_params davdb;
     acl_proc_t acl_ext;			/* special ACL handling (extensions) */
     struct mkcol_params mkcol;		/* params for creating collection */
     post_proc_t post;			/* special POST handling (optional) */
