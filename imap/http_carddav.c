@@ -107,7 +107,6 @@ static int report_card_multiget(struct transaction_t *txn, xmlNodePtr inroot,
 
 static int meth_copy(struct transaction_t *txn, void *params);
 static int meth_delete(struct transaction_t *txn, void *params);
-static int meth_post(struct transaction_t *txn, void *params);
 static int store_resource(struct transaction_t *txn, VObject *vcard,
 			  struct mailbox *mailbox, const char *resource,
 			  struct carddav_db *carddavdb, int overwrite,
@@ -121,8 +120,9 @@ static struct meth_params carddav_params = {
     (foreach_proc_t) &carddav_foreach,
     (write_proc_t) &carddav_write,
     (delete_proc_t) &carddav_delete,
-    NULL,
-    { MBTYPE_ADDRESSBOOK, NULL, NULL, 0 },
+    NULL,					/* No ACL extensions */
+    { MBTYPE_ADDRESSBOOK, NULL, NULL, 0 },	/* No special MK* method */
+    NULL,		  	      		/* No special POST handling */
     { CARDDAV_SUPP_DATA, &carddav_put },
     { { "addressbook-query", &report_card_query, DACL_READ,
 	REPORT_NEED_MBOX | REPORT_MULTISTATUS },
@@ -772,47 +772,6 @@ static int meth_delete(struct transaction_t *txn,
 
   done:
     if (mailbox) mailbox_unlock_index(mailbox, NULL);
-
-    return ret;
-}
-
-
-/* Perform a POST request */
-static int meth_post(struct transaction_t *txn, void *params)
-{
-    static unsigned post_count = 0;
-    int r, ret;
-    size_t len;
-    char *p;
-
-    /* Response should not be cached */
-    txn->flags.cc |= CC_NOCACHE;
-
-    /* Make sure its a DAV resource */
-    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
-
-    /* Parse the path */
-    if ((r = carddav_parse_path(&txn->req_tgt, &txn->error.desc))) return r;
-
-    /* We only handle POST on calendar collections */
-    if (!txn->req_tgt.collection ||
-	txn->req_tgt.resource) return HTTP_NOT_ALLOWED;
-
-    /* POST to regular calendar collection */
-
-    /* Append a unique resource name to URL path and perform a PUT */
-    len = strlen(txn->req_tgt.path);
-    p = txn->req_tgt.path + len;
-
-    snprintf(p, MAX_MAILBOX_PATH - len, "%x-%d-%ld-%u.ics",
-	     strhash(txn->req_tgt.path), getpid(), time(0), post_count++);
-
-    /* Tell client where to find the new resource */
-    txn->location = txn->req_tgt.path;
-
-    ret = meth_put(txn, params);
-
-    if (ret != HTTP_CREATED) txn->location = NULL;
 
     return ret;
 }

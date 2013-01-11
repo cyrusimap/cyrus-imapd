@@ -126,7 +126,7 @@ static int caldav_check_precond(struct transaction_t *txn, const void *data,
 				const char *etag, time_t lastmod);
 
 static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights);
-
+static int caldav_post(struct transaction_t *txn);
 static int caldav_put(struct transaction_t *txn, struct mailbox *mailbox,
 		      unsigned flags);
 
@@ -139,7 +139,6 @@ static int report_fb_query(struct transaction_t *txn, xmlNodePtr inroot,
 
 static int meth_copy(struct transaction_t *txn, void *params);
 static int meth_delete(struct transaction_t *txn, void *params);
-static int meth_post(struct transaction_t *txn, void *params);
 static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			  struct mailbox *mailbox, const char *resource,
 			  struct caldav_db *caldavdb, int overwrite,
@@ -171,6 +170,7 @@ static struct meth_params caldav_params = {
     (delete_proc_t) &caldav_delete,
     &caldav_acl,
     { MBTYPE_CALENDAR, "mkcalendar", "mkcalendar-response", NS_CALDAV },
+    &caldav_post,
     { CALDAV_SUPP_DATA, &caldav_put },
     { { "calendar-query", &report_cal_query, DACL_READ,
 	REPORT_NEED_MBOX | REPORT_MULTISTATUS },
@@ -444,6 +444,21 @@ static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights)
 
     /* Process this priv in meth_acl() */
     return 0;
+}
+
+
+/* Perform a busy time request, if necessary */
+static int caldav_post(struct transaction_t *txn)
+{
+#ifdef WITH_CALDAV_SCHED
+    if (!strcmp(txn->req_tgt.collection, SCHED_OUTBOX)) {
+	/* POST to schedule-outbox (busy time request) */
+
+	return sched_busytime(txn);
+    }
+#endif
+
+    return HTTP_CONTINUE;
 }
 
 
@@ -1279,55 +1294,6 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
     }
 
     return match;
-}
-
-
-/* Perform a POST request */
-static int meth_post(struct transaction_t *txn, void *params)
-{
-    static unsigned post_count = 0;
-    int r, ret;
-    size_t len;
-    char *p;
-
-    /* Response should not be cached */
-    txn->flags.cc |= CC_NOCACHE;
-
-    /* Make sure its a DAV resource */
-    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
-
-    /* Parse the path */
-    if ((r = caldav_parse_path(&txn->req_tgt, &txn->error.desc))) return r;
-
-    /* We only handle POST on calendar collections */
-    if (!txn->req_tgt.collection ||
-	txn->req_tgt.resource) return HTTP_NOT_ALLOWED;
-
-#ifdef WITH_CALDAV_SCHED
-    if (!strcmp(txn->req_tgt.collection, SCHED_OUTBOX)) {
-	/* POST to schedule-outbox (busy time request) */
-
-	return sched_busytime(txn);
-    }
-#endif
-
-    /* POST to regular calendar collection */
-
-    /* Append a unique resource name to URL path and perform a PUT */
-    len = strlen(txn->req_tgt.path);
-    p = txn->req_tgt.path + len;
-
-    snprintf(p, MAX_MAILBOX_PATH - len, "%x-%d-%ld-%u.ics",
-	     strhash(txn->req_tgt.path), getpid(), time(0), post_count++);
-
-    /* Tell client where to find the new resource */
-    txn->location = txn->req_tgt.path;
-
-    ret = meth_put(txn, params);
-
-    if (ret != HTTP_CREATED) txn->location = NULL;
-
-    return ret;
 }
 
 

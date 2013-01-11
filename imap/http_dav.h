@@ -290,13 +290,20 @@ struct mkcol_params {
     unsigned xml_ns;			/* namespace of response element */
 };
 
+/*
+ * Function to do special processing for POST method (optional).
+ * Returns HTTP_CONTINUE if processing should continue in meth_post(),
+ * otherwise processing is complete.
+ */
+typedef int (*post_proc_t)(struct transaction_t *txn);
+
 /* meth_put() parameters */
 typedef int (*put_proc_t)(struct transaction_t *txn, struct mailbox *mailbox,
 			  unsigned flags);
 
 struct put_params {
     unsigned supp_data_precond;		/* precond code for unsupported data */
-    put_proc_t proc;			/* function to process & put a rsrc */
+    put_proc_t proc;			/* function to process & PUT a rsrc */
 };
 
 /* meth_report() parameters */
@@ -328,6 +335,7 @@ struct meth_params {
     delete_proc_t delete_resource;	/* delete a specific resource */
     acl_proc_t acl_ext;			/* special ACL handling (extensions) */
     struct mkcol_params mkcol;		/* params for creating collection */
+    post_proc_t post;			/* special POST handling (optional) */
     struct put_params put;		/* params for putting a resource */
     struct report_type_t reports[];	/* array of reports & proc functions */
 };
@@ -362,6 +370,7 @@ int meth_lock(struct transaction_t *txn, void *params);
 int meth_mkcol(struct transaction_t *txn, void *params);
 int meth_propfind(struct transaction_t *txn, void *params);
 int meth_proppatch(struct transaction_t *txn, void *params);
+int meth_post(struct transaction_t *txn, void *params);
 int meth_put(struct transaction_t *txn, void *params);
 int meth_report(struct transaction_t *txn, void *params);
 int meth_unlock(struct transaction_t *txn, void *params);

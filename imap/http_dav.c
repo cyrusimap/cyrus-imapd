@@ -3849,6 +3849,60 @@ int meth_proppatch(struct transaction_t *txn,  void *params)
 }
 
 
+/* Perform a POST request */
+int meth_post(struct transaction_t *txn, void *params)
+{
+    struct meth_params *pparams = (struct meth_params *) params;
+    static unsigned post_count = 0;
+    int r, ret;
+    size_t len;
+    char *p;
+
+    /* Response should not be cached */
+    txn->flags.cc |= CC_NOCACHE;
+
+    /* Make sure its a DAV resource */
+    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
+
+    /* Parse the path */
+    if ((r = pparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+
+    /* We only handle POST on collections */
+    if (!txn->req_tgt.collection ||
+	txn->req_tgt.resource) return HTTP_NOT_ALLOWED;
+
+    /* Do any special processing */
+    if (pparams->post) ret = pparams->post(txn);
+    switch (ret) {
+    case HTTP_CONTINUE:
+	/* Continue processing normally */
+	break;
+
+    default:
+	/* Done processing */
+	return ret;
+    }
+
+    /* POST to regular collection */
+
+    /* Append a unique resource name to URL path and perform a PUT */
+    len = strlen(txn->req_tgt.path);
+    p = txn->req_tgt.path + len;
+
+    snprintf(p, MAX_MAILBOX_PATH - len, "%x-%d-%ld-%u.ics",
+	     strhash(txn->req_tgt.path), getpid(), time(0), post_count++);
+
+    /* Tell client where to find the new resource */
+    txn->location = txn->req_tgt.path;
+
+    ret = meth_put(txn, params);
+
+    if (ret != HTTP_CREATED) txn->location = NULL;
+
+    return ret;
+}
+
+
 /* Perform a PUT request
  *
  * preconditions:
@@ -4005,7 +4059,7 @@ int meth_put(struct transaction_t *txn, void *params)
 	goto done;
     }
 
-    /* Check if we can append a new iMIP message to calendar mailbox */
+    /* Check if we can append a new message to mailbox */
     if ((r = append_check(txn->req_tgt.mboxname, httpd_authstate, ACL_INSERT, size))) {
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
