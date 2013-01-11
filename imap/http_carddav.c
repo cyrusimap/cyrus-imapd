@@ -646,8 +646,6 @@ static int meth_delete(struct transaction_t *txn,
 
     if (!txn->req_tgt.resource) {
 	/* DELETE collection */
-	/* XXX  Need to process any scheduling objects */
-
 	r = mboxlist_deletemailbox(txn->req_tgt.mboxname,
 				   httpd_userisadmin || httpd_userisproxyadmin,
 				   httpd_userid, httpd_authstate,
