@@ -3872,15 +3872,9 @@ int meth_post(struct transaction_t *txn, void *params)
 	txn->req_tgt.resource) return HTTP_NOT_ALLOWED;
 
     /* Do any special processing */
-    if (pparams->post) ret = pparams->post(txn);
-    switch (ret) {
-    case HTTP_CONTINUE:
-	/* Continue processing normally */
-	break;
-
-    default:
-	/* Done processing */
-	return ret;
+    if (pparams->post) {
+	ret = pparams->post(txn);
+	if (ret != HTTP_CONTINUE) return ret;
     }
 
     /* POST to regular collection */
