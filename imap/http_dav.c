@@ -4130,7 +4130,7 @@ int report_sync_col(struct transaction_t *txn,
 		    (syncmodseq < mailbox->i.deletedmodseq) ||
 		    (syncmodseq > highestmodseq)) {
 		    /* DAV:valid-sync-token */
-		    *fctx->errstr = "Invalid sync-token";
+		    txn->error.precond = DAV_SYNC_TOKEN;
 		    ret = HTTP_FORBIDDEN;
 		    goto done;
 		}
@@ -4157,7 +4157,7 @@ int report_sync_col(struct transaction_t *txn,
 			(!(str = xmlNodeListGetString(inroot->doc,
 						      node2->children, 1)) ||
 			 (sscanf((char *) str, "%u", &limit) != 1))) {
-			*fctx->errstr = "Invalid limit";
+			txn->error.precond = DAV_OVER_LIMIT;
 			ret = HTTP_FORBIDDEN;
 			goto done;
 		    }
