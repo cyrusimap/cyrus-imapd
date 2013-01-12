@@ -70,9 +70,7 @@
 #include "cyrusdb.h"
 #include "util.h"
 #include "mailbox.h"
-#ifdef ENABLE_MBOXEVENT
 #include "mboxevent.h"
-#endif
 #include "exitcodes.h"
 #include "imap/imap_err.h"
 #include "xmalloc.h"
@@ -769,16 +767,14 @@ EXPORTED int mboxlist_createmailbox(const char *name, int mbtype,
 				    forceuser, dbonly, &mailbox, extargs);
 
     if (notify && !r) {
-#ifdef ENABLE_MBOXEVENT
 	/* send a MailboxCreate event notification */
 	struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_CREATE);
 	mboxevent_extract_mailbox(mboxevent, mailbox);
-#endif
+
 	mailbox_close(&mailbox);
-#ifdef ENABLE_MBOXEVENT
+
 	mboxevent_notify(mboxevent);
 	mboxevent_free(&mboxevent);
-#endif
     }
     return r;
 }
@@ -1094,15 +1090,12 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
     if (!isremote && mailbox) {
 	/* only on a real delete do we delete from the remote end as well */
 	sync_log_unmailbox(mailbox->name);
-#ifdef ENABLE_MBOXEVENT
 	mboxevent_extract_mailbox(mboxevent, mailbox);
-#endif
+
 	r = mailbox_delete(&mailbox);
-#ifdef ENABLE_MBOXEVENT
 	/* abort event notification */
 	if (r && mboxevent)
 	    mboxevent_free(&mboxevent);
-#endif
     }
 
  done:
@@ -1328,7 +1321,6 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 	mailbox_close(&oldmailbox);
     } else {
 	if (newmailbox) {
-#ifdef ENABLE_MBOXEVENT
 	    /* prepare the event notification */
 	    if (mboxevent) {
 		/* case of delayed delete */
@@ -1339,7 +1331,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 		    mboxevent_extract_old_mailbox(mboxevent, oldmailbox);
 		}
 	    }
-#endif
+
 	    mailbox_rename_cleanup(&oldmailbox, isusermbox);
 	    mailbox_close(&newmailbox);
 	}
@@ -2540,11 +2532,10 @@ EXPORTED int mboxlist_setquotas(const char *root,
     int r;
     int res;
     struct txn *tid = NULL;
-#ifdef ENABLE_MBOXEVENT
     struct mboxevent *mboxevents = NULL;
     struct mboxevent *quotachange_event = NULL;
     struct mboxevent *quotawithin_event = NULL;
-#endif
+
     if (!root[0] || root[0] == '.' || strchr(root, '/')
 	|| strchr(root, '*') || strchr(root, '%') || strchr(root, '?')) {
 	return IMAP_MAILBOX_BADNAME;
@@ -2561,7 +2552,7 @@ EXPORTED int mboxlist_setquotas(const char *root,
 	for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
 	    if (q.limits[res] != newquotas[res]) {
 		underquota = 0;
-#ifdef ENABLE_MBOXEVENT
+
 		/* prepare a QuotaChange event notification */
 		if (quotachange_event == NULL)
 		    quotachange_event = mboxevent_enqueue(EVENT_QUOTA_CHANGE,
@@ -2575,14 +2566,13 @@ EXPORTED int mboxlist_setquotas(const char *root,
 			                                      &mboxevents);
 		    underquota++;
 		}
-#endif
+
 		q.limits[res] = newquotas[res];
 		changed++;
-#ifdef ENABLE_MBOXEVENT
+
 		mboxevent_extract_quota(quotachange_event, &q, res);
 		if (underquota)
 		    mboxevent_extract_quota(quotawithin_event, &q, res);
-#endif
 	    }
 	}
 	if (changed)
@@ -2639,14 +2629,14 @@ EXPORTED int mboxlist_setquotas(const char *root,
     memcpy(q.limits, newquotas, sizeof(q.limits));
     r = quota_write(&q, &tid);
     if (r) goto done;
-#ifdef ENABLE_MBOXEVENT
+
     /* prepare a QuotaChange event notification */
     quotachange_event = mboxevent_enqueue(EVENT_QUOTA_CHANGE, &mboxevents);
     for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
     	if (q.limits[res] != QUOTA_UNLIMITED)
     	    mboxevent_extract_quota(quotachange_event, &q, res);
     }
-#endif
+
     quota_commit(&tid);
 
     /* recurse through mailboxes, setting the quota and finding
@@ -2665,14 +2655,12 @@ done:
     if (r && tid) quota_abort(&tid);
     if (!r) {
 	sync_log_quota(root);
-#ifdef ENABLE_MBOXEVENT
+
 	/* send QuotaChange and QuotaWithin event notifications */
 	mboxevent_notify(mboxevents);
-#endif
     }
-#ifdef ENABLE_MBOXEVENT
     mboxevent_freequeue(&mboxevents);
-#endif
+
     return r;
 }
 
@@ -3389,9 +3377,8 @@ EXPORTED int mboxlist_changesub(const char *name, const char *userid,
     struct mboxlist_entry *mbentry = NULL;
     int r;
     struct db *subs;
-#ifdef ENABLE_MBOXEVENT
     struct mboxevent *mboxevent;
-#endif 
+
     if ((r = mboxlist_opensubs(userid, &subs)) != 0) {
 	return r;
     }
@@ -3430,7 +3417,7 @@ EXPORTED int mboxlist_changesub(const char *name, const char *userid,
     sync_log_subscribe(userid, name);
     mboxlist_closesubs(subs);
     mboxlist_entry_free(&mbentry);
-#ifdef ENABLE_MBOXEVENT
+
     /* prepare a MailboxSubscribe or MailboxUnSubscribe event notification */
     if (notify && r == 0) {
 	mboxevent = mboxevent_new(add ? EVENT_MAILBOX_SUBSCRIBE :
@@ -3440,7 +3427,7 @@ EXPORTED int mboxlist_changesub(const char *name, const char *userid,
 	mboxevent_notify(mboxevent);
 	mboxevent_free(&mboxevent);
     }
-#endif
+
     return r;
 }
 

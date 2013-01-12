@@ -408,10 +408,10 @@ imap_libcyrus_imap_la_SOURCES = imap/annotate.c imap/annotate.h imap/append.c \
 	imap/duplicate.h imap/global.c imap/global.h imap/idle.c imap/idle.h \
 	imap/idlemsg.c imap/idlemsg.h imap/imapparse.c imap/index.c \
 	imap/index.h imap/mailbox.c imap/mailbox.h imap/mbdump.c \
-	imap/mbdump.h imap/mboxkey.c imap/mboxkey.h imap/mboxlist.c \
-	imap/mboxlist.h imap/mboxname.c imap/mboxname.h imap/message_guid.c \
-	imap/message_guid.h imap/message.c imap/message.h \
-	imap/mupdate-client.c imap/mupdate-client.h imap/mutex.h \
+	imap/mbdump.h imap/mboxevent.c imap/mboxevent.h imap/mboxkey.c \
+	imap/mboxkey.h imap/mboxlist.c imap/mboxlist.h imap/mboxname.c \
+	imap/mboxname.h imap/message_guid.c imap/message_guid.h imap/message.c \
+	imap/message.h imap/mupdate-client.c imap/mupdate-client.h imap/mutex.h \
 	imap/notify.c imap/notify.h imap/proc.c imap/proc.h imap/protocol.h \
 	imap/quota_db.c imap/rfc822_header.c imap/rfc822_header.h \
 	imap/saslclient.c imap/saslclient.h imap/saslserver.c \
@@ -423,11 +423,13 @@ imap_libcyrus_imap_la_SOURCES = imap/annotate.c imap/annotate.h imap/append.c \
 	imap/tls.h imap/upgrade_index.c imap/upgrade_index.h imap/user.c \
 	imap/user.h imap/userdeny_db.c imap/userdeny.h imap/version.c \
 	imap/version.h
-if MBOXEVENT
-imap_libcyrus_imap_la_SOURCES += imap/mboxevent.c
-endif
+
 imap_libcyrus_imap_la_LIBADD = $(COM_ERR_LIBS) $(LIB_UUID) lib/libcyrus_min.la lib/libcyrus.la
 imap_libcyrus_imap_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
+if JANSSON
+imap_libcyrus_imap_la_LIBADD += $(JANSSON_LIBS)
+imap_libcyrus_imap_la_CFLAGS += $(JANSSON_CFLAGS)
+endif
 
 imap_lmtpd_SOURCES = imap/lmtpd.c imap/lmtpd.h imap/lmtpengine.c \
 	imap/lmtpengine.h imap/lmtpstats.c imap/lmtpstats.h \
@@ -572,10 +574,6 @@ lib_libcyrus_min_la_SOURCES += lib/map_stupidshared.c
 else
 lib_libcyrus_min_la_SOURCES += lib/map_nommap.c
 endif
-endif
-if JANSSON
-imap_libcyrus_imap_la_LIBADD += $(JANSSON_LIBS)
-imap_libcyrus_imap_la_CFLAGS += $(JANSSON_CFLAGS)
 endif
 lib_libcyrus_min_la_SOURCES += lib/mpool.c lib/retry.c lib/strarray.c \
 	lib/strhash.c lib/util.c lib/xmalloc.c lib/xstrlcat.c lib/xstrlcpy.c \

@@ -284,11 +284,11 @@ int main (int argc, char *argv[]) {
     quotadb_open(NULL);
 
     sync_log_init();
-#ifdef ENABLE_MBOXEVENT
+
     /* setup for mailbox event notifications */
     mboxevent_init();
     mboxevent_setnamespace(&scan_namespace);
-#endif
+
     if (optind == argc) { /* do the whole partition */
 	strcpy(buf, "*");
 	(*scan_namespace.mboxlist_findall)(&scan_namespace, buf, 1, 0, 0,

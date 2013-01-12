@@ -830,10 +830,10 @@ int service_init(int argc, char **argv, char **envp)
 
     /* setup for sending IMAP IDLE notifications */
     idle_init();
-#ifdef ENABLE_MBOXEVENT
+
     /* setup for mailbox event notifications */
     mboxevent_init();
-#endif
+
     /* create connection to the SNMP listener, if available. */
     snmp_connect(); /* ignore return code */
     snmp_set_str(SERVER_NAME_VERSION,cyrus_version());
@@ -959,7 +959,7 @@ int service_main(int argc __attribute__((unused)),
     /* LOGOUT executed */
     prot_flush(imapd_out);
     snmp_increment(ACTIVE_CONNECTIONS, -1);
-#ifdef ENABLE_MBOXEVENT
+
     /* send a Logout event notification */
     if ((mboxevent = mboxevent_new(EVENT_LOGOUT))) {
 	mboxevent_set_access(mboxevent, saslprops.iplocalport,
@@ -968,7 +968,6 @@ int service_main(int argc __attribute__((unused)),
 	mboxevent_notify(mboxevent);
 	mboxevent_free(&mboxevent);
     }
-#endif
 
     /* cleanup */
     imapd_reset();
@@ -2264,9 +2263,9 @@ static void authentication_success(void)
     /* Set namespace */
     r = mboxname_init_namespace(&imapd_namespace,
 				imapd_userisadmin || imapd_userisproxyadmin);
-#ifdef ENABLE_MBOXEVENT
+
     mboxevent_setnamespace(&imapd_namespace);
-#endif 
+ 
     if (r) {
 	syslog(LOG_ERR, "%s", error_message(r));
 	fatal(error_message(r), EC_CONFIG);
@@ -2279,7 +2278,7 @@ static void authentication_success(void)
     mboxname_hiersep_tointernal(&imapd_namespace, imapd_userid,
 				config_virtdomains ?
 				strcspn(imapd_userid, "@") : 0);
-#ifdef ENABLE_MBOXEVENT
+
     /* send a Login event notification */
     if ((mboxevent = mboxevent_new(EVENT_LOGIN))) {
 	mboxevent_set_access(mboxevent, saslprops.iplocalport,
@@ -2288,7 +2287,7 @@ static void authentication_success(void)
 	mboxevent_notify(mboxevent);
 	mboxevent_free(&mboxevent);
     }
-#endif
+
     autocreate_inbox();
 }
 
@@ -5625,9 +5624,9 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
 	return;
     }
     mboxlist_entry_free(&mbentry);
-#ifdef ENABLE_MBOXEVENT
+
     mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
-#endif
+
     /* local mailbox */
     if (!r) {
         if (localonly || !mboxlist_delayed_delete_isenabled()) {
@@ -5648,12 +5647,12 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
                                                1-force, 0);
         }
     }
-#ifdef ENABLE_MBOXEVENT
+
     /* send a MailboxDelete event notification */
     if (!r)
 	mboxevent_notify(mboxevent);
     mboxevent_free(&mboxevent);
-#endif
+
     /* was it a top-level user mailbox? */
     /* localonly deletes are only per-mailbox */
     if (!r && !localonly && mboxname_isusermailbox(mailboxname, 1)) {
@@ -6038,11 +6037,11 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
     /* attempt to rename the base mailbox */
     if (!r) {
 	struct mboxevent *mboxevent = NULL;
-#ifdef ENABLE_MBOXEVENT
+
 	/* don't send rename notification if we only change the partition */
 	if (strcmp(oldmailboxname, newmailboxname))
 	    mboxevent = mboxevent_new(EVENT_MAILBOX_RENAME);
-#endif
+
 	r = mboxlist_renamemailbox(oldmailboxname, newmailboxname, partition,
 				   0 /* uidvalidity */, imapd_userisadmin,
 				   imapd_userid, imapd_authstate, mboxevent,
@@ -6051,17 +6050,16 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	if (r == IMAP_MAILBOX_NONEXISTENT && subcount && !rename_user &&
 	   mboxname_userownsmailbox(imapd_userid, oldmailboxname) &&
 	   mboxname_userownsmailbox(imapd_userid, newmailboxname)) {
-#ifdef ENABLE_MBOXEVENT
+
 	    mboxevent_free(&mboxevent);
-#endif
+
 	    goto submboxes;
 	}
-#ifdef ENABLE_MBOXEVENT
+
 	/* send a MailboxRename event notification if enabled */
 	if (!r)
 	    mboxevent_notify(mboxevent);
 	mboxevent_free(&mboxevent);
-#endif
     }
 
     /* If we're renaming a user, take care of changing quotaroot, ACL,

@@ -457,18 +457,18 @@ int service_init(int argc __attribute__((unused)),
 
     /* setup for sending IMAP IDLE notifications */
     idle_init();
-#ifdef ENABLE_MBOXEVENT 
+
     /* setup for mailbox event notifications */
     mboxevent_init();
-#endif
+
     /* Set namespace */
     if ((r = mboxname_init_namespace(&popd_namespace, 1)) != 0) {
 	syslog(LOG_ERR, "%s", error_message(r));
 	fatal(error_message(r), EC_CONFIG);
     }
-#ifdef ENABLE_MBOXEVENT
+
     mboxevent_setnamespace(&popd_namespace);
-#endif
+
     while ((opt = getopt(argc, argv, "skp:")) != EOF) {
 	switch(opt) {
 	case 's': /* pop3s (do starttls right away) */
@@ -587,7 +587,7 @@ int service_main(int argc __attribute__((unused)),
     cmdloop();
 
     /* QUIT executed */
-#ifdef ENABLE_MBOXEVENT 
+ 
     /* send a Logout event notification */
     if ((mboxevent = mboxevent_new(EVENT_LOGOUT))) {
 	mboxevent_set_access(mboxevent, saslprops.iplocalport,
@@ -596,7 +596,7 @@ int service_main(int argc __attribute__((unused)),
 	mboxevent_notify(mboxevent);
 	mboxevent_free(&mboxevent);
     }
-#endif
+
     /* don't bother reusing KPOP connections */
     if (kflag) shut_down(0);
 
@@ -836,11 +836,10 @@ static int expunge_deleted(void)
     uint32_t msgno;
     int r = 0;
     int numexpunged = 0;
-#ifdef ENABLE_MBOXEVENT
     struct mboxevent *mboxevent;
 
     mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
-#endif
+
     /* loop over all known messages looking for deletes */
     for (msgno = 1; msgno <= popd_exists; msgno++) {
 	/* not deleted? skip */
@@ -862,9 +861,8 @@ static int expunge_deleted(void)
 	/* store back to the mailbox */
 	r = mailbox_rewrite_index_record(popd_mailbox, &record);
 	if (r) break;
-#ifdef ENABLE_MBOXEVENT
+
 	mboxevent_extract_record(mboxevent, popd_mailbox, &record);
-#endif
     }
 
     if (r) {
@@ -876,13 +874,13 @@ static int expunge_deleted(void)
 	syslog(LOG_NOTICE, "Expunged %d messages from %s",
 	       numexpunged, popd_mailbox->name);
     }
-#ifdef ENABLE_MBOXEVENT
+
     /* send the MessageExpunge event notification */
     mboxevent_extract_mailbox(mboxevent, popd_mailbox);
     mboxevent_set_numunseen(mboxevent, popd_mailbox, -1);
     mboxevent_notify(mboxevent);
     mboxevent_free(&mboxevent);
-#endif
+
     return r;
 }
 
@@ -1759,7 +1757,6 @@ int openinbox(void)
     struct mboxlist_entry *mbentry = NULL;
     struct statusdata sdata;
     struct proc_limits limits;
-#ifdef ENABLE_MBOXEVENT
     struct mboxevent *mboxevent;
 
     /* send a Login event notification */
@@ -1770,7 +1767,7 @@ int openinbox(void)
 	mboxevent_notify(mboxevent);
 	mboxevent_free(&mboxevent);
     }
-#endif
+
     if (popd_subfolder) {
 	/* we need to convert to internal namespace dammit */
 	char *internal_subfolder = xstrdup(popd_subfolder+1); /* remove + */

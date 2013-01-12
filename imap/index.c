@@ -285,21 +285,19 @@ EXPORTED int index_expunge(struct index_state *state, char *sequence,
     struct index_map *im;
     struct seqset *seq = NULL;
     int numexpunged = 0;
-#ifdef ENABLE_MBOXEVENT
     struct mboxevent *mboxevent = NULL;
-#endif
 
     r = index_lock(state);
     if (r) return r;
 
     /* XXX - earlier list if the sequence names UIDs that don't exist? */
     seq = _parse_sequence(state, sequence, 1);
-#ifdef ENABLE_MBOXEVENT
+
     /* don't notify for messages that don't need \Deleted flag because
      * a notification should be already send (eg. MessageMove) */
     if (need_deleted)
 	mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
-#endif
+
     for (msgno = 1; msgno <= state->exists; msgno++) {
 	im = &state->map[msgno-1];
 
@@ -326,31 +324,29 @@ EXPORTED int index_expunge(struct index_state *state, char *sequence,
 	r = mailbox_rewrite_index_record(state->mailbox, &im->record);
 
 	if (r) break;
-#ifdef ENABLE_MBOXEVENT
+
 	mboxevent_extract_record(mboxevent, state->mailbox, &im->record);
-#endif
     }
 
     seqset_free(seq);
-#ifdef ENABLE_MBOXEVENT
+
     mboxevent_extract_mailbox(mboxevent, state->mailbox);
     mboxevent_set_numunseen(mboxevent, state->mailbox, state->numunseen);
-#endif
+
     /* unlock before responding */
     index_unlock(state);
 
     if (!r && (numexpunged > 0)) {
 	syslog(LOG_NOTICE, "Expunged %d messages from %s",
 	       numexpunged, state->mailbox->name);
-#ifdef ENABLE_MBOXEVENT
+
 	/* send the MessageExpunge event notification for "immediate", "default"
 	 * and "delayed" expunge */
 	mboxevent_notify(mboxevent);
-#endif
     }
-#ifdef ENABLE_MBOXEVENT
+
     mboxevent_free(&mboxevent);
-#endif
+
     return r;
 }
 
@@ -862,9 +858,9 @@ static int _fetch_setseen(struct index_state *state, struct mboxevent *mboxevent
     state->numunseen--;
     state->seen_dirty = 1;
     im->isseen = 1;
-#ifdef ENABLE_MBOXEVENT
+
     mboxevent_extract_record(mboxevent, state->mailbox, &im->record);
-#endif
+
     /* RFC2060 says:
      * The \Seen flag is implicitly set; if this causes
      * the flags to change they SHOULD be included as part
@@ -960,9 +956,8 @@ EXPORTED int index_fetch(struct index_state *state,
 
     /* set the \Seen flag if necessary - while we still have the lock */
     if (fetchargs->fetchitems & FETCH_SETSEEN && !state->examining) {
-#ifdef ENABLE_MBOXEVENT
 	mboxevent = mboxevent_new(EVENT_MESSAGE_READ);
-#endif
+
 	for (msgno = 1; msgno <= state->exists; msgno++) {
 	    im = &state->map[msgno-1];
 	    checkval = usinguid ? im->record.uid : msgno;
@@ -971,11 +966,10 @@ EXPORTED int index_fetch(struct index_state *state,
 	    r = _fetch_setseen(state, mboxevent, msgno);
 	    if (r) break;
 	}
-#ifdef ENABLE_MBOXEVENT
+
 	mboxevent_extract_mailbox(mboxevent, state->mailbox);
 	mboxevent_set_numunseen(mboxevent, state->mailbox,
 	                        state->numunseen);
-#endif
     }
 
     if (fetchargs->vanished) {
@@ -989,11 +983,11 @@ EXPORTED int index_fetch(struct index_state *state,
     }
 
     index_unlock(state);
-#ifdef ENABLE_MBOXEVENT
+
     /* send MessageRead event notification for successfully rewritten records */
     mboxevent_notify(mboxevent);
     mboxevent_free(&mboxevent);
-#endif
+
     index_checkflags(state, 0);
 
     if (vanishedlist && vanishedlist->len) {
@@ -1027,10 +1021,8 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
     struct seqset *seq;
     struct index_map *im;
     const strarray_t *flags = &storeargs->flags;
-#ifdef ENABLE_MBOXEVENT
     struct mboxevent *mboxevents = NULL;
     struct mboxevent *flagsset = NULL, *flagsclear = NULL;
-#endif
     struct index_modified_flags modified_flags;
 
     /* First pass at checking permission */
@@ -1085,7 +1077,7 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
 	    r = index_storeflag(state, &modified_flags, msgno, storeargs);
 	    if (r)
 		break;
-#ifdef ENABLE_MBOXEVENT
+
 	    if (modified_flags.added_flags) {
 		if (flagsset == NULL)
 		    flagsset = mboxevent_enqueue(EVENT_FLAGS_SET, &mboxevents);
@@ -1104,7 +1096,7 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
 		                    modified_flags.removed_user_flags);
 		mboxevent_extract_record(flagsclear, state->mailbox, &im->record);
 	    }
-#endif
+
 	    break;
 
 	case STORE_ANNOTATION:
@@ -1117,7 +1109,7 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
 	}
 	if (r) goto out;
     }
-#ifdef ENABLE_MBOXEVENT
+
     /* let mboxevent_notify split FlagsSet into MessageRead, MessageTrash
      * and FlagsSet events */
     mboxevent_extract_mailbox(flagsset, state->mailbox);
@@ -1127,7 +1119,6 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
 
     mboxevent_notify(mboxevents);
     mboxevent_freequeue(&mboxevents);
-#endif
 out:
     if (storeargs->operation == STORE_ANNOTATION && r)
 	annotate_state_abort(&state->mailbox->annot_state);

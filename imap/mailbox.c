@@ -3171,9 +3171,8 @@ EXPORTED int mailbox_expunge(struct mailbox *mailbox,
     int numexpunged = 0;
     uint32_t recno;
     struct index_record record;
-#ifdef ENABLE_MBOXEVENT
     struct mboxevent *mboxevent = NULL;
-#endif
+
     assert(mailbox_index_islocked(mailbox, 1));
 
     /* anything to do? */
@@ -3181,10 +3180,10 @@ EXPORTED int mailbox_expunge(struct mailbox *mailbox,
 	if (nexpunged) *nexpunged = 0;
 	return 0;
     }
-#ifdef ENABLE_MBOXEVENT
+
     if (event_type)
 	mboxevent = mboxevent_new(event_type);
-#endif
+
     if (!decideproc) decideproc = expungedeleted;
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
@@ -3203,30 +3202,25 @@ EXPORTED int mailbox_expunge(struct mailbox *mailbox,
 
 	    r = mailbox_rewrite_index_record(mailbox, &record);
 	    if (r) {
-#ifdef ENABLE_MBOXEVENT
 		mboxevent_free(&mboxevent);
-#endif
 		return IMAP_IOERROR;
 	    }
-#ifdef ENABLE_MBOXEVENT
+
 	    mboxevent_extract_record(mboxevent, mailbox, &record);
-#endif
 	}
     }
 
     if (numexpunged > 0) {
 	syslog(LOG_NOTICE, "Expunged %d messages from %s",
 	       numexpunged, mailbox->name);
-#ifdef ENABLE_MBOXEVENT
+
 	/* send the MessageExpunge or MessageExpire event notification */
 	mboxevent_extract_mailbox(mboxevent, mailbox);
 	mboxevent_set_numunseen(mboxevent, mailbox, -1);
 	mboxevent_notify(mboxevent);
-#endif
     }
-#ifdef ENABLE_MBOXEVENT
     mboxevent_free(&mboxevent);
-#endif
+
     if (nexpunged) *nexpunged = numexpunged;
 
     return 0;

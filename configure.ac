@@ -1007,22 +1007,21 @@ AM_CONDITIONAL([ZEPHYR], [test "$with_zephyr" != "no"])
 
 
 dnl
-dnl enable/disable mailbox event notification
+dnl Test for mailbox event notification
 dnl enable requires the installation of jansson library
 dnl
 AC_ARG_ENABLE(event-notification,
         [AS_HELP_STRING([--disable-event-notification], [disable compiling of mailbox event notification (that needs jansson library)])])
-AM_CONDITIONAL([MBOXEVENT], [test "$enable_event_notification" != "no"])
 
 if test "$enable_event_notification" != "no"; then
     PKG_CHECK_MODULES([JANSSON], [jansson >= 2.0],
 	[check_jansson=true] 
 	  dnl call AC_SUBST macro to support pkg-config version older that 0.24 without any bad consequence for recent version
 	  [AC_SUBST([JANSSON_LIBS])]
-	  [AC_SUBST([JANSSON_CFLAGS])],
+	  [AC_SUBST([JANSSON_CFLAGS])]
+	  [AC_DEFINE(ENABLE_MBOXEVENT,[],[Build with support of mailbox event notification])],
 	[check_jansson=false]
-	  [AC_MSG_ERROR([jansson 2.0 or later was not found, but is required to enable mailbox event notification])])
-    AC_DEFINE(ENABLE_MBOXEVENT,[],[Build with support of mailbox event notification])
+	  [AC_MSG_WARN([jansson 2.0 or later was not found, but is required to enable mailbox event notification])])
 fi
 AM_CONDITIONAL(JANSSON, test x$check_jansson = xtrue)
 

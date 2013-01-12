@@ -66,6 +66,7 @@
 #include "global.h"
 #include "hash.h"
 #include "libcyr_cfg.h"
+#include "mboxevent.h"
 #include "mboxlist.h"
 #include "util.h"
 #include "xmalloc.h"
@@ -481,18 +482,18 @@ int main(int argc, char *argv[])
     /* open the quota db, we'll need it for expunge */
     quotadb_init(0);
     quotadb_open(NULL);
-#ifdef ENABLE_MBOXEVENT
+
     /* setup for mailbox event notifications */
     mboxevent_init();
-#endif
+
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&expire_namespace, 1)) != 0) {
 	syslog(LOG_ERR, "%s", error_message(r));
 	fatal(error_message(r), EC_CONFIG);
     }
-#ifdef ENABLE_MBOXEVENT
+
     mboxevent_setnamespace(&expire_namespace);
-#endif
+
     if (duplicate_init(NULL) != 0) {
 	fprintf(stderr,
 		"cyr_expire: unable to init duplicate delivery database\n");
