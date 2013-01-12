@@ -274,12 +274,16 @@ typedef int (*db_write_proc_t)(void *davdb, void *data, int commit);
 /* Function to delete resource in 'rowid', optionally commiting txn */
 typedef int (*db_delete_proc_t)(void *davdb, unsigned rowid, int commit);
 
+/* Function to delete all entries in 'mailbox', optionally commiting txn */
+typedef int (*db_delmbox_proc_t)(void *davdb, const char *mailbox, int commit);
+
 struct davdb_params {
     void **db;				/* DAV DB to use for resources */
     db_lookup_proc_t lookup_resource;	/* lookup a specific resource */
     db_foreach_proc_t foreach_resource;	/* process all resources in a mailbox */
     db_write_proc_t write_resource;	/* write a specific resource */
     db_delete_proc_t delete_resource;	/* delete a specific resource */
+    db_delmbox_proc_t delete_mbox;	/* delete all resources in mailbox */
 };
 
 /*
@@ -289,6 +293,9 @@ struct davdb_params {
  */
 typedef int (*acl_proc_t)(struct transaction_t *txn, xmlNodePtr priv,
 			  int *rights);
+
+typedef int (*delete_proc_t)(struct transaction_t *txn, struct mailbox *mailbox,
+			     struct index_record *record, void *data);
 
 /* meth_mkcol() parameters */
 struct mkcol_params {
@@ -338,6 +345,7 @@ struct meth_params {
     check_precond_t check_precond;	/* check headers for preconditions */
     struct davdb_params davdb;
     acl_proc_t acl_ext;			/* special ACL handling (extensions) */
+    delete_proc_t delete;		/* special DELETE handling (optional) */
     struct mkcol_params mkcol;		/* params for creating collection */
     post_proc_t post;			/* special POST handling (optional) */
     struct put_params put;		/* params for putting a resource */
@@ -369,6 +377,7 @@ int propfind_by_collection(char *mboxname, int matchlen,
 
 /* DAV method processing functions */
 int meth_acl(struct transaction_t *txn, void *params);
+int meth_delete(struct transaction_t *txn, void *params);
 int meth_get_dav(struct transaction_t *txn, void *params);
 int meth_lock(struct transaction_t *txn, void *params);
 int meth_mkcol(struct transaction_t *txn, void *params);

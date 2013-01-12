@@ -2745,6 +2745,165 @@ int meth_acl(struct transaction_t *txn, void *params)
 }
 
 
+/* Perform a DELETE request */
+int meth_delete(struct transaction_t *txn, void *params)
+{
+    struct meth_params *dparams = (struct meth_params *) params;
+    int ret = HTTP_NO_CONTENT, r, precond, rights;
+    char *server, *acl;
+    struct mailbox *mailbox = NULL;
+    struct dav_data *ddata;
+    struct index_record record;
+    const char *etag = NULL;
+    time_t lastmod = 0;
+
+    /* Response should not be cached */
+    txn->flags.cc |= CC_NOCACHE;
+
+    /* Make sure its a DAV resource */
+    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
+
+    /* Parse the path */
+    if ((r = dparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+
+    /* Locate the mailbox */
+    if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
+	syslog(LOG_ERR, "mlookup(%s) failed: %s",
+	       txn->req_tgt.mboxname, error_message(r));
+	txn->error.desc = error_message(r);
+
+	switch (r) {
+	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	default: return HTTP_SERVER_ERROR;
+	}
+    }
+
+    /* Check ACL for current user */
+    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
+    if ((txn->req_tgt.resource && !(rights & DACL_RMRSRC)) ||
+	!(rights & DACL_RMCOL)) {
+	/* DAV:need-privileges */
+	txn->error.precond = DAV_NEED_PRIVS;
+	txn->error.resource = txn->req_tgt.path;
+	txn->error.rights = txn->req_tgt.resource ? DACL_RMRSRC : DACL_RMCOL;
+	return HTTP_FORBIDDEN;
+    }
+
+    if (server) {
+	/* Remote mailbox */
+	struct backend *be;
+
+	be = proxy_findserver(server, &http_protocol, httpd_userid,
+			      &backend_cached, NULL, NULL, httpd_in);
+	if (!be) return HTTP_UNAVAILABLE;
+
+	return http_pipe_req_resp(be, txn);
+    }
+
+    /* Local Mailbox */
+
+    if (!txn->req_tgt.resource) {
+	/* DELETE collection */
+
+	/* Do any special processing */
+	if (dparams->delete) dparams->delete(txn, NULL, NULL, NULL);
+
+	r = mboxlist_deletemailbox(txn->req_tgt.mboxname,
+				   httpd_userisadmin || httpd_userisproxyadmin,
+				   httpd_userid, httpd_authstate,
+				   1, 0, 0);
+
+	if (!r) dparams->davdb.delete_mbox(*dparams->davdb.db, txn->req_tgt.mboxname, 0);
+	else if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
+	else if (r == IMAP_MAILBOX_NONEXISTENT) ret = HTTP_NOT_FOUND;
+	else if (r) ret = HTTP_SERVER_ERROR;
+
+	return ret;
+    }
+
+
+    /* DELETE resource */
+
+    /* Open mailbox for writing */
+    if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_EXCLUSIVE))) {
+	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+	       txn->req_tgt.mboxname, error_message(r));
+	txn->error.desc = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
+    /* Find message UID for the resource, if exists */
+    dparams->davdb.lookup_resource(*dparams->davdb.db, txn->req_tgt.mboxname,
+				   txn->req_tgt.resource, 1, (void **) &ddata);
+    if (!ddata->rowid) {
+	ret = HTTP_NOT_FOUND;
+	goto done;
+    }
+
+    memset(&record, 0, sizeof(struct index_record));
+    if (ddata->imap_uid) {
+	/* Mapped URL - Fetch index record for the resource */
+	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &record);
+	if (r) {
+	    txn->error.desc = error_message(r);
+	    ret = HTTP_SERVER_ERROR;
+	    goto done;
+	}
+
+	etag = message_guid_encode(&record.guid);
+	lastmod = record.internaldate;
+    }
+    else {
+	/* Unmapped URL (empty resource) */
+	etag = NULL_ETAG;
+	lastmod = ddata->creationdate;
+    }
+
+    /* Check any preconditions */
+    precond = dparams->check_precond(txn, (void *) ddata, etag, lastmod);
+
+    switch (precond) {
+    case HTTP_OK:
+	break;
+
+    case HTTP_LOCKED:
+	txn->error.precond = DAV_NEED_LOCK_TOKEN;
+	txn->error.resource = txn->req_tgt.path;
+
+    default:
+	/* We failed a precondition - don't perform the request */
+	ret = precond;
+	goto done;
+    }
+
+    if (record.uid) {
+	/* Expunge the resource */
+	record.system_flags |= FLAG_EXPUNGED;
+
+	if ((r = mailbox_rewrite_index_record(mailbox, &record))) {
+	    syslog(LOG_ERR, "expunging record (%s) failed: %s",
+		   txn->req_tgt.mboxname, error_message(r));
+	    txn->error.desc = error_message(r);
+	    ret = HTTP_SERVER_ERROR;
+	    goto done;
+	}
+    }
+
+    /* Delete mapping entry for resource name */
+    dparams->davdb.delete_resource(*dparams->davdb.db, ddata->rowid, 1);
+
+    /* Do any special processing */
+    if (dparams->delete) dparams->delete(txn, mailbox, &record, ddata);
+
+  done:
+    if (mailbox) mailbox_unlock_index(mailbox, NULL);
+
+    return ret;
+}
+
+
 /* Perform a GET/HEAD request */
 int meth_get_dav(struct transaction_t *txn, void *params)
 {

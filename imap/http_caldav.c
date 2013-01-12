@@ -126,6 +126,9 @@ static int caldav_check_precond(struct transaction_t *txn, const void *data,
 				const char *etag, time_t lastmod);
 
 static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights);
+static int caldav_delete_sched(struct transaction_t *txn,
+			       struct mailbox *mailbox,
+			       struct index_record *record, void *data);
 static int caldav_post(struct transaction_t *txn);
 static int caldav_put(struct transaction_t *txn, struct mailbox *mailbox,
 		      unsigned flags);
@@ -138,7 +141,6 @@ static int report_fb_query(struct transaction_t *txn, xmlNodePtr inroot,
 			   struct propfind_ctx *fctx);
 
 static int meth_copy(struct transaction_t *txn, void *params);
-static int meth_delete(struct transaction_t *txn, void *params);
 static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			  struct mailbox *mailbox, const char *resource,
 			  struct caldav_db *caldavdb, int overwrite,
@@ -167,8 +169,10 @@ static struct meth_params caldav_params = {
       (db_lookup_proc_t) &caldav_lookup_resource,
       (db_foreach_proc_t) &caldav_foreach,
       (db_write_proc_t) &caldav_write,
-      (db_delete_proc_t) &caldav_delete },
+      (db_delete_proc_t) &caldav_delete,
+      (db_delmbox_proc_t) &caldav_delmbox },
     &caldav_acl,
+    &caldav_delete_sched,
     { MBTYPE_CALENDAR, "mkcalendar", "mkcalendar-response", NS_CALDAV },
     &caldav_post,
     { CALDAV_SUPP_DATA, &caldav_put },
@@ -192,7 +196,7 @@ const struct namespace_t namespace_calendar = {
     { 
 	{ &meth_acl,		&caldav_params },	/* ACL		*/
 	{ &meth_copy,		NULL },			/* COPY		*/
-	{ &meth_delete,		NULL },			/* DELETE	*/
+	{ &meth_delete,		&caldav_params },	/* DELETE	*/
 	{ &meth_get_dav,	&caldav_params },	/* GET		*/
 	{ &meth_get_dav,	&caldav_params },	/* HEAD		*/
 	{ &meth_lock,		&caldav_params },	/* LOCK		*/
@@ -444,6 +448,100 @@ static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights)
 
     /* Process this priv in meth_acl() */
     return 0;
+}
+
+
+/* Perform scheduling actions for a DELETE request */
+static int caldav_delete_sched(struct transaction_t *txn,
+			       struct mailbox *mailbox,
+			       struct index_record *record, void *data)
+{
+    struct caldav_data *cdata = (struct caldav_data *) data;
+    int ret = 0;
+
+#ifdef WITH_CALDAV_SCHED
+    if (!mailbox) {
+	/* XXX  DELETE collection - check all resources for sched objects */
+    }
+    else if (cdata->sched_tag) {
+	/* Scheduling object resource */
+	int r, rights;
+	struct mboxlist_entry mbentry;
+	char outboxname[MAX_MAILBOX_BUFFER];
+	const char *msg_base = NULL, *userid, *organizer, **hdr;
+	unsigned long msg_size = 0;
+	icalcomponent *ical, *comp;
+	icalproperty *prop;
+	struct sched_param sparam;
+
+	/* Construct userid corresponding to mailbox */
+	userid = mboxname_to_userid(txn->req_tgt.mboxname);
+
+	/* Check ACL of auth'd user on userid's Scheduling Outbox */
+	caldav_mboxname(SCHED_OUTBOX, userid, outboxname);
+
+	if ((r = mboxlist_lookup(outboxname, &mbentry, NULL))) {
+	    syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
+		   outboxname, error_message(r));
+	    mbentry.acl = NULL;
+	}
+
+	rights =
+	    mbentry.acl ? cyrus_acl_myrights(httpd_authstate, mbentry.acl) : 0;
+	if (!(rights & DACL_SCHED)) {
+	    /* DAV:need-privileges */
+	    txn->error.precond = DAV_NEED_PRIVS;
+	    txn->error.rights = DACL_SCHED;
+
+	    assert(!buf_len(&txn->buf));
+	    buf_printf(&txn->buf, "/calendars/user/%s/%s", userid, SCHED_OUTBOX);
+	    txn->error.resource = buf_cstring(&txn->buf);
+	    return HTTP_FORBIDDEN;
+	}
+
+	/* Load message containing the resource and parse iCal data */
+	mailbox_map_message(mailbox, record->uid, &msg_base, &msg_size);
+	ical = icalparser_parse_string(msg_base + record->header_size);
+	mailbox_unmap_message(mailbox, record->uid, &msg_base, &msg_size);
+
+	if (!ical) {
+	    syslog(LOG_ERR,
+		   "meth_delete: failed to parse iCalendar object %s:%u",
+		   txn->req_tgt.mboxname, record->uid);
+	    return HTTP_SERVER_ERROR;
+	}
+
+	/* Grab the organizer */
+	comp = icalcomponent_get_first_real_component(ical);
+	prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+	organizer = icalproperty_get_organizer(prop);
+
+	if (caladdress_lookup(organizer, &sparam)) {
+	    syslog(LOG_ERR,
+		   "meth_delete: failed to process scheduling message in %s"
+		   " (org=%s, att=%s)",
+		   txn->req_tgt.mboxname, organizer, userid);
+	    txn->error.desc = "Failed to lookup organizer address\r\n";
+	    ret = HTTP_SERVER_ERROR;
+	    goto done;
+	}
+
+	if (!strcmp(sparam.userid, userid)) {
+	    /* Organizer scheduling object resource */
+	    sched_request(organizer, &sparam, ical, NULL);
+	}
+	else if (!(hdr = spool_getheader(txn->req_hdrs, "Schedule-Reply")) ||
+		 strcmp(hdr[0], "F")) {
+	    /* Attendee scheduling object resource */
+	    sched_reply(userid, ical, NULL);
+	}
+
+      done:
+	icalcomponent_free(ical);
+    }
+#endif /* WITH_CALDAV_SCHED */
+
+    return ret;
 }
 
 
@@ -879,243 +977,6 @@ static int meth_copy(struct transaction_t *txn,
     if (ical) icalcomponent_free(ical);
     if (dest_mbox) mailbox_close(&dest_mbox);
     if (src_mbox) mailbox_unlock_index(src_mbox, NULL);
-
-    return ret;
-}
-
-
-/* Perform a DELETE request */
-static int meth_delete(struct transaction_t *txn,
-		       void *params __attribute__((unused)))
-{
-    int ret = HTTP_NO_CONTENT, r, precond, rights;
-    char *server, *acl;
-    struct mailbox *mailbox = NULL;
-    struct caldav_data *cdata;
-    struct index_record record;
-    const char *etag = NULL, *userid;
-    time_t lastmod = 0;
-    unsigned rowid;
-
-    /* Response should not be cached */
-    txn->flags.cc |= CC_NOCACHE;
-
-    /* Make sure its a DAV resource */
-    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
-
-    /* Parse the path */
-    if ((r = caldav_parse_path(&txn->req_tgt, &txn->error.desc))) return r;
-
-    /* Construct userid corresponding to mailbox */
-    userid = mboxname_to_userid(txn->req_tgt.mboxname);
-
-    /* Locate the mailbox */
-    if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
-	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-
-	switch (r) {
-	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	default: return HTTP_SERVER_ERROR;
-	}
-    }
-
-    /* Check ACL for current user */
-    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
-    if ((txn->req_tgt.resource && !(rights & DACL_RMRSRC)) ||
-	!(rights & DACL_RMCOL)) {
-	/* DAV:need-privileges */
-	txn->error.precond = DAV_NEED_PRIVS;
-	txn->error.resource = txn->req_tgt.path;
-	txn->error.rights = txn->req_tgt.resource ? DACL_RMRSRC : DACL_RMCOL;
-	return HTTP_FORBIDDEN;
-    }
-
-    if (server) {
-	/* Remote mailbox */
-	struct backend *be;
-
-	be = proxy_findserver(server, &http_protocol, httpd_userid,
-			      &backend_cached, NULL, NULL, httpd_in);
-	if (!be) return HTTP_UNAVAILABLE;
-
-	return http_pipe_req_resp(be, txn);
-    }
-
-    /* Local Mailbox */
-
-    if (!txn->req_tgt.resource) {
-	/* DELETE collection */
-	/* XXX  Need to process any scheduling objects */
-
-	r = mboxlist_deletemailbox(txn->req_tgt.mboxname,
-				   httpd_userisadmin || httpd_userisproxyadmin,
-				   httpd_userid, httpd_authstate,
-				   1, 0, 0);
-
-	if (!r) caldav_delmbox(auth_caldavdb, txn->req_tgt.mboxname, 0);
-	else if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
-	else if (r == IMAP_MAILBOX_NONEXISTENT) ret = HTTP_NOT_FOUND;
-	else if (r) ret = HTTP_SERVER_ERROR;
-
-	return ret;
-    }
-
-
-    /* DELETE resource */
-
-    /* Open mailbox for writing */
-    if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_EXCLUSIVE))) {
-	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
-    }
-
-    /* Find message UID for the resource, if exists */
-    caldav_lookup_resource(auth_caldavdb, txn->req_tgt.mboxname,
-			   txn->req_tgt.resource, 1, &cdata);
-    if (!cdata->dav.rowid) {
-	ret = HTTP_NOT_FOUND;
-	goto done;
-    }
-
-    memset(&record, 0, sizeof(struct index_record));
-    if (cdata->dav.imap_uid) {
-	/* Mapped URL - Fetch index record for the resource */
-	r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
-	if (r) {
-	    txn->error.desc = error_message(r);
-	    ret = HTTP_SERVER_ERROR;
-	    goto done;
-	}
-
-	etag = message_guid_encode(&record.guid);
-	lastmod = record.internaldate;
-    }
-    else {
-	/* Unmapped URL (empty resource) */
-	etag = NULL_ETAG;
-	lastmod = cdata->dav.creationdate;
-    }
-
-    /* Check any preconditions */
-    precond = caldav_check_precond(txn, cdata, etag, lastmod);
-
-    switch (precond) {
-    case HTTP_OK:
-	break;
-
-    case HTTP_LOCKED:
-	txn->error.precond = DAV_NEED_LOCK_TOKEN;
-	txn->error.resource = txn->req_tgt.path;
-
-    default:
-	/* We failed a precondition - don't perform the request */
-	ret = precond;
-	goto done;
-    }
-
-    /* Save rowid because cdata will be overwritten by scheduling ops */
-    rowid = cdata->dav.rowid;
-
-#ifdef WITH_CALDAV_SCHED
-    if (cdata->sched_tag) {
-	/* Scheduling object resource */
-	struct mboxlist_entry mbentry;
-	char outboxname[MAX_MAILBOX_BUFFER];
-	const char *msg_base = NULL, *organizer, **hdr;
-	unsigned long msg_size = 0;
-	icalcomponent *ical, *comp;
-	icalproperty *prop;
-	struct sched_param sparam;
-
-	/* Check ACL of auth'd user on userid's Scheduling Outbox */
-	caldav_mboxname(SCHED_OUTBOX, userid, outboxname);
-
-	if ((r = mboxlist_lookup(outboxname, &mbentry, NULL))) {
-	    syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
-		   outboxname, error_message(r));
-	    mbentry.acl = NULL;
-	}
-
-	rights =
-	    mbentry.acl ? cyrus_acl_myrights(httpd_authstate, mbentry.acl) : 0;
-	if (!(rights & DACL_SCHED)) {
-	    /* DAV:need-privileges */
-	    txn->error.precond = DAV_NEED_PRIVS;
-	    txn->error.rights = DACL_SCHED;
-
-	    assert(!buf_len(&txn->buf));
-	    buf_printf(&txn->buf, "/calendars/user/%s/%s", userid, SCHED_OUTBOX);
-	    txn->error.resource = buf_cstring(&txn->buf);
-	    ret = HTTP_FORBIDDEN;
-	    goto done;
-	}
-
-	/* Load message containing the resource and parse iCal data */
-	mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
-	ical = icalparser_parse_string(msg_base + record.header_size);
-	mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
-
-	if (!ical) {
-	    syslog(LOG_ERR,
-		   "meth_delete: failed to parse iCalendar object %s:%u",
-		   txn->req_tgt.mboxname, record.uid);
-	    ret = HTTP_SERVER_ERROR;
-	    goto done;
-	}
-
-	/* Grab the organizer */
-	comp = icalcomponent_get_first_real_component(ical);
-	prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-	organizer = icalproperty_get_organizer(prop);
-
-	if (caladdress_lookup(organizer, &sparam)) {
-	    syslog(LOG_ERR,
-		   "meth_delete: failed to process scheduling message in %s"
-		   " (org=%s, att=%s)",
-		   txn->req_tgt.mboxname, organizer, userid);
-	    txn->error.desc = "Failed to lookup organizer address\r\n";
-	    ret = HTTP_SERVER_ERROR;
-	    goto done;
-	}
-
-	if (!strcmp(sparam.userid, userid)) {
-	    /* Organizer scheduling object resource */
-	    sched_request(organizer, &sparam, ical, NULL);
-	}
-	else if (!(hdr = spool_getheader(txn->req_hdrs, "Schedule-Reply")) ||
-		 strcmp(hdr[0], "F")) {
-	    /* Attendee scheduling object resource */
-	    sched_reply(userid, ical, NULL);
-	}
-
-	icalcomponent_free(ical);
-    }
-#endif /* WITH_CALDAV_SCHED */
-
-    if (record.uid) {
-	/* Expunge the resource */
-	record.system_flags |= FLAG_EXPUNGED;
-
-	if ((r = mailbox_rewrite_index_record(mailbox, &record))) {
-	    syslog(LOG_ERR, "expunging record (%s) failed: %s",
-		   txn->req_tgt.mboxname, error_message(r));
-	    txn->error.desc = error_message(r);
-	    ret = HTTP_SERVER_ERROR;
-	    goto done;
-	}
-    }
-
-    /* Delete mapping entry for resource name */
-    caldav_delete(auth_caldavdb, rowid, 1);
-
-  done:
-    if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
     return ret;
 }

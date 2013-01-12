@@ -106,7 +106,6 @@ static int report_card_multiget(struct transaction_t *txn, xmlNodePtr inroot,
 				struct propfind_ctx *fctx);
 
 static int meth_copy(struct transaction_t *txn, void *params);
-static int meth_delete(struct transaction_t *txn, void *params);
 static int store_resource(struct transaction_t *txn, VObject *vcard,
 			  struct mailbox *mailbox, const char *resource,
 			  struct carddav_db *carddavdb, int overwrite,
@@ -119,8 +118,10 @@ static struct meth_params carddav_params = {
       (db_lookup_proc_t) &carddav_lookup_resource,
       (db_foreach_proc_t) &carddav_foreach,
       (db_write_proc_t) &carddav_write,
-      (db_delete_proc_t) &carddav_delete },
+      (db_delete_proc_t) &carddav_delete,
+      (db_delmbox_proc_t) &carddav_delmbox },
     NULL,					/* No ACL extensions */
+    NULL,		  	      		/* No special DELETE handling */
     { MBTYPE_ADDRESSBOOK, NULL, NULL, 0 },	/* No special MK* method */
     NULL,		  	      		/* No special POST handling */
     { CARDDAV_SUPP_DATA, &carddav_put },
@@ -142,7 +143,7 @@ const struct namespace_t namespace_addressbook = {
     { 
 	{ &meth_acl,		&carddav_params },	/* ACL		*/
 	{ &meth_copy,		NULL },			/* COPY		*/
-	{ &meth_delete,		NULL },			/* DELETE	*/
+	{ &meth_delete,		&carddav_params },	/* DELETE	*/
 	{ &meth_get_dav,	&carddav_params },	/* GET		*/
 	{ &meth_get_dav,	&carddav_params },	/* HEAD		*/
 	{ &meth_lock,		&carddav_params },	/* LOCK		*/
@@ -617,161 +618,6 @@ static int meth_copy(struct transaction_t *txn,
     }
     if (dest_mbox) mailbox_close(&dest_mbox);
     if (src_mbox) mailbox_unlock_index(src_mbox, NULL);
-
-    return ret;
-}
-
-
-/* Perform a DELETE request */
-static int meth_delete(struct transaction_t *txn,
-		       void *params __attribute__((unused)))
-{
-    int ret = HTTP_NO_CONTENT, r, precond, rights;
-    char *server, *acl;
-    struct mailbox *mailbox = NULL;
-    struct carddav_data *cdata;
-    struct index_record record;
-    const char *etag = NULL, *userid;
-    time_t lastmod = 0;
-
-    /* Response should not be cached */
-    txn->flags.cc |= CC_NOCACHE;
-
-    /* Make sure its a DAV resource */
-    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
-
-    /* Parse the path */
-    if ((r = carddav_parse_path(&txn->req_tgt, &txn->error.desc))) return r;
-
-    /* Construct userid corresponding to mailbox */
-    userid = mboxname_to_userid(txn->req_tgt.mboxname);
-
-    /* Locate the mailbox */
-    if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
-	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-
-	switch (r) {
-	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	default: return HTTP_SERVER_ERROR;
-	}
-    }
-
-    /* Check ACL for current user */
-    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
-    if ((txn->req_tgt.resource && !(rights & DACL_RMRSRC)) ||
-	!(rights & DACL_RMCOL)) {
-	/* DAV:need-privileges */
-	txn->error.precond = DAV_NEED_PRIVS;
-	txn->error.resource = txn->req_tgt.path;
-	txn->error.rights = txn->req_tgt.resource ? DACL_RMRSRC : DACL_RMCOL;
-	return HTTP_FORBIDDEN;
-    }
-
-    if (server) {
-	/* Remote mailbox */
-	struct backend *be;
-
-	be = proxy_findserver(server, &http_protocol, httpd_userid,
-			      &backend_cached, NULL, NULL, httpd_in);
-	if (!be) return HTTP_UNAVAILABLE;
-
-	return http_pipe_req_resp(be, txn);
-    }
-
-    /* Local Mailbox */
-
-    if (!txn->req_tgt.resource) {
-	/* DELETE collection */
-	r = mboxlist_deletemailbox(txn->req_tgt.mboxname,
-				   httpd_userisadmin || httpd_userisproxyadmin,
-				   httpd_userid, httpd_authstate,
-				   1, 0, 0);
-
-	if (!r) carddav_delmbox(auth_carddavdb, txn->req_tgt.mboxname, 0);
-	else if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
-	else if (r == IMAP_MAILBOX_NONEXISTENT) ret = HTTP_NOT_FOUND;
-	else if (r) ret = HTTP_SERVER_ERROR;
-
-	return ret;
-    }
-
-
-    /* DELETE resource */
-
-    /* Open mailbox for writing */
-    if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_EXCLUSIVE))) {
-	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
-    }
-
-    /* Find message UID for the resource, if exists */
-    carddav_lookup_resource(auth_carddavdb, txn->req_tgt.mboxname,
-			   txn->req_tgt.resource, 1, &cdata);
-    if (!cdata->dav.rowid) {
-	ret = HTTP_NOT_FOUND;
-	goto done;
-    }
-
-    memset(&record, 0, sizeof(struct index_record));
-    if (cdata->dav.imap_uid) {
-	/* Mapped URL - Fetch index record for the resource */
-	r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
-	if (r) {
-	    txn->error.desc = error_message(r);
-	    ret = HTTP_SERVER_ERROR;
-	    goto done;
-	}
-
-	etag = message_guid_encode(&record.guid);
-	lastmod = record.internaldate;
-    }
-    else {
-	/* Unmapped URL (empty resource) */
-	etag = NULL_ETAG;
-	lastmod = cdata->dav.creationdate;
-    }
-
-    /* Check any preconditions */
-    precond = check_precond(txn, cdata, etag, lastmod);
-
-    switch (precond) {
-    case HTTP_OK:
-	break;
-
-    case HTTP_LOCKED:
-	txn->error.precond = DAV_NEED_LOCK_TOKEN;
-	txn->error.resource = txn->req_tgt.path;
-
-    default:
-	/* We failed a precondition - don't perform the request */
-	ret = precond;
-	goto done;
-    }
-
-    if (record.uid) {
-	/* Expunge the resource */
-	record.system_flags |= FLAG_EXPUNGED;
-
-	if ((r = mailbox_rewrite_index_record(mailbox, &record))) {
-	    syslog(LOG_ERR, "expunging record (%s) failed: %s",
-		   txn->req_tgt.mboxname, error_message(r));
-	    txn->error.desc = error_message(r);
-	    ret = HTTP_SERVER_ERROR;
-	    goto done;
-	}
-    }
-
-    /* Delete mapping entry for resource name */
-    carddav_delete(auth_carddavdb, cdata->dav.rowid, 1);
-
-  done:
-    if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
     return ret;
 }
