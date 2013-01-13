@@ -1046,7 +1046,7 @@ dnl
 dnl see if we're compiling with NNTP support
 dnl
 AC_ARG_ENABLE(nntp,
-        [AS_HELP_STRING([--enable-nntp], [enable NNTP support])],,[enable_nttp="no";])
+        [AS_HELP_STRING([--enable-nntp], [enable NNTP support])],,[enable_nntp="no";])
 AM_CONDITIONAL([NNTPD], [test "$enable_nntp" != "no"])
 dnl
 dnl see if we're compiling the Murder support programs
