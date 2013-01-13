@@ -385,13 +385,9 @@ AM_CONDITIONAL([USE_SQL], [test $HAVE_SQL = 1])
 dnl End SQL DB Detection
 
 AC_ARG_ENABLE(sieve,
-        [AS_HELP_STRING([--disable-sieve], [disable Sieve support])])
-testpcre="yes"
+        [AS_HELP_STRING([--disable-sieve], [disable Sieve support])],,[enable_sieve="yes";])
 AC_ARG_ENABLE(pcre,
-	[AS_HELP_STRING([--disable-pcre], [disable PCRE library])],
-	if test "$enableval" = no; then
-		testpcre="no"
-	fi)
+	[AS_HELP_STRING([--disable-pcre], [disable PCRE library])])
 
 if test "$enable_sieve" != "no"; then
 	AC_DEFINE(USE_SIEVE,[],[Build in Sieve support?])
@@ -400,7 +396,7 @@ if test "$enable_sieve" != "no"; then
 	AC_PROG_YACC
 	AM_PROG_LEX
 
-	if test "$testpcre" != "no"; then
+	if test "$enable_pcre" != "no"; then
 	    AC_CHECK_HEADER(pcreposix.h)
 	    if test "$ac_cv_header_pcreposix_h" = "yes"; then
 		    AC_MSG_CHECKING(for utf8 enabled pcre)
@@ -1044,19 +1040,19 @@ dnl
 dnl see if we're compiling with IMAP idled support
 dnl
 AC_ARG_ENABLE(idled,
-        [AS_HELP_STRING([--enable-idled], [enable IMAP idled support])])
+        [AS_HELP_STRING([--enable-idled], [enable IMAP idled support])],,[enable_idled="no";])
 AM_CONDITIONAL([IDLED], [test "$enable_idled" != "no"])
 dnl
 dnl see if we're compiling with NNTP support
 dnl
 AC_ARG_ENABLE(nntp,
-        [AS_HELP_STRING([--enable-nntp], [enable NNTP support])])
+        [AS_HELP_STRING([--enable-nntp], [enable NNTP support])],,[enable_nttp="no";])
 AM_CONDITIONAL([NNTPD], [test "$enable_nntp" != "no"])
 dnl
 dnl see if we're compiling the Murder support programs
 dnl
 AC_ARG_ENABLE(murder,
-        [AS_HELP_STRING([--enable-murder], [enable IMAP Murder support])])
+        [AS_HELP_STRING([--enable-murder], [enable IMAP Murder support])],, [enable_murder="no";])
 AM_CONDITIONAL([MURDER], [test "$enable_murder" != "no"])
 if test "$enable_murder" != no; then
 	# for master/slave auto-selection
@@ -1067,7 +1063,7 @@ dnl
 dnl see if we're compiling replication support programs
 dnl
 AC_ARG_ENABLE(replication,
-        [AS_HELP_STRING([--enable-replication], [enable replication support (experimental)])])
+        [AS_HELP_STRING([--enable-replication], [enable replication support (experimental)])],,[enable_replication="no";])
 AM_CONDITIONAL([REPLICATION], [test "$enable_replication" != no])
 
 dnl
@@ -1552,3 +1548,21 @@ CMU_PERL_MAKEMAKER(perl/sieve/managesieve)
 fi
 
 AC_OUTPUT
+echo "
+Cyrus Imapd configured components
+
+   idled:       $enable_idled
+   murder:      $enable_murder
+   nttpd:       $enable_nntp
+   replication: $enable_replication
+   sieve:       $enable_sieve
+
+External dependencies:
+   pcre:        $cyrus_cv_pcre_utf8
+
+Database support:
+   bdb:         $use_berkeley
+   mysql:       $use_mysql
+   postgresql:  $use_pgsql
+   sqlite:      $use_sqlite
+"
