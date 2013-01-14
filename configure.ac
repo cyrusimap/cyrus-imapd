@@ -1011,7 +1011,8 @@ dnl Test for mailbox event notification
 dnl enable requires the installation of jansson library
 dnl
 AC_ARG_ENABLE(event-notification,
-        [AS_HELP_STRING([--disable-event-notification], [disable compiling of mailbox event notification (that needs jansson library)])])
+        [AS_HELP_STRING([--disable-event-notification], [disable compiling of mailbox event notification (that needs jansson library)])],,
+        [enable_event_notification="yes";])
 
 if test "$enable_event_notification" != "no"; then
     PKG_CHECK_MODULES([JANSSON], [jansson >= 2.0],
@@ -1021,7 +1022,8 @@ if test "$enable_event_notification" != "no"; then
 	  [AC_SUBST([JANSSON_CFLAGS])]
 	  [AC_DEFINE(ENABLE_MBOXEVENT,[],[Build with support of mailbox event notification])],
 	[check_jansson=false]
-	  [AC_MSG_WARN([jansson 2.0 or later was not found, but is required to enable mailbox event notification])])
+	  [AC_MSG_WARN([jansson 2.0 or later was not found, but is required to enable mailbox event notification])]
+	  enable_event_notification="no")
 fi
 AM_CONDITIONAL(JANSSON, test x$check_jansson = xtrue)
 
@@ -1550,18 +1552,19 @@ AC_OUTPUT
 echo "
 Cyrus Imapd configured components
 
-   idled:       $enable_idled
-   murder:      $enable_murder
-   nttpd:       $enable_nntp
-   replication: $enable_replication
-   sieve:       $enable_sieve
+   event notification: $enable_event_notification
+   idled:              $enable_idled
+   murder:             $enable_murder
+   nttpd:              $enable_nntp
+   replication:        $enable_replication
+   sieve:              $enable_sieve
 
 External dependencies:
-   pcre:        $cyrus_cv_pcre_utf8
+   pcre:               $cyrus_cv_pcre_utf8
 
 Database support:
-   bdb:         $use_berkeley
-   mysql:       $use_mysql
-   postgresql:  $use_pgsql
-   sqlite:      $use_sqlite
+   bdb:                $use_berkeley
+   mysql:              $use_mysql
+   postgresql:         $use_pgsql
+   sqlite:             $use_sqlite
 "
