@@ -829,15 +829,17 @@ static int flush(search_text_receiver_t *rx)
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
     int r = 0;
+    struct timeval start, end;
 
     if (!tr->uncommitted) return 0;
 
-    if (tr->super.verbose > 1)
-	syslog(LOG_NOTICE, "Xapian committing %u updates",
-		tr->uncommitted);
-
+    gettimeofday(&start, NULL);
     r = xapian_dbw_commit_txn(tr->dbw);
     if (r) goto out;
+    gettimeofday(&end, NULL);
+
+    syslog(LOG_INFO, "Xapian committed %u updates in %.6f sec",
+		tr->uncommitted, timesub(&start, &end));
 
     /* We write out the latestid for the mailbox only after successfully
      * updating the index, to avoid a future instance not realising that
