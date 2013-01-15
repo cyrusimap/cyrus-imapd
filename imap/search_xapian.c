@@ -1330,6 +1330,7 @@ static int list_files(const char *mboxname, const char *partition, strarray_t *f
 	strarray_appendm(files, fname);
 	fname = NULL;
     }
+    r = 0;
 
     xapiandir = strconcat(basedir, XAPIAN_DIRNAME, (char *)NULL);
     dirh = opendir(xapiandir);
@@ -1345,6 +1346,7 @@ static int list_files(const char *mboxname, const char *partition, strarray_t *f
 	    fname = NULL;
 	}
     }
+    r = 0;
 
 out:
     if (dirh) closedir(dirh);
