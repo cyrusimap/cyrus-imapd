@@ -299,6 +299,7 @@ static int query_begin_index(search_query_t *query,
 	init.out = query->state->out;
 
 	r = index_open(mboxname, &init, statep);
+	if (r == IMAP_PERMISSION_DENIED) r = IMAP_MAILBOX_NONEXISTENT;
 	if (r) goto out;
 
 	index_checkflags(*statep, 0, 0);
@@ -444,6 +445,13 @@ static void subquery_post_indexed(const char *key, void *data, void *rock)
     }
 
     r = query_begin_index(query, mboxname, &state);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+	/* Silently swallow mailboxes which have been deleted, renamed,
+	 * or had their ACL changed to prevent us reading them, after
+	 * the index was constructed [IRIS-2469].  */
+	r = 0;
+	goto out;
+    }
     if (r) goto out;
 
     if (!state->exists) goto out;
@@ -608,6 +616,13 @@ static int subquery_run_one_folder(search_query_t *query,
     }
 
     r = query_begin_index(query, mboxname, &state);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+	/* Silently swallow mailboxes which have been deleted, renamed,
+	 * or had their ACL changed to prevent us reading them, after
+	 * the index was constructed [IRIS-2469].  */
+	r = 0;
+	goto out;
+    }
     if (r) goto out;
 
     if (!state->exists) goto out;
