@@ -208,7 +208,7 @@ enum index_warmup_flags
     WARMUP_ANNOTATIONS	    = (1<<2),
     WARMUP_FOLDERSTATUS	    = (1<<3),
     WARMUP_SEARCH	    = (1<<4),
-    WARMUP_ALL		    = (~0)
+    WARMUP_ALL		    = (~WARMUP_SEARCH)
 };
 
 /* non-locking, non-updating - just do a fetch on the state
