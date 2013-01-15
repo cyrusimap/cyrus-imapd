@@ -51,6 +51,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <dirent.h>
 
 #include "imap_err.h"
 #include "global.h"
@@ -80,7 +81,7 @@ static int open_latest(struct mailbox *, const char *root, struct latestdb *);
 static void close_latest(struct latestdb *);
 static int read_latest(struct latestdb *, struct mailbox *, uint32_t *, int);
 static int write_latest(struct latestdb *, struct mailbox *, uint32_t, int);
-static int xapian_basedir(const struct mailbox *mailbox,
+static int xapian_basedir(const char *mboxname, const char *part,
 			  const char *root, char **basedirp);
 
 /* Name of columns */
@@ -511,7 +512,7 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     bb->mailbox = mailbox;
     bb->opts = opts;
 
-    r = xapian_basedir(mailbox, NULL, &basedir);
+    r = xapian_basedir(mailbox->name, mailbox->part, NULL, &basedir);
     if (r) goto out;
     dir = strconcat(basedir, XAPIAN_DIRNAME, NULL);
 
@@ -600,7 +601,7 @@ static const char *xapian_rootdir(const char *partition)
 }
 
 /* Returns in *basedirp a new string which must be free()d */
-static int xapian_basedir(const struct mailbox *mailbox,
+static int xapian_basedir(const char *mboxname, const char *partition,
 			  const char *root, char **basedirp)
 {
     char *basedir = NULL;
@@ -611,13 +612,13 @@ static int xapian_basedir(const struct mailbox *mailbox,
     mboxname_init_parts(&parts);
 
     if (!root)
-	root = xapian_rootdir(mailbox->part);
+	root = xapian_rootdir(partition);
     if (!root) {
 	r = IMAP_PARTITION_UNKNOWN;
 	goto out;
     }
 
-    r = mboxname_to_parts(mailbox->name, &parts);
+    r = mboxname_to_parts(mboxname, &parts);
     if (r) goto out;
     if (!parts.userid) {
 	r = IMAP_PARTITION_UNKNOWN;
@@ -696,7 +697,7 @@ static int open_latest(struct mailbox *mailbox, const char *root,
     char *path = NULL;
     int r;
 
-    r = xapian_basedir(mailbox, root, &basedir);
+    r = xapian_basedir(mailbox->name, mailbox->part, root, &basedir);
     if (r) return r;
     path = strconcat(basedir, LATESTDB_FNAME, NULL);
     free(basedir);
@@ -999,7 +1000,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     struct stat sb;
     int r;
 
-    r = xapian_basedir(mailbox, tr->temp_root, &basedir);
+    r = xapian_basedir(mailbox->name, mailbox->part, tr->temp_root, &basedir);
     if (r) return r;
     dir = strconcat(basedir, XAPIAN_DIRNAME, NULL);
 
@@ -1010,7 +1011,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     if (r) goto out;
 
     if (tr->temp_root) {
-	r = xapian_basedir(mailbox, NULL, &real_basedir);
+	r = xapian_basedir(mailbox->name, mailbox->part, NULL, &real_basedir);
 	if (r) goto out;
 
 	r = check_directory(real_basedir, tr->super.verbose, /*create*/1);
@@ -1310,6 +1311,49 @@ static int end_snippets(search_text_receiver_t *rx)
     return free_receiver(&tr->super);
 }
 
+static int list_files(const char *mboxname, const char *partition, strarray_t *files)
+{
+    char *basedir = NULL;
+    char *xapiandir = NULL;
+    char *fname = NULL;
+    DIR *dirh = NULL;
+    struct dirent *de;
+    struct stat sb;
+    int r;
+
+    r = xapian_basedir(mboxname, partition, NULL, &basedir);
+    if (r) return r;
+
+    fname = strconcat(basedir, LATESTDB_FNAME, (char *)NULL);
+    r = stat(fname, &sb);
+    if (!r) {
+	strarray_appendm(files, fname);
+	fname = NULL;
+    }
+
+    xapiandir = strconcat(basedir, XAPIAN_DIRNAME, (char *)NULL);
+    dirh = opendir(xapiandir);
+    if (!dirh) goto out;
+
+    while ((de = readdir(dirh))) {
+	if (de->d_name[0] == '.') continue;
+	free(fname);
+	fname = strconcat(xapiandir, "/", de->d_name, (char *)NULL);
+	r = stat(fname, &sb);
+	if (!r && S_ISREG(sb.st_mode)) {
+	    strarray_appendm(files, fname);
+	    fname = NULL;
+	}
+    }
+
+out:
+    if (dirh) closedir(dirh);
+    free(basedir);
+    free(xapiandir);
+    free(fname);
+    return r;
+}
+
 const struct search_engine xapian_search_engine = {
     "Xapian",
     SEARCH_FLAG_CAN_BATCH,
@@ -1322,6 +1366,7 @@ const struct search_engine xapian_search_engine = {
     describe_internalised,
     free_internalised,
     /*start_daemon*/NULL,
-    /*stop_daemon*/NULL
+    /*stop_daemon*/NULL,
+    list_files
 };
 

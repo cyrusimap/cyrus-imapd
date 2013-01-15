@@ -45,6 +45,7 @@
 
 #include "mailbox.h"
 #include "util.h"
+#include "strarray.h"
 
 typedef int (*search_hit_cb_t)(const char *mboxname, uint32_t uidvalidity,
 			       uint32_t uid, void *rock);
@@ -140,6 +141,7 @@ struct search_engine {
     void (*free_internalised)(void *);
     int (*start_daemon)(int verbose);
     int (*stop_daemon)(int verbose);
+    int (*list_files)(const char *mboxname, const char *partition, strarray_t *);
 };
 
 /*
@@ -168,6 +170,7 @@ char *search_describe_internalised(void *internalised);
 void search_free_internalised(void *internalised);
 int search_start_daemon(int verbose);
 int search_stop_daemon(int verbose);
+int search_list_files(const char *mboxname, const char *partition, strarray_t *);
 
 /* for debugging */
 extern const char *search_op_as_string(int op);

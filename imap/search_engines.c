@@ -284,6 +284,14 @@ EXPORTED int search_stop_daemon(int verbose)
     return (se->stop_daemon ? se->stop_daemon(verbose) : 0);
 }
 
+EXPORTED int search_list_files(const char *mboxname,
+			       const char *partition,
+			       strarray_t *files)
+{
+    const struct search_engine *se = engine();
+    return (se->list_files ? se->list_files(mboxname, partition, files) : 0);
+}
+
 const char *search_op_as_string(int op)
 {
     static char buf[33];

@@ -1397,11 +1397,16 @@ out:
     return r;
 }
 
-EXPORTED int index_warmup(struct mboxlist_entry *mbentry, unsigned int warmup_flags)
+EXPORTED int index_warmup(struct mboxlist_entry *mbentry,
+			  unsigned int warmup_flags,
+			  struct seqset *uids)
 {
     const char *fname = NULL;
     char *tofree1 = NULL;
     char *tofree2 = NULL;
+    unsigned int uid;
+    strarray_t files = STRARRAY_INITIALIZER;
+    int i;
     int r = 0;
 
     if (warmup_flags & WARMUP_INDEX) {
@@ -1428,6 +1433,20 @@ EXPORTED int index_warmup(struct mboxlist_entry *mbentry, unsigned int warmup_fl
 	    if (r) goto out;
 	}
     }
+    if (warmup_flags & WARMUP_SEARCH) {
+	r = search_list_files(mbentry->name, mbentry->partition, &files);
+	if (r) goto out;
+	for (i = 0 ; i < files.count ; i++) {
+	    fname = strarray_nth(&files, i);
+	    r = warmup_file(fname, 0, 0);
+	    if (r) goto out;
+	}
+    }
+    while ((uid = seqset_getnext(uids))) {
+	fname = mboxname_datapath(mbentry->partition, mbentry->name, uid);
+	r = warmup_file(fname, 0, 0);
+	if (r) goto out;
+    }
 
 out:
     if (r == ENOENT || r == ENOSYS)
@@ -1437,6 +1456,7 @@ out:
 		fname, error_message(r));
     free(tofree1);
     free(tofree2);
+    strarray_fini(&files);
     return r;
 }
 

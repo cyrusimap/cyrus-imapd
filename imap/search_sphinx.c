@@ -2381,6 +2381,7 @@ const struct search_engine sphinx_search_engine = {
     describe_internalised,
     free_internalised,
     start_daemon,
-    stop_daemon
+    stop_daemon,
+    /* list_files */NULL
 };
 

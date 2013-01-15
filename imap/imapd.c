@@ -9890,6 +9890,7 @@ static void cmd_xwarmup(const char *tag)
     char mytime[100];
     struct buf arg = BUF_INITIALIZER;
     int warmup_flags = 0;
+    struct seqset *uids = NULL;
     /* We deal with the mboxlist API instead of the index_state API or
      * mailbox API to avoid the overhead of index_open(), which will
      * block while reading all the cyrus.index...we want to be
@@ -9968,6 +9969,16 @@ syntax_error:
 		warmup_flags |= WARMUP_ANNOTATIONS;
 	    else if (!strcasecmp(arg.s, "folderstatus"))
 		warmup_flags |= WARMUP_FOLDERSTATUS;
+	    else if (!strcasecmp(arg.s, "search"))
+		warmup_flags |= WARMUP_SEARCH;
+	    else if (!strcasecmp(arg.s, "uids")) {
+		if (c != ' ') goto syntax_error;
+		c = getword(imapd_in, &arg);
+		if (c == EOF) goto syntax_error;
+		if (!imparse_issequence(arg.s)) goto syntax_error;
+		uids = seqset_parse(arg.s, NULL, /*maxval*/0);
+		if (!uids) goto syntax_error;
+	    }
 	    else if (!strcasecmp(arg.s, "all"))
 		warmup_flags |= WARMUP_ALL;
 	    else
@@ -9983,7 +9994,7 @@ syntax_error:
     if (c == '\r') c = prot_getc(imapd_in);
     if (c != '\n') goto syntax_error;
 
-    r = index_warmup(mbentry, warmup_flags);
+    r = index_warmup(mbentry, warmup_flags, uids);
 
 out:
     snprintf(mytime, sizeof(mytime), "%2.3f",
@@ -10001,6 +10012,7 @@ out_noprint:
 	eatline(imapd_in, c);
     mboxlist_entry_free(&mbentry);
     buf_free(&arg);
+    if (uids) seqset_free(uids);
 }
 
 static void free_snippetargs(struct snippetargs **sap)

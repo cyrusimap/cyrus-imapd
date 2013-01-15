@@ -207,7 +207,8 @@ enum index_warmup_flags
     WARMUP_CONVERSATIONS    = (1<<1),
     WARMUP_ANNOTATIONS	    = (1<<2),
     WARMUP_FOLDERSTATUS	    = (1<<3),
-    WARMUP_ALL		    = (~0),
+    WARMUP_SEARCH	    = (1<<4),
+    WARMUP_ALL		    = (~0)
 };
 
 /* non-locking, non-updating - just do a fetch on the state
@@ -228,8 +229,9 @@ extern int index_store(struct index_state *state,
 extern int index_run_annotator(struct index_state *state,
 			       const char *sequence, int usinguid,
 			       struct namespace *namespace, int isadmin);
-extern int index_warmup(struct mboxlist_entry *, unsigned int warmup_flags);
-extern int index_sort(struct index_state *state, const struct sortcrit *sortcrit,
+extern int index_warmup(struct mboxlist_entry *, unsigned int warmup_flags,
+			struct seqset *uids);
+extern int index_sort(struct index_state *state, struct sortcrit *sortcrit,
 		      const struct searchargs *searchargs, int usinguid);
 extern int index_convsort(struct index_state *state, struct sortcrit *sortcrit,
 		      struct searchargs *searchargs,
