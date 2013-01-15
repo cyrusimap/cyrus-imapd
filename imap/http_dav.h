@@ -294,6 +294,13 @@ struct davdb_params {
 typedef int (*acl_proc_t)(struct transaction_t *txn, xmlNodePtr priv,
 			  int *rights);
 
+/* Function to process and COPY a resource */
+typedef int (*copy_proc_t)(struct transaction_t *txn,
+			   struct mailbox *src_mbox, struct index_record *src_rec,
+			   struct mailbox *dest_mbox, const char *dest_rsrc,
+			   unsigned overwrite, unsigned flags);
+
+/* Function to do special processing for DELETE method (optional) */
 typedef int (*delete_proc_t)(struct transaction_t *txn, struct mailbox *mailbox,
 			     struct index_record *record, void *data);
 
@@ -339,12 +346,20 @@ enum {
     REPORT_MULTISTATUS	= (1<<2)
 };
 
+/* Overwrite flags */
+enum {
+    OVERWRITE_CHECK = -1,
+    OVERWRITE_NO,
+    OVERWRITE_YES
+};
+
 struct meth_params {
     const char *content_type;		/* Content-Type of resources */
     parse_path_t parse_path;		/* parse URI path & generate mboxname */
     check_precond_t check_precond;	/* check headers for preconditions */
     struct davdb_params davdb;
     acl_proc_t acl_ext;			/* special ACL handling (extensions) */
+    copy_proc_t copy;			/* function to process & COPY a rsrc */
     delete_proc_t delete;		/* special DELETE handling (optional) */
     struct mkcol_params mkcol;		/* params for creating collection */
     post_proc_t post;			/* special POST handling (optional) */
@@ -377,6 +392,7 @@ int propfind_by_collection(char *mboxname, int matchlen,
 
 /* DAV method processing functions */
 int meth_acl(struct transaction_t *txn, void *params);
+int meth_copy(struct transaction_t *txn, void *params);
 int meth_delete(struct transaction_t *txn, void *params);
 int meth_get_dav(struct transaction_t *txn, void *params);
 int meth_lock(struct transaction_t *txn, void *params);

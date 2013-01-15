@@ -92,12 +92,6 @@
 
 #define NEW_STAG (1<<8)  /* Make sure we skip over PREFER bits */
 
-enum {
-    OVERWRITE_CHECK = -1,
-    OVERWRITE_NO,
-    OVERWRITE_YES
-};
-
 struct busytime {
     struct icalperiodtype *busy;
     unsigned len;
@@ -126,6 +120,10 @@ static int caldav_check_precond(struct transaction_t *txn, const void *data,
 				const char *etag, time_t lastmod);
 
 static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights);
+static int caldav_copy(struct transaction_t *txn,
+		       struct mailbox *src_mbox, struct index_record *src_rec,
+		       struct mailbox *dest_mbox, const char *dest_rsrc,
+		       unsigned overwrite, unsigned flags);
 static int caldav_delete_sched(struct transaction_t *txn,
 			       struct mailbox *mailbox,
 			       struct index_record *record, void *data);
@@ -140,7 +138,6 @@ static int report_cal_multiget(struct transaction_t *txn, xmlNodePtr inroot,
 static int report_fb_query(struct transaction_t *txn, xmlNodePtr inroot,
 			   struct propfind_ctx *fctx);
 
-static int meth_copy(struct transaction_t *txn, void *params);
 static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			  struct mailbox *mailbox, const char *resource,
 			  struct caldav_db *caldavdb, int overwrite,
@@ -172,6 +169,7 @@ static struct meth_params caldav_params = {
       (db_delete_proc_t) &caldav_delete,
       (db_delmbox_proc_t) &caldav_delmbox },
     &caldav_acl,
+    &caldav_copy,
     &caldav_delete_sched,
     { MBTYPE_CALENDAR, "mkcalendar", "mkcalendar-response", NS_CALDAV },
     &caldav_post,
@@ -195,14 +193,14 @@ const struct namespace_t namespace_calendar = {
     &my_caldav_init, &my_caldav_auth, my_caldav_reset, &my_caldav_shutdown,
     { 
 	{ &meth_acl,		&caldav_params },	/* ACL		*/
-	{ &meth_copy,		NULL },			/* COPY		*/
+	{ &meth_copy,		&caldav_params },	/* COPY		*/
 	{ &meth_delete,		&caldav_params },	/* DELETE	*/
 	{ &meth_get_dav,	&caldav_params },	/* GET		*/
 	{ &meth_get_dav,	&caldav_params },	/* HEAD		*/
 	{ &meth_lock,		&caldav_params },	/* LOCK		*/
 	{ &meth_mkcol,		&caldav_params },	/* MKCALENDAR	*/
 	{ &meth_mkcol,		&caldav_params },	/* MKCOL	*/
-	{ &meth_copy,		NULL },			/* MOVE		*/
+	{ &meth_copy,		&caldav_params },	/* MOVE		*/
 	{ &meth_options,	NULL },			/* OPTIONS	*/
 	{ &meth_post,		&caldav_params },	/* POST		*/
 	{ &meth_propfind,	&caldav_params },	/* PROPFIND	*/
@@ -451,6 +449,63 @@ static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights)
 }
 
 
+/* Perform a COPY/MOVE request
+ *
+ * preconditions:
+ *   CALDAV:supported-calendar-data
+ *   CALDAV:valid-calendar-data
+ *   CALDAV:valid-calendar-object-resource
+ *   CALDAV:supported-calendar-component
+ *   CALDAV:no-uid-conflict (DAV:href)
+ *   CALDAV:calendar-collection-location-ok
+ *   CALDAV:max-resource-size
+ *   CALDAV:min-date-time
+ *   CALDAV:max-date-time
+ *   CALDAV:max-instances
+ *   CALDAV:max-attendees-per-instance
+ */
+static int caldav_copy(struct transaction_t *txn,
+		       struct mailbox *src_mbox, struct index_record *src_rec,
+		       struct mailbox *dest_mbox, const char *dest_rsrc,
+		       unsigned overwrite, unsigned flags)
+{
+    int ret;
+
+    const char *msg_base = NULL, *organizer = NULL;
+    unsigned long msg_size = 0;
+    icalcomponent *ical, *comp;
+    icalproperty *prop;
+
+    /* Load message containing the resource and parse iCal data */
+    mailbox_map_message(src_mbox, src_rec->uid, &msg_base, &msg_size);
+    ical = icalparser_parse_string(msg_base + src_rec->header_size);
+    mailbox_unmap_message(src_mbox, src_rec->uid, &msg_base, &msg_size);
+
+    if (!ical) {
+	txn->error.precond = CALDAV_VALID_DATA;
+	return HTTP_FORBIDDEN;
+    }
+
+    /* Finished our initial read of source mailbox */
+    mailbox_unlock_index(src_mbox, NULL);
+
+#ifdef WITH_CALDAV_SCHED
+    comp = icalcomponent_get_first_real_component(ical);
+    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    if (prop) organizer = icalproperty_get_organizer(prop);
+    if (organizer) flags |= NEW_STAG;
+#endif
+
+    /* Store source resource at destination */
+    ret = store_resource(txn, ical, dest_mbox, dest_rsrc, auth_caldavdb,
+			 overwrite, flags);
+
+    icalcomponent_free(ical);
+
+    return ret;
+}
+
+
 /* Perform scheduling actions for a DELETE request */
 static int caldav_delete_sched(struct transaction_t *txn,
 			       struct mailbox *mailbox,
@@ -684,299 +739,6 @@ static int caldav_put(struct transaction_t *txn, struct mailbox *mailbox,
 
   done:
     if (ical) icalcomponent_free(ical);
-
-    return ret;
-}
-
-
-/* Perform a COPY/MOVE request
- *
- * preconditions:
- *   CALDAV:supported-calendar-data
- *   CALDAV:valid-calendar-data
- *   CALDAV:valid-calendar-object-resource
- *   CALDAV:supported-calendar-component
- *   CALDAV:no-uid-conflict (DAV:href)
- *   CALDAV:calendar-collection-location-ok
- *   CALDAV:max-resource-size
- *   CALDAV:min-date-time
- *   CALDAV:max-date-time
- *   CALDAV:max-instances
- *   CALDAV:max-attendees-per-instance
- */
-static int meth_copy(struct transaction_t *txn,
-		     void *params __attribute__((unused)))
-{
-    int ret = HTTP_CREATED, r, precond, rights, overwrite = OVERWRITE_YES;
-    const char **hdr;
-    struct request_target_t dest;  /* Parsed destination URL */
-    char *server, *acl;
-    struct backend *src_be = NULL, *dest_be = NULL;
-    struct mailbox *src_mbox = NULL, *dest_mbox = NULL;
-    struct caldav_data *cdata;
-    struct index_record src_rec;
-    const char *etag = NULL;
-    time_t lastmod = 0;
-    const char *msg_base = NULL;
-    unsigned long msg_size = 0;
-    icalcomponent *ical = NULL;
-
-    /* Response should not be cached */
-    txn->flags.cc |= CC_NOCACHE;
-
-    /* Make sure source is a DAV resource */
-    if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED;
-
-    /* Parse the source path */
-    if ((r = caldav_parse_path(&txn->req_tgt, &txn->error.desc))) return r;
-
-    /* We don't yet handle COPY/MOVE on collections */
-    if (!txn->req_tgt.resource) return HTTP_NOT_ALLOWED;
-
-    /* Check for mandatory Destination header */
-    if (!(hdr = spool_getheader(txn->req_hdrs, "Destination"))) {
-	txn->error.desc = "Missing Destination header\r\n";
-	return HTTP_BAD_REQUEST;
-    }
-
-    /* Parse destination URI */
-    if ((r = parse_uri(METH_UNKNOWN, hdr[0], &dest, &txn->error.desc))) return r;
-
-    /* Make sure source and dest resources are NOT the same */
-    if (!strcmp(txn->req_tgt.path, dest.path)) {
-	txn->error.desc = "Source and destination resources are the same\r\n";
-	return HTTP_FORBIDDEN;
-    }
-
-    /* Parse the destination path */
-    if ((r = caldav_parse_path(&dest, &txn->error.desc))) return r;
-    dest.namespace = txn->req_tgt.namespace;
-
-    /* We don't yet handle COPY/MOVE on collections */
-    if (!dest.resource) return HTTP_NOT_ALLOWED;
-
-    /* Locate the source mailbox */
-    if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
-	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-
-	switch (r) {
-	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	default: return HTTP_SERVER_ERROR;
-	}
-    }
-
-    /* Check ACL for current user on source mailbox */
-    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
-    if (((rights & DACL_READ) != DACL_READ) ||
-	((txn->meth == METH_MOVE) && !(rights & DACL_RMRSRC))) {
-	/* DAV:need-privileges */
-	txn->error.precond = DAV_NEED_PRIVS;
-	txn->error.resource = txn->req_tgt.path;
-	txn->error.rights =
-	    (rights & DACL_READ) != DACL_READ ? DACL_READ : DACL_RMRSRC;
-	return HTTP_FORBIDDEN;
-    }
-
-    if (server) {
-	/* Remote source mailbox */
-	src_be = proxy_findserver(server, &http_protocol, httpd_userid,
-				  &backend_cached, NULL, NULL, httpd_in);
-	if (!src_be) return HTTP_UNAVAILABLE;
-    }
-
-    /* Locate the destination mailbox */
-    if ((r = http_mlookup(dest.mboxname, &server, &acl, NULL))) {
-	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       dest.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-
-	switch (r) {
-	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	default: return HTTP_SERVER_ERROR;
-	}
-    }
-
-    /* Check ACL for current user on destination */
-    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
-    if (!(rights & DACL_ADDRSRC) || !(rights & DACL_WRITECONT)) {
-	/* DAV:need-privileges */
-	txn->error.precond = DAV_NEED_PRIVS;
-	txn->error.resource = dest.path;
-	txn->error.rights =
-	    !(rights & DACL_ADDRSRC) ? DACL_ADDRSRC : DACL_WRITECONT;
-	return HTTP_FORBIDDEN;
-    }
-
-    if (server) {
-	/* Remote destination mailbox */
-	dest_be = proxy_findserver(server, &http_protocol, httpd_userid,
-				   &backend_cached, NULL, NULL, httpd_in);
-	if (!dest_be) return HTTP_UNAVAILABLE;
-    }
-
-    if (src_be) {
-	/* Remote source mailbox */
-	/* XXX  Currently only supports standard Murder */
-
-	if (!dest_be) return HTTP_NOT_ALLOWED;
-
-	/* Replace cached Destination header with just the absolute path */
-	hdr = spool_getheader(txn->req_hdrs, "Destination");
-	strcpy((char *) hdr[0], dest.path);
-
-	if (src_be == dest_be) {
-	    /* Simply send the COPY to the backend */
-	    return http_pipe_req_resp(src_be, txn);
-	}
-
-	/* This is the harder case: GET from source and PUT on destination */
-	return http_proxy_copy(src_be, dest_be, txn);
-    }
-
-    /* Local Mailbox */
-
-    /* Open dest mailbox for reading */
-    if ((r = mailbox_open_irl(dest.mboxname, &dest_mbox))) {
-	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
-	       dest.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
-    }
-
-    /* Find message UID for the dest resource, if exists */
-    caldav_lookup_resource(auth_caldavdb,
-			   dest.mboxname, dest.resource, 0, &cdata);
-    /* XXX  Check errors */
-
-    /* Finished our initial read of dest mailbox */
-    mailbox_unlock_index(dest_mbox, NULL);
-
-    /* Check any preconditions on destination */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Overwrite")) &&
-	!strcmp(hdr[0], "F")) {
-
-	if (cdata->dav.rowid) {
-	    /* Don't overwrite the destination resource */
-	    ret = HTTP_PRECOND_FAILED;
-	    goto done;
-	}
-	overwrite = OVERWRITE_NO;
-    }
-
-    /* Open source mailbox for reading */
-    if ((r = http_mailbox_open(txn->req_tgt.mboxname, &src_mbox, LOCK_SHARED))) {
-	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
-    }
-
-    /* Find message UID for the source resource */
-    caldav_lookup_resource(auth_caldavdb, txn->req_tgt.mboxname,
-			   txn->req_tgt.resource, 0, &cdata);
-    if (!cdata->dav.rowid) {
-	ret = HTTP_NOT_FOUND;
-	goto done;
-    }
-
-    if (cdata->dav.imap_uid) {
-	/* Mapped URL - Fetch index record for the resource */
-	r = mailbox_find_index_record(src_mbox, cdata->dav.imap_uid, &src_rec);
-	if (r) {
-	    txn->error.desc = error_message(r);
-	    ret = HTTP_SERVER_ERROR;
-	    goto done;
-	}
-
-	etag = message_guid_encode(&src_rec.guid);
-	lastmod = src_rec.internaldate;
-    }
-    else {
-	/* Unmapped URL (empty resource) */
-	etag = NULL_ETAG;
-	lastmod = cdata->dav.creationdate;
-    }
-
-    /* Check any preconditions on source */
-    precond = caldav_check_precond(txn, cdata, etag, lastmod);
-
-    switch (precond) {
-    case HTTP_OK:
-	break;
-
-    case HTTP_LOCKED:
-	txn->error.precond = DAV_NEED_LOCK_TOKEN;
-	txn->error.resource = txn->req_tgt.path;
-
-    default:
-	/* We failed a precondition - don't perform the request */
-	ret = precond;
-	goto done;
-    }
-
-    /* Load message containing the resource and parse iCal data */
-    mailbox_map_message(src_mbox, src_rec.uid, &msg_base, &msg_size);
-    ical = icalparser_parse_string(msg_base + src_rec.header_size);
-    mailbox_unmap_message(src_mbox, src_rec.uid, &msg_base, &msg_size);
-
-    /* Finished our initial read of source mailbox */
-    mailbox_unlock_index(src_mbox, NULL);
-
-    /* Store source resource at destination */
-    ret = store_resource(txn, ical, dest_mbox, dest.resource, auth_caldavdb,
-			 overwrite, NEW_STAG);
-
-    /* For MOVE, we need to delete the source resource */
-    if ((txn->meth == METH_MOVE) &&
-	(ret == HTTP_CREATED || ret == HTTP_NO_CONTENT)) {
-	/* Lock source mailbox */
-	mailbox_lock_index(src_mbox, LOCK_EXCLUSIVE);
-
-	/* Find message UID for the source resource */
-	caldav_lookup_resource(auth_caldavdb, txn->req_tgt.mboxname,
-			       txn->req_tgt.resource, 1, &cdata);
-	/* XXX  Check errors */
-
-	/* Fetch index record for the source resource */
-	if (cdata->dav.imap_uid &&
-	    !mailbox_find_index_record(src_mbox, cdata->dav.imap_uid,
-				       &src_rec)) {
-
-	    /* Expunge the source message */
-	    src_rec.system_flags |= FLAG_EXPUNGED;
-	    if ((r = mailbox_rewrite_index_record(src_mbox, &src_rec))) {
-		syslog(LOG_ERR, "expunging src record (%s) failed: %s",
-		       txn->req_tgt.mboxname, error_message(r));
-		txn->error.desc = error_message(r);
-		ret = HTTP_SERVER_ERROR;
-		goto done;
-	    }
-	}
-
-	/* Delete mapping entry for source resource name */
-	caldav_delete(auth_caldavdb, cdata->dav.rowid, 1);
-    }
-
-  done:
-    if (ret == HTTP_CREATED) {
-	/* Tell client where to find the new resource */
-	hdr = spool_getheader(txn->req_hdrs, "Destination");
-	txn->location = hdr[0];
-    }
-    else {
-	/* Don't confuse client by providing ETag of Destination resource */
-	txn->resp_body.etag = NULL;
-    }
-
-    if (ical) icalcomponent_free(ical);
-    if (dest_mbox) mailbox_close(&dest_mbox);
-    if (src_mbox) mailbox_unlock_index(src_mbox, NULL);
 
     return ret;
 }
