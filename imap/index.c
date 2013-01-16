@@ -1438,13 +1438,13 @@ EXPORTED int index_warmup(struct mboxlist_entry *mbentry,
 	if (r) goto out;
 	for (i = 0 ; i < files.count ; i++) {
 	    fname = strarray_nth(&files, i);
-	    r = warmup_file(fname, 0, 0, /*verbose*/0);
+	    r = warmup_file(fname, 0, 0, /*verbose*/1);
 	    if (r) goto out;
 	}
     }
     while ((uid = seqset_getnext(uids))) {
 	fname = mboxname_datapath(mbentry->partition, mbentry->name, uid);
-	r = warmup_file(fname, 0, 0, /*verbose*/0);
+	r = warmup_file(fname, 0, 0, /*verbose*/1);
 	if (r) goto out;
     }
 
