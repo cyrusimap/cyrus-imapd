@@ -140,6 +140,10 @@ static int referral_kick = 0; /* kick after next command recieved, for
 				 referrals that are likely to change the
 				 mailbox list */
 
+/* global conversations database holder to avoid re-opening during
+ * status command or list responses */
+struct converstaions_state *global_conversations = NULL;
+
 /* all subscription commands go to the backend server containing the
    user's inbox */
 struct backend *backend_inbox = NULL;
@@ -7414,6 +7418,11 @@ static void cmd_list(char *tag, struct listargs *listargs)
     if (list_callback_calls)
 	prot_printf(imapd_out, " %u calls", list_callback_calls);
     prot_printf(imapd_out, ")\r\n");
+
+    if (global_conversations) {
+	conversations_abort(&global_conversations);
+	global_conversations = NULL;
+    }
 }
 
 /*
@@ -8437,19 +8446,20 @@ static int imapd_statusdata(const char *mailboxname, unsigned statusitems,
 
 	/* use the existing state if possible */
 	state = conversations_get_mbox(mailboxname);
-	if (state) {
-	    r = conversation_getstatus(state, mailboxname, &sd->xconv);
-	    if (r) goto out;
-	}
 
 	/* otherwise fetch a new one and just use for this one thing! */
-	else {
+	if (!state) {
+	    if (global_conversations) {
+		conversations_abort(&global_conversations);
+		global_conversations = NULL;
+	    }
 	    r = conversations_open_mbox(mailboxname, &state);
 	    if (r) goto out;
-	    r = conversation_getstatus(state, mailboxname, &sd->xconv);
-	    conversations_abort(&state);
-	    if (r) goto out;
+	    global_conversations = state;
 	}
+
+	r = conversation_getstatus(state, mailboxname, &sd->xconv);
+	if (r) goto out;
     }
 
 out:
@@ -8559,6 +8569,10 @@ static void cmd_status(char *tag, char *name)
     }
 
  done:
+    if (global_conversations) {
+	conversations_abort(&global_conversations);
+	global_conversations = NULL;
+    }
     mboxlist_entry_free(&mbentry);
     return;
 }
