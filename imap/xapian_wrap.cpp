@@ -18,9 +18,10 @@ extern "C" {
 void xapian_init(void)
 {
     static int init = 0;
+    static /* NOT const */ char enable_ngrams[] = "XAPIAN_CJK_NGRAM=1";
 
     if (!init) {
-	putenv("XAPIAN_CJK_NGRAM=1"); /* enable CJK N-grams */
+	putenv(enable_ngrams);
 	init = 1;
     }
 }
