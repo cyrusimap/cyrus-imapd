@@ -1226,6 +1226,7 @@ static int end_message_snippets(search_text_receiver_t *rx)
 {
     xapian_snippet_receiver_t *tr = (xapian_snippet_receiver_t *)rx;
     struct buf snippets = BUF_INITIALIZER;
+    unsigned int context_length;
     int i;
     int r;
 
@@ -1243,7 +1244,11 @@ static int end_message_snippets(search_text_receiver_t *rx)
 
 	if (!tr->super.parts[i].len) continue;
 
-	r = xapian_snipgen_begin_doc(tr->snipgen);
+	/* TODO: UINT_MAX doesn't behave as expected, which is probably
+	 * a bug, but really any value larger than a reasonable Subject
+	 * length will do */
+	context_length = (i == SEARCH_PART_HEADERS || i == SEARCH_PART_BODY ? 5 : 1000000);
+	r = xapian_snipgen_begin_doc(tr->snipgen, context_length);
 	if (r) break;
 
 	generate_snippet_terms(tr->snipgen, i, tr->root);

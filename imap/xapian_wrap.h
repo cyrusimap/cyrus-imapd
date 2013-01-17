@@ -75,7 +75,7 @@ extern int xapian_query_run(const xapian_db_t *, const xapian_query_t *,
 extern xapian_snipgen_t *xapian_snipgen_new(void);
 extern void xapian_snipgen_free(xapian_snipgen_t *);
 extern int xapian_snipgen_add_match(xapian_snipgen_t *snipgen, const char *match);
-extern int xapian_snipgen_begin_doc(xapian_snipgen_t *snipgen);
+extern int xapian_snipgen_begin_doc(xapian_snipgen_t *snipgen, unsigned context_length);
 extern int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen, const struct buf *part);
 extern int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *);
 

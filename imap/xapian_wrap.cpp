@@ -350,12 +350,13 @@ int xapian_snipgen_add_match(xapian_snipgen_t *snipgen, const char *match)
     return r;
 }
 
-int xapian_snipgen_begin_doc(xapian_snipgen_t *snipgen)
+int xapian_snipgen_begin_doc(xapian_snipgen_t *snipgen, unsigned int context_length)
 {
     int r = 0;
 
     try {
 	snipgen->snippet_generator->reset();
+	snipgen->snippet_generator->set_context_length(context_length);
     }
     catch (const Xapian::Error &err) {
 	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
