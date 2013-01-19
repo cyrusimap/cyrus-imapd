@@ -140,6 +140,9 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 
     if (status) *status = NULL;
 
+    /* If we're not proxying for a user, don't need to auth (iSchedule/DKIM) */
+    if (!userid) return 0;
+
     /* set the IP addresses */
     addrsize = sizeof(struct sockaddr_storage);
     if (getpeername(s->sock, (struct sockaddr *) &saddr_r, &addrsize) ||
