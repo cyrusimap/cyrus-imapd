@@ -372,7 +372,7 @@ static int meth_post_isched(struct transaction_t *txn,
 int isched_send(struct sched_param *sparam, icalcomponent *ical,
 		xmlNodePtr *xml)
 {
-    int r = 0;
+    int r = 0, sep = ' ';
     struct backend *be;
     static unsigned send_count = 0;
     static struct buf hdrs = BUF_INITIALIZER;
@@ -399,10 +399,13 @@ int isched_send(struct sched_param *sparam, icalcomponent *ical,
     body = icalcomponent_as_ical_string(ical);
     bodylen = strlen(body);
 
-    /* Create iSchedule request header */
+    /* Create iSchedule request header.
+     * XXX  Make sure that we don't use multiple headers of the same name
+     *      or add WSP around commas to obey ischedule-relaxed canonicalization.
+     */
     buf_reset(&hdrs);
     buf_printf(&hdrs, "Host: %s\r\n", sparam->server);
-    buf_printf(&hdrs, "Cache-Control: no-cache, no-transform\r\n");
+    buf_printf(&hdrs, "Cache-Control: no-cache,no-transform\r\n");
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	buf_printf(&hdrs, "User-Agent: %s\r\n", buf_cstring(&serverinfo));
     }
@@ -413,7 +416,7 @@ int isched_send(struct sched_param *sparam, icalcomponent *ical,
 
     comp = icalcomponent_get_first_real_component(ical);
     kind = icalcomponent_isa(comp);
-    buf_printf(&hdrs, "; method=REQUEST; component=%s \r\n",
+    buf_printf(&hdrs, "; method=REQUEST; component=%s\r\n",
 	       icalcomponent_kind_to_string(kind));
 
     buf_printf(&hdrs, "Content-Length: %u\r\n", bodylen);
@@ -421,13 +424,15 @@ int isched_send(struct sched_param *sparam, icalcomponent *ical,
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     buf_printf(&hdrs, "Originator: %s\r\n", icalproperty_get_organizer(prop));
 
+    buf_printf(&hdrs, "Recipient:");
     for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
 	 prop;
 	 prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
-	buf_printf(&hdrs, "Recipient: %s\r\n", icalproperty_get_attendee(prop));
+	buf_printf(&hdrs, "%c%s", sep, icalproperty_get_attendee(prop));
+	sep = ',';
     }
 
-    buf_printf(&hdrs, "\r\n");
+    buf_printf(&hdrs, "\r\n\r\n");
 
   redirect:
     /* Send request line */
@@ -446,7 +451,9 @@ int isched_send(struct sched_param *sparam, icalcomponent *ical,
 			      (dkim_sigkey_t) buf_cstring(&privkey),
 			      (const u_char *) config_getstring(IMAPOPT_DKIM_SELECTOR),
 			      (const u_char *) config_getstring(IMAPOPT_DKIM_DOMAIN),
-			      DKIM_CANON_RELAXED, DKIM_CANON_SIMPLE,
+			      /* Requires modified version of OpenDKIM
+				 until we get OpenDOSETA */
+			      DKIM_CANON_ISCHEDULE, DKIM_CANON_SIMPLE,
 			      DKIM_SIGN_RSASHA256, -1 /* entire body */,
 			      &stat))) {
 
@@ -585,7 +592,8 @@ static void isched_init(struct buf *serverinfo)
     const char *requiredhdrs[] = { "Content-Type", "iSchedule-Version",
 				   "Originator", "Recipient", NULL };
     const char *signhdrs[] = { "iSchedule-Message-ID", "User-Agent", NULL };
-    const char *skiphdrs[] = { "Connection", "Content-Length", "Keep-Alive",
+    const char *skiphdrs[] = { "Cache-Control", "Connection",
+			       "Content-Length", "Host", "Keep-Alive",
 			       "Proxy-Authenticate", "Proxy-Authorization",
 			       "TE", "Trailer", "Transfer-Encoding",
 			       "Upgrade", "Via", NULL };
@@ -664,12 +672,34 @@ static void isched_shutdown(void)
 static void dkim_cachehdr(const char *name, const char *contents, void *rock)
 {
     struct buf *hdrfield = &tmpbuf;
+    static const char *lastname = NULL;
+    int dup_hdr = name && lastname && !strcmp(name, lastname);
 
-    buf_reset(hdrfield);
-    buf_printf(hdrfield, "%s:%s", name, contents);
+    /* Combine header fields of the same name.
+     * Our hash table will always feed us duplicate headers consecutively.
+     */
+    if (lastname && !dup_hdr) {
+	dkim_header((DKIM *) rock,
+		    (u_char *) buf_cstring(hdrfield), buf_len(hdrfield));
+    }
 
-    dkim_header((DKIM *) rock,
-		(u_char *) buf_cstring(hdrfield), buf_len(hdrfield));
+    lastname = name;
+
+    if (name) {
+	tok_t tok;
+	char *token, sep = ':';
+
+	if (!dup_hdr) buf_setcstr(hdrfield, name);
+	else sep = ',';
+
+	/* Trim leading/trailing WSP around comma-separated values */
+	tok_init(&tok, contents, ",", TOK_TRIMLEFT|TOK_TRIMRIGHT|TOK_EMPTY);
+	while ((token = tok_next(&tok))) {
+	    buf_printf(hdrfield, "%c%s", sep, token);
+	    sep = ',';
+	}
+	tok_fini(&tok);
+    }
 }
 
 static int dkim_auth(struct transaction_t *txn)
@@ -701,6 +731,7 @@ static int dkim_auth(struct transaction_t *txn)
 
     /* Process the cached headers and body */
     spool_enum_hdrcache(txn->req_hdrs, &dkim_cachehdr, dkim);
+    dkim_cachehdr(NULL, NULL, dkim);  /* Force canon of last header */
     stat = dkim_eoh(dkim);
     if (stat == DKIM_STAT_OK) {
 	stat = dkim_body(dkim, (u_char *) buf_cstring(&txn->req_body),
