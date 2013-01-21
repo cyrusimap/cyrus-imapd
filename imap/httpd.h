@@ -213,6 +213,7 @@ struct resp_body_t {
     const char *lang;	/* Content-Language */
     const char *loc;	/* Content-Location */
     const char *type;	/* Content-Type     */
+    unsigned prefs;	/* Prefer	    */
     const char *lock;	/* Lock-Token       */
     const char *etag;	/* ETag             */
     time_t lastmod;	/* Last-Modified    */

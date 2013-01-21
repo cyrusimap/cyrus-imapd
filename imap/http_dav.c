@@ -325,15 +325,17 @@ unsigned get_preferences(struct transaction_t *txn)
 
 	    tok_init(&tok, hdr[i], ",\r\n", TOK_TRIMLEFT|TOK_TRIMRIGHT);
 	    while ((token = tok_next(&tok))) {
-		if (!strcmp(token, "return-minimal"))
+		if (!strcmp(token, "return=minimal"))
 		    prefs |= PREFER_MIN;
-		else if (!strcmp(token, "return-representation"))
+		else if (!strcmp(token, "return=representation"))
 		    prefs |= PREFER_REP;
 		else if (!strcmp(token, "depth-noroot"))
 		    prefs |= PREFER_NOROOT;
 	    }
 	    tok_fini(&tok);
 	}
+
+	txn->resp_body.prefs = prefs;
     }
 
     /* Check for Brief header */

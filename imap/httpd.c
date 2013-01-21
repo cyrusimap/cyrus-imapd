@@ -1859,6 +1859,14 @@ void response_header(long code, struct transaction_t *txn)
 
 	comma_list_hdr("Vary", vary_hdrs, txn->flags.vary);
     }
+    if (resp_body->prefs) {
+	/* Construct Preference-Applied header */
+	const char *prefs[] = {
+	    "return=minimal", "return=representation", "depth-noroot", NULL
+	};
+
+	comma_list_hdr("Preference-Applied", prefs, resp_body->prefs);
+    }
     if (resp_body->lock) {
 	prot_printf(httpd_out, "Lock-Token: <%s>\r\n", resp_body->lock);
     }
