@@ -2079,6 +2079,7 @@ void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
     default:
 	/* Neither Brief nor Prefer affect error response bodies */
 	txn->flags.vary &= ~(VARY_BRIEF | VARY_PREFER);
+	txn->resp_body.prefs = 0;
     }
 
     /* Dump XML response tree into a text buffer */
@@ -2113,6 +2114,7 @@ void error_response(long code, struct transaction_t *txn)
 
     /* Neither Brief nor Prefer affect error response bodies */
     txn->flags.vary &= ~(VARY_BRIEF | VARY_PREFER);
+    txn->resp_body.prefs = 0;
 
 #ifdef WITH_CALDAV
     if (txn->error.precond) {
