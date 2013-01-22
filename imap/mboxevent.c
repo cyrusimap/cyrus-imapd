@@ -85,11 +85,9 @@
 #define FILL_ARRAY_PARAM(e,p,v) e->params[p].value = (uint64_t)v; \
 				 e->params[p].type = EVENT_PARAM_ARRAY; \
 				 e->params[p].filled = 1
-#define FILL_INT_PARAM(e,p,v) if (e->params[p].value >= 0) { \
-				  e->params[p].value = v; \
+#define FILL_UNSIGNED_PARAM(e,p,v) e->params[p].value = (uint64_t)v; \
 				  e->params[p].type = EVENT_PARAM_INT; \
-				  e->params[p].filled = 1; \
-			      }
+				  e->params[p].filled = 1
 
 static const char *notifier = NULL;
 static struct namespace namespace;
@@ -640,7 +638,7 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
     /* add modseq only on first call, cancel otherwise */
     if (mboxevent_expected_param(event->type, EVENT_MODSEQ)) {
 	if (event->uidset == NULL) {
-	    FILL_INT_PARAM(event, EVENT_MODSEQ, record->modseq);
+	    FILL_UNSIGNED_PARAM(event, EVENT_MODSEQ, record->modseq);
 	}
 	else {
 	    /* From RFC 5423:
@@ -672,7 +670,7 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 
     /* add message size */
     if (mboxevent_expected_param(event->type, EVENT_MESSAGE_SIZE)) {
-	FILL_INT_PARAM(event, EVENT_MESSAGE_SIZE, record->size);
+	FILL_UNSIGNED_PARAM(event, EVENT_MESSAGE_SIZE, record->size);
     }
 
     /* add bodyStructure */
@@ -712,7 +710,7 @@ void mboxevent_extract_content(struct mboxevent *event,
 #ifdef ENABLE_MBOXEVENT
     const char *base = NULL;
     unsigned long len = 0;
-    int offset, size, truncate;
+    size_t offset, size, truncate;
 
     if (!event)
 	return;
@@ -785,17 +783,17 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
     case QUOTA_STORAGE:
 	if (mboxevent_expected_param(event->type, EVENT_DISK_QUOTA)) {
 	    if (quota->limits[res] >= 0)
-		FILL_INT_PARAM(event, EVENT_DISK_QUOTA, quota->limits[res]);
+		FILL_UNSIGNED_PARAM(event, EVENT_DISK_QUOTA, quota->limits[res]);
 	}
 	if (mboxevent_expected_param(event->type, EVENT_DISK_USED)) {
-	    FILL_INT_PARAM(event, EVENT_DISK_USED,
+	    FILL_UNSIGNED_PARAM(event, EVENT_DISK_USED,
 	                   quota->useds[res] / quota_units[res]);
 	}
 	break;
     case QUOTA_MESSAGE:
 	if (quota->limits[res] >= 0)
-	    FILL_INT_PARAM(event, EVENT_MAX_MESSAGES, quota->limits[res]);
-	FILL_INT_PARAM(event, EVENT_MESSAGES, quota->useds[res]);
+	    FILL_UNSIGNED_PARAM(event, EVENT_MAX_MESSAGES, quota->limits[res]);
+	FILL_UNSIGNED_PARAM(event, EVENT_MESSAGES, quota->useds[res]);
 	break;
     default:
 	/* others quota are not supported by RFC 5423 */
@@ -834,11 +832,12 @@ EXPORTED void mboxevent_set_numunseen(struct mboxevent *event,
     	return;
 
     if (mboxevent_expected_param(event->type, EVENT_UNSEEN_MESSAGES)) {
+	unsigned count = (numunseen >= 0) ? (unsigned)numunseen
+					  : mailbox_count_unseen(mailbox);
 	/* as event notification is focused on mailbox, we don't care about the
 	 * authenticated user but the mailbox's owner.
 	 * it could be a problem only if it is a shared or public folder */
-	FILL_INT_PARAM(event, EVENT_UNSEEN_MESSAGES, numunseen >= 0 ? numunseen :
-		       mailbox_count_unseen(mailbox));
+	FILL_UNSIGNED_PARAM(event, EVENT_UNSEEN_MESSAGES, count);
     }
 #endif
 }
@@ -890,7 +889,7 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
 	FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(url));
     }
     if (mboxevent_expected_param(event->type, EVENT_UIDNEXT)) {
-	FILL_INT_PARAM(event, EVENT_UIDNEXT, mailbox->i.last_uid+1);
+	FILL_UNSIGNED_PARAM(event, EVENT_UIDNEXT, mailbox->i.last_uid+1);
     }
 
     /* From RFC 5423 :
@@ -906,7 +905,7 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
      * mailbox and not the message count quota.
      */
     if (mboxevent_expected_param(event->type, EVENT_MESSAGES)) {
-	FILL_INT_PARAM(event, EVENT_MESSAGES, mailbox->i.exists);
+	FILL_UNSIGNED_PARAM(event, EVENT_MESSAGES, mailbox->i.exists);
     }
 #endif
 }
