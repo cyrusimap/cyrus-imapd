@@ -373,6 +373,7 @@ int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen, const struct buf *part)
 
     try {
 	snipgen->snippet_generator->accept_text(Xapian::Utf8Iterator(part->s, part->len));
+	snipgen->snippet_generator->increase_termpos();
     }
     catch (const Xapian::Error &err) {
 	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",

@@ -4606,17 +4606,18 @@ static int getsearchtext_cb(int partno, int charset, int encoding,
 	buf_init_ro_cstr(&text, q);
 	if (++str->partcount == 1) {
 	    stuff_part(str->receiver, SEARCH_PART_HEADERS, &text);
-	    str->receiver->begin_part(str->receiver, SEARCH_PART_BODY);
 	} else {
-	    str->receiver->append_text(str->receiver, &text);
+	    stuff_part(str->receiver, SEARCH_PART_BODY, &text);
 	}
 	free(q);
 	buf_free(&text);
     }
     else {
 	/* body-like */
+	str->receiver->begin_part(str->receiver, SEARCH_PART_BODY);
 	charset_extract(extract_cb, str, data, charset, encoding, subtype,
 			str->charset_flags);
+	str->receiver->end_part(str->receiver, SEARCH_PART_BODY);
     }
 
     return 0;
@@ -4657,7 +4658,6 @@ EXPORTED int index_getsearchtext(message_t *msg,
     }
 
     message_foreach_text_section(msg, getsearchtext_cb, &str);
-    receiver->end_part(receiver, SEARCH_PART_BODY);
 
     if (!message_get_field(msg, "From", format, &buf))
 	stuff_part(receiver, SEARCH_PART_FROM, &buf);

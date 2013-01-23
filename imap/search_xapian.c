@@ -100,6 +100,14 @@ static const char * const prefix_by_part[SEARCH_NUM_PARTS] = {
     "D",		/* BODY */
 };
 
+struct segment
+{
+    int part;
+    int sequence;	/* forces stable sort order JIC */
+    int is_finished;
+    struct buf text;
+};
+
 static int parse_cyrusid(const char *cyrusid,
 			 const char **mboxnamep,
 			 unsigned int *uidvalidityp,
@@ -554,7 +562,7 @@ struct xapian_receiver
     int part;
     unsigned int parts_total;
     int truncate_warning;
-    struct buf parts[SEARCH_NUM_PARTS];
+    ptrarray_t segs;
 };
 
 /* receiver used for updating the index */
@@ -857,14 +865,25 @@ out:
     return r;
 }
 
+static void free_segments(xapian_receiver_t *tr)
+{
+    int i;
+    struct segment *seg;
+
+    for (i = 0 ; i < tr->segs.count ; i++) {
+	seg = (struct segment *)ptrarray_nth(&tr->segs, i);
+	buf_free(&seg->text);
+	free(seg);
+    }
+    ptrarray_truncate(&tr->segs, 0);
+}
+
 static void begin_message(search_text_receiver_t *rx, uint32_t uid)
 {
     xapian_receiver_t *tr = (xapian_receiver_t *)rx;
-    int i;
 
     tr->uid = uid;
-    for (i = 0 ; i < SEARCH_NUM_PARTS ; i++)
-	buf_reset(&tr->parts[i]);
+    free_segments(tr);
     tr->parts_total = 0;
     tr->truncate_warning = 0;
 }
@@ -880,6 +899,7 @@ static void append_text(search_text_receiver_t *rx,
 			const struct buf *text)
 {
     xapian_receiver_t *tr = (xapian_receiver_t *)rx;
+    struct segment *seg;
 
     if (tr->part) {
 	unsigned len = text->len;
@@ -892,7 +912,15 @@ static void append_text(search_text_receiver_t *rx,
 	}
 	if (len) {
 	    tr->parts_total += len;
-	    buf_appendmap(&tr->parts[tr->part], text->s, len);
+
+	    seg = (struct segment *)ptrarray_tail(&tr->segs);
+	    if (!seg || seg->is_finished || seg->part != tr->part) {
+		seg = (struct segment *)xzmalloc(sizeof(*seg));
+		seg->sequence = tr->segs.count;
+		seg->part = tr->part;
+		ptrarray_append(&tr->segs, seg);
+	    }
+	    buf_appendmap(&seg->text, text->s, len);
 	}
     }
 }
@@ -901,18 +929,36 @@ static void end_part(search_text_receiver_t *rx,
 		     int part __attribute__((unused)))
 {
     xapian_receiver_t *tr = (xapian_receiver_t *)rx;
+    struct segment *seg;
+
+    seg = (struct segment *)ptrarray_tail(&tr->segs);
+    if (seg)
+	seg->is_finished = 1;
 
     if (tr->verbose > 1)
 	syslog(LOG_NOTICE, "Xapian: %u bytes in part %s",
-	       tr->parts[tr->part].len, search_part_as_string(tr->part));
+	       (seg ? seg->text.len : 0), search_part_as_string(tr->part));
 
     tr->part = 0;
+}
+
+static int compare_segs(const void **v1, const void **v2)
+{
+    const struct segment *s1 = *(const struct segment **)v1;
+    const struct segment *s2 = *(const struct segment **)v2;
+    int r;
+
+    r = s1->part - s2->part;
+    if (!r)
+	r = s1->sequence - s2->sequence;
+    return r;
 }
 
 static int end_message_update(search_text_receiver_t *rx)
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
     int i;
+    struct segment *seg;
     int r = 0;
 
     if (!tr->dbw) return IMAP_INTERNAL;
@@ -920,10 +966,11 @@ static int end_message_update(search_text_receiver_t *rx)
     r = xapian_dbw_begin_doc(tr->dbw, make_cyrusid(tr->super.mailbox, tr->super.uid));
     if (r) goto out;
 
-    for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
-	const struct buf *part = &tr->super.parts[i];
-	if (!part->len) continue;
-	r = xapian_dbw_doc_part(tr->dbw, part, prefix_by_part[i]);
+    ptrarray_sort(&tr->super.segs, compare_segs);
+
+    for (i = 0 ; i < tr->super.segs.count ; i++) {
+	seg = (struct segment *)ptrarray_nth(&tr->super.segs, i);
+	r = xapian_dbw_doc_part(tr->dbw, &seg->text, prefix_by_part[seg->part]);
 	if (r) goto out;
     }
 
@@ -1140,11 +1187,10 @@ static search_text_receiver_t *begin_update(int verbose)
 
 static int free_receiver(xapian_receiver_t *tr)
 {
-    int i;
     int r = 0;
 
-    for (i = 0 ; i < SEARCH_NUM_PARTS ; i++)
-	buf_free(&tr->parts[i]);
+    free_segments(tr);
+    ptrarray_fini(&tr->segs);
 
     free(tr);
 
@@ -1228,6 +1274,8 @@ static int end_message_snippets(search_text_receiver_t *rx)
     struct buf snippets = BUF_INITIALIZER;
     unsigned int context_length;
     int i;
+    struct segment *seg;
+    int last_part = -1;
     int r;
 
     if (!tr->snipgen) {
@@ -1239,30 +1287,40 @@ static int end_message_snippets(search_text_receiver_t *rx)
 	goto out;
     }
 
-    for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
-	if (i == SEARCH_PART_ANY) continue;
+    ptrarray_sort(&tr->super.segs, compare_segs);
 
-	if (!tr->super.parts[i].len) continue;
+    for (i = 0 ; i < tr->super.segs.count ; i++) {
+	seg = (struct segment *)ptrarray_nth(&tr->super.segs, i);
 
-	/* TODO: UINT_MAX doesn't behave as expected, which is probably
-	 * a bug, but really any value larger than a reasonable Subject
-	 * length will do */
-	context_length = (i == SEARCH_PART_HEADERS || i == SEARCH_PART_BODY ? 5 : 1000000);
-	r = xapian_snipgen_begin_doc(tr->snipgen, context_length);
-	if (r) break;
+	if (seg->part != last_part) {
 
-	generate_snippet_terms(tr->snipgen, i, tr->root);
+	    if (last_part != -1) {
+		r = xapian_snipgen_end_doc(tr->snipgen, &snippets);
+		if (!r && snippets.len)
+		    r = tr->proc(tr->super.mailbox, tr->super.uid, last_part, snippets.s, tr->rock);
+		if (r) break;
+	    }
 
-	r = xapian_snipgen_doc_part(tr->snipgen, &tr->super.parts[i]);
-	if (r) break;
-
-	r = xapian_snipgen_end_doc(tr->snipgen, &snippets);
-	if (r) break;
-
-	if (snippets.len) {
-	    r = tr->proc(tr->super.mailbox, tr->super.uid, i, snippets.s, tr->rock);
+	    /* TODO: UINT_MAX doesn't behave as expected, which is probably
+	     * a bug, but really any value larger than a reasonable Subject
+	     * length will do */
+	    context_length = (seg->part == SEARCH_PART_HEADERS || seg->part == SEARCH_PART_BODY ? 5 : 1000000);
+	    r = xapian_snipgen_begin_doc(tr->snipgen, context_length);
 	    if (r) break;
+
+	    generate_snippet_terms(tr->snipgen, seg->part, tr->root);
 	}
+
+	r = xapian_snipgen_doc_part(tr->snipgen, &seg->text);
+	if (r) break;
+
+	last_part = seg->part;
+    }
+
+    if (last_part != -1) {
+	r = xapian_snipgen_end_doc(tr->snipgen, &snippets);
+	if (!r && snippets.len)
+	    r = tr->proc(tr->super.mailbox, tr->super.uid, last_part, snippets.s, tr->rock);
     }
 
 out:
