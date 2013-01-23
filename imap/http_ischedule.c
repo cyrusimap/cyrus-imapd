@@ -89,6 +89,7 @@ static int dkim_auth(struct transaction_t *txn);
 static int meth_get_domainkey(struct transaction_t *txn, void *params);
 static void calc_compile_time(struct buf *serverinfo);
 static time_t compile_time;
+time_t isched_serial;
 
 const struct namespace_t namespace_ischedule = {
     URL_NS_ISCHEDULE, "/ischedule", ISCHED_WELLKNOWN_URI, 0 /* auth */,
@@ -159,7 +160,7 @@ static void calc_compile_time(struct buf *serverinfo __attribute__((unused)))
 	if (!strcmp(month, monthname[tm.tm_mon])) break;
     }
 
-    compile_time = mktime(&tm);
+    isched_serial = compile_time = mktime(&tm);
 }
 
 
@@ -212,6 +213,9 @@ static int meth_get_isched(struct transaction_t *txn,
     }
 
     capa = xmlNewChild(root, NULL, BAD_CAST "capabilities", NULL);
+
+    node = xmlNewChild(capa, NULL, BAD_CAST "serial-number",
+		       BAD_CAST buf_cstring(&txn->buf));
 
     node = xmlNewChild(capa, NULL, BAD_CAST "versions", NULL);
     node = xmlNewChild(node, NULL, BAD_CAST "version", BAD_CAST "1.0");

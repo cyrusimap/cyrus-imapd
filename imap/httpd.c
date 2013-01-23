@@ -1725,9 +1725,14 @@ void response_header(long code, struct transaction_t *txn)
 		    txn->flags.ranges ? "bytes" : "none");
     }
 
+#ifdef WITH_CALDAV_SCHED
     if (txn->req_tgt.allow & ALLOW_ISCHEDULE) {
+	extern time_t isched_serial;
+
 	prot_printf(httpd_out, "iSchedule-Version: 1.0\r\n");
+	prot_printf(httpd_out, "iSchedule-Capabilities: %ld\r\n", isched_serial);
     }
+#endif
     if (txn->req_tgt.allow & ALLOW_DAV) {
 	/* Construct DAV header(s) based on namespace of request URL */
 	prot_printf(httpd_out, "DAV: 1, 2, 3%s\r\n",
