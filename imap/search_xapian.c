@@ -64,6 +64,7 @@
 #include "search_engines.h"
 #include "cyr_lock.h"
 #include "xapian_wrap.h"
+#include "command.h"
 
 struct latestdb
 {
@@ -997,7 +998,6 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     char *basedir = NULL;
     char *real_basedir = NULL;
     char *dir = NULL;
-    struct stat sb;
     int r;
 
     r = xapian_basedir(mailbox->name, mailbox->part, tr->temp_root, &basedir);
