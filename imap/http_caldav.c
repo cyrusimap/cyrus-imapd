@@ -2192,53 +2192,23 @@ static int sched_busytime(struct transaction_t *txn)
 
 struct sched_data {
     unsigned is_reply;
-    icalcomponent *ical;
-    icalparameter_partstat partstat;
+    icalcomponent *itip;
     icalcomponent *master;
     unsigned comp_mask;
     char *force_send;
     const char *status;
 };
 
-struct exclude_rock {
-    unsigned ncomp;
-    icalcomponent *comp;
-};
-
-/* Add EXDATE to master component if attendee is excluded from recurrence */
-static void sched_exclude(char *attendee __attribute__((unused)),
-			  void *data, void *rock)
-{
+static void free_sched_data(void *data) {
     struct sched_data *sched_data = (struct sched_data *) data;
-    struct exclude_rock *erock = (struct exclude_rock *) rock;
 
-    if (!(sched_data->comp_mask & (1<<erock->ncomp))) {
-	icalproperty *recurid, *exdate;
-	struct icaltimetype exdt;
-	icalparameter *param;
-
-	/* Fetch the RECURRENCE-ID and use it to create a new EXDATE */
-	recurid = icalcomponent_get_first_property(erock->comp,
-						   ICAL_RECURRENCEID_PROPERTY);
-	exdt = icalproperty_get_recurrenceid(recurid);
-
-	exdate = icalproperty_new_exdate(exdt);
-
-	/* Copy any parameters from RECURRENCE-ID to EXDATE */
-	param = icalproperty_get_first_parameter(recurid, ICAL_TZID_PARAMETER);
-	if (param) {
-	    icalproperty_add_parameter(exdate, icalparameter_new_clone(param));
-	}
-	param = icalproperty_get_first_parameter(recurid, ICAL_VALUE_PARAMETER);
-	if (param) {
-	    icalproperty_add_parameter(exdate, icalparameter_new_clone(param));
-	}
-	/* XXX  Need to handle RANGE parameter */
-
-	/* Add the EXDATE to the master component for this attendee */
-	icalcomponent_add_property(sched_data->master, exdate);
+    if (sched_data) {
+	if (sched_data->itip) icalcomponent_free(sched_data->itip);
+	if (sched_data->force_send) free(sched_data->force_send);
+	free(sched_data);
     }
 }
+
 
 #define SCHEDSTAT_PENDING	"1.0"
 #define SCHEDSTAT_SENT		"1.1"
@@ -2319,7 +2289,7 @@ static void sched_deliver(char *recipient, void *data, void *rock)
     }
 
     caldav_lookup_uid(caldavdb,
-		      icalcomponent_get_uid(sched_data->ical), 0, &cdata);
+		      icalcomponent_get_uid(sched_data->itip), 0, &cdata);
 
     if (cdata->dav.mailbox) {
 	mboxname = cdata->dav.mailbox;
@@ -2336,7 +2306,7 @@ static void sched_deliver(char *recipient, void *data, void *rock)
 	mboxname = namebuf;
 	buf_reset(&resource);
 	buf_printf(&resource, "%s.ics",
-		   icalcomponent_get_uid(sched_data->ical));
+		   icalcomponent_get_uid(sched_data->itip));
     }
 
     /* Open recipient's calendar for reading */
@@ -2349,7 +2319,7 @@ static void sched_deliver(char *recipient, void *data, void *rock)
 
     if (!cdata->dav.imap_uid) {
 	/* Create new object (copy of request w/o METHOD) */
-	ical = icalcomponent_new_clone(sched_data->ical);
+	ical = icalcomponent_new_clone(sched_data->itip);
 
 	prop = icalcomponent_get_first_property(ical, ICAL_METHOD_PROPERTY);
 	icalcomponent_remove_property(ical, prop);
@@ -2374,7 +2344,7 @@ static void sched_deliver(char *recipient, void *data, void *rock)
 	kind = icalcomponent_isa(comp);
 
 	/* Get METHOD of the iTIP message */
-	method = icalcomponent_get_method(sched_data->ical);
+	method = icalcomponent_get_method(sched_data->itip);
 
 	switch (method) {
 	case ICAL_METHOD_CANCEL:
@@ -2408,7 +2378,7 @@ static void sched_deliver(char *recipient, void *data, void *rock)
 
 	    } while ((comp = icalcomponent_get_next_component(ical, kind)));
 
-	    itip = icalcomponent_get_first_component(sched_data->ical, kind);
+	    itip = icalcomponent_get_first_component(sched_data->itip, kind);
 	    do {
 		/* Lookup this comp in the hash table */
 		prop = icalcomponent_get_first_property(itip,
@@ -2519,7 +2489,7 @@ static void sched_deliver(char *recipient, void *data, void *rock)
 		icalparameter_set_iana_value(param, SCHEDSTAT_SUCCESS);
 
 	    } while ((itip =
-		      icalcomponent_get_next_component(sched_data->ical, kind)));
+		      icalcomponent_get_next_component(sched_data->itip, kind)));
 
 	    free_hash_table(&comp_table, NULL);
 
@@ -2561,13 +2531,13 @@ static void sched_deliver(char *recipient, void *data, void *rock)
     /* Create a name for the new iTIP message resource */
     buf_reset(&resource);
     buf_printf(&resource, "%x-%d-%ld-%u.ics",
-	       strhash(icalcomponent_get_uid(sched_data->ical)), getpid(),
+	       strhash(icalcomponent_get_uid(sched_data->itip)), getpid(),
 	       time(0), sched_count++);
 
     /* Store the message in the recipient's Inbox */
     mailbox_unlock_index(inbox, NULL);
 
-    r = store_resource(&txn, sched_data->ical, inbox, buf_cstring(&resource),
+    r = store_resource(&txn, sched_data->itip, inbox, buf_cstring(&resource),
 		       caldavdb, OVERWRITE_NO, 0);
     /* XXX  What do we do if storing to Inbox fails? */
 
@@ -2578,15 +2548,63 @@ static void sched_deliver(char *recipient, void *data, void *rock)
     if (caldavdb) caldav_close(caldavdb);
 }
 
-static void free_sched_data(void *data) {
-    struct sched_data *sched_data = (struct sched_data *) data;
 
-    if (sched_data) {
-	if (sched_data->ical) icalcomponent_free(sched_data->ical);
-	if (sched_data->force_send) free(sched_data->force_send);
-	free(sched_data);
+struct exclude_rock {
+    unsigned ncomp;
+    icalcomponent *comp;
+};
+
+/* Add EXDATE to master component if attendee is excluded from recurrence */
+static void sched_exclude(char *attendee __attribute__((unused)),
+			  void *data, void *rock)
+{
+    struct sched_data *sched_data = (struct sched_data *) data;
+    struct exclude_rock *erock = (struct exclude_rock *) rock;
+
+    if (!(sched_data->comp_mask & (1<<erock->ncomp))) {
+	icalproperty *recurid, *exdate;
+	struct icaltimetype exdt;
+	icalparameter *param;
+
+	/* Fetch the RECURRENCE-ID and use it to create a new EXDATE */
+	recurid = icalcomponent_get_first_property(erock->comp,
+						   ICAL_RECURRENCEID_PROPERTY);
+	exdt = icalproperty_get_recurrenceid(recurid);
+
+	exdate = icalproperty_new_exdate(exdt);
+
+	/* Copy any parameters from RECURRENCE-ID to EXDATE */
+	param = icalproperty_get_first_parameter(recurid, ICAL_TZID_PARAMETER);
+	if (param) {
+	    icalproperty_add_parameter(exdate, icalparameter_new_clone(param));
+	}
+	param = icalproperty_get_first_parameter(recurid, ICAL_VALUE_PARAMETER);
+	if (param) {
+	    icalproperty_add_parameter(exdate, icalparameter_new_clone(param));
+	}
+	/* XXX  Need to handle RANGE parameter */
+
+	/* Add the EXDATE to the master component for this attendee */
+	icalcomponent_add_property(sched_data->master, exdate);
     }
 }
+
+
+struct comp_data {
+    icalcomponent *comp;
+    icalparameter_partstat partstat;
+    int sequence;
+};
+
+static void free_comp_data(void *data) {
+    struct comp_data *comp_data = (struct comp_data *) data;
+
+    if (comp_data) {
+	if (comp_data->comp) icalcomponent_free(comp_data->comp);
+	free(comp_data);
+    }
+}
+
 
 static void sched_request(const char *organizer, struct sched_param *sparam,
 			  icalcomponent *oldical, icalcomponent *newical)
@@ -2761,7 +2779,7 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 		if (!sched_data) {
 		    /* New attendee - add it to the hash table */
 		    sched_data = xzmalloc(sizeof(struct sched_data));
-		    sched_data->ical = icalcomponent_new_clone(req);
+		    sched_data->itip = icalcomponent_new_clone(req);
 		    if (force_send) {
 			sched_data->force_send =
 			    xstrdup(icalparameter_get_iana_value(force_send));
@@ -2769,7 +2787,7 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 		    hash_insert(attendee, sched_data, &att_table);
 		}
 		new_comp = icalcomponent_new_clone(comp);
-		icalcomponent_add_component(sched_data->ical, new_comp);
+		icalcomponent_add_component(sched_data->itip, new_comp);
 		sched_data->comp_mask |= (1 << ncomp);
 		if (!ncomp) sched_data->master = new_comp;
 	    }
@@ -2932,16 +2950,16 @@ static void clean_component(icalcomponent *comp)
 }
 
 
-static void decline_component(char *recurid __attribute__((unused)),
-			      void *data, void *rock)
+static void sched_decline(char *recurid __attribute__((unused)),
+			  void *data, void *rock)
 {
-    struct sched_data *old_data = (struct sched_data *) data;
-    icalcomponent *ical = (icalcomponent *) rock;
+    struct comp_data *old_data = (struct comp_data *) data;
+    icalcomponent *itip = (icalcomponent *) rock;
     icalproperty *myattendee;
     icalparameter *param;
 
     /* Attendee is deleting the object, set PARTSTAT:DECLINED */
-    myattendee = icalcomponent_get_first_property(old_data->ical,
+    myattendee = icalcomponent_get_first_property(old_data->comp,
 						  ICAL_ATTENDEE_PROPERTY);
 
     param =
@@ -2954,10 +2972,11 @@ static void decline_component(char *recurid __attribute__((unused)),
     icalproperty_add_parameter(myattendee, param);
     icalparameter_set_partstat(param, ICAL_PARTSTAT_DECLINED);
 
-    clean_component(old_data->ical);
+    clean_component(old_data->comp);
 
-    icalcomponent_add_component(ical, old_data->ical);
+    icalcomponent_add_component(itip, old_data->comp);
 }
+
 
 static void sched_reply(const char *userid,
 			icalcomponent *oldical, icalcomponent *newical)
@@ -2967,7 +2986,8 @@ static void sched_reply(const char *userid,
     char outboxname[MAX_MAILBOX_BUFFER];
     icalcomponent *ical;
     static struct buf prodid = BUF_INITIALIZER;
-    struct sched_data *sched_data, *old_data;
+    struct sched_data *sched_data;
+    struct comp_data *old_data;
     struct auth_state *authstate;
     icalcomponent *comp;
     icalproperty *prop;
@@ -3040,7 +3060,7 @@ static void sched_reply(const char *userid,
 	buf_printf(&prodid, "-//CyrusIMAP.org/Cyrus %s//EN", cyrus_version());
     }
 
-    sched_data->ical =
+    sched_data->itip =
 	icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT,
 			    icalproperty_new_version("2.0"),
 			    icalproperty_new_prodid(buf_cstring(&prodid)),
@@ -3050,7 +3070,7 @@ static void sched_reply(const char *userid,
     /* Copy over any CALSCALE property */
     prop = icalcomponent_get_first_property(ical, ICAL_CALSCALE_PROPERTY);
     if (prop) {
-	icalcomponent_add_property(sched_data->ical,
+	icalcomponent_add_property(sched_data->itip,
 				   icalproperty_new_clone(prop));
     }
 
@@ -3060,7 +3080,7 @@ static void sched_reply(const char *userid,
 	 comp;
 	 comp = icalcomponent_get_next_component(ical,
 						 ICAL_VTIMEZONE_COMPONENT)) {
-	 icalcomponent_add_component(sched_data->ical,
+	 icalcomponent_add_component(sched_data->itip,
 				     icalcomponent_new_clone(comp));
     }
 
@@ -3070,9 +3090,9 @@ static void sched_reply(const char *userid,
     if (oldical) {
 	comp = icalcomponent_get_first_real_component(oldical);
 	do {
-	    old_data = xzmalloc(sizeof(struct sched_data));
+	    old_data = xzmalloc(sizeof(struct comp_data));
 
-	    old_data->ical = trim_attendees(comp, userid, NULL,
+	    old_data->comp = trim_attendees(comp, userid, NULL,
 					    &old_data->partstat, &recurid);
 
 	    hash_insert(recurid ? recurid : "", old_data, &comp_table);
@@ -3103,7 +3123,7 @@ static void sched_reply(const char *userid,
 			changed = 0;
 		    }
 
-		    free_sched_data(old_data);
+		    free_comp_data(old_data);
 		}
 	    }
 	    else {
@@ -3115,7 +3135,7 @@ static void sched_reply(const char *userid,
 	    if (changed) {
 		clean_component(copy);
 
-		icalcomponent_add_component(sched_data->ical, copy);
+		icalcomponent_add_component(sched_data->itip, copy);
 	    }
 	    else icalcomponent_free(copy);
 
@@ -3123,12 +3143,12 @@ static void sched_reply(const char *userid,
     }
 
     /* Decline any components that have been left behind in the old obj */
-    hash_enumerate(&comp_table, decline_component, sched_data->ical);
+    hash_enumerate(&comp_table, sched_decline, sched_data->itip);
     free_hash_table(&comp_table, free_sched_data);
 
   done:
-    if (sched_data->ical &&
-	icalcomponent_get_first_real_component(sched_data->ical)) {
+    if (sched_data->itip &&
+	icalcomponent_get_first_real_component(sched_data->itip)) {
 	/* We built a reply object */
 
 	if (!sched_data->status) {
