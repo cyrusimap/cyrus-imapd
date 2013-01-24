@@ -2889,16 +2889,16 @@ static icalcomponent *trim_attendees(icalcomponent *comp, const char *userid,
 
 static void clean_component(icalcomponent *comp)
 {
-    icalcomponent *alarm, *nextalarm;
+    icalcomponent *alarm, *next;
     icalproperty *prop;
     icalparameter *param;
+    icaltimezone *utc = icaltimezone_get_utc_timezone();
+    time_t now = time(NULL);
 
     /* Remove any VALARM components */
-    for (alarm = icalcomponent_get_first_component(comp,
-						   ICAL_VALARM_COMPONENT);
-	 alarm; alarm = nextalarm) {
-	nextalarm = icalcomponent_get_next_component(comp,
-						     ICAL_VALARM_COMPONENT);
+    for (alarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
+	 alarm; alarm = next) {
+	next = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT);
 	icalcomponent_remove_component(comp, alarm);
     }
 
@@ -2921,6 +2921,14 @@ static void clean_component(icalcomponent *comp)
 	    icalproperty_remove_parameter_by_ref(prop, param);
 	}
     }
+
+    /* Replace DTSTAMP on component */
+    prop = icalcomponent_get_first_property(comp,
+					    ICAL_DTSTAMP_PROPERTY);
+    icalcomponent_remove_property(comp, prop);
+    prop =
+	icalproperty_new_dtstamp(icaltime_from_timet_with_zone(now, 0, utc));
+    icalcomponent_add_property(comp, prop);
 }
 
 
@@ -2974,7 +2982,7 @@ static void sched_reply(const char *userid,
 	ical = oldical;
     }
     else {
-	/* Create / modify */
+	/* Create / Modify */
 	ical = newical;
     }
 
@@ -3109,9 +3117,7 @@ static void sched_reply(const char *userid,
 
 		icalcomponent_add_component(sched_data->ical, copy);
 	    }
-	    else {
-		icalcomponent_free(copy);
-	    }
+	    else icalcomponent_free(copy);
 
 	} while ((comp = icalcomponent_get_next_component(newical, kind)));
     }
@@ -3133,10 +3139,12 @@ static void sched_reply(const char *userid,
 	}
 
 	if (newical) {
-	    /* XXX  Do we do this for ALL components or just the updated one(s)? */
+	    /* XXX  Do we do this for ALL components, just the first one,
+	       or just the updated one(s)? */
 	    /* Set SCHEDULE-STATUS for organizer in attendee object */
 	    comp = icalcomponent_get_first_real_component(newical);
-	    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+	    prop = icalcomponent_get_first_property(comp,
+						    ICAL_ORGANIZER_PROPERTY);
 	    param = icalparameter_new(ICAL_IANA_PARAMETER);
 	    icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
 	    icalparameter_set_iana_value(param, sched_data->status);
