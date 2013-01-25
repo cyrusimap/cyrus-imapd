@@ -829,7 +829,7 @@ static void cmdloop(void)
 		/* Mailbox has been (re)moved */
 		syslog(LOG_WARNING,
 		       "Newsgroup %s has been (re)moved out from under client",
-		       group_state->mailbox->name);
+		       group_state->mboxname);
 		prot_printf(nntp_out,
 			    "400 Newsgroup has been (re)moved\r\n");
 		shut_down(0);
@@ -873,7 +873,7 @@ static void cmdloop(void)
 
 	/* In case a [LIST]GROUP fails or
 	   a retrieval by msgid makes us switch groups */
-	strcpy(curgroup, group_state ? group_state->mailbox->name : "");
+	strcpy(curgroup, group_state ? group_state->mboxname : "");
 
 	switch (cmd.s[0]) {
 	case 'A':
@@ -1081,7 +1081,7 @@ static void cmdloop(void)
 				group_state->last_uid+1,
 				nntp_exists ? index_getuid(group_state, nntp_exists) :
 				group_state->last_uid,
-				group_state->mailbox->name + strlen(newsprefix));
+				group_state->mboxname + strlen(newsprefix));
 
 		    if (LISTGROUP) {
 			int msgno, last_msgno;
@@ -1509,7 +1509,7 @@ static void cmdloop(void)
       prevgroup:
 	/* Return to previously selected group */
 	if (*curgroup &&
-	    (!group_state || strcmp(curgroup, group_state->mailbox->name))) {
+	    (!group_state || strcmp(curgroup, group_state->mboxname))) {
 	    open_group(curgroup, 1, NULL, NULL);
 	}
 
@@ -1622,7 +1622,7 @@ static int parserange(char *str, uint32_t *uid, uint32_t *last,
 	*msgid = str;
 
 	/* open group if its different from our current one */
-	if (!group_state || strcmp(mboxname, group_state->mailbox->name)) {
+	if (!group_state || strcmp(mboxname, group_state->mboxname)) {
 	    if ((r = open_group(mboxname, 1, ret, NULL))) goto nomsgid;
 	}
     }

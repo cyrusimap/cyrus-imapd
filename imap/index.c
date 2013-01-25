@@ -262,6 +262,16 @@ static int index_rewrite_record(struct index_state *state,
     return 0;
 }
 
+EXPORTED void index_release(struct index_state *state)
+{
+    if (!state) return;
+
+    if (state->mailbox) {
+	mailbox_close(&state->mailbox);
+	state->mailbox = NULL; /* should be done by close anyway */
+    }
+}
+
 /*
  * A mailbox is about to be closed.
  */
@@ -272,11 +282,13 @@ EXPORTED void index_close(struct index_state **stateptr)
 
     if (!state) return;
 
-    free(state->userid);
+    index_release(state);
+
     free(state->map);
+    free(state->mboxname);
+    free(state->userid);
     for (i = 0; i < MAX_USER_FLAGS; i++)
 	free(state->flagname[i]);
-    mailbox_close(&state->mailbox);
     free(state);
 
     *stateptr = NULL;
@@ -293,28 +305,29 @@ EXPORTED int index_open(const char *name, struct index_init *init,
     struct index_state *state = xzmalloc(sizeof(struct index_state));
 
     if (init) {
-	if (init->examine_mode) {
-	    r = mailbox_open_irl(name, &state->mailbox);
+	state->authstate = init->authstate;
+	state->examining = init->examine_mode;
+	state->mboxname = xstrdup(name);
+	state->out = init->out;
+	state->qresync = init->qresync;
+	state->userid = xstrdupnull(init->userid);
+
+	if (state->examining) {
+	    r = mailbox_open_irl(state->mboxname, &state->mailbox);
 	    if (r) goto fail;
-	} else {
-	    r = mailbox_open_iwl(name, &state->mailbox);
+	}
+	else {
+	    r = mailbox_open_iwl(state->mboxname, &state->mailbox);
 	    if (r) goto fail;
 	}
 	state->myrights = cyrus_acl_myrights(init->authstate,
 					     state->mailbox->acl);
-	if (init->examine_mode)
+	if (state->examining)
 	    state->myrights &= ~ACL_READ_WRITE;
-
-	state->authstate = init->authstate;
-	state->userid = xstrdupnull(init->userid);
 
 	state->internalseen = mailbox_internal_seen(state->mailbox,
 						    state->userid);
 	state->keepingseen = (state->myrights & ACL_SETSEEN);
-	state->examining = init->examine_mode;
-
-	state->out = init->out;
-	state->qresync = init->qresync;
     }
     else {
 	r = mailbox_open_iwl(name, &state->mailbox);
@@ -336,7 +349,8 @@ EXPORTED int index_open(const char *name, struct index_init *init,
     return 0;
 
 fail:
-    free(state->mailbox);
+    free(state->mboxname);
+    free(state->userid);
     free(state);
     return r;
 }
@@ -406,8 +420,7 @@ EXPORTED int index_expunge(struct index_state *state, char *sequence,
 
     if (!r && (numexpunged > 0)) {
 	syslog(LOG_NOTICE, "Expunged %d messages from %s",
-	       numexpunged, state->mailbox->name);
-
+	       numexpunged, state->mboxname);
 	/* send the MessageExpunge event notification for "immediate", "default"
 	 * and "delayed" expunge */
 	mboxevent_notify(mboxevent);
@@ -805,7 +818,6 @@ EXPORTED void index_select(struct index_state *state, struct index_init *init)
  */
 EXPORTED int index_check(struct index_state *state, int usinguid, int printuid)
 {
-    struct mailbox *mailbox = state->mailbox;
     int r;
 
     r = mailbox_lock_index(mailbox, LOCK_EXCLUSIVE);
@@ -816,7 +828,7 @@ EXPORTED int index_check(struct index_state *state, int usinguid, int printuid)
 	if (config_getswitch(IMAPOPT_DISCONNECT_ON_VANISHED_MAILBOX)) {
 	    syslog(LOG_WARNING,
 		   "Mailbox %s has been (re)moved out from under client",
-		   mailbox->name);
+		   state->mboxname);
 	    fatal("Mailbox has been (re)moved", EC_IOERR);
 	}
 
@@ -845,12 +857,12 @@ EXPORTED int index_check(struct index_state *state, int usinguid, int printuid)
 
 #if TOIMSP
     if (state->firstnotseen) {
-	toimsp(mailbox->name, mailbox->i.uidvalidity, "SEENsnn", state->userid,
-	       0, mailbox->i.recenttime, 0);
+	toimsp(state->mboxname, state->mailbox->i.uidvalidity, "SEENsnn", state->userid,
+	       0, state->mailbox->i.recenttime, 0);
     }
     else {
-	toimsp(mailbox->name, mailbox->i.uidvalidity, "SEENsnn", state->userid,
-	       mailbox->last_uid, mailbox->i.recenttime, 0);
+	toimsp(state->mboxname, state->mailbox->i.uidvalidity, "SEENsnn", state->userid,
+	       state->mailbox->last_uid, state->mailbox->i.recenttime, 0);
     }
 #endif
 
@@ -1018,7 +1030,7 @@ void index_fetchresponses(struct index_state *state,
     /* Keep an open reference on the per-mailbox db to avoid
      * doing too many slow database opens during the fetch */
     if ((fetchargs->fetchitems & FETCH_ANNOTATION))
-	annotate_getdb(state->mailbox->name, &annot_db);
+	annotate_getdb(state->mboxname, &annot_db);
 
     start = 1;
     end = state->exists;
@@ -1141,7 +1153,7 @@ EXPORTED int index_fetch(struct index_state *state,
 EXPORTED int index_store(struct index_state *state, char *sequence,
 			 struct storeargs *storeargs)
 {
-    struct mailbox *mailbox = state->mailbox;
+    struct mailbox *mailbox;
     int i, r = 0;
     uint32_t msgno;
     int userflag;
@@ -1164,6 +1176,8 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
 
     r = index_lock(state);
     if (r) return r;
+
+    mailbox = state->mailbox;
 
     seq = _parse_sequence(state, sequence, storeargs->usinguid);
 
@@ -1568,8 +1582,28 @@ EXPORTED int index_getuidsequence(struct index_state *state,
 
 static int index_lock(struct index_state *state)
 {
-    int r = mailbox_lock_index(state->mailbox, LOCK_EXCLUSIVE);
-    if (r) return r;
+    int r;
+
+    if (state->mailbox) {
+	if (state->examining) {
+	    r = mailbox_lock_index(state->mailbox, LOCK_SHARED);
+	    if (r) return r;
+	}
+	else {
+	    r = mailbox_lock_index(state->mailbox, LOCK_EXCLUSIVE);
+	    if (r) return r;
+	}
+    }
+    else {
+	if (state->examining) {
+	    r = mailbox_open_irl(state->mboxname, &state->mailbox);
+	    if (r) return r;
+	}
+	else {
+	    r = mailbox_open_iwl(state->mboxname, &state->mailbox);
+	    if (r) return r;
+	}
+    }
 
     /* if the UIDVALIDITY has changed, treat as a delete */
     if (state->mailbox->i.uidvalidity != state->uidvalidity) {
@@ -2237,7 +2271,7 @@ static int index_fetchsection(struct index_state *state, const char *resp,
 
 	/* check that the offset isn't corrupt */
 	if (offset + size > msg_size) {
-	    syslog(LOG_ERR, "invalid part offset in %s", state->mailbox->name);
+	    syslog(LOG_ERR, "invalid part offset in %s", state->mboxname);
 	    return IMAP_IOERROR;
 	}
 
@@ -4262,7 +4296,7 @@ static MsgData *index_msgdata_load(struct index_state *state,
  	    case SORT_ANNOTATION: {
 		struct buf value = BUF_INITIALIZER;
 
-		annotatemore_msg_lookup(state->mailbox->name,
+		annotatemore_msg_lookup(state->mboxname,
 					record.uid,
 					sortcrit[j].args.annot.entry,
 					sortcrit[j].args.annot.userid,

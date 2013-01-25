@@ -86,7 +86,6 @@ struct index_init {
     int qresync;
     int select;
     struct vanished_params vanished;
-    int want_expunged;
     struct seqset *vanishedlist;
 };
 
@@ -124,6 +123,7 @@ struct index_state {
     unsigned firstnotseen;
     char *flagname[MAX_USER_FLAGS];
     char *userid;
+    char *mboxname;
     struct protstream *out;
     int qresync;
     struct auth_state *authstate;
@@ -235,6 +235,7 @@ extern int index_open(const char *name, struct index_init *init,
 		      struct index_state **stateptr);
 extern void index_select(struct index_state *state, struct index_init *init);
 extern int index_status(struct index_state *state, struct statusdata *sdata);
+extern void index_release(struct index_state *state);
 extern void index_close(struct index_state **stateptr);
 extern uint32_t index_finduid(struct index_state *state, uint32_t uid);
 extern uint32_t index_getuid(struct index_state *state, uint32_t msgno);
