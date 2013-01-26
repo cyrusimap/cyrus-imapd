@@ -2691,10 +2691,9 @@ static int parse_ranges(const char *hdr, struct range *range)
 int check_precond(struct transaction_t *txn, const void *data,
 		  const char *etag, time_t lastmod)
 {
-    long resp = HTTP_OK;
     struct dav_data *ddata = (struct dav_data *) data;
     const char *lock_token = NULL;
-    unsigned locked = 0, is_get_or_head = 0;
+    unsigned locked = 0;
     hdrcache_t hdrcache = txn->req_hdrs;
     const char **hdr;
     time_t since;
@@ -2754,7 +2753,7 @@ int check_precond(struct transaction_t *txn, const void *data,
     /* Evaluate other precondition headers per Section 5 of HTTPbis, Part 4 */
 
     /* Step 1 */
-    else if ((hdr = spool_getheader(hdrcache, "If-Match"))) {
+    if ((hdr = spool_getheader(hdrcache, "If-Match"))) {
 	if (!etag_match(hdr, etag)) return HTTP_PRECOND_FAILED;
 
 	/* Continue to step 3 */
@@ -2772,45 +2771,45 @@ int check_precond(struct transaction_t *txn, const void *data,
     }
 
     /* Step 3 */
-    switch (txn->meth) {
-    case METH_GET:
-	if (txn->flags.ranges && (hdr = spool_getheader(hdrcache, "Range"))) {
-	    resp = parse_ranges(hdr[0], &txn->resp_body.range);
-
-	    if (resp != HTTP_OK &&
-		(hdr = spool_getheader(hdrcache, "If-Range"))) {
-		since = message_parse_date((char *) hdr[0],
-					   PARSE_DATE|PARSE_TIME|PARSE_ZONE|
-					   PARSE_GMT|PARSE_NOCREATE);
-
-		if ((since && (lastmod > since)) || etagcmp(hdr[0], etag))
-		    resp = HTTP_OK;
-
-		return resp;  /* Ignore remaining conditionals */
-	    }
+    if ((hdr = spool_getheader(hdrcache, "If-None-Match"))) {
+	if (etag_match(hdr, etag)) {
+	    return (txn->meth == METH_GET || txn->meth == METH_HEAD) ?
+		HTTP_NOT_MODIFIED : HTTP_PRECOND_FAILED;
 	}
 
-    case METH_HEAD:
-	is_get_or_head = 1;
+	/* Continue to step 5 */
     }
 
     /* Step 4 */
-    if ((hdr = spool_getheader(hdrcache, "If-None-Match"))) {
-	if (etag_match(hdr, etag))
-	    return (is_get_or_head ? HTTP_NOT_MODIFIED : HTTP_PRECOND_FAILED);
-    }
-
-    /* Step 5 */
-    else if (is_get_or_head &&
+    else if ((txn->meth == METH_GET || txn->meth == METH_HEAD) &&
 	     (hdr = spool_getheader(hdrcache, "If-Modified-Since"))) {
 	since = message_parse_date((char *) hdr[0],
 				   PARSE_DATE|PARSE_TIME|PARSE_ZONE|
 				   PARSE_GMT|PARSE_NOCREATE);
 
 	if (lastmod <= since) return HTTP_NOT_MODIFIED;
+
+	/* Continue to step 5 */
     }
 
-    return resp;
+    /* Step 5 */
+    if (txn->flags.ranges &&  /* Only if we support Range requests */
+	txn->meth == METH_GET && (hdr = spool_getheader(hdrcache, "Range"))) {
+	const char *ranges = hdr[0];
+
+	if ((hdr = spool_getheader(hdrcache, "If-Range"))) {
+	    since = message_parse_date((char *) hdr[0],
+				       PARSE_DATE|PARSE_TIME|PARSE_ZONE|
+				       PARSE_GMT|PARSE_NOCREATE);
+	}
+
+	/* Only process Range if If-Range isn't present or validator matches */
+	if (!hdr || (since && (lastmod <= since)) || !etagcmp(hdr[0], etag))
+	    return parse_ranges(ranges, &txn->resp_body.range);
+    }
+
+    /* Step 6 */
+    return HTTP_OK;
 }
 
 
