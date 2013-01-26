@@ -2558,26 +2558,28 @@ static unsigned etag_match(const char *hdr[], const char *etag)
 }
 
 
+/* Evaluate If header.  Note that we can't short-circuit any of the tests
+   because we need to check for a lock-token anywhere in the header */
 static int eval_if(const char *hdr, const char *etag, const char *lock_token,
 		   unsigned *locked)
 {
-    int r = 0;
+    unsigned ret = 0;
     tok_t tok_l;
     char *list;
 
-    /* Process each list until one evaluates to true */
+    /* Process each list, ORing the results */
     tok_init(&tok_l, hdr, ")", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-    while (!r && (list = tok_next(&tok_l))) {
+    while ((list = tok_next(&tok_l))) {
+	unsigned ret_l = 1;
 	tok_t tok_c;
 	char *cond;
 
 	/* XXX  Need to handle Resource-Tag for Tagged-list (COPY/MOVE dest) */
 
-	/* Process each condition until one fails */
-	r = 1;
+	/* Process each condition, ANDing the results */
 	tok_initm(&tok_c, list+1, "]>", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-	while (r && (cond = tok_next(&tok_c))) {
-	    unsigned not = 0;
+	while ((cond = tok_next(&tok_c))) {
+	    unsigned r, not = 0;
 
 	    if (!strncmp(cond, "Not", 3)) {
 		not = 1;
@@ -2600,15 +2602,17 @@ static int eval_if(const char *hdr, const char *etag, const char *lock_token,
 		}
 	    }
 
-	    if (not) r = !r;
+	    ret_l &= (not ? !r : r);
 	}
 
 	tok_fini(&tok_c);
+
+	ret |= ret_l;
     }
 
     tok_fini(&tok_l);
 
-    return r;
+    return (ret || locked);
 }
 
 
@@ -2703,14 +2707,6 @@ int check_precond(struct transaction_t *txn, const void *data,
 	lock_token = ddata->lock_token;
 
 	switch (txn->meth) {
-	case METH_ACL:
-	case METH_MKCALENDAR:
-	case METH_MKCOL:
-	case METH_PROPPATCH:
-	    /* State-changing method: These operate on collections
-	       and we currently don't support locks on collections */
-	    break;
-
 	case METH_DELETE:
 	case METH_LOCK:
 	case METH_MOVE:
@@ -2724,10 +2720,14 @@ int check_precond(struct transaction_t *txn, const void *data,
 	    break;
 
 	case METH_UNLOCK:
-	    /* State-changing method: Only the lock owner
-	       or a user with the DAV:unlock right can execute,
-	       and MUST provide a correct Lock-Token header.
-	       Both criteria are checked in meth_unlock() */
+	    /* State-changing method: Authorized in meth_unlock() */
+	    break;
+
+	case METH_ACL:
+	case METH_MKCALENDAR:
+	case METH_MKCOL:
+	case METH_PROPPATCH:
+	    /* State-changing method: Locks on collections unsupported */
 	    break;
 
 	default:
@@ -2736,13 +2736,12 @@ int check_precond(struct transaction_t *txn, const void *data,
 	}
     }
 
-    /* Step 0 - Per RFC 4918, If supercedes If-Match */
+    /* Per RFC 4918, If is similar to If-Match, but with lock-token submission.
+       Per Section 5 of HTTPbis, Part 4, LOCK errors supercede preconditions */
     if ((hdr = spool_getheader(hdrcache, "If"))) {
 	/* State tokens (sync-token, lock-token) and Etags */
 	if (!eval_if(hdr[0], etag, lock_token, &locked))
 	    return HTTP_PRECOND_FAILED;
-
-	/* Continue to step 1 */
     }
 
     if (locked) {
