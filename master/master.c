@@ -385,7 +385,10 @@ static int verify_service_file(const strarray_t *filename)
 static void service_forget_exec(struct service *s)
 {
     if (s->exec) {
-	strarray_free(s->exec);
+	/* Only free the service info on the primary */
+	if (s->associate == 0) {
+	    strarray_free(s->exec);
+	}
 	s->exec = NULL;
     }
 }
