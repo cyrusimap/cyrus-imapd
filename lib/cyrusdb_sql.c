@@ -677,9 +677,8 @@ static int fetch(struct dbengine *db,
     esc_key = dbengine->sql_escape(db->conn, &db->esc_key, key, keylen);
     snprintf(cmd, sizeof(cmd),
 	     "SELECT * FROM %s WHERE dbkey = '%s';", db->table, esc_key);
-    r = dbengine->sql_exec(db->conn, cmd, &select_cb, &srock);
-
     if (esc_key != db->esc_key) free(esc_key);
+    r = dbengine->sql_exec(db->conn, cmd, &select_cb, &srock);
 
     if (r) {
 	syslog(LOG_ERR, "DBERROR: SQL failed %s", cmd);
@@ -721,9 +720,8 @@ static int foreach(struct dbengine *db,
     snprintf(cmd, sizeof(cmd),
 	     "SELECT * FROM %s WHERE dbkey LIKE '%s%%' ORDER BY dbkey;",
 	     db->table, esc_key ? esc_key : "");
+    if (esc_key && (esc_key != db->esc_key)) free(esc_key);
     r = dbengine->sql_exec(db->conn, cmd, &select_cb, &srock);
-
-    if (esc_key && esc_key != db->esc_key) free(esc_key);
 
     if (r) {
 	syslog(LOG_ERR, "DBERROR: SQL failed %s", cmd);
@@ -741,6 +739,7 @@ static int mystore(struct dbengine *db,
 		   int isdelete)
 {
     char cmd[1024], *esc_key;
+    int free_esc_key = 0;
     const char dummy = 0;
     int r = 0;
 
@@ -754,6 +753,7 @@ static int mystore(struct dbengine *db,
     if (tid && !*tid && !(*tid = start_txn(db))) return CYRUSDB_INTERNAL;
 
     esc_key = dbengine->sql_escape(db->conn, &db->esc_key, key, keylen);
+    free_esc_key = (esc_key != db->esc_key);
 
     if (isdelete) {
 	/* DELETE the entry */
@@ -774,6 +774,7 @@ static int mystore(struct dbengine *db,
 
 	char *esc_data = dbengine->sql_escape(db->conn, &db->esc_data,
 					      data, datalen);
+	int free_esc_data = (esc_data != db->esc_data);
 
 	/* see if we just SELECTed this key in this transaction */
 	if (tid && *tid) {
@@ -813,10 +814,10 @@ static int mystore(struct dbengine *db,
 	    r = dbengine->sql_exec(db->conn, cmd, NULL, NULL);
 	}
 
-	if (esc_data != db->esc_data) free(esc_data);
+	if (free_esc_data) free(esc_data);
     }
 
-    if (esc_key != db->esc_key) free(esc_key);
+    if (free_esc_key) free(esc_key);
 
     if (r) {
 	syslog(LOG_ERR, "DBERROR: SQL failed: %s", cmd);
