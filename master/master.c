@@ -1004,7 +1004,7 @@ static void reap_child(void)
 				   "service %s, disabling until next SIGHUP",
 				   SERVICENAME(s->name));
 			    service_forget_exec(s);
-			    close(s->socket);
+			    if (s->socket > 0) close(s->socket);
 			    s->socket = 0;
 			}
 		    }
