@@ -9133,8 +9133,8 @@ static int getsearchcriteria(char *tag, struct searchargs *searchargs,
 	    if (!imparse_isatom(arg.s)) goto badflag;
 	    lcase(arg.s);
 	    for (flag=0; flag < MAX_USER_FLAGS; flag++) {
-		if (imapd_index->mailbox->flagname[flag] &&
-		    !strcasecmp(imapd_index->mailbox->flagname[flag], arg.s)) break;
+		if (imapd_index->flagname[flag] &&
+		    !strcasecmp(imapd_index->flagname[flag], arg.s)) break;
 	    }
 	    if (flag == MAX_USER_FLAGS) {
 		/* Force failure */
@@ -9364,8 +9364,8 @@ static int getsearchcriteria(char *tag, struct searchargs *searchargs,
 	    if (!imparse_isatom(arg.s)) goto badflag;
 	    lcase(arg.s);
 	    for (flag=0; flag < MAX_USER_FLAGS; flag++) {
-		if (imapd_index->mailbox->flagname[flag] &&
-		    !strcasecmp(imapd_index->mailbox->flagname[flag], arg.s)) break;
+		if (imapd_index->flagname[flag] &&
+		    !strcasecmp(imapd_index->flagname[flag], arg.s)) break;
 	    }
 	    if (flag != MAX_USER_FLAGS) {
 		searchargs->user_flags_unset[flag/32] |= 1<<(flag&31);
