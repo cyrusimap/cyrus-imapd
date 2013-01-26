@@ -3063,6 +3063,10 @@ static void sched_decline(char *recurid __attribute__((unused)),
     icalproperty *myattendee;
     icalparameter *param;
 
+    /* Don't send a decline for cancelled components */
+    if (icalcomponent_get_status(old_data->comp) == ICAL_STATUS_CANCELLED)
+	return;
+
     myattendee = icalcomponent_get_first_property(old_data->comp,
 						  ICAL_ATTENDEE_PROPERTY);
 
