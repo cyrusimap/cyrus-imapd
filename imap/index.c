@@ -832,8 +832,9 @@ static struct seqset *_index_vanished(struct index_state *state,
     return outlist;
 }
 
-static int _fetch_setseen(struct index_state *state, struct mboxevent *mboxevent,
-                          uint32_t msgno)
+static int _fetch_setseen(struct index_state *state,
+			  struct mboxevent *mboxevent,
+			  uint32_t msgno)
 {
     struct index_map *im = &state->map[msgno-1];
     int r;
@@ -955,10 +956,10 @@ EXPORTED int index_fetch(struct index_state *state,
     seq = _parse_sequence(state, sequence, usinguid);
 
     /* set the \Seen flag if necessary - while we still have the lock */
-    if (fetchargs->fetchitems & FETCH_SETSEEN && !state->examining) {
+    if (fetchargs->fetchitems & FETCH_SETSEEN && !state->examining
+	&& state->firstnotseen) {
 	mboxevent = mboxevent_new(EVENT_MESSAGE_READ);
-
-	for (msgno = 1; msgno <= state->exists; msgno++) {
+	for (msgno = state->firstnotseen; msgno <= state->exists; msgno++) {
 	    im = &state->map[msgno-1];
 	    checkval = usinguid ? im->record.uid : msgno;
 	    if (!seqset_ismember(seq, checkval))
@@ -969,7 +970,7 @@ EXPORTED int index_fetch(struct index_state *state,
 
 	mboxevent_extract_mailbox(mboxevent, state->mailbox);
 	mboxevent_set_numunseen(mboxevent, state->mailbox,
-	                        state->numunseen);
+				state->numunseen);
     }
 
     if (fetchargs->vanished) {
