@@ -683,6 +683,7 @@ void index_refresh(struct index_state *state)
     state->exists = msgno - 1; /* we actually got this many */
     state->delayed_modseq = delayed_modseq;
     state->highestmodseq = mailbox->i.highestmodseq;
+    state->generation = mailbox->i.generation_no;
     state->last_uid = mailbox->i.last_uid;
     state->num_records = mailbox->i.num_records;
     state->firstnotseen = firstnotseen;
@@ -1523,8 +1524,9 @@ static int index_lock(struct index_state *state)
     int r = mailbox_lock_index(state->mailbox, LOCK_EXCLUSIVE);
     if (r) return r;
 
-    /* if highestmodseq has changed, read updates */
-    if (state->highestmodseq != state->mailbox->i.highestmodseq)
+    /* if highestmodseq has changed or file is repacked, read updates */
+    if (state->highestmodseq != state->mailbox->i.highestmodseq
+	|| state->generation != state->mailbox->i.generation_no)
 	index_refresh(state);
 
     return 0;

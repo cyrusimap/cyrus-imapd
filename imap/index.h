@@ -107,6 +107,7 @@ struct index_state {
     unsigned oldexists;
     unsigned exists;
     unsigned long last_uid;
+    uint32_t generation; /* to notice repacks */
     modseq_t highestmodseq;
     modseq_t delayed_modseq;
     struct index_map *map;
