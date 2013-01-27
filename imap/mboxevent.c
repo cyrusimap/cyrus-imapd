@@ -525,6 +525,9 @@ void mboxevent_add_flags(struct mboxevent *event, char *flagnames[MAX_USER_FLAGS
 #ifdef ENABLE_MBOXEVENT
     unsigned flag, flagmask;
 
+    if (!event)
+	return;
+
     /* add system flags */
     if (system_flags & FLAG_DELETED) {
 	if (strarray_find_case(excluded_flags, "\\Deleted", 0) < 0)
@@ -1070,6 +1073,9 @@ static int filled_params(enum event_type type, struct mboxevent *event)
 {
     struct buf missing = BUF_INITIALIZER;
     int param, ret = 1;
+
+    if (!event)
+	return 0;
 
     for (param = 0; param <= MAX_PARAM; param++) {
 
