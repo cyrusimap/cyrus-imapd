@@ -222,7 +222,6 @@ static int meth_get_isched(struct transaction_t *txn,
 
     node = xmlNewChild(capa, NULL,
 		       BAD_CAST "scheduling-messages", NULL);
-#if 0
     comp = xmlNewChild(node, NULL, BAD_CAST "component", NULL);
     xmlNewProp(comp, BAD_CAST "name", BAD_CAST "VEVENT");
     meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
@@ -231,10 +230,8 @@ static int meth_get_isched(struct transaction_t *txn,
     xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REPLY");
     meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
     xmlNewProp(meth, BAD_CAST "name", BAD_CAST "CANCEL");
-
     comp = xmlNewChild(node, NULL, BAD_CAST "component", NULL);
     xmlNewProp(comp, BAD_CAST "name", BAD_CAST "VTODO");
-#endif
     comp = xmlNewChild(node, NULL, BAD_CAST "component", NULL);
     xmlNewProp(comp, BAD_CAST "name", BAD_CAST "VFREEBUSY");
 
