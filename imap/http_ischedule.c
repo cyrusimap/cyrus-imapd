@@ -282,7 +282,22 @@ static int meth_post_isched(struct transaction_t *txn,
 	return HTTP_BAD_REQUEST;
     }
 
-    /* XXX  Check Originator and Recipient */
+    /* Check Originator */
+    if (!(hdr = spool_getheader(txn->req_hdrs, "Originator"))) {
+	txn->error.precond = ISCHED_ORIG_MISSING;
+	return HTTP_BAD_REQUEST;
+    }
+    else if (hdr[1]) {
+	/* Multiple Originators (XXX is this the correct precond?) */
+	txn->error.precond = ISCHED_ORIG_INVALID;
+	return HTTP_BAD_REQUEST;
+    }
+
+    /* Check Recipient */
+    if (!(hdr = spool_getheader(txn->req_hdrs, "Recipient"))) {
+	txn->error.precond = ISCHED_RECIP_MISSING;
+	return HTTP_BAD_REQUEST;
+    }
 
     /* Read body */
     if (!txn->flags.havebody) {
