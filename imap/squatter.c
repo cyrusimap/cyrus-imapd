@@ -800,6 +800,7 @@ int main(int argc, char **argv)
 	case 'R':		/* rolling indexer */
 	    if (mode != UNKNOWN) usage(argv[0]);
 	    mode = ROLLING;
+	    incremental_mode = 1; /* always incremental if rolling */
 	    break;
 
 	case 'T':		/* temporary root directory for search */
