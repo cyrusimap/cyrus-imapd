@@ -150,7 +150,8 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
 					   const char *organizer,
 					   const char *attendee);
 #ifdef WITH_CALDAV_SCHED
-static int caladdress_lookup(const char *addr, struct sched_param *param);
+#include "http_caldav_sched.h"
+
 static int sched_busytime(struct transaction_t *txn);
 static void sched_request(const char *organizer, struct sched_param *sparam,
 			  icalcomponent *oldical, icalcomponent *newical);
@@ -1587,7 +1588,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 
 
 #ifdef WITH_CALDAV_SCHED
-static int caladdress_lookup(const char *addr, struct sched_param *param)
+int caladdress_lookup(const char *addr, struct sched_param *param)
 {
     char *p;
     int islocal = 1, found = 1;
@@ -1728,8 +1729,8 @@ static int imip_send(icalcomponent *ical)
 
 
 /* Add a <response> XML element for 'recipient' to 'root' */
-static xmlNodePtr xml_add_schedresponse(xmlNodePtr root, xmlNsPtr dav_ns,
-					xmlChar *recipient, xmlChar *status)
+xmlNodePtr xml_add_schedresponse(xmlNodePtr root, xmlNsPtr dav_ns,
+				 xmlChar *recipient, xmlChar *status)
 {
     xmlNodePtr resp, recip;
 
@@ -1745,16 +1746,6 @@ static xmlNodePtr xml_add_schedresponse(xmlNodePtr root, xmlNsPtr dav_ns,
     return resp;
 }
 
-
-#define REQSTAT_PENDING		"1.0;Pending"
-#define REQSTAT_SENT		"1.1;Sent"
-#define REQSTAT_DELIVERED	"1.2;Delivered"
-#define REQSTAT_SUCCESS		"2.0;Success"
-#define REQSTAT_NOUSER		"3.7;Invalid calendar user"
-#define REQSTAT_NOPRIVS		"3.8;Noauthority"
-#define REQSTAT_TEMPFAIL	"5.1;Service unavailable"
-#define REQSTAT_PERMFAIL	"5.2;Invalid calendar service"
-#define REQSTAT_REJECTED	"5.3;No scheduling support for user"
 
 struct remote_rock {
     struct transaction_t *txn;
@@ -2190,16 +2181,8 @@ static int sched_busytime(struct transaction_t *txn)
 }
 
 
-struct sched_data {
-    unsigned is_reply;
-    icalcomponent *itip;
-    icalcomponent *master;
-    unsigned comp_mask;
-    char *force_send;
-    const char *status;
-};
-
-static void free_sched_data(void *data) {
+static void free_sched_data(void *data)
+{
     struct sched_data *sched_data = (struct sched_data *) data;
 
     if (sched_data) {
@@ -2222,7 +2205,7 @@ static void free_sched_data(void *data) {
 #define SCHEDSTAT_REJECTED	"5.3"
 
 /* Deliver scheduling object to recipient's Inbox */
-static void sched_deliver(char *recipient, void *data, void *rock)
+void sched_deliver(char *recipient, void *data, void *rock)
 {
     struct sched_data *sched_data = (struct sched_data *) data;
     struct auth_state *authstate = (struct auth_state *) rock;
@@ -2241,7 +2224,8 @@ static void sched_deliver(char *recipient, void *data, void *rock)
     struct transaction_t txn;
 
     if (caladdress_lookup(recipient, &sparam)) {
-	sched_data->status = SCHEDSTAT_NOUSER;
+	sched_data->status =
+	    sched_data->ischedule ? REQSTAT_NOUSER : SCHEDSTAT_NOUSER;
 	goto done;
     }
     else userid = sparam.userid;
@@ -2262,14 +2246,16 @@ static void sched_deliver(char *recipient, void *data, void *rock)
     if ((r = mboxlist_lookup(namebuf, &mbentry, NULL))) {
 	syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
 	       namebuf, error_message(r));
-	sched_data->status = SCHEDSTAT_REJECTED;
+	sched_data->status =
+	    sched_data->ischedule ? REQSTAT_REJECTED : SCHEDSTAT_REJECTED;
 	goto done;
     }
 
     rights =
 	mbentry.acl ? cyrus_acl_myrights(authstate, mbentry.acl) : 0;
     if (!(rights & DACL_SCHED)) {
-	sched_data->status = SCHEDSTAT_NOPRIVS;
+	sched_data->status =
+	    sched_data->ischedule ? REQSTAT_NOPRIVS : SCHEDSTAT_NOPRIVS;
 	goto done;
     }
 
@@ -2277,14 +2263,16 @@ static void sched_deliver(char *recipient, void *data, void *rock)
     if ((r = mailbox_open_irl(namebuf, &inbox))) {
 	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
 	       namebuf, error_message(r));
-	sched_data->status = SCHEDSTAT_TEMPFAIL;
+	sched_data->status =
+	    sched_data->ischedule ? REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
 	goto done;
     }
 
     /* Search for iCal UID in recipient's calendars */
     caldavdb = caldav_open(userid, CALDAV_CREATE);
     if (!caldavdb) {
-	sched_data->status = SCHEDSTAT_TEMPFAIL;
+	sched_data->status =
+	    sched_data->ischedule ? REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
 	goto done;
     }
 
@@ -2297,7 +2285,8 @@ static void sched_deliver(char *recipient, void *data, void *rock)
     }
     else if (sched_data->is_reply) {
 	/* Can't find object belonging to organizer - ignore reply */
-	sched_data->status = SCHEDSTAT_PERMFAIL;
+	sched_data->status =
+	    sched_data->ischedule ? REQSTAT_PERMFAIL : SCHEDSTAT_PERMFAIL;
 	goto done;
     }
     else {
@@ -2313,7 +2302,8 @@ static void sched_deliver(char *recipient, void *data, void *rock)
     if ((r = mailbox_open_irl(mboxname, &mailbox))) {
 	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
 	       mboxname, error_message(r));
-	sched_data->status = SCHEDSTAT_TEMPFAIL;
+	sched_data->status =
+	    sched_data->ischedule ? REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
 	goto done;
     }
 
@@ -2557,12 +2547,14 @@ static void sched_deliver(char *recipient, void *data, void *rock)
 		       caldavdb, OVERWRITE_YES, NEW_STAG);
 
     if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
-	sched_data->status = SCHEDSTAT_DELIVERED;
+	sched_data->status =
+	    sched_data->ischedule ? REQSTAT_SUCCESS : SCHEDSTAT_DELIVERED;
     }
     else {
 	syslog(LOG_ERR, "store_resource(%s) failed: %s (%s)",
 	       mailbox->name, error_message(r), txn.error.resource);
-	sched_data->status = SCHEDSTAT_TEMPFAIL;
+	sched_data->status =
+	    sched_data->ischedule ? REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
 	goto done;
     }
 

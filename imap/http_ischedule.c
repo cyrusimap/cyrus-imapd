@@ -53,6 +53,7 @@
 
 #include "global.h"
 #include "httpd.h"
+#include "http_caldav_sched.h"
 #include "http_dav.h"
 #include "http_err.h"
 #include "http_proxy.h"
@@ -82,7 +83,6 @@ static void isched_init(struct buf *serverinfo);
 static void isched_shutdown(void);
 #endif /* WITH_DKIM */
 
-extern int busytime_query(struct transaction_t *txn, icalcomponent *comp);
 static int meth_get_isched(struct transaction_t *txn, void *params);
 static int meth_post_isched(struct transaction_t *txn, void *params);
 static int dkim_auth(struct transaction_t *txn);
@@ -342,11 +342,70 @@ static int meth_post_isched(struct transaction_t *txn,
 	goto done;
     }
 
-    switch (meth) {
-    case ICAL_METHOD_REQUEST:
-	switch (kind) {
-	case ICAL_VFREEBUSY_COMPONENT:
+    switch (kind) {
+    case ICAL_VFREEBUSY_COMPONENT:
+	if (meth == ICAL_METHOD_REQUEST)
 	    ret = busytime_query(txn, ical);
+	else {
+	    txn->error.precond = ISCHED_INVALID_SCHED;
+	    ret = HTTP_BAD_REQUEST;
+	}
+	break;
+
+    case ICAL_VEVENT_COMPONENT:
+    case ICAL_VTODO_COMPONENT:
+	switch (meth) {
+	case ICAL_METHOD_REQUEST:
+	case ICAL_METHOD_REPLY:
+	case ICAL_METHOD_CANCEL: {
+	    struct sched_data sched_data =
+		{ 1, meth == ICAL_METHOD_REPLY, ical, NULL, 0, NULL, NULL };
+	    xmlNodePtr root = NULL;
+	    xmlNsPtr ns[NUM_NAMESPACE];
+	    struct auth_state *authstate;
+	    icalcomponent *comp;
+	    icalproperty *prop;
+
+	    /* Start construction of our schedule-response */
+	    if (!(root = init_xml_response("schedule-response",
+					   NS_ISCHED, NULL, ns))) {
+		ret = HTTP_SERVER_ERROR;
+		txn->error.desc = "Unable to create XML response\r\n";
+		goto done;
+	    }
+
+	    authstate = auth_newstate("anonymous");
+	    comp = icalcomponent_get_first_real_component(ical);
+
+	    /* Process each attendee */
+	    for (prop = icalcomponent_get_first_property(comp,
+							 ICAL_ATTENDEE_PROPERTY);
+		 prop;
+		 prop =
+		     icalcomponent_get_next_property(comp,
+						     ICAL_ATTENDEE_PROPERTY)) {
+		const char *attendee;
+		struct sched_param sparam;
+		int r;
+
+		/* Is attendee remote or local? */
+		attendee = icalproperty_get_attendee(prop);
+		r = caladdress_lookup(attendee, &sparam);
+
+		/* Don't allow scheduling of remote users via an iSchedule request */
+		if (sparam.flags & SCHEDTYPE_REMOTE) r = HTTP_FORBIDDEN;
+
+		if (r) sched_data.status = REQSTAT_NOUSER;
+		else sched_deliver((char *) attendee, &sched_data, authstate);
+
+		xml_add_schedresponse(root, NULL, BAD_CAST attendee,
+				      BAD_CAST sched_data.status);
+	    }
+
+	    xml_response(HTTP_OK, txn, root->doc);
+
+	    auth_freestate(authstate);
+	}
 	    break;
 
 	default:
@@ -354,9 +413,6 @@ static int meth_post_isched(struct transaction_t *txn,
 	    ret = HTTP_BAD_REQUEST;
 	}
 	break;
-
-    case ICAL_METHOD_REPLY:
-    case ICAL_METHOD_CANCEL:
 
     default:
 	txn->error.precond = ISCHED_INVALID_SCHED;
