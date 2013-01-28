@@ -670,7 +670,6 @@ static void isched_init(struct buf *serverinfo)
 			       "TE", "Trailer", "Transfer-Encoding",
 			       "Upgrade", "Via", NULL };
     const char *senderhdrs[] = { "Originator", NULL };
-    const char *oversignhdrs[] = { "Recipient", NULL };
     uint32_t ver = dkim_libversion();
 
     calc_compile_time(serverinfo);
@@ -707,10 +706,6 @@ static void isched_init(struct buf *serverinfo)
 		 skiphdrs, sizeof(const char **));
     dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_SENDERHDRS,
 		 senderhdrs, sizeof(const char **));
-    if (dkim_libfeature(dkim_lib, DKIM_FEATURE_OVERSIGN))
-	dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_OVERSIGNHDRS,
-		     oversignhdrs, sizeof(const char **));
-    else syslog(LOG_WARNING, "no oversign support in libopendkim");
 
     /* Fetch DKIM private key for signing */
     buf_printf(&keypath, "%s/dkim.private", config_dir);
