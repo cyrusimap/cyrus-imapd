@@ -2957,23 +2957,25 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 	     prop =
 		 icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
 	    const char *attendee = icalproperty_get_attendee(prop);
-	    icalparameter *param;
+	    const char *stat = NULL;
 
 	    /* Don't set status if attendee == organizer */
 	    if (!strcmp(attendee, organizer)) continue;
 
-	    param = icalparameter_new(ICAL_IANA_PARAMETER);
-	    icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
-
-	    if (sched_stat) icalparameter_set_iana_value(param, sched_stat);
+	    if (sched_stat) stat = sched_stat;
 	    else {
 		struct sched_data *sched_data;
 
 		sched_data = hash_lookup(attendee, &att_table);
-		icalparameter_set_iana_value(param, sched_data->status);
+		if (sched_data) stat = sched_data->status;
 	    }
 
-	    icalproperty_add_parameter(prop, param);
+	    if (stat) {
+		icalparameter *param = icalparameter_new(ICAL_IANA_PARAMETER);
+		icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
+		icalparameter_set_iana_value(param, stat);
+		icalproperty_add_parameter(prop, param);
+	    }
 	}
     }
 
