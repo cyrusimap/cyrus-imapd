@@ -2187,7 +2187,7 @@ static const struct prop_entry {
     { "current-user-principal", XML_NS_DAV, 0, propfind_curprin, NULL, NULL },
 
     /* WebDAV POST (RFC 5995) properties */
-    { "add-member", XML_NS_DAV, 0, propfind_addmember, NULL, NULL },
+//    { "add-member", XML_NS_DAV, 0, propfind_addmember, NULL, NULL },
 
     /* WebDAV Sync (RFC 6578) properties */
     { "sync-token", XML_NS_DAV, 1, propfind_sync_token, NULL, NULL },
