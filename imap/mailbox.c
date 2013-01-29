@@ -1698,10 +1698,14 @@ EXPORTED int mailbox_find_index_record(struct mailbox *mailbox, uint32_t uid,
 	const char *oldmem = base + (oldrecord->recno-1) * size;
 	if (uid == oldrecord->uid) {
 	    /* already found it */
-	    low = oldmem;
-	    num_records = 1;
+	    if (record != oldrecord)
+		memcpy(record, oldrecord, sizeof(struct index_record));
+	    return 0;
 	}
 	else if (uid == oldrecord->uid+1) {
+	    /* are we at the end? */
+	    if (oldrecord->recno == mailbox->i.num_records)
+		return IMAP_NOTFOUND;
 	    /* Optimise for the common case of moving up by one uid.
 	     * The index file is in UID order so the record we want
 	     * is either the next one or is not present. */
