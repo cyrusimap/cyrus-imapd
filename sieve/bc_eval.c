@@ -1357,7 +1357,6 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    } else {
 		res = SIEVE_RUN_ERROR; /* something is bad */ 
 	    }
-	    if (toaddr != NULL) free(toaddr);
 
 	    break;
 	}
