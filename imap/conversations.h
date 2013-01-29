@@ -86,6 +86,7 @@ struct conv_folder {
     modseq_t	    modseq;
     uint32_t	    num_records;
     uint32_t	    exists;
+    uint32_t	    unseen;
     uint32_t	    prev_exists;
 };
 

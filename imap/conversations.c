@@ -723,6 +723,7 @@ EXPORTED int conversation_store(struct conversations_state *state,
 	dlist_setnum64(nn, "MODSEQ", folder->modseq);
 	dlist_setnum32(nn, "NUMRECORDS", folder->num_records);
 	dlist_setnum32(nn, "EXISTS", folder->exists);
+	dlist_setnum32(nn, "UNSEEN", folder->unseen);
     }
 
     n = dlist_newlist(dl, "SENDER");
@@ -1053,6 +1054,9 @@ EXPORTED int conversation_parse(struct conversations_state *state,
 	nn = dlist_getchildn(n, 3);
 	if (nn)
 	    folder->exists = dlist_num(nn);
+	nn = dlist_getchildn(n, 4);
+	if (nn)
+	    folder->unseen = dlist_num(nn);
 
 	folder->prev_exists = folder->exists;
     }
@@ -1411,6 +1415,7 @@ EXPORTED void conversation_update(struct conversations_state *state,
     }
     if (delta_unseen) {
 	_apply_delta(&conv->unseen, delta_unseen);
+	_apply_delta(&folder->unseen, delta_unseen);
 	conv->dirty = 1;
     }
     if (delta_size) {

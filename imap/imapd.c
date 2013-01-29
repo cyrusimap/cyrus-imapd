@@ -4814,6 +4814,7 @@ static void do_one_xconvmeta(struct conversations_state *state,
 		dlist_setatom(sli, "DOMAIN", sender->domain);
 	    }
 	}
+	/* XXX - maybe rename FOLDERCOUNTS or something? */
 	else if (!strcasecmp(key, "FOLDEREXISTS")) {
 	    struct dlist *flist = dlist_newlist(item, "FOLDEREXISTS");
 	    conv_folder_t *folder;
@@ -4831,6 +4832,26 @@ static void do_one_xconvmeta(struct conversations_state *state,
 		    dlist_setatom(flist, "MBOXNAME", fname);
 		    /* ok if it's not there */
 		    dlist_setnum32(flist, "EXISTS", folder ? folder->exists : 0);
+		}
+	    }
+	}
+	else if (!strcasecmp(key, "FOLDERUNSEEN")) {
+	    struct dlist *flist = dlist_newlist(item, "FOLDERUNSEEN");
+	    conv_folder_t *folder;
+	    fl = fl->next;
+	    if (dlist_isatomlist(fl)) {
+		struct dlist *tmp;
+		for (tmp = fl->head; tmp; tmp = tmp->next) {
+		    const char *fname = dlist_cstring(tmp);
+		    char intname[MAX_MAILBOX_NAME];
+		    /* ugly city */
+		    if ((*imapd_namespace.mboxname_tointernal)(&imapd_namespace, fname,
+							       imapd_userid, intname))
+			continue;
+		    folder = conversation_find_folder(state, conv, intname);
+		    dlist_setatom(flist, "MBOXNAME", fname);
+		    /* ok if it's not there */
+		    dlist_setnum32(flist, "UNSEEN", folder ? folder->unseen : 0);
 		}
 	    }
 	}
