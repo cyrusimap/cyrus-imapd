@@ -44,9 +44,17 @@
 #ifndef HTTP_CALDAV_SCHED_H
 #define HTTP_CALDAV_SCHED_H
 
-#include "httpd.h"
-
 #include <libical/ical.h>
+
+#ifdef WITH_DKIM
+#include <dkim.h>
+
+#if (OPENDKIM_LIB_VERSION < 0x02070000)
+#undef WITH_DKIM
+#endif
+
+#endif /* WITH_DKIM */
+
 
 #define REQSTAT_PENDING		"1.0;Pending"
 #define REQSTAT_SENT		"1.1;Sent"
@@ -67,6 +75,28 @@ struct sched_data {
     char *force_send;
     const char *status;
 };
+
+/* Scheduling protocol flags */
+#define SCHEDTYPE_REMOTE	(1<<0)
+#define SCHEDTYPE_ISCHEDULE	(1<<1)
+#define SCHEDTYPE_SSL		(1<<2)
+
+struct proplist {
+    icalproperty *prop;
+    struct proplist *next;
+};
+
+/* Each calendar user address has the following scheduling protocol params */
+struct sched_param {
+    char *userid;	/* Userid corresponding to calendar address */ 
+    char *server;	/* Remote server user lives on */
+    unsigned port;	/* Remote server port, default = 80 */
+    unsigned flags;	/* Flags dictating protocol to use for scheduling */
+    struct proplist *props; /* List of attendee iCal properties */
+};
+
+extern int isched_send(struct sched_param *sparam, icalcomponent *ical,
+		       xmlNodePtr *xml);
 
 extern int busytime_query(struct transaction_t *txn, icalcomponent *comp);
 extern void sched_deliver(char *recipient, void *data, void *rock);

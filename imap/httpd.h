@@ -364,39 +364,4 @@ extern int check_precond(struct transaction_t *txn, const void *data,
 extern int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 		     int decompress, const char **errstr);
 
-#ifdef WITH_CALDAV_SCHED
-#include <libical/ical.h>
-
-/* Scheduling protocol flags */
-#define SCHEDTYPE_REMOTE	(1<<0)
-#define SCHEDTYPE_ISCHEDULE	(1<<1)
-#define SCHEDTYPE_SSL		(1<<2)
-
-struct proplist {
-    icalproperty *prop;
-    struct proplist *next;
-};
-
-/* Each calendar user address has the following scheduling protocol params */
-struct sched_param {
-    char *userid;	/* Userid corresponding to calendar address */ 
-    char *server;	/* Remote server user lives on */
-    unsigned port;	/* Remote server port, default = 80 */
-    unsigned flags;	/* Flags dictating protocol to use for scheduling */
-    struct proplist *props; /* List of attendee iCal properties */
-};
-
-extern int isched_send(struct sched_param *sparam, icalcomponent *ical,
-		       xmlNodePtr *xml);
-
-#ifdef WITH_DKIM
-#include <dkim.h>
-
-#if (OPENDKIM_LIB_VERSION < 0x02070000)
-#undef WITH_DKIM
-#endif
-
-#endif /* WITH_DKIM */
-#endif /* WITH_CALDAV_SCHED */
-
 #endif /* HTTPD_H */
