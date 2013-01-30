@@ -1787,6 +1787,9 @@ static void busytime_query_remote(char *server __attribute__((unused)),
 
 	r = isched_send(remote, rrock->ical, &xml);
 	if (r) status = REQSTAT_TEMPFAIL;
+	else if (xmlStrcmp(xml->name, BAD_CAST "schedule-response")) {
+	    if (r) status = REQSTAT_TEMPFAIL;
+	}
 	else {
 	    xmlNodePtr cur;
 
@@ -2223,14 +2226,6 @@ void sched_deliver(char *recipient, void *data, void *rock)
     icalproperty *prop;
     struct transaction_t txn;
 
-    if (caladdress_lookup(recipient, &sparam)) {
-	sched_data->status =
-	    sched_data->ischedule ? REQSTAT_NOUSER : SCHEDSTAT_NOUSER;
-	goto done;
-    }
-    else userid = sparam.userid;
-    /* XXX  Check sparam.flags for remote recipients */
-
     /* Check SCHEDULE-FORCE-SEND value */
     if (sched_data->force_send) {
 	const char *force = sched_data->is_reply ? "REPLY" : "REQUEST";
@@ -2239,6 +2234,83 @@ void sched_deliver(char *recipient, void *data, void *rock)
 	    sched_data->status = SCHEDSTAT_PARAM;
 	    goto done;
 	}
+    }
+
+    if (caladdress_lookup(recipient, &sparam)) {
+	sched_data->status =
+	    sched_data->ischedule ? REQSTAT_NOUSER : SCHEDSTAT_NOUSER;
+	goto done;
+    }
+    else userid = sparam.userid;
+
+    if (sparam.flags) {
+	/* Remote attendee */
+	if (sparam.flags == SCHEDTYPE_REMOTE) {
+	    /* Use iMIP */
+	    r = imip_send(sched_data->itip);
+	    if (!r) {
+		sched_data->status =
+		    sched_data->ischedule ? REQSTAT_SENT : SCHEDSTAT_SENT;
+	    }
+	    else {
+		sched_data->status = sched_data->ischedule ?
+		    REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
+	    }
+	}
+	else {
+	    /* Use iSchedule */
+	    xmlNodePtr xml;
+
+	    r = isched_send(&sparam, sched_data->itip, &xml);
+	    if (r) {
+		sched_data->status = sched_data->ischedule ?
+		    REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
+	    }
+	    else if (xmlStrcmp(xml->name, BAD_CAST "schedule-response")) {
+		sched_data->status = sched_data->ischedule ?
+		    REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
+	    }
+	    else {
+		xmlNodePtr cur;
+
+		/* Process each response element */
+		for (cur = xml->children; cur; cur = cur->next) {
+		    xmlNodePtr node;
+		    xmlChar *recip = NULL, *status = NULL;
+		    static char statbuf[1024];
+
+		    if (cur->type != XML_ELEMENT_NODE) continue;
+
+		    for (node = cur->children; node; node = node->next) {
+			if (node->type != XML_ELEMENT_NODE) continue;
+
+			if (!xmlStrcmp(node->name, BAD_CAST "recipient"))
+			    recip = xmlNodeGetContent(node);
+			else if (!xmlStrcmp(node->name,
+					    BAD_CAST "request-status"))
+			    status = xmlNodeGetContent(node);
+		    }
+
+		    if (!strncmp(status, "2.0", 3)) {
+			sched_data->status = sched_data->ischedule ?
+			    REQSTAT_DELIVERED : SCHEDSTAT_DELIVERED;
+		    }
+		    else {
+			if (sched_data->ischedule)
+			    strlcpy(statbuf, status, sizeof(statbuf));
+			else
+			    strlcpy(statbuf, status, 4);
+
+			sched_data->status = statbuf;
+		    }
+
+		    xmlFree(status);
+		    xmlFree(recip);
+		}
+	    }
+	}
+
+	goto done;
     }
 
     /* Check ACL of sender on recipient's Scheduling Inbox */
