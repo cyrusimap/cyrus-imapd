@@ -462,8 +462,12 @@ int isched_send(struct sched_param *sparam, icalcomponent *ical,
     if (sparam->flags & SCHEDTYPE_REMOTE) uri = ISCHED_WELLKNOWN_URI;
     else uri = namespace_ischedule.prefix;
 
-    /* Open connection to iSchedule receiver */
-    be = proxy_findserver(sparam->server, &http_protocol, NULL,
+    /* Open connection to iSchedule receiver.
+       Use header buffer to construct remote server[:port][/tls] */
+    buf_setcstr(&hdrs, sparam->server);
+    if (sparam->port) buf_printf(&hdrs, ":%u", sparam->port);
+    if (sparam->flags & SCHEDTYPE_SSL) buf_appendcstr(&hdrs, "/tls");
+    be = proxy_findserver(buf_cstring(&hdrs), &http_protocol, NULL,
 			  &backend_cached, NULL, NULL, httpd_in);
     if (!be) return HTTP_UNAVAILABLE;
 
@@ -476,7 +480,9 @@ int isched_send(struct sched_param *sparam, icalcomponent *ical,
      *      or add WSP around commas to obey ischedule-relaxed canonicalization.
      */
     buf_reset(&hdrs);
-    buf_printf(&hdrs, "Host: %s\r\n", sparam->server);
+    buf_printf(&hdrs, "Host: %s", sparam->server);
+    if (sparam->port) buf_printf(&hdrs, ":%u", sparam->port);
+    buf_printf(&hdrs, "\r\n");
     buf_printf(&hdrs, "Cache-Control: no-cache,no-transform\r\n");
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	buf_printf(&hdrs, "User-Agent: %s\r\n", buf_cstring(&serverinfo));
@@ -529,10 +535,13 @@ int isched_send(struct sched_param *sparam, icalcomponent *ical,
 			      DKIM_SIGN_RSASHA256, -1 /* entire body */,
 			      &stat))) {
 
+	    /* Suppress folding of DKIM header */
+//	    stat = dkim_set_margin(dkim, 0);
+
 	    /* Add our query method list */
 	    stat = dkim_add_querymethod(dkim, "private-exchange", NULL);
 	    stat = dkim_add_querymethod(dkim, "http", "well-known");
-	    stat = dkim_add_querymethod(dkim, "dns", "txt");
+//	    stat = dkim_add_querymethod(dkim, "dns", "txt");
 
 	    /* Process the headers and body */
 	    stat = dkim_chunk(dkim,
@@ -659,6 +668,7 @@ static void isched_init(struct buf *serverinfo)
     int fd;
     struct buf keypath = BUF_INITIALIZER;
     unsigned flags = ( DKIM_LIBFLAGS_BADSIGHANDLES | DKIM_LIBFLAGS_CACHE |
+//		       DKIM_LIBFLAGS_KEEPFILES | DKIM_LIBFLAGS_TMPFILES |
 		       DKIM_LIBFLAGS_VERIFYONE );
     uint64_t ttl = 3600;  /* 1 hour */
     const char *requiredhdrs[] = { "Content-Type", "iSchedule-Version",
