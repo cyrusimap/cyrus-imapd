@@ -738,8 +738,7 @@ static size_t roundup(size_t size)
 	return 256;
     if (size < 512)
 	return 512;
-    size += 1024;
-    return size & ~((size_t)1024);
+    return ((size + 1024) & ~1023);
 }
 
 EXPORTED void buf_ensure(struct buf *buf, size_t n)
