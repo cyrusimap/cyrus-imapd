@@ -257,9 +257,11 @@ static const struct precond_t {
     { "invalid-calendar-data", NS_ISCHED },
     { "invalid-scheduling-message", NS_ISCHED },
     { "originator-missing", NS_ISCHED },
+    { "too-many-originators", NS_ISCHED },
     { "originator-invalid", NS_ISCHED },
     { "originator-denied", NS_ISCHED },
     { "recipient-missing", NS_ISCHED },
+    { "recipient-mismatch", NS_ISCHED },
     { "verification-failed", NS_ISCHED },
 
     /* CardDAV (RFC 6352) preconditions */

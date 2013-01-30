@@ -288,8 +288,8 @@ static int meth_post_isched(struct transaction_t *txn,
 	return HTTP_BAD_REQUEST;
     }
     else if (hdr[1]) {
-	/* Multiple Originators (XXX is this the correct precond?) */
-	txn->error.precond = ISCHED_ORIG_INVALID;
+	/* Multiple Originators */
+	txn->error.precond = ISCHED_MULTIPLE_ORIG;
 	return HTTP_BAD_REQUEST;
     }
 
