@@ -73,6 +73,8 @@ is used to manage a cyrusdb file. The usable actions are:
 .PP
 .BI consistency
 .PP
+.BI repack
+.PP
 You may omit key or key/value and specify one per line on stdin. Keys are
 terminated by tab or newline, values are terminated by newline.
 .PP
@@ -81,6 +83,9 @@ usable actions.
 .PP
 The 'consistency' command runs a consistency check on the DB by calling
 'myconsistent' on it.
+.PP
+The 'repack' command will compress the database by removing stale data
+on backends which support it.  It's a NOOP otherwise.
 .PP
 .I cyr_dbtool
 reads any applicable configuration options out of the

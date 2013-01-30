@@ -279,6 +279,7 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "* delete <key>\n");
 	fprintf(stderr, "* dump - internal format dump\n");
 	fprintf(stderr, "* consistent - check consistency\n");
+	fprintf(stderr, "* repack - repack/checkpoint the DB (if supported)\n");
 	fprintf(stderr, "* damage - start a commit then die during\n");
 	fprintf(stderr, "* batch - read from stdin and execute commands\n");
 	fprintf(stderr, "You may omit key or key/value and specify one per line on stdin\n");
@@ -357,6 +358,9 @@ int main(int argc, char *argv[])
 	} else {
 	    printf("Yes, consistent\n");
 	}
+    } else if (!strcmp(action, "repack")) {
+	if (cyrusdb_repack(db))
+	    printf("Failed to repack\n");
     } else if (!strcmp(action, "damage")) {
 	cyrusdb_store(db, "INVALID", 7, "CRASHME", 7, &tid);
 	assert(!tid);
