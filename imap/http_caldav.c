@@ -2207,14 +2207,87 @@ static void free_sched_data(void *data)
 #define SCHEDSTAT_PERMFAIL	"5.2"
 #define SCHEDSTAT_REJECTED	"5.3"
 
-/* Deliver scheduling object to recipient's Inbox */
-void sched_deliver(char *recipient, void *data, void *rock)
+/* Deliver scheduling object to a remote recipient */
+void sched_deliver_remote(char *recipient __attribute__((unused)),
+			  struct sched_param *sparam,
+			  struct sched_data *sched_data)
 {
-    struct sched_data *sched_data = (struct sched_data *) data;
-    struct auth_state *authstate = (struct auth_state *) rock;
+    int r;
+
+    if (sparam->flags == SCHEDTYPE_REMOTE) {
+	/* Use iMIP */
+	r = imip_send(sched_data->itip);
+	if (!r) {
+	    sched_data->status =
+		sched_data->ischedule ? REQSTAT_SENT : SCHEDSTAT_SENT;
+	}
+	else {
+	    sched_data->status = sched_data->ischedule ?
+		REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
+	}
+    }
+    else {
+	/* Use iSchedule */
+	xmlNodePtr xml;
+
+	r = isched_send(sparam, sched_data->itip, &xml);
+	if (r) {
+	    sched_data->status = sched_data->ischedule ?
+		REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
+	}
+	else if (xmlStrcmp(xml->name, BAD_CAST "schedule-response")) {
+	    sched_data->status = sched_data->ischedule ?
+		REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
+	}
+	else {
+	    xmlNodePtr cur;
+
+	    /* Process each response element */
+	    for (cur = xml->children; cur; cur = cur->next) {
+		xmlNodePtr node;
+		xmlChar *recip = NULL, *status = NULL;
+		static char statbuf[1024];
+
+		if (cur->type != XML_ELEMENT_NODE) continue;
+
+		for (node = cur->children; node; node = node->next) {
+		    if (node->type != XML_ELEMENT_NODE) continue;
+
+		    if (!xmlStrcmp(node->name, BAD_CAST "recipient"))
+			recip = xmlNodeGetContent(node);
+		    else if (!xmlStrcmp(node->name,
+					BAD_CAST "request-status"))
+			status = xmlNodeGetContent(node);
+		}
+
+		if (!strncmp((const char *) status, "2.0", 3)) {
+		    sched_data->status = sched_data->ischedule ?
+			REQSTAT_DELIVERED : SCHEDSTAT_DELIVERED;
+		}
+		else {
+		    if (sched_data->ischedule)
+			strlcpy(statbuf, (const char *) status, sizeof(statbuf));
+		    else
+			strlcpy(statbuf, (const char *) status, 4);
+		    
+		    sched_data->status = statbuf;
+		}
+
+		xmlFree(status);
+		xmlFree(recip);
+	    }
+	}
+    }
+}
+
+/* Deliver scheduling object to local recipient */
+void sched_deliver_local(char *recipient __attribute__((unused)),
+			 struct sched_param *sparam,
+			 struct sched_data *sched_data,
+			 struct auth_state *authstate)
+{
     int r = 0, rights;
-    struct sched_param sparam;
-    const char *userid, *mboxname = NULL;
+    const char *userid = sparam->userid, *mboxname = NULL;
     static struct buf resource = BUF_INITIALIZER;
     static unsigned sched_count = 0;
     char namebuf[MAX_MAILBOX_BUFFER];
@@ -2225,93 +2298,6 @@ void sched_deliver(char *recipient, void *data, void *rock)
     icalcomponent *ical = NULL;
     icalproperty *prop;
     struct transaction_t txn;
-
-    /* Check SCHEDULE-FORCE-SEND value */
-    if (sched_data->force_send) {
-	const char *force = sched_data->is_reply ? "REPLY" : "REQUEST";
-
-	if (strcmp(sched_data->force_send, force)) {
-	    sched_data->status = SCHEDSTAT_PARAM;
-	    goto done;
-	}
-    }
-
-    if (caladdress_lookup(recipient, &sparam)) {
-	sched_data->status =
-	    sched_data->ischedule ? REQSTAT_NOUSER : SCHEDSTAT_NOUSER;
-	goto done;
-    }
-    else userid = sparam.userid;
-
-    if (sparam.flags) {
-	/* Remote attendee */
-	if (sparam.flags == SCHEDTYPE_REMOTE) {
-	    /* Use iMIP */
-	    r = imip_send(sched_data->itip);
-	    if (!r) {
-		sched_data->status =
-		    sched_data->ischedule ? REQSTAT_SENT : SCHEDSTAT_SENT;
-	    }
-	    else {
-		sched_data->status = sched_data->ischedule ?
-		    REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
-	    }
-	}
-	else {
-	    /* Use iSchedule */
-	    xmlNodePtr xml;
-
-	    r = isched_send(&sparam, sched_data->itip, &xml);
-	    if (r) {
-		sched_data->status = sched_data->ischedule ?
-		    REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
-	    }
-	    else if (xmlStrcmp(xml->name, BAD_CAST "schedule-response")) {
-		sched_data->status = sched_data->ischedule ?
-		    REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
-	    }
-	    else {
-		xmlNodePtr cur;
-
-		/* Process each response element */
-		for (cur = xml->children; cur; cur = cur->next) {
-		    xmlNodePtr node;
-		    xmlChar *recip = NULL, *status = NULL;
-		    static char statbuf[1024];
-
-		    if (cur->type != XML_ELEMENT_NODE) continue;
-
-		    for (node = cur->children; node; node = node->next) {
-			if (node->type != XML_ELEMENT_NODE) continue;
-
-			if (!xmlStrcmp(node->name, BAD_CAST "recipient"))
-			    recip = xmlNodeGetContent(node);
-			else if (!xmlStrcmp(node->name,
-					    BAD_CAST "request-status"))
-			    status = xmlNodeGetContent(node);
-		    }
-
-		    if (!strncmp(status, "2.0", 3)) {
-			sched_data->status = sched_data->ischedule ?
-			    REQSTAT_DELIVERED : SCHEDSTAT_DELIVERED;
-		    }
-		    else {
-			if (sched_data->ischedule)
-			    strlcpy(statbuf, status, sizeof(statbuf));
-			else
-			    strlcpy(statbuf, status, 4);
-
-			sched_data->status = statbuf;
-		    }
-
-		    xmlFree(status);
-		    xmlFree(recip);
-		}
-	    }
-	}
-
-	goto done;
-    }
 
     /* Check ACL of sender on recipient's Scheduling Inbox */
     caldav_mboxname(SCHED_INBOX, userid, namebuf);
@@ -2649,6 +2635,41 @@ void sched_deliver(char *recipient, void *data, void *rock)
     if (inbox) mailbox_close(&inbox);
     if (mailbox) mailbox_close(&mailbox);
     if (caldavdb) caldav_close(caldavdb);
+}
+
+
+/* Deliver scheduling object to recipient's Inbox */
+void sched_deliver(char *recipient, void *data, void *rock)
+{
+    struct sched_data *sched_data = (struct sched_data *) data;
+    struct auth_state *authstate = (struct auth_state *) rock;
+    struct sched_param sparam;
+
+    /* Check SCHEDULE-FORCE-SEND value */
+    if (sched_data->force_send) {
+	const char *force = sched_data->is_reply ? "REPLY" : "REQUEST";
+
+	if (strcmp(sched_data->force_send, force)) {
+	    sched_data->status = SCHEDSTAT_PARAM;
+	    return;
+	}
+    }
+
+    if (caladdress_lookup(recipient, &sparam)) {
+	sched_data->status =
+	    sched_data->ischedule ? REQSTAT_NOUSER : SCHEDSTAT_NOUSER;
+	/* Unknown user */
+	return;
+    }
+
+    if (sparam.flags) {
+	/* Remote recipient */
+	sched_deliver_remote(recipient, &sparam, sched_data);
+    }
+    else {
+	/* Local recipient */
+	sched_deliver_local(recipient, &sparam, sched_data, authstate);
+    }
 }
 
 
