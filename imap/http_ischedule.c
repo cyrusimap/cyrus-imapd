@@ -232,8 +232,16 @@ static int meth_get_isched(struct transaction_t *txn,
     xmlNewProp(meth, BAD_CAST "name", BAD_CAST "CANCEL");
     comp = xmlNewChild(node, NULL, BAD_CAST "component", NULL);
     xmlNewProp(comp, BAD_CAST "name", BAD_CAST "VTODO");
+    meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
+    xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REQUEST");
+    meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
+    xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REPLY");
+    meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
+    xmlNewProp(meth, BAD_CAST "name", BAD_CAST "CANCEL");
     comp = xmlNewChild(node, NULL, BAD_CAST "component", NULL);
     xmlNewProp(comp, BAD_CAST "name", BAD_CAST "VFREEBUSY");
+    meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
+    xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REQUEST");
 
     node = xmlNewChild(capa, NULL,
 		       BAD_CAST "calendar-data-types", NULL);
