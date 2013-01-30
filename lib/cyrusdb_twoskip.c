@@ -1770,9 +1770,6 @@ static int mycheckpoint(struct dbengine *db)
     struct copy_rock cr;
     int r = 0;
 
-    /* must be in a transaction still */
-    assert(db->current_txn);
-
     r = myconsistent(db, db->current_txn);
     if (r) {
 	syslog(LOG_ERR, "db %s, inconsistent pre-checkpoint, bailing out",
@@ -2359,5 +2356,6 @@ HIDDEN struct cyrusdb_backend cyrusdb_twoskip =
 
     &dump,
     &consistent,
+    &mycheckpoint,
     &mycompar
 };

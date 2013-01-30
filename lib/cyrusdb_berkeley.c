@@ -1043,6 +1043,7 @@ HIDDEN struct cyrusdb_backend cyrusdb_berkeley =
     
     NULL,
     NULL,
+    NULL,
     &mycompar
 };
 
@@ -1070,6 +1071,7 @@ HIDDEN struct cyrusdb_backend cyrusdb_berkeley_nosync =
     &commit_nosync,
     &abort_txn,
 
+    NULL,
     NULL,
     NULL,
     &mycompar
@@ -1101,6 +1103,7 @@ HIDDEN struct cyrusdb_backend cyrusdb_berkeley_hash =
     
     NULL,
     NULL,
+    NULL,
     &mycompar
 };
 
@@ -1128,6 +1131,7 @@ HIDDEN struct cyrusdb_backend cyrusdb_berkeley_hash_nosync =
     &commit_nosync,
     &abort_txn,
 
+    NULL,
     NULL,
     NULL,
     &mycompar

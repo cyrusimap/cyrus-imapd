@@ -852,5 +852,6 @@ EXPORTED struct cyrusdb_backend cyrusdb_flat =
 
     NULL,
     NULL,
+    NULL,
     &mycompar
 };

@@ -209,6 +209,7 @@ struct cyrusdb_backend {
 
     int (*dump)(struct dbengine *db, int detail);
     int (*consistent)(struct dbengine *db);
+    int (*repack)(struct dbengine *db);
     int (*compar)(struct dbengine *db, const char *s1, int l1,
 		  const char *s2, int l2);
 };
@@ -272,6 +273,7 @@ extern int cyrusdb_commit(struct db *db, struct txn *tid);
 extern int cyrusdb_abort(struct db *db, struct txn *tid);
 extern int cyrusdb_dump(struct db *db, int detail);
 extern int cyrusdb_consistent(struct db *db);
+extern int cyrusdb_repack(struct db *db);
 extern int cyrusdb_compar(struct db *db,
 			  const char *a, int alen,
 			  const char *b, int blen);

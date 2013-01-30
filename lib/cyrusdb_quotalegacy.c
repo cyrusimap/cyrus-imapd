@@ -894,5 +894,6 @@ HIDDEN struct cyrusdb_backend cyrusdb_quotalegacy =
 
     NULL,
     NULL,
+    NULL,
     &mycompar
 };

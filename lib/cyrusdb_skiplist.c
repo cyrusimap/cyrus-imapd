@@ -313,7 +313,7 @@ enum {
 
 static int mycommit(struct dbengine *db, struct txn *tid);
 static int myabort(struct dbengine *db, struct txn *tid);
-static int mycheckpoint(struct dbengine *db, int locked);
+static int mycheckpoint(struct dbengine *db);
 static int myconsistent(struct dbengine *db, struct txn *tid, int locked);
 static int recovery(struct dbengine *db, int flags);
 
@@ -1553,7 +1553,7 @@ static int mycommit(struct dbengine *db, struct txn *tid)
 
     /* consider checkpointing */
     if (!r && tid->logend > (2 * db->logstart + SKIPLIST_MINREWRITE)) {
-	r = mycheckpoint(db, 1);
+	r = mycheckpoint(db);
     }
     
     if (be_paranoid) {
@@ -1690,7 +1690,7 @@ static int myabort(struct dbengine *db, struct txn *tid)
 
 /* compress 'db'. if 'locked != 0', the database is already R/W locked and
    will be returned as such. */
-static int mycheckpoint(struct dbengine *db, int locked)
+static int mycheckpoint(struct dbengine *db)
 {
     char fname[1024];
     int oldfd;
@@ -1704,17 +1704,10 @@ static int mycheckpoint(struct dbengine *db, int locked)
     unsigned i;
     clock_t start = sclock();
 
-    /* grab write lock (could be read but this prevents multiple checkpoints
-     simultaneously) */
-    if (!locked) {
-	r = write_lock(db, NULL);
-	if (r < 0) return r;
-    } else {
-	/* we need the latest and greatest data */
-        assert(db->is_open && db->lock_status == WRITELOCKED);
-	map_refresh(db->fd, 0, &db->map_base, &db->map_len, MAP_UNKNOWN_LEN,
-		    db->fname, 0);
-    }
+    /* we need the latest and greatest data */
+    assert(db->is_open && db->lock_status == WRITELOCKED);
+    map_refresh(db->fd, 0, &db->map_base, &db->map_len, MAP_UNKNOWN_LEN,
+		db->fname, 0);
 
     /* can't be in a transaction */
     assert(db->current_txn == NULL);
@@ -1731,7 +1724,6 @@ static int mycheckpoint(struct dbengine *db, int locked)
     db->fd = open(fname, O_RDWR | O_CREAT, 0644);
     if (db->fd < 0) {
 	syslog(LOG_ERR, "DBERROR: skiplist checkpoint: open(%s): %m", fname);
-	if (!locked) unlock(db);
 	db->fd = oldfd;
 	return CYRUSDB_IOERROR;
     }
@@ -1740,7 +1732,6 @@ static int mycheckpoint(struct dbengine *db, int locked)
     r = ftruncate(db->fd, 0);
     if (r < 0) {
 	syslog(LOG_ERR, "DBERROR: skiplist checkpoint %s: ftruncate %m", fname);
-	if (!locked) unlock(db);
 	db->fd = oldfd;
 	return CYRUSDB_IOERROR;
     }
@@ -1904,11 +1895,6 @@ static int mycheckpoint(struct dbengine *db, int locked)
 	syslog(LOG_ERR, "db %s, inconsistent post-checkpoint, bailing out",
 	       db->fname);
 	return r;
-    }
-
-    if (!locked) {
-	/* unlock the new db files */
-	unlock(db);
     }
 
     syslog(LOG_INFO,
@@ -2406,7 +2392,7 @@ static int recovery(struct dbengine *db, int flags)
 	map_refresh(db->fd, 0, &db->map_base, &db->map_len, db->map_size,
 		    db->fname, 0);
 
-	r = mycheckpoint(db, 1);
+	r = mycheckpoint(db);
 
 	if (r || !(flags & RECOVERY_CALLER_LOCKED)) {
 	    unlock(db);
@@ -2445,7 +2431,7 @@ static int recovery(struct dbengine *db, int flags)
     }
 
     if (!r && need_checkpoint) {
-	r = mycheckpoint(db, 1);
+	r = mycheckpoint(db);
     }
 
     if(r || !(flags & RECOVERY_CALLER_LOCKED)) {
@@ -2489,5 +2475,6 @@ EXPORTED struct cyrusdb_backend cyrusdb_skiplist =
 
     &dump,
     &consistent,
+    &mycheckpoint,
     &mycompar
 };

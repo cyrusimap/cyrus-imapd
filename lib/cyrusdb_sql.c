@@ -920,5 +920,6 @@ HIDDEN struct cyrusdb_backend cyrusdb_sql =
 
     NULL,
     NULL,
+    NULL,
     &mycompar
 };

@@ -267,12 +267,20 @@ EXPORTED int cyrusdb_abort(struct db *db, struct txn *tid)
 
 EXPORTED int cyrusdb_dump(struct db *db, int detail)
 {
+    if (!db->backend->dump) return 0;
     return db->backend->dump(db->engine, detail);
 }
 
 EXPORTED int cyrusdb_consistent(struct db *db)
 {
+    if (!db->backend->consistent) return 0;
     return db->backend->consistent(db->engine);
+}
+
+EXPORTED int cyrusdb_repack(struct db *db)
+{
+    if (!db->backend->repack) return 0;
+    return db->backend->repack(db->engine);
 }
 
 EXPORTED int cyrusdb_compar(struct db *db,
