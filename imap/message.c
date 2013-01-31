@@ -5684,9 +5684,11 @@ EXPORTED int message_get_indexflags(message_t *m, uint32_t *flagsp)
 
 EXPORTED int message_get_userflags(message_t *m, uint32_t *flagsp)
 {
+    int i;
     int r = message_need(m, M_RECORD);
     if (r) return r;
-    memcpy(flagsp, m->record.user_flags, MAX_USER_FLAGS/32);
+    for (i = 0; i < MAX_USER_FLAGS/32; i++)
+	flagsp[i] = m->record.user_flags[i];
     return 0;
 }
 
