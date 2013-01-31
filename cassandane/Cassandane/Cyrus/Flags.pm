@@ -351,6 +351,42 @@ sub test_max_userflags
 
 #
 # Test that
+#  - more than 32 flags can be searched for
+#  - no more can be used
+#
+sub test_search_allflags
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $talk->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog "Add messages and flags";
+
+    my %msg;
+    for (my $i = 1 ; $i <= MAX_USER_FLAGS ; $i++)
+    {
+	my $flag = "flag$i";
+	$msg{$i} = $self->make_message("Message $i");
+	xlog "Set $flag on message $i";
+	$talk->store($i, '+flags', "($flag)");
+    }
+
+    # for debugging
+    $talk->fetch('1:*', '(uid flags)');
+
+    for (my $i = 1 ; $i <= MAX_USER_FLAGS ; $i++) {
+	xlog "Can search for flag $i";
+	my $uids = $talk->search("keyword", "flag$i");
+	$self->assert_equals(1, scalar(@$uids));
+	$self->assert_equals($i, $uids->[0]);
+    }
+}
+
+#
+# Test that
 #  - multiple flags can be set together
 #  - flags can be set and cleared without affecting other flags
 #  - other messages aren't affected by those changes
