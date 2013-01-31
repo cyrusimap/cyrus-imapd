@@ -85,6 +85,14 @@ void message_guid_copy(struct message_guid *dst __attribute__((unused)),
 int message_guid_isnull(struct message_guid *guid __attribute__((unused)))
 { return 0; }
 
+const char *cacheitem_base(struct index_record *record __attribute__((unused)),
+			   int field __attribute__((unused)))
+{ return NULL; }
+
+unsigned cacheitem_size(struct index_record *record __attribute__((unused)),
+			int field __attribute__((unused)))
+{ return 0; }
+
 #define HEADERCACHESIZE 1019
 
 typedef struct Header {
