@@ -1228,7 +1228,8 @@ int tls_init_clientengine(int verifydepth,
 	printf("TLS client engine: cannot seed PRNG\n");
 	return -1;
     }
-    
+
+    /* XXX  May need to use only SSLv3 for iSchedule */
     c_ctx = SSL_CTX_new(TLSv1_client_method());
     if (c_ctx == NULL) {
 	return (-1);
