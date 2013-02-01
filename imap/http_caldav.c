@@ -2534,7 +2534,7 @@ void sched_deliver_local(char *recipient __attribute__((unused)),
 		    icalproperty_add_parameter(prop, param);
 		    icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
 		}
-		icalparameter_set_iana_value(param, SCHEDSTAT_SUCCESS);
+		icalparameter_set_iana_value(param, req_stat);
 
 	    } while ((itip =
 		      icalcomponent_get_next_component(sched_data->itip, kind)));
