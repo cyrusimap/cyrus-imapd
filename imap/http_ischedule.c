@@ -449,10 +449,10 @@ static int meth_post_isched(struct transaction_t *txn,
 }
 
 
-int isched_send(struct sched_param *sparam, icalcomponent *ical,
-		xmlNodePtr *xml)
+int isched_send(struct sched_param *sparam, const char *recipient,
+		icalcomponent *ical, xmlNodePtr *xml)
 {
-    int r = 0, sep = ' ';
+    int r = 0;
     struct backend *be;
     static unsigned send_count = 0;
     static struct buf hdrs = BUF_INITIALIZER;
@@ -510,15 +510,27 @@ int isched_send(struct sched_param *sparam, icalcomponent *ical,
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     buf_printf(&hdrs, "Originator: %s\r\n", icalproperty_get_organizer(prop));
 
-    buf_printf(&hdrs, "Recipient:");
-    for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
-	 prop;
-	 prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
-	buf_printf(&hdrs, "%c%s", sep, icalproperty_get_attendee(prop));
-	sep = ',';
+    if (recipient) {
+	/* Single recipient */
+	buf_printf(&hdrs, "Recipient: %s\r\n", recipient);
+    }
+    else {
+	/* VFREEBUSY REQUEST - use ATTENDEES as Recipients */
+	char sep = ' ';
+
+	buf_printf(&hdrs, "Recipient:");
+	for (prop = icalcomponent_get_first_property(comp,
+						     ICAL_ATTENDEE_PROPERTY);
+	     prop;
+	     prop = icalcomponent_get_next_property(comp,
+						    ICAL_ATTENDEE_PROPERTY)) {
+	    buf_printf(&hdrs, "%c%s", sep, icalproperty_get_attendee(prop));
+	    sep = ',';
+	}
+	buf_printf(&hdrs, "\r\n");
     }
 
-    buf_printf(&hdrs, "\r\n\r\n");
+    buf_printf(&hdrs, "\r\n");
 
   redirect:
     /* Send request line */

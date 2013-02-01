@@ -1785,7 +1785,7 @@ static void busytime_query_remote(char *server __attribute__((unused)),
 	/* Use iSchedule */
 	xmlNodePtr xml;
 
-	r = isched_send(remote, rrock->ical, &xml);
+	r = isched_send(remote, NULL, rrock->ical, &xml);
 	if (r) status = REQSTAT_TEMPFAIL;
 	else if (xmlStrcmp(xml->name, BAD_CAST "schedule-response")) {
 	    if (r) status = REQSTAT_TEMPFAIL;
@@ -2208,8 +2208,7 @@ static void free_sched_data(void *data)
 #define SCHEDSTAT_REJECTED	"5.3"
 
 /* Deliver scheduling object to a remote recipient */
-void sched_deliver_remote(char *recipient __attribute__((unused)),
-			  struct sched_param *sparam,
+void sched_deliver_remote(char *recipient, struct sched_param *sparam,
 			  struct sched_data *sched_data)
 {
     int r;
@@ -2230,7 +2229,7 @@ void sched_deliver_remote(char *recipient __attribute__((unused)),
 	/* Use iSchedule */
 	xmlNodePtr xml;
 
-	r = isched_send(sparam, sched_data->itip, &xml);
+	r = isched_send(sparam, recipient, sched_data->itip, &xml);
 	if (r) {
 	    sched_data->status = sched_data->ischedule ?
 		REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;

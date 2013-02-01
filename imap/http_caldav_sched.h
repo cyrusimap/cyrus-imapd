@@ -95,8 +95,8 @@ struct sched_param {
     struct proplist *props; /* List of attendee iCal properties */
 };
 
-extern int isched_send(struct sched_param *sparam, icalcomponent *ical,
-		       xmlNodePtr *xml);
+extern int isched_send(struct sched_param *sparam, const char *recipient,
+		       icalcomponent *ical, xmlNodePtr *xml);
 
 extern int busytime_query(struct transaction_t *txn, icalcomponent *comp);
 extern void sched_deliver(char *recipient, void *data, void *rock);
