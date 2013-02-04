@@ -136,7 +136,11 @@ static struct meth_params carddav_params = {
 /* Namespace for Carddav collections */
 struct namespace_t namespace_addressbook = {
     URL_NS_ADDRESSBOOK, 0, "/addressbooks", "/.well-known/carddav", 1 /* auth */,
+#if 0 /* Until Apple Contacts fixes their add-member implementation */
     (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DAV | ALLOW_CARD),
+#else
+    (ALLOW_READ | ALLOW_WRITE | ALLOW_DAV | ALLOW_CARD),
+#endif
     &my_carddav_init, &my_carddav_auth, my_carddav_reset, &my_carddav_shutdown,
     { 
 	{ &meth_acl,		&carddav_params },	/* ACL		*/
@@ -149,7 +153,11 @@ struct namespace_t namespace_addressbook = {
 	{ &meth_mkcol,		&carddav_params },	/* MKCOL	*/
 	{ &meth_copy,		&carddav_params },	/* MOVE		*/
 	{ &meth_options,	NULL },			/* OPTIONS	*/
+#if 0 /* Until Apple Contacts fixes their add-member implementation */
 	{ &meth_post,		&carddav_params },	/* POST		*/
+#else
+	{ NULL,			NULL },			/* POST		*/
+#endif
 	{ &meth_propfind,	&carddav_params },	/* PROPFIND	*/
 	{ &meth_proppatch,	&carddav_params },	/* PROPPATCH	*/
 	{ &meth_put,		&carddav_params },	/* PUT		*/
