@@ -70,6 +70,7 @@
 #include "global.h"
 #include "hash.h"
 #include "httpd.h"
+#include "http_caldav_sched.h"
 #include "http_dav.h"
 #include "http_err.h"
 #include "http_proxy.h"
@@ -149,15 +150,12 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
 					   const char *uid,
 					   const char *organizer,
 					   const char *attendee);
-#ifdef WITH_CALDAV_SCHED
-#include "http_caldav_sched.h"
 
 static int sched_busytime(struct transaction_t *txn);
 static void sched_request(const char *organizer, struct sched_param *sparam,
 			  icalcomponent *oldical, icalcomponent *newical);
 static void sched_reply(const char *userid,
 			icalcomponent *oldical, icalcomponent *newical);
-#endif /* WITH_CALDAV_SCHED */
 
 static struct meth_params caldav_params = {
     "text/calendar; charset=utf-8",
@@ -188,8 +186,8 @@ static struct meth_params caldav_params = {
 
 
 /* Namespace for CalDAV collections */
-const struct namespace_t namespace_calendar = {
-    URL_NS_CALENDAR, "/calendars", "/.well-known/caldav", 1 /* auth */,
+struct namespace_t namespace_calendar = {
+    URL_NS_CALENDAR, 0, "/calendars", "/.well-known/caldav", 1 /* auth */,
     (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DAV | ALLOW_CAL),
     &my_caldav_init, &my_caldav_auth, my_caldav_reset, &my_caldav_shutdown,
     { 
@@ -215,6 +213,11 @@ const struct namespace_t namespace_calendar = {
 
 static void my_caldav_init(struct buf *serverinfo)
 {
+    namespace_calendar.enabled =
+	config_httpmodules & IMAP_ENUM_HTTPMODULES_CALDAV;
+
+    if (!namespace_calendar.enabled) return;
+
     if (!config_getstring(IMAPOPT_CALENDARPREFIX)) {
 	fatal("Required 'calendarprefix' option is not set", EC_CONFIG);
     }
@@ -225,8 +228,12 @@ static void my_caldav_init(struct buf *serverinfo)
 	buf_printf(serverinfo, " libical/%s", ICAL_VERSION);
     }
 
-    /* Need to set this to parse CalDAV Scheduling parameters */
-    ical_set_unknown_token_handling_setting(ICAL_ASSUME_IANA_TOKEN);
+    if (config_httpmodules & IMAP_ENUM_HTTPMODULES_CALDAV_SCHED) {
+	namespace_calendar.allow |= ALLOW_CAL_SCHED;
+
+	/* Need to set this to parse CalDAV Scheduling parameters */
+	ical_set_unknown_token_handling_setting(ICAL_ASSUME_IANA_TOKEN);
+    }
 }
 
 
@@ -490,12 +497,12 @@ static int caldav_copy(struct transaction_t *txn,
     /* Finished our initial read of source mailbox */
     mailbox_unlock_index(src_mbox, NULL);
 
-#ifdef WITH_CALDAV_SCHED
-    comp = icalcomponent_get_first_real_component(ical);
-    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-    if (prop) organizer = icalproperty_get_organizer(prop);
-    if (organizer) flags |= NEW_STAG;
-#endif
+    if (namespace_calendar.allow & ALLOW_CAL_SCHED) {
+	comp = icalcomponent_get_first_real_component(ical);
+	prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+	if (prop) organizer = icalproperty_get_organizer(prop);
+	if (organizer) flags |= NEW_STAG;
+    }
 
     /* Store source resource at destination */
     ret = store_resource(txn, ical, dest_mbox, dest_rsrc, auth_caldavdb,
@@ -515,7 +522,8 @@ static int caldav_delete_sched(struct transaction_t *txn,
     struct caldav_data *cdata = (struct caldav_data *) data;
     int ret = 0;
 
-#ifdef WITH_CALDAV_SCHED
+    if (!(namespace_calendar.allow & ALLOW_CAL_SCHED)) return 0;
+
     if (!mailbox) {
 	/* XXX  DELETE collection - check all resources for sched objects */
     }
@@ -595,7 +603,6 @@ static int caldav_delete_sched(struct transaction_t *txn,
       done:
 	icalcomponent_free(ical);
     }
-#endif /* WITH_CALDAV_SCHED */
 
     return ret;
 }
@@ -604,13 +611,12 @@ static int caldav_delete_sched(struct transaction_t *txn,
 /* Perform a busy time request, if necessary */
 static int caldav_post(struct transaction_t *txn)
 {
-#ifdef WITH_CALDAV_SCHED
-    if (!strcmp(txn->req_tgt.collection, SCHED_OUTBOX)) {
+    if ((namespace_calendar.allow & ALLOW_CAL_SCHED) &&
+	!strcmp(txn->req_tgt.collection, SCHED_OUTBOX)) {
 	/* POST to schedule-outbox (busy time request) */
 
 	return sched_busytime(txn);
     }
-#endif
 
     return HTTP_CONTINUE;
 }
@@ -681,8 +687,7 @@ static int caldav_put(struct transaction_t *txn, struct mailbox *mailbox,
 	}
     }
 
-#ifdef WITH_CALDAV_SCHED
-    if (organizer) {
+    if ((namespace_calendar.allow & ALLOW_CAL_SCHED) && organizer) {
 	/* Scheduling object resource */
 	const char *userid;
 	struct caldav_data *cdata;
@@ -745,10 +750,9 @@ static int caldav_put(struct transaction_t *txn, struct mailbox *mailbox,
 	}
 
 	if (oldical) icalcomponent_free(oldical);
-    }
 
-    flags |= NEW_STAG;
-#endif /* WITH_CALDAV_SCHED */
+	flags |= NEW_STAG;
+    }
 
     /* Store resource at target */
     ret = store_resource(txn, ical, mailbox, txn->req_tgt.resource,
@@ -1587,7 +1591,6 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 }
 
 
-#ifdef WITH_CALDAV_SCHED
 int caladdress_lookup(const char *addr, struct sched_param *param)
 {
     char *p;
@@ -3370,4 +3373,3 @@ static void sched_reply(const char *userid,
     /* Cleanup */
     free_sched_data(sched_data);
 }
-#endif /* WITH_CALDAV_SCHED */

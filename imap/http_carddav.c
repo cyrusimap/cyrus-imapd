@@ -134,8 +134,8 @@ static struct meth_params carddav_params = {
 
 
 /* Namespace for Carddav collections */
-const struct namespace_t namespace_addressbook = {
-    URL_NS_ADDRESSBOOK, "/addressbooks", "/.well-known/carddav", 1 /* auth */,
+struct namespace_t namespace_addressbook = {
+    URL_NS_ADDRESSBOOK, 0, "/addressbooks", "/.well-known/carddav", 1 /* auth */,
     (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DAV | ALLOW_CARD),
     &my_carddav_init, &my_carddav_auth, my_carddav_reset, &my_carddav_shutdown,
     { 
@@ -161,6 +161,11 @@ const struct namespace_t namespace_addressbook = {
 
 static void my_carddav_init(struct buf *serverinfo)
 {
+    namespace_addressbook.enabled =
+	config_httpmodules & IMAP_ENUM_HTTPMODULES_CARDDAV;
+
+    if (!namespace_addressbook.enabled) return;
+
     if (!config_getstring(IMAPOPT_ADDRESSBOOKPREFIX)) {
 	fatal("Required 'addressbookprefix' option is not set", EC_CONFIG);
     }

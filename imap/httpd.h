@@ -122,9 +122,10 @@ enum {
     ALLOW_WRITE =	(1<<1),	/* Create/modify/delete/lock resources/props */
     ALLOW_DAV =		(1<<2),	/* WebDAV specific methods/features */
     ALLOW_CAL =		(1<<3),	/* CalDAV specific methods/features */
-    ALLOW_CARD =	(1<<4),	/* CardDAV specific methods/features */
-    ALLOW_POST =	(1<<5),	/* Post to a URL */
-    ALLOW_ISCHEDULE =	(1<<6)	/* iSchedule specific methods/features */
+    ALLOW_CAL_SCHED =	(1<<4),	/* CalDAV Scheduling specific features */
+    ALLOW_CARD =	(1<<5),	/* CardDAV specific methods/features */
+    ALLOW_POST =	(1<<6),	/* Post to a URL */
+    ALLOW_ISCHEDULE =	(1<<7)	/* iSchedule specific methods/features */
 };
 
 #define MAX_QUERY_LEN	100
@@ -303,6 +304,7 @@ struct method_t {
 
 struct namespace_t {
     unsigned id;		/* Namespace identifier */
+    unsigned enabled;
     const char *prefix;		/* Prefix of URL path denoting namespace */
     const char *well_known;	/* Any /.well-known/ URI */
     unsigned need_auth;		/* Do we need to auth for this namespace? */
@@ -320,13 +322,13 @@ struct namespace_t {
 				 */
 };
 
-extern const struct namespace_t namespace_principal;
-extern const struct namespace_t namespace_calendar;
-extern const struct namespace_t namespace_addressbook;
-extern const struct namespace_t namespace_ischedule;
-extern const struct namespace_t namespace_domainkey;
-extern const struct namespace_t namespace_rss;
-extern const struct namespace_t namespace_default;
+extern struct namespace_t namespace_principal;
+extern struct namespace_t namespace_calendar;
+extern struct namespace_t namespace_addressbook;
+extern struct namespace_t namespace_ischedule;
+extern struct namespace_t namespace_domainkey;
+extern struct namespace_t namespace_rss;
+extern struct namespace_t namespace_default;
 
 
 /* XXX  These should be included in struct transaction_t */
@@ -342,6 +344,7 @@ extern int httpd_userisproxyadmin;
 extern char *httpd_userid;
 extern struct auth_state *httpd_authstate;
 extern struct namespace httpd_namespace;
+extern unsigned long config_httpmodules;
 
 extern int parse_uri(unsigned meth, const char *uri,
 		     struct request_target_t *tgt, const char **errstr);

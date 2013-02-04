@@ -92,14 +92,8 @@ static struct meth_params princ_params = {
 };
 
 /* Namespace for WebDAV principals */
-const struct namespace_t namespace_principal = {
-    URL_NS_PRINCIPAL, "/principals", NULL, 1 /* auth */,
-#ifdef WITH_CALDAV
-    ALLOW_CAL |
-#endif
-#ifdef WITH_CARDDAV
-    ALLOW_CARD |
-#endif
+struct namespace_t namespace_principal = {
+    URL_NS_PRINCIPAL, 0, "/principals", NULL, 1 /* auth */,
     ALLOW_DAV,
     &my_dav_init, NULL, NULL, NULL,
     {
@@ -125,6 +119,19 @@ const struct namespace_t namespace_principal = {
 
 static void my_dav_init(struct buf *serverinfo)
 {
+    if (config_httpmodules & IMAP_ENUM_HTTPMODULES_CALDAV) {
+	namespace_principal.enabled = 1;
+	namespace_principal.allow |= ALLOW_CAL;
+	if (config_httpmodules & IMAP_ENUM_HTTPMODULES_CALDAV_SCHED)
+	    namespace_principal.allow |= ALLOW_CAL_SCHED;
+    }
+    if (config_httpmodules & IMAP_ENUM_HTTPMODULES_CARDDAV) {
+	namespace_principal.enabled = 1;
+	namespace_principal.allow |= ALLOW_CARD;
+    }
+
+    if (!namespace_principal.enabled) return;
+
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	buf_printf(serverinfo, " SQLite/%s", sqlite3_libversion());
     }
@@ -1772,7 +1779,6 @@ static int propfind_suppcaldata(xmlNodePtr prop,
 }
 
 
-#ifdef WITH_CALDAV_SCHED
 /* Callback to fetch CALDAV:schedule-tag */
 static int propfind_schedtag(xmlNodePtr prop,
 			     struct propfind_ctx *fctx,
@@ -1933,7 +1939,7 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
 
     return 0;
 }
-#endif /* WITH_CALDAV_SCHED */
+
 
 /* Callback to fetch CARDDAV:addressbook-home-set */
 static int propfind_abookurl(xmlNodePtr prop,
@@ -2211,7 +2217,6 @@ static const struct prop_entry {
     { "max-instances", XML_NS_CALDAV, 0, NULL, NULL, NULL },
     { "max-attendees-per-instance", XML_NS_CALDAV, 0, NULL, NULL, NULL },
 
-#ifdef WITH_CALDAV_SCHED
     /* CalDAV Scheduling (RFC 6638) properties */
     { "schedule-tag", XML_NS_CALDAV, 0, propfind_schedtag, NULL, NULL },
     { "schedule-inbox-URL", XML_NS_CALDAV, 0,
@@ -2225,7 +2230,6 @@ static const struct prop_entry {
     { "calendar-user-address-set", XML_NS_CALDAV, 0,
       propfind_caluseraddr, NULL, NULL },
     { "calendar-user-type", XML_NS_CALDAV, 0, NULL, NULL, NULL },
-#endif /* WITH_CALDAV_SCHED */
 
     /* CardDAV (RFC 6352) properties */
     { "address-data", XML_NS_CARDDAV, 0, propfind_getdata, NULL, NULL },

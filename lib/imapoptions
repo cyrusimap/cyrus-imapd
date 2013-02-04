@@ -425,6 +425,11 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* If enabled, the server will compress responses if the client
    indicates that it can accept them. */
 
+{ "httpdocroot", NULL, STRING }
+/* If set, http will serve the static content (html/text/jpeg/gif
+   files, etc) rooted at this directory.  Otherwise, httpd will not
+   serve any static content. */ 
+
 { "httpkeepalive", 20, INT }
 /* Set the length of the HTTP server's keepalive heartbeat in seconds.
    The default is 20.  The minimum value is 0, which will disable the
@@ -433,10 +438,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    provisional responses every \fIhttpkeepalive\fR seconds until the
    final response can be sent */
 
-{ "httpdocroot", NULL, STRING }
-/* If set, http will serve the static content (html/text/jpeg/gif
-   files, etc) rooted at this directory.  Otherwise, httpd will not
-   serve any static content. */ 
+{ "httpmodules", "caldav caldav_sched carddav domainkey ischedule rss", BITFIELD("caldav", "caldav_sched", "carddav", "domainkey", "ischedule", "rss") }
+/* Space-separated list of HTTP modules that will be enabled in
+   httpd(8).  This option has no effect on modules that are disabled
+   at compile time due to missing dependencies (e.g. libxml2). */
 
 { "httptimeout", 5, INT }
 /* Set the length of the HTTP server's inactivity autologout timer,    
@@ -1496,6 +1501,6 @@ product version in the capabilities */
 .SH SEE ALSO
 .PP
 \fBimapd(8)\fR, \fBpop3d(8)\fR, \fBnntpd(8)\fR, \fBlmtpd(8)\fR,
-\fBtimsieved(8)\fR, \fBidled(8)\fR, \fBnotifyd(8)\fR,
+\fBhttpd(8)\fR, \fBtimsieved(8)\fR, \fBidled(8)\fR, \fBnotifyd(8)\fR,
 \fBdeliver(8)\fR, \fBmaster(8)\fR, \fBciphers(1)\fR
 */

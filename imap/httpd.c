@@ -102,7 +102,7 @@
 #include "rfc822date.h"
 #include "tok.h"
 
-#ifdef WITH_CALDAV
+#ifdef WITH_DAV
 #include "http_dav.h"
 #endif
 
@@ -155,6 +155,7 @@ int https = 0;
 int httpd_tls_done = 0;
 int httpd_tls_required = 0;
 unsigned avail_auth_schemes = 0; /* bitmask of available auth schemes */
+unsigned long config_httpmodules;
 
 struct buf serverinfo = BUF_INITIALIZER;
 
@@ -265,8 +266,8 @@ const struct known_meth_t http_methods[] = {
 };
 
 /* Namespace to fetch static content from filesystem */
-const struct namespace_t namespace_default = {
-    URL_NS_DEFAULT, "", NULL, 0 /* no auth */, ALLOW_READ,
+struct namespace_t namespace_default = {
+    URL_NS_DEFAULT, 1, "", NULL, 0 /* no auth */, ALLOW_READ,
     NULL, NULL, NULL, NULL,
     {
 	{ NULL,			NULL },			/* ACL		*/
@@ -290,18 +291,12 @@ const struct namespace_t namespace_default = {
 
 /* Array of different namespaces and features supported by the server */
 const struct namespace_t *namespaces[] = {
-#if defined(WITH_CALDAV) || defined(WITH_CARDDAV)
+#ifdef WITH_DAV
     &namespace_principal,
-#ifdef WITH_CALDAV
     &namespace_calendar,
-#ifdef WITH_CALDAV_SCHED
     &namespace_ischedule,
     &namespace_domainkey,
-#endif
-#endif
-#ifdef WITH_CARDDAV
     &namespace_addressbook,
-#endif
 #endif
 #ifdef WITH_RSS
     &namespace_rss,
@@ -317,9 +312,10 @@ static void httpd_reset(void)
     int bytes_in = 0;
     int bytes_out = 0;
 
-    /* do any namespace specific cleanup */
+    /* Do any namespace specific cleanup */
     for (i = 0; namespaces[i]; i++) {
-	if (namespaces[i]->reset) namespaces[i]->reset();
+	if (namespaces[i]->enabled && namespaces[i]->reset)
+	    namespaces[i]->reset();
     }
 
     proc_cleanup();
@@ -493,7 +489,8 @@ int service_init(int argc __attribute__((unused)),
 	buf_printf(&serverinfo, " libxml/%s", LIBXML_DOTTED_VERSION);
     }
 
-    /* do any namespace specific initialization */
+    /* Do any namespace specific initialization */
+    config_httpmodules = config_getbitfield(IMAPOPT_HTTPMODULES);
     for (i = 0; namespaces[i]; i++) {
 	if (namespaces[i]->init) namespaces[i]->init(&serverinfo);
     }
@@ -676,9 +673,10 @@ void shut_down(int code)
 
     in_shutdown = 1;
 
-    /* do any namespace specific cleanup */
+    /* Do any namespace specific cleanup */
     for (i = 0; namespaces[i]; i++) {
-	if (namespaces[i]->shutdown) namespaces[i]->shutdown();
+	if (namespaces[i]->enabled && namespaces[i]->shutdown)
+	    namespaces[i]->shutdown();
     }
 
     xmlCleanupParser();
@@ -1088,6 +1086,9 @@ static void cmdloop(void)
 		const char *path = txn.req_tgt.path;
 		const char *query = txn.req_tgt.query;
 		size_t len;
+
+		/* Skip disabled namespaces */
+		if (!namespaces[i]->enabled) continue;
 
 		/* Handle any /.well-known/ bootstrapping */
 		if (namespaces[i]->well_known) {
@@ -1727,7 +1728,7 @@ void response_header(long code, struct transaction_t *txn)
 
     if (txn->req_tgt.allow & ALLOW_ISCHEDULE) {
 	prot_printf(httpd_out, "iSchedule-Version: 1.0\r\n");
-#ifdef WITH_CALDAV_SCHED
+#ifdef WITH_DAV
 	if (txn->meth != METH_OPTIONS) {
 	    extern time_t isched_serial;
 
@@ -1743,11 +1744,9 @@ void response_header(long code, struct transaction_t *txn)
 		    (txn->req_tgt.allow & ALLOW_WRITE) ?
 		    ", access-control, extended-mkcol" : "");
 	if (txn->req_tgt.allow & ALLOW_CAL) {
-	    const char *sched = "";
-#ifdef WITH_CALDAV_SCHED
-	    sched = ", calendar-auto-schedule";
-#endif
-	    prot_printf(httpd_out, "DAV: calendar-access%s\r\n", sched);
+	    prot_printf(httpd_out, "DAV: calendar-access%s\r\n",
+			(txn->req_tgt.allow & ALLOW_CAL_SCHED) ?
+			", calendar-auto-schedule" : "");
 	}
 	if (txn->req_tgt.allow & ALLOW_CARD) {
 	    prot_printf(httpd_out, "DAV: addressbook\r\n");
@@ -2125,7 +2124,7 @@ void error_response(long code, struct transaction_t *txn)
     txn->flags.vary &= ~(VARY_BRIEF | VARY_PREFER);
     txn->resp_body.prefs = 0;
 
-#ifdef WITH_CALDAV
+#ifdef WITH_DAV
     if (txn->error.precond) {
 	xmlNodePtr root = xml_add_error(NULL, &txn->error, NULL);
 
@@ -2488,7 +2487,8 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 
     /* Do any namespace specific post-auth processing */
     for (i = 0; namespaces[i]; i++) {
-	if (namespaces[i]->auth) namespaces[i]->auth(httpd_userid);
+	if (namespaces[i]->enabled && namespaces[i]->auth)
+	    namespaces[i]->auth(httpd_userid);
     }
 
     return status;
@@ -2706,6 +2706,7 @@ int check_precond(struct transaction_t *txn, const void *data,
     const char **hdr;
     time_t since;
 
+#ifdef WITH_DAV
     /* Check for a write-lock on the source */
     if (ddata && ddata->lock_expire > time(NULL)) {
 	lock_token = ddata->lock_token;
@@ -2739,6 +2740,7 @@ int check_precond(struct transaction_t *txn, const void *data,
 	    break;
 	}
     }
+#endif /* WITH_DAV */
 
     /* Per RFC 4918, If is similar to If-Match, but with lock-token submission.
        Per Section 5 of HTTPbis, Part 4, LOCK errors supercede preconditions */
@@ -2945,7 +2947,8 @@ int meth_options(struct transaction_t *txn,
 	int i;
 
 	for (i = 0; namespaces[i]; i++) {
-	    txn->req_tgt.allow |= namespaces[i]->allow;
+	    if (namespaces[i]->enabled)
+		txn->req_tgt.allow |= namespaces[i]->allow;
 	}
     }
 
@@ -2957,7 +2960,7 @@ int meth_options(struct transaction_t *txn,
 /* Perform an PROPFIND request on "/" iff we support CalDAV */
 int meth_propfind_root(struct transaction_t *txn, void *params)
 {
-#ifdef WITH_CALDAV
+#ifdef WITH_DAV
     /* Apple iCal and Evolution both check "/" */
     if (!strcmp(txn->req_tgt.path, "/")) {
 	if (!httpd_userid) return HTTP_UNAUTHORIZED;

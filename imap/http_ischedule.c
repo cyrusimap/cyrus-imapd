@@ -78,27 +78,22 @@ static DKIM_LIB *dkim_lib = NULL;
 static struct buf privkey = BUF_INITIALIZER;
 static struct buf tmpbuf = BUF_INITIALIZER;
 static struct buf b64req = BUF_INITIALIZER;
+#endif /* WITH_DKIM */
 
 static void isched_init(struct buf *serverinfo);
 static void isched_shutdown(void);
-#endif /* WITH_DKIM */
 
 static int meth_get_isched(struct transaction_t *txn, void *params);
 static int meth_post_isched(struct transaction_t *txn, void *params);
 static int dkim_auth(struct transaction_t *txn);
 static int meth_get_domainkey(struct transaction_t *txn, void *params);
-static void calc_compile_time(struct buf *serverinfo);
 static time_t compile_time;
 time_t isched_serial;
 
-const struct namespace_t namespace_ischedule = {
-    URL_NS_ISCHEDULE, "/ischedule", ISCHED_WELLKNOWN_URI, 0 /* auth */,
+struct namespace_t namespace_ischedule = {
+    URL_NS_ISCHEDULE, 0, "/ischedule", ISCHED_WELLKNOWN_URI, 0 /* auth */,
     (ALLOW_READ | ALLOW_POST | ALLOW_ISCHEDULE),
-#ifdef WITH_DKIM
     isched_init, NULL, NULL, isched_shutdown,
-#else
-    calc_compile_time, NULL, NULL, NULL,
-#endif
     {
 	{ NULL,			NULL },	/* ACL		*/
 	{ NULL,			NULL },	/* COPY		*/
@@ -119,8 +114,8 @@ const struct namespace_t namespace_ischedule = {
     }
 };
 
-const struct namespace_t namespace_domainkey = {
-    URL_NS_DOMAINKEY, "/domainkeys", "/.well-known/domainkey", 0 /* auth */,
+struct namespace_t namespace_domainkey = {
+    URL_NS_DOMAINKEY, 0, "/domainkeys", "/.well-known/domainkey", 0 /* auth */,
     ALLOW_READ, NULL, NULL, NULL, NULL,
     {
 	{ NULL,			NULL },	/* ACL		*/
@@ -142,7 +137,7 @@ const struct namespace_t namespace_domainkey = {
 
 
 /* Calculate compile time of this file for use as Etag for capabilities */
-static void calc_compile_time(struct buf *serverinfo __attribute__((unused)))
+static void calc_compile_time()
 {
     struct tm tm;
     char month[4];
@@ -683,89 +678,6 @@ static DKIM_CBSTAT isched_get_key(DKIM *dkim, DKIM_SIGINFO *sig,
 }
 
 
-static void isched_init(struct buf *serverinfo)
-{
-    int fd;
-    struct buf keypath = BUF_INITIALIZER;
-    unsigned flags = ( DKIM_LIBFLAGS_BADSIGHANDLES | DKIM_LIBFLAGS_CACHE |
-//		       DKIM_LIBFLAGS_KEEPFILES | DKIM_LIBFLAGS_TMPFILES |
-		       DKIM_LIBFLAGS_VERIFYONE );
-    uint64_t ttl = 3600;  /* 1 hour */
-    const char *requiredhdrs[] = { "Content-Type", "iSchedule-Version",
-				   "Originator", "Recipient", NULL };
-    const char *signhdrs[] = { "iSchedule-Message-ID", "User-Agent", NULL };
-    const char *skiphdrs[] = { "Cache-Control", "Connection",
-			       "Content-Length", "Host", "Keep-Alive",
-			       "Proxy-Authenticate", "Proxy-Authorization",
-			       "TE", "Trailer", "Transfer-Encoding",
-			       "Upgrade", "Via", NULL };
-    const char *senderhdrs[] = { "Originator", NULL };
-    uint32_t ver = dkim_libversion();
-
-    calc_compile_time(serverinfo);
-
-    /* Add OpenDKIM version to serverinfo string */
-    buf_printf(serverinfo, " OpenDKIM/%u.%u.%u",
-	       (ver >> 24) & 0xff, (ver >> 16) & 0xff, (ver >> 8) & 0xff);
-    if (ver & 0xff) buf_printf(serverinfo, ".%u", ver & 0xff);
-
-    /* Initialize DKIM library */
-    if (!(dkim_lib = dkim_init(NULL, NULL))) {
-	syslog(LOG_ERR, "unable to initialize libopendkim");
-	return;
-    }
-
-    /* Install our callback for doing key lookups */
-    dkim_set_key_lookup(dkim_lib, isched_get_key);
-
-    /* Setup iSchedule DKIM options */
-#ifdef TEST
-    flags |= ( DKIM_LIBFLAGS_SIGNLEN | DKIM_LIBFLAGS_ZTAGS );
-#endif
-    dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_FLAGS,
-		 &flags, sizeof(flags));
-    dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_SIGNATURETTL,
-		 &ttl, sizeof(ttl));
-    dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_REQUIREDHDRS,
-		 requiredhdrs, sizeof(const char **));
-    dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_MUSTBESIGNED,
-		 requiredhdrs, sizeof(const char **));
-    dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_SIGNHDRS,
-		 signhdrs, sizeof(const char **));
-    dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_SKIPHDRS,
-		 skiphdrs, sizeof(const char **));
-    dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_SENDERHDRS,
-		 senderhdrs, sizeof(const char **));
-
-    /* Fetch DKIM private key for signing */
-    buf_printf(&keypath, "%s/dkim.private", config_dir);
-    if ((fd = open(buf_cstring(&keypath), O_RDONLY)) != -1) {
-	const char *base = NULL;
-	unsigned long len = 0;
-
-	map_refresh(fd, 1, &base, &len,
-		    MAP_UNKNOWN_LEN, buf_cstring(&keypath), NULL);
-	buf_setmap(&privkey, base, len);
-	map_free(&base, &len);
-	close(fd);
-    }
-    else {
-	syslog(LOG_ERR, "unable to open private key file %s",
-	       buf_cstring(&keypath));
-    }
-    buf_free(&keypath);
-}
-
-
-static void isched_shutdown(void)
-{
-    buf_free(&privkey);
-    buf_free(&tmpbuf);
-    buf_free(&b64req);
-    if (dkim_lib) dkim_close(dkim_lib);
-}
-
-
 static void dkim_cachehdr(const char *name, const char *contents, void *rock)
 {
     struct buf *hdrfield = &tmpbuf;
@@ -884,4 +796,116 @@ static int meth_get_domainkey(struct transaction_t *txn,
     txn->resp_body.type = "text/plain";
 
     return meth_get_doc(txn, NULL);
+}
+
+
+static void isched_init(struct buf *serverinfo)
+{
+    unsigned need_dkim = 1;
+
+    if (!(config_httpmodules & IMAP_ENUM_HTTPMODULES_CALDAV) ||
+	!(config_httpmodules & IMAP_ENUM_HTTPMODULES_CALDAV_SCHED)) {
+	/* Need CALDAV and CALDAV_SCHED in order to have ISCHEDULE */
+	return;
+    }
+
+    calc_compile_time();
+
+    if (config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS)) {
+	/* If backend server, we require ISCHEDULE (w/o DKIM) */
+	namespace_ischedule.enabled = 1;
+	need_dkim = 0;
+    }
+#ifdef WITH_DKIM
+    else {
+	namespace_ischedule.enabled =
+	    config_httpmodules & IMAP_ENUM_HTTPMODULES_ISCHEDULE;
+    }
+
+    if (namespace_ischedule.enabled) {
+	int fd;
+	struct buf keypath = BUF_INITIALIZER;
+	unsigned flags = ( DKIM_LIBFLAGS_BADSIGHANDLES | DKIM_LIBFLAGS_CACHE |
+//			   DKIM_LIBFLAGS_KEEPFILES | DKIM_LIBFLAGS_TMPFILES |
+			   DKIM_LIBFLAGS_VERIFYONE );
+	uint64_t ttl = 3600;  /* 1 hour */
+	const char *requiredhdrs[] = { "Content-Type", "iSchedule-Version",
+				       "Originator", "Recipient", NULL };
+	const char *signhdrs[] = { "iSchedule-Message-ID", "User-Agent", NULL };
+	const char *skiphdrs[] = { "Cache-Control", "Connection",
+				   "Content-Length", "Host", "Keep-Alive",
+				   "Proxy-Authenticate", "Proxy-Authorization",
+				   "TE", "Trailer", "Transfer-Encoding",
+				   "Upgrade", "Via", NULL };
+	const char *senderhdrs[] = { "Originator", NULL };
+	uint32_t ver = dkim_libversion();
+
+	/* Add OpenDKIM version to serverinfo string */
+	buf_printf(serverinfo, " OpenDKIM/%u.%u.%u",
+		   (ver >> 24) & 0xff, (ver >> 16) & 0xff, (ver >> 8) & 0xff);
+	if (ver & 0xff) buf_printf(serverinfo, ".%u", ver & 0xff);
+
+	/* Initialize DKIM library */
+	if (!(dkim_lib = dkim_init(NULL, NULL))) {
+	    syslog(LOG_ERR, "unable to initialize libopendkim");
+	    namespace_ischedule.enabled = !need_dkim;	    
+	    return;
+	}
+
+	/* Install our callback for doing key lookups */
+	dkim_set_key_lookup(dkim_lib, isched_get_key);
+
+	/* Setup iSchedule DKIM options */
+#ifdef TEST
+	flags |= ( DKIM_LIBFLAGS_SIGNLEN | DKIM_LIBFLAGS_ZTAGS );
+#endif
+	dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_FLAGS,
+		     &flags, sizeof(flags));
+	dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_SIGNATURETTL,
+		     &ttl, sizeof(ttl));
+	dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_REQUIREDHDRS,
+		     requiredhdrs, sizeof(const char **));
+	dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_MUSTBESIGNED,
+		     requiredhdrs, sizeof(const char **));
+	dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_SIGNHDRS,
+		     signhdrs, sizeof(const char **));
+	dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_SKIPHDRS,
+		     skiphdrs, sizeof(const char **));
+	dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_SENDERHDRS,
+		     senderhdrs, sizeof(const char **));
+
+	/* Fetch DKIM private key for signing */
+	buf_printf(&keypath, "%s/dkim.private", config_dir);
+	if ((fd = open(buf_cstring(&keypath), O_RDONLY)) != -1) {
+	    const char *base = NULL;
+	    unsigned long len = 0;
+
+	    map_refresh(fd, 1, &base, &len,
+			MAP_UNKNOWN_LEN, buf_cstring(&keypath), NULL);
+	    buf_setmap(&privkey, base, len);
+	    map_free(&base, &len);
+	    close(fd);
+	}
+	else {
+	    syslog(LOG_ERR, "unable to open private key file %s",
+		   buf_cstring(&keypath));
+	    namespace_ischedule.enabled = !need_dkim;	    
+	}
+	buf_free(&keypath);
+
+	namespace_domainkey.enabled =
+	    config_httpmodules & IMAP_ENUM_HTTPMODULES_DOMAINKEY;
+    }
+#endif /* WITH_DKIM */
+}
+
+
+static void isched_shutdown(void)
+{
+#ifdef WITH_DKIM
+    buf_free(&privkey);
+    buf_free(&tmpbuf);
+    buf_free(&b64req);
+    if (dkim_lib) dkim_close(dkim_lib);
+#endif
 }

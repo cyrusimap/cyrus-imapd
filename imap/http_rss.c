@@ -85,7 +85,7 @@ static const char def_template[] =
     "</body>\n</html>\n";
 
 static time_t compile_time;
-static void calc_compile_time(struct buf *serverinfo);
+static void rss_init(struct buf *serverinfo);
 static int meth_get(struct transaction_t *txn, void *params);
 static int rss_to_mboxname(struct request_target_t *req_tgt,
 			   char *mboxname, uint32_t *uid,
@@ -106,9 +106,9 @@ static void fetch_part(struct transaction_t *txn, struct body *body,
 
 
 /* Namespace for RSS feeds of mailboxes */
-const struct namespace_t namespace_rss = {
-    URL_NS_RSS, "/rss", NULL, 1 /* auth */, ALLOW_READ,
-    calc_compile_time, NULL, NULL, NULL,
+struct namespace_t namespace_rss = {
+    URL_NS_RSS, 0, "/rss", NULL, 1 /* auth */, ALLOW_READ,
+    rss_init, NULL, NULL, NULL,
     {
 	{ NULL,			NULL },	/* ACL		*/
 	{ NULL,			NULL },	/* COPY		*/
@@ -130,7 +130,7 @@ const struct namespace_t namespace_rss = {
 };
 
 /* Calculate compile time of this file for use as ETag for capabilities */
-static void calc_compile_time(struct buf *serverinfo __attribute__((unused)))
+static void calc_compile_time()
 {
     struct tm tm;
     char month[4];
@@ -151,6 +151,15 @@ static void calc_compile_time(struct buf *serverinfo __attribute__((unused)))
     compile_time = mktime(&tm);
 }
 
+
+static void rss_init(struct buf *serverinfo __attribute__((unused)))
+{
+    namespace_rss.enabled = config_httpmodules & IMAP_ENUM_HTTPMODULES_RSS;
+
+    if (!namespace_rss.enabled) return;
+
+    calc_compile_time();
+}
 
 /* Perform a GET/HEAD request */
 static int meth_get(struct transaction_t *txn,
