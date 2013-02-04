@@ -1,3 +1,9 @@
+*.pc
+*.libs
+*.dirstamp
+*.deps
+*.la
+*.lo
 *.o
 *.a
 *~
