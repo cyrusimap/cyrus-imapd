@@ -259,6 +259,24 @@ xapian_query_t *xapian_query_new_compound(const xapian_db_t *db __attribute__((u
     }
 }
 
+/* Xapian does not have an OP_NOT.  WTF?  We fake it with
+ * OP_AND_NOT where the left child is MatchAll */
+xapian_query_t *xapian_query_new_not(const xapian_db_t *db __attribute__((unused)),
+				     xapian_query_t *child)
+{
+    try {
+	return (xapian_query_t *)new Xapian::Query(
+					Xapian::Query::OP_AND_NOT,
+					Xapian::Query::MatchAll,
+					*(Xapian::Query *)child);
+    }
+    catch (const Xapian::Error &err) {
+	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+		    err.get_context().c_str(), err.get_description().c_str());
+	return 0;
+    }
+}
+
 void xapian_query_free(xapian_query_t *qq)
 {
     try {

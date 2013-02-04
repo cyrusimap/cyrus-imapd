@@ -67,6 +67,7 @@ extern xapian_db_t *xapian_db_open(const char *path);
 extern void xapian_db_close(xapian_db_t *);
 extern xapian_query_t *xapian_query_new_match(const xapian_db_t *, const char *prefix, const char *term);
 extern xapian_query_t *xapian_query_new_compound(const xapian_db_t *, int is_or, xapian_query_t **children, int n);
+extern xapian_query_t *xapian_query_new_not(const xapian_db_t *, xapian_query_t *);
 extern void xapian_query_free(xapian_query_t *);
 extern int xapian_query_run(const xapian_db_t *, const xapian_query_t *,
 			    int (*cb)(const char *cyrusid, void *rock), void *rock);

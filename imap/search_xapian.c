@@ -327,10 +327,8 @@ static xapian_query_t *opnode_to_query(const xapian_db_t *db, struct opnode *on)
 
     switch (on->op) {
     case SEARCH_OP_NOT:
-	/* Xapian does not have an OP_NOT.  WTF?  We may be able
-	 * to fake it with OP_AND_NOT where the left child is MatchAll
-	 * but that will have to wait. */
-	assert(0);
+	if (on->children)
+	    qq = xapian_query_new_not(db, opnode_to_query(db, on->children));
 	break;
     case SEARCH_OP_OR:
     case SEARCH_OP_AND:
