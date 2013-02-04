@@ -1801,7 +1801,9 @@ void response_header(long code, struct transaction_t *txn)
 	    prot_printf(httpd_out, "Allow: REPORT, PROPFIND");
 	    if (txn->req_tgt.allow & ALLOW_WRITE) {
 		prot_printf(httpd_out,
-			    ", PROPPATCH, COPY, MOVE, LOCK, UNLOCK, ACL, MKCOL");
+			    ", PROPPATCH, COPY, MOVE, LOCK, UNLOCK, MKCOL");
+		prot_printf(httpd_out,
+			    "\r\nAllow: ACL");
 		if (txn->req_tgt.allow & ALLOW_CAL) {
 		    prot_printf(httpd_out, ", MKCALENDAR");
 		}
