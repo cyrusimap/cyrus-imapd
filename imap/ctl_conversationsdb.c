@@ -268,7 +268,7 @@ static int recalc_counts_cb(const char *mboxname,
     struct mailbox *mailbox = NULL;
     int r;
 
-    r = mailbox_open_irl(mboxname, &mailbox);
+    r = mailbox_open_iwl(mboxname, &mailbox);
     if (r) return r;
 
     if (verbose)

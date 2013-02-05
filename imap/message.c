@@ -3044,7 +3044,6 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
     int nfound = 0;
 #define ALLOCINCREMENT 16
     conversation_id_t cid;
-    conversation_id_t newcid = record->cid;
     conversation_t *conv = NULL;
     const char *msubj = NULL;
     int i;
@@ -3170,36 +3169,35 @@ continue2:
 	}
     }
 
-    /* Work out the new CID this message will belong to.
-     * If it already has a cid allocated, then it has been
-     * checked already (maybe on a master) so don't try again */
-    if (!record->cid) {
-	/* Use the MAX of any CIDs found - as NULLCONVERSATION is
+    if (!record->silent) {
+	conversation_id_t newcid = record->cid;
+	/* Work out the new CID this message will belong to.
+	 * Use the MAX of any CIDs found - as NULLCONVERSATION is
 	 * numerically zero this will be the only non-NULL CID or
 	 * the MAX of two or more non-NULL CIDs */
 	for (i = 0 ; i < nfound ; i++)
 	    newcid = (newcid > found[i].cid ? newcid : found[i].cid);
-	if (newcid == NULLCONVERSATION) {
-	    newcid = generate_conversation_id(record);
-	}
 
-	/*
-	 * Detect and handle CID renames.  Note that we don't rename on
-	 * a replica, because the master will do the rename and push the
-	 * changes anyway, and they would be likely to clash if we do
-	 * both ends.
-	 */
-	for (i = 0 ; i < nfound ; i++) {
-	    r = conversations_rename_cid(state, found[i].cid, newcid);
-	    if (r)
-		goto out;
-	}
+	if (!newcid)
+	    newcid = generate_conversation_id(record);
+
+	/* Mark any CID renames */
+	for (i = 0 ; i < nfound ; i++)
+	    conversations_rename_cid(state, found[i].cid, newcid);
+
+	if (!record->cid) record->cid = newcid;
     }
 
-    r = conversation_load(state, newcid, &conv);
+    if (!record->cid) goto out;
+
+    r = conversation_load(state, record->cid, &conv);
     if (r) goto out;
 
     if (!conv) conv = conversation_new(state);
+
+    /* Create the subject header if not already set */
+    if (!conv->subject)
+	conv->subject = xstrdupnull(msubj);
 
     /*
      * Update the database to add records for all the message-ids
@@ -3209,18 +3207,12 @@ continue2:
      * which would stuff up pruning of the database.
      */
     for (i = 0 ; i < nfound ; i++) {
-	if (found[i].cid == newcid)
+	if (found[i].cid >= record->cid)
 	    continue;
-	r = conversations_set_msgid(state, found[i].msgid, newcid);
+	r = conversations_set_msgid(state, found[i].msgid, record->cid);
 	if (r)
 	    goto out;
     }
-
-    /* Create the subject header if not already set */
-    if (!conv->subject)
-	conv->subject = xstrdupnull(msubj);
-
-    record->cid = newcid;
 
 out:
     free(msgid);

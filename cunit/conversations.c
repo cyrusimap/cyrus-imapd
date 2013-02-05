@@ -395,8 +395,7 @@ static void test_cid_rename(void)
     CU_ASSERT_EQUAL(r, 0);
 
     /* do a rename */
-    r = conversations_rename_cid(state, C_CID1, C_CID2);
-    CU_ASSERT_EQUAL(r, 0);
+    conversations_rename_cid(state, C_CID1, C_CID2);
 
     /* commit & close */
     r = conversations_commit(&state);

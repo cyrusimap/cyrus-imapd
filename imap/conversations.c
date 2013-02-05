@@ -98,6 +98,13 @@
 static char *convdir = NULL;
 static char *suffix = NULL;
 
+static int check_msgid(const char *msgid, size_t len, size_t *lenp);
+static int _conversations_parse(const char *data, size_t datalen,
+				conversation_id_t *cidp, time_t *stampp);
+static int _conversations_set_key(struct conversations_state *state,
+				  const char *key, size_t keylen,
+				  conversation_id_t cid, time_t stamp);
+
 EXPORTED void conversations_set_directory(const char *dir)
 {
     free(convdir);
@@ -230,6 +237,9 @@ EXPORTED int conversations_open_path(const char *fname, struct conversations_sta
     /* create the status cache */
     construct_hash_table(&open->s.folderstatus, open->s.folder_names->count/4+4, 0);
 
+    /* create the cid rename table */
+    construct_hashu64_table(&open->s.cidrenames, 1023, 0);
+
     *statep = &open->s;
 
     return 0;
@@ -288,13 +298,13 @@ EXPORTED struct conversations_state *conversations_get_mbox(const char *mboxname
 }
 
 
-static void _conv_remove(struct conversations_state **statep)
+static void _conv_remove(struct conversations_state *state)
 {
     struct conversations_open **prevp = &open_conversations;
     struct conversations_open *cur;
 
     for (cur = open_conversations; cur; cur = cur->next) {
-	if (*statep == &cur->s) {
+	if (state == &cur->s) {
 	    /* found it! */
 	    *prevp = cur->next;
 	    free(cur->s.path);
@@ -303,7 +313,6 @@ static void _conv_remove(struct conversations_state **statep)
 	    if (cur->s.folder_names)
 		strarray_free(cur->s.folder_names);
 	    free(cur);
-	    *statep = NULL;
 	    return;
 	}
 	prevp = &cur->next;
@@ -316,6 +325,12 @@ static void conversations_abortcache(struct conversations_state *state)
 {
     /* still gotta clean up */
     free_hash_table(&state->folderstatus, free);
+}
+
+static void conversations_abortcidrenames(struct conversations_state *state)
+{
+    /* still gotta clean up */
+    free_hashu64_table(&state->cidrenames, free);
 }
 
 static void commitstatus_cb(const char *key, void *data, void *rock)
@@ -333,13 +348,108 @@ static void conversations_commitcache(struct conversations_state *state)
     free_hash_table(&state->folderstatus, free);
 }
 
+struct rename_rock {
+    struct conversations_state *state;
+    conversation_id_t from_cid;
+    conversation_id_t to_cid;
+    unsigned long entries_seen;
+    unsigned long entries_renamed;
+};
+
+static int do_one_rename(void *rock,
+		         const char *key, size_t keylen,
+		         const char *data, size_t datalen)
+{
+    struct rename_rock *rrock = (struct rename_rock *)rock;
+    conversation_id_t cid;
+    time_t stamp;
+    int r;
+
+    r = check_msgid(key, keylen, NULL);
+    if (r) return r;
+
+    r = _conversations_parse(data, datalen, &cid, &stamp);
+    if (r) return r;
+
+    rrock->entries_seen++;
+
+    if (cid != rrock->from_cid)
+	return 0;	/* nothing to see, move along */
+
+    rrock->entries_renamed++;
+
+    return _conversations_set_key(rrock->state, key, keylen,
+				  rrock->to_cid, stamp);
+}
+
+static void commitrename_cb(uint64_t from, void *data, void *rock)
+{
+    uint64_t to = *((uint64_t *)data);
+    struct conversations_state *state = (struct conversations_state *)rock;
+
+    struct rename_rock rrock;
+    conv_folder_t *folder = NULL;
+    conversation_t *conv = NULL;
+    int r = 0;
+
+    while ((data = hashu64_lookup(to, &state->cidrenames))) {
+	/* got renamed again! */
+	to = *((uint64_t *)data);
+    }
+
+    memset(&rrock, 0, sizeof(rrock));
+    rrock.state = state;
+    rrock.from_cid = from;
+    rrock.to_cid = to;
+
+    cyrusdb_foreach(state->db, "<", 1, NULL, do_one_rename, &rrock, &state->txn);
+
+    syslog(LOG_NOTICE, "conversations_rename_cid: saw %lu entries, renamed %lu"
+		       " from " CONV_FMT " to " CONV_FMT,
+			rrock.entries_seen, rrock.entries_renamed,
+			from, to);
+
+    /* Use the B record to find the mailboxes for a CID rename.
+     * The rename events will decrease the NUM_RECORDS count back
+     * to zero, and the record will delete itself! */
+    r = conversation_load(state, from, &conv);
+    if (r) return;
+    if (!conv) return;
+
+    for (folder = conv->folders ; folder ; folder = folder->next) {
+	const char *mboxname = strarray_nth(state->folder_names, folder->number);
+	struct mailbox *mailbox = NULL;
+
+	r = mailbox_open_iwl(mboxname, &mailbox);
+	if (r) break;
+
+	r = mailbox_cid_rename(mailbox, from, to);
+	mailbox_close(&mailbox);
+
+	if (r) break;
+    }
+
+    conversation_free(conv);
+
+    /* XXX - COULD try to read the B key and confirm that it doesn't exist any more... */
+}
+
+static void conversations_commitcidrenames(struct conversations_state *state)
+{
+    hashu64_enumerate(&state->cidrenames, commitrename_cb, state);
+    free_hashu64_table(&state->cidrenames, free);
+}
+
 EXPORTED int conversations_abort(struct conversations_state **statep)
 {
     struct conversations_state *state = *statep;
 
     if (!state) return 0;
-    
-    /* clean up the cache first */
+
+    *statep = NULL;
+
+    /* clean up hashes */
+    conversations_abortcidrenames(state);
     conversations_abortcache(state);
 
     if (state->db) {
@@ -348,7 +458,7 @@ EXPORTED int conversations_abort(struct conversations_state **statep)
 	cyrusdb_close(state->db);
     }
 
-    _conv_remove(statep);
+    _conv_remove(state);
 
     return 0;
 }
@@ -360,7 +470,10 @@ EXPORTED int conversations_commit(struct conversations_state **statep)
 
     if (!state) return 0;
 
-    /* clean up the cache first, it may write to the DB */
+    *statep = NULL;
+
+    /* clean up the renames and the cache first, they may write to the DB */
+    conversations_commitcidrenames(state);
     conversations_commitcache(state);
 
     if (state->db) {
@@ -369,7 +482,7 @@ EXPORTED int conversations_commit(struct conversations_state **statep)
 	cyrusdb_close(state->db);
     }
 
-    _conv_remove(statep);
+    _conv_remove(state);
 
     return r;
 }
@@ -1556,103 +1669,33 @@ EXPORTED int conversation_id_decode(conversation_id_t *cid, const char *text)
     return 1;
 }
 
-struct rename_rock {
-    struct conversations_state *state;
-    conversation_id_t from_cid;
-    conversation_id_t to_cid;
-    unsigned long entries_seen;
-    unsigned long entries_renamed;
-};
-
-static int do_one_rename(void *rock,
-		         const char *key, size_t keylen,
-		         const char *data, size_t datalen)
-{
-    struct rename_rock *rrock = (struct rename_rock *)rock;
-    conversation_id_t cid;
-    time_t stamp;
-    int r;
-
-    r = check_msgid(key, keylen, NULL);
-    if (r) return r;
-
-    r = _conversations_parse(data, datalen, &cid, &stamp);
-    if (r) return r;
-
-    rrock->entries_seen++;
-
-    if (cid != rrock->from_cid)
-	return 0;	/* nothing to see, move along */
-
-    rrock->entries_renamed++;
-
-    return _conversations_set_key(rrock->state, key, keylen,
-				  rrock->to_cid, stamp);
-}
-
-EXPORTED int conversations_rename_cid(struct conversations_state *state,
+EXPORTED void conversations_rename_cid(struct conversations_state *state,
 			     conversation_id_t from_cid,
 			     conversation_id_t to_cid)
 {
-    struct rename_rock rrock;
-    conv_folder_t *folder = NULL;
-    conversation_t *conv = NULL;
-    int r = 0;
+    uint64_t *valptr;
 
     if (!from_cid)
-	return 0;
+	return;
 
     if (from_cid == to_cid)
-	return 0;
+	return;
 
     /* we never rename down! */
     assert(from_cid < to_cid);
 
-    memset(&rrock, 0, sizeof(rrock));
-    rrock.state = state;
-    rrock.from_cid = from_cid;
-    rrock.to_cid = to_cid;
-
-    cyrusdb_foreach(state->db, "<", 1, NULL, do_one_rename, &rrock, &state->txn);
-
-    syslog(LOG_NOTICE, "conversations_rename_cid: saw %lu entries, renamed %lu"
-		       " from " CONV_FMT " to " CONV_FMT,
-			rrock.entries_seen, rrock.entries_renamed,
-			from_cid, to_cid);
-
-    /* Use the B record to find the mailboxes for a CID rename.
-     * The rename events will decrease the NUM_RECORDS count back
-     * to zero, and the record will delete itself! */
-    r = conversation_load(state, from_cid, &conv);
-    if (r) return r;
-    if (!conv) return 0;
-
-    for (folder = conv->folders ; folder ; folder = folder->next) {
-	const char *mboxname = strarray_nth(state->folder_names, folder->number);
-	/* use the hacky 'findopen' to get any existing mailbox
-	 * directly, regardless of where we came in */
-	struct mailbox *mailbox = mailbox_findopen(mboxname);
-
-	if (mailbox) {
-	    r = mailbox_cid_rename(mailbox, from_cid, to_cid);
-	    if (r) return r;
-	}
-	else {
-	    r = mailbox_open_iwl(mboxname, &mailbox);
-	    if (r) return r;
-
-	    r = mailbox_cid_rename(mailbox, from_cid, to_cid);
-	    if (r) return r;
-
-	    mailbox_close(&mailbox);
-	}
+    valptr = hashu64_lookup(from_cid, &state->cidrenames);
+    if (valptr) {
+	/* already there or better? */
+	if (*valptr >= to_cid)
+	    return;
+	free(valptr);
     }
 
-    conversation_free(conv);
+    valptr = xmalloc(sizeof(uint64_t));
+    *valptr = to_cid;
 
-    /* XXX - COULD try to read the B key and confirm that it doesn't exist any more... */
-
-    return 0;
+    hashu64_insert(from_cid, valptr, &state->cidrenames);
 }
 
 static int folder_key_rename(struct conversations_state *state,
