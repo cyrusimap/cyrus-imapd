@@ -868,6 +868,7 @@ sub start
     {
 	$self->_add_services_from_cyrus_conf();
     }
+    $self->_uncompress_berkeley_crud();
     $self->_start_master();
     $self->{_stopped} = 0;
     $self->{_started} = 1;
@@ -875,6 +876,56 @@ sub start
     if ($created && $self->{setup_mailbox})
     {
 	$self->create_user("cassandane");
+    }
+}
+
+sub _compress_berkeley_crud
+{
+    my ($self) = @_;
+
+    my @files;
+    my $dbdir = $self->{basedir} . "/conf/db";
+    if ( -d $dbdir )
+    {
+	opendir DBDIR, $dbdir
+	    or die "Cannot open directory $dbdir: $!";
+	while (my $e = readdir DBDIR)
+	{
+	    push(@files, "$dbdir/$e")
+		if ($e =~ m/^__db\.\d+$/);
+	}
+	closedir DBDIR;
+    }
+
+    if (scalar @files)
+    {
+	xlog "Compressing Berkeley environment files: " . join(' ', @files);
+	system('/bin/bzip2', @files);
+    }
+}
+
+sub _uncompress_berkeley_crud
+{
+    my ($self) = @_;
+
+    my @files;
+    my $dbdir = $self->{basedir} . "/conf/db";
+    if ( -d $dbdir )
+    {
+	opendir DBDIR, $dbdir
+	    or die "Cannot open directory $dbdir: $!";
+	while (my $e = readdir DBDIR)
+	{
+	    push(@files, "$dbdir/$e")
+		if ($e =~ m/^__db\.\d+\.bz2$/);
+	}
+	closedir DBDIR;
+    }
+
+    if (scalar @files)
+    {
+	xlog "Uncompressing Berkeley environment files: " . join(' ', @files);
+	system('/bin/bunzip2', @files);
     }
 }
 
@@ -1030,6 +1081,7 @@ sub stop
     }
     # Note: no need to reap this daemon which is not our child anymore
 
+    $self->_compress_berkeley_crud();
     $self->_check_valgrind_logs();
     $self->_check_cores();
 }
