@@ -274,7 +274,27 @@ static int recalc_counts_cb(const char *mboxname,
     if (verbose)
 	printf("%s\n", mboxname);
 
-    r = mailbox_add_conversations(mailbox); 
+    r = mailbox_add_conversations(mailbox, /*silent*/0); 
+
+    mailbox_close(&mailbox);
+    return r;
+}
+
+static int audit_counts_cb(const char *mboxname,
+			   int matchlen __attribute__((unused)),
+			   int maycreate __attribute__((unused)),
+			   void *rock __attribute__((unused)))
+{
+    struct mailbox *mailbox = NULL;
+    int r;
+
+    r = mailbox_open_irl(mboxname, &mailbox);
+    if (r) return r;
+
+    if (verbose)
+	printf("%s\n", mboxname);
+
+    r = mailbox_add_conversations(mailbox, /*silent*/1); 
 
     mailbox_close(&mailbox);
     return r;
@@ -661,7 +681,7 @@ static int do_audit(const char *inboxname)
     conversations_set_suffix(temp_suffix);
     conversations_set_directory(audit_temp_directory);
 
-    r = recalc_counts_cb(inboxname, 0, 0, NULL);
+    r = audit_counts_cb(inboxname, 0, 0, NULL);
     if (r) {
 	fprintf(stderr, "Failed to recalculate counts in %s: %s\n",
 		filename_temp, error_message(r));
@@ -670,7 +690,7 @@ static int do_audit(const char *inboxname)
 
     snprintf(buf, sizeof(buf), "%s.*", inboxname);
     r = mboxlist_findall(NULL, buf, 1, NULL,
-			 NULL, recalc_counts_cb, NULL);
+			 NULL, audit_counts_cb, NULL);
 
     conversations_set_suffix(NULL);
     conversations_set_directory(NULL);
