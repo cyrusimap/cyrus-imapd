@@ -269,4 +269,7 @@ extern int index_getuidsequence(struct index_state *state,
 				struct searchargs *searchargs,
 				unsigned **uid_list);
 
+extern const char *index_mboxname(const struct index_state *state);
+extern int index_hasrights(const struct index_state *state, int rights);
+
 #endif /* INDEX_H */

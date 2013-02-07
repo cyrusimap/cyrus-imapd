@@ -5530,6 +5530,17 @@ EXPORTED extern unsigned long index_getlines(struct index_state *state, uint32_t
     return im->record.content_lines;
 }
 
+EXPORTED const char *index_mboxname(const struct index_state *state)
+{
+    if (!state) return NULL;
+    return state->mailbox->name;
+}
+
+EXPORTED int index_hasrights(const struct index_state *state, int rights)
+{
+    return state->myrights & rights;
+}
+
 /*
  * Parse a sequence into an array of sorted & merged ranges.
  */

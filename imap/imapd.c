@@ -1050,7 +1050,7 @@ void shut_down(int code)
     if (backend_cached) free(backend_cached);
 
     if (idling)
-	idle_stop(imapd_index ? imapd_index->mailbox->name : NULL);
+	idle_stop(index_mboxname(imapd_index));
 
     if (imapd_index) index_close(&imapd_index);
 
@@ -2186,11 +2186,12 @@ static void cmdloop(void)
 	/* End command timer - don't log "idle" commands */
 	if (commandmintimer && strcmp("idle", cmdname)) {
 	    double cmdtime, nettime;
+	    const char *mboxname = index_mboxname(imapd_index);
+	    if (!mboxname) mboxname = "<none>";
 	    cmdtime_endtimer(&cmdtime, &nettime);
 	    if (cmdtime >= commandmintimerd) {
 		syslog(LOG_NOTICE, "cmdtimer: '%s' '%s' '%s' '%f' '%f' '%f'",
-		    imapd_userid ? imapd_userid : "<none>", 
-		    cmdname, imapd_index ? imapd_index->mailbox->name : "<none>",
+		    imapd_userid ? imapd_userid : "<none>", cmdname, mboxname,
 		    cmdtime, nettime, cmdtime + nettime);
 	    }
 	}
@@ -2848,7 +2849,7 @@ static void cmd_idle(char *tag)
 
 	/* Start doing mailbox updates */
 	if (imapd_index) index_check(imapd_index, 1, 0);
-	idle_start(imapd_index ? imapd_index->mailbox->name : NULL);
+	idle_start(index_mboxname(imapd_index));
 	/* use this flag so if getc causes a shutdown due to
 	 * connection abort we tell idled about it */
 	idling = 1;
@@ -2882,7 +2883,7 @@ static void cmd_idle(char *tag)
 
 	/* Stop updates and do any necessary cleanup */
 	idling = 0;
-	idle_stop(imapd_index ? imapd_index->mailbox->name : NULL);
+	idle_stop(index_mboxname(imapd_index));
     }
     else {  /* Remote mailbox */
 	int done = 0, shutdown = 0;
@@ -3417,11 +3418,11 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
 	    int is_active = 1;
 	    s->context = (void*) &is_active;
 	    if (imapd_index) {
+		const char *mboxname = index_mboxname(imapd_index);
 		prot_printf(s->out, "%s Localappend {" SIZE_T_FMT "+}\r\n%s"
 			    " {" SIZE_T_FMT "+}\r\n%s ",
 			    tag, strlen(name), name,
-			    strlen(imapd_index->mailbox->name),
-			    imapd_index->mailbox->name);
+			    strlen(mboxname), mboxname);
 	    } else {
 		prot_printf(s->out, "%s Localappend {" SIZE_T_FMT "+}\r\n%s"
 			    " \"\" ", tag, strlen(name), name);
@@ -4006,8 +4007,8 @@ static void cmd_select(char *tag, char *cmd, char *name)
     r = index_open(mailboxname, &init, &imapd_index);
     if (!r) doclose = 1;
 
-    if (!r && !(imapd_index->myrights & ACL_READ)) {
-	r = (imapd_userisadmin || (imapd_index->myrights & ACL_LOOKUP)) ?
+    if (!r && !index_hasrights(imapd_index, ACL_READ)) {
+	r = (imapd_userisadmin || index_hasrights(imapd_index, ACL_LOOKUP)) ?
 	  IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
     }
 
@@ -4019,7 +4020,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
 	return;
     }
 
-    if (imapd_index->myrights & ACL_EXPUNGE)
+    if (index_hasrights(imapd_index, ACL_EXPUNGE))
 	warn_about_quota(imapd_index->mailbox->quotaroot);
 
     index_select(imapd_index, &init);
@@ -4028,7 +4029,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
     init.vanishedlist = NULL;
 
     prot_printf(imapd_out, "%s OK [READ-%s] %s\r\n", tag,
-		(imapd_index->myrights & ACL_READ_WRITE) ?
+		index_hasrights(imapd_index, ACL_READ_WRITE) ?
 		"WRITE" : "ONLY", error_message(IMAP_OK_COMPLETED));
 
     proc_register("imapd", imapd_clienthost, imapd_userid, mailboxname);
@@ -4070,7 +4071,7 @@ static void cmd_close(char *tag, char *cmd)
     }
 
     /* local mailbox */
-    if ((cmd[0] == 'C') && (imapd_index->myrights & ACL_EXPUNGE)) {
+    if ((cmd[0] == 'C') && index_hasrights(imapd_index, ACL_EXPUNGE)) {
 	index_expunge(imapd_index, NULL, 1);
 	/* don't tell changes here */
     }
@@ -5315,9 +5316,8 @@ static void cmd_expunge(char *tag, char *sequence)
     }
 
     /* local mailbox */
-    if (!(imapd_index->myrights & ACL_EXPUNGE)) {
+    if (!index_hasrights(imapd_index, ACL_EXPUNGE))
 	r = IMAP_PERMISSION_DENIED;
-    }
 
     old = index_highestmodseq(imapd_index);
 
@@ -6170,7 +6170,7 @@ static void cmd_reconstruct(const char *tag, const char *name, int recursive)
 	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 						   imapd_userid, mailboxname);
 
-    if (!r && imapd_index && !strcmp(mailboxname, imapd_index->mailbox->name))
+    if (!r && !strcmpsafe(mailboxname, index_mboxname(imapd_index)))
 	r = IMAP_MAILBOX_LOCKED;
     
     if (!r) {
@@ -7427,7 +7427,7 @@ static int imapd_statusdata(const char *mailboxname, unsigned statusitems,
 			    struct statusdata *sd)
 {
     /* use the index status if we can so we get the 'alive' Recent count */
-    if (imapd_index && !strcmp(imapd_index->mailbox->name, mailboxname))
+    if (!strcmpsafe(mailboxname, index_mboxname(imapd_index)))
 	return index_status(imapd_index, sd);
 
     /* fall back to generic lookup */
@@ -10359,7 +10359,7 @@ static void cmd_xfer(const char *tag, const char *name,
     /* if we are not moving a user, just move the one mailbox */
     if (!moving_user) {
 	/* is the selected mailbox the one we're moving? */
-	if (imapd_index && !strcmp(mailboxname, imapd_index->mailbox->name)) {
+	if (!strcmpsafe(mailboxname, index_mboxname(imapd_index))) {
 	    r = IMAP_MAILBOX_LOCKED;
 	    goto done;
 	}
@@ -10368,8 +10368,8 @@ static void cmd_xfer(const char *tag, const char *name,
 	const char *userid = mboxname_to_userid(mailboxname);
 
 	/* is the selected mailbox in the namespace we're moving? */
-	if (imapd_index && !strncmp(mailboxname, imapd_index->mailbox->name,
-				    strlen(mailboxname))) {
+	if (!strncmpsafe(mailboxname, index_mboxname(imapd_index),
+			 strlen(mailboxname))) {
 	    r = IMAP_MAILBOX_LOCKED;
 	    goto done;
 	}
@@ -11062,7 +11062,7 @@ static void list_response(const char *name, int attributes,
 
 	    goto done;
 	}
-	else if (imapd_index && !strcmp(internal_name, imapd_index->mailbox->name)) {
+	else if (!strcmpsafe(internal_name, index_mboxname(imapd_index))) {
 	    /* currently selected mailbox */
 	    if (!index_scan(imapd_index, listargs->scan))
 		goto done; /* no matching messages */
@@ -11083,8 +11083,8 @@ static void list_response(const char *name, int attributes,
 	    if (!r)
 		doclose = 1;
 
-	    if (!r && !(state->myrights & ACL_READ)) {
-		r = (imapd_userisadmin || (state->myrights & ACL_LOOKUP)) ?
+	    if (!r && index_hasrights(state, ACL_READ)) {
+		r = (imapd_userisadmin || index_hasrights(state, ACL_LOOKUP)) ?
 		    IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
 	    }
 
@@ -11884,7 +11884,7 @@ static void cmd_urlfetch(char *tag)
 	    }
 
 	    if (!r) {
-		if (imapd_index && !strcmp(imapd_index->mailbox->name, mailboxname)) {
+		if (!strcmp(index_mboxname(imapd_index), mailboxname)) {
 		    state = imapd_index;
 		}
 		else {
