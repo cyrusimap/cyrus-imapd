@@ -624,7 +624,7 @@ int prot_fill(struct protstream *s)
 	    FD_SET(s->fd, &rfds);
 
 	    if (!haveinput &&
-		(select(s->fd + 1, &rfds, (fd_set *)0, (fd_set *)0,
+		(signals_select(s->fd + 1, &rfds, (fd_set *)0, (fd_set *)0,
 			&timeout) <= 0)) {
 		if (s->readcallback_proc) {
 		    (*s->readcallback_proc)(s, s->readcallback_rock);
@@ -669,7 +669,7 @@ int prot_fill(struct protstream *s)
 		timeout.tv_usec = 0;
 		FD_ZERO(&rfds);
 		FD_SET(s->fd, &rfds);
-		r = select(s->fd + 1, &rfds, (fd_set *)0, (fd_set *)0,
+		r = signals_select(s->fd + 1, &rfds, (fd_set *)0, (fd_set *)0,
 			   &timeout);
 		now = time(NULL);
 	    } while ((r == 0 || (r == -1 && errno == EINTR && !signals_poll())) &&
@@ -1543,7 +1543,7 @@ int prot_select(struct protgroup *readstreams, int extra_read_fd,
 	    timeout->tv_usec = 0;
 	}
 
-	if(select(max_fd + 1, &rfds, NULL, NULL, timeout) == -1)
+	if(signals_select(max_fd + 1, &rfds, NULL, NULL, timeout) == -1)
 	    return -1;
 
 	/* Reset now */
