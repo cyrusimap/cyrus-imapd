@@ -111,6 +111,7 @@ EXPORTED void signals_add_handlers(int alarm)
 }
 
 static shutdownfn *shutdown_cb = NULL;
+static int signals_in_shutdown = 0;
 
 EXPORTED void signals_set_shutdown(shutdownfn *s)
 {
@@ -124,7 +125,12 @@ static int signals_poll_mask(sigset_t *oldmaskp)
     if (gotsignal[SIGINT] || gotsignal[SIGQUIT] || gotsignal[SIGTERM]) {
 	if (oldmaskp)
 	    sigprocmask(SIG_SETMASK, oldmaskp, NULL);
-	if (shutdown_cb) shutdown_cb(EC_TEMPFAIL);
+	if (shutdown_cb) {
+	    if (!signals_in_shutdown) {
+		signals_in_shutdown = 1;
+		shutdown_cb(EC_TEMPFAIL);
+	    }
+	}
 	else exit(EC_TEMPFAIL);
     }
     for (sig = 1 ; sig < _NSIG ; sig++) {
