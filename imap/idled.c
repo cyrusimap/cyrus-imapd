@@ -73,7 +73,6 @@ extern char *optarg;
 static int verbose = 0;
 static int debugmode = 0;
 static time_t idle_timeout;
-static volatile sig_atomic_t sigquit = 0;
 
 struct ientry {
     struct sockaddr_un remote;
@@ -257,10 +256,13 @@ static void send_alert(const char *key,
     }
 }
 
-static void sighandler(int sig __attribute__((unused)))
+static void shut_down(int ec) __attribute__((noreturn));
+static void shut_down(int ec)
 {
-    sigquit = 1;
-    return;
+    hash_enumerate(&itable, send_alert, NULL);
+    idle_done_sock();
+    cyrus_done();
+    exit(ec);
 }
 
 int main(int argc, char **argv)
@@ -275,7 +277,6 @@ int main(int argc, char **argv)
     struct timeval timeout;
     pid_t pid;
     char *alt_config = NULL;
-    struct sigaction action;
 
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
@@ -310,16 +311,8 @@ int main(int argc, char **argv)
     mboxlist_close();
     mboxlist_done();
 
-    sigemptyset(&action.sa_mask);
-
-    action.sa_flags = 0;
-    action.sa_handler = sighandler;
-    if (sigaction(SIGQUIT, &action, NULL) < 0)
-	fatal("unable to install signal handler for SIGQUIT", 1);
-    if (sigaction(SIGINT, &action, NULL) < 0)
-	fatal("unable to install signal handler for SIGINT", 1);
-    if (sigaction(SIGTERM, &action, NULL) < 0)
-	fatal("unable to install signal handler for SIGTERM", 1);
+    signals_set_shutdown(shut_down);
+    signals_add_handlers(0);
 
     /* create idle table -- +1 to avoid a zero value */
     construct_hash_table(&itable, nmbox + 1, 1);
@@ -360,14 +353,8 @@ int main(int argc, char **argv)
 	if (shutdown_file(NULL, 0)) {
 	    /* signal all processes to shutdown */
 	    if (verbose || debugmode)
-		syslog(LOG_DEBUG, "IDLE_ALERT\n");
-
-	    hash_enumerate(&itable, send_alert, NULL);
-	    break;
-	}
-	if (sigquit) {
-	    hash_enumerate(&itable, send_alert, NULL);
-	    break;
+		syslog(LOG_DEBUG, "Detected shutdown file\n");
+	    shut_down(1);
 	}
 
 	/* timeout for select is 1 second */
@@ -376,7 +363,7 @@ int main(int argc, char **argv)
 
 	/* check for the next input */
 	rset = read_set;
-	n = select(nfds, &rset, NULL, NULL, &timeout);
+	n = signals_select(nfds, &rset, NULL, NULL, &timeout);
 	if (n < 0 && errno == EAGAIN) continue;
 	if (n < 0 && errno == EINTR) continue;
 	if (n == -1) {
@@ -397,10 +384,8 @@ int main(int argc, char **argv)
 
     }
 
-    idle_done_sock();
-    cyrus_done();
-
-    exit(1);
+    /* NOTREACHED */
+    shut_down(1);
 }
 
 void printstring(const char *s __attribute__((unused)))
