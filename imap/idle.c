@@ -212,13 +212,10 @@ EXPORTED int idle_wait(int otherfd)
     timeout.tv_usec = 0;
 
     do {
-	r = select(maxfd+1, &rfds, NULL, NULL, &timeout);
+	r = signals_select(maxfd+1, &rfds, NULL, NULL, &timeout);
 
 	if (r < 0) {
-	    if (errno == EAGAIN || errno == EINTR) {
-		signals_poll();
-		continue;
-	    }
+	    if (errno == EAGAIN || errno == EINTR) continue;
 	    syslog(LOG_ERR, "IDLE: select failed: %m");
 	    return 0;
 	}

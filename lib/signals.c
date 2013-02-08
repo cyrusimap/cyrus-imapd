@@ -117,11 +117,13 @@ EXPORTED void signals_set_shutdown(shutdownfn *s)
     shutdown_cb = s;
 }
 
-EXPORTED int signals_poll(void)
+static int signals_poll_mask(sigset_t *oldmaskp)
 {
     int sig;
 
     if (gotsignal[SIGINT] || gotsignal[SIGQUIT] || gotsignal[SIGTERM]) {
+	if (oldmaskp)
+	    sigprocmask(SIG_SETMASK, oldmaskp, NULL);
 	if (shutdown_cb) shutdown_cb(EC_TEMPFAIL);
 	else exit(EC_TEMPFAIL);
     }
@@ -130,4 +132,70 @@ EXPORTED int signals_poll(void)
 	    return sig;
     }
     return 0;
+}
+
+EXPORTED int signals_poll(void)
+{
+    return signals_poll_mask(NULL);
+}
+
+/*
+ * Same interface as select() but closes the race between
+ * select() blocking and delivery of some signficant signals
+ * like SIGTERM.  This is necessary to ensure clean shutdown
+ * of Cyrus processes.
+ */
+EXPORTED int signals_select(int nfds, fd_set *rfds, fd_set *wfds,
+			    fd_set *efds, struct timeval *tout)
+{
+#if HAVE_PSELECT
+    /* pselect() closes the race between SIGCHLD arriving
+    * and select() sleeping for up to 10 seconds. */
+    struct timespec ts, *tsptr = NULL;
+    sigset_t blocked;
+    sigset_t oldmask;
+    int saved_errno;
+    int r;
+
+    /* temporarily block all the signals we want
+     * to be caught reliably */
+    sigemptyset(&blocked);
+    sigaddset(&blocked, SIGCHLD);
+    sigaddset(&blocked, SIGALRM);
+    sigaddset(&blocked, SIGQUIT);
+    sigaddset(&blocked, SIGINT);
+    sigaddset(&blocked, SIGTERM);
+    sigprocmask(SIG_BLOCK, &blocked, &oldmask);
+
+    /* Those signals will not arrive now.  Check to see if any
+     * of them arrived before we blocked them */
+    signals_poll_mask(&oldmask);
+
+    if (tout) {
+	ts.tv_sec = tout->tv_sec;
+	ts.tv_nsec = tout->tv_usec * 1000;
+	tsptr = &ts;
+    }
+
+    /* pselect() allows the restartable signals to arrive */
+    r = pselect(nfds, rfds, wfds, efds, tsptr, &oldmask);
+
+    if (r < 0 && (errno == EAGAIN || errno == EINTR))
+	signals_poll_mask(&oldmask);
+
+    /* restore the old signal mask */
+    saved_errno = errno;
+    sigprocmask(SIG_SETMASK, &oldmask, NULL);
+    errno = saved_errno;
+
+    return r;
+#else
+    int r;
+
+    r = select(nfds, rfds, wfds, efds, tout);
+    if (r < 0 && (errno == EAGAIN || errno == EINTR))
+	signals_poll();
+
+    return r;
+#endif
 }
