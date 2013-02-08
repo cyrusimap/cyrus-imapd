@@ -462,5 +462,78 @@ sub test_sigterm
     $self->assert_matches(qr/IMAP Connection closed by other end/, $mm);
 }
 
+sub test_sigterm_many
+{
+    my ($self) = @_;
+
+    xlog "Test that the Cyrus instance can be cleanly shut";
+    xlog "down with SIGTERM while many imapds execute an";
+    xlog "IDLE command";
+
+    $self->{instance}->{config}->set(imapidlepoll => '2');
+    $self->{instance}->add_start(name => 'idled',
+				 argv => [ 'idled' ]);
+    xlog "Starting up the instance";
+    $self->{instance}->start();
+
+    my $svc = $self->{instance}->get_service('imap');
+
+    my $N = 16;
+    my @stores;
+    my $r;
+
+    for (my $i = 0 ; $i < $N ; $i++)
+    {
+	my $store = $svc->create_store(folder => 'INBOX');
+	push(@stores, $store);
+	my $talk = $store->get_client();
+
+	$store->_select();
+
+	xlog "Sending the IDLE command";
+	$store->idle_begin()
+	    or die "IDLE failed: $@";
+
+	xlog "Poll for any unsolicited response - should be none";
+	$r = $store->idle_response({}, 0);
+	$self->assert(!$r, "No unsolicted response");
+    }
+
+    xlog "sleeping for 3 seconds";
+    sleep(3);
+
+    foreach my $store (@stores)
+    {
+	xlog "Poll for any unsolicited response - should be none";
+	$r = $store->idle_response({}, 0);
+	$self->assert(!$r, "No unsolicted response");
+
+	$self->assert_null($store->get_client()->get_response_code('alert'));
+    }
+
+    xlog "Shut down the instance";
+    $self->{instance}->stop();
+#     $self->assert($r == 1, "shutdown required brute force");
+
+    xlog "Check that the server disconnected";
+
+    foreach my $store (@stores)
+    {
+	eval
+	{
+	    # We use _send_cmd() and _next_atom() rather the normal path
+	    # through _imap_cmd() because the latter will warn() to stderr
+	    # about the exception we're about to generate, which is
+	    # downright untidy.
+	    my $talk = $store->get_client();
+	    $talk->_send_cmd('status', 'INBOX', '(messages unseen)');
+	    $talk->_parse_response({});
+	};
+	my $mm = $@;    # this doesn't survive unless we save it
+	$self->assert_matches(qr/IMAP Connection closed by other end/, $mm);
+    }
+}
+
+
 
 1;
