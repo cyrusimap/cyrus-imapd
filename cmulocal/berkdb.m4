@@ -214,6 +214,7 @@ AC_DEFUN([CYRUS_BERKELEY_DB_CHK_LIB],
 
 	saved_LIBS=$LIBS
 	    for dbname in ${with_bdb} \
+	        db-5.3 db5.3 db53 \
 	        db-5.2 db5.2 db52 \
 	        db-5.1 db5.2 db51 \
 	        db-5.0 db5.2 db50 \
