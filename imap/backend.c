@@ -541,7 +541,7 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
     /* need to (re)establish connection to server or create one */
     int sock = -1;
     int r = 0;
-    int err = 0, do_tls = 0;
+    int err = 0, do_tls = 0, no_auth = 0;
     struct addrinfo hints, *res0 = NULL, *res;
     struct sockaddr_un sunsock;
     struct backend *ret;
@@ -592,6 +592,7 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
 		tok_initm(&tok, p, "/", 0);
 		while ((opt = tok_next(&tok))) {
 		    if (!strcmp(opt, "tls")) do_tls = 1;
+		    else if (!strcmp(opt, "noauth")) no_auth = 1;
 		}
 		tok_fini(&tok);
 	    }
@@ -690,7 +691,7 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
     if (do_tls) r = backend_starttls(ret, NULL);
 
     /* Login to the server */
-    if (!r) {
+    if (!r && !no_auth) {
 	if (prot->type == TYPE_SPEC)
 	    r = prot->u.spec.login(ret, server, prot, userid, cb, auth_status);
 	else

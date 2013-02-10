@@ -470,6 +470,7 @@ int isched_send(struct sched_param *sparam, const char *recipient,
     buf_setcstr(&hdrs, sparam->server);
     if (sparam->port) buf_printf(&hdrs, ":%u", sparam->port);
     if (sparam->flags & SCHEDTYPE_SSL) buf_appendcstr(&hdrs, "/tls");
+    if (sparam->flags & SCHEDTYPE_REMOTE) buf_appendcstr(&hdrs, "/noauth");
     be = proxy_findserver(buf_cstring(&hdrs), &http_protocol, NULL,
 			  &backend_cached, NULL, NULL, httpd_in);
     if (!be) return HTTP_UNAVAILABLE;
@@ -480,13 +481,14 @@ int isched_send(struct sched_param *sparam, const char *recipient,
 
     /* Create iSchedule request header.
      * XXX  Make sure that we don't use multiple headers of the same name
-     *      or add WSP around commas to obey ischedule-relaxed canonicalization.
+     *      or add WSP around commas in signed headers
+     *      to obey ischedule-relaxed canonicalization.
      */
     buf_reset(&hdrs);
     buf_printf(&hdrs, "Host: %s", sparam->server);
     if (sparam->port) buf_printf(&hdrs, ":%u", sparam->port);
     buf_printf(&hdrs, "\r\n");
-    buf_printf(&hdrs, "Cache-Control: no-cache,no-transform\r\n");
+    buf_printf(&hdrs, "Cache-Control: no-cache, no-transform\r\n");
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	buf_printf(&hdrs, "User-Agent: %s\r\n", buf_cstring(&serverinfo));
     }
