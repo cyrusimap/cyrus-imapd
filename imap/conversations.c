@@ -396,8 +396,8 @@ rename:
     j = 0;
     for (i = 0; i < CONVERSATION_MAX_CIDS; i++) {
 	if (!cids[i]) break;
-	if (cids[i] == rrock->from_cid) break;
-	if (cids[i] == rrock->to_cid) break;
+	if (cids[i] == rrock->from_cid) continue;
+	if (cids[i] == rrock->to_cid) continue;
 	newcids[j++] = cids[i];
     }
     newcids[j] = rrock->to_cid;
@@ -597,18 +597,21 @@ EXPORTED int conversations_add_msgid(struct conversations_state *state,
     int i;
 
     r = check_msgid(msgid, 0, &keylen);
-    if (r)
-	return r;
+    if (r) return r;
 
     r = conversations_get_msgid(state, msgid, cids);
+    if (r) return r;
 
     for (i = 0; i < CONVERSATION_MAX_CIDS; i++) {
 	if (!cids[i]) break;
 	if (cids[i] == cid) return 0; /* found it */
     }
 
+    /* need to compile with support for more if we ever hit this,
+     * but it means a single conversation with MAX_CIDS different
+     * subjects over the life of remembered message-ids.  */
     if (i == CONVERSATION_MAX_CIDS)
-	return IMAP_USERFLAG_EXHAUSTED; /* XXX - saner error? */
+	return IMAP_CONVERSATIONS_SUBJECT_LIMIT;
 
     cids[i] = cid;
 

@@ -3140,6 +3140,7 @@ continue2:
 	    if (r) goto out;
 
 	    for (j = 0; j < CONVERSATION_MAX_CIDS; j++) {
+		if (!cids[j]) break;
 		r = conversation_load(state, cids[j], &conv);
 		if (r) goto out;
 		/* [IRIS-1576] if X-ME-Message-ID says the messages are
