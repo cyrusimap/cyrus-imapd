@@ -382,9 +382,10 @@ static int do_one_rename(void *rock,
 				  rrock->to_cid, stamp);
 }
 
-static void commitrename_cb(uint64_t from, void *data, void *rock)
+static void commitrename_cb(uint64_t fromval, void *data, void *rock)
 {
-    uint64_t to = *((uint64_t *)data);
+    conversation_id_t to = *((conversation_id_t *)data);
+    conversation_id_t from = (conversation_id_t)fromval;
     struct conversations_state *state = (struct conversations_state *)rock;
 
     struct rename_rock rrock;
@@ -866,7 +867,7 @@ EXPORTED int conversation_store(struct conversations_state *state,
 
     if (_sanity_check_counts(conv)) {
 	syslog(LOG_ERR, "IOERROR: conversations_audit on store: %s %.*s %.*s",
-	       state->path, keylen, key, buf.len, buf.s);
+	       state->path, keylen, key, (int)buf.len, buf.s);
     }
 
     r = cyrusdb_store(state->db, key, keylen, buf.s, buf.len, &state->txn);
