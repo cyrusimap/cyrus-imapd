@@ -1157,7 +1157,7 @@ static void imapd_check(struct backend *be, int usinguid)
 	prot_printf(backend_current->out, "%s Noop\r\n", mytag);
 	pipe_until_tag(backend_current, mytag, 0);
     }
-    else if (imapd_index) {
+    else {
 	/* local mailbox */
 	index_check(imapd_index, usinguid, 0);
     }
@@ -2657,8 +2657,7 @@ static void cmd_noop(char *tag, char *cmd)
 	return;
     }
 
-    if (imapd_index) 
-	index_check(imapd_index, 1, 0);
+    index_check(imapd_index, 1, 0);
 
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
@@ -2848,7 +2847,7 @@ static void cmd_idle(char *tag)
 	prot_flush(imapd_out);
 
 	/* Start doing mailbox updates */
-	if (imapd_index) index_check(imapd_index, 1, 0);
+	index_check(imapd_index, 1, 0);
 	idle_start(index_mboxname(imapd_index));
 	/* use this flag so if getc causes a shutdown due to
 	 * connection abort we tell idled about it */
@@ -2862,7 +2861,7 @@ static void cmd_idle(char *tag)
 	    }
 
 	    /* Send unsolicited untagged responses to the client */
-	    if ((flags & IDLE_MAILBOX) && imapd_index)
+	    if (flags & IDLE_MAILBOX)
 		index_check(imapd_index, 1, 0);
 
 	    if (flags & IDLE_ALERT) {

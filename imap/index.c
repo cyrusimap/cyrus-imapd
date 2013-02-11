@@ -820,7 +820,9 @@ EXPORTED int index_check(struct index_state *state, int usinguid, int printuid)
 {
     int r;
 
-    r = mailbox_lock_index(mailbox, LOCK_EXCLUSIVE);
+    if (!state) return 0;
+
+    r = index_lock(state);
 
     /* Check for deleted mailbox  */
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -848,10 +850,6 @@ EXPORTED int index_check(struct index_state *state, int usinguid, int printuid)
     }
 
     if (r) return r;
-
-    /* if highestmodseq has changed, read updates */
-    if (state->highestmodseq != mailbox->i.highestmodseq)
-	index_refresh(state);
 
     index_tellchanges(state, usinguid, printuid, 0);
 
