@@ -3043,7 +3043,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
     } *found = NULL;
     int nfound = 0;
 #define ALLOCINCREMENT 16
-    conversation_id_t cid;
+    conversation_id_t cids[CONVERSATION_MAX_CIDS];
     conversation_t *conv = NULL;
     const char *msubj = NULL;
     int i;
@@ -3114,7 +3114,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
     for (i = 0 ; i < 4 ; i++) {
 continue2:
 	while ((msgid = find_msgid(hdrs[i], &hdrs[i])) != NULL) {
-
+	    conversation_id_t cid = 0;
 	    /*
 	     * The issue of case sensitivity of msgids is curious.
 	     * RFC2822 seems to imply they're case-insensitive,
@@ -3135,28 +3135,25 @@ continue2:
 	    }
 
 	    /* Lookup the conversations database to work out which
-	     * conversation id that message belongs to. */
-	    r = conversations_get_msgid(state, msgid, &cid);
+	     * conversation ids that message belongs to. */
+	    r = conversations_get_msgid(state, msgid, cids);
 	    if (r) goto out;
 
-	    /* [IRIS-1576] if X-ME-Message-ID says the messages are
-	     * linked, ignore any difference in Subject: header fields.  */
-	    if (i != 3) {
-		/* Check to see if the conversation has an incompatible
-		 * subject. */
-		r = conversation_load(state, cid, &conv);
+	    for (j = 0; j < CONVERSATION_MAX_CIDS; j++) {
+		r = conversation_load(state, cids[j], &conv);
 		if (r) goto out;
-		if (conv && strcmpsafe(conv->subject, msubj)) {
-		    conversation_free(conv);
-		    conv = NULL;
-		    free(msgid);
+		/* [IRIS-1576] if X-ME-Message-ID says the messages are
+		 * linked, ignore any difference in Subject: header fields. */
+		if (conv && i != 3 && strcmpsafe(conv->subject, msubj))
 		    continue;
-		}
-		conversation_free(conv);
-		conv = NULL;
+		cid = cids[j];
+		break;
 	    }
 
-	    /* it's unique and compatible, add it */
+	    conversation_free(conv);
+	    conv = NULL;
+
+	    /* it's unique, add it */
 
 	    if (nfound % ALLOCINCREMENT == 0) {
 		found = xrealloc(found,
@@ -3201,17 +3198,12 @@ continue2:
 
     /*
      * Update the database to add records for all the message-ids
-     * not already mentioned.  Note that we take care to avoid
-     * setting those which are already set, because that would be
-     * wasteful and it would also change the record's timestamp,
-     * which would stuff up pruning of the database.
+     * not already mentioned.  Note that add_msgid does the right
+     * thing[tm] when the cid already exists.
      */
     for (i = 0 ; i < nfound ; i++) {
-	if (found[i].cid >= record->cid)
-	    continue;
-	r = conversations_set_msgid(state, found[i].msgid, record->cid);
-	if (r)
-	    goto out;
+	r = conversations_add_msgid(state, found[i].msgid, record->cid);
+	if (r) goto out;
     }
 
 out:

@@ -83,7 +83,6 @@
 
 #include "conversations.h"
 
-
 #define CONVERSATION_ID_STRMAX	    (1+sizeof(conversation_id_t)*2)
 
 /* per user conversations db extension */
@@ -100,10 +99,10 @@ static char *suffix = NULL;
 
 static int check_msgid(const char *msgid, size_t len, size_t *lenp);
 static int _conversations_parse(const char *data, size_t datalen,
-				conversation_id_t *cidp, time_t *stampp);
+				conversation_id_t *cids, time_t *stampp);
 static int _conversations_set_key(struct conversations_state *state,
 				  const char *key, size_t keylen,
-				  conversation_id_t cid, time_t stamp);
+				  conversation_id_t *cids, time_t stamp);
 
 EXPORTED void conversations_set_directory(const char *dir)
 {
@@ -361,25 +360,50 @@ static int do_one_rename(void *rock,
 		         const char *data, size_t datalen)
 {
     struct rename_rock *rrock = (struct rename_rock *)rock;
-    conversation_id_t cid;
+    conversation_id_t cids[CONVERSATION_MAX_CIDS];
+    conversation_id_t newcids[CONVERSATION_MAX_CIDS];
     time_t stamp;
     int r;
+    int i;
+    int j;
 
     r = check_msgid(key, keylen, NULL);
     if (r) return r;
 
-    r = _conversations_parse(data, datalen, &cid, &stamp);
+    r = _conversations_parse(data, datalen, cids, &stamp);
     if (r) return r;
 
     rrock->entries_seen++;
 
-    if (cid != rrock->from_cid)
-	return 0;	/* nothing to see, move along */
+    for (i = 0; i < CONVERSATION_MAX_CIDS; i++) {
+	if (!cids[i]) break;
+	if (cids[i] != rrock->from_cid) continue;
+	/* OK, we have a match! */
+	goto rename;
+    }
 
+    return 0;
+
+rename:
     rrock->entries_renamed++;
 
+    /* annoyingly, the new CID may also be in here as well.  Easiest is
+     * to just build a new CID list without either, and then add the new
+     * value on the end.  Guaranteed (by above - at least one match) to
+     * not overflow.
+     */
+    memset(newcids, 0, sizeof(conversation_id_t) * CONVERSATION_MAX_CIDS);
+    j = 0;
+    for (i = 0; i < CONVERSATION_MAX_CIDS; i++) {
+	if (!cids[i]) break;
+	if (cids[i] == rrock->from_cid) break;
+	if (cids[i] == rrock->to_cid) break;
+	newcids[j++] = cids[i];
+    }
+    newcids[j] = rrock->to_cid;
+
     return _conversations_set_key(rrock->state, key, keylen,
-				  rrock->to_cid, stamp);
+				  newcids, stamp);
 }
 
 static void commitrename_cb(uint64_t fromval, void *data, void *rock)
@@ -507,18 +531,28 @@ static int check_msgid(const char *msgid, size_t len, size_t *lenp)
 
 static int _conversations_set_key(struct conversations_state *state,
 				  const char *key, size_t keylen,
-				  conversation_id_t cid, time_t stamp)
+				  conversation_id_t *cids, time_t stamp)
 {
     int r;
     struct buf buf;
     int version = CONVERSATIONS_VERSION;
+    int i;
+
+    /* XXX: should this be a delete operation? */
+    assert(cids[0]);
 
     buf_init(&buf);
 
     if (state->db == NULL)
 	return IMAP_IOERROR;
 
-    buf_printf(&buf, "%d " CONV_FMT " %lu", version, cid, stamp);
+    buf_printf(&buf, "%d ", version);
+    for (i = 0; i < CONVERSATION_MAX_CIDS; i++) {
+	if (!cids[i]) break;
+	if (i) buf_putc(&buf, ',');
+	buf_printf(&buf, CONV_FMT, cids[i]);
+    }
+    buf_printf(&buf, " %lu", stamp);
 
     r = cyrusdb_store(state->db,
 		      key, keylen,
@@ -553,28 +587,46 @@ static int _sanity_check_counts(conversation_t *conv)
 }
 
 
-EXPORTED int conversations_set_msgid(struct conversations_state *state,
-			  const char *msgid,
-			  conversation_id_t cid)
+EXPORTED int conversations_add_msgid(struct conversations_state *state,
+				     const char *msgid,
+				     conversation_id_t cid)
 {
     size_t keylen;
+    conversation_id_t cids[CONVERSATION_MAX_CIDS];
     int r;
+    int i;
 
     r = check_msgid(msgid, 0, &keylen);
     if (r)
 	return r;
 
-    return _conversations_set_key(state, msgid, keylen, cid, time(NULL));
+    r = conversations_get_msgid(state, msgid, cids);
+
+    for (i = 0; i < CONVERSATION_MAX_CIDS; i++) {
+	if (!cids[i]) break;
+	if (cids[i] == cid) return 0; /* found it */
+    }
+
+    if (i == CONVERSATION_MAX_CIDS)
+	return IMAP_USERFLAG_EXHAUSTED; /* XXX - saner error? */
+
+    cids[i] = cid;
+
+    return _conversations_set_key(state, msgid, keylen, cids, time(NULL));
 }
 
 static int _conversations_parse(const char *data, size_t datalen,
-				conversation_id_t *cidp, time_t *stampp)
+				conversation_id_t *cids, time_t *stampp)
 { 
     const char *rest;
     size_t restlen;
     int r;
+    int i;
     bit64 tval;
     bit64 version;
+
+    /* make sure we don't leak old data */
+    memset(cids, 0, sizeof(conversation_id_t) * CONVERSATION_MAX_CIDS);
 
     r = parsenum(data, &rest, datalen, &version);
     if (r) return IMAP_MAILBOX_BADFORMAT;
@@ -592,8 +644,12 @@ static int _conversations_parse(const char *data, size_t datalen,
     if (restlen < 17)
 	return IMAP_MAILBOX_BADFORMAT;
 
-    r = parsehex(rest, &rest, 16, cidp);
-    if (r) return IMAP_MAILBOX_BADFORMAT;
+    for (i = 0; i < CONVERSATION_MAX_CIDS; i++) {
+	r = parsehex(rest, &rest, 16, &cids[i]);
+	if (r) return IMAP_MAILBOX_BADFORMAT;
+	if (rest[0] == ' ') break;
+	if (rest[0] != ',') return IMAP_MAILBOX_BADFORMAT;
+    }
 
     if (rest[0] != ' ')
 	return IMAP_MAILBOX_BADFORMAT;
@@ -613,8 +669,8 @@ static int _conversations_parse(const char *data, size_t datalen,
 }
 
 EXPORTED int conversations_get_msgid(struct conversations_state *state,
-		          const char *msgid,
-		          conversation_id_t *cidp)
+				     const char *msgid,
+				     conversation_id_t *cids)
 {
     size_t keylen;
     size_t datalen = 0;
@@ -630,9 +686,9 @@ EXPORTED int conversations_get_msgid(struct conversations_state *state,
 		      &data, &datalen,
 		      &state->txn);
 
-    if (!r) r = _conversations_parse(data, datalen, cidp, NULL);
+    if (!r) r = _conversations_parse(data, datalen, cids, NULL);
 
-    if (r) *cidp = NULLCONVERSATION;
+    if (r) *cids = NULLCONVERSATION;
 
     return 0;
 }
@@ -1606,7 +1662,7 @@ static int prunecb(void *rock,
 		   const char *data, size_t datalen)
 {
     struct prune_rock *prock = (struct prune_rock *)rock;
-    conversation_id_t cid;
+    conversation_id_t cids[CONVERSATION_MAX_CIDS];
     time_t stamp;
     int r;
 
@@ -1614,7 +1670,7 @@ static int prunecb(void *rock,
     r = check_msgid(key, keylen, NULL);
     if (r) return r;
 
-    r = _conversations_parse(data, datalen, &cid, &stamp);
+    r = _conversations_parse(data, datalen, cids, &stamp);
     if (r) return r;
 
     /* keep records newer than the threshold */
