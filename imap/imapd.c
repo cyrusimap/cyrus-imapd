@@ -648,7 +648,7 @@ static int mlookup(const char *tag, const char *ext_name,
     struct mboxlist_entry *mbentry = NULL;
 
     r = mboxlist_lookup(name, &mbentry, NULL);
-    if ((r == IMAP_MAILBOX_NONEXISTENT || (mbentry->mbtype & MBTYPE_RESERVE)) &&
+    if ((r == IMAP_MAILBOX_NONEXISTENT || (!r && (mbentry->mbtype & MBTYPE_RESERVE))) &&
 	config_mupdate_server) {
 	/* It is not currently active, make sure we have the most recent
 	 * copy of the database */
