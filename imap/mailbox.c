@@ -1029,21 +1029,6 @@ EXPORTED int mailbox_open_iwl(const char *name, struct mailbox **mailboxptr)
 				 mailboxptr);
 }
 
-struct mailbox *mailbox_findopen(const char *name)
-{
-    struct mailboxlist *listitem = find_listitem(name);
-
-    if (listitem) {
-	struct mailbox *mailbox = &listitem->m;
-	/* we only want exclusive locked - otherwise fall back to
-	 * open_advanced and refcounting */
-	if (mailbox->index_locktype == LOCK_EXCLUSIVE)
-	    return mailbox;
-    }
-
-    return NULL;
-}
-
 HIDDEN int mailbox_open_exclusive(const char *name, struct mailbox **mailboxptr)
 {
     return mailbox_open_advanced(name, LOCK_EXCLUSIVE, LOCK_EXCLUSIVE,

@@ -447,13 +447,10 @@ struct buf *cacheitem_buf(struct index_record *record, int field);
 const char *cache_base(struct index_record *record);
 size_t cache_len(struct index_record *record);
 struct buf *cache_buf(struct index_record *record);
+
 /* opening and closing */
 extern int mailbox_open_iwl(const char *name,
 			    struct mailbox **mailboxptr);
-/* This is a filthy hack - it also asserts iwl, it's for
-   doing things on the current mailbox when you're deep
-   enough in layers that you don't have a ref any more */
-struct mailbox *mailbox_findopen(const char *name);
 extern int mailbox_open_irl(const char *name,
 			    struct mailbox **mailboxptr);
 extern int mailbox_open_exclusive(const char *name,
