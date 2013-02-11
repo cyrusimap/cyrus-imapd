@@ -5756,7 +5756,7 @@ EXPORTED extern unsigned long index_getlines(struct index_state *state,
 EXPORTED const char *index_mboxname(const struct index_state *state)
 {
     if (!state) return NULL;
-    return state->mailbox->name;
+    return state->mboxname;
 }
 
 EXPORTED int index_hasrights(const struct index_state *state, int rights)
