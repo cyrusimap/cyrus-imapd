@@ -3369,7 +3369,7 @@ static int deliver(message_data_t *msg)
 		    }            
 		}                
 		else {           
-		    r = append_commit(&as, NULL);
+		    r = append_commit(&as);
 		}
 	    }
 

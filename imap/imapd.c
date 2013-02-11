@@ -3611,6 +3611,7 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
 	struct body *body;
 
 	doappenduid = (appendstate.myrights & ACL_READ);
+	uidvalidity = append_uidvalidity(&appendstate);
 
 	for (i = 0; !r && i < stages.count ; i++) {
 	    curstage = stages.data[i];
@@ -3636,11 +3637,7 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
 	}
 
 	if (!r) {
-	    struct mailbox *mailbox = NULL;
-	    r = append_commit(&appendstate, &mailbox);
-	    if (!r)
-		uidvalidity = mailbox->i.uidvalidity;
-	    mailbox_close(&mailbox);
+	    r = append_commit(&appendstate);
 	} else {
 	    append_abort(&appendstate);
 	}

@@ -147,6 +147,7 @@ done:
  *		     vnd.cmu.MessageCopy (zero means don't send notification)
  * On success, the struct pointed to by 'as' is set up.
  *
+ * when you commit or abort, the mailbox is closed
  */
 EXPORTED int append_setup(struct appendstate *as, const char *name,
 		 const char *userid, struct auth_state *auth_state,
@@ -159,35 +160,43 @@ EXPORTED int append_setup(struct appendstate *as, const char *name,
     r = mailbox_open_iwl(name, &mailbox);
     if (r) return r;
 
-    return append_setup_mbox(as, mailbox, userid, auth_state,
-			     aclcheck, quotacheck, namespace, isadmin, event_type);
+    r = append_setup_mbox(as, mailbox, userid, auth_state,
+			  aclcheck, quotacheck, namespace, isadmin, event_type);
+    if (r)
+	mailbox_close(&mailbox);
+
+    as->close_mailbox_when_done = 1;
+
+    return r;
 }
 
-HIDDEN int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
-		 const char *userid, struct auth_state *auth_state,
-		 long aclcheck, const quota_t quotacheck[QUOTA_NUMRESOURCES],
-		 struct namespace *namespace, int isadmin, enum event_type event_type)
+/* setup for append with an existing mailbox
+ *
+ * same as append_setup, but when you commit, the mailbox remains open and locked.
+ *
+ * Requires as write locked mailbox (of course)
+ */
+EXPORTED int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
+			       const char *userid, struct auth_state *auth_state,
+			       long aclcheck, const quota_t quotacheck[QUOTA_NUMRESOURCES],
+			       struct namespace *namespace, int isadmin,
+			       enum event_type event_type)
 {
     int r;
 
     memset(as, 0, sizeof(*as));
-    as->mailbox = mailbox;
 
-    as->myrights = cyrus_acl_myrights(auth_state, as->mailbox->acl);
+    as->myrights = cyrus_acl_myrights(auth_state, mailbox->acl);
 
     if ((as->myrights & aclcheck) != aclcheck) {
 	r = (as->myrights & ACL_LOOKUP) ?
 	  IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
-	mailbox_close(&as->mailbox);
 	return r;
     }
 
     if (quotacheck) {
-	r = mailbox_quota_check(as->mailbox, quotacheck);
-	if (r) {
-	    mailbox_close(&as->mailbox);
-	    return r;
-	}
+	r = mailbox_quota_check(mailbox, quotacheck);
+	if (r) return r;
     }
 
     if (userid) {
@@ -201,32 +210,34 @@ HIDDEN int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
 
     /* make sure we can open the cache file, so we
      * abort early otherwise */
-    r = mailbox_ensure_cache(as->mailbox, 0);
-    if (r) {
-	mailbox_close(&as->mailbox);
-	return r;
-    }
+    r = mailbox_ensure_cache(mailbox, 0);
+    if (r) return r;
 
     /* initialize seen list creator */
-    as->internalseen = mailbox_internal_seen(as->mailbox, as->userid);
+    as->internalseen = mailbox_internal_seen(mailbox, as->userid);
     as->seen_seq = seqset_init(0, SEQ_SPARSE);
 
     /* zero out metadata */
     as->nummsg = 0;
-    as->baseuid = as->mailbox->i.last_uid + 1;
+    as->baseuid = mailbox->i.last_uid + 1;
     as->s = APPEND_READY;
 
     as->event_type = event_type;
     as->mboxevents = NULL;
 
+    as->mailbox = mailbox;
+
     return 0;
 }
 
+EXPORTED uint32_t append_uidvalidity(struct appendstate *as)
+{
+    return as->mailbox->i.uidvalidity;
+}
 
 /* may return non-zero, indicating that the entire append has failed
  and the mailbox is probably in an inconsistent state. */
-EXPORTED int append_commit(struct appendstate *as,
-		  struct mailbox **mailboxptr)
+EXPORTED int append_commit(struct appendstate *as)
 {
     int r = 0;
     
@@ -260,12 +271,8 @@ EXPORTED int append_commit(struct appendstate *as,
     mboxevent_freequeue(&as->mboxevents);
     as->event_type = 0;
 
-    if (mailboxptr) {
-	*mailboxptr = as->mailbox;
-    }
-    else {
+    if (as->close_mailbox_when_done)
 	mailbox_close(&as->mailbox);
-    }
 
     as->s = APPEND_DONE;
 
@@ -283,7 +290,8 @@ EXPORTED int append_abort(struct appendstate *as)
     /* XXX - clean up neatly so we don't crash and burn here... */
 
     /* close mailbox */
-    mailbox_close(&as->mailbox);
+    if (as->close_mailbox_when_done)
+	mailbox_close(&as->mailbox);
 
     seqset_free(as->seen_seq);
 

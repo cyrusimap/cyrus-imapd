@@ -75,6 +75,8 @@ struct copymsg {
 struct appendstate {
     /* mailbox we're appending to */
     struct mailbox *mailbox;
+    /* do we own it? */
+    int close_mailbox_when_done:1;
     int myrights;
     char userid[MAX_MAILBOX_BUFFER];
 
@@ -122,8 +124,9 @@ extern int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
 			     struct namespace *namespace,
 			     int isadmin, enum event_type event_type);
 
-extern int append_commit(struct appendstate *as,
-			 struct mailbox **mailboxptr);
+extern uint32_t append_uidvalidity(struct appendstate *as);
+
+extern int append_commit(struct appendstate *as);
 extern int append_abort(struct appendstate *as);
 
 /* creates a new stage and returns stage file corresponding to mailboxname */

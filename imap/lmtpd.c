@@ -538,8 +538,14 @@ int deliver_mailbox(FILE *f,
     int r = 0;
     struct appendstate as;
     const char *notifier;
+    struct mailbox *mailbox = NULL;
     duplicate_key_t dkey = DUPLICATE_INITIALIZER;
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
+
+    /* open the mailbox separately so we can hold it open until
+     * after the duplicate elimination is done */
+    r = mailbox_open_iwl(mailboxname, &mailbox);
+    if (r) return r;
 
     if (quotaoverride)
 	qdiffs[QUOTA_STORAGE] = -1;
@@ -554,10 +560,13 @@ int deliver_mailbox(FILE *f,
     else if (config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA))
 	qdiffs[QUOTA_ANNOTSTORAGE] = 0;
 
-    r = append_setup(&as, mailboxname,
-		     authuser, authstate, acloverride ? 0 : ACL_POST, 
-		     qdiffs, NULL, 0, EVENT_MESSAGE_NEW);
-    if (r) return r;
+    r = append_setup_mbox(&as, mailbox,
+			  authuser, authstate, acloverride ? 0 : ACL_POST, 
+			  qdiffs, NULL, 0, EVENT_MESSAGE_NEW);
+    if (r) {
+	mailbox_close(&mailbox);
+	return r;
+    }
 
     /* check for duplicate message */
     dkey.id = id;
@@ -567,6 +576,7 @@ int deliver_mailbox(FILE *f,
 	duplicate_check(&dkey)) {
 	duplicate_log(&dkey, "delivery");
 	append_abort(&as);
+	mailbox_close(&mailbox);
 	return 0;
     }
 
@@ -584,19 +594,20 @@ int deliver_mailbox(FILE *f,
 	if (r) {
 	    append_abort(&as);
 	} else {
-	    struct mailbox *mailbox = NULL;
-	    /* hold the mailbox open until the duplicate mark is done */
-	    r = append_commit(&as, &mailbox);
+	    r = append_commit(&as);
 	    if (!r) {
+		/* dupelim after commit, but while mailbox is still
+		 * locked to avoid race condition */
 		syslog(LOG_INFO, "Delivered: %s to mailbox: %s",
 		       id, mailboxname);
-		if (dupelim && id) {
+		if (dupelim && id)
 		    duplicate_mark(&dkey, time(NULL), as.baseuid);
-		}
-		mailbox_close(&mailbox);
 	    }
 	}
     }
+
+    /* safe to close the mailbox before sending responses */
+    mailbox_close(&mailbox);
 
     if (!r && user && (notifier = config_getstring(IMAPOPT_MAILNOTIFIER))) {
 	char inbox[MAX_MAILBOX_BUFFER];

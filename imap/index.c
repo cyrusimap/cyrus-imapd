@@ -1192,7 +1192,6 @@ EXPORTED int index_run_annotator(struct index_state *state,
     r = index_lock(state);
     if (r) return r;
 
-    mailbox_ref(state->mailbox);
     r = append_setup_mbox(&as, state->mailbox,
 			  state->userid, state->authstate,
 			  0, NULL, namespace, isadmin, 0);
@@ -1221,24 +1220,18 @@ EXPORTED int index_run_annotator(struct index_state *state,
     }
 
 out:
+    seqset_free(seq);
+
     if (!r) {
-	/* There's a delicate dance involved in shutting all
-	 * this down without double-unlocking the mailbox; the
-	 * trick is to give append_commit() a non-NULL mailbox**
-	 * to avoid it calling mailbox_close() too early. */
-	struct mailbox *mailbox = NULL;
-	append_commit(&as, &mailbox);
-	/* it turns out that index_unlock() really needs to be
-	 * called with a locked mailbox, if the seen data is dirty */
-	index_unlock(state);
-	mailbox_close(&mailbox);
+	r = append_commit(&as);
     }
     else {
-	/* append abort unlocks the mailbox */
 	append_abort(&as);
     }
-    seqset_free(seq);
+    index_unlock(state);
+
     index_tellchanges(state, usinguid, usinguid, 1);
+
     return r;
 }
 
@@ -1739,7 +1732,7 @@ index_copy(struct index_state *state,
     r = append_copy(mailbox, &appendstate, copyargs.nummsg,
 		    copyargs.copymsg, nolink);
     if (!r) {
-	r = append_commit(&appendstate, &destmailbox);
+	r = append_commit(&appendstate);
     }
 
     /* unlock first so we don't hold the lock while expunging
