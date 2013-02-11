@@ -243,6 +243,16 @@ static int unlockaccept(void)
     return 0;
 }
 
+static int safe_wait_readable(int fd)
+{
+    fd_set rfds;
+    int r;
+
+    FD_ZERO(&rfds);
+    FD_SET(fd, &rfds);
+    return signals_select(fd+1, &rfds, NULL, NULL, NULL);
+}
+
 int main(int argc, char **argv, char **envp)
 {
     int fdflags;
@@ -426,6 +436,11 @@ int main(int argc, char **argv, char **envp)
 	    }
 
 	    if (soctype == SOCK_STREAM) {
+		/* Wait for the file descriptor to be connected to, in a
+		 * signal-safe manner.  This ensures the accept() does
+		 * not block and we don't need to make it signal-safe.  */
+		if (safe_wait_readable(LISTEN_FD) < 0)
+		    continue;
 		fd = accept(LISTEN_FD, NULL, NULL);
 		if (fd < 0) {
 		    switch (errno) {
@@ -462,7 +477,9 @@ int main(int argc, char **argv, char **envp)
 		socklen_t fromlen;
 		char ch;
 		int r;
- 
+
+		if (safe_wait_readable(LISTEN_FD) < 0)
+		    continue;
 		fromlen = sizeof(from);
 		r = recvfrom(LISTEN_FD, (void *) &ch, 1, MSG_PEEK,
 			     (struct sockaddr *) &from, &fromlen);
