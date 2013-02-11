@@ -48,6 +48,7 @@
 
 #include <string.h>
 #include <sys/types.h>
+#include "util.h"
 
 typedef struct
 {
@@ -55,8 +56,6 @@ typedef struct
     int alloc;
     char **data;
 } strarray_t;
-
-typedef int compar_t(const void *a, const void *b);
 
 #define STRARRAY_INITIALIZER	{ 0, 0, NULL }
 #define strarray_init(sa)   (memset((sa), 0, sizeof(strarray_t)))

@@ -557,6 +557,7 @@ doc_text_htmlstrip_SOURCE = doc/text/htmlstrip.c
 includedir=@includedir@/cyrus
 include_HEADERS = \
 	lib/acl.h \
+	lib/arrayu64.h \
 	lib/assert.h \
 	lib/auth.h \
 	lib/auth_pts.h \
@@ -968,6 +969,7 @@ lib_libcyrus_la_LIBADD = $(LIB_RT) ${LIB_SASL} $(SSL_LIBS)
 lib_libcyrus_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 lib_libcyrus_min_la_SOURCES = \
+	lib/arrayu64.c \
 	lib/assert.c \
 	lib/hash.c \
 	lib/hashu64.c \
