@@ -99,10 +99,10 @@ static char *suffix = NULL;
 
 static int check_msgid(const char *msgid, size_t len, size_t *lenp);
 static int _conversations_parse(const char *data, size_t datalen,
-				conversation_id_t *cids, time_t *stampp);
+				arrayu64_t *cids, time_t *stampp);
 static int _conversations_set_key(struct conversations_state *state,
 				  const char *key, size_t keylen,
-				  conversation_id_t *cids, time_t stamp);
+				  arrayu64_t *cids, time_t stamp);
 
 EXPORTED void conversations_set_directory(const char *dir)
 {
@@ -360,67 +360,35 @@ static int do_one_rename(void *rock,
 		         const char *data, size_t datalen)
 {
     struct rename_rock *rrock = (struct rename_rock *)rock;
-    conversation_id_t cids[CONVERSATION_MAX_CIDS];
-    conversation_id_t newcids[CONVERSATION_MAX_CIDS];
+    arrayu64_t cids = ARRAYU64_INITIALIZER;
     time_t stamp;
     int r;
-    int i;
-    int j;
+    int removed;
 
     r = check_msgid(key, keylen, NULL);
     if (r) return r;
 
-    r = _conversations_parse(data, datalen, cids, &stamp);
+    r = _conversations_parse(data, datalen, &cids, &stamp);
     if (r) return r;
 
     rrock->entries_seen++;
 
-    for (i = 0; i < CONVERSATION_MAX_CIDS; i++) {
-	if (!cids[i]) break;
-	if (cids[i] != rrock->from_cid) continue;
-	/* OK, we have a match! */
-	goto rename;
-    }
+    removed = arrayu64_remove_all(&cids, rrock->from_cid);
+    if (!removed) return 0;
 
-    return 0;
+    arrayu64_add(&cids, rrock->to_cid);
 
-rename:
     rrock->entries_renamed++;
 
-    /* annoyingly, the new CID may also be in here as well.  Easiest is
-     * to just build a new CID list without either, and then add the new
-     * value on the end.  Guaranteed (by above - at least one match) to
-     * not overflow.
-     */
-    memset(newcids, 0, sizeof(conversation_id_t) * CONVERSATION_MAX_CIDS);
-    j = 0;
-    for (i = 0; i < CONVERSATION_MAX_CIDS; i++) {
-	if (!cids[i]) break;
-	if (cids[i] == rrock->from_cid) continue;
-	if (cids[i] == rrock->to_cid) continue;
-	newcids[j++] = cids[i];
-    }
-    newcids[j] = rrock->to_cid;
-
     return _conversations_set_key(rrock->state, key, keylen,
-				  newcids, stamp);
+				  &cids, stamp);
 }
 
-static void commitrename_cb(uint64_t fromval, void *data, void *rock)
+EXPORTED void conversations_rename_cidentry(struct conversations_state *state,
+					    conversation_id_t from,
+					    conversation_id_t to)
 {
-    conversation_id_t to = *((conversation_id_t *)data);
-    conversation_id_t from = (conversation_id_t)fromval;
-    struct conversations_state *state = (struct conversations_state *)rock;
-
     struct rename_rock rrock;
-    conv_folder_t *folder = NULL;
-    conversation_t *conv = NULL;
-    int r = 0;
-
-    while ((data = hashu64_lookup(to, &state->cidrenames))) {
-	/* got renamed again! */
-	to = *((uint64_t *)data);
-    }
 
     memset(&rrock, 0, sizeof(rrock));
     rrock.state = state;
@@ -433,6 +401,22 @@ static void commitrename_cb(uint64_t fromval, void *data, void *rock)
 		       " from " CONV_FMT " to " CONV_FMT,
 			rrock.entries_seen, rrock.entries_renamed,
 			from, to);
+}
+
+static void commitrename_cb(uint64_t fromval, void *data, void *rock)
+{
+    conversation_id_t to = *((conversation_id_t *)data);
+    conversation_id_t from = (conversation_id_t)fromval;
+    struct conversations_state *state = (struct conversations_state *)rock;
+
+    conv_folder_t *folder = NULL;
+    conversation_t *conv = NULL;
+    int r = 0;
+
+    while ((data = hashu64_lookup(to, &state->cidrenames))) {
+	/* got renamed again! */
+	to = *((uint64_t *)data);
+    }
 
     /* Use the B record to find the mailboxes for a CID rename.
      * The rename events will decrease the NUM_RECORDS count back
@@ -531,7 +515,7 @@ static int check_msgid(const char *msgid, size_t len, size_t *lenp)
 
 static int _conversations_set_key(struct conversations_state *state,
 				  const char *key, size_t keylen,
-				  conversation_id_t *cids, time_t stamp)
+				  arrayu64_t *cids, time_t stamp)
 {
     int r;
     struct buf buf;
@@ -539,7 +523,7 @@ static int _conversations_set_key(struct conversations_state *state,
     int i;
 
     /* XXX: should this be a delete operation? */
-    assert(cids[0]);
+    assert(cids->count);
 
     buf_init(&buf);
 
@@ -547,10 +531,10 @@ static int _conversations_set_key(struct conversations_state *state,
 	return IMAP_IOERROR;
 
     buf_printf(&buf, "%d ", version);
-    for (i = 0; i < CONVERSATION_MAX_CIDS; i++) {
-	if (!cids[i]) break;
+    for (i = 0; i < cids->count; i++) {
+	conversation_id_t cid = arrayu64_nth(cids, i);
 	if (i) buf_putc(&buf, ',');
-	buf_printf(&buf, CONV_FMT, cids[i]);
+	buf_printf(&buf, CONV_FMT, cid);
     }
     buf_printf(&buf, " %lu", stamp);
 
@@ -591,45 +575,38 @@ EXPORTED int conversations_add_msgid(struct conversations_state *state,
 				     const char *msgid,
 				     conversation_id_t cid)
 {
+    arrayu64_t cids = ARRAYU64_INITIALIZER;
     size_t keylen;
-    conversation_id_t cids[CONVERSATION_MAX_CIDS];
-    int r;
-    int i;
+    int r = 0;
 
     r = check_msgid(msgid, 0, &keylen);
-    if (r) return r;
+    if (r) goto done;
 
-    r = conversations_get_msgid(state, msgid, cids);
-    if (r) return r;
+    r = conversations_get_msgid(state, msgid, &cids);
+    if (r) goto done;
 
-    for (i = 0; i < CONVERSATION_MAX_CIDS; i++) {
-	if (!cids[i]) break;
-	if (cids[i] == cid) return 0; /* found it */
+    if (arrayu64_find(&cids, cid, 0) < 0) {
+	arrayu64_append(&cids, cid);
+	r = _conversations_set_key(state, msgid, keylen, &cids, time(NULL));
     }
 
-    /* need to compile with support for more if we ever hit this,
-     * but it means a single conversation with MAX_CIDS different
-     * subjects over the life of remembered message-ids.  */
-    if (i == CONVERSATION_MAX_CIDS)
-	return IMAP_CONVERSATIONS_SUBJECT_LIMIT;
-
-    cids[i] = cid;
-
-    return _conversations_set_key(state, msgid, keylen, cids, time(NULL));
+done:
+    arrayu64_fini(&cids);
+    return r;
 }
 
 static int _conversations_parse(const char *data, size_t datalen,
-				conversation_id_t *cids, time_t *stampp)
+				arrayu64_t *cids, time_t *stampp)
 { 
     const char *rest;
     size_t restlen;
     int r;
-    int i;
+    conversation_id_t cid;
     bit64 tval;
     bit64 version;
 
     /* make sure we don't leak old data */
-    memset(cids, 0, sizeof(conversation_id_t) * CONVERSATION_MAX_CIDS);
+    arrayu64_truncate(cids, 0);
 
     r = parsenum(data, &rest, datalen, &version);
     if (r) return IMAP_MAILBOX_BADFORMAT;
@@ -647,11 +624,13 @@ static int _conversations_parse(const char *data, size_t datalen,
     if (restlen < 17)
 	return IMAP_MAILBOX_BADFORMAT;
 
-    for (i = 0; i < CONVERSATION_MAX_CIDS; i++) {
-	r = parsehex(rest, &rest, 16, &cids[i]);
+    while (1) {
+	r = parsehex(rest, &rest, 16, &cid);
 	if (r) return IMAP_MAILBOX_BADFORMAT;
+	arrayu64_append(cids, cid);
 	if (rest[0] == ' ') break;
 	if (rest[0] != ',') return IMAP_MAILBOX_BADFORMAT;
+	rest++; /* skip comma */
     }
 
     if (rest[0] != ' ')
@@ -673,7 +652,7 @@ static int _conversations_parse(const char *data, size_t datalen,
 
 EXPORTED int conversations_get_msgid(struct conversations_state *state,
 				     const char *msgid,
-				     conversation_id_t *cids)
+				     arrayu64_t *cids)
 {
     size_t keylen;
     size_t datalen = 0;
@@ -691,7 +670,7 @@ EXPORTED int conversations_get_msgid(struct conversations_state *state,
 
     if (!r) r = _conversations_parse(data, datalen, cids, NULL);
 
-    if (r) *cids = NULLCONVERSATION;
+    if (r) arrayu64_truncate(cids, 0);
 
     return 0;
 }
@@ -1665,27 +1644,31 @@ static int prunecb(void *rock,
 		   const char *data, size_t datalen)
 {
     struct prune_rock *prock = (struct prune_rock *)rock;
-    conversation_id_t cids[CONVERSATION_MAX_CIDS];
+    arrayu64_t cids = ARRAYU64_INITIALIZER;
     time_t stamp;
     int r;
 
     prock->nseen++;
     r = check_msgid(key, keylen, NULL);
-    if (r) return r;
+    if (r) goto done;
 
-    r = _conversations_parse(data, datalen, cids, &stamp);
-    if (r) return r;
+    r = _conversations_parse(data, datalen, &cids, &stamp);
+    if (r) goto done;
 
     /* keep records newer than the threshold */
     if (stamp >= prock->thresh)
-	return 0;
+	goto done;
 
     prock->ndeleted++;
 
-    return cyrusdb_delete(prock->state->db,
-		      key, keylen,
-		      &prock->state->txn,
-		      /*force*/1);
+    r = cyrusdb_delete(prock->state->db,
+		       key, keylen,
+		       &prock->state->txn,
+		       /*force*/1);
+
+done:
+    arrayu64_fini(&cids);
+    return r;
 }
 
 EXPORTED int conversations_prune(struct conversations_state *state,

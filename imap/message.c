@@ -55,6 +55,8 @@
 #include <netinet/in.h>
 #include <stdlib.h>
 
+#include "arrayu64.h"
+#include "assert.h"
 #include "crc32.h"
 #include "dlist.h"
 #include "exitcodes.h"
@@ -3036,14 +3038,10 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
     char *hdrs[4];
     char *c_refs = NULL, *c_env = NULL, *c_me_msgid = NULL;
     struct buf msubject = BUF_INITIALIZER;
-    /* TODO: need an expanding array class here */
-    struct {
-	char *msgid;
-	conversation_id_t cid;
-    } *found = NULL;
-    int nfound = 0;
-#define ALLOCINCREMENT 16
-    conversation_id_t cids[CONVERSATION_MAX_CIDS];
+    strarray_t msgidlist = STRARRAY_INITIALIZER;
+    arrayu64_t matchlist = ARRAYU64_INITIALIZER;
+    arrayu64_t emptylist = ARRAYU64_INITIALIZER;
+    arrayu64_t cids = ARRAYU64_INITIALIZER;
     conversation_t *conv = NULL;
     const char *msubj = NULL;
     int i;
@@ -3114,7 +3112,6 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
     for (i = 0 ; i < 4 ; i++) {
 continue2:
 	while ((msgid = find_msgid(hdrs[i], &hdrs[i])) != NULL) {
-	    conversation_id_t cid = 0;
 	    /*
 	     * The issue of case sensitivity of msgids is curious.
 	     * RFC2822 seems to imply they're case-insensitive,
@@ -3126,67 +3123,68 @@ continue2:
 	     */
 	    msgid = lcase(msgid);
 
-	    /* check for duplicates.  O(N^2), yuck */
-	    for (j = 0 ; j < nfound ; j++) {
-		if (!strcmp(msgid, found[j].msgid)) {
-		    free(msgid);
-		    goto continue2;
-		}
-	    }
+	    /* already seen this one? */
+	    if (strarray_find(&msgidlist, msgid, 0) < 0)
+		continue;
+
+	    strarray_append(&msgidlist, msgid);
 
 	    /* Lookup the conversations database to work out which
 	     * conversation ids that message belongs to. */
-	    r = conversations_get_msgid(state, msgid, cids);
+	    r = conversations_get_msgid(state, msgid, &cids);
 	    if (r) goto out;
 
-	    for (j = 0; j < CONVERSATION_MAX_CIDS; j++) {
-		if (!cids[j]) break;
-		r = conversation_load(state, cids[j], &conv);
+	    for (j = 0; j < cids.count; j++) {
+		conversation_id_t cid = arrayu64_nth(&cids, j);
+		r = conversation_load(state, cid, &conv);
 		if (r) goto out;
+		if (!conv)
+		    arrayu64_add(&emptylist, cid);
 		/* [IRIS-1576] if X-ME-Message-ID says the messages are
-		 * linked, ignore any difference in Subject: header fields. */
-		if (conv && i != 3 && strcmpsafe(conv->subject, msubj))
-		    continue;
-		cid = cids[j];
-		break;
+		* linked, ignore any difference in Subject: header fields. */
+		else if (i == 3 || !strcmpsafe(conv->subject, msubj))
+		    arrayu64_add(&matchlist, cid);
 	    }
 
 	    conversation_free(conv);
 	    conv = NULL;
-
-	    /* it's unique, add it */
-
-	    if (nfound % ALLOCINCREMENT == 0) {
-		found = xrealloc(found,
-			    (nfound+ALLOCINCREMENT) * sizeof(*found));
-	    }
-
-	    found[nfound].msgid = msgid;
-	    found[nfound].cid = cid;
-	    nfound++;
 	}
     }
 
     if (!record->silent) {
 	conversation_id_t newcid = record->cid;
+	conversation_id_t val;
+
 	/* Work out the new CID this message will belong to.
 	 * Use the MAX of any CIDs found - as NULLCONVERSATION is
 	 * numerically zero this will be the only non-NULL CID or
 	 * the MAX of two or more non-NULL CIDs */
-	for (i = 0 ; i < nfound ; i++)
-	    newcid = (newcid > found[i].cid ? newcid : found[i].cid);
+	val = arrayu64_max(&matchlist);
+	if (val > newcid) newcid = val;
+
+	val = arrayu64_max(&emptylist);
+	if (val > newcid) newcid = val;
 
 	if (!newcid)
 	    newcid = generate_conversation_id(record);
 
 	/* Mark any CID renames */
-	for (i = 0 ; i < nfound ; i++)
-	    conversations_rename_cid(state, found[i].cid, newcid);
+	for (i = 0 ; i < matchlist.count ; i++)
+	    conversations_rename_cid(state, arrayu64_nth(&matchlist, i), newcid);
 
 	if (!record->cid) record->cid = newcid;
     }
 
     if (!record->cid) goto out;
+
+    /* for CIDs with no 'B' record (hence, no existing members) it is
+     * safe to rename all the entries for that CID to the higher numbered
+     * cid.  In both master and replica cases, this will execute once the
+     * last message has its CID renamed */
+    for (i = 0; i < emptylist.count; i++) {
+	conversation_id_t item = arrayu64_nth(&emptylist, i);
+	conversations_rename_cidentry(state, item, record->cid);
+    }
 
     r = conversation_load(state, record->cid, &conv);
     if (r) goto out;
@@ -3202,16 +3200,17 @@ continue2:
      * not already mentioned.  Note that add_msgid does the right
      * thing[tm] when the cid already exists.
      */
-    for (i = 0 ; i < nfound ; i++) {
-	r = conversations_add_msgid(state, found[i].msgid, record->cid);
+    for (i = 0 ; i < msgidlist.count ; i++) {
+	r = conversations_add_msgid(state, strarray_nth(&msgidlist, i), record->cid);
 	if (r) goto out;
     }
 
 out:
     free(msgid);
-    for (i = 0 ; i < nfound ; i++)
-	free(found[i].msgid);
-    free(found);
+    strarray_fini(&msgidlist);
+    arrayu64_fini(&matchlist);
+    arrayu64_fini(&emptylist);
+    arrayu64_fini(&cids);
     free(c_refs);
     free(c_env);
     free(c_me_msgid);

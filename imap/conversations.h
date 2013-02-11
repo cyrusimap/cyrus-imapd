@@ -49,6 +49,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include "arrayu64.h"
 #include "hash.h"
 #include "hashu64.h"
 #include "strarray.h"
@@ -57,8 +58,6 @@
 typedef bit64	conversation_id_t;
 #define CONV_FMT "%016llx"
 #define NULLCONVERSATION	(0ULL)
-
-#define CONVERSATION_MAX_CIDS      16
 
 struct conversations_state {
     struct db *db;
@@ -152,7 +151,7 @@ extern int conversations_add_msgid(struct conversations_state *state,
 				   conversation_id_t cid);
 extern int conversations_get_msgid(struct conversations_state *state,
 				   const char *msgid,
-				   conversation_id_t *cids);
+				   arrayu64_t *cids);
 extern conv_folder_t *conversation_get_folder(conversation_t *conv,
 					      int number, int create_flag);
 

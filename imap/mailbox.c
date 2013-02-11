@@ -2786,7 +2786,9 @@ EXPORTED int mailbox_update_conversations(struct mailbox *mailbox,
 	    assert((new->system_flags & FLAG_EXPUNGED));
 
 	if (old->cid != new->cid) {
-	    /* handle CID being renamed, by calling ourselves */
+	    /* handle CID being renamed, by calling ourselves.  Always remove
+	     * BEFORE adding so that the old 'B' record can be deleted, and
+	     * hence the old CID be cleaned up in a rename case */
 	    r = mailbox_update_conversations(mailbox, old, NULL);
 	    if (!r && new->cid) /* handle ctl_conversationdb -z correctly */
 		r = mailbox_update_conversations(mailbox, NULL, new);
