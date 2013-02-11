@@ -5691,6 +5691,7 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
 
 struct renrock 
 {
+    struct namespace *namespace;
     int ol;
     int nl;
     int rename_user;
@@ -5761,7 +5762,7 @@ static int renmbox(char *name,
 	/* If we're renaming a user, change quotaroot and ACL */
 	if (text->rename_user) {
 	    user_copyquotaroot(name, text->newmailboxname);
-	    user_renameacl(text->newmailboxname,
+	    user_renameacl(text->namespace, text->newmailboxname,
 			   text->acl_olduser, text->acl_newuser);
 	}
 
@@ -6017,6 +6018,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	strcat(nmbn, ".");
 
 	/* setup the rock */
+	rock.namespace = &imapd_namespace;
 	rock.found = 0;
 	rock.newmailboxname = nmbn;
 	rock.ol = ol;
@@ -6095,7 +6097,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 				    strcspn(acl_newuser, "@") : 0);
 
 	user_copyquotaroot(oldmailboxname, newmailboxname);
-	user_renameacl(newmailboxname, acl_olduser, acl_newuser);
+	user_renameacl(&imapd_namespace, newmailboxname, acl_olduser, acl_newuser);
 	user_renamedata(olduser, newuser, imapd_userid, imapd_authstate);
 
 	/* XXX report status/progress of meta-data */
@@ -6114,6 +6116,7 @@ submboxes:
 	strcat(newmailboxname, ".");
 
 	/* setup the rock */
+	rock.namespace = &imapd_namespace;
 	rock.newmailboxname = newmailboxname;
 	rock.ol = omlen + 1;
 	rock.nl = nmlen + 1;
@@ -6832,9 +6835,9 @@ static void cmd_setacl(char *tag, const char *name,
 
     /* local mailbox */
     if (!r) {
-	r = mboxlist_setacl(mailboxname, identifier, rights,
+	r = mboxlist_setacl(&imapd_namespace, mailboxname, identifier, rights,
 			    imapd_userisadmin || imapd_userisproxyadmin,
-			    imapd_userid, imapd_authstate);
+			    proxy_userid, imapd_authstate);
     }
 
     imapd_check(NULL, 0);

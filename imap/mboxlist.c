@@ -581,6 +581,16 @@ static int mboxlist_create_acl(const char *mboxname, char **out)
     owner = mboxname_to_userid(mboxname);
     if (owner) {
 	/* owner gets full permission on own mailbox by default */
+	if (config_getswitch(IMAPOPT_UNIXHIERARCHYSEP)) {
+	    /*
+	     * The mailboxname is now in the internal format,
+	     * so we we need to change DOTCHARs back to '.'
+	     * in the identifier in order to have the correct ACL.
+	     */
+	    for (p = (char *)owner; *p; p++) {
+		if (*p == DOTCHAR) *p = '.';
+	    }
+	}
 	cyrus_acl_set(out, owner, ACL_MODE_SET, ACL_ALL,
 		      (cyrus_acl_canonproc_t *)0, (void *)0);
 	return 0;
@@ -1366,27 +1376,36 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 /*
  * Verify if the 'user' is the mailbox 'name' owner.
  */
-static int mboxlist_is_owner(const char *name, int domainlen,
+static int mboxlist_is_owner(struct namespace *namespace,
+			     const char *name, int domainlen,
 			     const char *user, int userlen)
 {
+    struct buf extname = BUF_INITIALIZER;
+    const char *username = NULL;
     char *dot_position = NULL;
 
     /* is_user_mbox */
-    if(strncmp(name+domainlen, "user.", 5))
-      return 0;
+    if (strncmp(name+domainlen, "user.", 5))
+	return 0;
 
-    dot_position = strchr(user, '.');
-    if (dot_position && (dot_position - user) <= userlen)
-      return 0;
+    /* get external representation of owner to check against given user */
+    username = name + domainlen + 5;
+    dot_position = strchr(username, '.');
+    buf_setmap(&extname, username, dot_position ?
+	dot_position - username : strlen(username));
+    mboxname_hiersep_toexternal(namespace,
+	(char *)buf_cstring(&extname), buf_len(&extname));
 
     /* starts_with_user */
-    if(strncmp(name+domainlen+5, user, userlen))
-      return 0;
+    if (strncmp(buf_cstring(&extname), user, userlen)) {
+	buf_free(&extname);
+	return 0;
+    }
+    buf_free(&extname);
 
     /* is_exactly_user */
-    if (!(name[domainlen+5+userlen] == '\0' ||
-	  name[domainlen+5+userlen] == '.'))
-      return 0;
+    if (!(username[userlen] == '\0' || username[userlen] == '.'))
+	return 0;
 
     return 1;
 }
@@ -1415,8 +1434,8 @@ static int mboxlist_have_admin_rights(const char* rights) {
  * 6. Change mupdate entry 
  *
  */
-EXPORTED int mboxlist_setacl(const char *name, const char *identifier,
-		    const char *rights, 
+EXPORTED int mboxlist_setacl(struct namespace *namespace, const char *name,
+		    const char *identifier, const char *rights,
 		    int isadmin, const char *userid, 
 		    struct auth_state *auth_state)
 {
@@ -1483,13 +1502,15 @@ EXPORTED int mboxlist_setacl(const char *name, const char *identifier,
 
     /* checks if the mailbox belongs to the user who is trying to change the
        access rights */
-    if (mboxlist_is_owner(name, domainlen, userid, useridlen)) {
+    if (mboxlist_is_owner(namespace, name, domainlen, userid, useridlen)) {
 	isusermbox = 1;
     }
     anyoneuseracl = config_getswitch(IMAPOPT_ANYONEUSERACL);
 
     /* checks if the identifier is the mailbox owner */
-    if (mboxlist_is_owner(name, domainlen, identifier, identifierlen)) {
+    if (mboxlist_is_owner(namespace, name, domainlen,
+	identifier, identifierlen))
+    {
 	isidentifiermbox = 1;
     }
 

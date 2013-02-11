@@ -64,7 +64,8 @@ int user_renamedata(char *olduser, char *newuser, char *userid,
 		    struct auth_state *authstate);
 
 /* Rename ACL for 'olduser' to 'newuser' on mailbox 'name'. */
-int user_renameacl(char *name, char *olduser, char *newuser);
+int user_renameacl(struct namespace *namespace, char *name,
+		   char *olduser, char *newuser);
 
 /* Copy a quotaroot from mailbox 'oldname' to 'newname' */
 int user_copyquotaroot(char *oldname, char *newname);

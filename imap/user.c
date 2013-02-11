@@ -373,7 +373,8 @@ EXPORTED int user_renamedata(char *olduser, char *newuser,
     return r;
 }
 
-EXPORTED int user_renameacl(char *name, char *olduser, char *newuser)
+EXPORTED int user_renameacl(struct namespace *namespace, char *name,
+			    char *olduser, char *newuser)
 {
     int r = 0;
     char *acl;
@@ -398,10 +399,10 @@ EXPORTED int user_renameacl(char *name, char *olduser, char *newuser)
 
 	if (!strcmp(acl, olduser)) {
 	    /* copy ACL for olduser to newuser */
-	    r = mboxlist_setacl(name, newuser, rights, 1, newuser, NULL);
+	    r = mboxlist_setacl(namespace, name, newuser, rights, 1, newuser, NULL);
 	    /* delete ACL for olduser */
 	    if (!r)
-		r = mboxlist_setacl(name, olduser, (char *)0, 1, newuser, NULL);
+		r = mboxlist_setacl(namespace, name, olduser, (char *)0, 1, newuser, NULL);
 	}
 
 	acl = nextid;

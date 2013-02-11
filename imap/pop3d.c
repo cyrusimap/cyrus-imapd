@@ -122,6 +122,7 @@ static sasl_conn_t *popd_saslconn; /* the sasl connection context */
 
 static int popd_timeout;
 static char *popd_userid = 0, *popd_subfolder = 0;
+static char *proxy_userid = 0;
 static struct mailbox *popd_mailbox = NULL;
 static struct auth_state *popd_authstate = 0;
 static int config_popuseacl, config_popuseimapflags;
@@ -385,6 +386,10 @@ static void popd_reset(void)
     if (popd_userid != NULL) {
 	free(popd_userid);
 	popd_userid = NULL;
+    }
+    if (proxy_userid != NULL) {
+	free(proxy_userid);
+	proxy_userid = NULL;
     }
     if (popd_subfolder != NULL) {
 	free(popd_subfolder);
@@ -1759,6 +1764,14 @@ int openinbox(void)
     struct proc_limits limits;
     struct mboxevent *mboxevent;
 
+    /* Make a copy of the external userid for use in proxying */
+    proxy_userid = xstrdup(popd_userid);
+
+    /* Translate any separators in userid */
+    mboxname_hiersep_tointernal(&popd_namespace, popd_userid,
+				config_virtdomains ?
+				strcspn(popd_userid, "@") : 0);
+
     /* send a Login event notification */
     if ((mboxevent = mboxevent_new(EVENT_LOGIN))) {
 	mboxevent_set_access(mboxevent, saslprops.iplocalport,
@@ -1820,7 +1833,7 @@ int openinbox(void)
 	char userid[MAX_MAILBOX_NAME];
 
 	/* Make a working copy of userid in case we need to alter it */
-	strlcpy(userid, popd_userid, sizeof(userid));
+	strlcpy(userid, proxy_userid, sizeof(userid));
 
 	if (popd_subfolder) {
 	    /* Add the subfolder back to the userid for proxying */
@@ -1848,7 +1861,7 @@ int openinbox(void)
 	     !(r = statuscache_lookup(inboxname, popd_userid, STATUS_MESSAGES, &sdata)) &&
 	     !sdata.messages) {
 	/* local mailbox (empty) -- don't bother opening the mailbox */
-	syslog(LOG_INFO, "optimized mode for empty maildrop: %s", popd_userid);
+	syslog(LOG_INFO, "optimized mode for empty maildrop: %s", proxy_userid);
     }
     else {
 	/* local mailbox */
@@ -1936,7 +1949,7 @@ int openinbox(void)
 
     limits.procname = "pop3d";
     limits.clienthost = popd_clienthost;
-    limits.userid = popd_userid;
+    limits.userid = proxy_userid;
     if (proc_checklimits(&limits)) {
 	const char *sep = "";
 	prot_printf(popd_out,
@@ -1948,7 +1961,7 @@ int openinbox(void)
 	}
 	if (limits.maxuser) {
 	    prot_printf(popd_out, "%s%d of %d for %s", sep,
-		        limits.user, limits.maxuser, popd_userid);
+		        limits.user, limits.maxuser, proxy_userid);
 	}
 	prot_printf(popd_out, ")\r\n");
 	mailbox_close(&popd_mailbox);
@@ -1956,10 +1969,10 @@ int openinbox(void)
     }
 
     /* register process */
-    proc_register("pop3d", popd_clienthost, popd_userid, inboxname);
+    proc_register("pop3d", popd_clienthost, proxy_userid, inboxname);
 
     /* Create telemetry log */
-    popd_logfd = telemetry_log(popd_userid, popd_in, popd_out, 0);
+    popd_logfd = telemetry_log(proxy_userid, popd_in, popd_out, 0);
 
     mboxlist_entry_free(&mbentry);
     free(inboxname);
@@ -1978,6 +1991,8 @@ int openinbox(void)
     free(inboxname);
     free(popd_userid);
     popd_userid = 0;
+    free(proxy_userid);
+    proxy_userid = 0;
     if (popd_subfolder) {
 	free(popd_subfolder);
 	popd_subfolder = 0;

@@ -170,8 +170,8 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 			   int forceuser, int ignorequota);
 
 /* change ACL */
-int mboxlist_setacl(const char *name, const char *identifier,
-		    const char *rights, int isadmin, 
+int mboxlist_setacl(struct namespace *namespace, const char *name,
+		    const char *identifier, const char *rights, int isadmin,
 		    const char *userid, struct auth_state *auth_state);
 
 /* Change all ACLs on mailbox */
