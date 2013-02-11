@@ -1198,6 +1198,9 @@ static void cmdloop(void)
     }
 
     for (;;) {
+	/* Release any held index */
+	index_release(imapd_index);
+
 	/* Flush any buffered output */
 	prot_flush(imapd_out);
 	if (backend_current) prot_flush(backend_current->out);
@@ -2853,6 +2856,7 @@ static void cmd_idle(char *tag)
 	 * connection abort we tell idled about it */
 	idling = 1;
 
+	index_release(imapd_index);
 	while ((flags = idle_wait(imapd_in->fd))) {
 	    if (flags & IDLE_INPUT) {
 		/* Get continuation data */
@@ -2877,6 +2881,7 @@ static void cmd_idle(char *tag)
 		}
 	    }
 
+	    index_release(imapd_index);
 	    prot_flush(imapd_out);
 	}
 
