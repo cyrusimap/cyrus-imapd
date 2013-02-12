@@ -208,13 +208,7 @@ sub test_rename_paths
     -f "$basedir/data/user/cassandane/rename-dst/sub/cyrus.cache" || die;
     -f "$basedir/data/user/cassandane/rename-dst/sub/1." || die;
 
-    # and src still do because it's selected still
-    -d "$basedir/data/user/cassandane/rename-src/sub" || die;
-    -d "$basedir/meta/user/cassandane/rename-src/sub" || die;
-
-    $imaptalk->select("INBOX");
-
-    # and src don't once we unselect
+    # and src don't
     -d "$basedir/data/user/cassandane/rename-src" && die;
     -d "$basedir/meta/user/cassandane/rename-src" && die;
 }
