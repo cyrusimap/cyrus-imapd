@@ -102,7 +102,7 @@ static int _conversations_parse(const char *data, size_t datalen,
 				arrayu64_t *cids, time_t *stampp);
 static int _conversations_set_key(struct conversations_state *state,
 				  const char *key, size_t keylen,
-				  arrayu64_t *cids, time_t stamp);
+				  const arrayu64_t *cids, time_t stamp);
 
 EXPORTED void conversations_set_directory(const char *dir)
 {
@@ -523,7 +523,7 @@ static int check_msgid(const char *msgid, size_t len, size_t *lenp)
 
 static int _conversations_set_key(struct conversations_state *state,
 				  const char *key, size_t keylen,
-				  arrayu64_t *cids, time_t stamp)
+				  const arrayu64_t *cids, time_t stamp)
 {
     int r;
     struct buf buf;
