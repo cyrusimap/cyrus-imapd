@@ -84,6 +84,7 @@ struct index_init {
     int examine_mode;
     int qresync;
     int select;
+    int want_expunged;
     struct vanished_params vanished;
     struct seqset *vanishedlist;
 };

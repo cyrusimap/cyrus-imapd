@@ -463,18 +463,18 @@ static void subquery_post_indexed(const char *key, void *data, void *rock)
 
     /* One pass through the folder's message list */
     for (msgno = 1 ; msgno <= state->exists ; msgno++) {
-	struct index_record *record = &state->map[msgno-1].record;
+	struct index_map *im = &state->map[msgno-1];
 
 	/* we only want to look at unchecked UIDs */
-	if (!bv_isset(&folder->unchecked_uids, record->uid))
+	if (!bv_isset(&folder->unchecked_uids, im->uid))
 	    continue;
 
 	/* moot if already in the uids set */
-	if (bv_isset(&folder->uids, record->uid))
+	if (bv_isset(&folder->uids, im->uid))
 	    continue;
 
 	/* can happen if we didn't "tellchanges" yet */
-	if (record->system_flags & FLAG_EXPUNGED)
+	if (im->system_flags & FLAG_EXPUNGED)
 	    continue;
 
 	/* run the search program */
@@ -483,8 +483,8 @@ static void subquery_post_indexed(const char *key, void *data, void *rock)
 
 	/* we have a new UID that needs to be merged in */
 
-	folder_add_uid(folder, record->uid);
-	folder_add_modseq(folder, record->modseq);
+	folder_add_uid(folder, im->uid);
+	folder_add_modseq(folder, im->modseq);
 	if (query->sortcrit)
 	    msgno_list[nmsgs++] = msgno;
     }
@@ -634,10 +634,10 @@ static int subquery_run_one_folder(search_query_t *query,
 
     /* One pass through the folder's message list */
     for (msgno = 1 ; msgno <= state->exists ; msgno++) {
-	struct index_record *record = &state->map[msgno-1].record;
+	struct index_map *im = &state->map[msgno-1];
 
 	/* can happen if we didn't "tellchanges" yet */
-	if (record->system_flags & FLAG_EXPUNGED)
+	if (im->system_flags & FLAG_EXPUNGED)
 	    continue;
 
 	/* run the search program */
@@ -654,11 +654,11 @@ static int subquery_run_one_folder(search_query_t *query,
 	}
 
 	/* moot if already in the uids set */
-	if (bv_isset(&folder->uids, record->uid))
+	if (bv_isset(&folder->uids, im->uid))
 	    continue;
 
-	folder_add_uid(folder, record->uid);
-	folder_add_modseq(folder, record->modseq);
+	folder_add_uid(folder, im->uid);
+	folder_add_modseq(folder, im->modseq);
 
 	if (query->sortcrit)
 	    msgno_list[nmsgs++] = msgno;
