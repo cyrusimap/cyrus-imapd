@@ -710,7 +710,7 @@ void index_refresh(struct index_state *state)
 	msgno++;
 
 	/* make sure we don't overflow the memory we mapped */
-	if (msgno >= state->mapsize) {
+	if (msgno > state->mapsize) {
 	    char buf[2048];
 	    sprintf(buf, "Exists wrong %u %u %u %u", msgno,
 		    state->mapsize, mailbox->i.exists, mailbox->i.num_records);
