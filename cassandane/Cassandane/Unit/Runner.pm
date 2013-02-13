@@ -48,7 +48,9 @@ use Test::Unit::Result;
 sub new
 {
     my $class = shift;
-    return $class->SUPER::new(@_);
+    my $self = $class->SUPER::new(@_);
+    $self->{remove_me_in_cassandane_child} = 1;
+    return $self;
 }
 
 sub create_test_result

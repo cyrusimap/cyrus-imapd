@@ -109,15 +109,15 @@ my %runners =
 (
     tap => sub
     {
-	my ($plan) = @_;
-	my $runner = Cassandane::Unit::Runner->new();
+	my ($plan, $fh) = @_;
+	my $runner = Cassandane::Unit::Runner->new($fh);
 	$runner->filter('x');
 	return $runner->do_run($plan, 0);
     },
     pretty => sub
     {
-	my ($plan) = @_;
-	my $runner = Cassandane::Unit::RunnerPretty->new();
+	my ($plan, $fh) = @_;
+	my $runner = Cassandane::Unit::RunnerPretty->new($fh);
 	$runner->filter('x');
 	return $runner->do_run($plan, 0);
     },
@@ -129,7 +129,7 @@ eval
 
     $runners{xml} = sub
     {
-	my ($plan) = @_;
+	my ($plan, $fh) = @_;
 
 	if ( ! -d $output_dir )
 	{
@@ -254,7 +254,9 @@ else
     # Build the schedule per commandline
     $plan->schedule(@names);
     # Run the schedule
-    exit(! $runners{$format}->($plan));
+    open my $fh, '>&', \*STDOUT
+	or die "Cannot save STDOUT as a runner print stream: $!";
+    exit(! $runners{$format}->($plan, $fh));
 }
 
 sub _listitem {

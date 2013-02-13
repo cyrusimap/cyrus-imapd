@@ -802,7 +802,7 @@ sub _setup_worker_listeners
     foreach my $ll (@{$result->{_Listeners}})
     {
 	push(@list, $ll)
-	    unless ref($ll) eq 'Cassandane::Unit::Runner';
+	    unless defined $ll->{remove_me_in_cassandane_child};
 	$found ||= (ref($ll) eq ref($wlistener));
     }
     push(@list, $wlistener)

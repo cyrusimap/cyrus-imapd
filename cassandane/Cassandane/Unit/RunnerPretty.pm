@@ -43,44 +43,37 @@ package Cassandane::Unit::RunnerPretty;
 use strict;
 use warnings;
 use base qw(Cassandane::Unit::Runner);
-# use Carp qw(cluck);
 
 sub start_test
 {
     my $self = shift;
     my $test = shift;
-
-    my $name = _getname($test);
-
-    print "$name";
+    # prevent the default action which is to print "."
 }
 
 sub add_pass
 {
     my $self = shift;
     my $test = shift;
-    print _getpad($test) . "[  \e[32mOK\e[0m  ]";
+    $self->_print(_getpaddedname($test) . "[  \e[32mOK\e[0m  ]\n");
 }
 
 sub add_error
 {
     my $self = shift;
     my $test = shift;
-    print _getpad($test) . "[\e[31mERROR\e[0m ]";
+    $self->_print(_getpaddedname($test) . "[\e[31mERROR\e[0m ]\n");
 }
 
 sub add_failure
 {
     my $self = shift;
     my $test = shift;
-    print _getpad($test) . "[\e[33mFAILED\e[0m]";
+    $self->_print(_getpaddedname($test) . "[\e[33mFAILED\e[0m]\n");
 }
 
-sub end_test {
-    print "\n";
-}
-
-sub _getname {
+sub _getpaddedname
+{
     my $test = shift;
     my $suite = ref($test);
     $suite =~ s/^Cassandane:://;
@@ -94,14 +87,9 @@ sub _getname {
 	$res = substr($res, 0, 67) . '...';
     }
 
-    return $res;
-}
+    $res .= ' ' x (72 - length($res));
 
-sub _getpad {
-    my $test = shift;
-    my $name = _getname($test);
-    my $padlen = 72 - length($name);
-    return ' ' x $padlen;
+    return $res;
 }
 
 1;
