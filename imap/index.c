@@ -1633,7 +1633,7 @@ EXPORTED int index_getuidsequence(struct index_state *state,
     query = search_query_new(state, searchargs);
     r = search_query_run(query);
     if (r) goto out;
-    folder = search_query_find_folder(query, state->mailbox->name);
+    folder = search_query_find_folder(query, index_mboxname(state));
     if (!folder) goto out;
 
     n = search_folder_get_array(folder, uid_list);
@@ -1765,7 +1765,7 @@ EXPORTED int index_search(struct index_state *state,
     query = search_query_new(state, searchargs);
     r = search_query_run(query);
     if (r) goto out;	    /* search failed */
-    folder = search_query_find_folder(query, state->mailbox->name);
+    folder = search_query_find_folder(query, index_mboxname(state));
 
     if (folder) {
 	if (!usinguid)
@@ -1863,7 +1863,7 @@ EXPORTED int index_sort(struct index_state *state,
     query->sortcrit = sortcrit;
     r = search_query_run(query);
     if (r) goto out;	    /* search failed */
-    folder = search_query_find_folder(query, state->mailbox->name);
+    folder = search_query_find_folder(query, index_mboxname(state));
 
     if (folder) {
 	if (highestmodseq)
@@ -1943,7 +1943,7 @@ static int search_predict_total(struct index_state *state,
     uint32_t exists;
 
     if (conversations) {
-	conversation_getstatus(cstate, state->mailbox->name, &convstatus);
+	conversation_getstatus(cstate, index_mboxname(state), &convstatus);
 	/* always grab xconvmodseq, so we report a growing
 	 * highestmodseq to all callers */
 	if (xconvmodseqp) *xconvmodseqp = convstatus.modseq;
@@ -2021,7 +2021,7 @@ EXPORTED int index_convsort(struct index_state *state,
     if (r) return r;
 
     if (windowargs->conversations) {
-	cstate = conversations_get_mbox(state->mailbox->name);
+	cstate = conversations_get_mbox(index_mboxname(state));
 	if (!cstate)
 	    return IMAP_INTERNAL;
     }
@@ -2197,7 +2197,7 @@ EXPORTED int index_convmultisort(struct index_state *state,
     if (windowargs->anchor && !windowargs->anchorfolder)
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
-    hms = mboxname_readmodseq(state->mailbox->name);
+    hms = mboxname_readmodseq(index_mboxname(state));
     query = search_query_new(state, searchargs);
     query->multiple = 1;
     query->need_ids = 1;
@@ -2424,7 +2424,7 @@ EXPORTED int index_snippets(struct index_state *state,
     for ( ; snippetargs ; snippetargs = snippetargs->next) {
 
 	mailbox = NULL;
-	if (!strcmp(snippetargs->mboxname, state->mailbox->name)) {
+	if (!strcmp(snippetargs->mboxname, index_mboxname(state))) {
 	    mailbox = state->mailbox;
 	}
 	else {
@@ -2516,7 +2516,7 @@ EXPORTED int index_convupdates(struct index_state *state,
     r = index_expunge(state, NULL, 1);
     if (r) return r;
 
-    cstate = conversations_get_mbox(state->mailbox->name);
+    cstate = conversations_get_mbox(index_mboxname(state));
     if (!cstate)
 	return IMAP_INTERNAL;
 
@@ -2710,7 +2710,7 @@ EXPORTED int index_thread(struct index_state *state, int algorithm,
     query = search_query_new(state, searchargs);
     r = search_query_run(query);
     if (r) goto out;	    /* search failed */
-    folder = search_query_find_folder(query, state->mailbox->name);
+    folder = search_query_find_folder(query, index_mboxname(state));
 
     if (folder) {
 	search_folder_use_msn(folder, state);
@@ -3958,7 +3958,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     if ((fetchitems & FETCH_FOLDER)) {
 	struct namespace *ns = fetchargs->namespace;
 	char mboxname[MAX_MAILBOX_PATH+1];
-	r = ns->mboxname_toexternal(ns, state->mailbox->name,
+	r = ns->mboxname_toexternal(ns, index_mboxname(state),
 				    fetchargs->userid, mboxname);
 	if (!r) {
 	    prot_printf(state->out, "%cFOLDER ", sepchar);
@@ -4876,7 +4876,7 @@ MsgData **index_msgdata_load(struct index_state *state,
 
 	    if ((label == SORT_HASCONVFLAG || label == SORT_CONVMODSEQ ||
 		label == SORT_CONVEXISTS || label == SORT_CONVSIZE) && !did_conv) {
-		if (!cstate) cstate = conversations_get_mbox(state->mailbox->name);
+		if (!cstate) cstate = conversations_get_mbox(index_mboxname(state));
 		assert(cstate);
 		if (conversation_load(cstate, record.cid, &conv))
 		    continue;

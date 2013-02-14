@@ -286,7 +286,7 @@ static int query_begin_index(search_query_t *query,
     int needs_refresh = 0;
 
     /* open an index_state */
-    if (!strcmp(query->state->mailbox->name, mboxname)) {
+    if (!strcmp(index_mboxname(query->state), mboxname)) {
 	*statep = query->state;
 	needs_refresh = 1;
     }
@@ -645,8 +645,7 @@ static int subquery_run_one_folder(search_query_t *query,
 	    continue;
 
 	if (!folder) {
-	    folder = query_get_valid_folder(query, mboxname,
-					    state->mailbox->i.uidvalidity);
+	    folder = query_get_valid_folder(query, mboxname, state->uidvalidity);
 	    if (!folder) {
 		r = IMAP_INTERNAL;
 		goto out;   /* can't happen */
@@ -683,8 +682,7 @@ static void subquery_run_folder(const char *key, void *data, void *rock)
     int r;
 
     if (query->error) return;
-    if (!query->multiple &&
-	strcmp(mboxname, query->state->mailbox->name))
+    if (!query->multiple && strcmp(mboxname, index_mboxname(query->state)))
 	return;
     r = subquery_run_one_folder(query, mboxname, sub->expr);
     if (r) query->error = r;
@@ -817,10 +815,10 @@ EXPORTED int search_query_run(search_query_t *query)
 	/* We have a scan expression which applies to all folders.
 	 * Walk over every folder, applying the scan expression. */
 	if (query->multiple)
-	    r = mboxlist_allusermbox(mboxname_to_userid(query->state->mailbox->name),
+	    r = mboxlist_allusermbox(mboxname_to_userid(index_mboxname(query->state)),
 				     subquery_run_global_cb, query, /*+deleted*/0);
 	else
-	    r = subquery_run_global(query, query->state->mailbox->name);
+	    r = subquery_run_global(query, index_mboxname(query->state));
 	if (r) goto out;
     }
     else if (query->folder_count) {
