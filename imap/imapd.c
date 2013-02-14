@@ -5552,7 +5552,7 @@ void cmd_xconvsort(char *tag, int updates)
 
     /* open the conversations state first - we don't care if it fails,
      * because that probably just means it's already open */
-    conversations_open_mbox(imapd_index->mailbox->name, &cstate);
+    conversations_open_mbox(index_mboxname(imapd_index), &cstate);
 
     if (updates) {
 	/* in XCONVUPDATES, need to force a re-read from scratch into
@@ -5567,7 +5567,7 @@ void cmd_xconvsort(char *tag, int updates)
 	init.out = imapd_out;
 	init.want_expunged = 1;
 
-	r = index_open(oldstate->mailbox->name, &init, &imapd_index);
+	r = index_open(index_mboxname(oldstate), &init, &imapd_index);
 	if (r) {
 	    prot_printf(imapd_out, "%s NO %s\r\n", tag,
 			error_message(r));
@@ -5695,7 +5695,7 @@ static void cmd_xconvmultisort(char *tag)
 
     /* open the conversations state first - we don't care if it fails,
      * because that probably just means it's already open */
-    conversations_open_mbox(imapd_index->mailbox->name, &cstate);
+    conversations_open_mbox(index_mboxname(imapd_index), &cstate);
 
     /* need index loaded to even parse searchargs! */
     searchargs = new_searchargs(tag, GETSEARCH_CHARSET_FIRST,
