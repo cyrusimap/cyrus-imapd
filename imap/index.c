@@ -2197,6 +2197,10 @@ EXPORTED int index_convmultisort(struct index_state *state,
     if (windowargs->anchor && !windowargs->anchorfolder)
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
+    /* make sure folder still exists and map in data */
+    r = index_refresh(state);
+    if (r) return r;
+
     hms = mboxname_readmodseq(index_mboxname(state));
     query = search_query_new(state, searchargs);
     query->multiple = 1;
