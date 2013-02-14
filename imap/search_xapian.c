@@ -934,8 +934,9 @@ static void end_part(search_text_receiver_t *rx,
 	seg->is_finished = 1;
 
     if (tr->verbose > 1)
-	syslog(LOG_NOTICE, "Xapian: %u bytes in part %s",
-	       (seg ? seg->text.len : 0), search_part_as_string(tr->part));
+	syslog(LOG_NOTICE, "Xapian: %llu bytes in part %s",
+	       (seg ? (unsigned long long)seg->text.len : 0),
+	       search_part_as_string(tr->part));
 
     tr->part = 0;
 }
@@ -1210,6 +1211,9 @@ static int end_update(search_text_receiver_t *rx)
 	if (tr->last_basedir && tr->commits)
 	    r = rsync_tree(tr->last_basedir, tr->last_real_basedir,
 			   tr->super.verbose, /*atomic*/1, /*remove*/1);
+	    if (r)
+		syslog(LOG_ERR, "FAILED TO RSYNC %s to %s",
+		       tr->last_basedir, tr->last_real_basedir);
     }
 
     indexing_unlock(&tr->indexing_lock_fd);

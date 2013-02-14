@@ -604,8 +604,8 @@ static int do_append(SquatReceiverData *d, const struct buf *text)
     int s;	    /* SQUAT error */
 
     if (d->verbose > 3)
-	syslog(LOG_ERR, "squat: writing %d bytes into message %d\n",
-	       text->len, d->uid);
+	syslog(LOG_ERR, "squat: writing %llu bytes into message %u\n",
+	       (unsigned long long)text->len, d->uid);
 
     s = squat_index_append_document(d->index, text->s, text->len);
     if (s != SQUAT_OK) {
