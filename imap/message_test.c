@@ -226,8 +226,8 @@ static int dump_one_section(int partno, int charset, int encoding,
 			    void *rock __attribute__((unused)))
 {
 #define MAX_TEXT    512
-    printf("SECTION partno=%d length=%u subtype=%s charset=%s encoding=%s\n",
-	    partno, data->len, subtype, charset_name(charset), encoding_name(encoding));
+    printf("SECTION partno=%d length=%llu subtype=%s charset=%s encoding=%s\n",
+	    partno, (unsigned long long)data->len, subtype, charset_name(charset), encoding_name(encoding));
     dump_buf(stdout, data);
     return 0;
 #undef MAX_TEXT
@@ -256,7 +256,7 @@ static void dump_rx_append_text(
     search_text_receiver_t *rx __attribute__((unused)),
     const struct buf *text)
 {
-    printf("APPEND_TEXT length=%u\n", text->len);
+    printf("APPEND_TEXT length=%llu\n", (unsigned long long)text->len);
     dump_buf(stdout, text);
 }
 

@@ -86,7 +86,7 @@ static void dump_one_folder(const char *key __attribute__((unused)),
     printf("min %u\n", search_folder_get_min(folder));
     printf("max %u\n", search_folder_get_max(folder));
     printf("count %u\n", search_folder_get_count(folder));
-    printf("highestmodseq %llu\n", search_folder_get_highest_modseq(folder));
+    printf("highestmodseq %llu\n", (unsigned long long)search_folder_get_highest_modseq(folder));
     search_folder_foreach(folder, uid) {
 	printf("uid %u\n", uid);
     }
