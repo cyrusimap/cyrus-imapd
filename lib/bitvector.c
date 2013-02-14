@@ -245,7 +245,7 @@ static unsigned int bitcount(unsigned int i)
 
 EXPORTED unsigned bv_count(const bitvector_t *bv)
 {
-    int i;
+    unsigned i;
     unsigned int n = 0;
 
     for (i = 0 ; i < bv->length ; i += BITS_PER_UNIT)
