@@ -227,6 +227,10 @@ extern int conversation_id_decode(conversation_id_t *cid, const char *text);
 extern void conversations_rename_cid(struct conversations_state *state,
 				     conversation_id_t from_cid,
 				     conversation_id_t to_cid);
+extern void conversations_rename_cidentry(struct conversations_state *state,
+					  conversation_id_t from,
+					  conversation_id_t to);
+
 
 extern int conversations_wipe_counts(struct conversations_state *state,
 				     int keepnames);
