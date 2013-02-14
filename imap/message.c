@@ -3110,7 +3110,6 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
     msubj = buf_cstring(&msubject);
 
     for (i = 0 ; i < 4 ; i++) {
-continue2:
 	while ((msgid = find_msgid(hdrs[i], &hdrs[i])) != NULL) {
 	    /*
 	     * The issue of case sensitivity of msgids is curious.
