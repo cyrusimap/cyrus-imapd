@@ -2406,6 +2406,10 @@ EXPORTED int index_snippets(struct index_state *state,
     int nmatches = 0;
     struct snippet_rock srock;
 
+    /* reload index */
+    r = index_refresh(state);
+    if (r) return r;
+
     bx = search_begin_search(state->mailbox, SEARCH_MULTIPLE);
     if (!bx) {
 	r = IMAP_INTERNAL;
