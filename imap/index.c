@@ -1686,13 +1686,9 @@ EXPORTED int index_status(struct index_state *state, struct statusdata *sdata)
 {
     int items = STATUS_MESSAGES | STATUS_UIDNEXT | STATUS_UIDVALIDITY |
 		STATUS_HIGHESTMODSEQ | STATUS_RECENT | STATUS_UNSEEN;
-    int r = status_lookup(index_mboxname(state), state->userid, items, sdata);
-    if (r) return r;
 
-    /* copy in local details */
-    sdata->unseen = state->numunseen;
-    sdata->recent = state->numrecent;
-
+    statuscache_fill(sdata, state->userid, state->mailbox, items,
+		     state->numrecent, state->numunseen);
     return 0;
 }
 
