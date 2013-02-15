@@ -82,14 +82,42 @@ endif
 
 bin_PROGRAMS = imtest/imtest
 if SERVER
-BUILT_SOURCES += imap/imap_err.c imap/mupdate_err.c imap/nntp_err.c \
-	imap/lmtpstats.c imap/pushstats.c imap/rfc822_header.c \
+BUILT_SOURCES += \
+	imap/imap_err.c \
+	imap/mupdate_err.c \
+	imap/nntp_err.c \
+	imap/lmtpstats.c \
+	imap/pushstats.c \
+	imap/rfc822_header.c \
 	imap/rfc822_header.h
 lib_LTLIBRARIES += imap/libcyrus_imap.la
-service_PROGRAMS += imap/arbitron imap/chk_cyrus imap/ctl_cyrusdb \
-	imap/ctl_deliver imap/ctl_mboxlist imap/cvt_cyrusdb imap/cyr_df \
-	imap/cyrdump imap/cyr_dbtool imap/cyr_expire imap/cyr_info \
-	imap/cyr_sequence imap/cyr_synclog imap/cyr_userseen imap/deliver
+service_PROGRAMS += \
+	imap/arbitron \
+	imap/chk_cyrus \
+	imap/ctl_cyrusdb \
+	imap/ctl_deliver \
+	imap/ctl_mboxlist \
+	imap/cvt_cyrusdb \
+	imap/cyr_df \
+	imap/cyrdump \
+	imap/cyr_dbtool \
+	imap/cyr_expire \
+	imap/cyr_info \
+	imap/cyr_sequence \
+	imap/cyr_synclog \
+	imap/cyr_userseen \
+	imap/deliver \
+	imap/imapd \
+	imap/ipurge \
+	imap/lmtpd \
+	imap/mbexamine \
+	imap/mbpath \
+	imap/mbtool \
+	imap/pop3d \
+	imap/quota \
+	imap/reconstruct \
+	imap/smmapd \
+	imap/squatter
 if NNTPD
 service_PROGRAMS += imap/fetchnews
 endif
@@ -97,16 +125,12 @@ service_PROGRAMS += imap/fud
 if IDLED
 service_PROGRAMS += imap/idled
 endif
-service_PROGRAMS += imap/imapd imap/ipurge imap/lmtpd imap/mbexamine \
-	imap/mbpath imap/mbtool
 if MURDER
 service_PROGRAMS += imap/mupdate
 endif
 if NNTPD
 service_PROGRAMS += imap/nntpd
 endif
-service_PROGRAMS += imap/pop3d imap/quota imap/reconstruct imap/smmapd \
-	imap/squatter
 if REPLICATION
 service_PROGRAMS += imap/sync_client imap/sync_reset imap/sync_server
 endif
@@ -147,57 +171,257 @@ service_PROGRAMS += timsieved/timsieved
 endif
 endif
 
-EXTRA_DIST = COPYRIGHT README.andrew SMakefile xversion.h \
-	com_err/et/et_c.awk com_err/et/et_h.awk \
-	com_err/et/test1.et com_err/et/test2.et com_err/et/test_et.c \
-	contrib/drac_auth.patch contrib/sieve-spamasssassin contrib/fud-client.c contrib/deliver-notify-zephyr.patch contrib/add-cyrus-user contrib/README contrib/cyrus-graphtools.1.0 contrib/cyrus-graphtools.1.0/cgi-bin/cyrus_master.pl contrib/cyrus-graphtools.1.0/cgi-bin/graph_cyrus_db.pl contrib/cyrus-graphtools.1.0/cgi-bin/graph_cyrus_db-sum.pl contrib/cyrus-graphtools.1.0/html contrib/cyrus-graphtools.1.0/html/index.html contrib/cyrus-graphtools.1.0/README contrib/cyrus-graphtools.1.0/script contrib/cyrus-graphtools.1.0/script/cyrus.pl contrib/cyrus-graphtools.1.0/script/run contrib/cyrus-graphtools.1.0/script/cyrusrc contrib/notify_unix/notify contrib/notify_unix/net-server-prefork-0.01.tgz contrib/notify_unix/README contrib/notify_unix/sql_notify.pl contrib/notify_unix/simple_notify.pl contrib/squatrunner.pl contrib/mupdate-test.pl contrib/squatrunner.txt \
-	cunit/cacert.pem cunit/cert.pem cunit/cunit.pl cunit/cunit-to-junit.pl cunit/key.pem cunit/vg.supp \
+EXTRA_DIST = \
+	COPYRIGHT \
+	README.andrew \
+	SMakefile \
+	xversion.h \
+	com_err/et/et_c.awk \
+	com_err/et/et_h.awk \
+	com_err/et/test1.et \
+	com_err/et/test2.et \
+	com_err/et/test_et.c \
+	contrib/drac_auth.patch \
+	contrib/sieve-spamasssassin \
+	contrib/fud-client.c \
+	contrib/deliver-notify-zephyr.patch \
+	contrib/add-cyrus-user \
+	contrib/README \
+	contrib/cyrus-graphtools.1.0 \
+	contrib/cyrus-graphtools.1.0/cgi-bin/cyrus_master.pl \
+	contrib/cyrus-graphtools.1.0/cgi-bin/graph_cyrus_db.pl \
+	contrib/cyrus-graphtools.1.0/cgi-bin/graph_cyrus_db-sum.pl \
+	contrib/cyrus-graphtools.1.0/html \
+	contrib/cyrus-graphtools.1.0/html/index.html \
+	contrib/cyrus-graphtools.1.0/README \
+	contrib/cyrus-graphtools.1.0/script \
+	contrib/cyrus-graphtools.1.0/script/cyrus.pl \
+	contrib/cyrus-graphtools.1.0/script/run \
+	contrib/cyrus-graphtools.1.0/script/cyrusrc \
+	contrib/notify_unix/notify \
+	contrib/notify_unix/net-server-prefork-0.01.tgz \
+	contrib/notify_unix/README \
+	contrib/notify_unix/sql_notify.pl \
+	contrib/notify_unix/simple_notify.pl \
+	contrib/squatrunner.pl \
+	contrib/mupdate-test.pl \
+	contrib/squatrunner.txt \
+	cunit/cacert.pem \
+	cunit/cert.pem \
+	cunit/cunit.pl \
+	cunit/cunit-to-junit.pl \
+	cunit/key.pem \
+	cunit/vg.supp \
 	doc \
-	imap/imap_err.et imap/mupdate_err.et imap/nntp_err.et imap/rfc822_header.st \
-	lib/charset/aliases.txt lib/charset/big5.t \
-	lib/charset/gb2312.t lib/charset/iso-2022-jp.t \
-	lib/charset/iso-2022-kr.t lib/charset/iso-8859-10.t \
-	lib/charset/iso-8859-11.t lib/charset/iso-8859-13.t \
-	lib/charset/iso-8859-14.t lib/charset/iso-8859-15.t \
-	lib/charset/iso-8859-16.t lib/charset/iso-8859-1.t \
-	lib/charset/iso-8859-2.t lib/charset/iso-8859-3.t \
-	lib/charset/iso-8859-4.t lib/charset/iso-8859-5.t \
-	lib/charset/iso-8859-6.t lib/charset/iso-8859-7.t \
-	lib/charset/iso-8859-8.t lib/charset/iso-8859-9.t \
-	lib/charset/koi8-r.t lib/charset/UnicodeData.txt \
-	lib/charset/unifix.txt lib/charset/us-ascii.t \
-	lib/charset/windows-1250.t lib/charset/windows-1251.t \
-	lib/charset/windows-1252.t lib/charset/windows-1255.t \
-	lib/charset/windows-1256.t lib/test/cyrusdb.c lib/test/cyrusdb.INPUT \
-	lib/test/cyrusdblong.INPUT lib/test/cyrusdblong.OUTPUT \
-	lib/test/cyrusdb.OUTPUT lib/test/cyrusdbtxn.INPUT \
-	lib/test/cyrusdbtxn.OUTPUT lib/test/pool.c lib/test/rnddb.c \
+	imap/imap_err.et \
+	imap/mupdate_err.et \
+	imap/nntp_err.et \
+	imap/rfc822_header.st \
+	lib/charset/aliases.txt \
+	lib/charset/big5.t \
+	lib/charset/gb2312.t \
+	lib/charset/iso-2022-jp.t \
+	lib/charset/iso-2022-kr.t \
+	lib/charset/iso-8859-10.t \
+	lib/charset/iso-8859-11.t \
+	lib/charset/iso-8859-13.t \
+	lib/charset/iso-8859-14.t \
+	lib/charset/iso-8859-15.t \
+	lib/charset/iso-8859-16.t \
+	lib/charset/iso-8859-1.t \
+	lib/charset/iso-8859-2.t \
+	lib/charset/iso-8859-3.t \
+	lib/charset/iso-8859-4.t \
+	lib/charset/iso-8859-5.t \
+	lib/charset/iso-8859-6.t \
+	lib/charset/iso-8859-7.t \
+	lib/charset/iso-8859-8.t \
+	lib/charset/iso-8859-9.t \
+	lib/charset/koi8-r.t \
+	lib/charset/UnicodeData.txt \
+	lib/charset/unifix.txt \
+	lib/charset/us-ascii.t \
+	lib/charset/windows-1250.t \
+	lib/charset/windows-1251.t \
+	lib/charset/windows-1252.t \
+	lib/charset/windows-1255.t \
+	lib/charset/windows-1256.t \
+	lib/test/cyrusdb.c \
+	lib/test/cyrusdb.INPUT \
+	lib/test/cyrusdblong.INPUT \
+	lib/test/cyrusdblong.OUTPUT \
+	lib/test/cyrusdb.OUTPUT \
+	lib/test/cyrusdbtxn.INPUT \
+	lib/test/cyrusdbtxn.OUTPUT \
+	lib/test/pool.c \
+	lib/test/rnddb.c \
 	lib/test/testglob2.c \
-	master/CYRUS-MASTER.mib master/conf/cmu-backend.conf master/conf/cmu-frontend.conf master/conf/normal.conf master/conf/prefork.conf master/conf/small.conf master/README \
+	master/CYRUS-MASTER.mib \
+	master/conf/cmu-backend.conf \
+	master/conf/cmu-frontend.conf \
+	master/conf/normal.conf \
+	master/conf/prefork.conf \
+	master/conf/small.conf \
+	master/README \
 	netnews/inn.diffs \
-	perl/annotator/Daemon.pm perl/annotator/Makefile.PL.in perl/annotator/MANIFEST perl/annotator/Message.pm perl/annotator/README \
-	perl/imap/Changes perl/imap/cyradm.sh perl/imap/cyrperl.h perl/imap/Cyrus/Shell.pm perl/imap/examples/auditmbox.pl perl/imap/examples/imapcollate.pl perl/imap/examples/imapdu.pl perl/imap/examples/test-imsp.pl perl/imap/IMAP/Admin.pm perl/imap/IMAP/IMSP.pm perl/imap/IMAP/Shell.pm perl/imap/IMAP.pm perl/imap/IMAP.xs perl/imap/Makefile.PL.in perl/imap/MANIFEST perl/imap/README perl/imap/t/01-imclient.t perl/imap/t/02-admin.t perl/imap/typemap perl/imap/xsutil.c \
-	perl/sieve/managesieve/Makefile.PL.in perl/sieve/managesieve/managesieve.h perl/sieve/managesieve/managesieve.pm perl/sieve/managesieve/managesieve.xs perl/sieve/managesieve/MANIFEST perl/sieve/managesieve/typemap \
-	ptclient/README ptclient/test.c ptclient/test2.c \
-	sieve/addr.h sieve/sieve.h sieve/sieve_err.et sieve/tests/testExtension sieve/tests/testExtension/uberExtensionTestScript.key sieve/tests/testExtension/testm sieve/tests/testExtension/testm/uetest-envelope sieve/tests/testExtension/testm/uetest-asub sieve/tests/testExtension/testm/uetest-areg sieve/tests/testExtension/testm/uetest-count sieve/tests/testExtension/testm/uetest-value sieve/tests/testExtension/testm/uetest-hreg sieve/tests/testExtension/serverm sieve/tests/testExtension/serverm/uetmail-hreg sieve/tests/testExtension/serverm/uetmail-value sieve/tests/testExtension/serverm/uetmail-count2 sieve/tests/testExtension/serverm/uetmail-envelope sieve/tests/testExtension/serverm/uetmail-asub sieve/tests/testExtension/serverm/uetmail-value2 sieve/tests/testExtension/serverm/uetmail-areg sieve/tests/testExtension/serverm/uetmail-count sieve/tests/testExtension/uberExtensionTestScript.s sieve/tests/README sieve/tests/action sieve/tests/action/testm sieve/tests/action/testm/uatest-keep sieve/tests/action/testm/uatest-redirect sieve/tests/action/testm/uatest-discard sieve/tests/action/testm/uatest-stop2 sieve/tests/action/testm/uatest-stop sieve/tests/action/serverm sieve/tests/action/serverm/uamail-stop2 sieve/tests/action/serverm/uamail-redirect sieve/tests/action/serverm/uamail-stop sieve/tests/action/serverm/uamail-keep sieve/tests/action/serverm/uamail-discard sieve/tests/action/uberActionScript.key sieve/tests/action/uberActionScript.s sieve/tests/test sieve/tests/test/uberTestScript.key sieve/tests/test/testm sieve/tests/test/testm/utest-header sieve/tests/test/testm/utest-address sieve/tests/test/serverm sieve/tests/test/serverm/utmail-address sieve/tests/test/serverm/utmail-header sieve/tests/test/uberTestScript.s sieve/tests/actionExtensions sieve/tests/actionExtensions/uberExtensionActionScript.s sieve/tests/actionExtensions/testm sieve/tests/actionExtensions/testm/ueatest-flag4 sieve/tests/actionExtensions/testm/ueatest-flag2 sieve/tests/actionExtensions/testm/ueatest-fileinto sieve/tests/actionExtensions/testm/ueatest-denotify sieve/tests/actionExtensions/testm/ueatest-vacation sieve/tests/actionExtensions/testm/ueatest-reject sieve/tests/actionExtensions/testm/ueatest-mark sieve/tests/actionExtensions/testm/ueatest-denotify2 sieve/tests/actionExtensions/testm/ueatest-flag5 sieve/tests/actionExtensions/testm/ueatest-notify2 sieve/tests/actionExtensions/testm/ueatest-notify sieve/tests/actionExtensions/testm/ueatest-flag1 sieve/tests/actionExtensions/testm/ueatest-flag3 sieve/tests/actionExtensions/testm/ueatest-unmark sieve/tests/actionExtensions/uberExtensionActionScript.key sieve/tests/actionExtensions/serverm sieve/tests/actionExtensions/serverm/ueamail-flag4 sieve/tests/actionExtensions/serverm/ueamail-denotify sieve/tests/actionExtensions/serverm/ueamail-mark sieve/tests/actionExtensions/serverm/ueamail-denotify2 sieve/tests/actionExtensions/serverm/ueamail-flag2 sieve/tests/actionExtensions/serverm/ueamail-unmark sieve/tests/actionExtensions/serverm/ueamail-reject sieve/tests/actionExtensions/serverm/ueamail-flag3 sieve/tests/actionExtensions/serverm/ueamail-fileinto sieve/tests/actionExtensions/serverm/ueamail-flag1 sieve/tests/actionExtensions/serverm/ueamail-notify sieve/tests/actionExtensions/serverm/ueamail-flag5 sieve/tests/actionExtensions/serverm/ueamail-notify2 sieve/tests/actionExtensions/serverm/ueamail-vacation \
+	perl/annotator/Daemon.pm \
+	perl/annotator/Makefile.PL.in \
+	perl/annotator/MANIFEST \
+	perl/annotator/Message.pm \
+	perl/annotator/README \
+	perl/imap/Changes \
+	perl/imap/cyradm.sh \
+	perl/imap/cyrperl.h \
+	perl/imap/Cyrus/Shell.pm \
+	perl/imap/examples/auditmbox.pl \
+	perl/imap/examples/imapcollate.pl \
+	perl/imap/examples/imapdu.pl \
+	perl/imap/examples/test-imsp.pl \
+	perl/imap/IMAP/Admin.pm \
+	perl/imap/IMAP/IMSP.pm \
+	perl/imap/IMAP/Shell.pm \
+	perl/imap/IMAP.pm \
+	perl/imap/IMAP.xs \
+	perl/imap/Makefile.PL.in \
+	perl/imap/MANIFEST \
+	perl/imap/README \
+	perl/imap/t/01-imclient.t \
+	perl/imap/t/02-admin.t \
+	perl/imap/typemap \
+	perl/imap/xsutil.c \
+	perl/sieve/managesieve/Makefile.PL.in \
+	perl/sieve/managesieve/managesieve.h \
+	perl/sieve/managesieve/managesieve.pm \
+	perl/sieve/managesieve/managesieve.xs \
+	perl/sieve/managesieve/MANIFEST \
+	perl/sieve/managesieve/typemap \
+	ptclient/README \
+	ptclient/test.c \
+	ptclient/test2.c \
+	sieve/addr.h \
+	sieve/sieve.h \
+	sieve/sieve_err.et \
+	sieve/tests/testExtension \
+	sieve/tests/testExtension/uberExtensionTestScript.key \
+	sieve/tests/testExtension/testm \
+	sieve/tests/testExtension/testm/uetest-envelope \
+	sieve/tests/testExtension/testm/uetest-asub \
+	sieve/tests/testExtension/testm/uetest-areg \
+	sieve/tests/testExtension/testm/uetest-count \
+	sieve/tests/testExtension/testm/uetest-value \
+	sieve/tests/testExtension/testm/uetest-hreg \
+	sieve/tests/testExtension/serverm \
+	sieve/tests/testExtension/serverm/uetmail-hreg \
+	sieve/tests/testExtension/serverm/uetmail-value \
+	sieve/tests/testExtension/serverm/uetmail-count2 \
+	sieve/tests/testExtension/serverm/uetmail-envelope \
+	sieve/tests/testExtension/serverm/uetmail-asub \
+	sieve/tests/testExtension/serverm/uetmail-value2 \
+	sieve/tests/testExtension/serverm/uetmail-areg \
+	sieve/tests/testExtension/serverm/uetmail-count \
+	sieve/tests/testExtension/uberExtensionTestScript.s \
+	sieve/tests/README \
+	sieve/tests/action \
+	sieve/tests/action/testm \
+	sieve/tests/action/testm/uatest-keep \
+	sieve/tests/action/testm/uatest-redirect \
+	sieve/tests/action/testm/uatest-discard \
+	sieve/tests/action/testm/uatest-stop2 \
+	sieve/tests/action/testm/uatest-stop \
+	sieve/tests/action/serverm \
+	sieve/tests/action/serverm/uamail-stop2 \
+	sieve/tests/action/serverm/uamail-redirect \
+	sieve/tests/action/serverm/uamail-stop \
+	sieve/tests/action/serverm/uamail-keep \
+	sieve/tests/action/serverm/uamail-discard \
+	sieve/tests/action/uberActionScript.key \
+	sieve/tests/action/uberActionScript.s \
+	sieve/tests/test \
+	sieve/tests/test/uberTestScript.key \
+	sieve/tests/test/testm \
+	sieve/tests/test/testm/utest-header \
+	sieve/tests/test/testm/utest-address \
+	sieve/tests/test/serverm \
+	sieve/tests/test/serverm/utmail-address \
+	sieve/tests/test/serverm/utmail-header \
+	sieve/tests/test/uberTestScript.s \
+	sieve/tests/actionExtensions \
+	sieve/tests/actionExtensions/uberExtensionActionScript.s \
+	sieve/tests/actionExtensions/testm \
+	sieve/tests/actionExtensions/testm/ueatest-flag4 \
+	sieve/tests/actionExtensions/testm/ueatest-flag2 \
+	sieve/tests/actionExtensions/testm/ueatest-fileinto \
+	sieve/tests/actionExtensions/testm/ueatest-denotify \
+	sieve/tests/actionExtensions/testm/ueatest-vacation \
+	sieve/tests/actionExtensions/testm/ueatest-reject \
+	sieve/tests/actionExtensions/testm/ueatest-mark \
+	sieve/tests/actionExtensions/testm/ueatest-denotify2 \
+	sieve/tests/actionExtensions/testm/ueatest-flag5 \
+	sieve/tests/actionExtensions/testm/ueatest-notify2 \
+	sieve/tests/actionExtensions/testm/ueatest-notify \
+	sieve/tests/actionExtensions/testm/ueatest-flag1 \
+	sieve/tests/actionExtensions/testm/ueatest-flag3 \
+	sieve/tests/actionExtensions/testm/ueatest-unmark \
+	sieve/tests/actionExtensions/uberExtensionActionScript.key \
+	sieve/tests/actionExtensions/serverm \
+	sieve/tests/actionExtensions/serverm/ueamail-flag4 \
+	sieve/tests/actionExtensions/serverm/ueamail-denotify \
+	sieve/tests/actionExtensions/serverm/ueamail-mark \
+	sieve/tests/actionExtensions/serverm/ueamail-denotify2 \
+	sieve/tests/actionExtensions/serverm/ueamail-flag2 \
+	sieve/tests/actionExtensions/serverm/ueamail-unmark \
+	sieve/tests/actionExtensions/serverm/ueamail-reject \
+	sieve/tests/actionExtensions/serverm/ueamail-flag3 \
+	sieve/tests/actionExtensions/serverm/ueamail-fileinto \
+	sieve/tests/actionExtensions/serverm/ueamail-flag1 \
+	sieve/tests/actionExtensions/serverm/ueamail-notify \
+	sieve/tests/actionExtensions/serverm/ueamail-flag5 \
+	sieve/tests/actionExtensions/serverm/ueamail-notify2 \
+	sieve/tests/actionExtensions/serverm/ueamail-vacation \
 	timsieved/TODO
 
 TEXINFO_TEX = com_err/et/texinfo.tex
-EXTRA_SCRIPTS = com_err/et/compile_et.sh com_err/et/config_script \
-	lib/imapoptions lib/mkchartable.pl lib/test/run \
-	perl/sieve/scripts/installsieve.pl perl/sieve/scripts/sieveshell.pl \
-	tools/arbitronsort.pl tools/compile_st.pl tools/config2header tools/config2man tools/convert-sieve.pl tools/dohash tools/masssievec tools/migrate-metadata tools/mkimap tools/mknewsgroups tools/mupdate-loadgen.pl tools/rehash tools/translatesieve tools/undohash tools/upgradesieve \
+EXTRA_SCRIPTS = \
+	com_err/et/compile_et.sh \
+	com_err/et/config_script \
+	lib/imapoptions \
+	lib/mkchartable.pl \
+	lib/test/run \
+	perl/sieve/scripts/installsieve.pl \
+	perl/sieve/scripts/sieveshell.pl \
+	tools/arbitronsort.pl \
+	tools/compile_st.pl \
+	tools/config2header \
+	tools/config2man \
+	tools/convert-sieve.pl \
+	tools/dohash \
+	tools/masssievec \
+	tools/migrate-metadata \
+	tools/mkimap \
+	tools/mknewsgroups \
+	tools/mupdate-loadgen.pl \
+	tools/rehash \
+	tools/translatesieve \
+	tools/undohash \
+	tools/upgradesieve \
 	snmp/snmpgen \
 	autobuild.sh
-noinst_MAN = com_err/et/com_err.3 com_err/et/compile_et.1
+noinst_MAN = \
+	com_err/et/com_err.3 \
+	com_err/et/compile_et.1
 noinst_TEXINFOS = com_err/et/com_err.texinfo
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libcyrus_min.pc libcyrus.pc libcyrus_sieve.pc
 
-com_err_et_libcyrus_com_err_la_SOURCES = com_err/et/com_err.c com_err/et/com_err.h \
-	com_err/et/error_message.c com_err/et/error_table.h \
-	com_err/et/et_name.c com_err/et/init_et.c com_err/et/internal.h \
+com_err_et_libcyrus_com_err_la_SOURCES = \
+	com_err/et/com_err.c \
+	com_err/et/com_err.h \
+	com_err/et/error_message.c \
+	com_err/et/error_table.h \
+	com_err/et/et_name.c \
+	com_err/et/init_et.c \
+	com_err/et/internal.h \
 	com_err/et/mit-sipb-copyright.h
 com_err_et_libcyrus_com_err_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
@@ -238,9 +462,12 @@ CLEANFILES += cunit/registers.h $(CUNIT_PROJECT)
 check_PROGRAMS += cunit/unit
 
 cunit_FRAMEWORK = \
-	cunit/unit.c cunit/cunit.h \
-	cunit/syslog.c cunit/cunit-syslog.h \
-	cunit/timeout.c cunit/timeout.h
+	cunit/unit.c \
+	cunit/cunit.h \
+	cunit/syslog.c \
+	cunit/cunit-syslog.h \
+	cunit/timeout.c \
+	cunit/timeout.h
 
 cunit_TESTS = \
 	cunit/annotate.testc \
@@ -317,20 +544,60 @@ endif
 doc_text_htmlstrip_SOURCE = doc/text/htmlstrip.c
 
 includedir=@includedir@/cyrus
-include_HEADERS = lib/acl.h lib/assert.h lib/auth.h lib/auth_pts.h \
-	lib/bsearch.h lib/charset.h lib/chartable.h lib/crc32.h \
-	lib/cyr_lock.h lib/cyrusdb.h lib/exitcodes.h lib/glob.h lib/gmtoff.h \
-	lib/hash.h lib/imapopts.h lib/imapurl.h lib/imclient.h lib/imparse.h \
-	lib/iostat.h lib/iptostring.h lib/libcyr_cfg.h lib/lsort.h \
-	lib/map.h lib/mappedfile.h lib/mkgmtime.h lib/mpool.h lib/nonblock.h \
-	lib/parseaddr.h lib/retry.h lib/rfc822date.h lib/signals.h \
-	lib/strarray.h lib/strhash.h lib/stristr.h lib/sysexits.h lib/times.h \
-	lib/tok.h lib/wildmat.h lib/xmalloc.h lib/hashu64.h
+include_HEADERS = \
+	lib/acl.h \
+	lib/assert.h \
+	lib/auth.h \
+	lib/auth_pts.h \
+	lib/bsearch.h \
+	lib/charset.h \
+	lib/chartable.h \
+	lib/crc32.h \
+	lib/cyr_lock.h \
+	lib/cyrusdb.h \
+	lib/exitcodes.h \
+	lib/glob.h \
+	lib/gmtoff.h \
+	lib/hash.h \
+	lib/hashu64.h \
+	lib/imapopts.h \
+	lib/imapurl.h \
+	lib/imclient.h \
+	lib/imparse.h \
+	lib/iostat.h \
+	lib/iptostring.h \
+	lib/libcyr_cfg.h \
+	lib/lsort.h \
+	lib/map.h \
+	lib/mappedfile.h \
+	lib/mkgmtime.h \
+	lib/mpool.h \
+	lib/nonblock.h \
+	lib/parseaddr.h \
+	lib/retry.h \
+	lib/rfc822date.h \
+	lib/signals.h \
+	lib/strarray.h \
+	lib/strhash.h \
+	lib/stristr.h \
+	lib/sysexits.h \
+	lib/times.h \
+	lib/tok.h \
+	lib/wildmat.h \
+	lib/xmalloc.h
 nobase_include_HEADERS = sieve/sieve_interface.h
 nobase_nodist_include_HEADERS = sieve/sieve_err.h
 
-noinst_HEADERS = lib/byteorder64.h lib/gai.h lib/libconfig.h lib/md5.h \
-	lib/prot.h lib/ptrarray.h lib/util.h lib/xstrlcat.h lib/xstrlcpy.h
+noinst_HEADERS = \
+	lib/byteorder64.h \
+	lib/gai.h \
+	lib/libconfig.h \
+	lib/md5.h \
+	lib/prot.h \
+	lib/ptrarray.h \
+	lib/util.h \
+	lib/xstrlcat.h \
+	lib/xstrlcpy.h
 
 imap_arbitron_SOURCES = imap/arbitron.c imap/cli_fatal.c imap/mutex_fake.c
 imap_arbitron_LDADD = $(LD_UTILITY_ADD)
@@ -377,7 +644,13 @@ imap_cyr_userseen_LDADD = $(LD_UTILITY_ADD)
 #imap_cyr_virusscan_SOURCES = imap/cli_fatal.c imap/cyr_virusscan.c imap/mutex_fake.c
 #imap_cyr_virusscan_LDADD = $(LD_UTILITY_ADD) -lclamav
 
-imap_deliver_SOURCES = imap/deliver.c imap/lmtpengine.c imap/lmtpstats.c imap/mutex_fake.c imap/proxy.c imap/spool.c
+imap_deliver_SOURCES = \
+	imap/deliver.c \
+	imap/lmtpengine.c \
+	imap/lmtpstats.c \
+	imap/mutex_fake.c \
+	imap/proxy.c \
+	imap/spool.c
 imap_deliver_LDADD = $(LD_UTILITY_ADD)
 
 imap_fetchnews_SOURCES = imap/cli_fatal.c imap/fetchnews.c imap/mutex_fake.c
@@ -389,10 +662,19 @@ imap_fud_LDADD = $(LD_SERVER_ADD)
 imap_idled_SOURCES = imap/idled.c imap/mutex_fake.c
 imap_idled_LDADD = $(LD_UTILITY_ADD)
 
-imap_imapd_SOURCES = imap/imap_proxy.c imap/imap_proxy.h imap/imapd.c imap/imapd.h imap/mutex_fake.c \
-		     imap/pushstats.c imap/pushstats.h imap/proxy.c master/service.c \
-		     imap/autocreate.h imap/autocreate.c
-imap_imapd_LDADD = 
+imap_imapd_SOURCES = \
+	imap/imap_proxy.c \
+	imap/imap_proxy.h \
+	imap/imapd.c \
+	imap/imapd.h \
+	imap/mutex_fake.c \
+	imap/pushstats.c \
+	imap/pushstats.h \
+	imap/proxy.c \
+	master/service.c \
+	imap/autocreate.h \
+	imap/autocreate.c
+imap_imapd_LDADD =
 if SIEVE
 imap_imapd_LDADD += sieve/libcyrus_sieve.la
 endif
@@ -401,29 +683,89 @@ imap_imapd_LDADD += $(LD_SERVER_ADD)
 imap_ipurge_SOURCES = imap/cli_fatal.c imap/ipurge.c imap/mutex_fake.c
 imap_ipurge_LDADD = $(LD_UTILITY_ADD)
 
-nodist_imap_libcyrus_imap_la_SOURCES = imap/imap_err.c imap/mupdate_err.c imap/mupdate_err.h
-imap_libcyrus_imap_la_SOURCES = imap/annotate.c imap/annotate.h imap/append.c \
-	imap/append.h imap/backend.c imap/backend.h imap/convert_code.c \
-	imap/convert_code.h imap/dlist.c imap/dlist.h imap/duplicate.c \
-	imap/duplicate.h imap/global.c imap/global.h imap/idle.c imap/idle.h \
-	imap/idlemsg.c imap/idlemsg.h imap/imapparse.c imap/index.c \
-	imap/index.h imap/mailbox.c imap/mailbox.h imap/mbdump.c \
-	imap/mbdump.h imap/mboxevent.c imap/mboxevent.h imap/mboxkey.c \
-	imap/mboxkey.h imap/mboxlist.c imap/mboxlist.h imap/mboxname.c \
-	imap/mboxname.h imap/message_guid.c imap/message_guid.h imap/message.c \
-	imap/message.h imap/mupdate-client.c imap/mupdate-client.h imap/mutex.h \
-	imap/notify.c imap/notify.h imap/proc.c imap/proc.h imap/protocol.h \
-	imap/quota_db.c imap/rfc822_header.c imap/rfc822_header.h \
-	imap/saslclient.c imap/saslclient.h imap/saslserver.c \
-	imap/search_engines.c imap/search_engines.h imap/seen.h \
-	imap/seen_db.c imap/sequence.c imap/sequence.h imap/setproctitle.c \
-	imap/squat.c imap/squat.h imap/squat_internal.c imap/squat_internal.h \
-	imap/statuscache.h imap/statuscache_db.c imap/sync_log.c \
-	imap/sync_log.h imap/telemetry.c imap/telemetry.h imap/tls.c \
-	imap/tls.h imap/upgrade_index.c imap/upgrade_index.h imap/user.c \
-	imap/user.h imap/userdeny_db.c imap/userdeny.h imap/version.c \
+nodist_imap_libcyrus_imap_la_SOURCES = \
+	imap/imap_err.c \
+	imap/mupdate_err.c \
+	imap/mupdate_err.h
+imap_libcyrus_imap_la_SOURCES = \
+	imap/annotate.c \
+	imap/annotate.h \
+	imap/append.c \
+	imap/append.h \
+	imap/backend.c \
+	imap/backend.h \
+	imap/convert_code.c \
+	imap/convert_code.h \
+	imap/dlist.c \
+	imap/dlist.h \
+	imap/duplicate.c \
+	imap/duplicate.h \
+	imap/global.c \
+	imap/global.h \
+	imap/idle.c \
+	imap/idle.h \
+	imap/idlemsg.c \
+	imap/idlemsg.h \
+	imap/imapparse.c \
+	imap/index.c \
+	imap/index.h \
+	imap/mailbox.c \
+	imap/mailbox.h \
+	imap/mbdump.c \
+	imap/mbdump.h \
+	imap/mboxkey.c \
+	imap/mboxkey.h \
+	imap/mboxlist.c \
+	imap/mboxlist.h \
+	imap/mboxevent.c \
+	imap/mboxevent.h \
+	imap/mboxname.c \
+	imap/mboxname.h \
+	imap/message_guid.c \
+	imap/message_guid.h \
+	imap/message.c \
+	imap/message.h \
+	imap/mupdate-client.c \
+	imap/mupdate-client.h \
+	imap/mutex.h \
+	imap/notify.c \
+	imap/notify.h \
+	imap/proc.c \
+	imap/proc.h \
+	imap/protocol.h \
+	imap/quota_db.c \
+	imap/rfc822_header.c \
+	imap/rfc822_header.h \
+	imap/saslclient.c \
+	imap/saslclient.h \
+	imap/saslserver.c \
+	imap/search_engines.c \
+	imap/search_engines.h \
+	imap/seen.h \
+	imap/seen_db.c \
+	imap/sequence.c \
+	imap/sequence.h \
+	imap/setproctitle.c \
+	imap/squat.c \
+	imap/squat.h \
+	imap/squat_internal.c \
+	imap/squat_internal.h \
+	imap/statuscache.h \
+	imap/statuscache_db.c \
+	imap/sync_log.c \
+	imap/sync_log.h \
+	imap/telemetry.c \
+	imap/telemetry.h \
+	imap/tls.c \
+	imap/tls.h \
+	imap/upgrade_index.c \
+	imap/upgrade_index.h \
+	imap/user.c \
+	imap/user.h \
+	imap/userdeny_db.c \
+	imap/userdeny.h \
+	imap/version.c \
 	imap/version.h
-
 imap_libcyrus_imap_la_LIBADD = $(COM_ERR_LIBS) $(LIB_UUID) lib/libcyrus_min.la lib/libcyrus.la
 imap_libcyrus_imap_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 if JANSSON
@@ -431,10 +773,19 @@ imap_libcyrus_imap_la_LIBADD += $(JANSSON_LIBS)
 imap_libcyrus_imap_la_CFLAGS += $(JANSSON_CFLAGS)
 endif
 
-imap_lmtpd_SOURCES = imap/lmtpd.c imap/lmtpd.h imap/lmtpengine.c \
-	imap/lmtpengine.h imap/lmtpstats.c imap/lmtpstats.h \
-	imap/mutex_fake.c imap/proxy.c imap/spool.c master/service.c \
-	imap/autocreate.h imap/autocreate.c
+imap_lmtpd_SOURCES = \
+	imap/autocreate.c \
+	imap/autocreate.h \
+	imap/lmtpd.c \
+	imap/lmtpd.h \
+	imap/lmtpengine.c \
+	imap/lmtpengine.h \
+	imap/lmtpstats.c \
+	imap/lmtpstats.h \
+	imap/mutex_fake.c \
+	imap/proxy.c \
+	imap/spool.c \
+	master/service.c
 imap_lmtpd_LDADD =
 if SIEVE
 imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/smtpclient.c
@@ -457,17 +808,34 @@ imap_mbpath_LDADD = $(LD_UTILITY_ADD)
 imap_mbtool_SOURCES = imap/cli_fatal.c imap/mbtool.c imap/mutex_fake.c
 imap_mbtool_LDADD = $(LD_UTILITY_ADD)
 
-imap_mupdate_SOURCES = imap/mupdate.c imap/mupdate-slave.c imap/mutex_pthread.c master/service-thread.c
+imap_mupdate_SOURCES = \
+	imap/mupdate.c \
+	imap/mupdate-slave.c \
+	imap/mutex_pthread.c \
+	master/service-thread.c
 imap_mupdate_LDADD = $(LD_SERVER_ADD) -lpthread
 
-nodist_imap_nntpd_SOURCES = imap/nntp_err.c imap/nntp_err.h
-imap_nntpd_SOURCES = imap/mutex_fake.c imap/nntpd.c \
-	imap/proxy.c imap/smtpclient.c imap/smtpclient.h imap/spool.c \
-	imap/spool.h master/service.c
+nodist_imap_nntpd_SOURCES = \
+	imap/nntp_err.c \
+	imap/nntp_err.h
+imap_nntpd_SOURCES = \
+	imap/mutex_fake.c \
+	imap/nntpd.c \
+	imap/proxy.c \
+	imap/smtpclient.c \
+	imap/smtpclient.h \
+	imap/spool.c \
+	imap/spool.h \
+	master/service.c
 imap_nntpd_LDADD = $(LD_SERVER_ADD)
 
-imap_pop3d_SOURCES = imap/mutex_fake.c imap/pop3d.c imap/proxy.c master/service.c \
-		     imap/autocreate.h imap/autocreate.c
+imap_pop3d_SOURCES = \
+	imap/autocreate.c \
+	imap/autocreate.h \
+	imap/mutex_fake.c \
+	imap/pop3d.c \
+	imap/proxy.c \
+	master/service.c
 imap_pop3d_LDADD =
 if SIEVE
 imap_pop3d_LDADD += sieve/libcyrus_sieve.la
@@ -523,44 +891,80 @@ imtest_imtest_LDADD = $(LD_BASIC_ADD)
 imtest_imtest_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 nodist_lib_libcyrus_la_SOURCES = lib/chartable.c
-lib_libcyrus_la_SOURCES = lib/acl.c lib/acl_afs.c lib/auth.c lib/auth_krb.c \
-	lib/auth_krb5.c lib/auth_pts.c lib/auth_unix.c lib/bsearch.c \
-	lib/byteorder64.c lib/charset.c lib/crc32.c lib/cyrusdb.c
+lib_libcyrus_la_SOURCES = \
+	lib/acl.c \
+	lib/acl_afs.c \
+	lib/auth.c \
+	lib/auth_krb.c \
+	lib/auth_krb5.c \
+	lib/auth_pts.c \
+	lib/auth_unix.c \
+	lib/bsearch.c \
+	lib/byteorder64.c \
+	lib/charset.c \
+	lib/crc32.c \
+	lib/cyrusdb.c \
+	lib/cyrusdb_flat.c \
+	lib/cyrusdb_quotalegacy.c \
+	lib/cyrusdb_skiplist.c \
+	lib/cyrusdb_twoskip.c \
+	lib/glob.c \
+	lib/imapurl.c \
+	lib/imclient.c \
+	lib/imparse.c \
+	lib/iostat.c \
+	lib/iptostring.c \
+	lib/libcyr_cfg.c \
+	lib/lsort.c \
+	lib/mappedfile.c \
+	lib/mkgmtime.c \
+	lib/parseaddr.c \
+	lib/prot.c \
+	lib/ptrarray.c \
+	lib/signals.c \
+	lib/stristr.c \
+	lib/times.c \
+	lib/tok.c \
+	lib/wildmat.c
 if USE_BERKELEY
 lib_libcyrus_la_SOURCES += lib/cyrusdb_berkeley.c
 endif
-lib_libcyrus_la_SOURCES += lib/cyrusdb_flat.c lib/cyrusdb_quotalegacy.c \
-	lib/cyrusdb_skiplist.c
 if USE_SQL
 lib_libcyrus_la_SOURCES += lib/cyrusdb_sql.c
 endif
-lib_libcyrus_la_SOURCES += lib/cyrusdb_twoskip.c lib/glob.c
 if GMTOFF_TM
 lib_libcyrus_la_SOURCES += lib/gmtoff_tm.c
 else
 lib_libcyrus_la_SOURCES += lib/gmtoff_gmtime.c
 endif
-lib_libcyrus_la_SOURCES += lib/imapurl.c lib/imclient.c lib/imparse.c \
-	lib/iostat.c lib/iptostring.c lib/libcyr_cfg.c lib/lsort.c \
-	lib/mappedfile.c lib/mkgmtime.c
 if NONBLOCK_FCNTL
 lib_libcyrus_la_SOURCES += lib/nonblock_fcntl.c
 else
 lib_libcyrus_la_SOURCES += lib/nonblock_ioctl.c
 endif
-lib_libcyrus_la_SOURCES += lib/parseaddr.c lib/prot.c lib/ptrarray.c \
-	lib/signals.c lib/stristr.c lib/times.c lib/tok.c lib/wildmat.c
 lib_libcyrus_la_LIBADD = $(LIB_RT) ${LIB_SASL} $(SSL_LIBS)
 lib_libcyrus_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
-lib_libcyrus_min_la_SOURCES = lib/assert.c
+lib_libcyrus_min_la_SOURCES = \
+	lib/assert.c \
+	lib/hash.c \
+	lib/hashu64.c \
+	lib/imapopts.c \
+	lib/libconfig.c \
+	lib/mpool.c \
+	lib/retry.c \
+	lib/strarray.c \
+	lib/strhash.c \
+	lib/util.c \
+	lib/xmalloc.c \
+	lib/xstrlcat.c \
+	lib/xstrlcpy.c
 if IPV6_noGETADDRINFO
 lib_libcyrus_min_la_SOURCES += lib/getaddrinfo.c
 endif
 if IPV6_noGETNAMEINFO
 lib_libcyrus_min_la_SOURCES += lib/getnameinfo.c
 endif
-lib_libcyrus_min_la_SOURCES += lib/hash.c lib/imapopts.c lib/libconfig.c
 if LOCK_FCNTL
 lib_libcyrus_min_la_SOURCES += lib/lock_fcntl.c
 else
@@ -575,9 +979,6 @@ else
 lib_libcyrus_min_la_SOURCES += lib/map_nommap.c
 endif
 endif
-lib_libcyrus_min_la_SOURCES += lib/mpool.c lib/retry.c lib/strarray.c \
-	lib/strhash.c lib/util.c lib/xmalloc.c lib/xstrlcat.c lib/xstrlcpy.c \
-	lib/hashu64.c
 lib_libcyrus_min_la_LIBADD = $(LTLIBOBJS)
 lib_libcyrus_min_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
@@ -598,39 +999,93 @@ lib/imapopts.c: lib/imapoptions tools/config2header
 
 @SET_MAKE@
 
-dist_man_MANS = man/imtest.1 man/installsieve.1 man/lmtptest.1 \
-	man/mupdatetest.1 man/nntptest.1 man/pop3test.1 man/sieveshell.1 \
-	man/sivtest.1 man/smtptest.1 \
+dist_man_MANS = \
+	man/imtest.1 \
+	man/installsieve.1 \
+	man/lmtptest.1 \
+	man/mupdatetest.1 \
+	man/nntptest.1 \
+	man/pop3test.1 \
+	man/sieveshell.1 \
+	man/sivtest.1 \
+	man/smtptest.1 \
 	man/imclient.3 \
-	man/cyrus.conf.5 man/imapd.conf.5 man/krb.equiv.5 \
-	man/arbitron.8 man/chk_cyrus.8 man/ctl_cyrusdb.8 man/ctl_deliver.8 \
-	man/ctl_mboxlist.8 man/cyr_expire.8 man/cvt_cyrusdb.8 \
-	man/cyr_dbtool.8 man/cyr_df.8 man/cyr_info.8 man/cyr_synclog.8 \
-	man/deliver.8 man/fetchnews.8 man/fud.8 man/idled.8 man/imapd.8 \
-	man/ipurge.8 man/lmtpd.8 man/master.8 man/mbexamine.8 man/mbpath.8 \
-	man/nntpd.8 man/notifyd.8 man/pop3d.8 man/quota.8 man/reconstruct.8 \
-	man/rmnews.8 man/smmapd.8 man/squatter.8 man/syncnews.8 \
-	man/sync_client.8 man/sync_reset.8 man/sync_server.8 man/timsieved.8 \
-	man/tls_prune.8 man/unexpunge.8
+	man/cyrus.conf.5 \
+	man/imapd.conf.5 \
+	man/krb.equiv.5 \
+	man/arbitron.8 \
+	man/chk_cyrus.8 \
+	man/ctl_cyrusdb.8 \
+	man/ctl_deliver.8 \
+	man/ctl_mboxlist.8 \
+	man/cyr_expire.8 \
+	man/cvt_cyrusdb.8 \
+	man/cyr_dbtool.8 \
+	man/cyr_df.8 \
+	man/cyr_info.8 \
+	man/cyr_synclog.8 \
+	man/deliver.8 \
+	man/fetchnews.8 \
+	man/fud.8 \
+	man/idled.8 \
+	man/imapd.8 \
+	man/ipurge.8 \
+	man/lmtpd.8 \
+	man/master.8 \
+	man/mbexamine.8 \
+	man/mbpath.8 \
+	man/nntpd.8 \
+	man/notifyd.8 \
+	man/pop3d.8 \
+	man/quota.8 \
+	man/reconstruct.8 \
+	man/rmnews.8 \
+	man/smmapd.8 \
+	man/squatter.8 \
+	man/syncnews.8 \
+	man/sync_client.8 \
+	man/sync_reset.8 \
+	man/sync_server.8 \
+	man/timsieved.8 \
+	man/tls_prune.8 \
+	man/unexpunge.8
 
-master_master_SOURCES = master/cyrusMasterMIB.c master/cyrusMasterMIB.h \
-	master/master.c master/master.h master/masterconf.c \
-	master/masterconf.h master/service.h
+master_master_SOURCES = \
+	master/cyrusMasterMIB.c \
+	master/cyrusMasterMIB.h \
+	master/master.c \
+	master/master.h \
+	master/masterconf.c \
+	master/masterconf.h \
+	master/service.h
 master_master_LDADD = lib/libcyrus_min.la $(LIB_UCDSNMP) $(LIBS) -lm
 
 
-netnews_remotepurge_SOURCES = netnews/macros.h netnews/readconfig.c netnews/readconfig.h netnews/remotepurge.c
+netnews_remotepurge_SOURCES = \
+	netnews/macros.h \
+	netnews/readconfig.c \
+	netnews/readconfig.h \
+	netnews/remotepurge.c
 netnews_remotepurge_LDADD = $(LD_BASIC_ADD)
 
-notifyd_notifyd_SOURCES = imap/mutex_fake.c master/service.c \
-	notifyd/exitcodes.h notifyd/notify_external.c \
-	notifyd/notify_external.h notifyd/notify_log.c notifyd/notify_log.h \
-	notifyd/notify_mailto.c notifyd/notify_mailto.h notifyd/notify_null.c \
-	notifyd/notify_null.h
+notifyd_notifyd_SOURCES = \
+	imap/mutex_fake.c \
+	master/service.c \
+	notifyd/exitcodes.h \
+	notifyd/notify_external.c \
+	notifyd/notify_external.h \
+	notifyd/notify_log.c \
+	notifyd/notify_log.h \
+	notifyd/notify_mailto.c \
+	notifyd/notify_mailto.h \
+	notifyd/notify_null.c \
+	notifyd/notify_null.h \
+	notifyd/notifyd.c \
+	notifyd/notifyd.h \
+	notifyd/version.h
 if ZEPHYR
 notifyd_notifyd_SOURCES += notifyd/notify_zephyr.c notifyd/notify_zephyr.h
 endif
-notifyd_notifyd_SOURCES += notifyd/notifyd.c notifyd/notifyd.h notifyd/version.h
 notifyd_notifyd_LDADD = $(LD_SERVER_ADD) $(ZEPHYR_LIBS)
 
 notifyd_notifytest_SOURCES = notifyd/notifytest.c imap/mutex_fake.c
@@ -641,7 +1096,11 @@ perl_libcyrus_la_LIBADD = $(lib_libcyrus_la_LIBADD)
 perl_libcyrus_min_la_SOURCES = $(lib_libcyrus_min_la_SOURCES)
 perl_libcyrus_min_la_LIBADD = $(lib_libcyrus_min_la_LIBADD)
 
-perl_sieve_lib_libisieve_a_SOURCES = perl/sieve/lib/isieve.c perl/sieve/lib/lex.c perl/sieve/lib/mystring.c perl/sieve/lib/request.c
+perl_sieve_lib_libisieve_a_SOURCES = \
+	perl/sieve/lib/isieve.c \
+	perl/sieve/lib/lex.c \
+	perl/sieve/lib/mystring.c \
+	perl/sieve/lib/request.c
 
 ptclient_ptdump_SOURCES = imap/cli_fatal.c imap/mutex_fake.c ptclient/ptdump.c
 ptclient_ptdump_LDADD = $(LD_UTILITY_ADD)
@@ -651,7 +1110,11 @@ ptclient_ptexpire_LDADD = $(LD_UTILITY_ADD)
 #ptclient_ptextract_SOURCES = imap/cli_fatal.c imap/mutex_fake.c ptclient/ptextract.c
 #ptclient_ptextract_LDADD = $(LD_UTILITY_ADD)
 
-ptclient_ptloader_SOURCES = ptclient/ptloader.c ptclient/ptloader.h imap/mutex_fake.c master/service-thread.c
+ptclient_ptloader_SOURCES = \
+	imap/mutex_fake.c \
+	ptclient/ptloader.c \
+	ptclient/ptloader.h \
+	master/service-thread.c
 ptclient_ptloader_LDFLAGS =
 ptclient_ptloader_LDADD = $(LD_SERVER_ADD)
 
@@ -667,12 +1130,29 @@ ptclient_ptloader_LDADD += $(AFS_LIBS)
 ptclient_ptloader_LDFLAGS += $(AFS_LDFLAGS)
 endif
 
-nodist_sieve_libcyrus_sieve_la_SOURCES = sieve/sieve_err.c sieve/sieve_err.h
-sieve_libcyrus_sieve_la_SOURCES = sieve/bytecode.h sieve/addr.y sieve/addr-lex.l \
-	sieve/bc_dump.c sieve/bc_emit.c sieve/bc_eval.c sieve/bc_generate.c \
-	sieve/comparator.c sieve/comparator.h sieve/interp.c sieve/interp.h \
-	sieve/message.c sieve/message.h sieve/script.c sieve/script.h \
-	sieve/sieve-lex.l sieve/sieve.y sieve/tree.c sieve/tree.h
+nodist_sieve_libcyrus_sieve_la_SOURCES = \
+	sieve/sieve_err.c \
+	sieve/sieve_err.h
+sieve_libcyrus_sieve_la_SOURCES = \
+	sieve/bytecode.h \
+	sieve/addr.y \
+	sieve/addr-lex.l \
+	sieve/bc_dump.c \
+	sieve/bc_emit.c \
+	sieve/bc_eval.c \
+	sieve/bc_generate.c \
+	sieve/comparator.c \
+	sieve/comparator.h \
+	sieve/interp.c \
+	sieve/interp.h \
+	sieve/message.c \
+	sieve/message.h \
+	sieve/script.c \
+	sieve/script.h \
+	sieve/sieve-lex.l \
+	sieve/sieve.y \
+	sieve/tree.c \
+	sieve/tree.h
 sieve_libcyrus_sieve_la_LIBADD = $(COM_ERR_LIBS) lib/libcyrus_min.la lib/libcyrus.la
 sieve_libcyrus_sieve_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
@@ -687,11 +1167,22 @@ sieve/sieve_err.h sieve/sieve_err.c: sieve/sieve_err.et $(COMPILE_ET_DEP)
 sieve_test_SOURCES = sieve/test.c imap/mutex_fake.c
 sieve_test_LDADD = sieve/libcyrus_sieve.la $(LD_UTILITY_ADD)
 
-timsieved_timsieved_SOURCES = imap/mutex_fake.c imap/proxy.c master/service.c \
-	timsieved/actions.c timsieved/actions.h timsieved/codes.h \
-	timsieved/exitcodes.h timsieved/lex.c timsieved/lex.h \
-	timsieved/mystring.c timsieved/mystring.h timsieved/parser.c \
-	timsieved/parser.h timsieved/scripttest.c timsieved/scripttest.h \
+timsieved_timsieved_SOURCES = \
+	imap/mutex_fake.c \
+	imap/proxy.c \
+	master/service.c \
+	timsieved/actions.c \
+	timsieved/actions.h \
+	timsieved/codes.h \
+	timsieved/exitcodes.h \
+	timsieved/lex.c \
+	timsieved/lex.h \
+	timsieved/mystring.c \
+	timsieved/mystring.h \
+	timsieved/parser.c \
+	timsieved/parser.h \
+	timsieved/scripttest.c \
+	timsieved/scripttest.h \
 	timsieved/timsieved.c
 timsieved_timsieved_LDADD = sieve/libcyrus_sieve.la $(LD_SERVER_ADD)
 
