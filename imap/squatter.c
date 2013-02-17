@@ -324,6 +324,107 @@ static void do_indexer(const strarray_t *sa)
     search_end_update(rx);
 }
 
+static int index_single_message(const char *mboxname, uint32_t uid)
+{
+    int r;
+    struct mailbox *mailbox = NULL;
+    message_t *msg = NULL;
+    int begun = 0;
+    struct index_record record;
+
+    r = mailbox_open_irl(mboxname, &mailbox);
+    if (r) goto out;
+
+    r = rx->begin_mailbox(rx, mailbox, /*incremental*/1);
+    if (r) goto out;
+    begun = 1;
+
+    if (rx->is_indexed(rx, uid)) goto out;
+
+    r = mailbox_find_index_record(mailbox, uid, &record, NULL);
+    if (r) goto out;
+
+    if (record.system_flags & (FLAG_EXPUNGED|FLAG_UNLINKED)) goto out;
+
+    msg = message_new_from_record(mailbox, &record);
+    if (!msg) goto out;
+
+    if (verbose) fprintf(stderr, "squatter: indexing mailbox:%s uid:%u\n",
+			 mboxname, uid);
+
+    r = index_getsearchtext(msg, rx, 0);
+
+out:
+    if (begun) {
+	int r2 = rx->end_mailbox(rx, mailbox);
+	if (r2 && !r) r = r2;
+    }
+    message_unref(&msg);
+    mailbox_close(&mailbox);
+    return r;
+}
+
+static int do_indexfrom(const char *fromfile)
+{
+    int r;
+    FILE *fp;
+    unsigned lineno = 0;
+    const char *p;
+    tok_t tok;
+    const char *mboxname;
+    uint32_t uid;
+    char buf[MAX_MAILBOX_BUFFER+128];
+
+    rx = search_begin_update(verbose);
+    if (rx == NULL) /* no indexer defined */
+	return 0;
+
+    fp = fopen(fromfile, "r");
+    if (!fp) {
+	r = errno;
+	perror(fromfile);
+	goto out;
+    }
+
+    while (fgets(buf, sizeof(buf), fp)) {
+	lineno++;
+	if (buf[0] == '#') continue;
+	tok_initm(&tok, buf, "\t", TOK_EMPTY|TOK_TRIMRIGHT);
+
+	/* first token is an mboxname */
+	mboxname = tok_next(&tok);
+	if (!mboxname) {
+syntax_error:
+	    fprintf(stderr, "%s:%u: syntax error, skipping\n",
+		    fromfile, lineno);
+	    continue;
+	}
+
+	/* 2nd token is a uid */
+	p = tok_next(&tok);
+	if (!p) goto syntax_error;
+	uid = strtoul(p, NULL, 0);
+	if (!uid) goto syntax_error;
+
+	/* no more tokens on the line */
+	p = tok_next(&tok);
+	if (p) goto syntax_error;
+
+	r = index_single_message(mboxname, uid);
+	if (r) {
+	    fprintf(stderr, "Failed to index mailbox \"%s\" uid %u: %s\n",
+		    mboxname, uid, error_message(r));
+	    /* ignore errors */
+	    r = 0;
+	}
+    }
+
+out:
+    if (fp) fclose(fp);
+    search_end_update(rx);
+    return r;
+}
+
 static int squatter_build_query(search_builder_t *bx, const char *query)
 {
     tok_t tok = TOK_INITIALIZER(query, NULL, 0);
@@ -782,7 +883,8 @@ int main(int argc, char **argv)
     const char *synclogfile = NULL;
     int init_flags = CYRUSINIT_PERROR;
     int multi_folder = 0;
-    enum { UNKNOWN, INDEXER, SEARCH, ROLLING, SYNCLOG,
+    const char *fromfile = NULL;
+    enum { UNKNOWN, INDEXER, INDEXFROM, SEARCH, ROLLING, SYNCLOG,
 	   START_DAEMON, STOP_DAEMON, RUN_DAEMON } mode = UNKNOWN;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
@@ -791,10 +893,16 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:RT:c:de:f:mn:rsiav")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:I:RT:c:de:f:mn:rsiav")) != EOF) {
 	switch (opt) {
 	case 'C':		/* alt config file */
 	    alt_config = optarg;
+	    break;
+
+	case 'I':		/* indexer, using specified mbox/uids in file */
+	    if (mode != UNKNOWN && mode != INDEXFROM) usage(argv[0]);
+	    fromfile = optarg;
+	    mode = INDEXFROM;
 	    break;
 
 	case 'R':		/* rolling indexer */
@@ -919,6 +1027,12 @@ int main(int argc, char **argv)
 	syslog(LOG_NOTICE, "indexing mailboxes");
 	do_indexer(&mboxnames);
 	syslog(LOG_NOTICE, "done indexing mailboxes");
+	break;
+    case INDEXFROM:
+	syslog(LOG_NOTICE, "indexing messages");
+	if (do_indexfrom(fromfile))
+	    exit(EC_TEMPFAIL);
+	syslog(LOG_NOTICE, "done indexing messages");
 	break;
     case SEARCH:
 	if (recursive_flag && optind == argc) usage(argv[0]);
