@@ -297,4 +297,16 @@ int buf_inflate(struct buf *buf, int scheme);
 int buf_deflate(struct buf *buf, int compLevel, int scheme);
 #endif
 
+/* A wrapper for close() which handles the fd=-1 case cleanly.
+ * The argument may have side effects and must be an lvalue */
+#define xclose(fd) \
+    do { \
+	int *_fdp = &(fd); \
+	if (*_fdp >= 0) { \
+	    close(*_fdp); \
+	    *_fdp = -1; \
+	} \
+    } while(0)
+
+
 #endif /* INCLUDED_UTIL_H */

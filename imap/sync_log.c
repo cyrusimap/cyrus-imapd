@@ -160,7 +160,7 @@ static void sync_log_base(const char *channel, const char *string)
 	if (lock_blocking(fd) == -1) {
 	    syslog(LOG_ERR, "sync_log(): Failed to lock %s for %s: %m",
 		   fname, string);
-	    close(fd);
+	    xclose(fd);
 	    return;
 	}
 
@@ -170,10 +170,10 @@ static void sync_log_base(const char *channel, const char *string)
 	    (sbuffd.st_ino == sbuffile.st_ino))
 	    break;
 
-	close(fd);
+	xclose(fd);
     }
     if (retries >= SYNC_LOG_RETRIES) {
-	close(fd);
+	xclose(fd);
 	syslog(LOG_ERR,
 	       "sync_log(): Failed to lock %s for %s after %d attempts",
 	       fname, string, retries);
@@ -185,7 +185,7 @@ static void sync_log_base(const char *channel, const char *string)
 	       fname, strerror(errno));
 
     (void)fsync(fd); /* paranoia */
-    close(fd);
+    xclose(fd);
 }
 
 static const char *sync_quote_name(const char *name)

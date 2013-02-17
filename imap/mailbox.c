@@ -544,8 +544,7 @@ HIDDEN int mailbox_ensure_cache(struct mailbox *mailbox, size_t len)
 	if (generation < mailbox->i.generation_no && !retry) {
 	    /* try a rename - maybe we got killed between renames in repack */
 	    map_free((const char **)&mailbox->cache_buf.s, &mailbox->cache_len);
-	    close(mailbox->cache_fd);
-	    mailbox->cache_fd = -1;
+	    xclose(mailbox->cache_fd);
 	    syslog(LOG_NOTICE, "WARNING: trying to rename cache file %s (%d < %d)",
 		   mailbox->name, generation, mailbox->i.generation_no);
 	    mailbox_meta_rename(mailbox, META_CACHE);
@@ -851,24 +850,15 @@ static void mailbox_release_resources(struct mailbox *mailbox)
 	abort();
 
     /* just close the header */
-    if (mailbox->header_fd != -1) {
-	close(mailbox->header_fd);
-	mailbox->header_fd = -1;
-    }
+    xclose(mailbox->header_fd);
 
     /* release and unmap index */
-    if (mailbox->index_fd != -1) {
-	close(mailbox->index_fd);
-	mailbox->index_fd = -1;
-    }
+    xclose(mailbox->index_fd);
     if (mailbox->index_base)
 	map_free(&mailbox->index_base, &mailbox->index_len);
 
     /* release and unmap cache */
-    if (mailbox->cache_fd != -1) {
-	close(mailbox->cache_fd);
-	mailbox->cache_fd = -1;
-    }
+    xclose(mailbox->cache_fd);
     if (mailbox->cache_buf.s)
 	map_free((const char **)&mailbox->cache_buf.s, &mailbox->cache_len);
     mailbox->cache_buf.len = 0;
@@ -1171,8 +1161,7 @@ HIDDEN int mailbox_read_header(struct mailbox *mailbox, char **aclptr)
     if (mailbox->header_dirty)
 	abort();
 
-    if (mailbox->header_fd != -1)
-	close(mailbox->header_fd);
+    xclose(mailbox->header_fd);
 
     fname = mailbox_meta_fname(mailbox, META_HEADER);
     mailbox->header_fd = open(fname, O_RDONLY, 0);
@@ -1183,8 +1172,7 @@ HIDDEN int mailbox_read_header(struct mailbox *mailbox, char **aclptr)
     }
 
     if (fstat(mailbox->header_fd, &sbuf) == -1) {
-	close(mailbox->header_fd);
-	mailbox->header_fd = 1;
+	xclose(mailbox->header_fd);
 	r = IMAP_IOERROR;
 	goto done;
     }
@@ -2992,9 +2980,9 @@ HIDDEN void mailbox_repack_abort(struct mailbox_repack **repackptr)
 {
     struct mailbox_repack *repack = *repackptr;
     if (!repack) return; /* safe against double-free */
-    if (repack->newcache_fd != -1) close(repack->newcache_fd);
+    xclose(repack->newcache_fd);
     unlink(mailbox_meta_newfname(repack->mailbox, META_CACHE));
-    if (repack->newindex_fd != -1) close(repack->newindex_fd);
+    xclose(repack->newindex_fd);
     unlink(mailbox_meta_newfname(repack->mailbox, META_INDEX));
     free(repack);
     *repackptr = NULL;
@@ -3030,10 +3018,8 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
     if (fsync(repack->newcache_fd) < 0)
 	goto fail;
 
-    close(repack->newcache_fd);
-    repack->newcache_fd = -1;
-    close(repack->newindex_fd);
-    repack->newindex_fd = -1;
+    xclose(repack->newcache_fd);
+    xclose(repack->newindex_fd);
 
     /* rename index first - loader will handle un-renamed cache if
      * the generation is lower */
@@ -4066,7 +4052,7 @@ static void cleanup_stale_expunged(struct mailbox *mailbox)
 
 done:
     if (expunge_base) map_free(&expunge_base, &expunge_len);
-    if (expunge_fd != -1) close(expunge_fd);
+    xclose(expunge_fd);
 }
 
 /* this is kind of like mailbox_create, but we try to rescue

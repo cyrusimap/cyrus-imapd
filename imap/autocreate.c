@@ -238,19 +238,19 @@ static int autocreate_sieve(const char *userid, const char *source_script)
 	}
 
 	if(r == 0) { /* EOF */
-	    close(out_fd);
-	    close(in_fd);
+	    xclose(out_fd);
+	    xclose(in_fd);
 	} else if (r < 0) {
 	    syslog(LOG_WARNING, "autocreate_sieve: Error reading compiled script file: %s. Will try to compile it", 
 			   compiled_source_script);
-	    close(in_fd);
+	    xclose(in_fd);
 	    do_compile = 1;
 	    if(lseek(out_fd, 0, SEEK_SET)) {
 		syslog(LOG_WARNING, "autocreate_sieve: Major IO problem. Aborting");
 		return 1;
 	    }
 	}
-	close(in_fd);
+	xclose(in_fd);
     } else {
 	if(compiled_source_script)
 	      syslog(LOG_WARNING,"autocreate_sieve: Problem opening compiled script file: %s. Compiling it", compiled_source_script);
@@ -300,7 +300,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
 	sieve_script_free(&s);
     }
 
-    close(out_fd);
+    xclose(out_fd);
     rewind(in_stream);
 
     /* Copy the initial script */
@@ -408,12 +408,12 @@ static int autocreate_sieve(const char *userid, const char *source_script)
 	}
 
 	if(r == 0 ) { /*EOF */
-	    close(out_fd);
-	    close(in_fd);
+	    xclose(out_fd);
+	    xclose(in_fd);
 	} else if (r < 0) {
 		syslog(LOG_WARNING, "autocreate_sieve: Error writing to file: %s, error: %d", sieve_tmpname, errno);
-		close(out_fd);
-		close(in_fd);
+		xclose(out_fd);
+		xclose(in_fd);
 		unlink(sieve_tmpname);
 		return 0;
 	}
