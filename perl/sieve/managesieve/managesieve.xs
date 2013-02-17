@@ -254,6 +254,7 @@ sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
 
   if (init_sasl(obj, 128, callbacks)) {
       globalerr = "sasl initialization failed";
+      sieve_free_net(obj);
       XSRETURN_UNDEF;
   }
   
@@ -266,12 +267,14 @@ sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
   mechlist=read_capability(obj);
   if(!mechlist) {
 	globalerr = "sasl mech list empty";
+	free(ret);
 	XSRETURN_UNDEF;
   }
 
   mlist = (char*) xstrdup(mechlist);
   if(!mlist) {
 	globalerr = "could not allocate memory for mech list";
+	free(ret);
 	XSRETURN_UNDEF;
   }
 
@@ -308,6 +311,7 @@ sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
 	/* we failed */
 	safefree(ret->class);
 	free(ret);
+	free(mechlist);
 	XSRETURN_UNDEF;
   }
 
@@ -317,6 +321,7 @@ sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
         if (detect_mitm(obj, mechlist)) {
 	    globalerr = "possible MITM attack: "
 		"list of available SASL mechamisms changed";
+	    free(ret);
 	    free(mechlist);
 	    XSRETURN_UNDEF;
 	}
