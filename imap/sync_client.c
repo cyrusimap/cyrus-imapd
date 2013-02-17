@@ -2695,6 +2695,7 @@ static int do_sync(const char *filename)
     }
 
     sync_action_list_free(&user_list);
+    sync_action_list_free(&unuser_list);
     sync_action_list_free(&meta_list);
     sync_action_list_free(&mailbox_list);
     sync_action_list_free(&unmailbox_list);
