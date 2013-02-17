@@ -59,6 +59,7 @@
 #include "global.h"
 #include "proc.h"
 #include "retry.h"
+#include "util.h"
 #include "xmalloc.h"
 
 #ifdef HAVE_DIRENT_H
@@ -180,7 +181,6 @@ static int proc_foreach_helper(pid_t pid, procdata_t *func, void *rock)
 	/* grab a copy of the file contents */
 	buf = xmalloc(sbuf.st_size+1);
 	n = retry_read(fd, buf, sbuf.st_size);
-	close(fd);
 	if (n != sbuf.st_size)
 	    goto done;
 
@@ -207,6 +207,7 @@ static int proc_foreach_helper(pid_t pid, procdata_t *func, void *rock)
     }
 
 done:
+    xclose(fd);
     free(buf);
     free(path);
     return r;
