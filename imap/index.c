@@ -394,11 +394,15 @@ EXPORTED int index_expunge(struct index_state *state, char *sequence,
 	if (index_reload_record(state, msgno, &record))
 	    continue;
 
-	if (!im->isseen)
+	if (!im->isseen) {
 	    state->numunseen--;
+	    im->isseen = 1;
+	}
 
-	if (im->isrecent)
+	if (im->isrecent) {
 	    state->numrecent--;
+	    im->isrecent = 0;
+	}
 
 	/* set the flags */
 	record.system_flags |= FLAG_DELETED | FLAG_EXPUNGED;
