@@ -88,7 +88,7 @@ EXPORTED void notify(const char *method,
 	    const char *message)
 {
     const char *notify_sock;
-    int soc;
+    int soc = -1;
     struct sockaddr_un sun_data;
     char buf[NOTIFY_MAXSIZE] = "", noptstr[20];
     int buflen = 0;
@@ -97,7 +97,7 @@ EXPORTED void notify(const char *method,
     soc = socket(AF_UNIX, SOCK_DGRAM, 0);
     if (soc == -1) {
 	syslog(LOG_ERR, "unable to create notify socket(): %m");
-	return;
+	goto out;
     }
 
     memset((char *)&sun_data, 0, sizeof(sun_data));
@@ -137,18 +137,22 @@ EXPORTED void notify(const char *method,
     if (r) {
         syslog(LOG_ERR, "notify datagram too large, %s, %s",
 	       user, mailbox);
-	close(soc);
-	return;
+	goto out;
     }
 
     r = sendto(soc, buf, buflen, 0,
 	       (struct sockaddr *)&sun_data, sizeof(sun_data));
-    if (r < buflen) {
+
+    if (r < 0) {
 	syslog(LOG_ERR, "unable to sendto() notify socket: %m");
-	return;
+	goto out;
+    }
+    if (r < buflen) {
+	syslog(LOG_ERR, "short write to notify socket");
+	goto out;
     }
 
-    close(soc);
-
+out:
+    xclose(soc);
     return;
 }
