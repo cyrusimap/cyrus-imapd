@@ -1122,7 +1122,7 @@ static int do_reserve(struct dlist *kl, struct sync_reserve_list *reserve_list)
     struct dlist *ml;
     struct dlist *gl;
     struct dlist *i;
-    struct dlist *kout;
+    struct dlist *kout = NULL;
 
     if (!dlist_getatom(kl, "PARTITION", &partition)) goto parse_err;
     if (!dlist_getlist(kl, "MBOXNAME", &ml)) goto parse_err;
@@ -1182,6 +1182,7 @@ static int do_reserve(struct dlist *kl, struct sync_reserve_list *reserve_list)
     return 0;
 
  parse_err:
+    dlist_free(&kout);
     sync_name_list_free(&folder_names);
     mboxlist_entry_free(&mbentry);
 
