@@ -116,7 +116,7 @@ static const char *get_script_name(const char *filename)
 static int autocreate_sieve(const char *userid, const char *source_script)
 {
     /* XXX - this is really ugly, but too much work to tidy up right now -- Bron */
-    const char *sieve_dir = user_sieve_path(userid);
+    const char *sieve_dir = NULL;
     sieve_script_t *s = NULL;
     bytecode_info_t *bc = NULL;
     char *err = NULL;
