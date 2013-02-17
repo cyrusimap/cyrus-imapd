@@ -223,7 +223,7 @@ static void closesyncfd(struct dbengine *db __attribute__((unused)),
 static int myinit(const char *dbdir, int myflags)
 {
     char sfile[1024];
-    int fd, r = 0;
+    int fd = -1, r = 0;
     uint32_t net32_time;
 
     snprintf(sfile, sizeof(sfile), "%s/skipstamp", dbdir);
@@ -253,11 +253,11 @@ static int myinit(const char *dbdir, int myflags)
 	if (r != -1) r = ftruncate(fd, 0);
 	net32_time = htonl(global_recovery);
 	if (r != -1) r = write(fd, &net32_time, 4);
-	if (r != -1) r = close(fd);
+	xclose(fd);
 
 	if (r == -1) {
 	    syslog(LOG_ERR, "DBERROR: writing %s: %m", sfile);
-	    if (fd != -1) close(fd);
+	    xclose(fd);
 	    return CYRUSDB_IOERROR;
 	}
     } else {
@@ -267,7 +267,7 @@ normal:
 	fd = open(sfile, O_RDONLY, 0644);
 	if (fd == -1) r = -1;
 	if (r != -1) r = read(fd, &net32_time, 4);
-	if (r != -1) r = close(fd);
+	xclose(fd);
 
 	if (r == -1) {
 	    syslog(LOG_ERR, "DBERROR: reading %s, assuming the worst: %m", 
