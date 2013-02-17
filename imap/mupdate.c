@@ -1452,6 +1452,7 @@ static struct mbent *database_lookup(const char *name, struct mpool *pool)
     out->server = (pool) ? mpool_strdup(pool, server)
 			 : xstrdup(server);
 
+    free(server);
     mboxlist_entry_free(&mbentry);
 
     return out;
