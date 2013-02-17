@@ -1012,11 +1012,12 @@ static int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
     char inbase64[4096];
     int inbase64len;
     char cmdbuf[40];
-    int sendliteral = sasl_cmd->quote;
+    int sendliteral;
     int initial_response = 1;
     imt_stat status;
     
     if (!sasl_cmd || !sasl_cmd->cmd) return IMTEST_FAIL;
+    sendliteral = sasl_cmd->quote;
     
     do { /* start authentication */
 	saslresult = sasl_client_start(conn, mechlist, &client_interact,
