@@ -408,6 +408,7 @@ static int myfetch(struct dbengine *db, char *quota_path,
 	    if (r == -1) {
 		syslog(LOG_ERR, "IOERROR: %s quota %s: %m", lockfailaction,
 		       quota_path);
+		xclose(quota_fd);
 		return CYRUSDB_IOERROR;
 	    }
 
@@ -703,6 +704,7 @@ static int mystore(struct dbengine *db,
 	    if (r == -1) {
 		syslog(LOG_ERR, "IOERROR: %s quota %s: %m", lockfailaction,
 		       quota_path);
+		xclose(fd);
 		return CYRUSDB_IOERROR;
 	    }
 	}
