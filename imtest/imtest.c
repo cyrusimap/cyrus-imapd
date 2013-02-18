@@ -951,7 +951,7 @@ static void interaction (int id, const char *challenge, const char *prompt,
     } else {
 	int c;
 	
-	if (((id==SASL_CB_ECHOPROMPT) || (id=SASL_CB_NOECHOPROMPT)) &&
+	if (((id==SASL_CB_ECHOPROMPT) || (id==SASL_CB_NOECHOPROMPT)) &&
 	    (challenge != NULL)) {
 	    printf("Server challenge: %s\n", challenge);
 	}
