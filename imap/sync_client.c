@@ -1380,7 +1380,7 @@ static int mailbox_full_update(const char *mboxname)
     }
 
 done:
-    if (r)
+    if (r && mailbox)
 	annotate_state_abort(&mailbox->annot_state);
     mailbox_close(&mailbox);
 
