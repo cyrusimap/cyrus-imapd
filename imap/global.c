@@ -190,15 +190,15 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     prefix = config_getstring(IMAPOPT_SYSLOG_PREFIX);
     facility = config_getstring(IMAPOPT_SYSLOG_FACILITY);
 
-    /* Reopen the log with the new prefix, if needed  */    
+    /* Reopen the log with the new prefix, if needed  */
     if (prefix || facility) {
-	int size = strlen(prefix) + 1 + strlen(ident) + 1;
-	char *ident_buf = xmalloc(size);
+	char *ident_buf;
 	int facnum = facility ? get_facility(facility) : SYSLOG_FACILITY;
-	
-	strlcpy(ident_buf, prefix, size);
-	strlcat(ident_buf, "/", size);
-	strlcat(ident_buf, ident, size);
+
+	if (prefix)
+	    ident_buf = strconcat(prefix, "/", ident, (char *)NULL);
+	else
+	    ident_buf = xstrdup(ident);
 
 	closelog();
 	openlog(ident_buf, syslog_opts, facnum);
