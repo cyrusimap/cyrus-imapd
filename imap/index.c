@@ -1214,7 +1214,7 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
 	}
 
 	r = index_reload_record(state, msgno, &record);
-	if (r) return r;
+	if (r) goto out;
 
 	switch (storeargs->operation) {
 	case STORE_ADD_FLAGS:
