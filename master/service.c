@@ -427,7 +427,14 @@ int main(int argc, char **argv, char **envp)
 	fd = -1;
 	while (fd < 0 && !signals_poll()) { /* loop until we succeed */
 	    /* check current process file inode, size and mtime */
-	    stat(path, &sbuf);
+	    int r = stat(path, &sbuf);
+	    if (r < 0) {
+		/* This might happen transiently during a package
+		 * upgrade or permanently after package removal.
+		 * In either case, it's time to die. */
+		syslog(LOG_INFO, "cannot stat process file: %m");
+		break;
+	    }
 	    if (sbuf.st_ino != start_ino || sbuf.st_size != start_size ||
 		sbuf.st_mtime != start_mtime) {
 		syslog(LOG_INFO, "process file has changed");
