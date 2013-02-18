@@ -247,6 +247,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
 	    do_compile = 1;
 	    if(lseek(out_fd, 0, SEEK_SET)) {
 		syslog(LOG_WARNING, "autocreate_sieve: Major IO problem. Aborting");
+		xclose(out_fd);
 		return 1;
 	    }
 	}
@@ -327,6 +328,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
 
     if(feof(in_stream)) {
 	fclose(out_fp);
+	fclose(in_stream);
     } else { /* ferror */
 	fclose(out_fp);
 	unlink(sieve_tmpname);
