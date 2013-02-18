@@ -162,42 +162,32 @@ EXPORTED int sieve_interp_free(sieve_interp_t **interp)
 }
 
 /* add the callbacks */
-EXPORTED int sieve_register_redirect(sieve_interp_t *interp, sieve_callback *f)
+EXPORTED void sieve_register_redirect(sieve_interp_t *interp, sieve_callback *f)
 {
     interp->redirect = f;
-
-    return SIEVE_OK;
 }
 
-EXPORTED int sieve_register_discard(sieve_interp_t *interp, sieve_callback *f)
+EXPORTED void sieve_register_discard(sieve_interp_t *interp, sieve_callback *f)
 {
     interp->discard = f;
-
-    return SIEVE_OK;
 }
 
-EXPORTED int sieve_register_reject(sieve_interp_t *interp, sieve_callback *f)
+EXPORTED void sieve_register_reject(sieve_interp_t *interp, sieve_callback *f)
 {
     interp->reject = f;
-
-    return SIEVE_OK;
 }
 
-EXPORTED int sieve_register_fileinto(sieve_interp_t *interp, sieve_callback *f)
+EXPORTED void sieve_register_fileinto(sieve_interp_t *interp, sieve_callback *f)
 {
     interp->fileinto = f;
-
-    return SIEVE_OK;
 }
 
-EXPORTED int sieve_register_keep(sieve_interp_t *interp, sieve_callback *f)
+EXPORTED void sieve_register_keep(sieve_interp_t *interp, sieve_callback *f)
 {
     interp->keep = f;
- 
-    return SIEVE_OK;
 }
 
-EXPORTED int sieve_register_imapflags(sieve_interp_t *interp, const strarray_t *mark)
+EXPORTED void sieve_register_imapflags(sieve_interp_t *interp, const strarray_t *mark)
 {
     static strarray_t default_mark = STRARRAY_INITIALIZER;
 
@@ -206,47 +196,38 @@ EXPORTED int sieve_register_imapflags(sieve_interp_t *interp, const strarray_t *
 
     interp->markflags =
 	(mark && mark->data && mark->count) ? mark : &default_mark;
-
-    return SIEVE_OK;
 }
 
-EXPORTED int sieve_register_notify(sieve_interp_t *interp, sieve_callback *f)
+EXPORTED void sieve_register_notify(sieve_interp_t *interp, sieve_callback *f)
 {
     interp->notify = f;
- 
-    return SIEVE_OK;
 }
 
 /* add the callbacks for messages. again, undefined if used after
    sieve_script_parse */
-EXPORTED int sieve_register_size(sieve_interp_t *interp, sieve_get_size *f)
+EXPORTED void sieve_register_size(sieve_interp_t *interp, sieve_get_size *f)
 {
     interp->getsize = f;
-    return SIEVE_OK;
 }
 
-EXPORTED int sieve_register_header(sieve_interp_t *interp, sieve_get_header *f)
+EXPORTED void sieve_register_header(sieve_interp_t *interp, sieve_get_header *f)
 {
     interp->getheader = f;
-    return SIEVE_OK;
 }
 
-EXPORTED int sieve_register_envelope(sieve_interp_t *interp, sieve_get_envelope *f)
+EXPORTED void sieve_register_envelope(sieve_interp_t *interp, sieve_get_envelope *f)
 {
     interp->getenvelope = f;
-    return SIEVE_OK;
 }
 
-EXPORTED int sieve_register_include(sieve_interp_t *interp, sieve_get_include *f)
+EXPORTED void sieve_register_include(sieve_interp_t *interp, sieve_get_include *f)
 {
     interp->getinclude = f;
-    return SIEVE_OK;
 }
 
-EXPORTED int sieve_register_body(sieve_interp_t *interp, sieve_get_body *f)
+EXPORTED void sieve_register_body(sieve_interp_t *interp, sieve_get_body *f)
 {
     interp->getbody = f;
-    return SIEVE_OK;
 }
 
 EXPORTED int sieve_register_vacation(sieve_interp_t *interp, sieve_vacation_t *v)
@@ -268,16 +249,14 @@ EXPORTED int sieve_register_vacation(sieve_interp_t *interp, sieve_vacation_t *v
     return SIEVE_OK;
 }
 
-EXPORTED int sieve_register_parse_error(sieve_interp_t *interp, sieve_parse_error *f)
+EXPORTED void sieve_register_parse_error(sieve_interp_t *interp, sieve_parse_error *f)
 {
     interp->err = f;
-    return SIEVE_OK;
 }
 
-EXPORTED int sieve_register_execute_error(sieve_interp_t *interp, sieve_execute_error *f)
+EXPORTED void sieve_register_execute_error(sieve_interp_t *interp, sieve_execute_error *f)
 {
     interp->execute_err = f;
-    return SIEVE_OK;
 }
 
 int interp_verify(sieve_interp_t *i)

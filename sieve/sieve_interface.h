@@ -144,31 +144,31 @@ int sieve_interp_free(sieve_interp_t **interp);
 
 /* add the callbacks for actions. undefined behavior results if these
    are called after sieve_script_parse is called! */
-int sieve_register_redirect(sieve_interp_t *interp, sieve_callback *f);
-int sieve_register_discard(sieve_interp_t *interp, sieve_callback *f);
-int sieve_register_reject(sieve_interp_t *interp, sieve_callback *f);
-int sieve_register_fileinto(sieve_interp_t *interp, sieve_callback *f);
-int sieve_register_keep(sieve_interp_t *interp, sieve_callback *f);
+void sieve_register_redirect(sieve_interp_t *interp, sieve_callback *f);
+void sieve_register_discard(sieve_interp_t *interp, sieve_callback *f);
+void sieve_register_reject(sieve_interp_t *interp, sieve_callback *f);
+void sieve_register_fileinto(sieve_interp_t *interp, sieve_callback *f);
+void sieve_register_keep(sieve_interp_t *interp, sieve_callback *f);
 int sieve_register_vacation(sieve_interp_t *interp, sieve_vacation_t *v);
-int sieve_register_imapflags(sieve_interp_t *interp, const strarray_t *mark);
-int sieve_register_notify(sieve_interp_t *interp, sieve_callback *f);
-int sieve_register_include(sieve_interp_t *interp, sieve_get_include *f);
+void sieve_register_imapflags(sieve_interp_t *interp, const strarray_t *mark);
+void sieve_register_notify(sieve_interp_t *interp, sieve_callback *f);
+void sieve_register_include(sieve_interp_t *interp, sieve_get_include *f);
 
 /* add the callbacks for messages. again, undefined if used after
    sieve_script_parse */
-int sieve_register_size(sieve_interp_t *interp, sieve_get_size *f);
-int sieve_register_header(sieve_interp_t *interp, sieve_get_header *f);
-int sieve_register_envelope(sieve_interp_t *interp, sieve_get_envelope *f);
-int sieve_register_body(sieve_interp_t *interp, sieve_get_body *f);
+void sieve_register_size(sieve_interp_t *interp, sieve_get_size *f);
+void sieve_register_header(sieve_interp_t *interp, sieve_get_header *f);
+void sieve_register_envelope(sieve_interp_t *interp, sieve_get_envelope *f);
+void sieve_register_body(sieve_interp_t *interp, sieve_get_body *f);
 
 typedef int sieve_parse_error(int lineno, const char *msg, 
 			      void *interp_context,
 			      void *script_context);
-int sieve_register_parse_error(sieve_interp_t *interp, sieve_parse_error *f);
+void sieve_register_parse_error(sieve_interp_t *interp, sieve_parse_error *f);
 
 typedef int sieve_execute_error(const char *msg, void *interp_context,
 				void *script_context, void *message_context);
-int sieve_register_execute_error(sieve_interp_t *interp, 
+void sieve_register_execute_error(sieve_interp_t *interp, 
 				 sieve_execute_error *f);
  
 /* given an interpretor and a script, produce an executable script */

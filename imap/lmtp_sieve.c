@@ -772,69 +772,19 @@ sieve_interp_t *setup_sieve(void)
     interp = sieve_interp_alloc(NULL);
     assert(interp != NULL);
 
-    res = sieve_register_redirect(interp, &sieve_redirect);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_redirect() returns %d\n", res);
-	fatal("sieve_register_redirect()", EC_SOFTWARE);
-    }
-    res = sieve_register_discard(interp, &sieve_discard);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_discard() returns %d\n", res);
-	fatal("sieve_register_discard()", EC_SOFTWARE);
-    }
-    res = sieve_register_reject(interp, &sieve_reject);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_reject() returns %d\n", res);
-	fatal("sieve_register_reject()", EC_SOFTWARE);
-    }
-    res = sieve_register_fileinto(interp, &sieve_fileinto);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_fileinto() returns %d\n", res);
-	fatal("sieve_register_fileinto()", EC_SOFTWARE);
-    }
-    res = sieve_register_keep(interp, &sieve_keep);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_keep() returns %d\n", res);
-	fatal("sieve_register_keep()", EC_SOFTWARE);
-    }
-    res = sieve_register_imapflags(interp, &mark);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_imapflags() returns %d\n", res);
-	fatal("sieve_register_imapflags()", EC_SOFTWARE);
-    }
-    res = sieve_register_notify(interp, &sieve_notify);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_notify() returns %d\n", res);
-	fatal("sieve_register_notify()", EC_SOFTWARE);
-    }
-    res = sieve_register_size(interp, &getsize);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_size() returns %d\n", res);
-	fatal("sieve_register_size()", EC_SOFTWARE);
-    }
-    res = sieve_register_header(interp, &getheader);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_header() returns %d\n", res);
-	fatal("sieve_register_header()", EC_SOFTWARE);
-    }
+    sieve_register_redirect(interp, &sieve_redirect);
+    sieve_register_discard(interp, &sieve_discard);
+    sieve_register_reject(interp, &sieve_reject);
+    sieve_register_fileinto(interp, &sieve_fileinto);
+    sieve_register_keep(interp, &sieve_keep);
+    sieve_register_imapflags(interp, &mark);
+    sieve_register_notify(interp, &sieve_notify);
+    sieve_register_size(interp, &getsize);
+    sieve_register_header(interp, &getheader);
 
-    res = sieve_register_envelope(interp, &getenvelope);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR,"sieve_register_envelope() returns %d\n", res);
-	fatal("sieve_register_envelope()", EC_SOFTWARE);
-    }
-    
-    res = sieve_register_body(interp, &getbody);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR,"sieve_register_body() returns %d\n", res);
-	fatal("sieve_register_body()", EC_SOFTWARE);
-    }
-    
-    res = sieve_register_include(interp, &getinclude);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR,"sieve_register_include() returns %d\n", res);
-	fatal("sieve_register_include()", EC_SOFTWARE);
-    }
+    sieve_register_envelope(interp, &getenvelope);
+    sieve_register_body(interp, &getbody);
+    sieve_register_include(interp, &getinclude);
 
     res = sieve_register_vacation(interp, &vacation);
     if (res != SIEVE_OK) {
@@ -842,18 +792,8 @@ sieve_interp_t *setup_sieve(void)
 	fatal("sieve_register_vacation()", EC_SOFTWARE);
     }
 
-    res = sieve_register_parse_error(interp, &sieve_parse_error_handler);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_parse_error() returns %d\n", res);
-	fatal("sieve_register_parse_error()", EC_SOFTWARE);
-    }
- 
-    res = sieve_register_execute_error(interp, 
-				       &sieve_execute_error_handler);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_register_execute_error() returns %d\n", res);
-	fatal("sieve_register_execute_error()", EC_SOFTWARE);
-    }
+    sieve_register_parse_error(interp, &sieve_parse_error_handler);
+    sieve_register_execute_error(interp, &sieve_execute_error_handler);
 
     return interp;
 }

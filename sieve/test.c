@@ -561,61 +561,16 @@ int main(int argc, char *argv[])
     i = sieve_interp_alloc(&force_fail);
     assert(i != NULL);
 
-    res = sieve_register_redirect(i, redirect);
-    if (res != SIEVE_OK) {
-	printf("sieve_register_redirect() returns %d\n", res);
-	exit(1);
-    }
-    res = sieve_register_discard(i, discard);
-    if (res != SIEVE_OK) {
-	printf("sieve_register_discard() returns %d\n", res);
-	exit(1);
-    }
-    res = sieve_register_reject(i, reject);
-    if (res != SIEVE_OK) {
-	printf("sieve_register_reject() returns %d\n", res);
-	exit(1);
-    }
-    res = sieve_register_fileinto(i, fileinto);
-    if (res != SIEVE_OK) {
-	printf("sieve_register_fileinto() returns %d\n", res);
-	exit(1);
-    }
-    res = sieve_register_keep(i, keep);
-    if (res != SIEVE_OK) {
-	printf("sieve_register_keep() returns %d\n", res);
-	exit(1);
-    }
-
-    res = sieve_register_size(i, getsize);
-    if (res != SIEVE_OK) {
-	printf("sieve_register_size() returns %d\n", res);
-	exit(1);
-    }
-
-    res = sieve_register_header(i, getheader);
-    if (res != SIEVE_OK) {
-	printf("sieve_register_header() returns %d\n", res);
-	exit(1);
-    }
-
-    res = sieve_register_envelope(i, getenvelope);
-    if (res != SIEVE_OK) {
-	printf("sieve_register_envelope() returns %d\n", res);
-	exit(1);
-    }
-
-    res = sieve_register_body(i, getbody);
-    if (res != SIEVE_OK) {
-	printf("sieve_register_body() returns %d\n", res);
-	exit(1);
-    }
-
-    res = sieve_register_include(i, getinclude);
-    if (res != SIEVE_OK) {
-	printf("sieve_register_include() returns %d\n", res);
-	exit(1);
-    }
+    sieve_register_redirect(i, redirect);
+    sieve_register_discard(i, discard);
+    sieve_register_reject(i, reject);
+    sieve_register_fileinto(i, fileinto);
+    sieve_register_keep(i, keep);
+    sieve_register_size(i, getsize);
+    sieve_register_header(i, getheader);
+    sieve_register_envelope(i, getenvelope);
+    sieve_register_body(i, getbody);
+    sieve_register_include(i, getinclude);
 
     res = sieve_register_vacation(i, &vacation);
     if (res != SIEVE_OK) {
@@ -624,30 +579,11 @@ int main(int argc, char *argv[])
     }
 
     strarray_append(&mark, "\\flagged");
-    res = sieve_register_imapflags(i, &mark);
+    sieve_register_imapflags(i, &mark);
 
-    if (res != SIEVE_OK) {
-	printf("sieve_register_imapflags() returns %d\n", res);
-	exit(1);
-    }
-
-    res = sieve_register_notify(i, notify);
-    if (res != SIEVE_OK) {
-	printf("sieve_register_notify() returns %d\n", res);
-	exit(1);
-    }
-
-    res = sieve_register_parse_error(i, mysieve_error);
-    if (res != SIEVE_OK) {
-	printf("sieve_register_parse_error() returns %d\n", res);
-	exit(1);
-    }
-
-    res = sieve_register_execute_error(i, mysieve_execute_error);
-    if (res != SIEVE_OK) {
-	printf("sieve_register_execute_error() returns %d\n", res);
-        exit(1);
-    }
+    sieve_register_notify(i, notify);
+    sieve_register_parse_error(i, mysieve_error);
+    sieve_register_execute_error(i, mysieve_execute_error);
 
     res = sieve_script_load(script, &exe);
     if (res != SIEVE_OK) {
