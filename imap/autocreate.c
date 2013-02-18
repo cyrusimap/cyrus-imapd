@@ -474,75 +474,75 @@ static int is_script_parsable(FILE *stream, char **errstr, sieve_script_t **ret)
     res = sieve_interp_alloc(&i, NULL);
     if (res != SIEVE_OK) {
 	syslog(LOG_WARNING, "sieve_interp_alloc() returns %d\n", res);
-	return TIMSIEVE_FAIL;
+	goto out;
     }
 
     res = sieve_register_redirect(i, (sieve_callback *) &foo);
     if (res != SIEVE_OK) {
 	syslog(LOG_WARNING, "sieve_register_redirect() returns %d\n", res);
-	return TIMSIEVE_FAIL;
+	goto out;
     }
     res = sieve_register_discard(i, (sieve_callback *) &foo);
     if (res != SIEVE_OK) {
 	syslog(LOG_WARNING, "sieve_register_discard() returns %d\n", res);
-	return TIMSIEVE_FAIL;
+	goto out;
     }
     res = sieve_register_reject(i, (sieve_callback *) &foo);
     if (res != SIEVE_OK) {
 	syslog(LOG_WARNING, "sieve_register_reject() returns %d\n", res);
-	return TIMSIEVE_FAIL;
+	goto out;
     }
     res = sieve_register_fileinto(i, (sieve_callback *) &foo);
     if (res != SIEVE_OK) {
 	syslog(LOG_WARNING, "sieve_register_fileinto() returns %d\n", res);
-	return TIMSIEVE_FAIL;
+	goto out;
     }
     res = sieve_register_keep(i, (sieve_callback *) &foo);
     if (res != SIEVE_OK) {
 	syslog(LOG_WARNING, "sieve_register_keep() returns %d\n", res);
-	return TIMSIEVE_FAIL;
+	goto out;
     }
 
     res = sieve_register_imapflags(i, NULL);
     if (res != SIEVE_OK) {
 	syslog(LOG_WARNING, "sieve_register_imapflags() returns %d\n", res);
-	return TIMSIEVE_FAIL;
+	goto out;
     }
 
     res = sieve_register_size(i, (sieve_get_size *) &foo);
     if (res != SIEVE_OK) {
 	syslog(LOG_WARNING, "sieve_register_size() returns %d\n", res);
-	return TIMSIEVE_FAIL;
+	goto out;
     }
 
     res = sieve_register_header(i, (sieve_get_header *) &foo);
     if (res != SIEVE_OK) {
 	syslog(LOG_WARNING, "sieve_register_header() returns %d\n", res);
-	return TIMSIEVE_FAIL;
+	goto out;
     }
 
     res = sieve_register_envelope(i, (sieve_get_envelope *) &foo);
     if (res != SIEVE_OK) {
 	syslog(LOG_WARNING, "sieve_register_envelope() returns %d\n", res);
-	return TIMSIEVE_FAIL;
+	goto out;
     }
 
     res = sieve_register_vacation(i, &vacation2);
     if (res != SIEVE_OK) {
 	syslog(LOG_WARNING, "sieve_register_vacation() returns %d\n", res);
-	return TIMSIEVE_FAIL;
+	goto out;
     }
 
     res = sieve_register_notify(i, &sieve_notify);
     if (res != SIEVE_OK) {
 	syslog(LOG_WARNING, "sieve_register_notify() returns %d\n", res);
-	return TIMSIEVE_FAIL;
+	goto out;
     }
 
     res = sieve_register_parse_error(i, &mysieve_error);
     if (res != SIEVE_OK) {
 	syslog(LOG_WARNING, "sieve_register_parse_error() returns %d\n", res);
-	return TIMSIEVE_FAIL;
+	goto out;
     }
 
     rewind(stream);
@@ -562,6 +562,7 @@ static int is_script_parsable(FILE *stream, char **errstr, sieve_script_t **ret)
 	*errstr = NULL;
     }
 
+out:
     /* free interpreter */
     sieve_interp_free(&i);
 
