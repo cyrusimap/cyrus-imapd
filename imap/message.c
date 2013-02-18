@@ -3123,7 +3123,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
 	    msgid = lcase(msgid);
 
 	    /* already seen this one? */
-	    if (strarray_find(&msgidlist, msgid, 0) < 0)
+	    if (strarray_find(&msgidlist, msgid, 0) >= 0)
 		continue;
 
 	    strarray_append(&msgidlist, msgid);
