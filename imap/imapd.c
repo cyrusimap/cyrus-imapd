@@ -7824,11 +7824,11 @@ static int parse_annotate_fetch_data(const char *tag,
 	    c = getastring(imapd_in, imapd_out, &arg);
 	else
 	    c = getqstring(imapd_in, imapd_out, &arg);
-	    if (c == EOF) {
-		prot_printf(imapd_out,
-			    "%s BAD Missing annotation attribute\r\n", tag);
-		goto baddata;
-	    }
+	if (c == EOF) {
+	    prot_printf(imapd_out,
+			"%s BAD Missing annotation attribute\r\n", tag);
+	    goto baddata;
+	}
 
 	strarray_append(attribs, arg.s);
    }
