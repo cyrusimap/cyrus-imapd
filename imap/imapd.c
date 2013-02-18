@@ -3323,7 +3323,7 @@ static int append_catenate(FILE *f, const char *cur_name, unsigned *totalsize,
 	}
 
 	if (!strcasecmp(arg.s, "TEXT")) {
-	    int r1 = catenate_text(!r ? f : NULL, totalsize, binary, parseerr);
+	    int r1 = catenate_text(f, totalsize, binary, parseerr);
 	    if (r1) return r1;
 
 	    /* if we see a SP, we're trying to catenate more than one part */
