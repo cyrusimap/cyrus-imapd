@@ -3123,10 +3123,12 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
 	    msgid = lcase(msgid);
 
 	    /* already seen this one? */
-	    if (strarray_find(&msgidlist, msgid, 0) >= 0)
+	    if (strarray_find(&msgidlist, msgid, 0) >= 0) {
+		free(msgid);
 		continue;
+	    }
 
-	    strarray_append(&msgidlist, msgid);
+	    strarray_appendm(&msgidlist, msgid);
 
 	    /* Lookup the conversations database to work out which
 	     * conversation ids that message belongs to. */
