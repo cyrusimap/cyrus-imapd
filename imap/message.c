@@ -3173,7 +3173,8 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
 	for (i = 0 ; i < matchlist.count ; i++)
 	    conversations_rename_cid(state, arrayu64_nth(&matchlist, i), newcid);
 
-	if (!record->cid) record->cid = newcid;
+	if (record->cid) conversations_rename_cid(state, record->cid, newcid);
+	else record->cid = newcid;
     }
 
     if (!record->cid) goto out;
