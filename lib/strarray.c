@@ -177,6 +177,7 @@ EXPORTED int strarray_appendm(strarray_t *sa, char *s)
 {
     int pos = sa->count++;
     ensure_alloc(sa, sa->count);
+    /* coverity[var_deref_op] */
     sa->data[pos] = s;
     return pos;
 }
