@@ -369,19 +369,23 @@ static int do_one_rename(void *rock,
     if (r) return r;
 
     r = _conversations_parse(data, datalen, &cids, &stamp);
-    if (r) return r;
+    if (r) goto done;
 
     rrock->entries_seen++;
 
     removed = arrayu64_remove_all(&cids, rrock->from_cid);
-    if (!removed) return 0;
+    if (!removed) goto done;
 
     arrayu64_add(&cids, rrock->to_cid);
 
     rrock->entries_renamed++;
 
-    return _conversations_set_key(rrock->state, key, keylen,
-				  &cids, stamp);
+    r = _conversations_set_key(rrock->state, key, keylen,
+			       &cids, stamp);
+
+done:
+    arrayu64_fini(&cids);
+    return r;
 }
 
 EXPORTED void conversations_rename_cidentry(struct conversations_state *state,
