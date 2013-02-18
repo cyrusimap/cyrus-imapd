@@ -1566,8 +1566,6 @@ static int myforeach(struct dbengine *db,
 		r = read_lock(db);
 		if (r) goto done;
 		need_unlock = 1;
-		/* reposition, something might have fiddled things meanwhile */
-		if (r) goto done;
 	    }
 
 	    /* should be cheap if we're already here */
@@ -1860,7 +1858,6 @@ static int dump(struct dbengine *db, int detail __attribute__((unused)))
 	printf("%08llX ", (LLU)offset);
 
 	r = read_onerecord(db, offset, &record);
-	if (r) return r;
 
 	if (r) {
 	    printf("ERROR\n");
