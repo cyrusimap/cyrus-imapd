@@ -769,11 +769,8 @@ sieve_interp_t *setup_sieve(void)
 	sieve_dir = NULL;
     }
 
-    res = sieve_interp_alloc(&interp, NULL);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_interp_alloc() returns %d\n", res);
-	fatal("sieve_interp_alloc()", EC_SOFTWARE);
-    }
+    interp = sieve_interp_alloc(NULL);
+    assert(interp != NULL);
 
     res = sieve_register_redirect(interp, &sieve_redirect);
     if (res != SIEVE_OK) {

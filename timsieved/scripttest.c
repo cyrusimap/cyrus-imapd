@@ -55,6 +55,7 @@
 
 #include "xmalloc.h"
 #include "util.h"
+#include "assert.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -94,12 +95,9 @@ static int mysieve_error(int lineno, const char *msg,
 int build_sieve_interp(void)
 {
     int res;
-  
-    res = sieve_interp_alloc(&interp, NULL);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_interp_alloc() returns %d\n", res);
-	return TIMSIEVE_FAIL;
-    }
+
+    interp = sieve_interp_alloc(NULL);
+    assert(interp != NULL);
 
     res = sieve_register_redirect(interp, (sieve_callback *) &foo);
     if (res != SIEVE_OK) {

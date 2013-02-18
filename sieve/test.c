@@ -558,11 +558,8 @@ int main(int argc, char *argv[])
 	}
     }
 
-    res = sieve_interp_alloc(&i, &force_fail);
-    if (res != SIEVE_OK) {
-	printf("sieve_interp_alloc() returns %d\n", res);
-	exit(1);
-    }
+    i = sieve_interp_alloc(&force_fail);
+    assert(i != NULL);
 
     res = sieve_register_redirect(i, redirect);
     if (res != SIEVE_OK) {

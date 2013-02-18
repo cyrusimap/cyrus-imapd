@@ -139,7 +139,7 @@ typedef struct sieve_send_response_context {
 } sieve_send_response_context_t;
 
 /* build a sieve interpretor */
-int sieve_interp_alloc(sieve_interp_t **interp, void *interp_context);
+sieve_interp_t *sieve_interp_alloc(void *interp_context);
 int sieve_interp_free(sieve_interp_t **interp);
 
 /* add the callbacks for actions. undefined behavior results if these

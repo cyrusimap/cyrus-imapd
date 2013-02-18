@@ -55,6 +55,7 @@
 
 #include "script.h"
 #include "util.h"
+#include "assert.h"
 #include <string.h> 
 #include <stdlib.h>
 #include <sys/file.h>
@@ -186,11 +187,8 @@ static int is_script_parsable(FILE *stream, char **errstr, sieve_script_t **ret)
     struct buf errors = BUF_INITIALIZER;
     int res;
 
-    res = sieve_interp_alloc(&i, NULL);
-    if (res != SIEVE_OK) {
-	syslog(LOG_ERR, "sieve_interp_alloc() returns %d\n", res);
-	return TIMSIEVE_FAIL;
-    }
+    i = sieve_interp_alloc(NULL);
+    assert(i != NULL);
 
     res = sieve_register_redirect(i, (sieve_callback *) &foo);
     if (res != SIEVE_OK) {

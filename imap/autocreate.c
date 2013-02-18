@@ -466,11 +466,7 @@ static int is_script_parsable(FILE *stream, char **errstr, sieve_script_t **ret)
     struct buf errors = BUF_INITIALIZER;
     int res;
 
-    res = sieve_interp_alloc(&i, NULL);
-    if (res != SIEVE_OK) {
-	syslog(LOG_WARNING, "sieve_interp_alloc() returns %d\n", res);
-	goto out;
-    }
+    i = sieve_interp_alloc(NULL);
 
     res = sieve_register_redirect(i, (sieve_callback *) &foo);
     if (res != SIEVE_OK) {

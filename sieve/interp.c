@@ -61,7 +61,7 @@
 #define EXT_LEN 4096
 
 /* build a sieve interpretor */
-EXPORTED int sieve_interp_alloc(sieve_interp_t **interp, void *interp_context)
+EXPORTED sieve_interp_t *sieve_interp_alloc(void *interp_context)
 {
     sieve_interp_t *i;
     static int initonce;
@@ -71,11 +71,7 @@ EXPORTED int sieve_interp_alloc(sieve_interp_t **interp, void *interp_context)
 	initonce = 1;
     }
 
-    *interp = NULL;
     i = (sieve_interp_t *) xmalloc(sizeof(sieve_interp_t));
-    if (i == NULL) {
-	return SIEVE_NOMEM;
-    }
 
     i->redirect = i->discard = i->reject = i->fileinto = i->keep = NULL;
     i->getsize = NULL;
@@ -93,8 +89,7 @@ EXPORTED int sieve_interp_alloc(sieve_interp_t **interp, void *interp_context)
     i->lastitem = NULL;
     i->extensions[0] = '\0';
 
-    *interp = i;
-    return SIEVE_OK;
+    return i;
 }
 
 EXPORTED const char *sieve_listextensions(sieve_interp_t *i)
