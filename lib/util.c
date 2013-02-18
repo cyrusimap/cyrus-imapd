@@ -791,7 +791,7 @@ EXPORTED void buf_ensure(struct buf *buf, size_t n)
 
 EXPORTED const char *buf_cstring(struct buf *buf)
 {
-    if (!(buf->flags & BUF_CSTRING)) {
+    if (!(buf->flags & BUF_CSTRING) || buf->s == NULL) {
 	buf_ensure(buf, 1);
 	buf->s[buf->len] = '\0';
 	buf->flags |= BUF_CSTRING;
