@@ -634,7 +634,8 @@ static int foreach(struct dbengine *db,
     if (tid && !*tid) *tid = &db->txn;
 
     /* sort the quotaroots (ignoring paths) */
-    qsort(pathbuf.data, pathbuf.count, sizeof(char *), db->compar);
+    if (pathbuf.data)
+	qsort(pathbuf.data, pathbuf.count, sizeof(char *), db->compar);
 
     for (i = 0; i < pathbuf.count; i++) {
 	const char *data, *key;
