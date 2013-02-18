@@ -452,14 +452,8 @@ static int sieve_notify(void *ac __attribute__((unused)),
 static int mysieve_error(int lineno, const char *msg,
 		  void *i __attribute__((unused)), void *s)
 {
-    char buf[1024];
-    char **errstr = (char **) s;
-
-    snprintf(buf, 80, "line %d: %s\r\n", lineno, msg);
-    *errstr = (char *) xrealloc(*errstr, strlen(*errstr) + strlen(buf) + 30);
-    syslog(LOG_DEBUG, "%s", buf);
-    strcat(*errstr, buf);
-
+    struct buf *errors = (struct buf *)s;
+    buf_printf(errors, "line %d: %s\r\n", lineno, msg);
     return SIEVE_OK;
 }
 
@@ -469,6 +463,7 @@ static int is_script_parsable(FILE *stream, char **errstr, sieve_script_t **ret)
 {
     sieve_interp_t *i;
     sieve_script_t *s;
+    struct buf errors = BUF_INITIALIZER;
     int res;
 
     res = sieve_interp_alloc(&i, NULL);
@@ -547,10 +542,10 @@ static int is_script_parsable(FILE *stream, char **errstr, sieve_script_t **ret)
 
     rewind(stream);
 
-    *errstr = (char *) xmalloc(20 * sizeof(char));
-    strcpy(*errstr, "script errors:\r\n");
+    buf_appendcstr(&errors, "script errors:\r\n");
+    *errstr = NULL;
 
-    res = sieve_script_parse(i, stream, errstr, &s);
+    res = sieve_script_parse(i, stream, &errors, &s);
 
     if (res == SIEVE_OK) {
 	if(ret) {
@@ -558,9 +553,12 @@ static int is_script_parsable(FILE *stream, char **errstr, sieve_script_t **ret)
 	} else {
 	    sieve_script_free(&s);
 	}
-	free(*errstr);
-	*errstr = NULL;
     }
+    else {
+	sieve_script_free(&s);
+	*errstr = buf_release(&errors);
+    }
+    buf_free(&errors);
 
 out:
     /* free interpreter */
