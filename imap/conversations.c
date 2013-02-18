@@ -583,9 +583,9 @@ EXPORTED int conversations_add_msgid(struct conversations_state *state,
     if (r) goto done;
 
     r = conversations_get_msgid(state, msgid, &cids);
-    if (r) goto done;
 
-    if (arrayu64_find(&cids, cid, 0) < 0) {
+    /* read failure will mean cids is empty, but we can still add this one */
+    if (r || arrayu64_find(&cids, cid, 0) < 0) {
 	arrayu64_append(&cids, cid);
 	r = _conversations_set_key(state, msgid, keylen, &cids, time(NULL));
     }
