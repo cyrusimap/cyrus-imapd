@@ -233,7 +233,7 @@ static int index_reload_record(struct index_state *state,
 
     /* restore mutable fields */
     recordp->modseq = im->modseq;
-    recordp->system_flags = recordp->system_flags;
+    recordp->system_flags = im->system_flags;
     for (i = 0; i < MAX_USER_FLAGS/32; i++)
 	recordp->user_flags[i] = im->user_flags[i];
 
