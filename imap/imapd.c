@@ -9959,6 +9959,7 @@ static int xfer_backport_seen_item(struct xfer_item *item,
     r = seen_write(seendb, mailbox->uniqueid, &sd);
 
     seen_freedata(&sd);
+    seqset_free(outlist);
 
     return r;
 }
