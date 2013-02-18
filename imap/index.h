@@ -96,8 +96,8 @@ struct index_map {
     uint32_t recno;
     uint32_t system_flags;
     uint32_t user_flags[MAX_USER_FLAGS/32];
-    int isseen:1;
-    int isrecent:1;
+    unsigned int isseen:1;
+    unsigned int isrecent:1;
 };
 
 struct index_state {

@@ -3384,7 +3384,7 @@ static int index_storeflag(struct index_state *state,
     /* Change \Seen flag.  This gets done on the index first and will only be
        copied into the record later if internalseen is set */
     if (state->myrights & ACL_SETSEEN) {
-	old = im->isseen;
+	old = im->isseen ? 1 : 0;
 	new = old;
 	if (storeargs->operation == STORE_REPLACE_FLAGS)
 	    new = storeargs->seen ? 1 : 0;
