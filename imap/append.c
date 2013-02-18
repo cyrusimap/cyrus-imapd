@@ -1215,6 +1215,7 @@ HIDDEN int append_run_annotator(struct appendstate *as,
     }
 
 out:
+    if (f) fclose(f);
     freeentryatts(user_annots);
     freeentryatts(system_annots);
     strarray_fini(&flags);
