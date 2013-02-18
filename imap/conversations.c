@@ -394,6 +394,8 @@ EXPORTED void conversations_rename_cidentry(struct conversations_state *state,
 {
     struct rename_rock rrock;
 
+    if (from == to) return;
+
     memset(&rrock, 0, sizeof(rrock));
     rrock.state = state;
     rrock.from_cid = from;
