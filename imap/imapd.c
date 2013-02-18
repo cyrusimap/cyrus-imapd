@@ -7162,10 +7162,10 @@ void cmd_setquota(const char *tag, const char *quotaroot)
 	prot_putc(' ', s->out);
 	pipe_including_tag(s, tag, 0);
 
-	if (r)
-	    prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-	return;
+	goto out;
     }
+    mboxlist_entry_free(&mbentry);
+
     /* local mailbox */
 
     /* Now parse the arguments as a setquota_list */
