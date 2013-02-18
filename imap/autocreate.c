@@ -465,7 +465,6 @@ static int mysieve_error(int lineno, const char *msg,
 
 /* end the boilerplate */
 
-/* returns TRUE or FALSE */
 static int is_script_parsable(FILE *stream, char **errstr, sieve_script_t **ret)
 {
     sieve_interp_t *i;
