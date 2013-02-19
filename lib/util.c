@@ -957,9 +957,10 @@ static void buf_replace_buf(struct buf *buf,
 	buf_ensure(buf, replace->len - length);
     }
     if (length != replace->len) {
+	/* +1 to copy the NULL to keep cstring semantics */
 	memmove(buf->s + offset + replace->len,
 		buf->s + offset + length,
-		buf->len - offset - length + replace->len + 1);
+		buf->len - offset - length + 1);
 	buf->len += (replace->len - length);
     }
     if (replace->len)
