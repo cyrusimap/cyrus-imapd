@@ -1214,6 +1214,7 @@ HIDDEN int mailbox_read_header(struct mailbox *mailbox, char **aclptr)
 
     /* read uniqueid (should always exist unless old format) */
     free(mailbox->uniqueid);
+    mailbox->uniqueid = NULL;
     if (tab < eol) {
 	p = tab + 1;
 	if (p == eol) {
@@ -1223,10 +1224,8 @@ HIDDEN int mailbox_read_header(struct mailbox *mailbox, char **aclptr)
 	tab = memchr(p, '\t', sbuf.st_size - (p - base));
 	if (!tab || tab > eol) tab = eol;
 	mailbox->uniqueid = xstrndup(p, tab - p);
-    } else {
-	/* uniqueid needs to be generated when we know the uidvalidity */
-	mailbox->uniqueid = NULL;
     }
+    /* else, uniqueid needs to be generated when we know the uidvalidity */
 
     /* read special use list flags (optional) */
     free(mailbox->specialuse);
