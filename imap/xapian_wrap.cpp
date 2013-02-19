@@ -265,10 +265,14 @@ xapian_query_t *xapian_query_new_not(const xapian_db_t *db __attribute__((unused
 				     xapian_query_t *child)
 {
     try {
-	return (xapian_query_t *)new Xapian::Query(
+	Xapian::Query *qq = new Xapian::Query(
 					Xapian::Query::OP_AND_NOT,
 					Xapian::Query::MatchAll,
 					*(Xapian::Query *)child);
+	// 'compound' owns a refcount on each child.  We need to
+	// drop the one we got when we allocated the children
+	delete (Xapian::Query *)child;
+	return (xapian_query_t *)qq;
     }
     catch (const Xapian::Error &err) {
 	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
