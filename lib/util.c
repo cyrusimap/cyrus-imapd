@@ -756,6 +756,9 @@ EXPORTED void buf_ensure(struct buf *buf, size_t n)
     /* protect against wrap */
     assert(newlen >= buf->len);
 
+    if (buf->alloc >= newlen)
+	return;
+
     if (buf->alloc) {
 	buf->s = xrealloc(buf->s, newlen);
     }
