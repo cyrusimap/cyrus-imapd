@@ -376,6 +376,7 @@ static int verify_user(const char *key, struct auth_state *authstate)
 	if (connect(soc,(struct sockaddr *) &sin, sizeof(sin)) < 0) { 
 	    syslog(LOG_ERR, "verify_user(%s) failed: can't connect to %s", 
 		   namebuf, mbentry->server);
+	    close(soc);
 	    mboxlist_entry_free(&mbentry);
 	    return r;
 	}
