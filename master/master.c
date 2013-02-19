@@ -1259,6 +1259,9 @@ static void child_sighandler_setup(void)
  * 1 if no msg available
  * 2 if bad message received (incorrectly sized)
  * -1 on error (errno set)
+ *
+ * TODO: should use retry_read() which has almost the
+ * exact same semantics apart from the return value.
  */
 static int read_msg(int fd, struct notify_message *msg)
 {
@@ -1268,7 +1271,7 @@ static int read_msg(int fd, struct notify_message *msg)
 
     while (s > 0) {
         do
-            r = read(fd, msg + off, s);
+	    r = read(fd, ((char *)msg) + off, s);
         while ((r == -1) && (errno == EINTR));
         if (r <= 0) break;
         s -= r;
