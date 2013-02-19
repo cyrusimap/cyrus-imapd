@@ -771,8 +771,10 @@ EXPORTED void buf_ensure(struct buf *buf, size_t n)
 
 	/* if no allocation, but data exists, it means copy on write.
 	 * grab a copy of what's there now */
-	if (buf->len)
+	if (buf->len) {
+	    assert(buf->s);
 	    memcpy(s, buf->s, buf->len);
+	}
 
 	/* can release MMAP now, we've already copied the data out */
 	if (buf->flags & BUF_MMAP) {
