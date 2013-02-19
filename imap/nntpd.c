@@ -3310,13 +3310,16 @@ static int deliver(message_data_t *msg)
     char *rcpt = NULL;
     struct body *body = NULL;
     struct dest *dlist = NULL;
+    struct mboxlist_entry *mbentry = NULL;
     duplicate_key_t dkey = {msg->id, NULL, msg->date};
 
     /* check ACLs of all mailboxes */
     for (n = 0; n < msg->rcpt.count; n++) {
-	struct mboxlist_entry *mbentry = NULL;
 	rcpt = msg->rcpt.data[n];
 	dkey.to = rcpt;
+
+	/* free the mbentry from the last iteration */
+	mboxlist_entry_free(&mbentry);
 
 	/* look it up */
 	r = mlookup(rcpt, &mbentry);
@@ -3381,8 +3384,8 @@ static int deliver(message_data_t *msg)
 		return r;
 	    }
 	}
-	mboxlist_entry_free(&mbentry);
     }
+    mboxlist_entry_free(&mbentry);
 
     if (body) {
 	message_free_body(body);
