@@ -1668,6 +1668,7 @@ static void add_event(const char *name, struct entry *e, void *rock)
 
 	if (ignore_err) {
 	    syslog(LOG_WARNING, "WARNING: %s -- ignored", buf);
+	    free(cmd);
 	    return;
 	}
 
