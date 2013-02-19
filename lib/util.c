@@ -751,31 +751,38 @@ static size_t roundup(size_t size)
 
 EXPORTED void buf_ensure(struct buf *buf, size_t n)
 {
-    size_t newlen = roundup(buf->len + n);
+    size_t newalloc = roundup(buf->len + n);
 
     /* protect against wrap */
-    assert(newlen >= buf->len);
+    assert(newalloc >= buf->len);
 
-    if (buf->alloc >= newlen)
+    if (buf->alloc >= newalloc)
 	return;
 
     if (buf->alloc) {
-	buf->s = xrealloc(buf->s, newlen);
+	buf->s = xrealloc(buf->s, newalloc);
     }
     else {
-	char *s = xmalloc(newlen);
-	if (buf->len) /* copy on write */
+	char *s = xmalloc(newalloc);
+
+	/* if no allocation, but data exists, it means copy on write.
+	 * grab a copy of what's there now */
+	if (buf->len)
 	    memcpy(s, buf->s, buf->len);
+
+	/* can release MMAP now, we've already copied the data out */
 	if (buf->flags & BUF_MMAP) {
 	    const char *base = buf->s;
 	    size_t len = buf->len;
 	    map_free(&base, &len);
 	    buf->flags &= ~BUF_MMAP;
 	}
+
 	buf->s = s;
     }
 
-    buf->alloc = newlen;
+    /* either way, our allocated space is now this long */
+    buf->alloc = newalloc;
 }
 
 EXPORTED const char *buf_cstring(struct buf *buf)
