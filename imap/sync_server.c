@@ -2154,6 +2154,7 @@ static int do_fetchsieve(struct dlist *kin)
     dlist_setmap(kl, "CONTENT", sieve, size);
     sync_send_response(kl, sync_out);
     dlist_free(&kl);
+    free(sieve);
 
     return 0;
 }
