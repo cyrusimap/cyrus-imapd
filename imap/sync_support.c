@@ -223,6 +223,7 @@ int sync_getflags(struct dlist *kl,
 	else {
 	    if (mailbox_user_flag(mailbox, s, &userflag, 1)) {
 		syslog(LOG_ERR, "Unable to record user flag: %s", s);
+		free(s);
 		return IMAP_IOERROR;
 	    }
 	    record->user_flags[userflag/32] |= 1<<(userflag&31);
