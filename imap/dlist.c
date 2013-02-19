@@ -667,7 +667,7 @@ EXPORTED char dlist_parse(struct dlist **dlp, int parsekey, struct protstream *i
     struct dlist *dl = NULL;
     static struct buf kbuf;
     static struct buf vbuf;
-    char c;
+    int c;
 
     /* handle the key if wanted */
     if (parsekey) {
