@@ -749,9 +749,13 @@ static size_t roundup(size_t size)
     return ((size + 1024) & ~1023);
 }
 
+/* this function has a side-effect of always leaving the buffer writable */
 EXPORTED void buf_ensure(struct buf *buf, size_t n)
 {
     size_t newalloc = roundup(buf->len + n);
+
+    /* can't create a zero byte buffer */
+    assert(newalloc);
 
     /* protect against wrap */
     assert(newalloc >= buf->len);
