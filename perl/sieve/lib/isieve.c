@@ -341,6 +341,7 @@ static int getauthline(isieve_t *obj, char **line, unsigned int *linelen,
   size_t len;
   mystring_t *errstr;
   char *last_send;
+  int r;
 
   /* now let's see what the server said */
   res=yylex(&state, obj->pin);
@@ -359,10 +360,12 @@ static int getauthline(isieve_t *obj, char **line, unsigned int *linelen,
 	      len = last_send_len*2+1;
 	      *line = xmalloc(len);
 
-	      sasl_decode64(last_send, last_send_len,
-			    *line, len, linelen);
+	      r = sasl_decode64(last_send, last_send_len,
+				*line, len, linelen);
 
 	      free(last_send);
+	      if (r != SASL_OK)
+		return STAT_NO;
 	  }
 	  return STAT_OK;
       } else { /* server said no or bye*/
@@ -375,8 +378,10 @@ static int getauthline(isieve_t *obj, char **line, unsigned int *linelen,
   len = state.str->len*2+1;
   *line=(char *) xmalloc(len);
 
-  sasl_decode64(string_DATAPTR(state.str), state.str->len,
-		*line, len, linelen);
+  r = sasl_decode64(string_DATAPTR(state.str), state.str->len,
+		    *line, len, linelen);
+  if (r != SASL_OK)
+      return STAT_NO;
 
   if (yylex(&state, obj->pin)!=EOL)
       return STAT_NO;
