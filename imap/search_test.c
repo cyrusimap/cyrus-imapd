@@ -109,6 +109,8 @@ static int do_search(const char *mboxname,
     int r;
     struct timeval start_time, end_time;
 
+    memset(&init, 0, sizeof(struct index_init));
+
     for (i = 0 ; i < nwords ; i++) {
 	if (i) buf_putc(&querytext, ' ');
 	buf_appendcstr(&querytext, words[i]);
@@ -127,7 +129,6 @@ static int do_search(const char *mboxname,
     pin = prot_readmap(querytext.s, querytext.len);
     pout = prot_new(/*fd*/0, /*write*/1);
 
-    memset(&init, 0, sizeof(struct index_init));
     init.userid = userid;
     init.authstate = auth_newstate(userid);
     init.out = pout;
@@ -172,6 +173,8 @@ out:
     if (searchargs) freesearchargs(searchargs);
     search_query_free(query);
     index_close(&state);
+    buf_free(&querytext);
+    if (init.authstate) auth_freestate(init.authstate);
     return !!r;
 }
 
