@@ -1660,10 +1660,12 @@ static int do_getfullmailbox(struct dlist *kin)
     if (r) goto out;
 
     r = sync_mailbox(mailbox, NULL, NULL, kl, NULL, 1);
-    if (!r) sync_send_response(kl, sync_out);
-    dlist_free(&kl);
+    if (r) goto out;
+
+    sync_send_response(kl, sync_out);
 
 out:
+    dlist_free(&kl);
     mailbox_close(&mailbox);
     return r;
 }
