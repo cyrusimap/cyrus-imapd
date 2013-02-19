@@ -538,38 +538,22 @@ static void context_setup(sieve_test_context_t *ctx,
     ctx->compile_errors = strarray_new();
     ctx->run_errors = strarray_new();
 
-    r = sieve_interp_alloc(&ctx->interp, ctx);
-    CU_ASSERT_EQUAL(r, SIEVE_OK);
-    r = sieve_register_redirect(ctx->interp, redirect);
-    CU_ASSERT_EQUAL(r, SIEVE_OK);
-    r = sieve_register_discard(ctx->interp, discard);
-    CU_ASSERT_EQUAL(r, SIEVE_OK);
-    r = sieve_register_reject(ctx->interp, reject);
-    CU_ASSERT_EQUAL(r, SIEVE_OK);
-    r = sieve_register_fileinto(ctx->interp, fileinto);
-    CU_ASSERT_EQUAL(r, SIEVE_OK);
-    r = sieve_register_keep(ctx->interp, keep);
-    CU_ASSERT_EQUAL(r, SIEVE_OK);
-    r = sieve_register_size(ctx->interp, getsize);
-    CU_ASSERT_EQUAL(r, SIEVE_OK);
-    r = sieve_register_header(ctx->interp, getheader);
-    CU_ASSERT_EQUAL(r, SIEVE_OK);
-    r = sieve_register_envelope(ctx->interp, getheader);
-    CU_ASSERT_EQUAL(r, SIEVE_OK);
-    r = sieve_register_body(ctx->interp, getbody);
-    CU_ASSERT_EQUAL(r, SIEVE_OK);
-    r = sieve_register_include(ctx->interp, getinclude);
-    CU_ASSERT_EQUAL(r, SIEVE_OK);
-    r = sieve_register_vacation(ctx->interp, &vacation);
-    CU_ASSERT_EQUAL(r, SIEVE_OK);
-    r = sieve_register_imapflags(ctx->interp, &mark);
-    CU_ASSERT_EQUAL(r, SIEVE_OK);
-    r = sieve_register_notify(ctx->interp, notify);
-    CU_ASSERT_EQUAL(r, SIEVE_OK);
-    r = sieve_register_parse_error(ctx->interp, mysieve_error);
-    CU_ASSERT_EQUAL(r, SIEVE_OK);
-    r = sieve_register_execute_error(ctx->interp, mysieve_execute_error);
-    CU_ASSERT_EQUAL(r, SIEVE_OK);
+    ctx->interp = sieve_interp_alloc(ctx);
+    sieve_register_redirect(ctx->interp, redirect);
+    sieve_register_discard(ctx->interp, discard);
+    sieve_register_reject(ctx->interp, reject);
+    sieve_register_fileinto(ctx->interp, fileinto);
+    sieve_register_keep(ctx->interp, keep);
+    sieve_register_size(ctx->interp, getsize);
+    sieve_register_header(ctx->interp, getheader);
+    sieve_register_envelope(ctx->interp, getheader);
+    sieve_register_body(ctx->interp, getbody);
+    sieve_register_include(ctx->interp, getinclude);
+    sieve_register_vacation(ctx->interp, &vacation);
+    sieve_register_imapflags(ctx->interp, &mark);
+    sieve_register_notify(ctx->interp, notify);
+    sieve_register_parse_error(ctx->interp, mysieve_error);
+    sieve_register_execute_error(ctx->interp, mysieve_execute_error);
 
     /* Here we pretend to be the sieve compiler, and generate
      * a file of compiled bytecode from the script string */
