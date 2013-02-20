@@ -617,13 +617,16 @@ static int foreach(struct dbengine *mydb,
 	r = cursor->c_get(cursor, &k, &d, DB_SET_RANGE);
     } else {
 	r = cursor->c_get(cursor, &k, &d, DB_FIRST);
+	prefixlen = 0;
     }
     if (!tid && r == DB_LOCK_DEADLOCK) goto restart;
 	
     /* iterate over all mailboxes matching prefix */
     while (!r) {
 	/* does this match our prefix? */
-	if (prefixlen && memcmp(k.data, prefix, prefixlen)) break;
+	if (prefixlen &&
+	    !(k.size >= prefixlen &&
+	      !memcmp(k.data, prefix, prefixlen))) break;
 
 	if (!goodp || goodp(rock, k.data, k.size, DATA(&d), DATALEN(&d))) {
 	    /* we have a winner! */
