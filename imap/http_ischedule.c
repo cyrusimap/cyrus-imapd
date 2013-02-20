@@ -817,6 +817,7 @@ static void isched_init(struct buf *serverinfo)
 	/* If backend server, we require ISCHEDULE (w/o DKIM) */
 	namespace_ischedule.enabled = 1;
 	need_dkim = 0;
+	buf_len(serverinfo);  // squash compiler warning when #undef WITH_DKIM
     }
 #ifdef WITH_DKIM
     else {
