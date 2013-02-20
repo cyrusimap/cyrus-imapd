@@ -1626,8 +1626,9 @@ static int parserange(char *str, uint32_t *uid, uint32_t *last,
 	    if ((r = open_group(mboxname, 1, ret, NULL))) goto nomsgid;
 	}
     }
-    else if (backend_current)
-	*ret = backend_current;
+    else if (backend_current) {
+	if (ret) *ret = backend_current;
+    }
     else if (!group_state) goto noopengroup;
     else if (parseuint32(str, &p, uid) || uid == 0) goto badrange;
     else if (p && *p) {
