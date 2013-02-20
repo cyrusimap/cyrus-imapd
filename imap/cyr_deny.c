@@ -107,6 +107,7 @@ struct kill_rock
  * to kill all the processes for the user, and hope any others will reconnect.
  */
 static int gather_one(int pid,
+		      const char *servicename __attribute__((unused)),
 		      const char *clienthost __attribute__((unused)),
 		      const char *userid,
 		      const char *mailbox __attribute__((unused)),
