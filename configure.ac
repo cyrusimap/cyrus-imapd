@@ -1569,7 +1569,7 @@ External dependencies:
 
 Database support:
    bdb:                $use_berkeley
-   mysql:              $use_mysql
+   mysql:              $with_mysql
    postgresql:         $use_pgsql
    sqlite:             $use_sqlite
 "
