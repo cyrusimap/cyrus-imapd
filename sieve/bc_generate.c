@@ -56,7 +56,7 @@
 
 #include "bytecode.h"
 
-#include <assert.h>
+#include "assert.h"
 #include <string.h>
 
 

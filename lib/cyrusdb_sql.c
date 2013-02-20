@@ -44,12 +44,12 @@
 #include <config.h>
 
 #include <syslog.h>
-#include <assert.h>
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "assert.h"
 #include "bsearch.h"
 #include "cyrusdb.h"
 #include "exitcodes.h"

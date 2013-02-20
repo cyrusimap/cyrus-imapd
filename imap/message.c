@@ -56,8 +56,8 @@
 #include <sys/stat.h>
 #include <netinet/in.h>
 #include <stdlib.h>
-#include <assert.h>
 
+#include "assert.h"
 #include "crc32.h"
 #include "exitcodes.h"
 #include "imap/imap_err.h"

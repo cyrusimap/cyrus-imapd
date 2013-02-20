@@ -54,8 +54,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <assert.h>
 
+#include "assert.h"
 #include "charset.h"
 #include "hash.h"
 #include "xmalloc.h"
