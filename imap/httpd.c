@@ -2701,7 +2701,6 @@ static int parse_ranges(const char *hdr, struct range *range)
 int check_precond(struct transaction_t *txn, const void *data,
 		  const char *etag, time_t lastmod)
 {
-    struct dav_data *ddata = (struct dav_data *) data;
     const char *lock_token = NULL;
     unsigned locked = 0;
     hdrcache_t hdrcache = txn->req_hdrs;
@@ -2709,6 +2708,8 @@ int check_precond(struct transaction_t *txn, const void *data,
     time_t since;
 
 #ifdef WITH_DAV
+    struct dav_data *ddata = (struct dav_data *) data;
+
     /* Check for a write-lock on the source */
     if (ddata && ddata->lock_expire > time(NULL)) {
 	lock_token = ddata->lock_token;
@@ -2742,6 +2743,8 @@ int check_precond(struct transaction_t *txn, const void *data,
 	    break;
 	}
     }
+#else
+    assert(!data);
 #endif /* WITH_DAV */
 
     /* Per RFC 4918, If is similar to If-Match, but with lock-token submission.
@@ -2962,6 +2965,9 @@ int meth_options(struct transaction_t *txn,
 /* Perform an PROPFIND request on "/" iff we support CalDAV */
 int meth_propfind_root(struct transaction_t *txn, void *params)
 {
+    assert(txn);
+    assert(!params);
+
 #ifdef WITH_DAV
     /* Apple iCal and Evolution both check "/" */
     if (!strcmp(txn->req_tgt.path, "/")) {
