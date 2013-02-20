@@ -404,7 +404,7 @@ static int ask_capability(struct backend *s, int dobanner, int automatic)
 	    prot_NONBLOCK(pin);
 	}
 
-	if (dobanner) strncpy(s->banner, str, sizeof(s->banner));
+	if (dobanner) xstrncpy(s->banner, str, sizeof(s->banner));
 
 	/* look for the end of the capabilities */
     } while (!resp || strncasecmp(str, resp, strlen(resp)));
@@ -819,7 +819,7 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
 	    }
 	} while (strncasecmp(buf, prot->banner.resp,
 			     strlen(prot->banner.resp)));
-	strncpy(ret->banner, buf, 2048);
+	xstrncpy(ret->banner, buf, 2048);
     }
 
     if (ask) {

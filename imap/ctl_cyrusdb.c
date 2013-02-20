@@ -199,7 +199,7 @@ static void check_convert(struct cyrusdb *db, const char *fname)
     if (!detectname) return;
 
     /* strip the -nosync from the name if present */
-    strncpy(backendbuf, *db->configptr, 100);
+    xstrncpy(backendbuf, *db->configptr, 100);
     p = strstr(backendbuf, "-nosync");
     if (p) *p = '\0';
 

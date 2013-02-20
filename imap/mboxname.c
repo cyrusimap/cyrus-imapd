@@ -885,7 +885,7 @@ EXPORTED const char *mboxname_to_userid(const char *mboxname)
 	if (parts.domain)
 	    snprintf(userid, sizeof(userid), "%s@%s", parts.userid, parts.domain);
 	else
-	    strncpy(userid, parts.userid, sizeof(userid));
+	    xstrncpy(userid, parts.userid, sizeof(userid));
 	ret = userid;
     }
 
@@ -1296,7 +1296,7 @@ EXPORTED char *mboxname_datapath(const char *partition, const char *mboxname, un
     if (!root) return NULL;
 
     if (!mboxname) {
-	strncpy(pathresult, root, MAX_MAILBOX_PATH);
+	xstrncpy(pathresult, root, MAX_MAILBOX_PATH);
 	return pathresult;
     }
 
@@ -1401,7 +1401,7 @@ EXPORTED char *mboxname_metapath(const char *partition, const char *mboxname,
 	return NULL;
 
     if (!mboxname) {
-	strncpy(metaresult, root, MAX_MAILBOX_PATH);
+	xstrncpy(metaresult, root, MAX_MAILBOX_PATH);
 	return metaresult;
     }
 
@@ -1427,7 +1427,7 @@ EXPORTED void mboxname_todeleted(const char *name, char *result, int withtime)
     char *p;
     const char *deletedprefix = config_getstring(IMAPOPT_DELETEDPREFIX);
 
-    strncpy(result, name, MAX_MAILBOX_BUFFER);
+    xstrncpy(result, name, MAX_MAILBOX_BUFFER);
 
     if (config_virtdomains && (p = strchr(name, '!')))
         domainlen = p - name + 1;    

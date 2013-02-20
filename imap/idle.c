@@ -60,6 +60,7 @@
 #include "idle.h"
 #include "idlemsg.h"
 #include "global.h"
+#include "util.h"
 
 HIDDEN const char *idle_method_desc = "no";
 
@@ -81,7 +82,7 @@ static int idle_send_msg(int which, const char *mboxname)
 
     /* fill the structure */
     msg.which = which;
-    strncpy(msg.mboxname, mboxname ? mboxname : ".", sizeof(msg.mboxname));
+    xstrncpy(msg.mboxname, mboxname ? mboxname : ".", sizeof(msg.mboxname));
 
     /* send */
     return idle_send(&idle_remote, &msg);

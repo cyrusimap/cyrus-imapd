@@ -1250,7 +1250,7 @@ static void cmdloop(void)
 	    continue;
 	}
 	lcase(cmd.s);
-	strncpy(cmdname, cmd.s, 99);
+	xstrncpy(cmdname, cmd.s, 99);
 	cmd.s[0] = toupper((unsigned char) cmd.s[0]);
 
 	/* if we need to force a kick, do so */
@@ -2030,7 +2030,7 @@ static void cmdloop(void)
 		c = getword(imapd_in, &arg1);
 		if (c != ' ') goto missingargs;
 		lcase(arg1.s);
-		strncpy(cmdname, arg1.s, 99);
+		xstrncpy(cmdname, arg1.s, 99);
 		if (!strcmp(arg1.s, "fetch")) {
 		    goto fetch;
 		}
@@ -8582,12 +8582,12 @@ static void cmd_getmetadata(const char *tag)
 	 * rid of this... */
 	if (!strncmp(ent, "/private", 8) &&
 	    (ent[8] == '\0' || ent[8] == '/')) {
-	    strncpy(entry, ent + 8, MAX_MAILBOX_NAME);
+	    xstrncpy(entry, ent + 8, MAX_MAILBOX_NAME);
 	    have_private = 1;
 	}
 	else if (!strncmp(ent, "/shared", 7) &&
 	         (ent[7] == '\0' || ent[7] == '/')) {
-	    strncpy(entry, ent + 7, MAX_MAILBOX_NAME);
+	    xstrncpy(entry, ent + 7, MAX_MAILBOX_NAME);
 	    have_shared = 1;
 	}
 	else {

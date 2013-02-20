@@ -2974,7 +2974,7 @@ EXPORTED int mboxlist_findsub(struct namespace *namespace,
 	snprintf(domainpat, sizeof(domainpat), "%s!%s", p+1, pattern);
     }
     else
-	strncpy(domainpat, pattern, sizeof(domainpat));
+	xstrncpy(domainpat, pattern, sizeof(domainpat));
 
     cbrock.g = glob_init(pattern, GLOB_HIERARCHY|GLOB_INBOXCASE);
     cbrock.namespace = NULL;

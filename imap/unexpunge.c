@@ -226,7 +226,7 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
 
 	/* duplicate the old filename */
 	fname = mailbox_message_fname(mailbox, olduid);
-	strncpy(oldfname, fname, MAX_MAILBOX_PATH);
+	xstrncpy(oldfname, fname, MAX_MAILBOX_PATH);
 
 	/* bump the UID, strip the flags */
 	record.uid = mailbox->i.last_uid + 1;

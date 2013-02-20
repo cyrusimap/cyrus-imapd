@@ -183,7 +183,7 @@ EXPORTED char *mailbox_meta_fname(struct mailbox *mailbox, int metafile)
     src = mboxname_metapath(mailbox->part, mailbox->name, metafile, 0);
     if (!src) return NULL;
 
-    strncpy(fnamebuf, src, MAX_MAILBOX_PATH);
+    xstrncpy(fnamebuf, src, MAX_MAILBOX_PATH);
     return fnamebuf;
 }
 
@@ -195,7 +195,7 @@ EXPORTED char *mailbox_meta_newfname(struct mailbox *mailbox, int metafile)
     src = mboxname_metapath(mailbox->part, mailbox->name, metafile, 1);
     if (!src) return NULL;
 
-    strncpy(fnamebuf, src, MAX_MAILBOX_PATH);
+    xstrncpy(fnamebuf, src, MAX_MAILBOX_PATH);
     return fnamebuf;
 }
 
@@ -218,7 +218,7 @@ EXPORTED char *mailbox_message_fname(struct mailbox *mailbox, unsigned long uid)
     src = mboxname_datapath(mailbox->part, mailbox->name, uid);
     if (!src) return NULL;
 
-    strncpy(localbuf, src, MAX_MAILBOX_PATH);
+    xstrncpy(localbuf, src, MAX_MAILBOX_PATH);
     return localbuf;
 }
 
@@ -230,7 +230,7 @@ EXPORTED char *mailbox_datapath(struct mailbox *mailbox)
     src = mboxname_datapath(mailbox->part, mailbox->name, 0);
     if (!src) return NULL;
 
-    strncpy(localbuf, src, MAX_MAILBOX_PATH);
+    xstrncpy(localbuf, src, MAX_MAILBOX_PATH);
     return localbuf;
 }
 
@@ -3690,9 +3690,9 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
     for (mf = meta_files; mf->metaflag; mf++) {
 	struct stat sbuf;
 
-	strncpy(oldbuf, mailbox_meta_fname(mailbox, mf->metaflag),
+	xstrncpy(oldbuf, mailbox_meta_fname(mailbox, mf->metaflag),
 		MAX_MAILBOX_PATH);
-	strncpy(newbuf, mboxname_metapath(newpart, newname, mf->metaflag, 0),
+	xstrncpy(newbuf, mboxname_metapath(newpart, newname, mf->metaflag, 0),
 		MAX_MAILBOX_PATH);
 
 	unlink(newbuf); /* Make link() possible */
@@ -3710,9 +3710,9 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
 	if (record.system_flags & FLAG_UNLINKED)
 	    continue;
 
-	strncpy(oldbuf, mailbox_message_fname(mailbox, record.uid),
+	xstrncpy(oldbuf, mailbox_message_fname(mailbox, record.uid),
 		MAX_MAILBOX_PATH);
-	strncpy(newbuf, mboxname_datapath(newpart, newname, record.uid),
+	xstrncpy(newbuf, mboxname_datapath(newpart, newname, record.uid),
 		MAX_MAILBOX_PATH);
 
 	r = mailbox_copyfile(oldbuf, newbuf, 0);

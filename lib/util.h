@@ -308,5 +308,18 @@ int buf_deflate(struct buf *buf, int compLevel, int scheme);
 	} \
     } while(0)
 
+/* A wrapper for strncpy() which ensures that the destination
+ * string is always NUL-terminated.  Yes, I know we have an
+ * implementation of the BSD strlcpy() which has this semantic,
+ * but that isn't a highly optimised libc or compiler provided
+ * function like strncpy(), and we can trivially and eficiently
+ * add the NUL termination semantic on top of strncpy(). */
+#define xstrncpy(d, s, n) \
+    do { \
+	char *_d = (d); \
+	size_t _n = (n); \
+	strncpy(_d, (s), _n); \
+	_d[_n-1] = '\0'; \
+    } while(0)
 
 #endif /* INCLUDED_UTIL_H */
