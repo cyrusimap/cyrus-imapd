@@ -3952,7 +3952,8 @@ int meth_propfind(struct transaction_t *txn, void *params)
     if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED;
 
     /* Parse the path */
-    if ((r = fparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+    if (fparams &&
+	(r = fparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
     /* Check Depth */
     hdr = spool_getheader(txn->req_hdrs, "Depth");
@@ -4066,7 +4067,7 @@ int meth_propfind(struct transaction_t *txn, void *params)
     fctx.reqd_privs = DACL_READ;
     fctx.filter = NULL;
     fctx.filter_crit = NULL;
-    if (fparams->davdb.db) {
+    if (fparams && fparams->davdb.db) {
 	fctx.davdb = *fparams->davdb.db;
 	fctx.lookup_resource = fparams->davdb.lookup_resource;
 	fctx.foreach_resource = fparams->davdb.foreach_resource;
