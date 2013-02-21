@@ -246,7 +246,6 @@ static int unlockaccept(void)
 static int safe_wait_readable(int fd)
 {
     fd_set rfds;
-    int r;
 
     FD_ZERO(&rfds);
     FD_SET(fd, &rfds);
