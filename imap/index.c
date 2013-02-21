@@ -1899,21 +1899,25 @@ index_copy(struct index_state *state,
 			  state->authstate, ACL_INSERT,
 			  qptr, namespace, isadmin,
 			  ismove ? EVENT_MESSAGE_MOVE : EVENT_MESSAGE_COPY);
-    if (r) return r;
+    if (r) goto done;
 
     docopyuid = (appendstate.myrights & ACL_READ);
 
     r = append_copy(mailbox, &appendstate, copyargs.nummsg,
 		    copyargs.copymsg, nolink);
-    if (!r) {
-	r = append_commit(&appendstate);
+    if (r) {
+	append_abort(&appendstate);
+	goto done;
     }
+
+    r = append_commit(&appendstate);
+    if (r) goto done;
 
     /* unlock first so we don't hold the lock while expunging
      * the source */
     mailbox_unlock_index(destmailbox, NULL);
 
-    if (!r && (docopyuid || ismove)) {
+    if (docopyuid || ismove) {
 	char *source;
 	struct seqset *seq;
 	unsigned uidvalidity = destmailbox->i.uidvalidity;
@@ -1949,6 +1953,7 @@ index_copy(struct index_state *state,
     if (!r)
 	sync_log_mailbox_double(mailbox->name, name);
 
+done:
     mailbox_close(&destmailbox);
 
     return r;
