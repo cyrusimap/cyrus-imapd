@@ -5135,12 +5135,14 @@ static int do_xconvfetch(struct dlist *cidlist,
 	/* make sure \Deleted messages are expunged.  Will also lock the
 	 * mailbox state and read any new information */
 	r = index_expunge(index_state, NULL, 1);
-	if (r) goto out;
 
-	index_fetchresponses(index_state, NULL, /*usinguid*/1,
-			     fetchargs, NULL);
+	if (!r)
+	    index_fetchresponses(index_state, NULL, /*usinguid*/1,
+				 fetchargs, NULL);
 
 	index_close(&index_state);
+
+	if (r) goto out;
     }
 
     r = 0;
