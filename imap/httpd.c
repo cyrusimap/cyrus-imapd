@@ -2963,10 +2963,10 @@ int meth_options(struct transaction_t *txn,
 
 
 /* Perform an PROPFIND request on "/" iff we support CalDAV */
-int meth_propfind_root(struct transaction_t *txn, void *params)
+int meth_propfind_root(struct transaction_t *txn,
+		       void *params __attribute__((unused)))
 {
     assert(txn);
-    assert(!params);
 
 #ifdef WITH_DAV
     /* Apple iCal and Evolution both check "/" */
@@ -2974,7 +2974,7 @@ int meth_propfind_root(struct transaction_t *txn, void *params)
 	if (!httpd_userid) return HTTP_UNAUTHORIZED;
 
 	txn->req_tgt.allow |= ALLOW_DAV;
-	return meth_propfind(txn, params);
+	return meth_propfind(txn, NULL);
     }
 #endif
 
