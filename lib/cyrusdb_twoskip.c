@@ -270,8 +270,8 @@
 
 /* don't bother rewriting if the database has less than this much "new" data */
 #define MINREWRITE 16834
-/* don't bother rewriting if less than this ratio is dirty (20%) */
-#define REWRITE_RATIO 0.2
+/* don't bother rewriting if less than this ratio is dirty (50%) */
+#define REWRITE_RATIO 0.5
 /* number of skiplist levels - 31 gives us binary search to 2^32 records.
  * limited to 255 by file format, but skiplist had 20, and that was enough
  * for most real uses.  31 is heaps. */
@@ -1088,7 +1088,6 @@ static int store_here(struct dbengine *db, const char *val, size_t vallen)
     if (loc->is_exactmatch) {
 	level = loc->record.level;
 	db->header.num_records--;
-	db->header.repack_size -= loc->record.len;
     }
 
     /* build a new record */
@@ -1116,7 +1115,6 @@ static int store_here(struct dbengine *db, const char *val, size_t vallen)
 
     /* update header to know details of new record */
     db->header.num_records++;
-    db->header.repack_size += loc->record.len;
 
     loc->is_exactmatch = 1;
     loc->end = db->end;
@@ -1136,7 +1134,6 @@ static int delete_here(struct dbengine *db)
 	return CYRUSDB_NOTFOUND;
 
     db->header.num_records--;
-    db->header.repack_size -= loc->record.len;
 
     /* by the magic of zeroing, this even works for zero */
     r = read_skipdelete(db, loc->forwardloc[0], &nextrecord);
@@ -1794,6 +1791,9 @@ static int mycheckpoint(struct dbengine *db)
 	       FNAME(db));
 	goto err;
     }
+
+    /* remember the repack size */
+    cr.db->header.repack_size = cr.db->header.current_size;
 
     /* increase the generation count */
     cr.db->header.generation = db->header.generation + 1;
