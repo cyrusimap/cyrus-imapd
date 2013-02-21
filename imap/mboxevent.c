@@ -841,7 +841,7 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     imapurl.mailbox = extname;
     imapurl.user = mboxname_to_userid(mailbox->name);
     imapurl.uidvalidity = mailbox->i.uidvalidity;
-    if (event->type & (EVENT_MESSAGE_NEW|EVENT_MESSAGE_APPEND)) {
+    if (event->type & (EVENT_MESSAGE_NEW|EVENT_MESSAGE_APPEND) && event->uidset) {
 	imapurl.uid = seqset_first(event->uidset);
 	/* don't add uidset parameter to MessageNew and MessageAppend events */
 	seqset_free(event->uidset);
@@ -1066,7 +1066,7 @@ static int filled_params(enum event_type type, struct mboxevent *event)
 	    case EVENT_MODSEQ:
 		/* modseq is not included if notification refers to several
 		 * messages */
-		if (seqset_first(event->uidset) == seqset_last(event->uidset))
+		if (!event->uidset || (seqset_first(event->uidset) == seqset_last(event->uidset)))
 		    buf_appendcstr(&missing, " modseq");
 		break;
 	    default:
