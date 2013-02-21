@@ -487,10 +487,12 @@ EXPORTED int conversations_commit(struct conversations_state **statep)
 
     *statep = NULL;
 
-    /* clean up the renames and the cache first, they may write to the DB */
+    /* clean up the renames first, it will update the cache */
     conversations_commitcidrenames(state);
+    /* cache second - also writes to to DB */
     conversations_commitcache(state);
 
+    /* finally it's safe to commit the DB itself */
     if (state->db) {
 	if (state->txn)
 	    r = cyrusdb_commit(state->db, state->txn);
