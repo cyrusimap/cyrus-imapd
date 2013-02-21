@@ -307,7 +307,7 @@ static struct subtxn *new_subtxn(const char *fname __attribute__((unused)),
     return ret;
 }
 
-static int myopen(const char *fname, int flags, struct dbengine **ret)
+static int myopen(const char *fname, int flags, struct dbengine **ret, struct txn **mytid)
 {
     struct dbengine *db = (struct dbengine *) xzmalloc(sizeof(struct dbengine));
     struct stat sbuf;
@@ -339,6 +339,11 @@ static int myopen(const char *fname, int flags, struct dbengine **ret)
     db->compar = (flags & CYRUSDB_MBOXSORT) ? compar_qr_mbox : compar_qr;
 
     *ret = db;
+
+    if (mytid) {
+	*mytid = &db->txn;
+    }
+
     return 0;
 }
 

@@ -1,4 +1,4 @@
-/*  cyrusdb_sql: SQL db backends
+my/*  cyrusdb_sql: SQL db backends
  *
  * Copyright (c) 1998-2004 Carnegie Mellon University.  All rights reserved.
  *
@@ -462,7 +462,7 @@ static int done(void)
     return 0;
 }
 
-static int myopen(const char *fname, int flags, struct dbengine **ret)
+static int myopen(const char *fname, int flags, struct dbengine **ret, struct txn **mytid)
 {
     const char *database, *hostnames, *user, *passwd;
     char *host_ptr, *host, *cur_host, *cur_port;
@@ -555,6 +555,10 @@ static int myopen(const char *fname, int flags, struct dbengine **ret)
     *ret = (struct dbengine *) xzmalloc(sizeof(struct dbengine));
     (*ret)->conn = conn;
     (*ret)->table = table;
+
+    if (mytid) {
+	*mytid = start_txn(*ret);
+    }
 
     return 0;
 }

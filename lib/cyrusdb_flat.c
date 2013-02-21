@@ -234,89 +234,6 @@ static struct txn *new_txn(void)
     return ret;
 }
 
-
-
-static int myopen(const char *fname, int flags, struct dbengine **ret)
-{
-    struct dbengine *db;
-    struct stat sbuf;
-
-    assert(fname && ret);
-
-    db = find_db(fname);
-    if (db)
-	goto out;   /* new reference to existing db */
-
-    db = (struct dbengine *) xzmalloc(sizeof(struct dbengine));
-
-    db->fd = open(fname, O_RDWR, 0644);
-    if (db->fd == -1 && errno == ENOENT) {
-	if (!(flags & CYRUSDB_CREATE)) {
-	    free_db(db);
-	    return CYRUSDB_NOTFOUND;
-	}
-	if (cyrus_mkdir(fname, 0755) == -1) {
-	    free_db(db);
-	    return CYRUSDB_IOERROR;
-	}
-	db->fd = open(fname, O_RDWR | O_CREAT, 0644);
-    }
-
-    if (db->fd == -1) {
-	syslog(LOG_ERR, "IOERROR: opening %s: %m", fname);
-	free_db(db);
-	return CYRUSDB_IOERROR;
-    }
-
-    if (fstat(db->fd, &sbuf) == -1) {
-	syslog(LOG_ERR, "IOERROR: fstat on %s: %m", fname);
-	close(db->fd);
-	free_db(db);
-	return CYRUSDB_IOERROR;
-    }
-    db->ino = sbuf.st_ino;
-
-    map_refresh(db->fd, 0, &db->base, &db->len, sbuf.st_size,
-		fname, 0);
-    db->size = sbuf.st_size;
-
-    db->fname = xstrdup(fname);
-    db->refcount = 1;
-
-    /* prepend to the list */
-    db->next = alldbs;
-    alldbs = db;
-
-out:
-    *ret = db;
-    return 0;
-}
-
-static int myclose(struct dbengine *db)
-{
-    struct dbengine **prevp;
-
-    assert(db);
-    if (--db->refcount > 0)
-	return 0;
-    /* now we are dropping the last reference */
-
-    /* detach from the list of all dbs */
-    for (prevp = &alldbs ;
-	 *prevp && *prevp != db ;
-	 prevp = &(*prevp)->next)
-	;
-    assert(*prevp == db); /* this struct must be in the list */
-    *prevp = db->next;
-
-    /* clean up the internals */
-    map_free(&db->base, &db->len);
-    close(db->fd);
-    free_db(db);
-
-    return 0;
-}
-
 static int starttxn_or_refetch(struct dbengine *db, struct txn **mytid)
 {
     int r = 0;
@@ -378,6 +295,92 @@ static int starttxn_or_refetch(struct dbengine *db, struct txn **mytid)
 		    sbuf.st_size, db->fname, 0);
 	db->size = sbuf.st_size;
     }
+
+    return 0;
+}
+
+static int myopen(const char *fname, int flags, struct dbengine **ret, struct txn **mytid)
+{
+    struct dbengine *db;
+    struct stat sbuf;
+
+    assert(fname && ret);
+
+    db = find_db(fname);
+    if (db)
+	goto out;   /* new reference to existing db */
+
+    db = (struct dbengine *) xzmalloc(sizeof(struct dbengine));
+
+    db->fd = open(fname, O_RDWR, 0644);
+    if (db->fd == -1 && errno == ENOENT) {
+	if (!(flags & CYRUSDB_CREATE)) {
+	    free_db(db);
+	    return CYRUSDB_NOTFOUND;
+	}
+	if (cyrus_mkdir(fname, 0755) == -1) {
+	    free_db(db);
+	    return CYRUSDB_IOERROR;
+	}
+	db->fd = open(fname, O_RDWR | O_CREAT, 0644);
+    }
+
+    if (db->fd == -1) {
+	syslog(LOG_ERR, "IOERROR: opening %s: %m", fname);
+	free_db(db);
+	return CYRUSDB_IOERROR;
+    }
+
+    if (fstat(db->fd, &sbuf) == -1) {
+	syslog(LOG_ERR, "IOERROR: fstat on %s: %m", fname);
+	close(db->fd);
+	free_db(db);
+	return CYRUSDB_IOERROR;
+    }
+    db->ino = sbuf.st_ino;
+
+    map_refresh(db->fd, 0, &db->base, &db->len, sbuf.st_size,
+		fname, 0);
+    db->size = sbuf.st_size;
+
+    db->fname = xstrdup(fname);
+    db->refcount = 1;
+
+    /* prepend to the list */
+    db->next = alldbs;
+    alldbs = db;
+
+    if (mytid) {
+	int r = starttxn_or_refetch(db, mytid);
+	if (r) return r;
+    }
+
+out:
+    *ret = db;
+    return 0;
+}
+
+static int myclose(struct dbengine *db)
+{
+    struct dbengine **prevp;
+
+    assert(db);
+    if (--db->refcount > 0)
+	return 0;
+    /* now we are dropping the last reference */
+
+    /* detach from the list of all dbs */
+    for (prevp = &alldbs ;
+	 *prevp && *prevp != db ;
+	 prevp = &(*prevp)->next)
+	;
+    assert(*prevp == db); /* this struct must be in the list */
+    *prevp = db->next;
+
+    /* clean up the internals */
+    map_free(&db->base, &db->len);
+    close(db->fd);
+    free_db(db);
 
     return 0;
 }

@@ -822,7 +822,7 @@ static int compare_signed(const char *s1, int l1, const char *s2, int l2)
     }
 }
 
-static int myopen(const char *fname, int flags, struct dbengine **ret)
+static int myopen(const char *fname, int flags, struct dbengine **ret, struct txn **mytid)
 {
     struct dbengine *db;
     struct db_list *list_ent = open_db;
@@ -834,9 +834,15 @@ static int myopen(const char *fname, int flags, struct dbengine **ret)
     if (list_ent) {
 	/* we already have this DB open! */
 	syslog(LOG_NOTICE, "skiplist: %s is already open %d time%s, returning object", 
-	fname, list_ent->refcount, list_ent->refcount == 1 ? "" : "s");
-	*ret = list_ent->db;
+	       fname, list_ent->refcount, list_ent->refcount == 1 ? "" : "s");
+	if (list_ent->db->current_txn)
+	    return CYRUSDB_LOCKED;
+	if (mytid) {
+	    r = lock_or_refresh(list_ent->db, mytid);
+	    if (r) return r;
+	}
 	++list_ent->refcount;
+	*ret = list_ent->db;
 	return 0;
     }
 
@@ -961,6 +967,11 @@ static int myopen(const char *fname, int flags, struct dbengine **ret)
     list_ent->next = open_db;
     list_ent->refcount = 1;
     open_db = list_ent;
+
+    if (mytid) {
+	r = lock_or_refresh(db, mytid);
+	if (r) return r;
+    }
 
     return 0;
 }

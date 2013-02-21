@@ -55,7 +55,8 @@ enum cyrusdb_ret {
     CYRUSDB_AGAIN = -2,
     CYRUSDB_EXISTS = -3,
     CYRUSDB_INTERNAL = -4,
-    CYRUSDB_NOTFOUND = -5
+    CYRUSDB_NOTFOUND = -5,
+    CYRUSDB_LOCKED = -6
 };
 
 #define cyrusdb_strerror(c) ("cyrusdb error")
@@ -107,7 +108,7 @@ struct cyrusdb_backend {
     int (*archive)(const strarray_t *fnames, const char *dirname);
 
     /* open the specified database in the global environment */
-    int (*open)(const char *fname, int flags, struct dbengine **ret);
+    int (*open)(const char *fname, int flags, struct dbengine **ret, struct txn **tid);
 
     /* close the specified database */
     int (*close)(struct dbengine *db);
@@ -237,6 +238,8 @@ void cyrusdb_done(void);
 /* direct DB interface */
 extern int cyrusdb_open(const char *backend, const char *fname,
 			int flags, struct db **ret);
+extern int cyrusdb_lockopen(const char *backend, const char *fname,
+			   int flags, struct db **ret, struct txn **tid);
 extern int cyrusdb_close(struct db *db);
 extern int cyrusdb_fetch(struct db *db,
 			 const char *key, size_t keylen,

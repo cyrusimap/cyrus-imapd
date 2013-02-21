@@ -1263,7 +1263,7 @@ static void dispose_db(struct dbengine *db)
 
 /************************************************************/
 
-static int opendb(const char *fname, int flags, struct dbengine **ret)
+static int opendb(const char *fname, int flags, struct dbengine **ret, struct txn **mytid)
 {
     struct dbengine *db;
     int r;
@@ -1358,26 +1358,37 @@ static int opendb(const char *fname, int flags, struct dbengine **ret)
 
     *ret = db;
 
+    if (mytid) {
+	r = newtxn(db, mytid);
+	if (r) goto done;
+    }
+
 done:
     if (r) dispose_db(db);
     return r;
 }
 
-static int myopen(const char *fname, int flags, struct dbengine **ret)
+static int myopen(const char *fname, int flags, struct dbengine **ret, struct txn **mytid)
 {
     struct db_list *ent;
     struct dbengine *mydb;
-    int r;
+    int r = 0;
 
     /* do we already have this DB open? */
     for (ent = open_twoskip; ent; ent = ent->next) {
 	if (strcmp(FNAME(ent->db), fname)) continue;
+	if (ent->db->current_txn)
+	    return CYRUSDB_LOCKED;
+	if (mytid) {
+	    r = newtxn(ent->db, mytid);
+	    if (r) return r;
+	}
 	ent->refcount++;
 	*ret = ent->db;
 	return 0;
     }
 
-    r = opendb(fname, flags, &mydb);
+    r = opendb(fname, flags, &mydb, mytid);
     if (r) return r;
 
     /* track this database in the open list */
@@ -1782,7 +1793,7 @@ static int mycheckpoint(struct dbengine *db)
 
     cr.db = NULL;
     cr.tid = NULL;
-    r = opendb(newfname, db->open_flags | CYRUSDB_CREATE, &cr.db);
+    r = opendb(newfname, db->open_flags | CYRUSDB_CREATE, &cr.db, &cr.tid);
     if (r) return r;
 
     r = myforeach(db, NULL, 0, NULL, copy_cb, &cr, &db->current_txn);
@@ -2048,7 +2059,7 @@ static int recovery2(struct dbengine *db, int *count)
     snprintf(newfname, sizeof(newfname), "%s.NEW", FNAME(db));
     unlink(newfname);
 
-    r = opendb(newfname, db->open_flags | CYRUSDB_CREATE, &newdb);
+    r = opendb(newfname, db->open_flags | CYRUSDB_CREATE, &newdb, NULL);
     if (r) return r;
 
     /* increase the generation count */
