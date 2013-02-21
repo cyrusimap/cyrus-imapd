@@ -41,9 +41,7 @@
  * Author: Sébastien Michel from Atos Worldline
  */
 #include <config.h>
-#ifndef ENABLE_MBOXEVENT
-#include "mboxevent.h"
-#else
+#ifdef ENABLE_MBOXEVENT
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
@@ -134,11 +132,9 @@ static char *json_formatter(enum event_type type, struct event_parameter params[
 static int filled_params(enum event_type type, struct mboxevent *mboxevent);
 #endif
 static int mboxevent_expected_param(enum event_type type, enum event_param param);
-#endif
 
 EXPORTED void mboxevent_init(void)
 {
-#ifdef ENABLE_MBOXEVENT
     const char *options;
     int groups;
 
@@ -177,19 +173,15 @@ EXPORTED void mboxevent_init(void)
 
     if (groups & IMAP_ENUM_EVENT_GROUPS_MAILBOX)
 	enabled_events |= MAILBOX_EVENTS;
-#endif
 }
 
 EXPORTED void mboxevent_setnamespace(struct namespace *n)
 {
-#ifdef ENABLE_MBOXEVENT
     namespace = *n;
     /* standardize IMAP URL format */
     namespace.isadmin = 0;
-#endif
 }
 
-#ifdef ENABLE_MBOXEVENT
 static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
 {
     int i = 0;
@@ -215,12 +207,10 @@ static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
 
     return 1;
 }
-#endif
 
 EXPORTED struct mboxevent *mboxevent_new(enum event_type type)
 {
     struct mboxevent *mboxevent = NULL;
-#ifdef ENABLE_MBOXEVENT
     /* event notification is completely disabled */
     if (!notifier)
 	return NULL;
@@ -241,15 +231,14 @@ EXPORTED struct mboxevent *mboxevent_new(enum event_type type)
      * so it seems appropriate here */
     if (mboxevent_expected_param(type, EVENT_TIMESTAMP))
 	gettimeofday(&mboxevent->timestamp, NULL);
-#endif
+
     return mboxevent;
 }
 
 struct mboxevent *mboxevent_enqueue(enum event_type type,
-                                    struct mboxevent **mboxevents)
+				    struct mboxevent **mboxevents)
 {
     struct mboxevent *mboxevent = NULL;
-#ifdef ENABLE_MBOXEVENT
     struct mboxevent *ptr;
 
     if (!(mboxevent = mboxevent_new(type)))
@@ -267,13 +256,12 @@ struct mboxevent *mboxevent_enqueue(enum event_type type,
 	    mboxevent->prev = ptr;
 	}
     }
-#endif
+
     return mboxevent;
 }
 
 EXPORTED void mboxevent_free(struct mboxevent **mboxevent)
 {
-#ifdef ENABLE_MBOXEVENT
     struct mboxevent *event = *mboxevent;
     int i;
 
@@ -295,12 +283,10 @@ EXPORTED void mboxevent_free(struct mboxevent **mboxevent)
     free(event);
 
     *mboxevent = NULL;
-#endif
 }
 
 void mboxevent_freequeue(struct mboxevent **mboxevent)
 {
-#ifdef ENABLE_MBOXEVENT
     struct mboxevent *next, *event = *mboxevent;
 
     if (!event)
@@ -314,10 +300,8 @@ void mboxevent_freequeue(struct mboxevent **mboxevent)
     while (event);
 
     *mboxevent = NULL;
-#endif
 }
 
-#ifdef ENABLE_MBOXEVENT
 static int mboxevent_expected_param(enum event_type type, enum event_param param)
 {
     switch (param) {
@@ -397,12 +381,10 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
     /* test if the parameter is related to a message event */
     return type & (MESSAGE_EVENTS|FLAGS_EVENTS);
 }
-#endif
 
 #define TIMESTAMP_MAX 32
 EXPORTED void mboxevent_notify(struct mboxevent *mboxevents)
 {
-#ifdef ENABLE_MBOXEVENT
     enum event_type type;
     struct mboxevent *event, *next;
     char stimestamp[TIMESTAMP_MAX+1];
@@ -516,13 +498,11 @@ EXPORTED void mboxevent_notify(struct mboxevent *mboxevents)
     while (event);
 
     return;
-#endif
 }
 
 void mboxevent_add_flags(struct mboxevent *event, char *flagnames[MAX_USER_FLAGS],
                          bit32 system_flags, bit32 user_flags[MAX_USER_FLAGS/32])
 {
-#ifdef ENABLE_MBOXEVENT
     unsigned flag, flagmask;
 
     if (!event)
@@ -561,25 +541,21 @@ void mboxevent_add_flags(struct mboxevent *event, char *flagnames[MAX_USER_FLAGS
 	if (strarray_find_case(excluded_flags, flagnames[flag], 0) < 0)
 	    strarray_add_case(&event->flagnames, flagnames[flag]);
     }
-#endif
 }
 
 void mboxevent_add_flag(struct mboxevent *event, const char *flag)
 {
-#ifdef ENABLE_MBOXEVENT
     if (!event)
 	return;
 
     if (mboxevent_expected_param(event->type, EVENT_FLAG_NAMES))
 	strarray_add_case(&event->flagnames, flag);
-#endif
 }
 
 EXPORTED void mboxevent_set_access(struct mboxevent *event,
                                    const char *serveraddr, const char *clientaddr,
                                    const char *userid, const char *mailboxname)
 {
-#ifdef ENABLE_MBOXEVENT
     char url[MAX_MAILBOX_PATH+1];
     struct imapurl imapurl;
     char extname[MAX_MAILBOX_NAME];
@@ -626,13 +602,11 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
     if (userid && mboxevent_expected_param(event->type, EVENT_USER)) {
 	FILL_STRING_PARAM(event, EVENT_USER, xstrdup(userid));
     }
-#endif
 }
 
 EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *mailbox,
                                        struct index_record *record)
 {
-#ifdef ENABLE_MBOXEVENT
     char *msgid = NULL;
 
     if (!event)
@@ -682,13 +656,11 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 	                  xstrndup(cacheitem_base(record, CACHE_BODYSTRUCTURE),
 	                           cacheitem_size(record, CACHE_BODYSTRUCTURE)));
     }
-#endif
 }
 
 void mboxevent_extract_copied_record(struct mboxevent *event,
 				     const struct mailbox *mailbox, uint32_t uid)
 {
-#ifdef ENABLE_MBOXEVENT
     int first = 0;
 
     if (!event)
@@ -704,13 +676,11 @@ void mboxevent_extract_copied_record(struct mboxevent *event,
     /* generate an IMAP URL to reference the old mailbox */
     if (first)
 	mboxevent_extract_old_mailbox(event, mailbox);
-#endif
 }
 
 void mboxevent_extract_content(struct mboxevent *event,
                                const struct index_record *record, FILE* content)
 {
-#ifdef ENABLE_MBOXEVENT
     const char *base = NULL;
     unsigned long len = 0;
     size_t offset, size, truncate;
@@ -768,13 +738,11 @@ void mboxevent_extract_content(struct mboxevent *event,
     map_refresh(fileno(content), 1, &base, &len, record->size, "new message", 0);
     FILL_STRING_PARAM(event, EVENT_MESSAGE_CONTENT, xstrndup(base+offset, size));
     map_free(&base, &len);
-#endif
 }
 
 void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
                              enum quota_resource res)
 {
-#ifdef ENABLE_MBOXEVENT
     struct imapurl imapurl;
     char url[MAX_MAILBOX_PATH+1];
     char extname[MAX_MAILBOX_NAME];
@@ -824,13 +792,11 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
 	imapurl_toURL(url, &imapurl);
 	FILL_STRING_PARAM(event, EVENT_URI, xstrdup(url));
     }
-#endif
 }
 
 EXPORTED void mboxevent_set_numunseen(struct mboxevent *event,
                                       struct mailbox *mailbox, int numunseen)
 {
-#ifdef ENABLE_MBOXEVENT
     if (!event)
     	return;
 
@@ -842,13 +808,11 @@ EXPORTED void mboxevent_set_numunseen(struct mboxevent *event,
 	 * it could be a problem only if it is a shared or public folder */
 	FILL_UNSIGNED_PARAM(event, EVENT_UNSEEN_MESSAGES, count);
     }
-#endif
 }
 
 EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
                                         struct mailbox *mailbox)
 {
-#ifdef ENABLE_MBOXEVENT
     struct imapurl imapurl;
     char url[MAX_MAILBOX_PATH+1];
     char extname[MAX_MAILBOX_NAME];
@@ -910,13 +874,11 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     if (mboxevent_expected_param(event->type, EVENT_MESSAGES)) {
 	FILL_UNSIGNED_PARAM(event, EVENT_MESSAGES, mailbox->i.exists);
     }
-#endif
 }
 
 void mboxevent_extract_old_mailbox(struct mboxevent *event,
                                    const struct mailbox *mailbox)
 {
-#ifdef ENABLE_MBOXEVENT
     struct imapurl imapurl;
     char url[MAX_MAILBOX_PATH+1];
     char extname[MAX_MAILBOX_NAME];
@@ -937,10 +899,8 @@ void mboxevent_extract_old_mailbox(struct mboxevent *event,
 
     imapurl_toURL(url, &imapurl);
     FILL_STRING_PARAM(event, EVENT_OLD_MAILBOX_ID, xstrdup(url));
-#endif
 }
 
-#ifdef ENABLE_MBOXEVENT
 static const char *event_to_name(enum event_type type)
 {
     switch (type) {
@@ -1127,4 +1087,100 @@ static int filled_params(enum event_type type, struct mboxevent *event)
     return ret;
 }
 #endif /* NDEBUG */
-#endif /* ENABLE_MBOXEVENT */
+
+#else /* !ENABLE_MBOXEVENT */
+
+#include "mboxevent.h"
+
+EXPORTED void mboxevent_init(void)
+{
+}
+
+EXPORTED void mboxevent_setnamespace(struct namespace *n __attribute__((unused)))
+{
+}
+
+EXPORTED struct mboxevent *mboxevent_new(enum event_type type __attribute__((unused)))
+{
+    return NULL;
+}
+
+struct mboxevent *mboxevent_enqueue(enum event_type type __attribute__((unused)),
+				    struct mboxevent **mboxevents __attribute__((unused)))
+{
+    return NULL;
+}
+
+EXPORTED void mboxevent_free(struct mboxevent **mboxevent __attribute__((unused)))
+{
+}
+
+void mboxevent_freequeue(struct mboxevent **mboxevent __attribute__((unused)))
+{
+}
+
+EXPORTED void mboxevent_notify(struct mboxevent *mboxevents __attribute__((unused)))
+{
+}
+
+void mboxevent_add_flags(struct mboxevent *event __attribute__((unused)),
+			 char *flagnames[MAX_USER_FLAGS] __attribute__((unused)),
+			 bit32 system_flags __attribute__((unused)),
+			 bit32 user_flags[MAX_USER_FLAGS/32] __attribute__((unused)))
+{
+}
+
+void mboxevent_add_flag(struct mboxevent *event __attribute__((unused)),
+			const char *flag __attribute__((unused)))
+{
+}
+
+EXPORTED void mboxevent_set_access(struct mboxevent *event __attribute__((unused)),
+				   const char *serveraddr __attribute__((unused)),
+				   const char *clientaddr __attribute__((unused)),
+				   const char *userid __attribute__((unused)),
+				   const char *mailboxname __attribute__((unused)))
+{
+}
+
+EXPORTED void mboxevent_extract_record(struct mboxevent *event __attribute__((unused)),
+				       struct mailbox *mailbox __attribute__((unused)),
+				       struct index_record *record __attribute__((unused)))
+{
+}
+
+void mboxevent_extract_copied_record(struct mboxevent *event __attribute__((unused)),
+				     const struct mailbox *mailbox __attribute__((unused)),
+				     uint32_t uid __attribute__((unused)))
+{
+}
+
+void mboxevent_extract_content(struct mboxevent *event __attribute__((unused)),
+			       const struct index_record *record __attribute__((unused)),
+			       FILE* content __attribute__((unused)))
+{
+}
+
+void mboxevent_extract_quota(struct mboxevent *event __attribute__((unused)),
+			     const struct quota *quota __attribute__((unused)),
+			     enum quota_resource res __attribute__((unused)))
+{
+}
+
+EXPORTED void mboxevent_set_numunseen(struct mboxevent *event __attribute__((unused)),
+				      struct mailbox *mailbox __attribute__((unused)),
+				      int numunseen __attribute__((unused)))
+{
+}
+
+EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event __attribute__((unused)),
+					struct mailbox *mailbox __attribute__((unused)))
+{
+}
+
+void mboxevent_extract_old_mailbox(struct mboxevent *event __attribute__((unused)),
+				   const struct mailbox *mailbox __attribute__((unused)))
+{
+}
+
+#endif /* !ENABLE_MBOXEVENT */
