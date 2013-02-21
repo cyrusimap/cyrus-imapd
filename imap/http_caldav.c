@@ -373,29 +373,23 @@ static int caldav_check_precond(struct transaction_t *txn, const void *data,
     const struct caldav_data *cdata = (const struct caldav_data *) data;
     const char *stag = cdata ? cdata->sched_tag : NULL;
     const char **hdr;
-    int ret;
+    int precond;
 
-    /* Per RFC 6638,
-       If-Schedule-Tag-Match supercedes any ETag-based precondition tests */
+    /* Do normal WebDAV/HTTP checks (primarily for lock-token via If header) */
+    precond = check_precond(txn, data, etag, lastmod);
+    if (!(precond == HTTP_OK || precond == HTTP_PARTIAL)) return precond;
+
+    /* Per RFC 6638, check Schedule-Tag */
     if ((hdr = spool_getheader(txn->req_hdrs, "If-Schedule-Tag-Match"))) {
 	if (etagcmp(hdr[0], stag)) return HTTP_PRECOND_FAILED;
     }
 
-    /* Do normal WebDAV/HTTP checks (primarily for lock-token via If header) */
-    ret = check_precond(txn, data, etag, lastmod);
-
-    switch (txn->meth) {
-    case METH_GET:
-    case METH_HEAD:
-	switch (ret) {
-	case HTTP_OK:
-	case HTTP_PARTIAL:
-	    /* Fill in Schedule-Tag for successful GET/HEAD */
-	    txn->resp_body.stag = stag;
-	}
+    if (txn->meth == METH_GET || txn->meth == METH_HEAD) {
+	/* Fill in Schedule-Tag for successful GET/HEAD */
+	txn->resp_body.stag = stag;
     }
 
-    return ret;
+    return precond;
 }
 
 
