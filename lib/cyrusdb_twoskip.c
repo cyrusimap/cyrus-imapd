@@ -244,7 +244,7 @@
  * CHECKPOINT:
  * Over time, a twoskip database accumulates cruft - replaced
  * records and delete records.  Records out of order, slowing
- * down sequential access.  When the calculated "repack size"
+ * down sequential access.  When the size at last repack
  * is sufficiently smaller than the current size (see the
  * TUNING constants below) then the file is checkpointed.
  * A checkpoint is achieved by creating a new file, and
@@ -1793,7 +1793,7 @@ static int mycheckpoint(struct dbengine *db)
     }
 
     /* remember the repack size */
-    cr.db->header.repack_size = cr.db->header.current_size;
+    cr.db->header.repack_size = cr.db->end;
 
     /* increase the generation count */
     cr.db->header.generation = db->header.generation + 1;
