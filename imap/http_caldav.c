@@ -1758,7 +1758,7 @@ struct remote_rock {
 };
 
 /* Send an iTIP busytime request to remote attendees via iMIP or iSchedule */
-static void busytime_query_remote(char *server __attribute__((unused)),
+static void busytime_query_remote(const char *server __attribute__((unused)),
 				  void *data, void *rock)
 {
     struct sched_param *remote = (struct sched_param *) data;
@@ -2211,7 +2211,7 @@ static void free_sched_data(void *data)
 #define SCHEDSTAT_REJECTED	"5.3"
 
 /* Deliver scheduling object to a remote recipient */
-void sched_deliver_remote(char *recipient, struct sched_param *sparam,
+void sched_deliver_remote(const char *recipient, struct sched_param *sparam,
 			  struct sched_data *sched_data)
 {
     int r;
@@ -2283,7 +2283,7 @@ void sched_deliver_remote(char *recipient, struct sched_param *sparam,
 }
 
 /* Deliver scheduling object to local recipient */
-void sched_deliver_local(char *recipient __attribute__((unused)),
+void sched_deliver_local(const char *recipient __attribute__((unused)),
 			 struct sched_param *sparam,
 			 struct sched_data *sched_data,
 			 struct auth_state *authstate)
@@ -2641,7 +2641,7 @@ void sched_deliver_local(char *recipient __attribute__((unused)),
 
 
 /* Deliver scheduling object to recipient's Inbox */
-void sched_deliver(char *recipient, void *data, void *rock)
+void sched_deliver(const char *recipient, void *data, void *rock)
 {
     struct sched_data *sched_data = (struct sched_data *) data;
     struct auth_state *authstate = (struct auth_state *) rock;
@@ -2681,7 +2681,7 @@ struct exclude_rock {
 };
 
 /* Add EXDATE to master component if attendee is excluded from recurrence */
-static void sched_exclude(char *attendee __attribute__((unused)),
+static void sched_exclude(const char *attendee __attribute__((unused)),
 			  void *data, void *rock)
 {
     struct sched_data *sched_data = (struct sched_data *) data;
@@ -2856,7 +2856,7 @@ struct cancel_rock {
 
 
 /* Organizer removed this component, mark it as cancelled for all attendees */
-static void sched_cancel(char *recurid __attribute__((unused)),
+static void sched_cancel(const char *recurid __attribute__((unused)),
 			 void *data, void *rock)
 {
     struct comp_data *old_data = (struct comp_data *) data;
@@ -3144,7 +3144,7 @@ static icalcomponent *trim_attendees(icalcomponent *comp, const char *userid,
 
 
 /* Attendee removed this component, mark it as declined for the organizer */
-static void sched_decline(char *recurid __attribute__((unused)),
+static void sched_decline(const char *recurid __attribute__((unused)),
 			  void *data, void *rock)
 {
     struct comp_data *old_data = (struct comp_data *) data;
@@ -3352,7 +3352,7 @@ static void sched_reply(const char *userid,
 	if (!sched_data->status) {
 	    /* Attempt to deliver reply to organizer */
 	    authstate = auth_newstate(userid);
-	    sched_deliver((char *) organizer, sched_data, authstate);
+	    sched_deliver(organizer, sched_data, authstate);
 	    auth_freestate(authstate);
 	}
 
