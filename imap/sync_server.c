@@ -1438,7 +1438,8 @@ static int do_mailbox(struct dlist *kin)
     annotate_state_begin(astate);
 
     if (strcmp(mailbox->uniqueid, uniqueid)) {
-	syslog(LOG_ERR, "Mailbox uniqueid changed %s - retry", mboxname);
+	syslog(LOG_ERR, "Mailbox uniqueid changed %s (%s => %s) - retry",
+	       mboxname, mailbox->uniqueid, uniqueid);
 	r = IMAP_MAILBOX_MOVED;
 	goto done;
     }
