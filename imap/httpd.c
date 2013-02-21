@@ -2783,8 +2783,10 @@ int check_precond(struct transaction_t *txn, const void *data,
     /* Step 3 */
     if ((hdr = spool_getheader(hdrcache, "If-None-Match"))) {
 	if (etag_match(hdr, etag)) {
-	    return (txn->meth == METH_GET || txn->meth == METH_HEAD) ?
-		HTTP_NOT_MODIFIED : HTTP_PRECOND_FAILED;
+	    if (txn->meth == METH_GET || txn->meth == METH_HEAD)
+		return HTTP_NOT_MODIFIED;
+	    else
+		return HTTP_PRECOND_FAILED;
 	}
 
 	/* Continue to step 5 */
