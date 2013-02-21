@@ -2520,9 +2520,11 @@ EXPORTED int index_convupdates(struct index_state *state,
     r = index_expunge(state, NULL, 1);
     if (r) return r;
 
-    cstate = conversations_get_mbox(index_mboxname(state));
-    if (!cstate)
-	return IMAP_INTERNAL;
+    if (windowargs->conversations) {
+	cstate = conversations_get_mbox(index_mboxname(state));
+	if (!cstate)
+	    return IMAP_INTERNAL;
+    }
 
     search_expr_internalise(state, searchargs->root);
 
@@ -2595,8 +2597,7 @@ EXPORTED int index_convupdates(struct index_state *state,
 	    msg->msgno = pos;   /* hacky: reuse ->msgno for pos */
 	    ptrarray_push(&added, msg);
 	} else if (was_old_exemplar && is_new_exemplar) {
-	    modseq_t modseq = get_modseq_of(msg,
-				windowargs->conversations ? cstate : NULL);
+	    modseq_t modseq = get_modseq_of(msg, cstate);
 	    if (modseq > windowargs->modseq) {
 		ptrarray_push(&changed, msg);
 		if (search_is_mutable) {
