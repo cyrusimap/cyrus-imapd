@@ -73,12 +73,8 @@ void fatal(const char *s, int t)
     exit(-1);
 }
 
-static int
-perlsieve_getpass(conn, context, id, psecret)
-	sasl_conn_t *conn;
-	void *context;
-	int id;
-        sasl_secret_t **psecret;
+static int perlsieve_getpass(sasl_conn_t *conn, void *context,
+			     int id, sasl_secret_t **psecret)
 {
         int count;
         dSP ;
@@ -114,12 +110,8 @@ perlsieve_getpass(conn, context, id, psecret)
         return SASL_OK;
 }
 
-static int
-perlsieve_simple(context, id, result, len)
-	void *context;
-        int id;
-	unsigned char **result;
-        unsigned *len;
+static int perlsieve_simple(void *context, int id,
+			    unsigned char **result, unsigned *len)
 {
         int count;
         dSP ;
@@ -187,12 +179,7 @@ PROTOTYPES: ENABLE
 
 
 Sieveobj
-sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
-  char *servername
-  SV *username_cb
-  SV *authname_cb
-  SV *password_cb
-  SV *realm_cb
+sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *password_cb, SV *realm_cb)
 
   PREINIT:
   Sieveobj ret = NULL;
@@ -332,8 +319,7 @@ sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
   sv_setref_pv(ST(0), ret->class, (void *) ret);
 
 char *
-sieve_get_error(obj)
-  Sieveobj obj
+sieve_get_error(Sieveobj obj)
   CODE:
     RETVAL = obj->errstr;
   OUTPUT:
@@ -347,58 +333,42 @@ sieve_get_global_error()
     RETVAL
 
 int
-sieve_logout(obj)
-  Sieveobj obj
+sieve_logout(Sieveobj obj)
   CODE:
 	/* xxx this leaves the object unusable */
 	isieve_logout(&(obj->isieve));
 	XSRETURN_UNDEF;
 
 int
-sieve_put_file(obj, filename)
-  Sieveobj obj
-  char *filename
+sieve_put_file(Sieveobj obj, char *filename)
   CODE:
     RETVAL = isieve_put_file(obj->isieve, filename, NULL, &obj->errstr);
   OUTPUT:
     RETVAL
 
 int
-sieve_put_file_withdest(obj, filename, destname)
-  Sieveobj obj
-  char *filename
-  char *destname
+sieve_put_file_withdest(Sieveobj obj, char *filename, char *destname)
   CODE:
     RETVAL = isieve_put_file(obj->isieve, filename, destname, &obj->errstr);
   OUTPUT:
     RETVAL
 
 int
-sieve_put(obj,name,data)
-  Sieveobj obj
-  char *name
-  char *data
-
+sieve_put(Sieveobj obj, char *name, char *data)
   CODE:
     RETVAL = isieve_put(obj->isieve, name, data, strlen(data), &obj->errstr);
   OUTPUT:
     RETVAL
 
 int
-sieve_delete(obj,name)
-  Sieveobj obj
-  char *name
-
+sieve_delete(Sieveobj obj, char *name)
   CODE:
     RETVAL = isieve_delete(obj->isieve, name, &obj->errstr);
   OUTPUT:
     RETVAL
 
 int
-sieve_list(obj,cb)
-  Sieveobj obj
-  SV *cb
-
+sieve_list(Sieveobj obj, SV *cb)
   CODE:
     RETVAL = isieve_list(obj->isieve, (isieve_listcb_t *) &call_listcb,
 			 cb, &obj->errstr);
@@ -406,21 +376,14 @@ sieve_list(obj,cb)
     RETVAL
 
 int
-sieve_activate(obj,name)
-  Sieveobj obj
-  char *name
-
+sieve_activate(Sieveobj obj, char *name)
   CODE:
     RETVAL = isieve_activate(obj->isieve, name, &obj->errstr);
   OUTPUT:
     RETVAL
 
 int
-sieve_get(obj,name,output)
-  Sieveobj obj
-  char *name
-  char *output
-
+sieve_get(Sieveobj obj, char *name, char *output)
   CODE:
     RETVAL = isieve_get(obj->isieve, name, &output, &obj->errstr);  
 
