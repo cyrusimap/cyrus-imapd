@@ -96,8 +96,7 @@ static int perlsieve_getpass(sasl_conn_t *conn, void *context,
         tmp = POPp;
 
         /* copy result */
-        *psecret = malloc(sizeof(sasl_secret_t) + strlen(tmp) + 2);
-        if (!*psecret) return SASL_NOMEM;
+	*psecret = xmalloc(sizeof(sasl_secret_t) + strlen(tmp) + 2);
         strcpy((char *) (*psecret)->data ,tmp);
         (*psecret)->len = strlen(tmp);
 
@@ -143,8 +142,7 @@ static int perlsieve_simple(void *context, int id,
         tmp = POPp;
 
         /* copy result */
-        *result = malloc(strlen(tmp) + 2);
-        if (!*result) return SASL_NOMEM;
+	*result = xmalloc(strlen(tmp) + 2);
         strcpy((char *) *result, tmp);
         if (len) *len = strlen((char *) *result);
 
@@ -245,7 +243,7 @@ sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *passwor
       XSRETURN_UNDEF;
   }
   
-  ret = malloc(sizeof(struct xscyrus));
+  ret = xmalloc(sizeof(struct xscyrus));
   ret->class = safemalloc(20);
   strcpy(ret->class,"managesieve");
   ret->isieve = obj;
@@ -259,11 +257,6 @@ sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *passwor
   }
 
   mlist = (char*) xstrdup(mechlist);
-  if(!mlist) {
-	globalerr = "could not allocate memory for mech list";
-	free(ret);
-	XSRETURN_UNDEF;
-  }
 
   /* loop through all the mechanisms */
   do {
