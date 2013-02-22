@@ -395,12 +395,10 @@ EXPORTED int index_expunge(struct index_state *state, char *sequence,
 	    im->isrecent = 0;
 	}
 
-	if (state->want_expunged)
-	    state->num_expunged++;
-
 	/* set the flags */
 	record.system_flags |= FLAG_DELETED | FLAG_EXPUNGED;
 	numexpunged++;
+	state->num_expunged++;
 
 	r = index_rewrite_record(state, msgno, &record);
 	if (r) break;
@@ -580,14 +578,15 @@ static void index_refresh_locked(struct index_state *state)
 {
     struct mailbox *mailbox = state->mailbox;
     struct index_record record;
-    uint32_t recno;
+    uint32_t recno = 1;
     uint32_t msgno = 1;
     uint32_t firstnotseen = 0;
     uint32_t numrecent = 0;
     uint32_t numunseen = 0;
-    uint32_t recentuid;
-    struct index_map *im;
+    uint32_t num_expunged = 0;
+    uint32_t recentuid = 0;
     modseq_t delayed_modseq = 0;
+    struct index_map *im;
     uint32_t need_records;
     struct seqset *seenlist;
     int i;
@@ -651,6 +650,9 @@ static void index_refresh_locked(struct index_state *state)
 	     * find the file */
 	    im->system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
 	    im = &state->map[msgno++];
+
+	    /* this one is expunged */
+	    num_expunged++;
 	}
 
 	/* expunged record not in map, can skip immediately.  It's
@@ -717,6 +719,9 @@ static void index_refresh_locked(struct index_state *state)
 	    }
 	}
 
+	if (im->system_flags & FLAG_EXPUNGED)
+	    num_expunged++;
+
 	msgno++;
 
 	/* make sure we don't overflow the memory we mapped */
@@ -743,6 +748,7 @@ static void index_refresh_locked(struct index_state *state)
 	im->recno = 0;
 	im->system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
 	im = &state->map[msgno++];
+	num_expunged++;
     }
 
     seqset_free(seenlist);
@@ -756,6 +762,7 @@ static void index_refresh_locked(struct index_state *state)
     state->uidvalidity = mailbox->i.uidvalidity;
     state->last_uid = mailbox->i.last_uid;
     state->num_records = mailbox->i.num_records;
+    state->num_expunged = num_expunged;
     state->firstnotseen = firstnotseen;
     state->numunseen = numunseen;
     state->numrecent = numrecent;
@@ -3633,6 +3640,7 @@ static void index_tellexpunge(struct index_state *state)
 	/* inform about expunges */
 	if (im->system_flags & FLAG_EXPUNGED) {
 	    state->exists--;
+	    state->num_expunged--;
 	    /* they never knew about this one, skip */
 	    if (msgno > state->oldexists)
 		continue;
