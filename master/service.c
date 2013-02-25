@@ -501,6 +501,7 @@ int main(int argc, char **argv, char **envp)
 		r = recvfrom(LISTEN_FD, (void *) &ch, 1, MSG_PEEK,
 			     (struct sockaddr *) &from, &fromlen);
 		if (r == -1) {
+		    if (signals_poll() == SIGHUP) break;
 		    syslog(LOG_ERR, "recvfrom failed: %m");
 		    if (MESSAGE_MASTER_ON_EXIT) 
 			notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
