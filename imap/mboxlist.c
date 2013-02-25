@@ -1382,7 +1382,7 @@ static int mboxlist_is_owner(struct namespace *namespace,
 {
     struct buf extname = BUF_INITIALIZER;
     const char *username = NULL;
-    char *dot_position = NULL;
+    const char *dot_position = NULL;
 
     /* is_user_mbox */
     if (strncmp(name+domainlen, "user.", 5))
@@ -1392,7 +1392,7 @@ static int mboxlist_is_owner(struct namespace *namespace,
     username = name + domainlen + 5;
     dot_position = strchr(username, '.');
     buf_setmap(&extname, username, dot_position ?
-	dot_position - username : strlen(username));
+	dot_position - username : (int)strlen(username));
     mboxname_hiersep_toexternal(namespace,
 	(char *)buf_cstring(&extname), buf_len(&extname));
 
