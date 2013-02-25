@@ -357,14 +357,10 @@ sub is_listening
     my ($self) = @_;
 
     my @afs;
-    if (!defined $self->host())
-    {
-	push(@afs, 'inet', 'inet6');
-    }
-    else
-    {
-	push(@afs, $self->address_family());
-    }
+    my $af = $self->address_family();
+    push(@afs, $af);
+    push(@afs, 'inet6')
+	if ($af eq 'inet' && !defined $self->host());
 
     foreach my $af (@afs)
     {
