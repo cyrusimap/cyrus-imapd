@@ -1552,24 +1552,25 @@ static void add_service(const char *name, struct entry *e, void *rock)
 	/* skip non-primary instances */
 	if (Services[i].associate > 0)
 	    continue;
+
+	if (!strcmpsafe(Services[i].name, name) && Services[i].exec) {
+	    /* we have duplicate service names in the config file */
+	    char buf[256];
+	    snprintf(buf, sizeof(buf), "multiple entries for service '%s'", name);
+
+	    if (ignore_err) {
+		syslog(LOG_WARNING, "WARNING: %s -- ignored", buf);
+		goto done;
+	    }
+
+	    fatal(buf, EX_CONFIG);
+	}
+
 	/* must have empty/same service name, listen and proto */
 	if ((!Services[i].name || !strcmp(Services[i].name, name)) &&
 	    (!Services[i].listen || !strcmp(Services[i].listen, listen)) &&
 	    (!Services[i].proto || !strcmp(Services[i].proto, proto)))
 	    break;
-    }
-
-    /* we have duplicate service names in the config file */
-    if ((i < nservices) && Services[i].exec) {
-	char buf[256];
-	snprintf(buf, sizeof(buf), "multiple entries for service '%s'", name);
-
-	if (ignore_err) {
-	    syslog(LOG_WARNING, "WARNING: %s -- ignored", buf);
-	    goto done;
-	}
-
-	fatal(buf, EX_CONFIG);
     }
 
     if (i == nservices) {
