@@ -137,7 +137,7 @@ const char *MASTER_CONFIG_FILENAME = DEFAULT_MASTER_CONFIG_FILENAME;
 
 #define SERVICE_NONE -1
 #define SERVICE_MAX  INT_MAX-10
-#define SERVICENAME(x) ((x) ? x : "unknown")
+#define SERVICEPARAM(x) ((x) ? x : "unknown")
 
 #define MAX_READY_FAILS	    5
 
@@ -525,10 +525,23 @@ static void service_create(struct service *s)
 	    s = &service;
 	}
 
+	s->family = res->ai_family;
+	switch (s->family) {
+	case AF_UNIX:	s->familyname = "unix"; break;
+	case AF_INET:	s->familyname = "ipv4"; break;
+	case AF_INET6:	s->familyname = "ipv6"; break;
+	default:	s->familyname = "unknown"; break;
+	}
+
+	if (verbose > 2) {
+	    syslog(LOG_DEBUG, "activating service %s/%s",
+		s->name, s->familyname);
+	}
+
 	s->socket = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
 	if (s->socket < 0) {
-	    if (verbose > 2)
-		syslog(LOG_ERR, "unable to open %s socket: %m", s->name);
+	    syslog(LOG_ERR, "unable to open %s/%s socket: %m",
+		s->name, s->familyname);
 	    continue;
 	}
 
@@ -536,14 +549,16 @@ static void service_create(struct service *s)
 	r = setsockopt(s->socket, SOL_SOCKET, SO_REUSEADDR,
 		       (void *) &on, sizeof(on));
 	if (r < 0) {
-	    syslog(LOG_ERR, "unable to setsocketopt(SO_REUSEADDR): %m");
+	    syslog(LOG_ERR, "unable to setsocketopt(SO_REUSEADDR) service %s/%s: %m",
+		s->name, s->familyname);
 	}
 #if defined(IPV6_V6ONLY) && !(defined(__FreeBSD__) && __FreeBSD__ < 3)
 	if (res->ai_family == AF_INET6) {
 	    r = setsockopt(s->socket, IPPROTO_IPV6, IPV6_V6ONLY,
 			   (void *) &on, sizeof(on));
 	    if (r < 0) {
-		syslog(LOG_ERR, "unable to setsocketopt(IPV6_V6ONLY): %m");
+		syslog(LOG_ERR, "unable to setsocketopt(IPV6_V6ONLY) service %s/%s: %m",
+		    s->name, s->familyname);
 	    }
 	}
 #endif
@@ -553,7 +568,8 @@ static void service_create(struct service *s)
 	r = setsockopt(s->socket, SOL_IP, IP_TOS,
 		       (void *) &config_qosmarking, sizeof(config_qosmarking));
 	if (r < 0) {
-	    syslog(LOG_WARNING, "unable to setsocketopt(IP_TOS): %m");
+	    syslog(LOG_WARNING, "unable to setsocketopt(IP_TOS) service %s/%s: %m",
+		s->name, s->familyname);
 	}
 #endif
 
@@ -561,8 +577,8 @@ static void service_create(struct service *s)
 	r = bind(s->socket, res->ai_addr, res->ai_addrlen);
 	umask(oldumask);
 	if (r < 0) {
-	    if (verbose > 2)
-		syslog(LOG_ERR, "unable to bind to %s socket: %m", s->name);
+	    syslog(LOG_ERR, "unable to bind to %s/%s socket: %m",
+		s->name, s->familyname);
 	    xclose(s->socket);
 	    continue;
 	}
@@ -576,14 +592,14 @@ static void service_create(struct service *s)
 	if ((!strcmp(s->proto, "tcp") || !strcmp(s->proto, "tcp4")
 	     || !strcmp(s->proto, "tcp6"))
 	    && listen(s->socket, listen_queue_backlog) < 0) {
-	    syslog(LOG_ERR, "unable to listen to %s socket: %m", s->name);
+	    syslog(LOG_ERR, "unable to listen to %s/%s socket: %m",
+		s->name, s->familyname);
 	    xclose(s->socket);
 	    continue;
 	}
 
 	s->ready_workers = 0;
 	s->associate = nsocket;
-	s->family = res->ai_family;
 
 	get_statsock(s->stat);
 
@@ -764,10 +780,16 @@ static void spawn_service(int si)
 
     switch (p = fork()) {
     case -1:
-	syslog(LOG_ERR, "can't fork process to run service %s: %m", s->name);
+	syslog(LOG_ERR, "can't fork process to run service %s/%s: %m",
+	    s->name, s->familyname);
 	break;
 
     case 0:
+	if (verbose > 2) {
+	    syslog(LOG_DEBUG, "forked process to run service %s/%s",
+		s->name, s->familyname);
+	}
+
 	/* Child - Release our pidfile lock. */
 	xclose(pidfd);
 
@@ -984,9 +1006,10 @@ static void reap_child(void)
 		break;
 	    default:
 		syslog(LOG_CRIT,
-		       "service %s pid %d in ILLEGAL STATE: exited. Serious "
+		       "service %s/%s pid %d in ILLEGAL STATE: exited. Serious "
 		       "software bug or memory corruption detected!",
-		       s ? SERVICENAME(s->name) : "unknown", pid);
+		       s ? SERVICEPARAM(s->name) : "unknown",
+		       s ? SERVICEPARAM(s->familyname) : "unknown", pid);
 		centry_set_state(c, SERVICE_STATE_UNKNOWN);
 	    }
 	    if (s) {
@@ -997,13 +1020,15 @@ static void reap_child(void)
 		    s->ready_workers--;
 		    if (!in_shutdown && failed) {
 			syslog(LOG_WARNING,
-			       "service %s pid %d in READY state: "
+			       "service %s/%s pid %d in READY state: "
 			       "terminated abnormally",
-			       SERVICENAME(s->name), pid);
+			       SERVICEPARAM(s->name),
+			       SERVICEPARAM(s->familyname), pid);
 			if (++s->nreadyfails >= MAX_READY_FAILS && s->exec) {
 			    syslog(LOG_ERR, "too many failures for "
-				   "service %s, disabling until next SIGHUP",
-				   SERVICENAME(s->name));
+				   "service %s/%s, disabling until next SIGHUP",
+				   SERVICEPARAM(s->name),
+				   SERVICEPARAM(s->familyname));
 			    service_forget_exec(s);
 			    xclose(s->socket);
 			}
@@ -1013,26 +1038,29 @@ static void reap_child(void)
 		case SERVICE_STATE_DEAD:
 		    /* uh? either we got duplicate signals, or we are now MT */
 		    syslog(LOG_WARNING,
-			   "service %s pid %d in DEAD state: "
+			   "service %s/%s pid %d in DEAD state: "
 			   "receiving duplicate signals",
-			   SERVICENAME(s->name), pid);
+			   SERVICEPARAM(s->name),
+			   SERVICEPARAM(s->familyname), pid);
 		    break;
 
 		case SERVICE_STATE_BUSY:
 		    s->nactive--;
 		    if (!in_shutdown && failed) {
 			syslog(LOG_DEBUG,
-			       "service %s pid %d in BUSY state: "
+			       "service %s/%s pid %d in BUSY state: "
 			       "terminated abnormally",
-			       SERVICENAME(s->name), pid);
+			       SERVICEPARAM(s->name),
+			       SERVICEPARAM(s->familyname), pid);
 		    }
 		    break;
 
 		case SERVICE_STATE_UNKNOWN:
 		    s->nactive--;
 		    syslog(LOG_WARNING,
-			   "service %s pid %d in UNKNOWN state: exited",
-			   SERVICENAME(s->name), pid);
+			   "service %s/%s pid %d in UNKNOWN state: exited",
+			   SERVICEPARAM(s->name),
+			   SERVICEPARAM(s->familyname), pid);
 		    break;
 		default:
 		    /* Shouldn't get here */
@@ -1058,8 +1086,9 @@ static void reap_child(void)
 	    /* FIXME: is this something we should take lightly? */
 	}
 	if (verbose && c && (c->si != SERVICE_NONE))
-	    syslog(LOG_DEBUG, "service %s now has %d ready workers\n",
-		    SERVICENAME(Services[c->si].name),
+	    syslog(LOG_DEBUG, "service %s/%s now has %d ready workers",
+		    SERVICEPARAM(Services[c->si].name),
+		    SERVICEPARAM(Services[c->si].familyname),
 		    Services[c->si].ready_workers);
     }
 }
@@ -1305,8 +1334,8 @@ static void process_msg(int si, struct notify_message *msg)
 	 * Note that this analysis depends on master's single-threaded
 	 * nature */
 	syslog(LOG_WARNING,
-		"service %s pid %d: receiving messages from long dead children",
-	       SERVICENAME(s->name), msg->service_pid);
+		"service %s/%s pid %d: receiving messages from long dead children",
+	       SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), msg->service_pid);
 	/* re-add child to list */
 	c = centry_alloc();
 	centry_set_name(c, "ZOMBIE", NULL, NULL);
@@ -1318,16 +1347,17 @@ static void process_msg(int si, struct notify_message *msg)
     /* paranoia */
     if (si != c->si) {
 	syslog(LOG_ERR,
-	       "service %s pid %d: changing from service %s due to received message",
-	       SERVICENAME(s->name), c->pid,
-	       ((c->si != SERVICE_NONE && Services[c->si].name) ? Services[c->si].name : "unknown"));
+	       "service %s/%s pid %d: changing from service %s/%s due to received message",
+	       SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid,
+	       ((c->si != SERVICE_NONE) ? SERVICEPARAM(Services[c->si].name) : "unknown"),
+	       ((c->si != SERVICE_NONE) ? SERVICEPARAM(Services[c->si].familyname) : "unknown"));
 	c->si = si;
     }
     switch (c->service_state) {
     case SERVICE_STATE_UNKNOWN:
 	syslog(LOG_WARNING,
-	       "service %s pid %d in UNKNOWN state: processing message 0x%x",
-	       SERVICENAME(s->name), c->pid, msg->message);
+	       "service %s/%s pid %d in UNKNOWN state: processing message 0x%x",
+	       SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid, msg->message);
 	break;
     case SERVICE_STATE_READY:
     case SERVICE_STATE_BUSY:
@@ -1335,8 +1365,8 @@ static void process_msg(int si, struct notify_message *msg)
 	break;
     default:
 	syslog(LOG_CRIT,
-	       "service %s pid %d in ILLEGAL state: detected. Serious software bug or memory corruption uncloaked while processing message 0x%x from child!",
-	       SERVICENAME(s->name), c->pid, msg->message);
+	       "service %s/%s pid %d in ILLEGAL state: detected. Serious software bug or memory corruption uncloaked while processing message 0x%x from child!",
+	       SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid, msg->message);
 	centry_set_state(c, SERVICE_STATE_UNKNOWN);
 	break;
     }
@@ -1348,24 +1378,24 @@ static void process_msg(int si, struct notify_message *msg)
 	case SERVICE_STATE_READY:
 	    /* duplicate message? */
 	    syslog(LOG_WARNING,
-		   "service %s pid %d in READY state: sent available message but it is already ready",
-		   SERVICENAME(s->name), c->pid);
+		   "service %s/%s pid %d in READY state: sent available message but it is already ready",
+		   SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid);
 	    break;
 
 	case SERVICE_STATE_UNKNOWN:
 	    /* since state is unknwon, error in non-DoS way, i.e.
 	     * we don't increment ready_workers */
 	    syslog(LOG_DEBUG,
-		   "service %s pid %d in UNKNOWN state: now available and in READY state",
-		   SERVICENAME(s->name), c->pid);
+		   "service %s/%s pid %d in UNKNOWN state: now available and in READY state",
+		   SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid);
 	    centry_set_state(c, SERVICE_STATE_READY);
 	    break;
 
 	case SERVICE_STATE_BUSY:
 	    if (verbose)
 		syslog(LOG_DEBUG,
-		       "service %s pid %d in BUSY state: now available and in READY state",
-		       SERVICENAME(s->name), c->pid);
+		       "service %s/%s pid %d in BUSY state: now available and in READY state",
+		       SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid);
 	    centry_set_state(c, SERVICE_STATE_READY);
 	    s->ready_workers++;
 	    break;
@@ -1385,22 +1415,22 @@ static void process_msg(int si, struct notify_message *msg)
 	case SERVICE_STATE_BUSY:
 	    /* duplicate message? */
 	    syslog(LOG_WARNING,
-		   "service %s pid %d in BUSY state: sent unavailable message but it is already busy",
-		   SERVICENAME(s->name), c->pid);
+		   "service %s/%s pid %d in BUSY state: sent unavailable message but it is already busy",
+		   SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid);
 	    break;
 
 	case SERVICE_STATE_UNKNOWN:
 	    syslog(LOG_DEBUG,
-		   "service %s pid %d in UNKNOWN state: now unavailable and in BUSY state",
-		   SERVICENAME(s->name), c->pid);
+		   "service %s/%s pid %d in UNKNOWN state: now unavailable and in BUSY state",
+		   SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid);
 	    centry_set_state(c, SERVICE_STATE_BUSY);
 	    break;
 
 	case SERVICE_STATE_READY:
 	    if (verbose)
 		syslog(LOG_DEBUG,
-		       "service %s pid %d in READY state: now unavailable and in BUSY state",
-		       SERVICENAME(s->name), c->pid);
+		       "service %s/%s pid %d in READY state: now unavailable and in BUSY state",
+		       SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid);
 	    centry_set_state(c, SERVICE_STATE_BUSY);
 	    s->ready_workers--;
 	    break;
@@ -1421,22 +1451,22 @@ static void process_msg(int si, struct notify_message *msg)
 	    s->nconnections++;
 	    if (verbose)
 		syslog(LOG_DEBUG,
-		       "service %s pid %d in BUSY state: now serving connection",
-		       SERVICENAME(s->name), c->pid);
+		       "service %s/%s pid %d in BUSY state: now serving connection",
+		       SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid);
 	    break;
 
 	case SERVICE_STATE_UNKNOWN:
 	    s->nconnections++;
 	    centry_set_state(c, SERVICE_STATE_BUSY);
 	    syslog(LOG_DEBUG,
-		   "service %s pid %d in UNKNOWN state: now in BUSY state and serving connection",
-		   SERVICENAME(s->name), c->pid);
+		   "service %s/%s pid %d in UNKNOWN state: now in BUSY state and serving connection",
+		   SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid);
 	    break;
 
 	case SERVICE_STATE_READY:
 	    syslog(LOG_ERR,
-		   "service %s pid %d in READY state: reported new connection, forced to BUSY state",
-		   SERVICENAME(s->name), c->pid);
+		   "service %s/%s pid %d in READY state: reported new connection, forced to BUSY state",
+		   SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid);
 	    /* be resilient on face of a bogon source, so lets err to the side
 	     * of non-denial-of-service */
 	    centry_set_state(c, SERVICE_STATE_BUSY);
@@ -1461,14 +1491,14 @@ static void process_msg(int si, struct notify_message *msg)
 	    s->nconnections++;
 	    if (verbose)
 		syslog(LOG_DEBUG,
-		       "service %s pid %d in READY state: serving one more multi-threaded connection",
-		       SERVICENAME(s->name), c->pid);
+		       "service %s/%s pid %d in READY state: serving one more multi-threaded connection",
+		       SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid);
 	    break;
 
 	case SERVICE_STATE_BUSY:
 	    syslog(LOG_ERR,
-		   "service %s pid %d in BUSY state: serving one more multi-threaded connection, forced to READY state",
-		   SERVICENAME(s->name), c->pid);
+		   "service %s/%s pid %d in BUSY state: serving one more multi-threaded connection, forced to READY state",
+		   SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid);
 	    /* be resilient on face of a bogon source, so lets err to the side
 	     * of non-denial-of-service */
 	    centry_set_state(c, SERVICE_STATE_READY);
@@ -1480,8 +1510,8 @@ static void process_msg(int si, struct notify_message *msg)
 	    s->nconnections++;
 	    centry_set_state(c, SERVICE_STATE_READY);
 	    syslog(LOG_ERR,
-		   "service %s pid %d in UNKNOWN state: serving one more multi-threaded connection, forced to READY state",
-		   SERVICENAME(s->name), c->pid);
+		   "service %s/%s pid %d in UNKNOWN state: serving one more multi-threaded connection, forced to READY state",
+		   SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid);
 	    break;
 
 	case SERVICE_STATE_DEAD:
@@ -1496,14 +1526,14 @@ static void process_msg(int si, struct notify_message *msg)
 	break;
 
     default:
-	syslog(LOG_CRIT, "service %s pid %d: Software bug: unrecognized message 0x%x",
-	       SERVICENAME(s->name), c->pid, msg->message);
+	syslog(LOG_CRIT, "service %s/%s pid %d: Software bug: unrecognized message 0x%x",
+	       SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid, msg->message);
 	break;
     }
 
     if (verbose)
-	syslog(LOG_DEBUG, "service %s now has %d ready workers\n",
-	       SERVICENAME(s->name), s->ready_workers);
+	syslog(LOG_DEBUG, "service %s/%s now has %d ready workers",
+	       SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), s->ready_workers);
 }
 
 static void add_start(const char *name, struct entry *e,
@@ -1773,8 +1803,9 @@ static void reread_conf(void)
 	    /* cleanup newly disabled services */
 
 	    if (verbose > 2)
-		syslog(LOG_DEBUG, "disable: service %s socket %d pipe %d %d",
-		       Services[i].name, Services[i].socket,
+		syslog(LOG_DEBUG, "disable: service %s/%s socket %d pipe %d %d",
+		       Services[i].name, Services[i].familyname,
+		       Services[i].socket,
 		       Services[i].stat[0], Services[i].stat[1]);
 
 	    /* Only free the service info on the primary */
@@ -1810,8 +1841,9 @@ static void reread_conf(void)
 
 	    service_create(&Services[i]);
 	    if (verbose > 2)
-		syslog(LOG_DEBUG, "init: service %s socket %d pipe %d %d",
-		       Services[i].name, Services[i].socket,
+		syslog(LOG_DEBUG, "init: service %s/%s socket %d pipe %d %d",
+		       Services[i].name, Services[i].familyname,
+		       Services[i].socket,
 		       Services[i].stat[0], Services[i].stat[1]);
 	}
     }
@@ -2129,8 +2161,9 @@ int main(int argc, char **argv)
     for (i = 0; i < nservices; i++) {
 	service_create(&Services[i]);
 	if (verbose > 2)
-	    syslog(LOG_DEBUG, "init: service %s socket %d pipe %d %d",
-		   Services[i].name, Services[i].socket,
+	    syslog(LOG_DEBUG, "init: service %s/%s socket %d pipe %d %d",
+		   Services[i].name, Services[i].familyname,
+		   Services[i].socket,
 		   Services[i].stat[0], Services[i].stat[1]);
     }
 
@@ -2183,16 +2216,16 @@ int main(int argc, char **argv)
 			  && Services[i].babysit
 			  && Services[i].nactive == 0) {
 		    syslog(LOG_ERR,
-			  "lost all children for service: %s.  " \
+			  "lost all children for service: %s/%s.  " \
 			  "Applying babysitter.",
-			  Services[i].name);
+			  Services[i].name, Services[i].familyname);
 		    spawn_service(i);
 		} else if (!Services[i].exec /* disabled */ &&
 			  Services[i].name /* not yet removed */ &&
 			  Services[i].nactive == 0) {
 		    if (verbose > 2)
-			syslog(LOG_DEBUG, "remove: service %s pipe %d %d",
-			      Services[i].name,
+			syslog(LOG_DEBUG, "remove: service %s/%s pipe %d %d",
+			      Services[i].name, Services[i].familyname,
 			      Services[i].stat[0], Services[i].stat[1]);
 
 		    /* Only free the service info on the primary */
@@ -2232,8 +2265,8 @@ int main(int argc, char **argv)
 	    /* messages */
 	    if (x > 0) {
 		if (verbose > 2)
-		    syslog(LOG_DEBUG, "listening for messages from %s",
-			   Services[i].name);
+		    syslog(LOG_DEBUG, "listening for messages from %s/%s",
+			   Services[i].name, Services[i].familyname);
 		FD_SET(x, &rfds);
 	    }
 	    if (x > maxfd) maxfd = x;
@@ -2243,16 +2276,16 @@ int main(int argc, char **argv)
 		Services[i].nactive < Services[i].max_workers &&
 		!service_is_fork_limited(&Services[i])) {
 		if (verbose > 2)
-		    syslog(LOG_DEBUG, "listening for connections for %s",
-			   Services[i].name);
+		    syslog(LOG_DEBUG, "listening for connections for %s/%s",
+			   Services[i].name, Services[i].familyname);
 		FD_SET(y, &rfds);
 		if (y > maxfd) maxfd = y;
 	    }
 
 	    /* paranoia */
 	    if (Services[i].ready_workers < 0) {
-		syslog(LOG_ERR, "%s has %d workers?!?", Services[i].name,
-		       Services[i].ready_workers);
+		syslog(LOG_ERR, "%s/%s has %d workers?!?", Services[i].name,
+		       Services[i].familyname, Services[i].ready_workers);
 	    }
 	}
 	maxfd++;		/* need 1 greater than maxfd */
