@@ -614,7 +614,7 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 
     /* add modseq only on first call, cancel otherwise */
     if (mboxevent_expected_param(event->type, EVENT_MODSEQ)) {
-	if (event->uidset == NULL) {
+	if (event->uidset == NULL || (seqset_first(event->uidset) == seqset_last(event->uidset))) {
 	    FILL_UNSIGNED_PARAM(event, EVENT_MODSEQ, record->modseq);
 	}
 	else {
