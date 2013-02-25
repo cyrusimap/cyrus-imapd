@@ -4231,6 +4231,9 @@ static MsgData *index_msgdata_load(struct index_state *state,
 
 	cur->uid = record.uid;
 
+	/* useful for convupdates */
+	cur->modseq = record.modseq;
+
 	did_cache = did_env = did_conv = 0;
 	tmpenv = NULL;
 
@@ -4282,7 +4285,7 @@ static MsgData *index_msgdata_load(struct index_state *state,
 		cur->from = get_localpart_addr(cacheitem_base(&record, CACHE_FROM));
 		break;
 	    case SORT_MODSEQ:
-		cur->modseq = record.modseq;
+		/* already copied above */
 		break;
 	    case SORT_SIZE:
 		cur->size = record.size;
