@@ -1797,7 +1797,7 @@ static void reread_conf(struct timeval now)
     masterconf_getsection("SERVICES", &add_service, (void*) 1);
 
     for (i = 0; i < nservices; i++) {
-	if (!Services[i].exec && Services[i].socket) {
+	if (!Services[i].exec && (Services[i].socket >= 0)) {
 	    /* cleanup newly disabled services */
 
 	    if (verbose > 2)
@@ -1828,13 +1828,10 @@ static void reread_conf(struct timeval now)
 	    }
 
 	    /* close all listeners */
-	    if (Services[i].socket >= 0) {
-		shutdown(Services[i].socket, SHUT_RDWR);
-		xclose(Services[i].socket);
-	    }
-	    Services[i].socket = -1;
+	    shutdown(Services[i].socket, SHUT_RDWR);
+	    xclose(Services[i].socket);
 	}
-	else if (Services[i].exec && !Services[i].socket) {
+	else if (Services[i].exec && (Services[i].socket < 0)) {
 	    /* initialize new services */
 
 	    service_create(&Services[i]);
@@ -2261,7 +2258,7 @@ int main(int argc, char **argv)
 	    int y = Services[i].socket;
 
 	    /* messages */
-	    if (x > 0) {
+	    if (x >= 0) {
 		if (verbose > 2)
 		    syslog(LOG_DEBUG, "listening for messages from %s/%s",
 			   Services[i].name, Services[i].familyname);
@@ -2270,7 +2267,7 @@ int main(int argc, char **argv)
 	    if (x > maxfd) maxfd = x;
 
 	    /* connections */
-	    if (y > 0 && Services[i].ready_workers == 0 &&
+	    if (y >= 0 && Services[i].ready_workers == 0 &&
 		Services[i].nactive < Services[i].max_workers &&
 		!service_is_fork_limited(&Services[i])) {
 		if (verbose > 2)
@@ -2326,7 +2323,7 @@ int main(int argc, char **argv)
 	    int y = Services[i].socket;
 	    int j;
 
-	    if (FD_ISSET(x, &rfds)) {
+	    if ((x >= 0) && FD_ISSET(x, &rfds)) {
 		while ((r = read_msg(x, &msg)) == 0)
 		    process_msg(i, &msg);
 
@@ -2353,7 +2350,7 @@ int main(int argc, char **argv)
 		}
 
 		if (Services[i].ready_workers == 0 &&
-		    FD_ISSET(y, &rfds)) {
+		    y >= 0 && FD_ISSET(y, &rfds)) {
 		    /* huh, someone wants to talk to us */
 		    spawn_service(i);
 		}
