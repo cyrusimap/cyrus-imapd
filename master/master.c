@@ -1092,18 +1092,17 @@ static void reap_child(void)
     }
 }
 
-static void init_janitor(void)
+static void init_janitor(struct timeval now)
 {
     struct event *evt = (struct event *) xzmalloc(sizeof(struct event));
 
-    gettimeofday(&janitor_mark, NULL);
+    janitor_mark = now;
     janitor_position = 0;
 
     evt->name = xstrdup("janitor periodic wakeup call");
     evt->period = 10;
     evt->periodic = 1;
     evt->mark = janitor_mark;
-    evt->mark.tv_sec += 2;
     schedule_event(evt);
 }
 
@@ -1784,7 +1783,7 @@ static void limit_fds(rlim_t x)
 }
 #endif /* HAVE_SETRLIMIT */
 
-static void reread_conf(void)
+static void reread_conf(struct timeval now)
 {
     int i,j;
     struct event *ptr;
@@ -1859,7 +1858,7 @@ static void reread_conf(void)
     masterconf_getsection("EVENTS", &add_event, (void*) 1);
 
     /* reinit child janitor */
-    init_janitor();
+    init_janitor(now);
 
     /* send some feedback to admin */
     syslog(LOG_NOTICE,
@@ -2174,12 +2173,12 @@ int main(int argc, char **argv)
     }
 
     /* init ctable janitor */
-    init_janitor();
+    gettimeofday(&now, 0);
+    init_janitor(now);
 
     /* ok, we're going to start spawning like mad now */
     syslog(LOG_DEBUG, "ready for work");
 
-    gettimeofday(&now, 0);
     for (;;) {
 	int r, i, maxfd, total_children = 0;
 	struct timeval tv, *tvptr;
@@ -2251,7 +2250,7 @@ int main(int argc, char **argv)
 	if (gotsighup) {
 	    syslog(LOG_NOTICE, "got SIGHUP");
 	    gotsighup = 0;
-	    reread_conf();
+	    reread_conf(now);
 	}
 
 	FD_ZERO(&rfds);
