@@ -878,5 +878,22 @@ sub test_service_bad_name
     $self->assert(!$self->{instance}->is_running());
 }
 
+sub test_service_associate
+{
+    my ($self) = @_;
+
+    xlog "sending a SIGHUP to a master process with services";
+    xlog "whose listen= parameters give more than one result in";
+    xlog "getaddrinfo(), such as an IPv4 and IPv6 (Bug 3771)";
+
+    my $host = 'localhost';
+
+    $self->lemming_service(tag => 'foo', host => undef);
+
+    $self->{instance}->start();
+    $self->{instance}->send_sighup();
+    $self->{instance}->stop();
+}
+
 
 1;

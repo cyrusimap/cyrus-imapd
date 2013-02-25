@@ -311,11 +311,9 @@ sub address_family
     die "Sorry, the host argument \"$h\" must be a numeric IPv4 or IPv6 address";
 }
 
-sub is_listening
+sub _is_listening_af
 {
-    my ($self) = @_;
-
-    my $af = $self->address_family();
+    my ($self, $af) = @_;
 
     my @cmd = (
 	'netstat',
@@ -352,6 +350,27 @@ sub is_listening
 	if ($found);
 
     return $found;
+}
+
+sub is_listening
+{
+    my ($self) = @_;
+
+    my @afs;
+    if (!defined $self->host())
+    {
+	push(@afs, 'inet', 'inet6');
+    }
+    else
+    {
+	push(@afs, $self->address_family());
+    }
+
+    foreach my $af (@afs)
+    {
+	return 0 if (!$self->_is_listening_af($af));
+    }
+    return 1;
 }
 
 sub kill_processes_on_ports

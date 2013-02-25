@@ -1061,6 +1061,19 @@ sub _stop_pid
     return $r;
 }
 
+sub send_sighup
+{
+    my ($self) = @_;
+
+    return if (!$self->{_started});
+    return if ($self->{_stopped});
+    xlog "sighup";
+
+    my $pid = $self->_read_pid_file('master') or return;
+    kill(SIGHUP, $pid) or die "Can't send signal SIGHUP to pid $pid: $!";
+    return 1;
+}
+
 sub stop
 {
     my ($self) = @_;
