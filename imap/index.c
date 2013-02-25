@@ -4849,6 +4849,9 @@ MsgData **index_msgdata_load(struct index_state *state,
 	if (found_anchor && record.uid == anchor)
 	    *found_anchor = 1;
 
+	/* useful for convupdates */
+	cur->modseq = record.modseq;
+
 	did_cache = did_env = did_conv = 0;
 	tmpenv = NULL;
 	conv = NULL; /* XXX: use a hash to avoid re-reading? */
