@@ -246,10 +246,21 @@ static int unlockaccept(void)
 static int safe_wait_readable(int fd)
 {
     fd_set rfds;
+    int r;
 
     FD_ZERO(&rfds);
     FD_SET(fd, &rfds);
-    return signals_select(fd+1, &rfds, NULL, NULL, NULL);
+
+    /* waiting for incoming connection, we want to leave as soon as possible
+     * upon SIGHUP. */
+    signals_reset_sighup_handler(0);
+
+    r = signals_select(fd+1, &rfds, NULL, NULL, NULL);
+
+    /* we don't want to be interrupted by SIGHUP anymore */
+    signals_reset_sighup_handler(1);
+
+    return r;
 }
 
 int main(int argc, char **argv, char **envp)

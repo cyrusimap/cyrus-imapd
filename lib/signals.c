@@ -122,6 +122,33 @@ EXPORTED void signals_add_handlers(int alarm)
     }
 }
 
+EXPORTED void signals_reset_sighup_handler(int restartable)
+{
+    struct sigaction action;
+
+    sigemptyset(&action.sa_mask);
+
+    action.sa_flags = 0;
+#ifdef SA_RESETHAND
+    action.sa_flags |= SA_RESETHAND;
+#endif
+#ifdef SA_RESTART
+    if (restartable) {
+	action.sa_flags |= SA_RESTART;
+    }
+#endif
+    action.sa_sigaction = sighandler;
+    action.sa_flags |= SA_SIGINFO;
+
+    if (sigaction(SIGHUP, &action, NULL) < 0) {
+	char buf[256];
+	snprintf(buf, sizeof(buf),
+		 "unable to install signal handler for %s: %s",
+		 strsignal(SIGHUP), strerror(errno));
+	fatal(buf, EC_TEMPFAIL);
+    }
+}
+
 static shutdownfn *shutdown_cb = NULL;
 static int signals_in_shutdown = 0;
 
