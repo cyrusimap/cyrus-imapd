@@ -1268,7 +1268,7 @@ static void child_sighandler_setup(void)
  */
 static int read_msg(int fd, struct notify_message *msg)
 {
-    ssize_t r;
+    ssize_t r = 0;
     size_t off = 0;
     int s = sizeof(struct notify_message);
 
