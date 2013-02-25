@@ -407,8 +407,12 @@ static struct service *service_add(const struct service *proto)
 
     if (proto)
 	memcpy(s, proto, sizeof(struct service));
-    else
+    else {
 	memset(s, 0, sizeof(struct service));
+	s->socket = -1;
+	s->stat[0] = -1;
+	s->stat[1] = -1;
+    }
 
     return s;
 }
@@ -516,14 +520,13 @@ static void service_create(struct service *s)
     memcpy(&service0, s, sizeof(struct service));
 
     for (res = res0; res; res = res->ai_next) {
-	if (s->socket > 0) {
+	if (s->socket >= 0) {
 	    memcpy(&service, &service0, sizeof(struct service));
 	    s = &service;
 	}
 
 	s->socket = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
 	if (s->socket < 0) {
-	    s->socket = 0;
 	    if (verbose > 2)
 		syslog(LOG_ERR, "unable to open %s socket: %m", s->name);
 	    continue;
@@ -558,10 +561,9 @@ static void service_create(struct service *s)
 	r = bind(s->socket, res->ai_addr, res->ai_addrlen);
 	umask(oldumask);
 	if (r < 0) {
-	    close(s->socket);
-	    s->socket = 0;
 	    if (verbose > 2)
 		syslog(LOG_ERR, "unable to bind to %s socket: %m", s->name);
+	    xclose(s->socket);
 	    continue;
 	}
 
@@ -575,8 +577,7 @@ static void service_create(struct service *s)
 	     || !strcmp(s->proto, "tcp6"))
 	    && listen(s->socket, listen_queue_backlog) < 0) {
 	    syslog(LOG_ERR, "unable to listen to %s socket: %m", s->name);
-	    close(s->socket);
-	    s->socket = 0;
+	    xclose(s->socket);
 	    continue;
 	}
 
@@ -654,7 +655,7 @@ static void run_startup(const char *name, const strarray_t *cmd)
 
     case 0:
 	/* Child - Release our pidfile lock. */
-	if(pidfd != -1) close(pidfd);
+	xclose(pidfd);
 
 	if (become_cyrus() != 0)
 	    fatalf(1, "can't change to the cyrus user: %m");
@@ -768,7 +769,7 @@ static void spawn_service(int si)
 
     case 0:
 	/* Child - Release our pidfile lock. */
-	if(pidfd != -1) close(pidfd);
+	xclose(pidfd);
 
 	if (become_cyrus() != 0) {
 	    syslog(LOG_ERR, "can't change to the cyrus user");
@@ -791,9 +792,9 @@ static void spawn_service(int si)
 
 	/* close all listeners */
 	for (i = 0; i < nservices; i++) {
-	    if (Services[i].socket > 0) close(Services[i].socket);
-	    if (Services[i].stat[0] > 0) close(Services[i].stat[0]);
-	    if (Services[i].stat[1] > 0) close(Services[i].stat[1]);
+	    xclose(Services[i].socket);
+	    xclose(Services[i].stat[0]);
+	    xclose(Services[i].stat[1]);
 	}
 	limit_fds(s->maxfds);
 
@@ -885,7 +886,7 @@ static void spawn_schedule(struct timeval now)
 
 	    case 0:
 		/* Child - Release our pidfile lock. */
-		if(pidfd != -1) close(pidfd);
+		xclose(pidfd);
 
 		if (become_cyrus() != 0) {
 		    syslog(LOG_ERR, "can't change to the cyrus user");
@@ -894,9 +895,9 @@ static void spawn_schedule(struct timeval now)
 
 		/* close all listeners */
 		for (i = 0; i < nservices; i++) {
-		    if (Services[i].socket > 0) close(Services[i].socket);
-		    if (Services[i].stat[0] > 0) close(Services[i].stat[0]);
-		    if (Services[i].stat[1] > 0) close(Services[i].stat[1]);
+		    xclose(Services[i].socket);
+		    xclose(Services[i].stat[0]);
+		    xclose(Services[i].stat[1]);
 		}
 		limit_fds(256);
 
@@ -1004,8 +1005,7 @@ static void reap_child(void)
 				   "service %s, disabling until next SIGHUP",
 				   SERVICENAME(s->name));
 			    service_forget_exec(s);
-			    if (s->socket > 0) close(s->socket);
-			    s->socket = 0;
+			    xclose(s->socket);
 			}
 		    }
 		    break;
@@ -1799,11 +1799,11 @@ static void reread_conf(void)
 	    }
 
 	    /* close all listeners */
-	    if (Services[i].socket > 0) {
+	    if (Services[i].socket >= 0) {
 		shutdown(Services[i].socket, SHUT_RDWR);
-		close(Services[i].socket);
+		xclose(Services[i].socket);
 	    }
-	    Services[i].socket = 0;
+	    Services[i].socket = -1;
 	}
 	else if (Services[i].exec && !Services[i].socket) {
 	    /* initialize new services */
@@ -2085,7 +2085,7 @@ int main(int argc, char **argv)
 		   "could not write success result to startup pipe (%m)");
 
 	close(startup_pipe[1]);
-	if (pidlock_fd != -1) close(pidlock_fd);
+	xclose(pidlock_fd);
     }
 
     syslog(LOG_DEBUG, "process started");
@@ -2205,9 +2205,8 @@ int main(int argc, char **argv)
 		    Services[i].nconnections = 0;
 		    Services[i].associate = 0;
 
-		    if (Services[i].stat[0] > 0) close(Services[i].stat[0]);
-		    if (Services[i].stat[1] > 0) close(Services[i].stat[1]);
-		    memset(Services[i].stat, 0, sizeof(Services[i].stat));
+		    xclose(Services[i].stat[0]);
+		    xclose(Services[i].stat[1]);
 		}
 	    }
 	}
