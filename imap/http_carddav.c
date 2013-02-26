@@ -578,7 +578,7 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 
     fprintf(f, "Message-ID: <%s@%s>\r\n", uid, config_servername);
 
-    fprintf(f, "Content-Type: text/vcard; charset=UTF-8\r\n");
+    fprintf(f, "Content-Type: text/vcard; charset=utf-8\r\n");
 
     fprintf(f, "Content-Length: %u\r\n", buf_len(&txn->req_body));
     fprintf(f, "Content-Disposition: inline; filename=\"%s\"\r\n", resource);

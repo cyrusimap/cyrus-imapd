@@ -1427,7 +1427,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 
     fprintf(f, "Message-ID: <%s@%s>\r\n", uid, config_servername);
 
-    fprintf(f, "Content-Type: text/calendar; charset=UTF-8");
+    fprintf(f, "Content-Type: text/calendar; charset=utf-8");
     if ((meth = icalcomponent_get_method(ical)) != ICAL_METHOD_NONE) {
 	fprintf(f, "; method=%s", icalproperty_method_to_string(meth));
     }
