@@ -251,8 +251,26 @@ static int safe_wait_readable(int fd)
     FD_ZERO(&rfds);
     FD_SET(fd, &rfds);
 
-    /* waiting for incoming connection, we want to leave as soon as possible
-     * upon SIGHUP. */
+    /* Waiting for incoming connection, we want to leave as soon as
+     * possible upon SIGHUP. Julien explains:
+     *
+     * The thing is SIGHUP handler is set as restartable, which is a good thing
+     * when we have received a connection and are processing client commands:
+     * we don't want to be interrupted by that signal.
+     *
+     * On the other hand, when we are waiting to receive a new connection, I
+     * needed a way to make the service instance holding the lock react faster.
+     * Without resetting SIGHUP as not restartable, the instance would just
+     * keep on waiting for a new connection (while the other instances -
+     * waiting for the lock - had received and processed the signal right
+     * away).
+     *
+     * Now that we have safe_wait_readable, Linux systems already react faster
+     * because there select/pselect always returns -1/EINTR even if SA_RESTART
+     * is set. But that may not be the case in other OSes (POSIX spec says it
+     * is implementation-defined whether it does restart or return -1/EINTR
+     * when SA_RESTART is set).
+     */
     signals_reset_sighup_handler(0);
 
     r = signals_select(fd+1, &rfds, NULL, NULL, NULL);
