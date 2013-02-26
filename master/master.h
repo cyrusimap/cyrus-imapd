@@ -19,7 +19,6 @@ struct service {
     
     /* multiple address family support */
     int associate;		/* are we primary or additional instance? */
-    int family;			/* address family */
     const char *familyname;	/* address family name */
 
     /* communication info */
