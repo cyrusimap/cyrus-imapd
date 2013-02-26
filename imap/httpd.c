@@ -1651,7 +1651,7 @@ void response_header(long code, struct transaction_t *txn)
     case HTTP_SWITCH_PROT:
 	keepalive = 0;  /* No alarm during TLS negotiation */
 	prot_printf(httpd_out, "Upgrade: TLS/1.0\r\n");
-	prot_printf(httpd_out, "Connection: Upgrade\r\n");
+	prot_printf(httpd_out, "Connection: upgrade\r\n");
 	/* Fall through as provisional response */
 
     case HTTP_CONTINUE:
@@ -1670,7 +1670,7 @@ void response_header(long code, struct transaction_t *txn)
 	return;
 
     case HTTP_UPGRADE:
-	upgrade = ", Upgrade";
+	upgrade = ", upgrade";
 	prot_printf(httpd_out, "Upgrade: TLS/1.0\r\n");
 	/* Fall through as final response */
 
@@ -1681,7 +1681,7 @@ void response_header(long code, struct transaction_t *txn)
 	}
 	else {
 	    prot_printf(httpd_out, "Keep-Alive: timeout=%d\r\n", httpd_timeout);
-	    prot_printf(httpd_out, "Connection: Keep-Alive%s\r\n", upgrade);
+	    prot_printf(httpd_out, "Connection: keep-alive%s\r\n", upgrade);
 	}
     }
 
@@ -1704,9 +1704,25 @@ void response_header(long code, struct transaction_t *txn)
     if (txn->location) {
 	prot_printf(httpd_out, "Location: %s\r\n", txn->location);
     }
+    if (resp_body->prefs) {
+	/* Construct Preference-Applied header */
+	const char *prefs[] = {
+	    "return=minimal", "return=representation", "depth-noroot", NULL
+	};
+
+	comma_list_hdr("Preference-Applied", prefs, resp_body->prefs);
+    }
+    if (txn->flags.vary) {
+	/* Construct Vary header */
+	const char *vary_hdrs[] = {
+	    "accept-encoding", "brief", "prefer", NULL
+	};
+
+	comma_list_hdr("Vary", vary_hdrs, txn->flags.vary);
+    }
 
 
-    /* Informative Header Fields */
+    /* Response Context */
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	prot_printf(httpd_out, "Server: %s\r\n", buf_cstring(&serverinfo));
     }
@@ -1755,7 +1771,7 @@ void response_header(long code, struct transaction_t *txn)
 
     switch (code) {
     case HTTP_UNAUTHORIZED:
-	/* Construct WWW-Authenticate header(s) for 401 response */
+	/* Authentication Challenges */
 	if (!auth_chal->scheme) {
 	    /* Require authentication by advertising all possible schemes */
 	    struct auth_scheme_t *scheme;
@@ -1845,6 +1861,8 @@ void response_header(long code, struct transaction_t *txn)
 	else prot_printf(httpd_out, "*");
 	prot_printf(httpd_out, "/%lu\r\n", resp_body->range.len);
 
+	/* Fall through and specify framing */
+
     default:
 	if (txn->flags.te) {
 	    prot_printf(httpd_out, "Transfer-Encoding:");
@@ -1860,23 +1878,7 @@ void response_header(long code, struct transaction_t *txn)
     }
 
 
-    /* Selected Representation */
-    if (txn->flags.vary) {
-	/* Construct Vary header */
-	const char *vary_hdrs[] = {
-	    "Accept-Encoding", "Brief", "Prefer", NULL
-	};
-
-	comma_list_hdr("Vary", vary_hdrs, txn->flags.vary);
-    }
-    if (resp_body->prefs) {
-	/* Construct Preference-Applied header */
-	const char *prefs[] = {
-	    "return=minimal", "return=representation", "depth-noroot", NULL
-	};
-
-	comma_list_hdr("Preference-Applied", prefs, resp_body->prefs);
-    }
+    /* Validators */
     if (resp_body->lock) {
 	prot_printf(httpd_out, "Lock-Token: <%s>\r\n", resp_body->lock);
     }
