@@ -60,6 +60,9 @@
 #define HTTP_VERSION	"HTTP/1.1"
 #define HTTPS_VERSION	"HTTPS/1.1"
 
+/* Support TLS version for upgrade */
+#define TLS_VERSION	"TLS/1.0"
+
 /* Supported HTML DOCTYPE */
 #define HTML_DOCTYPE \
     "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" " \

@@ -1069,7 +1069,7 @@ static void cmdloop(void)
 		else if (!ret && !httpd_tls_done && tls_enabled() &&
 			 !strcasecmp(token, "Upgrade")) {
 		    if ((hdr = spool_getheader(txn.req_hdrs, "Upgrade")) &&
-			!strncmp(hdr[0], "TLS/1.0", strcspn(hdr[0], " ,"))) {
+			!strncmp(hdr[0], TLS_VERSION, strcspn(hdr[0], " ,"))) {
 			syslog(LOG_DEBUG, "client requested TLS");
 			dotls = 1;
 		    }
@@ -1185,7 +1185,7 @@ static void cmdloop(void)
 
 		/* Check which response is required */
 		if ((hdr = spool_getheader(txn.req_hdrs, "Upgrade")) &&
-		    !strncmp(hdr[0], "TLS/1.0", strcspn(hdr[0], " ,"))) {
+		    !strncmp(hdr[0], TLS_VERSION, strcspn(hdr[0], " ,"))) {
 		    /* Client (Murder proxy) prefers RFC 2817 (TLS upgrade) */
 		    code = HTTP_UPGRADE;
 		}
@@ -1650,7 +1650,8 @@ void response_header(long code, struct transaction_t *txn)
     switch (code) {
     case HTTP_SWITCH_PROT:
 	keepalive = 0;  /* No alarm during TLS negotiation */
-	prot_printf(httpd_out, "Upgrade: TLS/1.0\r\n");
+	prot_printf(httpd_out, "Upgrade: %s, %s\r\n",
+		    TLS_VERSION, HTTP_VERSION);
 	prot_printf(httpd_out, "Connection: upgrade\r\n");
 	/* Fall through as provisional response */
 
@@ -1671,7 +1672,8 @@ void response_header(long code, struct transaction_t *txn)
 
     case HTTP_UPGRADE:
 	upgrade = ", upgrade";
-	prot_printf(httpd_out, "Upgrade: TLS/1.0\r\n");
+	prot_printf(httpd_out, "Upgrade: %s, %s\r\n",
+		    TLS_VERSION, HTTP_VERSION);
 	/* Fall through as final response */
 
     default:
