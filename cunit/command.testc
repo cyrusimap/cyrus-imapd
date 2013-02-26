@@ -1,6 +1,7 @@
 #include "config.h"
 #include <stdio.h>
 #include "cunit/cunit.h"
+#include <sys/stat.h>
 #include "command.h"
 
 const char canary[] = "canary.txt";

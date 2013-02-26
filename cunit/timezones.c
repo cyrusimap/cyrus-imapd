@@ -44,6 +44,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <assert.h>
+#include <time.h>
 #include "timezones.h"
 
 extern int verbose;
