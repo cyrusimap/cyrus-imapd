@@ -108,7 +108,7 @@ ec HTTP_PRECOND_FAILED,
    "412 Precondition Failed"
 
 ec HTTP_TOO_LARGE,
-   "413 Request Representation Too Large"
+   "413 Payload Too Large"
 
 ec HTTP_TOO_LONG,
    "414 URI Too Long"
@@ -117,7 +117,7 @@ ec HTTP_BAD_MEDIATYPE,
    "415 Unsupported Media Type"
 
 ec HTTP_UNSAT_RANGE,
-   "416 Request Range Not Satisfiable"
+   "416 Range Not Satisfiable"
 
 ec HTTP_EXPECT_FAILED,
    "417 Expectation Failed"
