@@ -216,7 +216,7 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 	}
 	prot_printf(s->out, "Upgrade: TLS/1.0\r\n");
 	if (need_tls) {
-	    prot_printf(s->out, "Connection: Upgrade\r\n");
+	    prot_printf(s->out, "Connection: upgrade\r\n");
 	    need_tls = 0;
 	}
 	prot_printf(s->out, "Authorization: %s %s\r\n",
@@ -607,7 +607,7 @@ static void send_response(struct protstream *pout,
 	prot_printf(pout, "Connection: close\r\n");
     else {
 	prot_printf(pout, "Keep-Alive: timeout=%d\r\n", httpd_timeout);
-	prot_printf(pout, "Connection: Keep-Alive\r\n");
+	prot_printf(pout, "Connection: keep-alive\r\n");
     }
     if (httpd_tls_done) {
 	prot_printf(httpd_out, "Strict-Transport-Security: max-age=600\r\n");
