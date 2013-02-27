@@ -173,6 +173,7 @@ struct centry {
     int si;			/* Services[] index */
     char *desc;			/* human readable description for logging */
     struct timeval spawntime;	/* when the centry was allocated */
+    time_t sighuptime;		/* when did we send a SIGHUP */;
     struct centry *next;
 };
 static struct centry *ctable[child_table_size];
@@ -275,6 +276,7 @@ static struct centry *centry_alloc(void)
     t = xzmalloc(sizeof(*t));
     t->si = SERVICE_NONE;
     gettimeofday(&t->spawntime, NULL);
+    t->sighuptime = (time_t)-1;
 
     return t;
 }
@@ -1144,6 +1146,23 @@ static void child_janitor(struct timeval now)
 		    p = &((*p)->next);
 		}
 	    } else {
+		time_t delay = (c->sighuptime != (time_t)-1) ?
+		    time(NULL) - c->sighuptime : 0;
+
+		if (delay >= 30) {
+		    /* client not yet logged out ? */
+		    struct service *s = ((c->si) != SERVICE_NONE) ?
+			&Services[c->si] : NULL;
+
+		    syslog(LOG_INFO, "service %s/%s pid %d in state %d has not "
+			"yet been recycled since SIGHUP was sent (%ds ago)",
+			s ? SERVICEPARAM(s->name) : "unknown",
+			s ? SERVICEPARAM(s->familyname) : "unknown",
+			c->pid, c->service_state, (int)delay);
+
+		    /* no need to log it more than once */
+		    c->sighuptime = (time_t)-1;
+		}
 		p = &((*p)->next);
 	    }
 	}
@@ -1814,6 +1833,7 @@ static void reread_conf(struct timeval now)
 		if ((c->si == i) &&
 		    (c->service_state != SERVICE_STATE_DEAD)) {
 		    kill(c->pid, SIGHUP);
+		    c->sighuptime = time(NULL);
 		}
 		c = c->next;
 	    }

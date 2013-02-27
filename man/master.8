@@ -147,6 +147,17 @@ rereads its configuration file when it receives a hangup signal,
 SIGHUP.  Services and events may be added, deleted or modified when the
 configuration file is reread.  Any active services removed from the
 configuration file will be allowed to run until completion.
+.PP
+.I Master
+propagates the hangup signal, SIGHUP, to its child service processes, so
+that they stop waiting for incoming connections and exit, allowing them
+to be recycled.  This is useful to make services take into account a new
+version of the
+.IR imapd.conf (5)
+file.  Children that are servicing a client connection when SIGHUP is
+received are allowed to run until the client logouts before being recycled.
+It may take a long time until the client logouts, so a log message is
+generated for processes that have not been recycled whithin 30s.
 .SH NOTES
 The environment variable \fBCYRUS_VERBOSE\fR can be set to log additional
 debugging information. Setting the value to 1 results in base level logging. 
