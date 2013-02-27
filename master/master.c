@@ -1801,6 +1801,24 @@ static void reread_conf(struct timeval now)
     masterconf_getsection("SERVICES", &add_service, (void*) 1);
 
     for (i = 0; i < nservices; i++) {
+	/* Send SIGHUP to all children:
+	 *  - for services being added, there are still no children
+	 *  - for services being disabled, we need to terminate the children
+	 *  - otherwise (remaining services) we want to recycle children
+	 * Note that for services being disabled, it is important to first
+	 * signal them before shutting down their socket.
+	 */
+	for (j = 0 ; j < child_table_size ; j++ ) {
+	    c = ctable[j];
+	    while (c != NULL) {
+		if ((c->si == i) &&
+		    (c->service_state != SERVICE_STATE_DEAD)) {
+		    kill(c->pid, SIGHUP);
+		}
+		c = c->next;
+	    }
+	}
+
 	if (!Services[i].exec && (Services[i].socket >= 0)) {
 	    /* cleanup newly disabled services */
 
@@ -1818,18 +1836,6 @@ static void reread_conf(struct timeval now)
 	    Services[i].listen = NULL;
 	    Services[i].proto = NULL;
 	    Services[i].desired_workers = 0;
-
-	    /* send SIGHUP to all children */
-	    for (j = 0 ; j < child_table_size ; j++ ) {
-		c = ctable[j];
-		while (c != NULL) {
-		    if ((c->si == i) &&
-			(c->service_state != SERVICE_STATE_DEAD)) {
-			kill(c->pid, SIGHUP);
-		    }
-		    c = c->next;
-		}
-	    }
 
 	    /* close all listeners */
 	    shutdown(Services[i].socket, SHUT_RDWR);
