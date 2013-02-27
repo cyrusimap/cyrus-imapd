@@ -76,12 +76,9 @@ static void sighandler(int sig, siginfo_t *si,
 	killer_pid = si->si_pid;
 }
 
-static const int catch[] = { SIGHUP, 0 };
-
 EXPORTED void signals_add_handlers(int alarm)
 {
     struct sigaction action;
-    int i;
 
     memset(&action, 0, sizeof(action));
     sigemptyset(&action.sa_mask);
@@ -111,15 +108,8 @@ EXPORTED void signals_add_handlers(int alarm)
     action.sa_flags |= SA_RESTART;
 #endif
 
-    for (i = 0; catch[i] != 0; i++) {
-	if (catch[i] != SIGALRM && sigaction(catch[i], &action, NULL) < 0) {
-	    char buf[256];
-	    snprintf(buf, sizeof(buf),
-		     "unable to install signal handler for %s: %s",
-		     strsignal(catch[i]), strerror(errno));
-	    fatal(buf, EC_TEMPFAIL);
-	}
-    }
+    if (sigaction(SIGHUP, &action, NULL) < 0)
+	fatal("unable to install signal handler for SIGHUP", EC_TEMPFAIL);
 }
 
 EXPORTED void signals_reset_sighup_handler(int restartable)
