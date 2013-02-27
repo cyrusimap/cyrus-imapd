@@ -104,16 +104,7 @@ EXPORTED void signals_add_handlers(int alarm)
     if (sigaction(SIGTERM, &action, NULL) < 0)
 	fatal("unable to install signal handler for SIGTERM", EC_TEMPFAIL);
 
-#ifdef SA_RESTART
-    action.sa_flags |= SA_RESTART;
-#endif
-#ifdef SA_RESETHAND
-    /* catch more than one SIGHUP */
-    action.sa_flags &= ~SA_RESETHAND;
-#endif
-
-    if (sigaction(SIGHUP, &action, NULL) < 0)
-	fatal("unable to install signal handler for SIGHUP", EC_TEMPFAIL);
+    signals_reset_sighup_handler(1);
 }
 
 EXPORTED void signals_reset_sighup_handler(int restartable)
