@@ -486,7 +486,8 @@ EXPORTED int quota_update_useds(const char *quotaroot,
 	    if (cmp <= 0)
 		q.scanuseds[res] += diff[res];
 
-	    if (oldused >= (q.limits[res] * quota_units[res]) &&
+	    if (q.limits[res] >= 0 &&
+		oldused >= ((quota_t)q.limits[res] * quota_units[res]) &&
 		!quota_is_overquota(&q, res, NULL)) {
 		if (!mboxevent)
 		    mboxevent = mboxevent_new(EVENT_QUOTA_WITHIN);
