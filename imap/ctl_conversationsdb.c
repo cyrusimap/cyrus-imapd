@@ -307,17 +307,27 @@ static int do_recalc(const char *inboxname)
     struct conversations_state *state = NULL;
 
     r = conversations_open_mbox(inboxname, &state);
+    if (r) return r;
 
-    conversations_wipe_counts(state, 0);
+    r = conversations_zero_counts(state);
+    if (r) goto err;
 
     r = recalc_counts_cb(inboxname, 0, 0, NULL);
-    if (r) return r;
+    if (r) goto err;
 
     snprintf(buf, sizeof(buf), "%s.*", inboxname);
     r = mboxlist_findall(NULL, buf, 1, NULL,
 			 NULL, recalc_counts_cb, NULL);
+    if (r) goto err;
+
+    r = conversations_cleanup_zero(&state);
+    if (r) goto err;
 
     conversations_commit(&state);
+    return 0;
+
+err:
+    conversations_abort(&state);
     return r;
 }
 
@@ -670,8 +680,12 @@ static int do_audit(const char *inboxname)
 	goto out;
     }
 
-    /* keep foldernames */
-    conversations_wipe_counts(state_temp, 1);
+    r = conversations_zero_counts(state_temp);
+    if (r) {
+	fprintf(stderr, "Failed to zero counts in %s: %s\n",
+		filename_temp, error_message(r));
+	goto out;
+    }
 
     /*
      * Set the conversations db suffix during the recalc pass, so that
@@ -691,6 +705,18 @@ static int do_audit(const char *inboxname)
     snprintf(buf, sizeof(buf), "%s.*", inboxname);
     r = mboxlist_findall(NULL, buf, 1, NULL,
 			 NULL, audit_counts_cb, NULL);
+    if (r) {
+	fprintf(stderr, "Failed to recalculate counts in %s: %s\n",
+		filename_temp, error_message(r));
+	goto out;
+    }
+
+    r = conversations_cleanup_zero(state_temp);
+    if (r) {
+	fprintf(stderr, "Failed to cleanup zero counts in %s: %s\n",
+		filename_temp, error_message(r));
+	goto out;
+    }
 
     conversations_set_suffix(NULL);
     conversations_set_directory(NULL);

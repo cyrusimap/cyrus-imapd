@@ -232,8 +232,8 @@ extern void conversations_rename_cidentry(struct conversations_state *state,
 					  conversation_id_t to);
 
 
-extern int conversations_wipe_counts(struct conversations_state *state,
-				     int keepnames);
+extern int conversations_zero_counts(struct conversations_state *state);
+extern int conversations_cleanup_zero(struct conversations_state *state);
 
 extern int conversations_rename_folder(struct conversations_state *state,
 			               const char *from_name,

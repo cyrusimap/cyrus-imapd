@@ -976,20 +976,14 @@ static int _conversation_save(struct conversations_state *state,
 	}
     }
 
-    if (!conv->num_records) {
+    if (conv->num_records) {
+	r = conversation_store(state, key, keylen, conv);
+    }
+    else {
 	/* last existing record removed - clean up the 'B' record */
 	r = cyrusdb_delete(state->db, key, keylen, &state->txn, 1);
-	if (!r) {
-	    /* and the 'S' record too */
-	    char *skey = xstrndup(key, keylen);
-	    skey[0] = 'S';
-	    r = cyrusdb_delete(state->db, skey, keylen, &state->txn, 1);
-	    free(skey);
-	}
-	goto done;
     }
 
-    r = conversation_store(state, key, keylen, conv);
 
 done:
     if (!r)
@@ -1809,48 +1803,126 @@ EXPORTED int conversations_rename_folder(struct conversations_state *state,
 }
 
 
-static int delete_cb(void *rock,
+static int zero_b_cb(void *rock,
 		     const char *key,
 		     size_t keylen,
-		     const char *val __attribute__((unused)),
-		     size_t vallen __attribute__((unused)))
+		     const char *val,
+		     size_t vallen)
 {
     struct conversations_state *state = (struct conversations_state *)rock;
-    return cyrusdb_delete(state->db, key, keylen, &state->txn, 1);
+    conversation_t *conv = NULL;
+    conv_folder_t *folder;
+    conv_sender_t *sender;
+    int r;
+    int i;
+
+    r = conversation_parse(state, val, vallen, &conv);
+    if (r) return r;
+
+    /* leave modseq untouched */
+    conv->num_records = 0;
+    conv->exists = 0;
+    conv->unseen = 0;
+
+    /* zero out all the counted counts */
+    for (i = 0; i < state->counted_flags->count; i++)
+	conv->counts[i] = 0;
+
+    for (folder = conv->folders; folder; folder = folder->next) {
+	/* keep the modseq */
+	folder->num_records = 0;
+	folder->exists = 0;
+	folder->unseen = 0;
+    }
+
+    /* just zero out senders */
+    while ((sender = conv->senders)) {
+	conv->senders = sender->next;
+	free(sender->name);
+	free(sender->route);
+	free(sender->mailbox);
+	free(sender->domain);
+	free(sender);
+    }
+
+    /* keep the subject of course */
+
+    conv->size = 0;
+
+    r = conversation_store(state, key, keylen, conv);
+    conversation_free(conv);
+
+    return r;
 }
 
-EXPORTED int conversations_wipe_counts(struct conversations_state *state,
-			      int keepnames)
+static int zero_f_cb(void *rock,
+		     const char *key,
+		     size_t keylen,
+		     const char *val,
+		     size_t vallen)
+{
+    struct conversations_state *state = (struct conversations_state *)rock;
+    conv_status_t status;
+    int r;
+
+    r = conversation_parsestatus(val, vallen, &status);
+    if (r) return r;
+
+    /* leave modseq unchanged */
+    status.exists = 0;
+    status.unseen = 0;
+
+    return conversation_storestatus(state, key, keylen, &status);
+}
+
+EXPORTED int conversations_zero_counts(struct conversations_state *state)
 {
     int r = 0;
 
     /* wipe B counts */
-    r = cyrusdb_foreach(state->db, "B", 1, NULL, delete_cb,
+    r = cyrusdb_foreach(state->db, "B", 1, NULL, zero_b_cb,
 			state, &state->txn);
     if (r) return r;
 
     /* wipe F counts */
-    r = cyrusdb_foreach(state->db, "F", 1, NULL, delete_cb,
+    r = cyrusdb_foreach(state->db, "F", 1, NULL, zero_f_cb,
 			state, &state->txn);
     if (r) return r;
-
-    /* wipe S keys */
-    r = cyrusdb_foreach(state->db, "S", 1, NULL, delete_cb,
-			state, &state->txn);
-    if (r) return r;
-
-    if (!keepnames) {
-	/* remove folder names */
-	strarray_truncate(state->folder_names, 0);
-	r = write_folders(state);
-	if (r) return r;
-    }
 
     /* re-init the counted flags */
     r = _init_counted(state, NULL, 0);
     if (r) return r;
 
     return r;
+}
+
+static int cleanup_b_cb(void *rock,
+			const char *key,
+			size_t keylen,
+			const char *val,
+			size_t vallen)
+{
+    struct conversations_state *state = (struct conversations_state *)rock;
+    conversation_t *conv = NULL;
+    int r;
+
+    r = conversation_parse(state, val, vallen, &conv);
+    if (r) return r;
+
+    /* should be gone, wipe it */
+    if (!conv->num_records)
+	r = cyrusdb_delete(state->db, key, keylen, &state->txn, 1);
+
+    conversation_free(conv);
+
+    return r;
+}
+
+EXPORTED int conversations_cleanup_zero(struct conversations_state *state)
+{
+    /* check B counts */
+    return cyrusdb_foreach(state->db, "B", 1, NULL, cleanup_b_cb,
+			   state, &state->txn);
 }
 
 EXPORTED void conversations_dump(struct conversations_state *state, FILE *fp)
