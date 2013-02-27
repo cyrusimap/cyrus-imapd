@@ -320,7 +320,7 @@ static int do_recalc(const char *inboxname)
 			 NULL, recalc_counts_cb, NULL);
     if (r) goto err;
 
-    r = conversations_cleanup_zero(&state);
+    r = conversations_cleanup_zero(state);
     if (r) goto err;
 
     conversations_commit(&state);
