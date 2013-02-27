@@ -131,13 +131,8 @@ EXPORTED void signals_reset_sighup_handler(int restartable)
     action.sa_sigaction = sighandler;
     action.sa_flags |= SA_SIGINFO;
 
-    if (sigaction(SIGHUP, &action, NULL) < 0) {
-	char buf[256];
-	snprintf(buf, sizeof(buf),
-		 "unable to install signal handler for %s: %s",
-		 strsignal(SIGHUP), strerror(errno));
-	fatal(buf, EC_TEMPFAIL);
-    }
+    if (sigaction(SIGHUP, &action, NULL) < 0)
+	fatal("unable to install signal handler for SIGHUP", EC_TEMPFAIL);
 }
 
 static shutdownfn *shutdown_cb = NULL;
