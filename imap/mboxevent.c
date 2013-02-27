@@ -280,6 +280,9 @@ EXPORTED void mboxevent_free(struct mboxevent **mboxevent)
     if (event->prev)
 	event->prev->next = event->next;
 
+    if (event->next)
+	event->next->prev = event->prev;
+
     free(event);
 
     *mboxevent = NULL;
