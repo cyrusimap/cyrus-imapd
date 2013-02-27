@@ -559,6 +559,7 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
     char url[MAX_MAILBOX_PATH+1];
     struct imapurl imapurl;
     char extname[MAX_MAILBOX_NAME];
+    char *userbuf;
 
     if (!event)
 	return;
@@ -581,8 +582,13 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
 					     mboxname_to_userid(mailboxname),
 					     extname);
 
+	    /* translate any separators in user */
+	    userbuf = (char *)mboxname_to_userid(mailboxname);
+	    mboxname_hiersep_toexternal(&namespace, userbuf,
+	                                config_virtdomains ? strcspn(userbuf, "@") : 0);
+
 	    imapurl.mailbox = extname;
-	    imapurl.user = mboxname_to_userid(mailboxname);
+	    imapurl.user = userbuf;
 	}
 
 	imapurl_toURL(url, &imapurl);
@@ -600,7 +606,11 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
 	FILL_STRING_PARAM(event, EVENT_CLIENT_ADDRESS, xstrdup(clientaddr));
     }
     if (userid && mboxevent_expected_param(event->type, EVENT_USER)) {
-	FILL_STRING_PARAM(event, EVENT_USER, xstrdup(userid));
+	/* translate any separators in user */
+	userbuf = xstrdup(userid);
+	mboxname_hiersep_toexternal(&namespace, userbuf,
+	                            config_virtdomains ? strcspn(userbuf, "@") : 0);
+	FILL_STRING_PARAM(event, EVENT_USER, userbuf);
     }
 }
 
@@ -746,6 +756,7 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
     struct imapurl imapurl;
     char url[MAX_MAILBOX_PATH+1];
     char extname[MAX_MAILBOX_NAME];
+    char *userbuf;
 
     if (!event)
 	return;
@@ -785,10 +796,15 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
 					 mboxname_to_userid(quota->root),
 					 extname);
 
+	/* translate any separators in user */
+	userbuf = (char *)mboxname_to_userid(quota->root);
+	mboxname_hiersep_toexternal(&namespace, userbuf,
+	                            config_virtdomains ? strcspn(userbuf, "@") : 0);
+
 	memset(&imapurl, 0, sizeof(struct imapurl));
 	imapurl.server = config_servername;
 	imapurl.mailbox = extname;
-	imapurl.user = mboxname_to_userid(quota->root);
+	imapurl.user = userbuf;
 	imapurl_toURL(url, &imapurl);
 	FILL_STRING_PARAM(event, EVENT_URI, xstrdup(url));
     }
@@ -816,6 +832,7 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     struct imapurl imapurl;
     char url[MAX_MAILBOX_PATH+1];
     char extname[MAX_MAILBOX_NAME];
+    char *userbuf;
 
     if (!event)
 	return;
@@ -833,13 +850,18 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     /* translate internal mailbox name to external */
     assert(namespace.mboxname_toexternal != NULL);
     (*namespace.mboxname_toexternal)(&namespace, mailbox->name,
-				     mboxname_to_userid(mailbox->name), extname);
+                                     mboxname_to_userid(mailbox->name), extname);
+
+    /* translate any separators in user */
+    userbuf = (char *)mboxname_to_userid(mailbox->name);
+    mboxname_hiersep_toexternal(&namespace, userbuf,
+                                config_virtdomains ? strcspn(userbuf, "@") : 0);
 
     /* all events needs uri parameter */
     memset(&imapurl, 0, sizeof(struct imapurl));
     imapurl.server = config_servername;
     imapurl.mailbox = extname;
-    imapurl.user = mboxname_to_userid(mailbox->name);
+    imapurl.user = userbuf;
     imapurl.uidvalidity = mailbox->i.uidvalidity;
     if (event->type & (EVENT_MESSAGE_NEW|EVENT_MESSAGE_APPEND) && event->uidset) {
 	imapurl.uid = seqset_first(event->uidset);
@@ -882,6 +904,7 @@ void mboxevent_extract_old_mailbox(struct mboxevent *event,
     struct imapurl imapurl;
     char url[MAX_MAILBOX_PATH+1];
     char extname[MAX_MAILBOX_NAME];
+    char *userbuf;
 
     if (!event)
 	return;
@@ -891,10 +914,15 @@ void mboxevent_extract_old_mailbox(struct mboxevent *event,
     (*namespace.mboxname_toexternal)(&namespace, mailbox->name,
 				     mboxname_to_userid(mailbox->name), extname);
 
+    /* translate any separators in user */
+    userbuf = (char *)mboxname_to_userid(mailbox->name);
+    mboxname_hiersep_toexternal(&namespace, userbuf,
+                                config_virtdomains ? strcspn(userbuf, "@") : 0);
+
     memset(&imapurl, 0, sizeof(struct imapurl));
     imapurl.server = config_servername;
     imapurl.mailbox = extname;
-    imapurl.user = mboxname_to_userid(mailbox->name);
+    imapurl.user = userbuf;
     imapurl.uidvalidity = mailbox->i.uidvalidity;
 
     imapurl_toURL(url, &imapurl);
