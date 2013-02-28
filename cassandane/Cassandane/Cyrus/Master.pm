@@ -82,10 +82,10 @@ sub tear_down
 
 sub lemming_connect
 {
-    my ($srv) = @_;
+    my ($srv, $address_family) = @_;
 
     my $sock = create_client_socket(
-		    $srv->address_family(),
+		    defined($address_family) ? $address_family : $srv->address_family(),
 		    $srv->host(), $srv->port())
 	or die "Cannot connect to lemming " . $srv->address() . ": $@";
 
@@ -895,5 +895,120 @@ sub test_service_associate
     $self->{instance}->stop();
 }
 
+sub test_service_primary_fail
+{
+    my ($self) = @_;
+
+    my $host = 'localhost';
+
+    my $srv = $self->lemming_service(tag => 'foo', host => undef, mode => 'exit-ipv4/serve');
+
+    $self->start();
+
+    xlog "connection fails due to dead IPv4 lemming";
+    my $lemm;
+    eval
+    {
+	$lemm = lemming_connect($srv, 'inet');
+    };
+    $self->assert_null($lemm);
+
+    xlog "expect 5 dead lemmings";
+    $self->assert_deep_equals({ foo => { live => 0, dead => 5 } },
+	$self->lemming_census());
+
+    xlog "check the IPv4 service is really dead";
+    eval
+    {
+	$lemm = lemming_connect($srv, 'inet');
+    };
+    $self->assert_null($lemm);
+    $self->assert_deep_equals({ foo => { live => 0, dead => 5 } },
+	$self->lemming_census());
+
+    xlog "breed one IPv6 lemming";
+    $lemm = lemming_connect($srv, 'inet6');
+    $self->assert_deep_equals({ foo => { live => 1, dead => 5 } },
+	$self->lemming_census());
+
+    lemming_push($lemm, 'success');
+
+    xlog "no more live lemmings";
+    $self->assert_deep_equals({ foo => { live => 0, dead => 6 } },
+	$self->lemming_census());
+
+    xlog "revive the dead IPv4 service";
+    $self->{instance}->send_sighup();
+
+    xlog "connection fails again due to dead IPv4 lemming";
+    $lemm = undef;
+    eval
+    {
+	$lemm = lemming_connect($srv, 'inet');
+    };
+    $self->assert_null($lemm);
+
+    xlog "expect 5 more dead lemmings";
+    $self->assert_deep_equals({ foo => { live => 0, dead => 11 } },
+	$self->lemming_census());
+}
+
+sub test_service_associate_fail
+{
+    my ($self) = @_;
+
+    my $host = 'localhost';
+
+    my $srv = $self->lemming_service(tag => 'foo', host => undef, mode => 'exit-ipv6/serve');
+
+    $self->start();
+
+    xlog "connection fails due to dead IPv6 lemming";
+    my $lemm;
+    eval
+    {
+	$lemm = lemming_connect($srv, 'inet6');
+    };
+    $self->assert_null($lemm);
+
+    xlog "expect 5 dead lemmings";
+    $self->assert_deep_equals({ foo => { live => 0, dead => 5 } },
+	$self->lemming_census());
+
+    xlog "check the IPv6 service is really dead";
+    eval
+    {
+	$lemm = lemming_connect($srv, 'inet6');
+    };
+    $self->assert_null($lemm);
+    $self->assert_deep_equals({ foo => { live => 0, dead => 5 } },
+	$self->lemming_census());
+
+    xlog "breed one IPv4 lemming";
+    $lemm = lemming_connect($srv, 'inet');
+    $self->assert_deep_equals({ foo => { live => 1, dead => 5 } },
+	$self->lemming_census());
+
+    lemming_push($lemm, 'success');
+
+    xlog "no more live lemmings";
+    $self->assert_deep_equals({ foo => { live => 0, dead => 6 } },
+	$self->lemming_census());
+
+    xlog "revive the dead IPv6 service";
+    $self->{instance}->send_sighup();
+
+    xlog "connection fails again due to dead IPv6 lemming";
+    $lemm = undef;
+    eval
+    {
+	$lemm = lemming_connect($srv, 'inet6');
+    };
+    $self->assert_null($lemm);
+
+    xlog "expect 5 dead lemmings";
+    $self->assert_deep_equals({ foo => { live => 0, dead => 11 } },
+	$self->lemming_census());
+}
 
 1;

@@ -43,6 +43,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <syslog.h>
+#include <netinet/in.h>
 #include <sys/socket.h>
 #include <ctype.h>
 #include <stdint.h>
@@ -175,6 +176,18 @@ read_line_from_client(void)
     return line;
 }
 
+static void lemming_success(void)
+{
+    syslog(LOG_ERR, "lemming exiting normally");
+    exit(0);
+}
+
+static void lemming_exit(void)
+{
+    syslog(LOG_ERR, "lemming exiting, code 1");
+    exit(1);
+}
+
 
 int
 main(int argc, char **argv)
@@ -184,6 +197,10 @@ main(int argc, char **argv)
     int c;
     int delay_ms = 20;
     char filename[256];
+    socklen_t salen;
+    struct sockaddr_storage localaddr;
+    struct sockaddr *localsock = (struct sockaddr *)&localaddr;
+    int family = AF_UNSPEC;
 
     no_cores();
 
@@ -216,6 +233,39 @@ main(int argc, char **argv)
     snprintf(filename, sizeof(filename), "lemming.%s.%d", tag, (int)getpid());
     creat(filename, 0644);
 
+    salen = sizeof(struct sockaddr_storage);
+    if (!getsockname(LISTEN_FD, localsock, &salen)) {
+	family = localsock->sa_family;
+    }
+    else {
+	syslog(LOG_ERR, "unable to determine socket family: %m");
+    }
+
+    if (!strcmp(mode, "exit-ipv4/serve"))
+    {
+	switch (family) {
+	case AF_INET:
+	    lemming_exit();
+	    break;
+
+	default:
+	    mode = "serve";
+	    break;
+	}
+    }
+    else if (!strcmp(mode, "exit-ipv6/serve"))
+    {
+	switch (family) {
+	case AF_INET6:
+	    lemming_exit();
+	    break;
+
+	default:
+	    mode = "serve";
+	    break;
+	}
+    }
+
     if (!strcmp(mode, "serve"))
 	mode = read_line_from_client();
     else if (delay_ms)
@@ -223,13 +273,11 @@ main(int argc, char **argv)
 
     if (!strcmp(mode, "success"))
     {
-	syslog(LOG_ERR, "lemming exiting normally");
-	exit(0);
+	lemming_success();
     }
     else if (!strcmp(mode, "exit"))
     {
-	syslog(LOG_ERR, "lemming exiting, code 1");
-	exit(1);
+	lemming_exit();
     }
     else if (!strcmp(mode, "abort"))
     {
