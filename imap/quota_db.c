@@ -475,20 +475,17 @@ EXPORTED int quota_update_useds(const char *quotaroot,
     if (!r) {
 	int res;
 	int cmp = 1;
-	quota_t oldused;
 	if (q.scanmbox) {
 	    cmp = cyrusdb_compar(qdb, mboxname, strlen(mboxname),
 				 q.scanmbox, strlen(q.scanmbox));
 	}
 	for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
-	    oldused = q.useds[res];
+	    int was_over = quota_is_overquota(&q, res, NULL);
 	    quota_use(&q, res, diff[res]);
 	    if (cmp <= 0)
 		q.scanuseds[res] += diff[res];
 
-	    if (q.limits[res] >= 0 &&
-		oldused >= ((quota_t)q.limits[res] * quota_units[res]) &&
-		!quota_is_overquota(&q, res, NULL)) {
+	    if (was_over && !quota_is_overquota(&q, res, NULL)) {
 		if (!mboxevent)
 		    mboxevent = mboxevent_new(EVENT_QUOTA_WITHIN);
 		mboxevent_extract_quota(mboxevent, &q, res);
