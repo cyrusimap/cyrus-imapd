@@ -463,7 +463,7 @@ EXPORTED int quota_update_useds(const char *quotaroot,
     struct quota q;
     struct txn *tid = NULL;
     int r = 0;
-    struct mboxevent *mboxevent = NULL;
+    struct mboxevent *mboxevents = NULL;
 
     if (!quotaroot || !*quotaroot)
 	return IMAP_QUOTAROOT_NONEXISTENT;
@@ -486,8 +486,8 @@ EXPORTED int quota_update_useds(const char *quotaroot,
 		q.scanuseds[res] += diff[res];
 
 	    if (was_over && !quota_is_overquota(&q, res, NULL)) {
-		if (!mboxevent)
-		    mboxevent = mboxevent_new(EVENT_QUOTA_WITHIN);
+		struct mboxevent *mboxevent =
+		    mboxevent_enqueue(EVENT_QUOTA_WITHIN, &mboxevents);
 		mboxevent_extract_quota(mboxevent, &q, res);
 	    }
 	}
@@ -500,7 +500,7 @@ EXPORTED int quota_update_useds(const char *quotaroot,
     }
     quota_commit(&tid);
 
-    mboxevent_notify(mboxevent);
+    mboxevent_notify(mboxevents);
 
 out:
     quota_free(&q);
@@ -511,7 +511,7 @@ out:
 	       quotaroot, error_message(r));
     }
 
-    mboxevent_free(&mboxevent);
+    mboxevent_freequeue(&mboxevents);
 
     return r;
 }
