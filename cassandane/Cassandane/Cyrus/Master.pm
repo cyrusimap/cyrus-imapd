@@ -204,19 +204,23 @@ sub lemming_event
 
 sub lemming_wait
 {
-    my ($self, %expected) = @_;
+    my ($self, %expected_census) = @_;
 
     timed_wait(
 	sub
 	{
 	    my $census = $self->lemming_census();
 	    map {
-		return 0 if !defined $census->{$_};
-		return 0 if $census->{$_}->{live} != $expected{$_};
-	    } keys %expected;
+		my $service_name = $_;
+		return 0 if !defined $census->{$service_name};
+		my $expected = $expected_census{$service_name};
+		map {
+		    return 0 if $census->{$service_name}->{$_} != $expected->{$_};
+		} keys %$expected;
+	    } keys %expected_census;
 	    return 1;
 	},
-	description => "master to prefork the configured lemmings");
+	description => "lemmings to reach the expected census");
 }
 
 sub start
@@ -357,21 +361,21 @@ sub test_prefork
     xlog "single successful service";
     my $srv = $self->lemming_service(prefork => 1);
     $self->start();
-    $self->lemming_wait(A => 1);
+    $self->lemming_wait(A => { live => 1 });
 
     xlog "preforked, so one lemming running already";
     $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
 			      $self->lemming_census());
 
     my $lemm1 = lemming_connect($srv);
-    $self->lemming_wait(A => 2);
+    $self->lemming_wait(A => { live => 2 });
 
     xlog "connected so one lemming forked";
     $self->assert_deep_equals({ A => { live => 2, dead => 0 } },
 			      $self->lemming_census());
 
     my $lemm2 = lemming_connect($srv);
-    $self->lemming_wait(A => 3);
+    $self->lemming_wait(A => { live => 3 });
 
     xlog "connected again so two additional lemmings forked";
     $self->assert_deep_equals({ A => { live => 3, dead => 0 } },
@@ -399,14 +403,14 @@ sub test_multi_prefork
     $self->start();
 
     # wait for lemmings to be preforked
-    $self->lemming_wait(A => 2, C => 3);
+    $self->lemming_wait(A => { live => 2 }, C => { live => 3 });
 
     my @lemmings;
     my $lemm;
 
     xlog "connect to A once";
     $lemm = lemming_connect($srvA);
-    $self->lemming_wait(A => 3);
+    $self->lemming_wait(A => { live => 3 });
     push(@lemmings, $lemm);
     $self->assert_deep_equals({
 				A => { live => 3, dead => 0 },
@@ -415,7 +419,7 @@ sub test_multi_prefork
 
     xlog "connect to A again";
     $lemm = lemming_connect($srvA);
-    $self->lemming_wait(A => 4);
+    $self->lemming_wait(A => { live => 4 });
     push(@lemmings, $lemm);
     $self->assert_deep_equals({
 				A => { live => 4, dead => 0 },
@@ -424,7 +428,7 @@ sub test_multi_prefork
 
     xlog "connect to A a third time";
     $lemm = lemming_connect($srvA);
-    $self->lemming_wait(A => 5);
+    $self->lemming_wait(A => { live => 5 });
     push(@lemmings, $lemm);
     $self->assert_deep_equals({
 				A => { live => 5, dead => 0 },
@@ -1008,6 +1012,48 @@ sub test_service_associate_fail
 
     xlog "expect 5 dead lemmings";
     $self->assert_deep_equals({ foo => { live => 0, dead => 11 } },
+	$self->lemming_census());
+}
+
+sub test_sighup_recycling
+{
+    my ($self) = @_;
+
+    my $host = 'localhost';
+
+    my $srv = $self->lemming_service(tag => 'foo', prefork => 1);
+    $self->start();
+    $self->lemming_wait(foo => { live => 1 });
+
+    xlog "preforked, so one lemming running already";
+    $self->assert_deep_equals({ foo => { live => 1, dead => 0 } },
+	$self->lemming_census());
+
+    my $lemm = lemming_connect($srv);
+    $self->lemming_wait(foo => { live => 2 });
+
+    xlog "connected so one lemming forked";
+    $self->assert_deep_equals({ foo => { live => 2, dead => 0 } },
+	$self->lemming_census());
+
+    $self->{instance}->send_sighup();
+    $self->lemming_wait(foo => { live => 2, dead => 1 });
+
+    xlog "recycled, so expect one dead lemming";
+    $self->assert_deep_equals({ foo => { live => 2, dead => 1 } },
+	$self->lemming_census());
+
+    $self->{instance}->send_sighup();
+    $self->lemming_wait(foo => { live => 2, dead => 2 });
+
+    xlog "recycled, again so expect one more dead lemming";
+    $self->assert_deep_equals({ foo => { live => 2, dead => 2 } },
+	$self->lemming_census());
+
+    lemming_push($lemm, 'success');
+
+    xlog "always at least one live lemming";
+    $self->assert_deep_equals({ foo => { live => 1, dead => 3 } },
 	$self->lemming_census());
 }
 

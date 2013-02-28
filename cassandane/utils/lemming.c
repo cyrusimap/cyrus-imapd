@@ -42,6 +42,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <syslog.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -56,6 +57,8 @@
 
 #define MASTER_SERVICE_AVAILABLE	1
 #define MASTER_SERVICE_UNAVAILABLE	2
+
+static volatile int gotsighup = 0;
 
 static void
 usage(void)
@@ -77,6 +80,31 @@ static void no_cores(void)
 	r = setrlimit(RLIMIT_CORE, &lim);
 	if (r)
 	    syslog(LOG_ERR, "setrlimit failed: %m");
+    }
+}
+
+static void sighup_handler(int sig __attribute__((unused)))
+{
+    gotsighup = 1;
+}
+
+static void set_sighup_handler(int restartable)
+{
+    struct sigaction action;
+
+    sigemptyset(&action.sa_mask);
+
+    action.sa_flags = 0;
+#ifdef SA_RESTART
+    if (restartable) {
+	action.sa_flags |= SA_RESTART;
+    }
+#endif
+    action.sa_handler = sighup_handler;
+
+    if (sigaction(SIGHUP, &action, NULL) < 0) {
+	syslog(LOG_ERR, "unable to install signal handler for SIGHUP: %m");
+	exit(1);
     }
 }
 
@@ -126,9 +154,16 @@ read_line_from_client(void)
     static const int maxlen = sizeof(line)-1;
 
     syslog(LOG_ERR, "lemming serving");
+    /* While 'accept'ing, let SIGHUP wake us up */
+    set_sighup_handler(0);
     fd = accept(LISTEN_FD, NULL, NULL);
+    set_sighup_handler(1);
     if (fd < 0)
     {
+	if (gotsighup) {
+	    syslog(LOG_ERR, "lemming exiting normally on SIGHUP");
+	    exit(0);
+	}
 	syslog(LOG_ERR,  "cannot accept: %m");
 	exit(1);
     }
@@ -202,6 +237,8 @@ main(int argc, char **argv)
     struct sockaddr *localsock = (struct sockaddr *)&localaddr;
     int family = AF_UNSPEC;
 
+    /* don't interrupt me on SIGHUP */
+    set_sighup_handler(1);
     no_cores();
 
     /* parse arguments */
