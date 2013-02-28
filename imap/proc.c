@@ -83,50 +83,54 @@
 #define FNAME_PROCDIR "/proc"
 
 static char *procfname = 0;
-static FILE *procfile = 0;
 
 static char *proc_getdir(void)
 {
     return strconcat(config_dir, FNAME_PROCDIR, (char *)NULL);
 }
 
-static char *proc_getpath(pid_t pid)
+static char *proc_getpath(pid_t pid, int isnew)
 {
     char *path;
 
     assert(pid > 0);
-    path = xmalloc(strlen(config_dir)+sizeof(FNAME_PROCDIR)+11);
-    sprintf(path, "%s%s/%u", config_dir, FNAME_PROCDIR, (unsigned)pid);
+    path = xmalloc(strlen(config_dir)+sizeof(FNAME_PROCDIR)+16);
+    sprintf(path, "%s%s/%s%u%s",
+		config_dir,
+		FNAME_PROCDIR,
+		(isnew ? "." : ""),
+		(unsigned)pid,
+		(isnew ? ".new" : ""));
     return path;
 }
 
 EXPORTED int proc_register(const char *servicename, const char *clienthost,
 		  const char *userid, const char *mailbox)
 {
-    pid_t pid;
-    int pos;
+    pid_t pid = getpid();
+    FILE *procfile = NULL;
+    char *newfname = NULL;
 
-    if (!procfname) {
-	pid = getpid();
-	procfname = proc_getpath(pid);
+    if (!procfname)
+	procfname = proc_getpath(pid, /*isnew*/0);
 
-	procfile = fopen(procfname, "w+");
-	if (!procfile) {
-	    if (cyrus_mkdir(procfname, 0755) == -1) {
-		fatal("couldn't create proc directory", EC_IOERR);
-	    }
-	    else {
-		syslog(LOG_NOTICE, "created proc directory");
-		procfile = fopen(procfname, "w+");
-		if (!procfile) {
-		    syslog(LOG_ERR, "IOERROR: creating %s: %m", procfname);
-		    fatal("can't write proc file", EC_IOERR);
-		}
+    newfname = proc_getpath(pid, /*isnew*/1);
+
+    procfile = fopen(newfname, "w+");
+    if (!procfile) {
+	if (cyrus_mkdir(newfname, 0755) == -1) {
+	    fatal("couldn't create proc directory", EC_IOERR);
+	}
+	else {
+	    syslog(LOG_NOTICE, "created proc directory");
+	    procfile = fopen(newfname, "w+");
+	    if (!procfile) {
+		syslog(LOG_ERR, "IOERROR: creating %s: %m", newfname);
+		fatal("can't write proc file", EC_IOERR);
 	    }
 	}
     }
 
-    rewind(procfile);
     fprintf(procfile, "%s\t%s", servicename, clienthost);
     if (userid) {
 	fprintf(procfile, "\t%s", userid);
@@ -135,25 +139,25 @@ EXPORTED int proc_register(const char *servicename, const char *clienthost,
 	}
     }
     putc('\n', procfile);
-    fflush(procfile);
-    pos = ftell(procfile);
-    if (pos < 0 || ftruncate(fileno(procfile), pos)) {
-	syslog(LOG_ERR, "IOERROR: creating %s: %m", procfname);
+    fclose(procfile);
+
+    if (rename(newfname, procfname)) {
+	syslog(LOG_ERR, "IOERROR: renaming %s to %s: %m", newfname, procfname);
+	unlink(newfname);
 	fatal("can't write proc file", EC_IOERR);
     }
-
 
     setproctitle("%s: %s %s %s", servicename, clienthost,
 		 userid ? userid : "",
 		 mailbox ? mailbox : "");
 
+    free(newfname);
     return 0;
 }
 
 EXPORTED void proc_cleanup(void)
 {
     if (procfname) {
-	fclose(procfile);
 	unlink(procfname);
 	free(procfname);
 	procfname = NULL;
@@ -167,7 +171,7 @@ static int proc_foreach_helper(pid_t pid, procdata_t *func, void *rock)
     char *path = NULL;
     int fd = -1;
 
-    path = proc_getpath(pid);
+    path = proc_getpath(pid, /*isnew*/0);
 
     fd = open(path, O_RDONLY, 0);
     if (fd != -1) {
