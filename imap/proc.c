@@ -202,6 +202,7 @@ static int proc_foreach_helper(pid_t pid, procdata_t *func, void *rock)
 	/* parse the fields */
 	service = buf;
 	host = strchr(service, '\t');
+	if (!host) goto done;
 	*host++ = '\0';
 	user = strchr(host, '\t');
 	if (user) {
