@@ -95,6 +95,17 @@ sub master_params
     return $params;
 }
 
+sub set_master_param
+{
+    my ($self, $param, $value) = @_;
+
+    foreach my $a ('name', 'argv', $self->_otherparams())
+    {
+	$self->{$a} = $value
+	    if ($a eq $param);
+    }
+}
+
 sub set_config
 {
     my ($self, $config) = @_;
