@@ -293,6 +293,12 @@ sub get_service
     return $self->{services}->{$name};
 }
 
+sub remove_service
+{
+    my ($self, $name) = @_;
+    delete $self->{services}->{$name};
+}
+
 sub add_start
 {
     my ($self, %params) = @_;
@@ -475,11 +481,13 @@ sub _emit_master_entry
     my $argv = delete $params->{argv};
     die "No argv argument"
 	unless defined $argv;
-    my $bin = shift @$argv;
+    # do not alter original argv
+    my @args = @$argv;
+    my $bin = shift @args;
     $params->{cmd} = join(' ',
 	$self->_binary($bin),
 	'-C', $self->_imapd_conf(),
-	@$argv
+	@args
     );
 
     print MASTER "    $name";

@@ -1057,4 +1057,102 @@ sub test_sighup_recycling
 	$self->lemming_census());
 }
 
+sub test_sighup_reloading
+{
+    my ($self) = @_;
+
+    my $host = 'localhost';
+
+    my $srvA = $self->lemming_service(tag => 'A');
+    $self->start();
+    my $srvB = $self->lemming_service(tag => 'B');
+
+
+    my $lemmA = lemming_connect($srvA);
+
+    xlog "connected so one lemming forked";
+    $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
+	$self->lemming_census());
+
+    lemming_push($lemmA, 'success');
+
+    xlog "no more live lemmings";
+    $self->assert_deep_equals({ A => { live => 0, dead => 1 } },
+	$self->lemming_census());
+
+    xlog "connection fails due to unexisting lemming";
+    my $lemmB;
+    eval
+    {
+	$lemmB = lemming_connect($srvB);
+    };
+    $self->assert_null($lemmB);
+
+    $self->assert_deep_equals({ A => { live => 0, dead => 1 } },
+	$self->lemming_census());
+
+
+    xlog "add service in cyrus.conf and reload";
+    $self->{instance}->_generate_master_conf();
+    $self->{instance}->send_sighup();
+
+    $lemmA = lemming_connect($srvA);
+
+    xlog "connected so one lemming forked";
+    $self->assert_deep_equals({ A => { live => 1, dead => 1 } },
+	$self->lemming_census());
+
+    lemming_push($lemmA, 'success');
+
+    xlog "no more live lemmings";
+    $self->assert_deep_equals({ A => { live => 0, dead => 2 } },
+	$self->lemming_census());
+
+    $lemmB = lemming_connect($srvB);
+
+    xlog "connected so one lemming forked";
+    $self->assert_deep_equals({ A => { live => 0, dead => 2 },
+				B => { live => 1, dead => 0 } },
+	$self->lemming_census());
+
+    lemming_push($lemmB, 'success');
+
+    xlog "no more live lemmings";
+    $self->assert_deep_equals({ A => { live => 0, dead => 2 },
+				B => { live => 0, dead => 1 } },
+	$self->lemming_census());
+
+
+    xlog "remove service in cyrus.conf and reload";
+    $self->{instance}->remove_service('A');
+    $self->{instance}->_generate_master_conf();
+    $self->{instance}->send_sighup();
+
+    xlog "connection fails due to unexisting lemming";
+    $lemmA = undef;
+    eval
+    {
+	$lemmA = lemming_connect($srvA);
+    };
+    $self->assert_null($lemmA);
+
+    $self->assert_deep_equals({ A => { live => 0, dead => 2 },
+				B => { live => 0, dead => 1 } },
+	$self->lemming_census());
+
+    $lemmB = lemming_connect($srvB);
+
+    xlog "connected so one lemming forked";
+    $self->assert_deep_equals({ A => { live => 0, dead => 2 },
+				B => { live => 1, dead => 1 } },
+	$self->lemming_census());
+
+    lemming_push($lemmB, 'success');
+
+    xlog "no more live lemmings";
+    $self->assert_deep_equals({ A => { live => 0, dead => 2 },
+				B => { live => 0, dead => 2 } },
+	$self->lemming_census());
+}
+
 1;
