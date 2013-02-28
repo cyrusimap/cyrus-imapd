@@ -85,13 +85,18 @@
 static char *procfname = 0;
 static FILE *procfile = 0;
 
-static char *proc_getpath(pid_t pid) {
+static char *proc_getdir(void)
+{
+    return strconcat(config_dir, FNAME_PROCDIR, (char *)NULL);
+}
+
+static char *proc_getpath(pid_t pid)
+{
     char *path;
+
+    assert(pid > 0);
     path = xmalloc(strlen(config_dir)+sizeof(FNAME_PROCDIR)+11);
-    if (pid)
-	sprintf(path, "%s%s/%u", config_dir, FNAME_PROCDIR, (unsigned)pid);
-    else
-	sprintf(path, "%s%s", config_dir, FNAME_PROCDIR);
+    sprintf(path, "%s%s/%u", config_dir, FNAME_PROCDIR, (unsigned)pid);
     return path;
 }
 
@@ -177,6 +182,8 @@ static int proc_foreach_helper(pid_t pid, procdata_t *func, void *rock)
 
 	if (fstat(fd, &sbuf))
 	    goto done;
+	if (!S_ISREG(sbuf.st_mode))
+	    goto done;
 
 	/* grab a copy of the file contents */
 	buf = xmalloc(sbuf.st_size+1);
@@ -223,7 +230,7 @@ EXPORTED int proc_foreach(procdata_t *func, void *rock)
     char *end = NULL;
     int r = 0;
 
-    path = proc_getpath(0);
+    path = proc_getdir();
     dirp = opendir(path);
 
     if (dirp) {
