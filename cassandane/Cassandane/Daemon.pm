@@ -88,15 +88,24 @@ sub port
 {
     my ($self) = @_;
 
-    if (defined $self->{port} &&
+    $self->set_port($self->{port});
+
+    return $self->{port};
+}
+
+sub set_port
+{
+    my ($self, $port) = @_;
+
+    if (defined $port &&
 	defined $self->{config})
     {
 	# expand @basedir@ et al
-	$self->{port} = $self->{config}->substitute($self->{port});
+	$port = $self->{config}->substitute($port);
     }
 
-    $self->{port} ||= Cassandane::PortManager::alloc();
-    return $self->{port};
+    $port ||= Cassandane::PortManager::alloc();
+    $self->{port} = $port;
 }
 
 # Return a hash of parameters for connecting to the daemon.

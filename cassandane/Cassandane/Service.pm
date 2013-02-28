@@ -95,6 +95,12 @@ sub port
     return $self->{_daemon}->port();
 }
 
+sub set_port
+{
+    my ($self, $port) = @_;
+    return $self->{_daemon}->set_port($port);
+}
+
 # Return a hash of parameters suitable for passing
 # to MessageStoreFactory::create.
 sub store_params
