@@ -90,7 +90,7 @@ static char *proc_getpath(pid_t pid) {
     path = xmalloc(strlen(config_dir)+sizeof(FNAME_PROCDIR)+11);
     if (pid)
 	sprintf(path, "%s%s/%u", config_dir, FNAME_PROCDIR, (unsigned)pid);
-    else 
+    else
 	sprintf(path, "%s%s", config_dir, FNAME_PROCDIR);
     return path;
 }
@@ -136,9 +136,9 @@ EXPORTED int proc_register(const char *servicename, const char *clienthost,
 	syslog(LOG_ERR, "IOERROR: creating %s: %m", procfname);
 	fatal("can't write proc file", EC_IOERR);
     }
-	
 
-    setproctitle("%s: %s %s %s", servicename, clienthost, 
+
+    setproctitle("%s: %s %s %s", servicename, clienthost,
 		 userid ? userid : "",
 		 mailbox ? mailbox : "");
 
@@ -256,7 +256,7 @@ static int procusage_cb(pid_t pid __attribute__((unused)),
 	limitsp->host++;
     if (limitsp->userid && !strcmp(userid, limitsp->userid))
 	limitsp->user++;
-    
+
     return 0;
 }
 
@@ -286,7 +286,7 @@ static int killuser_cb(pid_t pid,
 		       void *rock)
 {
     pid_t mypid = getpid();
-    const char *test = (const char *)rock;    
+    const char *test = (const char *)rock;
 
     /* don't kill myself */
     if (mypid == pid)
@@ -306,7 +306,7 @@ static int killmbox_cb(pid_t pid,
 		       void *rock)
 {
     pid_t mypid = getpid();
-    const char *test = (const char *)rock;    
+    const char *test = (const char *)rock;
 
     /* don't kill myself */
     if (mypid == pid)
