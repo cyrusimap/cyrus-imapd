@@ -435,4 +435,41 @@ sub test_admin_inbox_del
     $self->check_folder_not_ondisk($subfolder, deleted => 1);
 }
 
+sub test_bz3781
+    :ImmediateDelete
+{
+    my ($self) = @_;
+
+    xlog "Testing that a folder can be deleted when there is";
+    xlog "unexpected files in the proc directory (Bug 3781)";
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inbox = 'user.cassandane';
+    my $subfolder = 'user.cassandane.foo';
+
+    xlog "First create a sub folder";
+    $talk->create($subfolder)
+	or die "Cannot create folder $subfolder: $@";
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $self->check_folder_ondisk($subfolder);
+
+    xlog "Create unexpected files in proc directory";
+    my $procdir = $self->{instance}->{basedir} . "/conf/proc";
+    POSIX::close(POSIX::creat("$procdir/xxx", 0600));	# non-numeric name
+    POSIX::close(POSIX::creat("$procdir/123", 0600));	# valid name but empty
+
+    xlog "can delete $subfolder";
+    $talk->delete($subfolder);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog "Cannot select $subfolder anymore";
+    $talk->select($subfolder);
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert_matches(qr/Mailbox does not exist/i, $talk->get_last_error());
+
+    $self->check_folder_not_ondisk($subfolder);
+}
+
 1;
