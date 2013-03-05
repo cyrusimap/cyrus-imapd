@@ -2392,6 +2392,8 @@ EXPORTED int annotate_state_write(annotate_state_t *state,
 static int annotate_canon_value(struct buf *value, int type)
 {
     char *p = NULL;
+    unsigned long uwhatever;
+    long whatever;
 
     /* check for NIL */
     if (value->s == NULL)
@@ -2420,7 +2422,7 @@ static int annotate_canon_value(struct buf *value, int type)
     case ATTRIB_TYPE_UINT:
 	/* make sure its a valid ulong ( >= 0 ) */
 	errno = 0;
-	(void)strtoul(value->s, &p, 10);
+	uwhatever = strtoul(value->s, &p, 10);
 	if ((p == value->s)		/* no value */
 	    || (*p != '\0')		/* illegal char */
 	    || (unsigned)(p - value->s) != value->len
@@ -2434,7 +2436,7 @@ static int annotate_canon_value(struct buf *value, int type)
     case ATTRIB_TYPE_INT:
 	/* make sure its a valid long */
 	errno = 0;
-	(void)strtol(value->s, &p, 10);
+	whatever = strtol(value->s, &p, 10);
 	if ((p == value->s)		/* no value */
 	    || (*p != '\0')		/* illegal char */
 	    || (unsigned)(p - value->s) != value->len
