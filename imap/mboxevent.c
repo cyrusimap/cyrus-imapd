@@ -208,7 +208,6 @@ static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
 	}
     }
 
-done:
     strarray_free(specialuse);
     return r;
 }
