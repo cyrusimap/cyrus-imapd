@@ -1521,12 +1521,15 @@ static int set_up(void)
 
 static int tear_down(void)
 {
+    int r = 0;
+
     cyrusdb_done();
 
     if (basedir) {
 	char buf[PATH_MAX];
 	snprintf(buf, sizeof(buf), "rm -rf \"%s\"", basedir);
-	(void)system(buf);
+	r = system(buf);
+	if (r) r = -1;
     }
 
     free(filename);
@@ -1536,7 +1539,7 @@ static int tear_down(void)
     free(basedir);
     basedir = NULL;
 
-    return 0;
+    return r;
 }
 
 /* vim: set ft=c: */
