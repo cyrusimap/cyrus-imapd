@@ -341,7 +341,7 @@ HIDDEN unsigned seqset_first(const struct seqset *seq)
  * Return the last number in the sequence, or 0
  * if the sequence is empty.
  */
-HIDDEN unsigned seqset_last(const struct seqset *seq)
+EXPORTED unsigned seqset_last(const struct seqset *seq)
 {
     return (seq->len ? seq->set[seq->len-1].high : 0);
 }
@@ -384,7 +384,7 @@ EXPORTED unsigned seqset_getnext(struct seqset *seq)
  * Merge the numbers in seqset `b' into seqset `a'.
  */
 /* NOTE - not sort safe! */
-EXPORTED void seqset_join(struct seqset *a, struct seqset *b)
+EXPORTED void seqset_join(struct seqset *a, const struct seqset *b)
 {
     if (a->len + b->len > a->alloc) {
 	a->alloc = a->len + b->len;
