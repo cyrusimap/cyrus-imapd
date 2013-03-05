@@ -179,14 +179,14 @@ static struct sasl_callback mysasl_cb[] = {
 };
 
 
-int service_init(int argc __attribute__((unused)), 
-		 char **argv __attribute__((unused)), 
+int service_init(int argc __attribute__((unused)),
+		 char **argv __attribute__((unused)),
 		 char **envp __attribute__((unused)))
 {
     int r;
 
     if (geteuid() == 0) return 1;
-    
+
     signals_set_shutdown(&shut_down);
     signal(SIGPIPE, SIG_IGN);
 
@@ -265,7 +265,7 @@ int service_init(int argc __attribute__((unused)),
 
 static int mupdate_ignore_cb(struct mupdate_mailboxdata *mdata __attribute__((unused)),
 			     const char *cmd __attribute__((unused)),
-			     void *context __attribute__((unused))) 
+			     void *context __attribute__((unused)))
 {
     /* If we get called, we've recieved something other than an OK in
      * response to the NOOP, so we want to hang up this connection anyway */
@@ -275,7 +275,7 @@ static int mupdate_ignore_cb(struct mupdate_mailboxdata *mdata __attribute__((un
 /*
  * run for each accepted connection
  */
-int service_main(int argc, char **argv, 
+int service_main(int argc, char **argv,
 		 char **envp __attribute__((unused)))
 {
     int opt, r;
@@ -284,9 +284,9 @@ int service_main(int argc, char **argv,
     struct io_count *io_count_stop;
 
     if (config_iolog) {
-        io_count_start = malloc (sizeof (struct io_count));
-        io_count_stop = malloc (sizeof (struct io_count));
-        read_io_count(io_count_start);
+	io_count_start = malloc (sizeof (struct io_count));
+	io_count_stop = malloc (sizeof (struct io_count));
+	read_io_count(io_count_start);
     }
 
     sync_log_init();
@@ -350,13 +350,13 @@ int service_main(int argc, char **argv,
     cyrus_reset_stdio();
 
     if (config_iolog) {
-        read_io_count(io_count_stop);
-        syslog(LOG_INFO,
-               "LMTP session stats : I/O read : %d bytes : I/O write : %d bytes",
-                io_count_stop->io_read_count - io_count_start->io_read_count,
-                io_count_stop->io_write_count - io_count_start->io_write_count);
-        free (io_count_start);
-        free (io_count_stop);
+	read_io_count(io_count_stop);
+	syslog(LOG_INFO,
+	       "LMTP session stats : I/O read : %d bytes : I/O write : %d bytes",
+		io_count_stop->io_read_count - io_count_start->io_read_count,
+		io_count_stop->io_write_count - io_count_start->io_write_count);
+	free (io_count_start);
+	free (io_count_stop);
     }
 
     return 0;
@@ -513,7 +513,7 @@ static int mlookup(const char *name, struct mboxlist_entry **mbentryptr)
     return r;
 }
 
-/* places msg in mailbox mailboxname.  
+/* places msg in mailbox mailboxname.
  * if you wish to use single instance store, pass stage as non-NULL
  * if you want to deliver message regardless of duplicates, pass id as NULL
  * if you want to notify, pass user
@@ -561,7 +561,7 @@ int deliver_mailbox(FILE *f,
 	qdiffs[QUOTA_ANNOTSTORAGE] = 0;
 
     r = append_setup_mbox(&as, mailbox,
-			  authuser, authstate, acloverride ? 0 : ACL_POST, 
+			  authuser, authstate, acloverride ? 0 : ACL_POST,
 			  qdiffs, NULL, 0, EVENT_MESSAGE_NEW);
     if (r) {
 	mailbox_close(&mailbox);
@@ -623,7 +623,7 @@ int deliver_mailbox(FILE *f,
 	    if (strlen(mailboxname) >= inboxlen &&
 		!strncmp(mailboxname, inbox, inboxlen) &&
 		(!mailboxname[inboxlen] || mailboxname[inboxlen] == '.')) {
-		strlcpy(inbox, "INBOX", sizeof(inbox)); 
+		strlcpy(inbox, "INBOX", sizeof(inbox));
 		strlcat(inbox, mailboxname+inboxlen, sizeof(inbox));
 		notify_mailbox = inbox;
 	    }
@@ -672,7 +672,7 @@ static void deliver_remote(message_data_t *msgdata,
 	lt->auth = d->authas[0] ? d->authas : NULL;
 	lt->isdotstuffed = 0;
 	lt->tempfail_unknown_mailbox = 1;
-	
+
 	prot_rewind(msgdata->data);
 	lt->data = msgdata->data;
 	lt->rcpt_num = d->rnum;
@@ -689,7 +689,7 @@ static void deliver_remote(message_data_t *msgdata,
 				  &backend_cached, NULL, NULL, NULL);
 	if (remote) {
 	    int txn_timeout = config_getint(IMAPOPT_LMTPTXN_TIMEOUT);
-	    if (txn_timeout) 
+	    if (txn_timeout)
 		prot_settimeout(remote->in, txn_timeout);
 	    lmtp_runtxn(remote, lt);
 	} else {
@@ -706,7 +706,7 @@ static void deliver_remote(message_data_t *msgdata,
 	    int j = rc->rcpt_num;
 	    switch (status[j]) {
 	    case s_wait:
-		/* hmmm, if something fails we'll want to try an 
+		/* hmmm, if something fails we'll want to try an
 		   error delivery */
 		if (lt->rcpt[i].result != RCPT_GOOD) {
 		    status[j] = s_err;
@@ -812,7 +812,7 @@ int deliver(message_data_t *msgdata, char *authuser,
     struct message_content content = { NULL, 0, NULL };
     char *notifyheader;
     deliver_data_t mydata;
-    
+
     assert(msgdata);
     nrcpts = msg_getnumrcpt(msgdata);
     assert(nrcpts);
@@ -830,7 +830,7 @@ int deliver(message_data_t *msgdata, char *authuser,
     mydata.namespace = &lmtpd_namespace;
     mydata.authuser = authuser;
     mydata.authstate = authstate;
-    
+
     /* loop through each recipient, attempting delivery for each */
     for (n = 0; n < nrcpts; n++) {
 	char namebuf[MAX_MAILBOX_BUFFER] = "";
@@ -902,7 +902,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	while (d) {
 	    struct dest *nextd = d->next;
 	    struct rcpt *rc = d->to;
-   
+
 	    while (rc) {
 		struct rcpt *nextrc = rc->next;
 		free(rc);
@@ -920,7 +920,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    case s_err:
 	    case s_done:
 		/* yikes, we haven't implemented sieve ! */
-		syslog(LOG_CRIT, 
+		syslog(LOG_CRIT,
 		       "sieve states reached, but we don't implement sieve");
 		abort();
 	    break;
@@ -944,7 +944,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    assert(status[n] == done || status[n] == s_done);
 	}
     }
-   
+
     /* cleanup */
     free(status);
     if (content.base) map_free(&content.base, &content.len);
@@ -962,7 +962,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 EXPORTED void fatal(const char* s, int code)
 {
     static int recurse_code = 0;
-    
+
     if(recurse_code) {
 	/* We were called recursively. Just give up */
 	snmp_increment(ACTIVE_CONNECTIONS, -1);
@@ -976,7 +976,7 @@ EXPORTED void fatal(const char* s, int code)
     if (stage) append_removestage(stage);
 
     syslog(LOG_ERR, "FATAL: %s", s);
-    
+
     /* shouldn't return */
     shut_down(code);
 
@@ -1204,7 +1204,7 @@ char *generate_notify(message_data_t *m)
 		    ret = xrealloc(ret, len += 1024);
 		}
 		pos += sprintf(ret + pos, "%s: ", h);
-		
+
 		/* put the header body.
 		   xxx it would be nice to linewrap.*/
 		/* need: length + '\n' + '\0' */
