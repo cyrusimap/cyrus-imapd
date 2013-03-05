@@ -68,7 +68,7 @@
 			EVENT_MESSAGE_COPY|EVENT_MESSAGE_MOVE)
 
 #define FLAGS_EVENTS   (EVENT_FLAGS_SET|EVENT_FLAGS_CLEAR|EVENT_MESSAGE_READ|\
-                        EVENT_MESSAGE_TRASH)
+			EVENT_MESSAGE_TRASH)
 
 #define MAILBOX_EVENTS (EVENT_MAILBOX_CREATE|EVENT_MAILBOX_DELETE|\
 			EVENT_MAILBOX_RENAME|EVENT_MAILBOX_SUBSCRIBE|\
@@ -332,7 +332,7 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
     case EVENT_FLAG_NAMES:
 	return (type & (EVENT_FLAGS_SET|EVENT_FLAGS_CLEAR)) ||
 	       ((extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_FLAGNAMES) &&
-	        (type & (EVENT_MESSAGE_APPEND|EVENT_MESSAGE_NEW)));
+		(type & (EVENT_MESSAGE_APPEND|EVENT_MESSAGE_NEW)));
     case EVENT_MAILBOX_ID:
 	return (type & MAILBOX_EVENTS);
     case EVENT_MAX_MESSAGES:
@@ -447,7 +447,7 @@ EXPORTED void mboxevent_notify(struct mboxevent *mboxevents)
 
 	if (mboxevent_expected_param(event->type, EVENT_TIMESTAMP)) {
 	    timeval_to_iso8601(&event->timestamp, timeval_ms,
-	                       stimestamp, sizeof(stimestamp));
+			       stimestamp, sizeof(stimestamp));
 	    FILL_STRING_PARAM(event, EVENT_TIMESTAMP, xstrdup(stimestamp));
 	}
 
@@ -509,7 +509,7 @@ EXPORTED void mboxevent_notify(struct mboxevent *mboxevents)
 }
 
 void mboxevent_add_flags(struct mboxevent *event, char *flagnames[MAX_USER_FLAGS],
-                         bit32 system_flags, bit32 user_flags[MAX_USER_FLAGS/32])
+			 bit32 system_flags, bit32 user_flags[MAX_USER_FLAGS/32])
 {
     unsigned flag, flagmask;
 
@@ -540,11 +540,11 @@ void mboxevent_add_flags(struct mboxevent *event, char *flagnames[MAX_USER_FLAGS
 
     /* add user flags */
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
-    	if ((flag & 31) == 0) {
-    	    flagmask = user_flags[flag/32];
-    	}
-    	if (!(flagnames[flag] && (flagmask & (1<<(flag & 31)))))
-    	    continue;
+	if ((flag & 31) == 0) {
+	    flagmask = user_flags[flag/32];
+	}
+	if (!(flagnames[flag] && (flagmask & (1<<(flag & 31)))))
+	    continue;
 
 	if (strarray_find_case(excluded_flags, flagnames[flag], 0) < 0)
 	    strarray_add_case(&event->flagnames, flagnames[flag]);
@@ -561,8 +561,8 @@ void mboxevent_add_flag(struct mboxevent *event, const char *flag)
 }
 
 EXPORTED void mboxevent_set_access(struct mboxevent *event,
-                                   const char *serveraddr, const char *clientaddr,
-                                   const char *userid, const char *mailboxname)
+				   const char *serveraddr, const char *clientaddr,
+				   const char *userid, const char *mailboxname)
 {
     char url[MAX_MAILBOX_PATH+1];
     struct imapurl imapurl;
@@ -593,7 +593,7 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
 	    /* translate any separators in user */
 	    userbuf = (char *)mboxname_to_userid(mailboxname);
 	    mboxname_hiersep_toexternal(&namespace, userbuf,
-	                                config_virtdomains ? strcspn(userbuf, "@") : 0);
+					config_virtdomains ? strcspn(userbuf, "@") : 0);
 
 	    imapurl.mailbox = extname;
 	    imapurl.user = userbuf;
@@ -617,13 +617,13 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
 	/* translate any separators in user */
 	userbuf = xstrdup(userid);
 	mboxname_hiersep_toexternal(&namespace, userbuf,
-	                            config_virtdomains ? strcspn(userbuf, "@") : 0);
+				    config_virtdomains ? strcspn(userbuf, "@") : 0);
 	FILL_STRING_PARAM(event, EVENT_USER, userbuf);
     }
 }
 
 EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *mailbox,
-                                       struct index_record *record)
+				       struct index_record *record)
 {
     char *msgid = NULL;
 
@@ -671,8 +671,8 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
     /* add bodyStructure */
     if (mboxevent_expected_param(event->type, EVENT_BODYSTRUCTURE)) {
 	FILL_STRING_PARAM(event, EVENT_BODYSTRUCTURE,
-	                  xstrndup(cacheitem_base(record, CACHE_BODYSTRUCTURE),
-	                           cacheitem_size(record, CACHE_BODYSTRUCTURE)));
+			  xstrndup(cacheitem_base(record, CACHE_BODYSTRUCTURE),
+				   cacheitem_size(record, CACHE_BODYSTRUCTURE)));
     }
 }
 
@@ -697,7 +697,7 @@ void mboxevent_extract_copied_record(struct mboxevent *event,
 }
 
 void mboxevent_extract_content(struct mboxevent *event,
-                               const struct index_record *record, FILE* content)
+			       const struct index_record *record, FILE* content)
 {
     const char *base = NULL;
     unsigned long len = 0;
@@ -759,7 +759,7 @@ void mboxevent_extract_content(struct mboxevent *event,
 }
 
 void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
-                             enum quota_resource res)
+			     enum quota_resource res)
 {
     struct imapurl imapurl;
     char url[MAX_MAILBOX_PATH+1];
@@ -777,7 +777,7 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
 	}
 	if (mboxevent_expected_param(event->type, EVENT_DISK_USED)) {
 	    FILL_UNSIGNED_PARAM(event, EVENT_DISK_USED,
-	                   quota->useds[res] / quota_units[res]);
+			   quota->useds[res] / quota_units[res]);
 	}
 	break;
     case QUOTA_MESSAGE:
@@ -807,7 +807,7 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
 	/* translate any separators in user */
 	userbuf = (char *)mboxname_to_userid(quota->root);
 	mboxname_hiersep_toexternal(&namespace, userbuf,
-	                            config_virtdomains ? strcspn(userbuf, "@") : 0);
+				    config_virtdomains ? strcspn(userbuf, "@") : 0);
 
 	memset(&imapurl, 0, sizeof(struct imapurl));
 	imapurl.server = config_servername;
@@ -819,10 +819,10 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
 }
 
 EXPORTED void mboxevent_set_numunseen(struct mboxevent *event,
-                                      struct mailbox *mailbox, int numunseen)
+				      struct mailbox *mailbox, int numunseen)
 {
     if (!event)
-    	return;
+	return;
 
     if (mboxevent_expected_param(event->type, EVENT_UNSEEN_MESSAGES)) {
 	unsigned count = (numunseen >= 0) ? (unsigned)numunseen
@@ -835,7 +835,7 @@ EXPORTED void mboxevent_set_numunseen(struct mboxevent *event,
 }
 
 EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
-                                        struct mailbox *mailbox)
+					struct mailbox *mailbox)
 {
     struct imapurl imapurl;
     char url[MAX_MAILBOX_PATH+1];
@@ -858,12 +858,12 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     /* translate internal mailbox name to external */
     assert(namespace.mboxname_toexternal != NULL);
     (*namespace.mboxname_toexternal)(&namespace, mailbox->name,
-                                     mboxname_to_userid(mailbox->name), extname);
+				     mboxname_to_userid(mailbox->name), extname);
 
     /* translate any separators in user */
     userbuf = (char *)mboxname_to_userid(mailbox->name);
     mboxname_hiersep_toexternal(&namespace, userbuf,
-                                config_virtdomains ? strcspn(userbuf, "@") : 0);
+				config_virtdomains ? strcspn(userbuf, "@") : 0);
 
     /* all events needs uri parameter */
     memset(&imapurl, 0, sizeof(struct imapurl));
@@ -907,7 +907,7 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
 }
 
 void mboxevent_extract_old_mailbox(struct mboxevent *event,
-                                   const struct mailbox *mailbox)
+				   const struct mailbox *mailbox)
 {
     struct imapurl imapurl;
     char url[MAX_MAILBOX_PATH+1];
@@ -925,7 +925,7 @@ void mboxevent_extract_old_mailbox(struct mboxevent *event,
     /* translate any separators in user */
     userbuf = (char *)mboxname_to_userid(mailbox->name);
     mboxname_hiersep_toexternal(&namespace, userbuf,
-                                config_virtdomains ? strcspn(userbuf, "@") : 0);
+				config_virtdomains ? strcspn(userbuf, "@") : 0);
 
     memset(&imapurl, 0, sizeof(struct imapurl));
     imapurl.server = config_servername;
@@ -959,7 +959,7 @@ static const char *event_to_name(enum event_type type)
     case EVENT_QUOTA_CHANGE:
 	return "QuotaChange";
     case EVENT_MESSAGE_READ:
-    	return "MessageRead";
+	return "MessageRead";
     case EVENT_MESSAGE_TRASH:
 	return "MessageTrash";
     case EVENT_FLAGS_SET:
@@ -1033,11 +1033,11 @@ static char *json_formatter(enum event_type type, struct event_parameter params[
 	    switch (params[param].type) {
 	    case EVENT_PARAM_INT:
 		json_object_set_new(event_json, params[param].name,
-		                    json_integer(params[param].value));
+				    json_integer(params[param].value));
 		break;
 	    case EVENT_PARAM_STRING:
 		json_object_set_new(event_json, params[param].name,
-		                    json_string((char *)params[param].value));
+				    json_string((char *)params[param].value));
 		break;
 	    case EVENT_PARAM_ARRAY:
 		jarray = json_array();
