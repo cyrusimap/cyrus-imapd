@@ -2007,11 +2007,16 @@ static void cmd_authinfo_user(char *user)
 static void cmd_authinfo_pass(char *pass)
 {
     int failedloginpause;
+    int r;
+
     /* Conceal password in telemetry log */
     if (nntp_logfd != -1 && pass) {
-	(void)ftruncate(nntp_logfd,
+	r = ftruncate(nntp_logfd,
 		  lseek(nntp_logfd, -2, SEEK_CUR) - strlen(pass));
-	(void)write(nntp_logfd, "...\r\n", 5);
+	if (!r)
+	    r = write(nntp_logfd, "...\r\n", 5);
+	if (r < 0)
+	    syslog(LOG_ERR, "IOERROR: cannot conceal password in telemetry log: %m");
     }
 
     if (nntp_authstate) {

@@ -63,8 +63,10 @@ EXPORTED int telemetry_log(const char *userid, struct protstream *pin,
 		  struct protstream *pout, int usetimestamp)
 {
     char buf[1024];
+    char buf2[1024];
     int fd = -1;
     time_t now;
+    int r;
 
     if(usetimestamp) {
 	struct timeval tv;
@@ -86,9 +88,11 @@ EXPORTED int telemetry_log(const char *userid, struct protstream *pin,
 
     if (fd != -1) {
 	now = time(NULL);
-	snprintf(buf, sizeof(buf), "---------- %s %s\n",
+	snprintf(buf2, sizeof(buf2), "---------- %s %s\n",
 		 userid, ctime(&now));
-	(void)write(fd, buf, strlen(buf));
+	r = write(fd, buf2, strlen(buf2));
+	if (r < 0)
+	    syslog(LOG_ERR, "IOERROR: unable to write to telemetry log %s: %m", buf);
 
 	prot_setlog(pin, fd);
 	prot_setlog(pout, fd);

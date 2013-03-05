@@ -1883,6 +1883,7 @@ int main(int argc, char **argv)
     int fd;
     fd_set rfds;
     char *p = NULL;
+    int r;
 
 #ifdef HAVE_NETSNMP
     char *agentxsocket = NULL;
@@ -2045,7 +2046,7 @@ int main(int argc, char **argv)
 	    int exit_result = EX_OSERR;
 
 	    /* Tell our parent that we failed. */
-	    (void)write(startup_pipe[1], &exit_result, sizeof(exit_result));
+	    r = write(startup_pipe[1], &exit_result, sizeof(exit_result));
 
 	    fatal("setsid failure", EX_OSERR);
 	}
@@ -2059,7 +2060,7 @@ int main(int argc, char **argv)
 	int exit_result = EX_OSERR;
 
 	/* Tell our parent that we failed. */
-	(void)write(startup_pipe[1], &exit_result, sizeof(exit_result));
+	r = write(startup_pipe[1], &exit_result, sizeof(exit_result));
 
 	syslog(LOG_ERR, "can't open pidfile: %m");
 	exit(EX_OSERR);
@@ -2070,7 +2071,7 @@ int main(int argc, char **argv)
 	    int exit_result = EX_OSERR;
 
 	    /* Tell our parent that we failed. */
-	    (void)write(startup_pipe[1], &exit_result, sizeof(exit_result));
+	    r = write(startup_pipe[1], &exit_result, sizeof(exit_result));
 
 	    fatal("cannot get exclusive lock on pidfile (is another master still running?)", EX_OSERR);
 	} else {
@@ -2082,7 +2083,7 @@ int main(int argc, char **argv)
 		int exit_result = EX_OSERR;
 
 		/* Tell our parent that we failed. */
-		(void)write(startup_pipe[1], &exit_result, sizeof(exit_result));
+		r = write(startup_pipe[1], &exit_result, sizeof(exit_result));
 
 		fatalf(EX_OSERR, "unable to set close-on-exec for pidfile: %m");
 	    }
@@ -2095,7 +2096,7 @@ int main(int argc, char **argv)
 		int exit_result = EX_OSERR;
 
 		/* Tell our parent that we failed. */
-		(void)write(startup_pipe[1], &exit_result, sizeof(exit_result));
+		r = write(startup_pipe[1], &exit_result, sizeof(exit_result));
 
 		fatalf(EX_OSERR, "unable to write to pidfile: %m");
 	    }
