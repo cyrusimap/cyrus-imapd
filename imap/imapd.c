@@ -894,10 +894,10 @@ int service_main(int argc __attribute__((unused)),
     struct io_count *io_count_start;
     struct io_count *io_count_stop;
 
-    if (config_iolog) { 
-        io_count_start = malloc (sizeof (struct io_count));
-        io_count_stop = malloc (sizeof (struct io_count));
-        read_io_count(io_count_start);
+    if (config_iolog) {
+	io_count_start = malloc (sizeof (struct io_count));
+	io_count_stop = malloc (sizeof (struct io_count));
+	read_io_count(io_count_start);
     }
 
     session_new_id();
@@ -919,8 +919,8 @@ int service_main(int argc __attribute__((unused)),
     imapd_clienthost = get_clienthost(0, &localip, &remoteip);
 
     /* create the SASL connection */
-    if (sasl_server_new("imap", config_servername, 
-			NULL, NULL, NULL, NULL, 0, 
+    if (sasl_server_new("imap", config_servername,
+			NULL, NULL, NULL, NULL, 0,
 			&imapd_saslconn) != SASL_OK) {
 	fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL);
     }
@@ -972,14 +972,14 @@ int service_main(int argc __attribute__((unused)),
     /* cleanup */
     imapd_reset();
 
-    if (config_iolog) { 
+    if (config_iolog) {
 	read_io_count(io_count_stop);
-	syslog(LOG_INFO, 
-               "IMAP session stats : I/O read : %d bytes : I/O write : %d bytes",
-                io_count_stop->io_read_count - io_count_start->io_read_count,
-                io_count_stop->io_write_count - io_count_start->io_write_count);
-        free (io_count_start);
-        free (io_count_stop);
+	syslog(LOG_INFO,
+	       "IMAP session stats : I/O read : %d bytes : I/O write : %d bytes",
+		io_count_stop->io_read_count - io_count_start->io_read_count,
+		io_count_stop->io_write_count - io_count_start->io_write_count);
+	free (io_count_start);
+	free (io_count_stop);
     }
 
     return 0;
