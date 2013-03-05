@@ -77,7 +77,7 @@ EXPORTED int telemetry_log(const char *userid, struct protstream *pin,
 		 (unsigned long)tv.tv_sec, (unsigned long)tv.tv_usec);
     } else {
 	/* use pid */
-	snprintf(buf, sizeof(buf), "%s%s%s/%s-%lu", 
+	snprintf(buf, sizeof(buf), "%s%s%s/%s-%lu",
 		 config_dir, FNAME_LOGDIR, userid, config_ident,
 		 (unsigned long) getpid());
     }
@@ -86,14 +86,14 @@ EXPORTED int telemetry_log(const char *userid, struct protstream *pin,
 
     if (fd != -1) {
 	now = time(NULL);
-	snprintf(buf, sizeof(buf), "---------- %s %s\n", 
+	snprintf(buf, sizeof(buf), "---------- %s %s\n",
 		 userid, ctime(&now));
 	(void)write(fd, buf, strlen(buf));
 
 	prot_setlog(pin, fd);
 	prot_setlog(pout, fd);
     }
-    
+
     return fd;
 }
 
