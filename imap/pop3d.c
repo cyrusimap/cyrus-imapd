@@ -513,8 +513,8 @@ int service_main(int argc __attribute__((unused)),
     struct mboxevent *mboxevent = NULL;
 
     if (config_iolog) {
-	io_count_start = malloc (sizeof (struct io_count));
-	io_count_stop = malloc (sizeof (struct io_count));
+	io_count_start = xmalloc (sizeof (struct io_count));
+	io_count_stop = xmalloc (sizeof (struct io_count));
 	read_io_count(io_count_start);
     }
 
