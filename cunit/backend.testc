@@ -1090,13 +1090,22 @@ static int server_checkpass(sasl_conn_t *conn __attribute__((unused)),
     return SASL_OK;
 }
 
+/* The auxprop API changed in commit a321326, Oct 2008 */
+#if SASL_AUXPROP_PLUG_VERSION > 4
+#   define AUXPROP_RTYPE int
+#   define AUXPROP_RET 0
+#else
+#   define AUXPROP_RTYPE void
+#   define AUXPROP_RET
+#endif
+
 /*
  * Callback which we use to fake out server-side password checking for
  * those mechanisms where a plaintext password from the client is *NOT*
  * available, and so the SASL server code needs to retrieve the password
  * from an auxprop plugin.
  */
-static int server_auxprop_lookup(void *glob_context __attribute__((unused)),
+static AUXPROP_RTYPE server_auxprop_lookup(void *glob_context __attribute__((unused)),
 				 sasl_server_params_t *sparams,
 				 unsigned flags __attribute__((unused)),
 				 const char *user,
@@ -1106,11 +1115,11 @@ static int server_auxprop_lookup(void *glob_context __attribute__((unused)),
 
     if (ulen != strlen(USERID) ||
 	strncmp(user, USERID, ulen))
-	return 0;
+	return AUXPROP_RET;
 
     prop = sparams->utils->prop_get(sparams->propctx);
     if (!prop)
-	return 0;
+	return AUXPROP_RET;
     for ( ; prop->name ; prop++) {
 	if (!strcmp(prop->name, "*userPassword") ||
 	    !strcmp(prop->name, "*cmusaslsecretDIGEST-MD5")) {
@@ -1121,7 +1130,7 @@ static int server_auxprop_lookup(void *glob_context __attribute__((unused)),
 	}
     }
 
-    return 0;
+    return AUXPROP_RET;
 }
 
 /*
