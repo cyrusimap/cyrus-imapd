@@ -511,7 +511,7 @@ EXPORTED void mboxevent_notify(struct mboxevent *mboxevents)
 void mboxevent_add_flags(struct mboxevent *event, char *flagnames[MAX_USER_FLAGS],
 			 bit32 system_flags, bit32 user_flags[MAX_USER_FLAGS/32])
 {
-    unsigned flag, flagmask;
+    unsigned flag, flagmask = 0;
 
     if (!event)
 	return;

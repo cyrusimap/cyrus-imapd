@@ -891,8 +891,8 @@ int service_main(int argc __attribute__((unused)),
     sasl_security_properties_t *secprops = NULL;
     const char *localip, *remoteip;
     struct mboxevent *mboxevent = NULL;
-    struct io_count *io_count_start;
-    struct io_count *io_count_stop;
+    struct io_count *io_count_start = NULL;
+    struct io_count *io_count_stop = NULL;
 
     if (config_iolog) {
 	io_count_start = xmalloc (sizeof (struct io_count));
@@ -3384,7 +3384,7 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
     int i;
     char mailboxname[MAX_MAILBOX_BUFFER];
     struct appendstate appendstate; 
-    unsigned long uidvalidity;
+    unsigned long uidvalidity = 0;
     long doappenduid = 0;
     const char *parseerr = NULL, *url = NULL;
     struct appendstage *curstage;

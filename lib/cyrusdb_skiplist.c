@@ -836,7 +836,7 @@ static int dispose_db(struct dbengine *db)
 static int compare_signed(const char *s1, int l1, const char *s2, int l2)
 {
     int min = l1 < l2 ? l1 : l2;
-    int cmp;
+    int cmp = 0;
 
     while (min-- > 0 && (cmp = *s1 - *s2) == 0) {
 	s1++;

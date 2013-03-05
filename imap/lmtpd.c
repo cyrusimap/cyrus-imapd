@@ -280,8 +280,8 @@ int service_main(int argc, char **argv,
 {
     int opt, r;
 
-    struct io_count *io_count_start;
-    struct io_count *io_count_stop;
+    struct io_count *io_count_start = NULL;
+    struct io_count *io_count_stop = NULL;
 
     if (config_iolog) {
 	io_count_start = xmalloc (sizeof (struct io_count));

@@ -1968,7 +1968,7 @@ static int index_appendremote(struct index_state *state, uint32_t msgno,
     struct mailbox *mailbox = state->mailbox;
     const char *msg_base = 0;
     size_t msg_size = 0;
-    unsigned flag, flagmask;
+    unsigned flag, flagmask = 0;
     char datebuf[RFC3501_DATETIME_MAX+1];
     char sepchar = '(';
     struct index_record record;

@@ -3286,7 +3286,7 @@ static void init_annotation_definitions(void)
     int i;
     FILE* f;
     struct parse_state state;
-    ptrarray_t *entries;
+    ptrarray_t *entries = NULL;
 
     /* copy static entries into list */
     for (i = 0 ; server_builtin_entries[i].name ; i++)
