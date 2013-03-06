@@ -1817,7 +1817,10 @@ static int zero_b_cb(void *rock,
     int i;
 
     r = conversation_parse(state, val, vallen, &conv);
-    if (r) return r;
+    if (r) {
+	r = cyrusdb_delete(state->db, key, keylen, &state->txn, /*force*/1);
+	return r;
+    }
 
     /* leave modseq untouched */
     conv->num_records = 0;
@@ -1868,7 +1871,10 @@ static int zero_f_cb(void *rock,
     int r;
 
     r = conversation_parsestatus(val, vallen, &status);
-    if (r) return r;
+    if (r) {
+	r = cyrusdb_delete(state->db, key, keylen, &state->txn, /*force*/1);
+	return r;
+    }
 
     /* leave modseq unchanged */
     status.exists = 0;
