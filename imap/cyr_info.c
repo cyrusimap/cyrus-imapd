@@ -242,15 +242,37 @@ static void do_defconf(void)
 
 static int known_overflowkey(const char *key)
 {
+    const char *match;
     /* any partition is OK (XXX: are there name restrictions to check?) */
     if (!strncmp(key, "partition-", 10)) return 1;
-    if (!strncmp(key, "searchpartition-", 10)) return 1;
 
     /* only valid if there's a partition with the same name */
     if (!strncmp(key, "metapartition-", 14)) {
 	if (config_getoverflowstring(key+4, NULL))
 	    return 1;
     }
+
+    match = strstr(key, "searchpartition-");
+    if (match) {
+	const char *conf = config_getstring(IMAPOPT_XAPIAN_TIERS);
+	if (conf) {
+	    strarray_t *names = strarray_split(conf, NULL, STRARRAY_TRIM);
+	    int i;
+	    for (i = 0; i < names->count; i++) {
+		if (!strncmp(key, strarray_nth(names, i), match - key)) {
+		    strarray_free(names);
+		    return 1;
+		}
+	    }
+	    strarray_free(names);
+	}
+	else {
+	    if (match == key) return 1; /* no tiers, no prefix */
+	}
+    }
+    
+    
+    if (!strncmp(key, "searchpartition-", 10)) return 1;
 
     return 0;
 }
