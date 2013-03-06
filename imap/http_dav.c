@@ -1637,8 +1637,7 @@ static int propfind_calcompset(xmlNodePtr prop,
 			       void *rock __attribute__((unused)))
 {
     struct annotation_data attrib;
-    const char *value = NULL;
-    unsigned long types;
+    unsigned long types = 0;
     int r = 0;
 
     if ((fctx->req_tgt->namespace == URL_NS_CALENDAR) &&
@@ -1647,9 +1646,11 @@ static int propfind_calcompset(xmlNodePtr prop,
 	    ANNOT_NS "CALDAV:supported-calendar-component-set";
 
 	if (!(r = annotatemore_lookup(fctx->mailbox->name, prop_annot,
-				      /* shared */ "", &attrib))
-	    && attrib.value) {
-	    value = attrib.value;
+				      /* shared */ "", &attrib))) {
+	    if (attrib.value)
+		types = strtoul(attrib.value, NULL, 10);
+	    else
+		types = -1;  /* ALL components types */
 	}
     }
 
@@ -1657,7 +1658,7 @@ static int propfind_calcompset(xmlNodePtr prop,
 	xml_add_prop(HTTP_SERVER_ERROR, fctx->ns[NS_DAV],
 		     &propstat[PROPSTAT_ERROR], prop, NULL, 0);
     }
-    else if (value && (types = strtoul(value, NULL, 10))) {
+    else if (types) {
 	xmlNodePtr set, node;
 	const struct cal_comp_t *comp;
 
