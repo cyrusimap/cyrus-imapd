@@ -1617,7 +1617,7 @@ void response_header(long code, struct transaction_t *txn)
     struct auth_challenge_t *auth_chal = &txn->auth_chal;
     struct resp_body_t *resp_body = &txn->resp_body;
     static struct buf log = BUF_INITIALIZER;
-    const char **hdr, *upgrade = "";
+    const char **hdr, *conn_token = "";
 
     /* Stop method processing alarm */
     alarm(0);
@@ -1671,7 +1671,7 @@ void response_header(long code, struct transaction_t *txn)
 	return;
 
     case HTTP_UPGRADE:
-	upgrade = ", upgrade";
+	conn_token = " upgrade,";
 	prot_printf(httpd_out, "Upgrade: %s, %s\r\n",
 		    TLS_VERSION, HTTP_VERSION);
 	/* Fall through as final response */
@@ -1679,11 +1679,11 @@ void response_header(long code, struct transaction_t *txn)
     default:
 	/* Final response */
 	if (txn->flags.close) {
-	    prot_printf(httpd_out, "Connection: close%s\r\n", upgrade);
+	    prot_printf(httpd_out, "Connection:%s close\r\n", conn_token);
 	}
 	else {
 	    prot_printf(httpd_out, "Keep-Alive: timeout=%d\r\n", httpd_timeout);
-	    prot_printf(httpd_out, "Connection: keep-alive%s\r\n", upgrade);
+	    prot_printf(httpd_out, "Connection:%s keep-alive\r\n", conn_token);
 	}
     }
 
