@@ -1548,21 +1548,20 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 		    else if (flags & NEW_STAG) {
 			sprintf(sched_tag, "%d-%ld-%u",
 				getpid(), now, store_count++);
-			cdata->sched_tag = sched_tag;
+			txn->resp_body.stag = cdata->sched_tag = sched_tag;
 		    }
 
 		    caldav_write(caldavdb, cdata, 1);
 		    /* XXX  check for errors, if this fails, backout changes */
 
-		    /* Tell client about the new resource */
-		    txn->resp_body.etag = message_guid_encode(&newrecord.guid);
-		    if (cdata->sched_tag) txn->resp_body.stag = cdata->sched_tag;
-
 		    if (flags & PREFER_REP) {
 			struct resp_body_t *resp_body = &txn->resp_body;
 
-			resp_body->loc = txn->req_tgt.path;
+			/* Fill in Last-Modified, ETag, and Content-Type */
+			resp_body->lastmod = newrecord.internaldate;
+			resp_body->etag = message_guid_encode(&newrecord.guid);
 			resp_body->type = "text/calendar; charset=utf-8";
+			resp_body->loc = txn->req_tgt.path;
 			resp_body->len = strlen(ics);
 
 			/* iCalendar data in response should not be transformed */
@@ -1570,6 +1569,12 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 
 			write_body(ret, txn, ics, strlen(ics));
 			ret = 0;
+		    }
+		    else if (!(flags & NEW_STAG)) {
+			/* Tell client about the new resource */
+			txn->resp_body.lastmod = newrecord.internaldate;
+			txn->resp_body.etag =
+			    message_guid_encode(&newrecord.guid);
 		    }
 		}
 
