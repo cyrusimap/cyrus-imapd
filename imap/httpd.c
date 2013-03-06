@@ -1729,21 +1729,6 @@ void response_header(long code, struct transaction_t *txn)
 	prot_printf(httpd_out, "Server: %s\r\n", buf_cstring(&serverinfo));
     }
 
-    switch (txn->meth) {
-    case METH_OPTIONS:
-	if (code == HTTP_OK) {
-	    /* Force Allow header for successful OPTIONS request */
-	    code = HTTP_NOT_ALLOWED;
-	}
-	break;
-
-    case METH_GET:
-    case METH_HEAD:
-	/* Add Accept-Ranges header for GET and HEAD responses */
-	prot_printf(httpd_out, "Accept-Ranges: %s\r\n",
-		    txn->flags.ranges ? "bytes" : "none");
-    }
-
     if (txn->req_tgt.allow & ALLOW_ISCHEDULE) {
 	prot_printf(httpd_out, "iSchedule-Version: 1.0\r\n");
 	if (resp_body->iserial) {
@@ -1765,6 +1750,21 @@ void response_header(long code, struct transaction_t *txn)
 	if (txn->req_tgt.allow & ALLOW_CARD) {
 	    prot_printf(httpd_out, "DAV: addressbook\r\n");
 	}
+    }
+
+    switch (txn->meth) {
+    case METH_OPTIONS:
+	if (code == HTTP_OK) {
+	    /* Force Allow header for successful OPTIONS request */
+	    code = HTTP_NOT_ALLOWED;
+	}
+	break;
+
+    case METH_GET:
+    case METH_HEAD:
+	/* Add Accept-Ranges header for GET and HEAD responses */
+	prot_printf(httpd_out, "Accept-Ranges: %s\r\n",
+		    txn->flags.ranges ? "bytes" : "none");
     }
 
     switch (code) {
@@ -1842,6 +1842,38 @@ void response_header(long code, struct transaction_t *txn)
     }
 
 
+    /* Validators */
+    if (resp_body->lock) {
+	prot_printf(httpd_out, "Lock-Token: <%s>\r\n", resp_body->lock);
+    }
+    if (resp_body->stag) {
+	prot_printf(httpd_out, "Schedule-Tag: \"%s\"\r\n", resp_body->stag);
+    }
+    if (resp_body->etag) {
+	prot_printf(httpd_out, "ETag: \"%s\"\r\n", resp_body->etag);
+    }
+    if (resp_body->lastmod) {
+	httpdate_gen(datestr, sizeof(datestr), resp_body->lastmod);
+	prot_printf(httpd_out, "Last-Modified: %s\r\n", datestr);
+    }
+
+
+    /* Representation Metadata */
+    if (resp_body->type) {
+	prot_printf(httpd_out, "Content-Type: %s\r\n", resp_body->type);
+
+	if (resp_body->enc) {
+	    prot_printf(httpd_out, "Content-Encoding: %s\r\n", resp_body->enc);
+	}
+	if (resp_body->lang) {
+	    prot_printf(httpd_out, "Content-Language: %s\r\n", resp_body->lang);
+	}
+	if (resp_body->loc && resp_body->len) {
+	    prot_printf(httpd_out, "Content-Location: %s\r\n", resp_body->loc);
+	}
+    }
+
+
     /* Payload */
     switch (code) {
     case HTTP_NO_CONTENT:
@@ -1873,38 +1905,6 @@ void response_header(long code, struct transaction_t *txn)
 	    prot_printf(httpd_out, " chunked\r\n");
 	}
 	else prot_printf(httpd_out, "Content-Length: %lu\r\n", resp_body->len);
-    }
-
-
-    /* Validators */
-    if (resp_body->lock) {
-	prot_printf(httpd_out, "Lock-Token: <%s>\r\n", resp_body->lock);
-    }
-    if (resp_body->stag) {
-	prot_printf(httpd_out, "Schedule-Tag: \"%s\"\r\n", resp_body->stag);
-    }
-    if (resp_body->etag) {
-	prot_printf(httpd_out, "ETag: \"%s\"\r\n", resp_body->etag);
-    }
-    if (resp_body->lastmod) {
-	httpdate_gen(datestr, sizeof(datestr), resp_body->lastmod);
-	prot_printf(httpd_out, "Last-Modified: %s\r\n", datestr);
-    }
-
-
-    /* Representation Metadata */
-    if (resp_body->type) {
-	prot_printf(httpd_out, "Content-Type: %s\r\n", resp_body->type);
-
-	if (resp_body->enc) {
-	    prot_printf(httpd_out, "Content-Encoding: %s\r\n", resp_body->enc);
-	}
-	if (resp_body->lang) {
-	    prot_printf(httpd_out, "Content-Language: %s\r\n", resp_body->lang);
-	}
-	if (resp_body->loc && resp_body->len) {
-	    prot_printf(httpd_out, "Content-Location: %s\r\n", resp_body->loc);
-	}
     }
 
 
