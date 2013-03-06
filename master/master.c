@@ -525,7 +525,8 @@ static void service_create(struct service *s)
 	    s = &service;
 	}
 
-	switch (res->ai_family) {
+	s->family = res->ai_family;
+	switch (s->family) {
 	case AF_UNIX:	s->familyname = "unix"; break;
 	case AF_INET:	s->familyname = "ipv4"; break;
 	case AF_INET6:	s->familyname = "ipv6"; break;
