@@ -244,6 +244,7 @@ static int known_overflowkey(const char *key)
 {
     /* any partition is OK (XXX: are there name restrictions to check?) */
     if (!strncmp(key, "partition-", 10)) return 1;
+    if (!strncmp(key, "searchpartition-", 10)) return 1;
 
     /* only valid if there's a partition with the same name */
     if (!strncmp(key, "metapartition-", 14)) {
