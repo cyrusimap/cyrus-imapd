@@ -122,7 +122,6 @@
 #include "strarray.h"
 
 enum {
-    become_cyrus_early = 1,
     child_table_size = 10000,
     child_table_inc = 100
 };
@@ -255,6 +254,17 @@ static void get_statsock(int filedes[2])
 				       fdflags | FD_CLOEXEC);
     if (fdflags == -1)
 	fatalf(1, "unable to set close-on-exec: %m");
+}
+
+static int cap_bind(int socket, struct sockaddr *addr, socklen_t length)
+{
+    int r;
+
+    set_caps(BEFORE_BIND, /*is_master*/1);
+    r = bind(socket, addr, length);
+    set_caps(AFTER_BIND, /*is_master*/1);
+
+    return r;
 }
 
 /* Return a new 'centry', by malloc'ing it. */
@@ -574,7 +584,7 @@ static void service_create(struct service *s)
 #endif
 
 	oldumask = umask((mode_t) 0); /* for linux */
-	r = bind(s->socket, res->ai_addr, res->ai_addrlen);
+	r = cap_bind(s->socket, res->ai_addr, res->ai_addrlen);
 	umask(oldumask);
 	if (r < 0) {
 	    syslog(LOG_ERR, "unable to bind to %s/%s socket: %m",
@@ -673,8 +683,7 @@ static void run_startup(const char *name, const strarray_t *cmd)
 	/* Child - Release our pidfile lock. */
 	xclose(pidfd);
 
-	if (become_cyrus() != 0)
-	    fatalf(1, "can't change to the cyrus user: %m");
+	set_caps(AFTER_FORK, /*is_master*/1);
 
 	child_sighandler_setup();
 
@@ -793,10 +802,7 @@ static void spawn_service(int si)
 	/* Child - Release our pidfile lock. */
 	xclose(pidfd);
 
-	if (become_cyrus() != 0) {
-	    syslog(LOG_ERR, "can't change to the cyrus user");
-	    exit(1);
-	}
+	set_caps(AFTER_FORK, /*is_master*/1);
 
 	child_sighandler_setup();
 
@@ -910,10 +916,7 @@ static void spawn_schedule(struct timeval now)
 		/* Child - Release our pidfile lock. */
 		xclose(pidfd);
 
-		if (become_cyrus() != 0) {
-		    syslog(LOG_ERR, "can't change to the cyrus user");
-		    exit(1);
-		}
+		set_caps(AFTER_FORK, /*is_master*/1);
 
 		/* close all listeners */
 		for (i = 0; i < nservices; i++) {
@@ -2147,6 +2150,13 @@ int main(int argc, char **argv)
     init_snmp("cyrusMaster");
 #endif
 
+#if defined(__linux__) && defined(HAVE_LIBCAP)
+    if (become_cyrus(/*is_master*/1) != 0) {
+	syslog(LOG_ERR, "can't change to the cyrus user: %m");
+	exit(1);
+    }
+#endif
+
     masterconf_getsection("START", &add_start, NULL);
     masterconf_getsection("SERVICES", &add_service, NULL);
     masterconf_getsection("EVENTS", &add_event, NULL);
@@ -2164,12 +2174,12 @@ int main(int argc, char **argv)
 		   Services[i].stat[0], Services[i].stat[1]);
     }
 
-    if (become_cyrus_early) {
-	if (become_cyrus() != 0) {
-	    syslog(LOG_ERR, "can't change to the cyrus user: %m");
-	    exit(1);
-	}
+#if !defined(__linux__) || !defined(HAVE_LIBCAP)
+    if (become_cyrus(/*is_master*/1) != 0) {
+	syslog(LOG_ERR, "can't change to the cyrus user: %m");
+	exit(1);
     }
+#endif
 
     /* init ctable janitor */
     gettimeofday(&now, 0);

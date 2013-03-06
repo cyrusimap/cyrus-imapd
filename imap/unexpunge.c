@@ -267,7 +267,7 @@ int main(int argc, char *argv[])
     unsigned nuids = 0;
     char *mboxname = NULL;
 
-    if ((geteuid()) == 0 && (become_cyrus() != 0)) {
+    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
 	fatal("must run as the Cyrus user", EC_USAGE);
     }
 

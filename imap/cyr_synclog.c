@@ -63,7 +63,7 @@ int main(int argc, char *argv[])
     char cmd = '\0';
     char opt;
 
-    if ((geteuid()) == 0 && (become_cyrus() != 0)) {
+    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
 	fatal("must run as the Cyrus user", EC_USAGE);
     }
 

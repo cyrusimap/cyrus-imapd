@@ -960,7 +960,7 @@ int main(int argc, char *argv[])
     enum mboxop op = NONE;
     char *alt_config = NULL;
 
-    if ((geteuid()) == 0 && (become_cyrus() != 0)) {
+    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
 	fatal("must run as the Cyrus user", EC_USAGE);
     }
 
