@@ -1825,8 +1825,10 @@ static int zero_b_cb(void *rock,
     conv->unseen = 0;
 
     /* zero out all the counted counts */
-    for (i = 0; i < state->counted_flags->count; i++)
-	conv->counts[i] = 0;
+    if (state->counted_flags) {
+	for (i = 0; i < state->counted_flags->count; i++)
+	    conv->counts[i] = 0;
+    }
 
     for (folder = conv->folders; folder; folder = folder->next) {
 	/* keep the modseq */
