@@ -222,6 +222,7 @@ struct resp_body_t {
     const char *etag;	/* ETag             */
     time_t lastmod;	/* Last-Modified    */
     const char *stag;	/* Schedule-Tag     */
+    time_t iserial;	/* iSched serial#   */
     struct buf payload;	/* Payload	    */
 };
 

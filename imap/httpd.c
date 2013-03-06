@@ -1659,7 +1659,7 @@ void response_header(long code, struct transaction_t *txn)
     case HTTP_PROCESSING:
 	/* Provisional response - nothing else needed */
 
-	/* CRLF terminating the header */
+	/* CRLF terminating the header block */
 	prot_printf(httpd_out, "\r\n");
 
 	/* Force the response to the client immediately */
@@ -1746,14 +1746,10 @@ void response_header(long code, struct transaction_t *txn)
 
     if (txn->req_tgt.allow & ALLOW_ISCHEDULE) {
 	prot_printf(httpd_out, "iSchedule-Version: 1.0\r\n");
-#ifdef WITH_DAV
-	if (txn->meth != METH_OPTIONS) {
-	    extern time_t isched_serial;
-
+	if (resp_body->iserial) {
 	    prot_printf(httpd_out, "iSchedule-Capabilities: %ld\r\n",
-			isched_serial);
+			resp_body->iserial);
 	}
-#endif
     }
 
     if (txn->req_tgt.allow & ALLOW_DAV) {
@@ -1912,7 +1908,7 @@ void response_header(long code, struct transaction_t *txn)
     }
 
 
-    /* CRLF terminating the header */
+    /* CRLF terminating the header block */
     prot_printf(httpd_out, "\r\n");
 }
 

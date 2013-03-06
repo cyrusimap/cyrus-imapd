@@ -88,7 +88,6 @@ static int meth_post_isched(struct transaction_t *txn, void *params);
 static int dkim_auth(struct transaction_t *txn);
 static int meth_get_domainkey(struct transaction_t *txn, void *params);
 static time_t compile_time;
-time_t isched_serial;
 
 struct namespace_t namespace_ischedule = {
     URL_NS_ISCHEDULE, 0, "/ischedule", ISCHED_WELLKNOWN_URI, 0 /* auth */,
@@ -155,7 +154,7 @@ static void calc_compile_time()
 	if (!strcmp(month, monthname[tm.tm_mon])) break;
     }
 
-    isched_serial = compile_time = mktime(&tm);
+    compile_time = mktime(&tm);
 }
 
 
@@ -197,9 +196,10 @@ static int meth_get_isched(struct transaction_t *txn,
 	return precond;
     }
 
-    /* Fill in Etag and Last-Modified */
+    /* Fill in Etag,  Last-Modified, and iSchedule-Capabilities */
     txn->resp_body.etag = etag;
     txn->resp_body.lastmod = compile_time;
+    txn->resp_body.iserial = compile_time;
 
     /* Start construction of our query-result */
     if (!(root = init_xml_response("query-result", NS_ISCHED, NULL, ns))) {
@@ -419,6 +419,9 @@ static int meth_post_isched(struct transaction_t *txn,
 		xml_add_schedresponse(root, NULL, BAD_CAST attendee,
 				      BAD_CAST sched_data.status);
 	    }
+
+	    /* Fill in iSchedule-Capabilities */
+	    txn->resp_body.iserial = compile_time;
 
 	    xml_response(HTTP_OK, txn, root->doc);
 
