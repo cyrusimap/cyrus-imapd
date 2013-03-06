@@ -513,7 +513,7 @@ static void write_via_hdr(struct protstream *pout, hdrcache_t hdrs)
     prot_printf(pout, "%s %s", https ? HTTPS_VERSION : HTTP_VERSION,
 		host && host[0] ? host[0] : config_servername);
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	prot_printf(pout, " (Cyrus-Murder/%s)", cyrus_version());
+	prot_printf(pout, " (Cyrus/%s)", cyrus_version());
     }
     prot_printf(pout, "\r\n");
 }
