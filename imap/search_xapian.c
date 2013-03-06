@@ -1357,7 +1357,7 @@ static uint32_t first_unindexed_uid(search_text_receiver_t *rx)
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
 
-    return seqset_last(tr->oldindexed) + 1;
+    return seqset_firstnonmember(tr->oldindexed);
 }
 
 static int is_indexed(search_text_receiver_t *rx, uint32_t uid)
