@@ -1176,7 +1176,6 @@ static void cmdloop(void)
 		    buf_appendcstr(&txn.buf, path);
 		    if (*query) buf_printf(&txn.buf, "?%s", query);
 		}
-		txn.location = buf_cstring(&txn.buf);
 
 		/* Create HTML body */
 		buf_reset(html);
@@ -1192,6 +1191,7 @@ static void cmdloop(void)
 		else {
 		    /* All other clients use RFC 2818 (HTTPS) */
 		    code = HTTP_MOVED;
+		    txn.location = buf_cstring(&txn.buf);
 		}
 
 		/* Output our HTML response */
