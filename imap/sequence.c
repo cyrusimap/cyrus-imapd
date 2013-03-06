@@ -346,6 +346,15 @@ EXPORTED unsigned seqset_last(const struct seqset *seq)
     return (seq->len ? seq->set[seq->len-1].high : 0);
 }
 
+/* NOTE: this assumes normalised, and also assumes that '1' is
+ * the first element */
+EXPORTED unsigned seqset_firstnonmember(const struct seqset *seq)
+{
+    if (!seq->len) return 1;
+    if (seq->set[0].low != 1) return 1;
+    return seq->set[0].high + 1;
+}
+
 /*
  * Iteration interface for sequences.  Returns the next number
  * in the sequence, or 0 if the end of the sequence has been
