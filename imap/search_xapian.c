@@ -72,7 +72,7 @@
 #define INDEXEDDB_VERSION	2
 #define INDEXEDDB_FNAME		"/cyrus.indexed.db"
 #define XAPIAN_DIRNAME		"/xapian"
-#define XAPIANACTIVE_METANAME	"xapianactive"
+#define ACTIVEFILE_METANAME	"xapianactive"
 
 /* Name of columns */
 #define COL_CYRUSID	"cyrusid"
@@ -122,7 +122,7 @@ static void tier_init(void)
 
 /* ====================================================================== */
 
-/* the "xapianactive" file lists the tiers and generations of all the
+/* the "activefile" file lists the tiers and generations of all the
  * currently active search databases.  The format is space separated
  * records tier:generation, i.e. "1:0".  If there is no file present,
  * it is created with initial values of one per tier with generation
@@ -131,7 +131,7 @@ static void tier_init(void)
 
 /* calculate the next name for this tier, by incrementing the generation
  * to one higher than any existing active record */
-static char *xapianactive_nextname(strarray_t *active, unsigned level)
+static char *activefile_nextname(strarray_t *active, unsigned level)
 {
     struct buf buf = BUF_INITIALIZER;
     int max = -1;
@@ -154,7 +154,7 @@ static char *xapianactive_nextname(strarray_t *active, unsigned level)
 /* filter a list of active records to only those with the same or lower
  * level.  Used to calculate which databases to use as sources for
  * compression */
-static strarray_t *xapianactive_filter(strarray_t *active, unsigned level)
+static strarray_t *activefile_filter(strarray_t *active, unsigned level)
 {
     int i;
     strarray_t *res = strarray_new();
@@ -171,26 +171,26 @@ static strarray_t *xapianactive_filter(strarray_t *active, unsigned level)
     return res;
 }
 
-/* the xapianactive file is a per-user meta file */
-static char *xapianactive_fname(const char *mboxname)
+/* the activefile file is a per-user meta file */
+static char *activefile_fname(const char *mboxname)
 {
     const char *userid = mboxname_to_userid(mboxname);
     if (!userid) return NULL;
-    return user_hash_meta(userid, XAPIANACTIVE_METANAME);
+    return user_hash_meta(userid, ACTIVEFILE_METANAME);
 }
 
 /* file format is very simple */
-static strarray_t *xapianactive_read(struct mappedfile *xapianactive)
+static strarray_t *activefile_read(struct mappedfile *activefile)
 {
-    return strarray_nsplit(mappedfile_base(xapianactive), mappedfile_size(xapianactive), NULL, 1);
+    return strarray_nsplit(mappedfile_base(activefile), mappedfile_size(activefile), NULL, 1);
 }
 
-/* to write a xapianactive file safely, we need to do the create .NEW,
+/* to write a activefile file safely, we need to do the create .NEW,
  * write, fsync, rename dance.  This unlocks the original file, so
  * callers will need to lock again if they need a locked file.
  * The 'mappedfile' API isn't a perfect match for what we need here,
  * but it's close enough, and avoids open coding the lock dance. */
-static int xapianactive_write(struct mappedfile *mf, const strarray_t *new)
+static int activefile_write(struct mappedfile *mf, const strarray_t *new)
 {
     char *newname = strconcat(mappedfile_fname(mf), ".NEW", (char *)NULL);
     struct mappedfile *newfile = NULL;
@@ -230,9 +230,9 @@ done:
  * with some dummy data.  Strictly it doesn't, but it makes
  * reasoning about everything else easier if there's always a
  * file */
-static void _xapianactive_init(struct mappedfile *xapianactive)
+static void _activefile_init(struct mappedfile *activefile)
 {
-    int r = mappedfile_writelock(xapianactive);
+    int r = mappedfile_writelock(activefile);
     struct buf buf = BUF_INITIALIZER;
     strarray_t *list;
     int i;
@@ -241,8 +241,8 @@ static void _xapianactive_init(struct mappedfile *xapianactive)
     if (r) return;
 
     /* did someone beat us to it? */
-    if (mappedfile_size(xapianactive)) {
-	mappedfile_unlock(xapianactive);
+    if (mappedfile_size(activefile)) {
+	mappedfile_unlock(activefile);
 	return;
     }
 
@@ -254,42 +254,42 @@ static void _xapianactive_init(struct mappedfile *xapianactive)
 	strarray_append(list, buf_cstring(&buf));
     }
 
-    xapianactive_write(xapianactive, list);
+    activefile_write(activefile, list);
 
     strarray_free(list);
     buf_free(&buf);
 }
 
-static strarray_t *xapianactive_open(const char *mboxname, struct mappedfile **xapianactive, int write)
+static strarray_t *activefile_open(const char *mboxname, struct mappedfile **activefile, int write)
 {
-    char *fname = xapianactive_fname(mboxname);
+    char *fname = activefile_fname(mboxname);
     int r;
 
     if (!fname) return NULL;
 
     /* try to open the file, and populate with initial values if it's empty */
-    r = mappedfile_open(xapianactive, fname, /*create*/1);
-    if (!r && !mappedfile_size(*xapianactive))
-	_xapianactive_init(*xapianactive);
+    r = mappedfile_open(activefile, fname, /*create*/1);
+    if (!r && !mappedfile_size(*activefile))
+	_activefile_init(*activefile);
     free(fname);
 
     if (r) return NULL;
 
     /* take the requested lock (a better helper API would allow this to be
      * specified as part of the open call, but here's where we are */
-    if (write) r = mappedfile_writelock(*xapianactive);
-    else r = mappedfile_readlock(*xapianactive);
+    if (write) r = mappedfile_writelock(*activefile);
+    else r = mappedfile_readlock(*activefile);
     if (r) return NULL;
 
     /* finally, read the contents */
-    return xapianactive_read(*xapianactive);
+    return activefile_read(*activefile);
 }
 
-/* given an item from the xapianactive file, and the mboxname and partition
+/* given an item from the activefile file, and the mboxname and partition
  * to calculate the user, find the path.  If dostat is true, also stat the
  * path and return NULL if it doesn't exist (used for filtering databases
  * to actually search in */
-static char *xapianactive_path(const char *mboxname, const char *part, const char *item, int dostat)
+static char *activefile_path(const char *mboxname, const char *part, const char *item, int dostat)
 {
     unsigned tier = 0;
     unsigned generation = 0;
@@ -323,16 +323,16 @@ static char *xapianactive_path(const char *mboxname, const char *part, const cha
     return dest;
 }
 
-/* convert an array of xapianactive items to an array of database paths,
+/* convert an array of activefile items to an array of database paths,
  * optionally stripping records where the path doesn't exist */
-static strarray_t *xapianactive_resolve(const char *mboxname, const char *part,
+static strarray_t *activefile_resolve(const char *mboxname, const char *part,
 					const strarray_t *items, int dostat)
 {
     strarray_t *result = strarray_new();
     int i;
 
     for (i = 0; i < items->count; i++) {
-	char *dir = xapianactive_path(mboxname, part, items->data[i], dostat);
+	char *dir = activefile_path(mboxname, part, items->data[i], dostat);
 	if (dir) strarray_appendm(result, dir);
     }
 
@@ -659,7 +659,7 @@ struct opnode
 typedef struct xapian_builder xapian_builder_t;
 struct xapian_builder {
     search_builder_t super;
-    struct mappedfile *xapianactive;
+    struct mappedfile *activefile;
     struct seqset *indexed;
     struct mailbox *mailbox;
     xapian_db_t *db;
@@ -943,13 +943,13 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     bb->mailbox = mailbox;
     bb->opts = opts;
 
-    /* need to hold a read-only lock on the xapianactive file until the search
+    /* need to hold a read-only lock on the activefile file until the search
      * has completed to ensure no databases are deleted out from under us */
-    active = xapianactive_open(mailbox->name, &bb->xapianactive, /*write*/0);
+    active = activefile_open(mailbox->name, &bb->activefile, /*write*/0);
     if (!active) goto out;
 
     /* only try to open directories with databases in them */
-    dirs = xapianactive_resolve(mailbox->name, mailbox->part, active, /*dostat*/1);
+    dirs = activefile_resolve(mailbox->name, mailbox->part, active, /*dostat*/1);
     if (!dirs || !dirs->count) goto out;
 
     /* if there are directories, open the databases */
@@ -985,9 +985,9 @@ static void end_search(search_builder_t *bx)
 
     /* now that the databases are closed, it's safe to unlock
      * the active file */
-    if (bb->xapianactive) {
-	mappedfile_unlock(bb->xapianactive);
-	mappedfile_close(&bb->xapianactive);
+    if (bb->activefile) {
+	mappedfile_unlock(bb->activefile);
+	mappedfile_close(&bb->activefile);
     }
 
     free(bx);
@@ -1015,7 +1015,7 @@ struct xapian_update_receiver
 {
     xapian_receiver_t super;
     xapian_dbw_t *dbw;
-    struct mappedfile *xapianactive;
+    struct mappedfile *activefile;
     unsigned int uncommitted;
     unsigned int commits;
     struct seqset *oldindexed;
@@ -1315,20 +1315,20 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     strarray_t *active = NULL;
     int r;
 
-    if (tr->xapianactive) {
-	mappedfile_unlock(tr->xapianactive);
-	mappedfile_close(&tr->xapianactive);
+    if (tr->activefile) {
+	mappedfile_unlock(tr->activefile);
+	mappedfile_close(&tr->activefile);
     }
 
-    /* we don't need a writelock on xapianactive to index - we just have to make
+    /* we don't need a writelock on activefile to index - we just have to make
      * sure that nobody else deletes the database out from under us, which means
      * holding a readlock until after committing the changes */
-    active = xapianactive_open(mailbox->name, &tr->xapianactive, /*write*/0);
+    active = activefile_open(mailbox->name, &tr->activefile, /*write*/0);
     /* this folder is not indexed?  Fine. */
     if (!active) return 0;
 
     /* doesn't matter if the first one doesn't exist yet, we'll create it */
-    dirs = xapianactive_resolve(mailbox->name, mailbox->part, active, /*dostat*/0);
+    dirs = activefile_resolve(mailbox->name, mailbox->part, active, /*dostat*/0);
     free(tr->basedir);
     tr->basedir = xstrdup(dirs->data[0]);
 
@@ -1394,10 +1394,10 @@ static int end_mailbox_update(search_text_receiver_t *rx,
     }
 
     /* don't unlock until DB is committed */
-    if (tr->xapianactive) {
-	mappedfile_unlock(tr->xapianactive);
-	mappedfile_close(&tr->xapianactive);
-	tr->xapianactive = NULL;
+    if (tr->activefile) {
+	mappedfile_unlock(tr->activefile);
+	mappedfile_close(&tr->activefile);
+	tr->activefile = NULL;
     }
 
     free(tr->basedir);
@@ -1613,15 +1613,15 @@ static int list_files(const char *mboxname, const char *partition, strarray_t *f
     struct stat sb;
     strarray_t *active = NULL;
     strarray_t *dirs = NULL;
-    struct mappedfile *xapianactive = NULL;
+    struct mappedfile *activefile = NULL;
     int r;
     int i;
 
-    active = xapianactive_open(mboxname, &xapianactive, /*write*/0);
+    active = activefile_open(mboxname, &activefile, /*write*/0);
     if (!active) goto out;
-    dirs = xapianactive_resolve(mboxname, partition, active, /*dostat*/1);
+    dirs = activefile_resolve(mboxname, partition, active, /*dostat*/1);
 
-    /* XXX - rewrite in terms of xapianactive */
+    /* XXX - rewrite in terms of activefile */
 
     for (i = 0; i < dirs->count; i++) {
 	const char *basedir = strarray_nth(dirs, i);
@@ -1645,9 +1645,9 @@ static int list_files(const char *mboxname, const char *partition, strarray_t *f
     }
 
 out:
-    if (xapianactive) {
-	mappedfile_unlock(xapianactive);
-	mappedfile_close(&xapianactive);
+    if (activefile) {
+	mappedfile_unlock(activefile);
+	mappedfile_close(&activefile);
     }
     strarray_free(active);
     strarray_free(dirs);
@@ -1679,7 +1679,7 @@ static int copyindexed_cb(void *rock,
 EXPORTED int compact_dbs(const char *mboxname, const char *tempdir, int level)
 {
     struct mboxlist_entry *mbentry = NULL;
-    struct mappedfile *xapianactive = NULL;
+    struct mappedfile *activefile = NULL;
     strarray_t *dirs = NULL;
     strarray_t *active = NULL;
     strarray_t *tochange = NULL;
@@ -1702,36 +1702,36 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir, int level)
 	goto out;
     }
 
-    /* take an exclusive lock on the xapianactive file */
-    active = xapianactive_open(mboxname, &xapianactive, /*write*/1);
+    /* take an exclusive lock on the activefile file */
+    active = activefile_open(mboxname, &activefile, /*write*/1);
     if (!active || !active->count) goto out;
 
-    /* read the xapianactive file, taking down the names of all paths with a
+    /* read the activefile file, taking down the names of all paths with a
      * level less than or equal to that requested */
-    tochange = xapianactive_filter(active, level);
+    tochange = activefile_filter(active, level);
     if (!tochange || !tochange->count) goto out;
 
-    /* add a new 'directory zero' to the start of the xapianactive file, and also register
+    /* add a new 'directory zero' to the start of the activefile file, and also register
      * our target name at the end */
-    newstart = xapianactive_nextname(active, 0);
-    newdest = xapianactive_nextname(active, level);
-    destdir = xapianactive_path(mboxname, mbentry->partition, newdest, /*dostat*/0);
+    newstart = activefile_nextname(active, 0);
+    newdest = activefile_nextname(active, level);
+    destdir = activefile_path(mboxname, mbentry->partition, newdest, /*dostat*/0);
     tempdestdir = strconcat(destdir, ".NEW", (char *)NULL);
 
     strarray_unshift(active, newstart);
     strarray_push(active, newdest);
 
     /* write the new file and release the exclusive lock */
-    xapianactive_write(xapianactive, active);
-    mappedfile_unlock(xapianactive);
+    activefile_write(activefile, active);
+    mappedfile_unlock(activefile);
 
     /* take a shared lock */
-    mappedfile_readlock(xapianactive);
+    mappedfile_readlock(activefile);
 
     /* reread and ensure our 'directory zero' is still directory zero,
      * otherwise abort now */
     {
-	strarray_t *newactive = xapianactive_read(xapianactive);
+	strarray_t *newactive = activefile_read(activefile);
 	if (!newactive || !newactive->count || strcmp(newstart, newactive->data[0])) {
 	    strarray_free(newactive);
 	    goto out;
@@ -1740,7 +1740,7 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir, int level)
     }
 
     /* find out which items actually exist from the set to be compressed */
-    dirs = xapianactive_resolve(mboxname, mbentry->partition, tochange, /*dostat*/1);
+    dirs = activefile_resolve(mboxname, mbentry->partition, tochange, /*dostat*/1);
 
     /* run the compress to tmpfs */
     if (tempdir)
@@ -1790,14 +1790,14 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir, int level)
 	}
     }
 
-    /* release and take an exclusive lock on xapianactive */
-    mappedfile_unlock(xapianactive);
-    mappedfile_writelock(xapianactive);
+    /* release and take an exclusive lock on activefile */
+    mappedfile_unlock(activefile);
+    mappedfile_writelock(activefile);
 
     /* check that we still have 'directory zero'.  If not, delete all
      * temporary files and abort */
     {
-	strarray_t *newactive = xapianactive_read(xapianactive);
+	strarray_t *newactive = activefile_read(activefile);
 	if (!newactive || !newactive->count || strcmp(newstart, newactive->data[0])) {
 	    strarray_free(newactive);
 	    goto out;
@@ -1807,8 +1807,8 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir, int level)
 
     if (dirs->count) {
 	/* create a new target name one greater than the highest in the
-	 * xapianactive file for our target directory.  Rename our DB to
-	 * that path, then rewrite xapianactive removing all the source
+	 * activefile file for our target directory.  Rename our DB to
+	 * that path, then rewrite activefile removing all the source
 	 * items */
 	r = rename(tempdestdir, destdir);
 	if (r) goto out;
@@ -1820,10 +1820,10 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir, int level)
     for (i = 0; i < tochange->count; i++)
 	strarray_remove_all(active, tochange->data[i]);
 
-    xapianactive_write(xapianactive, active);
+    activefile_write(activefile, active);
 
     /* release the lock */
-    mappedfile_unlock(xapianactive);
+    mappedfile_unlock(activefile);
 
     /* finally remove all directories on disk of the source dbs */
     for (i = 0; i < dirs->count; i++)
@@ -1845,8 +1845,8 @@ out:
     free(newdest);
     free(destdir);
     free(tempdestdir);
-    mappedfile_unlock(xapianactive);
-    mappedfile_close(&xapianactive);
+    mappedfile_unlock(activefile);
+    mappedfile_close(&activefile);
     mboxlist_entry_free(&mbentry);
 
     return r;
