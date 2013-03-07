@@ -1737,38 +1737,7 @@ void response_header(long code, struct transaction_t *txn)
 	}
     }
 
-    if (txn->req_tgt.allow & ALLOW_DAV) {
-	/* Construct DAV header(s) based on namespace of request URL */
-	prot_printf(httpd_out, "DAV: 1, 2, 3%s\r\n",
-		    (txn->req_tgt.allow & ALLOW_WRITE) ?
-		    ", access-control, extended-mkcol" : "");
-	if (txn->req_tgt.allow & ALLOW_CAL) {
-	    prot_printf(httpd_out, "DAV: calendar-access%s\r\n",
-			(txn->req_tgt.allow & ALLOW_CAL_SCHED) ?
-			", calendar-auto-schedule" : "");
-	}
-	if (txn->req_tgt.allow & ALLOW_CARD) {
-	    prot_printf(httpd_out, "DAV: addressbook\r\n");
-	}
-    }
-
-    switch (txn->meth) {
-    case METH_OPTIONS:
-	if (code == HTTP_OK) {
-	    /* Force Allow header for successful OPTIONS request */
-	    code = HTTP_NOT_ALLOWED;
-	}
-	break;
-
-    case METH_GET:
-    case METH_HEAD:
-	/* Add Accept-Ranges header for GET and HEAD responses */
-	prot_printf(httpd_out, "Accept-Ranges: %s\r\n",
-		    txn->flags.ranges ? "bytes" : "none");
-    }
-
-    switch (code) {
-    case HTTP_UNAUTHORIZED:
+    if (code == HTTP_UNAUTHORIZED) {
 	/* Authentication Challenges */
 	if (!auth_chal->scheme) {
 	    /* Require authentication by advertising all possible schemes */
@@ -1795,38 +1764,9 @@ void response_header(long code, struct transaction_t *txn)
 	    /* Continue with current authentication exchange */ 
 	    WWW_Authenticate(auth_chal->scheme->name, auth_chal->param);
 	}
-
-	break;
-
-    case HTTP_NOT_ALLOWED:
-	/* Construct Allow header(s) for successful OPTIONS and 405 response */
-	prot_printf(httpd_out, "Allow: OPTIONS");
-	if (txn->req_tgt.allow & ALLOW_READ) {
-	    prot_printf(httpd_out, ", GET, HEAD");
-	}
-	if (txn->req_tgt.allow & ALLOW_POST) {
-	    prot_printf(httpd_out, ", POST");
-	}
-	if (txn->req_tgt.allow & ALLOW_WRITE) {
-	    prot_printf(httpd_out, ", PUT, DELETE");
-	}
-	prot_printf(httpd_out, "\r\n");
-	if (txn->req_tgt.allow & ALLOW_DAV) {
-	    prot_printf(httpd_out, "Allow: REPORT, PROPFIND");
-	    if (txn->req_tgt.allow & ALLOW_WRITE) {
-		prot_printf(httpd_out,
-			    ", PROPPATCH, COPY, MOVE, LOCK, UNLOCK, MKCOL");
-		prot_printf(httpd_out,
-			    "\r\nAllow: ACL");
-		if (txn->req_tgt.allow & ALLOW_CAL) {
-		    prot_printf(httpd_out, ", MKCALENDAR");
-		}
-	    }
-	    prot_printf(httpd_out, "\r\n");
-	}
-	/* Fall through as possible authenticated request */
-
-    default:
+    }
+    else {
+	/* Authentication completed/unnecessary */
 	if (auth_chal->param) {
 	    /* Authentication completed with success data */
 	    if (auth_chal->scheme->send_success) {
@@ -1837,6 +1777,62 @@ void response_header(long code, struct transaction_t *txn)
 	    else {
 		/* Default handling of success data */
 		WWW_Authenticate(auth_chal->scheme->name, auth_chal->param);
+	    }
+	}
+
+	switch (txn->meth) {
+	case METH_GET:
+	case METH_HEAD:
+	    /* Construct Accept-Ranges header for GET and HEAD responses */
+	    prot_printf(httpd_out, "Accept-Ranges: %s\r\n",
+			txn->flags.ranges ? "bytes" : "none");
+	    break;
+
+	case METH_OPTIONS:
+	    if (txn->req_tgt.allow & ALLOW_DAV) {
+		/* Construct DAV header(s) based on namespace of request URL */
+		prot_printf(httpd_out, "DAV: 1, 2, 3%s\r\n",
+			    (txn->req_tgt.allow & ALLOW_WRITE) ?
+			    ", access-control, extended-mkcol" : "");
+		if (txn->req_tgt.allow & ALLOW_CAL) {
+		    prot_printf(httpd_out, "DAV: calendar-access%s\r\n",
+				(txn->req_tgt.allow & ALLOW_CAL_SCHED) ?
+				", calendar-auto-schedule" : "");
+		}
+		if (txn->req_tgt.allow & ALLOW_CARD) {
+		    prot_printf(httpd_out, "DAV: addressbook\r\n");
+		}
+	    }
+
+	    /* Fall through and add Allow header(s) */
+
+	default:
+	    if (txn->meth == METH_OPTIONS || code == HTTP_NOT_ALLOWED) {
+		/* Construct Allow header(s) for OPTIONS and 405 response */
+		prot_printf(httpd_out, "Allow: OPTIONS");
+		if (txn->req_tgt.allow & ALLOW_READ) {
+		    prot_printf(httpd_out, ", GET, HEAD");
+		}
+		if (txn->req_tgt.allow & ALLOW_POST) {
+		    prot_printf(httpd_out, ", POST");
+		}
+		if (txn->req_tgt.allow & ALLOW_WRITE) {
+		    prot_printf(httpd_out, ", PUT, DELETE");
+		}
+		prot_printf(httpd_out, "\r\n");
+		if (txn->req_tgt.allow & ALLOW_DAV) {
+		    prot_printf(httpd_out, "Allow: REPORT, PROPFIND");
+		    if (txn->req_tgt.allow & ALLOW_WRITE) {
+			prot_printf(httpd_out,
+				    ", PROPPATCH, COPY, MOVE, LOCK, UNLOCK, MKCOL");
+			prot_printf(httpd_out,
+				    "\r\nAllow: ACL");
+			if (txn->req_tgt.allow & ALLOW_CAL) {
+			    prot_printf(httpd_out, ", MKCALENDAR");
+			}
+		    }
+		    prot_printf(httpd_out, "\r\n");
+		}
 	    }
 	}
     }
@@ -1868,7 +1864,7 @@ void response_header(long code, struct transaction_t *txn)
 	if (resp_body->lang) {
 	    prot_printf(httpd_out, "Content-Language: %s\r\n", resp_body->lang);
 	}
-	if (resp_body->loc && resp_body->len) {
+	if (resp_body->loc) {
 	    prot_printf(httpd_out, "Content-Location: %s\r\n", resp_body->loc);
 	}
     }
