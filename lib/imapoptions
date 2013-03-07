@@ -2032,6 +2032,13 @@ product version in the capabilities */
    this user.  NOTE: This must be an existing local user name with an
    INBOX, NOT an email address! */
 
+{ "xapian_tiers", NULL, STRING }
+/* Space-separated list of names of tiered search databases.  Each
+   tier will be used to lookup <tier>searchpartition-default in
+   imapd.conf to find a root directory for search indexes.  All
+   the tiers are queried, only the first one is written when
+   indexing. */
+
 { "zoneinfo_db", "twoskip", STRINGLIST("flat", "skiplist", "twoskip")}
 /* The cyrusdb backend to use for zoneinfo. */
 

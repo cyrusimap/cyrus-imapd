@@ -28,6 +28,37 @@ void xapian_init(void)
 
 /* ====================================================================== */
 
+int xapian_compact_dbs(const char *dest, const char **sources)
+{
+    int r = 0;
+
+    try {
+	Xapian::Compactor *c = new Xapian::Compactor;
+
+	while (*sources) {
+	    c->add_source(*sources++);
+	}
+
+	c->set_destdir(dest);
+
+	/* we never write to compresion targets again */
+	c->set_compaction_level(Xapian::Compactor::FULLER);
+
+	/* XXX - add a filter here */
+
+	c->compact();
+    }
+    catch (const Xapian::Error &err) {
+	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+		    err.get_context().c_str(), err.get_description().c_str());
+	r = IMAP_IOERROR;
+    }
+
+    return r;
+}
+
+/* ====================================================================== */
+
 struct xapian_dbw
 {
     Xapian::WritableDatabase *database;
@@ -36,12 +67,12 @@ struct xapian_dbw
     Xapian::Document *document;
 };
 
-xapian_dbw_t *xapian_dbw_open(const char *path, int incremental)
+xapian_dbw_t *xapian_dbw_open(const char *path)
 {
     xapian_dbw_t *dbw = 0;
     try {
 	dbw = (xapian_dbw_t *)xzmalloc(sizeof(xapian_dbw_t));
-	int action = (incremental ? Xapian::DB_CREATE_OR_OPEN : Xapian::DB_CREATE_OR_OVERWRITE);
+	int action = Xapian::DB_CREATE_OR_OPEN;
 	dbw->database = new Xapian::WritableDatabase(path, action);
 	dbw->term_generator = new Xapian::TermGenerator();
 	dbw->stemmer = new Xapian::Stem("en");
@@ -177,15 +208,19 @@ struct xapian_db
     Xapian::QueryParser *parser;
 };
 
-// there is no struct xapian_query, we just typedef
-// to it in order to hide Xapian::Query
-
-xapian_db_t *xapian_db_open(const char *path)
+xapian_db_t *xapian_db_open(const char **paths)
 {
     xapian_db_t *db = NULL;
+    const char *thispath = "(unknown)";
+
     try {
 	db = (xapian_db_t *)xzmalloc(sizeof(xapian_db_t));
-	db->database = new Xapian::Database(path);
+	db->database = new Xapian::Database();
+	while (*paths) {
+	    thispath = *paths++;
+	    db->database->add_database(Xapian::Database(thispath));
+	    thispath = "(unknown)";
+	}
 	db->stemmer = new Xapian::Stem("en");
 	db->parser = new Xapian::QueryParser;
 	db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_ALL);
@@ -195,7 +230,7 @@ xapian_db_t *xapian_db_open(const char *path)
     }
     catch (const Xapian::Error &err) {
 	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
-		    path, err.get_description().c_str());
+		    thispath, err.get_description().c_str());
 	db = NULL;
     }
     return db;

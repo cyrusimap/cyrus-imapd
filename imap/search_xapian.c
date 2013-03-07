@@ -56,34 +56,23 @@
 #include "imap_err.h"
 #include "global.h"
 #include "ptrarray.h"
+#include "user.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "mappedfile.h"
 #include "mboxlist.h"
 #include "xstats.h"
 #include "search_engines.h"
+#include "sequence.h"
 #include "cyr_lock.h"
 #include "xapian_wrap.h"
 #include "command.h"
 
-struct latestdb
-{
-    struct db *db;
-    char *path;
-};
-#define LATESTDB_INITIALIZER { 0, 0 }
-#define LATESTDB_VERSION	1
-#define LATESTDB_FNAME		"/latest.x.db"
-
+#define INDEXEDDB_VERSION	2
+#define INDEXEDDB_FNAME		"/cyrus.indexed.db"
 #define XAPIAN_DIRNAME		"/xapian"
-#define INDEXING_LOCK_SUFFIX	".indexing.lock"
-
-static int open_latest(struct mailbox *, const char *root, struct latestdb *);
-static void close_latest(struct latestdb *);
-static int read_latest(struct latestdb *, struct mailbox *, uint32_t *, int);
-static int write_latest(struct latestdb *, struct mailbox *, uint32_t, int);
-static int xapian_basedir(const char *mboxname, const char *part,
-			  const char *root, char **basedirp);
+#define XAPIANACTIVE_METANAME	"xapianactive"
 
 /* Name of columns */
 #define COL_CYRUSID	"cyrusid"
@@ -107,6 +96,451 @@ struct segment
     int is_finished;
     struct buf text;
 };
+
+
+static int xapian_basedir(int tier, const char *mboxname, const char *part,
+			  const char *root, char **basedir);
+
+/* ====================================================================== */
+
+static strarray_t *tiers;
+
+static void tier_init(void)
+{
+    if (!tiers) {
+	const char *conf = config_getstring(IMAPOPT_XAPIAN_TIERS);
+	if (!conf) {
+	    /* by default, a single unnamed tier. */
+	    tiers = strarray_new();
+	    strarray_append(tiers, "");
+	}
+	else {
+	    tiers = strarray_split(conf, NULL, STRARRAY_TRIM);
+	}
+    }
+}
+
+/* ====================================================================== */
+
+/* the "xapianactive" file lists the tiers and generations of all the
+ * currently active search databases.  The format is space separated
+ * records tier:generation, i.e. "1:0".  If there is no file present,
+ * it is created with initial values of one per tier with generation
+ * set to zero at each tier.  These will quickly disappear on a
+ * compress. */
+
+/* calculate the next name for this tier, by incrementing the generation
+ * to one higher than any existing active record */
+static char *xapianactive_nextname(strarray_t *active, unsigned level)
+{
+    struct buf buf = BUF_INITIALIZER;
+    int max = -1;
+    int i;
+
+    for (i = 0; i < active->count; i++) {
+	unsigned tier = 0;
+	unsigned generation = 0;
+	if (sscanf(active->data[i], "%u:%u", &tier, &generation) == 2) {
+	    if (tier == level && (int)generation > max)
+		max = generation;
+	}
+    }
+
+    buf_printf(&buf, "%u:%u", level, max+1);
+
+    return buf_release(&buf);
+}
+
+/* filter a list of active records to only those with the same or lower
+ * level.  Used to calculate which databases to use as sources for
+ * compression */
+static strarray_t *xapianactive_filter(strarray_t *active, unsigned level)
+{
+    int i;
+    strarray_t *res = strarray_new();
+
+    for (i = 0; i < active->count; i++) {
+	unsigned tier = 0;
+	unsigned generation = 0;
+	if (sscanf(active->data[i], "%u:%u", &tier, &generation) == 2) {
+	    if (tier <= level)
+		strarray_append(res, active->data[i]);
+	}
+    }
+
+    return res;
+}
+
+/* the xapianactive file is a per-user meta file */
+static char *xapianactive_fname(const char *mboxname)
+{
+    const char *userid = mboxname_to_userid(mboxname);
+    if (!userid) return NULL;
+    return user_hash_meta(userid, XAPIANACTIVE_METANAME);
+}
+
+/* file format is very simple */
+static strarray_t *xapianactive_read(struct mappedfile *xapianactive)
+{
+    return strarray_nsplit(mappedfile_base(xapianactive), mappedfile_size(xapianactive), NULL, 1);
+}
+
+/* to write a xapianactive file safely, we need to do the create .NEW,
+ * write, fsync, rename dance.  This unlocks the original file, so
+ * callers will need to lock again if they need a locked file.
+ * The 'mappedfile' API isn't a perfect match for what we need here,
+ * but it's close enough, and avoids open coding the lock dance. */
+static int xapianactive_write(struct mappedfile *mf, const strarray_t *new)
+{
+    char *newname = strconcat(mappedfile_fname(mf), ".NEW", (char *)NULL);
+    struct mappedfile *newfile = NULL;
+    int r;
+    char *towrite = NULL;
+
+    r = mappedfile_open(&newfile, newname, /*create*/1);
+    if (r) goto done;
+    r = mappedfile_writelock(newfile);
+    if (r) goto done;
+
+    towrite = strarray_join(new, " ");
+    mappedfile_pwrite(newfile, towrite, strlen(towrite), 0);
+    free(towrite);
+
+    r = mappedfile_commit(newfile);
+    if (r) goto done;
+
+    r = mappedfile_rename(newfile, mappedfile_fname(mf));
+    if (r) unlink(newname);
+
+    /* we lose control over the lock here, so we have to release */
+    mappedfile_unlock(mf);
+
+done:
+    if (newfile) {
+	mappedfile_unlock(newfile);
+	mappedfile_close(&newfile);
+    }
+    free(newname);
+
+    return r;
+}
+
+/* if the mappedfile has no content, it needs to be initialised
+ * with some dummy data.  Strictly it doesn't, but it makes
+ * reasoning about everything else easier if there's always a
+ * file */
+static void _xapianactive_init(struct mappedfile *xapianactive)
+{
+    int r = mappedfile_writelock(xapianactive);
+    struct buf buf = BUF_INITIALIZER;
+    strarray_t *list;
+    int i;
+
+    /* failed to lock, doh */
+    if (r) return;
+
+    /* did someone beat us to it? */
+    if (mappedfile_size(xapianactive)) {
+	mappedfile_unlock(xapianactive);
+	return;
+    }
+
+    list = strarray_new();
+
+    for (i = 0; i < tiers->count; i++) {
+	buf_reset(&buf);
+	buf_printf(&buf, "%d:0", i);
+	strarray_append(list, buf_cstring(&buf));
+    }
+
+    xapianactive_write(xapianactive, list);
+
+    strarray_free(list);
+    buf_free(&buf);
+}
+
+static strarray_t *xapianactive_open(const char *mboxname, struct mappedfile **xapianactive, int write)
+{
+    char *fname = xapianactive_fname(mboxname);
+    int r;
+
+    if (!fname) return NULL;
+
+    /* try to open the file, and populate with initial values if it's empty */
+    r = mappedfile_open(xapianactive, fname, /*create*/1);
+    if (!r && !mappedfile_size(*xapianactive))
+	_xapianactive_init(*xapianactive);
+    free(fname);
+
+    if (r) return NULL;
+
+    /* take the requested lock (a better helper API would allow this to be
+     * specified as part of the open call, but here's where we are */
+    if (write) r = mappedfile_writelock(*xapianactive);
+    else r = mappedfile_readlock(*xapianactive);
+    if (r) return NULL;
+
+    /* finally, read the contents */
+    return xapianactive_read(*xapianactive);
+}
+
+/* given an item from the xapianactive file, and the mboxname and partition
+ * to calculate the user, find the path.  If dostat is true, also stat the
+ * path and return NULL if it doesn't exist (used for filtering databases
+ * to actually search in */
+static char *xapianactive_path(const char *mboxname, const char *part, const char *item, int dostat)
+{
+    unsigned tier = 0;
+    unsigned generation = 0;
+    char *basedir = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    char *dest = NULL;
+
+    if (sscanf(item, "%u:%u", &tier, &generation) != 2)
+	return NULL;
+
+    xapian_basedir(tier, mboxname, part, NULL, &basedir);
+    if (!basedir) return NULL;
+    buf_printf(&buf, "%s%s", basedir, XAPIAN_DIRNAME);
+    free(basedir);
+
+    if (generation)
+	buf_printf(&buf, ".%u", generation);
+
+    dest = buf_release(&buf);
+
+    if (dostat) {
+	struct stat sbuf;
+	if (stat(dest, &sbuf)) {
+	    if (errno != ENOENT)
+		syslog(LOG_ERR, "IOERROR: can't read %s for search, check permissions: %m", dest);
+	    free(dest);
+	    return NULL;
+	}
+    }
+
+    return dest;
+}
+
+/* convert an array of xapianactive items to an array of database paths,
+ * optionally stripping records where the path doesn't exist */
+static strarray_t *xapianactive_resolve(const char *mboxname, const char *part,
+					const strarray_t *items, int dostat)
+{
+    strarray_t *result = strarray_new();
+    int i;
+
+    for (i = 0; i < items->count; i++) {
+	char *dir = xapianactive_path(mboxname, part, items->data[i], dostat);
+	if (dir) strarray_appendm(result, dir);
+    }
+
+    return result;
+}
+
+/* ====================================================================== */
+
+/* The "indexed database" contains information about which cyrus messages
+ * are indexed in this sphinx directory.  The keys are mailbox.uidvalidity
+ * and the values are "version sequence", where sequence is an IMAP-style
+ * sequence of UIDs.  This allows squatter to quickly determine which
+ * messages are not yet indexed in any active database. */
+
+/* parse both the old version 1 (just max UID rather than range) and
+ * current version sequence from a mapped database value */
+static struct seqset *parse_indexed(const char *data, size_t datalen)
+{
+    struct seqset *seq = NULL;
+    const char *rest;
+    bit64 version;
+    char *val;
+
+    if (parsenum(data, &rest, datalen, &version))
+	return NULL;
+
+    if (*rest++ != ' ')
+	return NULL;
+
+    switch(version) {
+    case 1:
+	{
+	    char buf[20];
+	    snprintf(buf, 20, "1:%.*s", (int)(datalen - (rest - data)), rest);
+	    return seqset_parse(buf, NULL, 0);
+	}
+    case 2:
+	val = xstrndup(rest, datalen - (rest - data));
+	seq = seqset_parse(val, NULL, 0);
+	free(val);
+	return seq;
+    }
+
+    return NULL;
+}
+
+/*
+ * Read the most indexed UIDs sequence for the current mailbox
+ * from the cyrus.indexed DB in each xapian directory and join
+ * them into a single result.
+ * Returns 0 on success or an IMAP error code.
+ */
+static int read_indexed(const strarray_t *paths,
+		       const char *mboxname,
+		       uint32_t uidvalidity,
+		       struct seqset *res,
+		       int verbose)
+{
+    struct db *db = NULL;
+    struct buf path = BUF_INITIALIZER;
+    struct buf key = BUF_INITIALIZER;
+    const char *data = NULL;
+    size_t datalen = 0;
+    int r = 0;
+    int i;
+
+    buf_printf(&key, "%s.%u", mboxname, uidvalidity);
+
+    for (i = 0; i < paths->count; i++) {
+	struct seqset *seq;
+	buf_reset(&path);
+	buf_printf(&path, "%s%s", strarray_nth(paths, i), INDEXEDDB_FNAME);
+	if (verbose > 1)
+	    syslog(LOG_INFO, "read_indexed db=%s mailbox=%s uidvalidity=%u",
+		   buf_cstring(&path), mboxname, uidvalidity);
+
+	r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_LATEST_DB),
+			 buf_cstring(&path), 0, &db);
+	if (r == CYRUSDB_NOTFOUND) {
+	    r = 0;
+	    if (verbose > 1)
+		syslog(LOG_INFO, "read_indexed no db for %s",
+		       buf_cstring(&path));
+	    continue;
+	}
+	if (r) goto out;
+
+	r = cyrusdb_fetch(db,
+			  key.s, key.len,
+			  &data, &datalen,
+			  (struct txn **)NULL);
+	if (r == CYRUSDB_NOTFOUND) {
+	    r = 0;
+	    cyrusdb_close(db);
+	    db = NULL;
+	    if (verbose > 1)
+		syslog(LOG_INFO, "read_indexed no record for %s: %.*s",
+		       buf_cstring(&path), (int)key.len, key.s);
+	    continue;
+	}
+	if (r) goto out;
+
+	seq = parse_indexed(data, datalen);
+	if (seq) {
+	    seqset_join(res, seq);
+	    seqset_free(seq);
+	    if (verbose > 1)
+		syslog(LOG_INFO, "read_indexed seq=%.*s", (int)datalen, data);
+	}
+
+	cyrusdb_close(db);
+	db = NULL;
+    }
+
+out:
+    if (db)
+	cyrusdb_close(db);
+    buf_free(&key);
+    buf_free(&path);
+
+    return r;
+}
+
+/* store the given sequence into the already opened cyrus db
+ * with the given key.  If there is an existing sequence in
+ * the DB, then join this sequence to it, so incremental
+ * indexing does what you would expect. */
+static int store_indexed(struct db *db, struct txn **tid,
+			 const char *key, size_t keylen,
+			 const struct seqset *val)
+{
+    struct buf data = BUF_INITIALIZER;
+    char *str = NULL;
+    int r;
+    const char *olddata = NULL;
+    size_t oldlen = 0;
+
+    r = cyrusdb_fetch(db, key, keylen, &olddata, &oldlen, tid);
+    if (r == CYRUSDB_NOTFOUND) {
+	str = seqset_cstring(val);
+    }
+    else if (r) return r;
+    else {
+	struct seqset *seq = parse_indexed(olddata, oldlen);
+	if (seq) {
+	    seqset_join(seq, val);
+	    str = seqset_cstring(seq);
+	    seqset_free(seq);
+	}
+	else {
+	    str = seqset_cstring(val);
+	}
+    }
+
+    if (!str) return 0;
+
+    buf_printf(&data, "%u %s", INDEXEDDB_VERSION, str);
+    r = cyrusdb_store(db, key, keylen, data.s, data.len, tid);
+    buf_free(&data);
+    free(str);
+
+    return r;
+}
+
+/* Given the directory of a xapian database which has just had
+ * messages indexed into it, add the sequence of UIDs to the
+ * record for the given mailbox and uidvalidity */
+static int write_indexed(const char *dir,
+			 const char *mboxname,
+			 uint32_t uidvalidity,
+			 struct seqset *seq,
+			 int verbose)
+{
+    struct buf path = BUF_INITIALIZER;
+    struct buf key = BUF_INITIALIZER;
+    struct db *db = NULL;
+    struct txn *txn = NULL;
+    int r = 0;
+
+    buf_reset(&path);
+    buf_printf(&path, "%s%s", dir, INDEXEDDB_FNAME);
+
+    if (verbose) {
+	char *str = seqset_cstring(seq);
+	syslog(LOG_INFO, "write_indexed db=%s mailbox=%s uidvalidity=%u uids=%s",
+	       buf_cstring(&path), mboxname, uidvalidity, str);
+	free(str);
+    }
+
+    buf_printf(&key, "%s.%u", mboxname, uidvalidity);
+
+    r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_LATEST_DB),
+		     buf_cstring(&path), CYRUSDB_CREATE, &db);
+    if (r) goto out;
+
+    r = store_indexed(db, &txn, key.s, key.len, seq);
+    if (!r)
+	r = cyrusdb_commit(db, txn);
+    else
+	cyrusdb_abort(db, txn);
+
+out:
+    if (db) cyrusdb_close(db);
+    buf_free(&path);
+    buf_free(&key);
+    return r;
+}
+
+/* ====================================================================== */
 
 static int parse_cyrusid(const char *cyrusid,
 			 const char **mboxnamep,
@@ -224,6 +658,8 @@ struct opnode
 typedef struct xapian_builder xapian_builder_t;
 struct xapian_builder {
     search_builder_t super;
+    struct mappedfile *xapianactive;
+    struct seqset *indexed;
     struct mailbox *mailbox;
     xapian_db_t *db;
     int opts;
@@ -394,26 +830,10 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
 {
     xapian_builder_t *bb = (xapian_builder_t *)bx;
     xapian_query_t *qq = NULL;
-    uint32_t uid;
-    uint32_t latest = 0;
     int r = 0;
 
     if (bb->db == NULL)
 	return IMAP_NOTFOUND;	    /* there's no index for this user */
-
-    if ((bb->opts & SEARCH_UNINDEXED)) {
-	/* To avoid races, we want the 'latest' uid we use to be
-	 * an underestimate, because the caller can handle false
-	 * positives but not false negatives.  So we fetch it
-	 * first before the main query. */
-	struct latestdb ldb = LATESTDB_INITIALIZER;
-	r = open_latest(bb->mailbox, NULL, &ldb);
-	if (!r) goto out;
-	r = read_latest(&ldb, bb->mailbox, &latest,
-			SEARCH_VERBOSE(bb->opts));
-	close_latest(&ldb);
-	if (r) goto out;
-    }
 
     optimise_nodes(NULL, bb->root);
     qq = opnode_to_query(bb->db, bb->root);
@@ -424,14 +844,7 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
     r = xapian_query_run(bb->db, qq, xapian_run_cb, bb);
     if (r) goto out;
 
-    if ((bb->opts & SEARCH_UNINDEXED)) {
-	/* add in the unindexed uids as false positives */
-	for (uid = latest+1 ; uid <= bb->mailbox->i.last_uid ; uid++) {
-	    xstats_inc(SPHINX_UNINDEXED);
-	    r = proc(bb->mailbox->name, bb->mailbox->i.uidvalidity, uid, rock);
-	    if (r) goto out;
-	}
-    }
+    /* XXX - re-add "run unfound items as false positives */
 
 out:
     if (qq) xapian_query_free(qq);
@@ -503,11 +916,12 @@ static void free_internalised(void *internalised)
 static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
 {
     xapian_builder_t *bb;
-    char *basedir = NULL;
-    char *dir;
-    int r = 0;
+    strarray_t *dirs = NULL;
+    strarray_t *active = NULL;
+    int r;
 
     xapian_init();
+    tier_init();
 
     bb = xzmalloc(sizeof(xapian_builder_t));
     bb->super.begin_boolean = begin_boolean;
@@ -519,12 +933,24 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     bb->mailbox = mailbox;
     bb->opts = opts;
 
-    r = xapian_basedir(mailbox->name, mailbox->part, NULL, &basedir);
-    if (r) goto out;
-    dir = strconcat(basedir, XAPIAN_DIRNAME, NULL);
+    /* need to hold a read-only lock on the xapianactive file until the search
+     * has completed to ensure no databases are deleted out from under us */
+    active = xapianactive_open(mailbox->name, &bb->xapianactive, /*write*/0);
+    if (!active) goto out;
 
-    bb->db = xapian_db_open(dir);
+    /* only try to open directories with databases in them */
+    dirs = xapianactive_resolve(mailbox->name, mailbox->part, active, /*dostat*/1);
+    if (!dirs || !dirs->count) goto out;
+
+    /* if there are directories, open the databases */
+    bb->db = xapian_db_open((const char **)dirs->data);
     if (!bb->db) goto out;
+
+    /* read the list of all indexed messages to allow (optional) false positives
+     * for unindexed messages */
+    bb->indexed = seqset_init(0, SEQ_MERGE);
+    r = read_indexed(dirs, mailbox->name, mailbox->i.uidvalidity, bb->indexed, /*verbose*/0);
+    if (r) goto out;
 
     if ((opts & SEARCH_MULTIPLE))
 	xstats_inc(SPHINX_MULTIPLE);
@@ -532,8 +958,8 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
 	xstats_inc(SPHINX_SINGLE);
 
 out:
-    free(basedir);
-    free(dir);
+    strarray_free(dirs);
+    strarray_free(active);
     return &bb->super;
 }
 
@@ -541,9 +967,19 @@ static void end_search(search_builder_t *bx)
 {
     xapian_builder_t *bb = (xapian_builder_t *)bx;
 
+    seqset_free(bb->indexed);
     ptrarray_fini(&bb->stack);
     if (bb->root) opnode_delete(bb->root);
+
     if (bb->db) xapian_db_close(bb->db);
+
+    /* now that the databases are closed, it's safe to unlock
+     * the active file */
+    if (bb->xapianactive) {
+	mappedfile_unlock(bb->xapianactive);
+	mappedfile_close(&bb->xapianactive);
+    }
+
     free(bx);
 }
 
@@ -569,13 +1005,12 @@ struct xapian_update_receiver
 {
     xapian_receiver_t super;
     xapian_dbw_t *dbw;
-    int indexing_lock_fd;
+    struct mappedfile *xapianactive;
     unsigned int uncommitted;
     unsigned int commits;
-    uint32_t latest;
-    struct latestdb latestdb;
-    char *last_basedir;
-    char *last_real_basedir;
+    struct seqset *oldindexed;
+    struct seqset *indexed;
+    char *basedir;
 };
 
 /* receiver used for extracting snippets after a search */
@@ -594,20 +1029,21 @@ struct xapian_snippet_receiver
  * total amount of parts text to 4 MB. */
 #define MAX_PARTS_SIZE	    (4*1024*1024)
 
-static const char *xapian_rootdir(const char *partition)
+static const char *xapian_rootdir(int tier, const char *partition)
 {
     char *confkey;
     const char *root;
     if (!partition)
 	partition = config_getstring(IMAPOPT_DEFAULTPARTITION);
-    confkey = strconcat("searchpartition-", partition, NULL);
+    confkey = strconcat(tiers->data[tier], "searchpartition-", partition, NULL);
     root = config_getoverflowstring(confkey, NULL);
     free(confkey);
     return root;
 }
 
 /* Returns in *basedirp a new string which must be free()d */
-static int xapian_basedir(const char *mboxname, const char *partition,
+static int xapian_basedir(int tier,
+			  const char *mboxname, const char *partition,
 			  const char *root, char **basedirp)
 {
     char *basedir = NULL;
@@ -618,7 +1054,7 @@ static int xapian_basedir(const char *mboxname, const char *partition,
     mboxname_init_parts(&parts);
 
     if (!root)
-	root = xapian_rootdir(partition);
+	root = xapian_rootdir(tier, partition);
     if (!root) {
 	r = IMAP_PARTITION_UNKNOWN;
 	goto out;
@@ -696,142 +1132,6 @@ out:
     return r;
 }
 
-static int open_latest(struct mailbox *mailbox, const char *root,
-		       struct latestdb *ldb)
-{
-    char *basedir = NULL;
-    char *path = NULL;
-    int r;
-
-    r = xapian_basedir(mailbox->name, mailbox->part, root, &basedir);
-    if (r) return r;
-    path = strconcat(basedir, LATESTDB_FNAME, NULL);
-    free(basedir);
-
-    if (!strcmpsafe(path, ldb->path)) {
-	free(path);
-	return 0;
-    }
-
-    /* need to open a new DB */
-
-    close_latest(ldb);
-
-    r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_LATEST_DB),
-		     path, CYRUSDB_CREATE, &ldb->db);
-    if (r) {
-	syslog(LOG_ERR, "DBERROR: opening %s: %s",
-	       path, cyrusdb_strerror(r));
-	r = IMAP_IOERROR;
-    }
-
-    if (r) {
-	free(path);
-    }
-    else {
-	ldb->path = path;
-    }
-    return r;
-}
-
-static void close_latest(struct latestdb *ldb)
-{
-    free(ldb->path);
-    ldb->path = NULL;
-
-    if (ldb->db) {
-	cyrusdb_close(ldb->db);
-	ldb->db = NULL;
-    }
-}
-
-/*
- * Read the most recently indexed UID for the current mailboxfrom the
- * 'latest' DB in the Sphinx directory.
- * Returns 0 on success or an IMAP error code.
- */
-static int read_latest(struct latestdb *ldb,
-		       struct mailbox *mailbox,
-		       uint32_t *latestp,
-		       int verbose)
-{
-    struct buf key = BUF_INITIALIZER;
-    struct buf buf = BUF_INITIALIZER;
-    const char *data = NULL;
-    size_t datalen = 0;
-    int r = 0;
-    unsigned int version = 0;
-    unsigned int uid = 0;
-
-    *latestp = 0;
-    if (verbose > 1)
-	syslog(LOG_INFO, "read_latest db=%s mailbox=%s uidvalidity=%u",
-	       ldb->path, mailbox->name, mailbox->i.uidvalidity);
-
-    buf_printf(&key, "%s.%u", mailbox->name, mailbox->i.uidvalidity);
-
-    r = cyrusdb_fetch(ldb->db,
-		      key.s, key.len,
-		      &data, &datalen,
-		      (struct txn **)NULL);
-    if (r == CYRUSDB_NOTFOUND) {
-	if (verbose > 1) syslog(LOG_INFO, "read_latest defaults to 0");
-	r = 0;
-	goto out;
-    }
-    if (r) goto out;
-    buf_init_ro(&buf, data, datalen);
-    buf_cstring(&buf);
-
-    r = sscanf(buf.s, "%u %u", &version, &uid);
-    if (r != 2 || version != LATESTDB_VERSION) {
-	r = IMAP_MAILBOX_BADFORMAT;
-	goto out;
-    }
-
-    if (verbose > 1) syslog(LOG_INFO, "read_latest uid=%u", uid);
-    *latestp = uid;
-    r = 0;
-
-out:
-    buf_free(&key);
-    buf_free(&buf);
-    return r;
-}
-
-static int write_latest(struct latestdb *ldb,
-			struct mailbox *mailbox,
-			uint32_t uid,
-			int verbose)
-{
-    struct buf key = BUF_INITIALIZER;
-    struct buf data = BUF_INITIALIZER;
-    struct txn *txn = NULL;
-    int r = 0;
-
-    if (verbose)
-	syslog(LOG_INFO, "write_latest db=%s mailbox=%s uidvalidity=%u uid=%u",
-	       ldb->path, mailbox->name, mailbox->i.uidvalidity, uid);
-
-    buf_printf(&key, "%s.%u", mailbox->name, mailbox->i.uidvalidity);
-    buf_printf(&data, "%u %u", LATESTDB_VERSION, uid);
-
-    do {
-	r = cyrusdb_store(ldb->db,
-			  key.s, key.len,
-			  data.s, data.len,
-			  &txn);
-    } while (r == CYRUSDB_AGAIN);
-    if (!r)
-	r = cyrusdb_commit(ldb->db, txn);
-    else
-	cyrusdb_abort(ldb->db, txn);
-
-    buf_free(&data);
-    buf_free(&key);
-    return r;
-}
-
 static int flush(search_text_receiver_t *rx)
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
@@ -848,12 +1148,17 @@ static int flush(search_text_receiver_t *rx)
     syslog(LOG_INFO, "Xapian committed %u updates in %.6f sec",
 		tr->uncommitted, timesub(&start, &end));
 
-    /* We write out the latestid for the mailbox only after successfully
+    /* We write out the indexed list for the mailbox only after successfully
      * updating the index, to avoid a future instance not realising that
      * there are unindexed messages should we fail to index */
-    r = write_latest(&tr->latestdb, tr->super.mailbox, tr->latest,
-		     tr->super.verbose);
+    r = write_indexed(tr->basedir, tr->super.mailbox->name, tr->super.mailbox->i.uidvalidity,
+		      tr->indexed, tr->super.verbose);
     if (r) goto out;
+
+    /* move the indexed state to "oldindexed", since they're committed now */
+    seqset_join(tr->oldindexed, tr->indexed);
+    seqset_free(tr->indexed);
+    tr->indexed = NULL;
 
     tr->uncommitted = 0;
     tr->commits++;
@@ -979,119 +1284,63 @@ static int end_message_update(search_text_receiver_t *rx)
     r = xapian_dbw_end_doc(tr->dbw);
     if (r) goto out;
     ++tr->uncommitted;
-    tr->latest = tr->super.uid;
+    /* track that this UID was indexed.  Use SEQ_MERGE to avoid a bitty sequence
+     * with lots of holes in it if messages have been expunged meanwhile. */
+    if (!tr->indexed) {
+	tr->indexed = seqset_init(0, SEQ_MERGE);
+    }
+    seqset_add(tr->indexed, tr->super.uid, 1);
 
 out:
     tr->super.uid = 0;
     return r;
 }
 
-static const char *indexing_lockpath(struct mailbox *mailbox)
-{
-    char *usermbox = mboxname_user_mbox(mboxname_to_userid(mailbox->name), NULL);
-    const char *lockpath = mboxname_lockpath_suffix(usermbox, INDEXING_LOCK_SUFFIX);
-    free(usermbox);
-    return lockpath;
-}
-
-static void indexing_unlock(int *fdp)
-{
-    if (*fdp >= 0) {
-	close(*fdp);
-	*fdp = -1;
-    }
-}
-
-static int indexing_lock(struct mailbox *mailbox, int *fdp)
-{
-    const char *lockpath = indexing_lockpath(mailbox);
-    int fd;
-    int r;
-
-    indexing_unlock(fdp);
-
-    fd = open(lockpath, O_WRONLY|O_CREAT, 0600);
-    if (fd < 0) {
-	if (cyrus_mkdir(lockpath, 0755) < 0) {
-	    syslog(LOG_ERR, "IOERROR: unable to cyrus_mkdir %s: %m", lockpath);
-	    return IMAP_IOERROR;
-	}
-	fd = open(lockpath, O_WRONLY|O_CREAT, 0600);
-    }
-    if (fd < 0) {
-	syslog(LOG_ERR, "IOERROR: unable to create %s: %m", lockpath);
-	return IMAP_IOERROR;
-    }
-
-    r = lock_blocking(fd, lockpath);
-    if (r < 0) {
-	syslog(LOG_ERR, "IOERROR: unable to lock %s: %m",
-		lockpath);
-	close(fd);
-	return IMAP_IOERROR;
-    }
-
-    *fdp = fd;
-    return 0;
-}
-
 static int begin_mailbox_update(search_text_receiver_t *rx,
 				struct mailbox *mailbox,
-				int incremental)
+				int incremental __attribute__((unused)))
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
-    char *basedir = NULL;
-    char *real_basedir = NULL;
-    char *dir = NULL;
+    strarray_t *dirs = NULL;
+    strarray_t *active = NULL;
     int r;
 
-    r = xapian_basedir(mailbox->name, mailbox->part, NULL, &basedir);
-    if (r) return r;
-    dir = strconcat(basedir, XAPIAN_DIRNAME, NULL);
-
-    r = indexing_lock(mailbox, &tr->indexing_lock_fd);
-    if (r) goto out;
-
-    r = check_directory(dir, tr->super.verbose, /*create*/1);
-    if (r) goto out;
-
-    if (strcmpsafe(basedir, tr->last_basedir)) {
-	/* changing from one Xapian DB to another, or starting
-	 * the first Xapian DB */
-
-	if (tr->dbw)
-	    xapian_dbw_close(tr->dbw);
-	tr->dbw = xapian_dbw_open(dir, incremental);
-	if (!tr->dbw) {
-	    r = IMAP_IOERROR;
-	    goto out;
-	}
+    if (tr->xapianactive) {
+	mappedfile_unlock(tr->xapianactive);
+	mappedfile_close(&tr->xapianactive);
     }
+
+    /* we don't need a writelock on xapianactive to index - we just have to make
+     * sure that nobody else deletes the database out from under us, which means
+     * holding a readlock until after committing the changes */
+    active = xapianactive_open(mailbox->name, &tr->xapianactive, /*write*/0);
+    /* this folder is not indexed?  Fine. */
+    if (!active) return 0;
+
+    /* doesn't matter if the first one doesn't exist yet, we'll create it */
+    dirs = xapianactive_resolve(mailbox->name, mailbox->part, active, /*dostat*/0);
+    free(tr->basedir);
+    tr->basedir = xstrdup(dirs->data[0]);
+
+    /* XXX - if not incremental, we actually want to throw away all existing up to
+     * this point and write a new one, so we should launch a new file and then
+     * reindex using the same algorithm as the "compress" codepath */
+
+    /* read the indexed data from every directory so know what still needs indexing */
+    if (tr->oldindexed) seqset_free(tr->oldindexed);
+    tr->oldindexed = seqset_init(0, SEQ_MERGE);
+    r = read_indexed(dirs, mailbox->name, mailbox->i.uidvalidity, tr->oldindexed, tr->super.verbose);
+    if (r) return r;
+
+    /* create the dirctory if needed */
+    r = check_directory(tr->basedir, tr->super.verbose, /*create*/1);
+    if (r) return r;
+
+    tr->dbw = xapian_dbw_open(tr->basedir);
+    if (!tr->dbw) return IMAP_IOERROR;
 
     tr->super.mailbox = mailbox;
 
-    r = open_latest(mailbox, NULL, &tr->latestdb);
-    if (r) goto out;
-
-    if (incremental) {
-	r = read_latest(&tr->latestdb, mailbox, &tr->latest, tr->super.verbose);
-	if (r) goto out;
-    }
-    else {
-	if (tr->super.verbose > 1)
-	    syslog(LOG_INFO, "resetting latest UID to 0");
-	tr->latest = 0;
-    }
-
-    free(tr->last_basedir);
-    tr->last_basedir = xstrdup(basedir);
-    free(tr->last_real_basedir);
-    tr->last_real_basedir = xstrdupnull(real_basedir);
-
-out:
-    free(basedir);
-    free(real_basedir);
-    free(dir);
     return 0;
 }
 
@@ -1099,14 +1348,14 @@ static uint32_t first_unindexed_uid(search_text_receiver_t *rx)
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
 
-    return tr->latest+1;
+    return seqset_last(tr->oldindexed) + 1;
 }
 
 static int is_indexed(search_text_receiver_t *rx, uint32_t uid)
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
 
-    return (uid <= tr->latest);
+    return (seqset_ismember(tr->oldindexed, uid) || seqset_ismember(tr->indexed, uid));
 }
 
 static int end_mailbox_update(search_text_receiver_t *rx,
@@ -1116,8 +1365,33 @@ static int end_mailbox_update(search_text_receiver_t *rx,
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
     int r = 0;
 
-    if (tr->dbw)
+    if (tr->oldindexed) {
+	seqset_free(tr->oldindexed);
+	tr->oldindexed = NULL;
+    }
+
+    if (tr->dbw) {
 	r = flush(rx);
+	xapian_dbw_close(tr->dbw);
+	tr->dbw = NULL;
+    }
+
+    /* nuke this after flush - should never happen really, since flush
+     * will clean it up */
+    if (tr->indexed) {
+	seqset_free(tr->indexed);
+	tr->indexed = NULL;
+    }
+
+    /* don't unlock until DB is committed */
+    if (tr->xapianactive) {
+	mappedfile_unlock(tr->xapianactive);
+	mappedfile_close(&tr->xapianactive);
+	tr->xapianactive = NULL;
+    }
+
+    free(tr->basedir);
+    tr->basedir = NULL;
 
     tr->super.mailbox = NULL;
 
@@ -1129,6 +1403,7 @@ static search_text_receiver_t *begin_update(int verbose)
     xapian_update_receiver_t *tr;
 
     xapian_init();
+    tier_init();
 
     tr = xzmalloc(sizeof(xapian_update_receiver_t));
     tr->super.super.begin_mailbox = begin_mailbox_update;
@@ -1142,7 +1417,6 @@ static search_text_receiver_t *begin_update(int verbose)
     tr->super.super.end_mailbox = end_mailbox_update;
     tr->super.super.flush = flush;
 
-    tr->indexing_lock_fd = -1;
     tr->super.verbose = verbose;
 
     return &tr->super.super;
@@ -1163,17 +1437,7 @@ static int free_receiver(xapian_receiver_t *tr)
 static int end_update(search_text_receiver_t *rx)
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
-    int r = 0;
 
-    if (tr->dbw) {
-	xapian_dbw_close(tr->dbw);
-	tr->dbw = NULL;
-    }
-    close_latest(&tr->latestdb);
-
-    indexing_unlock(&tr->indexing_lock_fd);
-    free(tr->last_basedir);
-    free(tr->last_real_basedir);
     return free_receiver(&tr->super);
 }
 
@@ -1303,6 +1567,7 @@ static search_text_receiver_t *begin_snippets(void *internalised,
     xapian_snippet_receiver_t *tr;
 
     xapian_init();
+    tier_init();
 
     tr = xzmalloc(sizeof(xapian_snippet_receiver_t));
     tr->super.super.begin_mailbox = begin_mailbox_snippets;
@@ -1332,46 +1597,248 @@ static int end_snippets(search_text_receiver_t *rx)
 
 static int list_files(const char *mboxname, const char *partition, strarray_t *files)
 {
-    char *basedir = NULL;
-    char *xapiandir = NULL;
     char *fname = NULL;
     DIR *dirh = NULL;
     struct dirent *de;
     struct stat sb;
+    strarray_t *active = NULL;
+    strarray_t *dirs = NULL;
+    struct mappedfile *xapianactive = NULL;
     int r;
+    int i;
 
-    r = xapian_basedir(mboxname, partition, NULL, &basedir);
-    if (r) return r;
+    active = xapianactive_open(mboxname, &xapianactive, /*write*/0);
+    if (!active) goto out;
+    dirs = xapianactive_resolve(mboxname, partition, active, /*dostat*/1);
 
-    fname = strconcat(basedir, LATESTDB_FNAME, (char *)NULL);
-    r = stat(fname, &sb);
-    if (!r) {
-	strarray_appendm(files, fname);
-	fname = NULL;
-    }
-    r = 0;
+    /* XXX - rewrite in terms of xapianactive */
 
-    xapiandir = strconcat(basedir, XAPIAN_DIRNAME, (char *)NULL);
-    dirh = opendir(xapiandir);
-    if (!dirh) goto out;
+    for (i = 0; i < dirs->count; i++) {
+	const char *basedir = strarray_nth(dirs, i);
 
-    while ((de = readdir(dirh))) {
-	if (de->d_name[0] == '.') continue;
-	free(fname);
-	fname = strconcat(xapiandir, "/", de->d_name, (char *)NULL);
-	r = stat(fname, &sb);
-	if (!r && S_ISREG(sb.st_mode)) {
-	    strarray_appendm(files, fname);
-	    fname = NULL;
+	dirh = opendir(basedir);
+	if (!dirh) continue;
+
+	while ((de = readdir(dirh))) {
+	    if (de->d_name[0] == '.') continue;
+	    free(fname);
+	    fname = strconcat(basedir, "/", de->d_name, (char *)NULL);
+	    r = stat(fname, &sb);
+	    if (!r && S_ISREG(sb.st_mode)) {
+		strarray_appendm(files, fname);
+		fname = NULL;
+	    }
 	}
+
+	closedir(dirh);
+	dirh = NULL;
     }
-    r = 0;
 
 out:
-    if (dirh) closedir(dirh);
-    free(basedir);
-    free(xapiandir);
+    if (xapianactive) {
+	mappedfile_unlock(xapianactive);
+	mappedfile_close(&xapianactive);
+    }
+    strarray_free(active);
+    strarray_free(dirs);
     free(fname);
+
+    return 0;
+}
+
+/* how many of these fricking things are there - stupid DB interface */
+struct indexedrock {
+    struct db *db;
+    struct txn **tid;
+};
+
+static int copyindexed_cb(void *rock,
+			 const char *key, size_t keylen,
+			 const char *data, size_t datalen)
+{
+    struct indexedrock *lr = (struct indexedrock *)rock;
+    struct seqset *seq = parse_indexed(data, datalen);
+    int r = 0;
+    if (seq) {
+	r = store_indexed(lr->db, lr->tid, key, keylen, seq);
+	seqset_free(seq);
+    }
+    return r;
+}
+
+EXPORTED int compact_dbs(const char *mboxname, const char *tempdir, int level)
+{
+    struct mboxlist_entry *mbentry = NULL;
+    struct mappedfile *xapianactive = NULL;
+    strarray_t *dirs = NULL;
+    strarray_t *active = NULL;
+    strarray_t *tochange = NULL;
+    char *newstart = NULL;
+    char *newdest = NULL;
+    char *destdir = NULL;
+    char *tempdestdir = NULL;
+    struct buf mytempdir = BUF_INITIALIZER;
+    struct buf buf = BUF_INITIALIZER;
+    struct indexedrock lr;
+    int r = 0;
+    int i;
+
+    xapian_init();
+    tier_init();
+
+    r = mboxlist_lookup(mboxname, &mbentry, NULL);
+    if (r) {
+	syslog(LOG_ERR, "IOERROR: failed to lookup %s", mboxname);
+	goto out;
+    }
+
+    /* take an exclusive lock on the xapianactive file */
+    active = xapianactive_open(mboxname, &xapianactive, /*write*/1);
+    if (!active || !active->count) goto out;
+
+    /* read the xapianactive file, taking down the names of all paths with a
+     * level less than or equal to that requested */
+    tochange = xapianactive_filter(active, level);
+    if (!tochange || !tochange->count) goto out;
+
+    /* add a new 'directory zero' to the start of the xapianactive file, and also register
+     * our target name at the end */
+    newstart = xapianactive_nextname(active, 0);
+    newdest = xapianactive_nextname(active, level);
+    destdir = xapianactive_path(mboxname, mbentry->partition, newdest, /*dostat*/0);
+    tempdestdir = strconcat(destdir, ".NEW", (char *)NULL);
+
+    strarray_unshift(active, newstart);
+    strarray_push(active, newdest);
+
+    /* write the new file and release the exclusive lock */
+    xapianactive_write(xapianactive, active);
+    mappedfile_unlock(xapianactive);
+
+    /* take a shared lock */
+    mappedfile_readlock(xapianactive);
+
+    /* reread and ensure our 'directory zero' is still directory zero,
+     * otherwise abort now */
+    {
+	strarray_t *newactive = xapianactive_read(xapianactive);
+	if (!newactive || !newactive->count || strcmp(newstart, newactive->data[0])) {
+	    strarray_free(newactive);
+	    goto out;
+	}
+	strarray_free(newactive);
+    }
+
+    /* find out which items actually exist from the set to be compressed */
+    dirs = xapianactive_resolve(mboxname, mbentry->partition, tochange, /*dostat*/1);
+
+    /* run the compress to tmpfs */
+    if (tempdir)
+	buf_printf(&mytempdir, "%s/xapian.%d", tempdir, getpid());
+    /* or just directly in place */
+    else
+	buf_printf(&mytempdir, "%s", tempdestdir);
+    r = cyrus_mkdir(buf_cstring(&mytempdir), 0755);
+    if (r) goto out;
+    r = mkdir(buf_cstring(&mytempdir), 0755);
+    if (r) goto out;
+
+    if (dirs->count) {
+	r = xapian_compact_dbs(buf_cstring(&mytempdir), (const char **)dirs->data);
+	if (r) goto out;
+
+	/* build the cyrus.indexed.db from the contents of the source dirs */
+	lr.db = NULL;
+	lr.tid = NULL;
+	buf_reset(&buf);
+	buf_printf(&buf, "%s%s", buf_cstring(&mytempdir), INDEXEDDB_FNAME);
+	r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_LATEST_DB),
+			 buf_cstring(&buf), CYRUSDB_CREATE, &lr.db);
+	for (i = 0; i < dirs->count; i++) {
+	    struct db *db = NULL;
+	    buf_reset(&buf);
+	    buf_printf(&buf, "%s%s", strarray_nth(dirs, i), INDEXEDDB_FNAME);
+	    r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_LATEST_DB),
+			     buf_cstring(&buf), 0, &db);
+	    if (r == IMAP_NOTFOUND) continue;
+	    r = cyrusdb_foreach(db, "", 0, NULL, copyindexed_cb, &lr, NULL);
+	    cyrusdb_close(db);
+	    if (r) {
+		if (lr.tid) cyrusdb_abort(lr.db, *lr.tid);
+		goto out;
+	    }
+	}
+	if (lr.tid) r = cyrusdb_commit(lr.db, *lr.tid);
+	cyrusdb_close(lr.db);
+	if (r) goto out;
+
+	/* move the tmpfs files to a temporary name in our target directory */
+	if (tempdir) {
+	    cyrus_mkdir(tempdestdir, 0755);
+	    r = rsync_tree(buf_cstring(&mytempdir), tempdestdir, 0, 0, 1);
+	    if (r) goto out;
+	}
+    }
+
+    /* release and take an exclusive lock on xapianactive */
+    mappedfile_unlock(xapianactive);
+    mappedfile_writelock(xapianactive);
+
+    /* check that we still have 'directory zero'.  If not, delete all
+     * temporary files and abort */
+    {
+	strarray_t *newactive = xapianactive_read(xapianactive);
+	if (!newactive || !newactive->count || strcmp(newstart, newactive->data[0])) {
+	    strarray_free(newactive);
+	    goto out;
+	}
+	strarray_free(newactive);
+    }
+
+    if (dirs->count) {
+	/* create a new target name one greater than the highest in the
+	 * xapianactive file for our target directory.  Rename our DB to
+	 * that path, then rewrite xapianactive removing all the source
+	 * items */
+	r = rename(tempdestdir, destdir);
+	if (r) goto out;
+    }
+    else {
+	strarray_append(tochange, newdest);
+    }
+
+    for (i = 0; i < tochange->count; i++)
+	strarray_remove_all(active, tochange->data[i]);
+
+    xapianactive_write(xapianactive, active);
+
+    /* release the lock */
+    mappedfile_unlock(xapianactive);
+
+    /* finally remove all directories on disk of the source dbs */
+    for (i = 0; i < dirs->count; i++)
+	run_command("/bin/rm", "-rf", dirs->data[i], (char *)NULL);
+
+    /* XXX - readdir and remove other directories as well */
+
+out:
+    if (tempdestdir)
+	run_command("/bin/rm", "-rf", tempdestdir, (char *)NULL);
+    if (mytempdir.len)
+	run_command("/bin/rm", "-rf", buf_cstring(&mytempdir), (char *)NULL);
+    strarray_free(dirs);
+    strarray_free(active);
+    strarray_free(tochange);
+    buf_free(&mytempdir);
+    buf_free(&buf);
+    free(newstart);
+    free(newdest);
+    free(destdir);
+    free(tempdestdir);
+    mappedfile_unlock(xapianactive);
+    mappedfile_close(&xapianactive);
+    mboxlist_entry_free(&mbentry);
+
     return r;
 }
 
@@ -1389,6 +1856,6 @@ const struct search_engine xapian_search_engine = {
     /*start_daemon*/NULL,
     /*stop_daemon*/NULL,
     list_files,
-    /*compact*/NULL
+    compact_dbs
 };
 
