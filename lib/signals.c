@@ -111,6 +111,7 @@ EXPORTED void signals_reset_sighup_handler(int restartable)
 {
     struct sigaction action;
 
+    memset(&action, 0, sizeof(action));
     sigemptyset(&action.sa_mask);
 
     action.sa_flags = 0;
