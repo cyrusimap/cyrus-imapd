@@ -203,8 +203,9 @@ static int xapianactive_write(struct mappedfile *mf, const strarray_t *new)
     if (r) goto done;
 
     towrite = strarray_join(new, " ");
-    mappedfile_pwrite(newfile, towrite, strlen(towrite), 0);
+    r = mappedfile_pwrite(newfile, towrite, strlen(towrite), 0);
     free(towrite);
+    if (r) goto done;
 
     r = mappedfile_commit(newfile);
     if (r) goto done;
