@@ -1150,6 +1150,8 @@ static int flush(search_text_receiver_t *rx)
 
     if (!tr->uncommitted) return 0;
 
+    assert(tr->dbw);
+
     gettimeofday(&start, NULL);
     r = xapian_dbw_commit_txn(tr->dbw);
     if (r) goto out;
@@ -1306,6 +1308,25 @@ out:
     return r;
 }
 
+/* called when update changes user, or when finishing an update */
+static void _receiver_finish_user(xapian_update_receiver_t *tr)
+{
+    if (tr->dbw) {
+	xapian_dbw_close(tr->dbw);
+	tr->dbw = NULL;
+    }
+
+    /* don't unlock until DB is committed */
+    if (tr->activefile) {
+	mappedfile_unlock(tr->activefile);
+	mappedfile_close(&tr->activefile);
+	tr->activefile = NULL;
+    }
+
+    free(tr->basedir);
+    tr->basedir = NULL;
+}
+
 static int begin_mailbox_update(search_text_receiver_t *rx,
 				struct mailbox *mailbox,
 				int incremental __attribute__((unused)))
@@ -1380,11 +1401,7 @@ static int end_mailbox_update(search_text_receiver_t *rx,
 	tr->oldindexed = NULL;
     }
 
-    if (tr->dbw) {
-	r = flush(rx);
-	xapian_dbw_close(tr->dbw);
-	tr->dbw = NULL;
-    }
+    r = flush(rx);
 
     /* nuke this after flush - should never happen really, since flush
      * will clean it up */
@@ -1393,17 +1410,9 @@ static int end_mailbox_update(search_text_receiver_t *rx,
 	tr->indexed = NULL;
     }
 
-    /* don't unlock until DB is committed */
-    if (tr->activefile) {
-	mappedfile_unlock(tr->activefile);
-	mappedfile_close(&tr->activefile);
-	tr->activefile = NULL;
-    }
-
-    free(tr->basedir);
-    tr->basedir = NULL;
-
     tr->super.mailbox = NULL;
+
+    _receiver_finish_user(tr);
 
     return r;
 }
