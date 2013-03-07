@@ -114,7 +114,6 @@ struct search_text_receiver {
     int (*end_mailbox)(search_text_receiver_t *,
 		       struct mailbox *);
     int (*flush)(search_text_receiver_t *);
-    void (*use_temp_root)(search_text_receiver_t *, const char *dir);
 };
 
 #define SEARCH_FLAG_CAN_BATCH	(1<<0)

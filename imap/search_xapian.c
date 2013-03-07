@@ -574,7 +574,6 @@ struct xapian_update_receiver
     unsigned int commits;
     uint32_t latest;
     struct latestdb latestdb;
-    char *temp_root;
     char *last_basedir;
     char *last_real_basedir;
 };
@@ -1046,7 +1045,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     char *dir = NULL;
     int r;
 
-    r = xapian_basedir(mailbox->name, mailbox->part, tr->temp_root, &basedir);
+    r = xapian_basedir(mailbox->name, mailbox->part, NULL, &basedir);
     if (r) return r;
     dir = strconcat(basedir, XAPIAN_DIRNAME, NULL);
 
@@ -1056,35 +1055,9 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     r = check_directory(dir, tr->super.verbose, /*create*/1);
     if (r) goto out;
 
-    if (tr->temp_root) {
-	r = xapian_basedir(mailbox->name, mailbox->part, NULL, &real_basedir);
-	if (r) goto out;
-
-	r = check_directory(real_basedir, tr->super.verbose, /*create*/1);
-	if (r) goto out;
-    }
-
     if (strcmpsafe(basedir, tr->last_basedir)) {
 	/* changing from one Xapian DB to another, or starting
 	 * the first Xapian DB */
-
-	if (tr->temp_root) {
-	    if (tr->last_basedir && tr->commits) {
-		/* rsync back in the database we just finished */
-		r = rsync_tree(tr->last_basedir, tr->last_real_basedir,
-			       tr->super.verbose, /*atomic*/1, /*remove*/0);
-		if (r) goto out;
-	    }
-
-	    if (incremental) {
-		/* rsync out a temporary copy of the database we're starting on */
-		r = rsync_tree(real_basedir, basedir,
-			       tr->super.verbose, /*atomic*/0, /*remove*/0);
-		if (r) goto out;
-	    }
-
-	    tr->commits = 0;
-	}
 
 	if (tr->dbw)
 	    xapian_dbw_close(tr->dbw);
@@ -1097,7 +1070,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
 
     tr->super.mailbox = mailbox;
 
-    r = open_latest(mailbox, tr->temp_root, &tr->latestdb);
+    r = open_latest(mailbox, NULL, &tr->latestdb);
     if (r) goto out;
 
     if (incremental) {
@@ -1151,14 +1124,6 @@ static int end_mailbox_update(search_text_receiver_t *rx,
     return r;
 }
 
-static void use_temp_root(search_text_receiver_t *rx, const char *dir)
-{
-    xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
-
-    free(tr->temp_root);
-    tr->temp_root = xstrdupnull(dir);
-}
-
 static search_text_receiver_t *begin_update(int verbose)
 {
     xapian_update_receiver_t *tr;
@@ -1176,7 +1141,6 @@ static search_text_receiver_t *begin_update(int verbose)
     tr->super.super.end_message = end_message_update;
     tr->super.super.end_mailbox = end_mailbox_update;
     tr->super.super.flush = flush;
-    tr->super.super.use_temp_root = use_temp_root;
 
     tr->indexing_lock_fd = -1;
     tr->super.verbose = verbose;
@@ -1207,17 +1171,7 @@ static int end_update(search_text_receiver_t *rx)
     }
     close_latest(&tr->latestdb);
 
-    if (tr->temp_root) {
-	if (tr->last_basedir && tr->commits)
-	    r = rsync_tree(tr->last_basedir, tr->last_real_basedir,
-			   tr->super.verbose, /*atomic*/1, /*remove*/1);
-	    if (r)
-		syslog(LOG_ERR, "FAILED TO RSYNC %s to %s",
-		       tr->last_basedir, tr->last_real_basedir);
-    }
-
     indexing_unlock(&tr->indexing_lock_fd);
-    free(tr->temp_root);
     free(tr->last_basedir);
     free(tr->last_real_basedir);
     return free_receiver(&tr->super);

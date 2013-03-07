@@ -313,9 +313,6 @@ static void do_indexer(const strarray_t *sa)
     if (rx == NULL)
 	return;	/* no indexer defined */
 
-    if (temp_root_dir && rx->use_temp_root)
-	rx->use_temp_root(rx, temp_root_dir);
-
     for (i = 0 ; i < sa->count ; i++) {
 	index_one(sa->data[i], /*blocking*/1);
 	/* Ignore errors: most will be mailboxes moving around */
