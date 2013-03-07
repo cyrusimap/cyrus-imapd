@@ -1432,23 +1432,20 @@ static search_text_receiver_t *begin_update(int verbose)
     return &tr->super.super;
 }
 
-static int free_receiver(xapian_receiver_t *tr)
+static void free_receiver(xapian_receiver_t *tr)
 {
-    int r = 0;
-
     free_segments(tr);
     ptrarray_fini(&tr->segs);
-
     free(tr);
-
-    return r;
 }
 
 static int end_update(search_text_receiver_t *rx)
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
 
-    return free_receiver(&tr->super);
+    free_receiver(&tr->super);
+
+    return 0;
 }
 
 static int begin_mailbox_snippets(search_text_receiver_t *rx,
@@ -1602,7 +1599,10 @@ static int end_snippets(search_text_receiver_t *rx)
     xapian_snippet_receiver_t *tr = (xapian_snippet_receiver_t *)rx;
 
     if (tr->snipgen) xapian_snipgen_free(tr->snipgen);
-    return free_receiver(&tr->super);
+
+    free_receiver(&tr->super);
+
+    return 0;
 }
 
 static int list_files(const char *mboxname, const char *partition, strarray_t *files)
