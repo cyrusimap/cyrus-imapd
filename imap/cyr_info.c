@@ -257,22 +257,16 @@ static int known_overflowkey(const char *key)
 	const char *conf = config_getstring(IMAPOPT_XAPIAN_TIERS);
 	if (conf) {
 	    strarray_t *names = strarray_split(conf, NULL, STRARRAY_TRIM);
-	    int i;
-	    for (i = 0; i < names->count; i++) {
-		if (!strncmp(key, strarray_nth(names, i), match - key)) {
-		    strarray_free(names);
-		    return 1;
-		}
-	    }
+	    char *name = xstrndup(key, match - key);
+	    int pos = strarray_find(names, name, 0);
+	    free(name);
 	    strarray_free(names);
+	    if (pos >= 0) return 1;
 	}
 	else {
 	    if (match == key) return 1; /* no tiers, no prefix */
 	}
     }
-    
-    
-    if (!strncmp(key, "searchpartition-", 10)) return 1;
 
     return 0;
 }
