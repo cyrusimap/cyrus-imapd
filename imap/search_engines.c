@@ -80,6 +80,7 @@ static const struct search_engine default_search_engine = {
     NULL,
     NULL,
     NULL,
+    NULL,
     NULL
 };
 
@@ -291,6 +292,14 @@ EXPORTED int search_list_files(const char *mboxname,
 {
     const struct search_engine *se = engine();
     return (se->list_files ? se->list_files(mboxname, partition, files) : 0);
+}
+
+EXPORTED int search_compact(const char *mboxname,
+			    const char *tempdir,
+			    int level)
+{
+    const struct search_engine *se = engine();
+    return (se->compact ? se->compact(mboxname, tempdir, level) : 0);
 }
 
 const char *search_op_as_string(int op)

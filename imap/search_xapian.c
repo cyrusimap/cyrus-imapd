@@ -1388,6 +1388,7 @@ const struct search_engine xapian_search_engine = {
     free_internalised,
     /*start_daemon*/NULL,
     /*stop_daemon*/NULL,
-    list_files
+    list_files,
+    /*compact*/NULL
 };
 

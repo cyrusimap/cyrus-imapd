@@ -1003,6 +1003,7 @@ const struct search_engine squat_search_engine = {
     /* free_internalised */NULL,
     /* start_daemon */NULL,
     /* stop_daemon */NULL,
-    /* list_files */NULL
+    /* list_files */NULL,
+    /* compact */NULL
 };
 

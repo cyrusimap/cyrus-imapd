@@ -513,6 +513,31 @@ static int print_search_hit(const char *mboxname, uint32_t uidvalidity,
     return 0;
 }
 
+static void compact_mbox(const char *mboxname, int level)
+{
+    /* XXX - handle errors? */
+    search_compact(mboxname, temp_root_dir, level);
+}
+
+static void do_compact(const strarray_t *mboxnames, int level)
+{
+    char *prev_userid = NULL;
+    int i;
+
+    for (i = 0 ; i < mboxnames->count ; i++) {
+	const char *userid = mboxname_to_userid(mboxnames->data[i]);
+	if (!strcmpsafe(prev_userid, userid))
+	    continue;
+
+	compact_mbox(mboxnames->data[i], level);
+
+	free(prev_userid);
+	prev_userid = xstrdup(userid);
+    }
+
+    free(prev_userid);
+}
+
 static void do_search(const char *query, int single, const strarray_t *mboxnames)
 {
     struct mailbox *mailbox = NULL;
@@ -880,9 +905,10 @@ int main(int argc, char **argv)
     const char *synclogfile = NULL;
     int init_flags = CYRUSINIT_PERROR;
     int multi_folder = 0;
+    int compact_level = 0;
     const char *fromfile = NULL;
     enum { UNKNOWN, INDEXER, INDEXFROM, SEARCH, ROLLING, SYNCLOG,
-	   START_DAEMON, STOP_DAEMON, RUN_DAEMON } mode = UNKNOWN;
+	   START_DAEMON, STOP_DAEMON, RUN_DAEMON, COMPACT } mode = UNKNOWN;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
 	fatal("must run as the Cyrus user", EC_USAGE);
@@ -890,7 +916,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:I:RT:c:de:f:mn:rsiav")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:I:RT:c:de:f:mn:rsiavz:")) != EOF) {
 	switch (opt) {
 	case 'C':		/* alt config file */
 	    alt_config = optarg;
@@ -982,6 +1008,12 @@ int main(int argc, char **argv)
 	    mode = INDEXER;
 	    break;
 
+	case 'z':
+	    if (mode != UNKNOWN && mode != COMPACT) usage(argv[0]);
+	    compact_level = atoi(optarg);
+	    mode = COMPACT;
+	    break;
+
 	default:
 	    usage("squatter");
 	}
@@ -1055,6 +1087,11 @@ int main(int argc, char **argv)
     case RUN_DAEMON:
 	if (optind != argc) usage("squatter");
 	do_run_daemon();
+	break;
+    case COMPACT:
+	if (recursive_flag && optind == argc) usage(argv[0]);
+	expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind);
+	do_compact(&mboxnames, compact_level);
 	break;
     }
 

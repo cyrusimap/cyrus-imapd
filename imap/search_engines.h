@@ -141,6 +141,7 @@ struct search_engine {
     int (*start_daemon)(int verbose);
     int (*stop_daemon)(int verbose);
     int (*list_files)(const char *mboxname, const char *partition, strarray_t *);
+    int (*compact)(const char *mboxname, const char *tempdir, int level);
 };
 
 /*
@@ -170,6 +171,7 @@ void search_free_internalised(void *internalised);
 int search_start_daemon(int verbose);
 int search_stop_daemon(int verbose);
 int search_list_files(const char *mboxname, const char *partition, strarray_t *);
+int search_compact(const char *mboxname, const char *tempdir, int level);
 
 /* for debugging */
 extern const char *search_op_as_string(int op);
