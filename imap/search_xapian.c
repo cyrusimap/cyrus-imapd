@@ -844,7 +844,16 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
     r = xapian_query_run(bb->db, qq, xapian_run_cb, bb);
     if (r) goto out;
 
-    /* XXX - re-add "run unfound items as false positives */
+    /* add in the unindexed uids as false positives */
+    if ((bb->opts & SEARCH_UNINDEXED)) {
+	uint32_t uid;
+	for (uid = seqset_firstnonmember(bb->indexed);
+	     uid <= bb->mailbox->i.last_uid ; uid++) {
+	    xstats_inc(SPHINX_UNINDEXED);
+	    r = proc(bb->mailbox->name, bb->mailbox->i.uidvalidity, uid, rock);
+	    if (r) goto out;
+	}
+    }
 
 out:
     if (qq) xapian_query_free(qq);
