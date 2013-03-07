@@ -1167,11 +1167,6 @@ static int flush(search_text_receiver_t *rx)
 		      tr->indexed, tr->super.verbose);
     if (r) goto out;
 
-    /* move the indexed state to "oldindexed", since they're committed now */
-    seqset_join(tr->oldindexed, tr->indexed);
-    seqset_free(tr->indexed);
-    tr->indexed = NULL;
-
     tr->uncommitted = 0;
     tr->commits++;
 
@@ -1396,18 +1391,16 @@ static int end_mailbox_update(search_text_receiver_t *rx,
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
     int r = 0;
 
-    if (tr->oldindexed) {
-	seqset_free(tr->oldindexed);
-	tr->oldindexed = NULL;
-    }
-
     r = flush(rx);
 
-    /* nuke this after flush - should never happen really, since flush
-     * will clean it up */
+    /* flush before cleaning up, since indexed data is written by flush */
     if (tr->indexed) {
 	seqset_free(tr->indexed);
 	tr->indexed = NULL;
+    }
+    if (tr->oldindexed) {
+	seqset_free(tr->oldindexed);
+	tr->oldindexed = NULL;
     }
 
     tr->super.mailbox = NULL;
