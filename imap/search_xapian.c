@@ -1623,8 +1623,6 @@ static int list_files(const char *mboxname, const char *partition, strarray_t *f
     if (!active) goto out;
     dirs = activefile_resolve(mboxname, partition, active, /*dostat*/1);
 
-    /* XXX - rewrite in terms of activefile */
-
     for (i = 0; i < dirs->count; i++) {
 	const char *basedir = strarray_nth(dirs, i);
 
