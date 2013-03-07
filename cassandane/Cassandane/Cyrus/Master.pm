@@ -899,7 +899,7 @@ sub test_service_associate
     $self->{instance}->stop();
 }
 
-sub test_service_primary_fail
+sub XXX_test_service_primary_fail
 {
     my ($self) = @_;
 
@@ -957,7 +957,7 @@ sub test_service_primary_fail
 	$self->lemming_census());
 }
 
-sub test_service_associate_fail
+sub XXX_test_service_associate_fail
 {
     my ($self) = @_;
 
