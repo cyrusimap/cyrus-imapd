@@ -1020,7 +1020,7 @@ struct xapian_update_receiver
     unsigned int commits;
     struct seqset *oldindexed;
     struct seqset *indexed;
-    char *basedir;
+    strarray_t *activedirs;
 };
 
 /* receiver used for extracting snippets after a search */
@@ -1163,7 +1163,8 @@ static int flush(search_text_receiver_t *rx)
     /* We write out the indexed list for the mailbox only after successfully
      * updating the index, to avoid a future instance not realising that
      * there are unindexed messages should we fail to index */
-    r = write_indexed(tr->basedir, tr->super.mailbox->name, tr->super.mailbox->i.uidvalidity,
+    r = write_indexed(strarray_nth(tr->activedirs, 0),
+		      tr->super.mailbox->name, tr->super.mailbox->i.uidvalidity,
 		      tr->indexed, tr->super.verbose);
     if (r) goto out;
 
@@ -1318,8 +1319,10 @@ static void _receiver_finish_user(xapian_update_receiver_t *tr)
 	tr->activefile = NULL;
     }
 
-    free(tr->basedir);
-    tr->basedir = NULL;
+    if (tr->activedirs) {
+	strarray_free(tr->activedirs);
+	tr->activedirs = NULL;
+    }
 }
 
 static int begin_mailbox_update(search_text_receiver_t *rx,
@@ -1327,46 +1330,53 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
 				int incremental __attribute__((unused)))
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
-    strarray_t *dirs = NULL;
+    char *fname = activefile_fname(mailbox->name);
     strarray_t *active = NULL;
-    int r;
+    int r = IMAP_IOERROR;
 
-    if (tr->activefile) {
-	mappedfile_unlock(tr->activefile);
-	mappedfile_close(&tr->activefile);
-    }
-
-    /* we don't need a writelock on activefile to index - we just have to make
-     * sure that nobody else deletes the database out from under us, which means
-     * holding a readlock until after committing the changes */
-    active = activefile_open(mailbox->name, &tr->activefile, /*write*/0);
-    /* this folder is not indexed?  Fine. */
-    if (!active) return 0;
-
-    /* doesn't matter if the first one doesn't exist yet, we'll create it */
-    dirs = activefile_resolve(mailbox->name, mailbox->part, active, /*dostat*/0);
-    free(tr->basedir);
-    tr->basedir = xstrdup(dirs->data[0]);
+    /* not an indexable mailbox, fine - return a code to avoid
+     * trying to index each message as well */
+    if (!fname) return IMAP_MAILBOX_NONEXISTENT;
 
     /* XXX - if not incremental, we actually want to throw away all existing up to
      * this point and write a new one, so we should launch a new file and then
-     * reindex using the same algorithm as the "compress" codepath */
+     * reindex using the same algorithm as the "compress" codepath.  The
+     * problem is that the index is per user, not per mailbox */
+
+    /* different user - switch active files */
+    if (!tr->activefile || strcmp(mappedfile_fname(&tr->activefile), fname)) {
+	_receiver_finish_user(tr);
+
+	/* we don't need a writelock on activefile to index - we just have to make
+	 * sure that nobody else deletes the database out from under us, which means
+	 * holding a readlock until after committing the changes */
+	active = activefile_open(mailbox->name, &tr->activefile, /*write*/0);
+	if (!active || !active->count) goto out;
+
+	/* doesn't matter if the first one doesn't exist yet, we'll create it */
+	tr->activedirs = activefile_resolve(mailbox->name, mailbox->part, active, /*dostat*/0);
+	if (!tr->activedirs || !tr->activedirs->count) goto out;
+
+	/* create the directory if needed */
+	r = check_directory(strarray_nth(tr->activedirs, 0), tr->super.verbose, /*create*/1);
+	if (r) goto out;
+
+	/* open the DB */
+	tr->dbw = xapian_dbw_open(strarray_nth(tr->activedirs, 0));
+    }
 
     /* read the indexed data from every directory so know what still needs indexing */
-    if (tr->oldindexed) seqset_free(tr->oldindexed);
     tr->oldindexed = seqset_init(0, SEQ_MERGE);
-    r = read_indexed(dirs, mailbox->name, mailbox->i.uidvalidity, tr->oldindexed, tr->super.verbose);
-    if (r) return r;
-
-    /* create the dirctory if needed */
-    r = check_directory(tr->basedir, tr->super.verbose, /*create*/1);
-    if (r) return r;
-
-    tr->dbw = xapian_dbw_open(tr->basedir);
-    if (!tr->dbw) return IMAP_IOERROR;
+    r = read_indexed(tr->activedirs, mailbox->name, mailbox->i.uidvalidity,
+		     tr->oldindexed, tr->super.verbose);
+    if (r) goto out;
 
     tr->super.mailbox = mailbox;
 
+out:
+    free(fname);
+    strarray_free(active);
+    if (!tr->dbw) return IMAP_IOERROR;
     return 0;
 }
 
@@ -1405,8 +1415,6 @@ static int end_mailbox_update(search_text_receiver_t *rx,
 
     tr->super.mailbox = NULL;
 
-    _receiver_finish_user(tr);
-
     return r;
 }
 
@@ -1444,6 +1452,8 @@ static void free_receiver(xapian_receiver_t *tr)
 static int end_update(search_text_receiver_t *rx)
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
+
+    _receiver_finish_user(tr);
 
     free_receiver(&tr->super);
 
