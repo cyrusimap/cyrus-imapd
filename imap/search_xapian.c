@@ -202,6 +202,7 @@ static int activefile_write(struct mappedfile *mf, const strarray_t *new)
     char *newname = strconcat(mappedfile_fname(mf), ".NEW", (char *)NULL);
     struct mappedfile *newfile = NULL;
     int r;
+    ssize_t nwritten;
     char *towrite = NULL;
 
     r = mappedfile_open(&newfile, newname, /*create*/1);
@@ -210,9 +211,15 @@ static int activefile_write(struct mappedfile *mf, const strarray_t *new)
     if (r) goto done;
 
     towrite = strarray_join(new, " ");
-    r = mappedfile_pwrite(newfile, towrite, strlen(towrite), 0);
+    nwritten = mappedfile_pwrite(newfile, towrite, strlen(towrite), 0);
     free(towrite);
-    if (r) goto done;
+    if (nwritten < 0) {
+	/* commit anyway so mappedfile doesn't have kittens
+	 * about the map being closed dirty */
+	r = IMAP_IOERROR;
+	mappedfile_commit(newfile);
+	goto done;
+    }
 
     r = mappedfile_commit(newfile);
     if (r) goto done;
