@@ -1791,9 +1791,10 @@ void response_header(long code, struct transaction_t *txn)
 	case METH_OPTIONS:
 	    if (txn->req_tgt.allow & ALLOW_DAV) {
 		/* Construct DAV header(s) based on namespace of request URL */
-		prot_printf(httpd_out, "DAV: 1, 2, 3%s\r\n",
-			    (txn->req_tgt.allow & ALLOW_WRITE) ?
-			    ", access-control, extended-mkcol" : "");
+		prot_printf(httpd_out, "DAV: 1,%s 3, access-control%s\r\n",
+			    (txn->req_tgt.allow & ALLOW_WRITE) ? " 2," : "",
+			    (txn->req_tgt.allow & ALLOW_WRITECOL) ?
+			    ", extended-mkcol" : "");
 		if (txn->req_tgt.allow & ALLOW_CAL) {
 		    prot_printf(httpd_out, "DAV: calendar-access%s\r\n",
 				(txn->req_tgt.allow & ALLOW_CAL_SCHED) ?
@@ -1817,16 +1818,19 @@ void response_header(long code, struct transaction_t *txn)
 		    prot_printf(httpd_out, ", POST");
 		}
 		if (txn->req_tgt.allow & ALLOW_WRITE) {
-		    prot_printf(httpd_out, ", PUT, DELETE");
+		    prot_printf(httpd_out, ", PUT");
+		}
+		if (txn->req_tgt.allow & ALLOW_DELETE) {
+		    prot_printf(httpd_out, ", DELETE");
 		}
 		prot_printf(httpd_out, "\r\n");
 		if (txn->req_tgt.allow & ALLOW_DAV) {
-		    prot_printf(httpd_out, "Allow: REPORT, PROPFIND");
+		    prot_printf(httpd_out, "Allow: PROPFIND, REPORT");
 		    if (txn->req_tgt.allow & ALLOW_WRITE) {
-			prot_printf(httpd_out,
-				    ", PROPPATCH, COPY, MOVE, LOCK, UNLOCK, MKCOL");
-			prot_printf(httpd_out,
-				    "\r\nAllow: ACL");
+			prot_printf(httpd_out, ", COPY, MOVE, LOCK, UNLOCK");
+		    }
+		    if (txn->req_tgt.allow & ALLOW_WRITECOL) {
+			prot_printf(httpd_out, ", PROPPATCH, ACL, MKCOL");
 			if (txn->req_tgt.allow & ALLOW_CAL) {
 			    prot_printf(httpd_out, ", MKCALENDAR");
 			}
@@ -2936,9 +2940,11 @@ int meth_get_doc(struct transaction_t *txn,
 
 
 /* Perform an OPTIONS request */
-int meth_options(struct transaction_t *txn,
-		 void *params __attribute__((unused)))
+int meth_options(struct transaction_t *txn, void *params)
 {
+    struct meth_params *oparams = (struct meth_params *) params;
+    int r;
+
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
 
@@ -2953,6 +2959,11 @@ int meth_options(struct transaction_t *txn,
 	    if (namespaces[i]->enabled)
 		txn->req_tgt.allow |= namespaces[i]->allow;
 	}
+    }
+    else if (oparams && oparams->parse_path) {
+	/* Parse the path */
+	r = oparams->parse_path(&txn->req_tgt, &txn->error.desc);
+	if (r) return r;
     }
 
     response_header(HTTP_OK, txn);

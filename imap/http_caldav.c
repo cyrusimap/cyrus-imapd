@@ -188,7 +188,8 @@ static struct meth_params caldav_params = {
 /* Namespace for CalDAV collections */
 struct namespace_t namespace_calendar = {
     URL_NS_CALENDAR, 0, "/calendars", "/.well-known/caldav", 1 /* auth */,
-    (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DAV | ALLOW_CAL),
+    (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DELETE |
+     ALLOW_DAV | ALLOW_WRITECOL | ALLOW_CAL ),
     &my_caldav_init, &my_caldav_auth, my_caldav_reset, &my_caldav_shutdown,
     { 
 	{ &meth_acl,		&caldav_params },	/* ACL		*/
@@ -200,7 +201,7 @@ struct namespace_t namespace_calendar = {
 	{ &meth_mkcol,		&caldav_params },	/* MKCALENDAR	*/
 	{ &meth_mkcol,		&caldav_params },	/* MKCOL	*/
 	{ &meth_copy,		&caldav_params },	/* MOVE		*/
-	{ &meth_options,	NULL },			/* OPTIONS	*/
+	{ &meth_options,	&caldav_params },	/* OPTIONS	*/
 	{ &meth_post,		&caldav_params },	/* POST		*/
 	{ &meth_propfind,	&caldav_params },	/* PROPFIND	*/
 	{ &meth_proppatch,	&caldav_params },	/* PROPPATCH	*/
@@ -284,6 +285,9 @@ static int caldav_parse_path(struct request_target_t *tgt, const char **errstr)
 	return HTTP_FORBIDDEN;
     }
 
+    /* Default to bare-bones Allow bits for toplevel collections */
+    tgt->allow &= ~(ALLOW_POST|ALLOW_WRITE|ALLOW_DELETE);
+
     /* Skip namespace */
     p += len;
     if (!*p || !*++p) return 0;
@@ -329,13 +333,25 @@ static int caldav_parse_path(struct request_target_t *tgt, const char **errstr)
     }
 
   done:
-    /* Determine if this is a scheduling Inbox/Outbox */
+    /* Set proper Allow bits and flags based on path components */
     if (tgt->collection) {
-	if (!strcmp(tgt->collection, SCHED_INBOX))
+	if (tgt->resource) {
+	    tgt->allow &= ~ALLOW_WRITECOL;
+	    tgt->allow |= (ALLOW_WRITE|ALLOW_DELETE);
+	}
+	else if (!strcmp(tgt->collection, SCHED_INBOX))
 	    tgt->flags = TGT_SCHED_INBOX;
-	else if (!strcmp(tgt->collection, SCHED_OUTBOX))
+	else if (!strcmp(tgt->collection, SCHED_OUTBOX)) {
 	    tgt->flags = TGT_SCHED_OUTBOX;
+	    tgt->allow |= ALLOW_POST;
+	}
+	else if (!strcmp(tgt->collection, SCHED_DEFAULT))
+	    tgt->allow |= ALLOW_POST;
+	else
+	    tgt->allow |= (ALLOW_POST|ALLOW_DELETE);
     }
+    else if (tgt->user) tgt->allow |= ALLOW_DELETE;
+
 
     /* Create mailbox name from the parsed path */ 
     if (!prefix) prefix = config_getstring(IMAPOPT_CALENDARPREFIX);

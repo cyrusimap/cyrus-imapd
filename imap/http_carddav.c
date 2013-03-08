@@ -137,9 +137,11 @@ static struct meth_params carddav_params = {
 struct namespace_t namespace_addressbook = {
     URL_NS_ADDRESSBOOK, 0, "/addressbooks", "/.well-known/carddav", 1 /* auth */,
 #if 0 /* Until Apple Contacts fixes their add-member implementation */
-    (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DAV | ALLOW_CARD),
+    (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DELETE |
+     ALLOW_DAV | ALLOW_WRITECOL | ALLOW_CARD),
 #else
-    (ALLOW_READ | ALLOW_WRITE | ALLOW_DAV | ALLOW_CARD),
+    (ALLOW_READ | ALLOW_WRITE | ALLOW_DELETE |
+     ALLOW_DAV | ALLOW_WRITECOL | ALLOW_CARD),
 #endif
     &my_carddav_init, &my_carddav_auth, my_carddav_reset, &my_carddav_shutdown,
     { 
@@ -152,7 +154,7 @@ struct namespace_t namespace_addressbook = {
 	{ NULL,			NULL },			/* MKCALENDAR	*/
 	{ &meth_mkcol,		&carddav_params },	/* MKCOL	*/
 	{ &meth_copy,		&carddav_params },	/* MOVE		*/
-	{ &meth_options,	NULL },			/* OPTIONS	*/
+	{ &meth_options,	&carddav_params },	/* OPTIONS	*/
 #if 0 /* Until Apple Contacts fixes their add-member implementation */
 	{ &meth_post,		&carddav_params },	/* POST		*/
 #else
@@ -234,6 +236,9 @@ static int carddav_parse_path(struct request_target_t *tgt, const char **errstr)
 	return HTTP_FORBIDDEN;
     }
 
+    /* Default to bare-bones Allow bits for toplevel collections */
+    tgt->allow &= ~(ALLOW_POST|ALLOW_WRITE|ALLOW_DELETE);
+
     /* Skip namespace */
     p += len;
     if (!*p || !*++p) return 0;
@@ -279,6 +284,21 @@ static int carddav_parse_path(struct request_target_t *tgt, const char **errstr)
     }
 
   done:
+    /* Set proper Allow bits based on path components */
+    if (tgt->collection) {
+	if (tgt->resource) {
+	    tgt->allow &= ~ALLOW_WRITECOL;
+	    tgt->allow |= (ALLOW_WRITE|ALLOW_DELETE);
+	}
+#if 0 /* Until Apple Contacts fixes their add-member implementation */
+	else tgt->allow |= (ALLOW_POST|ALLOW_DELETE);
+#else
+	else tgt->allow |= ALLOW_DELETE;
+#endif
+    }
+    else if (tgt->user) tgt->allow |= ALLOW_DELETE;
+
+
     /* Create mailbox name from the parsed path */ 
     if (!prefix) prefix = config_getstring(IMAPOPT_ADDRESSBOOKPREFIX);
 

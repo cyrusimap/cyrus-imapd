@@ -94,14 +94,14 @@ static struct meth_params princ_params = {
 /* Namespace for WebDAV principals */
 struct namespace_t namespace_principal = {
     URL_NS_PRINCIPAL, 0, "/principals", NULL, 1 /* auth */,
-    ALLOW_DAV,
+    ALLOW_READ | ALLOW_DAV,
     &my_dav_init, NULL, NULL, NULL,
     {
 	{ NULL,			NULL },			/* ACL		*/
 	{ NULL,			NULL },			/* COPY		*/
 	{ NULL,			NULL },			/* DELETE	*/
-	{ NULL,			NULL },			/* GET		*/
-	{ NULL,			NULL },			/* HEAD		*/
+	{ &meth_get_dav,	&princ_params },	/* GET		*/
+	{ &meth_get_dav,	&princ_params },	/* HEAD		*/
 	{ NULL,			NULL },			/* LOCK		*/
 	{ NULL,			NULL },			/* MKCALENDAR	*/
 	{ NULL,			NULL },			/* MKCOL	*/
@@ -2475,16 +2475,13 @@ int meth_acl(struct transaction_t *txn, void *params)
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
 
-    /* Make sure its a DAV resource */
-    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
-
     /* Parse the path */
     if ((r = aparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
-    /* Make sure its a calendar collection */
-    if (!txn->req_tgt.collection || txn->req_tgt.resource) {
-	txn->error.desc = "ACLs can only be set on calendar collections\r\n";
-	syslog(LOG_DEBUG, "Tried to set ACL on non-calendar collection");
+    /* Make sure method is allowed (only allowed on collections) */
+    if (!(txn->req_tgt.allow & ALLOW_WRITECOL)) {
+	txn->error.desc = "ACLs can only be set on collections\r\n";
+	syslog(LOG_DEBUG, "Tried to set ACL on non-collection");
 	return HTTP_NOT_ALLOWED;
     }
 
@@ -2778,14 +2775,11 @@ int meth_copy(struct transaction_t *txn, void *params)
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
 
-    /* Make sure source is a DAV resource */
-    if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED;
-
     /* Parse the source path */
     if ((r = cparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
-    /* We don't yet handle COPY/MOVE on collections */
-    if (!txn->req_tgt.resource) return HTTP_NOT_ALLOWED;
+    /* Make sure method is allowed (not allowed on collections yet) */
+    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
 
     /* Check for mandatory Destination header */
     if (!(hdr = spool_getheader(txn->req_hdrs, "Destination"))) {
@@ -3043,11 +3037,11 @@ int meth_delete(struct transaction_t *txn, void *params)
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
 
-    /* Make sure its a DAV resource */
-    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
-
     /* Parse the path */
     if ((r = dparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+
+    /* Make sure method is allowed */
+    if (!(txn->req_tgt.allow & ALLOW_DELETE)) return HTTP_NOT_ALLOWED; 
 
     /* Locate the mailbox */
     if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
@@ -3187,7 +3181,7 @@ int meth_delete(struct transaction_t *txn, void *params)
 }
 
 
-/* Perform a GET/HEAD request */
+/* Perform a GET/HEAD request on a DAV resource */
 int meth_get_dav(struct transaction_t *txn, void *params)
 {
     struct meth_params *gparams = (struct meth_params *) params;
@@ -3205,7 +3199,7 @@ int meth_get_dav(struct transaction_t *txn, void *params)
     /* Parse the path */
     if ((r = gparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
-    /* We don't handle GET on a calendar collection (yet) */
+    /* We don't handle GET on a collection (yet) */
     if (!txn->req_tgt.resource) return HTTP_NO_CONTENT;
 
     /* Locate the mailbox */
@@ -3369,14 +3363,11 @@ int meth_lock(struct transaction_t *txn, void *params)
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
 
-    /* Make sure its a DAV resource */
-    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
-
     /* Parse the path */
     if ((r = lparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
-    /* We only handle LOCK on resources */
-    if (!txn->req_tgt.resource) return HTTP_NOT_ALLOWED;
+    /* Make sure method is allowed (only allowed on resources) */
+    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
 
     /* Locate the mailbox */
     if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
@@ -3622,17 +3613,14 @@ int meth_mkcol(struct transaction_t *txn, void *params)
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
 
-    /* Make sure its a DAV resource */
-    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
-
     /* Parse the path */
     if ((r = mparams->parse_path(&txn->req_tgt, &txn->error.desc))) {
 	txn->error.precond = CALDAV_LOCATION_OK;
 	return HTTP_FORBIDDEN;
     }
 
-    /* Make sure its a home-set collection */
-    if (!txn->req_tgt.collection || txn->req_tgt.resource) {
+    /* Make sure method is allowed (only allowed on home-set) */
+    if (!(txn->req_tgt.allow & ALLOW_WRITECOL)) {
 	txn->error.precond = CALDAV_LOCATION_OK;
 	return HTTP_FORBIDDEN;
     }
@@ -3949,12 +3937,12 @@ int meth_propfind(struct transaction_t *txn, void *params)
 
     memset(&fctx, 0, sizeof(struct propfind_ctx));
 
-    /* Make sure its a DAV resource */
-    if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED;
-
     /* Parse the path */
     if (fparams &&
 	(r = fparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+
+    /* Make sure method is allowed */
+    if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED;
 
     /* Check Depth */
     hdr = spool_getheader(txn->req_hdrs, "Depth");
@@ -4171,17 +4159,14 @@ int meth_proppatch(struct transaction_t *txn,  void *params)
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
 
-    /* Make sure its a DAV resource */
-    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
-
     /* Parse the path */
     if ((r = pparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
-    /* Make sure its a collection */
-    if (txn->req_tgt.resource) {
+    /* Make sure method is allowed (only allowed on collections) */
+    if (!(txn->req_tgt.allow & ALLOW_WRITECOL))  {
 	txn->error.desc =
 	    "Properties can only be updated on collections\r\n";
-	return HTTP_FORBIDDEN;
+	return HTTP_NOT_ALLOWED;
     }
 
     /* Locate the mailbox */
@@ -4304,15 +4289,11 @@ int meth_post(struct transaction_t *txn, void *params)
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
 
-    /* Make sure its a DAV resource */
-    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
-
     /* Parse the path */
     if ((r = pparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
-    /* We only handle POST on collections */
-    if (!txn->req_tgt.collection ||
-	txn->req_tgt.resource) return HTTP_NOT_ALLOWED;
+    /* Make sure method is allowed (only allowed on certain collections) */
+    if (!(txn->req_tgt.allow & ALLOW_POST)) return HTTP_NOT_ALLOWED; 
 
     /* Do any special processing */
     if (pparams->post) {
@@ -4361,18 +4342,15 @@ int meth_put(struct transaction_t *txn, void *params)
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
 
-    /* Make sure Content-Range isn't specified */
-    if (spool_getheader(txn->req_hdrs, "Content-Range"))
-	return HTTP_BAD_REQUEST;
-
-    /* Make sure its a DAV resource */
-    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
-
     /* Parse the path */
     if ((r = pparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
-    /* We only handle PUT on resources */
-    if (!txn->req_tgt.resource) return HTTP_NOT_ALLOWED;
+    /* Make sure method is allowed (only allowed on resources) */
+    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
+
+    /* Make sure Content-Range isn't specified */
+    if (spool_getheader(txn->req_hdrs, "Content-Range"))
+	return HTTP_BAD_REQUEST;
 
     /* Check Content-Type */
     if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
@@ -4741,11 +4719,11 @@ int meth_report(struct transaction_t *txn, void *params)
 
     memset(&fctx, 0, sizeof(struct propfind_ctx));
 
-    /* Make sure its a DAV resource */
-    if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED; 
-
     /* Parse the path */
     if ((r = rparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+
+    /* Make sure method is allowed */
+    if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED; 
 
     /* Check Depth */
     if ((hdr = spool_getheader(txn->req_hdrs, "Depth"))) {
@@ -4939,14 +4917,11 @@ int meth_unlock(struct transaction_t *txn, void *params)
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
 
-    /* Make sure its a DAV resource */
-    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
-
     /* Parse the path */
     if ((r = lparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
-    /* We only handle UNLOCK on resources */
-    if (!txn->req_tgt.resource) return HTTP_NOT_ALLOWED;
+    /* Make sure method is allowed (only allowed on resources) */
+    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
 
     /* Check for mandatory Lock-Token header */
     if (!(hdr = spool_getheader(txn->req_hdrs, "Lock-Token"))) {

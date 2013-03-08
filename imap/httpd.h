@@ -122,13 +122,15 @@ enum {
 /* Bitmask of features/methods to allow, based on URL */
 enum {
     ALLOW_READ =	(1<<0),	/* Read resources/properties */
-    ALLOW_WRITE =	(1<<1),	/* Create/modify/delete/lock resources/props */
-    ALLOW_DAV =		(1<<2),	/* WebDAV specific methods/features */
-    ALLOW_CAL =		(1<<3),	/* CalDAV specific methods/features */
-    ALLOW_CAL_SCHED =	(1<<4),	/* CalDAV Scheduling specific features */
-    ALLOW_CARD =	(1<<5),	/* CardDAV specific methods/features */
-    ALLOW_POST =	(1<<6),	/* Post to a URL */
-    ALLOW_ISCHEDULE =	(1<<7)	/* iSchedule specific methods/features */
+    ALLOW_POST =	(1<<1),	/* Post to a URL */
+    ALLOW_WRITE =	(1<<2),	/* Create/modify/lock resources */
+    ALLOW_DELETE =	(1<<3),	/* Delete resources/collections */
+    ALLOW_DAV =		(1<<4),	/* WebDAV specific methods/features */
+    ALLOW_WRITECOL =	(1<<5),	/* Create/modify collections */
+    ALLOW_CAL =		(1<<6),	/* CalDAV specific methods/features */
+    ALLOW_CAL_SCHED =	(1<<7),	/* CalDAV Scheduling specific features */
+    ALLOW_CARD =	(1<<8),	/* CardDAV specific methods/features */
+    ALLOW_ISCHEDULE =	(1<<9)	/* iSchedule specific methods/features */
 };
 
 #define MAX_QUERY_LEN	100
@@ -308,7 +310,7 @@ struct method_t {
 
 struct namespace_t {
     unsigned id;		/* Namespace identifier */
-    unsigned enabled;
+    unsigned enabled;		/* Is this namespace enabled? */
     const char *prefix;		/* Prefix of URL path denoting namespace */
     const char *well_known;	/* Any /.well-known/ URI */
     unsigned need_auth;		/* Do we need to auth for this namespace? */
