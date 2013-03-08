@@ -551,9 +551,10 @@ EXPORTED int set_caps(int stage, int is_master)
     return r;
 }
 #else
-void set_caps(int stage __attribute__((unused)),
-    int is_master __attribute__((unused)))
+EXPORTED int set_caps(int stage __attribute__((unused)),
+		      int is_master __attribute__((unused)))
 {
+    return 0;
 }
 #endif
 
