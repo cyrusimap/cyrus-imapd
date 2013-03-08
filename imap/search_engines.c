@@ -296,10 +296,11 @@ EXPORTED int search_list_files(const char *mboxname,
 
 EXPORTED int search_compact(const char *mboxname,
 			    const char *tempdir,
-			    int level)
+			    const strarray_t *srctiers,
+			    const char *desttier)
 {
     const struct search_engine *se = engine();
-    return (se->compact ? se->compact(mboxname, tempdir, level) : 0);
+    return (se->compact ? se->compact(mboxname, tempdir, srctiers, desttier) : 0);
 }
 
 const char *search_op_as_string(int op)

@@ -98,74 +98,81 @@ struct segment
 };
 
 
-static int xapian_basedir(int tier, const char *mboxname, const char *part,
+static int xapian_basedir(const char *tier, const char *mboxname, const char *part,
 			  const char *root, char **basedir);
-
-/* ====================================================================== */
-
-static strarray_t *tiers;
-
-static void tier_init(void)
-{
-    if (!tiers) {
-	const char *conf = config_getstring(IMAPOPT_XAPIAN_TIERS);
-	if (!conf) {
-	    /* by default, a single unnamed tier. */
-	    tiers = strarray_new();
-	    strarray_append(tiers, "");
-	}
-	else {
-	    tiers = strarray_split(conf, NULL, STRARRAY_TRIM);
-	}
-    }
-}
 
 /* ====================================================================== */
 
 /* the "activefile" file lists the tiers and generations of all the
  * currently active search databases.  The format is space separated
- * records tier:generation, i.e. "1:0".  If there is no file present,
- * it is created with initial values of one per tier with generation
- * set to zero at each tier.  These will quickly disappear on a
- * compress. */
+ * records tiername:generation, i.e. "meta:0".  If there is no file present,
+ * it is created with initial value of the "default:0" where default is the
+ * searchdefaulttier config value ("" unless specified) */
+
+struct activeitem {
+    char *tier;
+    int generation;
+};
+
+static struct activeitem *activeitem_parse(const char *input)
+{
+    struct activeitem *res = NULL;
+    char *num = strrchr(input, ':');
+
+    if (!num) return NULL;
+
+    res = xzmalloc(sizeof(struct activeitem));
+    res->tier = xstrndup(input, num-input);
+    res->generation = atoi(num+1);
+
+    return res;
+}
+
+static void activeitem_free(struct activeitem *item)
+{
+    if (!item) return;
+    free(item->tier);
+    free(item);
+}
+
+char *activeitem_generate(const char *tier, int generation)
+{
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, "%s:%d", tier, generation);
+    return buf_release(&buf);
+}
 
 /* calculate the next name for this tier, by incrementing the generation
  * to one higher than any existing active record */
-static char *activefile_nextname(strarray_t *active, unsigned level)
+static char *activefile_nextname(const strarray_t *active, const char *tier)
 {
-    struct buf buf = BUF_INITIALIZER;
     int max = -1;
     int i;
 
     for (i = 0; i < active->count; i++) {
-	unsigned tier = 0;
-	unsigned generation = 0;
-	if (sscanf(active->data[i], "%u:%u", &tier, &generation) == 2) {
-	    if (tier == level && (int)generation > max)
-		max = generation;
+	struct activeitem *item = activeitem_parse(strarray_nth(active, i));
+	if (item && !strcmp(item->tier, tier)) {
+	    if (item->generation > max)
+		max = item->generation;
 	}
+	activeitem_free(item);
     }
 
-    buf_printf(&buf, "%u:%u", level, max+1);
-
-    return buf_release(&buf);
+    return activeitem_generate(tier, max+1);
 }
 
-/* filter a list of active records to only those with the same or lower
- * level.  Used to calculate which databases to use as sources for
- * compression */
-static strarray_t *activefile_filter(strarray_t *active, unsigned level)
+/* filter a list of active records to only those in certain tiers.
+ * Used to calculate which databases to use as sources for compression */
+static strarray_t *activefile_filter(const strarray_t *active, const strarray_t *tiers)
 {
-    int i;
     strarray_t *res = strarray_new();
+    int i;
 
     for (i = 0; i < active->count; i++) {
-	unsigned tier = 0;
-	unsigned generation = 0;
-	if (sscanf(active->data[i], "%u:%u", &tier, &generation) == 2) {
-	    if (tier <= level)
-		strarray_append(res, active->data[i]);
-	}
+	struct activeitem *item = activeitem_parse(strarray_nth(active, i));
+	if (item && strarray_find(tiers, item->tier, 0) >= 0)
+	    strarray_append(res, strarray_nth(active, i));
+	activeitem_free(item);
     }
 
     return res;
@@ -233,9 +240,8 @@ done:
 static void _activefile_init(struct mappedfile *activefile)
 {
     int r = mappedfile_writelock(activefile);
-    struct buf buf = BUF_INITIALIZER;
-    strarray_t *list;
-    int i;
+    const char *tier = config_getstring(IMAPOPT_DEFAULTSEARCHTIER);
+    strarray_t *list = NULL;
 
     /* failed to lock, doh */
     if (r) return;
@@ -247,17 +253,11 @@ static void _activefile_init(struct mappedfile *activefile)
     }
 
     list = strarray_new();
-
-    for (i = 0; i < tiers->count; i++) {
-	buf_reset(&buf);
-	buf_printf(&buf, "%d:0", i);
-	strarray_append(list, buf_cstring(&buf));
-    }
+    strarray_appendm(list, activeitem_generate(tier, 0));
 
     activefile_write(activefile, list);
 
     strarray_free(list);
-    buf_free(&buf);
 }
 
 static strarray_t *activefile_open(const char *mboxname, struct mappedfile **activefile, int write)
@@ -291,22 +291,18 @@ static strarray_t *activefile_open(const char *mboxname, struct mappedfile **act
  * to actually search in */
 static char *activefile_path(const char *mboxname, const char *part, const char *item, int dostat)
 {
-    unsigned tier = 0;
-    unsigned generation = 0;
     char *basedir = NULL;
     struct buf buf = BUF_INITIALIZER;
     char *dest = NULL;
+    struct activeitem *ai = activeitem_parse(item);
 
-    if (sscanf(item, "%u:%u", &tier, &generation) != 2)
-	return NULL;
-
-    xapian_basedir(tier, mboxname, part, NULL, &basedir);
-    if (!basedir) return NULL;
+    xapian_basedir(ai->tier, mboxname, part, NULL, &basedir);
+    if (!basedir) goto out;
     buf_printf(&buf, "%s%s", basedir, XAPIAN_DIRNAME);
     free(basedir);
 
-    if (generation)
-	buf_printf(&buf, ".%u", generation);
+    if (ai->generation)
+	buf_printf(&buf, ".%d", ai->generation);
 
     dest = buf_release(&buf);
 
@@ -316,10 +312,12 @@ static char *activefile_path(const char *mboxname, const char *part, const char 
 	    if (errno != ENOENT)
 		syslog(LOG_ERR, "IOERROR: can't read %s for search, check permissions: %m", dest);
 	    free(dest);
-	    return NULL;
+	    dest = NULL;
 	}
     }
 
+out:
+    activeitem_free(ai);
     return dest;
 }
 
@@ -332,7 +330,7 @@ static strarray_t *activefile_resolve(const char *mboxname, const char *part,
     int i;
 
     for (i = 0; i < items->count; i++) {
-	char *dir = activefile_path(mboxname, part, items->data[i], dostat);
+	char *dir = activefile_path(mboxname, part, strarray_nth(items, i), dostat);
 	if (dir) strarray_appendm(result, dir);
     }
 
@@ -931,7 +929,6 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     int r;
 
     xapian_init();
-    tier_init();
 
     bb = xzmalloc(sizeof(xapian_builder_t));
     bb->super.begin_boolean = begin_boolean;
@@ -1039,20 +1036,20 @@ struct xapian_snippet_receiver
  * total amount of parts text to 4 MB. */
 #define MAX_PARTS_SIZE	    (4*1024*1024)
 
-static const char *xapian_rootdir(int tier, const char *partition)
+static const char *xapian_rootdir(const char *tier, const char *partition)
 {
     char *confkey;
     const char *root;
     if (!partition)
 	partition = config_getstring(IMAPOPT_DEFAULTPARTITION);
-    confkey = strconcat(tiers->data[tier], "searchpartition-", partition, NULL);
+    confkey = strconcat(tier, "searchpartition-", partition, NULL);
     root = config_getoverflowstring(confkey, NULL);
     free(confkey);
     return root;
 }
 
 /* Returns in *basedirp a new string which must be free()d */
-static int xapian_basedir(int tier,
+static int xapian_basedir(const char *tier,
 			  const char *mboxname, const char *partition,
 			  const char *root, char **basedirp)
 {
@@ -1423,7 +1420,6 @@ static search_text_receiver_t *begin_update(int verbose)
     xapian_update_receiver_t *tr;
 
     xapian_init();
-    tier_init();
 
     tr = xzmalloc(sizeof(xapian_update_receiver_t));
     tr->super.super.begin_mailbox = begin_mailbox_update;
@@ -1586,7 +1582,6 @@ static search_text_receiver_t *begin_snippets(void *internalised,
     xapian_snippet_receiver_t *tr;
 
     xapian_init();
-    tier_init();
 
     tr = xzmalloc(sizeof(xapian_snippet_receiver_t));
     tr->super.super.begin_mailbox = begin_mailbox_snippets;
@@ -1686,7 +1681,8 @@ static int copyindexed_cb(void *rock,
     return r;
 }
 
-EXPORTED int compact_dbs(const char *mboxname, const char *tempdir, int level)
+EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
+			 const strarray_t *srctiers, const char *desttier)
 {
     struct mboxlist_entry *mbentry = NULL;
     struct mappedfile *activefile = NULL;
@@ -1704,7 +1700,6 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir, int level)
     int i;
 
     xapian_init();
-    tier_init();
 
     r = mboxlist_lookup(mboxname, &mbentry, NULL);
     if (r) {
@@ -1718,13 +1713,13 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir, int level)
 
     /* read the activefile file, taking down the names of all paths with a
      * level less than or equal to that requested */
-    tochange = activefile_filter(active, level);
+    tochange = activefile_filter(active, srctiers);
     if (!tochange || !tochange->count) goto out;
 
     /* add a new 'directory zero' to the start of the activefile file, and also register
      * our target name at the end */
-    newstart = activefile_nextname(active, 0);
-    newdest = activefile_nextname(active, level);
+    newstart = activefile_nextname(active, config_getstring(IMAPOPT_DEFAULTSEARCHTIER));
+    newdest = activefile_nextname(active, desttier);
     destdir = activefile_path(mboxname, mbentry->partition, newdest, /*dostat*/0);
     tempdestdir = strconcat(destdir, ".NEW", (char *)NULL);
 

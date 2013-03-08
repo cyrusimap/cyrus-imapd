@@ -513,13 +513,15 @@ static int print_search_hit(const char *mboxname, uint32_t uidvalidity,
     return 0;
 }
 
-static void compact_mbox(const char *mboxname, int level)
+static void compact_mbox(const char *mboxname, const strarray_t *srctiers,
+			 const char *desttier)
 {
     /* XXX - handle errors? */
-    search_compact(mboxname, temp_root_dir, level);
+    search_compact(mboxname, temp_root_dir, srctiers, desttier);
 }
 
-static void do_compact(const strarray_t *mboxnames, int level)
+static void do_compact(const strarray_t *mboxnames, const strarray_t *srctiers,
+		       const char *desttier)
 {
     char *prev_userid = NULL;
     int i;
@@ -529,7 +531,7 @@ static void do_compact(const strarray_t *mboxnames, int level)
 	if (!strcmpsafe(prev_userid, userid))
 	    continue;
 
-	compact_mbox(mboxnames->data[i], level);
+	compact_mbox(mboxnames->data[i], srctiers, desttier);
 
 	free(prev_userid);
 	prev_userid = xstrdup(userid);
@@ -905,8 +907,9 @@ int main(int argc, char **argv)
     const char *synclogfile = NULL;
     int init_flags = CYRUSINIT_PERROR;
     int multi_folder = 0;
-    int compact_level = 0;
     const char *fromfile = NULL;
+    strarray_t *srctiers = NULL;
+    const char *desttier;
     enum { UNKNOWN, INDEXER, INDEXFROM, SEARCH, ROLLING, SYNCLOG,
 	   START_DAEMON, STOP_DAEMON, RUN_DAEMON, COMPACT } mode = UNKNOWN;
 
@@ -916,7 +919,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:I:RT:c:de:f:mn:rsiavz:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:I:RT:c:de:f:mn:rsiavz:t:")) != EOF) {
 	switch (opt) {
 	case 'C':		/* alt config file */
 	    alt_config = optarg;
@@ -1006,7 +1009,13 @@ int main(int argc, char **argv)
 
 	case 'z':
 	    if (mode != UNKNOWN && mode != COMPACT) usage(argv[0]);
-	    compact_level = atoi(optarg);
+	    desttier = optarg;
+	    mode = COMPACT;
+	    break;
+
+	case 't':
+	    if (mode != UNKNOWN && mode != COMPACT) usage(argv[0]);
+	    srctiers = strarray_split(optarg, ",", 0);
 	    mode = COMPACT;
 	    break;
 
@@ -1022,6 +1031,11 @@ int main(int argc, char **argv)
     if (mode == ROLLING && background) {
 	become_daemon();
 	init_flags &= ~CYRUSINIT_PERROR;
+    }
+
+    if (mode == COMPACT && (!desttier || !srctiers)) {
+	/* need both src and dest for compact */
+	usage("squatter");
     }
 
     cyrus_init(alt_config, "squatter", init_flags, CONFIG_NEED_PARTITION_DATA);
@@ -1087,7 +1101,7 @@ int main(int argc, char **argv)
     case COMPACT:
 	if (recursive_flag && optind == argc) usage(argv[0]);
 	expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind);
-	do_compact(&mboxnames, compact_level);
+	do_compact(&mboxnames, srctiers, desttier);
 	break;
     }
 
