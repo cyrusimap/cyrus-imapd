@@ -1348,7 +1348,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
      * problem is that the index is per user, not per mailbox */
 
     /* different user - switch active files */
-    if (!tr->activefile || strcmp(mappedfile_fname(&tr->activefile), fname)) {
+    if (!tr->activefile || strcmp(mappedfile_fname(tr->activefile), fname)) {
 	_receiver_finish_user(tr);
 
 	/* we don't need a writelock on activefile to index - we just have to make
