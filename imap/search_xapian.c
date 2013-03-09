@@ -510,7 +510,7 @@ static int read_indexed(const strarray_t *paths,
 	    syslog(LOG_INFO, "read_indexed db=%s mailbox=%s uidvalidity=%u",
 		   buf_cstring(&path), mboxname, uidvalidity);
 
-	r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_LATEST_DB),
+	r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_INDEXED_DB),
 			 buf_cstring(&path), 0, &db);
 	if (r == CYRUSDB_NOTFOUND) {
 	    r = 0;
@@ -625,7 +625,7 @@ static int write_indexed(const char *dir,
 
     buf_printf(&key, "%s.%u", mboxname, uidvalidity);
 
-    r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_LATEST_DB),
+    r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_INDEXED_DB),
 		     buf_cstring(&path), CYRUSDB_CREATE, &db);
     if (r) goto out;
 
@@ -1870,14 +1870,14 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
 	lr.tid = NULL;
 	buf_reset(&buf);
 	buf_printf(&buf, "%s%s", buf_cstring(&mytempdir), INDEXEDDB_FNAME);
-	r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_LATEST_DB),
+	r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_INDEXED_DB),
 			 buf_cstring(&buf), CYRUSDB_CREATE, &lr.db);
 	if (r) goto out;
 	for (i = 0; i < dirs->count; i++) {
 	    struct db *db = NULL;
 	    buf_reset(&buf);
 	    buf_printf(&buf, "%s%s", strarray_nth(dirs, i), INDEXEDDB_FNAME);
-	    r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_LATEST_DB),
+	    r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_INDEXED_DB),
 			     buf_cstring(&buf), 0, &db);
 	    if (r) continue;
 	    r = cyrusdb_foreach(db, "", 0, NULL, copyindexed_cb, &lr, NULL);

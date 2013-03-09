@@ -1649,7 +1649,7 @@ static int open_latest(struct mailbox *mailbox, struct latestdb *ldb)
 
     close_latest(ldb);
 
-    r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_LATEST_DB),
+    r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_INDEXED_DB),
 		     path, CYRUSDB_CREATE, &ldb->db);
     if (r) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s",
