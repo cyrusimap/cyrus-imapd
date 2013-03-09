@@ -1872,6 +1872,7 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
 	buf_printf(&buf, "%s%s", buf_cstring(&mytempdir), INDEXEDDB_FNAME);
 	r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_LATEST_DB),
 			 buf_cstring(&buf), CYRUSDB_CREATE, &lr.db);
+	if (r) goto out;
 	for (i = 0; i < dirs->count; i++) {
 	    struct db *db = NULL;
 	    buf_reset(&buf);
