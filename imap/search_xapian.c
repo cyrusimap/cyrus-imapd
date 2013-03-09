@@ -106,8 +106,11 @@ static int xapian_basedir(const char *tier, const char *mboxname, const char *pa
 /* the "activefile" file lists the tiers and generations of all the
  * currently active search databases.  The format is space separated
  * records tiername:generation, i.e. "meta:0".  If there is no file present,
- * it is created with initial value of the "default:0" where default is the
- * searchdefaulttier config value ("" unless specified) */
+ * it is created by finding all the existing search directories (from
+ * filesystem inspection) and prepending default:nextgen where default
+ * is the searchdefaulttier value and nextgen is one higher than the
+ * largest generation found.  In the simplest configuration this is
+ * just ":0" */
 
 struct activeitem {
     char *tier;
@@ -244,7 +247,12 @@ done:
  * with some dummy data.  Strictly it doesn't, but it makes
  * reasoning about everything else easier if there's always a
  * file */
-static void _activefile_init(struct mappedfile *activefile)
+
+static void inspect_filesystem(const char *mboxname, const char *partition,
+			       strarray_t *found, strarray_t *bogus);
+
+static void _activefile_init(const char *mboxname, const char *partition,
+			     struct mappedfile *activefile)
 {
     int r = mappedfile_writelock(activefile);
     const char *tier = config_getstring(IMAPOPT_DEFAULTSEARCHTIER);
@@ -260,14 +268,18 @@ static void _activefile_init(struct mappedfile *activefile)
     }
 
     list = strarray_new();
-    strarray_appendm(list, activeitem_generate(tier, 0));
+    inspect_filesystem(mboxname, partition, list, NULL);
+    /* always put the next item on the front so we don't write to any
+     * existing databases */
+    strarray_unshiftm(list, activefile_nextname(list, tier));
 
     activefile_write(activefile, list);
 
     strarray_free(list);
 }
 
-static strarray_t *activefile_open(const char *mboxname, struct mappedfile **activefile, int write)
+static strarray_t *activefile_open(const char *mboxname, const char *partition,
+				   struct mappedfile **activefile, int write)
 {
     char *fname = activefile_fname(mboxname);
     int r;
@@ -277,7 +289,7 @@ static strarray_t *activefile_open(const char *mboxname, struct mappedfile **act
     /* try to open the file, and populate with initial values if it's empty */
     r = mappedfile_open(activefile, fname, /*create*/1);
     if (!r && !mappedfile_size(*activefile))
-	_activefile_init(*activefile);
+	_activefile_init(mboxname, partition, *activefile);
     free(fname);
 
     if (r) return NULL;
@@ -342,6 +354,90 @@ static strarray_t *activefile_resolve(const char *mboxname, const char *part,
     }
 
     return result;
+}
+
+/* ====================================================================== */
+
+/* the filesystem layout is inspectable - this is useful for a couple of
+ * purposes - both rebuilding the activefile if it's lost, and also finding
+ * stale "missing" directories after a successful rebuild */
+
+struct inspectrock {
+    const char *mboxname;
+    const char *partition;
+    strarray_t *found;
+    strarray_t *bogus;
+};
+
+static void inspect_check(const char *key, const char *val __attribute__((unused)), void *rock)
+{
+    struct inspectrock *ir = (struct inspectrock *)rock;
+    const char *match = strstr(key, "searchpartition-");
+    char *basedir = NULL;
+    char *tier = NULL;
+    char *fname = NULL;
+    DIR *dirh = NULL;
+    struct dirent *de;
+    bit64 generation;
+    const char *rest;
+
+    if (!match) goto out;
+    tier = xstrndup(key, match - key);
+
+    if (xapian_basedir(tier, ir->mboxname, ir->partition, NULL, &basedir))
+	goto out;
+
+    dirh = opendir(basedir);
+    if (!dirh) goto out;
+
+    while ((de = readdir(dirh))) {
+	generation = 0;
+	if (de->d_name[0] == '.') continue;
+	free(fname);
+	fname = strconcat(basedir, "/", de->d_name, (char *)NULL);
+	/* only 'xapian' directories allowed */
+	if (strncmp(de->d_name, "xapian", 6)) goto bogus;
+
+	/* xapian by itself is tier zero */
+	if (de->d_name[6]) {
+	    /* otherwise it's xapian.generation */
+	    if (de->d_name[6] != '.') goto bogus;
+
+	    /* unless it exactly matches digits, it's either got .NEW on the end or is
+	     * likewise bogus, track it */
+	    if (parsenum(de->d_name + 7, &rest, strlen(de->d_name)-7, &generation) || rest[0])
+		goto bogus;
+	}
+
+	/* found one! */
+	strarray_appendm(ir->found, activeitem_generate(tier, (int)generation));
+	continue;
+
+bogus:
+	if (ir->bogus) {
+	    strarray_appendm(ir->bogus, fname);
+	    fname = NULL;
+	}
+    }
+
+out:
+    if (dirh) closedir(dirh);
+    free(fname);
+    free(basedir);
+    free(tier);
+}
+
+static void inspect_filesystem(const char *mboxname, const char *partition,
+			       strarray_t *found, strarray_t *bogus)
+{
+    struct inspectrock rock;
+
+    rock.mboxname = mboxname;
+    rock.partition = partition;
+    rock.found = found;
+    rock.bogus = bogus;
+
+    config_foreachoverflowstring(inspect_check, &rock);
 }
 
 /* ====================================================================== */
@@ -949,7 +1045,7 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
 
     /* need to hold a read-only lock on the activefile file until the search
      * has completed to ensure no databases are deleted out from under us */
-    active = activefile_open(mailbox->name, &bb->activefile, /*write*/0);
+    active = activefile_open(mailbox->name, mailbox->part, &bb->activefile, /*write*/0);
     if (!active) goto out;
 
     /* only try to open directories with databases in them */
@@ -1354,7 +1450,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
 	/* we don't need a writelock on activefile to index - we just have to make
 	 * sure that nobody else deletes the database out from under us, which means
 	 * holding a readlock until after committing the changes */
-	active = activefile_open(mailbox->name, &tr->activefile, /*write*/0);
+	active = activefile_open(mailbox->name, mailbox->part, &tr->activefile, /*write*/0);
 	if (!active || !active->count) goto out;
 
 	/* doesn't matter if the first one doesn't exist yet, we'll create it */
@@ -1631,7 +1727,7 @@ static int list_files(const char *mboxname, const char *partition, strarray_t *f
     int r;
     int i;
 
-    active = activefile_open(mboxname, &activefile, /*write*/0);
+    active = activefile_open(mboxname, partition, &activefile, /*write*/0);
     if (!active) goto out;
     dirs = activefile_resolve(mboxname, partition, active, /*dostat*/1);
 
@@ -1715,7 +1811,7 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
     }
 
     /* take an exclusive lock on the activefile file */
-    active = activefile_open(mboxname, &activefile, /*write*/1);
+    active = activefile_open(mboxname, mbentry->partition, &activefile, /*write*/1);
     if (!active || !active->count) goto out;
 
     /* read the activefile file, taking down the names of all paths with a
