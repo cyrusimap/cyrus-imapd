@@ -1879,7 +1879,7 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
 	    buf_printf(&buf, "%s%s", strarray_nth(dirs, i), INDEXEDDB_FNAME);
 	    r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_LATEST_DB),
 			     buf_cstring(&buf), 0, &db);
-	    if (r == IMAP_NOTFOUND) continue;
+	    if (r) continue;
 	    r = cyrusdb_foreach(db, "", 0, NULL, copyindexed_cb, &lr, NULL);
 	    cyrusdb_close(db);
 	    if (r) {
