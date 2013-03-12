@@ -52,41 +52,41 @@ the server.
 
 .PP
 .SH OPTIONS
-
-.I -v <name>
+.TP
+.BI \-v " name"
 View script with the given name. The script if retrieved sucessfully
 is output to standard output.
-
-.I -l
+.TP
+.B \-l
 List all of the scripts currently on the server. If one of the scripts
 is active a arrow is printed indicating that it is the active script.
-
-.I -p <port>
+.TP
+.BI \-p " port"
 Port to connect to. If left off this defaults to "sieve" as defined in
 /etc/services.
-
-.I -i <file>
+.TP
+.BI \-i " file"
 Install a file onto the server. If a script with the same name already
 exists on the server it is overwritten. Upon sucessfully putting the
-script on the server the script is set active. If <file> has the
+script on the server the script is set active. If \fIfile\fP has the
 extension .script it is chopped when put on the server since sieve
 names may not contain a '.'.
-
-.I -a <name>
-Set <name> as the active script. The list of available names can be
-obtained from the '-l' option..
-
-.I -d <name>
-Delete the sieve script on the server with <name>.
-
-.I -m <mechanism>
-Force installsieve to use <mechanism> for authentication. If not
+.TP
+.BI \-a " name"
+Set \fIname\fP as the active script. The list of available names can be
+obtained from the \fB-l\fP option.
+.TP
+.BI \-d " name"
+Delete the sieve script on the server with \fIname\fP.
+.TP
+.BI \-m " mechanism"
+Force installsieve to use \fImechanism\fP for authentication. If not
 specified the strongest authentication mechanism is chosen.
-
-.I -g <name>
-Get the sieve script with <name> and save it to disk with a ".script"
+.TP
+.BI \-g " name"
+Get the sieve script with \fIname\fP and save it to disk with a ".script"
 extension. If a file with that name already exists it is
 overwritten.
-
-.I -u <user>
+.TP
+.BI \-u " user"
 Userid/Authname to use for authentication; by default, the current user.
