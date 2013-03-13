@@ -792,30 +792,30 @@ static int append_apply_flags(struct appendstate *as,
 	    mboxevent_add_flag(mboxevent, flag);
 	}
 	else if (!strcasecmp(flag, "\\deleted")) {
-	    if (as->myrights & ACL_DELETEMSG) {
+	    if (as->myrights & (as->is_deliver ? ACL_POST : ACL_DELETEMSG)) {
 		record->system_flags |= FLAG_DELETED;
 		mboxevent_add_flag(mboxevent, flag);
 	    }
 	}
 	else if (!strcasecmp(flag, "\\draft")) {
-	    if (as->myrights & ACL_WRITE) {
+	    if (as->myrights & (as->is_deliver ? ACL_POST : ACL_WRITE)) {
 		record->system_flags |= FLAG_DRAFT;
 		mboxevent_add_flag(mboxevent, flag);
 	    }
 	}
 	else if (!strcasecmp(flag, "\\flagged")) {
-	    if (as->myrights & ACL_WRITE) {
+	    if (as->myrights & (as->is_deliver ? ACL_POST : ACL_WRITE)) {
 		record->system_flags |= FLAG_FLAGGED;
 		mboxevent_add_flag(mboxevent, flag);
 	    }
 	}
 	else if (!strcasecmp(flag, "\\answered")) {
-	    if (as->myrights & ACL_WRITE) {
+	    if (as->myrights & (as->is_deliver ? ACL_POST : ACL_WRITE)) {
 		record->system_flags |= FLAG_ANSWERED;
 		mboxevent_add_flag(mboxevent, flag);
 	    }
 	}
-	else if (as->myrights & ACL_WRITE) {
+	else if (as->myrights & (as->is_deliver ? ACL_POST : ACL_WRITE)) {
 	    r = mailbox_user_flag(as->mailbox, flag, &userflag, 1);
 	    if (r) goto out;
 	    record->user_flags[userflag/32] |= 1<<(userflag&31);

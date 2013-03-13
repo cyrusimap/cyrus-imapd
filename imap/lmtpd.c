@@ -567,6 +567,7 @@ int deliver_mailbox(FILE *f,
 	mailbox_close(&mailbox);
 	return r;
     }
+    as.is_deliver = 1;
 
     /* check for duplicate message */
     dkey.id = id;
