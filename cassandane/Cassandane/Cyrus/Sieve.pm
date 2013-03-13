@@ -72,13 +72,23 @@ sub install_sieve_script
 {
     my ($self, $script, %params) = @_;
 
-    my $user = $params{username} || 'cassandane';
-    my $uhash = substr($user, 0, 1);
-    my $name = $params{name} || 'test1';
+    my $user = (exists $params{username} ? $params{username} : 'cassandane');
     my $basedir = $self->{instance}->{basedir};
-    my $sieved = "$basedir/conf/sieve/$uhash/$user";
+    my $name = $params{name} || 'test1';
+    my $sieved = "$basedir/conf/sieve/";
 
-    xlog "Installing sieve script $name for user $user";
+    if (defined $user)
+    {
+	my $uhash = substr($user, 0, 1);
+	$sieved .= "$uhash/$user";
+    }
+    else
+    {
+	# shared folder
+	$sieved .= 'global/';
+    }
+
+    xlog "Installing sieve script $name in $sieved";
 
     mkpath $sieved
 	or die "Cannot make path $sieved: $!";

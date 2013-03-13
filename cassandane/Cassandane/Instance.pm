@@ -1169,9 +1169,18 @@ sub deliver
     }
 
     my @users;
-    push(@users, @{$params{users}}) if (defined $params{users});
-    push(@users, $params{user}) if (defined $params{user});
-    push(@users, 'cassandane') if !scalar(@users);
+    if (defined $params{users})
+    {
+	push(@users, @{$params{users}});
+    }
+    elsif (defined $params{user})
+    {
+	push(@users, $params{user})
+    }
+    else
+    {
+	push(@users, 'cassandane');
+    }
     push(@cmd, @users);
 
     $self->run_command({
