@@ -1822,12 +1822,21 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
     newdest = activefile_nextname(active, desttier);
     strarray_push(active, newdest);
 
+    if (verbose) {
+	char *target = strarray_join(tochange, ",");
+	printf("compressing %s to %s for %s\n", target, newdest, mboxname);
+	free(target);
+    }
+
     /* are we going to change the first active?  We need to start indexing to
      * a new location! */
     if (strarray_find(tochange, strarray_nth(active, 0), 0) >= 0) {
 	/* always recalculate the first name once the destination is chosen,
 	* because we may be compressing to the default tier for some reason */
 	char *newstart = activefile_nextname(active, config_getstring(IMAPOPT_DEFAULTSEARCHTIER));
+	if (verbose) {
+	    printf("adding new initial search location %s\n", newstart);
+	}
 	strarray_unshiftm(active, newstart);
     }
 
@@ -1846,6 +1855,9 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
     {
 	strarray_t *newactive = activefile_read(activefile);
 	if (strarray_cmp(active, newactive)) {
+	    if (verbose) {
+		printf("aborting compact of %s, lost the race early\n", mboxname);
+	    }
 	    strarray_free(newactive);
 	    goto out;
 	}
@@ -1867,9 +1879,15 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
     if (r) goto out;
 
     if (dirs->count) {
+	if (verbose) {
+	    printf("compacting databases\n");
+	}
 	r = xapian_compact_dbs(buf_cstring(&mytempdir), (const char **)dirs->data);
 	if (r) goto out;
 
+	if (verbose) {
+	    printf("building cyrus.indexed.db\n");
+	}
 	/* build the cyrus.indexed.db from the contents of the source dirs */
 	lr.db = NULL;
 	lr.tid = NULL;
@@ -1898,6 +1916,9 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
 
 	/* move the tmpfs files to a temporary name in our target directory */
 	if (tempdir) {
+	    if (verbose) {
+		printf("copying from tempdir to destination\n");
+	    }
 	    cyrus_mkdir(tempdestdir, 0755);
 	    r = rsync_tree(buf_cstring(&mytempdir), tempdestdir, 0, 0, 1);
 	    if (r) goto out;
@@ -1913,6 +1934,9 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
     {
 	strarray_t *newactive = activefile_read(activefile);
 	if (strarray_cmp(active, newactive)) {
+	    if (verbose) {
+		printf("aborting compact of %s, lost the race late\n", mboxname);
+	    }
 	    strarray_free(newactive);
 	    goto out;
 	}
@@ -1924,10 +1948,16 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
 	 * activefile file for our target directory.  Rename our DB to
 	 * that path, then rewrite activefile removing all the source
 	 * items */
+	if (verbose) {
+	    printf("renaming tempdir into place\n");
+	}
 	r = rename(tempdestdir, destdir);
 	if (r) goto out;
     }
     else {
+	if (verbose) {
+	    printf("nothing compacted, cleaning up %s\n", newdest);
+	}
 	strarray_append(tochange, newdest);
     }
 
@@ -1938,6 +1968,10 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
 
     /* release the lock */
     mappedfile_unlock(activefile);
+
+    if (verbose) {
+	printf("finished compact of %s\n", mboxname);
+    }
 
     /* finally remove all directories on disk of the source dbs */
     for (i = 0; i < dirs->count; i++)
