@@ -1840,7 +1840,7 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
      * otherwise abort now */
     {
 	strarray_t *newactive = activefile_read(activefile);
-	if (!newactive || !newactive->count || strcmp(newstart, newactive->data[0])) {
+	if (strarray_cmp(active, newactive)) {
 	    strarray_free(newactive);
 	    goto out;
 	}
@@ -1907,7 +1907,7 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
      * temporary files and abort */
     {
 	strarray_t *newactive = activefile_read(activefile);
-	if (!newactive || !newactive->count || strcmp(newstart, newactive->data[0])) {
+	if (strarray_cmp(active, newactive)) {
 	    strarray_free(newactive);
 	    goto out;
 	}
