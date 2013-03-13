@@ -175,6 +175,9 @@ magic(ImmediateExpunge => sub {
 magic(DelayedExpunge => sub {
     shift->config_set(expunge_mode => 'delayed');
 });
+magic(Admin => sub {
+    shift->want('adminstore');
+});
 
 # Run any magic handlers indicated by the test name or attributes
 sub _run_magic
