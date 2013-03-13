@@ -1824,7 +1824,9 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
 
     if (verbose) {
 	char *target = strarray_join(tochange, ",");
-	printf("compressing %s to %s for %s\n", target, newdest, mboxname);
+	char *alist = strarray_join(active, ",");
+	printf("compressing %s to %s for %s (active %s)\n", target, newdest, mboxname, alist);
+	free(alist);
 	free(target);
     }
 
@@ -1970,7 +1972,9 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
     mappedfile_unlock(activefile);
 
     if (verbose) {
-	printf("finished compact of %s\n", mboxname);
+	char *alist = strarray_join(active, ",");
+	printf("finished compact of %s (active %s)\n", mboxname, alist);
+	free(alist);
     }
 
     /* finally remove all directories on disk of the source dbs */
