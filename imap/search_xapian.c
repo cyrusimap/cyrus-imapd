@@ -1785,7 +1785,7 @@ static int copyindexed_cb(void *rock,
 }
 
 EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
-			 const strarray_t *srctiers, const char *desttier)
+			 const strarray_t *srctiers, const char *desttier, int verbose)
 {
     struct mboxlist_entry *mbentry = NULL;
     struct mappedfile *activefile = NULL;

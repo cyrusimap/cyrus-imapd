@@ -517,7 +517,7 @@ static void compact_mbox(const char *mboxname, const strarray_t *srctiers,
 			 const char *desttier)
 {
     /* XXX - handle errors? */
-    search_compact(mboxname, temp_root_dir, srctiers, desttier);
+    search_compact(mboxname, temp_root_dir, srctiers, desttier, verbose);
 }
 
 static void do_compact(const strarray_t *mboxnames, const strarray_t *srctiers,

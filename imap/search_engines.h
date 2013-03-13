@@ -142,7 +142,7 @@ struct search_engine {
     int (*stop_daemon)(int verbose);
     int (*list_files)(const char *mboxname, const char *partition, strarray_t *);
     int (*compact)(const char *mboxname, const char *tempdir,
-		   const strarray_t *srctiers, const char *desttier);
+		   const strarray_t *srctiers, const char *desttier, int verbose);
 };
 
 /*
@@ -173,7 +173,7 @@ int search_start_daemon(int verbose);
 int search_stop_daemon(int verbose);
 int search_list_files(const char *mboxname, const char *partition, strarray_t *);
 int search_compact(const char *mboxname, const char *tempdir,
-		   const strarray_t *srctiers, const char *desttier);
+		   const strarray_t *srctiers, const char *desttier, int verbose);
 
 
 /* for debugging */
