@@ -466,5 +466,56 @@ EOF
     $self->check_messages({ 1 => $msg1 }, check_guid => 0);
 }
 
+sub test_shared_delivery_addflag
+    :Admin
+{
+    my ($self) = @_;
+
+    xlog "Testing setting a flag on a sieve script on a";
+    xlog "shared folder.  Bug 3617";
+
+    my $imaptalk = $self->{store}->get_client();
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog "Create the target folder";
+    my $admintalk = $self->{adminstore}->get_client();
+    my $target = "shared.departments.cis";
+    $admintalk->create($target)
+	or die "Cannot create folder \"$target\": $@";
+    $admintalk->setacl($target, admin => 'lrswipkxtecda')
+	or die "Cannot setacl for \"$target\": $@";
+    $admintalk->setacl($target, 'cassandane' => 'lrswipkxtecd')
+	or die "Cannot setacl for \"$target\": $@";
+    $admintalk->setacl($target, 'anyone' => 'p')
+	or die "Cannot setacl for \"$target\": $@";
+
+
+    xlog "Install the sieve script";
+    my $scriptname = 'cosbySweater';
+    $self->install_sieve_script(<<EOF
+require ["imapflags"];
+if header :comparator "i;ascii-casemap" :is "Subject" "quinoa"  {
+    addflag "\\\\Flagged";
+    keep;
+    stop;
+}
+EOF
+    , username => undef,
+    name => $scriptname);
+
+    xlog "Tell the folder to run the sieve script";
+    $admintalk->setmetadata($target, "/shared/vendor/cmu/cyrus-imapd/sieve", $scriptname)
+	or die "Cannot set metadata: $@";
+
+    xlog "Deliver a message";
+    my $msg1 = $self->{gen}->generate(subject => "quinoa");
+    $self->{instance}->deliver($msg1, users => [], folder => $target);
+
+    xlog "Check that the message made it to target";
+    $self->{store}->set_folder($target);
+    $msg1->set_attribute(flags => [ '\\Recent', '\\Flagged' ]);
+    $self->check_messages({ 1 => $msg1 }, check_guid => 0);
+}
+
 
 1;
