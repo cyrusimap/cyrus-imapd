@@ -399,6 +399,8 @@ static char *action_to_string(action_t action)
 {
     switch(action)
 	{
+	case ACTION_NULL: return "NULL";
+	case ACTION_NONE: return "None";
 	case ACTION_REJECT: return "Reject";
 	case ACTION_FILEINTO: return "Fileinto";
 	case ACTION_KEEP: return "Keep";
