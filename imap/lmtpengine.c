@@ -467,8 +467,7 @@ static char *parseautheq(char **strp)
 /* return malloc'd string containing the address */
 static char *parseaddr(char *s)
 {
-    char *p, *ret;
-    int len;
+    char *p;
     int lmtp_strict_rfc2821 = config_getswitch(IMAPOPT_LMTP_STRICT_RFC2821);
 
     p = s;
@@ -533,15 +532,11 @@ static char *parseaddr(char *s)
 	    while (Uisalnum(*p) || *p == '.' || *p == '-') p++;
 	}
     }
-    
+
     if (*p++ != '>') return 0;
     if (*p && *p != ' ') return 0;
-    len = p - s;
 
-    ret = xmalloc(len + 1);
-    memcpy(ret, s, len);
-    ret[len] = '\0';
-    return ret;
+    return xstrndup(s, p - s);
 }
 
 /* clean off the <> from the return path */
