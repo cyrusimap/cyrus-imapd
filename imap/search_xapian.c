@@ -1792,7 +1792,6 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
     strarray_t *dirs = NULL;
     strarray_t *active = NULL;
     strarray_t *tochange = NULL;
-    char *newstart = NULL;
     char *newdest = NULL;
     char *destdir = NULL;
     char *tempdestdir = NULL;
@@ -1819,15 +1818,21 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
     tochange = activefile_filter(active, srctiers);
     if (!tochange || !tochange->count) goto out;
 
-    /* add a new 'directory zero' to the start of the activefile file, and also register
-     * our target name at the end */
-    newstart = activefile_nextname(active, config_getstring(IMAPOPT_DEFAULTSEARCHTIER));
+    /* register the target name first, and put it at the end of the file */
     newdest = activefile_nextname(active, desttier);
+    strarray_push(active, newdest);
+
+    /* are we going to change the first active?  We need to start indexing to
+     * a new location! */
+    if (strarray_find(tochange, strarray_nth(active, 0), 0) >= 0) {
+	/* always recalculate the first name once the destination is chosen,
+	* because we may be compressing to the default tier for some reason */
+	char *newstart = activefile_nextname(active, config_getstring(IMAPOPT_DEFAULTSEARCHTIER));
+	strarray_unshiftm(active, newstart);
+    }
+
     destdir = activefile_path(mboxname, mbentry->partition, newdest, /*dostat*/0);
     tempdestdir = strconcat(destdir, ".NEW", (char *)NULL);
-
-    strarray_unshift(active, newstart);
-    strarray_push(active, newdest);
 
     /* write the new file and release the exclusive lock */
     activefile_write(activefile, active);
@@ -1950,7 +1955,6 @@ out:
     strarray_free(tochange);
     buf_free(&mytempdir);
     buf_free(&buf);
-    free(newstart);
     free(newdest);
     free(destdir);
     free(tempdestdir);
