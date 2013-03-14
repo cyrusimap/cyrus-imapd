@@ -98,6 +98,7 @@ struct segment
 };
 
 
+static const char *xapian_rootdir(const char *tier, const char *partition);
 static int xapian_basedir(const char *tier, const char *mboxname, const char *part,
 			  const char *root, char **basedir);
 
@@ -166,14 +167,16 @@ static char *activefile_nextname(const strarray_t *active, const char *tier)
 
 /* filter a list of active records to only those in certain tiers.
  * Used to calculate which databases to use as sources for compression */
-static strarray_t *activefile_filter(const strarray_t *active, const strarray_t *tiers)
+static strarray_t *activefile_filter(const strarray_t *active, const strarray_t *tiers, const char *partition)
 {
     strarray_t *res = strarray_new();
     int i;
 
     for (i = 0; i < active->count; i++) {
 	struct activeitem *item = activeitem_parse(strarray_nth(active, i));
-	if (item && strarray_find(tiers, item->tier, 0) >= 0)
+	/* we want to compress anything which can't possibly exist as well
+	 * as anything which matches the filter tiers */
+	if (!item || strarray_find(tiers, item->tier, 0) >= 0 || !xapian_rootdir(item->tier, partition))
 	    strarray_append(res, strarray_nth(active, i));
 	activeitem_free(item);
     }
@@ -1818,7 +1821,7 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
 
     /* read the activefile file, taking down the names of all paths with a
      * level less than or equal to that requested */
-    tochange = activefile_filter(active, srctiers);
+    tochange = activefile_filter(active, srctiers, mbentry->partition);
     if (!tochange || !tochange->count) goto out;
 
     /* register the target name first, and put it at the end of the file */
