@@ -534,7 +534,7 @@ static void do_compact(const strarray_t *mboxnames, const strarray_t *srctiers,
 	compact_mbox(mboxnames->data[i], srctiers, desttier);
 
 	free(prev_userid);
-	prev_userid = xstrdup(userid);
+	prev_userid = xstrdupnull(userid);
     }
 
     free(prev_userid);
