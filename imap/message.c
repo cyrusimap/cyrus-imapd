@@ -3779,10 +3779,12 @@ static void segment_dump(segment_t *s, int depth)
 	part_t *part = get_part(s);
 	fprintf(stderr, " type=%s/%s"
 			" charset=%s"
-			" encoding=%s",
+			" encoding=%s"
+			" boundary=%s",
 		part->type, part->subtype,
 		charset_name(part->charset),
-		encoding_name(part->encoding));
+		encoding_name(part->encoding),
+		part->boundary);
     }
 
     fputc('\n', stderr);
