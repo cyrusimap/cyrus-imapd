@@ -509,9 +509,9 @@ xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
 	    xml_add_href(node, NULL, err->resource);
 
 	    if (rlen > 6 && !strcmp(p-6, SCHED_INBOX))
-		flags |= PRIV_INBOX;
+		flags = PRIV_INBOX;
 	    else if (rlen > 7 && !strcmp(p-7, SCHED_OUTBOX))
-		flags |= PRIV_OUTBOX;
+		flags = PRIV_OUTBOX;
 
 	    add_privs(err->rights, flags, node, root, avail_ns);
 	}
@@ -1071,7 +1071,10 @@ static int propfind_supprivset(xmlNodePtr prop,
     add_suppriv(agg, "read-current-user-privilege-set", NULL, 1,
 		"Read current user privilege set");
 
-    if (fctx->req_tgt->namespace == URL_NS_CALENDAR) {
+    if (fctx->req_tgt->namespace == URL_NS_CALENDAR &&
+	!(fctx->req_tgt->collection &&
+	  (!strcmp(fctx->req_tgt->collection, SCHED_INBOX) ||
+	   !strcmp(fctx->req_tgt->collection, SCHED_OUTBOX)))) {
 	ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
 	add_suppriv(agg, "read-free-busy", fctx->ns[NS_CALDAV], 0,
 		    "Read free/busy time");
@@ -1101,28 +1104,29 @@ static int propfind_supprivset(xmlNodePtr prop,
     add_suppriv(agg, "write-acl", NULL, 1, "Write ACL");
     add_suppriv(agg, "unlock", NULL, 1, "Unlock resource");
 
-    if (fctx->req_tgt->collection) {
+    if (fctx->req_tgt->namespace == URL_NS_CALENDAR &&
+	fctx->req_tgt->collection) {
 	if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX)) {
 	    ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
 	    agg = add_suppriv(all, "schedule-deliver", fctx->ns[NS_CALDAV], 0,
 			      "Deliver scheduling messages");
-	    add_suppriv(agg, "schedule-deliver-invite", fctx->ns[NS_CALDAV], 1,
+	    add_suppriv(agg, "schedule-deliver-invite", fctx->ns[NS_CALDAV], 0,
 			"Deliver scheduling messages from Organizers");
-	    add_suppriv(agg, "schedule-deliver-reply", fctx->ns[NS_CALDAV], 1,
+	    add_suppriv(agg, "schedule-deliver-reply", fctx->ns[NS_CALDAV], 0,
 			"Deliver scheduling messages from Attendees");
-	    add_suppriv(agg, "schedule-query-freebusy", fctx->ns[NS_CALDAV], 1,
-			"Accept freebusy requests");
+	    add_suppriv(agg, "schedule-query-freebusy", fctx->ns[NS_CALDAV], 0,
+			"Accept free/busy requests");
 	}
 	else if (!strcmp(fctx->req_tgt->collection, SCHED_OUTBOX)) {
 	    ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
 	    agg = add_suppriv(all, "schedule-send", fctx->ns[NS_CALDAV], 0,
 			      "Send scheduling messages");
-	    add_suppriv(agg, "schedule-send-invite", fctx->ns[NS_CALDAV], 1,
+	    add_suppriv(agg, "schedule-send-invite", fctx->ns[NS_CALDAV], 0,
 			"Send scheduling messages by Organizers");
-	    add_suppriv(agg, "schedule-send-reply", fctx->ns[NS_CALDAV], 1,
+	    add_suppriv(agg, "schedule-send-reply", fctx->ns[NS_CALDAV], 0,
 			"Send scheduling messages by Attendees");
-	    add_suppriv(agg, "schedule-send-freebusy", fctx->ns[NS_CALDAV], 1,
-			"Submit freebusy requests");
+	    add_suppriv(agg, "schedule-send-freebusy", fctx->ns[NS_CALDAV], 0,
+			"Submit free/busy requests");
 	}
     }
 
@@ -1135,7 +1139,10 @@ static int add_privs(int rights, unsigned flags,
 {
     xmlNodePtr priv;
 
-    if ((rights & DACL_ALL) == DACL_ALL) {
+    if ((rights & DACL_ALL) == DACL_ALL &&
+	/* DAV:all on CALDAV:schedule-in/outbox MUST include CALDAV:schedule */
+	(!(flags & (PRIV_INBOX|PRIV_OUTBOX)) ||
+	 (rights & DACL_SCHED) == DACL_SCHED)) {
 	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
 	xmlNewChild(priv, NULL, BAD_CAST "all", NULL);
     }
@@ -1144,7 +1151,9 @@ static int add_privs(int rights, unsigned flags,
 	xmlNewChild(priv, NULL, BAD_CAST "read", NULL);
 	if (flags & PRIV_IMPLICIT) rights |= DACL_READFB;
     }
-    if (rights & DACL_READFB) {
+    if ((rights & DACL_READFB) &&
+	/* CALDAV:read-free-busy does not apply to CALDAV:schedule-in/outbox */
+	!(flags & (PRIV_INBOX|PRIV_OUTBOX))) {
 	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
 	ensure_ns(ns, NS_CALDAV, root, XML_NS_CALDAV, "C");
 	xmlNewChild(priv, ns[NS_CALDAV], BAD_CAST  "read-free-busy", NULL);
@@ -1196,12 +1205,41 @@ static int add_privs(int rights, unsigned flags,
     }
 
     if (rights & DACL_SCHED) {
-	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
 	ensure_ns(ns, NS_CALDAV, root, XML_NS_CALDAV, "C");
+    }
+    if ((rights & DACL_SCHED) == DACL_SCHED) {
+	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
 	if (flags & PRIV_INBOX)
 	    xmlNewChild(priv, ns[NS_CALDAV], BAD_CAST "schedule-deliver", NULL);
 	else if (flags & PRIV_OUTBOX)
 	    xmlNewChild(priv, ns[NS_CALDAV], BAD_CAST "schedule-send", NULL);
+    }
+    if (rights & DACL_INVITE) {
+	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
+	if (flags & PRIV_INBOX)
+	    xmlNewChild(priv, ns[NS_CALDAV],
+			BAD_CAST "schedule-deliver-invite", NULL);
+	else if (flags & PRIV_OUTBOX)
+	    xmlNewChild(priv, ns[NS_CALDAV],
+			BAD_CAST "schedule-send-invite", NULL);
+    }
+    if (rights & DACL_REPLY) {
+	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
+	if (flags & PRIV_INBOX)
+	    xmlNewChild(priv, ns[NS_CALDAV],
+			BAD_CAST "schedule-deliver-reply", NULL);
+	else if (flags & PRIV_OUTBOX)
+	    xmlNewChild(priv, ns[NS_CALDAV],
+			BAD_CAST "schedule-send-reply", NULL);
+    }
+    if (rights & DACL_SCHEDFB) {
+	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
+	if (flags & PRIV_INBOX)
+	    xmlNewChild(priv, ns[NS_CALDAV],
+			BAD_CAST "schedule-query-freebusy", NULL);
+	else if (flags & PRIV_OUTBOX)
+	    xmlNewChild(priv, ns[NS_CALDAV],
+			BAD_CAST "schedule-send-freebusy", NULL);
     }
 
     return 0;
@@ -1248,9 +1286,9 @@ static int propfind_curprivset(xmlNodePtr prop,
 		flags = PRIV_IMPLICIT;
 
 		if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX))
-		    flags |= PRIV_INBOX;
+		    flags = PRIV_INBOX;
 		else if (!strcmp(fctx->req_tgt->collection, SCHED_OUTBOX))
-		    flags |= PRIV_OUTBOX;
+		    flags = PRIV_OUTBOX;
 	    }
 
 	    add_privs(rights, flags, set, resp->parent, fctx->ns);
@@ -1290,9 +1328,9 @@ static int propfind_acl(xmlNodePtr prop,
 
 	    if (fctx->req_tgt->collection) {
 		if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX))
-		    flags |= PRIV_INBOX;
+		    flags = PRIV_INBOX;
 		else if (!strcmp(fctx->req_tgt->collection, SCHED_OUTBOX))
-		    flags |= PRIV_OUTBOX;
+		    flags = PRIV_OUTBOX;
 	    }
 	}
 

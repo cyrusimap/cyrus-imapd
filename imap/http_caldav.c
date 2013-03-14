@@ -413,26 +413,43 @@ static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights)
 {
     if (!xmlStrcmp(priv->ns->href, BAD_CAST XML_NS_CALDAV)) {
 	/* CalDAV privileges */
-	if (!xmlStrcmp(priv->name, BAD_CAST "read-free-busy"))
-	    *rights |= DACL_READFB;
-	else if (txn->req_tgt.flags == TGT_SCHED_INBOX &&
-		 !xmlStrcmp(priv->name, BAD_CAST "schedule-deliver"))
-	    *rights |= DACL_SCHED;
-	else if (txn->req_tgt.flags == TGT_SCHED_OUTBOX &&
-		 !xmlStrcmp(priv->name, BAD_CAST "schedule-send"))
-	    *rights |= DACL_SCHED;
-	else if (!xmlStrcmp(priv->name, BAD_CAST "schedule-deliver-invite")
-		 || !xmlStrcmp(priv->name, BAD_CAST "schedule-deliver-reply")
-		 || !xmlStrcmp(priv->name, BAD_CAST "schedule-query-freebusy")
-		 || !xmlStrcmp(priv->name, BAD_CAST "schedule-send-invite")
-		 || !xmlStrcmp(priv->name, BAD_CAST "schedule-send-reply")
-		 || !xmlStrcmp(priv->name, BAD_CAST "schedule-send-freebusy")) {
-	    /* DAV:no-abstract */
-	    txn->error.precond = DAV_NO_ABSTRACT;
-	}
-	else {
-	    /* DAV:not-supported-privilege */
-	    txn->error.precond = DAV_SUPP_PRIV;
+	switch (txn->req_tgt.flags) {
+	case TGT_SCHED_INBOX:
+	    if (!xmlStrcmp(priv->name, BAD_CAST "schedule-deliver"))
+		*rights |= DACL_SCHED;
+	    else if (!xmlStrcmp(priv->name, BAD_CAST "schedule-deliver-invite"))
+		*rights |= DACL_INVITE;
+	    else if (!xmlStrcmp(priv->name, BAD_CAST "schedule-deliver-reply"))
+		*rights |= DACL_REPLY;
+	    else if (!xmlStrcmp(priv->name, BAD_CAST "schedule-query-freebusy"))
+		*rights |= DACL_SCHEDFB;
+	    else {
+		/* DAV:not-supported-privilege */
+		txn->error.precond = DAV_SUPP_PRIV;
+	    }
+	    break;
+	case TGT_SCHED_OUTBOX:
+	    if (!xmlStrcmp(priv->name, BAD_CAST "schedule-send"))
+		*rights |= DACL_SCHED;
+	    else if (!xmlStrcmp(priv->name, BAD_CAST "schedule-send-invite"))
+		*rights |= DACL_INVITE;
+	    else if (!xmlStrcmp(priv->name, BAD_CAST "schedule-send-reply"))
+		*rights |= DACL_REPLY;
+	    else if (!xmlStrcmp(priv->name, BAD_CAST "schedule-send-freebusy"))
+		*rights |= DACL_SCHEDFB;
+	    else {
+		/* DAV:not-supported-privilege */
+		txn->error.precond = DAV_SUPP_PRIV;
+	    }
+	    break;
+	default:
+	    if (xmlStrcmp(priv->name, BAD_CAST "read-free-busy"))
+		*rights |= DACL_READFB;
+	    else {
+		/* DAV:not-supported-privilege */
+		txn->error.precond = DAV_SUPP_PRIV;
+	    }
+	    break;
 	}
 
 	/* Done processing this priv */
@@ -457,8 +474,15 @@ static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights)
 	    }
 	}
 	else if (!xmlStrcmp(priv->name, BAD_CAST "read")) {
-	    /* DAV:read aggregates CALDAV:read-free-busy */
-	    *rights |= DACL_READFB;
+	    switch (txn->req_tgt.flags) {
+	    case TGT_SCHED_INBOX:
+	    case TGT_SCHED_OUTBOX:
+		break;
+	    default:
+		/* DAV:read aggregates CALDAV:read-free-busy */
+		*rights |= DACL_READFB;
+		break;
+	    }
 	}
     }
 
@@ -539,39 +563,11 @@ static int caldav_delete_sched(struct transaction_t *txn,
     }
     else if (cdata->sched_tag) {
 	/* Scheduling object resource */
-	int r, rights;
-	struct mboxlist_entry mbentry;
-	char outboxname[MAX_MAILBOX_BUFFER];
 	const char *msg_base = NULL, *userid, *organizer, **hdr;
 	unsigned long msg_size = 0;
 	icalcomponent *ical, *comp;
 	icalproperty *prop;
 	struct sched_param sparam;
-
-	/* Construct userid corresponding to mailbox */
-	userid = mboxname_to_userid(txn->req_tgt.mboxname);
-
-	/* Check ACL of auth'd user on userid's Scheduling Outbox */
-	caldav_mboxname(SCHED_OUTBOX, userid, outboxname);
-
-	if ((r = mboxlist_lookup(outboxname, &mbentry, NULL))) {
-	    syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
-		   outboxname, error_message(r));
-	    mbentry.acl = NULL;
-	}
-
-	rights =
-	    mbentry.acl ? cyrus_acl_myrights(httpd_authstate, mbentry.acl) : 0;
-	if (!(rights & DACL_SCHED)) {
-	    /* DAV:need-privileges */
-	    txn->error.precond = DAV_NEED_PRIVS;
-	    txn->error.rights = DACL_SCHED;
-
-	    assert(!buf_len(&txn->buf));
-	    buf_printf(&txn->buf, "/calendars/user/%s/%s", userid, SCHED_OUTBOX);
-	    txn->error.resource = buf_cstring(&txn->buf);
-	    return HTTP_FORBIDDEN;
-	}
 
 	/* Load message containing the resource and parse iCal data */
 	mailbox_map_message(mailbox, record->uid, &msg_base, &msg_size);
@@ -584,6 +580,9 @@ static int caldav_delete_sched(struct transaction_t *txn,
 		   txn->req_tgt.mboxname, record->uid);
 	    return HTTP_SERVER_ERROR;
 	}
+
+	/* Construct userid corresponding to mailbox */
+	userid = mboxname_to_userid(txn->req_tgt.mboxname);
 
 	/* Grab the organizer */
 	comp = icalcomponent_get_first_real_component(ical);
@@ -2034,7 +2033,7 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
 
 	    rights =
 		mbentry.acl ? cyrus_acl_myrights(org_authstate, mbentry.acl) : 0;
-	    if (!(rights & DACL_SCHED)) {
+	    if (!(rights & DACL_SCHEDFB)) {
 		xmlNewChild(resp, NULL, BAD_CAST "request-status",
 			    BAD_CAST REQSTAT_NOPRIVS);
 		continue;
@@ -2131,11 +2130,11 @@ static int sched_busytime(struct transaction_t *txn)
 
     /* Check ACL for current user */
     rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
-    if (!(rights & DACL_SCHED)) {
+    if (!(rights & DACL_SCHEDFB)) {
 	/* DAV:need-privileges */
 	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
-	txn->error.rights = DACL_SCHED;
+	txn->error.rights = DACL_SCHEDFB;
 	return HTTP_FORBIDDEN;
     }
 
@@ -2303,7 +2302,7 @@ void sched_deliver_local(const char *recipient __attribute__((unused)),
 			 struct sched_data *sched_data,
 			 struct auth_state *authstate)
 {
-    int r = 0, rights;
+    int r = 0, rights, reqd_privs;
     const char *userid = sparam->userid, *mboxname = NULL;
     static struct buf resource = BUF_INITIALIZER;
     static unsigned sched_count = 0;
@@ -2326,9 +2325,10 @@ void sched_deliver_local(const char *recipient __attribute__((unused)),
 	goto done;
     }
 
+    reqd_privs = sched_data->is_reply ? DACL_REPLY : DACL_INVITE;
     rights =
 	mbentry.acl ? cyrus_acl_myrights(authstate, mbentry.acl) : 0;
-    if (!(rights & DACL_SCHED)) {
+    if (!(rights & reqd_privs)) {
 	sched_data->status =
 	    sched_data->ischedule ? REQSTAT_NOPRIVS : SCHEDSTAT_NOPRIVS;
 	goto done;
@@ -2931,7 +2931,7 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 
     rights =
 	mbentry.acl ? cyrus_acl_myrights(httpd_authstate, mbentry.acl) : 0;
-    if (!(rights & DACL_SCHED)) {
+    if (!(rights & DACL_INVITE)) {
 	/* DAV:need-privileges */
 	sched_stat = SCHEDSTAT_NOPRIVS;
 
@@ -3261,7 +3261,7 @@ static void sched_reply(const char *userid,
 
     rights =
 	mbentry.acl ? cyrus_acl_myrights(httpd_authstate, mbentry.acl) : 0;
-    if (!(rights & DACL_SCHED)) {
+    if (!(rights & DACL_REPLY)) {
 	/* DAV:need-privileges */
 	if (newical) sched_data->status = SCHEDSTAT_NOPRIVS;
 

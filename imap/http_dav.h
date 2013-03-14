@@ -116,11 +116,31 @@ enum {
 #define DACL_READFB	ACL_USER9	/* CALDAV:read-free-busy
 					   (implicit if user has DAV:read) */
 
-/* CalDAV Scheduling (RFC 6638) privileges */
-/* XXX  Can/should we use the same ACL for both schedule-deliver & schedule-send
-   and can/should we use the same ACL as read-free-busy?
+/* CalDAV Scheduling (RFC 6638) privileges
+
+   We use the same ACLs for both schedule-deliver* and schedule-send* because
+   functionality of Scheduling Inbox and Outbox are mutually exclusive.
+   We use ACL_USER9 for both read-free-busy and schedule-*-freebusy because
+   Scheduling Inbox and Outbox don't contribute to free-busy.
 */
-#define DACL_SCHED	ACL_USER8	/* For Scheduling Inbox:
+#define DACL_SCHEDFB	ACL_USER9	/* For Scheduling Inbox:
+					   CALDAV:schedule-query-freebusy
+
+					   For Scheduling Outbox:
+					   CALDAV:schedule-send-freebusy */
+#define DACL_INVITE	ACL_USER8	/* For Scheduling Inbox:
+					   CALDAV:schedule-deliver-invite
+
+					   For Scheduling Outbox:
+					   CALDAV:schedule-send-invite */
+#define DACL_REPLY	ACL_USER7	/* For Scheduling Inbox:
+					   CALDAV:schedule-deliver-reply
+
+					   For Scheduling Outbox:
+					   CALDAV:schedule-send-reply */
+#define DACL_SCHED	(DACL_SCHEDFB\
+			 |DACL_INVITE\
+			 |DACL_REPLY)	/* For Scheduling Inbox:
 					   CALDAV:schedule-deliver (aggregates
 					   CALDAV:schedule-deliver-invite,
 					   schedule-deliver-reply,
