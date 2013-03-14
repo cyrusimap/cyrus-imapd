@@ -1795,6 +1795,7 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
     char *newdest = NULL;
     char *destdir = NULL;
     char *tempdestdir = NULL;
+    char *activestr = NULL;
     struct buf mytempdir = BUF_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
     struct indexedrock lr;
@@ -1813,6 +1814,8 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
     active = activefile_open(mboxname, mbentry->partition, &activefile, /*write*/1);
     if (!active || !active->count) goto out;
 
+    activestr = strarray_join(active, ",");
+
     /* read the activefile file, taking down the names of all paths with a
      * level less than or equal to that requested */
     tochange = activefile_filter(active, srctiers);
@@ -1824,9 +1827,7 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
 
     if (verbose) {
 	char *target = strarray_join(tochange, ",");
-	char *alist = strarray_join(active, ",");
-	printf("compressing %s to %s for %s (active %s)\n", target, newdest, mboxname, alist);
-	free(alist);
+	printf("compressing %s to %s for %s (active %s)\n", target, newdest, mboxname, activestr);
 	free(target);
     }
 
@@ -1875,6 +1876,8 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
     /* or just directly in place */
     else
 	buf_printf(&mytempdir, "%s", tempdestdir);
+
+    /* make sure the destination path exists */
     r = cyrus_mkdir(buf_cstring(&mytempdir), 0755);
     if (r) goto out;
     r = mkdir(buf_cstring(&mytempdir), 0755);
@@ -1885,7 +1888,10 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
 	    printf("compacting databases\n");
 	}
 	r = xapian_compact_dbs(buf_cstring(&mytempdir), (const char **)dirs->data);
-	if (r) goto out;
+	if (r) {
+	    printf("ERROR: failed to compact to %s", buf_cstring(&mytempdir));
+	    goto out;
+	}
 
 	if (verbose) {
 	    printf("building cyrus.indexed.db\n");
@@ -1897,7 +1903,10 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
 	buf_printf(&buf, "%s%s", buf_cstring(&mytempdir), INDEXEDDB_FNAME);
 	r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_INDEXED_DB),
 			 buf_cstring(&buf), CYRUSDB_CREATE, &lr.db);
-	if (r) goto out;
+	if (r) {
+	    printf("ERROR: failed to open indexed %s\n", buf_cstring(&mytempdir));
+	    goto out;
+	}
 	for (i = 0; i < dirs->count; i++) {
 	    struct db *db = NULL;
 	    buf_reset(&buf);
@@ -1909,12 +1918,16 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
 	    cyrusdb_close(db);
 	    if (r) {
 		if (lr.tid) cyrusdb_abort(lr.db, *lr.tid);
+		printf("ERROR: failed to process indexed db %s\n", strarray_nth(dirs, i));
 		goto out;
 	    }
 	}
 	if (lr.tid) r = cyrusdb_commit(lr.db, *lr.tid);
 	cyrusdb_close(lr.db);
-	if (r) goto out;
+	if (r) {
+	    printf("ERROR: failed to commit indexed %s", buf_cstring(&mytempdir));
+	    goto out;
+	}
 
 	/* move the tmpfs files to a temporary name in our target directory */
 	if (tempdir) {
@@ -1923,7 +1936,10 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
 	    }
 	    cyrus_mkdir(tempdestdir, 0755);
 	    r = rsync_tree(buf_cstring(&mytempdir), tempdestdir, 0, 0, 1);
-	    if (r) goto out;
+	    if (r) {
+		printf("Failed to rsync from %s to %s", buf_cstring(&mytempdir), tempdestdir);
+		goto out;
+	    }
 	}
     }
 
@@ -1954,7 +1970,10 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
 	    printf("renaming tempdir into place\n");
 	}
 	r = rename(tempdestdir, destdir);
-	if (r) goto out;
+	if (r) {
+	    printf("ERROR: failed to rename into place %s to %s", tempdestdir, destdir);
+	    goto out;
+	}
     }
     else {
 	if (verbose) {
@@ -1994,6 +2013,7 @@ out:
     buf_free(&mytempdir);
     buf_free(&buf);
     free(newdest);
+    free(activestr);
     free(destdir);
     free(tempdestdir);
     mappedfile_unlock(activefile);
