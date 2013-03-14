@@ -1916,7 +1916,10 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
 	    buf_printf(&buf, "%s%s", strarray_nth(dirs, i), INDEXEDDB_FNAME);
 	    r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_INDEXED_DB),
 			     buf_cstring(&buf), 0, &db);
-	    if (r) continue;
+	    if (r) {
+		r = 0;
+		continue;
+	    }
 	    r = cyrusdb_foreach(db, "", 0, NULL, copyindexed_cb, &lr, NULL);
 	    cyrusdb_close(db);
 	    if (r) {
@@ -1928,7 +1931,7 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
 	if (lr.tid) r = cyrusdb_commit(lr.db, *lr.tid);
 	cyrusdb_close(lr.db);
 	if (r) {
-	    printf("ERROR: failed to commit indexed %s", buf_cstring(&mytempdir));
+	    printf("ERROR: failed to commit indexed %s\n", buf_cstring(&mytempdir));
 	    goto out;
 	}
 
@@ -1974,7 +1977,7 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
 	}
 	r = rename(tempdestdir, destdir);
 	if (r) {
-	    printf("ERROR: failed to rename into place %s to %s", tempdestdir, destdir);
+	    printf("ERROR: failed to rename into place %s to %s\n", tempdestdir, destdir);
 	    goto out;
 	}
     }
