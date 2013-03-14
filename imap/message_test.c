@@ -249,7 +249,7 @@ static void dump_rx_begin_message(
 static void dump_rx_begin_part(
     search_text_receiver_t *rx __attribute__((unused)), int part)
 {
-    printf("BEGIN_PART part=%d\n", part);
+    printf("BEGIN_PART part=%s\n", search_part_as_string(part));
 }
 
 static void dump_rx_append_text(
@@ -263,7 +263,7 @@ static void dump_rx_append_text(
 static void dump_rx_end_part(
     search_text_receiver_t *rx __attribute__((unused)), int part)
 {
-    printf("END_PART part=%d\n", part);
+    printf("END_PART part=%s\n", search_part_as_string(part));
 }
 
 static int dump_rx_end_message(search_text_receiver_t *rx __attribute__((unused)))
