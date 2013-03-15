@@ -211,6 +211,33 @@ int xapian_dbw_end_doc(xapian_dbw_t *dbw)
     return r;
 }
 
+/* cb returns true if document still exists, false if it doesn't */
+int xapian_dbw_filter(xapian_dbw_t *dbw,
+		      int (*cb)(const char *cyrusid, void *rock),
+		      void *rock)
+{
+    int r = 0;
+
+    try {
+	Xapian::Enquire enquire(*dbw->database);
+	enquire.set_query(Xapian::Query::MatchAll);
+	Xapian::MSet matches = enquire.get_mset(0, dbw->database->get_doccount());
+	for (Xapian::MSetIterator i = matches.begin() ; i != matches.end() ; ++i) {
+	    Xapian::Document doc = i.get_document();
+	    std::string cyrusid = doc.get_value(SLOT_CYRUSID);
+	    if (!cb(cyrusid.c_str(), rock))
+		dbw->database->delete_document(doc.get_docid());
+	}
+    }
+    catch (const Xapian::Error &err) {
+	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
+		    err.get_context().c_str(), err.get_description().c_str());
+	r = IMAP_IOERROR;
+    }
+
+    return r;
+}
+
 /* ====================================================================== */
 
 struct xapian_db

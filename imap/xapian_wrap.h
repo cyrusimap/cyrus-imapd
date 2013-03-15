@@ -64,6 +64,9 @@ extern int xapian_dbw_cancel_txn(xapian_dbw_t *dbw);
 extern int xapian_dbw_begin_doc(xapian_dbw_t *dbw, const char *cyrusid);
 extern int xapian_dbw_doc_part(xapian_dbw_t *dbw, const struct buf *part, const char *prefix);
 extern int xapian_dbw_end_doc(xapian_dbw_t *dbw);
+extern int xapian_dbw_filter(xapian_dbw_t *dbw,
+			     int (*cb)(const char *cyrusid, void *rock),
+			     void *rock);
 
 /* query-side interface */
 extern xapian_db_t *xapian_db_open(const char **paths);
