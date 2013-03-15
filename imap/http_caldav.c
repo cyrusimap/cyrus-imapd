@@ -151,7 +151,6 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
 					   const char *organizer,
 					   const char *attendee);
 
-static int sched_busytime(struct transaction_t *txn);
 static void sched_request(const char *organizer, struct sched_param *sparam,
 			  icalcomponent *oldical, icalcomponent *newical);
 static void sched_reply(const char *userid,
@@ -620,14 +619,129 @@ static int caldav_delete_sched(struct transaction_t *txn,
 /* Perform a busy time request, if necessary */
 static int caldav_post(struct transaction_t *txn)
 {
-    if ((namespace_calendar.allow & ALLOW_CAL_SCHED) &&
-	!strcmp(txn->req_tgt.collection, SCHED_OUTBOX)) {
-	/* POST to schedule-outbox (busy time request) */
+    int ret = 0, r, rights;
+    char *acl;
+    const char **hdr;
+    icalcomponent *ical = NULL, *comp;
+    icalcomponent_kind kind = 0;
+    icalproperty_method meth = 0;
+    icalproperty *prop = NULL;
+    const char *uid = NULL, *organizer = NULL, *orgid = NULL;
+    struct sched_param sparam;
 
-	return sched_busytime(txn);
+    if (!(namespace_calendar.allow & ALLOW_CAL_SCHED) || !txn->req_tgt.flags) {
+	/* POST to regular calendar collection */
+	return HTTP_CONTINUE;
+    }
+    else if (txn->req_tgt.flags == TGT_SCHED_INBOX) {
+	/* Don't allow POST to schedule-inbox */
+	return HTTP_NOT_ALLOWED;
     }
 
-    return HTTP_CONTINUE;
+    /* POST to schedule-outbox */
+
+    /* Check Content-Type */
+    if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
+	!is_mediatype(hdr[0], "text/calendar")) {
+	txn->error.precond = CALDAV_SUPP_DATA;
+	return HTTP_BAD_REQUEST;
+    }
+
+    /* Locate the mailbox */
+    if ((r = http_mlookup(txn->req_tgt.mboxname, NULL, &acl, NULL))) {
+	syslog(LOG_ERR, "mlookup(%s) failed: %s",
+	       txn->req_tgt.mboxname, error_message(r));
+	txn->error.desc = error_message(r);
+
+	switch (r) {
+	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	default: return HTTP_SERVER_ERROR;
+	}
+    }
+
+    /* Get rights for current user */
+    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
+
+    /* Read body */
+    if (!txn->flags.havebody) {
+	txn->flags.havebody = 1;
+	r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, 1,
+		      &txn->error.desc);
+	if (r) {
+	    txn->flags.close = 1;
+	    return r;
+	}
+    }
+
+    /* Make sure we have a body */
+    if (!buf_len(&txn->req_body)) {
+	txn->error.desc = "Missing request body\r\n";
+	return HTTP_BAD_REQUEST;
+    }
+
+    /* Parse the iCal data for important properties */
+    ical = icalparser_parse_string(buf_cstring(&txn->req_body));
+    if (!ical || !icalrestriction_check(ical)) {
+	txn->error.precond = CALDAV_VALID_DATA;
+	return HTTP_BAD_REQUEST;
+    }
+
+    meth = icalcomponent_get_method(ical);
+    comp = icalcomponent_get_first_real_component(ical);
+    if (comp) {
+	uid = icalcomponent_get_uid(comp);
+	kind = icalcomponent_isa(comp);
+	prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    }
+
+    /* Check method preconditions */
+    if (!meth || !uid || !prop) {
+	txn->error.precond = CALDAV_VALID_SCHED;
+	ret = HTTP_BAD_REQUEST;
+	goto done;
+    }
+
+    /* Organizer MUST be local to use CalDAV Scheduling */
+    organizer = icalproperty_get_organizer(prop);
+    if (organizer) {
+	if (!caladdress_lookup(organizer, &sparam) &&
+	    !(sparam.flags & SCHEDTYPE_REMOTE))
+	    orgid = sparam.userid;
+    }
+
+    if (!orgid || strncmp(orgid, txn->req_tgt.user, txn->req_tgt.userlen)) {
+	txn->error.precond = CALDAV_VALID_ORGANIZER;
+	ret = HTTP_FORBIDDEN;
+	goto done;
+    }
+
+    switch (kind) {
+    case ICAL_VFREEBUSY_COMPONENT:
+	if (meth == ICAL_METHOD_REQUEST)
+	    if (!(rights & DACL_SCHEDFB)) {
+		/* DAV:need-privileges */
+		txn->error.precond = DAV_NEED_PRIVS;
+		txn->error.resource = txn->req_tgt.path;
+		txn->error.rights = DACL_SCHEDFB;
+		ret = HTTP_FORBIDDEN;
+	    }
+	    else ret = busytime_query(txn, ical);
+	else {
+	    txn->error.precond = CALDAV_VALID_SCHED;
+	    ret = HTTP_BAD_REQUEST;
+	}
+	break;
+
+    default:
+	txn->error.precond = CALDAV_VALID_SCHED;
+	ret = HTTP_BAD_REQUEST;
+    }
+
+  done:
+    if (ical) icalcomponent_free(ical);
+
+    return ret;
 }
 
 
@@ -2090,112 +2204,6 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
     if (org_authstate) auth_freestate(org_authstate);
     if (calfilter.busytime.busy) free(calfilter.busytime.busy);
     if (root) xmlFree(root->doc);
-
-    return ret;
-}
-
-
-/* Perform a CalDAV Scheduling Busy Time request */
-static int sched_busytime(struct transaction_t *txn)
-{
-    int ret = 0, r, rights;
-    char *acl;
-    const char **hdr;
-    icalcomponent *ical = NULL, *comp;
-    icalcomponent_kind kind = 0;
-    icalproperty_method meth = 0;
-    icalproperty *prop = NULL;
-    const char *uid = NULL, *organizer = NULL, *orgid = NULL;
-    struct sched_param sparam;
-
-    /* Check Content-Type */
-    if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
-	!is_mediatype(hdr[0], "text/calendar")) {
-	txn->error.precond = CALDAV_SUPP_DATA;
-	return HTTP_BAD_REQUEST;
-    }
-
-    /* Locate the mailbox */
-    if ((r = http_mlookup(txn->req_tgt.mboxname, NULL, &acl, NULL))) {
-	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-
-	switch (r) {
-	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	default: return HTTP_SERVER_ERROR;
-	}
-    }
-
-    /* Check ACL for current user */
-    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
-    if (!(rights & DACL_SCHEDFB)) {
-	/* DAV:need-privileges */
-	txn->error.precond = DAV_NEED_PRIVS;
-	txn->error.resource = txn->req_tgt.path;
-	txn->error.rights = DACL_SCHEDFB;
-	return HTTP_FORBIDDEN;
-    }
-
-    /* Read body */
-    if (!txn->flags.havebody) {
-	txn->flags.havebody = 1;
-	r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, 1,
-		      &txn->error.desc);
-	if (r) {
-	    txn->flags.close = 1;
-	    return r;
-	}
-    }
-
-    /* Make sure we have a body */
-    if (!buf_len(&txn->req_body)) {
-	txn->error.desc = "Missing request body\r\n";
-	return HTTP_BAD_REQUEST;
-    }
-
-    /* Parse the iCal data for important properties */
-    ical = icalparser_parse_string(buf_cstring(&txn->req_body));
-    if (!ical || !icalrestriction_check(ical)) {
-	txn->error.precond = CALDAV_VALID_DATA;
-	return HTTP_BAD_REQUEST;
-    }
-
-    meth = icalcomponent_get_method(ical);
-    comp = icalcomponent_get_first_real_component(ical);
-    if (comp) {
-	uid = icalcomponent_get_uid(comp);
-	kind = icalcomponent_isa(comp);
-	prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-    }
-
-    /* Check method preconditions */
-    if (!meth || meth != ICAL_METHOD_REQUEST || !uid ||
-	kind != ICAL_VFREEBUSY_COMPONENT || !prop) {
-	txn->error.precond = CALDAV_VALID_SCHED;
-	ret = HTTP_BAD_REQUEST;
-	goto done;
-    }
-
-    /* Organizer MUST be local to use CalDAV Scheduling */
-    organizer = icalproperty_get_organizer(prop);
-    if (organizer) {
-	if (!caladdress_lookup(organizer, &sparam) &&
-	    !(sparam.flags & SCHEDTYPE_REMOTE))
-	    orgid = sparam.userid;
-    }
-
-    if (!orgid || strncmp(orgid, txn->req_tgt.user, txn->req_tgt.userlen)) {
-	txn->error.precond = CALDAV_VALID_ORGANIZER;
-	ret = HTTP_FORBIDDEN;
-	goto done;
-    }
-
-    ret = busytime_query(txn, ical);
-
-  done:
-    if (ical) icalcomponent_free(ical);
 
     return ret;
 }
