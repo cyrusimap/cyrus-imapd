@@ -1142,7 +1142,14 @@ static void message_parse_disposition(const char *hdr, struct body *body)
 }
 
 /*
- * Parse a parameter list from a header
+ * Parse a parameter list from a header.
+ *
+ * 'hdr' points into the message, and is not expected to
+ * be nul-terminated.  Handles continuation headers.
+ *
+ * Malformed parameters are handled by skipping to the
+ * next ';' or end of line, which should mark the next
+ * parameter.
  */
 static void message_parse_params(const char *hdr, struct param **paramp)
 {
@@ -1161,7 +1168,7 @@ static void message_parse_params(const char *hdr, struct param **paramp)
 	/* Find end of attribute */
 	attribute = hdr;
 	for (; *hdr && !Uisspace(*hdr) && *hdr != '=' && *hdr != '('; hdr++) {
-	    if (*hdr < ' ' || strchr(TSPECIALS, *hdr)) return;
+	    if (*hdr < ' ' || strchr(TSPECIALS, *hdr)) goto skip;
 	}
 	attributelen = hdr - attribute;
 
@@ -1170,7 +1177,7 @@ static void message_parse_params(const char *hdr, struct param **paramp)
 	if (!hdr) return;
 
 	/* Ignore param if no '=' character */
-	if (*hdr++ != '=') return;
+	if (*hdr++ != '=') goto skip;
 
 	/* Skip whitespace before value */
 	message_parse_rfc822space(&hdr);
@@ -1186,8 +1193,9 @@ static void message_parse_params(const char *hdr, struct param **paramp)
 		    if (!*hdr) return;
 		}
 		if (*hdr == '\r') {
+		    /* check for continuation headers */
 		    if (hdr[1] == '\n' && (hdr[2] == ' ' || hdr[2] == '\t')) hdr += 2;
- 		    else return;
+		    else return;    /* end of header field */
 		}
 		hdr++;
 	    }
@@ -1195,7 +1203,7 @@ static void message_parse_params(const char *hdr, struct param **paramp)
 	}
 	else {
 	    for (; *hdr && !Uisspace(*hdr) && *hdr != ';' && *hdr != '('; hdr++) {
-		if (*hdr < ' ' || strchr(TSPECIALS, *hdr)) return;
+		if (*hdr < ' ' || strchr(TSPECIALS, *hdr)) goto skip;
 	    }
 	}
 	valuelen = hdr - value;
@@ -1204,7 +1212,12 @@ static void message_parse_params(const char *hdr, struct param **paramp)
 	message_parse_rfc822space(&hdr);
 
 	/* Ignore parameter if not at end of header or parameter delimiter */
-	if (hdr && *hdr++ != ';') return;
+	if (hdr && *hdr++ != ';') {
+skip:
+	    hdr += strcspn(hdr, ";\r\n");
+	    if (*hdr == ';') hdr++;
+	    continue;
+	}
 		  
 	/* Save attribute/value pair */
 	*paramp = param = (struct param *)xzmalloc(sizeof(struct param));
@@ -1446,7 +1459,7 @@ static void message_parse_rfc822space(const char **s)
 	if (*p == '\n') {
 	    p++;
 	    if (*p != ' ' && *p != '\t') {
-		*s = 0;
+		*s = 0;	    /* end of header field, no continuation */
 		return;
 	    }
 	}
@@ -1481,7 +1494,7 @@ static void message_parse_rfc822space(const char **s)
 	else p++;
     }
     if (*p == 0) {
-	*s = 0;
+	*s = 0;	    /* embedded NUL */
     }
     else {
 	*s = p;
