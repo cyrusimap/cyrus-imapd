@@ -4847,20 +4847,22 @@ static int message2_parse_header(part_t *part, const struct buf *map)
 		/* previous field is complete */
 		r = add_field(header, desc, start, head, colon, line, mime_fields);
 		if (r) goto out;
+		desc = NULL;
+		head = NULL;
 	    }
 	    colon = memchr(line, ':', end-line);
 	    if (!colon)
-		goto out;  /* no colon */
+		goto next;  /* no colon */
 	    /* TODO: walk 'colon' back over any whitespace */
 	    if (colon == line)
-		goto out;  /* zero length name */
+		goto next;  /* zero length name */
 	    if (colon-line > MAX_FIELDNAME_LENGTH)
-		goto out;  /* name too long */
-	    /* TODO: recover, and just skip this field */
+		goto next;  /* name too long */
 	    head = line;
 	    desc = field_desc_get_byname(line, colon-line, /*create*/1);
 	}
 
+next:
 	crlf = memchr(line, '\r', line-end);
 	if (!crlf)
 	    goto out;  /* no CR */

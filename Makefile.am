@@ -615,6 +615,7 @@ cunit_TESTS = \
 	cunit/mboxname.testc \
 	cunit/md5.testc \
 	cunit/message.testc \
+	cunit/message2.testc \
 	cunit/msgid.testc \
 	cunit/parseaddr.testc \
 	cunit/parse.testc \

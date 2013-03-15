@@ -1,0 +1,204 @@
+#if HAVE_CONFIG_H
+#include <config.h>
+#endif
+#include "cunit/cunit.h"
+#include "charset.h"
+#include "imap/message.h"
+
+#define canaryize(x) \
+    memset(&(x), 0x45, sizeof(x))
+
+static void *canaryptr(void)
+{
+    void *x;
+    canaryize(x);
+    return x;
+}
+
+static void test_zero_length_fieldnames(void)
+{
+#define TEXT_PART \
+    "Hello, World"
+#define HTML_PART \
+    "<html><head><title>Hello, World</title></head>\r\n" \
+    "<body>\r\n" \
+    "<p>Hello, World</p>\r\n" \
+    "<body></html>"
+
+    static const char msg[] =
+"From: Fred Bloggs <fbloggs@fastmail.fm>\r\n"
+"Reply-To: <bounce.me.harder@fastmail.fm>\r\n"
+"To: Sarah Jane Smith <sjsmith@gmail.com>\r\n"
+"Date: Thu, 28 Oct 2010 18:37:26 +1100\r\n"
+"Subject: MIME testing email\r\n"
+"X-Mailer: Norman\r\n"
+"MIME-Version: 1.0\r\n"
+"Content-Type: multipart/mixed; boundary=\"7225e50d962de81173be22223f706458743c3a9a\"\r\n"
+"Content-Language: en\r\n"
+"Message-ID: <fake1003@fastmail.fm>\r\n"
+"\r\n"
+"--7225e50d962de81173be22223f706458743c3a9a\r\n"
+": \r\n"
+"Content-Type: text/plain; charset=\"us-ascii\"\r\n"
+": \r\n"
+"\r\n"
+TEXT_PART "\r\n"
+"--7225e50d962de81173be22223f706458743c3a9a\r\n"
+": \r\n"
+"Content-Type: text/html; charset=\"us-ascii\"\r\n"
+": \r\n"
+"\r\n"
+HTML_PART "\r\n"
+"--7225e50d962de81173be22223f706458743c3a9a\r\n"
+": \r\n"
+"Content-Type: image/png\r\n"
+"Content-Disposition: attachment; filename=cyrus-favicon.png\r\n"
+"Content-Transfer-Encoding: base64\r\n"
+": \r\n"
+"\r\n"
+"iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAAZiS0dEAP8A\r\n"
+"/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9sBEQEMHNieJnIAAAIsSURBVDjL\r\n"
+"tZNPSNNhGMc/r+xSUY4hbHO1LYyRSXRw4iaSRVFCiNBf8BA/mwWVB1sQFGgdgqjfph6i0EEUXaxJ\r\n"
+"3tTmkA6zQxieVlR0GP0xy7n9Ftipng6/NZMM6dBzenmf5/083+d53gf+l42Njkm1zychTZPZ2Vn5\r\n"
+"p8dRPSIuu0NcdodsdDgl4K+TqVRqRYj6dZhKpaQv2kuhYJBOp0GKXgGlzLBAMAjAdV2nakuVWka6\r\n"
+"3N0tyYkJWc2G43GJ6vpyNbGBQXHZHZJMJFYFJBMJqfb55MHQkABYQpomV3p6QKmSVIC+SATD+AqA\r\n"
+"x7OJ9o6OYtGKglEg3HWOkKYJle7N0hgIynA8LtlsdlUF2WxWkomENAYbxGV3iGXR6SHl38ePWwN4\r\n"
+"vV5sNhsA/dEo+byBUgq3e0lBPpej55rOU38L5d/HwVrfJDx8JegjUrHdL726/tfsd2Ix8TTsFvQR\r\n"
+"If5arPW7pAwUKAWebcyfv0144hnHDh0hl8uV+rGwsMDJ9hOcvT9C5tQN8NaAmIMoE5HizBWsK4e2\r\n"
+"Czx+/4U9O5uYTCZ5Pj1N64EWRief8O1o2IwpNlNEsJS+kwhkXlAe78eo2sHM1lraOrsAmOu4CpmX\r\n"
+"VAxeZL75ONTtL6kzAQKM34UPbzHOREpZ5i7dM8FrN4C3hvmmw/DoJryZgdbTvwEyaajdC82aWYoU\r\n"
+"qWvWL//xAhzshMUCfH5neqp9PvlodS4tR7G2P5ZmhfvK/Cd+At3OXF7AwYF1AAAAAElFTkSuQmCC\r\n"
+"\r\n--7225e50d962de81173be22223f706458743c3a9a--\r\n";
+    int r;
+    message_t *m;
+    struct buf b = BUF_INITIALIZER;
+    part_t *p;
+    const char *s;
+    unsigned int n;
+    int i;
+
+    m = message_new_from_data(msg, sizeof(msg)-1);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(m);
+
+    /* Content-Type: */
+    canaryize(s);
+    r = message_get_type(m, &s);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NOT_EQUAL(s, canaryptr());
+    CU_ASSERT_STRING_EQUAL(s, "MULTIPART");
+
+    canaryize(s);
+    r = message_get_subtype(m, &s);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NOT_EQUAL(s, canaryptr());
+    CU_ASSERT_STRING_EQUAL(s, "MIXED");
+
+    canaryize(n);
+    r = message_get_num_parts(m, &n);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(n, 3);
+
+    /* part 1 */
+    canaryize(p);
+    r = message_get_part(m, 1, &p);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NOT_NULL(p);
+    CU_ASSERT_PTR_NOT_EQUAL(p, canaryptr());
+
+    canaryize(s);
+    r = part_get_type(p, &s);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NOT_EQUAL(s, canaryptr());
+    CU_ASSERT_STRING_EQUAL(s, "TEXT");
+
+    canaryize(s);
+    r = part_get_subtype(p, &s);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NOT_EQUAL(s, canaryptr());
+    CU_ASSERT_STRING_EQUAL(s, "PLAIN");
+
+    canaryize(i);
+    r = part_get_charset(p, &i);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_STRING_EQUAL(charset_name(i), "us-ascii");
+
+    canaryize(i);
+    r = part_get_encoding(p, &i);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(i, ENCODING_NONE);
+
+    buf_reset(&b);
+    r = part_get_body(p, MESSAGE_DECODED, &b);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&b), TEXT_PART);
+
+    /* part 2 */
+    canaryize(p);
+    r = message_get_part(m, 2, &p);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NOT_NULL(p);
+    CU_ASSERT_PTR_NOT_EQUAL(p, canaryptr());
+
+    canaryize(s);
+    r = part_get_type(p, &s);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NOT_EQUAL(s, canaryptr());
+    CU_ASSERT_STRING_EQUAL(s, "TEXT");
+
+    canaryize(s);
+    r = part_get_subtype(p, &s);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NOT_EQUAL(s, canaryptr());
+    CU_ASSERT_STRING_EQUAL(s, "HTML");
+
+    canaryize(i);
+    r = part_get_charset(p, &i);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_STRING_EQUAL(charset_name(i), "us-ascii");
+
+    canaryize(i);
+    r = part_get_encoding(p, &i);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(i, ENCODING_NONE);
+
+    buf_reset(&b);
+    r = part_get_body(p, MESSAGE_DECODED, &b);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&b), HTML_PART);
+
+    /* part 3 */
+    canaryize(p);
+    r = message_get_part(m, 3, &p);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NOT_NULL(p);
+    CU_ASSERT_PTR_NOT_EQUAL(p, canaryptr());
+
+    canaryize(s);
+    r = part_get_type(p, &s);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NOT_EQUAL(s, canaryptr());
+    CU_ASSERT_STRING_EQUAL(s, "IMAGE");
+
+    canaryize(s);
+    r = part_get_subtype(p, &s);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NOT_EQUAL(s, canaryptr());
+    CU_ASSERT_STRING_EQUAL(s, "PNG");
+
+    canaryize(i);
+    r = part_get_charset(p, &i);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(i, CHARSET_UNKNOWN_CHARSET);
+
+    canaryize(i);
+    r = part_get_encoding(p, &i);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(i, ENCODING_BASE64);
+
+    buf_free(&b);
+    message_unref(&m);
+#undef TEXT_PART
+#undef HTML_PART
+}
+
+/* vim: set ft=c: */
