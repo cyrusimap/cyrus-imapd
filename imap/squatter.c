@@ -750,6 +750,7 @@ static void do_synclogfile(const char *synclogfile)
     qitem_t *item;
     int delay_ms;
     int r;
+    char *last = NULL;
 
     slr = sync_log_reader_create_with_filename(synclogfile);
     r = sync_log_reader_begin(slr);
@@ -764,6 +765,12 @@ static void do_synclogfile(const char *synclogfile)
 	    /* have some due items in the queue, try to index them */
 	    rx = search_begin_update(verbose);
 	    while ((item = queue_remove_due(&queue))) {
+		if (!strcmp(item->mboxname, last)) {
+		    qitem_delete(item);
+		    continue;
+		}
+		free(last);
+		last = xstrdup(item->mboxname);
 		if (verbose > 1)
 		    syslog(LOG_INFO, "do_synclogfile: indexing %s", item->mboxname);
 		r = index_one(item->mboxname, /*blocking*/0);
@@ -786,6 +793,7 @@ static void do_synclogfile(const char *synclogfile)
     }
 
 out:
+    free(last);
     sync_log_reader_free(slr);
 }
 
