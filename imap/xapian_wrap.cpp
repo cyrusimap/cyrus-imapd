@@ -44,7 +44,7 @@ int xapian_compact_dbs(const char *dest, const char **sources)
 	/* we never write to compresion targets again */
 	c->set_compaction_level(Xapian::Compactor::FULLER);
 
-	/* XXX - add a filter here */
+	c->set_multipass(true);
 
 	c->compact();
     }
