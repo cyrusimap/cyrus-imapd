@@ -98,7 +98,7 @@ struct sched_param {
 extern int isched_send(struct sched_param *sparam, const char *recipient,
 		       icalcomponent *ical, xmlNodePtr *xml);
 
-extern int busytime_query(struct transaction_t *txn, icalcomponent *comp);
+extern int sched_busytime_query(struct transaction_t *txn, icalcomponent *comp);
 extern void sched_deliver(const char *recipient, void *data, void *rock);
 extern xmlNodePtr xml_add_schedresponse(xmlNodePtr root, xmlNsPtr dav_ns,
 					xmlChar *recipient, xmlChar *status);

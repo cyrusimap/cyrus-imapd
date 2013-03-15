@@ -363,7 +363,7 @@ static int meth_post_isched(struct transaction_t *txn,
     switch (kind) {
     case ICAL_VFREEBUSY_COMPONENT:
 	if (meth == ICAL_METHOD_REQUEST)
-	    ret = busytime_query(txn, ical);
+	    ret = sched_busytime_query(txn, ical);
 	else {
 	    txn->error.precond = ISCHED_INVALID_SCHED;
 	    ret = HTTP_BAD_REQUEST;

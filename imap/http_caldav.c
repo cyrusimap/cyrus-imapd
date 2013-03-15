@@ -143,13 +143,6 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			  struct mailbox *mailbox, const char *resource,
 			  struct caldav_db *caldavdb, int overwrite,
 			  unsigned flags);
-static icalcomponent *busytime_query_local(struct transaction_t *txn,
-					   struct propfind_ctx *fctx,
-					   char mailboxname[],
-					   icalproperty_method method,
-					   const char *uid,
-					   const char *organizer,
-					   const char *attendee);
 
 static void sched_request(const char *organizer, struct sched_param *sparam,
 			  icalcomponent *oldical, icalcomponent *newical);
@@ -726,7 +719,7 @@ static int caldav_post(struct transaction_t *txn)
 		txn->error.rights = DACL_SCHEDFB;
 		ret = HTTP_FORBIDDEN;
 	    }
-	    else ret = busytime_query(txn, ical);
+	    else ret = sched_busytime_query(txn, ical);
 	else {
 	    txn->error.precond = CALDAV_VALID_SCHED;
 	    ret = HTTP_BAD_REQUEST;
@@ -1993,7 +1986,7 @@ static void busytime_query_remote(const char *server __attribute__((unused)),
 
 /* Perform a Busy Time query based on given VFREEBUSY component */
 /* NOTE: This function is destructive of 'ical' */
-int busytime_query(struct transaction_t *txn, icalcomponent *ical)
+int sched_busytime_query(struct transaction_t *txn, icalcomponent *ical)
 {
     int ret = 0;
     static const char *calendarprefix = NULL;
