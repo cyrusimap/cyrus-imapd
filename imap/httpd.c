@@ -1789,6 +1789,8 @@ void response_header(long code, struct transaction_t *txn)
 	    break;
 
 	case METH_OPTIONS:
+	    if (code != HTTP_OK) break;
+
 	    if (txn->req_tgt.allow & ALLOW_DAV) {
 		/* Construct DAV header(s) based on namespace of request URL */
 		prot_printf(httpd_out, "DAV: 1,%s 3, access-control%s\r\n",
@@ -1806,9 +1808,10 @@ void response_header(long code, struct transaction_t *txn)
 	    }
 
 	    /* Fall through and add Allow header(s) */
+	    code = HTTP_NOT_ALLOWED;
 
 	default:
-	    if (txn->meth == METH_OPTIONS || code == HTTP_NOT_ALLOWED) {
+	    if (code == HTTP_NOT_ALLOWED) {
 		/* Construct Allow header(s) for OPTIONS and 405 response */
 		prot_printf(httpd_out, "Allow: OPTIONS");
 		if (txn->req_tgt.allow & ALLOW_READ) {
