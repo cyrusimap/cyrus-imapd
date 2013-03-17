@@ -226,7 +226,6 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 	if (scheme && userid && *userid) {
 	    prot_printf(s->out, "Authorization-Id: %s\r\n", userid);
 	}
-	prot_printf(s->out, "Content-Length: 0\r\n");
 	prot_printf(s->out, "\r\n");
 	prot_flush(s->out);
 
@@ -439,7 +438,6 @@ static int ping(struct backend *s)
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	prot_printf(s->out, "User-Agent: %s\r\n", buf_cstring(&serverinfo));
     }
-    prot_printf(s->out, "Content-Length: 0\r\n");
     prot_printf(s->out, "\r\n");
     prot_flush(s->out);
 
@@ -751,7 +749,6 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 	prot_printf(src_be->out, "If-Unmodified-Since: %s\r\n", hdr[0]);
     if ((hdr = spool_getheader(txn->req_hdrs, "If-Range")))
 	prot_printf(src_be->out, "If-Range: %s\r\n", hdr[0]);
-    prot_printf(src_be->out, "Content-Length: 0\r\n\r\n");
     prot_flush(src_be->out);
 
     /* Read response from source backend */
@@ -809,7 +806,6 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 			    buf_cstring(&serverinfo));
 	    }
 	    if (etag) prot_printf(src_be->out, "If-Match: %s\r\n", etag);
-	    prot_printf(src_be->out, "Content-Length: 0\r\n\r\n");
 	    prot_flush(src_be->out);
 
 	    /* Read response from source backend */
@@ -856,7 +852,6 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 			buf_cstring(&serverinfo));
 	}
 	if (etag) prot_printf(src_be->out, "If-Match: %s\r\n", etag);
-	prot_printf(src_be->out, "Content-Length: 0\r\n\r\n");
 	prot_flush(src_be->out);
 
 	/* Read response from source backend */
