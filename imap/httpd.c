@@ -766,7 +766,6 @@ void fatal(const char* s, int code)
 
 
 #ifdef HAVE_SSL
-/*  XXX  Needs clean up if we are going to support TLS upgrade (RFC 2817) */
 static void starttls(int https)
 {
     int result;
@@ -788,7 +787,7 @@ static void starttls(int https)
     }
 
     if (!https) {
-	/* tell client to start TLS */
+	/* tell client to start TLS upgrade (RFC 2817) */
 	response_header(HTTP_SWITCH_PROT, NULL);
     }
   
@@ -1164,39 +1163,40 @@ static void cmdloop(void)
 
 	    if (httpd_tls_required) {
 		/* We only support TLS+Basic, so tell client to use TLS */
-		const char *path = txn.req_tgt.path;
-		const char *query = txn.req_tgt.query;
-		struct buf *html = &txn.resp_body.payload;
-		long code;
-
-		/* Create https URL */
-		hdr = spool_getheader(txn.req_hdrs, "Host");
-		buf_printf(&txn.buf, "https://%s", hdr[0]);
-		if (strcmp(path, "*")) {
-		    buf_appendcstr(&txn.buf, path);
-		    if (*query) buf_printf(&txn.buf, "?%s", query);
-		}
-
-		/* Create HTML body */
-		buf_reset(html);
-		buf_printf(html, tls_message,
-			   buf_cstring(&txn.buf), buf_cstring(&txn.buf));
 
 		/* Check which response is required */
-		if ((hdr = spool_getheader(txn.req_hdrs, "Upgrade")) &&
-		    !strncmp(hdr[0], TLS_VERSION, strcspn(hdr[0], " ,"))) {
+		if ((hdr = spool_getheader(txn.req_hdrs, "Prefer")) &&
+		    !strncmp(hdr[0], "tls-upgrade", strcspn(hdr[0], " ,"))) {
 		    /* Client (Murder proxy) prefers RFC 2817 (TLS upgrade) */
-		    code = HTTP_UPGRADE;
+
+		    response_header(HTTP_UPGRADE, &txn);
 		}
 		else {
 		    /* All other clients use RFC 2818 (HTTPS) */
-		    code = HTTP_MOVED;
-		    txn.location = buf_cstring(&txn.buf);
-		}
+		    const char *path = txn.req_tgt.path;
+		    const char *query = txn.req_tgt.query;
+		    struct buf *html = &txn.resp_body.payload;
 
-		/* Output our HTML response */
-		txn.resp_body.type = "text/html; charset=utf-8";
-		write_body(code, &txn, buf_cstring(html), buf_len(html));
+		    /* Create https URL */
+		    hdr = spool_getheader(txn.req_hdrs, "Host");
+		    buf_printf(&txn.buf, "https://%s", hdr[0]);
+		    if (strcmp(path, "*")) {
+			buf_appendcstr(&txn.buf, path);
+			if (*query) buf_printf(&txn.buf, "?%s", query);
+		    }
+
+		    txn.location = buf_cstring(&txn.buf);
+
+		    /* Create HTML body */
+		    buf_reset(html);
+		    buf_printf(html, tls_message,
+			       buf_cstring(&txn.buf), buf_cstring(&txn.buf));
+
+		    /* Output our HTML response */
+		    txn.resp_body.type = "text/html; charset=utf-8";
+		    write_body(HTTP_MOVED, &txn,
+			       buf_cstring(html), buf_len(html));
+		}
 
 		goto done;
 	    }
