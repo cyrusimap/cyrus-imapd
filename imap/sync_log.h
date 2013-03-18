@@ -53,6 +53,7 @@ void sync_log_suppress(void);
 void sync_log_done(void);
 
 void sync_log(const char *fmt, ...);
+void sync_log_channel(const char *channel, const char *fmt, ...);
 
 #define sync_log_user(user) \
     sync_log("USER %s\n", user)

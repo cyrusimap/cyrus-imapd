@@ -304,6 +304,19 @@ EXPORTED void sync_log(const char *fmt, ...)
 	sync_log_base(channels->data[i], val);
 }
 
+EXPORTED void sync_log_channel(const char *channel, const char *fmt, ...)
+{
+    va_list ap;
+    const char *val;
+    int i;
+
+    va_start(ap, fmt);
+    val = va_format(fmt, ap);
+    va_end(ap);
+
+    sync_log_base(channel, val);
+}
+
 /*
  * Read-side sync log code
  */
