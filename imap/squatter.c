@@ -575,278 +575,102 @@ static void do_search(const char *query, int single, const strarray_t *mboxnames
     }
 }
 
-typedef struct qitem qitem_t;
-struct qitem
-{
-    qitem_t *next;
-    int delta_ms;	/* time after previous item */
-    int delay_ms;	/* how much to delay */
-    int elapsed_ms;	/* total elapsed delays */
-    int retries;	/* number of times we have failed to index */
-    char *mboxname;
-};
-/* Initial delay is very short to make retries fast when
- * racing against lmtpd.  */
-#define INIT_DELAY_MS    (32)		    /* 32 millisec */
-#define MAX_DELAY_MS     (1000)		    /* 1 sec */
-#define MAX_ELAPSED_MS	 (10 * 60 * 1000)   /* 10 min */
-
-static qitem_t *queue;
-static int n_unretried = 0;
-
-static qitem_t *qitem_new(const char *mboxname)
-{
-    qitem_t *item = xzmalloc(sizeof(qitem_t));
-    item->mboxname = xstrdup(mboxname);
-    return item;
-}
-
-static void qitem_delete(qitem_t *item)
-{
-    free(item->mboxname);
-    free(item);
-}
-
-static int qitem_compare(const void *v1, const void *v2)
-{
-    const qitem_t *item1 = *(const qitem_t **)v1;
-    const qitem_t *item2 = *(const qitem_t **)v2;
-    return strcmp(item1->mboxname, item2->mboxname);
-}
-
-static void debug_dump(void)
-{
-    qitem_t *item;
-
-    syslog(LOG_INFO, "queue {");
-    for (item = queue ; item ; item = item->next) {
-	syslog(LOG_INFO, "    delta_ms=%d delay_ms=%d mboxname=%s retries=%d",
-		item->delta_ms, item->delay_ms, item->mboxname, item->retries);
-    }
-    syslog(LOG_INFO, "} queue");
-    syslog(LOG_INFO, "n_unretried=%d", n_unretried);
-}
-
-static qitem_t *_queue_detach(qitem_t **prevp);
-
-static qitem_t *queue_find_by_name(qitem_t **headp, const char *mboxname)
-{
-    qitem_t **prevp;
-
-    for (prevp = headp ; *prevp ; prevp = &((*prevp)->next)) {
-	if (!strcmp((*prevp)->mboxname, mboxname))
-	    return prevp;
-    }
-    return NULL;
-}
-
-static qitem_t *_queue_detach(qitem_t **prevp)
-{
-    qitem_t *item = *prevp;
-    if (item) {
-	*prevp = item->next;
-	item->next = NULL;
-	if (!item->retries) n_unretried--;
-    }
-    return item;
-}
-
-static void _queue_insert(qitem_t **prevp, qitem_t *item)
-{
-    item->next = *prevp;
-    *prevp = item;
-    if (!item->retries) n_unretried++;
-}
-
-static qitem_t *queue_remove_due(qitem_t **headp)
-{
-    qitem_t *item = *headp;
-    if (item && item->delta_ms <= 0)
-	return _queue_detach(headp);
-    return NULL;
-}
-
-static void queue_delay(qitem_t **headp, qitem_t *item)
-{
-    qitem_t **prevp;
-    int delta_ms;
-
-    delta_ms = item->delay_ms;
-
-    item->elapsed_ms += delta_ms;
-    if (item->elapsed_ms > MAX_ELAPSED_MS) {
-	syslog(LOG_ERR, "IOERROR: Unable to open mailbox %s for indexing "
-			"after %d.%03d second of delays, giving up",
-			item->mboxname,
-			item->elapsed_ms / 1000, item->elapsed_ms % 1000);
-	qitem_delete(item);
-	return;
-    }
-
-    if (!item->delay_ms)
-	item->delay_ms = INIT_DELAY_MS;
-    else
-	item->delay_ms = MIN(item->delay_ms * 2, MAX_DELAY_MS);
-
-    if (verbose > 1)
-	syslog(LOG_INFO, "queue_delay(%s, %d ms)", item->mboxname, delta_ms);
-
-    for (prevp = headp ;
-	 *prevp && delta_ms >= (*prevp)->delta_ms ;
-	 prevp = &((*prevp)->next))
-	delta_ms -= (*prevp)->delta_ms;
-
-    item->delta_ms = delta_ms;
-    _queue_insert(prevp, item);
-}
-
-static int queue_next_due(qitem_t **headp)
-{
-    return (*headp ? (*headp)->delta_ms : INT_MAX);
-}
-
-static void queue_slept(qitem_t **headp, int delay_ms)
-{
-    if (*headp)
-	(*headp)->delta_ms -= delay_ms;
-}
-
-static void read_sync_log_items(sync_log_reader_t *slr)
+static strarray_t *read_sync_log_items(sync_log_reader_t *slr)
 {
     const char *args[3];
-    qitem_t *item = NULL;
-    int i;
-    ptrarray_t items = PTRARRAY_INITIALIZER;
+    strarray_t *folders = strarray_new();
 
     while (sync_log_reader_getitem(slr, args) == 0) {
-	if (!strcmp(args[0], "APPEND")) {
-	    item = queue_find_by_name(&queue, args[1]);
-	    if (!item) {
-		item = qitem_new(args[1]);
-		ptrarray_append(&items, item);
-	    }
-	}
+	if (!strcmp(args[0], "APPEND"))
+	    strarray_add(folders, args[1]);
     }
 
     /* sort the mailboxes to get locality of reference
-     * for searchd startups */
-    qsort(items.data, items.count, sizeof(qitem_t*), qitem_compare);
+     * for indexing */
+    strarray_sort(folders, NULL);
 
-    for (i = 0 ; i < items.count ; i++) {
-	item = ptrarray_nth(&items, i);
-	item->delay_ms = 0;
-	item->retries = 0;
-	item->elapsed_ms = 0;
-	queue_delay(&queue, item);
-    }
-
-    ptrarray_fini(&items);
-
-    /* TODO: save the queue to a file at this point */
+    return folders;
 }
 
 static void do_synclogfile(const char *synclogfile)
 {
+    strarray_t *folders = NULL;
     sync_log_reader_t *slr;
-    qitem_t *item;
-    int delay_ms;
+    int i;
     int r;
 
     slr = sync_log_reader_create_with_filename(synclogfile);
     r = sync_log_reader_begin(slr);
     if (r) goto out;
-    read_sync_log_items(slr);
+    folders = read_sync_log_items(slr);
     sync_log_reader_end(slr);
 
-    while (queue) {
-	signals_poll();
+    signals_poll();
 
-	if (queue_next_due(&queue) <= 0) {
-	    /* have some due items in the queue, try to index them */
-	    rx = search_begin_update(verbose);
-	    while ((item = queue_remove_due(&queue))) {
-		if (verbose > 1)
-		    syslog(LOG_INFO, "do_synclogfile: indexing %s", item->mboxname);
-		r = index_one(item->mboxname, /*blocking*/0);
-		if (r == IMAP_AGAIN || r == IMAP_MAILBOX_LOCKED) {
-		    item->retries++;
-		    queue_delay(&queue, item);
-		}
-		else
-		    qitem_delete(item);
-	    }
-	    search_end_update(rx);
-	    rx = NULL;
-	}
-
-	delay_ms = queue_next_due(&queue);
-	if (delay_ms && delay_ms != INT_MAX) {
-	    poll(NULL, 0, delay_ms);
-	    queue_slept(&queue, delay_ms);
+    /* have some due items in the queue, try to index them */
+    rx = search_begin_update(verbose);
+    for (i = 0; i < folders->count; i++) {
+	const char *mboxname = strarray_nth(folders, i);
+	if (verbose > 1)
+	    syslog(LOG_INFO, "do_synclogfile: indexing %s", mboxname);
+	r = index_one(mboxname, /*blocking*/1);
+	if (r == IMAP_AGAIN || r == IMAP_MAILBOX_LOCKED) {
+	    syslog(LOG_ERR, "IOERROR: failed to index %s", mboxname);
 	}
     }
+    search_end_update(rx);
+    rx = NULL;
 
 out:
+    strarray_free(folders);
     sync_log_reader_free(slr);
 }
 
 static void do_rolling(const char *channel)
 {
+    strarray_t *folders = NULL;
     sync_log_reader_t *slr;
-    qitem_t *item;
-    int poll_period_ms = 1000;
-    int delay_ms;
+    int i;
     int r;
 
     slr = sync_log_reader_create_with_channel(channel);
 
     for (;;) {
-	r = signals_poll();
-	if (r == SIGHUP) {
-	    debug_dump();
-	    signals_clear(SIGHUP);
-	    continue;
-	}
+	signals_poll();
 	if (shutdown_file(NULL, 0))
 	    shut_down(EC_TEMPFAIL);
 
-	if (!n_unretried) {
-	    /* Have successfully drained the queue of items which are on
-	     * their first pass around, go see if there's some more to
-	     * be had in the sync log */
-	    r = sync_log_reader_begin(slr);
-	    if (r && r != IMAP_AGAIN)
-		break;
-	    if (!r) {
-		read_sync_log_items(slr);
-	    }
+	r = sync_log_reader_begin(slr);
+	if (r) { /* including IMAP_AGAIN */
+	    usleep(100000);    /* 1/10th second */
+	    continue;
 	}
 
-	if (queue_next_due(&queue) <= 0) {
+	folders = read_sync_log_items(slr);
+
+	if (folders->count) {
 	    /* have some due items in the queue, try to index them */
 	    rx = search_begin_update(verbose);
-	    while ((item = queue_remove_due(&queue))) {
+	    for (i = 0; i < folders->count; i++) {
+		const char *mboxname = strarray_nth(folders, i);
 		if (verbose > 1)
-		    syslog(LOG_INFO, "do_rolling: indexing %s", item->mboxname);
-		r = index_one(item->mboxname, /*blocking*/0);
+		    syslog(LOG_INFO, "do_rolling: indexing %s", mboxname);
+		r = index_one(mboxname, /*blocking*/0);
 		if (r == IMAP_AGAIN || r == IMAP_MAILBOX_LOCKED) {
-		    item->retries++;
-		    queue_delay(&queue, item);
+		    /* XXX: alternative, just append to strarray_t *folders ... */
+		    sync_log_channel(channel, "APPEND %s", mboxname);
 		}
-		else
-		    qitem_delete(item);
 	    }
 	    search_end_update(rx);
 	    rx = NULL;
 	}
 
-	delay_ms = MIN(poll_period_ms, queue_next_due(&queue));
-	if (delay_ms) {
-	    poll(NULL, 0, delay_ms);
-	    queue_slept(&queue, delay_ms);
-	}
+	strarray_free(folders);
+	folders = NULL;
     }
 
+    /* XXX - we don't really get here... */
+    strarray_free(folders);
     sync_log_reader_free(slr);
 }
 
