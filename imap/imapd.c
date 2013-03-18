@@ -419,9 +419,9 @@ static int parse_annotate_fetch_data(const char *tag,
 				     int permessage_flag,
 				     strarray_t *entries,
 				     strarray_t *attribs);
-static int parse_metadata_fetch_data(const char *tag,
-				     strarray_t *entries,
-				     strarray_t *attribs);
+static int parse_metadata_string_or_list(const char *tag,
+					 strarray_t *sa,
+					 int *was_singlep);
 static int parse_annotate_store_data(const char *tag,
 				     int permessage_flag,
 				     struct entryattlist **entryatts);
@@ -7841,24 +7841,26 @@ static int parse_annotate_fetch_data(const char *tag,
 }
 
 /*
- * Parse metadata fetch data.
- *
- * This is a generic routine which parses just the annotation data.
- * Any surrounding command text must be parsed elsewhere, ie,
- * GETANNOTATION, FETCH.
+ * Parse either a single string or a (bracketed) list of strings.
+ * This is used up to three times in the GETMETADATA command.
  */
-static int parse_metadata_fetch_data(const char *tag,
-				     strarray_t *entries,
-				     strarray_t *attribs)
+static int parse_metadata_string_or_list(const char *tag,
+					 strarray_t *entries,
+					 int *was_singlep)
 {
     int c;
     static struct buf arg;
+
+    *was_singlep = 0;
 
     c = prot_getc(imapd_in);
     if (c == EOF) {
 	prot_printf(imapd_out,
 		    "%s BAD Missing metadata entry\r\n", tag);
 	goto baddata;
+    }
+    else if (c == '\r') {
+	return c;
     }
     else if (c == '(') {
 	/* entry list */
@@ -7895,49 +7897,10 @@ static int parse_metadata_fetch_data(const char *tag,
 	}
 
 	strarray_append(entries, arg.s);
+	*was_singlep = 1;
     }
 
-    if (c != ' ') return c;
-
-    /* entries were actually options!  So we're going to read the new
-     * entries into the "attribs" value and sort it out later */
-    c = prot_getc(imapd_in);
-    if (c == '(') {
-	do {
-	    c = getastring(imapd_in, imapd_out, &arg);
-	    if (c == EOF) {
-		prot_printf(imapd_out,
-			    "%s BAD Missing metadata attribute(s)\r\n", tag);
-		goto baddata;
-	    }
-
-	    /* add the attrib to the list */
-	    strarray_append(attribs, arg.s);
-
-	} while (c == ' ');
-
-	if (c != ')') {
-	    prot_printf(imapd_out,
-			"%s BAD Missing close paren in "
-			"annotation attribute list\r\n", tag);
-	    goto baddata;
-	}
-
-	c = prot_getc(imapd_in);
-    }
-    else {
-	/* single attrib */
-	prot_ungetc(c, imapd_in);
-	c = getastring(imapd_in, imapd_out, &arg);
-	if (c == EOF) {
-	    prot_printf(imapd_out,
-			"%s BAD Missing annotation attribute\r\n", tag);
-	    goto baddata;
-	}
-	strarray_append(attribs, arg.s);
-    }
-
-    return c;
+    if (c == ' ' || c == '\r') return c;
 
   baddata:
     if (c != EOF) prot_ungetc(c, imapd_in);
@@ -8456,6 +8419,52 @@ static void getmetadata_response(const char *mboxname,
     buf_free(&mentry);
 }
 
+struct getmetadata_options
+{
+    int maxsize;
+    int depth;
+};
+
+static int parse_getmetadata_options(const strarray_t *sa,
+				     struct getmetadata_options *opts)
+{
+    int i;
+    int n = 0;
+    struct getmetadata_options dummy;
+
+    if (!opts) opts = &dummy;
+
+    for (i = 0 ; i < sa->count ; i+=2) {
+	const char *option = sa->data[i];
+	const char *value = sa->data[i+1];
+	if (!value)
+	    return -1;
+	if (!strcasecmp(option, "MAXSIZE")) {
+	    char *end = NULL;
+	    opts->maxsize = strtoul(value, &end, 10);
+	    if (!end || *end || end == value)
+		return -1;
+	    n++;
+	}
+	else if (!strcasecmp(option, "DEPTH")) {
+	    if (!strcmp(value, "0"))
+		opts->depth = 0;
+	    else if (!strcmp(value, "1"))
+		opts->depth = 1;
+	    else if (!strcasecmp(value, "infinity"))
+		opts->depth = -1;
+	    else
+		return -1;
+	    n++;
+	}
+	else {
+	    return 0;
+	}
+    }
+
+    return n;
+}
+
 /*
  * Perform a GETMETADATA command
  *
@@ -8464,60 +8473,37 @@ static void getmetadata_response(const char *mboxname,
 static void cmd_getmetadata(const char *tag)
 {
     int c, r = 0;
-    strarray_t entries = STRARRAY_INITIALIZER;
-    strarray_t attribs = STRARRAY_INITIALIZER;
+    strarray_t lists[3] = { STRARRAY_INITIALIZER,
+			    STRARRAY_INITIALIZER,
+			    STRARRAY_INITIALIZER };
+    int was_single[3] = { 0, 0, 0 };
+    int nlists = 0;
+    strarray_t *options = NULL;
+    strarray_t *mboxes = NULL;
+    strarray_t *entries = NULL;
     strarray_t newe = STRARRAY_INITIALIZER;
     strarray_t newa = STRARRAY_INITIALIZER;
-    strarray_t *real_entries;
     struct buf arg1 = BUF_INITIALIZER;
-    strarray_t mboxes = STRARRAY_INITIALIZER;
     int mbox_is_pattern = 0;
-    int maxsize = -1;
+    struct getmetadata_options opts;
     int basesize = 0;
     int *sizeptr = NULL;
-    int depth = 0;
     int have_shared = 0;
     int have_private = 0;
     int i;
     annotate_state_t *astate = NULL;
 
-    c = prot_getc(imapd_in);
-    if (c == EOF)
-	goto missingargs;
-    if (c == '(') {
-	/* Non-standard extension to GETMETADATA syntax:
-	 * allow a (list) of folder names instead of a
-	 * single folder or folder pattern */
-	for (;;) {
-	    c = getastring(imapd_in, imapd_out, &arg1);
-	    if (arg1.len)
-		strarray_append(&mboxes, arg1.s);
-	    if (c == ')')
-		break;
-	    if (c != ' ')
-		goto missingargs;
-	}
-	c = prot_getc(imapd_in);
-	if (c != ' ')
-	    goto missingargs;
-	mbox_is_pattern = 0;
-    }
-    else {
-	/* Standard GETMETADATA syntax: 1st argument
-	 * is a folder name/pattern */
-	prot_ungetc(c, imapd_in);
-	c = getastring(imapd_in, imapd_out, &arg1);
-	if (c != ' ')
-	    goto missingargs;
-	if (arg1.len)
-	    strarray_append(&mboxes, arg1.s);
-	mbox_is_pattern = 1;
-    }
+    opts.maxsize = -1;
+    opts.depth = 0;
 
-    c = parse_metadata_fetch_data(tag, &entries, &attribs);
-    if (c == EOF) {
-	eatline(imapd_in, c);
-	goto freeargs;
+    while (nlists < 3)
+    {
+	c = parse_metadata_string_or_list(tag, &lists[nlists], &was_single[nlists]);
+	if (c == EOF)
+	    goto missingargs;
+	nlists++;
+	if (c == '\r')
+	    break;
     }
 
     /* check for CRLF */
@@ -8530,50 +8516,82 @@ static void cmd_getmetadata(const char *tag)
 	goto freeargs;
     }
 
-    /* we need to rewrite the entries and attribs to match the way that
-     * the old annotation system works.  also, we need to handle the
-     * options if there are any */
-    if (attribs.count) {
-	for (i = 0 ; i < entries.count ; i+=2) {
-	    const char *option = entries.data[i];
-	    const char *value = entries.data[i+1];
-	    if (!value) {
-		prot_printf(imapd_out,
-			    "%s BAD missing value to metadata option\r\n",
-			    tag);
-		goto freeargs;
-	    }
-	    if (!strcasecmp(option, "MAXSIZE")) {
-		/* XXX - scan for "is number" */
-		maxsize = atoi(value);
-		sizeptr = &maxsize;
-	    }
-	    else if (!strcasecmp(option, "DEPTH")) {
-		if (!strcmp(value, "0")) {
-		    depth = 0;
-		}
-		else if (!strcmp(value, "1")) {
-		    depth = 1;
-		}
-		else if (!strcasecmp(value, "infinity")) {
-		    depth = -1;
-		}
-		else {
-		    prot_printf(imapd_out,
-				"%s BAD invalid depth option\r\n",
-				tag);
-		    goto freeargs;
-		}
-	    }
-	}
-	real_entries = &attribs;
+    /*
+     * We have three strings or lists of strings.  Now to figure out
+     * what's what.  We have two complicating factors.  First, due to
+     * a erratum in RFC5464 and our earlier misreading of the document,
+     * we historically supported specifying the options *after* the
+     * mailbox name.  Second, we have for a few months now supported
+     * a non-standard extension where a list of mailbox names could
+     * be supplied instead of just a single one.  So we have to apply
+     * some rules.  We support the following syntaxes:
+     *
+     * --- no options
+     * mailbox entry
+     * mailbox (entries)
+     * (mailboxes) entry
+     * (mailboxes) (entries)
+     *
+     * --- options in the correct place (per the ABNF in RFC5464)
+     * (options) mailbox entry
+     * (options) mailbox (entries)
+     * (options) (mailboxes) entry
+     * (options) (mailboxes) (entries)
+     *
+     * --- options in the wrong place (per the examples in RFC5464)
+     * mailbox (options) entry
+     * mailbox (options) (entries)
+     * (mailboxes) (options) entry
+     * (mailboxes) (options) (entries)
+     */
+    if (nlists < 2)
+	goto missingargs;
+    entries = &lists[nlists-1];	    /* entries always last */
+    if (nlists == 2) {
+	/* no options */
+	mboxes = &lists[0];
+	mbox_is_pattern = was_single[0];
     }
-    else {
-	real_entries = &entries;
+    if (nlists == 3) {
+	/* options, either before or after */
+	int r0 = (parse_getmetadata_options(&lists[0], NULL) > 0);
+	int r1 = (parse_getmetadata_options(&lists[1], NULL) > 0);
+	switch ((r1<<1)|r0) {
+	case 0:
+	    /* neither are valid options */
+	    goto missingargs;
+	case 1:
+	    /* (options) (mailboxes) */
+	    options = &lists[0];
+	    mboxes = &lists[1];
+	    mbox_is_pattern = was_single[1];
+	    break;
+	case 2:
+	    /* (mailboxes) (options) */
+	    mboxes = &lists[0];
+	    mbox_is_pattern = was_single[0];
+	    options = &lists[1];
+	    break;
+	case 3:
+	    /* both appear like valid options */
+	    prot_printf(imapd_out,
+			"%s BAD Too many option lists for Getmetadata\r\n",
+			tag);
+	    eatline(imapd_in, c);
+	    goto freeargs;
+	}
     }
 
-    for (i = 0 ; i < real_entries->count ; i++) {
-	char *ent = real_entries->data[i];
+    if (options) {
+	parse_getmetadata_options(options, &opts);
+	if (opts.maxsize >= 0)
+	    sizeptr = &opts.maxsize;
+    }
+
+    /* we need to rewrite the entries and attribs to match the way that
+     * the old annotation system works. */
+    for (i = 0 ; i < entries->count ; i++) {
+	char *ent = entries->data[i];
 	char entry[MAX_MAILBOX_NAME];
 
 	lcase(ent);
@@ -8597,11 +8615,11 @@ static void cmd_getmetadata(const char *tag)
 	    goto freeargs;
 	}
 	strarray_append(&newe, entry);
-	if (depth == 1) {
+	if (opts.depth == 1) {
 	    strncat(entry, "/%", MAX_MAILBOX_NAME);
 	    strarray_append(&newe, entry);
 	}
-	else if (depth == -1) {
+	else if (opts.depth == -1) {
 	    strncat(entry, "/*", MAX_MAILBOX_NAME);
 	    strarray_append(&newe, entry);
 	}
@@ -8614,8 +8632,8 @@ static void cmd_getmetadata(const char *tag)
     annotate_state_set_auth(astate,
 			    imapd_userisadmin || imapd_userisproxyadmin,
 			    imapd_userid, imapd_authstate);
-    basesize = maxsize;
-    if (!mboxes.count) {
+    basesize = opts.maxsize;
+    if (!mboxes->count || !strcmpsafe(mboxes->data[0], NULL)) {
 	r = annotate_state_set_server(astate);
 	if (!r)
 	    r = annotate_state_fetch(astate, &newe, &newa,
@@ -8628,9 +8646,9 @@ static void cmd_getmetadata(const char *tag)
 	arock.callback = getmetadata_response;
 	arock.sizeptr = sizeptr;
 	if (mbox_is_pattern)
-	    r = apply_mailbox_pattern(astate, mboxes.data[0], annot_fetch_cb, &arock);
+	    r = apply_mailbox_pattern(astate, mboxes->data[0], annot_fetch_cb, &arock);
 	else
-	    r = apply_mailbox_array(astate, &mboxes, annot_fetch_cb, &arock);
+	    r = apply_mailbox_array(astate, mboxes, annot_fetch_cb, &arock);
     }
     /* we didn't write anything */
     annotate_state_abort(&astate);
@@ -8648,16 +8666,16 @@ static void cmd_getmetadata(const char *tag)
     }
 
   freeargs:
-    strarray_fini(&entries);
-    strarray_fini(&attribs);
+    strarray_fini(&lists[0]);
+    strarray_fini(&lists[1]);
+    strarray_fini(&lists[2]);
     strarray_fini(&newe);
     strarray_fini(&newa);
-    strarray_fini(&mboxes);
     buf_free(&arg1);
     return;
 
 missingargs:
-    prot_printf(imapd_out, "%s BAD Missing arguments to Getannotation\r\n", tag);
+    prot_printf(imapd_out, "%s BAD Missing arguments to Getmetadata\r\n", tag);
     eatline(imapd_in, c);
     goto freeargs;
 }
