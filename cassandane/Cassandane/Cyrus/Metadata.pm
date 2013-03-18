@@ -2621,4 +2621,165 @@ sub test_getmetadata_multiple_folders
     }
 }
 
+# This is like Mail::IMAPTalk::getmetadata, but
+# a) doesn't assume incorrect placement of the options, and
+# b) handles the METADATA LONGENTRIES response code
+sub getmetadata
+{
+    my ($talk, @args) = @_;
+
+    my $res = {};
+
+    my %handlers =
+    (
+	metadata => sub
+	{
+	    my ($response, $rr, $id) = @_;
+	    if ($rr->[0] =~ m/^longentries/i)
+	    {
+		$res->{longentries} = 0 + $rr->[1];
+	    }
+	    else
+	    {
+		my $f = $talk->_unfix_folder_name($rr->[0]);
+		my %kv = ( @{$rr->[1]} );
+		map { $res->{$f}->{$_} = $kv{$_}; } keys %kv;
+	    }
+	}
+    );
+
+    my $r = $talk->_imap_cmd('getmetadata', 0, \%handlers, @args);
+    return if !defined $r;
+    return $res;
+}
+
+sub test_getmetadata_maxsize
+{
+    my ($self) = @_;
+
+    xlog "test the GETMETADATA command with the MAXSIZE option";
+
+    my $imaptalk = $self->{store}->get_client();
+    # data thanks to hipsteripsum.me
+    my $folder = 'INBOX.denim';
+    my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
+    my $res;
+
+    xlog "Create folder";
+    $imaptalk->create($folder)
+	or die "Cannot create mailbox $folder: $@";
+
+    $res = $imaptalk->getmetadata($folder, $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+
+    my $uuid = $res->{$folder}{$entry};
+    $self->assert_not_null($uuid);
+    $self->assert($uuid =~ m/^[0-9a-z-]+$/);
+
+    xlog "Getting metadata with no MAXSIZE";
+    $res = getmetadata($imaptalk, $folder, $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals({ $folder => { $entry => $uuid } } , $res);
+
+    xlog "Getting metadata with a large MAXSIZE in the right place";
+    $res = getmetadata($imaptalk, [ MAXSIZE => 2048 ], $folder, $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals({ $folder => { $entry => $uuid } } , $res);
+
+    xlog "Getting metadata with a small MAXSIZE in the right place";
+    $res = getmetadata($imaptalk, [ MAXSIZE => 8 ], $folder, $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_deep_equals({ longentries => 36 } , $res);
+
+    xlog "Getting metadata with a large MAXSIZE in the wrong place";
+    $res = getmetadata($imaptalk, $folder, [ MAXSIZE => 2048 ], $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals({ $folder => { $entry => $uuid } } , $res);
+
+    xlog "Getting metadata with a small MAXSIZE in the wrong place";
+    $res = getmetadata($imaptalk, $folder, [ MAXSIZE => 8 ], $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_deep_equals({ longentries => 36 } , $res);
+}
+
+sub test_getmetadata_depth
+    :AnnotationAllowUndefined
+{
+    my ($self) = @_;
+
+    xlog "test the GETMETADATA command with DEPTH option";
+
+    my $imaptalk = $self->{store}->get_client();
+    # data thanks to hipsteripsum.me
+    my $folder = 'INBOX.denim';
+    my %entries = (
+	'/shared/selvage' => 'locavore',
+	'/shared/selvage/portland' => 'ennui',
+	'/shared/selvage/leggings' => 'scenester',
+	'/shared/selvage/portland/mustache' => 'terry richardson',
+	'/shared/selvage/portland/mustache/american' => 'messenger bag',
+	'/shared/selvage/portland/mustache/american/apparel' => 'street art',
+    );
+    my $rootentry = '/shared/selvage';
+    my $res;
+
+    xlog "Create folder";
+    $imaptalk->create($folder)
+	or die "Cannot create mailbox $folder: $@";
+
+    xlog "Setup metadata";
+    foreach my $entry (sort keys %entries)
+    {
+	$imaptalk->setmetadata($folder, $entry, $entries{$entry})
+	    or die "Cannot setmetadata: $@";
+    }
+
+    xlog "Getting metadata with no DEPTH";
+    $res = getmetadata($imaptalk, $folder, $rootentry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals({ $folder => { $rootentry => $entries{$rootentry} } } , $res);
+
+    xlog "Getting metadata with DEPTH 0 in the right place";
+    $res = getmetadata($imaptalk, $folder, [ DEPTH => 0 ], $rootentry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals({ $folder => { $rootentry => $entries{$rootentry} } } , $res);
+
+    xlog "Getting metadata with DEPTH 1 in the right place";
+    my @subset = ( qw(/shared/selvage /shared/selvage/portland /shared/selvage/leggings) );
+    $res = getmetadata($imaptalk, $folder, [ DEPTH => 1 ], $rootentry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals({ $folder => { map { $_ => $entries{$_} } @subset } }, $res);
+
+    xlog "Getting metadata with DEPTH infinity in the right place";
+    $res = getmetadata($imaptalk, $folder, [ DEPTH => 'infinity' ], $rootentry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals({ $folder => { %entries } } , $res);
+
+    xlog "Getting metadata with DEPTH 0 in the wrong place";
+    $res = getmetadata($imaptalk, $folder, [ DEPTH => 0 ], $rootentry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals({ $folder => { $rootentry => $entries{$rootentry} } } , $res);
+
+    xlog "Getting metadata with DEPTH 1 in the wrong place";
+    $res = getmetadata($imaptalk, $folder, [ DEPTH => 1 ], $rootentry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals({ $folder => { map { $_ => $entries{$_} } @subset } }, $res);
+
+    xlog "Getting metadata with DEPTH infinity in the wrong place";
+    $res = getmetadata($imaptalk, $folder, [ DEPTH => 'infinity' ], $rootentry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals({ $folder => { %entries } } , $res);
+}
+
 1;
