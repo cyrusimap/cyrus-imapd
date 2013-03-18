@@ -1218,6 +1218,11 @@ EXPORTED int prot_putbuf(struct protstream *s, struct buf *buf)
     return prot_write(s, buf->s, buf->len);
 }
 
+int prot_puts(struct protstream *s, const char *str)
+{
+    return prot_write(s, str, strlen(str));
+}
+
 /*
  * Stripped-down version of printf() that works on protection streams
  * Only understands '%lld', '%llu', '%ld', '%lu', '%d', %u', '%s',
