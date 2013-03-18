@@ -664,9 +664,13 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     prot_printf(be->out, " %s\r\n", HTTP_VERSION);
     write_via_hdr(be->out, txn->req_hdrs);
     prot_printf(be->out, "Host: %s\r\n", be->hostname);
-    prot_printf(be->out, "Expect: 100-continue\r\n");
     spool_enum_hdrcache(txn->req_hdrs, &write_cachehdr, be->out);
-    prot_printf(be->out, "Transfer-Encoding: chunked\r\n\r\n");
+    if (spool_getheader(txn->req_hdrs, "Transfer-Encoding") ||
+	spool_getheader(txn->req_hdrs, "Content-Length")) {
+	prot_printf(be->out, "Expect: 100-continue\r\n");
+	prot_printf(be->out, "Transfer-Encoding: chunked\r\n");
+    }
+    prot_printf(be->out, "\r\n");
     prot_flush(be->out);
 
     do {
@@ -688,9 +692,12 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 	    }
 	    else {
 		/* Send single-chunk body to backend to complete the request */
-		prot_printf(be->out, "%x\r\n", buf_len(&txn->req_body));
-		prot_putbuf(be->out, &txn->req_body);
-		prot_printf(be->out, "\r\n0\r\n\r\n");
+		if (buf_len(&txn->req_body)) {
+		    prot_printf(be->out, "%x\r\n", buf_len(&txn->req_body));
+		    prot_putbuf(be->out, &txn->req_body);
+		    prot_printf(be->out, "\r\n");
+		}
+		prot_printf(be->out, "0\r\n\r\n");
 		prot_flush(be->out);
 	    }
 	}
