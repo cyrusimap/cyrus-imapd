@@ -1236,14 +1236,14 @@ static void cmdloop(void)
 	}
 
       done:
+	/* Handle errors (success responses handled by method functions) */
+	if (ret) error_response(ret, &txn);
+
 	/* If we haven't the read body, read and discard it */
 	if (txn.req_hdrs && !txn.flags.havebody &&
 	    read_body(httpd_in, txn.req_hdrs, NULL, 0, &txn.error.desc)) {
 	    txn.flags.close = 1;
 	}
-
-	/* Handle errors (success responses handled by method functions) */
-	if (ret) error_response(ret, &txn);
 
 	/* Memory cleanup */
 	if (txn.req_hdrs) spool_free_hdrcache(txn.req_hdrs);
