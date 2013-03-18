@@ -3992,7 +3992,7 @@ int meth_propfind(struct transaction_t *txn, void *params)
 	return HTTP_BAD_REQUEST;
     }
 
-    if ((txn->req_tgt.allow & ALLOW_WRITE) && txn->req_tgt.user) {
+    if ((txn->req_tgt.namespace != URL_NS_PRINCIPAL) && txn->req_tgt.user) {
 	char *server, *acl;
 	int rights;
 
