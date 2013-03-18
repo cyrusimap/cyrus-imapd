@@ -1424,8 +1424,11 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
 	int r = read_annotations(mailbox, NULL, &mannots);
 	if (r) return 0;
 
-	if (diff_annotations(mannots, remote->annots))
+	if (diff_annotations(mannots, remote->annots)) {
+	    sync_annot_list_free(&mannots);
 	    return 0;
+	}
+	sync_annot_list_free(&mannots);
     }
 
     /* otherwise it's unchanged! */
