@@ -235,6 +235,23 @@ EXPORTED uint32_t append_uidvalidity(struct appendstate *as)
     return as->mailbox->i.uidvalidity;
 }
 
+static void append_free(struct appendstate *as)
+{
+    if (!as) return;
+    if (as->s == APPEND_DONE) return;
+
+    seqset_free(as->seen_seq);
+    as->seen_seq = NULL;
+
+    mboxevent_freequeue(&as->mboxevents);
+    as->event_type = 0;
+
+    if (as->close_mailbox_when_done)
+	mailbox_close(&as->mailbox);
+
+    as->s = APPEND_DONE;
+}
+
 /* may return non-zero, indicating that the entire append has failed
  and the mailbox is probably in an inconsistent state. */
 EXPORTED int append_commit(struct appendstate *as)
@@ -254,8 +271,7 @@ EXPORTED int append_commit(struct appendstate *as)
 	if (as->userid[0])
 	    append_addseen(as->mailbox, as->userid, as->seen_seq);
     }
-    seqset_free(as->seen_seq);
-    
+
     /* We want to commit here to guarantee mailbox on disk vs
      * duplicate DB consistency */
     r = mailbox_commit(as->mailbox);
@@ -268,38 +284,18 @@ EXPORTED int append_commit(struct appendstate *as)
 
     /* send the list of MessageCopy or MessageAppend event notifications at once */
     mboxevent_notify(as->mboxevents);
-    mboxevent_freequeue(&as->mboxevents);
-    as->event_type = 0;
 
-    if (as->close_mailbox_when_done)
-	mailbox_close(&as->mailbox);
-
-    as->s = APPEND_DONE;
-
+    append_free(as);
     return 0;
 }
 
 /* may return non-zero, indicating an internal error of some sort. */
 EXPORTED int append_abort(struct appendstate *as)
 {
-    int r = 0;
-
     if (as->s == APPEND_DONE) return 0;
-    as->s = APPEND_DONE;
+    append_free(as);
 
-    /* XXX - clean up neatly so we don't crash and burn here... */
-
-    /* close mailbox */
-    if (as->close_mailbox_when_done)
-	mailbox_close(&as->mailbox);
-
-    seqset_free(as->seen_seq);
-
-    /* don't send the MessageCopy or MessageAppend event notifications */
-    mboxevent_freequeue(&as->mboxevents);
-    as->event_type = 0;
-
-    return r;
+    return 0;
 }
 
 /*
