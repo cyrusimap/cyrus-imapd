@@ -8596,11 +8596,15 @@ static void cmd_getmetadata(const char *tag)
 			tag);
 	    goto freeargs;
 	}
-	if (depth == 1)
-	    strncat(entry, "/%", MAX_MAILBOX_NAME);
-	else if (depth == -1)
-	    strncat(entry, "/*", MAX_MAILBOX_NAME);
 	strarray_append(&newe, entry);
+	if (depth == 1) {
+	    strncat(entry, "/%", MAX_MAILBOX_NAME);
+	    strarray_append(&newe, entry);
+	}
+	else if (depth == -1) {
+	    strncat(entry, "/*", MAX_MAILBOX_NAME);
+	    strarray_append(&newe, entry);
+	}
     }
 
     if (have_private) strarray_append(&newa, "value.priv");
