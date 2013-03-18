@@ -209,7 +209,7 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 	}
 
 	/* Send Authorization and/or Upgrade request to server */
-	prot_printf(s->out, "OPTIONS * HTTP/1.1\r\n");
+	prot_puts(s->out, "OPTIONS * HTTP/1.1\r\n");
 	prot_printf(s->out, "Host: %s\r\n", s->hostname);
 	if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	    prot_printf(s->out, "User-Agent: %s\r\n", buf_cstring(&serverinfo));
@@ -217,16 +217,16 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 	if (need_tls) {
 	    prot_printf(s->out, "Upgrade: %s, %s\r\n",
 			TLS_VERSION, HTTP_VERSION);
-	    prot_printf(s->out, "Connection: upgrade\r\n");
+	    prot_puts(s->out, "Connection: upgrade\r\n");
 	    need_tls = 0;
 	}
-	else prot_printf(s->out, "Prefer: tls-upgrade\r\n");
+	else prot_puts(s->out, "Prefer: tls-upgrade\r\n");
 	prot_printf(s->out, "Authorization: %s %s\r\n",
 		    scheme ? scheme->name : "", clientout ? clientout : "");
 	if (scheme && userid && *userid) {
 	    prot_printf(s->out, "Authorization-Id: %s\r\n", userid);
 	}
-	prot_printf(s->out, "\r\n");
+	prot_puts(s->out, "\r\n");
 	prot_flush(s->out);
 
 	serverin = clientout = NULL;
@@ -433,12 +433,12 @@ static int ping(struct backend *s)
     const char **hdr, *errstr;
 
     /* Send request to server */
-    prot_printf(s->out, "OPTIONS * HTTP/1.1\r\n");
+    prot_puts(s->out, "OPTIONS * HTTP/1.1\r\n");
     prot_printf(s->out, "Host: %s\r\n", s->hostname);
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	prot_printf(s->out, "User-Agent: %s\r\n", buf_cstring(&serverinfo));
     }
-    prot_printf(s->out, "\r\n");
+    prot_puts(s->out, "\r\n");
     prot_flush(s->out);
 
     do {
@@ -508,14 +508,14 @@ static void write_via_hdr(struct protstream *pout, hdrcache_t hdrs)
     const char **via = spool_getheader(hdrs, "Via");
     const char **host = spool_getheader(hdrs, "Host");
 
-    prot_printf(pout, "Via: ");
+    prot_puts(pout, "Via: ");
     if (via && via[0]) prot_printf(pout, "%s, ", via[0]);
     prot_printf(pout, "%s %s", https ? HTTPS_VERSION : HTTP_VERSION,
 		host && host[0] ? host[0] : config_servername);
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	prot_printf(pout, " (Cyrus/%s)", cyrus_version());
     }
-    prot_printf(pout, "\r\n");
+    prot_puts(pout, "\r\n");
 }
 
 
@@ -601,16 +601,16 @@ static void send_response(struct protstream *pout,
      * - Use all cached end-to-end headers
      * - Body is buffered, so send using "identity" TE
      */
-    prot_printf(pout, "%s", statline);
+    prot_puts(pout, statline);
     write_via_hdr(pout, hdrs);
     if (flags->close)
-	prot_printf(pout, "Connection: close\r\n");
+	prot_puts(pout, "Connection: close\r\n");
     else {
 	prot_printf(pout, "Keep-Alive: timeout=%d\r\n", httpd_timeout);
-	prot_printf(pout, "Connection: keep-alive\r\n");
+	prot_puts(pout, "Connection: keep-alive\r\n");
     }
     if (httpd_tls_done) {
-	prot_printf(httpd_out, "Strict-Transport-Security: max-age=600\r\n");
+	prot_puts(httpd_out, "Strict-Transport-Security: max-age=600\r\n");
     }
 
     spool_enum_hdrcache(hdrs, &write_cachehdr, pout);
@@ -667,10 +667,10 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     spool_enum_hdrcache(txn->req_hdrs, &write_cachehdr, be->out);
     if (spool_getheader(txn->req_hdrs, "Transfer-Encoding") ||
 	spool_getheader(txn->req_hdrs, "Content-Length")) {
-	prot_printf(be->out, "Expect: 100-continue\r\n");
-	prot_printf(be->out, "Transfer-Encoding: chunked\r\n");
+	prot_puts(be->out, "Expect: 100-continue\r\n");
+	prot_puts(be->out, "Transfer-Encoding: chunked\r\n");
     }
-    prot_printf(be->out, "\r\n");
+    prot_puts(be->out, "\r\n");
     prot_flush(be->out);
 
     do {
@@ -695,9 +695,9 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 		if (buf_len(&txn->req_body)) {
 		    prot_printf(be->out, "%x\r\n", buf_len(&txn->req_body));
 		    prot_putbuf(be->out, &txn->req_body);
-		    prot_printf(be->out, "\r\n");
+		    prot_puts(be->out, "\r\n");
 		}
-		prot_printf(be->out, "0\r\n\r\n");
+		prot_puts(be->out, "0\r\n\r\n");
 		prot_flush(be->out);
 	    }
 	}
@@ -782,7 +782,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 	    prot_printf(dest_be->out, "User-Agent: %s\r\n",
 			buf_cstring(&serverinfo));
 	}
-	prot_printf(dest_be->out, "Expect: 100-continue\r\n");
+	prot_puts(dest_be->out, "Expect: 100-continue\r\n");
 	if ((hdr = spool_getheader(txn->req_hdrs, "Overwrite")) &&
 	    !strcmp(hdr[0], "F")) {
 	    prot_printf(dest_be->out, "If-None-Match: *\r\n");
@@ -791,7 +791,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 	prot_printf(dest_be->out, "Content-Type: %s\r\n", hdr[0]);
 	if ((hdr = spool_getheader(resp_hdrs, "Content-Language")))
 	    prot_printf(dest_be->out, "Content-Language: %s\r\n", hdr[0]);
-	prot_printf(dest_be->out, "Transfer-Encoding: chunked\r\n\r\n");
+	prot_puts(dest_be->out, "Transfer-Encoding: chunked\r\n\r\n");
 	prot_flush(dest_be->out);
 
 	/* Read response from dest backend */
@@ -824,7 +824,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 		/* Send single-chunk body to dest backend to complete the PUT */
 		prot_printf(dest_be->out, "%x\r\n", buf_len(resp_body));
 		prot_putbuf(dest_be->out, resp_body);
-		prot_printf(dest_be->out, "\r\n0\r\n\r\n");
+		prot_puts(dest_be->out, "\r\n0\r\n\r\n");
 		prot_flush(dest_be->out);
 
 		/* Read final response from dest backend */

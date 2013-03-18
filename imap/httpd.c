@@ -1593,7 +1593,7 @@ const char *http_statusline(long code)
 #define WWW_Authenticate(name, param)				\
     prot_printf(httpd_out, "WWW-Authenticate: %s", name);	\
     if (param) prot_printf(httpd_out, " %s", param);		\
-    prot_printf(httpd_out, "\r\n")
+    prot_puts(httpd_out, "\r\n")
 
 static void comma_list_hdr(const char *hdr, const char *vals[], unsigned flags)
 {
@@ -1607,7 +1607,7 @@ static void comma_list_hdr(const char *hdr, const char *vals[], unsigned flags)
 	    sep = ",";
 	}
     }
-    prot_printf(httpd_out, "\r\n");
+    prot_puts(httpd_out, "\r\n");
 }
 
 void response_header(long code, struct transaction_t *txn)
@@ -1652,7 +1652,7 @@ void response_header(long code, struct transaction_t *txn)
 	keepalive = 0;  /* No alarm during TLS negotiation */
 	prot_printf(httpd_out, "Upgrade: %s, %s\r\n",
 		    TLS_VERSION, HTTP_VERSION);
-	prot_printf(httpd_out, "Connection: upgrade\r\n");
+	prot_puts(httpd_out, "Connection: upgrade\r\n");
 	/* Fall through as provisional response */
 
     case HTTP_CONTINUE:
@@ -1660,7 +1660,7 @@ void response_header(long code, struct transaction_t *txn)
 	/* Provisional response - nothing else needed */
 
 	/* CRLF terminating the header block */
-	prot_printf(httpd_out, "\r\n");
+	prot_puts(httpd_out, "\r\n");
 
 	/* Force the response to the client immediately */
 	prot_flush(httpd_out);
@@ -1693,7 +1693,7 @@ void response_header(long code, struct transaction_t *txn)
     prot_printf(httpd_out, "Date: %s\r\n", datestr);
 
     if (httpd_tls_done) {
-	prot_printf(httpd_out, "Strict-Transport-Security: max-age=600\r\n");
+	prot_puts(httpd_out, "Strict-Transport-Security: max-age=600\r\n");
     }
     if (txn->flags.cc) {
 	/* Construct Cache-Control header */
@@ -1730,7 +1730,7 @@ void response_header(long code, struct transaction_t *txn)
     }
 
     if (txn->req_tgt.allow & ALLOW_ISCHEDULE) {
-	prot_printf(httpd_out, "iSchedule-Version: 1.0\r\n");
+	prot_puts(httpd_out, "iSchedule-Version: 1.0\r\n");
 	if (resp_body->iserial) {
 	    prot_printf(httpd_out, "iSchedule-Capabilities: %ld\r\n",
 			resp_body->iserial);
@@ -1803,7 +1803,7 @@ void response_header(long code, struct transaction_t *txn)
 				", calendar-auto-schedule" : "");
 		}
 		if (txn->req_tgt.allow & ALLOW_CARD) {
-		    prot_printf(httpd_out, "DAV: addressbook\r\n");
+		    prot_puts(httpd_out, "DAV: addressbook\r\n");
 		}
 	    }
 
@@ -1813,32 +1813,32 @@ void response_header(long code, struct transaction_t *txn)
 	default:
 	    if (code == HTTP_NOT_ALLOWED) {
 		/* Construct Allow header(s) for OPTIONS and 405 response */
-		prot_printf(httpd_out, "Allow: OPTIONS");
+		prot_puts(httpd_out, "Allow: OPTIONS");
 		if (txn->req_tgt.allow & ALLOW_READ) {
-		    prot_printf(httpd_out, ", GET, HEAD");
+		    prot_puts(httpd_out, ", GET, HEAD");
 		}
 		if (txn->req_tgt.allow & ALLOW_POST) {
-		    prot_printf(httpd_out, ", POST");
+		    prot_puts(httpd_out, ", POST");
 		}
 		if (txn->req_tgt.allow & ALLOW_WRITE) {
-		    prot_printf(httpd_out, ", PUT");
+		    prot_puts(httpd_out, ", PUT");
 		}
 		if (txn->req_tgt.allow & ALLOW_DELETE) {
-		    prot_printf(httpd_out, ", DELETE");
+		    prot_puts(httpd_out, ", DELETE");
 		}
-		prot_printf(httpd_out, "\r\n");
+		prot_puts(httpd_out, "\r\n");
 		if (txn->req_tgt.allow & ALLOW_DAV) {
-		    prot_printf(httpd_out, "Allow: PROPFIND, REPORT");
+		    prot_puts(httpd_out, "Allow: PROPFIND, REPORT");
 		    if (txn->req_tgt.allow & ALLOW_WRITE) {
-			prot_printf(httpd_out, ", COPY, MOVE, LOCK, UNLOCK");
+			prot_puts(httpd_out, ", COPY, MOVE, LOCK, UNLOCK");
 		    }
 		    if (txn->req_tgt.allow & ALLOW_WRITECOL) {
-			prot_printf(httpd_out, ", PROPPATCH, ACL, MKCOL");
+			prot_puts(httpd_out, ", PROPPATCH, ACL, MKCOL");
 			if (txn->req_tgt.allow & ALLOW_CAL) {
-			    prot_printf(httpd_out, ", MKCALENDAR");
+			    prot_puts(httpd_out, ", MKCALENDAR");
 			}
 		    }
-		    prot_printf(httpd_out, "\r\n");
+		    prot_puts(httpd_out, "\r\n");
 		}
 	    }
 	}
@@ -1886,7 +1886,7 @@ void response_header(long code, struct transaction_t *txn)
 
     case HTTP_PARTIAL:
     case HTTP_UNSAT_RANGE:
-	prot_printf(httpd_out, "Content-Range: bytes ");
+	prot_puts(httpd_out, "Content-Range: bytes ");
 	if (code == HTTP_PARTIAL) {
 	    prot_printf(httpd_out, "%lu-%lu",
 			resp_body->range.first, resp_body->range.last);
@@ -1898,21 +1898,21 @@ void response_header(long code, struct transaction_t *txn)
 
     default:
 	if (txn->flags.te) {
-	    prot_printf(httpd_out, "Transfer-Encoding:");
+	    prot_puts(httpd_out, "Transfer-Encoding:");
 	    if (txn->flags.te == TE_GZIP)
-		prot_printf(httpd_out, " gzip,");
+		prot_puts(httpd_out, " gzip,");
 	    else if (txn->flags.te == TE_DEFLATE)
-		prot_printf(httpd_out, " deflate,");
+		prot_puts(httpd_out, " deflate,");
 
 	    /* Any TE implies "chunked", which is always last */
-	    prot_printf(httpd_out, " chunked\r\n");
+	    prot_puts(httpd_out, " chunked\r\n");
 	}
 	else prot_printf(httpd_out, "Content-Length: %lu\r\n", resp_body->len);
     }
 
 
     /* CRLF terminating the header block */
-    prot_printf(httpd_out, "\r\n");
+    prot_puts(httpd_out, "\r\n");
 }
 
 
@@ -2018,16 +2018,16 @@ void write_body(long code, struct transaction_t *txn,
 		/* we have a chunk of compressed output */
 		prot_printf(httpd_out, "%x\r\n", out);
 		prot_write(httpd_out, zbuf, out);
-		prot_printf(httpd_out, "\r\n");
+		prot_puts(httpd_out, "\r\n");
 	    }
 
 	} while (!txn->zstrm.avail_out);
 
 	if (flush == Z_FINISH) {
 	    /* terminate the body with a zero-length chunk */
-	    prot_printf(httpd_out, "0\r\n");
+	    prot_puts(httpd_out, "0\r\n");
 	    /* empty trailer */
-	    prot_printf(httpd_out, "\r\n");
+	    prot_puts(httpd_out, "\r\n");
 	}
 #else
 	/* XXX should never get here */
@@ -2041,7 +2041,7 @@ void write_body(long code, struct transaction_t *txn,
 	else {
 	    /* empty trailer */
 	}
-	prot_printf(httpd_out, "\r\n");
+	prot_puts(httpd_out, "\r\n");
     }
     else {
 	/* full body */
