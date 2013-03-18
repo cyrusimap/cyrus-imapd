@@ -4587,6 +4587,8 @@ static int message2_parse_cbodystructure(message_t *m)
 
 static int parse_param_name(const char *s)
 {
+    if (!s) return P_UNKNOWN;
+
     switch (s[0]) {
     case 'B':
     case 'b':
