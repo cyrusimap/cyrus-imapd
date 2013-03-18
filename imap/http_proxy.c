@@ -221,12 +221,13 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 	    need_tls = 0;
 	}
 	else prot_puts(s->out, "Prefer: tls-upgrade\r\n");
-	prot_printf(s->out, "Authorization: %s %s\r\n",
-		    scheme ? scheme->name : "", clientout ? clientout : "");
-	if (scheme && userid && *userid) {
-	    prot_printf(s->out, "Authorization-Id: %s\r\n", userid);
+	prot_puts(s->out, "Authorization: ");
+	if (scheme) {
+	    prot_printf(s->out, "%s ", scheme->name);
+	    if (userid) prot_printf(s->out, "authzid=%s,", userid);
+	    if (clientout) prot_write(s->out, clientout, clientoutlen);
 	}
-	prot_puts(s->out, "\r\n");
+	prot_puts(s->out, "\r\n\r\n");
 	prot_flush(s->out);
 
 	serverin = clientout = NULL;
