@@ -290,6 +290,7 @@ sub test_shared
 	    '/shared/comment' => undef,
 	    '/shared/checkperiod' => undef,
 	    '/shared/check' => undef,
+	    '/shared' => undef,
 	}, $r);
 
     # individual item fetch:
@@ -657,6 +658,7 @@ sub test_private
 	    '/private/checkperiod' => undef,
 	    '/private/check' => undef,
 	    '/private/specialuse' => undef,
+	    '/private' => undef,
 	}, $r);
 
     $imaptalk->setmetadata('INBOX', "/private/comment", "This is a comment");
