@@ -1883,6 +1883,8 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
     /* make sure the destination path exists */
     r = cyrus_mkdir(buf_cstring(&mytempdir), 0755);
     if (r) goto out;
+    /* and doesn't contain any junk */
+    run_command("/bin/rm", "-rf", buf_cstring(&mytempdir), (char *)NULL);
     r = mkdir(buf_cstring(&mytempdir), 0755);
     if (r) goto out;
 
@@ -1941,6 +1943,7 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
 		printf("copying from tempdir to destination\n");
 	    }
 	    cyrus_mkdir(tempdestdir, 0755);
+	    run_command("/bin/rm", "-rf", tempdestdir, (char *)NULL);
 	    r = rsync_tree(buf_cstring(&mytempdir), tempdestdir, 0, 0, 1);
 	    if (r) {
 		printf("Failed to rsync from %s to %s", buf_cstring(&mytempdir), tempdestdir);
@@ -1975,6 +1978,7 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
 	if (verbose) {
 	    printf("renaming tempdir into place\n");
 	}
+	run_command("/bin/rm", "-rf", destdir, (char *)NULL);
 	r = rename(tempdestdir, destdir);
 	if (r) {
 	    printf("ERROR: failed to rename into place %s to %s\n", tempdestdir, destdir);
