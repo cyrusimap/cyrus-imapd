@@ -1044,10 +1044,18 @@ static void cmdloop(void)
 	}
 
 	/* Check for mandatory Host header */
-	/* XXX  Should we check this against servername? */
-	if (!ret && !(hdr = spool_getheader(txn.req_hdrs, "Host"))) {
-	    ret = HTTP_BAD_REQUEST;
-	    txn.error.desc = "Missing Host header\r\n";
+	if (!ret) {
+	    if (!(hdr = spool_getheader(txn.req_hdrs, "Host"))) {
+		ret = HTTP_BAD_REQUEST;
+		txn.error.desc = "Missing Host header\r\n";
+	    }
+	    else if (hdr[1]) {
+		ret = HTTP_BAD_REQUEST;
+		txn.error.desc = "Too many Host headers\r\n";
+	    }
+	    else {
+		/* XXX  Should we check this against servername? */
+	    }
 	}
 
 	/* Check for connection directives */
