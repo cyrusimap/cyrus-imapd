@@ -629,13 +629,13 @@ static void debug_dump(void)
 
 static qitem_t *_queue_detach(qitem_t **prevp);
 
-static qitem_t *queue_remove_by_name(qitem_t **headp, const char *mboxname)
+static qitem_t *queue_find_by_name(qitem_t **headp, const char *mboxname)
 {
     qitem_t **prevp;
 
     for (prevp = headp ; *prevp ; prevp = &((*prevp)->next)) {
 	if (!strcmp((*prevp)->mboxname, mboxname))
-	    return _queue_detach(prevp);
+	    return prevp;
     }
     return NULL;
 }
@@ -720,10 +720,11 @@ static void read_sync_log_items(sync_log_reader_t *slr)
 
     while (sync_log_reader_getitem(slr, args) == 0) {
 	if (!strcmp(args[0], "APPEND")) {
-	    item = queue_remove_by_name(&queue, args[1]);
-	    if (!item)
+	    item = queue_find_by_name(&queue, args[1]);
+	    if (!item) {
 		item = qitem_new(args[1]);
-	    ptrarray_append(&items, item);
+		ptrarray_append(&items, item);
+	    }
 	}
     }
 
@@ -750,7 +751,6 @@ static void do_synclogfile(const char *synclogfile)
     qitem_t *item;
     int delay_ms;
     int r;
-    char *last = NULL;
 
     slr = sync_log_reader_create_with_filename(synclogfile);
     r = sync_log_reader_begin(slr);
@@ -765,12 +765,6 @@ static void do_synclogfile(const char *synclogfile)
 	    /* have some due items in the queue, try to index them */
 	    rx = search_begin_update(verbose);
 	    while ((item = queue_remove_due(&queue))) {
-		if (!strcmpsafe(item->mboxname, last)) {
-		    qitem_delete(item);
-		    continue;
-		}
-		free(last);
-		last = xstrdup(item->mboxname);
 		if (verbose > 1)
 		    syslog(LOG_INFO, "do_synclogfile: indexing %s", item->mboxname);
 		r = index_one(item->mboxname, /*blocking*/0);
@@ -793,7 +787,6 @@ static void do_synclogfile(const char *synclogfile)
     }
 
 out:
-    free(last);
     sync_log_reader_free(slr);
 }
 
@@ -804,7 +797,6 @@ static void do_rolling(const char *channel)
     int poll_period_ms = 1000;
     int delay_ms;
     int r;
-    char *last = NULL;
 
     slr = sync_log_reader_create_with_channel(channel);
 
@@ -834,12 +826,6 @@ static void do_rolling(const char *channel)
 	    /* have some due items in the queue, try to index them */
 	    rx = search_begin_update(verbose);
 	    while ((item = queue_remove_due(&queue))) {
-		if (!strcmpsafe(item->mboxname, last)) {
-		    qitem_delete(item);
-		    continue;
-		}
-		free(last);
-		last = xstrdup(item->mboxname);
 		if (verbose > 1)
 		    syslog(LOG_INFO, "do_rolling: indexing %s", item->mboxname);
 		r = index_one(item->mboxname, /*blocking*/0);
@@ -861,7 +847,6 @@ static void do_rolling(const char *channel)
 	}
     }
 
-    free(last);
     sync_log_reader_free(slr);
 }
 
