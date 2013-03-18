@@ -539,6 +539,7 @@ int deliver_mailbox(FILE *f,
     struct appendstate as;
     const char *notifier;
     struct mailbox *mailbox = NULL;
+    char *uuid = NULL;
     duplicate_key_t dkey = DUPLICATE_INITIALIZER;
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
 
@@ -569,14 +570,16 @@ int deliver_mailbox(FILE *f,
     }
 
     /* check for duplicate message */
+    uuid = xstrdup(as.mailbox->uniqueid);
     dkey.id = id;
-    dkey.to = as.mailbox->uniqueid;
+    dkey.to = uuid;
     dkey.date = date;
     if (id && dupelim && !(as.mailbox->i.options & OPT_IMAP_DUPDELIVER) &&
 	duplicate_check(&dkey)) {
 	duplicate_log(&dkey, "delivery");
 	append_abort(&as);
 	mailbox_close(&mailbox);
+	free(uuid);
 	return 0;
     }
 
@@ -644,6 +647,7 @@ int deliver_mailbox(FILE *f,
 	}
     }
 
+    free(uuid);
     return r;
 }
 
