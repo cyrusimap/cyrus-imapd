@@ -1674,8 +1674,10 @@ static int end_snippets(search_text_receiver_t *rx)
     return 0;
 }
 
-static int list_files(const char *mboxname, const char *partition, strarray_t *files)
+static int list_files(const char *userid, strarray_t *files)
 {
+    char *mboxname = mboxname_user_mbox(userid, NULL);
+    struct mboxlist_entry *mbentry = NULL;
     char *fname = NULL;
     DIR *dirh = NULL;
     struct dirent *de;
@@ -1686,9 +1688,15 @@ static int list_files(const char *mboxname, const char *partition, strarray_t *f
     int r;
     int i;
 
-    active = activefile_open(mboxname, partition, &activefile, /*write*/0);
+    r = mboxlist_lookup(mboxname, &mbentry, NULL);
+    if (r) {
+	syslog(LOG_ERR, "IOERROR: failed to lookup %s", mboxname);
+	goto out;
+    }
+
+    active = activefile_open(mboxname, mbentry->partition, &activefile, /*write*/0);
     if (!active) goto out;
-    dirs = activefile_resolve(mboxname, partition, active, /*dostat*/1);
+    dirs = activefile_resolve(mboxname, mbentry->partition, active, /*dostat*/1);
 
     for (i = 0; i < dirs->count; i++) {
 	const char *basedir = strarray_nth(dirs, i);
@@ -1719,6 +1727,8 @@ out:
     strarray_free(active);
     strarray_free(dirs);
     free(fname);
+    mboxlist_entry_free(&mbentry);
+    free(mboxname);
 
     return 0;
 }

@@ -297,12 +297,11 @@ EXPORTED int search_stop_daemon(int verbose)
     return (se->stop_daemon ? se->stop_daemon(verbose) : 0);
 }
 
-EXPORTED int search_list_files(const char *mboxname,
-			       const char *partition,
+EXPORTED int search_list_files(const char *userid,
 			       strarray_t *files)
 {
     const struct search_engine *se = engine();
-    return (se->list_files ? se->list_files(mboxname, partition, files) : 0);
+    return (se->list_files ? se->list_files(userid, files) : 0);
 }
 
 EXPORTED int search_compact(const char *userid,

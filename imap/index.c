@@ -1440,7 +1440,8 @@ EXPORTED int index_warmup(struct mboxlist_entry *mbentry,
 	}
     }
     if (warmup_flags & WARMUP_SEARCH) {
-	r = search_list_files(mbentry->name, mbentry->partition, &files);
+	const char *userid = mboxname_to_userid(mbentry->name);
+	r = search_list_files(userid, &files);
 	if (r) goto out;
 	for (i = 0 ; i < files.count ; i++) {
 	    fname = strarray_nth(&files, i);
