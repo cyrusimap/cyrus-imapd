@@ -393,55 +393,42 @@ static void test_printf(void)
 #undef HEX0
 }
 
-/*
- * This test exercises an important feature of buf_printf, namely
- * formatting a result which is longer than the size that buf_printf()
- * initially guesses it will need.  That feature relies on vsnprintf()
- * correctly realizing that it's about to overrun the buffer provided,
- * and returning the correct formatted size.  Experiment shows that
- * vsnprintf() behaves correctly (at least in glibc 2.11 on Ubuntu) but
- * something really bad happens in Valgrind (version
- * 1:3.6.0~svn20100724-0ubuntu2).  I suspect a bug in Valgrind's
- * replacement mempcpy() routine.  Until Valgrind is fixed, let's just
- * disable this test.
- */
+static void test_long_printf(void)
+{
+    struct buf b = BUF_INITIALIZER;
+    int i;
+    const char *s;
+    char *exp;
+#define SZ  6
+#define N 10000
 
-// static void test_long_printf(void)
-// {
-//     struct buf b = BUF_INITIALIZER;
-//     int i;
-//     const char *s;
-//     char *exp;
-// #define SZ  6
-// #define N 10000
-// 
-//     CU_ASSERT_EQUAL(b.len, 0);
-//     CU_ASSERT(b.alloc >= b.len);
-//     CU_ASSERT_EQUAL(buf_len(&b), b.len);
-//     CU_ASSERT_PTR_NULL(b.s);
-// 
-//     exp = xmalloc(SZ*N+1);
-//     for (i = 0 ; i < N ; i++)
-// 	snprintf(exp+SZ*i, SZ+1, "%c%05d", 'A'+(i%26), i);
-// 
-//     buf_printf(&b, "x%sy", exp);
-//     s = buf_cstring(&b);
-// 
-//     CU_ASSERT_EQUAL(b.len, SZ*N+2);
-//     CU_ASSERT_EQUAL(buf_len(&b), b.len);
-//     CU_ASSERT(b.alloc >= b.len);
-//     CU_ASSERT_PTR_NOT_NULL(b.s);
-// 
-//     CU_ASSERT_PTR_NOT_NULL(s);
-//     CU_ASSERT_EQUAL(s[0], 'x');
-//     CU_ASSERT(!memcmp(s+1, exp, SZ*N));
-//     CU_ASSERT_EQUAL(s[SZ*N+1], 'y');
-// 
-//     buf_free(&b);
-//     free(exp);
-// #undef N
-// #undef SZ
-// }
+    CU_ASSERT_EQUAL(b.len, 0);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT_PTR_NULL(b.s);
+
+    exp = xmalloc(SZ*N+1);
+    for (i = 0 ; i < N ; i++)
+	snprintf(exp+SZ*i, SZ+1, "%c%05d", 'A'+(i%26), i);
+
+    buf_printf(&b, "x%sy", exp);
+    s = buf_cstring(&b);
+
+    CU_ASSERT_EQUAL(b.len, SZ*N+2);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_EQUAL(s[0], 'x');
+    CU_ASSERT(!memcmp(s+1, exp, SZ*N));
+    CU_ASSERT_EQUAL(s[SZ*N+1], 'y');
+
+    buf_free(&b);
+    free(exp);
+#undef N
+#undef SZ
+}
 
 static void test_replace_all(void)
 {
