@@ -650,14 +650,14 @@ void buf_printf(struct buf *buf, const char *fmt, ...)
      * needs to overrun the size. */
     buf_ensure(buf, 1024);
 
-    room = buf->alloc - buf->len - 1;
+    room = buf->alloc - buf->len;
     va_start(args, fmt);
-    n = vsnprintf(buf->s + buf->len, room+1, fmt, args);
+    n = vsnprintf(buf->s + buf->len, room, fmt, args);
     va_end(args);
 
-    if (n > room) {
-	/* woops, we guessed wrong...retry */
-	buf_ensure(buf, n-room);
+    if (n >= room) {
+	/* woops, we guessed wrong...retry with enough space */
+	buf_ensure(buf, n+1);
 	va_start(args, fmt);
 	n = vsnprintf(buf->s + buf->len, n+1, fmt, args);
 	va_end(args);
