@@ -965,6 +965,9 @@ static void cmdloop(void)
 	}
 	p = reqline + strlen(reqline);
 
+	/* Ignore empty lines before request-line per HTTPbis Part 1 Sec 3.5 */
+	if (p - reqline <= 2) continue;
+
 	/* Parse request-line = method SP request-target SP HTTP-version CRLF */
 	tok_initm(&tok, reqline, " \r\n", 0);
 	if (!(meth = tok_next(&tok))) {
