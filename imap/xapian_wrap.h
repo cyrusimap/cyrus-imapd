@@ -56,7 +56,7 @@ extern void xapian_init(void);
 extern int xapian_compact_dbs(const char *dest, const char **sources);
 
 /* write-side interface */
-extern xapian_dbw_t *xapian_dbw_open(const char *path);
+extern int xapian_dbw_open(const char *path, xapian_dbw_t **dbwp);
 extern void xapian_dbw_close(xapian_dbw_t *dbw);
 extern int xapian_dbw_begin_txn(xapian_dbw_t *dbw);
 extern int xapian_dbw_commit_txn(xapian_dbw_t *dbw);

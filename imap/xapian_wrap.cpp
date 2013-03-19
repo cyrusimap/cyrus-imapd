@@ -67,9 +67,11 @@ struct xapian_dbw
     Xapian::Document *document;
 };
 
-xapian_dbw_t *xapian_dbw_open(const char *path)
+int xapian_dbw_open(const char *path, xapian_dbw_t **dbwp)
 {
     xapian_dbw_t *dbw = 0;
+    int r = 0;
+
     try {
 	dbw = (xapian_dbw_t *)xzmalloc(sizeof(xapian_dbw_t));
 	int action = Xapian::DB_CREATE_OR_OPEN;
@@ -79,13 +81,23 @@ xapian_dbw_t *xapian_dbw_open(const char *path)
 	dbw->term_generator->set_stemmer(*dbw->stemmer);
 	dbw->term_generator->set_stemming_strategy(Xapian::TermGenerator::STEM_ALL);
     }
+    catch (const Xapian::DatabaseLockError &err) {
+	/* somebody else is already indexing this user.  They may be doing a different
+	 * mailbox, so we need to re-insert this mailbox into the queue! */
+	r = IMAP_MAILBOX_LOCKED;
+    }
     catch (const Xapian::Error &err) {
 	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
 		    err.get_context().c_str(), err.get_description().c_str());
-	free(dbw);
-	dbw = 0;
+	r = IMAP_IOERROR;
     }
-    return dbw;
+
+    if (r)
+	free(dbw);
+    else
+	*dbwp = dbw;
+
+    return r;
 }
 
 void xapian_dbw_close(xapian_dbw_t *dbw)

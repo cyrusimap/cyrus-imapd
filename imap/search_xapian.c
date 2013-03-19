@@ -1435,11 +1435,14 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
     char *fname = activefile_fname(mailbox->name);
     strarray_t *active = NULL;
-    int r = IMAP_IOERROR;
+    int r = 0;
 
     /* not an indexable mailbox, fine - return a code to avoid
      * trying to index each message as well */
-    if (!fname) return IMAP_MAILBOX_NONEXISTENT;
+    if (!fname) {
+	r = IMAP_MAILBOX_NONEXISTENT;
+	goto out;
+    }
 
     /* XXX - if not incremental, we actually want to throw away all existing up to
      * this point and write a new one, so we should launch a new file and then
@@ -1465,7 +1468,8 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
 	if (r) goto out;
 
 	/* open the DB */
-	tr->dbw = xapian_dbw_open(strarray_nth(tr->activedirs, 0));
+	r = xapian_dbw_open(strarray_nth(tr->activedirs, 0), &tr->dbw);
+	if (r) goto out;
     }
 
     /* read the indexed data from every directory so know what still needs indexing */
@@ -1479,8 +1483,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
 out:
     free(fname);
     strarray_free(active);
-    if (!tr->dbw) return IMAP_IOERROR;
-    return 0;
+    return r;
 }
 
 static uint32_t first_unindexed_uid(search_text_receiver_t *rx)

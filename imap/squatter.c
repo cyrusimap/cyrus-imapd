@@ -318,6 +318,7 @@ static void expand_mboxnames(strarray_t *sa, int nmboxnames,
 
 static int do_indexer(const strarray_t *sa)
 {
+    int r = 0;
     int i;
 
     rx = search_begin_update(verbose);
@@ -325,13 +326,17 @@ static int do_indexer(const strarray_t *sa)
 	return 0;	/* no indexer defined */
 
     for (i = 0 ; i < sa->count ; i++) {
-	index_one(sa->data[i], /*blocking*/1);
-	/* Ignore errors: most will be mailboxes moving around */
+	r = index_one(sa->data[i], /*blocking*/1);
+	if (r == IMAP_MAILBOX_NONEXISTENT)
+	    r = 0;
+	if (r == IMAP_MAILBOX_LOCKED)
+	    r = 0; /* XXX - try again? */
+	if (r) break;
     }
 
     search_end_update(rx);
 
-    return 0;
+    return r;
 }
 
 static int index_single_message(const char *mboxname, uint32_t uid)
@@ -609,6 +614,7 @@ static int do_synclogfile(const char *synclogfile)
 {
     strarray_t *folders = NULL;
     sync_log_reader_t *slr;
+    int nskipped = 0;
     int i;
     int r;
 
@@ -630,6 +636,18 @@ static int do_synclogfile(const char *synclogfile)
 	if (verbose > 1)
 	    syslog(LOG_INFO, "do_synclogfile: indexing %s", mboxname);
 	r = index_one(mboxname, /*blocking*/1);
+	if (r == IMAP_MAILBOX_NONEXISTENT)
+	    r = 0;
+	if (r == IMAP_MAILBOX_LOCKED || r == IMAP_AGAIN) {
+	    nskipped++;
+	    if (nskipped > 10000) {
+		syslog(LOG_ERR, "IOERROR: skipped too many times at %s", mboxname);
+		break;
+	    }
+	    r = 0;
+	    /* try again at the end */
+	    strarray_append(folders, mboxname);
+	}
 	if (r) {
 	    syslog(LOG_ERR, "IOERROR: failed to index %s: %s",
 		   mboxname, error_message(r));
