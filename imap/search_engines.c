@@ -224,7 +224,10 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
 	/* This UID didn't appear in the old index file */
 	r = mailbox_find_index_record(mailbox, uid, &record,
 				      (first ? NULL : &record));
-	if (r == IMAP_NOTFOUND) continue;
+	if (r == IMAP_NOTFOUND) {
+	    r = 0;
+	    continue;
+	}
 	if (r) goto out;
 	first = 0;
 	if (record.system_flags & (FLAG_EXPUNGED|FLAG_UNLINKED))
