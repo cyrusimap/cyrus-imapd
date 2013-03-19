@@ -1214,9 +1214,7 @@ static void cmdloop(void)
 	    else {
 		/* Tell client to authenticate */
 		ret = HTTP_UNAUTHORIZED;
-		if (r == SASL_CONTINUE)
-		    txn.error.desc = "Continue authentication exchange\r\n";
-		else if (r) txn.error.desc = "Authentication failed\r\n";
+		if (r) txn.error.desc = "Authentication failed\r\n";
 		else txn.error.desc =
 			 "Must authenticate to access the specified target\r\n";
 	    }
@@ -2251,36 +2249,26 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 {
     struct auth_challenge_t *chal = &txn->auth_chal;
     static int status = SASL_OK;
-    size_t slen = 0, zlen = 0;
+    size_t slen;
     const char *clientin = NULL, *user;
     unsigned int clientinlen = 0;
     struct auth_scheme_t *scheme;
     static char base64[BASE64_BUF_SIZE+1];
     const void *canon_user;
-    const char *authzid = NULL;
+    const char **authzid = spool_getheader(txn->req_hdrs, "Authorization-Id");
     int i;
 
     chal->param = NULL;
 
-    /* Split credentials into auth-scheme, authzid, and auth-params */
-    if ((clientin = strchr(creds, ' '))) {
-	slen = clientin - creds;
-	clientinlen = strlen(++clientin);
-
-	if (!strncmp(clientin, "authzid=", 8)) {
-	    authzid = clientin+8;
-	    if ((clientin = strchr(authzid, ','))) {
-		zlen = clientin - authzid;
-		clientinlen = strlen(++clientin);
-	    }
-	}
-    }
+    /* Split credentials into auth scheme and response */
+    slen = strcspn(creds, " \0");
+    if ((clientin = strchr(creds, ' '))) clientinlen = strlen(++clientin);
 
     syslog(LOG_DEBUG,
-	   "http_auth: status=%d   scheme='%s'   creds='%.*s%s'   authzid='%.*s'",
+	   "http_auth: status=%d   scheme='%s'   creds='%.*s%s'   authzid='%s'",
 	   status, chal->scheme ? chal->scheme->name : "",
 	   slen, creds, clientin ? " <response>" : "",
-	   zlen, authzid ? authzid : "");
+	   authzid ? authzid[0] : "");
 
     if (chal->scheme) {
 	/* Use current scheme, if possible */
@@ -2447,19 +2435,19 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 	return status;
     }
 
-    if (authzid && *authzid) {
+    if (authzid && *authzid[0]) {
 	/* Trying to proxy as another user */
 	char authzbuf[MAX_MAILBOX_BUFFER];
 	unsigned authzlen;
 
 	/* Canonify the authzid */
 	status = mysasl_canon_user(httpd_saslconn, NULL,
-				   authzid, zlen,
+				   authzid[0], strlen(authzid[0]),
 				   SASL_CU_AUTHZID, NULL,
 				   authzbuf, sizeof(authzbuf), &authzlen);
 	if (status) {
-	    syslog(LOG_NOTICE, "badlogin: %s %s %.*s invalid user",
-		   httpd_clienthost, scheme->name, zlen, authzid);
+	    syslog(LOG_NOTICE, "badlogin: %s %s %s invalid user",
+		   httpd_clienthost, scheme->name, beautify_string(authzid[0]));
 	    return status;
 	}
 	user = (const char *) canon_user;
