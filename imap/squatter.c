@@ -316,13 +316,13 @@ static void expand_mboxnames(strarray_t *sa, int nmboxnames,
     }
 }
 
-static void do_indexer(const strarray_t *sa)
+static int do_indexer(const strarray_t *sa)
 {
     int i;
 
     rx = search_begin_update(verbose);
     if (rx == NULL)
-	return;	/* no indexer defined */
+	return 0;	/* no indexer defined */
 
     for (i = 0 ; i < sa->count ; i++) {
 	index_one(sa->data[i], /*blocking*/1);
@@ -330,6 +330,8 @@ static void do_indexer(const strarray_t *sa)
     }
 
     search_end_update(rx);
+
+    return 0;
 }
 
 static int index_single_message(const char *mboxname, uint32_t uid)
@@ -524,34 +526,36 @@ static int print_search_hit(const char *mboxname, uint32_t uidvalidity,
     return 0;
 }
 
-static void compact_mbox(const char *mboxname, const strarray_t *srctiers,
+static int compact_mbox(const char *mboxname, const strarray_t *srctiers,
 			 const char *desttier)
 {
-    /* XXX - handle errors? */
-    search_compact(mboxname, temp_root_dir, srctiers, desttier, verbose);
+    return search_compact(mboxname, temp_root_dir, srctiers, desttier, verbose);
 }
 
-static void do_compact(const strarray_t *mboxnames, const strarray_t *srctiers,
-		       const char *desttier)
+static int do_compact(const strarray_t *mboxnames, const strarray_t *srctiers,
+		      const char *desttier)
 {
     char *prev_userid = NULL;
-    int i;
+    int i; 
+    int r = 0;
 
     for (i = 0 ; i < mboxnames->count ; i++) {
 	const char *userid = mboxname_to_userid(mboxnames->data[i]);
 	if (!strcmpsafe(prev_userid, userid))
 	    continue;
 
-	compact_mbox(mboxnames->data[i], srctiers, desttier);
+	r = compact_mbox(mboxnames->data[i], srctiers, desttier);
+	if (r) break;
 
 	free(prev_userid);
 	prev_userid = xstrdupnull(userid);
     }
 
     free(prev_userid);
+    return r;
 }
 
-static void do_search(const char *query, int single, const strarray_t *mboxnames)
+static int do_search(const char *query, int single, const strarray_t *mboxnames)
 {
     struct mailbox *mailbox = NULL;
     int i;
@@ -584,6 +588,8 @@ static void do_search(const char *query, int single, const strarray_t *mboxnames
 
 	mailbox_close(&mailbox);
     }
+
+    return 0;
 }
 
 static strarray_t *read_sync_log_items(sync_log_reader_t *slr)
@@ -599,7 +605,7 @@ static strarray_t *read_sync_log_items(sync_log_reader_t *slr)
     return folders;
 }
 
-static void do_synclogfile(const char *synclogfile)
+static int do_synclogfile(const char *synclogfile)
 {
     strarray_t *folders = NULL;
     sync_log_reader_t *slr;
@@ -624,8 +630,10 @@ static void do_synclogfile(const char *synclogfile)
 	if (verbose > 1)
 	    syslog(LOG_INFO, "do_synclogfile: indexing %s", mboxname);
 	r = index_one(mboxname, /*blocking*/1);
-	if (r == IMAP_AGAIN || r == IMAP_MAILBOX_LOCKED) {
-	    syslog(LOG_ERR, "IOERROR: failed to index %s", mboxname);
+	if (r) {
+	    syslog(LOG_ERR, "IOERROR: failed to index %s: %s",
+		   mboxname, error_message(r));
+	    break;
 	}
     }
     search_end_update(rx);
@@ -634,6 +642,7 @@ static void do_synclogfile(const char *synclogfile)
 out:
     strarray_free(folders);
     sync_log_reader_free(slr);
+    return r;
 }
 
 static void do_rolling(const char *channel)
@@ -735,7 +744,7 @@ int main(int argc, char **argv)
 {
     int opt;
     char *alt_config = NULL;
-    int r;
+    int r = IMAP_NOTFOUND;
     strarray_t mboxnames = STRARRAY_INITIALIZER;
     const char *query = NULL;
     int background = 1;
@@ -900,35 +909,33 @@ int main(int argc, char **argv)
 	if (recursive_flag && optind == argc) usage(argv[0]);
 	expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind);
 	syslog(LOG_NOTICE, "indexing mailboxes");
-	do_indexer(&mboxnames);
+	r = do_indexer(&mboxnames);
 	syslog(LOG_NOTICE, "done indexing mailboxes");
 	break;
     case INDEXFROM:
 	syslog(LOG_NOTICE, "indexing messages");
-	if (do_indexfrom(fromfile))
-	    exit(EC_TEMPFAIL);
+	r = do_indexfrom(fromfile);
 	syslog(LOG_NOTICE, "done indexing messages");
 	break;
     case SEARCH:
 	if (recursive_flag && optind == argc) usage(argv[0]);
 	expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind);
-	do_search(query, !multi_folder, &mboxnames);
+	r = do_search(query, !multi_folder, &mboxnames);
 	break;
     case ROLLING:
 	do_rolling(channel);
+	/* never returns */
 	break;
     case SYNCLOG:
-	do_synclogfile(synclogfile);
+	r = do_synclogfile(synclogfile);
 	break;
     case START_DAEMON:
 	if (optind != argc) usage("squatter");
-	if (search_start_daemon(verbose))
-	    exit(EC_TEMPFAIL);
+	search_start_daemon(verbose);
 	break;
     case STOP_DAEMON:
 	if (optind != argc) usage("squatter");
-	if (search_stop_daemon(verbose))
-	    exit(EC_TEMPFAIL);
+	search_stop_daemon(verbose);
 	break;
     case RUN_DAEMON:
 	if (optind != argc) usage("squatter");
@@ -937,10 +944,10 @@ int main(int argc, char **argv)
     case COMPACT:
 	if (recursive_flag && optind == argc) usage(argv[0]);
 	expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind);
-	do_compact(&mboxnames, srctiers, desttier);
+	r = do_compact(&mboxnames, srctiers, desttier);
 	break;
     }
 
     strarray_fini(&mboxnames);
-    shut_down(0);
+    shut_down(r ? EC_TEMPFAIL : 0);
 }
