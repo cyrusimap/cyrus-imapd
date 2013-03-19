@@ -155,10 +155,12 @@ struct search_engine {
 extern search_builder_t *search_begin_search(struct mailbox *, int opts);
 extern void search_end_search(search_builder_t *);
 
+#define SEARCH_UPDATE_INCREMENTAL (1<<0)
+#define SEARCH_UPDATE_PARTIAL     (1<<1)
 search_text_receiver_t *search_begin_update(int verbose);
 int search_update_mailbox(search_text_receiver_t *rx,
 			  struct mailbox *mailbox,
-			  int incremental);
+			  int flags);
 int search_end_update(search_text_receiver_t *rx);
 search_text_receiver_t *search_begin_snippets(void *internalised,
 					      int verbose,

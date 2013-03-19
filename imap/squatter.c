@@ -159,6 +159,16 @@ static int index_one(const char *name, int blocking)
     struct mailbox *mailbox = NULL;
     int r;
     char extname[MAX_MAILBOX_BUFFER];
+    int flags = 0;
+
+    if (incremental_mode)
+	flags |= SEARCH_UPDATE_INCREMENTAL;
+
+    /* in non-blocking (rolling) mode, only do one batch per mailbox at
+     * a time for fairness [IRIS-2471].  The squatter will re-insert the
+     * mailbox in the queue */
+    if (!blocking)
+	flags |= SEARCH_UPDATE_PARTIAL;
 
     /* Convert internal name to external */
     (*squat_namespace.mboxname_toexternal)(&squat_namespace, name,
@@ -262,7 +272,7 @@ static int index_one(const char *name, int blocking)
 	printf("Indexing mailbox %s... ", extname);
     }
 
-    r = search_update_mailbox(rx, mailbox, incremental_mode);
+    r = search_update_mailbox(rx, mailbox, flags);
 
     mailbox_close(&mailbox);
 

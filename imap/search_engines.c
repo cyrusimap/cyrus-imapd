@@ -188,15 +188,17 @@ static int flush_batch(search_text_receiver_t *rx,
 
 EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
 				   struct mailbox *mailbox,
-				   int incremental)
+				   int flags)
 {
     uint32_t uid;
     int r = 0;			/* Using IMAP_* not SQUAT_* return codes here */
     int r2;
     int first = 1;
+    int was_partial = 0;
     int batch_size = search_batch_size();
     ptrarray_t batch = PTRARRAY_INITIALIZER;
     struct index_record record;
+    int incremental = (flags & SEARCH_UPDATE_INCREMENTAL) ? 1 : 0;
 
     r = rx->begin_mailbox(rx, mailbox, incremental);
     if (r) return r;
@@ -208,6 +210,17 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
 	if (rx->is_indexed(rx, uid))
 	    continue;
 
+	if (incremental && batch.count >= batch_size) {
+	    syslog(LOG_INFO, "search_update_mailbox batching %u messages to %s",
+		   batch.count, mailbox->name);
+	    if (flags & SEARCH_UPDATE_PARTIAL) {
+		was_partial = 1;
+		break;
+	    }
+	    r = flush_batch(rx, mailbox, &batch);
+	    if (r) goto out;
+	}
+
 	/* This UID didn't appear in the old index file */
 	r = mailbox_find_index_record(mailbox, uid, &record,
 				      (first ? NULL : &record));
@@ -218,13 +231,6 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
 	    continue;
 
 	ptrarray_append(&batch, message_new_from_record(mailbox, &record));
-
-	if (incremental && batch.count >= batch_size) {
-	    syslog(LOG_INFO, "search_update_mailbox batching %u messages to %s",
-		   batch.count, mailbox->name);
-	    r = flush_batch(rx, mailbox, &batch);
-	    if (r) goto out;
-	}
     }
 
     if (batch.count)
@@ -233,8 +239,10 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
 out:
     ptrarray_fini(&batch);
     r2 = rx->end_mailbox(rx, mailbox);
-    if (r2 && !r) r = r2;
-    return r;
+    if (r) return r;
+    if (r2) return r2;
+    if (was_partial) return IMAP_AGAIN;
+    return 0;
 }
 
 EXPORTED int search_end_update(search_text_receiver_t *rx)
