@@ -1176,9 +1176,9 @@ static void cmdloop(void)
 		/* We only support TLS+Basic, so tell client to use TLS */
 
 		/* Check which response is required */
-		if ((hdr = spool_getheader(txn.req_hdrs, "Prefer")) &&
-		    !strncmp(hdr[0], "tls-upgrade", strcspn(hdr[0], " ,"))) {
-		    /* Client (Murder proxy) prefers RFC 2817 (TLS upgrade) */
+		if ((hdr = spool_getheader(txn.req_hdrs, "Upgrade")) &&
+		    !strncmp(hdr[0], TLS_VERSION, strcspn(hdr[0], " ,"))) {
+		    /* Client (Murder proxy) supports RFC 2817 (TLS upgrade) */
 
 		    response_header(HTTP_UPGRADE, &txn);
 		}

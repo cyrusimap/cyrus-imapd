@@ -214,20 +214,21 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 	if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	    prot_printf(s->out, "User-Agent: %s\r\n", buf_cstring(&serverinfo));
 	}
-	if (need_tls) {
+	if (scheme) {
+	    prot_printf(s->out, "Authorization: %s %s\r\n", 
+			scheme->name, clientout ? clientout : "");
+	    if (userid) prot_printf(s->out, "Authorize-As: %s\r\n", userid);
+	}
+	else {
 	    prot_printf(s->out, "Upgrade: %s, %s\r\n",
 			TLS_VERSION, HTTP_VERSION);
-	    prot_puts(s->out, "Connection: upgrade\r\n");
-	    need_tls = 0;
+	    if (need_tls) {
+		prot_puts(s->out, "Connection: upgrade\r\n");
+		need_tls = 0;
+	    }
+	    prot_puts(s->out, "Authorization: \r\n");
 	}
-	else prot_puts(s->out, "Prefer: tls-upgrade\r\n");
-	prot_puts(s->out, "Authorization: ");
-	if (scheme) {
-	    prot_printf(s->out, "%s ", scheme->name);
-	    if (clientout) prot_write(s->out, clientout, clientoutlen);
-	    if (userid) prot_printf(s->out, "\r\nAuthorize-As: %s", userid);
-	}
-	prot_puts(s->out, "\r\n\r\n");
+	prot_puts(s->out, "\r\n");
 	prot_flush(s->out);
 
 	serverin = clientout = NULL;
