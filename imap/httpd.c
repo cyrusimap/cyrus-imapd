@@ -1214,7 +1214,9 @@ static void cmdloop(void)
 	    else {
 		/* Tell client to authenticate */
 		ret = HTTP_UNAUTHORIZED;
-		if (r) txn.error.desc = "Authentication failed\r\n";
+		if (r == SASL_CONTINUE)
+		    txn.error.desc = "Continue authentication exchange\r\n";
+		else if (r) txn.error.desc = "Authentication failed\r\n";
 		else txn.error.desc =
 			 "Must authenticate to access the specified target\r\n";
 	    }
@@ -2255,7 +2257,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
     struct auth_scheme_t *scheme;
     static char base64[BASE64_BUF_SIZE+1];
     const void *canon_user;
-    const char **authzid = spool_getheader(txn->req_hdrs, "Authorization-Id");
+    const char **authzid = spool_getheader(txn->req_hdrs, "Authorize-As");
     int i;
 
     chal->param = NULL;
