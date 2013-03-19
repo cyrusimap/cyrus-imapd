@@ -1397,6 +1397,11 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 	/* Check for Content-Length */
 	if ((hdr = spool_getheader(hdrs, "Content-Length"))) {
 	    /* length-delimited body */
+	    if (hdr[1]) {
+		*errstr = "Multiple Content-Length header fields\r\n";
+		return HTTP_BAD_REQUEST;
+	    }
+
 	    len = strtoul(hdr[0], NULL, 10);
 	    if (len > max_msgsize) return HTTP_TOO_LARGE;
 	}
