@@ -596,10 +596,6 @@ static strarray_t *read_sync_log_items(sync_log_reader_t *slr)
 	    strarray_add(folders, args[1]);
     }
 
-    /* sort the mailboxes to get locality of reference
-     * for indexing */
-    strarray_sort(folders, cmpstringp_raw);
-
     return folders;
 }
 
@@ -615,6 +611,9 @@ static void do_synclogfile(const char *synclogfile)
     if (r) goto out;
     folders = read_sync_log_items(slr);
     sync_log_reader_end(slr);
+
+    /* sort folders for locality of reference in file processing mode */
+    strarray_sort(folders, cmpstringp_raw);
 
     signals_poll();
 
