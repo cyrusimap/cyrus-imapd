@@ -1743,9 +1743,10 @@ static int copyindexed_cb(void *rock,
     return r;
 }
 
-EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
+EXPORTED int compact_dbs(const char *userid, const char *tempdir,
 			 const strarray_t *srctiers, const char *desttier, int flags)
 {
+    char *mboxname = mboxname_user_mbox(userid, NULL);
     struct mboxlist_entry *mbentry = NULL;
     struct mappedfile *activefile = NULL;
     strarray_t *dirs = NULL;
@@ -1994,6 +1995,7 @@ out:
     mappedfile_unlock(activefile);
     mappedfile_close(&activefile);
     mboxlist_entry_free(&mbentry);
+    free(mboxname);
 
     return r;
 }

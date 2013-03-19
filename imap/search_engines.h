@@ -143,7 +143,7 @@ struct search_engine {
     int (*list_files)(const char *mboxname, const char *partition, strarray_t *);
 #define SEARCH_COMPACT_VERBOSE (1<<0)
 #define SEARCH_COMPACT_COPYONE (1<<1)
-    int (*compact)(const char *mboxname, const char *tempdir,
+    int (*compact)(const char *userid, const char *tempdir,
 		   const strarray_t *srctiers, const char *desttier, int flags);
 };
 
@@ -176,7 +176,7 @@ void search_free_internalised(void *internalised);
 int search_start_daemon(int verbose);
 int search_stop_daemon(int verbose);
 int search_list_files(const char *mboxname, const char *partition, strarray_t *);
-int search_compact(const char *mboxname, const char *tempdir,
+int search_compact(const char *userid, const char *tempdir,
 		   const strarray_t *srctiers, const char *desttier, int verbose);
 
 

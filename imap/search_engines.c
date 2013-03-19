@@ -305,14 +305,14 @@ EXPORTED int search_list_files(const char *mboxname,
     return (se->list_files ? se->list_files(mboxname, partition, files) : 0);
 }
 
-EXPORTED int search_compact(const char *mboxname,
+EXPORTED int search_compact(const char *userid,
 			    const char *tempdir,
 			    const strarray_t *srctiers,
 			    const char *desttier,
 			    int flags)
 {
     const struct search_engine *se = engine();
-    return (se->compact ? se->compact(mboxname, tempdir, srctiers, desttier, flags) : 0);
+    return (se->compact ? se->compact(userid, tempdir, srctiers, desttier, flags) : 0);
 }
 
 const char *search_op_as_string(int op)

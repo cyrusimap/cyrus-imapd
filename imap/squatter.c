@@ -534,10 +534,10 @@ static int print_search_hit(const char *mboxname, uint32_t uidvalidity,
     return 0;
 }
 
-static int compact_mbox(const char *mboxname, const strarray_t *srctiers,
-			 const char *desttier, int flags)
+static int compact_mbox(const char *userid, const strarray_t *srctiers,
+			const char *desttier, int flags)
 {
-    return search_compact(mboxname, temp_root_dir, srctiers, desttier, flags);
+    return search_compact(userid, temp_root_dir, srctiers, desttier, flags);
 }
 
 static int do_compact(const strarray_t *mboxnames, const strarray_t *srctiers,
@@ -549,10 +549,12 @@ static int do_compact(const strarray_t *mboxnames, const strarray_t *srctiers,
 
     for (i = 0 ; i < mboxnames->count ; i++) {
 	const char *userid = mboxname_to_userid(mboxnames->data[i]);
+	if (!userid) continue;
+
 	if (!strcmpsafe(prev_userid, userid))
 	    continue;
 
-	r = compact_mbox(mboxnames->data[i], srctiers, desttier, flags);
+	r = compact_mbox(userid, srctiers, desttier, flags);
 	if (r) break;
 
 	free(prev_userid);
