@@ -460,6 +460,12 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
 static int deleteactive(struct protstream *conn)
 {
     if (unlink("defaultbc") != 0) {
+	if (errno == ENOENT) {
+	    /* RFC 5804, 2.8 SETACTIVE Command:
+	     * Disabling an active script when there is no script active is
+	     * not an error and MUST result in an OK reply. */
+	    return TIMSIEVE_OK;
+	}
 	prot_printf(conn,"NO \"Unable to unlink active script\"\r\n");
 	return TIMSIEVE_FAIL;
     }
