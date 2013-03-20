@@ -1831,29 +1831,21 @@ void response_header(long code, struct transaction_t *txn)
 	default:
 	    if (code == HTTP_NOT_ALLOWED) {
 		/* Construct Allow header(s) for OPTIONS and 405 response */
-		prot_puts(httpd_out, "Allow: OPTIONS");
-		if (txn->req_tgt.allow & ALLOW_READ) {
-		    prot_puts(httpd_out, ", GET, HEAD");
-		}
-		if (txn->req_tgt.allow & ALLOW_POST) {
-		    prot_puts(httpd_out, ", POST");
-		}
-		if (txn->req_tgt.allow & ALLOW_WRITE) {
-		    prot_puts(httpd_out, ", PUT");
-		}
-		if (txn->req_tgt.allow & ALLOW_DELETE) {
-		    prot_puts(httpd_out, ", DELETE");
-		}
-		prot_puts(httpd_out, "\r\n");
+		const char *http_meth[] = {
+		    "OPTIONS, GET, HEAD", "POST", "PUT", "DELETE", NULL
+		};
+
+		comma_list_hdr("Allow", http_meth, txn->req_tgt.allow);
+
 		if (txn->req_tgt.allow & ALLOW_DAV) {
 		    prot_puts(httpd_out, "Allow: PROPFIND, REPORT");
 		    if (txn->req_tgt.allow & ALLOW_WRITE) {
 			prot_puts(httpd_out, ", COPY, MOVE, LOCK, UNLOCK");
 		    }
 		    if (txn->req_tgt.allow & ALLOW_WRITECOL) {
-			prot_puts(httpd_out, ", PROPPATCH, ACL, MKCOL");
+			prot_puts(httpd_out, ", PROPPATCH, MKCOL, ACL");
 			if (txn->req_tgt.allow & ALLOW_CAL) {
-			    prot_puts(httpd_out, ", MKCALENDAR");
+			    prot_puts(httpd_out, "\r\nAllow: MKCALENDAR");
 			}
 		    }
 		    prot_puts(httpd_out, "\r\n");
