@@ -1004,6 +1004,7 @@ const struct search_engine squat_search_engine = {
     /* start_daemon */NULL,
     /* stop_daemon */NULL,
     /* list_files */NULL,
-    /* compact */NULL
+    /* compact */NULL,
+    /* deluser */NULL
 };
 

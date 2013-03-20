@@ -2034,6 +2034,7 @@ const struct search_engine xapian_search_engine = {
     /*start_daemon*/NULL,
     /*stop_daemon*/NULL,
     list_files,
-    compact_dbs
+    compact_dbs,
+    /*deluser*/NULL   /* XXX: fixme */
 };
 

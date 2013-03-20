@@ -145,6 +145,7 @@ struct search_engine {
 #define SEARCH_COMPACT_COPYONE (1<<1)
     int (*compact)(const char *userid, const char *tempdir,
 		   const strarray_t *srctiers, const char *desttier, int flags);
+    int (*deluser)(const char *userid);
 };
 
 /*
@@ -178,6 +179,7 @@ int search_stop_daemon(int verbose);
 int search_list_files(const char *userid, strarray_t *);
 int search_compact(const char *userid, const char *tempdir,
 		   const strarray_t *srctiers, const char *desttier, int verbose);
+int search_deluser(const char *userid);
 
 
 /* for debugging */

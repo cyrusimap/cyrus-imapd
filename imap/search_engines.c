@@ -314,6 +314,12 @@ EXPORTED int search_compact(const char *userid,
     return (se->compact ? se->compact(userid, tempdir, srctiers, desttier, flags) : 0);
 }
 
+EXPORTED int search_deluser(const char *userid)
+{
+    const struct search_engine *se = engine();
+    return (se->deluser ? se->deluser(userid) : 0);
+}
+
 const char *search_op_as_string(int op)
 {
     static char buf[33];
