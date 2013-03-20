@@ -161,6 +161,10 @@ Run in rolling mode; \fBsquatter\fP runs as a daemon listening to
 a sync log channel and continuously incrementally indexing mailboxes.
 See also \fB-d\fP and \fB-n\fP.
 .TP
+.BI \-S " seconds"
+After processing each mailbox, sleep for "seconds" before continuing.
+Can be used to provide some load balancing.  Accepts fractional amounts.
+.TP
 .BI \-T " directory"
 When indexing, work on a temporary copy of the search engine databases
 in \fIdirectory\fP.  That directory would typically be on some very

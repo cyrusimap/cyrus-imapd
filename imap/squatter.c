@@ -97,6 +97,7 @@ static int incremental_mode = 0;
 static int recursive_flag = 0;
 static int annotation_flag = 0;
 static int running_daemon = 0;
+static int sleepmicroseconds = 0;
 static const char *temp_root_dir = NULL;
 static search_text_receiver_t *rx = NULL;
 
@@ -332,6 +333,8 @@ static int do_indexer(const strarray_t *sa)
 	if (r == IMAP_MAILBOX_LOCKED)
 	    r = 0; /* XXX - try again? */
 	if (r) break;
+	if (sleepmicroseconds)
+	    usleep(sleepmicroseconds);
     }
 
     search_end_update(rx);
@@ -554,6 +557,9 @@ static int do_compact(const strarray_t *mboxnames, const strarray_t *srctiers,
 
 	free(prev_userid);
 	prev_userid = xstrdupnull(userid);
+
+	if (sleepmicroseconds)
+	    usleep(sleepmicroseconds);
     }
 
     free(prev_userid);
@@ -653,6 +659,8 @@ static int do_synclogfile(const char *synclogfile)
 		   mboxname, error_message(r));
 	    break;
 	}
+	if (sleepmicroseconds)
+	    usleep(sleepmicroseconds);
     }
     search_end_update(rx);
     rx = NULL;
@@ -697,6 +705,8 @@ static void do_rolling(const char *channel)
 		    /* XXX: alternative, just append to strarray_t *folders ... */
 		    sync_log_channel(channel, "APPEND %s", mboxname);
 		}
+		if (sleepmicroseconds)
+		    usleep(sleepmicroseconds);
 	    }
 	    search_end_update(rx);
 	    rx = NULL;
@@ -782,7 +792,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:I:RT:c:de:f:mn:rsiavz:t:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:I:RT:S:c:de:f:mn:rsiavz:t:")) != EOF) {
 	switch (opt) {
 	case 'C':		/* alt config file */
 	    alt_config = optarg;
@@ -798,6 +808,10 @@ int main(int argc, char **argv)
 	    if (mode != UNKNOWN) usage(argv[0]);
 	    mode = ROLLING;
 	    incremental_mode = 1; /* always incremental if rolling */
+	    break;
+
+	case 'S':		/* sleep time in seconds */
+	    sleepmicroseconds = (atof(optarg) * 1000000);
 	    break;
 
 	case 'T':		/* temporary root directory for search */
