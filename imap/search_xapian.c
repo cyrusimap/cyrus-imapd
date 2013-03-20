@@ -1689,6 +1689,11 @@ static int list_files(const char *userid, strarray_t *files)
     int i;
 
     r = mboxlist_lookup(mboxname, &mbentry, NULL);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+	/* no user, no worries */
+	r = 0;
+	goto out;
+    }
     if (r) {
 	syslog(LOG_ERR, "IOERROR: failed to lookup %s", mboxname);
 	goto out;
@@ -1773,13 +1778,18 @@ EXPORTED int compact_dbs(const char *userid, const char *tempdir,
     int r = 0;
     int i;
 
-    xapian_init();
-
     r = mboxlist_lookup(mboxname, &mbentry, NULL);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+	/* no user, no worries */
+	r = 0;
+	goto out;
+    }
     if (r) {
 	syslog(LOG_ERR, "IOERROR: failed to lookup %s", mboxname);
 	goto out;
     }
+
+    xapian_init();
 
     /* take an exclusive lock on the activefile file */
     active = activefile_open(mboxname, mbentry->partition, &activefile, /*write*/1);
