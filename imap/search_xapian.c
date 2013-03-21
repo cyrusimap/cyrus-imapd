@@ -1744,7 +1744,7 @@ static int copyindexed_cb(void *rock,
 }
 
 EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
-			 const strarray_t *srctiers, const char *desttier, int verbose)
+			 const strarray_t *srctiers, const char *desttier, int flags)
 {
     struct mboxlist_entry *mbentry = NULL;
     struct mappedfile *activefile = NULL;
@@ -1758,6 +1758,7 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
     struct buf mytempdir = BUF_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
     struct indexedrock lr;
+    int verbose = (flags & SEARCH_COMPACT_VERBOSE);
     int r = 0;
     int i;
 
@@ -1844,6 +1845,14 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
     r = mkdir(buf_cstring(&mytempdir), 0755);
     if (r) goto out;
 
+    if (dirs->count == 1 && (flags & SEARCH_COMPACT_COPYONE)) {
+	if (verbose) {
+	    printf("only one source, copying directly to %s\n", tempdestdir);
+	}
+	cyrus_mkdir(tempdestdir, 0755);
+	remove_dir(tempdestdir);
+	r = copy_files(dirs->data[0], tempdestdir);
+    }
     if (dirs->count) {
 	if (verbose) {
 	    printf("compacting databases\n");

@@ -141,8 +141,10 @@ struct search_engine {
     int (*start_daemon)(int verbose);
     int (*stop_daemon)(int verbose);
     int (*list_files)(const char *mboxname, const char *partition, strarray_t *);
+#define SEARCH_COMPACT_VERBOSE (1<<0)
+#define SEARCH_COMPACT_COPYONE (1<<1)
     int (*compact)(const char *mboxname, const char *tempdir,
-		   const strarray_t *srctiers, const char *desttier, int verbose);
+		   const strarray_t *srctiers, const char *desttier, int flags);
 };
 
 /*
