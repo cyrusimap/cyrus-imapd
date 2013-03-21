@@ -535,16 +535,16 @@ static int print_search_hit(const char *mboxname, uint32_t uidvalidity,
 }
 
 static int compact_mbox(const char *mboxname, const strarray_t *srctiers,
-			 const char *desttier)
+			 const char *desttier, int flags)
 {
-    return search_compact(mboxname, temp_root_dir, srctiers, desttier, verbose);
+    return search_compact(mboxname, temp_root_dir, srctiers, desttier, flags);
 }
 
 static int do_compact(const strarray_t *mboxnames, const strarray_t *srctiers,
-		      const char *desttier)
+		      const char *desttier, int flags)
 {
     char *prev_userid = NULL;
-    int i; 
+    int i;
     int r = 0;
 
     for (i = 0 ; i < mboxnames->count ; i++) {
@@ -552,7 +552,7 @@ static int do_compact(const strarray_t *mboxnames, const strarray_t *srctiers,
 	if (!strcmpsafe(prev_userid, userid))
 	    continue;
 
-	r = compact_mbox(mboxnames->data[i], srctiers, desttier);
+	r = compact_mbox(mboxnames->data[i], srctiers, desttier, flags);
 	if (r) break;
 
 	free(prev_userid);
@@ -780,6 +780,7 @@ int main(int argc, char **argv)
     const char *synclogfile = NULL;
     int init_flags = CYRUSINIT_PERROR;
     int multi_folder = 0;
+    int compact_flags = 0;
     const char *fromfile = NULL;
     strarray_t *srctiers = NULL;
     const char *desttier;
@@ -792,7 +793,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:I:RT:S:c:de:f:mn:rsiavz:t:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:I:RT:S:c:de:f:mn:rsiavz:t:o")) != EOF) {
 	switch (opt) {
 	case 'C':		/* alt config file */
 	    alt_config = optarg;
@@ -858,6 +859,10 @@ int main(int argc, char **argv)
 	    channel = optarg;
 	    break;
 
+	case 'o':		/* copy one DB rather than compressing */
+	    compact_flags |= SEARCH_COMPACT_COPYONE;
+	    break;
+
 	case 'v':		/* verbose */
 	    verbose++;
 	    break;
@@ -900,6 +905,9 @@ int main(int argc, char **argv)
 	    usage("squatter");
 	}
     }
+
+    if (verbose)
+	compact_flags |= SEARCH_COMPACT_VERBOSE;
 
     if (mode == UNKNOWN)
 	mode = INDEXER;
@@ -976,7 +984,7 @@ int main(int argc, char **argv)
     case COMPACT:
 	if (recursive_flag && optind == argc) usage(argv[0]);
 	expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind);
-	r = do_compact(&mboxnames, srctiers, desttier);
+	r = do_compact(&mboxnames, srctiers, desttier, compact_flags);
 	break;
     }
 
