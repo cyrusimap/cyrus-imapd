@@ -151,7 +151,6 @@ static void index_get_ids(MsgData *msgdata,
 
 static int index_sort_compare(MsgData *md1, MsgData *md2,
 			      const struct sortcrit *call_data);
-static void index_msgdata_free(MsgData *md);
 static int index_sort_compare_qsort(const void *v1, const void *v2);
 
 static void *index_thread_getnext(Thread *thread);
