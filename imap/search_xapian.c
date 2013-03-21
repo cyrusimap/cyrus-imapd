@@ -688,65 +688,18 @@ static const char *make_cyrusid(struct mailbox *mailbox, uint32_t uid)
     return buf_cstring(&buf);
 }
 
-static int rsync_tree(const char *fromdir, const char *todir,
-		      int verbose, int atomic, int remove)
+/* XXX - replace with cyrus_mkdir and cyrus_copyfile */
+static void remove_dir(const char *dir)
+{
+    run_command("/bin/rm", "-rf", dir, (char *)NULL);
+}
+
+static int copy_files(const char *fromdir, const char *todir)
 {
     char *fromdir2 = strconcat(fromdir, "/", (char *)NULL);
-    char *todir_new = NULL;
-    char *todir_old = NULL;
-    int r = 0;
+    int r = run_command("/usr/bin/rsync", "-a", fromdir2, todir, (char *)NULL);
 
-    if (atomic) {
-	todir_new = strconcat(todir, ".NEW", (char *)NULL);
-	todir_old = strconcat(todir, ".OLD", (char *)NULL);
-    }
-    else {
-	todir_new = xstrdup(todir);
-    }
-
-    if (verbose > 1)
-	syslog(LOG_INFO, "running: rsync %s -> %s", fromdir2, todir_new);
-    r = run_command("/usr/bin/rsync", (verbose ? "-av" : "-a"),
-		       fromdir2, todir_new, (char *)NULL);
-    if (r) goto out;
-
-    if (atomic) {
-	/* this isn't really atomic because the atomic-rename trick
-	 * doesn't work on directories, but it does reduce the window */
-
-	if (verbose > 1)
-	    syslog(LOG_INFO, "renaming %s -> %s", todir, todir_old);
-	r = rename(todir, todir_old);
-	if (r) {
-	    syslog(LOG_ERR, "IOERROR: failed to rename %s to %s: %s",
-		    todir, todir_old, error_message(errno));
-	    r = IMAP_IOERROR;
-	    goto out;
-	}
-
-	if (verbose > 1)
-	    syslog(LOG_INFO, "renaming %s -> %s", todir_new, todir);
-	r = rename(todir_new, todir);
-	if (r) {
-	    syslog(LOG_ERR, "IOERROR: failed to rename %s to %s: %s",
-		    todir_new, todir, error_message(errno));
-	    r = IMAP_IOERROR;
-	    goto out;
-	}
-
-	run_command("/bin/rm", "-rf", todir_old, (char *)NULL);
-    }
-
-    if (remove) {
-	if (verbose > 1)
-	    syslog(LOG_INFO, "Removing tree %s", fromdir);
-	run_command("/bin/rm", "-rf", fromdir, (char *)NULL);
-    }
-
-out:
     free(fromdir2);
-    free(todir_new);
-    free(todir_old);
     return r;
 }
 
@@ -1887,7 +1840,7 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
     r = cyrus_mkdir(buf_cstring(&mytempdir), 0755);
     if (r) goto out;
     /* and doesn't contain any junk */
-    run_command("/bin/rm", "-rf", buf_cstring(&mytempdir), (char *)NULL);
+    remove_dir(buf_cstring(&mytempdir));
     r = mkdir(buf_cstring(&mytempdir), 0755);
     if (r) goto out;
 
@@ -1946,8 +1899,8 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
 		printf("copying from tempdir to destination\n");
 	    }
 	    cyrus_mkdir(tempdestdir, 0755);
-	    run_command("/bin/rm", "-rf", tempdestdir, (char *)NULL);
-	    r = rsync_tree(buf_cstring(&mytempdir), tempdestdir, 0, 0, 1);
+	    remove_dir(tempdestdir);
+	    r = copy_files(buf_cstring(&mytempdir), tempdestdir);
 	    if (r) {
 		printf("Failed to rsync from %s to %s", buf_cstring(&mytempdir), tempdestdir);
 		goto out;
@@ -1981,7 +1934,7 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
 	if (verbose) {
 	    printf("renaming tempdir into place\n");
 	}
-	run_command("/bin/rm", "-rf", destdir, (char *)NULL);
+	remove_dir(destdir);
 	r = rename(tempdestdir, destdir);
 	if (r) {
 	    printf("ERROR: failed to rename into place %s to %s\n", tempdestdir, destdir);
@@ -2011,15 +1964,15 @@ EXPORTED int compact_dbs(const char *mboxname, const char *tempdir,
 
     /* finally remove all directories on disk of the source dbs */
     for (i = 0; i < dirs->count; i++)
-	run_command("/bin/rm", "-rf", dirs->data[i], (char *)NULL);
+	remove_dir(dirs->data[i]);
 
     /* XXX - readdir and remove other directories as well */
 
 out:
     if (tempdestdir)
-	run_command("/bin/rm", "-rf", tempdestdir, (char *)NULL);
+	remove_dir(tempdestdir);
     if (mytempdir.len)
-	run_command("/bin/rm", "-rf", buf_cstring(&mytempdir), (char *)NULL);
+	remove_dir(buf_cstring(&mytempdir));
     strarray_free(dirs);
     strarray_free(active);
     strarray_free(tochange);
