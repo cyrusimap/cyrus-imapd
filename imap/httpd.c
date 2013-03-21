@@ -77,6 +77,7 @@
 #include <sasl/saslutil.h>
 
 #include "httpd.h"
+#include "http_proxy.h"
 
 #include "assert.h"
 #include "util.h"
@@ -261,6 +262,7 @@ const struct known_meth_t http_methods[] = {
     { "PROPPATCH",	0 },
     { "PUT",		0 },
     { "REPORT",		0 },
+    { "TRACE",	   	METH_NOBODY },
     { "UNLOCK",	   	METH_NOBODY },
     { NULL,		0 }
 };
@@ -285,12 +287,13 @@ struct namespace_t namespace_default = {
 	{ NULL,			NULL },			/* PROPPATCH	*/
 	{ NULL,			NULL },			/* PUT		*/
 	{ NULL,			NULL },			/* REPORT	*/
+	{ &meth_trace,		NULL },			/* TRACE	*/
 	{ NULL,			NULL },			/* UNLOCK	*/
     }
 };
 
 /* Array of different namespaces and features supported by the server */
-const struct namespace_t *namespaces[] = {
+struct namespace_t *namespaces[] = {
 #ifdef WITH_DAV
     &namespace_principal,
     &namespace_calendar,
@@ -409,7 +412,7 @@ int service_init(int argc __attribute__((unused)),
 		 char **argv __attribute__((unused)),
 		 char **envp __attribute__((unused)))
 {
-    int r, opt, i;
+    int r, opt, i, allow_trace = config_getswitch(IMAPOPT_HTTPALLOWTRACE);
 
     LIBXML_TEST_VERSION
 
@@ -492,6 +495,7 @@ int service_init(int argc __attribute__((unused)),
     /* Do any namespace specific initialization */
     config_httpmodules = config_getbitfield(IMAPOPT_HTTPMODULES);
     for (i = 0; namespaces[i]; i++) {
+	if (allow_trace) namespaces[i]->allow |= ALLOW_TRACE;
 	if (namespaces[i]->init) namespaces[i]->init(&serverinfo);
     }
 
@@ -1832,7 +1836,7 @@ void response_header(long code, struct transaction_t *txn)
 	    if (code == HTTP_NOT_ALLOWED) {
 		/* Construct Allow header(s) for OPTIONS and 405 response */
 		const char *http_meth[] = {
-		    "OPTIONS, GET, HEAD", "POST", "PUT", "DELETE", NULL
+		    "OPTIONS, GET, HEAD", "POST", "PUT", "DELETE", "TRACE", NULL
 		};
 
 		comma_list_hdr("Allow", http_meth, txn->req_tgt.allow);
@@ -2955,7 +2959,7 @@ int meth_get_doc(struct transaction_t *txn,
 /* Perform an OPTIONS request */
 int meth_options(struct transaction_t *txn, void *params)
 {
-    struct meth_params *oparams = (struct meth_params *) params;
+    parse_path_t parse_path = (parse_path_t) params;
     int r;
 
     /* Response should not be cached */
@@ -2973,9 +2977,9 @@ int meth_options(struct transaction_t *txn, void *params)
 		txn->req_tgt.allow |= namespaces[i]->allow;
 	}
     }
-    else if (oparams && oparams->parse_path) {
+    else if (parse_path) {
 	/* Parse the path */
-	r = oparams->parse_path(&txn->req_tgt, &txn->error.desc);
+	r = parse_path(&txn->req_tgt, &txn->error.desc);
 	if (r) return r;
     }
 
@@ -3001,4 +3005,97 @@ int meth_propfind_root(struct transaction_t *txn,
 #endif
 
     return HTTP_NOT_ALLOWED;
+}
+
+
+/* Write cached header to buf, excluding any that might have sensitive data. */
+static void trace_cachehdr(const char *name, const char *contents, void *rock)
+{
+    struct buf *buf = (struct buf *) rock;
+    const char **hdr, *sensitive[] =
+	{ "authorization", "cookie", "proxy-authorization", NULL };
+
+    for (hdr = sensitive; *hdr && strcmp(name, *hdr); hdr++);
+
+    if (!*hdr) buf_printf(buf, "%c%s: %s\r\n",
+			  toupper(name[0]), name+1, contents);
+}
+
+/* Perform an TRACE request */
+int meth_trace(struct transaction_t *txn, void *params)
+{
+    parse_path_t parse_path = (parse_path_t) params;
+    const char **hdr;
+    unsigned long max_fwd = -1;
+    struct buf *msg = &txn->resp_body.payload;
+
+    /* Response should not be cached */
+    txn->flags.cc |= CC_NOCACHE;
+
+    /* Make sure method is allowed */
+    if (!(txn->req_tgt.allow & ALLOW_TRACE)) return HTTP_NOT_ALLOWED;
+
+    if ((hdr = spool_getheader(txn->req_hdrs, "Max-Forwards"))) {
+	max_fwd = strtoul(hdr[0], NULL, 10);
+    }
+
+    if (max_fwd && parse_path) {
+	/* Parse the path */
+	int r;
+
+	if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+
+	if (*txn->req_tgt.mboxname) {
+	    /* Locate the mailbox */
+	    char *server;
+
+	    r = http_mlookup(txn->req_tgt.mboxname, &server, NULL, NULL);
+	    if (r) {
+		syslog(LOG_ERR, "mlookup(%s) failed: %s",
+		       txn->req_tgt.mboxname, error_message(r));
+		txn->error.desc = error_message(r);
+
+		switch (r) {
+		case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+		case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+		default: return HTTP_SERVER_ERROR;
+		}
+	    }
+
+	    if (server) {
+		/* Remote mailbox */
+		struct backend *be;
+
+		be = proxy_findserver(server, &http_protocol, httpd_userid,
+				      &backend_cached, NULL, NULL, httpd_in);
+		if (!be) return HTTP_UNAVAILABLE;
+
+		return http_pipe_req_resp(be, txn);
+	    }
+
+	    /* Local mailbox */
+	}
+    }
+
+    /* Echo the request back to the client as a message/http:
+     *
+     * - Piece the Request-line back together
+     * - Use all non-sensitive cached headers from client
+     */
+    buf_setcstr(msg, "TRACE ");
+    buf_appendcstr(msg, txn->req_tgt.path);
+    if (*txn->req_tgt.query) {
+	buf_printf(msg, "?%s", txn->req_tgt.query);
+    }
+    buf_appendcstr(msg, " " HTTP_VERSION "\r\n");
+
+    spool_enum_hdrcache(txn->req_hdrs, &trace_cachehdr, msg);
+    buf_appendcstr(msg, "\r\n");
+
+    txn->resp_body.type = "message/http";
+    txn->resp_body.len = buf_len(msg);
+
+    write_body(HTTP_OK, txn, buf_cstring(msg), buf_len(msg));
+
+    return 0;
 }

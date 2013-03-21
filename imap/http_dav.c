@@ -112,6 +112,7 @@ struct namespace_t namespace_principal = {
 	{ NULL,			NULL },			/* PROPPATCH	*/
 	{ NULL,			NULL },			/* PUT		*/
 	{ &meth_report,		NULL },			/* REPORT	*/
+	{ &meth_trace,		NULL },			/* TRACE	*/
 	{ NULL,			NULL }			/* UNLOCK	*/
     }
 };

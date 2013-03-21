@@ -102,6 +102,7 @@ enum {
     METH_PROPPATCH,
     METH_PUT,
     METH_REPORT,
+    METH_TRACE,
     METH_UNLOCK,
 
     METH_UNKNOWN,  /* MUST be last */
@@ -125,12 +126,13 @@ enum {
     ALLOW_POST =	(1<<1),	/* Post to a URL */
     ALLOW_WRITE =	(1<<2),	/* Create/modify/lock resources */
     ALLOW_DELETE =	(1<<3),	/* Delete resources/collections */
-    ALLOW_DAV =		(1<<4),	/* WebDAV specific methods/features */
-    ALLOW_WRITECOL =	(1<<5),	/* Create/modify collections */
-    ALLOW_CAL =		(1<<6),	/* CalDAV specific methods/features */
-    ALLOW_CAL_SCHED =	(1<<7),	/* CalDAV Scheduling specific features */
-    ALLOW_CARD =	(1<<8),	/* CardDAV specific methods/features */
-    ALLOW_ISCHEDULE =	(1<<9)	/* iSchedule specific methods/features */
+    ALLOW_TRACE =	(1<<4),	/* TRACE a request */
+    ALLOW_DAV =		(1<<5),	/* WebDAV specific methods/features */
+    ALLOW_WRITECOL =	(1<<6),	/* Create/modify collections */
+    ALLOW_CAL =		(1<<7),	/* CalDAV specific methods/features */
+    ALLOW_CAL_SCHED =	(1<<8),	/* CalDAV Scheduling specific features */
+    ALLOW_CARD =	(1<<9),	/* CardDAV specific methods/features */
+    ALLOW_ISCHEDULE =	(1<<10)	/* iSchedule specific methods/features */
 };
 
 #define MAX_QUERY_LEN	100
@@ -190,6 +192,9 @@ enum {
     TGT_SCHED_INBOX = 1,
     TGT_SCHED_OUTBOX
 };
+
+/* Function to parse URI path and generate a mailbox name */
+typedef int (*parse_path_t)(struct request_target_t *tgt, const char **errstr);
 
 /* Auth challenge context */
 struct auth_challenge_t {
@@ -367,6 +372,7 @@ extern void write_body(long code, struct transaction_t *txn,
 		       const char *buf, unsigned len);
 extern int meth_get_doc(struct transaction_t *txn, void *params);
 extern int meth_options(struct transaction_t *txn, void *params);
+extern int meth_trace(struct transaction_t *txn, void *params);
 extern int etagcmp(const char *hdr, const char *etag);
 extern int check_precond(struct transaction_t *txn, const void *data,
 			 const char *etag, time_t lastmod);

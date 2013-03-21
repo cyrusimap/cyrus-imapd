@@ -283,9 +283,6 @@ struct propfind_ctx {
     struct buf buf;			/* Working buffer */
 };
 
-/* Function to parse URI path and generate a mailbox name */
-typedef int (*parse_path_t)(struct request_target_t *tgt, const char **errstr);
-
 /* Function to check headers for preconditions */
 typedef int (*check_precond_t)(struct transaction_t *txn, const void *data,
 			       const char *etag, time_t lastmod);
@@ -379,7 +376,7 @@ struct meth_params {
     const char *content_type;		/* Content-Type of resources */
     parse_path_t parse_path;		/* parse URI path & generate mboxname */
     check_precond_t check_precond;	/* check headers for preconditions */
-    struct davdb_params davdb;
+    struct davdb_params davdb;		/* DAV DB access functions */
     acl_proc_t acl_ext;			/* special ACL handling (extensions) */
     copy_proc_t copy;			/* function to process & COPY a rsrc */
     delete_proc_t delete;		/* special DELETE handling (optional) */

@@ -532,9 +532,17 @@ static void write_cachehdr(const char *name, const char *contents, void *rock)
 
     for (hdr = hop_by_hop; *hdr && strcmp(name, *hdr); hdr++);
 
-    if (!*hdr) prot_printf(pout, "%c%s: %s\r\n",
-			   toupper(name[0]), name+1, contents);
+    if (!*hdr) {
+	if (!strcmp(name, "max-forwards")) {
+	    /* Decrement Max-Forwards before forwarding */
+	    unsigned long max = strtoul(contents, NULL, 10);
 
+	    prot_printf(pout, "Max-Forwards: %lu\r\n", max-1);
+	}
+	else {
+	    prot_printf(pout, "%c%s: %s\r\n", toupper(*name), name+1, contents);
+	}
+    }
 }
 
 

@@ -87,9 +87,7 @@ static const char def_template[] =
 static time_t compile_time;
 static void rss_init(struct buf *serverinfo);
 static int meth_get(struct transaction_t *txn, void *params);
-static int rss_to_mboxname(struct request_target_t *req_tgt,
-			   char *mboxname, uint32_t *uid,
-			   char *section);
+static int rss_parse_path(struct request_target_t *tgt, const char **errstr);
 static int is_feed(const char *mbox);
 static int list_feeds(struct transaction_t *txn);
 static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
@@ -110,22 +108,23 @@ struct namespace_t namespace_rss = {
     URL_NS_RSS, 0, "/rss", NULL, 1 /* auth */, ALLOW_READ,
     rss_init, NULL, NULL, NULL,
     {
-	{ NULL,			NULL },	/* ACL		*/
-	{ NULL,			NULL },	/* COPY		*/
-	{ NULL,			NULL },	/* DELETE	*/
-	{ &meth_get,		NULL },	/* GET		*/
-	{ &meth_get,		NULL },	/* HEAD		*/
-	{ NULL,			NULL },	/* LOCK		*/
-	{ NULL,			NULL },	/* MKCALENDAR	*/
-	{ NULL,			NULL },	/* MKCOL	*/
-	{ NULL,			NULL },	/* MOVE		*/
-	{ &meth_options,	NULL },	/* OPTIONS	*/
-	{ NULL,			NULL },	/* POST		*/
-	{ NULL,			NULL },	/* PROPFIND	*/
-	{ NULL,			NULL },	/* PROPPATCH	*/
-	{ NULL,			NULL },	/* PUT		*/
-	{ NULL,			NULL },	/* REPORT	*/
-	{ NULL,			NULL }	/* UNLOCK	*/
+	{ NULL,			NULL },			/* ACL		*/
+	{ NULL,			NULL },			/* COPY		*/
+	{ NULL,			NULL },			/* DELETE	*/
+	{ &meth_get,		NULL },			/* GET		*/
+	{ &meth_get,		NULL },			/* HEAD		*/
+	{ NULL,			NULL },			/* LOCK		*/
+	{ NULL,			NULL },			/* MKCALENDAR	*/
+	{ NULL,			NULL },			/* MKCOL	*/
+	{ NULL,			NULL },			/* MOVE		*/
+	{ &meth_options,	&rss_parse_path },	/* OPTIONS	*/
+	{ NULL,			NULL },			/* POST		*/
+	{ NULL,			NULL },			/* PROPFIND	*/
+	{ NULL,			NULL },			/* PROPPATCH	*/
+	{ NULL,			NULL },			/* PUT		*/
+	{ NULL,			NULL },			/* REPORT	*/
+	{ &meth_trace,		&rss_parse_path },	/* TRACE	*/
+	{ NULL,			NULL }			/* UNLOCK	*/
     }
 };
 
@@ -166,26 +165,26 @@ static int meth_get(struct transaction_t *txn,
 		    void *params __attribute__((unused)))
 {
     int ret = 0, r;
-    char *server, mailboxname[MAX_MAILBOX_BUFFER+1], section[MAX_SECTION_LEN+1];
-    uint32_t uid;
+    char *server, section[MAX_SECTION_LEN+1] = "";
+    uint32_t uid = 0;
     struct mailbox *mailbox = NULL;
 
     /* Construct mailbox name corresponding to request target URI */
-    if ((r = rss_to_mboxname(&txn->req_tgt, mailboxname, &uid, section))) {
+    if ((r = rss_parse_path(&txn->req_tgt, &txn->error.desc))) {
 	txn->error.desc = error_message(r);
 	return HTTP_NOT_FOUND;
     }
 
     /* If no mailboxname, list all available feeds */
-    if (!*mailboxname) return list_feeds(txn);
+    if (!*txn->req_tgt.mboxname) return list_feeds(txn);
 
     /* Make sure its a mailbox that we are treating as an RSS feed */
-    if (!is_feed(mailboxname)) return HTTP_NOT_FOUND;
+    if (!is_feed(txn->req_tgt.mboxname)) return HTTP_NOT_FOUND;
 
     /* Locate the mailbox */
-    if ((r = http_mlookup(mailboxname, &server, NULL, NULL))) {
+    if ((r = http_mlookup(txn->req_tgt.mboxname, &server, NULL, NULL))) {
 	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       mailboxname, error_message(r));
+	       txn->req_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
 
 	switch (r) {
@@ -209,15 +208,29 @@ static int meth_get(struct transaction_t *txn,
     /* Local Mailbox */
 
     /* Open mailbox for reading */
-    if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_SHARED))) {
+    if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_SHARED))) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-	       mailboxname, error_message(r));
+	       txn->req_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
 
 	switch (r) {
 	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
 	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
 	default: return HTTP_SERVER_ERROR;
+	}
+    }
+
+    /* Parse query params, if any */
+    if (!strncasecmp(txn->req_tgt.query, "uid=", 4)) {
+	/* UID */
+	char *end;
+
+	uid = strtoul(txn->req_tgt.query+4, &end, 10);
+	if (!uid) uid = -1;
+
+	if (!strncasecmp(end, ";section=", 9)) {
+	    /* SECTION */
+	    strlcpy(section, end+9, MAX_SECTION_LEN);
 	}
     }
 
@@ -310,18 +323,14 @@ static int meth_get(struct transaction_t *txn,
 
 
 /* Create a mailbox name from the request URL */ 
-static int rss_to_mboxname(struct request_target_t *req_tgt,
-			   char *mboxname, uint32_t *uid,
-			   char *section)
+static int rss_parse_path(struct request_target_t *tgt,
+			  const char **errstr __attribute__((unused)))
 {
     char *start, *end;
     size_t len;
 
-    *uid = 0;
-    *section = 0;
-
     /* Clip off RSS prefix */
-    start = req_tgt->path + strlen("/rss");
+    start = tgt->path + strlen("/rss");
     if (*start == '/') start++;
     end = start + strlen(start);
 
@@ -330,21 +339,10 @@ static int rss_to_mboxname(struct request_target_t *req_tgt,
     len = end - start;
     if (len > MAX_MAILBOX_BUFFER) return IMAP_MAILBOX_BADNAME;
 
-    strncpy(mboxname, start, len);
-    mboxname[len] = '\0';
+    strncpy(tgt->mboxname, start, len);
+    tgt->mboxname[len] = '\0';
 
-    mboxname_hiersep_tointernal(&httpd_namespace, mboxname, len);
-
-    if (!strncasecmp(req_tgt->query, "uid=", 4)) {
-	/* UID */
-	*uid = strtoul(req_tgt->query+4, &end, 10);
-	if (!*uid) *uid = -1;
-
-	if (!strncasecmp(end, ";section=", 9)) {
-	    /* SECTION */
-	    strlcpy(section, end+9, MAX_SECTION_LEN);
-	}
-    }
+    mboxname_hiersep_tointernal(&httpd_namespace, tgt->mboxname, len);
 
     return 0;
 }

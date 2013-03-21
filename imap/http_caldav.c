@@ -193,12 +193,13 @@ struct namespace_t namespace_calendar = {
 	{ &meth_mkcol,		&caldav_params },	/* MKCALENDAR	*/
 	{ &meth_mkcol,		&caldav_params },	/* MKCOL	*/
 	{ &meth_copy,		&caldav_params },	/* MOVE		*/
-	{ &meth_options,	&caldav_params },	/* OPTIONS	*/
+	{ &meth_options,	&caldav_parse_path },	/* OPTIONS	*/
 	{ &meth_post,		&caldav_params },	/* POST		*/
 	{ &meth_propfind,	&caldav_params },	/* PROPFIND	*/
 	{ &meth_proppatch,	&caldav_params },	/* PROPPATCH	*/
 	{ &meth_put,		&caldav_params },	/* PUT		*/
 	{ &meth_report,		&caldav_params },	/* REPORT	*/
+	{ &meth_trace,		&caldav_parse_path },	/* TRACE	*/
 	{ &meth_unlock,		&caldav_params } 	/* UNLOCK	*/
     }
 };

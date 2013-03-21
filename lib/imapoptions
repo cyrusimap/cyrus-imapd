@@ -425,6 +425,11 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* If enabled, the server will compress responses if the client
    indicates that it can accept them. */
 
+{ "httpallowtrace", 0, SWITCH }
+/* Allow use of the TRACE method.
+.PP
+   Note that sensitive data might be disclosed by the response. */
+
 { "httpdocroot", NULL, STRING }
 /* If set, http will serve the static content (html/text/jpeg/gif
    files, etc) rooted at this directory.  Otherwise, httpd will not

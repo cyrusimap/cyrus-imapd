@@ -109,6 +109,7 @@ struct namespace_t namespace_ischedule = {
 	{ NULL,			NULL },	/* PROPPATCH	*/
 	{ NULL,			NULL },	/* PUT		*/
 	{ NULL,			NULL },	/* REPORT	*/
+	{ &meth_trace,		NULL },	/* TRACE	*/
 	{ NULL,			NULL }	/* UNLOCK	*/
     }
 };
@@ -122,6 +123,7 @@ struct namespace_t namespace_domainkey = {
 	{ NULL,			NULL },	/* DELETE	*/
 	{ &meth_get_domainkey,	NULL },	/* GET		*/
 	{ &meth_get_domainkey,	NULL },	/* HEAD		*/
+	{ NULL,			NULL },	/* LOCK		*/
 	{ NULL,			NULL },	/* MKCALENDAR	*/
 	{ NULL,			NULL },	/* MKCOL	*/
 	{ NULL,			NULL },	/* MOVE		*/
@@ -130,7 +132,9 @@ struct namespace_t namespace_domainkey = {
 	{ NULL,			NULL },	/* PROPFIND	*/
 	{ NULL,			NULL },	/* PROPPATCH	*/
 	{ NULL,			NULL },	/* PUT		*/
-	{ NULL,			NULL }	/* REPORT	*/
+	{ NULL,			NULL },	/* REPORT	*/
+	{ &meth_trace,		NULL },	/* TRACE	*/
+	{ NULL,			NULL }	/* UNLOCK	*/
     }
 };
 

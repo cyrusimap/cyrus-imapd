@@ -154,7 +154,7 @@ struct namespace_t namespace_addressbook = {
 	{ NULL,			NULL },			/* MKCALENDAR	*/
 	{ &meth_mkcol,		&carddav_params },	/* MKCOL	*/
 	{ &meth_copy,		&carddav_params },	/* MOVE		*/
-	{ &meth_options,	&carddav_params },	/* OPTIONS	*/
+	{ &meth_options,	&carddav_parse_path },	/* OPTIONS	*/
 #if 0 /* Until Apple Contacts fixes their add-member implementation */
 	{ &meth_post,		&carddav_params },	/* POST		*/
 #else
@@ -164,6 +164,7 @@ struct namespace_t namespace_addressbook = {
 	{ &meth_proppatch,	&carddav_params },	/* PROPPATCH	*/
 	{ &meth_put,		&carddav_params },	/* PUT		*/
 	{ &meth_report,		&carddav_params },	/* REPORT	*/
+	{ &meth_trace,		&carddav_parse_path },	/* TRACE	*/
 	{ &meth_unlock,		&carddav_params } 	/* UNLOCK	*/
     }
 };
