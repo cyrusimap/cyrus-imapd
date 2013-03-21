@@ -213,6 +213,7 @@ extern void proc_cleanup(void);
 static int reset_saslconn(sasl_conn_t **conn);
 
 static void cmdloop(void);
+static void parse_connection(struct transaction_t *txn, int *tls_upgrade);
 static struct accept *parse_accept(const char *hdr);
 static int http_auth(const char *creds, struct transaction_t *txn);
 static void keep_alive(int sig);
@@ -896,7 +897,7 @@ static int reset_saslconn(sasl_conn_t **conn)
  */
 static void cmdloop(void)
 {
-    int ret, r, i, gzip_enabled = 0;
+    int ret, r, i, tls_upgrade, gzip_enabled = 0;
     tok_t tok;
     char reqline[MAX_REQ_LINE+1], buf[1024], *p, *meth, *ver;
     const char **hdr;
@@ -918,7 +919,7 @@ static void cmdloop(void)
 
     for (;;) {
 	/* Reset state */
-	ret = 0;
+	ret = tls_upgrade = 0;
 	meth = ver = NULL;
 	txn.meth = METH_UNKNOWN;
 	txn.uri = NULL;
@@ -1065,34 +1066,9 @@ static void cmdloop(void)
 	    }
 	}
 
-	/* Check for connection directives */
-	if ((hdr = spool_getheader(txn.req_hdrs, "Connection"))) {
-	    /* Look for interesting connection tokens */
-	    tok_t tok = TOK_INITIALIZER(hdr[0], ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-	    char *token;
-	    int dotls = 0;
-
-	    while ((token = tok_next(&tok))) {
-		/* Check if this is a non-persistent connection */
-		if (!strcasecmp(token, "close")) {
-		    syslog(LOG_DEBUG, "non-persistent connection");
-		    txn.flags.close = 1;
-		}
-
-		/* Check if we need to upgrade to TLS */
-		else if (!ret && !httpd_tls_done && tls_enabled() &&
-			 !strcasecmp(token, "Upgrade")) {
-		    if ((hdr = spool_getheader(txn.req_hdrs, "Upgrade")) &&
-			!strncmp(hdr[0], TLS_VERSION, strcspn(hdr[0], " ,"))) {
-			syslog(LOG_DEBUG, "client requested TLS");
-			dotls = 1;
-		    }
-		}
-	    }
-	    tok_fini(&tok);
-
-	    if (dotls) starttls(0);
-	}
+	/* Check for connection options */
+	parse_connection(&txn, &tls_upgrade);
+	if (!ret && tls_upgrade) starttls(0);
 
 	/* Find the namespace of the requested resource */
 	if (!ret) {
@@ -1528,6 +1504,45 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 
     return 0;
 }
+
+
+/* Parse Connection header(s) for interesting options */
+static void parse_connection(struct transaction_t *txn, int *tls_upgrade)
+{
+    const char **conn = spool_getheader(txn->req_hdrs, "Connection");
+    int i;
+
+    *tls_upgrade = 0;
+
+    /* Look for interesting connection tokens */
+    for (i = 0; conn && conn[i]; i++) {
+	tok_t tok = TOK_INITIALIZER(conn[i], ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+	char *token;
+
+	while ((token = tok_next(&tok))) {
+	    /* Check if this is a non-persistent connection */
+	    if (!strcasecmp(token, "close")) {
+		syslog(LOG_DEBUG, "non-persistent connection");
+		txn->flags.close = 1;
+	    }
+
+	    /* Check if we need to upgrade to TLS */
+	    else if (!httpd_tls_done && tls_enabled() &&
+		     !strcasecmp(token, "Upgrade")) {
+		const char **upgrd;
+
+		if ((upgrd = spool_getheader(txn->req_hdrs, "Upgrade")) &&
+		    !strncmp(upgrd[0], TLS_VERSION, strcspn(upgrd[0], " ,"))) {
+		    syslog(LOG_DEBUG, "client requested TLS");
+		    *tls_upgrade = 1;
+		}
+	    }
+	}
+
+	tok_fini(&tok);
+    }
+}
+
 
 /* Compare accept quality values so that they sort in descending order */
 static int compare_accept(const struct accept *a1, const struct accept *a2)
