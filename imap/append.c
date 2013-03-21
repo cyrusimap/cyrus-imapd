@@ -1325,12 +1325,15 @@ EXPORTED int append_copy(struct mailbox *mailbox,
 
 out:
     free(destfname);
-    if (r) append_abort(as);
+    if (r) {
+	append_abort(as);
+	return r;
+    }
 
     mboxevent_extract_mailbox(mboxevent, as->mailbox);
     mboxevent_set_numunseen(mboxevent, as->mailbox, -1);
 
-    return r;
+    return 0;
 }
 
 void append_setseen(struct appendstate *as, struct index_record *record)
