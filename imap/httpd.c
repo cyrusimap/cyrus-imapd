@@ -214,7 +214,7 @@ static int reset_saslconn(sasl_conn_t **conn);
 
 static void cmdloop(void);
 static void parse_connection(struct transaction_t *txn, int *tls_upgrade);
-static struct accept *parse_accept(const char *hdr);
+static struct accept *parse_accept(const char **hdr);
 static int http_auth(const char *creds, struct transaction_t *txn);
 static void keep_alive(int sig);
 
@@ -1205,7 +1205,7 @@ static void cmdloop(void)
 	/* Check if we should compress response body */
 	if (!ret && gzip_enabled &&
 	    (hdr = spool_getheader(txn.req_hdrs, "Accept-Encoding"))) {
-	    struct accept *e, *enc = parse_accept(hdr[0]);
+	    struct accept *e, *enc = parse_accept(hdr);
 
 	    for (e = enc; e && e->token; e++) {
 		if (!strcmp(e->token, "gzip") || !strcmp(e->token, "x-gzip")) {
@@ -1552,30 +1552,33 @@ static int compare_accept(const struct accept *a1, const struct accept *a2)
     return 0;
 }
 
-static struct accept *parse_accept(const char *hdr)
+static struct accept *parse_accept(const char **hdr)
 {
-    tok_t tok = TOK_INITIALIZER(hdr, ";,\r\n", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-    char *token;
-    int n = 0, alloc = 0;
+    int i, n = 0, alloc = 0;
     struct accept *ret = NULL;
 #define GROW_ACCEPT 10;
 
-    while ((token = tok_next(&tok))) {
-	if (!strncmp(token, "q=", 2)) {
-	    if (!ret) break;
-	    ret[n-1].qual = strtof(token+2, NULL);
-	}
-	else {
-	    if (n + 1 >= alloc)  {
-		alloc += GROW_ACCEPT;
-		ret = xrealloc(ret, alloc * sizeof(struct accept));
+    for (i = 0; hdr && hdr[i]; i++) {
+	tok_t tok = TOK_INITIALIZER(hdr[i], ";,", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+	char *token;
+
+	while ((token = tok_next(&tok))) {
+	    if (!strncmp(token, "q=", 2)) {
+		if (!ret) break;
+		ret[n-1].qual = strtof(token+2, NULL);
 	    }
-	    ret[n].token = xstrdup(token);
-	    ret[n].qual = 1.0;
-	    ret[++n].token = NULL;
+	    else {
+		if (n + 1 >= alloc)  {
+		    alloc += GROW_ACCEPT;
+		    ret = xrealloc(ret, alloc * sizeof(struct accept));
+		}
+		ret[n].token = xstrdup(token);
+		ret[n].qual = 1.0;
+		ret[++n].token = NULL;
+	    }
 	}
+	tok_fini(&tok);
     }
-    tok_fini(&tok);
 
     qsort(ret, n, sizeof(struct accept),
 	  (int (*)(const void *, const void *)) &compare_accept);
