@@ -656,7 +656,7 @@ static void send_response(struct protstream *pout,
  */
 int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 {
-    int r = 0;
+    int r = 0, sent_body = 0;
     xmlChar *uri;
     unsigned code;
     const char *statline;
@@ -696,20 +696,24 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 			       resp_body, 0, &txn->error.desc);
 	if (r) break;
 
-	if ((code == 100) && !txn->flags.havebody) {
-	    /* Read body from client */
-	    txn->flags.havebody = 1;
-	    r = read_body(httpd_in, txn->req_hdrs, &txn->req_body,
-			  txn->flags.cont, &txn->error.desc);
-	    if (r) {
-		/* Couldn't get the body and can't finish request */
-		txn->flags.close = 1;
-		break;
+	if ((code == 100) && !sent_body++) {
+	    unsigned len;
+
+	    if (!txn->flags.havebody) {
+		/* Read body from client */
+		txn->flags.havebody = 1;
+		r = read_body(httpd_in, txn->req_hdrs, &txn->req_body,
+			      txn->flags.cont, &txn->error.desc);
+		if (r) {
+		    /* Couldn't get the body and can't finish request */
+		    txn->flags.close = 1;
+		    break;
+		}
 	    }
 
 	    /* Send single-chunk body to backend to complete the request */
-	    if (buf_len(&txn->req_body)) {
-		prot_printf(be->out, "%x\r\n", buf_len(&txn->req_body));
+	    if ((len = buf_len(&txn->req_body))) {
+		prot_printf(be->out, "%x\r\n", len);
 		prot_putbuf(be->out, &txn->req_body);
 		prot_puts(be->out, "\r\n");
 	    }
