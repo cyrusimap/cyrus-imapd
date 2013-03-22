@@ -174,10 +174,10 @@ ec HTTP_PERM_REDIRECT,
 
 
 
-# Additional HTTP (RFC 6685)
+# Additional HTTP Status Codes (RFC 6585)
 
 ec HTTP_PRECOND_REQUIRED,
-   "412 Precondition Required"
+   "428 Precondition Required"
 
 
 end
