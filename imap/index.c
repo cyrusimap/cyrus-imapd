@@ -3529,6 +3529,10 @@ static int index_storeflag(struct index_state *state,
     if (!state->qresync && storeargs->silent && im->told_modseq == oldmodseq)
 	im->told_modseq = im->modseq;
 
+    /* keep firstnotseen correct for later setseen calls */
+    if (!im->isseen && (!state->firstnotseen || msgno < state->firstnotseen))
+	state->firstnotseen = msgno;
+
     return 0;
 }
 
