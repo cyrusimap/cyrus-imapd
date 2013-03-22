@@ -905,4 +905,51 @@ sub test_unchangedsince_multi
 
 }
 
+# check that seen flags are set correctly on body fetch
+sub test_setseen
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $talk->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog "Add three messages";
+    my %msg;
+    $msg{A} = $self->make_message('Message A');
+    $msg{A}->set_attributes(id => 1,
+			    uid => 1,
+			    flags => []);
+    $msg{B} = $self->make_message('Message B');
+    $msg{B}->set_attributes(id => 2,
+			    uid => 2,
+			    flags => []);
+    $msg{C} = $self->make_message('Message C');
+    $msg{C}->set_attributes(id => 3,
+			    uid => 3,
+			    flags => []);
+    $self->check_messages(\%msg);
+
+    xlog "Fetch body of message A";
+    $talk->fetch('1', '(body[])');
+    $msg{A}->set_attribute(flags => ['\\Seen']);
+    $self->check_messages(\%msg);
+
+    xlog "Fetch body.peek of message B";
+    $talk->fetch('2', '(body.peek[])');
+    $self->check_messages(\%msg);
+
+    xlog "Fetch binary of message C";
+    $talk->fetch('3', '(binary[])');
+    $msg{C}->set_attribute(flags => ['\\Seen']);
+    $self->check_messages(\%msg);
+
+    xlog "Reconnect, \\Seen should still be on messages A and C";
+    $self->{store}->disconnect();
+    $self->{store}->connect();
+    $self->{store}->_select();
+    $self->check_messages(\%msg);
+}
+
 1;
