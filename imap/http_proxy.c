@@ -446,15 +446,17 @@ static int ping(struct backend *s)
     do {
 	r = http_read_response(s, METH_OPTIONS, &code, NULL,
 			       &hdrs, NULL, 0, &errstr);
+	if (r) break;
 
 	/* Check if this is a non-persistent connection */
-	if (!r && (hdr = spool_getheader(hdrs, "Connection")) &&
+	if ((hdr = spool_getheader(hdrs, "Connection")) &&
 	    !strcmp(hdr[0], "close")) {
 	    r = HTTP_BAD_GATEWAY;
+	    break;
 	}
 
 	/* Continue until error or final response */
-    } while (!r && (code < 200));
+    } while (code < 200);
 
     if (hdrs) spool_free_hdrcache(hdrs);
 
@@ -571,23 +573,24 @@ int http_read_response(struct backend *be, unsigned meth,
     }
     eatline(be->in, c); /* CRLF separating headers & body */
 
+    /* 1xx (provisional) response - nothing else  to do */
+    if (*code < 200) return 0;
+
+    /* Final response */
     if (resp_body) buf_reset(resp_body);
 
-    /* Not expecting a body for 1xx/204/304 response or any HEAD response */
+    /* Not expecting a body for 204/304 response or any HEAD response */
     switch (*code){
-    case 100: /* Continue */
-    case 101: /* Switching Protocols */
-    case 102: /* Processing */
     case 204: /* No Content */
     case 304: /* Not Modified */
-	return 0;
+	break;
 
     default:
-	if (meth == METH_HEAD) return 0;
-    }
+	if (meth == METH_HEAD) break;
 
-    if (read_body(be->in, *resp_hdrs, resp_body, decode, errstr)) {
-	return HTTP_BAD_GATEWAY;
+	if (read_body(be->in, *resp_hdrs, resp_body, decode, errstr)) {
+	    return HTTP_BAD_GATEWAY;
+	}
     }
 
     return 0;
@@ -609,7 +612,6 @@ static void send_response(struct protstream *pout,
      * - Add/append-to Via: header
      * - Add our own hop-by-hop headers
      * - Use all cached end-to-end headers
-     * - Body is buffered, so send using "identity" TE
      */
     prot_puts(pout, statline);
     write_via_hdr(pout, hdrs);
@@ -625,8 +627,8 @@ static void send_response(struct protstream *pout,
 
     spool_enum_hdrcache(hdrs, &write_cachehdr, pout);
 
-    if (!(len = buf_len(body))) {
-	/* Empty body -- use returned payload headers, if any */
+    if (!body || !(len = buf_len(body))) {
+	/* Empty body -- use  payload headers from response, if any */
 	const char **hdr;
 
 	if ((hdr = spool_getheader(hdrs, "Transfer-Encoding"))) {
@@ -639,6 +641,7 @@ static void send_response(struct protstream *pout,
 	prot_puts(httpd_out, "\r\n");
     }
     else {
+	/* Body is buffered, so send using "identity" TE */
 	prot_printf(httpd_out, "Content-Length: %lu\r\n\r\n", len);
 	prot_putbuf(httpd_out, body);
     }
@@ -655,7 +658,7 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 {
     int r = 0;
     xmlChar *uri;
-    unsigned code = 0;
+    unsigned code;
     const char *statline;
     hdrcache_t resp_hdrs = NULL;
     struct buf *resp_body = &txn->resp_body.payload;
@@ -688,9 +691,10 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     prot_flush(be->out);
 
     /* Read response(s) from backend until final response or error */
-    while ((code < 200) &&
-	   !(r = http_read_response(be, txn->meth, &code, &statline, &resp_hdrs,
-				    resp_body, 0, &txn->error.desc))) {
+    do {
+	r = http_read_response(be, txn->meth, &code, &statline, &resp_hdrs,
+			       resp_body, 0, &txn->error.desc);
+	if (r) break;
 
 	if ((code == 100) && !txn->flags.havebody) {
 	    /* Read body from client */
@@ -712,7 +716,7 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 	    prot_puts(be->out, "0\r\n\r\n");
 	    prot_flush(be->out);
 	}
-    }
+    } while (code < 200);
 
     if (r) proxy_downserver(be);
     else {
