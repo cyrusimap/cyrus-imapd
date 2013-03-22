@@ -3726,7 +3726,7 @@ static void warn_about_quota(const char *quotaroot)
     quota_init(&q, quotaroot);
     r = quota_read(&q, NULL, 0);
     if (r)
-	return;	    /* failed to read */
+	goto out;	    /* failed to read */
 
     memset(thresholds, 0, sizeof(thresholds));
     thresholds[QUOTA_STORAGE] = config_getint(IMAPOPT_QUOTAWARNKB);
@@ -3758,6 +3758,7 @@ static void warn_about_quota(const char *quotaroot)
     }
 
     buf_reset(&msg);
+out:
     quota_free(&q);
 }
 
