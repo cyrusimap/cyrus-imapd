@@ -140,9 +140,9 @@ void free_test(test_t *t)
 	break;
 
     case HEADER:
+	free(t->u.h.comparator);
 	strarray_free(t->u.h.sl);
 	strarray_free(t->u.h.pl);
-	
 	break;
 
     case ADDRESS:
@@ -153,6 +153,7 @@ void free_test(test_t *t)
 	break;
 
     case BODY:
+	free(t->u.b.comparator);
 	strarray_free(t->u.b.content_types);
 	strarray_free(t->u.b.pl);
 	break;
