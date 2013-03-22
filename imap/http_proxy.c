@@ -786,7 +786,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
     if (!r && (code == 200)) {  /* OK */
 	int sent_body = 0;
 
-	/* For MOVE, make a copy of the Etag for laster use in DELETE */
+	/* For MOVE, make a copy of the ETag for later use in DELETE */
 	if ((txn->meth == METH_MOVE) &&
 	    (hdr = spool_getheader(resp_hdrs, "Etag"))) {
 	    etag = xstrdup(hdr[0]);
