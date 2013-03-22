@@ -77,6 +77,7 @@
 #include "mboxname.h"
 #include "proc.h"
 #include "quota.h"
+#include "search_engines.h"
 #include "seen.h"
 #include "user.h"
 #include "util.h"
@@ -223,6 +224,9 @@ EXPORTED int user_deletedata(const char *userid, int wipe_user)
     fname = user_hash_meta(userid, "uidvalidity");
     (void) unlink(fname);
     free(fname);
+
+    /* delete all the search engine data (if any) */
+    search_deluser(userid);
 
     proc_killuser(userid);
 
