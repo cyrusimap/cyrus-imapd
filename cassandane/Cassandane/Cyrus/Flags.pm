@@ -952,4 +952,44 @@ sub test_setseen
     $self->check_messages(\%msg);
 }
 
+# check that seen flags are set correctly on body fetch
+# even if the flag was removed in the same session
+sub test_setseen_after_store
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $talk->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog "Add two messages";
+    my %msg;
+    $msg{A} = $self->make_message('Message A');
+    $msg{A}->set_attributes(id => 1,
+			    uid => 1,
+			    flags => []);
+    $msg{B} = $self->make_message('Message B');
+    $msg{B}->set_attributes(id => 2,
+			    uid => 2,
+			    flags => []);
+    $self->check_messages(\%msg);
+
+    xlog "Fetch body of message A";
+    $talk->fetch('1', '(body[])');
+    $msg{A}->set_attribute(flags => ['\\Seen']);
+    $self->check_messages(\%msg);
+
+    xlog "Fetch remove the flag again, and immediately fetch the body";
+    $talk->store('1', '-flags.silent', "(\\Seen)");
+    $talk->fetch('1', '(body[])');
+    $self->check_messages(\%msg);
+
+    xlog "Reconnect, \\Seen should still be on message A";
+    $self->{store}->disconnect();
+    $self->{store}->connect();
+    $self->{store}->_select();
+    $self->check_messages(\%msg);
+}
+
 1;
