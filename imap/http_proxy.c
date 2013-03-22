@@ -605,7 +605,7 @@ static void send_response(struct protstream *pout,
     alarm(0);
 
     /*
-     * - Use cached Status-Line
+     * - Use cached Status Line
      * - Add/append-to Via: header
      * - Add our own hop-by-hop headers
      * - Use all cached end-to-end headers
@@ -626,18 +626,22 @@ static void send_response(struct protstream *pout,
     spool_enum_hdrcache(hdrs, &write_cachehdr, pout);
 
     if (!(len = buf_len(body))) {
+	/* Empty body -- use returned payload headers, if any */
 	const char **hdr;
 
 	if ((hdr = spool_getheader(hdrs, "Transfer-Encoding"))) {
-	    prot_printf(httpd_out, "Transfer-Encoding: %s\r\n\r\n", hdr[0]);
-	    return;
+	    prot_printf(httpd_out, "Transfer-Encoding: %s\r\n", hdr[0]);
 	}
 	else if ((hdr = spool_getheader(hdrs, "Content-Length"))) {
-	    len = strtoul(hdr[0], NULL, 10);
+	    prot_printf(httpd_out, "Content-Length: %s\r\n", hdr[0]);
 	}
+
+	prot_puts(httpd_out, "\r\n");
     }
-    prot_printf(httpd_out, "Content-Length: %lu\r\n\r\n", len);
-    prot_putbuf(httpd_out, body);
+    else {
+	prot_printf(httpd_out, "Content-Length: %lu\r\n\r\n", len);
+	prot_putbuf(httpd_out, body);
+    }
 }
 
 
