@@ -252,7 +252,7 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 	switch (code) {
 	case 101: /* Switching Protocols */
 	    if (backend_starttls(s, NULL)) {
-		r = HTTP_UNAVAILABLE;
+		r = HTTP_BAD_GATEWAY;
 		if (status) *status = "Unable to start TLS";
 		break;
 	    }
@@ -400,14 +400,14 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 
 	case 426: /* Upgrade Required */
 	    if (tls_done) {
-		r = HTTP_UNAVAILABLE;
+		r = HTTP_BAD_GATEWAY;
 		if (status) *status = "TLS already active";
 	    }
 	    else need_tls = 1;
 	    break;
 
 	default:
-	    r = HTTP_UNAVAILABLE;
+	    r = HTTP_BAD_GATEWAY;
 	    if (status) *status = "Unknown backend server error";
 	    break;
 	}
@@ -450,7 +450,7 @@ static int ping(struct backend *s)
 	/* Check if this is a non-persistent connection */
 	if (!r && (hdr = spool_getheader(hdrs, "Connection")) &&
 	    !strcmp(hdr[0], "close")) {
-	    r = HTTP_SERVER_ERROR;
+	    r = HTTP_BAD_GATEWAY;
 	}
 
 	/* Continue until error or final response */
@@ -567,7 +567,7 @@ int http_read_response(struct backend *be, unsigned meth,
 	(sscanf(statbuf, HTTP_VERSION " %u ", code) != 1) ||
 	spool_fill_hdrcache(be->in, NULL, *resp_hdrs, NULL)) {
 	*errstr = "Unable to read status-line/headers from backend";
-	return HTTP_UNAVAILABLE;
+	return HTTP_BAD_GATEWAY;
     }
     eatline(be->in, c); /* CRLF separating headers & body */
 
@@ -587,7 +587,7 @@ int http_read_response(struct backend *be, unsigned meth,
     }
 
     if (read_body(be->in, *resp_hdrs, resp_body, decode, errstr)) {
-	return HTTP_UNAVAILABLE;
+	return HTTP_BAD_GATEWAY;
     }
 
     return 0;

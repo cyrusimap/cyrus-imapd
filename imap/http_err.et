@@ -131,8 +131,14 @@ ec HTTP_SERVER_ERROR,
 ec HTTP_NOT_IMPLEMENTED,
    "501 Not Implemented"
 
+ec HTTP_BAD_GATEWAY,
+   "502 Bad Gateway"
+
 ec HTTP_UNAVAILABLE,
    "503 Service Unavailable"
+
+ec HTTP_GATEWAY_TIMEOUT,
+   "504 Gateway Timeout"
 
 ec HTTP_BAD_VERSION,
    "505 HTTP Version Not Supported"
