@@ -213,6 +213,7 @@ extern void proc_cleanup(void);
 static int reset_saslconn(sasl_conn_t **conn);
 
 static void cmdloop(void);
+static int parse_expect(struct transaction_t *txn);
 static void parse_connection(struct transaction_t *txn, int *tls_upgrade);
 static struct accept *parse_accept(const char **hdr);
 static int http_auth(const char *creds, struct transaction_t *txn);
@@ -1051,6 +1052,13 @@ static void cmdloop(void)
 	    goto done;
 	}
 
+	/* Check for Connection options */
+	parse_connection(&txn, &tls_upgrade);
+	if (tls_upgrade) starttls(0);
+
+	/* Check for Expectations */
+	if (!ret) ret = parse_expect(&txn);
+
 	/* Check for mandatory Host header */
 	if (!ret) {
 	    if (!(hdr = spool_getheader(txn.req_hdrs, "Host"))) {
@@ -1065,10 +1073,6 @@ static void cmdloop(void)
 		/* XXX  Should we check this against servername? */
 	    }
 	}
-
-	/* Check for connection options */
-	parse_connection(&txn, &tls_upgrade);
-	if (!ret && tls_upgrade) starttls(0);
 
 	/* Find the namespace of the requested resource */
 	if (!ret) {
@@ -1234,7 +1238,8 @@ static void cmdloop(void)
 
 	/* If we haven't the read body, read and discard it */
 	if (txn.req_hdrs && !txn.flags.havebody &&
-	    read_body(httpd_in, txn.req_hdrs, NULL, 0, &txn.error.desc)) {
+	    read_body(httpd_in, txn.req_hdrs, NULL,
+		      txn.flags.cont, &txn.error.desc)) {
 	    txn.flags.close = 1;
 	}
 
@@ -1330,28 +1335,19 @@ int is_mediatype(const char *hdr, const char *type)
  * Handles gzip and deflate CE only.
  */
 int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
-	      int decompress, const char **errstr)
+	      unsigned flags, const char **errstr)
 {
     const char **hdr;
     unsigned long len = 0;
-    unsigned need_cont = 0, len_delim, max_msgsize, n;
+    unsigned len_delim, max_msgsize, n;
     char buf[PROT_BUFSIZE];
     enum { LEN_DELIM_LENGTH, LEN_DELIM_CHUNKED, LEN_DELIM_CLOSE };
 
-    syslog(LOG_DEBUG, "read_body(%s)", body == NULL ? "discard" : "");
-
-    /* Check if client expects 100 (Continue) status before sending body */
-    if ((hdr = spool_getheader(hdrs, "Expect"))) {
-	if (!strcasecmp(hdr[0], "100-continue"))
-	    need_cont = 1;
-	else {
-	    *errstr = "Unsupported Expect\r\n";
-	    return HTTP_EXPECT_FAILED;
-	}
-    }
+    syslog(LOG_DEBUG, "read_body(%x: %s)",
+	   flags, body == NULL ? "discard" : "");
 
     if (body) buf_reset(body);
-    else if (need_cont) {
+    else if (flags & BODY_CONTINUE) {
 	/* Don't care about the body and client hasn't sent it, we're done */
 	return 0;
     }
@@ -1399,7 +1395,7 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 	}
     }
 
-    if (need_cont) {
+    if (flags & BODY_CONTINUE) {
 	/* Tell client to send the body */
 	response_header(HTTP_CONTINUE, NULL);
     }
@@ -1474,7 +1470,7 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 
 
     /* Decode the representation, if necessary */
-    if (decompress && body &&
+    if (body && (flags & BODY_DECODE) &&
 	(hdr = spool_getheader(hdrs, "Content-Encoding"))) {
 	int r = HTTP_BAD_MEDIATYPE;
 
@@ -1503,6 +1499,36 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
     }
 
     return 0;
+}
+
+
+/* Parse Expect header(s) for interesting expectations */
+static int parse_expect(struct transaction_t *txn)
+{
+    const char **exp = spool_getheader(txn->req_hdrs, "Expect");
+    int i, ret = 0;
+
+    /* Look for interesting expectations.  Unknown == error */
+    for (i = 0; !ret && exp && exp[i]; i++) {
+	tok_t tok = TOK_INITIALIZER(exp[i], ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+	char *token;
+
+	while (!ret && (token = tok_next(&tok))) {
+	    /* Check if this is a non-persistent connection */
+	    if (!strcasecmp(token, "100-continue")) {
+		syslog(LOG_DEBUG, "Expect: 100-continue");
+		txn->flags.cont = 1;
+	    }
+	    else {
+		txn->error.desc = "Unsupported Expectation";
+		ret = HTTP_EXPECT_FAILED;
+	    }
+	}
+
+	tok_fini(&tok);
+    }
+
+    return ret;
 }
 
 
@@ -2338,8 +2364,8 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 	sasl_http_request_t sasl_http_req;
 
 	txn->flags.havebody = 1;
-	if (read_body(httpd_in, txn->req_hdrs, &txn->req_body, 1,
-		      &txn->error.desc)) {
+	if (read_body(httpd_in, txn->req_hdrs, &txn->req_body,
+		      txn->flags.cont | BODY_DECODE, &txn->error.desc)) {
 	    txn->flags.close = 1;
 	    return SASL_FAIL;
 	}

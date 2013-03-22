@@ -660,8 +660,8 @@ static int caldav_post(struct transaction_t *txn)
     /* Read body */
     if (!txn->flags.havebody) {
 	txn->flags.havebody = 1;
-	r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, 1,
-		      &txn->error.desc);
+	r = read_body(httpd_in, txn->req_hdrs, &txn->req_body,
+		      txn->flags.cont | BODY_DECODE, &txn->error.desc);
 	if (r) {
 	    txn->flags.close = 1;
 	    return r;

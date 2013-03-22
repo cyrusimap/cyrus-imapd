@@ -2444,8 +2444,8 @@ int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
     /* Read body */
     if (!txn->flags.havebody) {
 	txn->flags.havebody = 1;
-	r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, 1,
-		      &txn->error.desc);
+	r = read_body(httpd_in, txn->req_hdrs, &txn->req_body,
+		      txn->flags.cont | BODY_DECODE, &txn->error.desc);
 	if (r) {
 	    txn->flags.close = 1;
 	    return r;
@@ -4497,8 +4497,8 @@ int meth_put(struct transaction_t *txn, void *params)
     /* Read body */
     if (!txn->flags.havebody) {
 	txn->flags.havebody = 1;
-	ret = read_body(httpd_in, txn->req_hdrs, &txn->req_body, 1,
-			&txn->error.desc);
+	ret = read_body(httpd_in, txn->req_hdrs, &txn->req_body,
+			txn->flags.cont | BODY_DECODE, &txn->error.desc);
 	if (ret) {
 	    txn->flags.close = 1;
 	    goto done;

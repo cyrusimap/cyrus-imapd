@@ -550,7 +550,7 @@ static void write_cachehdr(const char *name, const char *contents, void *rock)
 int http_read_response(struct backend *be, unsigned meth,
 		       unsigned *code, const char **statline,
 		       hdrcache_t *resp_hdrs, struct buf *resp_body,
-		       int decompress, const char **errstr)
+		       unsigned decode, const char **errstr)
 {
     static char statbuf[2048];
     int c = EOF;
@@ -586,7 +586,7 @@ int http_read_response(struct backend *be, unsigned meth,
 	if (meth == METH_HEAD) return 0;
     }
 
-    if (read_body(be->in, *resp_hdrs, resp_body, decompress, errstr)) {
+    if (read_body(be->in, *resp_hdrs, resp_body, decode, errstr)) {
 	return HTTP_UNAVAILABLE;
     }
 
@@ -689,11 +689,11 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 			       &resp_hdrs, resp_body, 0, &txn->error.desc);
 
 	if (!r && (code == 100)) { /* Continue */
-	    /* Read body */
+	    /* Read body from client */
 	    if (!txn->flags.havebody) {
 		txn->flags.havebody = 1;
-		r = read_body(httpd_in, txn->req_hdrs,
-			      &txn->req_body, 0, &txn->error.desc);
+		r = read_body(httpd_in, txn->req_hdrs, &txn->req_body,
+			      txn->flags.cont, &txn->error.desc);
 	    }
 	    if (r) {
 		/* Couldn't get the body and can't finish request */
@@ -806,7 +806,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 
 	/* Read response from dest backend */
 	r = http_read_response(dest_be, METH_PUT, &code, &statline,
-			       &resp_hdrs, resp_body, 1, &txn->error.desc);
+			       &resp_hdrs, resp_body, 0, &txn->error.desc);
 	if (r) goto cleanup;
 
 	if (code == 100) {  /* Continue */
@@ -827,7 +827,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 
 	    /* Read response from source backend */
 	    r = http_read_response(src_be, METH_GET, &code, &statline,
-				   &resp_hdrs, resp_body, 1, &txn->error.desc);
+				   &resp_hdrs, resp_body, 0, &txn->error.desc);
 	    if (r) goto cleanup;
 
 	    if (code == 200) {  /* OK */
@@ -839,7 +839,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 
 		/* Read final response from dest backend */
 		r = http_read_response(dest_be, METH_PUT, &code, &statline,
-				       &resp_hdrs, resp_body, 1, &txn->error.desc);
+				       &resp_hdrs, resp_body, 0, &txn->error.desc);
 		if (r) goto cleanup;
 	    }
 	    else {
@@ -873,7 +873,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 
 	/* Read response from source backend */
 	http_read_response(src_be, METH_DELETE, &code, &statline,
-			   &resp_hdrs, resp_body, 1, &txn->error.desc);
+			   &resp_hdrs, NULL, 0, &txn->error.desc);
     }
 
   cleanup:

@@ -309,8 +309,8 @@ static int meth_post_isched(struct transaction_t *txn,
     /* Read body */
     if (!txn->flags.havebody) {
 	txn->flags.havebody = 1;
-	r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, 1,
-		      &txn->error.desc);
+	r = read_body(httpd_in, txn->req_hdrs, &txn->req_body,
+		      txn->flags.cont | BODY_DECODE, &txn->error.desc);
 	if (r) {
 	    txn->flags.close = 1;
 	    return r;
@@ -593,8 +593,8 @@ int isched_send(struct sched_param *sparam, const char *recipient,
     prot_write(be->out, body, bodylen);
 
     /* Read response (req_hdr and req_body are actually the response) */
-    r = http_read_response(be, METH_POST, &code, NULL,
-			   &txn.req_hdrs, &txn.req_body, 1, &txn.error.desc);
+    r = http_read_response(be, METH_POST, &code, NULL, &txn.req_hdrs,
+			   &txn.req_body, BODY_DECODE, &txn.error.desc);
     if (!r) {
 	switch (code) {
 	case 200:  /* Successful */
