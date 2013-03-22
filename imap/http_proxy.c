@@ -670,7 +670,7 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
      * - Add/append-to Via: header
      * - Add Expect:100-continue header (for synchonicity)
      * - Use all cached end-to-end headers from client
-     * - Body will be sent using "chunked" TE
+     * - Body will be sent using "chunked" TE, since we might not have it yet
      */
     uri = xmlURIEscapeStr(BAD_CAST txn->req_tgt.path, BAD_CAST "/");
     prot_printf(be->out, "%s %s", http_methods[txn->meth].name, uri);
@@ -696,7 +696,7 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 			       resp_body, 0, &txn->error.desc);
 	if (r) break;
 
-	if ((code == 100) && !sent_body++) {
+	if ((code == 100) /* Continue */  && !sent_body++) {
 	    unsigned len;
 
 	    if (!txn->flags.havebody) {
@@ -753,11 +753,11 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
     struct buf *resp_body = &txn->resp_body.payload;
 
     /*
-     * Send a HEAD request to source backend to test conditionals:
+     * Send a GET request to source backend to fetch body:
      *
-     * - Use any conditional headers specified by client
+     * - Use any relevant conditional headers specified by client
      */
-    prot_printf(src_be->out, "HEAD %s %s\r\n", txn->req_tgt.path, HTTP_VERSION);
+    prot_printf(src_be->out, "GET %s %s\r\n", txn->req_tgt.path, HTTP_VERSION);
     prot_printf(src_be->out, "Host: %s\r\n", src_be->hostname);
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	prot_printf(src_be->out, "User-Agent: %s\r\n",
@@ -765,34 +765,41 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
     }
     if ((hdr = spool_getheader(txn->req_hdrs, "If")))
 	prot_printf(src_be->out, "If: %s\r\n", hdr[0]);
-    if ((hdr = spool_getheader(txn->req_hdrs, "If-Match")))
-	prot_printf(src_be->out, "If-Match: %s\r\n", hdr[0]);
-    if ((hdr = spool_getheader(txn->req_hdrs, "If-Modified-Since")))
-	prot_printf(src_be->out, "If-Modified-Since: %s\r\n", hdr[0]);
-    if ((hdr = spool_getheader(txn->req_hdrs, "If-None-Match")))
-	prot_printf(src_be->out, "If-None-Match: %s\r\n", hdr[0]);
+    if ((hdr = spool_getheader(txn->req_hdrs, "If-Match"))) {
+	for (; *hdr; hdr++) prot_printf(src_be->out, "If-Match: %s\r\n", *hdr);
+    }
     if ((hdr = spool_getheader(txn->req_hdrs, "If-Unmodified-Since")))
 	prot_printf(src_be->out, "If-Unmodified-Since: %s\r\n", hdr[0]);
-    if ((hdr = spool_getheader(txn->req_hdrs, "If-Range")))
-	prot_printf(src_be->out, "If-Range: %s\r\n", hdr[0]);
+    prot_puts(src_be->out, "\r\n");
     prot_flush(src_be->out);
 
-    /* Read response from source backend */
-    r = http_read_response(src_be, METH_HEAD, &code, &statline,
-			   &resp_hdrs, NULL, 0, &txn->error.desc);
-    if (r) goto cleanup;
+    /* Read response(s) from source backend until final response or error */
+    do {
+	r = http_read_response(src_be, METH_GET, &code, &statline,
+			       &resp_hdrs, resp_body, 0, &txn->error.desc);
+	if (r) {
+	    proxy_downserver(src_be);
+	    break;
+	}
+    } while (code < 200);
 
-    if (code == 200) {  /* OK */
-	/* Make a copy of the Etag for later use */
-	if ((hdr = spool_getheader(resp_hdrs, "Etag"))) etag = xstrdup(hdr[0]);
+    if (!r && (code == 200)) {  /* OK */
+	int sent_body = 0;
+
+	/* For MOVE, make a copy of the Etag for laster use in DELETE */
+	if ((txn->meth == METH_MOVE) &&
+	    (hdr = spool_getheader(resp_hdrs, "Etag"))) {
+	    etag = xstrdup(hdr[0]);
+	}
 
 	/*
-	 * Send a synchonizing PUT request to dest backend to test conditionals:
+	 * Send a synchonizing PUT request to dest backend:
 	 *
 	 * - Add Expect:100-continue header (for synchonicity)
+	 * - Use any Prefer headers specified by client
 	 * - Obey Overwrite:F by adding If-None-Match:* header
-	 * - Use Content-Type, -Language and -Type from HEAD response
-	 * - Body will be sent using "chunked" TE
+	 * - Use Content-Type, -Encoding, -Language and -Length from GET resp
+	 * - Body is buffered, so send using "identity" TE
 	 */
 	hdr = spool_getheader(txn->req_hdrs, "Destination");
 	prot_printf(dest_be->out, "PUT %s %s\r\n", hdr[0], HTTP_VERSION);
@@ -802,29 +809,55 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 			buf_cstring(&serverinfo));
 	}
 	prot_puts(dest_be->out, "Expect: 100-continue\r\n");
+	if ((hdr = spool_getheader(txn->req_hdrs, "Prefer"))) {
+	    for (; *hdr; hdr++)
+		prot_printf(dest_be->out, "Prefer: %s\r\n", *hdr);
+	}
 	if ((hdr = spool_getheader(txn->req_hdrs, "Overwrite")) &&
 	    !strcmp(hdr[0], "F")) {
 	    prot_printf(dest_be->out, "If-None-Match: *\r\n");
 	}
 	hdr = spool_getheader(resp_hdrs, "Content-Type");
 	prot_printf(dest_be->out, "Content-Type: %s\r\n", hdr[0]);
+	if ((hdr = spool_getheader(resp_hdrs, "Content-Encoding")))
+	    prot_printf(dest_be->out, "Content-Encoding: %s\r\n", hdr[0]);
 	if ((hdr = spool_getheader(resp_hdrs, "Content-Language")))
 	    prot_printf(dest_be->out, "Content-Language: %s\r\n", hdr[0]);
-	prot_puts(dest_be->out, "Transfer-Encoding: chunked\r\n\r\n");
+	prot_printf(dest_be->out, "Content-Length: %u\r\n", buf_len(resp_body));
+	prot_puts(dest_be->out, "\r\n");
 	prot_flush(dest_be->out);
 
-	/* Read response from dest backend */
-	r = http_read_response(dest_be, METH_PUT, &code, &statline,
-			       &resp_hdrs, resp_body, 0, &txn->error.desc);
-	if (r) goto cleanup;
+	/* Read response(s) from dest backend until final response or error */
+	do {
+	    r = http_read_response(dest_be, METH_PUT, &code, &statline,
+				   &resp_hdrs, resp_body, 0, &txn->error.desc);
+	    if (r) {
+		proxy_downserver(dest_be);
+		break;
+	    }
 
-	if (code == 100) {  /* Continue */
+	    if ((code == 100) /* Continue */  && !sent_body++) {
+		/* Send body to dest backend to complete the PUT */
+		prot_putbuf(dest_be->out, resp_body);
+		prot_flush(dest_be->out);
+	    }
+	} while (code < 200);
+    }
+
+    if (!r) {
+	/* Send response to client */
+	send_response(httpd_out, statline, resp_hdrs, resp_body, &txn->flags);
+
+	if ((txn->meth == METH_MOVE) && (code < 300)) {
 	    /*
-	     * Send a GET request to source backend to fetch body:
+	     * Send a DELETE request to source backend:
 	     *
-	     * - Add If-Match header with ETag from HEAD
+	     * - Add If-Match header with ETag from GET
+	     *
+	     * XXX  This clearly isn't an atomic MOVE.
+	     *      Either try to fix this (LOCK?), or don't allow MOVE
 	     */
-	    prot_printf(src_be->out, "GET %s %s\r\n",
+	    prot_printf(src_be->out, "DELETE %s %s\r\n",
 			txn->req_tgt.path, HTTP_VERSION);
 	    prot_printf(src_be->out, "Host: %s\r\n", src_be->hostname);
 	    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
@@ -832,60 +865,20 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 			    buf_cstring(&serverinfo));
 	    }
 	    if (etag) prot_printf(src_be->out, "If-Match: %s\r\n", etag);
+	    prot_puts(src_be->out, "\r\n");
 	    prot_flush(src_be->out);
 
-	    /* Read response from source backend */
-	    r = http_read_response(src_be, METH_GET, &code, &statline,
-				   &resp_hdrs, resp_body, 0, &txn->error.desc);
-	    if (r) goto cleanup;
-
-	    if (code == 200) {  /* OK */
-		/* Send single-chunk body to dest backend to complete the PUT */
-		prot_printf(dest_be->out, "%x\r\n", buf_len(resp_body));
-		prot_putbuf(dest_be->out, resp_body);
-		prot_puts(dest_be->out, "\r\n0\r\n\r\n");
-		prot_flush(dest_be->out);
-
-		/* Read final response from dest backend */
-		r = http_read_response(dest_be, METH_PUT, &code, &statline,
-				       &resp_hdrs, resp_body, 0, &txn->error.desc);
-		if (r) goto cleanup;
-	    }
-	    else {
-		/* Couldn't get the body and can't finish PUT */
-		proxy_downserver(dest_be);
-	    }
+	    /* Read response(s) from source backend until final resp or error */
+	    do {
+		if (http_read_response(src_be, METH_DELETE, &code, &statline,
+				       &resp_hdrs, NULL, 0, &txn->error.desc)) {
+		    proxy_downserver(src_be);
+		    break;
+		}
+	    } while (code < 200);
 	}
     }
 
-    /* Send response to client */
-    send_response(httpd_out, statline, resp_hdrs, resp_body, &txn->flags);
-
-    if ((txn->meth == METH_MOVE) && (code < 300)) {
-	/*
-	 * Send a DELETE request to source backend:
-	 *
-	 * - Add If-Match header with ETag from HEAD
-	 *
-	 * XXX  This clearly isn't an atomic MOVE.
-	 *      Either try to fix this, or don't allow MOVE
-	 */
-	prot_printf(src_be->out, "DELETE %s %s\r\n",
-		    txn->req_tgt.path, HTTP_VERSION);
-	prot_printf(src_be->out, "Host: %s\r\n", src_be->hostname);
-	if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	    prot_printf(src_be->out, "User-Agent: %s\r\n",
-			buf_cstring(&serverinfo));
-	}
-	if (etag) prot_printf(src_be->out, "If-Match: %s\r\n", etag);
-	prot_flush(src_be->out);
-
-	/* Read response from source backend */
-	http_read_response(src_be, METH_DELETE, &code, &statline,
-			   &resp_hdrs, NULL, 0, &txn->error.desc);
-    }
-
-  cleanup:
     if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
     if (etag) free(etag);
 
