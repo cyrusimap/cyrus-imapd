@@ -651,7 +651,7 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 {
     int r = 0;
     xmlChar *uri;
-    unsigned code;
+    unsigned code = 0;
     const char *statline;
     hdrcache_t resp_hdrs = NULL;
     struct buf *resp_body = &txn->resp_body.payload;
@@ -659,7 +659,7 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     /*
      * Send client request to backend:
      *
-     * - Piece the Request_line back together
+     * - Piece the Request Line back together
      * - Add/append-to Via: header
      * - Add Expect:100-continue header (for synchonicity)
      * - Use all cached end-to-end headers from client
@@ -672,8 +672,8 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 	prot_printf(be->out, "?%s", txn->req_tgt.query);
     }
     prot_printf(be->out, " %s\r\n", HTTP_VERSION);
-    write_via_hdr(be->out, txn->req_hdrs);
     prot_printf(be->out, "Host: %s\r\n", be->hostname);
+    write_via_hdr(be->out, txn->req_hdrs);
     spool_enum_hdrcache(txn->req_hdrs, &write_cachehdr, be->out);
     if (spool_getheader(txn->req_hdrs, "Transfer-Encoding") ||
 	spool_getheader(txn->req_hdrs, "Content-Length")) {
@@ -683,41 +683,38 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     prot_puts(be->out, "\r\n");
     prot_flush(be->out);
 
-    do {
-	/* Read response from backend */
-	r = http_read_response(be, txn->meth, &code, &statline,
-			       &resp_hdrs, resp_body, 0, &txn->error.desc);
+    /* Read response(s) from backend until final response or error */
+    while ((code < 200) &&
+	   !(r = http_read_response(be, txn->meth, &code, &statline, &resp_hdrs,
+				    resp_body, 0, &txn->error.desc))) {
 
-	if (!r && (code == 100)) { /* Continue */
+	if ((code == 100) && !txn->flags.havebody) {
 	    /* Read body from client */
-	    if (!txn->flags.havebody) {
-		txn->flags.havebody = 1;
-		r = read_body(httpd_in, txn->req_hdrs, &txn->req_body,
-			      txn->flags.cont, &txn->error.desc);
-	    }
+	    txn->flags.havebody = 1;
+	    r = read_body(httpd_in, txn->req_hdrs, &txn->req_body,
+			  txn->flags.cont, &txn->error.desc);
 	    if (r) {
 		/* Couldn't get the body and can't finish request */
 		txn->flags.close = 1;
-		proxy_downserver(be);
+		break;
 	    }
-	    else {
-		/* Send single-chunk body to backend to complete the request */
-		if (buf_len(&txn->req_body)) {
-		    prot_printf(be->out, "%x\r\n", buf_len(&txn->req_body));
-		    prot_putbuf(be->out, &txn->req_body);
-		    prot_puts(be->out, "\r\n");
-		}
-		prot_puts(be->out, "0\r\n\r\n");
-		prot_flush(be->out);
+
+	    /* Send single-chunk body to backend to complete the request */
+	    if (buf_len(&txn->req_body)) {
+		prot_printf(be->out, "%x\r\n", buf_len(&txn->req_body));
+		prot_putbuf(be->out, &txn->req_body);
+		prot_puts(be->out, "\r\n");
 	    }
+	    prot_puts(be->out, "0\r\n\r\n");
+	    prot_flush(be->out);
 	}
+    }
 
-	/* Continue until error or final response */
-    } while (!r && (code < 200));
-
-    /* Send response to client */
-    if (!r) send_response(httpd_out, statline, resp_hdrs, resp_body,
-			  &txn->flags);
+    if (r) proxy_downserver(be);
+    else {
+	/* Send response to client */
+	send_response(httpd_out, statline, resp_hdrs, resp_body, &txn->flags);
+    }
 
     if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
 
