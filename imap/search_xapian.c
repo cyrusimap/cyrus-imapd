@@ -2020,6 +2020,43 @@ out:
     return r;
 }
 
+/* cleanup */
+static void delete_one(const char *key, const char *val __attribute__((unused)), void *rock)
+{
+    const char *mboxname = (const char *)rock;
+    const char *partition = NULL;
+    char *tier = NULL;
+    char *basedir = NULL;
+
+    partition = strstr(key, "searchpartition-");
+    if (!partition) return;
+    tier = xstrndup(key, partition - key);
+    partition += 16; /* skip over name */
+
+    xapian_basedir(tier, mboxname, partition, NULL, &basedir);
+    if (basedir)
+	remove_dir(basedir);
+
+    free(basedir);
+    free(tier);
+}
+
+static int delete_user(const char *userid)
+{
+    char *mboxname = mboxname_user_mbox(userid, /*subfolder*/NULL);
+    char *activename = activefile_fname(mboxname);
+
+    config_foreachoverflowstring(delete_one, mboxname);
+    unlink(activename);
+
+    free(activename);
+    free(mboxname);
+
+    return 0;
+}
+
+
+
 const struct search_engine xapian_search_engine = {
     "Xapian",
     SEARCH_FLAG_CAN_BATCH,
@@ -2035,6 +2072,6 @@ const struct search_engine xapian_search_engine = {
     /*stop_daemon*/NULL,
     list_files,
     compact_dbs,
-    /*deluser*/NULL   /* XXX: fixme */
+    delete_user  /* XXX: fixme */
 };
 
