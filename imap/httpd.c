@@ -2598,9 +2598,12 @@ int etagcmp(const char *hdr, const char *etag)
     if (!strcmp(hdr, "*")) return 0;	/* any representation	   */
 
     len = strlen(etag);
-    if (strlen(hdr) != len+2) return 1;	/* make sure lengths match */
-    if (hdr[0] != '\"') return 1;    	/* match open DQUOTE 	   */
-    return strncmp(hdr+1, etag, len);   /* skip DQUOTE		   */
+    if (*hdr++ != '\"') return 1;    	/* match/skip open DQUOTE  */
+    if (!strncmp(hdr, "W/", 2)) hdr+=2;	/* skip weak prefix	   */
+    if (strlen(hdr) != len+1) return 1;	/* make sure lengths match */
+    if (hdr[len] != '\"') return 1;    	/* match close DQUOTE	   */
+
+    return strncmp(hdr, etag, len);
 }
 
 
