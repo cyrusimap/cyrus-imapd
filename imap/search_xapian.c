@@ -1802,6 +1802,14 @@ static int compact_dbs(const char *userid, const char *tempdir,
     tochange = activefile_filter(active, srctiers, mbentry->partition);
     if (!tochange || !tochange->count) goto out;
 
+    /* find out which items actually exist from the set to be compressed - first pass */
+    dirs = activefile_resolve(mboxname, mbentry->partition, tochange, /*dostat*/1);
+    if (!dirs || !dirs->count) goto out;
+    /* NOTE: it's safe to keep this list even over the unlock/relock because we
+     * always write out a new first item if necessary, so these will never be
+     * written to after we release the lock - if they don't have content now,
+     * they never will */
+
     /* register the target name first, and put it at the end of the file */
     newdest = activefile_nextname(active, desttier);
     strarray_push(active, newdest);
@@ -1847,9 +1855,6 @@ static int compact_dbs(const char *userid, const char *tempdir,
 	}
 	strarray_free(newactive);
     }
-
-    /* find out which items actually exist from the set to be compressed */
-    dirs = activefile_resolve(mboxname, mbentry->partition, tochange, /*dostat*/1);
 
     /* run the compress to tmpfs */
     if (tempdir)
