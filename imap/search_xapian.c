@@ -1874,7 +1874,7 @@ static int compact_dbs(const char *userid, const char *tempdir,
 	remove_dir(tempdestdir);
 	r = copy_files(dirs->data[0], tempdestdir);
     }
-    if (dirs->count) {
+    else if (dirs->count) {
 	if (verbose) {
 	    printf("compacting databases\n");
 	}
