@@ -747,7 +747,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 {
     int r = 0;
     unsigned code;
-    char *etag = NULL;
+    char *etag = NULL, *lastmod = NULL;;
     const char **hdr, *statline;
     hdrcache_t resp_hdrs = NULL;
     struct buf *resp_body = &txn->resp_body.payload;
@@ -786,10 +786,12 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
     if (!r && (code == 200)) {  /* OK */
 	int sent_body = 0;
 
-	/* For MOVE, make a copy of the ETag for later use in DELETE */
-	if ((txn->meth == METH_MOVE) &&
-	    (hdr = spool_getheader(resp_hdrs, "Etag"))) {
-	    etag = xstrdup(hdr[0]);
+	/* For MOVE, make a copy of the ETag or Last-Modified for later use */
+	if (txn->meth == METH_MOVE) {
+	    if ((hdr = spool_getheader(resp_hdrs, "ETag")))
+		etag = xstrdup(hdr[0]);
+	    else if ((hdr = spool_getheader(resp_hdrs, "Last-Modified")))
+		lastmod = xstrdup(hdr[0]);
 	}
 
 	/*
@@ -853,6 +855,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 	     * Send a DELETE request to source backend:
 	     *
 	     * - Add If-Match header with ETag from GET
+	     * - Add If-Unmodified-Since header with Last-Modified from GET
 	     *
 	     * XXX  This clearly isn't an atomic MOVE.
 	     *      Either try to fix this (LOCK?), or don't allow MOVE
@@ -865,6 +868,9 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 			    buf_cstring(&serverinfo));
 	    }
 	    if (etag) prot_printf(src_be->out, "If-Match: %s\r\n", etag);
+	    else if (lastmod) prot_printf(src_be->out,
+					  "If-Unmodified-Since: %s\r\n",
+					  lastmod);
 	    prot_puts(src_be->out, "\r\n");
 	    prot_flush(src_be->out);
 
@@ -881,6 +887,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 
     if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
     if (etag) free(etag);
+    if (lastmod) free(lastmod);
 
     return r;
 }
