@@ -5130,6 +5130,7 @@ static void ref_prune_tree(Thread *parent)
 	 cur;
 	 prev = cur, cur = next, next = (cur ? cur->next : NULL)) {
 
+retry:
 	/* if we have an empty container with no children, delete it */
 	if (!cur->msgdata && !cur->child) {
 	    if (!prev)	/* first child */
@@ -5184,8 +5185,14 @@ static void ref_prune_tree(Thread *parent)
 	}
 
 	/* if we have a message with children, prune it's children */
-	else if (cur->child)
+	else if (cur->child) {
 	    ref_prune_tree(cur);
+	    if (!cur->msgdata && !cur->child) {
+		/* Did we end up with a completely empty node here?
+		 * Go back and prune it too.  See Bug 3784.  */
+		goto retry;
+	    }
+	}
     }
 }
 
