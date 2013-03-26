@@ -233,7 +233,7 @@ extern int index_run_annotator(struct index_state *state,
 extern int index_warmup(struct mboxlist_entry *, unsigned int warmup_flags,
 			struct seqset *uids);
 extern int index_sort(struct index_state *state, const struct sortcrit *sortcrit,
-		      const struct searchargs *searchargs, int usinguid);
+		      struct searchargs *searchargs, int usinguid);
 extern int index_convsort(struct index_state *state, struct sortcrit *sortcrit,
 		      struct searchargs *searchargs,
 		      const struct windowargs * windowargs);

@@ -1847,7 +1847,7 @@ out:
  */
 EXPORTED int index_sort(struct index_state *state,
 	       const struct sortcrit *sortcrit,
-	       const struct searchargs *searchargs, int usinguid)
+	       struct searchargs *searchargs, int usinguid)
 {
     int i;
     int nmsg = 0;
