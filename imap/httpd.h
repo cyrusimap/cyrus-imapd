@@ -57,10 +57,11 @@
 #define MAX_REQ_LINE	8000  /* minimum size per HTTPbis */
 
 /* Supported HTTP version */
-#define HTTP_VERSION	"HTTP/1.1"
+#define HTTP_VERSION	 "HTTP/1.1"
+#define HTTP_VERSION_LEN 8
 
-/* Support TLS version for upgrade */
-#define TLS_VERSION	"TLS/1.0"
+/* Supported TLS version for Upgrade */
+#define TLS_VERSION	 "TLS/1.0"
 
 /* Supported HTML DOCTYPE */
 #define HTML_DOCTYPE \
@@ -234,9 +235,10 @@ struct resp_body_t {
 
 /* Transaction flags */
 struct txn_flags_t {
+    unsigned long ver1_0	: 1;	/* Request from HTTP/1.0 client */
+    unsigned long close		: 1;	/* Close connection after response */
     unsigned long havebody	: 1;	/* Has body of request has been read? */
     unsigned long cont		: 1;	/* Does client expect 100-continue */
-    unsigned long close		: 1;	/* Close connection after response */
     unsigned long te		: 2;	/* Transfer-Encoding for resp */
     unsigned long ce		: 2;	/* Content-Encoding for resp */
     unsigned long cc		: 4;	/* Cache-Control directives for resp */

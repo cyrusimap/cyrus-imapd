@@ -40,17 +40,6 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-/*
- * Issues to consider if we want to support HTTP/1.0:
- *
- * - HTTP/1.0 requests to not require a Host: header field.
- * - HTTP/1.0 requests are non-persistent by default. The non-standard
- *   Connection:Keep-Alive header field can be used to request/signal
- *   a persistent connection.
- * - HTTP/1.0 does not support Transfer-Encoding, therefore we can not have
- *   "chunked" responses.  Any dynamically generated content and/or
- *   gzipped content will have to be close-delimited.
- */
 
 #include <config.h>
 
@@ -1008,12 +997,19 @@ static void cmdloop(void)
 	    txn.error.desc = "Unexpected extra argument(s) in request-line";
 	}
 
-	/* Check HTTP-Version */
-	else if (strcmp(ver, HTTP_VERSION)) {
+	/* Check HTTP-Version - MUST be HTTP/1.x */
+	else if (strlen(ver) != HTTP_VERSION_LEN
+		 || strncmp(ver, HTTP_VERSION, HTTP_VERSION_LEN-1)
+		 || !isdigit(ver[HTTP_VERSION_LEN-1])) {
 	    ret = HTTP_BAD_VERSION;
 	    buf_printf(&txn.buf,
-		     "This server only speaks %s", HTTP_VERSION);
+		     "This server only speaks %.*sx",
+		       HTTP_VERSION_LEN-1, HTTP_VERSION);
 	    txn.error.desc = buf_cstring(&txn.buf);
+	}
+	else if (ver[HTTP_VERSION_LEN-1] == '0') {
+	    /* HTTP/1.0 - non-persistent connection by default */
+	    txn.flags.ver1_0 = txn.flags.close = 1;
 	}
 	tok_fini(&tok);
 
@@ -1057,17 +1053,17 @@ static void cmdloop(void)
 
 	if (txn.meth == METH_UNKNOWN) ret = HTTP_NOT_IMPLEMENTED;
 
-	/* Check for Expectations */
-	else if ((r = parse_expect(&txn))) ret = r;
+	/* Check for Expectations (HTTP/1.1+ only) */
+	else if (!txn.flags.ver1_0 && (r = parse_expect(&txn))) ret = r;
 
-	/* Check for mandatory Host header */
-	else if (!(hdr = spool_getheader(txn.req_hdrs, "Host"))) {
-	    ret = HTTP_BAD_REQUEST;
-	    txn.error.desc = "Missing Host header";
-	}
-	else if (hdr[1]) {
+	/* Check for mandatory Host header (HTTP/1.1+ only) */
+	else if ((hdr = spool_getheader(txn.req_hdrs, "Host")) && hdr[1]) {
 	    ret = HTTP_BAD_REQUEST;
 	    txn.error.desc = "Too many Host headers";
+	}
+	else if (!hdr && !txn.flags.ver1_0) {
+	    ret = HTTP_BAD_REQUEST;
+	    txn.error.desc = "Missing Host header";
 	}
 	/* XXX  Should we check Host against servername? */
 
@@ -1226,8 +1222,8 @@ static void cmdloop(void)
 	    if (enc) free(enc);
 	}
 
-	/* Start method processing alarm */
-	alarm(httpd_keepalive);
+	/* Start method processing alarm (HTTP/1.1+ only) */
+	if (!txn.flags.ver1_0) alarm(httpd_keepalive);
 
 	/* Process the requested method */
 	ret = (*meth_t->proc)(&txn, meth_t->params);
@@ -1548,9 +1544,17 @@ static void parse_connection(struct transaction_t *txn, int *tls_upgrade)
 	char *token;
 
 	while ((token = tok_next(&tok))) {
-	    /* Check if this is a non-persistent connection */
-	    if (!strcasecmp(token, "close")) {
-		syslog(LOG_DEBUG, "non-persistent connection");
+	    /* Check if this is a persistent 1.0 connection */
+	    if (txn->flags.ver1_0) {
+		if (httpd_timeout && !strcasecmp(token, "keep-alive")) {
+		    syslog(LOG_DEBUG, "persistent 1.0 connection");
+		    txn->flags.close = 0;
+		}
+	    }
+
+	    /* Check if this is a non-persistent 1.1 connection */
+	    else if (!strcasecmp(token, "close")) {
+		syslog(LOG_DEBUG, "non-persistent 1.1 connection");
 		txn->flags.close = 1;
 	    }
 
@@ -1681,7 +1685,7 @@ static void comma_list_hdr(const char *hdr, const char *vals[], unsigned flags)
 void response_header(long code, struct transaction_t *txn)
 {
     char datestr[30];
-    unsigned keepalive = httpd_keepalive;
+    unsigned keepalive = txn->flags.ver1_0 ? 0 : httpd_keepalive;
     struct auth_challenge_t *auth_chal = &txn->auth_chal;
     struct resp_body_t *resp_body = &txn->resp_body;
     static struct buf log = BUF_INITIALIZER;
@@ -1958,14 +1962,17 @@ void response_header(long code, struct transaction_t *txn)
 
     default:
 	if (txn->flags.te) {
-	    prot_puts(httpd_out, "Transfer-Encoding:");
-	    if (txn->flags.te == TE_GZIP)
-		prot_puts(httpd_out, " gzip,");
-	    else if (txn->flags.te == TE_DEFLATE)
-		prot_puts(httpd_out, " deflate,");
+	    /* HTTP/1.1+ only - we use close-delimiting for HTTP/1.0 */
+	    if (!txn->flags.ver1_0) {
+		prot_puts(httpd_out, "Transfer-Encoding:");
+		if (txn->flags.te == TE_GZIP)
+		    prot_puts(httpd_out, " gzip,");
+		else if (txn->flags.te == TE_DEFLATE)
+		    prot_puts(httpd_out, " deflate,");
 
-	    /* Any TE implies "chunked", which is always last */
-	    prot_puts(httpd_out, " chunked\r\n");
+		/* Any TE implies "chunked", which is always last */
+		prot_puts(httpd_out, " chunked\r\n");
+	    }
 	}
 	else prot_printf(httpd_out, "Content-Length: %lu\r\n", resp_body->len);
     }
@@ -2008,6 +2015,9 @@ static int is_incompressible(const char *type)
  * a response header and the first body chunk.
  * All subsequent calls should have 'code' = 0 to output just the body chunk.
  * A final call with 'len' = 0 ends the chunked body.
+ *
+ * NOTE: HTTP/1.0 clients can't handle chunked encoding,
+ *       so we use bare chunks and close the connection when done.
  */
 void write_body(long code, struct transaction_t *txn,
 		const char *buf, unsigned len)
@@ -2017,7 +2027,7 @@ void write_body(long code, struct transaction_t *txn,
     unsigned is_chunked = (txn->flags.te == TE_CHUNKED);
 
     if (code) {
-	/* Initial call - prepare response header based on CE and TE */
+	/* Initial call - prepare response header based on CE, TE and version */
 
 	if ((!is_chunked && len < GZIP_MIN_LEN) ||
 	    is_incompressible(txn->resp_body.type)) {
@@ -2035,7 +2045,15 @@ void write_body(long code, struct transaction_t *txn,
 	    /* compressed output will be always chunked (streamed) */
 	    txn->flags.te = TE_CHUNKED;
 	}
-	else if (!is_chunked) txn->resp_body.len = len;
+	else if (!is_chunked) {
+	    /* full body (no encoding) */
+	    txn->resp_body.len = len;
+	}
+
+	if (txn->flags.ver1_0 && (txn->flags.te == TE_CHUNKED)) {
+	    /* HTTP/1.0 close-delimited data */
+	    txn->flags.close = 1;
+	}
 
 	response_header(code, txn);
 
@@ -2074,17 +2092,21 @@ void write_body(long code, struct transaction_t *txn,
 	    deflate(&txn->zstrm, flush);
 	    out = PROT_BUFSIZE - txn->zstrm.avail_out;
 
-	    if (out) {
-		/* we have a chunk of compressed output */
+	    if (out && !txn->flags.ver1_0) {
+		/* HTTP/1.1 chunk of compressed output */
 		prot_printf(httpd_out, "%x\r\n", out);
 		prot_write(httpd_out, zbuf, out);
 		prot_puts(httpd_out, "\r\n");
 	    }
+	    else {
+		/* HTTP/1.0 close-delimited data */
+		prot_write(httpd_out, zbuf, out);
+	    }
 
 	} while (!txn->zstrm.avail_out);
 
-	if (flush == Z_FINISH) {
-	    /* terminate the body with a zero-length chunk */
+	if (flush == Z_FINISH && !txn->flags.ver1_0) {
+	    /* terminate the HTTP/1.1 body with a zero-length chunk */
 	    prot_puts(httpd_out, "0\r\n");
 	    /* empty trailer */
 	    prot_puts(httpd_out, "\r\n");
@@ -2094,8 +2116,8 @@ void write_body(long code, struct transaction_t *txn,
 	fatal("Content-Encoding requested, but no zlib", EC_SOFTWARE);
 #endif /* HAVE_ZLIB */
     }
-    else if (is_chunked) {
-	/* chunk */
+    else if (is_chunked && !txn->flags.ver1_0) {
+	/* HTTP/1.1 chunk */
 	prot_printf(httpd_out, "%x\r\n", len);
 	if (len) prot_write(httpd_out, buf, len);
 	else {
@@ -2104,7 +2126,7 @@ void write_body(long code, struct transaction_t *txn,
 	prot_puts(httpd_out, "\r\n");
     }
     else {
-	/* full body */
+	/* full body or HTTP/1.0 close-delimited data */
 	prot_write(httpd_out, buf, len);
     }
 }
