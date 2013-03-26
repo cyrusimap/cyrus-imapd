@@ -1684,6 +1684,7 @@ static void comma_list_hdr(const char *hdr, const char *vals[], unsigned flags)
 
 void response_header(long code, struct transaction_t *txn)
 {
+    time_t now = time(0);
     char datestr[30];
     unsigned keepalive = txn->flags.ver1_0 ? 0 : httpd_keepalive;
     struct auth_challenge_t *auth_chal = &txn->auth_chal;
@@ -1761,7 +1762,7 @@ void response_header(long code, struct transaction_t *txn)
 
 
     /* Control Data */
-    httpdate_gen(datestr, sizeof(datestr), time(0));
+    httpdate_gen(datestr, sizeof(datestr), now);
     prot_printf(httpd_out, "Date: %s\r\n", datestr);
 
     if (httpd_tls_done) {
@@ -1920,6 +1921,8 @@ void response_header(long code, struct transaction_t *txn)
 	prot_printf(httpd_out, "ETag: \"%s\"\r\n", resp_body->etag);
     }
     if (resp_body->lastmod) {
+	/* Last-Modified MUST NOT be in the future */
+	resp_body->lastmod = MIN(resp_body->lastmod, now);
 	httpdate_gen(datestr, sizeof(datestr), resp_body->lastmod);
 	prot_printf(httpd_out, "Last-Modified: %s\r\n", datestr);
     }
