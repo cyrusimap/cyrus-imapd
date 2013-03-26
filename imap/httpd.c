@@ -898,13 +898,8 @@ static int reset_saslconn(sasl_conn_t **conn)
  */
 static void cmdloop(void)
 {
-    int ret, r, i, tls_upgrade, gzip_enabled = 0;
-    tok_t tok;
-    char reqline[MAX_REQ_LINE+1], buf[1024], *p, *meth, *ver;
-    const char **hdr;
+    int gzip_enabled = 0;
     struct transaction_t txn;
-    const struct namespace_t *namespace;
-    const struct method_t *meth_t;
 
     /* Start with an empty (clean) transaction */
     memset(&txn, 0, sizeof(struct transaction_t));
@@ -919,9 +914,14 @@ static void cmdloop(void)
 #endif
 
     for (;;) {
-	/* Reset state */
-	ret = tls_upgrade = 0;
-	meth = ver = NULL;
+	int ret = 0, tls_upgrade = 0, r, i, c;
+	char buf[MAX_REQ_LINE+1], *p, *meth = NULL, *ver = NULL;
+	tok_t tok;
+	const char **hdr;
+	const struct namespace_t *namespace;
+	const struct method_t *meth_t;
+
+	/* Reset txn state */
 	txn.meth = METH_UNKNOWN;
 	txn.uri = NULL;
 	memset(&txn.flags, 0, sizeof(struct txn_flags_t));
@@ -945,7 +945,7 @@ static void cmdloop(void)
 	     userdeny(httpd_userid, config_ident, buf, sizeof(buf)))) {
 	    txn.error.desc = buf;
 	    txn.flags.close = 1;
-	    response_header(HTTP_UNAVAILABLE, &txn);
+	    error_response(HTTP_UNAVAILABLE, &txn);
 	    shut_down(0);
 	}
 
@@ -960,95 +960,89 @@ static void cmdloop(void)
 
 	/* Read request-line */
 	syslog(LOG_DEBUG, "read & parse request-line");
-	if (!prot_fgets(reqline, sizeof(reqline), httpd_in)) {
+	if (!prot_fgets(buf, sizeof(buf), httpd_in)) {
 	    txn.error.desc = prot_error(httpd_in);
 	    if (txn.error.desc && strcmp(txn.error.desc, PROT_EOF_STRING)) {
 		syslog(LOG_WARNING, "%s, closing connection", txn.error.desc);
 	    }
 	    /* client closed connection or timed out */
+	    ret = HTTP_TIMEOUT;
+	}
+	else if ((p = buf + strlen(buf)) && p[-1] != '\n') {
+	    /* request-line overran the size of our buffer */
+	    ret = HTTP_TOO_LONG;
+	    buf_printf(&txn.buf,
+		       "Length of request-line MUST be less than %u octets",
+		       sizeof(buf)-1);
+	    txn.error.desc = buf_cstring(&txn.buf);
+	}
+	
+	if (ret) {
 	    txn.flags.close = 1;
 	    goto done;
 	}
-	p = reqline + strlen(reqline);
 
-	/* Ignore empty lines before request-line per HTTPbis Part 1 Sec 3.5 */
-	if (p - reqline <= 2) continue;
-
-	/* Parse request-line = method SP request-target SP HTTP-version CRLF */
-	tok_initm(&tok, reqline, " \r\n", 0);
-	if (!(meth = tok_next(&tok))) {
-	    ret = HTTP_BAD_REQUEST;
-	    txn.error.desc = "Missing method in request-line\r\n";
-	}
-	else if (!(txn.uri = tok_next(&tok))) {
-	    ret = HTTP_BAD_REQUEST;
-	    txn.error.desc = "Missing request-target in request-line\r\n";
-	}
-	else if ((!(ver = tok_next(&tok))
-		  || (strlen(ver) <= strlen(HTTP_VERSION)))
-		 && (p[-1] != '\n')) {
-	    /* request-line overran the size of our buffer */
-	    eatline(httpd_in, p[-1]);
-	    ret = HTTP_TOO_LONG;
-	    buf_printf(&txn.buf,
-		       "Length of request-line MUST be less than than %u octets\r\n",
-		       sizeof(reqline));
-	    txn.error.desc = buf_cstring(&txn.buf);
-	}
-	else if (!ver) {
-	    ret = HTTP_BAD_REQUEST;
-	    txn.error.desc = "Missing HTTP-version in request-line\r\n";
-	}
-	else if (reqline[tok_offset(&tok) + strlen(ver)] == ' ') {
-	    ret = HTTP_BAD_REQUEST;
-	    txn.error.desc = "Unexpected extra argument(s) in request-line\r\n";
-	}
-
-	/* Trim CRLF from request line */
+	/* Trim CRLF from request-line */
 	if (p[-1] == '\n') *--p = '\0';
 	if (p[-1] == '\r') *--p = '\0';
 
+	/* Ignore empty lines before request-line per HTTPbis Part 1 Sec 3.5 */
+	if (!*buf) continue;
+
+	/* Parse request-line = method SP request-target SP HTTP-version CRLF */
+	tok_initm(&tok, buf, " ", 0);
+	if (!(meth = tok_next(&tok))) {
+	    ret = HTTP_BAD_REQUEST;
+	    txn.error.desc = "Missing method in request-line";
+	}
+	else if (!(txn.uri = tok_next(&tok))) {
+	    ret = HTTP_BAD_REQUEST;
+	    txn.error.desc = "Missing request-target in request-line";
+	}
+	else if (!(ver = tok_next(&tok))) {
+	    ret = HTTP_BAD_REQUEST;
+	    txn.error.desc = "Missing HTTP-version in request-line";
+	}
+	else if (p != buf + tok_offset(&tok) + strlen(ver)) {
+	    ret = HTTP_BAD_REQUEST;
+	    txn.error.desc = "Unexpected extra argument(s) in request-line";
+	}
+
 	/* Check HTTP-Version */
-	if (!ret && strcmp(ver, HTTP_VERSION)) {
+	else if (strcmp(ver, HTTP_VERSION)) {
 	    ret = HTTP_BAD_VERSION;
 	    buf_printf(&txn.buf,
-		     "This server only speaks %s\r\n", HTTP_VERSION);
+		     "This server only speaks %s", HTTP_VERSION);
 	    txn.error.desc = buf_cstring(&txn.buf);
 	}
+	tok_fini(&tok);
 
-	/* Check Method against our list of known methods */
-	if (!ret) {
-	    for (txn.meth = 0; (txn.meth < METH_UNKNOWN) &&
-		     strcmp(http_methods[txn.meth].name, meth);
-		 txn.meth++);
-
-	    if (txn.meth == METH_UNKNOWN) ret = HTTP_NOT_IMPLEMENTED;
-	}
-
-	/* Parse request-target URI */
-	if (!ret &&
-	    (r = parse_uri(txn.meth, txn.uri, &txn.req_tgt, &txn.error.desc))) {
-	    ret = r;
+	if (ret) {
+	    txn.flags.close = 1;
+	    goto done;
 	}
 
 	/* Read and parse headers */
 	syslog(LOG_DEBUG, "read & parse headers");
 	if (!(txn.req_hdrs = spool_new_hdrcache())) {
 	    ret = HTTP_SERVER_ERROR;
-	    txn.flags.close = 1;
-	    txn.error.desc = "Unable to create header cache\r\n";
-	    goto done;
+	    txn.error.desc = "Unable to create header cache";
 	}
-	if ((r = spool_fill_hdrcache(httpd_in, NULL, txn.req_hdrs, NULL))) {
+	else if ((r = spool_fill_hdrcache(httpd_in, NULL,
+					  txn.req_hdrs, NULL))) {
 	    ret = HTTP_BAD_REQUEST;
-	    txn.error.desc = "Request contains invalid header\r\n";
+	    txn.error.desc = error_message(r);
 	}
 
 	/* Read CRLF separating headers and body */
-	if (!prot_fgets(buf, sizeof(buf), httpd_in)) {
+	else if ((c = prot_getc(httpd_in)) != '\r' ||
+		 (c = prot_getc(httpd_in)) != '\n') {
 	    ret = HTTP_BAD_REQUEST;
+	    txn.error.desc = "Missing separator between headers and body";
+	}
+
+	if (ret) {
 	    txn.flags.close = 1;
-	    txn.error.desc = "Missing separator between headers and body\r\n";
 	    goto done;
 	}
 
@@ -1056,76 +1050,85 @@ static void cmdloop(void)
 	parse_connection(&txn, &tls_upgrade);
 	if (tls_upgrade) starttls(0);
 
+	/* Check Method against our list of known methods */
+	for (txn.meth = 0; (txn.meth < METH_UNKNOWN) &&
+		 strcmp(http_methods[txn.meth].name, meth);
+	     txn.meth++);
+
+	if (txn.meth == METH_UNKNOWN) ret = HTTP_NOT_IMPLEMENTED;
+
 	/* Check for Expectations */
-	if (!ret) ret = parse_expect(&txn);
+	else if ((r = parse_expect(&txn))) ret = r;
 
 	/* Check for mandatory Host header */
-	if (!ret) {
-	    if (!(hdr = spool_getheader(txn.req_hdrs, "Host"))) {
-		ret = HTTP_BAD_REQUEST;
-		txn.error.desc = "Missing Host header\r\n";
-	    }
-	    else if (hdr[1]) {
-		ret = HTTP_BAD_REQUEST;
-		txn.error.desc = "Too many Host headers\r\n";
-	    }
-	    else {
-		/* XXX  Should we check this against servername? */
-	    }
+	else if (!(hdr = spool_getheader(txn.req_hdrs, "Host"))) {
+	    ret = HTTP_BAD_REQUEST;
+	    txn.error.desc = "Missing Host header";
+	}
+	else if (hdr[1]) {
+	    ret = HTTP_BAD_REQUEST;
+	    txn.error.desc = "Too many Host headers";
+	}
+	/* XXX  Should we check Host against servername? */
+
+	/* Parse request-target URI */
+	else if ((r = parse_uri(txn.meth, txn.uri,
+				&txn.req_tgt, &txn.error.desc))) {
+	    ret = r;
 	}
 
+	if (ret) goto done;
+
 	/* Find the namespace of the requested resource */
-	if (!ret) {
-	    for (i = 0; namespaces[i]; i++) {
-		const char *path = txn.req_tgt.path;
-		const char *query = txn.req_tgt.query;
-		size_t len;
+	for (i = 0; namespaces[i]; i++) {
+	    const char *path = txn.req_tgt.path;
+	    const char *query = txn.req_tgt.query;
+	    size_t len;
 
-		/* Skip disabled namespaces */
-		if (!namespaces[i]->enabled) continue;
+	    /* Skip disabled namespaces */
+	    if (!namespaces[i]->enabled) continue;
 
-		/* Handle any /.well-known/ bootstrapping */
-		if (namespaces[i]->well_known) {
-		    len = strlen(namespaces[i]->well_known);
-		    if (!strncmp(path, namespaces[i]->well_known, len) &&
-			(!path[len] || path[len] == '/')) {
+	    /* Handle any /.well-known/ bootstrapping */
+	    if (namespaces[i]->well_known) {
+		len = strlen(namespaces[i]->well_known);
+		if (!strncmp(path, namespaces[i]->well_known, len) &&
+		    (!path[len] || path[len] == '/')) {
 			
-			hdr = spool_getheader(txn.req_hdrs, "Host");
-			buf_printf(&txn.buf, "%s://%s%s%s",
-				   https ? "https" : "http", hdr[0],
-				   namespaces[i]->prefix,
-				   path + len);
-			if (*query) buf_printf(&txn.buf, "?%s", query);
-			txn.location = buf_cstring(&txn.buf);
+		    hdr = spool_getheader(txn.req_hdrs, "Host");
+		    buf_printf(&txn.buf, "%s://%s%s%s",
+			       https ? "https" : "http", hdr[0],
+			       namespaces[i]->prefix,
+			       path + len);
+		    if (*query) buf_printf(&txn.buf, "?%s", query);
+		    txn.location = buf_cstring(&txn.buf);
 
-			ret = HTTP_MOVED;
-			goto done;
-		    }
-		}
-
-		/* See if the prefix matches - terminated with NUL or '/' */
-		len = strlen(namespaces[i]->prefix);
-		if (!strncmp(path, namespaces[i]->prefix, len) &&
-		    (!path[len] || (path[len] == '/') || !strcmp(path, "*"))) {
-		    break;
+		    ret = HTTP_MOVED;
+		    goto done;
 		}
 	    }
-	    if ((namespace = namespaces[i])) {
-		txn.req_tgt.namespace = namespace->id;
-		txn.req_tgt.allow = namespace->allow;
 
-		/* Check if method is supported in this namespace */
-		meth_t = &namespace->methods[txn.meth];
-		if (!meth_t->proc) ret = HTTP_NOT_ALLOWED;
-
-		/* Check if method expects a body */
-		else if ((http_methods[txn.meth].flags & METH_NOBODY) &&
-			 spool_getheader(txn.req_hdrs, "Content-Type"))
-		    ret = HTTP_BAD_MEDIATYPE;
-	    } else {
-		/* XXX  Should never get here */
-		ret = HTTP_SERVER_ERROR;
+	    /* See if the prefix matches - terminated with NUL or '/' */
+	    len = strlen(namespaces[i]->prefix);
+	    if (!strncmp(path, namespaces[i]->prefix, len) &&
+		(!path[len] || (path[len] == '/') || !strcmp(path, "*"))) {
+		break;
 	    }
+	}
+	if ((namespace = namespaces[i])) {
+	    txn.req_tgt.namespace = namespace->id;
+	    txn.req_tgt.allow = namespace->allow;
+
+	    /* Check if method is supported in this namespace */
+	    meth_t = &namespace->methods[txn.meth];
+	    if (!meth_t->proc) ret = HTTP_NOT_ALLOWED;
+
+	    /* Check if method expects a body */
+	    else if ((http_methods[txn.meth].flags & METH_NOBODY) &&
+		     spool_getheader(txn.req_hdrs, "Content-Type"))
+		ret = HTTP_BAD_MEDIATYPE;
+	} else {
+	    /* XXX  Should never get here */
+	    ret = HTTP_SERVER_ERROR;
 	}
 
 	if (ret) goto done;
@@ -1192,22 +1195,22 @@ static void cmdloop(void)
 		    write_body(HTTP_MOVED, &txn,
 			       buf_cstring(html), buf_len(html));
 		}
-
-		goto done;
 	    }
 	    else {
 		/* Tell client to authenticate */
 		ret = HTTP_UNAUTHORIZED;
 		if (r == SASL_CONTINUE)
-		    txn.error.desc = "Continue authentication exchange\r\n";
-		else if (r) txn.error.desc = "Authentication failed\r\n";
+		    txn.error.desc = "Continue authentication exchange";
+		else if (r) txn.error.desc = "Authentication failed";
 		else txn.error.desc =
-			 "Must authenticate to access the specified target\r\n";
+			 "Must authenticate to access the specified target";
 	    }
+
+	    goto done;
 	}
 
 	/* Check if we should compress response body */
-	if (!ret && gzip_enabled &&
+	if (gzip_enabled &&
 	    (hdr = spool_getheader(txn.req_hdrs, "Accept-Encoding"))) {
 	    struct accept *e, *enc = parse_accept(hdr);
 
@@ -1223,29 +1226,28 @@ static void cmdloop(void)
 	    if (enc) free(enc);
 	}
 
-	/* Process the requested method */
-	if (!ret) {
-	    /* Start method processing alarm */
-	    alarm(httpd_keepalive);
+	/* Start method processing alarm */
+	alarm(httpd_keepalive);
 
-	    ret = (*meth_t->proc)(&txn, meth_t->params);
-	    if (ret == HTTP_UNAUTHORIZED) goto need_auth;
-	}
+	/* Process the requested method */
+	ret = (*meth_t->proc)(&txn, meth_t->params);
+	if (ret == HTTP_UNAUTHORIZED) goto need_auth;
 
       done:
 	/* Handle errors (success responses handled by method functions) */
 	if (ret) error_response(ret, &txn);
 
-	/* If we haven't the read body, read and discard it */
-	if (txn.req_hdrs && !txn.flags.havebody &&
-	    read_body(httpd_in, txn.req_hdrs, NULL,
-		      txn.flags.cont, &txn.error.desc)) {
-	    txn.flags.close = 1;
-	}
+	/* Cleanup */
+	if (txn.req_hdrs) {
+	    /* If we haven't the read body, read and discard it */
+	    if (!txn.flags.havebody &&
+		read_body(httpd_in, txn.req_hdrs, NULL,
+			  txn.flags.cont, &txn.error.desc)) {
+		txn.flags.close = 1;
+	    }
 
-	/* Memory cleanup */
-	if (txn.req_hdrs) spool_free_hdrcache(txn.req_hdrs);
-	tok_fini(&tok);
+	    spool_free_hdrcache(txn.req_hdrs);
+	}
 
 	if (txn.flags.close) {
 	    buf_free(&txn.req_body);
@@ -2245,7 +2247,8 @@ void error_response(long code, struct transaction_t *txn)
 	const char **hdr, *host = "";
 	char *port = NULL;
 
-	if ((hdr = spool_getheader(txn->req_hdrs, "Host")) &&
+	if (txn->req_hdrs &&
+	    (hdr = spool_getheader(txn->req_hdrs, "Host")) &&
 	    hdr[0] && *hdr[0]) {
 	    host = (char *) hdr[0];
 	    if ((port = strchr(host, ':'))) *port++ = '\0';
