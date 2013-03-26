@@ -257,7 +257,7 @@ int yylex(lexstate_t * lvalp, void * client)
       if (!isalpha((unsigned char) ch)) {
 	int token;
 
-	buffer[ buff_ptr - buffer] = '\0';
+	*buff_ptr = '\0';
 
 	/* We've got the atom. */
 	token = token_lookup(buffer);
