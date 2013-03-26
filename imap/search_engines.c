@@ -81,6 +81,7 @@ static const struct search_engine default_search_engine = {
     NULL,
     NULL,
     NULL,
+    NULL,
     NULL
 };
 
