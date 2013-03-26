@@ -1206,7 +1206,7 @@ static void fetch_part(struct transaction_t *txn, struct body *body,
 
 	if (!outbuf) {
 	    txn->error.desc = "Unknown MIME encoding\r\n";
-	    response_header(HTTP_SERVER_ERROR, txn);
+	    error_response(HTTP_SERVER_ERROR, txn);
 	    return;
 
 	}
