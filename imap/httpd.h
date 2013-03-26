@@ -58,7 +58,6 @@
 
 /* Supported HTTP version */
 #define HTTP_VERSION	"HTTP/1.1"
-#define HTTPS_VERSION	"HTTPS/1.1"
 
 /* Support TLS version for upgrade */
 #define TLS_VERSION	"TLS/1.0"

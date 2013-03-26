@@ -68,6 +68,8 @@
 
 #include <libxml/uri.h>
 
+#define HTTPS_VERSION	"HTTPS/1.1"
+
 static int login(struct backend *s, const char *server __attribute__((unused)),
 		 struct protocol_t *prot, const char *userid,
 		 sasl_callback_t *cb, const char **status);
