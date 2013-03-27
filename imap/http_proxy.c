@@ -531,7 +531,7 @@ static void write_cachehdr(const char *name, const char *contents, void *rock)
     struct protstream *pout = (struct protstream *) rock;
     const char **hdr, *hop_by_hop[] =
 	{ "authorization", "connection", "content-length", "expect",
-	  "host", "keep-alive", "strict-transport-security",
+	  "host", "keep-alive", "strict-transport-security", "te",
 	  "transfer-encoding", "upgrade", "via", NULL };
 
     for (hdr = hop_by_hop; *hdr && strcmp(name, *hdr); hdr++);
