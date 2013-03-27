@@ -2951,7 +2951,7 @@ int meth_get_doc(struct transaction_t *txn,
     buf_printf(&txn->buf, "%ld-%ld", (long) sbuf.st_mtime, (long) sbuf.st_size);
 
     /* Check any preconditions, including range request */
-    txn->flags.ranges = 1;
+    txn->flags.ranges = !txn->flags.ce;
     resp_body->range.len = datalen;
     precond = check_precond(txn, NULL, buf_cstring(&txn->buf), sbuf.st_mtime);
 

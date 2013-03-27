@@ -3308,7 +3308,7 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 	offset = record.header_size;
 	datalen = record.size - offset;
 
-	txn->flags.ranges = 1;
+	txn->flags.ranges = !txn->flags.ce;;
 	resp_body->range.len = datalen;
 	etag = message_guid_encode(&record.guid);
 	lastmod = record.internaldate;
