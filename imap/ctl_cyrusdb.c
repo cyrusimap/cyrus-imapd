@@ -330,38 +330,19 @@ int main(int argc, char *argv[])
 
 	    if (!rotated) {
 		/* rotate the backup directories -- ONE time only */
-		char *tail;
+		char *file;
 		DIR *dirp;
 		struct dirent *dirent;
-
-		char *path;
-		size_t length;
-		long path_max;
-
-		if ((path_max = pathconf("/", _PC_PATH_MAX)) == -1) {
-			syslog(LOG_WARNING, "Unable to determine system PATH_MAX. Using POSIX default.");
-			path_max = _POSIX_PATH_MAX;
-		}
-		if ((path = malloc(path_max)) == NULL) {
-			syslog(LOG_ERR, "%s:%d %s", __FILE__, __LINE__, strerror(errno));
-			exit(EXIT_FAILURE);
-		}
-
-		/* Add path prefix to buffer. */
-		length = strlcpy(path, backup2, path_max);
-		tail = path + length;
-		*tail++ = '/';
-		length++;
 
 		/* remove db.backup2 */
 		dirp = opendir(backup2);
 
 		if (dirp) {
 		    while ((dirent = readdir(dirp)) != NULL) {
-			if (dirent->d_name[0] == '.') 
-				continue;
-			(void) strlcpy(tail, dirent->d_name, path_max - length);
-			(void) unlink(path);
+			if (dirent->d_name[0] == '.') continue;
+			file = strconcat(backup2, "/", dirent->d_name, (char *)NULL);
+			unlink(file);
+			free(file);
 		    }
 
 		    closedir(dirp);
