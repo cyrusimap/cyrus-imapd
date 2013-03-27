@@ -2571,7 +2571,7 @@ int meth_acl(struct transaction_t *txn, void *params)
 
     /* Parse the ACL body */
     ret = parse_xml_body(txn, &root);
-    if (!root) {
+    if (!ret && !root) {
 	txn->error.desc = "Missing request body\r\n";
 	ret = HTTP_BAD_REQUEST;
     }
@@ -3514,13 +3514,11 @@ int meth_lock(struct transaction_t *txn, void *params)
 
 	/* Parse the required body */
 	ret = parse_xml_body(txn, &root);
-	if (ret) goto done;
-
-	if (!root) {
+	if (!ret && !root) {
 	    txn->error.desc = "Missing request body";
 	    ret = HTTP_BAD_REQUEST;
-	    goto done;
 	}
+	if (ret) goto done;
 
 	/* Check for correct root element */
 	indoc = root->doc;
@@ -4246,7 +4244,7 @@ int meth_proppatch(struct transaction_t *txn,  void *params)
 
     /* Parse the PROPPATCH body */
     ret = parse_xml_body(txn, &root);
-    if (!root) {
+    if (!ret && !root) {
 	txn->error.desc = "Missing request body\r\n";
 	return HTTP_BAD_REQUEST;
     }
@@ -4783,7 +4781,7 @@ int meth_report(struct transaction_t *txn, void *params)
 
     /* Parse the REPORT body */
     ret = parse_xml_body(txn, &inroot);
-    if (!inroot) {
+    if (!ret && !inroot) {
 	txn->error.desc = "Missing request body\r\n";
 	return HTTP_BAD_REQUEST;
     }

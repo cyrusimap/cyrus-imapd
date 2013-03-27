@@ -949,13 +949,16 @@ static void cmdloop(void)
 
 	/* Read request-line */
 	syslog(LOG_DEBUG, "read & parse request-line");
-	if (!prot_fgets(buf, sizeof(buf), httpd_in)) {
+	if ((r = !prot_fgets(buf, sizeof(buf), httpd_in))) {
 	    txn.error.desc = prot_error(httpd_in);
 	    if (txn.error.desc && strcmp(txn.error.desc, PROT_EOF_STRING)) {
+		/* client timed out */
 		syslog(LOG_WARNING, "%s, closing connection", txn.error.desc);
+		ret = HTTP_TIMEOUT;
 	    }
-	    /* client closed connection or timed out */
-	    ret = HTTP_TIMEOUT;
+	    else {
+		/* client closed connection */
+	    }
 	}
 	else if ((p = buf + strlen(buf)) && p[-1] != '\n') {
 	    /* request-line overran the size of our buffer */
@@ -966,7 +969,7 @@ static void cmdloop(void)
 	    txn.error.desc = buf_cstring(&txn.buf);
 	}
 	
-	if (ret) {
+	if (r || ret) {
 	    txn.flags.close = 1;
 	    goto done;
 	}
@@ -1029,12 +1032,18 @@ static void cmdloop(void)
 	    ret = HTTP_BAD_REQUEST;
 	    txn.error.desc = error_message(r);
 	}
+	else if ((txn.error.desc = prot_error(httpd_in)) &&
+		 strcmp(txn.error.desc, PROT_EOF_STRING)) {
+	    /* client timed out */
+	    syslog(LOG_WARNING, "%s, closing connection", txn.error.desc);
+	    ret = HTTP_TIMEOUT;
+	}
 
 	/* Read CRLF separating headers and body */
 	else if ((c = prot_getc(httpd_in)) != '\r' ||
 		 (c = prot_getc(httpd_in)) != '\n') {
 	    ret = HTTP_BAD_REQUEST;
-	    txn.error.desc = "Missing separator between headers and body";
+	    txn.error.desc = error_message(IMAP_MESSAGE_NOBLANKLINE);
 	}
 
 	if (ret) {
@@ -1410,7 +1419,7 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 	    if (!prot_fgets(buf, PROT_BUFSIZE, pin) ||
 		sscanf(buf, "%x", &chunk) != 1) {
 		*errstr = "Unable to read chunk size\r\n";
-		return HTTP_BAD_REQUEST;
+		goto bad_request;
 	    }
 	    if ((len += chunk) > max_msgsize) return HTTP_TOO_LARGE;
 
@@ -1429,15 +1438,15 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 		
 		if (!n) {
 		    syslog(LOG_ERR, "prot_read() error");
-		    *errstr = "Unable to read body data\r\n";
-		    return HTTP_BAD_REQUEST;
+		    *errstr = "Unable to read chunk data\r\n";
+		    goto bad_request;
 		}
 	    }
 
 	    /* Read CRLF terminating the chunk/trailer */
 	    if (!prot_fgets(buf, sizeof(buf), pin)) {
 		*errstr = "Missing CRLF following chunk/trailer\r\n";
-		return HTTP_BAD_REQUEST;
+		goto bad_request;
 	    }
 
 	} while (!last);
@@ -1451,6 +1460,8 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 	    if ((len += n) > max_msgsize) return HTTP_TOO_LARGE;
 
 	} while (n);
+
+	if (!pin->eof) goto bad_request;
     }
     else {
 	/* Read 'len' octets */
@@ -1461,7 +1472,7 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 	    if (!n) {
 		syslog(LOG_ERR, "prot_read() error");
 		*errstr = "Unable to read body data\r\n";
-		return HTTP_BAD_REQUEST;
+		goto bad_request;
 	    }
 	}
     }
@@ -1497,6 +1508,15 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
     }
 
     return 0;
+
+  bad_request:
+    if (strcmpsafe(prot_error(httpd_in), PROT_EOF_STRING)) {
+	/* client timed out */
+	*errstr = prot_error(httpd_in);
+	syslog(LOG_WARNING, "%s, closing connection", *errstr);
+	return HTTP_TIMEOUT;
+    }
+    else return HTTP_BAD_REQUEST;
 }
 
 
