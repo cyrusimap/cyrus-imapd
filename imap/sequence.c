@@ -465,6 +465,8 @@ EXPORTED struct seqset *seqset_dup(const struct seqset *l)
  */
 EXPORTED void seqset_free(struct seqset *l)
 {
+    if (!l) return;
+
     free(l->set);
     free(l);
 }
