@@ -1686,11 +1686,11 @@ void response_header(long code, struct transaction_t *txn)
 {
     time_t now = time(0);
     char datestr[30];
-    unsigned keepalive = txn->flags.ver1_0 ? 0 : httpd_keepalive;
-    struct auth_challenge_t *auth_chal = &txn->auth_chal;
-    struct resp_body_t *resp_body = &txn->resp_body;
+    unsigned keepalive;
+    const char **hdr, *conn_token;
+    struct auth_challenge_t *auth_chal;
+    struct resp_body_t *resp_body;
     static struct buf log = BUF_INITIALIZER;
-    const char **hdr, *conn_token = "";
 
     /* Stop method processing alarm */
     alarm(0);
@@ -1720,6 +1720,9 @@ void response_header(long code, struct transaction_t *txn)
 
 
     /* Connection Management */
+    conn_token = "";
+    keepalive = httpd_keepalive;
+
     switch (code) {
     case HTTP_SWITCH_PROT:
 	keepalive = 0;  /* No alarm during TLS negotiation */
@@ -1758,6 +1761,9 @@ void response_header(long code, struct transaction_t *txn)
 	    prot_printf(httpd_out, "Keep-Alive: timeout=%d\r\n", httpd_timeout);
 	    prot_printf(httpd_out, "Connection:%s keep-alive\r\n", conn_token);
 	}
+
+	auth_chal = &txn->auth_chal;
+	resp_body = &txn->resp_body;
     }
 
 
