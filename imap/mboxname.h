@@ -46,7 +46,6 @@
 #define INCLUDED_MBOXNAME_H
 
 #include "auth.h"
-#include "strarray.h"
 
 #define MAX_NAMESPACE_PREFIX 40
 
@@ -93,10 +92,11 @@ struct mboxlock {
 };
 
 struct mboxname_parts {
-    char *domain;
-    char *userid; /* userid WITHOUT the domain */
-    strarray_t *mbox;
+    const char *domain;
+    const char *userid;	    /* userid WITHOUT the domain */
+    const char *box;
     int is_deleted;
+    char *freeme;
 };
 
 int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
