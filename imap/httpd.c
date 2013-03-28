@@ -1107,11 +1107,8 @@ static void cmdloop(void)
 		if (!strncmp(path, namespaces[i]->well_known, len) &&
 		    (!path[len] || path[len] == '/')) {
 			
-		    hdr = spool_getheader(txn.req_hdrs, "Host");
-		    buf_printf(&txn.buf, "%s://%s%s%s",
-			       https ? "https" : "http", hdr[0],
-			       namespaces[i]->prefix,
-			       path + len);
+		    buf_setcstr(&txn.buf, namespaces[i]->prefix);
+		    buf_appendcstr(&txn.buf, path + len);
 		    if (*query) buf_printf(&txn.buf, "?%s", query);
 		    txn.location = buf_cstring(&txn.buf);
 
