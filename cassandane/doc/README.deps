@@ -53,14 +53,14 @@ Cassandane needs the following software to work:
     format, for integration with Jenkins CI.
     CPAN package http://search.cpan.org/dist/Test-Unit-Runner-Xml/
     No Ubuntu package (sorry) - but install depends on:
-        libxml-generator-perl libxml-xpath-perl
+	libxml-generator-perl libxml-xpath-perl
     RH/CentOS package perl-Test-Unit-Runner-Xml
 
  * XML::Generator
     Needed by Test::Unit::Runner::XML
     CPAN package http://search.cpan.org/dist/XML-Generator/
-    Ubuntu package unknown
-    RH/CentOS package unknown
+    Ubuntu package libxml-generator-perl
+    RH/CentOS package perl-XML-Generator
 
  * Clone
     Provides a Perl structure deep-clone operation
