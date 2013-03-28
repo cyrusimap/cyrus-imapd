@@ -3046,8 +3046,7 @@ int meth_copy(struct transaction_t *txn, void *params)
   done:
     if (ret == HTTP_CREATED) {
 	/* Tell client where to find the new resource */
-	hdr = spool_getheader(txn->req_hdrs, "Destination");
-	txn->location = hdr[0];
+	txn->location = dest.path;
     }
     else {
 	/* Don't confuse client by providing ETag of Destination resource */
