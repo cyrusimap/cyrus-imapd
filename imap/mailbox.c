@@ -2753,10 +2753,12 @@ EXPORTED int mailbox_update_conversations(struct mailbox *mailbox,
 				 struct index_record *new)
 {
     int r = 0;
+    struct mboxname_parts parts;
     conversation_t *conv = NULL;
     int delta_num_records = 0;
     int delta_exists = 0;
     int delta_unseen = 0;
+    int is_trash = 0;
     int delta_size = 0;
     int *delta_counts = NULL;
     int i;
@@ -2770,6 +2772,16 @@ EXPORTED int mailbox_update_conversations(struct mailbox *mailbox,
     cstate = conversations_get_mbox(mailbox->name);
     if (!cstate)
 	return IMAP_CONVERSATIONS_NOT_OPEN;
+
+    /* IRIS-2534: check if it's the trash folder - XXX - should be separate
+     * conversation root or similar more useful method in future */
+    if (mboxname_to_parts(mailbox->name, &parts))
+	return IMAP_MAILBOX_BADNAME;
+
+    if (!strcmpsafe(parts.box, "Trash"))
+	is_trash = 1;
+
+    mboxname_free_parts(&parts);
 
     /* handle unlinked items as if they didn't exist */
     if (old && (old->system_flags & FLAG_UNLINKED)) old = NULL;
@@ -2834,7 +2846,7 @@ EXPORTED int mailbox_update_conversations(struct mailbox *mailbox,
 	    delta_size -= old->size;
 	    /* drafts don't update the 'unseen' counter so that
 	     * they never turn a conversation "unread" */
-	    if (!(old->system_flags & (FLAG_SEEN|FLAG_DRAFT)))
+	    if (!is_trash && !(old->system_flags & (FLAG_SEEN|FLAG_DRAFT)))
 		delta_unseen--;
 	    if (cstate->counted_flags) {
 		for (i = 0; i < cstate->counted_flags->count; i++) {
@@ -2854,7 +2866,7 @@ EXPORTED int mailbox_update_conversations(struct mailbox *mailbox,
 	    delta_size += new->size;
 	    /* drafts don't update the 'unseen' counter so that
 	     * they never turn a conversation "unread" */
-	    if (!(new->system_flags & (FLAG_SEEN|FLAG_DRAFT)))
+	    if (!is_trash && !(new->system_flags & (FLAG_SEEN|FLAG_DRAFT)))
 		delta_unseen++;
 	    if (cstate->counted_flags) {
 		for (i = 0; i < cstate->counted_flags->count; i++) {
