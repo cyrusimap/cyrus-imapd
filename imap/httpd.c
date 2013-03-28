@@ -1242,17 +1242,8 @@ static void cmdloop(void)
 	/* Handle errors (success responses handled by method functions) */
 	if (ret) error_response(ret, &txn);
 
-	/* Cleanup */
-	if (txn.req_hdrs) {
-	    /* If we haven't the read body, read and discard it */
-	    if (!txn.flags.havebody &&
-		read_body(httpd_in, txn.req_hdrs, NULL,
-			  txn.flags.cont, &txn.error.desc)) {
-		txn.flags.close = 1;
-	    }
-
-	    spool_free_hdrcache(txn.req_hdrs);
-	}
+	/* Memory cleanup */
+	if (txn.req_hdrs) spool_free_hdrcache(txn.req_hdrs);
 
 	if (txn.flags.close) {
 	    buf_free(&txn.req_body);
@@ -1704,7 +1695,7 @@ static void comma_list_hdr(const char *hdr, const char *vals[], unsigned flags)
 
 void response_header(long code, struct transaction_t *txn)
 {
-    time_t now = time(0);
+    time_t now;
     char datestr[30];
     unsigned keepalive;
     const char **hdr, *conn_token;
@@ -1712,10 +1703,19 @@ void response_header(long code, struct transaction_t *txn)
     struct resp_body_t *resp_body;
     static struct buf log = BUF_INITIALIZER;
 
-    /* Stop method processing alarm */
-    alarm(0);
-
     if (txn && txn->req_hdrs) {
+	/* If we haven't the read body, read and possibly discard it */
+	if (!txn->flags.havebody) {
+	    const char *errstr = NULL;
+
+	    txn->flags.havebody = 1;
+	    if (read_body(httpd_in, txn->req_hdrs,
+			  code == HTTP_UNAUTHORIZED ? &txn->req_body : NULL,
+			  txn->flags.cont | BODY_DECODE, &errstr)) {
+		txn->flags.close = 1;
+	    }
+	}
+
 	/* Log the client request and our response */
 	buf_reset(&log);
 	buf_printf(&log, "%s", httpd_clienthost);
@@ -1733,6 +1733,10 @@ void response_header(long code, struct transaction_t *txn)
 	}
 	syslog(LOG_INFO, "%s", buf_cstring(&log));
     }
+
+
+    /* Stop method processing alarm */
+    alarm(0);
 
 
     /* Status-Line */
@@ -1761,7 +1765,7 @@ void response_header(long code, struct transaction_t *txn)
 	/* Force the response to the client immediately */
 	prot_flush(httpd_out);
 
-	/* Restart method processing alarm */
+	/* Reset method processing alarm */
 	alarm(keepalive);
 
 	return;
@@ -1788,6 +1792,7 @@ void response_header(long code, struct transaction_t *txn)
 
 
     /* Control Data */
+    now = time(0);
     httpdate_gen(datestr, sizeof(datestr), now);
     prot_printf(httpd_out, "Date: %s\r\n", datestr);
 
@@ -2417,11 +2422,14 @@ static int http_auth(const char *creds, struct transaction_t *txn)
     if (scheme->flags & AUTH_NEED_BODY) {
 	sasl_http_request_t sasl_http_req;
 
-	txn->flags.havebody = 1;
-	if (read_body(httpd_in, txn->req_hdrs, &txn->req_body,
-		      txn->flags.cont | BODY_DECODE, &txn->error.desc)) {
-	    txn->flags.close = 1;
-	    return SASL_FAIL;
+	/* Read body */
+	if (!txn->flags.havebody) {
+	    txn->flags.havebody = 1;
+	    if (read_body(httpd_in, txn->req_hdrs, &txn->req_body,
+			  txn->flags.cont | BODY_DECODE, &txn->error.desc)) {
+		txn->flags.close = 1;
+		return SASL_FAIL;
+	    }
 	}
 	sasl_http_req.method = http_methods[txn->meth].name;
 	sasl_http_req.uri = txn->uri;
