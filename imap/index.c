@@ -1098,10 +1098,10 @@ EXPORTED int index_fetch(struct index_state *state,
     seq = _parse_sequence(state, sequence, usinguid);
 
     /* set the \Seen flag if necessary - while we still have the lock */
-    if (fetchargs->fetchitems & FETCH_SETSEEN && !state->examining
-	&& state->firstnotseen) {
+    if (fetchargs->fetchitems & FETCH_SETSEEN && !state->examining) {
 	mboxevent = mboxevent_new(EVENT_MESSAGE_READ);
-	for (msgno = state->firstnotseen; msgno <= state->exists; msgno++) {
+
+	for (msgno = 1; msgno <= state->exists; msgno++) {
 	    im = &state->map[msgno-1];
 	    if (!seqset_ismember(seq, usinguid ? im->uid : msgno))
 		continue;
@@ -3528,10 +3528,6 @@ static int index_storeflag(struct index_state *state,
      * bandwidth */
     if (!state->qresync && storeargs->silent && im->told_modseq == oldmodseq)
 	im->told_modseq = im->modseq;
-
-    /* keep firstnotseen correct for later setseen calls */
-    if (!im->isseen && (!state->firstnotseen || msgno < state->firstnotseen))
-	state->firstnotseen = msgno;
 
     return 0;
 }
