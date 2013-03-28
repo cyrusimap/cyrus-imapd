@@ -924,28 +924,39 @@ static void cmdloop(void)
 	       sizeof(struct resp_body_t) - sizeof(struct buf));
 	buf_reset(&txn.buf);
 
-	/* Flush any buffered output */
-	prot_flush(httpd_out);
-	if (backend_current) prot_flush(backend_current->out);
+	do {
+	    /* Flush any buffered output */
+	    prot_flush(httpd_out);
+	    if (backend_current) prot_flush(backend_current->out);
 
-	/* Check for shutdown file */
-	if (shutdown_file(buf, sizeof(buf)) ||
-	    (httpd_userid &&
-	     userdeny(httpd_userid, config_ident, buf, sizeof(buf)))) {
-	    txn.error.desc = buf;
+	    /* Check for shutdown file */
+	    if (shutdown_file(buf, sizeof(buf)) ||
+		(httpd_userid &&
+		 userdeny(httpd_userid, config_ident, buf, sizeof(buf)))) {
+		txn.error.desc = buf;
+		ret = HTTP_UNAVAILABLE;
+		break;
+	    }
+
+	    signals_poll();
+
+	} while (!proxy_check_input(protin, httpd_in, httpd_out,
+				    backend_current ? backend_current->in : NULL,
+				    NULL, 0));
+
+	/* Create header cache */
+	if (!ret && !(txn.req_hdrs = spool_new_hdrcache())) {
+	    txn.error.desc = "Unable to create header cache";
+	    ret = HTTP_SERVER_ERROR;
+	}
+
+	if (ret) {
 	    txn.flags.close = 1;
-	    error_response(HTTP_UNAVAILABLE, &txn);
+	    error_response(ret, &txn);
+	    protgroup_free(protin);
 	    shut_down(0);
 	}
 
-	signals_poll();
-
-	if (!proxy_check_input(protin, httpd_in, httpd_out,
-			       backend_current ? backend_current->in : NULL,
-			       NULL, 0)) {
-	    /* No input from client */
-	    continue;
-	}
 
 	/* Read request-line */
 	syslog(LOG_DEBUG, "read & parse request-line");
@@ -959,27 +970,21 @@ static void cmdloop(void)
 	    else {
 		/* client closed connection */
 	    }
-	}
-	else if ((p = buf + strlen(buf)) && p[-1] != '\n') {
-	    /* request-line overran the size of our buffer */
-	    ret = HTTP_TOO_LONG;
-	    buf_printf(&txn.buf,
-		       "Length of request-line MUST be less than %u octets",
-		       sizeof(buf)-1);
-	    txn.error.desc = buf_cstring(&txn.buf);
-	}
-	
-	if (r || ret) {
+
 	    txn.flags.close = 1;
 	    goto done;
 	}
 
 	/* Trim CRLF from request-line */
+	p = buf + strlen(buf);
 	if (p[-1] == '\n') *--p = '\0';
 	if (p[-1] == '\r') *--p = '\0';
 
 	/* Ignore empty lines before request-line per HTTPbis Part 1 Sec 3.5 */
 	if (!*buf) continue;
+
+	/* Add request-line to our header cache */
+	spool_cache_header(xstrdup(":reqline"), xstrdup(buf), txn.req_hdrs);
 
 	/* Parse request-line = method SP request-target SP HTTP-version CRLF */
 	tok_initm(&tok, buf, " ", 0);
@@ -990,6 +995,14 @@ static void cmdloop(void)
 	else if (!(txn.uri = tok_next(&tok))) {
 	    ret = HTTP_BAD_REQUEST;
 	    txn.error.desc = "Missing request-target in request-line";
+	}
+	else if ((size_t) (p - buf) > sizeof(buf) - 3) {
+	    /* request-line overran the size of our buffer */
+	    ret = HTTP_TOO_LONG;
+	    buf_printf(&txn.buf,
+		       "Length of request-line MUST be less than %u octets",
+		       sizeof(buf)-1);
+	    txn.error.desc = buf_cstring(&txn.buf);
 	}
 	else if (!(ver = tok_next(&tok))) {
 	    ret = HTTP_BAD_REQUEST;
@@ -1023,12 +1036,7 @@ static void cmdloop(void)
 
 	/* Read and parse headers */
 	syslog(LOG_DEBUG, "read & parse headers");
-	if (!(txn.req_hdrs = spool_new_hdrcache())) {
-	    ret = HTTP_SERVER_ERROR;
-	    txn.error.desc = "Unable to create header cache";
-	}
-	else if ((r = spool_fill_hdrcache(httpd_in, NULL,
-					  txn.req_hdrs, NULL))) {
+	if ((r = spool_fill_hdrcache(httpd_in, NULL, txn.req_hdrs, NULL))) {
 	    ret = HTTP_BAD_REQUEST;
 	    txn.error.desc = error_message(r);
 	}
@@ -1723,13 +1731,25 @@ void response_header(long code, struct transaction_t *txn)
 	if ((hdr = spool_getheader(txn->req_hdrs, "User-Agent"))) {
 	    buf_printf(&log, " with \"%s\"", hdr[0]);
 	}
-	buf_printf(&log, "; \"%s %s\"", http_methods[txn->meth].name, txn->uri);
+	if ((hdr = spool_getheader(txn->req_hdrs, ":reqline"))) {
+	    buf_printf(&log, "; \"%s\"", hdr[0]);
+	}
 	if ((hdr = spool_getheader(txn->req_hdrs, "Destination"))) {
-	    buf_printf(&log, " (%s)", hdr[0]);
+	    buf_printf(&log, " (destination=%s)", hdr[0]);
+	}
+	else if ((hdr = spool_getheader(txn->req_hdrs, ":type"))) {
+	    buf_printf(&log, " (type=%s", hdr[0]);
+	    if ((hdr = spool_getheader(txn->req_hdrs, "Depth"))) {
+		buf_printf(&log, "; depth=%s", hdr[0]);
+	    }
+	    buf_appendcstr(&log, ")");
 	}
 	buf_printf(&log, " => \"%s\"", error_message(code));
 	if (txn->location) {
-	    buf_printf(&log, " (%s)", txn->location);
+	    buf_printf(&log, " (location=%s)", txn->location);
+	}
+	else if (txn->error.desc) {
+	    buf_printf(&log, " (error=%s)", txn->error.desc);
 	}
 	syslog(LOG_INFO, "%s", buf_cstring(&log));
     }
@@ -2327,6 +2347,9 @@ void error_response(long code, struct transaction_t *txn)
 static void log_cachehdr(const char *name, const char *contents, void *rock)
 {
     struct buf *buf = (struct buf *) rock;
+
+    /* Ignore private headers in our cache */
+    if (name[0] == ':') return;
 
     buf_printf(buf, "%c%s: ", toupper(name[0]), name+1);
     if (!strcmp(name, "authorization")) {
@@ -3123,6 +3146,9 @@ static void trace_cachehdr(const char *name, const char *contents, void *rock)
     struct buf *buf = (struct buf *) rock;
     const char **hdr, *sensitive[] =
 	{ "authorization", "cookie", "proxy-authorization", NULL };
+
+    /* Ignore private headers in our cache */
+    if (name[0] == ':') return;
 
     for (hdr = sensitive; *hdr && strcmp(name, *hdr); hdr++);
 

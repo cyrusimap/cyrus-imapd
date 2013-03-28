@@ -693,6 +693,9 @@ static void dkim_cachehdr(const char *name, const char *contents, void *rock)
     static const char *lastname = NULL;
     int dup_hdr = name && lastname && !strcmp(name, lastname);
 
+    /* Ignore private headers in our cache */
+    if (name && name[0] == ':') return;
+
     /* Combine header fields of the same name.
      * Our hash table will always feed us duplicate headers consecutively.
      */

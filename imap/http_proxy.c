@@ -534,6 +534,9 @@ static void write_cachehdr(const char *name, const char *contents, void *rock)
 	  "host", "keep-alive", "strict-transport-security", "te",
 	  "transfer-encoding", "upgrade", "via", NULL };
 
+    /* Ignore private headers in our cache */
+    if (name[0] == ':') return;
+
     for (hdr = hop_by_hop; *hdr && strcmp(name, *hdr); hdr++);
 
     if (!*hdr) {

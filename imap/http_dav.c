@@ -4064,6 +4064,10 @@ int meth_propfind(struct transaction_t *txn, void *params)
 	for (cur = root->children;
 	     cur && cur->type != XML_ELEMENT_NODE; cur = cur->next);
 
+	/* Add propfind type to our header cache */
+	spool_cache_header(xstrdup(":type"), xstrdup((const char *) cur->name),
+			   txn->req_hdrs);
+
 	/* Make sure its a prop element */
 	/* XXX  TODO: Check for allprop and propname too */
 	if (!cur || xmlStrcmp(cur->name, BAD_CAST "prop")) {
@@ -4786,6 +4790,10 @@ int meth_report(struct transaction_t *txn, void *params)
 	return HTTP_BAD_REQUEST;
     }
     if (ret) goto done;
+
+    /* Add report type to our header cache */
+    spool_cache_header(xstrdup(":type"), xstrdup((const char *) inroot->name),
+		       txn->req_hdrs);
 
     /* Check the report type against our supported list */
     for (report = rparams->reports; report && report->name; report++) {
