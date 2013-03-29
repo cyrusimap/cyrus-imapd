@@ -4322,11 +4322,13 @@ static int skip_nil_or_nstring_list(struct protstream *prot,
     c = prot_getc(prot);
     if (c == EOF)
 	goto out;   /* ran out of data */
-    if (c == '(' && !word.len) {
+    if (c == '(') {
 	/* possibly-nested list of atoms */
 	int treedepth = 1;
 	do {
 	    c = prot_getc(prot);
+	    if (c == ' ')
+		c = prot_getc(prot);
 	    if (c != ')' && c != '(') {
 		prot_ungetc(c, prot);
 		c = getnstring(prot, NULL, &word);
@@ -4340,7 +4342,9 @@ static int skip_nil_or_nstring_list(struct protstream *prot,
 		treedepth++;
 	    else if (c == ')')
 		treedepth--;
-	    else if (c != ' ')
+	    else if (c == ' ')
+		prot_ungetc(c, prot);
+	    else
 		goto out;
 	} while (treedepth);
 	c = prot_getc(prot);
