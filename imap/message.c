@@ -4517,7 +4517,7 @@ badformat:
 					 prot, depth+1);
 	    if (r) goto out;
 
-	    /* skip trailing space (part_bs_part doesn't eat it) */
+	    /* skip trailing space (parse_bs_part doesn't eat it) */
 	    c = prot_getc(prot);
 	    if (c != ' ') goto badformat;
 
