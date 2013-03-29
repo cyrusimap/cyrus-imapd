@@ -426,6 +426,7 @@ EXPORTED char *seqset_cstring(const struct seqset *seq)
     unsigned i;
 
     if (!seq) return NULL;
+    if (!seq->len) return NULL;
 
     for (i = 0; i < seq->len; i++) {
 	/* join with comma if not the first item */
