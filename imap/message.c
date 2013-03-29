@@ -4512,10 +4512,14 @@ badformat:
 	    r = skip_nil_or_nstring_list(prot, depth);
 	    if (r) goto out;
 
-	    /* skip body */
+	    /* process body */
 	    r = parse_bodystructure_part(get_part(body->children),
 					 prot, depth+1);
 	    if (r) goto out;
+
+	    /* skip trailing space (part_bs_part doesn't eat it) */
+	    c = prot_getc(prot);
+	    if (c != ' ') goto badformat;
 
 	    /* parse content-lines */
 	    c = getword(prot, &buf1);
