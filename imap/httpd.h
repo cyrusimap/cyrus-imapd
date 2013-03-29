@@ -170,6 +170,15 @@ extern struct auth_scheme_t auth_schemes[];
 extern const char *digest_recv_success(hdrcache_t hdrs);
 
 
+/* Request-line context */
+struct request_line_t {
+    char buf[MAX_REQ_LINE+1];	/* working copy of request-line */
+    char *meth;			/* method */
+    char *uri;			/* request-target */
+    char *ver;			/* HTTP-version */
+};
+
+
 /* Request target context */
 struct request_target_t {
     char path[MAX_MAILBOX_PATH+1]; /* working copy of URL path */
@@ -249,8 +258,8 @@ struct txn_flags_t {
 /* Transaction context */
 struct transaction_t {
     unsigned meth;			/* Index of Method to be performed */
-    const char *uri;			/* Original URI in request */
     struct txn_flags_t flags;		/* Flags for this txn */
+    struct request_line_t req_line;	/* Parsed request-line */
     struct request_target_t req_tgt;	/* Parsed target URL */
     hdrcache_t req_hdrs;    		/* Cached HTTP headers */
     struct buf req_body;		/* Buffered request body */

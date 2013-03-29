@@ -893,6 +893,9 @@ static void cmdloop(void)
     /* Start with an empty (clean) transaction */
     memset(&txn, 0, sizeof(struct transaction_t));
 
+    /* Pre-allocate our working buffer */
+    buf_ensure(&txn.buf, 1024);
+
 #ifdef HAVE_ZLIB
     /* Always use gzip format because IE incorrectly uses raw deflate */
     if (config_getswitch(IMAPOPT_HTTPALLOWCOMPRESS) &&
@@ -904,18 +907,19 @@ static void cmdloop(void)
 
     for (;;) {
 	int ret = 0, tls_upgrade = 0, r, i, c;
-	char buf[MAX_REQ_LINE+1], *p, *meth = NULL, *ver = NULL;
+	char *p;
 	tok_t tok;
 	const char **hdr;
 	const struct namespace_t *namespace;
 	const struct method_t *meth_t;
+	struct request_line_t *req_line = &txn.req_line;
 
 	/* Reset txn state */
 	txn.meth = METH_UNKNOWN;
-	txn.uri = NULL;
 	memset(&txn.flags, 0, sizeof(struct txn_flags_t));
 	txn.flags.close = !httpd_timeout;
 	txn.flags.vary = gzip_enabled ? VARY_AE : 0;
+	memset(req_line, 0, sizeof(struct request_line_t));
 	txn.auth_chal.param = NULL;
 	txn.req_hdrs = NULL;
 	txn.location = NULL;
@@ -930,10 +934,10 @@ static void cmdloop(void)
 	    if (backend_current) prot_flush(backend_current->out);
 
 	    /* Check for shutdown file */
-	    if (shutdown_file(buf, sizeof(buf)) ||
+	    if (shutdown_file(txn.buf.s, txn.buf.alloc) ||
 		(httpd_userid &&
-		 userdeny(httpd_userid, config_ident, buf, sizeof(buf)))) {
-		txn.error.desc = buf;
+		 userdeny(httpd_userid, config_ident, txn.buf.s, txn.buf.alloc))) {
+		txn.error.desc = txn.buf.s;
 		ret = HTTP_UNAVAILABLE;
 		break;
 	    }
@@ -960,7 +964,7 @@ static void cmdloop(void)
 
 	/* Read request-line */
 	syslog(LOG_DEBUG, "read & parse request-line");
-	if ((r = !prot_fgets(buf, sizeof(buf), httpd_in))) {
+	if ((r = !prot_fgets(req_line->buf, MAX_REQ_LINE+1, httpd_in))) {
 	    txn.error.desc = prot_error(httpd_in);
 	    if (txn.error.desc && strcmp(txn.error.desc, PROT_EOF_STRING)) {
 		/* client timed out */
@@ -976,54 +980,51 @@ static void cmdloop(void)
 	}
 
 	/* Trim CRLF from request-line */
-	p = buf + strlen(buf);
+	p = req_line->buf + strlen(req_line->buf);
 	if (p[-1] == '\n') *--p = '\0';
 	if (p[-1] == '\r') *--p = '\0';
 
 	/* Ignore empty lines before request-line per HTTPbis Part 1 Sec 3.5 */
-	if (!*buf) continue;
-
-	/* Add request-line to our header cache */
-	spool_cache_header(xstrdup(":reqline"), xstrdup(buf), txn.req_hdrs);
+	if (!*req_line->buf) continue;
 
 	/* Parse request-line = method SP request-target SP HTTP-version CRLF */
-	tok_initm(&tok, buf, " ", 0);
-	if (!(meth = tok_next(&tok))) {
+	tok_initm(&tok, req_line->buf, " ", 0);
+	if (!(req_line->meth = tok_next(&tok))) {
 	    ret = HTTP_BAD_REQUEST;
 	    txn.error.desc = "Missing method in request-line";
 	}
-	else if (!(txn.uri = tok_next(&tok))) {
+	else if (!(req_line->uri = tok_next(&tok))) {
 	    ret = HTTP_BAD_REQUEST;
 	    txn.error.desc = "Missing request-target in request-line";
 	}
-	else if ((size_t) (p - buf) > sizeof(buf) - 3) {
+	else if ((size_t) (p - req_line->buf) > MAX_REQ_LINE - 2) {
 	    /* request-line overran the size of our buffer */
 	    ret = HTTP_TOO_LONG;
 	    buf_printf(&txn.buf,
 		       "Length of request-line MUST be less than %u octets",
-		       sizeof(buf)-1);
+		       MAX_REQ_LINE);
 	    txn.error.desc = buf_cstring(&txn.buf);
 	}
-	else if (!(ver = tok_next(&tok))) {
+	else if (!(req_line->ver = tok_next(&tok))) {
 	    ret = HTTP_BAD_REQUEST;
 	    txn.error.desc = "Missing HTTP-version in request-line";
 	}
-	else if (p != buf + tok_offset(&tok) + strlen(ver)) {
+	else if (tok_next(&tok)) {
 	    ret = HTTP_BAD_REQUEST;
 	    txn.error.desc = "Unexpected extra argument(s) in request-line";
 	}
 
 	/* Check HTTP-Version - MUST be HTTP/1.x */
-	else if (strlen(ver) != HTTP_VERSION_LEN
-		 || strncmp(ver, HTTP_VERSION, HTTP_VERSION_LEN-1)
-		 || !isdigit(ver[HTTP_VERSION_LEN-1])) {
+	else if (strlen(req_line->ver) != HTTP_VERSION_LEN
+		 || strncmp(req_line->ver, HTTP_VERSION, HTTP_VERSION_LEN-1)
+		 || !isdigit(req_line->ver[HTTP_VERSION_LEN-1])) {
 	    ret = HTTP_BAD_VERSION;
 	    buf_printf(&txn.buf,
 		     "This server only speaks %.*sx",
 		       HTTP_VERSION_LEN-1, HTTP_VERSION);
 	    txn.error.desc = buf_cstring(&txn.buf);
 	}
-	else if (ver[HTTP_VERSION_LEN-1] == '0') {
+	else if (req_line->ver[HTTP_VERSION_LEN-1] == '0') {
 	    /* HTTP/1.0 - non-persistent connection by default */
 	    txn.flags.ver1_0 = txn.flags.close = 1;
 	}
@@ -1065,7 +1066,7 @@ static void cmdloop(void)
 
 	/* Check Method against our list of known methods */
 	for (txn.meth = 0; (txn.meth < METH_UNKNOWN) &&
-		 strcmp(http_methods[txn.meth].name, meth);
+		 strcmp(http_methods[txn.meth].name, req_line->meth);
 	     txn.meth++);
 
 	if (txn.meth == METH_UNKNOWN) ret = HTTP_NOT_IMPLEMENTED;
@@ -1085,7 +1086,7 @@ static void cmdloop(void)
 	/* XXX  Should we check Host against servername? */
 
 	/* Parse request-target URI */
-	else if ((r = parse_uri(txn.meth, txn.uri,
+	else if ((r = parse_uri(txn.meth, req_line->uri,
 				&txn.req_tgt, &txn.error.desc))) {
 	    ret = r;
 	}
@@ -1728,9 +1729,17 @@ void response_header(long code, struct transaction_t *txn)
 	if ((hdr = spool_getheader(txn->req_hdrs, "User-Agent"))) {
 	    buf_printf(&log, " with \"%s\"", hdr[0]);
 	}
-	if ((hdr = spool_getheader(txn->req_hdrs, ":reqline"))) {
-	    buf_printf(&log, "; \"%s\"", hdr[0]);
+	buf_printf(&log, "; \"%s",
+		   txn->req_line.meth ? txn->req_line.meth : "");
+	if (txn->req_line.uri) buf_printf(&log, " %s", txn->req_line.uri);
+	if (txn->req_line.ver) {
+	    buf_printf(&log, " %s", txn->req_line.ver);
+	    if (code != HTTP_TOO_LONG) {
+		char *p = txn->req_line.ver + strlen(txn->req_line.ver) + 1;
+		if (*p) buf_printf(&log, " %s", p);
+	    }
 	}
+	buf_appendcstr(&log, "\"");
 	if ((hdr = spool_getheader(txn->req_hdrs, "Destination"))) {
 	    buf_printf(&log, " (destination=%s)", hdr[0]);
 	}
@@ -2451,8 +2460,8 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 		return SASL_FAIL;
 	    }
 	}
-	sasl_http_req.method = http_methods[txn->meth].name;
-	sasl_http_req.uri = txn->uri;
+	sasl_http_req.method = txn->req_line.meth;
+	sasl_http_req.uri = txn->req_line.uri;
 	sasl_http_req.entity = (u_char *) buf_cstring(&txn->req_body);
 	sasl_http_req.elen = buf_len(&txn->req_body);
 	sasl_http_req.non_persist = txn->flags.close;
@@ -2604,7 +2613,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
     assert(!buf_len(&txn->buf));
     buf_printf(&txn->buf, "<%ld<", time(NULL));		/* timestamp */
     buf_printf(&txn->buf, "%s %s %s\r\n",		/* request-line*/
-	       http_methods[txn->meth].name, txn->uri, HTTP_VERSION);
+	       txn->req_line.meth, txn->req_line.uri, txn->req_line.ver);
     spool_enum_hdrcache(txn->req_hdrs,			/* header fields */
 			&log_cachehdr, &txn->buf);
     buf_appendcstr(&txn->buf, "\r\n");			/* CRLF */
