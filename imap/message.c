@@ -4502,7 +4502,7 @@ badformat:
 
 	}
 	else if (!strcmpsafe(part->type, "MESSAGE") &&
-		 !strcmpsafe(part->type, "RFC822")) {
+		 !strcmpsafe(part->subtype, "RFC822")) {
 
 	    /* skip envelope */
 	    r = skip_nil_or_nstring_list(prot, depth);
