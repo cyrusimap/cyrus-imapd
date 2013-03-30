@@ -677,11 +677,11 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
      * - Use all cached end-to-end headers from client
      * - Body will be sent using "chunked" TE, since we might not have it yet
      */
-    uri = xmlURIEscapeStr(BAD_CAST txn->req_tgt.path, BAD_CAST "/");
-    prot_printf(be->out, "%s %s", http_methods[txn->meth].name, uri);
+    uri = xmlURIEscapeStr(BAD_CAST txn->req_uri->path, BAD_CAST "/");
+    prot_printf(be->out, "%s %s", txn->req_line.meth, uri);
     free(uri);
-    if (*txn->req_tgt.query) {
-	prot_printf(be->out, "?%s", txn->req_tgt.query);
+    if (txn->req_uri->query_raw) {
+	prot_printf(be->out, "?%s", txn->req_uri->query_raw);
     }
     prot_printf(be->out, " %s\r\n", HTTP_VERSION);
     prot_printf(be->out, "Host: %s\r\n", be->hostname);

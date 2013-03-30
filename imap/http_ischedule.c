@@ -173,8 +173,10 @@ static int meth_get_isched(struct transaction_t *txn,
     xmlNsPtr ns[NUM_NAMESPACE];
 
     /* We don't handle GET on a anything other than ?action=capabilities */
-    if (strcmp(txn->req_tgt.query, "action=capabilities"))
+    if (!txn->req_uri->query_raw ||
+	strcmp(txn->req_uri->query_raw, "action=capabilities")) {
 	return HTTP_NOT_FOUND;
+    }
 
     /* Generate ETag based on compile date/time of this source file.
      * Extend this to include config file size/mtime if we add run-time options.

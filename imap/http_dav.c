@@ -85,7 +85,8 @@
 
 static void my_dav_init(struct buf *serverinfo);
 
-static int prin_parse_path(struct request_target_t *tgt, const char **errstr);
+static int prin_parse_path(const char *path,
+			   struct request_target_t *tgt, const char **errstr);
 
 static struct meth_params princ_params = {
     .parse_path = &prin_parse_path
@@ -282,11 +283,17 @@ static const struct precond_t {
 
 
 /* Parse request-target path in /principals namespace */
-static int prin_parse_path(struct request_target_t *tgt, const char **errstr)
+static int prin_parse_path(const char *path,
+			   struct request_target_t *tgt, const char **errstr)
 {
-    char *p = tgt->path;
+    char *p;
     size_t len;
 
+    /* Make a working copy of target path */
+    strlcpy(tgt->path, path, sizeof(tgt->path));
+    tgt->tail = tgt->path + strlen(tgt->path);
+
+    p = tgt->path;
     if (!*p || !*++p) return 0;
 
     /* Skip namespace */
@@ -2515,7 +2522,8 @@ int meth_acl(struct transaction_t *txn, void *params)
     txn->flags.cc |= CC_NOCACHE;
 
     /* Parse the path */
-    if ((r = aparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+    if ((r = aparams->parse_path(txn->req_uri->path,
+				 &txn->req_tgt, &txn->error.desc))) return r;
 
     /* Make sure method is allowed (only allowed on collections) */
     if (!(txn->req_tgt.allow & ALLOW_WRITECOL)) {
@@ -2593,6 +2601,7 @@ int meth_acl(struct transaction_t *txn, void *params)
 	    const char *userid = NULL;
 	    int deny = 0, rights = 0;
 	    char rightstr[100];
+	    struct request_target_t tgt;
 
 	    for (child = ace->children; child; child = child->next) {
 		if (child->type == XML_ELEMENT_NODE) {
@@ -2654,16 +2663,18 @@ int meth_acl(struct transaction_t *txn, void *params)
 	    }
 	    else if (!xmlStrcmp(prin->name, BAD_CAST "href")) {
 		xmlChar *href = xmlNodeGetContent(prin);
-		struct request_target_t uri;
+		xmlURIPtr uri;
 		const char *errstr = NULL;
 
-		r = parse_uri(METH_UNKNOWN, (const char *) href, &uri, &errstr);
-		if (!r &&
-		    !strncmp("/principals/", uri.path, strlen("/principals/"))) {
-		    uri.namespace = URL_NS_PRINCIPAL;
-		    r = aparams->parse_path(&uri, &errstr);
-		    if (!r && uri.user) userid = uri.user;
+		uri = parse_uri(METH_UNKNOWN, (const char *) href, &errstr);
+		if (uri &&
+		    !strncmp("/principals/", uri->path, strlen("/principals/"))) {
+		    memset(&tgt, 0, sizeof(struct request_target_t));
+		    tgt.namespace = URL_NS_PRINCIPAL;
+		    r = aparams->parse_path(uri->path, &tgt, &errstr);
+		    if (!r && tgt.user) userid = tgt.user;
 		}
+		if (uri) xmlFreeURI(uri);
 		xmlFree(href);
 	    }
 
@@ -2801,7 +2812,8 @@ int meth_copy(struct transaction_t *txn, void *params)
     struct meth_params *cparams = (struct meth_params *) params;
     int ret = HTTP_CREATED, r, precond, rights, overwrite = OVERWRITE_YES;
     const char **hdr;
-    struct request_target_t dest;  /* Parsed destination URL */
+    xmlURIPtr dest_uri;
+    struct request_target_t dest_tgt;  /* Parsed destination URL */
     char *server, *acl;
     struct backend *src_be = NULL, *dest_be = NULL;
     struct mailbox *src_mbox = NULL, *dest_mbox = NULL;
@@ -2815,7 +2827,8 @@ int meth_copy(struct transaction_t *txn, void *params)
     txn->flags.cc |= CC_NOCACHE;
 
     /* Parse the source path */
-    if ((r = cparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+    if ((r = cparams->parse_path(txn->req_uri->path,
+				 &txn->req_tgt, &txn->error.desc))) return r;
 
     /* Make sure method is allowed (not allowed on collections yet) */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
@@ -2827,20 +2840,27 @@ int meth_copy(struct transaction_t *txn, void *params)
     }
 
     /* Parse destination URI */
-    if ((r = parse_uri(METH_UNKNOWN, hdr[0], &dest, &txn->error.desc))) return r;
+    if (!(dest_uri = parse_uri(METH_UNKNOWN, hdr[0], &txn->error.desc))) {
+	txn->error.desc = "Illegal Destination target URI";
+	return HTTP_BAD_REQUEST;
+    }
 
     /* Make sure source and dest resources are NOT the same */
-    if (!strcmp(txn->req_tgt.path, dest.path)) {
+    if (!strcmp(txn->req_uri->path, dest_uri->path)) {
 	txn->error.desc = "Source and destination resources are the same\r\n";
-	return HTTP_FORBIDDEN;
+	r = HTTP_FORBIDDEN;
     }
 
     /* Parse the destination path */
-    if ((r = cparams->parse_path(&dest, &txn->error.desc))) return r;
-    dest.namespace = txn->req_tgt.namespace;
+    if (!r) {
+	r = cparams->parse_path(dest_uri->path, &dest_tgt, &txn->error.desc);
+    }
+    xmlFreeURI(dest_uri);
+
+    if (r) return r;
 
     /* We don't yet handle COPY/MOVE on collections */
-    if (!dest.resource) return HTTP_NOT_ALLOWED;
+    if (!dest_tgt.resource) return HTTP_NOT_ALLOWED;
 
     /* Locate the source mailbox */
     if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
@@ -2875,9 +2895,9 @@ int meth_copy(struct transaction_t *txn, void *params)
     }
 
     /* Locate the destination mailbox */
-    if ((r = http_mlookup(dest.mboxname, &server, &acl, NULL))) {
+    if ((r = http_mlookup(dest_tgt.mboxname, &server, &acl, NULL))) {
 	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       dest.mboxname, error_message(r));
+	       dest_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
 
 	switch (r) {
@@ -2892,7 +2912,7 @@ int meth_copy(struct transaction_t *txn, void *params)
     if (!(rights & DACL_ADDRSRC) || !(rights & DACL_WRITECONT)) {
 	/* DAV:need-privileges */
 	txn->error.precond = DAV_NEED_PRIVS;
-	txn->error.resource = dest.path;
+	txn->error.resource = dest_tgt.path;
 	txn->error.rights =
 	    !(rights & DACL_ADDRSRC) ? DACL_ADDRSRC : DACL_WRITECONT;
 	return HTTP_FORBIDDEN;
@@ -2913,7 +2933,7 @@ int meth_copy(struct transaction_t *txn, void *params)
 
 	/* Replace cached Destination header with just the absolute path */
 	hdr = spool_getheader(txn->req_hdrs, "Destination");
-	strcpy((char *) hdr[0], dest.path);
+	strcpy((char *) hdr[0], dest_tgt.path);
 
 	if (src_be == dest_be) {
 	    /* Simply send the COPY to the backend */
@@ -2927,17 +2947,17 @@ int meth_copy(struct transaction_t *txn, void *params)
     /* Local Mailbox */
 
     /* Open dest mailbox for reading */
-    if ((r = mailbox_open_irl(dest.mboxname, &dest_mbox))) {
+    if ((r = mailbox_open_irl(dest_tgt.mboxname, &dest_mbox))) {
 	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
-	       dest.mboxname, error_message(r));
+	       dest_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
 
     /* Find message UID for the dest resource, if exists */
-    cparams->davdb.lookup_resource(*cparams->davdb.db, dest.mboxname,
-				   dest.resource, 0, (void **) &ddata);
+    cparams->davdb.lookup_resource(*cparams->davdb.db, dest_tgt.mboxname,
+				   dest_tgt.resource, 0, (void **) &ddata);
     /* XXX  Check errors */
 
     /* Finished our initial read of dest mailbox */
@@ -3010,7 +3030,7 @@ int meth_copy(struct transaction_t *txn, void *params)
     if (get_preferences(txn) & PREFER_REP) flags |= PREFER_REP;
 
     /* Parse, validate, and store the resource */
-    ret = cparams->copy(txn, src_mbox, &src_rec, dest_mbox, dest.resource,
+    ret = cparams->copy(txn, src_mbox, &src_rec, dest_mbox, dest_tgt.resource,
 			overwrite, flags);
 
     /* For MOVE, we need to delete the source resource */
@@ -3046,7 +3066,7 @@ int meth_copy(struct transaction_t *txn, void *params)
   done:
     if (ret == HTTP_CREATED) {
 	/* Tell client where to find the new resource */
-	txn->location = dest.path;
+	txn->location = dest_tgt.path;
     }
     else {
 	/* Don't confuse client by providing ETag of Destination resource */
@@ -3076,7 +3096,8 @@ int meth_delete(struct transaction_t *txn, void *params)
     txn->flags.cc |= CC_NOCACHE;
 
     /* Parse the path */
-    if ((r = dparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+    if ((r = dparams->parse_path(txn->req_uri->path,
+				 &txn->req_tgt, &txn->error.desc))) return r;
 
     /* Make sure method is allowed */
     if (!(txn->req_tgt.allow & ALLOW_DELETE)) return HTTP_NOT_ALLOWED; 
@@ -3235,7 +3256,8 @@ int meth_get_dav(struct transaction_t *txn, void *params)
     time_t lastmod = 0;
 
     /* Parse the path */
-    if ((r = gparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+    if ((r = gparams->parse_path(txn->req_uri->path,
+				 &txn->req_tgt, &txn->error.desc))) return r;
 
     /* We don't handle GET on a collection (yet) */
     if (!txn->req_tgt.resource) return HTTP_NO_CONTENT;
@@ -3402,7 +3424,8 @@ int meth_lock(struct transaction_t *txn, void *params)
     txn->flags.cc |= CC_NOCACHE;
 
     /* Parse the path */
-    if ((r = lparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+    if ((r = lparams->parse_path(txn->req_uri->path,
+				 &txn->req_tgt, &txn->error.desc))) return r;
 
     /* Make sure method is allowed (only allowed on resources) */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
@@ -3650,7 +3673,8 @@ int meth_mkcol(struct transaction_t *txn, void *params)
     txn->flags.cc |= CC_NOCACHE;
 
     /* Parse the path */
-    if ((r = mparams->parse_path(&txn->req_tgt, &txn->error.desc))) {
+    if ((r = mparams->parse_path(txn->req_uri->path,
+				 &txn->req_tgt, &txn->error.desc))) {
 	txn->error.precond = CALDAV_LOCATION_OK;
 	return HTTP_FORBIDDEN;
     }
@@ -3975,7 +3999,8 @@ int meth_propfind(struct transaction_t *txn, void *params)
 
     /* Parse the path */
     if (fparams &&
-	(r = fparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+	(r = fparams->parse_path(txn->req_uri->path,
+				 &txn->req_tgt, &txn->error.desc))) return r;
 
     /* Make sure method is allowed */
     if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED;
@@ -4200,7 +4225,8 @@ int meth_proppatch(struct transaction_t *txn,  void *params)
     txn->flags.cc |= CC_NOCACHE;
 
     /* Parse the path */
-    if ((r = pparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+    if ((r = pparams->parse_path(txn->req_uri->path,
+				 &txn->req_tgt, &txn->error.desc))) return r;
 
     /* Make sure method is allowed (only allowed on collections) */
     if (!(txn->req_tgt.allow & ALLOW_WRITECOL))  {
@@ -4330,7 +4356,8 @@ int meth_post(struct transaction_t *txn, void *params)
     txn->flags.cc |= CC_NOCACHE;
 
     /* Parse the path */
-    if ((r = pparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+    if ((r = pparams->parse_path(txn->req_uri->path,
+				 &txn->req_tgt, &txn->error.desc))) return r;
 
     /* Make sure method is allowed (only allowed on certain collections) */
     if (!(txn->req_tgt.allow & ALLOW_POST)) return HTTP_NOT_ALLOWED; 
@@ -4383,7 +4410,8 @@ int meth_put(struct transaction_t *txn, void *params)
     txn->flags.cc |= CC_NOCACHE;
 
     /* Parse the path */
-    if ((r = pparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+    if ((r = pparams->parse_path(txn->req_uri->path,
+				 &txn->req_tgt, &txn->error.desc))) return r;
 
     /* Make sure method is allowed (only allowed on resources) */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
@@ -4760,7 +4788,8 @@ int meth_report(struct transaction_t *txn, void *params)
     memset(&fctx, 0, sizeof(struct propfind_ctx));
 
     /* Parse the path */
-    if ((r = rparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+    if ((r = rparams->parse_path(txn->req_uri->path,
+				 &txn->req_tgt, &txn->error.desc))) return r;
 
     /* Make sure method is allowed */
     if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED; 
@@ -4962,7 +4991,8 @@ int meth_unlock(struct transaction_t *txn, void *params)
     txn->flags.cc |= CC_NOCACHE;
 
     /* Parse the path */
-    if ((r = lparams->parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+    if ((r = lparams->parse_path(txn->req_uri->path,
+				 &txn->req_tgt, &txn->error.desc))) return r;
 
     /* Make sure method is allowed (only allowed on resources) */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 

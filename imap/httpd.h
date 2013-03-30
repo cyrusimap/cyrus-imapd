@@ -46,6 +46,7 @@
 
 #include <sasl/sasl.h>
 #include <libxml/tree.h>
+#include <libxml/uri.h>
 
 #ifdef HAVE_ZLIB
 #include <zlib.h>
@@ -135,8 +136,6 @@ enum {
     ALLOW_ISCHEDULE =	(1<<10)	/* iSchedule specific methods/features */
 };
 
-#define MAX_QUERY_LEN	100
-
 struct auth_scheme_t {
     unsigned idx;		/* Index value of the scheme */
     const char *name;		/* HTTP auth scheme name */
@@ -183,7 +182,6 @@ struct request_line_t {
 struct request_target_t {
     char path[MAX_MAILBOX_PATH+1]; /* working copy of URL path */
     char *tail;			/* tail of original request path */
-    char query[MAX_QUERY_LEN+1]; /* working copy of URL query */
     unsigned namespace;		/* namespace of path */
     char *user;			/* ptr to owner of collection (NULL = shared) */
     size_t userlen;
@@ -203,7 +201,8 @@ enum {
 };
 
 /* Function to parse URI path and generate a mailbox name */
-typedef int (*parse_path_t)(struct request_target_t *tgt, const char **errstr);
+typedef int (*parse_path_t)(const char *path,
+			    struct request_target_t *tgt, const char **errstr);
 
 /* Auth challenge context */
 struct auth_challenge_t {
@@ -260,7 +259,8 @@ struct transaction_t {
     unsigned meth;			/* Index of Method to be performed */
     struct txn_flags_t flags;		/* Flags for this txn */
     struct request_line_t req_line;	/* Parsed request-line */
-    struct request_target_t req_tgt;	/* Parsed target URL */
+    xmlURIPtr req_uri;	  		/* Parsed request-target URI */
+    struct request_target_t req_tgt;	/* Parsed request-target path */
     hdrcache_t req_hdrs;    		/* Cached HTTP headers */
     struct buf req_body;		/* Buffered request body */
     struct auth_challenge_t auth_chal;	/* Authentication challenge */
@@ -368,8 +368,7 @@ extern struct auth_state *httpd_authstate;
 extern struct namespace httpd_namespace;
 extern unsigned long config_httpmodules;
 
-extern int parse_uri(unsigned meth, const char *uri,
-		     struct request_target_t *tgt, const char **errstr);
+extern xmlURIPtr parse_uri(unsigned meth, const char *uri, const char **errstr);
 extern int is_mediatype(const char *hdr, const char *type);
 extern int http_mailbox_open(const char *name, struct mailbox **mailbox,
 			     int locktype);

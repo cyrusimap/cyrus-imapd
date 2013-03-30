@@ -87,7 +87,8 @@ static const char def_template[] =
 static time_t compile_time;
 static void rss_init(struct buf *serverinfo);
 static int meth_get(struct transaction_t *txn, void *params);
-static int rss_parse_path(struct request_target_t *tgt, const char **errstr);
+static int rss_parse_path(const char *path,
+			  struct request_target_t *tgt, const char **errstr);
 static int is_feed(const char *mbox);
 static int list_feeds(struct transaction_t *txn);
 static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
@@ -170,7 +171,8 @@ static int meth_get(struct transaction_t *txn,
     struct mailbox *mailbox = NULL;
 
     /* Construct mailbox name corresponding to request target URI */
-    if ((r = rss_parse_path(&txn->req_tgt, &txn->error.desc))) {
+    if ((r = rss_parse_path(txn->req_uri->path,
+			    &txn->req_tgt, &txn->error.desc))) {
 	txn->error.desc = error_message(r);
 	return HTTP_NOT_FOUND;
     }
@@ -221,11 +223,12 @@ static int meth_get(struct transaction_t *txn,
     }
 
     /* Parse query params, if any */
-    if (!strncasecmp(txn->req_tgt.query, "uid=", 4)) {
+    if (txn->req_uri->query_raw &&
+	!strncasecmp(txn->req_uri->query_raw, "uid=", 4)) {
 	/* UID */
 	char *end;
 
-	uid = strtoul(txn->req_tgt.query+4, &end, 10);
+	uid = strtoul(txn->req_uri->query_raw+4, &end, 10);
 	if (!uid) uid = -1;
 
 	if (!strncasecmp(end, ";section=", 9)) {
@@ -323,14 +326,15 @@ static int meth_get(struct transaction_t *txn,
 
 
 /* Create a mailbox name from the request URL */ 
-static int rss_parse_path(struct request_target_t *tgt,
+static int rss_parse_path(const char *path,
+			  struct request_target_t *tgt,
 			  const char **errstr __attribute__((unused)))
 {
-    char *start, *end;
+    const char *start, *end;
     size_t len;
 
     /* Clip off RSS prefix */
-    start = tgt->path + strlen("/rss");
+    start = path + strlen("/rss");
     if (*start == '/') start++;
     end = start + strlen(start);
 
@@ -798,7 +802,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     }
     assert(!buf_len(url));
     buf_printf(url, "%s://%.*s%s",
-	       prot, strcspn(host, " \r\n"), host, txn->req_tgt.path);
+	       prot, strcspn(host, " \r\n"), host, txn->req_uri->path);
     url_len = buf_len(url);
 
     buf_printf(buf, "<link>%s</link>\n", buf_cstring(url));

@@ -89,7 +89,8 @@ static void my_carddav_auth(const char *userid);
 static void my_carddav_reset(void);
 static void my_carddav_shutdown(void);
 
-static int carddav_parse_path(struct request_target_t *tgt, const char **errstr);
+static int carddav_parse_path(const char *path,
+			      struct request_target_t *tgt, const char **errstr);
 
 static int carddav_copy(struct transaction_t *txn,
 			struct mailbox *src_mbox, struct index_record *src_rec,
@@ -221,12 +222,18 @@ static void my_carddav_shutdown(void)
 
 
 /* Parse request-target path in /calendars namespace */
-static int carddav_parse_path(struct request_target_t *tgt, const char **errstr)
+static int carddav_parse_path(const char *path,
+			      struct request_target_t *tgt, const char **errstr)
 {
-    char *p = tgt->path;
+    char *p;
     size_t len, siz;
     static const char *prefix = NULL;
 
+    /* Make a working copy of target path */
+    strlcpy(tgt->path, path, sizeof(tgt->path));
+    tgt->tail = tgt->path + strlen(tgt->path);
+
+    p = tgt->path;
     if (!*p || !*++p) return 0;
 
     /* Sanity check namespace */
@@ -474,8 +481,7 @@ static int report_card_multiget(struct transaction_t *txn,
 	    xmlURIUnescapeString((const char *) href, len, uri.s);
 
 	    /* Parse the path */
-	    strlcpy(tgt.path, uri.s, sizeof(tgt.path));
-	    if ((r = carddav_parse_path(&tgt, fctx->errstr))) {
+	    if ((r = carddav_parse_path(uri.s, &tgt, fctx->errstr))) {
 		ret = r;
 		goto done;
 	    }

@@ -920,6 +920,7 @@ static void cmdloop(void)
 	txn.flags.close = !httpd_timeout;
 	txn.flags.vary = gzip_enabled ? VARY_AE : 0;
 	memset(req_line, 0, sizeof(struct request_line_t));
+	txn.req_uri = NULL;
 	txn.auth_chal.param = NULL;
 	txn.req_hdrs = NULL;
 	txn.location = NULL;
@@ -1086,17 +1087,17 @@ static void cmdloop(void)
 	/* XXX  Should we check Host against servername? */
 
 	/* Parse request-target URI */
-	else if ((r = parse_uri(txn.meth, req_line->uri,
-				&txn.req_tgt, &txn.error.desc))) {
-	    ret = r;
+	else if (!(txn.req_uri = parse_uri(txn.meth, req_line->uri,
+					   &txn.error.desc))) {
+	    ret = HTTP_BAD_REQUEST;
 	}
 
 	if (ret) goto done;
 
 	/* Find the namespace of the requested resource */
 	for (i = 0; namespaces[i]; i++) {
-	    const char *path = txn.req_tgt.path;
-	    const char *query = txn.req_tgt.query;
+	    const char *path = txn.req_uri->path;
+	    const char *query = txn.req_uri->query_raw;
 	    size_t len;
 
 	    /* Skip disabled namespaces */
@@ -1110,7 +1111,7 @@ static void cmdloop(void)
 			
 		    buf_setcstr(&txn.buf, namespaces[i]->prefix);
 		    buf_appendcstr(&txn.buf, path + len);
-		    if (*query) buf_printf(&txn.buf, "?%s", query);
+		    if (query) buf_printf(&txn.buf, "?%s", query);
 		    txn.location = buf_cstring(&txn.buf);
 
 		    ret = HTTP_MOVED;
@@ -1182,8 +1183,8 @@ static void cmdloop(void)
 		}
 		else {
 		    /* All other clients use RFC 2818 (HTTPS) */
-		    const char *path = txn.req_tgt.path;
-		    const char *query = txn.req_tgt.query;
+		    const char *path = txn.req_uri->path;
+		    const char *query = txn.req_uri->query_raw;
 		    struct buf *html = &txn.resp_body.payload;
 
 		    /* Create https URL */
@@ -1191,7 +1192,7 @@ static void cmdloop(void)
 		    buf_printf(&txn.buf, "https://%s", hdr[0]);
 		    if (strcmp(path, "*")) {
 			buf_appendcstr(&txn.buf, path);
-			if (*query) buf_printf(&txn.buf, "?%s", query);
+			if (query) buf_printf(&txn.buf, "?%s", query);
 		    }
 
 		    txn.location = buf_cstring(&txn.buf);
@@ -1249,6 +1250,7 @@ static void cmdloop(void)
 	if (ret) error_response(ret, &txn);
 
 	/* Memory cleanup */
+	if (txn.req_uri) xmlFreeURI(txn.req_uri);
 	if (txn.req_hdrs) spool_free_hdrcache(txn.req_hdrs);
 
 	if (txn.flags.close) {
@@ -1267,17 +1269,14 @@ static void cmdloop(void)
 /****************************  Parsing Routines  ******************************/
 
 /* Parse URI, returning the path */
-int parse_uri(unsigned meth, const char *uri,
-	      struct request_target_t *tgt, const char **errstr)
+xmlURIPtr parse_uri(unsigned meth, const char *uri, const char **errstr)
 {
     xmlURIPtr p_uri;  /* parsed URI */
 
-    memset(tgt, 0, sizeof(struct request_target_t));
-
     /* Parse entire URI */
     if ((p_uri = xmlParseURI(uri)) == NULL) {
-	*errstr = "Illegal request target URI\r\n";
-	return HTTP_BAD_REQUEST;
+	*errstr = "Illegal request target URI";
+	goto bad_request;
     }
 
     if (p_uri->scheme) {
@@ -1285,40 +1284,30 @@ int parse_uri(unsigned meth, const char *uri,
 
 	if (strcasecmp(p_uri->scheme, "http") &&
 	    strcasecmp(p_uri->scheme, "https")) {
-	    xmlFreeURI(p_uri);
-	    *errstr = "Unsupported URI scheme\r\n";
-	    return HTTP_BAD_REQUEST;
+	    *errstr = "Unsupported URI scheme";
+	    goto bad_request;
 	}
     }
 
-    /* XXX  Probably need to grab server part for remote COPY/MOVE */
-
     /* Check sanity of path */
     if (!p_uri->path || !*p_uri->path) {
-	xmlFreeURI(p_uri);
-	*errstr = "Empty path in target URI\r\n";
-	return HTTP_BAD_REQUEST;
+	*errstr = "Empty path in target URI";
+	goto bad_request;
     }
 
-    if ((strlen(p_uri->path) > MAX_MAILBOX_PATH) ||
-	(p_uri->query && (strlen(p_uri->query) > MAX_QUERY_LEN))) {
-	xmlFreeURI(p_uri);
-	return HTTP_TOO_LONG;
-    }
+    if (strlen(p_uri->path) > MAX_MAILBOX_PATH) goto bad_request;
 
     if ((p_uri->path[0] != '/') &&
 	(strcmp(p_uri->path, "*") || (meth != METH_OPTIONS))) {
-	*errstr = "Illegal request target URI\r\n";
-	return HTTP_BAD_REQUEST;
+	*errstr = "Illegal request target URI";
+	goto bad_request;
     }
 
-    /* Make a working copy of the path and query,  and free the parsed struct */
-    strcpy(tgt->path, p_uri->path);
-    tgt->tail = tgt->path + strlen(tgt->path);
-    if (p_uri->query) strcpy(tgt->query, p_uri->query);
-    xmlFreeURI(p_uri);
+    return p_uri;
 
-    return 0;
+  bad_request:
+    if (p_uri) xmlFreeURI(p_uri);
+    return NULL;
 }
 
 
@@ -3117,7 +3106,7 @@ int meth_options(struct transaction_t *txn, void *params)
     }
     else if (parse_path) {
 	/* Parse the path */
-	r = parse_path(&txn->req_tgt, &txn->error.desc);
+	r = parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
 	if (r) return r;
     }
 
@@ -3184,7 +3173,8 @@ int meth_trace(struct transaction_t *txn, void *params)
 	/* Parse the path */
 	int r;
 
-	if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+	if ((r = parse_path(txn->req_uri->path,
+			    &txn->req_tgt, &txn->error.desc))) return r;
 
 	if (*txn->req_tgt.mboxname) {
 	    /* Locate the mailbox */
@@ -3223,13 +3213,7 @@ int meth_trace(struct transaction_t *txn, void *params)
      * - Piece the Request-line back together
      * - Use all non-sensitive cached headers from client
      */
-    buf_setcstr(msg, "TRACE ");
-    buf_appendcstr(msg, txn->req_tgt.path);
-    if (*txn->req_tgt.query) {
-	buf_printf(msg, "?%s", txn->req_tgt.query);
-    }
-    buf_appendcstr(msg, " " HTTP_VERSION "\r\n");
-
+    buf_printf(msg, "TRACE %s %s\r\n", txn->req_line.uri, txn->req_line.ver);
     spool_enum_hdrcache(txn->req_hdrs, &trace_cachehdr, msg);
     buf_appendcstr(msg, "\r\n");
 
