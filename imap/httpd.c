@@ -1916,10 +1916,11 @@ void response_header(long code, struct transaction_t *txn)
 
 	switch (txn->meth) {
 	case METH_GET:
-	case METH_HEAD:
-	    /* Construct Accept-Ranges header for GET and HEAD responses */
-	    prot_printf(httpd_out, "Accept-Ranges: %s\r\n",
-			txn->flags.ranges ? "bytes" : "none");
+	    if (code == HTTP_OK) {
+		/* Construct Accept-Ranges header for GET and HEAD responses */
+		prot_printf(httpd_out, "Accept-Ranges: %s\r\n",
+			    txn->flags.ranges ? "bytes" : "none");
+	    }
 	    break;
 
 	case METH_OPTIONS:
