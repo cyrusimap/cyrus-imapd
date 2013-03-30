@@ -366,6 +366,7 @@ extern int httpd_userisproxyadmin;
 extern char *httpd_userid;
 extern struct auth_state *httpd_authstate;
 extern struct namespace httpd_namespace;
+extern struct sockaddr_storage httpd_localaddr, httpd_remoteaddr;
 extern unsigned long config_httpmodules;
 
 extern xmlURIPtr parse_uri(unsigned meth, const char *uri, const char **errstr);

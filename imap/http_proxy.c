@@ -68,8 +68,6 @@
 
 #include <libxml/uri.h>
 
-#define HTTPS_VERSION	"HTTPS/1.1"
-
 static int login(struct backend *s, const char *server __attribute__((unused)),
 		 struct protocol_t *prot, const char *userid,
 		 sasl_callback_t *cb, const char **status);
@@ -509,19 +507,45 @@ int http_mlookup(const char *name, char **server, char **aclp, void *tid)
 
 
 /* Construct and write Via header to protstream. */
-static void write_via_hdr(struct protstream *pout, hdrcache_t hdrs)
+static void write_forwarding_hdrs(struct protstream *pout, hdrcache_t hdrs,
+				  const char *version, const char *proto)
 {
     const char **via = spool_getheader(hdrs, "Via");
-    const char **host = spool_getheader(hdrs, "Host");
+    const char **fwd = spool_getheader(hdrs, "Forwarded");
 
-    prot_puts(pout, "Via: ");
-    if (via && via[0]) prot_printf(pout, "%s, ", via[0]);
-    prot_printf(pout, "%s %s", https ? HTTPS_VERSION : HTTP_VERSION,
-		host && *host[0] ? host[0] : config_servername);
+    /* Add any existing Via headers */
+    for (; via && *via; via++) prot_printf(pout, "Via: %s\r\n", *via);
+
+    /* Create our own Via header */
+    prot_printf(pout, "Via: %s %s", version+5, config_servername);
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	prot_printf(pout, " (Cyrus/%s)", cyrus_version());
     }
     prot_puts(pout, "\r\n");
+
+    /* Add any existing Forwarded headers */
+    for (; fwd && *fwd; fwd++) prot_printf(pout, "Forwarded: %s\r\n", *fwd);
+
+    /* Create our own Forwarded header */
+    if (proto) {
+	char localip[60], remoteip[60], *p;
+	socklen_t salen = sizeof(httpd_remoteaddr);
+	const char **host = spool_getheader(hdrs, "Host");
+
+	prot_printf(pout, "Forwarded: proto=%s", proto);
+	if (host) prot_printf(pout, ";host=%s", *host);
+	if (!iptostring((struct sockaddr *)&httpd_remoteaddr, salen,
+			remoteip, 60)) {
+	    if ((p = strrchr(remoteip, ';'))) *p = '\0';
+	    prot_printf(pout, ";for=%s", remoteip);
+	}
+	if (!iptostring((struct sockaddr *)&httpd_localaddr, salen,
+			localip, 60)) {
+	    if ((p = strrchr(localip, ';'))) *p = '\0';
+	    prot_printf(pout, ";by=%s", localip);
+	}
+	prot_puts(pout, "\r\n");    
+    }
 }
 
 
@@ -531,8 +555,8 @@ static void write_cachehdr(const char *name, const char *contents, void *rock)
     struct protstream *pout = (struct protstream *) rock;
     const char **hdr, *hop_by_hop[] =
 	{ "authorization", "connection", "content-length", "expect",
-	  "host", "keep-alive", "strict-transport-security", "te",
-	  "transfer-encoding", "upgrade", "via", NULL };
+	  "forwarded", "host", "keep-alive", "strict-transport-security",
+	  "te", "transfer-encoding", "upgrade", "via", NULL };
 
     /* Ignore private headers in our cache */
     if (name[0] == ':') return;
@@ -619,7 +643,7 @@ static void send_response(struct protstream *pout,
      * - Use all cached end-to-end headers
      */
     prot_puts(pout, statline);
-    write_via_hdr(pout, hdrs);
+    write_forwarding_hdrs(pout, hdrs, HTTP_VERSION, NULL);
     if (flags->close)
 	prot_puts(pout, "Connection: close\r\n");
     else {
@@ -685,7 +709,8 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     }
     prot_printf(be->out, " %s\r\n", HTTP_VERSION);
     prot_printf(be->out, "Host: %s\r\n", be->hostname);
-    write_via_hdr(be->out, txn->req_hdrs);
+    write_forwarding_hdrs(be->out, txn->req_hdrs, txn->req_line.ver,
+			  https ? "https" : "http");
     spool_enum_hdrcache(txn->req_hdrs, &write_cachehdr, be->out);
     if (spool_getheader(txn->req_hdrs, "Transfer-Encoding") ||
 	spool_getheader(txn->req_hdrs, "Content-Length")) {

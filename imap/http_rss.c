@@ -65,6 +65,7 @@
 #include "proxy.h"
 #include "rfc822date.h"
 #include "seen.h"
+#include "tok.h"
 #include "util.h"
 #include "version.h"
 #include "wildmat.h"
@@ -692,7 +693,7 @@ static void buf_escapestr(struct buf *buf, const char *str, unsigned max,
 /* List messages as an RSS feed */
 static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 {
-    const char **via, *prot, *host, *webmaster;
+    const char **fwd, *proto, *host, *webmaster;
     uint32_t url_len, recno, recentuid = 0;
     int max_age, max_items, max_len, ttl, nitems;
     time_t age_mark = 0;
@@ -784,25 +785,30 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     buf_printf(buf, "<title>%s</title>\n", mailbox->name);
 
     /* Construct base URL */
-    if ((via = spool_getheader(txn->req_hdrs, "Via"))) {
-	/* Proxied request - parse tail of Via header for protocol and host */
-	const char *p;
+    if ((fwd = spool_getheader(txn->req_hdrs, "Forwarded"))) {
+	/* Proxied request - parse last Forwarded header for proto and host */
+	/* XXX  This is destructive of the header but we don't care
+	 * and more importantly, need the tokens available after tok_fini()
+	 */
+	tok_t tok;
+	char *token;
 
-	if (!(p = strrchr(via[0], ','))) p = via[0];
-	while (*p == ' ') p++;  /* skip leading whitespace */
-	prot = !strncasecmp(p, "https", 5) ? "https" : "http",
+	while (fwd[1]) ++fwd;  /* Skip to last Forwarded header */
 
-	host = strchr(p, ' ');
-	while (*host == ' ') host++;  /* skip leading whitespace */
+	tok_initm(&tok, (char *) fwd[0], ";", 0);
+	while ((token = tok_next(&tok))) {
+	    if (!strncmp(token, "proto=", 6)) proto = token+6;
+	    else if (!strncmp(token, "host=", 5)) host = token+5;
+	}
+	tok_fini(&tok);
     }
     else {
 	/* Use our protocol and host */
-	prot = https ? "https" : "http";
+	proto = https ? "https" : "http";
 	host = *spool_getheader(txn->req_hdrs, "Host");
     }
     assert(!buf_len(url));
-    buf_printf(url, "%s://%.*s%s",
-	       prot, strcspn(host, " \r\n"), host, txn->req_uri->path);
+    buf_printf(url, "%s://%s%s", proto, host, txn->req_uri->path);
     url_len = buf_len(url);
 
     buf_printf(buf, "<link>%s</link>\n", buf_cstring(url));
