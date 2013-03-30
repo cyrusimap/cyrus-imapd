@@ -1075,21 +1075,36 @@ static void cmdloop(void)
 	/* Check for Expectations (HTTP/1.1+ only) */
 	else if (!txn.flags.ver1_0 && (r = parse_expect(&txn))) ret = r;
 
+	/* Parse request-target URI */
+	else if (!(txn.req_uri = parse_uri(txn.meth, req_line->uri,
+					   &txn.error.desc))) {
+	    ret = HTTP_BAD_REQUEST;
+	}
+
 	/* Check for mandatory Host header (HTTP/1.1+ only) */
 	else if ((hdr = spool_getheader(txn.req_hdrs, "Host")) && hdr[1]) {
 	    ret = HTTP_BAD_REQUEST;
 	    txn.error.desc = "Too many Host headers";
 	}
-	else if (!hdr && !txn.flags.ver1_0) {
-	    ret = HTTP_BAD_REQUEST;
-	    txn.error.desc = "Missing Host header";
-	}
-	/* XXX  Should we check Host against servername? */
+	else if (!hdr) {
+	    if (txn.flags.ver1_0) {
+		/* HTTP/1.0 - create a Host header from URI */
+		if (txn.req_uri->server) {
+		    buf_setcstr(&txn.buf, txn.req_uri->server);
+		    if (txn.req_uri->port)
+			buf_printf(&txn.buf, ":%d", txn.req_uri->port);
+		}
+		else buf_setcstr(&txn.buf, config_servername);
 
-	/* Parse request-target URI */
-	else if (!(txn.req_uri = parse_uri(txn.meth, req_line->uri,
-					   &txn.error.desc))) {
-	    ret = HTTP_BAD_REQUEST;
+		spool_cache_header(xstrdup("Host"),
+				   xstrdup(buf_cstring(&txn.buf)),
+				   txn.req_hdrs);
+		buf_reset(&txn.buf);
+	    }
+	    else {
+		ret = HTTP_BAD_REQUEST;
+		txn.error.desc = "Missing Host header";
+	    }
 	}
 
 	if (ret) goto done;
