@@ -1875,6 +1875,7 @@ struct searchmsg_rock
     const char *substr;
     comp_pat *pat;
     int skipheader;
+    int result;
 };
 
 static int searchmsg_cb(int partno, int charset, int encoding,
@@ -1889,17 +1890,19 @@ static int searchmsg_cb(int partno, int charset, int encoding,
 	    sr->skipheader = 0; /* Only skip top-level message header */
 	    return 0;
 	}
-	return charset_search_mimeheader(sr->substr, sr->pat,
-					 buf_cstring(data), charset_flags);
+	sr->result = charset_search_mimeheader(sr->substr, sr->pat,
+					       buf_cstring(data), charset_flags);
     }
     else {
 	/* body-like */
 	if (charset < 0 || charset == 0xffff)
-		return 0;
-	return charset_searchfile(sr->substr, sr->pat,
-				  data->s, data->len,
-				  charset, encoding, charset_flags);
+	     return 0;
+	sr->result = charset_searchfile(sr->substr, sr->pat,
+					data->s, data->len,
+					charset, encoding, charset_flags);
     }
+    if (sr->result) return 1; /* found it, exit early */
+    return 0;
 }
 
 static int search_text_match(message_t *m, const union search_value *v,
@@ -1910,7 +1913,9 @@ static int search_text_match(message_t *m, const union search_value *v,
     sr.substr = v->s;
     sr.pat = (comp_pat *)internalised;
     sr.skipheader = (int)(unsigned long)data1;
-    return message_foreach_text_section(m, searchmsg_cb, &sr);
+    sr.result = 0;
+    message_foreach_text_section(m, searchmsg_cb, &sr);
+    return sr.result;
 }
 
 /* ====================================================================== */
