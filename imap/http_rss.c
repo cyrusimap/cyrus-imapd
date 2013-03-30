@@ -695,15 +695,18 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 {
     const char **fwd, *proto, *host, *webmaster;
     uint32_t url_len, recno, recentuid = 0;
-    int max_age, max_items, max_len, ttl, nitems;
-    time_t age_mark = 0;
+    int max_age, max_items, max_len, ttl, nitems, precond;
+    time_t age_mark = 0, lastmod;
     char datestr[80];
+    static char etag[33];
     struct buf *url = &txn->buf;
     struct buf *buf = &txn->resp_body.payload;
 
     /* Check any preconditions */
-    time_t lastmod = mailbox->i.last_appenddate;
-    int precond = check_precond(txn, NULL, NULL, lastmod);
+    lastmod = mailbox->i.last_appenddate;
+    sprintf(etag, "%u-%u-%u",
+	    mailbox->i.uidvalidity, mailbox->i.last_uid, mailbox->i.exists);
+    precond = check_precond(txn, NULL, etag, lastmod);
 
     switch (precond) {
     case HTTP_OK:
@@ -711,13 +714,15 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
     case HTTP_NOT_MODIFIED:
 	/* Fill in ETag for 304 response */
+	txn->resp_body.etag = etag;
 
     default:
 	/* We failed a precondition - don't perform the request */
 	return precond;
     }
 
-    /* Fill in Last-Modified */
+    /* Fill in ETag and Last-Modified */
+    txn->resp_body.etag = etag;
     txn->resp_body.lastmod = lastmod;
 
     /* Setup for chunked response */
