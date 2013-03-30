@@ -169,8 +169,9 @@ static int meth_get_isched(struct transaction_t *txn,
     int precond;
     struct message_guid guid;
     const char *etag;
-    xmlNodePtr root, capa, node, comp, meth;
-    xmlNsPtr ns[NUM_NAMESPACE];
+    static time_t lastmod = 0;
+    static xmlChar *buf = NULL;
+    static int bufsiz = 0;
 
     /* We don't handle GET on a anything other than ?action=capabilities */
     if (!txn->req_uri->query_raw ||
@@ -207,56 +208,72 @@ static int meth_get_isched(struct transaction_t *txn,
     txn->resp_body.lastmod = compile_time;
     txn->resp_body.iserial = compile_time;
 
-    /* Start construction of our query-result */
-    if (!(root = init_xml_response("query-result", NS_ISCHED, NULL, ns))) {
-	txn->error.desc = "Unable to create XML response\r\n";
-	return HTTP_SERVER_ERROR;
+    if (txn->resp_body.lastmod > lastmod) {
+	xmlNodePtr root, capa, node, comp, meth;
+	xmlNsPtr ns[NUM_NAMESPACE];
+
+	/* Start construction of our query-result */
+	if (!(root = init_xml_response("query-result", NS_ISCHED, NULL, ns))) {
+	    txn->error.desc = "Unable to create XML response";
+	    return HTTP_SERVER_ERROR;
+	}
+
+	capa = xmlNewChild(root, NULL, BAD_CAST "capabilities", NULL);
+
+	node = xmlNewChild(capa, NULL, BAD_CAST "serial-number",
+			   BAD_CAST buf_cstring(&txn->buf));
+
+	node = xmlNewChild(capa, NULL, BAD_CAST "versions", NULL);
+	node = xmlNewChild(node, NULL, BAD_CAST "version", BAD_CAST "1.0");
+
+	node = xmlNewChild(capa, NULL,
+			   BAD_CAST "scheduling-messages", NULL);
+	comp = xmlNewChild(node, NULL, BAD_CAST "component", NULL);
+	xmlNewProp(comp, BAD_CAST "name", BAD_CAST "VEVENT");
+	meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
+	xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REQUEST");
+	meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
+	xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REPLY");
+	meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
+	xmlNewProp(meth, BAD_CAST "name", BAD_CAST "CANCEL");
+	comp = xmlNewChild(node, NULL, BAD_CAST "component", NULL);
+	xmlNewProp(comp, BAD_CAST "name", BAD_CAST "VTODO");
+	meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
+	xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REQUEST");
+	meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
+	xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REPLY");
+	meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
+	xmlNewProp(meth, BAD_CAST "name", BAD_CAST "CANCEL");
+	comp = xmlNewChild(node, NULL, BAD_CAST "component", NULL);
+	xmlNewProp(comp, BAD_CAST "name", BAD_CAST "VFREEBUSY");
+	meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
+	xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REQUEST");
+
+	node = xmlNewChild(capa, NULL,
+			   BAD_CAST "calendar-data-types", NULL);
+	node = xmlNewChild(node, NULL, BAD_CAST "calendar-data-type", NULL);
+	xmlNewProp(node, BAD_CAST "content-type", BAD_CAST "text/calendar");
+	xmlNewProp(node, BAD_CAST "version", BAD_CAST "2.0");
+
+	node = xmlNewChild(capa, NULL, BAD_CAST "attachments", NULL);
+	node = xmlNewChild(node, NULL, BAD_CAST "inline", NULL);
+
+	/* Dump XML response tree into a text buffer */
+	if (buf) xmlFree(buf);
+	xmlDocDumpFormatMemoryEnc(root->doc, &buf, &bufsiz, "utf-8", 1);
+	xmlFree(root->doc);
+
+	if (!buf) {
+	    txn->error.desc = "Error dumping XML tree";
+	    return HTTP_SERVER_ERROR;
+	}
+
+	lastmod = txn->resp_body.lastmod;
     }
 
-    capa = xmlNewChild(root, NULL, BAD_CAST "capabilities", NULL);
-
-    node = xmlNewChild(capa, NULL, BAD_CAST "serial-number",
-		       BAD_CAST buf_cstring(&txn->buf));
-
-    node = xmlNewChild(capa, NULL, BAD_CAST "versions", NULL);
-    node = xmlNewChild(node, NULL, BAD_CAST "version", BAD_CAST "1.0");
-
-    node = xmlNewChild(capa, NULL,
-		       BAD_CAST "scheduling-messages", NULL);
-    comp = xmlNewChild(node, NULL, BAD_CAST "component", NULL);
-    xmlNewProp(comp, BAD_CAST "name", BAD_CAST "VEVENT");
-    meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
-    xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REQUEST");
-    meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
-    xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REPLY");
-    meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
-    xmlNewProp(meth, BAD_CAST "name", BAD_CAST "CANCEL");
-    comp = xmlNewChild(node, NULL, BAD_CAST "component", NULL);
-    xmlNewProp(comp, BAD_CAST "name", BAD_CAST "VTODO");
-    meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
-    xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REQUEST");
-    meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
-    xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REPLY");
-    meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
-    xmlNewProp(meth, BAD_CAST "name", BAD_CAST "CANCEL");
-    comp = xmlNewChild(node, NULL, BAD_CAST "component", NULL);
-    xmlNewProp(comp, BAD_CAST "name", BAD_CAST "VFREEBUSY");
-    meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
-    xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REQUEST");
-
-    node = xmlNewChild(capa, NULL,
-		       BAD_CAST "calendar-data-types", NULL);
-    node = xmlNewChild(node, NULL, BAD_CAST "calendar-data-type", NULL);
-    xmlNewProp(node, BAD_CAST "content-type", BAD_CAST "text/calendar");
-    xmlNewProp(node, BAD_CAST "version", BAD_CAST "2.0");
-
-    node = xmlNewChild(capa, NULL, BAD_CAST "attachments", NULL);
-    node = xmlNewChild(node, NULL, BAD_CAST "inline", NULL);
-
     /* Output the XML response */
-    xml_response(HTTP_OK, txn, root->doc);
-
-    xmlFree(root->doc);
+    txn->resp_body.type = "application/xml; charset=utf-8";
+    write_body(HTTP_OK, txn, (char *) buf, bufsiz);
 
     return 0;
 }
