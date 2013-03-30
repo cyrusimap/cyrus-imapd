@@ -1237,20 +1237,35 @@ static void cmdloop(void)
 	}
 
 	/* Check if we should compress response body */
-	if (gzip_enabled &&
-	    (hdr = spool_getheader(txn.req_hdrs, "Accept-Encoding"))) {
-	    struct accept *e, *enc = parse_accept(hdr);
+	if (gzip_enabled) {
+	    /* XXX  Do we want to support deflate even though M$
+	       doesn't implement it correctly (raw deflate vs. zlib)? */
 
-	    for (e = enc; e && e->token; e++) {
-		if (!strcmp(e->token, "gzip") || !strcmp(e->token, "x-gzip")) {
-		    txn.flags.ce = CE_GZIP;
+	    if (!txn.flags.ver1_0 &&
+		(hdr = spool_getheader(txn.req_hdrs, "TE"))) {
+		struct accept *e, *enc = parse_accept(hdr);
+
+		for (e = enc; e && e->token; e++) {
+		    if (!strcmp(e->token, "gzip") ||
+			!strcmp(e->token, "x-gzip")) {
+			txn.flags.te = TE_GZIP;
+		    }
+		    free(e->token);
 		}
-		/* XXX  Do we want to support deflate even though M$
-		   doesn't implement it correctly (raw deflate vs. zlib)? */
-
-		free(e->token);
+		if (enc) free(enc);
 	    }
-	    if (enc) free(enc);
+	    else if ((hdr = spool_getheader(txn.req_hdrs, "Accept-Encoding"))) {
+		struct accept *e, *enc = parse_accept(hdr);
+
+		for (e = enc; e && e->token; e++) {
+		    if (!strcmp(e->token, "gzip") ||
+			!strcmp(e->token, "x-gzip")) {
+			txn.flags.ce = CE_GZIP;
+		    }
+		    free(e->token);
+		}
+		if (enc) free(enc);
+	    }
 	}
 
 	/* Start method processing alarm (HTTP/1.1+ only) */
@@ -2030,9 +2045,9 @@ void response_header(long code, struct transaction_t *txn)
 	    /* HTTP/1.1+ only - we use close-delimiting for HTTP/1.0 */
 	    if (!txn->flags.ver1_0) {
 		prot_puts(httpd_out, "Transfer-Encoding:");
-		if (txn->flags.te == TE_GZIP)
+		if (txn->flags.te & TE_GZIP)
 		    prot_puts(httpd_out, " gzip,");
-		else if (txn->flags.te == TE_DEFLATE)
+		else if (txn->flags.te & TE_DEFLATE)
 		    prot_puts(httpd_out, " deflate,");
 
 		/* Any TE implies "chunked", which is always last */
@@ -2089,18 +2104,24 @@ void write_body(long code, struct transaction_t *txn,
 {
 #define GZIP_MIN_LEN 300
 
-    unsigned is_chunked = (txn->flags.te == TE_CHUNKED);
+    static unsigned is_dynamic;
 
     if (code) {
 	/* Initial call - prepare response header based on CE, TE and version */
+	is_dynamic = (txn->flags.te & TE_CHUNKED);
 
-	if ((!is_chunked && len < GZIP_MIN_LEN) ||
+	if ((!is_dynamic && len < GZIP_MIN_LEN) ||
 	    is_incompressible(txn->resp_body.type)) {
 	    /* Don't compress small or imcompressible bodies */
 	    txn->flags.ce = CE_IDENTITY;
+	    txn->flags.te &= TE_CHUNKED;
 	}
 
-	if (txn->flags.ce) {
+	if (txn->flags.te & ~TE_CHUNKED) {
+	    /* compressed output will be always chunked (streamed) */
+	    txn->flags.te |= TE_CHUNKED;
+	}
+	else if (txn->flags.ce) {
 	    /* set content-encoding */
 	    if (txn->flags.ce == CE_GZIP)
 		txn->resp_body.enc = "gzip";
@@ -2108,14 +2129,14 @@ void write_body(long code, struct transaction_t *txn,
 		txn->resp_body.enc = "deflate";
 
 	    /* compressed output will be always chunked (streamed) */
-	    txn->flags.te = TE_CHUNKED;
+	    txn->flags.te |= TE_CHUNKED;
 	}
-	else if (!is_chunked) {
+	else if (!is_dynamic) {
 	    /* full body (no encoding) */
 	    txn->resp_body.len = len;
 	}
 
-	if (txn->flags.ver1_0 && (txn->flags.te == TE_CHUNKED)) {
+	if (txn->flags.ver1_0 && (txn->flags.te & TE_CHUNKED)) {
 	    /* HTTP/1.0 close-delimited data */
 	    txn->flags.close = 1;
 	}
@@ -2137,7 +2158,7 @@ void write_body(long code, struct transaction_t *txn,
     }
 
     /* Send [partial] body based on CE and TE */
-    if (txn->flags.ce) {
+    if (txn->flags.ce || txn->flags.te & ~TE_CHUNKED) {
 #ifdef HAVE_ZLIB
 	char zbuf[PROT_BUFSIZE];
 	unsigned flush, out;
@@ -2145,7 +2166,7 @@ void write_body(long code, struct transaction_t *txn,
 	if (code) deflateReset(&txn->zstrm);
 
 	/* don't flush until last (zero-length) or only chunk */
-	flush = (is_chunked && len) ? Z_NO_FLUSH : Z_FINISH;
+	flush = (is_dynamic && len) ? Z_NO_FLUSH : Z_FINISH;
 
 	txn->zstrm.next_in = (Bytef *) buf;
 	txn->zstrm.avail_in = len;
@@ -2181,7 +2202,7 @@ void write_body(long code, struct transaction_t *txn,
 	fatal("Content-Encoding requested, but no zlib", EC_SOFTWARE);
 #endif /* HAVE_ZLIB */
     }
-    else if (is_chunked && !txn->flags.ver1_0) {
+    else if (is_dynamic && !txn->flags.ver1_0) {
 	/* HTTP/1.1 chunk */
 	prot_printf(httpd_out, "%x\r\n", len);
 	if (len) prot_write(httpd_out, buf, len);

@@ -289,9 +289,9 @@ struct transaction_t {
 /* Transfer-Encoding flags (coding of response payload) */
 enum {
     TE_NONE =		0,
-    TE_CHUNKED =	1,
-    TE_GZIP =		2,	/* Implies TE_CHUNKED as final coding */
-    TE_DEFLATE =	3	/* Implies TE_CHUNKED as final coding */
+    TE_CHUNKED =	(1<<0),
+    TE_GZIP =		(1<<1),	/* Implies TE_CHUNKED as final coding */
+    TE_DEFLATE =	(1<<2)	/* Implies TE_CHUNKED as final coding */
 };
 
 /* Content-Encoding flags (coding of representation) */

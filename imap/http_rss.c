@@ -571,7 +571,7 @@ static int list_feeds(struct transaction_t *txn)
     txn->resp_body.type = "text/html; charset=utf-8";
 
     /* Setup for chunked response */
-    txn->flags.te = TE_CHUNKED;
+    txn->flags.te |= TE_CHUNKED;
 
     /* Short-circuit for HEAD request */
     if (txn->meth == METH_HEAD) {
@@ -726,7 +726,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     txn->resp_body.lastmod = lastmod;
 
     /* Setup for chunked response */
-    txn->flags.te = TE_CHUNKED;
+    txn->flags.te |= TE_CHUNKED;
     txn->resp_body.type = "application/xml; charset=utf-8";
 
     /* Short-circuit for HEAD request */
@@ -1146,7 +1146,7 @@ static void display_message(struct transaction_t *txn,
     struct buf *buf = &txn->resp_body.payload;
 
     /* Setup for chunked response */
-    txn->flags.te = TE_CHUNKED;
+    txn->flags.te |= TE_CHUNKED;
     txn->resp_body.type = "text/html; charset=utf-8";
 
     /* Short-circuit for HEAD request */
