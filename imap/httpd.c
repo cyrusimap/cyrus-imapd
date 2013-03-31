@@ -1365,6 +1365,7 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
     unsigned len_delim, max_msgsize, n;
     char buf[PROT_BUFSIZE];
     enum { LEN_DELIM_LENGTH, LEN_DELIM_CHUNKED, LEN_DELIM_CLOSE };
+    unsigned te = TE_NONE, ce = CE_IDENTITY;
 
     syslog(LOG_DEBUG, "read_body(%x: %s)",
 	   flags, body == NULL ? "discard" : "");
@@ -1382,12 +1383,37 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 
     /* Check for Transfer-Encoding */
     if ((hdr = spool_getheader(hdrs, "Transfer-Encoding"))) {
-	if (!strcasecmp(hdr[0], "chunked")) {
-	    /* "chunked" encoding */
-	    len_delim = LEN_DELIM_CHUNKED;
+	for (; *hdr; hdr++) {
+	    tok_t tok = TOK_INITIALIZER(*hdr, ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+	    char *token;
+
+	    while ((token = tok_next(&tok))) {
+		if (te & TE_CHUNKED) {
+		    /* "chunked" MUST be last */
+		    break;
+		}
+		else if (!strcasecmp(token, "chunked")) {
+		    te |= TE_CHUNKED;
+		    len_delim = LEN_DELIM_CHUNKED;
+		}
+		else if (te & ~TE_CHUNKED) {
+		    /* can't combine compression codings */
+		    break;
+		}
+		else if (!strcasecmp(token, "deflate"))
+		    te = TE_DEFLATE;
+		else if (!strcasecmp(token, "gzip") ||
+			 !strcasecmp(token, "x-gzip"))
+		    te = TE_GZIP;
+		else {
+		    /* unknown/unsupported TE */
+		    break;
+		}
+	    }
+	    tok_fini(&tok);
+	    if (token) break;
 	}
-	/* XXX  Should we handle compress/deflate/gzip? */
-	else {
+	if (*hdr) {
 	    *errstr = "Specified Transfer-Encoding not implemented\r\n";
 	    return HTTP_NOT_IMPLEMENTED;
 	}
@@ -1415,6 +1441,24 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 		len_delim = LEN_DELIM_CLOSE;
 	    }
 	    else return HTTP_LENGTH_REQUIRED;
+	}
+    }
+
+    /* Check for Content-Encoding, if necessary */
+    if (body && (flags & BODY_DECODE)) {
+	if (!(hdr = spool_getheader(hdrs, "Content-Encoding"))) {
+	    /* nothing to see here */
+	}
+
+#ifdef HAVE_ZLIB
+	else if (!strcasecmp(hdr[0], "deflate"))
+	    ce = CE_DEFLATE;
+	else if (!strcasecmp(hdr[0], "gzip") || !strcasecmp(hdr[0], "x-gzip"))
+	    ce = CE_GZIP;
+#endif
+	else {
+	    *errstr = "Specified Content-Encoding not accepted";
+	    return HTTP_BAD_MEDIATYPE;
 	}
     }
 
@@ -1494,13 +1538,23 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
     }
 
 
-    /* Decode the representation, if necessary */
-    if (body && (flags & BODY_DECODE) &&
-	(hdr = spool_getheader(hdrs, "Content-Encoding"))) {
-	int r = HTTP_BAD_MEDIATYPE;
-
 #ifdef HAVE_ZLIB
-	if (!strcmp(hdr[0], "deflate")) {
+    if (body && (ce || (te & ~TE_CHUNKED))) {
+	int r = 0;
+
+	/* Decode the payload, if necessary */
+	if (te & TE_DEFLATE)
+	    r = buf_inflate(body, DEFLATE_ZLIB);
+	else if (te & TE_GZIP)
+	    r = buf_inflate(body, DEFLATE_GZIP);
+
+	if (r) {
+	    *errstr = "Error decoding payload";
+	    return HTTP_BAD_REQUEST;
+	}
+
+	/* Decode the representation, if necessary */
+	if (ce == CE_DEFLATE) {
 	    const char **ua = spool_getheader(hdrs, "User-Agent");
 
 	    /* Try to detect Microsoft's broken deflate */
@@ -1509,19 +1563,15 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 	    else
 		r = buf_inflate(body, DEFLATE_ZLIB);
 	}
-	else if (!strcmp(hdr[0], "gzip") || !strcmp(hdr[0], "x-gzip"))
+	else if (ce == CE_GZIP)
 	    r = buf_inflate(body, DEFLATE_GZIP);
-#endif
 
-	if (r == HTTP_BAD_MEDIATYPE) {
-	    *errstr = "Specified Content-Encoding not accepted\r\n";
-	    return HTTP_BAD_MEDIATYPE;
-	}
-	else if (r) {
+	if (r) {
 	    *errstr = "Error decoding content\r\n";
 	    return HTTP_BAD_REQUEST;
 	}
     }
+#endif
 
     return 0;
 
