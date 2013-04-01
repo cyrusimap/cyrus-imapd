@@ -61,6 +61,7 @@
 #include "proxy.h"
 #include "spool.h"
 #include "tls.h"
+#include "tok.h"
 #include "version.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
@@ -602,7 +603,7 @@ int http_read_response(struct backend *be, unsigned meth,
     }
     eatline(be->in, c); /* CRLF separating headers & body */
 
-    /* 1xx (provisional) response - nothing else  to do */
+    /* 1xx (provisional) response - nothing else to do */
     if (*code < 200) return 0;
 
     /* Final response */
@@ -617,8 +618,28 @@ int http_read_response(struct backend *be, unsigned meth,
     default:
 	if (meth == METH_HEAD) break;
 
-	if (read_body(be->in, *resp_hdrs, resp_body, decode, errstr)) {
-	    return HTTP_BAD_GATEWAY;
+	else {
+	    unsigned flags = BODY_RESPONSE | (decode ? BODY_DECODE : 0);
+	    unsigned close = !strncmp(statbuf, "HTTP/1.0 ", 9);
+	    const char **conn = spool_getheader(*resp_hdrs, "Connection");
+
+	    for (; conn && *conn; conn++) {
+		tok_t tok =
+		    TOK_INITIALIZER(*conn, ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+		char *token;
+
+		while ((token = tok_next(&tok))) {
+		    if (!strcasecmp(token, "keep-alive")) close = 0;
+		    else if (!strcasecmp(token, "close")) close = 1;
+		}
+		tok_fini(&tok);
+	    }
+
+	    if (close) flags |= BODY_CLOSE;
+
+	    if (read_body(be->in, *resp_hdrs, resp_body, flags, errstr)) {
+		return HTTP_BAD_GATEWAY;
+	    }
 	}
     }
 

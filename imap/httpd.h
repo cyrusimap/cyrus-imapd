@@ -392,8 +392,10 @@ extern int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 
 /* Read body flags */
 enum {
-    BODY_CONTINUE =	(1<<0),
-    BODY_DECODE =	(1<<1)
+    BODY_CONTINUE =	(1<<0),		/* client Expects 100-continue */
+    BODY_DECODE =	(1<<1),		/* decode any Content-Encoding */
+    BODY_RESPONSE =	(1<<2),		/* response body (mutex w/ continue) */
+    BODY_CLOSE =	(1<<3)		/* cxn will close (mutex w/ continue) */
 };
 
 #endif /* HTTPD_H */

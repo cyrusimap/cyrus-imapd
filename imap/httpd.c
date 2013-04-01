@@ -1353,8 +1353,8 @@ int is_mediatype(const char *hdr, const char *type)
 
 /*
  * Read the body of a request or response.
- * Handles identity and chunked TE only.
- * Handles close-delimited bodies (no Content-Length specified) 
+ * Handles chunked, gzip, deflate TE only.
+ * Handles close-delimited response bodies (no Content-Length specified) 
  * Handles gzip and deflate CE only.
  */
 int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
@@ -1362,13 +1362,11 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 {
     const char **hdr;
     unsigned long len = 0;
-    unsigned len_delim, max_msgsize, n;
-    char buf[PROT_BUFSIZE];
     enum { LEN_DELIM_LENGTH, LEN_DELIM_CHUNKED, LEN_DELIM_CLOSE };
-    unsigned te = TE_NONE, ce = CE_IDENTITY;
+    unsigned len_delim = LEN_DELIM_LENGTH, te = TE_NONE, max_msgsize, n;
+    char buf[PROT_BUFSIZE];
 
-    syslog(LOG_DEBUG, "read_body(%x: %s)",
-	   flags, body == NULL ? "discard" : "");
+    syslog(LOG_DEBUG, "read_body(%x: %s)", flags, !body ? "discard" : "");
 
     if (body) buf_reset(body);
     else if (flags & BODY_CONTINUE) {
@@ -1389,7 +1387,7 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 
 	    while ((token = tok_next(&tok))) {
 		if (te & TE_CHUNKED) {
-		    /* "chunked" MUST be last */
+		    /* "chunked" MUST only appear once and MUST be last */
 		    break;
 		}
 		else if (!strcasecmp(token, "chunked")) {
@@ -1400,67 +1398,58 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 		    /* can't combine compression codings */
 		    break;
 		}
+#ifdef HAVE_ZLIB
 		else if (!strcasecmp(token, "deflate"))
 		    te = TE_DEFLATE;
 		else if (!strcasecmp(token, "gzip") ||
 			 !strcasecmp(token, "x-gzip"))
 		    te = TE_GZIP;
-		else {
+#endif
+		else if (body) {
 		    /* unknown/unsupported TE */
 		    break;
 		}
 	    }
 	    tok_fini(&tok);
-	    if (token) break;
+	    if (token) break;  /* error */
 	}
+
 	if (*hdr) {
-	    *errstr = "Specified Transfer-Encoding not implemented\r\n";
+	    *errstr = "Specified Transfer-Encoding not implemented";
 	    return HTTP_NOT_IMPLEMENTED;
 	}
-    }
-    else {
-	/* "identity" encoding */
-	len_delim = LEN_DELIM_LENGTH;
 
-	/* Check for Content-Length */
-	if ((hdr = spool_getheader(hdrs, "Content-Length"))) {
-	    /* length-delimited body */
-	    if (hdr[1]) {
-		*errstr = "Multiple Content-Length header fields\r\n";
-		return HTTP_BAD_REQUEST;
-	    }
-
-	    len = strtoul(hdr[0], NULL, 10);
-	    if (len > max_msgsize) return HTTP_TOO_LARGE;
-	}
-	else if ((hdr = spool_getheader(hdrs, "Content-Type"))) {
-	    /* Check if this is a non-persistent connection */
-	    if ((hdr = spool_getheader(hdrs, "Connection")) &&
-		!strcmp(hdr[0], "close")) {
-		/* close-delimited body */
+	/* Check if this is a non-chunked response */
+	else if (!(te & TE_CHUNKED)) {
+	    if ((flags & BODY_RESPONSE) && (flags & BODY_CLOSE)) {
 		len_delim = LEN_DELIM_CLOSE;
 	    }
-	    else return HTTP_LENGTH_REQUIRED;
+	    else {
+		*errstr = "Final Transfer-Encoding MUST be \"chunked\"";
+		return HTTP_NOT_IMPLEMENTED;
+	    }
 	}
     }
 
-    /* Check for Content-Encoding, if necessary */
-    if (body && (flags & BODY_DECODE)) {
-	if (!(hdr = spool_getheader(hdrs, "Content-Encoding"))) {
-	    /* nothing to see here */
+    /* Check for Content-Length */
+    else if ((hdr = spool_getheader(hdrs, "Content-Length"))) {
+	if (hdr[1]) {
+	    *errstr = "Multiple Content-Length header fields";
+	    return HTTP_BAD_REQUEST;
 	}
 
-#ifdef HAVE_ZLIB
-	else if (!strcasecmp(hdr[0], "deflate"))
-	    ce = CE_DEFLATE;
-	else if (!strcasecmp(hdr[0], "gzip") || !strcasecmp(hdr[0], "x-gzip"))
-	    ce = CE_GZIP;
-#endif
-	else {
-	    *errstr = "Specified Content-Encoding not accepted";
-	    return HTTP_BAD_MEDIATYPE;
-	}
+	len = strtoul(hdr[0], NULL, 10);
+	if (len > max_msgsize) return HTTP_TOO_LARGE;
+
+	len_delim = LEN_DELIM_LENGTH;
     }
+	
+    /* Check if this is a close-delimited response */
+    else if (flags & BODY_RESPONSE) {
+	if (flags & BODY_CLOSE) len_delim = LEN_DELIM_CLOSE;
+	else return HTTP_LENGTH_REQUIRED;
+    }
+
 
     if (flags & BODY_CONTINUE) {
 	/* Tell client to send the body */
@@ -1478,8 +1467,8 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 	    /* Read chunk-size */
 	    if (!prot_fgets(buf, PROT_BUFSIZE, pin) ||
 		sscanf(buf, "%x", &chunk) != 1) {
-		*errstr = "Unable to read chunk size\r\n";
-		goto bad_request;
+		*errstr = "Unable to read chunk size";
+		goto read_failure;
 	    }
 	    if ((len += chunk) > max_msgsize) return HTTP_TOO_LARGE;
 
@@ -1498,18 +1487,20 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 		
 		if (!n) {
 		    syslog(LOG_ERR, "prot_read() error");
-		    *errstr = "Unable to read chunk data\r\n";
-		    goto bad_request;
+		    *errstr = "Unable to read chunk data";
+		    goto read_failure;
 		}
 	    }
 
 	    /* Read CRLF terminating the chunk/trailer */
 	    if (!prot_fgets(buf, sizeof(buf), pin)) {
-		*errstr = "Missing CRLF following chunk/trailer\r\n";
-		goto bad_request;
+		*errstr = "Missing CRLF following chunk/trailer";
+		goto read_failure;
 	    }
 
 	} while (!last);
+
+	te &= ~TE_CHUNKED;
     }
     else if (len_delim == LEN_DELIM_CLOSE) {
 	/* Read until EOF */
@@ -1521,9 +1512,9 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 
 	} while (n);
 
-	if (!pin->eof) goto bad_request;
+	if (!pin->eof) goto read_failure;
     }
-    else {
+    else if (len) {
 	/* Read 'len' octets */
 	for (; len; len -= n) {
 	    if (body) n = prot_readbuf(pin, body, len);
@@ -1531,51 +1522,64 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 
 	    if (!n) {
 		syslog(LOG_ERR, "prot_read() error");
-		*errstr = "Unable to read body data\r\n";
-		goto bad_request;
+		*errstr = "Unable to read body data";
+		goto read_failure;
 	    }
 	}
     }
 
 
-#ifdef HAVE_ZLIB
-    if (body && (ce || (te & ~TE_CHUNKED))) {
+    if (body && buf_len(body)) {
 	int r = 0;
 
+#ifdef HAVE_ZLIB
 	/* Decode the payload, if necessary */
-	if (te & TE_DEFLATE)
+	if (te == TE_DEFLATE)
 	    r = buf_inflate(body, DEFLATE_ZLIB);
-	else if (te & TE_GZIP)
+	else if (te == TE_GZIP)
 	    r = buf_inflate(body, DEFLATE_GZIP);
 
 	if (r) {
 	    *errstr = "Error decoding payload";
 	    return HTTP_BAD_REQUEST;
 	}
+#endif
 
 	/* Decode the representation, if necessary */
-	if (ce == CE_DEFLATE) {
-	    const char **ua = spool_getheader(hdrs, "User-Agent");
+	if (flags & BODY_DECODE) {
+	    if (!(hdr = spool_getheader(hdrs, "Content-Encoding"))) {
+		/* nothing to see here */
+	    }
 
-	    /* Try to detect Microsoft's broken deflate */
-	    if (ua && strstr(ua[0], "; MSIE "))
-		r = buf_inflate(body, DEFLATE_RAW);
-	    else
-		r = buf_inflate(body, DEFLATE_ZLIB);
-	}
-	else if (ce == CE_GZIP)
-	    r = buf_inflate(body, DEFLATE_GZIP);
+#ifdef HAVE_ZLIB
+	    else if (!strcasecmp(hdr[0], "deflate")) {
+		const char **ua = spool_getheader(hdrs, "User-Agent");
 
-	if (r) {
-	    *errstr = "Error decoding content\r\n";
-	    return HTTP_BAD_REQUEST;
+		/* Try to detect Microsoft's broken deflate */
+		if (ua && strstr(ua[0], "; MSIE "))
+		    r = buf_inflate(body, DEFLATE_RAW);
+		else
+		    r = buf_inflate(body, DEFLATE_ZLIB);
+	    }
+	    else if (!strcasecmp(hdr[0], "gzip") ||
+		     !strcasecmp(hdr[0], "x-gzip"))
+		r = buf_inflate(body, DEFLATE_GZIP);
+#endif
+	    else {
+		*errstr = "Specified Content-Encoding not accepted";
+		return HTTP_BAD_MEDIATYPE;
+	    }
+
+	    if (r) {
+		*errstr = "Error decoding content";
+		return HTTP_BAD_REQUEST;
+	    }
 	}
     }
-#endif
 
     return 0;
 
-  bad_request:
+  read_failure:
     if (strcmpsafe(prot_error(httpd_in), PROT_EOF_STRING)) {
 	/* client timed out */
 	*errstr = prot_error(httpd_in);
