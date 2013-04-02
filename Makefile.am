@@ -381,7 +381,7 @@ EXTRA_DIST = \
 	timsieved/TODO
 
 TEXINFO_TEX = com_err/et/texinfo.tex
-EXTRA_SCRIPTS = \
+dist_noinst_SCRIPTS = \
 	com_err/et/compile_et.sh \
 	com_err/et/config_script \
 	lib/imapoptions \
@@ -395,6 +395,8 @@ EXTRA_SCRIPTS = \
 	tools/config2man \
 	tools/convert-sieve.pl \
 	tools/dohash \
+	tools/fixsearchpath.pl \
+	tools/jenkins-build.sh \
 	tools/masssievec \
 	tools/migrate-metadata \
 	tools/mkimap \
@@ -404,8 +406,7 @@ EXTRA_SCRIPTS = \
 	tools/translatesieve \
 	tools/undohash \
 	tools/upgradesieve \
-	snmp/snmpgen \
-	autobuild.sh
+	snmp/snmpgen
 noinst_MAN = \
 	com_err/et/com_err.3 \
 	com_err/et/compile_et.1
