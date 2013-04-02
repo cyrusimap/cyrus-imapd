@@ -384,6 +384,8 @@ TEXINFO_TEX = com_err/et/texinfo.tex
 dist_noinst_SCRIPTS = \
 	com_err/et/compile_et.sh \
 	com_err/et/config_script \
+	imap/lmtpstats.snmp \
+	imap/pushstats.snmp \
 	lib/imapoptions \
 	lib/mkchartable.pl \
 	lib/test/run \
@@ -681,6 +683,7 @@ imap_imapd_SOURCES = \
 	imap/pushstats.c \
 	imap/pushstats.h \
 	imap/proxy.c \
+	imap/proxy.h \
 	master/service.c \
 	imap/autocreate.h \
 	imap/autocreate.c
@@ -798,7 +801,7 @@ imap_lmtpd_SOURCES = \
 	master/service.c
 imap_lmtpd_LDADD =
 if SIEVE
-imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/smtpclient.c
+imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/lmtp_sieve.h imap/smtpclient.c
 imap_lmtpd_LDADD += sieve/libcyrus_sieve.la
 endif
 imap_lmtpd_LDADD += $(LD_SERVER_ADD)
@@ -820,6 +823,7 @@ imap_mbtool_LDADD = $(LD_UTILITY_ADD)
 
 imap_mupdate_SOURCES = \
 	imap/mupdate.c \
+	imap/mupdate.h \
 	imap/mupdate-slave.c \
 	imap/mutex_pthread.c \
 	master/service-thread.c
@@ -852,7 +856,7 @@ imap_pop3d_LDADD += sieve/libcyrus_sieve.la
 endif
 imap_pop3d_LDADD += $(LD_SERVER_ADD)
 
-imap_quota_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/quota.c
+imap_quota_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/quota.c imap/quota.h
 imap_quota_LDADD = $(LD_UTILITY_ADD)
 
 imap_reconstruct_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/reconstruct.c
@@ -1111,9 +1115,13 @@ perl_libcyrus_min_la_SOURCES = $(lib_libcyrus_min_la_SOURCES)
 perl_libcyrus_min_la_LIBADD = $(lib_libcyrus_min_la_LIBADD)
 
 perl_sieve_lib_libisieve_a_SOURCES = \
+	perl/sieve/lib/codes.h \
 	perl/sieve/lib/isieve.c \
+	perl/sieve/lib/isieve.h \
 	perl/sieve/lib/lex.c \
-	perl/sieve/lib/request.c
+	perl/sieve/lib/lex.h \
+	perl/sieve/lib/request.c \
+	perl/sieve/lib/request.h
 
 ptclient_ptdump_SOURCES = imap/cli_fatal.c imap/mutex_fake.c ptclient/ptdump.c
 ptclient_ptdump_LDADD = $(LD_UTILITY_ADD)
