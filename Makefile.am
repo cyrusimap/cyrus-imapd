@@ -868,7 +868,8 @@ imap_smmapd_LDADD = $(LD_SERVER_ADD)
 imap_squatter_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/squatter.c imap/squat_build.c
 imap_squatter_LDADD = $(LD_UTILITY_ADD)
 
-imap_sync_client_SOURCES = imap/mutex_fake.c imap/sync_client.c imap/sync_support.c
+imap_sync_client_SOURCES = imap/mutex_fake.c imap/sync_client.c \
+	imap/sync_support.c imap/sync_support.h
 imap_sync_client_LDADD = $(LD_UTILITY_ADD)
 
 imap_sync_reset_SOURCES = imap/mutex_fake.c imap/sync_reset.c imap/sync_support.c
