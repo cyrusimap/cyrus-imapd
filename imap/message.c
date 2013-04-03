@@ -4202,21 +4202,84 @@ static int message2_parse_cenvelope(message_t *m)
     (((s) == NULL && (len) == 0) || \
      ((s) != NULL && (s)->offset == (off) && (s)->length == (len)))
 
+struct csection_item {
+    uint32_t hdr_start;
+    uint32_t hdr_len;
+    uint32_t con_start;
+    uint32_t con_len;
+    int encoding;
+    int charset;
+};
+
+static int csection_read(const char **cachestrp, const char *cacheend,
+			 struct csection_item *citem)
+{
+    const char *cachestr = *cachestrp;
+    uint32_t val;
+    if (cachestr + 5*4 > cacheend)
+	return IMAP_MAILBOX_BADFORMAT;
+
+    citem->hdr_start = CACHE_ITEM_BIT32(cachestr+0*4);
+    citem->hdr_len = CACHE_ITEM_BIT32(cachestr+1*4);
+    citem->con_start = CACHE_ITEM_BIT32(cachestr+2*4);
+    citem->con_len = CACHE_ITEM_BIT32(cachestr+3*4);
+    val = CACHE_ITEM_BIT32(cachestr+4*4);
+    citem->charset = val >> 16;
+    citem->encoding = val & 0xff;
+
+    *cachestrp += 5*4;
+
+    return 0;
+}
+
+static int citem_is_multipart(struct csection_item *citem)
+{
+    if (citem->hdr_start != 0) return 0;
+    if (citem->hdr_len != 0xffffffff) return 0;
+    if (citem->con_start != 0) return 0;
+    if (citem->con_len != 0xffffffff) return 0;
+    return 1;
+}
+
+static segment_t *csection_add_child(message_t *m, segment_t *parent,
+				     ptrarray_t *stackp, int ins,
+				     int partno, struct csection_item *citem)
+{
+    segment_t *subpart = part_new(m, partno);
+    segment_t *header = segment_new(ID_HEADER);
+    segment_t *body = segment_new(ID_BODY);
+
+    segment_append(parent, subpart);
+    get_part(subpart)->charset = citem->charset;
+    get_part(subpart)->encoding = citem->encoding;
+
+    segment_set_shape(header, citem->hdr_start, citem->hdr_len);
+    segment_append(subpart, header);
+
+    segment_set_shape(body, citem->con_start, citem->con_len);
+    segment_append(subpart, body);
+
+    /* Note: we need to insert at the old tail,
+     * so that the order of children is reversed,
+     * so that it's correct again when we pop off.
+     * Also note: no recursing for part 0, it's a
+     * header only */
+    ptrarray_insert(stackp, ins, subpart);
+
+    return subpart;
+}
+
 /* Parse the cached section structure, which gives us a
  * skeleton tree of segments without most of the MIME
  * information. */
 static int message2_parse_csections(message_t *m)
 {
     segment_t *part;
-    segment_t *subpart;
     segment_t *body;
-    segment_t *header;
-    int is_same;
     int nsubparts;
     int ins;
-    uint32_t hdr_start, hdr_len;
-    uint32_t con_start, con_len;
-    int partno, encoding, charset;
+    int partno;
+    struct csection_item citem;
     const char *cachestr = cacheitem_base(&m->record, CACHE_SECTION);
     const char *cacheend = cachestr + cacheitem_size(&m->record, CACHE_SECTION);
     ptrarray_t stack = PTRARRAY_INITIALIZER;
@@ -4243,61 +4306,61 @@ static int message2_parse_csections(message_t *m)
 	    continue;	    /* found 0 length body in parent */
 
 	ins = stack.count;
-	for (partno = 0 ; partno < nsubparts ; partno++) {
+	body = segment_find_child(part, ID_BODY);
 
-	    if (cachestr + 5*4 > cacheend) {
+	/* partno == 0 */
+	if (csection_read(&cachestr, cacheend, &citem)) {
+	    /* ran out of data early */
+	    r = IMAP_MAILBOX_BADFORMAT;
+	    goto out;
+	}
+
+	if (citem_is_multipart(&citem)) {
+	    /* MULTIPART - partno 0 doesn't exist - ignore it.  Add the rest
+	     * as regular children */
+	    for (partno = 1; partno < nsubparts; partno++) {
+		if (csection_read(&cachestr, cacheend, &citem)) {
+		    /* ran out of data early */
+		    r = IMAP_MAILBOX_BADFORMAT;
+		    goto out;
+		}
+		csection_add_child(m, body, &stack, ins, partno, &citem);
+	    }
+	}
+	else if (nsubparts == 2) {
+	    /* read the second part */
+	    struct csection_item citembody;
+	    if (csection_read(&cachestr, cacheend, &citembody)) {
 		/* ran out of data early */
 		r = IMAP_MAILBOX_BADFORMAT;
 		goto out;
 	    }
-	    hdr_start = CACHE_ITEM_BIT32(cachestr+0*4);
-	    hdr_len = CACHE_ITEM_BIT32(cachestr+1*4);
-	    con_start = CACHE_ITEM_BIT32(cachestr+2*4);
-	    con_len = CACHE_ITEM_BIT32(cachestr+3*4);
-	    charset = CACHE_ITEM_BIT32(cachestr+4*4) >> 16;
-	    encoding = CACHE_ITEM_BIT32(cachestr+4*4) & 0xff;
-
-	    cachestr += 5*4;
-
-	    TRIM_RANGE(hdr_start, hdr_len, m->record.size);
-	    TRIM_RANGE(con_start, con_len, m->record.size);
-
-	    subpart = NULL;
-	    if (hdr_len || con_len) {
-
-		subpart = part;
-
-		body = segment_find_child(part, ID_BODY);
-		header = segment_find_child(part, ID_HEADER);
-		is_same = (IS_SHAPED(header, hdr_start, hdr_len) &&
-			   IS_SHAPED(body, con_start, con_len));
-		if (partno && !is_same) {
-		    subpart = part_new(m, partno);
-		    segment_append(segment_find_child(part, ID_BODY), subpart);
-		}
-		get_part(subpart)->charset = charset;
-		get_part(subpart)->encoding = encoding;
-
-		if (hdr_len > 0 && !is_same) {
-		    segment_t *header = segment_new(ID_HEADER);
-		    segment_set_shape(header, hdr_start, hdr_len);
-		    segment_append(subpart, header);
-		}
-
-		if (con_len > 0 && !is_same) {
-		    segment_t *body = segment_new(ID_BODY);
-		    segment_set_shape(body, con_start, con_len);
-		    segment_append(subpart, body);
-		}
+	    /* MESSAGE/RFC822 with non-multipart body.  In theory part 0 is the header
+	     * and part1 is the body, but there's duplicate data in the structure, so
+	     * just take it all from the second citem */
+	    if (citembody.hdr_start == citem.hdr_start &&
+	        citembody.hdr_len   == citem.hdr_len &&
+	        citembody.con_start == citem.con_start) {
+		csection_add_child(m, body, &stack, ins, partno, &citembody);
 	    }
-
-	    if (partno) {
-		/* Note: we need to insert at the old tail,
-		 * so that the order of children is reversed,
-		 * so that it's correct again when we pop off.
-		 * Also note: no recursing for part 0, it's a
-		 * header only */
-		ptrarray_insert(&stack, ins, subpart);
+	    else {
+		/* EEP - multipart with only one part??  Surely that's bogus. */
+		syslog(LOG_ERR, "IOERROR: 1 child for multipart RFC822 at %s %u",
+				m->mailbox->name, m->record.uid);
+	    }
+	}
+	else {
+	    /* MESSAGE/RFC822 with multipart body.  Part 0 is the headers of the RFC822 itself,
+	     * the other parts are the multipart children */
+	    segment_t *subpart = csection_add_child(m, body, &stack, ins, partno, &citem);
+	    body = segment_find_child(subpart, ID_BODY);
+	    for (partno = 1; partno < nsubparts; partno++) {
+		if (csection_read(&cachestr, cacheend, &citem)) {
+		    /* ran out of data early */
+		    r = IMAP_MAILBOX_BADFORMAT;
+		    goto out;
+		}
+		csection_add_child(m, body, &stack, ins, partno, &citem);
 	    }
 	}
     }
