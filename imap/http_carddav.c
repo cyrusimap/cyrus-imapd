@@ -679,7 +679,8 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 			/* Check any preconditions */
 			const char *etag = message_guid_encode(&oldrecord.guid);
 			time_t lastmod = oldrecord.internaldate;
-			int precond = check_precond(txn, cdata, etag, lastmod);
+			int precond = check_precond(txn, cdata,
+						    etag, lastmod, 0);
 
 			overwrite = (precond == HTTP_OK);
 		    }

@@ -263,12 +263,12 @@ static int meth_get(struct transaction_t *txn,
 	    if (!strcmp(section, "0")) {
 		/* Entire raw message */
 		txn->flags.ranges = !txn->flags.ce;
-		datalen = resp_body->range.len = msg_size;
+		datalen = msg_size;
 	    }
 
 	    etag = message_guid_encode(&record.guid);
 	    lastmod = record.internaldate;
-	    precond = check_precond(txn, NULL, etag, lastmod);
+	    precond = check_precond(txn, NULL, etag, lastmod, datalen);
 
 	    switch (precond) {
 	    case HTTP_OK:
@@ -276,8 +276,8 @@ static int meth_get(struct transaction_t *txn,
 
 	    case HTTP_PARTIAL:
 		/* Set data parameters for range */
-		offset += resp_body->range.first;
-		datalen = resp_body->range.last - resp_body->range.first + 1;
+		offset += resp_body->range->first;
+		datalen = resp_body->range->last - resp_body->range->first + 1;
 		break;
 
 	    case HTTP_NOT_MODIFIED:
@@ -302,7 +302,11 @@ static int meth_get(struct transaction_t *txn,
 		/* Return entire message as text/plain */
 		resp_body->type = "text/plain";
 
-		write_body(precond, txn, msg_base + offset, datalen);
+		if (resp_body->range && resp_body->range->next) {
+		    /* multiple ranges */
+		    multipart_byteranges(txn, msg_base);
+		}
+		else write_body(precond, txn, msg_base + offset, datalen);
 	    }
 	    else {
 		/* Fetch, decode, and return the specified MIME message part */
@@ -549,7 +553,7 @@ static int list_feeds(struct transaction_t *txn)
     buf_printf(&txn->buf, "-%ld-%ld", sbuf.st_mtime, sbuf.st_size);
 
     /* Check any preconditions */
-    precond = check_precond(txn, NULL, buf_cstring(&txn->buf), lastmod);
+    precond = check_precond(txn, NULL, buf_cstring(&txn->buf), lastmod, 0);
 
     switch (precond) {
     case HTTP_OK:
@@ -706,7 +710,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     lastmod = mailbox->i.last_appenddate;
     sprintf(etag, "%u-%u-%u",
 	    mailbox->i.uidvalidity, mailbox->i.last_uid, mailbox->i.exists);
-    precond = check_precond(txn, NULL, etag, lastmod);
+    precond = check_precond(txn, NULL, etag, lastmod, 0);
 
     switch (precond) {
     case HTTP_OK:

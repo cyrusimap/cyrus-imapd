@@ -2084,13 +2084,17 @@ void response_header(long code, struct transaction_t *txn)
 
     case HTTP_PARTIAL:
     case HTTP_UNSAT_RANGE:
-	prot_puts(httpd_out, "Content-Range: bytes ");
-	if (code == HTTP_PARTIAL) {
-	    prot_printf(httpd_out, "%lu-%lu",
-			resp_body->range.first, resp_body->range.last);
+	if (resp_body->range) {
+	    prot_puts(httpd_out, "Content-Range: bytes ");
+	    if (code == HTTP_PARTIAL) {
+		prot_printf(httpd_out, "%lu-%lu",
+			    resp_body->range->first, resp_body->range->last);
+	    }
+	    else prot_printf(httpd_out, "*");
+	    prot_printf(httpd_out, "/%lu\r\n", resp_body->range->len);
+
+	    free(resp_body->range);
 	}
-	else prot_printf(httpd_out, "*");
-	prot_printf(httpd_out, "/%lu\r\n", resp_body->range.len);
 
 	/* Fall through and specify framing */
 
@@ -2857,74 +2861,85 @@ static int eval_if(const char *hdr, const char *etag, const char *lock_token,
 }
 
 
-static int parse_ranges(const char *hdr, struct range *range)
+static int parse_ranges(const char **hdr, unsigned long len,
+			struct range **ranges)
 {
-    ulong *first = &range->first;
-    ulong *last = &range->last;
-    ulong len = range->len;
-    char *p, *endp;
+    int i, ret = HTTP_OK;
+    struct range *new, *tail = *ranges = NULL;
 
-    /* default to entire representation */
-    *first = 0;
-    *last = len - 1;
+    for (i = 0; hdr[i]; i++) {
+	tok_t tok;
+	char *token;
 
-    if (!hdr) return HTTP_OK;
-    if (strncmp(hdr, "bytes=", 6)) {
 	/* we only handle byte-unit */
-	return HTTP_OK;
-    }
+	if (strncmp(hdr[i], "bytes=", 6)) continue;
 
-    hdr += 6;
-    if (!(p = strchr(hdr, '-'))) {
-	/* bad byte-range-set */
-	return HTTP_OK;
-    }
-    if (strchr(p, ',')) {
-	/* we don't handle multiple byte-range-set */
-	return HTTP_OK;
-    }
+	if (ret != HTTP_PARTIAL) ret = HTTP_UNSAT_RANGE;
 
-    if (p == hdr) {
-	/* suffix-byte-range-spec */
-	unsigned long suffix = strtoul(++p, &endp, 10);
-	if (endp == p || *endp) {
-	    /* bad suffix-length */
-	    return HTTP_OK;
-	}
-	if (!suffix) {
-	    /* unsatisfiable suffix-length (zero) */
-	    return HTTP_UNSAT_RANGE;
-	}
+	tok_init(&tok, hdr[i]+6, ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+	while ((token = tok_next(&tok))) {
+	    /* default to entire representation */
+	    unsigned long first = 0;
+	    unsigned long last = len - 1;
+	    char *p, *endp;
 
-	/* don't start before byte zero */
-	if (suffix < len) *first = len - suffix;
-    }
-    else {
-	/* byte-range-spec */
-	*first = strtoul(hdr, &endp, 10);
-	if (endp != p) {
-	    /* bad first-byte-pos */
-	    return HTTP_OK;
-	}
-	if (*first >= len) {
-	    /* unsatisfiable first-byte-pos */
-	    return HTTP_UNSAT_RANGE;
-	}
+	    if (!(p = strchr(token, '-'))) continue;  /* bad byte-range-set */
 
-	if (*++p) {
-	    /* last-byte-pos */
-	    *last = strtoul(p, &endp, 10);
-	    if (*endp || *last < *first) {
-		/* bad last-byte-pos */
-		return HTTP_OK;
+	    if (p == token) {
+		/* suffix-byte-range-spec */
+		unsigned long suffix = strtoul(++p, &endp, 10);
+
+		if (endp == p || *endp) continue;  /* bad suffix-length */
+		if (!suffix) continue;	/* unsatisfiable suffix-length */
+		
+		/* don't start before byte zero */
+		if (suffix < len) first = len - suffix;
+	    }
+	    else {
+		/* byte-range-spec */
+		first = strtoul(token, &endp, 10);
+		if (endp != p) continue;      /* bad first-byte-pos */
+		if (first >= len) continue;   /* unsatisfiable first-byte-pos */
+
+		if (*++p) {
+		    /* last-byte-pos */
+		    last = strtoul(p, &endp, 10);
+		    if (*endp || last < first) continue; /* bad last-byte-pos */
+
+		    /* don't go past end of representation */
+		    if (last >= len) last = len - 1;
+		}
 	    }
 
-	    /* don't go past end of representation */
-	    if (*last >= len) *last = len - 1;
+	    ret = HTTP_PARTIAL;
+
+	    /* Coalesce overlapping ranges, or those with a gap < 80 bytes */
+	    if (tail &&
+		first >= tail->first && (long) (first - tail->last) < 80) {
+		tail->last = MAX(last, tail->last);
+		continue;
+	    }
+
+	    /* Create a new range and append it to linked list */
+	    new = xzmalloc(sizeof(struct range));
+	    new->first = first;
+	    new->last = last;
+	    new->len = len;
+
+	    if (tail) tail->next = new;
+	    else *ranges = new;
+	    tail = new;
 	}
+
+	tok_fini(&tok);
     }
 
-    return HTTP_PARTIAL;
+    if (ret == HTTP_UNSAT_RANGE) {
+	*ranges = new = xzmalloc(sizeof(struct range));
+	new->len = len;
+    }
+
+    return ret;
 }
 
 
@@ -2934,7 +2949,7 @@ static int parse_ranges(const char *hdr, struct range *range)
  * Section 5 of HTTPbis, Part 4.
  */
 int check_precond(struct transaction_t *txn, const void *data,
-		  const char *etag, time_t lastmod)
+		  const char *etag, time_t lastmod, unsigned long len)
 {
     const char *lock_token = NULL;
     unsigned locked = 0;
@@ -3042,7 +3057,7 @@ int check_precond(struct transaction_t *txn, const void *data,
     /* Step 5 */
     if (txn->flags.ranges &&  /* Only if we support Range requests */
 	txn->meth == METH_GET && (hdr = spool_getheader(hdrcache, "Range"))) {
-	const char *ranges = hdr[0];
+	const char **ranges = hdr;
 
 	if ((hdr = spool_getheader(hdrcache, "If-Range"))) {
 	    since = message_parse_date((char *) hdr[0],
@@ -3052,11 +3067,67 @@ int check_precond(struct transaction_t *txn, const void *data,
 
 	/* Only process Range if If-Range isn't present or validator matches */
 	if (!hdr || (since && (lastmod <= since)) || !etagcmp(hdr[0], etag))
-	    return parse_ranges(ranges, &txn->resp_body.range);
+	    return parse_ranges(ranges, len, &txn->resp_body.range);
     }
 
     /* Step 6 */
     return HTTP_OK;
+}
+
+
+/* Output multipart/byteranges */
+void multipart_byteranges(struct transaction_t *txn, const char *msg_base)
+{
+    struct range *range = txn->resp_body.range;
+    struct buf *body = &txn->resp_body.payload;
+    const char *type = txn->resp_body.type;
+    const char *preamble =
+	"This is a message with multiple parts in MIME format.\r\n";
+    char boundary[100];
+
+    /* Create multipart boundary */
+    snprintf(boundary, sizeof(boundary), "%s-%ld-%ld-%ld",
+	     *spool_getheader(txn->req_hdrs, "Host"),
+	     (long) getpid(), (long) time(NULL), (long) rand());
+
+    /* Create Content-Type w/ boundary */
+    assert(!buf_len(&txn->buf));
+    buf_printf(&txn->buf, "multipart/byteranges; boundary=\"%s\"", boundary);
+    txn->resp_body.type = buf_cstring(&txn->buf);
+
+    /* Setup for chunked response and begin output */
+    txn->flags.te |= TE_CHUNKED;
+    txn->resp_body.range = NULL;
+    write_body(HTTP_PARTIAL, txn, preamble, strlen(preamble));
+
+    while (range) {
+	unsigned long offset = range->first;
+	unsigned long datalen = range->last - range->first + 1;
+	struct range *next = range->next;
+
+	/* Output header for next range */
+	buf_reset(body);
+	buf_printf(body, "\r\n--%s\r\n"
+		   "Content-Type: %s\r\n"
+		   "Content-Range: bytes %lu-%lu/%lu\r\n\r\n",
+		   boundary, type, range->first, range->last, range->len);
+	write_body(0, txn, buf_cstring(body), buf_len(body));
+
+	/* Output range data */
+	write_body(0, txn, msg_base + offset, datalen);
+
+	/* Cleanup */
+	free(range);
+	range = next;
+    }
+
+    /* Output final boundary */
+    buf_reset(body);
+    buf_printf(body, "\r\n--%s--\r\n", boundary);
+    write_body(0, txn, buf_cstring(body), buf_len(body));
+
+    /* End of output */
+    write_body(0, txn, NULL, 0);
 }
 
 
@@ -3095,8 +3166,8 @@ int meth_get_doc(struct transaction_t *txn,
 
     /* Check any preconditions, including range request */
     txn->flags.ranges = !txn->flags.ce;
-    resp_body->range.len = datalen;
-    precond = check_precond(txn, NULL, buf_cstring(&txn->buf), sbuf.st_mtime);
+    precond = check_precond(txn, NULL, buf_cstring(&txn->buf), sbuf.st_mtime,
+			    datalen);
 
     switch (precond) {
     case HTTP_OK:
@@ -3104,8 +3175,8 @@ int meth_get_doc(struct transaction_t *txn,
 
     case HTTP_PARTIAL:
 	/* Set data parameters for range */
-	offset += resp_body->range.first;
-	datalen = resp_body->range.last - resp_body->range.first + 1;
+	offset += resp_body->range->first;
+	datalen = resp_body->range->last - resp_body->range->first + 1;
 	break;
 
     case HTTP_NOT_MODIFIED:
@@ -3121,10 +3192,9 @@ int meth_get_doc(struct transaction_t *txn,
     if ((fd = open(path, O_RDONLY)) == -1) return HTTP_SERVER_ERROR;
     map_refresh(fd, 1, &msg_base, &msg_size, sbuf.st_size, path, NULL);
 
-    /* Fill in ETag, Last-Modified, and Content-Length */
+    /* Fill in ETag and Last-Modified */
     resp_body->etag = buf_cstring(&txn->buf);
     resp_body->lastmod = sbuf.st_mtime;
-    resp_body->len = msg_size;
 
     if (resp_body->type) {
 	/* Caller has specified the Content-Type */
@@ -3165,7 +3235,11 @@ int meth_get_doc(struct transaction_t *txn,
 	}
     }
 
-    write_body(precond, txn, msg_base + offset, datalen);
+    if (resp_body->range && resp_body->range->next) {
+	/* multiple ranges */
+	multipart_byteranges(txn, msg_base);
+    }
+    else write_body(precond, txn, msg_base + offset, datalen);
 
     map_free(&msg_base, &msg_size);
     close(fd);

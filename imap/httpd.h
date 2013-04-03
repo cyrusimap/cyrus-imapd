@@ -219,15 +219,16 @@ struct error_t {
 };
 
 struct range {
-    ulong first;
-    ulong last;
-    ulong len;
+    unsigned long first;
+    unsigned long last;
+    unsigned long len;
+    struct range *next;
 };
 
 /* Meta-data for response body (payload & representation headers) */
 struct resp_body_t {
     ulong len; 		/* Content-Length   */
-    struct range range;	/* Content-Range    */
+    struct range *range;/* Content-Range    */
     const char *enc;	/* Content-Encoding */
     const char *lang;	/* Content-Language */
     const char *loc;	/* Content-Location */
@@ -381,12 +382,14 @@ extern void html_response(long code, struct transaction_t *txn, xmlDocPtr html);
 extern void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml);
 extern void write_body(long code, struct transaction_t *txn,
 		       const char *buf, unsigned len);
+extern void multipart_byteranges(struct transaction_t *txn,
+				 const char *msg_base);
 extern int meth_get_doc(struct transaction_t *txn, void *params);
 extern int meth_options(struct transaction_t *txn, void *params);
 extern int meth_trace(struct transaction_t *txn, void *params);
 extern int etagcmp(const char *hdr, const char *etag);
 extern int check_precond(struct transaction_t *txn, const void *data,
-			 const char *etag, time_t lastmod);
+			 const char *etag, time_t lastmod, unsigned long len);
 extern int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 		     unsigned flags, const char **errstr);
 

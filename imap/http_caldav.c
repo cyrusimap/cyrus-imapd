@@ -119,7 +119,8 @@ static int caldav_parse_path(const char *path,
 			     struct request_target_t *tgt, const char **errstr);
 
 static int caldav_check_precond(struct transaction_t *txn, const void *data,
-				const char *etag, time_t lastmod);
+				const char *etag, time_t lastmod,
+				unsigned long len);
 
 static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights);
 static int caldav_copy(struct transaction_t *txn,
@@ -384,7 +385,8 @@ static int caldav_parse_path(const char *path,
 
 /* Check headers for any preconditions */
 static int caldav_check_precond(struct transaction_t *txn, const void *data,
-				const char *etag, time_t lastmod)
+				const char *etag, time_t lastmod,
+				unsigned long len)
 {
     const struct caldav_data *cdata = (const struct caldav_data *) data;
     const char *stag = cdata ? cdata->sched_tag : NULL;
@@ -392,7 +394,7 @@ static int caldav_check_precond(struct transaction_t *txn, const void *data,
     int precond;
 
     /* Do normal WebDAV/HTTP checks (primarily for lock-token via If header) */
-    precond = check_precond(txn, data, etag, lastmod);
+    precond = check_precond(txn, data, etag, lastmod, len);
     if (!(precond == HTTP_OK || precond == HTTP_PARTIAL)) return precond;
 
     /* Per RFC 6638, check Schedule-Tag */
@@ -1635,7 +1637,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			const char *etag = message_guid_encode(&oldrecord.guid);
 			time_t lastmod = oldrecord.internaldate;
 			int precond = caldav_check_precond(txn, cdata,
-							   etag, lastmod);
+							   etag, lastmod, 0);
 
 			overwrite = (precond == HTTP_OK);
 		    }

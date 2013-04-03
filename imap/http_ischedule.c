@@ -188,7 +188,7 @@ static int meth_get_isched(struct transaction_t *txn,
     etag = message_guid_encode(&guid);
 
     /* Check any preconditions */
-    precond = check_precond(txn, NULL, etag, compile_time);
+    precond = check_precond(txn, NULL, etag, compile_time, 0);
 
     switch (precond) {
     case HTTP_OK:
