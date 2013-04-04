@@ -2867,6 +2867,8 @@ static int parse_ranges(const char **hdr, unsigned long len,
     int i, ret = HTTP_OK;
     struct range *new, *tail = *ranges = NULL;
 
+    if (!len) return HTTP_OK;  /* need to know length of representation */
+
     for (i = 0; hdr[i]; i++) {
 	tok_t tok;
 	char *token;
