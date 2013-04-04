@@ -4594,12 +4594,6 @@ static int message2_parse_cbodystructure(message_t *m)
 #if DEBUG
     segment_dump(m->segs, 0);
 #endif
-    if (r) {
-	syslog(LOG_ERR, "IOERROR: Failed to parse bodystructure: uid=<%u> mailbox=<%s> bs=<%.*s>",
-	       m->record.uid, m->mailbox->name,
-	       (int)cacheitem_size(&m->record, CACHE_BODYSTRUCTURE),
-	       cacheitem_base(&m->record, CACHE_BODYSTRUCTURE));
-    }
     return r;
 }
 
