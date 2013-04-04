@@ -169,6 +169,7 @@ static int meth_get_isched(struct transaction_t *txn,
     int precond;
     struct message_guid guid;
     const char *etag;
+    unsigned long offset = 0, datalen;
     static time_t lastmod = 0;
     static xmlChar *buf = NULL;
     static int bufsiz = 0;
@@ -187,11 +188,19 @@ static int meth_get_isched(struct transaction_t *txn,
     message_guid_generate(&guid, buf_cstring(&txn->buf), buf_len(&txn->buf));
     etag = message_guid_encode(&guid);
 
-    /* Check any preconditions */
-    precond = check_precond(txn, NULL, etag, compile_time, 0);
+    /* Check any preconditions, including range request */
+    datalen = bufsiz;
+    txn->flags.ranges = !txn->flags.ce;
+    precond = check_precond(txn, NULL, etag, compile_time, datalen);
 
     switch (precond) {
     case HTTP_OK:
+	break;
+
+    case HTTP_PARTIAL:
+	/* Set data parameters for range */
+	offset += txn->resp_body.range->first;
+	datalen = txn->resp_body.range->last - txn->resp_body.range->first + 1;
 	break;
 
     case HTTP_NOT_MODIFIED:
@@ -269,11 +278,16 @@ static int meth_get_isched(struct transaction_t *txn,
 	}
 
 	lastmod = txn->resp_body.lastmod;
+	datalen = bufsiz;
     }
 
     /* Output the XML response */
     txn->resp_body.type = "application/xml; charset=utf-8";
-    write_body(HTTP_OK, txn, (char *) buf, bufsiz);
+    if (txn->resp_body.range && txn->resp_body.range->next) {
+	/* multiple ranges */
+	multipart_byteranges(txn, (char *) buf);
+    }
+    else write_body(precond, txn, (char *) buf + offset, datalen);
 
     return 0;
 }
