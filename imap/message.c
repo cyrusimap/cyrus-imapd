@@ -82,6 +82,9 @@
 #include "rfc822tok.h"
 #include "times.h"
 
+static int message_map_file(message_t *m, const char *fname);
+static int message_parse_cbodystructure(message_t *m);
+
 #define DEBUG 0
 
 /* Message being parsed */
@@ -143,22 +146,6 @@ static void message_write_searchaddr(struct buf *buf,
 				     const struct address *addrlist);
 static int message_need(message_t *m, unsigned int need);
 static void message_yield(message_t *m, unsigned int yield);
-static int message2_parse_header(part_t *p, const struct buf *map);
-static int message2_parse_multipart(part_t *p, segment_t *body);
-static int message2_map_segment(message_t *m, segment_t *s, struct buf *buf);
-static int message2_expand_segment(message_t *m, segment_t *seg);
-static int message2_map_file(message_t *m, const char *fname);
-static int message2_parse_cheader(message_t *m);
-static int message2_parse_cenvelope(message_t *m);
-static int message2_parse_csections(message_t *m);
-static int message2_parse_cbodystructure(message_t *m);
-
-static segment_t unfinished_seg = {
-    .id = ID_UNFINISHED, .children = &unfinished_seg
-};
-static hash_table descs_by_name = HASH_TABLE_INITIALIZER;
-static ptrarray_t descs_by_id = PTRARRAY_INITIALIZER;
-static unsigned int next_field_id = ID_PREALLOCATED_LAST+1;
 
 /*
  * Convert a string to uppercase.  Returns the string.
@@ -345,7 +332,7 @@ EXPORTED int message_parse_file(FILE *infile,
     if (!*msg_base || !*msg_len)
 	return IMAP_IOERROR; /* zero length file? */
 
-    if (!*body) *body = (struct body *) xmalloc(sizeof(struct body));
+    if (!*body) *body = (struct body *) xzmalloc(sizeof(struct body));
     r = message_parse_mapped(*msg_base, *msg_len, *body);
 
     if (unmap) map_free(msg_base, msg_len);
@@ -390,7 +377,7 @@ EXPORTED int message_parse_binary_file(FILE *infile, struct body **body)
 	return IMAP_IOERROR;
     }
 
-    if (!*body) *body = (struct body *) xmalloc(sizeof(struct body));
+    if (!*body) *body = (struct body *) xzmalloc(sizeof(struct body));
     message_parse_body(&msg, *body,
 		       DEFAULT_CONTENT_TYPE, (strarray_t *)0);
 
@@ -408,7 +395,6 @@ EXPORTED int message_parse_binary_file(FILE *infile, struct body **body)
 
     return 0;
 }
-
 
 /*
  * Parse the message at 'msg_base' of length 'msg_len'.
@@ -1543,14 +1529,15 @@ static void message_parse_multipart(struct msg *msg, struct body *body,
 	    (limit == 0 ? 1 : boundaries->count < limit)) {
 	body->subpart = (struct body *)xrealloc((char *)body->subpart,
 				 (body->numparts+1)*sizeof(struct body));
-	message_parse_body(msg, &body->subpart[body->numparts++],
+	message_parse_body(msg, &body->subpart[body->numparts],
 			   defaultContentType, boundaries);
 	if (msg->offset == msg->len &&
-	    body->subpart[body->numparts-1].boundary_size == 0) {
+	    body->subpart[body->numparts].boundary_size == 0) {
 	    /* hit the end of the message, therefore end all pending
 	       multiparts */
 	    strarray_truncate(boundaries, 0);
 	}
+	body->numparts++;
     }
 
     if (boundaries->count == depth-1) {
@@ -3245,7 +3232,6 @@ out:
 
 
 /*
-
   Format of the CACHE_SECTION cache item is a binary encoding
   tree of MIME sections.  In something like rpcgen notation
   (see RFC 4506):
@@ -3264,600 +3250,15 @@ out:
 	struct part parts[numparts];
 	struct section[numparts-1];
     };
-
 */
-
-/*
- * Iterate 'proc' over all the MIME parts of the message defined
- * by `record' and 'msg'.  Uses the SECTION information from the
- * cyrus.cache, so 'record' needs to have had mailbox_cacherecord()
- * called on it beforehand.
- *
- * Parameters passed to 'proc' are:
- *
- *    partno - part number within the innermost MIME space being
- *             iterated.  Most useful for telling whether we are
- *             being given a header (partno=0) or a body part (>0).
- *    charset - a charset number, as returned from charse_lookupname()
- *    encoding - one of the ENCODING_* constants e.g. ENCODING_QP.
- *    data - read-only struct buf pointing to the mapped raw (i.e.
- *           not decoded) section data.
- *    rock - the 'rock' parameter passed in.
- *
- * If 'proc' returns non-zero, the iteration finishes early and the
- * return value of 'proc' is returned.  Otherwise returns 0.
- */
-int message_foreach_part(struct index_record *record,
-			 const struct buf *msg,
-			 int (*proc)(int partno, int charset, int encoding,
-				     struct buf *data, void *rock),
-			 void *rock)
-{
-    int partsleft = 1;
-    int subparts;
-    unsigned long start;
-    int partno, encoding, charset;
-    int len;
-    int r;
-    const char *cachestr = cacheitem_base(record, CACHE_SECTION);
-    struct buf data = BUF_INITIALIZER;
-
-    /* Won't find anything in a truncated file */
-    if (!msg || !msg->s || !msg->len) return 0;
-
-    while (partsleft--) {
-	subparts = CACHE_ITEM_BIT32(cachestr);
-	cachestr += 4;
-	if (subparts) {
-	    partsleft += subparts-1;
-
-	    for (partno = 0 ; partno < subparts ; partno++) {
-		if (!partno) {
-		    start = CACHE_ITEM_BIT32(cachestr+0*4);
-		    len = CACHE_ITEM_BIT32(cachestr+1*4);
-		}
-		else {
-		    start = CACHE_ITEM_BIT32(cachestr+2*4);
-		    len = CACHE_ITEM_BIT32(cachestr+3*4);
-		}
-		charset = CACHE_ITEM_BIT32(cachestr+4*4) >> 16;
-		encoding = CACHE_ITEM_BIT32(cachestr+4*4) & 0xff;
-		cachestr += 5*4;
-
-		if (len <= 0)
-		    continue;	    /* may be a validly nonexistant section */
-
-		/* trim the range [start,start+len) */
-		if (start > msg->len) {
-		    start = msg->len;
-		    len = 0;
-		}
-		else if (start + len > msg->len) {
-		    len = msg->len - start;
-		}
-		if (len == 0)
-		    continue;	    /* probably corrupt data */
-
-		buf_init_ro(&data, msg->s + start, len);
-		r = proc(partno, charset, encoding, &data, rock);
-		buf_free(&data);
-		if (r) return r;
-	    }
-	}
-    }
-
-    return 0;
-}
-
-/*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
-
-/*
- * Handling field descriptors.  Every header field encountered
- * has it's own field_desc_t* object, some pre-defined and some
- * dynamically added as we encounter them in raw message data
- * or in cached header data.  The field_desc_t tells us a number
- * of useful things about how to handle the field, e.g. is it
- * cached, and can it be found in the cached ENVELOPE.
- */
-
-static void field_desc_insert(field_desc_t *desc)
-{
-    void *old;
-    int idx;
-
-    if (!desc->id)
-	desc->id = next_field_id++;
-    idx = (desc->id & ID_MASK);
-
-    if (!descs_by_name.size)
-	construct_hash_table(&descs_by_name, 128, 0);
-    old = hash_insert(desc->name, (void *)desc, &descs_by_name);
-    /* names must be unique */
-    assert(old == NULL || old == (void *)desc);
-
-    /* ids must be unique too */
-    assert(ptrarray_nth(&descs_by_id, idx) == NULL);
-#if 1
-    /* HACK: work around a bug in ptrarray where set() past the end
-     * fails to expand the array sparsely */
-    while (descs_by_id.count < idx)
-	ptrarray_append(&descs_by_id, NULL);
-    if (descs_by_id.count == idx)
-	ptrarray_append(&descs_by_id, desc);
-    else
-	ptrarray_set(&descs_by_id, idx, desc);
-    /* END HACK */
-#else
-    ptrarray_set(&descs_by_id, idx, desc);
-#endif
-    assert(ptrarray_nth(&descs_by_id, idx) == (void *)desc);
-}
-
-/* Add and return a dynamic field_desc.  Takes over 'name'. */
-static field_desc_t *field_desc_add(char *name)
-{
-    field_desc_t *desc;
-
-    desc = xzmalloc(sizeof(*desc));
-    desc->name = (const char *)name;
-    desc->min_cache_version = BIT32_MAX;
-    desc->cache_idx = -1;
-    desc->env_idx = -1;
-    field_desc_insert(desc);
-    return desc;
-}
-
-static void field_desc_init_builtins(void)
-{
-    field_desc_t *desc;
-
-    /* Note: these are deliberately not const, so we can use
-     * them read-write at runtime */
-    static field_desc_t builtins[] = {
-	/* things we have always cached */
-	{ "priority", 0, 0, -1, -1 },
-	{ "references", 0, ID_REFERENCES, -1, -1 },
-	{ "resent-from", 0, 0, -1, -1 },
-	{ "newsgroups", 0, 0, -1, -1 },
-	{ "followup-to", 0, 0, -1, -1 },
-
-	/* x headers that we may want to cache anyway */
-	{ "x-mailer", 1, 0, -1, -1 },
-	{ "x-trace", 1, 0, -1, -1 },
-
-	/* outlook express seems to want these */
-	{ "x-ref", 2, 0, -1, -1 },
-	{ "x-priority", 2, 0, -1, -1 },
-	{ "x-msmail-priority", 2, 0, -1, -1 },
-	{ "x-msoesrec", 2, 0, -1, -1 },
-
-	/* for efficient FastMail interface display */
-	{ "x-spam-score", 3, 0, -1, -1 },
-	{ "x-spam-hits", 3, 0, -1, -1 },
-	{ "x-spam-source", 3, 0, -1, -1 },
-	{ "x-resolved-to", 3, 0, -1, -1 },
-	{ "x-delivered-to", 3, 0, -1, -1 },
-	{ "x-mail-from", 3, 0, -1, -1 },
-	{ "x-truedomain", 3, 0, -1, -1 },
-	{ "x-truedomain-dkim", 3, 0, -1, -1 },
-	{ "x-truedomain-spf", 3, 0, -1, -1 },
-	{ "x-truedomain-domain", 3, 0, -1, -1 },
-
-	/* for conversations */
-	{ "x-me-message-id", 4, 0, -1, -1 },
-
-	/* things to never cache */
-	{ "bcc", BIT32_MAX, ID_BCC, CACHE_BCC, ENV_BCC },
-	{ "cc", BIT32_MAX, ID_CC, CACHE_CC, ENV_CC },
-	{ "date", BIT32_MAX, ID_DATE, -1, ENV_DATE },
-	{ "delivery-date", BIT32_MAX, 0, -1, -1 },
-	{ "envelope-to", BIT32_MAX, 0, -1, -1 },
-	{ "from", BIT32_MAX, ID_FROM, CACHE_FROM, ENV_FROM },
-	{ "in-reply-to", BIT32_MAX, ID_IN_REPLY_TO, -1, ENV_INREPLYTO },
-	{ "mime-version", BIT32_MAX, ID_MIME_VERSION, -1, -1 },
-	{ "content-type", BIT32_MAX, ID_CONTENT_TYPE, -1, -1 },
-	{ "content-transfer-encoding", BIT32_MAX,
-	    ID_CONTENT_TRANSFER_ENCODING, -1, -1 },
-	{ "reply-to", BIT32_MAX, 0, -1, -1 },
-	{ "received", BIT32_MAX, 0, -1, -1 },
-	{ "return-path", BIT32_MAX, 0, -1, -1 },
-	{ "sender", BIT32_MAX, 0, -1, -1 },
-	/* Subject: appears as CACHE_SUBJECT in the cache but that
-	 * field is decoded and we want the raw value which is in
-	 * the cached envelope. */
-	{ "subject", BIT32_MAX, ID_SUBJECT, -1, ENV_SUBJECT },
-	{ "to", BIT32_MAX, ID_TO, CACHE_TO, ENV_TO },
-
-	/* signatures tend to be large, and are useless without the body */
-	{ "dkim-signature", BIT32_MAX, 0, -1, -1 },
-	{ "domainkey-signature", BIT32_MAX, 0, -1, -1 },
-	{ "domainkey-x509", BIT32_MAX, 0, -1, -1 },
-
-	/* older versions of PINE (before 4.56) need message-id in the cache too
-	 * though technically it is a waste of space because it is in
-	 * ENVELOPE.  We should probably uncomment the following at some
-	 * future point [ken3 notes this may also be useful to have here for
-	 * threading so we can avoid parsing the envelope] */
-	{ "message-id", BIT32_MAX, ID_MESSAGE_ID, -1, ENV_MSGID },
-
-	/* Not cached in any way, but we will be looking them up */
-	{ "list-id", BIT32_MAX, ID_LIST_ID, -1, -1 },
-	{ "mailing-list", BIT32_MAX, ID_MAILING_LIST, -1, -1 },
-
-	{ NULL, 0, 0, 0, 0 }
-    };
-
-    for (desc = builtins ; desc->name ; desc++)
-	field_desc_insert(desc);
-}
-
-static field_desc_t *field_desc_get_byname(const char *name, int len,
-					   int create_flag)
-{
-    field_desc_t *desc;
-    char namebuf[MAX_FIELDNAME_LENGTH];
-
-    if (len <= 0) len = strlen(name);
-    if (len >= MAX_FIELDNAME_LENGTH)
-	return NULL;
-    memcpy(namebuf, name, len);
-    namebuf[len] = '\0';
-    lcase(namebuf);
-
-    if (!descs_by_name.size)
-	field_desc_init_builtins();
-
-    desc = hash_lookup(namebuf, &descs_by_name);
-    if (!desc && create_flag)
-	desc = field_desc_add(xstrdup(namebuf));
-    return desc;
-}
-
-static field_desc_t *field_desc_get_byid(unsigned int id)
-{
-    if (!descs_by_name.size)
-	field_desc_init_builtins();
-
-    return ptrarray_nth(&descs_by_id, id & ID_MASK);
-}
-
-/*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
-
-static inline int is_finished(const segment_t *s)
-{
-    return (s != &unfinished_seg);
-}
-
-static inline int has_unique_children(const segment_t *s)
-{
-    return (s->id != ID_HEADER);
-}
-
-static inline int is_part(const segment_t *s)
-{
-    return ((s->id & TYPE_MASK) == T_PART);
-}
-
-static part_t *get_part(segment_t *s)
-{
-    while (s && !is_part(s))
-	s = s->parent;
-    /* safe downcast */
-    return (part_t *)s;
-}
-
-#define to_segment(part)	    (&(part)->super)
-
-static void segment_init(segment_t *s, unsigned int id)
-{
-    /* there's only one of these */
-    assert(id != ID_UNFINISHED);
-    s->id = id;
-    s->children = &unfinished_seg;
-}
-
-static segment_t *segment_new(unsigned int id)
-{
-    segment_t *s = xzmalloc(sizeof(segment_t));
-    segment_init(s, id);
-    return s;
-}
-
-static void segment_free(segment_t *s)
-{
-    segment_t *child;
-
-    if (!is_finished(s))
-	return;
-
-    while ((child = s->children)) {
-	s->children = child->next;
-	segment_free(child);
-    }
-
-    if (is_part(s)) {
-	part_t *part = get_part(s);
-	free(part->type);
-	free(part->subtype);
-	free(part->boundary);
-    }
-
-    free(s);
-}
-
-/* Adjust the shape of a new parent segment to cope with
- * the newly added or reshaped child */
-static void segment_adjust_shape(segment_t *parent, segment_t *child)
-{
-    if (!parent->offset && !parent->length) {
-	parent->offset = child->offset;
-	parent->length = child->length;
-    }
-    else {
-	unsigned long child_end = child->offset + child->length;
-	unsigned long parent_end = parent->offset + parent->length;
-	if (child_end > parent_end)
-	    parent->length = child_end - parent->offset;
-    }
-}
-
-static void segment_set_shape(segment_t *s,
-			      unsigned int offset,
-			      unsigned int length)
-{
-    assert(!s->offset);
-    assert(!s->length);
-    s->offset = offset;
-    s->length = length;
-    if (s->parent)
-	segment_adjust_shape(s->parent, s);
-}
-
-/* Give 'parent' a new single child 'child' which covers the same range as
- * 'parent' (which will presumably be reduced later using something like
- * segment_split_right() */
-static void segment_bud(segment_t *parent, segment_t *child)
-{
-    assert(is_finished(parent));
-    assert(!is_finished(parent->children));
-    assert(!child->parent);
-
-    segment_set_shape(child, parent->offset, parent->length);
-
-    parent->children = child;
-    child->next = NULL;
-    child->parent = parent;
-}
-
-/* Make a segment actually be a leaf, i.e. finished */
-static void segment_finish(segment_t *s)
-{
-    assert(!is_finished(s->children));
-    s->children = NULL;
-}
-
-/* Find and return the tail pointer of the segment's children */
-static segment_t **segment_get_tail(segment_t *s)
-{
-    segment_t **tailp;
-
-    assert(is_finished(s));
-
-    if (is_finished(s->children)) {
-	for (tailp = &s->children ;
-	     *tailp ;
-	     tailp = &(*tailp)->next)
-	    ;
-    }
-    else {
-	segment_finish(s);
-	tailp = &s->children;
-    }
-
-    return tailp;
-}
-
-/* Give 'parent' a new child 'child' at the end of the child */
-static void segment_append(segment_t *parent, segment_t *child)
-{
-    segment_t **tailp = segment_get_tail(parent);
-
-    child->next = NULL;
-    *tailp = child;
-    child->parent = parent;
-    segment_adjust_shape(parent, child);
-}
-
-static void segment_detach(segment_t *child)
-{
-    segment_t **prevp;
-
-    assert(child);
-    assert(child->parent);
-
-    for (prevp = &child->parent->children ;
-	 *prevp && *prevp != child;
-	 prevp = &(*prevp)->next)
-	;
-    *prevp = child->next;
-    child->next = NULL;
-}
-
-/* Give 's' a new right sibling and divide it's range between them
- * at offset 'off' from their parent. */
-static void segment_split_right(segment_t *s,
-				unsigned int off,
-				segment_t *sib)
-{
-    assert(is_finished(s));
-    assert(s->parent);
-    assert(!sib->parent);
-
-    /* bounds check 'off' and ensure we don't
-     * try to create zero length parts */
-    assert(off > 0);
-    assert(off < s->length);
-    /* TODO: perhaps bounds check off against 's's children if any */
-
-    segment_set_shape(sib, s->offset + off, s->length - off);
-    s->length = off;
-    sib->next = s->next;
-    s->next = sib;
-    sib->parent = s->parent;
-}
-
-static segment_t *segment_find_child(segment_t *s,
-				     unsigned int id)
-{
-    segment_t *child;
-
-    if (!s) return NULL;
-
-    for (child = s->children ; child ; child = child->next) {
-	if (child->id == id)
-	    return child;
-    }
-    return NULL;
-}
-
-static unsigned int segment_get_num_children(segment_t *s)
-{
-    segment_t *child;
-    unsigned int n = 0;
-
-    if (!s) return 0;
-
-    for (child = s->children ; child ; child = child->next)
-	n++;
-    return n;
-}
-
-#if DEBUG
-static const char *indent(int depth)
-{
-    int i;
-    static struct buf buf = BUF_INITIALIZER;
-    static int lastdepth = -1;
-
-    if (depth != lastdepth) {
-	buf_reset(&buf);
-	for (i = 0 ; i < depth ; i++)
-	    buf_appendcstr(&buf, "  ");
-	lastdepth = depth;
-    }
-    return buf_cstring(&buf);
-}
-
-static void segment_dump(segment_t *s, int depth)
-{
-    segment_t *child;
-
-    fprintf(stderr, "%sSEG id=", indent(depth));
-    switch (s->id) {
-    case ID_INVALID:
-	fputs("INVALID", stderr);
-	break;
-    case ID_UNFINISHED:
-	fputs("UNFINISHED\n", stderr);
-	return;
-    case ID_HEADER:
-	fputs("HEADER", stderr);
-	break;
-    case ID_BODY:
-	fputs("BODY", stderr);
-	break;
-    default:
-	switch ((s->id & TYPE_MASK)) {
-	case T_FIELD: {
-	    field_desc_t *desc = field_desc_get_byid(s->id);
-	    if (desc)
-		fprintf(stderr, "FIELD:%s", desc->name);
-	    else
-		fprintf(stderr, "FIELD:%x", s->id & ID_MASK);
-	    break;
-	    }
-	case T_PART:
-	    fprintf(stderr, "PART:%u", (s->id & ID_MASK));
-	    break;
-	default:
-	    fprintf(stderr, "%08x", s->id);
-	    break;
-	}
-	break;
-    }
-    fprintf(stderr, " offset=%u length=%u",
-	    s->offset, s->length);
-
-    if (is_part(s)) {
-	part_t *part = get_part(s);
-	fprintf(stderr, " type=%s/%s"
-			" charset=%s"
-			" encoding=%s"
-			" boundary=%s",
-		part->type, part->subtype,
-		charset_name(part->charset),
-		encoding_name(part->encoding),
-		part->boundary);
-    }
-
-    fputc('\n', stderr);
-
-    for (child = s->children ; child ; child = child->next)
-	segment_dump(child, depth+1);
-}
-#endif
-
-/*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
-
-static segment_t *part_new(message_t *m, unsigned int id)
-{
-    part_t *part = xzmalloc(sizeof(part_t));
-    segment_init(to_segment(part), T_PART|id);
-    part->message = m;
-    return to_segment(part);
-}
-
-static void part_set_type(part_t *part, const char *type,
-			  const char *subtype)
-{
-    free(part->type);
-    free(part->subtype);
-    part->type = (type ? ucase(xstrdup(type)) : NULL);
-    part->subtype = (type ? ucase(xstrdup(subtype)) : NULL);
-}
-
-#if DEBUG
-static const char *part_get_path(part_t *part)
-{
-    ptrarray_t ancestors = PTRARRAY_INITIALIZER;
-    static struct buf buf = BUF_INITIALIZER;
-    int i;
-
-    for ( ; part ; part = get_part(part->super.parent))
-	ptrarray_push(&ancestors, part);
-
-    buf_reset(&buf);
-    for (i = ancestors.count-1 ; i >= 0  ; i--)
-	buf_printf(&buf, "%s%u",
-		    (buf.len ? "." : ""),
-		    ((segment_t *)ancestors.data[i])->id & ID_MASK);
-
-    ptrarray_fini(&ancestors);
-    return buf_cstring(&buf);
-}
-#endif
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 
 EXPORTED message_t *message_new(void)
 {
-    message_t *m;
-
-    m = xzmalloc(sizeof(*m));
+    message_t *m = xzmalloc(sizeof(*m));
 
     m->refcount = 1;
-    m->segs = &unfinished_seg;
-    m->cheader_segs = &unfinished_seg;
 
     return m;
 }
@@ -3979,7 +3380,7 @@ static int message_need(message_t *m, unsigned int need)
 	    filename = mailbox_message_fname(m->mailbox, m->record.uid);
 	else
 	    return IMAP_NOTFOUND;
-	r = message2_map_file(m, filename);
+	r = message_map_file(m, filename);
 	if (r) return r;
 	found(M_MAP);
     }
@@ -3992,52 +3393,23 @@ static int message_need(message_t *m, unsigned int need)
 	found(M_CACHE);
     }
 
-    if (is_missing(M_SEGS)) {
+    if (is_missing(M_CACHEBODY)) {
 	if (message_need(m, M_CACHE) == 0) {
-	    r = message2_parse_csections(m);
+	    r = message_parse_cbodystructure(m);
 	    if (r) return r;
-	    found(M_SEGS);	    /* no M_BODY yet */
-	}
-	else if (message_need(m, M_MAP) == 0) {
-	    if (!is_finished(m->segs)) {
-		m->segs = part_new(m, 1);
-		segment_set_shape(m->segs, 0, m->map.len);
-	    }
-	    r = message2_parse_header(get_part(m->segs), &m->map);
-	    if (r) return r;
-	    found(M_SEGS|M_BODY);
+	    found(M_CACHEBODY);
 	}
 	else
-	    return IMAP_NOTFOUND;
-#if DEBUG
-	segment_dump(m->segs, 0);
-#endif
+	    return message_need(m, M_FULLBODY);
     }
 
-    if (is_missing(M_BODY)) {
-	r = message_need(m, M_SEGS);
+    if (is_missing(M_FULLBODY)) {
+	r = message_need(m, M_MAP);
 	if (r) return r;
-	if (is_missing(M_BODY) && message_need(m, M_CACHE) == 0) {
-	    r = message2_parse_cbodystructure(m);
-	    if (r) return r;
-	    found(M_BODY);
-	}
-    }
-
-    if (is_missing(M_CHEADER)) {
-	r = message_need(m, M_CACHE);
+	m->body = (struct body *)xzmalloc(sizeof(struct body));
+	r = message_parse_mapped(m->map.s, m->map.len, m->body);
 	if (r) return r;
-	r = message2_parse_cheader(m);
-	if (r) return r;
-	found(M_CHEADER);
-    }
-
-    if (is_missing(M_CENVELOPE)) {
-	r = message_need(m, M_CACHE);
-	if (r) return r;
-	r = message2_parse_cenvelope(m);
-	if (r) return r;
-	found(M_CENVELOPE);
+	found(M_CACHEBODY|M_FULLBODY);
     }
 
     /* Check that we got everything we asked for and could get */
@@ -4069,23 +3441,10 @@ static void message_yield(message_t *m, unsigned int yield)
 	m->have &= ~M_MAP;
     }
 
-    if ((yield & M_SEGS)) {
-	segment_free(m->segs);
-	m->segs = NULL;
-	m->have &= ~(M_SEGS|M_BODY);
-    }
-
-    if ((yield & M_CHEADER)) {
-	buf_free(&m->cheader_map);
-	segment_free(m->cheader_segs);
-	m->cheader_segs = NULL;
-	m->have &= ~M_CHEADER;
-    }
-
-    if ((yield & M_CENVELOPE)) {
-	free(m->envelope);
-	m->envelope = NULL;
-	m->have &= ~M_CENVELOPE;
+    if ((yield & M_BODY)) {
+	message_free_body(m->body);
+	m->body = NULL;
+	m->have &= ~M_BODY;
     }
 
     /* Check we yielded everything we could */
@@ -4094,226 +3453,16 @@ static void message_yield(message_t *m, unsigned int yield)
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 
-static int message2_map_segment(message_t *m, segment_t *s, struct buf *buf)
-{
-    int r;
-
-    if (!s) return IMAP_NOTFOUND;
-
-    r = message_need(m, M_MAP);
-    if (r) return r;
-
-    buf_init_ro(buf, m->map.s + s->offset, s->length);
-    return 0;
-}
-
-static int message2_expand_segment(message_t *m, segment_t *s)
-{
-    int r;
-
-    if (is_finished(s->children))
-	return 0;
-
-    if (s->id == ID_BODY) {
-	part_t *part = get_part(s);
-	if (!strcmpsafe(part->type, "MULTIPART")) {
-	    r = message2_parse_multipart(part, s);
-	    if (r) return r;
-	}
-	else
-	    segment_finish(s);
-    }
-    else if (s->id == ID_HEADER || is_part(s)) {
-	/* ID_HEADER happens if we've read a message's segments from
-	 * cyrus.cache and not parsed the header in detail. */
-	struct buf map = BUF_INITIALIZER;
-	r = message2_map_segment(m, s, &map);
-	if (r) return r;
-	r = message2_parse_header(get_part(s), &map);
-	if (r) return r;
-	buf_free(&map);
-    }
-
-    assert(is_finished(s->children));
-#if DEBUG
-    segment_dump(m->segs, 0);
-#endif
-    return 0;
-}
-
-/*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
-
 /*
  * Parse various information out of the cyrus.cache.
  */
-
-/* Parse the cached header (strictly, header subset) */
-static int message2_parse_cheader(message_t *m)
-{
-    buf_init_ro(&m->cheader_map,
-		cacheitem_base(&m->record, CACHE_HEADERS),
-		cacheitem_size(&m->record, CACHE_HEADERS));
-    m->cheader_segs = part_new(m, 1);
-    segment_set_shape(m->cheader_segs, 0, m->cheader_map.len);
-    return message2_parse_header(get_part(m->cheader_segs),
-				 &m->cheader_map);
-}
-
-/* Parse the cached envelope */
-static int message2_parse_cenvelope(message_t *m)
-{
-    int tokslen;
-    int strslen;
-    char **toks;
-    char *strs;
-
-    if (cacheitem_size(&m->record, CACHE_ENVELOPE) < 2)
-	return IMAP_INTERNAL;
-
-    tokslen = NUMENVTOKENS * sizeof(char *);
-    strslen = cacheitem_size(&m->record, CACHE_ENVELOPE) - 2;
-    toks = xzmalloc(tokslen + strslen + 1);
-    strs = ((char *)toks) + tokslen;
-
-    /* +1 -> skip the leading paren */
-    /* -2 -> don't include the size of the outer parens */
-    memcpy(strs, cacheitem_base(&m->record, CACHE_ENVELOPE) + 1, strslen);
-
-    parse_cached_envelope(strs, toks, NUMENVTOKENS);
-
-    m->envelope = toks;
-    return 0;
-}
-
-/* trim the range [start,start+len) */
-#define TRIM_RANGE(off, len, size) \
-    do { \
-	if (len == (uint32_t)-1) \
-	    len = 0; \
-	else if (off > size) { \
-	    len = 0; \
-	} \
-	else if (off + len > size) { \
-	    len = size - off; \
-	} \
-    } while(0)
-
-#define IS_SHAPED(s, off, len) \
-    (((s) == NULL && (len) == 0) || \
-     ((s) != NULL && (s)->offset == (off) && (s)->length == (len)))
-
-/* Parse the cached section structure, which gives us a
- * skeleton tree of segments without most of the MIME
- * information. */
-static int message2_parse_csections(message_t *m)
-{
-    segment_t *part;
-    segment_t *subpart;
-    segment_t *body;
-    segment_t *header;
-    int is_same;
-    int nsubparts;
-    int ins;
-    uint32_t hdr_start, hdr_len;
-    uint32_t con_start, con_len;
-    int partno, encoding, charset;
-    const char *cachestr = cacheitem_base(&m->record, CACHE_SECTION);
-    const char *cacheend = cachestr + cacheitem_size(&m->record, CACHE_SECTION);
-    ptrarray_t stack = PTRARRAY_INITIALIZER;
-    int r = 0;
-
-    assert(!is_finished(m->segs));
-    part = part_new(m, 1);
-    ptrarray_push(&stack, part);
-    m->segs = part;
-
-    while (stack.count) {
-	part = ptrarray_pop(&stack);	/* may be NULL */
-
-	if (cachestr + 4 > cacheend) {
-	    /* ran out of data early */
-	    r = IMAP_MAILBOX_BADFORMAT;
-	    goto out;
-	}
-	nsubparts = CACHE_ITEM_BIT32(cachestr);
-	cachestr += 4;
-	if (!nsubparts)
-	    continue;	    /* leaf part */
-	if (!part)
-	    continue;	    /* found 0 length body in parent */
-
-	ins = stack.count;
-	for (partno = 0 ; partno < nsubparts ; partno++) {
-
-	    if (cachestr + 5*4 > cacheend) {
-		/* ran out of data early */
-		r = IMAP_MAILBOX_BADFORMAT;
-		goto out;
-	    }
-	    hdr_start = CACHE_ITEM_BIT32(cachestr+0*4);
-	    hdr_len = CACHE_ITEM_BIT32(cachestr+1*4);
-	    con_start = CACHE_ITEM_BIT32(cachestr+2*4);
-	    con_len = CACHE_ITEM_BIT32(cachestr+3*4);
-	    charset = CACHE_ITEM_BIT32(cachestr+4*4) >> 16;
-	    encoding = CACHE_ITEM_BIT32(cachestr+4*4) & 0xff;
-
-	    cachestr += 5*4;
-
-	    TRIM_RANGE(hdr_start, hdr_len, m->record.size);
-	    TRIM_RANGE(con_start, con_len, m->record.size);
-
-	    subpart = NULL;
-	    if (hdr_len || con_len) {
-
-		subpart = part;
-
-		body = segment_find_child(part, ID_BODY);
-		header = segment_find_child(part, ID_HEADER);
-		is_same = (IS_SHAPED(header, hdr_start, hdr_len) &&
-			   IS_SHAPED(body, con_start, con_len));
-		if (partno && !is_same) {
-		    subpart = part_new(m, partno);
-		    segment_append(segment_find_child(part, ID_BODY), subpart);
-		}
-		get_part(subpart)->charset = charset;
-		get_part(subpart)->encoding = encoding;
-
-		if (hdr_len > 0 && !is_same) {
-		    segment_t *header = segment_new(ID_HEADER);
-		    segment_set_shape(header, hdr_start, hdr_len);
-		    segment_append(subpart, header);
-		}
-
-		if (con_len > 0 && !is_same) {
-		    segment_t *body = segment_new(ID_BODY);
-		    segment_set_shape(body, con_start, con_len);
-		    segment_append(subpart, body);
-		}
-	    }
-
-	    if (partno) {
-		/* Note: we need to insert at the old tail,
-		 * so that the order of children is reversed,
-		 * so that it's correct again when we pop off.
-		 * Also note: no recursing for part 0, it's a
-		 * header only */
-		ptrarray_insert(&stack, ins, subpart);
-	    }
-	}
-    }
-
-out:
-    ptrarray_fini(&stack);
-    return r;
-}
 
 /*
  * Skip either a single NIL or a balanced possibly-nested list of
  * nstrings.  Useful for ignoring various constructs from the
  * BODYSTRUCTURE cache.
  */
-static int skip_nil_or_nstring_list(struct protstream *prot,
-				    int depth __attribute__((unused)))
+static int skip_nil_or_nstring_list(struct protstream *prot)
 {
     int r = IMAP_MAILBOX_BADFORMAT;
     int c;
@@ -4370,21 +3519,52 @@ out:
     return r;
 }
 
-static int parse_bodystructure_part(part_t *part,
-				    struct protstream *prot,
-				    int depth)
+static int parse_mime_params(struct protstream *prot, struct param **prev)
+{
+    int c;
+    struct buf key = BUF_INITIALIZER;
+    struct buf val = BUF_INITIALIZER;
+    struct param *param;
+
+    c = prot_getc(prot);
+    if (c != '(') {
+	/* must be NIL */
+	if (c != 'N') goto err;
+	c = prot_getc(prot);
+	if (c != 'I') goto err;
+	c = prot_getc(prot);
+	if (c != 'L') goto err;
+	return prot_getc(prot);
+    }
+
+    /* otherwise we have a list */
+    do {
+	c = getnstring(prot, NULL, &key);
+	if (c != ' ') goto err;
+	c = getnstring(prot, NULL, &val);
+	if (c != ' ' && c != ')') goto err;
+	param = (struct param *)xzmalloc(sizeof(struct param));
+	param->attribute = buf_releasenull(&key);
+	param->value = buf_releasenull(&val);
+	*prev = param;
+	prev = &param;
+    } while (c == ' ');
+
+    return prot_getc(prot);
+
+err:
+    buf_free(&key);
+    buf_free(&val);
+    return EOF;
+}
+
+static int parse_bodystructure_part(struct protstream *prot, struct body *body)
 {
     int c;
     int r = 0;
-    struct buf buf1 = BUF_INITIALIZER;
-    struct buf buf2 = BUF_INITIALIZER;
-    segment_t *body = segment_find_child(to_segment(part), ID_BODY);
-    int is_multipart = 0;
+    struct buf buf = BUF_INITIALIZER;
 
-#if DEBUG
-    fprintf(stderr, "%sparsing bodystructure for %s {\n",
-	    indent(depth), part_get_path(part));
-#endif
+    memset(body, 0, sizeof(struct body));
 
     c = prot_getc(prot);
     if (c != '(') {
@@ -4396,125 +3576,80 @@ badformat:
     c = prot_getc(prot);
     prot_ungetc(c, prot);
     if (c == '(') {
-	segment_t *s;
-	int body_is_fake = 0;
+	while (c == '(') {
+	    body->subpart = (struct body *)xrealloc((char *)body->subpart,
+					    (body->numparts+1)*sizeof(struct body));
 
-	if (!body) {
-	    /* IRIS-1912. Message with Content-Type=multipart/something
-	     * but no body at all.  This isn't legal according to
-	     * RFC2046 but it does happen.  We create a fake zero-length
-	     * body just long enough to parse the BODYSTRUCTURE. */
-	    body = segment_new(ID_BODY);
-	    segment_append(to_segment(part), body);
-	    segment_append(body, part_new(part->message, 1));
-	    body_is_fake = 1;
-	}
-	else if (!is_finished(body->children)) {
-	    /* IRIS-1912. Message with Content-Type=multipart/something
-	     * and a non-empty body with no boundaries in it.  This
-	     * isn't legal according to RFC2046 but it does happen.  We
-	     * create a single subpart to finish off the segment subtree
-	     * beneath ID_BODY and keep it. */
-	    segment_t *subpart, *subbody;
-
-	    subpart = part_new(part->message, 1);
-	    segment_set_shape(subpart, body->offset, body->length);
-	    segment_append(body, subpart);
-
-	    subbody = segment_new(ID_BODY);
-	    segment_set_shape(subbody, body->offset, body->length);
-	    segment_append(subpart, subbody);
-	    segment_finish(subbody);
-	}
-
-	is_multipart = 1;
-	/* parse children of a MULTIPART */
-	for (s = body->children ; s ; s = s->next) {
-	    r = parse_bodystructure_part(get_part(s), prot, depth+1);
+	    r = parse_bodystructure_part(prot, &body->subpart[body->numparts]);
 	    if (r) goto out;
+
+	    body->numparts++;
+
+	    c = prot_getc(prot);
+	    prot_ungetc(c, prot);
 	}
 
 	c = prot_getc(prot);
 	if (c != ' ') goto badformat;
 
-	if (body_is_fake) {
-	    segment_detach(body);
-	    segment_free(body);
-	}
+	body->type = xstrdup("MULTIPART");
     }
     else {
-
 	/* parse mime-type */
-	c = getnstring(prot, NULL, &buf1);
+	c = getnstring(prot, NULL, &buf);
 	if (c != ' ') goto badformat;
-#if DEBUG
-	fprintf(stderr, "%smime-type=\"%s\"\n", indent(depth), buf1.s);
-#endif
+
+	body->type = buf_releasenull(&buf);
     }
 
     /* parse mime-subtype */
-    c = getnstring(prot, NULL, &buf2);
+    c = getnstring(prot, NULL, &buf);
     if (c != ' ') goto badformat;
-#if DEBUG
-    fprintf(stderr, "%smime-subtype=\"%s\"\n", indent(depth), buf2.s);
-#endif
+    body->subtype = buf_releasenull(&buf);
 
-    part_set_type(part, (is_multipart ? "MULTIPART" : buf1.s), buf2.s);
+    /* parse mime-params */
+    c = parse_mime_params(prot, &body->params);
+    if (c != ' ') goto badformat;
 
-    /* skip mime-params: we have all the ones we care about from SECTION */
-    r = skip_nil_or_nstring_list(prot, depth);
-    if (r) goto out;
-
-    if (!is_multipart) {
-
-	/* skip msgid: we have it from ENVELOPE */
-	c = getnstring(prot, NULL, &buf1);
+    if (strcmp(body->type, "MULTIPART")) {
+	/* msgid */
+	c = getnstring(prot, NULL, &buf);
 	if (c != ' ') goto badformat;
-#if DEBUG
-	fprintf(stderr, "%smsgid=\"%s\"\n", indent(depth), buf1.s);
-#endif
+	body->message_id = buf_releasenull(&buf);
 
-	/* skip description: we don't care */
-	c = getnstring(prot, NULL, &buf1);
+	/* description */
+	c = getnstring(prot, NULL, &buf);
 	if (c != ' ') goto badformat;
-#if DEBUG
-	fprintf(stderr, "%sdescription=\"%s\"\n", indent(depth), buf1.s);
-#endif
+	body->description = buf_releasenull(&buf);
 
-	/* skip encoding: we have it from SECTION */
-	c = getnstring(prot, NULL, &buf1);
+	/* encoding */
+	c = getnstring(prot, NULL, &buf);
 	if (c != ' ') goto badformat;
-#if DEBUG
-	fprintf(stderr, "%sencoding=\"%s\"\n", indent(depth), buf1.s);
-#endif
+	body->encoding = buf_releasenull(&buf);
 
-	/* skip content-size: we have it from SECTION */
-	c = getword(prot, &buf1);
+	/* content-size */
+	c = getword(prot, &buf);
 	if (c != ' ') goto badformat;
-#if DEBUG
-	    fprintf(stderr, "%scontent-size=\"%s\"\n", indent(depth), buf1.s);
-#endif
+	body->content_size = atoi(buf_cstring(&buf));
 
-	if (!strcmpsafe(part->type, "TEXT")) {
-
+	if (!strcmpsafe(body->type, "TEXT")) {
 	    /* parse content-lines */
-	    c = getword(prot, &buf1);
+	    c = getword(prot, &buf);
 	    if (c != ' ') goto badformat;
-#if DEBUG
-	    fprintf(stderr, "%scontent-lines=\"%s\"\n", indent(depth), buf1.s);
-#endif
-
+	    body->content_lines = atoi(buf_cstring(&buf));
 	}
-	else if (!strcmpsafe(part->type, "MESSAGE") &&
-		 !strcmpsafe(part->subtype, "RFC822")) {
+
+	else if (!strcmpsafe(body->type, "MESSAGE") &&
+		 !strcmpsafe(body->subtype, "RFC822")) {
+	    body->numparts = 1;
+	    body->subpart = xzmalloc(sizeof(struct body));
 
 	    /* skip envelope */
-	    r = skip_nil_or_nstring_list(prot, depth);
+	    r = skip_nil_or_nstring_list(prot);
 	    if (r) goto out;
 
 	    /* process body */
-	    r = parse_bodystructure_part(get_part(body->children),
-					 prot, depth+1);
+	    r = parse_bodystructure_part(prot, body->subpart);
 	    if (r) goto out;
 
 	    /* skip trailing space (parse_bs_part doesn't eat it) */
@@ -4522,66 +3657,150 @@ badformat:
 	    if (c != ' ') goto badformat;
 
 	    /* parse content-lines */
-	    c = getword(prot, &buf1);
+	    c = getword(prot, &buf);
 	    if (c != ' ') goto badformat;
-#if DEBUG
-	    fprintf(stderr, "%scontent-lines=\"%s\"\n", indent(depth), buf1.s);
-#endif
+	    body->content_lines = atoi(buf_cstring(&buf));
 	}
 
 	/* parse md5sum */
-	c = getnstring(prot, NULL, &buf1);
+	c = getnstring(prot, NULL, &buf);
 	if (c != ' ') goto badformat;
-#if DEBUG
-	fprintf(stderr, "%smd5sum=\"%s\"\n", indent(depth), buf1.s);
-#endif
+	body->md5 = buf_releasenull(&buf);
     }
 
     /* skips disposition-and-params */
-    r = skip_nil_or_nstring_list(prot, depth);
+    r = skip_nil_or_nstring_list(prot);
     if (r) goto out;
 
     /* parse languages */  /* TODO */
-    r = skip_nil_or_nstring_list(prot, depth);
+    r = skip_nil_or_nstring_list(prot);
     if (r) goto out;
 
-    /* skip location */
-    c = getnstring(prot, NULL, &buf1);
-    if (c != ')') goto badformat;
-#if DEBUG
-    fprintf(stderr, "%slocation=\"%s\"\n", indent(depth), buf1.s);
-#endif
+    /* location */
+    c = getnstring(prot, NULL, &buf);
+    if (c != ')') goto badformat; /* final field */
+    body->location = buf_releasenull(&buf);
 
     r = 0;
 out:
-#if DEBUG
-    fprintf(stderr, "%s}\n", indent(depth));
-#endif
-    buf_free(&buf1);
-    buf_free(&buf2);
+    buf_free(&buf);
     return r;
 }
 
-static int message2_parse_cbodystructure(message_t *m)
+static int parse_bodystructure_sections(const char **cachestrp, const char *cacheend, struct body *body)
+{
+    struct body *this;
+    int nsubparts;
+    int part;
+
+    if (*cachestrp + 4 > cacheend)
+	return IMAP_MAILBOX_BADFORMAT;
+
+    nsubparts = CACHE_ITEM_BIT32(*cachestrp);
+    *cachestrp += 4;
+
+    if (*cachestrp + 4*5*nsubparts > cacheend)
+	return IMAP_MAILBOX_BADFORMAT;
+
+    if (strcmp(body->type, "MESSAGE") == 0
+	&& strcmp(body->subtype, "RFC822") == 0) {
+	if (body->subpart->numparts) {
+	    /*
+	     * Part 0 of a message/rfc822 is the message header/text.
+	     * Nested parts of a message/rfc822 containing a multipart
+	     * are the sub-parts of the multipart.
+	     */
+	    if (body->subpart->numparts + 1 != nsubparts)
+		return IMAP_MAILBOX_BADFORMAT;
+
+	    body->subpart->header_offset = CACHE_ITEM_BIT32(*cachestrp+0*4);
+	    body->subpart->header_size = CACHE_ITEM_BIT32(*cachestrp+1*4);
+	    body->subpart->content_offset = CACHE_ITEM_BIT32(*cachestrp+2*4);
+	    body->subpart->content_size = CACHE_ITEM_BIT32(*cachestrp+3*4);
+	    *cachestrp += 5*4;
+
+	    for (part = 0; part < body->subpart->numparts; part++) {
+		this = &body->subpart->subpart[part];
+		this->header_offset = CACHE_ITEM_BIT32(*cachestrp+0*4);
+		this->header_size = CACHE_ITEM_BIT32(*cachestrp+1*4);
+		this->content_offset = CACHE_ITEM_BIT32(*cachestrp+2*4);
+		this->content_size = CACHE_ITEM_BIT32(*cachestrp+3*4);
+		*cachestrp += 5*4;
+	    }
+
+	    /* and parse subparts */
+	    for (part = 0; part < body->subpart->numparts; part++) {
+		this = &body->subpart->subpart[part];
+		if (parse_bodystructure_sections(cachestrp, cacheend, this))
+		    return IMAP_MAILBOX_BADFORMAT;
+	    }
+	}
+	else {
+	    /*
+	     * Part 0 of a message/rfc822 is the message header/text.
+	     * Part 1 of a message/rfc822 containing a non-multipart
+	     * is the message body.
+	     */
+
+	    if (2 != nsubparts)
+		return IMAP_MAILBOX_BADFORMAT;
+
+	    /* data is the same in body, just grab the first one */
+	    body->subpart->header_offset = CACHE_ITEM_BIT32(*cachestrp+0*4);
+	    body->subpart->header_size = CACHE_ITEM_BIT32(*cachestrp+1*4);
+	    body->subpart->content_offset = CACHE_ITEM_BIT32(*cachestrp+2*4);
+	    body->subpart->content_size = CACHE_ITEM_BIT32(*cachestrp+3*4);
+	    *cachestrp += 10*4;
+
+	    /* and parse subpart */
+	    if (parse_bodystructure_sections(cachestrp, cacheend, body->subpart))
+	        return IMAP_MAILBOX_BADFORMAT;
+	}
+    }
+    else if (body->numparts) {
+	/*
+	 * Cannot fetch part 0 of a multipart.
+	 * Nested parts of a multipart are the sub-parts.
+	 */
+	if (body->numparts + 1 != nsubparts)
+	    return IMAP_MAILBOX_BADFORMAT;
+	*cachestrp += 5*4;
+	for (part = 0; part < body->numparts; part++) {
+	    this = &body->subpart[part];
+	    this->header_offset = CACHE_ITEM_BIT32(*cachestrp+0*4);
+	    this->header_size = CACHE_ITEM_BIT32(*cachestrp+1*4);
+	    this->content_offset = CACHE_ITEM_BIT32(*cachestrp+2*4);
+	    this->content_size = CACHE_ITEM_BIT32(*cachestrp+3*4);
+	    *cachestrp += 5*4;
+	}
+
+	for (part = 0; part < body->numparts; part++) {
+	    this = &body->subpart[part];
+	    if (parse_bodystructure_sections(cachestrp, cacheend, this))
+		return IMAP_MAILBOX_BADFORMAT;
+	}
+    }
+    else {
+	/*
+	 * Leaf section--no part 0 or nested parts
+	 */
+	if (nsubparts != 0)
+	    return IMAP_MAILBOX_BADFORMAT;
+    }
+
+    return 0;
+}
+
+static int message_parse_cbodystructure(message_t *m)
 {
     struct protstream *prot = NULL;
+    const char *cachestr = cacheitem_base(&m->record, CACHE_SECTION);
+    const char *cacheend = cachestr + cacheitem_size(&m->record, CACHE_SECTION);
+    struct body toplevel;
     int r;
-
-    /* We assume we have a complete and correct tree of segments
-     * from the SECTION cache, and we're just filling in some
-     * details like MIME types */
-    assert(m->have & M_SEGS);
-    assert(is_finished(m->segs));
 
     /* We're reading the cache - double check we have it */
     assert(m->have & M_CACHE);
-
-#if DEBUG
-    fprintf(stderr, "parsing bodystructure=\"");
-    fwrite(cacheitem_base(&m->record, CACHE_BODYSTRUCTURE), 1,
-	    cacheitem_size(&m->record, CACHE_BODYSTRUCTURE), stderr);
-    fprintf(stderr, "\"\n");
-#endif
 
     prot = prot_readmap(cacheitem_base(&m->record, CACHE_BODYSTRUCTURE),
 			cacheitem_size(&m->record, CACHE_BODYSTRUCTURE));
@@ -4589,428 +3808,34 @@ static int message2_parse_cbodystructure(message_t *m)
 	return IMAP_MAILBOX_BADFORMAT;
     prot_setisclient(prot, 1);	/* don't crash parsing literals */
 
-    r = parse_bodystructure_part(get_part(m->segs), prot, 0);
+    m->body = xzmalloc(sizeof(struct body));
+    r = parse_bodystructure_part(prot, m->body);
+    if (r) syslog(LOG_ERR, "IOERROR: parsing body structure for %s %u (%.*s)",
+		  m->mailbox->name, m->record.uid,
+		  (int)cacheitem_size(&m->record, CACHE_BODYSTRUCTURE),
+		  cacheitem_base(&m->record, CACHE_BODYSTRUCTURE));
+    if (r) goto done;
+
+    memset(&toplevel, 0, sizeof(struct body));
+    toplevel.type = "MESSAGE";
+    toplevel.subtype = "RFC822";
+    toplevel.subpart = m->body;
+
+    r = parse_bodystructure_sections(&cachestr, cacheend, &toplevel);
+    if (r) syslog(LOG_ERR, "IOERROR: parsing section structure for %s %u (%.*s)",
+		  m->mailbox->name, m->record.uid,
+		  (int)cacheitem_size(&m->record, CACHE_BODYSTRUCTURE),
+		  cacheitem_base(&m->record, CACHE_BODYSTRUCTURE));
+
+done:
     prot_free(prot);
-#if DEBUG
-    segment_dump(m->segs, 0);
-#endif
+
     return r;
 }
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 
-/*
- * Parsing a raw RFC822 message from mapped data, or just the header
- * part from a cached header.
- */
-
-#define P_UNKNOWN   	0
-#define P_BOUNDARY	1
-#define P_CHARSET	2
-
-static int parse_param_name(const char *s)
-{
-    if (!s) return P_UNKNOWN;
-
-    switch (s[0]) {
-    case 'B':
-    case 'b':
-	if (!strcasecmp(s, "boundary"))
-	    return P_BOUNDARY;
-	break;
-    case 'C':
-    case 'c':
-	if (!strcasecmp(s, "charset"))
-	    return P_CHARSET;
-	break;
-    }
-    return P_UNKNOWN;
-}
-
-/*
- * Parse the special MIME fields.  Note that we can't just parse these
- * as they appear in the header, because we have to check them in a
- * specific order and they might not appear in that order.
- *
- * We do not return failure: RFC2045 recommends that the defaults be
- * assumed the absence of the Content-Type field, or syntactic errors in
- * the field.
- */
-static void handle_mime_fields(part_t *part,
-			       const struct buf *mime_fields)
-{
-    const struct buf *raw;
-    char *subtype = NULL;
-    rfc822tok_t tok = RFC822TOK_INITIALIZER;
-    int t;
-    char *val;
-
-    /* parse MIME-Version: */
-    raw = &mime_fields[ID_MIME_VERSION - ID_MIME_FIRST];
-    /* TODO: per RFC2045 section 4, MIME-Version is required sometimes
-     * and not required at some other times. */
-    if (raw->s) {
-	rfc822tok_init_buf(&tok, raw, 0);
-	/* RFC2045 says "It is not possible to fully specify how a mail
-	 * reader that conforms with MIME as defined in this document should
-	 * treat a message that might arrive in the future with some value
-	 * of MIME-Version other than "1.0"."  Thanks for nothing guys. */
-	t = rfc822tok_next(&tok, &val);
-	if (t != RFC822_ATOM || strcmpsafe(val, "1.0"))
-	    goto defaults;
-	t = rfc822tok_next(&tok, &val);
-	if (t != EOF)
-	    goto defaults;
-	rfc822tok_fini(&tok);
-    }
-    else if (part->super.parent == NULL) {
-	/* MIME-Version is required in the outermost header of a multipart */
-	goto defaults;
-    }
-
-    /* parse Content-Type: */
-    raw = &mime_fields[ID_CONTENT_TYPE - ID_MIME_FIRST];
-    if (!raw->s)
-	goto defaults;
-    rfc822tok_init_buf(&tok, raw, RFC822_SPECIAL_EQUAL);
-
-    /* parse TYPE/SUBTYPE */
-    t = rfc822tok_next(&tok, &val);
-    if (t != RFC822_ATOM && t != RFC822_QSTRING)
-	goto defaults;
-    subtype = strchr(val, '/');
-    /* RFC2045 says "a subtype specification is MANDATORY -- it may
-     * not be omitted from a Content-Type header field" */
-    if (!subtype || !*subtype)
-	goto defaults;
-    *subtype++ = '\0';
-    /* RFC2045 says "The type, subtype, and parameter names are not
-     * case sensitive", so we normalise the case here.  We use upper
-     * case only for legacy reasons; the old message API used it. */
-    part_set_type(part, val, subtype);
-
-    /* RFC2045 says "the "charset" parameter is applicable to any
-     * subtype of "text"" */
-    if (!strcmp(part->type, "TEXT"))
-	part->charset = 0;	    /* US-ASCII is always charset 0 */
-    else
-	part->charset = CHARSET_UNKNOWN_CHARSET;
-
-    /* parse any parameters */
-    while ((t = rfc822tok_next(&tok, &val)) == ';') {
-	int param = P_UNKNOWN;
-	t = rfc822tok_next(&tok, &val);
-	if (t != RFC822_ATOM && t != RFC822_QSTRING)
-	    goto defaults;
-	param = parse_param_name(val);
-	t = rfc822tok_next(&tok, &val);
-	if (t != '=')
-	    goto defaults;
-	t = rfc822tok_next(&tok, &val);
-	if (t != RFC822_ATOM && t != RFC822_QSTRING)
-	    goto defaults;
-	if (!val || !*val)
-	    continue;
-	if (param == P_BOUNDARY) {
-	    /* RFC2045 says "multipart boundaries are case-sensitive" */
-	    free(part->boundary);
-	    part->boundary = xstrdup(val);
-	}
-	else if (param == P_CHARSET) {
-	    part->charset = charset_lookupname(val);
-	}
-    }
-    if (t != EOF)
-	goto defaults;
-
-    /* parse Content-Transfer-Encoding: */
-    /* RFC2045 says ""Content-Transfer-Encoding: 7BIT" is assumed if the
-     * Content-Transfer-Encoding header field is not present." */
-    part->encoding = ENCODING_NONE;
-    raw = &mime_fields[ID_CONTENT_TRANSFER_ENCODING - ID_MIME_FIRST];
-    if (raw->s) {
-	int e;
-	rfc822tok_init_buf(&tok, raw, 0);
-	t = rfc822tok_next(&tok, &val);
-	if (t != RFC822_ATOM && t != RFC822_QSTRING)
-	    goto default_encoding;
-	e = encoding_lookupname(val);
-	if (e == ENCODING_UNKNOWN)
-	    goto default_encoding;
-	part->encoding = e;
-	t = rfc822tok_next(&tok, &val);
-	if (t != EOF)
-	    goto default_encoding;
-    }
-
-    /* post-parse checks */
-
-    if (!strcmp(part->type, "MULTIPART")) {
-	/* RFC2045 says "the "boundary" parameter is required for any
-	 * subtype of the "multipart" media type" */
-	if (!part->boundary)
-	    goto defaults;
-	/* RFC2045 says "If an entity is of type "multipart" the
-	 * Content-Transfer-Encoding is not permitted to have any value
-	 * other than "7bit", "8bit" or "binary" */
-	if (part->encoding != ENCODING_NONE)
-	    goto defaults;
-    }
-
-    rfc822tok_fini(&tok);
-    return;
-
-defaults:
-    /* RFC2045 says "Default RFC 822 messages without a MIME
-     * Content-Type header are taken this protocol to be plain text in
-     * the US-ASCII character set, which can be explicitly specified as:
-     * Content-type: text/plain; charset=us-ascii" */
-    part_set_type(part, "TEXT", "PLAIN");
-    part->charset = 0;	    /* US-ASCII is always charset 0 */
-    part->encoding = ENCODING_NONE;
-    free(part->boundary);
-    part->boundary = NULL;
-    rfc822tok_fini(&tok);
-    return;
-
-default_encoding:
-    /* RFC2045 says "Any entity with an unrecognized
-     * Content-Transfer-Encoding must be treated as if it has a
-     * Content-Type of "application/octet-stream"" */
-    part_set_type(part, "APPLICATION", "OCTET-STREAM");
-    part->charset = CHARSET_UNKNOWN_CHARSET;
-    part->encoding = ENCODING_NONE;
-}
-
-static int add_field(segment_t *header,
-		     field_desc_t *desc,
-		     const char *start,
-		     const char *head,
-		     const char *colon,
-		     const char *line,
-		     struct buf *mime_fields)
-{
-    segment_t *field;
-    int r = 0;
-
-    field = segment_new(desc->id);
-    segment_set_shape(field, header->offset + (head - start), line - head);
-    segment_finish(field);
-    segment_append(header, field);
-
-    if (desc->id >= ID_MIME_FIRST && desc->id <= ID_MIME_LAST) {
-	colon++;
-	buf_init_ro(&mime_fields[desc->id - ID_MIME_FIRST],
-		    colon, line - colon);
-    }
-
-    return r;
-}
-
-/*
- * A note about the ID_HEADER segment.  RFC5322 (Internet Message
- * Format) and RFC3501 (IMAPv4) disagree slightly about what a "header"
- * is.  In RFC5322 the empty line (i.e. the CRLF pair) immediately
- * following the last header field is neither in the header nor in the
- * body, so strictly speaking an RFC5322 header does not include a
- * trailing empty line.  In RFC3501 however, when the client asks for a
- * "HEADER" section, this must include a trailing empty line (except in
- * the corner case where the underlying message has no body and no empty
- * line).  For a number of reasons (most of them historical) we lean the
- * RFC3501 way and include the trailing empty line in ID_HEADER.  This
- * means that ID_HEADER and the following ID_BODY always abut precisely.
- */
-
-static int message2_parse_header(part_t *part, const struct buf *map)
-{
-    segment_t *header;
-    const char *start;	    /* start of header+body section */
-    const char *end;	    /* end of header+body section */
-    const char *head;	    /* start of first line of this header  */
-    const char *line;	    /* start of this line */
-    const char *colon;	    /* the ':' separating the name, if any */
-    const char *crlf;	    /* CR+LF at end of this line */
-    struct buf mime_fields[ID_MIME_LAST-ID_MIME_FIRST+1];
-    field_desc_t *desc = NULL;
-    int i;
-    int r = IMAP_MESSAGE_BADHEADER;
-
-    header = segment_find_child(to_segment(part), ID_HEADER);
-    if (!header) {
-	header = segment_new(ID_HEADER);
-	segment_bud(to_segment(part), header);
-    }
-    segment_finish(header);
-
-    memset(mime_fields, 0, sizeof(mime_fields));
-
-    start = map->s;
-    end = start + map->len;
-    line = start;
-    head = NULL;
-
-    while (line < end) {
-
-	if (end - line < 2) {
-	    /* not enough room remains for a field */
-	    goto out;
-	}
-	else if (line[0] == '\r' && line[1] == '\n') {
-	    /* empty line: separates header and body */
-	    break;
-	}
-	else if (isspace(*line)) {
-	    /* continuation line */
-	}
-	else {
-	    /* new header line */
-	    if (desc) {
-		/* previous field is complete */
-		r = add_field(header, desc, start, head, colon, line, mime_fields);
-		if (r) goto out;
-		desc = NULL;
-		head = NULL;
-	    }
-	    colon = memchr(line, ':', end-line);
-	    if (!colon)
-		goto next;  /* no colon */
-	    /* TODO: walk 'colon' back over any whitespace */
-	    if (colon == line)
-		goto next;  /* zero length name */
-	    if (colon-line > MAX_FIELDNAME_LENGTH)
-		goto next;  /* name too long */
-	    head = line;
-	    desc = field_desc_get_byname(line, colon-line, /*create*/1);
-	}
-
-next:
-	crlf = memchr(line, '\r', line-end);
-	if (!crlf)
-	    goto out;  /* no CR */
-	if (crlf+2 >= end)
-	    goto out;  /* no LF */
-	line = crlf+2;
-    }
-
-    if (desc) {
-	/* last field is complete */
-	r = add_field(header, desc, start, head, colon, line, mime_fields);
-	if (r) goto out;
-    }
-
-    if (line+2 < end) {
-	/* a body follows; this is not always the case, especially
-	 * when we're parsing cached header fields. */
-	segment_t *body = segment_new(ID_BODY);
-	segment_split_right(header, line+2 - start, body);
-    }
-
-    /* TODO: maintain a line count in each part!!! */
-
-    handle_mime_fields(part, mime_fields);
-    r = 0;
-
-out:
-    for (i = ID_MIME_FIRST ; i < ID_MIME_LAST ; i++)
-	buf_free(&mime_fields[i - ID_MIME_FIRST]);
-    return r;
-}
-
-static int message2_parse_multipart(part_t *part,
-				    segment_t *body)
-{
-    const char *start;	    /* start of body section */
-    const char *end;	    /* end of body section */
-    const char *line;	    /* start of this line */
-    const char *crlf;	    /* CR+LF at end of this line */
-    const char *entstart;   /* start of the entity being parsed */
-    int blen;		    /* length of boundary string */
-    unsigned int next_partno = 1;
-    int r;
-    struct buf map = BUF_INITIALIZER;
-    message_t *m = part->message;
-
-    assert(part->boundary);
-    blen = strlen(part->boundary);
-
-    r = message2_map_segment(m, body, &map);
-    if (r) return r;
-
-    start = map.s;
-    end = start + map.len;
-    line = start;
-    entstart = NULL;
-    crlf = NULL;
-
-    while (line < end) {
-
-	if (end - line < blen+4) {
-	    /* not enough room remains for a closing boundary */
-	    break;
-	}
-	else if (line[0] == '-' && line[1] == '-') {
-	    /* Potentially a boundary line.  Note that the nice thing
-	     * about our top-down parsing model is that we already know
-	     * the shape of the entity so we don't have to deal with
-	     * possibility of seeing any boundary except our own.  */
-	    int close = 0;
-	    const char *p = line+2;
-	    if (!memcmp(p, part->boundary, blen)) {
-		p += blen;
-		if (p[0] == '-' && p[1] == '-') {
-		    p += 2;
-		    close = 1;
-		}
-		/* skip any trailing Linear White Space */
-		for ( ; p < end && (*p == ' ' || *p == '\t') ; p++)
-		    ;
-		/* boundary line must end with a CRLF or the end
-		 * of the entity */
-		if (p == end ||
-		    ((end - p) >= 2 && p[0] == '\r' && p[1] == '\n')) {
-		    /* ok we have a correctly formed boundary line */
-		    if (entstart) {
-			/* crlf points to the CRLF before the start of
-			 * the boundary line, which is one after the
-			 * last byte of the previous entity */
-			segment_t *part = part_new(m, next_partno++);
-			segment_set_shape(part,
-					  body->offset + (entstart - start),
-					  crlf - entstart);
-			segment_append(body, part);
-		    }
-		    entstart = (p < end ? p+2 : NULL);
-		    /* entstart points to the first byte of the next entity */
-		    if (close)
-			break;
-		}
-	    }
-	}
-
-	crlf = memchr(line, '\r', line-end);
-	if (!crlf)
-	    break;  /* no CR */
-	if (crlf+2 >= end)
-	    break;  /* no LF */
-	if (crlf[1] != '\n')
-	    break;  /* no LF */
-	line = crlf+2;
-    }
-
-    /*
-     * RFC2046 says:
-     *
-     * There appears to be room for additional information prior to the
-     * first boundary delimiter line and following the final boundary
-     * delimiter line.  These areas should generally be left blank, and
-     * implementations must ignore anything that appears before the
-     * first boundary delimiter line or after the last one.
-     */
-
-    return 0;
-}
-
-static int message2_map_file(message_t *m, const char *fname)
+static int message_map_file(message_t *m, const char *fname)
 {
     int fd;
     struct stat sbuf;
@@ -5043,8 +3868,218 @@ static int message2_map_file(message_t *m, const char *fname)
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 
+static void body_get_leaf_types(struct body *body, strarray_t *types)
+{
+    int i;
+
+    if (strcmpsafe(body->type, "MULTIPART") &&
+	strcmpsafe(body->type, "MESSAGE")) {
+	strarray_append(types, body->type);
+	strarray_append(types, body->subtype);
+    }
+
+    for (i = 0; i < body->numparts; i++) {
+	body_get_leaf_types(&body->subpart[i], types);
+    }
+}
+
+static int body_foreach_text_section(struct body *body,
+				     struct message *message,
+				     int (*proc)(int isbody, int charset, int encoding,
+						 const char *subtype, struct buf *data, void *rock),
+				     void *rock)
+{
+    struct buf data = BUF_INITIALIZER;
+    int i;
+    int r;
+
+    if (body->header_size) {
+	buf_init_ro(&data, message->map.s + body->header_offset, body->header_size);
+	r = proc(/*isbody*/0, 0, 0, NULL, &data, rock);
+	buf_free(&data);
+
+	if (r) return r;
+    }
+
+    if (!strcmpsafe(body->type, "TEXT")) {
+	int encoding, charset;
+	message_parse_charset(body, &encoding, &charset);
+
+	buf_init_ro(&data, message->map.s + body->content_offset, body->content_size);
+	r = proc(/*isbody*/1, charset, encoding,
+		 body->subtype, &data, rock);
+	buf_free(&data);
+
+	if (r) return r;
+    }
+
+    for (i = 0; i < body->numparts; i++) {
+	r = body_foreach_text_section(&body->subpart[i], message, proc, rock);
+	if (r) return r;
+    }
+
+    return 0;
+}
+
+
+/*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
+
+/*
+ * Iterate 'proc' over all the MIME header sections and body sections of
+ * type TEXT, in the message 'm', preorder.  The 'proc' is called with
+ * 'partno' equal to zero for header sections, non-zero for body
+ * sections.  If 'proc' returns non-zero, the iteration finishes early
+ * and the return value of 'proc' is returned.  Otherwise returns 0.
+ */
+EXPORTED int message_foreach_text_section(message_t *m,
+			 int (*proc)(int isbody, int charset, int encoding,
+				     const char *subtype, struct buf *data, void *rock),
+			 void *rock)
+{
+    int r = message_need(m, M_CACHEBODY|M_MAP);
+    if (r) return r;
+    return body_foreach_text_section(m->body, m, proc, rock);
+}
+
+/*
+ * Get the MIME content types of all leaf sections, i.e. sections whose
+ * type is not multipart or message.  Strings are added to the array in
+ * pairs, type first then subtype.
+ */
+EXPORTED int message_get_leaf_types(message_t *m, strarray_t *types)
+{
+    int r = message_need(m, M_CACHEBODY);
+    if (r) return r;
+    body_get_leaf_types(m->body, types);
+    return 0;
+}
+
+/*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
+
+EXPORTED int message_get_bcc(message_t *m, struct buf *buf)
+{
+    return message_get_field(m, "bcc", MESSAGE_RAW, buf);
+}
+
+EXPORTED int message_get_cc(message_t *m, struct buf *buf)
+{
+    return message_get_field(m, "cc", MESSAGE_RAW, buf);
+}
+
+EXPORTED int message_get_to(message_t *m, struct buf *buf)
+{
+    return message_get_field(m, "to", MESSAGE_RAW, buf);
+}
+
+EXPORTED int message_get_from(message_t *m, struct buf *buf)
+{
+    return message_get_field(m, "from", MESSAGE_RAW, buf);
+}
+
+EXPORTED int message_get_listid(message_t *m, struct buf *buf)
+{
+    return message_get_field(m, "list-id", MESSAGE_RAW, buf);
+}
+
+EXPORTED int message_get_messageid(message_t *m, struct buf *buf)
+{
+    return message_get_field(m, "message-id", MESSAGE_RAW, buf);
+}
+
+EXPORTED int message_get_subject(message_t *m, struct buf *buf)
+{
+    return message_get_field(m, "subject", MESSAGE_RAW, buf);
+}
+
+EXPORTED int message_get_mailinglist(message_t *m, struct buf *buf)
+{
+    return message_get_field(m, "mailing-list", MESSAGE_RAW, buf);
+}
+
+EXPORTED int message_get_size(message_t *m, uint32_t *sizep)
+{
+    int r = message_need(m, M_RECORD);
+    if (r) return r;
+    *sizep = m->record.size;
+    return 0;
+}
+
+EXPORTED int message_get_uid(message_t *m, uint32_t *uidp)
+{
+    int r = message_need(m, M_RECORD);
+    if (r) return r;
+    *uidp = m->record.uid;
+    return 0;
+}
+
+EXPORTED int message_get_cid(message_t *m, conversation_id_t *cidp)
+{
+    int r = message_need(m, M_RECORD);
+    if (r) return r;
+    *cidp = m->record.cid;
+    return 0;
+}
+
+EXPORTED int message_get_modseq(message_t *m, modseq_t *modseqp)
+{
+    int r = message_need(m, M_RECORD);
+    if (r) return r;
+    *modseqp = m->record.modseq;
+    return 0;
+}
+
+EXPORTED int message_get_msgno(message_t *m, uint32_t *msgnop)
+{
+    int r = message_need(m, M_INDEX);
+    if (r) return r;
+    *msgnop = m->msgno;
+    return 0;
+}
+
+EXPORTED int message_get_userflags(message_t *m, uint32_t *flagsp)
+{
+    int r = message_need(m, M_RECORD);
+    int i;
+    if (r) return r;
+    for (i = 0; i < MAX_USER_FLAGS/32; i++)
+	flagsp[i] = m->record.user_flags[i];
+    return 0;
+}
+
+EXPORTED int message_get_systemflags(message_t *m, uint32_t *flagsp)
+{
+    int r = message_need(m, M_RECORD);
+    if (r) return r;
+    *flagsp = m->record.system_flags;
+    return 0;
+}
+
+EXPORTED int message_get_indexflags(message_t *m, uint32_t *flagsp)
+{
+    int r = message_need(m, M_INDEX);
+    if (r) return r;
+    *flagsp = m->indexflags;
+    return 0;
+}
+
+EXPORTED int message_get_sentdate(message_t *m, time_t *datep)
+{
+    int r = message_need(m, M_RECORD);
+    if (r) return r;
+    *datep = m->record.sentdate;
+    return 0;
+}
+
+EXPORTED int message_get_internaldate(message_t *m, time_t *datep)
+{
+    int r = message_need(m, M_RECORD);
+    if (r) return r;
+    *datep = m->record.internaldate;
+    return 0;
+}
+
 static void extract_one(struct buf *buf,
-			const field_desc_t *desc,
+			const char *name,
 			int format,
 			int has_name,
 			struct buf *raw)
@@ -5060,7 +4095,7 @@ static void extract_one(struct buf *buf,
     else if (!has_name && (format & MESSAGE_FIELDNAME)) {
 	/* insert a fieldname and colon */
 	buf_insertcstr(raw, 0, ":");
-	buf_insertcstr(raw, 0, desc->name);
+	buf_insertcstr(raw, 0, name);
     }
 
     if (!(format & MESSAGE_APPEND))
@@ -5097,663 +4132,92 @@ static void extract_one(struct buf *buf,
     free(p);
 }
 
-static int message_extract_field(message_t *m,
-				 segment_t *part,
-				 field_desc_t *desc,
-				 int format,
-				 struct buf *buf)
+EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct buf *buf)
 {
-    int r = 0;
+    strarray_t want = STRARRAY_INITIALIZER;
     struct buf raw = BUF_INITIALIZER;
-    segment_t *s = NULL;
-    const struct buf *map = NULL;
+    int hasname = 1;
 
-    if (!desc)
-	return IMAP_NOTFOUND;
-
-    assert(part == m->segs || is_finished(part));
-
-    /* Note we don't check part->parent, that isn't right in the case
-     * when we've been passed an unfinished root part */
-    if (part == m->segs) {
-	/* top-level header fields might be in the cyrus.cache */
-
-	/* retrieve from cache entry if possible */
-	if (desc->cache_idx >= 0) {
-	    r = message_need(m, M_CACHE);
-	    if (!r) {
-		if (cacheitem_size(&m->record, desc->cache_idx))
-		    buf_init_ro(&raw, cacheitem_base(&m->record, desc->cache_idx),
-				      cacheitem_size(&m->record, desc->cache_idx));
-		extract_one(buf, desc, format, /*has_name*/0, &raw);
-		goto out;
-	    }
-	}
-
-	/* retrieve from cached envelope if possible */
-	if (desc->env_idx >= 0) {
-	    assert(desc->env_idx < NUMENVTOKENS);
-	    r = message_need(m, M_CENVELOPE);
-	    if (!r) {
-		buf_init_ro_cstr(&raw, m->envelope[desc->env_idx]);
-		extract_one(buf, desc, format, /*has_name*/0, &raw);
-		goto out;
-	    }
-	}
-
-	/* retrieve from cached headers if possible */
-	if (desc->min_cache_version != BIT32_MAX) {
-	    r = message_need(m, M_CHEADER);
-	    if (!r && desc->min_cache_version <= m->record.cache_version) {
-		s = m->cheader_segs;
-		map = &m->cheader_map;
-	    }
-	}
+    /* the 5 standalone cache fields */
+    if (!strcasecmp(hdr, "from")) {
+	int r = message_need(m, M_CACHE);
+	if (r) return r;
+	buf_setmap(&raw, cacheitem_base(&m->record, CACHE_FROM),
+			 cacheitem_size(&m->record, CACHE_FROM));
+	hasname = 0;
+    }
+    else if (!strcasecmp(hdr, "to")) {
+	int r = message_need(m, M_CACHE);
+	if (r) return r;
+	buf_setmap(&raw, cacheitem_base(&m->record, CACHE_TO),
+			 cacheitem_size(&m->record, CACHE_TO));
+	hasname = 0;
+    }
+    else if (!strcasecmp(hdr, "cc")) {
+	int r = message_need(m, M_CACHE);
+	if (r) return r;
+	buf_setmap(&raw, cacheitem_base(&m->record, CACHE_CC),
+			 cacheitem_size(&m->record, CACHE_CC));
+	hasname = 0;
+    }
+    else if (!strcasecmp(hdr, "bcc")) {
+	int r = message_need(m, M_CACHE);
+	if (r) return r;
+	buf_setmap(&raw, cacheitem_base(&m->record, CACHE_BCC),
+			 cacheitem_size(&m->record, CACHE_BCC));
+	hasname = 0;
+    }
+    else if (!strcasecmp(hdr, "subject")) {
+	int r = message_need(m, M_CACHE);
+	if (r) return r;
+	buf_setmap(&raw, cacheitem_base(&m->record, CACHE_SUBJECT),
+			 cacheitem_size(&m->record, CACHE_SUBJECT));
+	hasname = 0;
     }
 
-    /* retrieve from full mapped file headers */
-    if (!s) {
-	r = message_need(m, M_SEGS);
-	if (!r) {
-	    s = is_finished(part) ? part : m->segs;
-	    map = &m->map;
-	}
+    /* message-id is from the envelope */
+    else if (!strcasecmp(hdr, "message-id")) {
+	char *envtokens[NUMENVTOKENS];
+	char *c_env;
+	int r = message_need(m, M_CACHE);
+	if (r) return r;
+	c_env = xstrndup(cacheitem_base(&m->record, CACHE_ENVELOPE) + 1,
+			 cacheitem_size(&m->record, CACHE_ENVELOPE) - 2);
+	parse_cached_envelope(c_env, envtokens, NUMENVTOKENS);
+	buf_appendcstr(&raw, envtokens[ENV_MSGID]);
+	free(c_env);
+	hasname = 0;
     }
 
-    r = IMAP_NOTFOUND;
-    if (s) {
-	s = segment_find_child(s, ID_HEADER);
-	r = message2_expand_segment(m, s);
-	if (r) goto out;
-	r = IMAP_NOTFOUND;
-	for (s = (s ? s->children : NULL) ; s ; s = s->next) {
-	    if (s->id != (unsigned)desc->id)
-		continue;
-	    buf_init_ro(&raw, map->s + s->offset, s->length);
-	    extract_one(buf, desc, format, /*has_name*/1, &raw);
-	    buf_free(&raw);
-	    r = 0;	/* found */
-	    if (!(format & MESSAGE_MULTIPLE))
-		break;
-	}
+    else if (mailbox_cached_header(hdr) != BIT32_MAX) {
+	/* it's in the cache */
+	char *headers = NULL;
+	int r = message_need(m, M_CACHE);
+	if (r) return r;
+	headers = xstrndup(cacheitem_base(&m->record, CACHE_HEADERS),
+			   cacheitem_size(&m->record, CACHE_HEADERS));
+	strarray_append(&want, hdr);
+	message_pruneheader(headers, &want, NULL);
+	buf_appendcstr(&raw, headers);
+	free(headers);
+	hasname = 1;
+    }
+    else {
+	char *headers = NULL;
+	int r = message_need(m, M_MAP);
+	if (r) return r;
+	headers = xstrndup(m->map.s + m->body->header_offset, m->body->header_size);
+	strarray_append(&want, hdr);
+	message_pruneheader(headers, &want, NULL);
+	buf_appendcstr(&raw, headers);
+	free(headers);
+	hasname = 1;
     }
 
-out:
-    buf_free(&raw);
-    return r;
-}
-
-/*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
-
-static int part_extract_header(part_t *part,
-			       int format,
-			       struct buf *buf)
-{
-    segment_t *s;
-    int r;
-    struct buf raw = BUF_INITIALIZER;
-    const char *p;
-
-    r = message_need(part->message, M_SEGS);
-    if (r) return r;
-
-    s = segment_find_child(to_segment(part), ID_HEADER);
-    if (!s) return IMAP_NOTFOUND;
-
-    r = message2_map_segment(part->message, s, &raw);
-    if (r) return r;
-
-    if (!(format & MESSAGE_APPEND))
-	buf_reset(buf);
-
-    switch (format & _MESSAGE_FORMAT_MASK) {
-    case MESSAGE_RAW:
-	/* Logically, we're appending to the resulting buffer.
-	 * However if the buf is empty we can save a memory copy
-	 * by setting it up as a CoW buffer.  This means that
-	 * the caller will need to call buf_cstring() if they
-	 * need a C string. */
-	if (!raw.alloc)
-	    buf_cowappendmap(buf, raw.s, raw.len);
-	else
-	    buf_append(buf, &raw);
-	break;
-    case MESSAGE_DECODED:
-	p = charset_parse_mimeheader(buf_cstring(&raw));
-	buf_appendcstr(buf, p);
-	break;
-    case MESSAGE_SEARCH:
-	/* TODO: need a variant of decode_mimeheader() which
-	 * takes two struct buf* and a search flag */
-	p = charset_decode_mimeheader(buf_cstring(&raw), charset_flags);
-	buf_appendcstr(buf, p);
-	break;
-    }
+    if (raw.len)
+	extract_one(buf, hdr, flags, hasname, &raw);
 
     buf_free(&raw);
-    return r;
-}
-
-/*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
-
-static int part_extract_body(part_t *part,
-			     int format,
-			     struct buf *buf)
-{
-    segment_t *s;
-    int r;
-    struct buf raw = BUF_INITIALIZER;
-    const char *p;
-    char *decbuf = NULL;
-    size_t declen = 0;
-
-    r = message_need(part->message, M_SEGS);
-    if (r) return r;
-
-    s = segment_find_child(to_segment(part), ID_BODY);
-    if (!s) return IMAP_NOTFOUND;
-
-    r = message2_map_segment(part->message, s, &raw);
-    if (r) return r;
-
-    if (!(format & MESSAGE_APPEND))
-	buf_reset(buf);
-
-    switch (format & _MESSAGE_FORMAT_MASK) {
-    case MESSAGE_RAW:
-	/* Logically, we're appending to the resulting buffer.
-	 * However if the buf is empty we can save a memory copy
-	 * by setting it up as a CoW buffer.  This means that
-	 * the caller will need to call buf_cstring() if they
-	 * need a C string. */
-	buf_cowappendmap(buf, raw.s, raw.len);
-	break;
-    case MESSAGE_DECODED:
-    case MESSAGE_SEARCH:
-	/* TODO: should push the append-to-a-buf semantics
-	 * down into charset_decode_mimebody instead of having
-	 * to deal with the interface mismatch here */
-	p = charset_decode_mimebody(raw.s, raw.len,
-				    part->encoding,
-				    &decbuf, &declen);
-	if (p == raw.s) {
-	    /* trivial encoding */
-	    buf_cowappendmap(buf, raw.s, raw.len);
-	}
-	else {
-	    /* nontrivial encoding: newly allocated result in decbuf */
-	    buf_cowappendfree(buf, decbuf, declen);
-	}
-	break;
-    }
-
-    buf_free(&raw);
-    return r;
-}
-
-/*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
-
-EXPORTED int part_get_field(part_t *part, const char *name,
-			    int format, struct buf *buf)
-{
-    return message_extract_field(part->message, to_segment(part),
-				 field_desc_get_byname(name, 0, /*create*/0),
-				 format, buf);
-}
-
-EXPORTED int part_get_header(part_t *part, int format, struct buf *buf)
-{
-    return part_extract_header(part, format, buf);
-}
-
-EXPORTED int part_get_body(part_t *part, int format, struct buf *buf)
-{
-    return part_extract_body(part, format, buf);
-}
-
-EXPORTED int part_get_type(part_t *part, const char **strp)
-{
-    int r = message_need(part->message, M_BODY);
-    if (r) return r;
-    /* we need to have parsed the header to report type */
-    r = message2_expand_segment(part->message, to_segment(part));
-    if (r) return r;
-    *strp = part->type;
-    return 0;
-}
-
-EXPORTED int part_get_subtype(part_t *part, const char **strp)
-{
-    int r = message_need(part->message, M_BODY);
-    if (r) return r;
-    /* we need to have parsed the header to report subtype */
-    r = message2_expand_segment(part->message, to_segment(part));
-    if (r) return r;
-    *strp = part->subtype;
-    return 0;
-}
-
-EXPORTED int part_get_charset(part_t *part, int *csp)
-{
-    int r;
-    /* we need to have parsed the header to report charset */
-    r = message2_expand_segment(part->message, to_segment(part));
-    if (r) return r;
-    *csp = part->charset;
-    return 0;
-}
-
-EXPORTED int part_get_encoding(part_t *part, int *encp)
-{
-    int r;
-    /* we need to have parsed the header to report encoding */
-    r = message2_expand_segment(part->message, to_segment(part));
-    if (r) return r;
-    *encp = part->encoding;
-    return 0;
-}
-
-EXPORTED int part_get_num_parts(part_t *part, unsigned int *np)
-{
-    segment_t *s;
-    int r;
-
-    r = message_need(part->message, M_SEGS);
-    if (r) return r;
-
-    s = segment_find_child(to_segment(part), ID_BODY);
-    if (!s) return IMAP_NOTFOUND;
-
-    r = message2_expand_segment(part->message, s);
-    if (r) return r;
-    *np = segment_get_num_children(s);
-    return 0;
-}
-
-EXPORTED int part_get_part(part_t *part, unsigned int id, part_t **childp)
-{
-    segment_t *s;
-    int r;
-
-    r = message_need(part->message, M_SEGS);
-    if (r) return r;
-
-    s = segment_find_child(to_segment(part), ID_BODY);
-    if (!s) return IMAP_NOTFOUND;
-
-    r = message2_expand_segment(part->message, s);
-    if (r) return r;
-    *childp = get_part(segment_find_child(s, T_PART|id));
-    return (*childp ? 0 : IMAP_NOTFOUND);
-}
-
-static int part_foreach_text_section(part_t *part,
-				     int (*proc)(int partno, int charset,
-						 int encoding, const char *subtype,
-						 struct buf *data, void *rock),
-				     void *rock)
-{
-    segment_t *header;
-    segment_t *body;
-    segment_t *s;
-    struct buf data = BUF_INITIALIZER;
-    int r;
-
-    r = message2_expand_segment(part->message, to_segment(part));
-    if (r) return r;
-
-    header = segment_find_child(to_segment(part), ID_HEADER);
-    if (header) {
-	buf_init_ro(&data, part->message->map.s + header->offset, header->length);
-	r = proc(0, 0, ENCODING_NONE, NULL, &data, rock);
-	buf_free(&data);
-	if (r) return r;
-    }
-
-    body = segment_find_child(to_segment(part), ID_BODY);
-    if (body) {
-	r = message2_expand_segment(part->message, body);
-	if (r) return r;
-
-	if (!strcmpsafe(part->type, "TEXT")) {
-	    buf_init_ro(&data, part->message->map.s + body->offset, body->length);
-	    r = proc(part->super.id & ID_MASK,
-		     part->charset, part->encoding, part->subtype,
-		     &data, rock);
-	    buf_free(&data);
-	    if (r) return r;
-	}
-	for (s = body->children ; s ; s = s->next) {
-	    r = part_foreach_text_section(get_part(s), proc, rock);
-	    if (r) return r;
-	}
-    }
 
     return 0;
 }
-
-static int part_get_leaf_types(part_t *part, strarray_t *types)
-{
-    segment_t *body;
-    segment_t *s;
-    int r;
-
-    r = message2_expand_segment(part->message, to_segment(part));
-    if (r) return r;
-
-    body = segment_find_child(to_segment(part), ID_BODY);
-    if (body) {
-	r = message2_expand_segment(part->message, body);
-	if (r) return r;
-
-	if (strcmpsafe(part->type, "MULTIPART") &&
-	    strcmpsafe(part->type, "MESSAGE")) {
-	    strarray_append(types, part->type);
-	    strarray_append(types, part->subtype);
-	}
-	for (s = body->children ; s ; s = s->next) {
-	    r = part_get_leaf_types(get_part(s), types);
-	    if (r) return r;
-	}
-    }
-
-    return 0;
-}
-
-/*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
-
-/*
- * Retrieve a single header field named 'name' from the message
- * 'message' and append it's value to 'buf'.  In general, the result in
- * 'buf' may be CoW so the caller should use buf_cstring() before
- * assuming that there is a NUL terminator.  The 'format' argument is
- * flags from enum message_format which control how the result is
- * formatted.  Returns zero on success, or an IMAP error number.
- */
-EXPORTED int message_get_field(message_t *m, const char *name,
-			       int format, struct buf *buf)
-{
-    return message_extract_field(m, m->segs,
-				 field_desc_get_byname(name, 0, /*create*/1),
-				 format, buf);
-}
-
-EXPORTED int message_get_header(message_t *m, int format, struct buf *buf)
-{
-    int r = message_need(m, M_SEGS);
-    if (r) return r;
-    return part_extract_header(get_part(m->segs), format, buf);
-}
-
-EXPORTED int message_get_body(message_t *m, int format, struct buf *buf)
-{
-    int r = message_need(m, M_SEGS);
-    if (r) return r;
-    return part_extract_body(get_part(m->segs), format, buf);
-}
-
-EXPORTED int message_get_type(message_t *m, const char **strp)
-{
-    int r = message_need(m, M_SEGS);
-    if (r) return r;
-    return part_get_type(get_part(m->segs), strp);
-}
-
-EXPORTED int message_get_subtype(message_t *m, const char **strp)
-{
-    int r = message_need(m, M_SEGS);
-    if (r) return r;
-    return part_get_subtype(get_part(m->segs), strp);
-}
-
-EXPORTED int message_get_charset(message_t *m, int *csp)
-{
-    int r = message_need(m, M_SEGS);
-    if (r) return r;
-    return part_get_charset(get_part(m->segs), csp);
-}
-
-EXPORTED int message_get_encoding(message_t *m, int *encp)
-{
-    int r = message_need(m, M_SEGS);
-    if (r) return r;
-    return part_get_encoding(get_part(m->segs), encp);
-}
-
-/* TODO: add message_get_parts(message_t *, ptrarray_t *); */
-
-EXPORTED int message_get_num_parts(message_t *m, unsigned int *np)
-{
-    int r = message_need(m, M_SEGS);
-    if (r) return r;
-    return part_get_num_parts(get_part(m->segs), np);
-}
-
-EXPORTED int message_get_part(message_t *m, unsigned int id, part_t **partp)
-{
-    int r = message_need(m, M_SEGS);
-    if (r) return r;
-    return part_get_part(get_part(m->segs), id, partp);
-}
-
-EXPORTED int message_get_root_part(message_t *m, part_t **partp)
-{
-    int r = message_need(m, M_SEGS);
-    if (r) return r;
-    *partp = get_part(m->segs);
-    return 0;
-}
-
-EXPORTED int message_get_messageid(message_t *m, struct buf *buf)
-{
-    return message_extract_field(m, m->segs,
-				 field_desc_get_byid(ID_MESSAGE_ID),
-				 MESSAGE_RAW, buf);
-}
-
-EXPORTED int message_get_listid(message_t *m, struct buf *buf)
-{
-    return message_extract_field(m, m->segs,
-				 field_desc_get_byid(ID_LIST_ID),
-				 MESSAGE_RAW, buf);
-}
-
-EXPORTED int message_get_mailinglist(message_t *m, struct buf *buf)
-{
-    return message_extract_field(m, m->segs,
-				 field_desc_get_byid(ID_MAILING_LIST),
-				 MESSAGE_RAW, buf);
-}
-
-EXPORTED int message_get_from(message_t *m, struct buf *buf)
-{
-    return message_extract_field(m, m->segs,
-				 field_desc_get_byid(ID_FROM),
-				 MESSAGE_RAW, buf);
-}
-
-EXPORTED int message_get_to(message_t *m, struct buf *buf)
-{
-    return message_extract_field(m, m->segs,
-				 field_desc_get_byid(ID_TO),
-				 MESSAGE_RAW, buf);
-}
-
-EXPORTED int message_get_bcc(message_t *m, struct buf *buf)
-{
-    return message_extract_field(m, m->segs,
-				 field_desc_get_byid(ID_BCC),
-				 MESSAGE_RAW, buf);
-}
-
-EXPORTED int message_get_cc(message_t *m, struct buf *buf)
-{
-    return message_extract_field(m, m->segs,
-				 field_desc_get_byid(ID_CC),
-				 MESSAGE_RAW, buf);
-}
-
-EXPORTED int message_get_inreplyto(message_t *m, struct buf *buf)
-{
-    return message_extract_field(m, m->segs,
-				 field_desc_get_byid(ID_IN_REPLY_TO),
-				 MESSAGE_RAW, buf);
-}
-
-EXPORTED int message_get_references(message_t *m, struct buf *buf)
-{
-    return message_extract_field(m, m->segs,
-				 field_desc_get_byid(ID_REFERENCES),
-				 MESSAGE_RAW, buf);
-}
-
-EXPORTED int message_get_subject(message_t *m, struct buf *buf)
-{
-    return message_extract_field(m, m->segs,
-				 field_desc_get_byid(ID_SUBJECT),
-				 MESSAGE_DECODED, buf);
-}
-
-EXPORTED int message_get_date(message_t *m, time_t *tp)
-{
-    struct buf buf = BUF_INITIALIZER;
-    int r = 0;
-
-    r = message_extract_field(m, m->segs,
-			      field_desc_get_byid(ID_DATE),
-			      MESSAGE_RAW, &buf);
-    if (r) return r;
-    r = time_from_rfc822(buf_cstring(&buf), tp);
-    if (r < 0) r = -EINVAL;
-    buf_free(&buf);
-    return r;
-}
-
-EXPORTED int message_get_mailbox(message_t *m, struct mailbox **mailboxp)
-{
-    int r = message_need(m, M_MAILBOX);
-    if (r) return r;
-    *mailboxp = m->mailbox;
-    return 0;
-}
-
-EXPORTED int message_get_uid(message_t *m, uint32_t *uidp)
-{
-    int r = message_need(m, M_UID);
-    if (r) return r;
-    *uidp = m->record.uid;
-    return 0;
-}
-
-EXPORTED int message_get_cid(message_t *m, conversation_id_t *cidp)
-{
-    int r = message_need(m, M_RECORD);
-    if (r) return r;
-    *cidp = m->record.cid;
-    return 0;
-}
-
-EXPORTED int message_get_internaldate(message_t *m, time_t *tp)
-{
-    int r = message_need(m, M_RECORD);
-    if (r) return r;
-    *tp = m->record.internaldate;
-/* TODO: as fallback, extract from header fields */
-    return 0;
-}
-
-EXPORTED int message_get_sentdate(message_t *m, time_t *tp)
-{
-    int r = message_need(m, M_RECORD);
-    if (r) return r;
-    *tp = m->record.sentdate;
-/* TODO: as fallback, extract from header fields */
-    return 0;
-}
-
-EXPORTED int message_get_modseq(message_t *m, modseq_t *modseqp)
-{
-    int r = message_need(m, M_RECORD);
-    if (r) return r;
-    *modseqp = m->record.modseq;
-    return 0;
-}
-
-EXPORTED int message_get_systemflags(message_t *m, uint32_t *flagsp)
-{
-    int r = message_need(m, M_RECORD);
-    if (r) return r;
-    *flagsp = m->record.system_flags;
-    return 0;
-}
-
-EXPORTED int message_get_indexflags(message_t *m, uint32_t *flagsp)
-{
-    int r = message_need(m, M_INDEX);
-    if (r) return r;
-    *flagsp = m->indexflags;
-    return 0;
-}
-
-EXPORTED int message_get_userflags(message_t *m, uint32_t *flagsp)
-{
-    int i;
-    int r = message_need(m, M_RECORD);
-    if (r) return r;
-    for (i = 0; i < MAX_USER_FLAGS/32; i++)
-	flagsp[i] = m->record.user_flags[i];
-    return 0;
-}
-
-EXPORTED int message_get_size(message_t *m, uint32_t *sizep)
-{
-    if (!message_need(m, M_RECORD)) {
-	*sizep = m->record.size;
-	return 0;
-    }
-    if (!message_need(m, M_SEGS)) {
-	*sizep = m->segs->length;
-	return 0;
-    }
-    return IMAP_NOTFOUND;
-}
-
-EXPORTED int message_get_msgno(message_t *m, uint32_t *msgnop)
-{
-    int r = message_need(m, M_INDEX);
-    if (r) return r;
-    *msgnop = m->msgno;
-    return 0;
-}
-
-/*
- * Iterate 'proc' over all the MIME header sections and body sections of
- * type TEXT, in the message 'm', preorder.  The 'proc' is called with
- * 'partno' equal to zero for header sections, non-zero for body
- * sections.  If 'proc' returns non-zero, the iteration finishes early
- * and the return value of 'proc' is returned.  Otherwise returns 0.
- */
-EXPORTED int message_foreach_text_section(message_t *m,
-			 int (*proc)(int partno, int charset,
-				     int encoding, const char *subtype,
-				     struct buf *data, void *rock),
-			 void *rock)
-{
-    int r = message_need(m, M_SEGS|M_BODY|M_MAP);
-    if (r) return r;
-    return part_foreach_text_section(get_part(m->segs), proc, rock);
-}
-
-/*
- * Get the MIME content types of all leaf sections, i.e. sections whose
- * type is not multipart or message.  Strings are added to the array in
- * pairs, type first then subtype.
- */
-EXPORTED int message_get_leaf_types(message_t *m, strarray_t *types)
-{
-    int r = message_need(m, M_SEGS|M_BODY|M_MAP);
-    if (r) return r;
-    return part_get_leaf_types(get_part(m->segs), types);
-}
-
-/*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/

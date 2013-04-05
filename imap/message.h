@@ -180,17 +180,10 @@ extern void message_read_bodystructure(struct index_record *record,
 
 extern int message_update_conversations(struct conversations_state *, struct index_record *, conversation_t **);
 
-int message_foreach_part(struct index_record *record,
-			 const struct buf *msg,
-			 int (*proc)(int partno, int charset, int encoding,
-				     struct buf *data, void *rock),
-			 void *rock);
-
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 /* New message API */
 
 typedef struct message message_t;
-typedef struct part part_t;
 struct mailbox;
 
 /* Flags for use as the 'format' argument to
@@ -250,17 +243,6 @@ extern message_t *message_new_from_filename(const char *filename);
 extern message_t *message_ref(message_t *m);
 extern void message_unref(message_t **m);
 
-extern int part_get_field(part_t *part, const char *name,
-		   int format, struct buf *buf);
-extern int part_get_header(part_t *part, int format, struct buf *buf);
-extern int part_get_body(part_t *part, int format, struct buf *buf);
-extern int part_get_type(part_t *part, const char **strp);
-extern int part_get_subtype(part_t *part, const char **strp);
-extern int part_get_charset(part_t *part, int *csp);
-extern int part_get_encoding(part_t *part, int *encp);
-extern int part_get_num_parts(part_t *part, unsigned int *np);
-extern int part_get_part(part_t *part, unsigned int id, part_t **childp);
-
 extern int message_get_field(message_t *m, const char *name,
 			     int format, struct buf *buf);
 extern int message_get_header(message_t *m, int format, struct buf *buf);
@@ -270,8 +252,6 @@ extern int message_get_subtype(message_t *m, const char **strp);
 extern int message_get_charset(message_t *m, int *csp);
 extern int message_get_encoding(message_t *m, int *encp);
 extern int message_get_num_parts(message_t *m, unsigned int *np);
-extern int message_get_part(message_t *m, unsigned int id, part_t **partp);
-extern int message_get_root_part(message_t *m, part_t **partp);
 extern int message_get_messageid(message_t *m, struct buf *buf);
 extern int message_get_listid(message_t *m, struct buf *buf);
 extern int message_get_mailinglist(message_t *m, struct buf *buf);
@@ -295,7 +275,7 @@ extern int message_get_indexflags(message_t *m, uint32_t *);
 extern int message_get_size(message_t *m, uint32_t *sizep);
 extern int message_get_msgno(message_t *m, uint32_t *msgnop);
 extern int message_foreach_text_section(message_t *m,
-		   int (*proc)(int partno, int charset, int encoding,
+		   int (*proc)(int isbody, int charset, int encoding,
 			       const char *subtype, struct buf *data, void *rock),
 		   void *rock);
 extern int message_get_leaf_types(message_t *m, strarray_t *types);

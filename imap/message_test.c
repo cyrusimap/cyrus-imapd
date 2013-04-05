@@ -92,98 +92,6 @@ static const char *indent(int depth)
     return buf_cstring(&buf);
 }
 
-static int dump_part(part_t *part, unsigned int id, int depth)
-{
-    int r;
-    int i;
-    const char *s;
-    unsigned int numparts;
-    part_t *child;
-
-    if (depth) {
-	printf("%sPART %u\n", indent(depth), id);
-
-	r = part_get_type(part, &s);
-	if (r < 0) return r;
-	printf("%sTYPE:%s\n", indent(depth+1), s);
-
-	r = part_get_subtype(part, &s);
-	if (r < 0) return r;
-	printf("%sSUBTYPE:%s\n", indent(depth+1), s);
-
-	r = part_get_encoding(part, &i);
-	if (r < 0) return r;
-	printf("%sENCODING:%s\n", indent(depth+1), encoding_name(i));
-
-	r = part_get_charset(part, &i);
-	if (r < 0) return r;
-	printf("%sCHARSET:%s\n", indent(depth+1), charset_name(i));
-    }
-
-    r = part_get_num_parts(part, &numparts);
-    if (r < 0) return r;
-    if (depth)
-	printf("%sNUMPARTS:%d\n", indent(depth+1), numparts);
-
-    for (id = 1 ; id <= numparts ; id++) {
-	r = part_get_part(part, id, &child);
-	if (r) return r;
-	r = dump_part(child, id, depth+1);
-	if (r) return r;
-    }
-
-    return 0;
-}
-
-
-static int dump_part_tree(message_t *message)
-{
-    struct buf buf = BUF_INITIALIZER;
-    part_t *root = NULL;
-    const char *s;
-    int i;
-    unsigned int numparts;
-    int r;
-
-    printf("========================================\n");
-
-    r = message_get_messageid(message, &buf);
-    if (r < 0) return r;
-    printf("MESSAGE-ID:%s\n", buf_cstring(&buf));
-    buf_free(&buf);
-
-    r = message_get_subject(message, &buf);
-    if (r < 0) return r;
-    printf("SUBJECT:%s\n", buf_cstring(&buf));
-    buf_free(&buf);
-
-    r = message_get_type(message, &s);
-    if (r < 0) return r;
-    printf("TYPE:%s\n", s);
-
-    r = message_get_subtype(message, &s);
-    if (r < 0) return r;
-    printf("SUBTYPE:%s\n", s);
-
-    r = message_get_encoding(message, &i);
-    if (r < 0) return r;
-    printf("ENCODING:%s\n", encoding_name(i));
-
-    r = message_get_charset(message, &i);
-    if (r < 0) return r;
-    printf("CHARSET:%s\n", charset_name(i));
-
-    r = message_get_num_parts(message, &numparts);
-    if (r < 0) return r;
-    printf("NUMPARTS:%d\n", numparts);
-
-    r = message_get_root_part(message, &root);
-    if (r < 0) return r;
-    dump_part(root, 1, 0);
-
-    return 0;
-}
-
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 
 static void dump_octets(FILE *fp, const char *base, unsigned int len)
@@ -290,12 +198,7 @@ static int dump_text_receiver(message_t *message)
 
 static int dump_message(message_t *message)
 {
-    switch (dump_mode) {
-    case PART_TREE: return dump_part_tree(message);
-    case TEXT_SECTIONS: return dump_text_sections(message);
-    case TEXT_RECEIVER: return dump_text_receiver(message);
-    }
-    return 0;
+    return dump_text_sections(message);
 }
 
 int main(int argc, char **argv)

@@ -52,82 +52,6 @@
 #include "charset.h"
 #include "util.h"
 
-typedef struct field_desc field_desc_t;
-
-enum segment_type {
-    T_PART =			    0,
-    T_SPECIAL =			    0x20000000,
-    T_FIELD =			    0x40000000,
-    T_UNFINISHED =		    0x60000000,
-};
-#define TYPE_MASK		    (0x60000000)
-#define ID_MASK			    (0x1fffffff)
-
-/* special part ids */
-enum segment_id {
-    ID_INVALID =  		0,
-
-#define ID_MIME_FIRST		ID_MIME_VERSION
-    ID_MIME_VERSION=		T_FIELD|1,
-    ID_CONTENT_TYPE,
-    ID_CONTENT_TRANSFER_ENCODING,
-#define ID_MIME_LAST		ID_CONTENT_TRANSFER_ENCODING
-    ID_MESSAGE_ID,
-    ID_IN_REPLY_TO,
-    ID_REFERENCES,
-    ID_SUBJECT,
-    ID_DATE,
-    ID_LIST_ID,
-    ID_MAILING_LIST,
-    ID_TO,
-    ID_FROM,
-    ID_BCC,
-    ID_CC,
-#define ID_PREALLOCATED_LAST	ID_CC
-
-    ID_UNFINISHED =		T_SPECIAL|1,
-    ID_HEADER,
-    ID_BODY
-};
-
-typedef struct segment segment_t;
-struct segment
-{
-    enum segment_id id;
-    /* offset and length in raw octets, absolute in file */
-    unsigned int offset, length;
-    struct segment *next;
-    struct segment *children;
-    struct segment *parent;
-};
-
-struct part
-{
-    struct segment super;
-
-    /* We keep a back pointer to the message_t in each part_t.
-     * Not in each segment_t - that would mean keeping a back
-     * pointer for each header field, which is silly.  */
-    message_t *message;
-
-    /* Extracted from Content-Type: */
-    char *type;
-    char *subtype;
-    int charset;
-    char *boundary;
-    /* from Content-Transfer-Encoding: */
-    int encoding;
-};
-
-struct field_desc
-{
-    const char *name;
-    unsigned int min_cache_version;
-    int id;
-    int cache_idx;
-    int env_idx;
-};
-
 /*
  * Flags for the 'have' and 'given' bitmask fields.  'Given' is the
  * resources we were initialised with by the caller, which are presumed
@@ -143,14 +67,15 @@ struct field_desc
 #define M_UID		(1<<3)	    /* valid UID in index_record */
 #define M_MAP		(1<<4)	    /* mmap()ed raw message data */
 #define M_CACHE		(1<<5)	    /* mmap()ed cyrus.cache */
-#define M_SEGS		(1<<6)	    /* top 2 levels of file segment tree from
-				     * fields or SECTION in cyrus.cache */
-#define M_BODY		(1<<7)	    /* MIME header details from fields, or
+#define M_CACHEBODY	(1<<6)	    /* MIME header details from fields, or
 				     * BODYSTRUCTURE from cyrus.cache */
+#define M_FULLBODY	(1<<7)	    /* BODY parsed from the raw message */
 #define M_CHEADER	(1<<8)	    /* header from cyrus.cache */
 #define M_CENVELOPE	(1<<9)	    /* envelope from cyrus.cache */
-#define M_INDEX	    	(1<<10)	    /* per-index bits: msgno & indexflags */
+#define M_INDEX		(1<<10)	    /* per-index bits: msgno & indexflags */
 #define M_ALL		(~0U)	    /* everything */
+
+#define M_BODY (M_CACHEBODY|M_FULLBODY) /* for yield masking */
 
 struct message
 {
@@ -162,9 +87,7 @@ struct message
     unsigned int msgno;
     uint32_t indexflags;
     struct buf map;
-    segment_t *segs;
-    struct buf cheader_map;
-    segment_t *cheader_segs;
+    struct body *body;
     char **envelope;
     struct index_record record;
 };
