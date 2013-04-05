@@ -2861,80 +2861,75 @@ static int eval_if(const char *hdr, const char *etag, const char *lock_token,
 }
 
 
-static int parse_ranges(const char **hdr, unsigned long len,
+static int parse_ranges(const char *hdr, unsigned long len,
 			struct range **ranges)
 {
-    int i, ret = HTTP_OK;
+    int ret = HTTP_UNSAT_RANGE;
     struct range *new, *tail = *ranges = NULL;
+    tok_t tok;
+    char *token;
 
     if (!len) return HTTP_OK;  /* need to know length of representation */
 
-    for (i = 0; hdr[i]; i++) {
-	tok_t tok;
-	char *token;
+    /* we only handle byte-unit */
+    if (!hdr || strncmp(hdr, "bytes=", 6)) return HTTP_OK;
 
-	/* we only handle byte-unit */
-	if (strncmp(hdr[i], "bytes=", 6)) continue;
+    tok_init(&tok, hdr+6, ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+    while ((token = tok_next(&tok))) {
+	/* default to entire representation */
+	unsigned long first = 0;
+	unsigned long last = len - 1;
+	char *p, *endp;
 
-	if (ret != HTTP_PARTIAL) ret = HTTP_UNSAT_RANGE;
+	if (!(p = strchr(token, '-'))) continue;  /* bad byte-range-set */
 
-	tok_init(&tok, hdr[i]+6, ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-	while ((token = tok_next(&tok))) {
-	    /* default to entire representation */
-	    unsigned long first = 0;
-	    unsigned long last = len - 1;
-	    char *p, *endp;
+	if (p == token) {
+	    /* suffix-byte-range-spec */
+	    unsigned long suffix = strtoul(++p, &endp, 10);
 
-	    if (!(p = strchr(token, '-'))) continue;  /* bad byte-range-set */
-
-	    if (p == token) {
-		/* suffix-byte-range-spec */
-		unsigned long suffix = strtoul(++p, &endp, 10);
-
-		if (endp == p || *endp) continue;  /* bad suffix-length */
-		if (!suffix) continue;	/* unsatisfiable suffix-length */
+	    if (endp == p || *endp) continue;  /* bad suffix-length */
+	    if (!suffix) continue;	/* unsatisfiable suffix-length */
 		
-		/* don't start before byte zero */
-		if (suffix < len) first = len - suffix;
+	    /* don't start before byte zero */
+	    if (suffix < len) first = len - suffix;
+	}
+	else {
+	    /* byte-range-spec */
+	    first = strtoul(token, &endp, 10);
+	    if (endp != p) continue;      /* bad first-byte-pos */
+	    if (first >= len) continue;   /* unsatisfiable first-byte-pos */
+
+	    if (*++p) {
+		/* last-byte-pos */
+		last = strtoul(p, &endp, 10);
+		if (*endp || last < first) continue; /* bad last-byte-pos */
+
+		/* don't go past end of representation */
+		if (last >= len) last = len - 1;
 	    }
-	    else {
-		/* byte-range-spec */
-		first = strtoul(token, &endp, 10);
-		if (endp != p) continue;      /* bad first-byte-pos */
-		if (first >= len) continue;   /* unsatisfiable first-byte-pos */
-
-		if (*++p) {
-		    /* last-byte-pos */
-		    last = strtoul(p, &endp, 10);
-		    if (*endp || last < first) continue; /* bad last-byte-pos */
-
-		    /* don't go past end of representation */
-		    if (last >= len) last = len - 1;
-		}
-	    }
-
-	    ret = HTTP_PARTIAL;
-
-	    /* Coalesce overlapping ranges, or those with a gap < 80 bytes */
-	    if (tail &&
-		first >= tail->first && (long) (first - tail->last) < 80) {
-		tail->last = MAX(last, tail->last);
-		continue;
-	    }
-
-	    /* Create a new range and append it to linked list */
-	    new = xzmalloc(sizeof(struct range));
-	    new->first = first;
-	    new->last = last;
-	    new->len = len;
-
-	    if (tail) tail->next = new;
-	    else *ranges = new;
-	    tail = new;
 	}
 
-	tok_fini(&tok);
+	ret = HTTP_PARTIAL;
+
+	/* Coalesce overlapping ranges, or those with a gap < 80 bytes */
+	if (tail &&
+	    first >= tail->first && (long) (first - tail->last) < 80) {
+	    tail->last = MAX(last, tail->last);
+	    continue;
+	}
+
+	/* Create a new range and append it to linked list */
+	new = xzmalloc(sizeof(struct range));
+	new->first = first;
+	new->last = last;
+	new->len = len;
+
+	if (tail) tail->next = new;
+	else *ranges = new;
+	tail = new;
     }
+
+    tok_fini(&tok);
 
     if (ret == HTTP_UNSAT_RANGE) {
 	*ranges = new = xzmalloc(sizeof(struct range));
@@ -3059,7 +3054,7 @@ int check_precond(struct transaction_t *txn, const void *data,
     /* Step 5 */
     if (txn->flags.ranges &&  /* Only if we support Range requests */
 	txn->meth == METH_GET && (hdr = spool_getheader(hdrcache, "Range"))) {
-	const char **ranges = hdr;
+	const char *ranges = hdr[0];
 
 	if ((hdr = spool_getheader(hdrcache, "If-Range"))) {
 	    since = message_parse_date((char *) hdr[0],
