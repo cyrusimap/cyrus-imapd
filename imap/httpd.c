@@ -3198,19 +3198,19 @@ int meth_get_doc(struct transaction_t *txn,
     }
     else if ((ext = strrchr(txn->req_tgt.path, '.'))) {
 	/* Try to use filename extension to identity Content-Type */
-	if (!strcmp(ext, ".text") || !strcmp(ext, ".txt"))
+	if (!strcasecmp(ext, ".text") || !strcmp(ext, ".txt"))
 	    resp_body->type = "text/plain";
-	else if (!strcmp(ext, ".html") || !strcmp(ext, ".htm"))
+	else if (!strcasecmp(ext, ".html") || !strcmp(ext, ".htm"))
 	    resp_body->type = "text/html";
-	else if (!strcmp(ext, ".css"))
+	else if (!strcasecmp(ext, ".css"))
 	    resp_body->type = "text/css";
-	else if (!strcmp(ext, ".js"))
+	else if (!strcasecmp(ext, ".js"))
 	    resp_body->type = "text/javascript";
-	else if (!strcmp(ext, ".jpeg") || !strcmp(ext, ".jpg"))
+	else if (!strcasecmp(ext, ".jpeg") || !strcmp(ext, ".jpg"))
 	    resp_body->type = "image/jpeg";
-	else if (!strcmp(ext, ".gif"))
+	else if (!strcasecmp(ext, ".gif"))
 	    resp_body->type = "image/gif";
-	else if (!strcmp(ext, ".png"))
+	else if (!strcasecmp(ext, ".png"))
 	    resp_body->type = "image/png";
 	else
 	    resp_body->type = "application/octet-stream";
