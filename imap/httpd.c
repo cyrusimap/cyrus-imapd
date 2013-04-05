@@ -906,7 +906,7 @@ static void cmdloop(void)
 #endif
 
     for (;;) {
-	int ret = 0, tls_upgrade = 0, r, i, c;
+	int ret, tls_upgrade, empty, r, i, c;
 	char *p;
 	tok_t tok;
 	const char **hdr;
@@ -928,7 +928,15 @@ static void cmdloop(void)
 	memset(&txn.resp_body, 0,  /* Don't zero the response payload buffer */
 	       sizeof(struct resp_body_t) - sizeof(struct buf));
 	buf_reset(&txn.buf);
+	ret = empty = 0;
 
+	/* Create header cache */
+	if (!(txn.req_hdrs = spool_new_hdrcache())) {
+	    txn.error.desc = "Unable to create header cache";
+	    ret = HTTP_SERVER_ERROR;
+	}
+
+      req_line:
 	do {
 	    /* Flush any buffered output */
 	    prot_flush(httpd_out);
@@ -948,13 +956,6 @@ static void cmdloop(void)
 	} while (!proxy_check_input(protin, httpd_in, httpd_out,
 				    backend_current ? backend_current->in : NULL,
 				    NULL, 0));
-
-	/* Create header cache */
-	if (!ret && !(txn.req_hdrs = spool_new_hdrcache())) {
-	    txn.error.desc = "Unable to create header cache";
-	    ret = HTTP_SERVER_ERROR;
-	}
-
 	if (ret) {
 	    txn.flags.close = 1;
 	    error_response(ret, &txn);
@@ -965,7 +966,7 @@ static void cmdloop(void)
 
 	/* Read request-line */
 	syslog(LOG_DEBUG, "read & parse request-line");
-	if ((r = !prot_fgets(req_line->buf, MAX_REQ_LINE+1, httpd_in))) {
+	if (!prot_fgets(req_line->buf, MAX_REQ_LINE+1, httpd_in)) {
 	    txn.error.desc = prot_error(httpd_in);
 	    if (txn.error.desc && strcmp(txn.error.desc, PROT_EOF_STRING)) {
 		/* client timed out */
@@ -985,8 +986,8 @@ static void cmdloop(void)
 	if (p[-1] == '\n') *--p = '\0';
 	if (p[-1] == '\r') *--p = '\0';
 
-	/* Ignore empty lines before request-line per HTTPbis Part 1 Sec 3.5 */
-	if (!*req_line->buf) continue;
+	/* Ignore 1 empty line before request-line per HTTPbis Part 1 Sec 3.5 */
+	if (!empty++ && !*req_line->buf) goto req_line;
 
 	/* Parse request-line = method SP request-target SP HTTP-version CRLF */
 	tok_initm(&tok, req_line->buf, " ", 0);
