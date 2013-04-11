@@ -253,11 +253,21 @@ Blank lines and lines beginning with ``#'' are ignored.
    layers of MIME structure.  The default of 1000 is much higher
    than any sane message should have. */
 
+{ "caldav_realm", NULL, STRING }
+/* The realm to present for HTTP authentication of CalDAV resources.
+   If not set (the default), the value of the "servername" option will
+   be used.*/
+
 { "calendarprefix", NULL, STRING }
 /* The prefix for the calendar mailboxes hierarchies.  The hierarchy
    delimiter will be automatically appended.  The public calendar
    hierarchy will be at the toplevel of the shared namespace.  A
    user's personal calendar hierarchy will be a child of their Inbox. */
+
+{ "carddav_realm", NULL, STRING }
+/* The realm to present for HTTP authentication of CardDAV resources.
+   If not set (the default), the value of the "servername" option will
+   be used.*/
 
 { "client_timeout", 10, INT }
 /* Number of seconds to wait before returning a timeout failure when
@@ -270,6 +280,11 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "configdirectory", NULL, STRING }
 /* The pathname of the IMAP configuration directory.  This field is
    required. */
+
+{ "dav_realm", NULL, STRING }
+/* The realm to present for HTTP authentication of generic DAV
+   resources (principals).  If not set (the default), the value of the
+   "servername" option will be used.*/
 
 { "debug_command", NULL, STRING }
 /* Debug command to be used by processes started with -D option.  The string
@@ -1146,6 +1161,11 @@ And the notification message will be available on \fIstdin\fR.
    no more than the first \fIrss_maxsynopsis\fR characters of an
    item's synopsis.  If set to 0, the entire synopsis will be
    displayed (the default). */
+
+{ "rss_realm", NULL, STRING }
+/* The realm to present for HTTP authentication of RSS feeds.  If not
+   set (the default), the value of the "servername" option will be
+   used.*/
 
 { "rss_ttl", 30, INT }
 /* RSS channel time to live.  Indicates to the client the number of

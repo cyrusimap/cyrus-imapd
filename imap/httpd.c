@@ -2465,7 +2465,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
     struct auth_challenge_t *chal = &txn->auth_chal;
     static int status = SASL_OK;
     size_t slen;
-    const char *clientin = NULL, *user;
+    const char *clientin = NULL, *realm = NULL, *user;
     unsigned int clientinlen = 0;
     struct auth_scheme_t *scheme;
     static char base64[BASE64_BUF_SIZE+1];
@@ -2531,6 +2531,27 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 	clientin = base64;
     }
 
+    /* Get realm - based on namespace of URL */
+    switch (txn->req_tgt.namespace) {
+    case URL_NS_DEFAULT:
+    case URL_NS_PRINCIPAL:
+	realm = config_getstring(IMAPOPT_DAV_REALM);
+	break;
+
+    case URL_NS_CALENDAR:
+	realm = config_getstring(IMAPOPT_CALDAV_REALM);
+	break;
+
+    case URL_NS_ADDRESSBOOK:
+	realm = config_getstring(IMAPOPT_CARDDAV_REALM);
+	break;
+
+    case URL_NS_RSS:
+	realm = config_getstring(IMAPOPT_RSS_REALM);
+	break;
+    }
+    if (!realm) realm = config_servername;
+
 #ifdef SASL_HTTP_REQUEST
     /* Setup SASL HTTP request, if necessary */
     if (scheme->flags & AUTH_NEED_BODY) {
@@ -2560,8 +2581,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 
 	if (!clientin) {
 	    /* Create initial challenge (base64 buffer is static) */
-	    snprintf(base64, BASE64_BUF_SIZE,
-		     "realm=\"%s\"", config_servername);
+	    snprintf(base64, BASE64_BUF_SIZE, "realm=\"%s\"", realm);
 	    chal->param = base64;
 	    chal->scheme = NULL;  /* make sure we don't reset the SASL ctx */
 	    return status;
