@@ -869,20 +869,21 @@ EXPORTED const char *buf_cstring(struct buf *buf)
 
 EXPORTED char *buf_release(struct buf *buf)
 {
-    char *ret;
+    char *ret = (char *)buf_cstring(buf);
+    buf_init(buf);
+    return ret;
+}
 
-    /* make sure it's NULL terminated - also guarantees it's a
-     * malloc'ed string */
-    buf_ensure(buf, 1);
-    ret = buf->s;
-    ret[buf->len] = '\0';
+EXPORTED const char *buf_cstringnull(struct buf *buf)
+{
+    if (!buf->s) return NULL;
+    return buf_cstring(buf);
+}
 
-    /* zero out the buffer so it no longer manages the string */
-    buf->s = NULL;
-    buf->len = 0;
-    buf->alloc = 0;
-    buf->flags = 0;
-
+EXPORTED char *buf_releasenull(struct buf *buf)
+{
+    char *ret = (char *)buf_cstringnull(buf);
+    buf_init(buf);
     return ret;
 }
 

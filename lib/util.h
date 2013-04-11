@@ -227,8 +227,10 @@ struct buf {
 #define BUF_INITIALIZER	{ NULL, 0, 0, 0 }
 
 const char *buf_cstring(struct buf *buf);
-void buf_ensure(struct buf *buf, size_t morebytes);
+const char *buf_cstringnull(struct buf *buf);
 char *buf_release(struct buf *buf);
+char *buf_releasenull(struct buf *buf);
+void buf_ensure(struct buf *buf, size_t morebytes);
 void buf_getmap(struct buf *buf, const char **base, size_t *len);
 int buf_getline(struct buf *buf, FILE *fp);
 size_t buf_len(const struct buf *buf);
