@@ -130,7 +130,7 @@ sqlite3 *dav_open(const char *userid, const char *cmds)
 #endif
     if (rc != SQLITE_OK) {
 	syslog(LOG_ERR, "dav_open(%s) open: %s",
-	       userid, db ? sqlite3_errmsg(db) : "failed");
+	       buf_cstring(&fname), db ? sqlite3_errmsg(db) : "failed");
     }
     else {
 #if SQLITE_VERSION_NUMBER >= 3006000
@@ -142,7 +142,7 @@ sqlite3 *dav_open(const char *userid, const char *cmds)
 	    rc = sqlite3_exec(db, cmds, NULL, NULL, NULL);
 	    if (rc != SQLITE_OK) {
 		syslog(LOG_ERR, "dav_open(%s) cmds: %s",
-		       userid, sqlite3_errmsg(db));
+		       buf_cstring(&fname), sqlite3_errmsg(db));
 	    }
 	}
     }
