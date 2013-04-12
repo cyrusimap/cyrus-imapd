@@ -4204,7 +4204,7 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
     }
     else {
 	char *headers = NULL;
-	int r = message_need(m, M_MAP);
+	int r = message_need(m, M_MAP|M_CACHEBODY);
 	if (r) return r;
 	headers = xstrndup(m->map.s + m->body->header_offset, m->body->header_size);
 	strarray_append(&want, hdr);
