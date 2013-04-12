@@ -1113,7 +1113,7 @@ static void cmdloop(void)
 	/* Find the namespace of the requested resource */
 	for (i = 0; namespaces[i]; i++) {
 	    const char *path = txn.req_uri->path;
-	    const char *query = txn.req_uri->query_raw;
+	    const char *query = URI_QUERY(txn.req_uri);
 	    size_t len;
 
 	    /* Skip disabled namespaces */
@@ -1200,7 +1200,7 @@ static void cmdloop(void)
 		else {
 		    /* All other clients use RFC 2818 (HTTPS) */
 		    const char *path = txn.req_uri->path;
-		    const char *query = txn.req_uri->query_raw;
+		    const char *query = URI_QUERY(txn.req_uri);
 		    struct buf *html = &txn.resp_body.payload;
 
 		    /* Create https URL */

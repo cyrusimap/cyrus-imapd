@@ -224,12 +224,12 @@ static int meth_get(struct transaction_t *txn,
     }
 
     /* Parse query params, if any */
-    if (txn->req_uri->query_raw &&
-	!strncasecmp(txn->req_uri->query_raw, "uid=", 4)) {
+    if (URI_QUERY(txn->req_uri) &&
+	!strncasecmp(URI_QUERY(txn->req_uri), "uid=", 4)) {
 	/* UID */
 	char *end;
 
-	uid = strtoul(txn->req_uri->query_raw+4, &end, 10);
+	uid = strtoul(URI_QUERY(txn->req_uri)+4, &end, 10);
 	if (!uid) uid = -1;
 
 	if (!strncasecmp(end, ";section=", 9)) {

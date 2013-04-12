@@ -69,6 +69,13 @@
     "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" " \
     "\"http://www.w3.org/TR/html4/loose.dtd\">\n"
 
+/* Macro to access query part of URI */
+#if LIBXML_VERSION >= 20700
+#define URI_QUERY(uri) uri->query_raw
+#else
+#define URI_QUERY(uri) uri->query
+#endif
+
 /* SASL usage based on availability */
 #if defined(SASL_NEED_HTTP) && defined(SASL_HTTP_REQUEST)
   #define HTTP_DIGEST_MECH "DIGEST-MD5"

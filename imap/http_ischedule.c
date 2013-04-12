@@ -175,8 +175,8 @@ static int meth_get_isched(struct transaction_t *txn,
     static int bufsiz = 0;
 
     /* We don't handle GET on a anything other than ?action=capabilities */
-    if (!txn->req_uri->query_raw ||
-	strcmp(txn->req_uri->query_raw, "action=capabilities")) {
+    if (!URI_QUERY(txn->req_uri) ||
+	strcmp(URI_QUERY(txn->req_uri), "action=capabilities")) {
 	return HTTP_NOT_FOUND;
     }
 
