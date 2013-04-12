@@ -3704,7 +3704,7 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
 
     if (strcmp(body->type, "MESSAGE") == 0
 	&& strcmp(body->subtype, "RFC822") == 0) {
-	if (body->subpart->numparts) {
+	if (strcmp(body->subpart->type, "MULTIPART") == 0) {
 	    /*
 	     * Part 0 of a message/rfc822 is the message header/text.
 	     * Nested parts of a message/rfc822 containing a multipart
