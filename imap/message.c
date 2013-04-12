@@ -4184,7 +4184,8 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
 	c_env = xstrndup(cacheitem_base(&m->record, CACHE_ENVELOPE) + 1,
 			 cacheitem_size(&m->record, CACHE_ENVELOPE) - 2);
 	parse_cached_envelope(c_env, envtokens, NUMENVTOKENS);
-	buf_appendcstr(&raw, envtokens[ENV_MSGID]);
+	if (envtokens[ENV_MSGID])
+	    buf_appendcstr(&raw, envtokens[ENV_MSGID]);
 	free(c_env);
 	hasname = 0;
     }
