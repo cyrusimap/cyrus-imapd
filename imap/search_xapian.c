@@ -1406,10 +1406,26 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     if (!tr->activefile || strcmp(mappedfile_fname(tr->activefile), fname)) {
 	_receiver_finish_user(tr);
 
-	/* we don't need a writelock on activefile to index - we just have to make
-	 * sure that nobody else deletes the database out from under us, which means
-	 * holding a readlock until after committing the changes */
-	active = activefile_open(mailbox->name, mailbox->part, &tr->activefile, /*write*/0);
+	/* we grab an activefile writelock to index.  Strictly we don't need it, but
+	 * doing this guarantees we never write under a client which is reading, which
+	 * avoids this:
+	 *
+	 *     IOERROR: Xapian: caught exception: : DatabaseModifiedError: The revision
+	 *     being read has been discarded - you should call Xapian::Database::reopen()
+	 *     and retry the operation
+	 *
+	 * in theory, this will go away eventually, and we can switch back to write: 0
+	 * in this code.
+	 *
+	 * http://grokbase.com/t/xapian/xapian-discuss/0667ppbks8/#20060608j8x5aeept49dv5fm8d02xkczgr
+	 *
+	 * "This is almost invariably caused by updating a database while reading
+	 *  from it. If two updates are committed before the read completes, you
+	 *  get this error (it's DatabaseModifiedError). It's a bit of a pain
+	 *  and will be going away in the future, but it's not too hard to design
+	 *  to avoid it happening at least."
+	 */
+	active = activefile_open(mailbox->name, mailbox->part, &tr->activefile, /*write*/1);
 	if (!active || !active->count) goto out;
 
 	/* doesn't matter if the first one doesn't exist yet, we'll create it */
