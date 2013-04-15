@@ -71,6 +71,7 @@ lib_LTLIBRARIES = lib/libcyrus_min.la lib/libcyrus.la
 EXTRA_PROGRAMS = doc/text/htmlstrip
 check_PROGRAMS =
 service_PROGRAMS =
+user_PROGRAMS =
 CLEANFILES =
 
 if COM_ERR
@@ -91,6 +92,11 @@ BUILT_SOURCES += \
 	imap/rfc822_header.h
 lib_LTLIBRARIES += imap/libcyrus_imap.la
 service_PROGRAMS += \
+	imap/imapd \
+	imap/lmtpd \
+	imap/pop3d \
+	imap/smmapd
+user_PROGRAMS += \
 	imap/arbitron \
 	imap/chk_cyrus \
 	imap/ctl_cyrusdb \
@@ -107,23 +113,19 @@ service_PROGRAMS += \
 	imap/cyr_synclog \
 	imap/cyr_userseen \
 	imap/deliver \
-	imap/imapd \
 	imap/ipurge \
-	imap/lmtpd \
 	imap/mbexamine \
 	imap/mbpath \
 	imap/mbtool \
-	imap/pop3d \
 	imap/quota \
 	imap/reconstruct \
-	imap/smmapd \
 	imap/squatter
 if NNTPD
-service_PROGRAMS += imap/fetchnews
+user_PROGRAMS += imap/fetchnews
 endif
 service_PROGRAMS += imap/fud
 if IDLED
-service_PROGRAMS += imap/idled
+user_PROGRAMS += imap/idled
 endif
 if MURDER
 service_PROGRAMS += imap/mupdate
@@ -132,16 +134,17 @@ if NNTPD
 service_PROGRAMS += imap/nntpd
 endif
 if REPLICATION
-service_PROGRAMS += imap/sync_client imap/sync_reset imap/sync_server
+user_PROGRAMS += imap/sync_client imap/sync_reset
+service_PROGRAMS += imap/sync_server
 endif
 if HAVE_SSL
-service_PROGRAMS += imap/tls_prune
+user_PROGRAMS += imap/tls_prune
 endif
-service_PROGRAMS += imap/unexpunge master/master
+user_PROGRAMS += imap/unexpunge master/master
 endif
 if CMULOCAL
 dist_sysconf_DATA += depot/rc.local.imap depot/rc.local.ptclient
-service_PROGRAMS += netnews/remotepurge
+user_PROGRAMS += netnews/remotepurge
 endif
 if SIEVE
 if SERVER
@@ -150,7 +153,8 @@ service_PROGRAMS += notifyd/notifyd
 endif
 endif
 if PTCLIENT
-service_PROGRAMS += ptclient/ptdump ptclient/ptexpire ptclient/ptloader
+user_PROGRAMS += ptclient/ptdump ptclient/ptexpire
+service_PROGRAMS += ptclient/ptloader
 # ptclient/ptextract
 endif
 if PERL
@@ -165,7 +169,7 @@ endif
 BUILT_SOURCES += sieve/addr.c sieve/sieve.c sieve/sieve_err.c
 lib_LTLIBRARIES += sieve/libcyrus_sieve.la
 check_PROGRAMS += sieve/test
-service_PROGRAMS += sieve/sievec sieve/sieved
+user_PROGRAMS += sieve/sievec sieve/sieved
 if SERVER
 service_PROGRAMS += timsieved/timsieved
 endif
@@ -1309,13 +1313,16 @@ if CMULOCAL
 endif
 
 install-exec-hook:
+if PERL
 	for s in installsieve sieveshell; \
 	do \
 	  $(PERL_PREINSTALL) < perl/sieve/scripts/$$s.pl > perl/sieve/scripts/$$s ;\
 	  $(INSTALL) -m 755 perl/sieve/scripts/$$s $(DESTDIR)$(bindir)/$$s ; \
 	done
+endif
 
 ## The @$(MKDIR_P) line is added due to a bug in Automake 1.10 and can be removed if using Automake 1.12.
+	@$(MKDIR_P) $(DESTDIR)$(userdir)
 	@$(MKDIR_P) $(DESTDIR)$(servicedir)
 	cd $(DESTDIR)$(servicedir) && \
 	  $(LN_S) -f pop3d pop3proxyd && \
