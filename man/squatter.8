@@ -70,6 +70,29 @@ squatter \- create SQUAT indexes for mailboxes
 .I config-file
 ]
 [
+.B \-r
+]
+[
+.B \-s
+]
+[
+.B \-i
+]
+[
+.B \-a
+]
+[
+.B \-v
+]
+.B -u
+.IR user ...
+.br
+.B squatter
+[
+.B \-C
+.I config-file
+]
+[
 .B -v
 ]
 [
@@ -170,6 +193,9 @@ When indexing, work on a temporary copy of the search engine databases
 in \fIdirectory\fP.  That directory would typically be on some very
 fast filesystem, like an SSD or tmpfs.  This option may not work with all
 search engines, but it's only effect is to speed up initial indexing.
+.TP
+.B \-u
+Extra options refer to usernames (e.g. foo@bar.com) rather than mailbox names.
 .TP
 .B \-d
 In rolling mode, don't background and do emit log messages on standard

@@ -109,6 +109,9 @@ static int usage(const char *name)
 	    "usage: %s [-C <alt_config>] [-v] [-s] [-a] [mailbox...]\n",
 	    name);
     fprintf(stderr,
+	    "usage: %s [-C <alt_config>] [-v] [-s] [-a] -u user...\n",
+	    name);
+    fprintf(stderr,
 	    "       %s [-C <alt_config>] [-v] [-s] [-a] -r mailbox [...]\n",
 	    name);
     fprintf(stderr,
@@ -292,7 +295,7 @@ static int addmbox(char *name,
 }
 
 static void expand_mboxnames(strarray_t *sa, int nmboxnames,
-			     const char **mboxnames)
+			     const char **mboxnames, int user_mode)
 {
     int i;
     char buf[MAX_MAILBOX_PATH + 1];
@@ -305,11 +308,18 @@ static void expand_mboxnames(strarray_t *sa, int nmboxnames,
     }
 
     for (i = 0; i < nmboxnames; i++) {
-	/* Translate any separators in mailboxname */
-	(*squat_namespace.mboxname_tointernal) (&squat_namespace,
-						mboxnames[i], NULL, buf);
+	if (user_mode) {
+	    char *mbox = mboxname_user_mbox(mboxnames[i], NULL);
+	    strlcpy(buf, mbox, sizeof(buf));
+	    free(mbox);
+	}
+	else {
+	    /* Translate any separators in mailboxname */
+	    (*squat_namespace.mboxname_tointernal) (&squat_namespace,
+						    mboxnames[i], NULL, buf);
+	}
 	strarray_append(sa, buf);
-	if (recursive_flag) {
+	if (recursive_flag || user_mode) {
 	    strlcat(buf, ".*", sizeof(buf));
 	    (*squat_namespace.mboxlist_findall) (&squat_namespace, buf, 1,
 						 0, 0, addmbox, sa);
@@ -782,6 +792,7 @@ int main(int argc, char **argv)
     const char *synclogfile = NULL;
     int init_flags = CYRUSINIT_PERROR;
     int multi_folder = 0;
+    int user_mode = 0;
     int compact_flags = 0;
     const char *fromfile = NULL;
     strarray_t *srctiers = NULL;
@@ -795,7 +806,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:I:RT:S:c:de:f:mn:rsiavz:t:o")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:I:RT:S:c:de:f:mn:rsiavz:t:ou")) != EOF) {
 	switch (opt) {
 	case 'C':		/* alt config file */
 	    alt_config = optarg;
@@ -903,6 +914,10 @@ int main(int argc, char **argv)
 	    mode = COMPACT;
 	    break;
 
+	case 'u':
+	    user_mode = 1;
+	    break;
+
 	default:
 	    usage("squatter");
 	}
@@ -949,7 +964,7 @@ int main(int argc, char **argv)
     case INDEXER:
 	/* -r requires at least one mailbox */
 	if (recursive_flag && optind == argc) usage(argv[0]);
-	expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind);
+	expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind, user_mode);
 	syslog(LOG_NOTICE, "indexing mailboxes");
 	r = do_indexer(&mboxnames);
 	syslog(LOG_NOTICE, "done indexing mailboxes");
@@ -961,7 +976,7 @@ int main(int argc, char **argv)
 	break;
     case SEARCH:
 	if (recursive_flag && optind == argc) usage(argv[0]);
-	expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind);
+	expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind, user_mode);
 	r = do_search(query, !multi_folder, &mboxnames);
 	break;
     case ROLLING:
@@ -985,7 +1000,7 @@ int main(int argc, char **argv)
 	break;
     case COMPACT:
 	if (recursive_flag && optind == argc) usage(argv[0]);
-	expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind);
+	expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind, user_mode);
 	r = do_compact(&mboxnames, srctiers, desttier, compact_flags);
 	break;
     }
