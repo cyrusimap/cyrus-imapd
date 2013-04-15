@@ -3166,11 +3166,10 @@ int meth_get_doc(struct transaction_t *txn,
     if (!prefix) return HTTP_NOT_FOUND;
 
     buf_setcstr(&pathbuf, prefix);
-    if (!txn->req_tgt.path || !*txn->req_tgt.path ||
-	(txn->req_tgt.path[0] == '/' && txn->req_tgt.path[1] == '\0'))
+    if (!strcmp(txn->req_uri->path, "/"))
 	buf_appendcstr(&pathbuf, "/index.html");
     else
-	buf_appendcstr(&pathbuf, txn->req_tgt.path);
+	buf_appendcstr(&pathbuf, txn->req_uri->path);
     path = buf_cstring(&pathbuf);
 
     /* See if file exists and get Content-Length & Last-Modified time */
@@ -3217,7 +3216,7 @@ int meth_get_doc(struct transaction_t *txn,
     if (resp_body->type) {
 	/* Caller has specified the Content-Type */
     }
-    else if ((ext = strrchr(txn->req_tgt.path, '.'))) {
+    else if ((ext = strrchr(txn->req_uri->path, '.'))) {
 	/* Try to use filename extension to identity Content-Type */
 	if (!strcasecmp(ext, ".text") || !strcmp(ext, ".txt"))
 	    resp_body->type = "text/plain";
@@ -3279,7 +3278,7 @@ int meth_options(struct transaction_t *txn, void *params)
     txn->flags.vary = 0;
 
     /* Special case "*" - show all features/methods available on server */
-    if (!strcmp(txn->req_tgt.path, "*")) {
+    if (!strcmp(txn->req_uri->path, "*")) {
 	int i;
 
 	for (i = 0; namespaces[i]; i++) {
@@ -3306,7 +3305,7 @@ int meth_propfind_root(struct transaction_t *txn,
 
 #ifdef WITH_DAV
     /* Apple iCal and Evolution both check "/" */
-    if (!strcmp(txn->req_tgt.path, "/")) {
+    if (!strcmp(txn->req_uri->path, "/")) {
 	if (!httpd_userid) return HTTP_UNAUTHORIZED;
 
 	txn->req_tgt.allow |= ALLOW_DAV;
