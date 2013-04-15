@@ -2444,8 +2444,9 @@ void sched_deliver_local(const char *recipient __attribute__((unused)),
 	    construct_hash_table(&comp_table, 10, 1);
 	    comp = icalcomponent_get_first_real_component(ical);
 	    do {
-		prop = icalcomponent_get_first_property(comp,
-							ICAL_RECURRENCEID_PROPERTY);
+		prop =
+		    icalcomponent_get_first_property(comp,
+						     ICAL_RECURRENCEID_PROPERTY);
 		if (prop) recurid = icalproperty_get_value_as_string(prop);
 		else recurid = "";
 
@@ -2457,8 +2458,9 @@ void sched_deliver_local(const char *recipient __attribute__((unused)),
 	    itip = icalcomponent_get_first_component(sched_data->itip, kind);
 	    do {
 		/* Lookup this comp in the hash table */
-		prop = icalcomponent_get_first_property(itip,
-							ICAL_RECURRENCEID_PROPERTY);
+		prop =
+		    icalcomponent_get_first_property(itip,
+						     ICAL_RECURRENCEID_PROPERTY);
 		if (prop) recurid = icalproperty_get_value_as_string(prop);
 		else recurid = "";
 
@@ -2466,41 +2468,49 @@ void sched_deliver_local(const char *recipient __attribute__((unused)),
 		if (!comp) {
 		    /* New recurrence overridden by attendee.
 		       Create a new recurrence from master component. */
-		    comp = icalcomponent_new_clone(hash_lookup("", &comp_table));
+		    comp =
+			icalcomponent_new_clone(hash_lookup("", &comp_table));
 
 		    /* Add RECURRENCE-ID */
 		    icalcomponent_add_property(comp,
 					       icalproperty_new_clone(prop));
 
 		    /* Remove RRULE */
-		    prop = icalcomponent_get_first_property(comp,
-							    ICAL_RRULE_PROPERTY);
+		    prop =
+			icalcomponent_get_first_property(comp,
+							 ICAL_RRULE_PROPERTY);
 		    if (prop) icalcomponent_remove_property(comp, prop);
 
 		    /* Replace DTSTART, DTEND, SEQUENCE */
-		    prop = icalcomponent_get_first_property(comp,
-							    ICAL_DTSTART_PROPERTY);
+		    prop =
+			icalcomponent_get_first_property(comp,
+							 ICAL_DTSTART_PROPERTY);
 		    if (prop) icalcomponent_remove_property(comp, prop);
-		    prop = icalcomponent_get_first_property(itip,
-							    ICAL_DTSTART_PROPERTY);
+		    prop =
+			icalcomponent_get_first_property(itip,
+							 ICAL_DTSTART_PROPERTY);
 		    if (prop)
 			icalcomponent_add_property(comp,
 						   icalproperty_new_clone(prop));
 
-		    prop = icalcomponent_get_first_property(comp,
-							    ICAL_DTEND_PROPERTY);
+		    prop =
+			icalcomponent_get_first_property(comp,
+							 ICAL_DTEND_PROPERTY);
 		    if (prop) icalcomponent_remove_property(comp, prop);
-		    prop = icalcomponent_get_first_property(itip,
-							    ICAL_DTEND_PROPERTY);
+		    prop =
+			icalcomponent_get_first_property(itip,
+							 ICAL_DTEND_PROPERTY);
 		    if (prop)
 			icalcomponent_add_property(comp,
 						   icalproperty_new_clone(prop));
 
-		    prop = icalcomponent_get_first_property(comp,
-							    ICAL_SEQUENCE_PROPERTY);
+		    prop =
+			icalcomponent_get_first_property(comp,
+							 ICAL_SEQUENCE_PROPERTY);
 		    if (prop) icalcomponent_remove_property(comp, prop);
-		    prop = icalcomponent_get_first_property(itip,
-							    ICAL_SEQUENCE_PROPERTY);
+		    prop =
+			icalcomponent_get_first_property(itip,
+							 ICAL_SEQUENCE_PROPERTY);
 		    if (prop)
 			icalcomponent_add_property(comp,
 						   icalproperty_new_clone(prop));
@@ -2512,8 +2522,9 @@ void sched_deliver_local(const char *recipient __attribute__((unused)),
 		att = icalcomponent_get_first_property(itip,
 						       ICAL_ATTENDEE_PROPERTY);
 		attendee = icalproperty_get_attendee(att);
-		param = icalproperty_get_first_parameter(att,
-							 ICAL_PARTSTAT_PARAMETER);
+		param =
+		    icalproperty_get_first_parameter(att,
+						     ICAL_PARTSTAT_PARAMETER);
 		partstat = icalparameter_get_partstat(param);
 
 		prop =
@@ -2551,12 +2562,14 @@ void sched_deliver_local(const char *recipient __attribute__((unused)),
 		icalparameter_set_partstat(param, partstat);
 
 		/* Find and set SCHEDULE-STATUS */
-		for (param = icalproperty_get_first_parameter(prop,
-							      ICAL_IANA_PARAMETER);
+		for (param =
+			 icalproperty_get_first_parameter(prop,
+							  ICAL_IANA_PARAMETER);
 		     param && strcmp(icalparameter_get_iana_name(param),
 				     "SCHEDULE-STATUS");
-		     param = icalproperty_get_next_parameter(prop,
-							     ICAL_IANA_PARAMETER));
+		     param =
+			 icalproperty_get_next_parameter(prop,
+							 ICAL_IANA_PARAMETER));
 		if (!param) {
 		    param = icalparameter_new(ICAL_IANA_PARAMETER);
 		    icalproperty_add_parameter(prop, param);
@@ -2564,8 +2577,8 @@ void sched_deliver_local(const char *recipient __attribute__((unused)),
 		}
 		icalparameter_set_iana_value(param, req_stat);
 
-	    } while ((itip =
-		      icalcomponent_get_next_component(sched_data->itip, kind)));
+	    } while ((itip = icalcomponent_get_next_component(sched_data->itip,
+							      kind)));
 
 	    free_hash_table(&comp_table, NULL);
 
@@ -2581,8 +2594,9 @@ void sched_deliver_local(const char *recipient __attribute__((unused)),
 	    construct_hash_table(&comp_table, 10, 1);
 	    comp = icalcomponent_get_first_real_component(ical);
 	    do {
-		prop = icalcomponent_get_first_property(comp,
-							ICAL_RECURRENCEID_PROPERTY);
+		prop =
+		    icalcomponent_get_first_property(comp,
+						     ICAL_RECURRENCEID_PROPERTY);
 		if (prop) recurid = icalproperty_get_value_as_string(prop);
 		else recurid = "";
 
@@ -2594,8 +2608,9 @@ void sched_deliver_local(const char *recipient __attribute__((unused)),
 	    itip = icalcomponent_get_first_component(sched_data->itip, kind);
 	    do {
 		/* Lookup this comp in the hash table */
-		prop = icalcomponent_get_first_property(itip,
-							ICAL_RECURRENCEID_PROPERTY);
+		prop =
+		    icalcomponent_get_first_property(itip,
+						     ICAL_RECURRENCEID_PROPERTY);
 		if (prop) recurid = icalproperty_get_value_as_string(prop);
 		else recurid = "";
 
@@ -2609,8 +2624,8 @@ void sched_deliver_local(const char *recipient __attribute__((unused)),
 		icalcomponent_add_component(ical,
 					    icalcomponent_new_clone(itip));
 
-	    } while ((itip =
-		      icalcomponent_get_next_component(sched_data->itip, kind)));
+	    } while ((itip = icalcomponent_get_next_component(sched_data->itip,
+							      kind)));
 
 	    free_hash_table(&comp_table, NULL);
 
@@ -2829,9 +2844,11 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
 	if (!strcmp(attendee, organizer)) continue;
 
 	/* Check CalDAV Scheduling parameters */
-	for (param = icalproperty_get_first_parameter(prop, ICAL_IANA_PARAMETER);
+	for (param =
+		 icalproperty_get_first_parameter(prop, ICAL_IANA_PARAMETER);
 	     param;
-	     param = icalproperty_get_next_parameter(prop, ICAL_IANA_PARAMETER)) {
+	     param =
+		 icalproperty_get_next_parameter(prop, ICAL_IANA_PARAMETER)) {
 	    if (!strcmp(icalparameter_get_iana_name(param),
 			"SCHEDULE-AGENT")) {
 		do_sched =
@@ -3033,7 +3050,7 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 
 	    /* XXX  We assume that the master component is always first */
 	    if (ncomp) {
-		/* Handle any attendees that are excluded from this recurrence */
+		/* Handle attendees that are excluded from this recurrence */
 		struct exclude_rock erock = { ncomp, copy };
 
 		hash_enumerate(&att_table, sched_exclude, &erock);
