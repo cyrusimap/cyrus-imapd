@@ -2235,8 +2235,9 @@ static void free_sched_data(void *data)
 #define SCHEDSTAT_REJECTED	"5.3"
 
 /* Deliver scheduling object to a remote recipient */
-void sched_deliver_remote(const char *recipient, struct sched_param *sparam,
-			  struct sched_data *sched_data)
+static void sched_deliver_remote(const char *recipient,
+				 struct sched_param *sparam,
+				 struct sched_data *sched_data)
 {
     int r;
 
@@ -2307,10 +2308,10 @@ void sched_deliver_remote(const char *recipient, struct sched_param *sparam,
 }
 
 /* Deliver scheduling object to local recipient */
-void sched_deliver_local(const char *recipient __attribute__((unused)),
-			 struct sched_param *sparam,
-			 struct sched_data *sched_data,
-			 struct auth_state *authstate)
+static void sched_deliver_local(const char *recipient __attribute__((unused)),
+				struct sched_param *sparam,
+				struct sched_data *sched_data,
+				struct auth_state *authstate)
 {
     int r = 0, rights, reqd_privs;
     const char *userid = sparam->userid, *mboxname = NULL;
@@ -2715,47 +2716,6 @@ void sched_deliver(const char *recipient, void *data, void *rock)
 }
 
 
-struct exclude_rock {
-    unsigned ncomp;
-    icalcomponent *comp;
-};
-
-/* Add EXDATE to master component if attendee is excluded from recurrence */
-static void sched_exclude(const char *attendee __attribute__((unused)),
-			  void *data, void *rock)
-{
-    struct sched_data *sched_data = (struct sched_data *) data;
-    struct exclude_rock *erock = (struct exclude_rock *) rock;
-
-    if (!(sched_data->comp_mask & (1<<erock->ncomp))) {
-	icalproperty *recurid, *exdate;
-	struct icaltimetype exdt;
-	icalparameter *param;
-
-	/* Fetch the RECURRENCE-ID and use it to create a new EXDATE */
-	recurid = icalcomponent_get_first_property(erock->comp,
-						   ICAL_RECURRENCEID_PROPERTY);
-	exdt = icalproperty_get_recurrenceid(recurid);
-
-	exdate = icalproperty_new_exdate(exdt);
-
-	/* Copy any parameters from RECURRENCE-ID to EXDATE */
-	param = icalproperty_get_first_parameter(recurid, ICAL_TZID_PARAMETER);
-	if (param) {
-	    icalproperty_add_parameter(exdate, icalparameter_new_clone(param));
-	}
-	param = icalproperty_get_first_parameter(recurid, ICAL_VALUE_PARAMETER);
-	if (param) {
-	    icalproperty_add_parameter(exdate, icalparameter_new_clone(param));
-	}
-	/* XXX  Need to handle RANGE parameter */
-
-	/* Add the EXDATE to the master component for this attendee */
-	icalcomponent_add_property(sched_data->master, exdate);
-    }
-}
-
-
 struct comp_data {
     icalcomponent *comp;
     icalparameter_partstat partstat;
@@ -2772,6 +2732,12 @@ static void free_comp_data(void *data) {
 }
 
 
+/*
+ * sched_request/reply() helper function
+ *
+ * Update DTSTAMP, remove VALARMs,
+ * optionally remove scheduling params from ORGANIZER
+ */
 static void clean_component(icalcomponent *comp, int clean_org)
 {
     icalcomponent *alarm, *next;
@@ -2820,8 +2786,57 @@ static void clean_component(icalcomponent *comp, int clean_org)
 }
 
 
-/* Process all attendees in the given component and add a 
-   properly modfied component to the attendee's iTIP request if necessary. */
+/*
+ * sched_request() helper function
+ *
+ * Add EXDATE to master component if attendee is excluded from recurrence
+ */
+struct exclude_rock {
+    unsigned ncomp;
+    icalcomponent *comp;
+};
+
+static void sched_exclude(const char *attendee __attribute__((unused)),
+			  void *data, void *rock)
+{
+    struct sched_data *sched_data = (struct sched_data *) data;
+    struct exclude_rock *erock = (struct exclude_rock *) rock;
+
+    if (!(sched_data->comp_mask & (1<<erock->ncomp))) {
+	icalproperty *recurid, *exdate;
+	struct icaltimetype exdt;
+	icalparameter *param;
+
+	/* Fetch the RECURRENCE-ID and use it to create a new EXDATE */
+	recurid = icalcomponent_get_first_property(erock->comp,
+						   ICAL_RECURRENCEID_PROPERTY);
+	exdt = icalproperty_get_recurrenceid(recurid);
+
+	exdate = icalproperty_new_exdate(exdt);
+
+	/* Copy any parameters from RECURRENCE-ID to EXDATE */
+	param = icalproperty_get_first_parameter(recurid, ICAL_TZID_PARAMETER);
+	if (param) {
+	    icalproperty_add_parameter(exdate, icalparameter_new_clone(param));
+	}
+	param = icalproperty_get_first_parameter(recurid, ICAL_VALUE_PARAMETER);
+	if (param) {
+	    icalproperty_add_parameter(exdate, icalparameter_new_clone(param));
+	}
+	/* XXX  Need to handle RANGE parameter */
+
+	/* Add the EXDATE to the master component for this attendee */
+	icalcomponent_add_property(sched_data->master, exdate);
+    }
+}
+
+
+/*
+ * sched_request() helper function
+ *
+ * Process all attendees in the given component and add a 
+ * properly modified component to the attendee's iTIP request if necessary
+ */
 static void process_attendees(icalcomponent *comp, unsigned ncomp,
 			      const char *organizer,
 			      struct hash_table *att_table,
@@ -2890,14 +2905,17 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
 }
 
 
+/*
+ * sched_request() helper function
+ *
+ * Organizer removed this component, mark it as cancelled for all attendees
+ */
 struct cancel_rock {
     const char *organizer;
     struct hash_table *att_table;
     icalcomponent *itip;
 };
 
-
-/* Organizer removed this component, mark it as cancelled for all attendees */
 static void sched_cancel(const char *recurid __attribute__((unused)),
 			 void *data, void *rock)
 {
@@ -2975,6 +2993,8 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 			      icalproperty_new_prodid(buf_cstring(&prodid)),
 			      icalproperty_new_method(method),
 			      0);
+
+    /* XXX  Make sure SEQUENCE is incremented */
 
     /* Copy over any CALSCALE property */
     prop = icalcomponent_get_first_property(ical, ICAL_CALSCALE_PROPERTY);
@@ -3121,7 +3141,10 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 }
 
 
-/* Remove all attendees from 'comp' other than the one corresponding to 'userid'
+/*
+ * sched_reply() helper function
+ *
+ * Remove all attendees from 'comp' other than the one corresponding to 'userid'
  *
  * Returns the new trimmed component (must be freed by caller)
  * Optionally returns the 'attendee' property, his/her 'propstat',
@@ -3185,7 +3208,11 @@ static icalcomponent *trim_attendees(icalcomponent *comp, const char *userid,
 }
 
 
-/* Attendee removed this component, mark it as declined for the organizer */
+/*
+ * sched_reply() helper function
+ *
+ * Attendee removed this component, mark it as declined for the organizer.
+ */
 static void sched_decline(const char *recurid __attribute__((unused)),
 			  void *data, void *rock)
 {
@@ -3306,6 +3333,8 @@ static void sched_reply(const char *userid,
 			    icalproperty_new_prodid(buf_cstring(&prodid)),
 			    icalproperty_new_method(ICAL_METHOD_REPLY),
 			    0);
+
+    /* XXX  Make sure SEQUENCE is incremented */
 
     /* Copy over any CALSCALE property */
     prop = icalcomponent_get_first_property(ical, ICAL_CALSCALE_PROPERTY);
