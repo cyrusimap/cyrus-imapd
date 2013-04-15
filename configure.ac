@@ -81,7 +81,7 @@ AC_ARG_WITH(cyrus-prefix,
 	cyrus_prefix="$withval",cyrus_prefix="$prefix/cyrus")
 AC_DEFINE_UNQUOTED(CYRUS_PATH,"$cyrus_prefix",[Where will we be installed?])
 AC_ARG_WITH(service-path,
-	[AS_HELP_STRING([--with-service-path=DIR], [use DIR as service install directory [PREFIX/cyrus/bin]])],
+	[AS_HELP_STRING([--with-service-path=DIR], [use DIR as service install directory [CYRUSPREFIX/bin]])],
 	servicedir="$withval",servicedir="$cyrus_prefix/bin")
 userdir=$servicedir
 AC_SUBST(userdir)
