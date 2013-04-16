@@ -1782,19 +1782,25 @@ struct mbdata {
 
 struct mbfilter {
     hash_table mboxes;
+    struct db *indexed;
     int verbose;
 };
 
 static void free_mbdata(void *rock)
 {
     struct mbdata *data = (struct mbdata *)rock;
+    if (!data) return;
     bv_free(&data->uids);
     free(data);
 }
 
 static int mbox_vector(const char *mboxname, struct mbfilter *filter)
 {
-    struct mbdata *data = xzmalloc(sizeof(struct mbdata));
+    struct mbdata *mbdata = xzmalloc(sizeof(struct mbdata));
+    struct buf key = BUF_INITIALIZER;
+    const char *data = NULL;
+    size_t datalen = 0;
+    struct seqset *seq = NULL;
     struct mailbox *mailbox = NULL;
     struct index_record record;
     unsigned recno;
@@ -1803,8 +1809,24 @@ static int mbox_vector(const char *mboxname, struct mbfilter *filter)
     r = mailbox_open_irl(mboxname, &mailbox);
     if (r) goto done;
 
-    data->uidvalidity = mailbox->i.uidvalidity;
-    bv_setsize(&data->uids, mailbox->i.last_uid);
+    buf_printf(&key, "%s.%u", mboxname, mailbox->i.uidvalidity);
+
+    r = cyrusdb_fetch(filter->indexed,
+		      key.s, key.len,
+		      &data, &datalen,
+		      (struct txn **)NULL);
+
+    if (r == CYRUSDB_NOTFOUND) {
+	r = 0;
+	goto done;
+    }
+    if (r) goto done;
+
+    seq = parse_indexed(data, datalen);
+    if (!seq) goto done;
+
+    mbdata->uidvalidity = mailbox->i.uidvalidity;
+    bv_setsize(&mbdata->uids, mailbox->i.last_uid);
 
     if (filter->verbose)
 	printf("Vectoring %s\n", mboxname);
@@ -1816,15 +1838,21 @@ static int mbox_vector(const char *mboxname, struct mbfilter *filter)
 	if (record.system_flags & FLAG_EXPUNGED)
 	    continue;
 
-	bv_set(&data->uids, record.uid);
+	/* we don't expect it to be in this index, don't check for it */
+	if (!seqset_ismember(seq, record.uid))
+	    continue;
+
+	bv_set(&mbdata->uids, record.uid);
     }
 
     /* yay, we have succeeded */
-    hash_insert(mboxname, data, &filter->mboxes);
+    hash_insert(mboxname, mbdata, &filter->mboxes);
+    mbdata = NULL;
 
 done:
+    if (seq) seqset_free(seq);
     if (mailbox) mailbox_close(&mailbox);
-    if (r) free_mbdata(data);
+    if (mbdata) free_mbdata(mbdata);
     return r;
 }
 
@@ -1848,6 +1876,7 @@ static int build_mbfilter(const char *userid, struct mbfilter *filter)
 static void free_mbfilter(struct mbfilter *filter)
 {
     free_hash_table(&filter->mboxes, free_mbdata);
+    cyrusdb_close(filter->indexed);
 }
 
 static int mbdata_exists_cb(const char *cyrusid, void *rock)
@@ -1871,6 +1900,11 @@ static int mbdata_exists_cb(const char *cyrusid, void *rock)
     /* then check if the UID exists */
     res = bv_isset(&data->uids, uid);
 
+    if (res) {
+	/* if we find it again, then we don't need a second copy */
+	bv_clear(&data->uids, uid);
+    }
+
 out:
     if (filter->verbose)
 	printf("Exists check: %s => %d\n", cyrusid, res);
@@ -1878,9 +1912,42 @@ out:
     return res;
 }
 
+static void notify_filter_cb(const char *mboxname, void *data, void *rock)
+{
+    struct mbdata *mbdata = (struct mbdata *)data;
+    struct mbfilter *filter = (struct mbfilter *)rock;
+    struct seqset *seq = seqset_init(0, SEQ_SPARSE);
+    int uid;
+
+    if (filter->verbose)
+	printf("checking for unindexed messages in %s\n", mboxname);
+
+    /* now we just read the bitvector and look for trouble! */
+    for (uid = bv_next_set(&mbdata->uids, 0) ;
+	 uid != -1 ;
+	 uid = bv_next_set(&mbdata->uids, uid+1))
+	seqset_add(seq, uid, 1);
+
+    if (seq->len) {
+	char *seqstr = seqset_cstring(seq);
+	syslog(LOG_ERR, "IOERROR: unindexed messages in %s: %s", mboxname, seqstr);
+	if (filter->verbose)
+	    printf("IOERROR: unindexed messages in %s: %s\n", mboxname, seqstr);
+	free(seqstr);
+    }
+
+    seqset_free(seq);
+}
+
+static void notify_missing_messages(struct mbfilter *filter)
+{
+    hash_enumerate(&filter->mboxes, notify_filter_cb, filter);
+}
+
 static int search_filter(const char *userid, const char *dbpath, int verbose)
 {
     xapian_dbw_t *dbw = NULL;
+    struct buf buf = BUF_INITIALIZER;
     struct mbfilter filter;
     int r;
 
@@ -1888,6 +1955,11 @@ static int search_filter(const char *userid, const char *dbpath, int verbose)
 
     filter.verbose = verbose;
     construct_hash_table(&filter.mboxes, 1024, 0);
+
+    buf_printf(&buf, "%s%s", dbpath, INDEXEDDB_FNAME);
+    r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_INDEXED_DB),
+		     buf_cstring(&buf), CYRUSDB_CREATE, &filter.indexed);
+    if (r) goto done;
 
     if (verbose)
 	printf("Building vector table for %s\n", userid);
@@ -1901,9 +1973,12 @@ static int search_filter(const char *userid, const char *dbpath, int verbose)
 	printf("Filtering database %s\n", dbpath);
 
     r = xapian_dbw_filter(dbw, mbdata_exists_cb, &filter);
+    if (r) goto done;
 
     if (verbose)
 	printf("done %s\n", dbpath);
+
+    notify_missing_messages(&filter);
 
 done:
     free_mbfilter(&filter);
