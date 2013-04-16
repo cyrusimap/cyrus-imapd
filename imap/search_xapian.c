@@ -53,6 +53,7 @@
 #endif
 #include <dirent.h>
 
+#include "bitvector.h"
 #include "imap_err.h"
 #include "global.h"
 #include "ptrarray.h"
@@ -1774,6 +1775,142 @@ static int copyindexed_cb(void *rock,
     return r;
 }
 
+struct mbdata {
+    uint32_t uidvalidity;
+    bitvector_t uids;
+};
+
+struct mbfilter {
+    hash_table mboxes;
+    int verbose;
+};
+
+static void free_mbdata(void *rock)
+{
+    struct mbdata *data = (struct mbdata *)rock;
+    bv_free(&data->uids);
+    free(data);
+}
+
+static int mbox_vector(const char *mboxname, struct mbfilter *filter)
+{
+    struct mbdata *data = xzmalloc(sizeof(struct mbdata));
+    struct mailbox *mailbox = NULL;
+    struct index_record record;
+    unsigned recno;
+    int r;
+
+    r = mailbox_open_irl(mboxname, &mailbox);
+    if (r) goto done;
+
+    data->uidvalidity = mailbox->i.uidvalidity;
+    bv_setsize(&data->uids, mailbox->i.last_uid);
+
+    if (filter->verbose)
+	printf("Vectoring %s\n", mboxname);
+
+    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
+	r = mailbox_read_index_record(mailbox, recno, &record);
+	if (r) goto done;
+
+	if (record.system_flags & FLAG_EXPUNGED)
+	    continue;
+
+	bv_set(&data->uids, record.uid);
+    }
+
+    /* yay, we have succeeded */
+    hash_insert(mboxname, data, &filter->mboxes);
+
+done:
+    if (mailbox) mailbox_close(&mailbox);
+    if (r) free_mbdata(data);
+    return r;
+}
+
+static int mbox_vector_cb(void *rock,
+			  const char *key, size_t keylen,
+			  const char *val __attribute__((unused)),
+			  size_t vallen __attribute__((unused)))
+{
+    char *mboxname = xstrndup(key, keylen);
+    struct mbfilter *filter = (struct mbfilter *)rock;
+    int r = mbox_vector(mboxname, filter);
+    free(mboxname);
+    return r;
+}
+
+static int build_mbfilter(const char *userid, struct mbfilter *filter)
+{
+    return mboxlist_allusermbox(userid, mbox_vector_cb, filter, /*include_deleted*/0);
+}
+
+static void free_mbfilter(struct mbfilter *filter)
+{
+    free_hash_table(&filter->mboxes, free_mbdata);
+}
+
+static int mbdata_exists_cb(const char *cyrusid, void *rock)
+{
+    struct mbfilter *filter = (struct mbfilter *)rock;
+    const char *mboxname;
+    unsigned int uidvalidity;
+    unsigned int uid;
+    struct mbdata *data;
+    int res = 0;
+
+    if (!parse_cyrusid(cyrusid, &mboxname, &uidvalidity, &uid))
+	goto out; /* failed to parse -> not exists */
+
+    data = (struct mbdata *)hash_lookup(mboxname, &filter->mboxes);
+
+    /* is it an identical mailbox? */
+    if (!data) goto out;
+    if (data->uidvalidity != uidvalidity) goto out;
+
+    /* then check if the UID exists */
+    res = bv_isset(&data->uids, uid);
+
+out:
+    if (filter->verbose)
+	printf("Exists check: %s => %d\n", cyrusid, res);
+
+    return res;
+}
+
+static int search_filter(const char *userid, const char *dbpath, int verbose)
+{
+    xapian_dbw_t *dbw = NULL;
+    struct mbfilter filter;
+    int r;
+
+    memset(&filter, 0, sizeof(struct mbfilter));
+
+    filter.verbose = verbose;
+    construct_hash_table(&filter.mboxes, 1024, 0);
+
+    if (verbose)
+	printf("Building vector table for %s\n", userid);
+    r = build_mbfilter(userid, &filter);
+    if (r) goto done;
+
+    r = xapian_dbw_open(dbpath, &dbw);
+    if (r) goto done;
+
+    if (verbose)
+	printf("Filtering database %s\n", dbpath);
+
+    r = xapian_dbw_filter(dbw, mbdata_exists_cb, &filter);
+
+    if (verbose)
+	printf("done %s\n", dbpath);
+
+done:
+    free_mbfilter(&filter);
+    if (dbw) xapian_dbw_close(dbw);
+    return r;
+}
+
 static int compact_dbs(const char *userid, const char *tempdir,
 		       const strarray_t *srctiers, const char *desttier, int flags)
 {
@@ -1944,6 +2081,14 @@ static int compact_dbs(const char *userid, const char *tempdir,
 	    goto out;
 	}
 
+	if (flags & SEARCH_COMPACT_FILTER) {
+	    r = search_filter(userid, buf_cstring(&mytempdir), verbose);
+	    if (r) {
+		printf("ERROR: failed to filter indexed %s\n", buf_cstring(&mytempdir));
+		goto out;
+	    }
+	}
+
 	/* move the tmpfs files to a temporary name in our target directory */
 	if (tempdir) {
 	    if (verbose) {
@@ -2075,7 +2220,6 @@ static int delete_user(const char *userid)
 
     return 0;
 }
-
 
 
 const struct search_engine xapian_search_engine = {

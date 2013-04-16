@@ -143,6 +143,7 @@ struct search_engine {
     int (*list_files)(const char *userid, strarray_t *);
 #define SEARCH_COMPACT_VERBOSE (1<<0)
 #define SEARCH_COMPACT_COPYONE (1<<1)
+#define SEARCH_COMPACT_FILTER (1<<2)
     int (*compact)(const char *userid, const char *tempdir,
 		   const strarray_t *srctiers, const char *desttier, int flags);
     int (*deluser)(const char *userid);
