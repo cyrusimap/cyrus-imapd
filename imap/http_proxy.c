@@ -236,18 +236,11 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 	serverinlen = clientoutlen = 0;
 
       response:
-	r = http_read_response(s, METH_OPTIONS, &code, NULL,
-			       &hdrs, NULL, 0, &errstr);
+	r = http_read_response(s, METH_OPTIONS, 0, &code, &non_persist, NULL,
+			       &hdrs, NULL, &errstr);
 	if (r) {
 	    if (status) *status = errstr;
 	    goto cleanup;
-	}
-
-	/* Check if this is a non-persistent connection */
-	non_persist = 0;
-	if ((hdr = spool_getheader(hdrs, "Connection")) &&
-	    !strcmp(hdr[0], "close")) {
-	    non_persist = 1;
 	}
 
 	switch (code) {
@@ -431,9 +424,9 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 static int ping(struct backend *s)
 {
     int r = 0;
-    unsigned code;
+    unsigned code, close;
     hdrcache_t hdrs = NULL;
-    const char **hdr, *errstr;
+    const char *errstr;
 
     /* Send request to server */
     prot_puts(s->out, "OPTIONS * HTTP/1.1\r\n");
@@ -445,16 +438,12 @@ static int ping(struct backend *s)
     prot_flush(s->out);
 
     do {
-	r = http_read_response(s, METH_OPTIONS, &code, NULL,
-			       &hdrs, NULL, 0, &errstr);
-	if (r) break;
-
+	r = http_read_response(s, METH_OPTIONS, 0, &code, &close, NULL,
+			       &hdrs, NULL, &errstr);
 	/* Check if this is a non-persistent connection */
-	if ((hdr = spool_getheader(hdrs, "Connection")) &&
-	    !strcmp(hdr[0], "close")) {
-	    r = HTTP_BAD_GATEWAY;
-	    break;
-	}
+	if (close) r = HTTP_BAD_GATEWAY;
+
+	if (r) break;
 
 	/* Continue until error or final response */
     } while (code < 200);
@@ -579,25 +568,26 @@ static void write_cachehdr(const char *name, const char *contents, void *rock)
 
 
 /* Read a response from backend */
-int http_read_response(struct backend *be, unsigned meth,
-		       unsigned *code, const char **statline,
-		       hdrcache_t *resp_hdrs, struct buf *resp_body,
-		       unsigned decode, const char **errstr)
+int http_read_response(struct backend *be, unsigned meth, unsigned decode,
+		       unsigned *code, unsigned *close, const char **statline,
+		       hdrcache_t *hdrs, struct buf *body, const char **errstr)
 {
     static char statbuf[2048];
+    const char **conn;
     int c = EOF;
 
     if (statline) *statline = statbuf;
     *errstr = NULL;
+    *close = 0;
 
-    if (*resp_hdrs) spool_free_hdrcache(*resp_hdrs);
-    if (!(*resp_hdrs = spool_new_hdrcache())) {
+    if (*hdrs) spool_free_hdrcache(*hdrs);
+    if (!(*hdrs = spool_new_hdrcache())) {
 	*errstr = "Unable to create header cache for backend response";
 	return HTTP_SERVER_ERROR;
     }
     if (!prot_fgets(statbuf, sizeof(statbuf), be->in) ||
 	(sscanf(statbuf, HTTP_VERSION " %u ", code) != 1) ||
-	spool_fill_hdrcache(be->in, NULL, *resp_hdrs, NULL)) {
+	spool_fill_hdrcache(be->in, NULL, *hdrs, NULL)) {
 	*errstr = "Unable to read status-line/headers from backend";
 	return HTTP_BAD_GATEWAY;
     }
@@ -607,7 +597,21 @@ int http_read_response(struct backend *be, unsigned meth,
     if (*code < 200) return 0;
 
     /* Final response */
-    if (resp_body) buf_reset(resp_body);
+    if (body) buf_reset(body);
+
+    /* Check connection persistence */
+    *close = !strncmp(statbuf, "HTTP/1.0 ", 9);
+    for (conn = spool_getheader(*hdrs, "Connection"); conn && *conn; conn++) {
+	tok_t tok =
+	    TOK_INITIALIZER(*conn, ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+	char *token;
+
+	while ((token = tok_next(&tok))) {
+	    if (!strcasecmp(token, "keep-alive")) *close = 0;
+	    else if (!strcasecmp(token, "close")) *close = 1;
+	}
+	tok_fini(&tok);
+    }
 
     /* Not expecting a body for 204/304 response or any HEAD response */
     switch (*code){
@@ -619,25 +623,12 @@ int http_read_response(struct backend *be, unsigned meth,
 	if (meth == METH_HEAD) break;
 
 	else {
-	    unsigned flags = BODY_RESPONSE | (decode ? BODY_DECODE : 0);
-	    unsigned close = !strncmp(statbuf, "HTTP/1.0 ", 9);
-	    const char **conn = spool_getheader(*resp_hdrs, "Connection");
+	    unsigned flags = BODY_RESPONSE;
 
-	    for (; conn && *conn; conn++) {
-		tok_t tok =
-		    TOK_INITIALIZER(*conn, ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-		char *token;
+	    if (decode) flags |= BODY_DECODE;
+	    if (*close) flags |= BODY_CLOSE;
 
-		while ((token = tok_next(&tok))) {
-		    if (!strcasecmp(token, "keep-alive")) close = 0;
-		    else if (!strcasecmp(token, "close")) close = 1;
-		}
-		tok_fini(&tok);
-	    }
-
-	    if (close) flags |= BODY_CLOSE;
-
-	    if (read_body(be->in, *resp_hdrs, resp_body, flags, errstr)) {
+	    if (read_body(be->in, *hdrs, body, flags, errstr)) {
 		return HTTP_BAD_GATEWAY;
 	    }
 	}
@@ -708,7 +699,7 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 {
     int r = 0, sent_body = 0;
     xmlChar *uri;
-    unsigned code;
+    unsigned code, close;
     const char *statline;
     hdrcache_t resp_hdrs = NULL;
     struct buf *resp_body = &txn->resp_body.payload;
@@ -743,8 +734,8 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 
     /* Read response(s) from backend until final response or error */
     do {
-	r = http_read_response(be, txn->meth, &code, &statline, &resp_hdrs,
-			       resp_body, 0, &txn->error.desc);
+	r = http_read_response(be, txn->meth, 0, &code, &close, &statline,
+			       &resp_hdrs, resp_body, &txn->error.desc);
 	if (r) break;
 
 	if ((code == 100) /* Continue */  && !sent_body++) {
@@ -773,11 +764,12 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 	}
     } while (code < 200);
 
-    if (r) proxy_downserver(be);
-    else {
+    if (!r) {
 	/* Send response to client */
 	send_response(httpd_out, statline, resp_hdrs, resp_body, &txn->flags);
     }
+
+    if (r || close) proxy_downserver(be);
 
     if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
 
@@ -797,7 +789,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 		    struct transaction_t *txn)
 {
     int r = 0;
-    unsigned code;
+    unsigned code, close;
     char *etag = NULL, *lastmod = NULL;;
     const char **hdr, *statline;
     hdrcache_t resp_hdrs = NULL;
@@ -826,9 +818,9 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 
     /* Read response(s) from source backend until final response or error */
     do {
-	r = http_read_response(src_be, METH_GET, &code, &statline,
-			       &resp_hdrs, resp_body, 0, &txn->error.desc);
-	if (r) {
+	r = http_read_response(src_be, METH_GET, 0, &code, &close, &statline,
+			       &resp_hdrs, resp_body, &txn->error.desc);
+	if (r || close) {
 	    proxy_downserver(src_be);
 	    break;
 	}
@@ -882,9 +874,10 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 
 	/* Read response(s) from dest backend until final response or error */
 	do {
-	    r = http_read_response(dest_be, METH_PUT, &code, &statline,
-				   &resp_hdrs, resp_body, 0, &txn->error.desc);
-	    if (r) {
+	    r = http_read_response(dest_be, METH_PUT, 0,
+				   &code, &close, &statline,
+				   &resp_hdrs, resp_body, &txn->error.desc);
+	    if (r || close) {
 		proxy_downserver(dest_be);
 		break;
 	    }
@@ -927,8 +920,10 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 
 	    /* Read response(s) from source backend until final resp or error */
 	    do {
-		if (http_read_response(src_be, METH_DELETE, &code, &statline,
-				       &resp_hdrs, NULL, 0, &txn->error.desc)) {
+		if (http_read_response(src_be, METH_DELETE, 0,
+				       &code, &close, NULL,
+				       &resp_hdrs, NULL, &txn->error.desc)
+		    || close) {
 		    proxy_downserver(src_be);
 		    break;
 		}

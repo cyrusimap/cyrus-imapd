@@ -53,9 +53,10 @@ extern int http_mlookup(const char *name, char **server, char **aclp, void *tid)
 extern int http_pipe_req_resp(struct backend *be, struct transaction_t *txn);
 extern int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 			   struct transaction_t *txn);
-extern int http_read_response(struct backend *be, unsigned meth,
-			      unsigned *code, const char **statline,
-			      hdrcache_t *resp_hdrs, struct buf *resp_body,
-			      unsigned decode, const char **errstr);
+extern int http_read_response(struct backend *be, unsigned meth, unsigned decode,
+			      unsigned *code, unsigned *close,
+			      const char **statline,
+			      hdrcache_t *hdrs, struct buf *body,
+			      const char **errstr);
 
 #endif /* _HTTP_PROXY_H */

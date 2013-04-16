@@ -496,7 +496,7 @@ int isched_send(struct sched_param *sparam, const char *recipient,
     icalcomponent *comp;
     icalcomponent_kind kind;
     icalproperty *prop;
-    unsigned code;
+    unsigned code, close;
     struct transaction_t txn;
 
     *xml = NULL;
@@ -626,8 +626,8 @@ int isched_send(struct sched_param *sparam, const char *recipient,
     prot_write(be->out, body, bodylen);
 
     /* Read response (req_hdr and req_body are actually the response) */
-    r = http_read_response(be, METH_POST, &code, NULL, &txn.req_hdrs,
-			   &txn.req_body, BODY_DECODE, &txn.error.desc);
+    r = http_read_response(be, METH_POST, BODY_DECODE, &code, &close, NULL,
+			   &txn.req_hdrs, &txn.req_body, &txn.error.desc);
     if (!r) {
 	switch (code) {
 	case 200:  /* Successful */
