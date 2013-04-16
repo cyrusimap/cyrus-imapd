@@ -212,9 +212,7 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 	/* Send Authorization and/or Upgrade request to server */
 	prot_puts(s->out, "OPTIONS * HTTP/1.1\r\n");
 	prot_printf(s->out, "Host: %s\r\n", s->hostname);
-	if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	    prot_printf(s->out, "User-Agent: %s\r\n", buf_cstring(&serverinfo));
-	}
+	prot_printf(s->out, "User-Agent: %s\r\n", buf_cstring(&serverinfo));
 	if (scheme) {
 	    prot_printf(s->out, "Authorization: %s %s\r\n", 
 			scheme->name, clientout ? clientout : "");
@@ -431,9 +429,7 @@ static int ping(struct backend *s)
     /* Send request to server */
     prot_puts(s->out, "OPTIONS * HTTP/1.1\r\n");
     prot_printf(s->out, "Host: %s\r\n", s->hostname);
-    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	prot_printf(s->out, "User-Agent: %s\r\n", buf_cstring(&serverinfo));
-    }
+    prot_printf(s->out, "User-Agent: %s\r\n", buf_cstring(&serverinfo));
     prot_puts(s->out, "\r\n");
     prot_flush(s->out);
 
@@ -802,10 +798,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
      */
     prot_printf(src_be->out, "GET %s %s\r\n", txn->req_tgt.path, HTTP_VERSION);
     prot_printf(src_be->out, "Host: %s\r\n", src_be->hostname);
-    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	prot_printf(src_be->out, "User-Agent: %s\r\n",
-		    buf_cstring(&serverinfo));
-    }
+    prot_printf(src_be->out, "User-Agent: %s\r\n", buf_cstring(&serverinfo));
     if ((hdr = spool_getheader(txn->req_hdrs, "If")))
 	prot_printf(src_be->out, "If: %s\r\n", hdr[0]);
     if ((hdr = spool_getheader(txn->req_hdrs, "If-Match"))) {
@@ -849,10 +842,8 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 	hdr = spool_getheader(txn->req_hdrs, "Destination");
 	prot_printf(dest_be->out, "PUT %s %s\r\n", hdr[0], HTTP_VERSION);
 	prot_printf(dest_be->out, "Host: %s\r\n", dest_be->hostname);
-	if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	    prot_printf(dest_be->out, "User-Agent: %s\r\n",
-			buf_cstring(&serverinfo));
-	}
+	prot_printf(dest_be->out, "User-Agent: %s\r\n",
+		    buf_cstring(&serverinfo));
 	prot_puts(dest_be->out, "Expect: 100-continue\r\n");
 	if ((hdr = spool_getheader(txn->req_hdrs, "Prefer"))) {
 	    for (; *hdr; hdr++)
@@ -907,10 +898,8 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 	    prot_printf(src_be->out, "DELETE %s %s\r\n",
 			txn->req_tgt.path, HTTP_VERSION);
 	    prot_printf(src_be->out, "Host: %s\r\n", src_be->hostname);
-	    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-		prot_printf(src_be->out, "User-Agent: %s\r\n",
-			    buf_cstring(&serverinfo));
-	    }
+	    prot_printf(src_be->out, "User-Agent: %s\r\n",
+			buf_cstring(&serverinfo));
 	    if (etag) prot_printf(src_be->out, "If-Match: %s\r\n", etag);
 	    else if (lastmod) prot_printf(src_be->out,
 					  "If-Unmodified-Since: %s\r\n",
