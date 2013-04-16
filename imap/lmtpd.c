@@ -887,7 +887,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    }
 	}
 
-	telemetry_rusage( user );
+	telemetry_rusage( userbuf );
 	msg_setrcpt_status(msgdata, n, r);
 
 	mboxlist_entry_free(&mbentry);
