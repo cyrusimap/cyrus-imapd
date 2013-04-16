@@ -213,6 +213,10 @@ In rolling mode, specify the name of the sync log channel that
 In compact mode, if only one source database is selected, just copy it
 to the destination rather than compacting.
 .TP
+.B \-F
+In compact mode, filter the resulting database to only include messages
+which are not expunged in mailboxes with existing name/uidvalidity.
+.TP
 .B \-r
 Recursively create indexes for all sub-mailboxes of the mailboxes or
 mailbox prefixes given as arguments.

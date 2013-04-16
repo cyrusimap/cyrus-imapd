@@ -806,10 +806,14 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:I:RT:S:c:de:f:mn:rsiavz:t:ou")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:I:RT:S:Fc:de:f:mn:rsiavz:t:ou")) != EOF) {
 	switch (opt) {
 	case 'C':		/* alt config file */
 	    alt_config = optarg;
+	    break;
+
+	case 'F':
+	    compact_flags |= SEARCH_COMPACT_FILTER;
 	    break;
 
 	case 'I':		/* indexer, using specified mbox/uids in file */
