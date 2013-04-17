@@ -806,10 +806,14 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:I:RT:S:Fc:de:f:mn:rsiavz:t:ou")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:I:RAT:S:Fc:de:f:mn:rsiavz:t:ou")) != EOF) {
 	switch (opt) {
 	case 'C':		/* alt config file */
 	    alt_config = optarg;
+	    break;
+
+	case 'A':
+	    compact_flags |= SEARCH_COMPACT_AUDIT;
 	    break;
 
 	case 'F':
@@ -927,8 +931,7 @@ int main(int argc, char **argv)
 	}
     }
 
-    if (verbose)
-	compact_flags |= SEARCH_COMPACT_VERBOSE;
+    compact_flags |= SEARCH_VERBOSE(verbose);
 
     if (mode == UNKNOWN)
 	mode = INDEXER;

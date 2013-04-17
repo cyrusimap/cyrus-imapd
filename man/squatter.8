@@ -217,6 +217,11 @@ to the destination rather than compacting.
 In compact mode, filter the resulting database to only include messages
 which are not expunged in mailboxes with existing name/uidvalidity.
 .TP
+.B \-A
+In compact mode, audit the resulting database to ensure that every
+non-expunged message in all the user's mailboxes which is specified
+by cyrus.indexed.db is present in the xapian database.
+.TP
 .B \-r
 Recursively create indexes for all sub-mailboxes of the mailboxes or
 mailbox prefixes given as arguments.

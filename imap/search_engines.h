@@ -127,6 +127,10 @@ struct search_engine {
 #define SEARCH_UNINDEXED	(1<<4)	/* return unindexed messages
 					 * as hits (doesn't work
 					 * with MULTIPLE) */
+#define SEARCH_COMPACT_COPYONE	(1<<5)	/* if only one source, just copy */
+#define SEARCH_COMPACT_FILTER	(1<<6)	/* filter resulting DB for
+					 * expunged records */
+#define SEARCH_COMPACT_AUDIT	(1<<7)	/* check DB for missing records */
     search_builder_t *(*begin_search)(struct mailbox *, int opts);
     void (*end_search)(search_builder_t *);
     search_text_receiver_t *(*begin_update)(int verbose);
@@ -141,11 +145,9 @@ struct search_engine {
     int (*start_daemon)(int verbose);
     int (*stop_daemon)(int verbose);
     int (*list_files)(const char *userid, strarray_t *);
-#define SEARCH_COMPACT_VERBOSE (1<<0)
-#define SEARCH_COMPACT_COPYONE (1<<1)
-#define SEARCH_COMPACT_FILTER (1<<2)
     int (*compact)(const char *userid, const char *tempdir,
-		   const strarray_t *srctiers, const char *desttier, int flags);
+		   const strarray_t *srctiers, const char *desttier,
+		   int flags);
     int (*deluser)(const char *userid);
 };
 

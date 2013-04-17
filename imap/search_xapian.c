@@ -1783,7 +1783,7 @@ struct mbdata {
 struct mbfilter {
     hash_table mboxes;
     struct db *indexed;
-    int verbose;
+    int flags;
 };
 
 static void free_mbdata(void *rock)
@@ -1803,6 +1803,7 @@ static int mbox_vector(const char *mboxname, struct mbfilter *filter)
     struct seqset *seq = NULL;
     struct mailbox *mailbox = NULL;
     struct index_record record;
+    int verbose = SEARCH_VERBOSE(filter->flags);
     unsigned recno;
     int r;
 
@@ -1828,7 +1829,7 @@ static int mbox_vector(const char *mboxname, struct mbfilter *filter)
     mbdata->uidvalidity = mailbox->i.uidvalidity;
     bv_setsize(&mbdata->uids, mailbox->i.last_uid);
 
-    if (filter->verbose)
+    if (verbose)
 	printf("Vectoring %s\n", mboxname);
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
@@ -1882,6 +1883,7 @@ static void free_mbfilter(struct mbfilter *filter)
 static int mbdata_exists_cb(const char *cyrusid, void *rock)
 {
     struct mbfilter *filter = (struct mbfilter *)rock;
+    int verbose = SEARCH_VERBOSE(filter->flags);
     const char *mboxname;
     unsigned int uidvalidity;
     unsigned int uid;
@@ -1906,10 +1908,20 @@ static int mbdata_exists_cb(const char *cyrusid, void *rock)
     }
 
 out:
-    if (filter->verbose)
-	printf("Exists check: %s => %d\n", cyrusid, res);
+    if (res) {
+	if (verbose > 2)
+	    printf("filter check %s: EXISTS\n", cyrusid);
+    }
+    else {
+	if (verbose > 1)
+	    printf("filter check %s: MISSING\n", cyrusid);
+    }
 
-    return res;
+    if (filter->flags & SEARCH_COMPACT_FILTER)
+	return res;
+
+    /* don't delete anything */
+    return 1;
 }
 
 static void notify_filter_cb(const char *mboxname, void *data, void *rock)
@@ -1917,9 +1929,10 @@ static void notify_filter_cb(const char *mboxname, void *data, void *rock)
     struct mbdata *mbdata = (struct mbdata *)data;
     struct mbfilter *filter = (struct mbfilter *)rock;
     struct seqset *seq = seqset_init(0, SEQ_SPARSE);
+    int verbose = SEARCH_VERBOSE(filter->flags);
     int uid;
 
-    if (filter->verbose)
+    if (verbose)
 	printf("checking for unindexed messages in %s\n", mboxname);
 
     /* now we just read the bitvector and look for trouble! */
@@ -1931,7 +1944,7 @@ static void notify_filter_cb(const char *mboxname, void *data, void *rock)
     if (seq->len) {
 	char *seqstr = seqset_cstring(seq);
 	syslog(LOG_ERR, "IOERROR: unindexed messages in %s: %s", mboxname, seqstr);
-	if (filter->verbose)
+	if (verbose)
 	    printf("IOERROR: unindexed messages in %s: %s\n", mboxname, seqstr);
 	free(seqstr);
     }
@@ -1944,16 +1957,17 @@ static void notify_missing_messages(struct mbfilter *filter)
     hash_enumerate(&filter->mboxes, notify_filter_cb, filter);
 }
 
-static int search_filter(const char *userid, const char *dbpath, int verbose)
+static int search_filter(const char *userid, const char *dbpath, int flags)
 {
     xapian_dbw_t *dbw = NULL;
     struct buf buf = BUF_INITIALIZER;
     struct mbfilter filter;
+    int verbose = SEARCH_VERBOSE(flags);
     int r;
 
     memset(&filter, 0, sizeof(struct mbfilter));
 
-    filter.verbose = verbose;
+    filter.flags = flags;
     construct_hash_table(&filter.mboxes, 1024, 0);
 
     buf_printf(&buf, "%s%s", dbpath, INDEXEDDB_FNAME);
@@ -1966,6 +1980,7 @@ static int search_filter(const char *userid, const char *dbpath, int verbose)
     r = build_mbfilter(userid, &filter);
     if (r) goto done;
 
+    /* XXX - if only audit mode, could theoretically do this read-only */
     r = xapian_dbw_open(dbpath, &dbw);
     if (r) goto done;
 
@@ -1978,7 +1993,8 @@ static int search_filter(const char *userid, const char *dbpath, int verbose)
     if (verbose)
 	printf("done %s\n", dbpath);
 
-    notify_missing_messages(&filter);
+    if (flags & SEARCH_COMPACT_AUDIT)
+	notify_missing_messages(&filter);
 
 done:
     free_mbfilter(&filter);
@@ -2002,7 +2018,7 @@ static int compact_dbs(const char *userid, const char *tempdir,
     struct buf mytempdir = BUF_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
     struct indexedrock lr;
-    int verbose = (flags & SEARCH_COMPACT_VERBOSE);
+    int verbose = SEARCH_VERBOSE(flags);
     int r = 0;
     int i;
 
@@ -2156,8 +2172,8 @@ static int compact_dbs(const char *userid, const char *tempdir,
 	    goto out;
 	}
 
-	if (flags & SEARCH_COMPACT_FILTER) {
-	    r = search_filter(userid, buf_cstring(&mytempdir), verbose);
+	if (flags & (SEARCH_COMPACT_FILTER|SEARCH_COMPACT_AUDIT)) {
+	    r = search_filter(userid, buf_cstring(&mytempdir), flags);
 	    if (r) {
 		printf("ERROR: failed to filter indexed %s\n", buf_cstring(&mytempdir));
 		goto out;
