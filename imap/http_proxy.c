@@ -131,8 +131,8 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
     int r = 0, local_cb = 0;
     socklen_t addrsize;
     struct sockaddr_storage saddr_l, saddr_r;
-    char remoteip[60], localip[60], *p;
-    struct buf buf = BUF_INITIALIZER;
+    char remoteip[60], localip[60];
+    static struct buf buf = BUF_INITIALIZER;
     sasl_security_properties_t secprops =
 	{ 0, 0xFF, PROT_BUFSIZE, 0, NULL, NULL }; /* default secprops */
     const char *mech_conf, *pass, *clientout = NULL;
@@ -261,7 +261,12 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 	default: /* Failure */
 	    if (!r) {
 		r = HTTP_BAD_GATEWAY;
-		if (status) *status = "Unknown backend server error";
+		if (status) {
+		    buf_reset(&buf);
+		    buf_printf(&buf,
+			       "Unexpected status code from backend: %u", code);
+		    *status = buf_cstring(&buf);
+		}
 	    }
 	    break;
 
@@ -278,7 +283,7 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 		(serverin = scheme->recv_success(hdrs))) {
 		serverinlen = strlen(serverin);
 	    }
-	    /* Fall through and check for any other success data */
+	    /* Fall through and process any success data */
 
 	case 401: /* Unauthorized */
 	    if (!serverin) {
@@ -345,7 +350,7 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 					  NULL, NULL, 	/* no initial resp */
 					  &mech);
 
-		    if (((r == SASL_OK) || (r == SASL_CONTINUE)) && mech) {
+		    if (mech) {
 			/* Find auth scheme associated with chosen SASL mech */
 			for (scheme = auth_schemes; scheme->name; scheme++) {
 			    if (scheme->saslmech &&
@@ -368,14 +373,15 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 		    }
 		}
 
-		/* Get server challenge */
-		if (hdr && (p = strchr(hdr[i], ' '))) {
-		    serverin = ++p;
+		/* Get server challenge, if any */
+		if (hdr) {
+		    const char *p = strchr(hdr[i], ' ');
+		    serverin = p ? ++p : "";
 		    serverinlen = strlen(serverin);
 		}
 	    }
 
-	    if ((r == SASL_CONTINUE) || serverin) {
+	    if (serverin) {
 		/* Perform the next step in the auth exchange */
 
 		if (scheme->idx == AUTH_BASIC) {
@@ -388,14 +394,13 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 		    buf_printf(&buf, "%s:%s", authid, pass);
 		    clientout = buf_cstring(&buf);
 		    clientoutlen = buf_len(&buf);
-		    r = SASL_OK;
 		}
 		else {
 		    /* Base64 decode any server challenge, if necessary */
 		    if (serverin && (scheme->flags & AUTH_BASE64)) {
 			r = sasl_decode64(serverin, serverinlen,
 					  base64, BASE64_BUF_SIZE, &serverinlen);
-			if (r != SASL_OK) break;
+			if (r != SASL_OK) break;  /* case 401 */
 
 			serverin = base64;
 		    }
@@ -409,10 +414,9 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 	    break;  /* case 401 */
 	}
 
-    } while (need_tls || (r == SASL_CONTINUE) || ((r == SASL_OK) && clientout));
+    } while (need_tls || clientout);
 
   done:
-    buf_free(&buf);
     if (local_cb) free_callbacks(cb);
     if (hdrs) spool_free_hdrcache(hdrs);
 
