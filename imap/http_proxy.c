@@ -138,6 +138,7 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
     const char *mech_conf, *pass, *clientout = NULL;
     struct auth_scheme_t *scheme = NULL;
     unsigned need_tls = 0, tls_done = 0;
+    hdrcache_t hdrs = NULL;
 
     if (status) *status = NULL;
 
@@ -188,7 +189,6 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 
     do {
 	unsigned code;
-	hdrcache_t hdrs = NULL;
 	const char **hdr, *errstr, *serverin;
 	char base64[BASE64_BUF_SIZE+1];
 	unsigned int serverinlen, clientoutlen, non_persist;
@@ -204,7 +204,7 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 	if (clientout && scheme && (scheme->flags & AUTH_BASE64)) {
 	    r = sasl_encode64(clientout, clientoutlen,
 			      base64, BASE64_BUF_SIZE, &clientoutlen);
-	    if (r != SASL_OK) goto cleanup;
+	    if (r != SASL_OK) break;
 
 	    clientout = base64;
 	}
@@ -233,27 +233,45 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 	serverin = clientout = NULL;
 	serverinlen = clientoutlen = 0;
 
-      response:
-	r = http_read_response(s, METH_OPTIONS, 0, &code, &non_persist, NULL,
-			       &hdrs, NULL, &errstr);
-	if (r) {
-	    if (status) *status = errstr;
-	    goto cleanup;
-	}
-
-	switch (code) {
-	case 101: /* Switching Protocols */
-	    if (backend_starttls(s, NULL)) {
-		r = HTTP_BAD_GATEWAY;
-		if (status) *status = "Unable to start TLS";
+	/* Read response(s) from backend until final response or error */
+	do {
+	    r = http_read_response(s, METH_OPTIONS, 0, &code, &non_persist,
+				   NULL, &hdrs, NULL, &errstr);
+	    if (r) {
+		if (status) *status = errstr;
 		break;
 	    }
-	    else tls_done = 1;
-	    /* Fall through as 100-Continue */
 
-	case 100: /* Continue */
-	case 102: /* Processing */
-	    goto response;
+	    if (code == 101) {  /* Switching Protocols */
+		if (tls_done) {
+		    r = HTTP_BAD_GATEWAY;
+		    if (status) *status = "TLS already active";
+		    break;
+		}
+		else if (backend_starttls(s, NULL)) {
+		    r = HTTP_SERVER_ERROR;
+		    if (status) *status = "Unable to start TLS";
+		    break;
+		}
+		else tls_done = 1;
+	    }
+	} while (code < 200);
+
+	switch (code) {
+	default: /* Failure */
+	    if (!r) {
+		r = HTTP_BAD_GATEWAY;
+		if (status) *status = "Unknown backend server error";
+	    }
+	    break;
+
+	case 426: /* Upgrade Required */
+	    if (tls_done) {
+		r = HTTP_BAD_GATEWAY;
+		if (status) *status = "TLS already active";
+	    }
+	    else need_tls = 1;
+	    break;
 
 	case 200: /* OK */
 	    if (scheme->recv_success &&
@@ -389,29 +407,14 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 		}
 	    }
 	    break;  /* case 401 */
-
-	case 426: /* Upgrade Required */
-	    if (tls_done) {
-		r = HTTP_BAD_GATEWAY;
-		if (status) *status = "TLS already active";
-	    }
-	    else need_tls = 1;
-	    break;
-
-	default:
-	    r = HTTP_BAD_GATEWAY;
-	    if (status) *status = "Unknown backend server error";
-	    break;
 	}
-
-      cleanup:
-	if (hdrs) spool_free_hdrcache(hdrs);
 
     } while (need_tls || (r == SASL_CONTINUE) || ((r == SASL_OK) && clientout));
 
   done:
     buf_free(&buf);
     if (local_cb) free_callbacks(cb);
+    if (hdrs) spool_free_hdrcache(hdrs);
 
     if (r && status && !*status) *status = sasl_errstring(r, NULL, NULL);
 
@@ -575,6 +578,7 @@ int http_read_response(struct backend *be, unsigned meth, unsigned decode,
     if (statline) *statline = statbuf;
     *errstr = NULL;
     *close = 0;
+    *code = HTTP_BAD_GATEWAY;
 
     if (*hdrs) spool_free_hdrcache(*hdrs);
     if (!(*hdrs = spool_new_hdrcache())) {
