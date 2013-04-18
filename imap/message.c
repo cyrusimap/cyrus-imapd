@@ -64,7 +64,6 @@
 #include "prot.h"
 #include "map.h"
 #include "mailbox.h"
-#include "mkgmtime.h"
 #include "message.h"
 #include "message_guid.h"
 #include "parseaddr.h"
