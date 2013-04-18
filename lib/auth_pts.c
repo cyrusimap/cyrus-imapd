@@ -65,7 +65,6 @@
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "xstrlcat.h"
 
 static char *canonuser_id = NULL;
 static struct auth_state *canonuser_cache = NULL;

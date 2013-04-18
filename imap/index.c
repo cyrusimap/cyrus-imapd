@@ -79,7 +79,6 @@
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "xstrlcat.h"
 
 #include "index.h"
 #include "sync_log.h"

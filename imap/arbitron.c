@@ -70,7 +70,6 @@
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "xstrlcat.h"
 
 #define DB (config_seenstate_db)
 #define SUBDB (config_subscription_db)

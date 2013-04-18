@@ -83,7 +83,6 @@
 #include "imap/mupdate_err.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "xstrlcat.h"
 #include "version.h"
 
 #include "lmtpengine.h"

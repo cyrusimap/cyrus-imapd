@@ -80,7 +80,6 @@
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "xstrlcat.h"
 
 static enum {
     NOT_RUNNING = 0,

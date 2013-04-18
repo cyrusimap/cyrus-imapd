@@ -82,7 +82,6 @@
 #include "version.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "xstrlcat.h"
 #include "mboxlist.h"
 #include "idle.h"
 #include "telemetry.h"

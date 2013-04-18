@@ -93,7 +93,6 @@
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "xstrlcat.h"
 
 extern int optind;
 extern char *optarg;

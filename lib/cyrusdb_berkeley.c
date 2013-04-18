@@ -58,7 +58,6 @@
 #include "libcyr_cfg.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "xstrlcat.h"
 
 #define DATA(d)	    ((d)->data ? (d)->data : "")
 #define DATALEN(d)  ((d)->size)

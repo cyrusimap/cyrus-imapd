@@ -61,7 +61,6 @@
 #include "proxy.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "xstrlcat.h"
 
 void proxy_adddest(struct dest **dlist, const char *rcpt, int rcpt_num,
 		   const char *server, const char *authas)

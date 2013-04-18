@@ -106,7 +106,6 @@
 #include "sync_log.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "xstrlcat.h"
 
 struct mailboxlist {
     struct mailboxlist *next;

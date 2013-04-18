@@ -66,7 +66,6 @@
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "xstrlcat.h"
 #include "strarray.h"
 
 #define QDB config_quota_db

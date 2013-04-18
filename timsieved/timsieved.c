@@ -87,7 +87,6 @@
 #include "imap/mboxlist.h"
 #include "imap/proxy.h"
 #include "util.h"
-#include "xstrlcat.h"
 #include "xstrlcpy.h"
 
 #include "scripttest.h"

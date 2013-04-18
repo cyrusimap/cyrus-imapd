@@ -61,7 +61,6 @@
 #include "wildmat.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "xstrlcat.h"
 
 #define FNAME_USERDENYDB "/user_deny.db"
 #define USERDENY_VERSION 2

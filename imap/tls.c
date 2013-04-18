@@ -123,7 +123,6 @@
 #include "assert.h"
 #include "nonblock.h"
 #include "xmalloc.h"
-#include "xstrlcat.h"
 #include "xstrlcpy.h"
 #include "tls.h"
 

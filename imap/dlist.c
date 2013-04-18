@@ -69,7 +69,6 @@
 #include "mailbox.h"
 #include "quota.h"
 #include "xmalloc.h"
-#include "xstrlcat.h"
 #include "xstrlcpy.h"
 #include "acl.h"
 #include "seen.h"

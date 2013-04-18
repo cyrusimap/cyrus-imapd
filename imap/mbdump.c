@@ -78,7 +78,6 @@
 #include "sequence.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "xstrlcat.h"
 #include "user.h"
 #include "util.h"
 #include "index.h"

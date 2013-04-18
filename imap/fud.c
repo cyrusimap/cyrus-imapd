@@ -76,7 +76,6 @@
 #include "seen.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "xstrlcat.h"
 
 #define REQ_OK		0
 #define REQ_DENY	1

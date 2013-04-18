@@ -64,7 +64,6 @@
 #include "prot.h"
 #include "util.h"
 #include "xmalloc.h"
-#include "xstrlcat.h"
 
 extern unsigned int proxy_cmdcnt;
 extern struct protstream *imapd_in, *imapd_out;

@@ -58,7 +58,6 @@
 #include "global.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "xstrlcat.h"
 
 #include "squat.h"
 

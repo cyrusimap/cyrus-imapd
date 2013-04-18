@@ -73,7 +73,6 @@
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "xstrlcat.h"
 #include "strarray.h"
 #include "global.h"
 #include "retry.h"

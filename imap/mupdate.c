@@ -90,7 +90,6 @@
 #include "util.h"
 #include "version.h"
 #include "xmalloc.h"
-#include "xstrlcat.h"
 #include "xstrlcpy.h"
 
 /* Sent to clients that we can't accept a connection for. */

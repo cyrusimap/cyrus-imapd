@@ -68,7 +68,6 @@
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "xstrlcat.h"
 
 static int sync_log_enabled = 0;
 static const char *suppressed_channel = NULL;

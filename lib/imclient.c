@@ -76,7 +76,6 @@
 #include "exitcodes.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "xstrlcat.h"
 #include "strarray.h"
 #include "imparse.h"
 #include "imclient.h"

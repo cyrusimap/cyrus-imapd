@@ -73,7 +73,6 @@
 #include "libconfig.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "xstrlcat.h"
 #include "strarray.h"
 #include "signals.h"
 

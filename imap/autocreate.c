@@ -65,7 +65,6 @@
 #include "user.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "xstrlcat.h"
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "imap/imap_err.h"
