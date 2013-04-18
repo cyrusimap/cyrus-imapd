@@ -74,7 +74,6 @@
 #include "libconfig.h"
 #include "xmalloc.h"
 #include "exitcodes.h"
-#include "iptostring.h"
 #include "imap/global.h"
 #include "codes.h"
 #include "actions.h"

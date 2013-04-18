@@ -80,7 +80,6 @@
 #include "exitcodes.h"
 #include "global.h"
 #include "imap/imap_err.h"
-#include "iptostring.h"
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "mpool.h"

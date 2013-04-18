@@ -69,7 +69,6 @@
 #include "exitcodes.h"
 #include "global.h"
 #include "imparse.h"
-#include "iptostring.h"
 #include "mupdate.h"
 #include "prot.h"
 #include "protocol.h"
