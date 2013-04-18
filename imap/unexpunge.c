@@ -72,7 +72,6 @@
 #include "mboxlist.h"
 #include "util.h"
 #include "xmalloc.h"
-#include "xstrlcpy.h"
 #include "sync_log.h"
 
 /* current namespace */

@@ -70,7 +70,6 @@
 #include "retry.h"
 #include "util.h"
 #include "xmalloc.h"
-#include "xstrlcpy.h"
 
 #define PROB (0.5)
 

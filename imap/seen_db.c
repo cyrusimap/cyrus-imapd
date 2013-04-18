@@ -64,7 +64,6 @@
 #include "assert.h"
 #include "global.h"
 #include "xmalloc.h"
-#include "xstrlcpy.h"
 #include "mailbox.h"
 #include "imap/imap_err.h"
 #include "statuscache.h"

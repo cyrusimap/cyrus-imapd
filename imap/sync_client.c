@@ -89,7 +89,6 @@
 #include "cyr_lock.h"
 #include "backend.h"
 #include "xstrlcat.h"
-#include "xstrlcpy.h"
 #include "signals.h"
 #include "cyrusdb.h"
 

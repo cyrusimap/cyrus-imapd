@@ -70,7 +70,6 @@
 #include "mboxlist.h"
 #include "util.h"
 #include "xmalloc.h"
-#include "xstrlcpy.h"
 #include "strarray.h"
 
 /* global state */

@@ -103,7 +103,6 @@
 #include "version.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
-#include "xstrlcpy.h"
 
 #include "message_guid.h"
 #include "sync_support.h"

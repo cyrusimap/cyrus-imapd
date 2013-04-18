@@ -61,7 +61,6 @@
 #include "mappedfile.h"
 #include "util.h"
 #include "xmalloc.h"
-#include "xstrlcpy.h"
 
 /*
  * twoskip disk format.

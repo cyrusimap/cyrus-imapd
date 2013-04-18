@@ -67,7 +67,6 @@
 #include "mailbox.h"
 #include "map.h"
 #include "xmalloc.h"
-#include "xstrlcpy.h"
 
 static void usage(void)
 {
