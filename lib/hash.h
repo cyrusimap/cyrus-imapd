@@ -5,7 +5,6 @@
 #define HASH__H
 
 #include <stddef.h>           /* For size_t     */
-#include "strhash.h"
 #include "mpool.h"
 
 #define HASH_TABLE_INITIALIZER {0, NULL, NULL}

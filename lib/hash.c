@@ -10,6 +10,7 @@
 
 #include "hash.h"
 #include "mpool.h"
+#include "strhash.h"
 #include "xmalloc.h"
 #include "exitcodes.h"
 
