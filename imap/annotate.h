@@ -50,7 +50,6 @@
 #include "mailbox.h"
 #include "mboxname.h"
 #include "mboxlist.h"
-#include "prot.h"
 #include "util.h"
 #include "strarray.h"
 

@@ -62,7 +62,6 @@
 #include <unistd.h>
 #include <string.h>
 
-#include "prot.h"
 #include "imap/tls.h"
 #include "util.h"
 #include "imap/global.h"

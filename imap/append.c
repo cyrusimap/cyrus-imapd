@@ -65,7 +65,6 @@
 #include "message.h"
 #include "append.h"
 #include "global.h"
-#include "prot.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"

@@ -66,7 +66,6 @@
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
-#include "prot.h"
 #include "backend.h"
 #include "global.h"
 #include "xmalloc.h"

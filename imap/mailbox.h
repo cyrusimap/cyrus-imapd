@@ -53,9 +53,9 @@
 #include "auth.h"
 #include "byteorder64.h"
 #include "message_guid.h"
-#include "prot.h"
 #include "quota.h"
 #include "sequence.h"
+#include "util.h"
 
 #define MAX_MAILBOX_NAME 490
 /* enough space for all possible rewrites and DELETED.* and stuff */

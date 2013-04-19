@@ -53,7 +53,6 @@
 
 #include "assert.h"
 #include "spool.h"
-#include "prot.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "exitcodes.h"

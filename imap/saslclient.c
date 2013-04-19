@@ -52,7 +52,6 @@
 #include <syslog.h>
 
 #include "xmalloc.h"
-#include "prot.h"
 #include "imap/imap_err.h"
 #include "saslclient.h"
 #include "global.h"

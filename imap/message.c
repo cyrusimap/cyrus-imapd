@@ -60,7 +60,6 @@
 #include "crc32.h"
 #include "exitcodes.h"
 #include "imap/imap_err.h"
-#include "prot.h"
 #include "map.h"
 #include "mailbox.h"
 #include "message.h"

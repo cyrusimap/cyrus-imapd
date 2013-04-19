@@ -56,7 +56,6 @@
 #include "global.h"
 #include "imap/imap_err.h"
 #include "mupdate-client.h"
-#include "prot.h"
 #include "proxy.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"

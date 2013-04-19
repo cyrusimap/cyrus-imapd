@@ -59,7 +59,6 @@
 #include "acl.h"
 #include "util.h"
 #include "auth.h"
-#include "prot.h"
 #include "global.h"
 #include "exitcodes.h"
 #include "imap/imap_err.h"
