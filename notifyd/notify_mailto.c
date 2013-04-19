@@ -55,7 +55,6 @@
 
 #include "imap/global.h"
 #include "libconfig.h"
-#include "rfc822date.h"
 #include "sieve/sieve_interface.h"
 #include "times.h"
 
