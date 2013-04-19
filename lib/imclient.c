@@ -77,7 +77,6 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "strarray.h"
-#include "imparse.h"
 #include "imclient.h"
 #include "nonblock.h"
 #include "util.h"

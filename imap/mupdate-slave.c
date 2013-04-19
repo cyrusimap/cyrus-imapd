@@ -70,7 +70,6 @@
 #include "xstrlcat.h"
 #include "global.h"
 #include "assert.h"
-#include "imparse.h"
 #include "mpool.h"
 #include "mupdate.h"
 #include "exitcodes.h"

@@ -80,7 +80,6 @@
 #include "mboxname.h"
 #include "map.h"
 #include "imapd.h"
-#include "imparse.h"
 #include "util.h"
 #include "prot.h"
 #include "message_guid.h"

@@ -84,7 +84,6 @@
 #include "assert.h"
 #include "crc32.h"
 #include "hash.h"
-#include "imparse.h"
 #include "global.h"
 #include "exitcodes.h"
 #include "imap/imap_err.h"

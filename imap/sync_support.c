@@ -75,7 +75,6 @@
 #include "mboxname.h"
 #include "map.h"
 #include "imapd.h"
-#include "imparse.h"
 #include "message.h"
 #include "util.h"
 #include "user.h"

@@ -82,7 +82,6 @@
 #include "index.h"
 #include "global.h"
 #include "imap/imap_err.h"
-#include "imparse.h"
 #include "mailbox.h"
 #include "message.h"
 #include "message_guid.h"

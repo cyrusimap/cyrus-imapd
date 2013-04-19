@@ -73,7 +73,6 @@
 #include "seen.h"
 #include "mboxname.h"
 #include "map.h"
-#include "imparse.h"
 #include "proc.h"
 #include "util.h"
 #include "xmalloc.h"
