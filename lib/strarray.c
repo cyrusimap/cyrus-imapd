@@ -45,7 +45,6 @@
 
 #include "strarray.h"
 #include <memory.h>
-#include "bsearch.h"
 #include "util.h"
 #include "xmalloc.h"
 #include <ctype.h>
