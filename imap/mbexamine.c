@@ -88,7 +88,6 @@
 #include "mboxname.h"
 #include "mboxlist.h"
 #include "seen.h"
-#include "retry.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"

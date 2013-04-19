@@ -60,7 +60,6 @@
 #include "util.h"
 #include "exitcodes.h"
 #include "libcyr_cfg.h"
-#include "retry.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 

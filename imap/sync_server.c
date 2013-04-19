@@ -91,7 +91,6 @@
 #include "proc.h"
 #include "prot.h"
 #include "quota.h"
-#include "retry.h"
 #include "seen.h"
 #include "spool.h"
 #include "statuscache.h"

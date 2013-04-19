@@ -89,7 +89,6 @@
 #include "mboxlist.h"
 #include "seen.h"
 #include "times.h"
-#include "retry.h"
 #include "util.h"
 #include "xmalloc.h"
 

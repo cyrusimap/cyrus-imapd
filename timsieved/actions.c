@@ -61,7 +61,6 @@
 #include <ctype.h>
 #include <unistd.h>
 #include <string.h>
-#include <retry.h>
 
 #include "prot.h"
 #include "imap/tls.h"

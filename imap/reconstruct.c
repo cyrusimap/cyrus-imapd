@@ -100,7 +100,6 @@
 #include "mboxlist.h"
 #include "quota.h"
 #include "seen.h"
-#include "retry.h"
 #include "util.h"
 #include "sync_log.h"
 

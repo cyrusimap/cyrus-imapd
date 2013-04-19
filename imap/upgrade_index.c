@@ -79,7 +79,6 @@
 #include "mailbox.h"
 #include "message.h"
 #include "map.h"
-#include "retry.h"
 #include "seen.h"
 #include "util.h"
 #include "sequence.h"

@@ -77,7 +77,6 @@
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
-#include "retry.h"
 #include "imapd.h"
 #include "user.h"
 #include "sync_support.h"

@@ -76,7 +76,6 @@
 #include "imapd.h"
 #include "message.h"
 #include "util.h"
-#include "retry.h"
 #include "prot.h"
 
 #include "dlist.h"

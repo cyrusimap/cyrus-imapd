@@ -77,7 +77,6 @@
 #include "message.h"
 #include "util.h"
 #include "user.h"
-#include "retry.h"
 #include "prot.h"
 #include "dlist.h"
 

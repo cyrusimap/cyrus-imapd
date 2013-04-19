@@ -91,7 +91,6 @@
 #include "map.h"
 #include "libcyr_cfg.h"
 #include "cyr_lock.h"
-#include "retry.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
