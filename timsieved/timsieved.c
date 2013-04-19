@@ -81,7 +81,6 @@
 #include "lex.h"
 
 #include "auth.h"
-#include "acl.h"
 #include "imap/backend.h"
 #include "imap/mboxlist.h"
 #include "imap/proxy.h"

@@ -56,7 +56,6 @@
 #include <sys/stat.h>
 #include <sys/param.h>
 
-#include "acl.h"
 #include "util.h"
 #include "auth.h"
 #include "global.h"

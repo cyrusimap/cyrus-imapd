@@ -61,7 +61,6 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 
-#include "acl.h"
 #include "assert.h"
 #include "auth.h"
 #include "cyrusdb.h"

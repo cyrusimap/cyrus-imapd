@@ -76,7 +76,6 @@
 # endif
 #endif
 
-#include "acl.h"
 #include "assert.h"
 #include "exitcodes.h"
 #include "index.h"

@@ -69,7 +69,6 @@
 #include "mailbox.h"
 #include "quota.h"
 #include "xmalloc.h"
-#include "acl.h"
 #include "seen.h"
 #include "mboxname.h"
 #include "map.h"

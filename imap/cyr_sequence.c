@@ -61,7 +61,6 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 
-#include "acl.h"
 #include "sequence.h"
 #include "auth.h"
 #include "exitcodes.h"

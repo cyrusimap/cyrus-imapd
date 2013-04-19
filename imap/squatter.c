@@ -92,7 +92,6 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
-#include "acl.h"
 #include "seen.h"
 #include "mboxname.h"
 #include "map.h"

@@ -74,7 +74,6 @@
 #include <sasl/saslutil.h>
 
 #include "assert.h"
-#include "acl.h"
 #include "annotate.h"
 #include "append.h"
 #include "auth.h"

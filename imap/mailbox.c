@@ -80,7 +80,6 @@
 #include <uuid/uuid.h>
 #endif
 
-#include "acl.h"
 #include "annotate.h"
 #include "assert.h"
 #include "crc32.h"
