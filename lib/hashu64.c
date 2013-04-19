@@ -8,6 +8,7 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "assert.h"
 #include "hashu64.h"
 #include "mpool.h"
 #include "xmalloc.h"

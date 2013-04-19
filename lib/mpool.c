@@ -56,7 +56,6 @@
 #include <syslog.h>
 #include <errno.h>
 
-#include "assert.h"
 #include "mpool.h"
 #include "xmalloc.h"
 #include "exitcodes.h"

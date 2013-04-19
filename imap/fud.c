@@ -64,7 +64,6 @@
 #include <pwd.h>
 
 #include "acl.h"
-#include "assert.h"
 #include "mboxlist.h"
 #include "global.h"
 #include "exitcodes.h"

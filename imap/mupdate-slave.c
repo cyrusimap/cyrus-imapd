@@ -69,7 +69,6 @@
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 #include "global.h"
-#include "assert.h"
 #include "mpool.h"
 #include "mupdate.h"
 #include "exitcodes.h"

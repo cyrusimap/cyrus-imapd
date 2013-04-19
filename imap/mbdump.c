@@ -62,7 +62,6 @@
 #include <unistd.h>
 #include <utime.h>
 
-#include "assert.h"
 #include "annotate.h"
 #include "exitcodes.h"
 #include "global.h"

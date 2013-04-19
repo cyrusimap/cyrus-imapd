@@ -74,6 +74,7 @@
 #include "append.h"
 #include "auth.h"
 #include "autocreate.h"
+#include "assert.h"
 #include "backend.h"
 #include "bsearch.h"
 #include "charset.h"

@@ -58,6 +58,7 @@
 
 #include "annotate.h"
 #include "append.h"
+#include "assert.h"
 #include "auth.h"
 #include "duplicate.h"
 #include "exitcodes.h"

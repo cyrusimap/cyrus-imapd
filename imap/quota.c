@@ -75,7 +75,6 @@
 # endif
 #endif
 
-#include "assert.h"
 #include "bsearch.h"
 #include "cyrusdb.h"
 #include "global.h"

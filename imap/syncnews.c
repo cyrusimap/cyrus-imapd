@@ -57,7 +57,6 @@
 #include <netinet/in.h>
 #include <sys/stat.h>
 
-#include "assert.h"
 #include "global.h"
 #include "xmalloc.h"
 #include "exitcodes.h"

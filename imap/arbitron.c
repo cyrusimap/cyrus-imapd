@@ -58,7 +58,6 @@
 #include <netinet/in.h>
 #include <sys/stat.h>
 
-#include "assert.h"
 #include "global.h"
 #include "exitcodes.h"
 #include "hash.h"

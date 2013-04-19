@@ -62,7 +62,6 @@
 #include <sys/msg.h>
 
 #include "acl.h"
-#include "assert.h"
 #include "sequence.h"
 #include "auth.h"
 #include "exitcodes.h"

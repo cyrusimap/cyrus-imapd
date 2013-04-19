@@ -62,6 +62,7 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "assert.h"
 #include "sieve_interface.h"
 #include "bytecode.h"
 #include "comparator.h"

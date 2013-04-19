@@ -51,7 +51,6 @@
 #include <syslog.h>
 #include <sys/un.h>
 
-#include "assert.h"
 #include "backend.h"
 #include "exitcodes.h"
 #include "global.h"

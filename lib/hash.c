@@ -8,6 +8,7 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "assert.h"
 #include "hash.h"
 #include "mpool.h"
 #include "strhash.h"

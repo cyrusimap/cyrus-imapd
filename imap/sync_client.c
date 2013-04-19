@@ -67,7 +67,6 @@
 #include <netinet/tcp.h>
 
 #include "global.h"
-#include "assert.h"
 #include "append.h"
 #include "mboxlist.h"
 #include "exitcodes.h"

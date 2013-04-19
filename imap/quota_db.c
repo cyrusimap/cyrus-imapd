@@ -53,7 +53,6 @@
 #include <errno.h>
 #include <syslog.h>
 
-#include "assert.h"
 #include "cyrusdb.h"
 #include "dlist.h"
 #include "exitcodes.h"

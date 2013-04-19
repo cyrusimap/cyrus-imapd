@@ -64,7 +64,6 @@
 #include <sys/select.h>
 #endif
 
-#include "assert.h"
 #include "cyrusdb.h"
 #include "exitcodes.h"
 #include "global.h"

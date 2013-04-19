@@ -64,7 +64,6 @@
 #include <sys/resource.h>
 
 #include "global.h"
-#include "assert.h"
 #include "mboxlist.h"
 #include "exitcodes.h"
 #include "imap/imap_err.h"
