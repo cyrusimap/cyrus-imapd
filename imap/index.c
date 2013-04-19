@@ -66,7 +66,6 @@
 #include "global.h"
 #include "times.h"
 #include "imapd.h"
-#include "cyr_lock.h"
 #include "lsort.h"
 #include "mailbox.h"
 #include "map.h"

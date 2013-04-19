@@ -76,7 +76,6 @@
 #include "exitcodes.h"
 #include "global.h"
 #include "imap/imap_err.h"
-#include "cyr_lock.h"
 #include "mailbox.h"
 #include "message.h"
 #include "map.h"

@@ -77,7 +77,6 @@
 #include "global.h"
 #include "idle.h"
 #include "imap/imap_err.h"
-#include "cyr_lock.h"
 #include "mailbox.h"
 #include "map.h"
 #include "mboxevent.h"

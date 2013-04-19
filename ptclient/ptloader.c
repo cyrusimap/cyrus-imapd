@@ -62,7 +62,6 @@
 #include "hash.h"
 #include "imap/global.h"
 #include "libconfig.h"
-#include "cyr_lock.h"
 #include "retry.h"
 #include "xmalloc.h"
 #include "ptloader.h"

@@ -68,7 +68,6 @@
 #include "exitcodes.h"
 #include "imap/global.h"
 #include "libconfig.h"
-#include "cyr_lock.h"
 #include "xmalloc.h"
 
 static char rcsid[] = "$Id: ptexpire.c,v 1.23 2010/01/06 17:01:57 murch Exp $";

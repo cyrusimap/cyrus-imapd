@@ -103,7 +103,6 @@
 #include "retry.h"
 #include "util.h"
 #include "sync_log.h"
-#include "cyr_lock.h"
 
 extern int optind;
 extern char *optarg;
