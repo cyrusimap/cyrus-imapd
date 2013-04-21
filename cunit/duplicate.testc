@@ -10,7 +10,6 @@
 #include "cyrusdb.h"
 #include "libcyr_cfg.h"
 #include "libconfig.h"
-#include "hash.h"
 
 #define DBDIR			"test-mb-dbdir"
 

@@ -55,7 +55,6 @@
 #include "bytecode.h"
 
 #include "charset.h"
-#include "hash.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "util.h"

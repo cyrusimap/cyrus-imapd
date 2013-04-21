@@ -57,7 +57,6 @@
 
 #include "assert.h"
 #include "charset.h"
-#include "hash.h"
 #include "xmalloc.h"
 
 #include "sieve_interface.h"

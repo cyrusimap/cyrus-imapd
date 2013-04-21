@@ -59,7 +59,6 @@
 #include "auth_pts.h"
 #include "cyrusdb.h"
 #include "exitcodes.h"
-#include "hash.h"
 #include "imap/global.h"
 #include "libconfig.h"
 #include "retry.h"

@@ -53,7 +53,6 @@
 #include "assert.h"
 #include "imapurl.h"
 #include "libconfig.h"
-#include "hash.h"
 #include "times.h"
 #include "xmalloc.h"
 

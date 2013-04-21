@@ -83,7 +83,6 @@
 #include "idle.h"
 #include "global.h"
 #include "times.h"
-#include "hash.h"
 #include "imap/imap_err.h"
 #include "proxy.h"
 #include "imap_proxy.h"

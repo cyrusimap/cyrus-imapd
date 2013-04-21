@@ -62,7 +62,6 @@
 #include "duplicate.h"
 #include "exitcodes.h"
 #include "global.h"
-#include "hash.h"
 #include "imap/imap_err.h"
 #include "index.h"
 #include "libcyr_cfg.h"

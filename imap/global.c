@@ -65,7 +65,6 @@
 #include "cyrusdb.h"
 #include "exitcodes.h"
 #include "gmtoff.h"
-#include "hash.h"
 #include "iptostring.h"
 #include "imap/imap_err.h"
 #include "global.h"
