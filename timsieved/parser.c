@@ -63,7 +63,6 @@
 #include "assert.h"
 #include "libconfig.h"
 #include "imap/global.h"
-#include "auth.h"
 #include "imap/backend.h"
 #include "imap/mboxname.h"
 #include "imap/mboxlist.h"
@@ -184,6 +183,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
   case EOF:
       /* timlex() will return EOF when the remote disconnects badly */
       syslog(LOG_WARNING, "Lost connection to client -- exiting");
+      prot_printf(sieved_out, "BYE \"Shutdown TCP timeout\"\r\n");
       ret = TRUE;
       goto done;
       break;
@@ -266,7 +266,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 
       if (timlex(&sieve_data, NULL, sieved_in)!=STRING)
       {
-          error_msg = "Did not specify legal script data length";
+          error_msg = "Expected script content as second parameter";
           goto error;
       }
 
@@ -297,7 +297,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
       
       if (timlex(NULL, NULL, sieved_in)!=SPACE)
       {
-	  error_msg = "Expected SPACE";
+	  error_msg = "Expected SPACE after SCRIPTNAME";
 	  goto error;
       }
       
