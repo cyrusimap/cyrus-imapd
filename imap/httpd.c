@@ -1150,9 +1150,10 @@ static void cmdloop(void)
 	    meth_t = &namespace->methods[txn.meth];
 	    if (!meth_t->proc) ret = HTTP_NOT_ALLOWED;
 
-	    /* Check if method expects a body */
+	    /* Check if method doesn't expect a body */
 	    else if ((http_methods[txn.meth].flags & METH_NOBODY) &&
-		     spool_getheader(txn.req_hdrs, "Content-Type"))
+		     (spool_getheader(txn.req_hdrs, "Transfer-Encoding") ||
+		      spool_getheader(txn.req_hdrs, "Content-Length")))
 		ret = HTTP_BAD_MEDIATYPE;
 	} else {
 	    /* XXX  Should never get here */
