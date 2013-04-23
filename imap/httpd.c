@@ -1764,7 +1764,7 @@ static void comma_list_hdr(const char *hdr, const char *vals[], unsigned flags)
     const char *sep = "";
     int i;
 
-    prot_printf(httpd_out, "%s:", hdr);
+    prot_printf(httpd_out, "%s", hdr);
     for (i = 0; vals[i]; i++) {
 	if (flags & (1 << i)) {
 	    prot_printf(httpd_out, "%s %s", sep, vals[i]);
@@ -1906,7 +1906,7 @@ void response_header(long code, struct transaction_t *txn)
 	    "no-cache", "no-transform", "private", NULL
 	};
 
-	comma_list_hdr("Cache-Control", cc_dirs, txn->flags.cc);
+	comma_list_hdr("Cache-Control:", cc_dirs, txn->flags.cc);
     }
     if (txn->location) {
 	prot_printf(httpd_out, "Location: %s\r\n", txn->location);
@@ -1917,7 +1917,7 @@ void response_header(long code, struct transaction_t *txn)
 	    "return=minimal", "return=representation", "depth-noroot", NULL
 	};
 
-	comma_list_hdr("Preference-Applied", prefs, resp_body->prefs);
+	comma_list_hdr("Preference-Applied:", prefs, resp_body->prefs);
     }
     if (txn->flags.vary) {
 	/* Construct Vary header */
@@ -1925,7 +1925,7 @@ void response_header(long code, struct transaction_t *txn)
 	    "accept-encoding", "brief", "prefer", NULL
 	};
 
-	comma_list_hdr("Vary", vary_hdrs, txn->flags.vary);
+	comma_list_hdr("Vary:", vary_hdrs, txn->flags.vary);
     }
 
 
@@ -2019,11 +2019,11 @@ void response_header(long code, struct transaction_t *txn)
 	default:
 	    if (code == HTTP_NOT_ALLOWED) {
 		/* Construct Allow header(s) for OPTIONS and 405 response */
-		const char *http_meth[] = {
-		    "OPTIONS, GET, HEAD", "POST", "PUT", "DELETE", "TRACE", NULL
+		const char *meths[] = {
+		    "GET, HEAD", "POST", "PUT", "DELETE", "TRACE", NULL
 		};
 
-		comma_list_hdr("Allow", http_meth, txn->req_tgt.allow);
+		comma_list_hdr("Allow: OPTIONS,", meths, txn->req_tgt.allow);
 
 		if (txn->req_tgt.allow & ALLOW_DAV) {
 		    prot_puts(httpd_out, "Allow: PROPFIND, REPORT");
