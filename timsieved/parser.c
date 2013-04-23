@@ -181,6 +181,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
   case EOF:
       /* timlex() will return EOF when the remote disconnects badly */
       syslog(LOG_WARNING, "Lost connection to client -- exiting");
+      prot_printf(sieved_out, "BYE \"Shutdown TCP timeout\"\r\n");
       ret = TRUE;
       goto done;
       break;
