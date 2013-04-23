@@ -3396,6 +3396,7 @@ int meth_trace(struct transaction_t *txn, void *params)
      * - Piece the Request-line back together
      * - Use all non-sensitive cached headers from client
      */
+    buf_reset(msg);
     buf_printf(msg, "TRACE %s %s\r\n", txn->req_line.uri, txn->req_line.ver);
     spool_enum_hdrcache(txn->req_hdrs, &trace_cachehdr, msg);
     buf_appendcstr(msg, "\r\n");
