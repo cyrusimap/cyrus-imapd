@@ -71,12 +71,12 @@ char* notify_external(const char *class, const char *priority,
 
     /* check/parse options */
     if (!(notify = config_getstring(IMAPOPT_NOTIFY_EXTERNAL))) {
-	syslog(LOG_ERR, "ERROR: recipient not sepcified");
+	syslog(LOG_ERR, "ERROR: recipient not specified");
 	return strdup("NO external recipient not specified");
     }
 
     if (!*user) {
-	syslog(LOG_ERR, "ERROR: recipient not sepcified");
+	syslog(LOG_ERR, "ERROR: recipient not specified");
 	return strdup("NO external recipient not specified");
     }
 
