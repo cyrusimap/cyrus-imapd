@@ -57,7 +57,6 @@ extern struct db *mbdb;
  * Maximum length of partition name. [config.c has a limit of 70]
  */
 #define MAX_PARTITION_LEN 64
-#define MAILBOX_UNIQUEID_LEN 32
 
 /* flags for types of mailboxes */
 #define MBTYPE_REMOTE (1<<0) /* Not on this server (part is remote host) */
