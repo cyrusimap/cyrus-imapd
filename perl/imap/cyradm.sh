@@ -116,13 +116,6 @@ action will run C<pwd> from a shell if invoked.
 Create a mailbox on the default or a specified partition.  Both old-style
 and getopt-style usages are accepted (combining them will produce an error).
 
-=item C<createcalendar> I<username>
-
-=item C<cc> I<username>
-
-Create a calendar for the supplied username.  In this case, the mailbox for
-said user must already exist.
-
 =item C<deleteaclmailbox> I<mailbox> I<id> [...]
 
 =item C<deleteacl> I<mailbox> I<id> [...]

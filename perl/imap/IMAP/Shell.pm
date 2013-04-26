@@ -114,9 +114,6 @@ my %builtins = (exit =>
 		   'create mailbox'],
 		create => 'createmailbox',
 		cm => 'createmailbox',
-		createcalendar =>
-		  [\&_sc_createcal, 'username [calendar prefix]', 'create calendar'],
-		cc => 'createcalendar',
 		deleteaclmailbox =>
 		  [\&_sc_deleteacl, 'mailbox id [id ...]',
 		   'remove ACLs from mailbox'],
@@ -993,32 +990,6 @@ sub _sc_create {
     die "createmailbox: no connection to server\n";
   }
   $$cyrref->create(@nargv) || die "createmailbox: " . $$cyrref->error . "\n";
-  0;
-}
-
-sub _sc_createcal {
-  my ($cyrref, $name, $fh, $lfh, @argv) = @_;
-  my (@nargv, $opt);
-  shift(@argv);
-  while (defined ($opt = shift(@argv))) {
-    # gack.  bloody tcl.
-    last if $opt eq '--';
-    if ($opt =~ /^-/) {
-      die "usage: createcalendar username [calendar prefix]\n";
-    }
-    else {
-      push(@nargv, $opt);
-      last;
-    }
-  }
-  push(@nargv, @argv);
-  if ((@nargv < 1) || (@nargv > 2)) {
-    die "usage: createcalendar username [calendar prefix]\n";
-  }
-  if (!$cyrref || !$$cyrref) {
-    die "createcalendar: no connection to server\n";
-  }
-  $$cyrref->createcal(@nargv) || die "createcalendar: " . $$cyrref->error . "\n";
   0;
 }
 
