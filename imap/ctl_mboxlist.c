@@ -484,7 +484,7 @@ static void do_dump(enum mboxop op, const char *part, int purge)
     if (op == M_POPULATE) {
 	/* Remove MBTYPE_MOVING flags (unflag_head) */
 	while (unflag_head) {
-	    struct mboxlist_entry *mbentry = NULL;
+	    mbentry_t *mbentry = NULL;
 	    struct mb_node *me = unflag_head;
 
 	    unflag_head = unflag_head->next;
@@ -577,7 +577,7 @@ static void do_undump(void)
 	char *name, *partition, *acl;
 	char *p;
 	int mbtype = 0, tries = 0;
-	struct mboxlist_entry *newmbentry = NULL;
+	mbentry_t *newmbentry = NULL;
 
 	line++;
 

@@ -379,7 +379,7 @@ EXPORTED int user_renameacl(struct namespace *namespace, char *name,
     int r = 0;
     char *acl;
     char *rights, *nextid;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     char *aclalloc;
 
     r = mboxlist_lookup(name, &mbentry, NULL);

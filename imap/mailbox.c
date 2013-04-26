@@ -919,7 +919,7 @@ static int mailbox_open_advanced(const char *name,
 				 int index_locktype,
 				 struct mailbox **mailboxptr)
 {
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     struct mailboxlist *listitem;
     struct mailbox *mailbox = NULL;
     int r = 0;
@@ -3513,7 +3513,7 @@ static int chkchildren(char *name,
 		       void *rock)
 {
     const char *part = (const char *)rock;
-    struct mboxlist_entry *mbentry;
+    mbentry_t *mbentry;
     int r;
 
     r = mboxlist_lookup(name, &mbentry, 0);
@@ -3586,7 +3586,7 @@ HIDDEN int mailbox_delete_cleanup(const char *part, const char *name)
     char pbuf[MAX_MAILBOX_PATH+1], mbuf[MAX_MAILBOX_PATH+1];
     char *ntail, *ptail, *mtail = NULL;
     char *path, *mpath;
-    struct mboxlist_entry *mbentry;
+    mbentry_t *mbentry;
     int r;
 
     /* XXX - use explicit paths to each type of file */
@@ -4059,7 +4059,7 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
     struct mailbox *mailbox = NULL;
     int options = config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS)
 		| OPT_POP3_NEW_UIDL;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     struct mailboxlist *listitem;
     int r;
 
@@ -4144,7 +4144,7 @@ static int mailbox_reconstruct_acl(struct mailbox *mailbox, int flags)
 	printf("%s: update acl from header %s => %s\n", mailbox->name,
 	       mailbox->acl, acl);
 	if (make_changes) {
-	    struct mboxlist_entry *mbentry = NULL;
+	    mbentry_t *mbentry = NULL;
 	    r = mboxlist_lookup(mailbox->name, &mbentry, NULL);
 	    if (!r) {
 		mbentry->acl = acl;

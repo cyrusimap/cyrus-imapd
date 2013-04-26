@@ -283,9 +283,9 @@ static struct protocol_t nntp_protocol =
 /* proxy mboxlist_lookup; on misses, it asks the listener for this
    machine to make a roundtrip to the master mailbox server to make
    sure it's up to date */
-static int mlookup(const char *name, struct mboxlist_entry **mbentryptr)
+static int mlookup(const char *name, mbentry_t **mbentryptr)
 {
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     int r;
     
     r = mboxlist_lookup(name, &mbentry, NULL);
@@ -1739,7 +1739,7 @@ static int open_group(char *name, int has_prefix, struct backend **ret,
 {
     char mailboxname[MAX_MAILBOX_BUFFER];
     int r = 0;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     struct backend *backend_next = NULL;
 
     /* close local group */
@@ -2562,7 +2562,7 @@ static int do_active(char *name, void *rock)
 static int do_newsgroups(char *name, void *rock)
 {
     struct list_rock *lrock = (struct list_rock *) rock;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     int r;
 
     r = mlookup(name, &mbentry);
@@ -3315,7 +3315,7 @@ static int deliver(message_data_t *msg)
     char *rcpt = NULL;
     struct body *body = NULL;
     struct dest *dlist = NULL;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     duplicate_key_t dkey = {msg->id, NULL, msg->date};
 
     /* check ACLs of all mailboxes */

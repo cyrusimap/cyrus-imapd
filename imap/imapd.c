@@ -642,10 +642,10 @@ static void imapd_refer(const char *tag,
 /* ext_name is the external name of the mailbox */
 /* you can avoid referring the client by setting tag or ext_name to NULL. */
 static int mlookup(const char *tag, const char *ext_name,
-	    const char *name, struct mboxlist_entry **mbentryptr)
+	    const char *name, mbentry_t **mbentryptr)
 {
     int r;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
 
     r = mboxlist_lookup(name, &mbentry, NULL);
     if ((r == IMAP_MAILBOX_NONEXISTENT || (!r && (mbentry->mbtype & MBTYPE_RESERVE))) &&
@@ -3214,7 +3214,7 @@ static int catenate_url(const char *s, const char *cur_name, FILE *f,
 						   url.mailbox,
 						   imapd_userid, mailboxname);
 	if (!r) {
-	    struct mboxlist_entry *mbentry = NULL;
+	    mbentry_t *mbentry = NULL;
 
 	    /* lookup the location of the mailbox */
 	    r = mlookup(NULL, NULL, mailboxname, &mbentry);
@@ -3387,7 +3387,7 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
     long doappenduid = 0;
     const char *parseerr = NULL, *url = NULL;
     struct appendstage *curstage;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
 
     /* See if we can append */
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
@@ -3772,7 +3772,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
     char mailboxname[MAX_MAILBOX_BUFFER];
     int r = 0;
     int doclose = 0;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     struct backend *backend_next = NULL;
     struct index_init init;
     int wasopen = 0;
@@ -5142,7 +5142,7 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
     int r, myrights;
     char mailboxname[MAX_MAILBOX_BUFFER];
     char *copyuid = NULL;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
 
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 					       imapd_userid, mailboxname);
@@ -5570,7 +5570,7 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
 {
     int r;
     char mailboxname[MAX_MAILBOX_BUFFER];
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     struct mboxevent *mboxevent = NULL;
     char *p;
 
@@ -5804,7 +5804,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
     int rename_user = 0;
     char olduser[128], newuser[128];
     char acl_olduser[128], acl_newuser[128];
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
 
     if (partition && !imapd_userisadmin) {
 	r = IMAP_PERMISSION_DENIED;
@@ -6163,7 +6163,7 @@ static void cmd_reconstruct(const char *tag, const char *name, int recursive)
     int r = 0;
     char mailboxname[MAX_MAILBOX_BUFFER];
     char quotaroot[MAX_MAILBOX_BUFFER];
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     struct mailbox *mailbox = NULL;
 
     /* administrators only please */
@@ -6552,7 +6552,7 @@ static void cmd_getacl(const char *tag, const char *name)
     int r, access;
     char *acl;
     char *rights, *nextid;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
 
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 					       imapd_userid, mailboxname);
@@ -6617,7 +6617,7 @@ static void cmd_listrights(char *tag, char *name, char *identifier)
 {
     char mailboxname[MAX_MAILBOX_BUFFER];
     int r, rights;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     struct auth_state *authstate;
     const char *canon_identifier;
     int implicit;
@@ -6712,7 +6712,7 @@ static void cmd_myrights(const char *tag, const char *name)
     char mailboxname[MAX_MAILBOX_BUFFER];
     int r, rights = 0;
     char str[ACL_MAXSTR];
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
 
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 					       imapd_userid, mailboxname);
@@ -6763,7 +6763,7 @@ static void cmd_setacl(char *tag, const char *name,
 {
     int r;
     char mailboxname[MAX_MAILBOX_BUFFER];
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
 
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 					       imapd_userid, mailboxname);
@@ -6896,7 +6896,7 @@ static int quota_cb(char *name, int matchlen __attribute__((unused)),
 		    int maycreate __attribute__((unused)), void *rock) 
 {
     const char *servername = (const char *)rock;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     int r;
     
     r = mlookup(NULL, NULL, name, &mbentry);
@@ -6923,7 +6923,7 @@ static void cmd_getquota(const char *tag, const char *name)
     int r;
     char quotarootbuf[MAX_MAILBOX_BUFFER];
     char internalname[MAX_MAILBOX_BUFFER];
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     struct quota q;
 
     imapd_check(NULL, 0);
@@ -7002,7 +7002,7 @@ static void cmd_getquota(const char *tag, const char *name)
 static void cmd_getquotaroot(const char *tag, const char *name)
 {
     char mailboxname[MAX_MAILBOX_BUFFER];
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     struct mailbox *mailbox = NULL;
     int myrights;
     int r, doclose = 0;
@@ -7106,7 +7106,7 @@ void cmd_setquota(const char *tag, const char *quotaroot)
     static struct buf arg;
     int r;
     char mailboxname[MAX_MAILBOX_BUFFER];
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
 
     if (!imapd_userisadmin && !imapd_userisproxyadmin) {
 	/* need to allow proxies so that mailbox moves can set initial quota
@@ -7448,7 +7448,7 @@ static void cmd_status(char *tag, char *name)
     unsigned statusitems = 0;
     char mailboxname[MAX_MAILBOX_BUFFER];
     const char *errstr = "Bad status string";
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     struct statusdata sdata;
     int r = 0;
 
@@ -8203,7 +8203,7 @@ static int apply_cb(char *name, int matchlen,
 {
     struct apply_rock *arock = (struct apply_rock *)rock;
     annotate_state_t *state = arock->state;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     char int_mboxname[MAX_MAILBOX_BUFFER];
     int r;
 
@@ -8287,7 +8287,7 @@ static int apply_mailbox_array(annotate_state_t *state,
 			       void *rock)
 {
     int i;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     char int_mboxname[MAX_MAILBOX_BUFFER];
     int r = 0;
 
@@ -9746,7 +9746,7 @@ enum {
 };
 
 struct xfer_item {
-    struct mboxlist_entry *mbentry;
+    mbentry_t *mbentry;
     char extname[MAX_MAILBOX_NAME];
     struct mailbox *mailbox;
     int state;
@@ -9907,7 +9907,7 @@ fail:
 }
 
 static void xfer_addmbox(struct xfer_header *xfer,
-			 struct mboxlist_entry *mbentry)
+			 mbentry_t *mbentry)
 {
     struct xfer_item *item = xzmalloc(sizeof(struct xfer_item));
 
@@ -10012,7 +10012,7 @@ static int xfer_undump(struct xfer_header *xfer)
 {
     struct xfer_item *item;
     int r;
-    struct mboxlist_entry *newentry;
+    mbentry_t *newentry;
     struct mailbox *mailbox = NULL;
 
     for (item = xfer->items; item; item = item->next) {
@@ -10122,7 +10122,7 @@ static int xfer_reactivate(struct xfer_header *xfer)
 
 static int xfer_delete(struct xfer_header *xfer)
 {
-    struct mboxlist_entry *newentry = NULL;
+    mbentry_t *newentry = NULL;
     struct xfer_item *item;
     int r;
 
@@ -10168,7 +10168,7 @@ static int xfer_delete(struct xfer_header *xfer)
 
 static void xfer_recover(struct xfer_header *xfer)
 {
-    struct mboxlist_entry *newentry = NULL;
+    mbentry_t *newentry = NULL;
     struct xfer_item *item;
     int r;
 
@@ -10225,7 +10225,7 @@ static int xfer_user_cb(char *name,
 			void *rock) 
 {
     struct xfer_header *xfer = (struct xfer_header *)rock;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     int r;
 
     /* NOTE: NOT mlookup() because we don't want to issue a referral */
@@ -10325,7 +10325,7 @@ static void cmd_xfer(const char *tag, const char *name,
     char mailboxname[MAX_MAILBOX_BUFFER];
     int moving_user = 0;
     char *p, *mbox = mailboxname;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     struct xfer_header *xfer = NULL;
 
     /* administrators only please */
@@ -10995,7 +10995,7 @@ static int set_haschildren(char *name, int matchlen,
     return 0;
 }
 
-static void specialuse_flags(struct mboxlist_entry *mbentry, const char *sep,
+static void specialuse_flags(mbentry_t *mbentry, const char *sep,
 			     int isxlist)
 {
     char inboxname[MAX_MAILBOX_PATH+1];
@@ -11035,7 +11035,7 @@ static void list_response(const char *name, int attributes,
     char mboxname[MAX_MAILBOX_PATH+1];
     const char *sep;
     const char *cmd;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     struct statusdata sdata;
 
     if (!name) return;
@@ -11692,7 +11692,7 @@ static void cmd_mupdatepush(char *tag, char *name)
 {
     int r = 0;
     char mailboxname[MAX_MAILBOX_BUFFER];
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     mupdate_handle *mupdate_h = NULL;
     char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
 
@@ -11753,7 +11753,7 @@ static void cmd_urlfetch(char *tag)
     char mailboxname[MAX_MAILBOX_BUFFER];
     struct index_state *state;
     uint32_t msgno;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     time_t now = time(NULL);
     unsigned extended, params;
 
@@ -11991,7 +11991,7 @@ static void cmd_genurlauth(char *tag)
     size_t keylen;
     unsigned char token[EVP_MAX_MD_SIZE+1]; /* +1 for algorithm */
     unsigned int token_len;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     time_t now = time(NULL);
 
     r = mboxkey_open(imapd_userid, MBOXKEY_CREATE, &mboxkey_db);
@@ -12137,7 +12137,7 @@ static void cmd_resetkey(char *tag, char *mailbox,
 	/* delete key for specified mailbox */
 	char mailboxname[MAX_MAILBOX_BUFFER];
 	struct mboxkey *mboxkey_db;
-	struct mboxlist_entry *mbentry = NULL;
+	mbentry_t *mbentry = NULL;
 
 	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace,
 						   mailbox,

@@ -1379,7 +1379,7 @@ static void database_init(void)
 /* log change to database. database must be locked. */
 static void database_log(const struct mbent *mb, struct txn **mytid)
 {
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
 
     mbentry = mboxlist_entry_create();
     mbentry->name = mb->mailbox;
@@ -1416,7 +1416,7 @@ static void database_log(const struct mbent *mb, struct txn **mytid)
  * a non-null pool implies we should use the mpool functionality */
 static struct mbent *database_lookup(const char *name, struct mpool *pool)
 {
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     struct mbent *out;
     char *server = NULL;
     int r;
@@ -2371,7 +2371,7 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
 			    l->mailbox );
 		    err++;
 		} else {
-		    struct mboxlist_entry *mbentry = mboxlist_entry_create();
+		    mbentry_t *mbentry = mboxlist_entry_create();
 		    mbentry->name = r->mailbox;
 		    mbentry->mbtype = (r->t == SET_RESERVE ? MBTYPE_RESERVE : 0);
 		    mbentry->server = r->server;
@@ -2408,7 +2408,7 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
 	    local_boxes.head = l->next;
 	} else /* (ret > 0) */ {
 	    /* Remote without corresponding local, insert it */
-	    struct mboxlist_entry *mbentry = mboxlist_entry_create();
+	    mbentry_t *mbentry = mboxlist_entry_create();
 	    mbentry->name = r->mailbox;
 	    mbentry->mbtype = (r->t == SET_RESERVE ? MBTYPE_RESERVE : 0);
 	    mbentry->server = r->server;
@@ -2436,7 +2436,7 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
     } else if (r && !l) {
 	/* we have more inserts to do */
 	while (r) {
-	    struct mboxlist_entry *mbentry = mboxlist_entry_create();
+	    mbentry_t *mbentry = mboxlist_entry_create();
 	    mbentry->name = r->mailbox;
 	    mbentry->mbtype = (r->t == SET_RESERVE ? MBTYPE_RESERVE : 0);
 	    mbentry->server = r->server;

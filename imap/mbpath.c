@@ -83,7 +83,7 @@ usage(void) {
 int
 main(int argc, char **argv)
 {
-  struct mboxlist_entry *mbentry = NULL;
+  mbentry_t *mbentry = NULL;
   int rc, i, quiet = 0, stop_on_error=0, metadata=0;
   int opt;		/* getopt() returns an int */
   char *alt_config = NULL;

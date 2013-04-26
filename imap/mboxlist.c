@@ -102,16 +102,16 @@ static int mboxlist_rmquota(const char *name, int matchlen, int maycreate,
 static int mboxlist_changequota(const char *name, int matchlen, int maycreate,
 				void *rock);
 
-EXPORTED struct mboxlist_entry *mboxlist_entry_create(void)
+EXPORTED mbentry_t *mboxlist_entry_create(void)
 {
-    struct mboxlist_entry *ret = xzmalloc(sizeof(struct mboxlist_entry));
+    mbentry_t *ret = xzmalloc(sizeof(mbentry_t));
     /* xxx - initialiser functions here? */
     return ret;
 }
 
-EXPORTED void mboxlist_entry_free(struct mboxlist_entry **mbentryptr)
+EXPORTED void mboxlist_entry_free(mbentry_t **mbentryptr)
 {
-    struct mboxlist_entry *mbentry = *mbentryptr;
+    mbentry_t *mbentry = *mbentryptr;
 
     /* idempotent */
     if (!mbentry) return;
@@ -125,7 +125,7 @@ EXPORTED void mboxlist_entry_free(struct mboxlist_entry **mbentryptr)
     *mbentryptr = NULL;
 }
 
-EXPORTED char *mboxlist_entry_cstring(struct mboxlist_entry *mbentry)
+EXPORTED char *mboxlist_entry_cstring(mbentry_t *mbentry)
 {
     struct buf ebuf;
     char sep = '(';
@@ -217,13 +217,13 @@ static int mboxlist_read(const char *name, const char **dataptr, size_t *datalen
  */
 /* NOTE: this needs to be made fully compatible with multiple different
  * formats at some stage, when we switch to fully dlist entries */
-static int mboxlist_parse_entry(struct mboxlist_entry **mbentryptr,
+static int mboxlist_parse_entry(mbentry_t **mbentryptr,
 				const char *name,
 				const char *data, size_t datalen)
 {
     char *p, *q;
     const char **target;
-    struct mboxlist_entry *mbentry;
+    mbentry_t *mbentry;
     int namelen = strlen(name);
 
     mbentry = mboxlist_entry_create();
@@ -286,7 +286,7 @@ static int mboxlist_parse_entry(struct mboxlist_entry **mbentryptr,
 
 /* read a record and parse into parts */
 static int mboxlist_mylookup(const char *name,
-			     struct mboxlist_entry **mbentryptr,
+			     mbentry_t **mbentryptr,
 			     struct txn **tid, int wrlock)
 {
     int r;
@@ -302,10 +302,10 @@ static int mboxlist_mylookup(const char *name,
 /*
  * Lookup 'name' in the mailbox list, ignoring reserved records
  */
-EXPORTED int mboxlist_lookup(const char *name, struct mboxlist_entry **entryptr,
+EXPORTED int mboxlist_lookup(const char *name, mbentry_t **entryptr,
 		    struct txn **tid)
 {
-    struct mboxlist_entry *entry = NULL;
+    mbentry_t *entry = NULL;
     int r;
 
     r = mboxlist_mylookup(name, &entry, tid, 0);
@@ -325,7 +325,7 @@ EXPORTED int mboxlist_lookup(const char *name, struct mboxlist_entry **entryptr,
 
 /* now this is just silly, but hey */
 EXPORTED int mboxlist_lookup_allow_reserved(const char *name,
-				   struct mboxlist_entry **entryptr,
+				   mbentry_t **entryptr,
 				   struct txn **tid)
 {
     return mboxlist_mylookup(name, entryptr, tid, 0);
@@ -336,7 +336,7 @@ EXPORTED int mboxlist_lookup_allow_reserved(const char *name,
 HIDDEN int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len)
 {
     const char *root;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     int r;
 
     assert(stagedir != NULL);
@@ -355,7 +355,7 @@ HIDDEN int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len)
     return 0;
 }
 
-EXPORTED int mboxlist_update(struct mboxlist_entry *mbentry, int localonly)
+EXPORTED int mboxlist_update(mbentry_t *mbentry, int localonly)
 {
     int r = 0, r2 = 0;
     char *mboxent = NULL;
@@ -408,9 +408,9 @@ EXPORTED int mboxlist_update(struct mboxlist_entry *mbentry, int localonly)
 }
 
 static int mboxlist_findparent(const char *mboxname,
-			       struct mboxlist_entry **mbentryp)
+			       mbentry_t **mbentryp)
 {
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     char *parent = xstrdup(mboxname);
     int parentlen = 0;
     char *p;
@@ -439,7 +439,7 @@ static int mboxlist_create_partition(const char *mboxname,
 				     const char *part,
 				     char **out)
 {
-    struct mboxlist_entry *parent = NULL;
+    mbentry_t *parent = NULL;
 
     if (!part) {
 	int r = mboxlist_findparent(mboxname, &parent);
@@ -480,7 +480,7 @@ static int mboxlist_create_namecheck(const char *mboxname,
 				     struct auth_state *auth_state,
 				     int isadmin, int force_subdirs)
 {
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     const char *p;
     int r = 0;
 
@@ -561,7 +561,7 @@ done:
 
 static int mboxlist_create_acl(const char *mboxname, char **out)
 {
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     const char *owner;
     int r;
 
@@ -679,7 +679,7 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
     char *acl = NULL;
     struct mailbox *newmailbox = NULL;
     int isremote = mbtype & MBTYPE_REMOTE;
-    struct mboxlist_entry *newmbentry = NULL;
+    mbentry_t *newmbentry = NULL;
     struct dlist *item;
     const char *useptr = NULL;
 
@@ -803,7 +803,7 @@ EXPORTED int mboxlist_createsync(const char *name, int mbtype,
 }
 
 /* insert an entry for the proxy */
-EXPORTED int mboxlist_insertremote(struct mboxlist_entry *mbentry,
+EXPORTED int mboxlist_insertremote(mbentry_t *mbentry,
 			  struct txn **tid)
 {
     char *mboxent;
@@ -854,7 +854,7 @@ EXPORTED int mboxlist_deleteremote(const char *name, struct txn **in_tid)
     int r;
     struct txn **tid;
     struct txn *lcl_tid = NULL;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
 
     if(in_tid) {
 	tid = in_tid;
@@ -928,7 +928,7 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
 			       int checkacl,
 			       int force)
 {
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     char newname[MAX_MAILBOX_BUFFER];
     int r;
     long myrights;
@@ -1012,7 +1012,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
                            int checkacl,
 			   int local_only, int force)
 {
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     int r;
     long myrights;
     struct mailbox *mailbox = NULL;
@@ -1138,7 +1138,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
     char *newpartition = NULL;
     char *mboxent = NULL;
     mupdate_handle *mupdate_h = NULL;
-    struct mboxlist_entry *newmbentry = NULL;
+    mbentry_t *newmbentry = NULL;
 
     /* 1. open mailbox */
     r = mailbox_open_iwl(oldname, &oldmailbox);
@@ -1439,7 +1439,7 @@ EXPORTED int mboxlist_setacl(struct namespace *namespace, const char *name,
 		    int isadmin, const char *userid, 
 		    struct auth_state *auth_state)
 {
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     int useridlen = strlen(userid);
     int domainlen = 0;
     int identifierlen = strlen(identifier);
@@ -1714,7 +1714,7 @@ EXPORTED int mboxlist_setacl(struct namespace *namespace, const char *name,
 EXPORTED int
 mboxlist_sync_setacls(const char *name, const char *newacl)
 {
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     int r;
     struct txn *tid = NULL;
 
@@ -1803,7 +1803,7 @@ mboxlist_sync_setacls(const char *name, const char *newacl)
 EXPORTED int mboxlist_setspecialuse(struct mailbox *mailbox, const char *specialuse)
 {
     const char *name = mailbox->name;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     struct txn *tid = NULL;
     char *mboxent = NULL;
     int r;
@@ -1971,7 +1971,7 @@ static int find_p(void *rockp,
     /* check acl */
     if (!rock->isadmin) {
 	int rights;
-	struct mboxlist_entry *mbentry = NULL;
+	mbentry_t *mbentry = NULL;
 
 	if (mboxlist_parse_entry(&mbentry, "", data, datalen))
 	    return 0;
@@ -2617,7 +2617,7 @@ EXPORTED int mboxlist_setquotas(const char *root,
 	strlcat(pattern, "*", sizeof(pattern));
     }
     else {
-	struct mboxlist_entry *mbentry = NULL;
+	mbentry_t *mbentry = NULL;
 	strlcat(pattern, ".*", sizeof(pattern));
 
 	/* look for a top-level mailbox in the proposed quotaroot */
@@ -3395,7 +3395,7 @@ EXPORTED int mboxlist_changesub(const char *name, const char *userid,
 				struct auth_state *auth_state, 
 				int add, int force, int notify)
 {
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     int r;
     struct db *subs;
     struct mboxevent *mboxevent;

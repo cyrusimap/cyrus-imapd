@@ -1252,7 +1252,7 @@ int addmbox(char *name,
 	    void *rock)
 {
     struct sync_name_list *list = (struct sync_name_list *) rock;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
 
     if (mboxlist_lookup(name, &mbentry, NULL))
 	return 0;

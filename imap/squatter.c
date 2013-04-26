@@ -530,7 +530,7 @@ bail:
 static int index_me(char *name, int matchlen __attribute__((unused)),
 		    int maycreate __attribute__((unused)),
 		    void *rock) {
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     struct index_state *state = NULL;
     int r;
     char *fname;

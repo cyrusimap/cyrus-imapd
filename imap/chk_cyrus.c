@@ -82,7 +82,7 @@ static int chkmbox(char *name,
 		   void *rock __attribute__((unused))) 
 {
     int r;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
 
     r = mboxlist_lookup(name, &mbentry, NULL);
 

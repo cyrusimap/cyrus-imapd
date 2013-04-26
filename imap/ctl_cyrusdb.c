@@ -126,7 +126,7 @@ static int fixmbox(char *name,
 		   int maycreate __attribute__((unused)),
 		   void *rock __attribute__((unused)))
 {
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     int r;
 
     r = mboxlist_lookup(name, &mbentry, NULL);

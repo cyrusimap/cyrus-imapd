@@ -251,7 +251,7 @@ static int verify_user(const char *key, struct auth_state *authstate)
 {
     char rcpt[MAX_MAILBOX_BUFFER], namebuf[MAX_MAILBOX_BUFFER] = "";
     char *user = rcpt, *domain = NULL, *mailbox = NULL;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     int r = 0;
 
     /* make a working copy of the key and split it into user/domain/mailbox */

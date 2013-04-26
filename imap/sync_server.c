@@ -1114,7 +1114,7 @@ static int do_reserve(struct dlist *kl, struct sync_reserve_list *reserve_list)
     struct sync_msgid_list *part_list;
     struct sync_msgid *item;
     struct sync_name *folder;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     const char *partition = NULL;
     struct dlist *ml;
     struct dlist *gl;

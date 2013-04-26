@@ -111,7 +111,7 @@ struct annotate_state
      * Common between storing and fetching
      */
     int which;			/* ANNOTATION_SCOPE_* */
-    struct mboxlist_entry *mbentry; /* for _MAILBOX */
+    mbentry_t *mbentry; /* for _MAILBOX */
     int mbentry_is_ours;
     struct mailbox *mailbox;	/* for _MAILBOX, _MESSAGE */
     int mailbox_is_ours;
@@ -227,7 +227,7 @@ static ptrarray_t server_entries = PTRARRAY_INITIALIZER;
 
 static void annotate_state_unset_scope(annotate_state_t *state);
 static int annotate_state_set_scope(annotate_state_t *state,
-				    struct mboxlist_entry *mbentry,
+				    mbentry_t *mbentry,
 				    struct mailbox *mailbox,
 				    unsigned int uid);
 static void init_annotation_definitions(void);
@@ -514,7 +514,7 @@ static void append_db(annotate_db_t *d)
  * @mboxname is NULL).  Returns the new string in
  * *@fnamep.  Returns an error code.
  */
-static int annotate_dbname_mbentry(const struct mboxlist_entry *mbentry,
+static int annotate_dbname_mbentry(const mbentry_t *mbentry,
 				   char **fnamep)
 {
     const char *conf_fname;
@@ -558,7 +558,7 @@ static int annotate_dbname_mailbox(struct mailbox *mailbox, char **fnamep)
 static int annotate_dbname(const char *mboxname, char **fnamep)
 {
     int r = 0;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
 
     if (mboxname) {
 	r = mboxlist_lookup(mboxname, &mbentry, NULL);
@@ -1137,7 +1137,7 @@ EXPORTED int annotate_state_set_mailbox(annotate_state_t *state,
 }
 
 EXPORTED int annotate_state_set_mailbox_mbe(annotate_state_t *state,
-				   struct mboxlist_entry *mbentry)
+				   mbentry_t *mbentry)
 {
     return annotate_state_set_scope(state, mbentry, NULL, 0);
 }
@@ -1168,7 +1168,7 @@ static void annotate_state_unset_scope(annotate_state_t *state)
 }
 
 static int annotate_state_set_scope(annotate_state_t *state,
-				    struct mboxlist_entry *mbentry,
+				    mbentry_t *mbentry,
 				    struct mailbox *mailbox,
 				    unsigned int uid)
 {

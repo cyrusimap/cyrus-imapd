@@ -344,7 +344,7 @@ static int handle_request(const char *who, const char *name,
     unsigned recentuid;
     unsigned numrecent;
     char mboxname[MAX_MAILBOX_BUFFER];
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     struct auth_state *mystate;
     int internalseen;
 

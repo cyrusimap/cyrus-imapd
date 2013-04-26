@@ -622,7 +622,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
   const void *canon_user, *val;
   char *username = NULL;
   int ret = TRUE;
-  struct mboxlist_entry *mbentry = NULL;
+  mbentry_t *mbentry = NULL;
 
   assert(initial_challenge);
   if (initial_challenge->s)

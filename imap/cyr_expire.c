@@ -221,7 +221,7 @@ static unsigned userflag_cb(struct mailbox *mailbox __attribute__((unused)),
 static int expire(char *name, int matchlen __attribute__((unused)),
 		  int maycreate __attribute__((unused)), void *rock)
 {
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     struct expire_rock *erock = (struct expire_rock *) rock;
     char *buf;
     struct buf attrib = BUF_INITIALIZER;
@@ -337,7 +337,7 @@ static int delete(char *name,
 		  int maycreate __attribute__((unused)),
 		  void *rock)
 {
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     struct delete_rock *drock = (struct delete_rock *) rock;
     int r;
     time_t timestamp;

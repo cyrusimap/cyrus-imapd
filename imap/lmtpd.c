@@ -452,11 +452,11 @@ int fuzzy_match(char *mboxname)
 /* proxy mboxlist_lookup; on misses, it asks the listener for this
    machine to make a roundtrip to the master mailbox server to make
    sure it's up to date */
-static int mlookup(const char *name, struct mboxlist_entry **mbentryptr)
+static int mlookup(const char *name, mbentry_t **mbentryptr)
 {
     int r;
     char *c;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
 
     if (mhandle) {
 	/* proxy only, so check the mupdate master */
@@ -838,7 +838,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	char namebuf[MAX_MAILBOX_BUFFER] = "";
 	char userbuf[MAX_MAILBOX_BUFFER];
 	const char *rcpt, *user, *domain, *mailbox;
-	struct mboxlist_entry *mbentry = NULL;
+	mbentry_t *mbentry = NULL;
 	int r = 0;
 
 	rcpt = msg_getrcptall(msgdata, n);
@@ -1125,7 +1125,7 @@ static int verify_user(const char *user, const char *domain, char *mailbox,
     }
 
     if (!r) {
-	struct mboxlist_entry *mbentry = NULL;
+	mbentry_t *mbentry = NULL;
 	long aclcheck = !user ? ACL_POST : 0;
 	/*
 	 * check to see if mailbox exists and we can append to it:
@@ -1231,7 +1231,7 @@ FILE *spoolfile(message_data_t *msgdata)
        (don't bother if we're only a proxy) */
     n = mhandle ? 0 : msg_getnumrcpt(msgdata);
     for (i = 0; !f && (i < n); i++) {
-	struct mboxlist_entry *mbentry = NULL;
+	mbentry_t *mbentry = NULL;
 	char namebuf[MAX_MAILBOX_BUFFER] = "";
 	const char *user, *domain, *mailbox;
 	int r;

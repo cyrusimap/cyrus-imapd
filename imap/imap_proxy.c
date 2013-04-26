@@ -110,7 +110,7 @@ void proxy_gentag(char *tag, size_t len)
 struct backend *proxy_findinboxserver(const char *userid)
 {
     char inbox[MAX_MAILBOX_BUFFER];
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     struct backend *s = NULL;
     int r;
 
@@ -590,7 +590,7 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 							userid,
 							mailboxname);
 	    if (!r) {
-		struct mboxlist_entry *mbentry = NULL;
+		mbentry_t *mbentry = NULL;
 		exist_r = mboxlist_lookup(mailboxname, &mbentry, NULL);
 		if(!exist_r && (mbentry->mbtype & MBTYPE_RESERVE))
 		    exist_r = IMAP_MAILBOX_RESERVED;

@@ -571,7 +571,7 @@ EXPORTED int is_userid_anonymous(const char *user)
 static int acl_ok(const char *user, struct auth_state *authstate)
 {
     struct namespace namespace;
-    struct mboxlist_entry *mbentry = NULL;
+    mbentry_t *mbentry = NULL;
     char bufuser[MAX_MAILBOX_BUFFER], inboxname[MAX_MAILBOX_BUFFER];
     int r;
 
@@ -580,7 +580,7 @@ static int acl_ok(const char *user, struct auth_state *authstate)
 	syslog(LOG_ERR, "%s", error_message(r));
 	fatal(error_message(r), EC_CONFIG);
     }
-    
+
     strlcpy(bufuser, user, sizeof(bufuser));
 
     /* Translate any separators in userid */

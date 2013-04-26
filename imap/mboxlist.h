@@ -89,27 +89,29 @@ struct mboxlist_entry {
     const char *uniqueid;
 };
 
-struct mboxlist_entry *mboxlist_entry_create();
+typedef struct mboxlist_entry mbentry_t;
 
-void mboxlist_entry_free(struct mboxlist_entry **mbentryptr);
+mbentry_t *mboxlist_entry_create();
+
+void mboxlist_entry_free(mbentry_t **mbentryptr);
 
 /* formats a cstring from a mboxlist_entry.  Caller must free
  * after use */
-char *mboxlist_entry_cstring(struct mboxlist_entry *mbentry);
+char *mboxlist_entry_cstring(mbentry_t *mbentry);
 
 /* Lookup 'name' in the mailbox list. */
-int mboxlist_lookup(const char *name, struct mboxlist_entry **mbentryptr,
+int mboxlist_lookup(const char *name, mbentry_t **mbentryptr,
 		    struct txn **tid);
 int mboxlist_lookup_allow_reserved(const char *name,
-				   struct mboxlist_entry **mbentryptr,
+				   mbentry_t **mbentryptr,
 				   struct txn **tid);
 
 /* insert/delete stub entries */
-int mboxlist_insertremote(struct mboxlist_entry *mbentry, struct txn **rettid);
+int mboxlist_insertremote(mbentry_t *mbentry, struct txn **rettid);
 int mboxlist_deleteremote(const char *name, struct txn **in_tid);
 
 /* Update a mailbox's entry */
-int mboxlist_update(struct mboxlist_entry *mbentry, int localonly);
+int mboxlist_update(mbentry_t *mbentry, int localonly);
 
 /* check user's ability to create mailbox */
 int mboxlist_createmailboxcheck(const char *name, int mbtype,
