@@ -137,7 +137,7 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 	{ 0, 0xFF, PROT_BUFSIZE, 0, NULL, NULL }; /* default secprops */
     const char *mech_conf, *pass, *clientout = NULL;
     struct auth_scheme_t *scheme = NULL;
-    unsigned need_tls = 0, tls_done = 0;
+    unsigned need_tls = 0, tls_done = 0, clientoutlen;
     hdrcache_t hdrs = NULL;
 
     if (status) *status = NULL;
@@ -191,7 +191,7 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 	unsigned code;
 	const char **hdr, *errstr, *serverin;
 	char base64[BASE64_BUF_SIZE+1];
-	unsigned int serverinlen, clientoutlen, non_persist;
+	unsigned int serverinlen, non_persist;
 #ifdef SASL_HTTP_REQUEST
 	sasl_http_request_t httpreq = { "OPTIONS",	/* Method */
 					"*",		/* URI */
