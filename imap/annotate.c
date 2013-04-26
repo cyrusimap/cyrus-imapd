@@ -2451,6 +2451,9 @@ static int annotate_canon_value(struct buf *value, int type)
 	return IMAP_ANNOTATION_BADVALUE;
     }
 
+    if (whatever || uwhatever) /* filthy compiler magic */
+	return 0;
+
     return 0;
 }
 
