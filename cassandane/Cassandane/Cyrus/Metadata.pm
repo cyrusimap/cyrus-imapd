@@ -287,6 +287,7 @@ sub test_shared
 	    '/shared/vendor/cmu/cyrus-imapd/duplicatedeliver' => 'false',
 	    '/shared/thread' => undef,
 	    '/shared/sort' => undef,
+	    '/shared/specialuse' => undef,
 	    '/shared/comment' => undef,
 	    '/shared/checkperiod' => undef,
 	    '/shared/check' => undef,
@@ -366,12 +367,11 @@ sub test_specialuse
 	    specialuse => '\Nonesuch',
 	    result => 'no'
 	},
-	# Cyrus doesn't support more than a single special use
-	# token per folder.
+	# Cyrus supports multiple special-use tokens per folder
 	{
 	    folder => 'i',
 	    specialuse => '\Sent \Trash',
-	    result => 'no'
+	    result => 'ok'
 	},
     );
 
