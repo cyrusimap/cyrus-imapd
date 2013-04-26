@@ -152,6 +152,13 @@ int annotate_state_fetch(annotate_state_t *state,
 		         annotate_fetch_cb_t callback, void *rock,
 		         int *maxsizeptr);
 
+/* write a single annotation, avoiding all ACL checks and etc */
+int annotatemore_write(const char *mboxname, const char *entry,
+		       const char *userid, const struct buf *value);
+int annotatemore_msg_write(const char *mboxname, uint32_t uid, const char *entry,
+			   const char *userid, const struct buf *value);
+
+
 /* lookup a single annotation and return result */
 int annotatemore_lookup(const char *mboxname, const char *entry,
 			const char *userid, struct buf *value);
@@ -229,5 +236,8 @@ void annotate_done(void);
  * references internally. */
 int annotate_getdb(const char *mboxname, annotate_db_t **dbp);
 void annotate_putdb(annotate_db_t **dbp);
+
+/* Maybe this isn't the right place - move later */
+int specialuse_validate(const char *src, struct buf *dest);
 
 #endif /* ANNOTATE_H */

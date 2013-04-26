@@ -1573,20 +1573,6 @@ static void annotation_get_pop3showafter(annotate_state_t *state,
     buf_free(&value);
 }
 
-static void annotation_get_specialuse(annotate_state_t *state,
-				      struct annotate_entry_list *entry)
-{
-    struct buf value = BUF_INITIALIZER;
-
-    assert(state->mailbox);
-
-    if (state->mailbox->specialuse)
-	buf_appendcstr(&value, state->mailbox->specialuse);
-
-    output_entryatt(state, entry->name, state->userid, &value);
-    buf_free(&value);
-}
-
 static void annotation_get_uniqueid(annotate_state_t *state,
 				    struct annotate_entry_list *entry)
 {
@@ -1740,16 +1726,14 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
 	NULL
     },{
 	/*
-	 * RFC6154 defines /private/specialuse.  We incorrectly
-	 * implement /shared semantics, as defined in the drafts but not
-	 * the final RFC, by historical accident.
+	 * RFC6154 defines /private/specialuse.
 	 */
 	"/specialuse",
 	ATTRIB_TYPE_STRING,
 	BACKEND_ONLY,
 	ATTRIB_VALUE_PRIV,
 	0,
-	annotation_get_specialuse,
+	annotation_get_fromdb,
 	annotation_set_specialuse,
 	NULL
     },{
@@ -2378,6 +2362,30 @@ out:
     return r;
 }
 
+EXPORTED int annotatemore_write(const char *mboxname, const char *entry,
+				const char *userid, const struct buf *value)
+{
+    return annotatemore_msg_write(mboxname, /*uid*/0, entry, userid, value);
+}
+
+EXPORTED int annotatemore_msg_write(const char *mboxname, uint32_t uid, const char *entry,
+				    const char *userid, const struct buf *value)
+{
+    struct mailbox *mailbox = NULL;
+    int r = 0;
+
+    if (mboxname)
+	r = mailbox_open_iwl(mboxname, &mailbox);
+
+    if (!r)
+	r = write_entry(mailbox, uid, entry, userid, value, /*ignorequota*/1);
+
+    if (mailbox)
+	mailbox_close(&mailbox);
+
+    return r;
+}
+
 EXPORTED int annotate_state_write(annotate_state_t *state,
 			 const char *entry,
 			 const char *userid,
@@ -2644,71 +2652,86 @@ static int annotation_set_pop3showafter(annotate_state_t *state,
     return 0;
 }
 
+EXPORTED int specialuse_validate(const char *src, struct buf *dest)
+{
+    const char *specialuse_extra_opt = config_getstring(IMAPOPT_SPECIALUSE_EXTRA);
+    char *strval = NULL;
+    strarray_t *valid = NULL;
+    strarray_t *values = NULL;
+    int i, j;
+    int r = 0;
+
+    if (!src) {
+	buf_reset(dest);
+	return 0;
+    }
+
+    /* check specialuse_extra option if set */
+    if (specialuse_extra_opt)
+	valid = strarray_split(specialuse_extra_opt, NULL, 0);
+    else
+	valid = strarray_new();
+
+    /* strarray_add(valid, "\\All"); -- we don't support virtual folders right now */
+    strarray_add(valid, "\\Archive");
+    strarray_add(valid, "\\Drafts");
+    /* strarray_add(valid, "\\Flagged"); -- we don't support virtual folders right now */
+    strarray_add(valid, "\\Junk");
+    strarray_add(valid, "\\Sent");
+    strarray_add(valid, "\\Trash");
+
+    values = strarray_split(src, NULL, 0);
+
+    for (i = 0; i < values->count; i++) {
+	const char *item = strarray_nth(values, i);
+
+	for (j = 0; j < valid->count; j++) { /* can't use find here */
+	    if (!strcasecmp(strarray_nth(valid, j), item))
+		break;
+	    /* or without the leading '\' */
+	    if (!strcasecmp(strarray_nth(valid, j) + 1, item))
+		break;
+	}
+	if (j >= valid->count) {
+	    r = IMAP_ANNOTATION_BADENTRY;
+	    goto done;
+	}
+
+	/* normalise the value */
+	strarray_set(values, i, strarray_nth(valid, j));
+    }
+
+    strval = strarray_join(values, " ");
+    buf_setcstr(dest, strval);
+
+done:
+    free(strval);
+    strarray_free(valid);
+    strarray_free(values);
+    return r;
+}
+
 static int annotation_set_specialuse(annotate_state_t *state,
 				     struct annotate_entry_list *entry)
 {
-    int r = 0;
-    const char *val;
-    int i;
-    strarray_t * specialuse_extra = 0;
-    static const char * const valid_specialuse[] = {
-    /*   "\\All",  -- we don't support virtual folders right now */
-      "\\Archive",
-      "\\Drafts",
-    /*  "\\Flagged",  -- we don't support virtual folders right now */
-      "\\Junk",
-      "\\Sent",
-      "\\Trash",
-      NULL
-    };
+    struct buf res = BUF_INITIALIZER;
+    int r = IMAP_PERMISSION_DENIED;
 
     assert(state->mailbox);
 
-    /* can only set specialuse on your own mailboxes */
-    if (!mboxname_userownsmailbox(state->userid, state->mailbox->name))
-	return IMAP_PERMISSION_DENIED;
-
+    /* Effectively removes the annotation */
     if (entry->priv.s == NULL) {
-	/* Effectively removes the annotation */
-	val = NULL;
-    }
-    else {
-	for (i = 0; valid_specialuse[i]; i++) {
-	    if (!strcasecmp(valid_specialuse[i], buf_cstring(&entry->priv)))
-		break;
-	    /* or without the leading '\' */
-	    if (!strcasecmp(valid_specialuse[i]+1, buf_cstring(&entry->priv)))
-		break;
-	}
-	val = valid_specialuse[i];
-
-	/* If not a built in one, check specialuse_extra option */
-	if (!val) {
-	    const char * specialuse_extra_opt = config_getstring(IMAPOPT_SPECIALUSE_EXTRA);
-	    if (specialuse_extra_opt) {
-		specialuse_extra = strarray_split(specialuse_extra_opt, NULL, 0);
-
-		for (i = 0; i < specialuse_extra->count; i++) {
-		    const char * extra_val = strarray_nth(specialuse_extra, i);
-		    if (!strcasecmp(extra_val, buf_cstring(&entry->priv))) {
-			/* strarray owns string, keep specialuse_extra until after set call */
-			val = extra_val;
-			break;
-		    }
-		}
-	    }
-	}
-
-	if (!val) {
-	    r = IMAP_ANNOTATION_BADVALUE;
-	    goto done;
-	}
+	r = write_entry(state->mailbox, state->uid, entry->name, state->userid, &entry->priv, 0);
+	goto done;
     }
 
-    r = mboxlist_setspecialuse(state->mailbox, val);
+    r = specialuse_validate(buf_cstring(&entry->priv), &res);
+    if (r) goto done;
+
+    r = write_entry(state->mailbox, state->uid, entry->name, state->userid, &res, 0);
 
 done:
-    strarray_free(specialuse_extra);
+    buf_free(&res);
 
     return r;
 }

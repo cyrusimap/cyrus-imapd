@@ -116,7 +116,6 @@ EXPORTED void mboxlist_entry_free(mbentry_t **mbentryptr)
     free(mbentry->partition);
     free(mbentry->server);
     free(mbentry->acl);
-    free(mbentry->specialuse);
     free(mbentry->uniqueid);
 
     free(mbentry);
@@ -242,7 +241,6 @@ static int mboxlist_parse_entry(mbentry_t **mbentryptr,
 	    while (*q && *q != ' ' && *q != ')') q++;
 	    if (*q != ' ') break;
 	    *q++ = '\0';
-	    if (!strcmp(p, "specialuse")) target = &mbentry->specialuse;
 	    if (!strcmp(p, "uniqueid")) target = &mbentry->uniqueid;
 	    p = q;
 	    while (*q && *q != ' ' && *q != ')') q++;
@@ -666,7 +664,7 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
 				int options, unsigned uidvalidity,
 				const char *copyacl, const char *uniqueid,
 				int localonly, int forceuser, int dbonly,
-				struct mailbox **mboxptr, struct dlist *extargs)
+				struct mailbox **mboxptr)
 {
     int r;
     char *newpartition = NULL;
@@ -675,12 +673,6 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
     struct mailbox *newmailbox = NULL;
     int isremote = mbtype & MBTYPE_REMOTE;
     mbentry_t *newmbentry = NULL;
-    struct dlist *item;
-    const char *useptr = NULL;
-
-    /* XXX - better DLIST API - handle multi-value? */
-    if (dlist_getlist(extargs, "USE", &item))
-	dlist_getatom(item, "USE", &useptr);
 
     r = mboxlist_create_namecheck(mboxname, userid, auth_state, 
 				  isadmin, forceuser);
@@ -701,7 +693,7 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
 
 	/* Filesystem Operations */
 	r = mailbox_create(mboxname, newpartition, acl, uniqueid,
-			   useptr, options, uidvalidity, &newmailbox);
+			   options, uidvalidity, &newmailbox);
 	if (r) goto done; /* CREATE failed */ 
     }
 
@@ -711,7 +703,6 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
     newmbentry->mbtype = mbtype;
     newmbentry->partition = xstrdupnull(newpartition);
     newmbentry->uniqueid = xstrdupnull(newmailbox ? newmailbox->uniqueid : uniqueid);
-    newmbentry->specialuse = xstrdupnull(useptr);
     mboxent = mboxlist_entry_cstring(newmbentry);
     r = cyrusdb_store(mbdb, mboxname, strlen(mboxname),
 		      mboxent, strlen(mboxent), NULL);
@@ -759,7 +750,7 @@ EXPORTED int mboxlist_createmailbox(const char *name, int mbtype,
 			   int isadmin, const char *userid, 
 			   struct auth_state *auth_state,
 			   int localonly, int forceuser, int dbonly,
-			   struct dlist *extargs, int notify)
+			   int notify)
 {
     int options = config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS)
 		  | OPT_POP3_NEW_UIDL;
@@ -769,7 +760,7 @@ EXPORTED int mboxlist_createmailbox(const char *name, int mbtype,
     r = mboxlist_createmailbox_full(name, mbtype, partition,
 				    isadmin, userid, auth_state,
 				    options, 0, NULL, NULL, localonly,
-				    forceuser, dbonly, &mailbox, extargs);
+				    forceuser, dbonly, &mailbox);
 
     if (notify && !r) {
 	/* send a MailboxCreate event notification */
@@ -794,7 +785,7 @@ EXPORTED int mboxlist_createsync(const char *name, int mbtype,
     return mboxlist_createmailbox_full(name, mbtype, partition,
 				       1, userid, auth_state,
 				       options, uidvalidity, acl, uniqueid,
-				       0, 1, 0, mboxptr, NULL);
+				       0, 1, 0, mboxptr);
 }
 
 /* insert an entry for the proxy */
@@ -1791,87 +1782,6 @@ mboxlist_sync_setacls(const char *name, const char *newacl)
     }
 
     mboxlist_entry_free(&mbentry);
-
-    return r;
-}
-
-/* set the XLIST flag for a mailbox.  Note: no mupdate changes required
- * yet because mupdate protocol doesn't support xlist flags */
-EXPORTED int mboxlist_setspecialuse(struct mailbox *mailbox, const char *specialuse)
-{
-    const char *name = mailbox->name;
-    mbentry_t *mbentry = NULL;
-    struct txn *tid = NULL;
-    char *mboxent = NULL;
-    int r;
-
-    assert(mailbox->index_locktype == LOCK_EXCLUSIVE);
-
-    /* 1. Start Transaction */
-    /* lookup the mailbox to make sure it exists and get its acl */
-    do {
-	r = mboxlist_mylookup(name, &mbentry, &tid, 1);
-    } while (r == IMAP_AGAIN);    
-
-    /* both empty? */
-    if (!mbentry->specialuse && !specialuse)
-	goto done;
-
-    /* both the same? */
-    if (mbentry->specialuse && specialuse &&
-	!strcmp(mbentry->specialuse, specialuse))
-	goto done;
-
-    /* Can't do this to anything other than a normal mailbox */
-    if (!r && mbentry->mbtype) {
-	r = IMAP_MAILBOX_NOTSUPPORTED;
-	goto done;
-    }
-
-    /* update the entry */
-    free(mbentry->specialuse);
-    mbentry->specialuse = xstrdupnull(specialuse);
-    mboxent = mboxlist_entry_cstring(mbentry);
-    do {
-	r = cyrusdb_store(mbdb, name, strlen(name),
-		          mboxent, strlen(mboxent), &tid);
-    } while (r == CYRUSDB_AGAIN);
-
-    if (r) {
-	syslog(LOG_ERR, "DBERROR: error updating acl %s: %s",
-	       name, cyrusdb_strerror(r));
-	r = IMAP_IOERROR;
-	goto done;
-    }
-
-    /* update the mailbox and commit */
-    r = mailbox_set_specialuse(mailbox, specialuse);
-    if (r) goto done;
-
-    r = mailbox_commit(mailbox);
-    if (r) goto done;
-
-    /* 3. Commit transaction */
-    r = cyrusdb_commit(mbdb, tid);
-    if (r) {
-	syslog(LOG_ERR, "DBERROR: failed on commit, header inconsistent %s: %s",
-	       name, cyrusdb_strerror(r));
-	r = IMAP_IOERROR;
-	goto done;
-    }
-
-    tid = NULL;
-
- done:
-    if (tid) {
-	int r2 = cyrusdb_abort(mbdb, tid);
-	if (r2) {
-	    syslog(LOG_ERR, "DBERROR: failed on abort %s: %s",
-		   name, cyrusdb_strerror(r2));
-	}
-    }
-    mboxlist_entry_free(&mbentry);
-    free(mboxent);
 
     return r;
 }

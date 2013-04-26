@@ -51,6 +51,7 @@
 
 #include <jansson.h>
 
+#include "annotate.h"
 #include "assert.h"
 #include "exitcodes.h"
 #include "imapurl.h"
@@ -187,7 +188,6 @@ EXPORTED void mboxevent_setnamespace(struct namespace *n)
 static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
 {
     int i = 0;
-    strarray_t *specialuse = NULL;
     int r = 1;
 
     if (!enable_subfolder && (mboxname_isusermailbox(mailbox->name, 1)) == NULL) {
@@ -196,21 +196,28 @@ static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
 
     /* test if the mailbox has a special-use attribute in the exclude list */
     if (strarray_size(excluded_specialuse) > 0) {
-	const char *attribute;
+	const char *userid = mboxname_to_userid(mailbox->name);
+	struct buf attrib = BUF_INITIALIZER;
+	strarray_t *specialuse = NULL;
+
+	r = annotatemore_lookup(mailbox->name, "/specialuse", userid, &attrib);
+	if (r) return 1; /* XXX - return -1?  Failure? */
 
 	/* get info and set flags */
-	specialuse = strarray_split(mailbox->specialuse, NULL, 0);
+	specialuse = strarray_split(buf_cstring(&attrib), NULL, 0);
 
 	for (i = 0; i < strarray_size(specialuse) ; i++) {
-	    attribute = strarray_nth(specialuse, i);
+	    const char *attribute = strarray_nth(specialuse, i);
 	    if (strarray_find(excluded_specialuse, attribute, 0) >= 0) {
 		r = 0;
 		break;
 	    }
 	}
+
+	strarray_free(specialuse);
+	buf_free(&attrib);
     }
 
-    strarray_free(specialuse);
     return r;
 }
 

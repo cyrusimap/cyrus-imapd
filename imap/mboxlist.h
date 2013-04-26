@@ -82,7 +82,6 @@ struct mboxlist_entry {
     char *server; /* holds remote machine for REMOTE mailboxes */
     char *acl;
     /* extra fields */
-    char *specialuse;
     char *uniqueid;
 };
 
@@ -128,7 +127,7 @@ int mboxlist_createmailbox(const char *name, int mbtype,
 			   int isadmin, const char *userid, 
 			   struct auth_state *auth_state,
 			   int localonly, int forceuser, int dbonly,
-			   struct dlist *extargs, int notify);
+			   int notify);
 
 /* create mailbox from sync */
 int mboxlist_createsync(const char *name, int mbtype,
@@ -175,10 +174,6 @@ int mboxlist_setacl(struct namespace *namespace, const char *name,
 
 /* Change all ACLs on mailbox */
 int mboxlist_sync_setacls(const char *name, const char *acl);
-
-/* Set specialuse on a mailbox */
-/* TODO: this takes a mailbox* so it doesn't really belong here */
-int mboxlist_setspecialuse(struct mailbox *, const char *specialuse);
 
 /* Find all mailboxes that match 'pattern'. */
 int mboxlist_findall(struct namespace *namespace,

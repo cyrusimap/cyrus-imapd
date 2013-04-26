@@ -285,7 +285,7 @@ int main(int argc, char **argv)
 
 	    /* don't notify mailbox creation here */
 	    r = mboxlist_createmailbox(buf, 0, start_part, 1,
-				       "cyrus", NULL, 0, 0, !xflag, NULL, 0);
+				       "cyrus", NULL, 0, 0, !xflag, 0);
 	    if (r) {
 		fprintf(stderr, "could not create %s\n", argv[i]);
 	    }
@@ -346,7 +346,7 @@ int main(int argc, char **argv)
 	/* partition is defined by the parent mailbox */
 	/* don't notify mailbox creation here */
 	r = mboxlist_createmailbox(name, 0, NULL, 1,
-				   "cyrus", NULL, 0, 0, !xflag, NULL, 0);
+				   "cyrus", NULL, 0, 0, !xflag, 0);
 	if (r) {
 	    fprintf(stderr, "createmailbox %s: %s\n",
 		    name, error_message(r));

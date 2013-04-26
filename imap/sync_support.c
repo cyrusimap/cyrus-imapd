@@ -430,7 +430,6 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
 					 uint32_t recentuid,
 					 time_t recenttime,
 					 time_t pop3_last_login,
-					 const char *specialuse,
 					 time_t pop3_show_after,
 					 struct sync_annot_list *annots)
 {
@@ -457,7 +456,6 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
     result->recentuid = recentuid;
     result->recenttime = recenttime;
     result->pop3_last_login = pop3_last_login;
-    result->specialuse = xstrdupnull(specialuse);
     result->pop3_show_after = pop3_show_after;
     result->annots = annots; /* NOTE: not a copy! */
 
@@ -493,7 +491,6 @@ void sync_folder_list_free(struct sync_folder_list **lp)
 	free(current->name);
 	free(current->part);
 	free(current->acl);
-	free(current->specialuse);
 	sync_annot_list_free(&current->annots);
 	free(current);
 	current = next;
@@ -1378,10 +1375,8 @@ int sync_mailbox(struct mailbox *mailbox,
     dlist_setatom(kl, "ACL", mailbox->acl);
     dlist_setatom(kl, "OPTIONS", sync_encode_options(mailbox->i.options));
     dlist_setnum32(kl, "SYNC_CRC", sync_crc_calc(mailbox, /*force*/0));
-    if (mailbox->quotaroot) 
+    if (mailbox->quotaroot)
 	dlist_setatom(kl, "QUOTAROOT", mailbox->quotaroot);
-    if (mailbox->specialuse)
-	dlist_setatom(kl, "SPECIALUSE", mailbox->specialuse);
 
     if (printrecords) {
 	struct index_record record;

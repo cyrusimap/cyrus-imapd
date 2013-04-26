@@ -1079,7 +1079,6 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
     free(mailbox->acl);
     free(mailbox->uniqueid);
     free(mailbox->quotaroot);
-    free(mailbox->specialuse);
 
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
 	free(mailbox->flagname[flag]);
@@ -1094,7 +1093,7 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
  * Read the header of 'mailbox'
  * format:
  * MAGIC
- * quotaroot TAB uniqueid TAB specialuse
+ * quotaroot TAB uniqueid
  * userflag1 SPACE userflag2 SPACE userflag3 [...] (with no trailing space)
  * user1 TAB user1acl TAB user2 TAB user2acl TAB (with trailing tab!)
  */
@@ -1179,15 +1178,6 @@ HIDDEN int mailbox_read_header(struct mailbox *mailbox, char **aclptr)
     }
     /* else, uniqueid needs to be generated when we know the uidvalidity */
 
-    /* read special use list flags (optional) */
-    free(mailbox->specialuse);
-    mailbox->specialuse = NULL;
-    if (tab < eol) {
-	p = tab + 1;
-	if (p < eol)
-	    mailbox->specialuse = xstrndup(p, eol - p);
-    }
-
     /* Read names of user flags */
     p = eol + 1;
     eol = memchr(p, '\n', sbuf.st_size - (p - base));
@@ -1264,21 +1254,6 @@ EXPORTED int mailbox_set_quotaroot(struct mailbox *mailbox, const char *quotaroo
     /* either way, it's changed, so dirty */
     mailbox->header_dirty = 1;
 
-    return 0;
-}
-
-/* set a new XLISTFLAG - only dirty if changed */
-HIDDEN int mailbox_set_specialuse(struct mailbox *mailbox, const char *specialuse)
-{
-    if (mailbox->specialuse) {
-	if (specialuse && !strcmp(mailbox->specialuse, specialuse))
-	    return 0; /* no change */
-	free(mailbox->specialuse);
-	mailbox->specialuse = NULL;
-    }
-    if (specialuse) 
-	mailbox->specialuse = xstrdup(specialuse);
-    mailbox->header_dirty = 1;
     return 0;
 }
 
@@ -1836,10 +1811,6 @@ static int mailbox_commit_header(struct mailbox *mailbox)
 	WRITEV_ADDSTR_TO_IOVEC(iov,niov,quotaroot);
 	WRITEV_ADD_TO_IOVEC(iov,niov,"\t",1);
 	WRITEV_ADDSTR_TO_IOVEC(iov,niov,mailbox->uniqueid);
-	if (mailbox->specialuse) {
-	    WRITEV_ADD_TO_IOVEC(iov,niov,"\t",1);
-	    WRITEV_ADDSTR_TO_IOVEC(iov,niov,mailbox->specialuse);
-	}
 	WRITEV_ADD_TO_IOVEC(iov,niov,"\n",1);
 	r = retry_writev(fd, iov, niov);
     }
@@ -3249,7 +3220,6 @@ EXPORTED int mailbox_create(const char *name,
 		   const char *part,
 		   const char *acl,
 		   const char *uniqueid,
-		   const char *specialuse,
 		   int options,
 		   unsigned uidvalidity,
 		   struct mailbox **mailboxptr)
@@ -3279,7 +3249,6 @@ EXPORTED int mailbox_create(const char *name,
 
     mailbox->part = xstrdup(part);
     mailbox->acl = xstrdup(acl);
-    if (specialuse) mailbox->specialuse = xstrdup(specialuse);
 
     hasquota = quota_findroot(quotaroot, sizeof(quotaroot), name);
 
@@ -3706,8 +3675,7 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
     /* Create new mailbox */
     r = mailbox_create(newname, newpartition,
 		       oldmailbox->acl, (userid ? NULL : oldmailbox->uniqueid),
-		       oldmailbox->specialuse, oldmailbox->i.options,
-		       uidvalidity, &newmailbox);
+		       oldmailbox->i.options, uidvalidity, &newmailbox);
 
     if (r) return r;
 
@@ -4063,7 +4031,7 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
          * no point trying to rescue anything else... */
 	mailbox_close(&mailbox);
 	r = mailbox_create(name, mbentry->partition, mbentry->acl,
-			   mbentry->specialuse, NULL, options, 0, mbptr);
+			   NULL, options, 0, mbptr);
 	mboxlist_entry_free(&mbentry);
 	return r;
     }

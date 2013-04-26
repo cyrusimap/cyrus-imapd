@@ -688,7 +688,7 @@ int autocreate_user(struct namespace *namespace,
     r = mboxlist_createmailbox(inboxname, /*mbtype*/0, /*partition*/NULL,
 			       /*isadmin*/1, userid, auth_state,
 			       /*localonly*/0, /*forceuser*/0,
-			       /*dbonly*/0, /*extargs*/NULL, 1);
+			       /*dbonly*/0, 1);
 
     if (!r) r = mboxlist_changesub(inboxname, userid, auth_state, 1, 1, 1);
     if (r) {
@@ -735,7 +735,7 @@ int autocreate_user(struct namespace *namespace,
 	r = mboxlist_createmailbox(foldername, /*mbtype*/0, /*partition*/NULL,
 				   /*isadmin*/1, userid, auth_state,
 				   /*localonly*/0, /*forceuser*/0,
-				   /*dbonly*/0, /*extargs*/NULL, 1);
+				   /*dbonly*/0, 1);
 
 	if (!r) {
 	    numcrt++;

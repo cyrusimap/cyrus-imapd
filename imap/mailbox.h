@@ -214,7 +214,6 @@ struct mailbox {
 
     /* Information in header */
     char *uniqueid;
-    char *specialuse;
     char *quotaroot;
     char *flagname[MAX_USER_FLAGS];
 
@@ -472,7 +471,6 @@ extern int mailbox_find_index_record(struct mailbox *mailbox, uint32_t uid,
 extern int mailbox_set_acl(struct mailbox *mailbox, const char *acl,
 			   int dirty_modseq);
 extern int mailbox_set_quotaroot(struct mailbox *mailbox, const char *quotaroot);
-extern int mailbox_set_specialuse(struct mailbox *mailbox, const char *specialuse);
 extern int mailbox_user_flag(struct mailbox *mailbox, const char *flag,
 			     int *flagnum, int create);
 extern int mailbox_remove_user_flag(struct mailbox *mailbox, int flagnum);
@@ -499,8 +497,7 @@ extern int mailbox_cleanup(struct mailbox *mailbox, int iscurrentdir,
 extern void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *sd);
 
 extern int mailbox_create(const char *name, const char *part, const char *acl,
-			  const char *uniqueid, const char *specialuse,
-			  int options, unsigned uidvalidity,
+			  const char *uniqueid, int options, unsigned uidvalidity,
 			  struct mailbox **mailboxptr);
 
 extern int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,

@@ -1357,9 +1357,6 @@ static int do_mailbox(struct dlist *kin)
 
     uint32_t options;
 
-    /* optional fields */
-    const char *specialuse = NULL;
-
     struct mailbox *mailbox = NULL;
     struct dlist *kr;
     struct dlist *ka = NULL;
@@ -1403,7 +1400,6 @@ static int do_mailbox(struct dlist *kin)
 
     /* optional */
     dlist_getlist(kin, "ANNOTATIONS", &ka);
-    dlist_getatom(kin, "SPECIALUSE", &specialuse);
     dlist_getdate(kin, "POP3_SHOW_AFTER", &pop3_show_after);
 
     options = sync_parse_options(options_str);
@@ -1513,16 +1509,6 @@ static int do_mailbox(struct dlist *kin)
 	syslog(LOG_ERR, "%s uidvalidity higher on master, updating %u => %u",
 	       mailbox->name, mailbox->i.uidvalidity, uidvalidity);
 	mailbox->i.uidvalidity = uidvalidity;
-    }
-
-    /* this is an ugly construct that's an artifact of the
-     * inversion of mboxlist and mailbox stuff that means
-     * we can't be efficient in mboxlist_setspecialuse, so
-     * we want to check it's needed first. */
-    if (!specialuse || !mailbox->specialuse ||
-	strcmp(specialuse, mailbox->specialuse)) {
-	r = mboxlist_setspecialuse(mailbox, specialuse);
-	if (r) goto done;
     }
 
 done:

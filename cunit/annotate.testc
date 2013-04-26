@@ -1906,7 +1906,7 @@ static int set_up(void)
 	return r;
 
     r = mailbox_create(MBOXNAME1_INT, PARTITION, ACL,
-		       /*uniqueid*/NULL, /*specialuse*/NULL,
+		       /*uniqueid*/NULL,
 		       /*options*/0, /*uidvalidity*/0,
 		       &mailbox);
     if (r)
@@ -1923,7 +1923,7 @@ static int set_up(void)
 	return r;
 
     r = mailbox_create(MBOXNAME2_INT, PARTITION, ACL,
-		       /*uniqueid*/NULL, /*specialuse*/NULL,
+		       /*uniqueid*/NULL,
 		       /*options*/0, /*uidvalidity*/0,
 		       &mailbox);
     if (r)

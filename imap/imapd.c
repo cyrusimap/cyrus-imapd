@@ -5339,9 +5339,32 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     int autocreatequotastorage;
     const char *partition = NULL;
     const char *server = NULL;
+    struct buf specialuse = BUF_INITIALIZER;
+    struct dlist *use;
 
     dlist_getatom(extargs, "PARTITION", &partition);
     dlist_getatom(extargs, "SERVER", &server);
+    use = dlist_getchild(extargs, "USE");
+    if (use) {
+	struct dlist *item;
+	char *raw;
+	/* I would much prefer to create the specialuse annotation FIRST
+	 * and do the sanity check on the values, so we can return the
+	 * correct error.  Sadly, that's a pain - so we compromise by
+	 * "normalising" first */
+	strarray_t *su = strarray_new();
+	for (item = use->head; item; item = item->next) {
+	    strarray_append(su, dlist_cstring(item));
+	}
+	raw = strarray_join(su, " ");
+	strarray_free(su);
+	r = specialuse_validate(raw, &specialuse);
+	free(raw);
+	if (r) {
+	    prot_printf(imapd_out, "%s NO [USEATTR] %s\r\n", tag, error_message(r));
+	    goto done;
+	}
+    }
 
     if (partition && !imapd_userisadmin) {
 	r = IMAP_PERMISSION_DENIED;
@@ -5429,22 +5452,31 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
 		/* ok, send the create to that server */
 		prot_printf(s->out, "%s CREATE ", tag);
 		prot_printastring(s->out, name);
-		/* Send partition as an atom, since its all we accept */
-		if (partition) {
+		/* special use needs extended support, so pass through extargs */
+		if (specialuse.len) {
+		    prot_printf(s->out, "(USE (%s)", buf_cstring(&specialuse));
+		    if (partition) {
+			prot_printf(s->out, " PARTITION ");
+			prot_printastring(s->out, partition);
+		    }
+		    prot_putc(')', s->out);
+		}
+		/* Send partition as an atom, since its supported by older servers */
+		else if (partition) {
 		    prot_putc(' ', s->out);
 		    prot_printastring(s->out, partition);
 		}
 		prot_printf(s->out, "\r\n");
 
 		res = pipe_until_tag(s, tag, 0);
-	
+
 		if (!CAPA(s, CAPA_MUPDATE)) {
 		    /* do MUPDATE create operations */
 		}
 		/* make sure we've seen the update */
 		if (ultraparanoid && res == PROXY_OK) kick_mupdate();
 	    }
-    
+
 	    imapd_check(s, 0);
 
 	    if (r) {
@@ -5455,7 +5487,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
 		prot_printf(imapd_out, "%s %s", tag, s->last_result.s);
 	    }
 
-	    return;
+	    goto done;
 	}
 #if 0
 	else if (!r &&
@@ -5475,21 +5507,22 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
 
     /* local mailbox */
     if (!r) {
+
 	/* xxx we do forced user creates on LOCALCREATE to facilitate
 	 * mailbox moves */
 	r = mboxlist_createmailbox(mailboxname, 0, partition,
-				   imapd_userisadmin || imapd_userisproxyadmin, 
+				   imapd_userisadmin || imapd_userisproxyadmin,
 				   imapd_userid, imapd_authstate,
-				   localonly, localonly, 0, extargs, 1);
+				   localonly, localonly, 0, 1);
 
 	if (r == IMAP_PERMISSION_DENIED && !strcasecmp(name, "INBOX") &&
 	    (autocreatequotastorage = config_getint(IMAPOPT_AUTOCREATEQUOTA))) {
 
 	    /* Auto create */
-	    r = mboxlist_createmailbox(mailboxname, 0, partition, 
+	    r = mboxlist_createmailbox(mailboxname, 0, partition,
 				       1, imapd_userid, imapd_authstate,
-				       0, 0, 0, extargs, 1);
-	    
+				       0, 0, 0, 1);
+
 	    int autocreatequotamessage = config_getint(IMAPOPT_AUTOCREATEQUOTAMSG);
 	    if (!r && ((autocreatequotastorage > 0) || (autocreatequotamessage > 0))) {
 		int res;
@@ -5501,6 +5534,15 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
 		newquotas[QUOTA_MESSAGE] = autocreatequotamessage;
 
 		(void) mboxlist_setquotas(mailboxname, newquotas, 0);
+	    }
+	}
+
+	if (!r && specialuse.len) {
+	    r = annotatemore_write(mailboxname, "/specialuse", imapd_userid, &specialuse);
+	    if (r) {
+		/* XXX - failure here SHOULD cause a cleanup of the created mailbox */
+		syslog(LOG_ERR, "IOERROR: failed to write specialuse for %s on %s (%s)",
+		       imapd_userid, mailboxname, buf_cstring(&specialuse));
 	    }
 	}
     }
@@ -5517,6 +5559,9 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
     }
+
+done:
+    buf_free(&specialuse);
 }
 
 /* Callback for use by cmd_delete */
@@ -11006,9 +11051,13 @@ static void specialuse_flags(mbentry_t *mbentry, const char *sep,
     }
     /* subdir */
     else if (mbentry->name[inboxlen] == '.') {
+	struct buf attrib = BUF_INITIALIZER;
 	/* check if there's a special use flag set */
-	if (mbentry->specialuse)
-	    prot_printf(imapd_out, "%s%s", sep, mbentry->specialuse);
+	if (!annotatemore_lookup(mbentry->name, "/specialuse", imapd_userid, &attrib)) {
+	    if (attrib.len)
+		prot_printf(imapd_out, "%s%s", sep, buf_cstring(&attrib));
+	}
+	buf_free(&attrib);
     }
     /* otherwise it's actually another user who matches for
      * the substr.  Ok to just print nothing */
@@ -11177,12 +11226,16 @@ static void list_response(const char *name, int attributes,
     }
 
     if (listargs->sel & LIST_SEL_SPECIALUSE) {
+	struct buf attrib = BUF_INITIALIZER;
 	if (!mbentry) goto done;
 	/* check that this IS a specialuse folder */
-	if (!mbentry->specialuse) goto done;
-	/* and owned by the user as well */
-	if (!mboxname_userownsmailbox(imapd_userid, mbentry->name))
+	if (annotatemore_lookup(mbentry->name, "/specialuse", imapd_userid, &attrib))
 	    goto done;
+	if (!attrib.len) {
+	    buf_free(&attrib);
+	    goto done;
+	}
+	buf_free(&attrib);
     }
 
     /* can we read the status data ? */
