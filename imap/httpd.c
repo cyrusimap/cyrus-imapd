@@ -920,6 +920,7 @@ static void cmdloop(void)
 	txn.flags.close = !httpd_timeout;
 	txn.flags.vary = gzip_enabled ? VARY_AE : 0;
 	memset(req_line, 0, sizeof(struct request_line_t));
+	memset(&txn.req_tgt, 0, sizeof(struct request_target_t));
 	txn.req_uri = NULL;
 	txn.auth_chal.param = NULL;
 	txn.req_hdrs = NULL;
