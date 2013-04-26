@@ -4147,7 +4147,8 @@ static int mailbox_reconstruct_acl(struct mailbox *mailbox, int flags)
 	    mbentry_t *mbentry = NULL;
 	    r = mboxlist_lookup(mailbox->name, &mbentry, NULL);
 	    if (!r) {
-		mbentry->acl = acl;
+		free(mbentry->acl);
+		mbentry->acl = xstrdup(acl);
 		r = mboxlist_update(mbentry, 0);
 	    }
 	    mboxlist_entry_free(&mbentry);

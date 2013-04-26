@@ -477,14 +477,14 @@ static int mlookup(const char *name, mbentry_t **mbentryptr)
 	if (mailboxdata->t == RESERVE) return IMAP_MAILBOX_RESERVED;
 
 	mbentry = mboxlist_entry_create();
-	mbentry->acl = mailboxdata->acl;
-	mbentry->server = mailboxdata->server;
+	mbentry->acl = xstrdupnull(mailboxdata->acl);
+	mbentry->server = xstrdupnull(mailboxdata->server);
 
 	/* XXX hack for now - should pull this out into mupdate_find */
 	c = strchr(mbentry->server, '!');
 	if (c) {
 	    *c++ = '\0';
-	    mbentry->partition = c;
+	    mbentry->partition = xstrdupnull(c);
 	}
 
     }

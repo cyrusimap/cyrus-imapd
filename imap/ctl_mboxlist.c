@@ -498,6 +498,7 @@ static void do_dump(enum mboxop op, const char *part, int purge)
 	    }
 
 	    /* Reset the partition! */
+	    free(mbentry->server);
 	    mbentry->server = NULL;
 	    mbentry->mbtype &= ~(MBTYPE_MOVING|MBTYPE_REMOTE);
 	    ret = mboxlist_update(mbentry, 1);
@@ -621,8 +622,8 @@ static void do_undump(void)
 	/* generate a new entry */
 	newmbentry = mboxlist_entry_create();
 	newmbentry->mbtype = mbtype;
-	newmbentry->partition = partition;
-	newmbentry->acl = acl;
+	newmbentry->partition = xstrdupnull(partition);
+	newmbentry->acl = xstrdupnull(acl);
 
 	data = mboxlist_entry_cstring(newmbentry);
 	datalen = strlen(data);
@@ -646,7 +647,7 @@ static void do_undump(void)
 	    r = IMAP_IOERROR;
 	    break;
 	}
-	
+
 	free(data);
 
 	if(--untilCommit == 0) {

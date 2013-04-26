@@ -78,15 +78,14 @@ extern struct db *mbdb;
 
 /* each mailbox has the following data */
 struct mboxlist_entry {
-    const char *name;
-    char * _alloc;
+    char *name;
     int mbtype;
-    const char *partition;
-    const char *server; /* holds remote machine for REMOTE mailboxes */
-    const char *acl;
+    char *partition;
+    char *server; /* holds remote machine for REMOTE mailboxes */
+    char *acl;
     /* extra fields */
-    const char *specialuse;
-    const char *uniqueid;
+    char *specialuse;
+    char *uniqueid;
 };
 
 typedef struct mboxlist_entry mbentry_t;

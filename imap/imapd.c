@@ -6552,6 +6552,7 @@ static void cmd_getacl(const char *tag, const char *name)
     int r, access;
     char *acl;
     char *rights, *nextid;
+    char *freeme = NULL;
     mbentry_t *mbentry = NULL;
 
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
@@ -6584,10 +6585,7 @@ static void cmd_getacl(const char *tag, const char *name)
     prot_printf(imapd_out, "* ACL ");
     prot_printastring(imapd_out, name);
 
-    /* we're going to scribble all over this, but it's OK because
-     * it's malloced for us, and will be freed within this function
-     * as well, so it can't affect anyone else... */
-    acl = (char *)mbentry->acl;
+    freeme = acl = xstrdupnull(mbentry->acl);
 
     while (acl) {
 	rights = strchr(acl, '\t');
@@ -6607,6 +6605,7 @@ static void cmd_getacl(const char *tag, const char *name)
     prot_printf(imapd_out, "\r\n");
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
+    free(freeme);
     mboxlist_entry_free(&mbentry);
 }
 
@@ -10027,10 +10026,10 @@ static int xfer_undump(struct xfer_header *xfer)
 	/* Step 3.5: Set mailbox as MOVING on local server */
 	/* XXX - this code is awful... need a sane way to manage mbentries */
 	newentry = mboxlist_entry_create();
-	newentry->name = item->mbentry->name;
-	newentry->acl = item->mbentry->acl;
-	newentry->server = xfer->toserver;
-	newentry->partition = xfer->topart;
+	newentry->name = xstrdupnull(item->mbentry->name);
+	newentry->acl = xstrdupnull(item->mbentry->acl);
+	newentry->server = xstrdupnull(xfer->toserver);
+	newentry->partition = xstrdupnull(xfer->topart);
 	newentry->mbtype = item->mbentry->mbtype|MBTYPE_MOVING;
 	r = mboxlist_update(newentry, 1);
 	mboxlist_entry_free(&newentry);
@@ -10134,10 +10133,10 @@ static int xfer_delete(struct xfer_header *xfer)
 	   otherwise mailbox can not be opened for deletion) */
 	/* XXX - this code is awful... need a sane way to manage mbentries */
 	newentry = mboxlist_entry_create();
-	newentry->name = item->mbentry->name;
-	newentry->acl = item->mbentry->acl;
-	newentry->server = item->mbentry->server;
-	newentry->partition = item->mbentry->partition;
+	newentry->name = xstrdupnull(item->mbentry->name);
+	newentry->acl = xstrdupnull(item->mbentry->acl);
+	newentry->server = xstrdupnull(item->mbentry->server);
+	newentry->partition = xstrdupnull(item->mbentry->partition);
 	newentry->mbtype = item->mbentry->mbtype|MBTYPE_DELETED;
 	r = mboxlist_update(newentry, 1);
 	mboxlist_entry_free(&newentry);
@@ -10180,10 +10179,10 @@ static void xfer_recover(struct xfer_header *xfer)
 	    /* Unset mailbox as MOVING on local server */
 	    /* XXX - this code is awful... need a sane way to manage mbentries */
 	    newentry = mboxlist_entry_create();
-	    newentry->name = item->mbentry->name;
-	    newentry->acl = item->mbentry->acl;
-	    newentry->server = item->mbentry->server;
-	    newentry->partition = item->mbentry->partition;
+	    newentry->name = xstrdupnull(item->mbentry->name);
+	    newentry->acl = xstrdupnull(item->mbentry->acl);
+	    newentry->server = xstrdupnull(item->mbentry->server);
+	    newentry->partition = xstrdupnull(item->mbentry->partition);
 	    newentry->mbtype = item->mbentry->mbtype;
 	    r = mboxlist_update(newentry, 1);
 	    mboxlist_entry_free(&newentry);

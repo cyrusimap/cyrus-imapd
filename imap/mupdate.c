@@ -1382,9 +1382,9 @@ static void database_log(const struct mbent *mb, struct txn **mytid)
     mbentry_t *mbentry = NULL;
 
     mbentry = mboxlist_entry_create();
-    mbentry->name = mb->mailbox;
-    mbentry->server = mb->server;
-    mbentry->acl = mb->acl;
+    mbentry->name = xstrdupnull(mb->mailbox);
+    mbentry->server = xstrdupnull(mb->server);
+    mbentry->acl = xstrdupnull(mb->acl);
 
     switch (mb->t) {
     case SET_ACTIVE:
@@ -2372,10 +2372,10 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
 		    err++;
 		} else {
 		    mbentry_t *mbentry = mboxlist_entry_create();
-		    mbentry->name = r->mailbox;
+		    mbentry->name = xstrdupnull(r->mailbox);
 		    mbentry->mbtype = (r->t == SET_RESERVE ? MBTYPE_RESERVE : 0);
-		    mbentry->server = r->server;
-		    mbentry->acl = r->acl;
+		    mbentry->server = xstrdupnull(r->server);
+		    mbentry->acl = xstrdupnull(r->acl);
 		    mboxlist_insertremote(mbentry, &tid);
 		    mboxlist_entry_free(&mbentry);
 		}
@@ -2409,10 +2409,10 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
 	} else /* (ret > 0) */ {
 	    /* Remote without corresponding local, insert it */
 	    mbentry_t *mbentry = mboxlist_entry_create();
-	    mbentry->name = r->mailbox;
+	    mbentry->name = xstrdupnull(r->mailbox);
 	    mbentry->mbtype = (r->t == SET_RESERVE ? MBTYPE_RESERVE : 0);
-	    mbentry->server = r->server;
-	    mbentry->acl = r->acl;
+	    mbentry->server = xstrdupnull(r->server);
+	    mbentry->acl = xstrdupnull(r->acl);
 	    mboxlist_insertremote(mbentry, &tid);
 	    mboxlist_entry_free(&mbentry);
 	    remote_boxes->head = r->next;
@@ -2437,10 +2437,10 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
 	/* we have more inserts to do */
 	while (r) {
 	    mbentry_t *mbentry = mboxlist_entry_create();
-	    mbentry->name = r->mailbox;
+	    mbentry->name = xstrdupnull(r->mailbox);
 	    mbentry->mbtype = (r->t == SET_RESERVE ? MBTYPE_RESERVE : 0);
-	    mbentry->server = r->server;
-	    mbentry->acl = r->acl;
+	    mbentry->server = xstrdupnull(r->server);
+	    mbentry->acl = xstrdupnull(r->acl);
 	    mboxlist_insertremote(mbentry, &tid);
 	    mboxlist_entry_free(&mbentry);
 	    remote_boxes->head = r->next;

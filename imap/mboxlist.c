@@ -116,9 +116,13 @@ EXPORTED void mboxlist_entry_free(mbentry_t **mbentryptr)
     /* idempotent */
     if (!mbentry) return;
 
-    /* check if we have allocated a buffer */
-    if (mbentry->_alloc)
-	free(mbentry->_alloc);
+    free(mbentry->name);
+
+    free(mbentry->partition);
+    free(mbentry->server);
+    free(mbentry->acl);
+    free(mbentry->specialuse);
+    free(mbentry->uniqueid);
 
     free(mbentry);
 
@@ -221,23 +225,17 @@ static int mboxlist_parse_entry(mbentry_t **mbentryptr,
 				const char *name,
 				const char *data, size_t datalen)
 {
-    char *p, *q;
-    const char **target;
+    char *p, *q, *freeme;
+    char **target;
     mbentry_t *mbentry;
-    int namelen = strlen(name);
 
     mbentry = mboxlist_entry_create();
-    mbentry->_alloc = p = xmalloc(namelen + datalen + 2);
 
     /* copy name */
-    memcpy(p, name, namelen);
-    p[namelen] = '\0';
-    mbentry->name = p;
-    p += namelen + 1;
+    mbentry->name = xstrdup(name);
 
     /* copy data */
-    memcpy(p, data, datalen);
-    p[datalen] = '\0';
+    freeme = p = xstrndup(data, datalen);
 
     /* check for extended mboxlist entry */
     if (*p == '(') {
@@ -255,7 +253,7 @@ static int mboxlist_parse_entry(mbentry_t **mbentryptr,
 	    while (*q && *q != ' ' && *q != ')') q++;
 	    if (*q != ' ') last = 1;
 	    if (*q) *q++ = '\0';
-	    if (target) *target = p;
+	    if (target) *target = xstrdup(p);
 	    p = q;
 	}
 	if (*p == ' ') p++; /* past trailing ' ' */
@@ -269,17 +267,19 @@ static int mboxlist_parse_entry(mbentry_t **mbentryptr,
     while (*q && *q != ' ' && *q != '!') q++;
     if (*q == '!') {
 	*q++ = '\0';
-	mbentry->server = p;
+	mbentry->server = xstrdup(p);
 	p = q;
 	while (*q && *q != ' ') q++;
     }
     if (*q) *q++ = '\0';
-    mbentry->partition = p;
+    mbentry->partition = xstrdup(p);
 
-    mbentry->acl = q;
+    mbentry->acl = xstrdup(q);
 
     if (mbentryptr) *mbentryptr = mbentry;
     else mboxlist_entry_free(&mbentry);
+
+    free(freeme);
 
     return 0;
 }
@@ -351,7 +351,7 @@ HIDDEN int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len)
     if (!root) return IMAP_PARTITION_UNKNOWN;
 
     snprintf(stagedir, sd_len, "%s/stage./", root);
-    
+
     return 0;
 }
 
@@ -712,11 +712,11 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
 
     /* all is well - activate the mailbox */
     newmbentry = mboxlist_entry_create();
-    newmbentry->acl = acl;
+    newmbentry->acl = xstrdupnull(acl);
     newmbentry->mbtype = mbtype;
-    newmbentry->partition = newpartition;
-    newmbentry->uniqueid = newmailbox ? newmailbox->uniqueid : uniqueid;
-    newmbentry->specialuse = useptr;
+    newmbentry->partition = xstrdupnull(newpartition);
+    newmbentry->uniqueid = xstrdupnull(newmailbox ? newmailbox->uniqueid : uniqueid);
+    newmbentry->specialuse = xstrdupnull(useptr);
     mboxent = mboxlist_entry_cstring(newmbentry);
     r = cyrusdb_store(mbdb, mboxname, strlen(mboxname),
 		      mboxent, strlen(mboxent), NULL);
@@ -1200,8 +1200,8 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 	if (r) goto done;
 	newmbentry = mboxlist_entry_create();
 	newmbentry->mbtype = oldmailbox->mbtype;
-	newmbentry->partition = newpartition;
-	newmbentry->acl = oldmailbox->acl;
+	newmbentry->partition = xstrdupnull(newpartition);
+	newmbentry->acl = xstrdupnull(oldmailbox->acl);
 	mboxent = mboxlist_entry_cstring(newmbentry);
 	r = cyrusdb_store(mbdb, newname, strlen(newname), 
 		          mboxent, strlen(mboxent), &tid);
@@ -1256,8 +1256,8 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
     /* create new entry */
     newmbentry = mboxlist_entry_create();
     newmbentry->mbtype = newmailbox->mbtype;
-    newmbentry->partition = newmailbox->part;
-    newmbentry->acl = newmailbox->acl;
+    newmbentry->partition = xstrdupnull(newmailbox->part);
+    newmbentry->acl = xstrdupnull(newmailbox->acl);
     mboxent = mboxlist_entry_cstring(newmbentry);
 
     do {
@@ -1625,7 +1625,8 @@ EXPORTED int mboxlist_setacl(struct namespace *namespace, const char *name,
 
     if(!r) {
 	/* ok, change the database */
-	mbentry->acl = newacl;
+	free(mbentry->acl);
+	mbentry->acl = xstrdupnull(newacl);
 	mboxent = mboxlist_entry_cstring(mbentry);
 
 	do {
@@ -1732,14 +1733,15 @@ mboxlist_sync_setacls(const char *name, const char *newacl)
     /* 2. Set DB Entry */
     if (!r) {
 	/* ok, change the database */
-	mbentry->acl = newacl;
+	free(mbentry->acl);
+	mbentry->acl = xstrdupnull(newacl);
 	char *mboxent = mboxlist_entry_cstring(mbentry);
 
 	do {
 	    r = cyrusdb_store(mbdb, name, strlen(name),
 			      mboxent, strlen(mboxent), &tid);
 	} while (r == CYRUSDB_AGAIN);
-    
+
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error updating acl %s: %s",
 		   name, cyrusdb_strerror(r));
@@ -1832,7 +1834,8 @@ EXPORTED int mboxlist_setspecialuse(struct mailbox *mailbox, const char *special
     }
 
     /* update the entry */
-    mbentry->specialuse = specialuse;
+    free(mbentry->specialuse);
+    mbentry->specialuse = xstrdupnull(specialuse);
     mboxent = mboxlist_entry_cstring(mbentry);
     do {
 	r = cyrusdb_store(mbdb, name, strlen(name),
