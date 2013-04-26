@@ -1921,7 +1921,7 @@ int main(int argc, char **argv)
     int fd;
     fd_set rfds;
     char *p = NULL;
-    int r;
+    int r = 0;
 
 #ifdef HAVE_NETSNMP
     char *agentxsocket = NULL;
@@ -2412,4 +2412,7 @@ int main(int argc, char **argv)
 	run_alarms();
 #endif
     }
+
+    /* never reached */
+    return r;
 }
