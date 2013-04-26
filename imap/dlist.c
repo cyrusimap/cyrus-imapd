@@ -790,7 +790,7 @@ EXPORTED int dlist_parsemap(struct dlist **dlp, int parsekey,
     return 0;
 }
 
-HIDDEN struct dlist *dlist_getchild(struct dlist *dl, const char *name)
+EXPORTED struct dlist *dlist_getchild(struct dlist *dl, const char *name)
 {
     struct dlist *i;
 
@@ -1123,7 +1123,7 @@ EXPORTED bit64 dlist_num(struct dlist *dl)
 }
 
 /* XXX - this stuff is all shitty, rationalise later */
-HIDDEN const char *dlist_cstring(struct dlist *dl)
+EXPORTED const char *dlist_cstring(struct dlist *dl)
 {
     static char zerochar = '\0';
 
