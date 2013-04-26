@@ -1002,6 +1002,7 @@ int service_main_fd(int fd,
 
 	syslog(LOG_ERR,
 	       "Server too busy, dropping connection.");
+	if (r) return 0; /* filthy hack to avoid warning on 'r' */
     } else if(write(conn_pipe[1], &fd, sizeof(fd)) == -1) {
 	/* signal that a new file descriptor is available.
 	 * If it fails... */
