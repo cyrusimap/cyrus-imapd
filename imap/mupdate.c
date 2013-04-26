@@ -1418,11 +1418,13 @@ static struct mbent *database_lookup(const char *name, struct mpool *pool)
     struct mbent *out;
     char *server = NULL;
     int r;
-    
+
     if (!name) return NULL;
 
     r = mboxlist_lookup_allow_reserved(name, &mbentry, NULL);
     if (r) return NULL;
+
+    /* XXX - if mbtype & MBTYPE_DELETED, maybe set a delete */
 
     if (mbentry->mbtype & MBTYPE_RESERVE) {
 	if(!pool) out = xmalloc(sizeof(struct mbent) + 1);

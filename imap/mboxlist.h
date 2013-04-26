@@ -77,6 +77,8 @@ extern struct db *mbdb;
 /* each mailbox has the following data */
 struct mboxlist_entry {
     char *name;
+    time_t mtime;
+    uint32_t uidvalidity;
     int mbtype;
     char *partition;
     char *server; /* holds remote machine for REMOTE mailboxes */
