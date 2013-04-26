@@ -153,6 +153,12 @@
   available mailbox list, but Cyrus <tt>imapd</tt> will not otherwise
   prevent an IMAP client from accessing them.</i></p>
 
+<p>By default, the CalDAV module will automatically perform scheduling
+  operations when a scheduling object (invitation or reply) is stored
+  on or deleted from the server.  Support for the calendar-auto-schedule
+  feature can be disabled with the <tt>caldav_allowscheduling</tt>
+  option.</p>
+
 <!--
 <p>Some CalDAV clients don't support the creation of calendars, so it is
   best to provision at least one calendar for each user.  To provision a
@@ -164,7 +170,11 @@
 
 <h4>Calendar provisioning</h4>
 
-<p>cyradm... </p>
+<p>The CalDAV module with automatically create the required calendars
+  for a user the first time that the user authenticates to the CalDAV
+  server.  Note that the user MUST have an
+  existing <a href="install-admin-mb.html">IMAP Inbox</a> in order for
+  the calendars to be created.</p>
 
 <h4>Calendar access controls</h4>
 
