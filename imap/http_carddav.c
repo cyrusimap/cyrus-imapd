@@ -171,8 +171,12 @@ struct namespace_t namespace_addressbook = {
 };
 
 
+static struct namespace carddav_namespace;
+
 static void my_carddav_init(struct buf *serverinfo)
 {
+    int r;
+
     namespace_addressbook.enabled =
 	config_httpmodules & IMAP_ENUM_HTTPMODULES_CARDDAV;
 
@@ -180,6 +184,12 @@ static void my_carddav_init(struct buf *serverinfo)
 
     if (!config_getstring(IMAPOPT_ADDRESSBOOKPREFIX)) {
 	fatal("Required 'addressbookprefix' option is not set", EC_CONFIG);
+    }
+
+    /* Set namespace -- force standard (internal) */
+    if ((r = mboxname_init_namespace(&carddav_namespace, 1))) {
+	syslog(LOG_ERR, "%s", error_message(r));
+	fatal(error_message(r), EC_CONFIG);
     }
 
     carddav_init();
@@ -191,8 +201,15 @@ static void my_carddav_init(struct buf *serverinfo)
 }
 
 
+#define DEFAULT_ADDRBOOK "Default"
+
 static void my_carddav_auth(const char *userid)
 {
+    int r;
+    size_t len;
+    char mailboxname[MAX_MAILBOX_BUFFER], rights[100], *partition = NULL;
+    struct buf acl = BUF_INITIALIZER;
+
     if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
 	/* proxy-only server - won't have DAV databases */
 	return;
@@ -201,6 +218,52 @@ static void my_carddav_auth(const char *userid)
 	     global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
 	/* admin or proxy from frontend - won't have DAV database */
 	return;
+    }
+
+    /* Auto-provision an addressbook for 'userid' */
+
+    /* Construct mailbox name corresponding to userid's Inbox */
+    (*carddav_namespace.mboxname_tointernal)(&carddav_namespace, "INBOX",
+					     userid, mailboxname);
+    len = strlen(mailboxname);
+
+    /* addressbook-home-set */
+    len += snprintf(mailboxname+len, MAX_MAILBOX_BUFFER - len, ".%s",
+		    config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
+    r = mboxlist_createmailboxcheck(mailboxname, 0, NULL, 0,
+				    userid, httpd_authstate, NULL,
+				    &partition, 0);
+    if (!r) {
+	buf_reset(&acl);
+	cyrus_acl_masktostr(ACL_ALL, rights);
+	buf_printf(&acl, "%s\t%s\t", userid, rights);
+	r = mboxlist_createmailbox_full(mailboxname, MBTYPE_ADDRESSBOOK,
+					partition, 0,
+					userid, httpd_authstate,
+					OPT_POP3_NEW_UIDL, time(0),
+					buf_cstring(&acl), NULL,
+					0, 0, 0, NULL);
+    }
+    if (r && r != IMAP_MAILBOX_EXISTS) {
+	if (partition) free(partition);
+	buf_free(&acl);
+	return;
+    }
+
+    /* Default addressbook */
+    snprintf(mailboxname+len, MAX_MAILBOX_BUFFER - len, ".%s",
+	     DEFAULT_ADDRBOOK);
+    r = mboxlist_lookup(mailboxname, NULL, NULL);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+	buf_reset(&acl);
+	cyrus_acl_masktostr(ACL_ALL, rights);
+	buf_printf(&acl, "%s\t%s\t", userid, rights);
+	r = mboxlist_createmailbox_full(mailboxname, MBTYPE_ADDRESSBOOK,
+					partition, 0,
+					userid, httpd_authstate,
+					OPT_POP3_NEW_UIDL, time(0),
+					buf_cstring(&acl), NULL,
+					0, 0, 0, NULL);
     }
 
     auth_carddavdb = carddav_open(userid, CARDDAV_CREATE);
