@@ -123,6 +123,15 @@ int mboxlist_createsync(const char *name, int mbtype,
 			int options, unsigned uidvalidity, const char *acl,
 			const char *uniqueid, struct mailbox **mboxptr);
 
+int mboxlist_createmailbox_full(const char *name, int mbtype,
+				const char *partition,
+				int isadmin, const char *userid,
+				struct auth_state *auth_state,
+				int options, unsigned uidvalidity,
+				const char *copyacl, const char *uniqueid,
+				int localonly, int forceuser, int dbonly,
+				struct mailbox **mboxptr);
+
 /* delated delete */
 /* Translate delete into rename */
 int
