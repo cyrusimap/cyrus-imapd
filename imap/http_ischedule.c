@@ -849,7 +849,7 @@ static void isched_init(struct buf *serverinfo)
     unsigned need_dkim = 1;
 
     if (!(config_httpmodules & IMAP_ENUM_HTTPMODULES_CALDAV) ||
-	!(config_httpmodules & IMAP_ENUM_HTTPMODULES_CALDAV_SCHED)) {
+	!config_getswitch(IMAPOPT_CALDAV_ALLOWSCHEDULING)) {
 	/* Need CALDAV and CALDAV_SCHED in order to have ISCHEDULE */
 	return;
     }

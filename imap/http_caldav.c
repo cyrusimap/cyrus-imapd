@@ -224,7 +224,7 @@ static void my_caldav_init(struct buf *serverinfo)
 	buf_printf(serverinfo, " libical/%s", ICAL_VERSION);
     }
 
-    if (config_httpmodules & IMAP_ENUM_HTTPMODULES_CALDAV_SCHED) {
+    if (config_getswitch(IMAPOPT_CALDAV_ALLOWSCHEDULING)) {
 	namespace_calendar.allow |= ALLOW_CAL_SCHED;
 
 	/* Need to set this to parse CalDAV Scheduling parameters */
