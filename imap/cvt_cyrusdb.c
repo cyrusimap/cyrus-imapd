@@ -61,7 +61,6 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 
-#include "auth.h"
 #include "cyrusdb.h"
 #include "exitcodes.h"
 #include "glob.h"

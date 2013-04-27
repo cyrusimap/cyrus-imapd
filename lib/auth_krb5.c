@@ -59,8 +59,6 @@
 
 #include <krb5.h>
 
-#include "auth.h"
-
 struct auth_state {
     char *userid; /* Canonified Userid */
 };

@@ -54,7 +54,6 @@
 #include <sys/un.h>
 #include <sys/uio.h>
 
-#include "auth.h"
 #include "auth_pts.h"
 #include "cyrusdb.h"
 #include "exitcodes.h"

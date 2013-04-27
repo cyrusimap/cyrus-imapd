@@ -62,7 +62,6 @@
 #include <sys/msg.h>
 
 #include "assert.h"
-#include "auth.h"
 #include "cyrusdb.h"
 #include "exitcodes.h"
 #include "glob.h"

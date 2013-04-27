@@ -63,7 +63,6 @@
 
 #include "acl.h"
 #include "annotate.h"
-#include "auth.h"
 #include "glob.h"
 #include "assert.h"
 #include "global.h"

@@ -50,7 +50,6 @@
 #include <limits.h>
 #include <config.h>
 
-#include "auth.h"
 #include "byteorder64.h"
 #include "message_guid.h"
 #include "quota.h"

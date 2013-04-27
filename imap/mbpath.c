@@ -57,7 +57,6 @@
 #include <sys/param.h>
 
 #include "util.h"
-#include "auth.h"
 #include "global.h"
 #include "exitcodes.h"
 #include "imap/imap_err.h"
