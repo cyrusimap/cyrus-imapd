@@ -63,7 +63,6 @@
 
 #include "sequence.h"
 #include "exitcodes.h"
-#include "glob.h"
 #include "imap/imap_err.h"
 #include "global.h"
 #include "util.h"

@@ -63,7 +63,6 @@
 
 #include "cyrusdb.h"
 #include "exitcodes.h"
-#include "glob.h"
 #include "imap/imap_err.h"
 #include "global.h"
 #include "mailbox.h"
