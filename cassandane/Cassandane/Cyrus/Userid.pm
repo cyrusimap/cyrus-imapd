@@ -89,6 +89,11 @@ sub test_dots_unix
 
     # There should only be ACLs for (external) userid
     my $adminclient = $self->{adminstore}->get_client();
+    my $mb = Cassandane::Mboxname->new(
+	    config => $self->{instance}->{config},
+	    userid => $user
+	)->to_external();
+
     my %acls = $adminclient->getacl($mb);
     $self->assert(defined($acls{$user}));
     $self->assert(!defined($acls{$user_internal}));
