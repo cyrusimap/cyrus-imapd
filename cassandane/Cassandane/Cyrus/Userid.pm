@@ -84,16 +84,11 @@ sub test_dots_unix
     # We will also play a bit with the internal form of this userid
     (my $user_internal = $user) =~ s/\./^/g;
 
-    xlog "create user $user";
-
-    my $adminclient = $self->{adminstore}->get_client();
-    my $mb = Cassandane::Mboxname->new(config => $self->{instance}->{config},
-	userid => $user)->to_external();
-    $adminclient->create($mb)
-	or die "Cannot create $mb: $@";
-
+    # Create user per instance->create_user() - see builds 1170-1176
+    $self->{instance}->create_user($user);
 
     # There should only be ACLs for (external) userid
+    my $adminclient = $self->{adminstore}->get_client();
     my %acls = $adminclient->getacl($mb);
     $self->assert(defined($acls{$user}));
     $self->assert(!defined($acls{$user_internal}));
