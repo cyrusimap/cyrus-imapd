@@ -1516,7 +1516,7 @@ sub quota_Z_wait
 #
 # Unpacks file.  Handles tar, gz, and bz2.
 #
-sub unpack
+sub unpackfile
 {
     my ($self, $src, $dst) = @_;
 

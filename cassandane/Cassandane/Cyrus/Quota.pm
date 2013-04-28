@@ -1328,8 +1328,8 @@ sub test_upgrade_v2_4
     $self->_check_usages('x-annotation-storage' => int($expected_annotation_storage/1024));
 
     xlog "restore cyrus v2.4 mailbox content and quota file";
-    $self->{instance}->unpack(abs_path('data/cyrus/quota_upgrade_v2_4.user.tar.gz'), 'data/user');
-    $self->{instance}->unpack(abs_path('data/cyrus/quota_upgrade_v2_4.quota.tar.gz'), 'conf/quota/c');
+    $self->{instance}->unpackfile(abs_path('data/cyrus/quota_upgrade_v2_4.user.tar.gz'), 'data/user');
+    $self->{instance}->unpackfile(abs_path('data/cyrus/quota_upgrade_v2_4.quota.tar.gz'), 'conf/quota/c');
 
     # count messages and size from restored mailbox
     my $expected_storage = 0;
