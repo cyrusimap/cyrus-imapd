@@ -126,7 +126,7 @@ static int fixmbox(char *name,
     mbentry_t *mbentry = NULL;
     int r;
 
-    r = mboxlist_lookup(name, &mbentry, NULL);
+    r = mboxlist_lookup_allow_reserved(name, &mbentry, NULL);
     if (r) return 0;
 
     /* if MBTYPE_RESERVED, unset it & call mboxlist_delete */
