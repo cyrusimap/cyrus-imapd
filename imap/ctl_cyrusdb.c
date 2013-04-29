@@ -129,6 +129,19 @@ static int fixmbox(char *name,
     r = mboxlist_lookup_allow_reserved(name, &mbentry, NULL);
     if (r) return 0;
 
+    if (mbentry->legacy_specialuse) {
+	const char *userid = mboxname_to_userid(name);
+	if (userid) {
+	    struct buf buf = BUF_INITIALIZER;
+	    buf_setcstr(&buf, mbentry->legacy_specialuse);
+	    annotatemore_write(name, "/specialuse", userid, &buf);
+	    buf_free(&buf);
+	}
+	free(mbentry->legacy_specialuse);
+	mbentry->legacy_specialuse = NULL;
+	mboxlist_update(mbentry, /*localonly*/1);
+    }
+
     /* if MBTYPE_RESERVED, unset it & call mboxlist_delete */
     if (mbentry->mbtype & MBTYPE_RESERVE) {
 	r = mboxlist_deletemailbox(name, 1, NULL, NULL, NULL, 0, 0, 1);
@@ -152,11 +165,12 @@ static int fixmbox(char *name,
 static void recover_reserved(void)
 {
     char pattern[2] = { '*', '\0' };
-    
+
     mboxlist_init(0);
     mboxlist_open(NULL);
 
-    /* Need annotations.db for mboxlist_deletemailbox() */
+    /* Need annotations.db for mboxlist_deletemailbox() and also
+     * for fixing legacy specialuse support */
     annotate_init(NULL, NULL);
     annotatemore_open();
 

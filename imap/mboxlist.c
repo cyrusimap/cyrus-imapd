@@ -118,6 +118,8 @@ EXPORTED void mboxlist_entry_free(mbentry_t **mbentryptr)
     free(mbentry->acl);
     free(mbentry->uniqueid);
 
+    free(mbentry->legacy_specialuse);
+
     free(mbentry);
 
     *mbentryptr = NULL;
@@ -363,6 +365,7 @@ static int mboxlist_parse_entry(mbentry_t **mbentryptr,
 	    if (*q != ' ') break;
 	    *q++ = '\0';
 	    if (!strcmp(p, "uniqueid")) target = &mbentry->uniqueid;
+	    if (!strcmp(p, "specialuse")) target = &mbentry->legacy_specialuse;
 	    p = q;
 	    while (*q && *q != ' ' && *q != ')') q++;
 	    if (*q != ' ') last = 1;
