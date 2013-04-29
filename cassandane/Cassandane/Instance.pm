@@ -48,6 +48,7 @@ use File::Find qw(find);
 use File::Basename;
 use File::stat;
 use POSIX qw(geteuid :signal_h :sys_wait_h :errno_h);
+use IO::Socket::UNIX;
 use DateTime;
 use BSD::Resource;
 use Cwd qw(abs_path getcwd);
@@ -91,8 +92,8 @@ sub new
 	_children => {},
 	_stopped => 0,
 	description => 'unknown',
+	_shutdowncallbacks => [],
 	_started => 0,
-	_logins => {},
 	_pwcheck => $cassini->val('cassandane', 'pwcheck', 'alwaystrue'),
     };
 
@@ -467,6 +468,10 @@ sub _generate_imapd_conf
 		cyrus_prefix => $self->{cyrus_prefix},
 		prefix => getcwd(),
 	    );
+    $self->{config}->set(
+		sasl_pwcheck_method => 'saslauthd',
+		sasl_saslauthd_path => "$self->{basedir}/run/mux",
+    );
     $self->{config}->generate($self->_imapd_conf());
 }
 
@@ -708,103 +713,39 @@ sub _start_master
     xlog "_start_master: all services listening";
 }
 
-sub _init_pwcheck
+sub _start_authdaemon
 {
     my ($self) = @_;
     my $pwcheck = $self->{_pwcheck};
 
-    my $conf = $self->{config};
-    if ($pwcheck eq 'alwaystrue')
-    {
-	$conf->set(sasl_pwcheck_method => 'alwaystrue');
-	$self->{_setup_login} = sub
-	{
-	    # Nothing to do here
-	};
+    my $basedir = $self->{basedir};
+
+    my $saslpid = fork();
+    unless ($saslpid) {
+	$SIG{TERM} = sub { die "killed" };
+
+	POSIX::close( $_ ) for 3 .. 1024; ## Arbitrary upper bound
+
+	# child;
+	$0 = "cassandane saslauthd: $basedir";
+	saslauthd("$basedir/run");
+	exit 0;
     }
-    elsif ($pwcheck eq 'sasldb')
-    {
-	$conf->set(sasl_pwcheck_method => 'auxprop');
-	$conf->set(sasl_sasldb_path => '@basedir@/conf/sasldb2');
-	$self->{_setup_login} = sub
-	{
-	    my ($self, $login) = @_;
-	    my $sasldb = $self->{basedir} . '/conf/sasldb2';
-	    my @cmd = ( '/usr/sbin/saslpasswd2', '-f', $sasldb, '-c', '-p', $login->{user} );
-	    my $password = $login->{password};
-	    $self->run_command({
-		cyrus => 0,
-		redirects => { stdin => \$password },
-	    }, @cmd);
-	};
-    }
-    else
-    {
-	die "Bad value for pwcheck: \"$pwcheck\"";
-    }
-}
 
-sub _flush_logins
-{
-    my ($self) = @_;
-
-    my $method = $self->{_setup_login};
-    foreach my $login (values %{$self->{_logins}})
-    {
-	next unless $login->{dirty};
-	$self->$method($login);
-	$login->{dirty} = 0;
-    }
-}
-
-sub add_login
-{
-    my ($self, $user, $password) = @_;
-
-    die "Login \"$user\" already exists"
-	if $self->{_logins}->{$user};
-
-    $self->{_logins}->{$user} = {
-	user => $user,
-	password => $password || 'testpw',
-	dirty => 1,
+    xlog "started saslauthd for $basedir as $saslpid";
+    push @{$self->{_shutdowncallbacks}}, sub {
+	my $self = shift;
+	xlog "killing saslauthd $saslpid";
+	kill(15, $saslpid);
+	waitpid($saslpid, 0);
     };
-
-    $self->_flush_logins()
-	if ($self->{_started});
-}
-
-sub have_login
-{
-    my ($self, $user) = @_;
-
-    return (defined $self->{_logins}->{$user});
-}
-
-# Copy the login data from another instance
-# Useful when setting up a master/replica pair
-sub copy_logins
-{
-    my ($self, $inst) = @_;
-
-    foreach my $login (values %{$inst->{_logins}})
-    {
-	$self->{_logins}->{$login->{user}} = {
-	    %$login,
-	    dirty => 1,
-	};
-    }
-    $self->_flush_logins()
-	if ($self->{_started});
 }
 
 #
-# Create a user, with a home folder and a login entry.
+# Create a user, with a home folder
 #
 # Argument 'user' may be of the form 'user' or 'user@domain'.
 # Following that are optional named parameters
-#
-#   password	    string, default is "testpw"
 #
 #   subdirs	    array of strings, lists folders
 #		    to be created, relative to the new
@@ -819,8 +760,6 @@ sub create_user
     my $mb = Cassandane::Mboxname->new(config => $self->{config}, username => $user);
 
     xlog "create user $user";
-
-    $self->add_login($user, $params{password});
 
     my $srv = $self->get_service('imap');
     return
@@ -860,22 +799,18 @@ sub start
     {
 	$created = 1;
 	rmtree $self->{basedir};
-	$self->_init_pwcheck();
-	$self->add_login('admin')
-	    if !$self->have_login('admin');
 	$self->_build_skeleton();
 	# TODO: system("echo 1 >/proc/sys/kernel/core_uses_pid");
 	# TODO: system("echo 1 >/proc/sys/fs/suid_dumpable");
 	$self->_generate_imapd_conf();
 	$self->_generate_master_conf();
-	# Ensure sasldb2 is created and contains 'admin'
-	$self->_flush_logins();
 	$self->_fix_ownership();
     }
     elsif (!scalar $self->{services})
     {
 	$self->_add_services_from_cyrus_conf();
     }
+    $self->_start_authdaemon();
     $self->_uncompress_berkeley_crud();
     $self->_start_master();
     $self->{_stopped} = 0;
@@ -1102,6 +1037,11 @@ sub stop
     }
     # Note: no need to reap this daemon which is not our child anymore
 
+    foreach my $item (@{$self->{_shutdowncallbacks}}) {
+	$item->($self);
+    }
+    $self->{_shutdowncallbacks} = [];
+
     $self->_compress_berkeley_crud();
     $self->_check_valgrind_logs();
     $self->_check_cores();
@@ -1134,6 +1074,11 @@ sub DESTROY
 	    next if (!defined $pid);
 	    _stop_pid($pid);
 	}
+
+	foreach my $item (@{$self->{_shutdowncallbacks}}) {
+	    $item->($self);
+	}
+	$self->{_shutdowncallbacks} = [];
     }
 }
 
@@ -1592,6 +1537,51 @@ sub folder_to_deleted_directories
 	closedir DELDIR;
     }
     return @dirs;
+}
+
+sub saslauthd
+{
+    my $dir = shift;
+    unlink("$dir/mux");
+    xlog "opening socket $dir/mux";
+    my $sock = IO::Socket::UNIX->new(
+	Local => "$dir/mux",
+	Type => SOCK_STREAM,
+	Listen => SOMAXCONN,
+    );
+    die "FAILED to create socket $!" unless $sock;
+    system("chmod 777 $dir/mux");
+
+    eval {
+	while (my $client = $sock->accept()) {
+	    my $LoginName = get_counted_string($client);
+	    my $Password = get_counted_string($client);
+	    my $Service = lc get_counted_string($client);
+	    my $Realm = get_counted_string($client);
+	    xlog "authdaemon connection: $LoginName $Password $Service $Realm";
+
+	    # XXX - custom logic?
+
+	    # OK :)
+	    if ($Password eq 'bad') {
+		$client->print(pack("nA3", 2, "NO\000"));
+	    }
+	    else {
+		$client->print(pack("nA3", 2, "OK\000"));
+	    }
+	    $client->close();
+	}
+    };
+}
+
+sub get_counted_string
+{
+    my $sock = shift;
+    my $data;
+    $sock->read($data, 2);
+    my $size = unpack('n', $data);
+    $sock->read($data, $size);
+    return unpack("A$size", $data);
 }
 
 1;

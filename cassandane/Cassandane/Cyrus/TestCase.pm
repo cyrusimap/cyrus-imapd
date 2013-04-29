@@ -267,7 +267,6 @@ sub _create_instances
 	    $self->{replica}->add_services(@{$want->{services}});
 	    $self->{replica}->_setup_for_deliver()
 		if ($want->{deliver});
-	    $self->{replica}->add_login('repluser', 'replpass');
 	}
     }
 
@@ -297,7 +296,6 @@ sub _start_instances
 	if (defined $self->{instance});
     if (defined $self->{replica})
     {
-	$self->{replica}->copy_logins($self->{instance});
 	$self->{replica}->start();
     }
 
