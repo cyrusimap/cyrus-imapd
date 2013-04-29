@@ -98,7 +98,7 @@ EXPORTED char *xstrdup(const char* str)
 }
 
 /* return a malloced "" if NULL is passed */
-char *xstrdupsafe(const char *str)
+EXPORTED char *xstrdupsafe(const char *str)
 {
     return str ? xstrdup(str) : xstrdup("");
 }

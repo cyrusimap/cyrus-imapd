@@ -63,7 +63,7 @@
  */
 EXPORTED int cyrus_acl_myrights(struct auth_state *auth_state, const char *origacl)
 {
-    char *acl = xstrdup(origacl);
+    char *acl = xstrdupsafe(origacl);
     char *thisid, *rights, *nextid;
     long acl_positive = 0, acl_negative = 0;
     long *acl_ptr;
@@ -96,7 +96,7 @@ EXPORTED int cyrus_acl_myrights(struct auth_state *auth_state, const char *origa
 
     return acl_positive & ~acl_negative;
 }
-	
+
 /*
  * Modify the ACL pointed to by 'acl' to make the rights granted to
  * 'identifier' the set specified in the mask 'access'.  The pointer
