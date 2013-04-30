@@ -1154,7 +1154,9 @@ static void cmdloop(void)
 	    /* Check if method doesn't expect a body */
 	    else if ((http_methods[txn.meth].flags & METH_NOBODY) &&
 		     (spool_getheader(txn.req_hdrs, "Transfer-Encoding") ||
-		      spool_getheader(txn.req_hdrs, "Content-Length")))
+		      /* Content-Length is allowed to be zero */
+		      spool_getheader(txn.req_hdrs, "Content-Type") ||
+		      spool_getheader(txn.req_hdrs, "Content-Encoding")))
 		ret = HTTP_BAD_MEDIATYPE;
 	} else {
 	    /* XXX  Should never get here */
