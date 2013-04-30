@@ -136,7 +136,8 @@ static struct meth_params carddav_params = {
 
 /* Namespace for Carddav collections */
 struct namespace_t namespace_addressbook = {
-    URL_NS_ADDRESSBOOK, 0, "/addressbooks", "/.well-known/carddav", 1 /* auth */,
+    URL_NS_ADDRESSBOOK, 0, "/dav/addressbooks", "/.well-known/carddav",
+    1 /* auth */,
 #if 0 /* Until Apple Contacts fixes their add-member implementation */
     (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DELETE |
      ALLOW_DAV | ALLOW_WRITECOL | ALLOW_CARD),
@@ -284,7 +285,7 @@ static void my_carddav_shutdown(void)
 }
 
 
-/* Parse request-target path in /calendars namespace */
+/* Parse request-target path in CardDAV namespace */
 static int carddav_parse_path(const char *path,
 			      struct request_target_t *tgt, const char **errstr)
 {
@@ -297,12 +298,12 @@ static int carddav_parse_path(const char *path,
     tgt->tail = tgt->path + strlen(tgt->path);
 
     p = tgt->path;
-    if (!*p || !*++p) return 0;
 
     /* Sanity check namespace */
-    len = strcspn(p, "/");
-    if (len != strlen(namespace_addressbook.prefix)-1 ||
-	strncmp(namespace_addressbook.prefix+1, p, len)) {
+    len = strlen(namespace_addressbook.prefix);
+    if (strlen(p) < len ||
+	strncmp(namespace_addressbook.prefix, p, len) ||
+	(path[len] && path[len] != '/')) {
 	*errstr = "Namespace mismatch request target path";
 	return HTTP_FORBIDDEN;
     }
@@ -641,7 +642,8 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 	/* CARDDAV:no-uid-conflict */
 	txn->error.precond = CARDDAV_UID_CONFLICT;
 	assert(!buf_len(&txn->buf));
-	buf_printf(&txn->buf, "/addressbooks/user/%s/%s/%s",
+	buf_printf(&txn->buf, "%s/user/%s/%s/%s",
+		   namespace_addressbook.prefix,
 		   mboxname_to_userid(cdata->dav.mailbox),
 		   strrchr(cdata->dav.mailbox, '.')+1, cdata->dav.resource);
 	txn->error.resource = buf_cstring(&txn->buf);

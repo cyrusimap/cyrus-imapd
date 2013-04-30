@@ -94,7 +94,7 @@ static struct meth_params princ_params = {
 
 /* Namespace for WebDAV principals */
 struct namespace_t namespace_principal = {
-    URL_NS_PRINCIPAL, 0, "/principals", NULL, 1 /* auth */,
+    URL_NS_PRINCIPAL, 0, "/dav/principals", NULL, 1 /* auth */,
     ALLOW_READ | ALLOW_DAV,
     &my_dav_init, NULL, NULL, NULL,
     {
@@ -282,7 +282,7 @@ static const struct precond_t {
 };
 
 
-/* Parse request-target path in /principals namespace */
+/* Parse request-target path in DAV principals namespace */
 static int prin_parse_path(const char *path,
 			   struct request_target_t *tgt, const char **errstr)
 {
@@ -294,10 +294,17 @@ static int prin_parse_path(const char *path,
     tgt->tail = tgt->path + strlen(tgt->path);
 
     p = tgt->path;
-    if (!*p || !*++p) return 0;
+
+    /* Sanity check namespace */
+    len = strlen(namespace_principal.prefix);
+    if (strlen(p) < len ||
+	strncmp(namespace_principal.prefix, p, len) ||
+	(path[len] && path[len] != '/')) {
+	*errstr = "Namespace mismatch request target path";
+	return HTTP_FORBIDDEN;
+    }
 
     /* Skip namespace */
-    len = strcspn(p, "/");
     p += len;
     if (!*p || !*++p) return 0;
 
@@ -1004,7 +1011,8 @@ static int propfind_principalurl(xmlNodePtr prop,
 
 	buf_reset(&fctx->buf);
 	if (fctx->req_tgt->user) {
-	    buf_printf(&fctx->buf, "/principals/user/%.*s/",
+	    buf_printf(&fctx->buf, "%s/user/%.*s/",
+		       namespace_principal.prefix,
 		       fctx->req_tgt->userlen, fctx->req_tgt->user);
 	}
 
@@ -1031,7 +1039,8 @@ static int propfind_owner(xmlNodePtr prop,
 	 fctx->req_tgt->namespace == URL_NS_ADDRESSBOOK) &&
 	fctx->req_tgt->user) {
 	buf_reset(&fctx->buf);
-	buf_printf(&fctx->buf, "/principals/user/%.*s/",
+	buf_printf(&fctx->buf, "%s/user/%.*s/",
+		   namespace_principal.prefix,
 		   fctx->req_tgt->userlen, fctx->req_tgt->user);
 
 	xml_add_href(node, NULL, buf_cstring(&fctx->buf));
@@ -1389,7 +1398,8 @@ static int propfind_acl(xmlNodePtr prop,
 		xmlNewChild(node, NULL, BAD_CAST "authenticated", NULL);
 	    else {
 		buf_reset(&fctx->buf);
-		buf_printf(&fctx->buf, "/principals/user/%s/", userid);
+		buf_printf(&fctx->buf, "%s/user/%s/",
+			   namespace_principal.prefix, userid);
 		xml_add_href(node, NULL, buf_cstring(&fctx->buf));
 	    }
 
@@ -1446,7 +1456,9 @@ static int propfind_princolset(xmlNodePtr prop,
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			prop, NULL, 0);
 
-    xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST "/principals/");
+    buf_reset(&fctx->buf);
+    buf_printf(&fctx->buf, "%s/", namespace_principal.prefix);
+    xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST buf_cstring(&fctx->buf));
 
     return 0;
 }
@@ -1532,7 +1544,8 @@ static int propfind_curprin(xmlNodePtr prop,
 
     if (fctx->userid) {
 	buf_reset(&fctx->buf);
-	buf_printf(&fctx->buf, "/principals/user/%s/", fctx->userid);
+	buf_printf(&fctx->buf, "%s/user/%s/",
+		   namespace_principal.prefix, fctx->userid);
 	xml_add_href(node, NULL, buf_cstring(&fctx->buf));
     }
     else {
@@ -1661,8 +1674,8 @@ static int propfind_calurl(xmlNodePtr prop,
 			    prop, NULL, 0);
 
 	buf_reset(&fctx->buf);
-	buf_printf(&fctx->buf, "/calendars/user/%s/%s", fctx->userid,
-		   cal ? cal : "");
+	buf_printf(&fctx->buf, "%s/user/%s/%s",
+		   namespace_calendar.prefix, fctx->userid, cal ? cal : "");
 
 	xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
     }
@@ -2665,10 +2678,12 @@ int meth_acl(struct transaction_t *txn, void *params)
 		xmlChar *href = xmlNodeGetContent(prin);
 		xmlURIPtr uri;
 		const char *errstr = NULL;
+		size_t plen = strlen(namespace_principal.prefix);
 
 		uri = parse_uri(METH_UNKNOWN, (const char *) href, &errstr);
 		if (uri &&
-		    !strncmp("/principals/", uri->path, strlen("/principals/"))) {
+		    !strncmp(namespace_principal.prefix, uri->path, plen) &&
+		    uri->path[plen] == '/') {
 		    memset(&tgt, 0, sizeof(struct request_target_t));
 		    tgt.namespace = URL_NS_PRINCIPAL;
 		    r = aparams->parse_path(uri->path, &tgt, &errstr);

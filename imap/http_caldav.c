@@ -181,7 +181,7 @@ static struct meth_params caldav_params = {
 
 /* Namespace for CalDAV collections */
 struct namespace_t namespace_calendar = {
-    URL_NS_CALENDAR, 0, "/calendars", "/.well-known/caldav", 1 /* auth */,
+    URL_NS_CALENDAR, 0, "/dav/calendars", "/.well-known/caldav", 1 /* auth */,
     (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DELETE |
      ALLOW_DAV | ALLOW_WRITECOL | ALLOW_CAL ),
     &my_caldav_init, &my_caldav_auth, my_caldav_reset, &my_caldav_shutdown,
@@ -346,7 +346,7 @@ static void my_caldav_shutdown(void)
 }
 
 
-/* Parse request-target path in /calendars namespace */
+/* Parse request-target path in CalDAV namespace */
 static int caldav_parse_path(const char *path,
 			     struct request_target_t *tgt, const char **errstr)
 {
@@ -359,12 +359,12 @@ static int caldav_parse_path(const char *path,
     tgt->tail = tgt->path + strlen(tgt->path);
 
     p = tgt->path;
-    if (!*p || !*++p) return 0;
 
     /* Sanity check namespace */
-    len = strcspn(p, "/");
-    if (len != strlen(namespace_calendar.prefix)-1 ||
-	strncmp(namespace_calendar.prefix+1, p, len)) {
+    len = strlen(namespace_calendar.prefix);
+    if (strlen(p) < len ||
+	strncmp(namespace_calendar.prefix, p, len) ||
+	(path[len] && path[len] != '/')) {
 	*errstr = "Namespace mismatch request target path";
 	return HTTP_FORBIDDEN;
     }
@@ -917,7 +917,8 @@ static int caldav_put(struct transaction_t *txn, struct mailbox *mailbox,
 
 	    txn->error.precond = CALDAV_UNIQUE_OBJECT;
 	    assert(!buf_len(&txn->buf));
-	    buf_printf(&txn->buf, "/calendars/user/%s/%s/%s",
+	    buf_printf(&txn->buf, "%s/user/%s/%s/%s",
+		       namespace_calendar.prefix,
 		       userid, strrchr(cdata->dav.mailbox, '.')+1,
 		       cdata->dav.resource);
 	    txn->error.resource = buf_cstring(&txn->buf);
@@ -1606,7 +1607,8 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 	/* CALDAV:no-uid-conflict */
 	txn->error.precond = CALDAV_UID_CONFLICT;
 	assert(!buf_len(&txn->buf));
-	buf_printf(&txn->buf, "/calendars/user/%s/%s/%s",
+	buf_printf(&txn->buf, "%s/user/%s/%s/%s",
+		   namespace_calendar.prefix,
 		   mboxname_to_userid(cdata->dav.mailbox),
 		   strrchr(cdata->dav.mailbox, '.')+1, cdata->dav.resource);
 	txn->error.resource = buf_cstring(&txn->buf);
