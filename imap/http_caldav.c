@@ -236,6 +236,7 @@ static void my_caldav_init(struct buf *serverinfo)
 static void my_caldav_auth(const char *userid)
 {
     int r;
+    struct mboxlist_entry mbentry;
     char mailboxname[MAX_MAILBOX_BUFFER], rights[100], *partition = NULL;
     struct buf acl = BUF_INITIALIZER;
 
@@ -253,23 +254,27 @@ static void my_caldav_auth(const char *userid)
 
     /* calendar-home-set */
     caldav_mboxname(NULL, userid, mailboxname);
-    r = mboxlist_createmailboxcheck(mailboxname, 0, NULL, 0,
-				    userid, httpd_authstate, NULL,
-				    &partition, 0);
-    if (!r) {
-	buf_reset(&acl);
-	cyrus_acl_masktostr(ACL_ALL | DACL_READFB, rights);
-	buf_printf(&acl, "%s\t%s\t", userid, rights);
-	cyrus_acl_masktostr(DACL_READFB, rights);
-	buf_printf(&acl, "%s\t%s\t", "anyone", rights);
-	r = mboxlist_createmailbox_full(mailboxname, MBTYPE_CALENDAR,
-					partition, 0,
-					userid, httpd_authstate,
-					OPT_POP3_NEW_UIDL, time(0),
-					buf_cstring(&acl), NULL,
-					0, 0, 0, NULL);
+    r = mboxlist_lookup(mailboxname, &mbentry, NULL);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+	r = mboxlist_createmailboxcheck(mailboxname, 0, NULL, 0,
+					userid, httpd_authstate, NULL,
+					&partition, 0);
+	if (!r) {
+	    buf_reset(&acl);
+	    cyrus_acl_masktostr(ACL_ALL | DACL_READFB, rights);
+	    buf_printf(&acl, "%s\t%s\t", userid, rights);
+	    cyrus_acl_masktostr(DACL_READFB, rights);
+	    buf_printf(&acl, "%s\t%s\t", "anyone", rights);
+	    r = mboxlist_createmailbox_full(mailboxname, MBTYPE_CALENDAR,
+					    partition, 0,
+					    userid, httpd_authstate,
+					    OPT_POP3_NEW_UIDL, time(0),
+					    buf_cstring(&acl), NULL,
+					    0, 0, 0, NULL);
+	}
+	mbentry.partition = partition;
     }
-    if (r && r != IMAP_MAILBOX_EXISTS) {
+    if (r) {
 	if (partition) free(partition);
 	buf_free(&acl);
 	return;
@@ -285,7 +290,7 @@ static void my_caldav_auth(const char *userid)
 	cyrus_acl_masktostr(DACL_READFB, rights);
 	buf_printf(&acl, "%s\t%s\t", "anyone", rights);
 	r = mboxlist_createmailbox_full(mailboxname, MBTYPE_CALENDAR,
-					partition, 0,
+					mbentry.partition, 0,
 					userid, httpd_authstate,
 					OPT_POP3_NEW_UIDL, time(0),
 					buf_cstring(&acl), NULL,
@@ -302,7 +307,7 @@ static void my_caldav_auth(const char *userid)
 	cyrus_acl_masktostr(DACL_SCHED, rights);
 	buf_printf(&acl, "%s\t%s\t", "anyone", rights);
 	r = mboxlist_createmailbox_full(mailboxname, MBTYPE_CALENDAR,
-					partition, 0,
+					mbentry.partition, 0,
 					userid, httpd_authstate,
 					OPT_POP3_NEW_UIDL, time(0),
 					buf_cstring(&acl), NULL,
@@ -317,7 +322,7 @@ static void my_caldav_auth(const char *userid)
 	cyrus_acl_masktostr(ACL_ALL | DACL_SCHED, rights);
 	buf_printf(&acl, "%s\t%s\t", userid, rights);
 	r = mboxlist_createmailbox_full(mailboxname, MBTYPE_CALENDAR,
-					partition, 0,
+					mbentry.partition, 0,
 					userid, httpd_authstate,
 					OPT_POP3_NEW_UIDL, time(0),
 					buf_cstring(&acl), NULL,
