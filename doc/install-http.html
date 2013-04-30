@@ -101,9 +101,27 @@
   Cyrus <tt>httpd</tt> does NOT have the ability to execute any
   server-side scripts.</p>
 
-<h2>HTTP Authentication</h2>
+<h3>HTTP Authentication</h3>
 
-<p>SASL ...</p>
+<p>As with other Cyrus services, the Cyrus <tt>httpd</tt> service uses
+  Cyrus SASL to perform its authentication.  Cyrus supports the
+  following HTTP authentication schemes: Basic, Digest, Negotiate
+  (Kerberos only), and NTLM.  While Basic is available in all versions
+  of SASL, the remaining schemes are only available in Cyrus SASL
+  2.1.16 (and higher).</p>
+
+<p>Similar to plaintext login commands in the other Cyrus services
+  (IMAP LOGIN, POP3 USER/PASS), the Cyrus <tt>httpd</tt> service
+  determines whether to advertise the HTTP Basic authentication scheme
+  based on the <tt>allowplaintext</tt> option and whether the client
+  has connected over a TLS protected connection (HTTPS).</p>
+
+<p>The availability of the other HTTP authentication schemes is
+  controlled by the <tt>sasl_mech_list</tt> option.  For
+  Cyrus <tt>httpd</tt> the <tt>DIGEST-MD5</tt>, <tt>GSS-SPNEGO</tt>,
+  and <tt>NTLM</tt> SASL plugins support the Digest, Negotiate,
+  and NTLM authentication schemes respectively, provided that the
+  plugins are installed on the server.</p>
 
 <h2>RSS Module</h2>
 
@@ -182,22 +200,52 @@
 
 <h3>Client Setup</h3>
 
-<h4>Mozilla Sunbird/Lightning</h4>
+<h4>Mozilla Lightning</h4>
 
-<p>This client requires that a calendar already exist.  Assuming that you
-  provisioned the "events" calendar as described above, set the calendar
-  location to:</p>
+<p>For each calendar that you would like to add to this client,
+  perform the following steps:
 
-<p><tt>http[s]://&lt;servername&gt;/calendars/user/&lt;userid&gt;/events/</tt></p>
+<ol>
+<li>Select the "File / New / Calendar..." menu option.</li>
+<li>Select the "On the Network" option and click Continue.</li>
+<li>Select "CalDAV" as the Format.</li>
+<li>Enter a URL of the following form as
+  the Location: <tt>https://&lt;servername&gt;/dav/calendars/user/&lt;userid&gt;/&lt;calendar&gt;/</tt></li>
+</ol>
+</p>
+<p>Cyrus will auto-provision a calendar with name "Default" which can
+  be used in the URL above.</p>
 
 <h4>Apple iCal</h4>
 
-<p>This client is able to locate and create calendars on its own.  Set
-  the server path to:</p>
+<p>This client will autodetect all available calendars on a server.
+  To add a Cyrus server to this client, perform the following steps:
 
-<p><tt>http[s]://&lt;servername&gt;/principals/user/&lt;userid&gt;/</tt></p>
+<ol>
+<li>Select the "Calendar / Preferences" menu option.</li>
+<li>Select the "Accounts" tab.</li>
+<li>Click the "+" button.</li>
+<li>Select "CalDAV" as the Account Type.
+<li>Fill in User Name, Password, and Server Address accordingly.</li>
+<li>Click Create.</li>
+</ol>
+</p>
 
 <h4>Apple iOS Calendar</h4>
+
+<p>This client will autodetect all available calendars on a server.
+  To add a Cyrus server to this client, perform the following steps:
+
+<ol>
+<li>Run the "Settings" app.</li>
+<li>Select the "Mail, Contacts, Calendars" menu.</li>
+<li>Select the "Add Account..." menu.</li>
+<li>Select the "Other" menu.</li>
+<li>Select the "Add CalDAV Account" menu.</li>
+<li>Fill in Server, User Name, Password, and Description accordingly.</li>
+<li>Click Next.</li>
+</ol>
+</p>
 
 <h4>Evolution</h4>
 
@@ -236,11 +284,42 @@
 
 <h4>Addressbook access controls</h4>
 
-<p>IMAP rights -> DAV privileges</p>
+<p>Cyrus uses the same access controls for addressbooks as it does for
+  calendars, with the exception that the scheduling rights (7, 8, 9)
+  have no use with addressbooks and are ignored.</p>
 
 <h3>Client Setup</h3>
 
 <h4>Apple Contacts</h4>
+
+<p>This client will autodetect all available addressbooks on a server.
+  To add a Cyrus server to this client, perform the following steps:
+
+<ol>
+<li>Select the "Contacts / Preferences" menu option.</li>
+<li>Select the "Accounts" tab.</li>
+<li>Click the "+" button.</li>
+<li>Select "CardDAV" as the Account Type.
+<li>Fill in User Name, Password, and Server Address accordingly.</li>
+<li>Click Create.</li>
+</ol>
+</p>
+
+<h4>Apple iOS Contacts</h4>
+
+<p>This client will autodetect all available addressbooks on a server.
+  To add a Cyrus server to this client, perform the following steps:
+
+<ol>
+<li>Run the "Settings" app.</li>
+<li>Select the "Mail, Contacts, Calendars" menu.</li>
+<li>Select the "Add Account..." menu.</li>
+<li>Select the "Other" menu.</li>
+<li>Select the "Add CardDAV Account" menu.</li>
+<li>Fill in Server, User Name, Password, and Description accordingly.</li>
+<li>Click Next.</li>
+</ol>
+</p>
 
 <!--
 <h2>iSchedule Module</h2>
