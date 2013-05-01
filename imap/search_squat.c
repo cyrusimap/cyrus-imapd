@@ -52,6 +52,7 @@
 #include <unistd.h>
 #endif
 
+#include "assert.h"
 #include "index.h"
 #include "global.h"
 #include "xmalloc.h"

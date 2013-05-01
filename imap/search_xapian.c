@@ -53,6 +53,7 @@
 #endif
 #include <dirent.h>
 
+#include "assert.h"
 #include "bitvector.h"
 #include "imap_err.h"
 #include "global.h"
