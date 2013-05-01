@@ -618,7 +618,6 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 	VObject *prop = nextVObject(&i);
 	const char *name = vObjectName(prop);
 
-	syslog(LOG_INFO, "%s: %u", name, vObjectValueType(prop));
 	if (!strcmp(name, "VERSION")) {
 	    version = fakeCString(vObjectUStringZValue(prop));
 	    if (strcmp(version, "3.0")) {
