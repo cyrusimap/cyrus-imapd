@@ -58,7 +58,6 @@
 
 /* cyrus includes */
 #include "global.h"
-#include "sysexits.h"
 #include "exitcodes.h"
 #include "imap/imap_err.h"
 #include "mailbox.h"

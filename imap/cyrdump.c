@@ -60,7 +60,6 @@
 #include "imapurl.h"
 #include "mailbox.h"
 #include "mboxlist.h"
-#include "sysexits.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
