@@ -1094,7 +1094,6 @@ netnews_remotepurge_LDADD = $(LD_BASIC_ADD)
 notifyd_notifyd_SOURCES = \
 	imap/mutex_fake.c \
 	master/service.c \
-	notifyd/exitcodes.h \
 	notifyd/notify_external.c \
 	notifyd/notify_external.h \
 	notifyd/notify_log.c \
@@ -1200,7 +1199,6 @@ timsieved_timsieved_SOURCES = \
 	timsieved/actions.c \
 	timsieved/actions.h \
 	timsieved/codes.h \
-	timsieved/exitcodes.h \
 	timsieved/lex.c \
 	timsieved/lex.h \
 	timsieved/parser.c \
