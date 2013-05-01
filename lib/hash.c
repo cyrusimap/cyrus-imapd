@@ -13,7 +13,6 @@
 #include "mpool.h"
 #include "strhash.h"
 #include "xmalloc.h"
-#include "exitcodes.h"
 
 /*
 ** public domain code by Jerry Coffin, with improvements by HenkJan Wolthuis.

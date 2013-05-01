@@ -45,7 +45,6 @@
 #ifndef INCLUDED_LIBCONFIG_H
 #define INCLUDED_LIBCONFIG_H
 
-#include "exitcodes.h"
 #include "imapopts.h"
 
 /* these will assert() if they're called on the wrong type of

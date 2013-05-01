@@ -62,7 +62,6 @@
 #include <sys/msg.h>
 
 #include "sequence.h"
-#include "exitcodes.h"
 #include "imap/imap_err.h"
 #include "global.h"
 #include "util.h"

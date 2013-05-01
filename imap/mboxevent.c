@@ -51,6 +51,7 @@
 #include <jansson.h>
 
 #include "assert.h"
+#include "exitcodes.h"
 #include "imapurl.h"
 #include "libconfig.h"
 #include "times.h"

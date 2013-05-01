@@ -60,6 +60,7 @@
 #include <errno.h>
 
 #include "assert.h"
+#include "exitcodes.h"
 #include "sync_log.h"
 #include "global.h"
 #include "cyr_lock.h"

@@ -73,7 +73,6 @@
 #include "annotate.h"
 #include "assert.h"
 #include "crc32.h"
-#include "exitcodes.h"
 #include "global.h"
 #include "imap/imap_err.h"
 #include "mailbox.h"

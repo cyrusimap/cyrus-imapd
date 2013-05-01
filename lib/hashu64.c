@@ -12,7 +12,6 @@
 #include "hashu64.h"
 #include "mpool.h"
 #include "xmalloc.h"
-#include "exitcodes.h"
 
 /*
 ** public domain code by Jerry Coffin, with improvements by HenkJan Wolthuis.

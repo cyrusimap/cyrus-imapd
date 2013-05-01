@@ -3,7 +3,6 @@
 
 #include "../cyrusdb.h"
 #include "../xmalloc.h"
-#include "../exitcodes.h"
 
 #ifdef BACKEND
 struct cyrusdb_backend *DB = &(BACKEND);

@@ -55,7 +55,6 @@
 #include "spool.h"
 #include "util.h"
 #include "xmalloc.h"
-#include "exitcodes.h"
 #include "imap/imap_err.h"
 #include "imap/nntp_err.h"
 #include "global.h"

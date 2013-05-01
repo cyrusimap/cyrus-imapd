@@ -60,7 +60,6 @@
 
 #include "assert.h"
 #include "cyrusdb.h"
-#include "exitcodes.h"
 #include "imapd.h"
 #include "global.h"
 #include "imap/imap_err.h"

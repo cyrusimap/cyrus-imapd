@@ -5,7 +5,6 @@
 
 #include "../cyrusdb.h"
 #include "../xmalloc.h"
-#include "../exitcodes.h"
 #include "../assert.h"
 
 #ifdef BACKEND

@@ -67,6 +67,7 @@
 #include <sasl/saslutil.h>
 
 #include "backend.h"
+#include "exitcodes.h"
 #include "global.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"

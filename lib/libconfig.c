@@ -54,6 +54,7 @@
 #include <sys/stat.h>
 
 #include "assert.h"
+#include "exitcodes.h"
 #include "hash.h"
 #include "libconfig.h"
 #include "xmalloc.h"

@@ -52,6 +52,7 @@
 #include <unistd.h>
 #endif
 
+#include "exitcodes.h"
 #include "global.h"
 #include "sync_log.h"
 #include "util.h"

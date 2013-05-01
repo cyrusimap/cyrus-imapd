@@ -44,8 +44,6 @@
 
 #include "xstrlcpy.h"
 
-#include "exitcodes.h"
-
 #ifndef HAVE_STRLCPY
 /* strlcpy -- copy string smartly.
  *

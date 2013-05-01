@@ -59,7 +59,6 @@
 
 #include "assert.h"
 #include "cyrusdb.h"
-#include "exitcodes.h"
 #include "map.h"
 #include "bsearch.h"
 #include "cyr_lock.h"
