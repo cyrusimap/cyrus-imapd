@@ -32,20 +32,21 @@
     feature set is limited to what is required to support the
     facilities listed above.</i>
 
-<!--
-<p>The Cyrus CalDAV implementation is not yet complete and currently
-  does NOT support scheduling, WebDAV ACLs, or all required CalDAV
-  reports.  Work on these features is ongoing.  The server has been
-  tested with the Mozilla Sunbird/Lightning, Apple iCal, and Evolution
-  clients.</p>
--->
+<p>This document assumes that you are familiar with building and
+  configuring a Cyrus server.  If you have not already done so, please
+  read and understand the rest of
+  the <a href="install.html">installation</a> documentation first.
+  Note: The "<a href="#install">Installation</a>" section below
+  augments the "<a href="install-compile.html">Compiling the IMAP
+  Server</a>" document.  The remaining sections assume that your Cyrus
+  server has already been
+  successfully <a href="install-configure.html">configured</a>.</p>
 
-<p>This document assumes that you have successfully been able to setup
-  your Cyrus server.  If you have not already done so, please refer
-  to the rest of the documentation.  This document also assumes that you
-  are familiar with RSS, calendaring, and contacts.</p>
+<p>This document also assumes that you are familiar with RSS, WebDAV,
+  CalDAV, CardDAV, calendaring, and contacts.</p>
 
-<h2>Installation</h2>
+
+<h2 id="install">Installation</h2>
 
 <p>You will need to build Cyrus with 
   the <tt>--enable-http</tt> configure option.  This builds httpd
@@ -80,7 +81,7 @@
 </ul>
 -->
 
-<h2>General Configuration</h2>
+<h2 id="config">General Configuration</h2>
 
 <p>The Cyrus <tt>httpd</tt> service is configurable via several
   options in <tt>imapd.conf</tt>.  Several of those options are
@@ -178,18 +179,12 @@
   feature can be disabled with the <tt>caldav_allowscheduling</tt>
   option.</p>
 
-<!--
-<p>Some CalDAV clients don't support the creation of calendars, so it is
-  best to provision at least one calendar for each user.  To provision a
-  user to have an "events" calendar, you would create a mailbox such
-  as <tt>user.&lt;userid&gt;.#calendars.events</tt></p>
--->
 
 <h3>Administration</h3>
 
 <h4>Calendar provisioning</h4>
 
-<p>The CalDAV module with automatically create the required calendars
+<p>The CalDAV module will automatically create the required calendars
   for a user the first time that the user authenticates to the CalDAV
   server.  Note that the user MUST have an
   existing <a href="install-admin-mb.html">IMAP Inbox</a> in order for
@@ -326,7 +321,7 @@
   perform the following steps:
 
 <ol>
-<li>Select the "File / New / Calendar..." menu option.</li>
+<li>Select the "File -> New -> Calendar..." menu option.</li>
 <li>Select the "On the Network" option and click Continue.</li>
 <li>Select "CalDAV" as the Format.</li>
 <li>Enter a URL of the following form as
@@ -342,7 +337,7 @@
   To add a Cyrus server to this client, perform the following steps:
 
 <ol>
-<li>Select the "Calendar / Preferences" menu option.</li>
+<li>Select the "Calendar -> Preferences" menu option.</li>
 <li>Select the "Accounts" tab.</li>
 <li>Click the "+" button.</li>
 <li>Select "CalDAV" as the Account Type.
@@ -374,7 +369,7 @@
   perform the following steps:
 
 <ol>
-<li>Select the "New / Calendar" menu option.</li>
+<li>Select the "New -> Calendar" menu option.</li>
 <li>Select "CalDAV" as the Type.</li>
 <li>Fill in Server and User accordingly.</li>
 <li>Click "Find Calendars".</li>
@@ -412,7 +407,7 @@
 
 <h4>Addressbook provisioning</h4>
 
-<p>The CardDAV module with automatically create a default addressbook
+<p>The CardDAV module will automatically create a default addressbook
   for a user the first time that the user authenticates to the CardDAV
   server.  Note that the user MUST have an
   existing <a href="install-admin-mb.html">IMAP Inbox</a> in order for
@@ -433,7 +428,7 @@
   To add a Cyrus server to this client, perform the following steps:
 
 <ol>
-<li>Select the "Contacts / Preferences" menu option.</li>
+<li>Select the "Contacts -> Preferences" menu option.</li>
 <li>Select the "Accounts" tab.</li>
 <li>Click the "+" button.</li>
 <li>Select "CardDAV" as the Account Type.
