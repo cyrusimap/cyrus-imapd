@@ -228,7 +228,7 @@ EXPORTED int cyrusdb_foreach(struct db *db,
 				p, cb, rock, tid);
 }
 
-int cyrusdb_create(struct db *db,
+EXPORTED int cyrusdb_create(struct db *db,
 	      const char *key, size_t keylen,
 	      const char *data, size_t datalen,
 	      struct txn **tid)
