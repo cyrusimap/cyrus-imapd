@@ -50,6 +50,7 @@
 #include <unistd.h>
 #endif
 
+#include "assert.h"
 #include "imap_err.h"
 #include "search_expr.h"
 #include "search_query.h"
