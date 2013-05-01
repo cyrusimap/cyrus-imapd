@@ -46,47 +46,41 @@
 
 #include "config.h"
 
-#include <sys/time.h>
-#include <sys/types.h>
-#include <sys/ipc.h>
-#include <sys/msg.h>
-#include <sys/stat.h>
 #include <fcntl.h>
-
+#include <limits.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <pwd.h>
+#include <signal.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <signal.h>
-#include <stdarg.h>
-
-#include <limits.h>
-#include <unistd.h>
-
-#include <netinet/in.h>
-#include <sys/un.h>
-#include <netdb.h>
-#include <sys/socket.h>
 #include <sys/file.h>
-#include <netinet/in.h>
-#include <netdb.h>
+#include <sys/msg.h>
+#include <sys/ipc.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <sys/un.h>
+#include <unistd.h>
 
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
-#include <pwd.h>
-
-#include "prot.h"
 #include "hash.h"
 #include "imparse.h"
 #include "iptostring.h"
+#include "md5.h"
+#include "prot.h"
+#include "retry.h"
+#include "strarray.h"
+#include "stristr.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
-#include "md5.h"
-#include "retry.h"
-#include "strarray.h"
-#include "stristr.h"
 
 #ifdef HAVE_SSL
 #include <openssl/ssl.h>
