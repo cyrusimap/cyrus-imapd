@@ -2434,15 +2434,24 @@ EXPORTED int annotatemore_msg_write(const char *mboxname, uint32_t uid, const ch
 {
     struct mailbox *mailbox = NULL;
     int r = 0;
+    annotate_db_t *d = NULL;
 
-    if (mboxname)
+    r = _annotate_getdb(mboxname, uid, CYRUSDB_CREATE, &d);
+    if (r) goto done;
+
+    if (mboxname) {
 	r = mailbox_open_iwl(mboxname, &mailbox);
+	if (r) goto done;
+    }
 
-    if (!r)
-	r = write_entry(mailbox, uid, entry, userid, value, /*ignorequota*/1);
+    r = write_entry(mailbox, uid, entry, userid, value, /*ignorequota*/1);
+    if (r) goto done;
 
-    if (mailbox)
-	mailbox_close(&mailbox);
+    r = annotate_commit(&d);
+
+done:
+    annotate_putdb(&d);
+    mailbox_close(&mailbox);
 
     return r;
 }
