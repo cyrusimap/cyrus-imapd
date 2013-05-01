@@ -21,6 +21,7 @@
 #include "libconfig.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
+#include "xmalloc.h"
 
 #define DBDIR       "test-sieve-dbdir"
 #define PARTITION   "default"

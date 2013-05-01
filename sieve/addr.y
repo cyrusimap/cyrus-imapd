@@ -54,7 +54,6 @@
 
 #include "sieve/script.h"
 #include "sieve/addr.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 
 #define ADDRERR_SIZE 500

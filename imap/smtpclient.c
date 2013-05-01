@@ -51,12 +51,11 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+#include "xmalloc.h"
 #include "global.h"
 #include "exitcodes.h"
 #include "imap/imap_err.h"
 #include "smtpclient.h"
-
-extern void fatal(const char *buf, int code);
 
 pid_t open_sendmail(const char *argv[], FILE **sm)
 {

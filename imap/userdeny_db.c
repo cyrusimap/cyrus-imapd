@@ -59,7 +59,6 @@
 #include "imap/imap_err.h"
 #include "tok.h"
 #include "wildmat.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 
 #define FNAME_USERDENYDB "/user_deny.db"

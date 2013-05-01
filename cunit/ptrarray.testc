@@ -1,5 +1,6 @@
+#include <stdlib.h>
+
 #include "cunit/cunit.h"
-#include "xmalloc.h"
 #include "ptrarray.h"
 
 #define PTR0	    ((void *)0xcafebabe)

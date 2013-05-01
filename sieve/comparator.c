@@ -57,7 +57,6 @@
 #include "sieve/sieve_interface.h"
 #include "sieve/sieve.h"
 #include "bytecode.h"
-#include "xmalloc.h"
 #include "util.h"
 
 /*!!! uses B_CONTAINS not CONTAINS, etc, only works with bytecode*/

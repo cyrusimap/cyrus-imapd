@@ -45,7 +45,6 @@
 #include <ctype.h>
 #include <errno.h>
 #include "rfc822tok.h"
-#include "xmalloc.h"
 
 EXPORTED void rfc822tok_init(rfc822tok_t *t, const char *base,
 			     unsigned int len, unsigned int flags)

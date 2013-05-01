@@ -60,7 +60,6 @@
 
 #include "global.h"
 #include "notify.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 

@@ -66,7 +66,6 @@
 #include "imap/imap_err.h"
 #include "global.h"
 #include "util.h"
-#include "xmalloc.h"
 
 static void usage(const char *name)
 {

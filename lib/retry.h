@@ -53,8 +53,8 @@
 #endif
 #endif
 
+#include <sys/types.h>
 #include <sys/uio.h>
-#include "xmalloc.h"
 
 extern ssize_t retry_read P((int fd, void *buf, size_t nbyte));
 extern ssize_t retry_write P((int fd, const void *buf, size_t nbyte));

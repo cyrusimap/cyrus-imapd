@@ -1,6 +1,7 @@
 #include "config.h"
 #include "cunit/cunit.h"
 #include "tok.h"
+#include "xmalloc.h"
 
 #define WORD0	"lorem"
 #define WORD1	"ipsum"

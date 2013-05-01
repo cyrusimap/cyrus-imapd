@@ -46,6 +46,8 @@
 #ifndef COMPARATOR_H
 #define COMPARATOR_H
 
+#include <sys/types.h>
+
 #ifdef ENABLE_REGEX
 # ifdef HAVE_PCREPOSIX_H
 #  include <pcre.h>

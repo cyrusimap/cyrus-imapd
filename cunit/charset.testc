@@ -1,5 +1,6 @@
+#include <stdlib.h>
+
 #include "cunit/cunit.h"
-#include "xmalloc.h"
 #include "charset.h"
 
 #define UTF8_REPLACEMENT    "\357\277\275"

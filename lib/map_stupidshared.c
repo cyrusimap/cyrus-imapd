@@ -51,6 +51,7 @@
 
 #include "map.h"
 #include "exitcodes.h"
+#include "xmalloc.h"
 
 EXPORTED const char *map_method_desc = "stupidshared";
 

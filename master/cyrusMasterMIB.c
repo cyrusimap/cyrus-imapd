@@ -7,7 +7,6 @@
 
 #if defined(HAVE_UCDSNMP) || defined(HAVE_NETSNMP)
 
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 
@@ -47,6 +46,7 @@
 
 #include <time.h>
 #include <string.h>
+#include <sys/types.h>
 
 #include "cyrusMasterMIB.h"
 

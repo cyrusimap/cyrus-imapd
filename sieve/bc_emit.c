@@ -48,7 +48,6 @@
 #include <config.h>
 #endif
 
-#include "xmalloc.h"
 #include "sieve_interface.h"
 
  

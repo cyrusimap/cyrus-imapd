@@ -47,6 +47,7 @@
 
 /***************** server-side LMTP *******************/
 
+#include "xmalloc.h"
 #include "spool.h"
 #include "mboxname.h"
 #include "quota.h"

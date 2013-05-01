@@ -1,5 +1,6 @@
+#include <stdlib.h>
+
 #include "cunit/cunit.h"
-#include "xmalloc.h"
 #include "bitvector.h"
 
 static void test_free(void)

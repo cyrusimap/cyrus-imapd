@@ -47,6 +47,8 @@
 **  Don't replace any existing definitions, for use with malloc-debug
 **  packages, e.g.
 */
+#include "xmalloc.h"
+
 #if	defined(_DEBUG_MALLOC_INC)
 #undef _DEBUG_MALLOC_INC
 #include "malloc.h"
