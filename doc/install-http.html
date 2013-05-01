@@ -110,17 +110,18 @@
   of SASL, the remaining schemes are only available in Cyrus SASL
   2.1.16 (and higher).</p>
 
-<p>Similar to plaintext login commands in the other Cyrus services
-  (IMAP LOGIN, POP3 USER/PASS), the Cyrus <tt>httpd</tt> service
-  determines whether to advertise the HTTP Basic authentication scheme
-  based on the <tt>allowplaintext</tt> option and whether the client
-  has connected over a TLS protected connection (HTTPS).</p>
+<p>Similar to plaintext login commands supported by the other Cyrus
+  services (IMAP LOGIN, POP3 USER/PASS), the Cyrus <tt>httpd</tt>
+  service determines whether to advertise the HTTP Basic
+  authentication scheme based on the <tt>allowplaintext</tt> option
+  and whether the client has connected over a TLS protected connection
+  (HTTPS).</p>
 
 <p>The availability of the other HTTP authentication schemes is
   controlled by the <tt>sasl_mech_list</tt> option.  For
   Cyrus <tt>httpd</tt> the <tt>DIGEST-MD5</tt>, <tt>GSS-SPNEGO</tt>,
   and <tt>NTLM</tt> SASL plugins support the Digest, Negotiate,
-  and NTLM authentication schemes respectively, provided that the
+  and NTLM authentication schemes respectively, provided that these
   plugins are installed on the server.</p>
 
 <h2>RSS Module</h2>
@@ -172,7 +173,7 @@
   prevent an IMAP client from accessing them.</i></p>
 
 <p>By default, the CalDAV module will automatically perform scheduling
-  operations when a scheduling object (invitation or reply) is stored
+  operations when a scheduling object (invite or reply) is stored
   on or deleted from the server.  Support for the calendar-auto-schedule
   feature can be disabled with the <tt>caldav_allowscheduling</tt>
   option.</p>
@@ -194,9 +195,128 @@
   existing <a href="install-admin-mb.html">IMAP Inbox</a> in order for
   the calendars to be created.</p>
 
-<h4>Calendar access controls</h4>
+<h4 id="ACLs">Calendar access controls</h4>
 
-<p>IMAP rights -> DAV privileges</p>
+<p>The CalDAV module uses the same access controls as the other Cyrus
+  services.  The <tt>cyradm(1)</tt> tool can be used to adjust ACLs on
+  calendars as needed.  The tables below show how the access controls
+  are used by the CalDAV module.</p>
+
+<br>
+<table border>
+  <caption>Mapping of IMAP Rights to WebDAV Privileges & HTTP Methods</caption>
+  <tr>
+    <th>IMAP right</th>
+    <th>WebDAV privilege</th>
+    <th>HTTP methods</th>
+  </tr>
+  <tr>
+    <td>l - lookup</td>
+    <td rowspan=2>DAV:read
+      <br><i>(aggregates DAV:read-current-user-privilege-set,
+      <br>CALDAV:read-free-busy)</i></td>
+    <td rowspan=2>GET/HEAD, PROPFIND, REPORT,
+      <br>COPY/MOVE <i>(on target)</i></td>
+  </tr>
+  <tr>
+    <td>r - read</td>
+  </tr>
+  <tr>
+    <td>s - seen</td>
+    <td colspan=2/>
+  </tr>
+  <tr>
+    <td>w - write</td>
+    <td>DAV:write-properties</i></td>
+    <td>PROPPATCH, COPY/MOVE <i>(on target)</i></td>
+  </tr>
+  <tr>
+    <td>i - insert</td>
+    <td>DAV:write-content</td>
+    <td>PUT, LOCK, COPY/MOVE <i>(on target)</i></td>
+  </tr>
+  <tr>
+    <td>p - post</td>
+    <td>CYRUS:add-resource <i>(aggregated under DAV:bind)</i></td>
+    <td>POST</td>
+  </tr>
+  <tr>
+    <td>k - create mailbox</td>
+    <td>CYRUS:make-collection <i>(aggregated under DAV:bind)</i></td>
+    <td>MKCOL, MKCALENDAR</td>
+  </tr>
+  <tr>
+    <td>x - delete mailbox</td>
+    <td>CYRUS:remove-collection <i>(aggregated under DAV:unbind)</i></td>
+    <td>DELETE</td>
+  </tr>
+  <tr>
+    <td>t - delete message</td>
+    <td>CYRUS:remove-resource <i>(aggregated under DAV:unbind)</i></td>
+    <td>DELETE, MOVE <i>(on source)</i></td>
+  </tr>
+  <tr>
+    <td>e - expunge</td>
+    <td colspan=2/>
+  </tr>
+  <tr>
+    <td>a - admin</td>
+    <td>CYRUS:admin
+      <br><i>(aggregates DAV:read-acl, DAV:write-acl, DAV:unlock)</i></td>
+    <td>ACL, UNLOCK, PROPFIND <i>(DAV:acl only)</i></td>
+  </tr>
+  <tr>
+    <td rowspan=3>9 - free/busy</td>
+    <td>CALDAV:read-free-busy <i>(regular calendar collection only)</i></td>
+    <td>REPORT <i>(CALDAV:free-busy-query only)</i><td/>
+  </tr>
+  <tr>
+    <td>CALDAV:schedule-query-freebusy <i>(Scheduling Inbox only)</i></td>
+    <td rowspan=6/>
+  </tr>
+  <tr>
+    <td>CALDAV:schedule-send-freebusy <i>(Scheduling Outbox only)</i></td>
+  <tr>
+    <td rowspan=2>8 - invite</td>
+    <td>CALDAV:schedule-deliver-invite <i>(Scheduling Inbox only)</i></td>
+  </tr>
+  <tr>
+    <td>CALDAV:schedule-send-invite <i>(Scheduling Outbox only)</i></td>
+  </tr>
+  <tr>
+    <td rowspan=2>7 - reply</td>
+    <td>CALDAV:schedule-deliver-reply <i>(Scheduling Inbox only)</i></td>
+  </tr>
+  <tr>
+    <td>CALDAV:schedule-send-reply <i>(Scheduling Outbox only)</i></td>
+  </tr>
+</table>
+<br>
+
+<br>
+<table border>
+  <caption>Default WebDAV Privileges by Collection</caption>
+  <tr>
+    <th>Collection</th>
+    <th>ACL</th>
+  </tr>
+  <tr>
+    <td>Regular Calendar</td>
+    <td>owner - DAV:all + CALDAV:read-free-busy (lrwipkxta9)
+      <br>anyone - CALDAV:read-free-busy (9)</td>
+  </tr>
+  <tr>
+    <td>Scheduling Inbox</td>
+    <td>owner - DAV:all + CALDAV:schedule-deliver (lrwipkxta789)
+      <br>anyone - CALDAV:schedule-deliver (789)</td>
+  </tr>
+  <tr>
+    <td>Scheduling Outbox</td>
+    <td>owner - DAV:all + CALDAV:schedule-send (lrwipkxta789)</td>
+  </tr>
+</table>
+<br>
+
 
 <h3>Client Setup</h3>
 
@@ -249,6 +369,22 @@
 
 <h4>Evolution</h4>
 
+<p>This client will autodetect all available calendars on a server.
+  For each calendar that you would like to add to this client,
+  perform the following steps:
+
+<ol>
+<li>Select the "New / Calendar" menu option.</li>
+<li>Select "CalDAV" as the Type.</li>
+<li>Fill in Server and User accordingly.</li>
+<li>Click "Find Calendars".</li>
+<li>Select the desired calendar from the list.</li>
+<li>Click "Apply".</li>
+<li>Click "OK".</li>
+</ol>
+</p>
+
+
 <h2>CardDAV Module</h2>
 
 <h3>Configuration</h3>
@@ -285,8 +421,9 @@
 <h4>Addressbook access controls</h4>
 
 <p>Cyrus uses the same access controls for addressbooks as it does for
-  calendars, with the exception that the scheduling rights (7, 8, 9)
-  have no use with addressbooks and are ignored.</p>
+  <a href="#ACLs">calendars</a>, with the exception that the
+  scheduling rights (7, 8, 9) have no use with addressbooks and are
+  ignored.</p>
 
 <h3>Client Setup</h3>
 
