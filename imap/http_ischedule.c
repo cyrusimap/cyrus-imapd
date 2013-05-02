@@ -846,8 +846,6 @@ static int meth_get_domainkey(struct transaction_t *txn,
 
 static void isched_init(struct buf *serverinfo)
 {
-    unsigned need_dkim = 1;
-
     if (!(config_httpmodules & IMAP_ENUM_HTTPMODULES_CALDAV) ||
 	!config_getswitch(IMAPOPT_CALDAV_ALLOWSCHEDULING)) {
 	/* Need CALDAV and CALDAV_SCHED in order to have ISCHEDULE */
@@ -858,8 +856,7 @@ static void isched_init(struct buf *serverinfo)
 
     if (config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS)) {
 	/* If backend server, we require ISCHEDULE (w/o DKIM) */
-	namespace_ischedule.enabled = 1;
-	need_dkim = 0;
+	namespace_ischedule.enabled = -1;
 	buf_len(serverinfo);  // squash compiler warning when #undef WITH_DKIM
     }
 #ifdef WITH_DKIM
@@ -885,6 +882,8 @@ static void isched_init(struct buf *serverinfo)
 				   "Upgrade", "Via", NULL };
 	const char *senderhdrs[] = { "Originator", NULL };
 	uint32_t ver = dkim_libversion();
+	unsigned need_dkim =
+	    namespace_ischedule.enabled == IMAP_ENUM_HTTPMODULES_ISCHEDULE;
 
 	/* Add OpenDKIM version to serverinfo string */
 	buf_printf(serverinfo, " OpenDKIM/%u.%u.%u",
