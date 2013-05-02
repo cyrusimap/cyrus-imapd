@@ -49,7 +49,8 @@
 #ifdef WITH_DKIM
 #include <dkim.h>
 
-#if (OPENDKIM_LIB_VERSION < 0x02070000)
+#if (OPENDKIM_LIB_VERSION < 0x03000000)
+/* Actually need 0x02070000 + ischedule-relaxed patch */
 #undef WITH_DKIM
 #endif
 
