@@ -697,7 +697,7 @@ static void buf_escapestr(struct buf *buf, const char *str, unsigned max,
 /* List messages as an RSS feed */
 static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 {
-    const char **fwd, *proto, *host, *webmaster;
+    const char **fwd, *proto = NULL, *host = NULL, *webmaster;
     uint32_t url_len, recno, recentuid = 0;
     int max_age, max_items, max_len, ttl, nitems, precond;
     time_t age_mark = 0, lastmod;
