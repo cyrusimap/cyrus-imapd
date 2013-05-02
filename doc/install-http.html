@@ -7,7 +7,7 @@
 </head>
 <body>
 
-<h1>Cyrus HTTP (RSS, CalDAV, CardDAV)</h1>
+<h1>Cyrus HTTP (RSS, CalDAV, CardDAV, iSchedule, DomainKey)</h1>
 
 <b><i>Note that the HTTP service and associated modules in Cyrus are
     still under development.  This release should be considered beta
@@ -25,6 +25,9 @@
 <li>Act as a contacts (CardDAV) server by using IMAP mailboxes as
   addressbook collections and RFC 5322 messages to store vCard
   data.</li>
+<li>Allow scheduling transactions between separate calendaring and
+  scheduling systems via the iSchedule protocol <i>(currently only used
+  within a Cyrus Murder)</i>.</li>
 </ul>
 
 <i>Unlike the <a href="http://httpd.apache.org/">Apache HTTP
@@ -43,7 +46,7 @@
   successfully <a href="install-configure.html">configured</a>.</p>
 
 <p>This document also assumes that you are familiar with RSS, WebDAV,
-  CalDAV, CardDAV, calendaring, and contacts.</p>
+  calendaring, and contacts.</p>
 
 
 <h2 id="install">Installation</h2>
@@ -416,9 +419,8 @@
 <h4>Addressbook access controls</h4>
 
 <p>Cyrus uses the same access controls for addressbooks as it does for
-  <a href="#ACLs">calendars</a>, with the exception that the
-  scheduling rights (7, 8, 9) have no use with addressbooks and are
-  ignored.</p>
+  <a href="#ACLs">calendars</a>, except that the scheduling rights (7,
+  8, 9) have no use with addressbooks and are ignored.</p>
 
 <h3>Client Setup</h3>
 
@@ -453,8 +455,25 @@
 </ol>
 </p>
 
-<!--
+
 <h2>iSchedule Module</h2>
+
+<p>This module will be automatically enabled if and only if both the
+  CalDAV module and the <tt>caldav_allowscheduling</tt> options are
+  enabled in a Cyrus Murder.</p>
+
+<p><i>Support for scheduling with external servers is currently under
+    development and will require a future release of OpenDKIM.</i></p>
+
+<!--
+<h3>Configuration</h3>
+
+<h3>Administration</h3>
 -->
+
+<h2>DomainKey Module</h2>
+
+<p><i>Currently unavailable.  Will be available once iSchedule support to
+    external servers is available.</i></p>
 
 </body></html>
