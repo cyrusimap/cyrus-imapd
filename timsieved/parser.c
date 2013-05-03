@@ -54,26 +54,25 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
-
 #include <string.h>
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
-
 #include "assert.h"
+#include "exitcodes.h"
 #include "libconfig.h"
-#include "imap/global.h"
-#include "imap/backend.h"
-#include "imap/mboxname.h"
-#include "imap/mboxlist.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "prot.h"
-#include "imap/tls.h"
-#include "lex.h"
-#include "actions.h"
-#include "exitcodes.h"
+
+#include "imap/backend.h"
+#include "imap/global.h"
+#include "imap/mboxlist.h"
+#include "imap/mboxname.h"
 #include "imap/telemetry.h"
+#include "imap/tls.h"
+
+#include "timsieved/actions.h"
+#include "timsieved/lex.h"
 
 extern const char *sieved_clienthost;
 extern int sieved_domainfromip;

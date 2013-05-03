@@ -47,35 +47,30 @@
 #include <config.h>
 #endif
 
+#include <ctype.h>
+#include <dirent.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <stdlib.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <sys/stat.h>
-#include <errno.h>
-#include <stdlib.h>
-#include <limits.h>
-#include <sys/param.h>
-#include <sys/types.h>
-#include <fcntl.h>
-#include <syslog.h>
-#include <dirent.h>
-#include <ctype.h>
-#include <unistd.h>
 #include <string.h>
+#include <sys/param.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <syslog.h>
+#include <unistd.h>
 
-#include "imap/tls.h"
-#include "util.h"
-#include "imap/global.h"
 #include "libconfig.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
-#include "sieve/sieve_interface.h"
-
-#include "codes.h"
-#include "actions.h"
-#include "scripttest.h"
-
+#include "imap/global.h"
 #include "imap/sync_log.h"
+#include "imap/tls.h"
+#include "timsieved/actions.h"
+#include "timsieved/scripttest.h"
 
 /* after a user has authentication, our current directory is their Sieve 
    directory! */

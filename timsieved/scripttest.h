@@ -46,6 +46,8 @@
 #ifndef INCLUDE_SCRIPTTEST_H_
 #define INCLUDE_SCRIPTTEST_H_
 
+#include "sieve/sieve_interface.h"
+
 extern sieve_interp_t *interp;
 
 int build_sieve_interp(void);

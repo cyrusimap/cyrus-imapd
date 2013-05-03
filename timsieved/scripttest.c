@@ -46,18 +46,16 @@
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-
-#include "sieve/sieve_interface.h"
-#include "scripttest.h"
+#include <stdlib.h>
+#include <string.h>
 #include <syslog.h>
 
-#include "codes.h"
-
-#include "xmalloc.h"
-#include "util.h"
 #include "assert.h"
-#include <string.h>
-#include <stdlib.h>
+#include "util.h"
+#include "xmalloc.h"
+
+#include "timsieved/codes.h"
+#include "timsieved/scripttest.h"
 
 /* to make larry's stupid functions happy :) */ 
 static void foo(void)

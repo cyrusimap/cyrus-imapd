@@ -48,19 +48,17 @@
 #include <config.h>
 #endif
 
+#include <ctype.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <ctype.h>
 #include <string.h>
 
-#include "imap/tls.h"
-#include "lex.h"
-#include "codes.h"
-#include "actions.h"
 #include "libconfig.h"
-#include "imap/global.h"
-#include "util.h"
 #include "xmalloc.h"
+#include "imap/global.h"
+#include "imap/tls.h"
+#include "timsieved/actions.h"
+#include "timsieved/lex.h"
 
 static int token_lookup(const char *str)
 {

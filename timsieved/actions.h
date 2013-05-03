@@ -49,8 +49,8 @@
 
 
 #include "prot.h"
-#include "codes.h"
 #include "util.h"
+#include "timsieved/codes.h"
 
 /*
  * Get the list of capabilities

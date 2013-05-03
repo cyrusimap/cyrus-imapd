@@ -48,47 +48,38 @@
 #include <config.h>
 #endif
 
+#include <arpa/inet.h>
+#include <ctype.h>
+#include <dirent.h>
+#include <errno.h>
+#include <limits.h>
+#include <netdb.h>
+#include <netinet/in.h>
 #include <sasl/sasl.h> /* yay! sasl */
-
+#include <signal.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <sys/stat.h>
-#include <errno.h>
-#include <stdlib.h>
-#include <limits.h>
-#include <sys/param.h>
-#include <syslog.h>
-#include <dirent.h>
-#include <ctype.h>
-#include <netdb.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <signal.h>
 #include <string.h>
-
-#include "sieve/sieve_interface.h"
-
-#include "prot.h"
-#include "libconfig.h"
-#include "xmalloc.h"
-#include "exitcodes.h"
-#include "imap/global.h"
-#include "codes.h"
-#include "actions.h"
-#include "parser.h"
-#include "lex.h"
+#include <sys/param.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <syslog.h>
+#include <unistd.h>
 
 #include "auth.h"
+#include "exitcodes.h"
+#include "libconfig.h"
+#include "xmalloc.h"
 #include "imap/backend.h"
+#include "imap/global.h"
 #include "imap/mboxlist.h"
 #include "imap/proxy.h"
-#include "util.h"
-
-#include "scripttest.h"
-
 #include "imap/sync_log.h"
+#include "timsieved/actions.h"
+#include "timsieved/codes.h"
+#include "timsieved/parser.h"
+#include "timsieved/scripttest.h"
+#include "timsieved/lex.h"
 
 /* global state */
 const int config_need_data = 0;
