@@ -52,8 +52,4 @@
 #define SIEVE_BADPORT -5
 #define SIEVE_NOEXIST -6
 
-
-#define TRUE 1
-#define FALSE 0
-
 #endif

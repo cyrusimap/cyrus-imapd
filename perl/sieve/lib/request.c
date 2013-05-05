@@ -49,23 +49,19 @@
 #include <config.h>
 #endif
 
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/ipc.h>
-#include <sys/msg.h>
-
+#include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-
 #include <sys/file.h>
-#include <errno.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
-#include "request.h"
-
-#include "prot.h"
-#include "lex.h"
 #include "xmalloc.h"
+#include "perl/sieve/lib/request.h"
+#include "perl/sieve/lib/lex.h"
 
 #define BLOCKSIZE 1024
 

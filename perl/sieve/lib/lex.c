@@ -48,17 +48,15 @@
 #include <config.h>
 #endif
 
+#include <ctype.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <ctype.h>
 #include <string.h>
 
 #include "prot.h"
 #include "xmalloc.h"
-
-#include "lex.h"
-
-#include "codes.h"
+#include "perl/sieve/lib/codes.h"
+#include "perl/sieve/lib/lex.h"
 
 /* current state the lexer is in */
 static int lexer_state = LEXER_STATE_NORMAL;

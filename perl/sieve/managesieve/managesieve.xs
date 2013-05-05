@@ -51,14 +51,12 @@ extern "C" {
 }
 #endif
 
-#include "managesieve.h"
-
-#include <netinet/in.h>
 #include <netdb.h>
-#include <sys/socket.h>
+#include <netinet/in.h>
 #include <sys/file.h>
-#include <netinet/in.h>
-#include <netdb.h>
+#include <sys/socket.h>
+
+#include "managesieve.h"
 
 typedef struct xscyrus *Sieveobj;
 static char *globalerr = NULL;
@@ -197,16 +195,16 @@ sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *passwor
     callbacks = safemalloc(5 * sizeof(sasl_callback_t));
 
     callbacks[0].id = SASL_CB_USER;
-    callbacks[0].proc = &perlsieve_simple;
+    callbacks[0].proc = (int (*)(void))&perlsieve_simple;
     callbacks[0].context = username_cb;
     callbacks[1].id = SASL_CB_AUTHNAME;
-    callbacks[1].proc = &perlsieve_simple;
+    callbacks[1].proc = (int (*)(void))&perlsieve_simple;
     callbacks[1].context = authname_cb;
     callbacks[2].id = SASL_CB_GETREALM;
-    callbacks[2].proc = &perlsieve_simple;
+    callbacks[2].proc = (int (*)(void))&perlsieve_simple;
     callbacks[2].context = realm_cb;
     callbacks[3].id = SASL_CB_PASS;
-    callbacks[3].proc = &perlsieve_getpass;
+    callbacks[3].proc = (int (*)(void))&perlsieve_getpass;
     callbacks[3].context = password_cb;
     callbacks[4].id = SASL_CB_LIST_END;
 

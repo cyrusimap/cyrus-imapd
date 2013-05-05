@@ -45,29 +45,20 @@
 #include <config.h>
 #endif
 
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif
-
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/file.h>
-#include <netinet/in.h>
 #include <netdb.h>
+#include <netinet/in.h>
+#include <sasl/saslutil.h>
+#include <sys/file.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 #include <string.h>
 #include <unistd.h>
 
-#include <sasl/sasl.h>
-#include <sasl/saslutil.h>
-
-#include "isieve.h"
-#include "lex.h"
-#include "request.h"
 #include "iptostring.h"
 #include "xmalloc.h"
-#include "util.h"
-
-#include <prot.h>
+#include "perl/sieve/lib/isieve.h"
+#include "perl/sieve/lib/lex.h"
+#include "perl/sieve/lib/request.h"
 
 struct iseive_s {
     char *serverFQDN;

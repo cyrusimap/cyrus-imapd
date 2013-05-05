@@ -48,7 +48,7 @@
 #define _REQUEST_H_
 
 #include "util.h"
-#include "isieve.h"
+#include "perl/sieve/lib/isieve.h"
 
 /* old and new versions of the protocol */
 #define OLD_VERSION  4
