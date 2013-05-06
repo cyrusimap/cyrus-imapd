@@ -2423,6 +2423,67 @@ out:
     return r;
 }
 
+EXPORTED int annotatemore_rawwrite(const char *mboxname, const char *entry,
+				   const char *userid, const struct buf *value)
+{
+    char key[MAX_MAILBOX_PATH+1];
+    int keylen, r;
+    annotate_db_t *d = NULL;
+    struct buf oldval = BUF_INITIALIZER;
+    uint32_t uid = 0;
+
+    r = _annotate_getdb(mboxname, uid, CYRUSDB_CREATE, &d);
+    if (r) goto done;
+
+    /* must be in a transaction to modify the db */
+    annotate_begin(d);
+
+    keylen = make_key(mboxname, uid, entry, userid, key, sizeof(key));
+
+    if (value->s == NULL) {
+	do {
+	    r = cyrusdb_delete(d->db, key, keylen, tid(d), /*force*/1);
+	} while (r == CYRUSDB_AGAIN);
+    }
+    else {
+	struct buf data = BUF_INITIALIZER;
+	unsigned long l;
+	static const char contenttype[] = "text/plain"; /* fake */
+
+	l = htonl(value->len);
+	buf_appendmap(&data, (const char *)&l, sizeof(l));
+
+	buf_appendmap(&data, value->s, value->len);
+	buf_putc(&data, '\0');
+
+	/*
+	 * Older versions of Cyrus expected content-type and
+	 * modifiedsince fields after the value.  We don't support those
+	 * but we write out default values just in case the database
+	 * needs to be read by older versions of Cyrus
+	 */
+	buf_appendcstr(&data, contenttype);
+	buf_putc(&data, '\0');
+
+	l = 0;	/* fake modifiedsince */
+	buf_appendmap(&data, (const char *)&l, sizeof(l));
+
+	do {
+	    r = cyrusdb_store(d->db, key, keylen, data.s, data.len, tid(d));
+	} while (r == CYRUSDB_AGAIN);
+
+	buf_free(&data);
+    }
+
+    if (r) goto done;
+    r = annotate_commit(d);
+
+done:
+    annotate_putdb(&d);
+
+    return r;
+}
+
 EXPORTED int annotatemore_write(const char *mboxname, const char *entry,
 				const char *userid, const struct buf *value)
 {
