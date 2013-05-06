@@ -77,23 +77,6 @@ enum { PART_TREE, TEXT_SECTIONS, TEXT_RECEIVER } dump_mode = PART_TREE;
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 
-static const char *indent(int depth)
-{
-    static struct buf buf = BUF_INITIALIZER;
-    static int last_depth = -1;
-    int i;
-
-    if (depth != last_depth) {
-	buf_reset(&buf);
-	for (i = 0 ; i < depth ; i++)
-	    buf_appendcstr(&buf, "  ");
-	last_depth = depth;
-    }
-    return buf_cstring(&buf);
-}
-
-/*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
-
 static void dump_octets(FILE *fp, const char *base, unsigned int len)
 {
     unsigned int i;
@@ -144,54 +127,6 @@ static int dump_one_section(int partno, int charset, int encoding,
 static int dump_text_sections(message_t *message)
 {
     return message_foreach_text_section(message, dump_one_section, NULL);
-}
-
-/*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
-
-static void dump_rx_begin_message(
-    search_text_receiver_t *rx __attribute__((unused)), uint32_t uid)
-{
-    printf("BEGIN_MESSAGE uid=%u\n", uid);
-}
-
-static void dump_rx_begin_part(
-    search_text_receiver_t *rx __attribute__((unused)), int part)
-{
-    printf("BEGIN_PART part=%s\n", search_part_as_string(part));
-}
-
-static void dump_rx_append_text(
-    search_text_receiver_t *rx __attribute__((unused)),
-    const struct buf *text)
-{
-    printf("APPEND_TEXT length=%llu\n", (unsigned long long)text->len);
-    dump_buf(stdout, text);
-}
-
-static void dump_rx_end_part(
-    search_text_receiver_t *rx __attribute__((unused)), int part)
-{
-    printf("END_PART part=%s\n", search_part_as_string(part));
-}
-
-static int dump_rx_end_message(search_text_receiver_t *rx __attribute__((unused)))
-{
-    printf("END_MESSAGE\n");
-    return 0;
-}
-
-static int dump_text_receiver(message_t *message)
-{
-    search_text_receiver_t rx;
-
-    rx.begin_message = dump_rx_begin_message;
-    rx.begin_part = dump_rx_begin_part;
-    rx.append_text = dump_rx_append_text;
-    rx.end_part = dump_rx_end_part;
-    rx.end_message = dump_rx_end_message;
-
-    index_getsearchtext(message, &rx, 0);
-    return 0;
 }
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
