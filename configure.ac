@@ -528,29 +528,32 @@ AM_CONDITIONAL([GMTOFF_TM], [test "$cyrus_cv_struct_sys_gmtoff" = "tm"])
 AC_MSG_RESULT($cyrus_cv_struct_sys_gmtoff)
 AC_MSG_CHECKING(for shared mmap)
 AC_CACHE_VAL(cyrus_cv_func_mmap_shared,AC_TRY_RUN([
-#include <sys/types.h>
-#include <sys/mman.h>
 #include <fcntl.h>
-main() {
-char *base;
-int fd = open("conftestmmap", O_RDWR|O_CREAT|O_TRUNC, 0666);
-if (fd == -1) exit(1);
-if (write(fd, "test", 4) != 4) exit(1);
-fsync(fd);
-base = mmap((caddr_t)0, 100, PROT_READ, MAP_SHARED
+#include <string.h>
+#include <sys/mman.h>
+#include <sys/types.h>
+#include <unistd.h>
+int main() {
+    char *base;
+    int mmapflags = MAP_SHARED;
+    int fd = open("conftestmmap", O_RDWR|O_CREAT|O_TRUNC, 0666);
+    if (fd == -1) return 1;
+    if (write(fd, "test", 4) != 4) return 1;
+    fsync(fd);
 #ifdef MAP_FILE
-| MAP_FILE
+    mmapflags |= MAP_FILE;
 #endif
 #ifdef MAP_VARIABLE
-| MAP_VARIABLE
+    mmapflags |= MAP_VARIABLE;
 #endif
-, fd, 0L);
-if (base == (caddr_t)-1) exit(1);
-if (strncmp(base, "test", 4) != 0) exit(1);
-if (write(fd, "test", 4) != 4) exit(1);
-fsync(fd);
-if (strncmp(base+4, "test", 4) != 0) exit(1);
-exit(0);}
+    base = mmap((caddr_t)0, 100, PROT_READ, mmapflags, fd, 0L);
+    if (base == (caddr_t)-1) return 1;
+    if (memcmp(base, "test", 4) != 0) return 1;
+    if (write(fd, "test", 4) != 4) return 1;
+    fsync(fd);
+    if (memcmp(base+4, "test", 4) != 0) return 1;
+    return 0;
+}
 ],cyrus_cv_func_mmap_shared=yes,cyrus_cv_func_mmap_shared=no,
 cyrus_cv_func_mmap_shared=no))
 AC_MSG_RESULT($cyrus_cv_func_mmap_shared)
@@ -559,30 +562,33 @@ if test $cyrus_cv_func_mmap_shared = yes; then
 else
 AC_MSG_CHECKING(for stupid shared mmap)
 AC_CACHE_VAL(cyrus_cv_func_mmap_stupidshared,AC_TRY_RUN([
-#include <sys/types.h>
-#include <sys/mman.h>
 #include <fcntl.h>
-main() {
-char *base;
-int fd = open("conftestmmap", O_RDWR|O_CREAT|O_TRUNC, 0666);
-if (fd == -1) exit(1);
-if (write(fd, "test", 4) != 4) exit(1);
-fsync(fd);
-base = mmap((caddr_t)0, 4, PROT_READ, MAP_SHARED
+#include <string.h>
+#include <sys/mman.h>
+#include <sys/types.h>
+#include <unistd.h>
+int main() {
+    char *base;
+    int fd = open("conftestmmap", O_RDWR|O_CREAT|O_TRUNC, 0666);
+    int mmapflags = MAP_SHARED;
+    if (fd == -1) return 1;
+    if (write(fd, "test", 4) != 4) return 1;
+    fsync(fd);
 #ifdef MAP_FILE
-| MAP_FILE
+    mmapflags |= MAP_FILE;
 #endif
 #ifdef MAP_VARIABLE
-| MAP_VARIABLE
+    mmapflags |= MAP_VARIABLE;
 #endif
-, fd, 0L);
-if (base == (caddr_t)-1) exit(1);
-if (strncmp(base, "test", 4) != 0) exit(1);
-lseek(fd, 0L, 0);	
-if (write(fd, "xyzz", 4) != 4) exit(1);
-fsync(fd);
-if (strncmp(base, "xyzz", 4) != 0) exit(1);
-exit(0);}
+    base = mmap((caddr_t)0, 4, PROT_READ, mmapflags, fd, 0L);
+    if (base == (caddr_t)-1) return 1;
+    if (memcmp(base, "test", 4) != 0) return 1;
+    lseek(fd, 0L, 0);
+    if (write(fd, "xyzz", 4) != 4) return 1;
+    fsync(fd);
+    if (memcmp(base, "xyzz", 4) != 0) return 1;
+    return 0;
+}
 ],cyrus_cv_func_mmap_stupidshared=yes,cyrus_cv_func_mmap_stupidshared=no,
 cyrus_cv_func_mmap_stupidshared=no))
 AC_MSG_RESULT($cyrus_cv_func_mmap_stupidshared)
