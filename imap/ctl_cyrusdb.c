@@ -134,7 +134,7 @@ static int fixmbox(char *name,
 	if (userid) {
 	    struct buf buf = BUF_INITIALIZER;
 	    buf_setcstr(&buf, mbentry->legacy_specialuse);
-	    annotatemore_write(name, "/specialuse", userid, &buf);
+	    annotatemore_rawwrite(name, "/specialuse", userid, &buf);
 	    buf_free(&buf);
 	}
 	free(mbentry->legacy_specialuse);
