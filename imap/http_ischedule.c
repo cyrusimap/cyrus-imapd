@@ -542,7 +542,7 @@ int isched_send(struct sched_param *sparam, const char *recipient,
     buf_printf(&hdrs, "; method=REQUEST; component=%s\r\n",
 	       icalcomponent_kind_to_string(kind));
 
-    buf_printf(&hdrs, "Content-Length: %u\r\n", bodylen);
+    buf_printf(&hdrs, "Content-Length: %u\r\n", (unsigned) bodylen);
 
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     buf_printf(&hdrs, "Originator: %s\r\n", icalproperty_get_organizer(prop));

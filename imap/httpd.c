@@ -2451,8 +2451,8 @@ static void log_cachehdr(const char *name, const char *contents, void *rock)
     if (!strcmp(name, "authorization")) {
 	/* Replace authorization credentials with an ellipsis */
 	const char *creds = strchr(contents, ' ') + 1;
-	buf_printf(buf, "%.*s%-*s\r\n",
-		   creds - contents, contents, strlen(creds), "...");
+	buf_printf(buf, "%.*s%-*s\r\n", (int) (creds - contents), contents,
+		   (int) strlen(creds), "...");
     }
     else buf_printf(buf, "%s\r\n", contents);
 }
@@ -2469,7 +2469,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 {
     struct auth_challenge_t *chal = &txn->auth_chal;
     static int status = SASL_OK;
-    size_t slen;
+    int slen;
     const char *clientin = NULL, *realm = NULL, *user;
     unsigned int clientinlen = 0;
     struct auth_scheme_t *scheme;

@@ -1013,7 +1013,7 @@ static int propfind_principalurl(xmlNodePtr prop,
 	if (fctx->req_tgt->user) {
 	    buf_printf(&fctx->buf, "%s/user/%.*s/",
 		       namespace_principal.prefix,
-		       fctx->req_tgt->userlen, fctx->req_tgt->user);
+		       (int) fctx->req_tgt->userlen, fctx->req_tgt->user);
 	}
 
 	xml_add_href(node, NULL, buf_cstring(&fctx->buf));
@@ -1041,7 +1041,7 @@ static int propfind_owner(xmlNodePtr prop,
 	buf_reset(&fctx->buf);
 	buf_printf(&fctx->buf, "%s/user/%.*s/",
 		   namespace_principal.prefix,
-		   fctx->req_tgt->userlen, fctx->req_tgt->user);
+		   (int) fctx->req_tgt->userlen, fctx->req_tgt->user);
 
 	xml_add_href(node, NULL, buf_cstring(&fctx->buf));
     }
@@ -1411,7 +1411,7 @@ static int propfind_acl(xmlNodePtr prop,
 		node = xmlNewChild(ace, NULL, BAD_CAST "inherited", NULL);
 		buf_reset(&fctx->buf);
 		buf_printf(&fctx->buf, "%.*s",
-			   fctx->req_tgt->resource - fctx->req_tgt->path,
+			   (int)(fctx->req_tgt->resource - fctx->req_tgt->path),
 			   fctx->req_tgt->path);
 		xml_add_href(node, NULL, buf_cstring(&fctx->buf));
 	    }
@@ -1566,7 +1566,7 @@ static int propfind_addmember(xmlNodePtr prop,
     if (fctx->req_tgt->collection &&  /* Until Apple Contacts is fixed */
 	fctx->req_tgt->namespace == URL_NS_CALENDAR) {
 	xmlNodePtr node;
-	size_t len;
+	int len;
 
 	node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			    prop, NULL, 0);

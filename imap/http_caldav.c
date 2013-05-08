@@ -453,7 +453,7 @@ static int caldav_parse_path(const char *path,
 	siz -= len;
 
 	if (tgt->userlen) {
-	    len = snprintf(p, siz, ".%.*s", tgt->userlen, tgt->user);
+	  len = snprintf(p, siz, ".%.*s", (int) tgt->userlen, tgt->user);
 	    p += len;
 	    siz -= len;
 	}
@@ -464,7 +464,7 @@ static int caldav_parse_path(const char *path,
     siz -= len;
 
     if (tgt->collection) {
-	snprintf(p, siz, ".%.*s", tgt->collen, tgt->collection);
+      snprintf(p, siz, ".%.*s", (int) tgt->collen, tgt->collection);
     }
 
     return 0;
@@ -1654,7 +1654,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     }
     fprintf(f, "; component=%s\r\n", icalcomponent_kind_to_string(kind));
 
-    fprintf(f, "Content-Length: %u\r\n", strlen(ics));
+    fprintf(f, "Content-Length: %u\r\n", (unsigned) strlen(ics));
     fprintf(f, "Content-Disposition: inline; filename=\"%s\"\r\n", resource);
 
     /* XXX  Check domain of data and use appropriate CTE */
