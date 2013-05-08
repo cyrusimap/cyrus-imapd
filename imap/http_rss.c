@@ -70,7 +70,6 @@
 #include "version.h"
 #include "wildmat.h"
 #include "xmalloc.h"
-#include "xmemmem.h"
 #include "xstrlcpy.h"
 
 #define RSS_SPEC	"http://www.rssboard.org/rss-specification"
