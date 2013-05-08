@@ -50,6 +50,8 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include "cyrusdb.h"
 #include "dav_db.h"
@@ -119,9 +121,15 @@ sqlite3 *dav_open(const char *userid, const char *cmds)
 {
     int rc;
     struct buf fname = BUF_INITIALIZER;
+    struct stat sbuf;
     sqlite3 *db = NULL;
 
     dav_getpath(&fname, userid);
+    rc = stat(buf_cstring(&fname), &sbuf);
+    if (rc == -1 && errno == ENOENT) {
+	rc = cyrus_mkdir(buf_cstring(&fname), 0755);
+    }
+
 #if SQLITE_VERSION_NUMBER >= 3006000
     rc = sqlite3_open_v2(buf_cstring(&fname), &db,
 			 SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL);
