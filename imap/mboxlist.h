@@ -69,7 +69,7 @@ extern struct db *mbdb;
 #define MBTYPE_MOVING (1<<3) /* Mailbox in mid-transfer (part is remotehost!localpart) */
 #define MBTYPE_DELETED (1<<4) /* Mailbox has been deleted, but not yet cleaned up */
 #define MBTYPE_CALENDAR (1<<5) /* Calendar Mailbox */
-#define MBTYPE_ADDRESSBOOK (1<<5) /* Addressbook Mailbox */
+#define MBTYPE_ADDRESSBOOK (1<<6) /* Addressbook Mailbox */
 
 /* master name of the mailboxes file */
 #define FNAME_MBOXLIST "/mailboxes.db"
