@@ -187,21 +187,23 @@ EXPORTED void mboxevent_setnamespace(struct namespace *n)
 
 static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
 {
+    struct buf attrib = BUF_INITIALIZER;
+    strarray_t *specialuse = NULL;
+    int enabled = 1;
     int i = 0;
-    int r = 1;
+    int r = 0;
 
     if (!enable_subfolder && (mboxname_isusermailbox(mailbox->name, 1)) == NULL) {
-	return 0;
+	enabled = 0;
+	goto done;
     }
 
     /* test if the mailbox has a special-use attribute in the exclude list */
     if (strarray_size(excluded_specialuse) > 0) {
 	const char *userid = mboxname_to_userid(mailbox->name);
-	struct buf attrib = BUF_INITIALIZER;
-	strarray_t *specialuse = NULL;
 
 	r = annotatemore_lookup(mailbox->name, "/specialuse", userid, &attrib);
-	if (r) return 1; /* XXX - return -1?  Failure? */
+	if (r) goto done; /* XXX - return -1?  Failure? */
 
 	/* get info and set flags */
 	specialuse = strarray_split(buf_cstring(&attrib), NULL, 0);
@@ -209,16 +211,16 @@ static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
 	for (i = 0; i < strarray_size(specialuse) ; i++) {
 	    const char *attribute = strarray_nth(specialuse, i);
 	    if (strarray_find(excluded_specialuse, attribute, 0) >= 0) {
-		r = 0;
-		break;
+		enabled = 0;
+		goto done;
 	    }
 	}
-
-	strarray_free(specialuse);
-	buf_free(&attrib);
     }
 
-    return r;
+done:
+    strarray_free(specialuse);
+    buf_free(&attrib);
+    return enabled;
 }
 
 EXPORTED struct mboxevent *mboxevent_new(enum event_type type)
