@@ -5899,10 +5899,19 @@ static int renmbox(char *name,
     char oldextname[MAX_MAILBOX_BUFFER];
     char newextname[MAX_MAILBOX_BUFFER];
     struct renrock *text = (struct renrock *)rock;
-    int r;
+    struct mboxlist_entry *mbentry = NULL;
+    int r = 0;
+
+    r = mboxlist_lookup(name, &mbentry, NULL);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+	/* skip these mailboxes */
+	r = 0;
+	goto done;
+    }
+    if (r) goto done;
 
     if((text->nl + strlen(name + text->ol)) >= MAX_MAILBOX_BUFFER)
-	return 0;
+	goto done;
 
     strcpy(text->newmailboxname + text->nl, name + text->ol);
 
@@ -5922,7 +5931,7 @@ static int renmbox(char *name,
     if(r) {
 	prot_printf(imapd_out, "* NO rename %s %s: %s\r\n",
 		    oldextname, newextname, error_message(r));
-	if (RENAME_STOP_ON_ERROR) return r;
+	if (!RENAME_STOP_ON_ERROR) r = 0;
     } else {
 	/* If we're renaming a user, change quotaroot and ACL */
 	if (text->rename_user) {
@@ -5946,9 +5955,11 @@ static int renmbox(char *name,
 	}
     }
 
+done:
+    mboxlist_entry_free(&mbentry);
     prot_flush(imapd_out);
 
-    return 0;
+    return r;
 }
 
 /*
