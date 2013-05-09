@@ -390,7 +390,7 @@ static int carddav_parse_path(const char *path,
 	siz -= len;
 
 	if (tgt->userlen) {
-	  len = snprintf(p, siz, ".%.*s", (int) tgt->userlen, tgt->user);
+	    len = snprintf(p, siz, ".%.*s", (int) tgt->userlen, tgt->user);
 	    p += len;
 	    siz -= len;
 	}
@@ -401,7 +401,7 @@ static int carddav_parse_path(const char *path,
     siz -= len;
 
     if (tgt->collection) {
-      snprintf(p, siz, ".%.*s", (int) tgt->collen, tgt->collection);
+	snprintf(p, siz, ".%.*s", (int) tgt->collen, tgt->collection);
     }
 
     return 0;
