@@ -3237,6 +3237,10 @@ int meth_get_doc(struct transaction_t *txn,
 	    resp_body->type = "image/gif";
 	else if (!strcasecmp(ext, ".png"))
 	    resp_body->type = "image/png";
+	else if (!strcasecmp(ext, ".svg"))
+	    resp_body->type = "image/svg+xml";
+	else if (!strcasecmp(ext, ".tiff") || !strcmp(ext, ".tif"))
+	    resp_body->type = "image/tiff";
 	else
 	    resp_body->type = "application/octet-stream";
     }
