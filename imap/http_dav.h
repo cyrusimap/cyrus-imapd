@@ -58,7 +58,7 @@
 
 #define DFLAG_UNBIND	"DAV:unbind"
 
-#define ANNOT_NS	"/vendor/cmu/cyrus-imapd/"
+#define ANNOT_NS	"/vendor/cmu/cyrus-httpd/"
 
 #define SCHED_INBOX	"Inbox/"
 #define SCHED_OUTBOX	"Outbox/"

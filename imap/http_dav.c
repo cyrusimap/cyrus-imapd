@@ -2106,22 +2106,15 @@ static int propfind_fromdb(xmlNodePtr prop,
 			   struct propfind_ctx *fctx,
 			   xmlNodePtr resp __attribute__((unused)),
 			   struct propstat propstat[],
-			   void *ns_prefix)
+			   void *rock __attribute__((unused)))
 {
     struct annotation_data attrib;
     xmlNodePtr node;
     int r = 0;
 
     buf_reset(&fctx->buf);
-    if (ns_prefix) {
-	buf_printf(&fctx->buf, ANNOT_NS "%s:%s",
-		   (const char *) ns_prefix, prop->name);
-    }
-    else {
-	/* "dead" property - use hash of the namespace href as prefix */
-	buf_printf(&fctx->buf, ANNOT_NS "%08X:%s",
-		   strhash((const char *) prop->ns->href), prop->name);
-    }
+    buf_printf(&fctx->buf, ANNOT_NS "<%s>%s",
+	       (const char *) prop->ns->href, prop->name);
 
     memset(&attrib, 0, sizeof(struct annotation_data));
 
@@ -2158,7 +2151,8 @@ static int propfind_fromdb(xmlNodePtr prop,
 /* Callback to write a property to annotation DB */
 static int proppatch_todb(xmlNodePtr prop, unsigned set,
 			  struct proppatch_ctx *pctx,
-			  struct propstat propstat[], void *ns_prefix)
+			  struct propstat propstat[],
+			  void *rock __attribute__((unused)))
 {
     xmlChar *freeme = NULL;
     const char *value = NULL;
@@ -2166,15 +2160,8 @@ static int proppatch_todb(xmlNodePtr prop, unsigned set,
     int r;
 
     buf_reset(&pctx->buf);
-    if (ns_prefix) {
-	buf_printf(&pctx->buf, ANNOT_NS "%s:%s",
-		   (const char *) ns_prefix, BAD_CAST prop->name);
-    }
-    else {
-	/* "dead" property - use hash of the namespace href as prefix */
-	buf_printf(&pctx->buf, ANNOT_NS "%08X:%s",
-		   strhash((const char *) prop->ns->href), BAD_CAST prop->name);
-    }
+    buf_printf(&pctx->buf, ANNOT_NS "<%s>%s",
+	       (const char *) prop->ns->href, prop->name);
 
     if (set) {
 	freeme = xmlNodeGetContent(prop);
@@ -2216,7 +2203,7 @@ static const struct prop_entry {
 
     /* WebDAV (RFC 4918) properties */
     { "creationdate", XML_NS_DAV, 1, propfind_creationdate, NULL, NULL },
-    { "displayname", XML_NS_DAV, 1, propfind_fromdb, proppatch_todb, "DAV" },
+    { "displayname", XML_NS_DAV, 1, propfind_fromdb, proppatch_todb, NULL },
     { "getcontentlanguage", XML_NS_DAV, 1,
       propfind_fromhdr, NULL, "Content-Language" },
     { "getcontentlength", XML_NS_DAV, 1, propfind_getlength, NULL, NULL },
@@ -2264,10 +2251,10 @@ static const struct prop_entry {
     /* CalDAV (RFC 4791) properties */
     { "calendar-data", XML_NS_CALDAV, 0, propfind_getdata, NULL, NULL },
     { "calendar-description", XML_NS_CALDAV, 0,
-      propfind_fromdb, proppatch_todb, "CALDAV" },
+      propfind_fromdb, proppatch_todb, NULL },
     { "calendar-home-set", XML_NS_CALDAV, 0, propfind_calurl, NULL, NULL },
     { "calendar-timezone", XML_NS_CALDAV, 0,
-      propfind_fromdb, proppatch_todb, "CALDAV" },
+      propfind_fromdb, proppatch_todb, NULL },
     { "supported-calendar-component-set", XML_NS_CALDAV, 0,
       propfind_calcompset, proppatch_calcompset, NULL },
     { "supported-calendar-data", XML_NS_CALDAV, 0,
@@ -2295,7 +2282,7 @@ static const struct prop_entry {
     /* CardDAV (RFC 6352) properties */
     { "address-data", XML_NS_CARDDAV, 0, propfind_getdata, NULL, NULL },
     { "addressbook-description", XML_NS_CARDDAV, 0,
-      propfind_fromdb, proppatch_todb, "CARDDAV" },
+      propfind_fromdb, proppatch_todb, NULL },
     { "addressbook-home-set", XML_NS_CARDDAV, 0,
       propfind_abookurl, NULL, NULL },
     { "supported-address-data", XML_NS_CARDDAV, 0,
@@ -2307,9 +2294,9 @@ static const struct prop_entry {
 
     /* Apple iCal properties */
     { "calendar-color", XML_NS_ICAL, 0,
-      propfind_fromdb, proppatch_todb, "iCAL" },
+      propfind_fromdb, proppatch_todb, NULL },
     { "calendar-order", XML_NS_ICAL, 0,
-      propfind_fromdb, proppatch_todb, "iCAL" },
+      propfind_fromdb, proppatch_todb, NULL },
 
     { NULL, NULL, 0, NULL, NULL, NULL }
 };
