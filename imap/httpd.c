@@ -1187,7 +1187,8 @@ static void cmdloop(void)
 	}
 
 	/* Request authentication, if necessary */
-	if (!httpd_userid && (r || namespace->need_auth)) {
+	if (!httpd_userid &&
+	    (r || (namespace->need_auth && txn.meth != METH_OPTIONS))) {
 	  need_auth:
 	    /* User must authenticate */
 
