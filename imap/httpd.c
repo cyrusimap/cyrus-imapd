@@ -1332,8 +1332,9 @@ xmlURIPtr parse_uri(unsigned meth, const char *uri, const char **errstr)
 
     if (strlen(p_uri->path) > MAX_MAILBOX_PATH) goto bad_request;
 
-    if ((p_uri->path[0] != '/') &&
-	(strcmp(p_uri->path, "*") || (meth != METH_OPTIONS))) {
+    if (strstr(p_uri->path, "/..") ||  /* don't allow access up dir tree */
+	((p_uri->path[0] != '/') &&
+	 (strcmp(p_uri->path, "*") || (meth != METH_OPTIONS)))) {
 	*errstr = "Illegal request target URI";
 	goto bad_request;
     }
@@ -3158,7 +3159,7 @@ void multipart_byteranges(struct transaction_t *txn, const char *msg_base)
 int meth_get_doc(struct transaction_t *txn,
 		 void *params __attribute__((unused)))
 {
-    int ret = 0, fd, precond;
+    int ret = 0, r, fd, precond;
     const char *prefix, *path, *ext;
     static struct buf pathbuf = BUF_INITIALIZER;
     struct stat sbuf;
@@ -3171,14 +3172,18 @@ int meth_get_doc(struct transaction_t *txn,
     if (!prefix) return HTTP_NOT_FOUND;
 
     buf_setcstr(&pathbuf, prefix);
-    if (!strcmp(txn->req_uri->path, "/"))
-	buf_appendcstr(&pathbuf, "/index.html");
-    else
-	buf_appendcstr(&pathbuf, txn->req_uri->path);
+    buf_appendcstr(&pathbuf, txn->req_uri->path);
     path = buf_cstring(&pathbuf);
 
+    /* See if path is a directory and look for index.html */
+    if (!(r = stat(path, &sbuf)) && S_ISDIR(sbuf.st_mode)) {
+	buf_appendcstr(&pathbuf, "/index.html");
+	path = buf_cstring(&pathbuf);
+	r = stat(path, &sbuf);
+    }
+
     /* See if file exists and get Content-Length & Last-Modified time */
-    if (stat(path, &sbuf) || !S_ISREG(sbuf.st_mode)) return HTTP_NOT_FOUND;
+    if (r || !S_ISREG(sbuf.st_mode)) return HTTP_NOT_FOUND;
 
     datalen = sbuf.st_size;
 
@@ -3221,7 +3226,7 @@ int meth_get_doc(struct transaction_t *txn,
     if (resp_body->type) {
 	/* Caller has specified the Content-Type */
     }
-    else if ((ext = strrchr(txn->req_uri->path, '.'))) {
+    else if ((ext = strrchr(path, '.'))) {
 	/* Try to use filename extension to identity Content-Type */
 	if (!strcasecmp(ext, ".text") || !strcmp(ext, ".txt"))
 	    resp_body->type = "text/plain";
