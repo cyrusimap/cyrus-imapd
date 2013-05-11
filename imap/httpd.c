@@ -3159,7 +3159,7 @@ void multipart_byteranges(struct transaction_t *txn, const char *msg_base)
 int meth_get_doc(struct transaction_t *txn,
 		 void *params __attribute__((unused)))
 {
-    int ret = 0, r, fd, precond;
+    int ret = 0, r, fd = -1, precond;
     const char *prefix, *path, *ext;
     static struct buf pathbuf = BUF_INITIALIZER;
     struct stat sbuf;
@@ -3215,54 +3215,40 @@ int meth_get_doc(struct transaction_t *txn,
 	return precond;
     }
 
-    /* Open and mmap the file */
-    if ((fd = open(path, O_RDONLY)) == -1) return HTTP_SERVER_ERROR;
-    map_refresh(fd, 1, &msg_base, &msg_size, sbuf.st_size, path, NULL);
+    if (txn->meth == METH_GET) {
+	/* Open and mmap the file */
+	if ((fd = open(path, O_RDONLY)) == -1) return HTTP_SERVER_ERROR;
+	map_refresh(fd, 1, &msg_base, &msg_size, sbuf.st_size, path, NULL);
+    }
 
     /* Fill in ETag and Last-Modified */
     resp_body->etag = buf_cstring(&txn->buf);
     resp_body->lastmod = sbuf.st_mtime;
 
-    if (resp_body->type) {
-	/* Caller has specified the Content-Type */
-    }
-    else if ((ext = strrchr(path, '.'))) {
-	/* Try to use filename extension to identity Content-Type */
-	if (!strcasecmp(ext, ".text") || !strcmp(ext, ".txt"))
-	    resp_body->type = "text/plain";
-	else if (!strcasecmp(ext, ".html") || !strcmp(ext, ".htm"))
-	    resp_body->type = "text/html";
-	else if (!strcasecmp(ext, ".css"))
-	    resp_body->type = "text/css";
-	else if (!strcasecmp(ext, ".js"))
-	    resp_body->type = "text/javascript";
-	else if (!strcasecmp(ext, ".jpeg") || !strcmp(ext, ".jpg"))
-	    resp_body->type = "image/jpeg";
-	else if (!strcasecmp(ext, ".gif"))
-	    resp_body->type = "image/gif";
-	else if (!strcasecmp(ext, ".png"))
-	    resp_body->type = "image/png";
-	else if (!strcasecmp(ext, ".svg"))
-	    resp_body->type = "image/svg+xml";
-	else if (!strcasecmp(ext, ".tiff") || !strcmp(ext, ".tif"))
-	    resp_body->type = "image/tiff";
-	else
-	    resp_body->type = "application/octet-stream";
-    }
-    else {
-	/* Try to use filetype signatures to identity Content-Type */
-	if (msg_size >= 8 &&
-	    !memcmp(msg_base, "\x89\x50\x4E\x47\x0D\x0A\x1A\x0A", 8)) {
-	    resp_body->type = "image/png";
-	} else if (msg_size >= 4 &&
-		   !memcmp(msg_base, "\xFF\xD8\xFF\xE0", 4)) {
-	    resp_body->type = "image/jpeg";
-	} else if (msg_size >= 6 &&
-		   (!memcmp(msg_base, "GIF87a", 6) ||
-		    !memcmp(msg_base, "GIF89a", 6))) {
-	    resp_body->type = "image/gif";
-	} else {
-	    resp_body->type = "application/octet-stream";
+    if (!resp_body->type) {
+	/* Caller hasn't specified the Content-Type */
+	resp_body->type = "application/octet-stream";
+	
+	if ((ext = strrchr(path, '.'))) {
+	    /* Try to use filename extension to identity Content-Type */
+	    if (!strcasecmp(ext, ".text") || !strcmp(ext, ".txt"))
+		resp_body->type = "text/plain";
+	    else if (!strcasecmp(ext, ".html") || !strcmp(ext, ".htm"))
+		resp_body->type = "text/html";
+	    else if (!strcasecmp(ext, ".css"))
+		resp_body->type = "text/css";
+	    else if (!strcasecmp(ext, ".js"))
+		resp_body->type = "text/javascript";
+	    else if (!strcasecmp(ext, ".jpeg") || !strcmp(ext, ".jpg"))
+		resp_body->type = "image/jpeg";
+	    else if (!strcasecmp(ext, ".gif"))
+		resp_body->type = "image/gif";
+	    else if (!strcasecmp(ext, ".png"))
+		resp_body->type = "image/png";
+	    else if (!strcasecmp(ext, ".svg"))
+		resp_body->type = "image/svg+xml";
+	    else if (!strcasecmp(ext, ".tiff") || !strcmp(ext, ".tif"))
+		resp_body->type = "image/tiff";
 	}
     }
 
@@ -3272,8 +3258,10 @@ int meth_get_doc(struct transaction_t *txn,
     }
     else write_body(precond, txn, msg_base + offset, datalen);
 
-    map_free(&msg_base, &msg_size);
-    close(fd);
+    if (fd != -1) {
+	map_free(&msg_base, &msg_size);
+	close(fd);
+    }
 
     return ret;
 }
