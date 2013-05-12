@@ -1256,7 +1256,15 @@ static int search_header_match(message_t *m, const union search_value *v,
 			  MESSAGE_DECODED|MESSAGE_APPEND|MESSAGE_MULTIPLE,
 			  &buf);
     if (!r) {
-	r = charset_searchstring(v->s, pat, buf.s, buf.len, charset_flags);
+	if (*v->s) {
+	    r = charset_searchstring(v->s, pat, buf.s, buf.len, charset_flags);
+	}
+	else {
+	    /* RFC3501: If the string to search is zero-length, this matches
+	     * all messages that have a header line with the specified
+	     * field-name regardless of the contents. */
+	    r = buf.len ? 1 : 0;
+	}
     }
     else
 	r = 0;
