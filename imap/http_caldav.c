@@ -760,7 +760,7 @@ static int caldav_post(struct transaction_t *txn)
 	r = read_body(httpd_in, txn->req_hdrs, &txn->req_body,
 		      txn->flags.cont | BODY_DECODE, &txn->error.desc);
 	if (r) {
-	    txn->flags.close = 1;
+	    txn->flags.conn = CONN_CLOSE;
 	    return r;
 	}
     }

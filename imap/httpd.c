@@ -203,7 +203,7 @@ static int reset_saslconn(sasl_conn_t **conn);
 
 static void cmdloop(void);
 static int parse_expect(struct transaction_t *txn);
-static void parse_connection(struct transaction_t *txn, int *tls_upgrade);
+static void parse_connection(struct transaction_t *txn);
 static struct accept *parse_accept(const char **hdr);
 static int http_auth(const char *creds, struct transaction_t *txn);
 static void keep_alive(int sig);
@@ -906,7 +906,7 @@ static void cmdloop(void)
 #endif
 
     for (;;) {
-	int ret, tls_upgrade, empty, r, i, c;
+	int ret, empty, r, i, c;
 	char *p;
 	tok_t tok;
 	const char **hdr;
@@ -917,7 +917,7 @@ static void cmdloop(void)
 	/* Reset txn state */
 	txn.meth = METH_UNKNOWN;
 	memset(&txn.flags, 0, sizeof(struct txn_flags_t));
-	txn.flags.close = !httpd_timeout;
+	txn.flags.conn = 0;
 	txn.flags.vary = gzip_enabled ? VARY_AE : 0;
 	memset(req_line, 0, sizeof(struct request_line_t));
 	memset(&txn.req_tgt, 0, sizeof(struct request_target_t));
@@ -958,7 +958,7 @@ static void cmdloop(void)
 				    backend_current ? backend_current->in : NULL,
 				    NULL, 0));
 	if (ret) {
-	    txn.flags.close = 1;
+	    txn.flags.conn = CONN_CLOSE;
 	    error_response(ret, &txn);
 	    protgroup_free(protin);
 	    shut_down(0);
@@ -978,7 +978,7 @@ static void cmdloop(void)
 		/* client closed connection */
 	    }
 
-	    txn.flags.close = 1;
+	    txn.flags.conn = CONN_CLOSE;
 	    goto done;
 	}
 
@@ -1028,13 +1028,13 @@ static void cmdloop(void)
 	    txn.error.desc = buf_cstring(&txn.buf);
 	}
 	else if (req_line->ver[HTTP_VERSION_LEN-1] == '0') {
-	    /* HTTP/1.0 - non-persistent connection by default */
-	    txn.flags.ver1_0 = txn.flags.close = 1;
+	    /* HTTP/1.0 connection */
+	    txn.flags.ver1_0 = 1;
 	}
 	tok_fini(&tok);
 
 	if (ret) {
-	    txn.flags.close = 1;
+	    txn.flags.conn = CONN_CLOSE;
 	    goto done;
 	}
 
@@ -1059,13 +1059,16 @@ static void cmdloop(void)
 	}
 
 	if (ret) {
-	    txn.flags.close = 1;
+	    txn.flags.conn = CONN_CLOSE;
 	    goto done;
 	}
 
 	/* Check for Connection options */
-	parse_connection(&txn, &tls_upgrade);
-	if (tls_upgrade) starttls(0);
+	parse_connection(&txn);
+	if (txn.flags.conn & CONN_UPGRADE) {
+	    starttls(0);
+	    txn.flags.conn &= ~CONN_UPGRADE;
+	}
 
 	/* Check Method against our list of known methods */
 	for (txn.meth = 0; (txn.meth < METH_UNKNOWN) &&
@@ -1289,7 +1292,7 @@ static void cmdloop(void)
 	if (txn.req_uri) xmlFreeURI(txn.req_uri);
 	if (txn.req_hdrs) spool_free_hdrcache(txn.req_hdrs);
 
-	if (txn.flags.close) {
+	if (txn.flags.conn & CONN_CLOSE) {
 	    buf_free(&txn.req_body);
 	    buf_free(&txn.resp_body.payload);
 #ifdef HAVE_ZLIB
@@ -1628,12 +1631,10 @@ static int parse_expect(struct transaction_t *txn)
 
 
 /* Parse Connection header(s) for interesting options */
-static void parse_connection(struct transaction_t *txn, int *tls_upgrade)
+static void parse_connection(struct transaction_t *txn)
 {
     const char **conn = spool_getheader(txn->req_hdrs, "Connection");
     int i;
-
-    *tls_upgrade = 0;
 
     /* Look for interesting connection tokens */
     for (i = 0; conn && conn[i]; i++) {
@@ -1641,34 +1642,44 @@ static void parse_connection(struct transaction_t *txn, int *tls_upgrade)
 	char *token;
 
 	while ((token = tok_next(&tok))) {
-	    /* Check if this is a persistent 1.0 connection */
-	    if (txn->flags.ver1_0) {
-		if (httpd_timeout && !strcasecmp(token, "keep-alive")) {
-		    syslog(LOG_DEBUG, "persistent 1.0 connection");
-		    txn->flags.close = 0;
+	    if (httpd_timeout) {
+		/* Check if this is a non-persistent connection */
+		if (!strcasecmp(token, "close")) {
+		    txn->flags.conn |= CONN_CLOSE;
+		    continue;
+		}
+
+		/* Check if this is a persistent connection */
+		else if (!strcasecmp(token, "keep-alive")) {
+		    txn->flags.conn |= CONN_KEEPALIVE;
+		    continue;
 		}
 	    }
 
-	    /* Check if this is a non-persistent 1.1 connection */
-	    else if (!strcasecmp(token, "close")) {
-		syslog(LOG_DEBUG, "non-persistent 1.1 connection");
-		txn->flags.close = 1;
-	    }
-
 	    /* Check if we need to upgrade to TLS */
-	    else if (!httpd_tls_done && tls_enabled() &&
+	    if (!httpd_tls_done && tls_enabled() &&
 		     !strcasecmp(token, "Upgrade")) {
 		const char **upgrd;
 
 		if ((upgrd = spool_getheader(txn->req_hdrs, "Upgrade")) &&
 		    !strncmp(upgrd[0], TLS_VERSION, strcspn(upgrd[0], " ,"))) {
 		    syslog(LOG_DEBUG, "client requested TLS");
-		    *tls_upgrade = 1;
+		    txn->flags.conn |= CONN_UPGRADE;
 		}
 	    }
 	}
 
 	tok_fini(&tok);
+    }
+
+    if (!httpd_timeout) txn->flags.conn |= CONN_CLOSE;
+    else if (txn->flags.conn & CONN_CLOSE) {
+	/* close overrides keep-alive */
+	txn->flags.conn &= ~CONN_KEEPALIVE;
+    }
+    else if (txn->flags.ver1_0 && !(txn->flags.conn & CONN_KEEPALIVE)) {
+	/* HTTP/1.0 - non-persistent connection unless keep-alive */
+	txn->flags.conn |= CONN_CLOSE;
     }
 }
 
@@ -1764,7 +1775,7 @@ const char *http_statusline(long code)
     if (param) prot_printf(httpd_out, " %s", param);		\
     prot_puts(httpd_out, "\r\n")
 
-static void comma_list_hdr(const char *hdr, const char *vals[], unsigned flags)
+void comma_list_hdr(const char *hdr, const char *vals[], unsigned flags)
 {
     const char *sep = "";
     int i;
@@ -1783,8 +1794,8 @@ void response_header(long code, struct transaction_t *txn)
 {
     time_t now;
     char datestr[30];
-    unsigned keepalive;
-    const char **hdr, *conn_token;
+    unsigned keepalive = httpd_keepalive;
+    const char **hdr;
     struct auth_challenge_t *auth_chal;
     struct resp_body_t *resp_body;
     static struct buf log = BUF_INITIALIZER;
@@ -1798,7 +1809,7 @@ void response_header(long code, struct transaction_t *txn)
 	    if (read_body(httpd_in, txn->req_hdrs,
 			  code == HTTP_UNAUTHORIZED ? &txn->req_body : NULL,
 			  txn->flags.cont | BODY_DECODE, &errstr)) {
-		txn->flags.close = 1;
+		txn->flags.conn = CONN_CLOSE;
 	    }
 	}
 
@@ -1850,15 +1861,11 @@ void response_header(long code, struct transaction_t *txn)
 
 
     /* Connection Management */
-    conn_token = "";
-    keepalive = httpd_keepalive;
-
     switch (code) {
     case HTTP_SWITCH_PROT:
 	keepalive = 0;  /* No alarm during TLS negotiation */
-	prot_printf(httpd_out, "Upgrade: %s, %s\r\n",
-		    TLS_VERSION, HTTP_VERSION);
-	prot_puts(httpd_out, "Connection: upgrade\r\n");
+	prot_printf(httpd_out, "Upgrade: %s\r\n", TLS_VERSION);
+	prot_puts(httpd_out, "Connection: Upgrade\r\n");
 	/* Fall through as provisional response */
 
     case HTTP_CONTINUE:
@@ -1877,19 +1884,23 @@ void response_header(long code, struct transaction_t *txn)
 	return;
 
     case HTTP_UPGRADE:
-	conn_token = " upgrade,";
-	prot_printf(httpd_out, "Upgrade: %s, %s\r\n",
-		    TLS_VERSION, HTTP_VERSION);
+	txn->flags.conn |= CONN_UPGRADE;
+	prot_printf(httpd_out, "Upgrade: %s\r\n", TLS_VERSION);
 	/* Fall through as final response */
 
     default:
 	/* Final response */
-	if (txn->flags.close) {
-	    prot_printf(httpd_out, "Connection:%s close\r\n", conn_token);
-	}
-	else {
-	    prot_printf(httpd_out, "Keep-Alive: timeout=%d\r\n", httpd_timeout);
-	    prot_printf(httpd_out, "Connection:%s keep-alive\r\n", conn_token);
+	if (txn->flags.conn) {
+	    /* Construct Connection header */
+	    const char *conn_tokens[] =
+		{ "close", "Upgrade", "Keep-Alive", NULL };
+
+	    if (txn->flags.conn & CONN_KEEPALIVE) {
+		prot_printf(httpd_out, "Keep-Alive: timeout=%d\r\n",
+			    httpd_timeout);
+	    }
+
+	    comma_list_hdr("Connection:", conn_tokens, txn->flags.conn);
 	}
 
 	auth_chal = &txn->auth_chal;
@@ -1905,30 +1916,27 @@ void response_header(long code, struct transaction_t *txn)
     if (httpd_tls_done) {
 	prot_puts(httpd_out, "Strict-Transport-Security: max-age=600\r\n");
     }
-    if (txn->flags.cc) {
-	/* Construct Cache-Control header */
-	const char *cc_dirs[] = {
-	    "no-cache", "no-transform", "private", NULL
-	};
-
-	comma_list_hdr("Cache-Control:", cc_dirs, txn->flags.cc);
-    }
     if (txn->location) {
 	prot_printf(httpd_out, "Location: %s\r\n", txn->location);
     }
+    if (txn->flags.cc) {
+	/* Construct Cache-Control header */
+	const char *cc_dirs[] =
+	    { "no-cache", "no-transform", "private", NULL };
+
+	comma_list_hdr("Cache-Control:", cc_dirs, txn->flags.cc);
+    }
     if (resp_body->prefs) {
 	/* Construct Preference-Applied header */
-	const char *prefs[] = {
-	    "return=minimal", "return=representation", "depth-noroot", NULL
-	};
+	const char *prefs[] =
+	    { "return=minimal", "return=representation", "depth-noroot", NULL };
 
 	comma_list_hdr("Preference-Applied:", prefs, resp_body->prefs);
     }
     if (txn->flags.vary) {
 	/* Construct Vary header */
-	const char *vary_hdrs[] = {
-	    "accept-encoding", "brief", "prefer", NULL
-	};
+	const char *vary_hdrs[] =
+	    { "Accept-Encoding", "Brief", "Prefer", NULL };
 
 	comma_list_hdr("Vary:", vary_hdrs, txn->flags.vary);
     }
@@ -1957,7 +1965,8 @@ void response_header(long code, struct transaction_t *txn)
 		/* Only advertise what is available and
 		   can work with the type of connection */
 		if ((avail_auth_schemes & (1 << scheme->idx)) &&
-		    !(txn->flags.close && (scheme->flags & AUTH_NEED_PERSIST))) {
+		    !((txn->flags.conn & CONN_CLOSE) &&
+		      (scheme->flags & AUTH_NEED_PERSIST))) {
 		    auth_chal->param = NULL;
 
 		    if (scheme->flags & AUTH_SERVER_FIRST) {
@@ -2204,7 +2213,7 @@ void write_body(long code, struct transaction_t *txn,
 
 	if (txn->flags.ver1_0 && (txn->flags.te & TE_CHUNKED)) {
 	    /* HTTP/1.0 close-delimited data */
-	    txn->flags.close = 1;
+	    txn->flags.conn = CONN_CLOSE;
 	}
 
 	response_header(code, txn);
@@ -2569,7 +2578,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 	    txn->flags.havebody = 1;
 	    if (read_body(httpd_in, txn->req_hdrs, &txn->req_body,
 			  txn->flags.cont | BODY_DECODE, &txn->error.desc)) {
-		txn->flags.close = 1;
+		txn->flags.conn = CONN_CLOSE;
 		return SASL_FAIL;
 	    }
 	}
@@ -2577,7 +2586,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 	sasl_http_req.uri = txn->req_line.uri;
 	sasl_http_req.entity = (u_char *) buf_cstring(&txn->req_body);
 	sasl_http_req.elen = buf_len(&txn->req_body);
-	sasl_http_req.non_persist = txn->flags.close;
+	sasl_http_req.non_persist = txn->flags.conn & CONN_CLOSE;
 	sasl_setprop(httpd_saslconn, SASL_HTTP_REQUEST, &sasl_http_req);
     }
 #endif /* SASL_HTTP_REQUEST */

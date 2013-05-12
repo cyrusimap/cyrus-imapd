@@ -252,14 +252,14 @@ struct resp_body_t {
 /* Transaction flags */
 struct txn_flags_t {
     unsigned long ver1_0	: 1;	/* Request from HTTP/1.0 client */
-    unsigned long close		: 1;	/* Close connection after response */
+    unsigned long conn		: 3;	/* Close connection after response */
     unsigned long havebody	: 1;	/* Has body of request has been read? */
     unsigned long cont		: 1;	/* Does client expect 100-continue */
-    unsigned long te		: 2;	/* Transfer-Encoding for resp */
+    unsigned long te		: 3;	/* Transfer-Encoding for resp */
     unsigned long ce		: 2;	/* Content-Encoding for resp */
-    unsigned long cc		: 4;	/* Cache-Control directives for resp */
+    unsigned long cc		: 3;	/* Cache-Control directives for resp */
     unsigned long ranges	: 1;	/* Accept range requests for resource */
-    unsigned long vary		: 5;	/* Headers on which response varied */
+    unsigned long vary		: 3;	/* Headers on which response varied */
 };
 
 /* Transaction context */
@@ -294,6 +294,13 @@ struct transaction_t {
 					*/
 };
 
+/* Connection token flags */
+enum {
+    CONN_CLOSE =	(1<<0),
+    CONN_UPGRADE = 	(1<<1),
+    CONN_KEEPALIVE =	(1<<2)
+};
+
 /* Transfer-Encoding flags (coding of response payload) */
 enum {
     TE_NONE =		0,
@@ -309,7 +316,7 @@ enum {
     CE_DEFLATE =	2
 };
 
-/* Cache-Control directives */
+/* Cache-Control directive flags */
 enum {
     CC_NOCACHE =	(1<<0),
     CC_NOTRANSFORM =	(1<<1),
@@ -383,6 +390,7 @@ extern int http_mailbox_open(const char *name, struct mailbox **mailbox,
 			     int locktype);
 extern const char *http_statusline(long code);
 extern void httpdate_gen(char *buf, size_t len, time_t t);
+extern void comma_list_hdr(const char *hdr, const char *vals[], unsigned flags);
 extern void response_header(long code, struct transaction_t *txn);
 extern void error_response(long code, struct transaction_t *txn);
 extern void html_response(long code, struct transaction_t *txn, xmlDocPtr html);

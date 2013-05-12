@@ -219,10 +219,9 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 	    if (userid) prot_printf(s->out, "Authorize-As: %s\r\n", userid);
 	}
 	else {
-	    prot_printf(s->out, "Upgrade: %s, %s\r\n",
-			TLS_VERSION, HTTP_VERSION);
+	    prot_printf(s->out, "Upgrade: %s\r\n", TLS_VERSION);
 	    if (need_tls) {
-		prot_puts(s->out, "Connection: upgrade\r\n");
+		prot_puts(s->out, "Connection: Upgrade\r\n");
 		need_tls = 0;
 	    }
 	    prot_puts(s->out, "Authorization: \r\n");
@@ -660,11 +659,16 @@ static void send_response(struct protstream *pout,
      */
     prot_puts(pout, statline);
     write_forwarding_hdrs(pout, hdrs, HTTP_VERSION, NULL);
-    if (flags->close)
-	prot_puts(pout, "Connection: close\r\n");
-    else {
-	prot_printf(pout, "Keep-Alive: timeout=%d\r\n", httpd_timeout);
-	prot_puts(pout, "Connection: keep-alive\r\n");
+    if (flags->conn) {
+	/* Construct Connection header */
+	const char *conn_tokens[] =
+	    { "close", "Keep-Alive", NULL };
+
+	if (flags->conn & CONN_KEEPALIVE) {
+	    prot_printf(httpd_out, "Keep-Alive: timeout=%d\r\n", httpd_timeout);
+	}
+
+	comma_list_hdr("Connection:", conn_tokens, flags->conn);
     }
     if (httpd_tls_done) {
 	prot_puts(httpd_out, "Strict-Transport-Security: max-age=600\r\n");
@@ -752,7 +756,7 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 			      txn->flags.cont, &txn->error.desc);
 		if (r) {
 		    /* Couldn't get the body and can't finish request */
-		    txn->flags.close = 1;
+		    txn->flags.conn = CONN_CLOSE;
 		    break;
 		}
 	    }
