@@ -1241,10 +1241,11 @@ EXPORTED int append_copy(struct mailbox *mailbox,
     char *srcfname = NULL;
     char *destfname = NULL;
     int r = 0;
-    int flag, userflag;
+    int userflag;
+    int i;
     annotate_state_t *astate = NULL;
     struct mboxevent *mboxevent = NULL;
-    
+
     if (!nummsg) {
 	append_abort(as);
 	return 0;
@@ -1257,30 +1258,29 @@ EXPORTED int append_copy(struct mailbox *mailbox,
 
     /* Copy/link all files and cache info */
     for (msg = 0; msg < nummsg; msg++) {
-	zero_index(record);
+	record = copymsg[msg].record;
+
+	/* renumber the message into the new mailbox */
 	record.uid = as->mailbox->i.last_uid + 1;
 	as->nummsg++;
 
-	/* copy the parts that are the same regardless */
-	record.internaldate = copymsg[msg].internaldate;
-	message_guid_copy(&record.guid, &copymsg[msg].guid);
-
-	/* Handle any flags that need to be copied */
+	/* user flags are special - different numbers, so look them up */
 	if (as->myrights & ACL_WRITE) {
-	    /* deleted is special, different ACL */
-	    record.system_flags =
-	      copymsg[msg].system_flags & ~FLAG_DELETED;
-
-	    for (flag = 0; copymsg[msg].flag[flag]; flag++) {
-		r = mailbox_user_flag(as->mailbox, 
-				      copymsg[msg].flag[flag], &userflag, 1);
+	    for (i = 0; i < strarray_size(&copymsg[msg].flags); i++) {
+		const char *flag = strarray_nth(&copymsg[msg].flags, i);
+		r = mailbox_user_flag(as->mailbox, flag, &userflag, 1);
 		if (r) goto out;
 		record.user_flags[userflag/32] |= 1<<(userflag&31);
 	    }
 	}
-	/* deleted flag copy as well */
-	if (as->myrights & ACL_DELETEMSG) {
-	    record.system_flags |= copymsg[msg].system_flags & FLAG_DELETED;
+	else {
+	    /* only flag allow to be kept without ACL_WRITE is DELETED */
+	    record.system_flags &= FLAG_DELETED;
+	}
+
+	/* deleted flag has its own ACL */
+	if (!(as->myrights & ACL_DELETEMSG)) {
+	    record.system_flags &= ~FLAG_DELETED;
 	}
 
 	/* should this message be marked \Seen? */
@@ -1296,16 +1296,8 @@ EXPORTED int append_copy(struct mailbox *mailbox,
 	r = mailbox_copyfile(srcfname, destfname, nolink);
 	if (r) goto out;
 
-	/* Write out cache info, copy other info */
-	record.sentdate = copymsg[msg].sentdate;
-	record.size = copymsg[msg].size;
-	record.header_size = copymsg[msg].header_size;
-	record.gmtime = copymsg[msg].gmtime;
-	record.content_lines = copymsg[msg].content_lines;
-	record.cache_version = copymsg[msg].cache_version;
-	record.cache_crc = copymsg[msg].cache_crc;
-	record.cid = copymsg[msg].cid;
-	record.crec = copymsg[msg].crec;
+	/* wipe out the cache offset so it rewrites */
+	record.cache_offset = 0;
 
 	/* Write out index file entry */
 	r = mailbox_append_index_record(as->mailbox, &record);
@@ -1317,13 +1309,13 @@ EXPORTED int append_copy(struct mailbox *mailbox,
 	r = mailbox_get_annotate_state(as->mailbox, record.uid, &astate);
 	if (r) goto out;
 
-	r = annotate_msg_copy(mailbox, copymsg[msg].uid,
+	r = annotate_msg_copy(mailbox, copymsg[msg].olduid,
 			      as->mailbox, record.uid,
 			      as->userid);
 	if (r) goto out;
 
 	mboxevent_extract_record(mboxevent, as->mailbox, &record);
-	mboxevent_extract_copied_record(mboxevent, mailbox, copymsg[msg].uid);
+	mboxevent_extract_copied_record(mboxevent, mailbox, copymsg[msg].olduid);
     }
 
 out:

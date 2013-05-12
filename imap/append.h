@@ -53,21 +53,10 @@
 #include "conversations.h"
 
 struct copymsg {
-    unsigned long uid;
-    time_t internaldate;
-    time_t sentdate;
-    time_t gmtime;
-    unsigned long size;
-    unsigned long header_size;
-    unsigned long content_lines;
-    unsigned long cache_version;
-    unsigned long cache_crc;
-    struct cacherecord crec;
-    int seen;
-    struct message_guid guid;
-    bit32 system_flags;
-    char *flag[MAX_USER_FLAGS+1];
-    conversation_id_t cid;
+    uint32_t olduid;
+    int seen:1;
+    struct index_record record;
+    strarray_t flags;
 };
 
 /* it's ridiculous i have to expose this structure if i want to allow
