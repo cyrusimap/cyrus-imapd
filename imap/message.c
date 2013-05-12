@@ -4144,6 +4144,8 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
 	if (r) return r;
 	buf_setmap(&raw, cacheitem_base(&m->record, CACHE_FROM),
 			 cacheitem_size(&m->record, CACHE_FROM));
+	if (raw.len == 3 && raw.s[0] == 'N' && raw.s[1] == 'I' && raw.s[2] == 'L')
+	    buf_reset(&raw);
 	hasname = 0;
     }
     else if (!strcasecmp(hdr, "to")) {
@@ -4151,6 +4153,8 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
 	if (r) return r;
 	buf_setmap(&raw, cacheitem_base(&m->record, CACHE_TO),
 			 cacheitem_size(&m->record, CACHE_TO));
+	if (raw.len == 3 && raw.s[0] == 'N' && raw.s[1] == 'I' && raw.s[2] == 'L')
+	    buf_reset(&raw);
 	hasname = 0;
     }
     else if (!strcasecmp(hdr, "cc")) {
@@ -4158,6 +4162,8 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
 	if (r) return r;
 	buf_setmap(&raw, cacheitem_base(&m->record, CACHE_CC),
 			 cacheitem_size(&m->record, CACHE_CC));
+	if (raw.len == 3 && raw.s[0] == 'N' && raw.s[1] == 'I' && raw.s[2] == 'L')
+	    buf_reset(&raw);
 	hasname = 0;
     }
     else if (!strcasecmp(hdr, "bcc")) {
@@ -4165,6 +4171,8 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
 	if (r) return r;
 	buf_setmap(&raw, cacheitem_base(&m->record, CACHE_BCC),
 			 cacheitem_size(&m->record, CACHE_BCC));
+	if (raw.len == 3 && raw.s[0] == 'N' && raw.s[1] == 'I' && raw.s[2] == 'L')
+	    buf_reset(&raw);
 	hasname = 0;
     }
     else if (!strcasecmp(hdr, "subject")) {
@@ -4172,6 +4180,8 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
 	if (r) return r;
 	buf_setmap(&raw, cacheitem_base(&m->record, CACHE_SUBJECT),
 			 cacheitem_size(&m->record, CACHE_SUBJECT));
+	if (raw.len == 3 && raw.s[0] == 'N' && raw.s[1] == 'I' && raw.s[2] == 'L')
+	    buf_reset(&raw);
 	hasname = 0;
     }
 
@@ -4187,6 +4197,8 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
 	if (envtokens[ENV_MSGID])
 	    buf_appendcstr(&raw, envtokens[ENV_MSGID]);
 	free(c_env);
+	if (raw.len == 3 && raw.s[0] == 'N' && raw.s[1] == 'I' && raw.s[2] == 'L')
+	    buf_reset(&raw);
 	hasname = 0;
     }
 
