@@ -4658,7 +4658,7 @@ int report_sync_col(struct transaction_t *txn,
     /* Parse children element of report */
     for (node = inroot->children; node; node = node->next) {
 	xmlNodePtr node2;
-	xmlChar *str;
+	xmlChar *str = NULL;
 	if (node->type == XML_ELEMENT_NODE) {
 	    if (!xmlStrcmp(node->name, BAD_CAST "sync-token") &&
 		(str = xmlNodeListGetString(inroot->doc, node->children, 1))) {
@@ -4674,25 +4674,22 @@ int report_sync_col(struct transaction_t *txn,
 		    /* DAV:valid-sync-token */
 		    txn->error.precond = DAV_SYNC_TOKEN;
 		    ret = HTTP_FORBIDDEN;
-		    goto done;
 		}
 	    }
-	    if (!xmlStrcmp(node->name, BAD_CAST "sync-level") &&
+	    else if (!xmlStrcmp(node->name, BAD_CAST "sync-level") &&
 		(str = xmlNodeListGetString(inroot->doc, node->children, 1))) {
 		if (!strcmp((char *) str, "infinity")) {
 		    *fctx->errstr =
 			"This server DOES NOT support infinite depth requests";
 		    ret = HTTP_SERVER_ERROR;
-		    goto done;
 		}
 		else if ((sscanf((char *) str, "%u", &fctx->depth) != 1) ||
 			 (fctx->depth != 1)) {
 		    *fctx->errstr = "Illegal sync-level";
 		    ret = HTTP_BAD_REQUEST;
-		    goto done;
 		}
 	    }
-	    if (!xmlStrcmp(node->name, BAD_CAST "limit")) {
+	    else if (!xmlStrcmp(node->name, BAD_CAST "limit")) {
 		for (node2 = node->children; node2; node2 = node2->next) {
 		    if ((node2->type == XML_ELEMENT_NODE) &&
 			!xmlStrcmp(node2->name, BAD_CAST "nresults") &&
@@ -4701,10 +4698,12 @@ int report_sync_col(struct transaction_t *txn,
 			 (sscanf((char *) str, "%u", &limit) != 1))) {
 			txn->error.precond = DAV_OVER_LIMIT;
 			ret = HTTP_FORBIDDEN;
-			goto done;
 		    }
 		}
 	    }
+
+	    if (str) xmlFree(str);
+	    if (ret) goto done;
 	}
     }
 

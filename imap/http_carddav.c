@@ -551,6 +551,7 @@ static int report_card_multiget(struct transaction_t *txn,
 
 	    buf_ensure(&uri, len);
 	    xmlURIUnescapeString((const char *) href, len, uri.s);
+	    xmlFree(href);
 
 	    /* Parse the path */
 	    if ((r = carddav_parse_path(uri.s, &tgt, fctx->errstr))) {

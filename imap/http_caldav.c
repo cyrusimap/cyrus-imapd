@@ -1285,6 +1285,7 @@ static int report_cal_multiget(struct transaction_t *txn,
 
 	    buf_ensure(&uri, len);
 	    xmlURIUnescapeString((const char *) href, len, uri.s);
+	    xmlFree(href);
 
 	    /* Parse the path */
 	    if ((r = caldav_parse_path(uri.s, &tgt, fctx->errstr))) {
