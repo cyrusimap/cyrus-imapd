@@ -2948,6 +2948,14 @@ int meth_copy(struct transaction_t *txn, void *params)
 
     /* Local Mailbox */
 
+    if (!*cparams->davdb.db) {
+	syslog(LOG_ERR, "DAV database for user '%s' is not opened.  "
+	       "Check 'configdirectory' permissions or "
+	       "'proxyservers' option on backend server.", httpd_userid);
+	txn->error.desc = "DAV database is not opened";
+	return HTTP_SERVER_ERROR;
+    }
+
     /* Open dest mailbox for reading */
     if ((r = mailbox_open_irl(dest_tgt.mboxname, &dest_mbox))) {
 	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
@@ -3141,6 +3149,14 @@ int meth_delete(struct transaction_t *txn, void *params)
 
     /* Local Mailbox */
 
+    if (!*dparams->davdb.db) {
+	syslog(LOG_ERR, "DAV database for user '%s' is not opened.  "
+	       "Check 'configdirectory' permissions or "
+	       "'proxyservers' option on backend server.", httpd_userid);
+	txn->error.desc = "DAV database is not opened";
+	return HTTP_SERVER_ERROR;
+    }
+
     if (!txn->req_tgt.resource) {
 	/* DELETE collection */
 
@@ -3299,6 +3315,14 @@ int meth_get_dav(struct transaction_t *txn, void *params)
     }
 
     /* Local Mailbox */
+
+    if (!*gparams->davdb.db) {
+	syslog(LOG_ERR, "DAV database for user '%s' is not opened.  "
+	       "Check 'configdirectory' permissions or "
+	       "'proxyservers' option on backend server.", httpd_userid);
+	txn->error.desc = "DAV database is not opened";
+	return HTTP_SERVER_ERROR;
+    }
 
     /* Open mailbox for reading */
     if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_SHARED))) {
@@ -3472,6 +3496,14 @@ int meth_lock(struct transaction_t *txn, void *params)
     }
 
     /* Local Mailbox */
+
+    if (!*lparams->davdb.db) {
+	syslog(LOG_ERR, "DAV database for user '%s' is not opened.  "
+	       "Check 'configdirectory' permissions or "
+	       "'proxyservers' option on backend server.", httpd_userid);
+	txn->error.desc = "DAV database is not opened";
+	return HTTP_SERVER_ERROR;
+    }
 
     /* Open mailbox for reading */
     if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_SHARED))) {
@@ -4061,6 +4093,13 @@ int meth_propfind(struct transaction_t *txn, void *params)
 	}
 
 	/* Local Mailbox */
+	if (!*fparams->davdb.db) {
+	    syslog(LOG_ERR, "DAV database for user '%s' is not opened.  "
+		   "Check 'configdirectory' permissions or "
+		   "'proxyservers' option on backend server.", httpd_userid);
+	    txn->error.desc = "DAV database is not opened";
+	    return HTTP_SERVER_ERROR;
+	}
     }
 
     /* Principal or Local Mailbox */
@@ -4469,6 +4508,14 @@ int meth_put(struct transaction_t *txn, void *params)
     }
 
     /* Local Mailbox */
+
+    if (!*pparams->davdb.db) {
+	syslog(LOG_ERR, "DAV database for user '%s' is not opened.  "
+	       "Check 'configdirectory' permissions or "
+	       "'proxyservers' option on backend server.", httpd_userid);
+	txn->error.desc = "DAV database is not opened";
+	return HTTP_SERVER_ERROR;
+    }
 
     /* Open mailbox for reading */
     if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_SHARED))) {
@@ -4885,6 +4932,13 @@ int meth_report(struct transaction_t *txn, void *params)
 	}
 
 	/* Local Mailbox */
+	if (!*rparams->davdb.db) {
+	    syslog(LOG_ERR, "DAV database for user '%s' is not opened.  "
+		   "Check 'configdirectory' permissions or "
+		   "'proxyservers' option on backend server.", httpd_userid);
+	    txn->error.desc = "DAV database is not opened";
+	    return HTTP_SERVER_ERROR;
+	}
     }
 
     /* Principal or Local Mailbox */
@@ -5035,6 +5089,14 @@ int meth_unlock(struct transaction_t *txn, void *params)
     }
 
     /* Local Mailbox */
+
+    if (!*lparams->davdb.db) {
+	syslog(LOG_ERR, "DAV database for user '%s' is not opened.  "
+	       "Check 'configdirectory' permissions or "
+	       "'proxyservers' option on backend server.", httpd_userid);
+	txn->error.desc = "DAV database is not opened";
+	return HTTP_SERVER_ERROR;
+    }
 
     /* Open mailbox for reading */
     if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_SHARED))) {
