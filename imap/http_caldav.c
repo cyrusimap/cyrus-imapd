@@ -1686,7 +1686,10 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 	    ret = HTTP_SERVER_ERROR;
 	    txn->error.desc = "append_fromstage() failed\r\n";
 	}
-	if (body) message_free_body(body);
+	if (body) {
+	    message_free_body(body);
+	    free(body);
+	}
 
 	if (r) append_abort(&as);
 	else {
