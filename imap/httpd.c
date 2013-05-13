@@ -1293,6 +1293,7 @@ static void cmdloop(void)
 	if (txn.req_hdrs) spool_free_hdrcache(txn.req_hdrs);
 
 	if (txn.flags.conn & CONN_CLOSE) {
+	    buf_free(&txn.buf);
 	    buf_free(&txn.req_body);
 	    buf_free(&txn.resp_body.payload);
 #ifdef HAVE_ZLIB
