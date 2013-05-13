@@ -252,7 +252,7 @@ struct resp_body_t {
 /* Transaction flags */
 struct txn_flags_t {
     unsigned long ver1_0	: 1;	/* Request from HTTP/1.0 client */
-    unsigned long conn		: 3;	/* Close connection after response */
+    unsigned long conn		: 3;	/* Connection opts on req/resp */
     unsigned long havebody	: 1;	/* Has body of request has been read? */
     unsigned long cont		: 1;	/* Does client expect 100-continue */
     unsigned long te		: 3;	/* Transfer-Encoding for resp */
