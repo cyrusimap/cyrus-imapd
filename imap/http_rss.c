@@ -47,6 +47,7 @@
 #include <unistd.h>
 #endif
 #include <ctype.h>
+#include <string.h>
 #include <syslog.h>
 #include <assert.h>
 
@@ -496,9 +497,9 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
 /* Create a HTML document listing all RSS feeds available to the user */
 static int list_feeds(struct transaction_t *txn)
 {
-    const char *template = config_getstring(IMAPOPT_RSS_FEEDLIST_TEMPLATE);
-    const char *msg_base = NULL;
-    unsigned long msg_size = 0, template_len;
+    const char *template_file = config_getstring(IMAPOPT_RSS_FEEDLIST_TEMPLATE);
+    const char *template = NULL, *prefix, *suffix;
+    unsigned long template_len = 0, prefix_len, suffix_len;
     int fd = -1;
     const char *var = NULL;
     size_t varlen = strlen(FEEDLIST_VAR);
@@ -511,18 +512,21 @@ static int list_feeds(struct transaction_t *txn)
     struct list_rock lrock;
     struct node root = { "", 0, NULL, NULL };
 
-    if (template) {
+    if (template_file) {
 	/* See if template exists and contains feedlist variable */
-	if (!stat(template, &sbuf) && S_ISREG(sbuf.st_mode) &&
-	    (fd = open(template, O_RDONLY)) != -1) {
-	    map_refresh(fd, 1, &msg_base, &msg_size, sbuf.st_size,
-			template, NULL);
-	    var = (const char *) memmem(msg_base, msg_size,
+	if (!stat(template_file, &sbuf) && S_ISREG(sbuf.st_mode) &&
+	    (fd = open(template_file, O_RDONLY)) != -1) {
+	    map_refresh(fd, 1, &template, &template_len, sbuf.st_size,
+			template_file, NULL);
+	    var = (const char *) memmem(template, template_len,
 					FEEDLIST_VAR, varlen);
 	    if (var) {
-		template = msg_base;
-		template_len = msg_size;
 		lastmod = sbuf.st_mtime;
+	    }
+	    else {
+		map_free(&template, &template_len);
+		close(fd);
+		fd = -1;
 	    }
 	}
     }
@@ -535,6 +539,11 @@ static int list_feeds(struct transaction_t *txn)
 				    FEEDLIST_VAR, varlen);
 	lastmod = compile_time;
     }
+
+    prefix = template;
+    prefix_len = var - template;
+    suffix = template + prefix_len + varlen;
+    suffix_len = template_len - (prefix_len + varlen);
 
     /* Begin to generate ETag */
     message_guid_generate(&guid, template, template_len);
@@ -583,7 +592,7 @@ static int list_feeds(struct transaction_t *txn)
     }
 
     /* Send beginning of template */
-    write_body(HTTP_OK, txn, template, var - template);
+    write_body(HTTP_OK, txn, prefix, prefix_len);
 
     /* Generate tree view of feeds */
     buf_reset(body);
@@ -597,14 +606,14 @@ static int list_feeds(struct transaction_t *txn)
     if (buf_len(body)) write_body(0, txn, buf_cstring(body), buf_len(body));
 
     /* Send rest of template */
-    write_body(0, txn, var + varlen, template_len - (var - template) - varlen);
+    if (suffix_len) write_body(0, txn, suffix, suffix_len);
 
     /* End of output */
     write_body(0, txn, NULL, 0);
 
   done:
     if (fd != -1) {
-	map_free(&msg_base, &msg_size);
+	map_free(&template, &template_len);
 	close(fd);
     }
 
