@@ -8,9 +8,16 @@
 </head>
 <body>
 
+<h1>Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta3</h1>
+<ul>
+<li>Plugged leaked memory found by Valgrind</li>
+<li>OPTIONS method can be used without authentication</li>
+<li>Better handling of Connection:keep-alive</li>
+</ul>
+
 <h1>Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta2</h1>
 <ul>
-<li>Fixed major security bug where a user-agent could access files
+<li>Fixed security bug where a user-agent could access files
   outside of <tt>httpdocroot</tt>.
 <li>Changed annotation entry name scheme to be
   "/vendor/cmu/cyrus-httpd/<" ns-href ">" prop</li>
