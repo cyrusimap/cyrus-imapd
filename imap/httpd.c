@@ -3171,7 +3171,7 @@ int meth_get_doc(struct transaction_t *txn,
 		 void *params __attribute__((unused)))
 {
     int ret = 0, r, fd = -1, precond;
-    const char *prefix, *path, *ext;
+    const char *prefix, *urls, *path, *ext;
     static struct buf pathbuf = BUF_INITIALIZER;
     struct stat sbuf;
     const char *msg_base = NULL;
@@ -3181,6 +3181,16 @@ int meth_get_doc(struct transaction_t *txn,
     /* Serve up static pages */
     prefix = config_getstring(IMAPOPT_HTTPDOCROOT);
     if (!prefix) return HTTP_NOT_FOUND;
+
+    if ((urls = config_getstring(IMAPOPT_HTTPALLOWEDURLS))) {
+	tok_t tok = TOK_INITIALIZER(urls, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+	char *token;
+
+	while ((token = tok_next(&tok)) && strcmp(token, txn->req_uri->path))
+	tok_fini(&tok);
+
+	if (!token) return HTTP_NOT_FOUND;
+    }
 
     buf_setcstr(&pathbuf, prefix);
     buf_appendcstr(&pathbuf, txn->req_uri->path);

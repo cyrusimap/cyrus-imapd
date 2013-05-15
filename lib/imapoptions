@@ -448,6 +448,16 @@ Blank lines and lines beginning with ``#'' are ignored.
 .PP
    Note that sensitive data might be disclosed by the response. */
 
+{ "httpallowedurls", NULL, STRING }
+/* Space-separated list of relative URLs (paths) rooted at
+   "httpdocroot" (see below) to be served by httpd.  If set, this
+   option will limit served static content to only those paths specified
+   (returning "404 Not Found" to any other client requested URLs).
+   Otherwise, httpd will serve any content found in "httpdocroot".
+.PP
+   Note that any path specified by "rss_feedlist_template" is an
+   exception to this rule.*/
+
 { "httpdocroot", NULL, STRING }
 /* If set, http will serve the static content (html/text/jpeg/gif
    files, etc) rooted at this directory.  Otherwise, httpd will not
