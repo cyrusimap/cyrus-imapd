@@ -498,11 +498,10 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
 static int list_feeds(struct transaction_t *txn)
 {
     const char *template_file = config_getstring(IMAPOPT_RSS_FEEDLIST_TEMPLATE);
-    const char *template = NULL, *prefix, *suffix;
+    const char *var = NULL, *template = NULL, *prefix, *suffix;
     unsigned long template_len = 0, prefix_len, suffix_len;
+    unsigned varlen = strlen(FEEDLIST_VAR);
     int fd = -1;
-    const char *var = NULL;
-    size_t varlen = strlen(FEEDLIST_VAR);
     struct message_guid guid;
     time_t lastmod;
     char mboxlist[MAX_MAILBOX_PATH+1];
@@ -515,12 +514,18 @@ static int list_feeds(struct transaction_t *txn)
     if (template_file) {
 	/* See if template exists and contains feedlist variable */
 	if (!stat(template_file, &sbuf) && S_ISREG(sbuf.st_mode) &&
+	    sbuf.st_size >= varlen &&
 	    (fd = open(template_file, O_RDONLY)) != -1) {
+	    const char *p;
+	    unsigned long len;
+
 	    map_refresh(fd, 1, &template, &template_len, sbuf.st_size,
 			template_file, NULL);
-	    var = (const char *) memmem(template, template_len,
-					FEEDLIST_VAR, varlen);
-	    if (var) {
+
+	    for (p = template, len = template_len;
+		 len >= varlen && strncmp(p, FEEDLIST_VAR, varlen); p++, len--);
+	    if (len >= varlen) {
+		var = p;
 		lastmod = sbuf.st_mtime;
 	    }
 	    else {
@@ -535,8 +540,7 @@ static int list_feeds(struct transaction_t *txn)
 	/* No usable template specified, use our default */
 	template = def_template;
 	template_len = strlen(def_template);
-	var = (const char *) memmem(template, template_len,
-				    FEEDLIST_VAR, varlen);
+	var = strstr(template, FEEDLIST_VAR);
 	lastmod = compile_time;
     }
 
