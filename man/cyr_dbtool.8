@@ -50,6 +50,12 @@ cyr_dbtool \- manage Cyrus databases
 [
 .B \-n
 ]
+[
+.B \-o
+]
+[
+.B \-T
+]
 <db file> <db backend> <action>
 [
 <key>
@@ -98,6 +104,14 @@ Read configuration options from \fIconfig-file\fR.
 .TP
 .BI \-n
 Create the database file if it doesn't already exist.
+.TP
+.BI \-o
+Store all the output in memory and only print it once the transaction
+is completed.
+.TP
+.BI \-T
+Use a transaction to do the action (most especially for 'show') - the
+default used to be transactions.
 .SH FILES
 .TP
 .B /etc/imapd.conf
