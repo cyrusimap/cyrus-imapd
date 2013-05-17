@@ -755,14 +755,12 @@ static int caldav_post(struct transaction_t *txn)
     rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
 
     /* Read body */
-    if (!txn->flags.havebody) {
-	txn->flags.havebody = 1;
-	r = read_body(httpd_in, txn->req_hdrs, &txn->req_body,
-		      txn->flags.cont | BODY_DECODE, &txn->error.desc);
-	if (r) {
-	    txn->flags.conn = CONN_CLOSE;
-	    return r;
-	}
+    txn->flags.body |= BODY_DECODE;
+    r = read_body(httpd_in, txn->req_hdrs, &txn->req_body,
+		  &txn->flags.body, &txn->error.desc);
+    if (r) {
+	txn->flags.conn = CONN_CLOSE;
+	return r;
     }
 
     /* Make sure we have a body */

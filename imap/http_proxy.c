@@ -626,12 +626,12 @@ int http_read_response(struct backend *be, unsigned meth, unsigned decode,
 	if (meth == METH_HEAD) break;
 
 	else {
-	    unsigned flags = BODY_RESPONSE;
+	    unsigned char flags = BODY_RESPONSE;
 
 	    if (decode) flags |= BODY_DECODE;
 	    if (*close) flags |= BODY_CLOSE;
 
-	    if (read_body(be->in, *hdrs, body, flags, errstr)) {
+	    if (read_body(be->in, *hdrs, body, &flags, errstr)) {
 		return HTTP_BAD_GATEWAY;
 	    }
 	}
@@ -749,16 +749,13 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 	if ((code == 100) /* Continue */  && !sent_body++) {
 	    unsigned len;
 
-	    if (!txn->flags.havebody) {
-		/* Read body from client */
-		txn->flags.havebody = 1;
-		r = read_body(httpd_in, txn->req_hdrs, &txn->req_body,
-			      txn->flags.cont, &txn->error.desc);
-		if (r) {
-		    /* Couldn't get the body and can't finish request */
-		    txn->flags.conn = CONN_CLOSE;
-		    break;
-		}
+	    /* Read body from client */
+	    r = read_body(httpd_in, txn->req_hdrs, &txn->req_body,
+			  &txn->flags.body, &txn->error.desc);
+	    if (r) {
+		/* Couldn't get the body and can't finish request */
+		txn->flags.conn = CONN_CLOSE;
+		break;
 	    }
 
 	    /* Send single-chunk body to backend to complete the request */

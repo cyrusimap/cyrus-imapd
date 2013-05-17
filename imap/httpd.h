@@ -251,15 +251,14 @@ struct resp_body_t {
 
 /* Transaction flags */
 struct txn_flags_t {
-    unsigned long ver1_0	: 1;	/* Request from HTTP/1.0 client */
-    unsigned long conn		: 3;	/* Connection opts on req/resp */
-    unsigned long havebody	: 1;	/* Has body of request has been read? */
-    unsigned long cont		: 1;	/* Does client expect 100-continue */
-    unsigned long te		: 3;	/* Transfer-Encoding for resp */
-    unsigned long ce		: 2;	/* Content-Encoding for resp */
-    unsigned long cc		: 3;	/* Cache-Control directives for resp */
-    unsigned long ranges	: 1;	/* Accept range requests for resource */
-    unsigned long vary		: 3;	/* Headers on which response varied */
+    unsigned char ver1_0;		/* Request from HTTP/1.0 client */
+    unsigned char conn;			/* Connection opts on req/resp */
+    unsigned char body;			/* read_body() flags on req */
+    unsigned char te;			/* Transfer-Encoding for resp */
+    unsigned char ce;			/* Content-Encoding for resp */
+    unsigned char cc;			/* Cache-Control directives for resp */
+    unsigned char ranges;		/* Accept range requests for resource */
+    unsigned char vary;			/* Headers on which response varied */
 };
 
 /* Transaction context */
@@ -299,6 +298,15 @@ enum {
     CONN_CLOSE =	(1<<0),
     CONN_UPGRADE = 	(1<<1),
     CONN_KEEPALIVE =	(1<<2)
+};
+
+/* read_body() flags */
+enum {
+    BODY_RESPONSE =	(1<<0),	/* Response body, otherwise request */
+    BODY_CONTINUE =	(1<<1),	/* Expect:100-continue request */
+    BODY_CLOSE =	(1<<1),	/* Close-delimited response body */
+    BODY_DECODE = 	(1<<2),	/* Decode any Content-Encoding */
+    BODY_DONE =		(1<<3)	/* Body has been read */
 };
 
 /* Transfer-Encoding flags (coding of response payload) */
@@ -406,14 +414,6 @@ extern int etagcmp(const char *hdr, const char *etag);
 extern int check_precond(struct transaction_t *txn, const void *data,
 			 const char *etag, time_t lastmod, unsigned long len);
 extern int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
-		     unsigned flags, const char **errstr);
-
-/* Read body flags */
-enum {
-    BODY_CONTINUE =	(1<<0),		/* client Expects 100-continue */
-    BODY_DECODE =	(1<<1),		/* decode any Content-Encoding */
-    BODY_RESPONSE =	(1<<2),		/* response body (mutex w/ continue) */
-    BODY_CLOSE =	(1<<3)		/* cxn will close (mutex w/ continue) */
-};
+		     unsigned char *flags, const char **errstr);
 
 #endif /* HTTPD_H */

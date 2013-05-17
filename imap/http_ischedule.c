@@ -340,14 +340,12 @@ static int meth_post_isched(struct transaction_t *txn,
     }
 
     /* Read body */
-    if (!txn->flags.havebody) {
-	txn->flags.havebody = 1;
-	r = read_body(httpd_in, txn->req_hdrs, &txn->req_body,
-		      txn->flags.cont | BODY_DECODE, &txn->error.desc);
-	if (r) {
-	    txn->flags.conn = CONN_CLOSE;
-	    return r;
-	}
+    txn->flags.body |= BODY_DECODE;
+    r = read_body(httpd_in, txn->req_hdrs, &txn->req_body,
+		  &txn->flags.body, &txn->error.desc);
+    if (r) {
+	txn->flags.conn = CONN_CLOSE;
+	return r;
     }
 
     /* Make sure we have a body */
@@ -631,7 +629,6 @@ int isched_send(struct sched_param *sparam, const char *recipient,
     if (!r) {
 	switch (code) {
 	case 200:  /* Successful */
-	    txn.flags.havebody = 1;
 	    r = parse_xml_body(&txn, xml);
 	    break;
 
