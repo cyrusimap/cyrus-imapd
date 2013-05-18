@@ -158,7 +158,7 @@ static void digest_send_success(const char *name __attribute__((unused)),
 /* List of HTTP auth schemes that we support */
 struct auth_scheme_t auth_schemes[] = {
     { AUTH_BASIC, "Basic", NULL, AUTH_SERVER_FIRST | AUTH_BASE64, NULL, NULL },
-    { AUTH_DIGEST, "Digest", HTTP_DIGEST_MECH, AUTH_NEED_BODY|AUTH_SERVER_FIRST,
+    { AUTH_DIGEST, "Digest", HTTP_DIGEST_MECH, AUTH_NEED_REQUEST|AUTH_SERVER_FIRST,
       &digest_send_success, digest_recv_success },
     { AUTH_SPNEGO, "Negotiate", "GSS-SPNEGO", AUTH_BASE64, NULL, NULL },
     { AUTH_NTLM, "NTLM", "NTLM", AUTH_NEED_PERSIST | AUTH_BASE64, NULL, NULL },
@@ -1805,10 +1805,8 @@ void response_header(long code, struct transaction_t *txn)
     static struct buf log = BUF_INITIALIZER;
 
     if (txn && txn->req_hdrs) {
-	/* Read and possibly discard any unread body */
-	txn->flags.body |= BODY_DECODE;
-	if (read_body(httpd_in, txn->req_hdrs,
-		      code == HTTP_UNAUTHORIZED ? &txn->req_body : NULL,
+	/* Read and discard any unread body */
+	if (read_body(httpd_in, txn->req_hdrs, NULL,
 		      &txn->flags.body, &txn->error.desc)) {
 	    txn->flags.conn = CONN_CLOSE;
 	}
@@ -2570,20 +2568,13 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 
 #ifdef SASL_HTTP_REQUEST
     /* Setup SASL HTTP request, if necessary */
-    if (scheme->flags & AUTH_NEED_BODY) {
+    if (scheme->flags & AUTH_NEED_REQUEST) {
 	sasl_http_request_t sasl_http_req;
 
-	/* Read body */
-	txn->flags.body |= BODY_DECODE;
-	if (read_body(httpd_in, txn->req_hdrs, &txn->req_body,
-		      &txn->flags.body, &txn->error.desc)) {
-	    txn->flags.conn = CONN_CLOSE;
-	    return SASL_FAIL;
-	}
 	sasl_http_req.method = txn->req_line.meth;
 	sasl_http_req.uri = txn->req_line.uri;
-	sasl_http_req.entity = (u_char *) buf_cstring(&txn->req_body);
-	sasl_http_req.elen = buf_len(&txn->req_body);
+	sasl_http_req.entity = NULL;
+	sasl_http_req.elen = 0;
 	sasl_http_req.non_persist = txn->flags.conn & CONN_CLOSE;
 	sasl_setprop(httpd_saslconn, SASL_HTTP_REQUEST, &sasl_http_req);
     }

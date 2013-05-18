@@ -165,7 +165,7 @@ enum {
 /* Auth scheme flags */
 enum {
     AUTH_NEED_PERSIST =	(1<<0),	/* Persistent connection required */
-    AUTH_NEED_BODY =	(1<<1),	/* Request body required */
+    AUTH_NEED_REQUEST =	(1<<1),	/* Request-line required */
     AUTH_SERVER_FIRST =	(1<<2),	/* SASL mech is server-first */
     AUTH_BASE64 =	(1<<3)	/* Base64 encode/decode auth data */
 };
