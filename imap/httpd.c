@@ -1804,49 +1804,11 @@ void response_header(long code, struct transaction_t *txn)
     struct resp_body_t *resp_body;
     static struct buf log = BUF_INITIALIZER;
 
-    if (txn && txn->req_hdrs) {
-	/* Read and discard any unread body */
-	if (read_body(httpd_in, txn->req_hdrs, NULL,
-		      &txn->flags.body, &txn->error.desc)) {
-	    txn->flags.conn = CONN_CLOSE;
-	}
-
-	/* Log the client request and our response */
-	buf_reset(&log);
-	buf_printf(&log, "%s", httpd_clienthost);
-	if (httpd_userid) buf_printf(&log, " as \"%s\"", httpd_userid);
-	if ((hdr = spool_getheader(txn->req_hdrs, "User-Agent"))) {
-	    buf_printf(&log, " with \"%s\"", hdr[0]);
-	}
-	buf_printf(&log, "; \"%s",
-		   txn->req_line.meth ? txn->req_line.meth : "");
-	if (txn->req_line.uri) buf_printf(&log, " %s", txn->req_line.uri);
-	if (txn->req_line.ver) {
-	    buf_printf(&log, " %s", txn->req_line.ver);
-	    if (code != HTTP_TOO_LONG) {
-		char *p = txn->req_line.ver + strlen(txn->req_line.ver) + 1;
-		if (*p) buf_printf(&log, " %s", p);
-	    }
-	}
-	buf_appendcstr(&log, "\"");
-	if ((hdr = spool_getheader(txn->req_hdrs, "Destination"))) {
-	    buf_printf(&log, " (destination=%s)", hdr[0]);
-	}
-	else if ((hdr = spool_getheader(txn->req_hdrs, ":type"))) {
-	    buf_printf(&log, " (type=%s", hdr[0]);
-	    if ((hdr = spool_getheader(txn->req_hdrs, "Depth"))) {
-		buf_printf(&log, "; depth=%s", hdr[0]);
-	    }
-	    buf_appendcstr(&log, ")");
-	}
-	buf_printf(&log, " => \"%s\"", error_message(code));
-	if (txn->location) {
-	    buf_printf(&log, " (location=%s)", txn->location);
-	}
-	else if (txn->error.desc) {
-	    buf_printf(&log, " (error=%s)", txn->error.desc);
-	}
-	syslog(LOG_INFO, "%s", buf_cstring(&log));
+    /* Read and discard any unread body */
+    if (txn && txn->req_hdrs &&
+	read_body(httpd_in, txn->req_hdrs, NULL,
+		  &txn->flags.body, &txn->error.desc)) {
+	txn->flags.conn = CONN_CLOSE;
     }
 
 
@@ -1862,8 +1824,10 @@ void response_header(long code, struct transaction_t *txn)
     switch (code) {
     case HTTP_SWITCH_PROT:
 	keepalive = 0;  /* No alarm during TLS negotiation */
+
 	prot_printf(httpd_out, "Upgrade: %s\r\n", TLS_VERSION);
 	prot_puts(httpd_out, "Connection: Upgrade\r\n");
+
 	/* Fall through as provisional response */
 
     case HTTP_CONTINUE:
@@ -1884,6 +1848,7 @@ void response_header(long code, struct transaction_t *txn)
     case HTTP_UPGRADE:
 	txn->flags.conn |= CONN_UPGRADE;
 	prot_printf(httpd_out, "Upgrade: %s\r\n", TLS_VERSION);
+
 	/* Fall through as final response */
 
     default:
@@ -2027,10 +1992,9 @@ void response_header(long code, struct transaction_t *txn)
 	    }
 
 	    /* Fall through and add Allow header(s) */
-	    code = HTTP_NOT_ALLOWED;
 
 	default:
-	    if (code == HTTP_NOT_ALLOWED) {
+	    if (txn->meth == METH_OPTIONS || code == HTTP_NOT_ALLOWED) {
 		/* Construct Allow header(s) for OPTIONS and 405 response */
 		const char *meths[] = {
 		    "GET, HEAD", "POST", "PUT", "DELETE", "TRACE", NULL
@@ -2133,6 +2097,51 @@ void response_header(long code, struct transaction_t *txn)
 
     /* CRLF terminating the header block */
     prot_puts(httpd_out, "\r\n");
+
+
+    /* Log the client request and our response */
+    buf_reset(&log);
+    buf_printf(&log, "%s", httpd_clienthost);
+    if (httpd_userid) buf_printf(&log, " as \"%s\"", httpd_userid);
+    if (txn->req_hdrs &&
+	(hdr = spool_getheader(txn->req_hdrs, "User-Agent"))) {
+	buf_printf(&log, " with \"%s\"", hdr[0]);
+    }
+    buf_appendcstr(&log, "; \"");
+    if (txn->req_line.meth) {
+	buf_printf(&log, "%s", txn->req_line.meth);
+	if (txn->req_line.uri) {
+	    buf_printf(&log, " %s", txn->req_line.uri);
+	    if (txn->req_line.ver) {
+		buf_printf(&log, " %s", txn->req_line.ver);
+		if (code != HTTP_TOO_LONG) {
+		    char *p = txn->req_line.ver + strlen(txn->req_line.ver) + 1;
+		    if (*p) buf_printf(&log, " %s", p);
+		}
+	    }
+	}
+    }
+    buf_appendcstr(&log, "\"");
+    if (txn->req_hdrs) {
+	if ((hdr = spool_getheader(txn->req_hdrs, "Destination"))) {
+	    buf_printf(&log, " (destination=%s)", hdr[0]);
+	}
+	else if ((hdr = spool_getheader(txn->req_hdrs, ":type"))) {
+	    buf_printf(&log, " (type=%s", hdr[0]);
+	    if ((hdr = spool_getheader(txn->req_hdrs, "Depth"))) {
+		buf_printf(&log, "; depth=%s", hdr[0]);
+	    }
+	    buf_appendcstr(&log, ")");
+	}
+    }
+    buf_printf(&log, " => \"%s\"", error_message(code));
+    if (txn->location) {
+	buf_printf(&log, " (location=%s)", txn->location);
+    }
+    else if (txn->error.desc) {
+	buf_printf(&log, " (error=%s)", txn->error.desc);
+    }
+    syslog(LOG_INFO, "%s", buf_cstring(&log));
 }
 
 
