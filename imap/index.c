@@ -4748,6 +4748,7 @@ static int index_copysetup(struct index_state *state, uint32_t msgno,
 {
     int userflag;
     bit32 flagmask = 0;
+    int i;
     int r;
     struct mailbox *mailbox = state->mailbox;
     struct index_map *im = &state->map[msgno-1];
@@ -4782,6 +4783,10 @@ static int index_copysetup(struct index_state *state, uint32_t msgno,
 
     /* grab seen from our state - it's different for different users */
     copyargs->copymsg[copyargs->nummsg].seen = im->isseen;
+
+    /* zero out the user_flags - they might be different in the destination */
+    for (i = 0; i < MAX_USER_FLAGS/32; i++)
+	copyargs->copymsg[copyargs->nummsg].record.user_flags[i] = 0;
 
     /* CIDs are per-user, so we can reuse the cid if we're copying
      * between mailboxes owned by the same user.  Otherwise we need
