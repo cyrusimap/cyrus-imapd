@@ -449,7 +449,7 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
 EXPORTED void mboxevent_notify(struct mboxevent *mboxevents)
 {
     enum event_type type;
-    struct mboxevent *event, *next;
+    struct mboxevent *event;
     char stimestamp[TIMESTAMP_MAX+1];
     char *formatted_message;
 
@@ -457,42 +457,41 @@ EXPORTED void mboxevent_notify(struct mboxevent *mboxevents)
     if (!mboxevents)
 	return;
 
-    event = mboxevents;
-
-    /* swap FlagsSet and FlagsClear notification order depending the presence of
-     * the \Seen flag because it changes the value of vnd.cmu.unseenMessages */
-    if (event->type == EVENT_FLAGS_SET &&
-	event->next &&
-	event->next->type == EVENT_FLAGS_CLEAR &&
-	strarray_find_case(&event->next->flagnames, "\\Seen", 0) >= 0) {
-
-	next = event->next;
-	event->next = next->next;
-	next->next = event;
-	event = next;
-    }
-
     /* loop over the chained list of events */
-    do {
+    for (event = mboxevents; event; event = event->next) {
 	if (event->type == EVENT_CANCELLED)
-	    goto next;
+	    continue;
+
+	/* swap FlagsSet and FlagsClear notification order depending the presence of
+	 * the \Seen flag because it changes the value of vnd.cmu.unseenMessages.
+	 * kinda bogus because it only finds two next to each other, but hey */
+	if (event->type == EVENT_FLAGS_SET &&
+	    event->next &&
+	    event->next->type == EVENT_FLAGS_CLEAR &&
+	    strarray_find_case(&event->next->flagnames, "\\Seen", 0) >= 0) {
+
+	    struct mboxevent *other = event->next;
+	    event->next = other->next;
+	    other->next = event;
+	    event = other;
+	}
 
 	/* verify that at least one message has been added depending the event type */
 	if (event->type & (MESSAGE_EVENTS|FLAGS_EVENTS)) {
 	    if (event->type & (EVENT_MESSAGE_NEW|EVENT_MESSAGE_APPEND)) {
 		if (!event->params[EVENT_URI].filled)
-		    goto next;
+		    continue;
 	    }
 	    else
 		if (event->uidset == NULL)
-		    goto next;
+		    continue;
 	}
 
 	/* others quota are not supported by RFC 5423 */
 	if ((event->type & QUOTA_EVENTS) &&
 	    !event->params[EVENT_DISK_QUOTA].filled &&
 	    !event->params[EVENT_MAX_MESSAGES].filled)
-	    goto next;
+	    continue;
 
 	/* finish to fill event parameters structure */
 
@@ -554,11 +553,7 @@ EXPORTED void mboxevent_notify(struct mboxevent *mboxevents)
 	    free(formatted_message);
 	}
 	while (strarray_size(&event->flagnames) > 0);
-
-    next:
-	event = event->next;
     }
-    while (event);
 
     return;
 }
