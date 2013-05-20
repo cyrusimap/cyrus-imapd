@@ -1221,7 +1221,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
     }
     if (r && !force) goto done;
 
-    if (!isremote) {
+    if (!isremote && !mboxname_isdeletedmailbox(mailbox->name, NULL)) {
 	/* store a DELETED marker */
 	mbentry_t *newmbentry = mboxlist_entry_create();
 	newmbentry->name = xstrdupnull(mailbox->name);
@@ -1232,7 +1232,8 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
 	mboxlist_entry_free(&newmbentry);
     }
     else {
-	/* delete entry */
+	/* delete entry (including DELETED.* mailboxes, no need
+	 * to keep that rubbish around) */
 	r = cyrusdb_delete(mbdb, name, strlen(name), NULL, 0);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error deleting %s: %s",
