@@ -834,6 +834,22 @@ static int caldav_post(struct transaction_t *txn)
 }
 
 
+static const char *get_icalrestriction_errstr(icalcomponent *ical)
+{
+    icalcomponent *comp;
+
+    for (comp = icalcomponent_get_first_component(ical, ICAL_ANY_COMPONENT);
+	 comp;
+	 comp = icalcomponent_get_next_component(ical, ICAL_ANY_COMPONENT)) {
+	icalproperty *prop =
+	    icalcomponent_get_first_property(comp, ICAL_XLICERROR_PROPERTY);
+	if (prop) return icalproperty_get_xlicerror(prop);
+    }
+
+    return NULL;
+}
+
+
 /* Perform a PUT request
  *
  * preconditions:
@@ -865,6 +881,11 @@ static int caldav_put(struct transaction_t *txn, struct mailbox *mailbox,
     }
     else if (!icalrestriction_check(ical)) {
 	txn->error.precond = CALDAV_VALID_OBJECT;
+	if ((txn->error.desc = get_icalrestriction_errstr(ical))) {
+	    assert(!buf_len(&txn->buf));
+	    buf_setcstr(&txn->buf, txn->error.desc);
+	    txn->error.desc = buf_cstring(&txn->buf);
+	}
 	ret = HTTP_FORBIDDEN;
 	goto done;
     }
