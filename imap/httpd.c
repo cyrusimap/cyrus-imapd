@@ -1169,24 +1169,33 @@ static void cmdloop(void)
 	if (ret) goto done;
 
 	/* Perform authentication, if necessary */
-	if (!httpd_userid) {
-	    if ((hdr = spool_getheader(txn.req_hdrs, "Authorization"))) {
-		/* Check the auth credentials */
-		r = http_auth(hdr[0], &txn);
-		if ((r < 0) || !txn.auth_chal.scheme) {
-		    /* Auth failed - reinitialize */
-		    syslog(LOG_DEBUG, "auth failed - reinit");
-		    reset_saslconn(&httpd_saslconn);
-		    txn.auth_chal.scheme = NULL;
-		    r = SASL_FAIL;
-		}
-	    }
-	    else if (txn.auth_chal.scheme) {
-		/* Started auth exchange, but client didn't engage - reinit */
-		syslog(LOG_DEBUG, "client didn't complete auth - reinit");
+	if ((hdr = spool_getheader(txn.req_hdrs, "Authorization"))) {
+	    if (httpd_userid) {
+		/* Reauth - reinitialize */
+		syslog(LOG_DEBUG, "reauth - reinit");
+		free(httpd_userid);
+		httpd_userid = NULL;
+		auth_freestate(httpd_authstate);
+		httpd_authstate = NULL;
 		reset_saslconn(&httpd_saslconn);
 		txn.auth_chal.scheme = NULL;
 	    }
+
+	    /* Check the auth credentials */
+	    r = http_auth(hdr[0], &txn);
+	    if ((r < 0) || !txn.auth_chal.scheme) {
+		/* Auth failed - reinitialize */
+		syslog(LOG_DEBUG, "auth failed - reinit");
+		reset_saslconn(&httpd_saslconn);
+		txn.auth_chal.scheme = NULL;
+		r = SASL_FAIL;
+	    }
+	}
+	else if (!httpd_userid && txn.auth_chal.scheme) {
+	    /* Started auth exchange, but client didn't engage - reinit */
+	    syslog(LOG_DEBUG, "client didn't complete auth - reinit");
+	    reset_saslconn(&httpd_saslconn);
+	    txn.auth_chal.scheme = NULL;
 	}
 
 	/* Request authentication, if necessary */
