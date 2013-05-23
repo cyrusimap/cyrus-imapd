@@ -333,6 +333,7 @@ static void my_caldav_auth(const char *userid)
     buf_free(&acl);
 
     /* Open CalDAV DB for 'userid' */
+    my_caldav_reset();
     auth_caldavdb = caldav_open(userid, CALDAV_CREATE);
     if (!auth_caldavdb) fatal("Unable to open CalDAV DB", EC_IOERR);
 }

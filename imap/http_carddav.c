@@ -275,6 +275,8 @@ static void my_carddav_auth(const char *userid)
     if (partition) free(partition);
     buf_free(&acl);
 
+    /* Open CardDAV DB for 'userid' */
+    my_carddav_reset();
     auth_carddavdb = carddav_open(userid, CARDDAV_CREATE);
     if (!auth_carddavdb) fatal("Unable to open CardDAV DB", EC_IOERR);
 }
