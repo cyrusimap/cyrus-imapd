@@ -1993,6 +1993,7 @@ static int find_p(void *rockp,
     long minmatch;
     struct glob *g = rock->g;
     long matchlen;
+    mbentry_t *mbentry = NULL;
 
     /* don't list mailboxes outside of the default domain */
     if (!rock->domainlen && !rock->isadmin && memchr(key, '!', keylen)) return 0; 
@@ -2053,25 +2054,26 @@ static int find_p(void *rockp,
 	    return 0;
     }
 
+    /* ignore entirely deleted records */
+    if (mboxlist_parse_entry(&mbentry, "", data, datalen))
+	return 0;
+
+    if (mbentry->mbtype & MBTYPE_DELETED) {
+	mboxlist_entry_free(&mbentry);
+	return 0;
+    }
 
     /* check acl */
     if (!rock->isadmin) {
-	int rights = 0;
-	mbentry_t *mbentry = NULL;
-
-	if (mboxlist_parse_entry(&mbentry, "", data, datalen))
-	    return 0;
-
-	/* check the acls */
-	if (!(mbentry->mbtype & MBTYPE_DELETED))
-	    rights = cyrus_acl_myrights(rock->auth_state, mbentry->acl);
-
-	mboxlist_entry_free(&mbentry);
+	int rights = cyrus_acl_myrights(rock->auth_state, mbentry->acl);
 
 	if (!(rights & ACL_LOOKUP)) {
+	    mboxlist_entry_free(&mbentry);
 	    return 0;
 	}
     }
+
+    mboxlist_entry_free(&mbentry);
 
     /* if we get here, close enough for us to spend the time
        acting interested */
