@@ -69,8 +69,7 @@
 
 #include <libxml/uri.h>
 
-static int login(struct backend *s, const char *server __attribute__((unused)),
-		 struct protocol_t *prot, const char *userid,
+static int login(struct backend *s, const char *userid,
 		 sasl_callback_t *cb, const char **status);
 static int ping(struct backend *s);
 static int logout(struct backend *s __attribute__((unused)));
@@ -124,8 +123,7 @@ static const char *callback_getdata(sasl_conn_t *conn,
 
 #define BASE64_BUF_SIZE	21848	/* per RFC 2222bis: ((16K / 3) + 1) * 4  */
 
-static int login(struct backend *s, const char *server __attribute__((unused)),
-		 struct protocol_t *prot, const char *userid,
+static int login(struct backend *s, const char *userid,
 		 sasl_callback_t *cb, const char **status)
 {
     int r = 0, local_cb = 0;
@@ -171,7 +169,8 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
     }
 
     /* Require proxying if we have an "interesting" userid (authzid) */
-    r = sasl_client_new(prot->sasl_service, s->hostname, localip, remoteip, cb,
+    r = sasl_client_new(s->prot->sasl_service, s->hostname,
+			localip, remoteip, cb,
 			/* (userid  && *userid ? SASL_NEED_PROXY : 0) | */
 			SASL_USAGE_FLAGS, &s->saslconn);
     if (r != SASL_OK) goto done;

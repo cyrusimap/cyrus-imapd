@@ -398,13 +398,13 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
     return r;
 }
 
-static int backend_login(struct backend *ret, const char *server,
-			 struct protocol_t *prot, const char *userid,
+static int backend_login(struct backend *ret, const char *userid,
 			 sasl_callback_t *cb, const char **auth_status)
 {
     int r = 0;
     int ask = 1; /* should we explicitly ask for capabilities? */
     char buf[2048], *mechlist = NULL;
+    struct protocol_t *prot = ret->prot;
 
     if (prot->u.std.banner.auto_capa) {
 	/* try to get the capabilities from the banner */
@@ -437,7 +437,7 @@ static int backend_login(struct backend *ret, const char *server,
 
     /* now need to authenticate to backend server,
        unless we're doing LMTP/CSYNC on a UNIX socket (deliver/sync_client) */
-    if ((server[0] != '/') ||
+    if ((ret->addr.ss_family != PF_UNIX) ||
 	(strcmp(prot->sasl_service, "lmtp") &&
 	 strcmp(prot->sasl_service, "csync"))) {
 	char *mlist = NULL;
@@ -450,7 +450,7 @@ static int backend_login(struct backend *ret, const char *server,
 	if ((r = backend_authenticate(ret, prot, &mlist, userid,
 				      cb, &my_status))) {
 	    syslog(LOG_ERR, "couldn't authenticate to backend server '%s': %s",
-		   server, sasl_errstring(r, NULL, NULL));
+		   ret->hostname, sasl_errstring(r, NULL, NULL));
 	}
 	else {
 	    const void *ssf;
@@ -693,9 +693,9 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
     /* Login to the server */
     if (!r && !no_auth) {
 	if (prot->type == TYPE_SPEC)
-	    r = prot->u.spec.login(ret, server, prot, userid, cb, auth_status);
+	    r = prot->u.spec.login(ret, userid, cb, auth_status);
 	else
-	    r = backend_login(ret, server, prot, userid, cb, auth_status);
+	    r = backend_login(ret, userid, cb, auth_status);
     }
 
     if (r) {

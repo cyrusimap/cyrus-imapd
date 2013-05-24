@@ -125,8 +125,7 @@ struct protocol_t {
 	struct stdprot_t std;
 	struct {
 	    /* special protocol */
-	    int (*login)(struct backend *s, const char *server,
-			 struct protocol_t *prot, const char *userid,
+	    int (*login)(struct backend *s, const char *userid,
 			 sasl_callback_t *cb, const char **status);
 	    int (*ping)(struct backend *s);
 	    int (*logout)(struct backend *s);
