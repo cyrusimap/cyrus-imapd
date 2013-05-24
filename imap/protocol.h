@@ -127,7 +127,7 @@ struct protocol_t {
 	    /* special protocol */
 	    int (*login)(struct backend *s, const char *userid,
 			 sasl_callback_t *cb, const char **status);
-	    int (*ping)(struct backend *s);
+	    int (*ping)(struct backend *s, const char *userid);
 	    int (*logout)(struct backend *s);
 	} spec;
     } u;

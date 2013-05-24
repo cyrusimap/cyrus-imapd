@@ -166,7 +166,7 @@ proxy_findserver(const char *server,		/* hostname of backend */
 	if (!strcmp(server, ((*cache)[i])->hostname)) {
 	    ret = (*cache)[i];
 	    /* ping/noop the server */
-	    if ((ret->sock != -1) && backend_ping(ret)) {
+	    if ((ret->sock != -1) && backend_ping(ret, userid)) {
 		backend_disconnect(ret);
 	    }
 	    break;

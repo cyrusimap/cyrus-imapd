@@ -71,7 +71,7 @@
 
 static int login(struct backend *s, const char *userid,
 		 sasl_callback_t *cb, const char **status);
-static int ping(struct backend *s);
+static int ping(struct backend *s, const char *userid);
 static int logout(struct backend *s __attribute__((unused)));
 
 
@@ -424,34 +424,9 @@ static int login(struct backend *s, const char *userid,
 }
 
 
-static int ping(struct backend *s)
+static int ping(struct backend *s, const char *userid)
 {
-    int r = 0;
-    unsigned code, close;
-    hdrcache_t hdrs = NULL;
-    const char *errstr;
-
-    /* Send request to server */
-    prot_puts(s->out, "OPTIONS * HTTP/1.1\r\n");
-    prot_printf(s->out, "Host: %s\r\n", s->hostname);
-    prot_printf(s->out, "User-Agent: %s\r\n", buf_cstring(&serverinfo));
-    prot_puts(s->out, "\r\n");
-    prot_flush(s->out);
-
-    do {
-	r = http_read_response(s, METH_OPTIONS, 0, &code, &close, NULL,
-			       &hdrs, NULL, &errstr);
-	/* Check if this is a non-persistent connection */
-	if (close) r = HTTP_BAD_GATEWAY;
-
-	if (r) break;
-
-	/* Continue until error or final response */
-    } while (code < 200);
-
-    if (hdrs) spool_free_hdrcache(hdrs);
-
-    return r;
+    return login(s, userid, NULL, NULL);
 }
 
 

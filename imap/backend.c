@@ -709,14 +709,14 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
     return ret;
 }
 
-int backend_ping(struct backend *s)
+int backend_ping(struct backend *s, const char *userid)
 {
     struct simple_cmd_t *ping_cmd;
 
     if (!s) return 0;
     if (s->sock == -1) return -1; /* Disconnected Socket */
 
-    if (s->prot->type == TYPE_SPEC) return s->prot->u.spec.ping(s);
+    if (s->prot->type == TYPE_SPEC) return s->prot->u.spec.ping(s, userid);
 
     ping_cmd = &s->prot->u.std.ping_cmd;
     if (!ping_cmd->cmd) return 0;

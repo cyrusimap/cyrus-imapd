@@ -2708,7 +2708,7 @@ void do_daemon(const char *sync_log_file, const char *sync_shutdown_file,
 	     * If we are, we had some type of error, so we exit.
 	     * Otherwise, try reconnecting.
 	     */
-	    if (!backend_ping(sync_backend)) restart = 1;
+	    if (!backend_ping(sync_backend, NULL)) restart = 1;
 	}
 	replica_disconnect();
     }
