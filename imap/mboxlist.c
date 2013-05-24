@@ -2191,12 +2191,40 @@ static int find_cb(void *rockp,
     return r;
 }
 
-EXPORTED int mboxlist_allmbox(const char *prefix, foreach_cb *proc, void *rock)
+static int skipdel_cb(void *rock __attribute__((unused)),
+		      const char *key,
+		      size_t keylen,
+		      const char *data,
+		      size_t datalen)
+{
+    mbentry_t *mbentry = NULL;
+    char *name = xstrndup(key, keylen);
+    int r;
+    int res = 1;
+
+    r = mboxlist_parse_entry(&mbentry, name, data, datalen);
+    free(name);
+
+    if (r) return 0;
+
+    if (mbentry->mbtype & MBTYPE_DELETED)
+	res = 0;
+
+    mboxlist_entry_free(&mbentry);
+
+    return res;
+}
+
+EXPORTED int mboxlist_allmbox(const char *prefix, foreach_cb *proc, void *rock,
+			      int incdel)
 {
     int r;
     char *search = prefix ? (char *)prefix : "";
 
-    r = cyrusdb_foreach(mbdb, search, strlen(search), NULL, proc, rock, 0);
+    if (incdel)
+	r = cyrusdb_foreach(mbdb, search, strlen(search), NULL, proc, rock, 0);
+    else
+	r = cyrusdb_foreach(mbdb, search, strlen(search), skipdel_cb, proc, rock, 0);
 
     return r;
 }

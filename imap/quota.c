@@ -624,7 +624,7 @@ int fixquota_dopass(char *domain, char **roots, int nroots,
 
     /* basic case - everything (potentially limited by domain still) */
     if (!nroots) {
-	r = mboxlist_allmbox(buf, cb, buf);
+	r = mboxlist_allmbox(buf, cb, buf, /*incdel*/0);
 	if (r) {
 	    errmsg("processing mbox list for '%s'", buf, IMAP_IOERROR);
 	}
@@ -639,7 +639,7 @@ int fixquota_dopass(char *domain, char **roots, int nroots,
 	/* change the separator to internal namespace */
 	mboxname_hiersep_tointernal(&quota_namespace, tail, 0);
 
-	r = mboxlist_allmbox(buf, cb, buf);
+	r = mboxlist_allmbox(buf, cb, buf, /*incdel*/0);
 	if (r) {
 	    errmsg("processing mbox list for '%s'", buf, IMAP_IOERROR);
 	    break;
