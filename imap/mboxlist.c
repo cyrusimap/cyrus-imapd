@@ -1626,8 +1626,8 @@ static int find_p(void *rockp,
 	return 0;
     }
 
-    /* Suppress deleted hierarchy and calendar mailboxes unless admin:
-       overrides ACL_LOOKUP test */
+    /* Suppress deleted hierarchy, calendar, and addressbook mailboxes
+       unless admin: overrides ACL_LOOKUP test */
     if (!rock->isadmin) {
 	char namebuf[MAX_MAILBOX_BUFFER];
 	int mbtype = strtol(data, NULL, 10);
@@ -1635,7 +1635,8 @@ static int find_p(void *rockp,
 	memcpy(namebuf, key, keylen);
 	namebuf[keylen] = '\0';
 	if (mboxname_isdeletedmailbox(namebuf) ||
-	    mboxname_iscalendarmailbox(namebuf, mbtype))
+	    mboxname_iscalendarmailbox(namebuf, mbtype) ||
+	    mboxname_isaddressbookmailbox(namebuf, mbtype))
 	    return 0;
     }
 
