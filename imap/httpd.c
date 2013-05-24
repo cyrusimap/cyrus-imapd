@@ -1173,10 +1173,14 @@ static void cmdloop(void)
 	    if (httpd_userid) {
 		/* Reauth - reinitialize */
 		syslog(LOG_DEBUG, "reauth - reinit");
-		free(httpd_userid);
-		httpd_userid = NULL;
-		auth_freestate(httpd_authstate);
-		httpd_authstate = NULL;
+		if (httpd_userid) {
+		    free(httpd_userid);
+		    httpd_userid = NULL;
+		}
+		if (httpd_authstate) {
+		    auth_freestate(httpd_authstate);
+		    httpd_authstate = NULL;
+		}
 		reset_saslconn(&httpd_saslconn);
 		txn.auth_chal.scheme = NULL;
 	    }
@@ -2700,6 +2704,12 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 	/* Trying to proxy as another user */
 	char authzbuf[MAX_MAILBOX_BUFFER];
 	unsigned authzlen;
+
+	/* Free authstate previously allocated for auth'd user */
+	if (httpd_authstate) {
+	    auth_freestate(httpd_authstate);
+	    httpd_authstate = NULL;
+	}
 
 	/* Canonify the authzid */
 	status = mysasl_canon_user(httpd_saslconn, NULL,
