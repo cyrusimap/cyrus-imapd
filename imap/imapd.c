@@ -5007,6 +5007,7 @@ void cmd_create(char *tag, char *name, struct dlist *extargs, int localonly)
     dlist_getatom(extargs, "SERVER", &server);
     if (dlist_getatom(extargs, "TYPE", &type)) {
 	if (!strcasecmp(type, "CALENDAR")) mbtype |= MBTYPE_CALENDAR;
+	else if (!strcasecmp(type, "ADDRESSBOOK")) mbtype |= MBTYPE_ADDRESSBOOK;
 	else r = IMAP_MAILBOX_BADTYPE;
     }
 
