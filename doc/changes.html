@@ -8,6 +8,18 @@
 </head>
 <body>
 
+<h1>Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta4</h1>
+<ul>
+<li>Always verify authorization credentials supplied by the client (a
+  proxy may be reusing an existing connection as a different user)</li>
+<li>Don't bother supporting Digest qop=auth-int since no clients seem
+  to use it</li>
+<li>Don't show addressbook mailboxes in IMAP LIST output</li>
+<li>Plugged leaked memory found by Valgrind</li>
+<li>Better handling of request/response bodies</li>
+<li>Added <tt>httpprettytelemetry</tt> option<li>
+</ul>
+
 <h1>Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta3</h1>
 <ul>
 <li>Plugged leaked memory found by Valgrind</li>
