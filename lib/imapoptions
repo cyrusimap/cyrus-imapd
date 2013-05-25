@@ -440,8 +440,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    (where hostname is the short hostname of the server) - Cyrus Murder */
 
 { "httpallowcompress", 1, SWITCH }
-/* If enabled, the server will compress responses if the client
-   indicates that it can accept them. */
+/* If enabled, the server will compress response payloads if the client
+   indicates that it can accept them.  Note that the compressed data
+   will appear in telemetry logs, leaving only the response headers as
+   human-readable.*/
 
 { "httpallowtrace", 0, SWITCH }
 /* Allow use of the TRACE method.
@@ -475,6 +477,13 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Space-separated list of HTTP modules that will be enabled in
    httpd(8).  This option has no effect on modules that are disabled
    at compile time due to missing dependencies (e.g. libical). */
+
+{ "httpprettytelemetry", 0, SWITCH }
+/* If enabled, HTTP response payloads including server-generated
+   markup languages (HTML, XML) will utilize line breaks and
+   indentation to promote better human-readability in telemetry logs.
+   Note that enabling this option will increase the amount of data
+   sent across the wire. */
 
 { "httptimeout", 5, INT }
 /* Set the length of the HTTP server's inactivity autologout timer,    

@@ -668,7 +668,7 @@ static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
 
 
 static void buf_escapestr(struct buf *buf, const char *str, unsigned max,
-			  unsigned replace)
+			  unsigned replace, unsigned level)
 {
     const char *c;
     unsigned buflen = buf_len(buf), len = 0;
@@ -676,6 +676,7 @@ static void buf_escapestr(struct buf *buf, const char *str, unsigned max,
     for (c = str; c && *c && (!max || len < max); c++, len++) {
 	/* Translate CR to HTML <br> tag */
 	if (*c == '\r') buf_appendcstr(buf, "<br>");
+	else if (*c == '\n' && !config_httpprettytelemetry) continue;
 
 	/* Translate XML/HTML specials */
 	else if (*c == '"') buf_appendcstr(buf, "&quot;");
@@ -689,10 +690,11 @@ static void buf_escapestr(struct buf *buf, const char *str, unsigned max,
 	    if (replace) {
 		/* Replace entire string with a warning */
 		buf_truncate(buf, buflen);
-		buf_appendcstr(buf, "<blockquote><i><b>NOTE:</b> "
-			       "This message contains characters "
-			       "that can not be displayed in RSS"
-			       "</i></blockquote>");
+		buf_printf_markup(buf, level++, "<blockquote>");
+		buf_printf_markup(buf, level, "<i><b>NOTE:</b> "
+				  "This message contains characters "
+				  "that can not be displayed in RSS</i>");
+		buf_printf_markup(buf, --level, "</blockquote>");
 		return;
 	    }
 	    else {
@@ -717,6 +719,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     static char etag[33];
     struct buf *url = &txn->buf;
     struct buf *buf = &txn->resp_body.payload;
+    unsigned level = 0;
 
     /* Check any preconditions */
     lastmod = mailbox->i.last_appenddate;
@@ -797,13 +800,14 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 #endif
 
     /* Start XML */
-    buf_setcstr(buf, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n");
+    buf_reset(buf);
+    buf_printf_markup(buf, level, "<?xml version=\"1.0\" encoding=\"utf-8\"?>");
 
     /* Set up the RSS <channel> response for the mailbox */
-    buf_appendcstr(buf, "<rss xmlns:atom=\"" XML_NS_ATOM
-		   "\" version=\"2.0\">\n");
-    buf_appendcstr(buf, "<channel>\n");
-    buf_printf(buf, "<title>%s</title>\n", mailbox->name);
+    buf_printf_markup(buf, level++,
+		      "<rss xmlns:atom=\"" XML_NS_ATOM "\" version=\"2.0\">");
+    buf_printf_markup(buf, level++, "<channel>");
+    buf_printf_markup(buf, level, "<title>%s</title>", mailbox->name);
 
     /* Construct base URL */
     if (config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS) &&
@@ -833,33 +837,33 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     buf_printf(url, "%s://%s%s", proto, host, txn->req_uri->path);
     url_len = buf_len(url);
 
-    buf_printf(buf, "<link>%s</link>\n", buf_cstring(url));
+    buf_printf_markup(buf, level, "<link>%s</link>", buf_cstring(url));
 
     /* Recommended by http://www.rssboard.org/rss-profile */
-    buf_printf(buf, "<atom:link href=\"%s\" rel=\"self\""
-	       " type=\"application/rss+xml\"/>\n", buf_cstring(url));
+    buf_printf_markup(buf, level, "<atom:link href=\"%s\" rel=\"self\""
+		      " type=\"application/rss+xml\"/>", buf_cstring(url));
 
     /* XXX  Use /comment annotation as description? */
-    buf_appendcstr(buf, "<description/>\n");
+    buf_printf_markup(buf, level, "<description/>");
 
     if ((webmaster = config_getstring(IMAPOPT_RSS_WEBMASTER))) {
-      buf_printf(buf, "<webMaster>%s</webMaster>\n", webmaster);
+	buf_printf_markup(buf, level, "<webMaster>%s</webMaster>", webmaster);
     }
 
     rfc822date_gen(datestr, sizeof(datestr), time(NULL));
-    buf_printf(buf, "<pubDate>%s</pubDate>\n", datestr);
+    buf_printf_markup(buf, level, "<pubDate>%s</pubDate>", datestr);
 
     rfc822date_gen(datestr, sizeof(datestr), lastmod);
-    buf_printf(buf, "<lastBuildDate>%s</lastBuildDate>\n", datestr);
+    buf_printf_markup(buf, level, "<lastBuildDate>%s</lastBuildDate>", datestr);
 
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	buf_printf(buf, "<generator>Cyrus HTTP %s</generator>\n",
-		   cyrus_version());
+	buf_printf_markup(buf, level, "<generator>Cyrus HTTP %s</generator>",
+			  cyrus_version());
     }
 
-    buf_printf(buf, "<docs>%s</docs>\n", RSS_SPEC);
+    buf_printf_markup(buf, level, "<docs>%s</docs>", RSS_SPEC);
 
-    if (ttl) buf_printf(buf, "<ttl>%d</ttl>\n", ttl);
+    if (ttl) buf_printf_markup(buf, level, "<ttl>%d</ttl>", ttl);
 
     write_body(HTTP_OK, txn, buf_cstring(buf), buf_len(buf));
     buf_reset(buf);
@@ -901,17 +905,20 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	/* Feeding this message, increment counter */
 	nitems++;
 
-	buf_appendcstr(buf, "<item>\n");
+	buf_printf_markup(buf, level++, "<item>");
 
 	subj = charset_parse_mimeheader(body->subject);
-	buf_appendcstr(buf, "<title>");
-	buf_escapestr(buf, subj && *subj ? subj : "[Untitled]", 0, 0);
-	buf_appendcstr(buf, "</title>\n");
+	buf_printf_markup(buf, level++, "<title>");
+	if (config_httpprettytelemetry)
+	    buf_printf(buf, "%*s", level * MARKUP_INDENT, "");
+	buf_escapestr(buf, subj && *subj ? subj : "[Untitled]", 0, 0, 0);
+	if (config_httpprettytelemetry) buf_appendcstr(buf, "\n");
+	buf_printf_markup(buf, --level, "</title>");
 	free(subj);
 
 	buf_truncate(url, url_len);
 	buf_printf(url, "?uid=%u", record.uid);
-	buf_printf(buf, "<link>%s</link>\n", buf_cstring(url));
+	buf_printf_markup(buf, level, "<link>%s</link>", buf_cstring(url));
 
 	if (body->from || body->sender) {
 	    struct address *addr;
@@ -920,24 +927,27 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	    else addr = body->sender;
 
 	    if (*addr->mailbox) {
-		buf_appendcstr(buf, "<author>");
-		buf_escapestr(buf, addr->mailbox, 0, 0);
+		buf_printf_markup(buf, level++, "<author>");
+		if (config_httpprettytelemetry)
+		    buf_printf(buf, "%*s", level * MARKUP_INDENT, "");
+		buf_escapestr(buf, addr->mailbox, 0, 0, 0);
 		buf_putc(buf, '@');
-		buf_escapestr(buf, addr->domain, 0, 0);
+		buf_escapestr(buf, addr->domain, 0, 0, 0);
 		if (addr->name) {
 		    buf_appendcstr(buf, " (");
-		    buf_escapestr(buf, addr->name, 0, 0);
+		    buf_escapestr(buf, addr->name, 0, 0, 0);
 		    buf_putc(buf, ')');
 		}
-		buf_appendcstr(buf, "</author>\n");
+		if (config_httpprettytelemetry) buf_appendcstr(buf, "\n");
+		buf_printf_markup(buf, --level, "</author>");
 	    }
 	}
 
-	buf_printf(buf, "<guid isPermaLink=\"false\">%s</guid>\n",
-		   message_guid_encode(&record.guid));
+	buf_printf_markup(buf, level, "<guid isPermaLink=\"false\">%s</guid>",
+			  message_guid_encode(&record.guid));
 
 	rfc822date_gen(datestr, sizeof(datestr), record.gmtime);
-	buf_printf(buf, "<pubDate>%s</pubDate>\n", datestr);
+	buf_printf_markup(buf, level, "<pubDate>%s</pubDate>", datestr);
 
 	/* Find and use the first text/ part as the <description> */
 	content.base = msg_base;
@@ -946,12 +956,14 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	message_fetch_part(&content, content_types, &parts);
 
 	if (parts && *parts) {
-	    buf_appendcstr(buf, "<description><![CDATA[");
-	    buf_escapestr(buf, parts[0]->decoded_body, max_len, 1);
-	    buf_appendcstr(buf, "]]></description>\n");
+	    buf_printf_markup(buf, level++, "<description>");
+	    buf_printf_markup(buf, level++, "<![CDATA[");
+	    buf_escapestr(buf, parts[0]->decoded_body, max_len, 1, level);
+	    buf_printf_markup(buf, --level, "]]>");
+	    buf_printf_markup(buf, --level, "</description>");
 	}
 
-	buf_appendcstr(buf, "</item>\n");
+	buf_printf_markup(buf, --level, "</item>");
 
 	/* free the results */
 	if (parts) {
@@ -970,7 +982,8 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     }
 
     /* End of RSS <channel> */
-    buf_appendcstr(buf, "</channel>\n</rss>\n");
+    buf_printf_markup(buf, --level, "</channel>");
+    buf_printf_markup(buf, --level, "</rss>");
     write_body(0, txn, buf_cstring(buf), buf_len(buf));
 
     /* End of output */
@@ -981,18 +994,24 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
 
 static void display_address(struct buf *buf, struct address *addr,
-			    const char *sep)
+			    const char *sep, unsigned level)
 {
+    if (config_httpprettytelemetry)
+	buf_printf(buf, "%*s", level * MARKUP_INDENT, "");
+
     buf_printf(buf, "%s", sep);
     if (addr->name) buf_printf(buf, "\"%s\" ", addr->name);
-    buf_printf(buf, "<a href=\"mailto:%s@%s\">&lt;%s@%s&gt;</a>\n",
+    buf_printf(buf, "<a href=\"mailto:%s@%s\">&lt;%s@%s&gt;</a>",
 	       addr->mailbox, addr->domain, addr->mailbox, addr->domain);
+
+    if (config_httpprettytelemetry) buf_appendcstr(buf, "\n");
 }
 
 
 static void display_part(struct transaction_t *txn,
 			 struct body *body, uint32_t uid,
-			 const char *cursection, const char *msg_base)
+			 const char *cursection, const char *msg_base,
+			 unsigned level)
 {
     struct buf *buf = &txn->resp_body.payload;
     char nextsection[MAX_SECTION_LEN+1];
@@ -1011,7 +1030,7 @@ static void display_part(struct transaction_t *txn,
 	    snprintf(nextsection, sizeof(nextsection), "%s%s%d",
 		     cursection, *cursection ? "." : "", i+1);
 	    display_part(txn, &body->subpart[i],
-			 uid, nextsection, msg_base);
+			 uid, nextsection, msg_base, level);
 	}
 	else {
 	    /* Display all subparts */
@@ -1019,7 +1038,7 @@ static void display_part(struct transaction_t *txn,
 		snprintf(nextsection, sizeof(nextsection), "%s%s%d",
 			 cursection, *cursection ? "." : "", i+1);
 		display_part(txn, &body->subpart[i],
-			     uid, nextsection, msg_base);
+			     uid, nextsection, msg_base, level);
 	    }
 	}
     }
@@ -1030,62 +1049,96 @@ static void display_part(struct transaction_t *txn,
 	char *sep;
 
 	/* Display enclosed message header as a shaded table */
-	buf_printf(buf, "<table width=\"100%%\" bgcolor=\"#CCCCCC\">\n");
+	buf_printf_markup(buf, level++,
+			  "<table width=\"100%%\" bgcolor=\"#CCCCCC\">");
 	/* Subject header field */
 	if (subpart->subject) {
 	    char *subj;
 
 	    subj = charset_parse_mimeheader(subpart->subject);
-	    buf_printf(buf, "<tr><td align=right valign=top><b>Subject: </b>");
-	    buf_printf(buf, "<td>%s\n", subj);
+	    buf_printf_markup(buf, level++, "<tr>");
+	    buf_printf_markup(buf, level,
+			      "<td align=right valign=top><b>Subject: </b></td>");
+	    buf_printf_markup(buf, level, "<td>%s</td>", subj);
+	    buf_printf_markup(buf, --level, "</tr>");
 	    free(subj);
 	}
 	/* From header field */
 	if (subpart->from && *subpart->from->mailbox) {
-	    buf_printf(buf, "<tr><td align=right><b>From: </b><td>");
-	    display_address(buf, subpart->from, "");
+	    buf_printf_markup(buf, level++, "<tr>");
+	    buf_printf_markup(buf, level,
+			      "<td align=right><b>From: </b></td>");
+	    buf_printf_markup(buf, level++, "<td>");
+	    display_address(buf, subpart->from, "", level);
+	    buf_printf_markup(buf, --level, "</td>");
+	    buf_printf_markup(buf, --level, "</tr>");
 	}
 	/* Sender header field (if different than From */
 	if (subpart->sender && *subpart->sender->mailbox &&
 	    (!subpart->from ||
 	     strcmp(subpart->sender->mailbox, subpart->from->mailbox) ||
 	     strcmp(subpart->sender->domain, subpart->from->domain))) {
-	    buf_printf(buf, "<tr><td align=right><b>Sender: </b><td>");
-	    display_address(buf, subpart->sender, "");
+	    buf_printf_markup(buf, level++, "<tr>");
+	    buf_printf_markup(buf, level,
+			      "<td align=right><b>Sender: </b></td>");
+	    buf_printf_markup(buf, level++, "<td>");
+	    display_address(buf, subpart->sender, "", level);
+	    buf_printf_markup(buf, --level, "</td>");
+	    buf_printf_markup(buf, --level, "</tr>");
 	}
 	/* Reply-To header field (if different than From */
 	if (subpart->reply_to && *subpart->reply_to->mailbox &&
 	    (!subpart->from ||
 	     strcmp(subpart->reply_to->mailbox, subpart->from->mailbox) ||
 	     strcmp(subpart->reply_to->domain, subpart->from->domain))) {
-	    buf_printf(buf, "<tr><td align=right><b>Reply-To: </b><td>");
-	    display_address(buf, subpart->reply_to, "");
+	    buf_printf_markup(buf, level++, "<tr>");
+	    buf_printf_markup(buf, level,
+			      "<td align=right><b>Reply-To: </b></td>");
+	    buf_printf_markup(buf, level++, "<td>");
+	    display_address(buf, subpart->reply_to, "", level);
+	    buf_printf_markup(buf, --level, "</td>");
+	    buf_printf_markup(buf, --level, "</tr>");
 	}
 	/* Date header field */
-	buf_printf(buf, "<tr><td align=right><b>Date: </b>");
-	buf_printf(buf, "<td width=\"100%%\">%s\n", subpart->date);
+	buf_printf_markup(buf, level++, "<tr>");
+	buf_printf_markup(buf, level,
+			  "<td align=right><b>Date: </b></td>");
+	buf_printf_markup(buf, level,
+			  "<td width=\"100%%\">%s</td>", subpart->date);
+	buf_printf_markup(buf, --level, "</tr>");
 	/* To header field (possibly multiple addresses) */
 	if (subpart->to) {
-	    buf_printf(buf, "<tr><td align=right valign=top><b>To: </b><td>");
+	    buf_printf_markup(buf, level++, "<tr>");
+	    buf_printf_markup(buf, level,
+			      "<td align=right valign=top><b>To: </b></td>");
+	    buf_printf_markup(buf, level++, "<td>");
 	    for (sep = "", addr = subpart->to; addr; addr = addr->next) {
-		display_address(buf, addr, sep);
+		display_address(buf, addr, sep, level);
 		sep = ", ";
 	    }
+	    buf_printf_markup(buf, --level, "</td>");
+	    buf_printf_markup(buf, --level, "</tr>");
 	}
 	/* Cc header field (possibly multiple addresses) */
 	if (subpart->cc) {
-	    buf_printf(buf, "<tr><td align=right valign=top><b>Cc: </b><td>");
+	    buf_printf_markup(buf, level++, "<tr>");
+	    buf_printf_markup(buf, level,
+			      "<td align=right valign=top><b>Cc: </b></td>");
+	    buf_printf_markup(buf, level++, "<td>");
 	    for (sep = "", addr = subpart->cc; addr; addr = addr->next) {
-		display_address(buf, addr, sep);
+		display_address(buf, addr, sep, level);
 		sep = ", ";
 	    }
+	    buf_printf_markup(buf, --level, "</td>");
+	    buf_printf_markup(buf, --level, "</tr>");
 	}
-	buf_printf(buf, "</table><br>\n");
+	buf_printf_markup(buf, --level, "</table>");
+//	buf_printf_markup(buf, level, "<br>");
 
 	/* Display subpart */
 	snprintf(nextsection, sizeof(nextsection), "%s%s%d",
 		 cursection, *cursection ? "." : "", 1);
-	display_part(txn, subpart, uid, nextsection, msg_base);
+	display_part(txn, subpart, uid, nextsection, msg_base, level);
     }
     else {
 	/* Leaf part - display something */
@@ -1100,12 +1153,12 @@ static void display_part(struct transaction_t *txn,
 	    body->decoded_body =
 		charset_to_utf8(msg_base + body->content_offset,
 				body->content_size, charset, encoding);
-	    if (!ishtml) buf_printf(buf, "<pre>");
+	    if (!ishtml) buf_printf_markup(buf, level, "<pre>");
 	    write_body(0, txn, buf_cstring(buf), buf_len(buf));
 	    buf_reset(buf);
 
 	    write_body(0, txn, body->decoded_body, strlen(body->decoded_body));
-	    if (!ishtml) buf_printf(buf, "</pre>");
+	    if (!ishtml) buf_printf_markup(buf, level, "</pre>");
 	}
 	else {
 	    int is_image = !strcmp(body->type, "IMAGE");
@@ -1124,12 +1177,16 @@ static void display_part(struct transaction_t *txn,
 	    for (; param && strcmp(param->attribute, file_attr);
 		 param = param->next);
 
-	    buf_printf(buf, "<div align=center>");
+	    buf_printf_markup(buf, level++, "<div align=center>");
 
 	    /* Create link */
-	    buf_printf(buf, "<a href=\"%s?uid=%u;section=%s\" type=\"%s/%s\">",
-		       txn->req_tgt.path, uid, cursection,
-		       body->type, body->subtype);
+	    buf_printf_markup(buf, level++,
+			      "<a href=\"%s?uid=%u;section=%s\" type=\"%s/%s\">",
+			      txn->req_tgt.path, uid, cursection,
+			      body->type, body->subtype);
+
+	    if (config_httpprettytelemetry)
+		buf_printf(buf, "%*s", level * MARKUP_INDENT, "");
 
 	    /* Add image */
 	    if (is_image) {
@@ -1145,10 +1202,14 @@ static void display_part(struct transaction_t *txn,
 	    }
 
 	    if (is_image) buf_printf(buf, "\">");
-	    buf_printf(buf, "</a></div>");
+
+	    if (config_httpprettytelemetry) buf_appendcstr(buf, "\n");
+
+	    buf_printf_markup(buf, --level, "</a>");
+	    buf_printf_markup(buf, --level, "</div>");
 	}
 
-	buf_printf(buf, "\n<hr>\n");
+	buf_printf_markup(buf, level, "<hr>");
     }
 }
 
@@ -1160,6 +1221,7 @@ static void display_message(struct transaction_t *txn,
 {
     struct body toplevel;
     struct buf *buf = &txn->resp_body.payload;
+    unsigned level = 0;
 
     /* Setup for chunked response */
     txn->flags.te |= TE_CHUNKED;
@@ -1172,15 +1234,23 @@ static void display_message(struct transaction_t *txn,
     }
 
     /* Start HTML */
-    buf_setcstr(buf, HTML_DOCTYPE);
-    buf_printf(buf, "<html><head><title>%s:%u</title></head><body>\n",
-	       mboxname, uid);
+    buf_reset(buf);
+    buf_printf_markup(buf, level, HTML_DOCTYPE);
+    buf_printf_markup(buf, level++, "<html>");
+    buf_printf_markup(buf, level++, "<head>");
+    buf_printf_markup(buf, level, "<title>%s:%u</title>",
+		      mboxname, uid);
+    buf_printf_markup(buf, --level, "</head>");
+    buf_printf_markup(buf, level++, "<body>");
 
     /* Create link to message source */
-    buf_printf(buf, "<div align=center>");
-    buf_printf(buf, "<a href=\"%s?uid=%u;section=0\" type=\"plain/text\">",
-	       txn->req_tgt.path, uid);
-    buf_printf(buf, "[View message source]</a></div><hr>\n");
+    buf_printf_markup(buf, level++, "<div align=center>");
+    buf_printf_markup(buf, level,
+		      "<a href=\"%s?uid=%u;section=0\" type=\"plain/text\">"
+		      "[View message source]</a>",
+		      txn->req_tgt.path, uid);
+    buf_printf_markup(buf, --level, "</div>");
+    buf_printf_markup(buf, level, "<hr>");
 
     write_body(HTTP_OK, txn, buf_cstring(buf), buf_len(buf));
     buf_reset(buf);
@@ -1191,10 +1261,12 @@ static void display_message(struct transaction_t *txn,
     toplevel.subtype = "RFC822";
     toplevel.subpart = body;
 
-    display_part(txn, &toplevel, uid, "", msg_base);
+    display_part(txn, &toplevel, uid, "", msg_base, level);
 
     /* End of HTML */
-    buf_printf(buf, "</body></html>");
+    buf_printf_markup(buf, --level, "</body>");
+    buf_printf_markup(buf, --level, "</html>");
+
     write_body(0, txn, buf_cstring(buf), buf_len(buf));
 
     /* End of output */

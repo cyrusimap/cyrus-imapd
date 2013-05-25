@@ -56,6 +56,7 @@
 #include "spool.h"
 
 #define MAX_REQ_LINE	8000  /* minimum size per HTTPbis */
+#define MARKUP_INDENT	2     /* # spaces to indent each line of markup */
 
 /* Supported HTTP version */
 #define HTTP_VERSION	 "HTTP/1.1"
@@ -67,7 +68,7 @@
 /* Supported HTML DOCTYPE */
 #define HTML_DOCTYPE \
     "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" " \
-    "\"http://www.w3.org/TR/html4/loose.dtd\">\n"
+    "\"http://www.w3.org/TR/html4/loose.dtd\">"
 
 /* Macro to access query part of URI */
 #if LIBXML_VERSION >= 20700
@@ -391,6 +392,7 @@ extern struct auth_state *httpd_authstate;
 extern struct namespace httpd_namespace;
 extern struct sockaddr_storage httpd_localaddr, httpd_remoteaddr;
 extern unsigned long config_httpmodules;
+extern int config_httpprettytelemetry;
 
 extern xmlURIPtr parse_uri(unsigned meth, const char *uri, const char **errstr);
 extern int is_mediatype(const char *hdr, const char *type);
@@ -400,6 +402,8 @@ extern const char *http_statusline(long code);
 extern void httpdate_gen(char *buf, size_t len, time_t t);
 extern void comma_list_hdr(const char *hdr, const char *vals[], unsigned flags);
 extern void response_header(long code, struct transaction_t *txn);
+extern void buf_printf_markup(struct buf *buf, unsigned level,
+			      const char *fmt, ...);
 extern void error_response(long code, struct transaction_t *txn);
 extern void html_response(long code, struct transaction_t *txn, xmlDocPtr html);
 extern void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml);

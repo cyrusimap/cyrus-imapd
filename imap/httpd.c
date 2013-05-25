@@ -105,9 +105,6 @@
 #endif /* HAVE_ZLIB */
 
 
-#define DEBUG 1
-
-
 static const char tls_message[] =
     HTML_DOCTYPE
     "<html>\n<head>\n<title>TLS Required</title>\n</head>\n" \
@@ -146,6 +143,7 @@ int httpd_tls_done = 0;
 int httpd_tls_required = 0;
 unsigned avail_auth_schemes = 0; /* bitmask of available auth schemes */
 unsigned long config_httpmodules;
+int config_httpprettytelemetry;
 
 struct buf serverinfo = BUF_INITIALIZER;
 
@@ -468,6 +466,8 @@ int service_init(int argc __attribute__((unused)),
 
     /* Create a protgroup for input from the client and selected backend */
     protin = protgroup_new(2);
+
+    config_httpprettytelemetry = config_getswitch(IMAPOPT_HTTPPRETTYTELEMETRY);
 
     /* Construct serverinfo string */
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
@@ -2313,32 +2313,6 @@ void write_body(long code, struct transaction_t *txn,
 }
 
 
-/* Output an HTTP response with text/html body */
-void html_response(long code, struct transaction_t *txn, xmlDocPtr html)
-{
-    xmlChar *buf;
-    int bufsiz;
-
-    /* Dump HTML response tree into a text buffer */
-    htmlDocDumpMemoryFormat(html, &buf, &bufsiz, DEBUG ? 1 : 0);
-
-    if (buf) {
-	/* Output the XML response */
-	txn->resp_body.type = "text/html; charset=utf-8";
-
-	write_body(code, txn, (char *) buf, bufsiz);
-
-	/* Cleanup */
-	xmlFree(buf);
-    }
-    else {
-	txn->error.precond = 0;
-	txn->error.desc = "Error dumping HTML tree\r\n";
-	error_response(HTTP_SERVER_ERROR, txn);
-    }
-}
-
-
 /* Output an HTTP response with application/xml body */
 void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
 {
@@ -2359,7 +2333,8 @@ void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
     }
 
     /* Dump XML response tree into a text buffer */
-    xmlDocDumpFormatMemoryEnc(xml, &buf, &bufsiz, "utf-8", DEBUG ? 1 : 0);
+    xmlDocDumpFormatMemoryEnc(xml, &buf, &bufsiz, "utf-8",
+			      config_httpprettytelemetry);
 
     if (buf) {
 	/* Output the XML response */
@@ -2377,15 +2352,29 @@ void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
     }
 }
 
+void buf_printf_markup(struct buf *buf, unsigned level, const char *fmt, ...)
+{
+    va_list args;
+    const char *eol = "\n";
+
+    if (!config_httpprettytelemetry) {
+	level = 0;
+	eol = "";
+    }
+
+    va_start(args, fmt);
+
+    buf_printf(buf, "%*s", level * MARKUP_INDENT, "");
+    buf_vprintf(buf, fmt, args);
+    buf_appendcstr(buf, eol);
+
+    va_end(args);
+}
+
 
 /* Output an HTTP error response with optional XML or HTML body */
 void error_response(long code, struct transaction_t *txn)
 {
-    const char error_body[] = HTML_DOCTYPE
-	"<html>\n<head>\n<title>%s</title>\n</head>\n"	\
-	"<body>\n<h1>%s</h1>\n<p>%s</p>\n"		\
-	"<hr>\n<address>%s Server at %s Port %s</address>\n" \
-	"</body>\n</html>\n";
     struct buf *html = &txn->resp_body.payload;
 
     /* Neither Brief nor Prefer affect error response bodies */
@@ -2449,6 +2438,7 @@ void error_response(long code, struct transaction_t *txn)
     if (txn->error.desc) {
 	const char **hdr, *host = "";
 	char *port = NULL;
+	unsigned level = 0;
 
 	if (txn->req_hdrs &&
 	    (hdr = spool_getheader(txn->req_hdrs, "Host")) &&
@@ -2461,8 +2451,22 @@ void error_response(long code, struct transaction_t *txn)
 	}
 	if (!port) port = strchr(saslprops.iplocalport, ';')+1;
 
-	buf_printf(html, error_body, error_message(code), error_message(code)+4,
-		   txn->error.desc, buf_cstring(&serverinfo), host, port);
+	buf_printf_markup(html, level, HTML_DOCTYPE);
+	buf_printf_markup(html, level++, "<html>");
+	buf_printf_markup(html, level++, "<head>");
+	buf_printf_markup(html, level, "<title>%s</title>",
+			  error_message(code));
+	buf_printf_markup(html, --level, "</head>");
+	buf_printf_markup(html, level++, "<body>");
+	buf_printf_markup(html, level, "<h1>%s</h1>", error_message(code)+4);
+	buf_printf_markup(html, level, "<p>%s</p>", txn->error.desc);
+	buf_printf_markup(html, level, "<hr>");
+	buf_printf_markup(html, level,
+			  "<address>%s Server at %s Port %s</address>",
+			  buf_cstring(&serverinfo), host, port);
+	buf_printf_markup(html, --level, "</body>");
+	buf_printf_markup(html, --level, "</html>");
+
 	txn->resp_body.type = "text/html; charset=utf-8";
     }
 
