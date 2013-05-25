@@ -639,9 +639,9 @@ void buf_putc(struct buf *buf, char c)
     buf->flags &= ~BUF_CSTRING;
 }
 
-void buf_printf(struct buf *buf, const char *fmt, ...)
+void buf_vprintf(struct buf *buf, const char *fmt, va_list args)
 {
-    va_list args;
+    va_list ap;
     int room;
     int n;
 
@@ -650,23 +650,32 @@ void buf_printf(struct buf *buf, const char *fmt, ...)
      * needs to overrun the size. */
     buf_ensure(buf, 1024);
 
+    /* Copy args in case we guess wrong on the size */
+    va_copy(ap, args);
+
     room = buf->alloc - buf->len;
-    va_start(args, fmt);
     n = vsnprintf(buf->s + buf->len, room, fmt, args);
-    va_end(args);
 
     if (n >= room) {
 	/* woops, we guessed wrong...retry with enough space */
 	buf_ensure(buf, n+1);
-	va_start(args, fmt);
-	n = vsnprintf(buf->s + buf->len, n+1, fmt, args);
-	va_end(args);
+	n = vsnprintf(buf->s + buf->len, n+1, fmt, ap);
     }
+    va_end(ap);
 
     buf->len += n;
     /* vsnprintf() gave us a trailing NUL, so we may as well remember
      * that for later */
     buf->flags |= BUF_CSTRING;
+}
+
+void buf_printf(struct buf *buf, const char *fmt, ...)
+{
+    va_list args;
+
+    va_start(args, fmt);
+    buf_vprintf(buf, fmt, args);
+    va_end(args);
 }
 
 /**

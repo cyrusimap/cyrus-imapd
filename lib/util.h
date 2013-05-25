@@ -203,6 +203,7 @@ void buf_appendcstr(struct buf *buf, const char *str);
 void buf_appendbit32(struct buf *buf, bit32 num);
 void buf_appendmap(struct buf *buf, const char *base, unsigned len);
 void buf_putc(struct buf *buf, char c);
+void buf_vprintf(struct buf *buf, const char *fmt, va_list args);
 void buf_printf(struct buf *buf, const char *fmt, ...)
     __attribute__((format(printf,2,3)));
 unsigned int buf_replace_all(struct buf *buf, const char *match,
