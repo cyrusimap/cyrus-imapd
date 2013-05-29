@@ -2665,7 +2665,7 @@ int meth_acl(struct transaction_t *txn, void *params)
 		const char *errstr = NULL;
 		size_t plen = strlen(namespace_principal.prefix);
 
-		uri = parse_uri(METH_UNKNOWN, (const char *) href, &errstr);
+		uri = parse_uri(METH_UNKNOWN, (const char *) href, 1, &errstr);
 		if (uri &&
 		    !strncmp(namespace_principal.prefix, uri->path, plen) &&
 		    uri->path[plen] == '/') {
@@ -2840,7 +2840,7 @@ int meth_copy(struct transaction_t *txn, void *params)
     }
 
     /* Parse destination URI */
-    if (!(dest_uri = parse_uri(METH_UNKNOWN, hdr[0], &txn->error.desc))) {
+    if (!(dest_uri = parse_uri(METH_UNKNOWN, hdr[0], 1, &txn->error.desc))) {
 	txn->error.desc = "Illegal Destination target URI";
 	return HTTP_BAD_REQUEST;
     }

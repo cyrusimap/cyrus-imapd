@@ -254,6 +254,7 @@ struct resp_body_t {
 struct txn_flags_t {
     unsigned char ver1_0;		/* Request from HTTP/1.0 client */
     unsigned char conn;			/* Connection opts on req/resp */
+    unsigned char cors;			/* Cross-Origin Resource Sharing */
     unsigned char body;			/* read_body() flags on req */
     unsigned char te;			/* Transfer-Encoding for resp */
     unsigned char ce;			/* Content-Encoding for resp */
@@ -299,6 +300,13 @@ enum {
     CONN_CLOSE =	(1<<0),
     CONN_UPGRADE = 	(1<<1),
     CONN_KEEPALIVE =	(1<<2)
+};
+
+/* Cross-Origin Resource Sharing flags */
+enum {
+    CORS_NONE =		0,
+    CORS_SIMPLE =	1,
+    CORS_PREFLIGHT =	2
 };
 
 /* read_body() flags */
@@ -394,7 +402,8 @@ extern struct sockaddr_storage httpd_localaddr, httpd_remoteaddr;
 extern unsigned long config_httpmodules;
 extern int config_httpprettytelemetry;
 
-extern xmlURIPtr parse_uri(unsigned meth, const char *uri, const char **errstr);
+extern xmlURIPtr parse_uri(unsigned meth, const char *uri, unsigned path_reqd,
+			   const char **errstr);
 extern int is_mediatype(const char *hdr, const char *type);
 extern int http_mailbox_open(const char *name, struct mailbox **mailbox,
 			     int locktype);

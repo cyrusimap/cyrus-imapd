@@ -642,7 +642,7 @@ static void send_response(struct protstream *pout,
 	    prot_printf(httpd_out, "Keep-Alive: timeout=%d\r\n", httpd_timeout);
 	}
 
-	comma_list_hdr("Connection:", conn_tokens, flags->conn);
+	comma_list_hdr("Connection", conn_tokens, flags->conn);
     }
     if (httpd_tls_done) {
 	prot_puts(httpd_out, "Strict-Transport-Security: max-age=600\r\n");

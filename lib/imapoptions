@@ -445,6 +445,17 @@ Blank lines and lines beginning with ``#'' are ignored.
    will appear in telemetry logs, leaving only the response headers as
    human-readable.*/
 
+{ "httpallowcors", NULL, STRING }
+/* A wildmat pattern specifying a list of origin URIs ( scheme "://"
+   host [ ":" port ] ) that are allowed to make Cross-Origin Resource
+   Sharing (CORS) requests on the server.  By default, CORS requests
+   are disabled.
+.PP
+   Note that the scheme and host should both be lowercase, the port
+   should be omitted if using the default for the scheme (80 for http,
+   443 for https), and there should be no trailing '/' (e.g.:
+   "http://www.example.com:8080", "https://example.org"). */
+
 { "httpallowtrace", 0, SWITCH }
 /* Allow use of the TRACE method.
 .PP

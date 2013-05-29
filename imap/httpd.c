@@ -91,6 +91,7 @@
 #include "idle.h"
 #include "rfc822date.h"
 #include "tok.h"
+#include "wildmat.h"
 
 #ifdef WITH_DAV
 #include "http_dav.h"
@@ -124,6 +125,7 @@ static SSL *tls_conn;
 sasl_conn_t *httpd_saslconn; /* the sasl connection context */
 
 static struct mailbox *httpd_mailbox = NULL;
+static struct wildmat *allow_cors = NULL;
 int httpd_timeout, httpd_keepalive;
 char *httpd_userid = 0;
 struct auth_state *httpd_authstate = 0;
@@ -469,6 +471,12 @@ int service_init(int argc __attribute__((unused)),
 
     config_httpprettytelemetry = config_getswitch(IMAPOPT_HTTPPRETTYTELEMETRY);
 
+    if (config_getstring(IMAPOPT_HTTPALLOWCORS)) {
+	allow_cors =
+	    split_wildmats((char *) config_getstring(IMAPOPT_HTTPALLOWCORS),
+			   NULL);
+    }
+
     /* Construct serverinfo string */
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	buf_printf(&serverinfo, "Cyrus/%s%s Cyrus-SASL/%u.%u.%u",
@@ -667,6 +675,8 @@ void shut_down(int code)
     int bytes_out = 0;
 
     in_shutdown = 1;
+
+    if (allow_cors) free_wildmats(allow_cors);
 
     /* Do any namespace specific cleanup */
     for (i = 0; namespaces[i]; i++) {
@@ -1081,7 +1091,7 @@ static void cmdloop(void)
 	else if (!txn.flags.ver1_0 && (r = parse_expect(&txn))) ret = r;
 
 	/* Parse request-target URI */
-	else if (!(txn.req_uri = parse_uri(txn.meth, req_line->uri,
+	else if (!(txn.req_uri = parse_uri(txn.meth, req_line->uri, 1,
 					   &txn.error.desc))) {
 	    ret = HTTP_BAD_REQUEST;
 	}
@@ -1258,6 +1268,46 @@ static void cmdloop(void)
 	    goto done;
 	}
 
+	/* Check if this is a Cross-Origin Resource Sharing request */
+	if (allow_cors && (hdr = spool_getheader(txn.req_hdrs, "Origin"))) {
+	    const char *err = NULL;
+	    xmlURIPtr uri = parse_uri(METH_UNKNOWN, hdr[0], 0, &err);
+
+	    if (uri && uri->scheme && uri->server) {
+		int o_https = !strcasecmp(uri->scheme, "https");
+
+		if ((https == o_https) &&
+		    !strcasecmp(uri->server,
+				*spool_getheader(txn.req_hdrs, "Host"))) {
+		    txn.flags.cors = CORS_SIMPLE;
+		}
+		else {
+		    struct wildmat *wild;
+
+		    /* Create URI w/o path or default port */
+		    assert(!buf_len(&txn.buf));
+		    buf_printf(&txn.buf, "%s://%s",
+			       lcase(uri->scheme), lcase(uri->server));
+		    if (uri->port &&
+			((o_https && uri->port != 443) ||
+			 (!o_https && uri->port != 80))) {
+			buf_printf(&txn.buf, ":%d", uri->port);
+		    }
+
+		    /* Check Origin against the 'httpallowcors' wildmat */
+		    for (wild = allow_cors; wild->pat; wild++) {
+			if (wildmat(buf_cstring(&txn.buf), wild->pat)) {
+			    /* If we have a non-negative match, allow request */
+			    if (!wild->not) txn.flags.cors = CORS_SIMPLE;
+			    break;
+			}
+		    }
+		    buf_reset(&txn.buf);
+		}
+	    }
+	    xmlFreeURI(uri);
+	}
+
 	/* Check if we should compress response body */
 	if (gzip_enabled) {
 	    /* XXX  Do we want to support deflate even though M$
@@ -1322,7 +1372,8 @@ static void cmdloop(void)
 /****************************  Parsing Routines  ******************************/
 
 /* Parse URI, returning the path */
-xmlURIPtr parse_uri(unsigned meth, const char *uri, const char **errstr)
+xmlURIPtr parse_uri(unsigned meth, const char *uri, unsigned path_reqd,
+		    const char **errstr)
 {
     xmlURIPtr p_uri;  /* parsed URI */
 
@@ -1343,18 +1394,26 @@ xmlURIPtr parse_uri(unsigned meth, const char *uri, const char **errstr)
     }
 
     /* Check sanity of path */
-    if (!p_uri->path || !*p_uri->path) {
+    if (path_reqd && (!p_uri->path || !*p_uri->path)) {
 	*errstr = "Empty path in target URI";
 	goto bad_request;
     }
-
-    if (strlen(p_uri->path) > MAX_MAILBOX_PATH) goto bad_request;
-
-    if (strstr(p_uri->path, "/..") ||  /* don't allow access up dir tree */
-	((p_uri->path[0] != '/') &&
-	 (strcmp(p_uri->path, "*") || (meth != METH_OPTIONS)))) {
-	*errstr = "Illegal request target URI";
-	goto bad_request;
+    else if (p_uri->path) {
+	if ((p_uri->path[0] != '/') &&
+	    (strcmp(p_uri->path, "*") || (meth != METH_OPTIONS))) {
+	    /* No special URLs except for "OPTIONS * HTTP/1.1" */
+	    *errstr = "Illegal request target URI";
+	    goto bad_request;
+	}
+	else if (strstr(p_uri->path, "/..")) {
+	    /* Don't allow access up directory tree */
+	    *errstr = "Illegal request target URI";
+	    goto bad_request;
+	}
+	else if (strlen(p_uri->path) > MAX_MAILBOX_PATH) {
+	    *errstr = "Request target URI too long";
+	    goto bad_request;
+	}
     }
 
     return p_uri;
@@ -1797,7 +1856,7 @@ void comma_list_hdr(const char *hdr, const char *vals[], unsigned flags)
     const char *sep = "";
     int i;
 
-    prot_printf(httpd_out, "%s", hdr);
+    prot_printf(httpd_out, "%s:", hdr);
     for (i = 0; vals[i]; i++) {
 	if (flags & (1 << i)) {
 	    prot_printf(httpd_out, "%s %s", sep, vals[i]);
@@ -1876,7 +1935,7 @@ void response_header(long code, struct transaction_t *txn)
 			    httpd_timeout);
 	    }
 
-	    comma_list_hdr("Connection:", conn_tokens, txn->flags.conn);
+	    comma_list_hdr("Connection", conn_tokens, txn->flags.conn);
 	}
 
 	auth_chal = &txn->auth_chal;
@@ -1900,21 +1959,21 @@ void response_header(long code, struct transaction_t *txn)
 	const char *cc_dirs[] =
 	    { "no-cache", "no-transform", "private", NULL };
 
-	comma_list_hdr("Cache-Control:", cc_dirs, txn->flags.cc);
+	comma_list_hdr("Cache-Control", cc_dirs, txn->flags.cc);
     }
     if (resp_body->prefs) {
 	/* Construct Preference-Applied header */
 	const char *prefs[] =
 	    { "return=minimal", "return=representation", "depth-noroot", NULL };
 
-	comma_list_hdr("Preference-Applied:", prefs, resp_body->prefs);
+	comma_list_hdr("Preference-Applied", prefs, resp_body->prefs);
     }
     if (txn->flags.vary) {
 	/* Construct Vary header */
 	const char *vary_hdrs[] =
 	    { "Accept-Encoding", "Brief", "Prefer", NULL };
 
-	comma_list_hdr("Vary:", vary_hdrs, txn->flags.vary);
+	comma_list_hdr("Vary", vary_hdrs, txn->flags.vary);
     }
 
 
@@ -2010,25 +2069,52 @@ void response_header(long code, struct transaction_t *txn)
 	    if (txn->meth == METH_OPTIONS || code == HTTP_NOT_ALLOWED) {
 		/* Construct Allow header(s) for OPTIONS and 405 response */
 		const char *meths[] = {
-		    "GET, HEAD", "POST", "PUT", "DELETE", "TRACE", NULL
+		    "OPTIONS, GET, HEAD", "POST", "PUT", "DELETE", "TRACE", NULL
 		};
+		const char *allow_hdr = "Allow";
 
-		comma_list_hdr("Allow: OPTIONS,", meths, txn->req_tgt.allow);
+		if (txn->flags.cors == CORS_PREFLIGHT) {
+		    /* CORS preflight request */
+		    allow_hdr = "Access-Control-Allow-Methods";
+
+		    /* Cache preflight info for an hour */
+		    prot_puts(httpd_out, "Access-Control-Max-Age: 3600\r\n");
+
+		    /* Allow all request headers */
+		    for (hdr = spool_getheader(txn->req_hdrs,
+					       "Access-Control-Request-Headers");
+			 hdr && *hdr; hdr++) {
+			prot_printf(httpd_out,
+				    "Access-Control-Allow-Headers: %s\r\n",
+				    *hdr);
+		    }
+		}
+
+		comma_list_hdr(allow_hdr, meths, txn->req_tgt.allow);
 
 		if (txn->req_tgt.allow & ALLOW_DAV) {
-		    prot_puts(httpd_out, "Allow: PROPFIND, REPORT");
+		    prot_printf(httpd_out, "%s: PROPFIND, REPORT", allow_hdr);
 		    if (txn->req_tgt.allow & ALLOW_WRITE) {
 			prot_puts(httpd_out, ", COPY, MOVE, LOCK, UNLOCK");
 		    }
 		    if (txn->req_tgt.allow & ALLOW_WRITECOL) {
 			prot_puts(httpd_out, ", PROPPATCH, MKCOL, ACL");
 			if (txn->req_tgt.allow & ALLOW_CAL) {
-			    prot_puts(httpd_out, "\r\nAllow: MKCALENDAR");
+			    prot_printf(httpd_out, "\r\n%s: MKCALENDAR",
+					allow_hdr);
 			}
 		    }
 		    prot_puts(httpd_out, "\r\n");
 		}
 	    }
+	}
+
+	if (txn->flags.cors) {
+	    /* Cross-Origin Resource Sharing request */
+	    prot_printf(httpd_out, "Access-Control-Allow-Origin: %s\r\n",
+			*spool_getheader(txn->req_hdrs, "Origin"));
+	    prot_printf(httpd_out,
+			"Access-Control-Allow-Credentials: true\r\n");
 	}
     }
 
@@ -2114,12 +2200,18 @@ void response_header(long code, struct transaction_t *txn)
 
     /* Log the client request and our response */
     buf_reset(&log);
+    /* Add client data */
     buf_printf(&log, "%s", httpd_clienthost);
     if (httpd_userid) buf_printf(&log, " as \"%s\"", httpd_userid);
     if (txn->req_hdrs &&
 	(hdr = spool_getheader(txn->req_hdrs, "User-Agent"))) {
 	buf_printf(&log, " with \"%s\"", hdr[0]);
+	if ((hdr = spool_getheader(txn->req_hdrs, "X-Client")))
+	    buf_printf(&log, " by \"%s\"", hdr[0]);
+	else if ((hdr = spool_getheader(txn->req_hdrs, "X-Requested-With")))
+	    buf_printf(&log, " by \"%s\"", hdr[0]);
     }
+    /* Add request-line */
     buf_appendcstr(&log, "; \"");
     if (txn->req_line.meth) {
 	buf_printf(&log, "%s", txn->req_line.meth);
@@ -2136,18 +2228,33 @@ void response_header(long code, struct transaction_t *txn)
     }
     buf_appendcstr(&log, "\"");
     if (txn->req_hdrs) {
+	/* Add any request modifying headers */
+	const char *sep = " (";
+
+	if ((hdr = spool_getheader(txn->req_hdrs, "Origin"))) {
+	    buf_printf(&log, "%sorigin=%s", sep, hdr[0]);
+	    sep = "; ";
+	}
+	if ((hdr = spool_getheader(txn->req_hdrs, "Referer"))) {
+	    buf_printf(&log, "%sreferer=%s", sep, hdr[0]);
+	    sep = "; ";
+	}
 	if ((hdr = spool_getheader(txn->req_hdrs, "Destination"))) {
-	    buf_printf(&log, " (destination=%s)", hdr[0]);
+	    buf_printf(&log, "%sdestination=%s", sep, hdr[0]);
+	    sep = "; ";
 	}
-	else if ((hdr = spool_getheader(txn->req_hdrs, ":type"))) {
-	    buf_printf(&log, " (type=%s", hdr[0]);
-	    if ((hdr = spool_getheader(txn->req_hdrs, "Depth"))) {
-		buf_printf(&log, "; depth=%s", hdr[0]);
-	    }
-	    buf_appendcstr(&log, ")");
+	if ((hdr = spool_getheader(txn->req_hdrs, ":type"))) {
+	    buf_printf(&log, "%stype=%s", sep, hdr[0]);
+	    sep = "; ";
 	}
+	if ((hdr = spool_getheader(txn->req_hdrs, "Depth"))) {
+	    buf_printf(&log, "%sdepth=%s", sep, hdr[0]);
+	    sep = "; ";
+	}
+	if (*sep == ';') buf_appendcstr(&log, ")");
     }
     buf_printf(&log, " => \"%s\"", error_message(code));
+    /* Add any auxiliary response data */
     if (txn->location) {
 	buf_printf(&log, " (location=%s)", txn->location);
     }
@@ -3312,7 +3419,7 @@ int meth_get_doc(struct transaction_t *txn,
 int meth_options(struct transaction_t *txn, void *params)
 {
     parse_path_t parse_path = (parse_path_t) params;
-    int r;
+    int r, i;
 
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
@@ -3322,17 +3429,42 @@ int meth_options(struct transaction_t *txn, void *params)
 
     /* Special case "*" - show all features/methods available on server */
     if (!strcmp(txn->req_uri->path, "*")) {
-	int i;
-
 	for (i = 0; namespaces[i]; i++) {
 	    if (namespaces[i]->enabled)
 		txn->req_tgt.allow |= namespaces[i]->allow;
 	}
     }
-    else if (parse_path) {
-	/* Parse the path */
-	r = parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
-	if (r) return r;
+    else {
+	if (parse_path) {
+	    /* Parse the path */
+	    r = parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
+	    if (r) return r;
+	}
+
+	if (txn->flags.cors) {
+	    const char **hdr =
+		spool_getheader(txn->req_hdrs, "Access-Control-Request-Method");
+
+	    if (hdr) {
+		/* CORS preflight request */
+		unsigned meth;
+
+		txn->flags.cors = CORS_PREFLIGHT;
+
+		/* Check Method against our list of known methods */
+		for (meth = 0; (meth < METH_UNKNOWN) &&
+			 strcmp(http_methods[meth].name, hdr[0]); meth++);
+
+		if (meth == METH_UNKNOWN) txn->flags.cors = 0;
+		else {
+		    /* Check Method against those supported by the resource */
+		    for (i = 0; namespaces[i] &&
+			     namespaces[i]->id != txn->req_tgt.namespace; i++);
+
+		    if (!namespaces[i]->methods[meth].proc) txn->flags.cors = 0;
+		}
+	    }
+	}
     }
 
     response_header(HTTP_OK, txn);
