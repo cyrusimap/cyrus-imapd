@@ -1991,16 +1991,17 @@ void response_header(long code, struct transaction_t *txn)
 	/* Construct Cross-Origin Resource Sharing headers */
 	prot_printf(httpd_out, "Access-Control-Allow-Origin: %s\r\n",
 		    *spool_getheader(txn->req_hdrs, "Origin"));
+	prot_puts(httpd_out, "Access-Control-Allow-Credentials: true\r\n");
 
 	if (txn->flags.cors == CORS_PREFLIGHT) {
-	    prot_puts(httpd_out, "Access-Control-Allow-Credentials: true\r\n");
+	    allow_hdr("Access-Control-Allow-Methods", txn->req_tgt.allow);
+
 	    for (hdr = spool_getheader(txn->req_hdrs,
 				       "Access-Control-Request-Headers");
 		 hdr && *hdr; hdr++) {
 		prot_printf(httpd_out,
 			    "Access-Control-Allow-Headers: %s\r\n", *hdr);
 	    }
-	    allow_hdr("Access-Control-Allow-Methods", txn->req_tgt.allow);
 	    prot_puts(httpd_out, "Access-Control-Max-Age: 3600\r\n");
 	}
     }
