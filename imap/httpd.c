@@ -1167,9 +1167,9 @@ static void cmdloop(void)
 	    /* Check if method doesn't expect a body */
 	    else if ((http_methods[txn.meth].flags & METH_NOBODY) &&
 		     (spool_getheader(txn.req_hdrs, "Transfer-Encoding") ||
-		      /* Content-Length is allowed to be zero */
-		      spool_getheader(txn.req_hdrs, "Content-Type") ||
-		      spool_getheader(txn.req_hdrs, "Content-Encoding")))
+		      /* XXX  Will break if client sends just a last-chunk */
+		      ((hdr = spool_getheader(txn.req_hdrs, "Content-Length"))
+		       && strtoul(hdr[0], NULL, 10))))
 		ret = HTTP_BAD_MEDIATYPE;
 	} else {
 	    /* XXX  Should never get here */
