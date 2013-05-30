@@ -1851,6 +1851,9 @@ const char *http_statusline(long code)
     if (param) prot_printf(httpd_out, " %s", param);		\
     prot_puts(httpd_out, "\r\n")
 
+#define Access_Control_Expose(hdr)				\
+    prot_puts(httpd_out, "Access-Control-Expose-Headers: " hdr "\r\n")
+
 void comma_list_hdr(const char *hdr, const char *vals[], unsigned flags)
 {
     const char *sep = "";
@@ -1864,6 +1867,29 @@ void comma_list_hdr(const char *hdr, const char *vals[], unsigned flags)
 	}
     }
     prot_puts(httpd_out, "\r\n");
+}
+
+void allow_hdr(const char *hdr, unsigned allow)
+{
+    const char *meths[] = {
+	"OPTIONS, GET, HEAD", "POST", "PUT", "DELETE", "TRACE", NULL
+    };
+
+    comma_list_hdr(hdr, meths, allow);
+
+    if (allow & ALLOW_DAV) {
+	prot_printf(httpd_out, "%s: PROPFIND, REPORT", hdr);
+	if (allow & ALLOW_WRITE) {
+	    prot_puts(httpd_out, ", COPY, MOVE, LOCK, UNLOCK");
+	}
+	if (allow & ALLOW_WRITECOL) {
+	    prot_puts(httpd_out, ", PROPPATCH, MKCOL, ACL");
+	    if (allow & ALLOW_CAL) {
+		prot_printf(httpd_out, "\r\n%s: MKCALENDAR", hdr);
+	    }
+	}
+	prot_puts(httpd_out, "\r\n");
+    }
 }
 
 void response_header(long code, struct transaction_t *txn)
@@ -1961,12 +1987,22 @@ void response_header(long code, struct transaction_t *txn)
 
 	comma_list_hdr("Cache-Control", cc_dirs, txn->flags.cc);
     }
-    if (resp_body->prefs) {
-	/* Construct Preference-Applied header */
-	const char *prefs[] =
-	    { "return=minimal", "return=representation", "depth-noroot", NULL };
+    if (txn->flags.cors) {
+	/* Construct Cross-Origin Resource Sharing headers */
+	prot_printf(httpd_out, "Access-Control-Allow-Origin: %s\r\n",
+		    *spool_getheader(txn->req_hdrs, "Origin"));
 
-	comma_list_hdr("Preference-Applied", prefs, resp_body->prefs);
+	if (txn->flags.cors == CORS_PREFLIGHT) {
+	    prot_puts(httpd_out, "Access-Control-Allow-Credentials: true\r\n");
+	    for (hdr = spool_getheader(txn->req_hdrs,
+				       "Access-Control-Request-Headers");
+		 hdr && *hdr; hdr++) {
+		prot_printf(httpd_out,
+			    "Access-Control-Allow-Headers: %s\r\n", *hdr);
+	    }
+	    allow_hdr("Access-Control-Allow-Methods", txn->req_tgt.allow);
+	    prot_puts(httpd_out, "Access-Control-Max-Age: 3600\r\n");
+	}
     }
     if (txn->flags.vary) {
 	/* Construct Vary header */
@@ -1981,13 +2017,20 @@ void response_header(long code, struct transaction_t *txn)
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	prot_printf(httpd_out, "Server: %s\r\n", buf_cstring(&serverinfo));
     }
-
     if (txn->req_tgt.allow & ALLOW_ISCHEDULE) {
 	prot_puts(httpd_out, "iSchedule-Version: 1.0\r\n");
 	if (resp_body->iserial) {
 	    prot_printf(httpd_out, "iSchedule-Capabilities: %ld\r\n",
 			resp_body->iserial);
 	}
+    }
+    if (resp_body->prefs) {
+	/* Construct Preference-Applied header */
+	const char *prefs[] =
+	    { "return=minimal", "return=representation", "depth-noroot", NULL };
+
+	comma_list_hdr("Preference-Applied", prefs, resp_body->prefs);
+	if (txn->flags.cors) Access_Control_Expose("Preference-Applied");
     }
 
     if (code == HTTP_UNAUTHORIZED) {
@@ -2063,58 +2106,15 @@ void response_header(long code, struct transaction_t *txn)
 		}
 	    }
 
+	    if (txn->flags.cors == CORS_PREFLIGHT) break;
+
 	    /* Fall through and add Allow header(s) */
 
 	default:
 	    if (txn->meth == METH_OPTIONS || code == HTTP_NOT_ALLOWED) {
 		/* Construct Allow header(s) for OPTIONS and 405 response */
-		const char *meths[] = {
-		    "OPTIONS, GET, HEAD", "POST", "PUT", "DELETE", "TRACE", NULL
-		};
-		const char *allow_hdr = "Allow";
-
-		if (txn->flags.cors == CORS_PREFLIGHT) {
-		    /* CORS preflight request */
-		    allow_hdr = "Access-Control-Allow-Methods";
-
-		    /* Cache preflight info for an hour */
-		    prot_puts(httpd_out, "Access-Control-Max-Age: 3600\r\n");
-
-		    /* Allow all request headers */
-		    for (hdr = spool_getheader(txn->req_hdrs,
-					       "Access-Control-Request-Headers");
-			 hdr && *hdr; hdr++) {
-			prot_printf(httpd_out,
-				    "Access-Control-Allow-Headers: %s\r\n",
-				    *hdr);
-		    }
-		}
-
-		comma_list_hdr(allow_hdr, meths, txn->req_tgt.allow);
-
-		if (txn->req_tgt.allow & ALLOW_DAV) {
-		    prot_printf(httpd_out, "%s: PROPFIND, REPORT", allow_hdr);
-		    if (txn->req_tgt.allow & ALLOW_WRITE) {
-			prot_puts(httpd_out, ", COPY, MOVE, LOCK, UNLOCK");
-		    }
-		    if (txn->req_tgt.allow & ALLOW_WRITECOL) {
-			prot_puts(httpd_out, ", PROPPATCH, MKCOL, ACL");
-			if (txn->req_tgt.allow & ALLOW_CAL) {
-			    prot_printf(httpd_out, "\r\n%s: MKCALENDAR",
-					allow_hdr);
-			}
-		    }
-		    prot_puts(httpd_out, "\r\n");
-		}
+		allow_hdr("Allow", txn->req_tgt.allow);
 	    }
-	}
-
-	if (txn->flags.cors) {
-	    /* Cross-Origin Resource Sharing request */
-	    prot_printf(httpd_out, "Access-Control-Allow-Origin: %s\r\n",
-			*spool_getheader(txn->req_hdrs, "Origin"));
-	    prot_printf(httpd_out,
-			"Access-Control-Allow-Credentials: true\r\n");
 	}
     }
 
@@ -2122,12 +2122,15 @@ void response_header(long code, struct transaction_t *txn)
     /* Validators */
     if (resp_body->lock) {
 	prot_printf(httpd_out, "Lock-Token: <%s>\r\n", resp_body->lock);
+	if (txn->flags.cors) Access_Control_Expose("Lock-Token");
     }
     if (resp_body->stag) {
 	prot_printf(httpd_out, "Schedule-Tag: \"%s\"\r\n", resp_body->stag);
+	if (txn->flags.cors) Access_Control_Expose("Schedule-Tag");
     }
     if (resp_body->etag) {
 	prot_printf(httpd_out, "ETag: \"%s\"\r\n", resp_body->etag);
+	if (txn->flags.cors) Access_Control_Expose("ETag");
     }
     if (resp_body->lastmod) {
 	/* Last-Modified MUST NOT be in the future */
@@ -2149,6 +2152,7 @@ void response_header(long code, struct transaction_t *txn)
 	}
 	if (resp_body->loc) {
 	    prot_printf(httpd_out, "Content-Location: %s\r\n", resp_body->loc);
+	    if (txn->flags.cors) Access_Control_Expose("Content-Location");
 	}
     }
 
@@ -2257,6 +2261,9 @@ void response_header(long code, struct transaction_t *txn)
     /* Add any auxiliary response data */
     if (txn->location) {
 	buf_printf(&log, " (location=%s)", txn->location);
+    }
+    else if (txn->flags.cors) {
+	buf_appendcstr(&log, " (allow-origin)");
     }
     else if (txn->error.desc) {
 	buf_printf(&log, " (error=%s)", txn->error.desc);
