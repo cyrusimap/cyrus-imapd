@@ -2034,7 +2034,48 @@ void response_header(long code, struct transaction_t *txn)
 	if (txn->flags.cors) Access_Control_Expose("Preference-Applied");
     }
 
-    if (code == HTTP_UNAUTHORIZED) {
+    switch (code) {
+    case HTTP_OK:
+	switch (txn->meth) {
+	case METH_GET:
+	case METH_HEAD:
+	    /* Construct Accept-Ranges header for GET and HEAD responses */
+	    prot_printf(httpd_out, "Accept-Ranges: %s\r\n",
+			txn->flags.ranges ? "bytes" : "none");
+	    break;
+
+	case METH_OPTIONS:
+	    if (txn->req_tgt.allow & ALLOW_DAV) {
+		/* Construct DAV header(s) based on namespace of request URL */
+		prot_printf(httpd_out, "DAV: 1,%s 3, access-control%s\r\n",
+			    (txn->req_tgt.allow & ALLOW_WRITE) ? " 2," : "",
+			    (txn->req_tgt.allow & ALLOW_WRITECOL) ?
+			    ", extended-mkcol" : "");
+		if (txn->req_tgt.allow & ALLOW_CAL) {
+		    prot_printf(httpd_out, "DAV: calendar-access%s\r\n",
+				(txn->req_tgt.allow & ALLOW_CAL_SCHED) ?
+				", calendar-auto-schedule" : "");
+		}
+		if (txn->req_tgt.allow & ALLOW_CARD) {
+		    prot_puts(httpd_out, "DAV: addressbook\r\n");
+		}
+	    }
+
+	    if (txn->flags.cors == CORS_PREFLIGHT) {
+		/* Access-Control-Allow-Methods supersedes Allow */
+		break;
+	    }
+	    else goto allow;
+	}
+	goto authorized;
+
+    case HTTP_NOT_ALLOWED:
+    allow:
+	/* Construct Allow header(s) for OPTIONS and 405 response */
+	allow_hdr("Allow", txn->req_tgt.allow);
+	goto authorized;
+
+    case HTTP_UNAUTHORIZED:
 	/* Authentication Challenges */
 	if (!auth_chal->scheme) {
 	    /* Require authentication by advertising all possible schemes */
@@ -2062,8 +2103,10 @@ void response_header(long code, struct transaction_t *txn)
 	    /* Continue with current authentication exchange */ 
 	    WWW_Authenticate(auth_chal->scheme->name, auth_chal->param);
 	}
-    }
-    else {
+	break;
+
+    default:
+    authorized:
 	/* Authentication completed/unnecessary */
 	if (auth_chal->param) {
 	    /* Authentication completed with success data */
@@ -2075,46 +2118,6 @@ void response_header(long code, struct transaction_t *txn)
 	    else {
 		/* Default handling of success data */
 		WWW_Authenticate(auth_chal->scheme->name, auth_chal->param);
-	    }
-	}
-
-	switch (txn->meth) {
-	case METH_GET:
-	case METH_HEAD:
-	    if (code == HTTP_OK) {
-		/* Construct Accept-Ranges header for GET and HEAD responses */
-		prot_printf(httpd_out, "Accept-Ranges: %s\r\n",
-			    txn->flags.ranges ? "bytes" : "none");
-	    }
-	    break;
-
-	case METH_OPTIONS:
-	    if (code != HTTP_OK) break;
-
-	    if (txn->req_tgt.allow & ALLOW_DAV) {
-		/* Construct DAV header(s) based on namespace of request URL */
-		prot_printf(httpd_out, "DAV: 1,%s 3, access-control%s\r\n",
-			    (txn->req_tgt.allow & ALLOW_WRITE) ? " 2," : "",
-			    (txn->req_tgt.allow & ALLOW_WRITECOL) ?
-			    ", extended-mkcol" : "");
-		if (txn->req_tgt.allow & ALLOW_CAL) {
-		    prot_printf(httpd_out, "DAV: calendar-access%s\r\n",
-				(txn->req_tgt.allow & ALLOW_CAL_SCHED) ?
-				", calendar-auto-schedule" : "");
-		}
-		if (txn->req_tgt.allow & ALLOW_CARD) {
-		    prot_puts(httpd_out, "DAV: addressbook\r\n");
-		}
-	    }
-
-	    if (txn->flags.cors == CORS_PREFLIGHT) break;
-
-	    /* Fall through and add Allow header(s) */
-
-	default:
-	    if (txn->meth == METH_OPTIONS || code == HTTP_NOT_ALLOWED) {
-		/* Construct Allow header(s) for OPTIONS and 405 response */
-		allow_hdr("Allow", txn->req_tgt.allow);
 	    }
 	}
     }
