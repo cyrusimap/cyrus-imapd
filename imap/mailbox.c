@@ -2814,6 +2814,8 @@ EXPORTED int mailbox_update_conversations(struct mailbox *mailbox,
 	r = message_update_conversations(cstate, new, &conv);
 	if (r) return r;
 	record = new;
+	/* possible if silent (i.e. replica) */
+	if (!record->cid) return 0;
     }
     else {
 	record = new ? new : old;
