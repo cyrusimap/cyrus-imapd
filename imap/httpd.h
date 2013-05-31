@@ -94,6 +94,11 @@ struct known_meth_t {
 };
 extern const struct known_meth_t http_methods[];
 
+/* Flags for known methods*/
+enum {
+    METH_NOBODY =	(1<<0),	/* Method does not expect a body */
+};
+
 /* Index into known HTTP methods - needs to stay in sync with array */
 enum {
     METH_ACL = 0,

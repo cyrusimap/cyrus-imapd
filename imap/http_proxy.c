@@ -706,7 +706,9 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     write_forwarding_hdrs(be->out, txn->req_hdrs, txn->req_line.ver,
 			  https ? "https" : "http");
     spool_enum_hdrcache(txn->req_hdrs, &write_cachehdr, be->out);
-    if (spool_getheader(txn->req_hdrs, "Transfer-Encoding") ||
+    if (http_methods[txn->meth].flags & METH_NOBODY)
+	prot_puts(be->out, "Content-Length: 0\r\n");
+    else if (spool_getheader(txn->req_hdrs, "Transfer-Encoding") ||
 	spool_getheader(txn->req_hdrs, "Content-Length")) {
 	prot_puts(be->out, "Expect: 100-continue\r\n");
 	prot_puts(be->out, "Transfer-Encoding: chunked\r\n");
