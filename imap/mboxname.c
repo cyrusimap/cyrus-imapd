@@ -1109,12 +1109,6 @@ HIDDEN int mboxname_policycheck(const char *name)
     if (strlen(name) > MAX_MAILBOX_NAME)
 	return IMAP_MAILBOX_BADNAME;
 
-    /* because directory hashing could create ambiguous naming for
-     * a folder if the first item is a single character long, reject
-     * single character top level names */
-    if (name[1] == '.' || name[1] == '\0')
-	return IMAP_MAILBOX_BADNAME;
-
     /* find the virtual domain, if any.  We don't sanity check domain
        names yet - maybe we should */
     p = strchr(name, '!');
