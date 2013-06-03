@@ -179,7 +179,7 @@ struct proppatch_ctx {
     xmlNodePtr root;			/* root node to add to XML tree */
     xmlNsPtr *ns;			/* Array of our supported namespaces */
     struct txn *tid;			/* Transaction ID for annot writes */
-    const char **errstr;		/* Error string to pass up to caller */
+    struct error_t *err;		/* Error info to pass up to caller */
     int *ret;  				/* Return code to pass up to caller */
     struct buf buf;			/* Working buffer */
 };
@@ -619,7 +619,7 @@ static int xml_add_response(struct propfind_ctx *fctx, long code)
 
     resp = xmlNewChild(fctx->root, NULL, BAD_CAST "response", NULL);
     if (!resp) {
-	*fctx->errstr = "Unable to add response XML element";
+	fctx->err->desc = "Unable to add response XML element";
 	*fctx->ret = HTTP_SERVER_ERROR;
 	return HTTP_SERVER_ERROR;
     }
@@ -2362,7 +2362,7 @@ static int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
 		     !xmlStrcmp(instr->name, BAD_CAST "remove")) set = 0;
 	    else {
 		syslog(LOG_INFO, "Unknown PROPPATCH instruction");
-		*pctx->errstr = "Unknown PROPPATCH instruction";
+		pctx->err->desc = "Unknown PROPPATCH instruction";
 		return HTTP_BAD_REQUEST;
 	    }
 
@@ -2370,7 +2370,7 @@ static int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
 	    for (prop = instr->children;
 		 prop && prop->type != XML_ELEMENT_NODE; prop = prop->next);
 	    if (!prop || xmlStrcmp(prop->name, BAD_CAST "prop")) {
-		*pctx->errstr = "Missing prop element";
+		pctx->err->desc = "Missing prop element";
 		return HTTP_BAD_REQUEST;
 	    }
 
@@ -3794,7 +3794,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 	pctx.root = root;
 	pctx.ns = ns;
 	pctx.tid = NULL;
-	pctx.errstr = &txn->error.desc;
+	pctx.err = &txn->error;
 	pctx.ret = &r;
 
 	/* Execute the property patch instructions */
@@ -3939,7 +3939,7 @@ int propfind_by_collection(char *mboxname, int matchlen,
     if ((r = mboxlist_lookup(mboxname, &mbentry, NULL))) {
 	syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
 	       mboxname, error_message(r));
-	*fctx->errstr = error_message(r);
+	fctx->err->desc = error_message(r);
 	*fctx->ret = HTTP_SERVER_ERROR;
 	goto done;
     }
@@ -3951,7 +3951,7 @@ int propfind_by_collection(char *mboxname, int matchlen,
     if ((r = mailbox_open_irl(mboxname, &mailbox))) {
 	syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
 	       mboxname, error_message(r));
-	*fctx->errstr = error_message(r);
+	fctx->err->desc = error_message(r);
 	*fctx->ret = HTTP_SERVER_ERROR;
 	goto done;
     }
@@ -4173,7 +4173,7 @@ int meth_propfind(struct transaction_t *txn, void *params)
     fctx.elist = NULL;
     fctx.root = root;
     fctx.ns = ns;
-    fctx.errstr = &txn->error.desc;
+    fctx.err = &txn->error;
     fctx.ret = &ret;
     fctx.fetcheddata = 0;
 
@@ -4353,7 +4353,7 @@ int meth_proppatch(struct transaction_t *txn,  void *params)
     pctx.root = resp;
     pctx.ns = ns;
     pctx.tid = NULL;
-    pctx.errstr = &txn->error.desc;
+    pctx.err = &txn->error;
     pctx.ret = &r;
 
     /* Execute the property patch instructions */
@@ -4675,13 +4675,13 @@ int report_sync_col(struct transaction_t *txn,
 	    else if (!xmlStrcmp(node->name, BAD_CAST "sync-level") &&
 		(str = xmlNodeListGetString(inroot->doc, node->children, 1))) {
 		if (!strcmp((char *) str, "infinity")) {
-		    *fctx->errstr =
+		    fctx->err->desc =
 			"This server DOES NOT support infinite depth requests";
 		    ret = HTTP_SERVER_ERROR;
 		}
 		else if ((sscanf((char *) str, "%u", &fctx->depth) != 1) ||
 			 (fctx->depth != 1)) {
-		    *fctx->errstr = "Illegal sync-level";
+		    fctx->err->desc = "Illegal sync-level";
 		    ret = HTTP_BAD_REQUEST;
 		}
 	    }
@@ -4705,7 +4705,7 @@ int report_sync_col(struct transaction_t *txn,
 
     /* Check Depth */
     if (!fctx->depth) {
-	*fctx->errstr = "Illegal sync-level";
+	fctx->err->desc = "Illegal sync-level";
 	ret = HTTP_BAD_REQUEST;
 	goto done;
     }
@@ -4759,7 +4759,7 @@ int report_sync_col(struct transaction_t *txn,
 
 	if (!nresp) {
 	    /* DAV:number-of-matches-within-limits */
-	    *fctx->errstr = "Unable to truncate results";
+	    fctx->err->desc = "Unable to truncate results";
 	    ret = HTTP_FORBIDDEN;  /* HTTP_NO_STORAGE ? */
 	    goto done;
 	}
@@ -4987,7 +4987,7 @@ int meth_report(struct transaction_t *txn, void *params)
     fctx.elist = NULL;
     fctx.root = outroot;
     fctx.ns = ns;
-    fctx.errstr = &txn->error.desc;
+    fctx.err = &txn->error;
     fctx.ret = &ret;
     fctx.fetcheddata = 0;
 

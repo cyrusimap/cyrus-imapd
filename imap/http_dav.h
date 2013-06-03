@@ -251,6 +251,7 @@ typedef int (*db_foreach_proc_t)(void *davdb, const char *mailbox,
 
 /* Context for fetching properties */
 struct propfind_entry_list;
+struct error_t;
 
 struct propfind_ctx {
     struct request_target_t *req_tgt;	/* parsed request target URL */
@@ -277,7 +278,7 @@ struct propfind_ctx {
     struct propfind_entry_list *elist;	/* List of props to fetch w/callbacks */
     xmlNodePtr root;			/* root node to add to XML tree */
     xmlNsPtr *ns;			/* Array of our supported namespaces */
-    const char **errstr;		/* Error string to pass up to caller */
+    struct error_t *err;		/* Error info to pass up to caller */
     int *ret;  				/* Return code to pass up to caller */
     int fetcheddata;			/* Did we fetch iCalendar/vCard data? */
     struct buf buf;			/* Working buffer */
@@ -401,7 +402,6 @@ int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root);
 xmlNodePtr init_xml_response(const char *resp, int ns,
 			     xmlNodePtr req, xmlNsPtr *respNs);
 
-struct error_t;
 xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
 			 xmlNsPtr *avail_ns);
 void xml_add_lockdisc(xmlNodePtr node, const char *path, struct dav_data *data);
