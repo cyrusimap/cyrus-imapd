@@ -10986,6 +10986,8 @@ static int getlistretopts(char *tag, struct listargs *args)
 	    args->ret |= LIST_RET_SUBSCRIBED;
 	else if (!strcmp(buf.s, "children"))
 	    args->ret |= LIST_RET_CHILDREN;
+	else if (!strcmp(buf.s, "myrights"))
+	    args->ret |= LIST_RET_MYRIGHTS;
 	else if (!strcmp(buf.s, "special-use"))
 	    args->ret |= LIST_RET_SPECIALUSE;
 	else if (!strcmp(buf.s, "status")) {

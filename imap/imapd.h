@@ -312,7 +312,8 @@ enum {
     LIST_RET_SUBSCRIBED =	(1<<0),
     LIST_RET_CHILDREN =		(1<<1),
     LIST_RET_SPECIALUSE =	(1<<2),
-    LIST_RET_STATUS =		(1<<3)
+    LIST_RET_STATUS =		(1<<3),
+    LIST_RET_MYRIGHTS =		(1<<4)
 };
 
 /* Bitmask for List name attributes */
@@ -335,7 +336,7 @@ enum {
 /* Bitmask for client capabilities */
 enum {
     CAPA_CONDSTORE =	(1<<0),
-    CAPA_QRESYNC = 	(1<<1)
+    CAPA_QRESYNC =	(1<<1)
 };
 
 /* Bitmask for urlfetch params */
