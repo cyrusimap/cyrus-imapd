@@ -318,6 +318,7 @@ static struct capa_struct base_capabilities[] = {
     { "METADATA",              2 },
     { "LIST-EXTENDED",         2 },
     { "LIST-STATUS",           2 },
+    { "LIST-MYRIGHTS",         2 }, /* not standard */
     { "WITHIN",                2 },
     { "QRESYNC",               2 },
     { "SCAN",                  2 },
