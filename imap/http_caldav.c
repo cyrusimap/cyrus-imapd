@@ -1625,8 +1625,17 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 	}
     }
 
-    /* Check for existing iCalendar UID */
+    /* Find iCalendar UID for the current resource, if exists */
     uid = icalcomponent_get_uid(comp);
+    caldav_lookup_resource(caldavdb,
+			   mailbox->name, resource, 0, &cdata);
+    if (cdata->ical_uid && strcmp(cdata->ical_uid, uid)) {
+	/* CALDAV:no-uid-conflict */
+	txn->error.precond = CALDAV_UID_CONFLICT;
+	return HTTP_FORBIDDEN;
+    }
+
+    /* Check for existing iCalendar UID */
     caldav_lookup_uid(caldavdb, uid, 0, &cdata);
     if (cdata->dav.mailbox && !strcmp(cdata->dav.mailbox, mailbox->name) &&
 	strcmp(cdata->dav.resource, resource)) {
