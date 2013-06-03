@@ -2307,11 +2307,12 @@ static const struct prop_entry {
  */
 static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 {
+    int ret = 0;
     xmlNodePtr prop;
     const struct prop_entry *entry;
 
     /* Iterate through requested properties */
-    for (prop = proplist; prop; prop = prop->next) {
+    for (prop = proplist; !ret && prop; prop = prop->next) {
 	if (prop->type == XML_ELEMENT_NODE) {
 	    struct propfind_entry_list *nentry =
 		xzmalloc(sizeof(struct propfind_entry_list));
@@ -2325,9 +2326,48 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 
 	    nentry->prop = prop;
 	    if (entry->name) {
+		xmlChar *type =  NULL, *ver = NULL;
+
 		/* Found a match */
 		nentry->get = entry->get;
 		nentry->rock = entry->rock;
+
+		switch (fctx->req_tgt->namespace) {
+		case URL_NS_CALENDAR:
+		    /* Sanity check any calendar-data "property" request */
+		    if (!xmlStrcmp(prop->name, BAD_CAST "calendar-data")) {
+			if ((type = xmlGetProp(prop, BAD_CAST "content-type"))
+			    && xmlStrcmp(type, BAD_CAST "text/calendar")) {
+			    fctx->err->precond = CALDAV_SUPP_DATA;
+			    ret = *fctx->ret = HTTP_FORBIDDEN;
+			}
+			if ((ver = xmlGetProp(prop, BAD_CAST "version"))
+			    && xmlStrcmp(ver, BAD_CAST "2.0")) {
+			    fctx->err->precond = CALDAV_SUPP_DATA;
+			    ret = *fctx->ret = HTTP_FORBIDDEN;
+			}
+		    }
+		    break;
+
+		case URL_NS_ADDRESSBOOK:
+		    /* Sanity check any address-data "property" request */
+		    if (!xmlStrcmp(prop->name, BAD_CAST "address-data")) {
+			if ((type = xmlGetProp(prop, BAD_CAST "content-type"))
+			    && xmlStrcmp(type, BAD_CAST "text/vcard")) {
+			    fctx->err->precond = CALDAV_SUPP_DATA;
+			    ret = *fctx->ret = HTTP_FORBIDDEN;
+			}
+			if ((ver = xmlGetProp(prop, BAD_CAST "version"))
+			    && xmlStrcmp(ver, BAD_CAST "3.0")) {
+			    fctx->err->precond = CALDAV_SUPP_DATA;
+			    ret = *fctx->ret = HTTP_FORBIDDEN;
+			}
+		    }
+		    break;
+		}
+
+		if (type) xmlFree(type);
+		if (ver) xmlFree(ver);
 	    }
 	    else {
 		/* No match, treat as a dead property */
@@ -2339,7 +2379,7 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 	}
     }
 
-    return 0;
+    return ret;
 }
 
 
@@ -4992,10 +5032,10 @@ int meth_report(struct transaction_t *txn, void *params)
     fctx.fetcheddata = 0;
 
     /* Parse the list of properties and build a list of callbacks */
-    if (prop) preload_proplist(prop->children, &fctx);
+    if (prop) ret = preload_proplist(prop->children, &fctx);
 
     /* Process the requested report */
-    ret = (*report->proc)(txn, inroot, &fctx);
+    if (!ret) ret = (*report->proc)(txn, inroot, &fctx);
 
     /* Output the XML response */
     if (!ret && outroot) {
