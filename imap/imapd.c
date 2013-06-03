@@ -6913,39 +6913,49 @@ static void cmd_listrights(char *tag, char *name, char *identifier)
 		error_message(IMAP_OK_COMPLETED));
 }
 
+static int printmyrights(const char *extname, mbentry_t *mbentry)
+{
+    int rights = 0;
+    char str[ACL_MAXSTR];
+
+    rights = cyrus_acl_myrights(imapd_authstate, mbentry->acl);
+
+    /* Add in implicit rights */
+    if (imapd_userisadmin) {
+	rights |= ACL_LOOKUP|ACL_ADMIN;
+    }
+    else if (mboxname_userownsmailbox(imapd_userid, mbentry->name)) {
+	rights |= config_implicitrights;
+    }
+
+    if (!(rights & (ACL_LOOKUP|ACL_READ|ACL_INSERT|ACL_CREATE|ACL_DELETEMBOX|ACL_ADMIN))) {
+	return IMAP_MAILBOX_NONEXISTENT;
+    }
+
+    prot_printf(imapd_out, "* MYRIGHTS ");
+    prot_printastring(imapd_out, extname);
+    prot_printf(imapd_out, " ");
+    prot_printastring(imapd_out, cyrus_acl_masktostr(rights, str));
+
+    return 0;
+}
+
 /*
  * Perform a MYRIGHTS command
  */
 static void cmd_myrights(const char *tag, const char *name)
 {
     char mailboxname[MAX_MAILBOX_BUFFER];
-    int r, rights = 0;
-    char str[ACL_MAXSTR];
     mbentry_t *mbentry = NULL;
+    int r;
 
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 					       imapd_userid, mailboxname);
 
-    if (!r) {
-	r = mlookup(tag, name, mailboxname, &mbentry);
-    }
+    if (!r) r = mlookup(tag, name, mailboxname, &mbentry);
     if (r == IMAP_MAILBOX_MOVED) return;
 
-    if (!r) {
-	rights = cyrus_acl_myrights(imapd_authstate, mbentry->acl);
-
-	/* Add in implicit rights */
-	if (imapd_userisadmin) {
-	    rights |= ACL_LOOKUP|ACL_ADMIN;
-	}
-	else if (mboxname_userownsmailbox(imapd_userid, mailboxname)) {
-	    rights |= config_implicitrights;
-	}
-
-	if (!(rights & (ACL_LOOKUP|ACL_READ|ACL_INSERT|ACL_CREATE|ACL_DELETEMBOX|ACL_ADMIN))) {
-	    r = IMAP_MAILBOX_NONEXISTENT;
-	}
-    }
+    if (!r) r = printmyrights(name, mbentry);
 
     mboxlist_entry_free(&mbentry);
 
@@ -6955,11 +6965,7 @@ static void cmd_myrights(const char *tag, const char *name)
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
 	return;
     }
-    
-    prot_printf(imapd_out, "* MYRIGHTS ");
-    prot_printastring(imapd_out, name);
-    prot_printf(imapd_out, " ");
-    prot_printastring(imapd_out, cyrus_acl_masktostr(rights, str));
+
     prot_printf(imapd_out, "\r\n%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
 }
@@ -11463,6 +11469,11 @@ static void list_response(const char *name, int attributes,
 	!(attributes & MBOX_ATTRIBUTE_NOSELECT)) {
 	/* output the status line now, per rfc 5819 */
 	print_statusline(mboxname, listargs->statusitems, &sdata);
+    }
+
+    if ((listargs->ret & LIST_RET_MYRIGHTS) &&
+	!(attributes & MBOX_ATTRIBUTE_NOSELECT)) {
+	/*ignore result*/printmyrights(mboxname, mbentry);
     }
 
 done:
