@@ -615,6 +615,19 @@ static int do_search(const char *query, int single, const strarray_t *mboxnames)
     return 0;
 }
 
+static void add_user(strarray_t *folders, const char *user)
+{
+    char *mbox = mboxname_user_mbox(user, NULL);
+    char *expr = strconcat(mbox, ".*", (char *)NULL);
+
+    strarray_append(folders, mbox);
+    (*squat_namespace.mboxlist_findall) (&squat_namespace, expr, 1,
+					 0, 0, addmbox, folders);
+
+    free(expr);
+    free(mbox);
+}
+
 static strarray_t *read_sync_log_items(sync_log_reader_t *slr)
 {
     const char *args[3];
@@ -623,6 +636,8 @@ static strarray_t *read_sync_log_items(sync_log_reader_t *slr)
     while (sync_log_reader_getitem(slr, args) == 0) {
 	if (!strcmp(args[0], "APPEND"))
 	    strarray_add(folders, args[1]);
+	if (!strcmp(args[0], "USER"))
+	    add_user(folders, args[1]);
     }
 
     return folders;
