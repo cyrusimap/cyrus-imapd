@@ -2429,7 +2429,6 @@ EXPORTED int annotatemore_rawwrite(const char *mboxname, const char *entry,
     char key[MAX_MAILBOX_PATH+1];
     int keylen, r;
     annotate_db_t *d = NULL;
-    struct buf oldval = BUF_INITIALIZER;
     uint32_t uid = 0;
 
     r = _annotate_getdb(mboxname, uid, CYRUSDB_CREATE, &d);
