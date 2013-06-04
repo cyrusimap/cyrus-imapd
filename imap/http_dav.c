@@ -2002,6 +2002,78 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
 }
 
 
+/* Callback to write calendar-timezone property */
+static int proppatch_timezone(xmlNodePtr prop, unsigned set,
+			      struct proppatch_ctx *pctx,
+			      struct propstat propstat[],
+			      void *rock __attribute__((unused)))
+{
+    if ((pctx->req_tgt->namespace == URL_NS_CALENDAR) &&
+	pctx->req_tgt->collection && !pctx->req_tgt->resource) {
+	xmlChar *freeme = NULL;
+	const char *value = NULL;
+	size_t len = 0;
+	unsigned valid = 1;
+
+	if (set) {
+	    icalcomponent *ical = NULL;
+
+	    freeme = xmlNodeGetContent(prop);
+	    value = (const char *) freeme;
+	    len = strlen(value);
+
+	    /* Parse and validate the iCal data */
+	    ical = icalparser_parse_string(value);
+	    if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {
+		xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
+			     &propstat[PROPSTAT_FORBID], prop, NULL,
+			     CALDAV_VALID_DATA);
+		*pctx->ret = HTTP_FORBIDDEN;
+		valid = 0;
+	    }
+	    else if (!icalcomponent_get_first_component(ical,
+							ICAL_VTIMEZONE_COMPONENT)
+		     || icalcomponent_get_first_real_component(ical)) {
+		xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
+			     &propstat[PROPSTAT_FORBID], prop, NULL,
+			     CALDAV_VALID_OBJECT);
+		*pctx->ret = HTTP_FORBIDDEN;
+		valid = 0;
+	    }
+	}
+
+	if (valid) {
+	    buf_reset(&pctx->buf);
+	    buf_printf(&pctx->buf, ANNOT_NS "<%s>%s",
+		       (const char *) prop->ns->href, prop->name);
+
+	    if (!annotatemore_write_entry(pctx->mailboxname,
+					  buf_cstring(&pctx->buf), /* shared */ "",
+					  value, NULL,
+					  len, 0,
+					  &pctx->tid)) {
+		xml_add_prop(HTTP_OK, pctx->ns[NS_DAV],
+			     &propstat[PROPSTAT_OK], prop, NULL, 0);
+	    }
+	    else {
+		xml_add_prop(HTTP_SERVER_ERROR, pctx->ns[NS_DAV],
+			     &propstat[PROPSTAT_ERROR], prop, NULL, 0);
+	    }
+	}
+
+	if (freeme) xmlFree(freeme);
+    }
+    else {
+	xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
+		     &propstat[PROPSTAT_FORBID], prop, NULL, 0);
+
+	*pctx->ret = HTTP_FORBIDDEN;
+    }
+
+    return 0;
+}
+
+
 /* Callback to fetch CARDDAV:addressbook-home-set */
 static int propfind_abookurl(xmlNodePtr prop,
 			     struct propfind_ctx *fctx,
@@ -2254,7 +2326,7 @@ static const struct prop_entry {
       propfind_fromdb, proppatch_todb, NULL },
     { "calendar-home-set", XML_NS_CALDAV, 0, propfind_calurl, NULL, NULL },
     { "calendar-timezone", XML_NS_CALDAV, 0,
-      propfind_fromdb, proppatch_todb, NULL },
+      propfind_fromdb, proppatch_timezone, NULL },
     { "supported-calendar-component-set", XML_NS_CALDAV, 0,
       propfind_calcompset, proppatch_calcompset, NULL },
     { "supported-calendar-data", XML_NS_CALDAV, 0,
