@@ -231,11 +231,6 @@ struct accept {
     struct accept *next;
 };
 
-/* Flags for known methods*/
-enum {
-    METH_NOBODY =	(1<<0),	/* Method does not expect a body */
-};
-
 /* Array of HTTP methods known by our server. */
 const struct known_meth_t http_methods[] = {
     { "ACL",		0 },
