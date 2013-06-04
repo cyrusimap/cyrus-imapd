@@ -3577,13 +3577,12 @@ badformat:
     prot_ungetc(c, prot);
     if (c == '(') {
 	while (c == '(') {
-	    body->subpart = (struct body *)xrealloc((char *)body->subpart,
-					    (body->numparts+1)*sizeof(struct body));
-
-	    r = parse_bodystructure_part(prot, &body->subpart[body->numparts]);
-	    if (r) goto out;
-
 	    body->numparts++;
+	    body->subpart = (struct body *)xrealloc((char *)body->subpart,
+					  body->numparts*sizeof(struct body));
+
+	    r = parse_bodystructure_part(prot, &body->subpart[body->numparts-1]);
+	    if (r) goto out;
 
 	    c = prot_getc(prot);
 	    prot_ungetc(c, prot);
