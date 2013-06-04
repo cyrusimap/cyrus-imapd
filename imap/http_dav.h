@@ -154,7 +154,7 @@ enum {
 
 /* Bitmask of calendar components */
 enum {
-    CAL_COMP_VCALENDAR =	(0<<0),
+    CAL_COMP_VCALENDAR =	0xf000,
     CAL_COMP_VEVENT =		(1<<0),
     CAL_COMP_VTODO =		(1<<1),
     CAL_COMP_VJOURNAL =		(1<<2),
