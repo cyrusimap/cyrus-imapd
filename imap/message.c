@@ -3443,6 +3443,7 @@ static void message_yield(message_t *m, unsigned int yield)
 
     if ((yield & M_BODY)) {
 	message_free_body(m->body);
+	free(m->body);
 	m->body = NULL;
 	m->have &= ~M_BODY;
     }
