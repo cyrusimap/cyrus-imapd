@@ -4230,6 +4230,7 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
 	extract_one(buf, hdr, flags, hasname, &raw);
 
     buf_free(&raw);
+    strarray_fini(&want);
 
     return 0;
 }
