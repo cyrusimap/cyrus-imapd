@@ -192,9 +192,9 @@ static const struct cal_comp_t {
     { "VEVENT",    CAL_COMP_VEVENT },
     { "VTODO",     CAL_COMP_VTODO },
     { "VJOURNAL",  CAL_COMP_VJOURNAL },
-    { "VFREEBUSY", CAL_COMP_VFREEBUSY },
-    { "VTIMEZONE", CAL_COMP_VTIMEZONE },
-    { "VALARM",	   CAL_COMP_VALARM },
+//    { "VFREEBUSY", CAL_COMP_VFREEBUSY },
+//    { "VTIMEZONE", CAL_COMP_VTIMEZONE },
+//    { "VALARM",	   CAL_COMP_VALARM },
     { NULL, 0 }
 };
 
