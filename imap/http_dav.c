@@ -4505,7 +4505,6 @@ int meth_post(struct transaction_t *txn, void *params)
     static unsigned post_count = 0;
     int r, ret;
     size_t len;
-    char *p;
 
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
@@ -4527,10 +4526,11 @@ int meth_post(struct transaction_t *txn, void *params)
 
     /* Append a unique resource name to URL path and perform a PUT */
     len = strlen(txn->req_tgt.path);
-    p = txn->req_tgt.path + len;
-
-    snprintf(p, MAX_MAILBOX_PATH - len, "%x-%d-%ld-%u.ics",
-	     strhash(txn->req_tgt.path), getpid(), time(0), post_count++);
+    txn->req_tgt.resource = txn->req_tgt.path + len;
+    txn->req_tgt.reslen =
+	snprintf(txn->req_tgt.resource, MAX_MAILBOX_PATH - len,
+		 "%x-%d-%ld-%u.ics",
+		 strhash(txn->req_tgt.path), getpid(), time(0), post_count++);
 
     /* Tell client where to find the new resource */
     txn->location = txn->req_tgt.path;
@@ -4561,15 +4561,19 @@ int meth_put(struct transaction_t *txn, void *params)
     uquota_t size = 0;
     unsigned flags = 0;
 
-    /* Response should not be cached */
-    txn->flags.cc |= CC_NOCACHE;
+    if (txn->meth == METH_PUT) {
+	/* Response should not be cached */
+	txn->flags.cc |= CC_NOCACHE;
 
-    /* Parse the path */
-    if ((r = pparams->parse_path(txn->req_uri->path,
-				 &txn->req_tgt, &txn->error.desc))) return r;
+	/* Parse the path */
+	if ((r = pparams->parse_path(txn->req_uri->path,
+				     &txn->req_tgt, &txn->error.desc))) {
+	    return r;
+	}
 
-    /* Make sure method is allowed (only allowed on resources) */
-    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
+	/* Make sure method is allowed (only allowed on resources) */
+	if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
+    }
 
     /* Make sure Content-Range isn't specified */
     if (spool_getheader(txn->req_hdrs, "Content-Range"))
