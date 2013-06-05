@@ -336,7 +336,8 @@ HIDDEN int upgrade_index(struct mailbox *mailbox)
     }
 no_expunge:
 
-    mailbox_repack_setup(mailbox, &repack);
+    r = mailbox_repack_setup(mailbox, &repack);
+    if (r) goto fail;
 
     /* Write the rest of new index */
     recno = 1;
