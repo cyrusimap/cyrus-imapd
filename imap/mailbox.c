@@ -2351,11 +2351,17 @@ int mailbox_repack_setup(struct mailbox *mailbox,
     /* new files */
     fname = mailbox_meta_newfname(mailbox, META_INDEX);
     repack->newindex_fd = open(fname, O_RDWR|O_TRUNC|O_CREAT, 0666);
-    if (repack->newindex_fd == -1) goto fail;
+    if (repack->newindex_fd == -1) {
+	syslog(LOG_ERR, "IOERROR: failed to create %s: %m", fname);
+	goto fail;
+    }
 
     fname = mailbox_meta_newfname(mailbox, META_CACHE);
     repack->newcache_fd = open(fname, O_RDWR|O_TRUNC|O_CREAT, 0666);
-    if (repack->newcache_fd == -1) goto fail;
+    if (repack->newcache_fd == -1) {
+	syslog(LOG_ERR, "IOERROR: failed to create %s: %m", fname);
+	goto fail;
+    }
 
     /* update the generation number */
     repack->i.generation_no++;
@@ -2368,7 +2374,7 @@ int mailbox_repack_setup(struct mailbox *mailbox,
     repack->i.answered = 0;
     repack->i.deleted = 0;
     repack->i.flagged = 0;
-    repack->i.exists = 0;   
+    repack->i.exists = 0;
     repack->i.first_expunged = 0;
     repack->i.leaked_cache_records = 0;
 
@@ -2380,8 +2386,8 @@ int mailbox_repack_setup(struct mailbox *mailbox,
     if (n == -1) goto fail;
 
     n = retry_write(repack->newindex_fd, buf, INDEX_HEADER_SIZE);
-    if (n == -1) goto fail;    
-    
+    if (n == -1) goto fail;
+
     *repackptr = repack;
     return 0;
 
