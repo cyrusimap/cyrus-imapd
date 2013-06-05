@@ -1221,13 +1221,15 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
     }
     if (r && !force) goto done;
 
-    if (!isremote && !mboxname_isdeletedmailbox(mailbox->name, NULL)) {
+    if (!isremote && !mboxname_isdeletedmailbox(name, NULL)) {
 	/* store a DELETED marker */
 	mbentry_t *newmbentry = mboxlist_entry_create();
-	newmbentry->name = xstrdupnull(mailbox->name);
+	newmbentry->name = xstrdupnull(name);
 	newmbentry->mbtype = MBTYPE_DELETED;
-	newmbentry->uidvalidity = mailbox->i.uidvalidity;
-	newmbentry->uniqueid = xstrdupnull(mailbox->uniqueid);
+	if (mailbox) {
+	    newmbentry->uidvalidity = mailbox->i.uidvalidity;
+	    newmbentry->uniqueid = xstrdupnull(mailbox->uniqueid);
+	}
 	r = mboxlist_update(newmbentry, /*localonly*/1);
 	mboxlist_entry_free(&newmbentry);
     }
