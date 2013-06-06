@@ -824,7 +824,7 @@ static int meth_get(struct transaction_t *txn, void *params)
     /* iCalendar data in response should not be transformed */
     txn->flags.cc |= CC_NOTRANSFORM;
 
-    /* Create hash table for any remote attendee servers */
+    /* Create hash table for TZIDs */
     construct_hash_table(&tzid_table, 10, 1);
 
     /* Begin iCalendar */
@@ -867,7 +867,7 @@ static int meth_get(struct transaction_t *txn, void *params)
 		    const char *tzid = icalproperty_get_tzid(prop);
 
 		    if (hash_lookup(tzid, &tzid_table)) continue;
-		    hash_insert(tzid, (void *)0xDEADBEEF, &tzid_table);
+		    else hash_insert(tzid, (void *)0xDEADBEEF, &tzid_table);
 		}
 
 		/* Include this component in our iCalendar */
