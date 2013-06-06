@@ -130,6 +130,7 @@ static int caldav_copy(struct transaction_t *txn,
 static int caldav_delete_sched(struct transaction_t *txn,
 			       struct mailbox *mailbox,
 			       struct index_record *record, void *data);
+static int meth_get(struct transaction_t *txn, void *params);
 static int caldav_post(struct transaction_t *txn);
 static int caldav_put(struct transaction_t *txn, struct mailbox *mailbox,
 		      unsigned flags);
@@ -189,8 +190,8 @@ struct namespace_t namespace_calendar = {
 	{ &meth_acl,		&caldav_params },	/* ACL		*/
 	{ &meth_copy,		&caldav_params },	/* COPY		*/
 	{ &meth_delete,		&caldav_params },	/* DELETE	*/
-	{ &meth_get_dav,	&caldav_params },	/* GET		*/
-	{ &meth_get_dav,	&caldav_params },	/* HEAD		*/
+	{ &meth_get,		&caldav_params },	/* GET		*/
+	{ &meth_get,		&caldav_params },	/* HEAD		*/
 	{ &meth_lock,		&caldav_params },	/* LOCK		*/
 	{ &meth_mkcol,		&caldav_params },	/* MKCALENDAR	*/
 	{ &meth_mkcol,		&caldav_params },	/* MKCOL	*/
@@ -703,6 +704,192 @@ static int caldav_delete_sched(struct transaction_t *txn,
       done:
 	icalcomponent_free(ical);
     }
+
+    return ret;
+}
+
+
+/* Perform a GET/HEAD request on a CalDAV resource */
+static int meth_get(struct transaction_t *txn, void *params)
+{
+    struct meth_params *gparams = (struct meth_params *) params;
+    int ret = 0, r, precond, rights;
+    struct resp_body_t *resp_body = &txn->resp_body;
+    struct buf *buf = &resp_body->payload;
+    char *server, *acl;
+    struct mailbox *mailbox = NULL;
+    static char etag[33];
+    time_t lastmod = 0;
+    uint32_t recno;
+    struct index_record record;
+    struct hash_table tzid_table;
+
+    /* Parse the path */
+    if ((r = gparams->parse_path(txn->req_uri->path,
+				 &txn->req_tgt, &txn->error.desc))) return r;
+
+    /* GET an individual resource */
+    if (txn->req_tgt.resource) return meth_get_dav(txn, params);
+
+    /* We don't handle GET on a home-set */
+    if (!txn->req_tgt.collection) return HTTP_NO_CONTENT;
+
+    /* Locate the mailbox */
+    if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
+	syslog(LOG_ERR, "mlookup(%s) failed: %s",
+	       txn->req_tgt.mboxname, error_message(r));
+	txn->error.desc = error_message(r);
+
+	switch (r) {
+	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	default: return HTTP_SERVER_ERROR;
+	}
+    }
+
+    /* Check ACL for current user */
+    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
+    if ((rights & DACL_READ) != DACL_READ) {
+	/* DAV:need-privileges */
+	txn->error.precond = DAV_NEED_PRIVS;
+	txn->error.resource = txn->req_tgt.path;
+	txn->error.rights = DACL_READ;
+	return HTTP_FORBIDDEN;
+    }
+
+    if (server) {
+	/* Remote mailbox */
+	struct backend *be;
+
+	be = proxy_findserver(server, &http_protocol, httpd_userid,
+			      &backend_cached, NULL, NULL, httpd_in);
+	if (!be) return HTTP_UNAVAILABLE;
+
+	return http_pipe_req_resp(be, txn);
+    }
+
+    /* Local Mailbox */
+
+    if (!*gparams->davdb.db) {
+	syslog(LOG_ERR, "DAV database for user '%s' is not opened.  "
+	       "Check 'configdirectory' permissions or "
+	       "'proxyservers' option on backend server.", httpd_userid);
+	txn->error.desc = "DAV database is not opened";
+	return HTTP_SERVER_ERROR;
+    }
+
+    /* Open mailbox for reading */
+    if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_SHARED))) {
+	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+	       txn->req_tgt.mboxname, error_message(r));
+	txn->error.desc = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
+    /* Check any preconditions */
+    lastmod = mailbox->i.last_appenddate;
+    sprintf(etag, "%u-%u-%u",
+	    mailbox->i.uidvalidity, mailbox->i.last_uid, mailbox->i.exists);
+    precond = gparams->check_precond(txn, NULL, etag, lastmod, 0);
+
+    switch (precond) {
+    case HTTP_OK:
+	break;
+
+    case HTTP_NOT_MODIFIED:
+	/* Fill in ETag for 304 response */
+	resp_body->etag = etag;
+
+    default:
+	/* We failed a precondition - don't perform the request */
+	ret = precond;
+	goto done;
+    }
+
+    /* Fill in ETag and Last-Modified */
+    txn->resp_body.etag = etag;
+    txn->resp_body.lastmod = lastmod;
+
+    /* Setup for chunked response */
+    txn->flags.te |= TE_CHUNKED;
+    txn->resp_body.type = gparams->content_type;
+
+    /* Short-circuit for HEAD request */
+    if (txn->meth == METH_HEAD) {
+	response_header(HTTP_OK, txn);
+	return 0;
+    }
+
+    /* iCalendar data in response should not be transformed */
+    txn->flags.cc |= CC_NOTRANSFORM;
+
+    /* Create hash table for any remote attendee servers */
+    construct_hash_table(&tzid_table, 10, 1);
+
+    /* Begin iCalendar */
+    buf_setcstr(buf, "BEGIN:VCALENDAR\r\n");
+    buf_printf(buf, "PRODID:-//CyrusIMAP.org/Cyrus %s//EN\r\n",
+	       cyrus_version());
+    buf_appendcstr(buf, "VERSION:2.0\r\n");
+    write_body(HTTP_OK, txn, buf_cstring(buf), buf_len(buf));
+
+    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
+	const char *msg_base = NULL;
+	unsigned long msg_size = 0;
+	icalcomponent *ical;
+
+	if (mailbox_read_index_record(mailbox, recno, &record)) continue;
+
+	if (record.system_flags & (FLAG_EXPUNGED | FLAG_DELETED)) continue;
+
+	/* Map and parse existing iCalendar resource */
+	mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
+	ical = icalparser_parse_string(msg_base + record.header_size);
+	mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
+
+	if (ical) {
+	    icalcomponent *comp;
+	    const char *cal_str = NULL;
+
+	    for (comp = icalcomponent_get_first_component(ical,
+							  ICAL_ANY_COMPONENT);
+		 comp;
+		 comp = icalcomponent_get_next_component(ical,
+							 ICAL_ANY_COMPONENT)) {
+		icalcomponent_kind kind = icalcomponent_isa(comp);
+
+		/* Don't duplicate any TZIDs in our iCalendar */
+		if (kind == ICAL_VTIMEZONE_COMPONENT) {
+		    icalproperty *prop =
+			icalcomponent_get_first_property(comp,
+							 ICAL_TZID_PROPERTY);
+		    const char *tzid = icalproperty_get_tzid(prop);
+
+		    if (hash_lookup(tzid, &tzid_table)) continue;
+		    hash_insert(tzid, (void *)0xDEADBEEF, &tzid_table);
+		}
+
+		/* Include this component in our iCalendar */
+		cal_str = icalcomponent_as_ical_string(comp);
+		write_body(0, txn, cal_str, strlen(cal_str));
+	    }
+
+	    icalcomponent_free(ical);
+	}
+    }
+
+    free_hash_table(&tzid_table, NULL);
+
+    /* End iCalendar */
+    buf_setcstr(buf, "END:VCALENDAR\r\n");
+    write_body(0, txn, buf_cstring(buf), buf_len(buf));
+
+    /* End of output */
+    write_body(0, txn, NULL, 0);
+
+  done:
+    if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
     return ret;
 }
