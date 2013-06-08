@@ -82,7 +82,6 @@
 
 #include "acl.h"
 #include "assert.h"
-#include "crc32.h"
 #include "hash.h"
 #include "global.h"
 #include "exitcodes.h"

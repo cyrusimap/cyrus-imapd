@@ -46,7 +46,6 @@
 #define INCLUDED_IMAPD_H
 
 #include "annotate.h"
-#include "charset.h"
 #include "hash.h"
 #include "mailbox.h"
 #include "prot.h"
