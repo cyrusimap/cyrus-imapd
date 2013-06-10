@@ -2128,7 +2128,8 @@ void response_header(long code, struct transaction_t *txn)
 	if (txn->flags.cors) Access_Control_Expose("Schedule-Tag");
     }
     if (resp_body->etag) {
-	prot_printf(httpd_out, "ETag: \"%s\"\r\n", resp_body->etag);
+	prot_printf(httpd_out, "ETag: %s\"%s\"\r\n",
+		    resp_body->enc ? "W/" : "", resp_body->etag);
 	if (txn->flags.cors) Access_Control_Expose("ETag");
     }
     if (resp_body->lastmod) {
