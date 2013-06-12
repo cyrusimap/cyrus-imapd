@@ -1290,7 +1290,7 @@ static int propfind_curprivset(xmlNodePtr prop,
 	if (fctx->userisadmin) {
 	    rights |= DACL_ADMIN;
 	}
-	else if (mboxname_userownsmailbox(fctx->userid, fctx->mailbox->name)) {
+	else if (mboxname_userownsmailbox(fctx->int_userid, fctx->mailbox->name)) {
 	    rights |= config_implicitrights;
 	}
 
@@ -2669,7 +2669,7 @@ int meth_acl(struct transaction_t *txn, void *params)
 	/* Remote mailbox */
 	struct backend *be;
 
-	be = proxy_findserver(server, &http_protocol, httpd_userid,
+	be = proxy_findserver(server, &http_protocol, proxy_userid,
 			      &backend_cached, NULL, NULL, httpd_in);
 	if (!be) return HTTP_UNAVAILABLE;
 
@@ -2761,7 +2761,7 @@ int meth_acl(struct transaction_t *txn, void *params)
 	    }
 
 	    if (!xmlStrcmp(prin->name, BAD_CAST "self")) {
-		userid = httpd_userid;
+		userid = proxy_userid;
 	    }
 #if 0  /* XXX  Do we need to support this? */
 	    else if (!xmlStrcmp(prin->name, BAD_CAST "owner")) {
@@ -3001,7 +3001,7 @@ int meth_copy(struct transaction_t *txn, void *params)
 
     if (server) {
 	/* Remote source mailbox */
-	src_be = proxy_findserver(server, &http_protocol, httpd_userid,
+	src_be = proxy_findserver(server, &http_protocol, proxy_userid,
 				  &backend_cached, NULL, NULL, httpd_in);
 	if (!src_be) return HTTP_UNAVAILABLE;
     }
@@ -3032,7 +3032,7 @@ int meth_copy(struct transaction_t *txn, void *params)
 
     if (server) {
 	/* Remote destination mailbox */
-	dest_be = proxy_findserver(server, &http_protocol, httpd_userid,
+	dest_be = proxy_findserver(server, &http_protocol, proxy_userid,
 				   &backend_cached, NULL, NULL, httpd_in);
 	if (!dest_be) return HTTP_UNAVAILABLE;
     }
@@ -3061,7 +3061,7 @@ int meth_copy(struct transaction_t *txn, void *params)
     if (!*cparams->davdb.db) {
 	syslog(LOG_ERR, "DAV database for user '%s' is not opened.  "
 	       "Check 'configdirectory' permissions or "
-	       "'proxyservers' option on backend server.", httpd_userid);
+	       "'proxyservers' option on backend server.", proxy_userid);
 	txn->error.desc = "DAV database is not opened";
 	return HTTP_SERVER_ERROR;
     }
@@ -3250,7 +3250,7 @@ int meth_delete(struct transaction_t *txn, void *params)
 	/* Remote mailbox */
 	struct backend *be;
 
-	be = proxy_findserver(server, &http_protocol, httpd_userid,
+	be = proxy_findserver(server, &http_protocol, proxy_userid,
 			      &backend_cached, NULL, NULL, httpd_in);
 	if (!be) return HTTP_UNAVAILABLE;
 
@@ -3262,7 +3262,7 @@ int meth_delete(struct transaction_t *txn, void *params)
     if (!*dparams->davdb.db) {
 	syslog(LOG_ERR, "DAV database for user '%s' is not opened.  "
 	       "Check 'configdirectory' permissions or "
-	       "'proxyservers' option on backend server.", httpd_userid);
+	       "'proxyservers' option on backend server.", proxy_userid);
 	txn->error.desc = "DAV database is not opened";
 	return HTTP_SERVER_ERROR;
     }
@@ -3417,7 +3417,7 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 	/* Remote mailbox */
 	struct backend *be;
 
-	be = proxy_findserver(server, &http_protocol, httpd_userid,
+	be = proxy_findserver(server, &http_protocol, proxy_userid,
 			      &backend_cached, NULL, NULL, httpd_in);
 	if (!be) return HTTP_UNAVAILABLE;
 
@@ -3429,7 +3429,7 @@ int meth_get_dav(struct transaction_t *txn, void *params)
     if (!*gparams->davdb.db) {
 	syslog(LOG_ERR, "DAV database for user '%s' is not opened.  "
 	       "Check 'configdirectory' permissions or "
-	       "'proxyservers' option on backend server.", httpd_userid);
+	       "'proxyservers' option on backend server.", proxy_userid);
 	txn->error.desc = "DAV database is not opened";
 	return HTTP_SERVER_ERROR;
     }
@@ -3598,7 +3598,7 @@ int meth_lock(struct transaction_t *txn, void *params)
 	/* Remote mailbox */
 	struct backend *be;
 
-	be = proxy_findserver(server, &http_protocol, httpd_userid,
+	be = proxy_findserver(server, &http_protocol, proxy_userid,
 			      &backend_cached, NULL, NULL, httpd_in);
 	if (!be) return HTTP_UNAVAILABLE;
 
@@ -3610,7 +3610,7 @@ int meth_lock(struct transaction_t *txn, void *params)
     if (!*lparams->davdb.db) {
 	syslog(LOG_ERR, "DAV database for user '%s' is not opened.  "
 	       "Check 'configdirectory' permissions or "
-	       "'proxyservers' option on backend server.", httpd_userid);
+	       "'proxyservers' option on backend server.", proxy_userid);
 	txn->error.desc = "DAV database is not opened";
 	return HTTP_SERVER_ERROR;
     }
@@ -3855,7 +3855,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 	p = strchr(server, '!');
 	if (p) *p++ = '\0';
 
-	be = proxy_findserver(server, &http_protocol, httpd_userid,
+	be = proxy_findserver(server, &http_protocol, proxy_userid,
 			      &backend_cached, NULL, NULL, httpd_in);
 	if (!be) return HTTP_UNAVAILABLE;
 
@@ -4195,7 +4195,7 @@ int meth_propfind(struct transaction_t *txn, void *params)
 	    /* Remote mailbox */
 	    struct backend *be;
 
-	    be = proxy_findserver(server, &http_protocol, httpd_userid,
+	    be = proxy_findserver(server, &http_protocol, proxy_userid,
 				  &backend_cached, NULL, NULL, httpd_in);
 	    if (!be) return HTTP_UNAVAILABLE;
 
@@ -4206,7 +4206,7 @@ int meth_propfind(struct transaction_t *txn, void *params)
 	if (!*fparams->davdb.db) {
 	    syslog(LOG_ERR, "DAV database for user '%s' is not opened.  "
 		   "Check 'configdirectory' permissions or "
-		   "'proxyservers' option on backend server.", httpd_userid);
+		   "'proxyservers' option on backend server.", proxy_userid);
 	    txn->error.desc = "DAV database is not opened";
 	    return HTTP_SERVER_ERROR;
 	}
@@ -4268,7 +4268,8 @@ int meth_propfind(struct transaction_t *txn, void *params)
     fctx.req_tgt = &txn->req_tgt;
     fctx.depth = depth;
     fctx.prefer = get_preferences(txn);
-    fctx.userid = httpd_userid;
+    fctx.userid = proxy_userid;
+    fctx.int_userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = httpd_authstate;
     fctx.mailbox = NULL;
@@ -4417,7 +4418,7 @@ int meth_proppatch(struct transaction_t *txn,  void *params)
 	/* Remote mailbox */
 	struct backend *be;
 
-	be = proxy_findserver(server, &http_protocol, httpd_userid,
+	be = proxy_findserver(server, &http_protocol, proxy_userid,
 			      &backend_cached, NULL, NULL, httpd_in);
 	if (!be) return HTTP_UNAVAILABLE;
 
@@ -4614,7 +4615,7 @@ int meth_put(struct transaction_t *txn, void *params)
 	/* Remote mailbox */
 	struct backend *be;
 
-	be = proxy_findserver(server, &http_protocol, httpd_userid,
+	be = proxy_findserver(server, &http_protocol, proxy_userid,
 			      &backend_cached, NULL, NULL, httpd_in);
 	if (!be) return HTTP_UNAVAILABLE;
 
@@ -4626,7 +4627,7 @@ int meth_put(struct transaction_t *txn, void *params)
     if (!*pparams->davdb.db) {
 	syslog(LOG_ERR, "DAV database for user '%s' is not opened.  "
 	       "Check 'configdirectory' permissions or "
-	       "'proxyservers' option on backend server.", httpd_userid);
+	       "'proxyservers' option on backend server.", proxy_userid);
 	txn->error.desc = "DAV database is not opened";
 	return HTTP_SERVER_ERROR;
     }
@@ -5035,7 +5036,7 @@ int meth_report(struct transaction_t *txn, void *params)
 	    /* Remote mailbox */
 	    struct backend *be;
 
-	    be = proxy_findserver(server, &http_protocol, httpd_userid,
+	    be = proxy_findserver(server, &http_protocol, proxy_userid,
 				  &backend_cached, NULL, NULL, httpd_in);
 	    if (!be) ret = HTTP_UNAVAILABLE;
 	    else ret = http_pipe_req_resp(be, txn);
@@ -5046,7 +5047,7 @@ int meth_report(struct transaction_t *txn, void *params)
 	if (!*rparams->davdb.db) {
 	    syslog(LOG_ERR, "DAV database for user '%s' is not opened.  "
 		   "Check 'configdirectory' permissions or "
-		   "'proxyservers' option on backend server.", httpd_userid);
+		   "'proxyservers' option on backend server.", proxy_userid);
 	    txn->error.desc = "DAV database is not opened";
 	    return HTTP_SERVER_ERROR;
 	}
@@ -5094,7 +5095,8 @@ int meth_report(struct transaction_t *txn, void *params)
     fctx.req_tgt = &txn->req_tgt;
     fctx.depth = depth;
     fctx.prefer = get_preferences(txn);
-    fctx.userid = httpd_userid;
+    fctx.userid = proxy_userid;
+    fctx.int_userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = httpd_authstate;
     fctx.mailbox = NULL;
@@ -5192,7 +5194,7 @@ int meth_unlock(struct transaction_t *txn, void *params)
 	/* Remote mailbox */
 	struct backend *be;
 
-	be = proxy_findserver(server, &http_protocol, httpd_userid,
+	be = proxy_findserver(server, &http_protocol, proxy_userid,
 			      &backend_cached, NULL, NULL, httpd_in);
 	if (!be) return HTTP_UNAVAILABLE;
 
@@ -5204,7 +5206,7 @@ int meth_unlock(struct transaction_t *txn, void *params)
     if (!*lparams->davdb.db) {
 	syslog(LOG_ERR, "DAV database for user '%s' is not opened.  "
 	       "Check 'configdirectory' permissions or "
-	       "'proxyservers' option on backend server.", httpd_userid);
+	       "'proxyservers' option on backend server.", proxy_userid);
 	txn->error.desc = "DAV database is not opened";
 	return HTTP_SERVER_ERROR;
     }

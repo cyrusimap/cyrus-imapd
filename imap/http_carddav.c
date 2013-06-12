@@ -210,6 +210,7 @@ static void my_carddav_auth(const char *userid)
     size_t len;
     struct mboxlist_entry mbentry;
     char mailboxname[MAX_MAILBOX_BUFFER], rights[100], *partition = NULL;
+    char ident[MAX_MAILBOX_NAME];
     struct buf acl = BUF_INITIALIZER;
 
     if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
@@ -223,6 +224,8 @@ static void my_carddav_auth(const char *userid)
     }
 
     /* Auto-provision an addressbook for 'userid' */
+    strlcpy(ident, userid, sizeof(ident));
+    mboxname_hiersep_toexternal(&httpd_namespace, ident, 0);
 
     /* Construct mailbox name corresponding to userid's Inbox */
     (*carddav_namespace.mboxname_tointernal)(&carddav_namespace, "INBOX",
@@ -240,7 +243,7 @@ static void my_carddav_auth(const char *userid)
 	if (!r) {
 	    buf_reset(&acl);
 	    cyrus_acl_masktostr(ACL_ALL, rights);
-	    buf_printf(&acl, "%s\t%s\t", userid, rights);
+	    buf_printf(&acl, "%s\t%s\t", ident, rights);
 	    r = mboxlist_createmailbox_full(mailboxname, MBTYPE_ADDRESSBOOK,
 					    partition, 0,
 					    userid, httpd_authstate,
@@ -263,7 +266,7 @@ static void my_carddav_auth(const char *userid)
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	buf_reset(&acl);
 	cyrus_acl_masktostr(ACL_ALL, rights);
-	buf_printf(&acl, "%s\t%s\t", userid, rights);
+	buf_printf(&acl, "%s\t%s\t", ident, rights);
 	r = mboxlist_createmailbox_full(mailboxname, MBTYPE_ADDRESSBOOK,
 					mbentry.partition, 0,
 					userid, httpd_authstate,
@@ -393,6 +396,7 @@ static int carddav_parse_path(const char *path,
 
 	if (tgt->userlen) {
 	    len = snprintf(p, siz, ".%.*s", (int) tgt->userlen, tgt->user);
+	    mboxname_hiersep_tointernal(&httpd_namespace, p+1, tgt->userlen);
 	    p += len;
 	    siz -= len;
 	}
@@ -650,11 +654,13 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
     if (cdata->dav.mailbox && !strcmp(cdata->dav.mailbox, mailbox->name) &&
 	strcmp(cdata->dav.resource, resource)) {
 	/* CARDDAV:no-uid-conflict */
+	char *owner = mboxname_to_userid(cdata->dav.mailbox);
+	mboxname_hiersep_toexternal(&httpd_namespace, owner, 0);
+
 	txn->error.precond = CARDDAV_UID_CONFLICT;
 	assert(!buf_len(&txn->buf));
 	buf_printf(&txn->buf, "%s/user/%s/%s/%s",
-		   namespace_addressbook.prefix,
-		   mboxname_to_userid(cdata->dav.mailbox),
+		   namespace_addressbook.prefix, owner,
 		   strrchr(cdata->dav.mailbox, '.')+1, cdata->dav.resource);
 	txn->error.resource = buf_cstring(&txn->buf);
 	return HTTP_FORBIDDEN;
@@ -670,7 +676,7 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
     /* Create iMIP header for resource */
 
     /* XXX  This needs to be done via an LDAP/DB lookup */
-    fprintf(f, "From: %s <>\r\n", httpd_userid);
+    fprintf(f, "From: %s <>\r\n", proxy_userid);
 
     fprintf(f, "Subject: %s\r\n", fullname);
 

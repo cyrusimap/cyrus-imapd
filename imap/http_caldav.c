@@ -239,6 +239,7 @@ static void my_caldav_auth(const char *userid)
     int r;
     struct mboxlist_entry mbentry;
     char mailboxname[MAX_MAILBOX_BUFFER], rights[100], *partition = NULL;
+    char ident[MAX_MAILBOX_NAME];
     struct buf acl = BUF_INITIALIZER;
 
     if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
@@ -253,6 +254,9 @@ static void my_caldav_auth(const char *userid)
 
     /* Auto-provision calendars for 'userid' */
 
+    strlcpy(ident, userid, sizeof(ident));
+    mboxname_hiersep_toexternal(&httpd_namespace, ident, 0);
+
     /* calendar-home-set */
     caldav_mboxname(NULL, userid, mailboxname);
     r = mboxlist_lookup(mailboxname, &mbentry, NULL);
@@ -263,7 +267,7 @@ static void my_caldav_auth(const char *userid)
 	if (!r) {
 	    buf_reset(&acl);
 	    cyrus_acl_masktostr(ACL_ALL | DACL_READFB, rights);
-	    buf_printf(&acl, "%s\t%s\t", userid, rights);
+	    buf_printf(&acl, "%s\t%s\t", ident, rights);
 	    cyrus_acl_masktostr(DACL_READFB, rights);
 	    buf_printf(&acl, "%s\t%s\t", "anyone", rights);
 	    r = mboxlist_createmailbox_full(mailboxname, MBTYPE_CALENDAR,
@@ -287,7 +291,7 @@ static void my_caldav_auth(const char *userid)
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	buf_reset(&acl);
 	cyrus_acl_masktostr(ACL_ALL | DACL_READFB, rights);
-	buf_printf(&acl, "%s\t%s\t", userid, rights);
+	buf_printf(&acl, "%s\t%s\t", ident, rights);
 	cyrus_acl_masktostr(DACL_READFB, rights);
 	buf_printf(&acl, "%s\t%s\t", "anyone", rights);
 	r = mboxlist_createmailbox_full(mailboxname, MBTYPE_CALENDAR,
@@ -304,7 +308,7 @@ static void my_caldav_auth(const char *userid)
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	buf_reset(&acl);
 	cyrus_acl_masktostr(ACL_ALL | DACL_SCHED, rights);
-	buf_printf(&acl, "%s\t%s\t", userid, rights);
+	buf_printf(&acl, "%s\t%s\t", ident, rights);
 	cyrus_acl_masktostr(DACL_SCHED, rights);
 	buf_printf(&acl, "%s\t%s\t", "anyone", rights);
 	r = mboxlist_createmailbox_full(mailboxname, MBTYPE_CALENDAR,
@@ -321,7 +325,7 @@ static void my_caldav_auth(const char *userid)
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	buf_reset(&acl);
 	cyrus_acl_masktostr(ACL_ALL | DACL_SCHED, rights);
-	buf_printf(&acl, "%s\t%s\t", userid, rights);
+	buf_printf(&acl, "%s\t%s\t", ident, rights);
 	r = mboxlist_createmailbox_full(mailboxname, MBTYPE_CALENDAR,
 					mbentry.partition, 0,
 					userid, httpd_authstate,
@@ -456,6 +460,7 @@ static int caldav_parse_path(const char *path,
 
 	if (tgt->userlen) {
 	    len = snprintf(p, siz, ".%.*s", (int) tgt->userlen, tgt->user);
+	    mboxname_hiersep_tointernal(&httpd_namespace, p+1, tgt->userlen);
 	    p += len;
 	    siz -= len;
 	}
@@ -761,7 +766,7 @@ static int meth_get(struct transaction_t *txn, void *params)
 	/* Remote mailbox */
 	struct backend *be;
 
-	be = proxy_findserver(server, &http_protocol, httpd_userid,
+	be = proxy_findserver(server, &http_protocol, proxy_userid,
 			      &backend_cached, NULL, NULL, httpd_in);
 	if (!be) return HTTP_UNAVAILABLE;
 
@@ -773,7 +778,7 @@ static int meth_get(struct transaction_t *txn, void *params)
     if (!*gparams->davdb.db) {
 	syslog(LOG_ERR, "DAV database for user '%s' is not opened.  "
 	       "Check 'configdirectory' permissions or "
-	       "'proxyservers' option on backend server.", httpd_userid);
+	       "'proxyservers' option on backend server.", proxy_userid);
 	txn->error.desc = "DAV database is not opened";
 	return HTTP_SERVER_ERROR;
     }
@@ -899,13 +904,13 @@ static int meth_get(struct transaction_t *txn, void *params)
 static int caldav_post(struct transaction_t *txn)
 {
     int ret = 0, r, rights;
-    char *acl;
+    char *acl, orgid[MAX_MAILBOX_NAME+1] = "";
     const char **hdr;
     icalcomponent *ical = NULL, *comp;
     icalcomponent_kind kind = 0;
     icalproperty_method meth = 0;
     icalproperty *prop = NULL;
-    const char *uid = NULL, *organizer = NULL, *orgid = NULL;
+    const char *uid = NULL, *organizer = NULL;
     struct sched_param sparam;
 
     if (!(namespace_calendar.allow & ALLOW_CAL_SCHED) || !txn->req_tgt.flags) {
@@ -983,11 +988,13 @@ static int caldav_post(struct transaction_t *txn)
     organizer = icalproperty_get_organizer(prop);
     if (organizer) {
 	if (!caladdress_lookup(organizer, &sparam) &&
-	    !(sparam.flags & SCHEDTYPE_REMOTE))
-	    orgid = sparam.userid;
+	    !(sparam.flags & SCHEDTYPE_REMOTE)) {
+	    strlcpy(orgid, sparam.userid, sizeof(orgid));
+	    mboxname_hiersep_toexternal(&httpd_namespace, orgid, 0);
+	}
     }
 
-    if (!orgid || strncmp(orgid, txn->req_tgt.user, txn->req_tgt.userlen)) {
+    if (strncmp(orgid, txn->req_tgt.user, txn->req_tgt.userlen)) {
 	txn->error.precond = CALDAV_VALID_ORGANIZER;
 	ret = HTTP_FORBIDDEN;
 	goto done;
@@ -1126,12 +1133,16 @@ static int caldav_put(struct transaction_t *txn, struct mailbox *mailbox,
 	    (strcmp(cdata->dav.mailbox, txn->req_tgt.mboxname) ||
 	     strcmp(cdata->dav.resource, txn->req_tgt.resource))) {
 	    /* CALDAV:unique-scheduling-object-resource */
+	    char ext_userid[MAX_MAILBOX_NAME+1];
+
+	    strlcpy(ext_userid, userid, sizeof(ext_userid));
+	    mboxname_hiersep_toexternal(&httpd_namespace, ext_userid, 0);
 
 	    txn->error.precond = CALDAV_UNIQUE_OBJECT;
 	    assert(!buf_len(&txn->buf));
 	    buf_printf(&txn->buf, "%s/user/%s/%s/%s",
 		       namespace_calendar.prefix,
-		       userid, strrchr(cdata->dav.mailbox, '.')+1,
+		       ext_userid, strrchr(cdata->dav.mailbox, '.')+1,
 		       cdata->dav.resource);
 	    txn->error.resource = buf_cstring(&txn->buf);
 	    ret = HTTP_FORBIDDEN;
@@ -1886,11 +1897,13 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     if (cdata->dav.mailbox && !strcmp(cdata->dav.mailbox, mailbox->name) &&
 	strcmp(cdata->dav.resource, resource)) {
 	/* CALDAV:no-uid-conflict */
+	char *owner = mboxname_to_userid(cdata->dav.mailbox);
+	mboxname_hiersep_toexternal(&httpd_namespace, owner, 0);
+
 	txn->error.precond = CALDAV_UID_CONFLICT;
 	assert(!buf_len(&txn->buf));
 	buf_printf(&txn->buf, "%s/user/%s/%s/%s",
-		   namespace_calendar.prefix,
-		   mboxname_to_userid(cdata->dav.mailbox),
+		   namespace_calendar.prefix, owner,
 		   strrchr(cdata->dav.mailbox, '.')+1, cdata->dav.resource);
 	txn->error.resource = buf_cstring(&txn->buf);
 	return HTTP_FORBIDDEN;
@@ -1912,7 +1925,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     }
     else {
 	/* XXX  This needs to be done via an LDAP/DB lookup */
-	fprintf(f, "From: %s@%s\r\n", httpd_userid, config_servername);
+	fprintf(f, "From: %s@%s\r\n", proxy_userid, config_servername);
     }
 
     fprintf(f, "Subject: %s\r\n", icalcomponent_get_summary(comp));
@@ -2122,6 +2135,7 @@ int caladdress_lookup(const char *addr, struct sched_param *param)
 	    calendarprefix = config_getstring(IMAPOPT_CALENDARPREFIX);
 	}
 
+	mboxname_hiersep_tointernal(&httpd_namespace, userid, 0);
 	snprintf(mailboxname, sizeof(mailboxname),
 		 "user.%s.%s", param->userid, calendarprefix);
 
@@ -2419,7 +2433,8 @@ int sched_busytime_query(struct transaction_t *txn, icalcomponent *ical)
     memset(&fctx, 0, sizeof(struct propfind_ctx));
     fctx.req_tgt = &txn->req_tgt;
     fctx.depth = 2;
-    fctx.userid = httpd_userid;
+    fctx.userid = proxy_userid;
+    fctx.int_userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = org_authstate;
     fctx.reqd_privs = 0;  /* handled by CALDAV:schedule-deliver on Inbox */

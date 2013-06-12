@@ -201,7 +201,7 @@ static int meth_get(struct transaction_t *txn,
 	/* Remote mailbox */
 	struct backend *be;
 
-	be = proxy_findserver(server, &http_protocol, httpd_userid,
+	be = proxy_findserver(server, &http_protocol, proxy_userid,
 			      &backend_cached, NULL, NULL, httpd_in);
 	if (!be) return HTTP_UNAVAILABLE;
 
@@ -425,7 +425,8 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
 	/* Found closest ancestor of 'name' */
 	struct node *node;
 	size_t len = matchlen;
-	char *cp, *shortname, path[MAX_MAILBOX_PATH+1], *href = NULL;
+	char shortname[MAX_MAILBOX_NAME+1], path[MAX_MAILBOX_PATH+1];
+	char *cp, *href = NULL;
 
 	/* Send a body chunk once in a while */
 	if (buf_len(buf) > PROT_BUFSIZE) {
@@ -458,8 +459,12 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
 	lrock->last = last->child = node;
 
 	/* Get last segment of mailbox name */
-	if ((shortname = strrchr(node->name, '.'))) shortname++;
-	else shortname = node->name;
+	if ((cp = strrchr(node->name, '.'))) cp++;
+	else cp = node->name;
+
+	/* Translate short mailbox name to external form */
+	strlcpy(shortname, cp, sizeof(shortname));
+	mboxname_hiersep_toexternal(&httpd_namespace, shortname, 0);
 
 	if (href) {
 	    /* Add selectable feed with link */
@@ -720,6 +725,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     struct buf *url = &txn->buf;
     struct buf *buf = &txn->resp_body.payload;
     unsigned level = 0;
+    char mboxname[MAX_MAILBOX_NAME+1];
 
     /* Check any preconditions */
     lastmod = mailbox->i.last_appenddate;
@@ -799,6 +805,10 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     }
 #endif
 
+    /* Translate mailbox name to external form */
+    strlcpy(mboxname, mailbox->name, sizeof(mboxname));
+    mboxname_hiersep_toexternal(&httpd_namespace, mboxname, 0);
+
     /* Start XML */
     buf_reset(buf);
     buf_printf_markup(buf, level, "<?xml version=\"1.0\" encoding=\"utf-8\"?>");
@@ -807,7 +817,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     buf_printf_markup(buf, level++,
 		      "<rss xmlns:atom=\"" XML_NS_ATOM "\" version=\"2.0\">");
     buf_printf_markup(buf, level++, "<channel>");
-    buf_printf_markup(buf, level, "<title>%s</title>", mailbox->name);
+    buf_printf_markup(buf, level, "<title>%s</title>", mboxname);
 
     /* Construct base URL */
     if (config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS) &&

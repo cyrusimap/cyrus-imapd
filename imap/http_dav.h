@@ -258,6 +258,7 @@ struct propfind_ctx {
     unsigned depth;	    		/* 0 = root, 1 = calendar, 2 = resrc */
     unsigned prefer;			/* bitmask of client preferences */
     const char *userid;			/* userid client has logged in as */
+    const char *int_userid;		/* internal userid */
     int userisadmin;			/* is userid an admin */
     struct auth_state *authstate;	/* authorization state for userid */
     void *davdb;			/* DAV DB corresponding to userid */

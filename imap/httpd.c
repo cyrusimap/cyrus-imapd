@@ -127,7 +127,7 @@ sasl_conn_t *httpd_saslconn; /* the sasl connection context */
 static struct mailbox *httpd_mailbox = NULL;
 static struct wildmat *allow_cors = NULL;
 int httpd_timeout, httpd_keepalive;
-char *httpd_userid = 0;
+char *httpd_userid = NULL, *proxy_userid = NULL;
 struct auth_state *httpd_authstate = 0;
 int httpd_userisadmin = 0;
 int httpd_userisproxyadmin = 0;
@@ -364,6 +364,10 @@ static void httpd_reset(void)
     if (httpd_userid != NULL) {
 	free(httpd_userid);
 	httpd_userid = NULL;
+    }
+    if (proxy_userid != NULL) {
+	free(proxy_userid);
+	proxy_userid = NULL;
     }
     if (httpd_authstate) {
 	auth_freestate(httpd_authstate);
@@ -1181,6 +1185,10 @@ static void cmdloop(void)
 		if (httpd_userid) {
 		    free(httpd_userid);
 		    httpd_userid = NULL;
+		}
+		if (proxy_userid) {
+		    free(proxy_userid);
+		    proxy_userid = NULL;
 		}
 		if (httpd_authstate) {
 		    auth_freestate(httpd_authstate);
@@ -2206,7 +2214,7 @@ void response_header(long code, struct transaction_t *txn)
     buf_reset(&log);
     /* Add client data */
     buf_printf(&log, "%s", httpd_clienthost);
-    if (httpd_userid) buf_printf(&log, " as \"%s\"", httpd_userid);
+    if (proxy_userid) buf_printf(&log, " as \"%s\"", proxy_userid);
     if (txn->req_hdrs &&
 	(hdr = spool_getheader(txn->req_hdrs, "User-Agent"))) {
 	buf_printf(&log, " with \"%s\"", hdr[0]);
@@ -2898,6 +2906,14 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 
     buf_reset(&txn->buf);
 
+    /* Make a copy of the external userid for use in proxying */
+    proxy_userid = xstrdup(httpd_userid);
+
+    /* Translate any separators in userid */
+    mboxname_hiersep_tointernal(&httpd_namespace, httpd_userid,
+				config_virtdomains ?
+				strcspn(httpd_userid, "@") : 0);
+
     /* Do any namespace specific post-auth processing */
     for (i = 0; namespaces[i]; i++) {
 	if (namespaces[i]->enabled && namespaces[i]->auth)
@@ -3564,7 +3580,7 @@ int meth_trace(struct transaction_t *txn, void *params)
 		/* Remote mailbox */
 		struct backend *be;
 
-		be = proxy_findserver(server, &http_protocol, httpd_userid,
+		be = proxy_findserver(server, &http_protocol, proxy_userid,
 				      &backend_cached, NULL, NULL, httpd_in);
 		if (!be) return HTTP_UNAVAILABLE;
 
