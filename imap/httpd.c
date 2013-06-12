@@ -2879,6 +2879,9 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 
     /* Close IP-based telemetry log */
     if (httpd_logfd != -1) {
+	prot_setlog(httpd_in, PROT_NO_FD);
+	prot_setlog(httpd_out, PROT_NO_FD);
+
 	/* Rewind log to current request and overwrite with redacted version */
 	ftruncate(httpd_logfd,
 		  lseek(httpd_logfd, -buf_len(&txn->buf), SEEK_END));
