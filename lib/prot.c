@@ -1209,13 +1209,23 @@ int prot_puts(struct protstream *s, const char *str)
 int prot_printf(struct protstream *s, const char *fmt, ...)
 {
     va_list pvar;
+    int r;
+
+    va_start(pvar, fmt);
+    r = prot_vprintf(s, fmt, pvar);
+    va_end(pvar);
+
+    return r;
+}
+
+int prot_vprintf(struct protstream *s, const char *fmt, va_list pvar)
+{
     char *percent, *p;
     long l;
     unsigned long ul;
     int i;
     unsigned u;
     char buf[30];
-    va_start(pvar, fmt);
 
     assert(s->write);
 
@@ -1365,7 +1375,6 @@ int prot_printf(struct protstream *s, const char *fmt, ...)
 	fmt = percent+1;
     }
     prot_write(s, fmt, strlen(fmt));
-    va_end(pvar);
     if (s->error || s->eof) return EOF;
     return 0;
 }
