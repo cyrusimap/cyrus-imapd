@@ -800,21 +800,20 @@ static int meth_get(struct transaction_t *txn, void *params)
 
     switch (precond) {
     case HTTP_OK:
-	break;
-
     case HTTP_NOT_MODIFIED:
-	/* Fill in ETag for 304 response */
-	resp_body->etag = etag;
+	/* Fill in ETag, Last-Modified, Expires, and Cache-Control */
+	txn->resp_body.etag = etag;
+	txn->resp_body.lastmod = lastmod;
+	txn->resp_body.maxage = 3600;  /* 1 hr */
+	txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;  /* don't use stale data */
+
+	if (precond != HTTP_NOT_MODIFIED) break;
 
     default:
 	/* We failed a precondition - don't perform the request */
 	ret = precond;
 	goto done;
     }
-
-    /* Fill in ETag and Last-Modified */
-    txn->resp_body.etag = etag;
-    txn->resp_body.lastmod = lastmod;
 
     /* Setup for chunked response */
     txn->flags.te |= TE_CHUNKED;

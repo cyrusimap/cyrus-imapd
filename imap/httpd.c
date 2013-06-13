@@ -1857,19 +1857,27 @@ const char *http_statusline(long code)
 #define Access_Control_Expose(hdr)				\
     prot_puts(httpd_out, "Access-Control-Expose-Headers: " hdr "\r\n")
 
-void comma_list_hdr(const char *hdr, const char *vals[], unsigned flags)
+void comma_list_hdr(const char *hdr, const char *vals[], unsigned flags, ...)
 {
-    const char *sep = "";
+    const char *sep = " ";
+    va_list args;
     int i;
 
+    va_start(args, flags);
     prot_printf(httpd_out, "%s:", hdr);
     for (i = 0; vals[i]; i++) {
 	if (flags & (1 << i)) {
-	    prot_printf(httpd_out, "%s %s", sep, vals[i]);
-	    sep = ",";
+	    prot_puts(httpd_out, sep);
+	    prot_vprintf(httpd_out, vals[i], args);
+	    sep = ", ";
+	}
+	else {
+	    /* discard any unused args */
+	    vsnprintf(NULL, 0, vals[i], args);
 	}
     }
     prot_puts(httpd_out, "\r\n");
+    va_end(args);
 }
 
 void allow_hdr(const char *hdr, unsigned allow)
@@ -1986,9 +1994,16 @@ void response_header(long code, struct transaction_t *txn)
     if (txn->flags.cc) {
 	/* Construct Cache-Control header */
 	const char *cc_dirs[] =
-	    { "no-cache", "no-transform", "private", NULL };
+	    { "must-revalidate", "no-cache", "no-store", "no-transform",
+	      "public", "private", "max-age=%d", NULL };
 
-	comma_list_hdr("Cache-Control", cc_dirs, txn->flags.cc);
+	comma_list_hdr("Cache-Control", cc_dirs, txn->flags.cc,
+		       resp_body->maxage);
+
+	if (txn->flags.cc & CC_MAXAGE) {
+	    httpdate_gen(datestr, sizeof(datestr), now + resp_body->maxage);
+	    prot_printf(httpd_out, "Expires: %s\r\n", datestr);
+	}
     }
     if (txn->flags.cors) {
 	/* Construct Cross-Origin Resource Sharing headers */
@@ -3371,18 +3386,21 @@ int meth_get_doc(struct transaction_t *txn,
 			    datalen);
 
     switch (precond) {
-    case HTTP_OK:
-	break;
-
     case HTTP_PARTIAL:
 	/* Set data parameters for range */
 	offset += resp_body->range->first;
 	datalen = resp_body->range->last - resp_body->range->first + 1;
-	break;
 
+    case HTTP_OK:
     case HTTP_NOT_MODIFIED:
-	/* Fill in ETag for 304 response */
+	/* Fill in ETag, Last-Modified, and Expires */
 	resp_body->etag = buf_cstring(&txn->buf);
+	resp_body->lastmod = sbuf.st_mtime;
+	resp_body->maxage = 86400;  /* 24 hrs */
+	txn->flags.cc |= CC_MAXAGE;
+	if (httpd_userid) txn->flags.cc |= CC_PUBLIC;
+
+	if (precond != HTTP_NOT_MODIFIED) break;
 
     default:
 	/* We failed a precondition - don't perform the request */
@@ -3394,10 +3412,6 @@ int meth_get_doc(struct transaction_t *txn,
 	if ((fd = open(path, O_RDONLY)) == -1) return HTTP_SERVER_ERROR;
 	map_refresh(fd, 1, &msg_base, &msg_size, sbuf.st_size, path, NULL);
     }
-
-    /* Fill in ETag and Last-Modified */
-    resp_body->etag = buf_cstring(&txn->buf);
-    resp_body->lastmod = sbuf.st_mtime;
 
     if (!resp_body->type) {
 	/* Caller hasn't specified the Content-Type */

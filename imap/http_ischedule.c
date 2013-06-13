@@ -194,28 +194,26 @@ static int meth_get_isched(struct transaction_t *txn,
     precond = check_precond(txn, NULL, etag, compile_time, datalen);
 
     switch (precond) {
-    case HTTP_OK:
-	break;
-
     case HTTP_PARTIAL:
 	/* Set data parameters for range */
 	offset += txn->resp_body.range->first;
 	datalen = txn->resp_body.range->last - txn->resp_body.range->first + 1;
-	break;
 
+    case HTTP_OK:
     case HTTP_NOT_MODIFIED:
-	/* Fill in ETag for 304 response */
+	/* Fill in Etag,  Last-Modified, Expires, and iSchedule-Capabilities */
 	txn->resp_body.etag = etag;
+	txn->resp_body.lastmod = compile_time;
+	txn->resp_body.maxage = 86400;  /* 24 hrs */
+	txn->flags.cc |= CC_MAXAGE;
+	txn->resp_body.iserial = compile_time;
+
+	if (precond != HTTP_NOT_MODIFIED) break;
 
     default:
 	/* We failed a precondition - don't perform the request */
 	return precond;
     }
-
-    /* Fill in Etag,  Last-Modified, and iSchedule-Capabilities */
-    txn->resp_body.etag = etag;
-    txn->resp_body.lastmod = compile_time;
-    txn->resp_body.iserial = compile_time;
 
     if (txn->resp_body.lastmod > lastmod) {
 	xmlNodePtr root, capa, node, comp, meth;
@@ -835,6 +833,7 @@ static int dkim_auth(struct transaction_t *txn __attribute__((unused)))
 static int meth_get_domainkey(struct transaction_t *txn,
 			      void *params __attribute__((unused)))
 {
+    txn->flags.cc |= CC_REVALIDATE;
     txn->resp_body.type = "text/plain";
 
     return meth_get_doc(txn, NULL);

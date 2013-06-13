@@ -250,6 +250,7 @@ struct resp_body_t {
     const char *lock;	/* Lock-Token       */
     const char *etag;	/* ETag             */
     time_t lastmod;	/* Last-Modified    */
+    time_t maxage;	/* Expires	    */
     const char *stag;	/* Schedule-Tag     */
     time_t iserial;	/* iSched serial#   */
     struct buf payload;	/* Payload	    */
@@ -340,9 +341,13 @@ enum {
 
 /* Cache-Control directive flags */
 enum {
-    CC_NOCACHE =	(1<<0),
-    CC_NOTRANSFORM =	(1<<1),
-    CC_PRIVATE =	(1<<2)
+    CC_REVALIDATE =	(1<<0),
+    CC_NOCACHE =	(1<<1),
+    CC_NOSTORE =	(1<<2),
+    CC_NOTRANSFORM =	(1<<3),
+    CC_PUBLIC =	   	(1<<4),
+    CC_PRIVATE =	(1<<5),
+    CC_MAXAGE =	   	(1<<6)
 };
 
 /* Vary header flags (headers used in selecting/producing representation) */
@@ -414,7 +419,8 @@ extern int http_mailbox_open(const char *name, struct mailbox **mailbox,
 			     int locktype);
 extern const char *http_statusline(long code);
 extern void httpdate_gen(char *buf, size_t len, time_t t);
-extern void comma_list_hdr(const char *hdr, const char *vals[], unsigned flags);
+extern void comma_list_hdr(const char *hdr, const char *vals[],
+			   unsigned flags, ...);
 extern void response_header(long code, struct transaction_t *txn);
 extern void buf_printf_markup(struct buf *buf, unsigned level,
 			      const char *fmt, ...);

@@ -271,18 +271,20 @@ static int meth_get(struct transaction_t *txn,
 	    precond = check_precond(txn, NULL, etag, lastmod, datalen);
 
 	    switch (precond) {
-	    case HTTP_OK:
-		break;
-
 	    case HTTP_PARTIAL:
 		/* Set data parameters for range */
 		offset += resp_body->range->first;
 		datalen = resp_body->range->last - resp_body->range->first + 1;
-		break;
 
+	    case HTTP_OK:
 	    case HTTP_NOT_MODIFIED:
-		/* Fill in ETag for 304 response */
+		/* Fill in ETag, Last-Modified, and Expires */
 		resp_body->etag = etag;
+		resp_body->lastmod = lastmod;
+		resp_body->maxage = 31536000;  /* 1 year */
+		txn->flags.cc |= CC_MAXAGE;
+
+		if (precond != HTTP_NOT_MODIFIED) break;
 
 	    default:
 		/* We failed a precondition - don't perform the request */
@@ -290,10 +292,6 @@ static int meth_get(struct transaction_t *txn,
 		goto done;
 	    }
 
-	    /* Fill in ETag and Last-Modified */
-	    resp_body->etag = etag;
-	    resp_body->lastmod = lastmod;
-	    
 	    if (!*section) {
 		/* Return entire message formatted as text/html */
 		display_message(txn, mailbox->name, record.uid, body, msg_base);
@@ -574,11 +572,14 @@ static int list_feeds(struct transaction_t *txn)
 
     switch (precond) {
     case HTTP_OK:
-	break;
-
     case HTTP_NOT_MODIFIED:
-	/* Fill in ETag for 304 response */
+	/* Fill in ETag, Last-Modified, and Expires */
 	txn->resp_body.etag = buf_cstring(&txn->buf);
+	txn->resp_body.lastmod = lastmod;
+	txn->resp_body.maxage = 86400;  /* 24 hrs */
+	txn->flags.cc |= CC_MAXAGE;
+
+	if (precond != HTTP_NOT_MODIFIED) break;
 
     default:
 	/* We failed a precondition - don't perform the request */
@@ -586,13 +587,9 @@ static int list_feeds(struct transaction_t *txn)
 	goto done;
     }
 
-    /* Fill in ETag, Last-Modified, and Content-Type */
-    txn->resp_body.etag = buf_cstring(&txn->buf);
-    txn->resp_body.lastmod = lastmod;
-    txn->resp_body.type = "text/html; charset=utf-8";
-
     /* Setup for chunked response */
     txn->flags.te |= TE_CHUNKED;
+    txn->resp_body.type = "text/html; charset=utf-8";
 
     /* Short-circuit for HEAD request */
     if (txn->meth == METH_HEAD) {
@@ -735,20 +732,19 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
     switch (precond) {
     case HTTP_OK:
-	break;
-
     case HTTP_NOT_MODIFIED:
-	/* Fill in ETag for 304 response */
+	/* Fill in ETag, Last-Modified, and Expires */
 	txn->resp_body.etag = etag;
+	txn->resp_body.lastmod = lastmod;
+	txn->resp_body.maxage = 3600;  /* 1 hr */
+	txn->flags.cc |= CC_MAXAGE;
+
+	if (precond != HTTP_NOT_MODIFIED) break;
 
     default:
 	/* We failed a precondition - don't perform the request */
 	return precond;
     }
-
-    /* Fill in ETag and Last-Modified */
-    txn->resp_body.etag = etag;
-    txn->resp_body.lastmod = lastmod;
 
     /* Setup for chunked response */
     txn->flags.te |= TE_CHUNKED;

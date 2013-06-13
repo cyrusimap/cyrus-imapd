@@ -3482,28 +3482,26 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 				     datalen);
 
     switch (precond) {
-    case HTTP_OK:
-	break;
-
     case HTTP_PARTIAL:
 	/* Set data parameters for range */
 	offset += resp_body->range->first;
 	datalen = resp_body->range->last - resp_body->range->first + 1;
-	break;
 
+    case HTTP_OK:
     case HTTP_NOT_MODIFIED:
-	/* Fill in ETag for 304 response */
+	/* Fill in ETag, Last-Modified, Expires, and Cache-Control */
 	resp_body->etag = etag;
+	resp_body->lastmod = lastmod;
+	resp_body->maxage = 3600;	/* 1 hr */
+	txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;  /* don't use stale data */
+
+	if (precond != HTTP_NOT_MODIFIED) break;
 
     default:
 	/* We failed a precondition - don't perform the request */
 	ret = precond;
 	goto done;
     }
-
-    /* Fill in Last-Modified, ETag, and Content-Type */
-    resp_body->lastmod = lastmod;
-    resp_body->etag = etag;
 
     if (record.uid) {
 	resp_body->type = gparams->content_type;
