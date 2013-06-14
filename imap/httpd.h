@@ -57,6 +57,7 @@
 
 #define MAX_REQ_LINE	8000  /* minimum size per HTTPbis */
 #define MARKUP_INDENT	2     /* # spaces to indent each line of markup */
+#define GZIP_MIN_LEN	300   /* minimum length of data to gzip */
 
 /* Supported HTTP version */
 #define HTTP_VERSION	 "HTTP/1.1"

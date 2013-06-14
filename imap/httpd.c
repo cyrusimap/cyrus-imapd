@@ -2301,25 +2301,6 @@ static void keep_alive(int sig)
 }
 
 
-/* List of incompressible MIME types */
-static const char *comp_mime[] = {
-    "image/gif",
-    "image/jpeg",
-    "image/png",
-    NULL
-};
-
-
-/* Determine if a MIME type is incompressible */
-static int is_incompressible(const char *type)
-{
-    const char **m;
-
-    for (m = comp_mime; *m && strcasecmp(*m, type); m++);
-    return (*m != NULL);
-}
-
-
 /*
  * Output an HTTP response with body data, compressed as necessary.
  *
@@ -2334,17 +2315,14 @@ static int is_incompressible(const char *type)
 void write_body(long code, struct transaction_t *txn,
 		const char *buf, unsigned len)
 {
-#define GZIP_MIN_LEN 300
-
     static unsigned is_dynamic;
 
     if (code) {
 	/* Initial call - prepare response header based on CE, TE and version */
 	is_dynamic = (txn->flags.te & TE_CHUNKED);
 
-	if ((!is_dynamic && len < GZIP_MIN_LEN) ||
-	    is_incompressible(txn->resp_body.type)) {
-	    /* Don't compress small or imcompressible bodies */
+	if (!is_dynamic && len < GZIP_MIN_LEN) {
+	    /* Don't compress small bodies */
 	    txn->flags.ce = CE_IDENTITY;
 	    txn->flags.te &= TE_CHUNKED;
 	}
@@ -3333,6 +3311,45 @@ void multipart_byteranges(struct transaction_t *txn, const char *msg_base)
     write_body(0, txn, NULL, 0);
 }
 
+const struct mimetype {
+    const char *ext;
+    const char *type;
+    unsigned int compressible;
+} mimetypes[] = {
+    { ".css", "text/css", 1 },
+    { ".htm", "text/html", 1 },
+    { ".html", "text/html", 1 },
+    { ".text", "text/plain", 1 },
+    { ".txt", "text/plain", 1 },
+
+    { ".gif", "image/gif", 0 },
+    { ".jpg", "image/jpeg", 0 },
+    { ".jpeg", "image/jpeg", 0 },
+    { ".png", "image/png", 0 },
+
+    { ".svg", "image/svg+xml", 1 },
+    { ".tif", "image/tiff", 1 },
+    { ".tiff", "image/tiff", 1 },
+
+    { ".bz", "application/x-bzip", 0 },
+    { ".bz2", "application/x-bzip2", 0 },
+    { ".gz", "application/gzip", 0 },
+    { ".gzip", "application/gzip", 0 },
+    { ".tgz", "application/gzip", 0 },
+    { ".zip", "application/zip", 0 },
+
+    { ".doc", "application/msword", 1 },
+    { ".js", "application/javascript", 1 },
+    { ".pdf", "application/pdf", 1 },
+    { ".ppt", "application/vnd.ms-powerpoint", 1 },
+    { ".sh", "application/x-sh", 1 },
+    { ".tar", "application/x-tar", 1 },
+    { ".xls", "application/vnd.ms-excel", 1 },
+    { ".xml", "application/xml", 1 },
+
+    { NULL, NULL, 0 }
+};
+
 
 /* Perform a GET/HEAD request */
 int meth_get_doc(struct transaction_t *txn,
@@ -3375,6 +3392,31 @@ int meth_get_doc(struct transaction_t *txn,
     if (r || !S_ISREG(sbuf.st_mode)) return HTTP_NOT_FOUND;
 
     datalen = sbuf.st_size;
+    if (datalen < GZIP_MIN_LEN) {
+	/* Don't compress small resources */
+	txn->flags.ce = CE_IDENTITY;
+    }
+    if (!resp_body->type) {
+	/* Caller hasn't specified the Content-Type */
+	resp_body->type = "application/octet-stream";
+	
+	if ((ext = strrchr(path, '.'))) {
+	    /* Try to use filename extension to identity Content-Type */
+	    const struct mimetype *mtype;
+
+	    for (mtype = mimetypes; mtype->ext; mtype++) {
+		if (!strcasecmp(ext, mtype->ext)) {
+		    resp_body->type = mtype->type;
+		    if (!mtype->compressible) {
+			/* Never compress non-compressible resources */
+			txn->flags.ce = CE_IDENTITY;
+			txn->flags.vary &= ~VARY_AE;
+		    }
+		    break;
+		}
+	    }
+	}
+    }
 
     /* Generate Etag */
     assert(!buf_len(&txn->buf));
@@ -3404,6 +3446,7 @@ int meth_get_doc(struct transaction_t *txn,
 
     default:
 	/* We failed a precondition - don't perform the request */
+	resp_body->type = NULL;
 	return precond;
     }
 
@@ -3411,33 +3454,6 @@ int meth_get_doc(struct transaction_t *txn,
 	/* Open and mmap the file */
 	if ((fd = open(path, O_RDONLY)) == -1) return HTTP_SERVER_ERROR;
 	map_refresh(fd, 1, &msg_base, &msg_size, sbuf.st_size, path, NULL);
-    }
-
-    if (!resp_body->type) {
-	/* Caller hasn't specified the Content-Type */
-	resp_body->type = "application/octet-stream";
-	
-	if ((ext = strrchr(path, '.'))) {
-	    /* Try to use filename extension to identity Content-Type */
-	    if (!strcasecmp(ext, ".text") || !strcmp(ext, ".txt"))
-		resp_body->type = "text/plain";
-	    else if (!strcasecmp(ext, ".html") || !strcmp(ext, ".htm"))
-		resp_body->type = "text/html";
-	    else if (!strcasecmp(ext, ".css"))
-		resp_body->type = "text/css";
-	    else if (!strcasecmp(ext, ".js"))
-		resp_body->type = "text/javascript";
-	    else if (!strcasecmp(ext, ".jpeg") || !strcmp(ext, ".jpg"))
-		resp_body->type = "image/jpeg";
-	    else if (!strcasecmp(ext, ".gif"))
-		resp_body->type = "image/gif";
-	    else if (!strcasecmp(ext, ".png"))
-		resp_body->type = "image/png";
-	    else if (!strcasecmp(ext, ".svg"))
-		resp_body->type = "image/svg+xml";
-	    else if (!strcasecmp(ext, ".tiff") || !strcmp(ext, ".tif"))
-		resp_body->type = "image/tiff";
-	}
     }
 
     if (resp_body->range && resp_body->range->next) {
