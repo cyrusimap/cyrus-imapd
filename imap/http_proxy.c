@@ -636,7 +636,7 @@ static void send_response(struct protstream *pout,
     if (flags->conn) {
 	/* Construct Connection header */
 	const char *conn_tokens[] =
-	    { "close", "Keep-Alive", NULL };
+	    { "close", "Upgrade", "Keep-Alive", NULL };
 
 	if (flags->conn & CONN_KEEPALIVE) {
 	    prot_printf(httpd_out, "Keep-Alive: timeout=%d\r\n", httpd_timeout);
