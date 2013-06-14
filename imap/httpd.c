@@ -927,7 +927,7 @@ static void cmdloop(void)
 	txn.meth = METH_UNKNOWN;
 	memset(&txn.flags, 0, sizeof(struct txn_flags_t));
 	txn.flags.conn = 0;
-	txn.flags.vary = gzip_enabled ? VARY_AE : 0;
+	txn.flags.vary = VARY_AE;
 	memset(req_line, 0, sizeof(struct request_line_t));
 	memset(&txn.req_tgt, 0, sizeof(struct request_target_t));
 	txn.req_uri = NULL;
