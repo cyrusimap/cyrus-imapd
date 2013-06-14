@@ -328,9 +328,9 @@ enum {
 /* Transfer-Encoding flags (coding of response payload) */
 enum {
     TE_NONE =		0,
-    TE_CHUNKED =	(1<<0),
+    TE_DEFLATE =	(1<<0),	/* Implies TE_CHUNKED as final coding */
     TE_GZIP =		(1<<1),	/* Implies TE_CHUNKED as final coding */
-    TE_DEFLATE =	(1<<2)	/* Implies TE_CHUNKED as final coding */
+    TE_CHUNKED =	(1<<2)  /* MUST be last */
 };
 
 /* Content-Encoding flags (coding of representation) */

@@ -2207,14 +2207,11 @@ void response_header(long code, struct transaction_t *txn)
 	if (txn->flags.te) {
 	    /* HTTP/1.1+ only - we use close-delimiting for HTTP/1.0 */
 	    if (!txn->flags.ver1_0) {
-		prot_puts(httpd_out, "Transfer-Encoding:");
-		if (txn->flags.te & TE_GZIP)
-		    prot_puts(httpd_out, " gzip,");
-		else if (txn->flags.te & TE_DEFLATE)
-		    prot_puts(httpd_out, " deflate,");
+		/* Construct Transfer-Encoding header */
+		const char *te[] =
+		    { "deflate", "gzip", "chunked", NULL };
 
-		/* Any TE implies "chunked", which is always last */
-		prot_puts(httpd_out, " chunked\r\n");
+		comma_list_hdr("Transfer-Encoding", te, txn->flags.te);
 	    }
 	}
 	else prot_printf(httpd_out, "Content-Length: %lu\r\n", resp_body->len);
