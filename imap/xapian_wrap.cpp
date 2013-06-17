@@ -242,6 +242,7 @@ int xapian_dbw_filter(xapian_dbw_t *dbw,
 
 struct xapian_db
 {
+    std::string *paths;
     Xapian::Database *database;
     Xapian::Stem *stemmer;
     Xapian::QueryParser *parser;
@@ -254,10 +255,13 @@ xapian_db_t *xapian_db_open(const char **paths)
 
     try {
 	db = (xapian_db_t *)xzmalloc(sizeof(xapian_db_t));
+	db->paths = new std::string();
 	db->database = new Xapian::Database();
 	while (*paths) {
 	    thispath = *paths++;
 	    db->database->add_database(Xapian::Database(thispath));
+	    db->paths->append(thispath);
+	    db->paths->append(" ");
 	    thispath = "(unknown)";
 	}
 	db->stemmer = new Xapian::Stem("en");
@@ -281,6 +285,7 @@ void xapian_db_close(xapian_db_t *db)
 	delete db->database;
 	delete db->stemmer;
 	delete db->parser;
+	delete db->paths;
 	free(db);
     }
     catch (const Xapian::Error &err) {
@@ -378,7 +383,14 @@ int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq,
 	enquire.set_query(*query);
 	Xapian::MSet matches = enquire.get_mset(0, db->database->get_doccount());
 	for (Xapian::MSetIterator i = matches.begin() ; i != matches.end() ; ++i) {
-	    std::string cyrusid = i.get_document().get_value(SLOT_CYRUSID);
+	    Xapian::Document d = i.get_document();
+	    std::string cyrusid = d.get_value(SLOT_CYRUSID);
+	    /* ignore documents with no cyrusid.  Shouldn't happen, but has been seen */
+	    if (cyrusid.length() == 0) {
+		syslog(LOG_ERR, "IOERROR: Xapian: zero length cyrusid for document id %u in index files %s",
+				d.get_docid(), db->paths->c_str());
+		continue;
+	    }
 	    r = cb(cyrusid.c_str(), rock);
 	    if (r) break;
 	}
