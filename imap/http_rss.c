@@ -262,7 +262,7 @@ static int meth_get(struct transaction_t *txn,
 	    /* Check any preconditions */
 	    if (!strcmp(section, "0")) {
 		/* Entire raw message */
-		txn->flags.ranges = !txn->flags.ce;
+		txn->flags.ranges = !txn->resp_body.enc;
 		datalen = msg_size;
 	    }
 

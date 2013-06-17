@@ -1331,7 +1331,7 @@ static void cmdloop(void)
 		for (e = enc; e && e->token; e++) {
 		    if (!strcasecmp(e->token, "gzip") ||
 			!strcasecmp(e->token, "x-gzip")) {
-			txn.flags.ce = CE_GZIP;
+			txn.resp_body.enc = CE_GZIP;
 		    }
 		    free(e->token);
 		}
@@ -2163,8 +2163,12 @@ void response_header(long code, struct transaction_t *txn)
     if (resp_body->type) {
 	prot_printf(httpd_out, "Content-Type: %s\r\n", resp_body->type);
 
-	if (resp_body->enc) {
-	    prot_printf(httpd_out, "Content-Encoding: %s\r\n", resp_body->enc);
+	if (txn->resp_body.enc) {
+	    /* Construct Content-Encoding header */
+	    const char *ce[] =
+		{ "deflate", "gzip", NULL };
+
+	    comma_list_hdr("Content-Encoding", ce, txn->resp_body.enc);
 	}
 	if (resp_body->lang) {
 	    prot_printf(httpd_out, "Content-Language: %s\r\n", resp_body->lang);
@@ -2316,7 +2320,7 @@ void write_body(long code, struct transaction_t *txn,
 
 	if (!is_dynamic && len < GZIP_MIN_LEN) {
 	    /* Don't compress small bodies */
-	    txn->flags.ce = CE_IDENTITY;
+	    txn->resp_body.enc = CE_IDENTITY;
 	    txn->flags.te &= TE_CHUNKED;
 	}
 
@@ -2324,13 +2328,7 @@ void write_body(long code, struct transaction_t *txn,
 	    /* compressed output will be always chunked (streamed) */
 	    txn->flags.te |= TE_CHUNKED;
 	}
-	else if (txn->flags.ce) {
-	    /* set content-encoding */
-	    if (txn->flags.ce == CE_GZIP)
-		txn->resp_body.enc = "gzip";
-	    else if (txn->flags.ce == CE_DEFLATE)
-		txn->resp_body.enc = "deflate";
-
+	else if (txn->resp_body.enc) {
 	    /* compressed output will be always chunked (streamed) */
 	    txn->flags.te |= TE_CHUNKED;
 	}
@@ -2361,7 +2359,7 @@ void write_body(long code, struct transaction_t *txn,
     }
 
     /* Send [partial] body based on CE and TE */
-    if (txn->flags.ce || txn->flags.te & ~TE_CHUNKED) {
+    if (txn->resp_body.enc || txn->flags.te & ~TE_CHUNKED) {
 #ifdef HAVE_ZLIB
 	char zbuf[PROT_BUFSIZE];
 	unsigned flush, out;
@@ -3392,7 +3390,7 @@ int meth_get_doc(struct transaction_t *txn,
     datalen = sbuf.st_size;
     if (datalen < GZIP_MIN_LEN) {
 	/* Don't compress small resources */
-	txn->flags.ce = CE_IDENTITY;
+	txn->resp_body.enc = CE_IDENTITY;
     }
     if (!resp_body->type) {
 	/* Caller hasn't specified the Content-Type */
@@ -3407,7 +3405,7 @@ int meth_get_doc(struct transaction_t *txn,
 		    resp_body->type = mtype->type;
 		    if (!mtype->compressible) {
 			/* Never compress non-compressible resources */
-			txn->flags.ce = CE_IDENTITY;
+			txn->resp_body.enc = CE_IDENTITY;
 			txn->flags.vary &= ~VARY_AE;
 		    }
 		    break;
@@ -3421,7 +3419,7 @@ int meth_get_doc(struct transaction_t *txn,
     buf_printf(&txn->buf, "%ld-%ld", (long) sbuf.st_mtime, (long) sbuf.st_size);
 
     /* Check any preconditions, including range request */
-    txn->flags.ranges = !txn->flags.ce;
+    txn->flags.ranges = !txn->resp_body.enc;
     precond = check_precond(txn, NULL, buf_cstring(&txn->buf), sbuf.st_mtime,
 			    datalen);
 

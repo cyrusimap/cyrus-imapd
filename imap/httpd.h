@@ -243,7 +243,7 @@ struct range {
 struct resp_body_t {
     ulong len; 		/* Content-Length   */
     struct range *range;/* Content-Range    */
-    const char *enc;	/* Content-Encoding */
+    unsigned char enc;	/* Content-Encoding */
     const char *lang;	/* Content-Language */
     const char *loc;	/* Content-Location */
     const char *type;	/* Content-Type     */
@@ -264,7 +264,6 @@ struct txn_flags_t {
     unsigned char cors;			/* Cross-Origin Resource Sharing */
     unsigned char body;			/* read_body() flags on req */
     unsigned char te;			/* Transfer-Encoding for resp */
-    unsigned char ce;			/* Content-Encoding for resp */
     unsigned char cc;			/* Cache-Control directives for resp */
     unsigned char ranges;		/* Accept range requests for resource */
     unsigned char vary;			/* Headers on which response varied */
@@ -336,8 +335,8 @@ enum {
 /* Content-Encoding flags (coding of representation) */
 enum {
     CE_IDENTITY =	0,
-    CE_GZIP =		1,
-    CE_DEFLATE =	2
+    CE_DEFLATE =	(1<<0),
+    CE_GZIP =		(1<<1)
 };
 
 /* Cache-Control directive flags */

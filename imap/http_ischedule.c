@@ -190,7 +190,7 @@ static int meth_get_isched(struct transaction_t *txn,
 
     /* Check any preconditions, including range request */
     datalen = bufsiz;
-    txn->flags.ranges = !txn->flags.ce;
+    txn->flags.ranges = !txn->resp_body.enc;
     precond = check_precond(txn, NULL, etag, compile_time, datalen);
 
     switch (precond) {
