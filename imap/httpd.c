@@ -1186,10 +1186,6 @@ static void cmdloop(void)
 		    free(httpd_userid);
 		    httpd_userid = NULL;
 		}
-		if (proxy_userid) {
-		    free(proxy_userid);
-		    proxy_userid = NULL;
-		}
 		if (httpd_authstate) {
 		    auth_freestate(httpd_authstate);
 		    httpd_authstate = NULL;
@@ -2875,20 +2871,24 @@ static int http_auth(const char *creds, struct transaction_t *txn)
     buf_appendmap(&txn->buf,				/* buffered input */
 		  (const char *) httpd_in->ptr, httpd_in->cnt);
 
-    /* Close IP-based telemetry log */
     if (httpd_logfd != -1) {
+	/* Rewind log to current request and truncate it */
+	off_t end = lseek(httpd_logfd, 0, SEEK_END);
+
+	ftruncate(httpd_logfd, end - buf_len(&txn->buf));
+    }
+
+    if (!proxy_userid || strcmp(proxy_userid, httpd_userid)) {
+	/* Close existing telemetry log */
+	close(httpd_logfd);
+
 	prot_setlog(httpd_in, PROT_NO_FD);
 	prot_setlog(httpd_out, PROT_NO_FD);
 
-	/* Rewind log to current request and overwrite with redacted version */
-	ftruncate(httpd_logfd,
-		  lseek(httpd_logfd, -buf_len(&txn->buf), SEEK_END));
-	write(httpd_logfd, buf_cstring(&txn->buf), buf_len(&txn->buf));
-	close(httpd_logfd);
+	/* Create telemetry log based on new userid */
+	httpd_logfd = telemetry_log(httpd_userid, httpd_in, httpd_out, 0);
     }
 
-    /* Create new telemetry log based on userid */
-    httpd_logfd = telemetry_log(httpd_userid, httpd_in, httpd_out, 0);
     if (httpd_logfd != -1) {
 	/* Log credential-redacted request */
 	write(httpd_logfd, buf_cstring(&txn->buf), buf_len(&txn->buf));
@@ -2897,6 +2897,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
     buf_reset(&txn->buf);
 
     /* Make a copy of the external userid for use in proxying */
+    if (proxy_userid) free(proxy_userid);
     proxy_userid = xstrdup(httpd_userid);
 
     /* Translate any separators in userid */
