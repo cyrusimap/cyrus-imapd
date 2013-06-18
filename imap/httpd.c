@@ -1360,6 +1360,7 @@ static void cmdloop(void)
 	    buf_free(&txn.resp_body.payload);
 #ifdef HAVE_ZLIB
 	    deflateEnd(&txn.zstrm);
+	    buf_free(&txn.zbuf);
 #endif
 	    return;
 	}
@@ -2312,33 +2313,66 @@ static void keep_alive(int sig)
 void write_body(long code, struct transaction_t *txn,
 		const char *buf, unsigned len)
 {
-    static unsigned is_dynamic;
+    unsigned is_dynamic = code ? (txn->flags.te & TE_CHUNKED) : 1;
+    unsigned outlen = len;
+
+    if (!is_dynamic && len < GZIP_MIN_LEN) {
+	/* Don't compress small static content */
+	txn->resp_body.enc = CE_IDENTITY;
+	txn->flags.te = TE_NONE;
+    }
+
+    /* Compress data */
+    if (txn->resp_body.enc || txn->flags.te & ~TE_CHUNKED) {
+#ifdef HAVE_ZLIB
+	/* Only flush for static content or on last (zero-length) chunk */
+	unsigned flush = (is_dynamic && len) ? Z_NO_FLUSH : Z_FINISH;
+
+	if (code) deflateReset(&txn->zstrm);
+
+	txn->zstrm.next_in = (Bytef *) buf;
+	txn->zstrm.avail_in = len;
+	buf_reset(&txn->zbuf);
+
+	do {
+	    buf_ensure(&txn->zbuf,
+		       deflateBound(&txn->zstrm, txn->zstrm.avail_in));
+
+	    txn->zstrm.next_out = (Bytef *) txn->zbuf.s + txn->zbuf.len;
+	    txn->zstrm.avail_out = txn->zbuf.alloc - txn->zbuf.len;
+
+	    deflate(&txn->zstrm, flush);
+	    txn->zbuf.len = txn->zbuf.alloc - txn->zstrm.avail_out;
+
+	} while (!txn->zstrm.avail_out);
+
+	buf = txn->zbuf.s;
+	outlen = txn->zbuf.len;
+#else
+	/* XXX should never get here */
+	fatal("Compression requested, but no zlib", EC_SOFTWARE);
+#endif /* HAVE_ZLIB */
+    }
 
     if (code) {
 	/* Initial call - prepare response header based on CE, TE and version */
-	is_dynamic = (txn->flags.te & TE_CHUNKED);
-
-	if (!is_dynamic && len < GZIP_MIN_LEN) {
-	    /* Don't compress small bodies */
-	    txn->resp_body.enc = CE_IDENTITY;
-	    txn->flags.te &= TE_CHUNKED;
-	}
 
 	if (txn->flags.te & ~TE_CHUNKED) {
-	    /* compressed output will be always chunked (streamed) */
+	    /* Transfer-Encoded content MUST be chunked */
 	    txn->flags.te |= TE_CHUNKED;
-	}
-	else if (txn->resp_body.enc) {
-	    /* compressed output will be always chunked (streamed) */
-	    txn->flags.te |= TE_CHUNKED;
-	}
-	else if (!is_dynamic) {
-	    /* full body (no encoding) */
-	    txn->resp_body.len = len;
+
+	    if (!is_dynamic) {
+		/* Handle static content as last chunk */
+		len = 0;
+	    }
 	}
 
-	if (txn->flags.ver1_0 && (txn->flags.te & TE_CHUNKED)) {
-	    /* HTTP/1.0 close-delimited data */
+	if (!(txn->flags.te & TE_CHUNKED)) {
+	    /* Full body (no encoding) */
+	    txn->resp_body.len = outlen;
+	}
+	else if (txn->flags.ver1_0) {
+	    /* HTTP/1.0 doesn't support chunked - close-delimit the body */
 	    txn->flags.conn = CONN_CLOSE;
 	}
 
@@ -2358,63 +2392,25 @@ void write_body(long code, struct transaction_t *txn,
 	}
     }
 
-    /* Send [partial] body based on CE and TE */
-    if (txn->resp_body.enc || txn->flags.te & ~TE_CHUNKED) {
-#ifdef HAVE_ZLIB
-	char zbuf[PROT_BUFSIZE];
-	unsigned flush, out;
-
-	if (code) deflateReset(&txn->zstrm);
-
-	/* don't flush until last (zero-length) or only chunk */
-	flush = (is_dynamic && len) ? Z_NO_FLUSH : Z_FINISH;
-
-	txn->zstrm.next_in = (Bytef *) buf;
-	txn->zstrm.avail_in = len;
-
-	do {
-	    txn->zstrm.next_out = (Bytef *) zbuf;
-	    txn->zstrm.avail_out = PROT_BUFSIZE;
-
-	    deflate(&txn->zstrm, flush);
-	    out = PROT_BUFSIZE - txn->zstrm.avail_out;
-
-	    if (out && !txn->flags.ver1_0) {
-		/* HTTP/1.1 chunk of compressed output */
-		prot_printf(httpd_out, "%x\r\n", out);
-		prot_write(httpd_out, zbuf, out);
-		prot_puts(httpd_out, "\r\n");
-	    }
-	    else {
-		/* HTTP/1.0 close-delimited data */
-		prot_write(httpd_out, zbuf, out);
-	    }
-
-	} while (!txn->zstrm.avail_out);
-
-	if (flush == Z_FINISH && !txn->flags.ver1_0) {
-	    /* terminate the HTTP/1.1 body with a zero-length chunk */
-	    prot_puts(httpd_out, "0\r\n");
-	    /* empty trailer */
+    /* Output data */
+    if (txn->flags.te & TE_CHUNKED && !txn->flags.ver1_0) {
+	/* HTTP/1.1 chunk */
+	if (outlen) {
+	    prot_printf(httpd_out, "%x\r\n", outlen);
+	    prot_write(httpd_out, buf, outlen);
 	    prot_puts(httpd_out, "\r\n");
 	}
-#else
-	/* XXX should never get here */
-	fatal("Content-Encoding requested, but no zlib", EC_SOFTWARE);
-#endif /* HAVE_ZLIB */
-    }
-    else if (is_dynamic && !txn->flags.ver1_0) {
-	/* HTTP/1.1 chunk */
-	prot_printf(httpd_out, "%x\r\n", len);
-	if (len) prot_write(httpd_out, buf, len);
-	else {
-	    /* empty trailer */
+	if (!len) {
+	    /* Terminate the HTTP/1.1 body with a zero-length chunk */
+	    prot_puts(httpd_out, "0\r\n");
+
+	    /* Empty trailer */
+	    prot_puts(httpd_out, "\r\n");
 	}
-	prot_puts(httpd_out, "\r\n");
     }
     else {
-	/* full body or HTTP/1.0 close-delimited data */
-	prot_write(httpd_out, buf, len);
+	/* Full body or HTTP/1.0 close-delimited body */
+	prot_write(httpd_out, buf, outlen);
     }
 }
 

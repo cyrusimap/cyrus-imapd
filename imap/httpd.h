@@ -284,6 +284,7 @@ struct transaction_t {
     struct resp_body_t resp_body;	/* Response body meta-data */
 #ifdef HAVE_ZLIB
     z_stream zstrm;			/* Compression context */
+    struct buf zbuf;			/* Compression buffer */
 #endif
     struct buf buf;	    		/* Working buffer - currently used for:
 					   httpd:
