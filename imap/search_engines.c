@@ -200,7 +200,6 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
 				   int flags)
 {
     uint32_t recno;
-    uint32_t uid;
     int r = 0;			/* Using IMAP_* not SQUAT_* return codes here */
     int r2;
     int first = 1;
@@ -238,7 +237,6 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     if (batch.count)
 	r = flush_batch(rx, mailbox, &batch);
 
-out:
     ptrarray_fini(&batch);
     r2 = rx->end_mailbox(rx, mailbox);
     if (r) return r;

@@ -1745,26 +1745,6 @@ out:
     return 0;
 }
 
-/* how many of these fricking things are there - stupid DB interface */
-struct indexedrock {
-    struct db *db;
-    struct txn **tid;
-};
-
-static int copyindexed_cb(void *rock,
-			 const char *key, size_t keylen,
-			 const char *data, size_t datalen)
-{
-    struct indexedrock *lr = (struct indexedrock *)rock;
-    struct seqset *seq = parse_indexed(data, datalen);
-    int r = 0;
-    if (seq) {
-	r = store_indexed(lr->db, lr->tid, key, keylen, seq);
-	seqset_free(seq);
-    }
-    return r;
-}
-
 struct mbdata {
     uint32_t uidvalidity;
     bitvector_t uids;
@@ -1773,8 +1753,24 @@ struct mbdata {
 struct mbfilter {
     hash_table mboxes;
     struct db *indexed;
+    struct txn **tid;
+    char *destpath;
     int flags;
 };
+
+static int copyindexed_cb(void *rock,
+			 const char *key, size_t keylen,
+			 const char *data, size_t datalen)
+{
+    struct mbfilter *filter = (struct mbfilter *)rock;
+    struct seqset *seq = parse_indexed(data, datalen);
+    int r = 0;
+    if (seq) {
+	r = store_indexed(filter->indexed, filter->tid, key, keylen, seq);
+	seqset_free(seq);
+    }
+    return r;
+}
 
 static void free_mbdata(void *rock)
 {
@@ -1841,6 +1837,7 @@ static int mbox_vector(const char *mboxname, struct mbfilter *filter)
     mbdata = NULL;
 
 done:
+    buf_free(&key);
     if (seq) seqset_free(seq);
     if (mailbox) mailbox_close(&mailbox);
     if (mbdata) free_mbdata(mbdata);
@@ -1861,13 +1858,16 @@ static int mbox_vector_cb(void *rock,
 
 static int build_mbfilter(const char *userid, struct mbfilter *filter)
 {
+    construct_hash_table(&filter->mboxes, 1024, 0);
     return mboxlist_allusermbox(userid, mbox_vector_cb, filter, /*include_deleted*/0);
 }
 
 static void free_mbfilter(struct mbfilter *filter)
 {
     free_hash_table(&filter->mboxes, free_mbdata);
+    if (filter->tid) cyrusdb_abort(filter->indexed, *filter->tid);
     cyrusdb_close(filter->indexed);
+    free(filter->destpath);
 }
 
 static int mbdata_exists_cb(const char *cyrusid, void *rock)
@@ -1947,22 +1947,62 @@ static void notify_missing_messages(struct mbfilter *filter)
     hash_enumerate(&filter->mboxes, notify_filter_cb, filter);
 }
 
-static int search_filter(const char *userid, const char *dbpath, int flags)
+static int create_filter(const strarray_t *srcpaths, const char *destpath,
+			 int flags, struct mbfilter *filter)
 {
-    xapian_dbw_t *dbw = NULL;
     struct buf buf = BUF_INITIALIZER;
+    int r = 0;
+    int i;
+
+    memset(filter, 0, sizeof(struct mbfilter));
+    filter->flags = flags;
+    filter->destpath = xstrdup(destpath);
+
+    /* build the cyrus.indexed.db from the contents of the source dirs */
+
+    buf_reset(&buf);
+    buf_printf(&buf, "%s%s", destpath, INDEXEDDB_FNAME);
+    r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_INDEXED_DB),
+		     buf_cstring(&buf), CYRUSDB_CREATE, &filter->indexed);
+    if (r) {
+	printf("ERROR: failed to open indexed %s\n", buf_cstring(&buf));
+	goto done;
+    }
+    for (i = 0; i < srcpaths->count; i++) {
+	struct db *db = NULL;
+	buf_reset(&buf);
+	buf_printf(&buf, "%s%s", strarray_nth(srcpaths, i), INDEXEDDB_FNAME);
+	r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_INDEXED_DB),
+			 buf_cstring(&buf), 0, &db);
+	if (r) {
+	    r = 0;
+	    continue;
+	}
+	r = cyrusdb_foreach(db, "", 0, NULL, copyindexed_cb, filter, NULL);
+	cyrusdb_close(db);
+	if (r) {
+	    printf("ERROR: failed to process indexed db %s\n", strarray_nth(srcpaths, i));
+	    goto done;
+	}
+    }
+    if (filter->tid) r = cyrusdb_commit(filter->indexed, *filter->tid);
+    if (r) {
+	printf("ERROR: failed to commit indexed %s\n", destpath);
+	goto done;
+    }
+
+done:
+    return r;
+}
+
+static int search_filter(const char *userid, const strarray_t *srcpaths,
+			 const char *destpath, int flags)
+{
     struct mbfilter filter;
     int verbose = SEARCH_VERBOSE(flags);
     int r;
 
-    memset(&filter, 0, sizeof(struct mbfilter));
-
-    filter.flags = flags;
-    construct_hash_table(&filter.mboxes, 1024, 0);
-
-    buf_printf(&buf, "%s%s", dbpath, INDEXEDDB_FNAME);
-    r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_INDEXED_DB),
-		     buf_cstring(&buf), CYRUSDB_CREATE, &filter.indexed);
+    r = create_filter(srcpaths, destpath, flags, &filter);
     if (r) goto done;
 
     if (verbose)
@@ -1970,25 +2010,158 @@ static int search_filter(const char *userid, const char *dbpath, int flags)
     r = build_mbfilter(userid, &filter);
     if (r) goto done;
 
-    /* XXX - if only audit mode, could theoretically do this read-only */
-    r = xapian_dbw_open(dbpath, &dbw);
+    if (verbose)
+	printf("Filtering database %s\n", destpath);
+
+    r = xapian_filter(destpath, (const char **)srcpaths->data,
+		      mbdata_exists_cb, &filter);
     if (r) goto done;
 
     if (verbose)
-	printf("Filtering database %s\n", dbpath);
-
-    r = xapian_dbw_filter(dbw, mbdata_exists_cb, &filter);
-    if (r) goto done;
-
-    if (verbose)
-	printf("done %s\n", dbpath);
+	printf("done %s\n", destpath);
 
     if (flags & SEARCH_COMPACT_AUDIT)
 	notify_missing_messages(&filter);
 
 done:
     free_mbfilter(&filter);
-    if (dbw) xapian_dbw_close(dbw);
+    return r;
+}
+
+static int reindex_mb(void *rock,
+		      const char *key, size_t keylen,
+		      const char *data, size_t datalen)
+{
+    struct mbfilter *filter = (struct mbfilter *)rock;
+    char *mboxname = xstrndup(key, keylen);
+    struct seqset *seq = parse_indexed(data, datalen);
+    xapian_update_receiver_t *tr = NULL;
+    struct mailbox *mailbox = NULL;
+    ptrarray_t batch = PTRARRAY_INITIALIZER;
+    struct index_record record;
+    int verbose = SEARCH_VERBOSE(filter->flags);
+    uint32_t recno;
+    int r = 0;
+    int i;
+    char *dot;
+    uint32_t uidvalidity;
+
+    dot = strrchr(mboxname, '.');
+    *dot++ = '\0';
+    uidvalidity = atol(dot);
+
+    if (!seq) goto done;
+
+    r = mailbox_open_irl(mboxname, &mailbox);
+    if (r) goto done;
+
+    if (mailbox->i.uidvalidity != uidvalidity) goto done; /* returns 0, nothing to index */
+
+    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
+	r = mailbox_read_index_record(mailbox, recno, &record);
+	if (r) goto done;
+
+	if (record.system_flags & FLAG_EXPUNGED)
+	    continue;
+
+	/* it wasn't in the previous index, skip it */
+	if (!seqset_ismember(seq, record.uid))
+	    continue;
+
+	/* add the record to the list */
+	ptrarray_append(&batch, message_new_from_record(mailbox, &record));
+    }
+
+    if (batch.count) {
+	tr = (xapian_update_receiver_t *)begin_update(verbose);
+	/* XXX - errors here could leak... */
+	/* game on */
+	mailbox_unlock_index(mailbox, NULL);
+	/* open the DB */
+	r = xapian_dbw_open(filter->destpath, &tr->dbw);
+	if (r) goto done;
+	tr->super.mailbox = mailbox;
+	/* flush the messages */
+	for (i = 0 ; i < batch.count ; i++) {
+	    message_t *msg = ptrarray_nth(&batch, i);
+	    r = index_getsearchtext(msg, &tr->super.super, 0);
+	    message_unref(&msg);
+	}
+	if (r) goto done;
+	if (tr->uncommitted) {
+	    r = xapian_dbw_commit_txn(tr->dbw);
+	    if (r) goto done;
+	}
+    }
+
+done:
+    if (tr) {
+	if (tr->indexed) seqset_free(tr->indexed);
+	if (tr->dbw) xapian_dbw_close(tr->dbw);
+	free_receiver(&tr->super);
+    }
+    mailbox_close(&mailbox);
+    ptrarray_fini(&batch);
+    free(mboxname);
+    seqset_free(seq);
+    return r;
+}
+
+static int search_reindex(const char *userid, const strarray_t *srcpaths,
+			  const char *destpath, int flags)
+{
+    struct buf buf = BUF_INITIALIZER;
+    struct mbfilter filter;
+    int verbose = SEARCH_VERBOSE(flags);
+    int r;
+
+    r = create_filter(srcpaths, destpath, flags, &filter);
+    if (r) goto done;
+
+    if (verbose)
+	printf("Reindexing messages for %s\n", userid);
+
+    r = cyrusdb_foreach(filter.indexed, "", 0, NULL, reindex_mb, &filter, NULL);
+    if (r) {
+	printf("ERROR: failed to reindex to %s\n", destpath);
+	goto done;
+    }
+
+    if (verbose)
+	printf("done %s\n", destpath);
+
+done:
+    free_mbfilter(&filter);
+    buf_free(&buf);
+    return r;
+}
+
+static int search_compress(const char *userid, const strarray_t *srcpaths,
+			   const char *destpath, int flags)
+{
+    struct buf buf = BUF_INITIALIZER;
+    struct mbfilter filter;
+    int verbose = SEARCH_VERBOSE(flags);
+    int r;
+
+    r = create_filter(srcpaths, destpath, flags, &filter);
+    if (r) goto done;
+
+    if (verbose)
+	printf("Reindexing messages for %s\n", userid);
+
+    r = xapian_compact_dbs(destpath, (const char **)srcpaths->data);
+    if (r) {
+	printf("ERROR: failed to reindex to %s\n", destpath);
+	goto done;
+    }
+
+    if (verbose)
+	printf("done %s\n", destpath);
+
+done:
+    free_mbfilter(&filter);
+    buf_free(&buf);
     return r;
 }
 
@@ -2007,7 +2180,6 @@ static int compact_dbs(const char *userid, const char *tempdir,
     char *activestr = NULL;
     struct buf mytempdir = BUF_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
-    struct indexedrock lr;
     int verbose = SEARCH_VERBOSE(flags);
     int r = 0;
     int i;
@@ -2117,55 +2289,24 @@ static int compact_dbs(const char *userid, const char *tempdir,
 	if (verbose) {
 	    printf("compacting databases\n");
 	}
-	r = xapian_compact_dbs(buf_cstring(&mytempdir), (const char **)dirs->data);
-	if (r) {
-	    printf("ERROR: failed to compact to %s", buf_cstring(&mytempdir));
-	    goto out;
-	}
-
-	if (verbose) {
-	    printf("building cyrus.indexed.db\n");
-	}
-	/* build the cyrus.indexed.db from the contents of the source dirs */
-	lr.db = NULL;
-	lr.tid = NULL;
-	buf_reset(&buf);
-	buf_printf(&buf, "%s%s", buf_cstring(&mytempdir), INDEXEDDB_FNAME);
-	r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_INDEXED_DB),
-			 buf_cstring(&buf), CYRUSDB_CREATE, &lr.db);
-	if (r) {
-	    printf("ERROR: failed to open indexed %s\n", buf_cstring(&mytempdir));
-	    goto out;
-	}
-	for (i = 0; i < dirs->count; i++) {
-	    struct db *db = NULL;
-	    buf_reset(&buf);
-	    buf_printf(&buf, "%s%s", strarray_nth(dirs, i), INDEXEDDB_FNAME);
-	    r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_INDEXED_DB),
-			     buf_cstring(&buf), 0, &db);
+	if (flags & SEARCH_COMPACT_FILTER) {
+	    r = search_filter(userid, dirs, buf_cstring(&mytempdir), flags);
 	    if (r) {
-		r = 0;
-		continue;
-	    }
-	    r = cyrusdb_foreach(db, "", 0, NULL, copyindexed_cb, &lr, NULL);
-	    cyrusdb_close(db);
-	    if (r) {
-		if (lr.tid) cyrusdb_abort(lr.db, *lr.tid);
-		printf("ERROR: failed to process indexed db %s\n", strarray_nth(dirs, i));
+		printf("ERROR: failed to filter to %s", buf_cstring(&mytempdir));
 		goto out;
 	    }
 	}
-	if (lr.tid) r = cyrusdb_commit(lr.db, *lr.tid);
-	cyrusdb_close(lr.db);
-	if (r) {
-	    printf("ERROR: failed to commit indexed %s\n", buf_cstring(&mytempdir));
-	    goto out;
-	}
-
-	if (flags & (SEARCH_COMPACT_FILTER|SEARCH_COMPACT_AUDIT)) {
-	    r = search_filter(userid, buf_cstring(&mytempdir), flags);
+	else if (flags & SEARCH_COMPACT_REINDEX) {
+	    r = search_reindex(userid, dirs, buf_cstring(&mytempdir), flags);
 	    if (r) {
-		printf("ERROR: failed to filter indexed %s\n", buf_cstring(&mytempdir));
+		printf("ERROR: failed to reindex to %s", buf_cstring(&mytempdir));
+		goto out;
+	    }
+	}
+	else {
+	    r = search_compress(userid, dirs, buf_cstring(&mytempdir), flags);
+	    if (r) {
+		printf("ERROR: failed to reindex to %s", buf_cstring(&mytempdir));
 		goto out;
 	    }
 	}

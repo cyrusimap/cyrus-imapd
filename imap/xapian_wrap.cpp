@@ -211,33 +211,6 @@ int xapian_dbw_end_doc(xapian_dbw_t *dbw)
     return r;
 }
 
-/* cb returns true if document still exists, false if it doesn't */
-int xapian_dbw_filter(xapian_dbw_t *dbw,
-		      int (*cb)(const char *cyrusid, void *rock),
-		      void *rock)
-{
-    int r = 0;
-
-    try {
-	Xapian::Enquire enquire(*dbw->database);
-	enquire.set_query(Xapian::Query::MatchAll);
-	Xapian::MSet matches = enquire.get_mset(0, dbw->database->get_doccount());
-	for (Xapian::MSetIterator i = matches.begin() ; i != matches.end() ; ++i) {
-	    Xapian::Document doc = i.get_document();
-	    std::string cyrusid = doc.get_value(SLOT_CYRUSID);
-	    if (!cb(cyrusid.c_str(), rock))
-		dbw->database->delete_document(doc.get_docid());
-	}
-    }
-    catch (const Xapian::Error &err) {
-	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
-		    err.get_context().c_str(), err.get_description().c_str());
-	r = IMAP_IOERROR;
-    }
-
-    return r;
-}
-
 /* ====================================================================== */
 
 struct xapian_db
@@ -504,6 +477,46 @@ int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
     catch (const Xapian::Error &err) {
 	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
 		    err.get_context().c_str(), err.get_description().c_str());
+	r = IMAP_IOERROR;
+    }
+
+    return r;
+}
+
+/* cb returns true if document should be copied, false if not */
+int xapian_filter(const char *dest, const char **sources,
+		  int (*cb)(const char *cyrusid, void *rock),
+		  void *rock)
+{
+    int r = 0;
+    int count = 0;
+
+    try {
+	/* create a destination database */
+	Xapian::WritableDatabase destdb = Xapian::WritableDatabase(dest, Xapian::DB_CREATE);
+
+	/* With multiple databases as above, the docids are interleaved, so it
+	 * might be worth trying to open each source and copy its documents to
+	 * destdb in turn for better locality of reference, and so better cache
+	 * use. -- Olly on the mailing list */
+	while (*sources) {
+	    Xapian::Database srcdb = Xapian::Database(*sources++);
+
+	    /* copy all matching documents to the new DB */
+	    for (Xapian::ValueIterator it = srcdb.valuestream_begin(SLOT_CYRUSID);
+				       it != srcdb.valuestream_end(SLOT_CYRUSID); it++) {
+		if (cb((*it).c_str(), rock)) {
+		    destdb.add_document(srcdb.get_document(it.get_docid()));
+		}
+	    }
+	}
+
+	/* commit all changes explicitly */
+	destdb.commit();
+    }
+    catch (const Xapian::Error &err) {
+	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s",
+	       err.get_description().c_str());
 	r = IMAP_IOERROR;
     }
 
