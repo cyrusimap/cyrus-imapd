@@ -635,7 +635,7 @@ static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
 	txn->error.desc = "Message has been removed\r\n";
 
 	/* Fill in Expires */
-	txn->resp_body.maxage = 3600;  /* 1 hr */
+	txn->resp_body.maxage = 31536000;  /* 1 year */
 	txn->flags.cc |= CC_MAXAGE;
 	return HTTP_GONE;
     }
