@@ -8,6 +8,24 @@
 </head>
 <body>
 
+<h1>Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta5</h1>
+<ul>
+<li><tt>unixhierarchysep</tt> i snow supported by all HTTP
+  modules</li>
+<li>Completely rewrote write_body() - Range requests are now supported
+  on non-chunked Content-Encoded data</li>
+<li>Added cache control response headers where appropriate to make
+  Redbot happy</li>
+<li>Fixed handling of telemetry log file descriptors and
+  truncation</li>
+<li>Allow GET on calendar collections for "exporting" entire
+  calendar</li>
+<li>Fixed POST on calendar collection (add-member)</li>
+<li>Fixed parsing of calendar-query filter</li>
+<li>Added several CalDAV/iCalendar validation checks based on
+  CalDAVTester results</li>
+</ul>
+
 <h1>Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta4</h1>
 <ul>
 <li>Always verify authorization credentials supplied by the client (a
