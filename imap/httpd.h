@@ -235,7 +235,6 @@ struct error_t {
 struct range {
     unsigned long first;
     unsigned long last;
-    unsigned long len;
     struct range *next;
 };
 
@@ -437,7 +436,7 @@ extern int meth_options(struct transaction_t *txn, void *params);
 extern int meth_trace(struct transaction_t *txn, void *params);
 extern int etagcmp(const char *hdr, const char *etag);
 extern int check_precond(struct transaction_t *txn, const void *data,
-			 const char *etag, time_t lastmod, unsigned long len);
+			 const char *etag, time_t lastmod);
 extern int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 		     unsigned char *flags, const char **errstr);
 

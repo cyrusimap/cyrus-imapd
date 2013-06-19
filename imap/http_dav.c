@@ -3131,7 +3131,7 @@ int meth_copy(struct transaction_t *txn, void *params)
     }
 
     /* Check any preconditions on source */
-    precond = check_precond(txn, (void **) ddata, etag, lastmod, 0);
+    precond = check_precond(txn, (void **) ddata, etag, lastmod);
 
     switch (precond) {
     case HTTP_OK:
@@ -3326,7 +3326,7 @@ int meth_delete(struct transaction_t *txn, void *params)
     }
 
     /* Check any preconditions */
-    precond = dparams->check_precond(txn, (void *) ddata, etag, lastmod, 0);
+    precond = dparams->check_precond(txn, (void *) ddata, etag, lastmod);
 
     switch (precond) {
     case HTTP_OK:
@@ -3465,7 +3465,7 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 	offset = record.header_size;
 	datalen = record.size - offset;
 
-	txn->flags.ranges = !txn->resp_body.enc;
+	txn->flags.ranges = 1;
 	etag = message_guid_encode(&record.guid);
 	lastmod = record.internaldate;
     }
@@ -3478,16 +3478,11 @@ int meth_get_dav(struct transaction_t *txn, void *params)
     }
 
     /* Check any preconditions, including range request */
-    precond = gparams->check_precond(txn, (void *) ddata, etag, lastmod,
-				     datalen);
+    precond = gparams->check_precond(txn, (void *) ddata, etag, lastmod);
 
     switch (precond) {
-    case HTTP_PARTIAL:
-	/* Set data parameters for range */
-	offset += resp_body->range->first;
-	datalen = resp_body->range->last - resp_body->range->first + 1;
-
     case HTTP_OK:
+    case HTTP_PARTIAL:
     case HTTP_NOT_MODIFIED:
 	/* Fill in ETag, Last-Modified, Expires, and Cache-Control */
 	resp_body->etag = etag;
@@ -3517,11 +3512,7 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 	}
     }
 
-    if (resp_body->range && resp_body->range->next) {
-	/* multiple ranges */
-	multipart_byteranges(txn, msg_base + record.header_size);
-    }
-    else write_body(precond, txn, data, datalen);
+    write_body(precond, txn, data, datalen);
 
     if (msg_base)
 	mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
@@ -3656,7 +3647,7 @@ int meth_lock(struct transaction_t *txn, void *params)
     }
 
     /* Check any preconditions */
-    precond = lparams->check_precond(txn, ddata, etag, lastmod, 0);
+    precond = lparams->check_precond(txn, ddata, etag, lastmod);
 
     switch (precond) {
     case HTTP_OK:
@@ -4673,7 +4664,7 @@ int meth_put(struct transaction_t *txn, void *params)
     mailbox_unlock_index(mailbox, NULL);
 
     /* Check any preconditions */
-    precond = pparams->check_precond(txn, ddata, etag, lastmod, 0);
+    precond = pparams->check_precond(txn, ddata, etag, lastmod);
 
     switch (precond) {
     case HTTP_OK:
@@ -5277,7 +5268,7 @@ int meth_unlock(struct transaction_t *txn, void *params)
     }
 
     /* Check any preconditions */
-    precond = lparams->check_precond(txn, ddata, etag, lastmod, 0);
+    precond = lparams->check_precond(txn, ddata, etag, lastmod);
 
     if (precond != HTTP_OK) {
 	/* We failed a precondition - don't perform the request */

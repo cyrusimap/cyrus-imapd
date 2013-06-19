@@ -257,26 +257,20 @@ static int meth_get(struct transaction_t *txn,
 	    const char *etag = NULL;
 	    time_t lastmod = 0;
 	    struct resp_body_t *resp_body = &txn->resp_body;
-	    unsigned long offset = 0, datalen = 0;
 
 	    /* Check any preconditions */
 	    if (!strcmp(section, "0")) {
 		/* Entire raw message */
-		txn->flags.ranges = !txn->resp_body.enc;
-		datalen = msg_size;
+		txn->flags.ranges = 1;
 	    }
 
 	    etag = message_guid_encode(&record.guid);
 	    lastmod = record.internaldate;
-	    precond = check_precond(txn, NULL, etag, lastmod, datalen);
+	    precond = check_precond(txn, NULL, etag, lastmod);
 
 	    switch (precond) {
-	    case HTTP_PARTIAL:
-		/* Set data parameters for range */
-		offset += resp_body->range->first;
-		datalen = resp_body->range->last - resp_body->range->first + 1;
-
 	    case HTTP_OK:
+	    case HTTP_PARTIAL:
 	    case HTTP_NOT_MODIFIED:
 		/* Fill in ETag, Last-Modified, and Expires */
 		resp_body->etag = etag;
@@ -299,12 +293,7 @@ static int meth_get(struct transaction_t *txn,
 	    else if (!strcmp(section, "0")) {
 		/* Return entire message as text/plain */
 		resp_body->type = "text/plain";
-
-		if (resp_body->range && resp_body->range->next) {
-		    /* multiple ranges */
-		    multipart_byteranges(txn, msg_base);
-		}
-		else write_body(precond, txn, msg_base + offset, datalen);
+		write_body(precond, txn, msg_base, msg_size);
 	    }
 	    else {
 		/* Fetch, decode, and return the specified MIME message part */
@@ -568,7 +557,7 @@ static int list_feeds(struct transaction_t *txn)
     buf_printf(&txn->buf, "-%ld-%ld", sbuf.st_mtime, sbuf.st_size);
 
     /* Check any preconditions */
-    precond = check_precond(txn, NULL, buf_cstring(&txn->buf), lastmod, 0);
+    precond = check_precond(txn, NULL, buf_cstring(&txn->buf), lastmod);
 
     switch (precond) {
     case HTTP_OK:
@@ -728,7 +717,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     lastmod = mailbox->i.last_appenddate;
     sprintf(etag, "%u-%u-%u",
 	    mailbox->i.uidvalidity, mailbox->i.last_uid, mailbox->i.exists);
-    precond = check_precond(txn, NULL, etag, lastmod, 0);
+    precond = check_precond(txn, NULL, etag, lastmod);
 
     switch (precond) {
     case HTTP_OK:

@@ -287,8 +287,7 @@ struct propfind_ctx {
 
 /* Function to check headers for preconditions */
 typedef int (*check_precond_t)(struct transaction_t *txn, const void *data,
-			       const char *etag, time_t lastmod,
-			       unsigned long len);
+			       const char *etag, time_t lastmod);
 
 /* Function to insert/update DAV resource in 'data', optionally commiting txn */
 typedef int (*db_write_proc_t)(void *davdb, void *data, int commit);

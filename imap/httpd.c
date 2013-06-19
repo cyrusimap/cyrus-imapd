@@ -205,6 +205,8 @@ static void cmdloop(void);
 static int parse_expect(struct transaction_t *txn);
 static void parse_connection(struct transaction_t *txn);
 static struct accept *parse_accept(const char **hdr);
+static int parse_ranges(const char *hdr, unsigned long len,
+			struct range **ranges);
 static int http_auth(const char *creds, struct transaction_t *txn);
 static void keep_alive(int sig);
 
@@ -2188,16 +2190,22 @@ void response_header(long code, struct transaction_t *txn)
 	/* MUST NOT include a body */
 	break;
 
-    case HTTP_PARTIAL:
     case HTTP_UNSAT_RANGE:
+	prot_printf(httpd_out, "Content-Range: bytes */%lu\r\n",
+		    resp_body->len);
+	resp_body->len = 0;  /* No content */
+
+	/* Fall through and specify framing */
+
+    case HTTP_PARTIAL:
 	if (resp_body->range) {
-	    prot_puts(httpd_out, "Content-Range: bytes ");
-	    if (code == HTTP_PARTIAL) {
-		prot_printf(httpd_out, "%lu-%lu",
-			    resp_body->range->first, resp_body->range->last);
-	    }
-	    else prot_printf(httpd_out, "*");
-	    prot_printf(httpd_out, "/%lu\r\n", resp_body->range->len);
+	    prot_printf(httpd_out, "Content-Range: bytes %lu-%lu/%lu\r\n",
+			resp_body->range->first, resp_body->range->last,
+			resp_body->len);
+
+	    /* Set actual content length of range */
+	    resp_body->len = resp_body->range->last -
+		resp_body->range->first + 1;
 
 	    free(resp_body->range);
 	}
@@ -2314,7 +2322,7 @@ void write_body(long code, struct transaction_t *txn,
 		const char *buf, unsigned len)
 {
     unsigned is_dynamic = code ? (txn->flags.te & TE_CHUNKED) : 1;
-    unsigned outlen = len;
+    unsigned outlen = len, offset = 0;
 
     if (!is_dynamic && len < GZIP_MIN_LEN) {
 	/* Don't compress small static content */
@@ -2368,8 +2376,47 @@ void write_body(long code, struct transaction_t *txn,
 	}
 
 	if (!(txn->flags.te & TE_CHUNKED)) {
-	    /* Full body (no encoding) */
+	    /* Full/partial body (no encoding).
+	     *
+	     * In all cases, 'resp_body.len' is used to specify complete-length
+	     * In the case of a 206 or 416 response, Content-Length will be
+	     * set accordingly in response_header().
+	     */
 	    txn->resp_body.len = outlen;
+
+	    if (code == HTTP_PARTIAL) {
+		/* check_precond() tells us that this is a range request */
+		code = parse_ranges(*spool_getheader(txn->req_hdrs, "Range"),
+				    outlen, &txn->resp_body.range);
+
+		switch (code) {
+		case HTTP_OK:
+		    /* Full body (unknown range-unit) */
+		    break;
+
+		case HTTP_PARTIAL:
+		    /* One or more range request(s) */
+		    txn->resp_body.len = outlen;
+
+		    if (txn->resp_body.range->next) {
+			/* Multiple ranges */
+			multipart_byteranges(txn, buf);
+			return;
+		    }
+		    else {
+			/* Single range - set data parameters accordingly */
+			offset += txn->resp_body.range->first;
+			outlen = txn->resp_body.range->last -
+			    txn->resp_body.range->first + 1;
+		    }
+		    break;
+
+		case HTTP_UNSAT_RANGE:
+		    /* No valid ranges */
+		    outlen = 0;
+		    break;
+		}
+	    }
 	}
 	else if (txn->flags.ver1_0) {
 	    /* HTTP/1.0 doesn't support chunked - close-delimit the body */
@@ -2393,7 +2440,7 @@ void write_body(long code, struct transaction_t *txn,
     }
 
     /* Output data */
-    if (txn->flags.te & TE_CHUNKED && !txn->flags.ver1_0) {
+    if ((txn->flags.te & TE_CHUNKED) && !txn->flags.ver1_0) {
 	/* HTTP/1.1 chunk */
 	if (outlen) {
 	    prot_printf(httpd_out, "%x\r\n", outlen);
@@ -2410,7 +2457,7 @@ void write_body(long code, struct transaction_t *txn,
     }
     else {
 	/* Full body or HTTP/1.0 close-delimited body */
-	prot_write(httpd_out, buf, outlen);
+	prot_write(httpd_out, buf + offset, outlen);
     }
 }
 
@@ -3098,7 +3145,6 @@ static int parse_ranges(const char *hdr, unsigned long len,
 	new = xzmalloc(sizeof(struct range));
 	new->first = first;
 	new->last = last;
-	new->len = len;
 
 	if (tail) tail->next = new;
 	else *ranges = new;
@@ -3106,11 +3152,6 @@ static int parse_ranges(const char *hdr, unsigned long len,
     }
 
     tok_fini(&tok);
-
-    if (ret == HTTP_UNSAT_RANGE) {
-	*ranges = new = xzmalloc(sizeof(struct range));
-	new->len = len;
-    }
 
     return ret;
 }
@@ -3122,7 +3163,7 @@ static int parse_ranges(const char *hdr, unsigned long len,
  * Section 5 of HTTPbis, Part 4.
  */
 int check_precond(struct transaction_t *txn, const void *data,
-		  const char *etag, time_t lastmod, unsigned long len)
+		  const char *etag, time_t lastmod)
 {
     const char *lock_token = NULL;
     unsigned locked = 0;
@@ -3230,7 +3271,6 @@ int check_precond(struct transaction_t *txn, const void *data,
     /* Step 5 */
     if (txn->flags.ranges &&  /* Only if we support Range requests */
 	txn->meth == METH_GET && (hdr = spool_getheader(hdrcache, "Range"))) {
-	const char *ranges = hdr[0];
 
 	if ((hdr = spool_getheader(hdrcache, "If-Range"))) {
 	    since = message_parse_date((char *) hdr[0],
@@ -3240,7 +3280,7 @@ int check_precond(struct transaction_t *txn, const void *data,
 
 	/* Only process Range if If-Range isn't present or validator matches */
 	if (!hdr || (since && (lastmod <= since)) || !etagcmp(hdr[0], etag))
-	    return parse_ranges(ranges, len, &txn->resp_body.range);
+	    return HTTP_PARTIAL;
     }
 
     /* Step 6 */
@@ -3283,7 +3323,8 @@ void multipart_byteranges(struct transaction_t *txn, const char *msg_base)
 	buf_printf(body, "\r\n--%s\r\n"
 		   "Content-Type: %s\r\n"
 		   "Content-Range: bytes %lu-%lu/%lu\r\n\r\n",
-		   boundary, type, range->first, range->last, range->len);
+		   boundary, type, range->first, range->last,
+		   txn->resp_body.len);
 	write_body(0, txn, buf_cstring(body), buf_len(body));
 
 	/* Output range data */
@@ -3352,7 +3393,7 @@ int meth_get_doc(struct transaction_t *txn,
     static struct buf pathbuf = BUF_INITIALIZER;
     struct stat sbuf;
     const char *msg_base = NULL;
-    unsigned long msg_size = 0, offset = 0, datalen;
+    unsigned long msg_size = 0;
     struct resp_body_t *resp_body = &txn->resp_body;
 
     /* Serve up static pages */
@@ -3383,11 +3424,6 @@ int meth_get_doc(struct transaction_t *txn,
     /* See if file exists and get Content-Length & Last-Modified time */
     if (r || !S_ISREG(sbuf.st_mode)) return HTTP_NOT_FOUND;
 
-    datalen = sbuf.st_size;
-    if (datalen < GZIP_MIN_LEN) {
-	/* Don't compress small resources */
-	txn->resp_body.enc = CE_IDENTITY;
-    }
     if (!resp_body->type) {
 	/* Caller hasn't specified the Content-Type */
 	resp_body->type = "application/octet-stream";
@@ -3402,6 +3438,7 @@ int meth_get_doc(struct transaction_t *txn,
 		    if (!mtype->compressible) {
 			/* Never compress non-compressible resources */
 			txn->resp_body.enc = CE_IDENTITY;
+			txn->flags.te = TE_NONE;
 			txn->flags.vary &= ~VARY_AE;
 		    }
 		    break;
@@ -3415,17 +3452,12 @@ int meth_get_doc(struct transaction_t *txn,
     buf_printf(&txn->buf, "%ld-%ld", (long) sbuf.st_mtime, (long) sbuf.st_size);
 
     /* Check any preconditions, including range request */
-    txn->flags.ranges = !txn->resp_body.enc;
-    precond = check_precond(txn, NULL, buf_cstring(&txn->buf), sbuf.st_mtime,
-			    datalen);
+    txn->flags.ranges = 1;
+    precond = check_precond(txn, NULL, buf_cstring(&txn->buf), sbuf.st_mtime);
 
     switch (precond) {
-    case HTTP_PARTIAL:
-	/* Set data parameters for range */
-	offset += resp_body->range->first;
-	datalen = resp_body->range->last - resp_body->range->first + 1;
-
     case HTTP_OK:
+    case HTTP_PARTIAL:
     case HTTP_NOT_MODIFIED:
 	/* Fill in ETag, Last-Modified, and Expires */
 	resp_body->etag = buf_cstring(&txn->buf);
@@ -3448,11 +3480,7 @@ int meth_get_doc(struct transaction_t *txn,
 	map_refresh(fd, 1, &msg_base, &msg_size, sbuf.st_size, path, NULL);
     }
 
-    if (resp_body->range && resp_body->range->next) {
-	/* multiple ranges */
-	multipart_byteranges(txn, msg_base);
-    }
-    else write_body(precond, txn, msg_base + offset, datalen);
+    write_body(precond, txn, msg_base, sbuf.st_size);
 
     if (fd != -1) {
 	map_free(&msg_base, &msg_size);

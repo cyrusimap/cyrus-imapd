@@ -119,8 +119,7 @@ static int caldav_parse_path(const char *path,
 			     struct request_target_t *tgt, const char **errstr);
 
 static int caldav_check_precond(struct transaction_t *txn, const void *data,
-				const char *etag, time_t lastmod,
-				unsigned long len);
+				const char *etag, time_t lastmod);
 
 static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights);
 static int caldav_copy(struct transaction_t *txn,
@@ -480,8 +479,7 @@ static int caldav_parse_path(const char *path,
 
 /* Check headers for any preconditions */
 static int caldav_check_precond(struct transaction_t *txn, const void *data,
-				const char *etag, time_t lastmod,
-				unsigned long len)
+				const char *etag, time_t lastmod)
 {
     const struct caldav_data *cdata = (const struct caldav_data *) data;
     const char *stag = cdata ? cdata->sched_tag : NULL;
@@ -489,7 +487,7 @@ static int caldav_check_precond(struct transaction_t *txn, const void *data,
     int precond;
 
     /* Do normal WebDAV/HTTP checks (primarily for lock-token via If header) */
-    precond = check_precond(txn, data, etag, lastmod, len);
+    precond = check_precond(txn, data, etag, lastmod);
     if (!(precond == HTTP_OK || precond == HTTP_PARTIAL)) return precond;
 
     /* Per RFC 6638, check Schedule-Tag */
@@ -796,7 +794,7 @@ static int meth_get(struct transaction_t *txn, void *params)
     lastmod = mailbox->i.last_appenddate;
     sprintf(etag, "%u-%u-%u",
 	    mailbox->i.uidvalidity, mailbox->i.last_uid, mailbox->i.exists);
-    precond = gparams->check_precond(txn, NULL, etag, lastmod, 0);
+    precond = gparams->check_precond(txn, NULL, etag, lastmod);
 
     switch (precond) {
     case HTTP_OK:
@@ -2018,7 +2016,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			const char *etag = message_guid_encode(&oldrecord.guid);
 			time_t lastmod = oldrecord.internaldate;
 			int precond = caldav_check_precond(txn, cdata,
-							   etag, lastmod, 0);
+							   etag, lastmod);
 
 			overwrite = (precond == HTTP_OK);
 		    }
