@@ -633,6 +633,10 @@ static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
     if ((r == CYRUSDB_NOTFOUND) ||
 	(record->system_flags & (FLAG_DELETED|FLAG_EXPUNGED))) {
 	txn->error.desc = "Message has been removed\r\n";
+
+	/* Fill in Expires */
+	txn->resp_body.maxage = 3600;  /* 1 hr */
+	txn->flags.cc |= CC_MAXAGE;
 	return HTTP_GONE;
     }
     else if (r) {
