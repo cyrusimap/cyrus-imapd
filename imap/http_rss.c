@@ -52,6 +52,7 @@
 #include <assert.h>
 
 #include "acl.h"
+#include "annotate.h"
 #include "charset.h"
 #include "global.h"
 #include "httpd.h"
@@ -73,8 +74,8 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 
-#define RSS_SPEC	"http://www.rssboard.org/rss-specification"
 #define XML_NS_ATOM	"http://www.w3.org/2005/Atom"
+#define XML_NS_CYRUS	"http://cyrusimap.org/ns/"
 #define MAX_SECTION_LEN	128
 #define FEEDLIST_VAR	"%RSS_FEEDLIST%"
 
@@ -668,6 +669,9 @@ static void buf_escapestr(struct buf *buf, const char *str, unsigned max,
     const char *c;
     unsigned buflen = buf_len(buf), len = 0;
 
+    if (!replace && config_httpprettytelemetry)
+	buf_printf(buf, "%*s", level * MARKUP_INDENT, "");
+
     for (c = str; c && *c && (!max || len < max); c++, len++) {
 	/* Translate CR to HTML <br> tag */
 	if (*c == '\r') buf_appendcstr(buf, "<br>");
@@ -675,10 +679,27 @@ static void buf_escapestr(struct buf *buf, const char *str, unsigned max,
 
 	/* Translate XML/HTML specials */
 	else if (*c == '"') buf_appendcstr(buf, "&quot;");
-	else if (*c == '\'') buf_appendcstr(buf, "&apos;");
+//	else if (*c == '\'') buf_appendcstr(buf, "&apos;");
 	else if (*c == '&') buf_appendcstr(buf, "&amp;");
 	else if (*c == '<') buf_appendcstr(buf, "&lt;");
 	else if (*c == '>') buf_appendcstr(buf, "&gt;");
+
+	/* Handle multi-byte UTF-8 sequences */
+	else if ((*c & 0xc0) == 0xc0) {
+	    /* Code points larger than 127 are represented by
+	     * multi-byte sequences, composed of a leading byte and
+	     * one or more continuation bytes.  The leading byte has
+	     * two or more high-order 1s followed by a 0, while
+	     * continuation bytes all have '10' in the high-order
+	     * position.  The number of high-order 1s in the leading
+	     * byte of a multi-byte sequence indicates the number of
+	     * bytes in the sequence.
+	     */
+	    unsigned char lead = *c;
+
+	    do buf_putc(buf, *c);
+	    while (((lead <<= 1) & 0x80) && c++);
+	}
 
 	/* Check for non-printable chars */
 	else if (!(isspace(*c) || isprint(*c))) {
@@ -700,15 +721,28 @@ static void buf_escapestr(struct buf *buf, const char *str, unsigned max,
 
 	else buf_putc(buf, *c);
     }
+
+    if (!replace && config_httpprettytelemetry) buf_appendcstr(buf, "\n");
+}
+
+
+/* Create RFC3339 date ('buf' must be at least 21 characters) */
+static void rfc3339date_gen(char *buf, size_t len, time_t t)
+{
+    struct tm *tm = gmtime(&t);
+
+    snprintf(buf, len, "%4d-%02d-%02dT%02d:%02d:%02dZ",
+	     tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, 
+	     tm->tm_hour, tm->tm_min, tm->tm_sec);
 }
 
 
 /* List messages as an RSS feed */
 static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 {
-    const char **fwd, *proto = NULL, *host = NULL, *webmaster;
+    const char **fwd, *proto = NULL, *host = NULL;
     uint32_t url_len, recno, recentuid = 0;
-    int max_age, max_items, max_len, ttl, nitems, precond;
+    int max_age, max_items, max_len, nitems, precond;
     time_t age_mark = 0, lastmod;
     char datestr[80];
     static char etag[33];
@@ -716,6 +750,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     struct buf *buf = &txn->resp_body.payload;
     unsigned level = 0;
     char mboxname[MAX_MAILBOX_NAME+1];
+    struct annotation_data attrib;
 
     /* Check any preconditions */
     lastmod = mailbox->i.last_appenddate;
@@ -741,7 +776,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
     /* Setup for chunked response */
     txn->flags.te |= TE_CHUNKED;
-    txn->resp_body.type = "application/xml; charset=utf-8";
+    txn->resp_body.type = "application/atom+xml; charset=utf-8";
 
     /* Short-circuit for HEAD request */
     if (txn->meth == METH_HEAD) {
@@ -760,10 +795,6 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     /* Get length of description to display */
     max_len = config_getint(IMAPOPT_RSS_MAXSYNOPSIS);
     if (max_len < 0) max_len = 0;
-
-    /* Get TTL */
-    ttl = config_getint(IMAPOPT_RSS_TTL);
-    if (ttl < 0) ttl = 0;
 
 #if 0
     /* Obtain recentuid */
@@ -798,22 +829,12 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     strlcpy(mboxname, mailbox->name, sizeof(mboxname));
     mboxname_hiersep_toexternal(&httpd_namespace, mboxname, 0);
 
-    /* Start XML */
-    buf_reset(buf);
-    buf_printf_markup(buf, level, "<?xml version=\"1.0\" encoding=\"utf-8\"?>");
-
-    /* Set up the RSS <channel> response for the mailbox */
-    buf_printf_markup(buf, level++,
-		      "<rss xmlns:atom=\"" XML_NS_ATOM "\" version=\"2.0\">");
-    buf_printf_markup(buf, level++, "<channel>");
-    buf_printf_markup(buf, level, "<title>%s</title>", mboxname);
-
     /* Construct base URL */
     if (config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS) &&
 	(fwd = spool_getheader(txn->req_hdrs, "Forwarded"))) {
 	/* Proxied request - parse last Forwarded header for proto and host */
 	/* XXX  This is destructive of the header but we don't care
-	 * and more importantly, need the tokens available after tok_fini()
+	 * and more importantly, we need the tokens available after tok_fini()
 	 */
 	tok_t tok;
 	char *token;
@@ -836,38 +857,61 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     buf_printf(url, "%s://%s%s", proto, host, txn->req_uri->path);
     url_len = buf_len(url);
 
-    buf_printf_markup(buf, level, "<link>%s</link>", buf_cstring(url));
+    /* Start XML */
+    buf_reset(buf);
+    buf_printf_markup(buf, level, "<?xml version=\"1.0\" encoding=\"utf-8\"?>");
 
-    /* Recommended by http://www.rssboard.org/rss-profile */
-    buf_printf_markup(buf, level, "<atom:link href=\"%s\" rel=\"self\""
-		      " type=\"application/rss+xml\"/>", buf_cstring(url));
+    /* Set up the Atom <feed> response for the mailbox */
+    buf_printf_markup(buf, level++,
+		      "<feed xmlns=\"" XML_NS_ATOM "\">");
 
-    /* XXX  Use /comment annotation as description? */
-    buf_printf_markup(buf, level, "<description/>");
+    /* <title> - required */
+    buf_printf_markup(buf, level, "<title>%s</title>", mboxname);
 
-    if ((webmaster = config_getstring(IMAPOPT_RSS_WEBMASTER))) {
-	buf_printf_markup(buf, level, "<webMaster>%s</webMaster>", webmaster);
+    /* <id> - required */
+    buf_printf_markup(buf, level, "<id>%sguid/%s</id>",
+		      XML_NS_CYRUS, mailbox->uniqueid);
+
+    /* <updated> - required */
+    rfc3339date_gen(datestr, sizeof(datestr), lastmod);
+    buf_printf_markup(buf, level, "<updated>%s</updated>", datestr);
+
+    /* <author> - required (use 'Anonymous' as default <name>) */
+    buf_printf_markup(buf, level++, "<author>");
+    buf_printf_markup(buf, level, "<name>Anonymous</name>");
+    buf_printf_markup(buf, --level, "</author>");
+
+    /* <subtitle> - optional */
+    memset(&attrib, 0, sizeof(struct annotation_data));
+    annotatemore_lookup(mailbox->name, "/comment", "", &attrib);
+    if (age_mark) {
+	rfc822date_gen(datestr, sizeof(datestr), age_mark);
+	buf_printf_markup(buf, level,
+			"<subtitle>%s [posts since %s]</subtitle>",
+			  attrib.value ? attrib.value : "", datestr);
+    }
+    else {
+	buf_printf_markup(buf, level,
+			  "<subtitle>%s [%u most recent posts]</subtitle>",
+			  attrib.value ? attrib.value : "",
+			  max_items ? (unsigned) max_items : mailbox->i.exists);
     }
 
-    rfc822date_gen(datestr, sizeof(datestr), time(NULL));
-    buf_printf_markup(buf, level, "<pubDate>%s</pubDate>", datestr);
+    /* <link> - optional */
+    buf_printf_markup(buf, level,
+		      "<link rel=\"self\" type=\"application/atom+xml\""
+		      " href=\"%s\"/>", buf_cstring(url));
 
-    rfc822date_gen(datestr, sizeof(datestr), lastmod);
-    buf_printf_markup(buf, level, "<lastBuildDate>%s</lastBuildDate>", datestr);
-
+    /* <generator> - optional */
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	buf_printf_markup(buf, level, "<generator>Cyrus HTTP %s</generator>",
 			  cyrus_version());
     }
 
-    buf_printf_markup(buf, level, "<docs>%s</docs>", RSS_SPEC);
-
-    if (ttl) buf_printf_markup(buf, level, "<ttl>%d</ttl>", ttl);
-
     write_body(HTTP_OK, txn, buf_cstring(buf), buf_len(buf));
     buf_reset(buf);
 
-    /* Add an <item> for each message */
+    /* Add an <entry> for each message */
     for (recno = mailbox->i.num_records, nitems = 0;
 	 recno >= 1 && (!max_items || nitems < max_items); recno--) {
 	struct index_record record;
@@ -875,6 +919,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	unsigned long msg_size;
 	struct body *body;
 	char *subj;
+	struct address *addr = NULL;
 	const char *content_types[] = { "text", NULL };
 	struct message_content content;
 	struct bodypart **parts;
@@ -904,65 +949,74 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	/* Feeding this message, increment counter */
 	nitems++;
 
-	buf_printf_markup(buf, level++, "<item>");
+	buf_printf_markup(buf, level++, "<entry>");
 
+	/* <title> - required */
 	subj = charset_parse_mimeheader(body->subject);
-	buf_printf_markup(buf, level++, "<title>");
-	if (config_httpprettytelemetry)
-	    buf_printf(buf, "%*s", level * MARKUP_INDENT, "");
-	buf_escapestr(buf, subj && *subj ? subj : "[Untitled]", 0, 0, 0);
-	if (config_httpprettytelemetry) buf_appendcstr(buf, "\n");
+	buf_printf_markup(buf, level++, "<title type=\"html\">");
+	buf_escapestr(buf, subj && *subj ? subj : "[Untitled]", 0, 0, level);
 	buf_printf_markup(buf, --level, "</title>");
 	free(subj);
 
+	/* <id> - required */
+	buf_printf_markup(buf, level, "<id>%sguid/%s</id>",
+			  XML_NS_CYRUS, message_guid_encode(&record.guid));
+
+	/* <updated> - required */
+	rfc3339date_gen(datestr, sizeof(datestr), record.gmtime);
+	buf_printf_markup(buf, level, "<updated>%s</updated>", datestr);
+
+	/* <published> - optional */
+	buf_printf_markup(buf, level, "<published>%s</published>", datestr);
+
+	/* <link> - optional */
 	buf_truncate(url, url_len);
 	buf_printf(url, "?uid=%u", record.uid);
-	buf_printf_markup(buf, level, "<link>%s</link>", buf_cstring(url));
+	buf_printf_markup(buf, level, "<link rel=\"alternate\""
+			  " type=\"text/html\" href=\"%s\"/>",
+			  buf_cstring(url));
 
-	if (body->from || body->sender) {
-	    struct address *addr;
+	/* <author> - optional */
+	addr = body->from;
+	if (!addr) addr = body->sender;
+	if (addr && *addr->mailbox) {
+	    buf_printf_markup(buf, level++, "<author>");
 
-	    if (body->from) addr = body->from;
-	    else addr = body->sender;
-
-	    if (*addr->mailbox) {
-		buf_printf_markup(buf, level++, "<author>");
-		if (config_httpprettytelemetry)
-		    buf_printf(buf, "%*s", level * MARKUP_INDENT, "");
-		buf_escapestr(buf, addr->mailbox, 0, 0, 0);
-		buf_putc(buf, '@');
-		buf_escapestr(buf, addr->domain, 0, 0, 0);
-		if (addr->name) {
-		    buf_appendcstr(buf, " (");
-		    buf_escapestr(buf, addr->name, 0, 0, 0);
-		    buf_putc(buf, ')');
-		}
-		if (config_httpprettytelemetry) buf_appendcstr(buf, "\n");
-		buf_printf_markup(buf, --level, "</author>");
+	    /* <name> - required */
+	    if (addr->name) {
+		char *name = charset_parse_mimeheader(addr->name);
+		buf_printf_markup(buf, level++, "<name>");
+		buf_escapestr(buf, name, 0, 0, level);
+		buf_printf_markup(buf, --level, "</name>");
+		free(name);
 	    }
+	    else {
+		buf_printf_markup(buf, level, "<name>%s@%s</name>",
+				  addr->mailbox, addr->domain);
+	    }
+
+	    /* <email> - optional */
+	    buf_printf_markup(buf, level, "<email>%s@%s</email>",
+			      addr->mailbox, addr->domain);
+
+	    buf_printf_markup(buf, --level, "</author>");
 	}
 
-	buf_printf_markup(buf, level, "<guid isPermaLink=\"false\">%s</guid>",
-			  message_guid_encode(&record.guid));
-
-	rfc822date_gen(datestr, sizeof(datestr), record.gmtime);
-	buf_printf_markup(buf, level, "<pubDate>%s</pubDate>", datestr);
-
-	/* Find and use the first text/ part as the <description> */
+	/* <summary> - optional (find and use the first text/ part) */
 	content.base = msg_base;
 	content.len = msg_size;
 	content.body = body;
 	message_fetch_part(&content, content_types, &parts);
 
 	if (parts && *parts) {
-	    buf_printf_markup(buf, level++, "<description>");
+	    buf_printf_markup(buf, level++, "<summary type=\"html\">");
 	    buf_printf_markup(buf, level++, "<![CDATA[");
 	    buf_escapestr(buf, parts[0]->decoded_body, max_len, 1, level);
 	    buf_printf_markup(buf, --level, "]]>");
-	    buf_printf_markup(buf, --level, "</description>");
+	    buf_printf_markup(buf, --level, "</summary>");
 	}
 
-	buf_printf_markup(buf, --level, "</item>");
+	buf_printf_markup(buf, --level, "</entry>");
 
 	/* free the results */
 	if (parts) {
@@ -980,9 +1034,8 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	}
     }
 
-    /* End of RSS <channel> */
-    buf_printf_markup(buf, --level, "</channel>");
-    buf_printf_markup(buf, --level, "</rss>");
+    /* End of Atom <feed> */
+    buf_printf_markup(buf, --level, "</feed>");
     write_body(0, txn, buf_cstring(buf), buf_len(buf));
 
     /* End of output */
