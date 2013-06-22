@@ -51,7 +51,9 @@ if HAVE_LDAP
 AM_CPPFLAGS += $(LDAP_CPPFLAGS)
 endif
 AM_LDFLAGS = $(COV_LDFLAGS)
-BUILT_SOURCES = xversion.h lib/imapopts.c
+BUILT_SOURCES = xversion.h \
+	imap/imap_err.c \
+	lib/imapopts.c
 DISTCLEANFILES = imap/imap_err.c imap/imap_err.h imap/mupdate_err.c imap/mupdate_err.h imap/nntp_err.c imap/nntp_err.h \
 	com_err/et/compile_et \
 	perl/annotator/Makefile perl/annotator/Makefile.PL perl/imap/Makefile perl/imap/Makefile.PL perl/sieve/managesieve/Makefile perl/sieve/managesieve/Makefile.PL perl/sieve/scripts/installsieve perl/sieve/scripts/sieveshell \
@@ -83,7 +85,6 @@ endif
 bin_PROGRAMS = imtest/imtest
 if SERVER
 BUILT_SOURCES += \
-	imap/imap_err.c \
 	imap/mupdate_err.c \
 	imap/nntp_err.c \
 	imap/lmtpstats.c \
@@ -1322,10 +1323,12 @@ endif
 ## The @$(MKDIR_P) line is added due to a bug in Automake 1.10 and can be removed if using Automake 1.12.
 	@$(MKDIR_P) $(DESTDIR)$(userdir)
 	@$(MKDIR_P) $(DESTDIR)$(servicedir)
+if SERVER
 	cd $(DESTDIR)$(servicedir) && \
 	  $(LN_S) -f pop3d pop3proxyd && \
 	  $(LN_S) -f imapd proxyd && \
 	  $(LN_S) -f lmtpd lmtpproxyd
+endif
 ## The @$(MKDIR_P) line is added due to a bug in Automake 1.10 and can be removed if using Automake 1.12.
 	@$(MKDIR_P) $(DESTDIR)$(bindir)
 	cd $(DESTDIR)$(bindir) && \
