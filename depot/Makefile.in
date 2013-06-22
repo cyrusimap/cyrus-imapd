@@ -68,10 +68,10 @@ cyrus_prefix = @cyrus_prefix@
 all:
 
 install:
-	$(srcdir)/../install-sh -d ${DESTDIR}etc
+	$(srcdir)/../install-sh -d ${DESTDIR}/etc
 	$(INSTALL) -m 644 $(srcdir)/depot.conf $(DESTDIR)
-	$(INSTALL) -m 644 $(srcdir)/rc.local.imap $(DESTDIR)etc
-	$(INSTALL) -m 644 $(srcdir)/rc.local.ptclient $(DESTDIR)etc
+	$(INSTALL) -m 644 $(srcdir)/rc.local.imap $(DESTDIR)/etc
+	$(INSTALL) -m 644 $(srcdir)/rc.local.ptclient $(DESTDIR)/etc
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
