@@ -1214,8 +1214,10 @@ fi
 
 dnl for timsieved
 if test "$sievedir" != "no"; then
+   if test "$enable_server" != "no"; then
 	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} timsieved notifyd"
 	EXTRA_OUTPUT="${EXTRA_OUTPUT} timsieved/Makefile notifyd/Makefile"
+   fi
 
 	PERL_SUBDIRS="${PERL_SUBDIRS} sieve"
 	PERL_DEPSUBDIRS="sieve"
