@@ -1757,13 +1757,16 @@ EXPORTED int mboxlist_setacl(struct namespace *namespace, const char *name,
 		mode = ACL_MODE_REMOVE;
 	    }
 	    /* do not allow non-admin user to remove the admin rights from mailbox owner */
-	    if (!isadmin && isidentifiermbox && (mode != ACL_MODE_ADD) &&
-		!mboxlist_have_admin_rights(rights)) {
-		syslog(LOG_ERR,"Denied removal of admin rights on "
-		       "folder \"%s\" (owner: %s) by user \"%s\"", name,
-		       mailbox_owner, userid);
-		r = IMAP_PERMISSION_DENIED;
-		goto done;
+	    if (!isadmin && isidentifiermbox) {
+		int has_admin_rights = mboxlist_have_admin_rights(rights);
+		if ((has_admin_rights && mode == ACL_MODE_REMOVE) ||
+		   (!has_admin_rights && mode != ACL_MODE_REMOVE)) {
+		    syslog(LOG_ERR, "Denied removal of admin rights on "
+			   "folder \"%s\" (owner: %s) by user \"%s\"", name,
+			   mailbox_owner, userid);
+		    r = IMAP_PERMISSION_DENIED;
+		    goto done;
+		}
 	    }
 
 	    if (cyrus_acl_set(&newacl, identifier, mode,
@@ -1775,7 +1778,7 @@ EXPORTED int mboxlist_setacl(struct namespace *namespace, const char *name,
 	} else {
 	    /* do not allow to remove the admin rights from mailbox owner */
 	    if (!isadmin && isidentifiermbox) {
-		syslog(LOG_ERR,"Denied removal of admin rights on "
+		syslog(LOG_ERR, "Denied removal of admin rights on "
 		       "folder \"%s\" (owner: %s) by user \"%s\"", name,
 		       mailbox_owner, userid);
 		r = IMAP_PERMISSION_DENIED;
