@@ -591,8 +591,9 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
 
 	    /* translate any separators in user */
 	    userbuf = (char *)mboxname_to_userid(mailboxname);
-	    mboxname_hiersep_toexternal(&namespace, userbuf,
-					config_virtdomains ? strcspn(userbuf, "@") : 0);
+	    if (userbuf != NULL)
+		mboxname_hiersep_toexternal(&namespace, userbuf,
+					    config_virtdomains ? strcspn(userbuf, "@") : 0);
 
 	    imapurl.mailbox = extname;
 	    imapurl.user = userbuf;
@@ -805,8 +806,9 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
 
 	/* translate any separators in user */
 	userbuf = (char *)mboxname_to_userid(quota->root);
-	mboxname_hiersep_toexternal(&namespace, userbuf,
-				    config_virtdomains ? strcspn(userbuf, "@") : 0);
+	if (userbuf != NULL)
+	    mboxname_hiersep_toexternal(&namespace, userbuf,
+					config_virtdomains ? strcspn(userbuf, "@") : 0);
 
 	memset(&imapurl, 0, sizeof(struct imapurl));
 	imapurl.server = config_servername;
@@ -861,8 +863,9 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
 
     /* translate any separators in user */
     userbuf = (char *)mboxname_to_userid(mailbox->name);
-    mboxname_hiersep_toexternal(&namespace, userbuf,
-				config_virtdomains ? strcspn(userbuf, "@") : 0);
+    if (userbuf != NULL)
+	mboxname_hiersep_toexternal(&namespace, userbuf,
+				    config_virtdomains ? strcspn(userbuf, "@") : 0);
 
     /* all events needs uri parameter */
     memset(&imapurl, 0, sizeof(struct imapurl));
@@ -923,8 +926,9 @@ void mboxevent_extract_old_mailbox(struct mboxevent *event,
 
     /* translate any separators in user */
     userbuf = (char *)mboxname_to_userid(mailbox->name);
-    mboxname_hiersep_toexternal(&namespace, userbuf,
-				config_virtdomains ? strcspn(userbuf, "@") : 0);
+    if (userbuf != NULL)
+	mboxname_hiersep_toexternal(&namespace, userbuf,
+				    config_virtdomains ? strcspn(userbuf, "@") : 0);
 
     memset(&imapurl, 0, sizeof(struct imapurl));
     imapurl.server = config_servername;
