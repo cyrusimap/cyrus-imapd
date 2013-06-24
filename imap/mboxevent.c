@@ -118,6 +118,7 @@ static struct mboxevent event_template =
     { EVENT_UIDSET, "uidset", EVENT_PARAM_STRING, 0, 0 },
     { EVENT_MIDSET, "vnd.cmu.midset", EVENT_PARAM_STRING, 0, 0 },
     { EVENT_FLAG_NAMES, "flagNames", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_PID, "pid", EVENT_PARAM_INT, 0, 0 },
     { EVENT_USER, "user", EVENT_PARAM_STRING, 0, 0 },
     { EVENT_MESSAGE_SIZE, "messageSize", EVENT_PARAM_INT, 0, 0 },
     /* always at end to let the parser to easily truncate this part */
@@ -236,6 +237,8 @@ EXPORTED struct mboxevent *mboxevent_new(enum event_type type)
     if (mboxevent_expected_param(type, EVENT_TIMESTAMP))
 	gettimeofday(&mboxevent->timestamp, NULL);
 
+    FILL_UNSIGNED_PARAM(mboxevent, EVENT_PID, getpid());
+
     return mboxevent;
 }
 
@@ -317,7 +320,7 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
 	       (type & (EVENT_MESSAGE_NEW|EVENT_MESSAGE_APPEND));
     case EVENT_CLIENT_ADDRESS:
 	return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_CLIENTADDRESS) &&
-	       (type & (EVENT_LOGIN|EVENT_LOGOUT);
+	       (type & (EVENT_LOGIN|EVENT_LOGOUT));
     case EVENT_DISK_QUOTA:
 	return type & QUOTA_EVENTS;
     case EVENT_DISK_USED:
@@ -369,6 +372,8 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
 	    return 0;
 	break;
     case EVENT_URI:
+	return 1;
+    case EVENT_PID:
 	return 1;
     case EVENT_USER:
 	return type & (EVENT_MAILBOX_SUBSCRIBE|EVENT_MAILBOX_UNSUBSCRIBE|\

@@ -82,7 +82,10 @@ enum event_type {
     EVENT_MAILBOX_UNSUBSCRIBE = (1<<19)
 };
 
-#define MAX_PARAM 21 /* messageContent number that is always the last */
+/* The number representing the last available position in
+ * event_param, which should always be messageContent.
+ */
+#define MAX_PARAM 22
 
 /*
  * event parameters defined in RFC 5423 - Internet Message Store Events
@@ -108,6 +111,7 @@ enum event_param {
     EVENT_UIDSET,
     EVENT_MIDSET,
     EVENT_FLAG_NAMES,
+    EVENT_PID,
     EVENT_USER,
     EVENT_MESSAGE_SIZE,
     EVENT_BODYSTRUCTURE,
