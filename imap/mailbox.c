@@ -1675,6 +1675,41 @@ static int rec_compar(const void *key, const void *mem)
     return (uid > recuid);
 }
 
+static uint32_t mailbox_getuid(struct mailbox *mailbox, uint32_t recno)
+{
+    struct index_record record;
+    record.uid = 0;
+    /* XXX - cheaper memory-access reads? */
+    mailbox_read_index_record(mailbox, recno, &record);
+    return record.uid;
+}
+
+
+/*
+ * Returns the recno of the message with UID 'uid'.
+ * If no message with UID 'uid', returns the message with
+ * the higest UID not greater than 'uid'.
+ */
+EXPORTED uint32_t mailbox_finduid(struct mailbox *mailbox, uint32_t uid)
+{
+    uint32_t low = 1;
+    uint32_t high = mailbox->i.num_records;
+    uint32_t mid;
+    uint32_t miduid;
+
+    while (low <= high) {
+	mid = (high - low)/2 + low;
+	miduid = mailbox_getuid(mailbox, mid);
+	if (miduid == uid)
+	    return mid;
+	else if (miduid > uid)
+	    high = mid - 1;
+	else
+	    low = mid + 1;
+    }
+    return high;
+}
+
 /*
  * Perform a binary search on the mailbox index file to read the record
  * for uid 'uid' into 'record'.  If 'oldrecord' is not NULL then it is

@@ -191,6 +191,7 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
 				   struct mailbox *mailbox,
 				   int flags)
 {
+    uint32_t recno;
     uint32_t uid;
     int r = 0;			/* Using IMAP_* not SQUAT_* return codes here */
     int r2;
@@ -204,11 +205,16 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     r = rx->begin_mailbox(rx, mailbox, incremental);
     if (r) return r;
 
-    for (uid = rx->first_unindexed_uid(rx) ;
-	 uid <= mailbox->i.last_uid ;
-	 uid++) {
+    first = mailbox_finduid(mailbox, rx->first_unindexed_uid(rx));
 
-	if (rx->is_indexed(rx, uid))
+    for (recno = first; recno <= mailbox->i.num_records; recno++) {
+	r = mailbox_read_index_record(mailbox, recno, &record);
+	if (r) continue;
+
+	if (record.system_flags & FLAG_EXPUNGED)
+	    continue;
+
+	if (rx->is_indexed(rx, record.uid))
 	    continue;
 
 	if (incremental && batch.count >= batch_size) {
@@ -221,18 +227,6 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
 	    r = flush_batch(rx, mailbox, &batch);
 	    if (r) goto out;
 	}
-
-	/* This UID didn't appear in the old index file */
-	r = mailbox_find_index_record(mailbox, uid, &record,
-				      (first ? NULL : &record));
-	if (r == IMAP_NOTFOUND) {
-	    r = 0;
-	    continue;
-	}
-	if (r) goto out;
-	first = 0;
-	if (record.system_flags & (FLAG_EXPUNGED|FLAG_UNLINKED))
-	    continue;
 
 	ptrarray_append(&batch, message_new_from_record(mailbox, &record));
     }
