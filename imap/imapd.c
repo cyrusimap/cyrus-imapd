@@ -8482,7 +8482,11 @@ static int imapd_statusdata(const char *mailboxname, unsigned statusitems,
 		global_conversations = NULL;
 	    }
 	    r = conversations_open_mbox(mailboxname, &state);
-	    if (r) goto out;
+	    if (r) {
+		/* maybe the mailbox doesn't even have conversations - just ignore */
+		r = 0;
+		goto out;
+	    }
 	    global_conversations = state;
 	}
 
