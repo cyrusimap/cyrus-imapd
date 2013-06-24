@@ -963,7 +963,7 @@ int service_main(int argc __attribute__((unused)),
     /* send a Logout event notification */
     if ((mboxevent = mboxevent_new(EVENT_LOGOUT))) {
 	mboxevent_set_access(mboxevent, saslprops.iplocalport,
-			     NULL, imapd_userid, NULL);
+			     saslprops.ipremoteport, imapd_userid, NULL);
 
 	mboxevent_notify(mboxevent);
 	mboxevent_free(&mboxevent);

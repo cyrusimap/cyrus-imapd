@@ -317,7 +317,7 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
 	       (type & (EVENT_MESSAGE_NEW|EVENT_MESSAGE_APPEND));
     case EVENT_CLIENT_ADDRESS:
 	return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_CLIENTADDRESS) &&
-	       (type & EVENT_LOGIN);
+	       (type & (EVENT_LOGIN|EVENT_LOGOUT);
     case EVENT_DISK_QUOTA:
 	return type & QUOTA_EVENTS;
     case EVENT_DISK_USED:
