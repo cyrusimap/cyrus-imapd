@@ -92,7 +92,6 @@ static struct namespace squat_namespace;
 const int SKIP_FUZZ = 60;
 
 static int verbose = 0;
-static int skip_unmodified = 0;
 static int incremental_mode = 0;
 static int recursive_flag = 0;
 static int annotation_flag = 0;
@@ -254,21 +253,6 @@ static int index_one(const char *name, int blocking)
 	syslog(LOG_INFO, "error opening %s: %s\n", extname, error_message(r));
 
 	return r;
-    }
-
-    /* process only changed mailboxes if skip option detected. */
-    if (skip_unmodified) {
-	char *fname = mailbox_meta_fname(mailbox, META_SQUAT);
-	struct stat sbuf;
-	if (!stat(fname, &sbuf) &&
-	    SKIP_FUZZ + mailbox->index_mtime < sbuf.st_mtime) {
-	    syslog(LOG_DEBUG, "skipping mailbox %s", extname);
-	    if (verbose > 0) {
-		printf("Skipping mailbox %s\n", extname);
-	    }
-	    mailbox_close(&mailbox);
-	    return IMAP_AGAIN;
-	}
     }
 
     syslog(LOG_INFO, "indexing mailbox %s... ", extname);
@@ -906,12 +890,6 @@ int main(int argc, char **argv)
 	case 'r':		/* recurse */
 	    if (mode != UNKNOWN && mode != INDEXER) usage(argv[0]);
 	    recursive_flag = 1;
-	    mode = INDEXER;
-	    break;
-
-	case 's':		/* skip unmodifed */
-	    if (mode != UNKNOWN && mode != INDEXER) usage(argv[0]);
-	    skip_unmodified = 1;
 	    mode = INDEXER;
 	    break;
 
