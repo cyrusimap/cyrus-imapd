@@ -167,12 +167,6 @@ static int index_one(const char *name, int blocking)
     if (incremental_mode)
 	flags |= SEARCH_UPDATE_INCREMENTAL;
 
-    /* in non-blocking (rolling) mode, only do one batch per mailbox at
-     * a time for fairness [IRIS-2471].  The squatter will re-insert the
-     * mailbox in the queue */
-    if (!blocking)
-	flags |= SEARCH_UPDATE_PARTIAL;
-
     /* Convert internal name to external */
     (*squat_namespace.mboxname_toexternal)(&squat_namespace, name,
 					   NULL, extname);
@@ -237,6 +231,7 @@ static int index_one(const char *name, int blocking)
 	buf_free(&attrib);
     }
 
+again:
     if (blocking)
 	r = mailbox_open_irl(name, &mailbox);
     else
@@ -263,6 +258,11 @@ static int index_one(const char *name, int blocking)
     r = search_update_mailbox(rx, mailbox, flags);
 
     mailbox_close(&mailbox);
+
+    /* in non-blocking (rolling) mode, only do one batch per mailbox at
+     * a time for fairness [IRIS-2471].  The squatter will re-insert the
+     * mailbox in the queue */
+    if (blocking && r == IMAP_AGAIN) goto again;
 
     return r;
 }

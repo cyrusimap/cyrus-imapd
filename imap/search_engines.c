@@ -220,12 +220,8 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
 	if (incremental && batch.count >= batch_size) {
 	    syslog(LOG_INFO, "search_update_mailbox batching %u messages to %s",
 		   batch.count, mailbox->name);
-	    if (flags & SEARCH_UPDATE_PARTIAL) {
-		was_partial = 1;
-		break;
-	    }
-	    r = flush_batch(rx, mailbox, &batch);
-	    if (r) goto out;
+	    was_partial = 1;
+	    break;
 	}
 
 	ptrarray_append(&batch, message_new_from_record(mailbox, &record));
