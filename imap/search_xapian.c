@@ -2081,7 +2081,22 @@ static int reindex_mb(void *rock,
 	r = xapian_dbw_open(filter->destpath, &tr->dbw);
 	if (r) goto done;
 	tr->super.mailbox = mailbox;
-	/* flush the messages */
+
+	/* preload */
+	for (i = 0 ; i < batch.count ; i++) {
+	    uint32_t uid;
+	    const char *fname;
+	    message_t *msg = ptrarray_nth(&batch, i);
+	    r = message_get_uid(msg, &uid);
+	    if (r) goto done;
+	    fname = mailbox_message_fname(mailbox, uid);
+	    if (!fname) continue;
+	    r = warmup_file(fname, 0, 0);
+	    if (r) goto done; /* means we failed to open a file,
+				so we'll fail later anyway */
+	}
+
+	/* index the messages */
 	for (i = 0 ; i < batch.count ; i++) {
 	    message_t *msg = ptrarray_nth(&batch, i);
 	    r = index_getsearchtext(msg, &tr->super.super, 0);
