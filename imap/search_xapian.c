@@ -1362,27 +1362,6 @@ out:
     return r;
 }
 
-/* called when update changes user, or when finishing an update */
-static void _receiver_finish_user(xapian_update_receiver_t *tr)
-{
-    if (tr->dbw) {
-	xapian_dbw_close(tr->dbw);
-	tr->dbw = NULL;
-    }
-
-    /* don't unlock until DB is committed */
-    if (tr->activefile) {
-	mappedfile_unlock(tr->activefile);
-	mappedfile_close(&tr->activefile);
-	tr->activefile = NULL;
-    }
-
-    if (tr->activedirs) {
-	strarray_free(tr->activedirs);
-	tr->activedirs = NULL;
-    }
-}
-
 static int begin_mailbox_update(search_text_receiver_t *rx,
 				struct mailbox *mailbox,
 				int incremental __attribute__((unused)))
@@ -1404,44 +1383,39 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
      * reindex using the same algorithm as the "compress" codepath.  The
      * problem is that the index is per user, not per mailbox */
 
-    /* different user - switch active files */
-    if (!tr->activefile || strcmp(mappedfile_fname(tr->activefile), fname)) {
-	_receiver_finish_user(tr);
+    /* we grab an activefile writelock to index.  Strictly we don't need it, but
+     * doing this guarantees we never write under a client which is reading, which
+     * avoids this:
+     *
+     *     IOERROR: Xapian: caught exception: : DatabaseModifiedError: The revision
+     *     being read has been discarded - you should call Xapian::Database::reopen()
+     *     and retry the operation
+     *
+     * in theory, this will go away eventually, and we can switch back to write: 0
+     * in this code.
+     *
+     * http://grokbase.com/t/xapian/xapian-discuss/0667ppbks8/#20060608j8x5aeept49dv5fm8d02xkczgr
+     *
+     * "This is almost invariably caused by updating a database while reading
+     *  from it. If two updates are committed before the read completes, you
+     *  get this error (it's DatabaseModifiedError). It's a bit of a pain
+     *  and will be going away in the future, but it's not too hard to design
+     *  to avoid it happening at least."
+     */
+    active = activefile_open(mailbox->name, mailbox->part, &tr->activefile, /*write*/1);
+    if (!active || !active->count) goto out;
 
-	/* we grab an activefile writelock to index.  Strictly we don't need it, but
-	 * doing this guarantees we never write under a client which is reading, which
-	 * avoids this:
-	 *
-	 *     IOERROR: Xapian: caught exception: : DatabaseModifiedError: The revision
-	 *     being read has been discarded - you should call Xapian::Database::reopen()
-	 *     and retry the operation
-	 *
-	 * in theory, this will go away eventually, and we can switch back to write: 0
-	 * in this code.
-	 *
-	 * http://grokbase.com/t/xapian/xapian-discuss/0667ppbks8/#20060608j8x5aeept49dv5fm8d02xkczgr
-	 *
-	 * "This is almost invariably caused by updating a database while reading
-	 *  from it. If two updates are committed before the read completes, you
-	 *  get this error (it's DatabaseModifiedError). It's a bit of a pain
-	 *  and will be going away in the future, but it's not too hard to design
-	 *  to avoid it happening at least."
-	 */
-	active = activefile_open(mailbox->name, mailbox->part, &tr->activefile, /*write*/1);
-	if (!active || !active->count) goto out;
+    /* doesn't matter if the first one doesn't exist yet, we'll create it */
+    tr->activedirs = activefile_resolve(mailbox->name, mailbox->part, active, /*dostat*/0);
+    if (!tr->activedirs || !tr->activedirs->count) goto out;
 
-	/* doesn't matter if the first one doesn't exist yet, we'll create it */
-	tr->activedirs = activefile_resolve(mailbox->name, mailbox->part, active, /*dostat*/0);
-	if (!tr->activedirs || !tr->activedirs->count) goto out;
+    /* create the directory if needed */
+    r = check_directory(strarray_nth(tr->activedirs, 0), tr->super.verbose, /*create*/1);
+    if (r) goto out;
 
-	/* create the directory if needed */
-	r = check_directory(strarray_nth(tr->activedirs, 0), tr->super.verbose, /*create*/1);
-	if (r) goto out;
-
-	/* open the DB */
-	r = xapian_dbw_open(strarray_nth(tr->activedirs, 0), &tr->dbw);
-	if (r) goto out;
-    }
+    /* open the DB */
+    r = xapian_dbw_open(strarray_nth(tr->activedirs, 0), &tr->dbw);
+    if (r) goto out;
 
     /* read the indexed data from every directory so know what still needs indexing */
     tr->oldindexed = seqset_init(0, SEQ_MERGE);
@@ -1492,6 +1466,23 @@ static int end_mailbox_update(search_text_receiver_t *rx,
 
     tr->super.mailbox = NULL;
 
+    if (tr->dbw) {
+	xapian_dbw_close(tr->dbw);
+	tr->dbw = NULL;
+    }
+
+    /* don't unlock until DB is committed */
+    if (tr->activefile) {
+	mappedfile_unlock(tr->activefile);
+	mappedfile_close(&tr->activefile);
+	tr->activefile = NULL;
+    }
+
+    if (tr->activedirs) {
+	strarray_free(tr->activedirs);
+	tr->activedirs = NULL;
+    }
+
     return r;
 }
 
@@ -1528,8 +1519,6 @@ static void free_receiver(xapian_receiver_t *tr)
 static int end_update(search_text_receiver_t *rx)
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
-
-    _receiver_finish_user(tr);
 
     free_receiver(&tr->super);
 
