@@ -156,13 +156,26 @@ static int flush_batch(search_text_receiver_t *rx,
 		       struct mailbox *mailbox,
 		       ptrarray_t *batch)
 {
-    int locktype = mailbox->index_locktype;
     int i;
     int r = 0;
+    uint32_t uid;
+    const char *fname;
+    message_t *msg;
 
     /* give someone else a chance */
-    if (locktype)
-	mailbox_unlock_index(mailbox, NULL);
+    mailbox_unlock_index(mailbox, NULL);
+
+    /* prefetch files */
+    for (i = 0 ; i < batch->count ; i++) {
+	msg = ptrarray_nth(batch, i);
+	r = message_get_uid(msg, &uid);
+	if (r) return r;
+	fname = mailbox_message_fname(mailbox, uid);
+	if (!fname) return IMAP_INVALID_IDENTIFIER;
+	r = warmup_file(fname, 0, 0);
+	if (r) return r; /* means we failed to open a file,
+			    so we'll fail later anyway */
+    }
 
     for (i = 0 ; i < batch->count ; i++) {
 	message_t *msg = ptrarray_nth(batch, i);
@@ -176,11 +189,6 @@ static int flush_batch(search_text_receiver_t *rx,
 
     if (rx->flush) {
 	r = rx->flush(rx);
-	if (r) return r;
-    }
-
-    if (locktype) {
-	r = mailbox_lock_index(mailbox, locktype);
 	if (r) return r;
     }
 
