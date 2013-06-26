@@ -2148,11 +2148,11 @@ static int search_compress(const char *userid, const strarray_t *srcpaths,
     if (r) goto done;
 
     if (verbose)
-	printf("Reindexing messages for %s\n", userid);
+	printf("Compressing messages for %s\n", userid);
 
     r = xapian_compact_dbs(destpath, (const char **)srcpaths->data);
     if (r) {
-	printf("ERROR: failed to reindex to %s\n", destpath);
+	printf("ERROR: failed to compress to %s\n", destpath);
 	goto done;
     }
 
