@@ -1271,7 +1271,6 @@ out:
     return r;
 }
 
-
 static void prefetch_messages(struct index_state *state,
 			      struct seqset *seq,
 			      int usinguid)
@@ -1280,7 +1279,6 @@ static void prefetch_messages(struct index_state *state,
     struct index_map *im;
     uint32_t msgno;
     char *fname;
-    int fd;
 
     syslog(LOG_ERR, "Prefetching initial parts of messages\n");
 
@@ -1293,12 +1291,7 @@ static void prefetch_messages(struct index_state *state,
 	if (!fname)
 	    continue;
 
-	fd = open(fname, O_RDONLY, 0);
-	if (fd < 0)
-	    continue;
-
-	posix_fadvise(fd, 0, 16384, POSIX_FADV_WILLNEED);
-	close(fd);
+	warmup_file(fname, 0, 16384);
     }
 }
 

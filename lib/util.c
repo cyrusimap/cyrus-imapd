@@ -1565,3 +1565,36 @@ EXPORTED int buf_deflate(struct buf *src, int compLevel, int scheme)
 }
 
 #endif
+
+/*
+ * Warm up a file, by beginning background readahead.  @offset and
+ * @length define a subset of the file to be warmed; @length = 0 means
+ * to the end of the file.  Returns a UNIX errno or 0 on success.  No
+ * error is reported if the file is missing or the kernel doesn't have
+ * the magic system call.
+ *
+ * Returns zero on success or an error code (system error code).
+ */
+EXPORTED int warmup_file(const char *filename,
+		         off_t offset, off_t length)
+{
+    int fd;
+    int r;
+
+    fd = open(filename, O_RDONLY, 0);
+    if (fd < 0) return errno;
+
+    /* Note, posix_fadvise() returns its error code rather than
+     * setting errno.  Unlike every other system call including
+     * others defined in the same standard by the same committee. */
+    r = posix_fadvise(fd, offset, length, POSIX_FADV_WILLNEED);
+
+    /* posix_fadvise(WILLNEED) on Linux will return an EINVAL error
+     * if the file is on tmpfs, even though this effectively means
+     * the file's bytes are all already available in RAM.  Duh. */
+    if (r == EINVAL) r = 0;
+
+    close(fd);
+
+    return r;
+}
