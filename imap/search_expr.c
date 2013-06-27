@@ -729,8 +729,7 @@ EXPORTED int search_expr_normalise(search_expr_t **ep)
     the_rootp = ep;
 #endif
     r = normalise(ep);
-    if (r >= 0)
-	sort_children(*ep);
+    sort_children(*ep);
 #if DEBUG
     the_rootp = NULL;
     the_focus = NULL;
@@ -1006,7 +1005,10 @@ EXPORTED void search_expr_split_by_folder_and_index(search_expr_t *e,
 	 *
 	 * for every "word" the user types into the Search box, by
 	 * avoiding the complexity explosion due to normalising all
-	 * those OR nodes.  */
+	 * those OR nodes.
+	 *
+	 * But - we still sort it.  */
+	sort_children(e);
 	cb(NULL, NULL, e, rock);
 	return;
     }
