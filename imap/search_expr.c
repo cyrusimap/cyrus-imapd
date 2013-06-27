@@ -634,6 +634,10 @@ static int compare(void *p1, void *p2, void *calldata)
     r = dnf_depth(e2) - dnf_depth(e1);
 
     if (!r)
+	r = (e2->attr ? e2->attr->cost : 0)
+	  - (e1->attr ? e1->attr->cost : 0);
+
+    if (!r)
 	r = strcasecmp(e1->attr ? e1->attr->name : "zzz",
 		       e2->attr ? e2->attr->name : "zzz");
 
@@ -1931,6 +1935,15 @@ static int search_text_match(message_t *m, const union search_value *v,
 
 static hash_table attrs_by_name = HASH_TABLE_INITIALIZER;
 
+enum search_cost {
+    SEARCH_COST_NONE = 0,
+    SEARCH_COST_INDEX,
+    SEARCH_COST_CONV,
+    SEARCH_COST_ANNOT,
+    SEARCH_COST_CACHE,
+    SEARCH_COST_BODY
+};
+
 /*
  * Call search_attr_init() before doing any work with search
  * expressions.
@@ -1944,6 +1957,7 @@ EXPORTED void search_attr_init(void)
 	    "bcc",
 	    SEA_FUZZABLE,
 	    SEARCH_PART_BCC,
+	    SEARCH_COST_CACHE,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_string_match,
@@ -1957,6 +1971,7 @@ EXPORTED void search_attr_init(void)
 	    "cc",
 	    SEA_FUZZABLE,
 	    SEARCH_PART_CC,
+	    SEARCH_COST_CACHE,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_string_match,
@@ -1970,6 +1985,7 @@ EXPORTED void search_attr_init(void)
 	    "from",
 	    SEA_FUZZABLE,
 	    SEARCH_PART_FROM,
+	    SEARCH_COST_CACHE,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_string_match,
@@ -1983,6 +1999,7 @@ EXPORTED void search_attr_init(void)
 	    "message-id",
 	    /*flags*/0,
 	    SEARCH_PART_NONE,
+	    SEARCH_COST_CACHE,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_string_match,
@@ -1996,6 +2013,7 @@ EXPORTED void search_attr_init(void)
 	    "listid",
 	    SEA_FUZZABLE,
 	    SEARCH_PART_LISTID,
+	    SEARCH_COST_CACHE,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_listid_match,
@@ -2009,6 +2027,7 @@ EXPORTED void search_attr_init(void)
 	    "contenttype",
 	    SEA_FUZZABLE,
 	    SEARCH_PART_TYPE,
+	    SEARCH_COST_CACHE,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_contenttype_match,
@@ -2022,6 +2041,7 @@ EXPORTED void search_attr_init(void)
 	    "subject",
 	    SEA_FUZZABLE,
 	    SEARCH_PART_SUBJECT,
+	    SEARCH_COST_CACHE,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_string_match,
@@ -2035,6 +2055,7 @@ EXPORTED void search_attr_init(void)
 	    "to",
 	    SEA_FUZZABLE,
 	    SEARCH_PART_TO,
+	    SEARCH_COST_CACHE,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_string_match,
@@ -2048,6 +2069,7 @@ EXPORTED void search_attr_init(void)
 	    "msgno",
 	    SEA_MUTABLE,
 	    SEARCH_PART_NONE,
+	    SEARCH_COST_INDEX,
 	    search_msgno_internalise,
 	    /*cmp*/NULL,
 	    search_seq_match,
@@ -2061,6 +2083,7 @@ EXPORTED void search_attr_init(void)
 	    "uid",
 	    /*flags*/0,
 	    SEARCH_PART_NONE,
+	    SEARCH_COST_INDEX,
 	    search_uid_internalise,
 	    /*cmp*/NULL,
 	    search_seq_match,
@@ -2074,6 +2097,7 @@ EXPORTED void search_attr_init(void)
 	    "systemflags",
 	    SEA_MUTABLE,
 	    SEARCH_PART_NONE,
+	    SEARCH_COST_INDEX,
 	    /*internalise*/NULL,
 	    /*cmp*/NULL,
 	    search_flags_match,
@@ -2087,6 +2111,7 @@ EXPORTED void search_attr_init(void)
 	    "indexflags",
 	    SEA_MUTABLE,
 	    SEARCH_PART_NONE,
+	    SEARCH_COST_INDEX,
 	    /*internalise*/NULL,
 	    /*cmp*/NULL,
 	    search_flags_match,
@@ -2100,6 +2125,7 @@ EXPORTED void search_attr_init(void)
 	    "keyword",
 	    SEA_MUTABLE,
 	    SEARCH_PART_NONE,
+	    SEARCH_COST_INDEX,
 	    search_keyword_internalise,
 	    /*cmp*/NULL,
 	    search_keyword_match,
@@ -2113,6 +2139,7 @@ EXPORTED void search_attr_init(void)
 	    "convflags",
 	    SEA_MUTABLE,
 	    SEARCH_PART_NONE,
+	    SEARCH_COST_CONV,
 	    search_convflags_internalise,
 	    /*cmp*/NULL,
 	    search_convflags_match,
@@ -2126,6 +2153,7 @@ EXPORTED void search_attr_init(void)
 	    "convmodseq",
 	    SEA_MUTABLE,
 	    SEARCH_PART_NONE,
+	    SEARCH_COST_CONV,
 	    search_convmodseq_internalise,
 	    /*cmp*/NULL,
 	    search_convmodseq_match,
@@ -2139,6 +2167,7 @@ EXPORTED void search_attr_init(void)
 	    "modseq",
 	    SEA_MUTABLE,
 	    SEARCH_PART_NONE,
+	    SEARCH_COST_INDEX,
 	    /*internalise*/NULL,
 	    /*cmp*/NULL,
 	    search_uint64_match,
@@ -2152,6 +2181,7 @@ EXPORTED void search_attr_init(void)
 	    "cid",
 	    SEA_MUTABLE,
 	    SEARCH_PART_NONE,
+	    SEARCH_COST_INDEX,
 	    /*internalise*/NULL,
 	    /*cmp*/NULL,
 	    search_uint64_match,
@@ -2165,6 +2195,7 @@ EXPORTED void search_attr_init(void)
 	    "folder",
 	    /*flags*/0,
 	    SEARCH_PART_NONE,
+	    SEARCH_COST_NONE,
 	    search_folder_internalise,
 	    /*cmp*/NULL,
 	    search_folder_match,
@@ -2178,6 +2209,7 @@ EXPORTED void search_attr_init(void)
 	    "annotation",
 	    SEA_MUTABLE,
 	    SEARCH_PART_NONE,
+	    SEARCH_COST_ANNOT,
 	    search_annotation_internalise,
 	    /*cmp*/NULL,
 	    search_annotation_match,
@@ -2191,6 +2223,7 @@ EXPORTED void search_attr_init(void)
 	    "size",
 	    /*flags*/0,
 	    SEARCH_PART_NONE,
+	    SEARCH_COST_INDEX,
 	    /*internalise*/NULL,
 	    search_uint32_cmp,
 	    search_uint32_match,
@@ -2204,6 +2237,7 @@ EXPORTED void search_attr_init(void)
 	    "internaldate",
 	    /*flags*/0,
 	    SEARCH_PART_NONE,
+	    SEARCH_COST_INDEX,
 	    /*internalise*/NULL,
 	    search_uint32_cmp,
 	    search_uint32_match,
@@ -2217,6 +2251,7 @@ EXPORTED void search_attr_init(void)
 	    "sentdate",
 	    /*flags*/0,
 	    SEARCH_PART_NONE,
+	    SEARCH_COST_INDEX,
 	    /*internalise*/NULL,
 	    search_uint32_cmp,
 	    search_uint32_match,
@@ -2230,6 +2265,7 @@ EXPORTED void search_attr_init(void)
 	    "body",
 	    SEA_FUZZABLE,
 	    SEARCH_PART_BODY,
+	    SEARCH_COST_BODY,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_text_match,
@@ -2243,6 +2279,7 @@ EXPORTED void search_attr_init(void)
 	    "text",
 	    SEA_FUZZABLE,
 	    SEARCH_PART_ANY,
+	    SEARCH_COST_BODY,
 	    search_string_internalise,
 	    /*cmp*/NULL,
 	    search_text_match,
@@ -2290,6 +2327,7 @@ EXPORTED const search_attr_t *search_attr_find_field(const char *field)
 	"name",
 	SEA_FUZZABLE,
 	SEARCH_PART_NONE,
+	SEARCH_COST_NONE,
 	search_string_internalise,
 	/*cmp*/NULL,
 	search_header_match,

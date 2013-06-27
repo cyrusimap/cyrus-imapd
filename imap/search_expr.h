@@ -88,6 +88,7 @@ struct search_attr {
     const char *name;
     int flags;
     int part;
+    int cost;
     void (*internalise)(struct index_state *, const union search_value *,
 		       void **internalisedp);
     int (*cmp)(message_t *, const union search_value *, void *internalised, void *data1);
