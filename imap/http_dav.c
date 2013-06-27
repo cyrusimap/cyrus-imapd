@@ -174,6 +174,7 @@ enum {
 /* Linked-list of properties for fetching */
 struct propfind_entry_list {
     xmlNodePtr prop;			/* Property */
+    unsigned char flags;		/* Flags for how/where props apply */
     int (*get)(xmlNodePtr node,		/* Callback to fetch property */
 	       struct propfind_ctx *fctx, xmlNodePtr resp,
 	       struct propstat propstat[], void *rock);
@@ -652,7 +653,20 @@ static int xml_add_response(struct propfind_ctx *fctx, long code)
 	    int r = HTTP_NOT_ALLOWED;
 
 	    if (e->get) {
-		r = e->get(e->prop, fctx, resp, propstat, e->rock);
+		r = 0;
+
+		/* Pre-screen request based on prop flags */
+		switch (fctx->req_tgt->namespace) {
+		case URL_NS_CALENDAR:
+		case URL_NS_ADDRESSBOOK:
+		    if (fctx->req_tgt->resource) {
+			if (!(e->flags & PROP_RESOURCE)) r = HTTP_NOT_FOUND;
+		    }
+		    else if (!(e->flags & PROP_COLLECTION)) r = HTTP_NOT_FOUND;
+		    break;
+		}
+
+		if (!r) r = e->get(e->prop, fctx, resp, propstat, e->rock);
 	    }
 
 	    switch (r) {
@@ -767,7 +781,9 @@ static int propfind_getlength(xmlNodePtr prop,
 {
     uint32_t len = 0;
 
-    if (fctx->record) len = fctx->record->size - fctx->record->header_size;
+    if (!fctx->record) return HTTP_NOT_FOUND;
+
+    len = fctx->record->size - fctx->record->header_size;
 
     buf_reset(&fctx->buf);
     buf_printf(&fctx->buf, "%u", len);
@@ -1019,12 +1035,8 @@ static int propfind_principalurl(xmlNodePtr prop,
 				 struct propstat propstat[],
 				 void *rock __attribute__((unused)))
 {
-    xmlNodePtr node;
-
-    if (fctx->req_tgt->namespace != URL_NS_PRINCIPAL) return HTTP_NOT_FOUND;
-
-    node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			prop, NULL, 0);
+    xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
+				   &propstat[PROPSTAT_OK], prop, NULL, 0);
 
     buf_reset(&fctx->buf);
     if (fctx->req_tgt->user) {
@@ -1046,14 +1058,10 @@ static int propfind_owner(xmlNodePtr prop,
 			  struct propstat propstat[],
 			  void *rock __attribute__((unused)))
 {
-    xmlNodePtr node;
+    xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
+				   &propstat[PROPSTAT_OK], prop, NULL, 0);
 
-    node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			prop, NULL, 0);
-
-    if ((fctx->req_tgt->namespace == URL_NS_CALENDAR ||
-	 fctx->req_tgt->namespace == URL_NS_ADDRESSBOOK) &&
-	fctx->req_tgt->user) {
+    if (fctx->req_tgt->user) {
 	buf_reset(&fctx->buf);
 	buf_printf(&fctx->buf, "%s/user/%.*s/",
 		   namespace_principal.prefix,
@@ -1558,9 +1566,7 @@ static int propfind_addmember(xmlNodePtr prop,
     xmlNodePtr node;
     int len;
 
-    if (!fctx->req_tgt->collection
-	/* Until Apple Contacts is fixed */
-	|| fctx->req_tgt->namespace != URL_NS_CALENDAR) return HTTP_NOT_FOUND;
+    if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
 
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			prop, NULL, 0);
@@ -1642,24 +1648,22 @@ static int propfind_calurl(xmlNodePtr prop,
     xmlNodePtr node;
     const char *cal = (const char *) rock;
 
-    if (fctx->userid &&
-	/* sched-def-cal-URL only defined on sched-inbox-URL */
-	((fctx->req_tgt->namespace == URL_NS_CALENDAR &&
-	  fctx->req_tgt->collection && cal &&
-	  !strcmp(fctx->req_tgt->collection, SCHED_INBOX) &&
-	  !strcmp(cal, SCHED_DEFAULT))
-	 /* others only defined on principals */
-	 || (fctx->req_tgt->namespace == URL_NS_PRINCIPAL))) {
-	node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			    prop, NULL, 0);
+    if (!fctx->userid) return HTTP_NOT_FOUND;
 
-	buf_reset(&fctx->buf);
-	buf_printf(&fctx->buf, "%s/user/%s/%s",
-		   namespace_calendar.prefix, fctx->userid, cal ? cal : "");
+    /* sched-def-cal-URL only defined on sched-inbox-URL */
+    if (!xmlStrcmp(prop->name, BAD_CAST "schedule-default-calendar-URL") &&
+	(!fctx->req_tgt->collection ||
+	 strcmp(fctx->req_tgt->collection, SCHED_INBOX)))
+	return HTTP_NOT_FOUND;
 
-	xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
-    }
-    else return HTTP_NOT_FOUND;
+    node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+			prop, NULL, 0);
+
+    buf_reset(&fctx->buf);
+    buf_printf(&fctx->buf, "%s/user/%s/%s",
+	       namespace_calendar.prefix, fctx->userid, cal ? cal : "");
+
+    xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
 
     return 0;
 }
@@ -1672,24 +1676,21 @@ static int propfind_calcompset(xmlNodePtr prop,
 			       struct propstat propstat[],
 			       void *rock __attribute__((unused)))
 {
+    const char *prop_annot = ANNOT_NS "CALDAV:supported-calendar-component-set";
     struct annotation_data attrib;
     unsigned long types = 0;
     xmlNodePtr set, node;
     const struct cal_comp_t *comp;
     int r = 0;
 
-    if ((fctx->req_tgt->namespace == URL_NS_CALENDAR) &&
-	fctx->req_tgt->collection && !fctx->req_tgt->resource) {
-	const char *prop_annot =
-	    ANNOT_NS "CALDAV:supported-calendar-component-set";
+    if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
 
-	if (!(r = annotatemore_lookup(fctx->mailbox->name, prop_annot,
-				      /* shared */ "", &attrib))) {
-	    if (attrib.value)
-		types = strtoul(attrib.value, NULL, 10);
-	    else
-		types = -1;  /* ALL components types */
-	}
+    if (!(r = annotatemore_lookup(fctx->mailbox->name, prop_annot,
+				  /* shared */ "", &attrib))) {
+	if (attrib.value)
+	    types = strtoul(attrib.value, NULL, 10);
+	else
+	    types = -1;  /* ALL components types */
     }
 
     if (r) return HTTP_SERVER_ERROR;
@@ -1790,20 +1791,15 @@ static int propfind_suppcaldata(xmlNodePtr prop,
 {
     xmlNodePtr node;
 
-    if ((fctx->req_tgt->namespace != URL_NS_CALENDAR) ||
-	!fctx->req_tgt->collection || fctx->req_tgt->resource)
-	return HTTP_NOT_FOUND;
+    if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
 
-    if ((fctx->req_tgt->namespace == URL_NS_CALENDAR) &&
-	fctx->req_tgt->collection && !fctx->req_tgt->resource) {
-	node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			    prop, NULL, 0);
+    node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+			prop, NULL, 0);
 
-	node = xmlNewChild(node, fctx->ns[NS_CALDAV],
-			   BAD_CAST "calendar-data", NULL);
-	xmlNewProp(node, BAD_CAST "content-type", BAD_CAST "text/calendar");
-	xmlNewProp(node, BAD_CAST "version", BAD_CAST "2.0");
-    }
+    node = xmlNewChild(node, fctx->ns[NS_CALDAV],
+		       BAD_CAST "calendar-data", NULL);
+    xmlNewProp(node, BAD_CAST "content-type", BAD_CAST "text/calendar");
+    xmlNewProp(node, BAD_CAST "version", BAD_CAST "2.0");
 
     return 0;
 }
@@ -1863,21 +1859,17 @@ static int propfind_caltransp(xmlNodePtr prop,
 			      struct propstat propstat[],
 			      void *rock __attribute__((unused)))
 {
+    const char *prop_annot = ANNOT_NS "CALDAV:schedule-calendar-transp";
     struct annotation_data attrib;
     const char *value = NULL;
     xmlNodePtr node;
     int r = 0;
 
-    if ((fctx->req_tgt->namespace == URL_NS_CALENDAR) &&
-	fctx->req_tgt->collection && !fctx->req_tgt->resource) {
-	const char *prop_annot =
-	    ANNOT_NS "CALDAV:schedule-calendar-transp";
+    if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
 
-	if (!(r = annotatemore_lookup(fctx->mailbox->name, prop_annot,
-				      /* shared */ "", &attrib))
-	    && attrib.value) {
-	    value = attrib.value;
-	}
+    if (!(r = annotatemore_lookup(fctx->mailbox->name, prop_annot,
+				  /* shared */ "", &attrib)) && attrib.value) {
+	value = attrib.value;
     }
 
     if (r) return HTTP_SERVER_ERROR;
@@ -2034,9 +2026,7 @@ static int propfind_abookurl(xmlNodePtr prop,
     xmlNodePtr node;
     const char *abook = (const char *) rock;
 
-    if (!fctx->userid ||
-	(fctx->req_tgt->namespace != URL_NS_PRINCIPAL))
-	return HTTP_NOT_FOUND;
+    if (!fctx->userid) return HTTP_NOT_FOUND;
 
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			prop, NULL, 0);
@@ -2060,9 +2050,7 @@ static int propfind_suppaddrdata(xmlNodePtr prop,
 {
     xmlNodePtr node;
 
-    if ((fctx->req_tgt->namespace != URL_NS_ADDRESSBOOK) ||
-	!fctx->req_tgt->collection || fctx->req_tgt->resource)
-	return HTTP_NOT_FOUND;
+    if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
 
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			prop, NULL, 0);
@@ -2108,8 +2096,6 @@ static int propfind_fromhdr(xmlNodePtr prop,
 	}
 
 	spool_free_hdrcache(hdrs);
-
-	if (hdr) return 0;
     }
 
     return r;
@@ -2274,7 +2260,8 @@ static const struct prop_entry {
       propfind_curprin, NULL, NULL },
 
     /* WebDAV POST (RFC 5995) properties */
-    { "add-member", XML_NS_DAV, PROP_COLLECTION,
+    { "add-member", XML_NS_DAV, PROP_COLLECTION
+      | PROP_CALENDAR,  /* Until Apple Contacts is fixed */
       propfind_addmember, NULL, NULL },
 
     /* WebDAV Sync (RFC 6578) properties */
@@ -2308,8 +2295,7 @@ static const struct prop_entry {
       propfind_calurl, NULL, SCHED_INBOX },
     { "schedule-outbox-URL", XML_NS_CALDAV, PROP_PRINCIPAL,
       propfind_calurl, NULL, SCHED_OUTBOX },
-    { "schedule-default-calendar-URL", XML_NS_CALDAV,
-      PROP_PRINCIPAL | PROP_COLLECTION,
+    { "schedule-default-calendar-URL", XML_NS_CALDAV, PROP_COLLECTION,
       propfind_calurl, NULL, SCHED_DEFAULT },
     { "schedule-calendar-transp", XML_NS_CALDAV,
       PROP_COLLECTION | PROP_CALENDAR,
@@ -2369,7 +2355,7 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 
 	    nentry->prop = prop;
 	    if (entry->name) {
-		/* Found a match - make sure its allowed */
+		/* Found a match - Pre-screen request based on prop flags */
 		xmlChar *type =  NULL, *ver = NULL;
 		unsigned allowed = 1;
 
@@ -2379,7 +2365,6 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 		    break;
 
 		case URL_NS_CALENDAR:
-		    /* Pre-screen request based on property flags */
 		    if ((entry->flags & PROP_ADDRESSBOOK) ||
 			(fctx->req_tgt->resource &&
 			 !(entry->flags & PROP_RESOURCE))) {
@@ -2399,7 +2384,6 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 		    break;
 
 		case URL_NS_ADDRESSBOOK:
-		    /* Pre-screen request based on property flags */
 		    if ((entry->flags & PROP_CALENDAR) ||
 			(fctx->req_tgt->resource &&
 			 !(entry->flags & PROP_RESOURCE))) {
@@ -2427,12 +2411,14 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 		if (ver) xmlFree(ver);
 
 		if (allowed) {
+		    nentry->flags = entry->flags;
 		    nentry->get = entry->get;
 		    nentry->rock = entry->rock;
 		}
 	    }
 	    else {
 		/* No match, treat as a dead property */
+		nentry->flags = PROP_COLLECTION;
 		nentry->get = propfind_fromdb;
 		nentry->rock = NULL;
 	    }
