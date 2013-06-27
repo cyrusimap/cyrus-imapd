@@ -2456,8 +2456,6 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 		case URL_NS_CALENDAR:
 		    /* Pre-screen request based on property flags */
 		    if ((entry->flags & PROP_ADDRESSBOOK) ||
-			((fctx->depth <= 1) &&
-			 !(entry->flags & PROP_COLLECTION)) ||
 			(fctx->req_tgt->resource &&
 			 !(entry->flags & PROP_RESOURCE))) {
 			allowed = 0;
@@ -2478,8 +2476,6 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 		case URL_NS_ADDRESSBOOK:
 		    /* Pre-screen request based on property flags */
 		    if ((entry->flags & PROP_CALENDAR) ||
-			((fctx->depth <= 1) &&
-			 !(entry->flags & PROP_COLLECTION)) ||
 			(fctx->req_tgt->resource &&
 			 !(entry->flags & PROP_RESOURCE))) {
 			allowed = 0;
