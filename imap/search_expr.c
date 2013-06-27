@@ -634,8 +634,8 @@ static int compare(void *p1, void *p2, void *calldata)
     r = dnf_depth(e2) - dnf_depth(e1);
 
     if (!r)
-	r = (e2->attr ? e2->attr->cost : 0)
-	  - (e1->attr ? e1->attr->cost : 0);
+	r = (e1->attr ? e1->attr->cost : 0)
+	  - (e2->attr ? e2->attr->cost : 0);
 
     if (!r)
 	r = strcasecmp(e1->attr ? e1->attr->name : "zzz",
