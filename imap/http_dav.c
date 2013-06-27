@@ -976,7 +976,6 @@ static int propfind_reportset(xmlNodePtr prop,
 	fctx->req_tgt->collection && !fctx->req_tgt->resource) {
 	s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
 	r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
-	ensure_ns(fctx->ns, NS_DAV, resp->parent, XML_NS_DAV, "D");
 	xmlNewChild(r, fctx->ns[NS_DAV], BAD_CAST "sync-collection", NULL);
     }
 
@@ -1643,7 +1642,6 @@ static int propfind_calurl(xmlNodePtr prop,
     xmlNodePtr node;
     const char *cal = (const char *) rock;
 
-    ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
     if (fctx->userid &&
 	/* sched-def-cal-URL only defined on sched-inbox-URL */
 	((fctx->req_tgt->namespace == URL_NS_CALENDAR &&
@@ -1820,7 +1818,6 @@ static int propfind_schedtag(xmlNodePtr prop,
 {
     struct caldav_data *cdata = (struct caldav_data *) fctx->data;
 
-    ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
     if (!cdata->sched_tag) return HTTP_NOT_FOUND;
 
     /* add DQUOTEs */
@@ -1843,7 +1840,6 @@ static int propfind_caluseraddr(xmlNodePtr prop,
 {
     xmlNodePtr node;
 
-    ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
     if (!fctx->userid) return HTTP_NOT_FOUND;
 
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
@@ -1884,7 +1880,6 @@ static int propfind_caltransp(xmlNodePtr prop,
 	}
     }
 
-    ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
     if (r) return HTTP_SERVER_ERROR;
     if (!value) return HTTP_NOT_FOUND;
 
@@ -2039,7 +2034,6 @@ static int propfind_abookurl(xmlNodePtr prop,
     xmlNodePtr node;
     const char *abook = (const char *) rock;
 
-    ensure_ns(fctx->ns, NS_CARDDAV, resp->parent, XML_NS_CARDDAV, "C");
     if (!fctx->userid ||
 	(fctx->req_tgt->namespace != URL_NS_PRINCIPAL))
 	return HTTP_NOT_FOUND;
