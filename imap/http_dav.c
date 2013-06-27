@@ -186,8 +186,9 @@ enum {
 
 /* Linked-list of properties for fetching */
 struct propfind_entry_list {
-    xmlNodePtr prop;			/* Property */
-    unsigned char flags;		/* Flags for how/where props apply */
+    const xmlChar *name;		/* Property name */
+    xmlNsPtr ns;			/* Property namespace */
+    unsigned char flags;		/* Flags for how/where prop apply */
     int (*get)(const xmlChar *name,	/* Callback to fetch property */
 	       xmlNsPtr ns, struct propfind_ctx *fctx, xmlNodePtr resp,
 	       struct propstat propstat[], void *rock);
@@ -680,7 +681,7 @@ static int xml_add_response(struct propfind_ctx *fctx, long code)
 		    break;
 		}
 
-		if (!r) r = e->get(e->prop->name, e->prop->ns,
+		if (!r) r = e->get(e->name, e->ns,
 				   fctx, resp, propstat, e->rock);
 	    }
 
@@ -693,26 +694,26 @@ static int xml_add_response(struct propfind_ctx *fctx, long code)
 	    case HTTP_UNAUTHORIZED:
 		xml_add_prop(HTTP_UNAUTHORIZED, fctx->ns[NS_DAV],
 			     &propstat[PROPSTAT_UNAUTH],
-			     e->prop->name, e->prop->ns, NULL, 0);
+			     e->name, e->ns, NULL, 0);
 		break;
 
 	    case HTTP_FORBIDDEN:
 		xml_add_prop(HTTP_FORBIDDEN, fctx->ns[NS_DAV],
 			     &propstat[PROPSTAT_FORBID],
-			     e->prop->name, e->prop->ns, NULL, 0);
+			     e->name, e->ns, NULL, 0);
 		break;
 
 	    case HTTP_NOT_FOUND:
 		if (!(fctx->prefer & PREFER_MIN)) {
 		    xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
 				 &propstat[PROPSTAT_NOTFOUND],
-				 e->prop->name, e->prop->ns, NULL, 0);
+				 e->name, e->ns, NULL, 0);
 		}
 		break;
 
 	    default:
 		xml_add_prop(r, fctx->ns[NS_DAV], &propstat[PROPSTAT_ERROR],
-			     e->prop->name, e->prop->ns, NULL, 0);
+			     e->name, e->ns, NULL, 0);
 		break;
 
 	    }
@@ -2371,7 +2372,8 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 			     known_namespaces[entry->ns].href));
 		 entry++);
 
-	    nentry->prop = prop;
+	    nentry->name = prop->name;
+	    nentry->ns = prop->ns;
 	    if (entry->name) {
 		/* Found a match - Pre-screen request based on prop flags */
 		xmlChar *type =  NULL, *ver = NULL;
