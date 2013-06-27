@@ -2284,7 +2284,7 @@ static const struct prop_entry {
       propfind_addmember, NULL, NULL },
 
     /* WebDAV Sync (RFC 6578) properties */
-    { "sync-token", XML_NS_DAV, PROP_ALLPROP | PROP_COLLECTION,
+    { "sync-token", XML_NS_DAV, PROP_COLLECTION,
       propfind_sync_token, NULL, NULL },
 
     /* CalDAV (RFC 4791) properties */
