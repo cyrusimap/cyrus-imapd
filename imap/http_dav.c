@@ -94,6 +94,19 @@ enum {
     PROP_ADDRESSBOOK =	(1<<6)		/* Returned for addressbook only */
 };
 
+static const struct dav_namespace_t {
+    const char *href;
+    const char *prefix;
+} known_namespaces[] = {
+    { XML_NS_DAV, "D" },
+    { XML_NS_CALDAV, "C" },
+    { XML_NS_CARDDAV, "C" },
+    { XML_NS_ISCHED, "IS" },
+    { XML_NS_CS, "CS" },
+    { XML_NS_CYRUS, "CY" },
+    { XML_NS_ICAL, "IC" }
+};
+
 static void my_dav_init(struct buf *serverinfo);
 
 static int prin_parse_path(const char *path,
@@ -2184,7 +2197,7 @@ static int proppatch_todb(xmlNodePtr prop, unsigned set,
 /* Array of known "live" properties */
 static const struct prop_entry {
     const char *name;			/* Property name */
-    const char *ns;			/* Property namespace */
+    unsigned ns;			/* Property namespace */
     unsigned char flags;		/* Flags for how/where props apply */
     int (*get)(xmlNodePtr node,		/* Callback to fetch property */
 	       struct propfind_ctx *fctx, xmlNodePtr resp,
@@ -2196,138 +2209,138 @@ static const struct prop_entry {
 } prop_entries[] = {
 
     /* WebDAV (RFC 4918) properties */
-    { "creationdate", XML_NS_DAV,
+    { "creationdate", NS_DAV,
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
       propfind_creationdate, NULL, NULL },
-    { "displayname", XML_NS_DAV,
+    { "displayname", NS_DAV,
       PROP_ALLPROP | PROP_PRINCIPAL | PROP_COLLECTION | PROP_RESOURCE,
       propfind_fromdb, proppatch_todb, NULL },
-    { "getcontentlanguage", XML_NS_DAV, PROP_ALLPROP | PROP_RESOURCE,
+    { "getcontentlanguage", NS_DAV, PROP_ALLPROP | PROP_RESOURCE,
       propfind_fromhdr, NULL, "Content-Language" },
-    { "getcontentlength", XML_NS_DAV, PROP_ALLPROP | PROP_RESOURCE,
+    { "getcontentlength", NS_DAV, PROP_ALLPROP | PROP_RESOURCE,
       propfind_getlength, NULL, NULL },
-    { "getcontenttype", XML_NS_DAV,
+    { "getcontenttype", NS_DAV,
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
       propfind_fromhdr, NULL, "Content-Type" },
-    { "getetag", XML_NS_DAV, PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
+    { "getetag", NS_DAV, PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
       propfind_getetag, NULL, NULL },
-    { "getlastmodified", XML_NS_DAV,
+    { "getlastmodified", NS_DAV,
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
       propfind_getlastmod, NULL, NULL },
-    { "lockdiscovery", XML_NS_DAV, PROP_ALLPROP | PROP_RESOURCE,
+    { "lockdiscovery", NS_DAV, PROP_ALLPROP | PROP_RESOURCE,
       propfind_lockdisc, NULL, NULL },
-    { "resourcetype", XML_NS_DAV,
+    { "resourcetype", NS_DAV,
       PROP_ALLPROP | PROP_PRINCIPAL | PROP_COLLECTION | PROP_RESOURCE,
       propfind_restype, proppatch_restype, NULL },
-    { "supportedlock", XML_NS_DAV, PROP_ALLPROP | PROP_RESOURCE,
+    { "supportedlock", NS_DAV, PROP_ALLPROP | PROP_RESOURCE,
       propfind_suplock, NULL, NULL },
 
     /* WebDAV Versioning (RFC 3253) properties */
-    { "supported-report-set", XML_NS_DAV, PROP_PRINCIPAL | PROP_COLLECTION,
+    { "supported-report-set", NS_DAV, PROP_PRINCIPAL | PROP_COLLECTION,
       propfind_reportset, NULL, NULL },
 
     /* WebDAV ACL (RFC 3744) properties */
-    { "alternate-URI-set", XML_NS_DAV, 0, NULL, NULL, NULL },
-    { "principal-URL", XML_NS_DAV, PROP_PRINCIPAL,
+    { "alternate-URI-set", NS_DAV, 0, NULL, NULL, NULL },
+    { "principal-URL", NS_DAV, PROP_PRINCIPAL,
       propfind_principalurl, NULL, NULL },
-    { "group-member-set", XML_NS_DAV, 0, NULL, NULL, NULL },
-    { "group-membership", XML_NS_DAV, 0, NULL, NULL, NULL },
-    { "owner", XML_NS_DAV, PROP_COLLECTION | PROP_RESOURCE,
+    { "group-member-set", NS_DAV, 0, NULL, NULL, NULL },
+    { "group-membership", NS_DAV, 0, NULL, NULL, NULL },
+    { "owner", NS_DAV, PROP_COLLECTION | PROP_RESOURCE,
       propfind_owner, NULL, NULL },
-    { "group", XML_NS_DAV, 0, NULL, NULL, NULL },
-    { "supported-privilege-set", XML_NS_DAV, PROP_COLLECTION | PROP_RESOURCE,
+    { "group", NS_DAV, 0, NULL, NULL, NULL },
+    { "supported-privilege-set", NS_DAV, PROP_COLLECTION | PROP_RESOURCE,
       propfind_supprivset, NULL, NULL },
-    { "current-user-privilege-set", XML_NS_DAV, PROP_COLLECTION | PROP_RESOURCE,
+    { "current-user-privilege-set", NS_DAV, PROP_COLLECTION | PROP_RESOURCE,
       propfind_curprivset, NULL, NULL },
-    { "acl", XML_NS_DAV, PROP_COLLECTION | PROP_RESOURCE,
+    { "acl", NS_DAV, PROP_COLLECTION | PROP_RESOURCE,
       propfind_acl, NULL, NULL },
-    { "acl-restrictions", XML_NS_DAV, PROP_COLLECTION | PROP_RESOURCE,
+    { "acl-restrictions", NS_DAV, PROP_COLLECTION | PROP_RESOURCE,
       propfind_aclrestrict, NULL, NULL },
-    { "inherited-acl-set", XML_NS_DAV, 0, NULL, NULL, NULL },
-    { "principal-collection-set", XML_NS_DAV,
+    { "inherited-acl-set", NS_DAV, 0, NULL, NULL, NULL },
+    { "principal-collection-set", NS_DAV,
       PROP_ROOT | PROP_PRINCIPAL | PROP_COLLECTION | PROP_RESOURCE,
       propfind_princolset, NULL, NULL },
 
     /* WebDAV Quota (RFC 4331) properties */
-    { "quota-available-bytes", XML_NS_DAV, PROP_COLLECTION,
+    { "quota-available-bytes", NS_DAV, PROP_COLLECTION,
       propfind_quota, NULL, NULL },
-    { "quota-used-bytes", XML_NS_DAV, PROP_COLLECTION,
+    { "quota-used-bytes", NS_DAV, PROP_COLLECTION,
       propfind_quota, NULL, NULL },
 
     /* WebDAV Current Principal (RFC 5397) properties */
-    { "current-user-principal", XML_NS_DAV,
+    { "current-user-principal", NS_DAV,
       PROP_ROOT | PROP_PRINCIPAL | PROP_COLLECTION | PROP_RESOURCE,
       propfind_curprin, NULL, NULL },
 
     /* WebDAV POST (RFC 5995) properties */
-    { "add-member", XML_NS_DAV, PROP_COLLECTION
+    { "add-member", NS_DAV, PROP_COLLECTION
       | PROP_CALENDAR,  /* Until Apple Contacts is fixed */
       propfind_addmember, NULL, NULL },
 
     /* WebDAV Sync (RFC 6578) properties */
-    { "sync-token", XML_NS_DAV, PROP_COLLECTION,
+    { "sync-token", NS_DAV, PROP_COLLECTION,
       propfind_sync_token, NULL, NULL },
 
     /* CalDAV (RFC 4791) properties */
-    { "calendar-data", XML_NS_CALDAV, PROP_RESOURCE | PROP_CALENDAR,
+    { "calendar-data", NS_CALDAV, PROP_RESOURCE | PROP_CALENDAR,
       propfind_getdata, NULL, NULL },
-    { "calendar-description", XML_NS_CALDAV, PROP_COLLECTION | PROP_CALENDAR,
+    { "calendar-description", NS_CALDAV, PROP_COLLECTION | PROP_CALENDAR,
       propfind_fromdb, proppatch_todb, NULL },
-    { "calendar-home-set", XML_NS_CALDAV, PROP_PRINCIPAL,
+    { "calendar-home-set", NS_CALDAV, PROP_PRINCIPAL,
       propfind_calurl, NULL, NULL },
-    { "calendar-timezone", XML_NS_CALDAV, PROP_COLLECTION | PROP_CALENDAR,
+    { "calendar-timezone", NS_CALDAV, PROP_COLLECTION | PROP_CALENDAR,
       propfind_fromdb, proppatch_timezone, NULL },
-    { "supported-calendar-component-set", XML_NS_CALDAV,
+    { "supported-calendar-component-set", NS_CALDAV,
       PROP_COLLECTION | PROP_CALENDAR,
       propfind_calcompset, proppatch_calcompset, NULL },
-    { "supported-calendar-data", XML_NS_CALDAV, PROP_COLLECTION | PROP_CALENDAR,
+    { "supported-calendar-data", NS_CALDAV, PROP_COLLECTION | PROP_CALENDAR,
       propfind_suppcaldata, NULL, NULL },
-    { "max-resource-size", XML_NS_CALDAV, 0, NULL, NULL, NULL },
-    { "min-date-time", XML_NS_CALDAV, 0, NULL, NULL, NULL },
-    { "max-date-time", XML_NS_CALDAV, 0, NULL, NULL, NULL },
-    { "max-instances", XML_NS_CALDAV, 0, NULL, NULL, NULL },
-    { "max-attendees-per-instance", XML_NS_CALDAV, 0, NULL, NULL, NULL },
+    { "max-resource-size", NS_CALDAV, 0, NULL, NULL, NULL },
+    { "min-date-time", NS_CALDAV, 0, NULL, NULL, NULL },
+    { "max-date-time", NS_CALDAV, 0, NULL, NULL, NULL },
+    { "max-instances", NS_CALDAV, 0, NULL, NULL, NULL },
+    { "max-attendees-per-instance", NS_CALDAV, 0, NULL, NULL, NULL },
 
     /* CalDAV Scheduling (RFC 6638) properties */
-    { "schedule-tag", XML_NS_CALDAV, PROP_RESOURCE | PROP_CALENDAR,
+    { "schedule-tag", NS_CALDAV, PROP_RESOURCE | PROP_CALENDAR,
       propfind_schedtag, NULL, NULL },
-    { "schedule-inbox-URL", XML_NS_CALDAV, PROP_PRINCIPAL,
+    { "schedule-inbox-URL", NS_CALDAV, PROP_PRINCIPAL,
       propfind_calurl, NULL, SCHED_INBOX },
-    { "schedule-outbox-URL", XML_NS_CALDAV, PROP_PRINCIPAL,
+    { "schedule-outbox-URL", NS_CALDAV, PROP_PRINCIPAL,
       propfind_calurl, NULL, SCHED_OUTBOX },
-    { "schedule-default-calendar-URL", XML_NS_CALDAV, PROP_COLLECTION,
+    { "schedule-default-calendar-URL", NS_CALDAV, PROP_COLLECTION,
       propfind_calurl, NULL, SCHED_DEFAULT },
-    { "schedule-calendar-transp", XML_NS_CALDAV,
+    { "schedule-calendar-transp", NS_CALDAV,
       PROP_COLLECTION | PROP_CALENDAR,
       propfind_caltransp, proppatch_caltransp, NULL },
-    { "calendar-user-address-set", XML_NS_CALDAV, PROP_PRINCIPAL,
+    { "calendar-user-address-set", NS_CALDAV, PROP_PRINCIPAL,
       propfind_caluseraddr, NULL, NULL },
-    { "calendar-user-type", XML_NS_CALDAV, 0, NULL, NULL, NULL },
+    { "calendar-user-type", NS_CALDAV, 0, NULL, NULL, NULL },
 
     /* CardDAV (RFC 6352) properties */
-    { "address-data", XML_NS_CARDDAV, PROP_RESOURCE | PROP_ADDRESSBOOK,
+    { "address-data", NS_CARDDAV, PROP_RESOURCE | PROP_ADDRESSBOOK,
       propfind_getdata, NULL, NULL },
-    { "addressbook-description", XML_NS_CARDDAV,
+    { "addressbook-description", NS_CARDDAV,
       PROP_COLLECTION | PROP_ADDRESSBOOK,
       propfind_fromdb, proppatch_todb, NULL },
-    { "addressbook-home-set", XML_NS_CARDDAV, PROP_PRINCIPAL,
+    { "addressbook-home-set", NS_CARDDAV, PROP_PRINCIPAL,
       propfind_abookurl, NULL, NULL },
-    { "supported-address-data", XML_NS_CARDDAV,
+    { "supported-address-data", NS_CARDDAV,
       PROP_COLLECTION | PROP_ADDRESSBOOK,
       propfind_suppaddrdata, NULL, NULL },
-    { "max-resource-size", XML_NS_CARDDAV, 0, NULL, NULL, NULL },
+    { "max-resource-size", NS_CARDDAV, 0, NULL, NULL, NULL },
 
     /* Apple Calendar Server properties */
-    { "getctag", XML_NS_CS, PROP_ALLPROP | PROP_COLLECTION,
+    { "getctag", NS_CS, PROP_ALLPROP | PROP_COLLECTION,
       propfind_sync_token, NULL, NULL },
 
     /* Apple iCal properties */
-    { "calendar-color", XML_NS_ICAL, PROP_COLLECTION | PROP_CALENDAR,
+    { "calendar-color", NS_ICAL, PROP_COLLECTION | PROP_CALENDAR,
       propfind_fromdb, proppatch_todb, NULL },
-    { "calendar-order", XML_NS_ICAL, PROP_COLLECTION | PROP_CALENDAR,
+    { "calendar-order", NS_ICAL, PROP_COLLECTION | PROP_CALENDAR,
       propfind_fromdb, proppatch_todb, NULL },
 
-    { NULL, NULL, 0, NULL, NULL, NULL }
+    { NULL, 0, 0, NULL, NULL, NULL }
 };
 
 
@@ -2350,7 +2363,8 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 	    for (entry = prop_entries;
 		 entry->name && 
 		     (strcmp((const char *) prop->name, entry->name) ||
-		      strcmp((const char *) prop->ns->href, entry->ns));
+		      strcmp((const char *) prop->ns->href,
+			     known_namespaces[entry->ns].href));
 		 entry++);
 
 	    nentry->prop = prop;
@@ -2471,7 +2485,8 @@ static int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
 		    for (entry = prop_entries;
 			 entry->name &&
 			     (strcmp((const char *) prop->name, entry->name) ||
-			      strcmp((const char *) prop->ns->href, entry->ns));
+			      strcmp((const char *) prop->ns->href,
+				     known_namespaces[entry->ns].href));
 			 entry++);
 
 		    if (entry->name) {
