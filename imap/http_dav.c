@@ -2334,12 +2334,6 @@ static const struct prop_entry {
     { "getctag", NS_CS, PROP_ALLPROP | PROP_COLLECTION,
       propfind_sync_token, NULL, NULL },
 
-    /* Apple iCal properties */
-    { "calendar-color", NS_ICAL, PROP_COLLECTION | PROP_CALENDAR,
-      propfind_fromdb, proppatch_todb, NULL },
-    { "calendar-order", NS_ICAL, PROP_COLLECTION | PROP_CALENDAR,
-      propfind_fromdb, proppatch_todb, NULL },
-
     { NULL, 0, 0, NULL, NULL, NULL }
 };
 
