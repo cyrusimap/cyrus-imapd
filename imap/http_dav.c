@@ -104,7 +104,6 @@ static const struct dav_namespace_t {
     { XML_NS_ISCHED, NULL },
     { XML_NS_CS, "CS" },
     { XML_NS_CYRUS, "CY" },
-    { XML_NS_ICAL, "IC" }
 };
 
 /* PROPFIND modes */
@@ -450,10 +449,6 @@ static int xml_add_ns(xmlNodePtr req, xmlNsPtr *respNs, xmlNodePtr root)
 			      (const char *) nsDef->prefix);
 		else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_CYRUS))
 		    ensure_ns(respNs, NS_CYRUS, root,
-			      (const char *) nsDef->href,
-			      (const char *) nsDef->prefix);
-		else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_ICAL))
-		    ensure_ns(respNs, NS_ICAL, root,
 			      (const char *) nsDef->href,
 			      (const char *) nsDef->prefix);
 		else

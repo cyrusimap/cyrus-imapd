@@ -71,7 +71,6 @@
 #define XML_NS_ISCHED	"urn:ietf:params:xml:ns:ischedule"
 #define XML_NS_CS	"http://calendarserver.org/ns/"
 #define XML_NS_CYRUS	"http://cyrusimap.org/ns/"
-#define XML_NS_ICAL	"http://apple.com/ns/ical/"
 
 /* Index into known namespace array */
 enum {
@@ -81,9 +80,8 @@ enum {
     NS_ISCHED,
     NS_CS,
     NS_CYRUS,
-    NS_ICAL
 };
-#define NUM_NAMESPACE 7
+#define NUM_NAMESPACE 6
 
 /* Cyrus-specific privileges */
 #define DACL_MKCOL	ACL_CREATE	/* CY:make-collection */
