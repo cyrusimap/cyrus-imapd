@@ -255,6 +255,7 @@ struct error_t;
 
 struct propfind_ctx {
     struct request_target_t *req_tgt;	/* parsed request target URL */
+    unsigned mode;	    		/* none, allprop, propname, prop */
     unsigned depth;	    		/* 0 = root, 1 = calendar, 2 = resrc */
     unsigned prefer;			/* bitmask of client preferences */
     const char *userid;			/* userid client has logged in as */

@@ -107,6 +107,14 @@ static const struct dav_namespace_t {
     { XML_NS_ICAL, "IC" }
 };
 
+/* PROPFIND modes */
+enum {
+    PROPFIND_NONE = 0,			/* only used with REPORT */
+    PROPFIND_ALL,
+    PROPFIND_NAME,
+    PROPFIND_PROP
+};
+
 static void my_dav_init(struct buf *serverinfo);
 
 static int prin_parse_path(const char *path,
@@ -681,8 +689,17 @@ static int xml_add_response(struct propfind_ctx *fctx, long code)
 		    break;
 		}
 
-		if (!r) r = e->get(e->name, e->ns,
+		if (!r) {
+		    if (fctx->mode == PROPFIND_NAME) {
+			xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
+				     &propstat[PROPSTAT_OK],
+				     e->name, e->ns, NULL, 0);
+		    }
+		    else {
+			r = e->get(e->name, e->ns,
 				   fctx, resp, propstat, e->rock);
+		    }
+		}
 	    }
 
 	    switch (r) {
@@ -2231,12 +2248,12 @@ static const struct prop_entry {
     { "getcontentlength", NS_DAV, PROP_ALLPROP | PROP_RESOURCE,
       propfind_getlength, NULL, NULL },
     { "getcontenttype", NS_DAV,
-      PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
+      PROP_ALLPROP | /*PROP_COLLECTION |*/ PROP_RESOURCE,
       propfind_fromhdr, NULL, "Content-Type" },
-    { "getetag", NS_DAV, PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
+    { "getetag", NS_DAV, PROP_ALLPROP | /*PROP_COLLECTION |*/ PROP_RESOURCE,
       propfind_getetag, NULL, NULL },
     { "getlastmodified", NS_DAV,
-      PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
+      PROP_ALLPROP | /*PROP_COLLECTION |*/ PROP_RESOURCE,
       propfind_getlastmod, NULL, NULL },
     { "lockdiscovery", NS_DAV, PROP_ALLPROP | PROP_RESOURCE,
       propfind_lockdisc, NULL, NULL },
@@ -2349,6 +2366,68 @@ static const struct prop_entry {
 };
 
 
+static int prescreen_prop(const struct prop_entry *entry,
+			  xmlNodePtr prop,
+			  struct propfind_ctx *fctx)
+{
+    xmlChar *type =  NULL, *ver = NULL;
+    unsigned allowed = 1;
+
+    switch (fctx->req_tgt->namespace) {
+    case URL_NS_PRINCIPAL:
+	if (!(entry->flags & PROP_PRINCIPAL)) allowed = 0;
+	break;
+
+    case URL_NS_CALENDAR:
+	if ((entry->flags & PROP_ADDRESSBOOK) ||
+	    (fctx->req_tgt->resource &&
+	     !(entry->flags & PROP_RESOURCE))) {
+	    allowed = 0;
+	}
+
+	/* Sanity check any calendar-data "property" request */
+	else if (prop && !xmlStrcmp(prop->name, BAD_CAST "calendar-data") &&
+		 (((type = xmlGetProp(prop, BAD_CAST "content-type"))
+		   && xmlStrcmp(type, BAD_CAST "text/calendar")) ||
+		  ((ver = xmlGetProp(prop, BAD_CAST "version")) &&
+		   xmlStrcmp(ver, BAD_CAST "2.0")))) {
+	    allowed = 0;
+	    fctx->err->precond = CALDAV_SUPP_DATA;
+	    *fctx->ret = HTTP_FORBIDDEN;
+	}
+	break;
+
+    case URL_NS_ADDRESSBOOK:
+	if ((entry->flags & PROP_CALENDAR) ||
+	    (fctx->req_tgt->resource &&
+	     !(entry->flags & PROP_RESOURCE))) {
+	    allowed = 0;
+	}
+
+	/* Sanity check any address-data "property" request */
+	else if (prop && !xmlStrcmp(prop->name, BAD_CAST "address-data") &&
+		 (((type = xmlGetProp(prop, BAD_CAST "content-type"))
+		   && xmlStrcmp(type, BAD_CAST "text/vcard")) ||
+		  ((ver = xmlGetProp(prop, BAD_CAST "version")) &&
+		   xmlStrcmp(ver, BAD_CAST "3.0")))) {
+	    allowed = 0;
+	    fctx->err->precond = CALDAV_SUPP_DATA;
+	    *fctx->ret = HTTP_FORBIDDEN;
+	}
+	break;
+
+    default:
+	if (!(entry->flags & PROP_ROOT)) allowed = 0;
+	break;
+    }
+
+    if (type) xmlFree(type);
+    if (ver) xmlFree(ver);
+
+    return allowed;
+}
+
+
 /* Parse the requested properties and create a linked list of fetch callbacks.
  * The list gets reused for each href if Depth > 0
  */
@@ -2358,8 +2437,37 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
     xmlNodePtr prop;
     const struct prop_entry *entry;
 
+    /* Add live properties for allprop/propname */
+    if (fctx->mode != PROPFIND_PROP) {
+	for (entry = prop_entries; entry->name; entry++) {
+	    if (entry->flags & PROP_ALLPROP) {
+		/* Pre-screen request based on prop flags */
+		int allowed = prescreen_prop(entry, NULL, fctx);
+
+		if (allowed || fctx->mode == PROP_ALLPROP) {
+		    struct propfind_entry_list *nentry =
+			xzmalloc(sizeof(struct propfind_entry_list));
+
+		    ensure_ns(fctx->ns, entry->ns, fctx->root,
+			      known_namespaces[entry->ns].href,
+			      known_namespaces[entry->ns].prefix);
+
+		    nentry->name = BAD_CAST entry->name;
+		    nentry->ns = fctx->ns[entry->ns];
+		    if (allowed) {
+			nentry->flags = entry->flags;
+			nentry->get = entry->get;
+			nentry->rock = entry->rock;
+		    }
+		    nentry->next = fctx->elist;
+		    fctx->elist = nentry;
+		}
+	    }
+	}
+    }
+
     /* Iterate through requested properties */
-    for (prop = proplist; !ret && prop; prop = prop->next) {
+    for (prop = proplist; !*fctx->ret && prop; prop = prop->next) {
 	if (prop->type == XML_ELEMENT_NODE) {
 	    struct propfind_entry_list *nentry =
 		xzmalloc(sizeof(struct propfind_entry_list));
@@ -2376,61 +2484,7 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 	    nentry->ns = prop->ns;
 	    if (entry->name) {
 		/* Found a match - Pre-screen request based on prop flags */
-		xmlChar *type =  NULL, *ver = NULL;
-		unsigned allowed = 1;
-
-		switch (fctx->req_tgt->namespace) {
-		case URL_NS_PRINCIPAL:
-		    if (!(entry->flags & PROP_PRINCIPAL)) allowed = 0;
-		    break;
-
-		case URL_NS_CALENDAR:
-		    if ((entry->flags & PROP_ADDRESSBOOK) ||
-			(fctx->req_tgt->resource &&
-			 !(entry->flags & PROP_RESOURCE))) {
-			allowed = 0;
-		    }
-
-		    /* Sanity check any calendar-data "property" request */
-		    else if (!xmlStrcmp(prop->name, BAD_CAST "calendar-data") &&
-			     (((type = xmlGetProp(prop, BAD_CAST "content-type"))
-			       && xmlStrcmp(type, BAD_CAST "text/calendar")) ||
-			      ((ver = xmlGetProp(prop, BAD_CAST "version")) &&
-			       xmlStrcmp(ver, BAD_CAST "2.0")))) {
-			allowed = 0;
-			fctx->err->precond = CALDAV_SUPP_DATA;
-			ret = *fctx->ret = HTTP_FORBIDDEN;
-		    }
-		    break;
-
-		case URL_NS_ADDRESSBOOK:
-		    if ((entry->flags & PROP_CALENDAR) ||
-			(fctx->req_tgt->resource &&
-			 !(entry->flags & PROP_RESOURCE))) {
-			allowed = 0;
-		    }
-
-		    /* Sanity check any address-data "property" request */
-		    else if (!xmlStrcmp(prop->name, BAD_CAST "address-data") &&
-			     (((type = xmlGetProp(prop, BAD_CAST "content-type"))
-			       && xmlStrcmp(type, BAD_CAST "text/vcard")) ||
-			      ((ver = xmlGetProp(prop, BAD_CAST "version")) &&
-			       xmlStrcmp(ver, BAD_CAST "3.0")))) {
-			allowed = 0;
-			fctx->err->precond = CALDAV_SUPP_DATA;
-			ret = *fctx->ret = HTTP_FORBIDDEN;
-		    }
-		    break;
-
-		default:
-		    if (!(entry->flags & PROP_ROOT)) allowed = 0;
-		    break;
-		}
-
-		if (type) xmlFree(type);
-		if (ver) xmlFree(ver);
-
-		if (allowed) {
+		if (prescreen_prop(entry, prop, fctx)) {
 		    nentry->flags = entry->flags;
 		    nentry->get = entry->get;
 		    nentry->rock = entry->rock;
@@ -4124,7 +4178,7 @@ int meth_propfind(struct transaction_t *txn, void *params)
     const char **hdr;
     unsigned depth;
     xmlDocPtr indoc = NULL, outdoc = NULL;
-    xmlNodePtr root, cur = NULL;
+    xmlNodePtr root, cur = NULL, props = NULL;
     xmlNsPtr ns[NUM_NAMESPACE];
     struct propfind_ctx fctx;
     struct propfind_entry_list *elist = NULL;
@@ -4211,12 +4265,11 @@ int meth_propfind(struct transaction_t *txn, void *params)
     if (ret) goto done;
 
     if (!root) {
-	/* XXX allprop request */
+	/* Empty request */
+	fctx.mode = PROPFIND_ALL;
     }
     else {
 	indoc = root->doc;
-
-	/* XXX  Need to support propname request too! */
 
 	/* Make sure its a propfind element */
 	if (xmlStrcmp(root->name, BAD_CAST "propfind")) {
@@ -4233,9 +4286,31 @@ int meth_propfind(struct transaction_t *txn, void *params)
 	spool_cache_header(xstrdup(":type"), xstrdup((const char *) cur->name),
 			   txn->req_hdrs);
 
-	/* Make sure its a prop element */
-	/* XXX  TODO: Check for allprop and propname too */
-	if (!cur || xmlStrcmp(cur->name, BAD_CAST "prop")) {
+	/* Make sure its a known element */
+	if (!cur) {
+	    ret = HTTP_BAD_REQUEST;
+	    goto done;
+	}
+	else if (!xmlStrcmp(cur->name, BAD_CAST "allprop")) {
+	    fctx.mode = PROPFIND_ALL;
+
+	    /* Check for 'include' element */
+	    for (cur = cur->next;
+		 cur && cur->type != XML_ELEMENT_NODE; cur = cur->next);
+
+	    if (cur && !xmlStrcmp(cur->name, BAD_CAST "include")) {
+		props = cur->children;
+	    }
+	}
+	else if (!xmlStrcmp(cur->name, BAD_CAST "propname")) {
+	    fctx.mode = PROPFIND_NAME;
+	    fctx.prefer = PREFER_MIN;  /* Don't want 404 (Not Found) */
+	}
+	else if (!xmlStrcmp(cur->name, BAD_CAST "prop")) {
+	    fctx.mode = PROPFIND_PROP;
+	    props = cur->children;
+	}
+	else {
 	    ret = HTTP_BAD_REQUEST;
 	    goto done;
 	}
@@ -4253,7 +4328,7 @@ int meth_propfind(struct transaction_t *txn, void *params)
     /* Populate our propfind context */
     fctx.req_tgt = &txn->req_tgt;
     fctx.depth = depth;
-    fctx.prefer = get_preferences(txn);
+    fctx.prefer |= get_preferences(txn);
     fctx.userid = proxy_userid;
     fctx.int_userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
@@ -4277,7 +4352,7 @@ int meth_propfind(struct transaction_t *txn, void *params)
     fctx.fetcheddata = 0;
 
     /* Parse the list of properties and build a list of callbacks */
-    preload_proplist(cur->children, &fctx);
+    preload_proplist(props, &fctx);
 
     if (!txn->req_tgt.collection &&
 	(!depth || !(fctx.prefer & PREFER_NOROOT))) {
@@ -4930,7 +5005,7 @@ int meth_report(struct transaction_t *txn, void *params)
     int ret = 0, r;
     const char **hdr;
     unsigned depth = 0;
-    xmlNodePtr inroot = NULL, outroot = NULL, cur, prop = NULL;
+    xmlNodePtr inroot = NULL, outroot = NULL, cur, props = NULL;
     const struct report_type_t *report = NULL;
     xmlNsPtr ns[NUM_NAMESPACE];
     struct propfind_ctx fctx;
@@ -5045,25 +5120,23 @@ int meth_report(struct transaction_t *txn, void *params)
     for (cur = inroot->children; cur; cur = cur->next) {
 	if (cur->type == XML_ELEMENT_NODE) {
 	    if (!xmlStrcmp(cur->name, BAD_CAST "allprop")) {
-		syslog(LOG_WARNING, "REPORT %s w/allprop", report->name);
-		txn->error.desc = "Unsupported REPORT option <allprop>\r\n";
-		ret = HTTP_NOT_IMPLEMENTED;
-		goto done;
+		fctx.mode = PROPFIND_ALL;
+		break;
 	    }
 	    else if (!xmlStrcmp(cur->name, BAD_CAST "propname")) {
-		syslog(LOG_WARNING, "REPORT %s w/propname", report->name);
-		txn->error.desc = "Unsupported REPORT option <propname>\r\n";
-		ret = HTTP_NOT_IMPLEMENTED;
-		goto done;
+		fctx.mode = PROPFIND_NAME;
+		fctx.prefer = PREFER_MIN;  /* Don't want 404 (Not Found) */
+		break;
 	    }
 	    else if (!xmlStrcmp(cur->name, BAD_CAST "prop")) {
-		prop = cur;
+		fctx.mode = PROPFIND_PROP;
+		props = cur->children;
 		break;
 	    }
 	}
     }
 
-    if (!prop && (report->flags & REPORT_NEED_PROPS)) {
+    if (!props && (report->flags & REPORT_NEED_PROPS)) {
 	txn->error.desc = "Missing <prop> element in REPORT\r\n";
 	ret = HTTP_BAD_REQUEST;
 	goto done;
@@ -5080,7 +5153,7 @@ int meth_report(struct transaction_t *txn, void *params)
     /* Populate our propfind context */
     fctx.req_tgt = &txn->req_tgt;
     fctx.depth = depth;
-    fctx.prefer = get_preferences(txn);
+    fctx.prefer |= get_preferences(txn);
     fctx.userid = proxy_userid;
     fctx.int_userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
@@ -5096,7 +5169,7 @@ int meth_report(struct transaction_t *txn, void *params)
     fctx.fetcheddata = 0;
 
     /* Parse the list of properties and build a list of callbacks */
-    if (prop) ret = preload_proplist(prop->children, &fctx);
+    if (fctx.mode) ret = preload_proplist(props, &fctx);
 
     /* Process the requested report */
     if (!ret) ret = (*report->proc)(txn, inroot, &fctx);
