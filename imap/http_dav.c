@@ -2438,7 +2438,7 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
     const struct prop_entry *entry;
 
     /* Add live properties for allprop/propname */
-    if (fctx->mode != PROPFIND_PROP) {
+    if (fctx->mode == PROPFIND_ALL || fctx->mode == PROPFIND_NAME) {
 	for (entry = prop_entries; entry->name; entry++) {
 	    if (entry->flags & PROP_ALLPROP) {
 		/* Pre-screen request based on prop flags */
@@ -2469,8 +2469,7 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
     /* Iterate through requested properties */
     for (prop = proplist; !*fctx->ret && prop; prop = prop->next) {
 	if (prop->type == XML_ELEMENT_NODE) {
-	    struct propfind_entry_list *nentry =
-		xzmalloc(sizeof(struct propfind_entry_list));
+	    struct propfind_entry_list *nentry;
 
 	    /* Look for a match against our known properties */
 	    for (entry = prop_entries;
@@ -2480,6 +2479,11 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 			     known_namespaces[entry->ns].href));
 		 entry++);
 
+	    /* Skip properties already included by allprop */
+	    if (fctx->mode == PROPFIND_ALL && (entry->flags & PROP_ALLPROP))
+		continue;		
+
+	    nentry = xzmalloc(sizeof(struct propfind_entry_list));
 	    nentry->name = prop->name;
 	    nentry->ns = prop->ns;
 	    if (entry->name) {
