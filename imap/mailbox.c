@@ -270,14 +270,9 @@ const struct mailbox_header_cache mailbox_cache_headers[] = {
 
     /* for efficient FastMail interface display */
     { "x-spam-score", 3 },
-    { "x-spam-hits", 3 },
-    { "x-spam-source", 3 },
     { "x-resolved-to", 3 },
     { "x-delivered-to", 3 },
     { "x-mail-from", 3 },
-    { "x-truedomain", 3 },
-    { "x-truedomain-dkim", 3 },
-    { "x-truedomain-spf", 3 },
     { "x-truedomain-domain", 3 },
 
     /* things to never cache */
