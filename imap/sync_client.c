@@ -103,6 +103,7 @@ static int verbose_logging = 0;
 static int connect_once    = 0;
 static int background      = 0;
 static int do_compress     = 0;
+static int no_copyback     = 0;
 
 #define CAPA_CRC_VERSIONS	    (CAPA_COMPRESS<<1)
 
@@ -1522,6 +1523,9 @@ static int update_mailbox(struct sync_folder *local,
 			  struct sync_reserve_list *reserve_guids)
 {
     int r = update_mailbox_once(local, remote, reserve_guids, 0);
+
+    /* never retry - other end should always sync cleanly */
+    if (no_copyback) return r;
 
     if (r == IMAP_AGAIN) {
 	r = mailbox_full_update(local->name);
@@ -3036,7 +3040,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:vlS:F:f:w:t:d:n:rRumsoz")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:vlS:F:f:w:t:d:n:rRumsozO")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -3117,6 +3121,11 @@ int main(int argc, char **argv)
 #else
 	    fatal("Compress not available without zlib compiled in", EC_SOFTWARE);
 #endif
+	    break;
+
+	case 'O':
+	    /* don't copy changes back from server */
+	    no_copyback = 1;
 	    break;
 
 	default:
