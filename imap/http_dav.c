@@ -101,7 +101,7 @@ static const struct dav_namespace_t {
     { XML_NS_DAV, "D" },
     { XML_NS_CALDAV, "C" },
     { XML_NS_CARDDAV, "C" },
-    { XML_NS_ISCHED, "IS" },
+    { XML_NS_ISCHED, NULL },
     { XML_NS_CS, "CS" },
     { XML_NS_CYRUS, "CY" },
     { XML_NS_ICAL, "IC" }
@@ -489,17 +489,8 @@ xmlNodePtr init_xml_response(const char *resp, int ns,
     xml_add_ns(req, respNs, root);
 
     /* Set namespace of root node */
-    switch (ns) {
-    case NS_ISCHED:
-	ensure_ns(respNs, NS_ISCHED, root, XML_NS_ISCHED, NULL);
-	break;
-
-    case NS_CALDAV:
-	ensure_ns(respNs, NS_CALDAV, root, XML_NS_CALDAV, "C");
-
-    default:
-	ensure_ns(respNs, NS_DAV, root, XML_NS_DAV, "D");
-    }
+    ensure_ns(respNs, ns, root,
+	      known_namespaces[ns].href, known_namespaces[ns].prefix);
     xmlSetNs(root, respNs[ns]);
 
     return root;
@@ -535,15 +526,8 @@ xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
     }
     else error = xmlNewChild(root, NULL, BAD_CAST "error", NULL);
 
-    switch (precond->ns) {
-    case NS_CALDAV:
-	ensure_ns(avail_ns, NS_CALDAV, root, XML_NS_CALDAV, "C");
-	break;
-
-    case NS_CARDDAV:
-	ensure_ns(avail_ns, NS_CARDDAV, root, XML_NS_CARDDAV, "C");
-	break;
-    }
+    ensure_ns(avail_ns, precond->ns, root, known_namespaces[precond->ns].href,
+	      known_namespaces[precond->ns].prefix);
     node = xmlNewChild(error, avail_ns[precond->ns],
 		       BAD_CAST precond->name, NULL);
 
@@ -1031,31 +1015,30 @@ static int propfind_reportset(const xmlChar *name, xmlNsPtr ns,
     }
 
     if (fctx->req_tgt->namespace == URL_NS_CALENDAR) {
+	ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
+
 	s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
 	r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
-	ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
 	xmlNewChild(r, fctx->ns[NS_CALDAV], BAD_CAST "calendar-query", NULL);
 
 	s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
 	r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
-	ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
 	xmlNewChild(r, fctx->ns[NS_CALDAV], BAD_CAST "calendar-multiget", NULL);
 
 	s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
 	r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
-	ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
 	xmlNewChild(r, fctx->ns[NS_CALDAV], BAD_CAST "free-busy-query", NULL);
     }
 
     else if (fctx->req_tgt->namespace == URL_NS_ADDRESSBOOK) {
+	ensure_ns(fctx->ns, NS_CARDDAV, resp->parent, XML_NS_CARDDAV, "C");
+
 	s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
 	r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
-	ensure_ns(fctx->ns, NS_CARDDAV, resp->parent, XML_NS_CARDDAV, "C");
 	xmlNewChild(r, fctx->ns[NS_CARDDAV], BAD_CAST "addressbook-query", NULL);
 
 	s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
 	r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
-	ensure_ns(fctx->ns, NS_CARDDAV, resp->parent, XML_NS_CARDDAV, "C");
 	xmlNewChild(r, fctx->ns[NS_CARDDAV], BAD_CAST "addressbook-multiget", NULL);
     }
 
@@ -1137,6 +1120,7 @@ static int propfind_supprivset(const xmlChar *name, xmlNsPtr ns,
 			       void *rock __attribute__((unused)))
 {
     xmlNodePtr set, all, agg, write;
+    unsigned tgt_flags = 0;
 
     set = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 		       name, ns, NULL, 0);
@@ -1147,13 +1131,19 @@ static int propfind_supprivset(const xmlChar *name, xmlNsPtr ns,
     add_suppriv(agg, "read-current-user-privilege-set", NULL, 1,
 		"Read current user privilege set");
 
-    if (fctx->req_tgt->namespace == URL_NS_CALENDAR &&
-	!(fctx->req_tgt->collection &&
-	  (!strcmp(fctx->req_tgt->collection, SCHED_INBOX) ||
-	   !strcmp(fctx->req_tgt->collection, SCHED_OUTBOX)))) {
-	ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
-	add_suppriv(agg, "read-free-busy", fctx->ns[NS_CALDAV], 0,
-		    "Read free/busy time");
+    if (fctx->req_tgt->namespace == URL_NS_CALENDAR) {
+	if (fctx->req_tgt->collection) {
+	    ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
+
+	    if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX))
+		tgt_flags = TGT_SCHED_INBOX;
+	    else if (!strcmp(fctx->req_tgt->collection, SCHED_OUTBOX))
+		tgt_flags = TGT_SCHED_OUTBOX;
+	    else {
+		add_suppriv(agg, "read-free-busy", fctx->ns[NS_CALDAV], 0,
+			    "Read free/busy time");
+	    }
+	}
     }
 
     write = add_suppriv(all, "write", NULL, 0, "Write any object");
@@ -1180,30 +1170,25 @@ static int propfind_supprivset(const xmlChar *name, xmlNsPtr ns,
     add_suppriv(agg, "write-acl", NULL, 1, "Write ACL");
     add_suppriv(agg, "unlock", NULL, 1, "Unlock resource");
 
-    if (fctx->req_tgt->namespace == URL_NS_CALENDAR &&
-	fctx->req_tgt->collection) {
-	if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX)) {
-	    ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
-	    agg = add_suppriv(all, "schedule-deliver", fctx->ns[NS_CALDAV], 0,
-			      "Deliver scheduling messages");
-	    add_suppriv(agg, "schedule-deliver-invite", fctx->ns[NS_CALDAV], 0,
-			"Deliver scheduling messages from Organizers");
-	    add_suppriv(agg, "schedule-deliver-reply", fctx->ns[NS_CALDAV], 0,
-			"Deliver scheduling messages from Attendees");
-	    add_suppriv(agg, "schedule-query-freebusy", fctx->ns[NS_CALDAV], 0,
-			"Accept free/busy requests");
-	}
-	else if (!strcmp(fctx->req_tgt->collection, SCHED_OUTBOX)) {
-	    ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
-	    agg = add_suppriv(all, "schedule-send", fctx->ns[NS_CALDAV], 0,
-			      "Send scheduling messages");
-	    add_suppriv(agg, "schedule-send-invite", fctx->ns[NS_CALDAV], 0,
-			"Send scheduling messages by Organizers");
-	    add_suppriv(agg, "schedule-send-reply", fctx->ns[NS_CALDAV], 0,
-			"Send scheduling messages by Attendees");
-	    add_suppriv(agg, "schedule-send-freebusy", fctx->ns[NS_CALDAV], 0,
-			"Submit free/busy requests");
-	}
+    if (tgt_flags == TGT_SCHED_INBOX) {
+	agg = add_suppriv(all, "schedule-deliver", fctx->ns[NS_CALDAV], 0,
+			  "Deliver scheduling messages");
+	add_suppriv(agg, "schedule-deliver-invite", fctx->ns[NS_CALDAV], 0,
+		    "Deliver scheduling messages from Organizers");
+	add_suppriv(agg, "schedule-deliver-reply", fctx->ns[NS_CALDAV], 0,
+		    "Deliver scheduling messages from Attendees");
+	add_suppriv(agg, "schedule-query-freebusy", fctx->ns[NS_CALDAV], 0,
+		    "Accept free/busy requests");
+    }
+    else if (tgt_flags == TGT_SCHED_OUTBOX) {
+	agg = add_suppriv(all, "schedule-send", fctx->ns[NS_CALDAV], 0,
+			  "Send scheduling messages");
+	add_suppriv(agg, "schedule-send-invite", fctx->ns[NS_CALDAV], 0,
+		    "Send scheduling messages by Organizers");
+	add_suppriv(agg, "schedule-send-reply", fctx->ns[NS_CALDAV], 0,
+		    "Send scheduling messages by Attendees");
+	add_suppriv(agg, "schedule-send-freebusy", fctx->ns[NS_CALDAV], 0,
+		    "Submit free/busy requests");
     }
 
     return 0;
