@@ -1256,6 +1256,15 @@ static int mailbox_compare_update(struct mailbox *mailbox,
 		(rrecord.system_flags & FLAG_EXPUNGED))
 		continue;
 
+	    /* GUID mismatch is an error straight away, it only ever happens if we
+	     * had a split brain - and it will take a full sync to sort out the mess */
+	    if (!message_guid_equal(&mrecord.guid, &rrecord.guid)) {
+		syslog(LOG_ERR, "SYNCERROR: guid mismatch %s %u",
+		       mailbox->name, mrecord.uid);
+		r = IMAP_SYNC_CHECKSUM;
+		goto out;
+	    }
+
 	    /* higher modseq on the replica is an error */
 	    if (rrecord.modseq > mrecord.modseq) {
 		if (opt_force) {
@@ -1268,15 +1277,6 @@ static int mailbox_compare_update(struct mailbox *mailbox,
 		    r = IMAP_SYNC_CHECKSUM;
 		    goto out;
 		}
-	    }
-
-	    /* GUID mismatch is an error straight away, it only ever happens if we
-	     * had a split brain - and it will take a full sync to sort out the mess */
-	    if (!message_guid_equal(&mrecord.guid, &rrecord.guid)) {
-		syslog(LOG_ERR, "SYNCERROR: guid mismatch %s %u",
-		       mailbox->name, mrecord.uid);
-		r = IMAP_SYNC_CHECKSUM;
-		goto out;
 	    }
 
 	    /* if it's already expunged on the replica, but alive on the master,
@@ -1546,10 +1546,16 @@ static int do_mailbox(struct dlist *kin)
 
 	/* skip out now, it's going to mismatch for sure! */
 	if (xconvmodseq < ourxconvmodseq) {
-	    syslog(LOG_ERR, "higher xconvmodseq on replica %s - %llu < %llu",
-		   mboxname, xconvmodseq, ourxconvmodseq);
-	    r = IMAP_SYNC_CHECKSUM;
-	    goto done;
+	    if (opt_force) {
+		syslog(LOG_NOTICE, "forcesync: higher xconvmodseq on replica %s - %llu < %llu",
+		       mboxname, xconvmodseq, ourxconvmodseq);
+	    }
+	    else {
+		syslog(LOG_ERR, "higher xconvmodseq on replica %s - %llu < %llu",
+		       mboxname, xconvmodseq, ourxconvmodseq);
+		r = IMAP_SYNC_CHECKSUM;
+		goto done;
+	    }
 	}
     }
 
@@ -1603,7 +1609,7 @@ static int do_mailbox(struct dlist *kin)
 			 (mailbox->i.options & ~MAILBOX_OPTIONS_MASK);
 
     /* this happens all the time! */
-    if (mailbox->i.highestmodseq < highestmodseq) {
+    if (mailbox->i.highestmodseq != highestmodseq) {
 	mboxname_setmodseq(mailbox->name, highestmodseq);
 	mailbox->i.highestmodseq = highestmodseq;
     }
@@ -1618,7 +1624,7 @@ static int do_mailbox(struct dlist *kin)
     }
 
     if (mailbox_has_conversations(mailbox)) {
-	r = mailbox_update_xconvmodseq(mailbox, xconvmodseq);
+	r = mailbox_update_xconvmodseq(mailbox, xconvmodseq, opt_force);
     }
 
 done:

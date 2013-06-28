@@ -1350,7 +1350,7 @@ static int mailbox_full_update(const char *mboxname)
     /* this is safe because "larger than" logic is embedded
      * inside update_xconvmodseq */
     if (mailbox_has_conversations(mailbox)) {
-	r = mailbox_update_xconvmodseq(mailbox, xconvmodseq);
+	r = mailbox_update_xconvmodseq(mailbox, xconvmodseq, /*force */0);
 	if (r) goto done;
     }
 
