@@ -4784,6 +4784,9 @@ static int index_copysetup(struct index_state *state, uint32_t msgno,
     /* grab seen from our state - it's different for different users */
     copyargs->copymsg[copyargs->nummsg].seen = im->isseen;
 
+    /* zero out the seen flag in the system record, it may be different */
+    copyargs->copymsg[copyargs->nummsg].record.system_flags &= ~FLAG_SEEN;
+
     /* zero out the user_flags - they might be different in the destination */
     for (i = 0; i < MAX_USER_FLAGS/32; i++)
 	copyargs->copymsg[copyargs->nummsg].record.user_flags[i] = 0;
