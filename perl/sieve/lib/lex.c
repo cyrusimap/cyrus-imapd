@@ -81,7 +81,16 @@ static int token_lookup(const char *str)
   if (strcmp(str,"active")==0) return TOKEN_ACTIVE;
   if (strcmp(str,"referral")==0) return TOKEN_REFERRAL;
   if (strcmp(str,"sasl")==0) return TOKEN_SASL;
-  
+  if (strcmp(str,"quota/maxscripts")==0) return RESP_CODE_QUOTA_MAXSCRIPTS;
+  if (strcmp(str,"quota/maxsize")==0) return RESP_CODE_QUOTA_MAXSIZE;
+  if (strcmp(str,"quota")==0) return RESP_CODE_QUOTA;
+  if (strcmp(str,"transition-needed")==0) return RESP_CODE_TRANSITION_NEEDED;
+  if (strcmp(str,"trylater")==0) return RESP_CODE_TRYLATER;
+  if (strcmp(str,"nonexistant")==0) return RESP_CODE_NONEXISTANT;
+  if (strcmp(str,"alreadyexists")==0) return RESP_CODE_ALREADYEXISTS;
+  if (strcmp(str,"warning")==0) return RESP_CODE_WARNINGS;
+  if (strcmp(str,"tag")==0) return RESP_CODE_TAG;
+
   return -1;
 }
 
@@ -252,7 +261,7 @@ int yylex(lexstate_t * lvalp, void * client)
       }
       break;
     case LEXER_STATE_ATOM:
-      if (!isalpha((unsigned char) ch)) {
+      if (!(isalpha((unsigned char) ch) || ch == '/')) {
 	int token;
 
 	*buff_ptr = '\0';

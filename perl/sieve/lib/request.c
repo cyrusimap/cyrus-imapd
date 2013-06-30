@@ -113,7 +113,7 @@ int handle_response(int res,int version,struct protstream *pin,
 		  res = yylex(&state, pin);
 	      }
 	      if(res != ')') {
-		  parseerror("expected RPARAN");
+		  parseerror("expected RPAREN");
 	      }
 	  }
 
@@ -143,7 +143,7 @@ int handle_response(int res,int version,struct protstream *pin,
 	      res = yylex(&state, pin);
 	  }
 	  if(res != ')') {
-	      parseerror("expected RPARAN");
+	      parseerror("expected RPAREN");
 	  }
 	  
 	  res = yylex(&state, pin);
