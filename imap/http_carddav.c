@@ -814,7 +814,7 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 			struct resp_body_t *resp_body = &txn->resp_body;
 
 			resp_body->loc = txn->req_tgt.path;
-			resp_body->type = "text/calendar; charset=utf-8";
+			resp_body->type = "text/vcard; charset=utf-8";
 			resp_body->len = buf_len(&txn->req_body);
 
 			/* vCard data in response should not be transformed */
