@@ -2382,7 +2382,7 @@ static int allprop_cb(const char *mailbox __attribute__((unused)),
 
     /* Split entry into namespace href and name ( <href>name ) */
     buf_setcstr(&arock->fctx->buf, entry + strlen(ANNOT_NS) + 1);
-    href = arock->fctx->buf.s;
+    href = (char *) buf_cstring(&arock->fctx->buf);
     if ((name = strchr(href, '>'))) *name++ = '\0';
 
     /* Look for a match against live properties */
