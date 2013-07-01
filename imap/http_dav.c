@@ -834,12 +834,20 @@ static int propfind_getetag(const xmlChar *name, xmlNsPtr ns,
 			    struct propstat propstat[],
 			    void *rock __attribute__((unused)))
 {
-    if (!fctx->record) return HTTP_NOT_FOUND;
+    if (fctx->req_tgt->resource && !fctx->record) return HTTP_NOT_FOUND;
+    if (!fctx->mailbox) return HTTP_NOT_FOUND;
 
-    /* add DQUOTEs */
     buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, "\"%s\"",
-	       message_guid_encode(&fctx->record->guid));
+
+    if (fctx->record) {
+	/* add DQUOTEs */
+	buf_printf(&fctx->buf, "\"%s\"",
+		   message_guid_encode(&fctx->record->guid));
+    }
+    else {
+	buf_printf(&fctx->buf, "\"%u-%u-%u\"", fctx->mailbox->i.uidvalidity,
+		   fctx->mailbox->i.last_uid, fctx->mailbox->i.exists);
+    }
 
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 		 name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
@@ -2249,7 +2257,7 @@ static const struct prop_entry {
     { "getcontenttype", NS_DAV,
       PROP_ALLPROP | /*PROP_COLLECTION |*/ PROP_RESOURCE,
       propfind_fromhdr, NULL, "Content-Type" },
-    { "getetag", NS_DAV, PROP_ALLPROP | /*PROP_COLLECTION |*/ PROP_RESOURCE,
+    { "getetag", NS_DAV, PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
       propfind_getetag, NULL, NULL },
     { "getlastmodified", NS_DAV,
       PROP_ALLPROP | /*PROP_COLLECTION |*/ PROP_RESOURCE,
