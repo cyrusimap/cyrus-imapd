@@ -143,8 +143,9 @@ static int _index_search(unsigned **msgno_list, struct index_state *state,
 
 static int index_copysetup(struct index_state *state, uint32_t msgno, struct copyargs *copyargs);
 static int index_storeflag(struct index_state *state,
-                           struct index_modified_flags *modified_flags,
-                           uint32_t msgno, struct storeargs *storeargs);
+			   struct index_modified_flags *modified_flags,
+			   uint32_t msgno, struct index_record *record,
+			   struct storeargs *storeargs);
 static int index_store_annotation(struct index_state *state, uint32_t msgno,
 			   struct storeargs *storeargs);
 static int index_fetchreply(struct index_state *state, uint32_t msgno,
@@ -1218,7 +1219,7 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
 	case STORE_ADD_FLAGS:
 	case STORE_REMOVE_FLAGS:
 	case STORE_REPLACE_FLAGS:
-	    r = index_storeflag(state, &modified_flags, msgno, storeargs);
+	    r = index_storeflag(state, &modified_flags, msgno, &record, storeargs);
 	    if (r)
 		break;
 
@@ -3375,23 +3376,20 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
  * Helper function to perform a STORE command for flags.
  */
 static int index_storeflag(struct index_state *state,
-                           struct index_modified_flags *modified_flags,
-                           uint32_t msgno, struct storeargs *storeargs)
+			   struct index_modified_flags *modified_flags,
+			   uint32_t msgno, struct index_record *record,
+			   struct storeargs *storeargs)
 {
     bit32 old, new;
     unsigned i;
     int dirty = 0;
     modseq_t oldmodseq;
     struct index_map *im = &state->map[msgno-1];
-    struct index_record record;
     int r;
 
     memset(modified_flags, 0, sizeof(struct index_modified_flags));
 
     oldmodseq = im->modseq;
-
-    r = index_reload_record(state, msgno, &record);
-    if (r) return r;
 
     /* Change \Seen flag.  This gets done on the index first and will only be
        copied into the record later if internalseen is set */
@@ -3411,7 +3409,7 @@ static int index_storeflag(struct index_state *state,
 	}
     }
 
-    old = record.system_flags;
+    old = record->system_flags;
     new = storeargs->system_flags;
 
     /* all other updates happen directly to the record */
@@ -3420,39 +3418,39 @@ static int index_storeflag(struct index_state *state,
 	    /* ACL_DELETE handled in index_store() */
 	    if ((old & FLAG_DELETED) != (new & FLAG_DELETED)) {
 		dirty++;
-	        record.system_flags = (old & ~FLAG_DELETED) | (new & FLAG_DELETED);
+	        record->system_flags = (old & ~FLAG_DELETED) | (new & FLAG_DELETED);
 	    }
 	}
 	else {
 	    if (!(state->myrights & ACL_DELETEMSG)) {
 		if ((old & ~FLAG_DELETED) != (new & ~FLAG_DELETED)) {
 		    dirty++;
-		    record.system_flags = (old & FLAG_DELETED) | (new & ~FLAG_DELETED);
+		    record->system_flags = (old & FLAG_DELETED) | (new & ~FLAG_DELETED);
 		}
 	    }
 	    else {
 		if (old != new) {
 		    dirty++;
-		    record.system_flags = new;
+		    record->system_flags = new;
 		}
 	    }
 	    for (i = 0; i < (MAX_USER_FLAGS/32); i++) {
-		if (record.user_flags[i] != storeargs->user_flags[i]) {
+		if (record->user_flags[i] != storeargs->user_flags[i]) {
 		    bit32 changed;
 		    dirty++;
 
-		    changed = ~record.user_flags[i] & storeargs->user_flags[i];
+		    changed = ~record->user_flags[i] & storeargs->user_flags[i];
 		    if (changed) {
 			modified_flags->added_user_flags[i] = changed;
 			modified_flags->added_flags++;
 		    }
 
-		    changed = record.user_flags[i] & ~storeargs->user_flags[i];
+		    changed = record->user_flags[i] & ~storeargs->user_flags[i];
 		    if (changed) {
 			modified_flags->removed_user_flags[i] = changed;
 			modified_flags->removed_flags++;
 		    }
-		    record.user_flags[i] = storeargs->user_flags[i];
+		    record->user_flags[i] = storeargs->user_flags[i];
 		}
 	    }
 	}
@@ -3462,13 +3460,13 @@ static int index_storeflag(struct index_state *state,
 
 	if (~old & new) {
 	    dirty++;
-	    record.system_flags = old | new;
+	    record->system_flags = old | new;
 	}
 	for (i = 0; i < (MAX_USER_FLAGS/32); i++) {
-	    added = ~record.user_flags[i] & storeargs->user_flags[i];
+	    added = ~record->user_flags[i] & storeargs->user_flags[i];
 	    if (added) {
 		dirty++;
-		record.user_flags[i] |= storeargs->user_flags[i];
+		record->user_flags[i] |= storeargs->user_flags[i];
 
 		modified_flags->added_user_flags[i] = added;
 		modified_flags->added_flags++;
@@ -3480,13 +3478,13 @@ static int index_storeflag(struct index_state *state,
 
 	if (old & new) {
 	    dirty++;
-	    record.system_flags &= ~storeargs->system_flags;
+	    record->system_flags &= ~storeargs->system_flags;
 	}
 	for (i = 0; i < (MAX_USER_FLAGS/32); i++) {
-	    removed = record.user_flags[i] & storeargs->user_flags[i];
+	    removed = record->user_flags[i] & storeargs->user_flags[i];
 	    if (removed) {
 		dirty++;
-		record.user_flags[i] &= ~storeargs->user_flags[i];
+		record->user_flags[i] &= ~storeargs->user_flags[i];
 
 		modified_flags->removed_user_flags[i] = removed;
 		modified_flags->removed_flags++;
@@ -3512,19 +3510,19 @@ static int index_storeflag(struct index_state *state,
     if (state->internalseen) {
 	/* copy the seen flag from the index */
 	if (im->isseen)
-	    record.system_flags |= FLAG_SEEN;
+	    record->system_flags |= FLAG_SEEN;
 	else
-	    record.system_flags &= ~FLAG_SEEN;
+	    record->system_flags &= ~FLAG_SEEN;
     }
 
-    modified_flags->added_system_flags = ~old & record.system_flags;
+    modified_flags->added_system_flags = ~old & record->system_flags;
     if (modified_flags->added_system_flags)
 	modified_flags->added_flags++;
-    modified_flags->removed_system_flags = old & ~record.system_flags;
+    modified_flags->removed_system_flags = old & ~record->system_flags;
     if (modified_flags->removed_system_flags)
 	modified_flags->removed_flags++;
 
-    r = index_rewrite_record(state, msgno, &record);
+    r = index_rewrite_record(state, msgno, record);
     if (r) return r;
 
     /* if it's silent and unchanged, update the seen value, but
