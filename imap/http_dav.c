@@ -662,7 +662,7 @@ static int xml_add_response(struct propfind_ctx *fctx, long code)
 
 	/* Process each property in the linked list */
 	for (e = fctx->elist; e; e = e->next) {
-	    int r = HTTP_NOT_ALLOWED;
+	    int r = HTTP_NOT_FOUND;
 
 	    if (e->get) {
 		r = 0;
