@@ -277,7 +277,9 @@ struct propfind_ctx {
 			    void *data);
     struct propfind_entry_list *elist;	/* List of props to fetch w/callbacks */
     xmlNodePtr root;			/* root node to add to XML tree */
-    xmlNsPtr *ns;			/* Array of our supported namespaces */
+    xmlNsPtr *ns;			/* Array of our known namespaces */
+    struct hash_table *ns_table;	/* Table of all ns attached to resp */
+    unsigned prefix_count;		/* Count of new ns added to resp */
     struct error_t *err;		/* Error info to pass up to caller */
     int *ret;  				/* Return code to pass up to caller */
     int fetcheddata;			/* Did we fetch iCalendar/vCard data? */

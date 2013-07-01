@@ -119,6 +119,11 @@ static void my_dav_init(struct buf *serverinfo);
 static int prin_parse_path(const char *path,
 			   struct request_target_t *tgt, const char **errstr);
 
+static int allprop_cb(const char *mailbox __attribute__((unused)),
+		      const char *entry,
+		      const char *userid, struct annotation_data *attrib,
+		      void *rock);
+
 static struct meth_params princ_params = {
     .parse_path = &prin_parse_path
 };
@@ -625,6 +630,11 @@ static xmlNodePtr xml_add_prop(long status, xmlNsPtr davns,
 }
 
 
+struct allprop_rock {
+    struct propfind_ctx *fctx;
+    struct propstat *propstat;
+};
+
 /* Add a response tree to 'root' for the specified href and 
    either error code or property list */
 static int xml_add_response(struct propfind_ctx *fctx, long code)
@@ -713,6 +723,15 @@ static int xml_add_response(struct propfind_ctx *fctx, long code)
 		break;
 
 	    }
+	}
+
+	/* Process dead properties for allprop/propname */
+	if (fctx->mailbox && !fctx->req_tgt->resource &&
+	    (fctx->mode == PROPFIND_ALL || fctx->mode == PROPFIND_NAME)) {
+	    struct allprop_rock arock = { fctx, propstat };
+
+	    annotatemore_findall(fctx->mailbox->name, ANNOT_NS "*",
+				 allprop_cb, &arock, NULL);
 	}
 
 	/* Check if we have any propstat elements */
@@ -2346,6 +2365,62 @@ static const struct prop_entry {
 };
 
 
+/* annotemore_findall callback for adding dead properties (allprop/propname) */
+static int allprop_cb(const char *mailbox __attribute__((unused)),
+		      const char *entry,
+		      const char *userid, struct annotation_data *attrib,
+		      void *rock)
+{
+    struct allprop_rock *arock = (struct allprop_rock *) rock;
+    const struct prop_entry *pentry;
+    char *href, *name;
+    xmlNsPtr ns;
+    xmlNodePtr node;
+
+    /* Make sure its a shared entry or the user's private one */
+    if (*userid && strcmp(userid, arock->fctx->userid)) return 0;
+
+    /* Split entry into namespace href and name ( <href>name ) */
+    buf_setcstr(&arock->fctx->buf, entry + strlen(ANNOT_NS) + 1);
+    href = arock->fctx->buf.s;
+    if ((name = strchr(href, '>'))) *name++ = '\0';
+
+    /* Look for a match against live properties */
+    for (pentry = prop_entries;
+	 pentry->name &&
+	     (strcmp(name, pentry->name) ||
+	      strcmp(href, known_namespaces[pentry->ns].href));
+	 pentry++);
+
+    if (pentry->name &&
+	(arock->fctx->mode == PROPFIND_ALL    /* Skip all live properties */
+	 || (pentry->flags & PROP_ALLPROP)))  /* Skip those already included */
+	return 0;
+
+    /* Look for an instance of this namespace in our response */
+    ns = hash_lookup(href, arock->fctx->ns_table);
+    if (!ns) {
+	char prefix[5];
+	snprintf(prefix, sizeof(prefix), "X%u", arock->fctx->prefix_count++);
+	ns = xmlNewNs(arock->fctx->root, BAD_CAST href, BAD_CAST prefix);
+	hash_insert(href, ns, arock->fctx->ns_table);
+    }
+
+    /* Add the dead property to the response */
+    node = xml_add_prop(HTTP_OK, arock->fctx->ns[NS_DAV],
+			&arock->propstat[PROPSTAT_OK],
+			BAD_CAST name, ns, NULL, 0);
+
+    if (arock->fctx->mode == PROPFIND_ALL) {
+	xmlAddChild(node, xmlNewCDataBlock(arock->fctx->root->doc,
+					   BAD_CAST attrib->value,
+					   attrib->size));
+    }
+
+    return 0;
+}
+
+
 static int prescreen_prop(const struct prop_entry *entry,
 			  xmlNodePtr prop,
 			  struct propfind_ctx *fctx)
@@ -2417,8 +2492,10 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
     xmlNodePtr prop;
     const struct prop_entry *entry;
 
-    /* Add live properties for allprop/propname */
     if (fctx->mode == PROPFIND_ALL || fctx->mode == PROPFIND_NAME) {
+	xmlNsPtr nsDef;
+
+	/* Add live properties for allprop/propname */
 	for (entry = prop_entries; entry->name; entry++) {
 	    if (entry->flags & PROP_ALLPROP) {
 		/* Pre-screen request based on prop flags */
@@ -2443,6 +2520,13 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 		    fctx->elist = nentry;
 		}
 	    }
+	}
+
+	/* Add all namespaces attached to the response to our hash table */
+	construct_hash_table(fctx->ns_table, 10, 1);
+
+	for (nsDef = fctx->root->nsDef; nsDef; nsDef = nsDef->next) {
+	    hash_insert((const char *) nsDef->href, nsDef, fctx->ns_table);
 	}
     }
 
@@ -4164,6 +4248,7 @@ int meth_propfind(struct transaction_t *txn, void *params)
     xmlDocPtr indoc = NULL, outdoc = NULL;
     xmlNodePtr root, cur = NULL, props = NULL;
     xmlNsPtr ns[NUM_NAMESPACE];
+    struct hash_table ns_table = { 0, NULL, NULL };
     struct propfind_ctx fctx;
     struct propfind_entry_list *elist = NULL;
 
@@ -4331,6 +4416,7 @@ int meth_propfind(struct transaction_t *txn, void *params)
     fctx.elist = NULL;
     fctx.root = root;
     fctx.ns = ns;
+    fctx.ns_table = &ns_table;
     fctx.err = &txn->error;
     fctx.ret = &ret;
     fctx.fetcheddata = 0;
@@ -4396,6 +4482,8 @@ int meth_propfind(struct transaction_t *txn, void *params)
     }
 
     buf_free(&fctx.buf);
+
+    free_hash_table(&ns_table, NULL);
 
     if (outdoc) xmlFreeDoc(outdoc);
     if (indoc) xmlFreeDoc(indoc);
@@ -4992,6 +5080,7 @@ int meth_report(struct transaction_t *txn, void *params)
     xmlNodePtr inroot = NULL, outroot = NULL, cur, props = NULL;
     const struct report_type_t *report = NULL;
     xmlNsPtr ns[NUM_NAMESPACE];
+    struct hash_table ns_table = { 0, NULL, NULL };
     struct propfind_ctx fctx;
     struct propfind_entry_list *elist = NULL;
 
@@ -5148,6 +5237,7 @@ int meth_report(struct transaction_t *txn, void *params)
     fctx.elist = NULL;
     fctx.root = outroot;
     fctx.ns = ns;
+    fctx.ns_table = &ns_table;
     fctx.err = &txn->error;
     fctx.ret = &ret;
     fctx.fetcheddata = 0;
@@ -5176,6 +5266,8 @@ int meth_report(struct transaction_t *txn, void *params)
     }
 
     buf_free(&fctx.buf);
+
+    free_hash_table(&ns_table, NULL);
 
     if (inroot) xmlFreeDoc(inroot->doc);
     if (outroot) xmlFreeDoc(outroot->doc);
