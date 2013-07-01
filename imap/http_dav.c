@@ -805,6 +805,35 @@ static int propfind_creationdate(const xmlChar *name, xmlNsPtr ns,
 }
 
 
+/* Callback to fetch DAV:getcontenttype */
+static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
+				   struct propfind_ctx *fctx,
+				   xmlNodePtr resp __attribute__((unused)),
+				   struct propstat propstat[],
+				   void *rock __attribute__((unused)))
+{
+    buf_reset(&fctx->buf);
+
+    switch (fctx->req_tgt->namespace) {
+    case URL_NS_CALENDAR:
+	buf_setcstr(&fctx->buf, "text/calendar; charset=utf-8");
+	break;
+
+    case URL_NS_ADDRESSBOOK:
+	buf_setcstr(&fctx->buf, "text/vcard; charset=utf-8");
+	break;
+
+    default:
+	return HTTP_NOT_FOUND;
+    }
+
+    xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+		 name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
+
+    return 0;
+}
+
+
 /* Callback to fetch DAV:getcontentlength */
 static int propfind_getlength(const xmlChar *name, xmlNsPtr ns,
 			      struct propfind_ctx *fctx,
@@ -2255,8 +2284,8 @@ static const struct prop_entry {
     { "getcontentlength", NS_DAV, PROP_ALLPROP | PROP_RESOURCE,
       propfind_getlength, NULL, NULL },
     { "getcontenttype", NS_DAV,
-      PROP_ALLPROP | /*PROP_COLLECTION |*/ PROP_RESOURCE,
-      propfind_fromhdr, NULL, "Content-Type" },
+      PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
+      propfind_getcontenttype, NULL, "Content-Type" },
     { "getetag", NS_DAV, PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
       propfind_getetag, NULL, NULL },
     { "getlastmodified", NS_DAV,
