@@ -722,7 +722,6 @@ static int meth_get(struct transaction_t *txn, void *params)
     char *server, *acl;
     struct mailbox *mailbox = NULL;
     static char etag[33];
-    time_t lastmod = 0;
     uint32_t recno;
     struct index_record record;
     struct hash_table tzid_table;
@@ -791,17 +790,15 @@ static int meth_get(struct transaction_t *txn, void *params)
     }
 
     /* Check any preconditions */
-    lastmod = mailbox->i.last_appenddate;
     sprintf(etag, "%u-%u-%u",
 	    mailbox->i.uidvalidity, mailbox->i.last_uid, mailbox->i.exists);
-    precond = gparams->check_precond(txn, NULL, etag, lastmod);
+    precond = gparams->check_precond(txn, NULL, etag, 0);
 
     switch (precond) {
     case HTTP_OK:
     case HTTP_NOT_MODIFIED:
-	/* Fill in ETag, Last-Modified, Expires, and Cache-Control */
+	/* Fill in ETag, Expires, and Cache-Control */
 	txn->resp_body.etag = etag;
-	txn->resp_body.lastmod = lastmod;
 	txn->resp_body.maxage = 3600;  /* 1 hr */
 	txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;  /* don't use stale data */
 
