@@ -1839,6 +1839,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     icalproperty_method meth;
     icalproperty *prop;
     unsigned mykind = 0;
+    const char *organizer = NULL;
     const char *prop_annot = ANNOT_NS "CALDAV:supported-calendar-component-set";
     struct annotation_data attrib;
     struct caldav_data *cdata;
@@ -1915,7 +1916,8 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     /* Create iMIP header for resource */
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     if (prop) {
-	fprintf(f, "From: %s\r\n", icalproperty_get_organizer(prop)+7);
+	organizer = icalproperty_get_organizer(prop)+7;
+	fprintf(f, "From: %s\r\n", organizer);
     }
     else {
 	/* XXX  This needs to be done via an LDAP/DB lookup */
@@ -1938,7 +1940,17 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     fprintf(f, "; component=%s\r\n", icalcomponent_kind_to_string(kind));
 
     fprintf(f, "Content-Length: %u\r\n", (unsigned) strlen(ics));
-    fprintf(f, "Content-Disposition: inline; filename=\"%s\"\r\n", resource);
+    fprintf(f, "Content-Disposition: inline; filename=\"%s\"", resource);
+    if (organizer) {
+	const char *stag;
+	if (flags & NEW_STAG) {
+	    sprintf(sched_tag, "%d-%ld-%u", getpid(), now, store_count++);
+	    stag = sched_tag;
+	}
+	else stag = cdata->sched_tag;
+	if (stag) fprintf(f, ";\r\n\tschedule-tag=%s", stag);
+    }
+    fprintf(f, "\r\n");
 
     /* XXX  Check domain of data and use appropriate CTE */
 
@@ -2053,8 +2065,6 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 		    if (!cdata->dav.creationdate) cdata->dav.creationdate = now;
 		    if (!cdata->organizer) cdata->sched_tag = NULL;
 		    else if (flags & NEW_STAG) {
-			sprintf(sched_tag, "%d-%ld-%u",
-				getpid(), now, store_count++);
 			txn->resp_body.stag = cdata->sched_tag = sched_tag;
 		    }
 
