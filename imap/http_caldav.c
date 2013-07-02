@@ -2081,8 +2081,11 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			resp_body->loc = txn->req_tgt.path;
 			resp_body->len = strlen(ics);
 
-			/* iCalendar data in response should not be transformed */
-			txn->flags.cc |= CC_NOTRANSFORM;
+			/* Fill in Expires and Cache-Control */
+			resp_body->maxage = 3600;  /* 1 hr */
+			txn->flags.cc = CC_MAXAGE
+			    | CC_REVALIDATE	   /* don't use stale data */
+			    | CC_NOTRANSFORM;	   /* don't alter iCal data */
 
 			write_body(ret, txn, ics, strlen(ics));
 			ret = 0;

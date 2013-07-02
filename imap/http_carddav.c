@@ -817,8 +817,11 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 			resp_body->type = "text/vcard; charset=utf-8";
 			resp_body->len = buf_len(&txn->req_body);
 
-			/* vCard data in response should not be transformed */
-			txn->flags.cc |= CC_NOTRANSFORM;
+			/* Fill in Expires and Cache-Control */
+			resp_body->maxage = 3600;  /* 1 hr */
+			txn->flags.cc = CC_MAXAGE
+			    | CC_REVALIDATE	   /* don't use stale data */
+			    | CC_NOTRANSFORM;	   /* don't alter vCard data */
 
 			write_body(ret, txn,
 				   buf_cstring(&txn->req_body), resp_body->len);
