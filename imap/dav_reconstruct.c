@@ -205,7 +205,7 @@ int do_reconstruct(char *mboxname,
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	struct body *body;
 	struct param *param;
-	const char *msg_base = NULL, *resource = NULL, *sched_tag = NULL;
+	const char *msg_base = NULL;
 	unsigned long msg_size = 0;
 	icalcomponent *ical = NULL;
 
@@ -230,14 +230,12 @@ int do_reconstruct(char *mboxname,
 	message_read_bodystructure(&record, &body);
 	for (param = body->disposition_params; param; param = param->next) {
 	    if (!strcmp(param->attribute, "FILENAME")) {
-		resource = param->value;
+		cdata.dav.resource = param->value;
 	    }
 	    else if (!strcmp(param->attribute, "SCHEDULE-TAG")) {
-		sched_tag = param->value;
+		cdata.sched_tag = param->value;
 	    }
 	}
-	cdata.dav.resource = resource;
-	cdata.sched_tag = sched_tag;
 
 	caldav_make_entry(ical, &cdata);
 
