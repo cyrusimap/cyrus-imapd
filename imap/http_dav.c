@@ -4399,14 +4399,6 @@ int meth_propfind(struct transaction_t *txn, void *params)
 	}
 	else if (!xmlStrcmp(cur->name, BAD_CAST "allprop")) {
 	    fctx.mode = PROPFIND_ALL;
-
-	    /* Check for 'include' element */
-	    for (cur = cur->next;
-		 cur && cur->type != XML_ELEMENT_NODE; cur = cur->next);
-
-	    if (cur && !xmlStrcmp(cur->name, BAD_CAST "include")) {
-		props = cur->children;
-	    }
 	}
 	else if (!xmlStrcmp(cur->name, BAD_CAST "propname")) {
 	    fctx.mode = PROPFIND_NAME;
@@ -4419,6 +4411,21 @@ int meth_propfind(struct transaction_t *txn, void *params)
 	else {
 	    ret = HTTP_BAD_REQUEST;
 	    goto done;
+	}
+
+	/* Check for extra elements */
+	for (cur = cur->next; cur; cur = cur->next) {
+	    if (cur->type == XML_ELEMENT_NODE) {
+		if ((fctx.mode == PROPFIND_ALL) && !props &&
+		    /* Check for 'include' element */
+		    !xmlStrcmp(cur->name, BAD_CAST "include")) {
+		    props = cur->children;
+		}
+		else {
+		    ret = HTTP_BAD_REQUEST;
+		    goto done;
+		}
+	    }
 	}
     }
 
