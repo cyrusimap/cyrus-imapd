@@ -363,8 +363,8 @@ static int prin_parse_path(const char *path,
     else return HTTP_NOT_FOUND;  /* need to specify a userid */
 
     if (*p) {
-	*errstr = "Too many segments in request target path";
-	return HTTP_FORBIDDEN;
+//	*errstr = "Too many segments in request target path";
+	return HTTP_NOT_FOUND;
     }
 
     return 0;
@@ -3125,7 +3125,7 @@ int meth_copy(struct transaction_t *txn, void *params)
     }
     xmlFreeURI(dest_uri);
 
-    if (r) return r;
+    if (r) return HTTP_FORBIDDEN;
 
     /* We don't yet handle COPY/MOVE on collections */
     if (!dest_tgt.resource) return HTTP_NOT_ALLOWED;
@@ -4746,7 +4746,7 @@ int meth_put(struct transaction_t *txn, void *params)
 	/* Parse the path */
 	if ((r = pparams->parse_path(txn->req_uri->path,
 				     &txn->req_tgt, &txn->error.desc))) {
-	    return r;
+	    return HTTP_FORBIDDEN;
 	}
 
 	/* Make sure method is allowed (only allowed on resources) */

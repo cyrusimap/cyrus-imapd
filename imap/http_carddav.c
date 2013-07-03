@@ -364,8 +364,8 @@ static int carddav_parse_path(const char *path,
     p += len;
 
     if (*p) {
-	*errstr = "Too many segments in request target path";
-	return HTTP_FORBIDDEN;
+//	*errstr = "Too many segments in request target path";
+	return HTTP_NOT_FOUND;
     }
 
   done:
