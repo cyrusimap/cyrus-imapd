@@ -3342,7 +3342,6 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
     icalcomponent_kind kind;
     struct hash_table att_table, comp_table;
     const char *sched_stat = NULL, *recurid;
-    struct comp_data *old_data;
 
     /* Check what kind of action we are dealing with */
     if (!newical) {
@@ -3413,17 +3412,17 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
     if (oldical) {
 	comp = icalcomponent_get_first_real_component(oldical);
 	do {
-	    old_data = xzmalloc(sizeof(struct comp_data));
+	    struct comp_data old_data;
 
-	    old_data->comp = comp;
-	    old_data->sequence = icalcomponent_get_sequence(comp);
+	    old_data.comp = comp;
+	    old_data.sequence = icalcomponent_get_sequence(comp);
 
 	    prop = icalcomponent_get_first_property(comp,
 						    ICAL_RECURRENCEID_PROPERTY);
 	    if (prop) recurid = icalproperty_get_value_as_string(prop);
 	    else recurid = "";
 
-	    hash_insert(recurid, old_data, &comp_table);
+	    hash_insert(recurid, &old_data, &comp_table);
 
 	} while ((comp = icalcomponent_get_next_component(oldical, kind)));
     }
@@ -3437,6 +3436,7 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 
 	comp = icalcomponent_get_first_real_component(newical);
 	do {
+	    struct comp_data *old_data;
 	    icalcomponent *copy;
 
 	    prop = icalcomponent_get_first_property(comp,
