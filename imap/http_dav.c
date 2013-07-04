@@ -2939,7 +2939,7 @@ int meth_acl(struct transaction_t *txn, void *params)
 		    uri->path[plen] == '/') {
 		    memset(&tgt, 0, sizeof(struct request_target_t));
 		    tgt.namespace = URL_NS_PRINCIPAL;
-		    r = aparams->parse_path(uri->path, &tgt, &errstr);
+		    r = prin_parse_path(uri->path, &tgt, &errstr);
 		    if (!r && tgt.user) userid = tgt.user;
 		}
 		if (uri) xmlFreeURI(uri);
