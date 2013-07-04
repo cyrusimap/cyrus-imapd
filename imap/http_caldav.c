@@ -1431,6 +1431,8 @@ static int parse_comp_filter(xmlNodePtr root, struct calquery_filter *filter,
 		    return HTTP_FORBIDDEN;
 		}
 
+		xmlFree(name);
+
 		ret = parse_comp_filter(node->children, filter, error);
 		if (ret) return ret;
 	    }
@@ -1789,13 +1791,19 @@ static int report_fb_query(struct transaction_t *txn,
     for (node = inroot->children; node; node = node->next) {
 	if (node->type == XML_ELEMENT_NODE) {
 	    if (!xmlStrcmp(node->name, BAD_CAST "time-range")) {
-		const char *start, *end;
+		xmlChar *start, *end;
 
-		start = (const char *) xmlGetProp(node, BAD_CAST "start");
-		if (start) calfilter.start = icaltime_from_string(start);
+		start = xmlGetProp(node, BAD_CAST "start");
+		if (start) {
+		    calfilter.start = icaltime_from_string((char *) start);
+		    xmlFree(start);
+		}
 
-		end = (const char *) xmlGetProp(node, BAD_CAST "end");
-		if (end) calfilter.end = icaltime_from_string(end);
+		end = xmlGetProp(node, BAD_CAST "end");
+		if (end) {
+		    calfilter.end = icaltime_from_string((char *) end);
+		    xmlFree(end);
+		}
 
 		if (!is_valid_timerange(calfilter.start, calfilter.end)) {
 		    return HTTP_BAD_REQUEST;
@@ -2596,7 +2604,7 @@ int sched_busytime_query(struct transaction_t *txn, icalcomponent *ical)
   done:
     if (org_authstate) auth_freestate(org_authstate);
     if (calfilter.busytime.busy) free(calfilter.busytime.busy);
-    if (root) xmlFree(root->doc);
+    if (root) xmlFreeDoc(root->doc);
 
     return ret;
 }

@@ -1810,6 +1810,8 @@ static int proppatch_calcompset(xmlNodePtr prop, unsigned set,
 	    /* Make sure we have a valid component type */
 	    for (comp = cal_comps;
 		 comp->name && xmlStrcmp(name, BAD_CAST comp->name); comp++);
+	    xmlFree(name);
+
 	    if (comp->name) types |= comp->type;   /* found match in our list */
 	    else break;	    	     		   /* no match - invalid type */
 	}
