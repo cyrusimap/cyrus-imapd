@@ -5121,7 +5121,7 @@ int meth_report(struct transaction_t *txn, void *params)
     int ret = 0, r;
     const char **hdr;
     unsigned depth = 0;
-    xmlNodePtr inroot = NULL, outroot = NULL, cur, props = NULL;
+    xmlNodePtr inroot = NULL, outroot = NULL, cur, prop = NULL, props = NULL;
     const struct report_type_t *report = NULL;
     xmlNsPtr ns[NUM_NAMESPACE];
     struct hash_table ns_table = { 0, NULL, NULL };
@@ -5238,22 +5238,25 @@ int meth_report(struct transaction_t *txn, void *params)
 	if (cur->type == XML_ELEMENT_NODE) {
 	    if (!xmlStrcmp(cur->name, BAD_CAST "allprop")) {
 		fctx.mode = PROPFIND_ALL;
+		prop = cur;
 		break;
 	    }
 	    else if (!xmlStrcmp(cur->name, BAD_CAST "propname")) {
 		fctx.mode = PROPFIND_NAME;
 		fctx.prefer = PREFER_MIN;  /* Don't want 404 (Not Found) */
+		prop = cur;
 		break;
 	    }
 	    else if (!xmlStrcmp(cur->name, BAD_CAST "prop")) {
 		fctx.mode = PROPFIND_PROP;
+		prop = cur;
 		props = cur->children;
 		break;
 	    }
 	}
     }
 
-    if (!props && (report->flags & REPORT_NEED_PROPS)) {
+    if (!prop && (report->flags & REPORT_NEED_PROPS)) {
 	txn->error.desc = "Missing <prop> element in REPORT\r\n";
 	ret = HTTP_BAD_REQUEST;
 	goto done;
