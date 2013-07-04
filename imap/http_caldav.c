@@ -1394,14 +1394,14 @@ static int parse_comp_filter(xmlNodePtr root, struct calquery_filter *filter,
 			filter->comp = CAL_COMP_VCALENDAR;
 		    else {
 			error->precond = CALDAV_VALID_FILTER;
-			return HTTP_FORBIDDEN;
+			ret = HTTP_FORBIDDEN;
 		    }
 		}
 		else if (filter->comp == CAL_COMP_VCALENDAR) {
 		    if (!xmlStrcmp(name, BAD_CAST "VCALENDAR") ||
 			!xmlStrcmp(name, BAD_CAST "VALARM")) {
 			error->precond = CALDAV_VALID_FILTER;
-			return HTTP_FORBIDDEN;
+			ret = HTTP_FORBIDDEN;
 		    }
 		    else if (!xmlStrcmp(name, BAD_CAST "VEVENT"))
 			filter->comp |= CAL_COMP_VEVENT;
@@ -1415,7 +1415,7 @@ static int parse_comp_filter(xmlNodePtr root, struct calquery_filter *filter,
 			filter->comp |= CAL_COMP_VTIMEZONE;
 		    else {
 			error->precond = CALDAV_SUPP_FILTER;
-			return HTTP_FORBIDDEN;
+			ret = HTTP_FORBIDDEN;
 		    }
 		}
 		else if (filter->comp & (CAL_COMP_VEVENT | CAL_COMP_VTODO)) {
@@ -1423,34 +1423,41 @@ static int parse_comp_filter(xmlNodePtr root, struct calquery_filter *filter,
 			filter->comp |= CAL_COMP_VALARM;
 		    else {
 			error->precond = CALDAV_VALID_FILTER;
-			return HTTP_FORBIDDEN;
+			ret = HTTP_FORBIDDEN;
 		    }
 		}
 		else {
 		    error->precond = CALDAV_SUPP_FILTER;
-		    return HTTP_FORBIDDEN;
+		    ret = HTTP_FORBIDDEN;
 		}
 
 		xmlFree(name);
 
-		ret = parse_comp_filter(node->children, filter, error);
+		if (!ret)
+		    ret = parse_comp_filter(node->children, filter, error);
 		if (ret) return ret;
 	    }
 	    else if (!xmlStrcmp(node->name, BAD_CAST "time-range")) {
-		const char *start, *end;
+		xmlChar *start, *end;
 
 		if (!(filter->comp & (CAL_COMP_VEVENT | CAL_COMP_VTODO))) {
 		    error->precond = CALDAV_VALID_FILTER;
 		    return HTTP_FORBIDDEN;
 		}
 
-		start = (const char *) xmlGetProp(node, BAD_CAST "start");
-		filter->start = start ? icaltime_from_string(start) :
-		    icaltime_from_timet_with_zone(INT_MIN, 0, NULL);
+		start = xmlGetProp(node, BAD_CAST "start");
+		if (start) {
+		    filter->start = icaltime_from_string((char *) start);
+		    xmlFree(start);
+		}
+		else icaltime_from_timet_with_zone(INT_MIN, 0, NULL);
 
-		end = (const char *) xmlGetProp(node, BAD_CAST "end");
-		filter->end = end ? icaltime_from_string(end) :
-		    icaltime_from_timet_with_zone(INT_MAX, 0, NULL);
+		end = xmlGetProp(node, BAD_CAST "end");
+		if (end) {
+		    filter->end = icaltime_from_string((char *) end);
+		    xmlFree(end);
+		}
+		else icaltime_from_timet_with_zone(INT_MAX, 0, NULL);
 
 		if (!is_valid_timerange(filter->start, filter->end)) {
 		    error->precond = CALDAV_VALID_FILTER;
@@ -1505,8 +1512,12 @@ static int report_cal_query(struct transaction_t *txn,
 						       ICAL_VTIMEZONE_COMPONENT)
 		    || icalcomponent_get_first_real_component(ical)) {
 		    txn->error.precond = CALDAV_VALID_DATA;
-		    return HTTP_FORBIDDEN;
+		    ret = HTTP_FORBIDDEN;
 		}
+
+		if (tz) xmlFree(tz);
+		if (ical) icalcomponent_free(ical);
+		if (ret) return ret;
 	    }
 	}
     }
