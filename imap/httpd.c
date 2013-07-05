@@ -3556,8 +3556,14 @@ int meth_propfind_root(struct transaction_t *txn,
 
 #ifdef WITH_DAV
     /* Apple iCal and Evolution both check "/" */
-    if (!strcmp(txn->req_uri->path, "/")) {
+    if (!strcmp(txn->req_uri->path, "/") ||
+	!strcmp(txn->req_uri->path, "/dav/")) {
 	if (!httpd_userid) return HTTP_UNAUTHORIZED;
+
+	/* Make a working copy of target path */
+	strlcpy(txn->req_tgt.path, txn->req_uri->path,
+		sizeof(txn->req_tgt.path));
+	txn->req_tgt.tail = txn->req_tgt.path + strlen(txn->req_tgt.path);
 
 	txn->req_tgt.allow |= ALLOW_DAV;
 	return meth_propfind(txn, NULL);
