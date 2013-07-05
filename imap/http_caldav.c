@@ -1908,7 +1908,8 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 
     /* Check for existing iCalendar UID */
     caldav_lookup_uid(caldavdb, uid, 0, &cdata);
-    if (cdata->dav.mailbox && !strcmp(cdata->dav.mailbox, mailbox->name) &&
+    if (!(flags & NO_DUP_CHECK) &&
+	cdata->dav.mailbox && !strcmp(cdata->dav.mailbox, mailbox->name) &&
 	strcmp(cdata->dav.resource, resource)) {
 	/* CALDAV:no-uid-conflict */
 	char *owner = mboxname_to_userid(cdata->dav.mailbox);

@@ -651,7 +651,8 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 
     /* Check for existing vCard UID */
     carddav_lookup_uid(carddavdb, uid, 0, &cdata);
-    if (cdata->dav.mailbox && !strcmp(cdata->dav.mailbox, mailbox->name) &&
+    if (!(flags & NO_DUP_CHECK) &&
+	cdata->dav.mailbox && !strcmp(cdata->dav.mailbox, mailbox->name) &&
 	strcmp(cdata->dav.resource, resource)) {
 	/* CARDDAV:no-uid-conflict */
 	char *owner = mboxname_to_userid(cdata->dav.mailbox);

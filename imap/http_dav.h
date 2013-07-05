@@ -237,6 +237,9 @@ enum {
     PREFER_NOROOT = (1<<2)
 };
 
+#define NO_DUP_CHECK (1<<7)
+
+
 /* Function to lookup DAV 'resource' in 'mailbox', with optional 'lock',
  * placing the record in 'data'
  */

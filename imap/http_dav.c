@@ -3306,6 +3306,8 @@ int meth_copy(struct transaction_t *txn, void *params)
     }
 
     if (get_preferences(txn) & PREFER_REP) flags |= PREFER_REP;
+    if ((txn->meth == METH_MOVE) && (dest_mbox == src_mbox))
+	flags |= NO_DUP_CHECK;
 
     /* Parse, validate, and store the resource */
     ret = cparams->copy(txn, src_mbox, &src_rec, dest_mbox, dest_tgt.resource,
