@@ -213,6 +213,7 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     if (r) return r;
 
     first = mailbox_finduid(mailbox, rx->first_unindexed_uid(rx));
+    if (!first) first = 1; /* empty mailbox */
 
     for (recno = first; recno <= mailbox->i.num_records; recno++) {
 	r = mailbox_read_index_record(mailbox, recno, &record);
