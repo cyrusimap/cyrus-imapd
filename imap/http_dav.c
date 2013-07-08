@@ -841,14 +841,13 @@ static int propfind_getlength(const xmlChar *name, xmlNsPtr ns,
 			      struct propstat propstat[],
 			      void *rock __attribute__((unused)))
 {
-    uint32_t len = 0;
-
-    if (!fctx->record) return HTTP_NOT_FOUND;
-
-    len = fctx->record->size - fctx->record->header_size;
-
     buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, "%u", len);
+
+    if (fctx->record) {
+	buf_printf(&fctx->buf, "%u",
+		   fctx->record->size - fctx->record->header_size);
+    }
+
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 		 name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
 
@@ -2283,7 +2282,8 @@ static const struct prop_entry {
       propfind_fromdb, proppatch_todb, NULL },
     { "getcontentlanguage", NS_DAV, PROP_ALLPROP | PROP_RESOURCE,
       propfind_fromhdr, NULL, "Content-Language" },
-    { "getcontentlength", NS_DAV, PROP_ALLPROP | PROP_RESOURCE,
+    { "getcontentlength", NS_DAV,
+      PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
       propfind_getlength, NULL, NULL },
     { "getcontenttype", NS_DAV,
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
