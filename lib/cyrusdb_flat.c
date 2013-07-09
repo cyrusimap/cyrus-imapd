@@ -453,7 +453,7 @@ static int foreach(struct db *db,
 
 	    if(mytid) {
 		/* transaction present, this means we do the slow way */
-		if (!savebuf || keylen > savebuflen) {
+		if (!savebuf || keylen >= savebuflen) {
 		    int dblsize = 2 * savebuflen;
 		    int addsize = keylen + 32;
 		    
