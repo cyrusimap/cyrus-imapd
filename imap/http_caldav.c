@@ -2850,6 +2850,7 @@ static void sched_deliver_local(const char *recipient __attribute__((unused)),
 	    icalproperty *att;
 	    icalparameter *param;
 	    icalparameter_partstat partstat;
+	    icalparameter_rsvp rsvp = ICAL_RSVP_NONE;
 	    const char *attendee, *recurid, *req_stat = SCHEDSTAT_SUCCESS;
 
 	    /* Add each component of old object to hash table for comparison */
@@ -2938,6 +2939,10 @@ static void sched_deliver_local(const char *recipient __attribute__((unused)),
 		    icalproperty_get_first_parameter(att,
 						     ICAL_PARTSTAT_PARAMETER);
 		partstat = icalparameter_get_partstat(param);
+		param =
+		    icalproperty_get_first_parameter(att,
+						     ICAL_RSVP_PARAMETER);
+		if (param) rsvp = icalparameter_get_rsvp(param);
 
 		prop =
 		    icalcomponent_get_first_property(itip,
@@ -2972,6 +2977,17 @@ static void sched_deliver_local(const char *recipient __attribute__((unused)),
 		    icalproperty_add_parameter(prop, param);
 		}
 		icalparameter_set_partstat(param, partstat);
+
+		/* Find and set RSVP */
+		param =
+		    icalproperty_get_first_parameter(prop,
+						     ICAL_RSVP_PARAMETER);
+		if (param) icalproperty_remove_parameter_by_ref(prop, param);
+		if (rsvp != ICAL_RSVP_NONE) {
+		    param = icalparameter_new(ICAL_PARTSTAT_PARAMETER);
+		    icalproperty_add_parameter(prop, param);
+		    icalparameter_set_partstat(param, partstat);
+		}
 
 		/* Find and set SCHEDULE-STATUS */
 		for (param =
