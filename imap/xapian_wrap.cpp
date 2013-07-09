@@ -272,8 +272,10 @@ xapian_query_t *xapian_query_new_match(const xapian_db_t *db, const char *prefix
     try {
 	// We don't use FLAG_BOOLEAN because Cyrus is doing boolean for us
 	// TODO: FLAG_AUTO_SYNONYMS
+	// quote the query for phrase management
+	std::string quoted = std::string("\"") + str + "\"";
 	Xapian::Query query = db->parser->parse_query(
-				    std::string(str),
+				    quoted,
 				    (Xapian::QueryParser::FLAG_PHRASE |
 				     Xapian::QueryParser::FLAG_LOVEHATE |
 				     Xapian::QueryParser::FLAG_WILDCARD),
