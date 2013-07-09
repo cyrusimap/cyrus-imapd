@@ -3555,10 +3555,21 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 	    }
 
 	    if (stat) {
-		icalparameter *param = icalparameter_new(ICAL_IANA_PARAMETER);
-		icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
+		icalparameter *param;
+		for (param =
+			 icalproperty_get_first_parameter(prop,
+							  ICAL_IANA_PARAMETER);
+		     param && strcmp(icalparameter_get_iana_name(param),
+				     "SCHEDULE-STATUS");
+		     param =
+			 icalproperty_get_next_parameter(prop,
+							 ICAL_IANA_PARAMETER));
+		if (!param) {
+		    param = icalparameter_new(ICAL_IANA_PARAMETER);
+		    icalproperty_add_parameter(prop, param);
+		    icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
+		}
 		icalparameter_set_iana_value(param, stat);
-		icalproperty_add_parameter(prop, param);
 	    }
 	}
     }
