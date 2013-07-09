@@ -42,11 +42,12 @@
  */
 #include <config.h>
 #ifdef ENABLE_MBOXEVENT
-#include <string.h>
-#include <stdio.h>
-#include <time.h>
-#include <syslog.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <syslog.h>
+#include <time.h>
+#include <unistd.h>
 
 #include <jansson.h>
 
@@ -54,13 +55,13 @@
 #include "exitcodes.h"
 #include "imapurl.h"
 #include "libconfig.h"
+#include "map.h"
 #include "times.h"
 #include "xmalloc.h"
 
-#include "map.h"
-#include "mboxevent.h"
-#include "mboxname.h"
-#include "notify.h"
+#include "imap/mboxevent.h"
+#include "imap/mboxname.h"
+#include "imap/notify.h"
 
 
 #define MESSAGE_EVENTS (EVENT_MESSAGE_APPEND|EVENT_MESSAGE_EXPIRE|\
