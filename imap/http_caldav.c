@@ -3269,15 +3269,19 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
 			      struct hash_table *att_table,
 			      icalcomponent *itip)
 {
+    icalcomponent *copy;
     icalproperty *prop;
     icalparameter *param;
 
-    clean_component(comp, 0);
+    /* Clone a working copy of the component */
+    copy = icalcomponent_new_clone(comp);
+
+    clean_component(copy, 0);
 
     /* Process each attendee */
-    for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+    for (prop = icalcomponent_get_first_property(copy, ICAL_ATTENDEE_PROPERTY);
 	 prop;
-	 prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
+	 prop = icalcomponent_get_next_property(copy, ICAL_ATTENDEE_PROPERTY)) {
 	const char *attendee = icalproperty_get_attendee(prop);
 	unsigned do_sched = 1;
 	icalparameter *force_send = NULL;
@@ -3329,6 +3333,16 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
 
 	if (force_send) icalproperty_remove_parameter_by_ref(prop, force_send);
     }
+
+    /* XXX  We assume that the master component is always first */
+    if (ncomp) {
+	/* Handle attendees that are excluded from this recurrence */
+	struct exclude_rock erock = { ncomp, copy };
+
+	hash_enumerate(att_table, sched_exclude, &erock);
+    }
+
+    icalcomponent_free(copy);
 }
 
 
@@ -3348,18 +3362,13 @@ static void sched_cancel(const char *recurid __attribute__((unused)),
 {
     struct comp_data *old_data = (struct comp_data *) data;
     struct cancel_rock *crock = (struct cancel_rock *) rock;
-    icalcomponent *copy;
-
-    /* Clone a working copy of the component */
-    copy = icalcomponent_new_clone(old_data->comp);
 
     /* Deleting the object -- set STATUS to CANCELLED for component */
-    icalcomponent_set_status(copy, ICAL_STATUS_CANCELLED);
-//    icalcomponent_set_sequence(copy, old_data->sequence+1);
+    icalcomponent_set_status(old_data->comp, ICAL_STATUS_CANCELLED);
+//    icalcomponent_set_sequence(old_data->comp, old_data->sequence+1);
 
-    process_attendees(copy, 0, crock->organizer, crock->att_table, crock->itip);
-
-    icalcomponent_free(copy);
+    process_attendees(old_data->comp, 0, crock->organizer,
+		      crock->att_table, crock->itip);
 }
 
 
@@ -3473,7 +3482,6 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 	comp = icalcomponent_get_first_real_component(newical);
 	do {
 	    struct comp_data *old_data;
-	    icalcomponent *copy;
 
 	    prop = icalcomponent_get_first_property(comp,
 						    ICAL_RECURRENCEID_PROPERTY);
@@ -3489,23 +3497,8 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 		continue;
 	    }
 
-	    /* Clone a working copy of the component */
-	    copy = icalcomponent_new_clone(comp);
-
 	    /* Process all attendees in created/modified components */
-	    process_attendees(copy, ncomp, organizer, &att_table, req);
-
-	    /* XXX  We assume that the master component is always first */
-	    if (ncomp) {
-		/* Handle attendees that are excluded from this recurrence */
-		struct exclude_rock erock = { ncomp, copy };
-
-		hash_enumerate(&att_table, sched_exclude, &erock);
-	    }
-
-	    icalcomponent_free(copy);
-
-	    ncomp++;
+	    process_attendees(comp, ncomp++, organizer, &att_table, req);
 
 	} while ((comp = icalcomponent_get_next_component(newical, kind)));
     }
