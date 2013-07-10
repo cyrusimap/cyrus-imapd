@@ -3016,7 +3016,49 @@ static void sched_deliver_local(const char *recipient __attribute__((unused)),
 	case ICAL_METHOD_REQUEST: {
 	    struct hash_table comp_table;
 	    icalcomponent *itip;
-	    const char *recurid;
+	    const char *tzid, *recurid;
+
+	    /* Add each VTIMEZONE of old object to hash table for comparison */
+	    construct_hash_table(&comp_table, 10, 1);
+	    for (comp = icalcomponent_get_first_component(ical,
+							  ICAL_VTIMEZONE_COMPONENT);
+		 comp;
+		 comp =
+		     icalcomponent_get_next_component(ical,
+						      ICAL_VTIMEZONE_COMPONENT)) {
+		prop =
+		    icalcomponent_get_first_property(comp, ICAL_TZID_PROPERTY);
+		tzid = icalproperty_get_tzid(prop);
+
+		hash_insert(tzid, comp, &comp_table);
+	    }
+
+	    /* Process each VTIMEZONE in the iTIP request */
+	    for (itip =
+		     icalcomponent_get_first_component(sched_data->itip,
+						       ICAL_VTIMEZONE_COMPONENT);
+		 itip;
+		 itip =
+		     icalcomponent_get_next_component(sched_data->itip,
+						      ICAL_VTIMEZONE_COMPONENT)) {
+		/* Lookup this TZID in the hash table */
+		prop =
+		    icalcomponent_get_first_property(itip,
+						     ICAL_TZID_PROPERTY);
+		tzid = icalproperty_get_tzid(prop);
+
+		comp = hash_lookup(tzid, &comp_table);
+		if (comp) {
+		    /* Remove component from old object */
+		    icalcomponent_remove_component(ical, comp);
+		}
+
+		/* Add new/modified component from iTIP request*/
+		icalcomponent_add_component(ical,
+					    icalcomponent_new_clone(itip));
+	    }
+
+	    free_hash_table(&comp_table, NULL);
 
 	    /* Add each component of old object to hash table for comparison */
 	    construct_hash_table(&comp_table, 10, 1);
