@@ -3267,11 +3267,33 @@ static void sched_exclude(const char *attendee __attribute__((unused)),
 static void process_attendees(icalcomponent *comp, unsigned ncomp,
 			      const char *organizer,
 			      struct hash_table *att_table,
-			      icalcomponent *itip)
+			      icalcomponent *itip, unsigned needs_action)
 {
     icalcomponent *copy;
     icalproperty *prop;
     icalparameter *param;
+
+    if (needs_action) {
+	/* Set PROPSTAT=NEEDS-ACTION on each attendee in organizer component */
+	for (prop =
+		 icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+	     prop;
+	     prop =
+		 icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
+	    const char *attendee = icalproperty_get_attendee(prop);
+
+	    /* Don't modify attendee == organizer */
+	    if (!strcmp(attendee, organizer)) continue;
+
+	    param =
+		icalproperty_get_first_parameter(prop, ICAL_PARTSTAT_PARAMETER);
+	    if (!param) {
+		param = icalparameter_new(ICAL_PARTSTAT_PARAMETER);
+		icalproperty_add_parameter(prop, param);
+	    }
+	    icalparameter_set_partstat(param, ICAL_PARTSTAT_NEEDSACTION);
+	}
+    }
 
     /* Clone a working copy of the component */
     copy = icalcomponent_new_clone(comp);
@@ -3368,7 +3390,31 @@ static void sched_cancel(const char *recurid __attribute__((unused)),
 //    icalcomponent_set_sequence(old_data->comp, old_data->sequence+1);
 
     process_attendees(old_data->comp, 0, crock->organizer,
-		      crock->att_table, crock->itip);
+		      crock->att_table, crock->itip, 0);
+}
+
+
+static unsigned propcmp(icalcomponent *oldical, icalcomponent *newical,
+			icalproperty_kind kind)
+{
+    icalproperty *oldprop, *newprop;
+
+    oldprop = icalcomponent_get_first_property(oldical, kind);
+    newprop = icalcomponent_get_first_property(newical, kind);
+
+    if (!oldprop) {
+	if (newprop) return 1;
+    }
+    else if (!newprop) return 1;
+    else {
+	/* XXX  Do something smarter based on property type */
+	const char *oldstr = icalproperty_get_value_as_string(oldprop);
+	const char *newstr = icalproperty_get_value_as_string(newprop);
+
+	if (strcmp(oldstr, newstr)) return 1;
+    }
+
+    return 0;
 }
 
 
@@ -3482,6 +3528,7 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 	comp = icalcomponent_get_first_real_component(newical);
 	do {
 	    struct comp_data *old_data;
+	    unsigned needs_action = 0;
 
 	    prop = icalcomponent_get_first_property(comp,
 						    ICAL_RECURRENCEID_PROPERTY);
@@ -3490,15 +3537,33 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 
 	    old_data = hash_del(recurid, &comp_table);
 
-	    if (old_data &&
-		old_data->sequence >= icalcomponent_get_sequence(comp)) {
-		/* This component hasn't changed, skip it */
-		/* XXX  We probably need to compare EXDATEs */
-		continue;
+	    if (old_data) {
+		if (old_data->sequence >= icalcomponent_get_sequence(comp)) {
+		    /* This component hasn't changed, skip it */
+		    continue;
+		}
+
+		/* Per RFC 6638, Section 3.2.8: We need to compare
+		   DTSTART, DTEND, DURATION, DUE, RRULE, RDATE, EXDATE */
+		needs_action += propcmp(old_data->comp, comp,
+					ICAL_DTSTART_PROPERTY);
+		needs_action += propcmp(old_data->comp, comp,
+					ICAL_DTEND_PROPERTY);
+		needs_action += propcmp(old_data->comp, comp,
+					ICAL_DURATION_PROPERTY);
+		needs_action += propcmp(old_data->comp, comp,
+					ICAL_DUE_PROPERTY);
+		needs_action += propcmp(old_data->comp, comp,
+					ICAL_RRULE_PROPERTY);
+		needs_action += propcmp(old_data->comp, comp,
+					ICAL_RDATE_PROPERTY);
+		needs_action += propcmp(old_data->comp, comp,
+					ICAL_EXDATE_PROPERTY);
 	    }
 
 	    /* Process all attendees in created/modified components */
-	    process_attendees(comp, ncomp++, organizer, &att_table, req);
+	    process_attendees(comp, ncomp++, organizer,
+			      &att_table, req, needs_action);
 
 	} while ((comp = icalcomponent_get_next_component(newical, kind)));
     }
