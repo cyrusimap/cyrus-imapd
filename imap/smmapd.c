@@ -105,6 +105,7 @@ static int forcedowncase;
 extern int optind;
 
 static struct protstream *map_in, *map_out;
+static const char *smmapd_clienthost;
 
 /* current namespace */
 static struct namespace map_namespace;
@@ -129,6 +130,8 @@ static void smmapd_reset(void)
 	prot_flush(map_out);
 	prot_free(map_out);
     }
+
+    smmapd_clienthost = "[local]";
 
     map_in = map_out = NULL;
 
@@ -216,11 +219,13 @@ int service_main(int argc __attribute__((unused)),
 		 char **argv __attribute__((unused)),
 		 char **envp __attribute__((unused)))
 {
-
+    const char *localip, *remoteip;
     map_in = prot_new(0, 0);
     map_out = prot_new(1, 1);
     prot_setflushonread(map_in, map_out);
     prot_settimeout(map_in, 360);
+
+    smmapd_clienthost = get_clienthost(0, &localip, &remoteip);
 
     if (begin_handling() != 0) shut_down(0);
 
@@ -468,20 +473,20 @@ static int begin_handling(void)
 
 	case 0:
 	    if (config_getswitch(IMAPOPT_AUDITLOG))
-		syslog(LOG_NOTICE, "auditlog: ok userid=<%s>", key);
+		syslog(LOG_NOTICE, "auditlog: ok userid=<%s> client=<%s>", key, smmapd_clienthost);
 	    prot_printf(map_out, SIZE_T_FMT ":OK %s,", 3+strlen(key), key);
 	    break;
 
 	case IMAP_MAILBOX_NONEXISTENT:
 	    if (config_getswitch(IMAPOPT_AUDITLOG))
-		syslog(LOG_NOTICE, "auditlog: nonexistent userid=<%s>", key);
+		syslog(LOG_NOTICE, "auditlog: nonexistent userid=<%s> client=<%s>", key, smmapd_clienthost);
 	    prot_printf(map_out, SIZE_T_FMT ":NOTFOUND %s,",
 			9+strlen(error_message(r)), error_message(r));
 	    break;
 
 	case IMAP_QUOTA_EXCEEDED:
 	    if (config_getswitch(IMAPOPT_AUDITLOG))
-		syslog(LOG_NOTICE, "auditlog: overquota userid=<%s>", key);
+		syslog(LOG_NOTICE, "auditlog: overquota userid=<%s> client=<%s>", key, smmapd_clienthost);
 	    if (!config_getswitch(IMAPOPT_LMTP_OVER_QUOTA_PERM_FAILURE)) {
 		prot_printf(map_out, SIZE_T_FMT ":TEMP %s,", strlen(error_message(r))+5,
 			    error_message(r));
@@ -491,7 +496,7 @@ static int begin_handling(void)
 
 	default:
 	    if (config_getswitch(IMAPOPT_AUDITLOG))
-		syslog(LOG_NOTICE, "auditlog: failed userid=<%s>", key);
+		syslog(LOG_NOTICE, "auditlog: failed userid=<%s> client=<%s>", key, smmapd_clienthost);
 	    if (errstring)
 		prot_printf(map_out, SIZE_T_FMT ":PERM %s (%s),",
 			    5+strlen(error_message(r))+3+strlen(errstring),
