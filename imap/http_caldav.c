@@ -3391,7 +3391,7 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
 		}
 		hash_insert(attendee, sched_data, att_table);
 	    }
-	    new_comp = icalcomponent_new_clone(comp);
+	    new_comp = icalcomponent_new_clone(copy);
 	    icalcomponent_add_component(sched_data->itip, new_comp);
 	    sched_data->comp_mask |= (1 << ncomp);
 
