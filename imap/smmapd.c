@@ -463,19 +463,25 @@ static int begin_handling(void)
 
 	switch (r) {
         case -1:
-            /* reply already sent */
-            break;
+	    /* reply already sent */
+	    break;
 
 	case 0:
+	    if (config_getswitch(IMAPOPT_AUDITLOG))
+		syslog(LOG_NOTICE, "auditlog: ok userid=<%s>", key);
 	    prot_printf(map_out, SIZE_T_FMT ":OK %s,", 3+strlen(key), key);
 	    break;
 
 	case IMAP_MAILBOX_NONEXISTENT:
+	    if (config_getswitch(IMAPOPT_AUDITLOG))
+		syslog(LOG_NOTICE, "auditlog: nonexistent userid=<%s>", key);
 	    prot_printf(map_out, SIZE_T_FMT ":NOTFOUND %s,",
 			9+strlen(error_message(r)), error_message(r));
 	    break;
 
 	case IMAP_QUOTA_EXCEEDED:
+	    if (config_getswitch(IMAPOPT_AUDITLOG))
+		syslog(LOG_NOTICE, "auditlog: overquota userid=<%s>", key);
 	    if (!config_getswitch(IMAPOPT_LMTP_OVER_QUOTA_PERM_FAILURE)) {
 		prot_printf(map_out, SIZE_T_FMT ":TEMP %s,", strlen(error_message(r))+5,
 			    error_message(r));
@@ -484,6 +490,8 @@ static int begin_handling(void)
 	    /* fall through - permanent failure */
 
 	default:
+	    if (config_getswitch(IMAPOPT_AUDITLOG))
+		syslog(LOG_NOTICE, "auditlog: failed userid=<%s>", key);
 	    if (errstring)
 		prot_printf(map_out, SIZE_T_FMT ":PERM %s (%s),",
 			    5+strlen(error_message(r))+3+strlen(errstring),
