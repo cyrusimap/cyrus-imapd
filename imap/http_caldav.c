@@ -2838,8 +2838,8 @@ static void sched_deliver_local(const char *recipient __attribute__((unused)),
 	    /* Set STATUS:CANCELLED on all components */
 	    do {
 		icalcomponent_set_status(comp, ICAL_STATUS_CANCELLED);
-//		icalcomponent_set_sequence(comp,
-//					   icalcomponent_get_sequence(comp)+1);
+		icalcomponent_set_sequence(comp,
+					   icalcomponent_get_sequence(comp)+1);
 	    } while ((comp = icalcomponent_get_next_component(ical, kind)));
 
 	    break;
