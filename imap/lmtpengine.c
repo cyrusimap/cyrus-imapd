@@ -1119,6 +1119,9 @@ void lmtpmode(struct lmtp_func *func,
 	  func->shutdown(0);
       }
 
+      if (config_getswitch(IMAPOPT_CHATTY))
+	syslog(LOG_NOTICE, "command: %s", buf);
+
       switch (buf[0]) {
       case 'a':
       case 'A':

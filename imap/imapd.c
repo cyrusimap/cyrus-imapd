@@ -1246,8 +1246,6 @@ static void cmdloop(void)
 	    continue;
 	}
 
-	syslog(LOG_DEBUG, "command with tag: %s", tag.s);
-
 	/* Parse command name */
 	c = getword(imapd_in, &cmd);
 	if (!cmd.s[0]) {
@@ -1259,12 +1257,15 @@ static void cmdloop(void)
 	xstrncpy(cmdname, cmd.s, 99);
 	cmd.s[0] = toupper((unsigned char) cmd.s[0]);
 
+	if (config_getswitch(IMAPOPT_CHATTY))
+	    syslog(LOG_NOTICE, "command: %s %s", tag.s, cmd.s);
+
 	/* if we need to force a kick, do so */
 	if (referral_kick) {
 	    kick_mupdate();
 	    referral_kick = 0;
 	}
-	
+
 	if (plaintextloginalert) {
 	    prot_printf(imapd_out, "* OK [ALERT] %s\r\n",
 			plaintextloginalert);

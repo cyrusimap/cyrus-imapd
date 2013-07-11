@@ -968,6 +968,9 @@ static void cmdloop(void)
 	}
 	lcase(inputbuf);
 
+	if (config_getswitch(IMAPOPT_CHATTY))
+	    syslog(LOG_NOTICE, "command: %s", inputbuf);
+
 	if (!strcmp(inputbuf, "quit")) {
 	    if (!arg) {
 		int pollpadding =config_getint(IMAPOPT_POPPOLLPADDING);

@@ -291,6 +291,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    layers of MIME structure.  The default of 1000 is much higher
    than any sane message should have. */
 
+{ "chatty", 0, SWITCH }
+/* If yes, syslog tags and commands for every IMAP command, mailboxes
+   for every lmtp connection, every POP3 command, etc */
+
 { "client_timeout", 10, INT }
 /* Number of seconds to wait before returning a timeout failure when
    performing a client connection (e.g., in a murder environment) */
