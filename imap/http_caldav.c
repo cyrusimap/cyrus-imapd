@@ -3366,6 +3366,10 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
 		icalproperty_remove_parameter_by_ref(prop, param);
 	    }
 	    else if (!strcmp(icalparameter_get_iana_name(param),
+			     "SCHEDULE-STATUS")) {
+		icalproperty_remove_parameter_by_ref(prop, param);
+	    }
+	    else if (!strcmp(icalparameter_get_iana_name(param),
 			     "SCHEDULE-FORCE-SEND")) {
 		force_send = param;
 	    }
