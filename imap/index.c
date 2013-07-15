@@ -2706,6 +2706,14 @@ int index_urlfetch(struct index_state *state, uint32_t msgno,
 		   unsigned long start_octet, unsigned long octet_count,
 		   struct protstream *pout, unsigned long *outsize)
 {
+    /* dumbass eM_Client sends this:
+     * A4 APPEND "INBOX.Junk Mail" () "14-Jul-2013 17:01:02 +0000"
+     * CATENATE (URL "/INBOX/;uid=83118/;section=TEXT.MIME"
+     * URL "/INBOX/;uid=83118/;section=TEXT")
+     *
+     * genius.  I can sort of see how TEXT.MIME kinda == "HEADER",
+     * so there we go */
+    static char text_mime[] = "HEADER";
     const char *data, *msg_base = 0;
     unsigned long msg_size = 0;
     const char *cacheitem;
@@ -2717,6 +2725,9 @@ int index_urlfetch(struct index_state *state, uint32_t msgno,
     char *decbuf = NULL;
     struct mailbox *mailbox = state->mailbox;
     struct index_map *im = &state->map[msgno-1];
+
+    if (!strcasecmp(section, "TEXT.MIME"))
+	section = text_mime;
 
     if (outsize) *outsize = 0;
 
