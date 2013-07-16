@@ -3340,18 +3340,28 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
     icalproperty *prop;
     icalparameter *param;
 
-    if (needs_action) {
-	/* Set PROPSTAT=NEEDS-ACTION on each attendee in organizer component */
-	for (prop =
-		 icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
-	     prop;
-	     prop =
-		 icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
-	    const char *attendee = icalproperty_get_attendee(prop);
+    /* Strip SCHEDULE-STATUS from each attendee
+       and optionally set PROPSTAT=NEEDS-ACTION */
+    for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+	 prop;
+	 prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
+	const char *attendee = icalproperty_get_attendee(prop);
 
-	    /* Don't modify attendee == organizer */
-	    if (!strcmp(attendee, organizer)) continue;
+	/* Don't modify attendee == organizer */
+	if (!strcmp(attendee, organizer)) continue;
 
+	for (param =
+		 icalproperty_get_first_parameter(prop, ICAL_IANA_PARAMETER);
+	     param;
+	     param =
+		 icalproperty_get_next_parameter(prop, ICAL_IANA_PARAMETER)) {
+	    if (!strcmp(icalparameter_get_iana_name(param),
+			     "SCHEDULE-STATUS")) {
+		icalproperty_remove_parameter_by_ref(prop, param);
+	    }
+	}
+
+	if (needs_action) {
 	    param =
 		icalproperty_get_first_parameter(prop, ICAL_PARTSTAT_PARAMETER);
 	    if (!param) {
@@ -3388,10 +3398,6 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
 			"SCHEDULE-AGENT")) {
 		do_sched =
 		    !strcmp(icalparameter_get_iana_value(param), "SERVER");
-		icalproperty_remove_parameter_by_ref(prop, param);
-	    }
-	    else if (!strcmp(icalparameter_get_iana_name(param),
-			     "SCHEDULE-STATUS")) {
 		icalproperty_remove_parameter_by_ref(prop, param);
 	    }
 	    else if (!strcmp(icalparameter_get_iana_name(param),
