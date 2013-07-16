@@ -147,7 +147,8 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			  unsigned flags);
 
 static void sched_request(const char *organizer, struct sched_param *sparam,
-			  icalcomponent *oldical, icalcomponent *newical);
+			  icalcomponent *oldical, icalcomponent *newical,
+			  unsigned is_update);
 static void sched_reply(const char *userid,
 			icalcomponent *oldical, icalcomponent *newical);
 
@@ -696,7 +697,7 @@ static int caldav_delete_sched(struct transaction_t *txn,
 
 	if (!strcmp(sparam.userid, userid)) {
 	    /* Organizer scheduling object resource */
-	    sched_request(organizer, &sparam, ical, NULL);
+	    sched_request(organizer, &sparam, ical, NULL, 0);
 	}
 	else if (!(hdr = spool_getheader(txn->req_hdrs, "Schedule-Reply")) ||
 		 strcmp(hdr[0], "F")) {
@@ -1169,7 +1170,7 @@ static int caldav_put(struct transaction_t *txn, struct mailbox *mailbox,
 
 	if (!strcmp(sparam.userid, userid)) {
 	    /* Organizer scheduling object resource */
-	    sched_request(organizer, &sparam, oldical, ical);
+	    sched_request(organizer, &sparam, oldical, ical, 0);
 	}
 	else {
 	    /* Attendee scheduling object resource */
@@ -2719,12 +2720,12 @@ static void sched_deliver_remote(const char *recipient,
 }
 
 /* Deliver scheduling object to local recipient */
-static void sched_deliver_local(const char *recipient __attribute__((unused)),
+static void sched_deliver_local(const char *recipient,
 				struct sched_param *sparam,
 				struct sched_data *sched_data,
 				struct auth_state *authstate)
 {
-    int r = 0, rights, reqd_privs;
+    int r = 0, rights, reqd_privs, deliver_inbox = 0;
     const char *userid = sparam->userid, *mboxname = NULL;
     static struct buf resource = BUF_INITIALIZER;
     static unsigned sched_count = 0;
@@ -2810,6 +2811,8 @@ static void sched_deliver_local(const char *recipient __attribute__((unused)),
 
 	prop = icalcomponent_get_first_property(ical, ICAL_METHOD_PROPERTY);
 	icalcomponent_remove_property(ical, prop);
+
+	deliver_inbox = 1;
     }
     else {
 	/* Update existing object */
@@ -2841,6 +2844,8 @@ static void sched_deliver_local(const char *recipient __attribute__((unused)),
 		icalcomponent_set_sequence(comp,
 					   icalcomponent_get_sequence(comp)+1);
 	    } while ((comp = icalcomponent_get_next_component(ical, kind)));
+
+	    deliver_inbox = 1;
 
 	    break;
 
@@ -3010,6 +3015,8 @@ static void sched_deliver_local(const char *recipient __attribute__((unused)),
 
 	    free_hash_table(&comp_table, NULL);
 
+	    deliver_inbox = 1;
+
 	    break;
 	}
 
@@ -3086,9 +3093,19 @@ static void sched_deliver_local(const char *recipient __attribute__((unused)),
 
 		comp = hash_lookup(recurid, &comp_table);
 		if (comp) {
+		    int old_seq, new_seq;
+
 		    /* Remove component from old object */
 		    icalcomponent_remove_component(ical, comp);
+
+		    /* Check if this is something more than an update */
+		    /* XXX  Probably need to check PARTSTAT=NEEDS-ACTION
+		            and RSVP=TRUE as well */
+		    old_seq = icalcomponent_get_sequence(comp);
+		    new_seq = icalcomponent_get_sequence(itip);
+		    if (new_seq > old_seq) deliver_inbox = 1;
 		}
+		else deliver_inbox = 1;
 
 		/* Add new/modified component from iTIP request*/
 		icalcomponent_add_component(ical,
@@ -3129,18 +3146,25 @@ static void sched_deliver_local(const char *recipient __attribute__((unused)),
     }
 
   inbox:
-    /* Create a name for the new iTIP message resource */
-    buf_reset(&resource);
-    buf_printf(&resource, "%x-%d-%ld-%u.ics",
-	       strhash(icalcomponent_get_uid(sched_data->itip)), getpid(),
-	       time(0), sched_count++);
+    if (deliver_inbox) {
+	/* Create a name for the new iTIP message resource */
+	buf_reset(&resource);
+	buf_printf(&resource, "%x-%d-%ld-%u.ics",
+		   strhash(icalcomponent_get_uid(sched_data->itip)), getpid(),
+		   time(0), sched_count++);
 
-    /* Store the message in the recipient's Inbox */
-    mailbox_unlock_index(inbox, NULL);
+	/* Store the message in the recipient's Inbox */
+	mailbox_unlock_index(inbox, NULL);
 
-    r = store_resource(&txn, sched_data->itip, inbox, buf_cstring(&resource),
-		       caldavdb, OVERWRITE_NO, 0);
-    /* XXX  What do we do if storing to Inbox fails? */
+	r = store_resource(&txn, sched_data->itip, inbox,
+			   buf_cstring(&resource), caldavdb, OVERWRITE_NO, 0);
+	/* XXX  What do we do if storing to Inbox fails? */
+    }
+
+    if (sched_data->is_reply) {
+	/* Send updates to attendees */
+	sched_request(recipient, sparam, NULL, ical, 1);
+    }
 
   done:
     if (ical) icalcomponent_free(ical);
@@ -3466,7 +3490,8 @@ static unsigned propcmp(icalcomponent *oldical, icalcomponent *newical,
 
 /* Create and deliver an organizer scheduling request */
 static void sched_request(const char *organizer, struct sched_param *sparam,
-			  icalcomponent *oldical, icalcomponent *newical)
+			  icalcomponent *oldical, icalcomponent *newical,
+			  unsigned is_update)
 {
     int r, rights;
     struct mboxlist_entry mbentry;
@@ -3492,22 +3517,24 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 	method = ICAL_METHOD_REQUEST;
     }
 
-    /* Check ACL of auth'd user on userid's Scheduling Outbox */
-    caldav_mboxname(SCHED_OUTBOX, sparam->userid, outboxname);
+    if (!is_update) {
+	/* Check ACL of auth'd user on userid's Scheduling Outbox */
+	caldav_mboxname(SCHED_OUTBOX, sparam->userid, outboxname);
 
-    if ((r = mboxlist_lookup(outboxname, &mbentry, NULL))) {
-	syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
-	       outboxname, error_message(r));
-	mbentry.acl = NULL;
-    }
+	if ((r = mboxlist_lookup(outboxname, &mbentry, NULL))) {
+	    syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
+		   outboxname, error_message(r));
+	    mbentry.acl = NULL;
+	}
 
-    rights =
-	mbentry.acl ? cyrus_acl_myrights(httpd_authstate, mbentry.acl) : 0;
-    if (!(rights & DACL_INVITE)) {
-	/* DAV:need-privileges */
-	sched_stat = SCHEDSTAT_NOPRIVS;
+	rights =
+	    mbentry.acl ? cyrus_acl_myrights(httpd_authstate, mbentry.acl) : 0;
+	if (!(rights & DACL_INVITE)) {
+	    /* DAV:need-privileges */
+	    sched_stat = SCHEDSTAT_NOPRIVS;
 
-	goto done;
+	    goto done;
+	}
     }
 
     /* Create a shell for our iTIP request objects */
