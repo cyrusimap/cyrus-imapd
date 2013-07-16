@@ -3084,6 +3084,8 @@ static void sched_deliver_local(const char *recipient,
 	    /* Process each component in the iTIP request */
 	    itip = icalcomponent_get_first_component(sched_data->itip, kind);
 	    do {
+		icalcomponent *new_comp = icalcomponent_new_clone(itip);
+
 		/* Lookup this comp in the hash table */
 		prop =
 		    icalcomponent_get_first_property(itip,
@@ -3104,12 +3106,35 @@ static void sched_deliver_local(const char *recipient,
 		    old_seq = icalcomponent_get_sequence(comp);
 		    new_seq = icalcomponent_get_sequence(itip);
 		    if (new_seq > old_seq) deliver_inbox = 1;
+
+		    /* Copy over any COMPLETED, PERCENT-COMPLETE,
+		       or TRANSP properties */
+		    prop =
+			icalcomponent_get_first_property(comp,
+							 ICAL_COMPLETED_PROPERTY);
+		    if (prop) {
+			icalcomponent_add_property(new_comp,
+						   icalproperty_new_clone(prop));
+		    }
+		    prop =
+			icalcomponent_get_first_property(comp,
+							 ICAL_PERCENTCOMPLETE_PROPERTY);
+		    if (prop) {
+			icalcomponent_add_property(new_comp,
+						   icalproperty_new_clone(prop));
+		    }
+		    prop =
+			icalcomponent_get_first_property(comp,
+							 ICAL_TRANSP_PROPERTY);
+		    if (prop) {
+			icalcomponent_add_property(new_comp,
+						   icalproperty_new_clone(prop));
+		    }
 		}
 		else deliver_inbox = 1;
 
 		/* Add new/modified component from iTIP request*/
-		icalcomponent_add_component(ical,
-					    icalcomponent_new_clone(itip));
+		icalcomponent_add_component(ical, new_comp);
 
 	    } while ((itip = icalcomponent_get_next_component(sched_data->itip,
 							      kind)));
