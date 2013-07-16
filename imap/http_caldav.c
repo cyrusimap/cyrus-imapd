@@ -3161,6 +3161,7 @@ static void sched_deliver_local(const char *recipient,
 	/* XXX  What do we do if storing to Inbox fails? */
     }
 
+    /* XXX  Should this be a config option? - it might have perf implications */
     if (sched_data->is_reply) {
 	/* Send updates to attendees */
 	sched_request(recipient, sparam, NULL, ical, 1);
