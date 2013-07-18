@@ -1374,7 +1374,8 @@ static int is_valid_timerange(const struct icaltimetype start,
 {
     return (icaltime_is_valid_time(start) && icaltime_is_valid_time(end) &&
 	    !icaltime_is_date(start) && !icaltime_is_date(end) &&
-	    start.zone && end.zone);
+	    (icaltime_is_utc(start) || start.zone) &&
+	    (icaltime_is_utc(end) || end.zone));
 }
 
 
@@ -1439,6 +1440,7 @@ static int parse_comp_filter(xmlNodePtr root, struct calquery_filter *filter,
 		if (ret) return ret;
 	    }
 	    else if (!xmlStrcmp(node->name, BAD_CAST "time-range")) {
+		icaltimezone *utc = icaltimezone_get_utc_timezone();
 		xmlChar *start, *end;
 
 		if (!(filter->comp & (CAL_COMP_VEVENT | CAL_COMP_VTODO))) {
@@ -1451,14 +1453,20 @@ static int parse_comp_filter(xmlNodePtr root, struct calquery_filter *filter,
 		    filter->start = icaltime_from_string((char *) start);
 		    xmlFree(start);
 		}
-		else icaltime_from_timet_with_zone(INT_MIN, 0, NULL);
+		else {
+		    filter->start =
+			icaltime_from_timet_with_zone(INT_MIN, 0, utc);
+		}
 
 		end = xmlGetProp(node, BAD_CAST "end");
 		if (end) {
 		    filter->end = icaltime_from_string((char *) end);
 		    xmlFree(end);
 		}
-		else icaltime_from_timet_with_zone(INT_MAX, 0, NULL);
+		else {
+		    filter->end =
+			icaltime_from_timet_with_zone(INT_MAX, 0, utc);
+		}
 
 		if (!is_valid_timerange(filter->start, filter->end)) {
 		    error->precond = CALDAV_VALID_FILTER;
