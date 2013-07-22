@@ -100,6 +100,8 @@ static int sleepmicroseconds = 0;
 static const char *temp_root_dir = NULL;
 static search_text_receiver_t *rx = NULL;
 
+static const char *name_starts_from = NULL;
+
 static void shut_down(int code) __attribute__((noreturn));
 
 static int usage(const char *name)
@@ -273,8 +275,13 @@ static int addmbox(char *name,
 		   void *rock)
 {
     strarray_t *sa = (strarray_t *) rock;
-    if (!mboxname_isdeletedmailbox(name, NULL))
-	strarray_append(sa, name);
+
+    if (strcmpsafe(name, name_starts_from) < 0)
+	return 0;
+    if (mboxname_isdeletedmailbox(name, NULL))
+	return 0;
+
+    strarray_append(sa, name);
     return 0;
 }
 
@@ -805,7 +812,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:I:RAXT:S:Fc:de:f:mn:rsiavz:t:ou")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:I:N:RAXT:S:Fc:de:f:mn:rsiavz:t:ou")) != EOF) {
 	switch (opt) {
 	case 'C':		/* alt config file */
 	    alt_config = optarg;
@@ -821,6 +828,10 @@ int main(int argc, char **argv)
 
 	case 'X':
 	    compact_flags |= SEARCH_COMPACT_REINDEX;
+	    break;
+
+	case 'N':
+	    name_starts_from = optarg;
 	    break;
 
 	case 'I':		/* indexer, using specified mbox/uids in file */
