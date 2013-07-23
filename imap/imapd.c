@@ -423,6 +423,8 @@ static void cmd_xwarmup(const char *tag);
 
 static void cmd_enable(char* tag);
 
+static void cmd_xkillmy(const char *tag, const char *cmdname);
+
 static int parsecreateargs(struct dlist **extargs);
 
 static int parse_annotate_fetch_data(const char *tag,
@@ -2257,6 +2259,15 @@ static void cmdloop(void)
 		cmd_xwarmup(tag.s);
 // 		snmp_increment(XWARMUP_COUNT, 1);
 	    }
+	    else if (!strcmp(cmd.s, "Xkillmy")) {
+		if (c != ' ') goto missingargs;
+		c = getastring(imapd_in, imapd_out, &arg1);
+		if (c == EOF) goto missingargs;
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
+		cmd_xkillmy(tag.s, arg1.s);
+	    }
+
 	    else goto badcmd;
 	    break;
 
@@ -12934,6 +12945,29 @@ static void cmd_enable(char *tag)
 
     /* track the new capabilities */
     imapd_client_capa = new_capa;
+
+    prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		error_message(IMAP_OK_COMPLETED));
+}
+
+/*
+ * Perform a GETQUOTAROOT command
+ */
+static void cmd_xkillmy(const char *tag, const char *cmdname)
+{
+    char *cmd = xstrdup(cmdname);
+    char *p;
+
+    /* normalise to imapd conventions */
+    if (Uislower(cmd[0]))
+	cmd[0] = toupper((unsigned char) cmd[0]);
+    for (p = cmd+1; *p; p++) {
+	if (Uisupper(*p)) *p = tolower((unsigned char) *p);
+    }
+
+    proc_killusercmd(imapd_userid, cmd, SIGUSR2);
+
+    free(cmd);
 
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
