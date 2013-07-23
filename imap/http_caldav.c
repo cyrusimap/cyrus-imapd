@@ -3288,18 +3288,18 @@ static void clean_component(icalcomponent *comp, int clean_org)
     }
 
     if (clean_org) {
-	icalparameter *param;
+	icalparameter *param, *next;
 
 	/* Grab the organizer */
 	prop = icalcomponent_get_first_property(comp,
 						ICAL_ORGANIZER_PROPERTY);
 
 	/* Remove CalDAV Scheduling parameters from organizer */
-	for (param = icalproperty_get_first_parameter(prop,
-						      ICAL_IANA_PARAMETER);
-	     param;
-	     param = icalproperty_get_next_parameter(prop,
-						     ICAL_IANA_PARAMETER)) {
+	for (param =
+		 icalproperty_get_first_parameter(prop, ICAL_IANA_PARAMETER);
+	     param; param = next) {
+	    next = icalproperty_get_next_parameter(prop, ICAL_IANA_PARAMETER);
+
 	    if (!strcmp(icalparameter_get_iana_name(param),
 			"SCHEDULE-AGENT")) {
 		icalproperty_remove_parameter_by_ref(prop, param);
@@ -3371,7 +3371,7 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
 {
     icalcomponent *copy;
     icalproperty *prop;
-    icalparameter *param;
+    icalparameter *param, *next;
 
     /* Strip SCHEDULE-STATUS from each attendee
        and optionally set PROPSTAT=NEEDS-ACTION */
@@ -3385,9 +3385,9 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
 
 	for (param =
 		 icalproperty_get_first_parameter(prop, ICAL_IANA_PARAMETER);
-	     param;
-	     param =
-		 icalproperty_get_next_parameter(prop, ICAL_IANA_PARAMETER)) {
+	     param; param = next) {
+	    next = icalproperty_get_next_parameter(prop, ICAL_IANA_PARAMETER);
+
 	    if (!strcmp(icalparameter_get_iana_name(param),
 			     "SCHEDULE-STATUS")) {
 		icalproperty_remove_parameter_by_ref(prop, param);
@@ -3424,9 +3424,9 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
 	/* Check CalDAV Scheduling parameters */
 	for (param =
 		 icalproperty_get_first_parameter(prop, ICAL_IANA_PARAMETER);
-	     param;
-	     param =
-		 icalproperty_get_next_parameter(prop, ICAL_IANA_PARAMETER)) {
+	     param; param = next) {
+	    next = icalproperty_get_next_parameter(prop, ICAL_IANA_PARAMETER);
+
 	    if (!strcmp(icalparameter_get_iana_name(param),
 			"SCHEDULE-AGENT")) {
 		do_sched =
