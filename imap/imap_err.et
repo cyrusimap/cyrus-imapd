@@ -236,6 +236,9 @@ ec IMAP_CONVERSATIONS_NOT_OPEN,
 ec IMAP_ANCHOR_NOT_FOUND,
    "Anchor not found"
 
+ec IMAP_CANCELLED,
+   "Command cancelled by user"
+
 # Used for search engine integration
 
 # Following used for internationalization of untagged BYE response

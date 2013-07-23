@@ -157,4 +157,6 @@ extern void parse_sessionid(const char *str, char *sessionid);
 /* Capability suppression */
 extern int capa_is_disabled(const char *str);
 
+extern int cmd_cancelled();
+
 #endif /* INCLUDED_GLOBAL_H */
