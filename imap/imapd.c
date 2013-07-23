@@ -1205,6 +1205,9 @@ static void cmdloop(void)
     }
     prot_printf(imapd_out, " server ready\r\n");
 
+    /* clear cancelled flag if present before the next command */
+    cmd_cancelled();
+
     motd_file();
 
     /* Get command timer logging paramater. This string
