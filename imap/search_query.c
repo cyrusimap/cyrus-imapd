@@ -318,6 +318,8 @@ static int query_begin_index(search_query_t *query,
 	if (r) goto out;
     }
 
+    r = cmd_cancelled();
+
 out:
     return r;
 }
@@ -465,6 +467,9 @@ static void subquery_post_indexed(const char *key, void *data, void *rock)
     /* One pass through the folder's message list */
     for (msgno = 1 ; msgno <= state->exists ; msgno++) {
 	struct index_map *im = &state->map[msgno-1];
+
+	r = cmd_cancelled();
+	if (r) goto out;
 
 	/* we only want to look at unchecked UIDs */
 	if (!bv_isset(&folder->unchecked_uids, im->uid))
@@ -636,6 +641,9 @@ static int subquery_run_one_folder(search_query_t *query,
     /* One pass through the folder's message list */
     for (msgno = 1 ; msgno <= state->exists ; msgno++) {
 	struct index_map *im = &state->map[msgno-1];
+
+	r = cmd_cancelled();
+	if (r) goto out;
 
 	/* can happen if we didn't "tellchanges" yet */
 	if (im->system_flags & FLAG_EXPUNGED)
@@ -849,7 +857,6 @@ EXPORTED int search_query_run(search_query_t *query)
 			   query->merged_msgdata.count,
 			   query->sortcrit);
     }
-
 
 out:
     return r;
