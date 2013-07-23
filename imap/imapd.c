@@ -944,7 +944,7 @@ int service_main(int argc __attribute__((unused)),
 	saslprops.iplocalport = xstrdup(localip);
     }
 
-    proc_register("imapd", imapd_clienthost, NULL, NULL);
+    proc_register(config_ident, imapd_clienthost, NULL, NULL, NULL);
 
     /* Set inactivity timer */
     imapd_timeout = config_getint(IMAPOPT_TIMEOUT);
@@ -1211,6 +1211,9 @@ static void cmdloop(void)
 	prot_flush(imapd_out);
 	if (backend_current) prot_flush(backend_current->out);
 
+	/* command no longer running */
+	proc_register(config_ident, imapd_clienthost, imapd_userid, index_mboxname(imapd_index), NULL);
+
 	/* Check for shutdown file */
 	if ( !imapd_userisadmin && imapd_userid &&
 	     (shutdown_file(shut, sizeof(shut)) ||
@@ -1259,6 +1262,8 @@ static void cmdloop(void)
 
 	if (config_getswitch(IMAPOPT_CHATTY))
 	    syslog(LOG_NOTICE, "command: %s %s", tag.s, cmd.s);
+
+	proc_register(config_ident, imapd_clienthost, imapd_userid, index_mboxname(imapd_index), cmd.s);
 
 	/* if we need to force a kick, do so */
 	if (referral_kick) {
@@ -2262,9 +2267,6 @@ static void authentication_success(void)
     int r;
     struct mboxevent *mboxevent;
 
-    /* register the user */
-    proc_register("imapd", imapd_clienthost, imapd_userid, NULL);
-    
     /* authstate already created by mysasl_proxy_policy() */
     imapd_userisadmin = global_authisa(imapd_authstate, IMAPOPT_ADMINS);
 
@@ -2276,7 +2278,7 @@ static void authentication_success(void)
 				imapd_userisadmin || imapd_userisproxyadmin);
 
     mboxevent_setnamespace(&imapd_namespace);
- 
+
     if (r) {
 	syslog(LOG_ERR, "%s", error_message(r));
 	fatal(error_message(r), EC_CONFIG);
@@ -3875,13 +3877,6 @@ static void cmd_select(char *tag, char *cmd, char *name)
 	wasopen = 1;
     }
 
-    if (wasopen) {
-	/* un-register currently selected mailbox, it may get
-	 * overwritten later, but easier here than handling
-	 * all possible error paths */
-	proc_register("imapd", imapd_clienthost, imapd_userid, NULL);
-    }
-
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 					       imapd_userid, mailboxname);
 
@@ -3952,7 +3947,6 @@ static void cmd_select(char *tag, char *cmd, char *name)
 
 	switch (pipe_including_tag(backend_current, tag, 0)) {
 	case PROXY_OK:
-	    proc_register("imapd", imapd_clienthost, imapd_userid, mailboxname);
 	    syslog(LOG_DEBUG, "open: user %s opened %s on %s",
 		   imapd_userid, name, mbentry->server);
 
@@ -4024,7 +4018,6 @@ static void cmd_select(char *tag, char *cmd, char *name)
 		index_hasrights(imapd_index, ACL_READ_WRITE) ?
 		"WRITE" : "ONLY", error_message(IMAP_OK_COMPLETED));
 
-    proc_register("imapd", imapd_clienthost, imapd_userid, mailboxname);
     syslog(LOG_DEBUG, "open: user %s opened %s", imapd_userid, name);
     return;
 
@@ -4045,9 +4038,6 @@ static void cmd_select(char *tag, char *cmd, char *name)
  */
 static void cmd_close(char *tag, char *cmd)
 {
-    /* unregister the selected mailbox */
-    proc_register("imapd", imapd_clienthost, imapd_userid, NULL);
-
     if (backend_current) {
 	/* remote mailbox */
 	prot_printf(backend_current->out, "%s %s\r\n", tag, cmd);

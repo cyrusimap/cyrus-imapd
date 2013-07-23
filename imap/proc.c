@@ -103,7 +103,7 @@ static char *proc_getpath(pid_t pid, int isnew)
 }
 
 EXPORTED int proc_register(const char *servicename, const char *clienthost,
-		  const char *userid, const char *mailbox)
+		  const char *userid, const char *mailbox, const char *cmd)
 {
     pid_t pid = getpid();
     FILE *procfile = NULL;
@@ -129,14 +129,12 @@ EXPORTED int proc_register(const char *servicename, const char *clienthost,
 	}
     }
 
-    fprintf(procfile, "%s\t%s", servicename, clienthost);
-    if (userid) {
-	fprintf(procfile, "\t%s", userid);
-	if (mailbox) {
-	    fprintf(procfile, "\t%s", mailbox);
-	}
-    }
-    putc('\n', procfile);
+    if (!servicename) servicename = "";
+    if (!clienthost) clienthost = "";
+    if (!userid) userid = "";
+    if (!mailbox) mailbox = "";
+    if (!cmd) cmd = "";
+    fprintf(procfile, "%s\t%s\t%s\t%s\t%s\n", servicename, clienthost, userid, mailbox, cmd);
     fclose(procfile);
 
     if (rename(newfname, procfname)) {
@@ -145,9 +143,7 @@ EXPORTED int proc_register(const char *servicename, const char *clienthost,
 	fatal("can't write proc file", EC_IOERR);
     }
 
-    setproctitle("%s: %s %s %s", servicename, clienthost,
-		 userid ? userid : "",
-		 mailbox ? mailbox : "");
+    setproctitle("%s: %s %s %s %s", servicename, clienthost, userid, mailbox, cmd);
 
     free(newfname);
     return 0;
@@ -181,6 +177,7 @@ static int proc_foreach_helper(pid_t pid, procdata_t *func, void *rock)
 	char *host = NULL;
 	char *user = NULL;
 	char *mailbox = NULL;
+	char *cmd = NULL;
 
 	if (fstat(fd, &sbuf))
 	    goto done;
@@ -210,10 +207,16 @@ static int proc_foreach_helper(pid_t pid, procdata_t *func, void *rock)
 	if (user) {
 	    *user++ = '\0';
 	    mailbox = strchr(user, '\t');
-	    if (mailbox) *mailbox++ = '\0';
+	}
+	if (mailbox) {
+	    *mailbox++ = '\0';
+	    cmd = strchr(mailbox, '\t');
+	}
+	if (cmd) {
+	    *cmd++ = '\0';
 	}
 
-	(*func)(pid, service, host, user, mailbox, rock);
+	(*func)(pid, service, host, user, mailbox, cmd, rock);
     }
 
 done:
@@ -261,6 +264,7 @@ static int procusage_cb(pid_t pid __attribute__((unused)),
 			const char *clienthost,
 			const char *userid,
 			const char *mboxname __attribute__((unused)),
+			const char *cmd __attribute__((unused)),
 			void *rock)
 {
     struct proc_limits *limitsp = (struct proc_limits *)rock;
@@ -294,58 +298,92 @@ EXPORTED int proc_checklimits(struct proc_limits *limitsp)
     return 0;
 }
 
-static int killuser_cb(pid_t pid,
-		       const char *servicename __attribute__((unused)),
-		       const char *clienthost  __attribute__((unused)),
+struct prockill_data {
+    const char *servicename;
+    const char *clienthost;
+    const char *userid;
+    const char *mboxname;
+    const char *cmd;
+    int sig;
+};
+
+#define PROCKILL_INIT { NULL, NULL, NULL, NULL, NULL, 0 }
+
+static int prockill_cb(pid_t pid,
+		       const char *servicename,
+		       const char *clienthost,
 		       const char *userid,
-		       const char *mboxname __attribute__((unused)),
-		       void *rock)
-{
-    pid_t mypid = getpid();
-    const char *test = (const char *)rock;
-
-    /* don't kill myself */
-    if (mypid == pid)
-	return 0;
-
-    if (!strcmpsafe(userid, test))
-	kill(pid, SIGTERM);
-
-    return 0;
-}
-
-static int killmbox_cb(pid_t pid,
-		       const char *servicename __attribute__((unused)),
-		       const char *clienthost  __attribute__((unused)),
-		       const char *userid __attribute__((unused)),
 		       const char *mboxname,
+		       const char *cmd,
 		       void *rock)
 {
+    struct prockill_data *dat = (struct prockill_data *)rock;
     pid_t mypid = getpid();
-    const char *test = (const char *)rock;
 
     /* don't kill myself */
     if (mypid == pid)
 	return 0;
 
-    if (!strcmpsafe(mboxname, test))
+    if (dat->servicename && strcmpsafe(servicename, dat->servicename))
+	return 0;
+
+    if (dat->clienthost && strcmpsafe(clienthost, dat->clienthost))
+	return 0;
+
+    if (dat->userid && strcmpsafe(userid, dat->userid))
+	return 0;
+
+    if (dat->mboxname && strcmpsafe(mboxname, dat->mboxname))
+	return 0;
+
+    if (dat->cmd && strcmpsafe(cmd, dat->cmd))
+	return 0;
+
+    if (dat->sig)
+	kill(pid, dat->sig);
+    else
 	kill(pid, SIGTERM);
 
     return 0;
 }
+
 
 EXPORTED void proc_killuser(const char *userid)
 {
+    struct prockill_data rock = PROCKILL_INIT;
+
     /* can't kill all non-connected, that's evil */
     assert(userid && userid[0]);
 
-    proc_foreach(killuser_cb, (void *)userid);
+    rock.userid = userid;
+
+    proc_foreach(prockill_cb, &rock);
 }
 
 EXPORTED void proc_killmbox(const char *mboxname)
 {
+    struct prockill_data rock = PROCKILL_INIT;
+
     /* can't kill all non-selected, that's evil */;
     assert(mboxname && mboxname[0]);
 
-    proc_foreach(killmbox_cb, (void *)mboxname);
+    rock.mboxname = mboxname;
+
+    proc_foreach(prockill_cb, &rock);
+}
+
+EXPORTED void proc_killusercmd(const char *userid, const char *cmd, int sig)
+{
+    struct prockill_data rock = PROCKILL_INIT;
+
+    /* can't kill all non-selected, that's evil */;
+    assert(userid && userid[0]);
+    /* or all cmd either... use proc_killuser if you want that */
+    assert(cmd && cmd[0]);
+
+    rock.userid = userid;
+    rock.cmd = cmd;
+    rock.sig = sig;
+
+    proc_foreach(prockill_cb, &rock);
 }

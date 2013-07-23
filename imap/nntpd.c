@@ -563,8 +563,6 @@ int service_main(int argc __attribute__((unused)),
 	nntp_logfd = telemetry_log(hbuf, nntp_in, nntp_out, 0);
     }
 
-    proc_register("nntpd", nntp_clienthost, NULL, NULL);
-
     /* Set inactivity timer */
     nntp_timeout = config_getint(IMAPOPT_NNTPTIMEOUT);
     if (nntp_timeout < 3) nntp_timeout = 3;
@@ -805,6 +803,8 @@ static void cmdloop(void)
 
 	signals_poll();
 
+	proc_register(config_ident, nntp_clienthost, nntp_userid, index_mboxname(group_state), NULL);
+
 	if (!proxy_check_input(protin, nntp_in, nntp_out,
 			       backend_current ? backend_current->in : NULL,
 			       NULL, 0)) {
@@ -846,15 +846,17 @@ static void cmdloop(void)
 	    if (Uisupper(*p)) *p = tolower((unsigned char) *p);
 	}
 
+	proc_register(config_ident, nntp_clienthost, nntp_userid, index_mboxname(group_state), cmd.s);
+
 	/* Ihave/Takethis only allowed for feeders */
 	if (!(nntp_capa & MODE_FEED) &&
 	    strchr("IT", cmd.s[0])) goto noperm;
-    
+
 	/* Body/Date/Group/Newgroups/Newnews/Next/Over/Post/Xhdr/Xover/Xpat
 	   only allowed for readers */
 	if (!(nntp_capa & MODE_READ) &&
 	    strchr("BDGNOPX", cmd.s[0])) goto noperm;
-    
+
 	/* Only Authinfo/Capabilities/Check/Head/Help/Ihave/List Active/
 	   Mode/Quit/Starttls/Stat/Takethis allowed when not logged in */
 	if (!nntp_authstate && !allowanonymous &&
@@ -2250,8 +2252,6 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
 
     syslog(LOG_NOTICE, "login: %s %s %s%s %s", nntp_clienthost, nntp_userid,
 	   mech, nntp_starttls_done ? "+TLS" : "", "User logged in");
-
-    proc_register("nntpd", nntp_clienthost, nntp_userid, NULL);
 
     if (success_data) {
 	prot_printf(nntp_out, "283 %s\r\n", success_data);

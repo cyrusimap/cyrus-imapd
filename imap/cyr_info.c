@@ -65,7 +65,7 @@ const char *MASTER_CONFIG_FILENAME = DEFAULT_MASTER_CONFIG_FILENAME;
 struct service_item {
     char *prefix;
     int prefixlen;
-    struct service_item *next;    
+    struct service_item *next;
 };
 
 static void usage(void)
@@ -85,14 +85,16 @@ static void usage(void)
     exit(-1);
 }
 
-static int print_procinfo(int pid, 
-			  const char *servicename, const char *host, 
+static int print_procinfo(pid_t pid,
+			  const char *servicename, const char *host,
 			  const char *user, const char *mailbox,
+			  const char *cmdname,
 			  void *rock __attribute__((unused)))
 {
-    printf("%d %s %s", pid, servicename, host);
+    printf("%d %s %s", (int)pid, servicename, host);
     if (user) printf(" %s", user);
     if (mailbox) printf(" %s", mailbox);
+    if (cmdname) printf(" %s", cmdname);
     printf("\n");
     return 0;
 }

@@ -393,7 +393,7 @@ int service_main(int argc __attribute__((unused)),
 	}
     }
 
-    proc_register("sync_server", sync_clienthost, NULL, NULL);
+    proc_register(config_ident, sync_clienthost, NULL, NULL, NULL);
 
     /* Set inactivity timer */
     timeout = config_getint(IMAPOPT_SYNC_TIMEOUT);
@@ -815,7 +815,7 @@ static void cmd_authenticate(char *mech, char *resp)
     }
 
     sync_userid = xstrdup((const char *) val);
-    proc_register("sync_server", sync_clienthost, sync_userid, NULL);
+    proc_register(config_ident, sync_clienthost, sync_userid, NULL, NULL);
 
     syslog(LOG_NOTICE, "login: %s %s %s%s %s", sync_clienthost, sync_userid,
 	   mech, sync_starttls_done ? "+TLS" : "", "User logged in");

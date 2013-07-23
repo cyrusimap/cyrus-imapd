@@ -104,11 +104,12 @@ struct kill_rock
  * kill the existing processes for only some of the services. Instead we have
  * to kill all the processes for the user, and hope any others will reconnect.
  */
-static int gather_one(int pid,
+static int gather_one(pid_t pid,
 		      const char *servicename __attribute__((unused)),
 		      const char *clienthost __attribute__((unused)),
 		      const char *userid,
 		      const char *mailbox __attribute__((unused)),
+		      const char *cmdname __attribute__((unused)),
 		      void *rock)
 {
     struct kill_rock *kr = (struct kill_rock *)rock;

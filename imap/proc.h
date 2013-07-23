@@ -56,13 +56,13 @@ struct proc_limits {
 typedef int procdata_t(pid_t pid,
 		       const char *servicename, const char *clienthost,
 		       const char *userid, const char *mailbox,
-		       void *rock);
+		       const char *cmd, void *rock);
 
 extern void setproctitle_init(int argc, char **argv, char **envp);
 extern void setproctitle(const char *fmt, ...);
 
 extern int proc_register(const char *servicename, const char *clienthost,
-		         const char *userid, const char *mailbox);
+		         const char *userid, const char *mailbox, const char *cmd);
 
 extern void proc_cleanup(void);
 
@@ -72,5 +72,6 @@ extern int proc_checklimits(struct proc_limits *limitsp);
 
 extern void proc_killuser(const char *userid);
 extern void proc_killmbox(const char *mboxname);
+extern void proc_killusercmd(const char *userid, const char *cmd, int sig);
 
 #endif /* _PROC_H */
