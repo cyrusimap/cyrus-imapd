@@ -3650,27 +3650,26 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 	    old_data = hash_del(recurid, &comp_table);
 
 	    if (old_data) {
-		if (old_data->sequence >= icalcomponent_get_sequence(comp)) {
-		    /* This component hasn't changed, skip it */
-		    continue;
+		if (old_data->sequence < icalcomponent_get_sequence(comp)) {
+		    /* Per RFC 6638, Section 3.2.8: We need to compare
+		       DTSTART, DTEND, DURATION, DUE, RRULE, RDATE, EXDATE */
+		    needs_action += propcmp(old_data->comp, comp,
+					    ICAL_DTSTART_PROPERTY);
+		    needs_action += propcmp(old_data->comp, comp,
+					    ICAL_DTEND_PROPERTY);
+		    needs_action += propcmp(old_data->comp, comp,
+					    ICAL_DURATION_PROPERTY);
+		    needs_action += propcmp(old_data->comp, comp,
+					    ICAL_DUE_PROPERTY);
+		    needs_action += propcmp(old_data->comp, comp,
+					    ICAL_RRULE_PROPERTY);
+		    needs_action += propcmp(old_data->comp, comp,
+					    ICAL_RDATE_PROPERTY);
+		    needs_action += propcmp(old_data->comp, comp,
+					    ICAL_EXDATE_PROPERTY);
 		}
 
-		/* Per RFC 6638, Section 3.2.8: We need to compare
-		   DTSTART, DTEND, DURATION, DUE, RRULE, RDATE, EXDATE */
-		needs_action += propcmp(old_data->comp, comp,
-					ICAL_DTSTART_PROPERTY);
-		needs_action += propcmp(old_data->comp, comp,
-					ICAL_DTEND_PROPERTY);
-		needs_action += propcmp(old_data->comp, comp,
-					ICAL_DURATION_PROPERTY);
-		needs_action += propcmp(old_data->comp, comp,
-					ICAL_DUE_PROPERTY);
-		needs_action += propcmp(old_data->comp, comp,
-					ICAL_RRULE_PROPERTY);
-		needs_action += propcmp(old_data->comp, comp,
-					ICAL_RDATE_PROPERTY);
-		needs_action += propcmp(old_data->comp, comp,
-					ICAL_EXDATE_PROPERTY);
+		free(old_data);
 	    }
 
 	    /* Process all attendees in created/modified components */
