@@ -3202,7 +3202,10 @@ static void sched_deliver_local(const char *recipient,
 
   done:
     if (ical) icalcomponent_free(ical);
-    if (inbox) mailbox_close(&inbox);
+    if (inbox) {
+	mailbox_unlock_index(inbox, NULL);
+	mailbox_close(&inbox);
+    }
     if (mailbox) mailbox_close(&mailbox);
     if (caldavdb) caldav_close(caldavdb);
 }
