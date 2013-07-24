@@ -424,6 +424,7 @@ static void cmd_xwarmup(const char *tag);
 static void cmd_enable(char* tag);
 
 static void cmd_xkillmy(const char *tag, const char *cmdname);
+static void cmd_xforever(const char *tag);
 
 static int parsecreateargs(struct dlist **extargs);
 
@@ -2266,6 +2267,11 @@ static void cmdloop(void)
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_xkillmy(tag.s, arg1.s);
+	    }
+	    else if (!strcmp(cmd.s, "Xforever")) {
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
+		cmd_xforever(tag.s);
 	    }
 
 	    else goto badcmd;
@@ -12971,4 +12977,19 @@ static void cmd_xkillmy(const char *tag, const char *cmdname)
 
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
+}
+
+static void cmd_xforever(const char *tag)
+{
+    unsigned n = 1;
+    int r = 0;
+
+    while (!r) {
+	sleep(1);
+	prot_printf(imapd_out, "* FOREVER %u\r\n", n++);
+	prot_flush(imapd_out);
+	r = cmd_cancelled();
+    }
+
+    prot_printf(imapd_out, "%s OK %s\r\n", tag, error_message(r));
 }
