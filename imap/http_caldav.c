@@ -3701,46 +3701,54 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 
   done:
     if (newical) {
+	unsigned ncomp = 0;
+
 	/* Set SCHEDULE-STATUS for each attendee in organizer object */
 	comp = icalcomponent_get_first_real_component(newical);
+	kind = icalcomponent_isa(comp);
 
-	for (prop =
-		 icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
-	     prop;
-	     prop =
-		 icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
-	    const char *attendee = icalproperty_get_attendee(prop);
-	    const char *stat = NULL;
+	do {
+	    for (prop =
+		     icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+		 prop;
+		 prop =
+		     icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
+		const char *attendee = icalproperty_get_attendee(prop);
+		const char *stat = NULL;
 
-	    /* Don't set status if attendee == organizer */
-	    if (!strcmp(attendee, organizer)) continue;
+		/* Don't set status if attendee == organizer */
+		if (!strcmp(attendee, organizer)) continue;
 
-	    if (sched_stat) stat = sched_stat;
-	    else {
-		struct sched_data *sched_data;
+		if (sched_stat) stat = sched_stat;
+		else {
+		    struct sched_data *sched_data;
 
-		sched_data = hash_lookup(attendee, &att_table);
-		if (sched_data) stat = sched_data->status;
-	    }
-
-	    if (stat) {
-		icalparameter *param;
-		for (param =
-			 icalproperty_get_first_parameter(prop,
-							  ICAL_IANA_PARAMETER);
-		     param && strcmp(icalparameter_get_iana_name(param),
-				     "SCHEDULE-STATUS");
-		     param =
-			 icalproperty_get_next_parameter(prop,
-							 ICAL_IANA_PARAMETER));
-		if (!param) {
-		    param = icalparameter_new(ICAL_IANA_PARAMETER);
-		    icalproperty_add_parameter(prop, param);
-		    icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
+		    sched_data = hash_lookup(attendee, &att_table);
+		    if (sched_data && (sched_data->comp_mask & (1 << ncomp)))
+			stat = sched_data->status;
 		}
-		icalparameter_set_iana_value(param, stat);
+
+		if (stat) {
+		    icalparameter *param;
+		    for (param =
+			     icalproperty_get_first_parameter(prop,
+							      ICAL_IANA_PARAMETER);
+			 param && strcmp(icalparameter_get_iana_name(param),
+					 "SCHEDULE-STATUS");
+			 param =
+			     icalproperty_get_next_parameter(prop,
+							     ICAL_IANA_PARAMETER));
+		    if (!param) {
+			param = icalparameter_new(ICAL_IANA_PARAMETER);
+			icalproperty_add_parameter(prop, param);
+			icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
+		    }
+		    icalparameter_set_iana_value(param, stat);
+		}
 	    }
-	}
+
+	    ncomp++;
+	} while ((comp = icalcomponent_get_next_component(newical, kind)));
     }
 
     /* Cleanup */
