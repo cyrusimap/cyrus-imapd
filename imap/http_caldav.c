@@ -4039,6 +4039,8 @@ static void sched_reply(const char *userid,
 
     /* Process each component of new object */
     if (newical) {
+	unsigned ncomp = 0;
+
 	comp = icalcomponent_get_first_real_component(newical);
 	do {
 	    icalcomponent *copy;
@@ -4073,9 +4075,11 @@ static void sched_reply(const char *userid,
 		clean_component(copy, 1);
 
 		icalcomponent_add_component(sched_data->itip, copy);
+		sched_data->comp_mask |= (1 << ncomp);
 	    }
 	    else icalcomponent_free(copy);
 
+	    ncomp++;
 	} while ((comp = icalcomponent_get_next_component(newical, kind)));
     }
 
@@ -4096,16 +4100,23 @@ static void sched_reply(const char *userid,
 	}
 
 	if (newical) {
-	    /* XXX  Do we do this for ALL components, just the first one,
-	       or just the updated one(s)? */
+	    unsigned ncomp = 0;
+
 	    /* Set SCHEDULE-STATUS for organizer in attendee object */
 	    comp = icalcomponent_get_first_real_component(newical);
-	    prop = icalcomponent_get_first_property(comp,
-						    ICAL_ORGANIZER_PROPERTY);
-	    param = icalparameter_new(ICAL_IANA_PARAMETER);
-	    icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
-	    icalparameter_set_iana_value(param, sched_data->status);
-	    icalproperty_add_parameter(prop, param);
+	    do {
+		if (sched_data->comp_mask & (1 << ncomp)) {
+		    prop =
+			icalcomponent_get_first_property(comp,
+							 ICAL_ORGANIZER_PROPERTY);
+		    param = icalparameter_new(ICAL_IANA_PARAMETER);
+		    icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
+		    icalparameter_set_iana_value(param, sched_data->status);
+		    icalproperty_add_parameter(prop, param);
+		}
+
+		ncomp++;
+	    } while ((comp = icalcomponent_get_next_component(newical, kind)));
 	}
     }
 
