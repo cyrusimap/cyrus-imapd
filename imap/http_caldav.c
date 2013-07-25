@@ -148,7 +148,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 
 static void sched_request(const char *organizer, struct sched_param *sparam,
 			  icalcomponent *oldical, icalcomponent *newical,
-			  unsigned is_update);
+			  const char *att_update);
 static void sched_reply(const char *userid,
 			icalcomponent *oldical, icalcomponent *newical);
 
@@ -2735,7 +2735,7 @@ static void sched_deliver_local(const char *recipient,
 				struct auth_state *authstate)
 {
     int r = 0, rights, reqd_privs, deliver_inbox = 0;
-    const char *userid = sparam->userid, *mboxname = NULL;
+    const char *userid = sparam->userid, *mboxname = NULL, *attendee = NULL;
     static struct buf resource = BUF_INITIALIZER;
     static unsigned sched_count = 0;
     char namebuf[MAX_MAILBOX_BUFFER];
@@ -2866,7 +2866,7 @@ static void sched_deliver_local(const char *recipient,
 	    icalparameter *param;
 	    icalparameter_partstat partstat;
 	    icalparameter_rsvp rsvp = ICAL_RSVP_NONE;
-	    const char *attendee, *recurid, *req_stat = SCHEDSTAT_SUCCESS;
+	    const char *recurid, *req_stat = SCHEDSTAT_SUCCESS;
 
 	    /* Add each component of old object to hash table for comparison */
 	    construct_hash_table(&comp_table, 10, 1);
@@ -3213,7 +3213,7 @@ static void sched_deliver_local(const char *recipient,
     /* XXX  Should this be a config option? - it might have perf implications */
     if (sched_data->is_reply) {
 	/* Send updates to attendees */
-	sched_request(recipient, sparam, NULL, ical, 1);
+	sched_request(recipient, sparam, NULL, ical, attendee);
     }
 
   done:
@@ -3386,7 +3386,7 @@ static void sched_exclude(const char *attendee __attribute__((unused)),
  * properly modified component to the attendee's iTIP request if necessary
  */
 static void process_attendees(icalcomponent *comp, unsigned ncomp,
-			      const char *organizer,
+			      const char *organizer, const char *att_update,
 			      struct hash_table *att_table,
 			      icalcomponent *itip, unsigned needs_action)
 {
@@ -3441,6 +3441,9 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
 
 	/* Don't schedule attendee == organizer */
 	if (!strcmp(attendee, organizer)) continue;
+
+	/* Don't send an update to the attendee that just sent a reply */
+	if (att_update && !strcmp(attendee, att_update)) continue;
 
 	/* Check CalDAV Scheduling parameters */
 	for (param =
@@ -3520,7 +3523,7 @@ static void sched_cancel(const char *recurid __attribute__((unused)),
     icalcomponent_set_status(old_data->comp, ICAL_STATUS_CANCELLED);
 //    icalcomponent_set_sequence(old_data->comp, old_data->sequence+1);
 
-    process_attendees(old_data->comp, 0, crock->organizer,
+    process_attendees(old_data->comp, 0, crock->organizer, NULL,
 		      crock->att_table, crock->itip, 0);
 }
 
@@ -3552,7 +3555,7 @@ static unsigned propcmp(icalcomponent *oldical, icalcomponent *newical,
 /* Create and deliver an organizer scheduling request */
 static void sched_request(const char *organizer, struct sched_param *sparam,
 			  icalcomponent *oldical, icalcomponent *newical,
-			  unsigned is_update)
+			  const char *att_update)
 {
     int r, rights;
     struct mboxlist_entry mbentry;
@@ -3579,7 +3582,7 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 	method = ICAL_METHOD_REQUEST;
     }
 
-    if (!is_update) {
+    if (!att_update) {
 	/* Check ACL of auth'd user on userid's Scheduling Outbox */
 	caldav_mboxname(SCHED_OUTBOX, sparam->userid, outboxname);
 
@@ -3694,7 +3697,7 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 	    }
 
 	    /* Process all attendees in created/modified components */
-	    process_attendees(comp, ncomp++, organizer,
+	    process_attendees(comp, ncomp++, organizer, att_update,
 			      &att_table, req, needs_action);
 
 	} while ((comp = icalcomponent_get_next_component(newical, kind)));
