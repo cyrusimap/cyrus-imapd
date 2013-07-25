@@ -2495,6 +2495,7 @@ int sched_busytime_query(struct transaction_t *txn, icalcomponent *ical)
 	/* Remove each attendee so we can add in only those
 	   that reside on a given remote server later */
 	icalcomponent_remove_property(comp, prop);
+	icalproperty_free(prop);
 
 	/* Is attendee remote or local? */
 	attendee = icalproperty_get_attendee(prop);
@@ -2819,6 +2820,7 @@ static void sched_deliver_local(const char *recipient,
 
 	prop = icalcomponent_get_first_property(ical, ICAL_METHOD_PROPERTY);
 	icalcomponent_remove_property(ical, prop);
+	icalproperty_free(prop);
 
 	deliver_inbox = 1;
     }
@@ -2905,13 +2907,19 @@ static void sched_deliver_local(const char *recipient,
 		    prop =
 			icalcomponent_get_first_property(comp,
 							 ICAL_RRULE_PROPERTY);
-		    if (prop) icalcomponent_remove_property(comp, prop);
+		    if (prop) {
+			icalcomponent_remove_property(comp, prop);
+			icalproperty_free(prop);
+		    }
 
 		    /* Replace DTSTART, DTEND, SEQUENCE */
 		    prop =
 			icalcomponent_get_first_property(comp,
 							 ICAL_DTSTART_PROPERTY);
-		    if (prop) icalcomponent_remove_property(comp, prop);
+		    if (prop) {
+			icalcomponent_remove_property(comp, prop);
+			icalproperty_free(prop);
+		    }
 		    prop =
 			icalcomponent_get_first_property(itip,
 							 ICAL_DTSTART_PROPERTY);
@@ -2922,7 +2930,10 @@ static void sched_deliver_local(const char *recipient,
 		    prop =
 			icalcomponent_get_first_property(comp,
 							 ICAL_DTEND_PROPERTY);
-		    if (prop) icalcomponent_remove_property(comp, prop);
+		    if (prop) {
+			icalcomponent_remove_property(comp, prop);
+			icalproperty_free(prop);
+		    }
 		    prop =
 			icalcomponent_get_first_property(itip,
 							 ICAL_DTEND_PROPERTY);
@@ -2933,7 +2944,10 @@ static void sched_deliver_local(const char *recipient,
 		    prop =
 			icalcomponent_get_first_property(comp,
 							 ICAL_SEQUENCE_PROPERTY);
-		    if (prop) icalcomponent_remove_property(comp, prop);
+		    if (prop) {
+			icalcomponent_remove_property(comp, prop);
+			icalproperty_free(prop);
+		    }
 		    prop =
 			icalcomponent_get_first_property(itip,
 							 ICAL_SEQUENCE_PROPERTY);
@@ -2997,9 +3011,9 @@ static void sched_deliver_local(const char *recipient,
 						     ICAL_RSVP_PARAMETER);
 		if (param) icalproperty_remove_parameter_by_ref(prop, param);
 		if (rsvp != ICAL_RSVP_NONE) {
-		    param = icalparameter_new(ICAL_PARTSTAT_PARAMETER);
+		    param = icalparameter_new(ICAL_RSVP_PARAMETER);
 		    icalproperty_add_parameter(prop, param);
-		    icalparameter_set_partstat(param, partstat);
+		    icalparameter_set_rsvp(param, rsvp);
 		}
 
 		/* Find and set SCHEDULE-STATUS */
@@ -3066,6 +3080,7 @@ static void sched_deliver_local(const char *recipient,
 		if (comp) {
 		    /* Remove component from old object */
 		    icalcomponent_remove_component(ical, comp);
+		    icalcomponent_free(comp);
 		}
 
 		/* Add new/modified component from iTIP request*/
@@ -3105,9 +3120,6 @@ static void sched_deliver_local(const char *recipient,
 		if (comp) {
 		    int old_seq, new_seq;
 
-		    /* Remove component from old object */
-		    icalcomponent_remove_component(ical, comp);
-
 		    /* Check if this is something more than an update */
 		    /* XXX  Probably need to check PARTSTAT=NEEDS-ACTION
 		            and RSVP=TRUE as well */
@@ -3138,6 +3150,10 @@ static void sched_deliver_local(const char *recipient,
 			icalcomponent_add_property(new_comp,
 						   icalproperty_new_clone(prop));
 		    }
+
+		    /* Remove component from old object */
+		    icalcomponent_remove_component(ical, comp);
+		    icalcomponent_free(comp);
 		}
 		else deliver_inbox = 1;
 
@@ -3279,6 +3295,7 @@ static void clean_component(icalcomponent *comp, int clean_org)
     prop = icalcomponent_get_first_property(comp,
 					    ICAL_DTSTAMP_PROPERTY);
     icalcomponent_remove_property(comp, prop);
+    icalproperty_free(prop);
     prop =
 	icalproperty_new_dtstamp(icaltime_from_timet_with_zone(now, 0, utc));
     icalcomponent_add_property(comp, prop);
@@ -3288,6 +3305,7 @@ static void clean_component(icalcomponent *comp, int clean_org)
 	 alarm; alarm = next) {
 	next = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT);
 	icalcomponent_remove_component(comp, alarm);
+	icalcomponent_free(alarm);
     }
 
     if (clean_org) {
@@ -3814,6 +3832,7 @@ static icalcomponent *trim_attendees(icalcomponent *comp, const char *userid,
 	else {
 	    /* Some other attendee, remove it */
 	    icalcomponent_remove_property(copy, prop);
+	    icalproperty_free(prop);
 	}
     }
 
@@ -3853,11 +3872,10 @@ static void sched_decline(const char *recurid __attribute__((unused)),
     param =
 	icalproperty_get_first_parameter(myattendee,
 					 ICAL_PARTSTAT_PARAMETER);
-    if (param) {
-	icalproperty_remove_parameter_by_ref(myattendee, param);
+    if (!param) {
+	param = icalparameter_new(ICAL_PARTSTAT_PARAMETER);
+	icalproperty_add_parameter(myattendee, param);
     }
-    param = icalparameter_new(ICAL_PARTSTAT_PARAMETER);
-    icalproperty_add_parameter(myattendee, param);
     icalparameter_set_partstat(param, ICAL_PARTSTAT_DECLINED);
 
     clean_component(old_data->comp, 1);
