@@ -3119,6 +3119,7 @@ static void sched_deliver_local(const char *recipient,
 		comp = hash_lookup(recurid, &comp_table);
 		if (comp) {
 		    int old_seq, new_seq;
+		    icalparameter *param;
 
 		    /* Check if this is something more than an update */
 		    /* XXX  Probably need to check PARTSTAT=NEEDS-ACTION
@@ -3149,6 +3150,34 @@ static void sched_deliver_local(const char *recipient,
 		    if (prop) {
 			icalcomponent_add_property(new_comp,
 						   icalproperty_new_clone(prop));
+		    }
+
+		    /* Copy over any ORGANIZER;SCHEDULE-STATUS */
+		    prop =
+			icalcomponent_get_first_property(comp,
+							 ICAL_ORGANIZER_PROPERTY);
+		    for (param =
+			   icalproperty_get_first_parameter(prop,
+							    ICAL_IANA_PARAMETER);
+			 param;
+			 param =
+			   icalproperty_get_next_parameter(prop,
+							   ICAL_IANA_PARAMETER)) {
+			if (!strcmp(icalparameter_get_iana_name(param),
+				    "SCHEDULE-STATUS")) {
+			    const char *sched_stat =
+				icalparameter_get_iana_value(param);
+syslog(LOG_INFO, "************** old org stat: '%s'", sched_stat);
+
+			    prop =
+				icalcomponent_get_first_property(new_comp,
+								 ICAL_ORGANIZER_PROPERTY);
+			    param = icalparameter_new(ICAL_IANA_PARAMETER);
+			    icalproperty_add_parameter(prop, param);
+			    icalparameter_set_iana_name(param,
+							"SCHEDULE-STATUS");
+			    icalparameter_set_iana_value(param, sched_stat);
+			}
 		    }
 
 		    /* Remove component from old object */
