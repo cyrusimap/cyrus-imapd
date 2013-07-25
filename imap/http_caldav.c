@@ -3153,6 +3153,7 @@ static void sched_deliver_local(const char *recipient,
 		    }
 
 		    /* Copy over any ORGANIZER;SCHEDULE-STATUS */
+		    /* XXX  Do we only do this iff PARTSTAT!=NEEDS-ACTION */
 		    prop =
 			icalcomponent_get_first_property(comp,
 							 ICAL_ORGANIZER_PROPERTY);
@@ -3167,7 +3168,6 @@ static void sched_deliver_local(const char *recipient,
 				    "SCHEDULE-STATUS")) {
 			    const char *sched_stat =
 				icalparameter_get_iana_value(param);
-syslog(LOG_INFO, "************** old org stat: '%s'", sched_stat);
 
 			    prop =
 				icalcomponent_get_first_property(new_comp,
