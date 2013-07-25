@@ -3693,7 +3693,7 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 
 	comp = icalcomponent_get_first_real_component(newical);
 	do {
-	    unsigned needs_action = 0;
+	    unsigned changed = 1, needs_action = 0;
 
 	    prop = icalcomponent_get_first_property(comp,
 						    ICAL_RECURRENCEID_PROPERTY);
@@ -3703,31 +3703,39 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 	    old_data = hash_del(recurid, &comp_table);
 
 	    if (old_data) {
-		if (old_data->sequence < icalcomponent_get_sequence(comp)) {
-		    /* Per RFC 6638, Section 3.2.8: We need to compare
-		       DTSTART, DTEND, DURATION, DUE, RRULE, RDATE, EXDATE */
-		    needs_action += propcmp(old_data->comp, comp,
-					    ICAL_DTSTART_PROPERTY);
-		    needs_action += propcmp(old_data->comp, comp,
-					    ICAL_DTEND_PROPERTY);
-		    needs_action += propcmp(old_data->comp, comp,
-					    ICAL_DURATION_PROPERTY);
-		    needs_action += propcmp(old_data->comp, comp,
-					    ICAL_DUE_PROPERTY);
-		    needs_action += propcmp(old_data->comp, comp,
-					    ICAL_RRULE_PROPERTY);
-		    needs_action += propcmp(old_data->comp, comp,
-					    ICAL_RDATE_PROPERTY);
-		    needs_action += propcmp(old_data->comp, comp,
-					    ICAL_EXDATE_PROPERTY);
+		/* Per RFC 6638, Section 3.2.8: We need to compare
+		   DTSTART, DTEND, DURATION, DUE, RRULE, RDATE, EXDATE */
+		needs_action += propcmp(old_data->comp, comp,
+					ICAL_DTSTART_PROPERTY);
+		needs_action += propcmp(old_data->comp, comp,
+					ICAL_DTEND_PROPERTY);
+		needs_action += propcmp(old_data->comp, comp,
+					ICAL_DURATION_PROPERTY);
+		needs_action += propcmp(old_data->comp, comp,
+					ICAL_DUE_PROPERTY);
+		needs_action += propcmp(old_data->comp, comp,
+					ICAL_RRULE_PROPERTY);
+		needs_action += propcmp(old_data->comp, comp,
+					ICAL_RDATE_PROPERTY);
+		needs_action += propcmp(old_data->comp, comp,
+					ICAL_EXDATE_PROPERTY);
+
+		if (old_data->sequence >= icalcomponent_get_sequence(comp)) {
+		    /* Make sure SEQUENCE is set properly */
+		    if (!needs_action) changed = 0;
+
+		    icalcomponent_set_sequence(comp,
+					       old_data->sequence + changed);
 		}
 
 		free(old_data);
 	    }
 
-	    /* Process all attendees in created/modified components */
-	    process_attendees(comp, ncomp++, organizer, att_update,
-			      &att_table, req, needs_action);
+	    if (changed) {
+		/* Process all attendees in created/modified components */
+		process_attendees(comp, ncomp++, organizer, att_update,
+				  &att_table, req, needs_action);
+	    }
 
 	} while ((comp = icalcomponent_get_next_component(newical, kind)));
     }
