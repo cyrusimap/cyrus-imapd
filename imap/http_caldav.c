@@ -1941,6 +1941,9 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 	return HTTP_SERVER_ERROR;
     }
 
+    /* Remove all X-LIC-ERROR properties*/
+    icalcomponent_strip_errors(ical);
+
     ics = icalcomponent_as_ical_string(ical);
 
     /* Create iMIP header for resource */
