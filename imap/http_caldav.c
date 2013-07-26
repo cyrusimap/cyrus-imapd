@@ -961,7 +961,8 @@ static int caldav_post(struct transaction_t *txn)
     ical = icalparser_parse_string(buf_cstring(&txn->req_body));
     if (!ical || !icalrestriction_check(ical)) {
 	txn->error.precond = CALDAV_VALID_DATA;
-	return HTTP_BAD_REQUEST;
+	ret = HTTP_BAD_REQUEST;
+	goto done;
     }
 
     meth = icalcomponent_get_method(ical);
@@ -2495,7 +2496,6 @@ int sched_busytime_query(struct transaction_t *txn, icalcomponent *ical)
 	/* Remove each attendee so we can add in only those
 	   that reside on a given remote server later */
 	icalcomponent_remove_property(comp, prop);
-	icalproperty_free(prop);
 
 	/* Is attendee remote or local? */
 	attendee = icalproperty_get_attendee(prop);
@@ -2512,6 +2512,8 @@ int sched_busytime_query(struct transaction_t *txn, icalcomponent *ical)
 				  !(txn->req_tgt.allow & ALLOW_ISCHEDULE) ?
 				  ns[NS_DAV] : NULL,
 				  BAD_CAST attendee, BAD_CAST REQSTAT_NOUSER);
+
+	    icalproperty_free(prop);
 	}
 	else if (sparam.flags) {
 	    /* Remote attendee */
@@ -2545,8 +2547,7 @@ int sched_busytime_query(struct transaction_t *txn, icalcomponent *ical)
 	    /* Local attendee on this server */
 	    xmlNodePtr resp;
 	    const char *userid = sparam.userid;
-	    struct mboxlist_entry mbentry;
-	    int rights;
+	    struct mboxlist_entry mbentry = { NULL, 0, NULL, NULL };
 	    icalcomponent *busy = NULL;
 
 	    resp =
@@ -2565,29 +2566,29 @@ int sched_busytime_query(struct transaction_t *txn, icalcomponent *ical)
 		       mailboxname, error_message(r));
 		xmlNewChild(resp, NULL, BAD_CAST "request-status",
 			    BAD_CAST REQSTAT_REJECTED);
-		continue;
 	    }
 
-	    rights =
-		mbentry.acl ? cyrus_acl_myrights(org_authstate, mbentry.acl) : 0;
-	    if (!(rights & DACL_SCHEDFB)) {
+	    else if (!mbentry.acl ||
+		     !(cyrus_acl_myrights(org_authstate, mbentry.acl) &
+		       DACL_SCHEDFB)) {
 		xmlNewChild(resp, NULL, BAD_CAST "request-status",
 			    BAD_CAST REQSTAT_NOPRIVS);
-		continue;
 	    }
 
-	    /* Start query at attendee's calendar-home-set */
-	    snprintf(mailboxname, sizeof(mailboxname),
-		     "user.%s.%s", userid, calendarprefix);
+	    else {
+		/* Start query at attendee's calendar-home-set */
+		snprintf(mailboxname, sizeof(mailboxname),
+			 "user.%s.%s", userid, calendarprefix);
 
-	    fctx.davdb = caldav_open(userid, CALDAV_CREATE);
-	    fctx.req_tgt->collection = NULL;
-	    calfilter.busytime.len = 0;
-	    busy = busytime_query_local(txn, &fctx, mailboxname,
-					ICAL_METHOD_REPLY, uid,
-					organizer, attendee);
+		fctx.davdb = caldav_open(userid, CALDAV_CREATE);
+		fctx.req_tgt->collection = NULL;
+		calfilter.busytime.len = 0;
+		busy = busytime_query_local(txn, &fctx, mailboxname,
+					    ICAL_METHOD_REPLY, uid,
+					    organizer, attendee);
 
-	    caldav_close(fctx.davdb);
+		caldav_close(fctx.davdb);
+	    }
 
 	    if (busy) {
 		xmlNodePtr cdata;
@@ -2611,6 +2612,8 @@ int sched_busytime_query(struct transaction_t *txn, icalcomponent *ical)
 		xmlNewChild(resp, NULL, BAD_CAST "request-status",
 			    BAD_CAST REQSTAT_NOUSER);
 	    }
+
+	    icalproperty_free(prop);
 	}
     }
 
