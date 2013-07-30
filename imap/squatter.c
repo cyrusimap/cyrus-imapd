@@ -625,9 +625,11 @@ static strarray_t *read_sync_log_items(sync_log_reader_t *slr)
     strarray_t *folders = strarray_new();
 
     while (sync_log_reader_getitem(slr, args) == 0) {
-	if (!strcmp(args[0], "APPEND"))
-	    strarray_add(folders, args[1]);
-	if (!strcmp(args[0], "USER"))
+	if (!strcmp(args[0], "APPEND")) {
+	    if (!mboxname_isdeletedmailbox(args[1], NULL))
+		strarray_add(folders, args[1]);
+	}
+	else if (!strcmp(args[0], "USER"))
 	    add_user(folders, args[1]);
     }
 
