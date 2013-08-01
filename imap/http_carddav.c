@@ -213,14 +213,19 @@ static void my_carddav_auth(const char *userid)
     char ident[MAX_MAILBOX_NAME];
     struct buf acl = BUF_INITIALIZER;
 
-    if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
-	/* proxy-only server - won't have DAV databases */
-	return;
-    }
-    else if (httpd_userisadmin ||
-	     global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
+    if (httpd_userisadmin ||
+	global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
 	/* admin or proxy from frontend - won't have DAV database */
 	return;
+    }
+    else if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
+	/* proxy-only server - won't have DAV databases */
+    }
+    else {
+	/* Open CardDAV DB for 'userid' */
+	my_carddav_reset();
+	auth_carddavdb = carddav_open(userid, CARDDAV_CREATE);
+	if (!auth_carddavdb) fatal("Unable to open CardDAV DB", EC_IOERR);
     }
 
     /* Auto-provision an addressbook for 'userid' */
@@ -237,9 +242,30 @@ static void my_carddav_auth(const char *userid)
 		    config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
     r = mboxlist_lookup(mailboxname, &mbentry, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-	r = mboxlist_createmailboxcheck(mailboxname, 0, NULL, 0,
-					userid, httpd_authstate, NULL,
-					&partition, 0);
+	if (config_mupdate_server) {
+	    /* Find location of INBOX */
+	    char inboxname[MAX_MAILBOX_BUFFER];
+
+	    r = (*httpd_namespace.mboxname_tointernal)(&httpd_namespace,
+						       "INBOX",
+						       userid, inboxname);
+	    if (!r) {
+		char *server;
+
+		r = http_mlookup(inboxname, &server, NULL, NULL);
+		if (!r && server) {
+		    proxy_findserver(server, &http_protocol, proxy_userid,
+				     &backend_cached, NULL, NULL, httpd_in);
+
+		    return;
+		}
+	    }
+	}
+
+	/* Create locally */
+	if (!r) r = mboxlist_createmailboxcheck(mailboxname, 0, NULL, 0,
+						userid, httpd_authstate, NULL,
+						&partition, 0);
 	if (!r) {
 	    buf_reset(&acl);
 	    cyrus_acl_masktostr(ACL_ALL, rights);
@@ -277,11 +303,6 @@ static void my_carddav_auth(const char *userid)
 
     if (partition) free(partition);
     buf_free(&acl);
-
-    /* Open CardDAV DB for 'userid' */
-    my_carddav_reset();
-    auth_carddavdb = carddav_open(userid, CARDDAV_CREATE);
-    if (!auth_carddavdb) fatal("Unable to open CardDAV DB", EC_IOERR);
 }
 
 
