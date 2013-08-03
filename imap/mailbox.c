@@ -420,8 +420,8 @@ EXPORTED struct buf *cacheitem_buf(struct index_record *record, int field)
 /* parse a single cache record from the mapped file - creates buf
  * records which point into the map, so you can't free it while
  * you still have them around! */
-int cache_parserecord(struct buf *cachebase, size_t cache_offset,
-		      struct cacherecord *crec)
+static int cache_parserecord(struct buf *cachebase, size_t cache_offset,
+			     struct cacherecord *crec)
 {
     int cache_ent;
     size_t offset;

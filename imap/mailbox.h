@@ -429,8 +429,6 @@ extern void mailbox_unmap_message(struct mailbox *mailbox,
 
 /* cache record API */
 int mailbox_ensure_cache(struct mailbox *mailbox, size_t len);
-int cache_parserecord(struct buf *cachebase,
-		      size_t cache_offset, struct cacherecord *crec);
 int mailbox_cacherecord(struct mailbox *mailbox,
 			struct index_record *record);
 int cache_append_record(int fd, struct index_record *record);
