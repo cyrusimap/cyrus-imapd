@@ -1,5 +1,3 @@
-$Id: TODO,v 1.5 2003/08/01 13:22:25 rjs3 Exp $
-
 does authenticating leak memory?  (mechanism name parameter in yacc
 not freed?)
 	- leg 9/29/99

@@ -6,8 +6,6 @@
  * parameters.
  */
 
-/* $Id: lsort.c,v 1.2 2002/05/25 19:57:47 leg Exp $ */
-
 #include "lsort.h"
 #include "config.h"
 #include <stdlib.h>

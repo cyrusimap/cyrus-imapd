@@ -1,5 +1,3 @@
-dnl $Id: libXau.m4,v 1.5 2005/04/26 19:14:08 shadow Exp $
-
 AC_DEFUN([CMU_XAU_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$saved_CPPFLAGS -I$1"

@@ -38,8 +38,6 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: smmapd.c,v 1.23 2010/01/06 17:01:40 murch Exp $
- *
  * smmapd.c -- sendmail socket map daemon
  *
  *

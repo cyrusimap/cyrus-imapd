@@ -39,8 +39,6 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: init_et.c,v 1.3 2010/01/06 17:01:28 murch Exp $
- *
  * Copyright 1986, 1987, 1988 by MIT Information Systems and
  *	the MIT Student Information Processing Board.
  *

@@ -2,7 +2,6 @@ dnl zephyr.m4--Zephyr libraries and includes
 dnl based on kafs.m4, by
 dnl Derrick Brashear
 dnl from KTH kafs and Arla
-dnl $Id: zephyr.m4,v 1.2 2005/04/26 19:14:08 shadow Exp $
 
 AC_DEFUN([CMU_ZEPHYR_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS

@@ -38,8 +38,6 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *
- * $Id: ptloader.c,v 1.50 2010/01/06 17:01:58 murch Exp $
  */
 
 #include <config.h>
@@ -140,7 +138,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     /* set signal handlers */
     signal(SIGPIPE, SIG_IGN);
 
-    syslog(LOG_NOTICE, "starting: $Id: ptloader.c,v 1.50 2010/01/06 17:01:58 murch Exp $");
+    syslog(LOG_NOTICE, "starting: ptloader.c,v " _CYRUS_VERSION " " CYRUS_GITVERSION);
 
     while ((opt = getopt(argc, argv, "d:")) != EOF) {
 	switch (opt) {

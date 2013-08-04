@@ -1,6 +1,5 @@
 dnl com_err.m4--com_err detection macro
 dnl Rob Earhart
-dnl $Id: com_err.m4,v 1.6 2003/10/08 20:35:24 rjs3 Exp $
 
 AC_DEFUN([CMU_COMERR], [
 	 cmu_need_compile_et=no

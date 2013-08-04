@@ -1,5 +1,3 @@
-dnl $Id: common.m4,v 1.13 2006/02/25 18:29:46 cg2v Exp $
-
 AC_DEFUN([CMU_TEST_LIBPATH], [
 changequote(<<, >>)
 define(<<CMU_AC_CV_FOUND>>, translit(ac_cv_found_$2_lib, <<- *>>, <<__p>>))

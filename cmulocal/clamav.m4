@@ -1,6 +1,5 @@
 dnl
 dnl macros for configure.in to detect clamav library
-dnl $Id: clamav.m4,v 1.2 2005/05/28 02:26:59 shadow Exp $
 dnl
 
 AC_DEFUN([CMU_CLAMAV], [

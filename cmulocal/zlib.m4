@@ -1,6 +1,5 @@
 dnl
 dnl macros for configure.in to detect zlib
-dnl $Id: zlib.m4,v 1.4 2010/01/06 17:01:28 murch Exp $
 dnl
 
 AC_DEFUN([CMU_HAVE_ZLIB], [

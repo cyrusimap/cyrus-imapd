@@ -1,8 +1,4 @@
 dnl
-dnl $Id: c-attribute.m4,v 1.5 2010/01/06 17:01:27 murch Exp $
-dnl
-
-dnl
 dnl Test for __attribute__
 dnl
 

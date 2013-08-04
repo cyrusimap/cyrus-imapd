@@ -1,7 +1,6 @@
 dnl libnet.m4--libnet and includes
 dnl Derrick Brashear
 dnl from KTH krb and Arla
-dnl $Id: libnet.m4,v 1.8 2005/04/26 19:14:08 shadow Exp $
 
 AC_DEFUN([CMU_LIBNET_CFG_WHERE1], [
 ac_cv_found_libnet_bin=no

@@ -38,8 +38,6 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: windows-1255.t,v 1.3 2010/01/06 17:01:50 murch Exp $
-#
 # Charset put together by Ewald Dieterich <ewald.dieterich@fun.de>
 # Reference: http://www.microsoft.com/globaldev/reference/sbcs/1252.htm
  0 0000 NULL (NUL)

@@ -39,8 +39,6 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cyrusdb_sql.c,v 1.3 2010/01/06 17:01:45 murch Exp $ */
-
 #include <config.h>
 
 #include <syslog.h>

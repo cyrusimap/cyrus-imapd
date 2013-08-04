@@ -1,5 +1,3 @@
-dnl $Id: sql.m4,v 1.2 2010/01/06 17:01:28 murch Exp $
-
 dnl These are the Cyrus MySQL macros.
 
 dnl They are here so that they can be shared between Cyrus IMAPd

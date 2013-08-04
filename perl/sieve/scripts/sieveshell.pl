@@ -41,8 +41,6 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: sieveshell.pl,v 1.26 2010/01/06 17:01:57 murch Exp $
-#
 
 use Cyrus::SIEVE::managesieve;
 use Getopt::Long;

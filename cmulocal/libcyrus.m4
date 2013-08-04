@@ -1,7 +1,6 @@
 dnl libcyrus.m4--Cyrus libraries and includes
 dnl Derrick Brashear
 dnl from KTH kafs and Arla
-dnl $Id: libcyrus.m4,v 1.20 2005/04/26 19:14:08 shadow Exp $
 
 AC_DEFUN([CMU_LIBCYRUS_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS

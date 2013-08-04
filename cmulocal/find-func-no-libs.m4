@@ -1,5 +1,3 @@
-dnl $Id: find-func-no-libs.m4,v 1.2 2003/10/08 20:35:24 rjs3 Exp $
-dnl
 dnl
 dnl Look for function in any of the specified libraries
 dnl

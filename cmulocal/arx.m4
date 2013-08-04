@@ -1,5 +1,3 @@
-dnl $Id: arx.m4,v 1.6 2005/04/26 19:14:07 shadow Exp $
-
 AC_DEFUN([CMU_ARX_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$saved_CPPFLAGS -I$1"

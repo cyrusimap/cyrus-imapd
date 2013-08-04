@@ -1,6 +1,5 @@
 dnl
 dnl macros for configure.in to detect openldap
-dnl $Id: openldap.m4,v 1.2 2006/03/13 19:16:11 mel Exp $
 dnl
 
 dnl

@@ -1,5 +1,3 @@
-dnl $Id: berkdb.m4,v 1.24 2010/01/06 17:01:27 murch Exp $
-
 AC_DEFUN([CMU_DB_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$saved_CPPFLAGS -I$1"

@@ -4,7 +4,6 @@
 #
 # Joseph Jackson
 # 09-May-2000
-# $Id: test-imsp.pl,v 1.2 2002/05/25 19:57:50 leg Exp $
 #
 # Quick demonstration and test for the Cyrus IMSP Perl module.
 

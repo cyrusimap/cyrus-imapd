@@ -1,5 +1,4 @@
 dnl look for the (ucd|net)snmp libraries
-dnl $Id: ucdsnmp.m4,v 1.13 2010/01/06 17:01:28 murch Exp $
 
 AC_DEFUN([CMU_UCDSNMP], [
 AC_REQUIRE([CMU_FIND_LIB_SUBDIR])

@@ -38,8 +38,6 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: windows-1256.t,v 1.3 2010/01/06 17:01:50 murch Exp $
-#
 # Charset put together by Rayed Alrashed <rayed@saudi.net.sa>
 # Reference:
 #   ftp://ftp.unicode.org/Public/MAPPINGS/VENDORS/MICSFT/WINDOWS/CP1256.TXT

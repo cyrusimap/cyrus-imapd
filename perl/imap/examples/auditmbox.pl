@@ -39,8 +39,6 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: auditmbox.pl,v 1.7 2010/01/06 17:01:55 murch Exp $
-#
 # This script WON'T work for you.  Guaranteed.
 # It checks CMU ECE policy, and your policy *will* be different.
 # Use it only as an example of how to use Cyrus::IMAP::Admin, as it will

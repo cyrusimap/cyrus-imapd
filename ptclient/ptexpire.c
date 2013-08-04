@@ -37,8 +37,6 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *
- * $Id: ptexpire.c,v 1.23 2010/01/06 17:01:57 murch Exp $
  */
 
 /* This program purges old entries from the database. It holds an exclusive
@@ -69,8 +67,7 @@
 #include "imap/global.h"
 #include "libconfig.h"
 #include "xmalloc.h"
-
-static char rcsid[] = "$Id: ptexpire.c,v 1.23 2010/01/06 17:01:57 murch Exp $";
+#include "xversion.h"
 
 /* global */
 time_t timenow;
@@ -142,7 +139,7 @@ int main(int argc, char *argv[])
     timenow = time(0);
     syslog(LOG_INFO, "Expiring entries older than %d seconds (currently %d)",
 	   (int)expire_time, (int)timenow);
-    syslog(LOG_DEBUG, "%s", rcsid);
+    syslog(LOG_DEBUG, "%s", "ptexpire.c,v " _CYRUS_VERSION " " CYRUS_GITVERSION);
     
     /* open database */
     strcpy(fnamebuf, config_dir);

@@ -1,6 +1,4 @@
 /* +++Date last modified: 05-Jul-1997 */
-/* $Id: hash.c,v 1.13 2006/11/30 17:11:22 murch Exp $ */
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif

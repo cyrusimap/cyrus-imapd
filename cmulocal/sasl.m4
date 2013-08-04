@@ -1,7 +1,6 @@
 dnl sasl.m4--sasl libraries and includes
 dnl Derrick Brashear
 dnl from KTH sasl and Arla
-dnl $Id: sasl.m4,v 1.23 2005/04/26 19:14:08 shadow Exp $
 
 AC_DEFUN([CMU_SASL_INC_WHERE1], [
 saved_CPPFLAGS=$CPPFLAGS

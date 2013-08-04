@@ -38,8 +38,6 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: com_err.c,v 1.3 2010/01/06 17:01:28 murch Exp $
- *
  * Copyright 1987, 1988 by MIT Student Information Processing Board.
  *
  * For copyright info, see mit-sipb-copyright.h.

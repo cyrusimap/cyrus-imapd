@@ -1,6 +1,5 @@
 dnl
 dnl macros for configure.in to detect openssl
-dnl $Id: openssl.m4,v 1.11 2006/05/17 18:30:19 murch Exp $
 dnl
 
 AC_DEFUN([CMU_HAVE_OPENSSL], [

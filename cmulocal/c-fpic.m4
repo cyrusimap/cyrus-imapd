@@ -1,8 +1,4 @@
 dnl
-dnl $Id: c-fpic.m4,v 1.4 2010/01/06 17:01:27 murch Exp $
-dnl
-
-dnl
 dnl Test for -fPIC
 dnl
 

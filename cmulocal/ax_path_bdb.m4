@@ -50,7 +50,6 @@ dnl The author would like to acknowledge the generous and valuable feedback
 dnl from Guido Draheim, without which this macro would be far less robust,
 dnl and have poor and inconsistent cross compilation support.
 dnl
-dnl @version $Id: ax_path_bdb.m4,v 1.1 2005/01/06 20:24:52 shadow Exp $
 dnl @author Tim Toolan <toolan@ele.uri.edu>
 dnl
 
