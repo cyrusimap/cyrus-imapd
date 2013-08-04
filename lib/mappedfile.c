@@ -86,9 +86,7 @@ struct mappedfile {
     char *fname;
 
     /* obviously you will need 64 bit size_t for 64 bit files... */
-    const char *map_base;
-    size_t map_size;
-    size_t map_len;
+    struct buf map_buf;
 
     /* the file itself */
     ino_t map_ino;
@@ -103,14 +101,19 @@ struct mappedfile {
 
 static void _ensure_mapped(struct mappedfile *mf, size_t offset)
 {
+    const char *base = NULL;
+    size_t len = 0;
+
     /* we may be rewriting inside a file, so don't shrink, only extend */
-    if (offset > mf->map_size) {
-	mf->map_size = offset;
+    if (offset > mf->map_buf.len)
 	mf->was_resized = 1;
-    }
+    else
+	offset = mf->map_buf.len;
+
     /* always give refresh another go, we may be map_nommap */
-    map_refresh(mf->fd, 0, &mf->map_base, &mf->map_len, mf->map_size,
-		mf->fname, 0);
+    map_refresh(mf->fd, 0, &base, &len, offset, mf->fname, 0);
+
+    buf_init_mmap(&mf->map_buf, base, offset);
 }
 
 /* NOTE - we don't provide any guarantees that the file isn't open multiple
@@ -187,7 +190,7 @@ EXPORTED int mappedfile_close(struct mappedfile **mfp)
     if (mf->fd >= 0)
 	r = close(mf->fd);
 
-    map_free(&mf->map_base, &mf->map_len);
+    buf_free(&mf->map_buf);
     free(mf->fname);
     free(mf);
 
@@ -239,9 +242,7 @@ EXPORTED int mappedfile_readlock(struct mappedfile *mf)
 
     /* XXX - can we guarantee the fd isn't reused? */
     if (mf->map_ino != sbuf.st_ino) {
-	mf->map_size = 0;
-	map_free(&mf->map_base, &mf->map_len);
-	mf->map_ino = sbuf.st_ino;
+	buf_free(&mf->map_buf);
     }
 
     _ensure_mapped(mf, sbuf.st_size);
@@ -268,11 +269,8 @@ EXPORTED int mappedfile_writelock(struct mappedfile *mf)
     mf->lock_status = MF_WRITELOCKED;
 
     /* XXX - can we guarantee the fd isn't reused? */
-    if (mf->map_ino != sbuf.st_ino) {
-	mf->map_size = 0;
-	map_free(&mf->map_base, &mf->map_len);
-	mf->map_ino = sbuf.st_ino;
-    }
+    if (mf->map_ino != sbuf.st_ino)
+	buf_free(&mf->map_buf);
 
     _ensure_mapped(mf, sbuf.st_size);
     mf->was_resized = 0;
@@ -430,7 +428,8 @@ EXPORTED int mappedfile_truncate(struct mappedfile *mf, off_t offset)
     mf->dirty++;
 
     /* make sure we don't think the future is valid any more */
-    if (offset < (off_t)mf->map_size) mf->map_size = offset;
+    if (offset < (off_t)mf->map_buf.len)
+	mf->map_buf.len = offset;
 
     r = ftruncate(mf->fd, offset);
     if (r < 0) {
@@ -485,12 +484,17 @@ EXPORTED int mappedfile_iswritable(const struct mappedfile *mf)
 EXPORTED const char *mappedfile_base(const struct mappedfile *mf)
 {
     /* XXX - require locked? */
-    return mf->map_base;
+    return mf->map_buf.s;
 }
 
 EXPORTED size_t mappedfile_size(const struct mappedfile *mf)
 {
-    return mf->map_size;
+    return mf->map_buf.len;
+}
+
+EXPORTED const struct buf *mappedfile_buf(const struct mappedfile *mf)
+{
+    return &mf->map_buf;
 }
 
 EXPORTED const char *mappedfile_fname(const struct mappedfile *mf)

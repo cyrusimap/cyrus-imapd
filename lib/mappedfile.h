@@ -44,6 +44,7 @@
 #define _MAPPEDFILE_H
 
 // includes
+#include "util.h"
 #include <sys/types.h>
 #include <sys/uio.h>
 
@@ -81,6 +82,9 @@ extern int mappedfile_iswritable(const struct mappedfile *mf);
 
 extern const char *mappedfile_base(const struct mappedfile *mf);
 extern size_t mappedfile_size(const struct mappedfile *mf);
+extern const struct buf *mappedfile_buf(const struct mappedfile *mf);
+
 extern const char *mappedfile_fname(const struct mappedfile *mf);
+
 
 #endif /* _MAPPEDFILE_H */
