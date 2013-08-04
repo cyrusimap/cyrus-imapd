@@ -250,6 +250,9 @@ static search_folder_t *query_get_valid_folder(search_query_t *query,
 {
     search_folder_t *folder;
 
+    if (mboxname_isdeletedmailbox(mboxname, 0))
+	return NULL;
+
     folder = query_get_folder(query, mboxname);
 
     if (uidvalidity < folder->uidvalidity) {
