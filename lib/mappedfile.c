@@ -98,6 +98,7 @@ struct mappedfile {
     int lock_status;
     int dirty;
     int was_resized;
+    int is_rw;
 };
 
 static void _ensure_mapped(struct mappedfile *mf, size_t offset)
@@ -115,10 +116,12 @@ static void _ensure_mapped(struct mappedfile *mf, size_t offset)
 /* NOTE - we don't provide any guarantees that the file isn't open multiple
  * times.  So don't do that.  It will mess with your locking no end */
 EXPORTED int mappedfile_open(struct mappedfile **mfp,
-		    const char *fname, int create)
+			     const char *fname, int flags)
 {
     struct mappedfile *mf;
     struct stat sbuf;
+    int openmode = (flags & MAPPEDFILE_RW) ? O_RDWR : O_RDONLY;
+    int create = (flags & MAPPEDFILE_CREATE) ? 1 : 0;
     int r;
 
     assert(fname);
@@ -126,10 +129,11 @@ EXPORTED int mappedfile_open(struct mappedfile **mfp,
 
     mf = xzmalloc(sizeof(struct mappedfile));
     mf->fname = xstrdup(fname);
+    mf->is_rw = (flags & MAPPEDFILE_RW) ? 1 : 0;
 
-    mf->fd = open(mf->fname, O_RDWR, 0644);
+    mf->fd = open(mf->fname, openmode, 0644);
     if (mf->fd < 0 && errno == ENOENT) {
-	if (!create) {
+	if (!create || !mf->is_rw) {
 	    r = -errno;
 	    goto err;
 	}
@@ -253,6 +257,7 @@ EXPORTED int mappedfile_writelock(struct mappedfile *mf)
 
     assert(mf->lock_status == MF_UNLOCKED);
     assert(mf->fd != -1);
+    assert(mf->is_rw);
     assert(!mf->dirty);
 
     r = lock_reopen(mf->fd, mf->fname, &sbuf, &lockfailaction);
@@ -304,6 +309,8 @@ EXPORTED int mappedfile_commit(struct mappedfile *mf)
     if (!mf->dirty)
 	return 0; /* nice, nothing to do */
 
+    assert(mf->is_rw);
+
     if (mf->was_resized) {
 	if (fsync(mf->fd) < 0) {
 	    syslog(LOG_ERR, "IOERROR: %s fsync: %m", mf->fname);
@@ -330,6 +337,7 @@ EXPORTED ssize_t mappedfile_pwrite(struct mappedfile *mf,
     ssize_t written;
     off_t pos;
 
+    assert(mf->is_rw);
     assert(mf->fd != -1);
     assert(base);
 
@@ -375,6 +383,7 @@ EXPORTED ssize_t mappedfile_pwritev(struct mappedfile *mf,
     ssize_t written;
     off_t pos;
 
+    assert(mf->is_rw);
     assert(mf->fd != -1);
     assert(iov);
 
@@ -415,6 +424,7 @@ EXPORTED int mappedfile_truncate(struct mappedfile *mf, off_t offset)
 {
     int r;
 
+    assert(mf->is_rw);
     assert(mf->fd != -1);
 
     mf->dirty++;
@@ -465,6 +475,11 @@ EXPORTED int mappedfile_isreadlocked(const struct mappedfile *mf)
 EXPORTED int mappedfile_iswritelocked(const struct mappedfile *mf)
 {
     return (mf->lock_status == MF_WRITELOCKED);
+}
+
+EXPORTED int mappedfile_iswritable(const struct mappedfile *mf)
+{
+    return !!mf->is_rw;
 }
 
 EXPORTED const char *mappedfile_base(const struct mappedfile *mf)

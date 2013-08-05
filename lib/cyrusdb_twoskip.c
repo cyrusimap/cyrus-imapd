@@ -1267,17 +1267,21 @@ static int opendb(const char *fname, int flags, struct dbengine **ret)
 {
     struct dbengine *db;
     int r;
+    int mappedfile_flags = MAPPEDFILE_RW;
 
     assert(fname);
     assert(ret);
 
     db = (struct dbengine *) xzmalloc(sizeof(struct dbengine));
 
+    if (flags & CYRUSDB_CREATE)
+	mappedfile_flags |= MAPPEDFILE_CREATE;
+
     db->open_flags = flags & ~CYRUSDB_CREATE;
     db->compar = (flags & CYRUSDB_MBOXSORT) ? bsearch_ncompare_mbox
 					    : bsearch_ncompare_raw;
 
-    r = mappedfile_open(&db->mf, fname, flags & CYRUSDB_CREATE);
+    r = mappedfile_open(&db->mf, fname, mappedfile_flags);
     if (r) {
 	/* convert to CYRUSDB errors*/
 	if (r == -ENOENT) r = CYRUSDB_NOTFOUND;

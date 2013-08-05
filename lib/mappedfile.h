@@ -49,8 +49,11 @@
 
 struct mappedfile;
 
+#define MAPPEDFILE_CREATE (1<<0)
+#define MAPPEDFILE_RW     (1<<1)
+
 extern int mappedfile_open(struct mappedfile **mfp,
-			   const char *fname, int create);
+			   const char *fname, int flags);
 extern int mappedfile_close(struct mappedfile **mfp);
 
 extern int mappedfile_readlock(struct mappedfile *mf);
@@ -74,6 +77,7 @@ extern int mappedfile_rename(struct mappedfile *mf, const char *newname);
 extern int mappedfile_islocked(const struct mappedfile *mf);
 extern int mappedfile_isreadlocked(const struct mappedfile *mf);
 extern int mappedfile_iswritelocked(const struct mappedfile *mf);
+extern int mappedfile_iswritable(const struct mappedfile *mf);
 
 extern const char *mappedfile_base(const struct mappedfile *mf);
 extern size_t mappedfile_size(const struct mappedfile *mf);
