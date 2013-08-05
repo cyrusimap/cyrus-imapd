@@ -63,6 +63,7 @@
 #include "retry.h"
 #include "xmalloc.h"
 #include "ptloader.h"
+#include "xversion.h"
 
 struct pts_module *pts_modules[] = {
 #ifdef HAVE_LDAP
