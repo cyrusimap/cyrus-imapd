@@ -299,7 +299,6 @@ HIDDEN int mappedfile_unlock(struct mappedfile *mf)
 
 HIDDEN int mappedfile_commit(struct mappedfile *mf)
 {
-    assert(mf->lock_status == MF_WRITELOCKED);
     assert(mf->fd != -1);
 
     if (!mf->dirty)
@@ -331,7 +330,6 @@ HIDDEN ssize_t mappedfile_pwrite(struct mappedfile *mf,
     ssize_t written;
     off_t pos;
 
-    assert(mf->lock_status == MF_WRITELOCKED);
     assert(mf->fd != -1);
     assert(base);
 
@@ -370,7 +368,6 @@ HIDDEN ssize_t mappedfile_pwritev(struct mappedfile *mf,
     ssize_t written;
     off_t pos;
 
-    assert(mf->lock_status == MF_WRITELOCKED);
     assert(mf->fd != -1);
     assert(iov);
 
@@ -411,7 +408,6 @@ HIDDEN int mappedfile_truncate(struct mappedfile *mf, off_t offset)
 {
     int r;
 
-    assert(mf->lock_status == MF_WRITELOCKED);
     assert(mf->fd != -1);
 
     mf->dirty++;
