@@ -173,7 +173,7 @@ EXPORTED uint32_t crc32_iovec(struct iovec *iov, int iovcnt)
 
 #endif
 
-EXPORTED uint32_t crc32_buf(struct buf *buf)
+EXPORTED uint32_t crc32_buf(const struct buf *buf)
 {
     return crc32_map(buf->s, buf->len);
 }
