@@ -274,6 +274,7 @@ extern int message_get_userflags(message_t *m, uint32_t *flagsp);
 extern int message_get_indexflags(message_t *m, uint32_t *);
 extern int message_get_size(message_t *m, uint32_t *sizep);
 extern int message_get_msgno(message_t *m, uint32_t *msgnop);
+extern int message_get_fname(message_t *m, const char **fnamep);
 extern int message_foreach_text_section(message_t *m,
 		   int (*proc)(int isbody, int charset, int encoding,
 			       const char *subtype, struct buf *data, void *rock),
