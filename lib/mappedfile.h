@@ -61,6 +61,9 @@ extern int mappedfile_commit(struct mappedfile *mf);
 extern ssize_t mappedfile_pwrite(struct mappedfile *mf,
 				 const char *base, size_t len,
 				 off_t offset);
+extern ssize_t mappedfile_pwritebuf(struct mappedfile *mf,
+				    const struct buf *buf,
+				    off_t offset);
 extern ssize_t mappedfile_pwritev(struct mappedfile *mf,
 				  const struct iovec *iov, int nio,
 				  off_t offset);

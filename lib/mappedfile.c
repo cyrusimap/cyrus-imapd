@@ -324,8 +324,8 @@ EXPORTED int mappedfile_commit(struct mappedfile *mf)
 }
 
 EXPORTED ssize_t mappedfile_pwrite(struct mappedfile *mf,
-			  const char *base, size_t len,
-			  off_t offset)
+				   const char *base, size_t len,
+				   off_t offset)
 {
     ssize_t written;
     off_t pos;
@@ -361,9 +361,16 @@ EXPORTED ssize_t mappedfile_pwrite(struct mappedfile *mf,
     return written;
 }
 
+EXPORTED ssize_t mappedfile_pwritebuf(struct mappedfile *mf,
+				      const struct buf *buf,
+				      off_t offset)
+{
+    return mappedfile_pwrite(mf, buf->s, buf->len, offset);
+}
+
 EXPORTED ssize_t mappedfile_pwritev(struct mappedfile *mf,
-			   const struct iovec *iov, int nio,
-			   off_t offset)
+				    const struct iovec *iov, int nio,
+				    off_t offset)
 {
     ssize_t written;
     off_t pos;
