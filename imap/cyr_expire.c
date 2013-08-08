@@ -216,6 +216,67 @@ static unsigned userflag_cb(struct mailbox *mailbox __attribute__((unused)),
     return 0;	/* always keep the message */
 }
 
+static unsigned archive_cb(struct mailbox *mailbox __attribute__((unused)),
+			   struct index_record *record,
+			   void *rock)
+{
+    time_t cutoff = *((time_t *)rock);
+
+    /* never pull messages back from the archives */
+    if (record->system_flags & FLAG_ARCHIVED)
+	return 1;
+
+    /* don't archive flagged messages - XXX, optional? */
+    if (record->system_flags & FLAG_FLAGGED)
+	return 0;
+
+    /* archive all other old messages */
+    if (record->internaldate < cutoff)
+	return 1;
+
+    /* and don't archive anything else! */
+    return 0;
+}
+
+static int archive(char *name, int matchlen __attribute__((unused)),
+		   int maycreate __attribute__((unused)), void *rock)
+{
+    int r;
+    mbentry_t *mbentry = NULL;
+    struct mailbox *mailbox = NULL;
+
+    if (sigquit) {
+	return 1;
+    }
+    /* Skip remote mailboxes */
+    r = mboxlist_lookup(name, &mbentry, NULL);
+    if (r) {
+	if (verbose) {
+	    printf("error looking up %s: %s\n", name, error_message(r));
+	}
+	return 1;
+    }
+
+    if (mbentry->mbtype & MBTYPE_REMOTE) {
+	mboxlist_entry_free(&mbentry);
+	return 0;
+    }
+    mboxlist_entry_free(&mbentry);
+
+    r = mailbox_open_iwl(name, &mailbox);
+    if (r) {
+	/* mailbox corrupt/nonexistent -- skip it */
+	syslog(LOG_WARNING, "unable to open mailbox %s: %s",
+	       name, error_message(r));
+	return 0;
+    }
+
+    mailbox_archive(mailbox, archive_cb, rock);
+
+    mailbox_close(&mailbox);
+
+    return 0;
+}
 
 /*
  * mboxlist_findall() callback function to:
@@ -421,6 +482,7 @@ int main(int argc, char *argv[])
     int opt, r = 0;
     int do_expunge = 1;	/* gnb:TODO bool */
     int expunge_seconds = -1;
+    int archive_seconds = -1;
     int delete_seconds = -1;
     int expire_seconds = 0;
     int cid_expire_seconds;
@@ -445,10 +507,15 @@ int main(int argc, char *argv[])
     memset(&crock, 0, sizeof(crock));
     construct_hash_table(&crock.seen, 100, 1);
 
-    while ((opt = getopt(argc, argv, "C:D:E:X:p:u:vaxtc")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:D:E:X:A:p:u:vaxtc")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
+	    break;
+
+	case 'A':
+	    if (archive_seconds >= 0) usage();
+	    if (!parse_duration(optarg, &archive_seconds)) usage();
 	    break;
 
 	case 'D':
@@ -549,6 +616,12 @@ int main(int argc, char *argv[])
 	fprintf(stderr,
 		"cyr_expire: unable to init duplicate delivery database\n");
 	exit(1);
+    }
+
+    if (archive_seconds >= 0) {
+	time_t archive_mark = time(0) - archive_seconds;
+	mboxlist_findall(NULL, find_prefix, 1, 0, 0, archive, &archive_mark);
+	/* XXX - add syslog? */
     }
 
     if (do_expunge && (expunge_seconds >= 0 || expire_seconds || erock.do_userflags)) {

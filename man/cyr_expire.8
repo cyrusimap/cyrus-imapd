@@ -48,6 +48,9 @@ cyr_expire \- expire messages and duplicate delivery database entries
 .I config-file
 ]
 [
+.BI \-A " archive-duration"
+]
+[
 .BI \-D " delete-duration"
 ]
 [
@@ -123,6 +126,11 @@ file unless specified otherwise by \fB-C\fR.
 \fB\-C\fI config-file\fR
 Read configuration options from \fIconfig-file\fR.
 .TP
+\fB\-A \fIarchive-duration\fR
+Archive non-flagged messages older than \fIarchive-duration\fR to the
+archive partition, allowing mailbox messages to be split between fast
+storage and slow large storage.  Only does anything if archivepartition-*
+has been set in your config.
 \fB\-D \fIdelete-duration\fR
 Remove previously deleted mailboxes older than \fIdelete-duration\fR
 (when using the "delayed" delete mode).
