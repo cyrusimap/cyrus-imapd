@@ -213,7 +213,7 @@ static int activefile_write(struct mappedfile *mf, const strarray_t *new)
     ssize_t nwritten;
     char *towrite = NULL;
 
-    r = mappedfile_open(&newfile, newname, /*create*/1);
+    r = mappedfile_open(&newfile, newname, MAPPEDFILE_CREATE|MAPPEDFILE_RW);
     if (r) goto done;
     r = mappedfile_writelock(newfile);
     if (r) goto done;
@@ -292,7 +292,7 @@ static strarray_t *activefile_open(const char *mboxname, const char *partition,
     if (!fname) return NULL;
 
     /* try to open the file, and populate with initial values if it's empty */
-    r = mappedfile_open(activefile, fname, /*create*/1);
+    r = mappedfile_open(activefile, fname, MAPPEDFILE_CREATE|MAPPEDFILE_RW);
     if (!r && !mappedfile_size(*activefile))
 	_activefile_init(mboxname, partition, *activefile);
     free(fname);
