@@ -311,6 +311,12 @@ struct mailbox {
 #define FLAG_UNLINKED (1<<30)
 #define FLAG_EXPUNGED (1U<<31)
 
+#define FLAGS_SYSTEM   (FLAG_ANSWERED|FLAG_FLAGGED|FLAG_DELETED|FLAG_DRAFT|FLAG_SEEN)
+#define FLAGS_INTERNAL (FLAG_UNLINKED|FLAG_EXPUNGED)
+/* for replication */
+#define FLAGS_LOCAL    (FLAG_UNLINKED)
+#define FLAGS_GLOBAL   (FLAGS_SYSTEM|FLAG_EXPUNGED)
+
 #define OPT_POP3_NEW_UIDL (1<<0)	/* added for Outlook stupidity */
 /* NOTE: not used anymore - but don't reuse it */
 #define OPT_IMAP_CONDSTORE (1<<1)	/* added for CONDSTORE extension */

@@ -1306,8 +1306,8 @@ static int mailbox_compare_update(struct mailbox *mailbox,
 	    rrecord.modseq = mrecord.modseq;
 	    rrecord.last_updated = mrecord.last_updated;
 	    rrecord.internaldate = mrecord.internaldate;
-	    rrecord.system_flags = (mrecord.system_flags & ~FLAG_UNLINKED) |
-				   (rrecord.system_flags & FLAG_UNLINKED);
+	    rrecord.system_flags = (mrecord.system_flags & FLAGS_GLOBAL) |
+				   (rrecord.system_flags & FLAGS_LOCAL);
 	    for (i = 0; i < MAX_USER_FLAGS/32; i++)
 		rrecord.user_flags[i] = mrecord.user_flags[i];
 

@@ -3386,7 +3386,7 @@ static int index_storeflag(struct index_state *state,
 			   uint32_t msgno, struct index_record *record,
 			   struct storeargs *storeargs)
 {
-    bit32 old, new;
+    uint32_t old, new, keep;
     unsigned i;
     int dirty = 0;
     modseq_t oldmodseq;
@@ -3415,8 +3415,9 @@ static int index_storeflag(struct index_state *state,
 	}
     }
 
-    old = record->system_flags;
-    new = storeargs->system_flags;
+    keep = record->system_flags & FLAGS_INTERNAL;
+    old = record->system_flags & FLAGS_SYSTEM;
+    new = storeargs->system_flags & FLAGS_SYSTEM;
 
     /* all other updates happen directly to the record */
     if (storeargs->operation == STORE_REPLACE_FLAGS) {
@@ -3442,7 +3443,7 @@ static int index_storeflag(struct index_state *state,
 	    }
 	    for (i = 0; i < (MAX_USER_FLAGS/32); i++) {
 		if (record->user_flags[i] != storeargs->user_flags[i]) {
-		    bit32 changed;
+		    uint32_t changed;
 		    dirty++;
 
 		    changed = ~record->user_flags[i] & storeargs->user_flags[i];
@@ -3462,7 +3463,7 @@ static int index_storeflag(struct index_state *state,
 	}
     }
     else if (storeargs->operation == STORE_ADD_FLAGS) {
-	bit32 added;
+	uint32_t added;
 
 	if (~old & new) {
 	    dirty++;
@@ -3480,7 +3481,7 @@ static int index_storeflag(struct index_state *state,
 	}
     }
     else { /* STORE_REMOVE_FLAGS */
-	bit32 removed;
+	uint32_t removed;
 
 	if (old & new) {
 	    dirty++;
@@ -3520,11 +3521,13 @@ static int index_storeflag(struct index_state *state,
 	else
 	    record->system_flags &= ~FLAG_SEEN;
     }
+    /* add back the internal tracking flags */
+    record->system_flags |= keep;
 
-    modified_flags->added_system_flags = ~old & record->system_flags;
+    modified_flags->added_system_flags = ~old & record->system_flags & FLAGS_SYSTEM;
     if (modified_flags->added_system_flags)
 	modified_flags->added_flags++;
-    modified_flags->removed_system_flags = old & ~record->system_flags;
+    modified_flags->removed_system_flags = old & ~record->system_flags & FLAGS_SYSTEM;
     if (modified_flags->removed_system_flags)
 	modified_flags->removed_flags++;
 
