@@ -3947,8 +3947,9 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 	sepchar = ' ';
     }
     if (fetchitems & FETCH_FILESIZE) {
-	if (!msg_base) {
-	    char *fname = mailbox_message_fname(mailbox, im->uid);
+	unsigned int msg_size = msg.len;
+	if (!msg.s) {
+	    const char *fname = mailbox_record_fname(mailbox, &record);
 	    struct stat sbuf;
 	    /* Find the size of the message file */
 	    if (stat(fname, &sbuf) == -1)

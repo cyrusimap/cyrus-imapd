@@ -3377,7 +3377,7 @@ static int message_need(message_t *m, unsigned int need)
 	if (message_need(m, M_FILENAME) == 0)
 	    filename = m->filename;
 	else if (message_need(m, M_MAILBOX|M_UID) == 0)
-	    filename = mailbox_message_fname(m->mailbox, m->record.uid);
+	    filename = mailbox_record_fname(m->mailbox, &m->record);
 	else
 	    return IMAP_NOTFOUND;
 	r = message_map_file(m, filename);
@@ -4075,6 +4075,14 @@ EXPORTED int message_get_internaldate(message_t *m, time_t *datep)
     int r = message_need(m, M_RECORD);
     if (r) return r;
     *datep = m->record.internaldate;
+    return 0;
+}
+
+EXPORTED int message_get_fname(message_t *m, const char **fnamep)
+{
+    int r = message_need(m, M_FILENAME);
+    if (r) return r;
+    *fnamep = m->filename;
     return 0;
 }
 

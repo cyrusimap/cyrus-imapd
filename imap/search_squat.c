@@ -338,7 +338,7 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
 {
     SquatBuilderData *bb;
     SquatSearchIndex* index;
-    char *fname;
+    const char *fname;
     int fd;
 
     if ((opts & SEARCH_MULTIPLE)) {

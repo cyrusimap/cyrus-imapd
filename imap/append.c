@@ -1283,7 +1283,7 @@ EXPORTED int append_copy(struct mailbox *mailbox,
 	/* Link/copy message file */
 	free(srcfname);
 	free(destfname);
-	srcfname = xstrdup(mboxname_datapath(mailbox->part, mailbox->name, copymsg[msg].uid));
+	srcfname = xstrdup(mailbox_record_fname(mailbox, &copymsg[msg].record));
 	destfname = xstrdup(mailbox_record_fname(as->mailbox, &record));
 	r = mailbox_copyfile(srcfname, destfname, nolink);
 	if (r) goto out;

@@ -2087,13 +2087,11 @@ static int reindex_mb(void *rock,
 
 	/* preload */
 	for (i = 0 ; i < batch.count ; i++) {
-	    uint32_t uid;
-	    const char *fname;
 	    message_t *msg = ptrarray_nth(&batch, i);
-	    r = message_get_uid(msg, &uid);
+	    const char *fname;
+
+	    r = message_get_fname(msg, &fname);
 	    if (r) goto done;
-	    fname = mailbox_message_fname(mailbox, uid);
-	    if (!fname) continue;
 	    r = warmup_file(fname, 0, 0);
 	    if (r) goto done; /* means we failed to open a file,
 				so we'll fail later anyway */

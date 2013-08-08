@@ -158,20 +158,17 @@ static int flush_batch(search_text_receiver_t *rx,
 {
     int i;
     int r = 0;
-    uint32_t uid;
-    const char *fname;
-    message_t *msg;
 
     /* give someone else a chance */
     mailbox_unlock_index(mailbox, NULL);
 
     /* prefetch files */
     for (i = 0 ; i < batch->count ; i++) {
-	msg = ptrarray_nth(batch, i);
-	r = message_get_uid(msg, &uid);
+	message_t *msg = ptrarray_nth(batch, i);
+	const char *fname;
+
+	r = message_get_fname(msg, &fname);
 	if (r) return r;
-	fname = mailbox_message_fname(mailbox, uid);
-	if (!fname) return IMAP_INVALID_IDENTIFIER;
 	r = warmup_file(fname, 0, 0);
 	if (r) return r; /* means we failed to open a file,
 			    so we'll fail later anyway */
