@@ -205,11 +205,6 @@ EXPORTED int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
     as->auth_state = auth_state;
     as->isadmin = isadmin;
 
-    /* make sure we can open the cache file, so we
-     * abort early otherwise */
-    r = mailbox_ensure_cache(mailbox, 0);
-    if (r) return r;
-
     /* initialize seen list creator */
     as->internalseen = mailbox_internal_seen(mailbox, as->userid);
     as->seen_seq = seqset_init(0, SEQ_SPARSE);
@@ -260,9 +255,6 @@ EXPORTED int append_commit(struct appendstate *as)
     if (as->nummsg) {
 	/* Calculate new index header information */
 	as->mailbox->i.last_appenddate = time(0);
-
-	/* the cache will be dirty even if we hand added the records */
-	as->mailbox->cache_dirty = 1;
 
 	/* log the append so rolling squatter can index this mailbox */
 	sync_log_append(as->mailbox->name);
