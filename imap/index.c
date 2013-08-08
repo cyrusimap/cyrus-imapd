@@ -215,6 +215,7 @@ static int index_reload_record(struct index_state *state,
     /* restore mutable fields */
     recordp->modseq = im->modseq;
     recordp->system_flags = im->system_flags;
+    recordp->cache_offset = im->cache_offset;
     for (i = 0; i < MAX_USER_FLAGS/32; i++)
 	recordp->user_flags[i] = im->user_flags[i];
 
@@ -237,6 +238,7 @@ static int index_rewrite_record(struct index_state *state,
     /* update tracking of mutable fields */
     im->modseq = recordp->modseq;
     im->system_flags = recordp->system_flags;
+    im->cache_offset = recordp->cache_offset;
     for (i = 0; i < MAX_USER_FLAGS/32; i++)
 	im->user_flags[i] = recordp->user_flags[i];
 
@@ -674,6 +676,7 @@ static void index_refresh_locked(struct index_state *state)
 	im->recno = recno;
 	im->modseq = record.modseq;
 	im->system_flags = record.system_flags;
+	im->cache_offset = record.cache_offset;
 	for (i = 0; i < MAX_USER_FLAGS/32; i++)
 	    im->user_flags[i] = record.user_flags[i];
 
