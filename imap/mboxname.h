@@ -201,9 +201,13 @@ void mboxname_hash(char *buf, size_t buf_len,
 		   const char *root,
 		   const char *name);
 
-char *mboxname_datapath(const char *partition, 
+char *mboxname_datapath(const char *partition,
 			const char *mboxname,
 			unsigned long uid);
+
+char *mboxname_archivepath(const char *partition,
+			   const char *mboxname,
+			   unsigned long uid);
 
 char *mboxname_metapath(const char *partition,
 			const char *mboxname,

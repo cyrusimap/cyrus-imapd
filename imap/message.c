@@ -1793,7 +1793,6 @@ int message_write_cache(struct index_record *record, const struct body *body)
     struct buf ib[NUM_CACHE_FIELDS];
     struct body toplevel;
     char *subject;
-    int len;
     int i;
 
     /* initialise data structures */
@@ -1831,15 +1830,13 @@ int message_write_cache(struct index_record *record, const struct body *body)
 	buf_free(&ib[i]);
     }
 
-    len = buf_len(&cacheitem_buffer);
-
     /* copy the fields into the message */
     record->cache_offset = 0; /* calculate on write! */
     record->cache_version = MAILBOX_CACHE_MINOR_VERSION;
-    record->cache_crc = crc32_map(cacheitem_buffer.s, len);
-    record->crec.base = &cacheitem_buffer;
+    record->cache_crc = crc32_buf(&cacheitem_buffer);
+    record->crec.buf = &cacheitem_buffer;
     record->crec.offset = 0; /* we're at the start of the buffer */
-    record->crec.len = len;
+    record->crec.len = buf_len(&cacheitem_buffer);
 
     return 0;
 }

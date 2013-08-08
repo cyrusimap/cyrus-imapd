@@ -51,6 +51,7 @@
 #include "byteorder64.h"
 #include "conversations.h"
 #include "message_guid.h"
+#include "ptrarray.h"
 #include "quota.h"
 #include "sequence.h"
 #include "util.h"
@@ -90,7 +91,8 @@ enum meta_filename {
   META_SQUAT,
   META_EXPUNGE,
   META_ANNOTATIONS,
-  META_DAV
+  META_DAV,
+  META_ARCHIVECACHE
 };
 
 #define MAILBOX_FNAME_LEN 256
@@ -109,7 +111,7 @@ struct cacheitem {
 };
 
 struct cacherecord {
-    struct buf *base;
+    const struct buf *buf;
     unsigned offset;
     unsigned len;
     struct cacheitem item[NUM_CACHE_FIELDS];
@@ -137,8 +139,8 @@ struct index_record {
     time_t gmtime;
     uint32_t cache_offset;
     time_t last_updated;
-    bit32 system_flags;
-    bit32 user_flags[MAX_USER_FLAGS/32];
+    uint32_t system_flags;
+    uint32_t user_flags[MAX_USER_FLAGS/32];
     uint32_t content_lines;
     uint32_t cache_version;
     struct message_guid guid;
@@ -198,14 +200,12 @@ struct index_header {
 
 struct mailbox {
     int index_fd;
-    int cache_fd;
     int lock_fd;
     int header_fd;
 
+    ptrarray_t caches;
     const char *index_base;
     size_t index_len;	/* mapped size */
-    struct buf cache_buf;
-    size_t cache_len;	/* mapped size */
 
     int index_locktype; /* 0 = none, 1 = shared, 2 = exclusive */
     int is_readonly; /* true = open index and cache files readonly */
@@ -241,7 +241,6 @@ struct mailbox {
     /* change management */
     int modseq_dirty;
     int header_dirty;
-    int cache_dirty;
     int quota_dirty;
     int has_changed;
     time_t last_updated; /* for appends*/
@@ -322,13 +321,14 @@ struct mailbox {
 #define FLAG_DELETED (1<<2)
 #define FLAG_DRAFT (1<<3)
 #define FLAG_SEEN (1<<4)
+#define FLAG_ARCHIVED (1<<29)
 #define FLAG_UNLINKED (1<<30)
 #define FLAG_EXPUNGED (1U<<31)
 
 #define FLAGS_SYSTEM   (FLAG_ANSWERED|FLAG_FLAGGED|FLAG_DELETED|FLAG_DRAFT|FLAG_SEEN)
-#define FLAGS_INTERNAL (FLAG_UNLINKED|FLAG_EXPUNGED)
+#define FLAGS_INTERNAL (FLAG_ARCHIVED|FLAG_UNLINKED|FLAG_EXPUNGED)
 /* for replication */
-#define FLAGS_LOCAL    (FLAG_UNLINKED)
+#define FLAGS_LOCAL    (FLAG_ARCHIVED|FLAG_UNLINKED)
 #define FLAGS_GLOBAL   (FLAGS_SYSTEM|FLAG_EXPUNGED)
 
 #define OPT_POP3_NEW_UIDL (1<<0)	/* added for Outlook stupidity */
@@ -445,12 +445,8 @@ extern const char *mailbox_datapath(struct mailbox *mailbox);
 extern int mailbox_map_record(struct mailbox *mailbox, struct index_record *record, struct buf *buf);
 
 /* cache record API */
-int mailbox_ensure_cache(struct mailbox *mailbox, size_t len);
 int mailbox_cacherecord(struct mailbox *mailbox,
 			struct index_record *record);
-int cache_append_record(int fd, struct index_record *record);
-int mailbox_append_cache(struct mailbox *mailbox,
-			 struct index_record *record);
 char *mailbox_cache_get_msgid(struct mailbox *mailbox,
 			      struct index_record *record);
 
@@ -512,6 +508,8 @@ extern int mailbox_expunge_cleanup(struct mailbox *mailbox, time_t expunge_mark,
 extern int mailbox_expunge(struct mailbox *mailbox,
 			   mailbox_decideproc_t *decideproc, void *deciderock,
 			   unsigned *nexpunged, int event_type);
+extern void mailbox_archive(struct mailbox *mailbox,
+			    mailbox_decideproc_t *decideproc, void *deciderock);
 extern int mailbox_cleanup(struct mailbox *mailbox, int iscurrentdir,
 			   mailbox_decideproc_t *decideproc, void *deciderock);
 extern void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *sd);
@@ -527,7 +525,7 @@ extern int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
 			      const char *newname);
 extern int mailbox_delete_cleanup(const char *part, const char *name);
 
-extern int mailbox_rename_copy(struct mailbox *oldmailbox, 
+extern int mailbox_rename_copy(struct mailbox *oldmailbox,
 			       const char *newname, const char *newpart,
 			       unsigned uidvalidity,
 			       const char *userid, int ignorequota,
@@ -541,7 +539,6 @@ extern int mailbox_reconstruct(const char *name, int flags);
 extern void mailbox_make_uniqueid(struct mailbox *mailbox);
 
 extern int mailbox_setversion(struct mailbox *mailbox, int version);
-/* for upgrade index */
 
 extern int mailbox_index_recalc(struct mailbox *mailbox);
 

@@ -534,9 +534,13 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
 	    break;
 
 	case META_CACHE:
-	    if (mailbox->cache_buf.s) {
-		fbase = mailbox->cache_buf.s;
-		flen = mailbox->cache_buf.len;
+	    {
+		/* XXX - multi-cache-file support */
+		struct mappedfile *cachefile = ptrarray_nth(&mailbox->caches, 0);
+		if (cachefile) {
+		    fbase = mappedfile_base(cachefile);
+		    flen = mappedfile_size(cachefile);
+		}
 	    }
 	    break;
 

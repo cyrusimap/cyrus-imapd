@@ -1388,6 +1388,36 @@ EXPORTED char *mboxname_datapath(const char *partition, const char *mboxname, un
     return pathresult;
 }
 
+/* note: mboxname must be internal */
+EXPORTED char *mboxname_archivepath(const char *partition, const char *mboxname, unsigned long uid)
+{
+    static char pathresult[MAX_MAILBOX_PATH+1];
+    const char *root;
+
+    if (!partition) return NULL;
+
+    root = config_archivepartitiondir(partition);
+    if (!root) return NULL;
+
+    if (!mboxname) {
+	xstrncpy(pathresult, root, MAX_MAILBOX_PATH);
+	return pathresult;
+    }
+
+    mboxname_hash(pathresult, MAX_MAILBOX_PATH, root, mboxname);
+
+    if (uid) {
+	int len = strlen(pathresult);
+	snprintf(pathresult + len, MAX_MAILBOX_PATH - len, "/%lu.", uid);
+    }
+    pathresult[MAX_MAILBOX_PATH] = '\0';
+
+    if (strlen(pathresult) == MAX_MAILBOX_PATH)
+	return NULL;
+
+    return pathresult;
+}
+
 char *mboxname_lockpath(const char *mboxname)
 {
     return mboxname_lockpath_suffix(mboxname, ".lock");
@@ -1423,6 +1453,7 @@ EXPORTED char *mboxname_metapath(const char *partition, const char *mboxname,
 {
     static char metaresult[MAX_MAILBOX_PATH];
     int metaflag = 0;
+    int archiveflag = 0;
     const char *root = NULL;
     const char *filename = NULL;
     char confkey[256];
@@ -1467,6 +1498,12 @@ EXPORTED char *mboxname_metapath(const char *partition, const char *mboxname,
 	metaflag = IMAP_ENUM_METAPARTITION_FILES_DAV;
 	filename = FNAME_DAV;
 	break;
+    case META_ARCHIVECACHE:
+	snprintf(confkey, 256, "metadir-archivecache-%s", partition);
+	metaflag = IMAP_ENUM_METAPARTITION_FILES_ARCHIVECACHE;
+	filename = FNAME_CACHE;
+	archiveflag = 1;
+	break;
     case 0:
 	break;
     default:
@@ -1478,6 +1515,9 @@ EXPORTED char *mboxname_metapath(const char *partition, const char *mboxname,
 
     if (!root && (!metaflag || (config_metapartition_files & metaflag)))
 	root = config_metapartitiondir(partition);
+
+    if (!root && archiveflag)
+	root = config_archivepartitiondir(partition);
 
     if (!root)
 	root = config_partitiondir(partition);

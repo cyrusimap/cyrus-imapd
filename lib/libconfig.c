@@ -204,6 +204,18 @@ EXPORTED const char *config_metapartitiondir(const char *partition)
     return config_getoverflowstring(buf, NULL);
 }
 
+EXPORTED const char *config_archivepartitiondir(const char *partition)
+{
+    char buf[80];
+
+    if(strlcpy(buf, "archivepartition-", sizeof(buf)) >= sizeof(buf))
+	return 0;
+    if(strlcat(buf, partition, sizeof(buf)) >= sizeof(buf))
+	return 0;
+
+    return config_getoverflowstring(buf, NULL);
+}
+
 static void config_ispartition(const char *key,
 			       const char *val __attribute__((unused)),
 			       void *rock)
