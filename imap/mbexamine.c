@@ -358,9 +358,9 @@ static int do_quota(char *name,
     struct mailbox *mailbox = NULL;
     struct index_record record;
     quota_t total = 0;
-    char *fname;
+    const char *fname;
     struct stat sbuf;
-    
+
     signals_poll();
 
     /* Convert internal name to external */
@@ -384,7 +384,7 @@ static int do_quota(char *name,
 	if (record.system_flags & FLAG_EXPUNGED)
 	    continue;
 
-	fname = mailbox_message_fname(mailbox, record.uid);
+	fname = mailbox_record_fname(mailbox, &record);
 
 	if (stat(fname, &sbuf) != 0) {
 	    syslog(LOG_WARNING,

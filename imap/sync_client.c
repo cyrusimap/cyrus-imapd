@@ -776,8 +776,8 @@ static int copy_local(struct mailbox *mailbox, unsigned long uid)
 	    newrecord.uid = mailbox->i.last_uid + 1;
 
 	    /* copy the file in to place */
-	    oldfname = xstrdup(mailbox_message_fname(mailbox, oldrecord.uid));
-	    newfname = xstrdup(mailbox_message_fname(mailbox, newrecord.uid));
+	    oldfname = xstrdup(mailbox_record_fname(mailbox, &oldrecord));
+	    newfname = xstrdup(mailbox_record_fname(mailbox, &newrecord));
 	    r = mailbox_copyfile(oldfname, newfname, 0);
 	    free(oldfname);
 	    free(newfname);

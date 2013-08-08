@@ -1299,7 +1299,8 @@ static void prefetch_messages(struct index_state *state,
     struct mailbox *mailbox = state->mailbox;
     struct index_map *im;
     uint32_t msgno;
-    char *fname;
+    const char *fname;
+    struct index_record record;
 
     syslog(LOG_ERR, "Prefetching initial parts of messages\n");
 
@@ -1308,7 +1309,10 @@ static void prefetch_messages(struct index_state *state,
 	if (!seqset_ismember(seq, usinguid ? im->uid : msgno))
 	    continue;
 
-	fname = mailbox_message_fname(mailbox, im->uid);
+	if (index_reload_record(state, msgno, &record))
+	    continue;
+
+	fname = mailbox_record_fname(mailbox, &record);
 	if (!fname)
 	    continue;
 

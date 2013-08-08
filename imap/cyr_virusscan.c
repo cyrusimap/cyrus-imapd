@@ -424,7 +424,7 @@ unsigned virus_check(struct mailbox *mailbox,
     const char *virname;
     int r = 0;
 
-    fname = mailbox_message_fname(mailbox, record->uid);
+    fname = mailbox_record_fname(mailbox, record);
 
     if ((r = engine.scanfile(engine.state, fname, &virname))) {
 	if (verbose) {

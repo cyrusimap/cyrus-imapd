@@ -861,7 +861,7 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
 {
     struct mailbox *mailbox = as->mailbox;
     struct index_record record;
-    char *fname;
+    const char *fname;
     FILE *destfile;
     int i, r;
     strarray_t *newflags = NULL;
@@ -933,7 +933,7 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
 
     /* Create message file */
     as->nummsg++;
-    fname = mailbox_message_fname(mailbox, record.uid);
+    fname = mailbox_record_fname(mailbox, &record);
 
     r = mailbox_copyfile(stagefile, fname, nolink);
     destfile = fopen(fname, "r");
@@ -1057,7 +1057,7 @@ EXPORTED int append_fromstream(struct appendstate *as, struct body **body,
 {
     struct mailbox *mailbox = as->mailbox;
     struct index_record record;
-    char *fname;
+    const char *fname;
     FILE *destfile;
     int r;
     struct mboxevent *mboxevent = NULL;
@@ -1070,7 +1070,7 @@ EXPORTED int append_fromstream(struct appendstate *as, struct body **body,
     record.internaldate = internaldate;
 
     /* Create message file */
-    fname = mailbox_message_fname(mailbox, record.uid);
+    fname = mailbox_record_fname(mailbox, &record);
     as->nummsg++;
 
     unlink(fname);
@@ -1160,7 +1160,7 @@ HIDDEN int append_run_annotator(struct appendstate *as,
 			     load_annot_cb, &user_annots);
     if (r) goto out;
 
-    fname = mailbox_message_fname(as->mailbox, record->uid);
+    fname = mailbox_record_fname(as->mailbox, record);
     if (!fname) goto out;
 
     f = fopen(fname, "r");
@@ -1281,11 +1281,11 @@ EXPORTED int append_copy(struct mailbox *mailbox,
 	}
 
 	/* Link/copy message file */
-	free(destfname);
-	srcfname = xstrdup(mailbox_message_fname(mailbox, copymsg[msg].uid));
-	destfname = xstrdup(mailbox_message_fname(as->mailbox, record.uid));
-	r = mailbox_copyfile(srcfname, destfname, nolink);
 	free(srcfname);
+	free(destfname);
+	srcfname = xstrdup(mailbox_record_fname(mailbox, &copymsg[msg].record));
+	destfname = xstrdup(mailbox_record_fname(as->mailbox, &record));
+	r = mailbox_copyfile(srcfname, destfname, nolink);
 	if (r) goto out;
 
 	/* Write out cache info, copy other info */
@@ -1318,6 +1318,7 @@ EXPORTED int append_copy(struct mailbox *mailbox,
     }
 
 out:
+    free(srcfname);
     free(destfname);
     if (r) {
 	append_abort(as);

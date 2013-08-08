@@ -66,6 +66,7 @@
 #include "global.h"
 #include "imap/imap_err.h"
 #include "map.h"
+#include "mappedfile.h"
 #include "mbdump.h"
 #include "mboxkey.h"
 #include "mboxlist.h"
@@ -482,8 +483,11 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
     struct quota q;
     struct data_file *df;
     struct seqset *expunged_seq = NULL;
+    const char *dirpath = mailbox_datapath(mailbox);
 
-    mbdir = opendir(mailbox_datapath(mailbox));
+    /* XXX - archivepath */
+
+    mbdir = opendir(dirpath);
     if (!mbdir && errno == EACCES) {
 	syslog(LOG_ERR,
 	       "could not dump mailbox %s (permission denied)", mailbox->name);
@@ -562,6 +566,7 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
     while ((next = readdir(mbdir)) != NULL) {
 	char *name = next->d_name;  /* Alias */
 	char *p = name;
+	char *fullpath;
 	uint32_t uid;
 
 	/* special case for '.' (well, it gets '..' too) */
@@ -581,9 +586,10 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
 	   continue;
 
 	/* construct path/filename */
-	fname = mailbox_message_fname(mailbox, uid);
+	fullpath = strconcat(dirpath, "/", name, (char *)NULL);
+	r = dump_file(0, !tag, pin, pout, fullpath, name, NULL, 0);
+	free(fullpath);
 
-	r = dump_file(0, !tag, pin, pout, fname, name, NULL, 0);
 	if (r) goto done;
     }
 
@@ -1123,7 +1129,7 @@ EXPORTED int undump_mailbox(const char *mbname,
 			/* Non-fatal,
 			   let's get the file transferred if we can */
 		    }
-		    
+
 		}
 	    }
 	} else {
@@ -1140,7 +1146,7 @@ EXPORTED int undump_mailbox(const char *mbname,
 		if (!parseuint32(file.s, &ptr, &uid)) {
 		    /* is it really a data file? */
 		    if (ptr && ptr[0] == '.' && ptr[1] == '\0')
-			path = mailbox_message_fname(mailbox, uid);
+			path = mboxname_datapath(mailbox->part, mailbox->name, uid);
 		}
 	    }
 	    if (!path) {
@@ -1286,7 +1292,7 @@ EXPORTED int undump_mailbox(const char *mbname,
 	    if (r) continue;
 	    if (record.system_flags & FLAG_UNLINKED)
 		continue; /* no file! */
-	    fname = mailbox_message_fname(mailbox, record.uid);
+	    fname = mailbox_record_fname(mailbox, &record);
 	    settime.actime = settime.modtime = record.internaldate;
 	    if (utime(fname, &settime) == -1) {
 		r = IMAP_IOERROR;

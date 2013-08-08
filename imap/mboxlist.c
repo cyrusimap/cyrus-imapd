@@ -1356,7 +1356,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 
     /* special case: same mailbox, must be a partition move */
     if (!strcmp(oldname, newname)) {
-	char *oldpath = mailbox_datapath(oldmailbox);
+	const char *oldpath = mailbox_datapath(oldmailbox);
 
 	/* Only admin can move mailboxes between partitions */
 	if (!isadmin) {

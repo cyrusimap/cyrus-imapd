@@ -215,7 +215,7 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
 	newrecord = record;
 
 	/* duplicate the old filename */
-	fname = mailbox_message_fname(mailbox, record.uid);
+	fname = mailbox_record_fname(mailbox, &record);
 	xstrncpy(oldfname, fname, MAX_MAILBOX_PATH);
 
 	/* bump the UID, strip the flags */
@@ -225,7 +225,7 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
 	    newrecord.system_flags &= ~FLAG_DELETED;
 
 	/* copy the message file */
-	fname = mailbox_message_fname(mailbox, newrecord.uid);
+	fname = mailbox_record_fname(mailbox, &newrecord);
 	r = mailbox_copyfile(oldfname, fname, 0);
 	if (r) goto done;
 

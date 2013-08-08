@@ -1075,7 +1075,7 @@ static void reserve_folder(const char *part, const char *mboxname,
 	    continue;
 
 	/* Attempt to reserve this message */
-	mailbox_msg_path = mailbox_message_fname(mailbox, record.uid);
+	mailbox_msg_path = mailbox_record_fname(mailbox, &record);
 	stage_msg_path = dlist_reserve_path(part, &record.guid);
 
 	/* check that the sha1 of the file on disk is correct */

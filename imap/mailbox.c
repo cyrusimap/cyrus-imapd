@@ -176,7 +176,7 @@ static void remove_listitem(struct mailboxlist *remitem)
     fatal("didn't find item in list", EC_SOFTWARE);
 }
 
-EXPORTED char *mailbox_meta_fname(struct mailbox *mailbox, int metafile)
+EXPORTED const char *mailbox_meta_fname(struct mailbox *mailbox, int metafile)
 {
     static char fnamebuf[MAX_MAILBOX_PATH];
     const char *src;
@@ -188,7 +188,7 @@ EXPORTED char *mailbox_meta_fname(struct mailbox *mailbox, int metafile)
     return fnamebuf;
 }
 
-EXPORTED char *mailbox_meta_newfname(struct mailbox *mailbox, int metafile)
+EXPORTED const char *mailbox_meta_newfname(struct mailbox *mailbox, int metafile)
 {
     static char fnamebuf[MAX_MAILBOX_PATH];
     const char *src;
@@ -202,8 +202,8 @@ EXPORTED char *mailbox_meta_newfname(struct mailbox *mailbox, int metafile)
 
 EXPORTED int mailbox_meta_rename(struct mailbox *mailbox, int metafile)
 {
-    char *fname = mailbox_meta_fname(mailbox, metafile);
-    char *newfname = mailbox_meta_newfname(mailbox, metafile);
+    const char *fname = mailbox_meta_fname(mailbox, metafile);
+    const char *newfname = mailbox_meta_newfname(mailbox, metafile);
 
     if (rename(newfname, fname))
 	return IMAP_IOERROR;
@@ -211,19 +211,13 @@ EXPORTED int mailbox_meta_rename(struct mailbox *mailbox, int metafile)
     return 0;
 }
 
-EXPORTED char *mailbox_message_fname(struct mailbox *mailbox, unsigned long uid)
+EXPORTED const char *mailbox_record_fname(struct mailbox *mailbox,
+					  struct index_record *record)
 {
-    static char localbuf[MAX_MAILBOX_PATH];
-    const char *src;
-
-    src = mboxname_datapath(mailbox->part, mailbox->name, uid);
-    if (!src) return NULL;
-
-    xstrncpy(localbuf, src, MAX_MAILBOX_PATH);
-    return localbuf;
+    return mboxname_datapath(mailbox->part, mailbox->name, record->uid);
 }
 
-EXPORTED char *mailbox_datapath(struct mailbox *mailbox)
+EXPORTED const char *mailbox_datapath(struct mailbox *mailbox)
 {
     static char localbuf[MAX_MAILBOX_PATH];
     const char *src;
@@ -506,7 +500,7 @@ HIDDEN int mailbox_ensure_cache(struct mailbox *mailbox, size_t len)
  retry:
     /* open the file */
     if (mailbox->cache_fd == -1) {
-	char *fname;
+	const char *fname;
 
 	/* it's bogus to be dirty here */
 	if (mailbox->cache_dirty)
@@ -770,7 +764,7 @@ EXPORTED int mailbox_map_record(struct mailbox *mailbox, struct index_record *re
     const char *fname;
     struct stat sbuf;
 
-    fname = mailbox_message_fname(mailbox, record->uid);
+    fname = mailbox_record_fname(mailbox, record);
 
     msgfd = open(fname, O_RDONLY, 0666);
     if (msgfd == -1) return errno;
@@ -812,7 +806,7 @@ static void mailbox_release_resources(struct mailbox *mailbox)
 static int mailbox_open_index(struct mailbox *mailbox)
 {
     struct stat sbuf;
-    char *fname;
+    const char *fname;
     int openflags = mailbox->is_readonly ? O_RDONLY : O_RDWR;
 
     mailbox_release_resources(mailbox);
@@ -2832,7 +2826,7 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
     if (!(record->system_flags & FLAG_UNLINKED)) {
 	/* make the file timestamp correct */
 	settime.actime = settime.modtime = record->internaldate;
-	if (utime(mailbox_message_fname(mailbox, record->uid), &settime) == -1)
+	if (utime(mailbox_record_fname(mailbox, record), &settime) == -1)
 	    return IMAP_IOERROR;
 
 	/* write the cache record before buffering the message, it
@@ -2909,9 +2903,10 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
     return mailbox_refresh_index_map(mailbox);
 }
 
-static void mailbox_message_unlink(struct mailbox *mailbox, uint32_t uid)
+static void mailbox_message_unlink(struct mailbox *mailbox,
+				   struct index_record *record)
 {
-    const char *fname = mailbox_message_fname(mailbox, uid);
+    const char *fname = mailbox_record_fname(mailbox, record);
     int r;
 
     /* XXX - reports errors other than ENOENT ? */
@@ -2921,20 +2916,20 @@ static void mailbox_message_unlink(struct mailbox *mailbox, uint32_t uid)
 	if (config_auditlog)
 	    syslog(LOG_NOTICE, "auditlog: unlink sessionid=<%s> "
 		   "mailbox=<%s> uniqueid=<%s> uid=<%u>",
-		   session_id(), mailbox->name, mailbox->uniqueid, uid);
+		   session_id(), mailbox->name, mailbox->uniqueid, record->uid);
     }
 
-    r = mailbox_get_annotate_state(mailbox, uid, NULL);
+    r = mailbox_get_annotate_state(mailbox, record->uid, NULL);
     if (r) {
 	syslog(LOG_ERR, "IOERROR: failed to open annotations %s %u: %s",
-	       mailbox->name, uid, error_message(r));
+	       mailbox->name, record->uid, error_message(r));
 	return;
     }
 
-    r = annotate_msg_cleanup(mailbox, uid);
+    r = annotate_msg_cleanup(mailbox, record->uid);
     if (r) {
 	syslog(LOG_ERR, "IOERROR: failed to cleanup annotations %s %u: %s",
-	       mailbox->name, uid, error_message(r));
+	       mailbox->name, record->uid, error_message(r));
 	return;
     }
 }
@@ -2956,7 +2951,7 @@ static int mailbox_index_unlink(struct mailbox *mailbox)
 	if (r) return r;
 
 	if (record.system_flags & FLAG_UNLINKED)
-	    mailbox_message_unlink(mailbox, record.uid);
+	    mailbox_message_unlink(mailbox, &record);
     }
 
     /* need to clear the flag, even if nothing needed unlinking! */
@@ -3274,7 +3269,7 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
 	/* we aren't keeping unlinked files, that's kind of the point */
 	if (record.system_flags & FLAG_UNLINKED) {
 	    /* just in case it was left lying around */
-	    mailbox_message_unlink(mailbox, record.uid);
+	    mailbox_message_unlink(mailbox, &record);
 
 	    /* track the modseq for QRESYNC purposes */
 	    if (record.modseq > repack->i.deletedmodseq)
@@ -3559,7 +3554,7 @@ EXPORTED int mailbox_create(const char *name,
     }
 
     /* ensure we can fit the longest possible file name */
-    fname = mailbox_message_fname(mailbox, UINT32_MAX);
+    fname = mailbox_datapath(mailbox);
     if (!fname) {
 	syslog(LOG_ERR, "IOERROR: Mailbox name too long (%s)", mailbox->name);
 	r = IMAP_MAILBOX_BADNAME;
@@ -3683,7 +3678,7 @@ done:
 /*
  * Remove all files in directory
  */
-static void mailbox_delete_files(char *path)
+static void mailbox_delete_files(const char *path)
 {
     DIR *dirp;
     struct dirent *f;
@@ -3948,7 +3943,7 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
 	if (record.system_flags & FLAG_UNLINKED)
 	    continue;
 
-	xstrncpy(oldbuf, mailbox_message_fname(mailbox, record.uid),
+	xstrncpy(oldbuf, mailbox_record_fname(mailbox, &record),
 		MAX_MAILBOX_PATH);
 	xstrncpy(newbuf, mboxname_datapath(newpart, newname, record.uid),
 		MAX_MAILBOX_PATH);
@@ -4488,7 +4483,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 					      int flags, int have_file,
 					      struct found_uids *discovered)
 {
-    char *fname = mailbox_message_fname(mailbox, record->uid);
+    const char *fname = mailbox_record_fname(mailbox, record);
     int r = 0;
     int i;
     struct index_record copy;
@@ -4501,7 +4496,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 
     /* does the file actually exist? */
     if (have_file && do_stat) {
-    	if (stat(fname, &sbuf) == -1 || (sbuf.st_size == 0)) {
+	if (stat(fname, &sbuf) == -1 || (sbuf.st_size == 0)) {
 	    have_file = 0;
 	}
 	else if (record->size != (unsigned) sbuf.st_size) {
@@ -4509,7 +4504,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 	}
 	did_stat = 1;
     }
-	
+
     if (!have_file) {
 	/* well, that's OK if it's supposed to be missing! */
 	if (record->system_flags & FLAG_UNLINKED)
@@ -4673,17 +4668,22 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid,
 				      int flags)
 {
-    char *fname = mailbox_message_fname(mailbox, uid);
+    /* XXX - support archived */
+    const char *fname;
     int r = 0;
     struct index_record record;
     struct stat sbuf;
     int make_changes = flags & RECONSTRUCT_MAKE_CHANGES;
 
+    fname = mboxname_datapath(mailbox->part, mailbox->name, uid);
+
     /* possible if '0.' file exists */
     if (!uid) {
 	/* filthy hack - copy the path to '1.' and replace 1 with 0 */
-	fname = xstrdup(mailbox_message_fname(mailbox, 1));
-	fname[strlen(fname)-2] = '0';
+	char *hack;
+	fname = mboxname_datapath(mailbox->part, mailbox->name, 1);
+	hack = (char *)fname;
+	hack[strlen(fname)-2] = '0';
     }
 
     if (stat(fname, &sbuf) == -1) r = IMAP_MAILBOX_NONEXISTENT;
@@ -4724,7 +4724,7 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid,
 	if (!make_changes) return 0;
 
 	oldfname = xstrdup(fname);
-	newfname = xstrdup(mailbox_message_fname(mailbox, record.uid));
+	newfname = xstrdup(mailbox_record_fname(mailbox, &record));
 	r = rename(oldfname, newfname);
 	free(oldfname);
 	free(newfname);
