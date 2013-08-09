@@ -1983,6 +1983,7 @@ struct find_rock {
     const char *usermboxname;
     size_t usermboxnamelen;
     int checkmboxlist;
+    int issubs;
     int checkshared;
     struct db *db;
     int isadmin;
@@ -2062,6 +2063,10 @@ static int find_p(void *rockp,
 	if (mboxname_isdeletedmailbox(namebuf, NULL))
 	    return 0;
     }
+
+    /* subs DB has empty keys */
+    if (rock->issubs)
+	return 1;
 
     /* ignore entirely deleted records */
     if (mboxlist_parse_entry(&mbentry, "", data, datalen))
@@ -2347,6 +2352,7 @@ EXPORTED int mboxlist_findall(struct namespace *namespace,
     cbrock.isadmin = isadmin;
     cbrock.auth_state = auth_state;
     cbrock.checkmboxlist = 0;	/* don't duplicate work */
+    cbrock.issubs = 0;
     cbrock.checkshared = 0;
     cbrock.proc = proc;
     cbrock.procrock = rock;
@@ -2503,6 +2509,7 @@ HIDDEN int mboxlist_findall_alt(struct namespace *namespace,
     cbrock.isadmin = isadmin;
     cbrock.auth_state = auth_state;
     cbrock.checkmboxlist = 0;	/* don't duplicate work */
+    cbrock.issubs = 0;
     cbrock.checkshared = 0;
     cbrock.proc = proc;
     cbrock.procrock = rock;
@@ -3146,6 +3153,7 @@ EXPORTED int mboxlist_findsub(struct namespace *namespace,
     cbrock.isadmin = 1;		/* user can always see their subs */
     cbrock.auth_state = auth_state;
     cbrock.checkmboxlist = !force;
+    cbrock.issubs = 1;
     cbrock.checkshared = 0;
     cbrock.proc = proc;
     cbrock.procrock = rock;
@@ -3325,6 +3333,7 @@ HIDDEN int mboxlist_findsub_alt(struct namespace *namespace,
     cbrock.isadmin = 1;		/* user can always see their subs */
     cbrock.auth_state = auth_state;
     cbrock.checkmboxlist = !force;
+    cbrock.issubs = 1;
     cbrock.checkshared = 0;
     cbrock.proc = proc;
     cbrock.procrock = rock;
