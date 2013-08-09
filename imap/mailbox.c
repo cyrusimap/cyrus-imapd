@@ -436,15 +436,16 @@ static int cache_parserecord(struct mappedfile *cachefile, size_t cache_offset,
 			     struct cacherecord *crec)
 {
     const struct buf *buf = mappedfile_buf(cachefile);
+    size_t buf_size = mappedfile_size(cachefile);
     const char *cacheitem, *next;
     size_t offset;
     int cache_ent;
 
     offset = cache_offset;
 
-    if (offset >= buf->len) {
+    if (offset >= buf_size) {
 	syslog(LOG_ERR, "IOERROR: offset greater than cache size %lu %lu",
-	       offset, buf->len);
+	       offset, buf_size);
 	return IMAP_IOERROR;
     }
 
@@ -462,10 +463,10 @@ static int cache_parserecord(struct mappedfile *cachefile, size_t cache_offset,
 	}
 
 	offset = next - buf->s;
-	if (offset > buf->len) {
+	if (offset > buf_size) {
 	    syslog(LOG_ERR, "IOERROR: offset greater than cache size "
 		   SIZE_T_FMT " " SIZE_T_FMT "(%d)",
-		   offset, buf->len, cache_ent);
+		   offset, buf_size, cache_ent);
 	    return IMAP_IOERROR;
 	}
     }
