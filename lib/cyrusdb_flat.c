@@ -475,7 +475,7 @@ static int getentry(struct dbengine *db, const char *p,
 static int foreach(struct dbengine *db,
 		   const char *prefix, size_t prefixlen,
 		   foreach_p *goodp,
-		   foreach_cb *cb, void *rock, 
+		   foreach_cb *cb, void *rock,
 		   struct txn **mytid)
 {
     int r = CYRUSDB_OK;
@@ -502,19 +502,20 @@ static int foreach(struct dbengine *db,
     r = starttxn_or_refetch(db, mytid);
     if (r) return r;
 
-    if(!mytid) {
+    if (!mytid) {
 	/* No transaction, use the fast method to avoid stomping on our
 	 * memory map if changes happen */
 	dbfd = dup(db->fd);
 	if(dbfd == -1) return CYRUSDB_IOERROR;
-	
+
 	map_refresh(dbfd, 1, &dbbase, &dblen, db->size, db->fname, 0);
 
 	/* drop our read lock on the file, since we don't really care
 	 * if it gets replaced out from under us, our mmap stays on the
 	 * old version */
 	lock_unlock(db->fd, db->fname);
-    } else {
+    }
+    else {
 	/* use the same variables as in the no transaction case, just to
 	 * get things set up */
 	dbbase = db->base;
@@ -524,15 +525,16 @@ static int foreach(struct dbengine *db,
     if (prefix) {
 	encode(prefix, prefixlen, &prefixbuf);
 	offset = bsearch_mem_mbox(prefixbuf.s, dbbase, db->size, 0, &len);
-    } else {
+    }
+    else {
 	offset = 0;
     }
-    
+
     p = dbbase + offset;
     pend = dbbase + db->size;
 
     while (p < pend) {
-	if(!dontmove) {
+	if (!dontmove) {
 	    GETENTRY(p)
 	}
 	else dontmove = 0;
@@ -543,7 +545,7 @@ static int foreach(struct dbengine *db,
 
 	if (!goodp || goodp(rock, keybuf.s, keybuf.len, DATA(db), DATALEN(db))) {
 	    unsigned long ino = db->ino;
- 	    unsigned long sz = db->size;
+	    unsigned long sz = db->size;
 
 	    if(mytid) {
 		/* transaction present, this means we do the slow way */
@@ -554,7 +556,7 @@ static int foreach(struct dbengine *db,
 	    r = cb(rock, keybuf.s, keybuf.len, DATA(db), DATALEN(db));
 	    if (r) break;
 
-	    if(mytid) {
+	    if (mytid) {
 		/* reposition? (we made a change) */
 		if (!(ino == db->ino && sz == db->size)) {
 		    /* something changed in the file; reseek */
@@ -562,27 +564,28 @@ static int foreach(struct dbengine *db,
 		    offset = bsearch_mem_mbox(savebuf.s, db->base, db->size,
 					      0, &len);
 		    p = db->base + offset;
-		    
+
 		    GETENTRY(p);
-		    
+
 		    /* 'key' might not equal 'savebuf'.  if it's different,
 		       we want to stay where we are.  if it's the same, we
 		       should move on to the next one */
 		    if (!buf_cmp(&savebuf, &keybuf)) {
 			p = dataend + 1;
-		    } else {
+		    }
+		    else {
 			/* 'savebuf' got deleted, so we're now pointing at the
 			   right thing */
 			dontmove = 1;
 		    }
-		}	
+		}
 	    }
 	}
 
 	p = dataend + 1;
     }
 
-    if(!mytid) {
+    if (!mytid) {
 	/* cleanup the fast method */
 	map_free(&dbbase, &dblen);
 	close(dbfd);
