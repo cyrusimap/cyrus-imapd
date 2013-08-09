@@ -87,6 +87,7 @@ struct mappedfile {
 
     /* obviously you will need 64 bit size_t for 64 bit files... */
     struct buf map_buf;
+    size_t map_size;
 
     /* the file itself */
     ino_t map_ino;
@@ -105,15 +106,16 @@ static void _ensure_mapped(struct mappedfile *mf, size_t offset)
     size_t len = 0;
 
     /* we may be rewriting inside a file, so don't shrink, only extend */
-    if (offset > mf->map_buf.len)
+    if (offset > mf->map_size)
 	mf->was_resized = 1;
     else
-	offset = mf->map_buf.len;
+	offset = mf->map_size;
 
     /* always give refresh another go, we may be map_nommap */
     map_refresh(mf->fd, 0, &base, &len, offset, mf->fname, 0);
 
-    buf_init_mmap(&mf->map_buf, base, offset);
+    buf_init_mmap(&mf->map_buf, base, len);
+    mf->map_size = offset;
 }
 
 /* NOTE - we don't provide any guarantees that the file isn't open multiple
@@ -428,8 +430,8 @@ EXPORTED int mappedfile_truncate(struct mappedfile *mf, off_t offset)
     mf->dirty++;
 
     /* make sure we don't think the future is valid any more */
-    if (offset < (off_t)mf->map_buf.len)
-	mf->map_buf.len = offset;
+    if (offset < (off_t)mf->map_size)
+	mf->map_size = offset;
 
     r = ftruncate(mf->fd, offset);
     if (r < 0) {
@@ -489,7 +491,7 @@ EXPORTED const char *mappedfile_base(const struct mappedfile *mf)
 
 EXPORTED size_t mappedfile_size(const struct mappedfile *mf)
 {
-    return mf->map_buf.len;
+    return mf->map_size;
 }
 
 EXPORTED const struct buf *mappedfile_buf(const struct mappedfile *mf)
