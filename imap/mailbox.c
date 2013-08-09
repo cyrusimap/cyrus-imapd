@@ -620,8 +620,6 @@ static int mailbox_append_cache(struct mailbox *mailbox,
 	return r;
     }
 
-    syslog(LOG_INFO, "WRITE CACHE %u %s %u", record->uid, mappedfile_fname(cachefile), record->cache_offset);
-
     return 0;
 }
 
@@ -659,8 +657,6 @@ EXPORTED int mailbox_cacherecord(struct mailbox *mailbox,
     crc = crc32_buf(cache_buf(record));
     if (crc != record->cache_crc)
 	r = IMAP_MAILBOX_CHECKSUM;
-
-    syslog(LOG_INFO, "READ CACHE %u %s %u", record->uid, mappedfile_fname(cachefile), record->cache_offset);
 
 done:
     if (r)
@@ -3812,14 +3808,10 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
 
 	/* got a new cache record to write */
 	if (differentcache) {
-	    off_t offset = record.cache_offset;
 	    record.cache_offset = 0;
 	    if (mailbox_append_cache(mailbox, &record))
 		continue;
-	    syslog(LOG_ERR, "rewrote cache %u (%d %d)", record.uid, (int)offset, (int)record.cache_offset);
 	}
-
-	syslog(LOG_INFO, "ARCHIVING %s %u (%s %s)", mailbox->name, record.uid, srcname, destname);
 
 	/* rewrite the index record */
 	record.silent = 1;
