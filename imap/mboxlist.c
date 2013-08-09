@@ -450,6 +450,7 @@ EXPORTED int mboxlist_lookup(const char *name, mbentry_t **entryptr,
     }
 
     if (entryptr) *entryptr = entry;
+    else mboxlist_entry_free(&entry);
 
     return 0;
 }
