@@ -202,6 +202,9 @@ EXPORTED char *mboxlist_entry_cstring(mbentry_t *mbentry)
     dlist_setdate(dl, "M", time(NULL));
 
     dlist_printbuf(dl, 0, &buf);
+
+    dlist_free(&dl);
+
     return buf_release(&buf);
 }
 
