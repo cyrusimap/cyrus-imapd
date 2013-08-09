@@ -63,7 +63,7 @@ EXPORTED void map_refresh(int fd, int onceonly, const char **base,
 		 const char *name, const char *mboxname)
 {
     struct stat sbuf;
-    char buf[80];
+    char buf[256];
 
     if (newlen == MAP_UNKNOWN_LEN) {
 	if (fstat(fd, &sbuf) == -1) {

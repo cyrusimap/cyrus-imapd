@@ -68,7 +68,7 @@ EXPORTED map_refresh(int fd, int onceonly, const char **base,
     (void)onceonly;
     struct stat sbuf;
     int flags;
-    char buf[80];
+    char buf[256];
 
     if (newlen == MAP_UNKNOWN_LEN) {
 	if (fstat(fd, &sbuf) == -1) {
