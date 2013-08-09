@@ -310,6 +310,9 @@ static int mboxlist_parse_entry(mbentry_t **mbentryptr,
     char *p, *q;
     mbentry_t *mbentry = mboxlist_entry_create();
 
+    if (!datalen)
+	goto done;
+
     /* copy name */
     mbentry->name = xstrdup(name);
 
