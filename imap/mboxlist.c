@@ -2002,7 +2002,7 @@ static int find_p(void *rockp,
     mbentry_t *mbentry = NULL;
 
     /* don't list mailboxes outside of the default domain */
-    if (!rock->domainlen && !rock->isadmin && memchr(key, '!', keylen)) return 0; 
+    if (!rock->domainlen && !rock->isadmin && memchr(key, '!', keylen)) return 0;
 
     minmatch = 0;
     if (rock->inboxoffset) {
