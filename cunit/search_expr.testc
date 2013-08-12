@@ -1138,7 +1138,7 @@ static void test_split_by_folder_and_index(void)
     /* a conjuctive node which doesn't match folders
      * gets a NULL mboxname */
     TESTCASE("(and (match message-id \"ETSY\") (le size 123))",
-	     "(and (match message-id \"ETSY\") (le size 123))\n");
+	     "(and (le size 123) (match message-id \"ETSY\"))\n");
     TESTCASE("(and (match message-id \"ETSY\") (not (le size 123)))",
 	     "(and (match message-id \"ETSY\") (not (le size 123)))\n");
     TESTCASE("(and (le size 123) (not (match message-id \"ETSY\")))",
@@ -1158,7 +1158,7 @@ static void test_split_by_folder_and_index(void)
     /* a disjunctive node which doesn't match folders
      * or indexable attrs is untouched */
     TESTCASE("(or (match message-id \"ETSY\") (le size 123))",
-	     "(or (match message-id \"ETSY\") (le size 123))\n");
+	     "(or (le size 123) (match message-id \"ETSY\"))\n");
     TESTCASE("(or (match message-id \"ETSY\") (not (le size 123)))",
 	     "(or (match message-id \"ETSY\") (not (le size 123)))\n");
     TESTCASE("(or (le size 123) (not (match message-id \"ETSY\")))",
