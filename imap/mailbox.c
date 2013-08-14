@@ -1752,12 +1752,6 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
 	sync_log_mailbox(mailbox->name);
 	statuscache_invalidate(mailbox->name, sdata);
 
-	if (config_auditlog)
-	    syslog(LOG_NOTICE, "auditlog: modseq sessionid=<%s> "
-		   "mailbox=<%s> uniqueid=<%s> highestmodseq=<" MODSEQ_FMT ">",
-		session_id(), mailbox->name, mailbox->uniqueid,
-		mailbox->i.highestmodseq);
-
 	mailbox->has_changed = 0;
     }
     else if (sdata) {
@@ -1987,6 +1981,12 @@ EXPORTED int mailbox_commit(struct mailbox *mailbox)
 	       mailbox->name);
 	return IMAP_IOERROR;
     }
+
+    if (config_auditlog && mailbox->modseq_dirty)
+	syslog(LOG_NOTICE, "auditlog: modseq sessionid=<%s> "
+	       "mailbox=<%s> uniqueid=<%s> highestmodseq=<" MODSEQ_FMT ">",
+	    session_id(), mailbox->name, mailbox->uniqueid,
+	    mailbox->i.highestmodseq);
 
     /* remove all dirty flags! */
     mailbox->i.dirty = 0;
