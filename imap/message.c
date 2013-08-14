@@ -3836,8 +3836,6 @@ static int message_map_file(message_t *m, const char *fname)
 {
     int fd;
     struct stat sbuf;
-    const char *base = NULL;
-    size_t len = 0;
 
     fd = open(fname, O_RDONLY, 0666);
     if (fd == -1) return errno;
@@ -3851,13 +3849,8 @@ static int message_map_file(message_t *m, const char *fname)
 	return EINVAL;
     }
     buf_free(&m->map);
-    map_refresh(fd, 1, &base, &len, sbuf.st_size, fname,
-		(m->mailbox ? m->mailbox->name : NULL));
-    if (!base || !len) {
-	close(fd);
-	return IMAP_IOERROR;
-    }
-    buf_init_mmap(&m->map, base, len);
+    buf_init_mmap(&m->map, /*onceonly*/1, fd, fname, sbuf.st_size,
+		  m->mailbox ? m->mailbox->name : NULL);
     close(fd);
 
     return 0;

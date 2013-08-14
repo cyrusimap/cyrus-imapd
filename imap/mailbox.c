@@ -798,10 +798,10 @@ EXPORTED int mailbox_map_record(struct mailbox *mailbox, struct index_record *re
 	syslog(LOG_ERR, "IOERROR: fstat on %s: %m", fname);
 	fatal("can't fstat message file", EC_OSFILE);
     }
-    map_refresh(msgfd, 1, &data, &len, sbuf.st_size, fname, mailbox->name);
+
+    buf_init_mmap(&buf, /*onceonly*/1, msgfd, fname, sbuf.st_size, mailbox->name);
     close(msgfd);
 
-    buf_init_mmap(buf, data, len);
     return 0;
 }
 
