@@ -3790,6 +3790,10 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
 	    if (mailbox_cacherecord(mailbox, &record))
 		continue;
 	    record.system_flags |= FLAG_ARCHIVED;
+	    if (config_auditlog)
+		syslog(LOG_NOTICE, "auditlog: archive sessionid=<%s> mailbox=<%s> uniqueid=<%s> uid=<%u> guid=<%s> cid=<%s>",
+		       session_id(), mailbox->name, mailbox->uniqueid, record.uid,
+		       message_guid_encode(&record.guid), conversation_id_encode(record.cid));
 	}
 	else {
 	    if (!(record.system_flags & FLAG_ARCHIVED))
@@ -3800,6 +3804,10 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
 	    if (mailbox_cacherecord(mailbox, &record))
 		continue;
 	    record.system_flags &= ~FLAG_ARCHIVED;
+	    if (config_auditlog)
+		syslog(LOG_NOTICE, "auditlog: unarchive sessionid=<%s> mailbox=<%s> uniqueid=<%s> uid=<%u> guid=<%s> cid=<%s>",
+		       session_id(), mailbox->name, mailbox->uniqueid, record.uid,
+		       message_guid_encode(&record.guid), conversation_id_encode(record.cid));
 	}
 
 	/* got a file to copy! */
