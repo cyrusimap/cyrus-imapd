@@ -782,6 +782,7 @@ EXPORTED int mailbox_map_message(struct mailbox *mailbox, unsigned long uid,
 	syslog(LOG_ERR, "IOERROR: fstat on %s: %m", fname);
 	fatal("can't fstat message file", EC_OSFILE);
     }
+
     *basep = 0;
     *lenp = 0;
     map_refresh(msgfd, 1, basep, lenp, sbuf.st_size, fname, mailbox->name);
@@ -792,12 +793,23 @@ EXPORTED int mailbox_map_message(struct mailbox *mailbox, unsigned long uid,
 
 EXPORTED int mailbox_map_record(struct mailbox *mailbox, struct index_record *record, struct buf *buf)
 {
-    const char *data;
-    size_t len;
-    int r = mailbox_map_message(mailbox, record->uid, &data, &len);
-    if (r) return r;
+    const char *fname;
+    struct stat sbuf;
+    int msgfd;
 
-    buf_init_mmap(buf, data, len);
+    fname = mailbox_message_fname(mailbox, record->uid);
+
+    msgfd = open(fname, O_RDONLY, 0666);
+    if (msgfd == -1) return errno;
+
+    if (fstat(msgfd, &sbuf) == -1) {
+	syslog(LOG_ERR, "IOERROR: fstat on %s: %m", fname);
+	fatal("can't fstat message file", EC_OSFILE);
+    }
+
+    buf_init_mmap(&buf, /*onceonly*/1, msgfd, fname, sbuf.st_size, mailbox->name);
+    close(msgfd);
+
     return 0;
 }
 
