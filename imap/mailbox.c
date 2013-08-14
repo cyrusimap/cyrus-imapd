@@ -3758,6 +3758,7 @@ static unsigned expungedeleted(struct mailbox *mailbox __attribute__((unused)),
 EXPORTED void mailbox_archive(struct mailbox *mailbox,
 			      mailbox_decideproc_t *decideproc, void *deciderock)
 {
+    int dirtycache = 0;
     uint32_t recno;
     struct index_record record;
     const char *srcname;
@@ -3809,6 +3810,7 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
 
 	/* got a new cache record to write */
 	if (differentcache) {
+	    dirtycache = 1;
 	    record.cache_offset = 0;
 	    if (mailbox_append_cache(mailbox, &record))
 		continue;
@@ -3822,6 +3824,12 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
 	/* finally clean up the original */
 	if (strcmp(srcname, destname))
 	    unlink(srcname);
+    }
+
+    /* if we have stale cache records, we'll need a repack */
+    if (dirtycache) {
+	mailbox_index_dirty(mailbox);
+	mailbox->i.options |= OPT_MAILBOX_NEEDS_REPACK;
     }
 }
 
