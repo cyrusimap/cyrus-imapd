@@ -3089,9 +3089,6 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
 	assert(record->system_flags & FLAG_EXPUNGED);
     }
 
-    if (oldrecord.system_flags & FLAG_ARCHIVED)
-	assert(record->system_flags & FLAG_ARCHIVED); /* no cutbacks */
-
     /* handle immediate expunges here... */
     if (immediate && (record->system_flags & FLAG_EXPUNGED))
 	record->system_flags |= FLAG_UNLINKED;
