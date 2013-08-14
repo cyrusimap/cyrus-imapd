@@ -1397,8 +1397,11 @@ EXPORTED char *mboxname_archivepath(const char *partition, const char *mboxname,
     if (!partition) return NULL;
 
     root = config_archivepartitiondir(partition);
+    if (!root) root = config_partitiondir(partition);
     if (!root) return NULL;
 
+    /* XXX - dedup with datapath above - but make sure to keep the results
+     * in separate buffers and/or audit the callers */
     if (!mboxname) {
 	xstrncpy(pathresult, root, MAX_MAILBOX_PATH);
 	return pathresult;
