@@ -1287,11 +1287,9 @@ static void test_mmap(void)
      * in case Valgrind is smart enough to detect that */
     retry_write(fd, DATA0, sizeof(DATA0));
 
-    map_refresh(fd, /*onceonly*/1, &base, &len, sizeof(DATA0), fname, NULL);
-
-    CU_ASSERT(is_valid_mapping(base, len));
-
-    buf_init_mmap(&b, base, len);
+    buf_init_mmap(&b, 1, fd, fname, MAP_UNKNOWN_LEN, NULL);
+    base = b.s;
+    len = b.len;
     CU_ASSERT_EQUAL(b.len, sizeof(DATA0));
     CU_ASSERT_EQUAL(b.alloc, 0);
     CU_ASSERT_EQUAL(buf_len(&b), b.len);
@@ -1326,7 +1324,9 @@ static void test_mmap_cow(void)
 
     CU_ASSERT(is_valid_mapping(base, len));
 
-    buf_init_mmap(&b, base, len);
+    buf_init_mmap(&b, 1, fd, fname, MAP_UNKNOWN_LEN, NULL);
+    base = b.s;
+    len = b.len;
     CU_ASSERT_EQUAL(b.len, sizeof(DATA0));
     CU_ASSERT_EQUAL(b.alloc, 0);
     CU_ASSERT_EQUAL(buf_len(&b), b.len);
