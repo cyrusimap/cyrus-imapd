@@ -3361,6 +3361,16 @@ static int message_need(message_t *m, unsigned int need)
 	return IMAP_NOTFOUND;
     }
 
+    if (is_missing(M_FILENAME)) {
+	const char *filename;
+	r = message_need(m, M_MAILBOX|M_RECORD);
+	if (r) return r;
+	filename = mailbox_record_fname(m->mailbox, &m->record);
+	if (!filename) return IMAP_NOTFOUND;
+	m->filename = xstrdup(filename);
+	found(M_FILENAME);
+    }
+
     if (is_missing(M_RECORD|M_UID)) {
 	r = message_need(m, M_MAILBOX);
 	if (r) return r;
@@ -3370,14 +3380,9 @@ static int message_need(message_t *m, unsigned int need)
     }
 
     if (is_missing(M_MAP)) {
-	const char *filename;
-	if (message_need(m, M_FILENAME) == 0)
-	    filename = m->filename;
-	else if (message_need(m, M_MAILBOX|M_UID) == 0)
-	    filename = mailbox_record_fname(m->mailbox, &m->record);
-	else
-	    return IMAP_NOTFOUND;
-	r = message_map_file(m, filename);
+	r = message_need(m, M_FILENAME);
+	if (r) return r;
+	r = message_map_file(m, m->filename);
 	if (r) return r;
 	found(M_MAP);
     }
