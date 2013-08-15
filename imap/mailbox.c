@@ -555,9 +555,12 @@ static struct mappedfile *cache_getfile(ptrarray_t *list, const char *fname,
 	return NULL;
     }
 
-    *((uint32_t *)buf) = htonl(generation);
-    mappedfile_pwrite(cachefile, buf, 4, 0);
-    mappedfile_commit(cachefile);
+    if (!readonly && !mappedfile_size(&cachefile)) {
+	/* zero byte file?  Set the generation */
+	*((uint32_t *)buf) = htonl(generation);
+	mappedfile_pwrite(cachefile, buf, 4, 0);
+	mappedfile_commit(cachefile);
+    }
 
     ptrarray_append(list, cachefile);
 
