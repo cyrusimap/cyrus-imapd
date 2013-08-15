@@ -3355,9 +3355,9 @@ static int message_need(message_t *m, unsigned int need)
     if (!is_missing(M_ALL))
 	return 0;	/* easy, we already have it */
 
-    if (is_missing(M_MAILBOX|M_FILENAME)) {
-	/* We can't get these for ourselves,
-	 * they need to be passed in by the caller */
+    if (is_missing(M_MAILBOX)) {
+	/* We can't get this for ourselves,
+	 * it needs to be passed in by the caller */
 	return IMAP_NOTFOUND;
     }
 
