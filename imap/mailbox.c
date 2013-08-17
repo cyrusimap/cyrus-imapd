@@ -555,7 +555,7 @@ static struct mappedfile *cache_getfile(ptrarray_t *list, const char *fname,
 	return NULL;
     }
 
-    if (!readonly && !mappedfile_size(&cachefile)) {
+    if (!readonly && !mappedfile_size(cachefile)) {
 	/* zero byte file?  Set the generation */
 	*((uint32_t *)buf) = htonl(generation);
 	mappedfile_pwrite(cachefile, buf, 4, 0);
