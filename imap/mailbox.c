@@ -3555,6 +3555,7 @@ static int mailbox_repack_commit(struct mailbox_repack **repackptr)
     for (i = 0; i < repack->caches.count; i++) {
 	struct mappedfile *cachefile = ptrarray_nth(&repack->caches, i);
 	char *fname = xstrdup(mappedfile_fname(cachefile));
+	mappedfile_commit(cachefile);  /* gotta commit to clear the dirty flag.  Alternative would be an unlink function */
 	mappedfile_unlock(cachefile);
 	mappedfile_close(&cachefile);
 	unlink(fname);
