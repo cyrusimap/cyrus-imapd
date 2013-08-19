@@ -794,14 +794,6 @@ static int meth_get(struct transaction_t *txn, void *params)
 
     /* Local Mailbox */
 
-    if (!*gparams->davdb.db) {
-	syslog(LOG_ERR, "DAV database for user '%s' is not opened.  "
-	       "Check 'configdirectory' permissions or "
-	       "'proxyservers' option on backend server.", proxy_userid);
-	txn->error.desc = "DAV database is not opened";
-	return HTTP_SERVER_ERROR;
-    }
-
     /* Open mailbox for reading */
     if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_SHARED))) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
