@@ -734,10 +734,8 @@ static int caldav_delete_sched(struct transaction_t *txn,
 }
 
 
-/* Perform a GET/HEAD request on a CalDAV resource */
-static int meth_get(struct transaction_t *txn, void *params)
+static int dump_calendar(struct transaction_t *txn, struct meth_params *gparams)
 {
-    struct meth_params *gparams = (struct meth_params *) params;
     int ret = 0, r, precond, rights;
     struct resp_body_t *resp_body = &txn->resp_body;
     struct buf *buf = &resp_body->payload;
@@ -748,16 +746,6 @@ static int meth_get(struct transaction_t *txn, void *params)
     struct index_record record;
     struct hash_table tzid_table;
     struct annotation_data attrib;
-
-    /* Parse the path */
-    if ((r = gparams->parse_path(txn->req_uri->path,
-				 &txn->req_tgt, &txn->error.desc))) return r;
-
-    /* GET an individual resource */
-    if (txn->req_tgt.resource) return meth_get_dav(txn, params);
-
-    /* We don't handle GET on a home-set */
-    if (!txn->req_tgt.collection) return HTTP_NO_CONTENT;
 
     /* Locate the mailbox */
     if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
@@ -920,6 +908,26 @@ static int meth_get(struct transaction_t *txn, void *params)
     if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
     return ret;
+}
+
+/* Perform a GET/HEAD request on a CalDAV resource */
+static int meth_get(struct transaction_t *txn, void *params)
+{
+    struct meth_params *gparams = (struct meth_params *) params;
+    int r;
+
+    /* Parse the path */
+    if ((r = gparams->parse_path(txn->req_uri->path,
+				 &txn->req_tgt, &txn->error.desc))) return r;
+
+    /* GET an individual resource */
+    else if (txn->req_tgt.resource) return meth_get_dav(txn, gparams);
+
+    /* Get an entire calendar collection */ 
+    else if (txn->req_tgt.collection) return dump_calendar(txn, params);
+
+    /* We don't handle GET on a home-set */
+    else return HTTP_NO_CONTENT;
 }
 
 
