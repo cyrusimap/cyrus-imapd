@@ -747,6 +747,7 @@ static int meth_get(struct transaction_t *txn, void *params)
     uint32_t recno;
     struct index_record record;
     struct hash_table tzid_table;
+    struct annotation_data attrib;
 
     /* Parse the path */
     if ((r = gparams->parse_path(txn->req_uri->path,
@@ -827,6 +828,20 @@ static int meth_get(struct transaction_t *txn, void *params)
     /* Setup for chunked response */
     txn->flags.te |= TE_CHUNKED;
     txn->resp_body.type = gparams->content_type;
+
+    /* Set filename of resource */
+    assert(!buf_len(&txn->buf));
+    buf_reset(&txn->buf);
+    buf_printf(&txn->buf, ANNOT_NS "<DAV:>displayname");
+
+    memset(&attrib, 0, sizeof(struct annotation_data));
+    r = annotatemore_lookup(mailbox->name, buf_cstring(&txn->buf),
+			    /* shared */ "", &attrib);
+    if (r || !attrib.value) attrib.value = strrchr(mailbox->name, '.') + 1;
+
+    buf_reset(&txn->buf);
+    buf_printf(&txn->buf, "%s.ics", attrib.value);
+    txn->resp_body.fname = buf_cstring(&txn->buf);
 
     /* Short-circuit for HEAD request */
     if (txn->meth == METH_HEAD) {
