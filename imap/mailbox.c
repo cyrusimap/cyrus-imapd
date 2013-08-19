@@ -602,13 +602,21 @@ static int mailbox_append_cache(struct mailbox *mailbox,
 
     assert(mailbox_index_islocked(mailbox, 1));
 
-    /* no cache content */
-    if (!record->crec.len)
-	abort();
-
     /* already been written */
     if (record->cache_offset)
 	return 0;
+
+    /* no cache content */
+    if (!record->crec.len) {
+	/* make one! */
+	const char *fname = mailbox_record_fname(mailbox, record);
+	syslog(LOG_ERR, "IOERROR: no cache for %s %u, parsing and saving",
+	       mailbox->name, record->uid);
+	r = message_parse(fname, record);
+	if (r) return r;
+	mailbox_index_dirty(mailbox);
+	mailbox->i.options |= OPT_MAILBOX_NEEDS_REPACK;
+    }
 
     cachefile = mailbox_cachefile(mailbox, record);
     if (!cachefile) {
@@ -631,28 +639,20 @@ EXPORTED int mailbox_cacherecord(struct mailbox *mailbox,
 				 struct index_record *record)
 {
     struct mappedfile *cachefile;
-    uint32_t crc;
     int r = 0;
 
     /* do we already have a record loaded? */
     if (record->crec.len)
 	return 0;
 
-    if (!record->cache_offset) {
-	/* parse directly into the cache for this record */
-	const char *fname = mailbox_record_fname(mailbox, record);
-	syslog(LOG_ERR, "IOERROR: no cache for %s %u, re-parsing",
-	       mailbox->name, record->uid);
-	/* XXX - force add? */
-	return message_parse(fname, record);
-    }
-
+    /* make sure there's a file to read from */
     cachefile = mailbox_cachefile(mailbox, record);
-    if (!cachefile) {
-	syslog(LOG_ERR, "Failed to open cache to %s for %u",
-		mailbox->name, record->uid);
-	return IMAP_IOERROR;
-    }
+    if (!cachefile)
+	goto err;
+
+    /* do we have an offset? */
+    if (!record->cache_offset)
+	goto err;
 
     /* try to parse the cache record */
     r = cache_parserecord(cachefile, record->cache_offset, &record->crec);
@@ -667,12 +667,54 @@ EXPORTED int mailbox_cacherecord(struct mailbox *mailbox,
     if (crc != record->cache_crc)
 	r = IMAP_MAILBOX_CHECKSUM;
 
-done:
-    if (r)
-	syslog(LOG_ERR, "IOERROR: invalid cache record for %s uid %u (%s) %s %u",
-	       mailbox->name, record->uid, error_message(r), mappedfile_fname(cachefile), record->system_flags);
+    if (r) goto err;
+    return 0;
 
-    return r;
+err:
+    if (!cachefile)
+	syslog(LOG_ERR, "IOERROR: missing cache file for %s uid %u",
+	       mailbox->name, record->uid);
+    else if (!record->cache_offset)
+	syslog(LOG_ERR, "IOERROR: missing cache offset for %s uid %u",
+	       mailbox->name, record->uid);
+    else if (r)
+	syslog(LOG_ERR, "IOERROR: invalid cache record for %s uid %u (%s)",
+	       mailbox->name, record->uid, error_message(r));
+
+    /* parse the file again */
+    {
+	/* parse directly into the cache for this record */
+	const char *fname = mailbox_record_fname(mailbox, record);
+	if (!fname) {
+	    syslog(LOG_ERR, "IOERROR: no spool file for %s uid %u",
+		   mailbox->name, record->uid);
+	    return IMAP_IOERROR;
+	}
+
+	r = message_parse(fname, record);
+	if (r) {
+	    syslog(LOG_ERR, "IOERROR: failed to parse message for %s uid %u",
+		   mailbox->name, record->uid);
+	    return r;
+	}
+
+	/* if we can add it, do that now */
+	if (cachefile && mailbox_index_islocked(mailbox, 1)) {
+	    r = cache_append_record(cachefile, record);
+	    if (r) {
+		syslog(LOG_ERR, "IOERROR: failed to append cache to %s for %u",
+		       mailbox->name, record->uid);
+		/* but ignore, we have a valid read at least */
+	    }
+	    else {
+		/* mark for repack */
+		mailbox_index_dirty(mailbox);
+		mailbox->i.options |= OPT_MAILBOX_NEEDS_REPACK;
+	    }
+	}
+    }
+
+    return 0;
 }
 
 int cache_append_record(int fd, struct index_record *record)
