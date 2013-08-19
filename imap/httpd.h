@@ -242,6 +242,7 @@ struct range {
 struct resp_body_t {
     ulong len; 		/* Content-Length   */
     struct range *range;/* Content-Range    */
+    const char *fname;	/* Content-Dispo    */
     unsigned char enc;	/* Content-Encoding */
     const char *lang;	/* Content-Language */
     const char *loc;	/* Content-Location */
