@@ -701,6 +701,7 @@ err:
 	/* if we can add it, do that now */
 	if (cachefile && mailbox_index_islocked(mailbox, 1)) {
 	    r = cache_append_record(cachefile, record);
+	    if (!r) r = mailbox_rewrite_index_record(mailbox, record);
 	    if (r) {
 		syslog(LOG_ERR, "IOERROR: failed to append cache to %s for %u",
 		       mailbox->name, record->uid);
