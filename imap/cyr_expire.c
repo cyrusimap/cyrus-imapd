@@ -572,6 +572,7 @@ int main(int argc, char *argv[])
     if (!expire_seconds &&
 	delete_seconds == -1 &&
 	expunge_seconds == -1 &&
+	archive_seconds == -1 &&
 	!erock.do_userflags)
 	usage();
 
