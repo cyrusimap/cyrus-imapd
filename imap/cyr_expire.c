@@ -72,6 +72,7 @@
 /* global state */
 static volatile sig_atomic_t sigquit = 0;
 static int verbose = 0;
+static int keep_flagged = 1;
 
 /* current namespace */
 static struct namespace expire_namespace;
@@ -227,7 +228,7 @@ static unsigned archive_cb(struct mailbox *mailbox __attribute__((unused)),
 	return 1;
 
     /* don't archive flagged messages - XXX, optional? */
-    if (record->system_flags & FLAG_FLAGGED)
+    if (keep_flagged && (record->system_flags & FLAG_FLAGGED))
 	return 0;
 
     /* archive all other old messages */
@@ -507,7 +508,7 @@ int main(int argc, char *argv[])
     memset(&crock, 0, sizeof(crock));
     construct_hash_table(&crock.seen, 100, 1);
 
-    while ((opt = getopt(argc, argv, "C:D:E:X:A:p:u:vaxtc")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:D:E:X:A:p:u:vaxtcF")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -531,6 +532,10 @@ int main(int argc, char *argv[])
 	case 'X':
 	    if (expunge_seconds >= 0) usage();
 	    if (!parse_duration(optarg, &expunge_seconds)) usage();
+	    break;
+
+	case 'F':
+	    keep_flagged = 0;
 	    break;
 
 	case 'p':
