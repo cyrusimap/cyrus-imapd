@@ -472,6 +472,36 @@ int http_mlookup(const char *name, char **server, char **aclp, void *tid)
 }
 
 
+/* Fetch protocol and host used for request from headers */
+void http_proto_host(hdrcache_t req_hdrs, const char **proto, const char **host)
+{
+    const char **fwd;
+
+    if (config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS) &&
+	(fwd = spool_getheader(req_hdrs, "Forwarded"))) {
+	/* Proxied request - parse last Forwarded header for proto and host */
+	/* XXX  This is destructive of the header but we don't care
+	 * and more importantly, we need the tokens available after tok_fini()
+	 */
+	tok_t tok;
+	char *token;
+
+	while (fwd[1]) ++fwd;  /* Skip to last Forwarded header */
+
+	tok_initm(&tok, (char *) fwd[0], ";", 0);
+	while ((token = tok_next(&tok))) {
+	    if (proto && !strncmp(token, "proto=", 6)) *proto = token+6;
+	    else if (host && !strncmp(token, "host=", 5)) *host = token+5;
+	}
+	tok_fini(&tok);
+    }
+    else {
+	/* Use our protocol and host */
+	if (proto) *proto = https ? "https" : "http";
+	if (host) *host = *spool_getheader(req_hdrs, "Host");
+    }
+}
+
 /* Construct and write Via header to protstream. */
 static void write_forwarding_hdrs(struct protstream *pout, hdrcache_t hdrs,
 				  const char *version, const char *proto)

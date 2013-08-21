@@ -740,7 +740,7 @@ static void rfc3339date_gen(char *buf, size_t len, time_t t)
 /* List messages as an RSS feed */
 static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 {
-    const char **fwd, *proto = NULL, *host = NULL;
+    const char *proto = NULL, *host = NULL;
     uint32_t url_len, recno, recentuid = 0;
     int max_age, max_items, max_len, nitems, precond;
     time_t age_mark = 0, lastmod;
@@ -830,29 +830,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     mboxname_hiersep_toexternal(&httpd_namespace, mboxname, 0);
 
     /* Construct base URL */
-    if (config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS) &&
-	(fwd = spool_getheader(txn->req_hdrs, "Forwarded"))) {
-	/* Proxied request - parse last Forwarded header for proto and host */
-	/* XXX  This is destructive of the header but we don't care
-	 * and more importantly, we need the tokens available after tok_fini()
-	 */
-	tok_t tok;
-	char *token;
-
-	while (fwd[1]) ++fwd;  /* Skip to last Forwarded header */
-
-	tok_initm(&tok, (char *) fwd[0], ";", 0);
-	while ((token = tok_next(&tok))) {
-	    if (!strncmp(token, "proto=", 6)) proto = token+6;
-	    else if (!strncmp(token, "host=", 5)) host = token+5;
-	}
-	tok_fini(&tok);
-    }
-    else {
-	/* Use our protocol and host */
-	proto = https ? "https" : "http";
-	host = *spool_getheader(txn->req_hdrs, "Host");
-    }
+    http_proto_host(txn->req_hdrs, &proto, &host);
     assert(!buf_len(url));
     buf_printf(url, "%s://%s%s", proto, host, txn->req_uri->path);
     url_len = buf_len(url);

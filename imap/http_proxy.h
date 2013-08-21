@@ -51,6 +51,8 @@ extern struct protocol_t http_protocol;
 
 extern int http_mlookup(const char *name,
 			char **server, char **aclp, void *tid);
+extern void http_proto_host(hdrcache_t req_hdrs,
+			    const char **proto, const char **host);
 extern int http_pipe_req_resp(struct backend *be, struct transaction_t *txn);
 extern int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 			   struct transaction_t *txn);
