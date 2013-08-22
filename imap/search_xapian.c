@@ -1797,7 +1797,11 @@ static int mbox_vector(const char *mboxname, struct mbfilter *filter)
     int r;
 
     r = mailbox_open_irl(mboxname, &mailbox);
-    if (r) goto done;
+    if (r) {
+	/* XXX - this is just a workaround for bugs in mboxlist_allusermbox */
+	if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
+	goto done;
+    }
 
     buf_printf(&key, "%s.%u", mboxname, mailbox->i.uidvalidity);
 
