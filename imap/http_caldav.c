@@ -85,6 +85,7 @@
 #include "smtpclient.h"
 #include "spool.h"
 #include "stristr.h"
+#include "tok.h"
 #include "util.h"
 #include "version.h"
 #include "xmalloc.h"
@@ -109,6 +110,7 @@ struct calquery_filter {
 };
 
 static struct caldav_db *auth_caldavdb = NULL;
+static time_t compile_time;
 
 static void my_caldav_init(struct buf *serverinfo);
 static void my_caldav_auth(const char *userid);
@@ -231,6 +233,8 @@ static void my_caldav_init(struct buf *serverinfo)
 	/* Need to set this to parse CalDAV Scheduling parameters */
 	ical_set_unknown_token_handling_setting(ICAL_ASSUME_IANA_TOKEN);
     }
+
+    compile_time = calc_compile_time(__TIME__, __DATE__);
 }
 
 
@@ -420,7 +424,11 @@ static int caldav_parse_path(const char *path,
 	tgt->userlen = len;
 
 	p += len;
-	if (!*p || !*++p) goto done;
+	if (!*p || !*++p) {
+	    /* Make sure calendar-home-set is terminated with '/' */
+	    if (p[-1] != '/') *p++ = '/';
+	    goto done;
+	}
 
 	len = strcspn(p, "/");
     }
@@ -736,52 +744,17 @@ static int caldav_delete_sched(struct transaction_t *txn,
 
 static int dump_calendar(struct transaction_t *txn, struct meth_params *gparams)
 {
-    int ret = 0, r, precond, rights;
+    int ret = 0, r, precond;
     struct resp_body_t *resp_body = &txn->resp_body;
     struct buf *buf = &resp_body->payload;
-    char *server, *acl;
     struct mailbox *mailbox = NULL;
     static char etag[33];
     uint32_t recno;
     struct index_record record;
     struct hash_table tzid_table;
+    static const char *displayname_annot =
+	ANNOT_NS "<" XML_NS_DAV ">displayname";
     struct annotation_data attrib;
-
-    /* Locate the mailbox */
-    if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
-	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-
-	switch (r) {
-	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	default: return HTTP_SERVER_ERROR;
-	}
-    }
-
-    /* Check ACL for current user */
-    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
-    if ((rights & DACL_READ) != DACL_READ) {
-	/* DAV:need-privileges */
-	txn->error.precond = DAV_NEED_PRIVS;
-	txn->error.resource = txn->req_tgt.path;
-	txn->error.rights = DACL_READ;
-	return HTTP_FORBIDDEN;
-    }
-
-    if (server) {
-	/* Remote mailbox */
-	struct backend *be;
-
-	be = proxy_findserver(server, &http_protocol, proxy_userid,
-			      &backend_cached, NULL, NULL, httpd_in);
-	if (!be) return HTTP_UNAVAILABLE;
-
-	return http_pipe_req_resp(be, txn);
-    }
-
-    /* Local Mailbox */
 
     /* Open mailbox for reading */
     if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_SHARED))) {
@@ -818,12 +791,8 @@ static int dump_calendar(struct transaction_t *txn, struct meth_params *gparams)
     txn->resp_body.type = gparams->content_type;
 
     /* Set filename of resource */
-    assert(!buf_len(&txn->buf));
-    buf_reset(&txn->buf);
-    buf_printf(&txn->buf, ANNOT_NS "<DAV:>displayname");
-
     memset(&attrib, 0, sizeof(struct annotation_data));
-    r = annotatemore_lookup(mailbox->name, buf_cstring(&txn->buf),
+    r = annotatemore_lookup(mailbox->name, displayname_annot,
 			    /* shared */ "", &attrib);
     if (r || !attrib.value) attrib.value = strrchr(mailbox->name, '.') + 1;
 
@@ -910,24 +879,213 @@ static int dump_calendar(struct transaction_t *txn, struct meth_params *gparams)
     return ret;
 }
 
+
+/*
+ * mboxlist_findall() callback function to list calendars
+ */
+static int list_cb(char *name,
+		   int matchlen __attribute__((unused)),
+		   int maycreate __attribute__((unused)),
+		   void *rock)
+{
+    struct transaction_t *txn = (struct transaction_t *) rock;
+    struct buf *body = &txn->resp_body.payload;
+    struct buf *url = &txn->buf;
+    static size_t inboxlen = 0;
+    static size_t outboxlen = 0;
+    char *acl, *shortname;
+    size_t len;
+    int r;
+    static const char *displayname_annot =
+	ANNOT_NS "<" XML_NS_DAV ">displayname";
+    struct annotation_data displayname;
+
+    if (!inboxlen) inboxlen = strlen(SCHED_INBOX) - 1;
+    if (!outboxlen) outboxlen = strlen(SCHED_OUTBOX) - 1;
+
+    shortname = strrchr(name, '.') + 1;
+    len = strlen(shortname);
+
+    /* Don't list scheduling Inbox/Outbox */
+    if ((len == inboxlen && !strncmp(shortname, SCHED_INBOX, inboxlen)) ||
+	(len == outboxlen && !strncmp(shortname, SCHED_OUTBOX, outboxlen)))
+	return 0;
+
+    /* Don't list deleted mailboxes */
+    if (mboxname_isdeletedmailbox(name)) return 0;
+
+    /* Lookup the mailbox and make sure its readable */
+    http_mlookup(name, NULL, &acl, NULL);
+    if (!acl || !(cyrus_acl_myrights(httpd_authstate, acl) & ACL_READ))
+	return 0;
+
+    /* Send a body chunk once in a while */
+    if (buf_len(body) > PROT_BUFSIZE) {
+	write_body(0, txn, buf_cstring(body), buf_len(body));
+	buf_reset(body);
+    }
+
+    /* Lookup DAV:displayname */
+    memset(&displayname, 0, sizeof(struct annotation_data));
+    r = annotatemore_lookup(name, displayname_annot,
+			    /* shared */ "", &displayname);
+    if (r || !displayname.value) displayname.value = shortname;
+
+    /* Add available calendar with link */
+    len = buf_len(url);
+    buf_printf_markup(body, 3, "<li><a href=\"%s%s\">%s</a></li>",
+		      buf_cstring(url), shortname, displayname.value);
+    buf_truncate(url, len);
+
+    return 0;
+}
+
+
+/* Create a HTML document listing all calendars available to the user */
+static int list_calendars(struct transaction_t *txn,
+			  struct meth_params *gparams)
+{
+    int ret = 0, precond;
+    time_t lastmod = compile_time;
+    char mboxlist[MAX_MAILBOX_PATH+1];
+    struct stat sbuf;
+    static char etag[63];
+    unsigned level = 0;
+    struct buf *body = &txn->resp_body.payload;
+    const char *host = NULL;
+
+    /* stat() mailboxes.db for Last-Modified and ETag */
+    snprintf(mboxlist, MAX_MAILBOX_PATH, "%s%s", config_dir, FNAME_MBOXLIST);
+    stat(mboxlist, &sbuf);
+    lastmod = MAX(compile_time, sbuf.st_mtime);
+    sprintf(etag, "%ld-%ld-%ld", compile_time, sbuf.st_mtime, sbuf.st_size);
+
+    /* Check any preconditions */
+    precond = gparams->check_precond(txn, NULL, etag, lastmod);
+
+    switch (precond) {
+    case HTTP_OK:
+    case HTTP_NOT_MODIFIED:
+	/* Fill in ETag, Last-Modified, and Expires */
+	txn->resp_body.etag = etag;
+	txn->resp_body.lastmod = lastmod;
+	txn->resp_body.maxage = 86400;  /* 24 hrs */
+	txn->flags.cc |= CC_MAXAGE;
+
+	if (precond != HTTP_NOT_MODIFIED) break;
+
+    default:
+	/* We failed a precondition - don't perform the request */
+	ret = precond;
+	goto done;
+    }
+
+    /* Setup for chunked response */
+    txn->flags.te |= TE_CHUNKED;
+    txn->resp_body.type = "text/html; charset=utf-8";
+
+    /* Short-circuit for HEAD request */
+    if (txn->meth == METH_HEAD) {
+	response_header(HTTP_OK, txn);
+	goto done;
+    }
+
+    /* Send HTML header */
+    buf_reset(body);
+    buf_printf_markup(body, level, HTML_DOCTYPE);
+    buf_printf_markup(body, level++, "<html>");
+    buf_printf_markup(body, level++, "<head>");
+    buf_printf_markup(body, level, "<title>%s</title>", "Available Calendars");
+    buf_printf_markup(body, --level, "</head>");
+    buf_printf_markup(body, level++, "<body>");
+    buf_printf_markup(body, level, "<h2>%s</h2>", "Available Calendars");
+    buf_printf_markup(body, level++, "<ul>");
+    write_body(HTTP_OK, txn, buf_cstring(body), buf_len(body));
+    buf_reset(body);
+
+    /* Create base URL for calendars */
+    http_proto_host(txn->req_hdrs, NULL, &host);
+    assert(!buf_len(&txn->buf));
+    buf_printf(&txn->buf, "webcal://%s%s", host, txn->req_tgt.path);
+
+    /* Generate list of calendars */
+    strlcat(txn->req_tgt.mboxname, ".%", sizeof(txn->req_tgt.mboxname));
+
+    mboxlist_findall(NULL, txn->req_tgt.mboxname, 1, httpd_userid,
+		     httpd_authstate, list_cb, txn);
+
+    if (buf_len(body)) write_body(0, txn, buf_cstring(body), buf_len(body));
+
+    /* Finish HTML */
+    buf_reset(body);
+    buf_printf_markup(body, --level, "</ul>");
+    buf_printf_markup(body, --level, "</body>");
+    buf_printf_markup(body, --level, "</html>");
+    write_body(0, txn, buf_cstring(body), buf_len(body));
+
+    /* End of output */
+    write_body(0, txn, NULL, 0);
+
+  done:
+    return ret;
+}
+
+
 /* Perform a GET/HEAD request on a CalDAV resource */
 static int meth_get(struct transaction_t *txn, void *params)
 {
     struct meth_params *gparams = (struct meth_params *) params;
-    int r;
+    int r, rights;
+    char *server, *acl;
 
     /* Parse the path */
     if ((r = gparams->parse_path(txn->req_uri->path,
 				 &txn->req_tgt, &txn->error.desc))) return r;
 
     /* GET an individual resource */
-    else if (txn->req_tgt.resource) return meth_get_dav(txn, gparams);
+    if (txn->req_tgt.resource) return meth_get_dav(txn, gparams);
+
+    /* Locate the mailbox */
+    if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
+	syslog(LOG_ERR, "mlookup(%s) failed: %s",
+	       txn->req_tgt.mboxname, error_message(r));
+	txn->error.desc = error_message(r);
+
+	switch (r) {
+	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	default: return HTTP_SERVER_ERROR;
+	}
+    }
+
+    /* Check ACL for current user */
+    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
+    if ((rights & DACL_READ) != DACL_READ) {
+	/* DAV:need-privileges */
+	txn->error.precond = DAV_NEED_PRIVS;
+	txn->error.resource = txn->req_tgt.path;
+	txn->error.rights = DACL_READ;
+	return HTTP_FORBIDDEN;
+    }
+
+    if (server) {
+	/* Remote mailbox */
+	struct backend *be;
+
+	be = proxy_findserver(server, &http_protocol, proxy_userid,
+			      &backend_cached, NULL, NULL, httpd_in);
+	if (!be) return HTTP_UNAVAILABLE;
+
+	return http_pipe_req_resp(be, txn);
+    }
+
+    /* Local Mailbox */
 
     /* Get an entire calendar collection */ 
-    else if (txn->req_tgt.collection) return dump_calendar(txn, params);
+    if (txn->req_tgt.collection) return dump_calendar(txn, gparams);
 
-    /* We don't handle GET on a home-set */
-    else return HTTP_NO_CONTENT;
+    /* GET a list of calendars under calendar-home-set */
+    else return list_calendars(txn, gparams);
 }
 
 
