@@ -73,6 +73,7 @@
 static volatile sig_atomic_t sigquit = 0;
 static int verbose = 0;
 static int keep_flagged = 1;
+static int max_archive_size = 0;
 
 /* current namespace */
 static struct namespace expire_namespace;
@@ -225,6 +226,10 @@ static unsigned archive_cb(struct mailbox *mailbox __attribute__((unused)),
 
     /* never pull messages back from the archives */
     if (record->system_flags & FLAG_ARCHIVED)
+	return 1;
+
+    /* always archive big messages */
+    if (max_archive_size && max_archive_size <= record->size)
 	return 1;
 
     /* don't archive flagged messages - XXX, optional? */
@@ -508,7 +513,7 @@ int main(int argc, char *argv[])
     memset(&crock, 0, sizeof(crock));
     construct_hash_table(&crock.seen, 100, 1);
 
-    while ((opt = getopt(argc, argv, "C:D:E:X:A:p:u:vaxtcF")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:D:E:X:A:p:u:vaxtcFS:")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -537,6 +542,9 @@ int main(int argc, char *argv[])
 	case 'F':
 	    keep_flagged = 0;
 	    break;
+
+	case 'S':
+	    max_archive_size = atoi(optarg); /* bytes, yo */
 
 	case 'p':
 	    find_prefix = optarg;
