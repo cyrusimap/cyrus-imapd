@@ -73,7 +73,7 @@
 static volatile sig_atomic_t sigquit = 0;
 static int verbose = 0;
 static int keep_flagged = 1;
-static int max_archive_size = 0;
+static size_t max_archive_size = 0;
 
 /* current namespace */
 static struct namespace expire_namespace;
