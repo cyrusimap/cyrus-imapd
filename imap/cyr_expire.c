@@ -545,6 +545,7 @@ int main(int argc, char *argv[])
 
 	case 'S':
 	    max_archive_size = atoi(optarg); /* bytes, yo */
+	    break;
 
 	case 'p':
 	    find_prefix = optarg;
