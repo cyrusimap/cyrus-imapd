@@ -768,13 +768,14 @@ static int dump_calendar(struct transaction_t *txn, struct meth_params *gparams)
     /* Check any preconditions */
     sprintf(etag, "%u-%u-%u",
 	    mailbox->i.uidvalidity, mailbox->i.last_uid, mailbox->i.exists);
-    precond = gparams->check_precond(txn, NULL, etag, 0);
+    precond = gparams->check_precond(txn, NULL, etag, mailbox->index_mtime);
 
     switch (precond) {
     case HTTP_OK:
     case HTTP_NOT_MODIFIED:
-	/* Fill in ETag, Expires, and Cache-Control */
+	/* Fill in ETag, Last-Modified, Expires, and Cache-Control */
 	txn->resp_body.etag = etag;
+	txn->resp_body.lastmod = mailbox->index_mtime;
 	txn->resp_body.maxage = 3600;  /* 1 hr */
 	txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;  /* don't use stale data */
 
