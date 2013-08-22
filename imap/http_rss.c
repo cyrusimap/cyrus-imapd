@@ -131,28 +131,6 @@ struct namespace_t namespace_rss = {
     }
 };
 
-/* Calculate compile time of this file for use as ETag for capabilities */
-static void calc_compile_time()
-{
-    struct tm tm;
-    char month[4];
-    const char *monthname[] = {
-	"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-	"Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-    };
-
-    memset(&tm, 0, sizeof(struct tm));
-    tm.tm_isdst = -1;
-    sscanf(__TIME__, "%02d:%02d:%02d", &tm.tm_hour, &tm.tm_min, &tm.tm_sec);
-    sscanf(__DATE__, "%s %2d %4d", month, &tm.tm_mday, &tm.tm_year);
-    tm.tm_year -= 1900;
-    for (tm.tm_mon = 0; tm.tm_mon < 12; tm.tm_mon++) {
-	if (!strcmp(month, monthname[tm.tm_mon])) break;
-    }
-
-    compile_time = mktime(&tm);
-}
-
 
 static void rss_init(struct buf *serverinfo __attribute__((unused)))
 {
@@ -160,7 +138,7 @@ static void rss_init(struct buf *serverinfo __attribute__((unused)))
 
     if (!namespace_rss.enabled) return;
 
-    calc_compile_time();
+    compile_time = calc_compile_time(__TIME__, __DATE__);
 }
 
 /* Perform a GET/HEAD request */
