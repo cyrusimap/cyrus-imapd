@@ -3623,6 +3623,7 @@ static int mailbox_repack_commit(struct mailbox_repack **repackptr)
 HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
 >>>>>>> archive partition support
 {
+    strarray_t cachefiles = STRARRAY_INITIALIZER;
     indexbuffer_t ibuf;
     unsigned char *buf = ibuf.buf;
     struct mailbox_repack *repack = *repackptr;
@@ -3681,7 +3682,11 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
     r = mailbox_meta_rename(repack->mailbox, META_INDEX);
     if (r) goto fail;
 
-    /* NOTE: cache files need commiting before index is renamed */
+    /* which cache files might currently exist? */
+    strarray_add(&cachefiles, mailbox_meta_fname(repack->mailbox, META_CACHE));
+    strarray_add(&cachefiles, mailbox_meta_fname(repack->mailbox, META_ARCHIVECACHE));
+
+    /* now the cache files can be renamed */
     for (i = 0; i < repack->caches.count; i++) {
 	struct mappedfile *cachefile = ptrarray_nth(&repack->caches, i);
 	char *newname = xstrdup(mappedfile_fname(cachefile));
@@ -3690,14 +3695,24 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
 	newname[len] = '\0'; /* STRIP .NEW */
 	mappedfile_rename(cachefile, newname);
 	mappedfile_close(&cachefile);
+	strarray_remove_all(&cachefiles, newname);
+	free(newname);
     }
     ptrarray_fini(&repack->caches);
 
+    for (i = 0; i < cachefiles.count; i++) {
+	const char *fname = strarray_nth(&cachefiles, i);
+	syslog(LOG_NOTICE, "Removing unused cache file %s", fname);
+	unlink(fname);
+    }
+
+    strarray_fini(&cachefiles);
     free(repack);
     *repackptr = NULL;
     return 0;
 
  fail:
+    strarray_fini(&cachefiles);
     mailbox_repack_abort(repackptr);
     return r;
 }
