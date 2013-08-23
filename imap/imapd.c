@@ -425,6 +425,7 @@ static void cmd_enable(char* tag);
 
 static void cmd_xkillmy(const char *tag, const char *cmdname);
 static void cmd_xforever(const char *tag);
+static void cmd_xmeid(const char *tag, const char *id);
 
 static int parsecreateargs(struct dlist **extargs);
 
@@ -2272,6 +2273,14 @@ static void cmdloop(void)
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 		cmd_xforever(tag.s);
+	    }
+	    else if (!strcmp(cmd.s, "Xmeid")) {
+		if (c != ' ') goto missingargs;
+		c = getastring(imapd_in, imapd_out, &arg1);
+		if (c == EOF) goto missingargs;
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
+		cmd_xmeid(tag.s, arg1.s);
 	    }
 
 	    else goto badcmd;
@@ -12956,9 +12965,6 @@ static void cmd_enable(char *tag)
 		error_message(IMAP_OK_COMPLETED));
 }
 
-/*
- * Perform a GETQUOTAROOT command
- */
 static void cmd_xkillmy(const char *tag, const char *cmdname)
 {
     char *cmd = xstrdup(cmdname);
@@ -12992,4 +12998,12 @@ static void cmd_xforever(const char *tag)
     }
 
     prot_printf(imapd_out, "%s OK %s\r\n", tag, error_message(r));
+}
+
+static void cmd_xmeid(const char *tag, const char *id)
+{
+    mboxevent_set_client_id(id);
+
+    prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		error_message(IMAP_OK_COMPLETED));
 }
