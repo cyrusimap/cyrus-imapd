@@ -218,7 +218,7 @@ static unsigned userflag_cb(struct mailbox *mailbox __attribute__((unused)),
     return 0;	/* always keep the message */
 }
 
-static unsigned archive_cb(struct mailbox *mailbox __attribute__((unused)),
+static unsigned archive_cb(struct mailbox *mailbox,
 			   struct index_record *record,
 			   void *rock)
 {
@@ -230,6 +230,10 @@ static unsigned archive_cb(struct mailbox *mailbox __attribute__((unused)),
 
     /* always archive big messages */
     if (max_archive_size && max_archive_size <= record->size)
+	return 1;
+
+    /* archive everything in DELETED mailboxes */
+    if (mboxname_isdeletedmailbox(mailbox->name, NULL))
 	return 1;
 
     /* don't archive flagged messages - XXX, optional? */
