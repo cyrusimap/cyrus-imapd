@@ -775,6 +775,15 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 	}
     } while (code < 200);
 
+    if (!sent_body) {
+	r = read_body(httpd_in, txn->req_hdrs, NULL,
+		      &txn->flags.body, &txn->error.desc);
+	if (r) {
+	    /* Couldn't get the body and can't service another request */
+	    txn->flags.conn = CONN_CLOSE;
+	}
+    }
+
     if (!r) {
 	/* Send response to client */
 	send_response(httpd_out, statline, resp_hdrs, resp_body, &txn->flags);
