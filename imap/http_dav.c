@@ -891,11 +891,13 @@ static int propfind_getlastmod(const xmlChar *name, xmlNsPtr ns,
 			       struct propstat propstat[],
 			       void *rock __attribute__((unused)))
 {
-    if (!fctx->record) return HTTP_NOT_FOUND;
+    if (!fctx->mailbox ||
+	(fctx->req_tgt->resource && !fctx->record)) return HTTP_NOT_FOUND;
 
     buf_ensure(&fctx->buf, 30);
     httpdate_gen(fctx->buf.s, fctx->buf.alloc,
-		 fctx->record->internaldate);
+		 fctx->record ? fctx->record->internaldate :
+		 fctx->mailbox->index_mtime);
 
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 		 name, ns, BAD_CAST fctx->buf.s, 0);
@@ -2291,7 +2293,7 @@ static const struct prop_entry {
     { "getetag", NS_DAV, PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
       propfind_getetag, NULL, NULL },
     { "getlastmodified", NS_DAV,
-      PROP_ALLPROP | /*PROP_COLLECTION |*/ PROP_RESOURCE,
+      PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
       propfind_getlastmod, NULL, NULL },
     { "lockdiscovery", NS_DAV, PROP_ALLPROP | PROP_RESOURCE,
       propfind_lockdisc, NULL, NULL },
