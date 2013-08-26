@@ -709,7 +709,7 @@ static void send_response(struct protstream *pout,
  */
 int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 {
-    int r = 0, sent_body = 0;
+    int r = 0;
     xmlChar *uri;
     unsigned code, close;
     const char *statline;
@@ -752,7 +752,7 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 			       &resp_hdrs, resp_body, &txn->error.desc);
 	if (r) break;
 
-	if ((code == 100) /* Continue */  && !sent_body++) {
+	if ((code == 100) /* Continue */  && !(txn->flags.body & BODY_DONE)) {
 	    unsigned len;
 
 	    /* Read body from client */
@@ -775,11 +775,12 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 	}
     } while (code < 200);
 
-    if (!sent_body) {
+    if (!(txn->flags.body & BODY_DONE)) {
+	/* Read and discard any unread body from client */
 	r = read_body(httpd_in, txn->req_hdrs, NULL,
 		      &txn->flags.body, &txn->error.desc);
 	if (r) {
-	    /* Couldn't get the body and can't service another request */
+	    /* Couldn't get the body and can't service another client request */
 	    txn->flags.conn = CONN_CLOSE;
 	}
     }
