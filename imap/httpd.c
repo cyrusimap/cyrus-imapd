@@ -1088,8 +1088,8 @@ static void cmdloop(void)
 
 	if (txn.meth == METH_UNKNOWN) ret = HTTP_NOT_IMPLEMENTED;
 
-	/* Check for Expectations (HTTP/1.1+ only) */
-	else if (!txn.flags.ver1_0 && (r = parse_expect(&txn))) ret = r;
+	/* Check for Expectations */
+	else if ((r = parse_expect(&txn))) ret = r;
 
 	/* Parse request-target URI */
 	else if (!(txn.req_uri = parse_uri(txn.meth, req_line->uri, 1,
@@ -1706,6 +1706,9 @@ static int parse_expect(struct transaction_t *txn)
 {
     const char **exp = spool_getheader(txn->req_hdrs, "Expect");
     int i, ret = 0;
+
+    /* Expect not supported by HTTP/1.0 clients */
+    if (exp && txn->flags.ver1_0) return HTTP_EXPECT_FAILED;
 
     /* Look for interesting expectations.  Unknown == error */
     for (i = 0; !ret && exp && exp[i]; i++) {
