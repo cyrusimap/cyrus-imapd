@@ -2721,15 +2721,14 @@ int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
     *root = NULL;
 
     /* Read body */
-    txn->flags.body |= BODY_DECODE;
-    r = read_body(httpd_in, txn->req_hdrs, &txn->req_body,
-		  &txn->flags.body, &txn->error.desc);
+    txn->req_body.flags |= BODY_DECODE;
+    r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, &txn->error.desc);
     if (r) {
 	txn->flags.conn = CONN_CLOSE;
 	return r;
     }
 
-    if (!buf_len(&txn->req_body)) return 0;
+    if (!buf_len(&txn->req_body.payload)) return 0;
 
     /* Check Content-Type */
     if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
@@ -2742,8 +2741,8 @@ int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
     /* Parse the XML request */
     ctxt = xmlNewParserCtxt();
     if (ctxt) {
-	doc = xmlCtxtReadMemory(ctxt, buf_cstring(&txn->req_body),
-				buf_len(&txn->req_body), NULL, NULL,
+	doc = xmlCtxtReadMemory(ctxt, buf_cstring(&txn->req_body.payload),
+				buf_len(&txn->req_body.payload), NULL, NULL,
 				XML_PARSE_NOWARNING);
 	xmlFreeParserCtxt(ctxt);
     }
@@ -4875,16 +4874,15 @@ int meth_put(struct transaction_t *txn, void *params)
     }
 
     /* Read body */
-    txn->flags.body |= BODY_DECODE;
-    ret = read_body(httpd_in, txn->req_hdrs, &txn->req_body,
-		    &txn->flags.body, &txn->error.desc);
+    txn->req_body.flags |= BODY_DECODE;
+    ret = read_body(httpd_in, txn->req_hdrs, &txn->req_body, &txn->error.desc);
     if (ret) {
 	txn->flags.conn = CONN_CLOSE;
 	goto done;
     }
 
     /* Make sure we have a body */
-    size = buf_len(&txn->req_body);
+    size = buf_len(&txn->req_body.payload);
     if (!size) {
 	txn->error.desc = "Missing request body\r\n";
 	ret = HTTP_BAD_REQUEST;
@@ -4892,7 +4890,8 @@ int meth_put(struct transaction_t *txn, void *params)
     }
 
     /* Check if we can append a new message to mailbox */
-    if ((r = append_check(txn->req_tgt.mboxname, httpd_authstate, ACL_INSERT, size))) {
+    if ((r = append_check(txn->req_tgt.mboxname,
+			  httpd_authstate, ACL_INSERT, size))) {
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;

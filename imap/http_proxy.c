@@ -190,7 +190,8 @@ static int login(struct backend *s, const char *userid,
 	unsigned code;
 	const char **hdr, *errstr, *serverin;
 	char base64[BASE64_BUF_SIZE+1];
-	unsigned int serverinlen, non_persist;
+	unsigned int serverinlen;
+	struct body_t resp_body;
 #ifdef SASL_HTTP_REQUEST
 	sasl_http_request_t httpreq = { "OPTIONS",	/* Method */
 					"*",		/* URI */
@@ -233,8 +234,9 @@ static int login(struct backend *s, const char *userid,
 
 	/* Read response(s) from backend until final response or error */
 	do {
-	    r = http_read_response(s, METH_OPTIONS, 0, &code, &non_persist,
-				   NULL, &hdrs, NULL, &errstr);
+	    resp_body.flags = BODY_DISCARD;
+	    r = http_read_response(s, METH_OPTIONS, &code, NULL,
+				   &hdrs, &resp_body, &errstr);
 	    if (r) {
 		if (status) *status = errstr;
 		break;
@@ -303,7 +305,7 @@ static int login(struct backend *s, const char *userid,
 			for (scheme = auth_schemes; scheme->name; scheme++) {
 			    if (!strncmp(scheme->name, hdr[i], len) &&
 				!((scheme->flags & AUTH_NEED_PERSIST) &&
-				  non_persist)) {
+				  (resp_body.flags & BODY_CLOSE))) {
 				/* Tag the scheme as available */
 				avail_auth_schemes |= (1 << scheme->idx);
 
@@ -338,7 +340,7 @@ static int login(struct backend *s, const char *userid,
 
 #ifdef SASL_HTTP_REQUEST
 		    /* Set HTTP request as specified above (REQUIRED) */
-		    httpreq.non_persist = non_persist;
+		    httpreq.non_persist = (resp_body.flags & BODY_CLOSE);
 		    sasl_setprop(s->saslconn, SASL_HTTP_REQUEST, &httpreq);
 #endif
 
@@ -574,9 +576,9 @@ static void write_cachehdr(const char *name, const char *contents, void *rock)
 
 
 /* Read a response from backend */
-int http_read_response(struct backend *be, unsigned meth, unsigned decode,
-		       unsigned *code, unsigned *close, const char **statline,
-		       hdrcache_t *hdrs, struct buf *body, const char **errstr)
+int http_read_response(struct backend *be, unsigned meth, unsigned *code,
+		       const char **statline, hdrcache_t *hdrs,
+		       struct body_t *body, const char **errstr)
 {
     static char statbuf[2048];
     const char **conn;
@@ -584,7 +586,6 @@ int http_read_response(struct backend *be, unsigned meth, unsigned decode,
 
     if (statline) *statline = statbuf;
     *errstr = NULL;
-    *close = 0;
     *code = HTTP_BAD_GATEWAY;
 
     if (*hdrs) spool_free_hdrcache(*hdrs);
@@ -604,18 +605,18 @@ int http_read_response(struct backend *be, unsigned meth, unsigned decode,
     if (*code < 200) return 0;
 
     /* Final response */
-    if (body) buf_reset(body);
+    if (!(body->flags & BODY_DISCARD)) buf_reset(&body->payload);
 
     /* Check connection persistence */
-    *close = !strncmp(statbuf, "HTTP/1.0 ", 9);
+    if (!strncmp(statbuf, "HTTP/1.0 ", 9)) body->flags |= BODY_CLOSE;
     for (conn = spool_getheader(*hdrs, "Connection"); conn && *conn; conn++) {
 	tok_t tok =
 	    TOK_INITIALIZER(*conn, ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
 	char *token;
 
 	while ((token = tok_next(&tok))) {
-	    if (!strcasecmp(token, "keep-alive")) *close = 0;
-	    else if (!strcasecmp(token, "close")) *close = 1;
+	    if (!strcasecmp(token, "keep-alive")) body->flags &= ~BODY_CLOSE;
+	    else if (!strcasecmp(token, "close")) body->flags |= BODY_CLOSE;
 	}
 	tok_fini(&tok);
     }
@@ -630,12 +631,10 @@ int http_read_response(struct backend *be, unsigned meth, unsigned decode,
 	if (meth == METH_HEAD) break;
 
 	else {
-	    unsigned char flags = BODY_RESPONSE;
+	    body->flags |= BODY_RESPONSE;
+	    body->framing = FRAMING_UNKNOWN;
 
-	    if (decode) flags |= BODY_DECODE;
-	    if (*close) flags |= BODY_CLOSE;
-
-	    if (read_body(be->in, *hdrs, body, &flags, errstr)) {
+	    if (read_body(be->in, *hdrs, body, errstr)) {
 		return HTTP_BAD_GATEWAY;
 	    }
 	}
@@ -711,10 +710,10 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 {
     int r = 0;
     xmlChar *uri;
-    unsigned code, close;
+    unsigned code;
     const char *statline;
     hdrcache_t resp_hdrs = NULL;
-    struct buf *resp_body = &txn->resp_body.payload;
+    struct body_t resp_body;
 
     /*
      * Send client request to backend:
@@ -747,17 +746,20 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     prot_flush(be->out);
 
     /* Read response(s) from backend until final response or error */
+    resp_body.flags = 0;
+    resp_body.payload = txn->resp_body.payload;
+
     do {
-	r = http_read_response(be, txn->meth, 0, &code, &close, &statline,
-			       &resp_hdrs, resp_body, &txn->error.desc);
+	r = http_read_response(be, txn->meth, &code, &statline,
+			       &resp_hdrs, &resp_body, &txn->error.desc);
 	if (r) break;
 
-	if ((code == 100) /* Continue */  && !(txn->flags.body & BODY_DONE)) {
+	if ((code == 100) /* Continue */  && !(resp_body.flags & BODY_DONE)) {
 	    unsigned len;
 
 	    /* Read body from client */
 	    r = read_body(httpd_in, txn->req_hdrs, &txn->req_body,
-			  &txn->flags.body, &txn->error.desc);
+			  &txn->error.desc);
 	    if (r) {
 		/* Couldn't get the body and can't finish request */
 		txn->flags.conn = CONN_CLOSE;
@@ -765,9 +767,9 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 	    }
 
 	    /* Send single-chunk body to backend to complete the request */
-	    if ((len = buf_len(&txn->req_body))) {
+	    if ((len = buf_len(&txn->req_body.payload))) {
 		prot_printf(be->out, "%x\r\n", len);
-		prot_putbuf(be->out, &txn->req_body);
+		prot_putbuf(be->out, &txn->req_body.payload);
 		prot_puts(be->out, "\r\n");
 	    }
 	    prot_puts(be->out, "0\r\n\r\n");
@@ -775,22 +777,15 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 	}
     } while (code < 200);
 
-    if (!(txn->flags.body & BODY_DONE)) {
-	/* Read and discard any unread body from client */
-	r = read_body(httpd_in, txn->req_hdrs, NULL,
-		      &txn->flags.body, &txn->error.desc);
-	if (r) {
-	    /* Couldn't get the body and can't service another client request */
-	    txn->flags.conn = CONN_CLOSE;
-	}
-    }
+    txn->resp_body.payload = resp_body.payload;
 
     if (!r) {
 	/* Send response to client */
-	send_response(httpd_out, statline, resp_hdrs, resp_body, &txn->flags);
+	send_response(httpd_out, statline, resp_hdrs,
+		      &resp_body.payload, &txn->flags);
     }
 
-    if (r || close) proxy_downserver(be);
+    if (r || (resp_body.flags & BODY_CLOSE)) proxy_downserver(be);
 
     if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
 
@@ -810,11 +805,11 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 		    struct transaction_t *txn)
 {
     int r = 0;
-    unsigned code, close;
+    unsigned code;
     char *etag = NULL, *lastmod = NULL;;
     const char **hdr, *statline;
     hdrcache_t resp_hdrs = NULL;
-    struct buf *resp_body = &txn->resp_body.payload;
+    struct body_t resp_body;
 
     /*
      * Send a GET request to source backend to fetch body:
@@ -835,10 +830,13 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
     prot_flush(src_be->out);
 
     /* Read response(s) from source backend until final response or error */
+    resp_body.flags = 0;
+    resp_body.payload = txn->resp_body.payload;
+
     do {
-	r = http_read_response(src_be, METH_GET, 0, &code, &close, &statline,
-			       &resp_hdrs, resp_body, &txn->error.desc);
-	if (r || close) {
+	r = http_read_response(src_be, METH_GET, &code, &statline,
+			       &resp_hdrs, &resp_body, &txn->error.desc);
+	if (r || (resp_body.flags & BODY_CLOSE)) {
 	    proxy_downserver(src_be);
 	    break;
 	}
@@ -884,31 +882,36 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 	    prot_printf(dest_be->out, "Content-Encoding: %s\r\n", hdr[0]);
 	if ((hdr = spool_getheader(resp_hdrs, "Content-Language")))
 	    prot_printf(dest_be->out, "Content-Language: %s\r\n", hdr[0]);
-	prot_printf(dest_be->out, "Content-Length: %u\r\n", buf_len(resp_body));
+	prot_printf(dest_be->out, "Content-Length: %u\r\n",
+		    buf_len(&resp_body.payload));
 	prot_puts(dest_be->out, "\r\n");
 	prot_flush(dest_be->out);
 
 	/* Read response(s) from dest backend until final response or error */
+	resp_body.flags = 0;
+
 	do {
-	    r = http_read_response(dest_be, METH_PUT, 0,
-				   &code, &close, &statline,
-				   &resp_hdrs, resp_body, &txn->error.desc);
-	    if (r || close) {
+	    r = http_read_response(dest_be, METH_PUT, &code, &statline,
+				   &resp_hdrs, &resp_body, &txn->error.desc);
+	    if (r || (resp_body.flags & BODY_CLOSE)) {
 		proxy_downserver(dest_be);
 		break;
 	    }
 
 	    if ((code == 100) /* Continue */  && !sent_body++) {
 		/* Send body to dest backend to complete the PUT */
-		prot_putbuf(dest_be->out, resp_body);
+		prot_putbuf(dest_be->out, &resp_body.payload);
 		prot_flush(dest_be->out);
 	    }
 	} while (code < 200);
     }
 
+    txn->resp_body.payload = resp_body.payload;
+
     if (!r) {
 	/* Send response to client */
-	send_response(httpd_out, statline, resp_hdrs, resp_body, &txn->flags);
+	send_response(httpd_out, statline, resp_hdrs,
+		      &resp_body.payload, &txn->flags);
 
 	if ((txn->meth == METH_MOVE) && (code < 300)) {
 	    /*
@@ -933,11 +936,12 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 	    prot_flush(src_be->out);
 
 	    /* Read response(s) from source backend until final resp or error */
+	    resp_body.flags = BODY_DISCARD;
+
 	    do {
-		if (http_read_response(src_be, METH_DELETE, 0,
-				       &code, &close, NULL,
-				       &resp_hdrs, NULL, &txn->error.desc)
-		    || close) {
+		if (http_read_response(src_be, METH_DELETE, &code, NULL,
+				       &resp_hdrs, &resp_body, &txn->error.desc)
+		    || (resp_body.flags & BODY_CLOSE)) {
 		    proxy_downserver(src_be);
 		    break;
 		}

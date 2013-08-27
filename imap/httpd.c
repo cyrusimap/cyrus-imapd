@@ -207,6 +207,8 @@ static void parse_connection(struct transaction_t *txn);
 static struct accept *parse_accept(const char **hdr);
 static int parse_ranges(const char *hdr, unsigned long len,
 			struct range **ranges);
+static int parse_framing(hdrcache_t hdrs, struct body_t *body,
+			 const char **errstr);
 static int http_auth(const char *creds, struct transaction_t *txn);
 static void keep_alive(int sig);
 
@@ -935,6 +937,7 @@ static void cmdloop(void)
 	txn.req_uri = NULL;
 	txn.auth_chal.param = NULL;
 	txn.req_hdrs = NULL;
+	txn.req_body.flags = 0;
 	txn.location = NULL;
 	memset(&txn.error, 0, sizeof(struct error_t));
 	memset(&txn.resp_body, 0,  /* Don't zero the response payload buffer */
@@ -1088,9 +1091,6 @@ static void cmdloop(void)
 
 	if (txn.meth == METH_UNKNOWN) ret = HTTP_NOT_IMPLEMENTED;
 
-	/* Check for Expectations */
-	else if ((r = parse_expect(&txn))) ret = r;
-
 	/* Parse request-target URI */
 	else if (!(txn.req_uri = parse_uri(txn.meth, req_line->uri, 1,
 					   &txn.error.desc))) {
@@ -1121,6 +1121,15 @@ static void cmdloop(void)
 		ret = HTTP_BAD_REQUEST;
 		txn.error.desc = "Missing Host header";
 	    }
+	}
+
+	/* Check for Expectations */
+	else if ((r = parse_expect(&txn))) ret = r;
+
+	/* Check message framing */
+	else if ((r = parse_framing(txn.req_hdrs, &txn.req_body,
+				    &txn.error.desc))) {
+	    ret = r;
 	}
 
 	if (ret) goto done;
@@ -1165,13 +1174,13 @@ static void cmdloop(void)
 	    meth_t = &namespace->methods[txn.meth];
 	    if (!meth_t->proc) ret = HTTP_NOT_ALLOWED;
 
-	    /* Check if method doesn't expect a body */
+	    /* Check if method expects a body */
 	    else if ((http_methods[txn.meth].flags & METH_NOBODY) &&
-		     (spool_getheader(txn.req_hdrs, "Transfer-Encoding") ||
+		     (txn.req_body.framing != FRAMING_LENGTH ||
 		      /* XXX  Will break if client sends just a last-chunk */
-		      ((hdr = spool_getheader(txn.req_hdrs, "Content-Length"))
-		       && strtoul(hdr[0], NULL, 10))))
+		      txn.req_body.len)) {
 		ret = HTTP_BAD_MEDIATYPE;
+	    }
 	} else {
 	    /* XXX  Should never get here */
 	    ret = HTTP_SERVER_ERROR;
@@ -1352,13 +1361,22 @@ static void cmdloop(void)
 	/* Handle errors (success responses handled by method functions) */
 	if (ret) error_response(ret, &txn);
 
+	/* Read and discard any unread request body */
+	if (!(txn.flags.conn & CONN_CLOSE)) {
+	    txn.req_body.flags |= BODY_DISCARD;
+	    if (read_body(httpd_in, txn.req_hdrs, &txn.req_body,
+			  &txn.error.desc)) {
+		txn.flags.conn = CONN_CLOSE;
+	    }
+	}
+
 	/* Memory cleanup */
 	if (txn.req_uri) xmlFreeURI(txn.req_uri);
 	if (txn.req_hdrs) spool_free_hdrcache(txn.req_hdrs);
 
 	if (txn.flags.conn & CONN_CLOSE) {
 	    buf_free(&txn.buf);
-	    buf_free(&txn.req_body);
+	    buf_free(&txn.req_body.payload);
 	    buf_free(&txn.resp_body.payload);
 #ifdef HAVE_ZLIB
 	    deflateEnd(&txn.zstrm);
@@ -1460,35 +1478,27 @@ time_t calc_compile_time(const char *time, const char *date)
 
 
 /*
- * Read the body of a request or response.
+ * Parse the framing of a request or response message.
  * Handles chunked, gzip, deflate TE only.
  * Handles close-delimited response bodies (no Content-Length specified) 
- * Handles gzip and deflate CE only.
  */
-int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
-	      unsigned char *flags, const char **errstr)
+static int parse_framing(hdrcache_t hdrs, struct body_t *body,
+			 const char **errstr)
 {
+    static unsigned max_msgsize = 0;
     const char **hdr;
-    unsigned long len = 0;
-    enum { LEN_DELIM_LENGTH, LEN_DELIM_CHUNKED, LEN_DELIM_CLOSE };
-    unsigned len_delim = LEN_DELIM_LENGTH, te = TE_NONE, max_msgsize, n;
-    char buf[PROT_BUFSIZE];
 
-    syslog(LOG_DEBUG, "read_body(%#x%s)", *flags, !body ? ", discard" : "");
+    if (!max_msgsize) {
+	max_msgsize = config_getint(IMAPOPT_MAXMESSAGESIZE);
 
-    if (*flags & BODY_DONE) return 0;
-    *flags |= BODY_DONE;
-
-    if (body) buf_reset(body);
-    else if (*flags & BODY_CONTINUE) {
-	/* Don't care about the body and client hasn't sent it, we're done */
-	return 0;
+	/* If max_msgsize is 0, allow any size */
+	if (!max_msgsize) max_msgsize = INT_MAX;
     }
 
-    max_msgsize = config_getint(IMAPOPT_MAXMESSAGESIZE);
-
-    /* If max_msgsize is 0, allow any size */
-    if (!max_msgsize) max_msgsize = INT_MAX;
+    body->framing = FRAMING_LENGTH;
+    body->te = TE_NONE;
+    body->len = 0;
+    body->max = max_msgsize;
 
     /* Check for Transfer-Encoding */
     if ((hdr = spool_getheader(hdrs, "Transfer-Encoding"))) {
@@ -1497,26 +1507,26 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 	    char *token;
 
 	    while ((token = tok_next(&tok))) {
-		if (te & TE_CHUNKED) {
+		if (body->te & TE_CHUNKED) {
 		    /* "chunked" MUST only appear once and MUST be last */
 		    break;
 		}
 		else if (!strcasecmp(token, "chunked")) {
-		    te |= TE_CHUNKED;
-		    len_delim = LEN_DELIM_CHUNKED;
+		    body->te |= TE_CHUNKED;
+		    body->framing = FRAMING_CHUNKED;
 		}
-		else if (te & ~TE_CHUNKED) {
+		else if (body->te & ~TE_CHUNKED) {
 		    /* can't combine compression codings */
 		    break;
 		}
 #ifdef HAVE_ZLIB
 		else if (!strcasecmp(token, "deflate"))
-		    te = TE_DEFLATE;
+		    body->te = TE_DEFLATE;
 		else if (!strcasecmp(token, "gzip") ||
 			 !strcasecmp(token, "x-gzip"))
-		    te = TE_GZIP;
+		    body->te = TE_GZIP;
 #endif
-		else if (body) {
+		else if (!(body->flags & BODY_DISCARD)) {
 		    /* unknown/unsupported TE */
 		    break;
 		}
@@ -1531,9 +1541,9 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 	}
 
 	/* Check if this is a non-chunked response */
-	else if (!(te & TE_CHUNKED)) {
-	    if ((*flags & BODY_RESPONSE) && (*flags & BODY_CLOSE)) {
-		len_delim = LEN_DELIM_CLOSE;
+	else if (!(body->te & TE_CHUNKED)) {
+	    if ((body->flags & BODY_RESPONSE) && (body->flags & BODY_CLOSE)) {
+		body->framing = FRAMING_CLOSE;
 	    }
 	    else {
 		*errstr = "Final Transfer-Encoding MUST be \"chunked\"";
@@ -1549,26 +1559,78 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 	    return HTTP_BAD_REQUEST;
 	}
 
-	len = strtoul(hdr[0], NULL, 10);
-	if (len > max_msgsize) return HTTP_TOO_LARGE;
+	body->len = strtoul(hdr[0], NULL, 10);
+	if (body->len > max_msgsize) return HTTP_TOO_LARGE;
 
-	len_delim = LEN_DELIM_LENGTH;
+	body->framing = FRAMING_LENGTH;
     }
 	
     /* Check if this is a close-delimited response */
-    else if (*flags & BODY_RESPONSE) {
-	if (*flags & BODY_CLOSE) len_delim = LEN_DELIM_CLOSE;
+    else if (body->flags & BODY_RESPONSE) {
+	if (body->flags & BODY_CLOSE) body->framing = FRAMING_CLOSE;
 	else return HTTP_LENGTH_REQUIRED;
     }
 
+    return 0;
+}
 
-    if (*flags & BODY_CONTINUE) {
+
+/*
+ * Read the body of a request or response.
+ * Handles chunked, gzip, deflate TE only.
+ * Handles close-delimited response bodies (no Content-Length specified) 
+ * Handles gzip and deflate CE only.
+ */
+int read_body(struct protstream *pin, hdrcache_t hdrs, struct body_t *body,
+	      const char **errstr)
+{
+    char buf[PROT_BUFSIZE];
+    unsigned n;
+    int r = 0;
+
+    syslog(LOG_DEBUG, "read_body(%#x)", body->flags);
+
+    if (body->flags & BODY_DONE) return 0;
+    body->flags |= BODY_DONE;
+
+    if (!(body->flags & BODY_DISCARD)) buf_reset(&body->payload);
+    else if (body->flags & BODY_CONTINUE) {
+	/* Don't care about the body and client hasn't sent it, we're done */
+	return 0;
+    }
+
+    if (body->framing == FRAMING_UNKNOWN) {
+	/* Get message framing */
+	r = parse_framing(hdrs, body, errstr);
+	if (r) return r;
+    }
+
+    if (body->flags & BODY_CONTINUE) {
 	/* Tell client to send the body */
 	response_header(HTTP_CONTINUE, NULL);
     }
 
     /* Read and buffer the body */
-    if (len_delim == LEN_DELIM_CHUNKED) {
+    switch (body->framing) {
+    case FRAMING_LENGTH:
+	/* Read 'len' octets */
+	for (; body->len; body->len -= n) {
+	    if (body->flags & BODY_DISCARD)
+		n = prot_read(pin, buf, MIN(body->len, PROT_BUFSIZE));
+	    else
+		n = prot_readbuf(pin, &body->payload, body->len);
+
+	    if (!n) {
+		syslog(LOG_ERR, "prot_read() error");
+		*errstr = "Unable to read body data";
+		goto read_failure;
+	    }
+	}
+
+	break;
+
+    case FRAMING_CHUNKED:
+    {
 	unsigned last = 0;
 
 	/* Read chunks until last-chunk (zero chunk-size) */
@@ -1581,7 +1643,7 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 		*errstr = "Unable to read chunk size";
 		goto read_failure;
 	    }
-	    if ((len += chunk) > max_msgsize) return HTTP_TOO_LARGE;
+	    else if (chunk > body->max - body->len) return HTTP_TOO_LARGE;
 
 	    if (!chunk) {
 		/* last-chunk */
@@ -1593,14 +1655,17 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 	    
 	    /* Read 'chunk' octets */ 
 	    for (; chunk; chunk -= n) {
-		if (body) n = prot_readbuf(pin, body, chunk);
-		else n = prot_read(pin, buf, MIN(chunk, PROT_BUFSIZE));
+		if (body->flags & BODY_DISCARD)
+		    n = prot_read(pin, buf, MIN(chunk, PROT_BUFSIZE));
+		else
+		    n = prot_readbuf(pin, &body->payload, chunk);
 		
 		if (!n) {
 		    syslog(LOG_ERR, "prot_read() error");
 		    *errstr = "Unable to read chunk data";
 		    goto read_failure;
 		}
+		body->len += n;
 	    }
 
 	    /* Read CRLF terminating the chunk/trailer */
@@ -1611,44 +1676,42 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 
 	} while (!last);
 
-	te &= ~TE_CHUNKED;
+	body->te &= ~TE_CHUNKED;
+
+	break;
     }
-    else if (len_delim == LEN_DELIM_CLOSE) {
+
+    case FRAMING_CLOSE:
 	/* Read until EOF */
 	do {
-	    if (body) n = prot_readbuf(pin, body, PROT_BUFSIZE);
-	    else n = prot_read(pin, buf, PROT_BUFSIZE);
+	    if (body->flags & BODY_DISCARD)
+		n = prot_read(pin, buf, PROT_BUFSIZE);
+	    else
+		n = prot_readbuf(pin, &body->payload, PROT_BUFSIZE);
 
-	    if ((len += n) > max_msgsize) return HTTP_TOO_LARGE;
+	    if (n > body->max - body->len) return HTTP_TOO_LARGE;
+	    body->len += n;
 
 	} while (n);
 
 	if (!pin->eof) goto read_failure;
-    }
-    else if (len) {
-	/* Read 'len' octets */
-	for (; len; len -= n) {
-	    if (body) n = prot_readbuf(pin, body, len);
-	    else n = prot_read(pin, buf, MIN(len, PROT_BUFSIZE));
 
-	    if (!n) {
-		syslog(LOG_ERR, "prot_read() error");
-		*errstr = "Unable to read body data";
-		goto read_failure;
-	    }
-	}
+	break;
+
+    default:
+	/* XXX  Should never get here */
+	*errstr = "Unknown length of read body data";
+	goto read_failure;
     }
 
 
-    if (body && buf_len(body)) {
-	int r = 0;
-
+    if (!(body->flags & BODY_DISCARD) && buf_len(&body->payload)) {
 #ifdef HAVE_ZLIB
 	/* Decode the payload, if necessary */
-	if (te == TE_DEFLATE)
-	    r = buf_inflate(body, DEFLATE_ZLIB);
-	else if (te == TE_GZIP)
-	    r = buf_inflate(body, DEFLATE_GZIP);
+	if (body->te == TE_DEFLATE)
+	    r = buf_inflate(&body->payload, DEFLATE_ZLIB);
+	else if (body->te == TE_GZIP)
+	    r = buf_inflate(&body->payload, DEFLATE_GZIP);
 
 	if (r) {
 	    *errstr = "Error decoding payload";
@@ -1657,7 +1720,9 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 #endif
 
 	/* Decode the representation, if necessary */
-	if (*flags & BODY_DECODE) {
+	if (body->flags & BODY_DECODE) {
+	    const char **hdr;
+
 	    if (!(hdr = spool_getheader(hdrs, "Content-Encoding"))) {
 		/* nothing to see here */
 	    }
@@ -1668,13 +1733,13 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct buf *body,
 
 		/* Try to detect Microsoft's broken deflate */
 		if (ua && strstr(ua[0], "; MSIE "))
-		    r = buf_inflate(body, DEFLATE_RAW);
+		    r = buf_inflate(&body->payload, DEFLATE_RAW);
 		else
-		    r = buf_inflate(body, DEFLATE_ZLIB);
+		    r = buf_inflate(&body->payload, DEFLATE_ZLIB);
 	    }
 	    else if (!strcasecmp(hdr[0], "gzip") ||
 		     !strcasecmp(hdr[0], "x-gzip"))
-		r = buf_inflate(body, DEFLATE_GZIP);
+		r = buf_inflate(&body->payload, DEFLATE_GZIP);
 #endif
 	    else {
 		*errstr = "Specified Content-Encoding not accepted";
@@ -1719,7 +1784,7 @@ static int parse_expect(struct transaction_t *txn)
 	    /* Check if this is a non-persistent connection */
 	    if (!strcasecmp(token, "100-continue")) {
 		syslog(LOG_DEBUG, "Expect: 100-continue");
-		txn->flags.body |= BODY_CONTINUE;
+		txn->req_body.flags |= BODY_CONTINUE;
 	    }
 	    else {
 		txn->error.desc = "Unsupported Expectation";
@@ -1937,14 +2002,6 @@ void response_header(long code, struct transaction_t *txn)
     struct auth_challenge_t *auth_chal;
     struct resp_body_t *resp_body;
     static struct buf log = BUF_INITIALIZER;
-
-    /* Read and discard any unread body */
-    if (txn && txn->req_hdrs &&
-	read_body(httpd_in, txn->req_hdrs, NULL,
-		  &txn->flags.body, &txn->error.desc)) {
-	txn->flags.conn = CONN_CLOSE;
-    }
-
 
     /* Stop method processing alarm */
     alarm(0);
@@ -2939,7 +2996,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
     spool_enum_hdrcache(txn->req_hdrs,			/* header fields */
 			&log_cachehdr, &txn->buf);
     buf_appendcstr(&txn->buf, "\r\n");			/* CRLF */
-    buf_append(&txn->buf, &txn->req_body);		/* message body */
+    buf_append(&txn->buf, &txn->req_body.payload);	/* message body */
     buf_appendmap(&txn->buf,				/* buffered input */
 		  (const char *) httpd_in->ptr, httpd_in->cnt);
 

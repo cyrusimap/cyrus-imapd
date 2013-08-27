@@ -1138,22 +1138,21 @@ static int caldav_post(struct transaction_t *txn)
     rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
 
     /* Read body */
-    txn->flags.body |= BODY_DECODE;
-    r = read_body(httpd_in, txn->req_hdrs, &txn->req_body,
-		  &txn->flags.body, &txn->error.desc);
+    txn->req_body.flags |= BODY_DECODE;
+    r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, &txn->error.desc);
     if (r) {
 	txn->flags.conn = CONN_CLOSE;
 	return r;
     }
 
     /* Make sure we have a body */
-    if (!buf_len(&txn->req_body)) {
+    if (!buf_len(&txn->req_body.payload)) {
 	txn->error.desc = "Missing request body\r\n";
 	return HTTP_BAD_REQUEST;
     }
 
     /* Parse the iCal data for important properties */
-    ical = icalparser_parse_string(buf_cstring(&txn->req_body));
+    ical = icalparser_parse_string(buf_cstring(&txn->req_body.payload));
     if (!ical || !icalrestriction_check(ical)) {
 	txn->error.precond = CALDAV_VALID_DATA;
 	ret = HTTP_BAD_REQUEST;
@@ -1259,7 +1258,7 @@ static int caldav_put(struct transaction_t *txn, struct mailbox *mailbox,
     const char *uid, *organizer = NULL;
 
     /* Parse and validate the iCal data */
-    ical = icalparser_parse_string(buf_cstring(&txn->req_body));
+    ical = icalparser_parse_string(buf_cstring(&txn->req_body.payload));
     if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {
 	txn->error.precond = CALDAV_VALID_DATA;
 	ret = HTTP_FORBIDDEN;

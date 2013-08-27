@@ -493,7 +493,8 @@ static int carddav_put(struct transaction_t *txn, struct mailbox *mailbox,
     VObject *vcard = NULL;
 
     /* Parse and validate the vCard data */
-    vcard = Parse_MIME(buf_cstring(&txn->req_body), buf_len(&txn->req_body));
+    vcard = Parse_MIME(buf_cstring(&txn->req_body.payload),
+		       buf_len(&txn->req_body.payload));
     if (!vcard || strcmp(vObjectName(vcard), "VCARD")) {
 	txn->error.precond = CARDDAV_VALID_DATA;
 	ret = HTTP_FORBIDDEN;
@@ -710,7 +711,7 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 
     fprintf(f, "Content-Type: text/vcard; charset=utf-8\r\n");
 
-    fprintf(f, "Content-Length: %u\r\n", buf_len(&txn->req_body));
+    fprintf(f, "Content-Length: %u\r\n", buf_len(&txn->req_body.payload));
     fprintf(f, "Content-Disposition: inline; filename=\"%s\"\r\n", resource);
 
     /* XXX  Check domain of data and use appropriate CTE */
@@ -719,7 +720,7 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
     fprintf(f, "\r\n");
 
     /* Write the vCard data to the file */
-    fprintf(f, "%s", buf_cstring(&txn->req_body));
+    fprintf(f, "%s", buf_cstring(&txn->req_body.payload));
     size = ftell(f);
 
     fclose(f);
@@ -837,7 +838,7 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 
 			resp_body->loc = txn->req_tgt.path;
 			resp_body->type = "text/vcard; charset=utf-8";
-			resp_body->len = buf_len(&txn->req_body);
+			resp_body->len = buf_len(&txn->req_body.payload);
 
 			/* Fill in Expires and Cache-Control */
 			resp_body->maxage = 3600;  /* 1 hr */
@@ -846,7 +847,8 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 			    | CC_NOTRANSFORM;	   /* don't alter vCard data */
 
 			write_body(ret, txn,
-				   buf_cstring(&txn->req_body), resp_body->len);
+				   buf_cstring(&txn->req_body.payload),
+				   buf_len(&txn->req_body.payload));
 			ret = 0;
 		    }
 		}

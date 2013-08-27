@@ -304,16 +304,15 @@ static int meth_post_isched(struct transaction_t *txn,
     }
 
     /* Read body */
-    txn->flags.body |= BODY_DECODE;
-    r = read_body(httpd_in, txn->req_hdrs, &txn->req_body,
-		  &txn->flags.body, &txn->error.desc);
+    txn->req_body.flags |= BODY_DECODE;
+    r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, &txn->error.desc);
     if (r) {
 	txn->flags.conn = CONN_CLOSE;
 	return r;
     }
 
     /* Make sure we have a body */
-    if (!buf_len(&txn->req_body)) {
+    if (!buf_len(&txn->req_body.payload)) {
 	txn->error.desc = "Missing request body\r\n";
 	return HTTP_BAD_REQUEST;
     }
@@ -338,7 +337,7 @@ static int meth_post_isched(struct transaction_t *txn,
     }
 
     /* Parse the iCal data for important properties */
-    ical = icalparser_parse_string(buf_cstring(&txn->req_body));
+    ical = icalparser_parse_string(buf_cstring(&txn->req_body.payload));
     if (!ical || !icalrestriction_check(ical)) {
 	txn->error.precond = ISCHED_INVALID_DATA;
 	return HTTP_BAD_REQUEST;
@@ -458,7 +457,7 @@ int isched_send(struct sched_param *sparam, const char *recipient,
     icalcomponent *comp;
     icalcomponent_kind kind;
     icalproperty *prop;
-    unsigned code, close;
+    unsigned code;
     struct transaction_t txn;
 
     *xml = NULL;
@@ -588,7 +587,8 @@ int isched_send(struct sched_param *sparam, const char *recipient,
     prot_write(be->out, body, bodylen);
 
     /* Read response (req_hdr and req_body are actually the response) */
-    r = http_read_response(be, METH_POST, BODY_DECODE, &code, &close, NULL,
+    txn.req_body.flags = BODY_DECODE;
+    r = http_read_response(be, METH_POST, &code, NULL,
 			   &txn.req_hdrs, &txn.req_body, &txn.error.desc);
     if (!r) {
 	switch (code) {
@@ -609,7 +609,7 @@ int isched_send(struct sched_param *sparam, const char *recipient,
     }
 
     if (txn.req_hdrs) spool_free_hdrcache(txn.req_hdrs);
-    buf_free(&txn.req_body);
+    buf_free(&txn.req_body.payload);
 
     return r;
 }
@@ -749,8 +749,8 @@ static int dkim_auth(struct transaction_t *txn)
     dkim_cachehdr(NULL, NULL, dkim);  /* Force canon of last header */
     stat = dkim_eoh(dkim);
     if (stat == DKIM_STAT_OK) {
-	stat = dkim_body(dkim, (u_char *) buf_cstring(&txn->req_body),
-			 buf_len(&txn->req_body));
+	stat = dkim_body(dkim, (u_char *) buf_cstring(&txn->req_body.payload),
+			 buf_len(&txn->req_body.payload));
 	stat = dkim_eom(dkim, NULL);
     }
 
