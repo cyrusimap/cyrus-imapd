@@ -168,11 +168,9 @@ static int login(struct backend *s, const char *userid,
 			      pass);
     }
 
-    /* Require proxying if we have an "interesting" userid (authzid) */
+    /* Create SASL context */
     r = sasl_client_new(s->prot->sasl_service, s->hostname,
-			localip, remoteip, cb,
-			/* (userid  && *userid ? SASL_NEED_PROXY : 0) | */
-			SASL_USAGE_FLAGS, &s->saslconn);
+			localip, remoteip, cb, SASL_USAGE_FLAGS, &s->saslconn);
     if (r != SASL_OK) goto done;
 
     r = sasl_setprop(s->saslconn, SASL_SEC_PROPS, &secprops);
@@ -428,6 +426,12 @@ static int login(struct backend *s, const char *userid,
 
 static int ping(struct backend *s, const char *userid)
 {
+    /* Free saslconn */
+    if (s->saslconn) {
+	sasl_dispose(&(s->saslconn));
+	s->saslconn = NULL;
+    }
+
     return login(s, userid, NULL, NULL);
 }
 
