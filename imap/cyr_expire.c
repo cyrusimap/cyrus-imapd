@@ -61,6 +61,7 @@
 #include "imap/imap_err.h"
 #include "global.h"
 #include "hash.h"
+#include "imap_err.h"
 #include "libcyr_cfg.h"
 #include "mboxevent.h"
 #include "mboxlist.h"
@@ -255,36 +256,37 @@ static int archive(char *name, int matchlen __attribute__((unused)),
     mbentry_t *mbentry = NULL;
     struct mailbox *mailbox = NULL;
 
-    if (sigquit) {
+    if (sigquit)
 	return 1;
-    }
-    /* Skip remote mailboxes */
+
+    /* Skip mailboxes with errors */
     r = mboxlist_lookup(name, &mbentry, NULL);
+    if (r == IMAP_MAILBOX_NONEXISTENT)
+	goto done;
     if (r) {
-	if (verbose) {
+	if (verbose)
 	    printf("error looking up %s: %s\n", name, error_message(r));
-	}
-	return 1;
+	goto done;
     }
 
-    if (mbentry->mbtype & MBTYPE_REMOTE) {
-	mboxlist_entry_free(&mbentry);
-	return 0;
-    }
-    mboxlist_entry_free(&mbentry);
+    if (mbentry->mbtype & MBTYPE_REMOTE)
+	goto done;
 
     r = mailbox_open_iwl(name, &mailbox);
     if (r) {
 	/* mailbox corrupt/nonexistent -- skip it */
 	syslog(LOG_WARNING, "unable to open mailbox %s: %s",
 	       name, error_message(r));
-	return 0;
+	goto done;
     }
 
     mailbox_archive(mailbox, archive_cb, rock);
 
+done:
+    mboxlist_entry_free(&mbentry);
     mailbox_close(&mailbox);
 
+    /* move on to the next mailbox regardless of errors */
     return 0;
 }
 
