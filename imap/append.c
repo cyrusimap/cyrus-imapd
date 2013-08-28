@@ -1177,7 +1177,7 @@ HIDDEN int append_run_annotator(struct appendstate *as,
     r = callout_run(fname, body, &user_annots, &system_annots, &flags);
     if (r) goto out;
 
-    record->system_flags &= FLAG_SEEN;
+    record->system_flags &= (FLAG_SEEN | FLAGS_INTERNAL);
     memset(&record->user_flags, 0, sizeof(record->user_flags));
     r = append_apply_flags(as, NULL, record, &flags);
     if (r) goto out;
