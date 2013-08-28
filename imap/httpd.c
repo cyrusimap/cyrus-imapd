@@ -209,6 +209,8 @@ static int parse_ranges(const char *hdr, unsigned long len,
 			struct range **ranges);
 static int parse_framing(hdrcache_t hdrs, struct body_t *body,
 			 const char **errstr);
+static int proxy_auth(const char **authzid, struct transaction_t *txn);
+static void auth_success(struct transaction_t *txn);
 static int http_auth(const char *creds, struct transaction_t *txn);
 static void keep_alive(int sig);
 
@@ -1193,14 +1195,6 @@ static void cmdloop(void)
 	    if (httpd_userid) {
 		/* Reauth - reinitialize */
 		syslog(LOG_DEBUG, "reauth - reinit");
-		if (httpd_userid) {
-		    free(httpd_userid);
-		    httpd_userid = NULL;
-		}
-		if (httpd_authstate) {
-		    auth_freestate(httpd_authstate);
-		    httpd_authstate = NULL;
-		}
 		reset_saslconn(&httpd_saslconn);
 		txn.auth_chal.scheme = NULL;
 	    }
@@ -1220,6 +1214,25 @@ static void cmdloop(void)
 	    syslog(LOG_DEBUG, "client didn't complete auth - reinit");
 	    reset_saslconn(&httpd_saslconn);
 	    txn.auth_chal.scheme = NULL;
+	}
+
+	/* Perform proxy authorization, if necessary */
+	else if (saslprops.authid &&
+		 (hdr = spool_getheader(txn.req_hdrs, "Authorize-As")) &&
+		 *hdr[0]) {
+	    const char *authzid = hdr[0];
+
+	    r = proxy_auth(&authzid, &txn);
+	    if (r) {
+		/* Proxy authz failed - reinitialize */
+		syslog(LOG_DEBUG, "proxy authz failed - reinit");
+		reset_saslconn(&httpd_saslconn);
+		txn.auth_chal.scheme = NULL;
+	    }
+	    else {
+		httpd_userid = xstrdup(authzid);
+		auth_success(&txn);
+	    }
 	}
 
 	/* Request authentication, if necessary */
@@ -2717,7 +2730,13 @@ static int proxy_auth(const char **authzid, struct transaction_t *txn)
     unsigned authzlen;
     int status;
 
-    /* Free authstate previously allocated for auth'd user */
+    syslog(LOG_DEBUG, "proxy_auth: authzid='%s'", *authzid);
+
+    /* Free userid & authstate previously allocated for auth'd user */
+    if (httpd_userid) {
+	free(httpd_userid);
+	httpd_userid = NULL;
+    }
     if (httpd_authstate) {
 	auth_freestate(httpd_authstate);
 	httpd_authstate = NULL;
@@ -2851,24 +2870,31 @@ static int http_auth(const char *creds, struct transaction_t *txn)
     struct auth_challenge_t *chal = &txn->auth_chal;
     static int status = SASL_OK;
     int slen;
-    const char *clientin = NULL, *realm = NULL, *user;
+    const char *clientin = NULL, *realm = NULL, *user, **authzid;
     unsigned int clientinlen = 0;
     struct auth_scheme_t *scheme;
     static char base64[BASE64_BUF_SIZE+1];
     const void *canon_user;
-    const char **authzid = spool_getheader(txn->req_hdrs, "Authorize-As");
-
-    chal->param = NULL;
 
     /* Split credentials into auth scheme and response */
     slen = strcspn(creds, " \0");
     if ((clientin = strchr(creds, ' '))) clientinlen = strlen(++clientin);
 
     syslog(LOG_DEBUG,
-	   "http_auth: status=%d   scheme='%s'   creds='%.*s%s'   authzid='%s'",
+	   "http_auth: status=%d   scheme='%s'   creds='%.*s%s'",
 	   status, chal->scheme ? chal->scheme->name : "",
-	   slen, creds, clientin ? " <response>" : "",
-	   authzid ? authzid[0] : "");
+	   slen, creds, clientin ? " <response>" : "");
+
+    /* Free userid & authstate previously allocated for auth'd user */
+    if (httpd_userid) {
+	free(httpd_userid);
+	httpd_userid = NULL;
+    }
+    if (httpd_authstate) {
+	auth_freestate(httpd_authstate);
+	httpd_authstate = NULL;
+    }
+    chal->param = NULL;
 
     if (chal->scheme) {
 	/* Use current scheme, if possible */
@@ -3053,9 +3079,10 @@ static int http_auth(const char *creds, struct transaction_t *txn)
     if (saslprops.authid) free(saslprops.authid);
     saslprops.authid = xstrdup(user);
 
-    if (authzid && **authzid) {
+    authzid = spool_getheader(txn->req_hdrs, "Authorize-As");
+    if (authzid && *authzid[0]) {
 	/* Trying to proxy as another user */
-	user = *authzid;
+	user = authzid[0];
 
 	status = proxy_auth(&user, txn);
 	if (status) return status;
