@@ -3102,7 +3102,7 @@ static int mailbox_update_indexes(struct mailbox *mailbox,
  * necessary tracking fields automatically.
  */
 EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
-				 struct index_record *record)
+					  struct index_record *record)
 {
     int n;
     int r;
@@ -3138,6 +3138,13 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
 	 * the data from the old record and appends it with a new
 	 * UID, which is righteous in the eyes of the IMAP client */
 	assert(record->system_flags & FLAG_EXPUNGED);
+    }
+
+    if (oldrecord.system_flags & FLAG_ARCHIVED) {
+	/* it is also a sin to unarchive a message, except in the
+	 * the very odd case of a reconstruct.  So let's see about
+	 * that */
+	assert(record->system_flags & FLAG_ARCHIVED);
     }
 
     /* handle immediate expunges here... */
