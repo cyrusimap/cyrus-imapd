@@ -3144,7 +3144,9 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
 	/* it is also a sin to unarchive a message, except in the
 	 * the very odd case of a reconstruct.  So let's see about
 	 * that */
-	assert(record->system_flags & FLAG_ARCHIVED);
+	if (!(record->system_flags & FLAG_ARCHIVED))
+	    syslog(LOG_ERR, "IOERROR: bogus removal of archived flag for %s %u",
+		   mailbox->name, record->uid);
     }
 
     /* handle immediate expunges here... */
