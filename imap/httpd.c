@@ -2711,6 +2711,49 @@ void error_response(long code, struct transaction_t *txn)
 }
 
 
+static int proxy_auth(const char **authzid, struct transaction_t *txn)
+{
+    static char authzbuf[MAX_MAILBOX_BUFFER];
+    unsigned authzlen;
+    int status;
+
+    /* Free authstate previously allocated for auth'd user */
+    if (httpd_authstate) {
+	auth_freestate(httpd_authstate);
+	httpd_authstate = NULL;
+    }
+
+    /* Canonify the authzid */
+    status = mysasl_canon_user(httpd_saslconn, NULL,
+			       *authzid, strlen(*authzid),
+			       SASL_CU_AUTHZID, NULL,
+			       authzbuf, sizeof(authzbuf), &authzlen);
+    if (status) {
+	syslog(LOG_NOTICE, "badlogin: %s %s %s invalid user",
+	       httpd_clienthost, txn->auth_chal.scheme->name,
+	       beautify_string(*authzid));
+	return status;
+    }
+
+    /* See if auth'd user is allowed to proxy */
+    status = mysasl_proxy_policy(httpd_saslconn, &httpd_proxyctx,
+				 authzbuf, authzlen,
+				 saslprops.authid, strlen(saslprops.authid),
+				 NULL, 0, NULL);
+
+    if (status) {
+	syslog(LOG_NOTICE, "badlogin: %s %s %s %s",
+	       httpd_clienthost, txn->auth_chal.scheme->name, saslprops.authid,
+	       sasl_errdetail(httpd_saslconn));
+	return status;
+    }
+
+    *authzid = authzbuf;
+
+    return status;
+}
+
+
 /* Write cached header (redacting authorization credentials) to buffer. */
 static void log_cachehdr(const char *name, const char *contents, void *rock)
 {
@@ -2727,6 +2770,72 @@ static void log_cachehdr(const char *name, const char *contents, void *rock)
 		   (int) strlen(creds), "...");
     }
     else buf_printf(buf, "%s\r\n", contents);
+}
+
+
+static void auth_success(struct transaction_t *txn)
+{
+    struct auth_scheme_t *scheme = txn->auth_chal.scheme;
+    int i;
+
+    proc_register("httpd", httpd_clienthost, httpd_userid, (char *)0);
+
+    syslog(LOG_NOTICE, "login: %s %s %s%s %s",
+	   httpd_clienthost, httpd_userid, scheme->name,
+	   httpd_tls_done ? "+TLS" : "", "User logged in");
+
+
+    /* Recreate telemetry log entry for request (w/ credentials redacted) */
+    assert(!buf_len(&txn->buf));
+    buf_printf(&txn->buf, "<%ld<", time(NULL));		/* timestamp */
+    buf_printf(&txn->buf, "%s %s %s\r\n",		/* request-line*/
+	       txn->req_line.meth, txn->req_line.uri, txn->req_line.ver);
+    spool_enum_hdrcache(txn->req_hdrs,			/* header fields */
+			&log_cachehdr, &txn->buf);
+    buf_appendcstr(&txn->buf, "\r\n");			/* CRLF */
+    buf_append(&txn->buf, &txn->req_body.payload);	/* message body */
+    buf_appendmap(&txn->buf,				/* buffered input */
+		  (const char *) httpd_in->ptr, httpd_in->cnt);
+
+    if (httpd_logfd != -1) {
+	/* Rewind log to current request and truncate it */
+	off_t end = lseek(httpd_logfd, 0, SEEK_END);
+
+	ftruncate(httpd_logfd, end - buf_len(&txn->buf));
+    }
+
+    if (!proxy_userid || strcmp(proxy_userid, httpd_userid)) {
+	/* Close existing telemetry log */
+	close(httpd_logfd);
+
+	prot_setlog(httpd_in, PROT_NO_FD);
+	prot_setlog(httpd_out, PROT_NO_FD);
+
+	/* Create telemetry log based on new userid */
+	httpd_logfd = telemetry_log(httpd_userid, httpd_in, httpd_out, 0);
+    }
+
+    if (httpd_logfd != -1) {
+	/* Log credential-redacted request */
+	write(httpd_logfd, buf_cstring(&txn->buf), buf_len(&txn->buf));
+    }
+
+    buf_reset(&txn->buf);
+
+    /* Make a copy of the external userid for use in proxying */
+    if (proxy_userid) free(proxy_userid);
+    proxy_userid = xstrdup(httpd_userid);
+
+    /* Translate any separators in userid */
+    mboxname_hiersep_tointernal(&httpd_namespace, httpd_userid,
+				config_virtdomains ?
+				strcspn(httpd_userid, "@") : 0);
+
+    /* Do any namespace specific post-auth processing */
+    for (i = 0; namespaces[i]; i++) {
+	if (namespaces[i]->enabled && namespaces[i]->auth)
+	    namespaces[i]->auth(httpd_userid);
+    }
 }
 
 
@@ -2748,7 +2857,6 @@ static int http_auth(const char *creds, struct transaction_t *txn)
     static char base64[BASE64_BUF_SIZE+1];
     const void *canon_user;
     const char **authzid = spool_getheader(txn->req_hdrs, "Authorize-As");
-    int i;
 
     chal->param = NULL;
 
@@ -2940,105 +3048,22 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 	syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME", status);
 	return status;
     }
+    user = (const char *) canon_user;
 
-    if (authzid && *authzid[0]) {
+    if (saslprops.authid) free(saslprops.authid);
+    saslprops.authid = xstrdup(user);
+
+    if (authzid && **authzid) {
 	/* Trying to proxy as another user */
-	char authzbuf[MAX_MAILBOX_BUFFER];
-	unsigned authzlen;
+	user = *authzid;
 
-	/* Free authstate previously allocated for auth'd user */
-	if (httpd_authstate) {
-	    auth_freestate(httpd_authstate);
-	    httpd_authstate = NULL;
-	}
-
-	/* Canonify the authzid */
-	status = mysasl_canon_user(httpd_saslconn, NULL,
-				   authzid[0], strlen(authzid[0]),
-				   SASL_CU_AUTHZID, NULL,
-				   authzbuf, sizeof(authzbuf), &authzlen);
-	if (status) {
-	    syslog(LOG_NOTICE, "badlogin: %s %s %s invalid user",
-		   httpd_clienthost, scheme->name, beautify_string(authzid[0]));
-	    return status;
-	}
-	user = (const char *) canon_user;
-
-	/* See if user is allowed to proxy */
-	status = mysasl_proxy_policy(httpd_saslconn, &httpd_proxyctx,
-				     authzbuf, authzlen, user, strlen(user),
-				     NULL, 0, NULL);
-
-	if (status) {
-	    syslog(LOG_NOTICE, "badlogin: %s %s %s %s",
-		   httpd_clienthost, scheme->name, user,
-		   sasl_errdetail(httpd_saslconn));
-	    return status;
-	}
-
-	canon_user = authzbuf;
+	status = proxy_auth(&user, txn);
+	if (status) return status;
     }
 
-    httpd_userid = xstrdup((const char *) canon_user);
+    httpd_userid = xstrdup(user);
 
-    proc_register("httpd", httpd_clienthost, httpd_userid, (char *)0);
-
-    syslog(LOG_NOTICE, "login: %s %s %s%s %s",
-	   httpd_clienthost, httpd_userid, scheme->name,
-	   httpd_tls_done ? "+TLS" : "", "User logged in");
-
-
-    /* Recreate telemetry log entry for request (w/ credentials redacted) */
-    assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "<%ld<", time(NULL));		/* timestamp */
-    buf_printf(&txn->buf, "%s %s %s\r\n",		/* request-line*/
-	       txn->req_line.meth, txn->req_line.uri, txn->req_line.ver);
-    spool_enum_hdrcache(txn->req_hdrs,			/* header fields */
-			&log_cachehdr, &txn->buf);
-    buf_appendcstr(&txn->buf, "\r\n");			/* CRLF */
-    buf_append(&txn->buf, &txn->req_body.payload);	/* message body */
-    buf_appendmap(&txn->buf,				/* buffered input */
-		  (const char *) httpd_in->ptr, httpd_in->cnt);
-
-    if (httpd_logfd != -1) {
-	/* Rewind log to current request and truncate it */
-	off_t end = lseek(httpd_logfd, 0, SEEK_END);
-
-	ftruncate(httpd_logfd, end - buf_len(&txn->buf));
-    }
-
-    if (!proxy_userid || strcmp(proxy_userid, httpd_userid)) {
-	/* Close existing telemetry log */
-	close(httpd_logfd);
-
-	prot_setlog(httpd_in, PROT_NO_FD);
-	prot_setlog(httpd_out, PROT_NO_FD);
-
-	/* Create telemetry log based on new userid */
-	httpd_logfd = telemetry_log(httpd_userid, httpd_in, httpd_out, 0);
-    }
-
-    if (httpd_logfd != -1) {
-	/* Log credential-redacted request */
-	write(httpd_logfd, buf_cstring(&txn->buf), buf_len(&txn->buf));
-    }
-
-    buf_reset(&txn->buf);
-
-    /* Make a copy of the external userid for use in proxying */
-    if (proxy_userid) free(proxy_userid);
-    proxy_userid = xstrdup(httpd_userid);
-
-    /* Translate any separators in userid */
-    mboxname_hiersep_tointernal(&httpd_namespace, httpd_userid,
-				config_virtdomains ?
-				strcspn(httpd_userid, "@") : 0);
-
-    /* Do any namespace specific post-auth processing */
-    for (i = 0; namespaces[i]; i++) {
-	if (namespaces[i]->enabled && namespaces[i]->auth)
-	    namespaces[i]->auth(httpd_userid);
-    }
+    auth_success(txn);
 
     return status;
 }
