@@ -730,7 +730,7 @@ static void send_response(struct protstream *pout,
  */
 int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 {
-    int r = 0;
+    int r = 0, sent_body = 0;
     xmlChar *uri;
     unsigned code;
     const char *statline;
@@ -776,7 +776,7 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 			       &resp_hdrs, &resp_body, &txn->error.desc);
 	if (r) break;
 
-	if ((code == 100) /* Continue */  && !(resp_body.flags & BODY_DONE)) {
+	if ((code == 100) /* Continue */  && !sent_body++) {
 	    unsigned len;
 
 	    /* Read body from client */
