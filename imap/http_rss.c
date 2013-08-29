@@ -471,7 +471,7 @@ static int list_feeds(struct transaction_t *txn)
     const char *template_file = config_getstring(IMAPOPT_RSS_FEEDLIST_TEMPLATE);
     const char *var = NULL, *template = NULL, *prefix, *suffix;
     unsigned long template_len = 0, prefix_len, suffix_len;
-    unsigned varlen = strlen(FEEDLIST_VAR);
+    size_t varlen = strlen(FEEDLIST_VAR);
     int fd = -1;
     struct message_guid guid;
     time_t lastmod;
@@ -485,7 +485,7 @@ static int list_feeds(struct transaction_t *txn)
     if (template_file) {
 	/* See if template exists and contains feedlist variable */
 	if (!stat(template_file, &sbuf) && S_ISREG(sbuf.st_mode) &&
-	    sbuf.st_size >= varlen &&
+	    (size_t) sbuf.st_size >= varlen &&
 	    (fd = open(template_file, O_RDONLY)) != -1) {
 	    const char *p;
 	    unsigned long len;
