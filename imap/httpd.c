@@ -209,7 +209,7 @@ static int parse_ranges(const char *hdr, unsigned long len,
 			struct range **ranges);
 static int parse_framing(hdrcache_t hdrs, struct body_t *body,
 			 const char **errstr);
-static int proxy_auth(const char **authzid, struct transaction_t *txn);
+static int proxy_authz(const char **authzid, struct transaction_t *txn);
 static void auth_success(struct transaction_t *txn);
 static int http_auth(const char *creds, struct transaction_t *txn);
 static void keep_alive(int sig);
@@ -1222,7 +1222,7 @@ static void cmdloop(void)
 		 *hdr[0]) {
 	    const char *authzid = hdr[0];
 
-	    r = proxy_auth(&authzid, &txn);
+	    r = proxy_authz(&authzid, &txn);
 	    if (r) {
 		/* Proxy authz failed - reinitialize */
 		syslog(LOG_DEBUG, "proxy authz failed - reinit");
@@ -2724,7 +2724,7 @@ void error_response(long code, struct transaction_t *txn)
 }
 
 
-static int proxy_auth(const char **authzid, struct transaction_t *txn)
+static int proxy_authz(const char **authzid, struct transaction_t *txn)
 {
     static char authzbuf[MAX_MAILBOX_BUFFER];
     unsigned authzlen;
@@ -2740,6 +2740,14 @@ static int proxy_auth(const char **authzid, struct transaction_t *txn)
     if (httpd_authstate) {
 	auth_freestate(httpd_authstate);
 	httpd_authstate = NULL;
+    }
+
+    if (!(config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS))) {
+	/* Not a backend in a Murder - proxy authz is not allowed */
+	syslog(LOG_NOTICE, "badlogin: %s %s %s %s",
+	       httpd_clienthost, txn->auth_chal.scheme->name, saslprops.authid,
+	       "proxy authz attempted on non-Murder backend");
+	return SASL_NOAUTHZ;
     }
 
     /* Canonify the authzid */
@@ -3084,7 +3092,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 	/* Trying to proxy as another user */
 	user = authzid[0];
 
-	status = proxy_auth(&user, txn);
+	status = proxy_authz(&user, txn);
 	if (status) return status;
     }
 
