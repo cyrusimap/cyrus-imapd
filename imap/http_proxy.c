@@ -426,13 +426,31 @@ static int login(struct backend *s, const char *userid,
 
 static int ping(struct backend *s, const char *userid)
 {
-    /* Free saslconn */
-    if (s->saslconn) {
-	sasl_dispose(&(s->saslconn));
-	s->saslconn = NULL;
-    }
+    unsigned code = 0;
+    const char *errstr;
+    hdrcache_t resp_hdrs = NULL;
+    struct body_t resp_body;
 
-    return login(s, userid, NULL, NULL);
+    /* Send Authorization request to server */
+    prot_puts(s->out, "OPTIONS * HTTP/1.1\r\n");
+    prot_printf(s->out, "Host: %s\r\n", s->hostname);
+    prot_printf(s->out, "User-Agent: %s\r\n", buf_cstring(&serverinfo));
+    if (userid) prot_printf(s->out, "Authorize-As: %s\r\n", userid);
+    prot_puts(s->out, "\r\n");
+    prot_flush(s->out);
+
+    /* Read response(s) from backend until final response or error */
+    do {
+	resp_body.flags = BODY_DISCARD;
+	if (http_read_response(s, METH_OPTIONS, &code, NULL,
+			       &resp_hdrs, &resp_body, &errstr)) {
+	    break;
+	}
+    } while (code < 200);
+
+    if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
+
+    return (code != 200);
 }
 
 
