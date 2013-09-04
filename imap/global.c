@@ -467,7 +467,7 @@ int mysasl_canon_user(sasl_conn_t *conn,
 	sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
 	return SASL_BUFOVER;
     }
-    memcpy(out, user, ulen);
+    memmove(out, user, ulen);
     out[ulen] = '\0';
 
     canonuser = canonify_userid(out, NULL, (int*) context);
