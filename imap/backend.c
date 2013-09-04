@@ -292,7 +292,6 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
     struct sockaddr_storage saddr_l, saddr_r;
     char remoteip[60], localip[60];
     socklen_t addrsize;
-    int local_cb = 0;
     char buf[2048], optstr[128], *p;
     const char *mech_conf, *pass;
 
@@ -310,7 +309,6 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
 	return SASL_FAIL;
 
     if (!cb) {
-	local_cb = 1;
 	strlcpy(optstr, s->hostname, sizeof(optstr));
 	p = strchr(optstr, '.');
 	if (p) *p = '\0';
@@ -321,6 +319,7 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
 			      config_getstring(IMAPOPT_PROXY_AUTHNAME),
 			      config_getstring(IMAPOPT_PROXY_REALM),
 			      pass);
+	s->sasl_cb = cb;
     }
 
     /* Require proxying if we have an "interesting" userid (authzid) */
@@ -329,14 +328,12 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
 			(prot->u.std.sasl_cmd.parse_success ? SASL_SUCCESS_DATA : 0),
 			&s->saslconn);
     if (r != SASL_OK) {
-	if (local_cb) free_callbacks(cb);
 	return r;
     }
 
     r = sasl_setprop(s->saslconn, SASL_SEC_PROPS, &secprops);
     if (!r) r = sasl_setprop(s->saslconn, SASL_SSF_EXTERNAL, &s->ext_ssf);
     if (r != SASL_OK) {
-	if (local_cb) free_callbacks(cb);
 	return r;
     }
 
@@ -385,9 +382,6 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
 	     (*mechlist = ask_capability(s->out, s->in, prot,
 					 &s->capability, NULL,
 					 prot->u.std.tls_cmd.auto_capa)));
-
-    /* xxx unclear that this is correct */
-    if (local_cb) free_callbacks(cb);
 
     if (r == SASL_OK) {
 	prot_setsasl(s->in, s->saslconn);
@@ -699,8 +693,8 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
     }
 
     if (r) {
+	backend_disconnect(ret);
 	if (!ret_backend) free(ret);
-	close(sock);
 	ret = NULL;
     }
     
@@ -798,6 +792,12 @@ void backend_disconnect(struct backend *s)
     if (s->saslconn) {
 	sasl_dispose(&(s->saslconn));
 	s->saslconn = NULL;
+    }
+
+    /* Free any SASL callbacks */
+    if (s->sasl_cb) {
+	free_callbacks(s->sasl_cb);
+	s->sasl_cb = NULL;
     }
 
     /* free last_result buffer */

@@ -71,6 +71,7 @@ struct backend {
     struct prot_waitevent *timeout; /* event for idle timeout */
 
     sasl_conn_t *saslconn;
+    sasl_callback_t *sasl_cb;
     sasl_ssf_t ext_ssf;
 #ifdef HAVE_SSL
     SSL *tlsconn;
