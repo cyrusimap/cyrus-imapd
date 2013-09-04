@@ -126,7 +126,7 @@ static const char *callback_getdata(sasl_conn_t *conn,
 static int login(struct backend *s, const char *userid,
 		 sasl_callback_t *cb, const char **status)
 {
-    int r = 0, local_cb = 0;
+    int r = 0;
     socklen_t addrsize;
     struct sockaddr_storage saddr_l, saddr_r;
     char remoteip[60], localip[60];
@@ -157,7 +157,6 @@ static int login(struct backend *s, const char *userid,
 
     /* Create callbacks, if necessary */
     if (!cb) {
-	local_cb = 1;
 	buf_setmap(&buf, s->hostname, strcspn(s->hostname, "."));
 	buf_appendcstr(&buf, "_password");
 	pass = config_getoverflowstring(buf_cstring(&buf), NULL);
@@ -166,6 +165,7 @@ static int login(struct backend *s, const char *userid,
 			      config_getstring(IMAPOPT_PROXY_AUTHNAME),
 			      config_getstring(IMAPOPT_PROXY_REALM),
 			      pass);
+	s->sasl_cb = cb;
     }
 
     /* Create SASL context */
@@ -415,7 +415,6 @@ static int login(struct backend *s, const char *userid,
     } while (need_tls || clientout);
 
   done:
-    if (local_cb) free_callbacks(cb);
     if (hdrs) spool_free_hdrcache(hdrs);
 
     if (r && status && !*status) *status = sasl_errstring(r, NULL, NULL);
