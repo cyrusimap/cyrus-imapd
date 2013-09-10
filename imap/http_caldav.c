@@ -2283,6 +2283,8 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 		}
 
 		if (!r) {
+		    struct resp_body_t *resp_body = &txn->resp_body;
+
 		    /* Create mapping entry from resource name to UID */
 		    cdata->dav.mailbox = mailbox->name;
 		    cdata->dav.resource = resource;
@@ -2292,15 +2294,13 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 		    if (!cdata->dav.creationdate) cdata->dav.creationdate = now;
 		    if (!cdata->organizer) cdata->sched_tag = NULL;
 		    else if (flags & NEW_STAG) {
-			txn->resp_body.stag = cdata->sched_tag = sched_tag;
+			resp_body->stag = cdata->sched_tag = sched_tag;
 		    }
 
 		    caldav_write(caldavdb, cdata, 1);
 		    /* XXX  check for errors, if this fails, backout changes */
 
 		    if (flags & PREFER_REP) {
-			struct resp_body_t *resp_body = &txn->resp_body;
-
 			/* Fill in Last-Modified, ETag, and Content-Type */
 			resp_body->lastmod = newrecord.internaldate;
 			resp_body->etag = message_guid_encode(&newrecord.guid);
@@ -2319,9 +2319,8 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 		    }
 		    else if (!(flags & NEW_STAG)) {
 			/* Tell client about the new resource */
-			txn->resp_body.lastmod = newrecord.internaldate;
-			txn->resp_body.etag =
-			    message_guid_encode(&newrecord.guid);
+			resp_body->lastmod = newrecord.internaldate;
+			resp_body->etag = message_guid_encode(&newrecord.guid);
 		    }
 		}
 
