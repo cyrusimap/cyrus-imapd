@@ -817,6 +817,8 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 		}
 
 		if (!r) {
+		    struct resp_body_t *resp_body = &txn->resp_body;
+
 		    /* Create mapping entry from resource name to UID */
 		    cdata->dav.mailbox = mailbox->name;
 		    cdata->dav.resource = resource;
@@ -831,13 +833,12 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 		    /* XXX  check for errors, if this fails, backout changes */
 
 		    /* Tell client about the new resource */
-		    txn->resp_body.etag = message_guid_encode(&newrecord.guid);
+		    resp_body->lastmod = newrecord.internaldate;
+		    resp_body->etag = message_guid_encode(&newrecord.guid);
 
 		    if (flags & PREFER_REP) {
-			struct resp_body_t *resp_body = &txn->resp_body;
-
-			resp_body->loc = txn->req_tgt.path;
 			resp_body->type = "text/vcard; charset=utf-8";
+			resp_body->loc = txn->req_tgt.path;
 			resp_body->len = buf_len(&txn->req_body.payload);
 
 			/* Fill in Expires and Cache-Control */
