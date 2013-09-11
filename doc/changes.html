@@ -8,6 +8,18 @@
 </head>
 <body>
 
+<h1>Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta6</h1>
+<ul>
+<li>Plugged several memory leaks found by Valgrind</li>
+<li>Less verbose reconnect communication between frontend and
+  backend</li>
+<li>GET on calendar-home-set now returns a list of subscribe-able
+  calendars</li>
+<li>Auto-provisioning of calendars/addressbooks now works via a
+  frontend proxy</li>
+<li>Fixed several conformance bugs detected by CalDAVTester</li>
+</ul>
+
 <h1>Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta5</h1>
 <ul>
 <li>RSS module now produces Atom 1.0 output rather than RSS 2.0 (we
@@ -38,8 +50,8 @@
 <li>Don't show addressbook mailboxes in IMAP LIST output</li>
 <li>Plugged leaked memory found by Valgrind</li>
 <li>Better handling of request/response bodies</li>
-<li>Added <tt>httpprettytelemetry</tt> option<li>
-<li>Added <tt>httpallowcors</tt> option (Cross-Origin Resource Sharing)<li>
+<li>Added <tt>httpprettytelemetry</tt> option</li>
+<li>Added <tt>httpallowcors</tt> option (Cross-Origin Resource Sharing)</li>
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta3</h1>
@@ -48,7 +60,7 @@
 <li>Rewrote list_feeds() to not use memmem()</li>
 <li>OPTIONS method can be used without authentication</li>
 <li>Better handling of Connection:keep-alive</li>
-<li>Added <tt>httpallowedurls</tt> option<li>
+<li>Added <tt>httpallowedurls</tt> option</li>
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta2</h1>
