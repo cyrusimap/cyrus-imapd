@@ -667,7 +667,12 @@ if test "x$enable_afs" = "xyes"; then
     ])
 
     CFLAGS="${CFLAGS} -I${with_afs_incdir}/include"
-    AFS_LIBS="${with_afs_libdir}/afs/libkauth.a ${with_afs_libdir}/afs/libprot.a  ${with_afs_libdir}/afs/libauth.a ${with_afs_libdir}/afs/libsys.a ${with_afs_libdir}/librxkad.a ${with_afs_libdir}/librx.a ${with_afs_libdir}/afs/libsys.a ${with_afs_libdir}/libubik.a  ${with_afs_libdir}/liblwp.a ${with_afs_libdir}/afs/util.a ${with_afs_libdir}/afs/libcom_err.a"
+    AFS_LIBS="${with_afs_libdir}/afs/libkauth.a ${with_afs_libdir}/afs/libprot.a  ${with_afs_libdir}/afs/libauth.a ${with_afs_libdir}/afs/libsys.a ${with_afs_libdir}/librxkad.a ${with_afs_libdir}/librx.a ${with_afs_libdir}/afs/libsys.a ${with_afs_libdir}/libubik.a  ${with_afs_libdir}/liblwp.a ${with_afs_libdir}/afs/util.a"
+    if test -f ${with_afs_libdir}/afs/libafscom_err.a; then
+      AFS_LIBS="$AFS_LIBS ${with_afs_libdir}/afs/libafscom_err.a"
+    else
+      AFS_LIBS="$AFS_LIBS ${with_afs_libdir}/afs/libcom_err.a"
+    fi
     if test -f ${with_afs_libdir}/afs/libaudit.a; then
       AFS_LIBS="$AFS_LIBS ${with_afs_libdir}/afs/libaudit.a"
     fi
