@@ -58,3 +58,6 @@ RFC 3431, December 2002.
 [SUBADDR] Murchison, K., "Sieve Email Filtering -- Subaddress Extension",
 RFC 3598, September 2003.
 
+[IMAP4FLAGS] Melnikov, A., "Sieve Email Filtering: Imap4flags Extension",
+RFC 5232, January 2008.
+
