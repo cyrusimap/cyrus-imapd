@@ -1655,6 +1655,8 @@ int read_body(struct protstream *pin, hdrcache_t hdrs, struct body_t *body,
 		sscanf(buf, "%x", &chunk) != 1) {
 		*errstr = "Unable to read chunk size";
 		goto read_failure;
+
+		/* XXX  Do we need to parse chunk-ext? */
 	    }
 	    else if (chunk > body->max - body->len) return HTTP_TOO_LARGE;
 
