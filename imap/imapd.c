@@ -174,6 +174,11 @@ static void *imapd_tls_comp = NULL; /* TLS compression method, if any */
 static int imapd_compress_done = 0; /* have we done a successful compress? */
 static const char *plaintextloginalert = NULL;
 
+static struct id_data {
+    struct attvaluelist *params;
+    int did_id;
+} imapd_id;
+
 #ifdef HAVE_SSL
 /* our tls connection, if any */
 static SSL *tls_conn = NULL;
@@ -465,6 +470,8 @@ static int subscribed_cb(const char *name, int matchlen, int maycreate,
 			 struct list_rock *rock);
 static void list_data(struct listargs *listargs);
 static int list_data_remote(char *tag, struct listargs *listargs);
+
+static void clear_id();
 
 extern int saslserver(sasl_conn_t *conn, const char *mech,
 		      const char *init_resp, const char *resp_prefix,
@@ -794,6 +801,8 @@ static void imapd_reset(void)
 	saslprops.authid = NULL;
     }
     saslprops.ssf = 0;
+
+    clear_id();
 }
 
 /*
@@ -2664,6 +2673,13 @@ static void cmd_noop(char *tag, char *cmd)
 		error_message(IMAP_OK_COMPLETED));
 }
 
+static void clear_id() {
+    if (imapd_id.params) {
+	freeattvalues(imapd_id.params);
+    }
+    memset(&imapd_id, 0, sizeof(struct id_data));
+}
+
 /*
  * Parse and perform an ID command.
  *
@@ -2675,16 +2691,11 @@ static void cmd_noop(char *tag, char *cmd)
  */
 static void cmd_id(char *tag)
 {
-    static int did_id = 0;
-    static int failed_id = 0;
-    static int logged_id = 0;
-    int error = 0;
     int c = EOF, npair = 0;
     static struct buf arg, field;
-    struct attvaluelist *params = 0;
 
     /* check if we've already had an ID in non-authenticated state */
-    if (!imapd_userid && did_id) {
+    if (!imapd_userid && imapd_id.did_id) {
 	prot_printf(imapd_out,
 		    "%s NO Only one Id allowed in non-authenticated state\r\n",
 		    tag);
@@ -2692,13 +2703,7 @@ static void cmd_id(char *tag)
 	return;
     }
 
-    /* check if we've had too many failed IDs in a row */
-    if (failed_id >= MAXIDFAILED) {
-	prot_printf(imapd_out, "%s NO Too many (%u) invalid Id commands\r\n",
-		    tag, failed_id);
-	eatline(imapd_in, c);
-	return;
-    }
+    clear_id();
 
     /* ok, accept parameter list */
     c = getword(imapd_in, &arg);
@@ -2706,7 +2711,6 @@ static void cmd_id(char *tag)
     if (strcasecmp(arg.s, "NIL") && c != '(') {
 	prot_printf(imapd_out, "%s BAD Invalid parameter list in Id\r\n", tag);
 	eatline(imapd_in, c);
-	failed_id++;
 	return;
     }
 
@@ -2724,8 +2728,8 @@ static void cmd_id(char *tag)
 		prot_printf(imapd_out,
 			    "%s BAD Invalid/missing field name in Id\r\n",
 			    tag);
-		error = 1;
-		break;
+		eatline(imapd_in, c);
+		return;
 	    }
 
 	    /* get field value */
@@ -2734,42 +2738,41 @@ static void cmd_id(char *tag)
 		prot_printf(imapd_out,
 			    "%s BAD Invalid/missing value in Id\r\n",
 			    tag);
-		error = 1;
-		break;
+		eatline(imapd_in, c);
+		return;
 	    }
 
 	    /* ok, we're anal, but we'll still process the ID command */
 	    if (strlen(field.s) > MAXIDFIELDLEN) {
-		prot_printf(imapd_out, 
+		prot_printf(imapd_out,
 			    "%s BAD field longer than %u octets in Id\r\n",
 			    tag, MAXIDFIELDLEN);
-		error = 1;
-		break;
+		eatline(imapd_in, c);
+		return;
 	    }
 	    if (arg.len > MAXIDVALUELEN) {
 		prot_printf(imapd_out,
 			    "%s BAD value longer than %u octets in Id\r\n",
 			    tag, MAXIDVALUELEN);
-		error = 1;
-		break;
+		eatline(imapd_in, c);
+		return;
 	    }
 	    if (++npair > MAXIDPAIRS) {
 		prot_printf(imapd_out,
 			    "%s BAD too many (%u) field-value pairs in ID\r\n",
 			    tag, MAXIDPAIRS);
-		error = 1;
-		break;
+		eatline(imapd_in, c);
+		return;
 	    }
-	    
+
 	    /* ok, we're happy enough */
-	    appendattvalue(&params, field.s, &arg);
+	    appendattvalue(&imapd_id.params, field.s, &arg);
 	}
 
-	if (error || c != ')') {
+	if (c != ')') {
 	    /* erp! */
+	    prot_printf(imapd_out, "%s BAD trailing junk\r\n", tag);
 	    eatline(imapd_in, c);
-	    freeattvalues(params);
-	    failed_id++;
 	    return;
 	}
 	c = prot_getc(imapd_in);
@@ -2778,39 +2781,30 @@ static void cmd_id(char *tag)
     /* check for CRLF */
     if (c == '\r') c = prot_getc(imapd_in);
     if (c != '\n') {
-	prot_printf(imapd_out,
-		    "%s BAD Unexpected extra arguments to Id\r\n", tag);
+	prot_printf(imapd_out, "%s BAD Unexpected extra arguments to Id\r\n", tag);
 	eatline(imapd_in, c);
-	freeattvalues(params);
-	failed_id++;
 	return;
     }
 
     /* log the client's ID string.
        eventually this should be a callback or something. */
-    if (npair && logged_id < MAXIDLOG) {
-	char logbuf[MAXIDLOGLEN + 1] = "";
+    if (npair) {
+	struct buf logbuf = BUF_INITIALIZER;
 	struct attvaluelist *pptr;
 
-	for (pptr = params; pptr; pptr = pptr->next) {
+	for (pptr = imapd_id.params; pptr; pptr = pptr->next) {
 	    const char *val = buf_cstring(&pptr->value);
 	    /* should we check for and format literals here ??? */
-	    snprintf(logbuf + strlen(logbuf), MAXIDLOGLEN - strlen(logbuf),
-		     " \"%s\" ", pptr->attrib);
+	    buf_printf(&logbuf, " \"%s\" ", pptr->attrib);
 	    if (!val || !strcmp(val, "NIL"))
-		snprintf(logbuf + strlen(logbuf), MAXIDLOGLEN - strlen(logbuf),
-			 "NIL");
+		buf_printf(&logbuf, "NIL");
 	    else
-		snprintf(logbuf + strlen(logbuf), MAXIDLOGLEN - strlen(logbuf),
-			"\"%s\"", val);
+		buf_printf(&logbuf, "\"%s\"", val);
 	}
 
-	syslog(LOG_INFO, "client id:%s", logbuf);
-
-	logged_id++;
+	syslog(LOG_INFO, "client id:%s", buf_cstring(&logbuf));
+	buf_free(&logbuf);
     }
-
-    freeattvalues(params);
 
     /* spit out our ID string.
        eventually this might be configurable. */
@@ -2827,8 +2821,7 @@ static void cmd_id(char *tag)
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
 
-    failed_id = 0;
-    did_id = 1;
+    imapd_id.did_id = 1;
 }
 
 /*

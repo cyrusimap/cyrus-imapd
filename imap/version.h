@@ -46,12 +46,9 @@
 #include "prot.h"
 /* Values for ID processing */
 enum {
-    MAXIDFAILED	= 3,
-    MAXIDLOG = 5,
     MAXIDFIELDLEN = 30,
     MAXIDVALUELEN = 1024,
     MAXIDPAIRS = 30,
-    MAXIDLOGLEN = (MAXIDPAIRS * (MAXIDFIELDLEN + MAXIDVALUELEN + 6))
 };
 
 const char *cyrus_version(void);
