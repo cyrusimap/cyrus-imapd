@@ -471,6 +471,13 @@ Blank lines and lines beginning with ``#'' are ignored.
    Note that any path specified by "rss_feedlist_template" is an
    exception to this rule.*/
 
+{ "httpcontentmd5", 0, SWITCH }
+/* If enabled, HTTP responses will include a Content-MD5 header for
+   the purpose of providing an end-to-end message integrity check
+   (MIC) of the payload body.  Note that enabling this option will
+   use additional CPU to generate the MD5 digest, which may be ignored
+   by clients anyways. */
+
 { "httpdocroot", NULL, STRING }
 /* If set, http will serve the static content (html/text/jpeg/gif
    files, etc) rooted at this directory.  Otherwise, httpd will not

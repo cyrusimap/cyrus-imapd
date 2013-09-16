@@ -265,6 +265,7 @@ struct resp_body_t {
     unsigned char enc;	/* Content-Encoding */
     const char *lang;	/* Content-Language */
     const char *loc;	/* Content-Location */
+    const u_char *md5;	/* Content-MD5      */
     const char *type;	/* Content-Type     */
     unsigned prefs;	/* Prefer	    */
     const char *lock;	/* Lock-Token       */
@@ -285,6 +286,7 @@ struct txn_flags_t {
     unsigned char cc;			/* Cache-Control directives for resp */
     unsigned char ranges;		/* Accept range requests for resource */
     unsigned char vary;			/* Headers on which response varied */
+    unsigned char trailer;		/* Headers which will be in trailer */
 };
 
 /* Transaction context */
@@ -375,6 +377,11 @@ enum {
     VARY_AE =		(1<<0),	/* Accept-Encoding */
     VARY_BRIEF =	(1<<1),
     VARY_PREFER =	(1<<2)
+};
+
+/* Trailer header flags */
+enum {
+    TRAILER_CMD5 =	(1<<0)  /* Content-MD5 */
 };
 
 typedef int (*method_proc_t)(struct transaction_t *txn, void *params);

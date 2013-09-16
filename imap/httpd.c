@@ -92,6 +92,7 @@
 #include "rfc822date.h"
 #include "tok.h"
 #include "wildmat.h"
+#include "md5.h"
 
 #ifdef WITH_DAV
 #include "http_dav.h"
@@ -2008,6 +2009,18 @@ void allow_hdr(const char *hdr, unsigned allow)
     }
 }
 
+#define MD5_BASE64_LEN 25   /* ((MD5_DIGEST_LENGTH / 3) + 1) * 4 */
+
+void Content_MD5(const unsigned char *md5)
+{
+    char base64[MD5_BASE64_LEN+1];
+
+    sasl_encode64((char *) md5, MD5_DIGEST_LENGTH,
+		  base64, MD5_BASE64_LEN, NULL);
+    prot_printf(httpd_out, "Content-MD5: %s\r\n", base64);
+}
+
+
 void response_header(long code, struct transaction_t *txn)
 {
     time_t now;
@@ -2283,6 +2296,9 @@ void response_header(long code, struct transaction_t *txn)
 	    prot_printf(httpd_out, "Content-Location: %s\r\n", resp_body->loc);
 	    if (txn->flags.cors) Access_Control_Expose("Content-Location");
 	}
+	if (resp_body->md5) {
+	    Content_MD5(resp_body->md5);
+	}
     }
 
 
@@ -2324,6 +2340,14 @@ void response_header(long code, struct transaction_t *txn)
 		    { "deflate", "gzip", "chunked", NULL };
 
 		comma_list_hdr("Transfer-Encoding", te, txn->flags.te);
+
+		if (txn->flags.trailer) {
+		    /* Construct Trailer header */
+		    const char *trailer_hdrs[] =
+			{ "Content-MD5", NULL };
+
+		    comma_list_hdr("Trailer", trailer_hdrs, txn->flags.trailer);
+		}
 	    }
 	}
 	else prot_printf(httpd_out, "Content-Length: %lu\r\n", resp_body->len);
@@ -2426,6 +2450,9 @@ void write_body(long code, struct transaction_t *txn,
 {
     unsigned is_dynamic = code ? (txn->flags.te & TE_CHUNKED) : 1;
     unsigned outlen = len, offset = 0;
+    int do_md5 = config_getswitch(IMAPOPT_HTTPCONTENTMD5);
+    static MD5_CTX ctx;
+    static unsigned char md5[MD5_DIGEST_LENGTH];
 
     if (!is_dynamic && len < GZIP_MIN_LEN) {
 	/* Don't compress small static content */
@@ -2467,6 +2494,7 @@ void write_body(long code, struct transaction_t *txn,
 
     if (code) {
 	/* Initial call - prepare response header based on CE, TE and version */
+	if (do_md5) MD5_Init(&ctx);
 
 	if (txn->flags.te & ~TE_CHUNKED) {
 	    /* Transfer-Encoded content MUST be chunked */
@@ -2520,11 +2548,18 @@ void write_body(long code, struct transaction_t *txn,
 		    break;
 		}
 	    }
+
+	    if (outlen && do_md5) {
+		MD5_Update(&ctx, buf+offset, outlen);
+		MD5_Final(md5, &ctx);
+		txn->resp_body.md5 = md5;
+	    }
 	}
 	else if (txn->flags.ver1_0) {
 	    /* HTTP/1.0 doesn't support chunked - close-delimit the body */
 	    txn->flags.conn = CONN_CLOSE;
 	}
+	else if (do_md5) txn->flags.trailer = TRAILER_CMD5;
 
 	response_header(code, txn);
 
@@ -2549,12 +2584,19 @@ void write_body(long code, struct transaction_t *txn,
 	    prot_printf(httpd_out, "%x\r\n", outlen);
 	    prot_write(httpd_out, buf, outlen);
 	    prot_puts(httpd_out, "\r\n");
+
+	    if (do_md5) MD5_Update(&ctx, buf, outlen);	    
 	}
 	if (!len) {
 	    /* Terminate the HTTP/1.1 body with a zero-length chunk */
 	    prot_puts(httpd_out, "0\r\n");
 
-	    /* Empty trailer */
+	    /* Trailer */
+	    if (do_md5) {
+		MD5_Final(md5, &ctx);
+		Content_MD5(md5);
+	    }
+
 	    prot_puts(httpd_out, "\r\n");
 	}
     }
