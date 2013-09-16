@@ -1100,6 +1100,17 @@ static void cmdloop(void)
 	    ret = HTTP_BAD_REQUEST;
 	}
 
+	/* Check message framing */
+	else if ((r = parse_framing(txn.req_hdrs, &txn.req_body,
+				    &txn.error.desc))) {
+	    ret = r;
+	}
+
+	/* Check for Expectations */
+	else if ((r = parse_expect(&txn))) {
+	    ret = r;
+	}
+
 	/* Check for mandatory Host header (HTTP/1.1+ only) */
 	else if ((hdr = spool_getheader(txn.req_hdrs, "Host")) && hdr[1]) {
 	    ret = HTTP_BAD_REQUEST;
@@ -1124,15 +1135,6 @@ static void cmdloop(void)
 		ret = HTTP_BAD_REQUEST;
 		txn.error.desc = "Missing Host header";
 	    }
-	}
-
-	/* Check for Expectations */
-	else if ((r = parse_expect(&txn))) ret = r;
-
-	/* Check message framing */
-	else if ((r = parse_framing(txn.req_hdrs, &txn.req_body,
-				    &txn.error.desc))) {
-	    ret = r;
 	}
 
 	if (ret) goto done;
