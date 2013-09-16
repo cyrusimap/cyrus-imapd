@@ -66,7 +66,6 @@
 #endif
 
 #include <sys/socket.h>
-#include <errno.h>
 
 #include "exitcodes.h"
 #include "map.h"

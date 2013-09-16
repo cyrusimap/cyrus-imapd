@@ -56,7 +56,6 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <sys/stat.h>
-#include <stdlib.h>
 #ifdef HAVE_ZLIB
 #include <zlib.h>
 #endif
@@ -81,7 +80,7 @@
 #include "acl.h"
 #include "assert.h"
 #include "hash.h"
-#include "global.h"
+#include "imap/global.h"
 #include "exitcodes.h"
 #include "imap/imap_err.h"
 #include "mailbox.h"
@@ -92,7 +91,6 @@
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 #include "strarray.h"
-#include "global.h"
 #include "mboxname.h"
 #include "mboxlist.h"
 #include "quota.h"

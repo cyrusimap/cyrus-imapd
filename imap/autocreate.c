@@ -58,7 +58,6 @@
 #include <ctype.h>
 #include <time.h>
 #include <syslog.h>
-#include <config.h>
 
 #include "global.h"
 #include "util.h"

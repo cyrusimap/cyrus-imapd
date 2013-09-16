@@ -62,8 +62,6 @@
 #include <netdb.h>
 #include <sys/socket.h>
 #include <sys/file.h>
-#include <netinet/in.h>
-#include <netdb.h>
 #include <syslog.h>
 
 #include <pwd.h>

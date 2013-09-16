@@ -53,11 +53,9 @@
 #include <sys/types.h>
 #include <fcntl.h>
 #include <netinet/in.h>
-#include <sys/types.h>
 #include <sys/stat.h>
 #include <ctype.h>
 #include <dirent.h>
-#include <unistd.h>
 #include <utime.h>
 
 #include "annotate.h"

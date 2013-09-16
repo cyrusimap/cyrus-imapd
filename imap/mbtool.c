@@ -55,7 +55,6 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <sys/stat.h>
-#include <stdlib.h>
 
 #if HAVE_DIRENT_H
 # include <dirent.h>

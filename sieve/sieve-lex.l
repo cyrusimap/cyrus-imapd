@@ -46,7 +46,6 @@
 #include <config.h>
 #endif
 
-#include <string.h> /* for strdup */
 #include "xmalloc.h"
 
 #include "sieve/tree.h"

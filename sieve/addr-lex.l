@@ -45,8 +45,6 @@
 
 #include "sieve/sieve_interface.h"
 #include "sieve/addr.h"
-#include <stdlib.h>
-#include <string.h>
 
 void addrerror(void*, const char *);
 

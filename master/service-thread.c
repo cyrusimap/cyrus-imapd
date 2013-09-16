@@ -51,8 +51,6 @@
 #endif
 #include <fcntl.h>
 #include <signal.h>
-#include <sys/time.h>
-#include <sys/types.h>
 #include <sys/param.h>
 #include <sys/stat.h>
 #include <syslog.h>
