@@ -5456,6 +5456,11 @@ static void cmd_search(char *tag, int usinguid)
 	freesearchargs(searchargs);
 	return;
     }
+    if (imapd_id.quirks & QUIRK_SEARCHFUZZY) {
+	char *expr = search_expr_serialise(searchargs->root);
+	syslog(LOG_NOTICE, "fuzzy search %s", expr);
+	free(expr);
+    }
 
     if (c == '\r') c = prot_getc(imapd_in);
     if (c != '\n') {
