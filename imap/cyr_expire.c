@@ -58,6 +58,7 @@
 #include "annotate.h"
 #include "duplicate.h"
 #include "exitcodes.h"
+#include "imap_err.h"
 #include "global.h"
 #include "hash.h"
 #include "libcyr_cfg.h"
@@ -229,15 +230,21 @@ static int expire(char *name, int matchlen __attribute__((unused)),
     if (sigquit) {
 	return 1;
     }
-    /* Skip remote mailboxes */
     r = mboxlist_lookup(name, &mbentry, NULL);
+
+    /* Skip deleted mailboxes */
+    if (r == IMAP_MAILBOX_NONEXISTENT)
+	return 0;
+
     if (r) {
 	if (verbose) {
 	    printf("error looking up %s: %s\n", name, error_message(r));
 	}
-	return 1;
+	syslog(LOG_ERR, "error looking up %s: %s\n", name, error_message(r));
+	return 0; /* still keep going */
     }
 
+    /* Skip remote mailboxes */
     if (mbentry->mbtype & MBTYPE_REMOTE) {
 	mboxlist_entry_free(&mbentry);
 	return 0;
