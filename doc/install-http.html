@@ -382,6 +382,41 @@
 </ol>
 </p>
 
+<h4><a href="http://www.acal.me">aCal</a></h4>
+
+<p>This client will autodetect all available calendars on a server.
+  To add a Cyrus server to this client, perform the following steps:
+
+<ol>
+<li>Press the Andoid "Menu" button.</li>
+<li>Select "Settings".</li>
+<li>Select "Servers".</li>
+<li>Select "Add Server".</li>
+<li>Select "Manual Configuration".</li>
+<li>Fill in Username, Password, and User URL (servername) accordingly.</li>
+<li>Press "Apply".</li>
+</ol>
+</p>
+
+<h4><a href="http://www.inf-it.com/open-source/clients/caldavzap/">
+  CalDavZAP</a></h4>
+
+<p>This client will autodetect all available calendars on a server.
+  To configure this client for a Cyrus server, edit <tt>config.js</tt> as
+  follows:
+
+<ol>
+<li>Set the <tt>href</tt> value in
+  the <tt>globalNetworkCheckSettings</tt> array to a URL of the following
+  form: <tt>https://&lt;servername&gt;/dav/principals/user/</tt> 
+  <br>Note that the trailing "/" is REQUIRED.</li>
+<li>Set the <tt>globalSettingsType</tt> option
+  to <tt>calendar-home-set</tt></li>
+<li>Set any other options as desired
+  (e.g. <tt>globalDatepickerFirstDayOfWeek</tt>, <tt>globalTimeZone</tt>).</li>
+</ol>
+</p>
+
 
 <h2>CardDAV Module</h2>
 
@@ -452,6 +487,24 @@
 <li>Select the "Add CardDAV Account" menu.</li>
 <li>Fill in Server, User Name, Password, and Description accordingly.</li>
 <li>Click Next.</li>
+</ol>
+</p>
+
+<h4><a href="http://www.inf-it.com/open-source/clients/carddavmate/">
+  CardDavMATE</a></h4>
+
+<p>This client will autodetect all available addressbooks on a server.
+  To configure this client for a Cyrus server, edit <tt>config.js</tt> as
+  follows:
+
+<ol>
+<li>Set the <tt>href</tt> value in
+  the <tt>globalNetworkCheckSettings</tt> array to a URL of the following
+  form: <tt>https://&lt;servername&gt;/dav/principals/user/</tt> 
+  <br>Note that the trailing "/" is REQUIRED.</li>
+<li>Set the <tt>globalSettingsType</tt> option
+  to <tt>addressbook-home-set</tt></li>
+<li>Set any other options as desired.</li>
 </ol>
 </p>
 
