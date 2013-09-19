@@ -817,6 +817,20 @@ static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
     switch (fctx->req_tgt->namespace) {
     case URL_NS_CALENDAR:
 	buf_setcstr(&fctx->buf, "text/calendar; charset=utf-8");
+
+	if (fctx->data) {
+	    struct caldav_data *cdata = (struct caldav_data *) fctx->data;
+	    const char *comp = NULL;
+
+	    switch (cdata->comp_type) {
+	    case CAL_COMP_VEVENT: comp = "VEVENT"; break;
+	    case CAL_COMP_VTODO: comp = "VTODO"; break;
+	    case CAL_COMP_VJOURNAL: comp = "VJOURNAL"; break;
+	    case CAL_COMP_VFREEBUSY: comp = "VFREEBUSY"; break;
+	    }
+
+	    if (comp) buf_printf(&fctx->buf, "; component=%s", comp);
+	}
 	break;
 
     case URL_NS_ADDRESSBOOK:
