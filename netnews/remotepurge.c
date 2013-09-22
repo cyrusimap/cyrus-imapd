@@ -47,7 +47,6 @@
 #include <sys/msg.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <ctype.h>
 
 #include <stdlib.h>
 #include <stdio.h>

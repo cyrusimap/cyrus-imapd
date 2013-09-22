@@ -48,7 +48,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <ctype.h>
 #include <syslog.h>
 #include <signal.h>
 #include <sys/types.h>

@@ -45,7 +45,6 @@
 #include <stdlib.h>
 #include <syslog.h>
 #include <string.h>
-#include <ctype.h>
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <errno.h>

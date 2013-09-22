@@ -44,7 +44,6 @@
  */
 
 #include <config.h>
-#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 #include "util.h"

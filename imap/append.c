@@ -46,7 +46,6 @@
 #include <unistd.h>
 #endif
 #include <stdio.h>
-#include <ctype.h>
 #include <string.h>
 #include <sys/types.h>
 #include <syslog.h>

@@ -58,7 +58,6 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <errno.h>
-#include <ctype.h>
 #include <sys/resource.h>
 
 #include "global.h"

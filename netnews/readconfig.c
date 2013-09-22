@@ -69,7 +69,6 @@
 #include <stdio.h>
 #include <time.h>
 #include <string.h>
-#include <ctype.h>
 
 #include "macros.h"
 

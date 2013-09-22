@@ -48,7 +48,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
 #include <syslog.h>

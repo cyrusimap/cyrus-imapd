@@ -47,6 +47,7 @@
 
 #ifdef HAVE_LDAP
 
+#include <ctype.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>

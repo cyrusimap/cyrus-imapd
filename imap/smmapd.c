@@ -83,7 +83,6 @@
 #include <string.h>
 #include <syslog.h>
 #include <signal.h>
-#include <ctype.h>
 
 #include "acl.h"
 #include "append.h"

@@ -44,7 +44,6 @@
 #define INCLUDED_LIBCYR_CFG_H
 
 #include <stdio.h>
-#include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
 #include <sys/types.h>

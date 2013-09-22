@@ -47,6 +47,7 @@
 #define INCLUDED_UTIL_H
 
 #include <config.h>
+#include <ctype.h>
 #include <sys/types.h>
 #include <limits.h>
 #include <stdarg.h>

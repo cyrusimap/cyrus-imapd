@@ -45,7 +45,6 @@
 #include <errno.h>
 #include <string.h>
 #include <signal.h>
-#include <ctype.h>
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 #include <syslog.h>

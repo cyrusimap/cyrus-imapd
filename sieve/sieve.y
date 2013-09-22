@@ -49,7 +49,6 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
-#include <ctype.h>
 #include "xmalloc.h"
 #include "sieve/comparator.h"
 #include "sieve/interp.h"

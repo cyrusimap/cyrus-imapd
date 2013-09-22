@@ -44,7 +44,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <ctype.h>
 #include <errno.h>
 #include <limits.h>
 #include <time.h>

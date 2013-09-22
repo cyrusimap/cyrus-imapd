@@ -56,7 +56,6 @@
 #include <netinet/in.h>
 #include <syslog.h>
 #include <errno.h>
-#include <ctype.h>
 
 #include "annotate.h" /* for strlist functionality */
 #include "message_guid.h"

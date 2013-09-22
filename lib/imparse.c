@@ -42,7 +42,6 @@
 
 #include <config.h>
 #include <stdio.h>
-#include <ctype.h>
 
 #include "imparse.h"
 #include "util.h"
