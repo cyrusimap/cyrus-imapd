@@ -120,7 +120,6 @@ print CFILE <<EOF
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
-#include <syslog.h>
 #include <stdlib.h>
 #include <string.h>
 #include "imapopts.h"

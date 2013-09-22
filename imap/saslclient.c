@@ -47,7 +47,6 @@
 #include <string.h>
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
-#include <syslog.h>
 
 #include "xmalloc.h"
 #include "imap/imap_err.h"

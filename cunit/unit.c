@@ -43,7 +43,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
-#include <syslog.h>
 #include <unistd.h>
 #include <CUnit/CUnit.h>
 #include <CUnit/Basic.h>

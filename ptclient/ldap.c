@@ -40,6 +40,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <syslog.h>
 #include <config.h>
 #include "ptloader.h"
 #include "exitcodes.h"

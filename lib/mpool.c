@@ -50,7 +50,6 @@
 #include <string.h>
 #include <signal.h>
 #include <stdlib.h>
-#include <syslog.h>
 #include <errno.h>
 
 #include "mpool.h"
