@@ -47,7 +47,6 @@
 #endif
 #include <stdio.h>
 #include <ctype.h>
-#include <utime.h>
 #include <string.h>
 #include <sys/types.h>
 #include <syslog.h>

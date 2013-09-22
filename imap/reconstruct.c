@@ -51,7 +51,6 @@
 #include <string.h>
 #include <fcntl.h>
 #include <ctype.h>
-#include <utime.h>
 #include <syslog.h>
 #include <sys/types.h>
 #include <netinet/in.h>

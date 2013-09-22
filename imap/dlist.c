@@ -57,7 +57,6 @@
 #include <errno.h>
 #include <ctype.h>
 #include <dirent.h>
-#include <utime.h>
 
 #include "global.h"
 #include "assert.h"
