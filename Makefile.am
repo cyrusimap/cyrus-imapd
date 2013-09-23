@@ -1104,8 +1104,7 @@ notifyd_notifyd_SOURCES = \
 	notifyd/notify_null.c \
 	notifyd/notify_null.h \
 	notifyd/notifyd.c \
-	notifyd/notifyd.h \
-	notifyd/version.h
+	notifyd/notifyd.h
 if ZEPHYR
 notifyd_notifyd_SOURCES += notifyd/notify_zephyr.c notifyd/notify_zephyr.h
 endif
