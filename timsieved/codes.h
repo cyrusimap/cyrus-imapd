@@ -45,8 +45,6 @@
 #ifndef _CODES_H_
 #define _CODES_H_
 
-#include "imap/version.h"
-
 #define TIMSIEVE_OK 0
 #define TIMSIEVE_FAIL -10
 

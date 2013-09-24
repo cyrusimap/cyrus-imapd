@@ -65,6 +65,7 @@
 #include "imap/global.h"
 #include "imap/sync_log.h"
 #include "imap/tls.h"
+#include "imap/version.h"
 #include "timsieved/actions.h"
 #include "timsieved/scripttest.h"
 
