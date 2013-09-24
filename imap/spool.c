@@ -53,7 +53,6 @@
 #include "util.h"
 #include "xmalloc.h"
 #include "imap/imap_err.h"
-#include "imap/nntp_err.h"
 #include "global.h"
 #include "strarray.h"
 
