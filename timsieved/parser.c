@@ -70,6 +70,7 @@
 #include "imap/tls.h"
 
 #include "timsieved/actions.h"
+#include "timsieved/codes.h"
 #include "timsieved/lex.h"
 
 extern const char *sieved_clienthost;

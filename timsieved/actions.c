@@ -67,6 +67,7 @@
 #include "imap/tls.h"
 #include "imap/version.h"
 #include "timsieved/actions.h"
+#include "timsieved/codes.h"
 #include "timsieved/scripttest.h"
 
 /* after a user has authentication, our current directory is their Sieve 

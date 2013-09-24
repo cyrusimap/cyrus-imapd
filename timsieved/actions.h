@@ -48,7 +48,6 @@
 
 #include "prot.h"
 #include "util.h"
-#include "timsieved/codes.h"
 
 /*
  * Get the list of capabilities
@@ -115,7 +114,5 @@ int actions_init(void);
  */
 
 int actions_setuser(const char *userid);
-
-
 
 #endif

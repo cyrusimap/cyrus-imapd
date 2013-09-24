@@ -55,7 +55,7 @@
 #include "xmalloc.h"
 #include "imap/global.h"
 #include "imap/tls.h"
-#include "timsieved/actions.h"
+#include "timsieved/codes.h"
 #include "timsieved/lex.h"
 
 static int token_lookup(const char *str)
