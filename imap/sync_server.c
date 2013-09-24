@@ -89,7 +89,6 @@
 #include "prot.h"
 #include "quota.h"
 #include "seen.h"
-#include "spool.h"
 #include "statuscache.h"
 #include "sync_log.h"
 #include "telemetry.h"
