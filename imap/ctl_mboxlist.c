@@ -83,8 +83,6 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 
-#include "sync_log.h"
-
 extern int optind;
 extern char *optarg;
 
