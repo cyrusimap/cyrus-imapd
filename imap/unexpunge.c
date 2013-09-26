@@ -56,7 +56,6 @@
 
 #include "annotate.h"
 #include "cyrusdb.h"
-#include "duplicate.h"
 #include "exitcodes.h"
 #include "global.h"
 #include "imap/imap_err.h"
