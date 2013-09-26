@@ -63,7 +63,6 @@
 #include "xmalloc.h"
 #include "mailbox.h"
 #include "imap/imap_err.h"
-#include "statuscache.h"
 #include "seen.h"
 #include "sync_log.h"
 #include "imparse.h"
