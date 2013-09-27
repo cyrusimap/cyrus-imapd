@@ -348,7 +348,7 @@ int scan_me(char *name,
 	printf("Working on %s...\n", mboxname);
     }
 
-    r = mailbox_open_iwl(name, 0, &mailbox);
+    r = mailbox_open_iwl(name, &mailbox);
     if (r) { /* did we find it? */
 	syslog(LOG_ERR, "Couldn't find %s, check spelling", name);
 	return 0;
@@ -386,7 +386,7 @@ int scan_me(char *name,
 	if (i_mbox) i_mbox->recno = 1;
     }
 
-    mailbox_expunge(mailbox, virus_check, i_mbox, 0, NULL, EVENT_MESSAGE_EXPUNGE);
+    mailbox_expunge(mailbox, virus_check, i_mbox, NULL, EVENT_MESSAGE_EXPUNGE);
     mailbox_close(&mailbox);
 
     return 0;
