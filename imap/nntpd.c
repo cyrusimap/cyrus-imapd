@@ -57,7 +57,6 @@
 #include <stdint.h>
 #endif
 #include <stdio.h>
-#include <errno.h>
 #include <string.h>
 #include <fcntl.h>
 #include <signal.h>

@@ -44,7 +44,6 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <syslog.h>
-#include <errno.h>
 #include <unistd.h>
 #include <regex.h>
 #include <memory.h>

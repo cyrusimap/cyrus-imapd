@@ -65,7 +65,6 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
-#include <errno.h>
 #include <syslog.h>
 #include <stdlib.h>
 #include <string.h>

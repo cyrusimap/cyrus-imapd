@@ -50,7 +50,6 @@
 #include <string.h>
 #include <signal.h>
 #include <stdlib.h>
-#include <errno.h>
 
 /* Opaque mpool handle */
 struct mpool;

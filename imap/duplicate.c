@@ -66,7 +66,6 @@
 #  include <ndir.h>
 # endif
 #endif
-#include <errno.h>
 
 #include "assert.h"
 #include "xmalloc.h"

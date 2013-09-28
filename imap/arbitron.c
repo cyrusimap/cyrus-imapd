@@ -49,7 +49,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <dirent.h>
-#include <errno.h>
 #include <syslog.h>
 #include <sys/types.h>
 #include <netinet/in.h>

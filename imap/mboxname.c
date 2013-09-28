@@ -44,7 +44,6 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <errno.h>
 #include <syslog.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>

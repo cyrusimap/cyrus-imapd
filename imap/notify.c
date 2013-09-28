@@ -45,7 +45,6 @@
 #endif
 
 #include <stdio.h>
-#include <errno.h>
 #include <string.h>
 #include <syslog.h>
 #include <sys/types.h>

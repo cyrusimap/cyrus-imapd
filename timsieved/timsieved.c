@@ -48,7 +48,6 @@
 
 #include <arpa/inet.h>
 #include <dirent.h>
-#include <errno.h>
 #include <limits.h>
 #include <netdb.h>
 #include <netinet/in.h>

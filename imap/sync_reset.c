@@ -56,7 +56,6 @@
 #include <fcntl.h>
 #include <string.h>
 #include <sys/wait.h>
-#include <errno.h>
 #include <sys/resource.h>
 
 #include "global.h"

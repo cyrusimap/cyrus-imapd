@@ -49,7 +49,6 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <syslog.h>
-#include <errno.h>
 #include <ctype.h>
 #include <stdlib.h>
 

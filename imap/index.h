@@ -54,7 +54,6 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <netinet/in.h>
-#include <errno.h>
 
 #include "annotate.h" /* for strlist functionality */
 #include "message_guid.h"

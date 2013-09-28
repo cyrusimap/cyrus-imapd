@@ -42,7 +42,6 @@
 
 #include <stdio.h>
 #include <memory.h>
-#include <errno.h>
 #include <ctype.h>
 
 #include "assert.h"

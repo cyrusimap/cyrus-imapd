@@ -50,7 +50,6 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <netinet/in.h>
-#include <errno.h>
 #include <limits.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
