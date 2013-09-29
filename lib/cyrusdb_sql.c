@@ -119,6 +119,7 @@ static char *_mysql_escape(void *conn, char **to,
     *to = xrealloc(*to, 2 * fromlen + 1); /* +1 for NUL */
 
     tolen = mysql_real_escape_string(conn, *to, from, fromlen);
+    (void)tolen;
 
     return *to;
 }
@@ -882,6 +883,7 @@ static int abort_txn(struct dbengine *db, struct txn *tid)
 static int mycompar(struct dbengine *db, const char *a, int alen,
 		    const char *b, int blen)
 {
+    (void)db;
     return bsearch_ncompare_raw(a, alen, b, blen);
 }
 

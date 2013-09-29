@@ -46,6 +46,7 @@
 
 int ftruncate(int fd, int length)
 {
+    (void)fd; (void)length;
     errno = EINVAL;
     return -1;
 }

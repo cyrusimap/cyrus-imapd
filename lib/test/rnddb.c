@@ -43,6 +43,7 @@ int countem(void *rock,
 	const char *key, int keylen,
 	const char *data, int datalen)
 {
+    (void)rock; (void)key; (void)keylen; (void)data; (void)datalen;
     count++;
     return 0;
 }
@@ -51,6 +52,7 @@ int findvictim(void *rock,
 	       const char *key, int keylen,
 	       const char *data, int datalen)
 {
+    (void)rock; (void)keylen; (void)data; (void)datalen;
     if (!victim) {
 	if ((rand() % count) == 0) {
 	    victim = xstrdup(key);

@@ -73,6 +73,7 @@ void
 timeout(signo)
 int signo;
 {
+	(void)signo;
 	fprintf(stderr,"fud-client: request timed out.\n");
 	exit(EX_UNAVAILABLE);
 }

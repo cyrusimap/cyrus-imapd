@@ -24,6 +24,8 @@ int yes(void *rock,
 	const char *key, int keylen,
 	const char *data, int datalen)
 {
+    (void)rock; (void)key; (void)keylen;
+    (void)data; (void)datalen;
     return 1;
 }
 
@@ -31,6 +33,7 @@ int appkey(void *rock,
 	   const char *key, int keylen,
 	   const char *data, int datalen)
 {
+    (void)data; (void)datalen;
     char *r = *(char **) rock;
     int newlen;
 

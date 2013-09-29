@@ -38,7 +38,7 @@ int main (argc, argv)
     int argc;
     char* argv[];
 {
-    char text[1024];
+    (void)argc;(void)argv;
     int i, j;
     int failed = 0;
     glob *g;
@@ -85,5 +85,6 @@ int main (argc, argv)
 }
 
 void fatal(char *s) {
+	(void)s;
 	exit(1);
 }

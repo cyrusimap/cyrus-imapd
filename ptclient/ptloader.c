@@ -234,6 +234,7 @@ int service_main_fd(int c, int argc __attribute__((unused)),
     if(newstate) {
 	/* Success! */
 	rc = cyrusdb_store(ptsdb, user, size, (void *)newstate, dsize, NULL);
+	(void)rc;
         free(newstate);
 	
 	/* and we're done */

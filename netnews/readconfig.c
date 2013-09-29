@@ -457,6 +457,7 @@ callback_list(struct imclient *imclient,
 	      void *rock,
 	      struct imclient_reply *reply)
 {
+    (void)imclient; (void)rock;
     char *s, *end;
     char *mailbox, *attributes, *separator;
     int c;
@@ -483,6 +484,7 @@ callback_list(struct imclient *imclient,
 	if (*s != '\"') return;
 	*s++ = '\0';
     }
+    (void)separator;
 
     if (*s++ != ' ') return;
     c = imparse_astring(&s, &mailbox);

@@ -65,6 +65,7 @@ EXPORTED map_refresh(int fd, int onceonly, const char **base,
 		     size_t *len, size_t newlen, const char *name,
 		     const char *mboxname)
 {
+    (void)onceonly;
     struct stat sbuf;
     int flags;
     char buf[80];

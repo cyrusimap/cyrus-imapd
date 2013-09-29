@@ -219,6 +219,7 @@ static void callback_capability(struct imclient *imclient,
 				struct imclient_reply *reply)
 
 {
+    (void)imclient;
     char *s;
     capabilities_t **caps = (capabilities_t **) rock;
     
@@ -235,6 +236,7 @@ callback_finish(struct imclient *imclient,
 		void *rock,
 		struct imclient_reply *reply)
 {
+    (void)imclient; (void)rock;
     if (!strcmp(reply->keyword, "OK")) {
 	cmd_done = IMAP_OK;
     } else if (!strcmp(reply->keyword, "NO")) {
@@ -279,6 +281,7 @@ callback_exists(struct imclient *imclient,
 	       void *rock,
 	       struct imclient_reply *reply)
 {
+    (void)imclient; (void)rock;
     current_mbox_exists = reply->msgno;
 }
 
@@ -287,6 +290,7 @@ callback_search(struct imclient *imclient,
 	       void *rock,
 	       struct imclient_reply *reply)
 {
+    (void)imclient;
     uid_list_t *uids = (uid_list_t *) rock;
     const char *s;
     uint32_t num;
@@ -639,7 +643,7 @@ int main(int argc, char **argv)
     int minssf = 0;
     char c;
 
-    char *tls_keyfile="";
+    char *tls_keyfile="";(void)tls_keyfile;
     char *port = "imap";
     int dotls=0;
     int r;
@@ -688,6 +692,7 @@ int main(int argc, char **argv)
 	    break;
 	}
 
+    (void)dotls;(void)mechanism;
     if (optind >= argc) usage();
 
 
