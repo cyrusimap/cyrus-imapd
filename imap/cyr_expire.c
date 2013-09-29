@@ -56,7 +56,6 @@
 #include <sasl/sasl.h>
 
 #include "annotate.h"
-#include "cyrusdb.h"
 #include "duplicate.h"
 #include "exitcodes.h"
 #include "global.h"

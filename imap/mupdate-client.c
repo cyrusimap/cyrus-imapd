@@ -62,7 +62,6 @@
 #include <sys/select.h>
 #endif
 
-#include "cyrusdb.h"
 #include "exitcodes.h"
 #include "global.h"
 #include "mupdate.h"

@@ -59,7 +59,6 @@
 #include "acl.h"
 #include "assert.h"
 #include "charset.h"
-#include "cyrusdb.h"
 #include "exitcodes.h"
 #include "gmtoff.h"
 #include "iptostring.h"

@@ -57,7 +57,6 @@
 #include <string.h>
 #include "../xversion.h"
 #include "version.h"
-#include "cyrusdb.h"
 #include "map.h"
 #include "cyr_lock.h"
 #include "nonblock.h"

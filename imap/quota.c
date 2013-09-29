@@ -73,7 +73,6 @@
 #endif
 
 #include "bsearch.h"
-#include "cyrusdb.h"
 #include "global.h"
 #include "exitcodes.h"
 #include "imap/imap_err.h"

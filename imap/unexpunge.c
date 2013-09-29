@@ -54,7 +54,6 @@
 #include <signal.h>
 
 #include "annotate.h"
-#include "cyrusdb.h"
 #include "exitcodes.h"
 #include "global.h"
 #include "imap/imap_err.h"

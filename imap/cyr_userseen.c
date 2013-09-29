@@ -51,7 +51,6 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
-#include "cyrusdb.h"
 #include "global.h"
 #include "exitcodes.h"
 #include "libcyr_cfg.h"

@@ -52,7 +52,6 @@
 #include <sys/stat.h>
 #include <signal.h>
 
-#include "cyrusdb.h"
 #include "duplicate.h"
 #include "exitcodes.h"
 #include "global.h"
