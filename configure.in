@@ -1037,6 +1037,15 @@ if test "$ENABLE_RSS" != no -o "$ENABLE_DAV" != no; then
 	 AC_SUBST(DKIM_LIBS)
 	 AC_DEFINE(WITH_DKIM,[],[Build DKIM support into iSchedule?]) 
       fi
+
+      ENABLE_JSON=yes
+      PKG_CHECK_MODULES([JSON], [json],, ENABLE_JSON=no)
+      if test "$ENABLE_JSON" != no; then
+         AC_SUBST(JSON_CFLAGS)
+	 AC_SUBST(JSON_LIBS)
+         AC_DEFINE(WITH_JSON,[],[Build jCal/jCard support into httpd?])
+	 HTTP_OBJS="$HTTP_OBJS \$(JSON_OBJS)"
+      fi
    fi
 fi
 AC_SUBST(HTTP_OBJS)

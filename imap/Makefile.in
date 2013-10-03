@@ -67,8 +67,9 @@ DAV_OBJS = http_dav.o dav_db.o
 CALDAV_OBJS = http_caldav.o caldav_db.o smtpclient.o
 CARDDAV_OBJS = http_carddav.o carddav_db.o
 ISCHED_OBJS = http_ischedule.o
+JSON_OBJS = jcal.o
 HTTP_OBJS = httpd.o http_err.o http_proxy.o @HTTP_OBJS@
-HTTP_LIBS = @XML2_LIBS@ @ICAL_LIBS@ @SQLITE3_LIBS@ @DKIM_LIBS@
+HTTP_LIBS = @XML2_LIBS@ @ICAL_LIBS@ @SQLITE3_LIBS@ @DKIM_LIBS@ @JSON_LIBS@
 
 SIEVE_OBJS = @SIEVE_OBJS@
 SIEVE_LIBS = @SIEVE_LIBS@

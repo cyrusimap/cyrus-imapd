@@ -108,6 +108,12 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 			  struct mailbox *mailbox, const char *resource,
 			  struct carddav_db *carddavdb, int overwrite,
 			  unsigned flags);
+
+static struct get_type_t carddav_get_types[] = {
+    { "text/vcard; charset=utf-8", NULL },
+    { NULL, NULL }
+};
+
 static struct meth_params carddav_params = {
     "text/vcard; charset=utf-8",
     &carddav_parse_path,
@@ -121,6 +127,7 @@ static struct meth_params carddav_params = {
     NULL,					/* No ACL extensions */
     &carddav_copy,
     NULL,		  	      		/* No special DELETE handling */
+    carddav_get_types,
     { MBTYPE_ADDRESSBOOK, NULL, NULL, 0 },	/* No special MK* method */
     NULL,		  	      		/* No special POST handling */
     { CARDDAV_SUPP_DATA, &carddav_put },

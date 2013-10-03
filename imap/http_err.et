@@ -92,6 +92,9 @@ ec HTTP_NOT_FOUND,
 ec HTTP_NOT_ALLOWED,
    "405 Method Not Allowed"
 
+ec HTTP_NOT_ACCEPTABLE,
+   "406 Not Acceptable"
+
 ec HTTP_TIMEOUT,
    "408 Request Timeout"
 

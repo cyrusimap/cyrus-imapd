@@ -329,6 +329,15 @@ typedef int (*copy_proc_t)(struct transaction_t *txn,
 typedef int (*delete_proc_t)(struct transaction_t *txn, struct mailbox *mailbox,
 			     struct index_record *record, void *data);
 
+/* meth_get_dav() parameters */
+typedef int (*get_proc_t)(struct transaction_t *txn, const char **data,
+			  unsigned long *datalen);
+
+struct get_type_t {
+  const char *content_type;
+  get_proc_t proc;
+};
+
 /* meth_mkcol() parameters */
 struct mkcol_params {
     unsigned mbtype;			/* mbtype to use for created mailbox */
@@ -386,6 +395,7 @@ struct meth_params {
     acl_proc_t acl_ext;			/* special ACL handling (extensions) */
     copy_proc_t copy;			/* function to process & COPY a rsrc */
     delete_proc_t delete;		/* special DELETE handling (optional) */
+    struct get_type_t *get;		/* array of MIME types and proc funcs */
     struct mkcol_params mkcol;		/* params for creating collection */
     post_proc_t post;			/* special POST handling (optional) */
     struct put_params put;		/* params for putting a resource */

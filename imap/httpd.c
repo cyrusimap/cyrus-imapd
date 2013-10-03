@@ -205,7 +205,6 @@ static int reset_saslconn(sasl_conn_t **conn);
 static void cmdloop(void);
 static int parse_expect(struct transaction_t *txn);
 static void parse_connection(struct transaction_t *txn);
-static struct accept *parse_accept(const char **hdr);
 static int parse_ranges(const char *hdr, unsigned long len,
 			struct range **ranges);
 static int parse_framing(hdrcache_t hdrs, struct body_t *body,
@@ -230,12 +229,6 @@ static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_PROXY_POLICY, (mysasl_cb_ft *) &mysasl_proxy_policy, (void*) &httpd_proxyctx },
     { SASL_CB_CANON_USER, (mysasl_cb_ft *) &mysasl_canon_user, NULL },
     { SASL_CB_LIST_END, NULL, NULL }
-};
-
-struct accept {
-    char *token;
-    float qual;
-    struct accept *next;
 };
 
 /* Array of HTTP methods known by our server. */
@@ -1879,7 +1872,7 @@ static int compare_accept(const struct accept *a1, const struct accept *a2)
     return 0;
 }
 
-static struct accept *parse_accept(const char **hdr)
+struct accept *parse_accept(const char **hdr)
 {
     int i, n = 0, alloc = 0;
     struct accept *ret = NULL;

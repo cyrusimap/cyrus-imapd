@@ -76,6 +76,7 @@
 #include "http_proxy.h"
 #include "imap_err.h"
 #include "index.h"
+#include "jcal.h"
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "message.h"
@@ -131,6 +132,10 @@ static int caldav_copy(struct transaction_t *txn,
 static int caldav_delete_sched(struct transaction_t *txn,
 			       struct mailbox *mailbox,
 			       struct index_record *record, void *data);
+#ifdef WITH_JSON
+static int jcal_get(struct transaction_t *txn,
+		    const char **data, unsigned long *datalen);
+#endif
 static int meth_get(struct transaction_t *txn, void *params);
 static int caldav_post(struct transaction_t *txn);
 static int caldav_put(struct transaction_t *txn, struct mailbox *mailbox,
@@ -154,6 +159,14 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 static void sched_reply(const char *userid,
 			icalcomponent *oldical, icalcomponent *newical);
 
+static struct get_type_t caldav_get_types[] = {
+    { "text/calendar; charset=utf-8", NULL },
+#ifdef WITH_JSON
+    { "application/calendar+json; charset=utf-8", &jcal_get },
+#endif
+    { NULL, NULL }
+};
+
 static struct meth_params caldav_params = {
     "text/calendar; charset=utf-8",
     &caldav_parse_path,
@@ -167,6 +180,7 @@ static struct meth_params caldav_params = {
     &caldav_acl,
     &caldav_copy,
     &caldav_delete_sched,
+    caldav_get_types,
     { MBTYPE_CALENDAR, "mkcalendar", "mkcalendar-response", NS_CALDAV },
     &caldav_post,
     { CALDAV_SUPP_DATA, &caldav_put },
@@ -225,6 +239,9 @@ static void my_caldav_init(struct buf *serverinfo)
 
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	buf_printf(serverinfo, " libical/%s", ICAL_VERSION);
+#ifdef JSON_C_VERSION
+	buf_printf(serverinfo, " json-c/%s", JSON_C_VERSION);
+#endif
     }
 
     if (config_getswitch(IMAPOPT_CALDAV_ALLOWSCHEDULING)) {
@@ -1030,6 +1047,26 @@ static int list_calendars(struct transaction_t *txn,
   done:
     return ret;
 }
+
+
+#ifdef WITH_JSON
+static int jcal_get(struct transaction_t *txn,
+		    const char **data, unsigned long *datalen)
+{
+    icalcomponent *ical;
+
+    ical = icalparser_parse_string(*data);
+
+    *data = icalcomponent_as_jcal_string(ical);
+    *datalen = strlen(*data);
+
+    txn->resp_body.type = "application/calendar+json; charset=utf-8";
+
+    icalcomponent_free(ical);
+
+    return 0;
+}
+#endif /* WITH_JSON */
 
 
 /* Perform a GET/HEAD request on a CalDAV resource */

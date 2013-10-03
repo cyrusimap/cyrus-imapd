@@ -3547,6 +3547,8 @@ int meth_delete(struct transaction_t *txn, void *params)
 int meth_get_dav(struct transaction_t *txn, void *params)
 {
     struct meth_params *gparams = (struct meth_params *) params;
+    const char **hdr;
+    struct get_type_t *get = NULL;
     int ret = 0, r, precond, rights;
     const char *msg_base = NULL, *data = NULL;
     unsigned long msg_size = 0, datalen, offset;
@@ -3564,6 +3566,23 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 
     /* We don't handle GET on a collection (yet) */
     if (!txn->req_tgt.resource) return HTTP_NO_CONTENT;
+
+    /* Check requested MIME type */
+    if ((hdr = spool_getheader(txn->req_hdrs, "Accept"))) {
+	struct accept *e, *enc = parse_accept(hdr);
+
+	for (e = enc; e && e->token; e++) {
+	    struct get_type_t *g;
+
+	    for (g = gparams->get; !get && g->content_type; g++) {
+		if (is_mediatype(e->token, g->content_type)) get = g;
+	    }
+
+	    free(e->token);
+	}
+	if (enc) free(enc);
+    }
+    if (!get) get = gparams->get;  /* 1st in array MUST default type */
 
     /* Locate the mailbox */
     if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
@@ -3674,7 +3693,7 @@ int meth_get_dav(struct transaction_t *txn, void *params)
     }
 
     if (record.uid) {
-	resp_body->type = gparams->content_type;
+	resp_body->type = get->content_type;
 
 	if (txn->meth == METH_GET) {
 	    /* Load message containing the resource */
@@ -3684,6 +3703,8 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 	    txn->flags.cc |= CC_NOTRANSFORM;
 
 	    data = msg_base + offset;
+
+	    if (get->proc) get->proc(txn, &data, &datalen);
 	}
     }
 
