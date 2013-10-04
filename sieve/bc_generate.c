@@ -356,6 +356,23 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 	codep = bc_stringlist_generate(codep, retval, t->u.h.pl);
 	if (codep == -1) return -1;
 	break;
+    case HASFLAG:
+	/* BC_HASFLAG { c: comparator } { flags : string list } */
+
+	if(!atleast(retval,codep + 1)) return -1;
+	retval->data[codep++].op = BC_HASFLAG;
+
+	/* comparator */
+	codep = bc_comparator_generate(codep, retval,
+				       t->u.h.comptag,
+				       t->u.h.relation,
+				       t->u.h.comparator);
+	if (codep == -1) return -1;
+
+	/* flags */
+	codep = bc_stringlist_generate(codep, retval, t->u.h.sl);
+	if (codep == -1) return -1;
+	break;
     case ADDRESS:
     case ENVELOPE:
 	/* BC_ADDRESS {i : index } {c : comparator}
@@ -586,9 +603,15 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 		break;
 
 	    case KEEP:
-		/* KEEP (no arguments) */
-		if (!atleast(retval, codep+1)) return -1;
+		/* KEEP
+		   VALUE copy
+		   STRINGLIST flags
+		*/
+		if (!atleast(retval, codep+2)) return -1;
 		retval->data[codep++].op = B_KEEP;
+		retval->data[codep++].value = c->u.k.copy;
+		codep = bc_stringlist_generate(codep,retval,c->u.k.flags);
+		if (codep == -1) return -1;
 		break;
 
 	    case MARK:
@@ -675,12 +698,15 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 		/* FILEINTO
 		   VALUE copy
 		   STRING folder
+		   STRINGLIST flags
 		*/
 		if (!atleast(retval, codep+4)) return -1;
 		retval->data[codep++].op = B_FILEINTO;
 		retval->data[codep++].value = c->u.f.copy;
 		retval->data[codep++].len = strlen(c->u.f.folder);
 		retval->data[codep++].str = c->u.f.folder;
+		codep = bc_stringlist_generate(codep, retval, c->u.f.flags);
+		if(codep == -1) return -1;
 		break;
 
 	    case REDIRECT:
