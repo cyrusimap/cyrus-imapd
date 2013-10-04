@@ -71,6 +71,7 @@ struct sieve_script {
 	int date           : 1;
 	int index          : 1;
 	int vacation_seconds: 1;
+	int imap4flags     : 1;
     } support;
 
     void *script_context;
