@@ -117,7 +117,7 @@ typedef union
 enum bytecode {
     B_STOP,
 
-    B_KEEP,
+    B_KEEP_ORIG,	/* legacy keep w/o support for :copy and :flags */
     B_DISCARD,
     B_REJECT,		/* require reject */
     B_FILEINTO_ORIG,	/* legacy fileinto w/o support for :copy */
@@ -128,9 +128,9 @@ enum bytecode {
     B_MARK,		/* require imapflags */
     B_UNMARK,		/* require imapflags */
 
-    B_ADDFLAG,		/* require imapflags */
-    B_SETFLAG,		/* require imapflags */
-    B_REMOVEFLAG,	/* require imapflags */
+    B_ADDFLAG,		/* require imap4flags */
+    B_SETFLAG,		/* require imap4flags */
+    B_REMOVEFLAG,	/* require imap4flags */
 
     B_NOTIFY,		/* require notify */
     B_DENOTIFY,		/* require notify */
@@ -142,10 +142,13 @@ enum bytecode {
     B_INCLUDE,		/* require include */
     B_RETURN,		/* require include */
 
-    B_FILEINTO,		/* require fileinto */
+    B_FILEINTO_COPY,	/* legacy fileinto w/o support for :flags */
     B_REDIRECT,
 
     B_VACATION,		/* require vacation */
+
+    B_KEEP,
+    B_FILEINTO		/* require fileinto */
 };
 
 enum bytecode_comps {
@@ -163,7 +166,8 @@ enum bytecode_comps {
     BC_DATE,            /* require date */
     BC_CURRENTDATE,     /* require date */
     BC_ADDRESS,
-    BC_HEADER
+    BC_HEADER,
+    BC_HASFLAG		/* require imap4flags */
 };
 
 /* currently one enum so as to help determine where values are being misused.
