@@ -330,8 +330,7 @@ typedef int (*delete_proc_t)(struct transaction_t *txn, struct mailbox *mailbox,
 			     struct index_record *record, void *data);
 
 /* meth_get_dav() parameters */
-typedef int (*get_proc_t)(struct transaction_t *txn, const char **data,
-			  unsigned long *datalen);
+typedef int (*get_proc_t)(const char **data, unsigned long *datalen);
 
 struct get_type_t {
   const char *content_type;

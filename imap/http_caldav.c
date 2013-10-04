@@ -133,8 +133,7 @@ static int caldav_delete_sched(struct transaction_t *txn,
 			       struct mailbox *mailbox,
 			       struct index_record *record, void *data);
 #ifdef WITH_JSON
-static int jcal_get(struct transaction_t *txn,
-		    const char **data, unsigned long *datalen);
+static int jcal_get(const char **data, unsigned long *datalen);
 #endif
 static int meth_get(struct transaction_t *txn, void *params);
 static int caldav_post(struct transaction_t *txn);
@@ -1050,8 +1049,7 @@ static int list_calendars(struct transaction_t *txn,
 
 
 #ifdef WITH_JSON
-static int jcal_get(struct transaction_t *txn,
-		    const char **data, unsigned long *datalen)
+static int jcal_get(const char **data, unsigned long *datalen)
 {
     icalcomponent *ical;
 
@@ -1059,8 +1057,6 @@ static int jcal_get(struct transaction_t *txn,
 
     *data = icalcomponent_as_jcal_string(ical);
     *datalen = strlen(*data);
-
-    txn->resp_body.type = "application/calendar+json; charset=utf-8";
 
     icalcomponent_free(ical);
 

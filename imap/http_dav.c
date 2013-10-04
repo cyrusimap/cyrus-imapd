@@ -3704,7 +3704,7 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 
 	    data = msg_base + offset;
 
-	    if (get->proc) get->proc(txn, &data, &datalen);
+	    if (get->proc) get->proc(&data, &datalen);
 	}
     }
 
