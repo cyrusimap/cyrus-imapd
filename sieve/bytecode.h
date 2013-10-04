@@ -38,8 +38,6 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *
- * $Id: bytecode.h,v 1.6 2010/01/06 17:01:59 murch Exp $
  */
 
 #ifndef SIEVE_BYTECODE_H
@@ -70,6 +68,7 @@ typedef union
     char *str;
 } bytecode_t;
 
+
 /* For sanity during input on 64-bit platforms.
  * str should only be accessed as (char *)&str, but given the use of
  * unwrap_string, this should be OK */
@@ -96,8 +95,11 @@ typedef union
  * version 0x03 scripts implemented short-circuiting of testlists (recompile)
  * version 0x04 scripts implemented BODY, INCLUDE and COPY extensions
  * version 0x05 scripts implemented updated VACATION (:from and :handle)
+ * version 0x06 scripts used in 2.5 (implemented updated VACATION (:seconds))
+ * version 0x07 scripts used in 2.5 (implemented updated INCLUDE (:once and :optional))
+ * version 0x08 scripts used in 2.5 (implemented DATE and INDEX extensions)
  */
-#define BYTECODE_VERSION 0x05
+#define BYTECODE_VERSION 0x08
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
 #define BYTECODE_MAGIC "CyrSBytecode"
 #define BYTECODE_MAGIC_LEN 12 /* Should be multiple of 4 */
@@ -109,7 +111,7 @@ typedef union
 enum bytecode {
     B_STOP,
 
-    B_KEEP,
+    B_KEEP_ORIG,	/* legacy keep w/o support for :copy and :flags */
     B_DISCARD,
     B_REJECT,		/* require reject */
     B_FILEINTO_ORIG,	/* legacy fileinto w/o support for :copy */
@@ -120,9 +122,9 @@ enum bytecode {
     B_MARK,		/* require imapflags */
     B_UNMARK,		/* require imapflags */
 
-    B_ADDFLAG,		/* require imapflags */
-    B_SETFLAG,		/* require imapflags */
-    B_REMOVEFLAG,	/* require imapflags */
+    B_ADDFLAG,		/* require imap4flags */
+    B_SETFLAG,		/* require imap4flags */
+    B_REMOVEFLAG,	/* require imap4flags */
 
     B_NOTIFY,		/* require notify */
     B_DENOTIFY,		/* require notify */
@@ -134,8 +136,13 @@ enum bytecode {
     B_INCLUDE,		/* require include */
     B_RETURN,		/* require include */
 
-    B_FILEINTO,		/* require fileinto */
-    B_REDIRECT
+    B_FILEINTO_COPY,	/* legacy fileinto w/o support for :flags */
+    B_REDIRECT,
+
+    B_RESERVED_VACATION,		/* require vacation */
+
+    B_KEEP,
+    B_FILEINTO		/* require fileinto */
 };
 
 enum bytecode_comps {
@@ -149,7 +156,12 @@ enum bytecode_comps {
     BC_ADDRESS,
     BC_ENVELOPE,	/* require envelope */
     BC_HEADER,
-    BC_BODY		/* require body */
+    BC_BODY,            /* require body */
+    BC_RESERVED_DATE,            /* require date */
+    BC_RESERVED_CURRENTDATE,     /* require date */
+    BC_RESERVED_ADDRESS,
+    BC_RESERVED_HEADER,
+    BC_HASFLAG		/* require imap4flags */
 };
 
 /* currently one enum so as to help determine where values are being misused.
@@ -237,8 +249,34 @@ enum bytecode_tags {
     B_LOCATION_PLACEHOLDER_1,
     B_LOCATION_PLACEHOLDER_2,
     B_LOCATION_PLACEHOLDER_3,
-    B_LOCATION_PLACEHOLDER_4
-  
+    B_LOCATION_PLACEHOLDER_4,
+
+    /* Zones */
+    B_RESERVED_TIMEZONE,
+    B_RESERVED_ORIGINALZONE,
+
+    B_RESERVED_ZONE_PLACEHOLDER_1,
+    B_RESERVED_ZONE_PLACEHOLDER_2,
+
+    /* Date Parts */
+    B_RESERVED_YEAR,
+    B_RESERVED_MONTH,
+    B_RESERVED_DAY,
+    B_RESERVED_DATE,
+    B_RESERVED_JULIAN,
+    B_RESERVED_HOUR,
+    B_RESERVED_MINUTE,
+    B_RESERVED_SECOND,
+    B_RESERVED_TIME,
+    B_RESERVED_ISO8601,
+    B_RESERVED_STD11,
+    B_RESERVED_ZONE,
+    B_RESERVED_WEEKDAY,
+
+    B_RESERVED_DATEPART_PLACEHOLDER_1,
+    B_RESERVED_DATEPART_PLACEHOLDER_2,
+    B_RESERVED_DATEPART_PLACEHOLDER_3,
+    B_RESERVED_DATEPART_PLACEHOLDER_4
 };
 
 #endif
