@@ -1125,7 +1125,7 @@ product version in the capabilities */
    user's scripts reside on a remote server (in a Murder).
    Otherwise, timsieved will proxy traffic to the remote server. */
 
-{ "sieve_extensions", "fileinto reject vacation imapflags notify envelope relational regex subaddress copy", BITFIELD("fileinto", "reject", "vacation", "imapflags", "notify", "include", "envelope", "body", "relational", "regex", "subaddress", "copy") }
+{ "sieve_extensions", "fileinto reject vacation imapflags notify envelope relational regex subaddress copy imap4flags", BITFIELD("fileinto", "reject", "vacation", "imapflags", "notify", "include", "envelope", "body", "relational", "regex", "subaddress", "copy", "imap4flags") }
 /* Space-separated list of Sieve extensions allowed to be used in
    sieve scripts, enforced at submission by timsieved(8).  Any
    previously installed script will be unaffected by this option and

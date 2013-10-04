@@ -118,6 +118,7 @@ CRLF		(\r\n|\r|\n)
 <INITIAL>body		return BODY;
 <INITIAL>not		return NOT;
 <INITIAL>size		return SIZE;
+<INITIAL>hasflag	return HASFLAG;
 <INITIAL>reject		return REJCT;
 <INITIAL>fileinto	return FILEINTO;
 <INITIAL>redirect	return REDIRECT;
@@ -168,6 +169,7 @@ CRLF		(\r\n|\r|\n)
 <INITIAL>:global	return GLOBAL;
 <INITIAL>return		return RETURN;
 <INITIAL>:copy		return COPY;
+<INITIAL>:flags		return FLAGS;
 <INITIAL>[ \t\n\r] ;	/* ignore whitespace */
 <INITIAL>#.* ;		/* ignore hash comments */
 <INITIAL>"/*"([^\*]|\*[^\/])*\*?"*/" ;	/* ignore bracket comments */
