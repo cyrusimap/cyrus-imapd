@@ -100,16 +100,18 @@ struct mappedfile {
     int is_rw;
 };
 
-static void _ensure_mapped(struct mappedfile *mf, size_t offset)
+static void _ensure_mapped(struct mappedfile *mf, size_t offset, int update)
 {
     const char *base = NULL;
     size_t len = 0;
 
     /* we may be rewriting inside a file, so don't shrink, only extend */
-    if (offset > mf->map_size)
-	mf->was_resized = 1;
-    else
-	offset = mf->map_size;
+    if (update) {
+	if (offset > mf->map_size)
+	    mf->was_resized = 1;
+	else
+	    offset = mf->map_size;
+    }
 
     /* always give refresh another go, we may be map_nommap */
     map_refresh(mf->fd, 0, &base, &len, offset, mf->fname, 0);
@@ -166,8 +168,7 @@ EXPORTED int mappedfile_open(struct mappedfile **mfp,
 	goto err;
     }
 
-    _ensure_mapped(mf, sbuf.st_size);
-    mf->was_resized = 0; /* not actually resized */
+    _ensure_mapped(mf, sbuf.st_size, /*update*/0);
 
     *mfp = mf;
 
@@ -247,7 +248,7 @@ EXPORTED int mappedfile_readlock(struct mappedfile *mf)
 	buf_free(&mf->map_buf);
     }
 
-    _ensure_mapped(mf, sbuf.st_size);
+    _ensure_mapped(mf, sbuf.st_size, /*update*/0);
 
     return 0;
 }
@@ -271,11 +272,11 @@ EXPORTED int mappedfile_writelock(struct mappedfile *mf)
     mf->lock_status = MF_WRITELOCKED;
 
     /* XXX - can we guarantee the fd isn't reused? */
-    if (mf->map_ino != sbuf.st_ino)
+    if (mf->map_ino != sbuf.st_ino) {
 	buf_free(&mf->map_buf);
+    }
 
-    _ensure_mapped(mf, sbuf.st_size);
-    mf->was_resized = 0;
+    _ensure_mapped(mf, sbuf.st_size, /*update*/0);
 
     return 0;
 }
@@ -364,7 +365,7 @@ EXPORTED ssize_t mappedfile_pwrite(struct mappedfile *mf,
 	return -1;
     }
 
-    _ensure_mapped(mf, pos+written);
+    _ensure_mapped(mf, pos+written, /*update*/1);
 
     return written;
 }
@@ -415,7 +416,7 @@ EXPORTED ssize_t mappedfile_pwritev(struct mappedfile *mf,
 	return -1;
     }
 
-    _ensure_mapped(mf, pos+written);
+    _ensure_mapped(mf, pos+written, /*update*/1);
 
     return written;
 }
@@ -429,18 +430,14 @@ EXPORTED int mappedfile_truncate(struct mappedfile *mf, off_t offset)
 
     mf->dirty++;
 
-    /* make sure we don't think the future is valid any more */
-    if (offset < (off_t)mf->map_size)
-	mf->map_size = offset;
-
     r = ftruncate(mf->fd, offset);
     if (r < 0) {
 	syslog(LOG_ERR, "IOERROR: ftruncate %s: %m", mf->fname);
 	return r;
     }
 
-    _ensure_mapped(mf, offset);
-    mf->was_resized = 1;
+    _ensure_mapped(mf, offset, /*update*/0);
+    mf->was_resized = 1; /* force the fsync */
 
     return 0;
 }
