@@ -2612,6 +2612,7 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 		    nentry->get = entry->get;
 		    nentry->rock = entry->rock;
 		}
+		ret = *fctx->ret;
 	    }
 	    else {
 		/* No match, treat as a dead property */
