@@ -374,9 +374,9 @@ EXPORTED sync_log_reader_t *sync_log_reader_create_with_channel(const char *chan
 
     slr->log_file = xstrdup(sync_log_fname(channel));
 
-    /* Create a work log filename.  Use the PID so we can
-     * try to reprocess it if the sync fails */
-    buf_printf(&buf, "%s-%d", slr->log_file, getpid());
+    /* Create a work log filename.  We will process this
+     * first if it exists */
+    buf_printf(&buf, "%s-run", slr->log_file);
     slr->work_file = buf_release(&buf);
 
     return slr;
@@ -451,8 +451,7 @@ EXPORTED int sync_log_reader_begin(sync_log_reader_t *slr)
     }
 
     if (stat(slr->work_file, &sbuf) == 0) {
-	/* Existing work log file from our parent < 1 hour old */
-	/* XXX  Is 60 minutes a resonable timeframe? */
+	/* Existing work log file - process this first */
 	syslog(LOG_NOTICE,
 	       "Reprocessing sync log file %s", slr->work_file);
     }
