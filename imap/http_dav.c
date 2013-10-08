@@ -91,7 +91,9 @@ enum {
     PROP_COLLECTION = 	(1<<3),		/* Returned for collection */
     PROP_RESOURCE =	(1<<4),		/* Returned for resource */
     PROP_CALENDAR = 	(1<<5),		/* Returned for calendar only */
-    PROP_ADDRESSBOOK =	(1<<6)		/* Returned for addressbook only */
+    PROP_ADDRESSBOOK =	(1<<6),		/* Returned for addressbook only */
+    PROP_PRESCREEN =	(1<<7),		/* Prescreen property with callback */
+    PROP_NEEDPROP =	(1<<8),		/* Pass property node into callback */
 };
 
 static const struct dav_namespace_t {
@@ -200,7 +202,7 @@ enum {
 struct propfind_entry_list {
     const xmlChar *name;		/* Property name */
     xmlNsPtr ns;			/* Property namespace */
-    unsigned char flags;		/* Flags for how/where prop apply */
+    unsigned flags;			/* Flags for how/where prop apply */
     int (*get)(const xmlChar *name,	/* Callback to fetch property */
 	       xmlNsPtr ns, struct propfind_ctx *fctx, xmlNodePtr resp,
 	       struct propstat propstat[], void *rock);
@@ -1693,11 +1695,63 @@ static int propfind_sync_token(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch CALDAV:calendar-data and CARDDAV:address-data */
 static int propfind_getdata(const xmlChar *name, xmlNsPtr ns,
 			    struct propfind_ctx *fctx,
-			    xmlNodePtr resp __attribute__((unused)),
+			    xmlNodePtr resp,
 			    struct propstat propstat[],
-			    void *rock __attribute__((unused)))
+			    void *rock)
 {
-    xmlNodePtr data;
+    xmlNodePtr prop = (xmlNodePtr) rock;
+    xmlChar *attr;
+    const char *data;
+    unsigned long datalen;
+    xmlNodePtr node;
+
+    if (!resp || !propstat) {
+	/* Prescreen any calendar/address-data "property" request */
+	unsigned allowed = 1;
+
+	switch (fctx->req_tgt->namespace) {
+	case URL_NS_CALENDAR:
+	    if ((attr = xmlGetProp(prop, BAD_CAST "content-type"))) {
+		if (!xmlStrcmp(attr, BAD_CAST "text/calendar")) {
+		    if ((attr = xmlGetProp(prop, BAD_CAST "version"))) {
+			if (xmlStrcmp(attr, BAD_CAST "2.0")) allowed = 0;
+			xmlFree(attr);
+		    }
+		}
+		else allowed = 0;
+
+		xmlFree(attr);
+	    }
+
+	    if (!allowed) {
+		fctx->err->precond = CALDAV_SUPP_DATA;
+		*fctx->ret = HTTP_FORBIDDEN;
+	    }
+	    break;
+
+	case URL_NS_ADDRESSBOOK:
+	    if ((attr = xmlGetProp(prop, BAD_CAST "content-type"))) {
+		if (!xmlStrcmp(attr, BAD_CAST "text/vcard")) {
+		    if ((attr = xmlGetProp(prop, BAD_CAST "version"))) {
+			if (xmlStrcmp(attr, BAD_CAST "3.0")) allowed = 0;
+			xmlFree(attr);
+		    }
+		}
+		else allowed = 0;
+
+		xmlFree(attr);
+	    }
+
+	    if (!allowed) {
+		fctx->err->precond = CARDDAV_SUPP_DATA;
+		*fctx->ret = HTTP_FORBIDDEN;
+	    }
+	    break;
+	}
+
+	return allowed;
+    }
+
 
     if (!fctx->record) return HTTP_NOT_FOUND;
 
@@ -1706,14 +1760,26 @@ static int propfind_getdata(const xmlChar *name, xmlNsPtr ns,
 			    &fctx->msg_base, &fctx->msg_size);
     }
 
-    data = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+    data = fctx->msg_base + fctx->record->header_size;
+    datalen = fctx->record->size - fctx->record->header_size;
+
+    node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			name, ns, NULL, 0);
-    xmlAddChild(data,
-		xmlNewCDataBlock(fctx->root->doc,
-				 BAD_CAST fctx->msg_base +
-				 fctx->record->header_size,
-				 fctx->record->size -
-				 fctx->record->header_size));
+
+    attr = xmlGetProp(prop, BAD_CAST "content-type");
+    if (attr) {
+	xmlSetProp(node, BAD_CAST "content-type", attr);
+	xmlFree(attr);
+
+	attr = xmlGetProp(prop, BAD_CAST "version");
+	if (attr) {
+	    xmlSetProp(node, BAD_CAST "version", attr);
+	    xmlFree(attr);
+	}
+    }
+
+    xmlAddChild(node,
+		xmlNewCDataBlock(fctx->root->doc, BAD_CAST data, datalen));
 
     fctx->fetcheddata = 1;
 
@@ -2279,7 +2345,7 @@ static int proppatch_todb(xmlNodePtr prop, unsigned set,
 static const struct prop_entry {
     const char *name;			/* Property name */
     unsigned ns;			/* Property namespace */
-    unsigned char flags;		/* Flags for how/where props apply */
+    unsigned flags;			/* Flags for how/where props apply */
     int (*get)(const xmlChar *name,	/* Callback to fetch property */
 	       xmlNsPtr ns, struct propfind_ctx *fctx, xmlNodePtr resp,
 	       struct propstat propstat[], void *rock);
@@ -2364,7 +2430,8 @@ static const struct prop_entry {
       propfind_sync_token, NULL, NULL },
 
     /* CalDAV (RFC 4791) properties */
-    { "calendar-data", NS_CALDAV, PROP_RESOURCE | PROP_CALENDAR,
+    { "calendar-data", NS_CALDAV,
+      PROP_RESOURCE | PROP_CALENDAR | PROP_PRESCREEN | PROP_NEEDPROP,
       propfind_getdata, NULL, NULL },
     { "calendar-description", NS_CALDAV, PROP_COLLECTION | PROP_CALENDAR,
       propfind_fromdb, proppatch_todb, NULL },
@@ -2400,7 +2467,8 @@ static const struct prop_entry {
     { "calendar-user-type", NS_CALDAV, 0, NULL, NULL, NULL },
 
     /* CardDAV (RFC 6352) properties */
-    { "address-data", NS_CARDDAV, PROP_RESOURCE | PROP_ADDRESSBOOK,
+    { "address-data", NS_CARDDAV,
+      PROP_RESOURCE | PROP_ADDRESSBOOK | PROP_PRESCREEN | PROP_NEEDPROP,
       propfind_getdata, NULL, NULL },
     { "addressbook-description", NS_CARDDAV,
       PROP_COLLECTION | PROP_ADDRESSBOOK,
@@ -2480,7 +2548,6 @@ static int prescreen_prop(const struct prop_entry *entry,
 			  xmlNodePtr prop,
 			  struct propfind_ctx *fctx)
 {
-    xmlChar *type =  NULL, *ver = NULL;
     unsigned allowed = 1;
 
     switch (fctx->req_tgt->namespace) {
@@ -2494,17 +2561,6 @@ static int prescreen_prop(const struct prop_entry *entry,
 	     !(entry->flags & PROP_RESOURCE))) {
 	    allowed = 0;
 	}
-
-	/* Sanity check any calendar-data "property" request */
-	else if (prop && !xmlStrcmp(prop->name, BAD_CAST "calendar-data") &&
-		 (((type = xmlGetProp(prop, BAD_CAST "content-type"))
-		   && xmlStrcmp(type, BAD_CAST "text/calendar")) ||
-		  ((ver = xmlGetProp(prop, BAD_CAST "version")) &&
-		   xmlStrcmp(ver, BAD_CAST "2.0")))) {
-	    allowed = 0;
-	    fctx->err->precond = CALDAV_SUPP_DATA;
-	    *fctx->ret = HTTP_FORBIDDEN;
-	}
 	break;
 
     case URL_NS_ADDRESSBOOK:
@@ -2513,17 +2569,6 @@ static int prescreen_prop(const struct prop_entry *entry,
 	     !(entry->flags & PROP_RESOURCE))) {
 	    allowed = 0;
 	}
-
-	/* Sanity check any address-data "property" request */
-	else if (prop && !xmlStrcmp(prop->name, BAD_CAST "address-data") &&
-		 (((type = xmlGetProp(prop, BAD_CAST "content-type"))
-		   && xmlStrcmp(type, BAD_CAST "text/vcard")) ||
-		  ((ver = xmlGetProp(prop, BAD_CAST "version")) &&
-		   xmlStrcmp(ver, BAD_CAST "3.0")))) {
-	    allowed = 0;
-	    fctx->err->precond = CALDAV_SUPP_DATA;
-	    *fctx->ret = HTTP_FORBIDDEN;
-	}
 	break;
 
     default:
@@ -2531,8 +2576,11 @@ static int prescreen_prop(const struct prop_entry *entry,
 	break;
     }
 
-    if (type) xmlFree(type);
-    if (ver) xmlFree(ver);
+    if (allowed && (entry->flags & PROP_PRESCREEN)) {
+	void *rock = (entry->flags & PROP_NEEDPROP) ? prop : entry->rock;
+
+	allowed = entry->get(prop->name, NULL, fctx, NULL, NULL, rock);
+    }
 
     return allowed;
 }
@@ -2610,7 +2658,10 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 		if (prescreen_prop(entry, prop, fctx)) {
 		    nentry->flags = entry->flags;
 		    nentry->get = entry->get;
-		    nentry->rock = entry->rock;
+		    if (entry->flags & PROP_NEEDPROP)
+			nentry->rock = prop;
+		    else
+			nentry->rock = entry->rock;
 		}
 		ret = *fctx->ret;
 	    }
