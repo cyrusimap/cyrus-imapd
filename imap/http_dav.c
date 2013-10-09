@@ -3756,7 +3756,14 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 
 	    data = msg_base + offset;
 
-	    if (get->proc) get->proc(&data, &datalen);
+	    if (get->convert) {
+		icalcomponent *ical;
+
+		ical = icalparser_parse_string(data);
+		data = get->convert(ical);
+		datalen = strlen(data);
+		icalcomponent_free(ical);
+	    }
 	}
     }
 

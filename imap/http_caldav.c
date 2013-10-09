@@ -132,9 +132,6 @@ static int caldav_copy(struct transaction_t *txn,
 static int caldav_delete_sched(struct transaction_t *txn,
 			       struct mailbox *mailbox,
 			       struct index_record *record, void *data);
-#ifdef WITH_JSON
-static int jcal_get(const char **data, unsigned long *datalen);
-#endif
 static int meth_get(struct transaction_t *txn, void *params);
 static int caldav_post(struct transaction_t *txn);
 static int caldav_put(struct transaction_t *txn, struct mailbox *mailbox,
@@ -161,7 +158,7 @@ static void sched_reply(const char *userid,
 static struct get_type_t caldav_get_types[] = {
     { "text/calendar; charset=utf-8", NULL },
 #ifdef WITH_JSON
-    { "application/calendar+json; charset=utf-8", &jcal_get },
+    { "application/calendar+json; charset=utf-8", &icalcomponent_as_jcal_string },
 #endif
     { NULL, NULL }
 };
@@ -1046,23 +1043,6 @@ static int list_calendars(struct transaction_t *txn,
   done:
     return ret;
 }
-
-
-#ifdef WITH_JSON
-static int jcal_get(const char **data, unsigned long *datalen)
-{
-    icalcomponent *ical;
-
-    ical = icalparser_parse_string(*data);
-
-    *data = icalcomponent_as_jcal_string(ical);
-    *datalen = strlen(*data);
-
-    icalcomponent_free(ical);
-
-    return 0;
-}
-#endif /* WITH_JSON */
 
 
 /* Perform a GET/HEAD request on a CalDAV resource */
