@@ -457,6 +457,9 @@ static void service_create(struct service *s)
     if (s->associate > 0)
 	return;			/* service is already activated */
 
+    if (!s->listen)
+	return;			/* service is a daemon, no listener */
+
     if (!s->name)
 	fatal("Serious software bug found: service_create() called on unnamed service!",
 		EX_SOFTWARE);
@@ -781,7 +784,7 @@ static void spawn_service(int si)
     pid_t p;
     int i;
     char path[PATH_MAX];
-    static char name_env[100], name_env2[100];
+    static char name_env[100], name_env2[100], name_env3[100];
     struct centry *c;
     struct service *s = &Services[si];
 
@@ -814,23 +817,29 @@ static void spawn_service(int si)
 
 	child_sighandler_setup();
 
-	if (dup2(s->stat[1], STATUS_FD) < 0) {
-	    syslog(LOG_ERR, "can't duplicate status fd: %m");
-	    exit(1);
-	}
-	if (dup2(s->socket, LISTEN_FD) < 0) {
-	    syslog(LOG_ERR, "can't duplicate listener fd: %m");
-	    exit(1);
-	}
+	if (s->listen) {
+	    if (dup2(s->stat[1], STATUS_FD) < 0) {
+		syslog(LOG_ERR, "can't duplicate status fd: %m");
+		exit(1);
+	    }
+	    if (dup2(s->socket, LISTEN_FD) < 0) {
+		syslog(LOG_ERR, "can't duplicate listener fd: %m");
+		exit(1);
+	    }
 
-	fcntl_unset(STATUS_FD, FD_CLOEXEC);
-	fcntl_unset(LISTEN_FD, FD_CLOEXEC);
+	    fcntl_unset(STATUS_FD, FD_CLOEXEC);
+	    fcntl_unset(LISTEN_FD, FD_CLOEXEC);
 
-	/* close all listeners */
-	for (i = 0; i < nservices; i++) {
-	    xclose(Services[i].socket);
-	    xclose(Services[i].stat[0]);
-	    xclose(Services[i].stat[1]);
+	    /* close all listeners */
+	    for (i = 0; i < nservices; i++) {
+		xclose(Services[i].socket);
+		xclose(Services[i].stat[0]);
+		xclose(Services[i].stat[1]);
+	    }
+	}
+	else {
+	    snprintf(name_env3, sizeof(name_env3), "CYRUS_ISDAEMON=1");
+	    putenv(name_env3);
 	}
 	limit_fds(s->maxfds);
 
@@ -854,7 +863,7 @@ static void spawn_service(int si)
 
 	/* add to child table */
 	c = centry_alloc();
-	centry_set_name(c, "SERVICE", s->name, path);
+	centry_set_name(c, s->listen ? "SERVICE" : "DAEMON", s->name, path);
 	c->si = si;
 	centry_set_state(c, SERVICE_STATE_READY);
 	centry_add(c, p);
@@ -1577,6 +1586,91 @@ static void add_start(const char *name, struct entry *e,
     strarray_free(tok);
 }
 
+static void add_daemon(const char *name, struct entry *e, void *rock)
+{
+    int ignore_err = rock ? 1 : 0;
+    char *cmd = xstrdup(masterconf_getstring(e, "cmd", ""));
+    rlim_t maxfds = (rlim_t) masterconf_getint(e, "maxfds", 256);
+    int maxforkrate = masterconf_getint(e, "maxforkrate", 0);
+    int reconfig = 0;
+    int i;
+
+    if (maxforkrate == 0) maxforkrate = 10; /* reasonable safety */
+
+    if (!strcmp(cmd, "")) {
+	char buf[256];
+	snprintf(buf, sizeof(buf),
+		 "unable to find command or port for service '%s'", name);
+
+	if (ignore_err) {
+	    syslog(LOG_WARNING, "WARNING: %s -- ignored", buf);
+	    goto done;
+	}
+
+	fatal(buf, EX_CONFIG);
+    }
+
+    /* see if we have an existing entry that can be reused */
+    for (i = 0; i < nservices; i++) {
+	/* skip non-primary instances */
+	if (Services[i].associate > 0)
+	    continue;
+
+	if (!strcmpsafe(Services[i].name, name) && Services[i].exec) {
+	    /* we have duplicate service names in the config file */
+	    char buf[256];
+	    snprintf(buf, sizeof(buf), "multiple entries for service '%s'", name);
+
+	    if (ignore_err) {
+		syslog(LOG_WARNING, "WARNING: %s -- ignored", buf);
+		goto done;
+	    }
+
+	    fatal(buf, EX_CONFIG);
+	}
+
+	/* must have empty/same service name, listen and proto */
+	if (!Services[i].name || !strcmp(Services[i].name, name))
+	    break;
+    }
+
+    if (i == nservices) {
+	/* we don't have an existing one, so create a new service */
+	struct service *s = service_add(NULL);
+	gettimeofday(&s->last_interval_start, 0);
+    }
+    else reconfig = 1;
+
+    if (!Services[i].name) Services[i].name = xstrdup(name);
+
+    strarray_free(Services[i].exec);
+    Services[i].exec = strarray_split(cmd, NULL, 0);
+
+    /* is this daemon actually there? */
+    if (!verify_service_file(Services[i].exec)) {
+	fatalf(EX_CONFIG,
+		 "cannot find executable for daemon '%s'", name);
+	/* if it is not, we're misconfigured, die. */
+    }
+
+    Services[i].maxforkrate = maxforkrate;
+    Services[i].maxfds = maxfds;
+    Services[i].babysit = 1;
+    Services[i].max_workers = 1;
+    Services[i].desired_workers = 1;
+    Services[i].familyname = "daemon";
+
+    if (verbose > 2)
+	syslog(LOG_DEBUG, "%s: daemon '%s' (%s, %d)",
+	       reconfig ? "reconfig" : "add",
+	       Services[i].name, cmd,
+	       (int) Services[i].maxfds);
+
+done:
+    free(cmd);
+    return;
+}
+
 static void add_service(const char *name, struct entry *e, void *rock)
 {
     int ignore_err = rock ? 1 : 0;
@@ -1650,6 +1744,7 @@ static void add_service(const char *name, struct entry *e, void *rock)
     Services[i].proto = proto;
     proto = NULL; /* avoid freeing it */
 
+    strarray_free(Services[i].exec);
     Services[i].exec = strarray_split(cmd, NULL, 0);
 
     /* is this service actually there? */
@@ -1824,6 +1919,7 @@ static void reread_conf(struct timeval now)
 
     /* read services */
     masterconf_getsection("SERVICES", &add_service, (void*) 1);
+    masterconf_getsection("DAEMON", &add_daemon, (void *)1);
 
     for (i = 0; i < nservices; i++) {
 	/* Send SIGHUP to all children:
@@ -2192,6 +2288,7 @@ int main(int argc, char **argv)
     masterconf_getsection("START", &add_start, NULL);
     masterconf_getsection("SERVICES", &add_service, NULL);
     masterconf_getsection("EVENTS", &add_event, NULL);
+    masterconf_getsection("DAEMON", &add_daemon, NULL);
 
     /* set signal handlers */
     sighandler_setup();
