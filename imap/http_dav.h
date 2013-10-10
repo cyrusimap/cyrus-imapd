@@ -252,6 +252,7 @@ typedef int (*db_foreach_proc_t)(void *davdb, const char *mailbox,
 
 /* Context for fetching properties */
 struct propfind_entry_list;
+struct prop_entry;
 struct error_t;
 
 struct propfind_ctx {
@@ -279,6 +280,7 @@ struct propfind_ctx {
     int (*proc_by_resource)(void *rock,	/* Callback to process a resource */
 			    void *data);
     struct propfind_entry_list *elist;	/* List of props to fetch w/callbacks */
+    const struct prop_entry *lprops;	/* Array of known "live" properties */
     xmlNodePtr root;			/* root node to add to XML tree */
     xmlNsPtr *ns;			/* Array of our known namespaces */
     struct hash_table *ns_table;	/* Table of all ns attached to resp */
@@ -288,6 +290,67 @@ struct propfind_ctx {
     int fetcheddata;			/* Did we fetch iCalendar/vCard data? */
     struct buf buf;			/* Working buffer */
 };
+
+
+/* Context for patching (writing) properties */
+struct proppatch_ctx {
+    struct request_target_t *req_tgt;	/* parsed request target URL */
+    unsigned meth;	    		/* requested Method */
+    const char *mailboxname;		/* mailbox correspondng to collection */
+    const struct prop_entry *lprops;	/* Array of known "live" properties */
+    xmlNodePtr root;			/* root node to add to XML tree */
+    xmlNsPtr *ns;			/* Array of our supported namespaces */
+    struct txn *tid;			/* Transaction ID for annot writes */
+    struct error_t *err;		/* Error info to pass up to caller */
+    int *ret;  				/* Return code to pass up to caller */
+    struct buf buf;			/* Working buffer */
+};
+
+
+/* Structure for property status */
+struct propstat {
+    xmlNodePtr root;
+    long status;
+    unsigned precond;
+};
+
+/* Index into propstat array */
+enum {
+    PROPSTAT_OK = 0,
+    PROPSTAT_UNAUTH,
+    PROPSTAT_FORBID,
+    PROPSTAT_NOTFOUND,
+    PROPSTAT_CONFLICT,
+    PROPSTAT_FAILEDDEP,
+    PROPSTAT_ERROR,
+    PROPSTAT_OVERQUOTA
+};
+#define NUM_PROPSTAT 8
+
+
+/* Context for "live" properties */
+struct prop_entry {
+    const char *name;			/* Property name */
+    unsigned ns;			/* Property namespace */
+    unsigned char flags;		/* Flags for how/where props apply */
+    int (*get)(const xmlChar *name,	/* Callback to fetch property */
+	       xmlNsPtr ns, struct propfind_ctx *fctx, xmlNodePtr resp,
+	       struct propstat *propstat, void *rock);
+    int (*put)(xmlNodePtr prop,		/* Callback to write property */
+	       unsigned set, struct proppatch_ctx *pctx,
+	       struct propstat *propstat, void *rock);
+    void *rock;				/* Add'l data to pass to callback */
+};
+
+/* Bitmask of property flags */
+enum {
+    PROP_ALLPROP =	(1<<0),		/* Returned in <allprop> request */
+    PROP_COLLECTION = 	(1<<1),		/* Returned for collection */
+    PROP_RESOURCE =	(1<<2),		/* Returned for resource */
+    PROP_PRESCREEN =	(1<<3),		/* Prescreen property using callback */
+    PROP_NEEDPROP =	(1<<4),		/* Pass property node into callback */
+};
+
 
 /* Function to check headers for preconditions */
 typedef int (*check_precond_t)(struct transaction_t *txn, const void *data,
@@ -396,6 +459,7 @@ struct meth_params {
     struct mkcol_params mkcol;		/* params for creating collection */
     post_proc_t post;			/* special POST handling (optional) */
     struct put_params put;		/* params for putting a resource */
+    const struct prop_entry *lprops;	/* array of "live" properties */
     struct report_type_t reports[];	/* array of reports & proc functions */
 };
 
@@ -413,9 +477,16 @@ int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root);
 xmlNodePtr init_xml_response(const char *resp, int ns,
 			     xmlNodePtr req, xmlNsPtr *respNs);
 
+xmlNodePtr xml_add_href(xmlNodePtr parent, xmlNsPtr ns, const char *href);
 xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
 			 xmlNsPtr *avail_ns);
+xmlNodePtr xml_add_prop(long status, xmlNsPtr davns,
+			struct propstat *propstat,
+			const xmlChar *name, xmlNsPtr ns,
+			xmlChar *content, unsigned precond);
 void xml_add_lockdisc(xmlNodePtr node, const char *path, struct dav_data *data);
+int ensure_ns(xmlNsPtr *respNs, int ns, xmlNodePtr node,
+	      const char *url, const char *prefix);
 
 int propfind_by_resource(void *rock, void *data);
 int propfind_by_collection(char *mboxname, int matchlen,
@@ -434,5 +505,83 @@ int meth_post(struct transaction_t *txn, void *params);
 int meth_put(struct transaction_t *txn, void *params);
 int meth_report(struct transaction_t *txn, void *params);
 int meth_unlock(struct transaction_t *txn, void *params);
+
+
+/* PROPFIND callbacks */
+int propfind_fromdb(const xmlChar *name, xmlNsPtr ns,
+		    struct propfind_ctx *fctx, xmlNodePtr resp,
+		    struct propstat propstat[], void *rock);
+int propfind_fromhdr(const xmlChar *name, xmlNsPtr ns,
+		     struct propfind_ctx *fctx, xmlNodePtr resp,
+		     struct propstat propstat[], void *rock);
+int propfind_creationdate(const xmlChar *name, xmlNsPtr ns,
+			  struct propfind_ctx *fctx, xmlNodePtr resp,
+			  struct propstat propstat[], void *rock);
+int propfind_getlength(const xmlChar *name, xmlNsPtr ns,
+		       struct propfind_ctx *fctx, xmlNodePtr resp,
+		       struct propstat propstat[], void *rock);
+int propfind_getetag(const xmlChar *name, xmlNsPtr ns,
+		     struct propfind_ctx *fctx, xmlNodePtr resp,
+		     struct propstat propstat[], void *rock);
+int propfind_getlastmod(const xmlChar *name, xmlNsPtr ns,
+			struct propfind_ctx *fctx, xmlNodePtr resp,
+			struct propstat propstat[], void *rock);
+int propfind_lockdisc(const xmlChar *name, xmlNsPtr ns,
+		      struct propfind_ctx *fctx, xmlNodePtr resp,
+		      struct propstat propstat[], void *rock);
+int propfind_suplock(const xmlChar *name, xmlNsPtr ns,
+		     struct propfind_ctx *fctx, xmlNodePtr resp,
+		     struct propstat propstat[], void *rock);
+
+int propfind_owner(const xmlChar *name, xmlNsPtr ns,
+		   struct propfind_ctx *fctx, xmlNodePtr resp,
+		   struct propstat propstat[], void *rock);
+int propfind_supprivset(const xmlChar *name, xmlNsPtr ns,
+			struct propfind_ctx *fctx, xmlNodePtr resp,
+			struct propstat propstat[], void *rock);
+int propfind_curprivset(const xmlChar *name, xmlNsPtr ns,
+			struct propfind_ctx *fctx, xmlNodePtr resp,
+			struct propstat propstat[], void *rock);
+int propfind_acl(const xmlChar *name, xmlNsPtr ns,
+		 struct propfind_ctx *fctx, xmlNodePtr resp,
+		 struct propstat propstat[], void *rock);
+int propfind_aclrestrict(const xmlChar *name, xmlNsPtr ns,
+			 struct propfind_ctx *fctx, xmlNodePtr resp,
+			 struct propstat propstat[], void *rock);
+int propfind_princolset(const xmlChar *name, xmlNsPtr ns,
+			struct propfind_ctx *fctx, xmlNodePtr resp,
+			struct propstat propstat[], void *rock);
+
+int propfind_quota(const xmlChar *name, xmlNsPtr ns,
+		   struct propfind_ctx *fctx, xmlNodePtr resp,
+		   struct propstat propstat[], void *rock);
+
+int propfind_curprin(const xmlChar *name, xmlNsPtr ns,
+		     struct propfind_ctx *fctx, xmlNodePtr resp,
+		     struct propstat propstat[], void *rock);
+
+int propfind_addmember(const xmlChar *name, xmlNsPtr ns,
+		       struct propfind_ctx *fctx, xmlNodePtr resp,
+		       struct propstat propstat[], void *rock);
+
+int propfind_sync_token(const xmlChar *name, xmlNsPtr ns,
+			struct propfind_ctx *fctx, xmlNodePtr resp,
+			struct propstat propstat[], void *rock);
+
+int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
+		    struct propfind_ctx *fctx, xmlNodePtr resp,
+		    struct propstat propstat[], void *rock);
+int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
+			 struct propfind_ctx *fctx, xmlNodePtr resp,
+			 struct propstat propstat[], void *rock);
+int propfind_abookurl(const xmlChar *name, xmlNsPtr ns,
+		      struct propfind_ctx *fctx, xmlNodePtr resp,
+		      struct propstat propstat[], void *rock);
+
+/* PROPPATCH callbacks */
+int proppatch_todb(xmlNodePtr prop, unsigned set, struct proppatch_ctx *pctx,
+		   struct propstat propstat[], void *rock);
+int proppatch_restype(xmlNodePtr prop, unsigned set, struct proppatch_ctx *pctx,
+		      struct propstat propstat[], void *rock);
 
 #endif /* HTTP_DAV_H */
