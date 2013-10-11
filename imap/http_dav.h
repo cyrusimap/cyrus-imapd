@@ -395,6 +395,7 @@ typedef int (*delete_proc_t)(struct transaction_t *txn, struct mailbox *mailbox,
 /* meth_get_dav() parameters */
 struct get_type_t {
     const char *content_type;
+    const char *version;
     const char* (*convert)(icalcomponent *ical);
 };
 
