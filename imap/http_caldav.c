@@ -190,11 +190,12 @@ static void sched_reply(const char *userid,
 			icalcomponent *oldical, icalcomponent *newical);
 
 static struct get_type_t caldav_get_types[] = {
-    { "text/calendar; charset=utf-8", NULL },
+    { "text/calendar; charset=utf-8", "2.0", NULL },
 #ifdef WITH_JSON
-    { "application/calendar+json; charset=utf-8", &icalcomponent_as_jcal_string },
+    { "application/calendar+json; charset=utf-8", NULL,
+      &icalcomponent_as_jcal_string },
 #endif
-    { NULL, NULL }
+    { NULL, NULL, NULL }
 };
 
 /* Array of known "live" properties */
@@ -1948,15 +1949,24 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 	unsigned allowed = 1;
 
 	if ((attr = xmlGetProp(prop, BAD_CAST "content-type"))) {
-	    if (!xmlStrcmp(attr, BAD_CAST "text/calendar")) {
-		if ((attr = xmlGetProp(prop, BAD_CAST "version"))) {
-		    if (xmlStrcmp(attr, BAD_CAST "2.0")) allowed = 0;
+	    struct get_type_t *get;
+
+	    /* Check requested MIME type */
+	    for (get = caldav_get_types; get->content_type; get++) {
+		if (is_mediatype((const char *) attr, get->content_type)) {
 		    xmlFree(attr);
+
+		    if ((attr = xmlGetProp(prop, BAD_CAST "version")) &&
+			(!get->version ||
+			 xmlStrcmp(attr, BAD_CAST get->version))) {
+			allowed = 0;
+		    }
+		    break;
 		}
 	    }
-	    else allowed = 0;
+	    if (!get->content_type) allowed = 0;
 
-	    xmlFree(attr);
+	    if (attr) xmlFree(attr);
 	}
 
 	if (!allowed) {
@@ -1981,13 +1991,24 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			name, ns, NULL, 0);
 
-    attr = xmlGetProp(prop, BAD_CAST "content-type");
-    if (attr) {
+    if ((attr = xmlGetProp(prop, BAD_CAST "content-type"))) {
+	struct get_type_t *get = caldav_get_types;
+
+	/* Convert data into requested MIME type */
+	while (!is_mediatype((const char *) attr, get->content_type)) get++;
+
+	if (get->convert) {
+	    icalcomponent *ical = icalparser_parse_string(data);
+
+	    data = get->convert(ical);
+	    datalen = strlen(data);
+	    icalcomponent_free(ical);
+	}
+
 	xmlSetProp(node, BAD_CAST "content-type", attr);
 	xmlFree(attr);
 
-	attr = xmlGetProp(prop, BAD_CAST "version");
-	if (attr) {
+	if ((attr = xmlGetProp(prop, BAD_CAST "version"))) {
 	    xmlSetProp(node, BAD_CAST "version", attr);
 	    xmlFree(attr);
 	}
