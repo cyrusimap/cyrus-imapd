@@ -319,8 +319,8 @@ int main(int argc, char **argv)
     }
     s = idle_get_sock();
 
-    /* fork unless we were given the -d option */
-    if (debugmode == 0) {
+    /* fork unless we were given the -d option or we're running as a daemon */
+    if (debugmode == 0 && !getenv("CYRUS_ISDAEMON")) {
 
 	pid = fork();
 
