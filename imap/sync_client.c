@@ -3132,7 +3132,7 @@ int main(int argc, char **argv)
 	fatal("No replication mode specified", EC_USAGE);
 
     /* fork if required */
-    if (background && !input_filename) {
+    if (background && !input_filename && !getenv("CYRUS_ISDAEMON")) {
 	int pid = fork();
 
 	if (pid == -1) {
