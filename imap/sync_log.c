@@ -308,7 +308,6 @@ EXPORTED void sync_log_channel(const char *channel, const char *fmt, ...)
 {
     va_list ap;
     const char *val;
-    int i;
 
     va_start(ap, fmt);
     val = va_format(fmt, ap);
