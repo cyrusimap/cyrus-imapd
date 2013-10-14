@@ -74,6 +74,7 @@
 #include "strhash.h"
 #include "stristr.h"
 #include "sync_log.h"
+#include "syslog.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
