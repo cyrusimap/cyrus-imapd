@@ -188,6 +188,15 @@ struct nntp_overview {
     unsigned long lines;
 };
 
+enum index_warmup_flags
+{
+    WARMUP_INDEX	    = (1<<0),
+    WARMUP_CONVERSATIONS    = (1<<1),
+    WARMUP_ANNOTATIONS	    = (1<<2),
+    WARMUP_FOLDERSTATUS	    = (1<<3),
+    WARMUP_ALL		    = (~0),
+};
+
 /* non-locking, non-updating - just do a fetch on the state
  * we already have */
 void index_fetchresponses(struct index_state *state,
@@ -206,8 +215,9 @@ extern int index_store(struct index_state *state,
 extern int index_run_annotator(struct index_state *state,
 			       const char *sequence, int usinguid,
 			       struct namespace *namespace, int isadmin);
+extern int index_warmup(struct mboxlist_entry *, unsigned int warmup_flags);
 extern int index_sort(struct index_state *state, const struct sortcrit *sortcrit,
-		      struct searchargs *searchargs, int usinguid);
+		      const struct searchargs *searchargs, int usinguid);
 extern int index_convsort(struct index_state *state, struct sortcrit *sortcrit,
 		      struct searchargs *searchargs,
 		      const struct windowargs * windowargs);

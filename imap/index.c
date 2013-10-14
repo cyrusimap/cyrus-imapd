@@ -1412,6 +1412,49 @@ out:
     return r;
 }
 
+EXPORTED int index_warmup(struct mboxlist_entry *mbentry, unsigned int warmup_flags)
+{
+    const char *fname = NULL;
+    char *tofree1 = NULL;
+    char *tofree2 = NULL;
+    int r = 0;
+
+    if (warmup_flags & WARMUP_INDEX) {
+	fname = mboxname_metapath(mbentry->partition, mbentry->name, META_INDEX, 0);
+	r = warmup_file(fname, 0, 0);
+	if (r) goto out;
+    }
+    if (warmup_flags & WARMUP_CONVERSATIONS) {
+	if (config_getswitch(IMAPOPT_CONVERSATIONS)) {
+	    fname = tofree1 = conversations_getmboxpath(mbentry->name);
+	    r = warmup_file(fname, 0, 0);
+	    if (r) goto out;
+	}
+    }
+    if (warmup_flags & WARMUP_ANNOTATIONS) {
+	fname = mboxname_metapath(mbentry->partition, mbentry->name, META_ANNOTATIONS, 0);
+	r = warmup_file(fname, 0, 0);
+	if (r) goto out;
+    }
+    if (warmup_flags & WARMUP_FOLDERSTATUS) {
+	if (config_getswitch(IMAPOPT_STATUSCACHE)) {
+	    fname = tofree2 = statuscache_filename();
+	    r = warmup_file(fname, 0, 0);
+	    if (r) goto out;
+	}
+    }
+
+out:
+    if (r == ENOENT || r == ENOSYS)
+	r = 0;
+    if (r)
+	syslog(LOG_ERR, "IOERROR: unable to warmup file %s: %s",
+		fname, error_message(r));
+    free(tofree1);
+    free(tofree2);
+    return r;
+}
+
 static int index_scan_work(const char *s, unsigned long len,
 			   const char *match, unsigned long min)
 {
