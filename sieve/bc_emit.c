@@ -284,6 +284,31 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
 	break;
     }
     
+    case BC_HASFLAG:
+    {
+	int ret;
+	/* Drop match type */
+	if(write_int(fd, bc->data[(*codep)].value) == -1)
+	    return -1;
+	wrote += sizeof(int);
+	(*codep)++;
+	/*drop comparator */
+	if(write_int(fd, bc->data[(*codep)].value) == -1)
+	    return -1;
+	wrote += sizeof(int);
+	(*codep)++;
+	/*now drop relation*/
+	if(write_int(fd, bc->data[(*codep)].value) == -1)
+	    return -1;
+	wrote += sizeof(int);
+	(*codep)++;
+	/* Now drop flags */
+	ret = bc_stringlist_emit(fd, codep, bc);
+	if(ret < 0) return -1;
+	wrote+=ret;
+	break;
+    }
+
     case BC_ADDRESS:
     case BC_ENVELOPE:
     {
@@ -512,9 +537,55 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 	    break;
 	}
 	
+	case B_KEEP:
+	    /* Copy (word), Flags Stringlist */
+
+	    if(write_int(fd,bc->data[codep++].value) == -1)
+		return -1;
+
+	    filelen += sizeof(int);
+
+	    /* Dump a stringlist of flags */
+	    ret = bc_stringlist_emit(fd, &codep, bc);
+	    if(ret < 0)
+		return -1;
+	    filelen += ret;
+
+	    break;
+
 	case B_FILEINTO:
+	    /* Copy (word), Folder String, Flags Stringlist */
+
+	    if(write_int(fd,bc->data[codep++].value) == -1)
+		return -1;
+
+	    filelen += sizeof(int);
+
+	    len = bc->data[codep++].len;
+	    if(write_int(fd,len) == -1)
+		return -1;
+
+	    filelen+=sizeof(int);
+
+	    if(write(fd,bc->data[codep++].str,len) == -1)
+		return -1;
+
+	    ret = align_string(fd, len);
+	    if(ret == -1)
+		return -1;
+
+	    filelen += len + ret;
+
+	    /* Dump a stringlist of flags */
+	    ret = bc_stringlist_emit(fd, &codep, bc);
+	    if(ret < 0)
+		return -1;
+	    filelen += ret;
+
+	    break;
+
 	case B_REDIRECT:
-	    /* Copy (word), Folder/Address String */
+	    /* Copy (word), Address String */
 
 	    if(write_int(fd,bc->data[codep++].value) == -1)
 		return -1;
@@ -772,7 +843,6 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 	case B_NULL:
 	case B_STOP:
 	case B_DISCARD:
-	case B_KEEP:
 	case B_MARK:
 	case B_UNMARK:
 	case B_RETURN:
