@@ -4642,6 +4642,10 @@ static int getsearchtext_cb(int partno, int charset, int encoding,
 	free(q);
 	buf_free(&text);
     }
+    else if (buf_len(data) > 50 && !memcmp(data->s, "-----BEGIN PGP MESSAGE-----", 27)) {
+	/* PGP encrypted body part - we don't want to index this,
+	 * it's a ton of random base64 noise */
+    }
     else {
 	/* body-like */
 	str->receiver->begin_part(str->receiver, SEARCH_PART_BODY);
