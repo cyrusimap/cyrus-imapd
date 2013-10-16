@@ -57,6 +57,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/poll.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <syslog.h>
 #include <string.h>
