@@ -2784,7 +2784,7 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 {
     struct meth_params *gparams = (struct meth_params *) params;
     const char **hdr;
-    struct get_type_t *get = NULL;
+    struct mime_type_t *mime = NULL;
     int ret = 0, r, precond, rights;
     const char *msg_base = NULL, *data = NULL;
     unsigned long msg_size = 0, datalen, offset;
@@ -2808,17 +2808,17 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 	struct accept *e, *enc = parse_accept(hdr);
 
 	for (e = enc; e && e->token; e++) {
-	    struct get_type_t *g;
+	    struct mime_type_t *m;
 
-	    for (g = gparams->get; !get && g->content_type; g++) {
-		if (is_mediatype(e->token, g->content_type)) get = g;
+	    for (m = gparams->mime_types; !mime && m->content_type; m++) {
+		if (is_mediatype(e->token, m->content_type)) mime = m;
 	    }
 
 	    free(e->token);
 	}
 	if (enc) free(enc);
     }
-    if (!get) get = gparams->get;  /* 1st in array MUST default type */
+    if (!mime) mime = gparams->mime_types;  /* 1st in array MUST default type */
 
     /* Locate the mailbox */
     if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
@@ -2929,7 +2929,7 @@ int meth_get_dav(struct transaction_t *txn, void *params)
     }
 
     if (record.uid) {
-	resp_body->type = get->content_type;
+	resp_body->type = mime->content_type;
 
 	if (txn->meth == METH_GET) {
 	    /* Load message containing the resource */
@@ -2940,11 +2940,11 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 
 	    data = msg_base + offset;
 
-	    if (get->convert) {
+	    if (mime->to_string) {
 		icalcomponent *ical;
 
 		ical = icalparser_parse_string(data);
-		data = get->convert(ical);
+		data = mime->to_string(ical);
 		datalen = strlen(data);
 		icalcomponent_free(ical);
 	    }
@@ -4017,6 +4017,7 @@ int meth_put(struct transaction_t *txn, void *params)
     struct meth_params *pparams = (struct meth_params *) params;
     int ret, r, precond, rights;
     const char **hdr, *etag;
+    struct mime_type_t *mime = NULL;
     char *server, *acl;
     struct mailbox *mailbox = NULL;
     struct dav_data *ddata;
@@ -4044,8 +4045,12 @@ int meth_put(struct transaction_t *txn, void *params)
 	return HTTP_BAD_REQUEST;
 
     /* Check Content-Type */
-    if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
-	!is_mediatype(hdr[0], pparams->content_type)) {
+    if ((hdr = spool_getheader(txn->req_hdrs, "Content-Type"))) {
+	for (mime = pparams->mime_types; mime->content_type; mime++) {
+	    if (is_mediatype(hdr[0], mime->content_type)) break;
+	}
+    }
+    if (!mime || !mime->content_type) {
 	txn->error.precond = pparams->put.supp_data_precond;
 	return HTTP_FORBIDDEN;
     }
@@ -4115,6 +4120,8 @@ int meth_put(struct transaction_t *txn, void *params)
 	/* Fetch index record for the resource */
 	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &oldrecord);
 	if (r) {
+	    syslog(LOG_ERR, "mailbox_find_index_record(%s, %u) failed: %s",
+		   txn->req_tgt.mboxname, ddata->imap_uid, error_message(r));
 	    txn->error.desc = error_message(r);
 	    ret = HTTP_SERVER_ERROR;
 	    goto done;
@@ -4173,6 +4180,8 @@ int meth_put(struct transaction_t *txn, void *params)
     /* Check if we can append a new message to mailbox */
     if ((r = append_check(txn->req_tgt.mboxname,
 			  httpd_authstate, ACL_INSERT, size))) {
+	syslog(LOG_ERR, "append_check(%s) failed: %s",
+	       txn->req_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
@@ -4181,7 +4190,7 @@ int meth_put(struct transaction_t *txn, void *params)
     if (get_preferences(txn) & PREFER_REP) flags |= PREFER_REP;
 
     /* Parse, validate, and store the resource */
-    ret = pparams->put.proc(txn, mailbox, flags);
+    ret = pparams->put.proc(txn, mime, mailbox, flags);
 
   done:
     if (mailbox) mailbox_unlock_index(mailbox, NULL);

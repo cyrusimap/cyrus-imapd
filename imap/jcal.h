@@ -45,6 +45,8 @@
 
 #ifdef WITH_JSON
 
+#define __STRICT_ANSI__
+
 #include <libical/ical.h>
 #include <json/json.h>
 
@@ -53,5 +55,6 @@
 #endif
 
 extern const char *icalcomponent_as_jcal_string(icalcomponent* comp);
+extern icalcomponent *jcal_string_as_icalcomponent(const char *str);
 
 #endif  /* WITH_JSON */

@@ -49,6 +49,7 @@
 #include <stdlib.h> /* for free() */
 #include <string.h> /* for strcpy(), others */
 #include <stddef.h> /* for offsetof() macro */
+#include <syslog.h>
 
 #include "httpd.h"
 #include "jcal.h"
@@ -108,23 +109,23 @@ static const struct {
 } recurmap[] = 
 {
     {"bysecond",
-     offsetof(struct icalrecurrencetype, by_second), ICAL_BY_SECOND_SIZE - 1},
+     offsetof(struct icalrecurrencetype, by_second), ICAL_BY_SECOND_SIZE},
     {"byminute",
-     offsetof(struct icalrecurrencetype, by_minute), ICAL_BY_MINUTE_SIZE - 1},
+     offsetof(struct icalrecurrencetype, by_minute), ICAL_BY_MINUTE_SIZE},
     {"byhour",
-     offsetof(struct icalrecurrencetype, by_hour), ICAL_BY_HOUR_SIZE - 1},
+     offsetof(struct icalrecurrencetype, by_hour), ICAL_BY_HOUR_SIZE},
     {"byday",
-     offsetof(struct icalrecurrencetype, by_day), ICAL_BY_DAY_SIZE - 1},
+     offsetof(struct icalrecurrencetype, by_day), ICAL_BY_DAY_SIZE},
     {"bymonthday",
-     offsetof(struct icalrecurrencetype, by_month_day),ICAL_BY_MONTHDAY_SIZE-1},
+     offsetof(struct icalrecurrencetype, by_month_day),ICAL_BY_MONTHDAY_SIZE},
     {"byyearday",
-     offsetof(struct icalrecurrencetype, by_year_day), ICAL_BY_YEARDAY_SIZE-1},
+     offsetof(struct icalrecurrencetype, by_year_day), ICAL_BY_YEARDAY_SIZE},
     {"byweekno",
-     offsetof(struct icalrecurrencetype, by_week_no), ICAL_BY_WEEKNO_SIZE - 1},
+     offsetof(struct icalrecurrencetype, by_week_no), ICAL_BY_WEEKNO_SIZE},
     {"bymonth",
-     offsetof(struct icalrecurrencetype, by_month), ICAL_BY_MONTH_SIZE - 1},
+     offsetof(struct icalrecurrencetype, by_month), ICAL_BY_MONTH_SIZE},
     {"bysetpos",
-     offsetof(struct icalrecurrencetype, by_set_pos), ICAL_BY_SETPOS_SIZE - 1},
+     offsetof(struct icalrecurrencetype, by_set_pos), ICAL_BY_SETPOS_SIZE},
     {0,0,0},
 };
 
@@ -162,8 +163,8 @@ icalrecurrencetype_as_json_object(struct icalrecurrencetype *recur)
     }
 
     for (j = 0; recurmap[j].str; j++){
-	short *array = (short *)(recurmap[j].offset + (size_t)recur);
-	int limit = recurmap[j].limit;
+	short *array = (short *)((size_t) recur + recurmap[j].offset);
+	int limit = recurmap[j].limit - 1;
 
 	/* Skip unused arrays */
 	if (array[0] != ICAL_RECURRENCE_ARRAY_MAX) {
@@ -379,6 +380,7 @@ static void icalparameter_as_json_object_member(icalparameter *param,
 	    return;
     }
 
+    /* XXX  Need to handle multi-valued parameters */
     value_string = icalparameter_get_xvalue(param);
     if (!value_string) {
 	icalparameter_value value = icalparameter_get_value(param);
@@ -492,6 +494,7 @@ static json_object *icalproperty_as_json_array(icalproperty *prop)
 
 
     /* Add value */
+    /* XXX  Need to handle multi-valued properties */
     value = icalproperty_get_value(prop);
     if (value) json_object_array_add(jprop, icalvalue_as_json_object(value));
 
@@ -583,6 +586,392 @@ const char *icalcomponent_as_jcal_string(icalcomponent *ical)
     json_object_put(jcal);
 
     return buf;
+}
+
+
+struct icalrecur_parser {
+    const char* rule;
+    char* copy;
+    char* this_clause;
+    char* next_clause;
+
+    struct icalrecurrencetype rt;
+};
+
+extern icalrecurrencetype_frequency icalrecur_string_to_freq(const char* str);
+extern void icalrecur_add_byrules(struct icalrecur_parser *parser, short *array,
+				  int size, char* vals);
+extern void icalrecur_add_bydayrules(struct icalrecur_parser *parser,
+				     const char* vals);
+
+/*
+ * Construct an iCalendar property value from a JSON object.
+ */
+static icalvalue *json_object_to_icalvalue(json_object *jvalue,
+					   icalvalue_kind kind)
+{
+    icalvalue *value = NULL;
+    int len, i;
+
+    switch (kind) {
+    case ICAL_BOOLEAN_VALUE:
+	if (json_object_is_type(jvalue, json_type_boolean))
+	    value = icalvalue_new_integer(json_object_get_boolean(jvalue));
+	else
+	    syslog(LOG_WARNING, "jCal boolean object expected");
+	break;
+
+    case ICAL_FLOAT_VALUE:
+	if (json_object_is_type(jvalue, json_type_double))
+	    value = icalvalue_new_float((float) json_object_get_double(jvalue));
+	else
+	    syslog(LOG_WARNING, "jCal double object expected");
+	break;
+
+    case ICAL_GEO_VALUE:
+	/* MUST be an array of 2 doubles */
+	if (json_object_is_type(jvalue, json_type_array) &&
+	    (len = json_object_array_length(jvalue)) != 2) {
+
+	    for (i = 0;
+		 i < len &&
+		     json_object_is_type(
+			 json_object_array_get_idx(jvalue, i),
+			 json_type_double);
+		 i++);
+	    if (i == len) {
+		struct icalgeotype geo;
+
+		geo.lat =
+		    json_object_get_double(json_object_array_get_idx(jvalue, 0));
+		geo.lon =
+		    json_object_get_double(json_object_array_get_idx(jvalue, 1));
+
+		value = icalvalue_new_geo(geo);
+	    }
+	}
+	if (!value)
+	    syslog(LOG_WARNING, "jCal array object of 2 doubles expected");
+	break;
+
+    case ICAL_INTEGER_VALUE:
+	if (json_object_is_type(jvalue, json_type_int))
+	    value = icalvalue_new_integer(json_object_get_int(jvalue));
+	else
+	    syslog(LOG_WARNING, "jCal integer object expected");
+	break;
+
+    case ICAL_RECUR_VALUE:
+	if (json_object_is_type(jvalue, json_type_object)) {
+	    struct icalrecur_parser parser;
+	    struct icalrecurrencetype *rt = &parser.rt;
+
+	    memset(&parser, 0, sizeof(parser));
+
+	    icalrecurrencetype_clear(rt);
+	    json_object_object_foreach(jvalue, key, val) {
+
+		if (!strcmp(key, "freq")) {
+		    rt->freq =
+			icalrecur_string_to_freq(json_object_get_string(val));
+		}
+		else if (!strcmp(key, "count")) {
+		    rt->count = json_object_get_int(val);
+		}
+		else if (!strcmp(key, "until")) {
+		    rt->until =
+			icaltime_from_string(json_object_get_string(val));
+		}
+		else if (!strcmp(key, "interval")) {
+		    rt->interval = json_object_get_int(val);
+		    if (rt->interval < 1) rt->interval = 1;  /* MUST be >= 1 */
+		}
+		else if (!strcmp(key, "wkst")) {
+		    rt->week_start =
+			icalrecur_string_to_weekday(json_object_get_string(val));
+		}
+		else if (!strcmp(key, "byday")) {
+		    icalrecur_add_bydayrules(&parser,
+					     json_object_get_string(val));
+		}
+		else {
+		    for (i = 0;
+			 recurmap[i].str && strcmp(key, recurmap[i].str);
+			 i++);
+
+		    if (recurmap[i].str) {
+			short *array =
+			    (short *)((size_t) rt + recurmap[i].offset);
+			int limit = recurmap[i].limit;
+
+			icalrecur_add_byrules(&parser, array, limit,
+					      icalmemory_tmp_copy(
+						  json_object_get_string(val)));
+		    }
+		    else {
+			syslog(LOG_WARNING, "Unknown recurrence rule");
+			icalrecurrencetype_clear(rt);
+			break;
+		    }
+		}
+	    }
+
+            if (rt->freq != ICAL_NO_RECURRENCE)
+		value = icalvalue_new_recur(parser.rt);
+	}
+	else
+	    syslog(LOG_WARNING, "jCal object object expected");
+	break;
+
+    case ICAL_REQUESTSTATUS_VALUE:
+	/* MUST be an array of 2-3 strings */
+	if (json_object_is_type(jvalue, json_type_array) &&
+	    ((len = json_object_array_length(jvalue)) == 2 || len == 3)) {
+
+	    for (i = 0;
+		 i < len &&
+		     json_object_is_type(
+			 json_object_array_get_idx(jvalue, i),
+			 json_type_string);
+		 i++);
+	    if (i == len) {
+		struct icalreqstattype rst =
+		    { ICAL_UNKNOWN_STATUS, NULL, NULL };
+		short maj, min;
+
+		if (sscanf(json_object_get_string(
+			       json_object_array_get_idx(jvalue, 0)),
+			   "%hd.%hd", &maj, &min) == 2) {
+		    rst.code = icalenum_num_to_reqstat(maj, min);
+		}
+		if (rst.code == ICAL_UNKNOWN_STATUS) {
+		    syslog(LOG_WARNING, "Unknown request-status code");
+		    break;
+		}
+
+		rst.desc =
+		    json_object_get_string(json_object_array_get_idx(jvalue, 1));
+		rst.debug = (len < 3) ? NULL :
+		    json_object_get_string(json_object_array_get_idx(jvalue, 2));
+
+		value = icalvalue_new_requeststatus(rst);
+	    }
+	}
+	if (!value)
+	    syslog(LOG_WARNING, "jCal array object of 2-3 strings expected");
+	break;
+
+    case ICAL_UTCOFFSET_VALUE:
+	if (json_object_is_type(jvalue, json_type_string)) {
+	    int utcoffset, hours, minutes, seconds = 0;
+	    char sign;
+
+	    if (sscanf(json_object_get_string(jvalue), "%c%02d:%02d:%02d",
+		       &sign, &hours, &minutes, &seconds) < 3) {
+		syslog(LOG_WARNING, "Unexpected utc-offset format");
+		break;
+	    }
+
+	    utcoffset = hours*3600 + minutes*60 + seconds;
+
+	    if (sign == '-') utcoffset = -utcoffset;
+
+	    value = icalvalue_new_utcoffset(utcoffset);
+	}
+	else
+	    syslog(LOG_WARNING, "jCal string object expected");
+	break;
+
+    default:
+	if (json_object_is_type(jvalue, json_type_string))
+	    value = icalvalue_new_from_string(kind,
+					      json_object_get_string(jvalue));
+	else
+	    syslog(LOG_WARNING, "jCal string object expected");
+	break;
+    }
+
+    return value;
+}
+
+
+/*
+ * Construct an iCalendar property from a JSON array.
+ */
+static icalproperty *json_array_to_icalproperty(json_object *jprop)
+{
+    json_object *jtype, *jparams, *jvaltype, *jvalue;
+    const char *propname, *typestr;
+    icalproperty_kind kind;
+    icalproperty *prop = NULL;
+    icalvalue_kind valkind;
+    icalvalue *value;
+
+    /* Sanity check the types of the jCal property object */
+    if (!json_object_is_type(jprop, json_type_array) ||
+	json_object_array_length(jprop) < 4) {
+	syslog(LOG_WARNING,
+	       "jCal component object is not an array of 4+ objects");
+	return NULL;
+    }
+
+    jtype = json_object_array_get_idx(jprop, 0);
+    jparams = json_object_array_get_idx(jprop, 1);
+    jvaltype = json_object_array_get_idx(jprop, 2);
+
+    if (!json_object_is_type(jtype, json_type_string) ||
+	!json_object_is_type(jparams, json_type_object) ||
+	!json_object_is_type(jvaltype, json_type_string)) {
+	syslog(LOG_WARNING, "jCal property array contains incorrect objects");
+	return NULL;
+    }
+
+    /* Get the property type */
+    propname = ucase(icalmemory_tmp_copy(json_object_get_string(jtype)));
+    kind = icalenum_string_to_property_kind(propname);
+    if (kind == ICAL_NO_PROPERTY) {
+	syslog(LOG_WARNING, "Unknown jCal property type: %s", propname);
+	return NULL;
+    }
+
+    /* Get the value type */
+    typestr = json_object_get_string(jvaltype);
+    valkind = !strcmp(typestr, "unknown") ? ICAL_X_VALUE :
+	icalenum_string_to_value_kind(ucase(icalmemory_tmp_copy(typestr)));
+    if (valkind == ICAL_NO_VALUE) {
+	syslog(LOG_WARNING, "Unknown jCal value type for %s property: %s",
+	       propname, typestr);
+	return NULL;
+    }
+
+    /* Create new property */
+    prop = icalproperty_new(kind);
+    if (!prop) {
+	syslog(LOG_ERR, "Creation of new %s property failed", propname);
+	return NULL;
+    }
+    if (kind == ICAL_X_PROPERTY) icalproperty_set_x_name(prop, propname);
+
+    /* Add parameters */
+    json_object_object_foreach(jparams, key, val) {
+	/* XXX  Need to handle multi-valued parameters */
+	icalproperty_set_parameter_from_string(prop,
+					       ucase(icalmemory_tmp_copy(key)),
+					       json_object_get_string(val));
+    }
+
+    /* Add value */
+    /* XXX  Need to handle multi-valued properties */
+    jvalue = json_object_array_get_idx(jprop, 3);
+    value = json_object_to_icalvalue(jvalue, valkind);
+    if (!value) {
+	syslog(LOG_ERR, "Creation of new %s property value failed", propname);
+	goto error;
+    }
+
+    icalproperty_set_value(prop, value);
+
+    return prop;
+
+  error:
+    icalproperty_free(prop);
+    return NULL;
+}
+
+
+/*
+ * Construct an iCalendar component from a JSON object.
+ */
+static icalcomponent *json_object_to_icalcomponent(json_object *jobj)
+{
+    json_object *jtype, *jprops, *jsubs;
+    const char *type;
+    icalcomponent_kind kind;
+    icalcomponent *comp = NULL;
+    int i;
+
+    /* Sanity check the types of the jCal component object */
+    if (!json_object_is_type(jobj, json_type_array) ||
+	json_object_array_length(jobj) != 3) {
+	syslog(LOG_WARNING,
+	       "jCal component object is not an array of 3 objects");
+	return NULL;
+    }
+
+    jtype = json_object_array_get_idx(jobj, 0);
+    jprops = json_object_array_get_idx(jobj, 1);
+    jsubs = json_object_array_get_idx(jobj, 2);
+
+    if (!json_object_is_type(jtype, json_type_string) ||
+	!json_object_is_type(jprops, json_type_array) ||
+	!json_object_is_type(jsubs, json_type_array)) {
+	syslog(LOG_WARNING, "jCal component array contains incorrect objects");
+	return NULL;
+    }
+
+    type = json_object_get_string(jtype);
+    kind = icalenum_string_to_component_kind(ucase(icalmemory_tmp_copy(type)));
+    if (kind == ICAL_NO_COMPONENT) {
+	syslog(LOG_WARNING, "Unknown jCal component type: %s", type);
+	return NULL;
+    }
+
+    /* Create new component */
+    comp = icalcomponent_new(kind);
+    if (!comp) {
+	syslog(LOG_ERR, "Creation of new %s component failed", type);
+	return NULL;
+    }
+
+    /* Add properties */
+    for (i = 0; i < json_object_array_length(jprops); i++) {
+	icalproperty *prop =
+	    json_array_to_icalproperty(json_object_array_get_idx(jprops, i));
+
+	if (!prop) goto error;
+
+	icalcomponent_add_property(comp, prop);
+    }
+
+    /* Add sub-components */
+    for (i = 0; i < json_object_array_length(jsubs); i++) {
+	icalcomponent *sub =
+	    json_object_to_icalcomponent(json_object_array_get_idx(jsubs, i));
+
+	if (!sub) goto error;
+
+	icalcomponent_add_component(comp, sub);
+    }
+
+    return comp;
+
+  error:
+    icalcomponent_free(comp);
+    return NULL;
+}
+
+
+/*
+ * Construct an iCalendar component from a jCal string.
+ */
+icalcomponent *jcal_string_as_icalcomponent(const char *str)
+{
+    json_object *jcal;
+    enum json_tokener_error jerr;
+    icalcomponent *ical;
+
+    jcal = json_tokener_parse_verbose(str, &jerr);
+    if (!jcal) {
+	syslog(LOG_WARNING, "json parse error: '%s'",
+	       json_tokener_error_desc(jerr));
+	return NULL;
+    }
+
+    ical = json_object_to_icalcomponent(jcal);
+
+    json_object_put(jcal);
+
+    return ical;
 }
 
 #endif  /* WITH_JSON */

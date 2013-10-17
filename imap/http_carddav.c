@@ -96,8 +96,13 @@ static int carddav_copy(struct transaction_t *txn,
 			struct mailbox *src_mbox, struct index_record *src_rec,
 			struct mailbox *dest_mbox, const char *dest_rsrc,
 			unsigned overwrite, unsigned flags);
-static int carddav_put(struct transaction_t *txn, struct mailbox *mailbox,
-		       unsigned flags);
+static int carddav_put(struct transaction_t *txn, 
+		       struct mime_type_t *mime,
+		       struct mailbox *mailbox, unsigned flags);
+static VObject *vcard_string_as_vobject(const char *str)
+{
+    return Parse_MIME(str, strlen(str));
+}
 
 static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
 				   struct propfind_ctx *fctx, xmlNodePtr resp,
@@ -125,9 +130,11 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 			  struct carddav_db *carddavdb, int overwrite,
 			  unsigned flags);
 
-static struct get_type_t carddav_get_types[] = {
-    { "text/vcard; charset=utf-8", "3.0", NULL },
-    { NULL, NULL, NULL }
+static struct mime_type_t carddav_mime_types[] = {
+    { "text/vcard; charset=utf-8", "3.0", NULL,
+      (void * (*)(const char*)) &vcard_string_as_vobject
+    },
+    { NULL, NULL, NULL, NULL }
 };
 
 /* Array of known "live" properties */
@@ -217,7 +224,7 @@ static const struct prop_entry carddav_props[] = {
 };
 
 static struct meth_params carddav_params = {
-    "text/vcard; charset=utf-8",
+    carddav_mime_types,
     &carddav_parse_path,
     &check_precond,
     { (void **) &auth_carddavdb,
@@ -229,7 +236,6 @@ static struct meth_params carddav_params = {
     NULL,					/* No ACL extensions */
     &carddav_copy,
     NULL,		  	      		/* No special DELETE handling */
-    carddav_get_types,
     { MBTYPE_ADDRESSBOOK, NULL, NULL, 0 },	/* No special MK* method */
     NULL,		  	      		/* No special POST handling */
     { CARDDAV_SUPP_DATA, &carddav_put },
@@ -596,15 +602,15 @@ static int carddav_copy(struct transaction_t *txn,
  *   CARDDAV:no-uid-conflict (DAV:href)
  *   CARDDAV:max-resource-size
  */
-static int carddav_put(struct transaction_t *txn, struct mailbox *mailbox,
-		       unsigned flags)
+static int carddav_put(struct transaction_t *txn, 
+		       struct mime_type_t *mime,
+		       struct mailbox *mailbox, unsigned flags)
 {
     int ret;
     VObject *vcard = NULL;
 
     /* Parse and validate the vCard data */
-    vcard = Parse_MIME(buf_cstring(&txn->req_body.payload),
-		       buf_len(&txn->req_body.payload));
+    vcard = mime->from_string(buf_cstring(&txn->req_body.payload));
     if (!vcard || strcmp(vObjectName(vcard), "VCARD")) {
 	txn->error.precond = CARDDAV_VALID_DATA;
 	ret = HTTP_FORBIDDEN;
@@ -716,22 +722,22 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
 	unsigned allowed = 1;
 
 	if ((attr = xmlGetProp(prop, BAD_CAST "content-type"))) {
-	    struct get_type_t *get;
+	    struct mime_type_t *mime;
 
 	    /* Check requested MIME type */
-	    for (get = carddav_get_types; get->content_type; get++) {
-		if (is_mediatype((const char *) attr, get->content_type)) {
+	    for (mime = carddav_mime_types; mime->content_type; mime++) {
+		if (is_mediatype((const char *) attr, mime->content_type)) {
 		    xmlFree(attr);
 
 		    if ((attr = xmlGetProp(prop, BAD_CAST "version")) &&
-			(!get->version ||
-			 xmlStrcmp(attr, BAD_CAST get->version))) {
+			(!mime->version ||
+			 xmlStrcmp(attr, BAD_CAST mime->version))) {
 			allowed = 0;
 		    }
 		    break;
 		}
 	    }
-	    if (!get->content_type) allowed = 0;
+	    if (!mime->content_type) allowed = 0;
 
 	    if (attr) xmlFree(attr);
 	}
@@ -759,12 +765,12 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
 			name, ns, NULL, 0);
 
     if ((attr = xmlGetProp(prop, BAD_CAST "content-type"))) {
-	struct get_type_t *get = carddav_get_types;
+	struct mime_type_t *mime = carddav_mime_types;
 
 	/* Convert data into requested MIME type */
-	while (!is_mediatype((const char *) attr, get->content_type)) get++;
+	while (!is_mediatype((const char *) attr, mime->content_type)) mime++;
 
-	if (get->convert) {
+	if (mime->to_string) {
 	    /* XXX  TODO */
 	}
 

@@ -392,11 +392,12 @@ typedef int (*copy_proc_t)(struct transaction_t *txn,
 typedef int (*delete_proc_t)(struct transaction_t *txn, struct mailbox *mailbox,
 			     struct index_record *record, void *data);
 
-/* meth_get_dav() parameters */
-struct get_type_t {
+/* Function to convert to/from MIME type */
+struct mime_type_t {
     const char *content_type;
     const char *version;
-    const char* (*convert)(icalcomponent *ical);
+    const char* (*to_string)(void *);
+    void* (*from_string)(const char *);
 };
 
 /* meth_mkcol() parameters */
@@ -415,8 +416,9 @@ struct mkcol_params {
 typedef int (*post_proc_t)(struct transaction_t *txn);
 
 /* meth_put() parameters */
-typedef int (*put_proc_t)(struct transaction_t *txn, struct mailbox *mailbox,
-			  unsigned flags);
+typedef int (*put_proc_t)(struct transaction_t *txn,
+			  struct mime_type_t *mime,
+			  struct mailbox *mailbox, unsigned flags);
 
 struct put_params {
     unsigned supp_data_precond;		/* precond code for unsupported data */
@@ -449,14 +451,13 @@ enum {
 };
 
 struct meth_params {
-    const char *content_type;		/* Content-Type of resources */
+    struct mime_type_t *mime_types;	/* array of MIME types and conv funcs */
     parse_path_t parse_path;		/* parse URI path & generate mboxname */
     check_precond_t check_precond;	/* check headers for preconditions */
     struct davdb_params davdb;		/* DAV DB access functions */
     acl_proc_t acl_ext;			/* special ACL handling (extensions) */
     copy_proc_t copy;			/* function to process & COPY a rsrc */
     delete_proc_t delete;		/* special DELETE handling (optional) */
-    struct get_type_t *get;		/* array of MIME types and conv funcs */
     struct mkcol_params mkcol;		/* params for creating collection */
     post_proc_t post;			/* special POST handling (optional) */
     struct put_params put;		/* params for putting a resource */

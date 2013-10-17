@@ -134,8 +134,9 @@ static int caldav_delete_sched(struct transaction_t *txn,
 			       struct index_record *record, void *data);
 static int meth_get(struct transaction_t *txn, void *params);
 static int caldav_post(struct transaction_t *txn);
-static int caldav_put(struct transaction_t *txn, struct mailbox *mailbox,
-		      unsigned flags);
+static int caldav_put(struct transaction_t *txn,
+		      struct mime_type_t *mime,
+		      struct mailbox *mailbox, unsigned flags);
 
 static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
 				   struct propfind_ctx *fctx, xmlNodePtr resp,
@@ -189,13 +190,17 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 static void sched_reply(const char *userid,
 			icalcomponent *oldical, icalcomponent *newical);
 
-static struct get_type_t caldav_get_types[] = {
-    { "text/calendar; charset=utf-8", "2.0", NULL },
+static struct mime_type_t caldav_mime_types[] = {
+    { "text/calendar; charset=utf-8", "2.0", NULL,
+      (void * (*)(const char*)) &icalparser_parse_string
+    },
 #ifdef WITH_JSON
     { "application/calendar+json; charset=utf-8", NULL,
-      &icalcomponent_as_jcal_string },
+      (const char* (*)(void *)) &icalcomponent_as_jcal_string,
+      (void * (*)(const char*)) &jcal_string_as_icalcomponent
+    },
 #endif
-    { NULL, NULL, NULL }
+    { NULL, NULL, NULL, NULL }
 };
 
 /* Array of known "live" properties */
@@ -302,7 +307,7 @@ static const struct prop_entry caldav_props[] = {
 
 
 static struct meth_params caldav_params = {
-    "text/calendar; charset=utf-8",
+    caldav_mime_types,
     &caldav_parse_path,
     &caldav_check_precond,
     { (void **) &auth_caldavdb,
@@ -314,7 +319,6 @@ static struct meth_params caldav_params = {
     &caldav_acl,
     &caldav_copy,
     &caldav_delete_sched,
-    caldav_get_types,
     { MBTYPE_CALENDAR, "mkcalendar", "mkcalendar-response", NS_CALDAV },
     &caldav_post,
     { CALDAV_SUPP_DATA, &caldav_put },
@@ -941,7 +945,7 @@ static int dump_calendar(struct transaction_t *txn, struct meth_params *gparams)
 
     /* Setup for chunked response */
     txn->flags.te |= TE_CHUNKED;
-    txn->resp_body.type = gparams->content_type;
+    txn->resp_body.type = gparams->mime_types[0].content_type;
 
     /* Set filename of resource */
     memset(&attrib, 0, sizeof(struct annotation_data));
@@ -1400,8 +1404,9 @@ static const char *get_icalrestriction_errstr(icalcomponent *ical)
  *   CALDAV:max-instances
  *   CALDAV:max-attendees-per-instance
  */
-static int caldav_put(struct transaction_t *txn, struct mailbox *mailbox,
-		      unsigned flags)
+static int caldav_put(struct transaction_t *txn,
+		      struct mime_type_t *mime,
+		      struct mailbox *mailbox, unsigned flags)
 {
     int ret;
     icalcomponent *ical = NULL, *comp, *nextcomp;
@@ -1410,7 +1415,7 @@ static int caldav_put(struct transaction_t *txn, struct mailbox *mailbox,
     const char *uid, *organizer = NULL;
 
     /* Parse and validate the iCal data */
-    ical = icalparser_parse_string(buf_cstring(&txn->req_body.payload));
+    ical = mime->from_string(buf_cstring(&txn->req_body.payload));
     if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {
 	txn->error.precond = CALDAV_VALID_DATA;
 	ret = HTTP_FORBIDDEN;
@@ -1949,22 +1954,22 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 	unsigned allowed = 1;
 
 	if ((attr = xmlGetProp(prop, BAD_CAST "content-type"))) {
-	    struct get_type_t *get;
+	    struct mime_type_t *mime;
 
 	    /* Check requested MIME type */
-	    for (get = caldav_get_types; get->content_type; get++) {
-		if (is_mediatype((const char *) attr, get->content_type)) {
+	    for (mime = caldav_mime_types; mime->content_type; mime++) {
+		if (is_mediatype((const char *) attr, mime->content_type)) {
 		    xmlFree(attr);
 
 		    if ((attr = xmlGetProp(prop, BAD_CAST "version")) &&
-			(!get->version ||
-			 xmlStrcmp(attr, BAD_CAST get->version))) {
+			(!mime->version ||
+			 xmlStrcmp(attr, BAD_CAST mime->version))) {
 			allowed = 0;
 		    }
 		    break;
 		}
 	    }
-	    if (!get->content_type) allowed = 0;
+	    if (!mime->content_type) allowed = 0;
 
 	    if (attr) xmlFree(attr);
 	}
@@ -1992,15 +1997,15 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 			name, ns, NULL, 0);
 
     if ((attr = xmlGetProp(prop, BAD_CAST "content-type"))) {
-	struct get_type_t *get = caldav_get_types;
+	struct mime_type_t *mime = caldav_mime_types;
 
 	/* Convert data into requested MIME type */
-	while (!is_mediatype((const char *) attr, get->content_type)) get++;
+	while (!is_mediatype((const char *) attr, mime->content_type)) mime++;
 
-	if (get->convert) {
+	if (mime->to_string) {
 	    icalcomponent *ical = icalparser_parse_string(data);
 
-	    data = get->convert(ical);
+	    data = mime->to_string(ical);
 	    datalen = strlen(data);
 	    icalcomponent_free(ical);
 	}
