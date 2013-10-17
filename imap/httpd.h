@@ -374,9 +374,10 @@ enum {
 
 /* Vary header flags (headers used in selecting/producing representation) */
 enum {
-    VARY_AE =		(1<<0),	/* Accept-Encoding */
-    VARY_BRIEF =	(1<<1),
-    VARY_PREFER =	(1<<2)
+    VARY_ACCEPT =	(1<<0),
+    VARY_AE =		(1<<1),	/* Accept-Encoding */
+    VARY_BRIEF =	(1<<2),
+    VARY_PREFER =	(1<<3)
 };
 
 /* Trailer header flags */

@@ -2131,7 +2131,7 @@ void response_header(long code, struct transaction_t *txn)
     if (txn->flags.vary) {
 	/* Construct Vary header */
 	const char *vary_hdrs[] =
-	    { "Accept-Encoding", "Brief", "Prefer", NULL };
+	    { "Accept", "Accept-Encoding", "Brief", "Prefer", NULL };
 
 	comma_list_hdr("Vary", vary_hdrs, txn->flags.vary);
     }

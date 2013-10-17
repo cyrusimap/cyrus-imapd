@@ -2929,6 +2929,7 @@ int meth_get_dav(struct transaction_t *txn, void *params)
     }
 
     if (record.uid) {
+	txn->flags.vary |= VARY_ACCEPT;
 	resp_body->type = mime->content_type;
 
 	if (txn->meth == METH_GET) {
