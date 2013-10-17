@@ -825,16 +825,30 @@ static int propfind_suppaddrdata(const xmlChar *name, xmlNsPtr ns,
 				 void *rock __attribute__((unused)))
 {
     xmlNodePtr node;
+    struct mime_type_t *mime;
 
     if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
 
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			name, ns, NULL, 0);
 
-    node = xmlNewChild(node, fctx->ns[NS_CARDDAV],
-		       BAD_CAST "address-data-type", NULL);
-    xmlNewProp(node, BAD_CAST "content-type", BAD_CAST "text/vcard");
-    xmlNewProp(node, BAD_CAST "version", BAD_CAST "3.0");
+    for (mime = carddav_mime_types; mime->content_type; mime++) {
+	xmlNodePtr type = xmlNewChild(node, fctx->ns[NS_CARDDAV],
+				      BAD_CAST "address-data-type", NULL);
+
+	/* Trim any charset from content-type */
+	buf_reset(&fctx->buf);
+	buf_printf(&fctx->buf, "%.*s",
+		   (int) strcspn(mime->content_type, ";"), mime->content_type);
+
+	xmlNewProp(type, BAD_CAST "content-type",
+		   BAD_CAST buf_cstring(&fctx->buf));
+
+	if (mime->version)
+	    xmlNewProp(type, BAD_CAST "version", BAD_CAST mime->version);
+    }
+
+    buf_reset(&fctx->buf);
 
     return 0;
 }
