@@ -1765,7 +1765,7 @@ int openinbox(void)
     int r, log_level = LOG_ERR;
     const char *statusline = NULL;
     mbentry_t *mbentry = NULL;
-    struct statusdata sdata;
+    struct statusdata sdata = STATUSDATA_INIT;
     struct proc_limits limits;
     struct mboxevent *mboxevent;
 

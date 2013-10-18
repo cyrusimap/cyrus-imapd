@@ -8552,10 +8552,8 @@ static void cmd_status(char *tag, char *name)
     char mailboxname[MAX_MAILBOX_BUFFER];
     const char *errstr = "Bad status string";
     mbentry_t *mbentry = NULL;
-    struct statusdata sdata;
+    struct statusdata sdata = STATUSDATA_INIT;
     int r = 0;
-
-    memset(&sdata, 0, sizeof(struct statusdata));
 
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 					       imapd_userid, mailboxname);
@@ -11724,11 +11722,9 @@ static void list_response(const char *name, int attributes,
     const char *sep;
     const char *cmd;
     mbentry_t *mbentry = NULL;
-    struct statusdata sdata;
+    struct statusdata sdata = STATUSDATA_INIT;
 
     if (!name) return;
-
-    memset(&sdata, 0, sizeof(struct statusdata));
 
     /* first convert "INBOX" to "user.<userid>" */
     if (!strncasecmp(name, "inbox", 5)

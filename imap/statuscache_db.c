@@ -273,8 +273,6 @@ EXPORTED int statuscache_lookup(const char *mboxname, const char *userid,
     if (!statuscache_dbopen)
 	return IMAP_NO_NOSUCHMSG;
 
-    memset(sdata, 0, sizeof(struct statusdata));
-
     /* Check if there is an entry in the database */
     do {
 	r = cyrusdb_fetch(statuscachedb, key, keylen, &data, &datalen, NULL);
