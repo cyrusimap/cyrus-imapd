@@ -41,7 +41,7 @@
  */
 
 extern int sys_nerr;
-extern char *sys_errlist;
+extern char **sys_errlist;
 
 const char *strerror(int errnum)
 {
