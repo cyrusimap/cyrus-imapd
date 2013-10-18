@@ -321,6 +321,8 @@ enum {
     STATUS_XCONVMODSEQ =	(1<<8)
 };
 
+#define STATUS_CONVITEMS (STATUS_XCONVEXISTS|STATUS_XCONVUNSEEN|STATUS_XCONVMODSEQ)
+
 /* Arguments to List functions */
 struct listargs {
     unsigned cmd;		/* Command variant */

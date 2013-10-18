@@ -8503,17 +8503,7 @@ static int imapd_statusdata(const char *mailboxname, unsigned statusitems,
 {
     int r;
 
-    /* use the index status if we can so we get the 'alive' Recent count */
-    if (!strcmpsafe(mailboxname, index_mboxname(imapd_index)))
-	r = index_status(imapd_index, sd);
-    /* fall back to generic lookup */
-    else
-	r = status_lookup(mailboxname, imapd_userid, statusitems, sd);
-
-    if (r) goto out;
-
-    if (statusitems & (STATUS_XCONVEXISTS | STATUS_XCONVUNSEEN
-		    | STATUS_XCONVMODSEQ)) {
+    if (statusitems & STATUS_CONVITEMS) {
 	struct conversations_state *state = NULL;
 
 	/* use the existing state if possible */
@@ -8536,7 +8526,16 @@ static int imapd_statusdata(const char *mailboxname, unsigned statusitems,
 
 	r = conversation_getstatus(state, mailboxname, &sd->xconv);
 	if (r) goto out;
+
+	statusitems &= ~STATUS_CONVITEMS; /* got them */
     }
+
+    /* use the index status if we can so we get the 'alive' Recent count */
+    if (!strcmpsafe(mailboxname, index_mboxname(imapd_index)))
+	r = index_status(imapd_index, sd);
+    /* fall back to generic lookup */
+    else
+	r = status_lookup(mailboxname, imapd_userid, statusitems, sd);
 
 out:
     return r;
