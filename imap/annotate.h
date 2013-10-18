@@ -43,10 +43,10 @@
 #ifndef ANNOTATE_H
 #define ANNOTATE_H
 
+#include "auth.h"
 #include "charset.h" /* for comp_pat */
 #include "imapd.h"
 #include "mailbox.h"
-#include "mboxname.h"
 #include "mboxlist.h"
 #include "util.h"
 #include "strarray.h"
