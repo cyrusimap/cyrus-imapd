@@ -1,5 +1,7 @@
 #include "../glob.h"
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 struct pattern_test {
    const char *pattern;
@@ -18,7 +20,7 @@ struct pattern_test patterns[] = {
   { "test.*3.foo", 2, 1 }, { "test.%3.foo", 2, 1 },
   { "INBOX", 4, 1 },
   { "INBOX*", 4, 4 }, { "INBOX.foo", 2, 1 }, { "INBOX.%.foo", 1, 1 },
-  { NULL, 0 }
+  { NULL, 0, 0 }
 };
 
 const char *strings[] = {
@@ -82,6 +84,7 @@ int main (argc, argv)
     } else {
 	printf("ERROR: %d tests failed!\n", failed);
     }
+    return 0;
 }
 
 void fatal(char *s) {

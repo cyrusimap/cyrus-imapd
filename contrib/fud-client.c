@@ -83,7 +83,8 @@ main(argc, argv)
 int argc; 
 char **argv;
 {
-	int soc,x,rc;
+	int soc,rc;
+	unsigned int x;
 	struct sockaddr_in sin,sfrom;
 	struct hostent *hp;
 	fd_set fset;
