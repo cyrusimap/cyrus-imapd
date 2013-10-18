@@ -131,6 +131,7 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 			  unsigned flags);
 
 static struct mime_type_t carddav_mime_types[] = {
+    /* First item MUST be the default type and storage format */
     { "text/vcard; charset=utf-8", "3.0", NULL,
       (void * (*)(const char*)) &vcard_string_as_vobject
     },
@@ -621,6 +622,42 @@ static int carddav_put(struct transaction_t *txn,
     ret = store_resource(txn, vcard, mailbox, txn->req_tgt.resource,
 			 auth_carddavdb, OVERWRITE_CHECK, flags);
 
+    if (flags & PREFER_REP) {
+	struct resp_body_t *resp_body = &txn->resp_body;
+	const char *data;
+
+	switch (ret) {
+	case HTTP_NO_CONTENT:
+	    ret = HTTP_OK;
+
+	case HTTP_CREATED:
+	    /* Use the request data */
+	    data = buf_cstring(&txn->req_body.payload);
+
+	    /* Fill in Content-Type, Content-Length */
+	    resp_body->type = mime->content_type;
+	    resp_body->len = strlen(data);
+
+	    /* Fill in Content-Location */
+	    resp_body->loc = txn->req_tgt.path;
+
+	    /* Fill in Expires and Cache-Control */
+	    resp_body->maxage = 3600;	/* 1 hr */
+	    txn->flags.cc = CC_MAXAGE
+		| CC_REVALIDATE		/* don't use stale data */
+		| CC_NOTRANSFORM;	/* don't alter vCard data */
+
+	    /* Output current representation */
+	    write_body(ret, txn, data, resp_body->len);
+	    ret = 0;
+	    break;
+
+	default:
+	    /* failure - do nothing */
+	    break;
+	}
+    }
+
   done:
     if (vcard) {
 	cleanVObject(vcard);
@@ -767,10 +804,11 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
     if ((attr = xmlGetProp(prop, BAD_CAST "content-type"))) {
 	struct mime_type_t *mime = carddav_mime_types;
 
-	/* Convert data into requested MIME type */
+	/* Find requested MIME type */
 	while (!is_mediatype((const char *) attr, mime->content_type)) mime++;
 
-	if (mime->to_string) {
+	if (mime != carddav_mime_types) {
+	    /* Not the storage format - convert into requested MIME type */
 	    /* XXX  TODO */
 	}
 
@@ -1115,7 +1153,7 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 		    */
 		    int userflag;
 
-		    ret = (flags & PREFER_REP) ? HTTP_OK : HTTP_NO_CONTENT;
+		    ret = HTTP_NO_CONTENT;
 
 		    /* Fetch index record for the resource */
 		    r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid,
@@ -1174,23 +1212,6 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 		    /* Tell client about the new resource */
 		    resp_body->lastmod = newrecord.internaldate;
 		    resp_body->etag = message_guid_encode(&newrecord.guid);
-
-		    if (flags & PREFER_REP) {
-			resp_body->type = "text/vcard; charset=utf-8";
-			resp_body->loc = txn->req_tgt.path;
-			resp_body->len = buf_len(&txn->req_body.payload);
-
-			/* Fill in Expires and Cache-Control */
-			resp_body->maxage = 3600;  /* 1 hr */
-			txn->flags.cc = CC_MAXAGE
-			    | CC_REVALIDATE	   /* don't use stale data */
-			    | CC_NOTRANSFORM;	   /* don't alter vCard data */
-
-			write_body(ret, txn,
-				   buf_cstring(&txn->req_body.payload),
-				   buf_len(&txn->req_body.payload));
-			ret = 0;
-		    }
 		}
 
 		/* need to close mailbox returned to us by append_commit */

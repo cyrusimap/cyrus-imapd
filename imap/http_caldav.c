@@ -191,7 +191,9 @@ static void sched_reply(const char *userid,
 			icalcomponent *oldical, icalcomponent *newical);
 
 static struct mime_type_t caldav_mime_types[] = {
-    { "text/calendar; charset=utf-8", "2.0", NULL,
+    /* First item MUST be the default type and storage format */
+    { "text/calendar; charset=utf-8", "2.0",
+      (const char* (*)(void *)) &icalcomponent_as_ical_string,
       (void * (*)(const char*)) &icalparser_parse_string
     },
 #ifdef WITH_JSON
@@ -1538,6 +1540,42 @@ static int caldav_put(struct transaction_t *txn,
     ret = store_resource(txn, ical, mailbox, txn->req_tgt.resource,
 			 auth_caldavdb, OVERWRITE_CHECK, flags);
 
+    if (flags & PREFER_REP) {
+	struct resp_body_t *resp_body = &txn->resp_body;
+	const char *data;
+
+	switch (ret) {
+	case HTTP_NO_CONTENT:
+	    ret = HTTP_OK;
+
+	case HTTP_CREATED:
+	    /* Convert into requested MIME type */
+	    data = mime->to_string(ical);
+
+	    /* Fill in Content-Type, Content-Length */
+	    resp_body->type = mime->content_type;
+	    resp_body->len = strlen(data);
+
+	    /* Fill in Content-Location */
+	    resp_body->loc = txn->req_tgt.path;
+
+	    /* Fill in Expires and Cache-Control */
+	    resp_body->maxage = 3600;	/* 1 hr */
+	    txn->flags.cc = CC_MAXAGE
+		| CC_REVALIDATE		/* don't use stale data */
+		| CC_NOTRANSFORM;	/* don't alter iCal data */
+
+	    /* Output current representation */
+	    write_body(ret, txn, data, resp_body->len);
+	    ret = 0;
+	    break;
+
+	default:
+	    /* failure - do nothing */
+	    break;
+	}
+    }
+
   done:
     if (ical) icalcomponent_free(ical);
 
@@ -1999,10 +2037,11 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
     if ((attr = xmlGetProp(prop, BAD_CAST "content-type"))) {
 	struct mime_type_t *mime = caldav_mime_types;
 
-	/* Convert data into requested MIME type */
+	/* Find requested MIME type */
 	while (!is_mediatype((const char *) attr, mime->content_type)) mime++;
 
-	if (mime->to_string) {
+	if (mime != caldav_mime_types) {
+	    /* Not the storage format - convert into requested MIME type */
 	    icalcomponent *ical = icalparser_parse_string(data);
 
 	    data = mime->to_string(ical);
@@ -3005,7 +3044,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 		    */
 		    int userflag;
 
-		    ret = (flags & PREFER_REP) ? HTTP_OK : HTTP_NO_CONTENT;
+		    ret = HTTP_NO_CONTENT;
 
 		    /* Fetch index record for the resource */
 		    r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid,
@@ -3064,24 +3103,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 		    caldav_write(caldavdb, cdata, 1);
 		    /* XXX  check for errors, if this fails, backout changes */
 
-		    if (flags & PREFER_REP) {
-			/* Fill in Last-Modified, ETag, and Content-Type */
-			resp_body->lastmod = newrecord.internaldate;
-			resp_body->etag = message_guid_encode(&newrecord.guid);
-			resp_body->type = "text/calendar; charset=utf-8";
-			resp_body->loc = txn->req_tgt.path;
-			resp_body->len = strlen(ics);
-
-			/* Fill in Expires and Cache-Control */
-			resp_body->maxage = 3600;  /* 1 hr */
-			txn->flags.cc = CC_MAXAGE
-			    | CC_REVALIDATE	   /* don't use stale data */
-			    | CC_NOTRANSFORM;	   /* don't alter iCal data */
-
-			write_body(ret, txn, ics, strlen(ics));
-			ret = 0;
-		    }
-		    else if (!(flags & NEW_STAG)) {
+		    if ((flags & PREFER_REP) || !(flags & NEW_STAG)) {
 			/* Tell client about the new resource */
 			resp_body->lastmod = newrecord.internaldate;
 			resp_body->etag = message_guid_encode(&newrecord.guid);

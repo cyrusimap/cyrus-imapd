@@ -2941,10 +2941,10 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 
 	    data = msg_base + offset;
 
-	    if (mime->to_string) {
-		icalcomponent *ical;
+	    if (mime != gparams->mime_types) {
+		/* Not the storage format - convert into requested MIME type */
+		icalcomponent *ical = icalparser_parse_string(data);
 
-		ical = icalparser_parse_string(data);
 		data = mime->to_string(ical);
 		datalen = strlen(data);
 		icalcomponent_free(ical);
