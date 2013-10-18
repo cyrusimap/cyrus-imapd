@@ -54,7 +54,6 @@
 #  ifdef HAVE_RXPOSIX_H
 #   include <rxposix.h>
 #  else /* !HAVE_RXPOSIX_H */
-#   include <sys/types.h>
 #   include <regex.h>
 #  endif /* HAVE_RXPOSIX_H */
 # endif /* HAVE_PCREPOSIX_H */
