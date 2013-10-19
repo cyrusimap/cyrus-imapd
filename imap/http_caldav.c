@@ -2841,11 +2841,31 @@ static int report_fb_query(struct transaction_t *txn,
     if (calfilter.busytime.busy) free(calfilter.busytime.busy);
 
     if (cal) {
+	struct mime_type_t *mime = NULL;
+	const char **hdr, *cal_str;
+
+	/* Check requested MIME type */
+	if ((hdr = spool_getheader(txn->req_hdrs, "Accept"))) {
+	    struct accept *e, *enc = parse_accept(hdr);
+
+	    for (e = enc; e && e->token; e++) {
+		struct mime_type_t *m;
+
+		for (m = caldav_mime_types; !mime && m->content_type; m++) {
+		    if (is_mediatype(e->token, m->content_type)) mime = m;
+		}
+
+		free(e->token);
+	    }
+	    if (enc) free(enc);
+	}
+	if (!mime) mime = caldav_mime_types;  /* 1st in array is default type */
+
 	/* Output the iCalendar object as text/calendar */
-	const char *cal_str = icalcomponent_as_ical_string(cal);
+	cal_str = mime->to_string(cal);
 	icalcomponent_free(cal);
 
-	txn->resp_body.type = "text/calendar; charset=utf-8";
+	txn->resp_body.type = mime->content_type;
 
 	/* iCalendar data in response should not be transformed */
 	txn->flags.cc |= CC_NOTRANSFORM;
