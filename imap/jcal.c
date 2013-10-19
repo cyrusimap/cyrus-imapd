@@ -389,7 +389,7 @@ static void icalparameter_as_json_object_member(icalparameter *param,
     }
     if (!value_string) return;
 
-    json_object_object_add(jparams, kind_string,
+    json_object_object_add(jparams, lcase(icalmemory_tmp_copy(kind_string)),
 			   json_object_new_string(value_string));
 }
 
@@ -399,35 +399,49 @@ static void icalparameter_as_json_object_member(icalparameter *param,
  */
 extern icalvalue_kind icalproperty_kind_to_value_kind(icalproperty_kind kind);
 
-static icalvalue_kind icalproperty_get_value_kind(icalproperty *prop)
+static const char *icalproperty_value_kind_as_json_string(icalproperty *prop)
 {
-    icalvalue_kind param_kind = ICAL_NO_VALUE;
+    icalvalue_kind kind = ICAL_NO_VALUE;
     icalparameter *val_param;
 
     val_param = icalproperty_get_first_parameter(prop, ICAL_VALUE_PARAMETER);
     if (val_param) {
-	param_kind = icalparameter_value_to_value_kind(
+	/* Use the kind specified in the VALUE param */
+	kind = icalparameter_value_to_value_kind(
 	    icalparameter_get_value(val_param));
     }
 
-    if (param_kind != ICAL_NO_VALUE) {
-	/* Use the kind specified in the VALUE param */
-	return param_kind;
-    }
-    else {
-	icalvalue_kind val_kind = ICAL_NO_VALUE;
+    if (kind == ICAL_NO_VALUE) {
 	icalvalue *value = icalproperty_get_value(prop);
 
-	if (value) val_kind = icalvalue_isa(value);
-	
-	if (val_kind != ICAL_NO_VALUE) {
+	if (value) {
 	    /* Use the kind determined from the property value */
-	    return val_kind;
+	    kind = icalvalue_isa(value);
 	}
     }
 
-    /* Use the default kind for the property */
-    return icalproperty_kind_to_value_kind(icalproperty_isa(prop));
+    if (kind == ICAL_NO_VALUE) {
+	/* Use the default kind for the property */
+	kind = icalproperty_kind_to_value_kind(icalproperty_isa(prop));
+    }
+
+    switch (kind) {
+    case ICAL_X_VALUE:
+	return "unknown";
+
+    case ICAL_ACTION_VALUE:
+    case ICAL_CARLEVEL_VALUE:
+    case ICAL_CLASS_VALUE:
+    case ICAL_CMD_VALUE:
+    case ICAL_METHOD_VALUE:
+    case ICAL_QUERYLEVEL_VALUE:
+    case ICAL_STATUS_VALUE:
+    case ICAL_TRANSP_VALUE:
+	return "text";
+
+    default:
+	return icalvalue_kind_to_string(kind);
+    }
 } 
 
 
@@ -439,8 +453,7 @@ static json_object *icalproperty_as_json_array(icalproperty *prop)
     icalproperty_kind prop_kind;
     const char *x_name, *property_name = NULL; 
     icalparameter *param;
-    icalvalue_kind val_kind;
-    const char *kind_string = NULL;
+    const char *type = NULL;
     const icalvalue *value;
     json_object *jprop, *jparams;
 
@@ -483,14 +496,9 @@ static json_object *icalproperty_as_json_array(icalproperty *prop)
 
 
     /* Add type */
-    val_kind = icalproperty_get_value_kind(prop);
-    if (val_kind == ICAL_X_VALUE)
-	kind_string = "unknown";
-    else
-	kind_string = icalvalue_kind_to_string(val_kind);
-
+    type = icalproperty_value_kind_as_json_string(prop);
     json_object_array_add(jprop,
-	json_object_new_string(lcase(icalmemory_tmp_copy(kind_string))));
+	json_object_new_string(lcase(icalmemory_tmp_copy(type))));
 
 
     /* Add value */
@@ -842,6 +850,10 @@ static icalproperty *json_array_to_icalproperty(json_object *jprop)
 	syslog(LOG_WARNING, "Unknown jCal value type for %s property: %s",
 	       propname, typestr);
 	return NULL;
+    }
+    else if (valkind == ICAL_TEXT_VALUE) {
+	/* "text" also includes enumerated types - grab type from property */
+	valkind = icalproperty_kind_to_value_kind(kind);
     }
 
     /* Create new property */
