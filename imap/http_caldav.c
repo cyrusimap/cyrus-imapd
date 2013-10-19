@@ -1254,6 +1254,7 @@ static int caldav_post(struct transaction_t *txn)
     int ret = 0, r, rights;
     char *acl, orgid[MAX_MAILBOX_NAME+1] = "";
     const char **hdr;
+    struct mime_type_t *mime = NULL;
     icalcomponent *ical = NULL, *comp;
     icalcomponent_kind kind = 0;
     icalproperty_method meth = 0;
@@ -1273,8 +1274,12 @@ static int caldav_post(struct transaction_t *txn)
     /* POST to schedule-outbox */
 
     /* Check Content-Type */
-    if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
-	!is_mediatype(hdr[0], "text/calendar")) {
+    if ((hdr = spool_getheader(txn->req_hdrs, "Content-Type"))) {
+	for (mime = caldav_mime_types; mime->content_type; mime++) {
+	    if (is_mediatype(hdr[0], mime->content_type)) break;
+	}
+    }
+    if (!mime || !mime->content_type) {
 	txn->error.precond = CALDAV_SUPP_DATA;
 	return HTTP_BAD_REQUEST;
     }
@@ -1310,7 +1315,7 @@ static int caldav_post(struct transaction_t *txn)
     }
 
     /* Parse the iCal data for important properties */
-    ical = icalparser_parse_string(buf_cstring(&txn->req_body.payload));
+    ical = mime->from_string(buf_cstring(&txn->req_body.payload));
     if (!ical || !icalrestriction_check(ical)) {
 	txn->error.precond = CALDAV_VALID_DATA;
 	ret = HTTP_BAD_REQUEST;
@@ -1358,7 +1363,7 @@ static int caldav_post(struct transaction_t *txn)
 		txn->error.rights = DACL_SCHEDFB;
 		ret = HTTP_FORBIDDEN;
 	    }
-	    else ret = sched_busytime_query(txn, ical);
+	    else ret = sched_busytime_query(txn, mime, ical);
 	else {
 	    txn->error.precond = CALDAV_VALID_SCHED;
 	    ret = HTTP_BAD_REQUEST;
@@ -3397,7 +3402,8 @@ static void busytime_query_remote(const char *server __attribute__((unused)),
 
 /* Perform a Busy Time query based on given VFREEBUSY component */
 /* NOTE: This function is destructive of 'ical' */
-int sched_busytime_query(struct transaction_t *txn, icalcomponent *ical)
+int sched_busytime_query(struct transaction_t *txn,
+			 struct mime_type_t *mime, icalcomponent *ical)
 {
     int ret = 0;
     static const char *calendarprefix = NULL;
@@ -3465,6 +3471,8 @@ int sched_busytime_query(struct transaction_t *txn, icalcomponent *ical)
 
     /* Create hash table for any remote attendee servers */
     construct_hash_table(&remote_table, 10, 1);
+
+    assert(!buf_len(&txn->buf));
 
     /* Process each attendee */
     for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
@@ -3574,7 +3582,7 @@ int sched_busytime_query(struct transaction_t *txn, icalcomponent *ical)
 
 	    if (busy) {
 		xmlNodePtr cdata;
-		const char *fb_str = icalcomponent_as_ical_string(busy);
+		const char *fb_str = mime->to_string(busy);
 		icalcomponent_free(busy);
 
 		xmlNewChild(resp, NULL, BAD_CAST "request-status",
@@ -3582,6 +3590,19 @@ int sched_busytime_query(struct transaction_t *txn, icalcomponent *ical)
 
 		cdata = xmlNewTextChild(resp, NULL,
 					BAD_CAST "calendar-data", NULL);
+
+		/* Trim any charset from content-type */
+		buf_reset(&txn->buf);
+		buf_printf(&txn->buf, "%.*s",
+			   (int) strcspn(mime->content_type, ";"),
+			   mime->content_type);
+
+		xmlNewProp(cdata, BAD_CAST "content-type",
+			   BAD_CAST buf_cstring(&txn->buf));
+
+		if (mime->version)
+		    xmlNewProp(cdata, BAD_CAST "version",
+			       BAD_CAST mime->version);
 
 		xmlAddChild(cdata,
 			    xmlNewCDataBlock(root->doc, BAD_CAST fb_str,
@@ -3598,6 +3619,8 @@ int sched_busytime_query(struct transaction_t *txn, icalcomponent *ical)
 	    icalproperty_free(prop);
 	}
     }
+
+    buf_reset(&txn->buf);
 
     if (remote) {
 	struct remote_rock rrock = { txn, ical, root, ns };

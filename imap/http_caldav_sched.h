@@ -55,6 +55,8 @@
 
 #endif /* WITH_DKIM */
 
+#include "http_dav.h"
+
 
 #define REQSTAT_PENDING		"1.0;Pending"
 #define REQSTAT_SENT		"1.1;Sent"
@@ -98,7 +100,8 @@ struct sched_param {
 extern int isched_send(struct sched_param *sparam, const char *recipient,
 		       icalcomponent *ical, xmlNodePtr *xml);
 
-extern int sched_busytime_query(struct transaction_t *txn, icalcomponent *comp);
+extern int sched_busytime_query(struct transaction_t *txn,
+				struct mime_type_t *mime, icalcomponent *comp);
 extern void sched_deliver(const char *recipient, void *data, void *rock);
 extern xmlNodePtr xml_add_schedresponse(xmlNodePtr root, xmlNsPtr dav_ns,
 					xmlChar *recipient, xmlChar *status);

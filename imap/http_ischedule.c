@@ -57,6 +57,7 @@
 #include "http_dav.h"
 #include "http_err.h"
 #include "http_proxy.h"
+#include "jcal.h"
 #include "map.h"
 #include "proxy.h"
 #include "tok.h"
@@ -88,6 +89,21 @@ static int meth_post_isched(struct transaction_t *txn, void *params);
 static int dkim_auth(struct transaction_t *txn);
 static int meth_get_domainkey(struct transaction_t *txn, void *params);
 static time_t compile_time;
+
+static struct mime_type_t isched_mime_types[] = {
+    /* First item MUST be the default type and storage format */
+    { "text/calendar; charset=utf-8", "2.0",
+      (const char* (*)(void *)) &icalcomponent_as_ical_string,
+      (void * (*)(const char*)) &icalparser_parse_string
+    },
+#ifdef WITH_JSON
+    { "application/calendar+json; charset=utf-8", NULL,
+      (const char* (*)(void *)) &icalcomponent_as_jcal_string,
+      (void * (*)(const char*)) &jcal_string_as_icalcomponent
+    },
+#endif
+    { NULL, NULL, NULL, NULL }
+};
 
 struct namespace_t namespace_ischedule = {
     URL_NS_ISCHEDULE, 0, "/ischedule", ISCHED_WELLKNOWN_URI, 0 /* auth */,
@@ -263,6 +279,7 @@ static int meth_post_isched(struct transaction_t *txn,
 {
     int ret = 0, r, authd = 0;
     const char **hdr;
+    struct mime_type_t *mime = NULL;
     icalcomponent *ical = NULL, *comp;
     icalcomponent_kind kind = 0;
     icalproperty_method meth = 0;
@@ -280,8 +297,12 @@ static int meth_post_isched(struct transaction_t *txn,
     }
 
     /* Check Content-Type */
-    if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
-	!is_mediatype(hdr[0], "text/calendar")) {
+    if ((hdr = spool_getheader(txn->req_hdrs, "Content-Type"))) {
+	for (mime = isched_mime_types; mime->content_type; mime++) {
+	    if (is_mediatype(hdr[0], mime->content_type)) break;
+	}
+    }
+    if (!mime || !mime->content_type) {
 	txn->error.precond = ISCHED_UNSUPP_DATA;
 	return HTTP_BAD_REQUEST;
     }
@@ -337,7 +358,7 @@ static int meth_post_isched(struct transaction_t *txn,
     }
 
     /* Parse the iCal data for important properties */
-    ical = icalparser_parse_string(buf_cstring(&txn->req_body.payload));
+    ical = mime->from_string(buf_cstring(&txn->req_body.payload));
     if (!ical || !icalrestriction_check(ical)) {
 	txn->error.precond = ISCHED_INVALID_DATA;
 	return HTTP_BAD_REQUEST;
@@ -361,7 +382,7 @@ static int meth_post_isched(struct transaction_t *txn,
     switch (kind) {
     case ICAL_VFREEBUSY_COMPONENT:
 	if (meth == ICAL_METHOD_REQUEST)
-	    ret = sched_busytime_query(txn, ical);
+	    ret = sched_busytime_query(txn, mime, ical);
 	else {
 	    txn->error.precond = ISCHED_INVALID_SCHED;
 	    ret = HTTP_BAD_REQUEST;
