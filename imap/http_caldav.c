@@ -3420,6 +3420,22 @@ static void busytime_query_remote(const char *server __attribute__((unused)),
 }
 
 
+static void free_sched_param(void *data)
+{
+    struct sched_param *sched_param = (struct sched_param *) data;
+
+    if (sched_param) {
+	struct proplist *prop, *next;
+
+	for (prop = sched_param->props; prop; prop = next) {
+	    next = prop->next;
+	    free(prop);
+	}
+	free(sched_param);
+    }
+}
+
+
 /* Perform a Busy Time query based on given VFREEBUSY component */
 /* NOTE: This function is destructive of 'ical' */
 int sched_busytime_query(struct transaction_t *txn,
@@ -3646,7 +3662,7 @@ int sched_busytime_query(struct transaction_t *txn,
 	struct remote_rock rrock = { txn, ical, root, ns };
 	hash_enumerate(&remote_table, busytime_query_remote, &rrock);
     }
-    free_hash_table(&remote_table, free);
+    free_hash_table(&remote_table, free_sched_param);
 
     /* Output the XML response */
     if (!ret) xml_response(HTTP_OK, txn, root->doc);
