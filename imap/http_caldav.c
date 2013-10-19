@@ -913,6 +913,8 @@ static int dump_calendar(struct transaction_t *txn, struct meth_params *gparams)
     static const char *displayname_annot =
 	ANNOT_NS "<" XML_NS_DAV ">displayname";
     struct annotation_data attrib;
+    const char **hdr, *sep;
+    struct mime_type_t *mime = NULL;
 
     /* Open mailbox for reading */
     if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_SHARED))) {
@@ -945,9 +947,27 @@ static int dump_calendar(struct transaction_t *txn, struct meth_params *gparams)
 	goto done;
     }
 
+    /* Check requested MIME type */
+    if ((hdr = spool_getheader(txn->req_hdrs, "Accept"))) {
+	struct accept *e, *enc = parse_accept(hdr);
+
+	for (e = enc; e && e->token; e++) {
+	    struct mime_type_t *m;
+
+	    for (m = caldav_mime_types; !mime && m->content_type; m++) {
+		if (is_mediatype(e->token, m->content_type)) mime = m;
+	    }
+
+	    free(e->token);
+	}
+	if (enc) free(enc);
+    }
+    if (!mime) mime = caldav_mime_types;  /* 1st in array MUST default type */
+
     /* Setup for chunked response */
     txn->flags.te |= TE_CHUNKED;
-    txn->resp_body.type = gparams->mime_types[0].content_type;
+    txn->flags.vary |= VARY_ACCEPT;
+    txn->resp_body.type = mime->content_type;
 
     /* Set filename of resource */
     memset(&attrib, 0, sizeof(struct annotation_data));
@@ -971,14 +991,29 @@ static int dump_calendar(struct transaction_t *txn, struct meth_params *gparams)
     /* Create hash table for TZIDs */
     construct_hash_table(&tzid_table, 10, 1);
 
-    /* Begin iCalendar */
-    buf_setcstr(buf, "BEGIN:VCALENDAR\r\n");
-    buf_printf(buf, "PRODID:-//CyrusIMAP.org/Cyrus %s//EN\r\n",
-	       cyrus_version());
-    buf_appendcstr(buf, "VERSION:2.0\r\n");
+    if (is_mediatype(mime->content_type, "application/calendar+json")) {
+	/* Begin jCal */
+	buf_reset(buf);
+	buf_printf_markup(buf, 0, "[\"vcalendar\",");
+	buf_printf_markup(buf, 1, "[");
+	buf_printf_markup(buf, 2, "[\"prodid\", {}, \"text\", "
+		   "\"-//CyrusIMAP.org/Cyrus %s//EN\"],", cyrus_version());
+	buf_printf_markup(buf, 2, "[\"version\", {}, \"text\", \"2.0\"]");
+	buf_printf_markup(buf, 1, "],");
+	buf_printf_markup(buf, 0, "[");
+	sep = ",";
+    }
+    else {
+	/* Begin iCalendar */
+	buf_setcstr(buf, "BEGIN:VCALENDAR\r\n");
+	buf_printf(buf, "PRODID:-//CyrusIMAP.org/Cyrus %s//EN\r\n",
+		   cyrus_version());
+	buf_appendcstr(buf, "VERSION:2.0\r\n");
+	sep = "";
+    }
     write_body(HTTP_OK, txn, buf_cstring(buf), buf_len(buf));
 
-    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
+    for (r = 0, recno = 1; recno <= mailbox->i.num_records; recno++) {
 	const char *msg_base = NULL;
 	unsigned long msg_size = 0;
 	icalcomponent *ical;
@@ -994,13 +1029,13 @@ static int dump_calendar(struct transaction_t *txn, struct meth_params *gparams)
 
 	if (ical) {
 	    icalcomponent *comp;
-	    const char *cal_str = NULL;
 
 	    for (comp = icalcomponent_get_first_component(ical,
 							  ICAL_ANY_COMPONENT);
 		 comp;
 		 comp = icalcomponent_get_next_component(ical,
 							 ICAL_ANY_COMPONENT)) {
+		const char *cal_str;
 		icalcomponent_kind kind = icalcomponent_isa(comp);
 
 		/* Don't duplicate any TZIDs in our iCalendar */
@@ -1015,7 +1050,13 @@ static int dump_calendar(struct transaction_t *txn, struct meth_params *gparams)
 		}
 
 		/* Include this component in our iCalendar */
-		cal_str = icalcomponent_as_ical_string(comp);
+		if (r++ && *sep) {
+		    /* Add separator, if necessary */
+		    buf_reset(buf);
+		    buf_printf_markup(buf, 0, sep);
+		    write_body(0, txn, buf_cstring(buf), buf_len(buf));
+		}
+		cal_str = mime->to_string(comp);
 		write_body(0, txn, cal_str, strlen(cal_str));
 	    }
 
@@ -1025,8 +1066,14 @@ static int dump_calendar(struct transaction_t *txn, struct meth_params *gparams)
 
     free_hash_table(&tzid_table, NULL);
 
-    /* End iCalendar */
-    buf_setcstr(buf, "END:VCALENDAR\r\n");
+    if (is_mediatype(mime->content_type, "application/calendar+json")) {
+	/* End jCal */
+	buf_setcstr(buf, "]]");
+    }
+    else {
+	/* End iCalendar */
+	buf_setcstr(buf, "END:VCALENDAR\r\n");
+    }
     write_body(0, txn, buf_cstring(buf), buf_len(buf));
 
     /* End of output */
