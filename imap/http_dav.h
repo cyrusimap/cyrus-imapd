@@ -396,6 +396,8 @@ typedef int (*delete_proc_t)(struct transaction_t *txn, struct mailbox *mailbox,
 struct mime_type_t {
     const char *content_type;
     const char *version;
+    const char *file_ext;
+    const char *file_ext2;
     const char* (*to_string)(void *);
     void* (*from_string)(const char *);
 };

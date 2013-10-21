@@ -192,17 +192,17 @@ static void sched_reply(const char *userid,
 
 static struct mime_type_t caldav_mime_types[] = {
     /* First item MUST be the default type and storage format */
-    { "text/calendar; charset=utf-8", "2.0",
+    { "text/calendar; charset=utf-8", "2.0", "ics", "ifb",
       (const char* (*)(void *)) &icalcomponent_as_ical_string,
       (void * (*)(const char*)) &icalparser_parse_string
     },
 #ifdef WITH_JSON
-    { "application/calendar+json; charset=utf-8", NULL,
+    { "application/calendar+json; charset=utf-8", NULL, "jcs", "jfb",
       (const char* (*)(void *)) &icalcomponent_as_jcal_string,
       (void * (*)(const char*)) &jcal_string_as_icalcomponent
     },
 #endif
-    { NULL, NULL, NULL, NULL }
+    { NULL, NULL, NULL, NULL, NULL, NULL }
 };
 
 /* Array of known "live" properties */
@@ -976,7 +976,7 @@ static int dump_calendar(struct transaction_t *txn, struct meth_params *gparams)
     if (r || !attrib.value) attrib.value = strrchr(mailbox->name, '.') + 1;
 
     buf_reset(&txn->buf);
-    buf_printf(&txn->buf, "%s.ics", attrib.value);
+    buf_printf(&txn->buf, "%s.%s", attrib.value, mime->file_ext);
     txn->resp_body.fname = buf_cstring(&txn->buf);
 
     /* Short-circuit for HEAD request */
