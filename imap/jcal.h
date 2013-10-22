@@ -1,4 +1,4 @@
-/* jcal.c -- Routines for converting iCalendar to/from jCal
+/* jcal.h -- Routines for converting iCalendar to/from jCal
  *
  * Copyright (c) 1994-2013 Carnegie Mellon University.  All rights reserved.
  *
