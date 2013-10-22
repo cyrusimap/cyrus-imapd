@@ -1044,7 +1044,6 @@ if test "$ENABLE_RSS" != no -o "$ENABLE_DAV" != no; then
          AC_SUBST(JSON_CFLAGS)
 	 AC_SUBST(JSON_LIBS)
          AC_DEFINE(WITH_JSON,[],[Build jCal/jCard support into httpd?])
-	 HTTP_OBJS="$HTTP_OBJS \$(JSON_OBJS)"
       fi
    fi
 fi
