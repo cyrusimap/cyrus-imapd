@@ -190,19 +190,24 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 static void sched_reply(const char *userid,
 			icalcomponent *oldical, icalcomponent *newical);
 
+static const char *begin_icalendar(struct buf *buf);
+static void end_icalendar(struct buf *buf);
+
 static struct mime_type_t caldav_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { "text/calendar; charset=utf-8", "2.0", "ics", "ifb",
       (const char* (*)(void *)) &icalcomponent_as_ical_string,
-      (void * (*)(const char*)) &icalparser_parse_string
+      (void * (*)(const char*)) &icalparser_parse_string,
+      &begin_icalendar, &end_icalendar
     },
 #ifdef WITH_JSON
     { "application/calendar+json; charset=utf-8", NULL, "jcs", "jfb",
       (const char* (*)(void *)) &icalcomponent_as_jcal_string,
-      (void * (*)(const char*)) &jcal_string_as_icalcomponent
+      (void * (*)(const char*)) &jcal_string_as_icalcomponent,
+      &begin_jcal, &end_jcal
     },
 #endif
-    { NULL, NULL, NULL, NULL, NULL, NULL }
+    { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
 
 /* Array of known "live" properties */
@@ -899,6 +904,22 @@ static int caldav_delete_sched(struct transaction_t *txn,
     return ret;
 }
 
+static const char *begin_icalendar(struct buf *buf)
+{
+    /* Begin iCalendar stream */
+    buf_setcstr(buf, "BEGIN:VCALENDAR\r\n");
+    buf_printf(buf, "PRODID:-//CyrusIMAP.org/Cyrus %s//EN\r\n",
+	       cyrus_version());
+    buf_appendcstr(buf, "VERSION:2.0\r\n");
+
+    return "";
+}
+
+static void end_icalendar(struct buf *buf)
+{
+    /* End iCalendar stream */
+    buf_setcstr(buf, "END:VCALENDAR\r\n");
+}
 
 static int dump_calendar(struct transaction_t *txn, struct meth_params *gparams)
 {
@@ -991,26 +1012,8 @@ static int dump_calendar(struct transaction_t *txn, struct meth_params *gparams)
     /* Create hash table for TZIDs */
     construct_hash_table(&tzid_table, 10, 1);
 
-    if (is_mediatype(mime->content_type, "application/calendar+json")) {
-	/* Begin jCal */
-	buf_reset(buf);
-	buf_printf_markup(buf, 0, "[\"vcalendar\",");
-	buf_printf_markup(buf, 1, "[");
-	buf_printf_markup(buf, 2, "[\"prodid\", {}, \"text\", "
-		   "\"-//CyrusIMAP.org/Cyrus %s//EN\"],", cyrus_version());
-	buf_printf_markup(buf, 2, "[\"version\", {}, \"text\", \"2.0\"]");
-	buf_printf_markup(buf, 1, "],");
-	buf_printf_markup(buf, 0, "[");
-	sep = ",";
-    }
-    else {
-	/* Begin iCalendar */
-	buf_setcstr(buf, "BEGIN:VCALENDAR\r\n");
-	buf_printf(buf, "PRODID:-//CyrusIMAP.org/Cyrus %s//EN\r\n",
-		   cyrus_version());
-	buf_appendcstr(buf, "VERSION:2.0\r\n");
-	sep = "";
-    }
+    /* Begin (converted) iCalendar stream */
+    sep = mime->begin_stream(buf);
     write_body(HTTP_OK, txn, buf_cstring(buf), buf_len(buf));
 
     for (r = 0, recno = 1; recno <= mailbox->i.num_records; recno++) {
@@ -1066,14 +1069,8 @@ static int dump_calendar(struct transaction_t *txn, struct meth_params *gparams)
 
     free_hash_table(&tzid_table, NULL);
 
-    if (is_mediatype(mime->content_type, "application/calendar+json")) {
-	/* End jCal */
-	buf_setcstr(buf, "]]");
-    }
-    else {
-	/* End iCalendar */
-	buf_setcstr(buf, "END:VCALENDAR\r\n");
-    }
+    /* End (converted) iCalendar stream */
+    mime->end_stream(buf);
     write_body(0, txn, buf_cstring(buf), buf_len(buf));
 
     /* End of output */

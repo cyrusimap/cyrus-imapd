@@ -46,14 +46,13 @@
 #ifdef WITH_JSON
 
 #include <stdio.h>  /* for snprintf() */
-#include <stdlib.h> /* for free() */
-#include <string.h> /* for strcpy(), others */
 #include <stddef.h> /* for offsetof() macro */
 #include <syslog.h>
 
 #include "httpd.h"
 #include "jcal.h"
 #include "util.h"
+#include "version.h"
 #include "xstrlcat.h"
 
 
@@ -77,7 +76,7 @@ static char *icaltime_as_json_string(const struct icaltimetype tt)
 
 
 /*
- * Construct a JSON object for an iCalendar Period.
+ * Construct a JSON string for an iCalendar Period.
  */
 static char *icalperiodtype_as_json_string(struct icalperiodtype p)
 {
@@ -136,8 +135,7 @@ extern const char* icalrecur_weekday_to_string(icalrecurrencetype_weekday kind);
 static json_object*
 icalrecurrencetype_as_json_object(struct icalrecurrencetype *recur)
 {
-    char temp[20];
-    int i,j;
+    int i, j;
     json_object *jrecur;
 
     if (recur->freq == ICAL_NO_RECURRENCE) return NULL;
@@ -147,12 +145,12 @@ icalrecurrencetype_as_json_object(struct icalrecurrencetype *recur)
     json_object_object_add(jrecur, "freq",
 	json_object_new_string(icalrecur_freq_to_string(recur->freq)));
 
+    /* until and count are mutually exclusive. */
     if (recur->until.year) {
 	json_object_object_add(jrecur, "until",
 	    json_object_new_string(icaltime_as_json_string(recur->until)));
     }
-
-    if (recur->count) {
+    else if (recur->count) {
 	json_object_object_add(jrecur, "count",
 			       json_object_new_int(recur->count));
     }
@@ -162,39 +160,7 @@ icalrecurrencetype_as_json_object(struct icalrecurrencetype *recur)
 			       json_object_new_int(recur->interval));
     }
 
-    for (j = 0; recurmap[j].str; j++){
-	short *array = (short *)((size_t) recur + recurmap[j].offset);
-	int limit = recurmap[j].limit - 1;
-
-	/* Skip unused arrays */
-	if (array[0] != ICAL_RECURRENCE_ARRAY_MAX) {
-
-	    for (i=0; i< limit && array[i] != ICAL_RECURRENCE_ARRAY_MAX; i++) {
-		if (j == 3) { /* BYDAY */
-		    const char *daystr;
-		    int pos;
-
-		    daystr = icalrecur_weekday_to_string(
-			icalrecurrencetype_day_day_of_week(array[i]));
-		    pos = icalrecurrencetype_day_position(array[i]);  
-		    
-		    if (pos == 0) {
-			json_object_object_add(jrecur, recurmap[j].str,
-					       json_object_new_string(daystr));
-		    } else {
-			snprintf(temp, sizeof(temp), "%d%s", pos, daystr);
-			json_object_object_add(jrecur, recurmap[j].str,
-					       json_object_new_string(temp));
-		    }                  
-		} else {
-		    json_object_object_add(jrecur, recurmap[j].str,
-					   json_object_new_int(array[i]));
-		}
-	    }	 
-	}
-    }
-
-    /* Monday is the default, so no need to write that out */
+    /* Monday is the default, so no need to include it */
     if (recur->week_start != ICAL_MONDAY_WEEKDAY && 
 	recur->week_start != ICAL_NO_WEEKDAY) {
 	const char *daystr;
@@ -203,6 +169,41 @@ icalrecurrencetype_as_json_object(struct icalrecurrencetype *recur)
 	    icalrecurrencetype_day_day_of_week(recur->week_start));
 	json_object_object_add(jrecur, "wkst",
 			       json_object_new_string(daystr));
+    }
+
+    /* The BY* parameters can each take a list of values.
+     *
+     * Each of the lists is terminated with the value
+     * ICAL_RECURRENCE_ARRAY_MAX unless the the list is full.
+     */
+    for (j = 0; recurmap[j].str; j++){
+	short *array = (short *)((size_t) recur + recurmap[j].offset);
+	int limit = recurmap[j].limit - 1;
+
+	for (i = 0; i < limit && array[i] != ICAL_RECURRENCE_ARRAY_MAX; i++) {
+	    if (j == 3) { /* BYDAY */
+		const char *daystr;
+		int pos;
+
+		daystr = icalrecur_weekday_to_string(
+		    icalrecurrencetype_day_day_of_week(array[i]));
+		pos = icalrecurrencetype_day_position(array[i]);  
+		    
+		if (pos == 0) {
+		    json_object_object_add(jrecur, recurmap[j].str,
+					   json_object_new_string(daystr));
+		} else {
+		    char temp[20];
+
+		    snprintf(temp, sizeof(temp), "%d%s", pos, daystr);
+		    json_object_object_add(jrecur, recurmap[j].str,
+					   json_object_new_string(temp));
+		}
+	    } else {
+		json_object_object_add(jrecur, recurmap[j].str,
+				       json_object_new_int(array[i]));
+	    }
+	}	 
     }
 
     return jrecur;
@@ -269,7 +270,7 @@ static char* icalvalue_utcoffset_as_json_string(const icalvalue* value)
  */
 static json_object *icalvalue_as_json_object(const icalvalue *value)
 {
-    const char *str;
+    const char *str = NULL;
     json_object *obj;
 
     switch (icalvalue_isa(value)) {
@@ -278,11 +279,11 @@ static json_object *icalvalue_as_json_object(const icalvalue *value)
 
     case ICAL_DATE_VALUE:
 	str = icaltime_as_json_string(icalvalue_get_date(value));
-	return json_object_new_string(str);
+	break;
 
     case ICAL_DATETIME_VALUE:
 	str = icaltime_as_json_string(icalvalue_get_datetime(value));
-	return json_object_new_string(str);
+	break;
 
     case ICAL_DATETIMEPERIOD_VALUE: {
 	struct icaldatetimeperiodtype dtp =
@@ -292,7 +293,7 @@ static json_object *icalvalue_as_json_object(const icalvalue *value)
 	    str = icaltime_as_json_string(dtp.time);
 	else
 	    str = icalperiodtype_as_json_string(dtp.period);
-	return json_object_new_string(str);
+	break;
     }
 
     case ICAL_FLOAT_VALUE:
@@ -312,7 +313,7 @@ static json_object *icalvalue_as_json_object(const icalvalue *value)
 
     case ICAL_PERIOD_VALUE:
 	str = icalperiodtype_as_json_string(icalvalue_get_period(value));
-	return json_object_new_string(str);
+	break;
 
     case ICAL_RECUR_VALUE: {
 	struct icalrecurrencetype recur = icalvalue_get_recur(value);
@@ -330,23 +331,19 @@ static json_object *icalvalue_as_json_object(const icalvalue *value)
 	    str = icaltime_as_json_string(trig.time);
 	else
 	    str = icaldurationtype_as_ical_string(trig.duration);
-	return json_object_new_string(str);
+	break;
     }
 
     case ICAL_UTCOFFSET_VALUE:
 	str = icalvalue_utcoffset_as_json_string(value);
-	return json_object_new_string(str);
+	break;
 
     default:
-	str = icalvalue_as_ical_string_r(value);
-	if (str) {
-	    obj = json_object_new_string(str);
-	    free((void *) str);
-	    return obj;
-	}
+	str = icalvalue_as_ical_string(value);
+	break;
     }
 
-    return NULL;
+    return (str ? json_object_new_string(str) : NULL);
 }
 
 
@@ -555,11 +552,10 @@ static json_object *icalcomponent_as_json_array(icalcomponent *comp)
 	 p;
 	 p = icalcomponent_get_next_property(comp, ICAL_ANY_PROPERTY)) {
 
-	icalerror_assert((p!=0),"Got a null property");
 	json_object_array_add(jprops, icalproperty_as_json_array(p));
     }
-   
-   
+
+
     /* Add sub-components */
     jsubs = json_object_new_array();
     json_object_array_add(jcomp, jsubs);
@@ -570,7 +566,7 @@ static json_object *icalcomponent_as_json_array(icalcomponent *comp)
 
 	json_object_array_add(jsubs, icalcomponent_as_json_array(c));
     }
-   
+
     return jcomp;
 }
 
@@ -582,6 +578,8 @@ const char *icalcomponent_as_jcal_string(icalcomponent *ical)
 {
     json_object *jcal;
     const char *buf;
+
+    if (!ical) return NULL;
 
     jcal = icalcomponent_as_json_array(ical);
 
@@ -984,6 +982,42 @@ icalcomponent *jcal_string_as_icalcomponent(const char *str)
     json_object_put(jcal);
 
     return ical;
+}
+
+
+const char *begin_jcal(struct buf *buf)
+{
+    /* Begin jCal stream */
+    buf_reset(buf);
+    buf_printf_markup(buf, 0, "[");
+    buf_printf_markup(buf, 1, "\"vcalendar\",");
+    buf_printf_markup(buf, 1, "[");
+    buf_printf_markup(buf, 2, "[");
+    buf_printf_markup(buf, 3, "\"prodid\",");
+    buf_printf_markup(buf, 3, "{");
+    buf_printf_markup(buf, 3, "},");
+    buf_printf_markup(buf, 3, "\"text\",");
+    buf_printf_markup(buf, 3, "\"-//CyrusIMAP.org/Cyrus %s//EN\"",
+		      cyrus_version());
+    buf_printf_markup(buf, 2, "],");
+    buf_printf_markup(buf, 2, "[");
+    buf_printf_markup(buf, 3, "\"version\",");
+    buf_printf_markup(buf, 3, "{");
+    buf_printf_markup(buf, 3, "},");
+    buf_printf_markup(buf, 3, "\"text\",");
+    buf_printf_markup(buf, 3, "\"2.0\"");
+    buf_printf_markup(buf, 2, "]");
+    buf_printf_markup(buf, 1, "],");
+    buf_printf_markup(buf, 0, "[");
+
+    return ",";
+}
+
+
+void end_jcal(struct buf *buf)
+{
+    /* End jCal stream */
+    buf_setcstr(buf, "]]");
 }
 
 #endif  /* WITH_JSON */

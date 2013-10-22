@@ -400,6 +400,8 @@ struct mime_type_t {
     const char *file_ext2;
     const char* (*to_string)(void *);
     void* (*from_string)(const char *);
+    const char* (*begin_stream)(struct buf *);
+    void (*end_stream)(struct buf *);
 };
 
 /* meth_mkcol() parameters */
