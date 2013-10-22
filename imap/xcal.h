@@ -1,4 +1,4 @@
-/* jcal.c -- Routines for converting iCalendar to/from jCal
+/* xcal.h -- Routines for converting iCalendar to/from xCal
  *
  * Copyright (c) 1994-2013 Carnegie Mellon University.  All rights reserved.
  *
@@ -43,22 +43,31 @@
 
 #include <config.h>
 
-#ifdef WITH_JSON
-
-#define __STRICT_ANSI__
-
 #include <libical/ical.h>
-#include <json/json.h>
 
 #include "util.h"
 
-#ifndef JSON_C_VERSION
-#define JSON_C_VERSION "0.10"
-#endif
+#define XML_NS_ICALENDAR	"urn:ietf:params:xml:ns:icalendar-2.0"
 
-extern const char *icalcomponent_as_jcal_string(icalcomponent* comp);
-extern icalcomponent *jcal_string_as_icalcomponent(const char *str);
-extern const char *begin_jcal(struct buf *buf);
-extern void end_jcal(struct buf *buf);
+struct recur_by_part {
+    const char *str;
+    int limit;
+    size_t offset;
+};
 
-#endif  /* WITH_JSON */
+extern const struct recur_by_part recurmap[];
+
+extern const char *icalproperty_value_kind_as_string(icalproperty *prop);
+extern const char *icaltime_as_iso_string(const struct icaltimetype tt);
+extern const char *icalvalue_utcoffset_as_iso_string(const icalvalue* value);
+extern void icalrecurrencetype_add_as_xxx(struct icalrecurrencetype *recur,
+					  void *obj,
+					  void (*add_int)(void *, const char *,
+							  int),
+					  void (*add_str)(void *, const char *,
+							  const char *));
+
+extern const char *icalcomponent_as_xcal_string(icalcomponent* comp);
+extern icalcomponent *xcal_string_as_icalcomponent(const char *str);
+extern const char *begin_xcal(struct buf *buf);
+extern void end_xcal(struct buf *buf);

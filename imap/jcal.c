@@ -51,28 +51,10 @@
 
 #include "httpd.h"
 #include "jcal.h"
+#include "xcal.h"
 #include "util.h"
 #include "version.h"
 #include "xstrlcat.h"
-
-
-/*
- * Construct an ISO.8601.2004 string for an iCalendar Date/Date-Time.
- */
-static char *icaltime_as_json_string(const struct icaltimetype tt)
-{
-    static char str[21];
-    const char *fmt;
-
-    if (tt.is_date) fmt = "%04d-%02d-%02d";
-    else if (tt.is_utc) fmt = "%04d-%02d-%02dT%02d:%02d:%02dZ";
-    else fmt = "%04d-%02d-%02dT%02d:%02d:%02d";
-
-    snprintf(str, sizeof(str), fmt, tt.year, tt.month, tt.day,
-	     tt.hour, tt.minute, tt.second);
-
-    return str;
-}
 
 
 /*
@@ -84,11 +66,11 @@ static char *icalperiodtype_as_json_string(struct icalperiodtype p)
     const char *start;
     const char *end;
 
-    start = icaltime_as_json_string(p.start);
+    start = icaltime_as_iso_string(p.start);
     snprintf(str, sizeof(str), "%s/", start);
 
     if (!icaltime_is_null_time(p.end))
-	end = icaltime_as_json_string(p.end);
+	end = icaltime_as_iso_string(p.end);
     else
 	end = icaldurationtype_as_ical_string(p.duration);
 
@@ -99,114 +81,20 @@ static char *icalperiodtype_as_json_string(struct icalperiodtype p)
 
 
 /*
- * Construct a JSON object for an iCalendar RRULE.
+ * Add an iCalendar recur-rule-part to a JSON recur object.
  */
-static const struct {
-    const char *str;
-    size_t offset;
-    int limit;
-} recurmap[] = 
+static void icalrecur_add_int_to_json_object(void *jrecur, const char *rpart,
+					     int i)
 {
-    {"bysecond",
-     offsetof(struct icalrecurrencetype, by_second), ICAL_BY_SECOND_SIZE},
-    {"byminute",
-     offsetof(struct icalrecurrencetype, by_minute), ICAL_BY_MINUTE_SIZE},
-    {"byhour",
-     offsetof(struct icalrecurrencetype, by_hour), ICAL_BY_HOUR_SIZE},
-    {"byday",
-     offsetof(struct icalrecurrencetype, by_day), ICAL_BY_DAY_SIZE},
-    {"bymonthday",
-     offsetof(struct icalrecurrencetype, by_month_day),ICAL_BY_MONTHDAY_SIZE},
-    {"byyearday",
-     offsetof(struct icalrecurrencetype, by_year_day), ICAL_BY_YEARDAY_SIZE},
-    {"byweekno",
-     offsetof(struct icalrecurrencetype, by_week_no), ICAL_BY_WEEKNO_SIZE},
-    {"bymonth",
-     offsetof(struct icalrecurrencetype, by_month), ICAL_BY_MONTH_SIZE},
-    {"bysetpos",
-     offsetof(struct icalrecurrencetype, by_set_pos), ICAL_BY_SETPOS_SIZE},
-    {0,0,0},
-};
+    json_object_object_add((json_object *) jrecur, rpart,
+			   json_object_new_int(i));
+}
 
-
-extern const char* icalrecur_freq_to_string(icalrecurrencetype_frequency kind);
-extern const char* icalrecur_weekday_to_string(icalrecurrencetype_weekday kind);
-
-static json_object*
-icalrecurrencetype_as_json_object(struct icalrecurrencetype *recur)
+static void icalrecur_add_string_to_json_object(void *jrecur, const char *rpart,
+						const char *s)
 {
-    int i, j;
-    json_object *jrecur;
-
-    if (recur->freq == ICAL_NO_RECURRENCE) return NULL;
-
-    jrecur = json_object_new_object();
-
-    json_object_object_add(jrecur, "freq",
-	json_object_new_string(icalrecur_freq_to_string(recur->freq)));
-
-    /* until and count are mutually exclusive. */
-    if (recur->until.year) {
-	json_object_object_add(jrecur, "until",
-	    json_object_new_string(icaltime_as_json_string(recur->until)));
-    }
-    else if (recur->count) {
-	json_object_object_add(jrecur, "count",
-			       json_object_new_int(recur->count));
-    }
-
-    if (recur->interval != 1) {
-	json_object_object_add(jrecur, "interval",
-			       json_object_new_int(recur->interval));
-    }
-
-    /* Monday is the default, so no need to include it */
-    if (recur->week_start != ICAL_MONDAY_WEEKDAY && 
-	recur->week_start != ICAL_NO_WEEKDAY) {
-	const char *daystr;
-
-	daystr = icalrecur_weekday_to_string(
-	    icalrecurrencetype_day_day_of_week(recur->week_start));
-	json_object_object_add(jrecur, "wkst",
-			       json_object_new_string(daystr));
-    }
-
-    /* The BY* parameters can each take a list of values.
-     *
-     * Each of the lists is terminated with the value
-     * ICAL_RECURRENCE_ARRAY_MAX unless the the list is full.
-     */
-    for (j = 0; recurmap[j].str; j++){
-	short *array = (short *)((size_t) recur + recurmap[j].offset);
-	int limit = recurmap[j].limit - 1;
-
-	for (i = 0; i < limit && array[i] != ICAL_RECURRENCE_ARRAY_MAX; i++) {
-	    if (j == 3) { /* BYDAY */
-		const char *daystr;
-		int pos;
-
-		daystr = icalrecur_weekday_to_string(
-		    icalrecurrencetype_day_day_of_week(array[i]));
-		pos = icalrecurrencetype_day_position(array[i]);  
-		    
-		if (pos == 0) {
-		    json_object_object_add(jrecur, recurmap[j].str,
-					   json_object_new_string(daystr));
-		} else {
-		    char temp[20];
-
-		    snprintf(temp, sizeof(temp), "%d%s", pos, daystr);
-		    json_object_object_add(jrecur, recurmap[j].str,
-					   json_object_new_string(temp));
-		}
-	    } else {
-		json_object_object_add(jrecur, recurmap[j].str,
-				       json_object_new_int(array[i]));
-	    }
-	}	 
-    }
-
-    return jrecur;
+    json_object_object_add((json_object *) jrecur, rpart,
+			   json_object_new_string(s));
 }
 
 
@@ -238,34 +126,6 @@ static json_object *icalreqstattype_as_json_array(struct icalreqstattype stat)
 
 
 /*
- * Construct an ISO.8601.2004 string for an iCalendar UTC Offset.
- */
-static char* icalvalue_utcoffset_as_json_string(const icalvalue* value)
-{    
-    static char str[10];
-    const char *fmt;
-    int off, h, m, s;
-    char sign;
-
-    off = icalvalue_get_utcoffset(value);
-
-    if (abs(off) == off) sign = '+';
-    else sign = '-';
-
-    h = off/3600;
-    m = (off - (h*3600))/ 60;
-    s = (off - (h*3600) - (m*60));
-
-    if (s > 0) fmt = "%c%02d:%02d:%02d";
-    else fmt = "%c%02d:%02d";
-
-    snprintf(str, sizeof(str), fmt, sign, abs(h), abs(m), abs(s));
-
-    return str;
-}
-
-
-/*
  * Construct the proper JSON object for an iCalendar value.
  */
 static json_object *icalvalue_as_json_object(const icalvalue *value)
@@ -278,11 +138,11 @@ static json_object *icalvalue_as_json_object(const icalvalue *value)
 	return json_object_new_boolean(icalvalue_get_integer(value));
 
     case ICAL_DATE_VALUE:
-	str = icaltime_as_json_string(icalvalue_get_date(value));
+	str = icaltime_as_iso_string(icalvalue_get_date(value));
 	break;
 
     case ICAL_DATETIME_VALUE:
-	str = icaltime_as_json_string(icalvalue_get_datetime(value));
+	str = icaltime_as_iso_string(icalvalue_get_datetime(value));
 	break;
 
     case ICAL_DATETIMEPERIOD_VALUE: {
@@ -290,7 +150,7 @@ static json_object *icalvalue_as_json_object(const icalvalue *value)
 	    icalvalue_get_datetimeperiod(value);
 
 	if (!icaltime_is_null_time(dtp.time))
-	    str = icaltime_as_json_string(dtp.time);
+	    str = icaltime_as_iso_string(dtp.time);
 	else
 	    str = icalperiodtype_as_json_string(dtp.period);
 	break;
@@ -317,7 +177,12 @@ static json_object *icalvalue_as_json_object(const icalvalue *value)
 
     case ICAL_RECUR_VALUE: {
 	struct icalrecurrencetype recur = icalvalue_get_recur(value);
-	return icalrecurrencetype_as_json_object(&recur);
+
+	obj = json_object_new_object();
+	icalrecurrencetype_add_as_xxx(&recur, obj,
+				      &icalrecur_add_int_to_json_object,
+				      &icalrecur_add_string_to_json_object);
+	return obj;
     }
 
     case ICAL_REQUESTSTATUS_VALUE:
@@ -328,14 +193,14 @@ static json_object *icalvalue_as_json_object(const icalvalue *value)
 	struct icaltriggertype trig = icalvalue_get_trigger(value);
 
 	if (!icaltime_is_null_time(trig.time))
-	    str = icaltime_as_json_string(trig.time);
+	    str = icaltime_as_iso_string(trig.time);
 	else
 	    str = icaldurationtype_as_ical_string(trig.duration);
 	break;
     }
 
     case ICAL_UTCOFFSET_VALUE:
-	str = icalvalue_utcoffset_as_json_string(value);
+	str = icalvalue_utcoffset_as_iso_string(value);
 	break;
 
     default:
@@ -392,57 +257,6 @@ static void icalparameter_as_json_object_member(icalparameter *param,
 
 
 /*
- * Determine the type (kind) of an iCalendar property value.
- */
-extern icalvalue_kind icalproperty_kind_to_value_kind(icalproperty_kind kind);
-
-static const char *icalproperty_value_kind_as_json_string(icalproperty *prop)
-{
-    icalvalue_kind kind = ICAL_NO_VALUE;
-    icalparameter *val_param;
-
-    val_param = icalproperty_get_first_parameter(prop, ICAL_VALUE_PARAMETER);
-    if (val_param) {
-	/* Use the kind specified in the VALUE param */
-	kind = icalparameter_value_to_value_kind(
-	    icalparameter_get_value(val_param));
-    }
-
-    if (kind == ICAL_NO_VALUE) {
-	icalvalue *value = icalproperty_get_value(prop);
-
-	if (value) {
-	    /* Use the kind determined from the property value */
-	    kind = icalvalue_isa(value);
-	}
-    }
-
-    if (kind == ICAL_NO_VALUE) {
-	/* Use the default kind for the property */
-	kind = icalproperty_kind_to_value_kind(icalproperty_isa(prop));
-    }
-
-    switch (kind) {
-    case ICAL_X_VALUE:
-	return "unknown";
-
-    case ICAL_ACTION_VALUE:
-    case ICAL_CARLEVEL_VALUE:
-    case ICAL_CLASS_VALUE:
-    case ICAL_CMD_VALUE:
-    case ICAL_METHOD_VALUE:
-    case ICAL_QUERYLEVEL_VALUE:
-    case ICAL_STATUS_VALUE:
-    case ICAL_TRANSP_VALUE:
-	return "text";
-
-    default:
-	return icalvalue_kind_to_string(kind);
-    }
-} 
-
-
-/*
  * Construct a JSON array for an iCalendar property.
  */
 static json_object *icalproperty_as_json_array(icalproperty *prop)
@@ -493,7 +307,7 @@ static json_object *icalproperty_as_json_array(icalproperty *prop)
 
 
     /* Add type */
-    type = icalproperty_value_kind_as_json_string(prop);
+    type = icalproperty_value_kind_as_string(prop);
     json_object_array_add(jprop,
 	json_object_new_string(lcase(icalmemory_tmp_copy(type))));
 
@@ -969,6 +783,8 @@ icalcomponent *jcal_string_as_icalcomponent(const char *str)
     json_object *jcal;
     enum json_tokener_error jerr;
     icalcomponent *ical;
+
+    if (!str) return NULL;
 
     jcal = json_tokener_parse_verbose(str, &jerr);
     if (!jcal) {

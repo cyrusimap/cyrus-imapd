@@ -64,7 +64,7 @@ IMAP_LIBS = @IMAP_LIBS@ @LIB_RT@
 
 RSS_OBJS = http_rss.o
 DAV_OBJS = http_dav.o dav_db.o
-CALDAV_OBJS = http_caldav.o caldav_db.o smtpclient.o jcal.o
+CALDAV_OBJS = http_caldav.o caldav_db.o smtpclient.o xcal.o jcal.o
 CARDDAV_OBJS = http_carddav.o carddav_db.o
 ISCHED_OBJS = http_ischedule.o
 HTTP_OBJS = httpd.o http_err.o http_proxy.o @HTTP_OBJS@

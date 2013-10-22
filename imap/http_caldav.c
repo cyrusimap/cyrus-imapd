@@ -77,6 +77,7 @@
 #include "imap_err.h"
 #include "index.h"
 #include "jcal.h"
+#include "xcal.h"
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "message.h"
@@ -199,6 +200,11 @@ static struct mime_type_t caldav_mime_types[] = {
       (const char* (*)(void *)) &icalcomponent_as_ical_string,
       (void * (*)(const char*)) &icalparser_parse_string,
       &begin_icalendar, &end_icalendar
+    },
+    { "application/calendar+xml; charset=utf-8", NULL, "xcs", "xfb",
+      (const char* (*)(void *)) &icalcomponent_as_xcal_string,
+      (void * (*)(const char*)) &xcal_string_as_icalcomponent,
+      &begin_xcal, &end_xcal
     },
 #ifdef WITH_JSON
     { "application/calendar+json; charset=utf-8", NULL, "jcs", "jfb",
