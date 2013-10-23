@@ -293,7 +293,8 @@ static void icalrecur_add_string_as_xml_element(void *xrecur, const char *rpart,
 static xmlNodePtr icalparameter_as_xml_element(icalparameter *param)
 {
     icalparameter_kind kind;
-    const char *kind_string, *value_string;
+    icalparameter_value value;
+    const char *kind_string, *type_string, *value_string;
     xmlNodePtr xparam;
 
     kind = icalparameter_isa(param);
@@ -317,17 +318,37 @@ static xmlNodePtr icalparameter_as_xml_element(icalparameter *param)
 	    return NULL;
     }
 
-    /* XXX  Need to handle multi-valued parameters */
-    value_string = icalparameter_get_xvalue(param);
-    if (!value_string) {
-	icalparameter_value value = icalparameter_get_value(param);
+    /* Get value type */
+    switch (kind) {
+    case ICAL_ALTREP_PARAMETER:
+    case ICAL_DIR_PARAMETER:
+	type_string = "uri";
+	break;
 
-	if (value) value_string = icalparameter_enum_to_string(value);
+    case ICAL_DELEGATEDFROM_PARAMETER:
+    case ICAL_DELEGATEDTO_PARAMETER:
+    case ICAL_MEMBER_PARAMETER:
+    case ICAL_SENTBY_PARAMETER:
+	type_string = "cal-address";
+	break;
+
+    case ICAL_RSVP_PARAMETER:
+	type_string = "boolean";
+	break;
+
+    default:
+	type_string = "text";
+	break;
     }
+
+    /* XXX  Need to handle multi-valued parameters */
+    value = icalparameter_get_value(param);
+    if (value == ICAL_VALUE_X) value_string = icalparameter_get_xvalue(param);
+    else value_string = icalparameter_enum_to_string(value);
     if (!value_string) return NULL;
 
     xparam = xmlNewNode(NULL, BAD_CAST lcase(icalmemory_tmp_copy(kind_string)));
-    xmlNewTextChild(xparam, NULL, BAD_CAST "text", BAD_CAST value_string);
+    xmlNewTextChild(xparam, NULL, BAD_CAST type_string, BAD_CAST value_string);
 
     return xparam;
 }
