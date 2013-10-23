@@ -2959,6 +2959,7 @@ static void de_nstring_buf(struct buf *src, struct buf *dst)
 	buf_free(dst);
 	return;
     }
+    buf_cstring(src); /* ensure nstring parse doesn't overrun */
     q = src->s;
     p = parse_nstring(&q);
     buf_setmap(dst, p, q-p);
