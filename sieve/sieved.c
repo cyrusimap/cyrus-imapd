@@ -312,6 +312,13 @@ static int dump2_test(bytecode_input_t * d, int i)
 	i=write_list(ntohl(d[i].len), i+1, d);
 	printf("             ]\n");
 	break;
+    case BC_HASFLAG:
+	printf("Hasflag [");
+	i= printComparison(d, i+1);
+	printf("              Flags: ");
+	i=write_list(ntohl(d[i].len), i+1, d);
+	printf("             ]\n");
+	break;
     case BC_BODY:/*10*/
 	printf("Body [");
 	i=printComparison(d, i+1);
@@ -356,17 +363,24 @@ static void dump2(bytecode_input_t *d, int bc_len)
     
     for(i++; i<bc_len;) 
     {
+	int op;
 	int copy = 0;
 
 	printf("%d: ",i);
 
-	switch(ntohl(d[i++].op)) {
+	op = ntohl(d[i++].op);
+	switch (op) {
 	    
 	case B_STOP:/*0*/
 	    printf("STOP\n");
 	    break;
 	    
-	case B_KEEP:/*1*/
+	case B_KEEP:
+	    copy = ntohl(d[i++].value);
+	    printf("KEEP COPY(%d) FLAGS {%d}\n",copy,ntohl(d[i].listlen));
+	    i=write_list(ntohl(d[i].listlen), i+1, d);
+	    break;
+	case B_KEEP_ORIG:/*1*/
 	    printf("KEEP\n");
 	    break;
 	    
@@ -379,12 +393,21 @@ static void dump2(bytecode_input_t *d, int bc_len)
 	    printf("REJECT {%d}%s\n", len, data);
 	    break;
 
-	case B_FILEINTO: /*19*/
+	case B_FILEINTO:
+	case B_FILEINTO_COPY : /*19*/
 	    copy = ntohl(d[i++].value);
 	    /* fall through */
 	case B_FILEINTO_ORIG: /*4*/
 	    i = unwrap_string(d, i, &data, &len);
+	    if(B_FILEINTO <= op) {
+	    /* TODO: implement :flags parameter */
+		printf("FILEINTO COPY(%d) FOLDER({%d}%s) FLAGS {%d}\n",copy,len,data,ntohl(d[i].listlen));
+		i=write_list(ntohl(d[i].listlen), i+1, d);
+	    }
+	    else {
 	    printf("FILEINTO COPY(%d) FOLDER({%d}%s)\n",copy,len,data);
+	    }
+
 	    break;
 
 	case B_REDIRECT: /*20*/
