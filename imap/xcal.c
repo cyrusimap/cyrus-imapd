@@ -156,7 +156,11 @@ const char *icalvalue_utcoffset_as_iso_string(const icalvalue* value)
 }
 
 
-const struct recur_by_part recurmap[] =
+static const struct {
+    const char *str;
+    int limit;
+    size_t offset;
+} recurmap[] =
 {
     { "bysecond",     ICAL_BY_SECOND_SIZE,
       offsetof(struct icalrecurrencetype, by_second)	},
@@ -618,14 +622,513 @@ const char *icalcomponent_as_xcal_string(icalcomponent *ical)
 }
 
 
+/* Add an iCalendar recurrence rule part to icalrecurrencetype.
+ *
+ * XXX  The following structure is opaque libical, but for some stupid
+ * reason the icalrecur_add_by*rules() functions require it even though
+ * all they use is the rt field.  MUST keep this in sync with icalrecur.c
+ */
+struct icalrecur_parser {
+    const char* rule;
+    char* copy;
+    char* this_clause;
+    char* next_clause;
+
+    struct icalrecurrencetype rt;
+};
+
+extern icalrecurrencetype_frequency icalrecur_string_to_freq(const char* str);
+extern void icalrecur_add_byrules(struct icalrecur_parser *parser, short *array,
+				  int size, char* vals);
+extern void icalrecur_add_bydayrules(struct icalrecur_parser *parser,
+				     const char* vals);
+
+struct icalrecurrencetype *icalrecur_add_rule(struct icalrecurrencetype **rt,
+					      const char *rpart, void *data,
+					      int (*get_int)(void *),
+					      const char* (*get_str)(void *))
+{
+    static struct icalrecur_parser parser;
+
+    if (!*rt) {
+	/* Initialize */
+	*rt = &parser.rt;
+	icalrecurrencetype_clear(*rt);
+    }
+
+    if (!strcmp(rpart, "freq")) {
+	(*rt)->freq = icalrecur_string_to_freq(get_str(data));
+    }
+    else if (!strcmp(rpart, "count")) {
+	(*rt)->count = get_int(data);
+    }
+    else if (!strcmp(rpart, "until")) {
+	(*rt)->until = icaltime_from_string(get_str(data));
+    }
+    else if (!strcmp(rpart, "interval")) {
+	(*rt)->interval = get_int(data);
+	if ((*rt)->interval < 1) (*rt)->interval = 1;  /* MUST be >= 1 */
+    }
+    else if (!strcmp(rpart, "wkst")) {
+	(*rt)->week_start = icalrecur_string_to_weekday(get_str(data));
+    }
+    else if (!strcmp(rpart, "byday")) {
+	icalrecur_add_bydayrules(&parser, get_str(data));
+    }
+    else {
+	int i;
+
+	for (i = 0; recurmap[i].str && strcmp(rpart, recurmap[i].str); i++);
+
+	if (recurmap[i].str) {
+	    short *array =
+		(short *)((size_t) *rt + recurmap[i].offset);
+	    int limit = recurmap[i].limit;
+
+	    icalrecur_add_byrules(&parser, array, limit,
+				  icalmemory_tmp_copy(get_str(data)));
+	}
+	else {
+	    syslog(LOG_WARNING, "Unknown recurrence rule-part: %s", rpart);
+	    icalrecurrencetype_clear(*rt);
+	    *rt = NULL;
+	}
+    }
+
+    return *rt;
+}
+
+
+int xmlElementContent_to_int(void *content)
+{
+    return atoi((const char *) content);
+}
+
+const char *xmlElementContent_to_str(void *content)
+{
+    return (const char *) content;
+}
+
+
+/*
+ * Construct an iCalendar property value from XML content.
+ */
+static icalvalue *xml_element_to_icalvalue(xmlNodePtr xtype,
+					   icalvalue_kind kind)
+{
+    icalvalue *value = NULL;
+    xmlNodePtr node;
+    xmlChar *content = NULL;
+
+    switch (kind) {
+
+    case ICAL_GEO_VALUE: {
+	struct icalgeotype geo;
+
+	node = xmlFirstElementChild(xtype);
+	if (!node) {
+	    syslog(LOG_WARNING, "Missing <latitude> XML element");
+	    break;
+	}
+	else if (xmlStrcmp(node->name, BAD_CAST "latitude")) {
+	    syslog(LOG_WARNING,
+		   "Expected <latitude> XML element, received %s", node->name);
+	    break;
+	}
+
+	content = xmlNodeGetContent(node);
+	geo.lat = atof((const char *) content);
+
+	node = xmlNextElementSibling(node);
+	if (!node) {
+	    syslog(LOG_WARNING, "Missing <longitude> XML element");
+	    break;
+	}
+	else if (xmlStrcmp(node->name, BAD_CAST "longitude")) {
+	    syslog(LOG_WARNING,
+		   "Expected <longitude> XML element, received %s", node->name);
+	    break;
+	}
+
+	xmlFree(content);
+	content = xmlNodeGetContent(node);
+	geo.lon = atof((const char *) content);
+
+	value = icalvalue_new_geo(geo);
+
+	break;
+    }
+
+    case ICAL_PERIOD_VALUE: {
+	struct icalperiodtype p;
+
+	p.start = p.end = icaltime_null_time();
+	p.duration = icaldurationtype_from_int(0);
+
+	node = xmlFirstElementChild(xtype);
+	if (!node) {
+	    syslog(LOG_WARNING, "Missing <start> XML element");
+	    break;
+	}
+	else if (xmlStrcmp(node->name, BAD_CAST "start")) {
+	    syslog(LOG_WARNING,
+		   "Expected <start> XML element, received %s", node->name);
+	    break;
+	}
+
+	content = xmlNodeGetContent(node);
+	p.start = icaltime_from_string((const char *) content);
+	if (icaltime_is_null_time(p.start)) break;
+
+	node = xmlNextElementSibling(node);
+	if (!node) {
+	    syslog(LOG_WARNING, "Missing <end> / <duration> XML element");
+	    break;
+	}
+	else if (!xmlStrcmp(node->name, BAD_CAST "end")) {
+	    xmlFree(content);
+	    content = xmlNodeGetContent(node);
+	    p.end = icaltime_from_string((const char *) content);
+	    if (icaltime_is_null_time(p.end)) break;
+	}
+	else if (!xmlStrcmp(node->name, BAD_CAST "duration")) {
+	    xmlFree(content);
+	    content = xmlNodeGetContent(node);
+	    p.duration = icaldurationtype_from_string((const char *) content);
+	    if (icaldurationtype_as_int(p.duration) == 0) break;
+	}
+	else {
+	    syslog(LOG_WARNING,
+		   "Expected <end> / <duration> XML element, received %s",
+		   node->name);
+	    break;
+	}
+
+	value = icalvalue_new_period(p);
+
+	break;
+    }
+
+    case ICAL_RECUR_VALUE: {
+	struct icalrecurrencetype *rt = NULL;
+
+	for (node = xmlFirstElementChild(xtype); node;
+	     node = xmlNextElementSibling(node)) {
+
+	    content = xmlNodeGetContent(node);
+	    rt = icalrecur_add_rule(&rt, (const char *) node->name, content,
+				    &xmlElementContent_to_int,
+				    &xmlElementContent_to_str);
+	    xmlFree(content);
+	    content = NULL;
+	    if (!rt) break;
+	}
+
+	if (rt && rt->freq != ICAL_NO_RECURRENCE)
+	    value = icalvalue_new_recur(*rt);
+
+	break;
+    }
+
+    case ICAL_REQUESTSTATUS_VALUE: {
+	struct icalreqstattype rst = { ICAL_UNKNOWN_STATUS, NULL, NULL };
+	short maj, min;
+
+	node = xmlFirstElementChild(xtype);
+	if (!node) {
+	    syslog(LOG_WARNING, "Missing <code> XML element");
+	    break;
+	}
+	else if (xmlStrcmp(node->name, BAD_CAST "code")) {
+	    syslog(LOG_WARNING,
+		   "Expected <code> XML element, received %s", node->name);
+	    break;
+	}
+
+	content = xmlNodeGetContent(node);
+	if (sscanf((const char *) content, "%hd.%hd", &maj, &min) == 2) {
+	    rst.code = icalenum_num_to_reqstat(maj, min);
+	}
+	if (rst.code == ICAL_UNKNOWN_STATUS) {
+	    syslog(LOG_WARNING, "Unknown request-status code");
+	    break;
+	}
+
+	node = xmlNextElementSibling(node);
+	if (!node) {
+	    syslog(LOG_WARNING, "Missing <description> XML element");
+	    break;
+	}
+	else if (xmlStrcmp(node->name, BAD_CAST "description")) {
+	    syslog(LOG_WARNING,
+		   "Expected <description> XML element, received %s",
+		   node->name);
+	    break;
+	}
+
+	xmlFree(content);
+	content = xmlNodeGetContent(node);
+	rst.desc = (const char *) content;
+
+	node = xmlNextElementSibling(node);
+	if (node) {
+	    if (xmlStrcmp(node->name, BAD_CAST "data")) {
+		syslog(LOG_WARNING,
+		       "Expected <data> XML element, received %s", node->name);
+		break;
+	    }
+
+	    xmlFree(content);
+	    content = xmlNodeGetContent(node);
+	    rst.debug = (const char *) content;
+	}
+
+	value = icalvalue_new_requeststatus(rst);
+	break;
+    }
+
+    case ICAL_UTCOFFSET_VALUE: {
+	int n, utcoffset, hours, minutes, seconds = 0;
+	char sign;
+
+	content = xmlNodeGetContent(xtype);
+	n = sscanf((const char *) content, "%c%02d:%02d:%02d",
+		   &sign, &hours, &minutes, &seconds);
+
+	if (n < 3) {
+	    syslog(LOG_WARNING, "Unexpected utc-offset format");
+	    break;
+	}
+
+	utcoffset = hours*3600 + minutes*60 + seconds;
+
+	if (sign == '-') utcoffset = -utcoffset;
+
+	value = icalvalue_new_utcoffset(utcoffset);
+	break;
+    }
+
+    default:
+	content = xmlNodeGetContent(xtype);
+	value = icalvalue_new_from_string(kind, (const char *) content);
+	break;
+    }
+
+    if (content) xmlFree(content);
+
+    return value;
+}
+
+
+/*
+ * Construct an iCalendar property from a XML element.
+ */
+static icalproperty *xml_element_to_icalproperty(xmlNodePtr xprop)
+{
+    const char *propname, *typestr;
+    icalproperty_kind kind;
+    icalproperty *prop = NULL;
+    icalvalue_kind valkind;
+    icalvalue *value;
+    xmlNodePtr node;
+
+    /* Get the property type */
+    propname = ucase(icalmemory_tmp_copy((const char *) xprop->name));
+    kind = icalenum_string_to_property_kind(propname);
+    if (kind == ICAL_NO_PROPERTY) {
+	syslog(LOG_WARNING, "Unknown xCal property type: %s", propname);
+	return NULL;
+    }
+
+    /* Create new property */
+    prop = icalproperty_new(kind);
+    if (!prop) {
+	syslog(LOG_ERR, "Creation of new %s property failed", propname);
+	return NULL;
+    }
+    if (kind == ICAL_X_PROPERTY) icalproperty_set_x_name(prop, propname);
+
+
+    /* Add parameters */
+    node = xmlFirstElementChild(xprop);
+    if (node && !xmlStrcmp(node->name, BAD_CAST "parameters")) {
+	xmlNodePtr xparam;
+
+	for (xparam = xmlFirstElementChild(node); xparam;
+	     xparam = xmlNextElementSibling(xparam)) {
+	    char *paramname =
+		ucase(icalmemory_tmp_copy((const char *) xparam->name));
+	    xmlChar *paramval = xmlNodeGetContent(xmlFirstElementChild(xparam));
+
+	    /* XXX  Need to handle multi-valued parameters */
+	    icalproperty_set_parameter_from_string(prop, paramname,
+						   (const char *) paramval);
+
+	    xmlFree(paramval);
+	}
+
+	node = xmlNextElementSibling(node);
+    }
+
+    /* Get the value type */
+    if (!node) {
+	syslog(LOG_WARNING, "Missing xCal value for %s property",
+	       propname);
+	return NULL;
+    }
+    typestr = ucase(icalmemory_tmp_copy((const char *) node->name));
+    valkind = !strcmp(typestr, "UNKNOWN") ? ICAL_X_VALUE :
+	icalenum_string_to_value_kind(typestr);
+    if (valkind == ICAL_NO_VALUE) {
+	syslog(LOG_WARNING, "Unknown xCal value type for %s property: %s",
+	       propname, typestr);
+	return NULL;
+    }
+    else if (valkind == ICAL_TEXT_VALUE) {
+	/* "text" also includes enumerated types - grab type from property */
+	valkind = icalproperty_kind_to_value_kind(kind);
+    }
+
+
+    /* Add value */
+    /* XXX  Need to handle multi-valued properties */
+    value = xml_element_to_icalvalue(node, valkind);
+    if (!value) {
+	syslog(LOG_ERR, "Parsing %s property value failed", propname);
+	goto error;
+    }
+
+    icalproperty_set_value(prop, value);
+
+
+    /* Sanity check */ 
+    if ((node = xmlNextElementSibling(node))) {
+	syslog(LOG_WARNING,
+	"Unexpected XML element in property: %s", node->name);
+	goto error;
+    }
+
+    return prop;
+
+  error:
+    icalproperty_free(prop);
+    return NULL;
+}
+
+
+/*
+ * Construct an iCalendar component from a XML element.
+ */
+static icalcomponent *xml_element_to_icalcomponent(xmlNodePtr xcomp)
+{
+    icalcomponent_kind kind;
+    icalcomponent *comp = NULL;
+    xmlNodePtr node, xprop, xsub;
+
+    if (!xcomp) return NULL;
+
+    /* Get component type */
+    kind =
+	icalenum_string_to_component_kind(
+	    ucase(icalmemory_tmp_copy((const char *) xcomp->name)));
+    if (kind == ICAL_NO_COMPONENT) {
+	syslog(LOG_WARNING, "Unknown xCal component type: %s", xcomp->name);
+	return NULL;
+    }
+
+    /* Create new component */
+    comp = icalcomponent_new(kind);
+    if (!comp) {
+	syslog(LOG_ERR, "Creation of new %s component failed", xcomp->name);
+	return NULL;
+    }
+
+    /* Add properties */
+    node = xmlFirstElementChild(xcomp);
+    if (!node || xmlStrcmp(node->name, BAD_CAST "properties")) {
+	syslog(LOG_WARNING,
+	       "Expected <properties> XML element, received %s", node->name);
+	goto error;
+    }
+    for (xprop = xmlFirstElementChild(node); xprop;
+	 xprop = xmlNextElementSibling(xprop)) {
+	icalproperty *prop = xml_element_to_icalproperty(xprop);
+
+	if (!prop) goto error;
+
+	icalcomponent_add_property(comp, prop);
+    }
+
+    /* Add sub-components */
+    if (!(node = xmlNextElementSibling(node))) return comp;
+
+    if (xmlStrcmp(node->name, BAD_CAST "components")) {
+	syslog(LOG_WARNING,
+	       "Expected <components> XML element, received %s", node->name);
+	goto error;
+    }
+
+    for (xsub = xmlFirstElementChild(node); xsub;
+	 xsub = xmlNextElementSibling(xsub)) {
+	icalcomponent *sub = xml_element_to_icalcomponent(xsub);
+
+	if (!sub) goto error;
+
+	icalcomponent_add_component(comp, sub);
+    }
+
+    /* Sanity check */ 
+    if ((node = xmlNextElementSibling(node))) {
+	syslog(LOG_WARNING,
+	"Unexpected XML element in component: %s", node->name);
+	goto error;
+    }
+
+    return comp;
+
+  error:
+    icalcomponent_free(comp);
+    return NULL;
+}
+
+
 /*
  * Construct an iCalendar component from an xCal string.
  */
 icalcomponent *xcal_string_as_icalcomponent(const char *str)
 {
+    xmlParserCtxtPtr ctxt;
+    xmlDocPtr doc = NULL;
+    xmlNodePtr root;
     icalcomponent *ical = NULL;
 
     if (!str) return NULL;
+
+    /* Parse the XML request */
+    ctxt = xmlNewParserCtxt();
+    if (ctxt) {
+	doc = xmlCtxtReadMemory(ctxt, str, strlen(str), NULL, NULL,
+				XML_PARSE_NOWARNING);
+	xmlFreeParserCtxt(ctxt);
+    }
+    if (!doc) {
+	syslog(LOG_WARNING, "XML parse error");
+	return NULL;
+    }
+
+    /* Get root element */
+    if (!(root = xmlDocGetRootElement(doc)) ||
+	xmlStrcmp(root->name, BAD_CAST "icalendar") ||
+	xmlStrcmp(root->ns->href, BAD_CAST XML_NS_ICALENDAR)) {
+	syslog(LOG_WARNING,
+	       "XML root element is not %s:icalendar", XML_NS_ICALENDAR);
+	goto done;
+    }
+
+    ical = xml_element_to_icalcomponent(xmlFirstElementChild(root));
+
+  done:
+    xmlFreeDoc(doc);
 
     return ical;
 }

@@ -49,14 +49,6 @@
 
 #define XML_NS_ICALENDAR	"urn:ietf:params:xml:ns:icalendar-2.0"
 
-struct recur_by_part {
-    const char *str;
-    int limit;
-    size_t offset;
-};
-
-extern const struct recur_by_part recurmap[];
-
 extern const char *icalproperty_value_kind_as_string(icalproperty *prop);
 extern const char *icaltime_as_iso_string(const struct icaltimetype tt);
 extern const char *icalvalue_utcoffset_as_iso_string(const icalvalue* value);
@@ -66,6 +58,11 @@ extern void icalrecurrencetype_add_as_xxx(struct icalrecurrencetype *recur,
 							  int),
 					  void (*add_str)(void *, const char *,
 							  const char *));
+extern struct icalrecurrencetype *
+icalrecur_add_rule(struct icalrecurrencetype **rt,
+		   const char *rpart, void *data,
+		   int (*get_int)(void *),
+		   const char* (*get_str)(void *));
 
 extern const char *icalcomponent_as_xcal_string(icalcomponent* comp);
 extern icalcomponent *xcal_string_as_icalcomponent(const char *str);

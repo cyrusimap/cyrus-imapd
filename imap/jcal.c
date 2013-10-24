@@ -483,61 +483,17 @@ static icalvalue *json_object_to_icalvalue(json_object *jvalue,
 
     case ICAL_RECUR_VALUE:
 	if (json_object_is_type(jvalue, json_type_object)) {
-	    struct icalrecur_parser parser;
-	    struct icalrecurrencetype *rt = &parser.rt;
+	    struct icalrecurrencetype *rt = NULL;
 
-	    memset(&parser, 0, sizeof(parser));
-
-	    icalrecurrencetype_clear(rt);
 	    json_object_object_foreach(jvalue, key, val) {
-
-		if (!strcmp(key, "freq")) {
-		    rt->freq =
-			icalrecur_string_to_freq(json_object_get_string(val));
-		}
-		else if (!strcmp(key, "count")) {
-		    rt->count = json_object_get_int(val);
-		}
-		else if (!strcmp(key, "until")) {
-		    rt->until =
-			icaltime_from_string(json_object_get_string(val));
-		}
-		else if (!strcmp(key, "interval")) {
-		    rt->interval = json_object_get_int(val);
-		    if (rt->interval < 1) rt->interval = 1;  /* MUST be >= 1 */
-		}
-		else if (!strcmp(key, "wkst")) {
-		    rt->week_start =
-			icalrecur_string_to_weekday(json_object_get_string(val));
-		}
-		else if (!strcmp(key, "byday")) {
-		    icalrecur_add_bydayrules(&parser,
-					     json_object_get_string(val));
-		}
-		else {
-		    for (i = 0;
-			 recurmap[i].str && strcmp(key, recurmap[i].str);
-			 i++);
-
-		    if (recurmap[i].str) {
-			short *array =
-			    (short *)((size_t) rt + recurmap[i].offset);
-			int limit = recurmap[i].limit;
-
-			icalrecur_add_byrules(&parser, array, limit,
-					      icalmemory_tmp_copy(
-						  json_object_get_string(val)));
-		    }
-		    else {
-			syslog(LOG_WARNING, "Unknown recurrence rule");
-			icalrecurrencetype_clear(rt);
-			break;
-		    }
-		}
+		rt = icalrecur_add_rule(&rt, key, val,
+		    (int (*)(void *)) &json_object_get_int,
+		    (const char * (*)(void *)) &json_object_get_string);
+		if (!rt) break;
 	    }
 
-            if (rt->freq != ICAL_NO_RECURRENCE)
-		value = icalvalue_new_recur(parser.rt);
+            if (rt && rt->freq != ICAL_NO_RECURRENCE)
+		value = icalvalue_new_recur(*rt);
 	}
 	else
 	    syslog(LOG_WARNING, "jCal object object expected");
