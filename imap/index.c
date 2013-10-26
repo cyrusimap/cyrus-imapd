@@ -2798,6 +2798,10 @@ index_copy(struct index_state *state,
 
     memset(&copyargs, 0, sizeof(struct copyargs));
 
+    /* let's just see how common this is... */
+    if (!strcmp(index_mboxname(state), name))
+	syslog(LOG_ERR, "IOERROR: same mailbox copy %s (%s)", name, sequence);
+
     is_same_user = mboxname_same_userid(index_mboxname(state), name);
     if (is_same_user < 0)
 	return is_same_user;
