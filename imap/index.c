@@ -2785,10 +2785,6 @@ EXPORTED void index_tellchanges(struct index_state *state, int canexpunge,
     for (msgno = 1; msgno <= state->exists; msgno++) {
 	im = &state->map[msgno-1];
 
-	/* we don't report flag updates if it's been expunged */
-	if (im->system_flags & FLAG_EXPUNGED)
-	    continue;
-
 	/* report if it's changed since last told */
 	if (im->modseq > im->told_modseq)
 	    index_printflags(state, msgno, printuid, printmodseq);
