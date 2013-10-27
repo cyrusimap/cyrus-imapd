@@ -361,6 +361,7 @@ EXPORTED int index_expunge(struct index_state *state, char *sequence,
     struct index_record record;
     int numexpunged = 0;
     struct mboxevent *mboxevent = NULL;
+    modseq_t oldmodseq;
 
     r = index_lock(state);
     if (r) return r;
@@ -390,6 +391,8 @@ EXPORTED int index_expunge(struct index_state *state, char *sequence,
 	if (index_reload_record(state, msgno, &record))
 	    continue;
 
+	oldmodseq = im->modseq;
+
 	if (!im->isseen) {
 	    state->numunseen--;
 	    im->isseen = 1;
@@ -406,6 +409,10 @@ EXPORTED int index_expunge(struct index_state *state, char *sequence,
 
 	r = index_rewrite_record(state, msgno, &record);
 	if (r) break;
+
+	/* avoid telling again (equivalent to STORE FLAGS.SILENT) */
+	if (im->told_modseq == oldmodseq)
+	    im->told_modseq = im->modseq;
 
 	mboxevent_extract_record(mboxevent, state->mailbox, &record);
     }
