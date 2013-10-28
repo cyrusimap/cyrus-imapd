@@ -2020,14 +2020,14 @@ void response_header(long code, struct transaction_t *txn)
 {
     time_t now;
     char datestr[30];
-    unsigned keepalive = httpd_keepalive;
+    unsigned keepalive;
     const char **hdr;
     struct auth_challenge_t *auth_chal;
     struct resp_body_t *resp_body;
     static struct buf log = BUF_INITIALIZER;
 
     /* Stop method processing alarm */
-    alarm(0);
+    keepalive = alarm(0);
 
 
     /* Status-Line */
@@ -2425,7 +2425,10 @@ void response_header(long code, struct transaction_t *txn)
 
 static void keep_alive(int sig)
 {
-    if (sig == SIGALRM) response_header(HTTP_PROCESSING, NULL);
+    if (sig == SIGALRM) {
+	response_header(HTTP_PROCESSING, NULL);
+	alarm(httpd_keepalive);
+    }
 }
 
 
