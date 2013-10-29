@@ -2700,7 +2700,7 @@ void cmd_idle(char *tag)
 
 	/* Start doing mailbox updates */
 	if (imapd_index) index_check(imapd_index, 1, 0);
-	idle_start(imapd_index ? imapd_index->mailbox->name : NULL);
+	idle_start(imapd_index ? imapd_index->mailbox->name : NULL, 0);
 	/* use this flag so if getc causes a shutdown due to
 	 * connection abort we tell idled about it */
 	idling = 1;

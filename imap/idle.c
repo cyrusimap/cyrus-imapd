@@ -59,6 +59,7 @@
 #include "idle.h"
 #include "idled.h"
 #include "global.h"
+#include "util.h"
 
 const char *idle_method_desc = "no";
 
@@ -67,7 +68,8 @@ static idle_updateproc_t *idle_update = NULL;
 
 /* how often to poll the mailbox */
 static time_t idle_period = -1;
-static int idle_started = 0;
+static time_t idle_started = 0;
+static unsigned int idle_timeout;
 
 /* UNIX socket variables */
 static int notify_sock = -1;
@@ -197,7 +199,8 @@ static void idle_handler(int sig)
 	break;
     case SIGALRM:
 	idle_update(IDLE_MAILBOX|IDLE_ALERT);
-	alarm(idle_period);
+	idle_timeout -= time(0) - idle_started;
+	alarm(MIN(idle_period, idle_timeout));
 	break;
     }
 }
@@ -232,14 +235,20 @@ int idle_init(idle_updateproc_t *proc)
     return 1;
 }
 
-void idle_start(const char *mboxname)
+void idle_start(const char *mboxname, unsigned int timeout)
 {
-    idle_started = 1;
+    idle_timeout = timeout;
+    idle_started = time(0);
 
     /* Tell idled that we're idling */
-    if (notify_sock == -1 || !idle_send_msg(IDLE_INIT, mboxname)) {
+    if (notify_sock != -1 && idle_send_msg(IDLE_INIT, mboxname)) {
+	/* set any timeout */
+	alarm(idle_timeout);
+    }
+    else {
 	/* otherwise, we'll poll with SIGALRM */
-	alarm(idle_period);
+	if (!idle_timeout) idle_timeout = UINT_MAX;
+	alarm(MIN(idle_period, idle_timeout));
     }
 }
 

@@ -66,7 +66,7 @@ int idle_enabled(void);
 int idle_init(idle_updateproc_t *proc);
 
 /* Start IDLEing on 'mailbox'. */
-void idle_start(const char *mboxname);
+void idle_start(const char *mboxname, unsigned int timeout);
 
 /* Cleanup when IDLE is completed. */
 void idle_done(const char *mboxname);
