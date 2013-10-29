@@ -5686,7 +5686,9 @@ localcreate:
 #endif // USE_AUTOCREATE
 
     if (specialuse.len) {
-	r = annotatemore_write(mailboxname, "/specialuse", imapd_userid, &specialuse);
+	const char *userid = mboxname_to_userid(mailboxname);
+	if (!userid) userid = imapd_userid;
+	r = annotatemore_write(mailboxname, "/specialuse", userid, &specialuse);
 	if (r) {
 	    /* XXX - failure here SHOULD cause a cleanup of the created mailbox */
 	    syslog(
