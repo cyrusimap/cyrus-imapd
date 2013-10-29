@@ -385,10 +385,35 @@ static int prin_parse_path(const char *path,
 
 unsigned get_preferences(struct transaction_t *txn)
 {
-    unsigned prefs = 0;
+    unsigned mask = 0, prefs = 0;
     const char **hdr;
 
-    txn->flags.vary |= (VARY_BRIEF | VARY_PREFER);
+    /* Create a mask for preferences honored by method */
+    switch (txn->meth) {
+    case METH_COPY:
+    case METH_MOVE:
+    case METH_POST:
+    case METH_PUT:
+	mask = PREFER_REP;
+	break;
+
+    case METH_MKCALENDAR:
+    case METH_MKCOL:
+    case METH_PROPPATCH:
+	mask = PREFER_MIN;
+	break;
+
+    case METH_PROPFIND:
+    case METH_REPORT:
+	mask = (PREFER_MIN | PREFER_NOROOT);
+	break;
+    }
+
+    if (!mask) return 0;
+    else {
+	txn->flags.vary |= VARY_PREFER;
+	if (mask & PREFER_MIN) txn->flags.vary |= VARY_BRIEF;
+    }
 
     /* Check for Prefer header(s) */
     if ((hdr = spool_getheader(txn->req_hdrs, "Prefer"))) {
@@ -399,11 +424,14 @@ unsigned get_preferences(struct transaction_t *txn)
 
 	    tok_init(&tok, hdr[i], ",\r\n", TOK_TRIMLEFT|TOK_TRIMRIGHT);
 	    while ((token = tok_next(&tok))) {
-		if (!strcmp(token, "return=minimal"))
+		if ((mask & PREFER_MIN) &&
+		    !strcmp(token, "return=minimal"))
 		    prefs |= PREFER_MIN;
-		else if (!strcmp(token, "return=representation"))
+		else if ((mask & PREFER_REP) &&
+			 !strcmp(token, "return=representation"))
 		    prefs |= PREFER_REP;
-		else if (!strcmp(token, "depth-noroot"))
+		else if ((mask & PREFER_NOROOT) &&
+			 !strcmp(token, "depth-noroot"))
 		    prefs |= PREFER_NOROOT;
 	    }
 	    tok_fini(&tok);
@@ -413,7 +441,8 @@ unsigned get_preferences(struct transaction_t *txn)
     }
 
     /* Check for Brief header */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Brief")) &&
+    if ((mask & PREFER_MIN) &&
+	(hdr = spool_getheader(txn->req_hdrs, "Brief")) &&
 	!strcasecmp(hdr[0], "t")) {
 	prefs |= PREFER_MIN;
     }
