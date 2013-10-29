@@ -2426,7 +2426,7 @@ void response_header(long code, struct transaction_t *txn)
 static void keep_alive(int sig)
 {
     if (sig == SIGALRM) {
-	response_header(HTTP_PROCESSING, NULL);
+	response_header(HTTP_CONTINUE, NULL);
 	alarm(httpd_keepalive);
     }
 }
