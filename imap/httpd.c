@@ -2470,21 +2470,21 @@ void write_multipart_body(long code, struct transaction_t *txn,
 	write_body(code, txn, buf, len);
     }
     else if (len) {
-	    /* Output delimiter and MIME part-headers */
-	    buf_reset(body);
-	    buf_printf(body, "\r\n--%s\r\n", boundary);
-	    buf_printf(body, "Content-Type: %s\r\n", txn->resp_body.type);
-	    if (txn->resp_body.range) {
-		buf_printf(body, "Content-Range: bytes %lu-%lu/%lu\r\n",
-			   txn->resp_body.range->first,
-			   txn->resp_body.range->last,
-			   txn->resp_body.len);
-	    }
-	    buf_printf(body, "Content-Length: %d\r\n\r\n", len);
-	    write_body(0, txn, buf_cstring(body), buf_len(body));
+	/* Output delimiter and MIME part-headers */
+	buf_reset(body);
+	buf_printf(body, "\r\n--%s\r\n", boundary);
+	buf_printf(body, "Content-Type: %s\r\n", txn->resp_body.type);
+	if (txn->resp_body.range) {
+	    buf_printf(body, "Content-Range: bytes %lu-%lu/%lu\r\n",
+		       txn->resp_body.range->first,
+		       txn->resp_body.range->last,
+		       txn->resp_body.len);
+	}
+	buf_printf(body, "Content-Length: %d\r\n\r\n", len);
+	write_body(0, txn, buf_cstring(body), buf_len(body));
 
-	    /* Output body-part data */
-	    write_body(0, txn, buf, len);
+	/* Output body-part data */
+	write_body(0, txn, buf, len);
     }
     else {
 	const char *epilogue = "\r\nEnd of MIME multipart body.\r\n";
