@@ -3754,6 +3754,12 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
     mailbox_quota_dirty(newmailbox);
     memset(newmailbox->quota_previously_used, 0, sizeof(newmailbox->quota_previously_used));
 
+    /* re-set the UIDVALIDITY, it will have been the old one in the index header */
+    mailbox_index_dirty(newmailbox);
+    newmailbox->i.uidvalidity = uidvalidity;
+    /* and bump the modseq too */
+    mailbox_modseq_dirty(newmailbox);
+
     /* commit the index changes */
     r = mailbox_commit(newmailbox);
     if (r) goto fail;
@@ -3761,7 +3767,7 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
     if (config_auditlog)
 	syslog(LOG_NOTICE, "auditlog: rename sessionid=<%s> "
 			   "oldmailbox=<%s> newmailbox=<%s> uniqueid=<%s>",
-			   session_id(), 
+			   session_id(),
 			   oldmailbox->name, newname, newmailbox->uniqueid);
 
     if (newmailboxptr) *newmailboxptr = newmailbox;
