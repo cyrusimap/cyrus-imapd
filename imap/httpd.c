@@ -2433,6 +2433,107 @@ static void keep_alive(int sig)
 
 
 /*
+ * Output an HTTP response with multipart body data.
+ *
+ * An initial call with 'code' != 0 will output a response header
+ * and the preamble.
+ * All subsequent calls should have 'code' = 0 to output just a body part.
+ * A final call with 'len' = 0 ends the multipart body.
+ */
+void write_multipart_body(long code, struct transaction_t *txn,
+			  const char *buf, unsigned len)
+{
+    static char boundary[100];
+    struct buf *body = &txn->resp_body.payload;
+
+    if (code) {
+	const char *preamble =
+	    "This is a message with multiple parts in MIME format.\r\n";
+
+	/* Create multipart boundary */
+	snprintf(boundary, sizeof(boundary), "%s-%ld-%ld-%ld",
+		 *spool_getheader(txn->req_hdrs, "Host"),
+		 (long) getpid(), (long) time(0), (long) rand());
+
+	/* Create Content-Type w/ boundary */
+	assert(!buf_len(&txn->buf));
+	buf_printf(&txn->buf, "%s; boundary=\"%s\"",
+		   txn->resp_body.type, boundary);
+	txn->resp_body.type = buf_cstring(&txn->buf);
+
+	/* Setup for chunked response and begin multipart */
+	txn->flags.te |= TE_CHUNKED;
+	if (!buf) {
+	    buf = preamble;
+	    len = strlen(preamble);
+	}
+	write_body(code, txn, buf, len);
+    }
+    else if (len) {
+	    /* Output delimiter and MIME part-headers */
+	    buf_reset(body);
+	    buf_printf(body, "\r\n--%s\r\n", boundary);
+	    buf_printf(body, "Content-Type: %s\r\n", txn->resp_body.type);
+	    if (txn->resp_body.range) {
+		buf_printf(body, "Content-Range: bytes %lu-%lu/%lu\r\n",
+			   txn->resp_body.range->first,
+			   txn->resp_body.range->last,
+			   txn->resp_body.len);
+	    }
+	    buf_printf(body, "Content-Length: %d\r\n\r\n", len);
+	    write_body(0, txn, buf_cstring(body), buf_len(body));
+
+	    /* Output body-part data */
+	    write_body(0, txn, buf, len);
+    }
+    else {
+	const char *epilogue = "\r\nEnd of MIME multipart body.\r\n";
+
+	/* Output close-delimiter and epilogue */
+	buf_reset(body);
+	buf_printf(body, "\r\n--%s--\r\n%s", boundary, epilogue);
+	write_body(0, txn, buf_cstring(body), buf_len(body));
+
+	/* End of output */
+	write_body(0, txn, NULL, 0);
+    }
+}
+
+
+/* Output multipart/byteranges */
+static void multipart_byteranges(struct transaction_t *txn,
+				 const char *msg_base)
+{
+    /* Save Content-Range and Content-Type pointers */
+    struct range *range = txn->resp_body.range;
+    const char *type = txn->resp_body.type;
+
+    /* Start multipart response */
+    txn->resp_body.range = NULL;
+    txn->resp_body.type = "multipart/byteranges";
+    write_multipart_body(HTTP_PARTIAL, txn, NULL, 0);
+
+    txn->resp_body.type = type;
+    while (range) {
+	unsigned long offset = range->first;
+	unsigned long datalen = range->last - range->first + 1;
+	struct range *next = range->next;
+
+	/* Output range as body part */
+	txn->resp_body.range = range;
+	write_multipart_body(0, txn, msg_base + offset, datalen);
+
+	/* Cleanup */
+	free(range);
+	range = next;
+    }
+
+    /* End of multipart body */
+    write_multipart_body(0, txn, NULL, 0);
+}
+
+
+/*
  * Output an HTTP response with body data, compressed as necessary.
  *
  * For chunked body data, an initial call with 'code' != 0 will output
@@ -3477,62 +3578,6 @@ int check_precond(struct transaction_t *txn, const void *data,
     return HTTP_OK;
 }
 
-
-/* Output multipart/byteranges */
-void multipart_byteranges(struct transaction_t *txn, const char *msg_base)
-{
-    struct range *range = txn->resp_body.range;
-    struct buf *body = &txn->resp_body.payload;
-    const char *type = txn->resp_body.type;
-    const char *preamble =
-	"This is a message with multiple parts in MIME format.\r\n";
-    char boundary[100];
-
-    /* Create multipart boundary */
-    snprintf(boundary, sizeof(boundary), "%s-%ld-%ld-%ld",
-	     *spool_getheader(txn->req_hdrs, "Host"),
-	     (long) getpid(), (long) time(NULL), (long) rand());
-
-    /* Create Content-Type w/ boundary */
-    assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "multipart/byteranges; boundary=\"%s\"", boundary);
-    txn->resp_body.type = buf_cstring(&txn->buf);
-
-    /* Setup for chunked response and begin output */
-    txn->flags.te |= TE_CHUNKED;
-    txn->resp_body.range = NULL;
-    write_body(HTTP_PARTIAL, txn, preamble, strlen(preamble));
-
-    while (range) {
-	unsigned long offset = range->first;
-	unsigned long datalen = range->last - range->first + 1;
-	struct range *next = range->next;
-
-	/* Output header for next range */
-	buf_reset(body);
-	buf_printf(body, "\r\n--%s\r\n"
-		   "Content-Type: %s\r\n"
-		   "Content-Range: bytes %lu-%lu/%lu\r\n\r\n",
-		   boundary, type, range->first, range->last,
-		   txn->resp_body.len);
-	write_body(0, txn, buf_cstring(body), buf_len(body));
-
-	/* Output range data */
-	write_body(0, txn, msg_base + offset, datalen);
-
-	/* Cleanup */
-	free(range);
-	range = next;
-    }
-
-    /* Output final boundary */
-    buf_reset(body);
-    buf_printf(body, "\r\n--%s--\r\n", boundary);
-    write_body(0, txn, buf_cstring(body), buf_len(body));
-
-    /* End of output */
-    write_body(0, txn, NULL, 0);
-}
 
 const struct mimetype {
     const char *ext;

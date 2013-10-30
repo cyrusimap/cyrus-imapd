@@ -465,8 +465,8 @@ extern void html_response(long code, struct transaction_t *txn, xmlDocPtr html);
 extern void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml);
 extern void write_body(long code, struct transaction_t *txn,
 		       const char *buf, unsigned len);
-extern void multipart_byteranges(struct transaction_t *txn,
-				 const char *msg_base);
+extern void write_multipart_body(long code, struct transaction_t *txn,
+				 const char *buf, unsigned len);
 extern int meth_get_doc(struct transaction_t *txn, void *params);
 extern int meth_options(struct transaction_t *txn, void *params);
 extern int meth_trace(struct transaction_t *txn, void *params);
