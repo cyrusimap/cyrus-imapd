@@ -3406,9 +3406,9 @@ EXPORTED int mailbox_create(const char *name,
 
     if (config_auditlog)
 	syslog(LOG_NOTICE, "auditlog: create sessionid=<%s> "
-			   "mailbox=<%s> uniqueid=<%s>",
-			   session_id(), 
-			   mailbox->name, mailbox->uniqueid);
+			   "mailbox=<%s> uniqueid=<%s> uidvalidity=<%u>",
+			   session_id(), mailbox->name,
+			   mailbox->uniqueid, mailbox->i.uidvalidity);
 
 done:
     if (!r && mailboxptr)
