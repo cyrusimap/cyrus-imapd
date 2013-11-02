@@ -473,6 +473,8 @@ extern int meth_trace(struct transaction_t *txn, void *params);
 extern int etagcmp(const char *hdr, const char *etag);
 extern int check_precond(struct transaction_t *txn, const void *data,
 			 const char *etag, time_t lastmod);
+extern int parse_framing(hdrcache_t hdrs, struct body_t *body,
+			 const char **errstr);
 extern int read_body(struct protstream *pin, hdrcache_t hdrs,
 		     struct body_t *body, const char **errstr);
 

@@ -575,7 +575,7 @@ static void write_cachehdr(const char *name, const char *contents, void *rock)
     const char **hdr, *hop_by_hop[] =
 	{ "authorization", "connection", "content-length", "expect",
 	  "forwarded", "host", "keep-alive", "strict-transport-security",
-	  "te", "transfer-encoding", "upgrade", "via", NULL };
+	  "te", "trailer", "transfer-encoding", "upgrade", "via", NULL };
 
     /* Ignore private headers in our cache */
     if (name[0] == ':') return;
@@ -666,8 +666,7 @@ int http_read_response(struct backend *be, unsigned meth, unsigned *code,
 
 
 /* Send a cached response to the client */
-static void send_response(struct protstream *pout,
-			  const char *statline, hdrcache_t hdrs,
+static void send_response(const char *statline, hdrcache_t hdrs,
 			  struct buf *body, struct txn_flags_t *flags)
 {
     unsigned long len;
@@ -681,8 +680,8 @@ static void send_response(struct protstream *pout,
      * - Add our own hop-by-hop headers
      * - Use all cached end-to-end headers
      */
-    prot_puts(pout, statline);
-    write_forwarding_hdrs(pout, hdrs, HTTP_VERSION, NULL);
+    prot_puts(httpd_out, statline);
+    write_forwarding_hdrs(httpd_out, hdrs, HTTP_VERSION, NULL);
     if (flags->conn) {
 	/* Construct Connection header */
 	const char *conn_tokens[] =
@@ -698,14 +697,18 @@ static void send_response(struct protstream *pout,
 	prot_puts(httpd_out, "Strict-Transport-Security: max-age=600\r\n");
     }
 
-    spool_enum_hdrcache(hdrs, &write_cachehdr, pout);
+    spool_enum_hdrcache(hdrs, &write_cachehdr, httpd_out);
 
     if (!body || !(len = buf_len(body))) {
 	/* Empty body -- use  payload headers from response, if any */
 	const char **hdr;
 
-	if ((hdr = spool_getheader(hdrs, "Transfer-Encoding"))) {
+	if (!flags->ver1_0 &&
+	    (hdr = spool_getheader(hdrs, "Transfer-Encoding"))) {
 	    prot_printf(httpd_out, "Transfer-Encoding: %s\r\n", hdr[0]);
+	    if ((hdr = spool_getheader(hdrs, "Trailer"))) {
+		prot_printf(httpd_out, "Trailer: %s\r\n", hdr[0]);
+	    }
 	}
 	else if ((hdr = spool_getheader(hdrs, "Content-Length"))) {
 	    prot_printf(httpd_out, "Content-Length: %s\r\n", hdr[0]);
@@ -721,12 +724,126 @@ static void send_response(struct protstream *pout,
 }
 
 
-/*
- * Proxy (pipe) a client-request/server-response to/from a backend.
- *
- * XXX  This function currently buffers the response headers and body.
- *      Should work on sending them to the client on-the-fly.
- */
+/* Proxy (pipe) a chunk of body data to a client/server. */
+static unsigned pipe_chunk(struct protstream *pin, struct protstream *pout,
+			   unsigned len)
+{
+    char buf[PROT_BUFSIZE];
+    unsigned n = 0;
+
+    /* Read 'len' octets */
+    for (; len; len -= n) {
+	n = prot_read(pin, buf, MIN(len, PROT_BUFSIZE));
+	if (!n) break;
+
+	prot_write(pout, buf, n);
+    }
+
+    return n;
+}
+
+
+/* Proxy (pipe) a response body to a client/server. */
+static int pipe_resp_body(struct protstream *pin, struct protstream *pout,
+			  hdrcache_t resp_hdrs, struct body_t *resp_body,
+			  int ver1_0, const char **errstr)
+{
+    char buf[PROT_BUFSIZE];
+
+    if (resp_body->framing == FRAMING_UNKNOWN) {
+	/* Get message framing */
+	int r = parse_framing(resp_hdrs, resp_body, errstr);
+	if (r) return r;
+    }
+    
+    /* Read and pipe the body */
+    switch (resp_body->framing) {
+    case FRAMING_LENGTH:
+	/* Read 'len' octets */
+	if (!pipe_chunk(pin, pout, resp_body->len)) {
+	    syslog(LOG_ERR, "prot_read() error");
+	    *errstr = "Unable to read body data";
+	    return HTTP_BAD_GATEWAY;
+	}
+	break;
+
+    case FRAMING_CHUNKED: {
+	unsigned chunk;
+	char *c;
+
+	/* Read chunks until last-chunk (zero chunk-size) */
+	do {
+	    /* Read chunk-size */
+	    prot_NONBLOCK(pin);
+	    c = prot_fgets(buf, PROT_BUFSIZE, pin);
+	    prot_BLOCK(pin);
+	    if (!c) {
+		prot_flush(pout);
+		c = prot_fgets(buf, PROT_BUFSIZE, pin);
+	    }
+	    if (!c || sscanf(buf, "%x", &chunk) != 1) {
+		*errstr = "Unable to read chunk size";
+		return HTTP_BAD_GATEWAY;
+
+		/* XXX  Do we need to parse chunk-ext? */
+	    }
+	    else if (chunk > resp_body->max - resp_body->len)
+		return HTTP_TOO_LARGE;
+	    else if (!ver1_0) prot_puts(pout, buf);
+
+	    if (chunk) {
+		/* Read 'chunk' octets */
+		if (!pipe_chunk(pin, pout, chunk)) {
+		    syslog(LOG_ERR, "prot_read() error");
+		    *errstr = "Unable to read chunk data";
+		    return HTTP_BAD_GATEWAY;
+		}
+	    }
+	    else {
+		/* Read any trailing headers */
+		for (*c = prot_ungetc(prot_getc(pin), pin);
+		     *c != '\r' && *c != '\n';
+		     *c = prot_ungetc(prot_getc(pin), pin)) {
+		    if (!prot_fgets(buf, sizeof(buf), pin)) {
+			*errstr = "Error reading trailer";
+			return HTTP_BAD_GATEWAY;
+		    }
+		    else if (!ver1_0) prot_puts(pout, buf);
+		}
+	    }
+	    
+
+	    /* Read CRLF terminating the chunk/trailer */
+	    if (!prot_fgets(buf, sizeof(buf), pin)) {
+		*errstr = "Missing CRLF following chunk/trailer";
+		return HTTP_BAD_GATEWAY;
+	    }
+	    else if (!ver1_0) prot_puts(pout, buf);
+
+	} while (chunk);
+
+	break;
+    }
+
+    case FRAMING_CLOSE:
+	/* Read until EOF */
+	if (pipe_chunk(pin, pout, UINT_MAX) || !pin->eof)
+	    return HTTP_BAD_GATEWAY;
+
+	break;
+
+    default:
+	/* XXX  Should never get here */
+	*errstr = "Unknown length of body data";
+	return HTTP_BAD_GATEWAY;
+    }
+
+    return 0;
+}
+
+
+
+/* Proxy (pipe) a client-request/server-response to/from a backend. */
 int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 {
     int r = 0, sent_body = 0;
@@ -767,43 +884,61 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     prot_flush(be->out);
 
     /* Read response(s) from backend until final response or error */
-    resp_body.flags = 0;
-    resp_body.payload = txn->resp_body.payload;
+    memset(&resp_body, 0, sizeof(struct body_t));
+    resp_body.flags = BODY_DONE; /* Don't read body, we want to pipe it */
 
     do {
 	r = http_read_response(be, txn->meth, &code, &statline,
 			       &resp_hdrs, &resp_body, &txn->error.desc);
 	if (r) break;
 
-	if ((code == 100) /* Continue */  && !sent_body++) {
-	    unsigned len;
+	if (code == 100) { /* Continue */
+	    if (!sent_body++) {
+		unsigned len;
 
-	    /* Read body from client */
-	    r = read_body(httpd_in, txn->req_hdrs, &txn->req_body,
-			  &txn->error.desc);
-	    if (r) {
-		/* Couldn't get the body and can't finish request */
-		txn->flags.conn = CONN_CLOSE;
-		break;
-	    }
+		/* Read body from client */
+		r = read_body(httpd_in, txn->req_hdrs, &txn->req_body,
+			      &txn->error.desc);
+		if (r) {
+		    /* Couldn't get the body and can't finish request */
+		    txn->flags.conn = CONN_CLOSE;
+		    break;
+		}
 
-	    /* Send single-chunk body to backend to complete the request */
-	    if ((len = buf_len(&txn->req_body.payload))) {
-		prot_printf(be->out, "%x\r\n", len);
-		prot_putbuf(be->out, &txn->req_body.payload);
-		prot_puts(be->out, "\r\n");
+		/* Send single-chunk body to backend to complete the request */
+		if ((len = buf_len(&txn->req_body.payload))) {
+		    prot_printf(be->out, "%x\r\n", len);
+		    prot_putbuf(be->out, &txn->req_body.payload);
+		    prot_puts(be->out, "\r\n");
+		}
+		prot_puts(be->out, "0\r\n\r\n");
+		prot_flush(be->out);
 	    }
-	    prot_puts(be->out, "0\r\n\r\n");
-	    prot_flush(be->out);
+	    else {
+		prot_puts(httpd_out, statline);
+		spool_enum_hdrcache(resp_hdrs, &write_cachehdr, httpd_out);
+		prot_puts(httpd_out, "\r\n");
+		prot_flush(httpd_out);
+	    }
 	}
     } while (code < 200);
 
-    txn->resp_body.payload = resp_body.payload;
-
     if (!r) {
 	/* Send response to client */
-	send_response(httpd_out, statline, resp_hdrs,
-		      &resp_body.payload, &txn->flags);
+	send_response(statline, resp_hdrs, NULL, &txn->flags);
+  
+	/* Not expecting a body for 204/304 response or any HEAD response */
+	switch (code) {
+	case 204: /* No Content */
+	case 304: /* Not Modified */
+	    break;
+
+	default:
+	    if (txn->meth == METH_HEAD) break;
+
+	    r = pipe_resp_body(be->in, httpd_out, resp_hdrs, &resp_body,
+			       txn->flags.ver1_0, &txn->error.desc);
+	}
     }
 
     if (r || (resp_body.flags & BODY_CLOSE)) proxy_downserver(be);
@@ -931,8 +1066,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 
     if (!r) {
 	/* Send response to client */
-	send_response(httpd_out, statline, resp_hdrs,
-		      &resp_body.payload, &txn->flags);
+	send_response(statline, resp_hdrs, &resp_body.payload, &txn->flags);
 
 	if ((txn->meth == METH_MOVE) && (code < 300)) {
 	    /*

@@ -207,8 +207,6 @@ static int parse_expect(struct transaction_t *txn);
 static void parse_connection(struct transaction_t *txn);
 static int parse_ranges(const char *hdr, unsigned long len,
 			struct range **ranges);
-static int parse_framing(hdrcache_t hdrs, struct body_t *body,
-			 const char **errstr);
 static int proxy_authz(const char **authzid, struct transaction_t *txn);
 static void auth_success(struct transaction_t *txn);
 static int http_auth(const char *creds, struct transaction_t *txn);
@@ -1491,8 +1489,7 @@ time_t calc_compile_time(const char *time, const char *date)
  * Handles chunked, gzip, deflate TE only.
  * Handles close-delimited response bodies (no Content-Length specified) 
  */
-static int parse_framing(hdrcache_t hdrs, struct body_t *body,
-			 const char **errstr)
+int parse_framing(hdrcache_t hdrs, struct body_t *body, const char **errstr)
 {
     static unsigned max_msgsize = 0;
     const char **hdr;
