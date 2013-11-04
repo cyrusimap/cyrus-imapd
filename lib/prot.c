@@ -1297,7 +1297,7 @@ EXPORTED int prot_printf(struct protstream *s, const char *fmt, ...)
 	    break;
 
 	case 'u':
-	    u = va_arg(pvar, int);
+	    u = va_arg(pvar, unsigned);
 	    snprintf(buf, sizeof(buf), "%u", u);
 	    prot_write(s, buf, strlen(buf));
 	    break;
