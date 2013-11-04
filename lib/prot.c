@@ -1225,8 +1225,9 @@ int prot_puts(struct protstream *s, const char *str)
 
 /*
  * Stripped-down version of printf() that works on protection streams
- * Only understands '%lld', '%llu', '%ld', '%lu', '%d', %u', '%s',
- * '%tu', '%td', '%c', and '%%' in the format string.
+ * Only understands '%lld', '%llu', '%llx', '%ld', '%lu', '%lx',
+ * '%d', %u', '%x', '%s', '%tu', '%td', '%c', and '%%'
+ * in the format string.
  */
 EXPORTED int prot_printf(struct protstream *s, const char *fmt, ...)
 {
@@ -1262,6 +1263,12 @@ EXPORTED int prot_printf(struct protstream *s, const char *fmt, ...)
 		prot_write(s, buf, strlen(buf));
 		break;
 
+	    case 'x':
+		l = va_arg(pvar, long);
+		snprintf(buf, sizeof(buf), "%lx", l);
+		prot_write(s, buf, strlen(buf));
+		break;
+
             case 'l': {
 		long long int ll;
 		unsigned long long int ull;
@@ -1276,6 +1283,12 @@ EXPORTED int prot_printf(struct protstream *s, const char *fmt, ...)
 		case 'u':
 		    ull = va_arg(pvar, unsigned long long int);
 		    snprintf(buf, sizeof(buf), "%llu", ull);
+		    prot_write(s, buf, strlen(buf));
+		    break;
+
+		case 'x':
+		    ll = va_arg(pvar, long long int);
+		    snprintf(buf, sizeof(buf), "%llx", ll);
 		    prot_write(s, buf, strlen(buf));
 		    break;
 
@@ -1299,6 +1312,12 @@ EXPORTED int prot_printf(struct protstream *s, const char *fmt, ...)
 	case 'u':
 	    u = va_arg(pvar, unsigned);
 	    snprintf(buf, sizeof(buf), "%u", u);
+	    prot_write(s, buf, strlen(buf));
+	    break;
+
+	case 'x':
+	    i = va_arg(pvar, int);
+	    snprintf(buf, sizeof(buf), "%x", i);
 	    prot_write(s, buf, strlen(buf));
 	    break;
 
