@@ -4561,6 +4561,21 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 	}
     }
 
+    if (!record->size) {
+	/* dang, guess it failed to parse */
+
+	printf("%s uid %u failed to parse\n", mailbox->name, record->uid);
+	syslog(LOG_ERR, "%s uid %u failed to parse", mailbox->name, record->uid);
+
+	if (!make_changes) return 0;
+
+	/* otherwise we have issues, mark it unlinked */
+	unlink(fname);
+	record->system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
+	mailbox->i.options |= OPT_MAILBOX_NEEDS_REPACK;
+	return mailbox_rewrite_index_record(mailbox, record);
+    }
+
     /* get internaldate from the file if not set */
     if (!record->internaldate) {
 	if (did_stat || stat(fname, &sbuf) != -1)
