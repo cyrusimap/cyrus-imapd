@@ -2805,8 +2805,8 @@ int meth_get_dav(struct transaction_t *txn, void *params)
     const char **hdr;
     struct mime_type_t *mime = NULL;
     int ret = 0, r, precond, rights;
-    const char *msg_base = NULL, *data = NULL;
-    unsigned long msg_size = 0, datalen, offset;
+    const char *data = NULL;
+    unsigned long datalen, offset;
     struct resp_body_t *resp_body = &txn->resp_body;
     char *server, *acl;
     struct mailbox *mailbox = NULL;
@@ -2953,6 +2953,9 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 
 	if (txn->meth == METH_GET) {
 	    /* Load message containing the resource */
+	    const char *msg_base = NULL;
+	    unsigned long msg_size = 0;
+
 	    mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
 
 	    /* iCalendar data in response should not be transformed */
@@ -2968,13 +2971,13 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 		datalen = strlen(data);
 		gparams->mime_types[0].free(obj);
 	    }
+
+	    if (msg_base)
+		mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
 	}
     }
 
     write_body(precond, txn, data, datalen);
-
-    if (msg_base)
-	mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
 
   done:
     if (mailbox) mailbox_unlock_index(mailbox, NULL);
