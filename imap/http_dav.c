@@ -2972,11 +2972,11 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 
 	    if (mime != gparams->mime_types) {
 		/* Not the storage format - convert into requested MIME type */
-		icalcomponent *ical = icalparser_parse_string(data);
+		void *obj = gparams->mime_types[0].from_string(data);
 
-		data = mime->to_string(ical);
+		data = mime->to_string(obj);
 		datalen = strlen(data);
-		icalcomponent_free(ical);
+		gparams->mime_types[0].free(obj);
 	    }
 	}
     }

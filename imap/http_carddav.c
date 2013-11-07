@@ -134,9 +134,9 @@ static struct mime_type_t carddav_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { "text/vcard; charset=utf-8", "3.0", NULL, "vcf", NULL,
       (void * (*)(const char*)) &vcard_string_as_vobject,
-      NULL, NULL
+      (void (*)(void *)) &cleanVObject, NULL, NULL
     },
-    { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
+    { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
 
 /* Array of known "live" properties */

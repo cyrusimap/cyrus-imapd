@@ -199,21 +199,21 @@ static struct mime_type_t caldav_mime_types[] = {
     { "text/calendar; charset=utf-8", "2.0", "ics", "ifb",
       (const char* (*)(void *)) &icalcomponent_as_ical_string,
       (void * (*)(const char*)) &icalparser_parse_string,
-      &begin_icalendar, &end_icalendar
+      (void (*)(void *)) &icalcomponent_free, &begin_icalendar, &end_icalendar
     },
     { "application/calendar+xml; charset=utf-8", NULL, "xcs", "xfb",
       (const char* (*)(void *)) &icalcomponent_as_xcal_string,
       (void * (*)(const char*)) &xcal_string_as_icalcomponent,
-      &begin_xcal, &end_xcal
+      NULL, &begin_xcal, &end_xcal
     },
 #ifdef WITH_JSON
     { "application/calendar+json; charset=utf-8", NULL, "jcs", "jfb",
       (const char* (*)(void *)) &icalcomponent_as_jcal_string,
       (void * (*)(const char*)) &jcal_string_as_icalcomponent,
-      &begin_jcal, &end_jcal
+      NULL, &begin_jcal, &end_jcal
     },
 #endif
-    { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
+    { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
 
 /* Array of known "live" properties */

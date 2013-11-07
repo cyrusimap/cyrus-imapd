@@ -95,16 +95,16 @@ static struct mime_type_t isched_mime_types[] = {
     { "text/calendar; charset=utf-8", "2.0", "ics", "ifb",
       (const char* (*)(void *)) &icalcomponent_as_ical_string,
       (void * (*)(const char*)) &icalparser_parse_string,
-      NULL, NULL
+      (void (*)(void *)) &icalcomponent_free, NULL, NULL
     },
 #ifdef WITH_JSON
     { "application/calendar+json; charset=utf-8", NULL, "jcs", "jfb",
       (const char* (*)(void *)) &icalcomponent_as_jcal_string,
       (void * (*)(const char*)) &jcal_string_as_icalcomponent,
-      NULL, NULL,
+      NULL, NULL, NULL,
     },
 #endif
-    { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
+    { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
 
 struct namespace_t namespace_ischedule = {
