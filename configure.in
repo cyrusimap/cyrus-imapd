@@ -1039,7 +1039,7 @@ if test "$ENABLE_RSS" != no -o "$ENABLE_DAV" != no; then
       fi
 
       ENABLE_JSON=yes
-      PKG_CHECK_MODULES([JSON], [json],, ENABLE_JSON=no)
+      PKG_CHECK_MODULES([JSON], [jansson],, ENABLE_JSON=no)
       if test "$ENABLE_JSON" != no; then
          AC_SUBST(JSON_CFLAGS)
 	 AC_SUBST(JSON_LIBS)

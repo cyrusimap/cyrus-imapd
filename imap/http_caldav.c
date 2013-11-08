@@ -391,8 +391,8 @@ static void my_caldav_init(struct buf *serverinfo)
 
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	buf_printf(serverinfo, " libical/%s", ICAL_VERSION);
-#ifdef JSON_C_VERSION
-	buf_printf(serverinfo, " json-c/%s", JSON_C_VERSION);
+#ifdef WITH_JSON
+	buf_printf(serverinfo, " Jansson/%s", JANSSON_VERSION);
 #endif
     }
 
