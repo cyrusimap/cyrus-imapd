@@ -1093,6 +1093,7 @@ dnl
 AC_ARG_ENABLE(nntp,
         [AS_HELP_STRING([--enable-nntp], [enable NNTP support])],,[enable_nntp="no";])
 AM_CONDITIONAL([NNTPD], [test "$enable_nntp" != "no"])
+
 dnl
 dnl see if we're compiling the Murder support programs
 dnl
@@ -1123,7 +1124,7 @@ dnl
 	PKG_CHECK_MODULES([XML2], [libxml-2.0],,AC_MSG_ERROR([Need libxml-2.0 for http]))
 	PKG_CHECK_MODULES([ICAL], [libical],,AC_MSG_ERROR([Need libical for http]))
 	PKG_CHECK_MODULES([SQLITE3], [sqlite3],,AC_MSG_ERROR([Need sqlite3 for http]))
-	PKG_CHECK_MODULES([JSON], [json],,AC_MSG_ERROR([Need json for http]))
+	PKG_CHECK_MODULES([JSON], [jansson],,AC_MSG_ERROR([Need jansson for http]))
 
 	HTTP_LIBS="${XML2_LIBS} ${ICAL_LIBS} ${SQLITE3_LIBS} ${JSON_LIBS}"
 	HTTP_CPPFLAGS="${JSON_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${XML2_CFLAGS}"
@@ -1144,7 +1145,6 @@ dnl
 fi
 AC_SUBST(HTTP_CPPFLAGS)
 AC_SUBST(HTTP_LIBS)
-
 
 dnl
 dnl see if we're compiling replication support programs

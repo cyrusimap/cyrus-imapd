@@ -45,16 +45,10 @@
 
 #ifdef WITH_JSON
 
-#define __STRICT_ANSI__
-
 #include <libical/ical.h>
-#include <json/json.h>
+#include <jansson.h>
 
 #include "util.h"
-
-#ifndef JSON_C_VERSION
-#define JSON_C_VERSION "0.10"
-#endif
 
 extern const char *icalcomponent_as_jcal_string(icalcomponent* comp);
 extern icalcomponent *jcal_string_as_icalcomponent(const char *str);
