@@ -579,13 +579,12 @@ static xmlNodePtr icalcomponent_as_xml_element(icalcomponent *comp)
 /*
  * Construct a xcal string for an iCalendar component.
  */
-const char *icalcomponent_as_xcal_string(icalcomponent *ical)
+char *icalcomponent_as_xcal_string(icalcomponent *ical)
 {
     xmlDocPtr doc;
     xmlNodePtr root, xcomp;
     xmlChar *buf;
     int bufsiz;
-    const char *xcal = NULL;
 
     if (!ical) return NULL;
 
@@ -613,12 +612,9 @@ const char *icalcomponent_as_xcal_string(icalcomponent *ical)
 	xmlBufferFree(xbuf);
     }
 
-    xcal = icalmemory_tmp_copy((char *) buf);
-
-    xmlFree(buf);
     xmlFreeDoc(doc);
 
-    return xcal;
+    return (char *) buf;
 }
 
 

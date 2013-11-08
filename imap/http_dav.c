@@ -2818,7 +2818,7 @@ int meth_get_dav(struct transaction_t *txn, void *params)
     const char *msg_base = NULL, *data = NULL;
     unsigned long msg_size = 0, datalen, offset;
     struct resp_body_t *resp_body = &txn->resp_body;
-    char *server, *acl;
+    char *server, *acl, *freeme = NULL;
     struct mailbox *mailbox = NULL;
     struct dav_data *ddata;
     struct index_record record;
@@ -2974,7 +2974,7 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 		/* Not the storage format - convert into requested MIME type */
 		void *obj = gparams->mime_types[0].from_string(data);
 
-		data = mime->to_string(obj);
+		data = freeme = mime->to_string(obj);
 		datalen = strlen(data);
 		gparams->mime_types[0].free(obj);
 	    }
@@ -2985,6 +2985,7 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 
     if (msg_base)
 	mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
+    if (freeme) free(freeme);
 
   done:
     if (mailbox) mailbox_unlock_index(mailbox, NULL);
