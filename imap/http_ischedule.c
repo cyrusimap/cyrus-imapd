@@ -63,6 +63,7 @@
 #include "tok.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xcal.h"
 #include "xstrlcpy.h"
 #include <sasl/saslutil.h>
 
@@ -96,6 +97,11 @@ static struct mime_type_t isched_mime_types[] = {
       (char* (*)(void *)) &icalcomponent_as_ical_string_r,
       (void * (*)(const char*)) &icalparser_parse_string,
       (void (*)(void *)) &icalcomponent_free, NULL, NULL
+    },
+    { "application/calendar+xml; charset=utf-8", NULL, "xcs", "xfb",
+      (char* (*)(void *)) &icalcomponent_as_xcal_string,
+      (void * (*)(const char*)) &xcal_string_as_icalcomponent,
+      NULL, NULL, NULL
     },
 #ifdef WITH_JSON
     { "application/calendar+json; charset=utf-8", NULL, "jcs", "jfb",
@@ -207,6 +213,7 @@ static int meth_get_isched(struct transaction_t *txn,
     if (txn->resp_body.lastmod > lastmod) {
 	xmlNodePtr root, capa, node, comp, meth;
 	xmlNsPtr ns[NUM_NAMESPACE];
+	struct mime_type_t *mime;
 
 	/* Start construction of our query-result */
 	if (!(root = init_xml_response("query-result", NS_ISCHED, NULL, ns))) {
@@ -247,9 +254,22 @@ static int meth_get_isched(struct transaction_t *txn,
 
 	node = xmlNewChild(capa, NULL,
 			   BAD_CAST "calendar-data-types", NULL);
-	node = xmlNewChild(node, NULL, BAD_CAST "calendar-data-type", NULL);
-	xmlNewProp(node, BAD_CAST "content-type", BAD_CAST "text/calendar");
-	xmlNewProp(node, BAD_CAST "version", BAD_CAST "2.0");
+	for (mime = isched_mime_types; mime->content_type; mime++) {
+	    xmlNodePtr type = xmlNewChild(node, NULL,
+					  BAD_CAST "calendar-data-type", NULL);
+
+	    /* Trim any charset from content-type */
+	    buf_reset(&txn->buf);
+	    buf_printf(&txn->buf, "%.*s",
+		       (int) strcspn(mime->content_type, ";"),
+		       mime->content_type);
+
+	    xmlNewProp(type, BAD_CAST "content-type",
+		       BAD_CAST buf_cstring(&txn->buf));
+
+	    if (mime->version)
+		xmlNewProp(type, BAD_CAST "version", BAD_CAST mime->version);
+	}
 
 	node = xmlNewChild(capa, NULL, BAD_CAST "attachments", NULL);
 	node = xmlNewChild(node, NULL, BAD_CAST "inline", NULL);
