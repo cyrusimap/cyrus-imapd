@@ -758,16 +758,14 @@ EXPORTED const char *begin_jcal(struct buf *buf)
     buf_printf_markup(buf, 1, "[");
     buf_printf_markup(buf, 2, "[");
     buf_printf_markup(buf, 3, "\"prodid\",");
-    buf_printf_markup(buf, 3, "{");
-    buf_printf_markup(buf, 3, "},");
+    buf_printf_markup(buf, 3, "{},");
     buf_printf_markup(buf, 3, "\"text\",");
     buf_printf_markup(buf, 3, "\"-//CyrusIMAP.org/Cyrus %s//EN\"",
 		      cyrus_version());
     buf_printf_markup(buf, 2, "],");
     buf_printf_markup(buf, 2, "[");
     buf_printf_markup(buf, 3, "\"version\",");
-    buf_printf_markup(buf, 3, "{");
-    buf_printf_markup(buf, 3, "},");
+    buf_printf_markup(buf, 3, "{},");
     buf_printf_markup(buf, 3, "\"text\",");
     buf_printf_markup(buf, 3, "\"2.0\"");
     buf_printf_markup(buf, 2, "]");
