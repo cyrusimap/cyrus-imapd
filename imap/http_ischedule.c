@@ -93,13 +93,13 @@ static time_t compile_time;
 static struct mime_type_t isched_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { "text/calendar; charset=utf-8", "2.0", "ics", "ifb",
-      (const char* (*)(void *)) &icalcomponent_as_ical_string,
+      (char* (*)(void *)) &icalcomponent_as_ical_string_r,
       (void * (*)(const char*)) &icalparser_parse_string,
       (void (*)(void *)) &icalcomponent_free, NULL, NULL
     },
 #ifdef WITH_JSON
     { "application/calendar+json; charset=utf-8", NULL, "jcs", "jfb",
-      (const char* (*)(void *)) &icalcomponent_as_jcal_string,
+      (char* (*)(void *)) &icalcomponent_as_jcal_string,
       (void * (*)(const char*)) &jcal_string_as_icalcomponent,
       NULL, NULL, NULL,
     },

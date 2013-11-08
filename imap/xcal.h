@@ -64,7 +64,7 @@ icalrecur_add_rule(struct icalrecurrencetype **rt,
 		   int (*get_int)(void *),
 		   const char* (*get_str)(void *));
 
-extern const char *icalcomponent_as_xcal_string(icalcomponent* comp);
+extern char *icalcomponent_as_xcal_string(icalcomponent* comp);
 extern icalcomponent *xcal_string_as_icalcomponent(const char *str);
 extern const char *begin_xcal(struct buf *buf);
 extern void end_xcal(struct buf *buf);

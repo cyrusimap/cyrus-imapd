@@ -199,18 +199,18 @@ static void end_icalendar(struct buf *buf);
 static struct mime_type_t caldav_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { "text/calendar; charset=utf-8", "2.0", "ics", "ifb",
-      (const char* (*)(void *)) &icalcomponent_as_ical_string,
+      (char* (*)(void *)) &icalcomponent_as_ical_string_r,
       (void * (*)(const char*)) &icalparser_parse_string,
       (void (*)(void *)) &icalcomponent_free, &begin_icalendar, &end_icalendar
     },
     { "application/calendar+xml; charset=utf-8", NULL, "xcs", "xfb",
-      (const char* (*)(void *)) &icalcomponent_as_xcal_string,
+      (char* (*)(void *)) &icalcomponent_as_xcal_string,
       (void * (*)(const char*)) &xcal_string_as_icalcomponent,
       NULL, &begin_xcal, &end_xcal
     },
 #ifdef WITH_JSON
     { "application/calendar+json; charset=utf-8", NULL, "jcs", "jfb",
-      (const char* (*)(void *)) &icalcomponent_as_jcal_string,
+      (char* (*)(void *)) &icalcomponent_as_jcal_string,
       (void * (*)(const char*)) &jcal_string_as_icalcomponent,
       NULL, &begin_jcal, &end_jcal
     },
@@ -990,7 +990,7 @@ static int dump_calendar(struct transaction_t *txn, struct meth_params *gparams)
 		 comp;
 		 comp = icalcomponent_get_next_component(ical,
 							 ICAL_ANY_COMPONENT)) {
-		const char *cal_str;
+		char *cal_str;
 		icalcomponent_kind kind = icalcomponent_isa(comp);
 
 		/* Don't duplicate any TZIDs in our iCalendar */
@@ -1013,6 +1013,7 @@ static int dump_calendar(struct transaction_t *txn, struct meth_params *gparams)
 		}
 		cal_str = mime->to_string(comp);
 		write_body(0, txn, cal_str, strlen(cal_str));
+		free(cal_str);
 	    }
 
 	    icalcomponent_free(ical);
@@ -1545,7 +1546,7 @@ static int caldav_put(struct transaction_t *txn,
 
     if (flags & PREFER_REP) {
 	struct resp_body_t *resp_body = &txn->resp_body;
-	const char *data;
+	char *data;
 
 	switch (ret) {
 	case HTTP_NO_CONTENT:
@@ -1570,6 +1571,8 @@ static int caldav_put(struct transaction_t *txn,
 
 	    /* Output current representation */
 	    write_body(ret, txn, data, resp_body->len);
+
+	    free(data);
 	    ret = 0;
 	    break;
 
@@ -1987,6 +1990,7 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
     xmlNodePtr prop = (xmlNodePtr) rock;
     xmlChar *attr;
     const char *data;
+    char *freeme = NULL;
     unsigned long datalen;
     xmlNodePtr node;
 
@@ -2047,7 +2051,7 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 	    /* Not the storage format - convert into requested MIME type */
 	    icalcomponent *ical = icalparser_parse_string(data);
 
-	    data = mime->to_string(ical);
+	    data = freeme = mime->to_string(ical);
 	    datalen = strlen(data);
 	    icalcomponent_free(ical);
 	}
@@ -2065,6 +2069,8 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 		xmlNewCDataBlock(fctx->root->doc, BAD_CAST data, datalen));
 
     fctx->fetcheddata = 1;
+
+    if (freeme) free(freeme);
 
     return 0;
 }
@@ -2843,7 +2849,8 @@ static int report_fb_query(struct transaction_t *txn,
 
     if (cal) {
 	struct mime_type_t *mime = NULL;
-	const char **hdr, *cal_str;
+	const char **hdr;
+	char *cal_str;
 
 	/* Check requested MIME type */
 	if ((hdr = spool_getheader(txn->req_hdrs, "Accept"))) {
@@ -2872,6 +2879,7 @@ static int report_fb_query(struct transaction_t *txn,
 	txn->flags.cc |= CC_NOTRANSFORM;
 
 	write_body(HTTP_OK, txn, cal_str, strlen(cal_str));
+	free(cal_str);
     }
     else ret = HTTP_NOT_FOUND;
 
@@ -3610,7 +3618,7 @@ int sched_busytime_query(struct transaction_t *txn,
 
 	    if (busy) {
 		xmlNodePtr cdata;
-		const char *fb_str = mime->to_string(busy);
+		char *fb_str = mime->to_string(busy);
 		icalcomponent_free(busy);
 
 		xmlNewChild(resp, NULL, BAD_CAST "request-status",
@@ -3635,6 +3643,7 @@ int sched_busytime_query(struct transaction_t *txn,
 		xmlAddChild(cdata,
 			    xmlNewCDataBlock(root->doc, BAD_CAST fb_str,
 					     strlen(fb_str)));
+		free(fb_str);
 
 		/* iCalendar data in response should not be transformed */
 		txn->flags.cc |= CC_NOTRANSFORM;
