@@ -2138,6 +2138,9 @@ void response_header(long code, struct transaction_t *txn)
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	prot_printf(httpd_out, "Server: %s\r\n", buf_cstring(&serverinfo));
     }
+    if (txn->flags.mime) {
+	prot_puts(httpd_out, "MIME-Version: 1.0\r\n");
+    }
     if (txn->req_tgt.allow & ALLOW_ISCHEDULE) {
 	prot_puts(httpd_out, "iSchedule-Version: 1.0\r\n");
 	if (resp_body->iserial) {
@@ -2446,6 +2449,8 @@ void write_multipart_body(long code, struct transaction_t *txn,
     if (code) {
 	const char *preamble =
 	    "This is a message with multiple parts in MIME format.\r\n";
+
+	txn->flags.mime = 1;
 
 	/* Create multipart boundary */
 	snprintf(boundary, sizeof(boundary), "%s-%ld-%ld-%ld",
