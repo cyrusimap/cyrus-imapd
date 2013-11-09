@@ -480,7 +480,7 @@ int service_init(int argc __attribute__((unused)),
 #ifdef HAVE_ZLIB
 	buf_printf(&serverinfo, " zlib/%s", ZLIB_VERSION);
 #endif
-	buf_printf(&serverinfo, " libxml/%s", LIBXML_DOTTED_VERSION);
+	buf_printf(&serverinfo, " libxml2/%s", LIBXML_DOTTED_VERSION);
     }
 
     /* Do any namespace specific initialization */
