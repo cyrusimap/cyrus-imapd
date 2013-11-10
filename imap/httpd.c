@@ -1072,6 +1072,13 @@ static void cmdloop(void)
 	    txn.flags.conn &= ~CONN_UPGRADE;
 	}
 
+	/* Check for HTTP method override */
+	if (!strcmp(req_line->meth, "POST") &&
+	    (hdr = spool_getheader(txn.req_hdrs, "X-HTTP-Method-Override"))) {
+	    txn.flags.override = 1;
+	    req_line->meth = (char *) hdr[0];
+	}
+
 	/* Check Method against our list of known methods */
 	for (txn.meth = 0; (txn.meth < METH_UNKNOWN) &&
 		 strcmp(http_methods[txn.meth].name, req_line->meth);
@@ -2363,7 +2370,8 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     /* Add request-line */
     buf_appendcstr(&log, "; \"");
     if (txn->req_line.meth) {
-	buf_printf(&log, "%s", txn->req_line.meth);
+	buf_printf(&log, "%s",
+		   txn->flags.override ? "POST" : txn->req_line.meth);
 	if (txn->req_line.uri) {
 	    buf_printf(&log, " %s", txn->req_line.uri);
 	    if (txn->req_line.ver) {
@@ -2380,6 +2388,10 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 	/* Add any request modifying headers */
 	const char *sep = " (";
 
+	if (txn->flags.override) {
+	    buf_printf(&log, "%smethod-override=%s", sep, txn->req_line.meth);
+	    sep = "; ";
+	}
 	if ((hdr = spool_getheader(txn->req_hdrs, "Origin"))) {
 	    buf_printf(&log, "%sorigin=%s", sep, hdr[0]);
 	    sep = "; ";

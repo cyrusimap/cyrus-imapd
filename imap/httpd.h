@@ -281,6 +281,7 @@ struct resp_body_t {
 struct txn_flags_t {
     unsigned char ver1_0;		/* Request from HTTP/1.0 client */
     unsigned char conn;			/* Connection opts on req/resp */
+    unsigned char override;		/* HTTP method override */
     unsigned char cors;			/* Cross-Origin Resource Sharing */
     unsigned char mime;			/* MIME-conformant response */
     unsigned char te;			/* Transfer-Encoding for resp */
