@@ -906,7 +906,7 @@ EXPORTED int mboxlist_createmailbox(const char *name, int mbtype,
 			   int isadmin, const char *userid, 
 			   struct auth_state *auth_state,
 			   int localonly, int forceuser, int dbonly,
-			   int notify)
+			   int notify, struct mailbox **mailboxptr)
 {
     int options = config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS)
 		  | OPT_POP3_NEW_UIDL;
@@ -923,11 +923,13 @@ EXPORTED int mboxlist_createmailbox(const char *name, int mbtype,
 	struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_CREATE);
 	mboxevent_extract_mailbox(mboxevent, mailbox);
 
-	mailbox_close(&mailbox);
-
 	mboxevent_notify(mboxevent);
 	mboxevent_free(&mboxevent);
     }
+
+    if (mailboxptr && !r) *mailboxptr = mailbox;
+    else mailbox_close(&mailbox);
+
     return r;
 }
 

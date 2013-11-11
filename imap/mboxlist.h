@@ -126,12 +126,14 @@ int mboxlist_createmailboxcheck(const char *name, int mbtype,
 /* forceuser allows the creation of user.x.<name> without a user.x */
 /* dbonly skips filesystem operations (e.g. reconstruct) */
 /* notify sends a MailboxCreate event notification */
+/* if given a mailbox pointer, return the still-locked mailbox
+ * for further manipulation */
 int mboxlist_createmailbox(const char *name, int mbtype,
 			   const char *partition,
 			   int isadmin, const char *userid, 
 			   struct auth_state *auth_state,
 			   int localonly, int forceuser, int dbonly,
-			   int notify);
+			   int notify, struct mailbox **mailboxptr);
 
 /* create mailbox from sync */
 int mboxlist_createsync(const char *name, int mbtype,

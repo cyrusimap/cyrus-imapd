@@ -5513,7 +5513,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
 	r = mboxlist_createmailbox(mailboxname, 0, partition,
 				   imapd_userisadmin || imapd_userisproxyadmin,
 				   imapd_userid, imapd_authstate,
-				   localonly, localonly, 0, 1);
+				   localonly, localonly, 0, 1, NULL);
 
 	if (r == IMAP_PERMISSION_DENIED && !strcasecmp(name, "INBOX") &&
 	    (autocreatequotastorage = config_getint(IMAPOPT_AUTOCREATEQUOTA))) {
@@ -5521,7 +5521,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
 	    /* Auto create */
 	    r = mboxlist_createmailbox(mailboxname, 0, partition,
 				       1, imapd_userid, imapd_authstate,
-				       0, 0, 0, 1);
+				       0, 0, 0, 1, NULL);
 
 	    int autocreatequotamessage = config_getint(IMAPOPT_AUTOCREATEQUOTAMSG);
 	    if (!r && ((autocreatequotastorage > 0) || (autocreatequotamessage > 0))) {
