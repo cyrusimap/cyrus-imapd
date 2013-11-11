@@ -765,7 +765,7 @@ static int pipe_resp_body(struct protstream *pin, struct protstream *pout,
     switch (resp_body->framing) {
     case FRAMING_LENGTH:
 	/* Read 'len' octets */
-	if (!pipe_chunk(pin, pout, resp_body->len)) {
+	if (resp_body->len && !pipe_chunk(pin, pout, resp_body->len)) {
 	    syslog(LOG_ERR, "prot_read() error");
 	    *errstr = "Unable to read body data";
 	    return HTTP_BAD_GATEWAY;
