@@ -850,7 +850,7 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     int r = 0, sent_body = 0;
     xmlChar *uri;
     unsigned code;
-    const char *statline;
+    const char **hdr, *statline;
     hdrcache_t resp_hdrs = NULL;
     struct body_t resp_body;
 
@@ -874,6 +874,9 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     write_forwarding_hdrs(be->out, txn->req_hdrs, txn->req_line.ver,
 			  https ? "https" : "http");
     spool_enum_hdrcache(txn->req_hdrs, &write_cachehdr, be->out);
+    if ((hdr = spool_getheader(txn->req_hdrs, "TE"))) {
+	for (; *hdr; hdr++) prot_printf(be->out, "TE: %s\r\n", *hdr);
+    }
     if (http_methods[txn->meth].flags & METH_NOBODY)
 	prot_puts(be->out, "Content-Length: 0\r\n");
     else if (spool_getheader(txn->req_hdrs, "Transfer-Encoding") ||
