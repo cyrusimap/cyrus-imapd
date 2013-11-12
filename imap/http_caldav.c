@@ -945,8 +945,8 @@ static int dump_calendar(struct transaction_t *txn, struct meth_params *gparams)
 
     /* Check requested MIME type:
        1st entry in caldav_mime_types array MUST be default MIME type */
-    ret = get_accept_type(txn->req_hdrs, caldav_mime_types, &mime);
-    if (ret) return ret;
+    mime = get_accept_type(txn->req_hdrs, caldav_mime_types);
+    if (!mime) return HTTP_NOT_ACCEPTABLE;
 
     /* Open mailbox for reading */
     if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_SHARED))) {
@@ -2848,8 +2848,8 @@ static int report_fb_query(struct transaction_t *txn,
 
     /* Check requested MIME type:
        1st entry in caldav_mime_types array MUST be default MIME type */
-    ret = get_accept_type(txn->req_hdrs, caldav_mime_types, &mime);
-    if (ret) return ret;
+    mime = get_accept_type(txn->req_hdrs, caldav_mime_types);
+    if (!mime) return HTTP_NOT_ACCEPTABLE;
 
     memset(&calfilter, 0, sizeof(struct calquery_filter));
     calfilter.comp = CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY;
