@@ -3254,6 +3254,7 @@ int meth_lock(struct transaction_t *txn, void *params)
 	/* Tell client where to find the new resource */
 	txn->location = txn->req_tgt.path;
     }
+    else ret = HTTP_OK;
 
     xml_response(ret, txn, outdoc);
     ret = 0;
