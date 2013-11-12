@@ -1342,8 +1342,9 @@ static void cmdloop(void)
 		struct accept *e, *enc = parse_accept(hdr);
 
 		for (e = enc; e && e->token; e++) {
-		    if (!strcasecmp(e->token, "gzip") ||
-			!strcasecmp(e->token, "x-gzip")) {
+		    if (e->qual > 0.0 &&
+			(!strcasecmp(e->token, "gzip") ||
+			 !strcasecmp(e->token, "x-gzip"))) {
 			txn.flags.te = TE_GZIP;
 		    }
 		    free(e->token);
@@ -1354,8 +1355,9 @@ static void cmdloop(void)
 		struct accept *e, *enc = parse_accept(hdr);
 
 		for (e = enc; e && e->token; e++) {
-		    if (!strcasecmp(e->token, "gzip") ||
-			!strcasecmp(e->token, "x-gzip")) {
+		    if (e->qual > 0.0 &&
+			(!strcasecmp(e->token, "gzip") ||
+			 !strcasecmp(e->token, "x-gzip"))) {
 			txn.resp_body.enc = CE_GZIP;
 		    }
 		    free(e->token);

@@ -940,8 +940,13 @@ static int dump_calendar(struct transaction_t *txn, struct meth_params *gparams)
     static const char *displayname_annot =
 	ANNOT_NS "<" XML_NS_DAV ">displayname";
     struct annotation_data attrib;
-    const char **hdr, *sep;
-    struct mime_type_t *mime = NULL;
+    const char *sep;
+    struct mime_type_t *mime;
+
+    /* Check requested MIME type:
+       1st entry in caldav_mime_types array MUST be default MIME type */
+    ret = get_accept_type(txn->req_hdrs, caldav_mime_types, &mime);
+    if (ret) return ret;
 
     /* Open mailbox for reading */
     if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_SHARED))) {
@@ -973,23 +978,6 @@ static int dump_calendar(struct transaction_t *txn, struct meth_params *gparams)
 	ret = precond;
 	goto done;
     }
-
-    /* Check requested MIME type */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Accept"))) {
-	struct accept *e, *enc = parse_accept(hdr);
-
-	for (e = enc; e && e->token; e++) {
-	    struct mime_type_t *m;
-
-	    for (m = caldav_mime_types; !mime && m->content_type; m++) {
-		if (is_mediatype(e->token, m->content_type)) mime = m;
-	    }
-
-	    free(e->token);
-	}
-	if (enc) free(enc);
-    }
-    if (!mime) mime = caldav_mime_types;  /* 1st in array MUST default type */
 
     /* Setup for chunked response */
     txn->flags.te |= TE_CHUNKED;
@@ -2850,12 +2838,18 @@ static int report_fb_query(struct transaction_t *txn,
 			   xmlNodePtr inroot, struct propfind_ctx *fctx)
 {
     int ret = 0;
+    struct mime_type_t *mime;
     struct calquery_filter calfilter;
     xmlNodePtr node;
     icalcomponent *cal;
 
     /* Can not be run against a resource */
     if (txn->req_tgt.resource) return HTTP_FORBIDDEN;
+
+    /* Check requested MIME type:
+       1st entry in caldav_mime_types array MUST be default MIME type */
+    ret = get_accept_type(txn->req_hdrs, caldav_mime_types, &mime);
+    if (ret) return ret;
 
     memset(&calfilter, 0, sizeof(struct calquery_filter));
     calfilter.comp = CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY;
@@ -2897,29 +2891,8 @@ static int report_fb_query(struct transaction_t *txn,
     if (calfilter.busytime.busy) free(calfilter.busytime.busy);
 
     if (cal) {
-	struct mime_type_t *mime = NULL;
-	const char **hdr;
-	char *cal_str;
-
-	/* Check requested MIME type */
-	if ((hdr = spool_getheader(txn->req_hdrs, "Accept"))) {
-	    struct accept *e, *enc = parse_accept(hdr);
-
-	    for (e = enc; e && e->token; e++) {
-		struct mime_type_t *m;
-
-		for (m = caldav_mime_types; !mime && m->content_type; m++) {
-		    if (is_mediatype(e->token, m->content_type)) mime = m;
-		}
-
-		free(e->token);
-	    }
-	    if (enc) free(enc);
-	}
-	if (!mime) mime = caldav_mime_types;  /* 1st in array is default type */
-
 	/* Output the iCalendar object as text/calendar */
-	cal_str = mime->to_string(cal);
+	char *cal_str = mime->to_string(cal);
 	icalcomponent_free(cal);
 
 	txn->resp_body.type = mime->content_type;
