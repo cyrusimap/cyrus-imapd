@@ -1023,7 +1023,7 @@ EXPORTED int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
      * Send a synchonizing PUT request to dest backend:
      *
      * - Add Expect:100-continue header (for synchonicity)
-     * - Use any Prefer headers specified by client
+     * - Use any TE, Prefer, Accept* headers specified by client
      * - Obey Overwrite:F by adding If-None-Match:* header
      * - Use Content-Type, -Encoding, -Language and -Length from GET resp
      * - Body is buffered, so send using "identity" TE
@@ -1034,16 +1034,33 @@ EXPORTED int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
     prot_printf(dest_be->out, "User-Agent: %s\r\n",
 		buf_cstring(&serverinfo));
     prot_puts(dest_be->out, "Expect: 100-continue\r\n");
+    if ((hdr = spool_getheader(txn->req_hdrs, "TE"))) {
+	for (; *hdr; hdr++) prot_printf(dest_be->out, "TE: %s\r\n", *hdr);
+    }
     if ((hdr = spool_getheader(txn->req_hdrs, "Prefer"))) {
+	for (; *hdr; hdr++) prot_printf(dest_be->out, "Prefer: %s\r\n", *hdr);
+    }
+    if ((hdr = spool_getheader(txn->req_hdrs, "Accept"))) {
+	for (; *hdr; hdr++) prot_printf(dest_be->out, "Accept: %s\r\n", *hdr);
+    }
+    if ((hdr = spool_getheader(txn->req_hdrs, "Accept-Charset"))) {
+	for (; *hdr; hdr++) prot_printf(dest_be->out,
+					"Accept-Charset: %s\r\n", *hdr);
+    }
+    if ((hdr = spool_getheader(txn->req_hdrs, "Accept-Encoding"))) {
+	for (; *hdr; hdr++) prot_printf(dest_be->out,
+					"Accept-Encoding: %s\r\n", *hdr);
+    }
+    if ((hdr = spool_getheader(txn->req_hdrs, "Accept-Language"))) {
 	for (; *hdr; hdr++)
-	    prot_printf(dest_be->out, "Prefer: %s\r\n", *hdr);
+	  prot_printf(dest_be->out, "Accept-Language: %s\r\n", *hdr);
     }
     if ((hdr = spool_getheader(txn->req_hdrs, "Overwrite")) &&
 	!strcmp(hdr[0], "F")) {
 	prot_printf(dest_be->out, "If-None-Match: *\r\n");
     }
-    hdr = spool_getheader(resp_hdrs, "Content-Type");
-    prot_printf(dest_be->out, "Content-Type: %s\r\n", hdr[0]);
+    if ((hdr = spool_getheader(resp_hdrs, "Content-Type")))
+	prot_printf(dest_be->out, "Content-Type: %s\r\n", hdr[0]);
     if ((hdr = spool_getheader(resp_hdrs, "Content-Encoding")))
 	prot_printf(dest_be->out, "Content-Encoding: %s\r\n", hdr[0]);
     if ((hdr = spool_getheader(resp_hdrs, "Content-Language")))
