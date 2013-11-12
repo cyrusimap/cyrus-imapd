@@ -454,13 +454,10 @@ unsigned get_preferences(struct transaction_t *txn)
 }
 
 
-int get_accept_type(hdrcache_t hdrs, struct mime_type_t *types,
-		    struct mime_type_t **mime)
+struct mime_type_t *get_accept_type(hdrcache_t hdrs, struct mime_type_t *types)
 {
-    int r = 0;
+    struct mime_type_t *ret = NULL;
     const char **hdr;
-
-    *mime = NULL;
 
     /* Check requested MIME type:
        1st entry in types array MUST be default MIME type */
@@ -468,15 +465,11 @@ int get_accept_type(hdrcache_t hdrs, struct mime_type_t *types,
 	struct accept *e, *enc = parse_accept(hdr);
 
 	for (e = enc; e && e->token; e++) {
-	    struct mime_type_t *m;
-
-	    for (m = types; !r && !*mime && m->content_type; m++) {
-		if (is_mediatype(e->token, m->content_type)) {
-		    if (e->qual > 0.0) *mime = m;
-		    else if (m == types) {
-			/* default MIME type not acceptable */
-			r = HTTP_NOT_ACCEPTABLE;
-		    }
+	    if (!ret && e->qual > 0.0) {
+		struct mime_type_t *m;
+				     
+		for (m = types; !ret && m->content_type; m++) {
+		    if (is_mediatype(e->token, m->content_type)) ret = m;
 		}
 	    }
 
@@ -484,10 +477,9 @@ int get_accept_type(hdrcache_t hdrs, struct mime_type_t *types,
 	}
 	if (enc) free(enc);
     }
+    else ret = types;  /* use the default MIME type */
 
-    if (!r && !*mime) *mime = types;  /* use default MIME type */
-
-    return r;
+    return ret;
 }
 
 
@@ -2860,8 +2852,8 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 
     /* Check requested MIME type:
        1st entry in gparams->mime_types array MUST be default MIME type */
-    r = get_accept_type(txn->req_hdrs, gparams->mime_types, &mime);
-    if (r) return r;
+    mime = get_accept_type(txn->req_hdrs, gparams->mime_types);
+    if (!mime) return HTTP_NOT_ACCEPTABLE;
 
     /* Locate the mailbox */
     if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
