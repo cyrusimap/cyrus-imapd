@@ -940,12 +940,14 @@ static int dump_calendar(struct transaction_t *txn, struct meth_params *gparams)
     static const char *displayname_annot =
 	ANNOT_NS "<" XML_NS_DAV ">displayname";
     struct annotation_data attrib;
-    const char *sep;
+    const char **hdr, *sep;
     struct mime_type_t *mime;
 
     /* Check requested MIME type:
        1st entry in caldav_mime_types array MUST be default MIME type */
-    mime = get_accept_type(txn->req_hdrs, caldav_mime_types);
+    if ((hdr = spool_getheader(txn->req_hdrs, "Accept")))
+	mime = get_accept_type(hdr, caldav_mime_types);
+    else mime = caldav_mime_types;
     if (!mime) return HTTP_NOT_ACCEPTABLE;
 
     /* Open mailbox for reading */
@@ -1586,7 +1588,12 @@ static int caldav_put(struct transaction_t *txn,
 
     if (flags & PREFER_REP) {
 	struct resp_body_t *resp_body = &txn->resp_body;
+	const char **hdr;
 	char *data;
+
+	if ((hdr = spool_getheader(txn->req_hdrs, "Accept")))
+	    mime = get_accept_type(hdr, caldav_mime_types);
+	if (!mime) goto done;
 
 	switch (ret) {
 	case HTTP_NO_CONTENT:
@@ -2838,6 +2845,7 @@ static int report_fb_query(struct transaction_t *txn,
 			   xmlNodePtr inroot, struct propfind_ctx *fctx)
 {
     int ret = 0;
+    const char **hdr;
     struct mime_type_t *mime;
     struct calquery_filter calfilter;
     xmlNodePtr node;
@@ -2848,7 +2856,9 @@ static int report_fb_query(struct transaction_t *txn,
 
     /* Check requested MIME type:
        1st entry in caldav_mime_types array MUST be default MIME type */
-    mime = get_accept_type(txn->req_hdrs, caldav_mime_types);
+    if ((hdr = spool_getheader(txn->req_hdrs, "Accept")))
+	mime = get_accept_type(hdr, caldav_mime_types);
+    else mime = caldav_mime_types;
     if (!mime) return HTTP_NOT_ACCEPTABLE;
 
     memset(&calfilter, 0, sizeof(struct calquery_filter));
