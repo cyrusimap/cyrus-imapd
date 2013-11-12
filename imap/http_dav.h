@@ -479,7 +479,7 @@ int report_sync_col(struct transaction_t *txn, xmlNodePtr inroot,
 int parse_path(struct request_target_t *tgt, const char **errstr);
 int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
 unsigned get_preferences(struct transaction_t *txn);
-struct mime_type_t *get_accept_type(hdrcache_t hdrs, struct mime_type_t *types);
+struct mime_type_t *get_accept_type(const char **hdr, struct mime_type_t *types);
 
 int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root);
 

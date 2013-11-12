@@ -454,30 +454,24 @@ unsigned get_preferences(struct transaction_t *txn)
 }
 
 
-struct mime_type_t *get_accept_type(hdrcache_t hdrs, struct mime_type_t *types)
+/* Check requested MIME type */
+struct mime_type_t *get_accept_type(const char **hdr, struct mime_type_t *types)
 {
     struct mime_type_t *ret = NULL;
-    const char **hdr;
+    struct accept *e, *enc = parse_accept(hdr);
 
-    /* Check requested MIME type:
-       1st entry in types array MUST be default MIME type */
-    if ((hdr = spool_getheader(hdrs, "Accept"))) {
-	struct accept *e, *enc = parse_accept(hdr);
-
-	for (e = enc; e && e->token; e++) {
-	    if (!ret && e->qual > 0.0) {
-		struct mime_type_t *m;
+    for (e = enc; e && e->token; e++) {
+	if (!ret && e->qual > 0.0) {
+	    struct mime_type_t *m;
 				     
-		for (m = types; !ret && m->content_type; m++) {
-		    if (is_mediatype(e->token, m->content_type)) ret = m;
-		}
+	    for (m = types; !ret && m->content_type; m++) {
+		if (is_mediatype(e->token, m->content_type)) ret = m;
 	    }
-
-	    free(e->token);
 	}
-	if (enc) free(enc);
+
+	free(e->token);
     }
-    else ret = types;  /* use the default MIME type */
+    if (enc) free(enc);
 
     return ret;
 }
@@ -2831,6 +2825,7 @@ int meth_delete(struct transaction_t *txn, void *params)
 int meth_get_dav(struct transaction_t *txn, void *params)
 {
     struct meth_params *gparams = (struct meth_params *) params;
+    const char **hdr;
     struct mime_type_t *mime;
     int ret = 0, r, precond, rights;
     const char *msg_base = NULL, *data = NULL;
@@ -2852,7 +2847,9 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 
     /* Check requested MIME type:
        1st entry in gparams->mime_types array MUST be default MIME type */
-    mime = get_accept_type(txn->req_hdrs, gparams->mime_types);
+    if ((hdr = spool_getheader(txn->req_hdrs, "Accept")))
+	mime = get_accept_type(hdr, gparams->mime_types);
+    else mime = gparams->mime_types;
     if (!mime) return HTTP_NOT_ACCEPTABLE;
 
     /* Locate the mailbox */
