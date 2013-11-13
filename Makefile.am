@@ -588,7 +588,6 @@ include_HEADERS = \
 	lib/nonblock.h \
 	lib/parseaddr.h \
 	lib/retry.h \
-	lib/rfc822date.h \
 	lib/rfc822tok.h \
 	lib/signals.h \
 	lib/strarray.h \
