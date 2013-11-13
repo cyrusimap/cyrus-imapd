@@ -233,6 +233,7 @@ void buf_ensure(struct buf *buf, size_t morebytes);
 void buf_getmap(struct buf *buf, const char **base, size_t *len);
 int buf_getline(struct buf *buf, FILE *fp);
 size_t buf_len(const struct buf *buf);
+const char *buf_base(const struct buf *buf);
 void buf_reset(struct buf *buf);
 void buf_truncate(struct buf *buf, size_t len);
 void buf_setcstr(struct buf *buf, const char *str);
@@ -248,6 +249,7 @@ void buf_insert(struct buf *dst, unsigned int off, const struct buf *src);
 void buf_insertcstr(struct buf *buf, unsigned int off, const char *str);
 void buf_insertmap(struct buf *buf, unsigned int off, const char *base, int len);
 void buf_putc(struct buf *buf, char c);
+void buf_vprintf(struct buf *buf, const char *fmt, va_list args);
 void buf_printf(struct buf *buf, const char *fmt, ...)
 	        __attribute__((format(printf,2,3)));
 int buf_replace_all(struct buf *buf, const char *match,
