@@ -1218,7 +1218,7 @@ EXPORTED int prot_putbuf(struct protstream *s, struct buf *buf)
     return prot_write(s, buf->s, buf->len);
 }
 
-int prot_puts(struct protstream *s, const char *str)
+EXPORTED int prot_puts(struct protstream *s, const char *str)
 {
     return prot_write(s, str, strlen(str));
 }
@@ -1547,7 +1547,7 @@ EXPORTED int prot_read(struct protstream *s, char *buf, unsigned size)
  * Read from the protections stream 's' up to 'size' bytes, and append them
  * to the buffer 'buf'.  Returns the number of bytes read, or 0 for some error.
  */
-int prot_readbuf(struct protstream *s, struct buf *buf, unsigned size)
+EXPORTED int prot_readbuf(struct protstream *s, struct buf *buf, unsigned size)
 {
     buf_ensure(buf, size);
     size = prot_read(s, buf->s + buf->len, size);
