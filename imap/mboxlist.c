@@ -304,7 +304,7 @@ static int _parse_mbtype(const char *mbtype)
  *  V: uid_v_alidity
  */
 static int mboxlist_parse_entry(mbentry_t **mbentryptr,
-				const char *name,
+				const char *name, size_t namelen,
 				const char *data, size_t datalen)
 {
     int r = IMAP_MAILBOX_BADFORMAT;
@@ -317,7 +317,10 @@ static int mboxlist_parse_entry(mbentry_t **mbentryptr,
 	goto done;
 
     /* copy name */
-    mbentry->name = xstrdup(name);
+    if (namelen)
+	mbentry->name = xstrndup(name, namelen);
+    else
+	mbentry->name = xstrdup(name);
 
     /* check for DLIST mboxlist */
     if (*data == '%') {
@@ -421,7 +424,7 @@ static int mboxlist_mylookup(const char *name,
     r = mboxlist_read(name, &data, &datalen, tid, wrlock);
     if (r) return r;
 
-    return mboxlist_parse_entry(mbentryptr, name, data, datalen);
+    return mboxlist_parse_entry(mbentryptr, name, 0, data, datalen);
 }
 
 /*
@@ -2076,7 +2079,7 @@ static int find_p(void *rockp,
 	return 1;
 
     /* ignore entirely deleted records */
-    if (mboxlist_parse_entry(&mbentry, "", data, datalen))
+    if (mboxlist_parse_entry(&mbentry, key, keylen, data, datalen))
 	return 0;
 
     if (mbentry->mbtype & MBTYPE_DELETED) {
@@ -2218,13 +2221,10 @@ static int skipdel_cb(void *rock __attribute__((unused)),
 		      size_t datalen)
 {
     mbentry_t *mbentry = NULL;
-    char *name = xstrndup(key, keylen);
     int r;
     int res = 1;
 
-    r = mboxlist_parse_entry(&mbentry, name, data, datalen);
-    free(name);
-
+    r = mboxlist_parse_entry(&mbentry, key, keylen, data, datalen);
     if (r) return 0;
 
     if (mbentry->mbtype & MBTYPE_DELETED)
