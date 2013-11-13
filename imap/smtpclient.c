@@ -55,7 +55,7 @@
 #include "imap/imap_err.h"
 #include "smtpclient.h"
 
-pid_t open_sendmail(const char *argv[], FILE **sm)
+EXPORTED pid_t open_sendmail(const char *argv[], FILE **sm)
 {
     int fds[2];
     FILE *ret;
@@ -95,7 +95,7 @@ pid_t open_sendmail(const char *argv[], FILE **sm)
    the exit code from wait() from sendmail.
 
    not thread safe, but probably ok */
-char *sendmail_errstr(int sm_stat)
+EXPORTED char *sendmail_errstr(int sm_stat)
 {
     static char errstr[200];
 
