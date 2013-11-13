@@ -58,7 +58,7 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 
-void proxy_adddest(struct dest **dlist, const char *rcpt, int rcpt_num,
+EXPORTED void proxy_adddest(struct dest **dlist, const char *rcpt, int rcpt_num,
 		   const char *server, const char *authas)
 {
     struct dest *d;
@@ -94,7 +94,7 @@ void proxy_adddest(struct dest **dlist, const char *rcpt, int rcpt_num,
     }
 }
 
-void proxy_downserver(struct backend *s)
+EXPORTED void proxy_downserver(struct backend *s)
 {
     if (!s || (s->sock == -1)) {
 	/* already disconnected */
@@ -137,8 +137,7 @@ backend_timeout(struct protstream *s __attribute__((unused)),
 }
 
 /* return the connection to the server */
-struct backend *
-proxy_findserver(const char *server,		/* hostname of backend */
+EXPORTED struct backend * proxy_findserver(const char *server,		/* hostname of backend */
 		 struct protocol_t *prot,	/* protocol we're speaking */
 		 const char *userid,		/* proxy as userid (ext form)*/
 		 struct backend ***cache,	/* ptr to backend cache */
@@ -209,7 +208,7 @@ proxy_findserver(const char *server,		/* hostname of backend */
  * If serverout is NULL:
  *   - returns 1 if input from clientin is pending, otherwise returns 0.
  */
-int proxy_check_input(struct protgroup *protin,
+EXPORTED int proxy_check_input(struct protgroup *protin,
 		      struct protstream *clientin,
 		      struct protstream *clientout,
 		      struct protstream *serverin,
