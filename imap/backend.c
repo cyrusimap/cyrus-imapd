@@ -67,11 +67,13 @@
 #include "backend.h"
 #include "exitcodes.h"
 #include "global.h"
+#include "iptostring.h"
+#include "nonblock.h"
+#include "tok.h"
+#include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
-#include "iptostring.h"
-#include "util.h"
 
 enum {
     AUTO_CAPA_BANNER = -1,
@@ -110,6 +112,8 @@ static void save_capability(struct backend *s,
 {
     int i;
 
+    if (s->prot->type != TYPE_STD) return;
+
     s->capability |= c->flag;
 
     if (param) {
@@ -144,7 +148,9 @@ static int match_capability(struct backend *s,
     const struct capa_t *c;
     const char *cend;
 
-    for (c = s->prot->capa_cmd.capa; c->str; c++) {
+    if (s->prot->type != TYPE_STD) return 0;
+
+    for (c = s->prot->u.std.capa_cmd.capa; c->str; c++) {
 	cend = strchr(c->str, '=');
 
 	if (cend) {
@@ -270,23 +276,25 @@ static int parse_capability(struct backend *s, const char *str)
     char *(*tok)(char *) = ws_tok;
     static const char code[] = "CAPABILITY";
 
+    if (s->prot->type != TYPE_STD) return 0;
+
     /* save the buffer, we're going to be destructively parsing it */
     buf = xstrdup(str);
 
-    if ((s->prot->capa_cmd.formatflags & CAPAF_ONE_PER_LINE)) {
+    if ((s->prot->u.std.capa_cmd.formatflags & CAPAF_ONE_PER_LINE)) {
 	/*
 	 * POP3, LMTP and sync protocol style: one capability per line.
 	 */
-	if ((s->prot->capa_cmd.formatflags & CAPAF_QUOTE_WORDS))
+	if ((s->prot->u.std.capa_cmd.formatflags & CAPAF_QUOTE_WORDS))
 	    tok = quote_tok;
 
-	if ((s->prot->capa_cmd.formatflags & CAPAF_DASH_STUFFING))
+	if ((s->prot->u.std.capa_cmd.formatflags & CAPAF_DASH_STUFFING))
 	    word = dash_tok(buf);
 	else
 	    word = tok(buf);
 
 	/* Ignore the first word of the line.  Used for LMTP and POP3 */
-	if (word && (s->prot->capa_cmd.formatflags & CAPAF_SKIP_FIRST_WORD))
+	if (word && (s->prot->u.std.capa_cmd.formatflags & CAPAF_SKIP_FIRST_WORD))
 	    word = tok(NULL);
 
 	if (!word)
@@ -349,8 +357,10 @@ out:
 
 static void post_parse_capability(struct backend *s)
 {
-    if (s->prot->capa_cmd.postcapability)
-	s->prot->capa_cmd.postcapability(s);
+    if (s->prot->type != TYPE_STD) return;
+
+    if (s->prot->u.std.capa_cmd.postcapability)
+	s->prot->u.std.capa_cmd.postcapability(s);
 }
 
 /*
@@ -375,16 +385,19 @@ static int ask_capability(struct backend *s, int dobanner, int automatic)
     char str[4096];
     const char *resp;
 
+    if (prot->type != TYPE_STD) return 0;
+
     resp = (automatic == AUTO_CAPA_BANNER) ?
-	prot->banner.resp : prot->capa_cmd.resp;
+	prot->u.std.banner.resp : prot->u.std.capa_cmd.resp;
 
     if (!automatic) {
 	/* no capability command */
-	if (!prot->capa_cmd.cmd) return -1;
-	
+	if (!prot->u.std.capa_cmd.cmd) return -1;
+
 	/* request capabilities of server */
-	prot_printf(pout, "%s", prot->capa_cmd.cmd);
-	if (prot->capa_cmd.arg) prot_printf(pout, " %s", prot->capa_cmd.arg);
+	prot_printf(pout, "%s", prot->u.std.capa_cmd.cmd);
+	if (prot->u.std.capa_cmd.arg)
+	    prot_printf(pout, " %s", prot->u.std.capa_cmd.arg);
 	prot_printf(pout, "\r\n");
 	prot_flush(pout);
     }
@@ -405,7 +418,7 @@ static int ask_capability(struct backend *s, int dobanner, int automatic)
 
 	/* look for the end of the capabilities */
     } while (!resp || strncasecmp(str, resp, strlen(resp)));
-    
+
     prot_BLOCK(pin);
     post_parse_capability(s);
     return matches;
@@ -459,52 +472,54 @@ static int do_compress(struct backend *s, struct simple_cmd_t *compress_cmd)
 #endif /* HAVE_ZLIB */
 }
 
-static int do_starttls(struct backend *s)
+EXPORTED int backend_starttls(struct backend *s, struct tls_cmd_t *tls_cmd)
 {
 #ifndef HAVE_SSL
     return -1;
 #else
-    const struct tls_cmd_t *tls_cmd = &s->prot->tls_cmd;
-    char buf[2048];
-    int r;
-    int *layerp;
-    char *auth_id;
-    sasl_ssf_t ssf;
+    char *auth_id = NULL;
+    int *layerp = NULL;
+    int r = 0;
 
-    /* send starttls command */
-    prot_printf(s->out, "%s\r\n", tls_cmd->cmd);
-    prot_flush(s->out);
+    if (tls_cmd) {
+	char buf[2048];
+	/* send starttls command */
+	prot_printf(s->out, "%s\r\n", tls_cmd->cmd);
+	prot_flush(s->out);
 
-    /* check response */
-    if (!prot_fgets(buf, sizeof(buf), s->in) ||
-	strncmp(buf, tls_cmd->ok, strlen(tls_cmd->ok)))
-	return -1;
+	/* check response */
+	if (!prot_fgets(buf, sizeof(buf), s->in) ||
+	    strncmp(buf, tls_cmd->ok, strlen(tls_cmd->ok)))
+	    return -1;
+    }
 
     r = tls_init_clientengine(5, "", "");
     if (r == -1) return -1;
 
     /* SASL and openssl have different ideas about whether ssf is signed */
-    layerp = (int *) &ssf;
+    layerp = (int *) &s->ext_ssf;
     r = tls_start_clienttls(s->in->fd, s->out->fd, layerp, &auth_id,
 			    &s->tlsconn, &s->tlssess);
     if (r == -1) return -1;
 
-    r = sasl_setprop(s->saslconn, SASL_SSF_EXTERNAL, &ssf);
-    if (r == SASL_OK)
-	r = sasl_setprop(s->saslconn, SASL_AUTH_EXTERNAL, auth_id);
-    if (auth_id) free(auth_id);
-    if (r != SASL_OK) return -1;
+    if (s->saslconn) {
+	r = sasl_setprop(s->saslconn, SASL_SSF_EXTERNAL, &s->ext_ssf);
+	if (r == SASL_OK)
+	    r = sasl_setprop(s->saslconn, SASL_AUTH_EXTERNAL, auth_id);
+	if (auth_id) free(auth_id);
+	if (r != SASL_OK) return -1;
+    }
 
     prot_settls(s->in,  s->tlsconn);
     prot_settls(s->out, s->tlsconn);
 
-    ask_capability(s, /*dobanner*/1, s->prot->tls_cmd.auto_capa);
+    ask_capability(s, /*dobanner*/1, tls_cmd->auto_capa);
 
     return 0;
 #endif /* HAVE_SSL */
 }
 
-static char *intersect_mechlists( char *config, char *server )
+EXPORTED char *intersect_mechlists( char *config, char *server )
 {
     char *newmechlist = xzmalloc( strlen( config ) + 1 );
     char *cmech = NULL, *smech = NULL, *s;
@@ -574,48 +589,47 @@ static int backend_authenticate(struct backend *s, const char *userid,
     struct sockaddr_storage saddr_l, saddr_r;
     char remoteip[60], localip[60];
     socklen_t addrsize;
-    int local_cb = 0;
     char buf[2048], optstr[128], *p;
     const char *mech_conf, *pass;
 
+    if (prot->type != TYPE_STD) return SASL_FAIL;
+
     /* set the IP addresses */
-    addrsize=sizeof(struct sockaddr_storage);
+    addrsize = sizeof(struct sockaddr_storage);
     if (getpeername(s->sock, (struct sockaddr *)&saddr_r, &addrsize) != 0)
 	return SASL_FAIL;
-    if(iptostring((struct sockaddr *)&saddr_r, addrsize, remoteip, 60) != 0)
+    if (iptostring((struct sockaddr *)&saddr_r, addrsize, remoteip, 60) != 0)
 	return SASL_FAIL;
-  
-    addrsize=sizeof(struct sockaddr_storage);
+
+    addrsize = sizeof(struct sockaddr_storage);
     if (getsockname(s->sock, (struct sockaddr *)&saddr_l, &addrsize)!=0)
 	return SASL_FAIL;
-    if(iptostring((struct sockaddr *)&saddr_l, addrsize, localip, 60) != 0)
+    if (iptostring((struct sockaddr *)&saddr_l, addrsize, localip, 60) != 0)
 	return SASL_FAIL;
 
     if (!cb) {
-	local_cb = 1;
 	strlcpy(optstr, s->hostname, sizeof(optstr));
 	p = strchr(optstr, '.');
 	if (p) *p = '\0';
 	strlcat(optstr, "_password", sizeof(optstr));
 	pass = config_getoverflowstring(optstr, NULL);
 	if(!pass) pass = config_getstring(IMAPOPT_PROXY_PASSWORD);
-	cb = mysasl_callbacks(userid, 
+	cb = mysasl_callbacks(userid,
 			      config_getstring(IMAPOPT_PROXY_AUTHNAME),
 			      config_getstring(IMAPOPT_PROXY_REALM),
 			      pass);
+	s->sasl_cb = cb;
     }
 
     /* Require proxying if we have an "interesting" userid (authzid) */
     r = sasl_client_new(prot->sasl_service, s->hostname, localip, remoteip, cb,
 			(userid  && *userid ? SASL_NEED_PROXY : 0) |
-			(prot->sasl_cmd.parse_success ? SASL_SUCCESS_DATA : 0),
+			(prot->u.std.sasl_cmd.parse_success ? SASL_SUCCESS_DATA : 0),
 			&s->saslconn);
-    if (r != SASL_OK)
-	goto out;
+    if (r != SASL_OK) return r;
 
     r = sasl_setprop(s->saslconn, SASL_SEC_PROPS, &secprops);
-    if (r != SASL_OK)
-	goto out;
+    if (r != SASL_OK) return r;
 
     /* Get SASL mechanism list.  We can force a particular
        mechanism using a <shorthost>_mechs option */
@@ -625,9 +639,8 @@ static int backend_authenticate(struct backend *s, const char *userid,
     strcat(buf, "_mechs");
     mech_conf = config_getoverflowstring(buf, NULL);
 
-    if (!mech_conf) {
+    if (!mech_conf)
 	mech_conf = config_getstring(IMAPOPT_FORCE_SASL_CLIENT_MECH);
-    }
 
     mechlist = backend_get_cap_params(s, CAPA_AUTH);
 
@@ -649,7 +662,7 @@ static int backend_authenticate(struct backend *s, const char *userid,
 
 	if (mechlist) {
 	    /* we now do the actual SASL exchange */
-	    saslclient(s->saslconn, &prot->sasl_cmd, mechlist,
+	    saslclient(s->saslconn, &prot->u.std.sasl_cmd, mechlist,
 		       s->in, s->out, &r, status);
 
 	    /* garbage collect */
@@ -659,9 +672,8 @@ static int backend_authenticate(struct backend *s, const char *userid,
 	else r = SASL_NOMECH;
 
 	/* If we don't have a usable mech, do TLS and try again */
-    } while (r == SASL_NOMECH &&
-	     CAPA(s, CAPA_STARTTLS) &&
-	     do_starttls(s) != -1 &&
+    } while (r == SASL_NOMECH && CAPA(s, CAPA_STARTTLS) &&
+	     backend_starttls(s, &prot->u.std.tls_cmd) != -1 &&
 	     (mechlist = backend_get_cap_params(s, CAPA_AUTH)));
 
     if (r == SASL_OK) {
@@ -671,134 +683,21 @@ static int backend_authenticate(struct backend *s, const char *userid,
 
     if (mechlist) free(mechlist);
 
-out:
-    /* r == SASL_OK on success */
-    if (local_cb) free_callbacks(cb);
-    return r;
+    return SASL_OK;
 }
 
-static volatile sig_atomic_t timedout = 0;
-
-static void timed_out(int sig) 
+static int backend_login(struct backend *ret, const char *userid,
+			 sasl_callback_t *cb, const char **auth_status,
+			 int noauth)
 {
-    if (sig == SIGALRM) {
-	timedout = 1;
-    } else {
-	fatal("Bad signal in timed_out", EC_SOFTWARE);
-    }
-}
-
-EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char *server,
-				struct protocol_t *prot, const char *userid,
-				sasl_callback_t *cb, const char **auth_status,
-				int logfd)
-{
-    /* need to (re)establish connection to server or create one */
-    int sock = -1;
-    int r;
-    int err = -1;
+    int r = 0;
     int ask = 1; /* should we explicitly ask for capabilities? */
-    struct addrinfo hints, *res0 = NULL, *res;
-    struct sockaddr_un sunsock;
     char buf[2048];
-    struct sigaction action;
-    struct backend *ret;
-    char rsessionid[MAX_SESSIONID_SIZE];
+    struct protocol_t *prot = ret->prot;
 
-    if (!ret_backend) {
-	ret = xzmalloc(sizeof(struct backend));
-	strlcpy(ret->hostname, server, sizeof(ret->hostname));
-	ret->timeout = NULL;
-    }
-    else
-	ret = ret_backend;
+    if (prot->type != TYPE_STD) return -1;
 
-    if (server[0] == '/') { /* unix socket */
-	res0 = &hints;
-	memset(res0, 0, sizeof(struct addrinfo));
-	res0->ai_family = PF_UNIX;
-	res0->ai_socktype = SOCK_STREAM;
-
- 	res0->ai_addr = (struct sockaddr *) &sunsock;
- 	res0->ai_addrlen = sizeof(sunsock.sun_family) + strlen(server) + 1;
-#ifdef SIN6_LEN
- 	res0->ai_addrlen += sizeof(sunsock.sun_len);
- 	sunsock.sun_len = res0->ai_addrlen;
-#endif
-	sunsock.sun_family = AF_UNIX;
-	strlcpy(sunsock.sun_path, server, sizeof(sunsock.sun_path));
-
-	/* XXX set that we are preauthed */
-
-	/* change hostname to 'config_servername' */
-	strlcpy(ret->hostname, config_servername, sizeof(ret->hostname));
-    }
-    else { /* inet socket */
-	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = PF_UNSPEC;
-	hints.ai_socktype = SOCK_STREAM;
-	err = getaddrinfo(server, prot->service, &hints, &res0);
-	if (err) {
-	    syslog(LOG_ERR, "getaddrinfo(%s) failed: %s",
-		   server, gai_strerror(err));
-	    goto error;
-	}
-    }
-
-    /* Setup timeout */
-    timedout = 0;
-    action.sa_flags = 0;
-    action.sa_handler = timed_out;
-    sigemptyset(&action.sa_mask);
-    if(sigaction(SIGALRM, &action, NULL) < 0) 
-    {
-	syslog(LOG_ERR, "Setting timeout in backend_connect failed: sigaction: %m");
-	/* continue anyway */
-    }
-    
-    for (res = res0; res; res = res->ai_next) {
-	sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-	if (sock < 0)
-	    continue;
-	alarm(config_getint(IMAPOPT_CLIENT_TIMEOUT));
-	if (connect(sock, res->ai_addr, res->ai_addrlen) >= 0)
-	    break;
-	if(errno == EINTR && timedout == 1)
-	    errno = ETIMEDOUT;
-	close(sock);
-	sock = -1;
-    }
-
-    /* Remove timeout code */
-    alarm(0);
-    signal(SIGALRM, SIG_IGN);
-    
-    if (sock < 0) {
-	if (res0 != &hints)
-	    freeaddrinfo(res0);
-	syslog(LOG_ERR, "connect(%s) failed: %m", server);
-	goto error;
-    }
-    memcpy(&ret->addr, res->ai_addr, res->ai_addrlen);
-    if (res0 != &hints)
-	freeaddrinfo(res0);
-
-    ret->in = prot_new(sock, 0);
-    ret->out = prot_new(sock, 1);
-    ret->sock = sock;
-    prot_setflushonread(ret->in, ret->out);
-    ret->prot = prot;
-
-    /* use literal+ to send literals */
-    prot_setisclient(ret->in, 1);
-    prot_setisclient(ret->out, 1);
-
-    if (logfd >= 0) {
-	prot_setlog(ret->in, logfd);
-	prot_setlog(ret->out, logfd);
-    }
-
-    if (prot->banner.auto_capa) {
+    if (prot->u.std.banner.auto_capa) {
 	/* try to get the capabilities from the banner */
 	r = ask_capability(ret, /*dobanner*/1, AUTO_CAPA_BANNER);
 	if (r) {
@@ -810,12 +709,12 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
 	do { /* read the initial greeting */
 	    if (!prot_fgets(buf, sizeof(buf), ret->in)) {
 		syslog(LOG_ERR,
-		       "backend_connect(): couldn't read initial greeting: %s",
+		       "backend_login(): couldn't read initial greeting: %s",
 		       ret->in->error ? ret->in->error : "(null)");
-		goto error;
+		return -1;
 	    }
-	} while (strncasecmp(buf, prot->banner.resp,
-			     strlen(prot->banner.resp)));
+	} while (strncasecmp(buf, prot->u.std.banner.resp,
+			     strlen(prot->u.std.banner.resp)));
 	xstrncpy(ret->banner, buf, 2048);
     }
 
@@ -826,9 +725,7 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
 
     /* now need to authenticate to backend server,
        unless we're doing LMTP/CSYNC on a UNIX socket (deliver/sync_client) */
-    if ((server[0] != '/') ||
-	(strcmp(prot->sasl_service, "lmtp") &&
-	 strcmp(prot->sasl_service, "csync"))) {
+    if (!noauth) {
 	char *old_mechlist = backend_get_cap_params(ret, CAPA_AUTH);
 	const char *my_status;
 
@@ -836,7 +733,7 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
 	    syslog(LOG_ERR, "couldn't authenticate to backend server: %s",
 		   sasl_errstring(r, NULL, NULL));
 	    free(old_mechlist);
-	    goto error;
+	    return -1;
 	}
 	else {
 	    const void *ssf;
@@ -846,7 +743,7 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
 		/* if we have a SASL security layer, compare SASL mech lists
 		   before/after AUTH to check for a MITM attack */
 		char *new_mechlist;
-		int auto_capa = (prot->sasl_cmd.auto_capa == AUTO_CAPA_AUTH_SSF);
+		int auto_capa = (prot->u.std.sasl_cmd.auto_capa == AUTO_CAPA_AUTH_SSF);
 
 		if (!strcmp(prot->service, "sieve")) {
 		    /* XXX  Hack to handle ManageSieve servers.
@@ -876,11 +773,11 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
 			   "list of available SASL mechanisms changed");
 		    free(new_mechlist);
 		    free(old_mechlist);
-		    goto error;
+		    return -1;
 		}
 		free(new_mechlist);
 	    }
-	    else if (prot->sasl_cmd.auto_capa == AUTO_CAPA_AUTH_OK) {
+	    else if (prot->u.std.sasl_cmd.auto_capa == AUTO_CAPA_AUTH_OK) {
 		/* try to get the capabilities from the AUTH success response */
 		forget_capabilities(ret);
 		parse_capability(ret, my_status);
@@ -889,6 +786,7 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
 
 	    if (!(strcmp(prot->service, "imap") &&
 		 (strcmp(prot->service, "pop3")))) {
+		char rsessionid[MAX_SESSIONID_SIZE];
 		parse_sessionid(my_status, rsessionid);
 		syslog(LOG_NOTICE, "proxy %s sessionid=<%s> remote=<%s>", userid, session_id(), rsessionid);
 	    }
@@ -899,13 +797,189 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
     }
 
     /* start compression if requested and both client/server support it */
-    if (config_getswitch(IMAPOPT_PROXY_COMPRESS) && ret &&
+    if (config_getswitch(IMAPOPT_PROXY_COMPRESS) &&
 	CAPA(ret, CAPA_COMPRESS) &&
-	prot->compress_cmd.cmd &&
-	do_compress(ret, &prot->compress_cmd)) {
+	prot->u.std.compress_cmd.cmd) {
+	r = do_compress(ret, &prot->u.std.compress_cmd);
+	if (r) {
+	    syslog(LOG_NOTICE, "couldn't enable compression on backend server: %s", error_message(r));
+	    r = 0; /* not a fail-level error */
+	}
+    }
 
-	syslog(LOG_ERR, "couldn't enable compression on backend server");
+    return 0;
+}
+
+
+EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char *server,
+				struct protocol_t *prot, const char *userid,
+				sasl_callback_t *cb, const char **auth_status,
+				int logfd)
+
+{
+    /* need to (re)establish connection to server or create one */
+    int sock = -1;
+    int r;
+    int err = -1;
+    int do_tls = 0;
+    int noauth = 0;
+    struct addrinfo hints, *res0 = NULL, *res;
+    struct sockaddr_un sunsock;
+    struct backend *ret;
+
+    if (!ret_backend) {
+	ret = xzmalloc(sizeof(struct backend));
+	strlcpy(ret->hostname, server, sizeof(ret->hostname));
+	ret->timeout = NULL;
+    }
+    else
+	ret = ret_backend;
+
+    if (server[0] == '/') { /* unix socket */
+	res0 = &hints;
+	memset(res0, 0, sizeof(struct addrinfo));
+	res0->ai_family = PF_UNIX;
+	res0->ai_socktype = SOCK_STREAM;
+
+	res0->ai_addr = (struct sockaddr *) &sunsock;
+	res0->ai_addrlen = sizeof(sunsock.sun_family) + strlen(server) + 1;
+#ifdef SIN6_LEN
+	res0->ai_addrlen += sizeof(sunsock.sun_len);
+	sunsock.sun_len = res0->ai_addrlen;
+#endif
+	sunsock.sun_family = AF_UNIX;
+	strlcpy(sunsock.sun_path, server, sizeof(sunsock.sun_path));
+
+	if (!strcmp(prot->sasl_service, "lmtp") ||
+	    !strcmp(prot->sasl_service, "csync")) {
+	    noauth = 1;
+	}
+    }
+    else { /* inet socket */
+	char host[1024], *p;
+	const char *service = prot->service;
+
+	/* Parse server string for possible port and options */
+	strlcpy(host, server, sizeof(host));
+	if ((p = strchr(host, ':'))) {
+	    *p++ = '\0';
+	    service = p;
+
+	    if ((p = strchr(service, '/'))) {
+		tok_t tok;
+		char *opt;
+
+		*p++ = '\0';
+		tok_initm(&tok, p, "/", 0);
+		while ((opt = tok_next(&tok))) {
+		    if (!strcmp(opt, "tls")) do_tls = 1;
+		    else if (!strcmp(opt, "noauth")) noauth = 1;
+		}
+		tok_fini(&tok);
+	    }
+	}
+
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = PF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
+	err = getaddrinfo(host, service, &hints, &res0);
+	if (err) {
+	    syslog(LOG_ERR, "getaddrinfo(%s) failed: %s",
+		   server, gai_strerror(err));
+	    goto error;
+	}
+    }
+
+    for (res = res0; res; res = res->ai_next) {
+	sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+	if (sock < 0)
+	    continue;
+
+	/* Do a non-blocking connect() */
+	nonblock(sock, 1);
+	if (!connect(sock, res->ai_addr, res->ai_addrlen)) {
+	    /* connect() succeeded immediately */
+	    break;
+	}
+	else if (errno == EINPROGRESS) {
+	    /* connect() in progress */
+	    int n;
+	    fd_set wfds, rfds;
+	    time_t now = time(NULL);
+	    time_t timeout = now + config_getint(IMAPOPT_CLIENT_TIMEOUT);
+	    struct timeval waitfor;
+
+	    /* select() socket for writing until we succeed, fail, or timeout */
+	    do {
+		FD_ZERO(&wfds);
+		FD_SET(sock, &wfds);
+		rfds = wfds;
+		waitfor.tv_sec = timeout - now;
+		waitfor.tv_usec = 0;
+
+		n = select(sock + 1, &rfds, &wfds, NULL, &waitfor);
+		now = time(NULL);
+
+		/* Retry select() if interrupted */
+	    } while (n < 0 && errno == EINTR && now < timeout);
+
+	    if (!n) {
+		/* select() timed out */
+		errno = ETIMEDOUT;
+	    }
+	    else if (FD_ISSET(sock, &rfds) || FD_ISSET(sock, &wfds)) {
+		/* Socket is ready for I/O - get SO_ERROR to determine status */
+		socklen_t errlen = sizeof(err);
+
+		if (!getsockopt(sock, SOL_SOCKET, SO_ERROR, &err, &errlen) &&
+		    !(errno = err)) {
+		    /* connect() succeeded */
+		    break;
+		}
+	    }
+	}
+
+	close(sock);
+	sock = -1;
+    }
+
+    if (sock < 0) {
+	if (res0 != &hints) freeaddrinfo(res0);
+	syslog(LOG_ERR, "connect(%s) failed: %m", server);
 	goto error;
+    }
+
+    /* Reset socket to blocking */
+    nonblock(sock, 0);
+
+    memcpy(&ret->addr, res->ai_addr, res->ai_addrlen);
+    if (res0 != &hints)
+	freeaddrinfo(res0);
+
+    ret->in = prot_new(sock, 0);
+    ret->out = prot_new(sock, 1);
+    ret->sock = sock;
+    prot_setflushonread(ret->in, ret->out);
+    ret->prot = prot;
+
+    /* use literal+ to send literals */
+    prot_setisclient(ret->in, 1);
+    prot_setisclient(ret->out, 1);
+
+    /* Start TLS if required */
+    if (do_tls) r = backend_starttls(ret, NULL);
+
+    /* Login to the server */
+    if (prot->type == TYPE_SPEC)
+	r = prot->u.spec.login(ret, userid, cb, auth_status, noauth);
+    else
+	r = backend_login(ret, userid, cb, auth_status, noauth);
+
+    if (r) goto error;
+
+    if (logfd >= 0) {
+	prot_setlog(ret->in, logfd);
+	prot_setlog(ret->out, logfd);
     }
 
     return ret;
@@ -931,56 +1005,66 @@ error:
     return NULL;
 }
 
-EXPORTED int backend_ping(struct backend *s)
+EXPORTED int backend_ping(struct backend *s, const char *userid)
 {
     char buf[1024];
+    struct simple_cmd_t *ping_cmd;
 
-    if (!s || !s->prot->ping_cmd.cmd) return 0;
+    if (!s) return 0;
     if (s->sock == -1) return -1; /* Disconnected Socket */
-    
-    prot_printf(s->out, "%s\r\n", s->prot->ping_cmd.cmd);
+
+    if (s->prot->type == TYPE_SPEC) return s->prot->u.spec.ping(s, userid);
+
+    ping_cmd = &s->prot->u.std.ping_cmd;
+    if (!ping_cmd->cmd) return 0;
+
+    prot_printf(s->out, "%s\r\n", ping_cmd->cmd);
     prot_flush(s->out);
 
     for (;;) {
 	if (!prot_fgets(buf, sizeof(buf), s->in)) {
 	    /* connection closed? */
 	    return -1;
-	} else if (s->prot->ping_cmd.unsol &&
-		   !strncmp(s->prot->ping_cmd.unsol, buf,
-			    strlen(s->prot->ping_cmd.unsol))) {
+	} else if (ping_cmd->unsol &&
+		   !strncmp(ping_cmd->unsol, buf,
+			    strlen(ping_cmd->unsol))) {
 	    /* unsolicited response */
 	    continue;
 	} else {
 	    /* success/fail response */
-	    return strncmp(s->prot->ping_cmd.ok, buf,
-			   strlen(s->prot->ping_cmd.ok));
+	    return strncmp(ping_cmd->ok, buf, strlen(ping_cmd->ok));
 	}
     }
 }
 
 EXPORTED void backend_disconnect(struct backend *s)
 {
-    char buf[1024];
-
     if (!s || s->sock == -1) return;
-    
-    if (!prot_error(s->in)) {
-	if (s->prot->logout_cmd.cmd) {
-	    prot_printf(s->out, "%s\r\n", s->prot->logout_cmd.cmd);
-	    prot_flush(s->out);
 
-	    for (;;) {
-		if (!prot_fgets(buf, sizeof(buf), s->in)) {
-		    /* connection closed? */
-		    break;
-		} else if (s->prot->logout_cmd.unsol &&
-			   !strncmp(s->prot->logout_cmd.unsol, buf,
-				    strlen(s->prot->logout_cmd.unsol))) {
-		    /* unsolicited response */
-		    continue;
-		} else {
-		    /* success/fail response -- don't care either way */
-		    break;
+    if (!prot_error(s->in)) {
+       if (s->prot->type == TYPE_SPEC) s->prot->u.spec.logout(s);
+       else {
+	   struct simple_cmd_t *logout_cmd = &s->prot->u.std.logout_cmd;
+
+	   if (logout_cmd->cmd) {
+		prot_printf(s->out, "%s\r\n", logout_cmd->cmd);
+		prot_flush(s->out);
+
+		for (;;) {
+		    char buf[1024];
+
+		    if (!prot_fgets(buf, sizeof(buf), s->in)) {
+			/* connection closed? */
+			break;
+		    } else if (logout_cmd->unsol &&
+			       !strncmp(logout_cmd->unsol, buf,
+					strlen(logout_cmd->unsol))) {
+			/* unsolicited response */
+			continue;
+		    } else {
+			/* success/fail response -- don't care either way */
+			break;
+		    }
 		}
 	    }
 	}
@@ -1001,16 +1085,24 @@ EXPORTED void backend_disconnect(struct backend *s)
     /* close/free socket & prot layer */
     cyrus_close_sock(s->sock);
     s->sock = -1;
-    
+
     prot_free(s->in);
     prot_free(s->out);
     s->in = s->out = NULL;
 
     /* Free saslconn */
-    if(s->saslconn) {
+    if (s->saslconn) {
 	sasl_dispose(&(s->saslconn));
 	s->saslconn = NULL;
     }
+
+    /* Free any SASL callbacks */
+    if (s->sasl_cb) {
+	free_callbacks(s->sasl_cb);
+	s->sasl_cb = NULL;
+    }
+
+
 
     /* free last_result buffer */
     buf_free(&s->last_result);

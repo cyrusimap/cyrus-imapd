@@ -83,49 +83,52 @@ static struct protocol_t test_prot =
 {
     /* .service is setup in default_conditions() */
     .sasl_service = SASLSERVICE,
-    .banner = {
-	.auto_capa = 1,
-	.resp = "OK"
-    },
-    .capa_cmd = {
-	.cmd = "XXCAPABILITY",
-	.arg = NULL,
-	.resp = "OK",
-	.postcapability = NULL,
-	.formatflags = CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD,
-	/* .capa is setup in default_conditions() */
-    },
-    .tls_cmd = {
-	.cmd = "XXSTARTTLS",
-	.ok = "OK",
-	.fail = "NO",
-	.auto_capa = 0
-    },
-    .sasl_cmd = {
-	.cmd = "XXAUTHENTICATE",
-	.maxlen = USHRT_MAX,
-	.quote = 0,
-	.ok = "OK",
-	.fail = "NO",
-	.cont = "+ ",
-	.cancel = "*",
-	.parse_success = NULL,
-	.auto_capa = 0
-    },
-    .compress_cmd = {
-	.cmd = NULL,
-	.unsol = NULL,
-	.ok = NULL
-    },
-    .ping_cmd = {
-	.cmd = "XXNOOP",
-	.unsol = NULL,
-	.ok = "OK"
-    },
-    .logout_cmd = {
-	.cmd = "XXLOGOUT",
-	.unsol = NULL,
-	.ok = "OK"
+    .type = TYPE_STD,
+    .u.std = {
+	.banner = {
+	    .auto_capa = 1,
+	    .resp = "OK"
+	},
+	.capa_cmd = {
+	    .cmd = "XXCAPABILITY",
+	    .arg = NULL,
+	    .resp = "OK",
+	    .postcapability = NULL,
+	    .formatflags = CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD,
+	    /* .capa is setup in default_conditions() */
+	},
+	.tls_cmd = {
+	    .cmd = "XXSTARTTLS",
+	    .ok = "OK",
+	    .fail = "NO",
+	    .auto_capa = 0
+	},
+	.sasl_cmd = {
+	    .cmd = "XXAUTHENTICATE",
+	    .maxlen = USHRT_MAX,
+	    .quote = 0,
+	    .ok = "OK",
+	    .fail = "NO",
+	    .cont = "+ ",
+	    .cancel = "*",
+	    .parse_success = NULL,
+	    .auto_capa = 0
+	},
+	.compress_cmd = {
+	    .cmd = NULL,
+	    .unsol = NULL,
+	    .ok = NULL
+	},
+	.ping_cmd = {
+	    .cmd = "XXNOOP",
+	    .unsol = NULL,
+	    .ok = "OK"
+	},
+	.logout_cmd = {
+	    .cmd = "XXLOGOUT",
+	    .unsol = NULL,
+	    .ok = "OK"
+	}
     }
 };
 
@@ -138,8 +141,8 @@ static void default_conditions(void)
     server_state->config = default_server_config;
 
     test_prot.service = default_service;
-    memcpy(&test_prot.capa_cmd.capa, default_capa, sizeof(default_capa));
-    test_prot.capa_cmd.formatflags = CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD;
+    memcpy(&test_prot.u.std.capa_cmd.capa, default_capa, sizeof(default_capa));
+    test_prot.u.std.capa_cmd.formatflags = CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD;
 }
 
 /* ====================================================================== */
@@ -201,7 +204,7 @@ static void test_sasl_plain(void)
     CU_ASSERT_STRING_EQUAL(mechs, "PLAIN");
     free(mechs);
 
-    r = backend_ping(be);
+    r = backend_ping(be, NULL);
     CU_ASSERT_EQUAL(r, 0);
 
     backend_disconnect(be);
@@ -268,7 +271,7 @@ static void test_sasl_digestmd5(void)
     CU_ASSERT_STRING_EQUAL(mechs, "DIGEST-MD5");
     free(mechs);
 
-    r = backend_ping(be);
+    r = backend_ping(be, NULL);
     CU_ASSERT_EQUAL(r, 0);
 
     backend_disconnect(be);
@@ -303,8 +306,8 @@ static void caps_common(void)
     /* append some extra capabilities */
     n = sizeof(default_capa)/sizeof(default_capa[0]) - 1;
     CU_ASSERT_FATAL(n * sizeof(struct capa_t) +
-		    sizeof(extra_capa) <= sizeof(test_prot.capa_cmd.capa));
-    memcpy(&test_prot.capa_cmd.capa[n], extra_capa, sizeof(extra_capa));
+		    sizeof(extra_capa) <= sizeof(test_prot.u.std.capa_cmd.capa));
+    memcpy(&test_prot.u.std.capa_cmd.capa[n], extra_capa, sizeof(extra_capa));
 
     be = backend_connect(NULL, HOST, &test_prot,
 			 USERID, callbacks, &auth_status, /*fd*/-1);
@@ -350,7 +353,7 @@ static void caps_common(void)
     params = backend_get_cap_params(be, CAPA_MIA);
     CU_ASSERT_PTR_NULL(params);
 
-    r = backend_ping(be);
+    r = backend_ping(be, NULL);
     CU_ASSERT_EQUAL(r, 0);
 
     backend_disconnect(be);
@@ -370,7 +373,7 @@ static void test_multiline_caps(void)
 {
     default_conditions();
     server_state->config.caps_one_per_line = 1;
-    test_prot.capa_cmd.formatflags = CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD;
+    test_prot.u.std.capa_cmd.formatflags = CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD;
     caps_common();
 }
 
@@ -381,7 +384,7 @@ static void test_oneline_caps(void)
 {
     default_conditions();
     server_state->config.caps_one_per_line = 0;
-    test_prot.capa_cmd.formatflags = CAPAF_MANY_PER_LINE;
+    test_prot.u.std.capa_cmd.formatflags = CAPAF_MANY_PER_LINE;
     caps_common();
 }
 
@@ -413,7 +416,7 @@ static void test_starttls(void)
 
     CU_ASSERT(CAPA(be, CAPA_STARTTLS))
 
-    r = backend_ping(be);
+    r = backend_ping(be, NULL);
     CU_ASSERT_EQUAL(r, 0);
 
     backend_disconnect(be);

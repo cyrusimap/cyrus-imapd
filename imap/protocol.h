@@ -45,6 +45,13 @@
 
 #include "saslclient.h"
 
+enum {
+    /* protocol types */
+    TYPE_STD           = 0,    /* protocol fits standard template */
+    TYPE_SPEC          = 1     /* non-standard needs special functions */
+};
+
+struct stdprot_t;
 struct backend;
 
 #define MAX_CAPA 9
@@ -60,8 +67,6 @@ enum {
       (1 << 3) .. (1 << MAX_CAPA)
     */
 };
-
-struct protocol_t;
 
 struct banner_t {
     u_char auto_capa;		/* capability response sent automatically
@@ -106,9 +111,7 @@ struct simple_cmd_t {
     const char *ok;		/* success response */
 };
 
-struct protocol_t {
-    const char *service;	/* INET service name */
-    const char *sasl_service;	/* SASL service name */
+struct stdprot_t {
     struct banner_t banner;
     struct capa_cmd_t capa_cmd;
     struct tls_cmd_t tls_cmd;
@@ -117,5 +120,24 @@ struct protocol_t {
     struct simple_cmd_t ping_cmd;
     struct simple_cmd_t logout_cmd;
 };
+
+struct protocol_t {
+    const char *service;       /* INET service name */
+    const char *sasl_service;  /* SASL service name */
+    unsigned type;
+    union {
+       struct stdprot_t std;
+       struct {
+	   /* special protocol */
+	   int (*login)(struct backend *s, const char *userid,
+			sasl_callback_t *cb, const char **status,
+			int noauth);
+	   int (*ping)(struct backend *s, const char *userid);
+	   int (*logout)(struct backend *s);
+       } spec;
+    } u;
+};
+
+
 
 #endif /* _INCLUDED_PROTOCOL_H */

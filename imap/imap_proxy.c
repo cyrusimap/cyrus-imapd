@@ -73,31 +73,31 @@ static void imap_postcapability(struct backend *s)
 {
     if (CAPA(s, CAPA_SASL_IR)) {
 	/* server supports initial response in AUTHENTICATE command */
-	s->prot->sasl_cmd.maxlen = USHRT_MAX;
+	s->prot->u.std.sasl_cmd.maxlen = USHRT_MAX;
     }
 }
 
 struct protocol_t imap_protocol =
-{ "imap", "imap",
-  { 1, NULL },
-  { "C01 CAPABILITY", NULL, "C01 ", imap_postcapability,
-    CAPAF_MANY_PER_LINE,
-    { { "AUTH", CAPA_AUTH },
-      { "STARTTLS", CAPA_STARTTLS },
-      { "COMPRESS=DEFLATE", CAPA_COMPRESS },
-      { "IDLE", CAPA_IDLE },
-      { "MUPDATE", CAPA_MUPDATE },
-      { "MULTIAPPEND", CAPA_MULTIAPPEND },
-      { "RIGHTS=kxte", CAPA_ACLRIGHTS },
-      { "LIST-EXTENDED", CAPA_LISTEXTENDED },
-      { "SASL-IR", CAPA_SASL_IR },
-      { NULL, 0 } } },
-  { "S01 STARTTLS", "S01 OK", "S01 NO", 0 },
-  { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*",
-    NULL, AUTO_CAPA_AUTH_OK },
-  { "Z01 COMPRESS DEFLATE", "* ", "Z01 OK" },
-  { "N01 NOOP", "* ", "N01 OK" },
-  { "Q01 LOGOUT", "* ", "Q01 " }
+{ "imap", "imap", TYPE_STD,
+  { { { 1, NULL },
+      { "C01 CAPABILITY", NULL, "C01 ", imap_postcapability,
+	CAPAF_MANY_PER_LINE,
+	{ { "AUTH", CAPA_AUTH },
+	  { "STARTTLS", CAPA_STARTTLS },
+	  { "COMPRESS=DEFLATE", CAPA_COMPRESS },
+	  { "IDLE", CAPA_IDLE },
+	  { "MUPDATE", CAPA_MUPDATE },
+	  { "MULTIAPPEND", CAPA_MULTIAPPEND },
+	  { "RIGHTS=kxte", CAPA_ACLRIGHTS },
+	  { "LIST-EXTENDED", CAPA_LISTEXTENDED },
+	  { "SASL-IR", CAPA_SASL_IR },
+	  { NULL, 0 } } },
+      { "S01 STARTTLS", "S01 OK", "S01 NO", 0 },
+      { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*",
+	NULL, AUTO_CAPA_AUTH_OK },
+      { "Z01 COMPRESS DEFLATE", "* ", "Z01 OK" },
+      { "N01 NOOP", "* ", "N01 OK" },
+      { "Q01 LOGOUT", "* ", "Q01 " } } }
 };
 
 void proxy_gentag(char *tag, size_t len)

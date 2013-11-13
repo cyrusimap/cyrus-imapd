@@ -122,19 +122,19 @@ static char *sieve_parsesuccess(char *str, const char **status)
 }
 
 static struct protocol_t sieve_protocol =
-{ "sieve", SIEVE_SERVICE_NAME,
-  { 1, "OK" },
-  { "CAPABILITY", NULL, "OK", NULL,
-    CAPAF_ONE_PER_LINE|CAPAF_QUOTE_WORDS,
-    { { "SASL", CAPA_AUTH },
-      { "STARTTLS", CAPA_STARTTLS },
-      { NULL, 0 } } },
-  { "STARTTLS", "OK", "NO", 1 },
-  { "AUTHENTICATE", USHRT_MAX, 1, "OK", "NO", NULL, "*",
-    &sieve_parsesuccess, AUTO_CAPA_AUTH_SSF },
-  { NULL, NULL, NULL },
-  { NULL, NULL, NULL },
-  { "LOGOUT", NULL, "OK" }
+{ "sieve", SIEVE_SERVICE_NAME, TYPE_STD,
+  { { { 1, "OK" },
+      { "CAPABILITY", NULL, "OK", NULL,
+	CAPAF_ONE_PER_LINE|CAPAF_QUOTE_WORDS,
+	{ { "SASL", CAPA_AUTH },
+	  { "STARTTLS", CAPA_STARTTLS },
+	  { NULL, 0 } } },
+      { "STARTTLS", "OK", "NO", 1 },
+      { "AUTHENTICATE", USHRT_MAX, 1, "OK", "NO", NULL, "*",
+	&sieve_parsesuccess, AUTO_CAPA_AUTH_SSF },
+      { NULL, NULL, NULL },
+      { NULL, NULL, NULL },
+      { "LOGOUT", NULL, "OK" } } }
 };
 
 /* Returns TRUE if we are done */

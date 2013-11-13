@@ -107,20 +107,20 @@ static int do_compress     = 0;
 #define CAPA_CRC_VERSIONS	    (CAPA_COMPRESS<<1)
 
 static struct protocol_t csync_protocol =
-{ "csync", "csync",
-  { 1, "* OK" },
-  { NULL, NULL, "* OK", NULL,
-    CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD,
-    { { "SASL", CAPA_AUTH },
-      { "STARTTLS", CAPA_STARTTLS },
-      { "COMPRESS=DEFLATE", CAPA_COMPRESS },
-      { "CRC_VERSIONS", CAPA_CRC_VERSIONS },
-      { NULL, 0 } } },
-  { "STARTTLS", "OK", "NO", 1 },
-  { "AUTHENTICATE", USHRT_MAX, 0, "OK", "NO", "+ ", "*", NULL, 0 },
-  { NULL, NULL, NULL },
-  { "NOOP", NULL, "OK" },
-  { "EXIT", NULL, "OK" }
+{ "csync", "csync", TYPE_STD,
+  { { { 1, "* OK" },
+      { NULL, NULL, "* OK", NULL,
+	CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD,
+	{ { "SASL", CAPA_AUTH },
+	  { "STARTTLS", CAPA_STARTTLS },
+	  { "COMPRESS=DEFLATE", CAPA_COMPRESS },
+	  { "CRC_VERSIONS", CAPA_CRC_VERSIONS },
+	  { NULL, 0 } } },
+      { "STARTTLS", "OK", "NO", 1 },
+      { "AUTHENTICATE", USHRT_MAX, 0, "OK", "NO", "+ ", "*", NULL, 0 },
+      { NULL, NULL, NULL },
+      { "NOOP", NULL, "OK" },
+      { "EXIT", NULL, "OK" } } }
 };
 
 static int do_meta(char *user);
@@ -2988,7 +2988,7 @@ static void do_daemon(const char *channel, const char *sync_shutdown_file,
 	     * If we are, we had some type of error, so we exit.
 	     * Otherwise, try reconnecting.
 	     */
-	    if (!backend_ping(sync_backend)) restart = 1;
+	    if (!backend_ping(sync_backend, NULL)) restart = 1;
 	}
 	replica_disconnect();
     }

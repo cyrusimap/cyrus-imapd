@@ -150,20 +150,20 @@ static mupdate_handle *mhandle = NULL;
 struct backend **backend_cached = NULL;
 
 static struct protocol_t lmtp_protocol =
-{ "lmtp", "lmtp",
-  { 0, "220 " },
-  { "LHLO", "lmtpproxyd", "250 ", NULL,
-    CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD|CAPAF_DASH_STUFFING,
-    { { "AUTH", CAPA_AUTH },
-      { "STARTTLS", CAPA_STARTTLS },
-      { "PIPELINING", CAPA_PIPELINING },
-      { "IGNOREQUOTA", CAPA_IGNOREQUOTA },
-      { NULL, 0 } } },
-  { "STARTTLS", "220", "454", 0 },
-  { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL, 0 },
-  { NULL, NULL, NULL },
-  { "NOOP", NULL, "250" },
-  { "QUIT", NULL, "221" }
+{ "lmtp", "lmtp", TYPE_STD,
+  { { { 0, "220 " },
+      { "LHLO", "lmtpproxyd", "250 ", NULL,
+	CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD|CAPAF_DASH_STUFFING,
+	{ { "AUTH", CAPA_AUTH },
+	  { "STARTTLS", CAPA_STARTTLS },
+	  { "PIPELINING", CAPA_PIPELINING },
+	  { "IGNOREQUOTA", CAPA_IGNOREQUOTA },
+	  { NULL, 0 } } },
+      { "STARTTLS", "220", "454", 0 },
+      { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL, 0 },
+      { NULL, NULL, NULL },
+      { "NOOP", NULL, "250" },
+      { "QUIT", NULL, "221" } } }
 };
 
 static struct sasl_callback mysasl_cb[] = {
