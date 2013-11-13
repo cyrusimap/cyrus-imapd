@@ -587,6 +587,11 @@ unsigned buf_len(const struct buf *buf)
     return buf->len;
 }
 
+const char *buf_base(const struct buf *buf)
+{
+    return buf->s;
+}
+
 void buf_reset(struct buf *buf)
 {
     buf->len = 0;
