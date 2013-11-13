@@ -8,6 +8,94 @@
 </head>
 <body>
 
+<h1>Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta7</h1>
+<ul>
+<li>Added support for returning jCal data in GET/PROPFIND/REPORT
+  response.</li>
+<li>Added support for accepting jCal data in PUT request.</li>
+</ul>
+
+<h1>Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta6</h1>
+<ul>
+<li>Plugged several memory leaks found by Valgrind</li>
+<li>Less verbose reconnect communication between frontend and
+  backend</li>
+<li>GET on calendar-home-set now returns a list of subscribe-able
+  calendars</li>
+<li>Auto-provisioning of calendars/addressbooks now works via a
+  frontend proxy</li>
+<li>Fixed several conformance bugs detected by CalDAVTester</li>
+<li>Added support for optionally adding Content-MD5 header to
+  responses (see <tt>httpcontentmd5</tt> option)</li>
+<li>Fixed time-based queries for components other than VEVENT</li>
+</ul>
+
+<h1>Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta5</h1>
+<ul>
+<li>RSS module now produces Atom 1.0 output rather than RSS 2.0 (we
+  prefer IETF standards)</li>
+<li>PROPFIND/REPORT allprop/propname requests are now supported</li>
+<li><tt>unixhierarchysep</tt> is now supported by all HTTP
+  modules</li>
+<li>Completely rewrote write_body() - Range requests are now supported
+  on non-chunked Content-Encoded data</li>
+<li>Added cache control response headers where appropriate to make
+  Redbot happy</li>
+<li>Fixed handling of telemetry log file descriptors and
+  truncation</li>
+<li>Allow GET on calendar collections for "exporting" entire
+  calendar</li>
+<li>Fixed POST on calendar collection (add-member)</li>
+<li>Fixed parsing of calendar-query filter</li>
+<li>Added several CalDAV/iCalendar validation checks based on
+  CalDAVTester results</li>
+</ul>
+
+<h1>Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta4</h1>
+<ul>
+<li>Always verify authorization credentials supplied by the client (a
+  proxy may be reusing an existing connection as a different user)</li>
+<li>Don't bother supporting Digest qop=auth-int since no clients seem
+  to use it</li>
+<li>Don't show addressbook mailboxes in IMAP LIST output</li>
+<li>Plugged leaked memory found by Valgrind</li>
+<li>Better handling of request/response bodies</li>
+<li>Added <tt>httpprettytelemetry</tt> option</li>
+<li>Added <tt>httpallowcors</tt> option (Cross-Origin Resource Sharing)</li>
+</ul>
+
+<h1>Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta3</h1>
+<ul>
+<li>Plugged leaked memory found by Valgrind</li>
+<li>Rewrote list_feeds() to not use memmem()</li>
+<li>OPTIONS method can be used without authentication</li>
+<li>Better handling of Connection:keep-alive</li>
+<li>Added <tt>httpallowedurls</tt> option</li>
+</ul>
+
+<h1>Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta2</h1>
+<ul>
+<li>Fixed security bug where a user-agent could access files
+  outside of <tt>httpdocroot</tt>.
+<li>Changed annotation entry name scheme to be
+  "/vendor/cmu/cyrus-httpd/<" ns-href ">" prop</li>
+</ul>
+
+<h1>Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta1</h1>
+<ul>
+<li>Fixed Bug #3792: Build failures on Solaris 10</li>
+<li>Path to user's DAV DB will be created, if necessary</li>
+<li>Fixed bug where calendars and addressbooks were using the same
+  mailbox type flag</li>
+<li>Fixed [un]signed int / size_t mismatches in formatted output</li>
+</ul>
+
+<h1>Changes to the Cyrus IMAP Server since 2.4.17</h1>
+<ul>
+<li>Added httpd service with CalDAV, CardDAV, RSS, and iSchedule
+  modules</li>
+</ul>
+
 <h1>Changes to the Cyrus IMAP Server since 2.4.16</h1>
 <ul>
 <li>A bunch of cleanups and fixes to compiling</li>
