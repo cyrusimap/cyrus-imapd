@@ -158,10 +158,8 @@ EXPORTED int append_setup(struct appendstate *as, const char *name,
 
     r = append_setup_mbox(as, mailbox, userid, auth_state,
 			  aclcheck, quotacheck, namespace, isadmin, event_type);
-    if (r)
-	mailbox_close(&mailbox);
-
-    as->close_mailbox_when_done = 1;
+    if (r) mailbox_close(&mailbox);
+    else as->close_mailbox_when_done = 1;
 
     return r;
 }
