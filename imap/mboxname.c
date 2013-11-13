@@ -831,6 +831,74 @@ EXPORTED int mboxname_isdeletedmailbox(const char *name, time_t *timestampp)
 }
 
 /*
+ * If (internal) mailbox 'name' is a CALENDAR mailbox
+ * returns boolean
+ */
+int mboxname_iscalendarmailbox(const char *name, int mbtype)
+{
+    static const char *calendarprefix = NULL;
+    static int calendarprefix_len = 0;
+    const char *p;
+    const char *start = name;
+
+    if (mbtype & MBTYPE_CALENDAR) return 1;  /* Only works on backends */
+
+    if (!calendarprefix) {
+	calendarprefix = config_getstring(IMAPOPT_CALENDARPREFIX);
+	if (calendarprefix) calendarprefix_len = strlen(calendarprefix);
+    }
+
+    /* if the prefix is blank, then no calendars */
+    if (!calendarprefix_len) return 0;
+
+    /* step past the domain part */
+    if (config_virtdomains && (p = strchr(start, '!')))
+	start = p + 1;
+
+    /* step past the user part */
+    if (!strncmp(start, "user.", 5) && (p = strchr(start+5, '.')))
+	start = p + 1;
+
+    return ((!strncmp(start, calendarprefix, calendarprefix_len) &&
+	     (start[calendarprefix_len] == '\0' ||
+	      start[calendarprefix_len] == '.')) ? 1 : 0);
+}
+
+/*
+ * If (internal) mailbox 'name' is a ADDRESSBOOK mailbox
+ * returns boolean
+ */
+int mboxname_isaddressbookmailbox(const char *name, int mbtype)
+{
+    static const char *addressbookprefix = NULL;
+    static int addressbookprefix_len = 0;
+    const char *p;
+    const char *start = name;
+
+    if (mbtype & MBTYPE_ADDRESSBOOK) return 1;  /* Only works on backends */
+
+    if (!addressbookprefix) {
+	addressbookprefix = config_getstring(IMAPOPT_ADDRESSBOOKPREFIX);
+	if (addressbookprefix) addressbookprefix_len = strlen(addressbookprefix);
+    }
+
+    /* if the prefix is blank, then no addressbooks */
+    if (!addressbookprefix_len) return 0;
+
+    /* step past the domain part */
+    if (config_virtdomains && (p = strchr(start, '!')))
+	start = p + 1;
+
+    /* step past the user part */
+    if (!strncmp(start, "user.", 5) && (p = strchr(start+5, '.')))
+	start = p + 1;
+
+    return ((!strncmp(start, addressbookprefix, addressbookprefix_len) &&
+	     (start[addressbookprefix_len] == '\0' ||
+	      start[addressbookprefix_len] == '.')) ? 1 : 0);
+}
+
+/*
  * Translate (internal) inboxname into corresponding userid.
  */
 EXPORTED const char *mboxname_to_userid(const char *mboxname)

@@ -174,6 +174,10 @@ EXPORTED const char *mboxlist_mbtype_to_string(uint32_t mbtype)
 	buf_putc(&buf, 'r');
     if (mbtype & MBTYPE_RESERVE)
 	buf_putc(&buf, 'z');
+    if (mbtype & MBTYPE_CALENDAR)
+	buf_putc(&buf, 'c');
+    if (mbtype & MBTYPE_ADDRESSBOOK)
+	buf_putc(&buf, 'a');
 
     return buf_cstring(&buf);
 }
@@ -274,6 +278,12 @@ EXPORTED uint32_t mboxlist_string_to_mbtype(const char *string)
 
     for (; *string; string++) {
 	switch (*string) {
+	case 'a':
+	    mbtype |= MBTYPE_ADDRESSBOOK;
+	    break;
+	case 'c':
+	    mbtype |= MBTYPE_CALENDAR;
+	    break;
 	case 'd':
 	    mbtype |= MBTYPE_DELETED;
 	    break;
@@ -2026,6 +2036,7 @@ static int find_p(void *rockp,
     struct glob *g = rock->g;
     long matchlen;
     mbentry_t *mbentry = NULL;
+    int ret = 0;
 
     /* don't list mailboxes outside of the default domain */
     if (!rock->domainlen && !rock->isadmin && memchr(key, '!', keylen)) return 0;
@@ -2034,7 +2045,7 @@ static int find_p(void *rockp,
     if (rock->inboxoffset) {
 	char namebuf[MAX_MAILBOX_BUFFER];
 
-	if(keylen >= (int) sizeof(namebuf)) {
+	if (keylen >= (int) sizeof(namebuf)) {
 	    syslog(LOG_ERR, "oversize keylen in mboxlist.c:find_p()");
 	    return 0;
 	}
@@ -2076,16 +2087,6 @@ static int find_p(void *rockp,
 	return 0;
     }
 
-    /* Suppress deleted hierarchy unless admin: overrides ACL_LOOKUP test */
-    if (!rock->isadmin) {
-	char namebuf[MAX_MAILBOX_BUFFER];
-
-	memcpy(namebuf, key, keylen);
-	namebuf[keylen] = '\0';
-	if (mboxname_isdeletedmailbox(namebuf, NULL))
-	    return 0;
-    }
-
     /* subs DB has empty keys */
     if (rock->issubs)
 	return 1;
@@ -2094,26 +2095,28 @@ static int find_p(void *rockp,
     if (mboxlist_parse_entry(&mbentry, key, keylen, data, datalen))
 	return 0;
 
-    if (mbentry->mbtype & MBTYPE_DELETED) {
-	mboxlist_entry_free(&mbentry);
-	return 0;
-    }
-
     /* check acl */
     if (!rock->isadmin) {
-	int rights = cyrus_acl_myrights(rock->auth_state, mbentry->acl);
+	/* always suppress deleted for non-admin */
+	if (mboxname_isdeletedmailbox(mbentry->name, NULL)) goto done;
 
-	if (!(rights & ACL_LOOKUP)) {
-	    mboxlist_entry_free(&mbentry);
-	    return 0;
-	}
+	/* also suppress calendar */
+	if (mboxname_iscalendarmailbox(mbentry->name, mbentry->mbtype)) goto done;
+
+	/* and addressbook */
+	if (mboxname_isaddressbookmailbox(mbentry->name, mbentry->mbtype)) goto done;
+
+	/* check the acls */
+	if (!(cyrus_acl_myrights(rock->auth_state, mbentry->acl) & ACL_LOOKUP)) goto done;
     }
-
-    mboxlist_entry_free(&mbentry);
 
     /* if we get here, close enough for us to spend the time
        acting interested */
-    return 1;
+    ret = 1;
+
+done:
+    mboxlist_entry_free(&mbentry);
+    return ret;
 }
 
 static int check_name(struct find_rock *rock,
