@@ -2444,3 +2444,412 @@ HIDDEN void message_parse_env_address(char *str, struct address *addr)
     addr->domain = parse_nstring(&str);
 }
 
+/*
+ * Read an nstring from cached bodystructure.
+ * Analog to mesage_write_nstring().
+ * If 'copy' is set, returns a freshly allocated copy of the string,
+ * otherwise is returns a pointer to the string which will be overwritten
+ * on the next call to message_read_nstring()
+ */
+static int message_read_nstring(struct protstream *strm, char **str, int copy)
+{
+    static struct buf buf = BUF_INITIALIZER;
+    int c;
+
+    c = getnstring(strm, NULL, &buf);
+
+    if (str) {
+	if (!strcmp(buf.s, "NIL")) *str = NULL;
+	else if (copy) *str = xstrdup(buf.s);
+	else *str = buf.s;
+    }
+
+    return c;
+}
+
+/*
+ * Read a parameter list from cached bodystructure.
+ * If withattr is set, attribute/value pairs will be read,
+ * otherwise, just values are read.
+ */
+static int message_read_params(struct protstream *strm, struct param **paramp,
+			       int withattr)
+{
+    int c;
+
+    if ((c = prot_getc(strm)) == '(') {
+	/* parse list */
+	struct param *param;
+
+	do {
+	    *paramp = param = (struct param *) xzmalloc(sizeof(struct param));
+
+	    if (withattr) {
+		/* attribute */
+		c = message_read_nstring(strm, &param->attribute, 1);
+	    }
+
+	    /* value */
+	    c = message_read_nstring(strm, &param->value, 1);
+
+	    /* get ready to append the next parameter */
+	    paramp = &param->next;
+
+	} while (c == ' ');
+
+	if (c == ')') c = prot_getc(strm);
+    }
+    else {
+	/* NIL */
+	prot_ungetc(c, strm);
+	c = message_read_nstring(strm, NULL, 0);
+    }
+
+    return c;
+}
+
+/*
+ * Read an address part from cached bodystructure.
+ * The string is appended to 'buf' (including NUL).
+ */
+static int message_read_addrpart(struct protstream *strm,
+				 const char **part, unsigned *off, struct buf *buf)
+{
+    int c;
+
+    c = message_read_nstring(strm, (char **)part, 0);
+    if (*part) {
+	*off = buf->len;
+	buf_appendmap(buf, *part, strlen(*part)+1);
+    }
+
+    return c;
+}
+
+/*
+ * Read an address list from cached bodystructure.
+ * Analog to mesage_write_address()
+ */
+static int message_read_address(struct protstream *strm, struct address **addrp)
+{
+    int c;
+
+    if ((c = prot_getc(strm)) == '(') {
+	/* parse list */
+	struct address *addr;
+	struct buf buf;
+	unsigned nameoff = 0, rtoff = 0, mboxoff = 0, domoff = 0;
+
+	do {
+	    *addrp = addr = (struct address *) xzmalloc(sizeof(struct address));
+	    buf_init(&buf);
+
+	    /* opening '(' */
+	    c = prot_getc(strm);
+
+	    /* name */
+	    c = message_read_addrpart(strm, &addr->name, &nameoff, &buf);
+
+	    /* route */
+	    c = message_read_addrpart(strm, &addr->route, &rtoff, &buf);
+
+	    /* mailbox */
+	    c = message_read_addrpart(strm, &addr->mailbox, &mboxoff, &buf);
+
+	    /* host */
+	    c = message_read_addrpart(strm, &addr->domain, &domoff, &buf);
+
+	    /* addr parts must now point into our freeme string */
+	    if (buf.len) {
+		char *freeme = addr->freeme = buf.s;
+
+		if (addr->name) addr->name = freeme+nameoff;
+		if (addr->route) addr->route = freeme+rtoff;
+		if (addr->mailbox) addr->mailbox = freeme+mboxoff;
+		if (addr->domain) addr->domain = freeme+domoff;
+	    }
+
+	    /* get ready to append the next address */
+	    addrp = &addr->next;
+
+	} while (((c = prot_getc(strm)) == '(') && prot_ungetc(c, strm));
+
+	if (c == ')') c = prot_getc(strm);
+    }
+    else {
+	/* NIL */
+	prot_ungetc(c, strm);
+	c = message_read_nstring(strm, NULL, 0);
+    }
+
+    return c;
+}
+
+/*
+ * Read a cached envelope response.
+ * Analog to mesage_write_envelope()
+ */
+static int message_read_envelope(struct protstream *strm, struct body *body)
+{
+    int c;
+
+    /* opening '(' */
+    c = prot_getc(strm);
+
+    /* date */
+    c = message_read_nstring(strm, &body->date, 1);
+
+    /* subject */
+    c = message_read_nstring(strm, &body->subject, 1);
+
+    /* from */
+    c = message_read_address(strm, &body->from);
+
+    /* sender */
+    c = message_read_address(strm, &body->sender);
+
+    /* reply-to */
+    c = message_read_address(strm, &body->reply_to);
+
+    /* to */
+    c = message_read_address(strm, &body->to);
+
+    /* cc */
+    c = message_read_address(strm, &body->cc);
+
+    /* bcc */
+    c = message_read_address(strm, &body->bcc);
+
+    /* in-reply-to */
+    c = message_read_nstring(strm, &body->in_reply_to, 1);
+
+    /* message-id */
+    c = message_read_nstring(strm, &body->message_id, 1);
+
+    if (c == ')') c = prot_getc(strm);
+
+    return c;
+}
+
+/*
+ * Read cached bodystructure response.
+ * Analog to mesage_write_body()
+ */
+static int message_read_body(struct protstream *strm, struct body *body)
+{
+#define prot_peek(strm) prot_ungetc(prot_getc(strm), strm)
+
+    int c;
+
+    /* opening '(' */
+    c = prot_getc(strm);
+
+    /* check for multipart */
+    if ((c = prot_peek(strm)) == '(') {
+
+	body->type = xstrdup("MULTIPART");
+	do {
+	    body->subpart =
+		(struct body *)xrealloc((char *)body->subpart,
+					(body->numparts+1)*sizeof(struct body));
+	    memset(&body->subpart[body->numparts], 0, sizeof(struct body));
+	    c = message_read_body(strm, &body->subpart[body->numparts++]);
+
+	} while (((c = prot_getc(strm)) == '(') && prot_ungetc(c, strm));
+
+	/* body subtype */
+	c = message_read_nstring(strm, &body->subtype, 1);
+
+	/* extension data */
+
+	/* body parameters */
+	c = message_read_params(strm, &body->params, 1);
+    }
+    else {
+	/* non-multipart */
+
+	/* body type */
+	c = message_read_nstring(strm, &body->type, 1);
+
+	/* body subtype */
+	c = message_read_nstring(strm, &body->subtype, 1);
+
+	/* body parameters */
+	c = message_read_params(strm, &body->params, 1);
+
+	/* body id */
+	c = message_read_nstring(strm, &body->id, 1);
+
+	/* body description */
+	c = message_read_nstring(strm, &body->description, 1);
+
+	/* body encoding */
+	c = message_read_nstring(strm, &body->encoding, 1);
+
+	/* body size */
+	c = getint32(strm, (int32_t *) &body->content_size);
+
+	if (!strcmp(body->type, "TEXT")) {
+	    /* body lines */
+	    c = getint32(strm, (int32_t *) &body->content_lines);
+	}
+	else if (!strcmp(body->type, "MESSAGE") &&
+		 !strcmp(body->subtype, "RFC822")) {
+
+	    body->subpart = (struct body *) xzmalloc(sizeof(struct body));
+
+	    /* envelope structure */
+	    c = message_read_envelope(strm, body->subpart);
+
+	    /* body structure */
+	    c = message_read_body(strm, body->subpart);
+	    c = prot_getc(strm); /* trailing SP */
+
+	    /* body lines */
+	    c = getint32(strm, (int32_t *) &body->content_lines);
+	}
+
+	/* extension data */
+
+	/* body MD5 */
+	c = message_read_nstring(strm, &body->md5, 1);
+    }
+
+    /* common extension data */
+
+    /* body disposition */
+    if ((c = prot_getc(strm)) == '(') {
+	c = message_read_nstring(strm, &body->disposition, 1);
+
+	c = message_read_params(strm, &body->disposition_params, 1);
+	if (c == ')') c = prot_getc(strm); /* trailing SP */
+    }
+    else {
+	/* NIL */
+	prot_ungetc(c, strm);
+	c = message_read_nstring(strm, &body->disposition, 1);
+    }
+
+    /* body language */
+    if ((c = prot_peek(strm)) == '(') {
+	c = message_read_params(strm, &body->language, 0);
+    }
+    else {
+	char *lang;
+
+	c = message_read_nstring(strm, &lang, 1);
+	if (lang) {
+	    body->language = (struct param *) xzmalloc(sizeof(struct param));
+	    body->language->value = lang;
+	}
+    }
+
+    /* body location */
+    c = message_read_nstring(strm, &body->location, 1);
+
+    /* XXX  We currently don't store any other extension data.
+            MUST keep in sync with message_write_body() */
+
+    return c;
+}
+
+/*
+ * Read cached binary bodystructure.
+ * Analog to mesage_write_section()
+ */
+static void message_read_binarybody(struct body *body, const char **sect)
+{
+    bit32 n, i;
+    const char *p = *sect;
+    struct body *subpart;
+
+    n = CACHE_ITEM_BIT32(*sect);
+    p = *sect += CACHE_ITEM_SIZE_SKIP;
+    if (!n) return;
+
+    if (!strcmp(body->type, "MESSAGE") && !strcmp(body->subtype, "RFC822") &&
+	body->subpart->numparts) {
+	subpart = body->subpart->subpart;
+	body = body->subpart;
+    }
+    else {
+	/* If a message/rfc822 contains a non-multipart,
+	   we don't care about part 0 (message header) */
+	subpart = body->subpart;
+	body = NULL;
+    }
+
+    if (!body) {
+	/* skip header part */
+	p += 5 * CACHE_ITEM_SIZE_SKIP;
+    }
+    else {
+	/* read header part */
+	body->header_offset = CACHE_ITEM_BIT32(p);
+	p += CACHE_ITEM_SIZE_SKIP;
+	body->header_size = CACHE_ITEM_BIT32(p);
+	p += CACHE_ITEM_SIZE_SKIP;
+	body->content_offset = CACHE_ITEM_BIT32(p);
+	p += CACHE_ITEM_SIZE_SKIP;
+	body->content_size = CACHE_ITEM_BIT32(p);
+	p += CACHE_ITEM_SIZE_SKIP;
+	body->charset_cte = CACHE_ITEM_BIT32(p);
+	p += CACHE_ITEM_SIZE_SKIP;
+    }
+
+    /* read body parts */
+    for (i = 0; i < n-1; i++) {
+	subpart[i].header_offset = CACHE_ITEM_BIT32(p);
+	p += CACHE_ITEM_SIZE_SKIP;
+	subpart[i].header_size = CACHE_ITEM_BIT32(p);
+	p += CACHE_ITEM_SIZE_SKIP;
+	subpart[i].content_offset = CACHE_ITEM_BIT32(p);
+	p += CACHE_ITEM_SIZE_SKIP;
+	subpart[i].content_size = CACHE_ITEM_BIT32(p);
+	p += CACHE_ITEM_SIZE_SKIP;
+	subpart[i].charset_cte = CACHE_ITEM_BIT32(p);
+	p += CACHE_ITEM_SIZE_SKIP;
+    }
+
+    /* read sub-parts */
+    for (*sect = p, i = 0; i < n-1; i++) {
+	message_read_binarybody(&subpart[i], sect);
+    }
+
+}
+
+/*
+ * Read cached envelope, binary bodystructure response and binary bodystructure
+ * of the specified record.  Populates 'body' which must be freed by the caller.
+ */
+EXPORTED void message_read_bodystructure(struct index_record *record, struct body **body)
+{
+    struct protstream *strm;
+    struct body toplevel;
+    const char *binbody;
+
+    memset(&toplevel, 0, sizeof(struct body));
+    toplevel.type = "MESSAGE";
+    toplevel.subtype = "RFC822";
+    toplevel.subpart = *body = xzmalloc(sizeof(struct body));
+
+    /* Read envelope response from cache */
+    strm = prot_readmap(cacheitem_base(record, CACHE_ENVELOPE),
+			cacheitem_size(record, CACHE_ENVELOPE));
+    prot_setisclient(strm, 1);  /* no-sync literals */
+
+    message_read_envelope(strm, *body);
+    prot_free(strm);
+
+    /* Read bodystructure response from cache */
+    strm = prot_readmap(cacheitem_base(record, CACHE_BODYSTRUCTURE),
+			cacheitem_size(record, CACHE_BODYSTRUCTURE));
+    prot_setisclient(strm, 1);  /* no-sync literals */
+
+    message_read_body(strm, *body);
+    prot_free(strm);
+
+    /* Read binary bodystructure from cache */
+    binbody = cacheitem_base(record, CACHE_SECTION);
+    message_read_binarybody(&toplevel, &binbody);
+}
