@@ -82,4 +82,7 @@ int timeval_to_iso8601(const struct timeval *t, enum timeval_precision tv_prec,
 int time_to_rfc3501(time_t t, char *buf, size_t len);
 int time_from_rfc3501(const char *s, time_t *tp);
 
+#define RFC3339_DATETIME_MAX 21
+int time_to_rfc3339(time_t t, char *buf, size_t len);
+
 #endif /* __CYRUS__TIME_H__ */
