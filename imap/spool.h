@@ -57,6 +57,9 @@ int spool_fill_hdrcache(struct protstream *fin, FILE *fout, hdrcache_t cache,
 			const char **skipheaders);
 const char **spool_getheader(hdrcache_t cache, const char *phead);
 void spool_free_hdrcache(hdrcache_t cache);
+void spool_enum_hdrcache(hdrcache_t cache,
+			 void (*proc)(const char *, const char *, void *),
+			 void *rock);
 int spool_copy_msg(struct protstream *fin, FILE *fout);
 
 #endif

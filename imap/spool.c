@@ -251,7 +251,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
     return 0;
 }
 
-void spool_cache_header(char *name, char *body, hdrcache_t cache)
+EXPORTED void spool_cache_header(char *name, char *body, hdrcache_t cache)
 {
     strarray_t *contents;
 
@@ -264,7 +264,7 @@ void spool_cache_header(char *name, char *body, hdrcache_t cache)
     free(name);
 }
 
-void spool_replace_header(char *name, char *body, hdrcache_t cache)
+EXPORTED void spool_replace_header(char *name, char *body, hdrcache_t cache)
 {
     strarray_t *contents;
 
@@ -279,7 +279,7 @@ void spool_replace_header(char *name, char *body, hdrcache_t cache)
     free(name);
 }
 
-int spool_fill_hdrcache(struct protstream *fin, FILE *fout, hdrcache_t cache,
+EXPORTED int spool_fill_hdrcache(struct protstream *fin, FILE *fout, hdrcache_t cache,
 			const char **skipheaders)
 {
     int r = 0;
@@ -304,7 +304,7 @@ int spool_fill_hdrcache(struct protstream *fin, FILE *fout, hdrcache_t cache,
     return r;
 }
 
-const char **spool_getheader(hdrcache_t cache, const char *phead)
+EXPORTED const char **spool_getheader(hdrcache_t cache, const char *phead)
 {
     char *head;
     strarray_t *contents;
@@ -322,12 +322,43 @@ const char **spool_getheader(hdrcache_t cache, const char *phead)
     return contents ? (const char **)contents->data : NULL;
 }
 
-void spool_free_hdrcache(hdrcache_t cache)
+EXPORTED void spool_free_hdrcache(hdrcache_t cache)
 {
     if (!cache) return;
 
     free_hash_table(cache, (void (*)(void *))strarray_free);
     free(cache);
+}
+
+struct spool_enum_rock {
+    void (*proc)(const char *, const char *, void *);
+    void *rock;
+};
+
+static void spool_enum_cb(const char *key, void *data, void *rock)
+{
+    struct spool_enum_rock *c = (struct spool_enum_rock *)rock;
+    strarray_t *d = (strarray_t *)data;
+    int i;
+
+    for (i = 0; i < d->count; i++) {
+	const char *val = strarray_nth(d, i);
+	c->proc(key, val, c->rock);
+    }
+}
+
+EXPORTED void spool_enum_hdrcache(hdrcache_t cache,
+			 void (*proc)(const char *, const char *, void *),
+			 void *rock)
+{
+    struct spool_enum_rock cbrock;
+
+    if (!cache) return;
+
+    cbrock.proc = proc;
+    cbrock.rock = rock;
+
+    hash_enumerate(cache, spool_enum_cb, &cbrock);
 }
 
 /* copies the message from fin to fout, massaging accordingly: 
@@ -336,7 +367,7 @@ void spool_free_hdrcache(hdrcache_t cache)
    . embedded NULs are rejected
    . bare \r are removed
 */
-int spool_copy_msg(struct protstream *fin, FILE *fout)
+EXPORTED int spool_copy_msg(struct protstream *fin, FILE *fout)
 {
     char buf[8192], *p;
     int r = 0;
