@@ -50,9 +50,13 @@ imap/cyr_sequence
 imap/cyr_synclog
 imap/cyr_userseen
 imap/cyrdump
+imap/dav_reconstruct
 imap/deliver
 imap/fetchnews
 imap/fud
+imap/http_err.c
+imap/http_err.h
+imap/httpd
 imap/idled
 imap/imap_err.c
 imap/imap_err.h
