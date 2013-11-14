@@ -742,92 +742,32 @@ static int propfind_reportset(const xmlChar *name, xmlNsPtr ns,
 }
 
 
-/* Callback to fetch CARDDAV:address-data */
+/* Callback to prescreen/fetch CARDDAV:address-data */
 static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
 			     struct propfind_ctx *fctx,
-			     xmlNodePtr resp,
+			     xmlNodePtr resp __attribute__((unused)),
 			     struct propstat propstat[],
 			     void *rock)
 {
     xmlNodePtr prop = (xmlNodePtr) rock;
-    xmlChar *attr;
-    const char *data;
-    unsigned long datalen;
-    xmlNodePtr node;
+    const char *data = NULL;
+    unsigned long datalen = 0;
 
-    if (!resp || !propstat) {
-	/* Prescreen address-data "property" request */
-	unsigned allowed = 1;
+    if (propstat) {
+	if (!fctx->record) return HTTP_NOT_FOUND;
 
-	if ((attr = xmlGetProp(prop, BAD_CAST "content-type"))) {
-	    struct mime_type_t *mime;
-
-	    /* Check requested MIME type */
-	    for (mime = carddav_mime_types; mime->content_type; mime++) {
-		if (is_mediatype((const char *) attr, mime->content_type)) {
-		    xmlFree(attr);
-
-		    if ((attr = xmlGetProp(prop, BAD_CAST "version")) &&
-			(!mime->version ||
-			 xmlStrcmp(attr, BAD_CAST mime->version))) {
-			allowed = 0;
-		    }
-		    break;
-		}
-	    }
-	    if (!mime->content_type) allowed = 0;
-
-	    if (attr) xmlFree(attr);
+	if (!fctx->msg_base) {
+	    mailbox_map_message(fctx->mailbox, fctx->record->uid,
+				&fctx->msg_base, &fctx->msg_size);
 	}
+	if (!fctx->msg_base) return HTTP_SERVER_ERROR;
 
-	if (!allowed) {
-	    fctx->err->precond = CARDDAV_SUPP_DATA;
-	    *fctx->ret = HTTP_FORBIDDEN;
-	}
-
-	return allowed;
+	data = fctx->msg_base + fctx->record->header_size;
+	datalen = fctx->record->size - fctx->record->header_size;
     }
 
-
-    if (!fctx->record) return HTTP_NOT_FOUND;
-
-    if (!fctx->msg_base) {
-	mailbox_map_message(fctx->mailbox, fctx->record->uid,
-			    &fctx->msg_base, &fctx->msg_size);
-    }
-
-    data = fctx->msg_base + fctx->record->header_size;
-    datalen = fctx->record->size - fctx->record->header_size;
-
-    node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			name, ns, NULL, 0);
-
-    if ((attr = xmlGetProp(prop, BAD_CAST "content-type"))) {
-	struct mime_type_t *mime = carddav_mime_types;
-
-	/* Find requested MIME type */
-	while (!is_mediatype((const char *) attr, mime->content_type)) mime++;
-
-	if (mime != carddav_mime_types) {
-	    /* Not the storage format - convert into requested MIME type */
-	    /* XXX  TODO */
-	}
-
-	xmlSetProp(node, BAD_CAST "content-type", attr);
-	xmlFree(attr);
-
-	if ((attr = xmlGetProp(prop, BAD_CAST "version"))) {
-	    xmlSetProp(node, BAD_CAST "version", attr);
-	    xmlFree(attr);
-	}
-    }
-
-    xmlAddChild(node,
-		xmlNewCDataBlock(fctx->root->doc, BAD_CAST data, datalen));
-
-    fctx->fetcheddata = 1;
-
-    return 0;
+    return propfind_getdata(name, ns, fctx, propstat, prop, carddav_mime_types,
+			    CARDDAV_SUPP_DATA, data, datalen);
 }
 
 
