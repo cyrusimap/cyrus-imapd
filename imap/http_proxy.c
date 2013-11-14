@@ -46,6 +46,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <assert.h>
 #include <ctype.h>
 #include <syslog.h>
 #include <sasl/sasl.h>
@@ -944,8 +945,11 @@ EXPORTED int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 	default:
 	    if (txn->meth == METH_HEAD) break;
 
-	    r = pipe_resp_body(be->in, httpd_out, resp_hdrs, &resp_body,
-			       txn->flags.ver1_0, &txn->error.desc);
+	    if (pipe_resp_body(be->in, httpd_out, resp_hdrs, &resp_body,
+			       txn->flags.ver1_0, &txn->error.desc)) {
+		/* Couldn't pipe the body and can't finish response */
+		txn->flags.conn = CONN_CLOSE;
+	    }
 	}
     }
 
@@ -962,42 +966,124 @@ EXPORTED int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
  * on different backends.  This is handled as a GET from the source and
  * PUT on the destination, while obeying any Overwrite header.
  *
- * XXX  This function currently buffers the response headers and body.
- *      Should work on sending them to the client on-the-fly.
+ * For a MOVE request, we also LOCK, DELETE, and possibly UNLOCK the source.
+ *
+ * XXX  This function buffers the response bodies of the LOCK & GET requests.
+ *      The response body of the PUT request is piped to the client.
  */
 EXPORTED int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 		    struct transaction_t *txn)
 {
-    int r = 0, sent_body = 0;
+    int r = 0, sent_body;
     unsigned code;
-    char *etag = NULL, *lastmod = NULL;;
+    char *lock = NULL;
     const char **hdr, *statline;
     hdrcache_t resp_hdrs = NULL;
     struct body_t resp_body;
+
+#define write_hdr(pout, name, hdrs)					\
+    if ((hdr = spool_getheader(hdrs, name)))				\
+	for (; *hdr; hdr++) prot_printf(pout, "%s: %s\r\n", name, *hdr)
+
+
+    resp_body.payload = txn->resp_body.payload;
+
+    if (txn->meth == METH_MOVE) {
+	/*
+	 * Send a LOCK request to source backend:
+	 *
+	 * - Use any relevant conditional headers specified by client
+	 */
+	prot_printf(src_be->out, "LOCK %s %s\r\n"
+				 "Host: %s\r\n"
+				 "User-Agent: %s\r\n",
+		    txn->req_tgt.path, HTTP_VERSION,
+		    src_be->hostname, buf_cstring(&serverinfo));
+	write_hdr(src_be->out, "If", txn->req_hdrs);
+	write_hdr(src_be->out, "If-Match", txn->req_hdrs);
+	write_hdr(src_be->out, "If-Unmodified-Since", txn->req_hdrs);
+	write_hdr(src_be->out, "If-Schedule-Tag-Match", txn->req_hdrs);
+
+	assert(!buf_len(&txn->buf));
+	buf_printf_markup(&txn->buf, 0,
+			  "<?xml version=\"1.0\" encoding=\"utf-8\" ?>");
+	buf_printf_markup(&txn->buf, 0, "<D:lockinfo xmlns:D='DAV:'>");
+	buf_printf_markup(&txn->buf, 1,
+			  "<D:lockscope><D:exclusive/></D:lockscope>");
+	buf_printf_markup(&txn->buf, 1,
+			  "<D:locktype><D:write/></D:locktype>");
+	buf_printf_markup(&txn->buf, 1, "<D:owner>%s</D:owner>", httpd_userid);
+	buf_printf_markup(&txn->buf, 0, "</D:lockinfo>");
+
+	prot_printf(src_be->out,
+		    "Content-Type: application/xml; charset=utf-8\r\n"
+		    "Content-Length: %u\r\n\r\n%s",
+		    buf_len(&txn->buf), buf_cstring(&txn->buf));
+	buf_reset(&txn->buf);
+
+	prot_flush(src_be->out);
+
+	/* Read response(s) from source backend until final response or error */
+	resp_body.flags = 0;
+
+	do {
+	    r = http_read_response(src_be, METH_LOCK, &code, &statline,
+				   &resp_hdrs, &resp_body, &txn->error.desc);
+	    if (r) {
+		proxy_downserver(src_be);
+		goto done;
+	    }
+	} while (code < 200);
+
+	/* Get lock token */
+	if ((hdr = spool_getheader(resp_hdrs, "Lock-Token")))
+	    lock = xstrdup(*hdr);
+
+	switch (code) {
+	case 200:
+	    /* Success, continue */
+	    break;
+
+	case 201:
+	    /* Created empty resource, treat as 404 (Not Found) */
+	    r = HTTP_NOT_FOUND;
+	    goto delete;
+
+	case 409:
+	    /* Failed to create resource, treat as 404 (Not Found) */
+	    r = HTTP_NOT_FOUND;
+	    goto done;
+
+	default:
+	    /* Send failure response to client */
+	    send_response(statline, resp_hdrs, &resp_body.payload, &txn->flags);
+	    goto done;
+	}
+    }
+
 
     /*
      * Send a GET request to source backend to fetch body:
      *
      * - Use any relevant conditional headers specified by client
+     *   (if not already sent in LOCK request)
      */
-    prot_printf(src_be->out, "GET %s %s\r\n", txn->req_tgt.path, HTTP_VERSION);
-    prot_printf(src_be->out, "Host: %s\r\n", src_be->hostname);
-    prot_printf(src_be->out, "User-Agent: %s\r\n", buf_cstring(&serverinfo));
-    if ((hdr = spool_getheader(txn->req_hdrs, "If")))
-	prot_printf(src_be->out, "If: %s\r\n", hdr[0]);
-    if ((hdr = spool_getheader(txn->req_hdrs, "If-Match"))) {
-	for (; *hdr; hdr++) prot_printf(src_be->out, "If-Match: %s\r\n", *hdr);
+    prot_printf(src_be->out, "GET %s %s\r\n"
+    			     "Host: %s\r\n"
+			     "User-Agent: %s\r\n",
+		txn->req_tgt.path, HTTP_VERSION,
+		src_be->hostname, buf_cstring(&serverinfo));
+    if (txn->meth != METH_MOVE) {
+	write_hdr(src_be->out, "If", txn->req_hdrs);
+	write_hdr(src_be->out, "If-Match", txn->req_hdrs);
+	write_hdr(src_be->out, "If-Unmodified-Since", txn->req_hdrs);
+	write_hdr(src_be->out, "If-Schedule-Tag-Match", txn->req_hdrs);
     }
-    if ((hdr = spool_getheader(txn->req_hdrs, "If-Unmodified-Since")))
-	prot_printf(src_be->out, "If-Unmodified-Since: %s\r\n", hdr[0]);
-    if ((hdr = spool_getheader(txn->req_hdrs, "If-Schedule-Tag-Match")))
-	prot_printf(src_be->out, "If-Schedule-Tag-Match: %s\r\n", hdr[0]);
     prot_puts(src_be->out, "\r\n");
     prot_flush(src_be->out);
 
     /* Read response(s) from source backend until final response or error */
     resp_body.flags = 0;
-    resp_body.payload = txn->resp_body.payload;
 
     do {
 	r = http_read_response(src_be, METH_GET, &code, &statline,
@@ -1009,71 +1095,46 @@ EXPORTED int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
     } while (code < 200);
 
     if (code != 200) {
-	/* Send response to client */
+	/* Send failure response to client */
 	send_response(statline, resp_hdrs, &resp_body.payload, &txn->flags);
 	goto done;
     }
 
-    /* For MOVE, make a copy of the ETag or Last-Modified for later use */
-    if (txn->meth == METH_MOVE) {
-	if ((hdr = spool_getheader(resp_hdrs, "ETag")))
-	    etag = xstrdup(hdr[0]);
-	else if ((hdr = spool_getheader(resp_hdrs, "Last-Modified")))
-	    lastmod = xstrdup(hdr[0]);
-    }
 
     /*
      * Send a synchonizing PUT request to dest backend:
      *
      * - Add Expect:100-continue header (for synchonicity)
+     * - Obey Overwrite by adding If-None-Match header
      * - Use any TE, Prefer, Accept* headers specified by client
-     * - Obey Overwrite:F by adding If-None-Match:* header
-     * - Use Content-Type, -Encoding, -Language and -Length from GET resp
+     * - Use Content-Type, -Encoding, -Language headers from GET response
      * - Body is buffered, so send using "identity" TE
      */
-    hdr = spool_getheader(txn->req_hdrs, "Destination");
-    prot_printf(dest_be->out, "PUT %s %s\r\n", hdr[0], HTTP_VERSION);
-    prot_printf(dest_be->out, "Host: %s\r\n", dest_be->hostname);
-    prot_printf(dest_be->out, "User-Agent: %s\r\n",
-		buf_cstring(&serverinfo));
-    prot_puts(dest_be->out, "Expect: 100-continue\r\n");
-    if ((hdr = spool_getheader(txn->req_hdrs, "TE"))) {
-	for (; *hdr; hdr++) prot_printf(dest_be->out, "TE: %s\r\n", *hdr);
-    }
-    if ((hdr = spool_getheader(txn->req_hdrs, "Prefer"))) {
-	for (; *hdr; hdr++) prot_printf(dest_be->out, "Prefer: %s\r\n", *hdr);
-    }
-    if ((hdr = spool_getheader(txn->req_hdrs, "Accept"))) {
-	for (; *hdr; hdr++) prot_printf(dest_be->out, "Accept: %s\r\n", *hdr);
-    }
-    if ((hdr = spool_getheader(txn->req_hdrs, "Accept-Charset"))) {
-	for (; *hdr; hdr++) prot_printf(dest_be->out,
-					"Accept-Charset: %s\r\n", *hdr);
-    }
-    if ((hdr = spool_getheader(txn->req_hdrs, "Accept-Encoding"))) {
-	for (; *hdr; hdr++) prot_printf(dest_be->out,
-					"Accept-Encoding: %s\r\n", *hdr);
-    }
-    if ((hdr = spool_getheader(txn->req_hdrs, "Accept-Language"))) {
-	for (; *hdr; hdr++)
-	  prot_printf(dest_be->out, "Accept-Language: %s\r\n", *hdr);
-    }
-    if ((hdr = spool_getheader(txn->req_hdrs, "Overwrite")) &&
-	!strcmp(hdr[0], "F")) {
-	prot_printf(dest_be->out, "If-None-Match: *\r\n");
-    }
-    if ((hdr = spool_getheader(resp_hdrs, "Content-Type")))
-	prot_printf(dest_be->out, "Content-Type: %s\r\n", hdr[0]);
-    if ((hdr = spool_getheader(resp_hdrs, "Content-Encoding")))
-	prot_printf(dest_be->out, "Content-Encoding: %s\r\n", hdr[0]);
-    if ((hdr = spool_getheader(resp_hdrs, "Content-Language")))
-	prot_printf(dest_be->out, "Content-Language: %s\r\n", hdr[0]);
-    prot_printf(dest_be->out, "Content-Length: %u\r\n",
+    prot_printf(dest_be->out, "PUT %s %s\r\n"
+    			      "Host: %s\r\n"
+			      "User-Agent: %s\r\n"
+			      "Expect: 100-continue\r\n",
+		*spool_getheader(txn->req_hdrs, "Destination"), HTTP_VERSION,
+		dest_be->hostname, buf_cstring(&serverinfo));
+    hdr = spool_getheader(txn->req_hdrs, "Overwrite");
+    if (hdr && !strcmp(*hdr, "F"))
+	prot_puts(dest_be->out, "If-None-Match: *\r\n");
+    write_hdr(dest_be->out, "TE", txn->req_hdrs);
+    write_hdr(dest_be->out, "Prefer", txn->req_hdrs);
+    write_hdr(dest_be->out, "Accept", txn->req_hdrs);
+    write_hdr(dest_be->out, "Accept-Charset", txn->req_hdrs);
+    write_hdr(dest_be->out, "Accept-Encoding", txn->req_hdrs);
+    write_hdr(dest_be->out, "Accept-Language", txn->req_hdrs);
+    write_hdr(dest_be->out, "Content-Type", resp_hdrs);
+    write_hdr(dest_be->out, "Content-Encoding", resp_hdrs);
+    write_hdr(dest_be->out, "Content-Language", resp_hdrs);
+    prot_printf(dest_be->out, "Content-Length: %u\r\n\r\n",
 		buf_len(&resp_body.payload));
-    prot_puts(dest_be->out, "\r\n");
     prot_flush(dest_be->out);
 
     /* Read response(s) from dest backend until final response or error */
+    sent_body = 0;
+
     do {
 	r = http_read_response(dest_be, METH_PUT, &code, &statline,
 			       &resp_hdrs, NULL, &txn->error.desc);
@@ -1093,33 +1154,29 @@ EXPORTED int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
     send_response(statline, resp_hdrs, NULL, &txn->flags);
     if (code != 204) {
 	resp_body.framing = FRAMING_UNKNOWN;
-	r = pipe_resp_body(dest_be->in, httpd_out, resp_hdrs, &resp_body,
-			   0, &txn->error.desc);
-	if (r) {
+	if (pipe_resp_body(dest_be->in, httpd_out, resp_hdrs, &resp_body,
+			   0, &txn->error.desc)) {
+	    /* Couldn't pipe the body and can't finish response */
+	    txn->flags.conn = CONN_CLOSE;
 	    proxy_downserver(dest_be);
 	    goto done;
 	}
     }
 
+
+  delete:
     if ((txn->meth == METH_MOVE) && (code < 300)) {
 	/*
 	 * Send a DELETE request to source backend:
 	 *
-	 * - Add If-Match header with ETag from GET
-	 * - Add If-Unmodified-Since header with Last-Modified from GET
-	 *
-	 * XXX  This clearly isn't an atomic MOVE.
-	 *      Either try to fix this (LOCK?), or don't allow MOVE
+	 * - Add If header with lock token
 	 */
-	prot_printf(src_be->out, "DELETE %s %s\r\n",
-		    txn->req_tgt.path, HTTP_VERSION);
-	prot_printf(src_be->out, "Host: %s\r\n", src_be->hostname);
-	prot_printf(src_be->out, "User-Agent: %s\r\n",
-		    buf_cstring(&serverinfo));
-	if (etag) prot_printf(src_be->out, "If-Match: %s\r\n", etag);
-	else if (lastmod) prot_printf(src_be->out,
-				      "If-Unmodified-Since: %s\r\n",
-				      lastmod);
+	prot_printf(src_be->out, "DELETE %s %s\r\n"
+				 "Host: %s\r\n"
+				 "User-Agent: %s\r\n",
+		    txn->req_tgt.path, HTTP_VERSION,
+		    src_be->hostname, buf_cstring(&serverinfo));
+	if (lock) prot_printf(src_be->out, "If: (%s)\r\n", lock);
 	prot_puts(src_be->out, "\r\n");
 	prot_flush(src_be->out);
 
@@ -1134,13 +1191,43 @@ EXPORTED int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 		break;
 	    }
 	} while (code < 200);
+
+	if (code < 300 && lock) {
+	    free(lock);
+	    lock = NULL;
+	}
     }
 
+
   done:
+    if (lock) {
+	/*
+	 * Something failed - Send an UNLOCK request to source backend:
+	 */
+	prot_printf(src_be->out, "UNLOCK %s %s\r\n"
+				 "Host: %s\r\n"
+				 "User-Agent: %s\r\n"
+				 "Lock-Token: %s\r\n\r\n",
+		    txn->req_tgt.path, HTTP_VERSION,
+		    src_be->hostname, buf_cstring(&serverinfo), lock);
+	prot_flush(src_be->out);
+
+	/* Read response(s) from source backend until final resp or error */
+	resp_body.flags = BODY_DISCARD;
+
+	do {
+	    if (http_read_response(src_be, METH_UNLOCK, &code, NULL,
+				   &resp_hdrs, &resp_body, &txn->error.desc)) {
+		proxy_downserver(src_be);
+		break;
+	    }
+	} while (code < 200);
+
+	free(lock);
+    }
+
     txn->resp_body.payload = resp_body.payload;
     if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
-    if (etag) free(etag);
-    if (lastmod) free(lastmod);
 
     return r;
 }
