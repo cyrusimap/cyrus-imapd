@@ -285,6 +285,7 @@ sub test_shared
 	    '/shared/vendor/cmu/cyrus-imapd/lastpop' => undef,
 	    '/shared/vendor/cmu/cyrus-imapd/expire' => undef,
 	    '/shared/vendor/cmu/cyrus-imapd/duplicatedeliver' => 'false',
+	    '/shared/specialuse' => undef,
 	    '/shared/thread' => undef,
 	    '/shared/sort' => undef,
 	    '/shared/specialuse' => undef,
@@ -323,6 +324,7 @@ sub test_specialuse
     my $imaptalk = $self->{store}->get_client();
     my $res;
     my $entry = '/private/specialuse';
+    my $sentry = '/shared/specialuse';
     my @testcases = (
 	# Cyrus has no virtual folders, so cannot do \All
 	{
@@ -390,6 +392,7 @@ sub test_specialuse
 	$res = $imaptalk->getmetadata($folder, $entry);
 	$self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 	$self->assert_not_null($res);
+	delete $res->{$sentry}; # may return a shared entry as well...
 	$self->assert_deep_equals({
 	    $folder => { $entry => undef }
 	}, $res);
@@ -402,6 +405,7 @@ sub test_specialuse
 	$res = $imaptalk->getmetadata($folder, $entry);
 	$self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 	$self->assert_not_null($res);
+	delete $res->{$sentry}; # may return a shared entry as well...
 	my $expected = {
 		$folder => { $entry => ($tc->{result} eq 'ok' ?  $tc->{specialuse} : undef) }
 	    };
@@ -419,6 +423,7 @@ sub test_specialuse
 	$res = $imaptalk->getmetadata($folder, $entry);
 	$self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 	$self->assert_not_null($res);
+	delete $res->{$sentry}; # may return a shared entry as well...
 	my $expected = {
 		$folder => { $entry => ($tc->{result} eq 'ok' ?  $tc->{specialuse} : undef) }
 	    };
@@ -437,6 +442,7 @@ sub test_specialuse
 	$res = $imaptalk->getmetadata($folder, $entry);
 	$self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 	$self->assert_not_null($res);
+	delete $res->{$sentry}; # may return a shared entry as well...
 	my $expected = {
 		$folder => { $entry => undef }
 	    };
