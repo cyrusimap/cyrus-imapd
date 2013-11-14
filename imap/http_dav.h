@@ -518,6 +518,11 @@ int meth_unlock(struct transaction_t *txn, void *params);
 
 
 /* PROPFIND callbacks */
+int propfind_getdata(const xmlChar *name, xmlNsPtr ns,
+		     struct propfind_ctx *fctx,
+		     struct propstat propstat[], xmlNodePtr prop,
+		     struct mime_type_t *mime_types, int precond,
+		     const char *data, unsigned long datalen);
 int propfind_fromdb(const xmlChar *name, xmlNsPtr ns,
 		    struct propfind_ctx *fctx, xmlNodePtr resp,
 		    struct propstat propstat[], void *rock);

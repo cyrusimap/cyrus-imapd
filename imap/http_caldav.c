@@ -171,6 +171,9 @@ static int propfind_caltransp(const xmlChar *name, xmlNsPtr ns,
 static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
 			       struct proppatch_ctx *pctx,
 			       struct propstat propstat[], void *rock);
+static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
+			    struct propfind_ctx *fctx, xmlNodePtr resp,
+			    struct propstat propstat[], void *rock);
 static int proppatch_timezone(xmlNodePtr prop, unsigned set,
 			      struct proppatch_ctx *pctx,
 			      struct propstat propstat[], void *rock);
@@ -293,8 +296,9 @@ static const struct prop_entry caldav_props[] = {
       propfind_caldata, NULL, NULL },
     { "calendar-description", NS_CALDAV, PROP_COLLECTION,
       propfind_fromdb, proppatch_todb, NULL },
-    { "calendar-timezone", NS_CALDAV, PROP_COLLECTION,
-      propfind_fromdb, proppatch_timezone, NULL },
+    { "calendar-timezone", NS_CALDAV,
+      PROP_COLLECTION | PROP_PRESCREEN | PROP_NEEDPROP,
+      propfind_timezone, proppatch_timezone, NULL },
     { "supported-calendar-component-set", NS_CALDAV, PROP_COLLECTION,
       propfind_calcompset, proppatch_calcompset, NULL },
     { "supported-calendar-data", NS_CALDAV, PROP_COLLECTION,
@@ -1975,99 +1979,32 @@ static int propfind_reportset(const xmlChar *name, xmlNsPtr ns,
 }
 
 
-/* Callback to fetch CALDAV:calendar-data */
+/* Callback to prescreen/fetch CALDAV:calendar-data */
 static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 			    struct propfind_ctx *fctx,
-			    xmlNodePtr resp,
+			    xmlNodePtr resp __attribute__((unused)),
 			    struct propstat propstat[],
 			    void *rock)
 {
     xmlNodePtr prop = (xmlNodePtr) rock;
-    xmlChar *attr;
-    const char *data;
-    char *freeme = NULL;
-    unsigned long datalen;
-    xmlNodePtr node;
+    const char *data = NULL;
+    unsigned long datalen = 0;
 
-    if (!resp || !propstat) {
-	/* Prescreen calendar-data "property" request */
-	unsigned allowed = 1;
+    if (propstat) {
+	if (!fctx->record) return HTTP_NOT_FOUND;
 
-	if ((attr = xmlGetProp(prop, BAD_CAST "content-type"))) {
-	    struct mime_type_t *mime;
-
-	    /* Check requested MIME type */
-	    for (mime = caldav_mime_types; mime->content_type; mime++) {
-		if (is_mediatype((const char *) attr, mime->content_type)) {
-		    xmlFree(attr);
-
-		    if ((attr = xmlGetProp(prop, BAD_CAST "version")) &&
-			(!mime->version ||
-			 xmlStrcmp(attr, BAD_CAST mime->version))) {
-			allowed = 0;
-		    }
-		    break;
-		}
-	    }
-	    if (!mime->content_type) allowed = 0;
-
-	    if (attr) xmlFree(attr);
+	if (!fctx->msg_base) {
+	    mailbox_map_message(fctx->mailbox, fctx->record->uid,
+				&fctx->msg_base, &fctx->msg_size);
 	}
+	if (!fctx->msg_base) return HTTP_SERVER_ERROR;
 
-	if (!allowed) {
-	    fctx->err->precond = CALDAV_SUPP_DATA;
-	    *fctx->ret = HTTP_FORBIDDEN;
-	}
-
-	return allowed;
+	data = fctx->msg_base + fctx->record->header_size;
+	datalen = fctx->record->size - fctx->record->header_size;
     }
 
-
-    if (!fctx->record) return HTTP_NOT_FOUND;
-
-    if (!fctx->msg_base) {
-	mailbox_map_message(fctx->mailbox, fctx->record->uid,
-			    &fctx->msg_base, &fctx->msg_size);
-    }
-
-    data = fctx->msg_base + fctx->record->header_size;
-    datalen = fctx->record->size - fctx->record->header_size;
-
-    node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			name, ns, NULL, 0);
-
-    if ((attr = xmlGetProp(prop, BAD_CAST "content-type"))) {
-	struct mime_type_t *mime = caldav_mime_types;
-
-	/* Find requested MIME type */
-	while (!is_mediatype((const char *) attr, mime->content_type)) mime++;
-
-	if (mime != caldav_mime_types) {
-	    /* Not the storage format - convert into requested MIME type */
-	    icalcomponent *ical = icalparser_parse_string(data);
-
-	    data = freeme = mime->to_string(ical);
-	    datalen = strlen(data);
-	    icalcomponent_free(ical);
-	}
-
-	xmlSetProp(node, BAD_CAST "content-type", attr);
-	xmlFree(attr);
-
-	if ((attr = xmlGetProp(prop, BAD_CAST "version"))) {
-	    xmlSetProp(node, BAD_CAST "version", attr);
-	    xmlFree(attr);
-	}
-    }
-
-    xmlAddChild(node,
-		xmlNewCDataBlock(fctx->root->doc, BAD_CAST data, datalen));
-
-    fctx->fetcheddata = 1;
-
-    if (freeme) free(freeme);
-
-    return 0;
+    return propfind_getdata(name, ns, fctx, propstat, prop, caldav_mime_types,
+			    CALDAV_SUPP_DATA, data, datalen);
 }
 
 
@@ -2410,6 +2347,45 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
     }
 
     return 0;
+}
+
+
+/* Callback to prescreen/fetch CALDAV:calendar-timezone */
+static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
+			     struct propfind_ctx *fctx,
+			     xmlNodePtr resp __attribute__((unused)),
+			     struct propstat propstat[],
+			     void *rock)
+{
+    xmlNodePtr prop = (xmlNodePtr) rock;
+    const char *data = NULL;
+    unsigned long datalen = 0;
+
+    if (propstat) {
+	struct annotation_data attrib;
+	int r = 0;
+
+	buf_reset(&fctx->buf);
+	buf_printf(&fctx->buf, ANNOT_NS "<%s>%s",
+		   (const char *) ns->href, name);
+
+	memset(&attrib, 0, sizeof(struct annotation_data));
+
+	if (fctx->mailbox && !fctx->record) {
+	    r = annotatemore_lookup(fctx->mailbox->name,
+				    buf_cstring(&fctx->buf),
+				    /* shared */ "", &attrib);
+	}
+
+	if (r) return HTTP_SERVER_ERROR;
+	if (!attrib.value) return HTTP_NOT_FOUND;
+
+	data = attrib.value;
+	datalen = attrib.size;
+    }
+
+    return propfind_getdata(name, ns, fctx, propstat, prop, caldav_mime_types,
+			    CALDAV_SUPP_DATA, data, datalen);
 }
 
 

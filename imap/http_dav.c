@@ -826,6 +826,74 @@ static int xml_add_response(struct propfind_ctx *fctx, long code)
 }
 
 
+/* Helper function to prescreen/fetch resource data */
+int propfind_getdata(const xmlChar *name, xmlNsPtr ns,
+		     struct propfind_ctx *fctx,
+		     struct propstat propstat[], xmlNodePtr prop,
+		     struct mime_type_t *mime_types, int precond,
+		     const char *data, unsigned long datalen)
+{
+    int ret = 0;
+    xmlChar *type, *ver = NULL;
+    struct mime_type_t *mime;
+
+    type = xmlGetProp(prop, BAD_CAST "content-type");
+    if (type) ver = xmlGetProp(prop, BAD_CAST "version");
+
+    /* Check/find requested MIME type */
+    for (mime = mime_types; type && mime->content_type; mime++) {
+	if (is_mediatype((const char *) type, mime->content_type)) {
+	    if (ver &&
+		(!mime->version || xmlStrcmp(ver, BAD_CAST mime->version))) {
+		continue;
+	    }
+	    break;
+	}
+    }
+
+    if (!propstat) {
+	/* Prescreen "property" request */
+	if (!mime->content_type) {
+	    fctx->err->precond = precond;
+	    ret = *fctx->ret = HTTP_FORBIDDEN;
+	}
+    }
+    else {
+	/* Add "property" */
+	char *freeme = NULL;
+
+	prop = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
+			    &propstat[PROPSTAT_OK], name, ns, NULL, 0);
+
+	if (mime != mime_types) {
+	    /* Not the storage format - convert into requested MIME type */
+	    void *obj = mime_types->from_string(data);
+	    
+	    data = freeme = mime->to_string(obj);
+	    datalen = strlen(data);
+	    mime_types->free(obj);
+	}
+
+	if (type) {
+	    xmlSetProp(prop, BAD_CAST "content-type", type);
+	    if (ver) xmlSetProp(prop, BAD_CAST "version", ver);
+	}
+
+	xmlAddChild(prop,
+		    xmlNewCDataBlock(fctx->root->doc, BAD_CAST data, datalen));
+
+	fctx->fetcheddata = 1;
+
+	if (freeme) free(freeme);
+    }
+
+    if (type) xmlFree(type);
+    if (ver) xmlFree(ver);
+
+    return ret;
+}
+
+
 /* Callback to fetch DAV:creationdate */
 int propfind_creationdate(const xmlChar *name, xmlNsPtr ns,
 			  struct propfind_ctx *fctx,
@@ -1810,7 +1878,7 @@ static int prescreen_prop(const struct prop_entry *entry,
     else if (entry->flags & PROP_PRESCREEN) {
 	void *rock = (entry->flags & PROP_NEEDPROP) ? prop : entry->rock;
 
-	allowed = entry->get(prop->name, NULL, fctx, NULL, NULL, rock);
+	allowed = !entry->get(prop->name, NULL, fctx, NULL, NULL, rock);
     }
 
     return allowed;
