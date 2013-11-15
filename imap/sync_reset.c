@@ -126,38 +126,10 @@ EXPORTED void fatal(const char* s, int code)
 
 static int reset_single(const char *userid)
 {
-    struct sync_name_list *list = NULL;
+    struct sync_name_list *sublist = sync_name_list_create();
+    struct sync_name_list *mblist = sync_name_list_create();
     struct sync_name *item;
-    char buf[MAX_MAILBOX_NAME];
     int r = 0;
-
-    /* Nuke subscriptions */
-    list = sync_name_list_create();
-    r = mboxlist_allsubs(userid, addmbox_sub, list);
-    if (r) goto fail;
-
-    /* ignore failures here - the subs file gets deleted soon anyway */
-    for (item = list->head; item; item = item->next) {
-        (void)mboxlist_changesub(item->name, userid, sync_authstate, 0, 0, 0);
-    }
-    sync_name_list_free(&list);
-
-    /* Nuke normal folders */
-    list = sync_name_list_create();
-
-    (sync_namespacep->mboxname_tointernal)(sync_namespacep, "INBOX",
-					   userid, buf);
-
-    /* deleted namespace items if enabled */
-    if (mboxlist_delayed_delete_isenabled()) {
-	char deletedname[MAX_MAILBOX_BUFFER];
-	mboxname_todeleted(buf, deletedname, 0);
-	strlcat(deletedname, ".*", sizeof(deletedname));
-	r = (sync_namespace.mboxlist_findall)(&sync_namespace, deletedname, 1,
-					      sync_userid, sync_authstate,
-					      addmbox, (void *)list);
-	if (r) goto fail;
-    }
 
     /* XXX: adding an entry to userdeny_db here would avoid the need to
      * protect against new logins with external proxy rules - Cyrus could
@@ -166,29 +138,31 @@ static int reset_single(const char *userid)
     /* first, disconnect all current connections for this user */
     proc_killuser(userid);
 
-    strlcat(buf, ".*", sizeof(buf));
-    r = (sync_namespacep->mboxlist_findall)(sync_namespacep, buf, 1,
-					    sync_userid, sync_authstate,
-					    addmbox, (void *)list);
+    r = mboxlist_allsubs(userid, addmbox_sub, sublist);
     if (r) goto fail;
 
-    for (item = list->head; item; item = item->next) {
-        r = mboxlist_deletemailbox(item->name, 1, sync_userid,
-				   sync_authstate, NULL, 0, 1, 0);
-        if (r) goto fail;
+    /* ignore failures here - the subs file gets deleted soon anyway */
+    for (item = sublist->head; item; item = item->next) {
+	(void)mboxlist_changesub(item->name, userid, sync_authstate, 0, 0, 0);
     }
 
-    /* Nuke inbox (recursive nuke possible?) */
-    (sync_namespacep->mboxname_tointernal)(sync_namespacep, "INBOX",
-					   userid, buf);
-    r = mboxlist_deletemailbox(buf, 1, sync_userid,
-			       sync_authstate, NULL, 0, 1, 0);
-    if (r && (r != IMAP_MAILBOX_NONEXISTENT)) goto fail;
+    r = mboxlist_allusermbox(userid, addmbox_sub, mblist, /*incdel*/1);
+    if (r) goto fail;
+
+    for (item = mblist->head; item; item = item->next) {
+	r = mboxlist_deletemailbox(item->name, 1, sync_userid,
+				   sync_authstate, NULL, 0, 1, 0);
+	if (r) goto fail;
+	/* XXX - cheap and nasty hack around actually cleaning up the entry */
+	r = mboxlist_deleteremote(item->name, NULL);
+	if (r) goto fail;
+    }
 
     r = user_deletedata(userid, 1);
 
  fail:
-    sync_name_list_free(&list);
+    sync_name_list_free(&sublist);
+    sync_name_list_free(&mblist);
 
     return r;
 }
