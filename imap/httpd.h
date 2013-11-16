@@ -130,9 +130,10 @@ enum {
     URL_NS_PRINCIPAL,
     URL_NS_CALENDAR,
     URL_NS_ADDRESSBOOK,
-    URL_NS_RSS,
     URL_NS_ISCHEDULE,
-    URL_NS_DOMAINKEY
+    URL_NS_DOMAINKEY,
+    URL_NS_TIMEZONE,
+    URL_NS_RSS
 };
 
 /* Bitmask of features/methods to allow, based on URL */
@@ -422,13 +423,14 @@ struct accept {
     struct accept *next;
 };
 
+extern struct namespace_t namespace_default;
 extern struct namespace_t namespace_principal;
 extern struct namespace_t namespace_calendar;
 extern struct namespace_t namespace_addressbook;
 extern struct namespace_t namespace_ischedule;
 extern struct namespace_t namespace_domainkey;
+extern struct namespace_t namespace_timezone;
 extern struct namespace_t namespace_rss;
-extern struct namespace_t namespace_default;
 
 
 /* XXX  These should be included in struct transaction_t */

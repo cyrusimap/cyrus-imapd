@@ -7,7 +7,7 @@
 </head>
 <body>
 
-<h1>Cyrus HTTP (RSS, CalDAV, CardDAV, iSchedule, DomainKey)</h1>
+<h1>Cyrus HTTP (RSS, CalDAV, CardDAV, iSchedule, Timezone Service)</h1>
 
 <b><i>Note that the HTTP service and associated modules in Cyrus are
     still under development.  This release should be considered beta
@@ -28,6 +28,9 @@
 <li>Allow scheduling transactions between separate calendaring and
   scheduling systems via the iSchedule protocol <i>(currently only used
   within a Cyrus Murder)</i>.</li>
+<li>Act as a Timezone Service by using IMAP mailboxes as timezone
+  collections and RFC 5322 messages to store iCalendar (VTIMEZONE)
+  data.</li>
 </ul>
 
 <i>Unlike the <a href="http://httpd.apache.org/">Apache HTTP
@@ -88,6 +91,13 @@
   installed.</li>
 </ul>
 -->
+
+<h3>Timezone Service Requirements</h3>
+<ul>
+<li>Must meet CalDAV requirements above.</li>
+<li>Must have <a href="http://www.digip.org/jansson/">Jansson</a>
+  installed.</li>
+</ul>
 
 <h2 id="config">General Configuration</h2>
 
@@ -533,5 +543,9 @@
 
 <p><i>Currently unavailable.  Will be available once iSchedule support to
     external servers is available.</i></p>
+
+<h2>Timezone Service Module</h2>
+
+<p><i>Currently under development.</i></p>
 
 </body></html>

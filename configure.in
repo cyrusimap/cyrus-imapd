@@ -1041,9 +1041,10 @@ if test "$ENABLE_RSS" != no -o "$ENABLE_DAV" != no; then
       ENABLE_JSON=yes
       PKG_CHECK_MODULES([JSON], [jansson],, ENABLE_JSON=no)
       if test "$ENABLE_JSON" != no; then
+         HTTP_OBJS="$HTTP_OBJS \$(TIMEZONE_OBJS)"
          AC_SUBST(JSON_CFLAGS)
 	 AC_SUBST(JSON_LIBS)
-         AC_DEFINE(WITH_JSON,[],[Build jCal/jCard support into httpd?])
+         AC_DEFINE(WITH_JSON,[],[Build jCal/jCard/TZ-service support into httpd?])
       fi
    fi
 fi
