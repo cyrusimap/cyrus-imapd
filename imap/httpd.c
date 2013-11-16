@@ -277,9 +277,12 @@ struct namespace_t *namespaces[] = {
 #ifdef WITH_DAV
     &namespace_principal,
     &namespace_calendar,
+    &namespace_addressbook,
     &namespace_ischedule,
     &namespace_domainkey,
-    &namespace_addressbook,
+#ifdef WITH_JSON
+    &namespace_timezone,
+#endif
 #endif
 #ifdef WITH_RSS
     &namespace_rss,
