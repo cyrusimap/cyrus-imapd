@@ -1963,6 +1963,7 @@ output_rrule				(char	        *rrule_buffer,
 	/* We do 6 days at the end of this month, and 1 at the start of the
 	   next. We can't do this if we want Outlook compatability, as it
 	   needs BYMONTHDAY, which Outlook doesn't support. */
+/*
 	sprintf (buffer,
 		 "RRULE:FREQ=YEARLY;BYMONTH=%i;BYMONTHDAY=%i,%i,%i,%i,%i,%i;BYDAY=%s",
 		 month + 1,
@@ -1977,6 +1978,17 @@ output_rrule				(char	        *rrule_buffer,
 
 	sprintf (rrule_buffer, "%s%s\n%s%s\r\n",
 		 buffer, until, buffer2, until);
+*/
+	/* Multiple RRULEs within the component are illegal according to new iCal RFC 5545,
+	   so combine the above RRULEs (commented) into a single RRULE using BYYEARDAY */
+	day_number = 0;
+	int i;
+	for (i = month+1; i < 12; i++) {
+	  day_number += DaysInMonth[i];
+	}
+	sprintf (rrule_buffer, "RRULE:FREQ=YEARLY;BYYEARDAY=-%i,-%i,-%i,-%i,-%i,-%i,-%i;BYDAY=%s%s\r\n",
+		 day_number, day_number+1, day_number+2, day_number+3,
+		 day_number+4, day_number+5, day_number+6, WeekDays[day_weekday], until);
 
 	return TRUE;
       }
@@ -2021,6 +2033,7 @@ output_rrule				(char	        *rrule_buffer,
 	/* We do 6 days at the end of this month, and 1 at the start of the
 	   next. We can't do this if we want Outlook compatability, as it needs
 	   BYMONTHDAY, which Outlook doesn't support. */
+/*
 	day_number = DaysInMonth[month];
 	sprintf (buffer,
 		 "RRULE:FREQ=YEARLY;BYMONTH=%i;BYMONTHDAY=%i,%i,%i,%i,%i,%i;BYDAY=%s",
@@ -2036,6 +2049,17 @@ output_rrule				(char	        *rrule_buffer,
 
 	sprintf (rrule_buffer, "%s%s\r\n%s%s\r\n",
 		 buffer, until, buffer2, until);
+*/
+	/* Multiple RRULEs within the component are illegal according to new iCal RFC 5545,
+	   so combine the above RRULEs (commented) into a single RRULE using BYYEARDAY */
+	day_number = 0;
+	int i;
+	for (i = month+1; i < 12; i++) {
+	  day_number += DaysInMonth[i];
+	}
+	sprintf (rrule_buffer, "RRULE:FREQ=YEARLY;BYYEARDAY=-%i,-%i,-%i,-%i,-%i,-%i,-%i;BYDAY=%s%s\r\n",
+		 day_number, day_number+1, day_number+2, day_number+3,
+		 day_number+4, day_number+5, day_number+6, WeekDays[day_weekday], until);
 
 	return TRUE;
       }
