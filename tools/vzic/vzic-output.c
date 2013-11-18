@@ -88,7 +88,7 @@ char TZIDPrefixExpanded[1024];
 
 /* This is the maximum year that time_t value can typically hold on 32-bit
    systems. */
-#define MAX_TIME_T_YEAR		2037
+#define MAX_TIME_T_YEAR		2038
 
 
 /* The year we use to start RRULEs. */
