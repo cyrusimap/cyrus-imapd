@@ -2144,7 +2144,7 @@ output_rrule_2				(char		*buffer,
 	   This is needed for Antarctica/Palmer & America/Santiago. */
 	sprintf (buffer, "RRULE:FREQ=YEARLY;BYMONTH=%i;BYDAY=2%s",
 		 month + 1, WeekDays[day_weekday]);
-      } else if (month != 1 && day_number == DaysInMonth[month] - 7) {
+      } else if (month != 1 && day_number <= DaysInMonth[month] - 7 && day_number > DaysInMonth[month] - 14) {
 	/* Convert it to a BYDAY=-1SU type of RRULE. (But never for February.)
 	   This is needed for America/Godthab. */
 	sprintf (buffer, "RRULE:FREQ=YEARLY;BYMONTH=%i;BYDAY=-1%s",
