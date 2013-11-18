@@ -538,7 +538,7 @@ parse_year			(ParsingData	*data,
     year = year * 10 + *p - '0';
   }
 
-  if (year < 1000 || year > 2037) {
+  if (year < 1000 || year > 2038) {
 	fprintf (stderr, "%s:%i: Strange year: %s\n%s\n", data->filename,
 		 data->line_number, field, data->line);
 	exit (1);
