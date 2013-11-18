@@ -62,10 +62,10 @@
    the past, since we can't include any historical changes in the files. */
 #if 1
 #define DUMP_START_YEAR 2003
-#define DUMP_END_YEAR	2037
+#define DUMP_END_YEAR	2038
 #else
 #define DUMP_START_YEAR 1970
-#define DUMP_END_YEAR	2037
+#define DUMP_END_YEAR	2038
 #endif
 
 /* The maximum size of any complete pathname. */
