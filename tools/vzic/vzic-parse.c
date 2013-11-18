@@ -27,6 +27,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <libgen.h>
 
 #include "vzic.h"
 #include "vzic-parse.h"
@@ -37,6 +39,7 @@
 /* The maximum number of fields on a line. */
 #define MAX_FIELDS	12
 
+#define CREATE_SYMLINK	1
 
 typedef enum
 {
@@ -488,6 +491,33 @@ parse_link_line			(ParsingData	*data)
   printf ("LINK FROM: %s\tTO: %s\n", from, to);
 #endif
 
+#if CREATE_SYMLINK
+  {
+      int len = strnlen(to,254);
+      int dirs = 0;
+      int i;
+      for (i = 0; i < len; i++) {
+	  dirs += to[i] == '/' ? 1 : 0;
+      }
+      if (dirs) {
+	  char rel_from[255];
+	  char to_dir[255];
+	  char to_path[255];
+	  if (dirs == 1) {
+	      sprintf(rel_from, "../%s.ics", from);
+	  } else if (dirs == 2) {
+	      sprintf(rel_from, "../../%s.ics", from);
+	  } else {
+	      return;
+	  }
+	  sprintf(to_path, "%s/%s.ics", VzicOutputDir, to);
+	  strncpy(to_dir, to_path, 254);
+	  ensure_directory_exists(dirname(to_dir));
+	  //printf("Creating symlink from %s to %s\n", rel_from, to_path);
+	  symlink(rel_from, to_path);
+      }
+  }
+#else
   if (g_hash_table_lookup_extended (data->link_data, from,
 				    (gpointer) &old_from,
 				    (gpointer) &zone_list)) {
@@ -500,6 +530,7 @@ parse_link_line			(ParsingData	*data)
   zone_list = g_list_prepend (zone_list, g_strdup (to));
 
   g_hash_table_insert (data->link_data, from, zone_list);
+#endif
 }
 
 
