@@ -42,7 +42,7 @@ gboolean VzicPureOutput			= FALSE;
 
 gboolean VzicDumpOutput			= FALSE;
 gboolean VzicDumpChanges		= FALSE;
-gboolean VzicDumpZoneNamesAndCoords	= TRUE;
+gboolean VzicDumpZoneNamesAndCoords	= FALSE;
 gboolean VzicDumpZoneTranslatableStrings= TRUE;
 gboolean VzicNoRRules			= FALSE;
 gboolean VzicNoRDates			= FALSE;
