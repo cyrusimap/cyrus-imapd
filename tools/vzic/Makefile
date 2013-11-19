@@ -23,7 +23,8 @@ PRODUCT_ID = -//My Organization//NONSGML My Product//EN
 # gets expanded to today's date. There is also a vzic-merge.pl which can be
 # used to merge changes into a master set of VTIMEZONEs. If a VTIMEZONE has
 # changed, it bumps the version number on the end of this prefix. */
-TZID_PREFIX = /myorganization.org/%D_1/
+#TZID_PREFIX = /myorganization.org/%D_1/
+TZID_PREFIX =
 
 # This is what libical-evolution uses.
 #TZID_PREFIX = /softwarestudio.org/Olson_%D_1/
