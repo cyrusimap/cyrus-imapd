@@ -81,7 +81,7 @@ char TZIDPrefixExpanded[1024];
    since otherwise RDATEs are more efficient. Actually, I've set this high
    so we only use RRULEs for infinite recurrences. Since expanding RRULEs is
    very time-consuming, this seems sensible. */
-#define MIN_RRULE_OCCURRENCES	100
+#define MIN_RRULE_OCCURRENCES	1
 
 
 /* The year we go up to when dumping the list of timezone changes (used
@@ -1370,8 +1370,10 @@ check_for_recurrence		(FILE		*fp,
   } else {
     VzicTime t1 = *vzictime;
 
+#if 0
     printf ("RRULE with UNTIL - aborting\n");
     abort ();
+#endif
 
     calculate_actual_time (&t1, TIME_UNIVERSAL, vzictime->prev_stdoff,
 			   vzictime->prev_walloff);
