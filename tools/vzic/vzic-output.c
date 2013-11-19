@@ -66,6 +66,8 @@
 
 #include "vzic-dump.h"
 
+#include "xversion.h"
+
 
 /* These come from the Makefile. See the comments there. */
 char *ProductID = PRODUCT_ID;
@@ -538,7 +540,10 @@ output_zone			(char		*directory,
     }
   }
 
-  fprintf (fp, "BEGIN:VCALENDAR\r\nPRODID:%s\r\nVERSION:2.0\r\n", ProductID);
+  fprintf (fp, "BEGIN:VCALENDAR\r\nPRODID:");
+  fprintf (fp, ProductID, _CYRUS_VERSION);
+  fprintf (fp, "\r\nVERSION:2.0\r\n");
+
 
   output_zone_to_files (zone, zone_name, rule_data, fp, changes_fp);
 

@@ -3,13 +3,13 @@
 # You will need to set this to the directory that the Olson timezone data
 # files are in.
 #
-OLSON_DIR = /home/damon/src/olson/tzdata2006b
+OLSON_DIR = .
 
 
 # This is used as the PRODID property on the iCalendar files output.
 # It identifies the product which created the iCalendar objects.
 # So you need to substitute your own organization name and product.
-PRODUCT_ID = -//My Organization//NONSGML My Product//EN
+PRODUCT_ID = -//CyrusIMAP.org//Cyrus %s//EN
 
 # This is what libical-evolution uses.
 #PRODUCT_ID = -//Ximian//NONSGML Evolution Olson-VTIMEZONE Converter//EN
@@ -35,7 +35,7 @@ TZID_PREFIX =
 # tests. You may need to change the '#include <ical.h>' line at the top of
 # test-vzic.c as well.
 LIBICAL_CFLAGS =
-LIBICAL_LDADD = -lical-evolution
+LIBICAL_LDADD = -lical
 
 
 #
@@ -45,7 +45,7 @@ LIBICAL_LDADD = -lical-evolution
 GLIB_CFLAGS = `pkg-config --cflags glib-2.0`
 GLIB_LDADD = `pkg-config --libs glib-2.0`
 
-CFLAGS = -g -DOLSON_DIR=\"$(OLSON_DIR)\" -DPRODUCT_ID='"$(PRODUCT_ID)"' -DTZID_PREFIX='"$(TZID_PREFIX)"' $(GLIB_CFLAGS) $(LIBICAL_CFLAGS)
+CFLAGS = -g -I../.. -DOLSON_DIR=\"$(OLSON_DIR)\" -DPRODUCT_ID='"$(PRODUCT_ID)"' -DTZID_PREFIX='"$(TZID_PREFIX)"' $(GLIB_CFLAGS) $(LIBICAL_CFLAGS)
 
 OBJECTS = vzic.o vzic-parse.o vzic-dump.o vzic-output.o
 
