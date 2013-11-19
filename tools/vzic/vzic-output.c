@@ -1070,8 +1070,15 @@ output_zone_components			(FILE		*fp,
   int i, start_index = 0;
   gboolean only_one_change = FALSE;
   char start_buffer[1024];
+  time_t now = time(0);
+  struct tm *tm = gmtime(&now);
 
   fprintf (fp, "BEGIN:VTIMEZONE\r\nTZID:%s%s\r\n", TZIDPrefixExpanded, name);
+
+  /* Use current time as LAST-MODIFIED */
+  fprintf (fp, "LAST-MODIFIED:%04i%02i%02iT%02i%02i%02iZ\r\n",
+	   tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
+	   tm->tm_hour, tm->tm_min, tm->tm_sec);
 
   if (VzicUrlPrefix != NULL)
       fprintf (fp, "TZURL:%s/%s\r\n", VzicUrlPrefix, name);
