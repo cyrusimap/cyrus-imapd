@@ -51,29 +51,16 @@
 #include <syslog.h>
 #include <assert.h>
 
-#include "acl.h"
-#include "annotate.h"
-#include "charset.h"
 #include "global.h"
+#include "hash.h"
 #include "httpd.h"
+#include "http_dav.h"
 #include "http_err.h"
-#include "http_proxy.h"
-#include "imap_err.h"
 #include "jcal.h"
-#include "mailbox.h"
 #include "map.h"
-#include "mboxlist.h"
-#include "message.h"
-#include "parseaddr.h"
-#include "proxy.h"
-#include "rfc822date.h"
-#include "seen.h"
 #include "tok.h"
 #include "util.h"
-#include "version.h"
-#include "wildmat.h"
-#include "xmalloc.h"
-#include "xstrlcpy.h"
+#include "xcal.h"
 
 
 #define TIMEZONE_WELLKNOWN_URI "/.well-known/timezone"
@@ -81,6 +68,39 @@
 static time_t compile_time;
 static void timezone_init(struct buf *serverinfo);
 static int meth_get(struct transaction_t *txn, void *params);
+static int action_capabilities(struct transaction_t *txn,
+			       struct hash_table *params);
+static int action_get(struct transaction_t *txn, struct hash_table *params);
+
+static const struct action_t {
+    const char *name;
+    int (*proc)(struct transaction_t *txn, struct hash_table *params);
+} actions[] = {
+    { "capabilities",	&action_capabilities },
+    { "get",		&action_get },
+    { NULL,		NULL}
+};
+
+
+static struct mime_type_t tz_mime_types[] = {
+    /* First item MUST be the default type and storage format */
+    { "text/calendar; charset=utf-8", "2.0", "ics", "ifb",
+      (char* (*)(void *)) &icalcomponent_as_ical_string_r,
+      (void * (*)(const char*)) &icalparser_parse_string,
+      (void (*)(void *)) &icalcomponent_free, NULL, NULL
+    },
+    { "application/calendar+xml; charset=utf-8", NULL, "xcs", "xfb",
+      (char* (*)(void *)) &icalcomponent_as_xcal_string,
+      (void * (*)(const char*)) &xcal_string_as_icalcomponent,
+      NULL, NULL, NULL
+    },
+    { "application/calendar+json; charset=utf-8", NULL, "jcs", "jfb",
+      (char* (*)(void *)) &icalcomponent_as_jcal_string,
+      (void * (*)(const char*)) &jcal_string_as_icalcomponent,
+      NULL, NULL, NULL
+    },
+    { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
+};
 
 
 /* Namespace for TIMEZONE feeds of mailboxes */
@@ -124,21 +144,50 @@ static void timezone_init(struct buf *serverinfo __attribute__((unused)))
     compile_time = calc_compile_time(__TIME__, __DATE__);
 }
 
+
 /* Perform a GET/HEAD request */
 static int meth_get(struct transaction_t *txn,
 		    void *params __attribute__((unused)))
+{
+    int ret;
+    tok_t tok;
+    char *param, *action;
+    struct hash_table query_params;
+    const struct action_t *ap;
+
+    if (!URI_QUERY(txn->req_uri)) return HTTP_BAD_REQUEST;
+
+    /* Parse the query string and add param/value pairs to hash table */
+    construct_hash_table(&query_params, 10, 1);
+    tok_initm(&tok, URI_QUERY(txn->req_uri), "&=", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+    while ((param = tok_next(&tok))) {
+	char *value = tok_next(&tok);
+	if (!value) break;
+
+	hash_insert(param, value, &query_params);
+    }
+    tok_fini(&tok);
+
+    action = hash_lookup("action", &query_params);
+    for (ap = actions; action && ap->name && strcmp(action, ap->name); ap++);
+    if (!action || !ap->name) ret = HTTP_BAD_REQUEST;
+    else ret = ap->proc(txn, &query_params);
+
+    free_hash_table(&query_params, NULL);
+
+    return ret;
+}
+
+
+/* Perform a capabilities action */
+static int action_capabilities(struct transaction_t *txn,
+			       struct hash_table *params __attribute__((unused)))
 {
     int precond;
     struct message_guid guid;
     const char *etag;
     static time_t lastmod = 0;
     static char *buf = NULL;
-
-    /* We don't handle GET on a anything other than ?action=capabilities */
-    if (!URI_QUERY(txn->req_uri) ||
-	strcmp(URI_QUERY(txn->req_uri), "action=capabilities")) {
-	return HTTP_NOT_FOUND;
-    }
 
     /* Generate ETag based on compile date/time of this source file.
      * Extend this to include config file size/mtime if we add run-time options.
@@ -156,7 +205,7 @@ static int meth_get(struct transaction_t *txn,
     case HTTP_OK:
     case HTTP_PARTIAL:
     case HTTP_NOT_MODIFIED:
-	/* Fill in Etag,  Last-Modified, Expires, and iSchedule-Capabilities */
+	/* Fill in Etag,  Last-Modified, Expires */
 	txn->resp_body.etag = etag;
 	txn->resp_body.lastmod = compile_time;
 	txn->resp_body.maxage = 86400;  /* 24 hrs */
@@ -250,4 +299,96 @@ static int meth_get(struct transaction_t *txn,
     write_body(precond, txn, buf, strlen(buf));
 
     return 0;
+}
+
+
+/* Perform a get action */
+static int action_get(struct transaction_t *txn, struct hash_table *params)
+{
+    static struct buf pathbuf = BUF_INITIALIZER;
+    int ret = 0, r, fd = -1, precond;
+    struct stat sbuf;
+    char *freeme = NULL;
+    const char *tzid, *format, *path, *msg_base, *data = NULL;
+    unsigned long msg_size, datalen = 0;
+    struct resp_body_t *resp_body = &txn->resp_body;
+    struct mime_type_t *mime;
+
+    tzid = hash_lookup("tzid", params);
+    if (!tzid || strchr(tzid, '.')) return HTTP_BAD_REQUEST;
+
+    /* Check/find requested MIME type */
+    format = hash_lookup("format", params);
+    for (mime = tz_mime_types; format && mime->content_type; mime++) {
+	if (is_mediatype(format, mime->content_type)) break;
+    }
+    if (!mime->content_type) return HTTP_BAD_REQUEST;
+
+    /* See if file exists and get Content-Length & Last-Modified time */
+    buf_reset(&pathbuf);
+    buf_printf(&pathbuf, "%s/zoneinfo/%s.ics", config_dir, tzid);
+    path = buf_cstring(&pathbuf);
+    r = stat(path, &sbuf);
+    if (r || !S_ISREG(sbuf.st_mode)) return HTTP_NOT_FOUND;
+
+    /* Generate ETag */
+    assert(!buf_len(&txn->buf));
+    buf_printf(&txn->buf, "%ld-%ld", (long) sbuf.st_mtime, (long) sbuf.st_size);
+
+    /* Check any preconditions, including range request */
+    txn->flags.ranges = 1;
+    precond = check_precond(txn, NULL, buf_cstring(&txn->buf), sbuf.st_mtime);
+
+    switch (precond) {
+    case HTTP_OK:
+    case HTTP_PARTIAL:
+    case HTTP_NOT_MODIFIED:
+	/* Fill in Content-Type, ETag, Last-Modified, and Expires */
+	resp_body->type = mime->content_type;
+	resp_body->etag = buf_cstring(&txn->buf);
+	resp_body->lastmod = sbuf.st_mtime;
+	resp_body->maxage = 86400;  /* 24 hrs */
+	txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;
+	if (httpd_userid) txn->flags.cc |= CC_PUBLIC;
+
+	if (precond != HTTP_NOT_MODIFIED) break;
+
+    default:
+	/* We failed a precondition - don't perform the request */
+	resp_body->type = NULL;
+	return precond;
+    }
+
+
+    if (txn->meth == METH_GET) {
+	/* Open and mmap the file */
+	if ((fd = open(path, O_RDONLY)) == -1) return HTTP_SERVER_ERROR;
+	map_refresh(fd, 1, &msg_base, &msg_size, sbuf.st_size, path, NULL);
+	data = msg_base;
+	datalen = msg_size;
+
+	buf_reset(&pathbuf);
+	buf_printf(&pathbuf, "%s.%s", tzid, mime->file_ext);
+	resp_body->fname = buf_cstring(&pathbuf);
+
+	if (mime != tz_mime_types) {
+	    /* Not the storage format - convert into requested MIME type */
+	    icalcomponent *ical = icalparser_parse_string(data);
+	    
+	    data = freeme = mime->to_string(ical);
+	    datalen = strlen(data);
+	    icalcomponent_free(ical);
+	}
+
+    }
+
+    write_body(precond, txn, data, datalen);
+
+    if (freeme) free(freeme);
+    if (fd != -1) {
+	map_free(&msg_base, &msg_size);
+	close(fd);
+    }
+
+    return ret;
 }
