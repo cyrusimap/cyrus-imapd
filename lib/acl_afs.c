@@ -180,8 +180,18 @@ EXPORTED int cyrus_acl_set(char **acl, const char *identifier,
     }
 
     if (access == 0L) {
-	/* Remove any existing entry for 'identifier' */
-	strcpy(thisid, nextid);
+	/* Remove any existing entry for 'identifier'.
+	   Special case: When we try to delete an invalid/non-existent identifier,
+	   both 'thisid' and 'nextid' point to the end of *acl. */
+	newacl = xmalloc(strlen(*acl) + strlen(nextid) - strlen(thisid) + 1);
+	/* Copy existing ACLs without the current identifier.
+	   Note: The buffer will not be zero terminated. */
+	strncpy(newacl, *acl, (thisid - *acl));
+	/* Append the remaining ACL string. Zero-terminates the string. */
+	strcpy(newacl + (thisid - *acl), nextid);
+
+	free(*acl);
+	*acl = newacl;
     }
     else {
 	/* Replace any existing entry for 'identifier' */
