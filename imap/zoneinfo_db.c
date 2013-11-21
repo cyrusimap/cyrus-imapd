@@ -237,18 +237,19 @@ static int find_cb(void *rock,
 
     r = parse_zoneinfo(data, datalen, &zi, 1);
     if (!r) {
-	struct strlist *link = NULL;
+	struct strlist *linkto = NULL;
 
 	if (zi.type == ZI_LINK) {
-	    link = zi.data;
+	    linkto = zi.data;
 	    zi.data = NULL;
-	    tzid = link->s;
+
+	    tzid = linkto->s;
 	    tzidlen = strlen(tzid);
 	    r = zoneinfo_lookup(tzid, &zi);
 	}
 	if (!r) r = (*frock->proc)(tzid, tzidlen, &zi, frock->rock);
 	freestrlist(zi.data);
-	freestrlist(link);
+	freestrlist(linkto);
     }
 
     return r;
