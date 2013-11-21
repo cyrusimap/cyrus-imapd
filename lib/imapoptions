@@ -1931,6 +1931,13 @@ product version in the capabilities */
    this user.  NOTE: This must be an existing local user name with an
    INBOX, NOT an email address! */
 
+{ "zoneinfo_db", "skiplist", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist")}
+/* The cyrusdb backend to use for zoneinfo. */
+
+{ "zoneinfo_db_path", NULL, STRING }
+/* The absolute path to the zoneinfo db file.  If not specified,
+   will be confdir/zoneinfo.db */
+
 /*
 .SH SEE ALSO
 .PP
