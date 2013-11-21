@@ -900,7 +900,7 @@ int propfind_creationdate(const xmlChar *name, xmlNsPtr ns,
 			  void *rock __attribute__((unused)))
 {
     time_t t = 0;
-    struct tm *tm;
+    char datestr[21];
 
     if (fctx->data) {
 	struct dav_data *ddata = (struct dav_data *) fctx->data;
@@ -917,15 +917,10 @@ int propfind_creationdate(const xmlChar *name, xmlNsPtr ns,
 
     if (!t) return HTTP_NOT_FOUND;
 
-    tm = gmtime(&t);
-
-    buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, "%4d-%02d-%02dT%02d:%02d:%02dZ",
-	       tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
-	       tm->tm_hour, tm->tm_min, tm->tm_sec);
+    rfc3339date_gen(datestr, sizeof(datestr), t);
 
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-		 name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
+		 name, ns, BAD_CAST datestr, 0);
 
     return 0;
 }

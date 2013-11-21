@@ -704,17 +704,6 @@ static void buf_escapestr(struct buf *buf, const char *str, unsigned max,
 }
 
 
-/* Create RFC3339 date ('buf' must be at least 21 characters) */
-static void rfc3339date_gen(char *buf, size_t len, time_t t)
-{
-    struct tm *tm = gmtime(&t);
-
-    snprintf(buf, len, "%4d-%02d-%02dT%02d:%02d:%02dZ",
-	     tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, 
-	     tm->tm_hour, tm->tm_min, tm->tm_sec);
-}
-
-
 /* List messages as an RSS feed */
 static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 {
