@@ -61,22 +61,26 @@
 #include "tok.h"
 #include "util.h"
 #include "xcal.h"
+#include "xstrlcpy.h"
+#include "zoneinfo_db.h"
 
 
 #define TIMEZONE_WELLKNOWN_URI "/.well-known/timezone"
 
 static time_t compile_time;
 static void timezone_init(struct buf *serverinfo);
+static void timezone_shutdown(void);
 static int meth_get(struct transaction_t *txn, void *params);
-static int action_capabilities(struct transaction_t *txn,
-			       struct hash_table *params);
+static int action_capa(struct transaction_t *txn, struct hash_table *params);
+static int action_list(struct transaction_t *txn, struct hash_table *params);
 static int action_get(struct transaction_t *txn, struct hash_table *params);
 
 static const struct action_t {
     const char *name;
     int (*proc)(struct transaction_t *txn, struct hash_table *params);
 } actions[] = {
-    { "capabilities",	&action_capabilities },
+    { "capabilities",	&action_capa },
+    { "list",		&action_list },
     { "get",		&action_get },
     { NULL,		NULL}
 };
@@ -86,18 +90,15 @@ static struct mime_type_t tz_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { "text/calendar; charset=utf-8", "2.0", "ics", "ifb",
       (char* (*)(void *)) &icalcomponent_as_ical_string_r,
-      (void * (*)(const char*)) &icalparser_parse_string,
-      (void (*)(void *)) &icalcomponent_free, NULL, NULL
+      NULL, NULL, NULL, NULL
     },
     { "application/calendar+xml; charset=utf-8", NULL, "xcs", "xfb",
       (char* (*)(void *)) &icalcomponent_as_xcal_string,
-      (void * (*)(const char*)) &xcal_string_as_icalcomponent,
-      NULL, NULL, NULL
+      NULL, NULL, NULL, NULL
     },
     { "application/calendar+json; charset=utf-8", NULL, "jcs", "jfb",
       (char* (*)(void *)) &icalcomponent_as_jcal_string,
-      (void * (*)(const char*)) &jcal_string_as_icalcomponent,
-      NULL, NULL, NULL
+      NULL, NULL, NULL, NULL
     },
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
@@ -106,7 +107,7 @@ static struct mime_type_t tz_mime_types[] = {
 /* Namespace for TIMEZONE feeds of mailboxes */
 struct namespace_t namespace_timezone = {
     URL_NS_TIMEZONE, 0, "/timezone", TIMEZONE_WELLKNOWN_URI, 0 /* auth */, ALLOW_READ,
-    timezone_init, NULL, NULL, NULL,
+    timezone_init, NULL, NULL, timezone_shutdown,
     {
 	{ NULL,			NULL },			/* ACL		*/
 	{ NULL,			NULL },			/* COPY		*/
@@ -129,12 +130,18 @@ struct namespace_t namespace_timezone = {
 };
 
 
-static void timezone_init(struct buf *serverinfo __attribute__((unused)))
+static void timezone_init(struct buf *serverinfo)
 {
     namespace_timezone.enabled =
 	config_httpmodules & IMAP_ENUM_HTTPMODULES_TIMEZONE;
 
     if (!namespace_timezone.enabled) return;
+
+    /* Open zoneinfo db */
+    if (zoneinfo_open(NULL)) {
+	namespace_timezone.enabled = 0;
+	return;
+    }
 
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON &&
 	!strstr(buf_cstring(serverinfo), " Jansson/")) {
@@ -142,6 +149,12 @@ static void timezone_init(struct buf *serverinfo __attribute__((unused)))
     }
 
     compile_time = calc_compile_time(__TIME__, __DATE__);
+}
+
+
+static void timezone_shutdown(void)
+{
+    zoneinfo_close(NULL);
 }
 
 
@@ -180,8 +193,8 @@ static int meth_get(struct transaction_t *txn,
 
 
 /* Perform a capabilities action */
-static int action_capabilities(struct transaction_t *txn,
-			       struct hash_table *params __attribute__((unused)))
+static int action_capa(struct transaction_t *txn,
+		       struct hash_table *params __attribute__((unused)))
 {
     int precond;
     struct message_guid guid;
@@ -221,10 +234,15 @@ static int action_capabilities(struct transaction_t *txn,
     if (txn->resp_body.lastmod > lastmod) {
 	size_t flags = JSON_PRESERVE_ORDER;
 	json_t *root;
+	struct zoneinfo info;
+	int r;
+
+	/* Get info record from the database */
+	if ((r = zoneinfo_lookup_info(&info))) return HTTP_SERVER_ERROR;
 
 	/* Construct our response */
 	root = json_pack("{s:i"				/* version */
-			 "  s:{s:s s:s}"		/* info */
+			 "  s:{s:s s:[]}"		/* info */
 			 "  s:["			/* actions */
 			 "    {s:s s:[]}"		/* capabilities */
 			 "    {s:s s:["			/* list */
@@ -247,7 +265,7 @@ static int action_capabilities(struct transaction_t *txn,
 			 "      {s:s s:b s:b}]}"
 			 "  ]}",
 			 "version", 1,
-			 "info", "primary-source", "foo", "contact", "bar",
+			 "info", "primary-source", info.data->s, "contacts",
 			 "actions",
 			 "name", "capabilities", "parameters",
 
@@ -275,6 +293,8 @@ static int action_capabilities(struct transaction_t *txn,
 			 "name", "find", "parameters",
 			 "name", "lang", "required", 0, "multi", 1,
 			 "name", "name", "required", 1, "multi", 0);
+	freestrlist(info.data);
+
 	if (!root) {
 	    txn->error.desc = "Unable to create JSON response";
 	    return HTTP_SERVER_ERROR;
@@ -299,6 +319,120 @@ static int action_capabilities(struct transaction_t *txn,
     write_body(precond, txn, buf, strlen(buf));
 
     return 0;
+}
+
+
+static int list_cb(const char *tzid, int tzidlen,
+		   struct zoneinfo *zi, void *rock)
+{
+    json_t *tzarray = (json_t *) rock, *tz;
+    char tzidbuf[200], lastmod[21];
+
+    strlcpy(tzidbuf, tzid, tzidlen+1);
+    rfc3339date_gen(lastmod, sizeof(lastmod), zi->dtstamp);
+
+    tz = json_pack("{s:s s:s}", "tzid", tzidbuf, "last-modified", lastmod);
+    json_array_append_new(tzarray, tz);
+
+    if (zi->data) {
+	struct strlist *sl;
+	json_t *aliases = json_array();
+
+	json_object_set_new(tz, "aliases", aliases);
+
+	for (sl = zi->data; sl; sl = sl->next)
+	    json_array_append_new(aliases, json_string(sl->s));
+    }
+
+    return 0;
+}
+
+
+/* Perform a list action */
+static int action_list(struct transaction_t *txn, struct hash_table *params)
+{
+    int ret = 0, r, precond = HTTP_OK;
+    struct resp_body_t *resp_body = &txn->resp_body;
+    char *buf = NULL;
+    unsigned long buflen = 0;
+    struct zoneinfo info;
+    time_t lastmod;
+
+    /* Get info record from the database */
+    if ((r = zoneinfo_lookup_info(&info))) return HTTP_SERVER_ERROR;
+
+    /* Generate ETag & Last-Modified from info record */
+    assert(!buf_len(&txn->buf));
+    buf_printf(&txn->buf, "%ld-%u",
+	       info.dtstamp, strhash(info.data->s));
+    lastmod = info.dtstamp;
+    freestrlist(info.data);
+
+    /* Check any preconditions, including range request */
+    txn->flags.ranges = 1;
+    precond = check_precond(txn, NULL, buf_cstring(&txn->buf), lastmod);
+
+    switch (precond) {
+    case HTTP_OK:
+    case HTTP_PARTIAL:
+    case HTTP_NOT_MODIFIED:
+	/* Fill in ETag, Last-Modified, and Expires */
+	resp_body->etag = buf_cstring(&txn->buf);
+	resp_body->lastmod = lastmod;
+	resp_body->maxage = 86400;  /* 24 hrs */
+	txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;
+	if (httpd_userid) txn->flags.cc |= CC_PUBLIC;
+
+	if (precond != HTTP_NOT_MODIFIED) break;
+
+    default:
+	/* We failed a precondition - don't perform the request */
+	resp_body->type = NULL;
+	return precond;
+    }
+
+
+    if (txn->meth == METH_GET) {
+	size_t flags = JSON_PRESERVE_ORDER;
+	json_t *root;
+	char dtstamp[21];
+	const char *cs;
+	time_t changedsince = 0;
+
+	rfc3339date_gen(dtstamp, sizeof(dtstamp), lastmod);
+	if ((cs = hash_lookup("changedsince", params)))
+	    changedsince = icaltime_as_timet(icaltime_from_string(cs));
+
+	/* Start constructing our response */
+	root = json_pack("{s:s s:[]}", "dtstamp", dtstamp, "timezones");
+	if (!root) {
+	    txn->error.desc = "Unable to create JSON response";
+	    return HTTP_SERVER_ERROR;
+	}
+
+	/* Add timezones to array */
+	zoneinfo_find(NULL, changedsince, &list_cb,
+		      json_object_get(root, "timezones"));
+
+	/* Dump JSON object into a text buffer */
+	flags |= (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
+	buf = json_dumps(root, flags);
+	json_decref(root);
+
+	if (buf) buflen = strlen(buf);
+	else {
+	    txn->error.desc = "Error dumping JSON object";
+	    return HTTP_SERVER_ERROR;
+	}
+    }
+
+    /* Output the JSON object */
+    resp_body->type = "application/json; charset=utf-8";
+    write_body(precond, txn, buf, buflen);
+
+    if (buf) free(buf);
+
+    return ret;
 }
 
 
