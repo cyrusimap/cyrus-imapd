@@ -1913,20 +1913,34 @@ struct accept *parse_accept(const char **hdr)
 /****************************  Response Routines  *****************************/
 
 
-/* Create HTTP-date ('buf' must be at least 30 characters) */
-EXPORTED void httpdate_gen(char *buf, size_t len, time_t t)
+/* Create RFC3339 date ('buf' must be at least 21 characters) */
+EXPORTED char *rfc3339date_gen(char *buf, size_t len, time_t t)
 {
-    struct tm *tm;
+    struct tm *tm = gmtime(&t);
+
+    snprintf(buf, len, "%4d-%02d-%02dT%02d:%02d:%02dZ",
+	     tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, 
+	     tm->tm_hour, tm->tm_min, tm->tm_sec);
+
+    return buf;
+}
+
+
+/* Create HTTP-date ('buf' must be at least 30 characters) */
+EXPORTED char *httpdate_gen(char *buf, size_t len, time_t t)
+{
     static char *month[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
 			     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
     static char *wday[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
 
-    tm = gmtime(&t);
+    struct tm *tm = gmtime(&t);
 
     snprintf(buf, len, "%3s, %02d %3s %4d %02d:%02d:%02d GMT",
 	     wday[tm->tm_wday], 
 	     tm->tm_mday, month[tm->tm_mon], tm->tm_year + 1900,
 	     tm->tm_hour, tm->tm_min, tm->tm_sec);
+
+    return buf;
 }
 
 

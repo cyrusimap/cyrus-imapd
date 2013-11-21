@@ -703,6 +703,7 @@ static void buf_escapestr(struct buf *buf, const char *str, unsigned max,
     if (!replace && config_httpprettytelemetry) buf_appendcstr(buf, "\n");
 }
 
+
 /* List messages as an RSS feed */
 static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 {

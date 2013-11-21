@@ -458,7 +458,8 @@ extern time_t calc_compile_time(const char *time, const char *date);
 extern int http_mailbox_open(const char *name, struct mailbox **mailbox,
 			     int locktype);
 extern const char *http_statusline(long code);
-extern void httpdate_gen(char *buf, size_t len, time_t t);
+extern char *rfc3339date_gen(char *buf, size_t len, time_t t);
+extern char *httpdate_gen(char *buf, size_t len, time_t t);
 extern void comma_list_hdr(const char *hdr, const char *vals[],
 			   unsigned flags, ...);
 extern void response_header(long code, struct transaction_t *txn);
