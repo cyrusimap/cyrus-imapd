@@ -103,6 +103,7 @@ struct cyrusdb_backend *config_tlscache_db;
 struct cyrusdb_backend *config_ptscache_db;
 struct cyrusdb_backend *config_statuscache_db;
 struct cyrusdb_backend *config_userdeny_db;
+struct cyrusdb_backend *config_zoneinfo_db;
 
 char session_id_buf[MAX_SESSIONID_SIZE];
 int session_id_time = 0;
@@ -212,6 +213,8 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
 	    cyrusdb_fromname(config_getstring(IMAPOPT_STATUSCACHE_DB));
 	config_userdeny_db =
 	    cyrusdb_fromname(config_getstring(IMAPOPT_USERDENY_DB));
+	config_zoneinfo_db =
+	    cyrusdb_fromname(config_getstring(IMAPOPT_ZONEINFO_DB));
 
 	/* configure libcyrus as needed */
 	libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, config_dir);

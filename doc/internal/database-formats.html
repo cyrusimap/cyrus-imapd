@@ -159,6 +159,21 @@ Key: &lt;Userid&gt;
 Data: &lt;Version&gt;TAB&lt;Deny List (comma-separated wildmat patterns)&gt;TAB&lt;Deny Message&gt;
 </pre>
 
+<h2>Timezone Info (zoneinfo.db)</h2>
+
+<p>This database is used for the timezone service and contains records
+  relating to timezones and their aliases.  The database is indexed by
+  timezone ID and each data record contains the database version
+  number, a record type, a timestamp, and an optional list of strings
+  (either aliases for a timezone or the reference timezone for an
+  alias).  The format of each record is as follows:</p>
+
+<pre>
+Key: &lt;TZID&gt;
+
+Data: &lt;Version&gt;SP&lt;Record Type&gt;SP&lt;Timestamp&gt;SP&lt;Data Strings (TAB-separated)&gt;
+</pre>
+
 <h2>Seen State (&lt;userid&gt;.seen)</h2>
 
 This database is per-user and maintains the list of
