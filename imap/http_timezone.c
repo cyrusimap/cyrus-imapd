@@ -82,6 +82,7 @@ static const struct action_t {
     { "capabilities",	&action_capa },
     { "list",		&action_list },
     { "get",		&action_get },
+    { "find",		&action_list },
     { NULL,		NULL}
 };
 
@@ -396,11 +397,15 @@ static int action_list(struct transaction_t *txn, struct hash_table *params)
 	size_t flags = JSON_PRESERVE_ORDER;
 	json_t *root;
 	char dtstamp[21];
-	const char *cs;
+	const char *cs, *name = NULL;
 	time_t changedsince = 0;
 
 	rfc3339date_gen(dtstamp, sizeof(dtstamp), lastmod);
-	if ((cs = hash_lookup("changedsince", params)))
+	if (!strcmp("find", hash_lookup("action", params))) {
+	    name = hash_lookup("name", params);
+	    if (!name) return HTTP_BAD_REQUEST;
+	}
+	else if ((cs = hash_lookup("changedsince", params)))
 	    changedsince = icaltime_as_timet(icaltime_from_string(cs));
 
 	/* Start constructing our response */
@@ -411,7 +416,7 @@ static int action_list(struct transaction_t *txn, struct hash_table *params)
 	}
 
 	/* Add timezones to array */
-	zoneinfo_find(NULL, changedsince, &list_cb,
+	zoneinfo_find((char *) name, changedsince, &list_cb,
 		      json_object_get(root, "timezones"));
 
 	/* Dump JSON object into a text buffer */

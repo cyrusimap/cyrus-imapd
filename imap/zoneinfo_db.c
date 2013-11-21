@@ -216,10 +216,15 @@ static int find_p(void *rock,
 
     if (parse_zoneinfo(data, datalen, &zi, 0)) return 0;
 
-    if (zi.type == ZI_INFO) return 0;
-    else if (!frock->isfind && zi.type != ZI_ZONE) return 0;
-    else if (zi.dtstamp <= frock->changedsince) return 0;
-    else return 1;
+    switch (zi.type) {
+    case ZI_INFO: return 0;
+
+    case ZI_LINK: return (frock->isfind);
+
+    case ZI_ZONE: return (zi.dtstamp > frock->changedsince);
+    }
+
+    return 1;
 }
 
 static int find_cb(void *rock,
@@ -232,8 +237,18 @@ static int find_cb(void *rock,
 
     r = parse_zoneinfo(data, datalen, &zi, 1);
     if (!r) {
-	r = (*frock->proc)(tzid, tzidlen, &zi, frock->rock);
+	struct strlist *link = NULL;
+
+	if (zi.type == ZI_LINK) {
+	    link = zi.data;
+	    zi.data = NULL;
+	    tzid = link->s;
+	    tzidlen = strlen(tzid);
+	    r = zoneinfo_lookup(tzid, &zi);
+	}
+	if (!r) r = (*frock->proc)(tzid, tzidlen, &zi, frock->rock);
 	freestrlist(zi.data);
+	freestrlist(link);
     }
 
     return r;
