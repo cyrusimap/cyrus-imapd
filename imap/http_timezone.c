@@ -46,7 +46,6 @@
  * - Implement action=expand
  * - Implement action=get&tzid=*
  * - Implement action=get&substitute-alias=true
- * - Implement action=list&tzid=
  * - Implement error (JSON) response bodies
  * - Implement localized names and "lang" parameter
  * - Implement multiple tzid parameters
@@ -260,7 +259,7 @@ static int action_capa(struct transaction_t *txn,
 			 "    {s:s s:[]}"		/* capabilities */
 			 "    {s:s s:["			/* list */
 //			 "      {s:s s:b s:b}"
-//			 "      {s:s s:b s:b}"
+			 "      {s:s s:b s:b}"
 			 "      {s:s s:b s:b}"
 			 "    ]}"
 			 "    {s:s s:["			/* get */
@@ -288,7 +287,7 @@ static int action_capa(struct transaction_t *txn,
 
 			 "name", "list", "parameters",
 //			 "name", "lang", "required", 0, "multi", 1,
-//			 "name", "tzid", "required", 0, "multi", 1,
+			 "name", "tzid", "required", 0, "multi", 0, // 1
 			 "name", "changedsince", "required", 0, "multi", 0,
 
 			 "name", "get", "parameters",
@@ -373,7 +372,27 @@ static int action_list(struct transaction_t *txn, struct hash_table *params)
     char *buf = NULL;
     unsigned long buflen = 0;
     struct zoneinfo info;
-    time_t lastmod;
+    time_t lastmod, changedsince = 0;
+    const char *name = NULL;
+
+    /* Sanity check the parameters */
+    if (!strcmp("find", hash_lookup("action", params))) {
+	name = hash_lookup("name", params);
+	if (!name) return HTTP_BAD_REQUEST;
+    }
+    else {
+	const char *cs = hash_lookup("changedsince", params);
+
+	name = hash_lookup("tzid", params);
+	if (name && !strcmp(name, "*")) name = NULL;
+
+	if (cs) {
+	    if (name) return HTTP_BAD_REQUEST;
+
+	    changedsince = icaltime_as_timet(icaltime_from_string(cs));
+	    if (!changedsince) return HTTP_BAD_REQUEST;
+	}
+    }
 
     /* Get info record from the database */
     if ((r = zoneinfo_lookup_info(&info))) return HTTP_SERVER_ERROR;
@@ -413,18 +432,9 @@ static int action_list(struct transaction_t *txn, struct hash_table *params)
 	size_t flags = JSON_PRESERVE_ORDER;
 	json_t *root;
 	char dtstamp[21];
-	const char *cs, *name = NULL;
-	time_t changedsince = 0;
-
-	rfc3339date_gen(dtstamp, sizeof(dtstamp), lastmod);
-	if (!strcmp("find", hash_lookup("action", params))) {
-	    name = hash_lookup("name", params);
-	    if (!name) return HTTP_BAD_REQUEST;
-	}
-	else if ((cs = hash_lookup("changedsince", params)))
-	    changedsince = icaltime_as_timet(icaltime_from_string(cs));
 
 	/* Start constructing our response */
+	rfc3339date_gen(dtstamp, sizeof(dtstamp), lastmod);
 	root = json_pack("{s:s s:[]}", "dtstamp", dtstamp, "timezones");
 	if (!root) {
 	    txn->error.desc = "Unable to create JSON response";
