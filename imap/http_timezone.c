@@ -1,4 +1,4 @@
-/* http_timezone.c -- Routines for handling timezone serice requests in httpd
+/* http_timezone.c -- Routines for handling timezone service requests in httpd
  *
  * Copyright (c) 1994-2013 Carnegie Mellon University.  All rights reserved.
  *
@@ -39,6 +39,18 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
+ */
+
+/*
+ * TODO:
+ * - Implement action=expand
+ * - Implement action=get&tzid=*
+ * - Implement action=get&substitute-alias=true
+ * - Implement action=list&tzid=
+ * - Implement error (JSON) response bodies
+ * - Implement localized names and "lang" parameter
+ * - Implement multiple tzid parameters
+ * - Implement action=find with sub-string match anywhere (not just prefix)?
  */
 
 #include <config.h>
@@ -247,23 +259,27 @@ static int action_capa(struct transaction_t *txn,
 			 "  s:["			/* actions */
 			 "    {s:s s:[]}"		/* capabilities */
 			 "    {s:s s:["			/* list */
+//			 "      {s:s s:b s:b}"
+//			 "      {s:s s:b s:b}"
 			 "      {s:s s:b s:b}"
-			 "      {s:s s:b s:b}"
-			 "      {s:s s:b s:b}]}"
+			 "    ]}"
 			 "    {s:s s:["			/* get */
-			 "      {s:s s:b s:b}"
+//			 "      {s:s s:b s:b}"
 			 "      {s:s s:b s:b}"
 			 "      {s:s s:b s:b s:[s s s]}"
-			 "      {s:s s:b s:b s:[b b]}]}"
-			 "    {s:s s:["			/* expand */
-			 "      {s:s s:b s:b}"
-			 "      {s:s s:b s:b}"
-			 "      {s:s s:b s:b}"
-			 "      {s:s s:b s:b}"
-			 "      {s:s s:b s:b}]}"
+//			 "      {s:s s:b s:b s:[b b]}"
+			 "    ]}"
+//			 "    {s:s s:["			/* expand */
+//			 "      {s:s s:b s:b}"
+//			 "      {s:s s:b s:b}"
+//			 "      {s:s s:b s:b}"
+//			 "      {s:s s:b s:b}"
+//			 "      {s:s s:b s:b}"
+//			 "    ]}"
 			 "    {s:s s:["			/* find */
+//			 "      {s:s s:b s:b}"
 			 "      {s:s s:b s:b}"
-			 "      {s:s s:b s:b}]}"
+			 "    ]}"
 			 "  ]}",
 			 "version", 1,
 			 "info", "primary-source", info.data->s, "contacts",
@@ -271,28 +287,28 @@ static int action_capa(struct transaction_t *txn,
 			 "name", "capabilities", "parameters",
 
 			 "name", "list", "parameters",
-			 "name", "lang", "required", 0, "multi", 1,
-			 "name", "tzid", "required", 0, "multi", 1,
+//			 "name", "lang", "required", 0, "multi", 1,
+//			 "name", "tzid", "required", 0, "multi", 1,
 			 "name", "changedsince", "required", 0, "multi", 0,
 
 			 "name", "get", "parameters",
-			 "name", "lang", "required", 0, "multi", 1,
+//			 "name", "lang", "required", 0, "multi", 1,
 			 "name", "tzid", "required", 1, "multi", 0,
 			 "name", "format", "required", 0, "multi", 0,
 			 "values", "text/calendar", "application/calendar+xml",
 			 "application/calendar+json",
-			 "name", "substitute-alias", "required", 0, "multi", 0,
-			 "values", 1, 0,
+//			 "name", "substitute-alias", "required", 0, "multi", 0,
+//			 "values", 1, 0,
 
-			 "name", "expand", "parameters",
-			 "name", "lang", "required", 0, "multi", 1,
-			 "name", "tzid", "required", 1, "multi", 0,
-			 "name", "changedsince", "required", 0, "multi", 0,
-			 "name", "start", "required", 0, "multi", 0,
-			 "name", "end", "required", 0, "multi", 0,
+//			 "name", "expand", "parameters",
+//			 "name", "lang", "required", 0, "multi", 1,
+//			 "name", "tzid", "required", 1, "multi", 0,
+//			 "name", "changedsince", "required", 0, "multi", 0,
+//			 "name", "start", "required", 0, "multi", 0,
+//			 "name", "end", "required", 0, "multi", 0,
 
 			 "name", "find", "parameters",
-			 "name", "lang", "required", 0, "multi", 1,
+//			 "name", "lang", "required", 0, "multi", 1,
 			 "name", "name", "required", 1, "multi", 0);
 	freestrlist(info.data);
 
