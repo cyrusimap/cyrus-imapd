@@ -2371,7 +2371,9 @@ void response_header(long code, struct transaction_t *txn)
 		}
 	    }
 	}
-	else prot_printf(httpd_out, "Content-Length: %lu\r\n", resp_body->len);
+	else if (resp_body->len || txn->meth != METH_HEAD) {
+	    prot_printf(httpd_out, "Content-Length: %lu\r\n", resp_body->len);
+	}
     }
 
 
