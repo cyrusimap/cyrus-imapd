@@ -44,9 +44,7 @@
 /*
  * TODO:
  * - Implement action=expand
- * - Implement action=get&tzid=*
  * - Implement action=get&substitute-alias=true
- * - Implement error (JSON) response bodies
  * - Implement localized names and "lang" parameter
  * - Implement multiple tzid parameters
  * - Implement action=find with sub-string match anywhere (not just prefix)?
@@ -71,12 +69,15 @@
 #include "map.h"
 #include "tok.h"
 #include "util.h"
+#include "version.h"
 #include "xcal.h"
 #include "xstrlcpy.h"
 #include "zoneinfo_db.h"
 
 
 #define TIMEZONE_WELLKNOWN_URI "/.well-known/timezone"
+
+#define FNAME_ZONEINFODIR "/zoneinfo/"
 
 static time_t compile_time;
 static void timezone_init(struct buf *serverinfo);
@@ -85,9 +86,12 @@ static int meth_get(struct transaction_t *txn, void *params);
 static int action_capa(struct transaction_t *txn, struct hash_table *params);
 static int action_list(struct transaction_t *txn, struct hash_table *params);
 static int action_get(struct transaction_t *txn, struct hash_table *params);
+static int action_get_all(struct transaction_t *txn, struct mime_type_t *mime);
 static int json_response(int code, struct transaction_t *txn, json_t *root,
 			 char **resp);
 static int json_error_response(struct transaction_t *txn, const char *err);
+static const char *begin_ical(struct buf *buf);
+static void end_ical(struct buf *buf);
 
 static const struct action_t {
     const char *name;
@@ -105,15 +109,15 @@ static struct mime_type_t tz_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { "text/calendar; charset=utf-8", "2.0", "ics", "ifb",
       (char* (*)(void *)) &icalcomponent_as_ical_string_r,
-      NULL, NULL, NULL, NULL
+      NULL, NULL, &begin_ical, &end_ical
     },
     { "application/calendar+xml; charset=utf-8", NULL, "xcs", "xfb",
       (char* (*)(void *)) &icalcomponent_as_xcal_string,
-      NULL, NULL, NULL, NULL
+      NULL, NULL, &begin_xcal, &end_xcal
     },
     { "application/calendar+json; charset=utf-8", NULL, "jcs", "jfb",
       (char* (*)(void *)) &icalcomponent_as_jcal_string,
-      NULL, NULL, NULL, NULL
+      NULL, NULL, &begin_jcal, &end_jcal
     },
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
@@ -442,11 +446,11 @@ static int action_list(struct transaction_t *txn, struct hash_table *params)
 static int action_get(struct transaction_t *txn, struct hash_table *params)
 {
     static struct buf pathbuf = BUF_INITIALIZER;
-    int ret = 0, r, fd = -1, precond;
+    int r, fd = -1, precond;
     struct stat sbuf;
     char *freeme = NULL;
-    const char *tzid, *format, *path, *msg_base, *data = NULL;
-    unsigned long msg_size, datalen = 0;
+    const char *tzid, *format, *path, *msg_base = NULL, *data = NULL;
+    unsigned long msg_size = 0, datalen = 0;
     struct resp_body_t *resp_body = &txn->resp_body;
     struct mime_type_t *mime;
 
@@ -462,9 +466,12 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
     }
     if (!mime->content_type) return HTTP_BAD_REQUEST;
 
+    /* Handle tzid=* separately */
+    if (!strcmp(tzid, "*")) return action_get_all(txn, mime);
+
     /* See if file exists and get Content-Length & Last-Modified time */
     buf_reset(&pathbuf);
-    buf_printf(&pathbuf, "%s/zoneinfo/%s.ics", config_dir, tzid);
+    buf_printf(&pathbuf, "%s%s%s.ics", config_dir, FNAME_ZONEINFODIR, tzid);
     path = buf_cstring(&pathbuf);
     r = stat(path, &sbuf);
     if (r || !S_ISREG(sbuf.st_mode)) return HTTP_NOT_FOUND;
@@ -502,6 +509,7 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
 	/* Open and mmap the file */
 	if ((fd = open(path, O_RDONLY)) == -1) return HTTP_SERVER_ERROR;
 	map_refresh(fd, 1, &msg_base, &msg_size, sbuf.st_size, path, NULL);
+	if (!msg_base) return HTTP_SERVER_ERROR;
 	data = msg_base;
 	datalen = msg_size;
 
@@ -517,7 +525,6 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
 	    datalen = strlen(data);
 	    icalcomponent_free(ical);
 	}
-
     }
 
     write_body(precond, txn, data, datalen);
@@ -528,7 +535,147 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
 	close(fd);
     }
 
-    return ret;
+    return 0;
+}
+
+
+static const char *begin_ical(struct buf *buf)
+{
+    /* Begin iCalendar stream */
+    buf_setcstr(buf, "BEGIN:VCALENDAR\r\n");
+    buf_printf(buf, "PRODID:-//CyrusIMAP.org/Cyrus %s//EN\r\n",
+	       cyrus_version());
+    buf_appendcstr(buf, "VERSION:2.0\r\n");
+
+    return "";
+}
+
+static void end_ical(struct buf *buf)
+{
+    /* End iCalendar stream */
+    buf_setcstr(buf, "END:VCALENDAR\r\n");
+}
+
+struct get_rock {
+    struct transaction_t *txn;
+    struct mime_type_t *mime;
+    const char *sep;
+    unsigned count;
+};
+
+static int get_cb(const char *tzid, int tzidlen,
+		  struct zoneinfo *zi __attribute__((unused)),
+		  void *rock)
+{
+    struct get_rock *grock = (struct get_rock *) rock;
+    struct buf *pathbuf = &grock->txn->buf;
+    const char *path, *msg_base = NULL;
+    unsigned long msg_size = 0;
+    icalcomponent *ical, *comp;
+    int fd = -1;
+    char *tz_str;
+
+    buf_reset(pathbuf);
+    buf_printf(pathbuf, "%s%s%.*s.ics",
+	       config_dir, FNAME_ZONEINFODIR, tzidlen, tzid);
+    path = buf_cstring(pathbuf);
+
+    /* Open, mmap, and parse the file */
+    if ((fd = open(path, O_RDONLY)) == -1) return HTTP_SERVER_ERROR;
+    map_refresh(fd, 1, &msg_base, &msg_size, MAP_UNKNOWN_LEN, path, NULL);
+    if (!msg_base) return HTTP_SERVER_ERROR;
+    ical = icalparser_parse_string(msg_base);
+    map_free(&msg_base, &msg_size);
+    close(fd);
+	    
+    if (grock->count++ && *grock->sep) {
+	/* Add separator, if necessary */
+	struct buf *buf = &grock->txn->resp_body.payload;
+
+	buf_reset(buf);
+	buf_printf_markup(buf, 0, grock->sep);
+	write_body(0, grock->txn, buf_cstring(buf), buf_len(buf));
+    }
+
+    /* Output the (converted) VTIMEZONE component */
+    comp = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
+    tz_str = grock->mime->to_string(comp);
+    write_body(0, grock->txn, tz_str, strlen(tz_str));
+    free(tz_str);
+
+    icalcomponent_free(ical);
+
+    return 0;
+}
+
+
+static int action_get_all(struct transaction_t *txn, struct mime_type_t *mime)
+{
+    int r, precond;
+    struct resp_body_t *resp_body = &txn->resp_body;
+    struct zoneinfo info;
+    time_t lastmod;
+    struct buf *buf = &resp_body->payload;
+    struct get_rock grock = { txn, mime, NULL, 0 };
+
+    /* Get info record from the database */
+    if ((r = zoneinfo_lookup_info(&info))) return HTTP_SERVER_ERROR;
+
+    /* Generate ETag & Last-Modified from info record */
+    assert(!buf_len(&txn->buf));
+    buf_printf(&txn->buf, "%ld-%u", info.dtstamp, strhash(info.data->s));
+    lastmod = info.dtstamp;
+    freestrlist(info.data);
+
+    /* Check any preconditions */
+    precond = check_precond(txn, NULL, buf_cstring(&txn->buf), lastmod);
+
+    switch (precond) {
+    case HTTP_OK:
+    case HTTP_NOT_MODIFIED:
+	/* Fill in ETag, Last-Modified, and Expires */
+	resp_body->etag = buf_cstring(&txn->buf);
+	resp_body->lastmod = lastmod;
+	resp_body->maxage = 86400;  /* 24 hrs */
+	txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;
+	if (httpd_userid) txn->flags.cc |= CC_PUBLIC;
+
+	if (precond != HTTP_NOT_MODIFIED) break;
+
+    default:
+	/* We failed a precondition - don't perform the request */
+	resp_body->type = NULL;
+	return precond;
+    }
+
+    /* Setup for chunked response */
+    txn->flags.te |= TE_CHUNKED;
+    txn->flags.vary |= VARY_ACCEPT;
+    txn->resp_body.type = mime->content_type;
+
+    /* Short-circuit for HEAD request */
+    if (txn->meth == METH_HEAD) {
+	response_header(HTTP_OK, txn);
+	return 0;
+    }
+
+    /* iCalendar data in response should not be transformed */
+    txn->flags.cc |= CC_NOTRANSFORM;
+
+    /* Begin (converted) iCalendar stream */
+    grock.sep = mime->begin_stream(buf);
+    write_body(HTTP_OK, txn, buf_cstring(buf), buf_len(buf));
+
+    zoneinfo_find(NULL, 0, &get_cb, &grock);
+
+    /* End (converted) iCalendar stream */
+    mime->end_stream(buf);
+    write_body(0, txn, buf_cstring(buf), buf_len(buf));
+
+    /* End of output */
+    write_body(0, txn, NULL, 0);
+
+    return 0;
 }
 
 
