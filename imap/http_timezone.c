@@ -43,7 +43,6 @@
 
 /*
  * TODO:
- * - Implement action=expand
  * - Implement action=get&substitute-alias=true
  * - Implement localized names and "lang" parameter
  * - Implement multiple tzid parameters
@@ -87,6 +86,7 @@ static int action_capa(struct transaction_t *txn, struct hash_table *params);
 static int action_list(struct transaction_t *txn, struct hash_table *params);
 static int action_get(struct transaction_t *txn, struct hash_table *params);
 static int action_get_all(struct transaction_t *txn, struct mime_type_t *mime);
+static int action_expand(struct transaction_t *txn, struct hash_table *params);
 static int json_response(int code, struct transaction_t *txn, json_t *root,
 			 char **resp);
 static int json_error_response(struct transaction_t *txn, const char *err);
@@ -100,6 +100,7 @@ static const struct action_t {
     { "capabilities",	&action_capa },
     { "list",		&action_list },
     { "get",		&action_get },
+    { "expand",		&action_expand },
     { "find",		&action_list },
     { NULL,		NULL}
 };
@@ -274,13 +275,13 @@ static int action_capa(struct transaction_t *txn,
 			 "      {s:s s:b s:b s:[s s s]}"
 //			 "      {s:s s:b s:b s:[b b]}"
 			 "    ]}"
-//			 "    {s:s s:["			/* expand */
+			 "    {s:s s:["			/* expand */
 //			 "      {s:s s:b s:b}"
-//			 "      {s:s s:b s:b}"
-//			 "      {s:s s:b s:b}"
-//			 "      {s:s s:b s:b}"
-//			 "      {s:s s:b s:b}"
-//			 "    ]}"
+			 "      {s:s s:b s:b}"
+			 "      {s:s s:b s:b}"
+			 "      {s:s s:b s:b}"
+			 "      {s:s s:b s:b}"
+			 "    ]}"
 			 "    {s:s s:["			/* find */
 //			 "      {s:s s:b s:b}"
 			 "      {s:s s:b s:b}"
@@ -305,12 +306,12 @@ static int action_capa(struct transaction_t *txn,
 //			 "name", "substitute-alias", "required", 0, "multi", 0,
 //			 "values", 1, 0,
 
-//			 "name", "expand", "parameters",
+			 "name", "expand", "parameters",
 //			 "name", "lang", "required", 0, "multi", 1,
-//			 "name", "tzid", "required", 1, "multi", 0,
-//			 "name", "changedsince", "required", 0, "multi", 0,
-//			 "name", "start", "required", 0, "multi", 0,
-//			 "name", "end", "required", 0, "multi", 0,
+			 "name", "tzid", "required", 1, "multi", 0,
+			 "name", "changedsince", "required", 0, "multi", 0,
+			 "name", "start", "required", 0, "multi", 0,
+			 "name", "end", "required", 0, "multi", 0,
 
 			 "name", "find", "parameters",
 //			 "name", "lang", "required", 0, "multi", 1,
@@ -676,6 +677,309 @@ static int action_get_all(struct transaction_t *txn, struct mime_type_t *mime)
     write_body(0, txn, NULL, 0);
 
     return 0;
+}
+
+
+struct observance {
+    const char *name;
+    icaltimetype onset;
+    int offset_from;
+    int offset_to;
+    unsigned is_daylight;
+};
+
+static int observance_compare(const void *obs1, const void *obs2)
+{
+    return icaltime_compare(((struct observance *) obs1)->onset,
+			    ((struct observance *) obs2)->onset);
+}
+
+/* Perform an expand action */
+static int action_expand(struct transaction_t *txn, struct hash_table *params)
+{
+    int r, precond;
+    const char *tzid, *param;
+    struct zoneinfo zi;
+    time_t lastmod, changedsince = 0;
+    icaltimetype start, end;
+    struct resp_body_t *resp_body = &txn->resp_body;
+    json_t *root = NULL;
+
+    /* Sanity check the parameters */
+    tzid = hash_lookup("tzid", params);
+    if (!tzid) return json_error_response(txn, "invalid-tzid");
+
+    param = hash_lookup("changedsince", params);
+    if (param) {
+	if (!(changedsince = icaltime_as_timet(icaltime_from_string(param))))
+	    return json_error_response(txn, "invalid-changedsince");
+    }
+
+    param = hash_lookup("start", params);
+    if (param) {
+	start = icaltime_from_string(param);
+	if (icaltime_is_null_time(start))
+	    return json_error_response(txn, "invalid-start");
+    }
+    else {
+	/* Default to current year */
+	time_t now = time(0);
+	struct tm *tm = gmtime(&now);
+
+	start = icaltime_from_day_of_year(1, tm->tm_year + 1900);
+    }
+
+    param = hash_lookup("end", params);
+    if (param) {
+	end = icaltime_from_string(param);
+	if (icaltime_compare(end, start) <= 0)
+	    return json_error_response(txn, "invalid-end");
+    }
+    else {
+	/* Default to start year + 10 */
+	memcpy(&end, &start, sizeof(icaltimetype));
+	end.year += 10;
+    }
+
+    /* Get info record from the database */
+    if ((r = zoneinfo_lookup(tzid, &zi))) return HTTP_SERVER_ERROR;
+
+    /* Generate ETag & Last-Modified from info record */
+    assert(!buf_len(&txn->buf));
+    buf_printf(&txn->buf, "%u-%ld", strhash(tzid), zi.dtstamp);
+    lastmod = zi.dtstamp;
+    freestrlist(zi.data);
+
+    /* Check any preconditions, including range request */
+    txn->flags.ranges = 1;
+    if (lastmod <= changedsince) precond = HTTP_NOT_MODIFIED;
+    else precond = check_precond(txn, NULL, buf_cstring(&txn->buf), lastmod);
+
+    switch (precond) {
+    case HTTP_OK:
+    case HTTP_PARTIAL:
+    case HTTP_NOT_MODIFIED:
+	/* Fill in ETag, Last-Modified, and Expires */
+	resp_body->etag = buf_cstring(&txn->buf);
+	resp_body->lastmod = lastmod;
+	resp_body->maxage = 86400;  /* 24 hrs */
+	txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;
+	if (httpd_userid) txn->flags.cc |= CC_PUBLIC;
+
+	if (precond != HTTP_NOT_MODIFIED) break;
+
+    default:
+	/* We failed a precondition - don't perform the request */
+	resp_body->type = NULL;
+	return precond;
+    }
+
+
+    if (txn->meth == METH_GET) {
+	static struct buf pathbuf = BUF_INITIALIZER;
+	const char *path, *msg_base = NULL;
+	unsigned long msg_size = 0;
+	icalcomponent *ical, *vtz, *comp;
+	char dtstamp[21];
+	icalarray *obsarray;
+	json_t *jobsarray;
+	unsigned n;
+	int fd;
+
+	/* Open, mmap, and parse the file */
+	buf_reset(&pathbuf);
+	buf_printf(&pathbuf, "%s%s%s.ics", config_dir, FNAME_ZONEINFODIR, tzid);
+	path = buf_cstring(&pathbuf);
+	if ((fd = open(path, O_RDONLY)) == -1) return HTTP_SERVER_ERROR;
+
+	map_refresh(fd, 1, &msg_base, &msg_size, MAP_UNKNOWN_LEN, path, NULL);
+	if (!msg_base) return HTTP_SERVER_ERROR;
+
+	ical = icalparser_parse_string(msg_base);
+	map_free(&msg_base, &msg_size);
+	close(fd);
+
+	/* Start constructing our response */
+	rfc3339date_gen(dtstamp, sizeof(dtstamp), lastmod);
+	root = json_pack("{s:s s:[]}", "dtstamp", dtstamp, "observances");
+	if (!root) {
+	    txn->error.desc = "Unable to create JSON response";
+	    return HTTP_SERVER_ERROR;
+	}
+
+	/* Create an array of observances */
+	obsarray = icalarray_new(sizeof(struct observance), 20);
+
+	/* Process each VTMEZONE STANDARD/DAYLIGHT subcomponent */
+	vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
+	for (comp = icalcomponent_get_first_component(vtz, ICAL_ANY_COMPONENT);
+	     comp;
+	     comp = icalcomponent_get_next_component(vtz, ICAL_ANY_COMPONENT)) {
+
+	    icaltimetype dtstart = icaltime_null_time();
+	    struct observance obs;
+	    icalproperty *prop;
+	    int have_rrule = 0;
+
+	    /* Start building our observance */
+	    memset(&obs, 0, sizeof(struct observance));
+	    obs.is_daylight =
+		(icalcomponent_isa(comp) == ICAL_XDAYLIGHT_COMPONENT);
+
+	    /* Grab the properties that we require to expand recurrences */
+	    for (prop = icalcomponent_get_first_property(comp,
+							 ICAL_ANY_PROPERTY);
+		 prop;
+		 prop = icalcomponent_get_next_property(comp,
+							ICAL_ANY_PROPERTY)) {
+
+		switch (icalproperty_isa(prop)) {
+		case ICAL_TZNAME_PROPERTY:
+		    obs.name = icalproperty_get_tzname(prop);
+		    break;
+
+		case ICAL_DTSTART_PROPERTY:
+		    dtstart = icalproperty_get_dtstart(prop);
+		    break;
+
+		case ICAL_TZOFFSETFROM_PROPERTY:
+		    obs.offset_from = icalproperty_get_tzoffsetfrom(prop);
+		    break;
+
+		case ICAL_TZOFFSETTO_PROPERTY:
+		    obs.offset_to = icalproperty_get_tzoffsetto(prop);
+		    break;
+
+		case ICAL_RRULE_PROPERTY:
+		    have_rrule = 1;
+		    break;
+
+		default:
+		    /* ignore all other properties */
+		    break;
+		}
+	    }
+
+	    /* We MUST have TZNAME, DTSTART, TZOFFSETFROM and TZOFFSETTO */
+	    if (!obs.name || !obs.offset_from || !obs.offset_to ||
+		icaltime_is_null_time(dtstart)) continue;
+
+	    /* Adjust DTSTART to UTC */
+	    memcpy(&obs.onset, &dtstart, sizeof(icaltimetype));
+	    icaltime_adjust(&obs.onset, 0, 0, 0,
+			    obs.is_daylight ? -obs.offset_from: -obs.offset_to);
+	    obs.onset.is_utc = 1;
+
+	    /* Skip occurance(s) after our window */
+	    if (icaltime_compare(obs.onset, end) > 0) continue;
+
+	    if (!have_rrule) {
+		/* Skip observance prior to our window */
+		if (icaltime_compare(obs.onset, start) < 0) continue;
+
+		/* Add the single DTSTART observance to our array */
+		icalarray_append(obsarray, &obs);
+	    }
+
+	    /* Add any relevant RDATE observances */
+	    for (prop = icalcomponent_get_first_property(comp,
+							 ICAL_RDATE_PROPERTY);
+		 prop;
+		 prop = icalcomponent_get_next_property(comp,
+							ICAL_RDATE_PROPERTY)) {
+		struct icaldatetimeperiodtype rdate =
+		    icalproperty_get_rdate(prop);
+
+		/* Adjust RDATE to UTC */
+		memcpy(&obs.onset, &rdate.time, sizeof(icaltimetype));
+		icaltime_adjust(&obs.onset, 0, 0, 0,
+				obs.is_daylight ? -obs.offset_from:
+				-obs.offset_to);
+		obs.onset.is_utc = 1;
+
+		/* Skip observances prior to our window */
+		if (icaltime_compare(obs.onset, start) < 0) continue;
+
+		/* Skip observances after our window */
+		if (icaltime_compare(obs.onset, end) > 0) continue;
+
+		/* Skip duplicate of DTSTART observance */
+		if (!icaltime_compare(obs.onset, dtstart)) continue;
+
+		/* Add the RDATE observance to our array */
+		icalarray_append(obsarray, &obs);
+	    }
+
+	    if (have_rrule) {
+		/* Add any relevant RRULE observances */
+		struct icalrecurrencetype rrule;
+		icalrecur_iterator *ritr;
+		icaltimetype next;
+
+		prop = icalcomponent_get_first_property(comp,
+							ICAL_RRULE_PROPERTY);
+		rrule = icalproperty_get_rrule(prop);
+		if (!icaltime_is_null_time (rrule.until)) {
+		    /* Skip RRULE that ends prior to our window */
+		    if (icaltime_compare(rrule.until, start) < 0) {
+			rrule.count = 0;  /* short-circuit the iterator */
+		    }
+
+		    /* Adjust UNTIL to local time */
+		    else if (rrule.until.is_utc) {
+			icaltime_adjust(&obs.onset, 0, 0, 0,
+					obs.is_daylight ? obs.offset_from:
+					obs.offset_to);
+			obs.onset.is_utc = 0;
+		    }
+		}
+
+		ritr = icalrecur_iterator_new(rrule, dtstart);
+		while (!icaltime_is_null_time(next =
+					      icalrecur_iterator_next(ritr))) {
+		    /* Adjust observance to UTC */
+		    memcpy(&obs.onset, &next, sizeof(icaltimetype));
+		    icaltime_adjust(&obs.onset, 0, 0, 0,
+				    obs.is_daylight ? -obs.offset_from:
+				    -obs.offset_to);
+		    obs.onset.is_utc = 1;
+
+		    /* Quit if we've gone past our window */
+		    if (icaltime_compare(obs.onset, end) > 0) break;
+
+		    /* Skip observances prior to our window */
+		    if (icaltime_compare(obs.onset, start) < 0) continue;
+
+		    /* Add the observance to our array */
+		    icalarray_append(obsarray, &obs);
+		}
+		icalrecur_iterator_free(ritr);
+	    }
+	}
+
+	/* Sort the observances by onset */
+	icalarray_sort(obsarray, &observance_compare);
+
+	/* Add observances to JSON array */
+	jobsarray = json_object_get(root, "observances");
+	for (n = 0; n < obsarray->num_elements; n++) {
+	    struct observance *obs = icalarray_element_at(obsarray, n);
+
+	    json_array_append_new(jobsarray,
+				  json_pack("{s:s s:s s:i s:i}",
+					    "name", obs->name,
+					    "onset",
+					    icaltime_as_ical_string(obs->onset),
+					    "utc-offset-from", obs->offset_from,
+					    "utc-offset-to", obs->offset_to));
+	}
+	icalarray_free(obsarray);
+
+	icalcomponent_free(ical);
+    }
+
+    /* Output the JSON object */
+    return json_response(precond, txn, root, NULL);
 }
 
 
