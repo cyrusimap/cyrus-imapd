@@ -1545,9 +1545,11 @@ output_component_start			(char		*buffer,
 				tmp_vzictime.day_number,
 				tmp_vzictime.time_seconds);
   sprintf (line5, "DTSTART:%s\r\n", formatted_time);
+#if 0  /* The RDATE matching DTSTART is unnecessary */
   if (output_rdate)
     sprintf (line6, "RDATE:%s\r\n", formatted_time);
   else
+#endif
     line6[0] = '\0';
 
   sprintf (buffer, "%s%s%s%s%s%s", line1, line2, line3, line4, line5, line6);
