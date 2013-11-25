@@ -203,6 +203,7 @@ static int meth_get(struct transaction_t *txn,
 
     action = hash_lookup("action", &query_params);
     for (ap = actions; action && ap->name && strcmp(action, ap->name); ap++);
+
     if (!action || !ap->name) ret = json_error_response(txn, "invalid-action");
     else ret = ap->proc(txn, &query_params);
 
