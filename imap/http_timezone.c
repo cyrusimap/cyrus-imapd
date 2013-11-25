@@ -685,7 +685,6 @@ struct observance {
     icaltimetype onset;
     int offset_from;
     int offset_to;
-    unsigned is_daylight;
 };
 
 static int observance_compare(const void *obs1, const void *obs2)
@@ -818,15 +817,10 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
 
 	    icaltimetype dtstart = icaltime_null_time();
 	    struct observance obs;
-	    icalproperty *prop;
-	    int have_rrule = 0;
-
-	    /* Start building our observance */
-	    memset(&obs, 0, sizeof(struct observance));
-	    obs.is_daylight =
-		(icalcomponent_isa(comp) == ICAL_XDAYLIGHT_COMPONENT);
+	    icalproperty *prop, *rrule_prop = NULL;
 
 	    /* Grab the properties that we require to expand recurrences */
+	    memset(&obs, 0, sizeof(struct observance));
 	    for (prop = icalcomponent_get_first_property(comp,
 							 ICAL_ANY_PROPERTY);
 		 prop;
@@ -851,7 +845,7 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
 		    break;
 
 		case ICAL_RRULE_PROPERTY:
-		    have_rrule = 1;
+		    rrule_prop = prop;
 		    break;
 
 		default:
@@ -866,22 +860,68 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
 
 	    /* Adjust DTSTART to UTC */
 	    memcpy(&obs.onset, &dtstart, sizeof(icaltimetype));
-	    icaltime_adjust(&obs.onset, 0, 0, 0,
-			    obs.is_daylight ? -obs.offset_from: -obs.offset_to);
+	    icaltime_adjust(&obs.onset, 0, 0, 0, -obs.offset_from);
 	    obs.onset.is_utc = 1;
 
-	    /* Skip occurance(s) after our window */
-	    if (icaltime_compare(obs.onset, end) > 0) continue;
+	    if (icaltime_compare(obs.onset, end) > 0) {
+		/* Skip observance(s) after our window */
+	    }
+	    else if (rrule_prop) {
+		/* Add any RRULE observances within our window */
+		struct icalrecurrencetype rrule;
+		icalrecur_iterator *ritr;
+		icaltimetype recur;
 
-	    if (!have_rrule) {
-		/* Skip observance prior to our window */
-		if (icaltime_compare(obs.onset, start) < 0) continue;
+		rrule = icalproperty_get_rrule(rrule_prop);
 
-		/* Add the single DTSTART observance to our array */
+		if (!icaltime_is_null_time(rrule.until) && rrule.until.is_utc) {
+		    /* Adjust UNTIL to local time */
+		    icaltime_adjust(&rrule.until, 0, 0, 0, obs.offset_from);
+		    rrule.until.is_utc = 0;
+		}
+
+		if (icaltime_compare(start, obs.onset) > 0) {
+		    /* Set iterator dtstart to be 1 day prior to our window */
+		    obs.onset.year = start.year;
+		    obs.onset.month = start.month;
+		    obs.onset.day = start.day - 1;
+		}
+
+		/* Adjust iterator dtstart to local time */
+		icaltime_adjust(&obs.onset, 0, 0, 0, obs.offset_from);
+		obs.onset.is_utc = 0;
+
+		ritr = icalrecur_iterator_new(rrule, obs.onset);
+		while (!icaltime_is_null_time(recur =
+					      icalrecur_iterator_next(ritr))) {
+		    /* Adjust observance to UTC */
+		    memcpy(&obs.onset, &recur, sizeof(icaltimetype));
+		    icaltime_adjust(&obs.onset, 0, 0, 0, -obs.offset_from);
+		    obs.onset.is_utc = 1;
+
+		    if (icaltime_compare(obs.onset, end) > 0) {
+			/* Quit if we've gone past our window */
+			break;
+		    }
+		    else if (icaltime_compare(obs.onset, start) < 0) {
+			/* Skip observances prior to our window */
+		    }
+		    else {
+			/* Add the observance to our array */
+			icalarray_append(obsarray, &obs);
+		    }
+		}
+		icalrecur_iterator_free(ritr);
+	    }
+	    else if (icaltime_compare(obs.onset, start) < 0) {
+		/* Skip observances prior to our window */
+	    }
+	    else {
+		/* Add the DTSTART observance to our array */
 		icalarray_append(obsarray, &obs);
 	    }
 
-	    /* Add any relevant RDATE observances */
+	    /* Add any RDATE observances within our window */
 	    for (prop = icalcomponent_get_first_property(comp,
 							 ICAL_RDATE_PROPERTY);
 		 prop;
@@ -892,68 +932,22 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
 
 		/* Adjust RDATE to UTC */
 		memcpy(&obs.onset, &rdate.time, sizeof(icaltimetype));
-		icaltime_adjust(&obs.onset, 0, 0, 0,
-				obs.is_daylight ? -obs.offset_from:
-				-obs.offset_to);
+		icaltime_adjust(&obs.onset, 0, 0, 0, -obs.offset_from);
 		obs.onset.is_utc = 1;
 
-		/* Skip observances prior to our window */
-		if (icaltime_compare(obs.onset, start) < 0) continue;
-
-		/* Skip observances after our window */
-		if (icaltime_compare(obs.onset, end) > 0) continue;
-
-		/* Skip duplicate of DTSTART observance */
-		if (!icaltime_compare(obs.onset, dtstart)) continue;
-
-		/* Add the RDATE observance to our array */
-		icalarray_append(obsarray, &obs);
-	    }
-
-	    if (have_rrule) {
-		/* Add any relevant RRULE observances */
-		struct icalrecurrencetype rrule;
-		icalrecur_iterator *ritr;
-		icaltimetype next;
-
-		prop = icalcomponent_get_first_property(comp,
-							ICAL_RRULE_PROPERTY);
-		rrule = icalproperty_get_rrule(prop);
-		if (!icaltime_is_null_time (rrule.until)) {
-		    /* Skip RRULE that ends prior to our window */
-		    if (icaltime_compare(rrule.until, start) < 0) {
-			rrule.count = 0;  /* short-circuit the iterator */
-		    }
-
-		    /* Adjust UNTIL to local time */
-		    else if (rrule.until.is_utc) {
-			icaltime_adjust(&obs.onset, 0, 0, 0,
-					obs.is_daylight ? obs.offset_from:
-					obs.offset_to);
-			obs.onset.is_utc = 0;
-		    }
-		}
-
-		ritr = icalrecur_iterator_new(rrule, dtstart);
-		while (!icaltime_is_null_time(next =
-					      icalrecur_iterator_next(ritr))) {
-		    /* Adjust observance to UTC */
-		    memcpy(&obs.onset, &next, sizeof(icaltimetype));
-		    icaltime_adjust(&obs.onset, 0, 0, 0,
-				    obs.is_daylight ? -obs.offset_from:
-				    -obs.offset_to);
-		    obs.onset.is_utc = 1;
-
-		    /* Quit if we've gone past our window */
-		    if (icaltime_compare(obs.onset, end) > 0) break;
-
+		if (icaltime_compare(obs.onset, start) < 0) {
 		    /* Skip observances prior to our window */
-		    if (icaltime_compare(obs.onset, start) < 0) continue;
-
-		    /* Add the observance to our array */
+		}
+		else if (icaltime_compare(obs.onset, end) > 0) {
+		    /* Skip observances after our window */
+		}
+		else if (icaltime_compare(obs.onset, dtstart) == 0) {
+		    /* Skip duplicates of DTSTART observance */
+		}
+		else {
+		    /* Add the RDATE observance to our array */
 		    icalarray_append(obsarray, &obs);
 		}
-		icalrecur_iterator_free(ritr);
 	    }
 	}
 
