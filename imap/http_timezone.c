@@ -203,7 +203,7 @@ static int meth_get(struct transaction_t *txn,
 
     action = hash_lookup("action", &query_params);
     for (ap = actions; action && ap->name && strcmp(action, ap->name); ap++);
-    if (!action || !ap->name) ret = HTTP_BAD_REQUEST;
+    if (!action || !ap->name) ret = json_error_response(txn, "invalid-action");
     else ret = ap->proc(txn, &query_params);
 
     free_hash_table(&query_params, NULL);
@@ -465,7 +465,7 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
     for (mime = tz_mime_types; format && mime->content_type; mime++) {
 	if (is_mediatype(format, mime->content_type)) break;
     }
-    if (!mime->content_type) return HTTP_BAD_REQUEST;
+    if (!mime->content_type) return json_error_response(txn, "invalid-format");
 
     /* Handle tzid=* separately */
     if (!strcmp(tzid, "*")) return action_get_all(txn, mime);
