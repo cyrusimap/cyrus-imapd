@@ -707,7 +707,8 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
 
     /* Sanity check the parameters */
     tzid = hash_lookup("tzid", params);
-    if (!tzid) return json_error_response(txn, "invalid-tzid");
+    if (!tzid || strchr(tzid, '.'))
+	return json_error_response(txn, "invalid-tzid");
 
     param = hash_lookup("changedsince", params);
     if (param) {
@@ -742,7 +743,8 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
     }
 
     /* Get info record from the database */
-    if ((r = zoneinfo_lookup(tzid, &zi))) return HTTP_SERVER_ERROR;
+    if ((r = zoneinfo_lookup(tzid, &zi)))
+	return (r == CYRUSDB_NOTFOUND ? HTTP_NOT_FOUND : HTTP_SERVER_ERROR);
 
     /* Generate ETag & Last-Modified from info record */
     assert(!buf_len(&txn->buf));
