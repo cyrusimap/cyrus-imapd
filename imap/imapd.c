@@ -5337,6 +5337,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     int r = 0;
     char mailboxname[MAX_MAILBOX_BUFFER];
     int autocreatequotastorage;
+    int mbtype = 0;
     const char *partition = NULL;
     const char *server = NULL;
     struct buf specialuse = BUF_INITIALIZER;
@@ -5510,7 +5511,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
 
 	/* xxx we do forced user creates on LOCALCREATE to facilitate
 	 * mailbox moves */
-	r = mboxlist_createmailbox(mailboxname, 0, partition,
+	r = mboxlist_createmailbox(mailboxname, mbtype, partition,
 				   imapd_userisadmin || imapd_userisproxyadmin,
 				   imapd_userid, imapd_authstate,
 				   localonly, localonly, 0, 1, NULL);
@@ -5518,8 +5519,8 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
 	if (r == IMAP_PERMISSION_DENIED && !strcasecmp(name, "INBOX") &&
 	    (autocreatequotastorage = config_getint(IMAPOPT_AUTOCREATEQUOTA))) {
 
-	    /* Auto create */
-	    r = mboxlist_createmailbox(mailboxname, 0, partition,
+	    /* Auto create INBOX is always type zero */
+	    r = mboxlist_createmailbox(mailboxname, /*mbtype*/0, partition,
 				       1, imapd_userid, imapd_authstate,
 				       0, 0, 0, 1, NULL);
 
