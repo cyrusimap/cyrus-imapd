@@ -50,6 +50,7 @@
 
 #include "caldav_db.h"
 #include "cyrusdb.h"
+#include "exitcodes.h"
 #include "httpd.h"
 #include "http_dav.h"
 #include "libconfig.h"
@@ -93,7 +94,7 @@ struct caldav_db {
 
 static struct namespace caldav_namespace;
 
-int caldav_init(void)
+EXPORTED int caldav_init(void)
 {
     int r;
 
@@ -107,7 +108,7 @@ int caldav_init(void)
 }
 
 
-int caldav_done(void)
+EXPORTED int caldav_done(void)
 {
     return dav_done();
 }
@@ -138,7 +139,7 @@ int caldav_done(void)
     "CREATE INDEX IF NOT EXISTS idx_ical_uid ON ical_objs ( ical_uid );"
 
 /* Open DAV DB corresponding to userid */
-struct caldav_db *caldav_open(const char *userid, int flags)
+EXPORTED struct caldav_db *caldav_open(const char *userid, int flags)
 {
     sqlite3 *db;
     struct caldav_db *caldavdb = NULL;
@@ -161,7 +162,7 @@ struct caldav_db *caldav_open(const char *userid, int flags)
 
 
 /* Close DAV DB */
-int caldav_close(struct caldav_db *caldavdb)
+EXPORTED int caldav_close(struct caldav_db *caldavdb)
 {
     int i, r = 0;
 
@@ -193,7 +194,7 @@ int caldav_close(struct caldav_db *caldavdb)
 
 #define CMD_BEGIN "BEGIN TRANSACTION;"
 
-int caldav_begin(struct caldav_db *caldavdb)
+EXPORTED int caldav_begin(struct caldav_db *caldavdb)
 {
     return dav_exec(caldavdb->db, CMD_BEGIN, NULL, NULL, NULL,
 		    &caldavdb->stmt[STMT_BEGIN]);
@@ -202,7 +203,7 @@ int caldav_begin(struct caldav_db *caldavdb)
 
 #define CMD_COMMIT "COMMIT TRANSACTION;"
 
-int caldav_commit(struct caldav_db *caldavdb)
+EXPORTED int caldav_commit(struct caldav_db *caldavdb)
 {
     return dav_exec(caldavdb->db, CMD_COMMIT, NULL, NULL, NULL,
 		    &caldavdb->stmt[STMT_COMMIT]);
@@ -211,7 +212,7 @@ int caldav_commit(struct caldav_db *caldavdb)
 
 #define CMD_ROLLBACK "ROLLBACK TRANSACTION;"
 
-int caldav_abort(struct caldav_db *caldavdb)
+EXPORTED int caldav_abort(struct caldav_db *caldavdb)
 {
     return dav_exec(caldavdb->db, CMD_ROLLBACK, NULL, NULL, NULL,
 		    &caldavdb->stmt[STMT_ROLLBACK]);
@@ -314,7 +315,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     " FROM ical_objs"							\
     " WHERE ( mailbox = :mailbox AND resource = :resource );"
 
-int caldav_lookup_resource(struct caldav_db *caldavdb,
+EXPORTED int caldav_lookup_resource(struct caldav_db *caldavdb,
 			   const char *mailbox, const char *resource,
 			   int lock, struct caldav_data **result)
 {
@@ -351,7 +352,7 @@ int caldav_lookup_resource(struct caldav_db *caldavdb,
     " FROM ical_objs"							\
     " WHERE ( ical_uid = :ical_uid AND mailbox != :inbox);"
 
-int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
+EXPORTED int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
 		      int lock, struct caldav_data **result)
 {
     struct bind_val bval[] = {
@@ -386,7 +387,7 @@ int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
     "  recurring, transp, sched_tag"					\
     " FROM ical_objs WHERE mailbox = :mailbox;"
 
-int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
+EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
 		   int (*cb)(void *rock, void *data),
 		   void *rock)
 {
@@ -430,7 +431,7 @@ int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
     "  sched_tag    = :sched_tag"	\
     " WHERE rowid = :rowid;"
 
-int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata,
+EXPORTED int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata,
 		 int commit)
 {
     struct bind_val bval[] = {
@@ -492,7 +493,7 @@ int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata,
 
 #define CMD_DELETE "DELETE FROM ical_objs WHERE rowid = :rowid;"
 
-int caldav_delete(struct caldav_db *caldavdb, unsigned rowid, int commit)
+EXPORTED int caldav_delete(struct caldav_db *caldavdb, unsigned rowid, int commit)
 {
     struct bind_val bval[] = {
 	{ ":rowid", SQLITE_INTEGER, { .i = rowid } },
@@ -506,7 +507,7 @@ int caldav_delete(struct caldav_db *caldavdb, unsigned rowid, int commit)
 	/* commit transaction */
 	return dav_exec(caldavdb->db, CMD_COMMIT, NULL, NULL, NULL,
 			&caldavdb->stmt[STMT_COMMIT]);
-    }	
+    }
 
     return r;
 }
@@ -514,7 +515,7 @@ int caldav_delete(struct caldav_db *caldavdb, unsigned rowid, int commit)
 
 #define CMD_DELMBOX "DELETE FROM ical_objs WHERE mailbox = :mailbox;"
 
-int caldav_delmbox(struct caldav_db *caldavdb, const char *mailbox, int commit)
+EXPORTED int caldav_delmbox(struct caldav_db *caldavdb, const char *mailbox, int commit)
 {
     struct bind_val bval[] = {
 	{ ":mailbox", SQLITE_TEXT, { .s = mailbox } },
@@ -528,7 +529,7 @@ int caldav_delmbox(struct caldav_db *caldavdb, const char *mailbox, int commit)
 	/* commit transaction */
 	return dav_exec(caldavdb->db, CMD_COMMIT, NULL, NULL, NULL,
 			&caldavdb->stmt[STMT_COMMIT]);
-    }	
+    }
 
     return r;
 }
@@ -704,7 +705,7 @@ static void recur_cb(icalcomponent *comp, struct icaltime_span *span,
 }
 
 
-void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata)
+EXPORTED void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata)
 {
     icalcomponent *comp = icalcomponent_get_first_real_component(ical);
     icalcomponent_kind kind;
@@ -785,7 +786,7 @@ void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata)
 }
 
 
-int caldav_mboxname(const char *name, const char *userid, char *result)
+EXPORTED int caldav_mboxname(const char *name, const char *userid, char *result)
 {
     size_t len;
 

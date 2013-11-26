@@ -63,7 +63,7 @@
 
 static int dbinit = 0;
 
-int dav_init(void)
+EXPORTED int dav_init(void)
 {
     if (!dbinit++) {
 #if SQLITE_VERSION_NUMBER >= 3006000
@@ -75,7 +75,7 @@ int dav_init(void)
 }
 
 
-int dav_done(void)
+EXPORTED int dav_done(void)
 {
     if (--dbinit) {
 #if SQLITE_VERSION_NUMBER >= 3006000
@@ -117,7 +117,7 @@ static void dav_debug(void *userid, const char *sql)
 
 
 /* Open DAV DB corresponding to userid */
-sqlite3 *dav_open(const char *userid, const char *cmds)
+EXPORTED sqlite3 *dav_open(const char *userid, const char *cmds)
 {
     int rc;
     struct buf fname = BUF_INITIALIZER;
@@ -167,7 +167,7 @@ sqlite3 *dav_open(const char *userid, const char *cmds)
 
 
 /* Close DAV DB */
-int dav_close(sqlite3 *davdb)
+EXPORTED int dav_close(sqlite3 *davdb)
 {
     int rc, r = 0;;
 
@@ -183,7 +183,7 @@ int dav_close(sqlite3 *davdb)
 }
 
 
-int dav_exec(sqlite3 *davdb, const char *cmd, struct bind_val bval[],
+EXPORTED int dav_exec(sqlite3 *davdb, const char *cmd, struct bind_val bval[],
 	     int (*cb)(sqlite3_stmt *stmt, void *rock), void *rock,
 	     sqlite3_stmt **stmt)
 {
@@ -237,7 +237,7 @@ int dav_exec(sqlite3 *davdb, const char *cmd, struct bind_val bval[],
 }
 
 
-int dav_delete(const char *userid)
+EXPORTED int dav_delete(const char *userid)
 {
     struct buf fname = BUF_INITIALIZER;
     int r = 0;

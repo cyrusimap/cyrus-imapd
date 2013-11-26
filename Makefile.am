@@ -60,6 +60,8 @@ DISTCLEANFILES = imap/imap_err.c \
 	imap/mupdate_err.h \
 	imap/nntp_err.c \
 	imap/nntp_err.h \
+	imap/http_err.c \
+	imap/http_err.h \
 	com_err/et/compile_et \
 	perl/annotator/Makefile \
 	perl/annotator/Makefile.PL \
@@ -153,6 +155,29 @@ service_PROGRAMS += imap/mupdate
 endif
 if NNTPD
 service_PROGRAMS += imap/nntpd
+endif
+if HTTPD
+AM_CPPFLAGS += $(HTTP_CPPFLAGS)
+AM_LDFLAGS += $(HTTP_LIBS)
+BUILT_SOURCES += imap/http_err.c imap/http_err.h
+service_PROGRAMS += imap/httpd
+user_PROGRAMS += imap/dav_reconstruct
+HTTP_SOURCES = imap/http_err.c \
+	       imap/http_proxy.c \
+	       imap/http_caldav.c \
+	       imap/http_carddav.c \
+	       imap/http_dav.c \
+	       imap/http_ischedule.c \
+	       imap/http_rss.c \
+	       imap/caldav_db.c \
+	       imap/proxy.c \
+	       imap/smtpclient.c \
+	       imap/spool.c \
+	       imap/carddav_db.c \
+	       imap/dav_db.c \
+	       imap/jcal.c \
+	       imap/xcal.c \
+	       imap/httpd.c
 endif
 if REPLICATION
 user_PROGRAMS += imap/sync_client imap/sync_reset
@@ -818,6 +843,9 @@ if JANSSON
 imap_libcyrus_imap_la_LIBADD += $(JANSSON_LIBS)
 imap_libcyrus_imap_la_CFLAGS += $(JANSSON_CFLAGS)
 endif
+if HTTPD
+imap_libcyrus_imap_la_SOURCES += $(HTTP_SOURCES)
+endif
 
 imap_lmtpd_SOURCES = \
 	imap/lmtpd.c \
@@ -882,6 +910,30 @@ imap_nntpd_SOURCES = \
 	master/service.c
 imap_nntpd_LDADD = $(LD_SERVER_ADD)
 
+nodist_imap_httpd_SOURCES = \
+	imap/http_err.c \
+	imap/http_err.h
+imap_httpd_SOURCES = \
+	imap/mutex_fake.c \
+	imap/carddav_db.c \
+	imap/caldav_db.c \
+	imap/http_proxy.c \
+	imap/httpd.c \
+	imap/proxy.c \
+	imap/spool.c \
+	imap/spool.h \
+	imap/http_rss.c \
+	imap/http_dav.c \
+	imap/dav_db.c \
+	imap/http_ischedule.c \
+	imap/http_carddav.c \
+	imap/http_caldav.c \
+	imap/smtpclient.c \
+	imap/xcal.c \
+	imap/jcal.c \
+	master/service.c
+imap_httpd_LDADD = $(LD_SERVER_ADD)
+
 imap_pop3d_SOURCES = \
 	imap/mutex_fake.c \
 	imap/pop3d.c \
@@ -905,6 +957,9 @@ imap_quota_LDADD = $(LD_UTILITY_ADD)
 
 imap_reconstruct_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/reconstruct.c
 imap_reconstruct_LDADD = $(LD_UTILITY_ADD)
+
+imap_dav_reconstruct_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/dav_reconstruct.c
+imap_dav_reconstruct_LDADD = $(LD_UTILITY_ADD)
 
 imap_smmapd_SOURCES = imap/mutex_fake.c imap/proxy.c imap/smmapd.c master/service.c
 imap_smmapd_LDADD = $(LD_SERVER_ADD)
@@ -936,6 +991,9 @@ imap/mupdate_err.h imap/mupdate_err.c: imap/mupdate_err.et $(COMPILE_ET_DEP)
 
 imap/nntp_err.h imap/nntp_err.c: imap/nntp_err.et $(COMPILE_ET_DEP)
 	cd imap && $(COMPILE_ET) ../$(top_srcdir)/imap/nntp_err.et
+
+imap/http_err.h imap/http_err.c: imap/http_err.et $(COMPILE_ET_DEP)
+	cd imap && $(COMPILE_ET) ../$(top_srcdir)/imap/http_err.et
 
 if MAINTAINER_MODE
 imap/rfc822_header.c: imap/rfc822_header.st
@@ -1091,6 +1149,7 @@ dist_man_MANS = \
 	man/deliver.8 \
 	man/fetchnews.8 \
 	man/fud.8 \
+	man/httpd.8 \
 	man/idled.8 \
 	man/imapd.8 \
 	man/ipurge.8 \

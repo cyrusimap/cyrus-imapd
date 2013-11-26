@@ -734,7 +734,7 @@ static icalcomponent *json_object_to_icalcomponent(json_object *jobj)
 /*
  * Construct an iCalendar component from a jCal string.
  */
-icalcomponent *jcal_string_as_icalcomponent(const char *str)
+EXPORTED icalcomponent *jcal_string_as_icalcomponent(const char *str)
 {
     json_object *jcal;
     enum json_tokener_error jerr;
@@ -757,7 +757,7 @@ icalcomponent *jcal_string_as_icalcomponent(const char *str)
 }
 
 
-const char *begin_jcal(struct buf *buf)
+EXPORTED const char *begin_jcal(struct buf *buf)
 {
     /* Begin jCal stream */
     buf_reset(buf);
@@ -786,7 +786,7 @@ const char *begin_jcal(struct buf *buf)
 }
 
 
-void end_jcal(struct buf *buf)
+EXPORTED void end_jcal(struct buf *buf)
 {
     /* End jCal stream */
     buf_setcstr(buf, "]]");

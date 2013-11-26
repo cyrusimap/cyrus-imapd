@@ -44,14 +44,15 @@
 #ifndef HTTP_DAV_H
 #define HTTP_DAV_H
 
+#include <stdint.h>
+#include <libical/ical.h>
+#include <libxml/tree.h>
+
+#include "annotate.h"
 #include "caldav_db.h"
 #include "httpd.h"
 #include "spool.h"
 #include "quota.h"
-
-#include <libical/ical.h>
-#include <libxml/tree.h>
-
 
 #define NULL_ETAG	"da39a3ee5e6b4b0d3255bfef95601890afd80709"
 			/* SHA1("") */
@@ -297,6 +298,7 @@ struct proppatch_ctx {
     struct request_target_t *req_tgt;	/* parsed request target URL */
     unsigned meth;	    		/* requested Method */
     const char *mailboxname;		/* mailbox correspondng to collection */
+    annotate_state_t *astate;           /* Annotation state */
     const struct prop_entry *lprops;	/* Array of known "live" properties */
     xmlNodePtr root;			/* root node to add to XML tree */
     xmlNsPtr *ns;			/* Array of our supported namespaces */

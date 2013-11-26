@@ -65,7 +65,7 @@
 #include "message.h"
 #include "parseaddr.h"
 #include "proxy.h"
-#include "rfc822date.h"
+#include "times.h"
 #include "seen.h"
 #include "tok.h"
 #include "util.h"
@@ -377,7 +377,7 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
 	if (!is_feed(name)) return 0;
 
 	/* Don't list deleted mailboxes */
-	if (mboxname_isdeletedmailbox(name)) return 0;
+	if (mboxname_isdeletedmailbox(name, NULL)) return 0;
 
 	/* Lookup the mailbox and make sure its readable */
 	http_mlookup(name, NULL, &acl, NULL);
@@ -703,18 +703,6 @@ static void buf_escapestr(struct buf *buf, const char *str, unsigned max,
     if (!replace && config_httpprettytelemetry) buf_appendcstr(buf, "\n");
 }
 
-
-/* Create RFC3339 date ('buf' must be at least 21 characters) */
-static void rfc3339date_gen(char *buf, size_t len, time_t t)
-{
-    struct tm *tm = gmtime(&t);
-
-    snprintf(buf, len, "%4d-%02d-%02dT%02d:%02d:%02dZ",
-	     tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, 
-	     tm->tm_hour, tm->tm_min, tm->tm_sec);
-}
-
-
 /* List messages as an RSS feed */
 static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 {
@@ -728,7 +716,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     struct buf *buf = &txn->resp_body.payload;
     unsigned level = 0;
     char mboxname[MAX_MAILBOX_NAME+1];
-    struct annotation_data attrib;
+    struct buf attrib = BUF_INITIALIZER;
 
     /* Check any preconditions */
     lastmod = mailbox->i.last_appenddate;
@@ -829,7 +817,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 		      XML_NS_CYRUS, mailbox->uniqueid);
 
     /* <updated> - required */
-    rfc3339date_gen(datestr, sizeof(datestr), lastmod);
+    time_to_rfc3339(lastmod, datestr, sizeof(datestr));
     buf_printf_markup(buf, level, "<updated>%s</updated>", datestr);
 
     /* <author> - required (use 'Anonymous' as default <name>) */
@@ -838,18 +826,17 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     buf_printf_markup(buf, --level, "</author>");
 
     /* <subtitle> - optional */
-    memset(&attrib, 0, sizeof(struct annotation_data));
     annotatemore_lookup(mailbox->name, "/comment", "", &attrib);
     if (age_mark) {
-	rfc822date_gen(datestr, sizeof(datestr), age_mark);
+	time_to_rfc822(age_mark, datestr, sizeof(datestr));
 	buf_printf_markup(buf, level,
 			"<subtitle>%s [posts since %s]</subtitle>",
-			  attrib.value ? attrib.value : "", datestr);
+			  buf_cstring(&attrib), datestr);
     }
     else {
 	buf_printf_markup(buf, level,
 			  "<subtitle>%s [%u most recent posts]</subtitle>",
-			  attrib.value ? attrib.value : "",
+			  buf_cstring(&attrib),
 			  max_items ? (unsigned) max_items : mailbox->i.exists);
     }
 
@@ -919,7 +906,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 			  XML_NS_CYRUS, message_guid_encode(&record.guid));
 
 	/* <updated> - required */
-	rfc3339date_gen(datestr, sizeof(datestr), record.gmtime);
+	time_to_rfc3339(record.gmtime, datestr, sizeof(datestr));
 	buf_printf_markup(buf, level, "<updated>%s</updated>", datestr);
 
 	/* <published> - optional */
@@ -1314,7 +1301,7 @@ static void fetch_part(struct transaction_t *txn, struct body *body,
 
 	outbuf = charset_decode_mimebody(msg_base + body->content_offset,
 					 body->content_size, encoding,
-					 &body->decoded_body, 0, &outsize);
+					 &body->decoded_body, &outsize);
 
 	if (!outbuf) {
 	    txn->error.desc = "Unknown MIME encoding\r\n";

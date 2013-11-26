@@ -89,7 +89,7 @@
 #include "userdeny.h"
 #include "message.h"
 #include "idle.h"
-#include "rfc822date.h"
+#include "times.h"
 #include "tok.h"
 #include "wildmat.h"
 #include "md5.h"
@@ -176,7 +176,7 @@ static struct proxy_context httpd_proxyctx = {
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
 /* current namespace */
-struct namespace httpd_namespace;
+HIDDEN struct namespace httpd_namespace;
 
 /* PROXY STUFF */
 /* we want a list of our outgoing connections here and which one we're
@@ -426,11 +426,10 @@ int service_init(int argc __attribute__((unused)),
 
     /* open the user deny db */
     denydb_init(0);
-    denydb_open(NULL);
+    denydb_open(/*create*/0);
 
     /* open annotations.db, we'll need it for collection properties */
-    annotatemore_init(0, NULL, NULL);
-    annotatemore_open(NULL);
+    annotatemore_open();
 
     /* setup for sending IMAP IDLE notifications */
     idle_enabled();
@@ -709,7 +708,6 @@ void shut_down(int code)
     denydb_done();
 
     annotatemore_close();
-    annotatemore_done();
 
     if (httpd_in) {
 	prot_NONBLOCK(httpd_in);
@@ -1399,7 +1397,7 @@ static void cmdloop(void)
 /****************************  Parsing Routines  ******************************/
 
 /* Parse URI, returning the path */
-xmlURIPtr parse_uri(unsigned meth, const char *uri, unsigned path_reqd,
+EXPORTED xmlURIPtr parse_uri(unsigned meth, const char *uri, unsigned path_reqd,
 		    const char **errstr)
 {
     xmlURIPtr p_uri;  /* parsed URI */
@@ -1452,7 +1450,7 @@ xmlURIPtr parse_uri(unsigned meth, const char *uri, unsigned path_reqd,
 
 
 /* Compare Content-Types */
-int is_mediatype(const char *hdr, const char *type)
+EXPORTED int is_mediatype(const char *hdr, const char *type)
 {
     size_t tlen = strcspn(type, "; \r\n\0");
     size_t hlen = strcspn(hdr, "; \r\n\0");
@@ -1462,7 +1460,7 @@ int is_mediatype(const char *hdr, const char *type)
 
 
 /* Calculate compile time of a file for use as Last-Modified and/or ETag */
-time_t calc_compile_time(const char *time, const char *date)
+EXPORTED time_t calc_compile_time(const char *time, const char *date)
 {
     struct tm tm;
     char month[4];
@@ -1489,7 +1487,7 @@ time_t calc_compile_time(const char *time, const char *date)
  * Handles chunked, gzip, deflate TE only.
  * Handles close-delimited response bodies (no Content-Length specified) 
  */
-int parse_framing(hdrcache_t hdrs, struct body_t *body, const char **errstr)
+EXPORTED int parse_framing(hdrcache_t hdrs, struct body_t *body, const char **errstr)
 {
     static unsigned max_msgsize = 0;
     const char **hdr;
@@ -1587,7 +1585,7 @@ int parse_framing(hdrcache_t hdrs, struct body_t *body, const char **errstr)
  * Handles close-delimited response bodies (no Content-Length specified) 
  * Handles gzip and deflate CE only.
  */
-int read_body(struct protstream *pin, hdrcache_t hdrs, struct body_t *body,
+EXPORTED int read_body(struct protstream *pin, hdrcache_t hdrs, struct body_t *body,
 	      const char **errstr)
 {
     char buf[PROT_BUFSIZE];
@@ -1908,7 +1906,7 @@ struct accept *parse_accept(const char **hdr)
 
 
 /* Create HTTP-date ('buf' must be at least 30 characters) */
-void httpdate_gen(char *buf, size_t len, time_t t)
+EXPORTED void httpdate_gen(char *buf, size_t len, time_t t)
 {
     struct tm *tm;
     static char *month[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -1925,7 +1923,7 @@ void httpdate_gen(char *buf, size_t len, time_t t)
 
 
 /* Create an HTTP Status-Line given response code */
-const char *http_statusline(long code)
+EXPORTED const char *http_statusline(long code)
 {
     static struct buf statline = BUF_INITIALIZER;
     static unsigned tail = 0;
@@ -1955,7 +1953,7 @@ const char *http_statusline(long code)
 #define Access_Control_Expose(hdr)				\
     prot_puts(httpd_out, "Access-Control-Expose-Headers: " hdr "\r\n")
 
-void comma_list_hdr(const char *hdr, const char *vals[], unsigned flags, ...)
+EXPORTED void comma_list_hdr(const char *hdr, const char *vals[], unsigned flags, ...)
 {
     const char *sep = " ";
     va_list args;
@@ -1978,7 +1976,7 @@ void comma_list_hdr(const char *hdr, const char *vals[], unsigned flags, ...)
     va_end(args);
 }
 
-void allow_hdr(const char *hdr, unsigned allow)
+EXPORTED void allow_hdr(const char *hdr, unsigned allow)
 {
     const char *meths[] = {
 	"OPTIONS, GET, HEAD", "POST", "PUT", "DELETE", "TRACE", NULL
@@ -2003,7 +2001,7 @@ void allow_hdr(const char *hdr, unsigned allow)
 
 #define MD5_BASE64_LEN 25   /* ((MD5_DIGEST_LENGTH / 3) + 1) * 4 */
 
-void Content_MD5(const unsigned char *md5)
+EXPORTED void Content_MD5(const unsigned char *md5)
 {
     char base64[MD5_BASE64_LEN+1];
 
@@ -2013,7 +2011,7 @@ void Content_MD5(const unsigned char *md5)
 }
 
 
-void response_header(long code, struct transaction_t *txn)
+EXPORTED void response_header(long code, struct transaction_t *txn)
 {
     time_t now;
     char datestr[30];
@@ -2437,7 +2435,7 @@ static void keep_alive(int sig)
  * All subsequent calls should have 'code' = 0 to output just a body part.
  * A final call with 'len' = 0 ends the multipart body.
  */
-void write_multipart_body(long code, struct transaction_t *txn,
+EXPORTED void write_multipart_body(long code, struct transaction_t *txn,
 			  const char *buf, unsigned len)
 {
     static char boundary[100];
@@ -2541,7 +2539,7 @@ static void multipart_byteranges(struct transaction_t *txn,
  * NOTE: HTTP/1.0 clients can't handle chunked encoding,
  *       so we use bare chunks and close the connection when done.
  */
-void write_body(long code, struct transaction_t *txn,
+EXPORTED void write_body(long code, struct transaction_t *txn,
 		const char *buf, unsigned len)
 {
     unsigned is_dynamic = code ? (txn->flags.te & TE_CHUNKED) : 1;
@@ -2704,7 +2702,7 @@ void write_body(long code, struct transaction_t *txn,
 
 
 /* Output an HTTP response with application/xml body */
-void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
+EXPORTED void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
 {
     xmlChar *buf;
     int bufsiz;
@@ -2742,7 +2740,7 @@ void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
     }
 }
 
-void buf_printf_markup(struct buf *buf, unsigned level, const char *fmt, ...)
+EXPORTED void buf_printf_markup(struct buf *buf, unsigned level, const char *fmt, ...)
 {
     va_list args;
     const char *eol = "\n";
@@ -2763,7 +2761,7 @@ void buf_printf_markup(struct buf *buf, unsigned level, const char *fmt, ...)
 
 
 /* Output an HTTP error response with optional XML or HTML body */
-void error_response(long code, struct transaction_t *txn)
+EXPORTED void error_response(long code, struct transaction_t *txn)
 {
     struct buf *html = &txn->resp_body.payload;
 
@@ -3250,7 +3248,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 /* "Open" the requested mailbox.  Either return the existing open
  * mailbox if it matches, or close the existing and open the requested.
  */
-int http_mailbox_open(const char *name, struct mailbox **mailbox, int locktype)
+EXPORTED int http_mailbox_open(const char *name, struct mailbox **mailbox, int locktype)
 {
     int r;
 
@@ -3276,7 +3274,7 @@ int http_mailbox_open(const char *name, struct mailbox **mailbox, int locktype)
 /* Compare an etag in a header to a resource etag.
  * Returns 0 if a match, non-zero otherwise.
  */
-int etagcmp(const char *hdr, const char *etag)
+EXPORTED int etagcmp(const char *hdr, const char *etag)
 {
     size_t len;
 
@@ -3450,7 +3448,7 @@ static int parse_ranges(const char *hdr, unsigned long len,
  * Interaction is complex and is documented in RFC 4918 and
  * Section 5 of HTTPbis, Part 4.
  */
-int check_precond(struct transaction_t *txn, const void *data,
+EXPORTED int check_precond(struct transaction_t *txn, const void *data,
 		  const char *etag, time_t lastmod)
 {
     const char *lock_token = NULL;
@@ -3523,9 +3521,8 @@ int check_precond(struct transaction_t *txn, const void *data,
 
     /* Step 2 */
     else if ((hdr = spool_getheader(hdrcache, "If-Unmodified-Since"))) {
-	since = message_parse_date((char *) hdr[0],
-				   PARSE_DATE|PARSE_TIME|PARSE_ZONE|
-				   PARSE_GMT|PARSE_NOCREATE);
+	if (time_from_rfc822(hdr[0], &since))
+	    return HTTP_BAD_REQUEST;
 
 	if (since && (lastmod > since)) return HTTP_PRECOND_FAILED;
 
@@ -3547,9 +3544,8 @@ int check_precond(struct transaction_t *txn, const void *data,
     /* Step 4 */
     else if ((txn->meth == METH_GET || txn->meth == METH_HEAD) &&
 	     (hdr = spool_getheader(hdrcache, "If-Modified-Since"))) {
-	since = message_parse_date((char *) hdr[0],
-				   PARSE_DATE|PARSE_TIME|PARSE_ZONE|
-				   PARSE_GMT|PARSE_NOCREATE);
+	if (time_from_rfc822(hdr[0], &since))
+	    return HTTP_BAD_REQUEST;
 
 	if (lastmod <= since) return HTTP_NOT_MODIFIED;
 
@@ -3561,9 +3557,7 @@ int check_precond(struct transaction_t *txn, const void *data,
 	txn->meth == METH_GET && (hdr = spool_getheader(hdrcache, "Range"))) {
 
 	if ((hdr = spool_getheader(hdrcache, "If-Range"))) {
-	    since = message_parse_date((char *) hdr[0],
-				       PARSE_DATE|PARSE_TIME|PARSE_ZONE|
-				       PARSE_GMT|PARSE_NOCREATE);
+	    time_from_rfc822(hdr[0], &since); /* error OK here, could be an etag */
 	}
 
 	/* Only process Range if If-Range isn't present or validator matches */
@@ -3724,7 +3718,7 @@ int meth_get_doc(struct transaction_t *txn,
 
 
 /* Perform an OPTIONS request */
-int meth_options(struct transaction_t *txn, void *params)
+EXPORTED int meth_options(struct transaction_t *txn, void *params)
 {
     parse_path_t parse_path = (parse_path_t) params;
     int r, i;
@@ -3841,7 +3835,7 @@ static void trace_cachehdr(const char *name, const char *contents, void *rock)
 }
 
 /* Perform an TRACE request */
-int meth_trace(struct transaction_t *txn, void *params)
+EXPORTED int meth_trace(struct transaction_t *txn, void *params)
 {
     parse_path_t parse_path = (parse_path_t) params;
     const char **hdr;

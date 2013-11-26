@@ -70,18 +70,19 @@
 #include <libxml/uri.h>
 
 static int login(struct backend *s, const char *userid,
-		 sasl_callback_t *cb, const char **status);
+		 sasl_callback_t *cb, const char **status,
+		 int noauth);
 static int ping(struct backend *s, const char *userid);
 static int logout(struct backend *s __attribute__((unused)));
 
 
-struct protocol_t http_protocol =
+HIDDEN struct protocol_t http_protocol =
 { "http", "HTTP", TYPE_SPEC,
   { .spec = { &login, &ping, &logout } }
 };
 
 
-const char *digest_recv_success(hdrcache_t hdrs)
+EXPORTED const char *digest_recv_success(hdrcache_t hdrs)
 {
     const char **hdr = spool_getheader(hdrs, "Authentication-Info");
 
@@ -124,7 +125,8 @@ static const char *callback_getdata(sasl_conn_t *conn,
 #define BASE64_BUF_SIZE	21848	/* per RFC 2222bis: ((16K / 3) + 1) * 4  */
 
 static int login(struct backend *s, const char *userid,
-		 sasl_callback_t *cb, const char **status)
+		 sasl_callback_t *cb, const char **status,
+		 int noauth __attribute__((unused)))
 {
     int r = 0;
     socklen_t addrsize;
@@ -464,9 +466,9 @@ static int logout(struct backend *s __attribute__((unused)))
  * machine to make a roundtrip to the master mailbox server to make
  * sure it's up to date
  */
-int http_mlookup(const char *name, char **server, char **aclp, void *tid)
+EXPORTED int http_mlookup(const char *name, char **server, char **aclp, void *tid)
 {
-    struct mboxlist_entry mbentry;
+    mbentry_t *mbentry = NULL;
     int r;
 
     r = mboxlist_lookup(name, &mbentry, tid);
@@ -475,28 +477,31 @@ int http_mlookup(const char *name, char **server, char **aclp, void *tid)
 	r = mboxlist_lookup(name, &mbentry, tid);
     }
     if (r) return r;
-    if (mbentry.mbtype & MBTYPE_RESERVE) return IMAP_MAILBOX_RESERVED;
-    if (mbentry.mbtype & MBTYPE_MOVING) return IMAP_MAILBOX_MOVED;
-    if (mbentry.mbtype & MBTYPE_DELETED) return IMAP_MAILBOX_NONEXISTENT;
-
-    if (aclp) *aclp = mbentry.acl;
-    if (server) {
-	*server = NULL;
-	if (mbentry.mbtype & MBTYPE_REMOTE) {
-	    /* xxx hide the fact that we are storing partitions */
-	    char *c;
-	    *server = mbentry.partition;
-	    c = strchr(*server, '!');
-	    if (c) *c = '\0';
-	}
+    if (mbentry->mbtype & MBTYPE_RESERVE) {
+	r = IMAP_MAILBOX_RESERVED;
+	goto done;
+    }
+    if (mbentry->mbtype & MBTYPE_MOVING) {
+	r = IMAP_MAILBOX_MOVED;
+	goto done;
+    }
+    if (mbentry->mbtype & MBTYPE_DELETED) {
+	r = IMAP_MAILBOX_NONEXISTENT;
+	goto done;
     }
 
+    /* XXX - will leak memory at call sites for now */
+    if (aclp) *aclp = xstrdupnull(mbentry->acl);
+    if (server) *server = xstrdupnull(mbentry->server);
+
+done:
+    mboxlist_entry_free(&mbentry);
     return r;
 }
 
 
 /* Fetch protocol and host used for request from headers */
-void http_proto_host(hdrcache_t req_hdrs, const char **proto, const char **host)
+EXPORTED void http_proto_host(hdrcache_t req_hdrs, const char **proto, const char **host)
 {
     const char **fwd;
 
@@ -597,7 +602,7 @@ static void write_cachehdr(const char *name, const char *contents, void *rock)
 
 
 /* Read a response from backend */
-int http_read_response(struct backend *be, unsigned meth, unsigned *code,
+EXPORTED int http_read_response(struct backend *be, unsigned meth, unsigned *code,
 		       const char **statline, hdrcache_t *hdrs,
 		       struct body_t *body, const char **errstr)
 {
@@ -844,7 +849,7 @@ static int pipe_resp_body(struct protstream *pin, struct protstream *pout,
 
 
 /* Proxy (pipe) a client-request/server-response to/from a backend. */
-int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
+EXPORTED int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 {
     int r = 0, sent_body = 0;
     xmlChar *uri;
@@ -957,7 +962,7 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
  * XXX  This function currently buffers the response headers and body.
  *      Should work on sending them to the client on-the-fly.
  */
-int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
+EXPORTED int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 		    struct transaction_t *txn)
 {
     int r = 0;
@@ -1039,7 +1044,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 	if ((hdr = spool_getheader(resp_hdrs, "Content-Language")))
 	    prot_printf(dest_be->out, "Content-Language: %s\r\n", hdr[0]);
 	prot_printf(dest_be->out, "Content-Length: %u\r\n",
-		    buf_len(&resp_body.payload));
+		    (unsigned)buf_len(&resp_body.payload));
 	prot_puts(dest_be->out, "\r\n");
 	prot_flush(dest_be->out);
 

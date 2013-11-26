@@ -1105,6 +1105,48 @@ if test "$enable_murder" != no; then
 fi
 
 dnl
+dnl see if we're compiling with HTTP support
+dnl
+ENABLE_HTTP=no
+AC_ARG_ENABLE(http,
+        [AS_HELP_STRING([--enable-http], [enable HTTP support])],, [enable_http="no";])
+AM_CONDITIONAL([HTTPD], [test "$enable_http" != "no"])
+
+HTTP_CPPFLAGS=
+HTTP_LIBS=
+if test "$enable_http" != no; then
+dnl
+dnl make sure all the modules we need are present
+dnl
+	ENABLE_RSS=yes
+	ENABLE_DAV=yes
+	PKG_CHECK_MODULES([XML2], [libxml-2.0],,AC_MSG_ERROR([Need libxml-2.0 for http]))
+	PKG_CHECK_MODULES([ICAL], [libical],,AC_MSG_ERROR([Need libical for http]))
+	PKG_CHECK_MODULES([SQLITE3], [sqlite3],,AC_MSG_ERROR([Need sqlite3 for http]))
+	PKG_CHECK_MODULES([JSON], [json],,AC_MSG_ERROR([Need json for http]))
+
+	HTTP_LIBS="${XML2_LIBS} ${ICAL_LIBS} ${SQLITE3_LIBS} ${JSON_LIBS}"
+	HTTP_CPPFLAGS="${JSON_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${XML2_CFLAGS}"
+
+	AC_DEFINE(HAVE_XML2,[],[Build in libxml support?])
+	AC_DEFINE(HAVE_ICAL,[],[Build in ical support?])
+	AC_DEFINE(HAVE_SQLITE3,[],[Build in SQLite support?])
+
+	AC_DEFINE(WITH_DAV,[],[Build DAV support into httpd?])
+	AC_DEFINE(WITH_JSON,[],[Build jCal/jCard support into httpd?])
+
+	CYRUS_OPENDKIM_CHK()
+	if test "$opendkimlib" = "yes"; then
+	    AC_SUBST(DKIM_CFLAGS)
+	    AC_SUBST(DKIM_LIBS)
+	    AC_DEFINE(WITH_DKIM,[],[Build DKIM support into iSchedule?]) 
+	fi
+fi
+AC_SUBST(HTTP_CPPFLAGS)
+AC_SUBST(HTTP_LIBS)
+
+
+dnl
 dnl see if we're compiling replication support programs
 dnl
 AC_ARG_ENABLE(replication,
@@ -1509,10 +1551,6 @@ struct sockaddr_storage {
 # define HAVE_SS_FAMILY
 #endif /* !HAVE_STRUCT_SOCKADDR_STORAGE */
 
-#ifndef HAVE_SS_FAMILY
-#define ss_family	__ss_family
-#endif
-
 #ifndef AF_INET6
 /* Define it to something that should never appear */
 #define	AF_INET6	AF_MAX
@@ -1640,6 +1678,7 @@ Cyrus Imapd configured components
    nntpd:              $enable_nntp
    replication:        $enable_replication
    sieve:              $enable_sieve
+   http:               $enable_http
 
 External dependencies:
    pcre:               $cyrus_cv_pcre_utf8

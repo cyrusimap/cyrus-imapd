@@ -87,13 +87,13 @@ struct carddav_db {
 };
 
 
-int carddav_init(void)
+EXPORTED int carddav_init(void)
 {
     return dav_init();
 }
 
 
-int carddav_done(void)
+EXPORTED int carddav_done(void)
 {
     return dav_done();
 }
@@ -143,7 +143,7 @@ struct carddav_db *carddav_open(const char *userid, int flags)
 
 
 /* Close DAV DB */
-int carddav_close(struct carddav_db *carddavdb)
+EXPORTED int carddav_close(struct carddav_db *carddavdb)
 {
     int i, r = 0;
 
@@ -175,7 +175,7 @@ int carddav_close(struct carddav_db *carddavdb)
 
 #define CMD_BEGIN "BEGIN TRANSACTION;"
 
-int carddav_begin(struct carddav_db *carddavdb)
+EXPORTED int carddav_begin(struct carddav_db *carddavdb)
 {
     return dav_exec(carddavdb->db, CMD_BEGIN, NULL, NULL, NULL,
 		    &carddavdb->stmt[STMT_BEGIN]);
@@ -184,7 +184,7 @@ int carddav_begin(struct carddav_db *carddavdb)
 
 #define CMD_COMMIT "COMMIT TRANSACTION;"
 
-int carddav_commit(struct carddav_db *carddavdb)
+EXPORTED int carddav_commit(struct carddav_db *carddavdb)
 {
     return dav_exec(carddavdb->db, CMD_COMMIT, NULL, NULL, NULL,
 		    &carddavdb->stmt[STMT_COMMIT]);
@@ -193,7 +193,7 @@ int carddav_commit(struct carddav_db *carddavdb)
 
 #define CMD_ROLLBACK "ROLLBACK TRANSACTION;"
 
-int carddav_abort(struct carddav_db *carddavdb)
+EXPORTED int carddav_abort(struct carddav_db *carddavdb)
 {
     return dav_exec(carddavdb->db, CMD_ROLLBACK, NULL, NULL, NULL,
 		    &carddavdb->stmt[STMT_ROLLBACK]);
@@ -294,7 +294,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     " FROM vcard_objs"							\
     " WHERE ( mailbox = :mailbox AND resource = :resource );"
 
-int carddav_lookup_resource(struct carddav_db *carddavdb,
+EXPORTED int carddav_lookup_resource(struct carddav_db *carddavdb,
 			   const char *mailbox, const char *resource,
 			   int lock, struct carddav_data **result)
 {
@@ -330,7 +330,7 @@ int carddav_lookup_resource(struct carddav_db *carddavdb,
     " FROM vcard_objs"							\
     " WHERE ( vcard_uid = :vcard_uid );"
 
-int carddav_lookup_uid(struct carddav_db *carddavdb, const char *vcard_uid,
+EXPORTED int carddav_lookup_uid(struct carddav_db *carddavdb, const char *vcard_uid,
 		      int lock, struct carddav_data **result)
 {
     struct bind_val bval[] = {
@@ -363,7 +363,7 @@ int carddav_lookup_uid(struct carddav_db *carddavdb, const char *vcard_uid,
     "  version, vcard_uid, kind, fullname, name, nickname, email"	\
     " FROM vcard_objs WHERE mailbox = :mailbox;"
 
-int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
+EXPORTED int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
 		   int (*cb)(void *rock, void *data),
 		   void *rock)
 {
@@ -404,7 +404,7 @@ int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
     "  email        = :email"		\
     " WHERE rowid = :rowid;"
 
-int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cdata,
+EXPORTED int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cdata,
 		 int commit)
 {
     struct bind_val bval[] = {
@@ -465,7 +465,7 @@ int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cdata,
 
 #define CMD_DELETE "DELETE FROM vcard_objs WHERE rowid = :rowid;"
 
-int carddav_delete(struct carddav_db *carddavdb, unsigned rowid, int commit)
+EXPORTED int carddav_delete(struct carddav_db *carddavdb, unsigned rowid, int commit)
 {
     struct bind_val bval[] = {
 	{ ":rowid", SQLITE_INTEGER, { .i = rowid } },
@@ -487,7 +487,7 @@ int carddav_delete(struct carddav_db *carddavdb, unsigned rowid, int commit)
 
 #define CMD_DELMBOX "DELETE FROM vcard_objs WHERE mailbox = :mailbox;"
 
-int carddav_delmbox(struct carddav_db *carddavdb, const char *mailbox, int commit)
+EXPORTED int carddav_delmbox(struct carddav_db *carddavdb, const char *mailbox, int commit)
 {
     struct bind_val bval[] = {
 	{ ":mailbox", SQLITE_TEXT, { .s = mailbox } },

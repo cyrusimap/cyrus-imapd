@@ -49,12 +49,14 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <syslog.h>
 #include <time.h>
 
 #include <libical/ical.h>
 
 #include "annotate.h"
 #include "caldav_db.h"
+#include "exitcodes.h"
 #include "global.h"
 #include "http_dav.h"
 #include "imap_err.h"
@@ -89,7 +91,7 @@ int main(int argc, char **argv)
     char buf[MAX_MAILBOX_PATH+1];
     char *alt_config = NULL, *userid;
 
-    if ((geteuid()) == 0 && (become_cyrus() != 0)) {
+    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
 	fatal("must run as the Cyrus user", EC_USAGE);
     }
 
@@ -108,7 +110,7 @@ int main(int argc, char **argv)
 	}
     }
 
-    cyrus_init(alt_config, "dav_reconstruct", 0);
+    cyrus_init(alt_config, "dav_reconstruct", 0, 0);
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&recon_namespace, 1)) != 0) {
@@ -118,10 +120,6 @@ int main(int argc, char **argv)
 
     mboxlist_init(0);
     mboxlist_open(NULL);
-
-    /* open annotations.db, we'll need it for collection properties */
-    annotatemore_init(0, NULL, NULL);
-    annotatemore_open(NULL);
 
     signals_set_shutdown(&shut_down);
     signals_add_handlers(0);
@@ -140,9 +138,6 @@ int main(int argc, char **argv)
 
     caldav_close(caldavdb);
     caldav_done();
-
-    annotatemore_close();
-    annotatemore_done();
 
     mboxlist_close();
     mboxlist_done();
@@ -194,7 +189,7 @@ int do_reconstruct(char *mboxname,
     printf("  Path to mailbox: %s\n", mailbox_datapath(mailbox));
 
     printf("\n Index Header Info:\n");
-    printf("  Number of Messages: %u  Mailbox Size: " UQUOTA_T_FMT " bytes\n",
+    printf("  Number of Messages: %u  Mailbox Size: " QUOTA_T_FMT " bytes\n",
 	   mailbox->i.exists, mailbox->i.quota_mailbox_used);
 
     printf("\n Message Info:\n");

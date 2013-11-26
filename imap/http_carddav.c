@@ -59,6 +59,7 @@
 #include "acl.h"
 #include "append.h"
 #include "carddav_db.h"
+#include "exitcodes.h"
 #include "global.h"
 #include "hash.h"
 #include "httpd.h"
@@ -72,10 +73,10 @@
 #include "message.h"
 #include "message_guid.h"
 #include "proxy.h"
-#include "rfc822date.h"
 #include "smtpclient.h"
 #include "spool.h"
 #include "stristr.h"
+#include "times.h"
 #include "util.h"
 #include "version.h"
 #include "xmalloc.h"
@@ -326,10 +327,8 @@ static void my_carddav_auth(const char *userid)
 {
     int r;
     size_t len;
-    struct mboxlist_entry mbentry;
-    char mailboxname[MAX_MAILBOX_BUFFER], rights[100], *partition = NULL;
+    char mailboxname[MAX_MAILBOX_BUFFER];
     char ident[MAX_MAILBOX_NAME];
-    struct buf acl = BUF_INITIALIZER;
 
     if (httpd_userisadmin ||
 	global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
@@ -358,7 +357,7 @@ static void my_carddav_auth(const char *userid)
     /* addressbook-home-set */
     len += snprintf(mailboxname+len, MAX_MAILBOX_BUFFER - len, ".%s",
 		    config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
-    r = mboxlist_lookup(mailboxname, &mbentry, NULL);
+    r = mboxlist_lookup(mailboxname, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	if (config_mupdate_server) {
 	    /* Find location of INBOX */
@@ -374,53 +373,30 @@ static void my_carddav_auth(const char *userid)
 		if (!r && server) {
 		    proxy_findserver(server, &http_protocol, proxy_userid,
 				     &backend_cached, NULL, NULL, httpd_in);
-
 		    return;
 		}
 	    }
 	}
 
-	/* Create locally */
-	if (!r) r = mboxlist_createmailboxcheck(mailboxname, 0, NULL, 0,
-						userid, httpd_authstate, NULL,
-						&partition, 0);
-	if (!r) {
-	    buf_reset(&acl);
-	    cyrus_acl_masktostr(ACL_ALL, rights);
-	    buf_printf(&acl, "%s\t%s\t", ident, rights);
-	    r = mboxlist_createmailbox_full(mailboxname, MBTYPE_ADDRESSBOOK,
-					    partition, 0,
-					    userid, httpd_authstate,
-					    OPT_POP3_NEW_UIDL, time(0),
-					    buf_cstring(&acl), NULL,
-					    0, 0, 0, NULL);
-	}
-	mbentry.partition = partition;
+	/* XXX - set rights */
+	r = mboxlist_createmailbox(mailboxname, MBTYPE_ADDRESSBOOK,
+				   NULL, 0,
+				   userid, httpd_authstate,
+				   0, 0, 0, 0, NULL);
     }
-    if (r) {
-	if (partition) free(partition);
-	buf_free(&acl);
-	return;
-    }
+    if (r) return;
 
     /* Default addressbook */
     snprintf(mailboxname+len, MAX_MAILBOX_BUFFER - len, ".%s",
 	     DEFAULT_ADDRBOOK);
     r = mboxlist_lookup(mailboxname, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-	buf_reset(&acl);
-	cyrus_acl_masktostr(ACL_ALL, rights);
-	buf_printf(&acl, "%s\t%s\t", ident, rights);
-	r = mboxlist_createmailbox_full(mailboxname, MBTYPE_ADDRESSBOOK,
-					mbentry.partition, 0,
-					userid, httpd_authstate,
-					OPT_POP3_NEW_UIDL, time(0),
-					buf_cstring(&acl), NULL,
-					0, 0, 0, NULL);
+	/* XXX - set rights */
+	r = mboxlist_createmailbox(mailboxname, MBTYPE_ADDRESSBOOK,
+				   NULL, 0,
+				   userid, httpd_authstate,
+				   0, 0, 0, 0, NULL);
     }
-
-    if (partition) free(partition);
-    buf_free(&acl);
 }
 
 
@@ -1014,7 +990,7 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
     FILE *f = NULL;
     struct stagemsg *stage;
     const char *version = NULL, *uid = NULL, *fullname = NULL, *nickname = NULL;
-    uquota_t size;
+    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
     time_t now = time(NULL);
     char datestr[80];
     struct appendstate as;
@@ -1055,8 +1031,7 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 	cdata->dav.mailbox && !strcmp(cdata->dav.mailbox, mailbox->name) &&
 	strcmp(cdata->dav.resource, resource)) {
 	/* CARDDAV:no-uid-conflict */
-	char *owner = mboxname_to_userid(cdata->dav.mailbox);
-	mboxname_hiersep_toexternal(&httpd_namespace, owner, 0);
+	const char *owner = mboxname_to_userid(cdata->dav.mailbox);
 
 	txn->error.precond = CARDDAV_UID_CONFLICT;
 	assert(!buf_len(&txn->buf));
@@ -1081,7 +1056,7 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 
     fprintf(f, "Subject: %s\r\n", fullname);
 
-    rfc822date_gen(datestr, sizeof(datestr), now);  /* Use REV? */
+    time_to_rfc822(now, datestr, sizeof(datestr));
 
     fprintf(f, "Date: %s\r\n", datestr);
 
@@ -1089,7 +1064,7 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 
     fprintf(f, "Content-Type: text/vcard; charset=utf-8\r\n");
 
-    fprintf(f, "Content-Length: %u\r\n", buf_len(&txn->req_body.payload));
+    fprintf(f, "Content-Length: %u\r\n", (unsigned)buf_len(&txn->req_body.payload));
     fprintf(f, "Content-Disposition: inline; filename=\"%s\"\r\n", resource);
 
     /* XXX  Check domain of data and use appropriate CTE */
@@ -1099,13 +1074,14 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 
     /* Write the vCard data to the file */
     fprintf(f, "%s", buf_cstring(&txn->req_body.payload));
-    size = ftell(f);
+
+    qdiffs[QUOTA_STORAGE] = ftell(f);
+    qdiffs[QUOTA_MESSAGE] = 1;
 
     fclose(f);
 
-
     /* Prepare to append the iMIP message to calendar mailbox */
-    if ((r = append_setup(&as, mailbox->name, NULL, NULL, 0, size))) {
+    if ((r = append_setup_mbox(&as, mailbox, NULL, NULL, 0, qdiffs, 0, 0, 0))) {
 	syslog(LOG_ERR, "append_setup(%s) failed: %s",
 	       mailbox->name, error_message(r));
 	ret = HTTP_SERVER_ERROR;
@@ -1128,7 +1104,8 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 	if (r) append_abort(&as);
 	else {
 	    /* Commit the append to the calendar mailbox */
-	    if ((r = append_commit(&as, size, NULL, NULL, NULL, &mailbox))) {
+	    r = append_commit(&as);
+	    if (r) {
 		syslog(LOG_ERR, "append_commit() failed");
 		ret = HTTP_SERVER_ERROR;
 		txn->error.desc = "append_commit() failed\r\n";
@@ -1180,7 +1157,7 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 		    }
 
 		    /* Perform the actual expunge */
-		    r = mailbox_user_flag(mailbox, DFLAG_UNBIND,  &userflag);
+		    r = mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag, 1);
 		    if (!r) {
 			expunge->user_flags[userflag/32] |= 1<<(userflag&31);
 			expunge->system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
@@ -1214,9 +1191,6 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 		    resp_body->lastmod = newrecord.internaldate;
 		    resp_body->etag = message_guid_encode(&newrecord.guid);
 		}
-
-		/* need to close mailbox returned to us by append_commit */
-		mailbox_close(&mailbox);
 	    }
 	}
     }

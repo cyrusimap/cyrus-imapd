@@ -74,7 +74,9 @@
 #include "imap_err.h"
 #include "index.h"
 #include "proxy.h"
-#include "rfc822date.h"
+#include "times.h"
+#include "syslog.h"
+#include "strhash.h"
 #include "tok.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
@@ -118,8 +120,9 @@ static int propfind_principalurl(const xmlChar *name, xmlNsPtr ns,
 				 struct propstat propstat[], void *rock);
 
 static int allprop_cb(const char *mailbox __attribute__((unused)),
+		      uint32_t uid __attribute__((unused)),
 		      const char *entry,
-		      const char *userid, struct annotation_data *attrib,
+		      const char *userid, const struct buf *attrib,
 		      void *rock);
 
 /* Array of known "live" properties */
@@ -765,8 +768,7 @@ static int xml_add_response(struct propfind_ctx *fctx, long code)
 	    (fctx->mode == PROPFIND_ALL || fctx->mode == PROPFIND_NAME)) {
 	    struct allprop_rock arock = { fctx, propstat };
 
-	    annotatemore_findall(fctx->mailbox->name, ANNOT_NS "*",
-				 allprop_cb, &arock, NULL);
+	    annotatemore_findall(fctx->mailbox->name, 0, "*", allprop_cb, &arock);
 	}
 
 	/* Check if we have any propstat elements */
@@ -1457,7 +1459,7 @@ int propfind_aclrestrict(const xmlChar *name, xmlNsPtr ns,
 
 
 /* Callback to fetch DAV:principal-collection-set */
-int propfind_princolset(const xmlChar *name, xmlNsPtr ns,
+EXPORTED int propfind_princolset(const xmlChar *name, xmlNsPtr ns,
 			struct propfind_ctx *fctx,
 			xmlNodePtr resp __attribute__((unused)),
 			struct propstat propstat[],
@@ -1475,7 +1477,7 @@ int propfind_princolset(const xmlChar *name, xmlNsPtr ns,
 
 
 /* Callback to fetch DAV:quota-available-bytes and DAV:quota-used-bytes */
-int propfind_quota(const xmlChar *name, xmlNsPtr ns,
+EXPORTED int propfind_quota(const xmlChar *name, xmlNsPtr ns,
 		   struct propfind_ctx *fctx,
 		   xmlNodePtr resp __attribute__((unused)),
 		   struct propstat propstat[],
@@ -1511,9 +1513,8 @@ int propfind_quota(const xmlChar *name, xmlNsPtr ns,
     buf_reset(&fctx->buf);
     if (!xmlStrcmp(name, BAD_CAST "quota-available-bytes")) {
 	/* Calculate limit in bytes and subtract usage */
-	uquota_t limit = fctx->quota.limit * QUOTA_UNITS;
-
-	buf_printf(&fctx->buf, UQUOTA_T_FMT, limit - fctx->quota.used);
+	quota_t limit = fctx->quota.limits[QUOTA_STORAGE] * quota_units[QUOTA_STORAGE];
+	buf_printf(&fctx->buf, QUOTA_T_FMT, limit - fctx->quota.useds[QUOTA_STORAGE]);
     }
     else if (fctx->record) {
 	/* Bytes used by resource */
@@ -1521,12 +1522,12 @@ int propfind_quota(const xmlChar *name, xmlNsPtr ns,
     }
     else if (fctx->mailbox) {
 	/* Bytes used by calendar collection */
-	buf_printf(&fctx->buf, UQUOTA_T_FMT,
+	buf_printf(&fctx->buf, QUOTA_T_FMT,
 		   fctx->mailbox->i.quota_mailbox_used);
     }
     else {
 	/* Bytes used by entire hierarchy */
-	buf_printf(&fctx->buf, UQUOTA_T_FMT, fctx->quota.used);
+	buf_printf(&fctx->buf, QUOTA_T_FMT, fctx->quota.useds[QUOTA_STORAGE]);
     }
 
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
@@ -1537,7 +1538,7 @@ int propfind_quota(const xmlChar *name, xmlNsPtr ns,
 
 
 /* Callback to fetch DAV:current-user-principal */
-int propfind_curprin(const xmlChar *name, xmlNsPtr ns,
+EXPORTED int propfind_curprin(const xmlChar *name, xmlNsPtr ns,
 		     struct propfind_ctx *fctx,
 		     xmlNodePtr resp __attribute__((unused)),
 		     struct propstat propstat[],
@@ -1653,7 +1654,7 @@ int propfind_fromdb(const xmlChar *name, xmlNsPtr ns,
 		    struct propstat propstat[],
 		    void *rock __attribute__((unused)))
 {
-    struct annotation_data attrib;
+    struct buf attrib = BUF_INITIALIZER;
     xmlNodePtr node;
     int r = 0;
 
@@ -1661,26 +1662,23 @@ int propfind_fromdb(const xmlChar *name, xmlNsPtr ns,
     buf_printf(&fctx->buf, ANNOT_NS "<%s>%s",
 	       (const char *) ns->href, name);
 
-    memset(&attrib, 0, sizeof(struct annotation_data));
-
     if (fctx->mailbox && !fctx->record &&
 	!(r = annotatemore_lookup(fctx->mailbox->name, buf_cstring(&fctx->buf),
 				  /* shared */ "", &attrib))) {
-	if (!attrib.value && 
+	if (!buf_len(&attrib) &&
 	    !xmlStrcmp(name, BAD_CAST "displayname")) {
 	    /* Special case empty displayname -- use last segment of path */
-	    attrib.value = strrchr(fctx->mailbox->name, '.') + 1;
-	    attrib.size = strlen(attrib.value);
+	    buf_setcstr(&attrib, strrchr(fctx->mailbox->name, '.') + 1);
 	}
     }
 
     if (r) return HTTP_SERVER_ERROR;
-    if (!attrib.value) return HTTP_NOT_FOUND;
+    if (!buf_len(&attrib)) return HTTP_NOT_FOUND;
 
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			name, ns, NULL, 0);
     xmlAddChild(node, xmlNewCDataBlock(fctx->root->doc,
-				       BAD_CAST attrib.value, attrib.size));
+				       BAD_CAST buf_cstring(&attrib), buf_len(&attrib)));
 
     return 0;
 }
@@ -1693,8 +1691,7 @@ int proppatch_todb(xmlNodePtr prop, unsigned set,
 		   void *rock __attribute__((unused)))
 {
     xmlChar *freeme = NULL;
-    const char *value = NULL;
-    size_t len = 0;
+    struct buf value = BUF_INITIALIZER;
     int r;
 
     buf_reset(&pctx->buf);
@@ -1703,14 +1700,12 @@ int proppatch_todb(xmlNodePtr prop, unsigned set,
 
     if (set) {
 	freeme = xmlNodeGetContent(prop);
-	value = (const char *) freeme;
-	len = strlen(value);
+	buf_init_ro_cstr(&value, (const char *)freeme);
     }
 
-    if (!(r = annotatemore_write_entry(pctx->mailboxname,
-				       buf_cstring(&pctx->buf), /* shared */ "",
-				       value, NULL, len, 0,
-				       &pctx->tid))) {
+    r = annotate_state_write(pctx->astate, buf_cstring(&pctx->buf), /*userid*/NULL, &value);
+
+    if (!r) {
 	xml_add_prop(HTTP_OK, pctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 		     prop->name, prop->ns, NULL, 0);
     }
@@ -1727,8 +1722,9 @@ int proppatch_todb(xmlNodePtr prop, unsigned set,
 
 /* annotemore_findall callback for adding dead properties (allprop/propname) */
 static int allprop_cb(const char *mailbox __attribute__((unused)),
+		      uint32_t uid __attribute__((unused)),
 		      const char *entry,
-		      const char *userid, struct annotation_data *attrib,
+		      const char *userid, const struct buf *attrib,
 		      void *rock)
 {
     struct allprop_rock *arock = (struct allprop_rock *) rock;
@@ -1774,8 +1770,7 @@ static int allprop_cb(const char *mailbox __attribute__((unused)),
 
     if (arock->fctx->mode == PROPFIND_ALL) {
 	xmlAddChild(node, xmlNewCDataBlock(arock->fctx->root->doc,
-					   BAD_CAST attrib->value,
-					   attrib->size));
+					   BAD_CAST attrib->s, attrib->len));
     }
 
     return 0;
@@ -2716,7 +2711,8 @@ int meth_delete(struct transaction_t *txn, void *params)
 	r = mboxlist_deletemailbox(txn->req_tgt.mboxname,
 				   httpd_userisadmin || httpd_userisproxyadmin,
 				   httpd_userid, httpd_authstate,
-				   1, 0, 0);
+				   /*mboxevent*/NULL,
+				   /*checkack*/1, /*localonly*/0, /*force*/0);
 
 	if (!r) dparams->davdb.delete_mbox(*dparams->davdb.db, txn->req_tgt.mboxname, 0);
 	else if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
@@ -3272,6 +3268,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
     xmlNsPtr ns[NUM_NAMESPACE];
     char *partition = NULL;
     struct proppatch_ctx pctx;
+    struct mailbox *mailbox = NULL;
 
     memset(&pctx, 0, sizeof(struct proppatch_ctx));
 
@@ -3342,7 +3339,16 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 	instr = root->children;
     }
 
-    if (instr) {
+    /* Create the mailbox */
+    r = mboxlist_createmailbox(txn->req_tgt.mboxname, mparams->mkcol.mbtype,
+			       partition,
+			       httpd_userisadmin || httpd_userisproxyadmin,
+			       httpd_userid, httpd_authstate,
+			       /*localonly*/0, /*forceuser*/0,
+			       /*dbonly*/0, /*notify*/0,
+			       &mailbox);
+
+    if (instr && !r) {
 	/* Start construction of our mkcol/mkcalendar response */
 	if (txn->meth == METH_MKCOL)
 	    root = init_xml_response("mkcol-response", NS_DAV, root, ns);
@@ -3367,13 +3373,15 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 	pctx.tid = NULL;
 	pctx.err = &txn->error;
 	pctx.ret = &r;
+	pctx.astate = annotate_state_new();
+	r = annotate_state_set_mailbox(pctx.astate, mailbox);
 
 	/* Execute the property patch instructions */
-	ret = do_proppatch(&pctx, instr);
+	if (!r) ret = do_proppatch(&pctx, instr);
 
 	if (ret || r) {
 	    /* Something failed.  Abort the txn and change the OK status */
-	    annotatemore_abort(pctx.tid);
+	    annotate_state_abort(&pctx.astate);
 
 	    if (!ret) {
 		/* Output the XML response */
@@ -3383,14 +3391,9 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 
 	    goto done;
 	}
-    }
 
-    /* Create the mailbox */
-    r = mboxlist_createmailbox(txn->req_tgt.mboxname, mparams->mkcol.mbtype,
-			       partition, 
-			       httpd_userisadmin || httpd_userisproxyadmin,
-			       httpd_userid, httpd_authstate,
-			       0, 0, 0);
+	r = annotate_state_commit(&pctx.astate);
+    }
 
     if (!r) ret = HTTP_CREATED;
     else if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
@@ -3403,19 +3406,9 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 	ret = HTTP_SERVER_ERROR;
     }
 
-    if (instr) {
-	if (r) {
-	    /* Failure.  Abort the txn */
-	    annotatemore_abort(pctx.tid);
-	}
-	else {
-	    /* Success.  Commit the txn */
-	    annotatemore_commit(pctx.tid);
-	}
-    }
-
   done:
     buf_free(&pctx.buf);
+    mailbox_close(&mailbox);
 
     if (outdoc) xmlFreeDoc(outdoc);
     if (indoc) xmlFreeDoc(indoc);
@@ -3496,7 +3489,7 @@ int propfind_by_collection(char *mboxname, int matchlen,
 			   void *rock)
 {
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
-    struct mboxlist_entry mbentry;
+    mbentry_t *mbentry = NULL;
     struct mailbox *mailbox = NULL;
     char *p;
     size_t len;
@@ -3515,7 +3508,7 @@ int propfind_by_collection(char *mboxname, int matchlen,
 	goto done;
     }
 
-    rights = mbentry.acl ? cyrus_acl_myrights(httpd_authstate, mbentry.acl) : 0;
+    rights = mbentry->acl ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
     if ((rights & fctx->reqd_privs) != fctx->reqd_privs) goto done;
 
     /* Open mailbox for reading */
@@ -3583,6 +3576,7 @@ int propfind_by_collection(char *mboxname, int matchlen,
     }
 
   done:
+    mboxlist_entry_free(&mbentry);
     if (mailbox) mailbox_close(&mailbox);
 
     return r;
@@ -3590,7 +3584,7 @@ int propfind_by_collection(char *mboxname, int matchlen,
 
 
 /* Perform a PROPFIND request */
-int meth_propfind(struct transaction_t *txn, void *params)
+EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 {
     struct meth_params *fparams = (struct meth_params *) params;
     int ret = 0, r;
@@ -3961,19 +3955,20 @@ int meth_proppatch(struct transaction_t *txn,  void *params)
     pctx.tid = NULL;
     pctx.err = &txn->error;
     pctx.ret = &r;
+    pctx.astate = annotate_state_new();
 
     /* Execute the property patch instructions */
     ret = do_proppatch(&pctx, instr);
 
     if (ret || r) {
 	/* Something failed.  Abort the txn and change the OK status */
-	annotatemore_abort(pctx.tid);
+	annotate_state_abort(&pctx.astate);
 
 	if (ret) goto done;
     }
     else {
 	/* Success.  Commit the txn */
-	annotatemore_commit(pctx.tid);
+	annotate_state_commit(&pctx.astate);
     }
 
     /* Output the XML response */
@@ -4052,8 +4047,8 @@ int meth_put(struct transaction_t *txn, void *params)
     struct mailbox *mailbox = NULL;
     struct dav_data *ddata;
     struct index_record oldrecord;
+    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
     time_t lastmod;
-    uquota_t size = 0;
     unsigned flags = 0;
 
     if (txn->meth == METH_PUT) {
@@ -4200,8 +4195,8 @@ int meth_put(struct transaction_t *txn, void *params)
     }
 
     /* Make sure we have a body */
-    size = buf_len(&txn->req_body.payload);
-    if (!size) {
+    qdiffs[QUOTA_STORAGE] = buf_len(&txn->req_body.payload);
+    if (!qdiffs[QUOTA_STORAGE]) {
 	txn->error.desc = "Missing request body\r\n";
 	ret = HTTP_BAD_REQUEST;
 	goto done;
@@ -4209,7 +4204,7 @@ int meth_put(struct transaction_t *txn, void *params)
 
     /* Check if we can append a new message to mailbox */
     if ((r = append_check(txn->req_tgt.mboxname,
-			  httpd_authstate, ACL_INSERT, size))) {
+			  httpd_authstate, ACL_INSERT, qdiffs))) {
 	syslog(LOG_ERR, "append_check(%s) failed: %s",
 	       txn->req_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
@@ -4218,6 +4213,15 @@ int meth_put(struct transaction_t *txn, void *params)
     }
 
     if (get_preferences(txn) & PREFER_REP) flags |= PREFER_REP;
+
+    r = mailbox_lock_index(mailbox, LOCK_EXCLUSIVE);
+    if (r) {
+	syslog(LOG_ERR, "relock index(%s) failed: %s",
+	       txn->req_tgt.mboxname, error_message(r));
+	txn->error.desc = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
 
     /* Parse, validate, and store the resource */
     ret = pparams->put.proc(txn, mime, mailbox, flags);
@@ -4233,8 +4237,8 @@ int meth_put(struct transaction_t *txn, void *params)
 static int map_modseq_cmp(const struct index_map *m1,
 			  const struct index_map *m2)
 {
-    if (m1->record.modseq < m2->record.modseq) return -1;
-    if (m1->record.modseq > m2->record.modseq) return 1;
+    if (m1->modseq < m2->modseq) return -1;
+    if (m1->modseq > m2->modseq) return 1;
     return 0;
 }
 
@@ -4242,14 +4246,14 @@ static int map_modseq_cmp(const struct index_map *m1,
 int report_sync_col(struct transaction_t *txn,
 		    xmlNodePtr inroot, struct propfind_ctx *fctx)
 {
-    int ret = 0, r, userflag;
+    int ret = 0, r, userflag, i;
     struct mailbox *mailbox = NULL;
     uint32_t uidvalidity = 0;
     modseq_t syncmodseq = 0, highestmodseq;
-    uint32_t limit = -1, recno, nresp;
+    uint32_t limit = -1, recno, msgno, nresp;
     xmlNodePtr node;
     struct index_state istate;
-    struct index_record *record;
+    struct index_record record;
     char tokenuri[MAX_MAILBOX_PATH+1];
 
     /* XXX  Handle Depth (cal-home-set at toplevel) */
@@ -4268,7 +4272,7 @@ int report_sync_col(struct transaction_t *txn,
     fctx->mailbox = mailbox;
 
     highestmodseq = mailbox->i.highestmodseq;
-    if (mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag)) userflag = -1;
+    if (mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag, 0)) userflag = -1;
 
     /* Parse children element of report */
     for (node = inroot->children; node; node = node->next) {
@@ -4337,28 +4341,30 @@ int report_sync_col(struct transaction_t *txn,
 
     /* Find which resources we need to report */
     for (nresp = 0, recno = 1; recno <= mailbox->i.num_records; recno++) {
-
-	record = &istate.map[nresp].record;
-	if (mailbox_read_index_record(mailbox, recno, record)) {
-	    /* XXX  Corrupted record?  Should we bail? */
+	/* XXX  Corrupted record?  Should we bail? */
+	if (mailbox_read_index_record(mailbox, recno, &record))
 	    continue;
-	}
 
-	if (record->modseq <= syncmodseq) {
-	    /* Resource not added/removed since last sync */
+	/* Resource not added/removed since last sync */
+	if (record.modseq <= syncmodseq)
 	    continue;
-	}
 
+	/* Resource replaced by a PUT, COPY, or MOVE - ignore it */
 	if ((userflag >= 0) &&
-	    record->user_flags[userflag / 32] & (1 << (userflag & 31))) {
-	    /* Resource replaced by a PUT, COPY, or MOVE - ignore it */
+	    record.user_flags[userflag / 32] & (1 << (userflag & 31)))
 	    continue;
-	}
 
-	if (!syncmodseq && (record->system_flags & FLAG_EXPUNGED)) {
-	    /* Initial sync - ignore unmapped resources */
+	/* Initial sync - ignore unmapped resources */
+	if (!syncmodseq && (record.system_flags & FLAG_EXPUNGED))
 	    continue;
-	}
+
+	/* copy data into map (just like index.c - XXX helper fn? */
+	istate.map[nresp].recno = recno;
+	istate.map[nresp].uid = record.uid;
+	istate.map[nresp].modseq = record.modseq;
+	istate.map[nresp].system_flags = record.system_flags;
+	for (i = 0; i < MAX_USER_FLAGS/32; i++)
+	    istate.map[nresp].user_flags[i] = record.user_flags[i];
 
 	nresp++;
     }
@@ -4373,7 +4379,7 @@ int report_sync_col(struct transaction_t *txn,
 
 	/* Our last response MUST be the last record with its modseq */
 	for (nresp = limit;
-	     nresp && map[nresp-1].record.modseq == map[nresp].record.modseq;
+	     nresp && map[nresp-1].modseq == map[nresp].modseq;
 	     nresp--);
 
 	if (!nresp) {
@@ -4384,21 +4390,22 @@ int report_sync_col(struct transaction_t *txn,
 	}
 
 	/* highestmodseq will be modseq of last record we return */
-	highestmodseq = map[nresp-1].record.modseq;
+	highestmodseq = map[nresp-1].modseq;
 
 	/* Tell client we truncated the responses */
 	xml_add_response(fctx, HTTP_NO_STORAGE);
     }
 
     /* Report the resources within the client requested limit (if any) */
-    for (recno = 1; recno <= nresp; recno++) {
+    for (msgno = 1; msgno <= nresp; recno++) {
 	char *p, *resource = NULL;
 	struct dav_data ddata;
 
-	record = &istate.map[recno-1].record;
+	if (mailbox_read_index_record(mailbox, istate.map[msgno-1].recno, &record))
+	    continue;
 
 	/* Get resource filename from Content-Disposition header */
-	if ((p = index_getheader(&istate, recno, "Content-Disposition"))) {
+	if ((p = index_getheader(&istate, msgno, "Content-Disposition"))) {
 	    resource = strstr(p, "filename=") + 9;
 	}
 	if (!resource) continue;  /* No filename */
@@ -4412,15 +4419,15 @@ int report_sync_col(struct transaction_t *txn,
 	memset(&ddata, 0, sizeof(struct dav_data));
 	ddata.resource = resource;
 
-	if (record->system_flags & FLAG_EXPUNGED) {
+	if (record.system_flags & FLAG_EXPUNGED) {
 	    /* report as NOT FOUND
 	       IMAP UID of 0 will cause index record to be ignored
 	       propfind_by_resource() will append our resource name */
 	    propfind_by_resource(fctx, &ddata);
 	}
 	else {
-	    fctx->record = record;
-	    ddata.imap_uid = record->uid;
+	    fctx->record = &record;
+	    ddata.imap_uid = record.uid;
 	    propfind_by_resource(fctx, &ddata);
 	}
     }
