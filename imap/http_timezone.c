@@ -435,7 +435,7 @@ static int action_list(struct transaction_t *txn, struct hash_table *params)
 	}
 
 	/* Add timezones to array */
-	zoneinfo_find((char *) name, changedsince, &list_cb,
+	zoneinfo_find(name, changedsince, &list_cb,
 		      json_object_get(root, "timezones"));
     }
 

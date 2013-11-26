@@ -79,8 +79,8 @@ extern int zoneinfo_lookup(const char *tzid, struct zoneinfo *zi);
 extern int zoneinfo_store(const char *tzid, struct zoneinfo *zi,
 			  struct txn **tid);
 
-/* process all zoneinfo entries matching (optional) name */
-extern int zoneinfo_find(char *name, time_t changedsince,
+/* process all zoneinfo entries (optionally matching 'find') */
+extern int zoneinfo_find(const char *find, time_t changedsince,
 			 int (*proc)(const char *tzid, int tzidlen,
 				     struct zoneinfo *zi, void *rock),
 			 void *rock);

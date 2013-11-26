@@ -200,7 +200,7 @@ int zoneinfo_store(const char *tzid, struct zoneinfo *zi, struct txn **tid)
 }
 
 struct findrock {
-    int isfind;
+    const char *find;
     time_t changedsince;
     int (*proc)();
     void *rock;
@@ -219,7 +219,7 @@ static int find_p(void *rock,
     switch (zi.type) {
     case ZI_INFO: return 0;
 
-    case ZI_LINK: return (frock->isfind);
+    case ZI_LINK: return (frock->find != NULL);
 
     case ZI_ZONE: return (zi.dtstamp > frock->changedsince);
     }
@@ -255,7 +255,8 @@ static int find_cb(void *rock,
     return r;
 }
 
-int zoneinfo_find(char *name, time_t changedsince, int (*proc)(), void *rock)
+int zoneinfo_find(const char *find, time_t changedsince,
+		  int (*proc)(), void *rock)
 {
     struct findrock frock;
 
@@ -264,14 +265,14 @@ int zoneinfo_find(char *name, time_t changedsince, int (*proc)(), void *rock)
 
     assert(proc);
 
-    frock.isfind = (name != NULL);
+    frock.find = find;
     frock.changedsince = changedsince;
     frock.proc = proc;
     frock.rock = rock;
 
-    if (!name) name = "";
+    if (!find) find = "";
 
     /* process each matching entry in our database */
-    return DB->foreach(zoneinfodb, name, strlen(name),
+    return DB->foreach(zoneinfodb, (char *) find, strlen(find),
 		       &find_p, &find_cb, &frock, NULL);
 }
