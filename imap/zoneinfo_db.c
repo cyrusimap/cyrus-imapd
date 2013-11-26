@@ -201,14 +201,14 @@ int zoneinfo_store(const char *tzid, struct zoneinfo *zi, struct txn **tid)
 
 struct findrock {
     const char *find;
+    int tzid_only;
     time_t changedsince;
     int (*proc)();
     void *rock;
 };
 
 static int find_p(void *rock,
-		  const char *tzid __attribute__((unused)),
-		  int tzidlen __attribute__((unused)),
+		  const char *tzid __attribute__((unused)), int tzidlen,
 		  const char *data, int datalen)
 {
     struct findrock *frock = (struct findrock *) rock;
@@ -219,12 +219,17 @@ static int find_p(void *rock,
     switch (zi.type) {
     case ZI_INFO: return 0;
 
-    case ZI_LINK: return (frock->find != NULL);
+    case ZI_LINK:
+	if (frock->tzid_only) return 0;
+	break;
 
-    case ZI_ZONE: return (zi.dtstamp > frock->changedsince);
+    case ZI_ZONE:
+	if (zi.dtstamp <= frock->changedsince) return 0;
+	break;
     }
 
-    return 1;
+    if (!frock->find || !frock->tzid_only) return 1;
+    else return (tzidlen == (int) strlen(frock->find));
 }
 
 static int find_cb(void *rock,
@@ -255,7 +260,7 @@ static int find_cb(void *rock,
     return r;
 }
 
-int zoneinfo_find(const char *find, time_t changedsince,
+int zoneinfo_find(const char *find, int tzid_only, time_t changedsince,
 		  int (*proc)(), void *rock)
 {
     struct findrock frock;
@@ -266,6 +271,7 @@ int zoneinfo_find(const char *find, time_t changedsince,
     assert(proc);
 
     frock.find = find;
+    frock.tzid_only = tzid_only;
     frock.changedsince = changedsince;
     frock.proc = proc;
     frock.rock = rock;
