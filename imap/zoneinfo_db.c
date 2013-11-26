@@ -46,6 +46,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -61,6 +62,8 @@
 #include "xmalloc.h"
 
 #include "zoneinfo_db.h"
+
+//#define FIND_CONTAINS
 
 #define DB config_zoneinfo_db
 
@@ -199,6 +202,43 @@ int zoneinfo_store(const char *tzid, struct zoneinfo *zi, struct txn **tid)
     return r; 
 }
 
+
+#ifdef FIND_CONTAINS
+/*
+ * Find the first occurrence of find in s, where the search is limited to the
+ * first slen characters of s.
+ *
+ * Copyright (c) 2001 Mike Barcroft <mike@FreeBSD.org>
+ * Copyright (c) 1990, 1993
+ *     The Regents of the University of California.  All rights reserved.
+ *
+ * This code is derived from software contributed to Berkeley by
+ * Chris Torek.
+ *
+ * Fix for case-insensitive match of first char added by Ken Murchison
+ */
+static char *strncasestr(const char *s, const char *find, size_t slen)
+{
+    char c, sc;
+    size_t len;
+
+    if ((c = tolower(*find++)) != '\0') {
+	len = strlen(find);
+	do {
+	    do {
+		if ((sc = *s++) == '\0' || slen-- < 1) return (NULL);
+	    } while (tolower(sc) != c);
+
+	    if (len > slen) return (NULL);
+	} while (strncasecmp(s, find, len) != 0);
+
+	s--;
+    }
+
+    return ((char *)s);
+}
+#endif /* FIND_CONTAINS */
+
 struct findrock {
     const char *find;
     int tzid_only;
@@ -228,8 +268,13 @@ static int find_p(void *rock,
 	break;
     }
 
-    if (!frock->find || !frock->tzid_only) return 1;
-    else return (tzidlen == (int) strlen(frock->find));
+    if (!frock->find) return 1;
+    else if (frock->tzid_only) return (tzidlen == (int) strlen(frock->find));
+#ifdef FIND_CONTAINS
+    else return (strncasestr(tzid, frock->find, tzidlen) != NULL);
+#else
+    else return 1;
+#endif
 }
 
 static int find_cb(void *rock,
@@ -276,7 +321,11 @@ int zoneinfo_find(const char *find, int tzid_only, time_t changedsince,
     frock.proc = proc;
     frock.rock = rock;
 
-    if (!find) find = "";
+    if (!find
+#ifdef FIND_CONTAINS
+	|| !tzid_only
+#endif
+	) find = "";
 
     /* process each matching entry in our database */
     return DB->foreach(zoneinfodb, (char *) find, strlen(find),
