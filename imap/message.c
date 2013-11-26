@@ -2253,6 +2253,8 @@ EXPORTED void message_free_body(struct body *body)
     struct param *param, *nextparam;
     int part;
 
+    if (!body) return;
+
     if (body->type) {
 	free(body->type);
 	free(body->subtype);
