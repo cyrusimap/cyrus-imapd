@@ -849,7 +849,7 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
     if (!dbonly && !isremote) {
 
 	/* Filesystem Operations */
-	r = mailbox_create(mboxname, newpartition, acl, uniqueid,
+	r = mailbox_create(mboxname, mbtype, newpartition, acl, uniqueid,
 			   options, uidvalidity, &newmailbox);
 	if (r) goto done; /* CREATE failed */ 
     }
