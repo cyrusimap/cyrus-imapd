@@ -2502,6 +2502,21 @@ out:
     return r;
 }
 
+/* NOTE: maybe make this able to return error codes if we have
+ * support for transactional mailbox updates later.  For now,
+ * we expect callers to have already done all sanity checking */
+static int mailbox_update_indexes(struct mailbox *mailbox,
+				  struct index_record *old,
+				  struct index_record *new)
+{
+    if (old)
+	mailbox_index_update_counts(mailbox, old, 0);
+    if (new)
+	mailbox_index_update_counts(mailbox, new, 1);
+
+    return 0;
+}
+
 /*
  * Rewrite an index record in a mailbox - updates all
  * necessary tracking fields automatically.
@@ -2577,8 +2592,8 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
     /* remove the counts for the old copy, and add them for
      * the new copy */
 
-    mailbox_index_update_counts(mailbox, &oldrecord, 0);
-    mailbox_index_update_counts(mailbox, record, 1);
+    r = mailbox_update_indexes(mailbox, &oldrecord, record);
+    if (r) return r;
 
     mailbox_index_record_to_buf(record, buf);
 
@@ -2600,7 +2615,7 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
     }
 
     /* expunged tracking */
-    if ((record->system_flags & FLAG_EXPUNGED) && 
+    if ((record->system_flags & FLAG_EXPUNGED) &&
 	!(oldrecord.system_flags & FLAG_EXPUNGED)) {
 
 	if (!mailbox->i.first_expunged ||
@@ -2692,11 +2707,11 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
 	record->last_updated = mailbox->last_updated;
     }
 
-    /* add counts */
-    mailbox_index_update_counts(mailbox, record, 1);
+    r = mailbox_update_indexes(mailbox, NULL, record);
+    if (r) return r;
 
     mailbox_index_record_to_buf(record, buf);
-    
+
     recno = mailbox->i.num_records + 1;
 
     offset = mailbox->i.start_offset +
