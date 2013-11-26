@@ -604,7 +604,8 @@ static int get_cb(const char *tzid, int tzidlen,
 {
     struct get_rock *grock = (struct get_rock *) rock;
     struct buf *pathbuf = &grock->txn->buf;
-    const char *path, *msg_base = NULL;
+    struct mime_type_t *mime = grock->mime;
+    const char *path, *proto, *host, *msg_base = NULL;
     unsigned long msg_size = 0;
     icalcomponent *ical, *comp;
     int fd = -1;
@@ -632,9 +633,22 @@ static int get_cb(const char *tzid, int tzidlen,
 	write_body(0, grock->txn, buf_cstring(buf), buf_len(buf));
     }
 
-    /* Output the (converted) VTIMEZONE component */
+    /* Set TZURL property */
+    buf_reset(pathbuf);
+    http_proto_host(grock->txn->req_hdrs, &proto, &host);
+    buf_printf(pathbuf, "%s://%s%s?action=get&tzid=%.*s",
+	       proto, host, namespace_timezone.prefix, tzidlen, tzid);
+    if (mime != tz_mime_types) {
+	buf_printf(pathbuf, "&format=%.*s",
+		   (int) strcspn(mime->content_type, ";"),
+		   mime->content_type);
+    }
+    path = buf_cstring(pathbuf);
     comp = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
-    tz_str = grock->mime->to_string(comp);
+    icalcomponent_add_property(comp, icalproperty_new_tzurl(path));
+
+    /* Output the (converted) VTIMEZONE component */
+    tz_str = mime->to_string(comp);
     write_body(0, grock->txn, tz_str, strlen(tz_str));
     free(tz_str);
 
