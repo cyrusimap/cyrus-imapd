@@ -5349,6 +5349,19 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
 
     dlist_getatom(extargs, "PARTITION", &partition);
     dlist_getatom(extargs, "SERVER", &server);
+
+    const char *type = NULL;
+
+    dlist_getatom(extargs, "PARTITION", &partition);
+    dlist_getatom(extargs, "SERVER", &server);
+    if (dlist_getatom(extargs, "TYPE", &type)) {
+	if (!strcasecmp(type, "CALENDAR")) mbtype |= MBTYPE_CALENDAR;
+	else if (!strcasecmp(type, "ADDRESSBOOK")) mbtype |= MBTYPE_ADDRESSBOOK;
+	else {
+	    r = IMAP_MAILBOX_BADTYPE;
+	    goto err;
+	}
+    }
     use = dlist_getchild(extargs, "USE");
     if (use) {
 	struct dlist *item;
@@ -5377,14 +5390,12 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     // However, this only applies to frontends. If we're a backend, a frontend will
     // proxy the partition it wishes to create the mailbox on.
     if ((server || partition) && !imapd_userisadmin) {
-	if (
-		config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD ||
-		config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_UNIFIED
-	    ) {
+	if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD ||
+	    config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
 
 	    if (!config_getstring(IMAPOPT_PROXYSERVERS)) {
-		prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(IMAP_PERMISSION_DENIED));
-		goto done;
+		r = IMAP_PERMISSION_DENIED;
+		goto err;
 	    }
 	}
     }
@@ -5398,6 +5409,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
 						imapd_userid, mailboxname);
 
     if (r) {
+    err:
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
 	goto done;
     }
