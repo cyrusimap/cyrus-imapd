@@ -421,6 +421,7 @@ struct sync_folder_list *sync_folder_list_create(void)
 
 struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
 					 const char *uniqueid, const char *name,
+					 uint32_t mbtype,
 					 const char *part, const char *acl,
 					 uint32_t options,
 					 uint32_t uidvalidity,
@@ -446,6 +447,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
 
     result->uniqueid = xstrdupnull(uniqueid);
     result->name = xstrdupnull(name);
+    result->mbtype = mbtype;
     result->part = xstrdupnull(part);
     result->acl = xstrdupnull(acl);
     result->uidvalidity = uidvalidity;
@@ -1363,6 +1365,8 @@ int sync_mailbox(struct mailbox *mailbox,
 
     dlist_setatom(kl, "UNIQUEID", mailbox->uniqueid);
     dlist_setatom(kl, "MBOXNAME", mailbox->name);
+    if (mailbox->mbtype)
+	dlist_setatom(kl, "MBOXTYPE", mboxlist_mbtype_to_string(mailbox->mbtype));
     dlist_setnum32(kl, "LAST_UID", mailbox->i.last_uid);
     dlist_setnum64(kl, "HIGHESTMODSEQ", mailbox->i.highestmodseq);
     dlist_setnum32(kl, "RECENTUID", mailbox->i.recentuid);

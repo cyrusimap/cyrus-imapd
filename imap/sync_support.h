@@ -135,20 +135,21 @@ struct sync_folder {
     struct sync_folder *next;
     char *uniqueid;
     char *name;
+    uint32_t mbtype;
     char *part;
     char *acl;
-    unsigned last_uid;
+    uint32_t last_uid;
     modseq_t highestmodseq;
-    unsigned options;
-    unsigned long uidvalidity;
+    uint32_t options;
+    uint32_t uidvalidity;
     uint32_t sync_crc;
-    unsigned long recentuid;
+    uint32_t recentuid;
     time_t recenttime;
     time_t pop3_last_login;
     time_t pop3_show_after;
     struct sync_annot_list *annots;
     struct quota quota;
-    int   mark; 
+    int   mark;
     int   reserve;  /* Folder has been processed by reserve operation */
 };
 
@@ -161,9 +162,10 @@ struct sync_folder_list *sync_folder_list_create(void);
 
 struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
 					 const char *uniqueid, const char *name,
-					 const char *part, const char *acl, 
+					 uint32_t mbtype,
+					 const char *part, const char *acl,
 					 uint32_t options,
-					 uint32_t uidvalidity, 
+					 uint32_t uidvalidity,
 					 uint32_t last_uid,
 					 modseq_t highestmodseq,
 					 uint32_t crc,

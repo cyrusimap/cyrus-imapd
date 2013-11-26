@@ -156,9 +156,11 @@ static void _write_acl(struct dlist *dl, const char *aclstr)
     }
 }
 
-static void _write_mbtype(struct dlist *dl, int mbtype)
+EXPORTED const char *mboxlist_mbtype_to_string(uint32_t mbtype)
 {
-    struct buf buf = BUF_INITIALIZER;
+    static struct buf buf = BUF_INITIALIZER;
+
+    buf_reset(&buf);
 
     if (mbtype & MBTYPE_DELETED)
 	buf_putc(&buf, 'd');
@@ -171,9 +173,7 @@ static void _write_mbtype(struct dlist *dl, int mbtype)
     if (mbtype & MBTYPE_RESERVE)
 	buf_putc(&buf, 'z');
 
-    dlist_setatom(dl, "T", buf_cstring(&buf));
-
-    buf_free(&buf);
+    return buf_cstring(&buf);
 }
 
 EXPORTED char *mboxlist_entry_cstring(mbentry_t *mbentry)
@@ -194,7 +194,7 @@ EXPORTED char *mboxlist_entry_cstring(mbentry_t *mbentry)
 	dlist_setatom(dl, "S", mbentry->server);
 
     if (mbentry->mbtype)
-	_write_mbtype(dl, mbentry->mbtype);
+	dlist_setatom(dl, "T", mboxlist_mbtype_to_string(mbentry->mbtype));
 
     if (mbentry->uidvalidity)
 	dlist_setnum32(dl, "V", mbentry->uidvalidity);
@@ -264,31 +264,33 @@ static char *_parse_acl(struct dlist *di)
     return buf_release(&buf);
 }
 
-static int _parse_mbtype(const char *mbtype)
+EXPORTED uint32_t mboxlist_string_to_mbtype(const char *string)
 {
-    int res = 0;
+    uint32_t mbtype = 0;
 
-    for (; *mbtype; mbtype++) {
-	switch (*mbtype) {
+    if (!string) return 0; /* null just means default */
+
+    for (; *string; string++) {
+	switch (*string) {
 	case 'd':
-	    res |= MBTYPE_DELETED;
+	    mbtype |= MBTYPE_DELETED;
 	    break;
 	case 'm':
-	    res |= MBTYPE_MOVING;
+	    mbtype |= MBTYPE_MOVING;
 	    break;
 	case 'n':
-	    res |= MBTYPE_NETNEWS;
+	    mbtype |= MBTYPE_NETNEWS;
 	    break;
 	case 'r':
-	    res |= MBTYPE_REMOTE;
+	    mbtype |= MBTYPE_REMOTE;
 	    break;
 	case 'z':
-	    res |= MBTYPE_RESERVE;
+	    mbtype |= MBTYPE_RESERVE;
 	    break;
 	}
     }
 
-    return res;
+    return mbtype;
 }
 
 /*
@@ -347,7 +349,7 @@ static int mboxlist_parse_entry(mbentry_t **mbentryptr,
 		mbentry->server = xstrdupnull(dlist_cstring(di));
 		break;
 	    case 'T':
-		mbentry->mbtype = _parse_mbtype(dlist_cstring(di));
+		mbentry->mbtype = mboxlist_string_to_mbtype(dlist_cstring(di));
 		break;
 	    case 'V':
 		mbentry->uidvalidity = dlist_num(di);

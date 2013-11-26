@@ -206,7 +206,7 @@ struct mailbox {
 
     /* Information in mailbox list */
     char *name;
-    int mbtype;
+    uint32_t mbtype;
     char *part;
     char *acl;
 

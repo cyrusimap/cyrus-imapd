@@ -231,6 +231,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
 	part_list = sync_reserve_partlist(reserve_guids, mailbox->part);
 
 	sync_folder_list_add(master_folders, mailbox->uniqueid, mailbox->name,
+			     mailbox->mbtype,
 			     mailbox->part, mailbox->acl, mailbox->i.options,
 			     mailbox->i.uidvalidity, mailbox->i.last_uid,
 			     mailbox->i.highestmodseq, 0,
@@ -432,6 +433,7 @@ static int response_parse(const char *cmd,
 	else if (!strcmp(kl->name, "MAILBOX")) {
 	    const char *uniqueid = NULL;
 	    const char *mboxname = NULL;
+	    const char *mboxtype = NULL;
 	    const char *part = NULL;
 	    const char *acl = NULL;
 	    const char *options = NULL;
@@ -460,12 +462,14 @@ static int response_parse(const char *cmd,
 	    if (!dlist_getdate(kl, "POP3_LAST_LOGIN", &pop3_last_login)) goto parse_err;
 	    /* optional */
 	    dlist_getdate(kl, "POP3_SHOW_AFTER", &pop3_show_after);
+	    dlist_getatom(kl, "MBOXTYPE", &mboxtype);
 
 	    if (dlist_getlist(kl, "ANNOTATIONS", &al))
 		decode_annotations(al, &annots);
 
-	    sync_folder_list_add(folder_list, uniqueid,
-				 mboxname, part, acl,
+	    sync_folder_list_add(folder_list, uniqueid, mboxname,
+				 mboxlist_string_to_mbtype(mboxtype),
+				 part, acl,
 				 sync_parse_options(options),
 				 uidvalidity, last_uid,
 				 highestmodseq, sync_crc,
@@ -1388,6 +1392,7 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
     unsigned options = mailbox->i.options & MAILBOX_OPTIONS_MASK;
 
     if (!remote) return 0;
+    if (remote->mbtype != mailbox->mbtype) return 0;
     if (remote->last_uid != mailbox->i.last_uid) return 0;
     if (remote->highestmodseq != mailbox->i.highestmodseq) return 0;
     if (remote->uidvalidity != mailbox->i.uidvalidity) return 0;

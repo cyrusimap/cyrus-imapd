@@ -1343,6 +1343,8 @@ static int do_mailbox(struct dlist *kin)
     const char *uniqueid;
     const char *partition;
     const char *mboxname;
+    const char *mboxtype = NULL; /* optional */
+    uint32_t mbtype;
     uint32_t last_uid;
     modseq_t highestmodseq;
     uint32_t recentuid;
@@ -1401,12 +1403,14 @@ static int do_mailbox(struct dlist *kin)
     /* optional */
     dlist_getlist(kin, "ANNOTATIONS", &ka);
     dlist_getdate(kin, "POP3_SHOW_AFTER", &pop3_show_after);
+    dlist_getatom(kin, "MBOXTYPE", &mboxtype);
 
     options = sync_parse_options(options_str);
- 
+    mbtype = mboxlist_string_to_mbtype(mboxtype);
+
     r = mailbox_open_iwl(mboxname, &mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-	r = mboxlist_createsync(mboxname, 0, partition,
+	r = mboxlist_createsync(mboxname, mbtype, partition,
 				sync_userid, sync_authstate,
 				options, uidvalidity, acl,
 				uniqueid, &mailbox);
@@ -1417,6 +1421,12 @@ static int do_mailbox(struct dlist *kin)
     if (r) {
 	syslog(LOG_ERR, "Failed to open mailbox %s to update: %s",
 	       mboxname, error_message(r));
+	goto done;
+    }
+
+    if (mailbox->mbtype != mbtype) {
+	/* is this even possible? */
+	r = IMAP_MAILBOX_BADTYPE;
 	goto done;
     }
 
