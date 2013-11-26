@@ -1,0 +1,186 @@
+# http_err.et -- Error codes for the Cyrus HTTP server
+#
+# Copyright (c) 1994-2011 Carnegie Mellon University.  All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in
+#    the documentation and/or other materials provided with the
+#    distribution.
+#
+# 3. The name "Carnegie Mellon University" must not be used to
+#    endorse or promote products derived from this software without
+#    prior written permission. For permission or any legal
+#    details, please contact
+#      Carnegie Mellon University
+#      Center for Technology Transfer and Enterprise Creation
+#      4615 Forbes Avenue
+#      Suite 302
+#      Pittsburgh, PA  15213
+#      (412) 268-7393, fax: (412) 268-7395
+#      innovation@andrew.cmu.edu
+#
+# 4. Redistributions of any form whatsoever must retain the following
+#    acknowledgment:
+#    "This product includes software developed by Computing Services
+#     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
+#
+# CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+# THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+# AND FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE
+# FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+# AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
+# OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+#
+
+error_table http
+
+# HTTP/1.1 Status Codes (draft-ietf-httpbis-*)
+#
+# 1xx: Informational - Request received, continuing process
+# 2xx: Successful    - Request successfully received, understood, and accepted
+# 3xx: Redirection   - Further action must be taken to complete the request
+# 4xx: Client Error  - The request contains bad syntax or cannot be fulfilled
+# 5xx: Server Error  - The server is incapable of performing the request
+
+ec HTTP_CONTINUE,
+   "100 Continue"
+
+ec HTTP_SWITCH_PROT,
+   "101 Switching Protocols"
+
+ec HTTP_OK,
+   "200 OK"
+
+ec HTTP_CREATED,
+   "201 Created"
+
+ec HTTP_NO_CONTENT,
+   "204 No Content"
+
+ec HTTP_PARTIAL,
+   "206 Partial Content"
+
+ec HTTP_MOVED,
+   "301 Moved Permanently"
+
+ec HTTP_NOT_MODIFIED,
+   "304 Not Modified"
+
+ec HTTP_TEMP_REDIRECT,
+   "307 Temporary Redirect"
+
+ec HTTP_BAD_REQUEST,
+   "400 Bad Request"
+
+ec HTTP_UNAUTHORIZED,
+   "401 Unauthorized"
+
+ec HTTP_FORBIDDEN,
+   "403 Forbidden"
+
+ec HTTP_NOT_FOUND,
+   "404 Not Found"
+
+ec HTTP_NOT_ALLOWED,
+   "405 Method Not Allowed"
+
+ec HTTP_NOT_ACCEPTABLE,
+   "406 Not Acceptable"
+
+ec HTTP_TIMEOUT,
+   "408 Request Timeout"
+
+ec HTTP_CONFLICT,
+   "409 Conflict"
+
+ec HTTP_GONE,
+   "410 Gone"
+
+ec HTTP_LENGTH_REQUIRED,
+   "411 Length Required"
+
+ec HTTP_PRECOND_FAILED,
+   "412 Precondition Failed"
+
+ec HTTP_TOO_LARGE,
+   "413 Payload Too Large"
+
+ec HTTP_TOO_LONG,
+   "414 URI Too Long"
+
+ec HTTP_BAD_MEDIATYPE,
+   "415 Unsupported Media Type"
+
+ec HTTP_UNSAT_RANGE,
+   "416 Range Not Satisfiable"
+
+ec HTTP_EXPECT_FAILED,
+   "417 Expectation Failed"
+
+ec HTTP_UPGRADE,
+   "426 Upgrade Required"
+
+ec HTTP_SERVER_ERROR,
+   "500 Internal Server Error"
+
+ec HTTP_NOT_IMPLEMENTED,
+   "501 Not Implemented"
+
+ec HTTP_BAD_GATEWAY,
+   "502 Bad Gateway"
+
+ec HTTP_UNAVAILABLE,
+   "503 Service Unavailable"
+
+ec HTTP_GATEWAY_TIMEOUT,
+   "504 Gateway Timeout"
+
+ec HTTP_BAD_VERSION,
+   "505 HTTP Version Not Supported"
+
+
+
+# WebDAV (RFC 2518/4918)
+
+ec HTTP_PROCESSING,
+   "102 Processing"
+
+ec HTTP_MULTI_STATUS,
+   "207 Multi-Status"
+
+ec HTTP_UNPROCESSABLE,
+   "422 Unprocessable Entity"
+
+ec HTTP_LOCKED,
+   "423 Locked"
+
+ec HTTP_FAILED_DEP,
+   "424 Failed Dependency"
+
+ec HTTP_NO_STORAGE,
+   "507 Insufficient Storage"
+
+
+
+# draft-reschke-http-status-308
+
+ec HTTP_PERM_REDIRECT,
+   "308 Permanent Redirect"
+
+
+
+# Additional HTTP Status Codes (RFC 6585)
+
+ec HTTP_PRECOND_REQUIRED,
+   "428 Precondition Required"
+
+
+end
