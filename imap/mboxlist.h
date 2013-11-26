@@ -85,6 +85,10 @@ struct mboxlist_entry {
     char *acl;
 };
 
+/* Convert mbtype to/from a string */
+const char *mboxlist_mbtype_to_string(uint32_t mbtype);
+uint32_t mboxlist_string_to_mbtype(const char *string);
+
 /* Lookup 'name' in the mailbox list. */
 int mboxlist_lookup(const char *name, struct mboxlist_entry *entry, struct txn **tid);
 

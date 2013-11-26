@@ -478,7 +478,8 @@ struct sync_folder_list *sync_folder_list_create(void)
 
 struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
 					 const char *uniqueid, const char *name,
-					 const char *part, const char *acl, 
+					 uint32_t mbtype,
+					 const char *part, const char *acl,
 					 uint32_t options,
 					 uint32_t uidvalidity, 
 					 uint32_t last_uid,
@@ -502,6 +503,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
 
     result->uniqueid = (uniqueid) ? xstrdup(uniqueid) : NULL;
     result->name = (name) ? xstrdup(name) : NULL;
+    result->mbtype = mbtype;
     result->part = (part) ? xstrdup(part) : NULL;
     result->acl = (acl) ? xstrdup(acl)  : NULL;
     result->uidvalidity = uidvalidity;
@@ -1412,6 +1414,8 @@ static int sync_mailbox(struct mailbox *mailbox,
 
     dlist_atom(kl, "UNIQUEID", mailbox->uniqueid);
     dlist_atom(kl, "MBOXNAME", mailbox->name);
+    if (mailbox->mbtype)
+	dlist_atom(kl, "MBOXTYPE", mboxlist_mbtype_to_string(mailbox->mbtype));
     dlist_num(kl, "LAST_UID", mailbox->i.last_uid);
     dlist_modseq(kl, "HIGHESTMODSEQ", mailbox->i.highestmodseq);
     dlist_num(kl, "RECENTUID", mailbox->i.recentuid);
@@ -1881,6 +1885,8 @@ int sync_apply_mailbox(struct dlist *kin, struct sync_state *sstate)
     const char *uniqueid;
     const char *partition;
     const char *mboxname;
+    const char *mboxtype = NULL; /* optional */
+    uint32_t mbtype;
     uint32_t last_uid;
     modseq_t highestmodseq;
     uint32_t recentuid;
@@ -1927,18 +1933,15 @@ int sync_apply_mailbox(struct dlist *kin, struct sync_state *sstate)
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getlist(kin, "RECORD", &kr))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
+    /* optional */
+    dlist_getatom(kin, "MBOXTYPE", &mboxtype);
 
     options = sync_parse_options(options_str);
- 
+
+    mbtype = mboxlist_string_to_mbtype(mboxtype);
+
     r = mailbox_open_iwl(mboxname, &mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-	int mbtype = 0;
-
-	if (mboxname_iscalendarmailbox(mboxname, 0))
-	    mbtype |= MBTYPE_CALENDAR;
-	else if (mboxname_isaddressbookmailbox(mboxname, 0))
-	    mbtype |= MBTYPE_ADDRESSBOOK;
-
 	r = mboxlist_createsync(mboxname, mbtype, partition,
 				sstate->userid, sstate->authstate,
 				options, uidvalidity, acl, uniqueid,
@@ -1947,6 +1950,14 @@ int sync_apply_mailbox(struct dlist *kin, struct sync_state *sstate)
     if (r) {
 	syslog(LOG_ERR, "Failed to open mailbox %s to update", mboxname);
 	return r;
+    }
+
+    if (mailbox->mbtype != (int) mbtype) {
+	/* is this even possible ? */
+	syslog(LOG_ERR, "Invalid Mailbox Type %s (%d %d)",
+	       mailbox->name, mailbox->mbtype, mbtype);
+	mailbox_close(&mailbox);
+	return IMAP_MAILBOX_BADTYPE;
     }
 
     if (strcmp(mailbox->uniqueid, uniqueid)) {
@@ -2801,7 +2812,8 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
 	part_list = sync_reserve_partlist(reserve_guids,
 					  topart ? topart : mailbox->part);
 
-	sync_folder_list_add(master_folders, mailbox->uniqueid, mailbox->name, 
+	sync_folder_list_add(master_folders, mailbox->uniqueid, mailbox->name,
+			     mailbox->mbtype,
 			     mailbox->part, mailbox->acl, mailbox->i.options,
 			     mailbox->i.uidvalidity, mailbox->i.last_uid,
 			     mailbox->i.highestmodseq, mailbox->i.sync_crc,
@@ -2995,6 +3007,7 @@ int sync_response_parse(struct protstream *sync_in, const char *cmd,
 	else if (!strcmp(kl->name, "MAILBOX")) {
 	    const char *uniqueid = NULL;
 	    const char *mboxname = NULL;
+	    const char *mboxtype = NULL;
 	    const char *part = NULL;
 	    const char *acl = NULL;
 	    const char *options = NULL;
@@ -3018,9 +3031,12 @@ int sync_response_parse(struct protstream *sync_in, const char *cmd,
 	    if (!dlist_getnum(kl, "RECENTUID", &recentuid)) goto parse_err;
 	    if (!dlist_getdate(kl, "RECENTTIME", &recenttime)) goto parse_err;
 	    if (!dlist_getdate(kl, "POP3_LAST_LOGIN", &pop3_last_login)) goto parse_err;
+	    /* optional */
+	    dlist_getatom(kl, "MBOXTYPE", &mboxtype);
 
-	    sync_folder_list_add(folder_list, uniqueid,
-				 mboxname, part, acl,
+	    sync_folder_list_add(folder_list, uniqueid, mboxname,
+				 mboxlist_string_to_mbtype(mboxtype),
+				 part, acl,
 				 sync_parse_options(options),
 				 uidvalidity, last_uid, 
 				 highestmodseq, sync_crc,
@@ -3844,6 +3860,7 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
     /* look for any mismatches */
     unsigned options = mailbox->i.options & MAILBOX_OPTIONS_MASK;
     if (!remote) return 0;
+    if (remote->mbtype != (uint32_t) mailbox->mbtype) return 0;
     if (remote->last_uid != mailbox->i.last_uid) return 0;
     if (remote->highestmodseq != mailbox->i.highestmodseq) return 0;
     if (remote->sync_crc != mailbox->i.sync_crc) return 0;

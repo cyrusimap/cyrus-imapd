@@ -8905,6 +8905,7 @@ static int sync_mailbox(struct mailbox *mailbox,
 
     master_folders = sync_folder_list_create();
     sync_folder_list_add(master_folders, mailbox->uniqueid, mailbox->name, 
+			 mailbox->mbtype,
 			 mailbox->part, mailbox->acl, mailbox->i.options,
 			 mailbox->i.uidvalidity, mailbox->i.last_uid,
 			 mailbox->i.highestmodseq, mailbox->i.sync_crc,

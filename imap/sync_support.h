@@ -141,6 +141,7 @@ struct sync_folder {
     struct mailbox *mailbox;
     char *uniqueid;
     char *name;
+    uint32_t mbtype;
     char *part;
     char *acl;
     unsigned last_uid;
@@ -152,7 +153,7 @@ struct sync_folder {
     time_t recenttime;
     time_t pop3_last_login;
     struct quota quota;
-    int   mark; 
+    int   mark;
     int   reserve;  /* Folder has been processed by reserve operation */
 };
 
@@ -165,9 +166,10 @@ struct sync_folder_list *sync_folder_list_create(void);
 
 struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
 					 const char *uniqueid, const char *name,
-					 const char *part, const char *acl, 
+					 uint32_t mbtype,
+					 const char *part, const char *acl,
 					 uint32_t options,
-					 uint32_t uidvalidity, 
+					 uint32_t uidvalidity,
 					 uint32_t last_uid,
 					 modseq_t highestmodseq,
 					 uint32_t crc,

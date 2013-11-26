@@ -110,6 +110,26 @@ char *mboxlist_makeentry(int mbtype, const char *part, const char *acl)
     return mboxent;
 }
 
+const char *mboxlist_mbtype_to_string(uint32_t mbtype)
+{
+    static struct buf buf = BUF_INITIALIZER;
+
+    buf_reset(&buf);
+
+    if (mbtype & MBTYPE_DELETED)
+	buf_putc(&buf, 'd');
+    if (mbtype & MBTYPE_MOVING)
+	buf_putc(&buf, 'm');
+    if (mbtype & MBTYPE_NETNEWS)
+	buf_putc(&buf, 'n');
+    if (mbtype & MBTYPE_REMOTE)
+	buf_putc(&buf, 'r');
+    if (mbtype & MBTYPE_RESERVE)
+	buf_putc(&buf, 'z');
+
+    return buf_cstring(&buf);
+}
+
 /*
  * Lookup 'name' in the mailbox list.
  * The capitalization of 'name' is canonicalized to the way it appears
@@ -155,6 +175,35 @@ static int mboxlist_read(const char *name, const char **dataptr, int *datalenptr
     }
 
     /* never get here */
+}
+
+uint32_t mboxlist_string_to_mbtype(const char *string)
+{
+    uint32_t mbtype = 0;
+
+    if (!string) return 0; /* null just means default */
+
+    for (; *string; string++) {
+	switch (*string) {
+	case 'd':
+	    mbtype |= MBTYPE_DELETED;
+	    break;
+	case 'm':
+	    mbtype |= MBTYPE_MOVING;
+	    break;
+	case 'n':
+	    mbtype |= MBTYPE_NETNEWS;
+	    break;
+	case 'r':
+	    mbtype |= MBTYPE_REMOTE;
+	    break;
+	case 'z':
+	    mbtype |= MBTYPE_RESERVE;
+	    break;
+	}
+    }
+
+    return mbtype;
 }
 
 static int mboxlist_mylookup(const char *name, struct mboxlist_entry *entry,
