@@ -2461,7 +2461,7 @@ static int message_read_nstring(struct protstream *strm, char **str, int copy)
     c = getnstring(strm, NULL, &buf);
 
     if (str) {
-	if (!strcmp(buf.s, "NIL")) *str = NULL;
+	if (!buf.s) *str = NULL;
 	else if (copy) *str = xstrdup(buf.s);
 	else *str = buf.s;
     }
