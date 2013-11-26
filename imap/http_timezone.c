@@ -44,7 +44,6 @@
 /*
  * TODO:
  * - Implement localized names and "lang" parameter
- * - Implement multiple tzid parameters
  * - Implement action=find with sub-string match anywhere (not just prefix)?
  */
 
@@ -184,9 +183,10 @@ static int meth_get(struct transaction_t *txn,
 {
     int ret;
     tok_t tok;
-    char *param, *action;
+    char *param;
+    struct strlist *action;
     struct hash_table query_params;
-    const struct action_t *ap;
+    const struct action_t *ap = NULL;
 
     if (!URI_QUERY(txn->req_uri)) return HTTP_BAD_REQUEST;
 
@@ -194,20 +194,25 @@ static int meth_get(struct transaction_t *txn,
     construct_hash_table(&query_params, 10, 1);
     tok_initm(&tok, URI_QUERY(txn->req_uri), "&=", TOK_TRIMLEFT|TOK_TRIMRIGHT);
     while ((param = tok_next(&tok))) {
+	struct strlist *vals;
 	char *value = tok_next(&tok);
 	if (!value) break;
 
-	hash_insert(param, value, &query_params);
+	vals = hash_lookup(param, &query_params);
+	appendstrlist(&vals, value);
+	hash_insert(param, vals, &query_params);
     }
     tok_fini(&tok);
 
     action = hash_lookup("action", &query_params);
-    for (ap = actions; action && ap->name && strcmp(action, ap->name); ap++);
+    if (action && !action->next  /* mandatory, once only */) {
+	for (ap = actions; ap->name && strcmp(action->s, ap->name); ap++);
+    }
 
-    if (!action || !ap->name) ret = json_error_response(txn, "invalid-action");
+    if (!ap || !ap->name) ret = json_error_response(txn, "invalid-action");
     else ret = ap->proc(txn, &query_params);
 
-    free_hash_table(&query_params, NULL);
+    free_hash_table(&query_params, (void (*)(void *)) &freestrlist);
 
     return ret;
 }
@@ -295,7 +300,7 @@ static int action_capa(struct transaction_t *txn,
 
 			 "name", "list", "parameters",
 //			 "name", "lang", "required", 0, "multi", 1,
-			 "name", "tzid", "required", 0, "multi", 0, // 1
+			 "name", "tzid", "required", 0, "multi", 1,
 			 "name", "changedsince", "required", 0, "multi", 0,
 
 			 "name", "get", "parameters",
@@ -362,30 +367,40 @@ static int list_cb(const char *tzid, int tzidlen,
 /* Perform a list action */
 static int action_list(struct transaction_t *txn, struct hash_table *params)
 {
-    int r, precond = HTTP_OK;
+    int r, precond, tzid_only = 1;
+    struct strlist *param, *name = NULL;
     struct resp_body_t *resp_body = &txn->resp_body;
     struct zoneinfo info;
     time_t lastmod, changedsince = 0;
-    const char *name = NULL;
     json_t *root = NULL;
 
     /* Sanity check the parameters */
-    if (!strcmp("find", hash_lookup("action", params))) {
+    param = hash_lookup("action", params);
+    if (!strcmp("find", param->s)) {
 	name = hash_lookup("name", params);
-	if (!name) return json_error_response(txn, "invalid-name");
+	if (!name || name->next  /* mandatory, once only */) {
+	    return json_error_response(txn, "invalid-name");
+	}
+	tzid_only = 0;
     }
     else {
-	const char *cs = hash_lookup("changedsince", params);
+	param = hash_lookup("changedsince", params);
+	if (param) {
+	    changedsince = icaltime_as_timet(icaltime_from_string(param->s));
+	    if (!changedsince || param->next  /* once only */)
+		return json_error_response(txn, "invalid-changedsince");
+	}
 
 	name = hash_lookup("tzid", params);
-	if (name && !strcmp(name, "*")) name = NULL;
+	if (name) {
+	    if (changedsince) return json_error_response(txn, "invalid-tzid");
+	    else {
+		/* Check for tzid=*, and revert to empty list */
+		struct strlist *sl;
 
-	if (cs) {
-	    if (name) return json_error_response(txn, "invalid-tzid");
-
-	    changedsince = icaltime_as_timet(icaltime_from_string(cs));
-	    if (!changedsince)
-		return json_error_response(txn, "invalid-changedsince");
+		for (sl = name; sl && strcmp(sl->s, "*"); sl = sl->next);
+		if (sl) name = NULL;
+	    }
 	}
     }
 
@@ -435,8 +450,10 @@ static int action_list(struct transaction_t *txn, struct hash_table *params)
 	}
 
 	/* Add timezones to array */
-	zoneinfo_find(name, changedsince, &list_cb,
-		      json_object_get(root, "timezones"));
+	do {
+	    zoneinfo_find(name ? name->s : NULL, tzid_only, changedsince,
+			  &list_cb, json_object_get(root, "timezones"));
+	} while (name && (name = name->next));
     }
 
     /* Output the JSON object */
@@ -448,25 +465,35 @@ static int action_list(struct transaction_t *txn, struct hash_table *params)
 static int action_get(struct transaction_t *txn, struct hash_table *params)
 {
     int r, precond, substitute = 0;
-    const char *tzid, *param;
+    struct strlist *param;
+    const char *tzid;
     struct zoneinfo zi;
     time_t lastmod;
     char *data = NULL;
     unsigned long datalen = 0;
     struct resp_body_t *resp_body = &txn->resp_body;
-    struct mime_type_t *mime;
+    struct mime_type_t *mime = NULL;
 
     /* Sanity check the parameters */
-    tzid = hash_lookup("tzid", params);
-    if (!tzid || strchr(tzid, '.'))
+    param = hash_lookup("tzid", params);
+    if (!param || param->next  /* mandatory, once only */
+	|| strchr(param->s, '.')  /* paranoia */) {
 	return json_error_response(txn, "invalid-tzid");
+    }
+    tzid = param->s;
 
     /* Check/find requested MIME type */
     param = hash_lookup("format", params);
-    for (mime = tz_mime_types; param && mime->content_type; mime++) {
-	if (is_mediatype(param, mime->content_type)) break;
+    if (param && !param->next  /* optional, once only */) {
+	for (mime = tz_mime_types; mime->content_type; mime++) {
+	    if (is_mediatype(param->s, mime->content_type)) break;
+	}
     }
-    if (!mime->content_type) return json_error_response(txn, "invalid-format");
+    else mime = tz_mime_types;
+
+    if (!mime || !mime->content_type) {
+	return json_error_response(txn, "invalid-format");
+    }
 
     /* Handle tzid=* separately */
     if (!strcmp(tzid, "*")) return action_get_all(txn, mime);
@@ -478,7 +505,7 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
     if (zi.type == ZI_LINK) {
 	/* Check for substitute-alias */
 	param = hash_lookup("substitute-alias", params);
-	if (param && !strcmp(param, "true")) substitute = 1;
+	if (param && !strcmp(param->s, "true")) substitute = 1;
     }
 
     /* Generate ETag & Last-Modified from info record */
@@ -715,7 +742,7 @@ static int action_get_all(struct transaction_t *txn, struct mime_type_t *mime)
     grock.sep = mime->begin_stream(buf);
     write_body(HTTP_OK, txn, buf_cstring(buf), buf_len(buf));
 
-    zoneinfo_find(NULL, 0, &get_cb, &grock);
+    zoneinfo_find(NULL, 1 /* tzid_only */, 0, &get_cb, &grock);
 
     /* End (converted) iCalendar stream */
     mime->end_stream(buf);
@@ -745,7 +772,8 @@ static int observance_compare(const void *obs1, const void *obs2)
 static int action_expand(struct transaction_t *txn, struct hash_table *params)
 {
     int r, precond;
-    const char *tzid, *param;
+    struct strlist *param;
+    const char *tzid;
     struct zoneinfo zi;
     time_t lastmod, changedsince = 0;
     icaltimetype start, end;
@@ -753,20 +781,24 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
     json_t *root = NULL;
 
     /* Sanity check the parameters */
-    tzid = hash_lookup("tzid", params);
-    if (!tzid || strchr(tzid, '.'))
+    param = hash_lookup("tzid", params);
+    if (!param || param->next  /* mandatory, once only */
+	|| strchr(param->s, '.')  /* paranoia */) {
 	return json_error_response(txn, "invalid-tzid");
+    }
+    tzid = param->s;
 
     param = hash_lookup("changedsince", params);
     if (param) {
-	if (!(changedsince = icaltime_as_timet(icaltime_from_string(param))))
+	changedsince = icaltime_as_timet(icaltime_from_string(param->s));
+	if (!changedsince || param->next  /* once only */)
 	    return json_error_response(txn, "invalid-changedsince");
     }
 
     param = hash_lookup("start", params);
     if (param) {
-	start = icaltime_from_string(param);
-	if (icaltime_is_null_time(start))
+	start = icaltime_from_string(param->s);
+	if (icaltime_is_null_time(start) || param->next  /* once only */)
 	    return json_error_response(txn, "invalid-start");
     }
     else {
@@ -779,8 +811,9 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
 
     param = hash_lookup("end", params);
     if (param) {
-	end = icaltime_from_string(param);
-	if (icaltime_compare(end, start) <= 0)
+	end = icaltime_from_string(param->s);
+	if (icaltime_compare(end, start) <= 0  /* end MUST be > start */
+	    || param->next  /* once only */)
 	    return json_error_response(txn, "invalid-end");
     }
     else {
