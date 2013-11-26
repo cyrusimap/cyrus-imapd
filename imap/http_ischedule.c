@@ -255,7 +255,6 @@ static int meth_get_isched(struct transaction_t *txn,
 	node = xmlNewChild(node, NULL, BAD_CAST "inline", NULL);
 
 	/* Dump XML response tree into a text buffer */
-	if (buf) xmlFree(buf);
 	xmlDocDumpFormatMemoryEnc(root->doc, &buf, &bufsiz, "utf-8", 1);
 	xmlFree(root->doc);
 
@@ -270,6 +269,8 @@ static int meth_get_isched(struct transaction_t *txn,
     /* Output the XML response */
     txn->resp_body.type = "application/xml; charset=utf-8";
     write_body(precond, txn, (char *) buf, bufsiz);
+
+    xmlFree(buf);
 
     return 0;
 }
