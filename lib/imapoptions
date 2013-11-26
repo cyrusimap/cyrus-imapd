@@ -93,6 +93,12 @@ are listed with ``<none>''.
 
 # OPTIONS
 
+{ "addressbookprefix", "#addressbooks", STRING }
+/* The prefix for the addressbook mailboxes hierarchies.  The hierarchy
+   delimiter will be automatically appended.  The public addressbook
+   hierarchy will be at the toplevel of the shared namespace.  A
+   user's personal calendar hierarchy will be a child of their Inbox. */
+
 { "admins", "", STRING }
 /* The list of userids with administrative rights.  Separate each userid
    with a space.  Sites using Kerberos authentication may use
@@ -372,6 +378,25 @@ Blank lines and lines beginning with ``#'' are ignored.
    layers of MIME structure.  The default of 1000 is much higher
    than any sane message should have. */
 
+{ "caldav_allowscheduling", 1, SWITCH }
+/* If enabled, the server will perform calendar scheduling operations. */
+
+{ "caldav_realm", NULL, STRING }
+/* The realm to present for HTTP authentication of CalDAV resources.
+   If not set (the default), the value of the "servername" option will
+   be used.*/
+
+{ "calendarprefix", "#calendars", STRING }
+/* The prefix for the calendar mailboxes hierarchies.  The hierarchy
+   delimiter will be automatically appended.  The public calendar
+   hierarchy will be at the toplevel of the shared namespace.  A
+   user's personal calendar hierarchy will be a child of their Inbox. */
+
+{ "carddav_realm", NULL, STRING }
+/* The realm to present for HTTP authentication of CardDAV resources.
+   If not set (the default), the value of the "servername" option will
+   be used.*/
+
 { "chatty", 0, SWITCH }
 /* If yes, syslog tags and commands for every IMAP command, mailboxes
    for every lmtp connection, every POP3 command, etc */
@@ -390,6 +415,11 @@ Blank lines and lines beginning with ``#'' are ignored.
 
 { "createonpost", 0, SWITCH }
 /* Deprecated in favor of \fIautocreate_post\fR. */
+
+{ "dav_realm", NULL, STRING }
+/* The realm to present for HTTP authentication of generic DAV
+   resources (principals).  If not set (the default), the value of the
+   "servername" option will be used.*/
 
 { "debug_command", NULL, STRING }
 /* Debug command to be used by processes started with -D option.  The string
@@ -447,6 +477,13 @@ Blank lines and lines beginning with ``#'' are ignored.
    server if the currently selected mailbox is (re)moved by another
    session.  Otherwise, the missing mailbox is treated as empty while
    in use by the client.*/
+
+{ "dkim_domain", NULL, STRING }
+/* The domain to be reported as doing DKIM signing. */
+
+{ "dkim_selector", NULL, STRING }
+/* Name of the selector subdividing the domain namespace.  This
+   specifies the actual key used for DKIM signing within the domain. */
 
 { "duplicate_db", "skiplist", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql", "twoskip")}
 /* The cyrusdb backend to use for the duplicate delivery suppression
@@ -566,6 +603,75 @@ Blank lines and lines beginning with ``#'' are ignored.
 # { "hostname_password", NULL, STRING }
 /* The password to use for authentication to the backend server hostname
    (where hostname is the short hostname of the server) - Cyrus Murder */
+
+{ "httpallowcompress", 1, SWITCH }
+/* If enabled, the server will compress response payloads if the client
+   indicates that it can accept them.  Note that the compressed data
+   will appear in telemetry logs, leaving only the response headers as
+   human-readable.*/
+
+{ "httpallowcors", NULL, STRING }
+/* A wildmat pattern specifying a list of origin URIs ( scheme "://"
+   host [ ":" port ] ) that are allowed to make Cross-Origin Resource
+   Sharing (CORS) requests on the server.  By default, CORS requests
+   are disabled.
+.PP
+   Note that the scheme and host should both be lowercase, the port
+   should be omitted if using the default for the scheme (80 for http,
+   443 for https), and there should be no trailing '/' (e.g.:
+   "http://www.example.com:8080", "https://example.org"). */
+
+{ "httpallowtrace", 0, SWITCH }
+/* Allow use of the TRACE method.
+.PP
+   Note that sensitive data might be disclosed by the response. */
+
+{ "httpallowedurls", NULL, STRING }
+/* Space-separated list of relative URLs (paths) rooted at
+   "httpdocroot" (see below) to be served by httpd.  If set, this
+   option will limit served static content to only those paths specified
+   (returning "404 Not Found" to any other client requested URLs).
+   Otherwise, httpd will serve any content found in "httpdocroot".
+.PP
+   Note that any path specified by "rss_feedlist_template" is an
+   exception to this rule.*/
+
+{ "httpcontentmd5", 0, SWITCH }
+/* If enabled, HTTP responses will include a Content-MD5 header for
+   the purpose of providing an end-to-end message integrity check
+   (MIC) of the payload body.  Note that enabling this option will
+   use additional CPU to generate the MD5 digest, which may be ignored
+   by clients anyways. */
+
+{ "httpdocroot", NULL, STRING }
+/* If set, http will serve the static content (html/text/jpeg/gif
+   files, etc) rooted at this directory.  Otherwise, httpd will not
+   serve any static content. */ 
+
+{ "httpkeepalive", 20, INT }
+/* Set the length of the HTTP server's keepalive heartbeat in seconds.
+   The default is 20.  The minimum value is 0, which will disable the
+   keepalive heartbeat.  When enabled, if a request takes longer than
+   \fIhttpkeepalive\fR seconds to process, the server will send the client
+   provisional responses every \fIhttpkeepalive\fR seconds until the
+   final response can be sent */
+
+{ "httpmodules", "", BITFIELD("caldav", "carddav", "domainkey", "ischedule", "rss") }
+/* Space-separated list of HTTP modules that will be enabled in
+   httpd(8).  This option has no effect on modules that are disabled
+   at compile time due to missing dependencies (e.g. libical). */
+
+{ "httpprettytelemetry", 0, SWITCH }
+/* If enabled, HTTP response payloads including server-generated
+   markup languages (HTML, XML) will utilize line breaks and
+   indentation to promote better human-readability in telemetry logs.
+   Note that enabling this option will increase the amount of data
+   sent across the wire. */
+
+{ "httptimeout", 5, INT }
+/* Set the length of the HTTP server's inactivity autologout timer,    
+   in minutes.  The default is 5.  The minimum value is 0, which will
+   disable persistent connections. */
 
 { "idlesocket", "{configdirectory}/socket/idle", STRING }
 /* Unix domain socket that idled listens on. */
@@ -907,7 +1013,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "mboxname_lockpath", NULL, STRING }
 /* Path to mailbox name lock files (default $conf/lock) */
 
-{ "metapartition_files", "", BITFIELD("header", "index", "cache", "expunge", "squat", "annotations") }
+{ "metapartition_files", "", BITFIELD("header", "index", "cache", "expunge", "squat", "annotations", "lock") }
 /* Space-separated list of metadata files to be stored on a
    \fImetapartition\fR rather than in the mailbox directory on a spool
    partition. */
@@ -1323,6 +1429,45 @@ If all partitions are over that limit, this feature is not used anymore.
    will be allowed in address tests and only "to" and "from" will be
    allowed in envelope tests.  When disabled, ANY grammatically correct header
    will be allowed. */
+
+{ "rss_feedlist_template", NULL, STRING }
+/* File containing HTML that will be used as a template for displaying
+   the list of available RSS feeds.  A single instance of the variable
+   %RSS_FEEDLIST% should appear in the file, which will be replaced by
+   a nested unordered list of feeds.  The toplevel unordered list will
+   be tagged with an id of "feed" (<ul id='feed'>) which can be used
+   by stylesheet(s) in your template.  The dynamically created list of
+   feeds based on the HTML template will be accessible at the "/rss"
+   URL on the server. */
+
+{ "rss_feeds", "*", STRING }
+/* A wildmat pattern specifying which mailbox hierarchies should be
+   treated as RSS feeds.  Only mailboxes matching the wildmat will
+   have their messages available via RSS.  If not set, a default
+   wildmat of "*" (ALL mailboxes) will be used. */
+
+{ "rss_maxage", 0, INT }
+/* Maximum age (in days) of items to display in an RSS channel.  If
+   non-zero, httpd will only display items received within the last
+   \fIrss_maxage\fR days.  If set to 0, all available items will be
+   displayed (the default). */
+
+{ "rss_maxitems", 0, INT }
+/* Maximum number of items to display in an RSS channel.  If non-zero,
+   httpd will display no more than the \fIrss_maxitems\fR most recent
+   items.  If set to 0, all available items will be displayed (the
+   default). */
+
+{ "rss_maxsynopsis", 0, INT }
+/* Maximum RSS item synopsis length.  If non-zero, httpd will display
+   no more than the first \fIrss_maxsynopsis\fR characters of an
+   item's synopsis.  If set to 0, the entire synopsis will be
+   displayed (the default). */
+
+{ "rss_realm", NULL, STRING }
+/* The realm to present for HTTP authentication of RSS feeds.  If not
+   set (the default), the value of the "servername" option will be
+   used.*/
 
 # Commented out - used by libsasl
 # { "sasl_auto_transition", 0, SWITCH }
@@ -1790,6 +1935,6 @@ product version in the capabilities */
 .SH SEE ALSO
 .PP
 \fBimapd(8)\fR, \fBpop3d(8)\fR, \fBnntpd(8)\fR, \fBlmtpd(8)\fR,
-\fBtimsieved(8)\fR, \fBidled(8)\fR, \fBnotifyd(8)\fR,
+\fBhttpd(8)\fR, \fBtimsieved(8)\fR, \fBidled(8)\fR, \fBnotifyd(8)\fR,
 \fBdeliver(8)\fR, \fBmaster(8)\fR, \fBciphers(1)\fR
 */
