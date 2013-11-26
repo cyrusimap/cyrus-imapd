@@ -43,7 +43,6 @@
 
 /*
  * TODO:
- * - Implement action=get&substitute-alias=true
  * - Implement localized names and "lang" parameter
  * - Implement multiple tzid parameters
  * - Implement action=find with sub-string match anywhere (not just prefix)?
@@ -64,6 +63,7 @@
 #include "httpd.h"
 #include "http_dav.h"
 #include "http_err.h"
+#include "http_proxy.h"
 #include "jcal.h"
 #include "map.h"
 #include "tok.h"
@@ -274,7 +274,7 @@ static int action_capa(struct transaction_t *txn,
 //			 "      {s:s s:b s:b}"
 			 "      {s:s s:b s:b}"
 			 "      {s:s s:b s:b s:[s s s]}"
-//			 "      {s:s s:b s:b s:[b b]}"
+			 "      {s:s s:b s:b s:[b b]}"
 			 "    ]}"
 			 "    {s:s s:["			/* expand */
 //			 "      {s:s s:b s:b}"
@@ -304,8 +304,8 @@ static int action_capa(struct transaction_t *txn,
 			 "name", "format", "required", 0, "multi", 0,
 			 "values", "text/calendar", "application/calendar+xml",
 			 "application/calendar+json",
-//			 "name", "substitute-alias", "required", 0, "multi", 0,
-//			 "values", 1, 0,
+			 "name", "substitute-alias", "required", 0, "multi", 0,
+			 "values", 1, 0,
 
 			 "name", "expand", "parameters",
 //			 "name", "lang", "required", 0, "multi", 1,
@@ -447,12 +447,12 @@ static int action_list(struct transaction_t *txn, struct hash_table *params)
 /* Perform a get action */
 static int action_get(struct transaction_t *txn, struct hash_table *params)
 {
-    static struct buf pathbuf = BUF_INITIALIZER;
-    int r, fd = -1, precond;
-    struct stat sbuf;
-    char *freeme = NULL;
-    const char *tzid, *format, *path, *msg_base = NULL, *data = NULL;
-    unsigned long msg_size = 0, datalen = 0;
+    int r, precond, substitute = 0;
+    const char *tzid, *param;
+    struct zoneinfo zi;
+    time_t lastmod;
+    char *data = NULL;
+    unsigned long datalen = 0;
     struct resp_body_t *resp_body = &txn->resp_body;
     struct mime_type_t *mime;
 
@@ -462,29 +462,34 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
 	return json_error_response(txn, "invalid-tzid");
 
     /* Check/find requested MIME type */
-    format = hash_lookup("format", params);
-    for (mime = tz_mime_types; format && mime->content_type; mime++) {
-	if (is_mediatype(format, mime->content_type)) break;
+    param = hash_lookup("format", params);
+    for (mime = tz_mime_types; param && mime->content_type; mime++) {
+	if (is_mediatype(param, mime->content_type)) break;
     }
     if (!mime->content_type) return json_error_response(txn, "invalid-format");
 
     /* Handle tzid=* separately */
     if (!strcmp(tzid, "*")) return action_get_all(txn, mime);
 
-    /* See if file exists and get Content-Length & Last-Modified time */
-    buf_reset(&pathbuf);
-    buf_printf(&pathbuf, "%s%s%s.ics", config_dir, FNAME_ZONEINFODIR, tzid);
-    path = buf_cstring(&pathbuf);
-    r = stat(path, &sbuf);
-    if (r || !S_ISREG(sbuf.st_mode)) return HTTP_NOT_FOUND;
+    /* Get info record from the database */
+    if ((r = zoneinfo_lookup(tzid, &zi)))
+	return (r == CYRUSDB_NOTFOUND ? HTTP_NOT_FOUND : HTTP_SERVER_ERROR);
 
-    /* Generate ETag */
+    if (zi.type == ZI_LINK) {
+	/* Check for substitute-alias */
+	param = hash_lookup("substitute-alias", params);
+	if (param && !strcmp(param, "true")) substitute = 1;
+    }
+
+    /* Generate ETag & Last-Modified from info record */
     assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "%ld-%ld", (long) sbuf.st_mtime, (long) sbuf.st_size);
+    buf_printf(&txn->buf, "%u-%ld", strhash(tzid), zi.dtstamp);
+    lastmod = zi.dtstamp;
+    freestrlist(zi.data);
 
     /* Check any preconditions, including range request */
     txn->flags.ranges = 1;
-    precond = check_precond(txn, NULL, buf_cstring(&txn->buf), sbuf.st_mtime);
+    precond = check_precond(txn, NULL, buf_cstring(&txn->buf), lastmod);
 
     switch (precond) {
     case HTTP_OK:
@@ -493,7 +498,7 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
 	/* Fill in Content-Type, ETag, Last-Modified, and Expires */
 	resp_body->type = mime->content_type;
 	resp_body->etag = buf_cstring(&txn->buf);
-	resp_body->lastmod = sbuf.st_mtime;
+	resp_body->lastmod = lastmod;
 	resp_body->maxage = 86400;  /* 24 hrs */
 	txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;
 	if (httpd_userid) txn->flags.cc |= CC_PUBLIC;
@@ -508,34 +513,62 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
 
 
     if (txn->meth == METH_GET) {
-	/* Open and mmap the file */
-	if ((fd = open(path, O_RDONLY)) == -1) return HTTP_SERVER_ERROR;
-	map_refresh(fd, 1, &msg_base, &msg_size, sbuf.st_size, path, NULL);
-	if (!msg_base) return HTTP_SERVER_ERROR;
-	data = msg_base;
-	datalen = msg_size;
+	static struct buf pathbuf = BUF_INITIALIZER;
+	const char *path, *proto, *host, *msg_base = NULL;
+	unsigned long msg_size = 0;
+	icalcomponent *ical, *comp;
+	icalproperty *prop;
+	int fd;
 
+	/* Open, mmap, and parse the file */
+	buf_reset(&pathbuf);
+	buf_printf(&pathbuf, "%s%s%s.ics", config_dir, FNAME_ZONEINFODIR, tzid);
+	path = buf_cstring(&pathbuf);
+	if ((fd = open(path, O_RDONLY)) == -1) return HTTP_SERVER_ERROR;
+
+	map_refresh(fd, 1, &msg_base, &msg_size, MAP_UNKNOWN_LEN, path, NULL);
+	if (!msg_base) return HTTP_SERVER_ERROR;
+
+	ical = icalparser_parse_string(msg_base);
+	map_free(&msg_base, &msg_size);
+	close(fd);
+
+	/* Set TZURL property */
+	buf_reset(&pathbuf);
+	http_proto_host(txn->req_hdrs, &proto, &host);
+	buf_printf(&pathbuf, "%s://%s%s?action=get&tzid=%s",
+		   proto, host, namespace_timezone.prefix, tzid);
+	if (mime != tz_mime_types) {
+	    buf_printf(&pathbuf, "&format=%.*s",
+		       (int) strcspn(mime->content_type, ";"),
+		       mime->content_type);
+	}
+	path = buf_cstring(&pathbuf);
+	comp =
+	    icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
+	prop = icalproperty_new_tzurl(path);
+	icalcomponent_add_property(comp, prop);
+
+	if (substitute) {
+	    /* Substitute TZID alias */
+	    prop = icalcomponent_get_first_property(comp, ICAL_TZID_PROPERTY);
+	    icalproperty_set_tzid(prop, tzid);
+	}
+
+	/* Convert to requested MIME type */
+	data = mime->to_string(ical);
+	datalen = strlen(data);
+	icalcomponent_free(ical);
+
+	/* Set Content-Disposition filename */
 	buf_reset(&pathbuf);
 	buf_printf(&pathbuf, "%s.%s", tzid, mime->file_ext);
 	resp_body->fname = buf_cstring(&pathbuf);
-
-	if (mime != tz_mime_types) {
-	    /* Not the storage format - convert into requested MIME type */
-	    icalcomponent *ical = icalparser_parse_string(data);
-	    
-	    data = freeme = mime->to_string(ical);
-	    datalen = strlen(data);
-	    icalcomponent_free(ical);
-	}
     }
 
     write_body(precond, txn, data, datalen);
 
-    if (freeme) free(freeme);
-    if (fd != -1) {
-	map_free(&msg_base, &msg_size);
-	close(fd);
-    }
+    if (data) free(data);
 
     return 0;
 }
