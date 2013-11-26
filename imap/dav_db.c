@@ -113,18 +113,15 @@ static void free_dav_open(struct open_davdb *open)
     free(open);
 }
 
-/* Open DAV DB corresponding to mailbox */
-EXPORTED sqlite3 *dav_open(struct mailbox *mailbox, const char *cmds)
+/* Open DAV DB corresponding in file */
+EXPORTED sqlite3 *dav_open(const char *fname, const char *cmds)
 {
     int rc = SQLITE_OK;
-    struct buf fname = BUF_INITIALIZER;
     struct stat sbuf;
     struct open_davdb *open;
 
-    dav_getpath(&fname, mailbox);
-
     for (open = open_davdbs; open; open = open->next) {
-	if (!strcmp(open->path, buf_cstring(&fname))) {
+	if (!strcmp(open->path, fname)) {
 	    /* already open! */
 	    open->refcount++;
 	    goto docmds;
@@ -132,7 +129,7 @@ EXPORTED sqlite3 *dav_open(struct mailbox *mailbox, const char *cmds)
     }
 
     open = xzmalloc(sizeof(struct open_davdb));
-    open->path = buf_release(&fname);
+    open->path = xstrdup(fname);
 
     rc = stat(open->path, &sbuf);
     if (rc == -1 && errno == ENOENT) {
@@ -173,8 +170,6 @@ EXPORTED sqlite3 *dav_open(struct mailbox *mailbox, const char *cmds)
 		   open->path, sqlite3_errmsg(open->db));
 	}
     }
-
-    buf_free(&fname);
 
     return open->db;
 }

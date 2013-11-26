@@ -71,7 +71,8 @@ int carddav_init(void);
 int carddav_done(void);
 
 /* get a database handle corresponding to mailbox */
-struct carddav_db *carddav_open(struct mailbox *mailbox, int flags);
+struct carddav_db *carddav_open_mailbox(struct mailbox *mailbox, int flags);
+struct carddav_db *carddav_open_userid(const char *userid, int flags);
 
 /* close this handle */
 int carddav_close(struct carddav_db *carddavdb);

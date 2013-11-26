@@ -65,6 +65,7 @@
 #include "message_guid.h"
 #include "mboxname.h"
 #include "mboxlist.h"
+#include "util.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
 
@@ -208,8 +209,7 @@ int do_reconstruct(char *mboxname,
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	struct body *body;
 	struct param *param;
-	const char *msg_base = NULL;
-	unsigned long msg_size = 0;
+	struct buf msg_buf = BUF_INITIALIZER;
 	icalcomponent *ical = NULL;
 
 	if (mailbox_read_index_record(mailbox, recno, &record)) continue;
@@ -219,9 +219,9 @@ int do_reconstruct(char *mboxname,
 	if (mailbox_cacherecord(mailbox, &record)) continue;
 
 	/* Load message containing the resource and parse iCal data */
-	mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
-	ical = icalparser_parse_string(msg_base + record.header_size);
-	mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
+	if (mailbox_map_record(mailbox, &record, &msg_buf)) continue;
+	ical = icalparser_parse_string(buf_base(&msg_buf) + record.header_size);
+	buf_free(&msg_buf);
 	if (!ical) continue;
 
 	memset(&cdata, 0, sizeof(struct caldav_data));

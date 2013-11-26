@@ -303,7 +303,7 @@ static struct carddav_db *my_carddav_open(struct mailbox *mailbox)
 	return auth_carddavdb;
     }
     else {
-	return carddav_open(mailbox, CALDAV_CREATE);
+	return carddav_open_mailbox(mailbox, CALDAV_CREATE);
     }
 }
 
@@ -354,12 +354,8 @@ static void my_carddav_auth(const char *userid)
     }
     else {
 	/* Open CardDAV DB for 'userid' */
-	struct mailbox mailbox;
-
-	mailbox.name = (char *)mailboxname;
-
 	my_carddav_reset();
-	auth_carddavdb = carddav_open(&mailbox, CARDDAV_CREATE);
+	auth_carddavdb = carddav_open_userid(userid, CARDDAV_CREATE);
 	if (!auth_carddavdb) fatal("Unable to open CardDAV DB", EC_IOERR);
     }
 
@@ -373,14 +369,16 @@ static void my_carddav_auth(const char *userid)
 	if (config_mupdate_server) {
 	    /* Find location of INBOX */
 	    const char *inboxname = mboxname_user_mbox(userid, NULL);
-	    char *server;
+	    mbentry_t *mbentry = NULL;
 
-	    r = http_mlookup(inboxname, &server, NULL, NULL);
-	    if (!r && server) {
-		proxy_findserver(server, &http_protocol, proxy_userid,
+	    r = http_mlookup(inboxname, &mbentry, NULL);
+	    if (!r && mbentry->server) {
+		proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
 				 &backend_cached, NULL, NULL, httpd_in);
+		mboxlist_entry_free(&mbentry);
 		return;
 	    }
+	    mboxlist_entry_free(&mbentry);
 	}
 
 	mailboxname = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
@@ -549,16 +547,16 @@ static int carddav_copy(struct transaction_t *txn,
 			struct carddav_db *dest_davdb,
 			unsigned overwrite, unsigned flags)
 {
-    int ret;
-    const char *msg_base = NULL;
-    unsigned long msg_size = 0;
+    int r;
+    struct buf msg_buf = BUF_INITIALIZER;
     VObject *vcard;
 
     /* Load message containing the resource and parse vCard data */
-    mailbox_map_message(src_mbox, src_rec->uid, &msg_base, &msg_size);
-    vcard = Parse_MIME(msg_base + src_rec->header_size,
+    r = mailbox_map_record(src_mbox, src_rec, &msg_buf);
+    if (r) return r;
+    vcard = Parse_MIME(buf_base(&msg_buf) + src_rec->header_size,
 		       src_rec->size - src_rec->header_size);
-    mailbox_unmap_message(src_mbox, src_rec->uid, &msg_base, &msg_size);
+    buf_free(&msg_buf);
 
     if (!vcard) {
 	txn->error.precond = CARDDAV_VALID_DATA;
@@ -569,13 +567,13 @@ static int carddav_copy(struct transaction_t *txn,
     mailbox_unlock_index(src_mbox, NULL);
 
     /* Store source resource at destination */
-    ret = store_resource(txn, vcard, dest_mbox, dest_rsrc, dest_davdb,
+    r = store_resource(txn, vcard, dest_mbox, dest_rsrc, dest_davdb,
 			 overwrite, flags);
 
     cleanVObject(vcard);
     cleanStrTbl();
 
-    return ret;
+    return r;
 }
 
 
@@ -735,18 +733,16 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
 {
     xmlNodePtr prop = (xmlNodePtr) rock;
     const char *data = NULL;
-    unsigned long datalen = 0;
+    size_t datalen = 0;
 
     if (propstat) {
 	if (!fctx->record) return HTTP_NOT_FOUND;
 
-	if (!fctx->msg_base) {
-	    mailbox_map_message(fctx->mailbox, fctx->record->uid,
-				&fctx->msg_base, &fctx->msg_size);
-	}
-	if (!fctx->msg_base) return HTTP_SERVER_ERROR;
+	if (!fctx->msg_buf.len)
+	    mailbox_map_record(fctx->mailbox, fctx->record, &fctx->msg_buf);
+	if (!fctx->msg_buf.len) return HTTP_SERVER_ERROR;
 
-	data = fctx->msg_base + fctx->record->header_size;
+	data = fctx->msg_buf.s + fctx->record->header_size;
 	datalen = fctx->record->size - fctx->record->header_size;
     }
 
@@ -1000,7 +996,7 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
     if (cdata->dav.imap_uid) {
 	/* Fetch index record for the resource */
 	r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid,
-				      &oldrecord);
+				      &oldrecord, NULL);
 
 	if (overwrite == OVERWRITE_CHECK) {
 	    /* Check any preconditions */
@@ -1008,7 +1004,7 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 	    time_t lastmod = oldrecord.internaldate;
 	    int precond = check_precond(txn, cdata, etag, lastmod);
 
-	    if (precond == HTTP_OK)
+	    if (precond != HTTP_OK)
 		return HTTP_PRECOND_FAILED;
 	}
 

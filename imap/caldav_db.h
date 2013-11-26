@@ -95,7 +95,8 @@ int caldav_init(void);
 int caldav_done(void);
 
 /* get a database handle corresponding to mailbox */
-struct caldav_db *caldav_open(struct mailbox *mailbox, int flags);
+struct caldav_db *caldav_open_mailbox(struct mailbox *mailbox, int flags);
+struct caldav_db *caldav_open_userid(const char *userid, int flags);
 
 /* close this handle */
 int caldav_close(struct caldav_db *caldavdb);

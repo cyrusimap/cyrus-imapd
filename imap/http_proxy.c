@@ -467,7 +467,7 @@ static int logout(struct backend *s __attribute__((unused)))
  * machine to make a roundtrip to the master mailbox server to make
  * sure it's up to date
  */
-EXPORTED int http_mlookup(const char *name, char **server, char **aclp, void *tid)
+EXPORTED int http_mlookup(const char *name, mbentry_t **mbentryp, void *tid)
 {
     mbentry_t *mbentry = NULL;
     int r;
@@ -491,12 +491,9 @@ EXPORTED int http_mlookup(const char *name, char **server, char **aclp, void *ti
 	goto done;
     }
 
-    /* XXX - will leak memory at call sites for now */
-    if (aclp) *aclp = xstrdupnull(mbentry->acl);
-    if (server) *server = xstrdupnull(mbentry->server);
-
 done:
-    mboxlist_entry_free(&mbentry);
+    if (!r && mbentryp) *mbentryp = mbentry;
+    else mboxlist_entry_free(&mbentry);
     return r;
 }
 

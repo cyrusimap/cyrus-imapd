@@ -262,8 +262,7 @@ struct propfind_ctx {
     struct quota quota;			/* quota info for collection */
     struct index_record *record;	/* cyrus.index record for resource */
     void *data;				/* DAV record for resource */
-    const char *msg_base;		/* base of mmap()'d resource file */
-    unsigned long msg_size;		/* size of mmap()'d resource file */
+    struct buf msg_buf;			/* mmap()'d resource file */
     unsigned long reqd_privs;		/* privileges req'd on collections */
     int (*filter)(struct propfind_ctx *,
 		  void *data);		/* callback to filter resources */
@@ -291,8 +290,7 @@ struct propfind_ctx {
 struct proppatch_ctx {
     struct request_target_t *req_tgt;	/* parsed request target URL */
     unsigned meth;	    		/* requested Method */
-    const char *mailboxname;		/* mailbox correspondng to collection */
-    annotate_state_t *astate;           /* Annotation state */
+    struct mailbox *mailbox;		/* mailbox related to the collection */
     const struct prop_entry *lprops;	/* Array of known "live" properties */
     xmlNodePtr root;			/* root node to add to XML tree */
     xmlNsPtr *ns;			/* Array of our supported namespaces */

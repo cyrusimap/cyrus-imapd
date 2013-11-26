@@ -138,8 +138,7 @@ EXPORTED int caldav_done(void)
     " UNIQUE( mailbox, resource ) );"					\
     "CREATE INDEX IF NOT EXISTS idx_ical_uid ON ical_objs ( ical_uid );"
 
-/* Open DAV DB corresponding to userid */
-EXPORTED struct caldav_db *caldav_open(struct mailbox *mailbox, int flags)
+static struct caldav_db *caldav_open_fname(const char *fname, int flags)
 {
     sqlite3 *db;
     struct caldav_db *caldavdb = NULL;
@@ -147,19 +146,45 @@ EXPORTED struct caldav_db *caldav_open(struct mailbox *mailbox, int flags)
 
     if (flags & CALDAV_TRUNC) cmds = CMD_DROP CMD_CREATE;
 
-    db = dav_open(mailbox, cmds);
+    db = dav_open(fname, cmds);
 
     if (db) {
-	const char *userid;
-
 	caldavdb = xzmalloc(sizeof(struct caldav_db));
 	caldavdb->db = db;
+    }
 
-	userid = mboxname_to_userid(mailbox->name);
-	if (userid) {
-	    /* Construct mbox name corresponding to userid's scheduling Inbox */
-	    strncpy(caldavdb->sched_inbox, caldav_mboxname(userid, SCHED_INBOX), sizeof(caldavdb->sched_inbox));
-	}
+    return caldavdb;
+}
+
+EXPORTED struct caldav_db *caldav_open_userid(const char *userid, int flags)
+{
+    struct caldav_db *caldavdb = NULL;
+    struct buf fname = BUF_INITIALIZER;
+
+    dav_getpath_byuserid(&fname, userid);
+    caldavdb = caldav_open_fname(buf_cstring(&fname), flags);
+    buf_free(&fname);
+
+    /* Construct mbox name corresponding to userid's scheduling Inbox */
+    strncpy(caldavdb->sched_inbox, caldav_mboxname(userid, SCHED_INBOX), sizeof(caldavdb->sched_inbox));
+
+    return caldavdb;
+}
+
+/* Open DAV DB corresponding to userid */
+EXPORTED struct caldav_db *caldav_open_mailbox(struct mailbox *mailbox, int flags)
+{
+    struct caldav_db *caldavdb = NULL;
+    const char *userid = mboxname_to_userid(mailbox->name);
+
+    if (userid) {
+	caldavdb = caldav_open_userid(userid, flags);
+    }
+    else {
+	struct buf fname = BUF_INITIALIZER;
+	dav_getpath(&fname, mailbox);
+	caldavdb = caldav_open_fname(buf_cstring(&fname), flags);
+	buf_free(&fname);
     }
 
     return caldavdb;

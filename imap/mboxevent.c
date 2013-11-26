@@ -744,6 +744,46 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 			  xstrndup(cacheitem_base(record, CACHE_BODYSTRUCTURE),
 				   cacheitem_size(record, CACHE_BODYSTRUCTURE)));
     }
+
+    /* add caldav items */
+    if ((mailbox->mbtype & (MBTYPES_DAV)) &&
+	(mboxevent_expected_param(event->type, EVENT_DAV_FILENAME) ||
+	 mboxevent_expected_param(event->type, EVENT_DAV_UID))) {
+	struct body *body = NULL;
+	const char *resource = NULL;
+	struct param *param;
+
+	if (mailbox_cacherecord(mailbox, record))
+	    return;
+	message_read_bodystructure(record, &body);
+
+	for (param = body->disposition_params; param; param = param->next) {
+	    if (!strcmp(param->attribute, "FILENAME")) {
+		resource = param->value;
+	    }
+	}
+
+	FILL_STRING_PARAM(event, EVENT_DAV_FILENAME, xstrdup(resource));
+
+	if (mboxevent_expected_param(event->type, EVENT_DAV_UID)) {
+	    if (mailbox->mbtype & MBTYPE_ADDRESSBOOK) {
+		struct carddav_db *carddavdb = NULL;
+		struct carddav_data *cdata = NULL;
+		carddavdb = carddav_open_mailbox(mailbox, 0);
+		carddav_lookup_resource(carddavdb, mailbox->name, resource, 0, &cdata);
+		FILL_STRING_PARAM(event, EVENT_DAV_UID, xstrdup(cdata->vcard_uid));
+		carddav_close(carddavdb);
+	    }
+	    if (mailbox->mbtype & MBTYPE_CALENDAR) {
+		struct caldav_db *caldavdb = NULL;
+		struct caldav_data *cdata = NULL;
+		caldavdb = caldav_open_mailbox(mailbox, 0);
+		caldav_lookup_resource(caldavdb, mailbox->name, resource, 0, &cdata);
+		FILL_STRING_PARAM(event, EVENT_DAV_UID, xstrdup(cdata->ical_uid));
+		caldav_close(caldavdb);
+	    }
+	}
+    }
 }
 
 void mboxevent_extract_copied_record(struct mboxevent *event,

@@ -75,7 +75,7 @@ int dav_init(void);
 int dav_done(void);
 
 /* get a database handle corresponding to mailbox */
-sqlite3 *dav_open(struct mailbox *mailbox, const char *cmds);
+sqlite3 *dav_open(const char *fname, const char *cmds);
 
 /* close this handle */
 int dav_close(sqlite3 *davdb);

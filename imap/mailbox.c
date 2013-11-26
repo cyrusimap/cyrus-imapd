@@ -2536,7 +2536,9 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
         }
     }
 
-    carddavdb = carddav_open(mailbox, 0);
+    assert(resource);
+
+    carddavdb = carddav_open_mailbox(mailbox, 0);
 
     /* Find existing record for this resource */
     carddav_lookup_resource(carddavdb, mailbox->name, resource, 1, &cdata);
@@ -2555,21 +2557,20 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
     }
     else {
 	const char *uid = NULL, *fullname = NULL, *nickname = NULL;
+	struct buf msg_buf = BUF_INITIALIZER;
 	VObjectIterator i;
-	const char *msg_base = NULL;
-	size_t msg_size = 0;
 	VObject *vcard;
 
 	/* already seen this message, so do we update it?  No */
 	if (old) goto done;
 
 	/* Load message containing the resource and parse vcard data */
-	r = mailbox_map_message(mailbox, new->uid, &msg_base, &msg_size);
+	r = mailbox_map_record(mailbox, new, &msg_buf);
 	if (r) goto done;
 
-	vcard = Parse_MIME(msg_base + new->header_size,
+	vcard = Parse_MIME(buf_base(&msg_buf) + new->header_size,
 			   new->size - new->header_size);
-	mailbox_unmap_message(mailbox, new->uid, &msg_base, &msg_size);
+	buf_free(&msg_buf);
 	if (!vcard) goto done;
 
 	initPropIterator(&i, vcard);
@@ -2646,7 +2647,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
         }
     }
 
-    caldavdb = caldav_open(mailbox, 0);
+    caldavdb = caldav_open_mailbox(mailbox, 0);
 
     /* Find existing record for this resource */
     caldav_lookup_resource(caldavdb, mailbox->name, resource, 1, &cdata);
@@ -2664,19 +2665,17 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 	r = caldav_delete(caldavdb, cdata->dav.rowid, 0);
     }
     else {
-	const char *msg_base = NULL;
-	size_t msg_size = 0;
+	struct buf msg_buf = BUF_INITIALIZER;
 	icalcomponent *ical = NULL;
 
 	/* already seen this message, so do we update it?  No */
 	if (old) goto done;
 
-	/* Load message containing the resource and parse iCal data */
-	r = mailbox_map_message(mailbox, new->uid, &msg_base, &msg_size);
+	r = mailbox_map_record(mailbox, new, &msg_buf);
 	if (r) goto done;
 
-	ical = icalparser_parse_string(msg_base + new->header_size);
-	mailbox_unmap_message(mailbox, new->uid, &msg_base, &msg_size);
+	ical = icalparser_parse_string(buf_base(&msg_buf) + new->header_size);
+	buf_free(&msg_buf);
 	if (!ical) goto done;
 
 	cdata->dav.creationdate = new->internaldate;
@@ -2689,7 +2688,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 
 	r = caldav_write(caldavdb, cdata, 0);
 
-        icalcomponent_free(ical);
+	icalcomponent_free(ical);
     }
 
 done:

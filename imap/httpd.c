@@ -4011,9 +4011,9 @@ EXPORTED int meth_trace(struct transaction_t *txn, void *params)
 
 	if (*txn->req_tgt.mboxname) {
 	    /* Locate the mailbox */
-	    char *server;
+	    mbentry_t *mbentry = NULL;
 
-	    r = http_mlookup(txn->req_tgt.mboxname, &server, NULL, NULL);
+	    r = http_mlookup(txn->req_tgt.mboxname, &mbentry, NULL);
 	    if (r) {
 		syslog(LOG_ERR, "mlookup(%s) failed: %s",
 		       txn->req_tgt.mboxname, error_message(r));
@@ -4026,16 +4026,19 @@ EXPORTED int meth_trace(struct transaction_t *txn, void *params)
 		}
 	    }
 
-	    if (server) {
+	    if (mbentry->server) {
 		/* Remote mailbox */
 		struct backend *be;
 
-		be = proxy_findserver(server, &http_protocol, proxy_userid,
+		be = proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
 				      &backend_cached, NULL, NULL, httpd_in);
+		mboxlist_entry_free(&mbentry);
 		if (!be) return HTTP_UNAVAILABLE;
 
 		return http_pipe_req_resp(be, txn);
 	    }
+
+	    mboxlist_entry_free(&mbentry);
 
 	    /* Local mailbox */
 	}

@@ -96,14 +96,14 @@ static int list_feeds(struct transaction_t *txn);
 static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
 			 unsigned recno, uint32_t uid,
 			 struct index_record *record, struct body **body,
-			 const char **msg_base, unsigned long *msg_size);
+			 struct buf *msg_buf);
 static int list_messages(struct transaction_t *txn, struct mailbox *mailbox);
 static void display_message(struct transaction_t *txn,
-			    const char *mboxname, uint32_t uid,
-			    struct body *body, const char *msg_base);
+			    const char *mboxname, const struct index_record *record,
+			    struct body *body, const struct buf *msg_buf);
 static void fetch_part(struct transaction_t *txn, struct body *body,
 		       const char *findsection, const char *cursection,
-		       const char *msg_base);
+		       struct buf *msg_buf);
 
 
 /* Namespace for RSS feeds of mailboxes */
@@ -146,9 +146,10 @@ static int meth_get(struct transaction_t *txn,
 		    void *params __attribute__((unused)))
 {
     int ret = 0, r;
-    char *server, section[MAX_SECTION_LEN+1] = "";
+    char section[MAX_SECTION_LEN+1] = "";
     uint32_t uid = 0;
     struct mailbox *mailbox = NULL;
+    mbentry_t *mbentry = NULL;
 
     /* Construct mailbox name corresponding to request target URI */
     if ((r = rss_parse_path(txn->req_uri->path,
@@ -164,7 +165,8 @@ static int meth_get(struct transaction_t *txn,
     if (!is_feed(txn->req_tgt.mboxname)) return HTTP_NOT_FOUND;
 
     /* Locate the mailbox */
-    if ((r = http_mlookup(txn->req_tgt.mboxname, &server, NULL, NULL))) {
+    r = http_mlookup(txn->req_tgt.mboxname, &mbentry, NULL);
+    if (r) {
 	syslog(LOG_ERR, "mlookup(%s) failed: %s",
 	       txn->req_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
@@ -176,16 +178,19 @@ static int meth_get(struct transaction_t *txn,
 	}
     }
 
-    if (server) {
+    if (mbentry->server) {
 	/* Remote mailbox */
 	struct backend *be;
 
-	be = proxy_findserver(server, &http_protocol, proxy_userid,
+	be = proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
 			      &backend_cached, NULL, NULL, httpd_in);
+	mboxlist_entry_free(&mbentry);
 	if (!be) return HTTP_UNAVAILABLE;
 
 	return http_pipe_req_resp(be, txn);
     }
+
+    mboxlist_entry_free(&mbentry);
 
     /* Local Mailbox */
 
@@ -225,13 +230,12 @@ static int meth_get(struct transaction_t *txn,
     }
     else {
 	struct index_record record;
-	const char *msg_base;
-	unsigned long msg_size;
-	struct body *body;
+	struct buf msg_buf = BUF_INITIALIZER;
+	struct body *body = NULL;
 
 	/* Fetch the message */
 	if (!(ret = fetch_message(txn, mailbox, 0, uid,
-				  &record, &body, &msg_base, &msg_size))) {
+				  &record, &body, &msg_buf))) {
 	    int precond;
 	    const char *etag = NULL;
 	    time_t lastmod = 0;
@@ -267,20 +271,20 @@ static int meth_get(struct transaction_t *txn,
 
 	    if (!*section) {
 		/* Return entire message formatted as text/html */
-		display_message(txn, mailbox->name, record.uid, body, msg_base);
+		display_message(txn, mailbox->name, &record, body, &msg_buf);
 	    }
 	    else if (!strcmp(section, "0")) {
 		/* Return entire message as text/plain */
 		resp_body->type = "text/plain";
-		write_body(precond, txn, msg_base, msg_size);
+		write_body(precond, txn, buf_base(&msg_buf), buf_len(&msg_buf));
 	    }
 	    else {
 		/* Fetch, decode, and return the specified MIME message part */
-		fetch_part(txn, body, section, "1", msg_base);
+		fetch_part(txn, body, section, "1", &msg_buf);
 	    }
 
 	  done:
-	    mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
+	    buf_free(&msg_buf);
 
 	    if (body) {
 		message_free_body(body);
@@ -371,7 +375,8 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
     struct buf *buf = &lrock->txn->resp_body.payload;
 
     if (name) {
-	char *acl;
+	mbentry_t *mbentry = NULL;
+	int r;
 
 	/* Don't list mailboxes that we don't treat as RSS feeds */
 	if (!is_feed(name)) return 0;
@@ -380,9 +385,12 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
 	if (mboxname_isdeletedmailbox(name, NULL)) return 0;
 
 	/* Lookup the mailbox and make sure its readable */
-	http_mlookup(name, NULL, &acl, NULL);
-	if (!acl || !(cyrus_acl_myrights(httpd_authstate, acl) & ACL_READ))
+	r = http_mlookup(name, &mbentry, NULL);
+	if (r || !mbentry->acl || !(cyrus_acl_myrights(httpd_authstate, mbentry->acl) & ACL_READ)) {
+	    mboxlist_entry_free(&mbentry);
 	    return 0;
+	}
+	mboxlist_entry_free(&mbentry);
     }
 
     if (name &&
@@ -599,15 +607,14 @@ static int list_feeds(struct transaction_t *txn)
 static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
 			 unsigned recno, uint32_t uid,
 			 struct index_record *record, struct body **body,
-			 const char **msg_base, unsigned long *msg_size)
+			 struct buf *msg_buf)
 {
     int r;
 
-    *body = NULL;
-    *msg_base = NULL;
+    buf_reset(msg_buf);
 
     /* Fetch index record for the message */
-    if (uid) r = mailbox_find_index_record(mailbox, uid, record);
+    if (uid) r = mailbox_find_index_record(mailbox, uid, record, NULL);
     else r = mailbox_read_index_record(mailbox, recno, record);
     if ((r == CYRUSDB_NOTFOUND) ||
 	(record->system_flags & (FLAG_DELETED|FLAG_EXPUNGED))) {
@@ -635,7 +642,7 @@ static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
     message_read_bodystructure(record, body);
 
     /* Map the message into memory */
-    mailbox_map_message(mailbox, record->uid, msg_base, msg_size);
+    mailbox_map_record(mailbox, record, msg_buf);
 
     return 0;
 }
@@ -859,9 +866,8 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     for (recno = mailbox->i.num_records, nitems = 0;
 	 recno >= 1 && (!max_items || nitems < max_items); recno--) {
 	struct index_record record;
-	const char *msg_base;
-	unsigned long msg_size;
-	struct body *body;
+	struct buf msg_buf = BUF_INITIALIZER;
+	struct body *body = NULL;
 	char *subj;
 	struct address *addr = NULL;
 	const char *content_types[] = { "text", NULL };
@@ -876,7 +882,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
 	/* Fetch the message */
 	if (fetch_message(txn, mailbox, recno, 0,
-			  &record, &body, &msg_base, &msg_size)) {
+			  &record, &body, &msg_buf)) {
 	    continue;
 	}
 
@@ -947,8 +953,8 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	}
 
 	/* <summary> - optional (find and use the first text/ part) */
-	content.base = msg_base;
-	content.len = msg_size;
+	content.base = buf_base(&msg_buf);
+	content.len = buf_len(&msg_buf);
 	content.body = body;
 	message_fetch_part(&content, content_types, &parts);
 
@@ -970,12 +976,12 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	    free(parts);
 	}
 
-	mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
-
 	if (body) {
 	    message_free_body(body);
 	    free(body);
 	}
+
+	buf_free(&msg_buf);
     }
 
     /* End of Atom <feed> */
@@ -1005,8 +1011,8 @@ static void display_address(struct buf *buf, struct address *addr,
 
 
 static void display_part(struct transaction_t *txn,
-			 struct body *body, uint32_t uid,
-			 const char *cursection, const char *msg_base,
+			 struct body *body, const struct index_record *record,
+			 const char *cursection, const struct buf *msg_buf,
 			 unsigned level)
 {
     struct buf *buf = &txn->resp_body.payload;
@@ -1026,7 +1032,7 @@ static void display_part(struct transaction_t *txn,
 	    snprintf(nextsection, sizeof(nextsection), "%s%s%d",
 		     cursection, *cursection ? "." : "", i+1);
 	    display_part(txn, &body->subpart[i],
-			 uid, nextsection, msg_base, level);
+			 record, nextsection, msg_buf, level);
 	}
 	else {
 	    /* Display all subparts */
@@ -1034,7 +1040,7 @@ static void display_part(struct transaction_t *txn,
 		snprintf(nextsection, sizeof(nextsection), "%s%s%d",
 			 cursection, *cursection ? "." : "", i+1);
 		display_part(txn, &body->subpart[i],
-			     uid, nextsection, msg_base, level);
+			     record, nextsection, msg_buf, level);
 	    }
 	}
     }
@@ -1134,7 +1140,7 @@ static void display_part(struct transaction_t *txn,
 	/* Display subpart */
 	snprintf(nextsection, sizeof(nextsection), "%s%s%d",
 		 cursection, *cursection ? "." : "", 1);
-	display_part(txn, subpart, uid, nextsection, msg_base, level);
+	display_part(txn, subpart, record, nextsection, msg_buf, level);
     }
     else {
 	/* Leaf part - display something */
@@ -1147,7 +1153,7 @@ static void display_part(struct transaction_t *txn,
 
 	    if (charset < 0) charset = 0; /* unknown, try ASCII */
 	    body->decoded_body =
-		charset_to_utf8(msg_base + body->content_offset,
+		charset_to_utf8(buf_base(msg_buf) + body->content_offset,
 				body->content_size, charset, encoding);
 	    if (!ishtml) buf_printf_markup(buf, level, "<pre>");
 	    write_body(0, txn, buf_cstring(buf), buf_len(buf));
@@ -1178,7 +1184,7 @@ static void display_part(struct transaction_t *txn,
 	    /* Create link */
 	    buf_printf_markup(buf, level++,
 			      "<a href=\"%s?uid=%u;section=%s\" type=\"%s/%s\">",
-			      txn->req_tgt.path, uid, cursection,
+			      txn->req_tgt.path, record->uid, cursection,
 			      body->type, body->subtype);
 
 	    if (config_httpprettytelemetry)
@@ -1187,7 +1193,7 @@ static void display_part(struct transaction_t *txn,
 	    /* Add image */
 	    if (is_image) {
 		buf_printf(buf, "<img src=\"%s?uid=%u;section=%s\" alt=\"",
-			   txn->req_tgt.path, uid, cursection);
+			   txn->req_tgt.path, record->uid, cursection);
 	    }
 
 	    /* Create text for link or alternative text for image */
@@ -1212,8 +1218,8 @@ static void display_part(struct transaction_t *txn,
 
 /* Return entire message formatted as text/html */
 static void display_message(struct transaction_t *txn,
-			    const char *mboxname, uint32_t uid,
-			    struct body *body, const char *msg_base)
+			    const char *mboxname, const struct index_record *record,
+			    struct body *body, const struct buf *msg_buf)
 {
     struct body toplevel;
     struct buf *buf = &txn->resp_body.payload;
@@ -1235,7 +1241,7 @@ static void display_message(struct transaction_t *txn,
     buf_printf_markup(buf, level++, "<html>");
     buf_printf_markup(buf, level++, "<head>");
     buf_printf_markup(buf, level, "<title>%s:%u</title>",
-		      mboxname, uid);
+		      mboxname, record->uid);
     buf_printf_markup(buf, --level, "</head>");
     buf_printf_markup(buf, level++, "<body>");
 
@@ -1244,7 +1250,7 @@ static void display_message(struct transaction_t *txn,
     buf_printf_markup(buf, level,
 		      "<a href=\"%s?uid=%u;section=0\" type=\"plain/text\">"
 		      "[View message source]</a>",
-		      txn->req_tgt.path, uid);
+		      txn->req_tgt.path, record->uid);
     buf_printf_markup(buf, --level, "</div>");
     buf_printf_markup(buf, level, "<hr>");
 
@@ -1257,7 +1263,7 @@ static void display_message(struct transaction_t *txn,
     toplevel.subtype = "RFC822";
     toplevel.subpart = body;
 
-    display_part(txn, &toplevel, uid, "", msg_base, level);
+    display_part(txn, &toplevel, record, "", msg_buf, level);
 
     /* End of HTML */
     buf_printf_markup(buf, --level, "</body>");
@@ -1273,7 +1279,7 @@ static void display_message(struct transaction_t *txn,
 /* Fetch, decode, and return the specified MIME message part */
 static void fetch_part(struct transaction_t *txn, struct body *body,
 		       const char *findsection, const char *cursection,
-		       const char *msg_base)
+		       struct buf *msg_buf)
 {
     char nextsection[MAX_SECTION_LEN+1];
 
@@ -1285,7 +1291,7 @@ static void fetch_part(struct transaction_t *txn, struct body *body,
 	    snprintf(nextsection, sizeof(nextsection), "%s%s%d",
 		     cursection, *cursection ? "." : "", i+1);
 	    fetch_part(txn, &body->subpart[i],
-		       findsection, nextsection, msg_base);
+		       findsection, nextsection, msg_buf);
 	}
     }
     else if (!strcmp(body->type, "MESSAGE") &&
@@ -1293,14 +1299,14 @@ static void fetch_part(struct transaction_t *txn, struct body *body,
 	/* Recurse into supbart */
 	snprintf(nextsection, sizeof(nextsection), "%s%s%d",
 		 cursection, *cursection ? "." : "", 1);
-	fetch_part(txn, body->subpart, findsection, nextsection, msg_base);
+	fetch_part(txn, body->subpart, findsection, nextsection, msg_buf);
     }
     else if (!strcmp(findsection, cursection)) {
 	int encoding = body->charset_cte & 0xff;
 	const char *outbuf;
 	size_t outsize;
 
-	outbuf = charset_decode_mimebody(msg_base + body->content_offset,
+	outbuf = charset_decode_mimebody(buf_base(msg_buf) + body->content_offset,
 					 body->content_size, encoding,
 					 &body->decoded_body, &outsize);
 

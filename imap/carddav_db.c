@@ -123,7 +123,7 @@ EXPORTED int carddav_done(void)
     "CREATE INDEX IF NOT EXISTS idx_vcard_uid ON vcard_objs ( vcard_uid );"
 
 /* Open DAV DB corresponding to mailbox */
-struct carddav_db *carddav_open(struct mailbox *mailbox, int flags)
+static struct carddav_db *carddav_open_fname(const char *fname, int flags)
 {
     sqlite3 *db;
     struct carddav_db *carddavdb = NULL;
@@ -131,12 +131,36 @@ struct carddav_db *carddav_open(struct mailbox *mailbox, int flags)
 
     if (flags & CARDDAV_TRUNC) cmds = CMD_DROP CMD_CREATE;
 
-    db = dav_open(mailbox, cmds);
+    db = dav_open(fname, cmds);
 
     if (db) {
 	carddavdb = xzmalloc(sizeof(struct carddav_db));
 	carddavdb->db = db;
     }
+
+    return carddavdb;
+}
+
+EXPORTED struct carddav_db *carddav_open_userid(const char *userid, int flags)
+{
+    struct buf fname = BUF_INITIALIZER;
+    struct carddav_db *carddavdb = NULL;
+
+    dav_getpath_byuserid(&fname, userid);
+    carddavdb = carddav_open_fname(buf_cstring(&fname), flags);
+    buf_free(&fname);
+
+    return carddavdb;
+}
+
+EXPORTED struct carddav_db *carddav_open_mailbox(struct mailbox *mailbox, int flags)
+{
+    struct buf fname = BUF_INITIALIZER;
+    struct carddav_db *carddavdb = NULL;
+
+    dav_getpath(&fname, mailbox);
+    carddavdb = carddav_open_fname(buf_cstring(&fname), flags);
+    buf_free(&fname);
 
     return carddavdb;
 }

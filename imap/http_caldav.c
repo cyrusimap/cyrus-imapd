@@ -407,7 +407,7 @@ static struct caldav_db *my_caldav_open(struct mailbox *mailbox)
 	return auth_caldavdb;
     }
     else {
-	return caldav_open(mailbox, CALDAV_CREATE);
+	return caldav_open_mailbox(mailbox, CALDAV_CREATE);
     }
 }
 
@@ -468,12 +468,8 @@ static void my_caldav_auth(const char *userid)
     }
     else {
 	/* Open CalDAV DB for 'userid' */
-	struct mailbox mailbox;
-
-	mailbox.name = (char *)mailboxname;
-
 	my_caldav_reset();
-	auth_caldavdb = caldav_open(&mailbox, CALDAV_CREATE);
+	auth_caldavdb = caldav_open_userid(userid, CALDAV_CREATE);
 	if (!auth_caldavdb) fatal("Unable to open CalDAV DB", EC_IOERR);
     }
 
@@ -485,14 +481,16 @@ static void my_caldav_auth(const char *userid)
 	if (config_mupdate_server) {
 	    /* Find location of INBOX */
 	    const char *inboxname = mboxname_user_mbox(userid, NULL);
-	    char *server;
+	    mbentry_t *mbentry = NULL;
 
-	    r = http_mlookup(inboxname, &server, NULL, NULL);
-	    if (!r && server) {
-		proxy_findserver(server, &http_protocol, proxy_userid,
+	    r = http_mlookup(inboxname, &mbentry, NULL);
+	    if (!r && mbentry->server) {
+		proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
 				 &backend_cached, NULL, NULL, httpd_in);
+		mboxlist_entry_free(&mbentry);
 		return;
 	    }
+	    mboxlist_entry_free(&mbentry);
 	}
 
 	/* will have been overwritten */
@@ -805,17 +803,18 @@ static int caldav_copy(struct transaction_t *txn,
 		       struct caldav_db *dest_davdb,
 		       unsigned overwrite, unsigned flags)
 {
-    int ret;
+    int r;
 
-    const char *msg_base = NULL, *organizer = NULL;
-    unsigned long msg_size = 0;
+    const char *organizer = NULL;
+    struct buf msg_buf = BUF_INITIALIZER;
     icalcomponent *ical, *comp;
     icalproperty *prop;
 
     /* Load message containing the resource and parse iCal data */
-    mailbox_map_message(src_mbox, src_rec->uid, &msg_base, &msg_size);
-    ical = icalparser_parse_string(msg_base + src_rec->header_size);
-    mailbox_unmap_message(src_mbox, src_rec->uid, &msg_base, &msg_size);
+    r = mailbox_map_record(src_mbox, src_rec, &msg_buf);
+    if (r) return r;
+    ical = icalparser_parse_string(buf_base(&msg_buf) + src_rec->header_size);
+    buf_free(&msg_buf);
 
     if (!ical) {
 	txn->error.precond = CALDAV_VALID_DATA;
@@ -833,12 +832,12 @@ static int caldav_copy(struct transaction_t *txn,
     }
 
     /* Store source resource at destination */
-    ret = store_resource(txn, ical, dest_mbox, dest_rsrc, dest_davdb,
+    r = store_resource(txn, ical, dest_mbox, dest_rsrc, dest_davdb,
 			 overwrite, flags);
 
     icalcomponent_free(ical);
 
-    return ret;
+    return r;
 }
 
 
@@ -848,7 +847,7 @@ static int caldav_delete_sched(struct transaction_t *txn,
 			       struct index_record *record, void *data)
 {
     struct caldav_data *cdata = (struct caldav_data *) data;
-    int ret = 0;
+    int r = 0;
 
     if (!(namespace_calendar.allow & ALLOW_CAL_SCHED)) return 0;
 
@@ -857,16 +856,17 @@ static int caldav_delete_sched(struct transaction_t *txn,
     }
     else if (cdata->sched_tag) {
 	/* Scheduling object resource */
-	const char *msg_base = NULL, *userid, *organizer, **hdr;
-	unsigned long msg_size = 0;
+	const char *userid, *organizer, **hdr;
+	struct buf msg_buf = BUF_INITIALIZER;
 	icalcomponent *ical, *comp;
 	icalproperty *prop;
 	struct sched_param sparam;
 
 	/* Load message containing the resource and parse iCal data */
-	mailbox_map_message(mailbox, record->uid, &msg_base, &msg_size);
-	ical = icalparser_parse_string(msg_base + record->header_size);
-	mailbox_unmap_message(mailbox, record->uid, &msg_base, &msg_size);
+	r = mailbox_map_record(mailbox, record, &msg_buf);
+	if (r) return r;
+	ical = icalparser_parse_string(buf_base(&msg_buf) + record->header_size);
+	buf_free(&msg_buf);
 
 	if (!ical) {
 	    syslog(LOG_ERR,
@@ -889,7 +889,7 @@ static int caldav_delete_sched(struct transaction_t *txn,
 		   " (org=%s, att=%s)",
 		   txn->req_tgt.mboxname, organizer, userid);
 	    txn->error.desc = "Failed to lookup organizer address\r\n";
-	    ret = HTTP_SERVER_ERROR;
+	    r = HTTP_SERVER_ERROR;
 	    goto done;
 	}
 
@@ -907,7 +907,7 @@ static int caldav_delete_sched(struct transaction_t *txn,
 	icalcomponent_free(ical);
     }
 
-    return ret;
+    return r;
 }
 
 static const char *begin_icalendar(struct buf *buf)
@@ -1011,8 +1011,7 @@ static int dump_calendar(struct transaction_t *txn, struct meth_params *gparams)
     write_body(HTTP_OK, txn, buf_cstring(buf), buf_len(buf));
 
     for (r = 0, recno = 1; recno <= mailbox->i.num_records; recno++) {
-	const char *msg_base = NULL;
-	unsigned long msg_size = 0;
+	struct buf msg_buf = BUF_INITIALIZER;
 	icalcomponent *ical;
 
 	if (mailbox_read_index_record(mailbox, recno, &record)) continue;
@@ -1020,9 +1019,9 @@ static int dump_calendar(struct transaction_t *txn, struct meth_params *gparams)
 	if (record.system_flags & (FLAG_EXPUNGED | FLAG_DELETED)) continue;
 
 	/* Map and parse existing iCalendar resource */
-	mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
-	ical = icalparser_parse_string(msg_base + record.header_size);
-	mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
+	if (mailbox_map_record(mailbox, &record, &msg_buf)) continue;
+	ical = icalparser_parse_string(buf_base(&msg_buf) + record.header_size);
+	buf_free(&msg_buf);
 
 	if (ical) {
 	    icalcomponent *comp;
@@ -1092,7 +1091,8 @@ static int list_cb(char *name,
     struct buf *url = &txn->buf;
     static size_t inboxlen = 0;
     static size_t outboxlen = 0;
-    char *acl, *shortname;
+    char *shortname;
+    mbentry_t *mbentry = NULL;
     size_t len;
     int r;
     static const char *displayname_annot =
@@ -1108,15 +1108,15 @@ static int list_cb(char *name,
     /* Don't list scheduling Inbox/Outbox */
     if ((len == inboxlen && !strncmp(shortname, SCHED_INBOX, inboxlen)) ||
 	(len == outboxlen && !strncmp(shortname, SCHED_OUTBOX, outboxlen)))
-	return 0;
+	goto done;
 
     /* Don't list deleted mailboxes */
-    if (mboxname_isdeletedmailbox(name, 0)) return 0;
+    if (mboxname_isdeletedmailbox(name, 0)) goto done;
 
     /* Lookup the mailbox and make sure its readable */
-    http_mlookup(name, NULL, &acl, NULL);
-    if (!acl || !(cyrus_acl_myrights(httpd_authstate, acl) & ACL_READ))
-	return 0;
+    r = http_mlookup(name, &mbentry, NULL);
+    if (r || !mbentry->acl || !(cyrus_acl_myrights(httpd_authstate, mbentry->acl) & ACL_READ))
+	goto done;
 
     /* Send a body chunk once in a while */
     if (buf_len(body) > PROT_BUFSIZE) {
@@ -1133,9 +1133,10 @@ static int list_cb(char *name,
     len = buf_len(url);
     buf_printf_markup(body, 3, "<li><a href=\"%s%s\">%s</a></li>",
 		      buf_cstring(url), shortname, buf_cstring(&displayname));
-    buf_truncate(url, len);
 
+done:
     buf_free(&displayname);
+    mboxlist_entry_free(&mbentry);
 
     return 0;
 }
@@ -1236,7 +1237,7 @@ static int meth_get(struct transaction_t *txn, void *params)
 {
     struct meth_params *gparams = (struct meth_params *) params;
     int r, rights;
-    char *server, *acl;
+    mbentry_t *mbentry = NULL;
 
     /* Parse the path */
     if ((r = gparams->parse_path(txn->req_uri->path,
@@ -1246,7 +1247,8 @@ static int meth_get(struct transaction_t *txn, void *params)
     if (txn->req_tgt.resource) return meth_get_dav(txn, gparams);
 
     /* Locate the mailbox */
-    if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
+    r = http_mlookup(txn->req_tgt.mboxname, &mbentry, NULL);
+    if (r) {
 	syslog(LOG_ERR, "mlookup(%s) failed: %s",
 	       txn->req_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
@@ -1259,25 +1261,29 @@ static int meth_get(struct transaction_t *txn, void *params)
     }
 
     /* Check ACL for current user */
-    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
+    rights = mbentry->acl ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
     if ((rights & DACL_READ) != DACL_READ) {
 	/* DAV:need-privileges */
 	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
 	txn->error.rights = DACL_READ;
+	mboxlist_entry_free(&mbentry);
 	return HTTP_FORBIDDEN;
     }
 
-    if (server) {
+    if (mbentry->server) {
 	/* Remote mailbox */
 	struct backend *be;
 
-	be = proxy_findserver(server, &http_protocol, proxy_userid,
+	be = proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
 			      &backend_cached, NULL, NULL, httpd_in);
+	mboxlist_entry_free(&mbentry);
 	if (!be) return HTTP_UNAVAILABLE;
 
 	return http_pipe_req_resp(be, txn);
     }
+
+    mboxlist_entry_free(&mbentry);
 
     /* Local Mailbox */
 
@@ -1293,7 +1299,8 @@ static int meth_get(struct transaction_t *txn, void *params)
 static int caldav_post(struct transaction_t *txn)
 {
     int ret = 0, r, rights;
-    char *acl, orgid[MAX_MAILBOX_NAME+1] = "";
+    char orgid[MAX_MAILBOX_NAME+1] = "";
+    mbentry_t *mbentry = NULL;
     const char **hdr;
     struct mime_type_t *mime = NULL;
     icalcomponent *ical = NULL, *comp;
@@ -1326,7 +1333,8 @@ static int caldav_post(struct transaction_t *txn)
     }
 
     /* Locate the mailbox */
-    if ((r = http_mlookup(txn->req_tgt.mboxname, NULL, &acl, NULL))) {
+    r = http_mlookup(txn->req_tgt.mboxname, &mbentry, NULL);
+    if (r) {
 	syslog(LOG_ERR, "mlookup(%s) failed: %s",
 	       txn->req_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
@@ -1339,7 +1347,8 @@ static int caldav_post(struct transaction_t *txn)
     }
 
     /* Get rights for current user */
-    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
+    rights = mbentry->acl ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
+    mboxlist_entry_free(&mbentry);
 
     /* Read body */
     txn->req_body.flags |= BODY_DECODE;
@@ -1515,9 +1524,8 @@ static int caldav_put(struct transaction_t *txn,
     switch (kind) {
     case ICAL_VEVENT_COMPONENT:
     case ICAL_VTODO_COMPONENT:
-	if ((namespace_calendar.allow & ALLOW_CAL_SCHED) && organizer
-	    /* XXX  Hack for Outlook */
-	    && icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY)) {
+	if ((namespace_calendar.allow & ALLOW_CAL_SCHED) && organizer &&
+	     icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY)) {
 	    /* Scheduling object resource */
 	    const char *userid;
 	    struct caldav_data *cdata;
@@ -1565,14 +1573,19 @@ static int caldav_put(struct transaction_t *txn,
 	    if (cdata->dav.imap_uid) {
 		/* Update existing object */
 		struct index_record record;
-		const char *msg_base = NULL;
-		unsigned long msg_size = 0;
+		struct buf msg_buf = BUF_INITIALIZER;
+		int r;
 
 		/* Load message containing the resource and parse iCal data */
-		mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
-		mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
-		oldical = icalparser_parse_string(msg_base + record.header_size);
-		mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
+		r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record, NULL);
+		if (!r) r = mailbox_map_record(mailbox, &record, &msg_buf);
+		if (r) {
+		    txn->error.desc = "Failed to read record \r\n";
+		    ret = HTTP_SERVER_ERROR;
+		    goto done;
+		}
+		oldical = icalparser_parse_string(buf_base(&msg_buf) + record.header_size);
+		buf_free(&msg_buf);
 	    }
 
 	    if (!strcmp(sparam.userid, userid)) {
@@ -1719,10 +1732,11 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
 	    icaltime_span rangespan;
 	    unsigned firstr, lastr;
 
-	    mailbox_map_message(fctx->mailbox, fctx->record->uid,
-				&fctx->msg_base, &fctx->msg_size);
+	    /* XXX - error */
+	    if (mailbox_map_record(fctx->mailbox, fctx->record, &fctx->msg_buf))
+		return 0;
 
-	    ical = icalparser_parse_string(fctx->msg_base +
+	    ical = icalparser_parse_string(buf_base(&fctx->msg_buf) +
 					   fctx->record->header_size);
 
 	    comp = icalcomponent_get_first_real_component(ical);
@@ -2057,13 +2071,12 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
     if (propstat) {
 	if (!fctx->record) return HTTP_NOT_FOUND;
 
-	if (!fctx->msg_base) {
-	    mailbox_map_message(fctx->mailbox, fctx->record->uid,
-				&fctx->msg_base, &fctx->msg_size);
+	if (!fctx->msg_buf.len) {
+	    mailbox_map_record(fctx->mailbox, fctx->record, &fctx->msg_buf);
 	}
-	if (!fctx->msg_base) return HTTP_SERVER_ERROR;
+	if (!fctx->msg_buf.len) return HTTP_SERVER_ERROR;
 
-	data = fctx->msg_base + fctx->record->header_size;
+	data = fctx->msg_buf.s + fctx->record->header_size;
 	datalen = fctx->record->size - fctx->record->header_size;
     }
 
@@ -2203,11 +2216,13 @@ static int proppatch_calcompset(xmlNodePtr prop, unsigned set,
 	    /* All component types are valid */
 	    const char *prop_annot =
 		ANNOT_NS "CALDAV:supported-calendar-component-set";
+	    annotate_state_t *astate = NULL;
 
 	    buf_reset(&pctx->buf);
 	    buf_printf(&pctx->buf, "%lu", types);
 
-	    r = annotate_state_write(pctx->astate, prop_annot, /*userid*/NULL, &pctx->buf);
+	    r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
+	    if (!r) r = annotate_state_write(astate, prop_annot, /*userid*/NULL, &pctx->buf);
 
 	    if (!r) {
 		xml_add_prop(HTTP_OK, pctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
@@ -2365,6 +2380,7 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
     if (pctx->req_tgt->collection && !pctx->req_tgt->resource) {
 	const char *prop_annot =
 	    ANNOT_NS "CALDAV:schedule-calendar-transp";
+	annotate_state_t *astate = NULL;
 
 	buf_reset(&pctx->buf);
 
@@ -2394,7 +2410,8 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
 	    }
 	}
 
-	r = annotate_state_write(pctx->astate, prop_annot, /*userid*/NULL, &pctx->buf);
+	r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
+	if (!r) r = annotate_state_write(astate, prop_annot, /*userid*/NULL, &pctx->buf);
 	if (!r) {
 	    xml_add_prop(HTTP_OK, pctx->ns[NS_DAV],
 			 &propstat[PROPSTAT_OK], prop->name, prop->ns, NULL, 0);
@@ -2539,11 +2556,14 @@ static int proppatch_timezone(xmlNodePtr prop, unsigned set,
 	}
 
 	if (valid) {
+	    annotate_state_t *astate = NULL;
+
 	    buf_reset(&pctx->buf);
 	    buf_printf(&pctx->buf, ANNOT_NS "<%s>%s",
 		       (const char *) prop->ns->href, prop->name);
 
-	    r = annotate_state_write(pctx->astate, buf_cstring(&pctx->buf), /*userid*/NULL, &buf);
+	    r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
+	    if (!r) r = annotate_state_write(astate, buf_cstring(&pctx->buf), /*userid*/NULL, &buf);
 	    if (!r) {
 		xml_add_prop(HTTP_OK, pctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			     prop->name, prop->ns, NULL, 0);
@@ -2639,12 +2659,14 @@ static int proppatch_availability(xmlNodePtr prop, unsigned set,
 	}
 
 	if (valid) {
+	    struct annotate_state *astate = NULL;
 	    int r;
 	    buf_reset(&pctx->buf);
 	    buf_printf(&pctx->buf, ANNOT_NS "<%s>%s",
 		       (const char *) prop->ns->href, prop->name);
 
-	    r = annotate_state_write(pctx->astate, buf_cstring(&pctx->buf), /*userid*/NULL, &buf);
+	    r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
+	    r = annotate_state_write(astate, buf_cstring(&pctx->buf), /*userid*/NULL, &buf);
 	    if (!r) {
 		xml_add_prop(HTTP_OK, pctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			     prop->name, prop->ns, NULL, 0);
@@ -2801,8 +2823,12 @@ static int report_cal_multiget(struct transaction_t *txn,
 	    fctx->davdb = my_caldav_open(fctx->mailbox);
 
 	    /* Find message UID for the resource */
-	    caldav_lookup_resource(fctx->davdb,
+	    r = caldav_lookup_resource(fctx->davdb,
 				   tgt.mboxname, tgt.resource, 0, &cdata);
+	    if (r) {
+		ret = HTTP_NOT_FOUND;
+		goto done;
+	    }
 	    cdata->dav.resource = tgt.resource;
 	    /* XXX  Check errors */
 
@@ -2832,18 +2858,13 @@ static int busytime_by_resource(void *rock, void *data)
     if (!ddata->imap_uid) return 0;
 
     /* Fetch index record for the resource */
-    r = mailbox_find_index_record(fctx->mailbox, ddata->imap_uid, &record);
+    r = mailbox_find_index_record(fctx->mailbox, ddata->imap_uid, &record, NULL);
     if (r) return 0;
 
     fctx->record = &record;
     (void) apply_calfilter(fctx, data);
 
-    if (fctx->msg_base) {
-	mailbox_unmap_message(fctx->mailbox, fctx->record->uid,
-			      &fctx->msg_base, &fctx->msg_size);
-    }
-    fctx->msg_base = NULL;
-    fctx->msg_size = 0;
+    buf_free(&fctx->msg_buf);
     fctx->record = NULL;
 
     return 0;
@@ -3145,7 +3166,8 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     if (cdata->dav.imap_uid) {
 	/* Fetch index record for the resource */
 	r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid,
-				      &oldrecord);
+				      &oldrecord, NULL);
+	if (r) return HTTP_SERVER_ERROR;
 
 	if (overwrite == OVERWRITE_CHECK) {
 	    /* Check any preconditions */
@@ -3356,24 +3378,24 @@ int caladdress_lookup(const char *addr, struct sched_param *param)
     if (islocal) {
 	/* User is in a local domain */
 	int r;
-	static const char *calendarprefix = NULL;
-	char mailboxname[MAX_MAILBOX_BUFFER];
+	char mailboxname[MAX_MAILBOX_NAME];
+	mbentry_t *mbentry = NULL;
+	struct mboxname_parts parts;
 
 	if (!found) return HTTP_NOT_FOUND;
 	else param->userid = userid;
 
 	/* Lookup user's cal-home-set to see if its on this server */
-	if (!calendarprefix) {
-	    calendarprefix = config_getstring(IMAPOPT_CALENDARPREFIX);
-	}
 
-	mboxname_hiersep_tointernal(&httpd_namespace, userid, 0);
-	snprintf(mailboxname, sizeof(mailboxname),
-		 "user.%s.%s", param->userid, calendarprefix);
+	mboxname_userid_to_parts(userid, &parts);
+	parts.box = xstrdupnull(config_getstring(IMAPOPT_CALENDARPREFIX));
+	mboxname_parts_to_internal(&parts, mailboxname);
 
-	if ((r = http_mlookup(mailboxname, &param->server, NULL, NULL))) {
+	r = http_mlookup(mailboxname, &mbentry, NULL);
+	if (r) {
 	    syslog(LOG_ERR, "mlookup(%s) failed: %s",
 		   mailboxname, error_message(r));
+	    mboxname_free_parts(&parts);
 
 	    switch (r) {
 	    case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
@@ -3381,6 +3403,9 @@ int caladdress_lookup(const char *addr, struct sched_param *param)
 	    default: return HTTP_SERVER_ERROR;
 	    }
 	}
+	mboxname_free_parts(&parts);
+	param->server = xstrdupnull(mbentry->server); /* XXX - memory leak */
+	mboxlist_entry_free(&mbentry);
 
 	if (param->server) param->flags |= SCHEDTYPE_ISCHEDULE;
     }
@@ -4339,7 +4364,7 @@ static void sched_deliver_local(const char *recipient,
     method = icalcomponent_get_method(sched_data->itip);
 
     /* Search for iCal UID in recipient's calendars */
-    caldavdb = caldav_open(inbox, CALDAV_CREATE);
+    caldavdb = caldav_open_userid(userid, CALDAV_CREATE);
     if (!caldavdb) {
 	sched_data->status =
 	    sched_data->ischedule ? REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
@@ -4395,7 +4420,8 @@ static void sched_deliver_local(const char *recipient,
     }
 
     /* Open recipient's calendar for reading */
-    if ((r = mailbox_open_irl(mailboxname, &mailbox))) {
+    r = mailbox_open_irl(mailboxname, &mailbox);
+    if (r) {
 	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
 	       mailboxname, error_message(r));
 	sched_data->status =
@@ -4405,14 +4431,18 @@ static void sched_deliver_local(const char *recipient,
 
     if (cdata->dav.imap_uid) {
 	struct index_record record;
-	const char *msg_base = NULL;
-	unsigned long msg_size = 0;
+	struct buf msg_buf = BUF_INITIALIZER;
 
 	/* Load message containing the resource and parse iCal data */
-	mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
-	mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
-	ical = icalparser_parse_string(msg_base + record.header_size);
-	mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
+	r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record, NULL);
+	if (!r) r = mailbox_map_record(mailbox, &record, &msg_buf);
+	if (r) {
+	    syslog(LOG_ERR, "mailbox_map_record(%s, %u) failed: %s",
+		   mailbox->name, record.uid, error_message(r));
+	    goto done;
+	}
+	ical = icalparser_parse_string(buf_base(&msg_buf) + record.header_size);
+	buf_free(&msg_buf);
     }
 
     switch (method) {
