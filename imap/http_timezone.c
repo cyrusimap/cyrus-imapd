@@ -409,8 +409,7 @@ static int action_list(struct transaction_t *txn, struct hash_table *params)
 
     /* Generate ETag & Last-Modified from info record */
     assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "%ld-%u",
-	       info.dtstamp, strhash(info.data->s));
+    buf_printf(&txn->buf, "%u-%ld", strhash(info.data->s), info.dtstamp);
     lastmod = info.dtstamp;
     freestrlist(info.data);
 
@@ -699,7 +698,7 @@ static int action_get_all(struct transaction_t *txn, struct mime_type_t *mime)
 
     /* Generate ETag & Last-Modified from info record */
     assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "%ld-%u", info.dtstamp, strhash(info.data->s));
+    buf_printf(&txn->buf, "%u-%ld", strhash(info.data->s), info.dtstamp);
     lastmod = info.dtstamp;
     freestrlist(info.data);
 
