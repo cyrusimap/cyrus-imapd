@@ -263,6 +263,48 @@ HIDDEN void mboxname_release(struct mboxlock **mboxlockptr)
  * one end to the other and such.  Yay flexibility.
  */
 
+EXPORTED int mboxname_parts_to_internal(struct mboxname_parts *parts,
+					char *result)
+{
+    char *p = result;
+    size_t sz = MAX_MAILBOX_NAME;
+    size_t len;
+    const char *dp = config_getstring(IMAPOPT_DELETEDPREFIX);
+    const char *pf = "";
+
+    if (parts->domain) {
+	len = snprintf(p, sz, "%s!", parts->domain);
+	p += len;
+	sz -= len;
+	if (!sz) return IMAP_MAILBOX_BADNAME;
+    }
+
+    if (parts->is_deleted) {
+	len = snprintf(p, sz, "%s%s", pf, dp);
+	p += len;
+	sz -= len;
+	if (!sz) return IMAP_MAILBOX_BADNAME;
+	pf = ".";
+    }
+
+    if (parts->userid) {
+	len = snprintf(p, sz, "%suser.%s", pf, parts->userid);
+	p += len;
+	sz -= len;
+	if (!sz) return IMAP_MAILBOX_BADNAME;
+	pf = ".";
+    }
+
+    if (parts->box) {
+	len = snprintf(p, sz, "%s%s", pf, parts->box);
+	p += len;
+	sz -= len;
+	if (!sz) return IMAP_MAILBOX_BADNAME;
+    }
+
+    return 0;
+}
+
 /* Handle conversion from the standard namespace to the internal namespace */
 static int mboxname_tointernal(struct namespace *namespace, const char *name,
 			       const char *userid, char *result)

@@ -147,6 +147,13 @@ int mboxname_isdeletedmailbox(const char *name, time_t *timestampp);
  */
 int mboxname_to_parts(const char *mboxname, struct mboxname_parts *parts);
 int mboxname_userid_to_parts(const char *userid, struct mboxname_parts *parts);
+
+/*
+ * Create an (internal) mboxname from parts
+ */
+
+int mboxname_parts_to_internal(struct mboxname_parts *parts, char *target);
+
 /*
  * Cleanup up a mboxname_parts structure.
  */
