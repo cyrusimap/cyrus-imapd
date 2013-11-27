@@ -602,7 +602,7 @@ int mailbox_append_cache(struct mailbox *mailbox,
 
     /* and now read it straight back in to ensure we're always
      * fresh */
-    r = mailbox_ensure_cache(mailbox, record->cache_offset);
+    r = mailbox_ensure_cache(mailbox, record->cache_offset + record->crec.len);
     if (r) return r;
 
     /* try to parse the cache record */
@@ -630,7 +630,7 @@ EXPORTED int mailbox_cacherecord(struct mailbox *mailbox,
 	r = IMAP_IOERROR;
     if (r) goto done;
 
-    r = mailbox_ensure_cache(mailbox, record->cache_offset);
+    r = mailbox_ensure_cache(mailbox, record->cache_offset + record->crec.len);
     if (r) goto done;
 
     /* try to parse the cache record */
