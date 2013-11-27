@@ -1081,7 +1081,7 @@ EXPORTED int mboxname_to_parts(const char *mboxname, struct mboxname_parts *part
     return 0;
 }
 
-int mboxname_userid_to_parts(const char *userid, struct mboxname_parts *parts)
+EXPORTED int mboxname_userid_to_parts(const char *userid, struct mboxname_parts *parts)
 {
     char *b, *e;    /* beginning and end of string parts */
 
@@ -1102,7 +1102,7 @@ int mboxname_userid_to_parts(const char *userid, struct mboxname_parts *parts)
     return 0;
 }
 
-HIDDEN void mboxname_init_parts(struct mboxname_parts *parts)
+EXPORTED void mboxname_init_parts(struct mboxname_parts *parts)
 {
     memset(parts, 0, sizeof(*parts));
 }

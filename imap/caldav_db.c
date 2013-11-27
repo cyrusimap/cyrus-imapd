@@ -154,7 +154,7 @@ EXPORTED struct caldav_db *caldav_open(const char *userid, int flags)
 	caldavdb->db = db;
 
 	/* Construct mailbox name corresponding to userid's scheduling Inbox */
-	caldav_mboxname(SCHED_INBOX, userid, caldavdb->sched_inbox);
+	strcpy(caldavdb->sched_inbox, caldav_mboxname(userid, SCHED_INBOX));
     }
 
     return caldavdb;
@@ -786,22 +786,22 @@ EXPORTED void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata)
 }
 
 
-EXPORTED int caldav_mboxname(const char *name, const char *userid, char *result)
+EXPORTED const char *caldav_mboxname(const char *userid, const char *name)
 {
-    size_t len;
+    struct buf boxbuf = BUF_INITIALIZER;
+    const char *res = NULL;
 
-    /* Construct mailbox name corresponding to userid's calendar mailbox */
-    (*caldav_namespace.mboxname_tointernal)(&caldav_namespace, "INBOX",
-					    userid, result);
-    len = strlen(result);
-    len += snprintf(result+len, MAX_MAILBOX_BUFFER - len,
-		    ".%s", config_getstring(IMAPOPT_CALENDARPREFIX));
-    if (name && *name) {
-	len += snprintf(result+len, MAX_MAILBOX_BUFFER - len,
-			".%s", name);
+    buf_setcstr(&boxbuf, config_getstring(IMAPOPT_CALENDARPREFIX));
+
+    if (name) {
+	size_t len = strcspn(name, "/");
+	buf_putc(&boxbuf, '.');
+	buf_appendmap(&boxbuf, name, len);
     }
 
-    if (result[len-1] == '/') result[len-1] = '\0';
+    res = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
 
-    return 0;
+    buf_free(&boxbuf);
+
+    return res;
 }

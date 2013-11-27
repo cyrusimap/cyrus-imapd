@@ -326,9 +326,8 @@ static void my_carddav_init(struct buf *serverinfo)
 static void my_carddav_auth(const char *userid)
 {
     int r;
-    size_t len;
-    char mailboxname[MAX_MAILBOX_BUFFER];
-    char ident[MAX_MAILBOX_NAME];
+    struct buf boxbuf = BUF_INITIALIZER;
+    const char *mailboxname;
 
     if (httpd_userisadmin ||
 	global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
@@ -345,38 +344,27 @@ static void my_carddav_auth(const char *userid)
 	if (!auth_carddavdb) fatal("Unable to open CardDAV DB", EC_IOERR);
     }
 
+    buf_setcstr(&boxbuf, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
+
+    mailboxname = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
+
     /* Auto-provision an addressbook for 'userid' */
-    strlcpy(ident, userid, sizeof(ident));
-    mboxname_hiersep_toexternal(&httpd_namespace, ident, 0);
-
-    /* Construct mailbox name corresponding to userid's Inbox */
-    (*carddav_namespace.mboxname_tointernal)(&carddav_namespace, "INBOX",
-					     userid, mailboxname);
-    len = strlen(mailboxname);
-
-    /* addressbook-home-set */
-    len += snprintf(mailboxname+len, MAX_MAILBOX_BUFFER - len, ".%s",
-		    config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
     r = mboxlist_lookup(mailboxname, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	if (config_mupdate_server) {
 	    /* Find location of INBOX */
-	    char inboxname[MAX_MAILBOX_BUFFER];
+	    const char *inboxname = mboxname_user_mbox(userid, NULL);
+	    char *server;
 
-	    r = (*httpd_namespace.mboxname_tointernal)(&httpd_namespace,
-						       "INBOX",
-						       userid, inboxname);
-	    if (!r) {
-		char *server;
-
-		r = http_mlookup(inboxname, &server, NULL, NULL);
-		if (!r && server) {
-		    proxy_findserver(server, &http_protocol, proxy_userid,
-				     &backend_cached, NULL, NULL, httpd_in);
-		    return;
-		}
+	    r = http_mlookup(inboxname, &server, NULL, NULL);
+	    if (!r && server) {
+		proxy_findserver(server, &http_protocol, proxy_userid,
+				 &backend_cached, NULL, NULL, httpd_in);
+		return;
 	    }
 	}
+
+	mailboxname = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
 
 	/* XXX - set rights */
 	r = mboxlist_createmailbox(mailboxname, MBTYPE_ADDRESSBOOK,
@@ -387,8 +375,9 @@ static void my_carddav_auth(const char *userid)
     if (r) return;
 
     /* Default addressbook */
-    snprintf(mailboxname+len, MAX_MAILBOX_BUFFER - len, ".%s",
-	     DEFAULT_ADDRBOOK);
+    buf_setcstr(&boxbuf, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
+    buf_printf(&boxbuf, ".%s", DEFAULT_ADDRBOOK);
+    mailboxname = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
     r = mboxlist_lookup(mailboxname, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	/* XXX - set rights */
@@ -418,8 +407,9 @@ static int carddav_parse_path(const char *path,
 			      struct request_target_t *tgt, const char **errstr)
 {
     char *p;
-    size_t len, siz;
-    static const char *prefix = NULL;
+    size_t len;
+    struct mboxname_parts parts;
+    struct buf boxbuf = BUF_INITIALIZER;
 
     /* Make a working copy of target path */
     strlcpy(tgt->path, path, sizeof(tgt->path));
@@ -499,31 +489,27 @@ static int carddav_parse_path(const char *path,
     else if (tgt->user) tgt->allow |= ALLOW_DELETE;
 
 
-    /* Create mailbox name from the parsed path */ 
-    if (!prefix) prefix = config_getstring(IMAPOPT_ADDRESSBOOKPREFIX);
+    /* Create mailbox name from the parsed path */
 
-    p = tgt->mboxname;
-    siz = MAX_MAILBOX_BUFFER;
-    if (tgt->user) {
-	len = snprintf(p, siz, "user");
-	p += len;
-	siz -= len;
+    mboxname_init_parts(&parts);
 
-	if (tgt->userlen) {
-	    len = snprintf(p, siz, ".%.*s", (int) tgt->userlen, tgt->user);
-	    mboxname_hiersep_tointernal(&httpd_namespace, p+1, tgt->userlen);
-	    p += len;
-	    siz -= len;
-	}
+    if (tgt->user && tgt->userlen) {
+        /* holy "avoid copying" batman */
+        char *userid = xstrndup(tgt->user, tgt->userlen);
+        mboxname_userid_to_parts(userid, &parts);
+        free(userid);
     }
 
-    len = snprintf(p, siz, "%s%s", p != tgt->mboxname ? "." : "", prefix);
-    p += len;
-    siz -= len;
-
-    if (tgt->collection) {
-	snprintf(p, siz, ".%.*s", (int) tgt->collen, tgt->collection);
+    buf_setcstr(&boxbuf, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
+    if (tgt->collen) {
+        buf_putc(&boxbuf, '.');
+        buf_appendmap(&boxbuf, tgt->collection, tgt->collen);
     }
+    parts.box = buf_release(&boxbuf);
+
+    mboxname_parts_to_internal(&parts, tgt->mboxname);
+
+    mboxname_free_parts(&parts);
 
     return 0;
 }

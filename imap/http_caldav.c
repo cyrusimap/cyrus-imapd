@@ -411,8 +411,8 @@ static void my_caldav_init(struct buf *serverinfo)
 
 static void my_caldav_auth(const char *userid)
 {
+    const char *mailboxname;
     int r;
-    char mailboxname[MAX_MAILBOX_BUFFER];
 
     if (httpd_userisadmin ||
 	global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
@@ -432,28 +432,24 @@ static void my_caldav_auth(const char *userid)
     /* Auto-provision calendars for 'userid' */
 
     /* calendar-home-set */
-    caldav_mboxname(NULL, userid, mailboxname);
+    mailboxname = caldav_mboxname(userid, NULL);
     r = mboxlist_lookup(mailboxname, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	if (config_mupdate_server) {
 	    /* Find location of INBOX */
-	    char inboxname[MAX_MAILBOX_BUFFER];
+	    const char *inboxname = mboxname_user_mbox(userid, NULL);
+	    char *server;
 
-	    r = (*httpd_namespace.mboxname_tointernal)(&httpd_namespace,
-						       "INBOX",
-						       userid, inboxname);
-	    if (!r) {
-		char *server;
-
-		r = http_mlookup(inboxname, &server, NULL, NULL);
-		if (!r && server) {
-		    proxy_findserver(server, &http_protocol, proxy_userid,
-				     &backend_cached, NULL, NULL, httpd_in);
-
-		    return;
-		}
+	    r = http_mlookup(inboxname, &server, NULL, NULL);
+	    if (!r && server) {
+		proxy_findserver(server, &http_protocol, proxy_userid,
+				 &backend_cached, NULL, NULL, httpd_in);
+		return;
 	    }
 	}
+
+	/* will have been overwritten */
+	mailboxname = caldav_mboxname(userid, NULL);
 
 	/* Create locally */
 	r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR,
@@ -463,7 +459,7 @@ static void my_caldav_auth(const char *userid)
     }
 
     /* Default calendar */
-    caldav_mboxname(SCHED_DEFAULT, userid, mailboxname);
+    mailboxname = caldav_mboxname(userid, SCHED_DEFAULT);
     r = mboxlist_lookup(mailboxname, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR,
@@ -473,7 +469,7 @@ static void my_caldav_auth(const char *userid)
     }
 
     /* Scheduling Inbox */
-    caldav_mboxname(SCHED_INBOX, userid, mailboxname);
+    mailboxname = caldav_mboxname(userid, SCHED_INBOX);
     r = mboxlist_lookup(mailboxname, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR,
@@ -483,7 +479,7 @@ static void my_caldav_auth(const char *userid)
     }
 
     /* Scheduling Outbox */
-    caldav_mboxname(SCHED_OUTBOX, userid, mailboxname);
+    mailboxname = caldav_mboxname(userid, SCHED_OUTBOX);
     r = mboxlist_lookup(mailboxname, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR,
@@ -512,8 +508,9 @@ static int caldav_parse_path(const char *path,
 			     struct request_target_t *tgt, const char **errstr)
 {
     char *p;
-    size_t len, siz;
-    static const char *prefix = NULL;
+    size_t len;
+    struct mboxname_parts parts;
+    struct buf boxbuf = BUF_INITIALIZER;
 
     /* Make a working copy of target path */
     strlcpy(tgt->path, path, sizeof(tgt->path));
@@ -601,32 +598,27 @@ static int caldav_parse_path(const char *path,
     }
     else if (tgt->user) tgt->allow |= ALLOW_DELETE;
 
+    /* Create mailbox name from the parsed path */
 
-    /* Create mailbox name from the parsed path */ 
-    if (!prefix) prefix = config_getstring(IMAPOPT_CALENDARPREFIX);
+    mboxname_init_parts(&parts);
 
-    p = tgt->mboxname;
-    siz = MAX_MAILBOX_BUFFER;
-    if (tgt->user) {
-	len = snprintf(p, siz, "user");
-	p += len;
-	siz -= len;
-
-	if (tgt->userlen) {
-	    len = snprintf(p, siz, ".%.*s", (int) tgt->userlen, tgt->user);
-	    mboxname_hiersep_tointernal(&httpd_namespace, p+1, tgt->userlen);
-	    p += len;
-	    siz -= len;
-	}
+    if (tgt->user && tgt->userlen) {
+	/* holy "avoid copying" batman */
+	char *userid = xstrndup(tgt->user, tgt->userlen);
+	mboxname_userid_to_parts(userid, &parts);
+	free(userid);
     }
 
-    len = snprintf(p, siz, "%s%s", p != tgt->mboxname ? "." : "", prefix);
-    p += len;
-    siz -= len;
-
-    if (tgt->collection) {
-	snprintf(p, siz, ".%.*s", (int) tgt->collen, tgt->collection);
+    buf_setcstr(&boxbuf, config_getstring(IMAPOPT_CALENDARPREFIX));
+    if (tgt->collen) {
+	buf_putc(&boxbuf, '.');
+	buf_appendmap(&boxbuf, tgt->collection, tgt->collen);
     }
+    parts.box = buf_release(&boxbuf);
+
+    mboxname_parts_to_internal(&parts, tgt->mboxname);
+
+    mboxname_free_parts(&parts);
 
     return 0;
 }
@@ -3771,10 +3763,10 @@ static void sched_deliver_local(const char *recipient,
 				struct auth_state *authstate)
 {
     int r = 0, rights, reqd_privs, deliver_inbox = 0;
-    const char *userid = sparam->userid, *mboxname = NULL, *attendee = NULL;
+    const char *userid = sparam->userid, *attendee = NULL;
     static struct buf resource = BUF_INITIALIZER;
     static unsigned sched_count = 0;
-    char namebuf[MAX_MAILBOX_BUFFER];
+    const char *mailboxname = NULL;
     mbentry_t *mbentry = NULL;
     struct mailbox *mailbox = NULL, *inbox = NULL;
     struct caldav_db *caldavdb = NULL;
@@ -3784,11 +3776,11 @@ static void sched_deliver_local(const char *recipient,
     struct transaction_t txn;
 
     /* Check ACL of sender on recipient's Scheduling Inbox */
-    caldav_mboxname(SCHED_INBOX, userid, namebuf);
-    r = mboxlist_lookup(namebuf, &mbentry, NULL);
+    mailboxname = caldav_mboxname(userid, SCHED_INBOX);
+    r = mboxlist_lookup(mailboxname, &mbentry, NULL);
     if (r) {
 	syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
-	       namebuf, error_message(r));
+	       mailboxname, error_message(r));
 	sched_data->status =
 	    sched_data->ischedule ? REQSTAT_REJECTED : SCHEDSTAT_REJECTED;
 	goto done;
@@ -3805,9 +3797,9 @@ static void sched_deliver_local(const char *recipient,
     }
 
     /* Open recipient's Inbox for reading */
-    if ((r = mailbox_open_irl(namebuf, &inbox))) {
+    if ((r = mailbox_open_irl(mailboxname, &inbox))) {
 	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
-	       namebuf, error_message(r));
+	       mailboxname, error_message(r));
 	sched_data->status =
 	    sched_data->ischedule ? REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
 	goto done;
@@ -3825,7 +3817,7 @@ static void sched_deliver_local(const char *recipient,
 		      icalcomponent_get_uid(sched_data->itip), 0, &cdata);
 
     if (cdata->dav.mailbox) {
-	mboxname = cdata->dav.mailbox;
+	mailboxname = cdata->dav.mailbox;
 	buf_setcstr(&resource, cdata->dav.resource);
     }
     else if (sched_data->is_reply) {
@@ -3836,17 +3828,16 @@ static void sched_deliver_local(const char *recipient,
     }
     else {
 	/* Can't find object belonging to attendee - use default calendar */
-	caldav_mboxname(SCHED_DEFAULT, userid, namebuf);
-	mboxname = namebuf;
+	mailboxname = caldav_mboxname(userid, SCHED_DEFAULT);
 	buf_reset(&resource);
 	buf_printf(&resource, "%s.ics",
 		   icalcomponent_get_uid(sched_data->itip));
     }
 
     /* Open recipient's calendar for reading */
-    if ((r = mailbox_open_irl(mboxname, &mailbox))) {
+    if ((r = mailbox_open_irl(mailboxname, &mailbox))) {
 	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
-	       mboxname, error_message(r));
+	       mailboxname, error_message(r));
 	sched_data->status =
 	    sched_data->ischedule ? REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
 	goto done;
@@ -4625,7 +4616,6 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 			  const char *att_update)
 {
     int r;
-    char outboxname[MAX_MAILBOX_BUFFER];
     icalproperty_method method;
     static struct buf prodid = BUF_INITIALIZER;
     struct auth_state *authstate;
@@ -4652,7 +4642,7 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 	int rights = 0;
 	mbentry_t *mbentry = NULL;
 	/* Check ACL of auth'd user on userid's Scheduling Outbox */
-	caldav_mboxname(SCHED_OUTBOX, sparam->userid, outboxname);
+	const char *outboxname = caldav_mboxname(sparam->userid, SCHED_OUTBOX);
 
 	r = mboxlist_lookup(outboxname, &mbentry, NULL);
 	if (r) {
@@ -4967,7 +4957,7 @@ static void sched_reply(const char *userid,
 {
     int r, rights = 0;
     mbentry_t *mbentry = NULL;
-    char outboxname[MAX_MAILBOX_BUFFER];
+    const char *outboxname;
     icalcomponent *ical;
     static struct buf prodid = BUF_INITIALIZER;
     struct sched_data *sched_data;
@@ -5022,7 +5012,7 @@ static void sched_reply(const char *userid,
     }
 
     /* Check ACL of auth'd user on userid's Scheduling Outbox */
-    caldav_mboxname(SCHED_OUTBOX, userid, outboxname);
+    outboxname = caldav_mboxname(userid, SCHED_OUTBOX);
 
     r = mboxlist_lookup(outboxname, &mbentry, NULL);
     if (r) {
