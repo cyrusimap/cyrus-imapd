@@ -69,7 +69,7 @@ build:
 	dh_testdir
 	autoreconf -v -i
 	./configure --without-krb --with-perl=/usr/bin/perl --enable-http --enable-idled --with-extraident=git-$branch-$num --prefix=/$basedir -with-cyrus-prefix=/$basedir --with-zlib --without-snmp --enable-replication --without-bdb --enable-xapian
-	make -j 8 all CFLAGS="-g -fPIC -W -Wall -fstack-protector-all"
+	make -j 8 all CFLAGS="-g -fPIC -W -Wall -Werror -fstack-protector-all"
 	make sieve/test
 	touch build
 
