@@ -74,6 +74,9 @@
 #include "annotate.h"
 #include "append.h"
 #include "auth.h"
+#include "caldav_db.h"
+#include "carddav_db.h"
+#include "dav_db.h"
 #include "dlist.h"
 #include "exitcodes.h"
 #include "global.h"
@@ -284,6 +287,10 @@ int service_init(int argc __attribute__((unused)),
 	statuscache_open();
     }
 
+    dav_init();
+    caldav_init();
+    carddav_init();
+
     return 0;
 }
 
@@ -443,6 +450,10 @@ void shut_down(int code)
     in_shutdown = 1;
 
     proc_cleanup();
+
+    carddav_done();
+    caldav_done();
+    dav_done();
 
     if (config_getswitch(IMAPOPT_STATUSCACHE)) {
 	statuscache_close();

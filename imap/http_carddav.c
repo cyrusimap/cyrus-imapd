@@ -988,9 +988,11 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
     VObjectIterator i;
     struct carddav_data *cdata;
     FILE *f = NULL;
+    struct index_record oldrecord;
     struct stagemsg *stage;
-    const char *version = NULL, *uid = NULL, *fullname = NULL, *nickname = NULL;
+    const char *version = NULL, *uid = NULL, *fullname = NULL;
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
+    uint32_t expunge_uid = 0;
     time_t now = time(NULL);
     char datestr[80];
     struct appendstate as;
@@ -1013,9 +1015,6 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 	}
 	else if (!strcmp(name, "FN")) {
 	    fullname = fakeCString(vObjectUStringZValue(prop));
-	}
-	if (!strcmp(name, "NICKNAME")) {
-	    nickname = fakeCString(vObjectUStringZValue(prop));
 	}
     }
 
@@ -1040,6 +1039,24 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 		   strrchr(cdata->dav.mailbox, '.')+1, cdata->dav.resource);
 	txn->error.resource = buf_cstring(&txn->buf);
 	return HTTP_FORBIDDEN;
+    }
+
+    if (cdata->dav.imap_uid) {
+	/* Fetch index record for the resource */
+	r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid,
+				      &oldrecord);
+
+	if (overwrite == OVERWRITE_CHECK) {
+	    /* Check any preconditions */
+	    const char *etag = message_guid_encode(&oldrecord.guid);
+	    time_t lastmod = oldrecord.internaldate;
+	    int precond = check_precond(txn, cdata, etag, lastmod);
+
+	    if (precond == HTTP_OK)
+		return HTTP_PRECOND_FAILED;
+	}
+
+	expunge_uid = oldrecord.uid;
     }
 
     /* Prepare to stage the message */
@@ -1112,18 +1129,13 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 	    }
 	    else {
 		/* append_commit() returns a write-locked index */
-		struct index_record newrecord, oldrecord, *expunge;
+		struct index_record newrecord;
 
 		/* Read index record for new message (always the last one) */
 		mailbox_read_index_record(mailbox, mailbox->i.num_records,
 					  &newrecord);
 
-		/* Find message UID for the current resource, if exists */
-		carddav_lookup_resource(carddavdb,
-				       mailbox->name, resource, 1, &cdata);
-		/* XXX  check for errors */
-
-		if (cdata->dav.imap_uid) {
+		if (expunge_uid) {
 		    /* Now that we have the replacement message in place
 		       and the mailbox locked, re-read the old record
 		       and see if we should overwrite it.  Either way,
@@ -1133,35 +1145,12 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 
 		    ret = HTTP_NO_CONTENT;
 
-		    /* Fetch index record for the resource */
-		    r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid,
-						  &oldrecord);
-
-		    if (overwrite == OVERWRITE_CHECK) {
-			/* Check any preconditions */
-			const char *etag = message_guid_encode(&oldrecord.guid);
-			time_t lastmod = oldrecord.internaldate;
-			int precond = check_precond(txn, cdata, etag, lastmod);
-
-			overwrite = (precond == HTTP_OK);
-		    }
-
-		    if (overwrite) {
-			/* Keep new resource - expunge the old one */
-			expunge = &oldrecord;
-		    }
-		    else {
-			/* Keep old resource - expunge the new one */
-			expunge = &newrecord;
-			ret = HTTP_PRECOND_FAILED;
-		    }
-
 		    /* Perform the actual expunge */
 		    r = mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag, 1);
 		    if (!r) {
-			expunge->user_flags[userflag/32] |= 1<<(userflag&31);
-			expunge->system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
-			r = mailbox_rewrite_index_record(mailbox, expunge);
+			oldrecord.user_flags[userflag/32] |= 1<<(userflag&31);
+			oldrecord.system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
+			r = mailbox_rewrite_index_record(mailbox, &oldrecord);
 		    }
 		    if (r) {
 			syslog(LOG_ERR, "expunging record (%s) failed: %s",
@@ -1173,19 +1162,6 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 
 		if (!r) {
 		    struct resp_body_t *resp_body = &txn->resp_body;
-
-		    /* Create mapping entry from resource name to UID */
-		    cdata->dav.mailbox = mailbox->name;
-		    cdata->dav.resource = resource;
-		    cdata->dav.imap_uid = newrecord.uid;
-		    cdata->vcard_uid = uid;
-		    cdata->fullname = fullname;
-		    cdata->nickname = nickname;
-
-		    if (!cdata->dav.creationdate) cdata->dav.creationdate = now;
-
-		    carddav_write(carddavdb, cdata, 1);
-		    /* XXX  check for errors, if this fails, backout changes */
 
 		    /* Tell client about the new resource */
 		    resp_body->lastmod = newrecord.internaldate;
