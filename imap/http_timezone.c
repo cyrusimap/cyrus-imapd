@@ -188,8 +188,6 @@ static int meth_get(struct transaction_t *txn,
     struct hash_table query_params;
     const struct action_t *ap = NULL;
 
-    if (!URI_QUERY(txn->req_uri)) return HTTP_BAD_REQUEST;
-
     /* Parse the query string and add param/value pairs to hash table */
     construct_hash_table(&query_params, 10, 1);
     tok_initm(&tok, URI_QUERY(txn->req_uri), "&=", TOK_TRIMLEFT|TOK_TRIMRIGHT);
