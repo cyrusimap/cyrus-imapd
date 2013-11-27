@@ -3231,6 +3231,8 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     struct stagemsg *stage;
     const char *uid, *ics;
     uquota_t size;
+    uint32_t expunge_uid = 0;
+    struct index_record oldrecord;
     time_t now = time(NULL);
     char datestr[80];
     struct appendstate as;
@@ -3270,6 +3272,27 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 	/* CALDAV:no-uid-conflict */
 	txn->error.precond = CALDAV_UID_CONFLICT;
 	return HTTP_FORBIDDEN;
+    }
+
+    /* XXX - theoretical race, but the mailbox is locked, so nothing
+     * else can ACTUALLY change it */
+    if (cdata->dav.imap_uid) {
+	/* Fetch index record for the resource */
+	r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid,
+				      &oldrecord);
+
+	if (overwrite == OVERWRITE_CHECK) {
+	    /* Check any preconditions */
+	    const char *etag = message_guid_encode(&oldrecord.guid);
+	    time_t lastmod = oldrecord.internaldate;
+	    int precond = caldav_check_precond(txn, cdata,
+					       etag, lastmod);
+
+	    if (precond != HTTP_OK)
+		return HTTP_PRECOND_FAILED;
+	}
+
+	expunge_uid = cdata->dav.imap_uid;
     }
 
     /* Check for existing iCalendar UID */
@@ -3404,18 +3427,13 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 	    }
 	    else {
 		/* append_commit() returns a write-locked index */
-		struct index_record newrecord, oldrecord, *expunge;
+		struct index_record newrecord;
 
 		/* Read index record for new message (always the last one) */
 		mailbox_read_index_record(mailbox, mailbox->i.num_records,
 					  &newrecord);
 
-		/* Find message UID for the current resource, if exists */
-		caldav_lookup_resource(caldavdb,
-				       mailbox->name, resource, 1, &cdata);
-		/* XXX  check for errors */
-
-		if (cdata->dav.imap_uid) {
+		if (expunge_uid) {
 		    /* Now that we have the replacement message in place
 		       and the mailbox locked, re-read the old record
 		       and see if we should overwrite it.  Either way,
@@ -3425,36 +3443,12 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 
 		    ret = HTTP_NO_CONTENT;
 
-		    /* Fetch index record for the resource */
-		    r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid,
-						  &oldrecord);
-
-		    if (overwrite == OVERWRITE_CHECK) {
-			/* Check any preconditions */
-			const char *etag = message_guid_encode(&oldrecord.guid);
-			time_t lastmod = oldrecord.internaldate;
-			int precond = caldav_check_precond(txn, cdata,
-							   etag, lastmod);
-
-			overwrite = (precond == HTTP_OK);
-		    }
-
-		    if (overwrite) {
-			/* Keep new resource - expunge the old one */
-			expunge = &oldrecord;
-		    }
-		    else {
-			/* Keep old resource - expunge the new one */
-			expunge = &newrecord;
-			ret = HTTP_PRECOND_FAILED;
-		    }
-
 		    /* Perform the actual expunge */
 		    r = mailbox_user_flag(mailbox, DFLAG_UNBIND,  &userflag);
 		    if (!r) {
-			expunge->user_flags[userflag/32] |= 1<<(userflag&31);
-			expunge->system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
-			r = mailbox_rewrite_index_record(mailbox, expunge);
+			oldrecord.user_flags[userflag/32] |= 1<<(userflag&31);
+			oldrecord.system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
+			r = mailbox_rewrite_index_record(mailbox, &oldrecord);
 		    }
 		    if (r) {
 			syslog(LOG_ERR, "expunging record (%s) failed: %s",
@@ -3467,20 +3461,9 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 		if (!r) {
 		    struct resp_body_t *resp_body = &txn->resp_body;
 
-		    /* Create mapping entry from resource name to UID */
-		    cdata->dav.mailbox = mailbox->name;
-		    cdata->dav.resource = resource;
-		    cdata->dav.imap_uid = newrecord.uid;
-		    caldav_make_entry(ical, cdata);
-
-		    if (!cdata->dav.creationdate) cdata->dav.creationdate = now;
-		    if (!cdata->organizer) cdata->sched_tag = NULL;
-		    else if (flags & NEW_STAG) {
-			resp_body->stag = cdata->sched_tag = sched_tag;
+		    if (cdata->organizer && (flags & NEW_STAG)) {
+			resp_body->stag = sched_tag;
 		    }
-
-		    caldav_write(caldavdb, cdata, 1);
-		    /* XXX  check for errors, if this fails, backout changes */
 
 		    if ((flags & PREFER_REP) || !(flags & NEW_STAG)) {
 			/* Tell client about the new resource */

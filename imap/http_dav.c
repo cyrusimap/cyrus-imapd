@@ -2730,9 +2730,6 @@ int meth_copy(struct transaction_t *txn, void *params)
 		goto done;
 	    }
 	}
-
-	/* Delete mapping entry for source resource name */
-	cparams->davdb.delete_resource(src_davdb, ddata->rowid, 1);
     }
 
   done:
@@ -2867,7 +2864,7 @@ int meth_delete(struct transaction_t *txn, void *params)
 
     /* Find message UID for the resource, if exists */
     dparams->davdb.lookup_resource(davdb, txn->req_tgt.mboxname,
-				   txn->req_tgt.resource, 1, (void **) &ddata);
+				   txn->req_tgt.resource, 0, (void **) &ddata);
     if (!ddata->rowid) {
 	ret = HTTP_NOT_FOUND;
 	goto done;
@@ -2921,9 +2918,6 @@ int meth_delete(struct transaction_t *txn, void *params)
 	    goto done;
 	}
     }
-
-    /* Delete mapping entry for resource name */
-    dparams->davdb.delete_resource(davdb, ddata->rowid, 1);
 
     /* Do any special processing */
     if (dparams->delete) dparams->delete(txn, mailbox, &record, ddata);
