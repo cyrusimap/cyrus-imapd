@@ -212,6 +212,7 @@ static void auth_success(struct transaction_t *txn);
 static int http_auth(const char *creds, struct transaction_t *txn);
 static void keep_alive(int sig);
 
+static int meth_get(struct transaction_t *txn, void *params);
 static int meth_propfind_root(struct transaction_t *txn, void *params);
 
 
@@ -259,8 +260,8 @@ struct namespace_t namespace_default = {
 	{ NULL,			NULL },			/* ACL		*/
 	{ NULL,			NULL },			/* COPY		*/
 	{ NULL,			NULL },			/* DELETE	*/
-	{ &meth_get_doc,	NULL },			/* GET		*/
-	{ &meth_get_doc,	NULL },			/* HEAD		*/
+	{ &meth_get,		NULL },			/* GET		*/
+	{ &meth_get,		NULL },			/* HEAD		*/
 	{ NULL,			NULL },			/* LOCK		*/
 	{ NULL,			NULL },			/* MKCALENDAR	*/
 	{ NULL,			NULL },			/* MKCOL	*/
@@ -3655,8 +3656,8 @@ const struct mimetype {
 
 
 /* Perform a GET/HEAD request */
-int meth_get_doc(struct transaction_t *txn,
-		 void *params __attribute__((unused)))
+static int meth_get(struct transaction_t *txn,
+		    void *params __attribute__((unused)))
 {
     int ret = 0, r, fd = -1, precond;
     const char *prefix, *urls, *path, *ext;
@@ -3819,8 +3820,8 @@ int meth_options(struct transaction_t *txn, void *params)
 
 
 /* Perform an PROPFIND request on "/" iff we support CalDAV */
-int meth_propfind_root(struct transaction_t *txn,
-		       void *params __attribute__((unused)))
+static int meth_propfind_root(struct transaction_t *txn,
+			      void *params __attribute__((unused)))
 {
     assert(txn);
 
