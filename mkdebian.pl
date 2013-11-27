@@ -33,7 +33,7 @@ Priority: extra
 Maintainer: Bron Gondwana <brong\@fastmail.fm>
 Build-Depends: libssl-dev, zlib1g-dev, comerr-dev, libsasl2-dev,
 	libzephyr-dev, libpcre3-dev, autoconf, libxapian-dev,
-	libxml2-dev, libjansson-dev, libical-dev, libsqlite3-dev,
+	libxml2-dev, libical-dev, libsqlite3-dev,
 	flex, bison, debhelper, libsnmp-dev
 
 Package: $basename
