@@ -32,18 +32,47 @@
 #
 
 # Set these to the toplevel directories of the 2 sets of VTIMEZONE files.
-#$MASTER_ZONEINFO_DIR = "/home/damon/cvs/libical/zoneinfo";
-$MASTER_ZONEINFO_DIR = "/usr/share/libical-evolution/zoneinfo";
-$NEW_ZONEINFO_DIR = "/home/damon/src/vzic-1.0/zoneinfo";
+$NEW_ZONEINFO_DIR = "zoneinfo";
 
 # Set this to 1 if you have version numbers in the TZID like libical.
-$LIBICAL_VERSIONING = 1;
+$LIBICAL_VERSIONING = 0;
 
 # Set this to 0 for dry-runs, and 1 to actually update.
 $DO_UPDATES = 1;
 
 # Save this so we can restore it later.
 $input_record_separator = $/;
+
+sub read_conf {
+    my $file = shift;
+
+    open CONF, $file or die "can't open $file";
+    while (<CONF>) {
+	if (/^#/) { 
+	    next; 
+	}
+	if (/\@include:\s+(.*)$/) {
+	    push @configs, $1;
+	}
+	if (/^configdirectory:\s+(.*)$/) {
+	    $confdir = $1;
+	}
+    }
+    close CONF;
+}
+
+$imapdconf = shift || "/etc/imapd.conf";
+
+push @configs, $imapdconf;
+
+while ($conf = shift @configs) {
+    read_conf($conf);
+}
+
+if (! $confdir) { $confdir = "/var/imap"; }
+
+$MASTER_ZONEINFO_DIR = $confdir . "/zoneinfo";
+
 
 chdir $NEW_ZONEINFO_DIR
     || die "Can't cd to $NEW_ZONEINFO_DIR";
@@ -70,7 +99,20 @@ foreach $new_file (`find -name "*.ics"`) {
 
     # If the ics file exists in the master copy we have to compare them,
     # otherwise we can just copy the new file into the master directory.
-    if (-e $master_file) {
+    if (-l $new_file) {
+	$link_to = readlink($new_file);
+
+	if (! -e $master_file || ! -l $master_file ||
+	    (readlink($master_file) ne $link_to)) {
+
+	    print "Linking $new_file to $link_to...\n";
+
+	    if ($DO_UPDATES) {
+		unlink($master_file);
+		symlink($link_to, $master_file);
+	    }
+	}
+    } elsif (-e $master_file) {
 	open (MASTERZONEFILE, "$master_file")
 	    || die "Can't open file: $master_file";
 	undef $/;
@@ -81,10 +123,18 @@ foreach $new_file (`find -name "*.ics"`) {
 	$new_contents_copy = $new_contents;
 
 	# Strip the TZID from both contents.
-	$new_contents_copy =~ s/^TZID:\S+$//m;
-	$new_tzid = $&;
-	$master_contents =~ s/^TZID:\S+$//m;
-	$master_tzid = $&;
+#	$new_contents_copy =~ s/^TZID:\S+\r$//m;
+#	$new_tzid = $&;
+#	$master_contents =~ s/^TZID:\S+\r$//m;
+#	$master_tzid = $&;
+
+	# Strip the PRODID from both contents.
+	$new_contents_copy =~ s/^PRODID:.*$//m;
+	$master_contents =~ s/^PRODID:.*$//m;
+
+	# Strip the LAST-MODIFIED from both contents.
+	$new_contents_copy =~ s/^LAST-MODIFIED:(\S+)\r$//m;
+	$master_contents =~ s/^LAST-MODIFIED:(\S+)\r$//m;
 
 #	print "Matched: $master_tzid\n";
 
@@ -95,7 +145,7 @@ foreach $new_file (`find -name "*.ics"`) {
 
 	    if ($LIBICAL_VERSIONING) {
 		# We bump the version number in the new file.
-		$master_tzid =~ m%_(\d+)/%;
+#		$master_tzid =~ m%_(\d+)/%;
 		$version_num = $1;
 #		print "Version: $version_num\n";
 
