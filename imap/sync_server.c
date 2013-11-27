@@ -1425,6 +1425,7 @@ static int do_mailbox(struct dlist *kin)
     }
 
     if (mailbox->mbtype != mbtype) {
+	syslog(LOG_ERR, "INVALID MAILBOX TYPE %s (%d, %d)", mailbox->name, mailbox->mbtype, mbtype);
 	/* is this even possible? */
 	r = IMAP_MAILBOX_BADTYPE;
 	goto done;
