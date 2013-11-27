@@ -132,7 +132,7 @@ static json_t *icalvalue_as_json_object(const icalvalue *value)
 
     switch (icalvalue_isa(value)) {
     case ICAL_BOOLEAN_VALUE:
-	return json_boolean(icalvalue_get_integer(value));
+	return (icalvalue_get_integer(value) ? json_true() : json_false());
 
     case ICAL_DATE_VALUE:
 	str = icaltime_as_iso_string(icalvalue_get_date(value));
