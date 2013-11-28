@@ -79,6 +79,7 @@
 #include "imapd.h"
 #include "imap_err.h"
 #include "http_err.h"
+#include "proc.h"
 #include "version.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
@@ -193,11 +194,6 @@ struct backend **backend_cached = NULL;
 static void starttls(int https);
 void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
-
-extern void setproctitle_init(int argc, char **argv, char **envp);
-extern int proc_register(const char *progname, const char *clienthost, 
-			 const char *userid, const char *mailbox);
-extern void proc_cleanup(void);
 
 /* Enable the resetting of a sasl_conn_t */
 static int reset_saslconn(sasl_conn_t **conn);
@@ -602,7 +598,7 @@ int service_main(int argc __attribute__((unused)),
     }
     httpd_tls_required = !avail_auth_schemes;
 
-    proc_register("httpd", httpd_clienthost, NULL, NULL);
+    proc_register("httpd", httpd_clienthost, NULL, NULL, NULL);
 
     /* Set inactivity timer */
     httpd_timeout = config_getint(IMAPOPT_HTTPTIMEOUT);
@@ -2943,7 +2939,7 @@ static void auth_success(struct transaction_t *txn)
     struct auth_scheme_t *scheme = txn->auth_chal.scheme;
     int i;
 
-    proc_register("httpd", httpd_clienthost, httpd_userid, (char *)0);
+    proc_register("httpd", httpd_clienthost, httpd_userid, NULL, NULL);
 
     syslog(LOG_NOTICE, "login: %s %s %s%s %s",
 	   httpd_clienthost, httpd_userid, scheme->name,
