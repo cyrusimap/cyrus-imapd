@@ -2999,8 +2999,11 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 	organizer = icalproperty_get_organizer(prop)+7;
 	fprintf(f, "From: %s\r\n", organizer);
     }
-    else {
+    else if (strchr(proxy_userid, '@')) {
 	/* XXX  This needs to be done via an LDAP/DB lookup */
+	fprintf(f, "From: %s\r\n", proxy_userid);
+    }
+    else {
 	fprintf(f, "From: %s@%s\r\n", proxy_userid, config_servername);
     }
 
@@ -3011,7 +3014,12 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 		   datestr, sizeof(datestr));
     fprintf(f, "Date: %s\r\n", datestr);
 
-    fprintf(f, "Message-ID: <%s@%s>\r\n", uid, config_servername);
+    if (strchr(uid, '@')) {
+	fprintf(f, "Message-ID: <%s>\r\n", uid);
+    }
+    else {
+	fprintf(f, "Message-ID: <%s@%s>\r\n", uid, config_servername);
+    }
 
     fprintf(f, "Content-Type: text/calendar; charset=utf-8");
     if ((meth = icalcomponent_get_method(ical)) != ICAL_METHOD_NONE) {
