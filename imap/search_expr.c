@@ -1460,6 +1460,28 @@ static int search_keyword_match(message_t *m,
 
 /* ====================================================================== */
 
+static int search_uint64_cmp(message_t *m, const union search_value *v,
+			     void *internalised __attribute__((unused)),
+			     void *data1)
+{
+    int r;
+    uint64_t u;
+    int (*getter)(message_t *, uint64_t *) = (int(*)(message_t *, uint64_t *))data1;
+
+    r = getter(m, &u);
+    if (!r) {
+	if (u < v->u)
+	    r = -1;
+	else if (u == v->u)
+	    r = 0;
+	else
+	    r = 1;
+    }
+    else
+	r = 0;
+    return r;
+}
+
 static int search_uint64_match(message_t *m, const union search_value *v,
 			       void *internalised __attribute__((unused)),
 			       void *data1)
@@ -2171,7 +2193,7 @@ EXPORTED void search_attr_init(void)
 	    SEARCH_PART_NONE,
 	    SEARCH_COST_INDEX,
 	    /*internalise*/NULL,
-	    /*cmp*/NULL,
+	    search_uint64_cmp,
 	    search_uint64_match,
 	    search_uint64_serialise,
 	    search_uint64_unserialise,
@@ -2185,7 +2207,7 @@ EXPORTED void search_attr_init(void)
 	    SEARCH_PART_NONE,
 	    SEARCH_COST_INDEX,
 	    /*internalise*/NULL,
-	    /*cmp*/NULL,
+	    search_uint64_cmp,
 	    search_uint64_match,
 	    search_cid_serialise,
 	    search_cid_unserialise,
