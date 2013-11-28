@@ -148,6 +148,7 @@ unsigned avail_auth_schemes = 0; /* bitmask of available auth schemes */
 unsigned long config_httpmodules;
 int config_httpprettytelemetry;
 
+static time_t compile_time;
 struct buf serverinfo = BUF_INITIALIZER;
 
 static void digest_send_success(const char *name __attribute__((unused)),
@@ -498,6 +499,8 @@ int service_init(int argc __attribute__((unused)),
 	if (allow_trace) namespaces[i]->allow |= ALLOW_TRACE;
 	if (namespaces[i]->init) namespaces[i]->init(&serverinfo);
     }
+
+    compile_time = calc_compile_time(__TIME__, __DATE__);
 
     return 0;
 }
@@ -3655,17 +3658,105 @@ const struct mimetype {
 };
 
 
+static int list_well_known(struct transaction_t *txn)
+{
+    static struct buf body = BUF_INITIALIZER;
+    static time_t lastmod = 0;
+    struct stat sbuf;
+    int precond;    
+
+    /* stat() imapd.conf for Last-Modified and ETag */
+    stat(config_filename, &sbuf);
+    assert(!buf_len(&txn->buf));
+    buf_printf(&txn->buf, "%ld-%ld-%ld",
+	       compile_time, sbuf.st_mtime, sbuf.st_size);
+    sbuf.st_mtime = MAX(compile_time, sbuf.st_mtime);
+
+    /* Check any preconditions */
+    precond = check_precond(txn, NULL, buf_cstring(&txn->buf), sbuf.st_mtime);
+
+    switch (precond) {
+    case HTTP_OK:
+    case HTTP_NOT_MODIFIED:
+	/* Fill in ETag, Last-Modified, and Expires */
+	txn->resp_body.etag = buf_cstring(&txn->buf);
+	txn->resp_body.lastmod = sbuf.st_mtime;
+	txn->resp_body.maxage = 86400;  /* 24 hrs */
+	txn->flags.cc |= CC_MAXAGE;
+
+	if (precond != HTTP_NOT_MODIFIED) break;
+
+    default:
+	/* We failed a precondition - don't perform the request */
+	return precond;
+    }
+
+    if (txn->resp_body.lastmod > lastmod) {
+	const char *proto = NULL, *host = NULL;
+	unsigned i, level = 0;
+
+	/* Start HTML */
+	buf_reset(&body);
+	buf_printf_markup(&body, level, HTML_DOCTYPE);
+	buf_printf_markup(&body, level++, "<html>");
+	buf_printf_markup(&body, level++, "<head>");
+	buf_printf_markup(&body, level,
+			  "<title>%s</title>", "Well-Known Locations");
+	buf_printf_markup(&body, --level, "</head>");
+	buf_printf_markup(&body, level++, "<body>");
+	buf_printf_markup(&body, level,
+			  "<h2>%s</h2>", "Well-Known Locations");
+	buf_printf_markup(&body, level++, "<ul>");
+
+	/* Add the list of enabled /.well-known/ URLs */
+	http_proto_host(txn->req_hdrs, &proto, &host);
+	for (i = 0; namespaces[i]; i++) {
+
+	    if (namespaces[i]->enabled && namespaces[i]->well_known) {
+		buf_printf_markup(&body, level,
+				  "<li><a href=\"%s://%s%s\">%s</a></li>",
+				  proto, host, namespaces[i]->prefix,
+				  namespaces[i]->well_known);
+	    }
+	}
+
+	/* Finish HTML */
+	buf_printf_markup(&body, --level, "</ul>");
+	buf_printf_markup(&body, --level, "</body>");
+	buf_printf_markup(&body, --level, "</html>");
+
+	lastmod = txn->resp_body.lastmod;
+    }
+
+    /* Output the HTML response */
+    txn->resp_body.type = "text/html; charset=utf-8";
+    write_body(precond, txn, buf_cstring(&body), buf_len(&body));
+
+    return 0;
+}
+
+
+#define WELL_KNOWN_PREFIX "/.well-known"
+
 /* Perform a GET/HEAD request */
 static int meth_get(struct transaction_t *txn,
 		    void *params __attribute__((unused)))
 {
-    int ret = 0, r, fd = -1, precond;
+    int ret = 0, r, fd = -1, precond, len;
     const char *prefix, *urls, *path, *ext;
     static struct buf pathbuf = BUF_INITIALIZER;
     struct stat sbuf;
     const char *msg_base = NULL;
     unsigned long msg_size = 0;
     struct resp_body_t *resp_body = &txn->resp_body;
+
+    /* Check if this is a request for /.well-known/ listing */
+    len = strlen(WELL_KNOWN_PREFIX);
+    if (!strncmp(txn->req_uri->path, WELL_KNOWN_PREFIX, len)) {
+	if (txn->req_uri->path[len] == '/') len++;
+	if (txn->req_uri->path[len] == '\0') return list_well_known(txn);
+	else return HTTP_NOT_FOUND;
+    }
 
     /* Serve up static pages */
     prefix = config_getstring(IMAPOPT_HTTPDOCROOT);
