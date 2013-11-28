@@ -4244,7 +4244,10 @@ int report_sync_col(struct transaction_t *txn,
     struct mailbox *mailbox = NULL;
     uint32_t uidvalidity = 0;
     modseq_t syncmodseq = 0, highestmodseq;
-    uint32_t limit = -1, recno, msgno, nresp;
+    uint32_t limit = -1;
+    uint32_t recno;
+    uint32_t msgno;
+    uint32_t nresp = 0;
     xmlNodePtr node;
     struct index_state istate;
     struct index_record record;
@@ -4334,7 +4337,7 @@ int report_sync_col(struct transaction_t *txn,
 			  sizeof(struct index_map));
 
     /* Find which resources we need to report */
-    for (nresp = 0, recno = 1; recno <= mailbox->i.num_records; recno++) {
+    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	/* XXX  Corrupted record?  Should we bail? */
 	if (mailbox_read_index_record(mailbox, recno, &record))
 	    continue;
@@ -4359,6 +4362,7 @@ int report_sync_col(struct transaction_t *txn,
 	istate.map[nresp].system_flags = record.system_flags;
 	for (i = 0; i < MAX_USER_FLAGS/32; i++)
 	    istate.map[nresp].user_flags[i] = record.user_flags[i];
+	istate.map[nresp].cache_offset = record.cache_offset;
 
 	nresp++;
     }
@@ -4391,7 +4395,7 @@ int report_sync_col(struct transaction_t *txn,
     }
 
     /* Report the resources within the client requested limit (if any) */
-    for (msgno = 1; msgno <= nresp; recno++) {
+    for (msgno = 1; msgno <= nresp; msgno++) {
 	char *p, *resource = NULL;
 	struct dav_data ddata;
 
