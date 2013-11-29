@@ -124,6 +124,8 @@ enum event_param {
     /* 28 */ EVENT_BODYSTRUCTURE,
     /* 29 */ EVENT_CLIENT_ID,
     /* 30 */ EVENT_SESSION_ID,
+    EVENT_CONVEXISTS,
+    EVENT_CONVUNSEEN,
     /* 31 */ EVENT_MESSAGE_CONTENT
 };
 
