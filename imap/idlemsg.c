@@ -164,12 +164,18 @@ EXPORTED int idle_get_sock(void)
 EXPORTED int idle_send(const struct sockaddr_un *remote,
 		       const idle_message_t *msg)
 {
+    int flags = 0;
+
+#ifdef MSG_DONTWAIT
+    flags |= MSG_DONTWAIT;
+#endif
+
     if (idle_sock < 0)
 	return IMAP_SERVER_UNAVAILABLE;
 
     if (sendto(idle_sock, (void *) msg,
 	       IDLE_MESSAGE_BASE_SIZE+strlen(msg->mboxname)+1, /* 1 for NULL */
-	       0, (struct sockaddr *) remote, sizeof(*remote)) == -1) {
+	       flags, (struct sockaddr *) remote, sizeof(*remote)) == -1) {
 	return errno;
     }
 
