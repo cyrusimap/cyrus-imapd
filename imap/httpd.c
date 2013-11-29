@@ -3672,7 +3672,8 @@ static int list_well_known(struct transaction_t *txn)
 	       compile_time, sbuf.st_mtime, sbuf.st_size);
     sbuf.st_mtime = MAX(compile_time, sbuf.st_mtime);
 
-    /* Check any preconditions */
+    /* Check any preconditions, including range request */
+    txn->flags.ranges = 1;
     precond = check_precond(txn, NULL, buf_cstring(&txn->buf), sbuf.st_mtime);
 
     switch (precond) {
