@@ -124,6 +124,7 @@ static struct mboxevent event_template =
     { EVENT_USER, "user", EVENT_PARAM_STRING, 0, 0 },
     { EVENT_MESSAGE_SIZE, "messageSize", EVENT_PARAM_INT, 0, 0 },
     /* always at end to let the parser to easily truncate this part */
+    { EVENT_ENVELOPE, "vnd.cmu.envelope", EVENT_PARAM_STRING, 0, 0 },
     { EVENT_BODYSTRUCTURE, "bodyStructure", EVENT_PARAM_STRING, 0, 0 },
     { EVENT_MESSAGE_CONTENT, "messageContent", EVENT_PARAM_STRING, 0, 0 }
   },
@@ -341,6 +342,9 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
 		 * extra parameter */
 		((extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_DISKUSED) &&
 		 (type & (EVENT_QUOTA_CHANGE))));
+    case EVENT_ENVELOPE:
+	return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_ENVELOPE) &&
+	       (type & (EVENT_MESSAGE_NEW|EVENT_MESSAGE_APPEND));
     case EVENT_FLAG_NAMES:
 	return (type & (EVENT_FLAGS_SET|EVENT_FLAGS_CLEAR)) ||
 	       ((extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_FLAGNAMES) &&
@@ -681,6 +685,13 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
     /* add message size */
     if (mboxevent_expected_param(event->type, EVENT_MESSAGE_SIZE)) {
 	FILL_UNSIGNED_PARAM(event, EVENT_MESSAGE_SIZE, record->size);
+    }
+
+    /* add vnd.cmu.envelope */
+    if (mboxevent_expected_param(event->type, EVENT_ENVELOPE)) {
+	FILL_STRING_PARAM(event, EVENT_ENVELOPE,
+			  xstrndup(cacheitem_base(record, CACHE_ENVELOPE),
+				   cacheitem_size(record, CACHE_ENVELOPE)));
     }
 
     /* add bodyStructure */
