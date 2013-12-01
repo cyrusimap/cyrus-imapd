@@ -237,6 +237,12 @@ static unsigned archive_cb(struct mailbox *mailbox,
     if (mboxname_isdeletedmailbox(mailbox->name, NULL))
 	return 1;
 
+    /* Calendar and Addressbook are small files and need to be hot */
+    if (mailbox->mbtype & MBTYPE_ADDRESSBOOK)
+	return 0;
+    if (mailbox->mbtype & MBTYPE_CALENDAR)
+	return 0;
+
     /* don't archive flagged messages - XXX, optional? */
     if (keep_flagged && (record->system_flags & FLAG_FLAGGED))
 	return 0;
