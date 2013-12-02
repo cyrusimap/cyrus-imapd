@@ -410,7 +410,7 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
 	return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_DAVUID) &&
 	       (type & EVENT_CALENDAR);
     case EVENT_MESSAGE_CID:
-	return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_CLIENTID) &&
+	return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_CID) &&
 	       (type & (EVENT_MESSAGE_APPEND|EVENT_MESSAGE_NEW));
     case EVENT_MESSAGES:
 	if (type & (EVENT_QUOTA_EXCEED|EVENT_QUOTA_WITHIN))
