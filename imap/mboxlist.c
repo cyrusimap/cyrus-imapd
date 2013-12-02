@@ -2097,6 +2097,10 @@ static int find_p(void *rockp,
     if (mboxlist_parse_entry(&mbentry, key, keylen, data, datalen))
 	return 0;
 
+    /* nobody sees tombstones */
+    if (mbentry->mbtype & MBTYPE_DELETED)
+	goto done;
+
     /* check acl */
     if (!rock->isadmin) {
 	/* always suppress deleted for non-admin */
