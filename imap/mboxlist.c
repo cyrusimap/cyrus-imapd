@@ -2259,19 +2259,15 @@ static int skipdel_cb(void *rock __attribute__((unused)),
 EXPORTED int mboxlist_allmbox(const char *prefix, foreach_cb *proc, void *rock,
 			      int incdel)
 {
-    int r;
     char *search = prefix ? (char *)prefix : "";
 
-    if (incdel)
-	r = cyrusdb_foreach(mbdb, search, strlen(search), NULL, proc, rock, 0);
-    else
-	r = cyrusdb_foreach(mbdb, search, strlen(search), skipdel_cb, proc, rock, 0);
-
-    return r;
+    return cyrusdb_foreach(mbdb, search, strlen(search),
+			   incdel ? NULL : skipdel_cb,
+			   proc, rock, 0);
 }
 
 EXPORTED int mboxlist_allusermbox(const char *userid, foreach_cb *proc,
-				  void *rock, int include_deleted)
+				  void *rock, int incdel)
 {
     char *inbox = mboxname_user_mbox(userid, 0);
     size_t inboxlen = strlen(inbox);
@@ -2281,22 +2277,31 @@ EXPORTED int mboxlist_allusermbox(const char *userid, foreach_cb *proc,
     int r;
 
     r = cyrusdb_fetch(mbdb, inbox, inboxlen, &data, &datalen, NULL);
-    if (r) goto done;
-
-    /* process inbox first */
-    r = proc(rock, inbox, inboxlen, data, datalen);
+    if (!r) {
+	/* process inbox first */
+	if (incdel || skipdel_cb(rock, inbox, inboxlen, data, datalen))
+	    r = proc(rock, inbox, inboxlen, data, datalen);
+    }
+    else if (r == CYRUSDB_NOTFOUND) {
+	/* don't process inbox! */
+	r = 0;
+    }
     if (r) goto done;
 
     /* process all the sub folders */
-    r = cyrusdb_foreach(mbdb, search, strlen(search), NULL, proc, rock, 0);
+    r = cyrusdb_foreach(mbdb, search, strlen(search),
+			incdel ? NULL : skipdel_cb,
+			proc, rock, 0);
     if (r) goto done;
 
     /* don't check if delayed delete is enabled, maybe the caller wants to
      * clean up deleted stuff after it's been turned off */
-    if (include_deleted) {
+    if (incdel) {
 	const char *prefix = config_getstring(IMAPOPT_DELETEDPREFIX);
 	char *name = strconcat(prefix, ".", inbox, ".", (char *)NULL);
-	r = cyrusdb_foreach(mbdb, name, strlen(name), NULL, proc, rock, 0);
+	r = cyrusdb_foreach(mbdb, name, strlen(name),
+			    incdel ? NULL : skipdel_cb,
+			    proc, rock, 0);
 	free(name);
     }
 
