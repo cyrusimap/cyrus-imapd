@@ -152,7 +152,10 @@ static int reset_single(const char *userid)
     for (item = mblist->head; item; item = item->next) {
 	r = mboxlist_deletemailbox(item->name, 1, sync_userid,
 				   sync_authstate, NULL, 0, 1, 0);
-	if (r) goto fail;
+	if (r == IMAP_MAILBOX_NONEXISTENT) {
+	    printf("skipping already removed mailbox %s\n", item->name);
+	}
+	else if (r) goto fail;
 	/* XXX - cheap and nasty hack around actually cleaning up the entry */
 	r = mboxlist_deleteremote(item->name, NULL);
 	if (r) goto fail;
