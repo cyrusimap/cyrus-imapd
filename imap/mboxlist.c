@@ -1204,6 +1204,9 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
     r = mboxlist_lookup(name, &mbentry, NULL);
     if (r) goto done;
 
+    if (mbentry->mbtype & MBTYPE_DELETED)
+	goto done;
+
     isremote = mbentry->mbtype & MBTYPE_REMOTE;
 
     /* check if user has Delete right (we've already excluded non-admins
