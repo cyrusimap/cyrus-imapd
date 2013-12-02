@@ -583,7 +583,6 @@ char *icalcomponent_as_xcal_string(icalcomponent *ical)
 {
     xmlDocPtr doc;
     xmlNodePtr root, xcomp;
-    xmlChar *buf;
     int bufsiz;
 
     if (!ical) return NULL;
@@ -599,8 +598,13 @@ char *icalcomponent_as_xcal_string(icalcomponent *ical)
 
     if (!xmlStrcmp(xcomp->name, BAD_CAST "vcalendar")) {
 	/* Complete iCalendar stream */
+	xmlChar *buf;
+
 	xmlDocDumpFormatMemoryEnc(doc, &buf, &bufsiz, "utf-8",
 				  config_httpprettytelemetry);
+	xcal = icalmemory_tmp_copy((char *) buf);
+
+	xmlFree(buf);
     }
     else {
 	/* Single iCalendar object */
@@ -608,7 +612,8 @@ char *icalcomponent_as_xcal_string(icalcomponent *ical)
 
 	bufsiz = xmlNodeDump(xbuf, doc, xcomp,
 			     0, config_httpprettytelemetry);
-	buf = xmlBufferDetach(xbuf);
+	xcal = icalmemory_tmp_copy((char *) xbuf);
+
 	xmlBufferFree(xbuf);
     }
 
