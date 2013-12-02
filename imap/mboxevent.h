@@ -126,6 +126,7 @@ enum event_param {
     /* 30 */ EVENT_SESSION_ID,
     EVENT_CONVEXISTS,
     EVENT_CONVUNSEEN,
+    EVENT_MESSAGE_CID,
     /* 31 */ EVENT_MESSAGE_CONTENT
 };
 
