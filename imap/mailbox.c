@@ -3087,7 +3087,7 @@ static int mailbox_update_indexes(struct mailbox *mailbox,
     r = mailbox_update_conversations(mailbox, old, new);
     if (r) return r;
 
-    /* NOTE - we do these last */
+    /* NOTE - we do these last, once the counts are updated */
 
     if (old)
 	mailbox_index_update_counts(mailbox, old, 0);
