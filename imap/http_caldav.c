@@ -2550,6 +2550,9 @@ static int report_cal_query(struct transaction_t *txn,
     xmlNodePtr node;
     struct calquery_filter calfilter;
 
+    memset(&calfilter, 0, sizeof(struct calquery_filter));
+    calfilter.save_busytime = 0;
+
     fctx->davdb = auth_caldavdb;
     fctx->lookup_resource = (db_lookup_proc_t) &caldav_lookup_resource;
     fctx->foreach_resource = (db_foreach_proc_t) &caldav_foreach;
@@ -2559,7 +2562,6 @@ static int report_cal_query(struct transaction_t *txn,
     for (node = inroot->children; node; node = node->next) {
 	if (node->type == XML_ELEMENT_NODE) {
 	    if (!xmlStrcmp(node->name, BAD_CAST "filter")) {
-		memset(&calfilter, 0, sizeof(struct calquery_filter));
 		ret = parse_comp_filter(node->children, &calfilter, &txn->error);
 		if (ret) return ret;
 		else {
@@ -2606,6 +2608,9 @@ static int report_cal_query(struct transaction_t *txn,
 
 	ret = *fctx->ret;
     }
+
+    /* RRULEs still populate busytime array */
+    if (calfilter.busytime.busy) free(calfilter.busytime.busy);
 
     return ret;
 }
