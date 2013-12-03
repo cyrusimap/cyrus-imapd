@@ -43,6 +43,7 @@
 
 /*
  * TODO:
+ * - Implement truncated timezones
  * - Implement localized names and "lang" parameter
  * - Implement action=find with sub-string match anywhere (not just prefix)?
  */
@@ -265,7 +266,7 @@ static int action_capa(struct transaction_t *txn,
 
 	/* Construct our response */
 	root = json_pack("{s:i"				/* version */
-			 "  s:{s:s s:[]}"		/* info */
+			 "  s:{s:s s:{s:b s:b} s:[]}"	/* info */
 			 "  s:["			/* actions */
 			 "    {s:s s:[]}"		/* capabilities */
 			 "    {s:s s:["			/* list */
@@ -277,6 +278,7 @@ static int action_capa(struct transaction_t *txn,
 //			 "      {s:s s:b s:b}"
 			 "      {s:s s:b s:b}"
 			 "      {s:s s:b s:b s:[s s s]}"
+//			 "      {s:s s:b s:b}"
 			 "      {s:s s:b s:b s:[b b]}"
 			 "    ]}"
 			 "    {s:s s:["			/* expand */
@@ -292,7 +294,8 @@ static int action_capa(struct transaction_t *txn,
 			 "    ]}"
 			 "  ]}",
 			 "version", 1,
-			 "info", "primary-source", info.data->s, "contacts",
+			 "info", "primary-source", info.data->s,
+			 "truncated", "any", 0, "untruncated", 1, "contacts",
 			 "actions",
 			 "name", "capabilities", "parameters",
 
@@ -307,6 +310,7 @@ static int action_capa(struct transaction_t *txn,
 			 "name", "format", "required", 0, "multi", 0,
 			 "values", "text/calendar", "application/calendar+xml",
 			 "application/calendar+json",
+//			 "name", "truncate", "required", 0, "multi", 0,
 			 "name", "substitute-alias", "required", 0, "multi", 0,
 			 "values", 1, 0,
 
