@@ -3345,7 +3345,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 		    r = mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag, 1);
 		    if (!r) {
 			oldrecord.user_flags[userflag/32] |= 1<<(userflag&31);
-			oldrecord.system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
+			oldrecord.system_flags |= FLAG_EXPUNGED;
 			r = mailbox_rewrite_index_record(mailbox, &oldrecord);
 		    }
 		    if (r) {
