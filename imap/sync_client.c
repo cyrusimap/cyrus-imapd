@@ -2298,21 +2298,6 @@ static void remove_meta(char *user, struct sync_action_list *list)
     }
 }
 
-static void remove_folder(char *name, struct sync_action_list *list,
-			  int chk_child)
-{
-    struct sync_action *action;
-    size_t len = strlen(name);
-
-    for (action = list->head ; action ; action = action->next) {
-	if (!strncmp(name, action->name, len) &&
-	    ((action->name[len] == '\0') ||
-	     (chk_child && (action->name[len] == '.')))) {
-	    action->active = 0;
-	}
-    }
-}
-
 /* ====================================================================== */
 
 static int do_sync_mailboxes(struct sync_name_list *mboxname_list,
@@ -2406,61 +2391,21 @@ static int do_sync(sync_log_reader_t *slr)
     /* Optimise out redundant clauses */
 
     for (action = user_list->head; action; action = action->next) {
-	char inboxname[MAX_MAILBOX_BUFFER];
-	char deletedname[MAX_MAILBOX_BUFFER];
-
-	/* USER action overrides any MAILBOX action on any of the
-	 * user's mailboxes or any META, SEEN or SUB/UNSUB
-	 * action for same user */
-	(sync_namespace.mboxname_tointernal)(&sync_namespace, "INBOX",
-					      action->user, inboxname);
-	remove_folder(inboxname, mailbox_list, 1);
-	remove_folder(inboxname, unmailbox_list, 1);
-
-	/* remove deleted namespace items as well */
-	if (mboxlist_delayed_delete_isenabled()) {
-	    mboxname_todeleted(inboxname, deletedname, 0);
-	    remove_folder(deletedname, mailbox_list, 1);
-	    remove_folder(deletedname, unmailbox_list, 1);
-	}
-
 	/* remove per-user items */
 	remove_meta(action->user, meta_list);
 	remove_meta(action->user, seen_list);
 	remove_meta(action->user, sub_list);
-
-	/* add back in inbox, because it may have a rename to detect, woot */
-	sync_action_list_add(mailbox_list, inboxname, NULL);
     }
 
     /* duplicate removal for unuser - we also strip all the user events */
     for (action = unuser_list->head; action; action = action->next) {
-	char inboxname[MAX_MAILBOX_BUFFER];
-	char deletedname[MAX_MAILBOX_BUFFER];
-
-	/* USER action overrides any MAILBOX action on any of the
-	 * user's mailboxes or any META, SEEN or SUB/UNSUB
-	 * action for same user */
-	(sync_namespace.mboxname_tointernal)(&sync_namespace, "INBOX",
-					      action->user, inboxname);
-	remove_folder(inboxname, mailbox_list, 1);
-	remove_folder(inboxname, unmailbox_list, 1);
-
-	/* remove deleted namespace items as well */
-	if (mboxlist_delayed_delete_isenabled()) {
-	    mboxname_todeleted(inboxname, deletedname, 0);
-	    remove_folder(deletedname, mailbox_list, 1);
-	    remove_folder(deletedname, unmailbox_list, 1);
-	}
-
 	/* remove per-user items */
 	remove_meta(action->user, meta_list);
 	remove_meta(action->user, seen_list);
 	remove_meta(action->user, sub_list);
-	remove_meta(action->user, user_list);
 
-	/* add back in inbox, because it may have a rename to detect, woot */
-	sync_action_list_add(mailbox_list, inboxname, NULL);
+	/* unuser trumps user */
+	remove_meta(action->user, user_list);
     }
 
     for (action = meta_list->head; action; action = action->next) {
