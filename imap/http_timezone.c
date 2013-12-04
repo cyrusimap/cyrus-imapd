@@ -43,7 +43,6 @@
 
 /*
  * TODO:
- * - Implement truncated timezones
  * - Implement localized names and "lang" parameter
  * - Implement action=find with sub-string match anywhere (not just prefix)?
  */
@@ -85,7 +84,8 @@ static int meth_get(struct transaction_t *txn, void *params);
 static int action_capa(struct transaction_t *txn, struct hash_table *params);
 static int action_list(struct transaction_t *txn, struct hash_table *params);
 static int action_get(struct transaction_t *txn, struct hash_table *params);
-static int action_get_all(struct transaction_t *txn, struct mime_type_t *mime);
+static int action_get_all(struct transaction_t *txn,
+			  struct mime_type_t *mime, icaltimetype *truncate);
 static int action_expand(struct transaction_t *txn, struct hash_table *params);
 static int json_response(int code, struct transaction_t *txn, json_t *root,
 			 char **resp);
@@ -278,7 +278,7 @@ static int action_capa(struct transaction_t *txn,
 //			 "      {s:s s:b s:b}"
 			 "      {s:s s:b s:b}"
 			 "      {s:s s:b s:b s:[s s s]}"
-//			 "      {s:s s:b s:b}"
+			 "      {s:s s:b s:b}"
 			 "      {s:s s:b s:b s:[b b]}"
 			 "    ]}"
 			 "    {s:s s:["			/* expand */
@@ -295,7 +295,7 @@ static int action_capa(struct transaction_t *txn,
 			 "  ]}",
 			 "version", 1,
 			 "info", "primary-source", info.data->s,
-			 "truncated", "any", 0, "untruncated", 1, "contacts",
+			 "truncated", "any", 1, "untruncated", 1, "contacts",
 			 "actions",
 			 "name", "capabilities", "parameters",
 
@@ -310,7 +310,7 @@ static int action_capa(struct transaction_t *txn,
 			 "name", "format", "required", 0, "multi", 0,
 			 "values", "text/calendar", "application/calendar+xml",
 			 "application/calendar+json",
-//			 "name", "truncate", "required", 0, "multi", 0,
+			 "name", "truncate", "required", 0, "multi", 0,
 			 "name", "substitute-alias", "required", 0, "multi", 0,
 			 "values", 1, 0,
 
@@ -462,6 +462,117 @@ static int action_list(struct transaction_t *txn, struct hash_table *params)
 }
 
 
+void truncate_vtimezone(icalcomponent *vtz, icaltimetype *truncate)
+{
+    icalcomponent *comp, *nextc;
+
+    /* Process each VTMEZONE STANDARD/DAYLIGHT subcomponent */
+    for (comp =
+	     icalcomponent_get_first_component(vtz, ICAL_ANY_COMPONENT);
+	 comp; comp = nextc) {
+	icalproperty *prop, *nextp, *dtstart_prop = NULL;
+	icalproperty *rrule_prop = NULL, *rdate_prop = NULL;
+	icaltimetype dtstart;
+
+	nextc = icalcomponent_get_next_component(vtz,
+						 ICAL_ANY_COMPONENT);
+
+	/* Check DTSTART */
+	dtstart_prop =
+	    icalcomponent_get_first_property(comp,
+					     ICAL_DTSTART_PROPERTY);
+	dtstart = icalproperty_get_dtstart(dtstart_prop);
+
+	if (icaltime_compare(dtstart, *truncate) >= 0) {
+	    /* All observances occur after our cutoff, keep comp */
+	    continue;
+	}
+
+	/* Check RRULE */
+	rrule_prop =
+	    icalcomponent_get_first_property(comp,
+					     ICAL_RRULE_PROPERTY);
+	if (rrule_prop) {
+	    struct icalrecurrencetype rrule;
+
+	    rrule = icalproperty_get_rrule(rrule_prop);
+
+	    /* Check RRULE duration */
+	    if (!icaltime_is_null_time(rrule.until)) {
+		if (rrule.until.is_utc) {
+		    /* Adjust UNTIL to local time */
+		    prop = icalcomponent_get_first_property(
+			comp, ICAL_TZOFFSETFROM_PROPERTY);
+
+		    icaltime_adjust(&rrule.until, 0, 0, 0,
+				    icalproperty_get_tzoffsetfrom(prop));
+		    rrule.until.is_utc = 0;
+		}
+
+		if (icaltime_compare(rrule.until, *truncate) < 0) {
+		    /* RRULE ends prior to our cutoff - remove it */
+		    icalcomponent_remove_property(comp, rrule_prop);
+		    icalproperty_free(rrule_prop);
+		    rrule_prop = NULL;
+		}
+	    }
+
+	    if (rrule_prop) {
+		/* Find first recurrence after our cutoff
+		   and set DTSTART accordingly */
+		icalrecur_iterator *ritr;
+
+		/* Set iterator to start 1 day prior to our cutoff */
+		dtstart.year = truncate->year;
+		dtstart.month = truncate->month;
+		dtstart.day = truncate->day - 1;
+
+		ritr = icalrecur_iterator_new(rrule, dtstart);
+		dtstart = icalrecur_iterator_next(ritr);
+		icalproperty_set_dtstart(dtstart_prop, dtstart);
+		icalrecur_iterator_free(ritr);
+	    }
+	}
+
+	/* Check RDATE(s) (we assume they are in order) */
+	for (prop =
+		 icalcomponent_get_first_property(comp,
+						  ICAL_RDATE_PROPERTY);
+	     prop; prop = nextp) {
+	    struct icaldatetimeperiodtype rdate;
+
+	    nextp =
+		icalcomponent_get_next_property(comp,
+						ICAL_RDATE_PROPERTY);
+
+	    rdate =icalproperty_get_rdate(prop);
+	    if (icaltime_compare(rdate.time, *truncate) < 0) {
+		/* RDATE occurs prior to our cutoff - remove it */
+		icalcomponent_remove_property(comp, prop);
+		icalproperty_free(prop);
+	    }
+	    else {
+		if (!rrule_prop) {
+		    /* Make this RDATE the new DTSTART */
+		    rdate_prop = prop;
+		    icalproperty_set_dtstart(dtstart_prop, rdate.time);
+
+		    icalcomponent_remove_property(comp, prop);
+		    icalproperty_free(prop);
+		}
+		break;
+	    }
+	}
+
+	/* Final check */
+	if (!rrule_prop && !rdate_prop) {
+	    /* All observances occur prior to our cutoff, remove comp */
+	    icalcomponent_remove_component(vtz, comp);
+	    icalcomponent_free(comp);
+	}
+    }
+}
+
 /* Perform a get action */
 static int action_get(struct transaction_t *txn, struct hash_table *params)
 {
@@ -470,6 +581,7 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
     const char *tzid;
     struct zoneinfo zi;
     time_t lastmod;
+    icaltimetype truncate = icaltime_null_time();
     char *data = NULL;
     unsigned long datalen = 0;
     struct resp_body_t *resp_body = &txn->resp_body;
@@ -496,8 +608,17 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
 	return json_error_response(txn, "invalid-format");
     }
 
+    /* Check for any truncation */
+    param = hash_lookup("truncate", params);
+    if (param) {
+	truncate = icaltime_from_day_of_year(1, atoi(param->s));
+	if (icaltime_is_null_time(truncate) || param->next  /* once only */)
+	    return json_error_response(txn, "invalid-truncate");
+
+    }
+
     /* Handle tzid=* separately */
-    if (!strcmp(tzid, "*")) return action_get_all(txn, mime);
+    if (!strcmp(tzid, "*")) return action_get_all(txn, mime, &truncate);
 
     /* Get info record from the database */
     if ((r = zoneinfo_lookup(tzid, &zi)))
@@ -544,7 +665,7 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
 	static struct buf pathbuf = BUF_INITIALIZER;
 	const char *path, *proto, *host, *msg_base = NULL;
 	unsigned long msg_size = 0;
-	icalcomponent *ical, *comp;
+	icalcomponent *ical, *vtz;
 	icalproperty *prop;
 	int fd;
 
@@ -561,7 +682,16 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
 	map_free(&msg_base, &msg_size);
 	close(fd);
 
-	/* Set TZURL property */
+	vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
+	prop = icalcomponent_get_first_property(vtz, ICAL_TZID_PROPERTY);
+
+	if (substitute) {
+	    /* Substitute TZID alias */
+	    icalproperty_set_tzid(prop, tzid);
+	}
+	else tzid = icalproperty_get_tzid(prop);
+
+	/* Start constructing TZURL */
 	buf_reset(&pathbuf);
 	http_proto_host(txn->req_hdrs, &proto, &host);
 	buf_printf(&pathbuf, "%s://%s%s?action=get&tzid=%s",
@@ -571,27 +701,28 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
 		       (int) strcspn(mime->content_type, ";"),
 		       mime->content_type);
 	}
-	path = buf_cstring(&pathbuf);
-	comp =
-	    icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
-	prop = icalproperty_new_tzurl(path);
-	icalcomponent_add_property(comp, prop);
 
-	if (substitute) {
-	    /* Substitute TZID alias */
-	    prop = icalcomponent_get_first_property(comp, ICAL_TZID_PROPERTY);
-	    icalproperty_set_tzid(prop, tzid);
+	if (!icaltime_is_null_time(truncate)) {
+	    /* Truncate the VTIMEZONE */
+	    truncate_vtimezone(vtz, &truncate);
+
+	    buf_printf(&pathbuf, "&truncate=%d", truncate.year);
 	}
+
+	/* Set TZURL property */
+	prop = icalproperty_new_tzurl(buf_cstring(&pathbuf));
+	icalcomponent_add_property(vtz, prop);
 
 	/* Convert to requested MIME type */
 	data = mime->to_string(ical);
 	datalen = strlen(data);
-	icalcomponent_free(ical);
 
 	/* Set Content-Disposition filename */
 	buf_reset(&pathbuf);
 	buf_printf(&pathbuf, "%s.%s", tzid, mime->file_ext);
 	resp_body->fname = buf_cstring(&pathbuf);
+
+	icalcomponent_free(ical);
     }
 
     write_body(precond, txn, data, datalen);
@@ -622,6 +753,7 @@ static void end_ical(struct buf *buf)
 struct get_rock {
     struct transaction_t *txn;
     struct mime_type_t *mime;
+    icaltimetype *truncate;
     const char *sep;
     unsigned count;
 };
@@ -635,7 +767,8 @@ static int get_cb(const char *tzid, int tzidlen,
     struct mime_type_t *mime = grock->mime;
     const char *path, *proto, *host, *msg_base = NULL;
     unsigned long msg_size = 0;
-    icalcomponent *ical, *comp;
+    icalcomponent *ical, *vtz;
+    icalproperty *prop;
     int fd = -1;
     char *tz_str;
 
@@ -661,7 +794,10 @@ static int get_cb(const char *tzid, int tzidlen,
 	write_body(0, grock->txn, buf_cstring(buf), buf_len(buf));
     }
 
-    /* Set TZURL property */
+    vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
+    prop = icalcomponent_get_first_property(vtz, ICAL_TZID_PROPERTY);
+
+    /* Start constructing TZURL */
     buf_reset(pathbuf);
     http_proto_host(grock->txn->req_hdrs, &proto, &host);
     buf_printf(pathbuf, "%s://%s%s?action=get&tzid=%.*s",
@@ -671,12 +807,20 @@ static int get_cb(const char *tzid, int tzidlen,
 		   (int) strcspn(mime->content_type, ";"),
 		   mime->content_type);
     }
-    path = buf_cstring(pathbuf);
-    comp = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
-    icalcomponent_add_property(comp, icalproperty_new_tzurl(path));
+
+    if (!icaltime_is_null_time(*grock->truncate)) {
+	/* Truncate the VTIMEZONE */
+	truncate_vtimezone(vtz, grock->truncate);
+
+	buf_printf(pathbuf, "&truncate=%d", grock->truncate->year);
+    }
+
+    /* Set TZURL property */
+    prop = icalproperty_new_tzurl(buf_cstring(pathbuf));
+    icalcomponent_add_property(vtz, prop);
 
     /* Output the (converted) VTIMEZONE component */
-    tz_str = mime->to_string(comp);
+    tz_str = mime->to_string(vtz);
     write_body(0, grock->txn, tz_str, strlen(tz_str));
     free(tz_str);
 
@@ -686,14 +830,15 @@ static int get_cb(const char *tzid, int tzidlen,
 }
 
 
-static int action_get_all(struct transaction_t *txn, struct mime_type_t *mime)
+static int action_get_all(struct transaction_t *txn,
+			  struct mime_type_t *mime, icaltimetype *truncate)
 {
     int r, precond;
     struct resp_body_t *resp_body = &txn->resp_body;
     struct zoneinfo info;
     time_t lastmod;
     struct buf *buf = &resp_body->payload;
-    struct get_rock grock = { txn, mime, NULL, 0 };
+    struct get_rock grock = { txn, mime, truncate, NULL, 0 };
 
     /* Get info record from the database */
     if ((r = zoneinfo_lookup_info(&info))) return HTTP_SERVER_ERROR;
