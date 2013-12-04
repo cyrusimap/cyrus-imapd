@@ -304,6 +304,7 @@ static int query_begin_index(search_query_t *query,
 
 	r = index_open(mboxname, &init, statep);
 	if (r == IMAP_PERMISSION_DENIED) r = IMAP_MAILBOX_NONEXISTENT;
+	if (r == IMAP_MAILBOX_BADTYPE) r = IMAP_MAILBOX_NONEXISTENT;
 	if (r) goto out;
 
 	index_checkflags(*statep, 0, 0);
