@@ -1382,30 +1382,29 @@ static int write_entry(const char *mboxname, const char *entry,
 	} while (r == CYRUSDB_AGAIN);
     }
     else {
-	char data[MAX_MAILBOX_PATH+1];
-	int datalen = 0;
+	struct buf data = BUF_INITIALIZER;
 	unsigned long l;
 
 	l = htonl(strlen(attrib->value));
-	memcpy(data+datalen, &l, sizeof(l));
-	datalen += sizeof(l);
+	buf_appendmap(&data, (const char *) &l, sizeof(l));
 
-	strlcpy(data+datalen, attrib->value, sizeof(data)-datalen);
-	datalen += strlen(attrib->value) + 1;
+	buf_appendcstr(&data, attrib->value);
+	buf_putc(&data, '\0');
 
 	if (!attrib->contenttype || !strcmp(attrib->contenttype, "NIL")) {
 	    attrib->contenttype = "text/plain";
 	}
-	strlcpy(data+datalen, attrib->contenttype, sizeof(data)-datalen);
-	datalen += strlen(attrib->contenttype) + 1;
+	buf_appendcstr(&data, attrib->contenttype);
+	buf_putc(&data, '\0');
 
 	l = htonl(attrib->modifiedsince);
-	memcpy(data+datalen, &l, sizeof(l));
-	datalen += sizeof(l);
+	buf_appendmap(&data, (const char *) &l, sizeof(l));
 
 	do {
-	    r = DB->store(anndb, key, keylen, data, datalen, tid);
+	    r = DB->store(anndb, key, keylen, data.s, data.len, tid);
 	} while (r == CYRUSDB_AGAIN);
+	buf_free(&data);
+
 	sync_log_annotation(mboxname);
     }
 
