@@ -2665,7 +2665,6 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 	r = carddav_delete(carddavdb, cdata->dav.rowid, 0);
     }
     else {
-	const char *uid = NULL, *fullname = NULL, *nickname = NULL;
 	struct buf msg_buf = BUF_INITIALIZER;
 	VObjectIterator i;
 	VObject *vcard;
@@ -2682,32 +2681,42 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 	buf_free(&msg_buf);
 	if (!vcard) goto done;
 
+	/* Create mapping entry from resource name to UID */
+	cdata->dav.mailbox = mailbox->name;
+	cdata->dav.resource = resource;
+	cdata->dav.imap_uid = new->uid;
+
+	if (!cdata->dav.creationdate)
+	    cdata->dav.creationdate = new->internaldate;
+
 	initPropIterator(&i, vcard);
 	while (moreIteration(&i)) {
 	    VObject *prop = nextVObject(&i);
 	    const char *name = vObjectName(prop);
 
 	    if (!strcmp(name, "UID")) {
-		uid = fakeCString(vObjectUStringZValue(prop));
+		cdata->vcard_uid = fakeCString(vObjectUStringZValue(prop));
+	    }
+	    else if (!strcmp(name, "N")) {
+		cdata->name = fakeCString(vObjectUStringZValue(prop));
 	    }
 	    else if (!strcmp(name, "FN")) {
-		fullname = fakeCString(vObjectUStringZValue(prop));
+		cdata->fullname = fakeCString(vObjectUStringZValue(prop));
 	    }
-	    if (!strcmp(name, "NICKNAME")) {
-		nickname = fakeCString(vObjectUStringZValue(prop));
+	    else if (!strcmp(name, "NICKNAME")) {
+		cdata->nickname = fakeCString(vObjectUStringZValue(prop));
+	    }
+	    else if (!strcmp(name, "EMAIL")) {
+		/* XXX - insert if primary */
+		const char *item = fakeCString(vObjectUStringZValue(prop));
+		strarray_append(&cdata->emails, item);
+	    }
+	    else if (!strcmp(name, "X-ADDRESSBOOKSERVER-MEMBER")) {
+		const char *item = fakeCString(vObjectUStringZValue(prop));
+		if (!strncmp(item, "urn:uuid:", 9))
+		    strarray_append(&cdata->member_uids, item+9);
 	    }
 	}
-
-	/* Create mapping entry from resource name to UID */
-	cdata->dav.mailbox = mailbox->name;
-	cdata->dav.resource = resource;
-	cdata->dav.imap_uid = new->uid;
-	cdata->vcard_uid = uid;
-	cdata->fullname = fullname;
-	cdata->nickname = nickname;
-
-	if (!cdata->dav.creationdate)
-	    cdata->dav.creationdate = new->internaldate;
 
 	r = carddav_write(carddavdb, cdata, 0);
     }
