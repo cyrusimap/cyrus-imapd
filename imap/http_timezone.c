@@ -75,8 +75,6 @@
 
 #define TIMEZONE_WELLKNOWN_URI "/.well-known/timezone"
 
-#define FNAME_ZONEINFODIR "/zoneinfo/"
-
 static time_t compile_time;
 static void timezone_init(struct buf *serverinfo);
 static void timezone_shutdown(void);
@@ -671,7 +669,8 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
 
 	/* Open, mmap, and parse the file */
 	buf_reset(&pathbuf);
-	buf_printf(&pathbuf, "%s%s%s.ics", config_dir, FNAME_ZONEINFODIR, tzid);
+	buf_printf(&pathbuf, "%s%s/%s.ics",
+		   config_dir, FNAME_ZONEINFODIR, tzid);
 	path = buf_cstring(&pathbuf);
 	if ((fd = open(path, O_RDONLY)) == -1) return HTTP_SERVER_ERROR;
 
@@ -773,7 +772,7 @@ static int get_cb(const char *tzid, int tzidlen,
     char *tz_str;
 
     buf_reset(pathbuf);
-    buf_printf(pathbuf, "%s%s%.*s.ics",
+    buf_printf(pathbuf, "%s%s/%.*s.ics",
 	       config_dir, FNAME_ZONEINFODIR, tzidlen, tzid);
     path = buf_cstring(pathbuf);
 
@@ -1016,7 +1015,8 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
 
 	/* Open, mmap, and parse the file */
 	buf_reset(&pathbuf);
-	buf_printf(&pathbuf, "%s%s%s.ics", config_dir, FNAME_ZONEINFODIR, tzid);
+	buf_printf(&pathbuf, "%s%s/%s.ics",
+		   config_dir, FNAME_ZONEINFODIR, tzid);
 	path = buf_cstring(&pathbuf);
 	if ((fd = open(path, O_RDONLY)) == -1) return HTTP_SERVER_ERROR;
 

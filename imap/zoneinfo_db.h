@@ -48,6 +48,9 @@
 
 #include "annotate.h" /* for strlist functionality */
 
+/* name of the zoneinfo directory */
+#define FNAME_ZONEINFODIR "/zoneinfo"
+
 /* name of the zoneinfo database */
 #define FNAME_ZONEINFODB "/zoneinfo.db"
 #define ZONEINFO_VERSION 1
