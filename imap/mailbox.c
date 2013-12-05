@@ -3836,6 +3836,7 @@ static unsigned expungedeleted(struct mailbox *mailbox __attribute__((unused)),
 EXPORTED void mailbox_archive(struct mailbox *mailbox,
 			      mailbox_decideproc_t *decideproc, void *deciderock)
 {
+    int r;
     int dirtycache = 0;
     uint32_t recno;
     struct index_record record;
@@ -3851,9 +3852,14 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
     assert(decideproc);
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
+	const char *action = NULL;
 	/* skip damaged records */
-	if (mailbox_read_index_record(mailbox, recno, &record))
+	r = mailbox_read_index_record(mailbox, recno, &record);
+	if (r) {
+	    syslog(LOG_ERR, "IOERROR archive %s recno %u failed to read index record: %s",
+		   mailbox->name, recno, error_message(r));
 	    continue;
+	}
 
 	/* skip already unlinked records */
 	if (record.system_flags & FLAG_UNLINKED)
@@ -3864,34 +3870,44 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
 		continue;
 	    srcname = mailbox_spool_fname(mailbox, record.uid);
 	    destname = mailbox_archive_fname(mailbox, record.uid);
+
 	    /* load cache before changing the flags */
-	    if (mailbox_cacherecord(mailbox, &record))
+	    r = mailbox_cacherecord(mailbox, &record);
+	    if (r) {
+		syslog(LOG_ERR, "IOERROR archive %s %u failed to read cache: %s",
+		       mailbox->name, record.uid, error_message(r));
 		continue;
+	    }
+
 	    record.system_flags |= FLAG_ARCHIVED;
-	    if (config_auditlog)
-		syslog(LOG_NOTICE, "auditlog: archive sessionid=<%s> mailbox=<%s> uniqueid=<%s> uid=<%u> guid=<%s> cid=<%s>",
-		       session_id(), mailbox->name, mailbox->uniqueid, record.uid,
-		       message_guid_encode(&record.guid), conversation_id_encode(record.cid));
+	    action = "archive";
 	}
 	else {
 	    if (!(record.system_flags & FLAG_ARCHIVED))
 		continue;
 	    destname = mailbox_spool_fname(mailbox, record.uid);
 	    srcname = mailbox_archive_fname(mailbox, record.uid);
+
 	    /* load cache before changing the flags */
-	    if (mailbox_cacherecord(mailbox, &record))
+	    r = mailbox_cacherecord(mailbox, &record);
+	    if (r) {
+		syslog(LOG_ERR, "IOERROR archive %s %u failed to read cache: %s",
+		       mailbox->name, record.uid, error_message(r));
 		continue;
+	    }
+
 	    record.system_flags &= ~FLAG_ARCHIVED;
-	    if (config_auditlog)
-		syslog(LOG_NOTICE, "auditlog: unarchive sessionid=<%s> mailbox=<%s> uniqueid=<%s> uid=<%u> guid=<%s> cid=<%s>",
-		       session_id(), mailbox->name, mailbox->uniqueid, record.uid,
-		       message_guid_encode(&record.guid), conversation_id_encode(record.cid));
+	    action = "unarchive";
 	}
 
 	/* got a file to copy! */
 	if (strcmp(srcname, destname)) {
-	    if (cyrus_copyfile(srcname, destname, COPYFILE_MKDIR))
+	    r = cyrus_copyfile(srcname, destname, COPYFILE_MKDIR);
+	    if (r) {
+		syslog(LOG_ERR, "IOERROR archive %s %u failed to copyfile (%s => %s): %s",
+		       mailbox->name, record.uid, srcname, destname, error_message(r));
 		continue;
+	    }
 	}
 
 	/* got a new cache record to write */
@@ -3906,6 +3922,11 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
 	record.silent = 1;
 	if (mailbox_rewrite_index_record(mailbox, &record))
 	    continue;
+
+	if (config_auditlog)
+	    syslog(LOG_NOTICE, "auditlog: %s sessionid=<%s> mailbox=<%s> uniqueid=<%s> uid=<%u> guid=<%s> cid=<%s>",
+		   action, session_id(), mailbox->name, mailbox->uniqueid, record.uid,
+		   message_guid_encode(&record.guid), conversation_id_encode(record.cid));
 
 	/* finally clean up the original */
 	if (strcmp(srcname, destname))
