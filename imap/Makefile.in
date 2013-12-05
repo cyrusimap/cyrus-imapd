@@ -359,8 +359,13 @@ reconstruct: reconstruct.o $(CLIOBJS) libimap.a $(DEPLIBS)
 
 dav_reconstruct: dav_reconstruct.o caldav_db.o dav_db.o $(CLIOBJS) \
 	libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -lical -o \
+	$(CC) $(LDFLAGS) -o \
 	 $@ dav_reconstruct.o caldav_db.o dav_db.o $(CLIOBJS) \
+	 libimap.a $(DEPLIBS) $(LIBS) $(HTTP_LIBS)
+
+ctl_zoneinfo: ctl_zoneinfo.o zoneinfo_db.o $(CLIOBJS) libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o \
+	 $@ ctl_zoneinfo.o zoneinfo_db.o $(CLIOBJS) \
 	 libimap.a $(DEPLIBS) $(LIBS) $(HTTP_LIBS)
 
 quota: quota.o $(CLIOBJS) libimap.a $(DEPLIBS)

@@ -1041,6 +1041,7 @@ if test "$ENABLE_RSS" != no -o "$ENABLE_DAV" != no; then
       ENABLE_JSON=yes
       PKG_CHECK_MODULES([JSON], [jansson],, ENABLE_JSON=no)
       if test "$ENABLE_JSON" != no; then
+         IMAP_PROGS="$IMAP_PROGS ctl_zoneinfo"
          HTTP_OBJS="$HTTP_OBJS \$(TIMEZONE_OBJS)"
          AC_SUBST(JSON_CFLAGS)
 	 AC_SUBST(JSON_LIBS)

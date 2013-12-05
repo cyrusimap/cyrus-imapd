@@ -70,7 +70,7 @@ MAN8 = $(srcdir)/arbitron.8 $(srcdir)/cyr_expire.8 $(srcdir)/deliver.8 \
 	$(srcdir)/nntpd.8 $(srcdir)/fetchnews.8 $(srcdir)/smmapd.8 \
 	$(srcdir)/sync_client.8 $(srcdir)/sync_server.8 $(srcdir)/sync_reset.8 \
 	$(srcdir)/unexpunge.8 $(srcdir)/cyr_dbtool.8 $(srcdir)/httpd.8 \
-	$(srcdir)/cyr_synclog.8 $(srcdir)/cyr_df.8
+	$(srcdir)/cyr_synclog.8 $(srcdir)/cyr_df.8 $(srcdir)/ctl_zoneinfo.8
 
 all: $(MAN1) $(MAN3) $(MAN5) $(MAN8)
 
