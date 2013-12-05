@@ -289,6 +289,7 @@ struct namespace_t *namespaces[] = {
 #ifdef WITH_RSS
     &namespace_rss,
 #endif
+    &namespace_dblookup,
     &namespace_default,		/* MUST be present and be last!! */
     NULL,
 };

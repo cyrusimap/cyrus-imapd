@@ -448,14 +448,6 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
 	}
     }
 
-    destfd = open(to, O_RDWR|O_TRUNC|O_CREAT, 0666);
-    if (destfd == -1) {
-	if (!(flags & COPYFILE_MKDIR))
-	    syslog(LOG_ERR, "IOERROR: creating %s: %m", to);
-	r = -1;
-	goto done;
-    }
-
     srcfd = open(from, O_RDONLY, 0666);
     if (srcfd == -1) {
 	syslog(LOG_ERR, "IOERROR: opening %s: %m", from);
@@ -465,6 +457,20 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
 
     if (fstat(srcfd, &sbuf) == -1) {
 	syslog(LOG_ERR, "IOERROR: fstat on %s: %m", from);
+	r = -1;
+	goto done;
+    }
+
+    if (!sbuf.st_size) {
+	syslog(LOG_ERR, "IOERROR: zero byte file %s: %m", from);
+	r = -1;
+	goto done;
+    }
+
+    destfd = open(to, O_RDWR|O_TRUNC|O_CREAT, 0666);
+    if (destfd == -1) {
+	if (!(flags & COPYFILE_MKDIR))
+	    syslog(LOG_ERR, "IOERROR: creating %s: %m", to);
 	r = -1;
 	goto done;
     }

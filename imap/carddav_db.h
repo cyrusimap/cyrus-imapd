@@ -47,6 +47,7 @@
 #include <config.h>
 
 #include "dav_db.h"
+#include "strarray.h"
 
 struct carddav_db;
 
@@ -61,7 +62,8 @@ struct carddav_data {
     const char *fullname;
     const char *name;
     const char *nickname;
-    const char *email;
+    strarray_t emails;
+    strarray_t member_uids;
 };
 
 /* prepare for carddav operations in this process */
@@ -87,6 +89,10 @@ int carddav_lookup_resource(struct carddav_db *carddavdb,
    (optionally inside a transaction for updates) */
 int carddav_lookup_uid(struct carddav_db *carddavdb, const char *ical_uid,
 		      int lock, struct carddav_data **result);
+
+/* check if an email address exists on any card */
+int carddav_getemail(struct carddav_db *carddavdb, const char *key);
+strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *key);
 
 /* process each entry for 'mailbox' in 'carddavdb' with cb() */
 int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,

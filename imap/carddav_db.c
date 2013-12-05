@@ -61,29 +61,24 @@ enum {
     STMT_SELUID,
     STMT_SELMBOX,
     STMT_INSERT,
-    STMT_UPDATE,
     STMT_DELETE,
     STMT_DELMBOX,
     STMT_BEGIN,
     STMT_COMMIT,
-    STMT_ROLLBACK
+    STMT_ROLLBACK,
+    STMT_INSERT_EMAIL,
+    STMT_INSERT_GROUP,
+    STMT_GETEMAIL,
+    STMT_GETGROUP,
+    NUM_STMT
 };
 
-#define NUM_STMT 10
+#define NUM_BUFS 10
 
 struct carddav_db {
     sqlite3 *db;			/* DB handle */
     sqlite3_stmt *stmt[NUM_STMT];	/* prepared statements */
-    struct buf mailbox;			/* buffers for copies of column text */
-    struct buf resource;
-    struct buf lock_token;
-    struct buf lock_owner;
-    struct buf lock_ownerid;
-    struct buf vcard_uid;
-    struct buf fullname;
-    struct buf name;
-    struct buf nickname;
-    struct buf email;
+    struct buf bufs[NUM_BUFS];		/* buffers for copies of column text */
 };
 
 
@@ -99,9 +94,9 @@ EXPORTED int carddav_done(void)
 }
 
 
-#define CMD_DROP "DROP TABLE IF EXISTS vcard_objs;"
+#define CMD_DROP_OBJ "DROP TABLE IF EXISTS vcard_objs;"
 
-#define CMD_CREATE							\
+#define CMD_CREATE_OBJ							\
     "CREATE TABLE IF NOT EXISTS vcard_objs ("				\
     " rowid INTEGER PRIMARY KEY,"					\
     " creationdate INTEGER,"						\
@@ -118,9 +113,33 @@ EXPORTED int carddav_done(void)
     " fullname TEXT,"							\
     " name TEXT,"							\
     " nickname TEXT,"							\
-    " email TEXT,"							\
     " UNIQUE( mailbox, resource ) );"					\
+    "CREATE INDEX IF NOT EXISTS idx_vcard_fn ON vcard_objs ( fullname );" \
     "CREATE INDEX IF NOT EXISTS idx_vcard_uid ON vcard_objs ( vcard_uid );"
+
+#define CMD_DROP_EM "DROP TABLE IF EXISTS vcard_emails;"
+
+#define CMD_CREATE_EM							\
+    "CREATE TABLE IF NOT EXISTS vcard_emails ("				\
+    " rowid INTEGER PRIMARY KEY,"					\
+    " objid INTEGER,"							\
+    " pos INTEGER NOT NULL," /* for sorting */				\
+    " email TEXT NOT NULL,"						\
+    " FOREIGN KEY (objid) REFERENCES vcard_objs (rowid) ON DELETE CASCADE );" \
+    "CREATE INDEX IF NOT EXISTS idx_vcard_email ON vcard_emails ( email );"
+
+#define CMD_DROP_GR "DROP TABLE IF EXISTS vcard_groups;"
+
+#define CMD_CREATE_GR							\
+    "CREATE TABLE IF NOT EXISTS vcard_groups ("				\
+    " rowid INTEGER PRIMARY KEY,"					\
+    " objid INTEGER,"							\
+    " pos INTEGER NOT NULL," /* for sorting */				\
+    " member_uid TEXT NOT NULL,"					\
+    " FOREIGN KEY (objid) REFERENCES vcard_objs (rowid) ON DELETE CASCADE );"
+
+#define CMD_DROP CMD_DROP_OBJ CMD_DROP_EM CMD_DROP_GR
+#define CMD_CREATE CMD_CREATE_OBJ CMD_CREATE_EM CMD_CREATE_GR
 
 /* Open DAV DB corresponding to mailbox */
 static struct carddav_db *carddav_open_fname(const char *fname, int flags)
@@ -173,16 +192,9 @@ EXPORTED int carddav_close(struct carddav_db *carddavdb)
 
     if (!carddavdb) return 0;
 
-    buf_free(&carddavdb->mailbox);
-    buf_free(&carddavdb->resource);
-    buf_free(&carddavdb->lock_token);
-    buf_free(&carddavdb->lock_owner);
-    buf_free(&carddavdb->lock_ownerid);
-    buf_free(&carddavdb->vcard_uid);
-    buf_free(&carddavdb->fullname);
-    buf_free(&carddavdb->name);
-    buf_free(&carddavdb->nickname);
-    buf_free(&carddavdb->email);
+    for (i = 0; i < NUM_BUFS; i++) {
+	buf_free(&carddavdb->bufs[i]);
+    }
 
     for (i = 0; i < NUM_STMT; i++) {
 	sqlite3_stmt *stmt = carddavdb->stmt[i];
@@ -268,7 +280,6 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 	cdata->fullname = (const char *) sqlite3_column_text(stmt, 12);
 	cdata->name = (const char *) sqlite3_column_text(stmt, 13);
 	cdata->nickname = (const char *) sqlite3_column_text(stmt, 14);
-	cdata->email = (const char *) sqlite3_column_text(stmt, 15);
 	r = rrock->cb(rrock->rock, cdata);
     }
     else {
@@ -277,34 +288,31 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 	 * it gets flushed by sqlite3_step() or sqlite3_reset() */
 	cdata->dav.mailbox =
 	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 2),
-			       &db->mailbox);
+			       &db->bufs[0]);
 	cdata->dav.resource =
 	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 3),
-			       &db->resource);
+			       &db->bufs[1]);
 	cdata->dav.lock_token =
 	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 5),
-			       &db->lock_token);
+			       &db->bufs[2]);
 	cdata->dav.lock_owner =
 	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 6),
-			       &db->lock_owner);
+			       &db->bufs[3]);
 	cdata->dav.lock_ownerid =
 	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 7),
-			       &db->lock_ownerid);
+			       &db->bufs[4]);
 	cdata->vcard_uid =
 	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 10),
-			       &db->vcard_uid);
+			       &db->bufs[5]);
 	cdata->fullname =
 	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 12),
-			       &db->fullname);
+			       &db->bufs[6]);
 	cdata->name =
 	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 13),
-			       &db->name);
+			       &db->bufs[7]);
 	cdata->nickname =
 	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 14),
-			       &db->nickname);
-	cdata->email =
-	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 15),
-			       &db->email);
+			       &db->bufs[8]);
     }
 
     return r;
@@ -314,7 +322,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 #define CMD_SELRSRC							\
     "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
-    "  version, vcard_uid, kind, fullname, name, nickname, email"	\
+    "  version, vcard_uid, kind, fullname, name, nickname"		\
     " FROM vcard_objs"							\
     " WHERE ( mailbox = :mailbox AND resource = :resource );"
 
@@ -350,7 +358,7 @@ EXPORTED int carddav_lookup_resource(struct carddav_db *carddavdb,
 #define CMD_SELUID							\
     "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
-    "  version, vcard_uid, kind, fullname, name, nickname, email"	\
+    "  version, vcard_uid, kind, fullname, name, nickname"		\
     " FROM vcard_objs"							\
     " WHERE ( vcard_uid = :vcard_uid );"
 
@@ -384,7 +392,7 @@ EXPORTED int carddav_lookup_uid(struct carddav_db *carddavdb, const char *vcard_
 #define CMD_SELMBOX							\
     "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
-    "  version, vcard_uid, kind, fullname, name, nickname, email"	\
+    "  version, vcard_uid, kind, fullname, name, nickname"		\
     " FROM vcard_objs WHERE mailbox = :mailbox;"
 
 EXPORTED int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
@@ -401,37 +409,143 @@ EXPORTED int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
 		    &carddavdb->stmt[STMT_SELMBOX]);
 }
 
+#define CMD_GETEMAIL							\
+    "SELECT rowid"							\
+    " FROM vcard_emails"						\
+    " WHERE ( email = :email );"
+
+static int foundemail_cb(sqlite3_stmt *stmt, void *rock)
+{
+    int *foundp = (int *)rock;
+    if (sqlite3_column_int(stmt, 0))
+	*foundp = 1;
+    return 0;
+}
+
+EXPORTED int carddav_getemail(struct carddav_db *carddavdb, const char *email)
+{
+    struct bind_val bval[] = {
+	{ ":email", SQLITE_TEXT, { .s = email } },
+	{ NULL,     SQLITE_NULL, { .s = NULL  } }
+    };
+    int found = 0;
+    int r;
+
+    r = dav_exec(carddavdb->db, CMD_GETEMAIL, bval, &foundemail_cb, &found,
+		 &carddavdb->stmt[STMT_GETEMAIL]);
+    if (r) {
+	/* XXX syslog */
+    }
+
+    return found;
+}
+
+#define CMD_GETGROUP \
+    "SELECT E.email FROM vcard_emails E" \
+    " JOIN vcard_objs CO JOIN vcard_groups G JOIN vcard_objs GO" \
+    " WHERE E.objid = CO.rowid AND CO.vcard_uid = G.member_uid AND G.objid = GO.rowid" \
+    " AND E.pos = 0 AND GO.fullname = :group"
+
+static int foundgroup_cb(sqlite3_stmt *stmt, void *rock)
+{
+    strarray_t *array = (strarray_t *)rock;
+    strarray_add(array, (const char *)sqlite3_column_text(stmt, 0));
+    return 0;
+}
+
+EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *group)
+{
+    struct bind_val bval[] = {
+	{ ":group", SQLITE_TEXT, { .s = group } },
+	{ NULL,     SQLITE_NULL, { .s = NULL  } }
+    };
+    strarray_t *found = strarray_new();
+    int r;
+
+    r = dav_exec(carddavdb->db, CMD_GETGROUP, bval, &foundgroup_cb, found,
+		 &carddavdb->stmt[STMT_GETGROUP]);
+    if (r) {
+	/* XXX syslog */
+    }
+
+    if (!strarray_size(found)) {
+	strarray_free(found);
+	return NULL;
+    }
+
+    return found;
+}
+
+
+#define CMD_INSERT_EMAIL						\
+    "INSERT INTO vcard_emails ( objid, pos, email )"			\
+    " VALUES ( :objid, :pos, :email );"
+
+/* no commit */
+static int carddav_write_emails(struct carddav_db *carddavdb, struct carddav_data *cdata)
+{
+    struct bind_val bval[] = {
+	{ ":objid",	   SQLITE_INTEGER, { .i = cdata->dav.rowid	  } },
+	{ ":pos",	   SQLITE_INTEGER, { .i = 0			  } },
+	{ ":email",	   SQLITE_TEXT,	   { .s = NULL			  } },
+	{ NULL,		   SQLITE_NULL,	   { .s = NULL			  } } };
+    int r;
+    int i;
+
+    for (i = 0; i < strarray_size(&cdata->emails); i++) {
+	bval[1].val.i = i;
+	bval[2].val.s = strarray_nth(&cdata->emails, i);
+	r = dav_exec(carddavdb->db, CMD_INSERT_EMAIL, bval, NULL, NULL,
+		    &carddavdb->stmt[STMT_INSERT_EMAIL]);
+	if (r) return r;
+    }
+
+    return 0;
+}
+
+#define CMD_INSERT_GROUP						\
+    "INSERT INTO vcard_groups ( objid, pos, member_uid )"		\
+    " VALUES ( :objid, :pos, :member_uid );"
+
+/* no commit */
+static int carddav_write_groups(struct carddav_db *carddavdb, struct carddav_data *cdata)
+{
+    struct bind_val bval[] = {
+	{ ":objid",	   SQLITE_INTEGER, { .i = cdata->dav.rowid	  } },
+	{ ":pos",	   SQLITE_INTEGER, { .i = 0			  } },
+	{ ":member_uid",   SQLITE_TEXT,	   { .s = NULL			  } },
+	{ NULL,		   SQLITE_NULL,	   { .s = NULL			  } } };
+    int r;
+    int i;
+
+    for (i = 0; i < strarray_size(&cdata->member_uids); i++) {
+	bval[1].val.i = i;
+	bval[2].val.s = strarray_nth(&cdata->member_uids, i);
+	r = dav_exec(carddavdb->db, CMD_INSERT_GROUP, bval, NULL, NULL,
+		    &carddavdb->stmt[STMT_INSERT_GROUP]);
+	if (r) return r;
+    }
+
+    return 0;
+}
 
 #define CMD_INSERT							\
     "INSERT INTO vcard_objs ("						\
     "  creationdate, mailbox, resource, imap_uid,"			\
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
-    "  version, vcard_uid, kind, fullname, name, nickname, email )" 	\
+    "  version, vcard_uid, kind, fullname, name, nickname)"		\
     " VALUES ("								\
     "  :creationdate, :mailbox, :resource, :imap_uid,"			\
     "  :lock_token, :lock_owner, :lock_ownerid, :lock_expire,"		\
-    "  :version, :vcard_uid, :kind, :fullname, :name, :nickname, :email );"
-
-#define CMD_UPDATE		   	\
-    "UPDATE vcard_objs SET"		\
-    "  imap_uid     = :imap_uid,"	\
-    "  lock_token   = :lock_token,"	\
-    "  lock_owner   = :lock_owner,"	\
-    "  lock_ownerid = :lock_ownerid,"	\
-    "  lock_expire  = :lock_expire,"	\
-    "  version      = :comp_type,"	\
-    "  vcard_uid    = :vcard_uid,"	\
-    "  kind         = :kind,"		\
-    "  fullname     = :fullname,"	\
-    "  name         = :name,"		\
-    "  nickname     = :nickname,"	\
-    "  email        = :email"		\
-    " WHERE rowid = :rowid;"
+    "  :version, :vcard_uid, :kind, :fullname, :name, :nickname );"
 
 EXPORTED int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cdata,
 		 int commit)
 {
     struct bind_val bval[] = {
+	{ ":creationdate", SQLITE_INTEGER, { .i = cdata->dav.creationdate } },
+	{ ":mailbox",	   SQLITE_TEXT,	   { .s = cdata->dav.mailbox	  } },
+	{ ":resource",	   SQLITE_TEXT,	   { .s = cdata->dav.resource	  } },
 	{ ":imap_uid",	   SQLITE_INTEGER, { .i = cdata->dav.imap_uid	  } },
 	{ ":lock_token",   SQLITE_TEXT,	   { .s = cdata->dav.lock_token	  } },
 	{ ":lock_owner",   SQLITE_TEXT,	   { .s = cdata->dav.lock_owner	  } },
@@ -443,47 +557,33 @@ EXPORTED int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cd
 	{ ":fullname",	   SQLITE_TEXT,	   { .s = cdata->fullname	  } },
 	{ ":name",	   SQLITE_TEXT,	   { .s = cdata->name		  } },
 	{ ":nickname",	   SQLITE_TEXT,	   { .s = cdata->nickname	  } },
-	{ ":email",	   SQLITE_TEXT,	   { .s = cdata->email		  } },
-	{ NULL,		   SQLITE_NULL,	   { .s = NULL			  } },
-	{ NULL,		   SQLITE_NULL,	   { .s = NULL			  } },
-	{ NULL,		   SQLITE_NULL,	   { .s = NULL			  } },
 	{ NULL,		   SQLITE_NULL,	   { .s = NULL			  } } };
-    const char *cmd;
-    sqlite3_stmt **stmt;
     int r;
 
     if (cdata->dav.rowid) {
-	cmd = CMD_UPDATE;
-	stmt = &carddavdb->stmt[STMT_UPDATE];
-
-	bval[12].name = ":rowid";
-	bval[12].type = SQLITE_INTEGER;
-	bval[12].val.i = cdata->dav.rowid;
-    }
-    else {
-	cmd = CMD_INSERT;
-	stmt = &carddavdb->stmt[STMT_INSERT];
-
-	bval[12].name = ":creationdate";
-	bval[12].type = SQLITE_INTEGER;
-	bval[12].val.i = cdata->dav.creationdate;
-	bval[13].name = ":mailbox";
-	bval[13].type = SQLITE_TEXT;
-	bval[13].val.s = cdata->dav.mailbox;
-	bval[14].name = ":resource";
-	bval[14].type = SQLITE_TEXT;
-	bval[14].val.s = cdata->dav.resource;
+	r = carddav_delete(carddavdb, cdata->dav.rowid, /*commit*/0);
+	if (r) return r;
     }
 
-    r = dav_exec(carddavdb->db, cmd, bval, NULL, NULL, stmt);
+    r = dav_exec(carddavdb->db, CMD_INSERT, bval, NULL, NULL,
+		 &carddavdb->stmt[STMT_INSERT]);
+    if (r) return r;
 
-    if (!r && commit) {
-	/* commit transaction */
-	return dav_exec(carddavdb->db, CMD_COMMIT, NULL, NULL, NULL,
-			&carddavdb->stmt[STMT_COMMIT]);
+    cdata->dav.rowid = sqlite3_last_insert_rowid(carddavdb->db);
+
+    r = carddav_write_emails(carddavdb, cdata);
+    if (r) return r;
+
+    r = carddav_write_groups(carddavdb, cdata);
+    if (r) return r;
+
+    /* commit transaction */
+    if (commit) {
+	r = carddav_commit(carddavdb);
+	if (r) return r;
     }
 
-    return r;
+    return 0;
 }
 
 
@@ -498,14 +598,15 @@ EXPORTED int carddav_delete(struct carddav_db *carddavdb, unsigned rowid, int co
 
     r = dav_exec(carddavdb->db, CMD_DELETE, bval, NULL, NULL,
 		 &carddavdb->stmt[STMT_DELETE]);
+    if (r) return r;
 
-    if (!r && commit) {
-	/* commit transaction */
-	return dav_exec(carddavdb->db, CMD_COMMIT, NULL, NULL, NULL,
-			&carddavdb->stmt[STMT_COMMIT]);
-    }	
+    /* commit transaction */
+    if (commit) {
+	r = carddav_commit(carddavdb);
+	if (r) return r;
+    }
 
-    return r;
+    return 0;
 }
 
 
@@ -520,12 +621,13 @@ EXPORTED int carddav_delmbox(struct carddav_db *carddavdb, const char *mailbox, 
 
     r = dav_exec(carddavdb->db, CMD_DELMBOX, bval, NULL, NULL,
 		 &carddavdb->stmt[STMT_DELMBOX]);
+    if (r) return r;
 
-    if (!r && commit) {
-	/* commit transaction */
-	return dav_exec(carddavdb->db, CMD_COMMIT, NULL, NULL, NULL,
-			&carddavdb->stmt[STMT_COMMIT]);
-    }	
+    /* commit transaction */
+    if (commit) {
+	r = carddav_commit(carddavdb);
+	if (r) return r;
+    }
 
-    return r;
+    return 0;
 }
