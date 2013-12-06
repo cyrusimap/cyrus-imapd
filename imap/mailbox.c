@@ -2693,26 +2693,29 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 	while (moreIteration(&i)) {
 	    VObject *prop = nextVObject(&i);
 	    const char *name = vObjectName(prop);
+	    VObject *propval = vObjectUStringZValue(prop);
+
+	    if (!name) continue;
+	    if (!propval) continue;
 
 	    if (!strcmp(name, "UID")) {
-		cdata->vcard_uid = fakeCString(vObjectUStringZValue(prop));
+		cdata->vcard_uid = fakeCString(propval);
 	    }
 	    else if (!strcmp(name, "N")) {
-		cdata->name = fakeCString(vObjectUStringZValue(prop));
+		cdata->name = fakeCString(propval);
 	    }
 	    else if (!strcmp(name, "FN")) {
-		cdata->fullname = fakeCString(vObjectUStringZValue(prop));
+		cdata->fullname = fakeCString(propval);
 	    }
 	    else if (!strcmp(name, "NICKNAME")) {
-		cdata->nickname = fakeCString(vObjectUStringZValue(prop));
+		cdata->nickname = fakeCString(propval);
 	    }
 	    else if (!strcmp(name, "EMAIL")) {
 		/* XXX - insert if primary */
-		const char *item = fakeCString(vObjectUStringZValue(prop));
-		strarray_append(&cdata->emails, item);
+		strarray_append(&cdata->emails, fakeCString(propval));
 	    }
 	    else if (!strcmp(name, "X-ADDRESSBOOKSERVER-MEMBER")) {
-		const char *item = fakeCString(vObjectUStringZValue(prop));
+		const char *item = fakeCString(propval);
 		if (!strncmp(item, "urn:uuid:", 9))
 		    strarray_append(&cdata->member_uids, item+9);
 	    }
