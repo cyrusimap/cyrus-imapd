@@ -2693,7 +2693,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 	while (moreIteration(&i)) {
 	    VObject *prop = nextVObject(&i);
 	    const char *name = vObjectName(prop);
-	    VObject *propval = vObjectUStringZValue(prop);
+	    const wchar_t *propval = vObjectUStringZValue(prop);
 
 	    if (!name) continue;
 	    if (!propval) continue;
