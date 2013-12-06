@@ -356,8 +356,8 @@ int parseentry_cb(int type, struct dlistsax_data *d)
  *  V: uid_v_alidity
  */
 EXPORTED int mboxlist_parse_entry(mbentry_t **mbentryptr,
-				const char *name, size_t namelen,
-				const char *data, size_t datalen)
+				  const char *name, size_t namelen,
+				  const char *data, size_t datalen)
 {
     static struct buf aclbuf;
     int r = IMAP_MAILBOX_BADFORMAT;

@@ -99,6 +99,10 @@ typedef struct mboxlist_entry mbentry_t;
 
 mbentry_t *mboxlist_entry_create();
 
+EXPORTED int mboxlist_parse_entry(mbentry_t **mbentryptr,
+				  const char *name, size_t namelen,
+				  const char *data, size_t datalen);
+
 void mboxlist_entry_free(mbentry_t **mbentryptr);
 
 /* formats a cstring from a mboxlist_entry.  Caller must free
