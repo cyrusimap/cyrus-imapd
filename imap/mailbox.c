@@ -2703,6 +2703,17 @@ done:
     return r;
 }
 
+static int mailbox_update_dav(struct mailbox *mailbox,
+			      struct index_record *old,
+			      struct index_record *new)
+{
+    if (mailbox->mbtype & MBTYPE_ADDRESSBOOK)
+	return mailbox_update_carddav(mailbox, old, new);
+    if (mailbox->mbtype & MBTYPE_CALENDAR)
+	return mailbox_update_caldav(mailbox, old, new);
+    return 0;
+}
+
 /* NOTE: maybe make this able to return error codes if we have
  * support for transactional mailbox updates later.  For now,
  * we expect callers to have already done all sanity checking */
@@ -2710,25 +2721,17 @@ static int mailbox_update_indexes(struct mailbox *mailbox,
 				  struct index_record *old,
 				  struct index_record *new)
 {
-    const char *userid = mboxname_to_userid(mailbox->name);
     int r = 0;
+
+    r = mailbox_update_dav(mailbox, old, new);
+    if (r) return r;
+
+    /* NOTE - we do these last */
 
     if (old)
 	mailbox_index_update_counts(mailbox, old, 0);
     if (new)
 	mailbox_index_update_counts(mailbox, new, 1);
-
-    if (!userid) return 0;
-
-    if (mailbox->mbtype & MBTYPE_CALENDAR) {
-	r = mailbox_update_caldav(mailbox, old, new);
-	if (r) return r;
-    }
-
-    if (mailbox->mbtype & MBTYPE_ADDRESSBOOK) {
-	r = mailbox_update_carddav(mailbox, old, new);
-	if (r) return r;
-    }
 
     return 0;
 }
@@ -3692,11 +3695,27 @@ static int chkchildren(char *name,
     return r;
 }
 
-/*
- * Delete and close the mailbox 'mailbox'.  Closes 'mailbox' whether
- * or not the deletion was successful.  Requires a locked mailbox.
- */
-EXPORTED int mailbox_delete(struct mailbox **mailboxptr)
+EXPORTED int mailbox_add_dav(struct mailbox *mailbox)
+{
+    struct index_record record;
+    uint32_t recno;
+    int r = 0;
+
+    if (!(mailbox->mbtype & (MBTYPE_ADDRESSBOOK|MBTYPE_CALENDAR)))
+	return 0;
+
+    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
+	r = mailbox_read_index_record(mailbox, recno, &record);
+	if (r) return r;
+
+	r = mailbox_update_dav(mailbox, NULL, &record);
+	if (r) return r;
+    }
+
+    return 0;
+}
+
+static int mailbox_delete_internal(struct mailbox **mailboxptr)
 {
     int r = 0;
     struct mailbox *mailbox = *mailboxptr;

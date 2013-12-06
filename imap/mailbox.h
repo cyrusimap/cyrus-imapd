@@ -562,4 +562,6 @@ extern int mailbox_get_annotate_state(struct mailbox *mailbox,
 uint32_t mailbox_sync_crc(struct mailbox *mailbox, unsigned vers, int recalc);
 unsigned mailbox_best_crcvers(unsigned minvers, unsigned maxvers);
 
+extern int mailbox_add_dav(struct mailbox *mailbox);
+
 #endif /* INCLUDED_MAILBOX_H */
