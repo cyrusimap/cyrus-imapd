@@ -361,6 +361,65 @@ sub test_exceeding_storage
     $self->_check_smmap('cassandane', 'OK');
 }
 
+sub test_move_near_limit
+{
+    my ($self) = @_;
+
+    xlog "test move near the STORAGE quota limit";
+
+    my $talk = $self->{store}->get_client();
+
+    xlog "set a low limit";
+    $self->_set_quotaroot('user.cassandane');
+    $self->_set_limits(storage => 210);
+    $self->_check_usages(storage => 0);
+
+    xlog "adding messages to get just below the limit";
+    my %msgs;
+    my $slack = 200 * 1024;
+    my $n = 1;
+    my $expected = 0;
+    while ($slack > 1000)
+    {
+	my $nlines = int(($slack - 640) / 23);
+	$nlines = 1000 if ($nlines > 1000);
+
+	my $msg = $self->make_message("Message $n",
+				      extra_lines => $nlines);
+	my $len = length($msg->as_string());
+	$slack -= $len;
+	$expected += $len;
+	xlog "added $len bytes of message";
+	$msgs{$n} = $msg;
+	$n++;
+    }
+    xlog "check that the messages are all in the mailbox";
+    $self->check_messages(\%msgs);
+    xlog "check that the usage is just below the limit";
+    $self->_check_usages(storage => int($expected/1024));
+    $self->_check_smmap('cassandane', 'OK');
+
+    xlog "add a message that exceeds the limit";
+    my $nlines = int(($slack - 640) / 23) * 2;
+    $nlines = 500 if ($nlines < 500);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    my $overmsg = eval { $self->make_message("Message $n", extra_lines => $nlines) };
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert($talk->get_last_error() =~ m/over quota/i);
+
+    $talk->create("INBOX.target");
+
+    xlog "try to copy the messages";
+    $talk->copy("1:*", "INBOX.target");
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert($talk->get_last_error() =~ m/over quota/i);
+
+    xlog "move the messages";
+    $talk->xmove("1:*", "INBOX.target");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+}
+
 sub test_overquota
 {
     my ($self) = @_;
