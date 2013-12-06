@@ -91,6 +91,14 @@ static int json_error_response(struct transaction_t *txn, const char *err);
 static const char *begin_ical(struct buf *buf);
 static void end_ical(struct buf *buf);
 
+struct observance {
+    const char *name;
+    icaltimetype onset;
+    int offset_from;
+    int offset_to;
+    int is_daylight;
+};
+
 static const struct action_t {
     const char *name;
     int (*proc)(struct transaction_t *txn, struct hash_table *params);
@@ -460,36 +468,109 @@ static int action_list(struct transaction_t *txn, struct hash_table *params)
 }
 
 
-void truncate_vtimezone(icalcomponent *vtz, icaltimetype *truncate)
+static void check_tombstone(struct observance *tombstone,
+			    struct observance *obs, icaltimetype *recur)
+{
+    icaltimetype *onset = recur ? recur : &obs->onset;
+
+    if (icaltime_compare(*onset, tombstone->onset) > 0) {
+	/* onset is closer to cutoff than existing tombstone */
+	tombstone->name = icalmemory_tmp_copy(obs->name);
+	tombstone->offset_from = tombstone->offset_to = obs->offset_to;
+	tombstone->is_daylight = obs->is_daylight;
+	memcpy(&tombstone->onset, onset, sizeof(icaltimetype));
+    }
+}
+
+struct rdate {
+    icalproperty *prop;
+    struct icaldatetimeperiodtype date;
+};
+
+static int rdate_compare(const void *rdate1, const void *rdate2)
+{
+    return icaltime_compare(((struct rdate *) rdate1)->date.time,
+			    ((struct rdate *) rdate2)->date.time);
+}
+
+static void truncate_vtimezone(icalcomponent *vtz, icaltimetype *truncate)
 {
     icalcomponent *comp, *nextc;
+    struct observance tombstone;
+
+    memset(&tombstone, 0, sizeof(struct observance));
 
     /* Process each VTMEZONE STANDARD/DAYLIGHT subcomponent */
-    for (comp =
-	     icalcomponent_get_first_component(vtz, ICAL_ANY_COMPONENT);
+    for (comp = icalcomponent_get_first_component(vtz, ICAL_ANY_COMPONENT);
 	 comp; comp = nextc) {
-	icalproperty *prop, *nextp, *dtstart_prop = NULL;
-	icalproperty *rrule_prop = NULL, *rdate_prop = NULL;
-	icaltimetype dtstart;
+	icalproperty *prop, *dtstart_prop = NULL, *rrule_prop = NULL;
+	icalarray *rdate_array = icalarray_new(sizeof(struct rdate), 20);
+	struct observance obs;
+	unsigned n;
+	int r;
 
-	nextc = icalcomponent_get_next_component(vtz,
-						 ICAL_ANY_COMPONENT);
+	nextc = icalcomponent_get_next_component(vtz, ICAL_ANY_COMPONENT);
 
-	/* Check DTSTART */
-	dtstart_prop =
-	    icalcomponent_get_first_property(comp,
-					     ICAL_DTSTART_PROPERTY);
-	dtstart = icalproperty_get_dtstart(dtstart_prop);
+	memset(&obs, 0, sizeof(struct observance));
+	obs.is_daylight = (icalcomponent_isa(comp) == ICAL_XDAYLIGHT_COMPONENT);
 
-	if (icaltime_compare(dtstart, *truncate) >= 0) {
-	    /* All observances occur after our cutoff, keep comp */
+	/* Grab the properties that we require to expand recurrences */
+	for (prop = icalcomponent_get_first_property(comp, ICAL_ANY_PROPERTY);
+	     prop;
+	     prop = icalcomponent_get_next_property(comp, ICAL_ANY_PROPERTY)) {
+
+	    switch (icalproperty_isa(prop)) {
+	    case ICAL_TZNAME_PROPERTY:
+		obs.name = icalproperty_get_tzname(prop);
+		break;
+
+	    case ICAL_DTSTART_PROPERTY:
+		dtstart_prop = prop;
+		obs.onset = icalproperty_get_dtstart(prop);
+		break;
+
+	    case ICAL_TZOFFSETFROM_PROPERTY:
+		obs.offset_from = icalproperty_get_tzoffsetfrom(prop);
+		break;
+
+	    case ICAL_TZOFFSETTO_PROPERTY:
+		obs.offset_to = icalproperty_get_tzoffsetto(prop);
+		break;
+
+	    case ICAL_RRULE_PROPERTY:
+		rrule_prop = prop;
+		break;
+
+	    case ICAL_RDATE_PROPERTY: {
+		struct rdate rdate = { prop, icalproperty_get_rdate(prop) };
+
+		icalarray_append(rdate_array, &rdate);
+		break;
+	    }
+
+	    default:
+		/* ignore all other properties */
+		break;
+	    }
+	}
+
+	/* We MUST have DTSTART, TZNAME, TZOFFSETFROM, and TZOFFSETTO */
+	if (!dtstart_prop || !obs.name || !obs.offset_from || !obs.offset_to)
+	    continue;
+
+	r = icaltime_compare(obs.onset, *truncate);
+	if (r <= 0) {
+	    /* Check DTSTART vs tombstone */
+	    check_tombstone(&tombstone, &obs, NULL);
+	}
+
+	if (r >= 0) {
+	    /* All observances occur on or after our cutoff, nothing to do */
+	    icalarray_free(rdate_array);
 	    continue;
 	}
 
 	/* Check RRULE */
-	rrule_prop =
-	    icalcomponent_get_first_property(comp,
-					     ICAL_RRULE_PROPERTY);
 	if (rrule_prop) {
 	    struct icalrecurrencetype rrule;
 
@@ -499,11 +580,7 @@ void truncate_vtimezone(icalcomponent *vtz, icaltimetype *truncate)
 	    if (!icaltime_is_null_time(rrule.until)) {
 		if (rrule.until.is_utc) {
 		    /* Adjust UNTIL to local time */
-		    prop = icalcomponent_get_first_property(
-			comp, ICAL_TZOFFSETFROM_PROPERTY);
-
-		    icaltime_adjust(&rrule.until, 0, 0, 0,
-				    icalproperty_get_tzoffsetfrom(prop));
+		    icaltime_adjust(&rrule.until, 0, 0, 0, obs.offset_from);
 		    rrule.until.is_utc = 0;
 		}
 
@@ -512,62 +589,86 @@ void truncate_vtimezone(icalcomponent *vtz, icaltimetype *truncate)
 		    icalcomponent_remove_property(comp, rrule_prop);
 		    icalproperty_free(rrule_prop);
 		    rrule_prop = NULL;
+
+		    /* Check UNTIL vs tombstone */
+		    check_tombstone(&tombstone, &obs, &rrule.until);
 		}
 	    }
 
 	    if (rrule_prop) {
-		/* Find first recurrence after our cutoff
-		   and set DTSTART accordingly */
 		icalrecur_iterator *ritr;
 
-		/* Set iterator to start 1 day prior to our cutoff */
-		dtstart.year = truncate->year;
-		dtstart.month = truncate->month;
-		dtstart.day = truncate->day - 1;
+		/* Set iterator to start 1 year prior to our cutoff */
+		obs.onset.year = truncate->year - 1;
+		obs.onset.month = truncate->month;
+		obs.onset.day = truncate->day;
 
-		ritr = icalrecur_iterator_new(rrule, dtstart);
-		dtstart = icalrecur_iterator_next(ritr);
-		icalproperty_set_dtstart(dtstart_prop, dtstart);
+		ritr = icalrecur_iterator_new(rrule, obs.onset);
+
+		/* Check last recurrence prior to our cutoff vs tombstone */
+		obs.onset = icalrecur_iterator_next(ritr);
+		check_tombstone(&tombstone, &obs, NULL);
+
+		/* Use first recurrence after our cutoff as new DTSTART */
+		obs.onset = icalrecur_iterator_next(ritr);
+		icalproperty_set_dtstart(dtstart_prop, obs.onset);
+		dtstart_prop = NULL;
+
 		icalrecur_iterator_free(ritr);
 	    }
 	}
 
-	/* Check RDATE(s) (we assume they are in order) */
-	for (prop =
-		 icalcomponent_get_first_property(comp,
-						  ICAL_RDATE_PROPERTY);
-	     prop; prop = nextp) {
-	    struct icaldatetimeperiodtype rdate;
+	/* Sort the RDATEs by onset */
+	icalarray_sort(rdate_array, &rdate_compare);
 
-	    nextp =
-		icalcomponent_get_next_property(comp,
-						ICAL_RDATE_PROPERTY);
+	/* Check RDATEs */
+	for (n = 0; n < rdate_array->num_elements; n++) {
+	    struct rdate *rdate = icalarray_element_at(rdate_array, n);
 
-	    rdate =icalproperty_get_rdate(prop);
-	    if (icaltime_compare(rdate.time, *truncate) < 0) {
+	    r = icaltime_compare(rdate->date.time, *truncate);
+	    if (r <= 0) {
+		/* Check RDATE vs tombstone */
+		check_tombstone(&tombstone, &obs, &rdate->date.time);
+	    }
+
+	    if (r < 0) {
 		/* RDATE occurs prior to our cutoff - remove it */
-		icalcomponent_remove_property(comp, prop);
-		icalproperty_free(prop);
+		icalcomponent_remove_property(comp, rdate->prop);
+		icalproperty_free(rdate->prop);
 	    }
 	    else {
-		if (!rrule_prop) {
+		if (dtstart_prop) {
 		    /* Make this RDATE the new DTSTART */
-		    rdate_prop = prop;
-		    icalproperty_set_dtstart(dtstart_prop, rdate.time);
+		    icalproperty_set_dtstart(dtstart_prop, rdate->date.time);
+		    dtstart_prop = NULL;
 
-		    icalcomponent_remove_property(comp, prop);
-		    icalproperty_free(prop);
+		    icalcomponent_remove_property(comp, rdate->prop);
+		    icalproperty_free(rdate->prop);
 		}
 		break;
 	    }
 	}
+	icalarray_free(rdate_array);
 
 	/* Final check */
-	if (!rrule_prop && !rdate_prop) {
+	if (dtstart_prop) {
 	    /* All observances occur prior to our cutoff, remove comp */
 	    icalcomponent_remove_component(vtz, comp);
 	    icalcomponent_free(comp);
 	}
+    }
+
+    if (icaltime_compare(tombstone.onset, *truncate) < 0) {
+	/* Need to add a tombstone component starting at our cutoff */
+	comp = icalcomponent_vanew(
+	    tombstone.is_daylight ?
+	    ICAL_XDAYLIGHT_COMPONENT : ICAL_XSTANDARD_COMPONENT,
+	    icalproperty_new_tzoffsetfrom(tombstone.offset_from),
+	    icalproperty_new_tzoffsetto(tombstone.offset_to),
+	    icalproperty_new_tzname(tombstone.name),
+	    icalproperty_new_dtstart(*truncate),
+	    0);
+	icalcomponent_add_component(vtz, comp);
     }
 }
 
@@ -610,9 +711,9 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
     param = hash_lookup("truncate", params);
     if (param) {
 	truncate = icaltime_from_day_of_year(1, atoi(param->s));
+	truncate.is_date = truncate.hour = truncate.minute = truncate.second = 0;
 	if (icaltime_is_null_time(truncate) || param->next  /* once only */)
 	    return json_error_response(txn, "invalid-truncate");
-
     }
 
     /* Handle tzid=* separately */
@@ -899,13 +1000,6 @@ static int action_get_all(struct transaction_t *txn,
     return 0;
 }
 
-
-struct observance {
-    const char *name;
-    icaltimetype onset;
-    int offset_from;
-    int offset_to;
-};
 
 static int observance_compare(const void *obs1, const void *obs2)
 {
