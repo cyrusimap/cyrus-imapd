@@ -268,13 +268,13 @@ static int recalc_counts_cb(const char *mboxname,
     struct mailbox *mailbox = NULL;
     int r;
 
-    r = mailbox_open_iwl(mboxname, &mailbox);
+    r = mailbox_open_irl(mboxname, &mailbox);
     if (r) return r;
 
     if (verbose)
 	printf("%s\n", mboxname);
 
-    r = mailbox_add_conversations(mailbox, /*silent*/0); 
+    r = mailbox_add_conversations(mailbox);
 
     mailbox_close(&mailbox);
     return r;
@@ -294,7 +294,7 @@ static int audit_counts_cb(const char *mboxname,
     if (verbose)
 	printf("%s\n", mboxname);
 
-    r = mailbox_add_conversations(mailbox, /*silent*/1); 
+    r = mailbox_add_conversations(mailbox);
 
     mailbox_close(&mailbox);
     return r;

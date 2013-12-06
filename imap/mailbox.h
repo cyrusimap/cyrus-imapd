@@ -571,7 +571,7 @@ extern int mailbox_cid_rename(struct mailbox *mailbox,
 extern int mailbox_update_conversations(struct mailbox *mailbox,
 					struct index_record *old,
 					struct index_record *new);
-extern int mailbox_add_conversations(struct mailbox *mailbox, int silent);
+extern int mailbox_add_conversations(struct mailbox *mailbox);
 extern int mailbox_get_xconvmodseq(struct mailbox *mailbox, modseq_t *);
 extern int mailbox_update_xconvmodseq(struct mailbox *mailbox, modseq_t, int force);
 extern int mailbox_has_conversations(struct mailbox *mailbox);
