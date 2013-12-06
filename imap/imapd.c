@@ -5157,7 +5157,7 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
 	       them to the other mailbox */
 
 	    proxy_copy(tag, sequence, name, myrights, usinguid, s);
-	    return;
+	    goto cleanup;
 	}
 	/* xxx  end of separate proxy-only code */
 
@@ -5167,7 +5167,7 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
 		    sequence, strlen(name), name);
 	pipe_including_tag(backend_current, tag, 0);
 
-	return;
+	goto cleanup;
     }
     else if (!r && (mbentry->mbtype & MBTYPE_REMOTE)) {
 	/* local mailbox -> remote mailbox
@@ -5233,14 +5233,17 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
 	    /* abort the append */
 	    prot_printf(s->out, " {0}\r\n");
 	    pipe_until_tag(s, tag, 0);
-	    
+
 	    /* report failure */
 	    prot_printf(imapd_out, "%s NO inter-server COPY failed\r\n", tag);
 	}
 
-	return;
+	goto cleanup;
     }
-    mboxlist_entry_free(&mbentry);
+
+    /* need permission to delete from source if it's a move */
+    if (ismove && !(imapd_index->myrights & ACL_EXPUNGE))
+	r = IMAP_PERMISSION_DENIED;
 
     /* local mailbox -> local mailbox */
     if (!r) {
@@ -5253,7 +5256,6 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
     imapd_check(NULL, ismove || usinguid);
 
   done:
-    mboxlist_entry_free(&mbentry);
 
     if (r && !(usinguid && r == IMAP_NO_NOSUCHMSG)) {
 	prot_printf(imapd_out, "%s NO %s%s\r\n", tag,
@@ -5273,7 +5275,10 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
     }
-}    
+
+cleanup:
+    mboxlist_entry_free(&mbentry);
+}
 
 /*
  * Perform an EXPUNGE command
