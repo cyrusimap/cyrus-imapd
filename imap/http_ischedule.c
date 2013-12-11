@@ -177,7 +177,8 @@ static int meth_get_isched(struct transaction_t *txn,
     /* We don't handle GET on a anything other than ?action=capabilities */
     if (!URI_QUERY(txn->req_uri) ||
 	strcmp(URI_QUERY(txn->req_uri), "action=capabilities")) {
-	return HTTP_NOT_FOUND;
+	txn->error.desc = "Invalid action";
+	return HTTP_BAD_REQUEST;
     }
 
     /* Generate ETag based on compile date/time of this source file.
