@@ -15,12 +15,16 @@
 <li>Added support for accepting/returning jCal (requires Jansson) and
   xCal data wherever iCalendar data is allowed.</li>
 <li>Proxied responses (including chunked) are now piped to client
-  rather than buffered and forwarded.</li>
+  rather than being buffered and forwarded.</li>
 <li>Better handling of COPY/MOVE between backends (including
   LOCKs).</li>
 <li>Fixed "annotation truncation" bug where the largest allowed
-  annotation value was slightly less than 4k.</li>
-<li>Plugged some memory leaks found by Valgrind.</li>
+  annotation value was slightly less than 4k (solves problem reading
+  CalDavZAP settings).</li>
+<li>GET on ./well-known now returns a list of /.well-known/ URLs on
+  the server.</li>
+<li>Added support for X-HTTP-Method-Override header in POST requests.</li>
+<li>Plugged a few memory leaks found by Valgrind.</li>
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta6</h1>
