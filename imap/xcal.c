@@ -1160,3 +1160,45 @@ void end_xcal(struct buf *buf)
     buf_printf_markup(buf, 1, "</vcalendar>");
     buf_printf_markup(buf, 0, "</icalendar>");
 }
+
+
+#ifndef HAVE_XML_BUFFERDETACH
+xmlChar *xmlBufferDetach(xmlBufferPtr buf)
+{
+    xmlChar *ret;
+
+    if (!buf) return NULL;
+
+    ret = buf->content;
+    buf->content = NULL;
+    buf->use = buf->size = 0;
+
+    return ret;
+}
+
+
+#ifndef HAVE_XML_TRAVERSAL
+xmlNodePtr xmlFirstElementChild(xmlNodePtr node)
+{
+    if (!node) return NULL;
+
+    for (node = node->children; node; node = node->next) {
+	if (node->type == XML_ELEMENT_NODE) return (node);
+    }
+
+    return NULL;
+}
+
+
+xmlNodePtr xmlNextElementSibling(xmlNodePtr node)
+{
+    if (!node) return NULL;
+
+    for (node = node->next; node; node = node->next) {
+	if (node->type == XML_ELEMENT_NODE) return (node);
+    }
+
+    return NULL;
+}
+#endif /* HAVE_XML_TRAVERSAL */
+#endif /* HAVE_XML_BUFFERDETACH */

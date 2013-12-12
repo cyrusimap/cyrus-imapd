@@ -1002,7 +1002,13 @@ dnl
 	ENABLE_RSS=yes
 	ENABLE_DAV=yes
 	PKG_CHECK_MODULES([XML2], [libxml-2.0],
-		[ PKG_CHECK_MODULES([ICAL], [libical],
+		[ AC_CHECK_LIB(xml2, xmlBufferDetach,
+		    [ AC_DEFINE(HAVE_XML_BUFFERDETACH,[],
+		        [Do we have XML buffer detach support?])
+		      AC_CHECK_LIB(xml2, xmlFirstElementChild,
+		        AC_DEFINE(HAVE_XML_TRAVERSAL,[],
+		          [Do we have XML element traversal support?]))])
+		  PKG_CHECK_MODULES([ICAL], [libical],
 		  	[ PKG_CHECK_MODULES([SQLITE3], [sqlite3],,
 			  	ENABLE_DAV=no) ],
 			ENABLE_DAV=no ) ],
