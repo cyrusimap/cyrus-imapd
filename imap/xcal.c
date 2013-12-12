@@ -1162,7 +1162,8 @@ void end_xcal(struct buf *buf)
 }
 
 
-#ifndef HAVE_XML_BUFFERDETACH
+/* libxml2 replacement functions for those missing in older versions */
+#if (LIBXML_VERSION < 20800)
 xmlChar *xmlBufferDetach(xmlBufferPtr buf)
 {
     xmlChar *ret;
@@ -1177,7 +1178,7 @@ xmlChar *xmlBufferDetach(xmlBufferPtr buf)
 }
 
 
-#ifndef HAVE_XML_TRAVERSAL
+#if (LIBXML_VERSION < 20703)
 xmlNodePtr xmlFirstElementChild(xmlNodePtr node)
 {
     if (!node) return NULL;
@@ -1200,5 +1201,5 @@ xmlNodePtr xmlNextElementSibling(xmlNodePtr node)
 
     return NULL;
 }
-#endif /* HAVE_XML_TRAVERSAL */
-#endif /* HAVE_XML_BUFFERDETACH */
+#endif /* < 2.7.3 */
+#endif /* < 2.8.0 */
