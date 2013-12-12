@@ -68,3 +68,13 @@ extern char *icalcomponent_as_xcal_string(icalcomponent* comp);
 extern icalcomponent *xcal_string_as_icalcomponent(const char *str);
 extern const char *begin_xcal(struct buf *buf);
 extern void end_xcal(struct buf *buf);
+
+#ifndef HAVE_XML_BUFFERDETACH
+#include <libxml/tree.h>
+extern xmlChar *xmlBufferDetach(xmlBufferPtr buf);
+
+#ifndef HAVE_XML_TRAVERSAL
+extern xmlNodePtr xmlFirstElementChild(xmlNodePtr parent);
+extern xmlNodePtr xmlNextElementSibling(xmlNodePtr node);
+#endif /* HAVE_XML_TRAVERSAL */
+#endif /* HAVE_XML_BUFFERDETACH */
