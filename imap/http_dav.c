@@ -2092,8 +2092,8 @@ int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
 
     /* Check Content-Type */
     if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
-	(!is_mediatype(hdr[0], "text/xml") &&
-	 !is_mediatype(hdr[0], "application/xml"))) {
+	(!is_mediatype("text/xml", hdr[0]) &&
+	 !is_mediatype("application/xml", hdr[0]))) {
 	txn->error.desc = "This method requires an XML body\r\n";
 	return HTTP_BAD_MEDIATYPE;
     }
@@ -4144,7 +4144,7 @@ int meth_put(struct transaction_t *txn, void *params)
     /* Check Content-Type */
     if ((hdr = spool_getheader(txn->req_hdrs, "Content-Type"))) {
 	for (mime = pparams->mime_types; mime->content_type; mime++) {
-	    if (is_mediatype(hdr[0], mime->content_type)) break;
+	    if (is_mediatype(mime->content_type, hdr[0])) break;
 	}
     }
     if (!mime || !mime->content_type) {
