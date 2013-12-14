@@ -1468,12 +1468,31 @@ xmlURIPtr parse_uri(unsigned meth, const char *uri, unsigned path_reqd,
 
 
 /* Compare Content-Types */
-int is_mediatype(const char *hdr, const char *type)
+int is_mediatype(const char *pat, const char *type)
 {
-    size_t tlen = strcspn(type, "; \r\n\0");
-    size_t hlen = strcspn(hdr, "; \r\n\0");
+    const char *psep = strchr(pat, '/');
+    const char *tsep = strchr(type, '/');
+    size_t plen;
+    size_t tlen;
+    int alltypes;
 
-    return ((tlen == hlen) && !strncasecmp(hdr, type, tlen));
+    /* Check type */
+    if (!psep || !tsep) return 0;
+    plen = psep - pat;
+    tlen = tsep - type;
+
+    alltypes = !strncmp(pat, "*", plen);
+
+    if (!alltypes && ((tlen != plen) || strncasecmp(pat, type, tlen))) return 0;
+
+    /* Check subtype */
+    pat = ++psep;
+    plen = strcspn(pat, "; \r\n\0");
+    type = ++tsep;
+    tlen = strcspn(type, "; \r\n\0");
+
+    return (!strncmp(pat, "*", plen) ||
+	    (!alltypes && (tlen == plen) && !strncasecmp(pat, type, tlen)));
 }
 
 

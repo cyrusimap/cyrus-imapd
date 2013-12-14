@@ -453,7 +453,7 @@ extern int config_httpprettytelemetry;
 extern xmlURIPtr parse_uri(unsigned meth, const char *uri, unsigned path_reqd,
 			   const char **errstr);
 extern struct accept *parse_accept(const char **hdr);
-extern int is_mediatype(const char *hdr, const char *type);
+extern int is_mediatype(const char *pat, const char *type);
 extern time_t calc_compile_time(const char *time, const char *date);
 extern int http_mailbox_open(const char *name, struct mailbox **mailbox,
 			     int locktype);

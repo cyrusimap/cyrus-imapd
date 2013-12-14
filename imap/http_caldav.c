@@ -1321,7 +1321,7 @@ static int caldav_post(struct transaction_t *txn)
     /* Check Content-Type */
     if ((hdr = spool_getheader(txn->req_hdrs, "Content-Type"))) {
 	for (mime = caldav_mime_types; mime->content_type; mime++) {
-	    if (is_mediatype(hdr[0], mime->content_type)) break;
+	    if (is_mediatype(mime->content_type, hdr[0])) break;
 	}
     }
     if (!mime || !mime->content_type) {
@@ -2460,7 +2460,7 @@ static int proppatch_timezone(xmlNodePtr prop, unsigned set,
 
 	/* Check/find requested MIME type */
 	for (mime = caldav_mime_types; type && mime->content_type; mime++) {
-	    if (is_mediatype((const char *) type, mime->content_type)) {
+	    if (is_mediatype(mime->content_type, (const char *) type)) {
 		if (ver &&
 		    (!mime->version || xmlStrcmp(ver, BAD_CAST mime->version))) {
 		    continue;

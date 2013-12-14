@@ -322,7 +322,7 @@ static int meth_post_isched(struct transaction_t *txn,
     /* Check Content-Type */
     if ((hdr = spool_getheader(txn->req_hdrs, "Content-Type"))) {
 	for (mime = isched_mime_types; mime->content_type; mime++) {
-	    if (is_mediatype(hdr[0], mime->content_type)) break;
+	    if (is_mediatype(mime->content_type, hdr[0])) break;
 	}
     }
     if (!mime || !mime->content_type) {
