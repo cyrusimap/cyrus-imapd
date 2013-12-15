@@ -933,10 +933,12 @@ static void cmdloop(void)
 	txn.auth_chal.param = NULL;
 	txn.req_hdrs = NULL;
 	txn.req_body.flags = 0;
+	buf_reset(&txn.req_body.payload);
 	txn.location = NULL;
 	memset(&txn.error, 0, sizeof(struct error_t));
 	memset(&txn.resp_body, 0,  /* Don't zero the response payload buffer */
 	       sizeof(struct resp_body_t) - sizeof(struct buf));
+	buf_reset(&txn.resp_body.payload);
 	buf_reset(&txn.buf);
 	ret = empty = 0;
 
