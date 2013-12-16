@@ -643,6 +643,14 @@ static int caldav_check_precond(struct transaction_t *txn, const void *data,
 
     /* Per RFC 6638, check Schedule-Tag */
     if ((hdr = spool_getheader(txn->req_hdrs, "If-Schedule-Tag-Match"))) {
+	if (!*hdr[0]) {
+	    /* XXX  Workaround for bug in MacOS X 10.9.0 Calendar client */
+	    const char *osx_sched_tag_bug_version =
+		"Mac_OS_X/10.9 (13A603) CalendarAgent/174";
+	    const char **ua = spool_getheader(txn->req_hdrs, "User-Agent");
+
+	    if (ua && !strcmp(ua[0], osx_sched_tag_bug_version)) return precond;
+	}
 	if (etagcmp(hdr[0], stag)) return HTTP_PRECOND_FAILED;
     }
 
