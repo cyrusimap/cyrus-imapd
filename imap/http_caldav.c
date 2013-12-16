@@ -3832,13 +3832,315 @@ static void sched_deliver_remote(const char *recipient,
     }
 }
 
+
+static void deliver_merge_reply(icalcomponent *ical, icalcomponent *reply)
+{
+    struct hash_table comp_table;
+    icalcomponent *comp, *itip;
+    icalcomponent_kind kind;
+    icalproperty *prop, *att;
+    icalparameter *param;
+    icalparameter_partstat partstat;
+    icalparameter_rsvp rsvp = ICAL_RSVP_NONE;
+    const char *recurid, *attendee, *req_stat = SCHEDSTAT_SUCCESS;
+
+    /* Add each component of old object to hash table for comparison */
+    construct_hash_table(&comp_table, 10, 1);
+    comp = icalcomponent_get_first_real_component(ical);
+    kind = icalcomponent_isa(comp);
+    do {
+	prop =
+	    icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+	if (prop) recurid = icalproperty_get_value_as_string(prop);
+	else recurid = "";
+
+	hash_insert(recurid, comp, &comp_table);
+
+    } while ((comp = icalcomponent_get_next_component(ical, kind)));
+
+    /* Process each component in the iTIP reply */
+    for (itip = icalcomponent_get_first_component(reply, kind);
+	 itip;
+	 itip = icalcomponent_get_next_component(reply, kind)) {
+
+	/* Lookup this comp in the hash table */
+	prop =
+	    icalcomponent_get_first_property(itip, ICAL_RECURRENCEID_PROPERTY);
+	if (prop) recurid = icalproperty_get_value_as_string(prop);
+	else recurid = "";
+
+	comp = hash_lookup(recurid, &comp_table);
+	if (!comp) {
+	    /* New recurrence overridden by attendee.
+	       Create a new recurrence from master component. */
+	    comp = icalcomponent_new_clone(hash_lookup("", &comp_table));
+
+	    /* Add RECURRENCE-ID */
+	    icalcomponent_add_property(comp, icalproperty_new_clone(prop));
+
+	    /* Remove RRULE */
+	    prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
+	    if (prop) {
+		icalcomponent_remove_property(comp, prop);
+		icalproperty_free(prop);
+	    }
+
+	    /* Replace DTSTART, DTEND, SEQUENCE */
+	    prop =
+		icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
+	    if (prop) {
+		icalcomponent_remove_property(comp, prop);
+		icalproperty_free(prop);
+	    }
+	    prop =
+		icalcomponent_get_first_property(itip, ICAL_DTSTART_PROPERTY);
+	    if (prop)
+		icalcomponent_add_property(comp, icalproperty_new_clone(prop));
+
+	    prop =
+		icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
+	    if (prop) {
+		icalcomponent_remove_property(comp, prop);
+		icalproperty_free(prop);
+	    }
+	    prop =
+		icalcomponent_get_first_property(itip, ICAL_DTEND_PROPERTY);
+	    if (prop)
+		icalcomponent_add_property(comp, icalproperty_new_clone(prop));
+
+	    prop =
+		icalcomponent_get_first_property(comp, ICAL_SEQUENCE_PROPERTY);
+	    if (prop) {
+		icalcomponent_remove_property(comp, prop);
+		icalproperty_free(prop);
+	    }
+	    prop =
+		icalcomponent_get_first_property(itip, ICAL_SEQUENCE_PROPERTY);
+	    if (prop)
+		icalcomponent_add_property(comp, icalproperty_new_clone(prop));
+
+	    icalcomponent_add_component(ical, comp);
+	}
+
+	/* Get the sending attendee */
+	att = icalcomponent_get_first_property(itip, ICAL_ATTENDEE_PROPERTY);
+	attendee = icalproperty_get_attendee(att);
+	param = icalproperty_get_first_parameter(att, ICAL_PARTSTAT_PARAMETER);
+	partstat = icalparameter_get_partstat(param);
+	param = icalproperty_get_first_parameter(att, ICAL_RSVP_PARAMETER);
+	if (param) rsvp = icalparameter_get_rsvp(param);
+
+	prop =
+	    icalcomponent_get_first_property(itip, ICAL_REQUESTSTATUS_PROPERTY);
+	if (prop) {
+	    struct icalreqstattype rq = icalproperty_get_requeststatus(prop);
+	    req_stat = icalenum_reqstat_code(rq.code);
+	}
+
+	/* Find matching attendee in existing object */
+	for (prop =
+		 icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+	     prop && strcmp(attendee, icalproperty_get_attendee(prop));
+	     prop =
+		 icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY));
+	if (!prop) {
+	    /* Attendee added themselves to this recurrence */
+	    prop = icalproperty_new_clone(att);
+	    icalcomponent_add_property(comp, prop);
+	}
+
+	/* Find and set PARTSTAT */
+	param = icalproperty_get_first_parameter(prop, ICAL_PARTSTAT_PARAMETER);
+	if (!param) {
+	    param = icalparameter_new(ICAL_PARTSTAT_PARAMETER);
+	    icalproperty_add_parameter(prop, param);
+	}
+	icalparameter_set_partstat(param, partstat);
+
+	/* Find and set RSVP */
+	param = icalproperty_get_first_parameter(prop, ICAL_RSVP_PARAMETER);
+	if (param) icalproperty_remove_parameter_by_ref(prop, param);
+	if (rsvp != ICAL_RSVP_NONE) {
+	    param = icalparameter_new(ICAL_RSVP_PARAMETER);
+	    icalproperty_add_parameter(prop, param);
+	    icalparameter_set_rsvp(param, rsvp);
+	}
+
+	/* Find and set SCHEDULE-STATUS */
+	for (param =
+		 icalproperty_get_first_parameter(prop, ICAL_IANA_PARAMETER);
+	     param && strcmp(icalparameter_get_iana_name(param),
+			     "SCHEDULE-STATUS");
+	     param =
+		 icalproperty_get_next_parameter(prop, ICAL_IANA_PARAMETER));
+	if (!param) {
+	    param = icalparameter_new(ICAL_IANA_PARAMETER);
+	    icalproperty_add_parameter(prop, param);
+	    icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
+	}
+	icalparameter_set_iana_value(param, req_stat);
+    }
+
+    free_hash_table(&comp_table, NULL);
+}
+
+
+static int deliver_merge_request(icalcomponent *ical, icalcomponent *request)
+{
+    int deliver_inbox = 0;
+    struct hash_table comp_table;
+    icalcomponent *comp, *itip;
+    icalcomponent_kind kind;
+    icalproperty *prop;
+    const char *tzid, *recurid;
+
+    /* Add each VTIMEZONE of old object to hash table for comparison */
+    construct_hash_table(&comp_table, 10, 1);
+    for (comp =
+	     icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
+	 comp;
+	 comp =
+	     icalcomponent_get_next_component(ical, ICAL_VTIMEZONE_COMPONENT)) {
+	prop = icalcomponent_get_first_property(comp, ICAL_TZID_PROPERTY);
+	tzid = icalproperty_get_tzid(prop);
+
+	hash_insert(tzid, comp, &comp_table);
+    }
+
+    /* Process each VTIMEZONE in the iTIP request */
+    for (itip = icalcomponent_get_first_component(request,
+						  ICAL_VTIMEZONE_COMPONENT);
+	 itip;
+	 itip = icalcomponent_get_next_component(request,
+						 ICAL_VTIMEZONE_COMPONENT)) {
+	/* Lookup this TZID in the hash table */
+	prop = icalcomponent_get_first_property(itip, ICAL_TZID_PROPERTY);
+	tzid = icalproperty_get_tzid(prop);
+
+	comp = hash_lookup(tzid, &comp_table);
+	if (comp) {
+	    /* Remove component from old object */
+	    icalcomponent_remove_component(ical, comp);
+	    icalcomponent_free(comp);
+	}
+
+	/* Add new/modified component from iTIP request*/
+	icalcomponent_add_component(ical, icalcomponent_new_clone(itip));
+    }
+
+    free_hash_table(&comp_table, NULL);
+
+    /* Add each component of old object to hash table for comparison */
+    construct_hash_table(&comp_table, 10, 1);
+    comp = icalcomponent_get_first_real_component(ical);
+    kind = icalcomponent_isa(comp);
+    do {
+	prop =
+	    icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+	if (prop) recurid = icalproperty_get_value_as_string(prop);
+	else recurid = "";
+
+	hash_insert(recurid, comp, &comp_table);
+
+    } while ((comp = icalcomponent_get_next_component(ical, kind)));
+
+    /* Process each component in the iTIP request */
+    for (itip = icalcomponent_get_first_component(request, kind);
+	 itip;
+	 itip = icalcomponent_get_next_component(request, kind)) {
+	icalcomponent *new_comp = icalcomponent_new_clone(itip);
+
+	/* Lookup this comp in the hash table */
+	prop =
+	    icalcomponent_get_first_property(itip, ICAL_RECURRENCEID_PROPERTY);
+	if (prop) recurid = icalproperty_get_value_as_string(prop);
+	else recurid = "";
+
+	comp = hash_lookup(recurid, &comp_table);
+	if (comp) {
+	    int old_seq, new_seq;
+	    icalparameter *param;
+
+	    /* Check if this is something more than an update */
+	    /* XXX  Probably need to check PARTSTAT=NEEDS-ACTION
+	       and RSVP=TRUE as well */
+	    old_seq = icalcomponent_get_sequence(comp);
+	    new_seq = icalcomponent_get_sequence(itip);
+	    if (new_seq > old_seq) deliver_inbox = 1;
+
+	    /* Copy over any COMPLETED, PERCENT-COMPLETE,
+	       or TRANSP properties */
+	    prop =
+		icalcomponent_get_first_property(comp, ICAL_COMPLETED_PROPERTY);
+	    if (prop) {
+		icalcomponent_add_property(new_comp,
+					   icalproperty_new_clone(prop));
+	    }
+	    prop =
+		icalcomponent_get_first_property(comp,
+						 ICAL_PERCENTCOMPLETE_PROPERTY);
+	    if (prop) {
+		icalcomponent_add_property(new_comp,
+					   icalproperty_new_clone(prop));
+	    }
+	    prop =
+		icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
+	    if (prop) {
+		icalcomponent_add_property(new_comp,
+					   icalproperty_new_clone(prop));
+	    }
+
+	    /* Copy over any ORGANIZER;SCHEDULE-STATUS */
+	    /* XXX  Do we only do this iff PARTSTAT!=NEEDS-ACTION */
+	    prop =
+		icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+	    for (param = icalproperty_get_first_parameter(prop,
+							  ICAL_IANA_PARAMETER);
+		 param;
+		 param = icalproperty_get_next_parameter(prop,
+							 ICAL_IANA_PARAMETER)) {
+		if (!strcmp(icalparameter_get_iana_name(param),
+			    "SCHEDULE-STATUS")) {
+		    const char *sched_stat =
+			icalparameter_get_iana_value(param);
+
+		    prop =
+			icalcomponent_get_first_property(new_comp,
+							 ICAL_ORGANIZER_PROPERTY);
+		    param = icalparameter_new(ICAL_IANA_PARAMETER);
+		    icalproperty_add_parameter(prop, param);
+		    icalparameter_set_iana_name(param,
+						"SCHEDULE-STATUS");
+		    icalparameter_set_iana_value(param, sched_stat);
+		}
+	    }
+
+	    /* Remove component from old object */
+	    icalcomponent_remove_component(ical, comp);
+	    icalcomponent_free(comp);
+	}
+	else {
+	    /* New component */
+	    deliver_inbox = 1;
+	}
+
+	/* Add new/modified component from iTIP request */
+	icalcomponent_add_component(ical, new_comp);
+    }
+
+    free_hash_table(&comp_table, NULL);
+
+    return deliver_inbox;
+}
+
+
 /* Deliver scheduling object to local recipient */
 static void sched_deliver_local(const char *recipient,
 				struct sched_param *sparam,
 				struct sched_data *sched_data,
 				struct auth_state *authstate)
 {
-    int r = 0, rights, reqd_privs, deliver_inbox = 0;
+    int r = 0, rights, reqd_privs, deliver_inbox = 1;
     const char *userid = sparam->userid, *mboxname = NULL, *attendee = NULL;
     static struct buf resource = BUF_INITIALIZER;
     static unsigned sched_count = 0;
@@ -3848,7 +4150,6 @@ static void sched_deliver_local(const char *recipient,
     struct caldav_db *caldavdb = NULL;
     struct caldav_data *cdata;
     icalcomponent *ical = NULL;
-    icalproperty *prop;
     struct transaction_t txn;
 
     /* Check ACL of sender on recipient's Scheduling Inbox */
@@ -3919,14 +4220,14 @@ static void sched_deliver_local(const char *recipient,
     }
 
     if (!cdata->dav.imap_uid) {
+	icalproperty *prop;
+
 	/* Create new object (copy of request w/o METHOD) */
 	ical = icalcomponent_new_clone(sched_data->itip);
 
 	prop = icalcomponent_get_first_property(ical, ICAL_METHOD_PROPERTY);
 	icalcomponent_remove_property(ical, prop);
 	icalproperty_free(prop);
-
-	deliver_inbox = 1;
     }
     else {
 	/* Update existing object */
@@ -3943,15 +4244,15 @@ static void sched_deliver_local(const char *recipient,
 	ical = icalparser_parse_string(msg_base + record.header_size);
 	mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
 
-	/* Get component type */
-	comp = icalcomponent_get_first_real_component(ical);
-	kind = icalcomponent_isa(comp);
-
 	/* Get METHOD of the iTIP message */
 	method = icalcomponent_get_method(sched_data->itip);
 
 	switch (method) {
 	case ICAL_METHOD_CANCEL:
+	    /* Get component type */
+	    comp = icalcomponent_get_first_real_component(ical);
+	    kind = icalcomponent_isa(comp);
+
 	    /* Set STATUS:CANCELLED on all components */
 	    do {
 		icalcomponent_set_status(comp, ICAL_STATUS_CANCELLED);
@@ -3959,347 +4260,17 @@ static void sched_deliver_local(const char *recipient,
 					   icalcomponent_get_sequence(comp)+1);
 	    } while ((comp = icalcomponent_get_next_component(ical, kind)));
 
-	    deliver_inbox = 1;
+	    break;
+
+	case ICAL_METHOD_REPLY:
+	    deliver_merge_reply(ical, sched_data->itip);
 
 	    break;
 
-	case ICAL_METHOD_REPLY: {
-	    struct hash_table comp_table;
-	    icalcomponent *itip;
-	    icalproperty *att;
-	    icalparameter *param;
-	    icalparameter_partstat partstat;
-	    icalparameter_rsvp rsvp = ICAL_RSVP_NONE;
-	    const char *recurid, *req_stat = SCHEDSTAT_SUCCESS;
-
-	    /* Add each component of old object to hash table for comparison */
-	    construct_hash_table(&comp_table, 10, 1);
-	    comp = icalcomponent_get_first_real_component(ical);
-	    do {
-		prop =
-		    icalcomponent_get_first_property(comp,
-						     ICAL_RECURRENCEID_PROPERTY);
-		if (prop) recurid = icalproperty_get_value_as_string(prop);
-		else recurid = "";
-
-		hash_insert(recurid, comp, &comp_table);
-
-	    } while ((comp = icalcomponent_get_next_component(ical, kind)));
-
-	    /* Process each component in the iTIP reply */
-	    itip = icalcomponent_get_first_component(sched_data->itip, kind);
-	    do {
-		/* Lookup this comp in the hash table */
-		prop =
-		    icalcomponent_get_first_property(itip,
-						     ICAL_RECURRENCEID_PROPERTY);
-		if (prop) recurid = icalproperty_get_value_as_string(prop);
-		else recurid = "";
-
-		comp = hash_lookup(recurid, &comp_table);
-		if (!comp) {
-		    /* New recurrence overridden by attendee.
-		       Create a new recurrence from master component. */
-		    comp =
-			icalcomponent_new_clone(hash_lookup("", &comp_table));
-
-		    /* Add RECURRENCE-ID */
-		    icalcomponent_add_property(comp,
-					       icalproperty_new_clone(prop));
-
-		    /* Remove RRULE */
-		    prop =
-			icalcomponent_get_first_property(comp,
-							 ICAL_RRULE_PROPERTY);
-		    if (prop) {
-			icalcomponent_remove_property(comp, prop);
-			icalproperty_free(prop);
-		    }
-
-		    /* Replace DTSTART, DTEND, SEQUENCE */
-		    prop =
-			icalcomponent_get_first_property(comp,
-							 ICAL_DTSTART_PROPERTY);
-		    if (prop) {
-			icalcomponent_remove_property(comp, prop);
-			icalproperty_free(prop);
-		    }
-		    prop =
-			icalcomponent_get_first_property(itip,
-							 ICAL_DTSTART_PROPERTY);
-		    if (prop)
-			icalcomponent_add_property(comp,
-						   icalproperty_new_clone(prop));
-
-		    prop =
-			icalcomponent_get_first_property(comp,
-							 ICAL_DTEND_PROPERTY);
-		    if (prop) {
-			icalcomponent_remove_property(comp, prop);
-			icalproperty_free(prop);
-		    }
-		    prop =
-			icalcomponent_get_first_property(itip,
-							 ICAL_DTEND_PROPERTY);
-		    if (prop)
-			icalcomponent_add_property(comp,
-						   icalproperty_new_clone(prop));
-
-		    prop =
-			icalcomponent_get_first_property(comp,
-							 ICAL_SEQUENCE_PROPERTY);
-		    if (prop) {
-			icalcomponent_remove_property(comp, prop);
-			icalproperty_free(prop);
-		    }
-		    prop =
-			icalcomponent_get_first_property(itip,
-							 ICAL_SEQUENCE_PROPERTY);
-		    if (prop)
-			icalcomponent_add_property(comp,
-						   icalproperty_new_clone(prop));
-
-		    icalcomponent_add_component(ical, comp);
-		}
-
-		/* Get the sending attendee */
-		att = icalcomponent_get_first_property(itip,
-						       ICAL_ATTENDEE_PROPERTY);
-		attendee = icalproperty_get_attendee(att);
-		param =
-		    icalproperty_get_first_parameter(att,
-						     ICAL_PARTSTAT_PARAMETER);
-		partstat = icalparameter_get_partstat(param);
-		param =
-		    icalproperty_get_first_parameter(att,
-						     ICAL_RSVP_PARAMETER);
-		if (param) rsvp = icalparameter_get_rsvp(param);
-
-		prop =
-		    icalcomponent_get_first_property(itip,
-						     ICAL_REQUESTSTATUS_PROPERTY);
-		if (prop) {
-		    struct icalreqstattype rq =
-			icalproperty_get_requeststatus(prop);
-		    req_stat =
-			icalenum_reqstat_code(rq.code);
-		}
-
-		/* Find matching attendee in existing object */
-		for (prop =
-			 icalcomponent_get_first_property(comp,
-							  ICAL_ATTENDEE_PROPERTY);
-		     prop && strcmp(attendee, icalproperty_get_attendee(prop));
-		     prop =
-			 icalcomponent_get_next_property(comp,
-							 ICAL_ATTENDEE_PROPERTY));
-		if (!prop) {
-		    /* Attendee added themselves to this recurrence */
-		    prop = icalproperty_new_clone(att);
-		    icalcomponent_add_property(comp, prop);
-		}
-
-		/* Find and set PARTSTAT */
-		param =
-		    icalproperty_get_first_parameter(prop,
-						     ICAL_PARTSTAT_PARAMETER);
-		if (!param) {
-		    param = icalparameter_new(ICAL_PARTSTAT_PARAMETER);
-		    icalproperty_add_parameter(prop, param);
-		}
-		icalparameter_set_partstat(param, partstat);
-
-		/* Find and set RSVP */
-		param =
-		    icalproperty_get_first_parameter(prop,
-						     ICAL_RSVP_PARAMETER);
-		if (param) icalproperty_remove_parameter_by_ref(prop, param);
-		if (rsvp != ICAL_RSVP_NONE) {
-		    param = icalparameter_new(ICAL_RSVP_PARAMETER);
-		    icalproperty_add_parameter(prop, param);
-		    icalparameter_set_rsvp(param, rsvp);
-		}
-
-		/* Find and set SCHEDULE-STATUS */
-		for (param =
-			 icalproperty_get_first_parameter(prop,
-							  ICAL_IANA_PARAMETER);
-		     param && strcmp(icalparameter_get_iana_name(param),
-				     "SCHEDULE-STATUS");
-		     param =
-			 icalproperty_get_next_parameter(prop,
-							 ICAL_IANA_PARAMETER));
-		if (!param) {
-		    param = icalparameter_new(ICAL_IANA_PARAMETER);
-		    icalproperty_add_parameter(prop, param);
-		    icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
-		}
-		icalparameter_set_iana_value(param, req_stat);
-
-	    } while ((itip = icalcomponent_get_next_component(sched_data->itip,
-							      kind)));
-
-	    free_hash_table(&comp_table, NULL);
-
-	    deliver_inbox = 1;
+	case ICAL_METHOD_REQUEST:
+	    deliver_inbox = deliver_merge_request(ical, sched_data->itip);
 
 	    break;
-	}
-
-	case ICAL_METHOD_REQUEST: {
-	    struct hash_table comp_table;
-	    icalcomponent *itip;
-	    const char *tzid, *recurid;
-
-	    /* Add each VTIMEZONE of old object to hash table for comparison */
-	    construct_hash_table(&comp_table, 10, 1);
-	    for (comp = icalcomponent_get_first_component(ical,
-							  ICAL_VTIMEZONE_COMPONENT);
-		 comp;
-		 comp =
-		     icalcomponent_get_next_component(ical,
-						      ICAL_VTIMEZONE_COMPONENT)) {
-		prop =
-		    icalcomponent_get_first_property(comp, ICAL_TZID_PROPERTY);
-		tzid = icalproperty_get_tzid(prop);
-
-		hash_insert(tzid, comp, &comp_table);
-	    }
-
-	    /* Process each VTIMEZONE in the iTIP request */
-	    for (itip =
-		     icalcomponent_get_first_component(sched_data->itip,
-						       ICAL_VTIMEZONE_COMPONENT);
-		 itip;
-		 itip =
-		     icalcomponent_get_next_component(sched_data->itip,
-						      ICAL_VTIMEZONE_COMPONENT)) {
-		/* Lookup this TZID in the hash table */
-		prop =
-		    icalcomponent_get_first_property(itip,
-						     ICAL_TZID_PROPERTY);
-		tzid = icalproperty_get_tzid(prop);
-
-		comp = hash_lookup(tzid, &comp_table);
-		if (comp) {
-		    /* Remove component from old object */
-		    icalcomponent_remove_component(ical, comp);
-		    icalcomponent_free(comp);
-		}
-
-		/* Add new/modified component from iTIP request*/
-		icalcomponent_add_component(ical,
-					    icalcomponent_new_clone(itip));
-	    }
-
-	    free_hash_table(&comp_table, NULL);
-
-	    /* Add each component of old object to hash table for comparison */
-	    construct_hash_table(&comp_table, 10, 1);
-	    comp = icalcomponent_get_first_real_component(ical);
-	    do {
-		prop =
-		    icalcomponent_get_first_property(comp,
-						     ICAL_RECURRENCEID_PROPERTY);
-		if (prop) recurid = icalproperty_get_value_as_string(prop);
-		else recurid = "";
-
-		hash_insert(recurid, comp, &comp_table);
-
-	    } while ((comp = icalcomponent_get_next_component(ical, kind)));
-
-	    /* Process each component in the iTIP request */
-	    itip = icalcomponent_get_first_component(sched_data->itip, kind);
-	    do {
-		icalcomponent *new_comp = icalcomponent_new_clone(itip);
-
-		/* Lookup this comp in the hash table */
-		prop =
-		    icalcomponent_get_first_property(itip,
-						     ICAL_RECURRENCEID_PROPERTY);
-		if (prop) recurid = icalproperty_get_value_as_string(prop);
-		else recurid = "";
-
-		comp = hash_lookup(recurid, &comp_table);
-		if (comp) {
-		    int old_seq, new_seq;
-		    icalparameter *param;
-
-		    /* Check if this is something more than an update */
-		    /* XXX  Probably need to check PARTSTAT=NEEDS-ACTION
-		            and RSVP=TRUE as well */
-		    old_seq = icalcomponent_get_sequence(comp);
-		    new_seq = icalcomponent_get_sequence(itip);
-		    if (new_seq > old_seq) deliver_inbox = 1;
-
-		    /* Copy over any COMPLETED, PERCENT-COMPLETE,
-		       or TRANSP properties */
-		    prop =
-			icalcomponent_get_first_property(comp,
-							 ICAL_COMPLETED_PROPERTY);
-		    if (prop) {
-			icalcomponent_add_property(new_comp,
-						   icalproperty_new_clone(prop));
-		    }
-		    prop =
-			icalcomponent_get_first_property(comp,
-							 ICAL_PERCENTCOMPLETE_PROPERTY);
-		    if (prop) {
-			icalcomponent_add_property(new_comp,
-						   icalproperty_new_clone(prop));
-		    }
-		    prop =
-			icalcomponent_get_first_property(comp,
-							 ICAL_TRANSP_PROPERTY);
-		    if (prop) {
-			icalcomponent_add_property(new_comp,
-						   icalproperty_new_clone(prop));
-		    }
-
-		    /* Copy over any ORGANIZER;SCHEDULE-STATUS */
-		    /* XXX  Do we only do this iff PARTSTAT!=NEEDS-ACTION */
-		    prop =
-			icalcomponent_get_first_property(comp,
-							 ICAL_ORGANIZER_PROPERTY);
-		    for (param =
-			   icalproperty_get_first_parameter(prop,
-							    ICAL_IANA_PARAMETER);
-			 param;
-			 param =
-			   icalproperty_get_next_parameter(prop,
-							   ICAL_IANA_PARAMETER)) {
-			if (!strcmp(icalparameter_get_iana_name(param),
-				    "SCHEDULE-STATUS")) {
-			    const char *sched_stat =
-				icalparameter_get_iana_value(param);
-
-			    prop =
-				icalcomponent_get_first_property(new_comp,
-								 ICAL_ORGANIZER_PROPERTY);
-			    param = icalparameter_new(ICAL_IANA_PARAMETER);
-			    icalproperty_add_parameter(prop, param);
-			    icalparameter_set_iana_name(param,
-							"SCHEDULE-STATUS");
-			    icalparameter_set_iana_value(param, sched_stat);
-			}
-		    }
-
-		    /* Remove component from old object */
-		    icalcomponent_remove_component(ical, comp);
-		    icalcomponent_free(comp);
-		}
-		else deliver_inbox = 1;
-
-		/* Add new/modified component from iTIP request*/
-		icalcomponent_add_component(ical, new_comp);
-
-	    } while ((itip = icalcomponent_get_next_component(sched_data->itip,
-							      kind)));
-
-	    free_hash_table(&comp_table, NULL);
-
-	    break;
-	}
 
 	default:
 	    /* Unknown METHOD -- ignore it */
