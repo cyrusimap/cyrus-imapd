@@ -1119,7 +1119,7 @@ static void buf_replace_buf(struct buf *buf,
 EXPORTED int buf_replace_all(struct buf *buf, const char *match,
 			     const char *replace)
 {
-    size_t n = 0;
+    int n = 0;
     int matchlen = strlen(match);
     struct buf replace_buf = BUF_INITIALIZER;
     size_t off;
@@ -1136,6 +1136,24 @@ EXPORTED int buf_replace_all(struct buf *buf, const char *match,
 	buf_replace_buf(buf, off, matchlen, &replace_buf);
 	n++;
 	off += replace_buf.len;
+    }
+
+    return n;
+}
+
+EXPORTED int buf_replace_char(struct buf *buf, char match, char replace)
+{
+    int n = 0;
+    size_t i;
+
+    /* we need writable, so may as well cstring it */
+    buf_writable_cstring(buf);
+
+    for (i = 0; i < buf->len; i++) {
+	if (buf->s[i] == match) {
+	    buf->s[i] = replace;
+	    n++;
+	}
     }
 
     return n;

@@ -263,6 +263,7 @@ void buf_printf(struct buf *buf, const char *fmt, ...)
 	        __attribute__((format(printf,2,3)));
 int buf_replace_all(struct buf *buf, const char *match,
 		    const char *replace);
+int buf_replace_char(struct buf *buf, char match, char replace);
 #ifdef ENABLE_REGEX
 int buf_replace_all_re(struct buf *buf, const regex_t *,
 		       const char *replace);
