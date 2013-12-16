@@ -444,6 +444,11 @@ int service_init(int argc __attribute__((unused)),
     /* External names are in URIs (UNIX sep) */
     httpd_namespace.hier_sep = '/';
 
+    /* open the mboxevent system */
+    mboxevent_init();
+
+    mboxevent_setnamespace(&httpd_namespace);
+
     while ((opt = getopt(argc, argv, "sp:")) != EOF) {
 	switch(opt) {
 	case 's': /* https (do TLS right away) */

@@ -2752,7 +2752,8 @@ int meth_copy(struct transaction_t *txn, void *params)
 int meth_delete(struct transaction_t *txn, void *params)
 {
     struct meth_params *dparams = (struct meth_params *) params;
-    int ret = HTTP_NO_CONTENT, r, precond, rights;
+    int ret = HTTP_NO_CONTENT, r = 0, precond, rights;
+    struct mboxevent *mboxevent = NULL;
     struct mailbox *mailbox = NULL;
     mbentry_t *mbentry = NULL;
     struct dav_data *ddata;
@@ -2765,8 +2766,9 @@ int meth_delete(struct transaction_t *txn, void *params)
     txn->flags.cc |= CC_NOCACHE;
 
     /* Parse the path */
-    if ((r = dparams->parse_path(txn->req_uri->path,
-				 &txn->req_tgt, &txn->error.desc))) return r;
+    r = dparams->parse_path(txn->req_uri->path,
+				 &txn->req_tgt, &txn->error.desc);
+    if (r) return r;
 
     /* Make sure method is allowed */
     if (!(txn->req_tgt.allow & ALLOW_DELETE)) return HTTP_NOT_ALLOWED; 
@@ -2832,10 +2834,12 @@ int meth_delete(struct transaction_t *txn, void *params)
 
 	mailbox_close(&mailbox);
 
+	mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
+
+	/* XXX - delayed delete? */
 	r = mboxlist_deletemailbox(txn->req_tgt.mboxname,
 				   httpd_userisadmin || httpd_userisproxyadmin,
-				   httpd_userid, httpd_authstate,
-				   /*mboxevent*/NULL,
+				   httpd_userid, httpd_authstate, mboxevent,
 				   /*checkack*/1, /*localonly*/0, /*force*/0);
 	if (!r) dparams->davdb.delete_mbox(davdb, txn->req_tgt.mboxname, 0);
 	else if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
@@ -2844,9 +2848,8 @@ int meth_delete(struct transaction_t *txn, void *params)
 
 	dparams->davdb.close_db(davdb);
 
-	return ret;
+	goto done;
     }
-
 
     /* DELETE resource */
 
@@ -2910,6 +2913,8 @@ int meth_delete(struct transaction_t *txn, void *params)
 	/* Expunge the resource */
 	record.system_flags |= FLAG_EXPUNGED;
 
+	mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
+
 	r = mailbox_rewrite_index_record(mailbox, &record);
 
 	if (r) {
@@ -2919,6 +2924,9 @@ int meth_delete(struct transaction_t *txn, void *params)
 	    ret = HTTP_SERVER_ERROR;
 	    goto done;
 	}
+
+	mboxevent_extract_record(mboxevent, mailbox, &record);
+	mboxevent_extract_mailbox(mboxevent, mailbox);
     }
 
     /* Do any special processing */
@@ -2927,6 +2935,10 @@ int meth_delete(struct transaction_t *txn, void *params)
   done:
     if (davdb) dparams->davdb.close_db(davdb);
     if (mailbox) mailbox_unlock_index(mailbox, NULL);
+
+    if (!r)
+	mboxevent_notify(mboxevent);
+    mboxevent_free(&mboxevent);
 
     return ret;
 }

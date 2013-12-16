@@ -3273,7 +3273,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     qdiffs[QUOTA_MESSAGE] = 1;
 
     /* Prepare to append the iMIP message to calendar mailbox */
-    if ((r = append_setup_mbox(&as, mailbox, NULL, NULL, 0, qdiffs, 0, 0, 0))) {
+    if ((r = append_setup_mbox(&as, mailbox, NULL, NULL, 0, qdiffs, 0, 0, EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
 	syslog(LOG_ERR, "append_setup(%s) failed: %s",
 	       mailbox->name, error_message(r));
 	ret = HTTP_SERVER_ERROR;

@@ -80,7 +80,8 @@ enum event_type {
     EVENT_MAILBOX_RENAME      = (1<<17),
     EVENT_MAILBOX_SUBSCRIBE   = (1<<18),
     EVENT_MAILBOX_UNSUBSCRIBE = (1<<19),
-    EVENT_ACL_CHANGE          = (1<<20)
+    EVENT_ACL_CHANGE          = (1<<20),
+    EVENT_CALENDAR            = (1<<21)
 };
 
 /* The number representing the last available position in
@@ -120,10 +121,13 @@ enum event_param {
     /* 20 */ EVENT_ACL_RIGHTS,
     /* 21 */ EVENT_USER,
     /* 22 */ EVENT_MESSAGE_SIZE,
-    /* 23 */ EVENT_ENVELOPE,
-    /* 24 */ EVENT_SESSIONID,
-    /* 25 */ EVENT_BODYSTRUCTURE,
-    /* 26 */ EVENT_MESSAGE_CONTENT
+    /* 23 */ EVENT_MBTYPE,
+    /* 24 */ EVENT_DAV_FILENAME,
+    /* 25 */ EVENT_DAV_UID,
+    /* 26 */ EVENT_ENVELOPE,
+    /* 27 */ EVENT_SESSIONID,
+    /* 28 */ EVENT_BODYSTRUCTURE,
+    /* 29 */ EVENT_MESSAGE_CONTENT
 };
 
 
