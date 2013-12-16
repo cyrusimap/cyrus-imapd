@@ -1750,7 +1750,7 @@ int propfind_fromdb(const xmlChar *name, xmlNsPtr ns,
 
     if (fctx->mailbox && !fctx->record &&
 	!(r = annotatemore_lookup(fctx->mailbox->name, buf_cstring(&fctx->buf),
-				  /* shared */ "", &attrib))) {
+				  /* shared */ NULL, &attrib))) {
 	if (!buf_len(&attrib) &&
 	    !xmlStrcmp(name, BAD_CAST "displayname")) {
 	    /* Special case empty displayname -- use last segment of path */

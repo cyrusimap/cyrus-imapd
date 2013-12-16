@@ -987,7 +987,7 @@ static int dump_calendar(struct transaction_t *txn, struct meth_params *gparams)
     txn->resp_body.type = mime->content_type;
 
     /* Set filename of resource */
-    r = annotatemore_lookup(mailbox->name, displayname_annot, /* shared */ "", &attrib);
+    r = annotatemore_lookup(mailbox->name, displayname_annot, /* shared */ NULL, &attrib);
     if (r || !attrib.len) buf_setcstr(&attrib, strrchr(mailbox->name, '.') + 1);
 
     buf_reset(&txn->buf);
@@ -1126,7 +1126,7 @@ static int list_cb(char *name,
 
     /* Lookup DAV:displayname */
     r = annotatemore_lookup(name, displayname_annot,
-			    /* shared */ "", &displayname);
+			    /* shared */ NULL, &displayname);
     if (r || !displayname.len) buf_setcstr(&displayname, shortname);
 
     /* Add available calendar with link */
@@ -2152,7 +2152,7 @@ static int propfind_calcompset(const xmlChar *name, xmlNsPtr ns,
     if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
 
     r = annotatemore_lookup(fctx->mailbox->name, prop_annot,
-			    /* shared */ "", &attrib);
+			    /* shared */ NULL, &attrib);
     if (r) return HTTP_SERVER_ERROR;
 
     if (attrib.len)
@@ -2354,7 +2354,7 @@ static int propfind_caltransp(const xmlChar *name, xmlNsPtr ns,
     if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
 
     r = annotatemore_lookup(fctx->mailbox->name, prop_annot,
-			    /* shared */ "", &attrib);
+			    /* shared */ NULL, &attrib);
 
     if (r) return HTTP_SERVER_ERROR;
     if (!attrib.len) return HTTP_NOT_FOUND;
@@ -2885,7 +2885,7 @@ static int busytime_by_collection(char *mboxname, int matchlen,
 	const char *prop_annot =
 	    ANNOT_NS "CALDAV:schedule-calendar-transp";
 
-	if (!annotatemore_lookup(mboxname, prop_annot, /* shared */ "", &attrib)) {
+	if (!annotatemore_lookup(mboxname, prop_annot, /* shared */ NULL, &attrib)) {
 	    if (!strcmp(buf_cstring(&attrib), "transparent")) {
 		buf_free(&attrib);
 		return 0;
@@ -3139,7 +3139,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     }
 
     if (!annotatemore_lookup(mailbox->name, prop_annot,
-			     /* shared */ "", &attrib)
+			     /* shared */ NULL, &attrib)
 	&& attrib.len) {
 	unsigned long supp_comp = strtoul(buf_cstring(&attrib), NULL, 10);
 
