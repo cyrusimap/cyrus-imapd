@@ -1846,6 +1846,7 @@ static int mycheckpoint(struct dbengine *db)
 static int dump(struct dbengine *db, int detail __attribute__((unused)))
 {
     struct skiprecord record;
+    struct buf scratch = BUF_INITIALIZER;
     size_t offset = DUMMY_OFFSET;
     int r = 0;
     int i;
@@ -1878,10 +1879,12 @@ static int dump(struct dbengine *db, int detail __attribute__((unused)))
 
 	case RECORD:
 	case DUMMY:
-	    printf("%s kl=%llu dl=%llu lvl=%d (%.*s)\n",
+	    buf_setmap(&scratch, KEY(db, &record), record.keylen);
+	    buf_replace_char(&scratch, '\0', '-');
+	    printf("%s kl=%llu dl=%llu lvl=%d (%s)\n",
 		   (record.type == RECORD ? "RECORD" : "DUMMY"),
 		   (LLU)record.keylen, (LLU)record.vallen,
-		   record.level, (int)record.keylen, KEY(db, &record));
+		   record.level, buf_cstring(&scratch));
 	    printf("\t");
 	    for (i = 0; i <= record.level; i++) {
 		printf("%08llX ", (LLU)record.nextloc[i]);
@@ -1894,6 +1897,8 @@ static int dump(struct dbengine *db, int detail __attribute__((unused)))
 
 	offset += record.len;
     }
+
+    buf_free(&scratch);
 
     return r;
 }
