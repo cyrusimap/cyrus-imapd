@@ -80,6 +80,7 @@
 #include "xcal.h"
 #include "mailbox.h"
 #include "mboxlist.h"
+#include "md5.h"
 #include "message.h"
 #include "message_guid.h"
 #include "proxy.h"
@@ -4632,27 +4633,51 @@ static void sched_cancel(const char *recurid __attribute__((unused)),
 }
 
 
+/*
+ * Compare the properties of the given kind in two components.
+ * Returns 0 if equal, 1 otherwise.
+ *
+ * If the property exists in neither comp, then they are equal.
+ * If the property exists in only 1 comp, then they are not equal.
+ * if the property is RDATE or EXDATE, create an MD5 hash of all
+ *   property strings for each component and compare the hashes.
+ * Otherwise compare the two property strings.
+ */
 static unsigned propcmp(icalcomponent *oldical, icalcomponent *newical,
 			icalproperty_kind kind)
 {
-    icalproperty *oldprop, *newprop;
+    icalproperty *oldprop = icalcomponent_get_first_property(oldical, kind);
+    icalproperty *newprop = icalcomponent_get_first_property(newical, kind);
 
-    oldprop = icalcomponent_get_first_property(oldical, kind);
-    newprop = icalcomponent_get_first_property(newical, kind);
-
-    if (!oldprop) {
-	if (newprop) return 1;
-    }
+    if (!oldprop) return (newprop != NULL);
     else if (!newprop) return 1;
-    else {
-	/* XXX  Do something smarter based on property type */
-	const char *oldstr = icalproperty_get_value_as_string(oldprop);
-	const char *newstr = icalproperty_get_value_as_string(newprop);
+    else if ((kind == ICAL_RDATE_PROPERTY) || (kind == ICAL_EXDATE_PROPERTY)) {
+	MD5_CTX ctx;
+	const char *str;
+	unsigned char old_md5[MD5_DIGEST_LENGTH], new_md5[MD5_DIGEST_LENGTH];
 
-	if (strcmp(oldstr, newstr)) return 1;
+	MD5Init(&ctx);
+	do {
+	    str = icalproperty_get_value_as_string(oldprop);
+	    MD5Update(&ctx, str, strlen(str));
+	} while ((oldprop = icalcomponent_get_next_property(oldical, kind)));
+
+	MD5Final(old_md5, &ctx);
+
+	MD5Init(&ctx);
+	do {
+	    str = icalproperty_get_value_as_string(newprop);
+	    MD5Update(&ctx, str, strlen(str));
+	} while ((newprop = icalcomponent_get_next_property(newical, kind)));
+
+	MD5Final(new_md5, &ctx);
+
+	return (memcmp(old_md5, new_md5, MD5_DIGEST_LENGTH) != 0);
     }
-
-    return 0;
+    else {
+	return (strcmp(icalproperty_get_value_as_string(oldprop),
+		       icalproperty_get_value_as_string(newprop)) != 0);
+    }
 }
 
 
