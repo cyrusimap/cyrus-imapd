@@ -2653,7 +2653,7 @@ void write_body(long code, struct transaction_t *txn,
 
     if (code) {
 	/* Initial call - prepare response header based on CE, TE and version */
-	if (do_md5) MD5_Init(&ctx);
+	if (do_md5) MD5Init(&ctx);
 
 	if (txn->flags.te & ~TE_CHUNKED) {
 	    /* Transfer-Encoded content MUST be chunked */
@@ -2709,8 +2709,8 @@ void write_body(long code, struct transaction_t *txn,
 	    }
 
 	    if (outlen && do_md5) {
-		MD5_Update(&ctx, buf+offset, outlen);
-		MD5_Final(md5, &ctx);
+		MD5Update(&ctx, buf+offset, outlen);
+		MD5Final(md5, &ctx);
 		txn->resp_body.md5 = md5;
 	    }
 	}
@@ -2744,7 +2744,7 @@ void write_body(long code, struct transaction_t *txn,
 	    prot_write(httpd_out, buf, outlen);
 	    prot_puts(httpd_out, "\r\n");
 
-	    if (do_md5) MD5_Update(&ctx, buf, outlen);	    
+	    if (do_md5) MD5Update(&ctx, buf, outlen);	    
 	}
 	if (!len) {
 	    /* Terminate the HTTP/1.1 body with a zero-length chunk */
@@ -2752,7 +2752,7 @@ void write_body(long code, struct transaction_t *txn,
 
 	    /* Trailer */
 	    if (do_md5) {
-		MD5_Final(md5, &ctx);
+		MD5Final(md5, &ctx);
 		Content_MD5(md5);
 	    }
 
