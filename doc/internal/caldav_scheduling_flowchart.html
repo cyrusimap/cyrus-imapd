@@ -20,7 +20,7 @@
     <li>Store the new/modified resource.</li>
   </ol>
 
-  <h3 id="caldav_delete_sched">caldav_delete_sched() - delete via HTTP
+  <h3 id="caldav_delete_sched">caldav_delete_sched() - remove via HTTP
     DELETE on a resource</h3>
   <ol>
     <li>Check if the existing resource is a scheduling resource (has
@@ -41,7 +41,8 @@
 
   <hr>
 
-  <h3 id="sched_request">sched_request()</h3>
+  <h3 id="sched_request">sched_request() - perform an organizer
+  request / attendee status update</h3>
   <ol>
     <li>Check the ACL on the owner's Scheduling Outbox.  If the
       authenticated user doesn't have the DACL_INVITE right, fail.</li>
@@ -73,7 +74,8 @@
       SCHEDULE-STATUS of each ATTENDEE.</li>
   </ol>
 
-  <h3 id="process_attendees">process_attendees()</h3>
+  <h3 id="process_attendees">process_attendees() - create a suitable
+    iTIP request message for each attendee</h3>
   <ol>
     <li>Foreach ATTENDEE in the component, remove the SCHEDULE-STATUS
       parameter, and set PROPSTAT=NEEDS-ACTION if required.</li>
@@ -94,7 +96,8 @@
       <a href="#sched_exclude">sched_exclude()</a>.</li>
   </ol>
 
-  <h3 id="sched_exclude">sched_exclude()</h3>
+  <h3 id="sched_exclude">sched_exclude() - exclude an attendee from a
+    recurrence instance</h3>
   <ol>
     <li>If the component did not appear in the attendee's iTIP
       message, add an EXDATE property (based on the RECURRENCE-ID of
@@ -102,7 +105,7 @@
       message.</li>
   </ol>
 
-  <h3 id="sched_cancel">sched_cancel()</h3>
+  <h3 id="sched_cancel">sched_cancel() - cancel an organizer event/task</h3>
   <ol>
     <li>Set STATUS:CANCELLED on the component.</li>
     <li><a href="#process_attendees">process_attendees()</a>.</li> 
@@ -110,7 +113,7 @@
 
   <hr>
 
-  <h3 id="sched_reply">sched_reply()</h3>
+  <h3 id="sched_reply">sched_reply() - perform an attendee reply</h3>
   <ol>
     <li>Check the CalDAV Scheduling parameters on ORGANIZER.  If
       SCHEDULE-AGENT != SERVER, we are done.</li>
@@ -148,7 +151,8 @@
       in our iTIP message, update the SCHEDULE-STATUS of the ORGANIZER.</li>
   </ol>
 
-  <h3 id="trim_attendees">trim_attendees()</h3>
+  <h3 id="trim_attendees">trim_attendees() - remove all attendees
+    other than the one replying</h3>
   <ol>
     <li>Clone the component and remove all ATTENDEE properties other
       than the one corresponding to the owner of the calendar.</li>
@@ -156,7 +160,8 @@
       parameter, and the RECURRENCE-ID of the component.</li>
   </ol>
 
-  <h3 id="sched_decline">sched_decline()</h3>
+  <h3 id="sched_decline">sched_decline() - decline a recurrence
+    instance for an attendee</h3>
   <ol>
     <li>Set PARTSTAT of ATTENDEE to DECLINED.</li>
     <li><a href="#clean_component">clean_component()</a>.</li>
@@ -165,7 +170,8 @@
 
   <hr>
 
-  <h3 id="clean_component">clean_component()</h3>
+  <h3 id="clean_component">clean_component() - sanitize a component
+    for use in an iTIP message</h3>
   <ol>
     <li>Update DTSTAMP.</li>
     <li>Remove any VALARM components.</li>
@@ -173,7 +179,8 @@
       ORGANIZER.</li>
   </ol>
 
-  <h3 id="sched_deliver">sched_deliver()</h3>
+  <h3 id="sched_deliver">sched_deliver() - deliver an iTIP message to
+    a recipient</h3>
   <ol>
     <li>Lookup the recipient.</li>
     <li>If local to our server goto
@@ -184,11 +191,12 @@
 
   <hr>
 
-  <h3 id="sched_deliver_local">sched_deliver_local()</h3>
+  <h3 id="sched_deliver_local">sched_deliver_local() - deliver an
+    iTIP message to a local user</h3>
   <ol>
     <li>Check the ACL on the owner's Scheduling Inbox.  If the
-      sender doesn't have the proper right (DACL_INVITE for request,
-      DACL_REPLY for reply), fail.</li>
+      sender doesn't have the proper right (DACL_INVITE for
+      request/cancel, DACL_REPLY for reply), fail.</li>
     <li>Search the recipient's calendars for a resource having the
       specified UID.</li>
     <li>If the resource doesn't exist:</li>
@@ -218,7 +226,8 @@
       via <a href="#sched_request">sched_request()</a>.</li>
   </ol>
 
-  <h3 id="deliver_merge_reply">deliver_merge_reply()</h3>
+  <h3 id="deliver_merge_reply">deliver_merge_reply() - update
+    an organizer resource with an attendee reply</h3>
   <ol>
     <li>Foreach component in the existing resource, add it to our
 	hash table keyed by RECURRENCE-ID (for comparison against
@@ -246,7 +255,8 @@
     </ol>
   </ol>
 
-  <h3 id="deliver_merge_request">deliver_merge_request()</h3>
+  <h3 id="deliver_merge_request">deliver_merge_request() -
+    create/update an attendee resource with an organizer request</h3>
   <ol>
     <li>Foreach VTIMEZONE component in the existing resource, add it
 	to our hash table keyed by TZID (for comparison against iTIP
@@ -284,7 +294,8 @@
 
   <hr>
 
-  <h3 id="sched_deliver_remote">sched_deliver_remote()</h3>
+  <h3 id="sched_deliver_remote">sched_deliver_remote() - deliver an
+    iTIP message to a remote user</h3>
   <ol>
     <li>If the recipient is local to our Murder, goto
       <a href="#isched_send">isched_send()</a>, otherwise
@@ -292,25 +303,30 @@
     <li>Retrieve status of iTIP message delivery.</li>
   </ol>
 
-  <h3 id="isched_send">isched_send()</h3>
+  <h3 id="isched_send">isched_send() - deliver an iTIP message to a
+    remote user via iSchedule (HTTP)</h3>
   <ol>
   </ol>
 
-  <h3 id="imip_send">imip_send()</h3>
+  <h3 id="imip_send">imip_send() - deliver an iTIP message to a
+    remote user via iMIP (SMTP)</h3>
   <ol>
   </ol>
 
   <hr>
 
-  <h3 id="sched_busytime_query">sched_busytime_query()</h3>
+  <h3 id="sched_busytime_query">sched_busytime_query() - perform a
+    busytime query</h3>
   <ol>
   </ol>
 
-  <h3 id="busytime_query_local">busytime_query_local()</h3>
+  <h3 id="busytime_query_local">busytime_query_local() - perform a
+    busytime query on a local user</h3>
   <ol>
   </ol>
 
-  <h3 id="busytime_query_remote">busytime_query_remote()</h3>
+  <h3 id="busytime_query_remote">busytime_query_remote() - perform a
+  busytime query on a remote user</h3>
   <ol>
   </ol>
 
