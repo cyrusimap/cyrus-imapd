@@ -436,6 +436,9 @@ int service_init(int argc __attribute__((unused)),
     /* setup for sending IMAP IDLE notifications */
     idle_enabled();
 
+    /* open the mboxevent system */
+    mboxevent_init();
+
     /* Set namespace */
     if ((r = mboxname_init_namespace(&httpd_namespace, 1)) != 0) {
 	syslog(LOG_ERR, "%s", error_message(r));
