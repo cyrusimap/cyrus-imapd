@@ -3777,7 +3777,8 @@ static void sched_deliver_remote(const char *recipient,
 }
 
 
-static void deliver_merge_reply(icalcomponent *ical, icalcomponent *reply)
+static const char *deliver_merge_reply(icalcomponent *ical,
+				       icalcomponent *reply)
 {
     struct hash_table comp_table;
     icalcomponent *comp, *itip;
@@ -3926,6 +3927,8 @@ static void deliver_merge_reply(icalcomponent *ical, icalcomponent *reply)
     }
 
     free_hash_table(&comp_table, NULL);
+
+    return attendee;
 }
 
 
@@ -4208,7 +4211,7 @@ static void sched_deliver_local(const char *recipient,
 	    break;
 
 	case ICAL_METHOD_REPLY:
-	    deliver_merge_reply(ical, sched_data->itip);
+	    attendee = deliver_merge_reply(ical, sched_data->itip);
 
 	    break;
 
@@ -4713,7 +4716,7 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
     /* Add each component of old object to hash table for comparison */
     construct_hash_table(&comp_table, 10, 1);
 
-    if (oldical) {
+    if (!att_update && oldical) {
 	comp = icalcomponent_get_first_real_component(oldical);
 	do {
 	    old_data = xzmalloc(sizeof(struct comp_data));
@@ -4765,6 +4768,7 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 					ICAL_RDATE_PROPERTY);
 		needs_action += propcmp(old_data->comp, comp,
 					ICAL_EXDATE_PROPERTY);
+		/* XXX  Should we check STATUS here? */
 
 		if (old_data->sequence >= icalcomponent_get_sequence(comp)) {
 		    /* Make sure SEQUENCE is set properly */

@@ -50,9 +50,10 @@
       otherwise set METHOD:CANCEL.</li>
     <li>Create an iTIP message template, copying over any
       CALSCALE property and VTIMEZONE components.</li>
-    <li>Foreach component in the existing resource, add it and
-	its SEQUENCE to our hash table keyed by RECURRENCE-ID (for
-	comparison against new/modified resource).</li>
+    <li>If not an attendee status update:
+      Foreach component in the existing resource, add it and
+      its SEQUENCE to our hash table keyed by RECURRENCE-ID (for
+      comparison against new/modified resource).</li>
     <li>Create a hash table of attendees.  This will hold
       attendee-specific iTIP messages.</li>
     <li>Foreach component in the new/modified resource:</li>
@@ -253,6 +254,7 @@
       <li>Set the ATTENDEE PARTSTAT, RSVP, and SCHEDULE-STATUS
 	parameters in the existing component.</li>
     </ol>
+    <li>Return the sending ATTENDEE.</li>
   </ol>
 
   <h3 id="deliver_merge_request">deliver_merge_request() -
