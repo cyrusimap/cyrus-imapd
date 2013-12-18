@@ -1248,8 +1248,13 @@ And the notification message will be available on \fIstdin\fR.
 { "servername", NULL, STRING }
 /* This is the hostname visible in the greeting messages of the POP,
    IMAP and LMTP daemons. If it is unset, then the result returned
-   from gethostname(2) is used. */
-   
+   from gethostname(2) is used.  This is also the value used by murder
+   clusters to identify the host name.  It should be resolvable by
+   DNS to the correct host, and unique within an active cluster.  If
+   you are using low level replication (e.g. drbd) then it should be
+   the same on each copy and the DNS name should also be moved to
+   the new master on failover. */
+
 { "serverinfo", "on", ENUM("off", "min", "on") }
 /* The server information to display in the greeting and capability
    responses. Information is displayed as follows:
