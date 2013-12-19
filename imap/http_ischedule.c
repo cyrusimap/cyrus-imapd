@@ -907,7 +907,7 @@ static int meth_get_domainkey(struct transaction_t *txn,
 static void isched_init(struct buf *serverinfo)
 {
     if (!(config_httpmodules & IMAP_ENUM_HTTPMODULES_CALDAV) ||
-	!config_getswitch(IMAPOPT_CALDAV_ALLOWSCHEDULING)) {
+	!config_getenum(IMAPOPT_CALDAV_ALLOWSCHEDULING)) {
 	/* Need CALDAV and CALDAV_SCHED in order to have ISCHEDULE */
 	return;
     }

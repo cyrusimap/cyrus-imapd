@@ -114,6 +114,7 @@ struct calquery_filter {
     struct busytime busytime;    	/* array of found busytime periods */
 };
 
+static unsigned config_allowsched = IMAP_ENUM_CALDAV_ALLOWSCHEDULING_OFF;
 static struct caldav_db *auth_caldavdb = NULL;
 static time_t compile_time;
 
@@ -403,7 +404,8 @@ static void my_caldav_init(struct buf *serverinfo)
 #endif
     }
 
-    if (config_getswitch(IMAPOPT_CALDAV_ALLOWSCHEDULING)) {
+    config_allowsched = config_getenum(IMAPOPT_CALDAV_ALLOWSCHEDULING);
+    if (config_allowsched) {
 	namespace_calendar.allow |= ALLOW_CAL_SCHED;
 
 	/* Need to set this to parse CalDAV Scheduling parameters */
@@ -3930,13 +3932,15 @@ static const char *deliver_merge_reply(icalcomponent *ical,
 }
 
 
-static int deliver_merge_request(icalcomponent *ical, icalcomponent *request)
+static int deliver_merge_request(const char *attendee,
+				 icalcomponent *ical, icalcomponent *request)
 {
     int deliver_inbox = 0;
     struct hash_table comp_table;
     icalcomponent *comp, *itip;
-    icalcomponent_kind kind;
+    icalcomponent_kind kind = ICAL_NO_COMPONENT;
     icalproperty *prop;
+    icalparameter *param;
     const char *tzid, *recurid;
 
     /* Add each VTIMEZONE of old object to hash table for comparison */
@@ -3969,7 +3973,7 @@ static int deliver_merge_request(icalcomponent *ical, icalcomponent *request)
 	    icalcomponent_free(comp);
 	}
 
-	/* Add new/modified component from iTIP request*/
+	/* Add new/modified component from iTIP request */
 	icalcomponent_add_component(ical, icalcomponent_new_clone(itip));
     }
 
@@ -3978,21 +3982,20 @@ static int deliver_merge_request(icalcomponent *ical, icalcomponent *request)
     /* Add each component of old object to hash table for comparison */
     construct_hash_table(&comp_table, 10, 1);
     comp = icalcomponent_get_first_real_component(ical);
-    kind = icalcomponent_isa(comp);
-    do {
+    if (comp) kind = icalcomponent_isa(comp);
+    for (; comp; comp = icalcomponent_get_next_component(ical, kind)) {
 	prop =
 	    icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
 	if (prop) recurid = icalproperty_get_value_as_string(prop);
 	else recurid = "";
 
 	hash_insert(recurid, comp, &comp_table);
-
-    } while ((comp = icalcomponent_get_next_component(ical, kind)));
+    }
 
     /* Process each component in the iTIP request */
-    for (itip = icalcomponent_get_first_component(request, kind);
-	 itip;
-	 itip = icalcomponent_get_next_component(request, kind)) {
+    itip = icalcomponent_get_first_real_component(request);
+    if (kind == ICAL_NO_COMPONENT) kind = icalcomponent_isa(itip);
+    for (; itip; itip = icalcomponent_get_next_component(request, kind)) {
 	icalcomponent *new_comp = icalcomponent_new_clone(itip);
 
 	/* Lookup this comp in the hash table */
@@ -4004,7 +4007,6 @@ static int deliver_merge_request(icalcomponent *ical, icalcomponent *request)
 	comp = hash_lookup(recurid, &comp_table);
 	if (comp) {
 	    int old_seq, new_seq;
-	    icalparameter *param;
 
 	    /* Check if this is something more than an update */
 	    /* XXX  Probably need to check PARTSTAT=NEEDS-ACTION
@@ -4069,6 +4071,33 @@ static int deliver_merge_request(icalcomponent *ical, icalcomponent *request)
 	    deliver_inbox = 1;
 	}
 
+	if (config_allowsched == IMAP_ENUM_CALDAV_ALLOWSCHEDULING_APPLE &&
+	    kind == ICAL_VEVENT_COMPONENT) {
+	    /* Make VEVENT component transparent if recipient ATTENDEE
+	       PARTSTAT=NEEDS-ACTION (for compatibility with CalendarServer) */
+	    for (prop =
+		     icalcomponent_get_first_property(new_comp,
+						      ICAL_ATTENDEE_PROPERTY);
+		 prop && strcmp(icalproperty_get_attendee(prop), attendee);
+		 prop =
+		     icalcomponent_get_next_property(new_comp,
+						     ICAL_ATTENDEE_PROPERTY));
+	    param =
+		icalproperty_get_first_parameter(prop, ICAL_PARTSTAT_PARAMETER);
+	    if (icalparameter_get_partstat(param) ==
+		ICAL_PARTSTAT_NEEDSACTION) {
+		prop = 
+		    icalcomponent_get_first_property(new_comp,
+						     ICAL_TRANSP_PROPERTY);
+		if (prop)
+		    icalproperty_set_transp(prop, ICAL_TRANSP_TRANSPARENT);
+		else {
+		    prop = icalproperty_new_transp(ICAL_TRANSP_TRANSPARENT);
+		    icalcomponent_add_property(new_comp, prop);
+		}
+	    }
+	}
+
 	/* Add new/modified component from iTIP request */
 	icalcomponent_add_component(ical, new_comp);
     }
@@ -4095,6 +4124,10 @@ static void sched_deliver_local(const char *recipient,
     struct caldav_db *caldavdb = NULL;
     struct caldav_data *cdata;
     icalcomponent *ical = NULL;
+    icalproperty_method method;
+    icalcomponent_kind kind;
+    icalcomponent *comp;
+    icalproperty *prop;
     struct transaction_t txn;
 
     /* Check ACL of sender on recipient's Scheduling Inbox */
@@ -4165,65 +4198,77 @@ static void sched_deliver_local(const char *recipient,
 	goto done;
     }
 
-    if (!cdata->dav.imap_uid) {
-	icalproperty *prop;
-
-	/* Create new object (copy of request w/o METHOD) */
-	ical = icalcomponent_new_clone(sched_data->itip);
-
-	prop = icalcomponent_get_first_property(ical, ICAL_METHOD_PROPERTY);
-	icalcomponent_remove_property(ical, prop);
-	icalproperty_free(prop);
-    }
-    else {
-	/* Update existing object */
+    if (cdata->dav.imap_uid) {
 	struct index_record record;
 	const char *msg_base = NULL;
 	unsigned long msg_size = 0;
-	icalcomponent *comp;
-	icalcomponent_kind kind;
-	icalproperty_method method;
 
 	/* Load message containing the resource and parse iCal data */
 	mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
 	mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
 	ical = icalparser_parse_string(msg_base + record.header_size);
 	mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
+    }
 
-	/* Get METHOD of the iTIP message */
-	method = icalcomponent_get_method(sched_data->itip);
+    /* Get METHOD of the iTIP message */
+    method = icalcomponent_get_method(sched_data->itip);
 
-	switch (method) {
-	case ICAL_METHOD_CANCEL:
-	    /* Get component type */
-	    comp = icalcomponent_get_first_real_component(ical);
-	    kind = icalcomponent_isa(comp);
+    switch (method) {
+    case ICAL_METHOD_CANCEL:
+	if (!ical) goto done;
 
-	    /* Set STATUS:CANCELLED on all components */
-	    do {
-		icalcomponent_set_status(comp, ICAL_STATUS_CANCELLED);
-		icalcomponent_set_sequence(comp,
-					   icalcomponent_get_sequence(comp)+1);
-	    } while ((comp = icalcomponent_get_next_component(ical, kind)));
+	/* Get component type */
+	comp = icalcomponent_get_first_real_component(ical);
+	kind = icalcomponent_isa(comp);
 
-	    break;
+	/* Set STATUS:CANCELLED on all components */
+	do {
+	    icalcomponent_set_status(comp, ICAL_STATUS_CANCELLED);
+	    icalcomponent_set_sequence(comp,
+				       icalcomponent_get_sequence(comp)+1);
+	} while ((comp = icalcomponent_get_next_component(ical, kind)));
 
-	case ICAL_METHOD_REPLY:
-	    attendee = deliver_merge_reply(ical, sched_data->itip);
+	break;
 
-	    break;
+    case ICAL_METHOD_REPLY:
+	attendee = deliver_merge_reply(ical, sched_data->itip);
 
-	case ICAL_METHOD_REQUEST:
-	    deliver_inbox = deliver_merge_request(ical, sched_data->itip);
+	break;
 
-	    break;
+    case ICAL_METHOD_REQUEST:
+	if (!ical) {
+	    /* Create new object */
+	    ical = icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT, 0);
 
-	default:
-	    /* Unknown METHOD -- ignore it */
-	    syslog(LOG_ERR, "Unknown iTIP method: %s",
-		   icalenum_method_to_string(method));
-	    goto inbox;
+	    /* Copy over VERSION property */
+	    prop = icalcomponent_get_first_property(sched_data->itip,
+						    ICAL_VERSION_PROPERTY);
+	    icalcomponent_add_property(ical, icalproperty_new_clone(prop));
+
+	    /* Copy over PRODID property */
+	    prop = icalcomponent_get_first_property(sched_data->itip,
+						    ICAL_PRODID_PROPERTY);
+	    icalcomponent_add_property(ical, icalproperty_new_clone(prop));
+
+	    /* Copy over any CALSCALE property */
+	    prop = icalcomponent_get_first_property(sched_data->itip,
+						    ICAL_CALSCALE_PROPERTY);
+	    if (prop) {
+		icalcomponent_add_property(ical,
+					   icalproperty_new_clone(prop));
+	    }
 	}
+
+	deliver_inbox = deliver_merge_request(recipient,
+					      ical, sched_data->itip);
+
+	break;
+
+    default:
+	/* Unknown METHOD -- ignore it */
+	syslog(LOG_ERR, "Unknown iTIP method: %s",
+	       icalenum_method_to_string(method));
+	goto inbox;
     }
 
     /* Store the (updated) object in the recipients's calendar */

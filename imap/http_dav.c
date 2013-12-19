@@ -222,7 +222,7 @@ static void my_dav_init(struct buf *serverinfo)
     if (config_httpmodules & IMAP_ENUM_HTTPMODULES_CALDAV) {
 	namespace_principal.enabled = 1;
 	namespace_principal.allow |= ALLOW_CAL;
-	if (config_getswitch(IMAPOPT_CALDAV_ALLOWSCHEDULING))
+	if (config_getenum(IMAPOPT_CALDAV_ALLOWSCHEDULING))
 	    namespace_principal.allow |= ALLOW_CAL_SCHED;
     }
     if (config_httpmodules & IMAP_ENUM_HTTPMODULES_CARDDAV) {

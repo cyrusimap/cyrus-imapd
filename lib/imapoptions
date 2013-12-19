@@ -378,8 +378,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    layers of MIME structure.  The default of 1000 is much higher
    than any sane message should have. */
 
-{ "caldav_allowscheduling", 1, SWITCH }
-/* If enabled, the server will perform calendar scheduling operations. */
+{ "caldav_allowscheduling", "on", ENUM("off", "on", "apple") }
+/* Enable calendar scheduling operations. If set to "apple", the
+   server will emulate Apple CalendarServer behavior as closely as
+   possible. */
 
 { "caldav_realm", NULL, STRING }
 /* The realm to present for HTTP authentication of CalDAV resources.
