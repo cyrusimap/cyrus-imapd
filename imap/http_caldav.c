@@ -67,6 +67,7 @@
 #include "acl.h"
 #include "append.h"
 #include "caldav_db.h"
+#include "charset.h"
 #include "global.h"
 #include "hash.h"
 #include "httpd.h"
@@ -3223,6 +3224,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     icalproperty_method meth;
     icalproperty *prop;
     unsigned mykind = 0;
+    char *header;
     const char *organizer = NULL;
     const char *prop_annot = ANNOT_NS "CALDAV:supported-calendar-component-set";
     struct annotation_data attrib;
@@ -3306,21 +3308,41 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     if (prop) {
 	organizer = icalproperty_get_organizer(prop)+7;
-	fprintf(f, "From: %s\r\n", organizer);
+	header = charset_encode_mimeheader(organizer, 0);
+	fprintf(f, "From: %s\r\n", header);
+	free(header);
+    }
+    else if (strchr(proxy_userid, '@')) {
+	/* XXX  This needs to be done via an LDAP/DB lookup */
+	header = charset_encode_mimeheader(proxy_userid, 0);
+	fprintf(f, "From: %s\r\n", header);
+	free(header);
     }
     else {
-	/* XXX  This needs to be done via an LDAP/DB lookup */
-	fprintf(f, "From: %s@%s\r\n", proxy_userid, config_servername);
+	struct buf headbuf = BUF_INITIALIZER;
+	buf_printf(&headbuf, "%s@%s", proxy_userid, config_servername);
+	header = charset_encode_mimeheader(headbuf.s, headbuf.len);
+	fprintf(f, "From: %s\r\n", header);
+	free(header);
+	buf_reset(&headbuf);
     }
 
-    fprintf(f, "Subject: %s\r\n", icalcomponent_get_summary(comp));
+    header = charset_encode_mimeheader(icalcomponent_get_summary(comp), 0);
+    fprintf(f, "Subject: %s\r\n", header);
+    free(header);
 
     rfc822date_gen(datestr, sizeof(datestr),
 		   icaltime_as_timet_with_zone(icalcomponent_get_dtstamp(comp),
 					       icaltimezone_get_utc_timezone()));
     fprintf(f, "Date: %s\r\n", datestr);
 
-    fprintf(f, "Message-ID: <%s@%s>\r\n", uid, config_servername);
+    /* XXX - validate uid for mime safety? */
+    if (strchr(uid, '@')) {
+	fprintf(f, "Message-ID: <%s>\r\n", uid);
+    }
+    else {
+	fprintf(f, "Message-ID: <%s@%s>\r\n", uid, config_servername);
+    }
 
     fprintf(f, "Content-Type: text/calendar; charset=utf-8");
     if ((meth = icalcomponent_get_method(ical)) != ICAL_METHOD_NONE) {
