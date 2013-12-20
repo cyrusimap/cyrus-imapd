@@ -3130,9 +3130,11 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     icalproperty_method meth;
     icalproperty *prop;
     unsigned mykind = 0;
+    char *header;
     const char *organizer = NULL;
     const char *prop_annot = ANNOT_NS "CALDAV:supported-calendar-component-set";
     struct buf attrib = BUF_INITIALIZER;
+    struct buf headbuf = BUF_INITIALIZER;
     struct index_record oldrecord;
     struct caldav_data *cdata;
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
@@ -3238,23 +3240,34 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     if (prop) {
 	organizer = icalproperty_get_organizer(prop)+7;
-	fprintf(f, "From: %s\r\n", organizer);
+	header = charset_encode_mimeheader(organizer, 0);
+	fprintf(f, "From: %s\r\n", header);
+	free(header);
     }
     else if (strchr(proxy_userid, '@')) {
 	/* XXX  This needs to be done via an LDAP/DB lookup */
-	fprintf(f, "From: %s\r\n", proxy_userid);
+	header = charset_encode_mimeheader(proxy_userid, 0);
+	fprintf(f, "From: %s\r\n", header);
+	free(header);
     }
     else {
-	fprintf(f, "From: %s@%s\r\n", proxy_userid, config_servername);
+	buf_printf(&headbuf, "%s@%s", proxy_userid, config_servername);
+	header = charset_encode_mimeheader(buf_base(&headbuf), buf_len(&headbuf));
+	fprintf(f, "From: %s\r\n", header);
+	free(header);
+	buf_reset(&headbuf);
     }
 
-    fprintf(f, "Subject: %s\r\n", icalcomponent_get_summary(comp));
+    header = charset_encode_mimeheader(icalcomponent_get_summary(comp), 0);
+    fprintf(f, "Subject: %s\r\n", header);
+    free(header);
 
     time_to_rfc822(icaltime_as_timet_with_zone(icalcomponent_get_dtstamp(comp),
 					       icaltimezone_get_utc_timezone()),
 		   datestr, sizeof(datestr));
     fprintf(f, "Date: %s\r\n", datestr);
 
+    /* XXX - validate uid for mime safety? */
     if (strchr(uid, '@')) {
 	fprintf(f, "Message-ID: <%s>\r\n", uid);
     }
@@ -3374,6 +3387,8 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     }
 
     append_removestage(stage);
+
+    buf_free(&headbuf);
 
     return ret;
 }

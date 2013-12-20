@@ -954,6 +954,7 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
     FILE *f = NULL;
     struct index_record oldrecord;
     struct stagemsg *stage;
+    char *header;
     const char *version = NULL, *uid = NULL, *fullname = NULL;
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
     uint32_t expunge_uid = 0;
@@ -1033,9 +1034,13 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
     /* Create iMIP header for resource */
 
     /* XXX  This needs to be done via an LDAP/DB lookup */
-    fprintf(f, "From: %s <>\r\n", proxy_userid);
+    header = charset_encode_mimeheader(proxy_userid, 0);
+    fprintf(f, "From: %s <>\r\n", header);
+    free(header);
 
-    fprintf(f, "Subject: %s\r\n", fullname);
+    header = charset_encode_mimeheader(fullname, 0);
+    fprintf(f, "Subject: %s\r\n", header);
+    free(header);
 
     time_to_rfc822(now, datestr, sizeof(datestr));
 
