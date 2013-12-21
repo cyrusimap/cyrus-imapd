@@ -202,14 +202,14 @@
       specified UID.</li>
     <li>If the resource doesn't exist:</li>
     <ol type=a>
-      <li>If the iTIP method is REPLY, ignore it (we are
-      done).</li>
-      <li>Otherwise, target the recipient's Default calendar.</li>
-      <li>Create a copy of the iTIP request (without METHOD).</li>
+      <li>If the iTIP method is REPLY, fail (we are done).</li>
+      <li>If the iTIP method is CANCEL, ignore it (we are done).</li>
+      <li>Otherwise, create a new (empty) attendee object and target
+	the recipient's Default calendar.</li>
     </ol>
-    <li>Otherwise, update the existing resource:</li>
+    <li>Otherwise, load the existing resource.</li>
+    <li>Update the new/existing resource:</li>
     <ol type=a>
-      <li>Load the existing resource.</li>
       <li>If the iTIP method is CANCEL, set STATUS:CANCELLED on all
 	existing components.</li>
       <li>If the iTIP method is REPLY, do
