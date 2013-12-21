@@ -4215,6 +4215,9 @@ static void sched_deliver_local(const char *recipient,
 	goto done;
     }
 
+    /* Get METHOD of the iTIP message */
+    method = icalcomponent_get_method(sched_data->itip);
+
     /* Search for iCal UID in recipient's calendars */
     caldavdb = caldav_open(userid, CALDAV_CREATE);
     if (!caldavdb) {
@@ -4236,6 +4239,12 @@ static void sched_deliver_local(const char *recipient,
 	    sched_data->ischedule ? REQSTAT_PERMFAIL : SCHEDSTAT_PERMFAIL;
 	goto done;
     }
+    else if (method == ICAL_METHOD_CANCEL) {
+	/* Can't find object belonging to attendee - we're done */
+	sched_data->status =
+	    sched_data->ischedule ? REQSTAT_SUCCESS : SCHEDSTAT_DELIVERED;
+	goto done;
+    }
     else {
 	/* Can't find object belonging to attendee - use default calendar */
 	caldav_mboxname(SCHED_DEFAULT, userid, namebuf);
@@ -4243,6 +4252,27 @@ static void sched_deliver_local(const char *recipient,
 	buf_reset(&resource);
 	buf_printf(&resource, "%s.ics",
 		   icalcomponent_get_uid(sched_data->itip));
+
+	/* Create new attendee object */
+	ical = icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT, 0);
+
+	/* Copy over VERSION property */
+	prop = icalcomponent_get_first_property(sched_data->itip,
+						ICAL_VERSION_PROPERTY);
+	icalcomponent_add_property(ical, icalproperty_new_clone(prop));
+
+	/* Copy over PRODID property */
+	prop = icalcomponent_get_first_property(sched_data->itip,
+						ICAL_PRODID_PROPERTY);
+	icalcomponent_add_property(ical, icalproperty_new_clone(prop));
+
+	/* Copy over any CALSCALE property */
+	prop = icalcomponent_get_first_property(sched_data->itip,
+						ICAL_CALSCALE_PROPERTY);
+	if (prop) {
+	    icalcomponent_add_property(ical,
+				       icalproperty_new_clone(prop));
+	}
     }
 
     /* Open recipient's calendar for reading */
@@ -4266,13 +4296,8 @@ static void sched_deliver_local(const char *recipient,
 	mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
     }
 
-    /* Get METHOD of the iTIP message */
-    method = icalcomponent_get_method(sched_data->itip);
-
     switch (method) {
     case ICAL_METHOD_CANCEL:
-	if (!ical) goto done;
-
 	/* Get component type */
 	comp = icalcomponent_get_first_real_component(ical);
 	kind = icalcomponent_isa(comp);
@@ -4292,32 +4317,8 @@ static void sched_deliver_local(const char *recipient,
 	break;
 
     case ICAL_METHOD_REQUEST:
-	if (!ical) {
-	    /* Create new object */
-	    ical = icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT, 0);
-
-	    /* Copy over VERSION property */
-	    prop = icalcomponent_get_first_property(sched_data->itip,
-						    ICAL_VERSION_PROPERTY);
-	    icalcomponent_add_property(ical, icalproperty_new_clone(prop));
-
-	    /* Copy over PRODID property */
-	    prop = icalcomponent_get_first_property(sched_data->itip,
-						    ICAL_PRODID_PROPERTY);
-	    icalcomponent_add_property(ical, icalproperty_new_clone(prop));
-
-	    /* Copy over any CALSCALE property */
-	    prop = icalcomponent_get_first_property(sched_data->itip,
-						    ICAL_CALSCALE_PROPERTY);
-	    if (prop) {
-		icalcomponent_add_property(ical,
-					   icalproperty_new_clone(prop));
-	    }
-	}
-
 	deliver_inbox = deliver_merge_request(recipient,
 					      ical, sched_data->itip);
-
 	break;
 
     default:
@@ -4363,7 +4364,7 @@ static void sched_deliver_local(const char *recipient,
 
     /* XXX  Should this be a config option? - it might have perf implications */
     if (sched_data->is_reply) {
-	/* Send updates to attendees */
+	/* Send updates to attendees - skipping sender of reply */
 	sched_request(recipient, sparam, NULL, ical, attendee);
     }
 
