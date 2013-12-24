@@ -5945,14 +5945,6 @@ static int renmbox(char *name,
 		    oldextname, newextname);
 
 	sync_log_mailbox_double(name, text->newmailboxname);
-
-	if (text->rename_user) {
-	    /* allow the replica to get the correct new quotaroot
-	     * and acls copied across */
-	    sync_log_user(text->newuser);
-	    /* allow the replica to clean up the old meta files */
-	    sync_log_unuser(text->olduser);
-	}
     }
 
 done:
@@ -6321,6 +6313,12 @@ submboxes:
     /* take care of deleting old ACLs, subscriptions, seen state and quotas */
     if (!r && rename_user)
 	user_deletedata(olduser, 1);
+	/* allow the replica to get the correct new quotaroot
+	 * and acls copied across */
+	sync_log_user(newuser);
+	/* allow the replica to clean up the old meta files */
+	sync_log_unuser(olduser);
+    }
 
     imapd_check(NULL, 0);
 
