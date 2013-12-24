@@ -1725,28 +1725,6 @@ bail:
 
 /* ====================================================================== */
 
-static void folderlist_remove(struct sync_folder_list *list, const char *prefix)
-{
-    struct sync_folder *item;
-
-    for (item = list->head; item; item = item->next) {
-	if (mboxname_is_prefix(item->name, prefix))
-	    item->mark = 1;
-    }
-}
-
-static void renamelist_remove(struct sync_rename_list *list, const char *prefix)
-{
-    struct sync_rename *item;
-
-    for (item = list->head; item; item = item->next) {
-	if (mboxname_is_prefix(item->oldname, prefix)) {
-	    list->done++;
-	    item->done = 1;
-	}
-    }
-}
-
 static int do_folders(struct sync_name_list *mboxname_list,
 	       struct sync_folder_list *replica_folders, int delete_remote)
 {
@@ -1776,22 +1754,8 @@ static int do_folders(struct sync_name_list *mboxname_list,
 	if (rfolder->mark) continue;
 	rfolder->mark = 1;
 
-	/* does it need a rename? */
-	if (strcmp(mfolder->name, rfolder->name)) {
-	    sync_rename_list_add(rename_folders, mfolder->uniqueid, rfolder->name,
-				 mfolder->name, mfolder->part, mfolder->uidvalidity);
-	    if (mboxname_isusermailbox(mfolder->name, 1) &&
-		mboxname_isusermailbox(rfolder->name, 1)) {
-		/* user rename - strip all other folders from consideration.  They
-		 * will be picked up by the full user sync later */
-		folderlist_remove(master_folders, mfolder->name);
-		renamelist_remove(rename_folders, rfolder->name);
-		folderlist_remove(replica_folders, rfolder->name);
-	    }
-	}
-
-	/* partition change is a rename too */
-	else if (strcmp(mfolder->part, rfolder->part)) {
+	/* does it need a rename? partition change is a rename too */
+	if (strcmp(mfolder->name, rfolder->name) || strcmp(mfolder->part, rfolder->part)) {
 	    sync_rename_list_add(rename_folders, mfolder->uniqueid, rfolder->name,
 				 mfolder->name, mfolder->part, mfolder->uidvalidity);
 	}
