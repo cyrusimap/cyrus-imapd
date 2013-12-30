@@ -729,6 +729,7 @@ void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata)
     /* Get organizer */
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     if (prop) cdata->organizer = icalproperty_get_organizer(prop)+7;
+    else cdata->organizer = NULL;
 
     /* Get transparency */
     prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
