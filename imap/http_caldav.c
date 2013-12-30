@@ -4762,19 +4762,25 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 
     if (!att_update && oldical) {
 	comp = icalcomponent_get_first_real_component(oldical);
-	do {
-	    old_data = xzmalloc(sizeof(struct comp_data));
-	    old_data->comp = comp;
-	    old_data->sequence = icalcomponent_get_sequence(comp);
 
-	    prop = icalcomponent_get_first_property(comp,
-						    ICAL_RECURRENCEID_PROPERTY);
-	    if (prop) recurid = icalproperty_get_value_as_string(prop);
-	    else recurid = "";
+	/* If the existing object isn't a scheduling object,
+	   we don't need to compare components, treat them as new */
+	if (icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY)) {
+	    do {
+		old_data = xzmalloc(sizeof(struct comp_data));
+		old_data->comp = comp;
+		old_data->sequence = icalcomponent_get_sequence(comp);
 
-	    hash_insert(recurid, old_data, &comp_table);
+		prop =
+		    icalcomponent_get_first_property(comp,
+						     ICAL_RECURRENCEID_PROPERTY);
+		if (prop) recurid = icalproperty_get_value_as_string(prop);
+		else recurid = "";
 
-	} while ((comp = icalcomponent_get_next_component(oldical, kind)));
+		hash_insert(recurid, old_data, &comp_table);
+
+	    } while ((comp = icalcomponent_get_next_component(oldical, kind)));
+	}
     }
 
     /* Create hash table of attendees */
