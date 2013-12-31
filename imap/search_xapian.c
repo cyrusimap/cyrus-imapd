@@ -1365,7 +1365,7 @@ out:
 
 static int begin_mailbox_update(search_text_receiver_t *rx,
 				struct mailbox *mailbox,
-				int incremental __attribute__((unused)))
+				int flags __attribute__((unused)))
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
     char *fname = activefile_fname(mailbox->name);
@@ -1378,6 +1378,13 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
 	r = IMAP_MAILBOX_NONEXISTENT;
 	goto out;
     }
+
+    /* XXX - there's an annoying lock inversion going on here.  We have to release
+     * the mailbox lock and then re-establish it after we have the xapianactive file
+     * open.  We should really just get an mboxname passed down to this layer, but
+     * that's a much bigger rewrite due to disparate actions being squeezed into an
+     * identical API */
+    mailbox_unlock_index(mailbox, NULL);
 
     /* XXX - if not incremental, we actually want to throw away all existing up to
      * this point and write a new one, so we should launch a new file and then
@@ -1422,6 +1429,11 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     tr->oldindexed = seqset_init(0, SEQ_MERGE);
     r = read_indexed(tr->activedirs, mailbox->name, mailbox->i.uidvalidity,
 		     tr->oldindexed, tr->super.verbose);
+    if (r) goto out;
+
+    /* XXX - and of course we have to lock again! (XXX - no support for the nonblocking bit
+     * on this second lock... *sigh*)  We don't have the flags to know that we wanted it */
+    r = mailbox_lock_index(mailbox, LOCK_SHARED);
     if (r) goto out;
 
     tr->super.mailbox = mailbox;

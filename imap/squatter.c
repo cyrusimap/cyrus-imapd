@@ -584,7 +584,7 @@ static int do_search(const char *query, int single, const strarray_t *mboxnames)
     for (i = 0 ; i < mboxnames->count ; i++) {
 	const char *mboxname = mboxnames->data[i];
 
-	r = mailbox_open_iwl(mboxname, &mailbox);
+	r = mailbox_open_irl(mboxname, &mailbox);
 	if (r) {
 	    fprintf(stderr, "Cannot open mailbox %s: %s\n",
 		    mboxname, error_message(r));

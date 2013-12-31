@@ -204,9 +204,9 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     int batch_size = search_batch_size();
     ptrarray_t batch = PTRARRAY_INITIALIZER;
     struct index_record record;
-    int incremental = (flags & SEARCH_UPDATE_INCREMENTAL) ? 1 : 0;
+    int incremental = (flags & SEARCH_UPDATE_INCREMENTAL);
 
-    r = rx->begin_mailbox(rx, mailbox, incremental);
+    r = rx->begin_mailbox(rx, mailbox, flags);
     if (r) return r;
 
     first = mailbox_finduid(mailbox, rx->first_unindexed_uid(rx));
