@@ -50,7 +50,8 @@
       otherwise set METHOD:CANCEL.</li>
     <li>Create an iTIP message template, copying over any
       CALSCALE property and VTIMEZONE components.</li>
-    <li>If not an attendee status update:
+    <li>If not an attendee status update and the existing resource is a
+      scheduling resource:
       Foreach component in the existing resource, add it and
       its SEQUENCE to our hash table keyed by RECURRENCE-ID (for
       comparison against new/modified resource).</li>
