@@ -1023,13 +1023,12 @@ static void cmdloop(void)
 
 		be = backend_current;
 		if (arg1.len &&
-		    (!is_newsgroup(arg1.s) ||
-		     (r = open_group(arg1.s, 0, &be, NULL)))) goto nogroup;
+		    (r = open_group(arg1.s, 0, &be, NULL))) goto nogroup;
 		else if (be) {
 		    prot_printf(be->out, "%s", cmd.s);
 		    if (arg1.len) {
 			prot_printf(be->out, " %s", arg1.s);
-			  if (LISTGROUP) prot_printf(be->out, " %s", arg2.s);
+			if (LISTGROUP) prot_printf(be->out, " %s", arg2.s);
 		    }
 		    prot_printf(be->out, "\r\n");
 
@@ -1741,6 +1740,8 @@ static int open_group(char *name, int has_prefix, struct backend **ret,
     if (!has_prefix) {
 	snprintf(mailboxname, sizeof(mailboxname), "%s%s", newsprefix, name);
 	name = mailboxname;
+
+	if (!is_newsgroup(name)) return IMAP_MAILBOX_NONEXISTENT;
     }
 
     if (!r) r = mlookup(name, &mbentry);
