@@ -8189,10 +8189,9 @@ static int trashacl(struct protstream *pin, struct protstream *pout,
     int i=0, j=0;
     char tagbuf[128];
     int c;		/* getword() returns an int */
-    struct buf tag, cmd, tmp, user;
+    struct buf cmd, tmp, user;
     int r = 0;
 
-    memset(&tag, 0, sizeof(struct buf));
     memset(&cmd, 0, sizeof(struct buf));
     memset(&tmp, 0, sizeof(struct buf));
     memset(&user, 0, sizeof(struct buf));
@@ -8201,28 +8200,21 @@ static int trashacl(struct protstream *pin, struct protstream *pout,
 		strlen(mailbox), mailbox);
 
     while(1) {
-	c = getword(pin, &tag);
-	if (c == EOF) {
-	    r = IMAP_SERVER_UNAVAILABLE;
+	c = prot_getc(pin);
+	if (c != '*') {
+	    prot_ungetc(c, pin);
+	    r = getresult(pin, "ACL0");
 	    break;
 	}
 
+	c = prot_getc(pin);  /* skip SP */
 	c = getword(pin, &cmd);
 	if (c == EOF) {
 	    r = IMAP_SERVER_UNAVAILABLE;
 	    break;
 	}
 	
-	if(c == '\r') {
-	    c = prot_getc(pin);
-	    if(c != '\n') {
-		r = IMAP_SERVER_UNAVAILABLE;
-		goto cleanup;
-	    }
-	}
-	if(c == '\n') goto cleanup;	
-
-	if (tag.s[0] == '*' && !strncmp(cmd.s, "ACL", 3)) {
+	if (!strncmp(cmd.s, "ACL", 3)) {
 	    while(c != '\n') {
 		/* An ACL response, we should send a DELETEACL command */
 		c = getastring(pin, pout, &tmp);
@@ -8238,7 +8230,7 @@ static int trashacl(struct protstream *pin, struct protstream *pout,
 			goto cleanup;
 		    }
 		}
-		if(c == '\n') goto cleanup;
+		if(c == '\n') break;  /* end of * ACL */
 		
 		c = getastring(pin, pout, &user);
 		if (c == EOF) {
@@ -8261,13 +8253,10 @@ static int trashacl(struct protstream *pin, struct protstream *pout,
 		}
 		/* if the next character is \n, we'll exit the loop */
 	    }
-	    continue;
-	} else if (!strncmp(tag.s, "ACL0", 4)) {
-	    /* end of this command */
-	    if (!strcasecmp(cmd.s, "OK")) { break; }
-	    if (!strcasecmp(cmd.s, "NO")) { r = IMAP_REMOTE_DENIED; break; }
-	    r = IMAP_SERVER_UNAVAILABLE;
-	    break;
+	}
+	else {
+	    /* skip this line, we don't really care */
+	    eatline(pin, c);
 	}
     }
 
@@ -8276,17 +8265,9 @@ static int trashacl(struct protstream *pin, struct protstream *pout,
     /* Now cleanup after all the DELETEACL commands */
     if(!r) {
 	while(j < i) {
-	    c = getword(pin, &tag);
-	    if (c == EOF) {
-		r = IMAP_SERVER_UNAVAILABLE;
-		break;
-	    }
-	    
-	    eatline(pin, c);
-	    
-	    if(!strncmp("ACL", tag.s, 3)) {
-		j++;
-	    }
+	    snprintf(tagbuf, sizeof(tagbuf), "ACL%d", ++j);
+	    r = getresult(pin, tagbuf);
+	    if (r) break;
 	}
     }
 
@@ -8295,7 +8276,6 @@ static int trashacl(struct protstream *pin, struct protstream *pout,
     buf_free(&user);
     buf_free(&tmp);
     buf_free(&cmd);
-    buf_free(&tag);
 
     return r;
 }
@@ -8304,15 +8284,11 @@ static int dumpacl(struct protstream *pin, struct protstream *pout,
 		   char *mailbox, char *acl_in) 
 {
     int r = 0;
-    int c;		/* getword() returns an int */
     char tag[128];
     int tagnum = 1;
     char *rights, *nextid;
     char *acl_safe = acl_in ? xstrdup(acl_in) : NULL;
     char *acl = acl_safe;
-    struct buf inbuf;
-    
-    memset(&inbuf, 0, sizeof(struct buf));
 
     while (acl) {
 	rights = strchr(acl, '\t');
@@ -8332,40 +8308,12 @@ static int dumpacl(struct protstream *pin, struct protstream *pout,
 		    strlen(acl), acl,
 		    strlen(rights), rights);
 
-	while(1) {
-	    c = getword(pin, &inbuf);
-	    if (c == EOF) {
-		r = IMAP_SERVER_UNAVAILABLE;
-		break;
-	    }
-	    if(strncmp(tag, inbuf.s, strlen(tag))) {
-		eatline(pin, c);
-		continue;
-	    } else {
-		/* this is our line */
-		break;
-	    }
-	}
+	r = getresult(pin, tag);
+	if (r) break;
 
-	/* Are we OK? */
-
-	c = getword(pin, &inbuf);
-	if (c == EOF) {
-	    r = IMAP_SERVER_UNAVAILABLE;
-	    break;
-	}
-
-	if(strncmp("OK", inbuf.s, 2)) {
-	    r = IMAP_REMOTE_DENIED;
-	    break;
-	}
-
-	/* Eat the line and get the next one */
-	eatline(pin, c);
 	acl = nextid;
     }
 
-    buf_free(&inbuf);
     if(acl_safe) free(acl_safe);
 
     return r;
