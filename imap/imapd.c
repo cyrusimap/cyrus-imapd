@@ -10014,6 +10014,7 @@ static int xfer_undump(struct xfer_header *xfer)
 		   "Could not move mailbox: %s, mboxlist_update() failed %s",
 		   item->mbentry->name, error_message(r));
 	}
+	else item->state = XFER_LOCAL_MOVING;
 
 	if (!r && xfer->seendb) {
 	    /* Backport the user's seendb on-the-fly */
