@@ -102,28 +102,6 @@ EXPORTED int dav_done(void)
 }
 
 
-/* Create filename corresponding to userid's DAV DB */
-static void dav_getpath(struct buf *fname, const char *userid)
-{
-    char c, *domain;
-
-    buf_reset(fname);
-    if (config_virtdomains && (domain = strchr(userid, '@'))) {
-	char d = (char) dir_hash_c(domain+1, config_fulldirhash);
-	*domain = '\0';  /* split user@domain */
-	c = (char) dir_hash_c(userid, config_fulldirhash);
-	buf_printf(fname, "%s%s%c/%s%s%c/%s%s", config_dir, FNAME_DOMAINDIR, d,
-		   domain+1, FNAME_USERDIR, c, userid, FNAME_DAVSUFFIX);
-	*domain = '@';  /* reassemble user@domain */
-    }
-    else {
-	c = (char) dir_hash_c(userid, config_fulldirhash);
-	buf_printf(fname, "%s%s%c/%s%s", config_dir, FNAME_USERDIR, c, userid,
-		   FNAME_DAVSUFFIX);
-    }
-}
-
-
 static void dav_debug(void *userid, const char *sql)
 {
     syslog(LOG_DEBUG, "dav_exec(%s%s): %s",
