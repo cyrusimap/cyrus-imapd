@@ -630,10 +630,14 @@ int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
 		fname = mboxkey_getpath(userid);
 		ftag = "MBOXKEY";
 		break;
-	    case DAV_DB:
-		fname = mboxkey_getpath(userid);
+	    case DAV_DB: {
+		struct buf dav_file = BUF_INITIALIZER;
+
+		dav_getpath(&dav_file, userid);
+		fname = (char *) buf_cstring(&dav_file);
 		ftag = "DAV";
 		break;
+	    }
 	    default:
 		fatal("unknown user data file", EC_OSFILE);
 	    }
