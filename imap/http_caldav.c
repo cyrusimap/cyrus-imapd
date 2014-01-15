@@ -1165,7 +1165,7 @@ static int list_calendars(struct transaction_t *txn,
     static char etag[63];
     unsigned level = 0;
     struct buf *body = &txn->resp_body.payload;
-    const char *host = NULL;
+    const char *proto = NULL, *host = NULL;
 
     /* stat() mailboxes.db for Last-Modified and ETag */
     snprintf(mboxlist, MAX_MAILBOX_PATH, "%s%s", config_dir, FNAME_MBOXLIST);
@@ -1217,9 +1217,9 @@ static int list_calendars(struct transaction_t *txn,
     buf_reset(body);
 
     /* Create base URL for calendars */
-    http_proto_host(txn->req_hdrs, NULL, &host);
+    http_proto_host(txn->req_hdrs, &proto, &host);
     assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "webcal://%s%s", host, txn->req_tgt.path);
+    buf_printf(&txn->buf, "%s://%s%s", proto, host, txn->req_tgt.path);
 
     /* Generate list of calendars */
     strlcat(txn->req_tgt.mboxname, ".%", sizeof(txn->req_tgt.mboxname));
