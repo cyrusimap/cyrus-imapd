@@ -1,6 +1,6 @@
-/* dav_db.h -- abstract interface for per-user DAV database
+/* dav_util.c -- utility functions for dealing with DAV database
  *
- * Copyright (c) 1994-2012 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2014 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -41,52 +41,31 @@
  *
  */
 
-#ifndef DAV_DB_H
-#define DAV_DB_H
+#include <config.h>
 
-#include <sqlite3.h>
+#include <string.h>
+
 #include "dav_util.h"
+#include "global.h"
+#include "util.h"
 
-struct dav_data {
-    unsigned rowid;
-    time_t creationdate;
-    const char *mailbox;
-    const char *resource;
-    uint32_t imap_uid;		/* zero (0) until URL is mapped */
-    const char *lock_token;
-    const char *lock_owner;
-    const char *lock_ownerid;
-    time_t lock_expire;
-};
+/* Create filename corresponding to userid's DAV DB */
+void dav_getpath(struct buf *fname, const char *userid)
+{
+    char c, *domain;
 
-struct bind_val {
-    const char *name;
-    int type;
-    union {
-	int i;
-	const char *s;
-    } val;
-};
-
-/* prepare for DAV operations in this process */
-int dav_init(void);
-
-/* done with all DAV operations for this process */
-int dav_done(void);
-
-/* get a database handle corresponding to userid */
-sqlite3 *dav_open(const char *userid, const char *cmds);
-
-/* close this handle */
-int dav_close(sqlite3 *davdb);
-
-/* execute 'cmd' and process results with 'cb'
-   'cmd' is prepared as 'stmt' with 'bval' as bound values */
-int dav_exec(sqlite3 *davdb, const char *cmd, struct bind_val bval[],
-	     int (*cb)(sqlite3_stmt *stmt, void *rock), void *rock,
-	     sqlite3_stmt **stmt);
-
-/* delete database corresponding to userid */
-int dav_delete(const char *userid);
-
-#endif /* DAV_DB_H */
+    buf_reset(fname);
+    if (config_virtdomains && (domain = strchr(userid, '@'))) {
+	char d = (char) dir_hash_c(domain+1, config_fulldirhash);
+	*domain = '\0';  /* split user@domain */
+	c = (char) dir_hash_c(userid, config_fulldirhash);
+	buf_printf(fname, "%s%s%c/%s%s%c/%s%s", config_dir, FNAME_DOMAINDIR, d,
+		   domain+1, FNAME_USERDIR, c, userid, FNAME_DAVSUFFIX);
+	*domain = '@';  /* reassemble user@domain */
+    }
+    else {
+	c = (char) dir_hash_c(userid, config_fulldirhash);
+	buf_printf(fname, "%s%s%c/%s%s", config_dir, FNAME_USERDIR, c, userid,
+		   FNAME_DAVSUFFIX);
+    }
+}

@@ -64,6 +64,7 @@
 
 #include "assert.h"
 #include "annotate.h"
+#include "dav_util.h"
 #include "exitcodes.h"
 #include "global.h"
 #include "imap_err.h"
@@ -472,8 +473,8 @@ static struct data_file data_files[] = {
     { 0, NULL }
 };
 
-enum { SEEN_DB = 0, SUBS_DB = 1, MBOXKEY_DB = 2 };
-static int NUM_USER_DATA_FILES = 3;
+enum { SEEN_DB = 0, SUBS_DB = 1, MBOXKEY_DB = 2, DAV_DB = 3 };
+static int NUM_USER_DATA_FILES = 4;
 
 int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
 		 int oldversion,
@@ -628,6 +629,10 @@ int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
 	    case MBOXKEY_DB:
 		fname = mboxkey_getpath(userid);
 		ftag = "MBOXKEY";
+		break;
+	    case DAV_DB:
+		fname = mboxkey_getpath(userid);
+		ftag = "DAV";
 		break;
 	    default:
 		fatal("unknown user data file", EC_OSFILE);
@@ -987,6 +992,12 @@ int undump_mailbox(const char *mbname,
 	    char *s = user_hash_subs(userid);
 	    strlcpy(fnamebuf, s, sizeof(fnamebuf));
 	    free(s);
+	} else if (userid && !strcmp(file.s, "DAV")) {
+	    /* overwriting this outright is absolutely what we want to do */
+	    struct buf dav_file = BUF_INITIALIZER;
+	    dav_getpath(&dav_file, userid);
+	    strlcpy(fnamebuf, buf_cstring(&dav_file), sizeof(fnamebuf));
+	    buf_free(&dav_file);
 	} else if (userid && !strcmp(file.s, "SEEN")) {
 	    seen_file = seen_getpath(userid);
 
