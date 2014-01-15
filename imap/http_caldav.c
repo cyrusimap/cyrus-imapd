@@ -2126,8 +2126,14 @@ int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
 			name, ns, NULL, 0);
 
     buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, "%s/user/%s/%s",
-	       namespace_calendar.prefix, fctx->userid, cal ? cal : "");
+    if (strchr(fctx->userid, '@')) {
+        buf_printf(&fctx->buf, "%s/user/%s/%s",
+	           namespace_calendar.prefix, fctx->userid, cal ? cal : "");
+    }
+    else {
+        buf_printf(&fctx->buf, "%s/user/%s@internal/%s",
+	           namespace_calendar.prefix, fctx->userid, cal ? cal : "");
+    }
 
     xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
 
