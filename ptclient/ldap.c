@@ -131,42 +131,50 @@ static char allowedchars[256] = {
 };
 
 typedef struct _ptsm {
-    const char   *uri;
-    int    version;
-    struct timeval timeout;
-    int    size_limit;
-    int    time_limit;
-    int    deref;
-    int    referrals;
-    int    restart;
-    int    scope;
-    const char   *base;
-    int    sasl;
-    const char   *id;
-    const char   *bind_dn;
-    const char   *password;
-    const char   *authz;
-    const char   *mech;
-    const char   *realm;
-    const char   *filter;
-    const char   *sasl_secprops;
-    int    start_tls;
-    int    tls_check_peer;
-    const char   *tls_cacert_file;
-    const char   *tls_cacert_dir;
-    const char   *tls_ciphers;
-    const char   *tls_cert;
-    const char   *tls_key;
-    int    member_method;
-    const char   *user_attribute;
-    const char   *member_attribute;
-    const char   *member_filter;
-    const char   *member_base;
-    int    member_scope;
-    const char   *group_filter;
-    const char   *group_base;
-    int    group_scope;
-    LDAP   *ld;
+    const char      *uri;
+    int             version;
+    struct timeval  timeout;
+    int             size_limit;
+    int             time_limit;
+    int             deref;
+    int             referrals;
+    int             restart;
+    int             scope;
+    const char      *base;
+    int             sasl;
+    const char      *id;
+    const char      *bind_dn;
+    const char      *password;
+    const char      *authz;
+    const char      *mech;
+    const char      *realm;
+    const char      *filter;
+    const char      *sasl_secprops;
+    int             start_tls;
+    int             tls_check_peer;
+    const char      *tls_cacert_file;
+    const char      *tls_cacert_dir;
+    const char      *tls_ciphers;
+    const char      *tls_cert;
+    const char      *tls_key;
+    int             member_method;
+    const char      *user_attribute;
+    const char      *member_attribute;
+    const char      *member_filter;
+    const char      *member_base;
+    int             member_scope;
+    const char      *group_filter;
+    const char      *group_base;
+    int             group_scope;
+
+    /* Used for domain name space -> root dn discovery */
+    const char      *domain_base_dn;
+    const char      *domain_filter;
+    const char      *domain_name_attribute;
+    int             domain_scope;
+    const char      *domain_result_attribute;
+
+    LDAP            *ld;
 } t_ptsm;
 
 #define PTSM_OK 0
@@ -448,11 +456,14 @@ static void myinit(void)
 
     ptsm->uri = (config_getstring(IMAPOPT_LDAP_URI) ?
         config_getstring(IMAPOPT_LDAP_URI) : config_getstring(IMAPOPT_LDAP_SERVERS));
+
     ptsm->version = (config_getint(IMAPOPT_LDAP_VERSION) == 2 ? LDAP_VERSION2 : LDAP_VERSION3);
     ptsm->timeout.tv_sec = config_getint(IMAPOPT_LDAP_TIME_LIMIT);
     ptsm->timeout.tv_usec = 0;
     ptsm->restart = config_getswitch(IMAPOPT_LDAP_RESTART);
+
     p = config_getstring(IMAPOPT_LDAP_DEREF);
+
     if (!strcasecmp(p, "search")) {
         ptsm->deref = LDAP_DEREF_SEARCHING;
     } else if (!strcasecmp(p, "find")) {
@@ -462,10 +473,13 @@ static void myinit(void)
     } else {
         ptsm->deref = LDAP_DEREF_NEVER;
     }
+
     ptsm->referrals = config_getswitch(IMAPOPT_LDAP_REFERRALS);
     ptsm->size_limit = config_getint(IMAPOPT_LDAP_SIZE_LIMIT);
     ptsm->time_limit = config_getint(IMAPOPT_LDAP_TIME_LIMIT);
+
     p = config_getstring(IMAPOPT_LDAP_SCOPE);
+
     if (!strcasecmp(p, "one")) {
         ptsm->scope = LDAP_SCOPE_ONELEVEL;
     } else if (!strcasecmp(p, "base")) {
@@ -473,18 +487,24 @@ static void myinit(void)
     } else {
         ptsm->scope = LDAP_SCOPE_SUBTREE;
     }
+
     ptsm->bind_dn = config_getstring(IMAPOPT_LDAP_BIND_DN);
     ptsm->sasl = config_getswitch(IMAPOPT_LDAP_SASL);
     ptsm->id = (config_getstring(IMAPOPT_LDAP_ID) ?
         config_getstring(IMAPOPT_LDAP_ID) : config_getstring(IMAPOPT_LDAP_SASL_AUTHC));
+
     ptsm->authz = (config_getstring(IMAPOPT_LDAP_AUTHZ) ?
         config_getstring(IMAPOPT_LDAP_AUTHZ) : config_getstring(IMAPOPT_LDAP_SASL_AUTHZ));
+
     ptsm->mech = (config_getstring(IMAPOPT_LDAP_MECH) ?
         config_getstring(IMAPOPT_LDAP_MECH) : config_getstring(IMAPOPT_LDAP_SASL_MECH));
+
     ptsm->realm = (config_getstring(IMAPOPT_LDAP_REALM) ?
         config_getstring(IMAPOPT_LDAP_REALM) : config_getstring(IMAPOPT_LDAP_SASL_REALM));
+
     ptsm->password = (config_getstring(IMAPOPT_LDAP_PASSWORD) ?
         config_getstring(IMAPOPT_LDAP_PASSWORD) : config_getstring(IMAPOPT_LDAP_SASL_PASSWORD));
+
     ptsm->start_tls = config_getswitch(IMAPOPT_LDAP_START_TLS);
     ptsm->tls_check_peer = config_getswitch(IMAPOPT_LDAP_TLS_CHECK_PEER);
     ptsm->tls_cacert_file = config_getstring(IMAPOPT_LDAP_TLS_CACERT_FILE);
@@ -492,12 +512,14 @@ static void myinit(void)
     ptsm->tls_ciphers = config_getstring(IMAPOPT_LDAP_TLS_CIPHERS);
     ptsm->tls_cert = config_getstring(IMAPOPT_LDAP_TLS_CERT);
     ptsm->tls_key = config_getstring(IMAPOPT_LDAP_TLS_KEY);
+
     p = config_getstring(IMAPOPT_LDAP_MEMBER_METHOD);
     if (!strcasecmp(p, "filter")) {
         ptsm->member_method = PTSM_MEMBER_METHOD_FILTER;
     } else {
         ptsm->member_method = PTSM_MEMBER_METHOD_ATTRIBUTE;
     }
+
     p = config_getstring(IMAPOPT_LDAP_MEMBER_SCOPE);
     if (!strcasecmp(p, "one")) {
         ptsm->member_scope = LDAP_SCOPE_ONELEVEL;
@@ -506,12 +528,15 @@ static void myinit(void)
     } else {
         ptsm->member_scope = LDAP_SCOPE_SUBTREE;
     }
+
     ptsm->member_filter = config_getstring(IMAPOPT_LDAP_MEMBER_FILTER);
     ptsm->member_base = config_getstring(IMAPOPT_LDAP_MEMBER_BASE);
     ptsm->member_attribute = (config_getstring(IMAPOPT_LDAP_MEMBER_ATTRIBUTE) ?
         config_getstring(IMAPOPT_LDAP_MEMBER_ATTRIBUTE) : config_getstring(IMAPOPT_LDAP_MEMBER_ATTRIBUTE));
+
     ptsm->user_attribute = (config_getstring(IMAPOPT_LDAP_USER_ATTRIBUTE) ?
         config_getstring(IMAPOPT_LDAP_USER_ATTRIBUTE) : config_getstring(IMAPOPT_LDAP_USER_ATTRIBUTE));
+
     p = config_getstring(IMAPOPT_LDAP_GROUP_SCOPE);
     if (!strcasecmp(p, "one")) {
         ptsm->group_scope = LDAP_SCOPE_ONELEVEL;
@@ -520,15 +545,30 @@ static void myinit(void)
     } else {
         ptsm->group_scope = LDAP_SCOPE_SUBTREE;
     }
+
     ptsm->group_filter = config_getstring(IMAPOPT_LDAP_GROUP_FILTER);
     ptsm->group_base = config_getstring(IMAPOPT_LDAP_GROUP_BASE);
     ptsm->filter = config_getstring(IMAPOPT_LDAP_FILTER);
     ptsm->base = config_getstring(IMAPOPT_LDAP_BASE);
 
-    if (ptsm->version != LDAP_VERSION3 &&
-        (ptsm->sasl ||
-         ptsm->start_tls))
+    if (ptsm->version != LDAP_VERSION3 && (ptsm->sasl || ptsm->start_tls))
         ptsm->version = LDAP_VERSION3;
+
+    ptsm->domain_base_dn = config_getstring(IMAPOPT_LDAP_DOMAIN_BASE_DN);
+    ptsm->domain_filter = config_getstring(IMAPOPT_LDAP_DOMAIN_FILTER);
+    ptsm->domain_name_attribute = config_getstring(IMAPOPT_LDAP_DOMAIN_NAME_ATTRIBUTE);
+
+    p = config_getstring(IMAPOPT_LDAP_DOMAIN_SCOPE);
+
+    if (!strcasecmp(p, "one")) {
+        ptsm->domain_scope = LDAP_SCOPE_ONELEVEL;
+    } else if (!strcasecmp(p, "base")) {
+        ptsm->domain_scope = LDAP_SCOPE_BASE;
+    } else {
+        ptsm->domain_scope = LDAP_SCOPE_SUBTREE;
+    }
+
+    ptsm->domain_result_attribute = config_getstring(IMAPOPT_LDAP_DOMAIN_RESULT_ATTRIBUTE);
 
     ptsm->ld = NULL;
 }
@@ -584,6 +624,63 @@ static int ptsmodule_escape(
         strncat(buf, ptr, end-ptr);
 
     *result = buf;
+
+    return PTSM_OK;
+}
+
+static int *ptsmodule_standard_root_dn(const char *domain, const char **result)
+{
+    /* number of dots */
+    int dots;
+    /* the expected length of the result */
+    int root_dn_len;
+
+    char *buf;
+    char *part;
+    char *ptr;
+
+    syslog(LOG_DEBUG, "ptsmodule_standard_root_dn called for domain %s", domain);
+
+    for (dots = 0, buf=(char *)domain; *buf; buf++) {
+	if (*buf == '.') {
+	    dots++;
+	}
+    }
+
+    /* Each dot is to be replaced with ',dc=' (length 4), so add
+     * length 3 for each of them.
+     */
+    root_dn_len = strlen(domain) + (dots * 3);
+
+    buf = xmalloc(root_dn_len);
+    buf[0] = '\0'; // (?)
+    /* AM: Above: Terminate the string by default, so strlen won't buffer-overflow later */
+
+    /* AM: No need for another allocation/dup */
+    part = strtok_r(domain, ".", &ptr);
+
+    while (part != NULL) {
+	syslog(LOG_DEBUG, "Root DN now %s", buf);
+	strcat(buf, ",dc=");
+	syslog(LOG_DEBUG, "Root DN now %s", buf);
+	strcat(buf, part);
+	syslog(LOG_DEBUG, "Root DN now %s", buf);
+	part = strtok_r(NULL, ".", &ptr);
+    }
+
+    syslog(LOG_DEBUG, "Root DN now %s", buf);
+
+    if (buf[0] == ',')
+	memmove(buf, buf+1, strlen(buf));
+
+    *result = xstrdup(buf);
+
+    free(buf);
+    free(part);
+/*    free(ptr);
+    free(root_dn_len);
+*/
+    syslog(LOG_DEBUG, "Root DN now %s", *result);
 
     return PTSM_OK;
 }
@@ -779,7 +876,6 @@ static int ptsmodule_expand_tokens(
     return PTSM_OK;
 }
 
-
 static int ptsmodule_get_dn(
     const char *canon_id,
     size_t size,
@@ -794,11 +890,14 @@ static int ptsmodule_get_dn(
     char *authzid;
 #endif
     char *base = NULL, *filter = NULL;
+    char *domain = NULL;
+    char domain_filter[1024];
     char *attrs[] = {LDAP_NO_ATTRS,NULL}; //do not return all attrs!
+    char *domain_attrs[] = {(char *)ptsm->domain_name_attribute,(char *)ptsm->domain_result_attribute,NULL};
     LDAPMessage *res;
     LDAPMessage *entry;
-    char *attr, **vals;
-    BerElement *ber;
+    char **vals;
+    /* unused: BerElement *ber; */
 
     *ret = NULL;
 
@@ -847,30 +946,96 @@ static int ptsmodule_get_dn(
         if (rc != PTSM_OK)
             return rc;
 
-        rc = ptsmodule_expand_tokens(ptsm->base, canon_id, NULL, &base);
-        if (rc != PTSM_OK)
-            return rc;
+	if (ptsm->domain_base_dn && (strrchr(canon_id, '@') != NULL)) {
+	    syslog(LOG_DEBUG, "Attempting to get domain for %s from %s", canon_id, ptsm->domain_base_dn);
+
+	    /* Get the base dn to search from domain_base_dn searched on domain_scope with
+		domain_filter */
+	    domain = strrchr(canon_id, '@');
+
+	    /* Strip the first character which is a '@' */
+	    domain = domain+1;
+
+	    snprintf(domain_filter, sizeof(domain_filter), ptsm->domain_filter, domain);
+
+	    syslog(LOG_DEBUG, "Domain filter: %s", domain_filter);
+
+	    rc = ldap_search_st(ptsm->ld, ptsm->domain_base_dn, ptsm->domain_scope, domain_filter, domain_attrs, 0, &(ptsm->timeout), &res);
+
+	    if (rc != LDAP_SUCCESS) {
+		syslog(LOG_ERR, "LDAP search for domain failed.");
+		return rc;
+	    }
+
+	    if (ldap_count_entries(ptsm->ld, res) < 1) {
+		syslog(LOG_ERR, "No domain %s found", domain);
+		return PTSM_FAIL;
+	    } else if (ldap_count_entries(ptsm->ld, res) > 1) {
+		syslog(LOG_ERR, "Multiple domains %s found", domain);
+		return PTSM_FAIL;
+	    } else {
+		if ((entry = ldap_first_entry(ptsm->ld, res)) != NULL) {
+		    if ((vals = ldap_get_values(ptsm->ld, entry, ptsm->domain_result_attribute)) != NULL) {
+			syslog(LOG_DEBUG, "Root DN for domain %s is %s", domain, vals[0]);
+			ptsm->base = vals[0];
+			rc = PTSM_OK;
+		    } else if ((vals = ldap_get_values(ptsm->ld, entry, ptsm->domain_name_attribute)) != NULL) {
+			char *new_domain = xstrdup(vals[0]);
+			syslog(LOG_DEBUG, "Domain %s is an alias domain for parent domain %s", domain, new_domain);
+			rc = ptsmodule_standard_root_dn(new_domain, &ptsm->base);
+			free(new_domain);
+		    } else {
+			rc = ptsmodule_standard_root_dn(domain, &ptsm->base);
+		    }
+
+		    if (rc != PTSM_OK) {
+			return rc;
+		    } else {
+			base = xstrdup(ptsm->base);
+			syslog(LOG_DEBUG, "Continuing with ptsm->base: %s", ptsm->base);
+		    }
+		}
+	    }
+
+	} else {
+            rc = ptsmodule_expand_tokens(ptsm->base, canon_id, NULL, &base);
+	    if (rc != PTSM_OK)
+	        return rc;
+	}
 
         rc = ldap_search_st(ptsm->ld, base, ptsm->scope, filter, attrs, 0, &(ptsm->timeout), &res);
-        free(filter);
-        free(base);
+
         if (rc != LDAP_SUCCESS) {
+	    syslog(LOG_DEBUG, "Searching %s with %s failed", base, base);
+	    free(filter);
+	    free(base);
+
             if (rc == LDAP_SERVER_DOWN) {
                 ldap_unbind(ptsm->ld);
                 ptsm->ld = NULL;
                 return PTSM_RETRY;
             }
+
             return PTSM_FAIL;
         }
 
-    /*
-     * We don't want to return the *first* entry found, we want to return
-     * the *only* entry found.
-     */
-    if ( ldap_count_entries(ptsm->ld, res) == 1 ) {
-        if ( (entry = ldap_first_entry(ptsm->ld, res)) != NULL )
-        *ret = ldap_get_dn(ptsm->ld, entry);
-    }
+        free(filter);
+        free(base);
+
+	/*
+	 * We don't want to return the *first* entry found, we want to return
+	 * the *only* entry found.
+	 */
+	if (ldap_count_entries(ptsm->ld, res) < 1) {
+	    syslog(LOG_ERR, "No entries found");
+	} else if (ldap_count_entries(ptsm->ld, res) > 1) {
+	    syslog(LOG_ERR, "Multiple entries found: %d", ldap_count_entries(ptsm->ld, res));
+	} else {
+/*      if ( ldap_count_entries(ptsm->ld, res) == 1 ) { */
+	    if ((entry = ldap_first_entry(ptsm->ld, res)) != NULL) {
+		*ret = ldap_get_dn(ptsm->ld, entry);
+	    }
+	}
 
         ldap_msgfree(res);
         res = NULL;
@@ -1145,6 +1310,9 @@ static int ptsmodule_make_authstate_group(
     struct auth_state **newstate)
 {
     char *base = NULL, *filter = NULL;
+    char *domain = NULL;
+    char domain_filter[1024];
+    char *domain_attrs[] = {(char *)ptsm->domain_name_attribute,(char *)ptsm->domain_result_attribute,NULL};
     int rc;
     int i; int n;
     LDAPMessage *res = NULL;
@@ -1168,6 +1336,71 @@ static int ptsmodule_make_authstate_group(
         *reply = "ptsmodule_expand_tokens() failed for group filter";
         goto done;
     }
+
+    if (ptsm->domain_base_dn && (strrchr(canon_id, '@') != NULL)) {
+	syslog(LOG_DEBUG, "(groups) Attempting to get domain for %s from %s", canon_id, ptsm->domain_base_dn);
+
+	/* Get the base dn to search from domain_base_dn searched on domain_scope with
+	    domain_filter */
+	domain = strrchr(canon_id, '@');
+
+	syslog(LOG_DEBUG, "(groups) Input domain would be %s", domain);
+
+	/* Strip the first character which is a '@' AM: assuming ASCII */
+	domain = domain+1;
+
+	syslog(LOG_DEBUG, "(groups) Input domain would be %s", domain);
+
+	snprintf(domain_filter, sizeof(domain_filter), ptsm->domain_filter, domain);
+
+	syslog(LOG_DEBUG, "(groups) Domain filter: %s", domain_filter);
+
+	rc = ldap_search_st(ptsm->ld, ptsm->domain_base_dn, ptsm->domain_scope, domain_filter, domain_attrs, 0, &(ptsm->timeout), &res);
+
+	if (rc != LDAP_SUCCESS) {
+	    syslog(LOG_DEBUG, "(groups) Result from domain query not OK");
+	    return rc;
+	} else {
+	    syslog(LOG_DEBUG, "(groups) Result from domain query OK");
+	}
+
+	if (ldap_count_entries(ptsm->ld, res) < 1) {
+	    syslog(LOG_ERR, "(groups) No domain %s found", domain);
+	    return PTSM_FAIL;
+	} else if (ldap_count_entries(ptsm->ld, res) > 1) {
+	    syslog(LOG_ERR, "(groups) Multiple domains %s found", domain);
+	    return PTSM_FAIL;
+	} else {
+	    syslog(LOG_DEBUG, "(groups) Domain %s found", domain);
+	    if ((entry = ldap_first_entry(ptsm->ld, res)) != NULL) {
+		if ((vals = ldap_get_values(ptsm->ld, entry, ptsm->domain_result_attribute)) != NULL) {
+		    ptsm->group_base = vals[0];
+		    rc = PTSM_OK;
+		} else if ((vals = ldap_get_values(ptsm->ld, entry, ptsm->domain_name_attribute)) != NULL) {
+		    char *new_domain = xstrdup(vals[0]);
+		    syslog(LOG_DEBUG, "(groups) Domain %s is now domain %s", domain, new_domain);
+		    rc = ptsmodule_standard_root_dn(new_domain, &ptsm->group_base);
+		    free(new_domain);
+		} else {
+		    rc = ptsmodule_standard_root_dn(domain, &ptsm->group_base);
+		}
+
+		if (rc != PTSM_OK) {
+		    return rc;
+		} else {
+		    base = xstrdup(ptsm->group_base);
+		    syslog(LOG_DEBUG, "Continuing with ptsm->group_base: %s", ptsm->group_base);
+		}
+	    }
+	}
+    } else {
+	rc = ptsmodule_expand_tokens(ptsm->group_base, canon_id, NULL, &base);
+	if (rc != PTSM_OK)
+	    return rc;
+    }
+
+    syslog(LOG_DEBUG, "(groups) about to search %s for %s", base, filter);
+
 
     rc = ptsmodule_expand_tokens(ptsm->group_base, canon_id+6, NULL, &base);
     if (rc != PTSM_OK) {

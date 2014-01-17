@@ -599,6 +599,21 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "ldap_deref", "never", STRINGLIST("search", "find", "always", "never") }
 /* Specify how aliases dereferencing is handled during search. */
 
+{ "ldap_domain_base_dn", "", STRING }
+/* Base DN to search for domain name spaces. */
+
+{ "ldap_domain_filter", "(&(objectclass=domainrelatedobject)(associateddomain=%s))", STRING }
+/* Filter to use searching for domains */
+
+{ "ldap_domain_name_attribute", "associateddomain", STRING }
+/* The attribute name for domains. */
+
+{ "ldap_domain_scope", "sub", STRINGLIST("sub", "one", "base") }
+/* Search scope */
+
+{ "ldap_domain_result_attribute", "inetdomainbasedn", STRING }
+/* Result attribute */
+
 { "ldap_filter", "(uid=%u)", STRING }
 /* Specify a filter that searches user identifiers.  The following tokens can be
    used in the filter string:
