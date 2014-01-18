@@ -2757,12 +2757,15 @@ int meth_delete(struct transaction_t *txn, void *params)
 
     /* Check ACL for current user */
     rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
-    if ((txn->req_tgt.resource && !(rights & DACL_RMRSRC)) ||
-	!(rights & DACL_RMCOL)) {
+    if (txn->req_tgt.resource) {
+	if (!(rights & DACL_RMRSRC)) txn->error.rights = DACL_RMRSRC;
+    }
+    else if (!(rights & DACL_RMCOL)) txn->error.rights = DACL_RMCOL;
+
+    if (txn->error.rights) {
 	/* DAV:need-privileges */
 	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
-	txn->error.rights = txn->req_tgt.resource ? DACL_RMRSRC : DACL_RMCOL;
 	return HTTP_FORBIDDEN;
     }
 
