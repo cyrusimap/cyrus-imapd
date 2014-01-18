@@ -114,6 +114,13 @@ static void free_dav_open(struct open_davdb *open)
 }
 
 
+static void free_dav_open(struct open_davdb *open)
+{
+    free(open->path);
+    free(open);
+}
+
+
 /* Open DAV DB corresponding to mailbox */
 EXPORTED sqlite3 *dav_open(struct mailbox *mailbox, const char *cmds)
 {
@@ -165,7 +172,7 @@ EXPORTED sqlite3 *dav_open(struct mailbox *mailbox, const char *cmds)
     open->next = open_davdbs;
     open_davdbs = open;
 
-docmds:
+  docmds:
     if (cmds) {
 	rc = sqlite3_exec(open->db, cmds, NULL, NULL, NULL);
 	if (rc != SQLITE_OK) {
@@ -184,7 +191,7 @@ docmds:
 /* Close DAV DB */
 EXPORTED int dav_close(sqlite3 *davdb)
 {
-    int rc, r = 0;;
+    int rc, r = 0;
     struct open_davdb *open, *prev = NULL;
 
     if (!davdb) return 0;
