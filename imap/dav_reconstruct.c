@@ -64,6 +64,7 @@
 #include "mboxname.h"
 #include "mboxlist.h"
 #include "xmalloc.h"
+#include "xstrlcat.h"
 
 extern int optind;
 extern char *optarg;
@@ -88,6 +89,7 @@ int main(int argc, char **argv)
     int opt, r;
     char buf[MAX_MAILBOX_PATH+1];
     char *alt_config = NULL, *userid;
+    struct mailbox mailbox;
 
     if ((geteuid()) == 0 && (become_cyrus() != 0)) {
 	fatal("must run as the Cyrus user", EC_USAGE);
@@ -132,9 +134,15 @@ int main(int argc, char **argv)
 
     printf("Reconstructing DAV DB for %s...\n", userid);
     caldav_init();
-    caldavdb = caldav_open(userid, CALDAV_CREATE | CALDAV_TRUNC);
 
-    snprintf(buf, sizeof(buf), "user.%s.#calendars.*", userid);
+    /* Generate mailboxname of calendar-home-set */
+    caldav_mboxname(NULL, userid, buf);
+
+    /* Open DAV DB corresponding to userid */
+    mailbox.name = buf;
+    caldavdb = caldav_open(&mailbox, CALDAV_CREATE | CALDAV_TRUNC);
+
+    strlcat(buf, ".*", sizeof(buf));
     (*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0, 0,
 					do_reconstruct, NULL);
 

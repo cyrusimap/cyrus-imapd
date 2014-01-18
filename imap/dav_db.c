@@ -85,22 +85,21 @@ int dav_done(void)
 }
 
 
-static void dav_debug(void *userid, const char *sql)
+static void dav_debug(void *fname, const char *sql)
 {
-    syslog(LOG_DEBUG, "dav_exec(%s%s): %s",
-	   (const char *) userid, FNAME_DAVSUFFIX, sql);
+    syslog(LOG_DEBUG, "dav_exec(%s): %s", (const char *) fname, sql);
 }
 
 
-/* Open DAV DB corresponding to userid */
-sqlite3 *dav_open(const char *userid, const char *cmds)
+/* Open DAV DB corresponding to mailbox */
+sqlite3 *dav_open(struct mailbox *mailbox, const char *cmds)
 {
     int rc;
     struct buf fname = BUF_INITIALIZER;
     struct stat sbuf;
     sqlite3 *db = NULL;
 
-    dav_getpath(&fname, userid);
+    dav_getpath(&fname, mailbox);
     rc = stat(buf_cstring(&fname), &sbuf);
     if (rc == -1 && errno == ENOENT) {
 	rc = cyrus_mkdir(buf_cstring(&fname), 0755);
@@ -120,7 +119,7 @@ sqlite3 *dav_open(const char *userid, const char *cmds)
 #if SQLITE_VERSION_NUMBER >= 3006000
 	sqlite3_extended_result_codes(db, 1);
 #endif
-	sqlite3_trace(db, dav_debug, (void *) userid);
+	sqlite3_trace(db, dav_debug, (void *) buf_cstring(&fname));
 
 	if (cmds) {
 	    rc = sqlite3_exec(db, cmds, NULL, NULL, NULL);
@@ -213,12 +212,12 @@ int dav_exec(sqlite3 *davdb, const char *cmd, struct bind_val bval[],
 }
 
 
-int dav_delete(const char *userid)
+int dav_delete(struct mailbox *mailbox)
 {
     struct buf fname = BUF_INITIALIZER;
     int r = 0;
 
-    dav_getpath(&fname, userid);
+    dav_getpath(&fname, mailbox);
     if (unlink(buf_cstring(&fname)) && errno != ENOENT) {
 	syslog(LOG_ERR, "dav_db: error unlinking %s: %m", buf_cstring(&fname));
 	r = CYRUSDB_INTERNAL;

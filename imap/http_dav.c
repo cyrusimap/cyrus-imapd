@@ -2458,6 +2458,7 @@ int meth_copy(struct transaction_t *txn, void *params)
     const char *etag = NULL;
     time_t lastmod = 0;
     unsigned flags = 0;
+    void *src_davdb = NULL, *dest_davdb = NULL;
 
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
@@ -2582,14 +2583,6 @@ int meth_copy(struct transaction_t *txn, void *params)
 
     /* Local Mailbox */
 
-    if (!*cparams->davdb.db) {
-	syslog(LOG_ERR, "DAV database for user '%s' is not opened.  "
-	       "Check 'configdirectory' permissions or "
-	       "'proxyservers' option on backend server.", proxy_userid);
-	txn->error.desc = "DAV database is not opened";
-	return HTTP_SERVER_ERROR;
-    }
-
     /* Open dest mailbox for reading */
     if ((r = mailbox_open_irl(dest_tgt.mboxname, &dest_mbox))) {
 	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
@@ -2599,8 +2592,11 @@ int meth_copy(struct transaction_t *txn, void *params)
 	goto done;
     }
 
+    /* Open the DAV DB corresponding to the dest mailbox */
+    dest_davdb = cparams->davdb.open_db(dest_mbox);
+
     /* Find message UID for the dest resource, if exists */
-    cparams->davdb.lookup_resource(*cparams->davdb.db, dest_tgt.mboxname,
+    cparams->davdb.lookup_resource(dest_davdb, dest_tgt.mboxname,
 				   dest_tgt.resource, 0, (void **) &ddata);
     /* XXX  Check errors */
 
@@ -2628,8 +2624,11 @@ int meth_copy(struct transaction_t *txn, void *params)
 	goto done;
     }
 
+    /* Open the DAV DB corresponding to the src mailbox */
+    src_davdb = cparams->davdb.open_db(src_mbox);
+
     /* Find message UID for the source resource */
-    cparams->davdb.lookup_resource(*cparams->davdb.db, txn->req_tgt.mboxname,
+    cparams->davdb.lookup_resource(src_davdb, txn->req_tgt.mboxname,
 				   txn->req_tgt.resource, 0, (void **) &ddata);
     if (!ddata->rowid) {
 	ret = HTTP_NOT_FOUND;
@@ -2677,7 +2676,7 @@ int meth_copy(struct transaction_t *txn, void *params)
 
     /* Parse, validate, and store the resource */
     ret = cparams->copy(txn, src_mbox, &src_rec, dest_mbox, dest_tgt.resource,
-			overwrite, flags);
+			dest_davdb, overwrite, flags);
 
     /* For MOVE, we need to delete the source resource */
     if ((txn->meth == METH_MOVE) &&
@@ -2686,7 +2685,7 @@ int meth_copy(struct transaction_t *txn, void *params)
 	mailbox_lock_index(src_mbox, LOCK_EXCLUSIVE);
 
 	/* Find message UID for the source resource */
-	cparams->davdb.lookup_resource(*cparams->davdb.db, txn->req_tgt.mboxname,
+	cparams->davdb.lookup_resource(src_davdb, txn->req_tgt.mboxname,
 				       txn->req_tgt.resource, 1, (void **) &ddata);
 	/* XXX  Check errors */
 
@@ -2706,7 +2705,7 @@ int meth_copy(struct transaction_t *txn, void *params)
 	}
 
 	/* Delete mapping entry for source resource name */
-	cparams->davdb.delete_resource(*cparams->davdb.db, ddata->rowid, 1);
+	cparams->davdb.delete_resource(src_davdb, ddata->rowid, 1);
     }
 
   done:
@@ -2719,7 +2718,9 @@ int meth_copy(struct transaction_t *txn, void *params)
 	txn->resp_body.etag = NULL;
     }
 
+    if (dest_davdb) cparams->davdb.close_db(dest_davdb);
     if (dest_mbox) mailbox_close(&dest_mbox);
+    if (src_davdb) cparams->davdb.close_db(src_davdb);
     if (src_mbox) mailbox_unlock_index(src_mbox, NULL);
 
     return ret;
@@ -2737,6 +2738,7 @@ int meth_delete(struct transaction_t *txn, void *params)
     struct index_record record;
     const char *etag = NULL;
     time_t lastmod = 0;
+    void *davdb = NULL;
 
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
@@ -2785,29 +2787,35 @@ int meth_delete(struct transaction_t *txn, void *params)
 
     /* Local Mailbox */
 
-    if (!*dparams->davdb.db) {
-	syslog(LOG_ERR, "DAV database for user '%s' is not opened.  "
-	       "Check 'configdirectory' permissions or "
-	       "'proxyservers' option on backend server.", proxy_userid);
-	txn->error.desc = "DAV database is not opened";
-	return HTTP_SERVER_ERROR;
-    }
-
     if (!txn->req_tgt.resource) {
 	/* DELETE collection */
 
+	/* Open mailbox for reading */
+	if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_SHARED))) {
+	    syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+		   txn->req_tgt.mboxname, error_message(r));
+	    txn->error.desc = error_message(r);
+	    return HTTP_SERVER_ERROR;
+	}
+
+	/* Open the DAV DB corresponding to the mailbox */
+	davdb = dparams->davdb.open_db(mailbox);
+
 	/* Do any special processing */
-	if (dparams->delete) dparams->delete(txn, NULL, NULL, NULL);
+	if (dparams->delete) dparams->delete(txn, mailbox, NULL, NULL);
+
+	mailbox_close(&mailbox);
 
 	r = mboxlist_deletemailbox(txn->req_tgt.mboxname,
 				   httpd_userisadmin || httpd_userisproxyadmin,
 				   httpd_userid, httpd_authstate,
 				   1, 0, 0);
-
-	if (!r) dparams->davdb.delete_mbox(*dparams->davdb.db, txn->req_tgt.mboxname, 0);
+	if (!r) dparams->davdb.delete_mbox(davdb, txn->req_tgt.mboxname, 0);
 	else if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
 	else if (r == IMAP_MAILBOX_NONEXISTENT) ret = HTTP_NOT_FOUND;
 	else if (r) ret = HTTP_SERVER_ERROR;
+
+	dparams->davdb.close_db(davdb);
 
 	return ret;
     }
@@ -2824,8 +2832,11 @@ int meth_delete(struct transaction_t *txn, void *params)
 	goto done;
     }
 
+    /* Open the DAV DB corresponding to the mailbox */
+    davdb = dparams->davdb.open_db(mailbox);
+
     /* Find message UID for the resource, if exists */
-    dparams->davdb.lookup_resource(*dparams->davdb.db, txn->req_tgt.mboxname,
+    dparams->davdb.lookup_resource(davdb, txn->req_tgt.mboxname,
 				   txn->req_tgt.resource, 1, (void **) &ddata);
     if (!ddata->rowid) {
 	ret = HTTP_NOT_FOUND;
@@ -2882,12 +2893,13 @@ int meth_delete(struct transaction_t *txn, void *params)
     }
 
     /* Delete mapping entry for resource name */
-    dparams->davdb.delete_resource(*dparams->davdb.db, ddata->rowid, 1);
+    dparams->davdb.delete_resource(davdb, ddata->rowid, 1);
 
     /* Do any special processing */
     if (dparams->delete) dparams->delete(txn, mailbox, &record, ddata);
 
   done:
+    if (davdb) dparams->davdb.close_db(davdb);
     if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
     return ret;
@@ -2910,6 +2922,7 @@ int meth_get_dav(struct transaction_t *txn, void *params)
     struct index_record record;
     const char *etag = NULL;
     time_t lastmod = 0;
+    void *davdb = NULL;
 
     /* Parse the path */
     if ((r = gparams->parse_path(txn->req_uri->path,
@@ -2961,14 +2974,6 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 
     /* Local Mailbox */
 
-    if (!*gparams->davdb.db) {
-	syslog(LOG_ERR, "DAV database for user '%s' is not opened.  "
-	       "Check 'configdirectory' permissions or "
-	       "'proxyservers' option on backend server.", proxy_userid);
-	txn->error.desc = "DAV database is not opened";
-	return HTTP_SERVER_ERROR;
-    }
-
     /* Open mailbox for reading */
     if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_SHARED))) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
@@ -2978,8 +2983,11 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 	goto done;
     }
 
+    /* Open the DAV DB corresponding to the mailbox */
+    davdb = gparams->davdb.open_db(mailbox);
+
     /* Find message UID for the resource */
-    gparams->davdb.lookup_resource(*gparams->davdb.db, txn->req_tgt.mboxname,
+    gparams->davdb.lookup_resource(davdb, txn->req_tgt.mboxname,
 				   txn->req_tgt.resource, 0, (void **) &ddata);
     if (!ddata->rowid) {
 	ret = HTTP_NOT_FOUND;
@@ -3064,6 +3072,7 @@ int meth_get_dav(struct transaction_t *txn, void *params)
     if (freeme) free(freeme);
 
   done:
+    if (davdb) gparams->davdb.close_db(davdb);
     if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
     return ret;
@@ -3092,6 +3101,7 @@ int meth_lock(struct transaction_t *txn, void *params)
     xmlNsPtr ns[NUM_NAMESPACE];
     xmlChar *owner = NULL;
     time_t now = time(NULL);
+    void *davdb = NULL;
 
     /* XXX  We ignore Depth and Timeout header fields */
 
@@ -3142,14 +3152,6 @@ int meth_lock(struct transaction_t *txn, void *params)
 
     /* Local Mailbox */
 
-    if (!*lparams->davdb.db) {
-	syslog(LOG_ERR, "DAV database for user '%s' is not opened.  "
-	       "Check 'configdirectory' permissions or "
-	       "'proxyservers' option on backend server.", proxy_userid);
-	txn->error.desc = "DAV database is not opened";
-	return HTTP_SERVER_ERROR;
-    }
-
     /* Open mailbox for reading */
     if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_SHARED))) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
@@ -3159,8 +3161,11 @@ int meth_lock(struct transaction_t *txn, void *params)
 	goto done;
     }
 
+    /* Open the DAV DB corresponding to the mailbox */
+    davdb = lparams->davdb.open_db(mailbox);
+
     /* Find message UID for the resource, if exists */
-    lparams->davdb.lookup_resource(*lparams->davdb.db, txn->req_tgt.mboxname,
+    lparams->davdb.lookup_resource(davdb, txn->req_tgt.mboxname,
 				   txn->req_tgt.resource, 1, (void *) &ddata);
 
     if (ddata->imap_uid) {
@@ -3304,7 +3309,7 @@ int meth_lock(struct transaction_t *txn, void *params)
     root = xmlNewChild(root, NULL, BAD_CAST "lockdiscovery", NULL);
     xml_add_lockdisc(root, txn->req_tgt.path, (struct dav_data *) ddata);
 
-    lparams->davdb.write_resource(*lparams->davdb.db, ddata, 1);
+    lparams->davdb.write_resource(davdb, ddata, 1);
 
     txn->resp_body.lock = ddata->lock_token;
 
@@ -3323,6 +3328,7 @@ int meth_lock(struct transaction_t *txn, void *params)
     ret = 0;
 
   done:
+    if (davdb) lparams->davdb.close_db(davdb);
     if (mailbox) mailbox_unlock_index(mailbox, NULL);
     if (outdoc) xmlFreeDoc(outdoc);
     if (indoc) xmlFreeDoc(indoc);
@@ -3638,6 +3644,9 @@ int propfind_by_collection(char *mboxname, int matchlen,
     if (fctx->depth > 1) {
 	/* Resource(s) */
 
+	/* Open the DAV DB corresponding to the mailbox */
+	if (!fctx->davdb) fctx->davdb = fctx->open_db(mailbox);
+
 	if (fctx->req_tgt->resource) {
 	    /* Add response for target resource */
 	    void *data;
@@ -3741,13 +3750,6 @@ int meth_propfind(struct transaction_t *txn, void *params)
 	}
 
 	/* Local Mailbox */
-	if (!*fparams->davdb.db) {
-	    syslog(LOG_ERR, "DAV database for user '%s' is not opened.  "
-		   "Check 'configdirectory' permissions or "
-		   "'proxyservers' option on backend server.", proxy_userid);
-	    txn->error.desc = "DAV database is not opened";
-	    return HTTP_SERVER_ERROR;
-	}
     }
 
     /* Principal or Local Mailbox */
@@ -3843,11 +3845,10 @@ int meth_propfind(struct transaction_t *txn, void *params)
     fctx.reqd_privs = DACL_READ;
     fctx.filter = NULL;
     fctx.filter_crit = NULL;
-    if (fparams->davdb.db) {
-	fctx.davdb = *fparams->davdb.db;
-	fctx.lookup_resource = fparams->davdb.lookup_resource;
-	fctx.foreach_resource = fparams->davdb.foreach_resource;
-    }
+    fctx.open_db = fparams->davdb.open_db;
+    fctx.close_db = fparams->davdb.close_db;
+    fctx.lookup_resource = fparams->davdb.lookup_resource;
+    fctx.foreach_resource = fparams->davdb.foreach_resource;
     fctx.proc_by_resource = &propfind_by_resource;
     fctx.elist = NULL;
     fctx.lprops = fparams->lprops;
@@ -3897,6 +3898,8 @@ int meth_propfind(struct transaction_t *txn, void *params)
 				 txn->req_tgt.mboxname, 1, httpd_userid, 
 				 httpd_authstate, propfind_by_collection, &fctx);
 	}
+
+	if (fctx.davdb) fctx.close_db(fctx.davdb);
 
 	ret = *fctx.ret;
     }
@@ -4133,6 +4136,7 @@ int meth_put(struct transaction_t *txn, void *params)
     time_t lastmod;
     uquota_t size = 0;
     unsigned flags = 0;
+    void *davdb = NULL;
 
     if (txn->meth == METH_PUT) {
 	/* Response should not be cached */
@@ -4200,14 +4204,6 @@ int meth_put(struct transaction_t *txn, void *params)
 
     /* Local Mailbox */
 
-    if (!*pparams->davdb.db) {
-	syslog(LOG_ERR, "DAV database for user '%s' is not opened.  "
-	       "Check 'configdirectory' permissions or "
-	       "'proxyservers' option on backend server.", proxy_userid);
-	txn->error.desc = "DAV database is not opened";
-	return HTTP_SERVER_ERROR;
-    }
-
     /* Open mailbox for reading */
     if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_SHARED))) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
@@ -4217,8 +4213,11 @@ int meth_put(struct transaction_t *txn, void *params)
 	goto done;
     }
 
+    /* Open the DAV DB corresponding to the mailbox */
+    davdb = pparams->davdb.open_db(mailbox);
+
     /* Find message UID for the resource, if exists */
-    pparams->davdb.lookup_resource(*pparams->davdb.db, txn->req_tgt.mboxname,
+    pparams->davdb.lookup_resource(davdb, txn->req_tgt.mboxname,
 				   txn->req_tgt.resource, 0, (void *) &ddata);
     /* XXX  Check errors */
 
@@ -4298,9 +4297,10 @@ int meth_put(struct transaction_t *txn, void *params)
     if (get_preferences(txn) & PREFER_REP) flags |= PREFER_REP;
 
     /* Parse, validate, and store the resource */
-    ret = pparams->put.proc(txn, mime, mailbox, flags);
+    ret = pparams->put.proc(txn, mime, mailbox, davdb, flags);
 
   done:
+    if (davdb) pparams->davdb.close_db(davdb);
     if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
     return ret;
@@ -4625,13 +4625,6 @@ int meth_report(struct transaction_t *txn, void *params)
 	}
 
 	/* Local Mailbox */
-	if (!*rparams->davdb.db) {
-	    syslog(LOG_ERR, "DAV database for user '%s' is not opened.  "
-		   "Check 'configdirectory' permissions or "
-		   "'proxyservers' option on backend server.", proxy_userid);
-	    txn->error.desc = "DAV database is not opened";
-	    return HTTP_SERVER_ERROR;
-	}
     }
 
     /* Principal or Local Mailbox */
@@ -4745,6 +4738,7 @@ int meth_unlock(struct transaction_t *txn, void *params)
     const char *etag;
     time_t lastmod;
     size_t len;
+    void *davdb = NULL;
 
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
@@ -4789,14 +4783,6 @@ int meth_unlock(struct transaction_t *txn, void *params)
 
     /* Local Mailbox */
 
-    if (!*lparams->davdb.db) {
-	syslog(LOG_ERR, "DAV database for user '%s' is not opened.  "
-	       "Check 'configdirectory' permissions or "
-	       "'proxyservers' option on backend server.", proxy_userid);
-	txn->error.desc = "DAV database is not opened";
-	return HTTP_SERVER_ERROR;
-    }
-
     /* Open mailbox for reading */
     if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_SHARED))) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
@@ -4806,8 +4792,11 @@ int meth_unlock(struct transaction_t *txn, void *params)
 	goto done;
     }
 
+    /* Open the DAV DB corresponding to the mailbox */
+    davdb = lparams->davdb.open_db(mailbox);
+
     /* Find message UID for the resource, if exists */
-    lparams->davdb.lookup_resource(*lparams->davdb.db, txn->req_tgt.mboxname,
+    lparams->davdb.lookup_resource(davdb, txn->req_tgt.mboxname,
 				   txn->req_tgt.resource, 1, (void **) &ddata);
     if (!ddata->rowid) {
 	ret = HTTP_NOT_FOUND;
@@ -4880,14 +4869,15 @@ int meth_unlock(struct transaction_t *txn, void *params)
 	ddata->lock_ownerid = NULL;
 	ddata->lock_expire = 0;
 
-	lparams->davdb.write_resource(*lparams->davdb.db, ddata, 1);
+	lparams->davdb.write_resource(davdb, ddata, 1);
     }
     else {
 	/* Unmapped URL - Treat as lock-null and delete mapping entry */
-	lparams->davdb.delete_resource(lparams->davdb.db, ddata->rowid, 1);
+	lparams->davdb.delete_resource(davdb, ddata->rowid, 1);
     }
 
   done:
+    if (davdb) lparams->davdb.close_db(davdb);
     if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
     return ret;

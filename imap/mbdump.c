@@ -470,6 +470,7 @@ static struct data_file data_files[] = {
     { META_INDEX,   "cyrus.index"   },
     { META_CACHE,   "cyrus.cache"   },
     { META_EXPUNGE, "cyrus.expunge" },
+    { META_DAV,     "cyrus.dav"     },
     { 0, NULL }
 };
 
@@ -633,7 +634,7 @@ int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
 	    case DAV_DB: {
 		struct buf dav_file = BUF_INITIALIZER;
 
-		dav_getpath(&dav_file, userid);
+		dav_getpath_byuserid(&dav_file, userid);
 		fname = (char *) buf_cstring(&dav_file);
 		ftag = "DAV";
 		break;
@@ -999,7 +1000,7 @@ int undump_mailbox(const char *mbname,
 	} else if (userid && !strcmp(file.s, "DAV")) {
 	    /* overwriting this outright is absolutely what we want to do */
 	    struct buf dav_file = BUF_INITIALIZER;
-	    dav_getpath(&dav_file, userid);
+	    dav_getpath_byuserid(&dav_file, userid);
 	    strlcpy(fnamebuf, buf_cstring(&dav_file), sizeof(fnamebuf));
 	    buf_free(&dav_file);
 	} else if (userid && !strcmp(file.s, "SEEN")) {

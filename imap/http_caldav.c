@@ -116,6 +116,8 @@ static unsigned config_allowsched = IMAP_ENUM_CALDAV_ALLOWSCHEDULING_OFF;
 static struct caldav_db *auth_caldavdb = NULL;
 static time_t compile_time;
 
+static struct caldav_db *my_caldav_open(struct mailbox *mailbox);
+static void my_caldav_close(struct caldav_db *caldavdb);
 static void my_caldav_init(struct buf *serverinfo);
 static void my_caldav_auth(const char *userid);
 static void my_caldav_reset(void);
@@ -131,6 +133,7 @@ static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights);
 static int caldav_copy(struct transaction_t *txn,
 		       struct mailbox *src_mbox, struct index_record *src_rec,
 		       struct mailbox *dest_mbox, const char *dest_rsrc,
+		       struct caldav_db *dest_davdb,
 		       unsigned overwrite, unsigned flags);
 static int caldav_delete_sched(struct transaction_t *txn,
 			       struct mailbox *mailbox,
@@ -139,7 +142,9 @@ static int meth_get(struct transaction_t *txn, void *params);
 static int caldav_post(struct transaction_t *txn);
 static int caldav_put(struct transaction_t *txn,
 		      struct mime_type_t *mime,
-		      struct mailbox *mailbox, unsigned flags);
+		      struct mailbox *mailbox,
+		      struct caldav_db *caldavdb,
+		      unsigned flags);
 
 static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
 				   struct propfind_ctx *fctx, xmlNodePtr resp,
@@ -329,18 +334,19 @@ static struct meth_params caldav_params = {
     caldav_mime_types,
     &caldav_parse_path,
     &caldav_check_precond,
-    { (void **) &auth_caldavdb,
+    { (db_open_proc_t) &my_caldav_open,
+      (db_close_proc_t) &my_caldav_close,
       (db_lookup_proc_t) &caldav_lookup_resource,
       (db_foreach_proc_t) &caldav_foreach,
       (db_write_proc_t) &caldav_write,
       (db_delete_proc_t) &caldav_delete,
       (db_delmbox_proc_t) &caldav_delmbox },
     &caldav_acl,
-    &caldav_copy,
+    (copy_proc_t) &caldav_copy,
     &caldav_delete_sched,
     { MBTYPE_CALENDAR, "mkcalendar", "mkcalendar-response", NS_CALDAV },
     &caldav_post,
-    { CALDAV_SUPP_DATA, &caldav_put },
+    { CALDAV_SUPP_DATA, (put_proc_t) &caldav_put },
     caldav_props,
     { { "calendar-query", &report_cal_query, DACL_READ,
 	REPORT_NEED_MBOX | REPORT_MULTISTATUS },
@@ -380,6 +386,23 @@ struct namespace_t namespace_calendar = {
 	{ &meth_unlock,		&caldav_params } 	/* UNLOCK	*/
     }
 };
+
+
+static struct caldav_db *my_caldav_open(struct mailbox *mailbox)
+{
+    if (httpd_userid && mboxname_userownsmailbox(httpd_userid, mailbox->name)) {
+	return auth_caldavdb;
+    }
+    else {
+	return caldav_open(mailbox, CALDAV_CREATE);
+    }
+}
+
+
+static void my_caldav_close(struct caldav_db *caldavdb)
+{
+    if (caldavdb && (caldavdb != auth_caldavdb)) caldav_close(caldavdb);
+}
 
 
 static void my_caldav_init(struct buf *serverinfo)
@@ -422,6 +445,9 @@ static void my_caldav_auth(const char *userid)
     char ident[MAX_MAILBOX_NAME];
     struct buf acl = BUF_INITIALIZER;
 
+    /* Generate mailboxname of calendar-home-set */
+    caldav_mboxname(NULL, userid, mailboxname);
+
     if (httpd_userisadmin ||
 	global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
 	/* admin or proxy from frontend - won't have DAV database */
@@ -432,8 +458,12 @@ static void my_caldav_auth(const char *userid)
     }
     else {
 	/* Open CalDAV DB for 'userid' */
+	struct mailbox mailbox;
+
+	mailbox.name = mailboxname;
+
 	my_caldav_reset();
-	auth_caldavdb = caldav_open(userid, CALDAV_CREATE);
+	auth_caldavdb = caldav_open(&mailbox, CALDAV_CREATE);
 	if (!auth_caldavdb) fatal("Unable to open CalDAV DB", EC_IOERR);
     }
 
@@ -443,7 +473,6 @@ static void my_caldav_auth(const char *userid)
     mboxname_hiersep_toexternal(&httpd_namespace, ident, 0);
 
     /* calendar-home-set */
-    caldav_mboxname(NULL, userid, mailboxname);
     r = mboxlist_lookup(mailboxname, &mbentry, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	if (config_mupdate_server) {
@@ -816,6 +845,7 @@ static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights)
 static int caldav_copy(struct transaction_t *txn,
 		       struct mailbox *src_mbox, struct index_record *src_rec,
 		       struct mailbox *dest_mbox, const char *dest_rsrc,
+		       struct caldav_db *dest_davdb,
 		       unsigned overwrite, unsigned flags)
 {
     int ret;
@@ -846,7 +876,7 @@ static int caldav_copy(struct transaction_t *txn,
     }
 
     /* Store source resource at destination */
-    ret = store_resource(txn, ical, dest_mbox, dest_rsrc, auth_caldavdb,
+    ret = store_resource(txn, ical, dest_mbox, dest_rsrc, dest_davdb,
 			 overwrite, flags);
 
     icalcomponent_free(ical);
@@ -865,7 +895,7 @@ static int caldav_delete_sched(struct transaction_t *txn,
 
     if (!(namespace_calendar.allow & ALLOW_CAL_SCHED)) return 0;
 
-    if (!mailbox) {
+    if (!record) {
 	/* XXX  DELETE collection - check all resources for sched objects */
     }
     else if (cdata->sched_tag) {
@@ -1467,7 +1497,9 @@ static const char *get_icalrestriction_errstr(icalcomponent *ical)
  */
 static int caldav_put(struct transaction_t *txn,
 		      struct mime_type_t *mime,
-		      struct mailbox *mailbox, unsigned flags)
+		      struct mailbox *mailbox,
+		      struct caldav_db *davdb,
+		      unsigned flags)
 {
     int ret;
     icalcomponent *ical = NULL, *comp, *nextcomp;
@@ -1536,7 +1568,7 @@ static int caldav_put(struct transaction_t *txn,
 	userid = mboxname_to_userid(txn->req_tgt.mboxname);
 
 	/* Make sure iCal UID is unique for this user */
-	caldav_lookup_uid(auth_caldavdb, uid, 0, &cdata);
+	caldav_lookup_uid(davdb, uid, 0, &cdata);
 	/* XXX  Check errors */
 
 	if (cdata->dav.mailbox &&
@@ -1599,7 +1631,7 @@ static int caldav_put(struct transaction_t *txn,
 
     /* Store resource at target */
     ret = store_resource(txn, ical, mailbox, txn->req_tgt.resource,
-			 auth_caldavdb, OVERWRITE_CHECK, flags);
+			 davdb, OVERWRITE_CHECK, flags);
 
     if (flags & PREFER_REP) {
 	struct resp_body_t *resp_body = &txn->resp_body;
@@ -2564,7 +2596,8 @@ static int report_cal_query(struct transaction_t *txn,
     memset(&calfilter, 0, sizeof(struct calquery_filter));
     calfilter.save_busytime = 0;
 
-    fctx->davdb = auth_caldavdb;
+    fctx->open_db = (db_open_proc_t) &my_caldav_open;
+    fctx->close_db = (db_close_proc_t) &my_caldav_close;
     fctx->lookup_resource = (db_lookup_proc_t) &caldav_lookup_resource;
     fctx->foreach_resource = (db_foreach_proc_t) &caldav_foreach;
     fctx->proc_by_resource = &propfind_by_resource;
@@ -2616,6 +2649,8 @@ static int report_cal_query(struct transaction_t *txn,
 			     txn->req_tgt.mboxname, 1, httpd_userid, 
 			     httpd_authstate, propfind_by_collection, fctx);
 	}
+
+	if (fctx->davdb) my_caldav_close(fctx->davdb);
 
 	ret = *fctx->ret;
     }
@@ -2675,13 +2710,18 @@ static int report_cal_multiget(struct transaction_t *txn,
 		fctx->mailbox = mailbox;
 	    }
 
+	    /* Open the DAV DB corresponding to the mailbox */
+	    fctx->davdb = my_caldav_open(fctx->mailbox);
+
 	    /* Find message UID for the resource */
-	    caldav_lookup_resource(auth_caldavdb,
+	    caldav_lookup_resource(fctx->davdb,
 				   tgt.mboxname, tgt.resource, 0, &cdata);
 	    cdata->dav.resource = tgt.resource;
 	    /* XXX  Check errors */
 
 	    propfind_by_resource(fctx, cdata);
+
+	    my_caldav_close(fctx->davdb);
 	}
     }
 
@@ -2769,6 +2809,8 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
     struct busytime *busytime = &calfilter->busytime;
     icalcomponent *cal = NULL;
 
+    fctx->open_db = (db_open_proc_t) &my_caldav_open;
+    fctx->close_db = (db_close_proc_t) &my_caldav_close;
     fctx->lookup_resource = (db_lookup_proc_t) &caldav_lookup_resource;
     fctx->foreach_resource = (db_foreach_proc_t) &caldav_foreach;
     fctx->proc_by_resource = &busytime_by_resource;
@@ -2790,6 +2832,8 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
 			     mailboxname, 1, httpd_userid, 
 			     httpd_authstate, busytime_by_collection, fctx);
 	}
+
+	if (fctx->davdb) my_caldav_close(fctx->davdb);
     }
 
     if (!*fctx->ret) {
@@ -2889,7 +2933,6 @@ static int report_fb_query(struct transaction_t *txn,
     calfilter.save_busytime = 1;
     fctx->filter = apply_calfilter;
     fctx->filter_crit = &calfilter;
-    fctx->davdb = auth_caldavdb;
 
     /* Parse children element of report */
     for (node = inroot->children; node; node = node->next) {
@@ -3668,14 +3711,11 @@ int sched_busytime_query(struct transaction_t *txn,
 		snprintf(mailboxname, sizeof(mailboxname),
 			 "user.%s.%s", userid, calendarprefix);
 
-		fctx.davdb = caldav_open(userid, CALDAV_CREATE);
 		fctx.req_tgt->collection = NULL;
 		calfilter.busytime.len = 0;
 		busy = busytime_query_local(txn, &fctx, mailboxname,
 					    ICAL_METHOD_REPLY, uid,
 					    organizer, attendee);
-
-		caldav_close(fctx.davdb);
 	    }
 
 	    if (busy) {
@@ -4221,7 +4261,7 @@ static void sched_deliver_local(const char *recipient,
     method = icalcomponent_get_method(sched_data->itip);
 
     /* Search for iCal UID in recipient's calendars */
-    caldavdb = caldav_open(userid, CALDAV_CREATE);
+    caldavdb = caldav_open(inbox, CALDAV_CREATE);
     if (!caldavdb) {
 	sched_data->status =
 	    sched_data->ischedule ? REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;

@@ -73,8 +73,8 @@ int caldav_init(void);
 /* done with all caldav operations for this process */
 int caldav_done(void);
 
-/* get a database handle corresponding to userid */
-struct caldav_db *caldav_open(const char *userid, int flags);
+/* get a database handle corresponding to mailbox */
+struct caldav_db *caldav_open(struct mailbox *mailbox, int flags);
 
 /* close this handle */
 int caldav_close(struct caldav_db *caldavdb);
