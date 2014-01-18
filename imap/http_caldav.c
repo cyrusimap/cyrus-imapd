@@ -1547,6 +1547,13 @@ static int caldav_put(struct transaction_t *txn,
 	    struct caldav_data *cdata;
 	    struct sched_param sparam;
 	    icalcomponent *oldical = NULL;
+	if ((namespace_calendar.allow & ALLOW_CAL_SCHED) && organizer &&
+	     icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY)) {
+	    /* Scheduling object resource */
+	    const char *userid;
+	    struct caldav_data *cdata;
+	    struct sched_param sparam;
+	    icalcomponent *oldical = NULL;
 
 	    /* Construct userid corresponding to mailbox */
 	    userid = mboxname_to_userid(txn->req_tgt.mboxname);
@@ -1558,17 +1565,10 @@ static int caldav_put(struct transaction_t *txn,
 	    if (cdata->dav.mailbox &&
 		(strcmp(cdata->dav.mailbox, txn->req_tgt.mboxname) ||
 		 strcmp(cdata->dav.resource, txn->req_tgt.resource))) {
-		/* CALDAV:unique-scheduling-object-resource */
-		char ext_userid[MAX_MAILBOX_NAME+1];
 
-		strlcpy(ext_userid, userid, sizeof(ext_userid));
-		mboxname_hiersep_toexternal(&httpd_namespace, ext_userid, 0);
-
-		txn->error.precond = CALDAV_UNIQUE_OBJECT;
-		assert(!buf_len(&txn->buf));
 		buf_printf(&txn->buf, "%s/user/%s/%s/%s",
 			   namespace_calendar.prefix,
-			   ext_userid, strrchr(cdata->dav.mailbox, '.')+1,
+			   userid, strrchr(cdata->dav.mailbox, '.')+1,
 			   cdata->dav.resource);
 		txn->error.resource = buf_cstring(&txn->buf);
 		ret = HTTP_FORBIDDEN;
