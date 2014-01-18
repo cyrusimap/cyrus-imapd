@@ -1471,7 +1471,9 @@ static int caldav_put(struct transaction_t *txn,
 	}
     }
 
-    if ((namespace_calendar.allow & ALLOW_CAL_SCHED) && organizer) {
+    if ((namespace_calendar.allow & ALLOW_CAL_SCHED) && organizer
+	/* XXX  Hack for Outlook */
+	&& icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY)) {
 	/* Scheduling object resource */
 	const char *userid;
 	struct caldav_data *cdata;
@@ -1508,9 +1510,9 @@ static int caldav_put(struct transaction_t *txn,
 	/* Lookup the organizer */
 	if (caladdress_lookup(organizer, &sparam)) {
 	    syslog(LOG_ERR,
-		   "meth_delete: failed to process scheduling message in %s"
-		   " (org=%s, att=%s)",
-		   txn->req_tgt.mboxname, organizer, userid);
+		   "meth_put: failed to process scheduling message in %s"
+		   " (org=%s)",
+		   txn->req_tgt.mboxname, organizer);
 	    txn->error.desc = "Failed to lookup organizer address\r\n";
 	    ret = HTTP_SERVER_ERROR;
 	    goto done;
