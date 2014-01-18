@@ -102,10 +102,9 @@ EXPORTED int dav_done(void)
 }
 
 
-static void dav_debug(void *userid, const char *sql)
+static void dav_debug(void *fname, const char *sql)
 {
-    syslog(LOG_DEBUG, "dav_exec(%s%s): %s",
-	   (const char *) userid, FNAME_DAVSUFFIX, sql);
+    syslog(LOG_DEBUG, "dav_exec(%s): %s", (const char *) fname, sql);
 }
 
 static void free_dav_open(struct open_davdb *open)
@@ -115,15 +114,15 @@ static void free_dav_open(struct open_davdb *open)
 }
 
 
-/* Open DAV DB corresponding to userid */
-EXPORTED sqlite3 *dav_open(const char *userid, const char *cmds)
+/* Open DAV DB corresponding to mailbox */
+EXPORTED sqlite3 *dav_open(struct mailbox *mailbox, const char *cmds)
 {
     int rc = SQLITE_OK;
     struct buf fname = BUF_INITIALIZER;
     struct stat sbuf;
     struct open_davdb *open;
 
-    dav_getpath(&fname, userid);
+    dav_getpath(&fname, mailbox);
 
     for (open = open_davdbs; open; open = open->next) {
 	if (!strcmp(open->path, buf_cstring(&fname))) {
@@ -270,12 +269,16 @@ EXPORTED int dav_exec(sqlite3 *davdb, const char *cmd, struct bind_val bval[],
 }
 
 
+<<<<<<< HEAD
 EXPORTED int dav_delete(const char *userid)
+=======
+int dav_delete(struct mailbox *mailbox)
+>>>>>>> b60343e... *dav*.[ch], mboxname.c: allow for per-mailbox DAV DB (cyrus.dav) and when reading/writing DAV entries use the DAV DB corresponding to the mailbox, not that of the authenticated user
 {
     struct buf fname = BUF_INITIALIZER;
     int r = 0;
 
-    dav_getpath(&fname, userid);
+    dav_getpath(&fname, mailbox);
     if (unlink(buf_cstring(&fname)) && errno != ENOENT) {
 	syslog(LOG_ERR, "dav_db: error unlinking %s: %m", buf_cstring(&fname));
 	r = CYRUSDB_INTERNAL;

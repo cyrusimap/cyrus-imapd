@@ -241,6 +241,9 @@ enum {
 #define NO_DUP_CHECK (1<<7)
 
 
+typedef void *(*db_open_proc_t)(struct mailbox *mailbox);
+typedef void (*db_close_proc_t)(void *davdb);
+
 /* Function to lookup DAV 'resource' in 'mailbox', with optional 'lock',
  * placing the record in 'data'
  */
@@ -265,7 +268,7 @@ struct propfind_ctx {
     const char *int_userid;		/* internal userid */
     int userisadmin;			/* is userid an admin */
     struct auth_state *authstate;	/* authorization state for userid */
-    void *davdb;			/* DAV DB corresponding to userid */
+    void *davdb;			/* DAV DB corresponding to collection */
     struct mailbox *mailbox;		/* mailbox correspondng to collection */
     struct quota quota;			/* quota info for collection */
     struct index_record *record;	/* cyrus.index record for resource */
@@ -276,8 +279,10 @@ struct propfind_ctx {
     int (*filter)(struct propfind_ctx *,
 		  void *data);		/* callback to filter resources */
     void *filter_crit;			/* criteria to filter resources */
-    db_lookup_proc_t lookup_resource;
-    db_foreach_proc_t foreach_resource;
+    db_open_proc_t open_db;		/* open DAV DB for a given mailbox */
+    db_close_proc_t close_db;		/* close DAV DB for a given mailbox */
+    db_lookup_proc_t lookup_resource;	/* lookup a specific resource */
+    db_foreach_proc_t foreach_resource;	/* process all resources in a mailbox */
     int (*proc_by_resource)(void *rock,	/* Callback to process a resource */
 			    void *data);
     struct propfind_entry_list *elist;	/* List of props to fetch w/callbacks */
@@ -368,7 +373,8 @@ typedef int (*db_delete_proc_t)(void *davdb, unsigned rowid, int commit);
 typedef int (*db_delmbox_proc_t)(void *davdb, const char *mailbox, int commit);
 
 struct davdb_params {
-    void **db;				/* DAV DB to use for resources */
+    db_open_proc_t open_db;		/* open DAV DB for a given mailbox */
+    db_close_proc_t close_db;		/* close DAV DB for a given mailbox */
     db_lookup_proc_t lookup_resource;	/* lookup a specific resource */
     db_foreach_proc_t foreach_resource;	/* process all resources in a mailbox */
     db_write_proc_t write_resource;	/* write a specific resource */
@@ -388,6 +394,7 @@ typedef int (*acl_proc_t)(struct transaction_t *txn, xmlNodePtr priv,
 typedef int (*copy_proc_t)(struct transaction_t *txn,
 			   struct mailbox *src_mbox, struct index_record *src_rec,
 			   struct mailbox *dest_mbox, const char *dest_rsrc,
+			   void *dest_davdb,
 			   unsigned overwrite, unsigned flags);
 
 /* Function to do special processing for DELETE method (optional) */
@@ -423,9 +430,8 @@ struct mkcol_params {
 typedef int (*post_proc_t)(struct transaction_t *txn);
 
 /* meth_put() parameters */
-typedef int (*put_proc_t)(struct transaction_t *txn,
-			  struct mime_type_t *mime,
-			  struct mailbox *mailbox, unsigned flags);
+typedef int (*put_proc_t)(struct transaction_t *txn, struct mime_type_t *mime,
+			  struct mailbox *mailbox, void *davdb, unsigned flags);
 
 struct put_params {
     unsigned supp_data_precond;		/* precond code for unsupported data */

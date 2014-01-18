@@ -44,11 +44,15 @@
 #ifndef DAV_UTIL_H
 #define DAV_UTIL_H
 
+#include "mailbox.h"
 #include "util.h"
 
 #define FNAME_DAVSUFFIX ".dav" /* per-user DAV DB extension */
 
-/* create filename for DAV database corresponding to userid */
-void dav_getpath(struct buf *fname, const char *userid);
+/* Create filename corresponding to DAV DB for mailbox */
+void dav_getpath(struct buf *fname, struct mailbox *mailbox);
+
+/* Create filename corresponding to DAV DB for userid */
+void dav_getpath_byuserid(struct buf *fname, const char *userid);
 
 #endif /* DAV_UTIL_H */

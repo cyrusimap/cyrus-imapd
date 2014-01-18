@@ -139,7 +139,7 @@ EXPORTED int caldav_done(void)
     "CREATE INDEX IF NOT EXISTS idx_ical_uid ON ical_objs ( ical_uid );"
 
 /* Open DAV DB corresponding to userid */
-EXPORTED struct caldav_db *caldav_open(const char *userid, int flags)
+EXPORTED struct caldav_db *caldav_open(struct mailbox *mailbox, int flags)
 {
     sqlite3 *db;
     struct caldav_db *caldavdb = NULL;
@@ -147,14 +147,19 @@ EXPORTED struct caldav_db *caldav_open(const char *userid, int flags)
 
     if (flags & CALDAV_TRUNC) cmds = CMD_DROP CMD_CREATE;
 
-    db = dav_open(userid, cmds);
+    db = dav_open(mailbox, cmds);
 
     if (db) {
+	const char *userid;
+
 	caldavdb = xzmalloc(sizeof(struct caldav_db));
 	caldavdb->db = db;
 
-	/* Construct mailbox name corresponding to userid's scheduling Inbox */
-	strcpy(caldavdb->sched_inbox, caldav_mboxname(userid, SCHED_INBOX));
+	userid = mboxname_to_userid(mailbox->name);
+	if (userid) {
+	    /* Construct mbox name corresponding to userid's scheduling Inbox */
+	    caldav_mboxname(SCHED_INBOX, userid, caldavdb->sched_inbox);
+	}
     }
 
     return caldavdb;

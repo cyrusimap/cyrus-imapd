@@ -1448,6 +1448,10 @@ EXPORTED char *mboxname_metapath(const char *partition, const char *mboxname,
 	snprintf(confkey, 256, "metadir-index-%s", partition);
 	metaflag = IMAP_ENUM_METAPARTITION_FILES_ANNOTATIONS;
 	filename = FNAME_ANNOTATIONS;
+    case META_DAV:
+	snprintf(confkey, 256, "metadir-dav-%s", partition);
+	metaflag = IMAP_ENUM_METAPARTITION_FILES_DAV;
+	filename = FNAME_DAV;
 	break;
     case 0:
 	break;
