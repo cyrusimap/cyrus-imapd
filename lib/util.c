@@ -557,6 +557,25 @@ const char *buf_cstring(struct buf *buf)
     return buf->s;
 }
 
+char *buf_release(struct buf *buf)
+{
+    char *ret;
+
+    /* make sure it's NULL terminated - also guarantees it's a
+     * malloc'ed string */
+    buf_ensure(buf, 1);
+    ret = buf->s;
+    ret[buf->len] = '\0';
+
+    /* zero out the buffer so it no longer manages the string */
+    buf->s = NULL;
+    buf->len = 0;
+    buf->alloc = 0;
+    buf->flags = 0;
+
+    return ret;
+}
+
 void buf_getmap(struct buf *buf, const char **base, unsigned *len)
 {
     *base = buf->s;

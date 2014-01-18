@@ -191,6 +191,7 @@ struct buf {
 
 const char *buf_cstring(struct buf *buf);
 void buf_ensure(struct buf *buf, unsigned morebytes);
+char *buf_release(struct buf *buf);
 void buf_getmap(struct buf *buf, const char **base, unsigned *len);
 unsigned buf_len(const struct buf *buf);
 void buf_reset(struct buf *buf);
