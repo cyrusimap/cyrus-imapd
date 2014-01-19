@@ -853,9 +853,8 @@ EXPORTED void _buf_ensure(struct buf *buf, size_t n)
 
 	/* can release MMAP now, we've copied the data out */
 	if (buf->flags & BUF_MMAP) {
-	    const char *base = buf->s;
-	    size_t len = buf->len;
-	    map_free(&base, &len);
+	    size_t len = buf->len; /* don't wipe the length, we still need it */
+	    map_free((const char **)&buf->s, &len);
 	    buf->flags &= ~BUF_MMAP;
 	}
 
@@ -939,8 +938,10 @@ EXPORTED const char *buf_base(const struct buf *buf)
 
 EXPORTED void buf_reset(struct buf *buf)
 {
+    if (buf->flags & BUF_MMAP)
+	map_free((const char **)&buf->s, &buf->len);
     buf->len = 0;
-    buf->flags &= ~BUF_CSTRING;
+    buf->flags = 0;
 }
 
 EXPORTED void buf_truncate(struct buf *buf, size_t len)
@@ -1301,11 +1302,8 @@ static void _buf_free_data(struct buf *buf)
 {
     if (buf->alloc)
 	free(buf->s);
-    else if (buf->flags & BUF_MMAP) {
-	const char *base = buf->s;
-	size_t len = buf->len;
-	map_free(&base, &len);
-    }
+    else if (buf->flags & BUF_MMAP)
+	map_free((const char **)&buf->s, &buf->len);
 }
 
 EXPORTED void buf_free(struct buf *buf)
