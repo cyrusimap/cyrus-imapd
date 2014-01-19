@@ -579,6 +579,8 @@ static int check_tailcrc(struct dbengine *db, struct skiprecord *record)
 static int read_onerecord(struct dbengine *db, size_t offset,
 			  struct skiprecord *record)
 {
+    const char *dbbase = BASE(db);
+    size_t dbsize = SIZE(db);
     const char *base;
     int i;
 
@@ -587,13 +589,14 @@ static int read_onerecord(struct dbengine *db, size_t offset,
     if (!offset) return 0;
 
     record->offset = offset;
-    record->len = 24; /* absolute minimum */
-
-    /* need space for at least the header plus some details */
-    if (record->offset + record->len > SIZE(db))
+    /* need space for at least the header plus some details.  No record
+     * is shorter than 24 bytes (header, zeroth pointer, CRCs) - and
+     * conveniently, 24 bytes is also enough to know the entire record
+     * size - so first make sure we HAVE 24 bytes to play with. */
+    if (offset + 24 > dbsize)
 	goto badsize;
 
-    base = BASE(db) + offset;
+    base = dbbase + offset;
 
     /* read in the record header */
     record->type = base[0];
@@ -607,14 +610,14 @@ static int read_onerecord(struct dbengine *db, size_t offset,
 
     /* long key */
     if (record->keylen == UINT16_MAX) {
-	base = BASE(db) + offset;
+	base = dbbase + offset;
 	record->keylen = ntohll(*((uint64_t *)base));
 	offset += 8;
     }
 
     /* long value */
     if (record->vallen == UINT32_MAX) {
-	base = BASE(db) + offset;
+	base = dbbase + offset;
 	record->vallen = ntohll(*((uint64_t *)base));
 	offset += 8;
     }
@@ -625,20 +628,21 @@ static int read_onerecord(struct dbengine *db, size_t offset,
 		+ 8                         /* crc32s */
 		+ roundup(record->keylen + record->vallen, 8);  /* keyval */
 
-    if (record->offset + record->len > SIZE(db))
+    /* and make sure the whole thing fits! */
+    if (record->offset + record->len > dbsize)
 	goto badsize;
 
     for (i = 0; i <= record->level; i++) {
-	base = BASE(db) + offset;
+	base = dbbase + offset;
 	record->nextloc[i] = ntohll(*((uint64_t *)base));
 	offset += 8;
     }
 
-    base = BASE(db) + offset;
+    base = dbbase + offset;
     record->crc32_head = ntohl(*((uint32_t *)base));
     if (db->open_flags & CYRUSDB_INTEGRITY) {
 	/* XXX - this one is a little shorter, so... hmm */
-	if (crc32_map(BASE(db) + record->offset, (offset - record->offset))
+	if (crc32_map(dbbase + record->offset, (offset - record->offset))
 	    != record->crc32_head)
 	    return CYRUSDB_IOERROR;
     }
