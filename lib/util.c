@@ -828,19 +828,21 @@ static size_t roundup(size_t size)
 /* this function has a side-effect of always leaving the buffer writable */
 EXPORTED void _buf_ensure(struct buf *buf, size_t n)
 {
-    size_t newalloc = roundup(buf->len + n);
+    size_t newlen = buf->len + n;
+    char *s;
 
-    /* can't create a zero byte buffer */
-    assert(newalloc);
+    assert(newlen); /* we never alloc zero bytes */
 
-    if (buf->alloc >= newalloc)
+    if (buf->alloc >= newlen)
 	return;
 
     if (buf->alloc) {
-	buf->s = xrealloc(buf->s, newalloc);
+	buf->alloc = roundup(newlen);
+	buf->s = xrealloc(buf->s, buf->alloc);
     }
     else {
-	char *s = xmalloc(newalloc);
+	buf->alloc = roundup(newlen);
+	s = xmalloc(buf->alloc);
 
 	/* if no allocation, but data exists, it means copy on write.
 	 * grab a copy of what's there now */
@@ -859,9 +861,6 @@ EXPORTED void _buf_ensure(struct buf *buf, size_t n)
 
 	buf->s = s;
     }
-
-    /* either way, our allocated space is now this long */
-    buf->alloc = newalloc;
 }
 
 EXPORTED const char *buf_cstring(struct buf *buf)
