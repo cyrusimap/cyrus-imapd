@@ -63,10 +63,13 @@
 #include "global.h"
 #include "mailbox.h"
 #include "util.h"
+#include "retry.h"
 #include "xmalloc.h"
 
 #define STACKSIZE 64000
 static char stack[STACKSIZE+1];
+
+int outfd;
 
 static struct db *db = NULL;
 
@@ -117,7 +120,7 @@ static int printer_cb(void *rock __attribute__((unused)),
     io[2].iov_len = datalen;
     io[3].iov_base = "\n";
     io[3].iov_len = 1;
-    writev(fileno(stdout), io, 4);
+    retry_writev(outfd, io, 4);
     return 0;
 }
 
@@ -302,6 +305,8 @@ int main(int argc, char *argv[])
 	       "\nPlease use absolute pathnames instead.\n\n");
 	exit(EC_OSERR);
     }
+
+    outfd = fileno(stdout);
 
     cyrus_init(alt_config, "cyr_dbtool", 0, 0);
 
