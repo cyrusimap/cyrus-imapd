@@ -112,6 +112,8 @@ EXPORTED int cyrusdb_open(const char *backend, const char *fname,
     struct db *db = xzmalloc(sizeof(struct db));
     int r;
 
+    flags |= CYRUSDB_INTEGRITY;
+
     if (!backend) backend = DEFAULT_BACKEND; /* not used yet, later */
     db->backend = cyrusdb_fromname(backend);
 

@@ -469,8 +469,6 @@ static uint8_t randlvl(uint8_t lvl, uint8_t maxlvl)
 /* given an open, mapped db, read in the header information */
 static int read_header(struct dbengine *db)
 {
-    uint32_t crc;
-
     assert(db && db->mf && db->is_open);
 
     if (SIZE(db) < HEADER_SIZE) {
@@ -508,12 +506,13 @@ static int read_header(struct dbengine *db)
     db->header.flags
 	= ntohl(*((uint32_t *)(BASE(db) + OFFSET_FLAGS)));
 
-    crc = ntohl(*((uint32_t *)(BASE(db) + OFFSET_CRC32)));
-
-    if (crc32_map(BASE(db), OFFSET_CRC32) != crc) {
-	syslog(LOG_ERR, "DBERROR: %s: twoskip header CRC failure",
-	       FNAME(db));
-	return CYRUSDB_IOERROR;
+    if (db->open_flags & CYRUSDB_INTEGRITY) {
+	uint32_t crc = ntohl(*((uint32_t *)(BASE(db) + OFFSET_CRC32)));
+	if (crc32_map(BASE(db), OFFSET_CRC32) != crc) {
+	    syslog(LOG_ERR, "DBERROR: %s: twoskip header CRC failure",
+		FNAME(db));
+	    return CYRUSDB_IOERROR;
+	}
     }
 
     db->end = db->header.current_size;
@@ -630,9 +629,12 @@ static int read_onerecord(struct dbengine *db, size_t offset,
 
     base = BASE(db) + offset;
     record->crc32_head = ntohl(*((uint32_t *)base));
-    if (crc32_map(BASE(db) + record->offset, (offset - record->offset))
-	!= record->crc32_head)
-	return CYRUSDB_IOERROR;
+    if (db->open_flags & CYRUSDB_INTEGRITY) {
+	/* XXX - this one is a little shorter, so... hmm */
+	if (crc32_map(BASE(db) + record->offset, (offset - record->offset))
+	    != record->crc32_head)
+	    return CYRUSDB_IOERROR;
+    }
 
     record->crc32_tail = ntohl(*((uint32_t *)(base+4)));
 
@@ -851,7 +853,7 @@ static int relocate(struct dbengine *db)
     uint8_t level;
     uint8_t i;
     int cmp = -1; /* never found a thing! */
-    int r;
+    int r = 0;
 
     /* pointer validity */
     loc->generation = db->header.generation;
@@ -913,9 +915,10 @@ static int relocate(struct dbengine *db)
 	    loc->forwardloc[i] = _getloc(db, &loc->record, i);
 
 	/* make sure this record is complete */
-	r = check_tailcrc(db, &loc->record);
-
-	if (r) return r;
+	if (db->open_flags & CYRUSDB_INTEGRITY) {
+	    r = check_tailcrc(db, &loc->record);
+	    if (r) return r;
+	}
     }
 
     return 0;
