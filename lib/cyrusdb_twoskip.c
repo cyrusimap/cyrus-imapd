@@ -384,7 +384,7 @@ struct dbengine {
     struct mappedfile *mf;
 
     struct db_header header;
-    struct skiploc loc;
+    struct skiploc dbloc;
 
     /* tracking info */
     int is_open;
@@ -575,7 +575,7 @@ static int read_onerecord(struct dbengine *db, size_t offset,
     const char *base;
     int i;
 
-    memset(record, 0, sizeof(struct skiprecord));
+    *record = (struct skiprecord){0};
 
     if (!offset) return 0;
 
@@ -844,9 +844,8 @@ static void _setloc(struct dbengine *db, struct skiprecord *record,
 
 /* finds a record, either an exact match or the record
  * immediately before */
-static int relocate(struct dbengine *db)
+static int dblocate(struct dbengine *db, struct skiploc *loc)
 {
-    struct skiploc *loc = &db->loc;
     struct skiprecord newrecord;
     size_t offset;
     size_t oldoffset = 0;
@@ -924,34 +923,26 @@ static int relocate(struct dbengine *db)
     return 0;
 }
 
-/* helper function to find a location, either by using the existing
- * location if it's close enough, or using the full relocate above */
-static int find_loc(struct dbengine *db, const char *key, size_t keylen)
+static int set_loc(struct dbengine *db, struct skiploc *loc,
+		   const char *key, size_t keylen)
 {
-    struct skiprecord newrecord;
-    struct skiploc *loc = &db->loc;
-    int cmp, i, r;
+    int cmp = db->compar(loc->keybuf.s, loc->keybuf.len, key, keylen);
+    int r;
 
-    if (key != loc->keybuf.s)
+    if (cmp)
 	buf_setmap(&loc->keybuf, key, keylen);
-    else if (keylen != loc->keybuf.len)
-	buf_truncate(&loc->keybuf, keylen);
 
-    /* can we special case advance? */
-    if (keylen && loc->end == db->end
-               && loc->generation == db->header.generation) {
-	cmp = db->compar(KEY(db, &loc->record), loc->record.keylen,
-			 loc->keybuf.s, loc->keybuf.len);
-	/* same place, and was exact.  Otherwise we're going back,
-	 * and the reverse pointers are no longer valid... */
-	if (db->loc.is_exactmatch && cmp == 0) {
+    if (loc->end == db->end && loc->generation == db->header.generation) {
+	if (!cmp)
 	    return 0;
-	}
 
 	/* we're looking after this record */
 	if (cmp < 0) {
-	    for (i = 0; i < db->loc.record.level; i++)
-		loc->backloc[i] = db->loc.record.offset;
+	    struct skiprecord newrecord;
+	    int i;
+
+	    for (i = 0; i < loc->record.level; i++)
+		loc->backloc[i] = loc->record.offset;
 
 	    /* read the next record */
 	    r = read_skipdelete(db, loc->forwardloc[0], &newrecord);
@@ -959,52 +950,51 @@ static int find_loc(struct dbengine *db, const char *key, size_t keylen)
 
 	    /* nothing afterwards? */
 	    if (!newrecord.offset) {
-		db->loc.is_exactmatch = 0;
+		loc->is_exactmatch = 0;
 		return 0;
 	    }
 
 	    /* now where is THIS record? */
 	    cmp = db->compar(KEY(db, &newrecord), newrecord.keylen,
-			     loc->keybuf.s, loc->keybuf.len);
+			     key, keylen);
 
 	    /* exact match? */
 	    if (cmp == 0) {
-		db->loc.is_exactmatch = 1;
-		db->loc.record = newrecord;
+		loc->is_exactmatch = 1;
+		loc->record = newrecord;
 
 		for (i = 0; i < newrecord.level; i++)
 		    loc->forwardloc[i] = _getloc(db, &newrecord, i);
 
-		/* make sure this record is complete */
-		r = check_tailcrc(db, &loc->record);
-		if (r) return r;
+		if (db->open_flags & CYRUSDB_INTEGRITY) {
+		    /* make sure this record is complete */
+		    r = check_tailcrc(db, &loc->record);
+		    if (r) return r;
+		}
 
 		return 0;
 	    }
 
 	    /* or in the gap */
 	    if (cmp > 0) {
-		db->loc.is_exactmatch = 0;
+		loc->is_exactmatch = 0;
 		return 0;
 	    }
 	}
-	/* if we fell out here, it's not a "local" record, just search */
     }
-
-    return relocate(db);
+    return dblocate(db, loc);
 }
 
 /* helper function to advance to the "next" record.  Used by foreach,
  * fetchnext, and internal functions */
-static int advance_loc(struct dbengine *db)
+static int advance_loc(struct dbengine *db, struct skiploc *loc)
 {
-    struct skiploc *loc = &db->loc;
     uint8_t i;
     int r;
 
-    /* has another session made changes?  Need to re-find the location */
+    /* if the DB has changed, re-locate */
     if (loc->end != db->end || loc->generation != db->header.generation) {
-	r = relocate(db);
+	r = dblocate(db, loc);
 	if (r) return r;
     }
 
@@ -1019,7 +1009,7 @@ static int advance_loc(struct dbengine *db)
     /* reached the end? */
     if (!loc->record.offset) {
 	buf_reset(&loc->keybuf);
-	return relocate(db);
+	return dblocate(db, loc);
     }
 
     /* update forward pointers */
@@ -1030,9 +1020,11 @@ static int advance_loc(struct dbengine *db)
     buf_setmap(&loc->keybuf, KEY(db, &loc->record), loc->record.keylen);
     loc->is_exactmatch = 1;
 
-    /* make sure this record is complete */
-    r = check_tailcrc(db, &loc->record);
-    if (r) return r;
+    if (db->open_flags & CYRUSDB_INTEGRITY) {
+	/* make sure this record is complete */
+	r = check_tailcrc(db, &loc->record);
+	if (r) return r;
+    }
 
     return 0;
 }
@@ -1041,9 +1033,8 @@ static int advance_loc(struct dbengine *db)
  * after appending a new record, either create or delete.  The
  * caller must set forwardloc[] correctly for each level it has
  * changed */
-static int stitch(struct dbengine *db, uint8_t maxlevel, size_t newoffset)
+static int stitch(struct dbengine *db, struct skiploc *loc, uint8_t maxlevel, size_t newoffset)
 {
-    struct skiploc *loc = &db->loc;
     struct skiprecord oldrecord;
     uint8_t i;
     int r;
@@ -1079,9 +1070,9 @@ static int stitch(struct dbengine *db, uint8_t maxlevel, size_t newoffset)
 /* overall "store" function - update the value in the current loc.
    All new values funnel through here.  Check delete_here for
    deletion.   Force is implied here, it gets checked higher. */
-static int store_here(struct dbengine *db, const char *val, size_t vallen)
+static int store_here(struct dbengine *db, struct skiploc *loc,
+		      const char *val, size_t vallen)
 {
-    struct skiploc *loc = &db->loc;
     struct skiprecord newrecord;
     uint8_t level = 0;
     uint8_t i;
@@ -1112,7 +1103,7 @@ static int store_here(struct dbengine *db, const char *val, size_t vallen)
 	loc->forwardloc[i] = newrecord.offset;
 
     /* update all backpointers */
-    r = stitch(db, level, newrecord.offset);
+    r = stitch(db, loc, level, newrecord.offset);
     if (r) return r;
 
     /* update header to know details of new record */
@@ -1125,9 +1116,8 @@ static int store_here(struct dbengine *db, const char *val, size_t vallen)
 }
 
 /* delete a record */
-static int delete_here(struct dbengine *db)
+static int delete_here(struct dbengine *db, struct skiploc *loc)
 {
-    struct skiploc *loc = &db->loc;
     struct skiprecord newrecord;
     struct skiprecord nextrecord;
     int r;
@@ -1155,7 +1145,7 @@ static int delete_here(struct dbengine *db)
 
     /* update all backpointers right up to the old record's
      * level, so that they all point past */
-    r = stitch(db, loc->record.level, loc->backloc[0]);
+    r = stitch(db, loc, loc->record.level, loc->backloc[0]);
     if (r) return r;
 
     /* update location */
@@ -1249,6 +1239,16 @@ static int newtxn(struct dbengine *db, struct txn **tidptr)
     return 0;
 }
 
+static void loc_init(struct skiploc *loc)
+{
+    memset(loc, 0, sizeof(struct skiploc));
+}
+
+static void loc_free(struct skiploc *loc)
+{
+    buf_free(&loc->keybuf);
+}
+
 static void dispose_db(struct dbengine *db)
 {
     if (!db) return;
@@ -1259,7 +1259,7 @@ static void dispose_db(struct dbengine *db)
 	mappedfile_close(&db->mf);
     }
 
-    buf_free(&db->loc.keybuf);
+    loc_free(&db->dbloc);
 
     free(db);
 }
@@ -1431,6 +1431,7 @@ static int myfetch(struct dbengine *db,
 	    struct txn **tidptr, int fetchnext)
 {
     int r = 0;
+    struct skiploc *loc = &db->dbloc;
 
     assert(db);
     if (datalen) assert(data);
@@ -1457,20 +1458,20 @@ static int myfetch(struct dbengine *db,
 	if (r) return r;
     }
 
-    r = find_loc(db, key, keylen);
+    r = set_loc(db, loc, key, keylen);
     if (r) goto done;
 
     if (fetchnext) {
-	r = advance_loc(db);
+	r = advance_loc(db, loc);
 	if (r) goto done;
     }
 
-    if (foundkey) *foundkey = db->loc.keybuf.s;
-    if (foundkeylen) *foundkeylen = db->loc.keybuf.len;
+    if (foundkey) *foundkey = loc->keybuf.s;
+    if (foundkeylen) *foundkeylen = loc->keybuf.len;
 
-    if (!r && db->loc.is_exactmatch) {
-	if (data) *data = VAL(db, &db->loc.record);
-	if (datalen) *datalen = db->loc.record.vallen;
+    if (!r && db->dbloc.is_exactmatch) {
+	if (data) *data = VAL(db, &loc->record);
+	if (datalen) *datalen = loc->record.vallen;
     }
     else {
 	/* we didn't get an exact match */
@@ -1502,7 +1503,7 @@ static int myforeach(struct dbengine *db,
     int need_unlock = 0;
     const char *val;
     size_t vallen;
-    struct buf keybuf = BUF_INITIALIZER;
+    struct skiploc loc;
 
     assert(db);
     assert(cb);
@@ -1527,26 +1528,29 @@ static int myforeach(struct dbengine *db,
 	need_unlock = 1;
     }
 
-    r = find_loc(db, prefix, prefixlen);
+    loc_init(&loc);
+
+    buf_setmap(&loc.keybuf, prefix, prefixlen);
+    r = dblocate(db, &loc);
     if (r) goto done;
 
-    if (!db->loc.is_exactmatch) {
+    if (!loc.is_exactmatch) {
 	/* advance to the first match */
-	r = advance_loc(db);
+	r = advance_loc(db, &loc);
 	if (r) goto done;
     }
 
-    while (db->loc.is_exactmatch) {
+    while (loc.is_exactmatch) {
 	/* does it match prefix? */
 	if (prefixlen) {
-	    if (db->loc.record.keylen < prefixlen) break;
-	    if (db->compar(KEY(db, &db->loc.record), prefixlen, prefix, prefixlen)) break;
+	    if (loc.keybuf.len < prefixlen) break;
+	    if (db->compar(loc.keybuf.s, prefixlen, prefix, prefixlen)) break;
 	}
 
-	val = VAL(db, &db->loc.record);
-	vallen = db->loc.record.vallen;
+	val = VAL(db, &loc.record);
+	vallen = loc.record.vallen;
 
-	if (!goodp || goodp(rock, db->loc.keybuf.s, db->loc.keybuf.len,
+	if (!goodp || goodp(rock, loc.keybuf.s, loc.keybuf.len,
 				  val, vallen)) {
 	    if (!tidptr) {
 		/* release read lock */
@@ -1555,12 +1559,8 @@ static int myforeach(struct dbengine *db,
 		need_unlock = 0;
 	    }
 
-	    /* take a copy of they key - just in case cb does actions on this database
-	     * and clobbers loc */
-	    buf_copy(&keybuf, &db->loc.keybuf);
-
 	    /* make callback */
-	    cb_r = cb(rock, db->loc.keybuf.s, db->loc.keybuf.len,
+	    cb_r = cb(rock, loc.keybuf.s, loc.keybuf.len,
 			    val, vallen);
 	    if (cb_r) break;
 
@@ -1570,20 +1570,16 @@ static int myforeach(struct dbengine *db,
 		if (r) goto done;
 		need_unlock = 1;
 	    }
-
-	    /* should be cheap if we're already here */
-	    r = find_loc(db, keybuf.s, keybuf.len);
-	    if (r) goto done;
 	}
 
 	/* move to the next one */
-	r = advance_loc(db);
+	r = advance_loc(db, &loc);
 	if (r) goto done;
     }
 
  done:
 
-    buf_free(&keybuf);
+    loc_free(&loc);
 
     if (need_unlock) {
 	/* release read lock */
@@ -1601,23 +1597,24 @@ static int skipwrite(struct dbengine *db,
 		     const char *data, size_t datalen,
 		     int force)
 {
-    int r = find_loc(db, key, keylen);
+    struct skiploc *loc = &db->dbloc;
+    int r = set_loc(db, loc, key, keylen);
     if (r) return r;
 
     /* could be a delete or a replace */
-    if (db->loc.is_exactmatch) {
-	if (!data) return delete_here(db);
+    if (loc->is_exactmatch) {
+	if (!data) return delete_here(db, loc);
 	if (!force) return CYRUSDB_EXISTS;
 	/* unchanged?  Save the IO */
 	if (!db->compar(data, datalen,
-			VAL(db, &db->loc.record),
-			db->loc.record.vallen))
+			VAL(db, &loc->record),
+			loc->record.vallen))
 	    return 0;
-	return store_here(db, data, datalen);
+	return store_here(db, loc, data, datalen);
     }
 
     /* only create if it's not a delete, obviously */
-    if (data) return store_here(db, data, datalen);
+    if (data) return store_here(db, loc, data, datalen);
 
     /* must be a delete - are we forcing? */
     if (!force) return CYRUSDB_NOTFOUND;
@@ -1702,8 +1699,7 @@ static int myabort(struct dbengine *db, struct txn *tid)
     /* recovery will clean up */
     r = recovery1(db, NULL);
 
-    buf_free(&db->loc.keybuf);
-    memset(&db->loc, 0, sizeof(struct skiploc));
+    loc_free(&db->dbloc);
 
     unlock(db);
 
@@ -1816,7 +1812,7 @@ static int mycheckpoint(struct dbengine *db)
 
     /* gotta clean it all up */
     mappedfile_close(&db->mf);
-    buf_free(&db->loc.keybuf);
+    loc_free(&db->dbloc);
 
     *db = *cr.db;
     free(cr.db); /* leaked? */
@@ -2096,7 +2092,7 @@ static int recovery2(struct dbengine *db, int *count)
 
     /* gotta clean it all up */
     mappedfile_close(&db->mf);
-    buf_free(&db->loc.keybuf);
+    loc_free(&db->dbloc);
 
     *db = *newdb;
     free(newdb); /* leaked? */
