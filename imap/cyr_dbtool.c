@@ -108,7 +108,16 @@ static int printer_cb(void *rock __attribute__((unused)),
     const char *key, size_t keylen,
     const char *data, size_t datalen)
 {
-    printf("%.*s\t%.*s\n", (int)keylen, key, (int)datalen, data);
+    struct iovec io[4];
+    io[0].iov_base = (char *)key;
+    io[0].iov_len = keylen;
+    io[1].iov_base = "\t";
+    io[1].iov_len = 1;
+    io[2].iov_base = (char *)data;
+    io[2].iov_len = datalen;
+    io[3].iov_base = "\n";
+    io[3].iov_len = 1;
+    writev(fileno(stdout), io, 4);
     return 0;
 }
 
