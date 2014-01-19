@@ -48,6 +48,7 @@
 #include <unistd.h>
 #endif
 
+#include "exitcodes.h"
 #include "retry.h"
 #include "xmalloc.h"
 
@@ -114,7 +115,8 @@ EXPORTED ssize_t retry_writev(int fd, const struct iovec *srciov, int iovcnt)
     int i;
     ssize_t n;
     size_t written = 0;
-    struct iovec *iov, *baseiov;
+    size_t len = 0;
+    struct iovec *iov, *baseiov = NULL;
     static int iov_max =
 #ifdef MAXIOV
 	MAXIOV
@@ -130,6 +132,17 @@ EXPORTED ssize_t retry_writev(int fd, const struct iovec *srciov, int iovcnt)
     if (!iovcnt)
 	return 0;
 
+    for (i = 0; i < iovcnt; i++) {
+	len += srciov[i].iov_len;
+    }
+
+    n = written = writev(fd, srciov, iovcnt > iov_max ? iov_max : iovcnt);
+
+    /* did we get lucky and write it all? */
+    if (written == len)
+	return written;
+
+    /* oh well, welcome to the slow path - we have copies */
     baseiov = iov = (struct iovec *)xmalloc(iovcnt * sizeof(struct iovec));
     for (i = 0; i < iovcnt; i++) {
 	iov[i].iov_base = srciov[i].iov_base;
@@ -137,12 +150,17 @@ EXPORTED ssize_t retry_writev(int fd, const struct iovec *srciov, int iovcnt)
     }
 
     for (;;) {
-	while (iovcnt && iov[0].iov_len == 0) {
+	for (i = 0; i < iovcnt; i++) {
+	    if (iov[i].iov_len > (size_t)n) {
+		iov[i].iov_base += n;
+		iov[i].iov_len -= n;
+		break;
+	    }
+	    n -= iov[i].iov_len;
 	    iov++;
 	    iovcnt--;
+	    if (!iovcnt) fatal("ran out of iov", EC_SOFTWARE);
 	}
-
-	if (!iovcnt) break;
 
 	n = writev(fd, iov, iovcnt > iov_max ? iov_max : iovcnt);
 	if (n == -1) {
@@ -157,17 +175,7 @@ EXPORTED ssize_t retry_writev(int fd, const struct iovec *srciov, int iovcnt)
 
 	written += n;
 
-	for (i = 0; i < iovcnt; i++) {
-	    if (iov[i].iov_len > (size_t)n) {
-		iov[i].iov_base = (char *)iov[i].iov_base + n;
-		iov[i].iov_len -= n;
-		break;
-	    }
-	    n -= iov[i].iov_len;
-	    iov[i].iov_len = 0;
-	}
-
-	if (i == iovcnt) break;
+	if (written == len) break;
     }
 
     free(baseiov);
