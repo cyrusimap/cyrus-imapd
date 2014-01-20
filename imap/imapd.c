@@ -2213,6 +2213,8 @@ static void cmdloop(void)
 		syslog(LOG_NOTICE, "cmdtimer: '%s' '%s' '%s' '%f' '%f' '%f'",
 		    imapd_userid ? imapd_userid : "<none>", cmdname, mboxname,
 		    cmdtime, nettime, cmdtime + nettime);
+		/* XXX - this would explode horribly if ptr is pointing into zbuf */
+		syslog(LOG_NOTICE, "buf: %.*s", (int)(imapd_in->ptr - imapd_in->buf), imapd_in->buf);
 	    }
 	}
 	continue;
