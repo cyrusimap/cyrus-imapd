@@ -1505,9 +1505,9 @@ done:
 
 /* XXX - use known record shape for offset to value? */
 struct recptr {
-    const char *key;
+    size_t keyoff;
     size_t keylen;
-    const char *val;
+    size_t valoff;
     size_t vallen;
 };
 
@@ -1522,6 +1522,7 @@ static int myforeach(struct dbengine *db,
 {
     int r = 0, cb_r = 0;
     const char *val;
+    const char *base;
     size_t vallen;
     struct skiploc loc;
     int i, nrec = 0;
@@ -1571,9 +1572,10 @@ static int myforeach(struct dbengine *db,
 		if (r) goto done;
 	    }
 	    for (i = 0; i < nrec; i++) {
-		buf_setmap(&loc.keybuf, rec[i].key, rec[i].keylen);
+		base = BASE(db);
+		buf_setmap(&loc.keybuf, base + rec[i].keyoff, rec[i].keylen);
 		/* make callback */
-		cb_r = cb(rock, loc.keybuf.s, loc.keybuf.len, rec[i].val, rec[i].vallen);
+		cb_r = cb(rock, loc.keybuf.s, loc.keybuf.len, base + rec[i].valoff, rec[i].vallen);
 		if (cb_r) goto done;
 		/* check that the file hasn't changed */
 		if (loc.end != db->end || loc.generation != db->header.generation) {
@@ -1596,9 +1598,9 @@ static int myforeach(struct dbengine *db,
 		if (cb_r) goto done;
 	    }
 	    else {
-		rec[nrec].key = KEY(db, &loc.record);
+		rec[nrec].keyoff = loc.record.keyoffset;
 		rec[nrec].keylen = loc.record.keylen;
-		rec[nrec].val = VAL(db, &loc.record);
+		rec[nrec].valoff = loc.record.valoffset;
 		rec[nrec].vallen = loc.record.vallen;
 		nrec++;
 	    }
@@ -1608,9 +1610,10 @@ static int myforeach(struct dbengine *db,
 		if (r) goto done;
 
 		for (i = 0; i < nrec; i++) {
-		    buf_setmap(&loc.keybuf, rec[i].key, rec[i].keylen);
+		    base = BASE(db);
+		    buf_setmap(&loc.keybuf, base + rec[i].keyoff, rec[i].keylen);
 		    /* make callback */
-		    cb_r = cb(rock, loc.keybuf.s, loc.keybuf.len, rec[i].val, rec[i].vallen);
+		    cb_r = cb(rock, loc.keybuf.s, loc.keybuf.len, base + rec[i].valoff, rec[i].vallen);
 		    if (cb_r) goto done;
 		    /* check that the file hasn't changed */
 		    if (loc.end != db->end || loc.generation != db->header.generation)
