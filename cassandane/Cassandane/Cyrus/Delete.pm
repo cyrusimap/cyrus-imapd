@@ -91,8 +91,6 @@ sub check_folder_ondisk
 
     $self->assert_not_null($dir,
 			   "directory missing for $display_folder");
-    $self->assert( -f "$dir/cyrus.cache",
-		  "cyrus.cache missing for $display_folder");
     $self->assert( -f "$dir/cyrus.header",
 		  "cyrus.header missing for $display_folder");
     $self->assert( -f "$dir/cyrus.index",
