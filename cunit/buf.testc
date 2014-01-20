@@ -5,6 +5,7 @@
 #include "util.h"
 #include "retry.h"
 #include "map.h"
+#include "util.h"
 #include <sys/mman.h>
 
 static void test_simple(void)

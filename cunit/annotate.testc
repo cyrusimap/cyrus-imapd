@@ -5,6 +5,7 @@
 #include "assert.h"
 #include "xmalloc.h"
 #include "retry.h"
+#include "util.h"
 #include "imap/global.h"
 #include "libcyr_cfg.h"
 #include "imap/annotate.h"

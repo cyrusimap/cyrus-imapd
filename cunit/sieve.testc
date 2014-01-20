@@ -16,6 +16,7 @@
 #include "retry.h"
 #include "imap/spool.h"
 #include "map.h"
+#include "util.h"
 #include "cyrusdb.h"
 #include "libcyr_cfg.h"
 #include "libconfig.h"
