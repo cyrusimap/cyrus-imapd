@@ -44,7 +44,7 @@
 /*
  * TODO:
  * - Implement localized names and "lang" parameter
- * - Implement action=find with sub-string match anywhere (not just prefix)?
+ * - Implement action=find with case-insensitive match - strncasecmp()?
  */
 
 #include <config.h>
@@ -82,14 +82,10 @@ static int meth_get(struct transaction_t *txn, void *params);
 static int action_capa(struct transaction_t *txn, struct hash_table *params);
 static int action_list(struct transaction_t *txn, struct hash_table *params);
 static int action_get(struct transaction_t *txn, struct hash_table *params);
-static int action_get_all(struct transaction_t *txn,
-			  struct mime_type_t *mime, icaltimetype *truncate);
 static int action_expand(struct transaction_t *txn, struct hash_table *params);
 static int json_response(int code, struct transaction_t *txn, json_t *root,
 			 char **resp);
 static int json_error_response(struct transaction_t *txn, const char *err);
-static const char *begin_ical(struct buf *buf);
-static void end_ical(struct buf *buf);
 
 struct observance {
     const char *name;
@@ -116,15 +112,15 @@ static struct mime_type_t tz_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { "text/calendar; charset=utf-8", "2.0", "ics", "ifb",
       (char* (*)(void *)) &icalcomponent_as_ical_string_r,
-      NULL, NULL, &begin_ical, &end_ical
+      NULL, NULL, NULL, NULL
     },
     { "application/calendar+xml; charset=utf-8", NULL, "xcs", "xfb",
       (char* (*)(void *)) &icalcomponent_as_xcal_string,
-      NULL, NULL, &begin_xcal, &end_xcal
+      NULL, NULL, NULL, NULL
     },
     { "application/calendar+json; charset=utf-8", NULL, "jcs", "jfb",
       (char* (*)(void *)) &icalcomponent_as_jcal_string,
-      NULL, NULL, &begin_jcal, &end_jcal
+      NULL, NULL, NULL, NULL
     },
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
@@ -274,29 +270,29 @@ static int action_capa(struct transaction_t *txn,
 	root = json_pack("{s:i"				/* version */
 			 "  s:{s:s s:{s:b s:b} s:[]}"	/* info */
 			 "  s:["			/* actions */
-			 "    {s:s s:[]}"		/* capabilities */
-			 "    {s:s s:["			/* list */
-//			 "      {s:s s:b s:b}"
-			 "      {s:s s:b s:b}"
-			 "      {s:s s:b s:b}"
+			 "    {s:s s:[]}"		/*   capabilities */
+			 "    {s:s s:["			/*   list */
+//			 "      {s:s s:b s:b}"		/*     lang */
+			 "      {s:s s:b s:b}"		/*     tzid */
+			 "      {s:s s:b s:b}"		/*     changedsince */
 			 "    ]}"
-			 "    {s:s s:["			/* get */
-//			 "      {s:s s:b s:b}"
-			 "      {s:s s:b s:b}"
-			 "      {s:s s:b s:b s:[s s s]}"
-			 "      {s:s s:b s:b}"
-			 "      {s:s s:b s:b s:[b b]}"
+			 "    {s:s s:["			/*   get */
+//			 "      {s:s s:b s:b}"		/*     lang */
+			 "      {s:s s:b s:b}"		/*     tzid */
+			 "      {s:s s:b s:b s:[s s s]}"/*     format */
+			 "      {s:s s:b s:b}"		/*     truncate */
+			 "      {s:s s:b s:b s:[b b]}"	/*     substitute-alias */
 			 "    ]}"
-			 "    {s:s s:["			/* expand */
-//			 "      {s:s s:b s:b}"
-			 "      {s:s s:b s:b}"
-			 "      {s:s s:b s:b}"
-			 "      {s:s s:b s:b}"
-			 "      {s:s s:b s:b}"
+			 "    {s:s s:["			/*   expand */
+//			 "      {s:s s:b s:b}"		/*     lang */
+			 "      {s:s s:b s:b}"		/*     tzid */
+			 "      {s:s s:b s:b}"		/*     changedsince */
+			 "      {s:s s:b s:b}"		/*     start */
+			 "      {s:s s:b s:b}"		/*     end */
 			 "    ]}"
-			 "    {s:s s:["			/* find */
-//			 "      {s:s s:b s:b}"
-			 "      {s:s s:b s:b}"
+			 "    {s:s s:["			/*   find */
+//			 "      {s:s s:b s:b}"		/*     lang */
+			 "      {s:s s:b s:b}"		/*     name */
 			 "    ]}"
 			 "  ]}",
 			 "version", 1,
@@ -716,9 +712,6 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
 	    return json_error_response(txn, "invalid-truncate");
     }
 
-    /* Handle tzid=* separately */
-    if (!strcmp(tzid, "*")) return action_get_all(txn, mime, &truncate);
-
     /* Get info record from the database */
     if ((r = zoneinfo_lookup(tzid, &zi)))
 	return (r == CYRUSDB_NOTFOUND ? HTTP_NOT_FOUND : HTTP_SERVER_ERROR);
@@ -828,174 +821,6 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
     write_body(precond, txn, data, datalen);
 
     if (data) free(data);
-
-    return 0;
-}
-
-
-static const char *begin_ical(struct buf *buf)
-{
-    /* Begin iCalendar stream */
-    buf_setcstr(buf, "BEGIN:VCALENDAR\r\n");
-    buf_printf(buf, "PRODID:-//CyrusIMAP.org/Cyrus %s//EN\r\n",
-	       cyrus_version());
-    buf_appendcstr(buf, "VERSION:2.0\r\n");
-
-    return "";
-}
-
-static void end_ical(struct buf *buf)
-{
-    /* End iCalendar stream */
-    buf_setcstr(buf, "END:VCALENDAR\r\n");
-}
-
-struct get_rock {
-    struct transaction_t *txn;
-    struct mime_type_t *mime;
-    icaltimetype *truncate;
-    const char *sep;
-    unsigned count;
-};
-
-static int get_cb(const char *tzid, int tzidlen,
-		  struct zoneinfo *zi __attribute__((unused)),
-		  void *rock)
-{
-    struct get_rock *grock = (struct get_rock *) rock;
-    struct buf *pathbuf = &grock->txn->buf;
-    struct mime_type_t *mime = grock->mime;
-    const char *path, *proto, *host, *msg_base = NULL;
-    unsigned long msg_size = 0;
-    icalcomponent *ical, *vtz;
-    icalproperty *prop;
-    int fd = -1;
-    char *tz_str;
-
-    buf_reset(pathbuf);
-    buf_printf(pathbuf, "%s%s/%.*s.ics",
-	       config_dir, FNAME_ZONEINFODIR, tzidlen, tzid);
-    path = buf_cstring(pathbuf);
-
-    /* Open, mmap, and parse the file */
-    if ((fd = open(path, O_RDONLY)) == -1) return HTTP_SERVER_ERROR;
-    map_refresh(fd, 1, &msg_base, &msg_size, MAP_UNKNOWN_LEN, path, NULL);
-    if (!msg_base) return HTTP_SERVER_ERROR;
-    ical = icalparser_parse_string(msg_base);
-    map_free(&msg_base, &msg_size);
-    close(fd);
-	    
-    if (grock->count++ && *grock->sep) {
-	/* Add separator, if necessary */
-	struct buf *buf = &grock->txn->resp_body.payload;
-
-	buf_reset(buf);
-	buf_printf_markup(buf, 0, grock->sep);
-	write_body(0, grock->txn, buf_cstring(buf), buf_len(buf));
-    }
-
-    vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
-    prop = icalcomponent_get_first_property(vtz, ICAL_TZID_PROPERTY);
-
-    /* Start constructing TZURL */
-    buf_reset(pathbuf);
-    http_proto_host(grock->txn->req_hdrs, &proto, &host);
-    buf_printf(pathbuf, "%s://%s%s?action=get&tzid=%.*s",
-	       proto, host, namespace_timezone.prefix, tzidlen, tzid);
-    if (mime != tz_mime_types) {
-	buf_printf(pathbuf, "&format=%.*s",
-		   (int) strcspn(mime->content_type, ";"),
-		   mime->content_type);
-    }
-
-    if (!icaltime_is_null_time(*grock->truncate)) {
-	/* Truncate the VTIMEZONE */
-	truncate_vtimezone(vtz, grock->truncate);
-
-	buf_printf(pathbuf, "&truncate=%d", grock->truncate->year);
-    }
-
-    /* Set TZURL property */
-    prop = icalproperty_new_tzurl(buf_cstring(pathbuf));
-    icalcomponent_add_property(vtz, prop);
-
-    /* Output the (converted) VTIMEZONE component */
-    tz_str = mime->to_string(vtz);
-    write_body(0, grock->txn, tz_str, strlen(tz_str));
-    free(tz_str);
-
-    icalcomponent_free(ical);
-
-    return 0;
-}
-
-
-static int action_get_all(struct transaction_t *txn,
-			  struct mime_type_t *mime, icaltimetype *truncate)
-{
-    int r, precond;
-    struct resp_body_t *resp_body = &txn->resp_body;
-    struct zoneinfo info;
-    time_t lastmod;
-    struct buf *buf = &resp_body->payload;
-    struct get_rock grock = { txn, mime, truncate, NULL, 0 };
-
-    /* Get info record from the database */
-    if ((r = zoneinfo_lookup_info(&info))) return HTTP_SERVER_ERROR;
-
-    /* Generate ETag & Last-Modified from info record */
-    assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "%u-%ld", strhash(info.data->s), info.dtstamp);
-    lastmod = info.dtstamp;
-    freestrlist(info.data);
-
-    /* Check any preconditions */
-    precond = check_precond(txn, NULL, buf_cstring(&txn->buf), lastmod);
-
-    switch (precond) {
-    case HTTP_OK:
-    case HTTP_NOT_MODIFIED:
-	/* Fill in ETag, Last-Modified, and Expires */
-	resp_body->etag = buf_cstring(&txn->buf);
-	resp_body->lastmod = lastmod;
-	resp_body->maxage = 86400;  /* 24 hrs */
-	txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;
-	if (httpd_userid) txn->flags.cc |= CC_PUBLIC;
-
-	if (precond != HTTP_NOT_MODIFIED) break;
-
-    default:
-	/* We failed a precondition - don't perform the request */
-	resp_body->type = NULL;
-	return precond;
-    }
-
-    /* Setup for chunked response */
-    txn->flags.te |= TE_CHUNKED;
-    txn->flags.vary |= VARY_ACCEPT;
-    txn->resp_body.type = mime->content_type;
-
-    /* Short-circuit for HEAD request */
-    if (txn->meth == METH_HEAD) {
-	response_header(HTTP_OK, txn);
-	return 0;
-    }
-
-    /* iCalendar data in response should not be transformed */
-    txn->flags.cc |= CC_NOTRANSFORM;
-
-    /* Begin (converted) iCalendar stream */
-    grock.sep = mime->begin_stream(buf);
-    write_body(HTTP_OK, txn, buf_cstring(buf), buf_len(buf));
-
-    zoneinfo_find(NULL, 1 /* tzid_only */, 0, &get_cb, &grock);
-
-    /* End (converted) iCalendar stream */
-    mime->end_stream(buf);
-    write_body(0, txn, buf_cstring(buf), buf_len(buf));
-
-    /* End of output */
-    write_body(0, txn, NULL, 0);
 
     return 0;
 }
