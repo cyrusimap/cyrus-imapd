@@ -1773,7 +1773,7 @@ EXPORTED int mboxlist_setacl(struct namespace *namespace, const char *name,
 		mode = ACL_MODE_REMOVE;
 	    }
 	    /* do not allow non-admin user to remove the admin rights from mailbox owner */
-	    if (!isadmin && isidentifiermbox) {
+	    if (!isadmin && isidentifiermbox && mode != ACL_MODE_ADD) {
 		int has_admin_rights = mboxlist_have_admin_rights(rights);
 		if ((has_admin_rights && mode == ACL_MODE_REMOVE) ||
 		   (!has_admin_rights && mode != ACL_MODE_REMOVE)) {
