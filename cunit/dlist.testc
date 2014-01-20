@@ -380,4 +380,31 @@ static void test_splat_nonlist(void)
     buf_free(&b2);
 }
 
+static void test_deepstructure(void)
+{
+    struct dlist *dl = NULL;
+    struct dlist *di = NULL;
+    struct buf b = BUF_INITIALIZER;
+    struct buf b2 = BUF_INITIALIZER;
+    int r;
+
+    buf_setcstr(&b, "%(toplevel %(sub thing) ANOTHER (value is %(list with interesting things) (in it)) ExTrA ExTrA READ \"all about it\" INCLUDING 123456)");
+
+    r = dlist_parsemap(&dl, 0, b.s, b.len);
+
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NOT_NULL(dl);
+
+    di = dlist_getchild(dl, "INCLUDING");
+    CU_ASSERT_EQUAL(dlist_num(di), 123456);
+
+    dlist_printbuf(dl, 0, &b2);
+
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&b2), buf_cstring(&b));
+
+    dlist_free(&dl);
+    buf_free(&b);
+    buf_free(&b2);
+}
+
 /* vim: set ft=c: */
