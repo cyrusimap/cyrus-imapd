@@ -282,7 +282,6 @@ static int action_capa(struct transaction_t *txn,
 			 "      {s:s s:b s:b}"		/*     tzid */
 			 "      {s:s s:b s:b s:[s s s]}"/*     format */
 			 "      {s:s s:b s:b}"		/*     truncate */
-			 "      {s:s s:b s:b s:[b b]}"	/*     substitute-alias */
 			 "    ]}"
 			 "    {s:s s:["			/*   expand */
 //			 "      {s:s s:b s:b}"		/*     lang */
@@ -314,8 +313,6 @@ static int action_capa(struct transaction_t *txn,
 			 "values", "text/calendar", "application/calendar+xml",
 			 "application/calendar+json",
 			 "name", "truncate", "required", 0, "multi", 0,
-			 "name", "substitute-alias", "required", 0, "multi", 0,
-			 "values", 1, 0,
 
 			 "name", "expand", "parameters",
 //			 "name", "lang", "required", 0, "multi", 1,
@@ -672,7 +669,7 @@ static void truncate_vtimezone(icalcomponent *vtz, icaltimetype *truncate)
 /* Perform a get action */
 static int action_get(struct transaction_t *txn, struct hash_table *params)
 {
-    int r, precond, substitute = 0;
+    int r, precond;
     struct strlist *param;
     const char *tzid;
     struct zoneinfo zi;
@@ -716,12 +713,6 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
     /* Get info record from the database */
     if ((r = zoneinfo_lookup(tzid, &zi)))
 	return (r == CYRUSDB_NOTFOUND ? HTTP_NOT_FOUND : HTTP_SERVER_ERROR);
-
-    if (zi.type == ZI_LINK) {
-	/* Check for substitute-alias */
-	param = hash_lookup("substitute-alias", params);
-	if (param && !strcmp(param->s, "true")) substitute = 1;
-    }
 
     /* Generate ETag & Last-Modified from info record */
     assert(!buf_len(&txn->buf));
@@ -778,12 +769,7 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
 
 	vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
 	prop = icalcomponent_get_first_property(vtz, ICAL_TZID_PROPERTY);
-
-	if (substitute) {
-	    /* Substitute TZID alias */
-	    icalproperty_set_tzid(prop, tzid);
-	}
-	else tzid = icalproperty_get_tzid(prop);
+	tzid = icalproperty_get_tzid(prop);
 
 	/* Start constructing TZURL */
 	buf_reset(&pathbuf);
