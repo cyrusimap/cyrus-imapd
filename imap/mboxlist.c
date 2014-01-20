@@ -256,20 +256,6 @@ static int mboxlist_read(const char *name, const char **dataptr, size_t *datalen
     /* never get here */
 }
 
-static char *_parse_acl(struct dlist *di)
-{
-    struct buf buf = BUF_INITIALIZER;
-    struct dlist *ai;
-
-    /* gotta make it all tabby again */
-    for (ai = di->head; ai; ai = ai->next) {
-	buf_printf(&buf, "%s\t", ai->name);
-	buf_printf(&buf, "%s\t", dlist_cstring(ai));
-    }
-
-    return buf_release(&buf);
-}
-
 EXPORTED uint32_t mboxlist_string_to_mbtype(const char *string)
 {
     uint32_t mbtype = 0;
@@ -305,6 +291,55 @@ EXPORTED uint32_t mboxlist_string_to_mbtype(const char *string)
     return mbtype;
 }
 
+struct parseentry_rock {
+    struct mboxlist_entry *mbentry;
+    struct buf aclbuf;
+    int doingacl;
+};
+
+int parseentry_cb(int type, struct dlistsax_state *s)
+{
+    struct parseentry_rock *rock = (struct parseentry_rock *)s->rock;
+
+    switch(type) {
+    case DLISTSAX_KVLISTSTART:
+	if (!strcmp(buf_cstring(&s->kbuf), "A")) {
+	    rock->doingacl = 1;
+	}
+	break;
+    case DLISTSAX_KVLISTEND:
+	rock->doingacl = 0;
+	break;
+    case DLISTSAX_STRING:
+	if (rock->doingacl) {
+	    buf_printf(&rock->aclbuf, "%s\t%s\t", buf_cstring(&s->kbuf), buf_cstring(&s->buf));
+	}
+	else {
+	    const char *key = buf_cstring(&s->kbuf);
+	    if (!strcmp(key, "I")) {
+		rock->mbentry->uniqueid = buf_release(&s->buf);
+	    }
+	    else if (!strcmp(key, "M")) {
+		rock->mbentry->mtime = atoi(buf_cstring(&s->buf));
+	    }
+	    else if (!strcmp(key, "P")) {
+		rock->mbentry->partition = buf_release(&s->buf);
+	    }
+	    else if (!strcmp(key, "S")) {
+		rock->mbentry->server = buf_release(&s->buf);
+	    }
+	    else if (!strcmp(key, "T")) {
+		rock->mbentry->mbtype = mboxlist_string_to_mbtype(buf_cstring(&s->buf));
+	    }
+	    else if (!strcmp(key, "V")) {
+		rock->mbentry->uidvalidity = atoi(buf_cstring(&s->buf));
+	    }
+	}
+    }
+
+    return 0;
+}
+
 /*
  * parse a record read from the mailboxes.db into its parts.
  *
@@ -338,39 +373,10 @@ static int mboxlist_parse_entry(mbentry_t **mbentryptr,
 
     /* check for DLIST mboxlist */
     if (*data == '%') {
-	struct dlist *dl = NULL;
-	struct dlist *di;
-	r = dlist_parsemap(&dl, 0, data, datalen);
-	if (r) goto done;
-	if (!dl) goto done;
-	for (di = dl->head; di; di = di->next) {
-	    switch(di->name[0]) {
-	    case 'A':
-		mbentry->acl = _parse_acl(di);
-		break;
-	    case 'I':
-		mbentry->uniqueid = xstrdupnull(dlist_cstring(di));
-		break;
-	    case 'M':
-		mbentry->mtime = dlist_num(di);
-		break;
-	    case 'P':
-		mbentry->partition = xstrdupnull(dlist_cstring(di));
-		break;
-	    case 'S':
-		mbentry->server = xstrdupnull(dlist_cstring(di));
-		break;
-	    case 'T':
-		mbentry->mbtype = mboxlist_string_to_mbtype(dlist_cstring(di));
-		break;
-	    case 'V':
-		mbentry->uidvalidity = dlist_num(di);
-		break;
-	    }
-	}
-	dlist_free(&dl);
-
-	r = 0;
+	struct parseentry_rock rock;
+	memset(&rock, 0, sizeof(struct parseentry_rock));
+	rock.mbentry = mbentry;
+	r = dlist_parsesax(data, datalen, 0, parseentry_cb, &rock);
 	goto done;
     }
 
