@@ -293,7 +293,7 @@ EXPORTED uint32_t mboxlist_string_to_mbtype(const char *string)
 
 struct parseentry_rock {
     struct mboxlist_entry *mbentry;
-    struct buf aclbuf;
+    struct buf *aclbuf;
     int doingacl;
 };
 
@@ -312,7 +312,10 @@ int parseentry_cb(int type, struct dlistsax_state *s)
 	break;
     case DLISTSAX_STRING:
 	if (rock->doingacl) {
-	    buf_printf(&rock->aclbuf, "%s\t%s\t", buf_cstring(&s->kbuf), buf_cstring(&s->buf));
+	    buf_append(rock->aclbuf, &d->kbuf);
+	    buf_putc(rock->aclbuf, '\t');
+	    buf_append(rock->aclbuf, &d->buf);
+	    buf_putc(rock->aclbuf, '\t');
 	}
 	else {
 	    const char *key = buf_cstring(&s->kbuf);
@@ -356,6 +359,7 @@ static int mboxlist_parse_entry(mbentry_t **mbentryptr,
 				const char *name, size_t namelen,
 				const char *data, size_t datalen)
 {
+    static struct buf aclbuf;
     int r = IMAP_MAILBOX_BADFORMAT;
     char *freeme = NULL;
     char **target;
@@ -376,8 +380,10 @@ static int mboxlist_parse_entry(mbentry_t **mbentryptr,
 	struct parseentry_rock rock;
 	memset(&rock, 0, sizeof(struct parseentry_rock));
 	rock.mbentry = mbentry;
+	rock.aclbuf = &aclbuf;
+	aclbuf.len = 0;
 	r = dlist_parsesax(data, datalen, 0, parseentry_cb, &rock);
-	if (!r) mbentry->acl = buf_release(&rock.aclbuf);
+	if (!r) mbentry->acl = buf_newcstring(&aclbuf);
 	goto done;
     }
 
