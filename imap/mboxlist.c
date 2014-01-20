@@ -377,6 +377,7 @@ static int mboxlist_parse_entry(mbentry_t **mbentryptr,
 	memset(&rock, 0, sizeof(struct parseentry_rock));
 	rock.mbentry = mbentry;
 	r = dlist_parsesax(data, datalen, 0, parseentry_cb, &rock);
+	if (!r) mbentry->acl = buf_release(&rock.aclbuf);
 	goto done;
     }
 
