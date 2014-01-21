@@ -584,7 +584,7 @@ static int read_onerecord(struct dbengine *db, size_t offset,
     const char *base;
     int i;
 
-    memset(record, 0, sizeof(struct skiprecord));
+    *record = (struct skiprecord){0};
 
     if (!offset) return 0;
 
