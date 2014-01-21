@@ -668,7 +668,7 @@ static int read_skipdelete(struct dbengine *db, size_t offset,
     r = read_onerecord(db, offset, record);
     if (r) return r;
 
-    while (record->type == DELETE)
+    if (record->type == DELETE)
 	r = read_onerecord(db, record->nextloc[0], record);
 
     return r;
