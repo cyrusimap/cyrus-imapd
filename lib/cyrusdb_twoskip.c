@@ -1047,7 +1047,6 @@ static int advance_loc(struct dbengine *db, struct skiploc *loc)
 static int stitch(struct dbengine *db, struct skiploc *loc, uint8_t maxlevel, size_t newoffset)
 {
     struct skiprecord oldrecord;
-    uint8_t tolevel;
     uint8_t i;
     int r;
 
@@ -1061,8 +1060,7 @@ static int stitch(struct dbengine *db, struct skiploc *loc, uint8_t maxlevel, si
 	/* always getting higher */
 	assert(oldrecord.level > level);
 
-	tolevel = oldrecord.level < maxlevel ? oldrecord.level : maxlevel;
-	for (i = level; i < tolevel; i++)
+	for (i = level; i < maxlevel; i++)
 	    _setloc(db, &oldrecord, i, loc->forwardloc[i]);
 
 	r = rewrite_record(db, &oldrecord);
