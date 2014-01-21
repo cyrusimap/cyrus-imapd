@@ -267,12 +267,6 @@
 
 /********** TUNING *************/
 
-/* Number of records to read ahead in read-only foreach.  In the case where
- * the callback isn't changing anything, this means we can process all those
- * records without locking again.  Note that we don't notice changes made in
- * other processes during that time.  Set to 1 for no readahead.  */
-#define FOREACH_READAHEAD 1024
-
 /* don't bother rewriting if the database has less than this much "new" data */
 #define MINREWRITE 16834
 /* don't bother rewriting if less than this ratio is dirty (50%) */
@@ -283,7 +277,6 @@
 #define MAXLEVEL 31
 /* should be 0.5 for binary search semantics */
 #define PROB 0.5
-
 
 /* format specifics */
 #undef VERSION /* defined in config.h */
@@ -1497,14 +1490,6 @@ done:
     return r;
 }
 
-/* XXX - use known record shape for offset to value? */
-struct recptr {
-    const char *key;
-    size_t keylen;
-    const char *val;
-    size_t vallen;
-};
-
 /* foreach allows for subsidary mailbox operations in 'cb'.
    if there is a txn, 'cb' must make use of it.
 */
@@ -1515,16 +1500,14 @@ static int myforeach(struct dbengine *db,
 		     struct txn **tidptr)
 {
     int r = 0, cb_r = 0;
+    int need_unlock = 0;
     const char *val;
     size_t vallen;
     struct skiploc loc;
-    int i, nrec = 0;
-    struct recptr rec[FOREACH_READAHEAD];
 
     assert(db);
     assert(cb);
     if (prefixlen) assert(prefix);
-    if (!prefix) prefix = "";
 
     /* Hacky workaround:
      *
@@ -1542,6 +1525,7 @@ static int myforeach(struct dbengine *db,
 	/* grab a r lock */
 	r = read_lock(db);
 	if (r) return r;
+	need_unlock = 1;
     }
 
     loc_init(&loc);
@@ -1556,26 +1540,11 @@ static int myforeach(struct dbengine *db,
 	if (r) goto done;
     }
 
-    while (1) {
+    while (loc.is_exactmatch) {
 	/* does it match prefix? */
-	if (!loc.is_exactmatch || (prefixlen && (loc.keybuf.len < prefixlen
-	     || db->compar(loc.keybuf.s, prefixlen, prefix, prefixlen)))) {
-	    if (!tidptr) {
-		r = unlock(db);
-		if (r) goto done;
-	    }
-	    for (i = 0; i < nrec; i++) {
-		buf_setmap(&loc.keybuf, rec[i].key, rec[i].keylen);
-		/* make callback */
-		cb_r = cb(rock, loc.keybuf.s, loc.keybuf.len, rec[i].val, rec[i].vallen);
-		if (cb_r) goto done;
-		/* check that the file hasn't changed */
-		if (loc.end != db->end || loc.generation != db->header.generation) {
-		    nrec = 0;
-		    goto next;
-		}
-	    }
-	    goto done;
+	if (prefixlen) {
+	    if (loc.keybuf.len < prefixlen) break;
+	    if (db->compar(loc.keybuf.s, prefixlen, prefix, prefixlen)) break;
 	}
 
 	val = VAL(db, &loc.record);
@@ -1583,38 +1552,23 @@ static int myforeach(struct dbengine *db,
 
 	if (!goodp || goodp(rock, loc.keybuf.s, loc.keybuf.len,
 				  val, vallen)) {
-	    if (tidptr) {
-		/* make callback */
-		cb_r = cb(rock, loc.keybuf.s, loc.keybuf.len,
-				val, vallen);
-		if (cb_r) goto done;
-	    }
-	    else {
-		rec[nrec].key = KEY(db, &loc.record);
-		rec[nrec].keylen = loc.record.keylen;
-		rec[nrec].val = VAL(db, &loc.record);
-		rec[nrec].vallen = loc.record.vallen;
-		nrec++;
-	    }
-
-	    if (nrec == FOREACH_READAHEAD) {
+	    if (!tidptr) {
+		/* release read lock */
 		r = unlock(db);
 		if (r) goto done;
+		need_unlock = 0;
+	    }
 
-		for (i = 0; i < nrec; i++) {
-		    buf_setmap(&loc.keybuf, rec[i].key, rec[i].keylen);
-		    /* make callback */
-		    cb_r = cb(rock, loc.keybuf.s, loc.keybuf.len, rec[i].val, rec[i].vallen);
-		    if (cb_r) goto done;
-		    /* check that the file hasn't changed */
-		    if (loc.end != db->end || loc.generation != db->header.generation)
-			break;
-		}
-		nrec = 0;
+	    /* make callback */
+	    cb_r = cb(rock, loc.keybuf.s, loc.keybuf.len,
+			    val, vallen);
+	    if (cb_r) break;
 
- next:
+	    if (!tidptr) {
+		/* grab a r lock */
 		r = read_lock(db);
 		if (r) goto done;
+		need_unlock = 1;
 	    }
 	}
 
@@ -1626,6 +1580,12 @@ static int myforeach(struct dbengine *db,
  done:
 
     loc_free(&loc);
+
+    if (need_unlock) {
+	/* release read lock */
+	int r1 = unlock(db);
+	if (r1) return r1;
+    }
 
     return r ? r : cb_r;
 }
