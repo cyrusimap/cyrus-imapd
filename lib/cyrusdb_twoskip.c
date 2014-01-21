@@ -1968,7 +1968,6 @@ static int myconsistent(struct dbengine *db, struct txn *tid)
     struct skiprecord prevrecord;
     struct skiprecord record;
     size_t fwd[MAXLEVEL];
-    int toplevel;
     size_t num_records = 0;
     int r = 0;
     int cmp;
@@ -1980,18 +1979,18 @@ static int myconsistent(struct dbengine *db, struct txn *tid)
     r = read_onerecord(db, DUMMY_OFFSET, &prevrecord);
     if (r) return r;
 
-    toplevel = prevrecord.level;
-
     /* set up the location pointers */
-    for (i = 1; i < toplevel; i++)
+    for (i = 0; i < MAXLEVEL; i++)
 	fwd[i] = _getloc(db, &prevrecord, i);
 
-    while (1) {
-	r = read_skipdelete(db, _getloc(db, &prevrecord, 0), &record);
+    while (fwd[0]) {
+	r = read_onerecord(db, fwd[0], &record);
 	if (r) return r;
 
-	/* may have finished on a delete, so just test afterwards */
-	if (!record.offset) break;
+	if (record.type == DELETE) {
+	    fwd[0] = record.nextloc[0];
+	    continue;
+	}
 
 	cmp = db->compar(KEY(db, &record), record.keylen,
 			 KEY(db, &prevrecord), prevrecord.keylen);
@@ -2004,7 +2003,7 @@ static int myconsistent(struct dbengine *db, struct txn *tid)
 	    return CYRUSDB_INTERNAL;
 	}
 
-	for (i = 1; i < record.level; i++) {
+	for (i = 0; i < record.level; i++) {
 	    /* check the old pointer was to here */
 	    if (fwd[i] != record.offset) {
 		syslog(LOG_ERR, "DBERROR: twoskip broken linkage %s: %08llX at %d, expected %08llX",
@@ -2020,7 +2019,7 @@ static int myconsistent(struct dbengine *db, struct txn *tid)
 	prevrecord = record;
     }
 
-    for (i = 1; i < toplevel; i++) {
+    for (i = 0; i < MAXLEVEL; i++) {
 	if (fwd[i]) {
 	    syslog(LOG_ERR, "DBERROR: twoskip broken tail %s: %08llX at %d",
 		   FNAME(db), (LLU)fwd[i], i);
@@ -2166,7 +2165,7 @@ static int recovery1(struct dbengine *db, int *count)
     struct skiprecord record;
     struct skiprecord prevrecord;
     struct skiprecord fixrecord;
-    int toplevel;
+    size_t nextoffset = 0;
     uint64_t num_records = 0;
     int changed = 0;
     int r = 0;
@@ -2193,29 +2192,32 @@ static int recovery1(struct dbengine *db, int *count)
     r = read_onerecord(db, DUMMY_OFFSET, &prevrecord);
     if (r) return r;
 
-    toplevel = prevrecord.level;
-
     /* and pointers forwards */
-    for (i = 2; i <= toplevel; i++) {
+    for (i = 2; i <= MAXLEVEL; i++) {
 	prev[i] = prevrecord.offset;
 	next[i] = prevrecord.nextloc[i];
     }
 
-    while (1) {
-	/* check for broken level - pointers */
-	for (i = 0; i < 2; i++) {
-	    if (prevrecord.nextloc[i] >= db->end) {
-		prevrecord.nextloc[i] = 0;
-		r = rewrite_record(db, &prevrecord);
-		changed++;
-	    }
+    /* check for broken level - pointers */
+    for (i = 0; i < 2; i++) {
+	if (prevrecord.nextloc[i] >= db->end) {
+	    prevrecord.nextloc[i] = 0;
+	    r = rewrite_record(db, &prevrecord);
+	    changed++;
 	}
+    }
 
-	r = read_skipdelete(db, _getloc(db, &prevrecord, 0), &record);
+    nextoffset = _getloc(db, &prevrecord, 0);
+
+    while (nextoffset) {
+	r = read_onerecord(db, nextoffset, &record);
 	if (r) return r;
 
-	/* we made it to the end */
-	if (!record.offset) break;
+	/* just skip over delele records */
+	if (record.type == DELETE) {
+	    nextoffset = record.nextloc[0];
+	    continue;
+	}
 
 	cmp = db->compar(KEY(db, &record), record.keylen,
 			 KEY(db, &prevrecord), prevrecord.keylen);
@@ -2245,13 +2247,25 @@ static int recovery1(struct dbengine *db, int *count)
 	    next[i] = record.nextloc[i];
 	}
 
+	/* check for broken level - pointers */
+	for (i = 0; i < 2; i++) {
+	    if (record.nextloc[i] >= db->end) {
+		record.nextloc[i] = 0;
+		r = rewrite_record(db, &record);
+		changed++;
+	    }
+	}
+
 	num_records++;
+
+	/* find the next record */
+	nextoffset = _getloc(db, &record, 0);
 
 	prevrecord = record;
     }
 
     /* check for remaining offsets needing fixing */
-    for (i = 2; i <= toplevel; i++) {
+    for (i = 2; i <= MAXLEVEL; i++) {
 	if (next[i]) {
 	    /* need to fix up the previous record to point to the end */
 	    r = read_onerecord(db, prev[i], &fixrecord);
