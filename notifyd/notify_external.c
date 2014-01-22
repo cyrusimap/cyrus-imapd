@@ -61,10 +61,10 @@ char* notify_external(const char *class, const char *priority,
 		      const char *user, const char *mailbox,
 		      int nopt __attribute__((unused)),
 		      char **options __attribute__((unused)),
-		      const char *message)
+		      const char *message, const char *fname)
 {
     const char *notify;
-    const char *buf[10];
+    const char *buf[12];
     int fds[2], status;
     pid_t child_pid;
     FILE *stream;
@@ -84,7 +84,9 @@ char* notify_external(const char *class, const char *priority,
     buf[6] = user;
     buf[7] = "-m";
     buf[8] = mailbox;
-    buf[9] = NULL;
+    buf[9] = "-f";
+    buf[10] = fname;
+    buf[11] = NULL;
 
     if (pipe(fds) < 0) {
        syslog(LOG_ERR,

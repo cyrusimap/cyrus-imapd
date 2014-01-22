@@ -46,11 +46,9 @@
 #include <config.h>
 
 /* the only option should be a mailto URI */
-char* notify_mailto(const char *class __attribute__((unused)),
-		    const char *priority __attribute__((unused)),
-		    const char *user __attribute__((unused)),
-		    const char *mailbox __attribute__((unused)),
+char* notify_mailto(const char *class, const char *priority,
+		    const char *user, const char *mailbox,
 		    int nopt, char **options,
-		    const char *message);
+		    const char *message, const char *fname);
 
 #endif /* _NOTIFY_MAILTO_H_ */

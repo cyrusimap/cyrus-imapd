@@ -51,7 +51,8 @@
 char* notify_log(const char *class, const char *priority,
 		 const char *user, const char *mailbox,
 		 int nopt, char **options,
-		 const char *message)
+		 const char *message,
+		 const char *fname __attribute__((unused)))
 {
     char opt_str[1024] = "";
     char *sep = "";
