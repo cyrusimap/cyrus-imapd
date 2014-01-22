@@ -210,7 +210,7 @@ struct namespace_t namespace_principal = {
 	{ &meth_propfind,	&princ_params },	/* PROPFIND	*/
 	{ NULL,			NULL },			/* PROPPATCH	*/
 	{ NULL,			NULL },			/* PUT		*/
-	{ &meth_report,		NULL },			/* REPORT	*/
+	{ &meth_report,		&princ_params },	/* REPORT	*/
 	{ &meth_trace,		NULL },			/* TRACE	*/
 	{ NULL,			NULL }			/* UNLOCK	*/
     }
