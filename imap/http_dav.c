@@ -2913,7 +2913,7 @@ int meth_delete(struct transaction_t *txn, void *params)
 	/* Expunge the resource */
 	record.system_flags |= FLAG_EXPUNGED;
 
-	mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
+	mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
 
 	r = mailbox_rewrite_index_record(mailbox, &record);
 
