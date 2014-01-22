@@ -81,7 +81,7 @@ EXPORTED void notify(const char *method,
 	    const char *class, const char *priority,
 	    const char *user, const char *mailbox,
 	    int nopt, const char **options,
-	    const char *message)
+	    const char *message, const char *fname)
 {
     const char *notify_sock;
     int soc = -1;
@@ -99,7 +99,7 @@ EXPORTED void notify(const char *method,
     memset((char *)&sun_data, 0, sizeof(sun_data));
     sun_data.sun_family = AF_UNIX;
     notify_sock = config_getstring(IMAPOPT_NOTIFYSOCKET);
-    if (notify_sock) {	
+    if (notify_sock) {
 	strlcpy(sun_data.sun_path, notify_sock, sizeof(sun_data.sun_path));
     }
     else {
@@ -129,6 +129,7 @@ EXPORTED void notify(const char *method,
     }
 
     if (!r) r = add_arg(buf, sizeof(buf), message, &buflen);
+    if (!r && fname) r = add_arg(buf, sizeof(buf), fname, &buflen);
 
     if (r) {
         syslog(LOG_ERR, "notify datagram too large, %s, %s",

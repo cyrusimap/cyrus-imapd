@@ -149,4 +149,6 @@ extern int append_collectnews(struct appendstate *mailbox,
 extern int append_run_annotator(struct appendstate *as,
 				struct index_record *record);
 
+extern const char *append_stagefname(struct stagemsg *stage);
+
 #endif /* INCLUDED_APPEND_H */

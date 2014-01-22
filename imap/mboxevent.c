@@ -483,6 +483,7 @@ EXPORTED void mboxevent_notify(struct mboxevent *mboxevents)
     struct mboxevent *event;
     char stimestamp[TIMESTAMP_MAX+1];
     char *formatted_message;
+    const char *fname = NULL;
 
     /* nothing to notify */
     if (!mboxevents)
@@ -581,7 +582,7 @@ EXPORTED void mboxevent_notify(struct mboxevent *mboxevents)
 
 	    /* notification is ready to send */
 	    formatted_message = json_formatter(type, event->params);
-	    notify(notifier, "EVENT", NULL, NULL, NULL, 0, NULL, formatted_message);
+	    notify(notifier, "EVENT", NULL, NULL, NULL, 0, NULL, formatted_message, fname);
 
 	    free(formatted_message);
 	}

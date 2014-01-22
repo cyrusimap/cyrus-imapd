@@ -118,6 +118,16 @@ static int getheader(void *v, const char *phead, const char ***body)
     }
 }
 
+static int getfname(void *v, const char **fnamep)
+{
+    deliver_data_t *d = (deliver_data_t *)v;
+    *fnamep = NULL;
+    if (d->stage)
+	*fnamep = append_stagefname(d->stage);
+    /* XXX GLOBAL STUFF HERE */
+    return 0;
+}
+
 static int getsize(void *mc, int *size)
 {
     message_data_t *m = ((deliver_data_t *) mc)->m;
@@ -486,7 +496,7 @@ static int sieve_reject(void *ac,
 static int sieve_fileinto(void *ac, 
 			  void *ic __attribute__((unused)),
 			  void *sc, 
-			  void *mc __attribute__((unused)), 
+			  void *mc,
 			  const char **errmsg __attribute__((unused)))
 {
     sieve_fileinto_context_t *fc = (sieve_fileinto_context_t *) ac;
@@ -572,9 +582,9 @@ static int sieve_notify(void *ac,
 	/* "default" is a magic value that implies the default */
 	notify(!strcmp("default",nc->method) ? notifier : nc->method,
 	       "SIEVE", nc->priority, sd->username, NULL,
-	       nopt, nc->options, nc->message);
+	       nopt, nc->options, nc->message, nc->fname);
     }
-    
+
     return SIEVE_OK;
 }
 
@@ -780,6 +790,7 @@ sieve_interp_t *setup_sieve(void)
     sieve_register_notify(interp, &sieve_notify);
     sieve_register_size(interp, &getsize);
     sieve_register_header(interp, &getheader);
+    sieve_register_fname(interp, &getfname);
 
     sieve_register_envelope(interp, &getenvelope);
     sieve_register_body(interp, &getbody);
