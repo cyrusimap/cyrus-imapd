@@ -1503,78 +1503,87 @@ static int caldav_put(struct transaction_t *txn,
 	}
     }
 
-    if ((namespace_calendar.allow & ALLOW_CAL_SCHED) && organizer
-	/* XXX  Hack for Outlook */
-	&& icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY)) {
-	/* Scheduling object resource */
-	const char *userid;
-	struct caldav_data *cdata;
-	struct sched_param sparam;
-	icalcomponent *oldical = NULL;
+    switch (kind) {
+    case ICAL_VEVENT_COMPONENT:
+    case ICAL_VTODO_COMPONENT:
+	if ((namespace_calendar.allow & ALLOW_CAL_SCHED) && organizer
+	    /* XXX  Hack for Outlook */
+	    && icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY)) {
+	    /* Scheduling object resource */
+	    const char *userid;
+	    struct caldav_data *cdata;
+	    struct sched_param sparam;
+	    icalcomponent *oldical = NULL;
 
-	/* Construct userid corresponding to mailbox */
-	userid = mboxname_to_userid(txn->req_tgt.mboxname);
+	    /* Construct userid corresponding to mailbox */
+	    userid = mboxname_to_userid(txn->req_tgt.mboxname);
 
-	/* Make sure iCal UID is unique for this user */
-	caldav_lookup_uid(davdb, uid, 0, &cdata);
-	/* XXX  Check errors */
+	    /* Make sure iCal UID is unique for this user */
+	    caldav_lookup_uid(davdb, uid, 0, &cdata);
+	    /* XXX  Check errors */
 
-	if (cdata->dav.mailbox &&
-	    (strcmp(cdata->dav.mailbox, txn->req_tgt.mboxname) ||
-	     strcmp(cdata->dav.resource, txn->req_tgt.resource))) {
-	    /* CALDAV:unique-scheduling-object-resource */
-	    char ext_userid[MAX_MAILBOX_NAME+1];
+	    if (cdata->dav.mailbox &&
+		(strcmp(cdata->dav.mailbox, txn->req_tgt.mboxname) ||
+		 strcmp(cdata->dav.resource, txn->req_tgt.resource))) {
+		/* CALDAV:unique-scheduling-object-resource */
+		char ext_userid[MAX_MAILBOX_NAME+1];
 
-	    strlcpy(ext_userid, userid, sizeof(ext_userid));
-	    mboxname_hiersep_toexternal(&httpd_namespace, ext_userid, 0);
+		strlcpy(ext_userid, userid, sizeof(ext_userid));
+		mboxname_hiersep_toexternal(&httpd_namespace, ext_userid, 0);
 
-	    txn->error.precond = CALDAV_UNIQUE_OBJECT;
-	    assert(!buf_len(&txn->buf));
-	    buf_printf(&txn->buf, "%s/user/%s/%s/%s",
-		       namespace_calendar.prefix,
-		       ext_userid, strrchr(cdata->dav.mailbox, '.')+1,
-		       cdata->dav.resource);
-	    txn->error.resource = buf_cstring(&txn->buf);
-	    ret = HTTP_FORBIDDEN;
-	    goto done;
+		txn->error.precond = CALDAV_UNIQUE_OBJECT;
+		assert(!buf_len(&txn->buf));
+		buf_printf(&txn->buf, "%s/user/%s/%s/%s",
+			   namespace_calendar.prefix,
+			   ext_userid, strrchr(cdata->dav.mailbox, '.')+1,
+			   cdata->dav.resource);
+		txn->error.resource = buf_cstring(&txn->buf);
+		ret = HTTP_FORBIDDEN;
+		goto done;
+	    }
+
+	    /* Lookup the organizer */
+	    if (caladdress_lookup(organizer, &sparam)) {
+		syslog(LOG_ERR,
+		       "meth_put: failed to process scheduling message in %s"
+		       " (org=%s)",
+		       txn->req_tgt.mboxname, organizer);
+		txn->error.desc = "Failed to lookup organizer address\r\n";
+		ret = HTTP_SERVER_ERROR;
+		goto done;
+	    }
+
+	    if (cdata->dav.imap_uid) {
+		/* Update existing object */
+		struct index_record record;
+		const char *msg_base = NULL;
+		unsigned long msg_size = 0;
+
+		/* Load message containing the resource and parse iCal data */
+		mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
+		mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
+		oldical = icalparser_parse_string(msg_base + record.header_size);
+		mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
+	    }
+
+	    if (!strcmp(sparam.userid, userid)) {
+		/* Organizer scheduling object resource */
+		sched_request(organizer, &sparam, oldical, ical, 0);
+	    }
+	    else {
+		/* Attendee scheduling object resource */
+		sched_reply(userid, oldical, ical);
+	    }
+
+	    if (oldical) icalcomponent_free(oldical);
+
+	    flags |= NEW_STAG;
 	}
+	break;
 
-	/* Lookup the organizer */
-	if (caladdress_lookup(organizer, &sparam)) {
-	    syslog(LOG_ERR,
-		   "meth_put: failed to process scheduling message in %s"
-		   " (org=%s)",
-		   txn->req_tgt.mboxname, organizer);
-	    txn->error.desc = "Failed to lookup organizer address\r\n";
-	    ret = HTTP_SERVER_ERROR;
-	    goto done;
-	}
-
-	if (cdata->dav.imap_uid) {
-	    /* Update existing object */
-	    struct index_record record;
-	    const char *msg_base = NULL;
-	    unsigned long msg_size = 0;
-
-	    /* Load message containing the resource and parse iCal data */
-	    mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
-	    mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
-	    oldical = icalparser_parse_string(msg_base + record.header_size);
-	    mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
-	}
-
-	if (!strcmp(sparam.userid, userid)) {
-	    /* Organizer scheduling object resource */
-	    sched_request(organizer, &sparam, oldical, ical, 0);
-	}
-	else {
-	    /* Attendee scheduling object resource */
-	    sched_reply(userid, oldical, ical);
-	}
-
-	if (oldical) icalcomponent_free(oldical);
-
-	flags |= NEW_STAG;
+    default:
+	/* Nothing else to do */
+	break;
     }
 
     /* Store resource at target */
