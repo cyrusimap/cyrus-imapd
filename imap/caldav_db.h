@@ -50,6 +50,27 @@
 
 #include "dav_db.h"
 
+#ifndef HAVE_VAVAILABILITY
+/* Allow us to compile without #ifdef HAVE_VAVAILABILITY everywhere */
+#define ICAL_VAVAILABILITY_COMPONENT	ICAL_XLICINVALID_COMPONENT
+#endif
+
+/* Bitmask of calendar components */
+enum {
+    /* "Real" components - MUST remain in this order (values used in DAV DB) */
+    CAL_COMP_VEVENT =		(1<<0),
+    CAL_COMP_VTODO =		(1<<1),
+    CAL_COMP_VJOURNAL =		(1<<2),
+    CAL_COMP_VFREEBUSY =	(1<<3),
+    CAL_COMP_VAVAILABILITY =	(1<<4),
+    /* Append additional "real" components here */
+
+    /* Other components - values don't matter - prepend here */
+    CAL_COMP_VALARM =		(1<<13),
+    CAL_COMP_VTIMEZONE =	(1<<14),
+    CAL_COMP_VCALENDAR =	(1<<15)
+};
+
 struct caldav_db;
 
 #define CALDAV_CREATE 0x01

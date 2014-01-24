@@ -146,9 +146,10 @@ enum {
     ALLOW_DAV =		(1<<5),	/* WebDAV specific methods/features */
     ALLOW_WRITECOL =	(1<<6),	/* Create/modify collections */
     ALLOW_CAL =		(1<<7),	/* CalDAV specific methods/features */
-    ALLOW_CAL_SCHED =	(1<<8),	/* CalDAV Scheduling specific features */
-    ALLOW_CARD =	(1<<9),	/* CardDAV specific methods/features */
-    ALLOW_ISCHEDULE =	(1<<10)	/* iSchedule specific methods/features */
+    ALLOW_CAL_AVAIL =	(1<<8),	/* CalDAV Availability specific features */
+    ALLOW_CAL_SCHED =	(1<<9),	/* CalDAV Scheduling specific features */
+    ALLOW_CARD =	(1<<10),/* CardDAV specific methods/features */
+    ALLOW_ISCHEDULE =	(1<<11)	/* iSchedule specific methods/features */
 };
 
 struct auth_scheme_t {

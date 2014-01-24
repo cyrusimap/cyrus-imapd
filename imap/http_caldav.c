@@ -178,12 +178,15 @@ static int propfind_caltransp(const xmlChar *name, xmlNsPtr ns,
 static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
 			       struct proppatch_ctx *pctx,
 			       struct propstat propstat[], void *rock);
-static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
-			    struct propfind_ctx *fctx, xmlNodePtr resp,
-			    struct propstat propstat[], void *rock);
+static int propfind_tz_avail(const xmlChar *name, xmlNsPtr ns,
+			     struct propfind_ctx *fctx, xmlNodePtr resp,
+			     struct propstat propstat[], void *rock);
 static int proppatch_timezone(xmlNodePtr prop, unsigned set,
 			      struct proppatch_ctx *pctx,
 			      struct propstat propstat[], void *rock);
+static int proppatch_availability(xmlNodePtr prop, unsigned set,
+				  struct proppatch_ctx *pctx,
+				  struct propstat propstat[], void *rock);
 
 static int report_cal_query(struct transaction_t *txn, xmlNodePtr inroot,
 			    struct propfind_ctx *fctx);
@@ -305,7 +308,7 @@ static const struct prop_entry caldav_props[] = {
       propfind_fromdb, proppatch_todb, NULL },
     { "calendar-timezone", NS_CALDAV,
       PROP_COLLECTION | PROP_PRESCREEN | PROP_NEEDPROP,
-      propfind_timezone, proppatch_timezone, NULL },
+      propfind_tz_avail, proppatch_timezone, NULL },
     { "supported-calendar-component-set", NS_CALDAV, PROP_COLLECTION,
       propfind_calcompset, proppatch_calcompset, NULL },
     { "supported-calendar-data", NS_CALDAV, PROP_COLLECTION,
@@ -323,6 +326,11 @@ static const struct prop_entry caldav_props[] = {
       propfind_calurl, NULL, SCHED_DEFAULT },
     { "schedule-calendar-transp", NS_CALDAV, PROP_COLLECTION,
       propfind_caltransp, proppatch_caltransp, NULL },
+
+    /* Calendar Availability (draft-daboo-calendar-availability) properties */
+    { "calendar-availability", NS_CALDAV,
+      PROP_COLLECTION | PROP_PRESCREEN | PROP_NEEDPROP,
+      propfind_tz_avail, proppatch_availability, NULL },
 
     /* Apple Calendar Server properties */
     { "getctag", NS_CS, PROP_ALLPROP | PROP_COLLECTION,
@@ -366,6 +374,9 @@ static struct meth_params caldav_params = {
 struct namespace_t namespace_calendar = {
     URL_NS_CALENDAR, 0, "/dav/calendars", "/.well-known/caldav", 1 /* auth */,
     (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DELETE |
+#ifdef HAVE_VAVAILABILITY
+     ALLOW_CAL_AVAIL |
+#endif
      ALLOW_DAV | ALLOW_WRITECOL | ALLOW_CAL ),
     &my_caldav_init, &my_caldav_auth, my_caldav_reset, &my_caldav_shutdown,
     { 
@@ -1862,6 +1873,8 @@ static int parse_comp_filter(xmlNodePtr root, struct calquery_filter *filter,
 			filter->comp |= CAL_COMP_VFREEBUSY;
 		    else if (!xmlStrcmp(name, BAD_CAST "VTIMEZONE"))
 			filter->comp |= CAL_COMP_VTIMEZONE;
+		    else if (!xmlStrcmp(name, BAD_CAST "VAVAILABILITY"))
+			filter->comp |= CAL_COMP_VAVAILABILITY;
 		    else {
 			error->precond = CALDAV_SUPP_FILTER;
 			ret = HTTP_FORBIDDEN;
@@ -1949,6 +1962,7 @@ static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
 	case CAL_COMP_VTODO: comp = "VTODO"; break;
 	case CAL_COMP_VJOURNAL: comp = "VJOURNAL"; break;
 	case CAL_COMP_VFREEBUSY: comp = "VFREEBUSY"; break;
+	case CAL_COMP_VAVAILABILITY: comp = "VAVAILABILITY"; break;
 	}
 
 	if (comp) buf_printf(&fctx->buf, "; component=%s", comp);
@@ -2099,12 +2113,15 @@ static const struct cal_comp_t {
     const char *name;
     unsigned long type;
 } cal_comps[] = {
-    { "VEVENT",    CAL_COMP_VEVENT },
-    { "VTODO",     CAL_COMP_VTODO },
-    { "VJOURNAL",  CAL_COMP_VJOURNAL },
-    { "VFREEBUSY", CAL_COMP_VFREEBUSY },
-//    { "VTIMEZONE", CAL_COMP_VTIMEZONE },
-//    { "VALARM",	   CAL_COMP_VALARM },
+    { "VEVENT",		CAL_COMP_VEVENT },
+    { "VTODO",		CAL_COMP_VTODO },
+    { "VJOURNAL",	CAL_COMP_VJOURNAL },
+    { "VFREEBUSY",	CAL_COMP_VFREEBUSY },
+#ifdef HAVE_VAVAILABILITY
+    { "VAVAILABILITY",	CAL_COMP_VAVAILABILITY },
+#endif
+//    { "VTIMEZONE",	CAL_COMP_VTIMEZONE },
+//    { "VALARM",	  	CAL_COMP_VALARM },
     { NULL, 0 }
 };
 
@@ -2402,8 +2419,8 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
 }
 
 
-/* Callback to prescreen/fetch CALDAV:calendar-timezone */
-static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
+/* Callback to prescreen/fetch CALDAV:calendar-timezone/availability */
+static int propfind_tz_avail(const xmlChar *name, xmlNsPtr ns,
 			     struct propfind_ctx *fctx,
 			     xmlNodePtr resp __attribute__((unused)),
 			     struct propstat propstat[],
@@ -2545,6 +2562,107 @@ static int proppatch_timezone(xmlNodePtr prop, unsigned set,
 	if (type) xmlFree(type);
 	if (ver) xmlFree(ver);
 	buf_free(&buf);
+    }
+    else {
+	xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
+		     &propstat[PROPSTAT_FORBID], prop->name, prop->ns, NULL, 0);
+
+	*pctx->ret = HTTP_FORBIDDEN;
+    }
+
+    return 0;
+}
+
+
+/* Callback to write calendar-availability property */
+static int proppatch_availability(xmlNodePtr prop, unsigned set,
+				  struct proppatch_ctx *pctx,
+				  struct propstat propstat[],
+				  void *rock __attribute__((unused)))
+{
+    if (pctx->req_tgt->collection && !pctx->req_tgt->resource) {
+	xmlChar *type, *ver = NULL, *freeme = NULL;
+	struct mime_type_t *mime;
+	icalcomponent *ical = NULL;
+	const char *value = NULL;
+	size_t len = 0;
+	unsigned valid = 1;
+
+	type = xmlGetProp(prop, BAD_CAST "content-type");
+	if (type) ver = xmlGetProp(prop, BAD_CAST "version");
+
+	/* Check/find requested MIME type */
+	for (mime = caldav_mime_types; type && mime->content_type; mime++) {
+	    if (is_mediatype(mime->content_type, (const char *) type)) {
+		if (ver &&
+		    (!mime->version || xmlStrcmp(ver, BAD_CAST mime->version))) {
+		    continue;
+		}
+		break;
+	    }
+	}
+
+	if (!mime->content_type) {
+	    xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
+			 &propstat[PROPSTAT_FORBID],
+			 prop->name, prop->ns, NULL,
+			 CALDAV_SUPP_DATA);
+	    *pctx->ret = HTTP_FORBIDDEN;
+	    valid = 0;
+	}
+	else if (set) {
+	    freeme = xmlNodeGetContent(prop);
+	    value = (const char *) freeme;
+
+	    /* Parse and validate the iCal data */
+	    ical = mime->from_string(value);
+	    if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {
+		xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
+			     &propstat[PROPSTAT_FORBID],
+			     prop->name, prop->ns, NULL,
+			     CALDAV_VALID_DATA);
+		*pctx->ret = HTTP_FORBIDDEN;
+		valid = 0;
+	    }
+	    else if (!icalcomponent_get_first_component(ical,
+							ICAL_VAVAILABILITY_COMPONENT)) {
+		xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
+			     &propstat[PROPSTAT_FORBID],
+			     prop->name, prop->ns, NULL,
+			     CALDAV_VALID_OBJECT);
+		*pctx->ret = HTTP_FORBIDDEN;
+		valid = 0;
+	    }
+	    else if (mime != caldav_mime_types) {
+		value = icalcomponent_as_ical_string(ical);
+	    }
+
+	    len = strlen(value);
+	}
+
+	if (valid) {
+	    buf_reset(&pctx->buf);
+	    buf_printf(&pctx->buf, ANNOT_NS "<%s>%s",
+		       (const char *) prop->ns->href, prop->name);
+
+	    if (!annotatemore_write_entry(pctx->mailboxname,
+					  buf_cstring(&pctx->buf),
+					  /* shared */ "", value, NULL,
+					  len, 0, &pctx->tid)) {
+		xml_add_prop(HTTP_OK, pctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+			     prop->name, prop->ns, NULL, 0);
+	    }
+	    else {
+		xml_add_prop(HTTP_SERVER_ERROR, pctx->ns[NS_DAV],
+			     &propstat[PROPSTAT_ERROR],
+			     prop->name, prop->ns, NULL, 0);
+	    }
+	}
+
+	if (ical) icalcomponent_free(ical);
+	if (freeme) xmlFree(freeme);
+	if (type) xmlFree(type);
+	if (ver) xmlFree(ver);
     }
     else {
 	xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
@@ -2995,6 +3113,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     case ICAL_VTODO_COMPONENT: mykind = CAL_COMP_VTODO; break;
     case ICAL_VJOURNAL_COMPONENT: mykind = CAL_COMP_VJOURNAL; break;
     case ICAL_VFREEBUSY_COMPONENT: mykind = CAL_COMP_VFREEBUSY; break;
+    case ICAL_VAVAILABILITY_COMPONENT: mykind = CAL_COMP_VAVAILABILITY; break;
     default:
 	txn->error.precond = CALDAV_SUPP_COMP;
 	return HTTP_FORBIDDEN;

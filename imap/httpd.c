@@ -2220,7 +2220,9 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 			    (txn->req_tgt.allow & ALLOW_WRITECOL) ?
 			    ", extended-mkcol" : "");
 		if (txn->req_tgt.allow & ALLOW_CAL) {
-		    prot_printf(httpd_out, "DAV: calendar-access%s\r\n",
+		    prot_printf(httpd_out, "DAV: calendar-access%s%s\r\n",
+				(txn->req_tgt.allow & ALLOW_CAL_AVAIL) ?
+				", calendar-availability" : "",
 				(txn->req_tgt.allow & ALLOW_CAL_SCHED) ?
 				", calendar-auto-schedule" : "");
 		}
