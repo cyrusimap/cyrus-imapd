@@ -77,18 +77,93 @@ static int add_arg(char *buf, int max_size, const char *arg, int *buflen)
     return 0;
 }
 
+static void notify_dlist(const char *sockpath, const char *method,
+			 const char *class, const char *priority,
+			 const char *user, const char *mailbox,
+			 int nopt, const char **options,
+			 const char *message, const char *fname)
+{
+    struct sockaddr_un sun_data;
+    struct protstream *in = NULL, *out = NULL;
+    struct dlist *dl = dlist_newkvlist(NULL, "NOTIFY");
+    struct dlist *res = NULL;
+    struct dlist *il;
+    int c;
+    int soc = -1;
+    int i;
+
+    dlist_setatom(dl, "METHOD", method);
+    dlist_setatom(dl, "CLASS", class);
+    dlist_setatom(dl, "PRIORITY", priority);
+    dlist_setatom(dl, "USER", user);
+    dlist_setatom(dl, "MAILBOX", mailbox);
+    il = dlist_newlist(dl, "OPTIONS");
+    for (i = 0; i < nopt; i++)
+	dlist_setatom(il, NULL, options[i]);
+    dlist_setatom(dl, "MESSAGE", message);
+    dlist_setatom(dl, "FILEPATH", fname);
+
+    memset((char *)&sun_data, 0, sizeof(sun_data));
+    sun_data.sun_family = AF_UNIX;
+    strlcpy(sun_data.sun_path, sockpath, sizeof(sun_data.sun_path));
+
+    soc = socket(PF_UNIX, SOCK_STREAM, 0);
+    if (soc < 0) {
+	syslog(LOG_ERR, "unable to create notify socket(): %m");
+	goto out;
+    }
+
+    if (connect(soc, (struct sockaddr *)&sun_data, sizeof(sun_data)) < 0) {
+	syslog(LOG_ERR, "failed to connect to %s: %m", sockpath);
+	goto out;
+    }
+
+    in = prot_new(soc, 0);
+    out = prot_new(soc, 1);
+    /* Force use of LITERAL+ */
+    prot_setisclient(in, 1);
+    prot_setisclient(out, 1);
+
+    dlist_print(dl, 1, out);
+    prot_printf(out, "\r\n");
+    prot_flush(out);
+
+    c = dlist_parse(&res, 1, in);
+    if (c == '\r') c = prot_getc(in);
+    /* XXX - do something with the response?  Like have NOTIFY answer */
+    if (c == '\n' && res && res->name) {
+	syslog(LOG_NOTICE, "NOTIFY: response %s to method %s", res->name, method);
+    }
+    else {
+	syslog(LOG_ERR, "NOTIFY: error sending %s to %s", method, sockpath);
+    }
+
+out:
+    if (in) prot_free(in);
+    if (out) prot_free(out);
+    if (soc >= 0) close(soc);
+    dlist_free(&dl);
+    dlist_free(&res);
+}
+
 EXPORTED void notify(const char *method,
 	    const char *class, const char *priority,
 	    const char *user, const char *mailbox,
 	    int nopt, const char **options,
 	    const char *message, const char *fname)
 {
-    const char *notify_sock;
+    const char *notify_sock = config_getstring(IMAPOPT_NOTIFYSOCKET);
     int soc = -1;
     struct sockaddr_un sun_data;
     char buf[NOTIFY_MAXSIZE] = "", noptstr[20];
     int buflen = 0;
     int i, r = 0;
+
+    if (!strncmp(notify_sock, "dlist:", 6)) {
+	return notify_dlist(notify_sock+6, method, class, priority,
+			    user, mailbox, nopt, options,
+			    message, fname);
+    }
 
     soc = socket(AF_UNIX, SOCK_DGRAM, 0);
     if (soc == -1) {
@@ -98,7 +173,6 @@ EXPORTED void notify(const char *method,
 
     memset((char *)&sun_data, 0, sizeof(sun_data));
     sun_data.sun_family = AF_UNIX;
-    notify_sock = config_getstring(IMAPOPT_NOTIFYSOCKET);
     if (notify_sock) {
 	strlcpy(sun_data.sun_path, notify_sock, sizeof(sun_data.sun_path));
     }
@@ -151,5 +225,4 @@ EXPORTED void notify(const char *method,
 
 out:
     xclose(soc);
-    return;
 }
