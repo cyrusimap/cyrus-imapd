@@ -768,7 +768,18 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
 
 	vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
 	prop = icalcomponent_get_first_property(vtz, ICAL_TZID_PROPERTY);
-	tzid = icalproperty_get_tzid(prop);
+
+	if (zi.type == ZI_LINK) {
+	    const char *equiv = icalproperty_get_tzid(prop);
+
+	    /* Substitute TZID alias */
+	    icalproperty_set_tzid(prop, tzid);
+
+	    /* Add EQUIVALENT-TZID */
+	    prop = icalproperty_new_x(equiv);
+	    icalproperty_set_x_name(prop, "EQUIVALENT-TZID");	
+	    icalcomponent_add_property(vtz, prop);
+	}
 
 	/* Start constructing TZURL */
 	buf_reset(&pathbuf);
@@ -780,12 +791,11 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
 		       (int) strcspn(mime->content_type, ";"),
 		       mime->content_type);
 	}
-
 	if (!icaltime_is_null_time(truncate)) {
+	    buf_printf(&pathbuf, "&truncate=%d", truncate.year);
+
 	    /* Truncate the VTIMEZONE */
 	    truncate_vtimezone(vtz, &truncate);
-
-	    buf_printf(&pathbuf, "&truncate=%d", truncate.year);
 	}
 
 	/* Set TZURL property */
