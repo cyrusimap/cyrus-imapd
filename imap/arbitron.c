@@ -135,7 +135,7 @@ int main(int argc,char **argv)
 	    break;
 
 	case 'D': {
-	    unsigned  month, day, year;
+	    unsigned  month = 0, day = 0, year = 0;
 	    struct tm date;
 
 	    if (strlen(optarg) < 8 ||
