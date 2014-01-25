@@ -201,7 +201,7 @@ static int meth_get(struct transaction_t *txn,
 	if (!value) break;
 
 	vals = hash_lookup(param, &query_params);
-	appendstrlist(&vals, value);
+	appendstrlist(&vals, xmlURIUnescapeString(value, strlen(value), NULL));
 	hash_insert(param, vals, &query_params);
     }
     tok_fini(&tok);
