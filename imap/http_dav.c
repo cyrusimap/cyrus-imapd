@@ -1656,7 +1656,12 @@ int propfind_addmember(const xmlChar *name, xmlNsPtr ns,
     xmlNodePtr node;
     int len;
 
-    if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
+    if (!fctx->req_tgt->collection ||
+	!strcmp(fctx->req_tgt->collection, SCHED_INBOX) ||
+	!strcmp(fctx->req_tgt->collection, SCHED_OUTBOX)) {
+	/* Only allowed on non-scheduling collections */
+	return HTTP_NOT_FOUND;
+    }
 
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			name, ns, NULL, 0);
