@@ -63,8 +63,6 @@
 
 #include "zoneinfo_db.h"
 
-//#define FIND_CONTAINS
-
 #define DB config_zoneinfo_db
 
 struct db *zoneinfodb;
@@ -203,41 +201,40 @@ int zoneinfo_store(const char *tzid, struct zoneinfo *zi, struct txn **tid)
 }
 
 
-#ifdef FIND_CONTAINS
-/*
- * Find the first occurrence of find in s, where the search is limited to the
- * first slen characters of s.
- *
- * Copyright (c) 2001 Mike Barcroft <mike@FreeBSD.org>
- * Copyright (c) 1990, 1993
- *     The Regents of the University of California.  All rights reserved.
- *
- * This code is derived from software contributed to Berkeley by
- * Chris Torek.
- *
- * Fix for case-insensitive match of first char added by Ken Murchison
- */
-static char *strncasestr(const char *s, const char *find, size_t slen)
+static int tzmatch(const char *str, const char *pat)
 {
-    char c, sc;
-    size_t len;
+    for ( ; *pat; str++, pat++) {
+	/* End of string and more pattern */
+	if (!*str && *pat != '*') return 0;
 
-    if ((c = tolower(*find++)) != '\0') {
-	len = strlen(find);
-	do {
-	    do {
-		if ((sc = *s++) == '\0' || slen-- < 1) return (NULL);
-	    } while (tolower(sc) != c);
+	switch (*pat) {
+	case '*':
+	    /* Collapse consecutive stars */
+	    while (*++pat == '*') continue;
 
-	    if (len > slen) return (NULL);
-	} while (strncasecmp(s, find, len) != 0);
+	    /* Trailing star matches anything */
+	    if (!*pat) return 1;
 
-	s--;
+	    while (*str) if (tzmatch(str++, pat)) return 1;
+	    return 0;
+
+	case ' ':
+	case '_':
+	    /* Treat ' ' == '-' */
+	    if (*str != ' ' && *str != '_') return 0;
+	    break;
+
+	default:
+	    /* Case-insensitive comparison */
+	    if (tolower(*str) != tolower(*pat)) return 0;
+	    break;
+	}
     }
 
-    return ((char *)s);
+    /* Did we reach end of string? */
+    return (!*str);
 }
-#endif /* FIND_CONTAINS */
+
 
 struct findrock {
     const char *find;
@@ -247,8 +244,7 @@ struct findrock {
     void *rock;
 };
 
-static int find_p(void *rock,
-		  const char *tzid __attribute__((unused)), int tzidlen,
+static int find_p(void *rock, const char *tzid, int tzidlen,
 		  const char *data, int datalen)
 {
     struct findrock *frock = (struct findrock *) rock;
@@ -270,11 +266,7 @@ static int find_p(void *rock,
 
     if (!frock->find) return 1;
     else if (frock->tzid_only) return (tzidlen == (int) strlen(frock->find));
-#ifdef FIND_CONTAINS
-    else return (strncasestr(tzid, frock->find, tzidlen) != NULL);
-#else
-    else return 1;
-#endif
+    else return tzmatch(tzid, frock->find);
 }
 
 static int find_cb(void *rock,
@@ -321,11 +313,7 @@ int zoneinfo_find(const char *find, int tzid_only, time_t changedsince,
     frock.proc = proc;
     frock.rock = rock;
 
-    if (!find
-#ifdef FIND_CONTAINS
-	|| !tzid_only
-#endif
-	) find = "";
+    if (!find || !tzid_only) find = "";
 
     /* process each matching entry in our database */
     return DB->foreach(zoneinfodb, (char *) find, strlen(find),
