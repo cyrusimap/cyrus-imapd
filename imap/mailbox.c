@@ -2069,7 +2069,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
     if (!new) goto done;
 
     /* phantom record - never really existed here */
-    if (!old && (new->system_flags && FLAG_EXPUNGED))
+    if (!old && (new->system_flags & FLAG_EXPUNGED))
 	goto done;
 
     r = mailbox_cacherecord(mailbox, new);
@@ -2174,7 +2174,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
     if (!new) goto done;
 
     /* phantom record - never really existed here */
-    if (!old && (new->system_flags && FLAG_EXPUNGED))
+    if (!old && (new->system_flags & FLAG_EXPUNGED))
 	goto done;
 
     r = mailbox_cacherecord(mailbox, new);
