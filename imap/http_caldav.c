@@ -2962,7 +2962,7 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
 	}
 	else {
 	    /* Get busytime for all contained calendar collections */
-	    strlcat(mailboxname, ".%", sizeof(mailboxname));
+	    strlcat(mailboxname, ".%", MAX_MAILBOX_PATH);
 	    mboxlist_findall(NULL,  /* internal namespace */
 			     mailboxname, 1, httpd_userid, 
 			     httpd_authstate, busytime_by_collection, fctx);
