@@ -1759,7 +1759,7 @@ static int search_convflags_match(message_t *m,
     struct conv_rock *rock = (struct conv_rock *)internalised;
     conversation_id_t cid = NULLCONVERSATION;
     conversation_t *conv = NULL;
-    int r;
+    int r = 0; /* invalid flag name */
 
     if (!rock->cstate) return 0;
 
@@ -1767,9 +1767,7 @@ static int search_convflags_match(message_t *m,
     if (conversation_load(rock->cstate, cid, &conv)) return 0;
     if (!conv) return 0;
 
-    if (rock->num < 0)
-	r = 0;	    /* invalid flag name */
-    else if (rock->num == 0)
+    if (rock->num == 0)
 	r = !conv->unseen;
     else if (rock->num > 0)
 	r = !!conv->counts[rock->num-1];

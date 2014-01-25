@@ -778,7 +778,7 @@ static int do_user(const char *userid)
 {
     char *inboxname;
     char *fname;
-    int r;
+    int r = 0;
 
     fname = conversations_getuserpath(userid);
     if (fname == NULL) {
