@@ -221,7 +221,7 @@ static int tzmatch(const char *str, const char *pat)
 
 	case ' ':
 	case '_':
-	    /* Treat ' ' == '-' */
+	    /* Treat ' ' == '_' */
 	    if (*str != ' ' && *str != '_') return 0;
 	    break;
 
