@@ -703,7 +703,6 @@ static int caldav_check_precond(struct transaction_t *txn, const void *data,
 	/* Special case for Apple 'If-Schedule-Tag-Match:' with no value
 	 * and also no schedule tag on the record - let that match */
 	if (cdata && !stag && !hdr[0][0]) return precond;
-
 	if (etagcmp(hdr[0], stag)) return HTTP_PRECOND_FAILED;
     }
 
