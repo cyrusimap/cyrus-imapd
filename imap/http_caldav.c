@@ -738,12 +738,10 @@ static int caldav_check_precond(struct transaction_t *txn, const void *data,
 
     /* Per RFC 6638, check Schedule-Tag */
     if ((hdr = spool_getheader(txn->req_hdrs, "If-Schedule-Tag-Match"))) {
-	if (!*hdr[0]) {
-	    /* XXX  Workaround for bug in MacOS X 10.9.x Calendar client */
-	    const char **ua = spool_getheader(txn->req_hdrs, "User-Agent");
+	/* Special case for Apple 'If-Schedule-Tag-Match:' with no value
+	 * and also no schedule tag on the record - let that match */
+	if (cdata && !stag && !hdr[0][0]) return precond;
 
-	    if (ua && strstr(ua[0], "CalendarAgent/174")) return precond;
-	}
 	if (etagcmp(hdr[0], stag)) return HTTP_PRECOND_FAILED;
     }
 
