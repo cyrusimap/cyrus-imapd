@@ -1124,8 +1124,8 @@ void sync_annot_list_add(struct sync_annot_list *l,
 {
     struct sync_annot *item = xzmalloc(sizeof(struct sync_annot));
 
-    item->entry = xstrdup(entry);
-    item->userid = xstrdup(userid);
+    item->entry = xstrdupnull(entry);
+    item->userid = xstrdupnull(userid);
     buf_copy(&item->value, value);
     item->mark = 0;
 
