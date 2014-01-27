@@ -945,21 +945,16 @@ static int find_cb(void *rock, const char *key, size_t keylen,
     const char *mboxname, *entry, *userid;
     unsigned int uid;
     struct buf value = BUF_INITIALIZER;
-    char keycopy[MAX_MAILBOX_PATH+1];
     int r;
 
     assert(keylen < MAX_MAILBOX_PATH);
 
-    /* take a copy, we may be deleting this record, so the key
-     * pointer will no longer be valid */
-    memcpy(keycopy, key, keylen);
-
 #if DEBUG
     syslog(LOG_ERR, "find_cb: found key %s in %s",
-	    key_as_string(frock->d, keycopy, keylen), frock->d->filename);
+	    key_as_string(frock->d, key, keylen), frock->d->filename);
 #endif
 
-    r = split_key(frock->d, keycopy, keylen, &mboxname,
+    r = split_key(frock->d, key, keylen, &mboxname,
 		  &uid, &entry, &userid);
     if (r)
 	return r;
