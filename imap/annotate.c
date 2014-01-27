@@ -817,56 +817,43 @@ static int split_key(const annotate_db_t *d,
 		     const char **entryp,
 		     const char **useridp)
 {
-#define NFIELDS 3
-    const char *fields[NFIELDS];
-    int nfields = 0;
+    static struct buf keybuf;
     const char *p;
-    unsigned int uid = 0;
-    const char *mboxname = "";
+    const char *end;
 
-    /* paranoia: ensure the last character in the key is
-     * a NUL, which it should be because of the way we
-     * always build keys */
-    if (key[keysize-1])
-	return IMAP_ANNOTATION_BADENTRY;
-    keysize--;
+    buf_setmap(&keybuf, key, keysize);
+    buf_putc(&keybuf, '\0'); /* safety tricks due to broken FM code */
+    p = buf_cstring(&keybuf);
+    end = p + keysize;
+
     /*
      * paranoia: split the key into fields on NUL characters.
      * We would use strarray_nsplit() for this, except that
      * by design that function cannot split on NULs and does
      * not handle embedded NULs.
      */
-    fields[nfields++] = key;
-    for (p = key ; (p-key) < keysize ; p++) {
-	if (!*p) {
-	    if (nfields == NFIELDS)
-		return IMAP_ANNOTATION_BADENTRY;
-	    fields[nfields++] = p+1;
-	}
-    }
-    if (nfields != NFIELDS)
-	return IMAP_ANNOTATION_BADENTRY;
 
     if (d->mboxname) {
-	/* per-folder db for message scope annotations */
-	char *end = NULL;
-	uid = strtoul(fields[0], &end, 10);
-	if (uid == 0 || end == NULL || *end)
-	    return IMAP_ANNOTATION_BADENTRY;
-	mboxname = d->mboxname;
+	*mboxnamep = d->mboxname;
+	*uidp = 0;
+	while (*p && p < end) *uidp = (10 * (*uidp)) + (*p++ - '0');
+	if (p < end) p++;
+	else return IMAP_ANNOTATION_BADENTRY;
     }
     else {
 	/* global db for mailnbox & server scope annotations */
-	uid = 0;
-	mboxname = fields[0];
+	*uidp = 0;
+	*mboxnamep = p;
+	while (*p && p < end) p++;
+	if (p < end) p++;
+	else return IMAP_ANNOTATION_BADENTRY;
     }
 
-    if (mboxnamep) *mboxnamep = mboxname;
-    if (uidp) *uidp = uid;
-    if (entryp) *entryp = fields[1];
-    if (useridp) *useridp = fields[2];
+    *entryp = p; /* XXX: trailing NULLs on non-userid keys?  Bogus just at FM */
+    while (*p && p < end) p++;
+    if (p < end && !*p)
+	*useridp = p;
     return 0;
-#undef NFIELDS
 }
 
 #if DEBUG
