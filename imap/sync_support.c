@@ -1703,9 +1703,9 @@ static int diff_annotation(const struct sync_annot *a,
 	diff++;
 
     if (!diff)
-	diff = strcmp(a->entry, b->entry);
+	diff = strcmpnull(a->entry, b->entry);
     if (!diff)
-	diff = strcmp(a->userid, b->userid);
+	diff = strcmpnull(a->userid, b->userid);
     if (!diff && diff_value)
 	diff = buf_cmp(&a->value, &b->value);
 
