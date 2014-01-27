@@ -852,7 +852,7 @@ static int split_key(const annotate_db_t *d,
     *entryp = p; /* XXX: trailing NULLs on non-userid keys?  Bogus just at FM */
     while (*p && p < end) p++;
     if (p < end && !*p)
-	*useridp = p;
+	*useridp = p+1;
     else
 	*useridp = NULL;
     return 0;
