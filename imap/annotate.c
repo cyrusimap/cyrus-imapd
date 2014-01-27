@@ -963,7 +963,7 @@ static int find_cb(void *rock, const char *key, size_t keylen,
 
     newkeylen = make_key(mboxname, uid, entry, userid, newkey, sizeof(newkey));
     if (keylen != newkeylen || strncmp(newkey, key, keylen)) {
-	syslog(LOG_ERR, "find_cb: bogus key %d %s %s", uid, entry, userid);
+	syslog(LOG_ERR, "find_cb: bogus key %s %d %s %s (%d %d)", mboxname, uid, entry, userid, (int)keylen, (int)newkeylen);
     }
 
     r = split_attribs(data, datalen, &value);
