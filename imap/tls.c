@@ -685,53 +685,6 @@ int     tls_init_serverengine(const char *ident,
     SSL_CTX_set_options(s_ctx, off);
     SSL_CTX_set_info_callback(s_ctx, (void (*)()) apps_ssl_info_callback);
 
-    /* Don't use an internal session cache */
-    SSL_CTX_sess_set_cache_size(s_ctx, 1);  /* 0 is unlimited, so use 1 */
-    SSL_CTX_set_session_cache_mode(s_ctx, SSL_SESS_CACHE_SERVER |
-				   SSL_SESS_CACHE_NO_AUTO_CLEAR |
-				   SSL_SESS_CACHE_NO_INTERNAL_LOOKUP);
-
-    /* Get the session timeout from the config file (in minutes) */
-    timeout = config_getint(IMAPOPT_TLS_SESSION_TIMEOUT);
-    if (timeout < 0) timeout = 0;
-    if (timeout > 1440) timeout = 1440; /* 24 hours max */
-
-    /* A timeout of zero disables session caching */
-    if (timeout) {
-	const char *fname = NULL;
-	char *tofree = NULL;
-	int r;
-
-	/* Set the context for session reuse -- use the service ident */
-	SSL_CTX_set_session_id_context(s_ctx, (void*) ident, strlen(ident));
-
-	/* Set the timeout for the internal/external cache (in seconds) */
-	SSL_CTX_set_timeout(s_ctx, timeout*60);
-
-	/* Set the callback functions for the external session cache */
-	SSL_CTX_sess_set_new_cb(s_ctx, new_session_cb);
-	SSL_CTX_sess_set_remove_cb(s_ctx, remove_session_cb);
-	SSL_CTX_sess_set_get_cb(s_ctx, get_session_cb);
-
-	fname = config_getstring(IMAPOPT_TLSCACHE_DB_PATH);
-
-	/* create the name of the db file */
-	if (!fname) {
-	    tofree = strconcat(config_dir, FNAME_TLSSESSIONS, (char *)NULL);
-	    fname = tofree;
-	}
-
-	r = (DB->open)(fname, CYRUSDB_CREATE, &sessdb);
-	if (r != 0) {
-	    syslog(LOG_ERR, "DBERROR: opening %s: %s",
-		   fname, cyrusdb_strerror(ret));
-	}
-	else
-	    sess_dbopen = 1;
-
-	free(tofree);
-    }
-
     cipher_list = config_getstring(IMAPOPT_TLS_CIPHER_LIST);
     if (!SSL_CTX_set_cipher_list(s_ctx, cipher_list)) {
 	syslog(LOG_ERR,"TLS server engine: cannot load cipher list '%s'",
@@ -785,6 +738,53 @@ int     tls_init_serverengine(const char *ident,
       } else {
 	  SSL_CTX_set_client_CA_list(s_ctx, SSL_load_client_CA_file(CAfile));
       }
+    }
+
+    /* Don't use an internal session cache */
+    SSL_CTX_sess_set_cache_size(s_ctx, 1);  /* 0 is unlimited, so use 1 */
+    SSL_CTX_set_session_cache_mode(s_ctx, SSL_SESS_CACHE_SERVER |
+				   SSL_SESS_CACHE_NO_AUTO_CLEAR |
+				   SSL_SESS_CACHE_NO_INTERNAL_LOOKUP);
+
+    /* Get the session timeout from the config file (in minutes) */
+    timeout = config_getint(IMAPOPT_TLS_SESSION_TIMEOUT);
+    if (timeout < 0) timeout = 0;
+    if (timeout > 1440) timeout = 1440; /* 24 hours max */
+
+    /* A timeout of zero disables session caching */
+    if (timeout) {
+	const char *fname = NULL;
+	char *tofree = NULL;
+	int r;
+
+	/* Set the context for session reuse -- use the service ident */
+	SSL_CTX_set_session_id_context(s_ctx, (void*) ident, strlen(ident));
+
+	/* Set the timeout for the internal/external cache (in seconds) */
+	SSL_CTX_set_timeout(s_ctx, timeout*60);
+
+	/* Set the callback functions for the external session cache */
+	SSL_CTX_sess_set_new_cb(s_ctx, new_session_cb);
+	SSL_CTX_sess_set_remove_cb(s_ctx, remove_session_cb);
+	SSL_CTX_sess_set_get_cb(s_ctx, get_session_cb);
+
+	fname = config_getstring(IMAPOPT_TLSCACHE_DB_PATH);
+
+	/* create the name of the db file */
+	if (!fname) {
+	    tofree = strconcat(config_dir, FNAME_TLSSESSIONS, (char *)NULL);
+	    fname = tofree;
+	}
+
+	r = (DB->open)(fname, CYRUSDB_CREATE, &sessdb);
+	if (r != 0) {
+	    syslog(LOG_ERR, "DBERROR: opening %s: %s",
+		   fname, cyrusdb_strerror(ret));
+	}
+	else
+	    sess_dbopen = 1;
+
+	free(tofree);
     }
 
     tls_serverengine = 1;
