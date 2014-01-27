@@ -944,6 +944,8 @@ static int find_cb(void *rock, const char *key, size_t keylen,
     struct find_rock *frock = (struct find_rock *) rock;
     const char *mboxname, *entry, *userid;
     unsigned int uid;
+    char newkey[MAX_MAILBOX_NAME+1];
+    size_t newkeylen;
     struct buf value = BUF_INITIALIZER;
     int r;
 
@@ -958,6 +960,11 @@ static int find_cb(void *rock, const char *key, size_t keylen,
 		  &uid, &entry, &userid);
     if (r)
 	return r;
+
+    newkeylen = make_key(mboxname, uid, entry, userid, newkey, sizeof(newkey));
+    if (keylen != newkeylen || strncmp(newkey, key, keylen)) {
+	syslog(LOG_ERR, "find_cb: bogus key %d %s %s", uid, entry, userid);
+    }
 
     r = split_attribs(data, datalen, &value);
 
