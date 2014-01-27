@@ -1147,8 +1147,8 @@ void sync_annot_list_free(struct sync_annot_list **lp)
     current = l->head;
     while (current) {
 	next = current->next;
-	if (current->entry) free(current->entry);
-	if (current->userid) free(current->userid);
+	free(current->entry);
+	free(current->userid);
 	buf_free(&current->value);
 	free(current);
 	current = next;
@@ -1631,13 +1631,13 @@ void encode_annotations(struct dlist *parent,
     struct dlist *annots = NULL;
     struct dlist *aa;
 
-    if  (!sal)
+    if (!sal)
 	return;
     for (sa = sal->head ; sa ; sa = sa->next) {
 	if (!annots)
 	    annots = dlist_newlist(parent, "ANNOTATIONS");
 
-	aa = dlist_newkvlist(annots, "A");
+	aa = dlist_newkvlist(annots, NULL);
 	dlist_setatom(aa, "ENTRY", sa->entry);
 	dlist_setatom(aa, "USERID", sa->userid);
 	dlist_setmap(aa, "VALUE", sa->value.s, sa->value.len);
