@@ -266,6 +266,17 @@ EXPORTED int strcasecmpsafe(const char *a, const char *b)
 	              (b == NULL ? "" : b));
 }
 
+/* in which NULL is NOT equal to "" */
+EXPORTED int strcmpnull(const char *a, const char *b)
+{
+    if (a) {
+	if (b) return strcmp(a, b);
+	return 1;
+    }
+    if (b) return -1;
+    return 0;
+}
+
 
 /* do a binary search in a keyvalue array
  *  nelem is the number of keyvalue elements in the kv array

@@ -141,6 +141,9 @@ int strcasecmpsafe(const char *a, const char *b);
 /* ditto strncmp */
 int strncmpsafe(const char *a, const char *b, size_t n);
 
+/* NULL isn't "" */
+int strcmpnull(const char *a, const char *b);
+
 /* do a binary search in a keyvalue array
  *  nelem is the number of keyvalue elements in the kv array
  *  cmpf is the comparison function (strcmp, stricmp, etc).
