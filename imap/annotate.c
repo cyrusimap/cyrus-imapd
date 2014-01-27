@@ -853,6 +853,8 @@ static int split_key(const annotate_db_t *d,
     while (*p && p < end) p++;
     if (p < end && !*p)
 	*useridp = p;
+    else
+	*useridp = NULL;
     return 0;
 }
 
