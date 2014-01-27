@@ -1361,6 +1361,7 @@ int sync_mailbox(struct mailbox *mailbox,
 		 struct dlist *kl, struct dlist *kupload,
 		 int printrecords)
 {
+    struct sync_annot_list *annots = NULL;
     int r = 0;
 
     dlist_setatom(kl, "UNIQUEID", mailbox->uniqueid);
@@ -1382,6 +1383,15 @@ int sync_mailbox(struct mailbox *mailbox,
     if (mailbox->quotaroot)
 	dlist_setatom(kl, "QUOTAROOT", mailbox->quotaroot);
 
+    /* always send mailbox annotations */
+    r = read_annotations(mailbox, NULL, &annots);
+    if (r) goto done;
+
+    if (annots) {
+	encode_annotations(kl, annots);
+	sync_annot_list_free(&annots);
+    }
+
     if (printrecords) {
 	struct index_record record;
 	struct dlist *il;
@@ -1389,7 +1399,6 @@ int sync_mailbox(struct mailbox *mailbox,
 	uint32_t recno;
 	int send_file;
 	uint32_t prevuid = 0;
-	struct sync_annot_list *annots = NULL;
 
 	for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	    /* we can't send bogus records */
@@ -1446,14 +1455,6 @@ int sync_mailbox(struct mailbox *mailbox,
 		encode_annotations(il, annots);
 		sync_annot_list_free(&annots);
 	    }
-	}
-
-	r = read_annotations(mailbox, NULL, &annots);
-	if (r) goto done;
-
-	if (annots) {
-	    encode_annotations(kl, annots);
-	    sync_annot_list_free(&annots);
 	}
     }
 
