@@ -903,6 +903,14 @@ int dlist_toatom(struct dlist *dl, const char **valp)
     const char *str;
     size_t len;
 
+    if (!dl) return 0;
+
+    /* atom can be NULL */
+    if (dl->type == DL_NIL) {
+	*valp = NULL;
+	return 1;
+    }
+
     /* tomap always adds a trailing \0 */
     if (!dlist_tomap(dl, &str, &len))
 	return 0;
