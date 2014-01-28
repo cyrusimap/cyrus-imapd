@@ -4493,6 +4493,8 @@ static void sched_deliver_local(const char *recipient,
 	/* Unknown METHOD -- ignore it */
 	syslog(LOG_ERR, "Unknown iTIP method: %s",
 	       icalenum_method_to_string(method));
+
+	sched_data->is_reply = 0;
 	goto inbox;
     }
 
