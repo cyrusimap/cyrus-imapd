@@ -3962,7 +3962,7 @@ static const char *deliver_merge_reply(icalcomponent *ical,
     icalparameter *param;
     icalparameter_partstat partstat;
     icalparameter_rsvp rsvp = ICAL_RSVP_NONE;
-    const char *recurid, *attendee, *req_stat = SCHEDSTAT_SUCCESS;
+    const char *recurid, *attendee = NULL, *req_stat = SCHEDSTAT_SUCCESS;
 
     /* Add each component of old object to hash table for comparison */
     construct_hash_table(&comp_table, 10, 1);
