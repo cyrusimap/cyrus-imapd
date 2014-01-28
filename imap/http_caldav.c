@@ -4366,8 +4366,7 @@ static void sched_deliver_local(const char *recipient,
     }
 
     reqd_privs = sched_data->is_reply ? DACL_REPLY : DACL_INVITE;
-    rights =
-	mbentry.acl ? cyrus_acl_myrights(authstate, mbentry.acl) : 0;
+    rights = mbentry.acl ? cyrus_acl_myrights(authstate, mbentry.acl) : 0;
     if (!(rights & reqd_privs)) {
 	sched_data->status =
 	    sched_data->ischedule ? REQSTAT_NOPRIVS : SCHEDSTAT_NOPRIVS;
