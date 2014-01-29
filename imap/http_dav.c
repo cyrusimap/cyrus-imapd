@@ -4440,7 +4440,8 @@ int report_sync_col(struct transaction_t *txn,
 	istate.map[nresp].system_flags = record.system_flags;
 	for (i = 0; i < MAX_USER_FLAGS/32; i++)
 	    istate.map[nresp].user_flags[i] = record.user_flags[i];
-	istate.map[nresp].cache_offset = record.cache_offset;
+	/* XXX - commit ordering problem, need cache_offset support in index map */
+	//istate.map[nresp].cache_offset = record.cache_offset;
 
 	nresp++;
     }
