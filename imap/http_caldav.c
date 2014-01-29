@@ -2435,7 +2435,15 @@ static int proppatch_timezone(xmlNodePtr prop, unsigned set,
 	    }
 	}
 
-	if (!mime->content_type) {
+	if (!mime) {
+	    xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
+			 &propstat[PROPSTAT_FORBID],
+			 prop->name, prop->ns, NULL,
+			 CALDAV_SUPP_DATA);
+	    *pctx->ret = HTTP_FORBIDDEN;
+	    valid = 0;
+	}
+	else if (!mime->content_type) {
 	    xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
 			 &propstat[PROPSTAT_FORBID],
 			 prop->name, prop->ns, NULL,
@@ -2445,10 +2453,9 @@ static int proppatch_timezone(xmlNodePtr prop, unsigned set,
 	}
 	else if (set) {
 	    freeme = xmlNodeGetContent(prop);
-	    buf_setcstr(&buf, (const char*)freeme);
 
 	    /* Parse and validate the iCal data */
-	    ical = mime->from_string(buf_cstring(&buf));
+	    ical = mime->from_string((const char *)freeme);
 	    if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {
 		xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
 			     &propstat[PROPSTAT_FORBID],
@@ -2468,10 +2475,11 @@ static int proppatch_timezone(xmlNodePtr prop, unsigned set,
 		valid = 0;
 	    }
 	    else if (mime != caldav_mime_types) {
-		value = icalcomponent_as_ical_string(ical);
+		buf_setcstr(&buf, icalcomponent_as_ical_string(ical));
 	    }
-
-	    len = strlen(value);
+	    else {
+		buf_setcstr(&buf, (const char *)freeme);
+	    }
 	}
 
 	if (valid) {
@@ -2495,6 +2503,7 @@ static int proppatch_timezone(xmlNodePtr prop, unsigned set,
 	if (freeme) xmlFree(freeme);
 	if (type) xmlFree(type);
 	if (ver) xmlFree(ver);
+	buf_free(&buf);
     }
     else {
 	xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
