@@ -157,7 +157,7 @@ EXPORTED sqlite3 *dav_open(struct mailbox *mailbox, const char *cmds)
 #if SQLITE_VERSION_NUMBER >= 3006000
 	sqlite3_extended_result_codes(open->db, 1);
 #endif
-	sqlite3_trace(open->db, dav_debug, (void *) userid);
+	sqlite3_trace(open->db, dav_debug, open->path);
     }
 
     /* stitch on up */
@@ -269,11 +269,7 @@ EXPORTED int dav_exec(sqlite3 *davdb, const char *cmd, struct bind_val bval[],
 }
 
 
-<<<<<<< HEAD
-EXPORTED int dav_delete(const char *userid)
-=======
-int dav_delete(struct mailbox *mailbox)
->>>>>>> b60343e... *dav*.[ch], mboxname.c: allow for per-mailbox DAV DB (cyrus.dav) and when reading/writing DAV entries use the DAV DB corresponding to the mailbox, not that of the authenticated user
+EXPORTED int dav_delete(struct mailbox *mailbox)
 {
     struct buf fname = BUF_INITIALIZER;
     int r = 0;

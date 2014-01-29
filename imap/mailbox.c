@@ -2536,7 +2536,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
         }
     }
 
-    carddavdb = carddav_open(userid, 0);
+    carddavdb = carddav_open(mailbox, 0);
 
     /* Find existing record for this resource */
     carddav_lookup_resource(carddavdb, mailbox->name, resource, 1, &cdata);
@@ -2646,7 +2646,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
         }
     }
 
-    caldavdb = caldav_open(userid, 0);
+    caldavdb = caldav_open(mailbox, 0);
 
     /* Find existing record for this resource */
     caldav_lookup_resource(caldavdb, mailbox->name, resource, 1, &cdata);

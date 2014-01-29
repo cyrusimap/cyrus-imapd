@@ -134,7 +134,7 @@ int main(int argc, char **argv)
     caldav_init();
 
     /* Generate mailboxname of calendar-home-set */
-    caldav_mboxname(NULL, userid, buf);
+    strncpy(buf, caldav_mboxname(userid, NULL), sizeof(buf));
 
     /* Open DAV DB corresponding to userid */
     mailbox.name = buf;

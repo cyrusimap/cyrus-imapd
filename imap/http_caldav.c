@@ -445,7 +445,7 @@ static void my_caldav_auth(const char *userid)
     int r;
 
     /* Generate mailboxname of calendar-home-set */
-    caldav_mboxname(NULL, userid, mailboxname);
+    mailboxname = caldav_mboxname(userid, NULL);
 
     if (httpd_userisadmin ||
 	global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
@@ -459,7 +459,7 @@ static void my_caldav_auth(const char *userid)
 	/* Open CalDAV DB for 'userid' */
 	struct mailbox mailbox;
 
-	mailbox.name = mailboxname;
+	mailbox.name = (char *)mailboxname;
 
 	my_caldav_reset();
 	auth_caldavdb = caldav_open(&mailbox, CALDAV_CREATE);
@@ -469,7 +469,7 @@ static void my_caldav_auth(const char *userid)
     /* Auto-provision calendars for 'userid' */
 
     /* calendar-home-set */
-    r = mboxlist_lookup(mailboxname, &mbentry, NULL);
+    r = mboxlist_lookup(mailboxname, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	if (config_mupdate_server) {
 	    /* Find location of INBOX */
@@ -3637,7 +3637,6 @@ int sched_busytime_query(struct transaction_t *txn,
 	    const char *userid = sparam.userid;
 	    mbentry_t *mbentry = NULL;
 	    icalcomponent *busy = NULL;
-	    int rights = 0;
 
 	    resp =
 		xml_add_schedresponse(root,

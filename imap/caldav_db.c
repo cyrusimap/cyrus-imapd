@@ -158,7 +158,7 @@ EXPORTED struct caldav_db *caldav_open(struct mailbox *mailbox, int flags)
 	userid = mboxname_to_userid(mailbox->name);
 	if (userid) {
 	    /* Construct mbox name corresponding to userid's scheduling Inbox */
-	    caldav_mboxname(SCHED_INBOX, userid, caldavdb->sched_inbox);
+	    strncpy(caldavdb->sched_inbox, caldav_mboxname(userid, SCHED_INBOX), sizeof(caldavdb->sched_inbox));
 	}
     }
 

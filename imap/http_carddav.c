@@ -342,10 +342,7 @@ static void my_carddav_auth(const char *userid)
     struct buf boxbuf = BUF_INITIALIZER;
     const char *mailboxname;
 
-    /* Construct mailbox name corresponding to userid's Inbox */
-    (*httpd_namespace.mboxname_tointernal)(&httpd_namespace, "INBOX",
-					   userid, mailboxname);
-    len = strlen(mailboxname);
+    mailboxname = mboxname_user_mbox(userid, NULL);
 
     if (httpd_userisadmin ||
 	global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
@@ -359,7 +356,7 @@ static void my_carddav_auth(const char *userid)
 	/* Open CardDAV DB for 'userid' */
 	struct mailbox mailbox;
 
-	mailbox.name = mailboxname;
+	mailbox.name = (char *)mailboxname;
 
 	my_carddav_reset();
 	auth_carddavdb = carddav_open(&mailbox, CARDDAV_CREATE);
