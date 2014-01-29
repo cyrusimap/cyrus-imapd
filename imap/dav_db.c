@@ -113,14 +113,6 @@ static void free_dav_open(struct open_davdb *open)
     free(open);
 }
 
-
-static void free_dav_open(struct open_davdb *open)
-{
-    free(open->path);
-    free(open);
-}
-
-
 /* Open DAV DB corresponding to mailbox */
 EXPORTED sqlite3 *dav_open(struct mailbox *mailbox, const char *cmds)
 {

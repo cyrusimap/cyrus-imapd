@@ -2578,12 +2578,12 @@ static int proppatch_availability(xmlNodePtr prop, unsigned set,
 				  struct propstat propstat[],
 				  void *rock __attribute__((unused)))
 {
+    /* XXX - fixme */
     if (pctx->req_tgt->collection && !pctx->req_tgt->resource) {
+	struct buf buf = BUF_INITIALIZER;
 	xmlChar *type, *ver = NULL, *freeme = NULL;
 	struct mime_type_t *mime;
 	icalcomponent *ical = NULL;
-	const char *value = NULL;
-	size_t len = 0;
 	unsigned valid = 1;
 
 	type = xmlGetProp(prop, BAD_CAST "content-type");
@@ -2610,10 +2610,9 @@ static int proppatch_availability(xmlNodePtr prop, unsigned set,
 	}
 	else if (set) {
 	    freeme = xmlNodeGetContent(prop);
-	    value = (const char *) freeme;
 
 	    /* Parse and validate the iCal data */
-	    ical = mime->from_string(value);
+	    ical = mime->from_string((const char *)freeme);
 	    if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {
 		xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
 			     &propstat[PROPSTAT_FORBID],
@@ -2632,21 +2631,21 @@ static int proppatch_availability(xmlNodePtr prop, unsigned set,
 		valid = 0;
 	    }
 	    else if (mime != caldav_mime_types) {
-		value = icalcomponent_as_ical_string(ical);
+		buf_setcstr(&buf, icalcomponent_as_ical_string(ical));
 	    }
-
-	    len = strlen(value);
+	    else {
+		buf_setcstr(&buf, (const char *)freeme);
+	    }
 	}
 
 	if (valid) {
+	    int r;
 	    buf_reset(&pctx->buf);
 	    buf_printf(&pctx->buf, ANNOT_NS "<%s>%s",
 		       (const char *) prop->ns->href, prop->name);
 
-	    if (!annotatemore_write_entry(pctx->mailboxname,
-					  buf_cstring(&pctx->buf),
-					  /* shared */ "", value, NULL,
-					  len, 0, &pctx->tid)) {
+	    r = annotate_state_write(pctx->astate, buf_cstring(&pctx->buf), /*userid*/NULL, &buf);
+	    if (!r) {
 		xml_add_prop(HTTP_OK, pctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			     prop->name, prop->ns, NULL, 0);
 	    }
@@ -2661,6 +2660,7 @@ static int proppatch_availability(xmlNodePtr prop, unsigned set,
 	if (freeme) xmlFree(freeme);
 	if (type) xmlFree(type);
 	if (ver) xmlFree(ver);
+	buf_free(&buf);
     }
     else {
 	xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],

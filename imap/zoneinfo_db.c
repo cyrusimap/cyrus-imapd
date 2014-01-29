@@ -267,7 +267,7 @@ static int find_p(void *rock,
     }
 
     if (!frock->find) return 1;
-    if (frock->tzid_only) return (tzidlen == (int) strlen(frock->find));
+    if (frock->tzid_only) return (tzidlen == strlen(frock->find));
     return tzmatch(tzid, frock->find);
 }
 
