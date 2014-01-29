@@ -1464,7 +1464,7 @@ EXPORTED xmlURIPtr parse_uri(unsigned meth, const char *uri, unsigned path_reqd,
 
 
 /* Compare Content-Types */
-EXPORTED int is_mediatype(const char *hdr, const char *type)
+EXPORTED int is_mediatype(const char *pat, const char *type)
 {
     const char *psep = strchr(pat, '/');
     const char *tsep = strchr(type, '/');
