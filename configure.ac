@@ -1142,6 +1142,10 @@ dnl
 	    AC_SUBST(DKIM_LIBS)
 	    AC_DEFINE(WITH_DKIM,[],[Build DKIM support into iSchedule?]) 
 	fi
+
+	AC_EGREP_HEADER(ICAL_SCHEDULESTATUS_PARAMETER, ical.h,
+	    AC_DEFINE(HAVE_SCHEDULING_PARAMS,[],
+		[Do we have built-in support for scheduling params?]))
 fi
 AC_SUBST(HTTP_CPPFLAGS)
 AC_SUBST(HTTP_LIBS)
