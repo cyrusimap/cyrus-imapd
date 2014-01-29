@@ -169,12 +169,14 @@ HTTP_SOURCES = imap/http_err.c \
 	       imap/http_dav.c \
 	       imap/http_ischedule.c \
 	       imap/http_rss.c \
+	       imap/http_timezone.c \
 	       imap/caldav_db.c \
 	       imap/proxy.c \
 	       imap/smtpclient.c \
 	       imap/spool.c \
 	       imap/carddav_db.c \
 	       imap/dav_db.c \
+	       imap/dav_util.c \
 	       imap/jcal.c \
 	       imap/xcal.c \
 	       imap/httpd.c
@@ -925,9 +927,11 @@ imap_httpd_SOURCES = \
 	imap/http_rss.c \
 	imap/http_dav.c \
 	imap/dav_db.c \
+	imap/dav_util.c \
 	imap/http_ischedule.c \
 	imap/http_carddav.c \
 	imap/http_caldav.c \
+	imap/http_timezone.c \
 	imap/smtpclient.c \
 	imap/xcal.c \
 	imap/jcal.c \

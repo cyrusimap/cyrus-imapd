@@ -50,7 +50,7 @@
 #include "util.h"
 
 /* Create filename corresponding to userid's DAV DB */
-void dav_getpath(struct buf *fname, const char *userid)
+EXPORTED void dav_getpath(struct buf *fname, const char *userid)
 {
     char c, *domain;
 
