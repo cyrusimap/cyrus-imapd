@@ -156,8 +156,9 @@ static int parse_zoneinfo(const char *data, int datalen,
 
 EXPORTED int zoneinfo_lookup(const char *tzid, struct zoneinfo *zi)
 {
-    int r, datalen;
     const char *data = NULL;
+    size_t datalen;
+    int r;
 
     /* Don't access DB if it hasn't been opened */
     if (!zoneinfo_dbopen) return CYRUSDB_INTERNAL;
@@ -248,8 +249,8 @@ struct findrock {
 };
 
 static int find_p(void *rock,
-		  const char *tzid __attribute__((unused)), int tzidlen,
-		  const char *data, int datalen)
+		  const char *tzid __attribute__((unused)), size_t tzidlen,
+		  const char *data, size_t datalen)
 {
     struct findrock *frock = (struct findrock *) rock;
     struct zoneinfo zi;
@@ -269,7 +270,7 @@ static int find_p(void *rock,
     }
 
     if (!frock->find) return 1;
-    else if (frock->tzid_only) return (tzidlen == (int) strlen(frock->find));
+    else if (frock->tzid_only) return (tzidlen == strlen(frock->find));
 #ifdef FIND_CONTAINS
     else return (strncasestr(tzid, frock->find, tzidlen) != NULL);
 #else
@@ -278,8 +279,8 @@ static int find_p(void *rock,
 }
 
 static int find_cb(void *rock,
-		   const char *tzid, int tzidlen,
-		   const char *data, int datalen)
+		   const char *tzid, size_t tzidlen,
+		   const char *data, size_t datalen)
 {
     struct findrock *frock = (struct findrock *) rock;
     struct zoneinfo zi;
