@@ -71,7 +71,7 @@ struct db *zoneinfodb;
 static int zoneinfo_dbopen = 0;
 static struct buf databuf = BUF_INITIALIZER;
 
-int zoneinfo_open(const char *fname)
+EXPORTED int zoneinfo_open(const char *fname)
 {
     int ret;
     char *tofree = NULL;
@@ -154,7 +154,7 @@ static int parse_zoneinfo(const char *data, int datalen,
     return 0;
 }
 
-int zoneinfo_lookup(const char *tzid, struct zoneinfo *zi)
+EXPORTED int zoneinfo_lookup(const char *tzid, struct zoneinfo *zi)
 {
     int r, datalen;
     const char *data = NULL;
@@ -174,7 +174,7 @@ int zoneinfo_lookup(const char *tzid, struct zoneinfo *zi)
     return parse_zoneinfo(data, datalen, zi, 1);
 }
 
-int zoneinfo_store(const char *tzid, struct zoneinfo *zi, struct txn **tid)
+EXPORTED int zoneinfo_store(const char *tzid, struct zoneinfo *zi, struct txn **tid)
 {
     struct strlist *sl;
     const char *sep;
@@ -305,7 +305,7 @@ static int find_cb(void *rock,
     return r;
 }
 
-int zoneinfo_find(const char *find, int tzid_only, time_t changedsince,
+EXPORTED int zoneinfo_find(const char *find, int tzid_only, time_t changedsince,
 		  int (*proc)(), void *rock)
 {
     struct findrock frock;

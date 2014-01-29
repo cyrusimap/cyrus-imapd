@@ -170,6 +170,7 @@ HTTP_SOURCES = imap/http_err.c \
 	       imap/http_ischedule.c \
 	       imap/http_rss.c \
 	       imap/http_timezone.c \
+	       imap/zoneinfo_db.c \
 	       imap/caldav_db.c \
 	       imap/proxy.c \
 	       imap/smtpclient.c \
@@ -932,6 +933,7 @@ imap_httpd_SOURCES = \
 	imap/http_carddav.c \
 	imap/http_caldav.c \
 	imap/http_timezone.c \
+	imap/zoneinfo_db.c \
 	imap/smtpclient.c \
 	imap/xcal.c \
 	imap/jcal.c \
