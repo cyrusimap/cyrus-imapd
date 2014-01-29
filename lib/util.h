@@ -98,8 +98,12 @@ typedef unsigned long long int modseq_t;
 extern const unsigned char convert_to_lowercase[256];
 extern const unsigned char convert_to_uppercase[256];
 
+#ifndef TOUPPER
 #define TOUPPER(c) (convert_to_uppercase[(unsigned char)(c)])
+#endif
+#ifndef TOLOWER
 #define TOLOWER(c) (convert_to_lowercase[(unsigned char)(c)])
+#endif
 
 #ifndef MAX
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
