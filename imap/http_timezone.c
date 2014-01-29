@@ -66,6 +66,7 @@
 #include "jcal.h"
 #include "map.h"
 #include "tok.h"
+#include "strhash.h"
 #include "util.h"
 #include "version.h"
 #include "xcal.h"

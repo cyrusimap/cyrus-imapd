@@ -84,7 +84,7 @@ EXPORTED int zoneinfo_open(const char *fname)
 	fname = tofree;
     }
 
-    ret = DB->open(fname, CYRUSDB_CREATE, &zoneinfodb);
+    ret = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &zoneinfodb);
     if (ret != 0) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
 	       cyrusdb_strerror(ret));
@@ -102,13 +102,13 @@ void zoneinfo_close(struct txn *tid)
 	int r;
 
 	if (tid) {
-	    r = DB->commit(zoneinfodb, tid);
+	    r = cyrusdb_commit(zoneinfodb, tid);
 	    if (r) {
 		syslog(LOG_ERR, "DBERROR: error committing zoneinfo: %s",
 		       cyrusdb_strerror(r));
 	    }
 	}
-	r = DB->close(zoneinfodb);
+	r = cyrusdb_close(zoneinfodb);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error closing zoneinfo: %s",
 		   cyrusdb_strerror(r));
@@ -166,7 +166,7 @@ EXPORTED int zoneinfo_lookup(const char *tzid, struct zoneinfo *zi)
 
     /* Check if there is an entry in the database */
     do {
-	r = DB->fetch(zoneinfodb, tzid, strlen(tzid), &data, &datalen, NULL);
+	r = cyrusdb_fetch(zoneinfodb, tzid, strlen(tzid), &data, &datalen, NULL);
     } while (r == CYRUSDB_AGAIN);
 
     if (r || !data || (datalen < 6)) return r ? r : CYRUSDB_IOERROR;
@@ -191,7 +191,7 @@ EXPORTED int zoneinfo_store(const char *tzid, struct zoneinfo *zi, struct txn **
     for (sl = zi->data, sep = ""; sl; sl = sl->next, sep = "\t")
 	buf_printf(&databuf, "%s%s", sep, sl->s);
 
-    r = DB->store(zoneinfodb, tzid, strlen(tzid),
+    r = cyrusdb_store(zoneinfodb, tzid, strlen(tzid),
 		  buf_cstring(&databuf), buf_len(&databuf), tid);
 
     if (r != CYRUSDB_OK) {
@@ -328,6 +328,6 @@ EXPORTED int zoneinfo_find(const char *find, int tzid_only, time_t changedsince,
 	) find = "";
 
     /* process each matching entry in our database */
-    return DB->foreach(zoneinfodb, (char *) find, strlen(find),
-		       &find_p, &find_cb, &frock, NULL);
+    return cyrusdb_foreach(zoneinfodb, (char *) find, strlen(find),
+			   &find_p, &find_cb, &frock, NULL);
 }

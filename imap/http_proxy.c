@@ -1018,7 +1018,7 @@ EXPORTED int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 	prot_printf(src_be->out,
 		    "Content-Type: application/xml; charset=utf-8\r\n"
 		    "Content-Length: %u\r\n\r\n%s",
-		    buf_len(&txn->buf), buf_cstring(&txn->buf));
+		    (unsigned)buf_len(&txn->buf), buf_cstring(&txn->buf));
 	buf_reset(&txn->buf);
 
 	prot_flush(src_be->out);
@@ -1129,7 +1129,7 @@ EXPORTED int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
     write_hdr(dest_be->out, "Content-Encoding", resp_hdrs);
     write_hdr(dest_be->out, "Content-Language", resp_hdrs);
     prot_printf(dest_be->out, "Content-Length: %u\r\n\r\n",
-		buf_len(&resp_body.payload));
+		(unsigned)buf_len(&resp_body.payload));
     prot_flush(dest_be->out);
 
     /* Read response(s) from dest backend until final response or error */
