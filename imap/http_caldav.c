@@ -97,6 +97,86 @@
 
 #define NEW_STAG (1<<8)  /* Make sure we skip over PREFER bits */
 
+
+#ifndef HAVE_SCHEDULING_PARAMS
+
+/* Functions to replace those not available in libical < v1.0 */
+
+static icalparameter_scheduleagent
+icalparameter_get_scheduleagent(icalparameter *param)
+{
+    const char *agent = NULL;
+
+    if (param) agent = icalparameter_get_iana_value(param);
+
+    if (!agent) return ICAL_SCHEDULEAGENT_NONE;
+    else if (!strcmp(agent, "SERVER")) return ICAL_SCHEDULEAGENT_SERVER;
+    else if (!strcmp(agent, "CLIENT")) return ICAL_SCHEDULEAGENT_CLIENT;
+    else return ICAL_SCHEDULEAGENT_X;
+}
+
+static icalparameter_scheduleforcesend
+icalparameter_get_scheduleforcesend(icalparameter *param)
+{
+    const char *force = NULL;
+
+    if (param) force = icalparameter_get_iana_value(param);
+
+    if (!force) return ICAL_SCHEDULEFORCESEND_NONE;
+    else if (!strcmp(force, "REQUEST")) return ICAL_SCHEDULEFORCESEND_REQUEST;
+    else if (!strcmp(force, "REPLY")) return ICAL_SCHEDULEFORCESEND_REPLY;
+    else return ICAL_SCHEDULEFORCESEND_X;
+}
+
+static icalparameter *icalparameter_new_schedulestatus(const char *stat)
+{
+    icalparameter *param = icalparameter_new(ICAL_IANA_PARAMETER);
+
+    icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
+    icalparameter_set_iana_value(param, stat);
+
+    return param;
+}
+
+/* Wrappers to fetch scheduling parameters by kind */
+
+static icalparameter*
+icalproperty_get_iana_parameter_by_name(icalproperty *prop, const char *name)
+{
+    icalparameter *param;
+
+    for (param = icalproperty_get_first_parameter(prop, ICAL_IANA_PARAMETER);
+	 param && strcmp(icalparameter_get_iana_name(param), name);
+	 param = icalproperty_get_next_parameter(prop, ICAL_IANA_PARAMETER));
+
+    return param;
+}
+
+#define icalproperty_get_scheduleagent_parameter(prop) \
+    icalproperty_get_iana_parameter_by_name(prop, "SCHEDULE-AGENT")
+
+#define icalproperty_get_scheduleforcesend_parameter(prop) \
+    icalproperty_get_iana_parameter_by_name(prop, "SCHEDULE-FORCE-SEND")
+
+#define icalproperty_get_schedulestatus_parameter(prop) \
+    icalproperty_get_iana_parameter_by_name(prop, "SCHEDULE-STATUS")
+
+#else
+
+/* Wrappers to fetch scheduling parameters by kind */
+
+#define icalproperty_get_scheduleagent_parameter(prop) \
+    icalproperty_get_first_parameter(prop, ICAL_SCHEDULEAGENT_PARAMETER)
+
+#define icalproperty_get_scheduleforcesend_parameter(prop) \
+    icalproperty_get_first_parameter(prop, ICAL_SCHEDULEFORCESEND_PARAMETER)
+
+#define icalproperty_get_schedulestatus_parameter(prop) \
+    icalproperty_get_first_parameter(prop, ICAL_SCHEDULESTATUS_PARAMETER)
+
+#endif /* HAVE_SCHEDULING_PARAMS */
+
+
 struct busytime {
     struct icalperiodtype *busy;
     unsigned len;
@@ -440,8 +520,10 @@ static void my_caldav_init(struct buf *serverinfo)
     if (config_allowsched) {
 	namespace_calendar.allow |= ALLOW_CAL_SCHED;
 
+#ifndef HAVE_SCHEDULING_PARAMS
 	/* Need to set this to parse CalDAV Scheduling parameters */
 	ical_set_unknown_token_handling_setting(ICAL_ASSUME_IANA_TOKEN);
+#endif
     }
 
     compile_time = calc_compile_time(__TIME__, __DATE__);
@@ -3911,7 +3993,6 @@ static void free_sched_data(void *data)
 
     if (sched_data) {
 	if (sched_data->itip) icalcomponent_free(sched_data->itip);
-	if (sched_data->force_send) free(sched_data->force_send);
 	free(sched_data);
     }
 }
@@ -4119,36 +4200,20 @@ static const char *deliver_merge_reply(icalcomponent *ical,
 	    icalcomponent_add_property(comp, prop);
 	}
 
-	/* Find and set PARTSTAT */
-	param = icalproperty_get_first_parameter(prop, ICAL_PARTSTAT_PARAMETER);
-	if (!param) {
-	    param = icalparameter_new(ICAL_PARTSTAT_PARAMETER);
-	    icalproperty_add_parameter(prop, param);
-	}
-	icalparameter_set_partstat(param, partstat);
+	/* Set PARTSTAT */
+	param = icalparameter_new_partstat(partstat);
+	icalproperty_set_parameter(prop, param);
 
-	/* Find and set RSVP */
-	param = icalproperty_get_first_parameter(prop, ICAL_RSVP_PARAMETER);
-	if (param) icalproperty_remove_parameter_by_ref(prop, param);
+	/* Set RSVP */
+	icalproperty_remove_parameter_by_kind(prop, ICAL_RSVP_PARAMETER);
 	if (rsvp != ICAL_RSVP_NONE) {
-	    param = icalparameter_new(ICAL_RSVP_PARAMETER);
+	    param = icalparameter_new_rsvp(rsvp);
 	    icalproperty_add_parameter(prop, param);
-	    icalparameter_set_rsvp(param, rsvp);
 	}
 
-	/* Find and set SCHEDULE-STATUS */
-	for (param =
-		 icalproperty_get_first_parameter(prop, ICAL_IANA_PARAMETER);
-	     param && strcmp(icalparameter_get_iana_name(param),
-			     "SCHEDULE-STATUS");
-	     param =
-		 icalproperty_get_next_parameter(prop, ICAL_IANA_PARAMETER));
-	if (!param) {
-	    param = icalparameter_new(ICAL_IANA_PARAMETER);
-	    icalproperty_add_parameter(prop, param);
-	    icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
-	}
-	icalparameter_set_iana_value(param, req_stat);
+	/* Set SCHEDULE-STATUS */
+	param = icalparameter_new_schedulestatus(req_stat);
+	icalproperty_set_parameter(prop, param);
     }
 
     free_hash_table(&comp_table, NULL);
@@ -4266,25 +4331,13 @@ static int deliver_merge_request(const char *attendee,
 	    /* XXX  Do we only do this iff PARTSTAT!=NEEDS-ACTION */
 	    prop =
 		icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-	    for (param = icalproperty_get_first_parameter(prop,
-							  ICAL_IANA_PARAMETER);
-		 param;
-		 param = icalproperty_get_next_parameter(prop,
-							 ICAL_IANA_PARAMETER)) {
-		if (!strcmp(icalparameter_get_iana_name(param),
-			    "SCHEDULE-STATUS")) {
-		    const char *sched_stat =
-			icalparameter_get_iana_value(param);
-
-		    prop =
-			icalcomponent_get_first_property(new_comp,
-							 ICAL_ORGANIZER_PROPERTY);
-		    param = icalparameter_new(ICAL_IANA_PARAMETER);
-		    icalproperty_add_parameter(prop, param);
-		    icalparameter_set_iana_name(param,
-						"SCHEDULE-STATUS");
-		    icalparameter_set_iana_value(param, sched_stat);
-		}
+	    param = icalproperty_get_schedulestatus_parameter(prop);
+	    if (param) {
+		param = icalparameter_new_clone(param);
+		prop =
+		    icalcomponent_get_first_property(new_comp,
+						     ICAL_ORGANIZER_PROPERTY);
+		icalproperty_add_parameter(prop, param);
 	    }
 
 	    /* Remove component from old object */
@@ -4554,15 +4607,30 @@ void sched_deliver(const char *recipient, void *data, void *rock)
     struct sched_data *sched_data = (struct sched_data *) data;
     struct auth_state *authstate = (struct auth_state *) rock;
     struct sched_param sparam;
+    int islegal;
 
     /* Check SCHEDULE-FORCE-SEND value */
-    if (sched_data->force_send) {
-	const char *force = sched_data->is_reply ? "REPLY" : "REQUEST";
+    switch (sched_data->force_send) {
+    case ICAL_SCHEDULEFORCESEND_NONE:
+	islegal = 1;
+	break;
 
-	if (strcmp(sched_data->force_send, force)) {
-	    sched_data->status = SCHEDSTAT_PARAM;
-	    return;
-	}
+    case ICAL_SCHEDULEFORCESEND_REPLY:
+	islegal = sched_data->is_reply;
+	break;
+
+    case ICAL_SCHEDULEFORCESEND_REQUEST:
+	islegal = !sched_data->is_reply;
+	break;
+
+    default:
+	islegal = 0;
+	break;
+    }
+
+    if (!islegal) {
+	sched_data->status = SCHEDSTAT_PARAM;
+	return;
     }
 
     if (caladdress_lookup(recipient, &sparam)) {
@@ -4630,27 +4698,12 @@ static void clean_component(icalcomponent *comp, int clean_org)
     }
 
     if (clean_org) {
-	icalparameter *param, *next;
-
 	/* Grab the organizer */
-	prop = icalcomponent_get_first_property(comp,
-						ICAL_ORGANIZER_PROPERTY);
+	prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
 
 	/* Remove CalDAV Scheduling parameters from organizer */
-	for (param =
-		 icalproperty_get_first_parameter(prop, ICAL_IANA_PARAMETER);
-	     param; param = next) {
-	    next = icalproperty_get_next_parameter(prop, ICAL_IANA_PARAMETER);
-
-	    if (!strcmp(icalparameter_get_iana_name(param),
-			"SCHEDULE-AGENT")) {
-		icalproperty_remove_parameter_by_ref(prop, param);
-	    }
-	    else if (!strcmp(icalparameter_get_iana_name(param),
-			     "SCHEDULE-FORCE-SEND")) {
-		icalproperty_remove_parameter_by_ref(prop, param);
-	    }
-	}
+	icalproperty_remove_parameter_by_name(prop, "SCHEDULE-AGENT");
+	icalproperty_remove_parameter_by_name(prop, "SCHEDULE-FORCE-SEND");
     }
 }
 
@@ -4713,37 +4766,25 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
 {
     icalcomponent *copy;
     icalproperty *prop;
-    icalparameter *param, *next;
+    icalparameter *param;
 
     /* Strip SCHEDULE-STATUS from each attendee
        and optionally set PROPSTAT=NEEDS-ACTION */
     for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
 	 prop;
 	 prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
+
 	const char *attendee = icalproperty_get_attendee(prop);
 
 	/* Don't modify attendee == organizer */
 	if (!strcmp(attendee, organizer)) continue;
 
-	for (param =
-		 icalproperty_get_first_parameter(prop, ICAL_IANA_PARAMETER);
-	     param; param = next) {
-	    next = icalproperty_get_next_parameter(prop, ICAL_IANA_PARAMETER);
-
-	    if (!strcmp(icalparameter_get_iana_name(param),
-			     "SCHEDULE-STATUS")) {
-		icalproperty_remove_parameter_by_ref(prop, param);
-	    }
-	}
+	icalproperty_remove_parameter_by_name(prop, "SCHEDULE-STATUS");
 
 	if (needs_action) {
-	    param =
-		icalproperty_get_first_parameter(prop, ICAL_PARTSTAT_PARAMETER);
-	    if (!param) {
-		param = icalparameter_new(ICAL_PARTSTAT_PARAMETER);
-		icalproperty_add_parameter(prop, param);
-	    }
-	    icalparameter_set_partstat(param, ICAL_PARTSTAT_NEEDSACTION);
+	    /* Set PARTSTAT */
+	    param = icalparameter_new_partstat(ICAL_PARTSTAT_NEEDSACTION);
+	    icalproperty_set_parameter(prop, param);
 	}
     }
 
@@ -4758,7 +4799,8 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
 	 prop = icalcomponent_get_next_property(copy, ICAL_ATTENDEE_PROPERTY)) {
 	const char *attendee = icalproperty_get_attendee(prop);
 	unsigned do_sched = 1;
-	icalparameter *force_send = NULL;
+	icalparameter_scheduleforcesend force_send =
+	    ICAL_SCHEDULEFORCESEND_NONE;
 
 	/* Don't schedule attendee == organizer */
 	if (!strcmp(attendee, organizer)) continue;
@@ -4767,21 +4809,19 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
 	if (att_update && !strcmp(attendee, att_update)) continue;
 
 	/* Check CalDAV Scheduling parameters */
-	for (param =
-		 icalproperty_get_first_parameter(prop, ICAL_IANA_PARAMETER);
-	     param; param = next) {
-	    next = icalproperty_get_next_parameter(prop, ICAL_IANA_PARAMETER);
+	param = icalproperty_get_scheduleagent_parameter(prop);
+	if (param) {
+	    icalparameter_scheduleagent agent =
+		icalparameter_get_scheduleagent(param);
 
-	    if (!strcmp(icalparameter_get_iana_name(param),
-			"SCHEDULE-AGENT")) {
-		do_sched =
-		    !strcmp(icalparameter_get_iana_value(param), "SERVER");
-		icalproperty_remove_parameter_by_ref(prop, param);
-	    }
-	    else if (!strcmp(icalparameter_get_iana_name(param),
-			     "SCHEDULE-FORCE-SEND")) {
-		force_send = param;
-	    }
+	    if (agent != ICAL_SCHEDULEAGENT_SERVER) do_sched = 0;
+	    icalproperty_remove_parameter_by_ref(prop, param);
+	}
+
+	param = icalproperty_get_scheduleforcesend_parameter(prop);
+	if (param) {
+	    force_send = icalparameter_get_scheduleforcesend(param);
+	    icalproperty_remove_parameter_by_ref(prop, param);
 	}
 
 	/* Create/update iTIP request for this attendee */
@@ -4794,10 +4834,7 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
 		/* New attendee - add it to the hash table */
 		sched_data = xzmalloc(sizeof(struct sched_data));
 		sched_data->itip = icalcomponent_new_clone(itip);
-		if (force_send) {
-		    sched_data->force_send =
-			xstrdup(icalparameter_get_iana_value(force_send));
-		}
+		sched_data->force_send = force_send;
 		hash_insert(attendee, sched_data, att_table);
 	    }
 	    new_comp = icalcomponent_new_clone(copy);
@@ -4807,8 +4844,6 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
 	    /* XXX  We assume that the master component is always first */
 	    if (!ncomp) sched_data->master = new_comp;
 	}
-
-	if (force_send) icalproperty_remove_parameter_by_ref(prop, force_send);
     }
 
     /* XXX  We assume that the master component is always first */
@@ -5113,21 +5148,11 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 		}
 
 		if (stat) {
+		    /* Set SCHEDULE-STATUS */
 		    icalparameter *param;
-		    for (param =
-			     icalproperty_get_first_parameter(prop,
-							      ICAL_IANA_PARAMETER);
-			 param && strcmp(icalparameter_get_iana_name(param),
-					 "SCHEDULE-STATUS");
-			 param =
-			     icalproperty_get_next_parameter(prop,
-							     ICAL_IANA_PARAMETER));
-		    if (!param) {
-			param = icalparameter_new(ICAL_IANA_PARAMETER);
-			icalproperty_add_parameter(prop, param);
-			icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
-		    }
-		    icalparameter_set_iana_value(param, stat);
+
+		    param = icalparameter_new_schedulestatus(stat);
+		    icalproperty_set_parameter(prop, param);
 		}
 	    }
 
@@ -5228,14 +5253,8 @@ static void sched_decline(const char *recurid __attribute__((unused)),
     myattendee = icalcomponent_get_first_property(old_data->comp,
 						  ICAL_ATTENDEE_PROPERTY);
 
-    param =
-	icalproperty_get_first_parameter(myattendee,
-					 ICAL_PARTSTAT_PARAMETER);
-    if (!param) {
-	param = icalparameter_new(ICAL_PARTSTAT_PARAMETER);
-	icalproperty_add_parameter(myattendee, param);
-    }
-    icalparameter_set_partstat(param, ICAL_PARTSTAT_DECLINED);
+    param = icalparameter_new_partstat(ICAL_PARTSTAT_DECLINED);
+    icalproperty_set_parameter(myattendee, param);
 
     clean_component(old_data->comp, 1);
 
@@ -5256,8 +5275,9 @@ static void sched_reply(const char *userid,
     struct auth_state *authstate;
     icalcomponent *comp;
     icalproperty *prop;
-    icalparameter *param, *force_send = NULL;
+    icalparameter *param;
     icalcomponent_kind kind;
+    icalparameter_scheduleforcesend force_send = ICAL_SCHEDULEFORCESEND_NONE;
     const char *organizer, *recurid;
     struct hash_table comp_table;
     struct comp_data *old_data;
@@ -5278,30 +5298,19 @@ static void sched_reply(const char *userid,
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     organizer = icalproperty_get_organizer(prop);
 
-    for (param = icalproperty_get_first_parameter(prop,
-						  ICAL_IANA_PARAMETER);
-	 param;
-	 param = icalproperty_get_next_parameter(prop,
-						 ICAL_IANA_PARAMETER)) {
-	if (!strcmp(icalparameter_get_iana_name(param),
-		    "SCHEDULE-AGENT")) {
-	    if (strcmp(icalparameter_get_iana_value(param), "SERVER")) {
-		/* We are not supposed to send replies to the organizer */
-		return;
-	    }
-	}
-	else if (!strcmp(icalparameter_get_iana_name(param),
-			 "SCHEDULE-FORCE-SEND")) {
-	    force_send = param;
-	}
+    param = icalproperty_get_scheduleagent_parameter(prop);
+    if (param &&
+	icalparameter_get_scheduleagent(param) != ICAL_SCHEDULEAGENT_SERVER) {
+	/* We are not supposed to send replies to the organizer */
+	return;
     }
+
+    param = icalproperty_get_scheduleforcesend_parameter(prop);
+    if (param) force_send = icalparameter_get_scheduleforcesend(param);
 
     sched_data = xzmalloc(sizeof(struct sched_data));
     sched_data->is_reply = 1;
-    if (force_send) {
-	sched_data->force_send =
-	    xstrdup(icalparameter_get_iana_value(force_send));
-    }
+    sched_data->force_send = force_send;
 
     /* Check ACL of auth'd user on userid's Scheduling Outbox */
     caldav_mboxname(SCHED_OUTBOX, userid, outboxname);
@@ -5440,9 +5449,8 @@ static void sched_reply(const char *userid,
 		    prop =
 			icalcomponent_get_first_property(comp,
 							 ICAL_ORGANIZER_PROPERTY);
-		    param = icalparameter_new(ICAL_IANA_PARAMETER);
-		    icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
-		    icalparameter_set_iana_value(param, sched_data->status);
+		    param =
+			icalparameter_new_schedulestatus(sched_data->status);
 		    icalproperty_add_parameter(prop, param);
 		}
 

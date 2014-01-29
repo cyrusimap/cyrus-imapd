@@ -58,6 +58,24 @@
 #include "http_dav.h"
 
 
+#ifndef HAVE_SCHEDULING_PARAMS
+
+typedef enum {
+    ICAL_SCHEDULEAGENT_X,
+    ICAL_SCHEDULEAGENT_SERVER,
+    ICAL_SCHEDULEAGENT_CLIENT,
+    ICAL_SCHEDULEAGENT_NONE
+} icalparameter_scheduleagent;
+
+typedef enum {
+    ICAL_SCHEDULEFORCESEND_X,
+    ICAL_SCHEDULEFORCESEND_REQUEST,
+    ICAL_SCHEDULEFORCESEND_REPLY,
+    ICAL_SCHEDULEFORCESEND_NONE
+} icalparameter_scheduleforcesend;
+
+#endif /* !HAVE_SCHEDULING_PARAMS */
+
 #define REQSTAT_PENDING		"1.0;Pending"
 #define REQSTAT_SENT		"1.1;Sent"
 #define REQSTAT_DELIVERED	"1.2;Delivered"
@@ -74,7 +92,7 @@ struct sched_data {
     icalcomponent *itip;
     icalcomponent *master;
     unsigned comp_mask;
-    char *force_send;
+    icalparameter_scheduleforcesend force_send;
     const char *status;
 };
 
