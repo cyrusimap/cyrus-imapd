@@ -2369,34 +2369,40 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
 			     void *rock)
 {
     xmlNodePtr prop = (xmlNodePtr) rock;
-    const char *data = NULL;
-    unsigned long datalen = 0;
+    struct buf attrib = BUF_INITIALIZER;
+    int ret = 0;
 
     if (propstat) {
-	struct annotation_data attrib;
 	int r = 0;
-
 	buf_reset(&fctx->buf);
 	buf_printf(&fctx->buf, ANNOT_NS "<%s>%s",
 		   (const char *) ns->href, name);
 
-	memset(&attrib, 0, sizeof(struct annotation_data));
-
 	if (fctx->mailbox && !fctx->record) {
 	    r = annotatemore_lookup(fctx->mailbox->name,
 				    buf_cstring(&fctx->buf),
-				    /* shared */ "", &attrib);
+				    /* shared */ NULL, &attrib);
 	}
 
-	if (r) return HTTP_SERVER_ERROR;
-	if (!attrib.value) return HTTP_NOT_FOUND;
+	if (r) {
+	    ret = HTTP_SERVER_ERROR;
+	    goto done;
+	}
 
-	data = attrib.value;
-	datalen = attrib.size;
+	if (!attrib.len) {
+	    ret = HTTP_NOT_FOUND;
+	    goto done;
+	}
     }
 
-    return propfind_getdata(name, ns, fctx, propstat, prop, caldav_mime_types,
-			    CALDAV_SUPP_DATA, data, datalen);
+    buf_cstring(&attrib); /* ensure a valid pointer */
+
+    ret = propfind_getdata(name, ns, fctx, propstat, prop, caldav_mime_types,
+			   CALDAV_SUPP_DATA, attrib.s, attrib.len);
+
+done:
+    buf_free(&attrib);
+    return ret;
 }
 
 
