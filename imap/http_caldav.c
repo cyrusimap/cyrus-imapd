@@ -4514,12 +4514,58 @@ static void sched_deliver_local(const char *recipient,
 	struct index_record record;
 	const char *msg_base = NULL;
 	unsigned long msg_size = 0;
+	int reject = 0;
 
 	/* Load message containing the resource and parse iCal data */
 	mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
 	mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
 	ical = icalparser_parse_string(msg_base + record.header_size);
 	mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
+
+	for (comp = icalcomponent_get_first_component(sched_data->itip,
+						      ICAL_ANY_COMPONENT);
+	     comp;
+	     comp = icalcomponent_get_next_component(sched_data->itip,
+						     ICAL_ANY_COMPONENT)) {
+	    /* Don't allow component type to be changed */
+	    kind = icalcomponent_isa(comp);
+	    switch (kind) {
+	    case ICAL_VEVENT_COMPONENT:
+		if (cdata->comp_type != CAL_COMP_VEVENT) reject = 1;
+		break;
+	    case ICAL_VTODO_COMPONENT:
+		if (cdata->comp_type != CAL_COMP_VTODO) reject = 1;
+		break;
+	    case ICAL_VJOURNAL_COMPONENT:
+		if (cdata->comp_type != CAL_COMP_VJOURNAL) reject = 1;
+		break;
+	    case ICAL_VFREEBUSY_COMPONENT:
+		if (cdata->comp_type != CAL_COMP_VFREEBUSY) reject = 1;
+		break;
+	    case ICAL_VAVAILABILITY_COMPONENT:
+		if (cdata->comp_type != CAL_COMP_VAVAILABILITY) reject = 1;
+		break;
+	    default:
+		break;
+	    }
+
+	    /* Don't allow ORGANIZER to be changed */
+	    if (cdata->organizer) {
+		prop =
+		    icalcomponent_get_first_property(comp,
+						     ICAL_ORGANIZER_PROPERTY);
+		if (prop && strcmp(cdata->organizer,
+				   icalproperty_get_organizer(prop))) {
+		    reject = 1;
+		}
+	    }
+
+	    if (reject) {
+		sched_data->status = sched_data->ischedule ?
+		    REQSTAT_REJECTED : SCHEDSTAT_REJECTED;
+		goto done;
+	    }
+	}
     }
 
     switch (method) {
