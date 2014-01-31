@@ -1796,6 +1796,9 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
 	if (!(cdata->comp_type & calfilter->comp)) return 0;
     }
 
+    /* Skip transparent resources */
+    if (calfilter->check_transp && cdata->transp) return 0;
+
     if (!icaltime_is_null_time(calfilter->start)) {
 	/* Perform CALDAV:time-range filtering */
 	struct icaltimetype dtstart = icaltime_from_string(cdata->dtstart);
