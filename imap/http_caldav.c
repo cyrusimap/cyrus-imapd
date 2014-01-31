@@ -3919,6 +3919,7 @@ int sched_busytime_query(struct transaction_t *txn,
 		snprintf(mailboxname, sizeof(mailboxname),
 			 "user.%s.%s", userid, calendarprefix);
 
+		fctx.davdb = NULL;
 		fctx.req_tgt->collection = NULL;
 		calfilter.busytime.len = 0;
 		busy = busytime_query_local(txn, &fctx, mailboxname,
