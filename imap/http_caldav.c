@@ -1688,6 +1688,11 @@ static int caldav_put(struct transaction_t *txn,
 	    }
 	    else {
 		/* Attendee scheduling object resource */
+		if (!oldical) {
+		    /* Can't reply to a non-existent invitation */
+		    ret = HTTP_FORBIDDEN;
+		    goto done;
+		}
 		sched_reply(userid, oldical, ical);
 	    }
 
