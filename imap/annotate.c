@@ -3061,7 +3061,7 @@ static int rename_cb(const char *mboxname __attribute__((unused)),
 	const char *newuserid = userid;
 
 	if (rrock->olduserid && rrock->newuserid &&
-	    !strcmp(rrock->olduserid, userid)) {
+	    !strcmpsafe(rrock->olduserid, userid)) {
 	    /* renaming a user, so change the userid for priv annots */
 	    newuserid = rrock->newuserid;
 	}
