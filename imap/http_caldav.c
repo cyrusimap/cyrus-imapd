@@ -4398,7 +4398,8 @@ static int deliver_merge_request(const char *attendee,
 						     ICAL_ATTENDEE_PROPERTY));
 	    param =
 		icalproperty_get_first_parameter(prop, ICAL_PARTSTAT_PARAMETER);
-	    if (icalparameter_get_partstat(param) ==
+	    if (param &&
+		icalparameter_get_partstat(param) ==
 		ICAL_PARTSTAT_NEEDSACTION) {
 		prop = 
 		    icalcomponent_get_first_property(new_comp,
