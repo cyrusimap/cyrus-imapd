@@ -4571,13 +4571,16 @@ static void sched_deliver_local(const char *recipient,
 	    }
 
 	    /* Don't allow ORGANIZER to be changed */
-	    if (cdata->organizer) {
+	    if (!reject && cdata->organizer) {
 		prop =
 		    icalcomponent_get_first_property(comp,
 						     ICAL_ORGANIZER_PROPERTY);
-		if (prop && strcmp(cdata->organizer,
-				   icalproperty_get_organizer(prop))) {
-		    reject = 1;
+		if (prop) {
+		    const char *organizer =
+			organizer = icalproperty_get_organizer(prop);
+
+		    if (!strncmp(organizer, "mailto:", 7)) organizer += 7;
+		    if (strcmp(cdata->organizer, organizer)) reject = 1;
 		}
 	    }
 
