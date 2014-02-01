@@ -1652,6 +1652,17 @@ static int caldav_put(struct transaction_t *txn,
 		goto done;
 	    }
 
+	    if (cdata->organizer) {
+		/* Don't allow ORGANIZER to be changed */
+		const char *p = organizer;
+
+		if (!strncmp(p, "mailto:", 7)) p += 7;
+		if (strcmp(cdata->organizer, p)) {
+		    ret = HTTP_FORBIDDEN;
+		    goto done;
+		}
+	    }
+
 	    /* Lookup the organizer */
 	    if (caladdress_lookup(organizer, &sparam)) {
 		syslog(LOG_ERR,
