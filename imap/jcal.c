@@ -415,7 +415,7 @@ extern void icalrecur_add_byrules(struct icalrecur_parser *parser, short *array,
 extern void icalrecur_add_bydayrules(struct icalrecur_parser *parser,
 				     const char* vals);
 
-static const char *json_x_value(json_t *jvalue)
+static const char *_json_x_value(json_t *jvalue)
 {
     static char buf[21];
 
@@ -426,6 +426,26 @@ static const char *json_x_value(json_t *jvalue)
     }
     else return json_string_value(jvalue);
 }
+
+static const char *json_x_value(json_t *jvalue)
+{
+    static struct buf buf = BUF_INITIALIZER;
+
+    if (json_is_array(jvalue)) {
+	size_t i, n = json_array_size(jvalue);
+	const char *sep = "";
+
+	buf_reset(&buf);
+	for (i = 0; i < n; i++) {
+	    buf_printf(&buf, "%s%s",
+		       sep, _json_x_value(json_array_get(jvalue, i)));
+	    sep = ",";
+	}
+	return buf_cstring(&buf);
+    }
+    else return _json_x_value(jvalue);
+}
+
 
 /*
  * Construct an iCalendar property value from a JSON object.
