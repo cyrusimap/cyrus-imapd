@@ -501,16 +501,6 @@ output_zone			(char		*directory,
 					g_strdup (zone_name));
   }
 
-  sprintf (output_directory, "%s/%s", directory, zone_directory);
-  ensure_directory_exists (output_directory);
-  sprintf (filename, "%s/%s.ics", output_directory, zone_filename);
-
-  if (VzicDumpChanges) {
-    sprintf (output_directory, "%s/ChangesVzic/%s", directory, zone_directory);
-    ensure_directory_exists (output_directory);
-    sprintf (changes_filename, "%s/%s", output_directory, zone_filename);
-  }
-
   if (zone_subdirectory) {
     sprintf (output_directory, "%s/%s/%s", directory, zone_directory,
 	     zone_subdirectory);
@@ -524,6 +514,29 @@ output_zone			(char		*directory,
       sprintf (changes_filename, "%s/%s", output_directory, zone_filename);
     }
   }
+  else if (zone_directory) {
+    sprintf (output_directory, "%s/%s", directory, zone_directory);
+    ensure_directory_exists (output_directory);
+    sprintf (filename, "%s/%s.ics", output_directory, zone_filename);
+
+    if (VzicDumpChanges) {
+      sprintf (output_directory, "%s/ChangesVzic/%s", directory, zone_directory);
+      ensure_directory_exists (output_directory);
+      sprintf (changes_filename, "%s/%s", output_directory, zone_filename);
+    }
+  }
+  else {
+    sprintf (output_directory, "%s", directory);
+    ensure_directory_exists (output_directory);
+    sprintf (filename, "%s/%s.ics", output_directory, zone_filename);
+
+    if (VzicDumpChanges) {
+      sprintf (output_directory, "%s/ChangesVzic", directory);
+      ensure_directory_exists (output_directory);
+      sprintf (changes_filename, "%s/%s", output_directory, zone_filename);
+    }
+  }
+
 
   /* Create the files. */
   fp = fopen (filename, "w");
@@ -596,17 +609,21 @@ parse_zone_name			(char		*name,
       }
     }
   }
-
+#if 0
   if (!first_slash_pos) {
 #if 0
 	fprintf (stderr, "No '/' character in Zone name: %s. Skipping.\n", name);
 #endif
 	return FALSE;
   }
-
+#endif
   if (invalid) {
     *directory = g_strdup ("Invalid");
     *filename = g_strdup_printf ("Zone%i", invalid_zone_num++);
+  } else if (!first_slash_pos) {
+      *directory = NULL;
+      *subdirectory = NULL;
+      *filename = g_strdup (name);
   } else {
     *first_slash_pos = '\0';
     *directory = g_strdup (name);
