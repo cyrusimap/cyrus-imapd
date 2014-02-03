@@ -499,11 +499,13 @@ parse_link_line			(ParsingData	*data)
       for (i = 0; i < len; i++) {
 	  dirs += to[i] == '/' ? 1 : 0;
       }
-      if (dirs) {
+      if (dirs >= 0) {
 	  char rel_from[255];
 	  char to_dir[255];
 	  char to_path[255];
-	  if (dirs == 1) {
+	  if (dirs == 0) {
+	      sprintf(rel_from, "%s.ics", from);
+	  } else if (dirs == 1) {
 	      sprintf(rel_from, "../%s.ics", from);
 	  } else if (dirs == 2) {
 	      sprintf(rel_from, "../../%s.ics", from);

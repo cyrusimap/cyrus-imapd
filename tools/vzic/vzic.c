@@ -167,8 +167,8 @@ main				(int		 argc,
 
   /* These are backwards-compatability and weird stuff. */
   convert_olson_file ("backward");
-#if 0
   convert_olson_file ("etcetera");
+#if 0
   convert_olson_file ("leapseconds");
   convert_olson_file ("pacificnew");
   convert_olson_file ("solar87");
