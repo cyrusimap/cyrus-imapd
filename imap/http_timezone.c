@@ -44,7 +44,8 @@
 /*
  * TODO:
  * - Implement localized names and "lang" parameter
- * - Implement action=find with case-insensitive match - strncasecmp()?
+ * - Remove duplicate TZs when doing action=find
+ * - Add tombstone at start= value for action=expand
  */
 
 #include <config.h>
@@ -142,7 +143,7 @@ struct namespace_t namespace_timezone = {
 	{ NULL,			NULL },			/* MKCOL	*/
 	{ NULL,			NULL },			/* MOVE		*/
 	{ &meth_options,	NULL },			/* OPTIONS	*/
-	{ NULL,			NULL },			/* POST		*/
+	{ &meth_get,		NULL },			/* POST	*/
 	{ NULL,			NULL },			/* PROPFIND	*/
 	{ NULL,			NULL },			/* PROPPATCH	*/
 	{ NULL,			NULL },			/* PUT		*/
@@ -439,7 +440,7 @@ static int action_list(struct transaction_t *txn, struct hash_table *params)
     }
 
 
-    if (txn->meth == METH_GET) {
+    if (txn->meth != METH_HEAD) {
 	char dtstamp[21];
 
 	/* Start constructing our response */
@@ -745,7 +746,7 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
     }
 
 
-    if (txn->meth == METH_GET) {
+    if (txn->meth != METH_HEAD) {
 	static struct buf pathbuf = BUF_INITIALIZER;
 	const char *path, *proto, *host, *msg_base = NULL;
 	unsigned long msg_size = 0;
@@ -918,7 +919,7 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
     }
 
 
-    if (txn->meth == METH_GET) {
+    if (txn->meth != METH_HEAD) {
 	static struct buf pathbuf = BUF_INITIALIZER;
 	const char *path, *msg_base = NULL;
 	unsigned long msg_size = 0;
@@ -978,7 +979,7 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
 		    break;
 
 		case ICAL_DTSTART_PROPERTY:
-		    dtstart = icalproperty_get_dtstart(prop);
+		    obs.onset = dtstart = icalproperty_get_dtstart(prop);
 		    break;
 
 		case ICAL_TZOFFSETFROM_PROPERTY:
@@ -1003,11 +1004,6 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
 	    if (!obs.name || !obs.offset_from || !obs.offset_to ||
 		icaltime_is_null_time(dtstart)) continue;
 
-	    /* Adjust DTSTART to UTC */
-	    memcpy(&obs.onset, &dtstart, sizeof(icaltimetype));
-	    icaltime_adjust(&obs.onset, 0, 0, 0, -obs.offset_from);
-	    obs.onset.is_utc = 1;
-
 	    if (icaltime_compare(obs.onset, end) > 0) {
 		/* Skip observance(s) after our window */
 	    }
@@ -1015,7 +1011,6 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
 		/* Add any RRULE observances within our window */
 		struct icalrecurrencetype rrule;
 		icalrecur_iterator *ritr;
-		icaltimetype recur;
 
 		rrule = icalproperty_get_rrule(rrule_prop);
 
@@ -1032,17 +1027,9 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
 		    obs.onset.day = start.day - 1;
 		}
 
-		/* Adjust iterator dtstart to local time */
-		icaltime_adjust(&obs.onset, 0, 0, 0, obs.offset_from);
-		obs.onset.is_utc = 0;
-
 		ritr = icalrecur_iterator_new(rrule, obs.onset);
-		while (!icaltime_is_null_time(recur =
+		while (!icaltime_is_null_time(obs.onset =
 					      icalrecur_iterator_next(ritr))) {
-		    /* Adjust observance to UTC */
-		    memcpy(&obs.onset, &recur, sizeof(icaltimetype));
-		    icaltime_adjust(&obs.onset, 0, 0, 0, -obs.offset_from);
-		    obs.onset.is_utc = 1;
 
 		    if (icaltime_compare(obs.onset, end) > 0) {
 			/* Quit if we've gone past our window */
@@ -1075,11 +1062,7 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
 		struct icaldatetimeperiodtype rdate =
 		    icalproperty_get_rdate(prop);
 
-		/* Adjust RDATE to UTC */
-		memcpy(&obs.onset, &rdate.time, sizeof(icaltimetype));
-		icaltime_adjust(&obs.onset, 0, 0, 0, -obs.offset_from);
-		obs.onset.is_utc = 1;
-
+		obs.onset = rdate.time;
 		if (icaltime_compare(obs.onset, start) < 0) {
 		    /* Skip observances prior to our window */
 		}
@@ -1108,7 +1091,7 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
 				  json_pack("{s:s s:s s:i s:i}",
 					    "name", obs->name,
 					    "onset",
-					    icaltime_as_ical_string(obs->onset),
+					    icaltime_as_iso_string(obs->onset),
 					    "utc-offset-from", obs->offset_from,
 					    "utc-offset-to", obs->offset_to));
 	}
