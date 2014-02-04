@@ -67,6 +67,6 @@ ec TZ_INVALID_TRUNCATE,
    "invalid-truncate"
 
 ec TZ_NOT_FOUND,
-   "missing-tzid"
+   "tzid-not-found"
 
 end
