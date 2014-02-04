@@ -67,7 +67,7 @@ DAV_OBJS = http_dav.o dav_db.o
 CALDAV_OBJS = http_caldav.o caldav_db.o smtpclient.o xcal.o jcal.o
 CARDDAV_OBJS = http_carddav.o carddav_db.o
 ISCHED_OBJS = http_ischedule.o
-TIMEZONE_OBJS = http_timezone.o zoneinfo_db.o
+TIMEZONE_OBJS = http_timezone.o zoneinfo_db.o tz_err.o
 HTTP_OBJS = httpd.o http_err.o http_proxy.o @HTTP_OBJS@
 HTTP_LIBS = @XML2_LIBS@ @ICAL_LIBS@ @SQLITE3_LIBS@ @DKIM_LIBS@ @JSON_LIBS@
 
@@ -133,7 +133,7 @@ PROGS = imapd lmtpd pop3d \
 
 BUILTSOURCES = imap_err.c imap_err.h pushstats.c pushstats.h \
 	lmtpstats.c lmtpstats.h mupdate_err.c mupdate_err.h \
-	nntp_err.c nntp_err.h http_err.c http_err.h
+	nntp_err.c nntp_err.h http_err.c http_err.h tz_err.c tz_err.h
 
 all: $(BUILTSOURCES) $(PROGS) $(SUIDPROGS)
 
@@ -194,6 +194,11 @@ http_err.c: http_err.et
 	$(COMPILE_ET) $(srcdir)/http_err.et
 
 http_err.h: http_err.c
+
+tz_err.c: tz_err.et
+	$(COMPILE_ET) $(srcdir)/tz_err.et
+
+tz_err.h: tz_err.c
 
 ### Services
 idled: idled.o mutex_fake.o libimap.a $(DEPLIBS)

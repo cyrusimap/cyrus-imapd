@@ -1,6 +1,6 @@
 /* http_timezone.c -- Routines for handling timezone service requests in httpd
  *
- * Copyright (c) 1994-2013 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2014 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -45,7 +45,6 @@
  * TODO:
  * - Implement localized names and "lang" parameter
  * - Remove duplicate TZs when doing action=find
- * - Use JSON body for 404 response
  */
 
 #include <config.h>
@@ -67,6 +66,7 @@
 #include "jcal.h"
 #include "map.h"
 #include "tok.h"
+#include "tz_err.h"
 #include "util.h"
 #include "version.h"
 #include "xcal.h"
@@ -86,7 +86,7 @@ static int action_get(struct transaction_t *txn, struct hash_table *params);
 static int action_expand(struct transaction_t *txn, struct hash_table *params);
 static int json_response(int code, struct transaction_t *txn, json_t *root,
 			 char **resp);
-static int json_error_response(struct transaction_t *txn, const char *err);
+static int json_error_response(struct transaction_t *txn, long code);
 
 struct observance {
     const char *name;
@@ -172,6 +172,8 @@ static void timezone_init(struct buf *serverinfo)
     }
 
     compile_time = calc_compile_time(__TIME__, __DATE__);
+
+    initialize_tz_error_table();
 }
 
 
@@ -211,7 +213,7 @@ static int meth_get(struct transaction_t *txn,
 	for (ap = actions; ap->name && strcmp(action->s, ap->name); ap++);
     }
 
-    if (!ap || !ap->name) ret = json_error_response(txn, "invalid-action");
+    if (!ap || !ap->name) ret = json_error_response(txn, TZ_INVALID_ACTION);
     else ret = ap->proc(txn, &query_params);
 
     free_hash_table(&query_params, (void (*)(void *)) &freestrlist);
@@ -381,7 +383,7 @@ static int action_list(struct transaction_t *txn, struct hash_table *params)
     if (!strcmp("find", param->s)) {
 	name = hash_lookup("name", params);
 	if (!name || name->next  /* mandatory, once only */) {
-	    return json_error_response(txn, "invalid-name");
+	    return json_error_response(txn, TZ_INVALID_NAME);
 	}
 	tzid_only = 0;
     }
@@ -390,12 +392,12 @@ static int action_list(struct transaction_t *txn, struct hash_table *params)
 	if (param) {
 	    changedsince = icaltime_as_timet(icaltime_from_string(param->s));
 	    if (!changedsince || param->next  /* once only */)
-		return json_error_response(txn, "invalid-changedsince");
+		return json_error_response(txn, TZ_INVALID_CHANGEDSINCE);
 	}
 
 	name = hash_lookup("tzid", params);
 	if (name) {
-	    if (changedsince) return json_error_response(txn, "invalid-tzid");
+	    if (changedsince) return json_error_response(txn, TZ_INVALID_TZID);
 	    else {
 		/* Check for tzid=*, and revert to empty list */
 		struct strlist *sl;
@@ -684,7 +686,7 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
     param = hash_lookup("tzid", params);
     if (!param || param->next  /* mandatory, once only */
 	|| strchr(param->s, '.')  /* paranoia */) {
-	return json_error_response(txn, "invalid-tzid");
+	return json_error_response(txn, TZ_INVALID_TZID);
     }
     tzid = param->s;
 
@@ -698,7 +700,7 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
     else mime = tz_mime_types;
 
     if (!mime || !mime->content_type) {
-	return json_error_response(txn, "invalid-format");
+	return json_error_response(txn, TZ_INVALID_FORMAT);
     }
 
     /* Check for any truncation */
@@ -707,12 +709,14 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
 	truncate = icaltime_from_day_of_year(1, atoi(param->s));
 	truncate.is_date = truncate.hour = truncate.minute = truncate.second = 0;
 	if (icaltime_is_null_time(truncate) || param->next  /* once only */)
-	    return json_error_response(txn, "invalid-truncate");
+	    return json_error_response(txn, TZ_INVALID_TRUNCATE);
     }
 
     /* Get info record from the database */
-    if ((r = zoneinfo_lookup(tzid, &zi)))
-	return (r == CYRUSDB_NOTFOUND ? HTTP_NOT_FOUND : HTTP_SERVER_ERROR);
+    if ((r = zoneinfo_lookup(tzid, &zi))) {
+	return (r == CYRUSDB_NOTFOUND ?
+		json_error_response(txn, TZ_NOT_FOUND) : HTTP_SERVER_ERROR);
+    }
 
     /* Generate ETag & Last-Modified from info record */
     assert(!buf_len(&txn->buf));
@@ -845,7 +849,7 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
     param = hash_lookup("tzid", params);
     if (!param || param->next  /* mandatory, once only */
 	|| strchr(param->s, '.')  /* paranoia */) {
-	return json_error_response(txn, "invalid-tzid");
+	return json_error_response(txn, TZ_INVALID_TZID);
     }
     tzid = param->s;
 
@@ -853,14 +857,14 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
     if (param) {
 	changedsince = icaltime_as_timet(icaltime_from_string(param->s));
 	if (!changedsince || param->next  /* once only */)
-	    return json_error_response(txn, "invalid-changedsince");
+	    return json_error_response(txn, TZ_INVALID_CHANGEDSINCE);
     }
 
     param = hash_lookup("start", params);
     if (param) {
 	start = icaltime_from_string(param->s);
 	if (icaltime_is_null_time(start) || param->next  /* once only */)
-	    return json_error_response(txn, "invalid-start");
+	    return json_error_response(txn, TZ_INVALID_START);
     }
     else {
 	/* Default to current year */
@@ -876,7 +880,7 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
 	end = icaltime_from_string(param->s);
 	if (icaltime_compare(end, start) <= 0  /* end MUST be > start */
 	    || param->next  /* once only */)
-	    return json_error_response(txn, "invalid-end");
+	    return json_error_response(txn, TZ_INVALID_END);
     }
     else {
 	/* Default to start year + 10 */
@@ -886,8 +890,10 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
     end.is_date = 0;
 
     /* Get info record from the database */
-    if ((r = zoneinfo_lookup(tzid, &zi)))
-	return (r == CYRUSDB_NOTFOUND ? HTTP_NOT_FOUND : HTTP_SERVER_ERROR);
+    if ((r = zoneinfo_lookup(tzid, &zi))) {
+	return (r == CYRUSDB_NOTFOUND ?
+		json_error_response(txn, TZ_NOT_FOUND) : HTTP_SERVER_ERROR);
+    }
 
     /* Generate ETag & Last-Modified from info record */
     assert(!buf_len(&txn->buf));
@@ -1154,15 +1160,26 @@ static int json_response(int code, struct transaction_t *txn, json_t *root,
 }
 
 
-static int json_error_response(struct transaction_t *txn, const char *err)
+static int json_error_response(struct transaction_t *txn, long tz_code)
 {
     json_t *root;
+    long http_code;
 
-    root = json_pack("{s:s}", "error", err);
+    root = json_pack("{s:s}", "error", error_message(tz_code));
     if (!root) {
 	txn->error.desc = "Unable to create JSON response";
 	return HTTP_SERVER_ERROR;
     }
 
-    return json_response(HTTP_BAD_REQUEST, txn, root, NULL);
+    switch (tz_code) {
+    case TZ_NOT_FOUND:
+	http_code = HTTP_NOT_FOUND;
+	break;
+
+    default:
+	http_code = HTTP_BAD_REQUEST;
+	break;
+    }
+
+    return json_response(http_code, txn, root, NULL);
 }
