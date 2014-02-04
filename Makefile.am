@@ -62,6 +62,8 @@ DISTCLEANFILES = imap/imap_err.c \
 	imap/nntp_err.h \
 	imap/http_err.c \
 	imap/http_err.h \
+	imap/tz_err.c \
+	imap/tz_err.h \
 	com_err/et/compile_et \
 	perl/annotator/Makefile \
 	perl/annotator/Makefile.PL \
@@ -172,6 +174,7 @@ HTTP_SOURCES = imap/http_err.c \
 	       imap/http_rss.c \
 	       imap/http_timezone.c \
 	       imap/zoneinfo_db.c \
+	       imap/tz_err.c \
 	       imap/caldav_db.c \
 	       imap/proxy.c \
 	       imap/smtpclient.c \
@@ -936,6 +939,7 @@ imap_httpd_SOURCES = \
 	imap/http_caldav.c \
 	imap/http_timezone.c \
 	imap/zoneinfo_db.c \
+	imap/tz_err.c \
 	imap/smtpclient.c \
 	imap/xcal.c \
 	imap/jcal.c \
@@ -1002,6 +1006,9 @@ imap/nntp_err.h imap/nntp_err.c: imap/nntp_err.et $(COMPILE_ET_DEP)
 
 imap/http_err.h imap/http_err.c: imap/http_err.et $(COMPILE_ET_DEP)
 	cd imap && $(COMPILE_ET) ../$(top_srcdir)/imap/http_err.et
+
+imap/tz_err.h imap/tz_err.c: imap/tz_err.et $(COMPILE_ET_DEP)
+	cd imap && $(COMPILE_ET) ../$(top_srcdir)/imap/tz_err.et
 
 if MAINTAINER_MODE
 imap/rfc822_header.c: imap/rfc822_header.st
