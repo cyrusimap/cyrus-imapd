@@ -45,7 +45,7 @@
  * TODO:
  * - Implement localized names and "lang" parameter
  * - Remove duplicate TZs when doing action=find
- * - Add tombstone at start= value for action=expand
+ * - Use JSON body for 404 response
  */
 
 #include <config.h>
@@ -869,6 +869,7 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
 
 	start = icaltime_from_day_of_year(1, tm->tm_year + 1900);
     }
+    start.is_date = 0;
 
     param = hash_lookup("end", params);
     if (param) {
@@ -882,6 +883,7 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
 	memcpy(&end, &start, sizeof(icaltimetype));
 	end.year += 10;
     }
+    end.is_date = 0;
 
     /* Get info record from the database */
     if ((r = zoneinfo_lookup(tzid, &zi)))
@@ -924,6 +926,7 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
 	unsigned long msg_size = 0;
 	icalcomponent *ical, *vtz, *comp;
 	char dtstamp[21];
+	struct observance tombstone;
 	icalarray *obsarray;
 	json_t *jobsarray;
 	unsigned n;
@@ -953,6 +956,8 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
 
 	/* Create an array of observances */
 	obsarray = icalarray_new(sizeof(struct observance), 20);
+
+	memset(&tombstone, 0, sizeof(struct observance));
 
 	/* Process each VTMEZONE STANDARD/DAYLIGHT subcomponent */
 	vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
@@ -1020,10 +1025,10 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
 		}
 
 		if (icaltime_compare(start, obs.onset) > 0) {
-		    /* Set iterator dtstart to be 1 day prior to our window */
-		    obs.onset.year = start.year;
+		    /* Set iterator to start 1 year prior to our window */
+		    obs.onset.year = start.year - 1;
 		    obs.onset.month = start.month;
-		    obs.onset.day = start.day - 1;
+		    obs.onset.day = start.day;
 		}
 
 		ritr = icalrecur_iterator_new(rrule, obs.onset);
@@ -1035,7 +1040,9 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
 			break;
 		    }
 		    else if (icaltime_compare(obs.onset, start) < 0) {
-			/* Skip observances prior to our window */
+			/* Skip observances prior to our window,
+			   but check vs tombstone */
+			check_tombstone(&tombstone, &obs, NULL);
 		    }
 		    else {
 			/* Add the observance to our array */
@@ -1045,7 +1052,9 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
 		icalrecur_iterator_free(ritr);
 	    }
 	    else if (icaltime_compare(obs.onset, start) < 0) {
-		/* Skip observances prior to our window */
+		/* Skip observances prior to our window,
+		   but check vs tombstone */
+		check_tombstone(&tombstone, &obs, NULL);
 	    }
 	    else {
 		/* Add the DTSTART observance to our array */
@@ -1063,7 +1072,9 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
 
 		obs.onset = rdate.time;
 		if (icaltime_compare(obs.onset, start) < 0) {
-		    /* Skip observances prior to our window */
+		    /* Skip observances prior to our window,
+		       but check vs tombstone */
+		    check_tombstone(&tombstone, &obs, NULL);
 		}
 		else if (icaltime_compare(obs.onset, end) > 0) {
 		    /* Skip observances after our window */
@@ -1076,6 +1087,12 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
 		    icalarray_append(obsarray, &obs);
 		}
 	    }
+	}
+
+	if (icaltime_compare(tombstone.onset, start) < 0) {
+	    /* Need to add a tombstone observance to our array */
+	    tombstone.onset = start;
+	    icalarray_append(obsarray, &tombstone);
 	}
 
 	/* Sort the observances by onset */
