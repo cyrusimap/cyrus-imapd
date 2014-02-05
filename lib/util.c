@@ -826,15 +826,12 @@ static size_t roundup(size_t size)
 }
 
 /* this function has a side-effect of always leaving the buffer writable */
-EXPORTED void buf_ensure(struct buf *buf, size_t n)
+EXPORTED void _buf_ensure(struct buf *buf, size_t n)
 {
     size_t newalloc = roundup(buf->len + n);
 
     /* can't create a zero byte buffer */
     assert(newalloc);
-
-    /* protect against wrap */
-    assert(newalloc >= buf->len);
 
     if (buf->alloc >= newalloc)
 	return;
@@ -852,7 +849,7 @@ EXPORTED void buf_ensure(struct buf *buf, size_t n)
 	    memcpy(s, buf->s, buf->len);
 	}
 
-	/* can release MMAP now, we've already copied the data out */
+	/* can release MMAP now, we've copied the data out */
 	if (buf->flags & BUF_MMAP) {
 	    const char *base = buf->s;
 	    size_t len = buf->len;
@@ -869,13 +866,16 @@ EXPORTED void buf_ensure(struct buf *buf, size_t n)
 
 EXPORTED const char *buf_cstring(struct buf *buf)
 {
-    if (!(buf->flags & BUF_CSTRING) || buf->s == NULL) {
-	buf_ensure(buf, 1);
-	buf->s[buf->len] = '\0';
-	buf->flags |= BUF_CSTRING;
-    }
-
+    buf_ensure(buf, 1);
+    buf->s[buf->len] = '\0';
     return buf->s;
+}
+
+EXPORTED char *buf_newcstring(struct buf *buf)
+{
+    char *ret = xstrdup(buf_cstring(buf));
+    buf_reset(buf);
+    return ret;
 }
 
 EXPORTED char *buf_release(struct buf *buf)
@@ -953,7 +953,6 @@ EXPORTED void buf_truncate(struct buf *buf, size_t len)
 	memset(buf->s + buf->len, 0, more);
     }
     buf->len = len;
-    buf->flags &= ~BUF_CSTRING;
 }
 
 EXPORTED void buf_setcstr(struct buf *buf, const char *str)
@@ -998,7 +997,6 @@ EXPORTED void buf_appendmap(struct buf *buf, const char *base, size_t len)
 	buf_ensure(buf, len);
 	memcpy(buf->s + buf->len, base, len);
 	buf->len += len;
-	buf->flags &= ~BUF_CSTRING;
     }
 }
 
@@ -1023,13 +1021,6 @@ EXPORTED void buf_cowappendfree(struct buf *buf, char *base, unsigned int len)
 	buf_appendmap(buf, base, len);
 	free(base);
     }
-}
-
-EXPORTED void buf_putc(struct buf *buf, char c)
-{
-    buf_ensure(buf, 1);
-    buf->s[buf->len++] = c;
-    buf->flags &= ~BUF_CSTRING;
 }
 
 EXPORTED void buf_vprintf(struct buf *buf, const char *fmt, va_list args)
@@ -1057,9 +1048,6 @@ EXPORTED void buf_vprintf(struct buf *buf, const char *fmt, va_list args)
     va_end(ap);
 
     buf->len += n;
-    /* vsnprintf() gave us a trailing NUL, so we may as well remember
-     * that for later */
-    buf->flags |= BUF_CSTRING;
 }
 
 EXPORTED void buf_printf(struct buf *buf, const char *fmt, ...)
@@ -1069,18 +1057,6 @@ EXPORTED void buf_printf(struct buf *buf, const char *fmt, ...)
     va_start(args, fmt);
     buf_vprintf(buf, fmt, args);
     va_end(args);
-}
-
-static void buf_writable_cstring(struct buf *buf)
-{
-    if ((buf->flags & BUF_CSTRING) && !buf->alloc) {
-	/* has a \0 terminator but not writable: force
-	 * re-allocation of the data and initialisation
-	 * of the terminator */
-	buf->flags &= ~BUF_CSTRING;
-    }
-    buf_cstring(buf);
-    assert(buf->alloc > 0);
 }
 
 static void buf_replace_buf(struct buf *buf,
@@ -1093,7 +1069,7 @@ static void buf_replace_buf(struct buf *buf,
 	length = buf->len - offset;
 
     /* we need buf to be a writable C string now please */
-    buf_writable_cstring(buf);
+    buf_cstring(buf);
 
     if (replace->len > length) {
 	/* string will need to expand */
@@ -1147,7 +1123,7 @@ EXPORTED int buf_replace_char(struct buf *buf, char match, char replace)
     size_t i;
 
     /* we need writable, so may as well cstring it */
-    buf_writable_cstring(buf);
+    buf_cstring(buf);
 
     for (i = 0; i < buf->len; i++) {
 	if (buf->s[i] == match) {
@@ -1305,7 +1281,7 @@ EXPORTED void buf_init_ro_cstr(struct buf *buf, const char *str)
 {
     buf->alloc = 0;
     buf->len = (str ? strlen(str) : 0);
-    buf->flags = (str ? BUF_CSTRING : 0);
+    buf->flags = 0;
     buf->s = (char *)str;
 }
 

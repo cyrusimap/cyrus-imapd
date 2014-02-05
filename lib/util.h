@@ -223,7 +223,6 @@ extern double timesub(const struct timeval *start, const struct timeval *end);
 
 extern clock_t sclock(void);
 
-#define BUF_CSTRING (1<<0)
 #define BUF_MMAP    (1<<1)
 
 struct buf {
@@ -234,11 +233,15 @@ struct buf {
 };
 #define BUF_INITIALIZER	{ NULL, 0, 0, 0 }
 
+#define buf_ensure(b, n) do { if ((b)->alloc < (b)->len + (n)) _buf_ensure((b), (n)); } while (0)
+#define buf_putc(b, c) do { buf_ensure((b), 1); (b)->s[(b)->len++] = (c); } while (0)
+
+void _buf_ensure(struct buf *buf, size_t len);
 const char *buf_cstring(struct buf *buf);
 const char *buf_cstringnull(struct buf *buf);
 char *buf_release(struct buf *buf);
+char *buf_newcstring(struct buf *buf);
 char *buf_releasenull(struct buf *buf);
-void buf_ensure(struct buf *buf, size_t morebytes);
 void buf_getmap(struct buf *buf, const char **base, size_t *len);
 int buf_getline(struct buf *buf, FILE *fp);
 size_t buf_len(const struct buf *buf);
@@ -257,7 +260,6 @@ void buf_cowappendfree(struct buf *buf, char *base, unsigned int len);
 void buf_insert(struct buf *dst, unsigned int off, const struct buf *src);
 void buf_insertcstr(struct buf *buf, unsigned int off, const char *str);
 void buf_insertmap(struct buf *buf, unsigned int off, const char *base, int len);
-void buf_putc(struct buf *buf, char c);
 void buf_vprintf(struct buf *buf, const char *fmt, va_list args);
 void buf_printf(struct buf *buf, const char *fmt, ...)
 	        __attribute__((format(printf,2,3)));
