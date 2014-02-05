@@ -297,13 +297,13 @@ struct parseentry_rock {
     int doingacl;
 };
 
-int parseentry_cb(int type, struct dlistsax_state *s)
+int parseentry_cb(int type, struct dlistsax_data *d)
 {
-    struct parseentry_rock *rock = (struct parseentry_rock *)s->rock;
+    struct parseentry_rock *rock = (struct parseentry_rock *)d->rock;
 
     switch(type) {
     case DLISTSAX_KVLISTSTART:
-	if (!strcmp(buf_cstring(&s->kbuf), "A")) {
+	if (!strcmp(buf_cstring(&d->kbuf), "A")) {
 	    rock->doingacl = 1;
 	}
 	break;
@@ -318,24 +318,24 @@ int parseentry_cb(int type, struct dlistsax_state *s)
 	    buf_putc(rock->aclbuf, '\t');
 	}
 	else {
-	    const char *key = buf_cstring(&s->kbuf);
+	    const char *key = buf_cstring(&d->kbuf);
 	    if (!strcmp(key, "I")) {
-		rock->mbentry->uniqueid = buf_release(&s->buf);
+		rock->mbentry->uniqueid = buf_newcstring(&d->buf);
 	    }
 	    else if (!strcmp(key, "M")) {
-		rock->mbentry->mtime = atoi(buf_cstring(&s->buf));
+		rock->mbentry->mtime = atoi(buf_cstring(&d->buf));
 	    }
 	    else if (!strcmp(key, "P")) {
-		rock->mbentry->partition = buf_release(&s->buf);
+		rock->mbentry->partition = buf_newcstring(&d->buf);
 	    }
 	    else if (!strcmp(key, "S")) {
-		rock->mbentry->server = buf_release(&s->buf);
+		rock->mbentry->server = buf_newcstring(&d->buf);
 	    }
 	    else if (!strcmp(key, "T")) {
-		rock->mbentry->mbtype = mboxlist_string_to_mbtype(buf_cstring(&s->buf));
+		rock->mbentry->mbtype = mboxlist_string_to_mbtype(buf_cstring(&d->buf));
 	    }
 	    else if (!strcmp(key, "V")) {
-		rock->mbentry->uidvalidity = atoi(buf_cstring(&s->buf));
+		rock->mbentry->uidvalidity = atoi(buf_cstring(&d->buf));
 	    }
 	}
     }
