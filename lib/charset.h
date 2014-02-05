@@ -125,4 +125,9 @@ extern int charset_extractfile(index_search_text_receiver_t receiver,
                                size_t len, charset_index charset,
                                int encoding);
 
+
+/* Function to generate new mimeheaders on created messages.  Caller must
+ * free the memory */
+extern char *charset_encode_mimeheader(const char *header, size_t len);
+
 #endif /* INCLUDED_CHARSET_H */
