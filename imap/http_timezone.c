@@ -742,6 +742,20 @@ static void truncate_vtimezone(icalcomponent *vtz, icaltimetype start)
     expand_vtimezone(vtz, NULL, start, end);
 }
 
+/* Version of icaltime_from_string() which supports just YYYY */
+static icaltimetype icaltime_from_year_string(const char *str)
+{
+    struct icaltimetype tt;
+    size_t size = strlen(str);
+
+    if (size < 4 || size > 4) return icaltime_null_time();
+
+    tt = icaltime_from_day_of_year(1, atoi(str));
+    tt.is_date = tt.hour = tt.minute = tt.second = 0;
+
+    return tt;
+}
+
 /* Perform a get action */
 static int action_get(struct transaction_t *txn, struct hash_table *params)
 {
@@ -780,8 +794,7 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
     /* Check for any truncation */
     param = hash_lookup("truncate", params);
     if (param) {
-	truncate = icaltime_from_day_of_year(1, atoi(param->s));
-	truncate.is_date = truncate.hour = truncate.minute = truncate.second = 0;
+	truncate = icaltime_from_year_string(param->s);
 	if (icaltime_is_null_time(truncate) || param->next  /* once only */)
 	    return json_error_response(txn, TZ_INVALID_TRUNCATE);
     }
@@ -936,7 +949,7 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
 
     param = hash_lookup("start", params);
     if (param) {
-	start = icaltime_from_string(param->s);
+	start = icaltime_from_year_string(param->s);
 	if (icaltime_is_null_time(start) || param->next  /* once only */)
 	    return json_error_response(txn, TZ_INVALID_START);
     }
@@ -951,7 +964,7 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
 
     param = hash_lookup("end", params);
     if (param) {
-	end = icaltime_from_string(param->s);
+	end = icaltime_from_year_string(param->s);
 	if (icaltime_compare(end, start) <= 0  /* end MUST be > start */
 	    || param->next  /* once only */)
 	    return json_error_response(txn, TZ_INVALID_END);
