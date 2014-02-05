@@ -44,7 +44,6 @@
 /*
  * TODO:
  * - Implement localized names and "lang" parameter
- * - Remove duplicate TZs when doing action=find
  */
 
 #include <config.h>
@@ -341,18 +340,28 @@ static int action_capa(struct transaction_t *txn,
     return json_response(precond, txn, root, &resp);
 }
 
+struct list_rock {
+    json_t *tzarray;
+    struct hash_table *tztable;
+};
 
 static int list_cb(const char *tzid, int tzidlen,
 		   struct zoneinfo *zi, void *rock)
 {
-    json_t *tzarray = (json_t *) rock, *tz;
+    struct list_rock *lrock = (struct list_rock *) rock;
     char tzidbuf[200], lastmod[21];
+    json_t *tz;
+
+    if (lrock->tztable) {
+	if (hash_lookup(tzid, lrock->tztable)) return 0;
+	hash_insert(tzid, (void *) 0xDEADBEEF, lrock->tztable);
+    }
 
     strlcpy(tzidbuf, tzid, tzidlen+1);
     rfc3339date_gen(lastmod, sizeof(lastmod), zi->dtstamp);
 
     tz = json_pack("{s:s s:s}", "tzid", tzidbuf, "last-modified", lastmod);
-    json_array_append_new(tzarray, tz);
+    json_array_append_new(lrock->tzarray, tz);
 
     if (zi->data) {
 	struct strlist *sl;
@@ -442,6 +451,8 @@ static int action_list(struct transaction_t *txn, struct hash_table *params)
 
 
     if (txn->meth != METH_HEAD) {
+	struct list_rock lrock = { NULL, NULL };
+	struct hash_table tzids;
 	char dtstamp[21];
 
 	/* Start constructing our response */
@@ -452,11 +463,19 @@ static int action_list(struct transaction_t *txn, struct hash_table *params)
 	    return HTTP_SERVER_ERROR;
 	}
 
+	lrock.tzarray = json_object_get(root, "timezones");
+	if (!tzid_only) {
+	    construct_hash_table(&tzids, 500, 1);
+	    lrock.tztable = &tzids;
+	}
+
 	/* Add timezones to array */
 	do {
 	    zoneinfo_find(name ? name->s : NULL, tzid_only, changedsince,
-			  &list_cb, json_object_get(root, "timezones"));
+			  &list_cb, &lrock);
 	} while (name && (name = name->next));
+
+	if (!tzid_only) free_hash_table(&tzids, NULL);
     }
 
     /* Output the JSON object */
