@@ -647,6 +647,191 @@ EXPORTED void dlist_free(struct dlist **dlp)
     *dlp = NULL;
 }
 
+struct dlistsax_state {
+    const char *base;
+    const char *p;
+    const char *end;
+    dlistsax_cb_t *proc;
+    int depth;
+    struct dlistsax_data d;
+    struct buf gbuf;
+};
+
+static int _parseqstring(struct dlistsax_state *s, struct buf *buf)
+{
+    buf->len = 0;
+
+    /* get over the first quote */
+    if (*s->p++ != '"') return IMAP_INVALID_IDENTIFIER;
+
+    while (s->p < s->end) {
+	/* found the end quote */
+	if (*s->p == '"') {
+	    s->p++;
+	    return 0;
+	}
+	/* backslash just quotes the next char, no matter what it is */
+	if (*s->p == '\\') {
+	    s->p++;
+	    if (s->p == s->end) break;
+	    /* fall through */
+	}
+
+	buf_putc(buf, *s->p++);
+    }
+
+    return IMAP_INVALID_IDENTIFIER;
+}
+
+static int _parseliteral(struct dlistsax_state *s, struct buf *buf)
+{
+    size_t len = 0;
+
+    if (*s->p++ != '{') return IMAP_INVALID_IDENTIFIER;
+
+    while (s->p < s->end) {
+	if (cyrus_isdigit(*s->p)) {
+	    len = (len * 10) + (*s->p++ - '0');
+	}
+	else if (*s->p == '}') {
+	    if (s->p + 3 + len >= s->end) break;
+	    if (s->p[1] != '\r') break;
+	    if (s->p[2] != '\n') break;
+	    buf_setmap(buf, s->p+3, len);
+	    s->p += len = 3;
+	    return 0;
+	}
+    }
+
+    return IMAP_INVALID_IDENTIFIER;
+}
+
+static int _parseitem(struct dlistsax_state *s, struct buf *buf)
+{
+    const char *sp;
+    if (*s->p == '"')
+	return _parseqstring(s, buf);
+    else if (*s->p == '{')
+	return _parseliteral(s, buf);
+
+    sp = memchr(s->p, ' ', s->end - s->p);
+    if (!sp) sp = s->end;
+    while (sp[-1] == ')' && sp > s->p) sp--;
+    /* this is much faster because it doesn't do a reset and check the MMAP flag */
+    buf->len = 0;
+    buf_appendmap(buf, s->p, sp - s->p);
+    s->p = sp;
+    return 0; /* this could be the last thing, so end is OK */
+}
+
+static int _parsesax(struct dlistsax_state *s, int parsekey)
+{
+    int r = 0;
+
+    s->depth++;
+
+    /* handle the key if wanted */
+    if (parsekey) {
+	r = _parseitem(s, &s->d.kbuf);
+	if (r) return r;
+	if (s->p >= s->end) return IMAP_INVALID_IDENTIFIER;
+	if (*s->p == ' ') s->p++;
+	else return IMAP_INVALID_IDENTIFIER;
+    }
+    else {
+	s->d.kbuf.len = 0;
+    }
+
+    if (s->p >= s->end) return IMAP_INVALID_IDENTIFIER;
+
+    /* check what sort of value we have */
+    if (*s->p == '(') {
+	r = s->proc(DLISTSAX_LISTSTART, &s->d);
+	if (r) return r;
+
+	s->p++;
+	if (s->p >= s->end) return IMAP_INVALID_IDENTIFIER;
+
+	while (*s->p != ')') {
+	    r = _parsesax(s, 0);
+	    if (r) return r;
+	    if (*s->p == ')') break;
+	    if (*s->p == ' ') s->p++;
+	    else return IMAP_INVALID_IDENTIFIER;
+	    if (s->p >= s->end) return IMAP_INVALID_IDENTIFIER;
+	}
+
+	r = s->proc(DLISTSAX_LISTEND, &s->d);
+	if (r) return r;
+
+	s->p++;
+    }
+    else if (*s->p == '%') {
+	s->p++;
+	if (s->p >= s->end) return IMAP_INVALID_IDENTIFIER;
+	/* no whitespace allowed here */
+	if (*s->p == '(') {
+	    r = s->proc(DLISTSAX_KVLISTSTART, &s->d);
+	    if (r) return r;
+
+	    s->p++;
+	    if (s->p >= s->end) return IMAP_INVALID_IDENTIFIER;
+
+	    while (*s->p != ')') {
+		r = _parsesax(s, 1);
+		if (r) return r;
+		if (*s->p == ')') break;
+		if (*s->p == ' ') s->p++;
+		else return IMAP_INVALID_IDENTIFIER;
+		if (s->p >= s->end) return IMAP_INVALID_IDENTIFIER;
+	    }
+
+	    r = s->proc(DLISTSAX_KVLISTEND, &s->d);
+	    if (r) return r;
+
+	    s->p++;
+	}
+	else {
+	    /* unknown percent type */
+	    return IMAP_INVALID_IDENTIFIER;
+	}
+    }
+    else {
+	r = _parseitem(s, &s->d.buf);
+	if (r) return r;
+
+	r = s->proc(DLISTSAX_STRING, &s->d);
+	if (r) return r;
+    }
+
+    s->depth--;
+
+    /* success */
+    return 0;
+}
+
+EXPORTED int dlist_parsesax(const char *base, size_t len, int parsekey,
+			    dlistsax_cb_t *proc, void *rock)
+{
+    static struct dlistsax_state state;
+    int r;
+
+    state.base = base;
+    state.p = base;
+    state.end = base + len;
+    state.proc = proc;
+    state.d.rock = rock;
+
+    r = _parsesax(&state, parsekey);
+
+    if (r) return r;
+
+    if (state.p < state.end)
+	return IMAP_IOERROR;
+
+    return 0;
+}
+
 static char next_nonspace(struct protstream *in, char c)
 {
     while (Uisspace(c)) c = prot_getc(in);

@@ -51,6 +51,25 @@
 #include "mailbox.h"
 #include "message_guid.h"
 
+enum dlistsax_t {
+    DLISTSAX_LISTSTART,
+    DLISTSAX_LISTEND,
+    DLISTSAX_KVLISTSTART,
+    DLISTSAX_KVLISTEND,
+    DLISTSAX_RESERVE,
+    DLISTSAX_LITERAL,
+    DLISTSAX_FLAG,
+    DLISTSAX_STRING,
+    /* error callbacks */
+    DLISTSAX_ERROR
+};
+
+struct dlistsax_data {
+    struct buf kbuf;
+    struct buf buf;
+    void *rock;
+};
+
 enum dlist_t {
     DL_NIL = 0,
     DL_ATOM,
@@ -206,6 +225,11 @@ char dlist_parse_asatomlist(struct dlist **dlp, int parsekey,
 			    struct protstream *in);
 int dlist_parsemap(struct dlist **dlp, int parsekeys,
 		   const char *base, unsigned len);
+
+typedef int dlistsax_cb_t(int type, struct dlistsax_data *data);
+
+int dlist_parsesax(const char *base, size_t len, int parsekey,
+		   dlistsax_cb_t *proc, void *rock);
 
 void dlist_stitch(struct dlist *parent, struct dlist *child);
 void dlist_unstitch(struct dlist *parent, struct dlist *child);
