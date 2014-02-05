@@ -489,8 +489,10 @@ static int rdate_compare(const void *rdate1, const void *rdate2)
 			    ((struct rdate *) rdate2)->date.time);
 }
 
-static void truncate_vtimezone(icalcomponent *vtz, icaltimetype *truncate)
+static void expand_vtimezone(icalcomponent *vtz, icalarray *obsarray,
+			     icaltimetype start, icaltimetype end)
 {
+    int truncate = !obsarray;
     icalcomponent *comp, *nextc;
     struct observance tombstone;
 
@@ -500,7 +502,8 @@ static void truncate_vtimezone(icalcomponent *vtz, icaltimetype *truncate)
     for (comp = icalcomponent_get_first_component(vtz, ICAL_ANY_COMPONENT);
 	 comp; comp = nextc) {
 	icalproperty *prop, *dtstart_prop = NULL, *rrule_prop = NULL;
-	icalarray *rdate_array = icalarray_new(sizeof(struct rdate), 20);
+	icalarray *rdate_array = icalarray_new(sizeof(struct rdate), 10);
+	icaltimetype dtstart;
 	struct observance obs;
 	unsigned n;
 	int r;
@@ -522,7 +525,7 @@ static void truncate_vtimezone(icalcomponent *vtz, icaltimetype *truncate)
 
 	    case ICAL_DTSTART_PROPERTY:
 		dtstart_prop = prop;
-		obs.onset = icalproperty_get_dtstart(prop);
+		obs.onset = dtstart = icalproperty_get_dtstart(prop);
 		break;
 
 	    case ICAL_TZOFFSETFROM_PROPERTY:
@@ -551,23 +554,47 @@ static void truncate_vtimezone(icalcomponent *vtz, icaltimetype *truncate)
 	}
 
 	/* We MUST have DTSTART, TZNAME, TZOFFSETFROM, and TZOFFSETTO */
-	if (!dtstart_prop || !obs.name || !obs.offset_from || !obs.offset_to)
-	    continue;
-
-	r = icaltime_compare(obs.onset, *truncate);
-	if (r <= 0) {
-	    /* Check DTSTART vs tombstone */
-	    check_tombstone(&tombstone, &obs, NULL);
-	}
-
-	if (r >= 0) {
-	    /* All observances occur on or after our cutoff, nothing to do */
+	if (!dtstart_prop || !obs.name || !obs.offset_from || !obs.offset_to) {
 	    icalarray_free(rdate_array);
 	    continue;
 	}
 
-	/* Check RRULE */
+	/* Check DTSTART vs window close */
+	if (icaltime_compare(obs.onset, end) >= 0) {
+	    /* All observances occur on/after window close, nothing to do */
+	    icalarray_free(rdate_array);
+	    continue;
+	}
+
+	/* Check DTSTART vs window open */
+	r = icaltime_compare(obs.onset, start);
+	if (r <= 0) {
+	    /* DTSTART is on/prior to our window open - check it vs tombstone */
+	    check_tombstone(&tombstone, &obs, NULL);
+	}
+
+	if (r >= 0) {
+	    /* DTSTART is on/after our window open */
+	    if (truncate) {
+		/* All observances occur on/after window open - nothing to do */
+		icalarray_free(rdate_array);
+		continue;
+	    }
+	    else if (!rrule_prop) {
+		/* Add the DTSTART observance to our array */
+		icalarray_append(obsarray, &obs);
+	    }
+	}
+	else if (rrule_prop) {
+	    /* RRULE starts prior to our window open - 
+	       bump RRULE start to 1 year prior to our window open */
+	    obs.onset.year = start.year - 1;
+	    obs.onset.month = start.month;
+	    obs.onset.day = start.day;
+	}
+
 	if (rrule_prop) {
+	    /* Add any RRULE observances within our window */
 	    struct icalrecurrencetype rrule;
 
 	    rrule = icalproperty_get_rrule(rrule_prop);
@@ -580,10 +607,13 @@ static void truncate_vtimezone(icalcomponent *vtz, icaltimetype *truncate)
 		    rrule.until.is_utc = 0;
 		}
 
-		if (icaltime_compare(rrule.until, *truncate) < 0) {
-		    /* RRULE ends prior to our cutoff - remove it */
-		    icalcomponent_remove_property(comp, rrule_prop);
-		    icalproperty_free(rrule_prop);
+		if (icaltime_compare(rrule.until, start) < 0) {
+		    /* RRULE ends prior to our window open */
+		    if (truncate) {
+			/* Remove RRULE */
+			icalcomponent_remove_property(comp, rrule_prop);
+			icalproperty_free(rrule_prop);
+		    }
 		    rrule_prop = NULL;
 
 		    /* Check UNTIL vs tombstone */
@@ -594,22 +624,37 @@ static void truncate_vtimezone(icalcomponent *vtz, icaltimetype *truncate)
 	    if (rrule_prop) {
 		icalrecur_iterator *ritr;
 
-		/* Set iterator to start 1 year prior to our cutoff */
-		obs.onset.year = truncate->year - 1;
-		obs.onset.month = truncate->month;
-		obs.onset.day = truncate->day;
-
 		ritr = icalrecur_iterator_new(rrule, obs.onset);
+		while (!icaltime_is_null_time(obs.onset =
+					      icalrecur_iterator_next(ritr))) {
 
-		/* Check last recurrence prior to our cutoff vs tombstone */
-		obs.onset = icalrecur_iterator_next(ritr);
-		check_tombstone(&tombstone, &obs, NULL);
+		    if (icaltime_compare(obs.onset, end) >= 0) {
+			/* Observance is on/after window close - we're done */
+			break;
+		    }
 
-		/* Use first recurrence after our cutoff as new DTSTART */
-		obs.onset = icalrecur_iterator_next(ritr);
-		icalproperty_set_dtstart(dtstart_prop, obs.onset);
-		dtstart_prop = NULL;
+		    /* Check observance vs our window open */
+		    r = icaltime_compare(obs.onset, start);
+		    if (r <= 0) {
+			/* Observance is on/prior to our window open -
+			   check it vs tombstone */
+			check_tombstone(&tombstone, &obs, NULL);
+		    }
 
+		    if (r >= 0) {
+			/* Observance is on/after our window open */
+			if (truncate && dtstart_prop) {
+			    /* Make first observance the new DTSTART */
+			    icalproperty_set_dtstart(dtstart_prop, obs.onset);
+			    dtstart_prop = NULL;
+			    break;
+			}
+			else {
+			    /* Add the observance to our array */
+			    icalarray_append(obsarray, &obs);
+			}
+		    }
+		}
 		icalrecur_iterator_free(ritr);
 	    }
 	}
@@ -621,51 +666,80 @@ static void truncate_vtimezone(icalcomponent *vtz, icaltimetype *truncate)
 	for (n = 0; n < rdate_array->num_elements; n++) {
 	    struct rdate *rdate = icalarray_element_at(rdate_array, n);
 
-	    r = icaltime_compare(rdate->date.time, *truncate);
+	    obs.onset = rdate->date.time;
+	    if (icaltime_compare(obs.onset, end) >= 0) {
+		/* RDATE is after our window close - we're done */
+		break;
+	    }
+
+	    r = icaltime_compare(obs.onset, start);
 	    if (r <= 0) {
-		/* Check RDATE vs tombstone */
+		/* RDATE is on/prior to window open - check it vs tombstone */
 		check_tombstone(&tombstone, &obs, &rdate->date.time);
 	    }
 
-	    if (r < 0) {
-		/* RDATE occurs prior to our cutoff - remove it */
+	    if (r >= 0) {
+		/* RDATE is on/after our window open */
+		if (truncate) {
+		    if (dtstart_prop) {
+			/* Make this RDATE the new DTSTART */
+			icalproperty_set_dtstart(dtstart_prop, rdate->date.time);
+			dtstart_prop = NULL;
+
+			icalcomponent_remove_property(comp, rdate->prop);
+			icalproperty_free(rdate->prop);
+		    }
+		    break;
+		}
+		else if (icaltime_compare(obs.onset, dtstart) != 0) {
+		    /* RDATE != DTSTART - add observance to our array */
+		    icalarray_append(obsarray, &obs);
+		}
+	    }
+	    else if (truncate) {
+		/* RDATE is prior to our window open - remove it */
 		icalcomponent_remove_property(comp, rdate->prop);
 		icalproperty_free(rdate->prop);
-	    }
-	    else {
-		if (dtstart_prop) {
-		    /* Make this RDATE the new DTSTART */
-		    icalproperty_set_dtstart(dtstart_prop, rdate->date.time);
-		    dtstart_prop = NULL;
-
-		    icalcomponent_remove_property(comp, rdate->prop);
-		    icalproperty_free(rdate->prop);
-		}
-		break;
 	    }
 	}
 	icalarray_free(rdate_array);
 
 	/* Final check */
-	if (dtstart_prop) {
-	    /* All observances occur prior to our cutoff, remove comp */
+	if (truncate && dtstart_prop) {
+	    /* All observances in comp occur prior to window open, remove it */
 	    icalcomponent_remove_component(vtz, comp);
 	    icalcomponent_free(comp);
 	}
     }
 
-    if (icaltime_compare(tombstone.onset, *truncate) < 0) {
-	/* Need to add a tombstone component starting at our cutoff */
-	comp = icalcomponent_vanew(
-	    tombstone.is_daylight ?
-	    ICAL_XDAYLIGHT_COMPONENT : ICAL_XSTANDARD_COMPONENT,
-	    icalproperty_new_tzoffsetfrom(tombstone.offset_from),
-	    icalproperty_new_tzoffsetto(tombstone.offset_to),
-	    icalproperty_new_tzname(tombstone.name),
-	    icalproperty_new_dtstart(*truncate),
-	    0);
-	icalcomponent_add_component(vtz, comp);
+    if (icaltime_compare(tombstone.onset, start) < 0) {
+	/* Need to add tombstone component/observance starting at window open */
+	if (truncate) {
+	    comp = icalcomponent_vanew(
+		tombstone.is_daylight ?
+		ICAL_XDAYLIGHT_COMPONENT : ICAL_XSTANDARD_COMPONENT,
+		icalproperty_new_tzoffsetfrom(tombstone.offset_from),
+		icalproperty_new_tzoffsetto(tombstone.offset_to),
+		icalproperty_new_tzname(tombstone.name),
+		icalproperty_new_dtstart(start),
+		0);
+	    icalcomponent_add_component(vtz, comp);
+	}
+	else {
+	    tombstone.onset = start;
+	    icalarray_append(obsarray, &tombstone);
+	}
     }
+}
+
+static void truncate_vtimezone(icalcomponent *vtz, icaltimetype start)
+{
+    /* We don't have an end date for truncation, so use "end of time" */
+    time_t now = INT_MAX;
+    struct tm *tm = gmtime(&now);
+    icaltimetype end = icaltime_from_day_of_year(1, tm->tm_year + 1900);
+
+    expand_vtimezone(vtz, NULL, start, end);
 }
 
 /* Perform a get action */
@@ -800,7 +874,7 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
 	    buf_printf(&pathbuf, "&truncate=%d", truncate.year);
 
 	    /* Truncate the VTIMEZONE */
-	    truncate_vtimezone(vtz, &truncate);
+	    truncate_vtimezone(vtz, truncate);
 	}
 
 	/* Set TZURL property */
@@ -930,9 +1004,8 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
 	static struct buf pathbuf = BUF_INITIALIZER;
 	const char *path, *msg_base = NULL;
 	unsigned long msg_size = 0;
-	icalcomponent *ical, *vtz, *comp;
+	icalcomponent *ical, *vtz;
 	char dtstamp[21];
-	struct observance tombstone;
 	icalarray *obsarray;
 	json_t *jobsarray;
 	unsigned n;
@@ -962,144 +1035,8 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
 
 	/* Create an array of observances */
 	obsarray = icalarray_new(sizeof(struct observance), 20);
-
-	memset(&tombstone, 0, sizeof(struct observance));
-
-	/* Process each VTMEZONE STANDARD/DAYLIGHT subcomponent */
 	vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
-	for (comp = icalcomponent_get_first_component(vtz, ICAL_ANY_COMPONENT);
-	     comp;
-	     comp = icalcomponent_get_next_component(vtz, ICAL_ANY_COMPONENT)) {
-
-	    icaltimetype dtstart = icaltime_null_time();
-	    struct observance obs;
-	    icalproperty *prop, *rrule_prop = NULL;
-
-	    /* Grab the properties that we require to expand recurrences */
-	    memset(&obs, 0, sizeof(struct observance));
-	    for (prop = icalcomponent_get_first_property(comp,
-							 ICAL_ANY_PROPERTY);
-		 prop;
-		 prop = icalcomponent_get_next_property(comp,
-							ICAL_ANY_PROPERTY)) {
-
-		switch (icalproperty_isa(prop)) {
-		case ICAL_TZNAME_PROPERTY:
-		    obs.name = icalproperty_get_tzname(prop);
-		    break;
-
-		case ICAL_DTSTART_PROPERTY:
-		    obs.onset = dtstart = icalproperty_get_dtstart(prop);
-		    break;
-
-		case ICAL_TZOFFSETFROM_PROPERTY:
-		    obs.offset_from = icalproperty_get_tzoffsetfrom(prop);
-		    break;
-
-		case ICAL_TZOFFSETTO_PROPERTY:
-		    obs.offset_to = icalproperty_get_tzoffsetto(prop);
-		    break;
-
-		case ICAL_RRULE_PROPERTY:
-		    rrule_prop = prop;
-		    break;
-
-		default:
-		    /* ignore all other properties */
-		    break;
-		}
-	    }
-
-	    /* We MUST have TZNAME, DTSTART, TZOFFSETFROM and TZOFFSETTO */
-	    if (!obs.name || !obs.offset_from || !obs.offset_to ||
-		icaltime_is_null_time(dtstart)) continue;
-
-	    if (icaltime_compare(obs.onset, end) > 0) {
-		/* Skip observance(s) after our window */
-	    }
-	    else if (rrule_prop) {
-		/* Add any RRULE observances within our window */
-		struct icalrecurrencetype rrule;
-		icalrecur_iterator *ritr;
-
-		rrule = icalproperty_get_rrule(rrule_prop);
-
-		if (!icaltime_is_null_time(rrule.until) && rrule.until.is_utc) {
-		    /* Adjust UNTIL to local time */
-		    icaltime_adjust(&rrule.until, 0, 0, 0, obs.offset_from);
-		    rrule.until.is_utc = 0;
-		}
-
-		if (icaltime_compare(start, obs.onset) > 0) {
-		    /* Set iterator to start 1 year prior to our window */
-		    obs.onset.year = start.year - 1;
-		    obs.onset.month = start.month;
-		    obs.onset.day = start.day;
-		}
-
-		ritr = icalrecur_iterator_new(rrule, obs.onset);
-		while (!icaltime_is_null_time(obs.onset =
-					      icalrecur_iterator_next(ritr))) {
-
-		    if (icaltime_compare(obs.onset, end) > 0) {
-			/* Quit if we've gone past our window */
-			break;
-		    }
-		    else if (icaltime_compare(obs.onset, start) < 0) {
-			/* Skip observances prior to our window,
-			   but check vs tombstone */
-			check_tombstone(&tombstone, &obs, NULL);
-		    }
-		    else {
-			/* Add the observance to our array */
-			icalarray_append(obsarray, &obs);
-		    }
-		}
-		icalrecur_iterator_free(ritr);
-	    }
-	    else if (icaltime_compare(obs.onset, start) < 0) {
-		/* Skip observances prior to our window,
-		   but check vs tombstone */
-		check_tombstone(&tombstone, &obs, NULL);
-	    }
-	    else {
-		/* Add the DTSTART observance to our array */
-		icalarray_append(obsarray, &obs);
-	    }
-
-	    /* Add any RDATE observances within our window */
-	    for (prop = icalcomponent_get_first_property(comp,
-							 ICAL_RDATE_PROPERTY);
-		 prop;
-		 prop = icalcomponent_get_next_property(comp,
-							ICAL_RDATE_PROPERTY)) {
-		struct icaldatetimeperiodtype rdate =
-		    icalproperty_get_rdate(prop);
-
-		obs.onset = rdate.time;
-		if (icaltime_compare(obs.onset, start) < 0) {
-		    /* Skip observances prior to our window,
-		       but check vs tombstone */
-		    check_tombstone(&tombstone, &obs, NULL);
-		}
-		else if (icaltime_compare(obs.onset, end) > 0) {
-		    /* Skip observances after our window */
-		}
-		else if (icaltime_compare(obs.onset, dtstart) == 0) {
-		    /* Skip duplicates of DTSTART observance */
-		}
-		else {
-		    /* Add the RDATE observance to our array */
-		    icalarray_append(obsarray, &obs);
-		}
-	    }
-	}
-
-	if (icaltime_compare(tombstone.onset, start) < 0) {
-	    /* Need to add a tombstone observance to our array */
-	    tombstone.onset = start;
-	    icalarray_append(obsarray, &tombstone);
-	}
+	expand_vtimezone(vtz, obsarray, start, end);
 
 	/* Sort the observances by onset */
 	icalarray_sort(obsarray, &observance_compare);
