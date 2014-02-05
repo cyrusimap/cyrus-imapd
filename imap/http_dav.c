@@ -487,8 +487,23 @@ static int add_privs(int rights, unsigned flags,
 int ensure_ns(xmlNsPtr *respNs, int ns, xmlNodePtr node,
 	      const char *url, const char *prefix)
 {
-    if (!respNs[ns])
+    if (!respNs[ns]) {
+	xmlNsPtr nsDef;
+	char myprefix[20];
+
+	/* Search for existing namespace using our prefix */
+	for (nsDef = node->nsDef;
+	     nsDef && strcmp((const char *) nsDef->prefix, prefix);
+	     nsDef = nsDef->next);
+    
+	if (nsDef) {
+	    /* Prefix is already used - generate a new one */
+	    snprintf(myprefix, sizeof(myprefix), "X%X", strhash(url) & 0xffff);
+	    prefix = myprefix;
+	}
+
 	respNs[ns] = xmlNewNs(node, BAD_CAST url, BAD_CAST prefix);
+    }
 
     /* XXX  check for errors */
     return 0;
