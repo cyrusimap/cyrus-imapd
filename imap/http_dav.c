@@ -3661,7 +3661,7 @@ int propfind_by_collection(char *mboxname, int matchlen,
 
 	/* If not filtering by calendar resource, and not excluding root,
 	   add response for collection */
-	if (!fctx->filter &&
+	if (!fctx->filter_crit &&
 	    (!root || (fctx->depth == 1) || !(fctx->prefer & PREFER_NOROOT)) &&
 	    (r = xml_add_response(fctx, 0))) goto done;
     }

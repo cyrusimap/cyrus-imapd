@@ -2825,6 +2825,7 @@ static int report_cal_query(struct transaction_t *txn,
     memset(&calfilter, 0, sizeof(struct calquery_filter));
     calfilter.save_busytime = 0;
 
+    fctx->filter_crit = &calfilter;
     fctx->open_db = (db_open_proc_t) &my_caldav_open;
     fctx->close_db = (db_close_proc_t) &my_caldav_close;
     fctx->lookup_resource = (db_lookup_proc_t) &caldav_lookup_resource;
@@ -2837,10 +2838,7 @@ static int report_cal_query(struct transaction_t *txn,
 	    if (!xmlStrcmp(node->name, BAD_CAST "filter")) {
 		ret = parse_comp_filter(node->children, &calfilter, &txn->error);
 		if (ret) return ret;
-		else {
-		    fctx->filter = apply_calfilter;
-		    fctx->filter_crit = &calfilter;
-		}
+		else fctx->filter = apply_calfilter;
 	    }
 	    else if (!xmlStrcmp(node->name, BAD_CAST "timezone")) {
 		xmlChar *tz = NULL;
@@ -2865,7 +2863,7 @@ static int report_cal_query(struct transaction_t *txn,
 	}
     }
 
-    if (fctx->depth > 0) {
+    if (fctx->depth++ > 0) {
 	/* Calendar collection(s) */
 	if (txn->req_tgt.collection) {
 	    /* Add response for target calendar collection */
