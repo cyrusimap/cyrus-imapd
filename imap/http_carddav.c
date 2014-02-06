@@ -831,6 +831,7 @@ static int report_card_query(struct transaction_t *txn,
     int ret = 0;
     xmlNodePtr node;
 
+    fctx->filter_crit = (void *) 0xDEADBEEF;  /* placeholder until we filter */
     fctx->open_db = (db_open_proc_t) &my_carddav_open;
     fctx->close_db = (db_close_proc_t) &my_carddav_close;
     fctx->lookup_resource = (db_lookup_proc_t) &carddav_lookup_resource;
@@ -847,7 +848,7 @@ static int report_card_query(struct transaction_t *txn,
 	}
     }
 
-    if (fctx->depth > 0) {
+    if (fctx->depth++ > 0) {
 	/* Calendar collection(s) */
 	if (txn->req_tgt.collection) {
 	    /* Add response for target calendar collection */
