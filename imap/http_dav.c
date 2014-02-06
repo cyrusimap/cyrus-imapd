@@ -1423,14 +1423,16 @@ int propfind_curprivset(const xmlChar *name, xmlNsPtr ns,
     set = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 		       name, ns, NULL, 0);
 
-    if (fctx->req_tgt->collection) {
+    if (!fctx->req_tgt->resource) {
 	if (fctx->req_tgt->namespace == URL_NS_CALENDAR) {
 	    flags = PRIV_IMPLICIT;
 
-	    if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX))
-		flags = PRIV_INBOX;
-	    else if (!strcmp(fctx->req_tgt->collection, SCHED_OUTBOX))
-		flags = PRIV_OUTBOX;
+	    if (fctx->req_tgt->collection) {
+		if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX))
+		    flags = PRIV_INBOX;
+		else if (!strcmp(fctx->req_tgt->collection, SCHED_OUTBOX))
+		    flags = PRIV_OUTBOX;
+	    }
 	}
 
 	add_privs(rights, flags, set, resp->parent, fctx->ns);
