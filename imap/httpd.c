@@ -923,7 +923,7 @@ static void cmdloop(void)
 	int ret, empty, r, i, c;
 	char *p;
 	tok_t tok;
-	const char **hdr;
+	const char **hdr, *query;
 	const struct namespace_t *namespace;
 	const struct method_t *meth_t;
 	struct request_line_t *req_line = &txn.req_line;
@@ -935,6 +935,7 @@ static void cmdloop(void)
 	txn.flags.vary = VARY_AE;
 	memset(req_line, 0, sizeof(struct request_line_t));
 	memset(&txn.req_tgt, 0, sizeof(struct request_target_t));
+	construct_hash_table(&txn.req_qparams, 10, 1);
 	txn.req_uri = NULL;
 	txn.auth_chal.param = NULL;
 	txn.req_hdrs = NULL;
@@ -1146,10 +1147,11 @@ static void cmdloop(void)
 
 	if (ret) goto done;
 
+	query = URI_QUERY(txn.req_uri);
+
 	/* Find the namespace of the requested resource */
 	for (i = 0; namespaces[i]; i++) {
 	    const char *path = txn.req_uri->path;
-	    const char *query = URI_QUERY(txn.req_uri);
 	    size_t len;
 
 	    /* Skip disabled namespaces */
@@ -1264,7 +1266,6 @@ static void cmdloop(void)
 		else {
 		    /* All other clients use RFC 2818 (HTTPS) */
 		    const char *path = txn.req_uri->path;
-		    const char *query = URI_QUERY(txn.req_uri);
 		    struct buf *html = &txn.resp_body.payload;
 
 		    /* Create https URL */
@@ -1375,6 +1376,26 @@ static void cmdloop(void)
 	    }
 	}
 
+	/* Parse any query parameters */
+	if (query) {
+	    /* Parse the query string and add param/value pairs to hash table */
+	    tok_t tok;
+	    char *param;
+
+	    tok_initm(&tok, (char *) query, ";&=", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+	    while ((param = tok_next(&tok))) {
+		struct strlist *vals;
+		char *value = tok_next(&tok);
+		if (!value) value = "";
+
+		vals = hash_lookup(param, &txn.req_qparams);
+		appendstrlist(&vals,
+			      xmlURIUnescapeString(value, strlen(value), NULL));
+		hash_insert(param, vals, &txn.req_qparams);
+	    }
+	    tok_fini(&tok);
+	}
+
 	/* Start method processing alarm (HTTP/1.1+ only) */
 	if (!txn.flags.ver1_0) alarm(httpd_keepalive);
 
@@ -1398,6 +1419,7 @@ static void cmdloop(void)
 	/* Memory cleanup */
 	if (txn.req_uri) xmlFreeURI(txn.req_uri);
 	if (txn.req_hdrs) spool_free_hdrcache(txn.req_hdrs);
+	free_hash_table(&txn.req_qparams, (void (*)(void *)) &freestrlist);
 
 	if (txn.flags.conn & CONN_CLOSE) {
 	    buf_free(&txn.buf);

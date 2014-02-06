@@ -146,7 +146,8 @@ static int meth_get(struct transaction_t *txn,
 		    void *params __attribute__((unused)))
 {
     int ret = 0, r;
-    char section[MAX_SECTION_LEN+1] = "";
+    struct strlist *param;
+    char *section = NULL;
     uint32_t uid = 0;
     struct mailbox *mailbox = NULL;
     mbentry_t *mbentry = NULL;
@@ -207,19 +208,14 @@ static int meth_get(struct transaction_t *txn,
 	}
     }
 
-    /* Parse query params, if any */
-    if (URI_QUERY(txn->req_uri) &&
-	!strncasecmp(URI_QUERY(txn->req_uri), "uid=", 4)) {
-	/* UID */
-	char *end;
-
-	uid = strtoul(URI_QUERY(txn->req_uri)+4, &end, 10);
+    /* Check query params, if any */    
+    param = hash_lookup("uid", &txn->req_qparams);
+    if (param) {
+	uid = strtoul(param->s, NULL, 10);
 	if (!uid) uid = -1;
 
-	if (!strncasecmp(end, ";section=", 9)) {
-	    /* SECTION */
-	    strlcpy(section, end+9, MAX_SECTION_LEN);
-	}
+	param = hash_lookup("section", &txn->req_qparams);
+	if (param) section = param->s;
     }
 
     /* If no UID specified, list messages as an RSS feed */
@@ -242,7 +238,7 @@ static int meth_get(struct transaction_t *txn,
 	    struct resp_body_t *resp_body = &txn->resp_body;
 
 	    /* Check any preconditions */
-	    if (!strcmp(section, "0")) {
+	    if (section && !strcmp(section, "0")) {
 		/* Entire raw message */
 		txn->flags.ranges = 1;
 	    }
@@ -269,7 +265,7 @@ static int meth_get(struct transaction_t *txn,
 		goto done;
 	    }
 
-	    if (!*section) {
+	    if (!section) {
 		/* Return entire message formatted as text/html */
 		display_message(txn, mailbox->name, &record, body, &msg_buf);
 	    }

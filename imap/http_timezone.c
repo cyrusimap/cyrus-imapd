@@ -80,10 +80,10 @@ static time_t compile_time;
 static void timezone_init(struct buf *serverinfo);
 static void timezone_shutdown(void);
 static int meth_get(struct transaction_t *txn, void *params);
-static int action_capa(struct transaction_t *txn, struct hash_table *params);
-static int action_list(struct transaction_t *txn, struct hash_table *params);
-static int action_get(struct transaction_t *txn, struct hash_table *params);
-static int action_expand(struct transaction_t *txn, struct hash_table *params);
+static int action_capa(struct transaction_t *txn);
+static int action_list(struct transaction_t *txn);
+static int action_get(struct transaction_t *txn);
+static int action_expand(struct transaction_t *txn);
 static int json_response(int code, struct transaction_t *txn, json_t *root,
 			 char **resp);
 static int json_error_response(struct transaction_t *txn, long code);
@@ -98,7 +98,7 @@ struct observance {
 
 static const struct action_t {
     const char *name;
-    int (*proc)(struct transaction_t *txn, struct hash_table *params);
+    int (*proc)(struct transaction_t *txn);
 } actions[] = {
     { "capabilities",	&action_capa },
     { "list",		&action_list },
@@ -188,43 +188,23 @@ static int meth_get(struct transaction_t *txn,
 		    void *params __attribute__((unused)))
 {
     int ret;
-    tok_t tok;
-    char *param;
     struct strlist *action;
-    struct hash_table query_params;
     const struct action_t *ap = NULL;
 
-    /* Parse the query string and add param/value pairs to hash table */
-    construct_hash_table(&query_params, 10, 1);
-    tok_initm(&tok, URI_QUERY(txn->req_uri), "&=", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-    while ((param = tok_next(&tok))) {
-	struct strlist *vals;
-	char *value = tok_next(&tok);
-	if (!value) break;
-
-	vals = hash_lookup(param, &query_params);
-	appendstrlist(&vals, xmlURIUnescapeString(value, strlen(value), NULL));
-	hash_insert(param, vals, &query_params);
-    }
-    tok_fini(&tok);
-
-    action = hash_lookup("action", &query_params);
+    action = hash_lookup("action", &txn->req_qparams);
     if (action && !action->next  /* mandatory, once only */) {
 	for (ap = actions; ap->name && strcmp(action->s, ap->name); ap++);
     }
 
     if (!ap || !ap->name) ret = json_error_response(txn, TZ_INVALID_ACTION);
-    else ret = ap->proc(txn, &query_params);
-
-    free_hash_table(&query_params, (void (*)(void *)) &freestrlist);
+    else ret = ap->proc(txn);
 
     return ret;
 }
 
 
 /* Perform a capabilities action */
-static int action_capa(struct transaction_t *txn,
-		       struct hash_table *params __attribute__((unused)))
+static int action_capa(struct transaction_t *txn)
 {
     int precond;
     struct message_guid guid;
@@ -379,7 +359,7 @@ static int list_cb(const char *tzid, int tzidlen,
 
 
 /* Perform a list action */
-static int action_list(struct transaction_t *txn, struct hash_table *params)
+static int action_list(struct transaction_t *txn)
 {
     int r, precond, tzid_only = 1;
     struct strlist *param, *name = NULL;
@@ -389,23 +369,23 @@ static int action_list(struct transaction_t *txn, struct hash_table *params)
     json_t *root = NULL;
 
     /* Sanity check the parameters */
-    param = hash_lookup("action", params);
+    param = hash_lookup("action", &txn->req_qparams);
     if (!strcmp("find", param->s)) {
-	name = hash_lookup("name", params);
+	name = hash_lookup("name", &txn->req_qparams);
 	if (!name || name->next  /* mandatory, once only */) {
 	    return json_error_response(txn, TZ_INVALID_NAME);
 	}
 	tzid_only = 0;
     }
     else {
-	param = hash_lookup("changedsince", params);
+	param = hash_lookup("changedsince", &txn->req_qparams);
 	if (param) {
 	    changedsince = icaltime_as_timet(icaltime_from_string(param->s));
 	    if (!changedsince || param->next  /* once only */)
 		return json_error_response(txn, TZ_INVALID_CHANGEDSINCE);
 	}
 
-	name = hash_lookup("tzid", params);
+	name = hash_lookup("tzid", &txn->req_qparams);
 	if (name) {
 	    if (changedsince) return json_error_response(txn, TZ_INVALID_TZID);
 	    else {
@@ -777,7 +757,7 @@ static icaltimetype icaltime_from_year_string(const char *str)
 }
 
 /* Perform a get action */
-static int action_get(struct transaction_t *txn, struct hash_table *params)
+static int action_get(struct transaction_t *txn)
 {
     int r, precond;
     struct strlist *param;
@@ -791,7 +771,7 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
     struct mime_type_t *mime = NULL;
 
     /* Sanity check the parameters */
-    param = hash_lookup("tzid", params);
+    param = hash_lookup("tzid", &txn->req_qparams);
     if (!param || param->next  /* mandatory, once only */
 	|| strchr(param->s, '.')  /* paranoia */) {
 	return json_error_response(txn, TZ_INVALID_TZID);
@@ -799,7 +779,7 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
     tzid = param->s;
 
     /* Check/find requested MIME type */
-    param = hash_lookup("format", params);
+    param = hash_lookup("format", &txn->req_qparams);
     if (param && !param->next  /* optional, once only */) {
 	for (mime = tz_mime_types; mime->content_type; mime++) {
 	    if (is_mediatype(param->s, mime->content_type)) break;
@@ -812,7 +792,7 @@ static int action_get(struct transaction_t *txn, struct hash_table *params)
     }
 
     /* Check for any truncation */
-    param = hash_lookup("truncate", params);
+    param = hash_lookup("truncate", &txn->req_qparams);
     if (param) {
 	truncate = icaltime_from_year_string(param->s);
 	if (icaltime_is_null_time(truncate) || param->next  /* once only */)
@@ -941,7 +921,7 @@ static int observance_compare(const void *obs1, const void *obs2)
 }
 
 /* Perform an expand action */
-static int action_expand(struct transaction_t *txn, struct hash_table *params)
+static int action_expand(struct transaction_t *txn)
 {
     int r, precond;
     struct strlist *param;
@@ -953,21 +933,21 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
     json_t *root = NULL;
 
     /* Sanity check the parameters */
-    param = hash_lookup("tzid", params);
+    param = hash_lookup("tzid", &txn->req_qparams);
     if (!param || param->next  /* mandatory, once only */
 	|| strchr(param->s, '.')  /* paranoia */) {
 	return json_error_response(txn, TZ_INVALID_TZID);
     }
     tzid = param->s;
 
-    param = hash_lookup("changedsince", params);
+    param = hash_lookup("changedsince", &txn->req_qparams);
     if (param) {
 	changedsince = icaltime_as_timet(icaltime_from_string(param->s));
 	if (!changedsince || param->next  /* once only */)
 	    return json_error_response(txn, TZ_INVALID_CHANGEDSINCE);
     }
 
-    param = hash_lookup("start", params);
+    param = hash_lookup("start", &txn->req_qparams);
     if (param) {
 	start = icaltime_from_year_string(param->s);
 	if (icaltime_is_null_time(start) || param->next  /* once only */)
@@ -982,7 +962,7 @@ static int action_expand(struct transaction_t *txn, struct hash_table *params)
     }
     start.is_date = 0;
 
-    param = hash_lookup("end", params);
+    param = hash_lookup("end", &txn->req_qparams);
     if (param) {
 	end = icaltime_from_year_string(param->s);
 	if (icaltime_compare(end, start) <= 0  /* end MUST be > start */

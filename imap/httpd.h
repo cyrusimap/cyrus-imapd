@@ -52,6 +52,8 @@
 #include <zlib.h>
 #endif /* HAVE_ZLIB */
 
+#include "annotate.h" /* for strlist */
+#include "hash.h"
 #include "mailbox.h"
 #include "spool.h"
 
@@ -301,6 +303,7 @@ struct transaction_t {
     struct request_line_t req_line;	/* Parsed request-line */
     xmlURIPtr req_uri;	  		/* Parsed request-target URI */
     struct request_target_t req_tgt;	/* Parsed request-target path */
+    hash_table req_qparams;   		/* Parsed query params */
     hdrcache_t req_hdrs;    		/* Cached HTTP headers */
     struct body_t req_body;		/* Buffered request body */
     struct auth_challenge_t auth_chal;	/* Authentication challenge */

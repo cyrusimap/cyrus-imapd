@@ -168,6 +168,7 @@ static int meth_get_isched(struct transaction_t *txn,
 			   void *params __attribute__((unused)))
 {
     int precond;
+    struct strlist *action;
     struct message_guid guid;
     const char *etag;
     static time_t lastmod = 0;
@@ -175,8 +176,8 @@ static int meth_get_isched(struct transaction_t *txn,
     static int bufsiz = 0;
 
     /* We don't handle GET on a anything other than ?action=capabilities */
-    if (!URI_QUERY(txn->req_uri) ||
-	strcmp(URI_QUERY(txn->req_uri), "action=capabilities")) {
+    action = hash_lookup("action", &txn->req_qparams);
+    if (!action || action->next || strcmp(action->s, "capabilities")) {
 	txn->error.desc = "Invalid action";
 	return HTTP_BAD_REQUEST;
     }
