@@ -492,9 +492,11 @@ int ensure_ns(xmlNsPtr *respNs, int ns, xmlNodePtr node,
 	char myprefix[20];
 
 	/* Search for existing namespace using our prefix */
-	for (nsDef = node->nsDef;
-	     nsDef && strcmp((const char *) nsDef->prefix, prefix);
-	     nsDef = nsDef->next);
+	for (nsDef = node->nsDef; nsDef; nsDef = nsDef->next) {
+	    if ((!nsDef->prefix && !prefix) ||
+		(nsDef->prefix && prefix &&
+		 !strcmp((const char *) nsDef->prefix, prefix))) break;
+	}
     
 	if (nsDef) {
 	    /* Prefix is already used - generate a new one */
