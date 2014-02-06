@@ -580,7 +580,7 @@ xmlNodePtr init_xml_response(const char *resp, int ns,
 
 xmlNodePtr xml_add_href(xmlNodePtr parent, xmlNsPtr ns, const char *href)
 {
-    xmlChar *uri = xmlURIEscapeStr(BAD_CAST href, BAD_CAST ":/");
+    xmlChar *uri = xmlURIEscapeStr(BAD_CAST href, BAD_CAST ":/?=");
     xmlNodePtr node = xmlNewChild(parent, ns, BAD_CAST "href", uri);
 
     free(uri);
@@ -1681,7 +1681,7 @@ int propfind_addmember(const xmlChar *name, xmlNsPtr ns,
 	(size_t) (fctx->req_tgt->resource - fctx->req_tgt->path) :
 	strlen(fctx->req_tgt->path);
     buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, "%.*s", len, fctx->req_tgt->path);
+    buf_printf(&fctx->buf, "%.*s?action=add-member", len, fctx->req_tgt->path);
 
     xml_add_href(node, NULL, buf_cstring(&fctx->buf));
 
@@ -4142,6 +4142,7 @@ int meth_post(struct transaction_t *txn, void *params)
 {
     struct meth_params *pparams = (struct meth_params *) params;
     static unsigned post_count = 0;
+    struct strlist *action;
     int r, ret;
     size_t len;
 
@@ -4161,7 +4162,11 @@ int meth_post(struct transaction_t *txn, void *params)
 	if (ret != HTTP_CONTINUE) return ret;
     }
 
-    /* POST to regular collection */
+    action = hash_lookup("action", &txn->req_qparams);
+    if (!action || action->next || strcmp(action->s, "add-member"))
+	return HTTP_FORBIDDEN;
+
+    /* POST add-member to regular collection */
 
     /* Append a unique resource name to URL path and perform a PUT */
     len = strlen(txn->req_tgt.path);
