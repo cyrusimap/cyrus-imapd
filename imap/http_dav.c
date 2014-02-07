@@ -3487,8 +3487,12 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 	    annotatemore_abort(pctx.tid);
 
 	    if (!ret) {
+		/* Error response MUST be a multistatus */
+		xmlNodeSetName(root, BAD_CAST "multistatus");
+		xmlSetNs(root, ns[NS_DAV]);
+
 		/* Output the XML response */
-		xml_response(HTTP_FORBIDDEN, txn, outdoc);
+		xml_response(HTTP_MULTI_STATUS, txn, outdoc);
 		ret = 0;
 	    }
 
