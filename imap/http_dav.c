@@ -1700,7 +1700,8 @@ int propfind_sync_token(const xmlChar *name, xmlNsPtr ns,
 			struct propstat propstat[],
 			void *rock __attribute__((unused)))
 {
-    if (!fctx->mailbox || fctx->record) return HTTP_NOT_FOUND;
+    if (!fctx->req_tgt->collection || /* until we support sync on cal-home */
+	!fctx->mailbox || fctx->record) return HTTP_NOT_FOUND;
 
     buf_reset(&fctx->buf);
     buf_printf(&fctx->buf, XML_NS_CYRUS "sync/%u-" MODSEQ_FMT,
