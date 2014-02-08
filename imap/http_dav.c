@@ -1755,8 +1755,15 @@ EXPORTED int propfind_curprin(const xmlChar *name, xmlNsPtr ns,
 	xmlNodePtr expand = (xmlNodePtr) rock;
 
 	buf_reset(&fctx->buf);
-	buf_printf(&fctx->buf, "%s/user/%s/",
-		   namespace_principal.prefix, fctx->userid);
+
+	if (strchr(fctx->userid, '@')) {
+	    buf_printf(&fctx->buf, "%s/user/%s/",
+		    namespace_principal.prefix, fctx->userid);
+	}
+	else {
+	    buf_printf(&fctx->buf, "%s/user/%s@%s/",
+		    namespace_principal.prefix, fctx->userid, httpd_extradomain);
+	}
 
 	if (expand) {
 	    /* Return properties for this URL */

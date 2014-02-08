@@ -396,6 +396,7 @@ extern int httpd_timeout;
 extern int httpd_userisadmin;
 extern int httpd_userisproxyadmin;
 extern char *httpd_userid, *proxy_userid;
+extern char *httpd_extradomain;
 extern struct auth_state *httpd_authstate;
 extern struct namespace httpd_namespace;
 extern struct sockaddr_storage httpd_localaddr, httpd_remoteaddr;

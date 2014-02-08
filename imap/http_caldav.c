@@ -3439,7 +3439,10 @@ static int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
     }
     else {
 	/* Return just the URL */
-	xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+        buf_printf(&fctx->buf, "%s/user/%s@%s/%s",
+	           namespace_calendar.prefix, fctx->userid,
+		   httpd_extradomain ? httpd_extradomain : "internal",
+		   cal ? cal : "");
     }
 
     return 0;

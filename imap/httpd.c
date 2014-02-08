@@ -130,6 +130,7 @@ sasl_conn_t *httpd_saslconn; /* the sasl connection context */
 static struct wildmat *allow_cors = NULL;
 int httpd_timeout, httpd_keepalive;
 char *httpd_userid = NULL, *proxy_userid = NULL;
+char *httpd_extradomain = NULL;
 struct auth_state *httpd_authstate = 0;
 int httpd_userisadmin = 0;
 int httpd_userisproxyadmin = 0;
@@ -359,6 +360,10 @@ static void httpd_reset(void)
     if (httpd_userid != NULL) {
 	free(httpd_userid);
 	httpd_userid = NULL;
+    }
+    if (httpd_extradomain != NULL) {
+	free(httpd_extradomain);
+	httpd_extradomain = NULL;
     }
     if (proxy_userid != NULL) {
 	free(proxy_userid);
@@ -2687,6 +2692,10 @@ static int proxy_authz(const char **authzid, struct transaction_t *txn)
 	free(httpd_userid);
 	httpd_userid = NULL;
     }
+    if (httpd_extradomain) {
+	free(httpd_extradomain);
+	httpd_extradomain = NULL;
+    }
     if (httpd_authstate) {
 	auth_freestate(httpd_authstate);
 	httpd_authstate = NULL;
@@ -2849,6 +2858,10 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 	free(httpd_userid);
 	httpd_userid = NULL;
     }
+    if (httpd_extradomain) {
+	free(httpd_extradomain);
+	httpd_extradomain = NULL;
+    }
     if (httpd_authstate) {
 	auth_freestate(httpd_authstate);
 	httpd_authstate = NULL;
@@ -2939,6 +2952,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
     if (scheme->idx == AUTH_BASIC) {
 	/* Basic (plaintext) authentication */
 	char *pass;
+	char *extra;
 
 	if (!clientin) {
 	    /* Create initial challenge (base64 buffer is static) */
@@ -2958,7 +2972,8 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 	    return SASL_BADPARAM;
 	}
 	*pass++ = '\0';
-	
+	extra = strchr(user, '%');
+	if (extra) *extra++ = '\0';
 	/* Verify the password */
 	status = sasl_checkpass(httpd_saslconn, user, strlen(user),
 				pass, strlen(pass));
@@ -2974,6 +2989,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 	}
 
 	/* Successful authentication - fall through */
+	httpd_extradomain = xstrdupnull(extra);
     }
     else {
 	/* SASL-based authentication (Digest, Negotiate, NTLM) */
