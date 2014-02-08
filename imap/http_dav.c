@@ -85,6 +85,8 @@
 #include <libxml/uri.h>
 
 
+#define SYNC_TOKEN_URL_SCHEME "data:,"
+
 static const struct dav_namespace_t {
     const char *href;
     const char *prefix;
@@ -1704,7 +1706,7 @@ int propfind_sync_token(const xmlChar *name, xmlNsPtr ns,
 	!fctx->mailbox || fctx->record) return HTTP_NOT_FOUND;
 
     buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, XML_NS_CYRUS "sync/%u-" MODSEQ_FMT,
+    buf_printf(&fctx->buf, SYNC_TOKEN_URL_SCHEME "%u-" MODSEQ_FMT,
 	       fctx->mailbox->i.uidvalidity,
 	       fctx->mailbox->i.highestmodseq);
 
@@ -4450,10 +4452,10 @@ int report_sync_col(struct transaction_t *txn,
 	if (node->type == XML_ELEMENT_NODE) {
 	    if (!xmlStrcmp(node->name, BAD_CAST "sync-token") &&
 		(str = xmlNodeListGetString(inroot->doc, node->children, 1))) {
-		if (xmlStrncmp(str, BAD_CAST XML_NS_CYRUS "sync/",
-			       strlen(XML_NS_CYRUS "sync/")) ||
-		    (sscanf(strrchr((char *) str, '/') + 1,
-			    "%u-" MODSEQ_FMT,
+		size_t slen = strlen(SYNC_TOKEN_URL_SCHEME);
+
+		if (xmlStrncmp(str, BAD_CAST SYNC_TOKEN_URL_SCHEME, slen) ||
+		    (sscanf((char *) str + slen, "%u-" MODSEQ_FMT,
 			    &uidvalidity, &syncmodseq) != 2) ||
 		    !syncmodseq ||
 		    (uidvalidity != mailbox->i.uidvalidity) ||
@@ -4605,7 +4607,7 @@ int report_sync_col(struct transaction_t *txn,
 
     /* Add sync-token element */
     snprintf(tokenuri, MAX_MAILBOX_PATH,
-	     XML_NS_CYRUS "sync/%u-" MODSEQ_FMT,
+	     SYNC_TOKEN_URL_SCHEME "%u-" MODSEQ_FMT,
 	     mailbox->i.uidvalidity, highestmodseq);
     xmlNewChild(fctx->root, NULL, BAD_CAST "sync-token", BAD_CAST tokenuri);
 
