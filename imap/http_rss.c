@@ -75,7 +75,7 @@
 #include "xstrlcpy.h"
 
 #define XML_NS_ATOM	"http://www.w3.org/2005/Atom"
-#define XML_NS_CYRUS	"http://cyrusimap.org/ns/"
+#define GUID_URL_SCHEME	"data:,"
 #define MAX_SECTION_LEN	128
 #define FEEDLIST_VAR	"%RSS_FEEDLIST%"
 
@@ -810,8 +810,8 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     buf_printf_markup(buf, level, "<title>%s</title>", mboxname);
 
     /* <id> - required */
-    buf_printf_markup(buf, level, "<id>%sguid/%s</id>",
-		      XML_NS_CYRUS, mailbox->uniqueid);
+    buf_printf_markup(buf, level, "<id>%s%s</id>",
+		      GUID_URL_SCHEME, mailbox->uniqueid);
 
     /* <updated> - required */
     rfc3339date_gen(datestr, sizeof(datestr), lastmod);
@@ -900,8 +900,8 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	free(subj);
 
 	/* <id> - required */
-	buf_printf_markup(buf, level, "<id>%sguid/%s</id>",
-			  XML_NS_CYRUS, message_guid_encode(&record.guid));
+	buf_printf_markup(buf, level, "<id>%s%s</id>",
+			  GUID_URL_SCHEME, message_guid_encode(&record.guid));
 
 	/* <updated> - required */
 	rfc3339date_gen(datestr, sizeof(datestr), record.gmtime);
