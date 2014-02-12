@@ -126,7 +126,6 @@ static SSL *tls_conn;
 
 sasl_conn_t *httpd_saslconn; /* the sasl connection context */
 
-static struct mailbox *httpd_mailbox = NULL;
 static struct wildmat *allow_cors = NULL;
 int httpd_timeout, httpd_keepalive;
 char *httpd_userid = NULL, *proxy_userid = NULL;
@@ -320,9 +319,6 @@ static void httpd_reset(void)
     if (backend_cached) free(backend_cached);
     backend_cached = NULL;
     backend_current = NULL;
-
-    if (httpd_mailbox) mailbox_close(&httpd_mailbox);
-    httpd_mailbox = NULL;
 
     if (httpd_in) {
 	prot_NONBLOCK(httpd_in);
@@ -702,8 +698,6 @@ void shut_down(int code)
 	i++;
     }
     if (backend_cached) free(backend_cached);
-
-    if (httpd_mailbox) mailbox_close(&httpd_mailbox);
 
     sync_log_done();
 
@@ -3341,32 +3335,6 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 
 
 /*************************  Method Execution Routines  ************************/
-
-
-/* "Open" the requested mailbox.  Either return the existing open
- * mailbox if it matches, or close the existing and open the requested.
- */
-EXPORTED int http_mailbox_open(const char *name, struct mailbox **mailbox, int locktype)
-{
-    int r;
-
-    if (httpd_mailbox && !strcmp(httpd_mailbox->name, name)) {
-	r = mailbox_lock_index(httpd_mailbox, locktype);
-    }
-    else {
-	if (httpd_mailbox) {
-	    mailbox_close(&httpd_mailbox);
-	    httpd_mailbox = NULL;
-	}
-	if (locktype == LOCK_EXCLUSIVE)
-	    r = mailbox_open_iwl(name, &httpd_mailbox);
-	else
-	    r = mailbox_open_irl(name, &httpd_mailbox);
-    }
-
-    *mailbox = httpd_mailbox;
-    return r;
-}
 
 
 /* Compare an etag in a header to a resource etag.

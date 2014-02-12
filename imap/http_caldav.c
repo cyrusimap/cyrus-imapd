@@ -1050,7 +1050,8 @@ static int dump_calendar(struct transaction_t *txn, struct meth_params *gparams)
     if (!mime) return HTTP_NOT_ACCEPTABLE;
 
     /* Open mailbox for reading */
-    if ((r = http_mailbox_open(txn->req_tgt.mboxname, &mailbox, LOCK_SHARED))) {
+    r = mailbox_open_irl(txn->req_tgt.mboxname, &mailbox);
+    if (r) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
 	       txn->req_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
@@ -1171,8 +1172,8 @@ static int dump_calendar(struct transaction_t *txn, struct meth_params *gparams)
     write_body(0, txn, NULL, 0);
 
   done:
-    if (mailbox) mailbox_unlock_index(mailbox, NULL);
     buf_free(&attrib);
+    mailbox_close(&mailbox);
 
     return ret;
 }
@@ -2931,10 +2932,11 @@ static int report_cal_multiget(struct transaction_t *txn,
 
 	    /* Check if we already have this mailbox open */
 	    if (!mailbox || strcmp(mailbox->name, tgt.mboxname)) {
-		if (mailbox) mailbox_unlock_index(mailbox, NULL);
+		if (mailbox) mailbox_close(&mailbox);
 
 		/* Open mailbox for reading */
-		if ((r = http_mailbox_open(tgt.mboxname, &mailbox, LOCK_SHARED))) {
+		r = mailbox_open_irl(tgt.mboxname, &mailbox);
+		if (r) {
 		    syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
 			   tgt.mboxname, error_message(r));
 		    txn->error.desc = error_message(r);
@@ -2965,7 +2967,7 @@ static int report_cal_multiget(struct transaction_t *txn,
     }
 
   done:
-    if (mailbox) mailbox_unlock_index(mailbox, NULL);
+    mailbox_close(&mailbox);
     buf_free(&uri);
 
     return ret;
@@ -4687,11 +4689,8 @@ static void sched_deliver_local(const char *recipient,
 
   done:
     if (ical) icalcomponent_free(ical);
-    if (inbox) {
-	mailbox_unlock_index(inbox, NULL);
-	mailbox_close(&inbox);
-    }
-    if (mailbox) mailbox_close(&mailbox);
+    mailbox_close(&inbox);
+    mailbox_close(&mailbox);
     if (caldavdb) caldav_close(caldavdb);
 }
 
