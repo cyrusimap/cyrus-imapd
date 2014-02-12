@@ -459,8 +459,6 @@ extern xmlURIPtr parse_uri(unsigned meth, const char *uri, unsigned path_reqd,
 extern struct accept *parse_accept(const char **hdr);
 extern int is_mediatype(const char *pat, const char *type);
 extern time_t calc_compile_time(const char *time, const char *date);
-extern int http_mailbox_open(const char *name, struct mailbox **mailbox,
-			     int locktype);
 extern const char *http_statusline(long code);
 extern char *rfc3339date_gen(char *buf, size_t len, time_t t);
 extern char *httpdate_gen(char *buf, size_t len, time_t t);

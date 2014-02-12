@@ -937,7 +937,8 @@ static int report_card_multiget(struct transaction_t *txn,
 		if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
 		/* Open mailbox for reading */
-		if ((r = http_mailbox_open(tgt.mboxname, &mailbox, LOCK_SHARED))) {
+		r = mailbox_open_irl(tgt.mboxname, &mailbox);
+		if (r) {
 		    syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
 			   tgt.mboxname, error_message(r));
 		    txn->error.desc = error_message(r);
@@ -964,7 +965,7 @@ static int report_card_multiget(struct transaction_t *txn,
     }
 
   done:
-    if (mailbox) mailbox_unlock_index(mailbox, NULL);
+    mailbox_close(&mailbox);
     buf_free(&uri);
 
     return ret;
