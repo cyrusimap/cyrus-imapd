@@ -35,6 +35,7 @@ imap/chk_cyrus
 imap/ctl_cyrusdb
 imap/ctl_deliver
 imap/ctl_mboxlist
+imap/ctl_zoneinfo
 imap/cvt_cyrusdb
 imap/cyr_charset
 imap/cyr_dbtool
@@ -79,6 +80,8 @@ imap/sync_client
 imap/sync_reset
 imap/sync_server
 imap/tls_prune
+imap/tz_err.c
+imap/tz_err.h
 imap/unexpunge
 imtest/imtest
 lib/chartable.c
@@ -108,4 +111,5 @@ sieve/sieve_err.c
 sieve/sieve_err.h
 sieve/sievec
 sieve/sieved
+tools/vzic/vzic
 xversion.h
