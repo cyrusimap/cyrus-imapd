@@ -1012,8 +1012,8 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     if (!dirs || !dirs->count) goto out;
 
     /* if there are directories, open the databases */
-    bb->db = xapian_db_open((const char **)dirs->data);
-    if (!bb->db) goto out;
+    r = xapian_db_open((const char **)dirs->data, &bb->db);
+    if (r) goto out;
 
     /* read the list of all indexed messages to allow (optional) false positives
      * for unindexed messages */
@@ -1029,6 +1029,7 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
 out:
     strarray_free(dirs);
     strarray_free(active);
+    /* XXX - error return? */
     return &bb->super;
 }
 

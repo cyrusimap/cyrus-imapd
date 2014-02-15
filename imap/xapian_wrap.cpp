@@ -69,11 +69,10 @@ struct xapian_dbw
 
 int xapian_dbw_open(const char *path, xapian_dbw_t **dbwp)
 {
-    xapian_dbw_t *dbw = 0;
+    xapian_dbw_t *dbw = (xapian_dbw_t *)xzmalloc(sizeof(xapian_dbw_t));
     int r = 0;
 
     try {
-	dbw = (xapian_dbw_t *)xzmalloc(sizeof(xapian_dbw_t));
 	int action = Xapian::DB_CREATE_OR_OPEN;
 	dbw->database = new Xapian::WritableDatabase(path, action);
 	dbw->term_generator = new Xapian::TermGenerator();
@@ -93,7 +92,7 @@ int xapian_dbw_open(const char *path, xapian_dbw_t **dbwp)
     }
 
     if (r)
-	free(dbw);
+	xapian_dbw_close(dbw);
     else
 	*dbwp = dbw;
 
@@ -221,13 +220,13 @@ struct xapian_db
     Xapian::QueryParser *parser;
 };
 
-xapian_db_t *xapian_db_open(const char **paths)
+int xapian_db_open(const char **paths, xapian_db_t **dbp)
 {
-    xapian_db_t *db = NULL;
+    xapian_db_t *db = (xapian_db_t *)xzmalloc(sizeof(xapian_db_t));
     const char *thispath = "(unknown)";
+    int r = 0;
 
     try {
-	db = (xapian_db_t *)xzmalloc(sizeof(xapian_db_t));
 	db->paths = new std::string();
 	db->database = new Xapian::Database();
 	while (*paths) {
@@ -247,9 +246,15 @@ xapian_db_t *xapian_db_open(const char **paths)
     catch (const Xapian::Error &err) {
 	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
 		    thispath, err.get_description().c_str());
-	db = NULL;
+	r = IMAP_IOERROR;
     }
-    return db;
+
+    if (r)
+	xapian_db_close(db);
+    else
+	*dbp = db;
+
+    return r;
 }
 
 void xapian_db_close(xapian_db_t *db)
@@ -262,6 +267,7 @@ void xapian_db_close(xapian_db_t *db)
 	free(db);
     }
     catch (const Xapian::Error &err) {
+	/* XXX - memory leak? */
 	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
 		    err.get_context().c_str(), err.get_description().c_str());
     }
