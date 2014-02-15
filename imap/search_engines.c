@@ -207,7 +207,7 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     int incremental = (flags & SEARCH_UPDATE_INCREMENTAL);
 
     r = rx->begin_mailbox(rx, mailbox, flags);
-    if (r) return r;
+    if (r) goto done;
 
     first = mailbox_finduid(mailbox, rx->first_unindexed_uid(rx));
     if (!first) first = 1; /* empty mailbox */
@@ -235,6 +235,7 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     if (batch.count)
 	r = flush_batch(rx, mailbox, &batch);
 
+ done:
     ptrarray_fini(&batch);
     r2 = rx->end_mailbox(rx, mailbox);
     if (r) return r;
