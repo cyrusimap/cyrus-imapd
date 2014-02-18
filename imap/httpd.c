@@ -3042,9 +3042,10 @@ static void auth_success(struct transaction_t *txn)
 
     proc_register("httpd", httpd_clienthost, httpd_userid, NULL, NULL);
 
-    syslog(LOG_NOTICE, "login: %s %s %s%s %s",
+    syslog(LOG_NOTICE, "login: %s %s %s%s %s SESSIONID=<%s>",
 	   httpd_clienthost, httpd_userid, scheme->name,
-	   httpd_tls_done ? "+TLS" : "", "User logged in");
+	   httpd_tls_done ? "+TLS" : "", "User logged in",
+	   session_id());
 
 
     /* Recreate telemetry log entry for request (w/ credentials redacted) */
