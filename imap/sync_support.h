@@ -48,6 +48,7 @@
 #ifndef INCLUDED_SYNC_SUPPORT_H
 #define INCLUDED_SYNC_SUPPORT_H
 
+#include "backend.h"
 #include "dlist.h"
 #include "prot.h"
 #include "mailbox.h"
@@ -400,6 +401,67 @@ int parse_upload(struct dlist *kr, struct mailbox *mailbox,
 		 struct index_record *record);
 int sync_append_copyfile(struct mailbox *mailbox,
 			 struct index_record *record);
+
+/* =======================  server-side sync  =========================== */
+
+struct sync_state {
+    char *userid;
+    int userisadmin;
+    struct auth_state *authstate;
+    struct namespace *namespace;
+    struct protstream *pout;
+};
+
+int sync_get_message(struct dlist *kin, struct sync_state *sstate);
+int sync_get_sieve(struct dlist *kin, struct sync_state *sstate);
+int sync_get_annotation(struct dlist *kin, struct sync_state *sstate);
+int sync_get_quota(struct dlist *kin, struct sync_state *sstate);
+int sync_get_fullmailbox(struct dlist *kin, struct sync_state *sstate);
+int sync_get_mailboxes(struct dlist *kin, struct sync_state *sstate);
+int sync_get_meta(struct dlist *kin, struct sync_state *sstate);
+int sync_get_user(struct dlist *kin, struct sync_state *sstate);
+
+int sync_apply_reserve(struct dlist *kl,
+		       struct sync_reserve_list *reserve_list,
+		       struct sync_state *sstate);
+int sync_apply_unquota(struct dlist *kin, struct sync_state *sstate);
+int sync_apply_quota(struct dlist *kin, struct sync_state *sstate);
+int sync_apply_mailbox(struct dlist *kin, struct sync_state *sstate);
+int sync_apply_unmailbox(struct dlist *kin, struct sync_state *sstate);
+int sync_apply_rename(struct dlist *kin, struct sync_state *sstate);
+int sync_apply_changesub(struct dlist *kin, struct sync_state *sstate);
+int sync_apply_annotation(struct dlist *kin, struct sync_state *sstate);
+int sync_apply_unannotation(struct dlist *kin, struct sync_state *sstate);
+int sync_apply_sieve(struct dlist *kin, struct sync_state *sstate);
+int sync_apply_unsieve(struct dlist *kin, struct sync_state *sstate);
+int sync_apply_activate_sieve(struct dlist *kin, struct sync_state *sstate);
+int sync_apply_unactivate_sieve(struct dlist *kin, struct sync_state *sstate);
+int sync_apply_seen(struct dlist *kin, struct sync_state *sstate);
+int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate);
+int sync_apply_expunge(struct dlist *kin, struct sync_state *sstate);
+int sync_apply_message(struct dlist *kin,
+		       struct sync_reserve_list *reserve_list,
+		       struct sync_state *sstate);
+
+void sync_print_response(char *tag, int r, struct protstream *pout);
+
+/* =======================  client-side sync  =========================== */
+
+int sync_do_seen(char *user, char *uniqueid, struct backend *sync_be,
+		 int verbose, int verbose_logging);
+int sync_do_quota(const char *root, struct backend *sync_be,
+		  int verbose, int verbose_logging);
+int sync_do_annotation(char *mboxname, struct backend *sync_be,
+		       int verbose, int verbose_logging);
+int sync_do_mailboxes(struct sync_name_list *mboxname_list,
+		      struct backend *sync_be,
+		      int verbose, int verbose_logging);
+int sync_do_user(char *userid, struct backend *sync_be,
+		 int verbose, int verbose_logging);
+int sync_do_meta(char *userid, struct backend *sync_be,
+		 int verbose, int verbose_logging);
+int sync_set_sub(const char *userid, const char *mboxname, int add,
+		 struct backend *sync_be, int verbose, int verbose_logging);
 
 /* ====================================================================== */
 

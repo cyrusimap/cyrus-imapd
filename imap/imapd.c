@@ -102,6 +102,7 @@
 #include "seen.h"
 #include "statuscache.h"
 #include "sync_log.h"
+#include "sync_support.h"
 #include "telemetry.h"
 #include "tls.h"
 #include "user.h"
@@ -309,6 +310,7 @@ struct capa_struct base_capabilities[] = {
     { "QRESYNC",               2 },
     { "SCAN",                  2 },
     { "XLIST",                 2 },
+    { "X-REPLICATION",         2 },
 
 #ifdef HAVE_SSL
     { "URLAUTH",               2 },
@@ -396,6 +398,12 @@ void cmd_getannotation(char* tag, char *mboxpat);
 void cmd_setannotation(char* tag, char *mboxpat);
 
 void cmd_enable(char* tag);
+
+static void cmd_syncapply(char *tag, struct dlist *kl,
+			  struct sync_reserve_list *reserve_list);
+static void cmd_syncget(char *tag, struct dlist *kl);
+static void cmd_syncrestart(char *tag, struct sync_reserve_list **reserve_listp,
+			    int realloc);
 
 int parsecreateargs(struct dlist **extargs);
 
@@ -1139,6 +1147,8 @@ void cmdloop()
     const char *err;
     const char * commandmintimer;
     double commandmintimerd = 0.0;
+    struct sync_reserve_list *reserve_list =
+	sync_reserve_list_create(SYNC_MESSAGE_LIST_HASH_SIZE);
 
     prot_printf(imapd_out, "* OK [CAPABILITY ");
     capa_response(CAPA_PREAUTH);
@@ -1204,7 +1214,7 @@ void cmdloop()
 		syslog(LOG_WARNING, "%s, closing connection", err);
 		prot_printf(imapd_out, "* BYE %s\r\n", err);
 	    }
-	    return;
+	    break;
 	}
 	if (c != ' ' || !imparse_isatom(tag.s) || (tag.s[0] == '*' && !tag.s[1])) {
 	    prot_printf(imapd_out, "* BAD Invalid tag\r\n");
@@ -1544,8 +1554,8 @@ void cmdloop()
 			    error_message(IMAP_BYE_LOGOUT));
 		prot_printf(imapd_out, "%s OK %s\r\n", tag.s, 
 			    error_message(IMAP_OK_COMPLETED));
-               telemetry_rusage( imapd_userid );
-		return;
+		telemetry_rusage( imapd_userid );
+		break;
 	    }
 	    else if (!imapd_userid) goto nologin;
 	    else if (!strcmp(cmd.s, "List")) {
@@ -1943,6 +1953,31 @@ void cmdloop()
 
 		snmp_increment(SCAN_COUNT, 1);
 	    }
+	    else if (!strcmp(cmd.s, "Syncapply")) {
+		struct dlist *kl = sync_parseline(imapd_in);
+
+		if (kl) {
+		    cmd_syncapply(tag.s, kl, reserve_list);
+		    dlist_free(&kl);
+		}
+		else goto extraargs;
+	    }
+	    else if (!strcmp(cmd.s, "Syncget")) {
+		struct dlist *kl = sync_parseline(imapd_in);
+
+		if (kl) {
+		    cmd_syncget(tag.s, kl);
+		    dlist_free(&kl);
+		}
+		else goto extraargs;
+	    }
+	    else if (!strcmp(cmd.s, "Syncrestart")) {
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
+
+		/* just clear the GUID cache */
+		cmd_syncrestart(tag.s, &reserve_list, 1);
+	    }
 	    else goto badcmd;
 	    break;
 
@@ -2142,6 +2177,8 @@ void cmdloop()
 	eatline(imapd_in, c);
 	continue;
     }
+
+    cmd_syncrestart(NULL, &reserve_list, 0);
 }
 
 static void authentication_success(void)
@@ -8421,6 +8458,8 @@ struct xfer_header {
     mupdate_handle *mupdate_h;
     struct backend *be;
     int remoteversion;
+    unsigned long use_replication;
+    struct buf tagbuf;
     char *toserver;
     char *topart;
     struct seen *seendb;
@@ -8484,6 +8523,8 @@ static void xfer_done(struct xfer_header **xferptr)
     free(xfer->topart);
 
     seen_close(&xfer->seendb);
+
+    buf_free(&xfer->tagbuf);
 
     free(xfer);
 
@@ -8552,6 +8593,12 @@ static int xfer_init(const char *toserver, const char *topart,
     }
 
     xfer->remoteversion = backend_version(xfer->be);
+    if (xfer->be->capability & CAPA_REPLICATION) {
+	xfer->use_replication = 1;
+
+	/* attach our IMAP tag buffer to our protstreams as userdata */
+	xfer->be->in->userdata = xfer->be->out->userdata = &xfer->tagbuf;
+    }
 
     xfer->toserver = xstrdup(toserver);
     xfer->topart = xstrdup(topart);
@@ -8888,13 +8935,35 @@ static int xfer_user_cb(char *name,
     return 0;
 }
 
-static int do_xfer(struct xfer_header *xfer)
+static int do_xfer(struct xfer_header *xfer, char *userid)
 {
-    int r;
+    int r = 0;
+    struct sync_name_list *mboxname_list = NULL;
 
-    r = xfer_deactivate(xfer);
-    if (!r) r = xfer_localcreate(xfer);
-    if (!r) r = xfer_undump(xfer);
+    if (xfer->use_replication) {
+	if (userid) r = sync_do_user(userid, xfer->be, 0, 0);
+	else {
+	    mboxname_list = sync_name_list_create();
+	    sync_name_list_add(mboxname_list, xfer->items->name);
+
+	    r = sync_do_mailboxes(mboxname_list, xfer->be, 0, 0);
+	}
+    }
+
+    if (!r) r = xfer_deactivate(xfer);
+
+    if (!r) {
+	if (xfer->use_replication) {
+	    if (userid) r = sync_do_user(userid, xfer->be, 0, 0);
+	    else r = sync_do_mailboxes(mboxname_list, xfer->be, 0, 0);
+	}
+	else {
+	    r = xfer_localcreate(xfer);
+	    if (!r) r = xfer_undump(xfer);
+	}
+    }
+
+    if (mboxname_list) sync_name_list_free(&mboxname_list);
 
     if (r) {
 	/* Something failed, revert back to local server */
@@ -9039,7 +9108,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	    r = IMAP_MAILBOX_LOCKED;
 	    goto done;
 	}
-	r = do_xfer(xfer);
+	r = do_xfer(xfer, NULL);
     } else {
 	char *userid = mboxname_to_userid(mailboxname);
 
@@ -9050,23 +9119,25 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	    goto done;
 	}
 
-	/* set the quotaroot if needed */
-	r = xfer_setquotaroot(xfer, mailboxname);
-	if (r) goto done;
+	if (!xfer->use_replication) {
+	    /* set the quotaroot if needed */
+	    r = xfer_setquotaroot(xfer, mailboxname);
+	    if (r) goto done;
+
+	    /* backport the seen file if needed */
+	    if (xfer->remoteversion < 12) {
+		r = seen_open(userid, SEEN_CREATE, &xfer->seendb);
+		if (r) goto done;
+	    }
+	}
 
 	/* add all submailboxes to the move list as well */
 	r = xfer_addsubmailboxes(xfer, mailboxname);
 	if (r) goto done;
 
-	/* backport the seen file if needed */
-	if (xfer->remoteversion < 12) {
-	    r = seen_open(userid, SEEN_CREATE, &xfer->seendb);
-	    if (r) goto done;
-	}
-
 	/* NOTE: mailboxes were added in reverse, so the inbox is
 	 * done last */
-	r = do_xfer(xfer);
+	r = do_xfer(xfer, userid);
 	if (r) goto done;
 
 	/* this was a successful user delete, and we need to delete
@@ -11114,4 +11185,179 @@ void cmd_enable(char *tag)
 
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
+}
+
+
+/*****************************  server-side sync  *****************************/
+
+static void cmd_syncapply(char *tag, struct dlist *kin,
+			  struct sync_reserve_list *reserve_list)
+{
+    int r;
+    struct sync_state sync_state = {
+	imapd_userid, imapd_userisadmin, imapd_authstate,
+	&imapd_namespace, imapd_out
+    };
+
+    ucase(kin->name);
+
+    if (!strcmp(kin->name, "MESSAGE"))
+	r = sync_apply_message(kin, reserve_list, &sync_state);
+    else if (!strcmp(kin->name, "EXPUNGE"))
+	r = sync_apply_expunge(kin, &sync_state);
+
+    /* dump protocol */
+    else if (!strcmp(kin->name, "ACTIVATE_SIEVE"))
+	r = sync_apply_activate_sieve(kin, &sync_state);
+    else if (!strcmp(kin->name, "ANNOTATION"))
+	r = sync_apply_annotation(kin, &sync_state);
+    else if (!strcmp(kin->name, "MAILBOX"))
+	r = sync_apply_mailbox(kin, &sync_state);
+    else if (!strcmp(kin->name, "QUOTA"))
+	r = sync_apply_quota(kin, &sync_state);
+    else if (!strcmp(kin->name, "SEEN"))
+	r = sync_apply_seen(kin, &sync_state);
+    else if (!strcmp(kin->name, "RENAME"))
+	r = sync_apply_rename(kin, &sync_state);
+    else if (!strcmp(kin->name, "RESERVE"))
+	r = sync_apply_reserve(kin, reserve_list, &sync_state);
+    else if (!strcmp(kin->name, "SIEVE"))
+	r = sync_apply_sieve(kin, &sync_state);
+    else if (!strcmp(kin->name, "SUB"))
+	r = sync_apply_changesub(kin, &sync_state);
+
+    /* "un"dump protocol ;) */
+    else if (!strcmp(kin->name, "UNACTIVATE_SIEVE"))
+	r = sync_apply_unactivate_sieve(kin, &sync_state);
+    else if (!strcmp(kin->name, "UNANNOTATION"))
+	r = sync_apply_unannotation(kin, &sync_state);
+    else if (!strcmp(kin->name, "UNMAILBOX"))
+	r = sync_apply_unmailbox(kin, &sync_state);
+    else if (!strcmp(kin->name, "UNQUOTA"))
+	r = sync_apply_unquota(kin, &sync_state);
+    else if (!strcmp(kin->name, "UNSIEVE"))
+	r = sync_apply_unsieve(kin, &sync_state);
+    else if (!strcmp(kin->name, "UNSUB"))
+	r = sync_apply_changesub(kin, &sync_state);
+
+    /* user is a special case that's not paired, there's no "upload user"
+     * as such - we just call the individual commands with their items */
+    else if (!strcmp(kin->name, "UNUSER"))
+	r = sync_apply_unuser(kin, &sync_state);
+
+    else
+	r = IMAP_PROTOCOL_ERROR;
+
+    sync_print_response(tag, r, imapd_out);
+}
+
+static void cmd_syncget(char *tag, struct dlist *kin)
+{
+    int r;
+    struct sync_state sync_state = {
+	imapd_userid, imapd_userisadmin, imapd_authstate,
+	&imapd_namespace, imapd_out
+    };
+
+    ucase(kin->name);
+
+    if (!strcmp(kin->name, "ANNOTATION"))
+	r = sync_get_annotation(kin, &sync_state);
+    else if (!strcmp(kin->name, "FETCH"))
+	r = sync_get_message(kin, &sync_state);
+    else if (!strcmp(kin->name, "FETCH_SIEVE"))
+	r = sync_get_sieve(kin, &sync_state);
+    else if (!strcmp(kin->name, "FULLMAILBOX"))
+	r = sync_get_fullmailbox(kin, &sync_state);
+    else if (!strcmp(kin->name, "MAILBOXES"))
+	r = sync_get_mailboxes(kin, &sync_state);
+    else if (!strcmp(kin->name, "META"))
+	r = sync_get_meta(kin, &sync_state);
+    else if (!strcmp(kin->name, "QUOTA"))
+	r = sync_get_quota(kin, &sync_state);
+    else if (!strcmp(kin->name, "USER"))
+	r = sync_get_user(kin, &sync_state);
+    else
+	r = IMAP_PROTOCOL_ERROR;
+
+    sync_print_response(tag, r, imapd_out);
+}
+
+
+/* partition_list is simple linked list of names used by cmd_restart */
+
+struct partition_list {
+    struct partition_list *next;
+    char *name;
+};
+
+static struct partition_list *
+partition_list_add(char *name, struct partition_list *pl)
+{
+    struct partition_list *p;
+
+    /* Is name already on list? */
+    for (p=pl; p; p = p->next) {
+        if (!strcmp(p->name, name))
+            return(pl);
+    }
+
+    /* Add entry to start of list and return new list */
+    p = xzmalloc(sizeof(struct partition_list));
+    p->next = pl;
+    p->name = xstrdup(name);
+
+    return(p);
+}
+
+static void
+partition_list_free(struct partition_list *current)
+{
+    while (current) {
+        struct partition_list *next = current->next;
+
+        free(current->name);
+        free(current);
+
+        current = next;
+    }
+    
+}
+
+static void cmd_syncrestart(char *tag, struct sync_reserve_list **reserve_listp,
+			    int re_alloc)
+{
+    struct sync_reserve *res;
+    struct sync_reserve_list *l = *reserve_listp;
+    struct sync_msgid *msg;
+    const char *fname;
+    int hash_size = l->hash_size;
+    struct partition_list *p, *pl = NULL;
+
+    for (res = l->head; res; res = res->next) {
+	for (msg = res->list->head; msg; msg = msg->next) {
+            pl = partition_list_add(res->part, pl);
+
+	    fname = dlist_reserve_path(res->part, &msg->guid);
+	    unlink(fname);
+	}
+    }
+    sync_reserve_list_free(reserve_listp);
+        
+    /* Remove all <partition>/sync./<pid> directories referred to above */
+    for (p=pl; p ; p = p->next) {
+        static char buf[MAX_MAILBOX_PATH];
+
+        snprintf(buf, MAX_MAILBOX_PATH, "%s/sync./%lu", 
+                 config_partitiondir(p->name), (unsigned long)getpid());
+        rmdir(buf);
+    }
+    partition_list_free(pl);
+
+    if (re_alloc) {
+	*reserve_listp = sync_reserve_list_create(hash_size);
+
+	prot_printf(imapd_out, "%s OK Restarting\r\n", tag);
+    }
+    else *reserve_listp = NULL;
 }

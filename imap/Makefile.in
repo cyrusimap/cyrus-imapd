@@ -114,7 +114,7 @@ LOBJS= append.o mailbox.o mboxlist.o mupdate-client.o mboxname.o message.o \
 	statuscache_db.o userdeny_db.o sequence.o upgrade_index.o \
 	dlist.o version.o dav_util.o
 
-IMAPDOBJS=pushstats.o imapd.o proxy.o imap_proxy.o index.o
+IMAPDOBJS=pushstats.o imapd.o proxy.o imap_proxy.o index.o sync_support.o
 
 LMTPOBJS=lmtpstats.o lmtpengine.o spool.o
 
@@ -148,6 +148,7 @@ install:
 	done
 	ln -f $(DESTDIR)$(service_path)/pop3d $(DESTDIR)$(service_path)/pop3proxyd
 	ln -f $(DESTDIR)$(service_path)/imapd $(DESTDIR)$(service_path)/proxyd
+	ln -f $(DESTDIR)$(service_path)/imapd $(DESTDIR)$(service_path)/sync_server
 	ln -f $(DESTDIR)$(service_path)/lmtpd $(DESTDIR)$(service_path)/lmtpproxyd
 
 .c.o:
@@ -262,13 +263,6 @@ fud: fud.o libimap.a mutex_fake.o $(DEPLIBS) $(SERVICE)
 
 smmapd: smmapd.o libimap.a mutex_fake.o $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o smmapd $(SERVICE) smmapd.o mutex_fake.o libimap.a \
-	$(DEPLIBS) $(LIBS) $(LIB_WRAP)
-
-sync_server: sync_server.o sync_support.o \
-	imapparse.o tls.o libimap.a mutex_fake.o $(DEPLIBS) $(SERVICE)
-	$(CC) $(LDFLAGS) -o \
-	sync_server sync_server.o sync_support.o \
-	imapparse.o tls.o $(SERVICE) libimap.a mutex_fake.o \
 	$(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
 httpd: $(HTTP_OBJS) proxy.o backend.o index.o spool.o tls.o mutex_fake.o \

@@ -115,6 +115,7 @@ struct protocol_t imap_protocol =
 	  { " MULTIAPPEND", CAPA_MULTIAPPEND },
 	  { " RIGHTS=kxte", CAPA_ACLRIGHTS },
 	  { " LIST-EXTENDED", CAPA_LISTEXTENDED },
+	  { " X-REPLICATION", CAPA_REPLICATION },
 	  { NULL, 0 } } },
       { "S01 STARTTLS", "S01 OK", "S01 NO", 0 },
       { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*",

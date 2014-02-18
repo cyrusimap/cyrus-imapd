@@ -1420,11 +1420,12 @@ product version in the capabilities */
 /* The default password to use when authenticating to a sync server.
    Prefix with a channel name to only apply for that channel */
 
-{ "sync_port", "csync", STRING }
+{ "sync_port", NULL, STRING }
 /* Name of the service (or port number) of the replication service on
-   replica host.  The default is "csync" which is usally port 2005, but
-   any service name or numeric port can be specified.
-   Prefix with a channel name to only apply for that channel */
+   replica host.  Prefix with a channel name to only apply for that
+   channel.  If not specified, the replication client will first
+   try "imap" (port 143) to check if imapd supports replication,
+   otherwise it will default to "csync" (usually port 2005).  */
 
 { "sync_realm", NULL, STRING }
 /* The authentication realm to use when authenticating to a sync server.

@@ -47,7 +47,7 @@
 
 #include "saslclient.h"
 
-#define MAX_CAPA 8
+#define MAX_CAPA 9
 
 enum {
     /* generic capabilities */

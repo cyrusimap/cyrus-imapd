@@ -62,7 +62,8 @@ enum {
     CAPA_MUPDATE	= (1 << 4),
     CAPA_MULTIAPPEND	= (1 << 5),
     CAPA_ACLRIGHTS	= (1 << 6),
-    CAPA_LISTEXTENDED	= (1 << 7)
+    CAPA_LISTEXTENDED	= (1 << 7),
+    CAPA_REPLICATION	= (1 << 8)
 };
 
 extern struct protocol_t imap_protocol;

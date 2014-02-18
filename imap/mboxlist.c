@@ -664,7 +664,7 @@ int mboxlist_createsync(const char *name, int mbtype,
     return mboxlist_createmailbox_full(name, mbtype, partition,
 				       1, userid, auth_state,
 				       options, uidvalidity, acl, uniqueid,
-				       0, 1, 0, mboxptr);
+				       1, 1, 0, mboxptr);
 }
 
 /* insert an entry for the proxy */
