@@ -5446,18 +5446,16 @@ static void cmd_search(char *tag, int usinguid)
     searchargs = new_searchargs(tag, GETSEARCH_CHARSET_KEYWORD|GETSEARCH_RETURN,
 				&imapd_namespace, imapd_userid, imapd_authstate,
 				imapd_userisadmin || imapd_userisproxyadmin);
+
+    /* special case quirk for iPhones */
     if (imapd_id.quirks & QUIRK_SEARCHFUZZY)
 	searchargs->fuzzy_depth++;
+
     c = get_search_program(imapd_in, imapd_out, searchargs);
     if (c == EOF) {
 	eatline(imapd_in, ' ');
 	freesearchargs(searchargs);
 	return;
-    }
-    if (imapd_id.quirks & QUIRK_SEARCHFUZZY) {
-	char *expr = search_expr_serialise(searchargs->root);
-	syslog(LOG_NOTICE, "fuzzy search %s", expr);
-	free(expr);
     }
 
     if (c == '\r') c = prot_getc(imapd_in);
