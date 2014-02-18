@@ -4546,7 +4546,7 @@ HIDDEN int mailbox_delete_cleanup(const char *part, const char *name)
 	for (i = 0; i < paths.count; i++) {
 	    char *path = paths.data[i]; /* need direct reference, because we're fiddling */
 	    r = rmdir(path);
-	    if (r && errno != -ENOENT)
+	    if (r && errno != ENOENT)
 		syslog(LOG_NOTICE,
 		       "Remove of supposedly empty directory %s failed: %m",
 		       path);
