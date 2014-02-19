@@ -5265,27 +5265,17 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 
 int caladdress_lookup(const char *addr, struct sched_param *param)
 {
-    char *p;
+    const char *userid = addr;
     int islocal = 1, found = 1;
-    static char userid[MAX_MAILBOX_BUFFER];
 
     memset(param, 0, sizeof(struct sched_param));
 
     if (!addr) return HTTP_NOT_FOUND;
 
-    p = (char *) addr;
-    if (!strncasecmp(addr, "mailto:", 7)) p += 7;
+    if (!strncasecmp(userid, "mailto:", 7)) userid += 7;
 
     /* XXX  Do LDAP/DB/socket lookup to see if user is local */
     /* XXX  Hack until real lookup stuff is written */
-    strlcpy(userid, p, sizeof(userid));
-    if ((p = strchr(userid, '@')) && !(*p = '\0') && *++p) {
-	struct strlist *domains = cua_domains;
-
-	for (; domains && strcmp(p, domains->s); domains = domains->next);
-
-	if (!domains) islocal = 0;
-    }
 
     if (islocal) {
 	/* User is in a local domain */
@@ -5295,7 +5285,7 @@ int caladdress_lookup(const char *addr, struct sched_param *param)
 	struct mboxname_parts parts;
 
 	if (!found) return HTTP_NOT_FOUND;
-	else param->userid = userid;
+	else param->userid = xstrdupnull(userid); /* XXX - memleak */
 
 	/* Lookup user's cal-home-set to see if its on this server */
 
@@ -5305,6 +5295,7 @@ int caladdress_lookup(const char *addr, struct sched_param *param)
 	mboxname_free_parts(&parts);
 
 	r = http_mlookup(mailboxname, &mbentry, NULL);
+
 	if (!r) {
 	    param->server = xstrdupnull(mbentry->server); /* XXX - memory leak */
 	    mboxlist_entry_free(&mbentry);
