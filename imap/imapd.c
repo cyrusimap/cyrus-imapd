@@ -8460,6 +8460,7 @@ struct xfer_header {
     int remoteversion;
     unsigned long use_replication;
     struct buf tagbuf;
+    char *userid;
     char *toserver;
     char *topart;
     struct seen *seendb;
@@ -8808,6 +8809,181 @@ static int xfer_undump(struct xfer_header *xfer)
     return 0;
 }
 
+static int sync_mailbox(struct mailbox *mailbox,
+			struct sync_folder_list *replica_folders,
+			struct backend *be)
+{
+    int r = 0;
+    struct sync_folder_list *master_folders;
+    struct sync_reserve_list *reserve_guids;
+    struct sync_msgid_list *part_list;
+    struct sync_reserve *reserve;
+    struct sync_folder *mfolder, *rfolder;
+
+    master_folders = sync_folder_list_create();
+    reserve_guids = sync_reserve_list_create(SYNC_MSGID_LIST_HASH_SIZE);
+
+    part_list = sync_reserve_partlist(reserve_guids, mailbox->part);
+
+    sync_folder_list_add(master_folders, mailbox->uniqueid, mailbox->name, 
+			 mailbox->part, mailbox->acl, mailbox->i.options,
+			 mailbox->i.uidvalidity, mailbox->i.last_uid,
+			 mailbox->i.highestmodseq, mailbox->i.sync_crc,
+			 mailbox->i.recentuid, mailbox->i.recenttime,
+			 mailbox->i.pop3_last_login);
+
+    mfolder = master_folders->head;
+    mfolder->mailbox = mailbox;
+
+    rfolder = sync_folder_lookup(replica_folders, mfolder->uniqueid);
+    if (rfolder) {
+	rfolder->mark = 1;
+
+	/* does it need a rename? */
+	if (strcmp(mfolder->name, rfolder->name) ||
+	    strcmp(mfolder->part, rfolder->part)) {
+	    /* XXX  what do we do here */
+	}
+	
+	sync_find_reserve_messages(mailbox, rfolder->last_uid, part_list);
+    }
+    else sync_find_reserve_messages(mailbox, 0, part_list);
+
+    for (reserve = reserve_guids->head; reserve; reserve = reserve->next) {
+	r = sync_reserve_partition(reserve->part, replica_folders,
+				   reserve->list, be);
+	if (r) break;
+    }
+
+    if (!r) {
+	r = sync_update_mailbox(mfolder, rfolder, reserve_guids, be);
+	if (r) {
+	    syslog(LOG_ERR, "sync_mailbox(): update failed: %s '%s'", 
+		   mfolder->name, error_message(r));
+	}
+    }
+
+    sync_reserve_list_free(&reserve_guids);
+    sync_folder_list_free(&master_folders);
+
+    return r;
+}
+
+static int xfer_finalsync(struct xfer_header *xfer)
+{
+    struct sync_name_list *master_quotaroots = sync_name_list_create();
+    struct sync_folder_list *replica_folders = sync_folder_list_create();
+    struct sync_folder *rfolder;
+    struct sync_name_list *replica_subs = NULL;
+    struct sync_sieve_list *replica_sieve = NULL;
+    struct sync_seen_list *replica_seen = NULL;
+    struct sync_quota_list *replica_quota = NULL;
+    const char *cmd;
+    struct dlist *kl = NULL;
+    struct xfer_item *item;
+    struct mailbox *mailbox = NULL;
+    char buf[MAX_PARTITION_LEN+HOSTNAME_SIZE+2];
+    int r;
+
+    if (xfer->userid) {
+	replica_subs = sync_name_list_create();
+	replica_sieve = sync_sieve_list_create();
+	replica_seen = sync_seen_list_create();
+	replica_quota = sync_quota_list_create();
+
+	cmd = "USER";
+	kl = dlist_atom(NULL, "USER", xfer->userid);
+    }
+    else {
+	cmd = "MAILBOXES";
+	kl = dlist_list(NULL, "MAILBOXES");
+	dlist_atom(kl, "MBOXNAME", xfer->items->name);
+    }
+
+    sync_send_lookup(kl, xfer->be->out);
+    dlist_free(&kl);
+
+    r = sync_response_parse(xfer->be->in, cmd, replica_folders, replica_subs,
+			    replica_sieve, replica_seen, replica_quota);
+
+    if (r) goto done;
+
+    for (item = xfer->items; item; item = item->next) {
+	r = mailbox_open_exclusive(item->name, &mailbox);
+	if (r) {
+	    syslog(LOG_ERR,
+		   "Failed to open mailbox %s for xfer_final_sync() %s",
+		   item->name, error_message(r));
+	    goto done;
+	}
+
+	/* Step 3.5: Set mailbox as MOVING on local server */
+	snprintf(buf, sizeof(buf), "%s!%s", xfer->toserver, xfer->topart);
+	r = mboxlist_update(item->name, item->mbtype|MBTYPE_MOVING,
+			    buf, item->acl, 1);
+	if (r) {
+	    syslog(LOG_ERR,
+		   "Could not move mailbox: %s, mboxlist_update() failed %s",
+		   item->name, error_message(r));
+	}
+	else item->state = XFER_LOCAL_MOVING;
+
+	/* Step 4: Sync local -> remote */
+	if (!r) {
+	    r = sync_mailbox(mailbox, replica_folders, xfer->be);
+	    if (r) {
+		syslog(LOG_ERR,
+		       "Could not move mailbox: %s, sync_mailbox() failed %s",
+		       item->name, error_message(r));
+	    }
+	    else if (mailbox->quotaroot &&
+		     !sync_name_lookup(master_quotaroots, mailbox->quotaroot)) {
+		sync_name_list_add(master_quotaroots, mailbox->quotaroot);
+	    }
+	}
+
+	mailbox_close(&mailbox);
+
+	if (r) goto done;
+
+	item->state = XFER_UNDUMPED;
+    }
+
+    /* Delete folders on replica which no longer exist on master */
+    for (rfolder = replica_folders->head; rfolder; rfolder = rfolder->next) {
+	if (rfolder->mark) continue;
+
+	r = sync_folder_delete(rfolder->name, xfer->be);
+	if (r) {
+	    syslog(LOG_ERR, "sync_folder_delete(): failed: %s '%s'", 
+		   rfolder->name, error_message(r));
+	    goto done;
+	}
+    }
+
+    /* Handle any mailbox/user metadata */
+    r = sync_do_user_quota(master_quotaroots,
+			   replica_quota, xfer->be);
+    if (!r && xfer->userid) {
+	r = sync_do_user_seen(xfer->userid,
+			      replica_seen, xfer->be);
+	if (!r) r = sync_do_user_sub(xfer->userid, replica_subs,
+				     xfer->be, 0, 0);
+	if (!r) r = sync_do_user_sieve(xfer->userid,
+				       replica_sieve, xfer->be);
+    }
+
+  done:
+    sync_name_list_free(&master_quotaroots);
+    sync_folder_list_free(&replica_folders);
+    if (replica_subs) sync_name_list_free(&replica_subs);
+    if (replica_sieve) sync_sieve_list_free(&replica_sieve);
+    if (replica_seen) sync_seen_list_free(&replica_seen);
+    if (replica_quota) sync_quota_list_free(&replica_quota);
+
+    return r;
+}
+
 static int xfer_reactivate(struct xfer_header *xfer)
 {
     struct xfer_item *item;
@@ -8890,15 +9066,17 @@ static void xfer_recover(struct xfer_header *xfer)
 	    }
 
 	case XFER_REMOTE_CREATED:
-	    /* Delete remote mailbox */
-	    prot_printf(xfer->be->out,
-			"LD1 LOCALDELETE {" SIZE_T_FMT "+}\r\n%s\r\n",
-			strlen(item->extname), item->extname);
-	    r = getresult(xfer->be->in, "LD1");
-	    if (r) {
-		syslog(LOG_ERR,
-		       "Could not back out remote mailbox during move of %s (%s)",
-		       item->name, error_message(r));
+	    if (!xfer->use_replication) {
+		/* Delete remote mailbox */
+		prot_printf(xfer->be->out,
+			    "LD1 LOCALDELETE {" SIZE_T_FMT "+}\r\n%s\r\n",
+			    strlen(item->extname), item->extname);
+		r = getresult(xfer->be->in, "LD1");
+		if (r) {
+		    syslog(LOG_ERR,
+			   "Could not back out remote mailbox during move of %s (%s)",
+			   item->name, error_message(r));
+		}
 	    }
 
 	case XFER_DEACTIVATED:
@@ -8935,18 +9113,24 @@ static int xfer_user_cb(char *name,
     return 0;
 }
 
-static int do_xfer(struct xfer_header *xfer, char *userid)
+static int do_xfer(struct xfer_header *xfer)
 {
     int r = 0;
-    struct sync_name_list *mboxname_list = NULL;
 
     if (xfer->use_replication) {
-	if (userid) r = sync_do_user(userid, xfer->be, 0, 0);
-	else {
-	    mboxname_list = sync_name_list_create();
-	    sync_name_list_add(mboxname_list, xfer->items->name);
+	/* Initial non-blocking sync */
+	if (xfer->userid) {
+	    r = sync_do_user(xfer->userid, xfer->be, 0, 0);
 
+	    /* User moves may take a while, do another non-blocking sync */
+	    if (!r) r = sync_do_user(xfer->userid, xfer->be, 0, 0);
+	}
+	else {
+	    struct sync_name_list *mboxname_list = sync_name_list_create();
+
+	    sync_name_list_add(mboxname_list, xfer->items->name);
 	    r = sync_do_mailboxes(mboxname_list, xfer->be, 0, 0);
+	    sync_name_list_free(&mboxname_list);
 	}
     }
 
@@ -8954,16 +9138,14 @@ static int do_xfer(struct xfer_header *xfer, char *userid)
 
     if (!r) {
 	if (xfer->use_replication) {
-	    if (userid) r = sync_do_user(userid, xfer->be, 0, 0);
-	    else r = sync_do_mailboxes(mboxname_list, xfer->be, 0, 0);
+	    /* Final sync with exclusive locks on mailboxes */
+	    r = xfer_finalsync(xfer);
 	}
 	else {
 	    r = xfer_localcreate(xfer);
 	    if (!r) r = xfer_undump(xfer);
 	}
     }
-
-    if (mboxname_list) sync_name_list_free(&mboxname_list);
 
     if (r) {
 	/* Something failed, revert back to local server */
@@ -9108,9 +9290,9 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	    r = IMAP_MAILBOX_LOCKED;
 	    goto done;
 	}
-	r = do_xfer(xfer, NULL);
+	r = do_xfer(xfer);
     } else {
-	char *userid = mboxname_to_userid(mailboxname);
+	char *userid = xfer->userid = mboxname_to_userid(mailboxname);
 
 	/* is the selected mailbox in the namespace we're moving? */
 	if (imapd_index && !strncmp(mailboxname, imapd_index->mailbox->name,
@@ -9137,7 +9319,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 
 	/* NOTE: mailboxes were added in reverse, so the inbox is
 	 * done last */
-	r = do_xfer(xfer, userid);
+	r = do_xfer(xfer);
 	if (r) goto done;
 
 	/* this was a successful user delete, and we need to delete

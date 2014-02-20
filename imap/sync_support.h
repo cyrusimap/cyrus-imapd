@@ -138,6 +138,7 @@ void sync_reserve_list_free(struct sync_reserve_list **list);
 
 struct sync_folder {
     struct sync_folder *next;
+    struct mailbox *mailbox;
     char *uniqueid;
     char *name;
     char *part;
@@ -391,17 +392,6 @@ int addmbox_sub(void *rockp, const char *key, int keylen,
 		const char *data __attribute__((unused)),
 		int datalen __attribute__((unused)));
 
-int sync_mailbox(struct mailbox *mailbox,
-		 struct sync_folder *remote,
-		 struct sync_msgid_list *part_list,
-		 struct dlist *kl, struct dlist *kupload,
-		 int printrecords);
-
-int parse_upload(struct dlist *kr, struct mailbox *mailbox,
-		 struct index_record *record);
-int sync_append_copyfile(struct mailbox *mailbox,
-			 struct index_record *record);
-
 /* =======================  server-side sync  =========================== */
 
 struct sync_state {
@@ -462,6 +452,34 @@ int sync_do_meta(char *userid, struct backend *sync_be,
 		 int verbose, int verbose_logging);
 int sync_set_sub(const char *userid, const char *mboxname, int add,
 		 struct backend *sync_be, int verbose, int verbose_logging);
+int sync_response_parse(struct protstream *sync_in, const char *cmd,
+			struct sync_folder_list *folder_list,
+			struct sync_name_list *sub_list,
+			struct sync_sieve_list *sieve_list,
+			struct sync_seen_list *seen_list,
+			struct sync_quota_list *quota_list);
+int sync_find_reserve_messages(struct mailbox *mailbox,
+			       unsigned last_uid,
+			       struct sync_msgid_list *part_list);
+int sync_reserve_partition(char *partition,
+			   struct sync_folder_list *replica_folders,
+			   struct sync_msgid_list *part_list,
+			   struct backend *sync_be);
+int sync_update_mailbox(struct sync_folder *local,
+			struct sync_folder *remote,
+			struct sync_reserve_list *reserve_guids,
+			struct backend *sync_be);
+int sync_folder_delete(char *mboxname, struct backend *sync_be);
+int sync_do_user_quota(struct sync_name_list *master_quotaroots,
+		       struct sync_quota_list *replica_quota,
+		       struct backend *sync_be);
+int sync_do_user_sub(const char *userid, struct sync_name_list *replica_subs,
+		     struct backend *sync_be,
+		     int verbose, int verbose_logging);
+int sync_do_user_seen(char *user, struct sync_seen_list *replica_seen,
+		      struct backend *sync_be);
+int sync_do_user_sieve(char *userid, struct sync_sieve_list *replica_sieve,
+		       struct backend *sync_be);
 
 /* ====================================================================== */
 
