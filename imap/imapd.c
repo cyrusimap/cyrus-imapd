@@ -8918,7 +8918,7 @@ static int xfer_finalsync(struct xfer_header *xfer)
     if (r) goto done;
 
     for (item = xfer->items; item; item = item->next) {
-	r = mailbox_open_exclusive(item->name, &mailbox);
+	r = mailbox_open_iwl(item->name, &mailbox);
 	if (r) {
 	    syslog(LOG_ERR,
 		   "Failed to open mailbox %s for xfer_final_sync() %s",
@@ -9156,7 +9156,7 @@ static int do_xfer(struct xfer_header *xfer)
 
     if (!r) {
 	if (xfer->use_replication) {
-	    /* Final sync with exclusive locks on mailboxes */
+	    /* Final sync with write locks on mailboxes */
 	    r = xfer_finalsync(xfer);
 	}
 	else {
