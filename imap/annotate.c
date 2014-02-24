@@ -1836,6 +1836,12 @@ const struct annotate_st_entry mailbox_rw_entries[] =
     { NULL, 0, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL }
 };
 
+const struct annotate_st_entry dav_mailbox_rw_entry =
+    { "/vendor/cmu/cyrus-httpd/", ATTRIB_TYPE_STRING, BACKEND_ONLY,
+      ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
+      | ATTRIB_CONTENTTYPE_SHARED | ATTRIB_CONTENTTYPE_PRIV,
+      0, annotation_set_todb, NULL };
+
 struct annotate_st_entry_list *server_entries_list = NULL;
 struct annotate_st_entry_list *mailbox_rw_entries_list = NULL;
 
@@ -1882,8 +1888,21 @@ int annotatemore_store(const char *mboxname,
 	    }
 	}
 	if (!currententry) {
-	    /* unknown annotation */
-	    return IMAP_PERMISSION_DENIED;
+	    if ((mboxname_iscalendarmailbox(mboxname, 0) ||
+		 mboxname_isaddressbookmailbox(mboxname, 0)) &&
+		!strncmp(e->entry, dav_mailbox_rw_entry.name,
+			 strlen(dav_mailbox_rw_entry.name))) {
+		static struct annotate_st_entry_list dav_entries_list;
+
+		memset(&dav_entries_list, 0,
+		       sizeof(struct annotate_st_entry_list));
+		dav_entries_list.entry = &dav_mailbox_rw_entry;
+		currententry = &dav_entries_list;
+	    }
+	    else {
+		/* unknown annotation */
+		return IMAP_PERMISSION_DENIED;
+	    }
 	}
 
 	/* Add this entry to our list only if it
