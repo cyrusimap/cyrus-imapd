@@ -46,6 +46,16 @@
 
 #include <config.h>
 
+/* prepare for carddav operations in this process */
+int carddav_init(void);
+
+/* done with all carddav operations for this process */
+int carddav_done(void);
+
+#ifdef WITH_DAV
+
+#include <libical/vcc.h>
+
 #include "dav_db.h"
 
 struct carddav_db;
@@ -63,12 +73,6 @@ struct carddav_data {
     const char *nickname;
     const char *email;
 };
-
-/* prepare for carddav operations in this process */
-int carddav_init(void);
-
-/* done with all carddav operations for this process */
-int carddav_done(void);
 
 /* get a database handle corresponding to mailbox */
 struct carddav_db *carddav_open(struct mailbox *mailbox, int flags);
@@ -110,5 +114,7 @@ int carddav_commit(struct carddav_db *carddavdb);
 
 /* abort transaction */
 int carddav_abort(struct carddav_db *carddavdb);
+
+#endif /* WITH_DAV */
 
 #endif /* CARDDAV_DB_H */

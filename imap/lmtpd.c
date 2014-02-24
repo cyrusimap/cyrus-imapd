@@ -71,6 +71,8 @@
 #include "assert.h"
 #include "auth.h"
 #include "backend.h"
+#include "caldav_db.h"
+#include "carddav_db.h"
 #include "duplicate.h"
 #include "exitcodes.h"
 #include "global.h"
@@ -225,6 +227,10 @@ int service_init(int argc __attribute__((unused)),
 	/* so we can do quota operations */
 	quotadb_init(0);
 	quotadb_open(NULL);
+
+	/* so we can do DAV opterations */
+	caldav_init();
+	carddav_init();
 
 	/* Initialize the annotatemore db (for sieve on shared mailboxes) */
 	annotatemore_init(0, NULL, NULL);
@@ -959,6 +965,9 @@ void shut_down(int code)
 
 	quotadb_close();
 	quotadb_done();
+
+	carddav_done();
+	caldav_done();
 
 	annotatemore_close();
 	annotatemore_done();

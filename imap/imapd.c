@@ -75,6 +75,8 @@
 #include "auth.h"
 #include "backend.h"
 #include "bsearch.h"
+#include "caldav_db.h"
+#include "carddav_db.h"
 #include "charset.h"
 #include "dlist.h"
 #include "exitcodes.h"
@@ -799,6 +801,10 @@ int service_init(int argc, char **argv, char **envp)
     quotadb_init(0);
     quotadb_open(NULL);
 
+    /* open the DAV dbs, we'll need then for real work */
+    caldav_init();
+    carddav_init();
+
     /* open the user deny db */
     denydb_init(0);
     denydb_open(NULL);
@@ -1030,6 +1036,9 @@ void shut_down(int code)
 
     quotadb_close();
     quotadb_done();
+
+    carddav_done();
+    caldav_done();
 
     denydb_close();
     denydb_done();

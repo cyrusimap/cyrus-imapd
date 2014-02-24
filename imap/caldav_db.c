@@ -43,6 +43,8 @@
 
 #include <config.h>
 
+#ifdef WITH_DAV
+
 #include <syslog.h>
 #include <string.h>
 
@@ -811,3 +813,19 @@ int caldav_mboxname(const char *name, const char *userid, char *result)
 
     return 0;
 }
+
+#else
+
+int caldav_init(void)
+{
+    return 0;
+}
+
+
+int caldav_done(void)
+{
+    return 0;
+}
+
+
+#endif /* WITH_DAV */

@@ -993,7 +993,7 @@ dnl
 ENABLE_HTTP=no
 AC_ARG_ENABLE(http,
         [  --enable-http           enable HTTP support],
-	ENABLE_HTTP=$enableval)
+	ENABLE_HTTP=$enableval, [ ENABLE_RSS=no ENABLE_DAV=no ])
 
 if test "$ENABLE_HTTP" != no; then
 dnl

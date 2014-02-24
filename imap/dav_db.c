@@ -43,6 +43,8 @@
 
 #include <config.h>
 
+#ifdef WITH_DAV
+
 #include <stdlib.h>
 #include <syslog.h>
 #include <string.h>
@@ -284,3 +286,5 @@ int dav_delete(struct mailbox *mailbox)
 
     return r;
 }
+
+#endif /* WITH_DAV */

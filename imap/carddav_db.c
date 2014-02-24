@@ -43,6 +43,8 @@
 
 #include <config.h>
 
+#ifdef WITH_DAV
+
 #include <syslog.h>
 #include <string.h>
 
@@ -505,3 +507,18 @@ int carddav_delmbox(struct carddav_db *carddavdb, const char *mailbox, int commi
 
     return r;
 }
+
+#else
+
+int carddav_init(void)
+{
+    return 0;
+}
+
+
+int carddav_done(void)
+{
+    return 0;
+}
+
+#endif /* WITH_DAV */

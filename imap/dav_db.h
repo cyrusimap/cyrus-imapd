@@ -44,6 +44,10 @@
 #ifndef DAV_DB_H
 #define DAV_DB_H
 
+#include <config.h>
+
+#ifdef WITH_DAV
+
 #include <sqlite3.h>
 #include "dav_util.h"
 
@@ -88,5 +92,7 @@ int dav_exec(sqlite3 *davdb, const char *cmd, struct bind_val bval[],
 
 /* delete database corresponding to mailbox */
 int dav_delete(struct mailbox *mailbox);
+
+#endif /* WITH_DAV */
 
 #endif /* DAV_DB_H */

@@ -48,7 +48,6 @@
 #endif
 #include <ctype.h>
 #include <errno.h>
-#include <libical/vcc.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -2054,6 +2053,7 @@ int mailbox_index_recalc(struct mailbox *mailbox)
     return r;
 }
 
+#ifdef WITH_DAV
 static int mailbox_update_carddav(struct mailbox *mailbox,
 				 struct index_record *old,
 				 struct index_record *new)
@@ -2248,6 +2248,23 @@ done:
 
     return r;
 }
+#else
+static int
+mailbox_update_carddav(struct mailbox *mailbox __attribute__((unused)),
+		       struct index_record *old __attribute__((unused)),
+		       struct index_record *new __attribute__((unused)))
+{
+    return 0;
+}
+
+static int
+mailbox_update_caldav(struct mailbox *mailbox __attribute__((unused)),
+		      struct index_record *old __attribute__((unused)),
+		      struct index_record *new __attribute__((unused)))
+{
+    return 0;
+}
+#endif /* WITH_DAV */
 
 /* NOTE: maybe make this able to return error codes if we have
  * support for transactional mailbox updates later.  For now,

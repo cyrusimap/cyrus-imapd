@@ -46,6 +46,14 @@
 
 #include <config.h>
 
+/* prepare for caldav operations in this process */
+int caldav_init(void);
+
+/* done with all caldav operations for this process */
+int caldav_done(void);
+
+#ifdef WITH_DAV
+
 #include <libical/ical.h>
 
 #include "dav_db.h"
@@ -87,12 +95,6 @@ struct caldav_data {
     unsigned transp;
     const char *sched_tag;
 };
-
-/* prepare for caldav operations in this process */
-int caldav_init(void);
-
-/* done with all caldav operations for this process */
-int caldav_done(void);
 
 /* get a database handle corresponding to mailbox */
 struct caldav_db *caldav_open(struct mailbox *mailbox, int flags);
@@ -139,5 +141,7 @@ int caldav_abort(struct caldav_db *caldavdb);
 void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata);
 
 int caldav_mboxname(const char *name, const char *userid, char *result);
+
+#endif /* WITH_DAV */
 
 #endif /* CALDAV_DB_H */
