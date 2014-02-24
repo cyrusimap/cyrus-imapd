@@ -8945,9 +8945,18 @@ static int xfer_finalsync(struct xfer_header *xfer)
 		       "Could not move mailbox: %s, sync_mailbox() failed %s",
 		       item->name, error_message(r));
 	    }
-	    else if (mailbox->quotaroot &&
-		     !sync_name_lookup(master_quotaroots, mailbox->quotaroot)) {
-		sync_name_list_add(master_quotaroots, mailbox->quotaroot);
+	    else {
+		if (mailbox->quotaroot &&
+		    !sync_name_lookup(master_quotaroots, mailbox->quotaroot)) {
+		    sync_name_list_add(master_quotaroots, mailbox->quotaroot);
+		}
+
+		r = sync_do_annotation(mailbox->name, xfer->be, 0, 0);
+		if (r) {
+		    syslog(LOG_ERR, "Could not move mailbox: %s,"
+			   " sync_do_annotation() failed %s",
+			   item->name, error_message(r));
+		}
 	    }
 	}
 
@@ -11386,8 +11395,8 @@ static void cmd_syncapply(char *tag, struct dlist *kin,
 {
     int r;
     struct sync_state sync_state = {
-	imapd_userid, imapd_userisadmin, imapd_authstate,
-	&imapd_namespace, imapd_out
+	imapd_userid, imapd_userisadmin || imapd_userisproxyadmin,
+	imapd_authstate, &imapd_namespace, imapd_out
     };
 
     ucase(kin->name);
