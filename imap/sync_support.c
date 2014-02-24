@@ -1929,7 +1929,14 @@ int sync_apply_mailbox(struct dlist *kin, struct sync_state *sstate)
  
     r = mailbox_open_iwl(mboxname, &mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-	r = mboxlist_createsync(mboxname, 0, partition,
+	int mbtype = 0;
+
+	if (mboxname_iscalendarmailbox(mboxname, 0))
+	    mbtype |= MBTYPE_CALENDAR;
+	else if (mboxname_isaddressbookmailbox(mboxname, 0))
+	    mbtype |= MBTYPE_ADDRESSBOOK;
+
+	r = mboxlist_createsync(mboxname, mbtype, partition,
 				sstate->userid, sstate->authstate,
 				options, uidvalidity, acl,
 				uniqueid, &mailbox);
