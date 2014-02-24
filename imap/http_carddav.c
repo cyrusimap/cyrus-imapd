@@ -983,7 +983,7 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
     struct carddav_data *cdata;
     FILE *f = NULL;
     struct stagemsg *stage;
-    const char *version = NULL, *uid = NULL, *fullname = NULL, *nickname = NULL;
+    const char *version = NULL, *uid = NULL, *fullname = NULL;
     uquota_t size;
     char *header;
     uint32_t expunge_uid = 0;
