@@ -8829,11 +8829,10 @@ static int sync_mailbox(struct mailbox *mailbox,
     struct sync_reserve *reserve;
     struct sync_folder *mfolder, *rfolder;
 
-    master_folders = sync_folder_list_create();
     reserve_guids = sync_reserve_list_create(SYNC_MSGID_LIST_HASH_SIZE);
-
     part_list = sync_reserve_partlist(reserve_guids, mailbox->part);
 
+    master_folders = sync_folder_list_create();
     sync_folder_list_add(master_folders, mailbox->uniqueid, mailbox->name, 
 			 mailbox->part, mailbox->acl, mailbox->i.options,
 			 mailbox->i.uidvalidity, mailbox->i.last_uid,
@@ -8860,11 +8859,9 @@ static int sync_mailbox(struct mailbox *mailbox,
     }
     else sync_find_reserve_messages(mailbox, 0, part_list);
 
-    for (reserve = reserve_guids->head; reserve; reserve = reserve->next) {
-	r = sync_reserve_partition(reserve->part, replica_folders,
-				   reserve->list, be);
-	if (r) break;
-    }
+    reserve = reserve_guids->head;
+    r = sync_reserve_partition(reserve->part, replica_folders,
+			       reserve->list, be);
 
     if (!r) {
 	r = sync_update_mailbox(mfolder, rfolder, reserve_guids, be);
