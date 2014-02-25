@@ -8851,7 +8851,9 @@ static int sync_mailbox(struct mailbox *mailbox,
 	/* does it need a rename? */
 	if (strcmp(mfolder->name, rfolder->name) ||
 	    strcmp(mfolder->part, rfolder->part)) {
-	    /* XXX  what do we do here */
+	    /* bail and retry */
+	    r = IMAP_AGAIN;
+	    goto cleanup;
 	}
 	
 	sync_find_reserve_messages(mailbox, rfolder->last_uid, part_list);
@@ -8872,6 +8874,7 @@ static int sync_mailbox(struct mailbox *mailbox,
 	}
     }
 
+  cleanup:
     sync_reserve_list_free(&reserve_guids);
     sync_folder_list_free(&master_folders);
 
