@@ -8515,6 +8515,8 @@ static void xfer_done(struct xfer_header **xferptr)
     struct xfer_header *xfer = *xferptr;
     struct xfer_item *item, *next;
 
+    syslog(LOG_INFO, "XFER: disconnecting from servers");
+
     /* remove items */
     item = xfer->items;
     while (item) {
@@ -8594,16 +8596,20 @@ static int xfer_init(const char *toserver, const char *topart,
     struct xfer_header *xfer = xzmalloc(sizeof(struct xfer_header));
     int r;
 
+    syslog(LOG_INFO, "XFER: connecting to server '%s'", toserver);
+
     /* Get a connection to the remote backend */
     xfer->be = backend_connect(NULL, toserver, &imap_protocol,
 			       "", NULL, NULL);
     if (!xfer->be) {
+	syslog(LOG_ERR, "Failed to connect to server '%s'", toserver);
 	r = IMAP_SERVER_UNAVAILABLE;
 	goto fail;
     }
 
     xfer->remoteversion = backend_version(xfer->be);
     if (xfer->be->capability & CAPA_REPLICATION) {
+	syslog(LOG_INFO, "XFER: destination supports replication");
 	xfer->use_replication = 1;
 
 	/* attach our IMAP tag buffer to our protstreams as userdata */
@@ -8616,9 +8622,16 @@ static int xfer_init(const char *toserver, const char *topart,
 
     /* connect to mupdate server if configured */
     if (config_mupdate_server) {
+	syslog(LOG_INFO, "XFER: connecting to mupdate '%s'",
+	       config_mupdate_server);
+
 	r = mupdate_connect(config_mupdate_server, NULL,
 			    &xfer->mupdate_h, NULL);
-	if (r) goto fail;
+	if (r) {
+	    syslog(LOG_INFO, "Failed to connect to mupdate '%s'",
+		   config_mupdate_server);
+	    goto fail;
+	}
     }
 
     *xferptr = xfer;
@@ -8653,6 +8666,8 @@ static int xfer_localcreate(struct xfer_header *xfer)
 {
     struct xfer_item *item;
     int r;
+
+    syslog(LOG_INFO, "XFER: creating mailboxes on destination");
 
     for (item = xfer->items; item; item = item->next) {
 	if (xfer->topart) {
@@ -8717,6 +8732,8 @@ static int xfer_deactivate(struct xfer_header *xfer)
     struct xfer_item *item;
     int r;
 
+    syslog(LOG_INFO, "XFER: deactivating mailboxes");
+
     /* Step 3: mupdate.DEACTIVATE(mailbox, newserver) */
     for (item = xfer->items; item; item = item->next) {
 	r = xfer_mupdate(xfer, 0, item->name, item->part,
@@ -8740,6 +8757,8 @@ static int xfer_undump(struct xfer_header *xfer)
     int r;
     struct mailbox *mailbox = NULL;
     char buf[MAX_PARTITION_LEN+HOSTNAME_SIZE+2];
+
+    syslog(LOG_INFO, "XFER: dumping mailboxes to destination");
 
     for (item = xfer->items; item; item = item->next) {
 	r = mailbox_open_irl(item->name, &mailbox);
@@ -8765,6 +8784,9 @@ static int xfer_undump(struct xfer_header *xfer)
 	    /* Backport the user's seendb on-the-fly */
 	    item->mailbox = mailbox;
 	    r = xfer_backport_seen_item(item, xfer->seendb);
+	    if (r) syslog(LOG_WARNING,
+			  "Failed to backport seen state for mailbox '%s'",
+			  item->name);
 
 	    /* Need to close seendb before dumping Inbox (last item) */
 	    if (!item->next) seen_close(&xfer->seendb);
@@ -8851,6 +8873,10 @@ static int sync_mailbox(struct mailbox *mailbox,
 	if (strcmp(mfolder->name, rfolder->name) ||
 	    strcmp(mfolder->part, rfolder->part)) {
 	    /* bail and retry */
+	    syslog(LOG_NOTICE,
+		   "XFER: rename %s!%s -> %s!%s during final sync"
+		   " - must try XFER again",
+		   mfolder->name, mfolder->part, rfolder->name, rfolder->part);
 	    r = IMAP_AGAIN;
 	    goto cleanup;
 	}
@@ -8862,13 +8888,16 @@ static int sync_mailbox(struct mailbox *mailbox,
     reserve = reserve_guids->head;
     r = sync_reserve_partition(reserve->part, replica_folders,
 			       reserve->list, be);
+    if (r) {
+	syslog(LOG_ERR, "sync_mailbox(): reserve partition failed: %s '%s'", 
+	       mfolder->name, error_message(r));
+	goto cleanup;
+    }
 
-    if (!r) {
-	r = sync_update_mailbox(mfolder, rfolder, reserve_guids, be);
-	if (r) {
-	    syslog(LOG_ERR, "sync_mailbox(): update failed: %s '%s'", 
-		   mfolder->name, error_message(r));
-	}
+    r = sync_update_mailbox(mfolder, rfolder, reserve_guids, be);
+    if (r) {
+	syslog(LOG_ERR, "sync_mailbox(): update failed: %s '%s'", 
+	       mfolder->name, error_message(r));
     }
 
   cleanup:
@@ -8921,7 +8950,7 @@ static int xfer_finalsync(struct xfer_header *xfer)
 	r = mailbox_open_iwl(item->name, &mailbox);
 	if (r) {
 	    syslog(LOG_ERR,
-		   "Failed to open mailbox %s for xfer_final_sync() %s",
+		   "Failed to open mailbox %s for xfer_finalsync() %s",
 		   item->name, error_message(r));
 	    goto done;
 	}
@@ -9007,6 +9036,8 @@ static int xfer_reactivate(struct xfer_header *xfer)
     struct xfer_item *item;
     int r;
 
+    syslog(LOG_INFO, "XFER: reactivating mailboxes");
+
     if (!xfer->mupdate_h) return 0;
 
     /* 6.5) Kick remote server to correct mupdate entry */
@@ -9028,6 +9059,8 @@ static int xfer_delete(struct xfer_header *xfer)
 {
     struct xfer_item *item;
     int r;
+
+    syslog(LOG_INFO, "XFER: deleting mailboxes on source");
 
     /* 7) local delete of mailbox
      * & remove local "remote" mailboxlist entry */
@@ -9068,6 +9101,8 @@ static void xfer_recover(struct xfer_header *xfer)
 {
     struct xfer_item *item;
     int r;
+
+    syslog(LOG_INFO, "XFER: recovering");
 
     /* Backout any changes - we stop on first untouched mailbox */
     for (item = xfer->items; item && item->state; item = item->next) {
@@ -9138,16 +9173,21 @@ static int do_xfer(struct xfer_header *xfer)
     if (xfer->use_replication) {
 	/* Initial non-blocking sync */
 	if (xfer->userid) {
-	    r = sync_do_user(xfer->userid, xfer->be, 0, 0);
+	    syslog(LOG_INFO, "XFER: initial sync of %s", xfer->userid);
+	    r = sync_do_user(xfer->userid, xfer->be, 0, 1);
 
 	    /* User moves may take a while, do another non-blocking sync */
-	    if (!r) r = sync_do_user(xfer->userid, xfer->be, 0, 0);
+	    if (!r) {
+		syslog(LOG_INFO, "XFER: second sync of %s", xfer->userid);
+		r = sync_do_user(xfer->userid, xfer->be, 0, 1);
+	    }
 	}
 	else {
 	    struct sync_name_list *mboxname_list = sync_name_list_create();
 
 	    sync_name_list_add(mboxname_list, xfer->items->name);
-	    r = sync_do_mailboxes(mboxname_list, xfer->be, 0, 0);
+	    syslog(LOG_INFO, "XFER: initial sync of %s", xfer->items->name);
+	    r = sync_do_mailboxes(mboxname_list, xfer->be, 0, 1);
 	    sync_name_list_free(&mboxname_list);
 	}
     }
@@ -9157,6 +9197,8 @@ static int do_xfer(struct xfer_header *xfer)
     if (!r) {
 	if (xfer->use_replication) {
 	    /* Final sync with write locks on mailboxes */
+	    syslog(LOG_INFO, "XFER: final sync of %s",
+		   xfer->userid ? xfer->userid : xfer->items->name);
 	    r = xfer_finalsync(xfer);
 	}
 	else {
@@ -9185,6 +9227,8 @@ static int xfer_setquotaroot(struct xfer_header *xfer, const char *mboxname)
     struct quota quota;
     int r;
     char extname[MAX_MAILBOX_NAME];
+
+    syslog(LOG_INFO, "XFER: setting quota root %s", mboxname);
 
     (*imapd_namespace.mboxname_toexternal)(&imapd_namespace, mboxname,
 					   imapd_userid, extname);
@@ -9219,11 +9263,16 @@ static int xfer_addsubmailboxes(struct xfer_header *xfer, const char *mboxname)
     char buf[MAX_MAILBOX_NAME];
     int r;
 
+    syslog(LOG_INFO, "XFER: adding submailboxes of %s", mboxname);
+
     snprintf(buf, sizeof(buf), "%s.*", mboxname);
     r = mboxlist_findall(NULL, buf, 1, imapd_userid,
 			 imapd_authstate, xfer_user_cb,
 			 xfer);
-    if (r) return r;
+    if (r) {
+	syslog(LOG_ERR, "Failed getting submailboxes of %s", mboxname);
+	return r;
+    }
 
     /* also move DELETED maiboxes for this user */
     if (mboxlist_delayed_delete_isenabled()) {
@@ -9232,6 +9281,8 @@ static int xfer_addsubmailboxes(struct xfer_header *xfer, const char *mboxname)
 	r = mboxlist_findall(NULL, buf, 1, imapd_userid,
 			     imapd_authstate, xfer_user_cb,
 			     xfer);
+	if (r) syslog(LOG_ERR, "Failed getting DELETED mailboxes of %s",
+		      mboxname);
     }
 
     return r;
@@ -9303,6 +9354,9 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 
     /* if we are not moving a user, just move the one mailbox */
     if (!moving_user) {
+	syslog(LOG_INFO, "XFER: mailbox '%s' -> %s!%s",
+	       xfer->items->name, toserver, topart);
+
 	/* is the selected mailbox the one we're moving? */
 	if (imapd_index && !strcmp(mailboxname, imapd_index->mailbox->name)) {
 	    r = IMAP_MAILBOX_LOCKED;
@@ -9311,6 +9365,9 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	r = do_xfer(xfer);
     } else {
 	char *userid = xfer->userid = mboxname_to_userid(mailboxname);
+
+	syslog(LOG_INFO, "XFER: user '%s' -> %s!%s",
+	       xfer->userid, toserver, topart);
 
 	/* is the selected mailbox in the namespace we're moving? */
 	if (imapd_index && !strncmp(mailboxname, imapd_index->mailbox->name,
@@ -9342,6 +9399,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 
 	/* this was a successful user delete, and we need to delete
 	   certain user meta-data (but not seen state!) */
+	syslog(LOG_INFO, "XFER: deleting user metadata");
 	user_deletedata(userid, imapd_userid, imapd_authstate, 0);
     }
 
