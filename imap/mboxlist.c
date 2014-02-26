@@ -594,7 +594,7 @@ int mboxlist_createmailbox_full(const char *name, int mbtype,
 
     if (!dbonly && !isremote) {
 	/* Filesystem Operations */
-	r = mailbox_create(name, newpartition, acl, uniqueid,
+	r = mailbox_create(name, mbtype, newpartition, acl, uniqueid,
 			   options, uidvalidity, &newmailbox);
     }
 

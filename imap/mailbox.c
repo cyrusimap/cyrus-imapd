@@ -2933,6 +2933,7 @@ int mailbox_internal_seen(struct mailbox *mailbox, const char *userid)
 /* returns a mailbox locked in MAILBOX EXCLUSIVE mode, so you
  * don't need to lock the index file to work with it :) */
 int mailbox_create(const char *name,
+		   uint32_t mbtype,
 		   const char *part,
 		   const char *acl,
 		   const char *uniqueid,
@@ -2965,6 +2966,7 @@ int mailbox_create(const char *name,
 
     mailbox->part = xstrdup(part);
     mailbox->acl = xstrdup(acl);
+    mailbox->mbtype = mbtype;
 
     hasquota = quota_findroot(quotaroot, sizeof(quotaroot), name);
 
@@ -3358,9 +3360,8 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     assert(mailbox_index_islocked(oldmailbox, 1));
 
     /* Create new mailbox */
-    r = mailbox_create(newname, newpartition,
-		       oldmailbox->acl, NULL,
-		       oldmailbox->i.options,
+    r = mailbox_create(newname, oldmailbox->mbtype, newpartition,
+		       oldmailbox->acl, NULL, oldmailbox->i.options,
 		       time(0), &newmailbox);
 
     if (r) return r;
@@ -3766,6 +3767,7 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
 
     mailbox->part = xstrdup(mbentry.partition);
     mailbox->acl = xstrdup(mbentry.acl);
+    mailbox->mbtype = mbentry.mbtype;
  
     /* Attempt to open index */
     r = mailbox_open_index(mailbox);
@@ -3776,8 +3778,8 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
 	/* no cyrus.index file at all - well, we're in a pickle!
          * no point trying to rescue anything else... */
 	mailbox_close(&mailbox);
-	return mailbox_create(name, mbentry.partition, mbentry.acl,
-			      NULL, options, time(0), mbptr);
+	return mailbox_create(name, mbentry.mbtype, mbentry.partition,
+			      mbentry.acl, NULL, options, time(0), mbptr);
     }
 
     /* read header, if it is not there, we need to create it */
