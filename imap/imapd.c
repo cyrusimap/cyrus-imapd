@@ -8840,6 +8840,53 @@ static int xfer_undump(struct xfer_header *xfer)
     return 0;
 }
 
+static int xfer_user_cb(char *name, int matchlen, int maycreate, void *rock);
+static int xfer_addsubmailboxes(struct xfer_header *xfer, const char *mboxname);
+
+static int xfer_initialsync(struct xfer_header *xfer)
+{
+    unsigned flags = SYNC_FLAG_LOGGING | SYNC_FLAG_LOCALONLY;
+    int r;
+
+    if (xfer->userid) {
+	struct xfer_item *item, *next;
+
+	syslog(LOG_INFO, "XFER: initial sync of user %s", xfer->userid);
+
+	r = sync_do_user(xfer->userid, xfer->be, flags);
+	if (r) return r;
+
+	/* User moves may take a while, do another non-blocking sync */
+	syslog(LOG_INFO, "XFER: second sync of user %s", xfer->userid);
+
+	r = sync_do_user(xfer->userid, xfer->be, flags);
+	if (r) return r;
+
+	/* User may have renamed/deleted a mailbox while syncing,
+	   recreate the submailboxes list */
+	for (item = xfer->items; (next = item->next); item = next) {
+	    free(item->name);
+	    free(item->part);
+	    free(item->acl);
+	    free(item);
+	}
+	xfer->items = item;  /* Inbox is the last item */
+
+	r = xfer_addsubmailboxes(xfer, item->name);
+    }
+    else {
+	struct sync_name_list *mboxname_list = sync_name_list_create();
+
+	syslog(LOG_INFO, "XFER: initial sync of mailbox %s", xfer->items->name);
+
+	sync_name_list_add(mboxname_list, xfer->items->name);
+	r = sync_do_mailboxes(mboxname_list, xfer->be, flags);
+	sync_name_list_free(&mboxname_list);
+    }
+
+    return r;
+}
+
 static int sync_mailbox(struct mailbox *mailbox,
 			struct sync_folder_list *replica_folders,
 			struct backend *be)
@@ -8926,16 +8973,20 @@ static int xfer_finalsync(struct xfer_header *xfer)
     int r;
 
     if (xfer->userid) {
+	syslog(LOG_INFO, "XFER: final sync of user %s", xfer->userid);
+
 	replica_subs = sync_name_list_create();
 	replica_sieve = sync_sieve_list_create();
 	replica_seen = sync_seen_list_create();
 
 	cmd = "USER";
-	kl = dlist_atom(NULL, "USER", xfer->userid);
+	kl = dlist_atom(NULL, cmd, xfer->userid);
     }
     else {
+	syslog(LOG_INFO, "XFER: final sync of mailbox %s", xfer->items->name);
+
 	cmd = "MAILBOXES";
-	kl = dlist_list(NULL, "MAILBOXES");
+	kl = dlist_list(NULL, cmd);
 	dlist_atom(kl, "MBOXNAME", xfer->items->name);
     }
 
@@ -9166,37 +9217,18 @@ static int xfer_user_cb(char *name,
 static int do_xfer(struct xfer_header *xfer)
 {
     int r = 0;
-    unsigned flags = SYNC_FLAG_LOGGING | SYNC_FLAG_LOCALONLY;
 
     if (xfer->use_replication) {
 	/* Initial non-blocking sync */
-	if (xfer->userid) {
-	    syslog(LOG_INFO, "XFER: initial sync of %s", xfer->userid);
-	    r = sync_do_user(xfer->userid, xfer->be, flags);
-
-	    /* User moves may take a while, do another non-blocking sync */
-	    if (!r) {
-		syslog(LOG_INFO, "XFER: second sync of %s", xfer->userid);
-		r = sync_do_user(xfer->userid, xfer->be, flags);
-	    }
-	}
-	else {
-	    struct sync_name_list *mboxname_list = sync_name_list_create();
-
-	    sync_name_list_add(mboxname_list, xfer->items->name);
-	    syslog(LOG_INFO, "XFER: initial sync of %s", xfer->items->name);
-	    r = sync_do_mailboxes(mboxname_list, xfer->be, flags);
-	    sync_name_list_free(&mboxname_list);
-	}
+	r = xfer_initialsync(xfer);
+	if (r) return r;
     }
 
-    if (!r) r = xfer_deactivate(xfer);
+    r = xfer_deactivate(xfer);
 
     if (!r) {
 	if (xfer->use_replication) {
 	    /* Final sync with write locks on mailboxes */
-	    syslog(LOG_INFO, "XFER: final sync of %s",
-		   xfer->userid ? xfer->userid : xfer->items->name);
 	    r = xfer_finalsync(xfer);
 	}
 	else {
