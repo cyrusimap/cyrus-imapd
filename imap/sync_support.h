@@ -400,6 +400,7 @@ struct sync_state {
     struct auth_state *authstate;
     struct namespace *namespace;
     struct protstream *pout;
+    int local_only;
 };
 
 int sync_get_message(struct dlist *kin, struct sync_state *sstate);
@@ -437,21 +438,20 @@ void sync_print_response(char *tag, int r, struct protstream *pout);
 
 /* =======================  client-side sync  =========================== */
 
+#define SYNC_FLAG_VERBOSE   (1<<0)
+#define SYNC_FLAG_LOGGING   (1<<1)
+#define SYNC_FLAG_LOCALONLY (1<<2)
+
 int sync_do_seen(char *user, char *uniqueid, struct backend *sync_be,
-		 int verbose, int verbose_logging);
-int sync_do_quota(const char *root, struct backend *sync_be,
-		  int verbose, int verbose_logging);
-int sync_do_annotation(char *mboxname, struct backend *sync_be,
-		       int verbose, int verbose_logging);
+		 unsigned flags);
+int sync_do_quota(const char *root, struct backend *sync_be, unsigned flags);
+int sync_do_annotation(char *mboxname, struct backend *sync_be, unsigned flags);
 int sync_do_mailboxes(struct sync_name_list *mboxname_list,
-		      struct backend *sync_be,
-		      int verbose, int verbose_logging);
-int sync_do_user(char *userid, struct backend *sync_be,
-		 int verbose, int verbose_logging);
-int sync_do_meta(char *userid, struct backend *sync_be,
-		 int verbose, int verbose_logging);
+		      struct backend *sync_be, unsigned flags);
+int sync_do_user(char *userid, struct backend *sync_be, unsigned flags);
+int sync_do_meta(char *userid, struct backend *sync_be, unsigned flags);
 int sync_set_sub(const char *userid, const char *mboxname, int add,
-		 struct backend *sync_be, int verbose, int verbose_logging);
+		 struct backend *sync_be, unsigned flags);
 int sync_response_parse(struct protstream *sync_in, const char *cmd,
 			struct sync_folder_list *folder_list,
 			struct sync_name_list *sub_list,
@@ -468,14 +468,13 @@ int sync_reserve_partition(char *partition,
 int sync_update_mailbox(struct sync_folder *local,
 			struct sync_folder *remote,
 			struct sync_reserve_list *reserve_guids,
-			struct backend *sync_be);
-int sync_folder_delete(char *mboxname, struct backend *sync_be);
+			struct backend *sync_be, unsigned flags);
+int sync_folder_delete(char *mboxname, struct backend *sync_be, unsigned flags);
 int sync_do_user_quota(struct sync_name_list *master_quotaroots,
 		       struct sync_quota_list *replica_quota,
 		       struct backend *sync_be);
 int sync_do_user_sub(const char *userid, struct sync_name_list *replica_subs,
-		     struct backend *sync_be,
-		     int verbose, int verbose_logging);
+		     struct backend *sync_be, unsigned flags);
 int sync_do_user_seen(char *user, struct sync_seen_list *replica_seen,
 		      struct backend *sync_be);
 int sync_do_user_sieve(char *userid, struct sync_sieve_list *replica_sieve,

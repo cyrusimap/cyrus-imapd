@@ -112,6 +112,7 @@ static struct buf tagbuf = BUF_INITIALIZER;
 
 static struct namespace   sync_namespace;
 
+static unsigned flags      = 0;
 static int verbose         = 0;
 static int verbose_logging = 0;
 static int connect_once    = 0;
@@ -217,11 +218,9 @@ static int user_sub(const char *userid, const char *mboxname)
 
     switch (r) {
     case CYRUSDB_OK:
-	return sync_set_sub(userid, mboxname, 1,
-			    sync_backend, verbose, verbose_logging);
+	return sync_set_sub(userid, mboxname, 1, sync_backend, flags);
     case CYRUSDB_NOTFOUND:
-	return sync_set_sub(userid, mboxname, 0,
-			    sync_backend, verbose, verbose_logging);
+	return sync_set_sub(userid, mboxname, 0, sync_backend, flags);
     default:
 	return r;
     }
@@ -396,8 +395,7 @@ static int do_sync(const char *filename)
 	if (!action->active)
 	    continue;
 
-	if (sync_do_quota(action->name, sync_backend,
-			  verbose, verbose_logging)) {
+	if (sync_do_quota(action->name, sync_backend, flags)) {
 	    /* XXX - bogus handling, should be user */
 	    sync_action_list_add(mailbox_list, action->name, NULL);
 	    if (verbose) {
@@ -419,7 +417,7 @@ static int do_sync(const char *filename)
 	 * annotation, hence the check for a character at the
 	 * start of the name */
 	if (sync_do_annotation(action->name, sync_backend,
-			       verbose, verbose_logging) && *action->name) {
+			       flags) && *action->name) {
 	    /* XXX - bogus handling, should be ... er, something */
 	    sync_action_list_add(mailbox_list, action->name, NULL);
 	    if (verbose) {
@@ -437,8 +435,7 @@ static int do_sync(const char *filename)
 	if (!action->active)
 	    continue;
 
-        if (sync_do_seen(action->user, action->name, sync_backend,
-			 verbose, verbose_logging)) {
+        if (sync_do_seen(action->user, action->name, sync_backend, flags)) {
 	    char *userid = mboxname_isusermailbox(action->name, 1);
 	    if (userid && !strcmp(userid, action->user)) {
 		sync_action_list_add(user_list, NULL, action->user);
@@ -490,8 +487,7 @@ static int do_sync(const char *filename)
 
     if (mboxname_list->count) {
 	int nonuser = 0;
-	r = sync_do_mailboxes(mboxname_list, sync_backend,
-			      verbose, verbose_logging);
+	r = sync_do_mailboxes(mboxname_list, sync_backend, flags);
 	if (r) {
 	    /* promote failed personal mailboxes to USER */
 	    struct sync_name *mbox;
@@ -531,7 +527,7 @@ static int do_sync(const char *filename)
 	if (!action->active)
 	    continue;
 
-	r = sync_do_meta(action->user, sync_backend, verbose, verbose_logging);
+	r = sync_do_meta(action->user, sync_backend, flags);
 	if (r) {
 	    if (r == IMAP_INVALID_USER) goto cleanup;
 
@@ -548,7 +544,7 @@ static int do_sync(const char *filename)
     }
 
     for (action = user_list->head; action; action = action->next) {
-	r = sync_do_user(action->user, sync_backend, verbose, verbose_logging);
+	r = sync_do_user(action->user, sync_backend, flags);
 	if (r) goto cleanup;
     }
 
@@ -1051,6 +1047,9 @@ int main(int argc, char **argv)
     if (mode == MODE_UNKNOWN)
         fatal("No replication mode specified", EC_USAGE);
 
+    if (verbose) flags |= SYNC_FLAG_VERBOSE;
+    if (verbose_logging) flags |= SYNC_FLAG_LOGGING;
+
     /* fork if required */
     if (background && !input_filename) {
 	int pid = fork();
@@ -1125,7 +1124,7 @@ int main(int argc, char **argv)
 		mboxname_hiersep_tointernal(&sync_namespace, buf,
 					    config_virtdomains ?
 					    strcspn(buf, "@") : 0);
-		if (sync_do_user(buf, sync_backend, verbose, verbose_logging)) {
+		if (sync_do_user(buf, sync_backend, flags)) {
 		    if (verbose)
 			fprintf(stderr,
 				"Error from do_user(%s): bailing out!\n",
@@ -1140,7 +1139,7 @@ int main(int argc, char **argv)
 	    mboxname_hiersep_tointernal(&sync_namespace, argv[i],
 					config_virtdomains ?
 					strcspn(argv[i], "@") : 0);
-	    if (sync_do_user(argv[i], sync_backend, verbose, verbose_logging)) {
+	    if (sync_do_user(argv[i], sync_backend, flags)) {
 		if (verbose)
 		    fprintf(stderr, "Error from do_user(%s): bailing out!\n",
 			    argv[i]);
@@ -1183,8 +1182,7 @@ int main(int argc, char **argv)
 		sync_name_list_add(mboxname_list, mailboxname);
 	}
 
-	if (sync_do_mailboxes(mboxname_list, sync_backend,
-			      verbose, verbose_logging)) {
+	if (sync_do_mailboxes(mboxname_list, sync_backend, flags)) {
 	    if (verbose) {
 		fprintf(stderr,
 			"Error from do_mailboxes(): bailing out!\n");
@@ -1205,7 +1203,7 @@ int main(int argc, char **argv)
 	    mboxname_hiersep_tointernal(&sync_namespace, argv[i],
 					config_virtdomains ?
 					strcspn(argv[i], "@") : 0);
-	    if (sync_do_meta(argv[i], sync_backend, verbose, verbose_logging)) {
+	    if (sync_do_meta(argv[i], sync_backend, flags)) {
 		if (verbose) {
 		    fprintf(stderr,
 			    "Error from do_meta(%s): bailing out!\n",

@@ -654,17 +654,16 @@ int mboxlist_createmailbox(const char *name, int mbtype,
 				       localonly, forceuser, dbonly, NULL);
 }
 
-int mboxlist_createsync(const char *name, int mbtype,
-			const char *partition,
+int mboxlist_createsync(const char *name, int mbtype, const char *partition,
 			const char *userid, struct auth_state *auth_state,
 			int options, unsigned uidvalidity,
 			const char *acl, const char *uniqueid,
-			struct mailbox **mboxptr)
+			int local_only, struct mailbox **mboxptr)
 {
     return mboxlist_createmailbox_full(name, mbtype, partition,
 				       1, userid, auth_state,
 				       options, uidvalidity, acl, uniqueid,
-				       1, 1, 0, mboxptr);
+				       local_only, 1, 0, mboxptr);
 }
 
 /* insert an entry for the proxy */
@@ -849,7 +848,7 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
     /* Get mboxlist_renamemailbox to do the hard work. No ACL checks needed */
     r = mboxlist_renamemailbox((char *)name, newname, mbentry.partition,
                                1 /* isadmin */, userid,
-                               auth_state, force, 1);
+                               auth_state, 0, force, 1);
     if (r) goto out;
 
     /* Rename mailbox annotations */
@@ -989,7 +988,7 @@ int mboxlist_deletemailbox(const char *name, int isadmin,
 int mboxlist_renamemailbox(const char *oldname, const char *newname, 
 			   const char *partition, int isadmin, 
 			   const char *userid, struct auth_state *auth_state,
-			   int forceuser, int ignorequota)
+			   int local_only, int forceuser, int ignorequota)
 {
     int r;
     long myrights;
@@ -1152,7 +1151,7 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 	goto done;
     }
 
-    if (config_mupdate_server) {
+    if (!local_only && config_mupdate_server) {
 	/* commit the mailbox in MUPDATE */
 	char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
 	const char *acl = newmailbox ? newmailbox->acl : oldmailbox->acl;

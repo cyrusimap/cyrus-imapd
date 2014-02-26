@@ -3539,7 +3539,7 @@ static int mvgroup(message_data_t *msg)
 	     newsprefix, (int)len, group);
 
     r = mboxlist_renamemailbox(oldmailboxname, newmailboxname, NULL, 0,
-			       newsmaster, newsmaster_authstate, 0, 0);
+			       newsmaster, newsmaster_authstate, 0, 0, 0);
 
     /* XXX check body of message for useful MIME parts */
 
