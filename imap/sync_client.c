@@ -956,7 +956,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:vlS:F:f:w:t:d:n:rRumsoz")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:vlLS:F:f:w:t:d:n:rRumsoz")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -973,6 +973,10 @@ int main(int argc, char **argv)
         case 'l': /* verbose Logging */
             verbose_logging++;
             break;
+
+	case 'L': /* local mailbox operations only */
+	    flags |= SYNC_FLAG_LOCALONLY;
+	    break;
 
 	case 'S': /* Socket descriptor for server */
 	    servername = optarg;

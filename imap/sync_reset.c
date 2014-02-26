@@ -97,6 +97,7 @@ static struct auth_state *sync_authstate = NULL;
 static char *sync_userid = NULL;
 
 static int verbose = 0;
+static int local_only = 0;
 
 static void shut_down(int code) __attribute__((noreturn));
 static void shut_down(int code)
@@ -168,7 +169,7 @@ static int reset_single(const char *userid)
 
     for (item = list->head; item; item = item->next) {
         r = mboxlist_deletemailbox(item->name, 1, sync_userid,
-				   sync_authstate, 0, 0, 1);
+				   sync_authstate, 0, local_only, 1);
         if (r) goto fail;
     }
 
@@ -176,7 +177,7 @@ static int reset_single(const char *userid)
     (sync_namespacep->mboxname_tointernal)(sync_namespacep, "INBOX",
 					   userid, buf);
     r = mboxlist_deletemailbox(buf, 1, sync_userid,
-			       sync_authstate, 0, 0, 1);
+			       sync_authstate, 0, local_only, 1);
     if (r && (r != IMAP_MAILBOX_NONEXISTENT)) goto fail;
 
     r = user_deletedata((char *)userid, sync_userid, sync_authstate, 1);
@@ -204,7 +205,7 @@ main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:vf")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:vfL")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -217,6 +218,10 @@ main(int argc, char **argv)
         case 'f': /* force: confirm option */
             force++;
             break;
+
+	case 'L': /* local mailbox operations only */
+	    local_only++;
+	    break;
 
         default:
             usage("sync_reset");
