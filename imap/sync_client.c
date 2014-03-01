@@ -1336,8 +1336,8 @@ static int mailbox_full_update(const char *mboxname,
 	       ", updating %u => %u",
 	       mailbox->name, mailbox->i.uidvalidity, uidvalidity);
 	mailbox_index_dirty(mailbox);
-	mailbox->i.uidvalidity = mboxname_setuidvalidity(mailbox->name,
-							 uidvalidity);
+	mboxname_setuidvalidity(mailbox->name, uidvalidity);
+	mailbox->i.uidvalidity = uidvalidity;
     }
 
     if (mailbox->i.highestmodseq < highestmodseq) {

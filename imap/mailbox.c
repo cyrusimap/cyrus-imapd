@@ -5850,8 +5850,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
     /* fix up 2.4.0 bug breakage */
     if (!mailbox->i.uidvalidity) {
 	if (make_changes) {
-	    mailbox->i.uidvalidity = mboxname_nextuidvalidity(mailbox->name,
-							      time(0));
+	    mailbox->i.uidvalidity = mboxname_nextuidvalidity(mailbox->name, time(0));
 	    mailbox_index_dirty(mailbox);
 	}
 	syslog(LOG_ERR, "%s: zero uidvalidity", mailbox->name);
