@@ -85,7 +85,11 @@ struct sync_msgid {
     struct sync_msgid *next;
     struct sync_msgid *hash_next;
     struct message_guid guid;
-    int need_upload;
+    struct body *body;
+    size_t size;
+    char *fname;
+    unsigned int need_upload:1;
+    unsigned int is_archive:1;
 };
 
 struct sync_msgid_list {
@@ -105,7 +109,7 @@ struct sync_msgid *sync_msgid_insert(struct sync_msgid_list *list,
 void sync_msgid_remove(struct sync_msgid_list *l,
 		       struct message_guid *guid);
 
-struct sync_msgid *sync_msgid_lookup(struct sync_msgid_list *list,
+struct sync_msgid *sync_msgid_lookup(const struct sync_msgid_list *list,
 				     struct message_guid *guid);
 
 void sync_msgid_list_free(struct sync_msgid_list **list);
@@ -413,7 +417,8 @@ int parse_upload(struct dlist *kr, struct mailbox *mailbox,
 		 struct sync_annot_list **annotsp);
 int sync_append_copyfile(struct mailbox *mailbox,
 			 struct index_record *record,
-			 const struct sync_annot_list *sal);
+			 const struct sync_annot_list *sal,
+			 const struct sync_msgid_list *part_list);
 
 /* ====================================================================== */
 

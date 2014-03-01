@@ -96,7 +96,7 @@ struct dlist {
     char *part; /* so what if we're big! */
 };
 
-const char *dlist_reserve_path(const char *part, struct message_guid *guid);
+const char *dlist_reserve_path(const char *part, int isarchive, struct message_guid *guid);
 
 /* set fields */
 void dlist_makeatom(struct dlist *dl, const char *val);
