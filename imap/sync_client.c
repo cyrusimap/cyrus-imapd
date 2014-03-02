@@ -321,7 +321,7 @@ static int reserve_partition(char *partition,
 	ki = dlist_newlist(kl, "GUID");
 	for (; msgid; msgid = msgid->next) {
 	    if (!msgid->need_upload) continue;
-	    if (n > 8092) break;
+	    if (n > 8192) break;
 	    dlist_setatom(ki, "GUID", message_guid_encode(&msgid->guid));
 	    /* we will re-add the "need upload" if we get a MISSING response */
 	    msgid->need_upload = 0;
