@@ -326,7 +326,6 @@ static int reserve_partition(char *partition,
 	    /* we will re-add the "need upload" if we get a MISSING response */
 	    msgid->need_upload = 0;
 	    part_list->toupload--;
-	    msgid = msgid->next;
 	    n++;
 	}
 
