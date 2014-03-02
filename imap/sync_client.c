@@ -295,44 +295,56 @@ static int reserve_partition(char *partition,
 			     struct sync_msgid_list *part_list)
 {
     const char *cmd = "RESERVE";
-    struct sync_msgid *msgid;
+    struct sync_msgid *msgid = part_list->head;
     struct sync_folder *folder;
-    struct dlist *kl;
+    struct dlist *kl = NULL;
     struct dlist *kin = NULL;
     struct dlist *ki;
-    int r;
-
-    if (!part_list->toupload)
-	return 0; /* nothing to reserve */
+    int r = 0;
 
     if (!replica_folders->head)
 	return 0; /* nowhere to reserve */
 
-    kl = dlist_newkvlist(NULL, cmd);
-    dlist_setatom(kl, "PARTITION", partition);
+    while (msgid) {
+	int n = 0;
 
-    ki = dlist_newlist(kl, "MBOXNAME");
-    for (folder = replica_folders->head; folder; folder = folder->next)
-	dlist_setatom(ki, "MBOXNAME", folder->name);
+	if (!part_list->toupload)
+	    goto done; /* got them all */
 
-    ki = dlist_newlist(kl, "GUID");
-    for (msgid = part_list->head; msgid; msgid = msgid->next) {
-	if (!msgid->need_upload) continue;
-	dlist_setatom(ki, "GUID", message_guid_encode(&msgid->guid));
-	/* we will re-add the "need upload" if we get a MISSING response */
-	msgid->need_upload = 0;
-	part_list->toupload--;
+	kl = dlist_newkvlist(NULL, cmd);
+	dlist_setatom(kl, "PARTITION", partition);
+
+	ki = dlist_newlist(kl, "MBOXNAME");
+	for (folder = replica_folders->head; folder; folder = folder->next)
+	    dlist_setatom(ki, "MBOXNAME", folder->name);
+
+	ki = dlist_newlist(kl, "GUID");
+	for (; msgid; msgid = msgid->next) {
+	    if (!msgid->need_upload) continue;
+	    if (n > 8092) break;
+	    dlist_setatom(ki, "GUID", message_guid_encode(&msgid->guid));
+	    /* we will re-add the "need upload" if we get a MISSING response */
+	    msgid->need_upload = 0;
+	    part_list->toupload--;
+	    msgid = msgid->next;
+	    n++;
+	}
+
+	sync_send_apply(kl, sync_out);
+
+	r = sync_parse_response(cmd, sync_in, &kin);
+	if (r) goto done;
+
+	r = mark_missing(kin, part_list);
+	if (r) goto done;
+
+	dlist_free(&kl);
+	dlist_free(&kin);
     }
 
-    sync_send_apply(kl, sync_out);
+done:
     dlist_free(&kl);
-
-    r = sync_parse_response(cmd, sync_in, &kin);
-    if (r) return r;
-
-    r = mark_missing(kin, part_list);
     dlist_free(&kin);
-
     return r;
 }
 
