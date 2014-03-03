@@ -350,7 +350,7 @@ static int do_sync_mailboxes(struct sync_name_list *mboxname_list,
     int r = 0;
 
     if (mboxname_list->count) {
-        r = sync_do_mailboxes(mboxname_list, sync_backend, flags);
+        r = sync_do_mailboxes(mboxname_list, NULL, sync_backend, flags);
         if (r) {
             /* promote failed personal mailboxes to USER */
             int nonuser = 0;
@@ -618,7 +618,7 @@ static int do_sync(sync_log_reader_t *slr)
     for (action = user_list->head; action; action = action->next) {
         if (!action->active)
             continue;
-        r = sync_do_user(action->user, sync_backend, flags);
+        r = sync_do_user(action->user, NULL, sync_backend, flags);
         if (r) goto cleanup;
         r = do_restart();
         if (r) goto cleanup;
@@ -998,7 +998,7 @@ static int do_mailbox(const char *mboxname, unsigned flags)
 
     sync_name_list_add(list, mboxname);
 
-    r = sync_do_mailboxes(list, sync_backend, flags);
+    r = sync_do_mailboxes(list, NULL, sync_backend, flags);
 
     sync_name_list_free(&list);
 
@@ -1020,7 +1020,7 @@ static int cb_allmbox(const mbentry_t *mbentry, void *rock __attribute__((unused
         /* only sync if we haven't just done the user */
         if (strcmpsafe(userid, prev_userid)) {
             printf("USER: %s\n", userid);
-            r = sync_do_user(userid, sync_backend, flags);
+            r = sync_do_user(userid, NULL, sync_backend, flags);
             if (r) {
                 if (verbose)
                     fprintf(stderr, "Error from do_user(%s): bailing out!\n", userid);
@@ -1078,6 +1078,7 @@ int main(int argc, char **argv)
     int   min_delta = 0;
     const char *channel = NULL;
     const char *sync_shutdown_file = NULL;
+    const char *partition = NULL;
     char buf[512];
     FILE *file;
     int len;
@@ -1089,7 +1090,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:vlLS:F:f:w:t:d:n:rRumsozOA")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:vlLS:F:f:w:t:d:n:rRumsozOAp:")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -1187,6 +1188,10 @@ int main(int argc, char **argv)
             no_copyback = 1;
             break;
 
+        case 'p':
+            partition = optarg;
+            break;
+
         default:
             usage("sync_client");
         }
@@ -1271,7 +1276,7 @@ int main(int argc, char **argv)
                 if ((len == 0) || (buf[0] == '#'))
                     continue;
 
-                if (sync_do_user(buf, sync_backend, flags)) {
+                if (sync_do_user(buf, partition, sync_backend, flags)) {
                     if (verbose)
                         fprintf(stderr,
                                 "Error from sync_do_user(%s): bailing out!\n",
@@ -1283,7 +1288,7 @@ int main(int argc, char **argv)
             }
             fclose(file);
         } else for (i = optind; !r && i < argc; i++) {
-            if (sync_do_user(argv[i], sync_backend, flags)) {
+            if (sync_do_user(argv[i], partition, sync_backend, flags)) {
                 if (verbose)
                     fprintf(stderr, "Error from sync_do_user(%s): bailing out!\n",
                             argv[i]);
@@ -1336,7 +1341,7 @@ int main(int argc, char **argv)
             free(intname);
         }
 
-        if (sync_do_mailboxes(mboxname_list, sync_backend, flags)) {
+        if (sync_do_mailboxes(mboxname_list, partition, sync_backend, flags)) {
             if (verbose) {
                 fprintf(stderr,
                         "Error from sync_do_mailboxes(): bailing out!\n");
