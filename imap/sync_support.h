@@ -1,4 +1,4 @@
-/* sync_support.h -- Cyrus synchonization support functions
+/* sync_support.h -- Cyrus synchronization support functions
  *
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *
