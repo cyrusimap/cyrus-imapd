@@ -447,8 +447,10 @@ int sync_do_seen(char *user, char *uniqueid, struct backend *sync_be,
 int sync_do_quota(const char *root, struct backend *sync_be, unsigned flags);
 int sync_do_annotation(char *mboxname, struct backend *sync_be, unsigned flags);
 int sync_do_mailboxes(struct sync_name_list *mboxname_list,
+		      const char *topart,
 		      struct backend *sync_be, unsigned flags);
-int sync_do_user(char *userid, struct backend *sync_be, unsigned flags);
+int sync_do_user(char *userid, const char *topart,
+		 struct backend *sync_be, unsigned flags);
 int sync_do_meta(char *userid, struct backend *sync_be, unsigned flags);
 int sync_set_sub(const char *userid, const char *mboxname, int add,
 		 struct backend *sync_be, unsigned flags);
@@ -467,6 +469,7 @@ int sync_reserve_partition(char *partition,
 			   struct backend *sync_be);
 int sync_update_mailbox(struct sync_folder *local,
 			struct sync_folder *remote,
+			const char *topart,
 			struct sync_reserve_list *reserve_guids,
 			struct backend *sync_be, unsigned flags);
 int sync_folder_delete(char *mboxname, struct backend *sync_be, unsigned flags);

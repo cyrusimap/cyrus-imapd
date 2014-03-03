@@ -8853,13 +8853,13 @@ static int xfer_initialsync(struct xfer_header *xfer)
 
 	syslog(LOG_INFO, "XFER: initial sync of user %s", xfer->userid);
 
-	r = sync_do_user(xfer->userid, xfer->be, flags);
+	r = sync_do_user(xfer->userid, xfer->topart, xfer->be, flags);
 	if (r) return r;
 
 	/* User moves may take a while, do another non-blocking sync */
 	syslog(LOG_INFO, "XFER: second sync of user %s", xfer->userid);
 
-	r = sync_do_user(xfer->userid, xfer->be, flags);
+	r = sync_do_user(xfer->userid, xfer->topart, xfer->be, flags);
 	if (r) return r;
 
 	/* User may have renamed/deleted a mailbox while syncing,
@@ -8880,7 +8880,7 @@ static int xfer_initialsync(struct xfer_header *xfer)
 	syslog(LOG_INFO, "XFER: initial sync of mailbox %s", xfer->items->name);
 
 	sync_name_list_add(mboxname_list, xfer->items->name);
-	r = sync_do_mailboxes(mboxname_list, xfer->be, flags);
+	r = sync_do_mailboxes(mboxname_list, xfer->topart, xfer->be, flags);
 	sync_name_list_free(&mboxname_list);
     }
 
@@ -8889,6 +8889,7 @@ static int xfer_initialsync(struct xfer_header *xfer)
 
 static int sync_mailbox(struct mailbox *mailbox,
 			struct sync_folder_list *replica_folders,
+			const char *topart,
 			struct backend *be)
 {
     int r = 0;
@@ -8899,7 +8900,7 @@ static int sync_mailbox(struct mailbox *mailbox,
     struct sync_folder *mfolder, *rfolder;
 
     reserve_guids = sync_reserve_list_create(SYNC_MSGID_LIST_HASH_SIZE);
-    part_list = sync_reserve_partlist(reserve_guids, mailbox->part);
+    part_list = sync_reserve_partlist(reserve_guids, topart);
 
     master_folders = sync_folder_list_create();
     sync_folder_list_add(master_folders, mailbox->uniqueid, mailbox->name, 
@@ -8918,7 +8919,7 @@ static int sync_mailbox(struct mailbox *mailbox,
 
 	/* does it need a rename? */
 	if (strcmp(mfolder->name, rfolder->name) ||
-	    strcmp(mfolder->part, rfolder->part)) {
+	    strcmp(topart, rfolder->part)) {
 	    /* bail and retry */
 	    syslog(LOG_NOTICE,
 		   "XFER: rename %s!%s -> %s!%s during final sync"
@@ -8941,7 +8942,7 @@ static int sync_mailbox(struct mailbox *mailbox,
 	goto cleanup;
     }
 
-    r = sync_update_mailbox(mfolder, rfolder, reserve_guids, be,
+    r = sync_update_mailbox(mfolder, rfolder, topart, reserve_guids, be,
 			    SYNC_FLAG_LOCALONLY);
     if (r) {
 	syslog(LOG_ERR, "sync_mailbox(): update failed: %s '%s'", 
@@ -9020,7 +9021,7 @@ static int xfer_finalsync(struct xfer_header *xfer)
 
 	/* Step 4: Sync local -> remote */
 	if (!r) {
-	    r = sync_mailbox(mailbox, replica_folders, xfer->be);
+	  r = sync_mailbox(mailbox, replica_folders, xfer->topart, xfer->be);
 	    if (r) {
 		syslog(LOG_ERR,
 		       "Could not move mailbox: %s, sync_mailbox() failed %s",

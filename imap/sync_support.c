@@ -1355,6 +1355,7 @@ struct dlist *sync_parseline(struct protstream *in)
 }
 
 static int sync_send_file(struct mailbox *mailbox,
+			  const char *topart,
 			  struct index_record *record,
 			  struct sync_msgid_list *part_list,
 			  struct dlist *kupload)
@@ -1395,7 +1396,7 @@ static int sync_send_file(struct mailbox *mailbox,
 	return IMAP_IOERROR;
     }
 
-    dlist_file(kupload, "MESSAGE", mailbox->part,
+    dlist_file(kupload, "MESSAGE", topart ? topart : mailbox->part,
 	       &record->guid, record->size, fname);
 
     return 0;
@@ -1403,6 +1404,7 @@ static int sync_send_file(struct mailbox *mailbox,
 
 static int sync_mailbox(struct mailbox *mailbox,
 			struct sync_folder *remote,
+			const char *topart,
 			struct sync_msgid_list *part_list,
 			struct dlist *kl, struct dlist *kupload,
 			int printrecords)
@@ -1417,7 +1419,7 @@ static int sync_mailbox(struct mailbox *mailbox,
     dlist_date(kl, "LAST_APPENDDATE", mailbox->i.last_appenddate);
     dlist_date(kl, "POP3_LAST_LOGIN", mailbox->i.pop3_last_login);
     dlist_num(kl, "UIDVALIDITY", mailbox->i.uidvalidity);
-    dlist_atom(kl, "PARTITION", mailbox->part);
+    dlist_atom(kl, "PARTITION", topart ? topart : mailbox->part);
     dlist_atom(kl, "ACL", mailbox->acl);
     dlist_atom(kl, "OPTIONS", sync_encode_options(mailbox->i.options));
     dlist_num(kl, "SYNC_CRC", mailbox->i.sync_crc);
@@ -1467,7 +1469,8 @@ static int sync_mailbox(struct mailbox *mailbox,
 		send_file = 0;
 
 	    if (send_file) {
-		int r = sync_send_file(mailbox, &record, part_list, kupload);
+		int r = sync_send_file(mailbox, topart,
+				       &record, part_list, kupload);
 		if (r) return r;
 	    }
 
@@ -2101,7 +2104,7 @@ static int mailbox_cb(char *name,
 	 !sync_name_lookup(qrl, mailbox->quotaroot))
 	sync_name_list_add(qrl, mailbox->quotaroot);
 
-    r = sync_mailbox(mailbox, NULL, NULL, kl, NULL, 0);
+    r = sync_mailbox(mailbox, NULL, NULL, NULL, kl, NULL, 0);
     if (!r) sync_send_response(kl, mrock->pout);
     dlist_free(&kl);
     mailbox_close(&mailbox);
@@ -2118,7 +2121,7 @@ int sync_get_fullmailbox(struct dlist *kin, struct sync_state *sstate)
     r = mailbox_open_irl(kin->sval, &mailbox);
     if (r) return r;
 
-    r = sync_mailbox(mailbox, NULL, NULL, kl, NULL, 1);
+    r = sync_mailbox(mailbox, NULL, NULL, NULL, kl, NULL, 1);
     if (!r) sync_send_response(kl, sstate->pout);
     dlist_free(&kl);
     mailbox_close(&mailbox);
@@ -2757,6 +2760,7 @@ int sync_find_reserve_messages(struct mailbox *mailbox,
 }
 
 static int find_reserve_all(struct sync_name_list *mboxname_list,
+			    const char *topart,
 			    struct sync_folder_list *master_folders,
 			    struct sync_folder_list *replica_folders,
 			    struct sync_reserve_list *reserve_guids)
@@ -2794,7 +2798,8 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
 
 	/* mailbox is open from here, no exiting without closing it! */
 
-	part_list = sync_reserve_partlist(reserve_guids, mailbox->part);
+	part_list = sync_reserve_partlist(reserve_guids,
+					  topart ? topart : mailbox->part);
 
 	sync_folder_list_add(master_folders, mailbox->uniqueid, mailbox->name, 
 			     mailbox->part, mailbox->acl, mailbox->i.options,
@@ -2900,6 +2905,7 @@ int sync_reserve_partition(char *partition,
 }
 
 static int reserve_messages(struct sync_name_list *mboxname_list,
+			    const char *topart,
 			    struct sync_folder_list *master_folders,
 			    struct sync_folder_list *replica_folders,
 			    struct sync_reserve_list *reserve_guids,
@@ -2908,7 +2914,7 @@ static int reserve_messages(struct sync_name_list *mboxname_list,
     struct sync_reserve *reserve;
     int r;
 
-    r = find_reserve_all(mboxname_list, master_folders, 
+    r = find_reserve_all(mboxname_list, topart, master_folders, 
 			 replica_folders, reserve_guids);
     if (r) return r;
 
@@ -3855,6 +3861,7 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
 
 static int update_mailbox_once(struct sync_folder *local,
 			       struct sync_folder *remote,
+			       const char *topart,
 			       struct sync_reserve_list *reserve_guids,
 			       struct backend *sync_be, unsigned flags)
 {
@@ -3908,8 +3915,8 @@ static int update_mailbox_once(struct sync_folder *local,
     if (is_unchanged(mailbox, remote))
 	goto done;
 
-    part_list = sync_reserve_partlist(reserve_guids, mailbox->part);
-    r = sync_mailbox(mailbox, remote, part_list, kl, kupload, 1);
+    part_list = sync_reserve_partlist(reserve_guids, topart);
+    r = sync_mailbox(mailbox, remote, topart, part_list, kl, kupload, 1);
     if (r) goto done;
 
     /* upload any messages required */
@@ -3950,24 +3957,26 @@ done:
 
 int sync_update_mailbox(struct sync_folder *local,
 			struct sync_folder *remote,
+			const char *topart,
 			struct sync_reserve_list *reserve_guids,
 			struct backend *sync_be, unsigned flags)
 {
-    int r = update_mailbox_once(local, remote, reserve_guids, sync_be, flags);
+    int r = update_mailbox_once(local, remote, topart,
+				reserve_guids, sync_be, flags);
 
     flags |= SYNC_FLAG_ISREPEAT;
 
     if (r == IMAP_AGAIN) {
 	r = mailbox_full_update(local, sync_be);
-	if (!r) r = update_mailbox_once(local, remote, reserve_guids, sync_be,
-					flags);
+	if (!r) r = update_mailbox_once(local, remote, topart,
+					reserve_guids, sync_be, flags);
     }
     else if (r == IMAP_MAILBOX_CRC) {
 	syslog(LOG_ERR, "CRC failure on sync for %s, trying full update",
 	       local->name);
 	r = mailbox_full_update(local, sync_be);
-	if (!r) r = update_mailbox_once(local, remote, reserve_guids, sync_be,
-					flags);
+	if (!r) r = update_mailbox_once(local, remote, topart,
+					reserve_guids, sync_be, flags);
     }
 
     return r;
@@ -4159,7 +4168,7 @@ bail:
 
 /* ====================================================================== */
 
-static int do_folders(struct sync_name_list *mboxname_list,
+static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
 		      struct sync_folder_list *replica_folders,
 		      struct backend *sync_be,
 		      unsigned flags)
@@ -4169,12 +4178,13 @@ static int do_folders(struct sync_name_list *mboxname_list,
     struct sync_rename_list *rename_folders;
     struct sync_reserve_list *reserve_guids;
     struct sync_folder *mfolder, *rfolder;
+    const char *part;
 
     master_folders = sync_folder_list_create();
     rename_folders = sync_rename_list_create();
     reserve_guids = sync_reserve_list_create(SYNC_MSGID_LIST_HASH_SIZE);
 
-    r = reserve_messages(mboxname_list, master_folders,
+    r = reserve_messages(mboxname_list, topart, master_folders,
 			 replica_folders, reserve_guids, sync_be);
     if (r) {
 	syslog(LOG_ERR, "reserve messages: failed: %s", error_message(r));
@@ -4189,9 +4199,10 @@ static int do_folders(struct sync_name_list *mboxname_list,
 	rfolder->mark = 1;
 
 	/* does it need a rename? */
-	if (strcmp(mfolder->name, rfolder->name) || strcmp(mfolder->part, rfolder->part))
+	part = topart ? topart : mfolder->part;
+	if (strcmp(mfolder->name, rfolder->name) || strcmp(part, rfolder->part))
 	    sync_rename_list_add(rename_folders, mfolder->uniqueid, rfolder->name, 
-				 mfolder->name, mfolder->part);
+				 mfolder->name, part);
     }
 
     /* Delete folders on server which no longer exist on client */
@@ -4251,7 +4262,7 @@ static int do_folders(struct sync_name_list *mboxname_list,
 	 * it was successfully renamed above, so just use mfolder->name for
 	 * all commands */
 	rfolder = sync_folder_lookup(replica_folders, mfolder->uniqueid);
-	r = sync_update_mailbox(mfolder, rfolder, reserve_guids,
+	r = sync_update_mailbox(mfolder, rfolder, topart, reserve_guids,
 				sync_be, flags);
 	if (r) {
 	    syslog(LOG_ERR, "do_folders(): update failed: %s '%s'", 
@@ -4267,7 +4278,7 @@ static int do_folders(struct sync_name_list *mboxname_list,
     return r;
 }
 
-int sync_do_mailboxes(struct sync_name_list *mboxname_list,
+int sync_do_mailboxes(struct sync_name_list *mboxname_list, const char *topart,
 		      struct backend *sync_be, unsigned flags)
 
 {
@@ -4298,7 +4309,8 @@ int sync_do_mailboxes(struct sync_name_list *mboxname_list,
     r = sync_response_parse(sync_be->in, "MAILBOXES", replica_folders,
 			    NULL, NULL, NULL, NULL);
 
-    if (!r) r = do_folders(mboxname_list, replica_folders, sync_be, flags);
+    if (!r) r = do_folders(mboxname_list, topart,
+			   replica_folders, sync_be, flags);
 
     sync_folder_list_free(&replica_folders);
 
@@ -4368,7 +4380,8 @@ int sync_do_user_quota(struct sync_name_list *master_quotaroots,
     return 0;
 }
 
-static int do_user_main(char *user, struct sync_folder_list *replica_folders,
+static int do_user_main(char *user, const char *topart,
+			struct sync_folder_list *replica_folders,
 			struct sync_quota_list *replica_quota,
 			struct namespace *sync_namespace,
 			struct backend *sync_be,
@@ -4406,7 +4419,8 @@ static int do_user_main(char *user, struct sync_folder_list *replica_folders,
 						&info);
     }
 
-    if (!r) r = do_folders(mboxname_list, replica_folders, sync_be, flags);
+    if (!r) r = do_folders(mboxname_list, topart,
+			   replica_folders, sync_be, flags);
     if (!r) r = sync_do_user_quota(master_quotaroots, replica_quota, sync_be);
 
     sync_name_list_free(&mboxname_list);
@@ -4562,7 +4576,8 @@ int sync_do_user_sieve(char *userid, struct sync_sieve_list *replica_sieve,
     return(r);
 }
 
-int sync_do_user(char *userid, struct backend *sync_be, unsigned flags)
+int sync_do_user(char *userid, const char *topart,
+		 struct backend *sync_be, unsigned flags)
 {
     char buf[MAX_MAILBOX_BUFFER];
     int r = 0;
@@ -4609,7 +4624,7 @@ int sync_do_user(char *userid, struct backend *sync_be, unsigned flags)
 
     /* we don't hold locks while sending commands */
     mailbox_close(&mailbox);
-    r = do_user_main(userid, replica_folders, replica_quota,
+    r = do_user_main(userid, topart, replica_folders, replica_quota,
 		     &sync_namespace, sync_be, flags);
     if (r) goto done;
     r = sync_do_user_sub(userid, replica_subs, sync_be, flags);

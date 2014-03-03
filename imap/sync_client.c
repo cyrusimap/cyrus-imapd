@@ -487,7 +487,7 @@ static int do_sync(const char *filename)
 
     if (mboxname_list->count) {
 	int nonuser = 0;
-	r = sync_do_mailboxes(mboxname_list, sync_backend, flags);
+	r = sync_do_mailboxes(mboxname_list, NULL, sync_backend, flags);
 	if (r) {
 	    /* promote failed personal mailboxes to USER */
 	    struct sync_name *mbox;
@@ -544,7 +544,7 @@ static int do_sync(const char *filename)
     }
 
     for (action = user_list->head; action; action = action->next) {
-	r = sync_do_user(action->user, sync_backend, flags);
+	r = sync_do_user(action->user, NULL, sync_backend, flags);
 	if (r) goto cleanup;
     }
 
@@ -943,6 +943,7 @@ int main(int argc, char **argv)
     const char *sync_log_file;
     const char *channel = NULL;
     const char *sync_shutdown_file = NULL;
+    const char *partition = NULL;
     char buf[512];
     FILE *file;
     int len;
@@ -956,7 +957,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:vlLS:F:f:w:t:d:n:rRumsoz")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:vlLS:F:f:w:t:d:n:rRumsozp:")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -1041,6 +1042,10 @@ int main(int argc, char **argv)
 #else
 	    fatal("Compress not available without zlib compiled in", EC_SOFTWARE);
 #endif
+	    break;
+
+        case 'p':
+	    partition = optarg;
 	    break;
 
         default:
@@ -1128,7 +1133,7 @@ int main(int argc, char **argv)
 		mboxname_hiersep_tointernal(&sync_namespace, buf,
 					    config_virtdomains ?
 					    strcspn(buf, "@") : 0);
-		if (sync_do_user(buf, sync_backend, flags)) {
+		if (sync_do_user(buf, partition, sync_backend, flags)) {
 		    if (verbose)
 			fprintf(stderr,
 				"Error from do_user(%s): bailing out!\n",
@@ -1143,7 +1148,7 @@ int main(int argc, char **argv)
 	    mboxname_hiersep_tointernal(&sync_namespace, argv[i],
 					config_virtdomains ?
 					strcspn(argv[i], "@") : 0);
-	    if (sync_do_user(argv[i], sync_backend, flags)) {
+	    if (sync_do_user(argv[i], partition, sync_backend, flags)) {
 		if (verbose)
 		    fprintf(stderr, "Error from do_user(%s): bailing out!\n",
 			    argv[i]);
@@ -1186,7 +1191,7 @@ int main(int argc, char **argv)
 		sync_name_list_add(mboxname_list, mailboxname);
 	}
 
-	if (sync_do_mailboxes(mboxname_list, sync_backend, flags)) {
+	if (sync_do_mailboxes(mboxname_list, partition, sync_backend, flags)) {
 	    if (verbose) {
 		fprintf(stderr,
 			"Error from do_mailboxes(): bailing out!\n");
