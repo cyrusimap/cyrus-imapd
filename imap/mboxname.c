@@ -535,7 +535,15 @@ static int mboxname_toexternal(struct namespace *namespace, const char *mboxname
 
 	if (mbparts.box)
 	    strcat(result, ".");
+    } else {
+	/* shared mailbox */
+	if (mbparts.is_deleted) {
+	    const char *dp = config_getstring(IMAPOPT_DELETEDPREFIX);
+	    sprintf(result, "%s.", dp);
+	}
     }
+
+
     if (mbparts.box)
 	strcat(result, mbparts.box);
 
