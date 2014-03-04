@@ -1396,8 +1396,7 @@ static int sync_send_file(struct mailbox *mailbox,
 	return IMAP_IOERROR;
     }
 
-    dlist_file(kupload, "MESSAGE", topart ? topart : mailbox->part,
-	       &record->guid, record->size, fname);
+    dlist_file(kupload, "MESSAGE", topart, &record->guid, record->size, fname);
 
     return 0;
 }
@@ -1409,6 +1408,7 @@ static int sync_mailbox(struct mailbox *mailbox,
 			struct dlist *kl, struct dlist *kupload,
 			int printrecords)
 {
+    if (!topart) topart = mailbox->part;
 
     dlist_atom(kl, "UNIQUEID", mailbox->uniqueid);
     dlist_atom(kl, "MBOXNAME", mailbox->name);
@@ -1419,7 +1419,7 @@ static int sync_mailbox(struct mailbox *mailbox,
     dlist_date(kl, "LAST_APPENDDATE", mailbox->i.last_appenddate);
     dlist_date(kl, "POP3_LAST_LOGIN", mailbox->i.pop3_last_login);
     dlist_num(kl, "UIDVALIDITY", mailbox->i.uidvalidity);
-    dlist_atom(kl, "PARTITION", topart ? topart : mailbox->part);
+    dlist_atom(kl, "PARTITION", topart);
     dlist_atom(kl, "ACL", mailbox->acl);
     dlist_atom(kl, "OPTIONS", sync_encode_options(mailbox->i.options));
     dlist_num(kl, "SYNC_CRC", mailbox->i.sync_crc);
@@ -3915,6 +3915,7 @@ static int update_mailbox_once(struct sync_folder *local,
     if (is_unchanged(mailbox, remote))
 	goto done;
 
+    if (!topart) topart = mailbox->part;
     part_list = sync_reserve_partlist(reserve_guids, topart);
     r = sync_mailbox(mailbox, remote, topart, part_list, kl, kupload, 1);
     if (r) goto done;

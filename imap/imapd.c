@@ -8899,6 +8899,7 @@ static int sync_mailbox(struct mailbox *mailbox,
     struct sync_reserve *reserve;
     struct sync_folder *mfolder, *rfolder;
 
+    if (!topart) topart = mailbox->part;
     reserve_guids = sync_reserve_list_create(SYNC_MSGID_LIST_HASH_SIZE);
     part_list = sync_reserve_partlist(reserve_guids, topart);
 
@@ -9021,7 +9022,7 @@ static int xfer_finalsync(struct xfer_header *xfer)
 
 	/* Step 4: Sync local -> remote */
 	if (!r) {
-	  r = sync_mailbox(mailbox, replica_folders, xfer->topart, xfer->be);
+	    r = sync_mailbox(mailbox, replica_folders, xfer->topart, xfer->be);
 	    if (r) {
 		syslog(LOG_ERR,
 		       "Could not move mailbox: %s, sync_mailbox() failed %s",
