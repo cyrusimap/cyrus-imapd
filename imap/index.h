@@ -216,14 +216,15 @@ extern int index_search(struct index_state *state,
 extern int index_scan(struct index_state *state,
 		      const char *contents);
 extern int index_copy(struct index_state *state,
-		      char *sequence, 
+		      char *sequence,
 		      int usinguid,
-		      char *name, 
+		      char *name,
 		      char **copyuidp,
 		      int nolink,
 		      struct namespace *namespace,
 		      int isadmin,
-		      int ismove);
+		      int ismove,
+		      int ignorequota);
 extern int find_thread_algorithm(char *arg);
 
 extern int index_open(const char *name, struct index_init *init,

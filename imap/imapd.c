@@ -175,6 +175,7 @@ static int imapd_starttls_done = 0; /* have we done a successful starttls? */
 static void *imapd_tls_comp = NULL; /* TLS compression method, if any */
 static int imapd_compress_done = 0; /* have we done a successful compress? */
 static const char *plaintextloginalert = NULL;
+static int ignorequota = 0;
 
 static struct id_data {
     struct attvaluelist *params;
@@ -847,7 +848,7 @@ int service_init(int argc, char **argv, char **envp)
     snmp_connect(); /* ignore return code */
     snmp_set_str(SERVER_NAME_VERSION,cyrus_version());
 
-    while ((opt = getopt(argc, argv, "sp:N")) != EOF) {
+    while ((opt = getopt(argc, argv, "Np:sq")) != EOF) {
 	switch (opt) {
 	case 's': /* imaps (do starttls right away) */
 	    imaps = 1;
@@ -863,6 +864,9 @@ int service_init(int argc, char **argv, char **envp)
 	case 'N': /* bypass SASL password check.  Not recommended unless
 		   * you know what you're doing! */
 	    nosaslpasswdcheck = 1;
+	    break;
+	case 'q': /* don't enforce quotas */
+	    ignorequota = 1;
 	    break;
 	default:
 	    break;
@@ -3610,7 +3614,7 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
 	qdiffs[QUOTA_MESSAGE] = stages.count;
 	r = append_setup(&appendstate, mailboxname, 
 			 imapd_userid, imapd_authstate, ACL_INSERT,
-			 qdiffs, &imapd_namespace,
+			 ignorequota ? NULL : qdiffs, &imapd_namespace,
 			 (imapd_userisadmin || imapd_userisproxyadmin),
 			 EVENT_MESSAGE_APPEND);
     }
@@ -5261,7 +5265,8 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
 	r = index_copy(imapd_index, sequence, usinguid, mailboxname,
 		       &copyuid, !config_getswitch(IMAPOPT_SINGLEINSTANCESTORE),
 		       &imapd_namespace,
-		       (imapd_userisadmin || imapd_userisproxyadmin), ismove);
+		       (imapd_userisadmin || imapd_userisproxyadmin), ismove,
+		       ignorequota);
     }
 
     imapd_check(NULL, ismove || usinguid);

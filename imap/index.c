@@ -1855,7 +1855,8 @@ index_copy(struct index_state *state,
 	   int nolink,
 	   struct namespace *namespace,
 	   int isadmin,
-	   int ismove)
+	   int ismove,
+	   int ignorequota)
 {
     static struct copyargs copyargs;
     int i;
@@ -1906,7 +1907,7 @@ index_copy(struct index_state *state,
 
     r = append_setup_mbox(&appendstate, destmailbox, state->userid,
 			  state->authstate, ACL_INSERT,
-			  qptr, namespace, isadmin,
+			  ignorequota ? NULL : qptr, namespace, isadmin,
 			  ismove ? EVENT_MESSAGE_MOVE : EVENT_MESSAGE_COPY);
     if (r) goto done;
 
