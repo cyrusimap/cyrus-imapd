@@ -11556,6 +11556,9 @@ static void cmd_syncapply(char *tag, struct dlist *kin,
 	r = IMAP_PROTOCOL_ERROR;
 
     sync_print_response(tag, r, imapd_out);
+
+    /* Reset inactivity timer in case we spent a long time processing data */
+    prot_resettimeout(imapd_in);
 }
 
 static void cmd_syncget(char *tag, struct dlist *kin)
