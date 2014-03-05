@@ -3720,7 +3720,7 @@ static int mailbox_full_update(struct sync_folder *local,
     uint32_t last_uid;
 
     if (flags & SYNC_FLAG_LOGGING) {
-	syslog(LOG_INFO, "&s %s", local->name);
+	syslog(LOG_INFO, "%s %s", cmd, local->name);
     }
 
     kl = dlist_atom(NULL, cmd, local->name);
@@ -3896,7 +3896,7 @@ static int update_mailbox_once(struct sync_folder *local,
     struct dlist *kupload = dlist_list(NULL, "MESSAGE");
 
     if (flags & SYNC_FLAG_LOGGING) {
-	syslog(LOG_INFO, "&s %s", local->name);
+	syslog(LOG_INFO, "%s %s", cmd, local->name);
     }
 
     if (local->mailbox) mailbox = local->mailbox;
@@ -4323,8 +4323,13 @@ int sync_do_mailboxes(struct sync_name_list *mboxname_list, const char *topart,
     }
 
     if (flags & SYNC_FLAG_LOGGING) {
+	struct buf buf = BUF_INITIALIZER;
+
+	buf_setcstr(&buf, "MAILBOXES");
 	for (mbox = mboxname_list->head; mbox; mbox = mbox->next)
-	    syslog(LOG_INFO, "MAILBOX %s", mbox->name);
+	    buf_printf(&buf, " %s", mbox->name);
+	syslog(LOG_INFO, "%s", buf_cstring(&buf));
+	buf_free(&buf);
     }
 
     kl = dlist_list(NULL, "MAILBOXES");
