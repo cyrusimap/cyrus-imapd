@@ -3702,7 +3702,8 @@ static int mailbox_update_loop(struct mailbox *mailbox,
 }
 
 static int mailbox_full_update(struct sync_folder *local,
-			       struct backend *sync_be)
+			       struct backend *sync_be,
+			       unsigned flags)
 {
     const char *cmd = "FULLMAILBOX";
     struct mailbox *mailbox = NULL;
@@ -3717,6 +3718,10 @@ static int mailbox_full_update(struct sync_folder *local,
     modseq_t highestmodseq;
     uint32_t uidvalidity;
     uint32_t last_uid;
+
+    if (flags & SYNC_FLAG_LOGGING) {
+	syslog(LOG_INFO, "&s %s", local->name);
+    }
 
     kl = dlist_atom(NULL, cmd, local->name);
     sync_send_lookup(kl, sync_be->out);
@@ -3890,6 +3895,10 @@ static int update_mailbox_once(struct sync_folder *local,
     struct dlist *kl = dlist_new(cmd);
     struct dlist *kupload = dlist_list(NULL, "MESSAGE");
 
+    if (flags & SYNC_FLAG_LOGGING) {
+	syslog(LOG_INFO, "&s %s", local->name);
+    }
+
     if (local->mailbox) mailbox = local->mailbox;
     else r = mailbox_open_irl(local->name, &mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -3985,14 +3994,14 @@ int sync_update_mailbox(struct sync_folder *local,
     flags |= SYNC_FLAG_ISREPEAT;
 
     if (r == IMAP_AGAIN) {
-	r = mailbox_full_update(local, sync_be);
+	r = mailbox_full_update(local, sync_be, flags);
 	if (!r) r = update_mailbox_once(local, remote, topart,
 					reserve_guids, sync_be, flags);
     }
     else if (r == IMAP_MAILBOX_CRC) {
 	syslog(LOG_ERR, "CRC failure on sync for %s, trying full update",
 	       local->name);
-	r = mailbox_full_update(local, sync_be);
+	r = mailbox_full_update(local, sync_be, flags);
 	if (!r) r = update_mailbox_once(local, remote, topart,
 					reserve_guids, sync_be, flags);
     }
