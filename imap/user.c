@@ -72,6 +72,7 @@
 # endif
 #endif
 
+#include "dav_util.h"
 #include "global.h"
 #include "user.h"
 #include "mboxkey.h"
@@ -183,6 +184,22 @@ static int user_deletesieve(const char *user)
     return 0;
 }
 
+static int user_deletedav(const char *userid)
+{
+    struct buf fname = BUF_INITIALIZER;
+    int r = 0;
+
+    dav_getpath_byuserid(&fname, userid);
+    if (unlink(buf_cstring(&fname)) && errno != ENOENT) {
+	syslog(LOG_WARNING, "error unlinking %s: %m", buf_cstring(&fname));
+	r = CYRUSDB_IOERROR;
+    }
+
+    buf_free(&fname);
+
+    return r;
+}
+
 int user_deletedata(char *user, char *userid __attribute__((unused)),
 		    struct auth_state *authstate __attribute__((unused)),
 		    int wipe_user)
@@ -217,6 +234,9 @@ int user_deletedata(char *user, char *userid __attribute__((unused)),
 
     /* delete sieve scripts */
     user_deletesieve(user);
+
+    /* delete DAV database */
+    user_deletedav(user);
 
     sync_log_user(user);
     
