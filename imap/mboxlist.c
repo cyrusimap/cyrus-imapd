@@ -126,6 +126,10 @@ const char *mboxlist_mbtype_to_string(uint32_t mbtype)
 	buf_putc(&buf, 'r');
     if (mbtype & MBTYPE_RESERVE)
 	buf_putc(&buf, 'z');
+    if (mbtype & MBTYPE_CALENDAR)
+	buf_putc(&buf, 'c');
+    if (mbtype & MBTYPE_ADDRESSBOOK)
+	buf_putc(&buf, 'a');
 
     return buf_cstring(&buf);
 }
@@ -185,6 +189,12 @@ uint32_t mboxlist_string_to_mbtype(const char *string)
 
     for (; *string; string++) {
 	switch (*string) {
+	case 'a':
+	    mbtype |= MBTYPE_ADDRESSBOOK;
+	    break;
+	case 'c':
+	    mbtype |= MBTYPE_CALENDAR;
+	    break;
 	case 'd':
 	    mbtype |= MBTYPE_DELETED;
 	    break;
