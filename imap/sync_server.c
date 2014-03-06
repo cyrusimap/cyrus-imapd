@@ -1276,24 +1276,23 @@ static int mailbox_compare_update(struct mailbox *mailbox,
 		}
 	    }
 
-	    /* everything else only matters if we're not expunged */
-	    if (!(mrecord.system_flags & FLAG_EXPUNGED)) {
-		/* GUID mismatch on a non-expunged record is an error straight away */
-		if (!message_guid_equal(&mrecord.guid, &rrecord.guid)) {
-		    syslog(LOG_ERR, "SYNCERROR: guid mismatch %s %u",
-			   mailbox->name, mrecord.uid);
-		    r = IMAP_SYNC_CHECKSUM;
-		    goto out;
-		}
+	    /* GUID mismatch is an error straight away, it only ever happens if we
+	     * had a split brain - and it will take a full sync to sort out the mess */
+	    if (!message_guid_equal(&mrecord.guid, &rrecord.guid)) {
+		syslog(LOG_ERR, "SYNCERROR: guid mismatch %s %u",
+		       mailbox->name, mrecord.uid);
+		r = IMAP_SYNC_CHECKSUM;
+		goto out;
+	    }
 
-		/* if it's already expunged on the replica, but alive on the master,
-		 * that's bad */
-		if (rrecord.system_flags & FLAG_EXPUNGED) {
-		    syslog(LOG_ERR, "SYNCERROR: expunged on replica %s %u",
-			   mailbox->name, mrecord.uid);
-		    r = IMAP_SYNC_CHECKSUM;
-		    goto out;
-		}
+	    /* if it's already expunged on the replica, but alive on the master,
+	     * that's bad */
+	    if (!(mrecord.system_flags & FLAG_EXPUNGED) &&
+		 (rrecord.system_flags & FLAG_EXPUNGED)) {
+		syslog(LOG_ERR, "SYNCERROR: expunged on replica %s %u",
+		       mailbox->name, mrecord.uid);
+		r = IMAP_SYNC_CHECKSUM;
+		goto out;
 	    }
 
 	    /* skip out on the first pass */
