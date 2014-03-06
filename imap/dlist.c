@@ -534,6 +534,50 @@ static struct dlist *dlist_getchild(struct dlist *dl, const char *name)
     return NULL;
 }
 
+static struct dlist *dlist_getchildn(struct dlist *dl, int num)
+{
+    struct dlist *i;
+
+    if (!dl) return NULL;
+
+    for (i = dl->head; i && num; i = i->next)
+	num--;
+
+    return i;
+}
+/* duplicate the parent list as a new list, and then move @num
+ * of the children from the parent onto the new list */
+struct dlist *dlist_splice(struct dlist *dl, int num)
+{
+    struct dlist *ret = dlist_list(NULL, dl->name);
+
+    /* clone exact type */
+    ret->type = dl->type;
+    ret->nval = dl->nval;
+
+    if (num > 0) {
+	struct dlist *end = dlist_getchildn(dl, num - 1);
+
+	/* take the start of the list */
+	ret->head = dl->head;
+
+	/* leave the end (if any) */
+	if (end) {
+	    ret->tail = end;
+	    dl->head = end->next;
+	    end->next = NULL;
+	}
+	else {
+	    ret->tail = dl->tail;
+	    dl->head = NULL;
+	    dl->tail = NULL;
+	}
+    }
+
+    return ret;
+}
+
+
 /* XXX - type coercion logic here */
 
 int dlist_getatom(struct dlist *dl, const char *name, const char **val)

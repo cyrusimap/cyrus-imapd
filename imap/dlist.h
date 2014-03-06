@@ -116,6 +116,8 @@ int dlist_getfile(struct dlist *dl,
 		  struct message_guid **guid,
 		  unsigned long *size, const char **fname);
 
+struct dlist *dlist_splice(struct dlist *dl, int num);
+
 const char *dlist_lastkey();
 
 #endif /* INCLUDED_DLIST_H */
