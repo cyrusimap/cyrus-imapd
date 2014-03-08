@@ -71,13 +71,8 @@ char* notify_external(const char *class, const char *priority,
 
     /* check/parse options */
     if (!(notify = config_getstring(IMAPOPT_NOTIFY_EXTERNAL))) {
-	syslog(LOG_ERR, "ERROR: recipient not specified");
-	return strdup("NO external recipient not specified");
-    }
-
-    if (!*user) {
-	syslog(LOG_ERR, "ERROR: recipient not specified");
-	return strdup("NO external recipient not specified");
+	syslog(LOG_ERR, "ERROR: no external recipient (program) specified");
+	return strdup("NO Recipient unspecified");
     }
 
     buf[0] = notify;
