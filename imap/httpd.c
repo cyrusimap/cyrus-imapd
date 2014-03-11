@@ -3980,8 +3980,6 @@ static int meth_propfind_root(struct transaction_t *txn,
 	    .lprops = root_props
 	};
 
-	if (!httpd_userid) return HTTP_UNAUTHORIZED;
-
 	/* Make a working copy of target path */
 	strlcpy(txn->req_tgt.path, txn->req_uri->path,
 		sizeof(txn->req_tgt.path));
