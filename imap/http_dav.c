@@ -3411,13 +3411,21 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 				    httpd_userisadmin || httpd_userisproxyadmin,
 				    httpd_userid, httpd_authstate,
 				    NULL, &partition, 0);
+    switch (r) {
+    case 0:
+	break;
 
-    if (r == IMAP_PERMISSION_DENIED) return HTTP_FORBIDDEN;
-    else if (r == IMAP_MAILBOX_EXISTS) {
+    case IMAP_MAILBOX_EXISTS:
 	txn->error.precond = DAV_RSRC_EXISTS;
-	return HTTP_FORBIDDEN;
+
+    case IMAP_PERMISSION_DENIED:
+	ret = HTTP_FORBIDDEN;
+	goto done;
+
+    default:
+	ret = HTTP_SERVER_ERROR;
+	goto done;
     }
-    else if (r) return HTTP_SERVER_ERROR;
 
     if (!config_partitiondir(partition)) {
 	/* Invalid partition, assume its a server (remote mailbox) */
@@ -3430,9 +3438,11 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 
 	be = proxy_findserver(server, &http_protocol, proxy_userid,
 			      &backend_cached, NULL, NULL, httpd_in);
-	if (!be) return HTTP_UNAVAILABLE;
 
-	return http_pipe_req_resp(be, txn);
+	if (!be) ret = HTTP_UNAVAILABLE;
+	else ret = http_pipe_req_resp(be, txn);
+
+	goto done;
     }
 
     /* Local Mailbox */
@@ -3451,7 +3461,8 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 	    r = xmlStrcmp(root->name, BAD_CAST mparams->mkcol.xml_req);
 	if (r) {
 	    txn->error.desc = "Incorrect root element in XML request\r\n";
-	    return HTTP_BAD_MEDIATYPE;
+	    ret = HTTP_BAD_MEDIATYPE;
+	    goto done;
 	}
 
 	instr = root->children;
@@ -3536,6 +3547,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
   done:
     buf_free(&pctx.buf);
 
+    if (partition) free(partition);
     if (outdoc) xmlFreeDoc(outdoc);
     if (indoc) xmlFreeDoc(indoc);
 
