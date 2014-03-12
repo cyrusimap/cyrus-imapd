@@ -2477,7 +2477,7 @@ int meth_copy(struct transaction_t *txn, void *params)
     int ret = HTTP_CREATED, r, precond, rights, overwrite = OVERWRITE_YES;
     const char **hdr;
     xmlURIPtr dest_uri;
-    struct request_target_t dest_tgt;  /* Parsed destination URL */
+    static struct request_target_t dest_tgt;  /* Parsed destination URL */
     char *server, *acl;
     struct backend *src_be = NULL, *dest_be = NULL;
     struct mailbox *src_mbox = NULL, *dest_mbox = NULL;
