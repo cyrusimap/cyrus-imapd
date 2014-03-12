@@ -862,15 +862,15 @@ static int action_get(struct transaction_t *txn)
 	prop = icalcomponent_get_first_property(vtz, ICAL_TZID_PROPERTY);
 
 	if (zi.type == ZI_LINK) {
+	    /* Add EQUIVALENT-TZID */
 	    const char *equiv = icalproperty_get_tzid(prop);
+	    icalproperty *eprop = icalproperty_new_x(equiv);
+
+	    icalproperty_set_x_name(eprop, "EQUIVALENT-TZID");	
+	    icalcomponent_add_property(vtz, eprop);
 
 	    /* Substitute TZID alias */
 	    icalproperty_set_tzid(prop, tzid);
-
-	    /* Add EQUIVALENT-TZID */
-	    prop = icalproperty_new_x(equiv);
-	    icalproperty_set_x_name(prop, "EQUIVALENT-TZID");	
-	    icalcomponent_add_property(vtz, prop);
 	}
 
 	/* Start constructing TZURL */
