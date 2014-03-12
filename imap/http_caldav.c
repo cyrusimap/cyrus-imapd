@@ -3354,11 +3354,15 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 	free(header);
     }
     else {
-	buf_printf(&headbuf, "%s@%s", proxy_userid, config_servername);
-	header = charset_encode_mimeheader(buf_base(&headbuf), buf_len(&headbuf));
+	struct buf *headbuf = &txn->buf;
+
+	assert(!headbuf->len);
+	buf_printf(headbuf, "%s@%s", proxy_userid, config_servername);
+	header = charset_encode_mimeheader(headbuf->s, headbuf->len);
+	buf_reset(headbuf);
+
 	fprintf(f, "From: %s\r\n", header);
 	free(header);
-	buf_reset(&headbuf);
     }
 
     header = charset_encode_mimeheader(icalcomponent_get_summary(comp), 0);
