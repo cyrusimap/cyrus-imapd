@@ -719,7 +719,7 @@ void mailbox_make_uniqueid(struct mailbox *mailbox)
 	hash %= PRIME;
     }
 
-    free(mailbox->uniqueid);
+    if (mailbox->uniqueid) free(mailbox->uniqueid);
     mailbox->uniqueid = xmalloc(32);
 
     snprintf(mailbox->uniqueid, 32, "%08x%08x",
@@ -1119,6 +1119,7 @@ int mailbox_read_header(struct mailbox *mailbox, char **aclptr)
 	mailbox->quotaroot = xstrndup(p, tab - p);
     }
 
+    if (mailbox->uniqueid) free(mailbox->uniqueid);
     if (oldformat) {
 	/* uniqueid needs to be generated when we know the uidvalidity */
 	mailbox->uniqueid = NULL;
