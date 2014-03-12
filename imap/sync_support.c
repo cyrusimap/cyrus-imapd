@@ -4129,7 +4129,11 @@ int sync_do_annotation(char *mboxname, struct backend *sync_be,
 
     r = annotatemore_findall(mboxname, "*",
 			     &do_annotation_cb, master_annot, NULL);
-    if (r) goto bail;
+    if (r) {
+	syslog(LOG_ERR, "IOERROR: fetching annotations for %s", mboxname);
+	r = IMAP_IOERROR;
+	goto bail;
+    }
 
     /* both lists are sorted, so we work our way through the lists
        top-to-bottom and determine what we need to do based on order */
@@ -4452,7 +4456,11 @@ int sync_do_user_sub(const char *userid, struct sync_name_list *replica_subs,
 
     /* Includes subsiduary nodes automatically */
     r = mboxlist_allsubs(userid, addmbox_sub, master_subs);
-    if (r) goto bail;
+    if (r) {
+	syslog(LOG_ERR, "IOERROR: fetching subscriptions for %s", userid);
+	r = IMAP_IOERROR;
+	goto bail;
+    }
 
     /* add any folders that need adding, and mark any which
      * still exist */
