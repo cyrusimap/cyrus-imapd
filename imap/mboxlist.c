@@ -366,7 +366,7 @@ mboxlist_mycreatemailboxcheck(const char *mboxname,
 			      int RMW, int localonly, int force_user_create,
 			      struct txn **tid)
 {
-    int r;
+    int r = 0;
     struct mboxlist_entry mbentry;
     char *name = xstrdup(mboxname);
     char *mbox = name;
@@ -383,7 +383,8 @@ mboxlist_mycreatemailboxcheck(const char *mboxname,
     
     /* Check for invalid name/partition */
     if (partition && strlen(partition) > MAX_PARTITION_LEN) {
-	return IMAP_PARTITION_UNKNOWN;
+	r = IMAP_PARTITION_UNKNOWN;
+	goto done;
     }
     if (config_virtdomains && (p = strchr(name, '!'))) {
 	/* pointer to mailbox w/o domain prefix */
@@ -392,11 +393,13 @@ mboxlist_mycreatemailboxcheck(const char *mboxname,
     r = mboxname_policycheck(mbox);
     /* filthy hack to support rename pre-check semantics, which
        will go away when we refactor this code */
-    if (r && force_user_create != 1) return r;
+    if (r && force_user_create != 1) goto done;
 
     /* you must be a real admin to create a local-only mailbox */
-    if(!isadmin && localonly) return IMAP_PERMISSION_DENIED;
-    if(!isadmin && force_user_create) return IMAP_PERMISSION_DENIED;
+    if (!isadmin && (localonly || force_user_create)) {
+	r = IMAP_PERMISSION_DENIED;
+	goto done;
+    }
 
     /* User has admin rights over their own mailbox namespace */
     if (mboxname_userownsmailbox(userid, name) && strchr(mbox+5, '.') &&
@@ -416,14 +419,13 @@ mboxlist_mycreatemailboxcheck(const char *mboxname,
 	    r = IMAP_PERMISSION_DENIED;
 	}
 
-	return r;       
-	break;
+	goto done;
+
     case IMAP_MAILBOX_NONEXISTENT:
 	break;
 
     default:
-	return r;
-	break;
+	goto done;
     }
 
     /* Search for a parent - stop if we hit the domain separator */
@@ -447,8 +449,7 @@ mboxlist_mycreatemailboxcheck(const char *mboxname,
 	    break;
 
 	default:
-	    return r;
-	    break;
+	    goto done;
 	}
     }
 
@@ -463,7 +464,8 @@ mboxlist_mycreatemailboxcheck(const char *mboxname,
 					 >= user_folder_limit) {
 		syslog(LOG_ERR, "LIMIT: refused to create %s for %s because of limit %d",
 			        mbox, userid, user_folder_limit);
-		return IMAP_PERMISSION_DENIED;
+		r = IMAP_PERMISSION_DENIED;
+		goto done;
 	    }
 	}
     }
@@ -472,7 +474,8 @@ mboxlist_mycreatemailboxcheck(const char *mboxname,
 	/* check acl */
 	if (!isadmin &&
 	    !(cyrus_acl_myrights(auth_state, mbentry.acl) & ACL_CREATE)) {
-	    return IMAP_PERMISSION_DENIED;
+	    r = IMAP_PERMISSION_DENIED;
+	    goto done;
 	}
 
       	/* Copy partition, if not specified */
@@ -493,7 +496,8 @@ mboxlist_mycreatemailboxcheck(const char *mboxname,
 	strncpy(name, parent, strlen(parent));
     } else { /* parentlen == 0, no parent mailbox */
 	if (!isadmin) {
-	    return IMAP_PERMISSION_DENIED;
+	    r = IMAP_PERMISSION_DENIED;
+	    goto done;
 	}
 	
 	ouracl = xstrdup("");
@@ -501,9 +505,9 @@ mboxlist_mycreatemailboxcheck(const char *mboxname,
 	    char *firstdot = strchr(mbox+5, '.');
 	    if (!force_user_create && firstdot) {
 		/* Disallow creating user.X.* when no user.X */
-		free(name);
 		free(ouracl);
-		return IMAP_PERMISSION_DENIED;
+		r = IMAP_PERMISSION_DENIED;
+		goto done;
 	    }
 
 	    /*
@@ -585,7 +589,10 @@ mboxlist_mycreatemailboxcheck(const char *mboxname,
     if (newacl) *newacl = ouracl;
     else free(ouracl);
 
-    return 0;
+ done:
+    free(name);
+
+    return r;
 }
 
 int
