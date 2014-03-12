@@ -1382,18 +1382,26 @@ static void cmdloop(void)
 	    tok_t tok;
 	    char *param;
 
+	    assert(!buf_len(&txn.buf));  /* Unescape buffer */
+
 	    tok_initm(&tok, (char *) query, ";&=", TOK_TRIMLEFT|TOK_TRIMRIGHT);
 	    while ((param = tok_next(&tok))) {
 		struct strlist *vals;
 		char *value = tok_next(&tok);
+		size_t len;
+
 		if (!value) value = "";
+		len = strlen(value);
+		buf_ensure(&txn.buf, len);
 
 		vals = hash_lookup(param, &txn.req_qparams);
 		appendstrlist(&vals,
-			      xmlURIUnescapeString(value, strlen(value), NULL));
+			      xmlURIUnescapeString(value, len, txn.buf.s));
 		hash_insert(param, vals, &txn.req_qparams);
 	    }
 	    tok_fini(&tok);
+
+	    buf_reset(&txn.buf);
 	}
 
 	/* Start method processing alarm (HTTP/1.1+ only) */
