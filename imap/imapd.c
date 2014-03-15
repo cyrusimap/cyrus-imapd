@@ -3460,7 +3460,7 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
     /* local mailbox */
     if (!r) {
 	qdiffs[QUOTA_MESSAGE] = 1;
-	r = append_check(mailboxname, imapd_authstate, ACL_INSERT, qdiffs);
+	r = append_check(mailboxname, imapd_authstate, ACL_INSERT, ignorequota ? NULL : qdiffs);
     }
     if (r) {
 	eatline(imapd_in, ' ');
