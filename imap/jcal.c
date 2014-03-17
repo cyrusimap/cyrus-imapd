@@ -496,6 +496,8 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue,
     case ICAL_INTEGER_VALUE:
 	if (json_is_integer(jvalue))
 	    value = icalvalue_new_integer((int) json_integer_value(jvalue));
+	else if (json_is_string(jvalue))
+	    value = icalvalue_new_integer(atoi(json_string_value(jvalue)));
 	else
 	    syslog(LOG_WARNING, "jCal integer object expected");
 	break;
