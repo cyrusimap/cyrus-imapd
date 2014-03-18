@@ -589,6 +589,8 @@ mboxlist_mycreatemailboxcheck(const char *mboxname,
     if (newacl) *newacl = ouracl;
     else free(ouracl);
 
+    r = 0;
+
  done:
     free(name);
 
