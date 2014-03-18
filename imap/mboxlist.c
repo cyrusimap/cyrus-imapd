@@ -793,6 +793,8 @@ EXPORTED int mboxlist_createmailboxcheck(const char *name, int mbtype __attribut
 	if (r) goto done;
     }
 
+    r = 0;
+
  done:
     if (r || !newacl) free(acl);
     else *newacl = acl;
