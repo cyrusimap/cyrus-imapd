@@ -50,6 +50,7 @@
 #include <libxml/tree.h>
 
 #include "httpd.h"
+#include "tok.h"
 #include "util.h"
 #include "version.h"
 #include "xcal.h"
@@ -457,6 +458,32 @@ static void icalproperty_add_value_as_xml_element(xmlNodePtr xprop,
 
     default:
 	str = icalvalue_as_ical_string(value);
+
+	switch (icalproperty_isa(prop)) {
+	case ICAL_CATEGORIES_PROPERTY:
+	case ICAL_RESOURCES_PROPERTY:
+	case ICAL_POLLPROPERTIES_PROPERTY:
+	    if (strchr(str, ',')) {
+		/* Handle multi-valued properties */
+		tok_t tok;
+
+		tok_init(&tok, str, ",", TOK_TRIMLEFT|TOK_TRIMRIGHT|TOK_EMPTY);
+		str = tok_next(&tok);
+		xmlAddChild(xtype, xmlNewText(BAD_CAST str));
+
+		while ((str = tok_next(&tok))) {
+		    if (*str) {
+			xtype = xmlNewChild(xprop, NULL, BAD_CAST type, NULL);
+			xmlAddChild(xtype, xmlNewText(BAD_CAST str));
+		    }
+		}
+		tok_fini(&tok);
+		return;
+	    }
+
+	default: break;
+	}
+
 	break;
     }
 
@@ -509,7 +536,6 @@ static xmlNodePtr icalproperty_as_xml_element(icalproperty *prop)
 
 
     /* Add value */
-    /* XXX  Need to handle multi-valued properties */
     icalproperty_add_value_as_xml_element(xprop, prop);
 
     return xprop;
@@ -987,11 +1013,37 @@ static icalproperty *xml_element_to_icalproperty(xmlNodePtr xprop)
 
 
     /* Add value */
-    /* XXX  Need to handle multi-valued properties */
-    value = xml_element_to_icalvalue(node, valkind);
-    if (!value) {
-	syslog(LOG_ERR, "Parsing %s property value failed", propname);
-	goto error;
+    switch (kind) {
+    case ICAL_CATEGORIES_PROPERTY:
+    case ICAL_RESOURCES_PROPERTY:
+    case ICAL_POLLPROPERTIES_PROPERTY:
+	if (valkind == ICAL_TEXT_VALUE) {
+	    /* Handle multi-valued properties */
+	    struct buf buf = BUF_INITIALIZER;
+	    xmlChar *content = NULL;
+
+	    content = xmlNodeGetContent(node);
+	    buf_setcstr(&buf, (const char *) content);
+	    free(content);
+
+	    while ((node = xmlNextElementSibling(node))) {
+		buf_putc(&buf, ',');
+		content = xmlNodeGetContent(node);
+		buf_appendcstr(&buf, (const char *) content);
+		free(content);
+	    }
+
+	    value = icalvalue_new_from_string(valkind, buf_cstring(&buf));
+	    buf_free(&buf);
+	    break;
+	}
+
+    default:
+	value = xml_element_to_icalvalue(node, valkind);
+	if (!value) {
+	    syslog(LOG_ERR, "Parsing %s property value failed", propname);
+	    goto error;
+	}
     }
 
     icalproperty_set_value(prop, value);
