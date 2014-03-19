@@ -1597,6 +1597,7 @@ static int caldav_put(struct transaction_t *txn,
     int ret;
     icalcomponent *ical = NULL, *comp, *nextcomp;
     icalcomponent_kind kind;
+    icalproperty_kind recip_kind;
     icalproperty *prop;
     const char *uid, *organizer = NULL;
 
@@ -1651,9 +1652,13 @@ static int caldav_put(struct transaction_t *txn,
     switch (kind) {
     case ICAL_VEVENT_COMPONENT:
     case ICAL_VTODO_COMPONENT:
+    case ICAL_VPOLL_COMPONENT:
+	recip_kind = (kind == ICAL_VPOLL_COMPONENT) ?
+	    ICAL_VOTER_PROPERTY : ICAL_ATTENDEE_PROPERTY;
+
 	if ((namespace_calendar.allow & ALLOW_CAL_SCHED) && organizer
 	    /* XXX  Hack for Outlook */
-	    && icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY)) {
+	    && icalcomponent_get_first_property(comp, recip_kind)) {
 	    /* Scheduling object resource */
 	    const char *userid;
 	    struct caldav_data *cdata;
@@ -2030,6 +2035,8 @@ static int parse_comp_filter(xmlNodePtr root, struct calquery_filter *filter,
 			filter->comp |= CAL_COMP_VTIMEZONE;
 		    else if (!xmlStrcmp(name, BAD_CAST "VAVAILABILITY"))
 			filter->comp |= CAL_COMP_VAVAILABILITY;
+		    else if (!xmlStrcmp(name, BAD_CAST "VPOLL"))
+			filter->comp |= CAL_COMP_VPOLL;
 		    else {
 			error->precond = CALDAV_SUPP_FILTER;
 			ret = HTTP_FORBIDDEN;
@@ -2118,6 +2125,7 @@ static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
 	case CAL_COMP_VJOURNAL: comp = "VJOURNAL"; break;
 	case CAL_COMP_VFREEBUSY: comp = "VFREEBUSY"; break;
 	case CAL_COMP_VAVAILABILITY: comp = "VAVAILABILITY"; break;
+	case CAL_COMP_VPOLL: comp = "VPOLL"; break;
 	}
 
 	if (comp) buf_printf(&fctx->buf, "; component=%s", comp);
@@ -2274,6 +2282,9 @@ static const struct cal_comp_t {
     { "VFREEBUSY",	CAL_COMP_VFREEBUSY },
 #ifdef HAVE_VAVAILABILITY
     { "VAVAILABILITY",	CAL_COMP_VAVAILABILITY },
+#endif
+#ifdef HAVE_VPOLL
+    { "VPOLL",		CAL_COMP_VPOLL },
 #endif
 //    { "VTIMEZONE",	CAL_COMP_VTIMEZONE },
 //    { "VALARM",	  	CAL_COMP_VALARM },
@@ -3250,6 +3261,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     case ICAL_VJOURNAL_COMPONENT: mykind = CAL_COMP_VJOURNAL; break;
     case ICAL_VFREEBUSY_COMPONENT: mykind = CAL_COMP_VFREEBUSY; break;
     case ICAL_VAVAILABILITY_COMPONENT: mykind = CAL_COMP_VAVAILABILITY; break;
+    case ICAL_VPOLL_COMPONENT: mykind = CAL_COMP_VPOLL; break;
     default:
 	txn->error.precond = CALDAV_SUPP_COMP;
 	return HTTP_FORBIDDEN;
@@ -3569,12 +3581,23 @@ static int imip_send(icalcomponent *ical)
     time_t t = time(NULL);
     char datestr[80];
     static unsigned send_count = 0;
+    icalproperty_kind recip_kind;
+    const char *(*get_recipient)(const icalproperty *);
 
     meth = icalcomponent_get_method(ical);
     comp = icalcomponent_get_first_real_component(ical);
     kind = icalcomponent_isa(comp);
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     organizer = icalproperty_get_organizer(prop) + 7;
+
+    if (kind == ICAL_VPOLL_COMPONENT) {
+	recip_kind = ICAL_VOTER_PROPERTY;
+	get_recipient = &icalproperty_get_voter;
+    }
+    else {
+	recip_kind = ICAL_ATTENDEE_PROPERTY;
+	get_recipient = &icalproperty_get_attendee;
+    }
 
     argv[0] = "sendmail";
     argv[1] = "-f";
@@ -3591,10 +3614,10 @@ static int imip_send(icalcomponent *ical)
     /* Create iMIP message */
     fprintf(sm, "From: %s\r\n", organizer);
 
-    for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+    for (prop = icalcomponent_get_first_property(comp, recip_kind);
 	 prop;
-	 prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
-	fprintf(sm, "To: %s\r\n", icalproperty_get_attendee(prop) + 7);
+	 prop = icalcomponent_get_next_property(comp, recip_kind)) {
+	fprintf(sm, "To: %s\r\n", get_recipient(prop) + 7);
     }
 
     subject = icalcomponent_get_summary(comp);
@@ -4113,6 +4136,85 @@ static void sched_deliver_remote(const char *recipient,
 }
 
 
+/*
+ * deliver_merge_reply() helper function
+ *
+ * Merge VOTER responses into VPOLL subcomponents
+ */
+static void deliver_merge_vpoll_reply(icalcomponent *ical,
+				      icalcomponent *reply)
+{
+    icalproperty *mastervoterp;
+    const char *voter;
+    icalcomponent *comp;
+
+    mastervoterp = icalcomponent_get_first_property(reply, ICAL_VOTER_PROPERTY);
+    voter = icalproperty_get_voter(mastervoterp);
+
+    /* Process each existing VPOLL subcomponent */
+    for (comp = icalcomponent_get_first_component(ical, ICAL_ANY_COMPONENT);
+	 comp;
+	 comp = icalcomponent_get_next_component(ical, ICAL_ANY_COMPONENT)) {
+
+	icalproperty *itemid, *voterp;
+	int id;
+
+	itemid =
+	    icalcomponent_get_first_property(comp, ICAL_POLLITEMID_PROPERTY);
+	if (!itemid) continue;
+
+	id = icalproperty_get_pollitemid(itemid);
+
+	/* Remove any existing voter property from the subcomponent */
+	for (voterp = icalcomponent_get_first_property(comp,
+						     ICAL_VOTER_PROPERTY);
+	     voterp && strcmp(voter, icalproperty_get_voter(voterp));
+	     voterp = icalcomponent_get_next_property(comp,
+						    ICAL_VOTER_PROPERTY));
+
+	if (voterp) {
+	    icalcomponent_remove_property(comp, voterp);
+	    icalproperty_free(voterp);
+	}
+
+
+	/* Find matching poll-item-id in the reply */
+	for (itemid = icalcomponent_get_first_property(reply,
+						       ICAL_POLLITEMID_PROPERTY);
+	     itemid && (id != icalproperty_get_pollitemid(itemid));
+	     itemid = icalcomponent_get_next_property(reply,
+						      ICAL_POLLITEMID_PROPERTY));
+	if (itemid) {
+	    icalparameter *param;
+
+	    /* Add a VOTER property with params from the reply */
+	    voterp = icalproperty_new_clone(mastervoterp);
+
+	    for (param =
+		     icalproperty_get_first_parameter(itemid,
+						      ICAL_ANY_PARAMETER);
+		 param;
+		 param =
+		     icalproperty_get_next_parameter(itemid,
+						     ICAL_ANY_PARAMETER)) {
+		switch (icalparameter_isa(param)) {
+		case ICAL_PUBLICCOMMENT_PARAMETER:
+		case ICAL_RESPONSE_PARAMETER:
+		    icalproperty_add_parameter(voterp,
+					       icalparameter_new_clone(param));
+		    break;
+
+		default:
+		    break;
+		}
+	    }
+
+	    icalcomponent_add_property(comp, voterp);
+	}
+    }
+}
+
+
 static const char *deliver_merge_reply(icalcomponent *ical,
 				       icalcomponent *reply)
 {
@@ -4121,9 +4223,11 @@ static const char *deliver_merge_reply(icalcomponent *ical,
     icalcomponent_kind kind;
     icalproperty *prop, *att;
     icalparameter *param;
-    icalparameter_partstat partstat;
+    icalparameter_partstat partstat = ICAL_PARTSTAT_NONE;
     icalparameter_rsvp rsvp = ICAL_RSVP_NONE;
     const char *recurid, *attendee = NULL, *req_stat = SCHEDSTAT_SUCCESS;
+    icalproperty_kind recip_kind;
+    const char *(*get_recipient)(const icalproperty *);
 
     /* Add each component of old object to hash table for comparison */
     construct_hash_table(&comp_table, 10, 1);
@@ -4138,6 +4242,16 @@ static const char *deliver_merge_reply(icalcomponent *ical,
 	hash_insert(recurid, comp, &comp_table);
 
     } while ((comp = icalcomponent_get_next_component(ical, kind)));
+
+
+    if (kind == ICAL_VPOLL_COMPONENT) {
+	recip_kind = ICAL_VOTER_PROPERTY;
+	get_recipient = &icalproperty_get_voter;
+    }
+    else {
+	recip_kind = ICAL_ATTENDEE_PROPERTY;
+	get_recipient = &icalproperty_get_attendee;
+    }
 
     /* Process each component in the iTIP reply */
     for (itip = icalcomponent_get_first_component(reply, kind);
@@ -4204,10 +4318,10 @@ static const char *deliver_merge_reply(icalcomponent *ical,
 	}
 
 	/* Get the sending attendee */
-	att = icalcomponent_get_first_property(itip, ICAL_ATTENDEE_PROPERTY);
-	attendee = icalproperty_get_attendee(att);
+	att = icalcomponent_get_first_property(itip, recip_kind);
+	attendee = get_recipient(att);
 	param = icalproperty_get_first_parameter(att, ICAL_PARTSTAT_PARAMETER);
-	partstat = icalparameter_get_partstat(param);
+	if (param) partstat = icalparameter_get_partstat(param);
 	param = icalproperty_get_first_parameter(att, ICAL_RSVP_PARAMETER);
 	if (param) rsvp = icalparameter_get_rsvp(param);
 
@@ -4220,10 +4334,10 @@ static const char *deliver_merge_reply(icalcomponent *ical,
 
 	/* Find matching attendee in existing object */
 	for (prop =
-		 icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
-	     prop && strcmp(attendee, icalproperty_get_attendee(prop));
+		 icalcomponent_get_first_property(comp, recip_kind);
+	     prop && strcmp(attendee, get_recipient(prop));
 	     prop =
-		 icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY));
+		 icalcomponent_get_next_property(comp, recip_kind));
 	if (!prop) {
 	    /* Attendee added themselves to this recurrence */
 	    prop = icalproperty_new_clone(att);
@@ -4231,8 +4345,10 @@ static const char *deliver_merge_reply(icalcomponent *ical,
 	}
 
 	/* Set PARTSTAT */
-	param = icalparameter_new_partstat(partstat);
-	icalproperty_set_parameter(prop, param);
+	if (partstat != ICAL_PARTSTAT_NONE) {
+	    param = icalparameter_new_partstat(partstat);
+	    icalproperty_set_parameter(prop, param);
+	}
 
 	/* Set RSVP */
 	icalproperty_remove_parameter_by_kind(prop, ICAL_RSVP_PARAMETER);
@@ -4244,6 +4360,9 @@ static const char *deliver_merge_reply(icalcomponent *ical,
 	/* Set SCHEDULE-STATUS */
 	param = icalparameter_new_schedulestatus(req_stat);
 	icalproperty_set_parameter(prop, param);
+
+	/* Handle VPOLL reply */
+	if (kind == ICAL_VPOLL_COMPONENT) deliver_merge_vpoll_reply(comp, itip);
     }
 
     free_hash_table(&comp_table, NULL);
@@ -4416,6 +4535,205 @@ static int deliver_merge_request(const char *attendee,
     return deliver_inbox;
 }
 
+struct pollstatus {
+    icalcomponent *item;
+    struct hash_table voter_table;
+};
+
+static void free_pollstatus(void *data)
+{
+    struct pollstatus *status = (struct pollstatus *) data;
+
+    if (status) {
+	free_hash_table(&status->voter_table, NULL);
+	free(status);
+    }
+}
+
+static int deliver_merge_pollstatus(icalcomponent *ical, icalcomponent *request)
+{
+    int deliver_inbox = 0;
+    struct hash_table comp_table;
+    icalcomponent *poll, *sub;
+    icalproperty *prop;
+    const char *itemid, *voter;
+
+    /* Add each sub-component of old object to hash table for comparison */
+    construct_hash_table(&comp_table, 10, 1);
+    poll = icalcomponent_get_first_component(ical, ICAL_VPOLL_COMPONENT);
+    for (sub = icalcomponent_get_first_component(poll, ICAL_ANY_COMPONENT);
+	 sub;
+	 sub = icalcomponent_get_next_component(poll, ICAL_ANY_COMPONENT)) {
+	struct pollstatus *status = xmalloc(sizeof(struct pollstatus));
+
+	status->item = sub;
+
+	prop = icalcomponent_get_first_property(sub, ICAL_POLLITEMID_PROPERTY);
+	itemid = icalproperty_get_value_as_string(prop);
+
+	hash_insert(itemid, status, &comp_table);
+
+	/* Add each VOTER to voter hash table */
+	construct_hash_table(&status->voter_table, 10, 1);
+	for (prop = icalcomponent_get_first_property(sub, ICAL_VOTER_PROPERTY);
+	     prop;
+	     prop =
+		 icalcomponent_get_next_property(sub, ICAL_VOTER_PROPERTY)) {
+	    voter = icalproperty_get_voter(prop);
+
+	    hash_insert(voter, prop, &status->voter_table);
+	}
+    }
+
+    /* Process each sub-component in the iTIP request */
+    poll = icalcomponent_get_first_component(request, ICAL_VPOLL_COMPONENT);
+    for (sub = icalcomponent_get_first_component(poll, ICAL_ANY_COMPONENT);
+	 sub;
+	 sub = icalcomponent_get_next_component(poll, ICAL_ANY_COMPONENT)) {
+	struct pollstatus *status;
+
+	prop = icalcomponent_get_first_property(sub, ICAL_POLLITEMID_PROPERTY);
+	itemid = icalproperty_get_value_as_string(prop);
+
+	status = hash_del(itemid, &comp_table);
+	if (status) {
+	    for (prop = icalcomponent_get_first_property(sub,
+							 ICAL_VOTER_PROPERTY);
+		 prop;
+		 prop = icalcomponent_get_next_property(sub,
+							ICAL_VOTER_PROPERTY)) {
+
+		icalproperty *oldvoter;
+
+		voter = icalproperty_get_voter(prop);
+
+		oldvoter = hash_del(voter, &status->voter_table);
+		if (oldvoter) {
+		    icalcomponent_remove_property(status->item, oldvoter);
+		    icalproperty_free(oldvoter);
+		}
+		
+		icalcomponent_add_property(status->item,
+					   icalproperty_new_clone(prop));
+	    }
+
+	    free_pollstatus(status);
+	}
+    }
+
+    free_hash_table(&comp_table, free_pollstatus);
+
+    return deliver_inbox;
+}
+
+
+static void sched_pollstatus(const char *organizer,
+			     struct sched_param *sparam, icalcomponent *ical)
+{
+    static struct buf prodid = BUF_INITIALIZER;
+    struct auth_state *authstate;
+    struct sched_data sched_data;
+    icalcomponent *itip, *comp;
+    icalproperty *prop;
+
+    /* XXX  Do we need to do more checks here? */
+    if (sparam->flags & SCHEDTYPE_REMOTE)
+	authstate = auth_newstate("anonymous");
+    else
+	authstate = auth_newstate(sparam->userid);
+
+    memset(&sched_data, 0, sizeof(struct sched_data));
+    sched_data.force_send = ICAL_SCHEDULEFORCESEND_NONE;
+
+    /* Create a shell for our iTIP request objects */
+    if (!buf_len(&prodid)) {
+	buf_printf(&prodid, "-//CyrusIMAP.org/Cyrus %s//EN", cyrus_version());
+    }
+
+    itip = icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT,
+			       icalproperty_new_version("2.0"),
+			       icalproperty_new_prodid(buf_cstring(&prodid)),
+			       icalproperty_new_method(ICAL_METHOD_POLLSTATUS),
+			       0);
+
+    /* Copy over any CALSCALE property */
+    prop = icalcomponent_get_first_property(ical, ICAL_CALSCALE_PROPERTY);
+    if (prop) icalcomponent_add_property(itip, icalproperty_new_clone(prop));
+
+    /* Process each VPOLL in resource */
+    for (comp = icalcomponent_get_first_component(ical, ICAL_VPOLL_COMPONENT);
+	 comp;
+	 comp =icalcomponent_get_next_component(ical, ICAL_VPOLL_COMPONENT)) {
+
+	icalcomponent *stat, *poll, *sub;
+	struct strlist *voters = NULL;
+
+	/* Make a working copy of the iTIP */
+	stat = icalcomponent_new_clone(itip);
+
+	/* Make a working copy of the VPOLL and add to pollstatus */
+	poll = icalcomponent_new_clone(comp);
+	icalcomponent_add_component(stat, poll);
+
+	/* Make list of VOTERs (stripping SCHEDULE-STATUS */
+	for (prop = icalcomponent_get_first_property(poll, ICAL_VOTER_PROPERTY);
+	     prop;
+	     prop =
+		 icalcomponent_get_next_property(poll, ICAL_VOTER_PROPERTY)) {
+	    const char *voter = icalproperty_get_voter(prop);
+
+	    if (strcmp(voter, organizer))
+		appendstrlist(&voters, (char *) icalproperty_get_voter(prop));
+
+	    icalproperty_remove_parameter_by_name(prop, "SCHEDULE-STATUS");
+	}
+
+	/* Process each sub-component of VPOLL */
+	for (sub = icalcomponent_get_first_component(poll, ICAL_ANY_COMPONENT);
+	     sub;
+	     sub = icalcomponent_get_next_component(poll, ICAL_ANY_COMPONENT)) {
+
+	    icalproperty *next;
+
+	    /* Strip all properties other than POLL-ITEM-ID and VOTER */
+	    for (prop =
+		     icalcomponent_get_first_property(sub, ICAL_ANY_PROPERTY);
+		 prop; prop = next) {
+
+		next = icalcomponent_get_next_property(sub, ICAL_ANY_PROPERTY);
+
+		switch (icalproperty_isa(prop)) {
+		case ICAL_POLLITEMID_PROPERTY:
+		case ICAL_VOTER_PROPERTY:
+		    break;
+
+		default:
+		    icalcomponent_remove_property(sub, prop);
+		    icalproperty_free(prop);
+		    break;
+		}
+	    }
+	}
+
+	/* Attempt to deliver to each voter in the list - removing as we go */
+	while (voters) { 
+	    struct strlist *next = voters->next;
+
+	    sched_data.itip = stat;
+	    sched_deliver(voters->s, &sched_data, authstate);
+
+	    free(voters->s);
+	    free(voters);
+	    voters = next;
+	}
+
+	icalcomponent_free(stat);
+    }
+
+    icalcomponent_free(itip);
+    auth_freestate(authstate);
+}
+
 
 /* Deliver scheduling object to local recipient */
 static void sched_deliver_local(const char *recipient,
@@ -4490,7 +4808,7 @@ static void sched_deliver_local(const char *recipient,
 	    sched_data->ischedule ? REQSTAT_PERMFAIL : SCHEDSTAT_PERMFAIL;
 	goto done;
     }
-    else if (method == ICAL_METHOD_CANCEL) {
+    else if (method == ICAL_METHOD_CANCEL || method == ICAL_METHOD_POLLSTATUS) {
 	/* Can't find object belonging to attendee - we're done */
 	sched_data->status =
 	    sched_data->ischedule ? REQSTAT_SUCCESS : SCHEDSTAT_DELIVERED;
@@ -4570,6 +4888,9 @@ static void sched_deliver_local(const char *recipient,
 	    case ICAL_VAVAILABILITY_COMPONENT:
 		if (cdata->comp_type != CAL_COMP_VAVAILABILITY) reject = 1;
 		break;
+	    case ICAL_VPOLL_COMPONENT:
+		if (cdata->comp_type != CAL_COMP_VPOLL) reject = 1;
+		break;
 	    default:
 		break;
 	    }
@@ -4621,6 +4942,10 @@ static void sched_deliver_local(const char *recipient,
 					      ical, sched_data->itip);
 	break;
 
+    case ICAL_METHOD_POLLSTATUS:
+	deliver_inbox = deliver_merge_pollstatus(ical, sched_data->itip);
+	break;
+
     default:
 	/* Unknown METHOD -- ignore it */
 	syslog(LOG_ERR, "Unknown iTIP method: %s",
@@ -4667,7 +4992,11 @@ static void sched_deliver_local(const char *recipient,
     /* XXX  Should this be a config option? - it might have perf implications */
     if (sched_data->is_reply) {
 	/* Send updates to attendees - skipping sender of reply */
-	sched_request(recipient, sparam, NULL, ical, attendee);
+	comp = icalcomponent_get_first_real_component(ical);
+	if (icalcomponent_isa(comp) == ICAL_VPOLL_COMPONENT)
+	    sched_pollstatus(recipient, sparam, ical);
+	else
+	    sched_request(recipient, sparam, NULL, ical, attendee);
     }
 
   done:
@@ -4844,14 +5173,26 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
     icalcomponent *copy;
     icalproperty *prop;
     icalparameter *param;
+    icalcomponent_kind kind = icalcomponent_isa(comp);
+    icalproperty_kind recip_kind;
+    const char *(*get_recipient)(const icalproperty *);
+
+    if (kind == ICAL_VPOLL_COMPONENT) {
+	recip_kind = ICAL_VOTER_PROPERTY;
+	get_recipient = &icalproperty_get_voter;
+    }
+    else {
+	recip_kind = ICAL_ATTENDEE_PROPERTY;
+	get_recipient = &icalproperty_get_attendee;
+    }
 
     /* Strip SCHEDULE-STATUS from each attendee
        and optionally set PROPSTAT=NEEDS-ACTION */
-    for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+    for (prop = icalcomponent_get_first_property(comp, recip_kind);
 	 prop;
-	 prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
+	 prop = icalcomponent_get_next_property(comp, recip_kind)) {
 
-	const char *attendee = icalproperty_get_attendee(prop);
+	const char *attendee = get_recipient(prop);
 
 	/* Don't modify attendee == organizer */
 	if (!strcmp(attendee, organizer)) continue;
@@ -4871,13 +5212,13 @@ static void process_attendees(icalcomponent *comp, unsigned ncomp,
     clean_component(copy, 0);
 
     /* Process each attendee */
-    for (prop = icalcomponent_get_first_property(copy, ICAL_ATTENDEE_PROPERTY);
+    for (prop = icalcomponent_get_first_property(copy, recip_kind);
 	 prop;
-	 prop = icalcomponent_get_next_property(copy, ICAL_ATTENDEE_PROPERTY)) {
-	const char *attendee = icalproperty_get_attendee(prop);
+	 prop = icalcomponent_get_next_property(copy, recip_kind)) {
 	unsigned do_sched = 1;
 	icalparameter_scheduleforcesend force_send =
 	    ICAL_SCHEDULEFORCESEND_NONE;
+	const char *attendee = get_recipient(prop);
 
 	/* Don't schedule attendee == organizer */
 	if (!strcmp(attendee, organizer)) continue;
@@ -5155,12 +5496,15 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 					ICAL_EXDATE_PROPERTY);
 		/* XXX  Should we check STATUS here? */
 
-		if (old_data->sequence >= icalcomponent_get_sequence(comp)) {
-		    /* Make sure SEQUENCE is set properly */
-		    if (!needs_action) changed = 0;
-
-		    icalcomponent_set_sequence(comp,
-					       old_data->sequence + changed);
+		if (needs_action) {
+		    if (old_data->sequence >= icalcomponent_get_sequence(comp)) {
+			/* Make sure SEQUENCE is set properly */
+			icalcomponent_set_sequence(comp,
+						   old_data->sequence + 1);
+		    }
+		}
+		else if (!propcmp(old_data->comp, comp, ICAL_STATUS_PROPERTY)) {
+		    changed = 0;
 		}
 
 		free(old_data);
@@ -5198,19 +5542,30 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
   done:
     if (newical) {
 	unsigned ncomp = 0;
+	icalproperty_kind recip_kind;
+	const char *(*get_recipient)(const icalproperty *);
 
 	/* Set SCHEDULE-STATUS for each attendee in organizer object */
 	comp = icalcomponent_get_first_real_component(newical);
 	kind = icalcomponent_isa(comp);
 
+	if (kind == ICAL_VPOLL_COMPONENT) {
+	    recip_kind = ICAL_VOTER_PROPERTY;
+	    get_recipient = &icalproperty_get_voter;
+	}
+	else {
+	    recip_kind = ICAL_ATTENDEE_PROPERTY;
+	    get_recipient = &icalproperty_get_attendee;
+	}
+
 	do {
 	    for (prop =
-		     icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+		     icalcomponent_get_first_property(comp, recip_kind);
 		 prop;
 		 prop =
-		     icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
-		const char *attendee = icalproperty_get_attendee(prop);
+		     icalcomponent_get_next_property(comp, recip_kind)) {
 		const char *stat = NULL;
+		const char *attendee = get_recipient(prop);
 
 		/* Don't set status if attendee == organizer */
 		if (!strcmp(attendee, organizer)) continue;
@@ -5258,22 +5613,33 @@ static icalcomponent *trim_attendees(icalcomponent *comp, const char *userid,
 {
     icalcomponent *copy;
     icalproperty *prop, *nextprop, *myattendee = NULL;
+    icalcomponent_kind kind;
+    icalproperty_kind recip_kind;
+    const char *(*get_recipient)(const icalproperty *);
 
     if (partstat) *partstat = ICAL_PARTSTAT_NONE;
 
     /* Clone a working copy of the component */
     copy = icalcomponent_new_clone(comp);
 
+    kind = icalcomponent_isa(comp);
+    if (kind == ICAL_VPOLL_COMPONENT) {
+	recip_kind = ICAL_VOTER_PROPERTY;
+	get_recipient = &icalproperty_get_voter;
+    }
+    else {
+	recip_kind = ICAL_ATTENDEE_PROPERTY;
+	get_recipient = &icalproperty_get_attendee;
+    }
+
     /* Locate userid in the attendee list (stripping others) */
-    for (prop = icalcomponent_get_first_property(copy,
-						 ICAL_ATTENDEE_PROPERTY);
+    for (prop = icalcomponent_get_first_property(copy, recip_kind);
 	 prop;
 	 prop = nextprop) {
-	const char *att = icalproperty_get_attendee(prop);
+	const char *att = get_recipient(prop);
 	struct sched_param sparam;
 
-	nextprop = icalcomponent_get_next_property(copy,
-						   ICAL_ATTENDEE_PROPERTY);
+	nextprop = icalcomponent_get_next_property(copy, recip_kind);
 
 	if (!myattendee &&
 	    !caladdress_lookup(att, &sparam) &&
@@ -5336,6 +5702,67 @@ static void sched_decline(const char *recurid __attribute__((unused)),
     clean_component(old_data->comp, 1);
 
     icalcomponent_add_component(itip, old_data->comp);
+}
+
+
+/* sched_reply() helper function
+ *
+ * Add voter responses to VPOLL reply and remove subcomponents
+ *
+ */
+static void sched_vpoll_reply(icalcomponent *poll, const char *voter)
+{
+    icalcomponent *item, *next;
+    icalproperty *prop;
+
+    for (item = icalcomponent_get_first_component(poll, ICAL_ANY_COMPONENT);
+			 
+	 item;
+	 item = next) {
+
+	next = icalcomponent_get_next_component(poll, ICAL_ANY_COMPONENT);
+
+	prop = icalcomponent_get_first_property(item, ICAL_POLLITEMID_PROPERTY);
+	if (prop) {
+	    int id = icalproperty_get_pollitemid(prop);
+
+	    for (prop = icalcomponent_get_first_property(item,
+							 ICAL_VOTER_PROPERTY);
+		 prop;
+		 prop =
+		     icalcomponent_get_next_property(item,
+						     ICAL_VOTER_PROPERTY)) {
+		if (!strcmp(voter, icalproperty_get_voter(prop))) {
+		    icalproperty *itemid = icalproperty_new_pollitemid(id);
+		    icalparameter *param;
+
+		    for (param =
+			     icalproperty_get_first_parameter(prop,
+							      ICAL_ANY_PARAMETER);
+			 param;
+			 param =
+			     icalproperty_get_next_parameter(prop,
+							     ICAL_ANY_PARAMETER)) {
+			switch (icalparameter_isa(param)) {
+			case ICAL_PUBLICCOMMENT_PARAMETER:
+			case ICAL_RESPONSE_PARAMETER:
+			    icalproperty_add_parameter(itemid,
+						       icalparameter_new_clone(param));
+			    break;
+
+			default:
+			    break;
+			}
+		    }
+
+		    icalcomponent_add_property(poll, itemid);
+		}
+	    }
+	}
+
+	icalcomponent_remove_component(poll, item);
+	icalcomponent_free(item);
+    }
 }
 
 
@@ -5472,11 +5899,18 @@ static void sched_reply(const char *userid,
 		old_data = hash_del(recurid, &comp_table);
 
 		if (old_data) {
-		    /* XXX  Need to check EXDATE */
+		    if (kind == ICAL_VPOLL_COMPONENT) {
+			/* VPOLL replies always override existing votes */
+			sched_vpoll_reply(copy,
+					  icalproperty_get_voter(myattendee));
+		    }
+		    else {
+			/* XXX  Need to check EXDATE */
 
-		    /* Compare PARTSTAT in the two components */
-		    if (old_data->partstat == partstat) {
-			changed = 0;
+			/* Compare PARTSTAT in the two components */
+			if (old_data->partstat == partstat) {
+			    changed = 0;
+			}
 		    }
 
 		    free_comp_data(old_data);

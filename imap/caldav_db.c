@@ -730,6 +730,7 @@ void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata)
     case ICAL_VJOURNAL_COMPONENT: mykind = CAL_COMP_VJOURNAL; break;
     case ICAL_VFREEBUSY_COMPONENT: mykind = CAL_COMP_VFREEBUSY; break;
     case ICAL_VAVAILABILITY_COMPONENT: mykind = CAL_COMP_VAVAILABILITY; break;
+    case ICAL_VPOLL_COMPONENT: mykind = CAL_COMP_VPOLL; break;
     default: break;
     }
     cdata->comp_type = mykind;

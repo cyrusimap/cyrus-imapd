@@ -63,6 +63,11 @@ int caldav_done(void);
 #define ICAL_VAVAILABILITY_COMPONENT	ICAL_XLICINVALID_COMPONENT
 #endif
 
+#ifndef HAVE_VPOLL
+/* Allow us to compile without #ifdef HAVE_VPOLL everywhere */
+#define ICAL_VPOLL_COMPONENT	ICAL_XLICINVALID_COMPONENT
+#endif
+
 /* Bitmask of calendar components */
 enum {
     /* "Real" components - MUST remain in this order (values used in DAV DB) */
@@ -71,6 +76,7 @@ enum {
     CAL_COMP_VJOURNAL =		(1<<2),
     CAL_COMP_VFREEBUSY =	(1<<3),
     CAL_COMP_VAVAILABILITY =	(1<<4),
+    CAL_COMP_VPOLL =	   	(1<<5),
     /* Append additional "real" components here */
 
     /* Other components - values don't matter - prepend here */
