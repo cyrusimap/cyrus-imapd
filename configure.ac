@@ -1144,8 +1144,17 @@ dnl
 	fi
 
 	AC_EGREP_HEADER(ICAL_SCHEDULESTATUS_PARAMETER, ical.h,
-	    AC_DEFINE(HAVE_SCHEDULING_PARAMS,[],
-		[Do we have built-in support for scheduling params?]))
+		AC_DEFINE(HAVE_SCHEDULING_PARAMS,[],
+			[Do we have built-in support for scheduling params?]))
+
+	AC_EGREP_HEADER(ICAL_VAVAILABILITY_COMPONENT, ical.h,
+		AC_DEFINE(HAVE_VAVAILABILITY,[],
+			[Build VAVAILABILITY support into httpd?]))
+
+	AC_EGREP_HEADER(ICAL_VPOLL_COMPONENT, ical.h,
+		AC_DEFINE(HAVE_VPOLL,[],
+			[Build VPOLL support into httpd?]))
+
 fi
 AC_SUBST(HTTP_CPPFLAGS)
 AC_SUBST(HTTP_LIBS)
