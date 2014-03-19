@@ -52,6 +52,7 @@
 #include "httpd.h"
 #include "jcal.h"
 #include "xcal.h"
+#include "tok.h"
 #include "util.h"
 #include "version.h"
 #include "xstrlcat.h"
@@ -308,9 +309,30 @@ static json_t *icalproperty_as_json_array(icalproperty *prop)
 
 
     /* Add value */
-    /* XXX  Need to handle multi-valued properties */
     value = icalproperty_get_value(prop);
-    if (value) json_array_append_new(jprop, icalvalue_as_json_object(value));
+    if (value) {
+	switch (icalproperty_isa(prop)) {
+	case ICAL_CATEGORIES_PROPERTY:
+	case ICAL_RESOURCES_PROPERTY:
+	case ICAL_POLLPROPERTIES_PROPERTY:
+	    if (icalvalue_isa(value) == ICAL_TEXT_VALUE) {
+		/* Handle multi-valued properties */
+		const char *str = icalvalue_as_ical_string(value);
+		tok_t tok;
+
+		tok_init(&tok, str, ",", TOK_TRIMLEFT|TOK_TRIMRIGHT|TOK_EMPTY);
+		while ((str = tok_next(&tok))) {
+		    if (*str) json_array_append_new(jprop, json_string(str));
+		}
+		tok_fini(&tok);
+		break;
+	    }
+
+	default:
+	    json_array_append_new(jprop, icalvalue_as_json_object(value));
+	    break;
+	}
+    }
 
     return jprop;
 }
@@ -601,9 +623,10 @@ static icalproperty *json_array_to_icalproperty(json_t *jprop)
     icalproperty *prop = NULL;
     icalvalue_kind valkind;
     icalvalue *value;
+    int len;
 
     /* Sanity check the types of the jCal property object */
-    if (!json_is_array(jprop) || json_array_size(jprop) < 4) {
+    if (!json_is_array(jprop) || (len = json_array_size(jprop)) < 4) {
 	syslog(LOG_WARNING,
 	       "jCal component object is not an array of 4+ objects");
 	return NULL;
@@ -658,12 +681,35 @@ static icalproperty *json_array_to_icalproperty(json_t *jprop)
     }
 
     /* Add value */
-    /* XXX  Need to handle multi-valued properties */
     jvalue = json_array_get(jprop, 3);
-    value = json_object_to_icalvalue(jvalue, valkind);
-    if (!value) {
-    	syslog(LOG_ERR, "Creation of new %s property value failed", propname);
-    	goto error;
+    switch (kind) {
+    case ICAL_CATEGORIES_PROPERTY:
+    case ICAL_RESOURCES_PROPERTY:
+    case ICAL_POLLPROPERTIES_PROPERTY:
+	if (json_is_string(jvalue) && len > 4) {
+	    /* Handle multi-valued properties */
+	    struct buf buf = BUF_INITIALIZER;
+	    int i;
+
+	    buf_setcstr(&buf, json_string_value(jvalue));
+	    for (i = 4; i < len; i++) {
+		buf_putc(&buf, ',');
+		jvalue = json_array_get(jprop, i);
+		buf_appendcstr(&buf, json_string_value(jvalue));
+	    }
+	    value = icalvalue_new_from_string(valkind, buf_cstring(&buf));
+	    buf_free(&buf);
+	    break;
+	}
+
+    default:
+	value = json_object_to_icalvalue(jvalue, valkind);
+	if (!value) {
+	    syslog(LOG_ERR, "Creation of new %s property value failed",
+		   propname);
+	    goto error;
+	}
+	break;
     }
 
     icalproperty_set_value(prop, value);
