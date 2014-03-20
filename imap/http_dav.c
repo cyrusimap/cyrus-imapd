@@ -109,6 +109,9 @@ static void my_dav_init(struct buf *serverinfo);
 
 static int prin_parse_path(const char *path,
 			   struct request_target_t *tgt, const char **errstr);
+static int propfind_displayname(const xmlChar *name, xmlNsPtr ns,
+				struct propfind_ctx *fctx, xmlNodePtr resp,
+				struct propstat propstat[], void *rock);
 static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
 			    struct propfind_ctx *fctx, xmlNodePtr resp,
 			    struct propstat propstat[], void *rock);
@@ -129,7 +132,8 @@ static const struct prop_entry dav_props[] = {
 
     /* WebDAV (RFC 4918) properties */
     { "creationdate", NS_DAV, PROP_ALLPROP, NULL, NULL, NULL },
-    { "displayname", NS_DAV, PROP_ALLPROP, NULL, NULL, NULL },
+    { "displayname", NS_DAV, PROP_ALLPROP | PROP_COLLECTION,
+      propfind_displayname, NULL, NULL },
     { "getcontentlanguage", NS_DAV, PROP_ALLPROP, NULL, NULL, NULL },
     { "getcontentlength", NS_DAV, PROP_ALLPROP | PROP_COLLECTION,
       propfind_getlength, NULL, NULL },
@@ -940,6 +944,28 @@ int propfind_creationdate(const xmlChar *name, xmlNsPtr ns,
 
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 		 name, ns, BAD_CAST datestr, 0);
+
+    return 0;
+}
+
+
+/* Callback to fetch DAV:displayname */
+static int propfind_displayname(const xmlChar *name, xmlNsPtr ns,
+				struct propfind_ctx *fctx,
+				xmlNodePtr resp __attribute__((unused)),
+				struct propstat propstat[],
+				void *rock __attribute__((unused)))
+{
+    /* XXX  Do LDAP/SQL lookup here */
+
+    buf_reset(&fctx->buf);
+    if (fctx->req_tgt->user) {
+	buf_printf(&fctx->buf, "%.*s",
+		   (int) fctx->req_tgt->userlen, fctx->req_tgt->user);
+    }
+
+    xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+		 name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
 
     return 0;
 }
