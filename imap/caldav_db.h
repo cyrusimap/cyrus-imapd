@@ -52,12 +52,12 @@
 
 #ifndef HAVE_VAVAILABILITY
 /* Allow us to compile without #ifdef HAVE_VAVAILABILITY everywhere */
-#define ICAL_VAVAILABILITY_COMPONENT	ICAL_XLICINVALID_COMPONENT
+#define ICAL_VAVAILABILITY_COMPONENT  ICAL_XLICINVALID_COMPONENT
 #endif
 
 #ifndef HAVE_VPOLL
 /* Allow us to compile without #ifdef HAVE_VPOLL everywhere */
-#define ICAL_VPOLL_COMPONENT	ICAL_XLICINVALID_COMPONENT
+#define ICAL_VPOLL_COMPONENT   	      ICAL_XLICINVALID_COMPONENT
 #endif
 
 /* Bitmask of calendar components */
