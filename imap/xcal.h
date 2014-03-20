@@ -47,6 +47,11 @@
 
 #include "util.h"
 
+#ifndef HAVE_VPOLL
+/* Allow us to compile without #ifdef HAVE_VPOLL everywhere */
+#define ICAL_POLLPROPERTIES_PROPERTY  ICAL_NO_PROPERTY
+#endif
+
 #define XML_NS_ICALENDAR	"urn:ietf:params:xml:ns:icalendar-2.0"
 
 extern const char *icalproperty_value_kind_as_string(icalproperty *prop);
