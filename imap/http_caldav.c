@@ -3260,8 +3260,10 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     case ICAL_VTODO_COMPONENT: mykind = CAL_COMP_VTODO; break;
     case ICAL_VJOURNAL_COMPONENT: mykind = CAL_COMP_VJOURNAL; break;
     case ICAL_VFREEBUSY_COMPONENT: mykind = CAL_COMP_VFREEBUSY; break;
+#if ICAL_VAVAILABILITY_COMPONENT != ICAL_VPOLL_COMPONENT
     case ICAL_VAVAILABILITY_COMPONENT: mykind = CAL_COMP_VAVAILABILITY; break;
     case ICAL_VPOLL_COMPONENT: mykind = CAL_COMP_VPOLL; break;
+#endif
     default:
 	txn->error.precond = CALDAV_SUPP_COMP;
 	return HTTP_FORBIDDEN;
@@ -4885,12 +4887,14 @@ static void sched_deliver_local(const char *recipient,
 	    case ICAL_VFREEBUSY_COMPONENT:
 		if (cdata->comp_type != CAL_COMP_VFREEBUSY) reject = 1;
 		break;
+#if ICAL_VAVAILABILITY_COMPONENT != ICAL_VPOLL_COMPONENT
 	    case ICAL_VAVAILABILITY_COMPONENT:
 		if (cdata->comp_type != CAL_COMP_VAVAILABILITY) reject = 1;
 		break;
 	    case ICAL_VPOLL_COMPONENT:
 		if (cdata->comp_type != CAL_COMP_VPOLL) reject = 1;
 		break;
+#endif
 	    default:
 		break;
 	    }
