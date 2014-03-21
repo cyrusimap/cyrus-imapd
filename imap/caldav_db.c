@@ -593,8 +593,12 @@ static void get_period(icalcomponent *comp, icalcomponent_kind kind,
 	}
 	break;
 
+#ifdef HAVE_VPOLL
+    case ICAL_VPOLL_COMPONENT:
+#endif
     case ICAL_VTODO_COMPONENT: {
-	struct icaltimetype due = icalcomponent_get_due(comp);
+	struct icaltimetype due = (kind == ICAL_VPOLL_COMPONENT) ?
+	    icalcomponent_get_dtend(comp) : icalcomponent_get_due(comp);
 
 	if (!icaltime_is_null_time(period->start)) {
 	    /* Has DTSTART */
@@ -604,7 +608,7 @@ static void get_period(icalcomponent *comp, icalcomponent_kind kind,
 		       sizeof(struct icaltimetype));
 
 		if (!icaltime_is_null_time(due)) {
-		    /* Has DUE */
+		    /* Has DUE (DTEND for VPOLL) */
 		    if (icaltime_compare(due, period->start) < 0)
 			memcpy(&period->start, &due, sizeof(struct icaltimetype));
 		    if (icaltime_compare(due, period->end) > 0)
@@ -617,7 +621,7 @@ static void get_period(icalcomponent *comp, icalcomponent_kind kind,
 
 	    /* No DTSTART */
 	    if (!icaltime_is_null_time(due)) {
-		/* Has DUE */
+		/* Has DUE (DTEND for VPOLL) */
 		memcpy(&period->start, &due, sizeof(struct icaltimetype));
 		memcpy(&period->end, &due, sizeof(struct icaltimetype));
 	    }
@@ -686,6 +690,8 @@ static void get_period(icalcomponent *comp, icalcomponent_kind kind,
 	}
 	break;
 
+    case ICAL_VAVAILABILITY_COMPONENT:
+	/* XXX  Probably need to do something different here */
     case ICAL_VFREEBUSY_COMPONENT:
 	if (icaltime_is_null_time(period->start) ||
 	    icaltime_is_null_time(period->end)) {
