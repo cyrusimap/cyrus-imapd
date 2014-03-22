@@ -197,6 +197,8 @@ struct calquery_filter {
 static unsigned config_allowsched = IMAP_ENUM_CALDAV_ALLOWSCHEDULING_OFF;
 static struct caldav_db *auth_caldavdb = NULL;
 static time_t compile_time;
+static struct buf ical_prodid_buf = BUF_INITIALIZER;
+static const char *ical_prodid = NULL;
 
 static struct caldav_db *my_caldav_open(struct mailbox *mailbox);
 static void my_caldav_close(struct caldav_db *caldavdb);
@@ -529,6 +531,10 @@ static void my_caldav_init(struct buf *serverinfo)
     }
 
     compile_time = calc_compile_time(__TIME__, __DATE__);
+
+    buf_printf(&ical_prodid_buf,
+	       "-//CyrusIMAP.org/Cyrus %s//EN", cyrus_version());
+    ical_prodid = buf_cstring(&ical_prodid_buf);
 }
 
 
@@ -626,6 +632,8 @@ static void my_caldav_reset(void)
 
 static void my_caldav_shutdown(void)
 {
+    buf_free(&ical_prodid_buf);
+
     caldav_done();
 }
 
@@ -1013,8 +1021,7 @@ static const char *begin_icalendar(struct buf *buf)
 {
     /* Begin iCalendar stream */
     buf_setcstr(buf, "BEGIN:VCALENDAR\r\n");
-    buf_printf(buf, "PRODID:-//CyrusIMAP.org/Cyrus %s//EN\r\n",
-	       cyrus_version());
+    buf_appendcstr(buf, ical_prodid);
     buf_appendcstr(buf, "VERSION:2.0\r\n");
 
     return "";
@@ -3090,19 +3097,16 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
     }
 
     if (!*fctx->ret) {
-	struct buf prodid = BUF_INITIALIZER;
 	icalcomponent *fb;
 	icalproperty *prop;
 	time_t now = time(0);
 	unsigned n;
 
 	/* Construct iCalendar object with VFREEBUSY component */
-	buf_printf(&prodid, "-//CyrusIMAP.org/Cyrus %s//EN", cyrus_version());
 	cal = icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT,
 				  icalproperty_new_version("2.0"),
-				  icalproperty_new_prodid(buf_cstring(&prodid)),
+				  icalproperty_new_prodid(ical_prodid),
 				  0);
-	buf_free(&prodid);
 
 	if (method) icalcomponent_set_method(cal, method);
 
@@ -4384,7 +4388,6 @@ static int deliver_merge_pollstatus(icalcomponent *ical, icalcomponent *request)
 static void sched_pollstatus(const char *organizer,
 			     struct sched_param *sparam, icalcomponent *ical)
 {
-    static struct buf prodid = BUF_INITIALIZER;
     struct auth_state *authstate;
     struct sched_data sched_data;
     icalcomponent *itip, *comp;
@@ -4400,13 +4403,9 @@ static void sched_pollstatus(const char *organizer,
     sched_data.force_send = ICAL_SCHEDULEFORCESEND_NONE;
 
     /* Create a shell for our iTIP request objects */
-    if (!buf_len(&prodid)) {
-	buf_printf(&prodid, "-//CyrusIMAP.org/Cyrus %s//EN", cyrus_version());
-    }
-
     itip = icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT,
 			       icalproperty_new_version("2.0"),
-			       icalproperty_new_prodid(buf_cstring(&prodid)),
+			       icalproperty_new_prodid(ical_prodid),
 			       icalproperty_new_method(ICAL_METHOD_POLLSTATUS),
 			       0);
 
@@ -5469,7 +5468,6 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 {
     int r;
     icalproperty_method method;
-    static struct buf prodid = BUF_INITIALIZER;
     struct auth_state *authstate;
     icalcomponent *ical, *req, *comp;
     icalproperty *prop;
@@ -5515,13 +5513,9 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
     }
 
     /* Create a shell for our iTIP request objects */
-    if (!buf_len(&prodid)) {
-	buf_printf(&prodid, "-//CyrusIMAP.org/Cyrus %s//EN", cyrus_version());
-    }
-
     req = icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT,
 			      icalproperty_new_version("2.0"),
-			      icalproperty_new_prodid(buf_cstring(&prodid)),
+			      icalproperty_new_prodid(ical_prodid),
 			      icalproperty_new_method(method),
 			      0);
 
@@ -5827,7 +5821,6 @@ static void sched_reply(const char *userid,
     mbentry_t *mbentry = NULL;
     const char *outboxname;
     icalcomponent *ical;
-    static struct buf prodid = BUF_INITIALIZER;
     struct sched_data *sched_data;
     struct auth_state *authstate;
     icalcomponent *comp;
@@ -5890,14 +5883,10 @@ static void sched_reply(const char *userid,
     }
 
     /* Create our reply iCal object */
-    if (!buf_len(&prodid)) {
-	buf_printf(&prodid, "-//CyrusIMAP.org/Cyrus %s//EN", cyrus_version());
-    }
-
     sched_data->itip =
 	icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT,
 			    icalproperty_new_version("2.0"),
-			    icalproperty_new_prodid(buf_cstring(&prodid)),
+			    icalproperty_new_prodid(ical_prodid),
 			    icalproperty_new_method(ICAL_METHOD_REPLY),
 			    0);
 
