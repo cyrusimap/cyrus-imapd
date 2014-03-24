@@ -249,13 +249,13 @@ static struct meth_params carddav_params = {
     NULL,		  	      		/* No special POST handling */
     { CARDDAV_SUPP_DATA, (put_proc_t) &carddav_put },
     carddav_props,
-    { { "addressbook-query", &report_card_query, DACL_READ,
-	REPORT_NEED_MBOX | REPORT_MULTISTATUS },
-      { "addressbook-multiget", &report_card_multiget, DACL_READ,
-	REPORT_NEED_MBOX | REPORT_MULTISTATUS },
-      { "sync-collection", &report_sync_col, DACL_READ,
-	REPORT_NEED_MBOX | REPORT_MULTISTATUS | REPORT_NEED_PROPS },
-      { NULL, NULL, 0, 0 } }
+    { { "addressbook-query", "multistatus", &report_card_query,
+	DACL_READ, REPORT_NEED_MBOX },
+      { "addressbook-multiget", "multistatus", &report_card_multiget,
+	DACL_READ, REPORT_NEED_MBOX },
+      { "sync-collection", "multistatus", &report_sync_col,
+	DACL_READ, REPORT_NEED_MBOX | REPORT_NEED_PROPS },
+      { NULL, NULL, NULL, 0, 0 } }
 };
 
 
@@ -867,7 +867,7 @@ static int report_card_query(struct transaction_t *txn,
 	ret = *fctx->ret;
     }
 
-    return ret;
+    return (ret ? ret : HTTP_MULTI_STATUS);
 }
 
 
@@ -939,7 +939,7 @@ static int report_card_multiget(struct transaction_t *txn,
     mailbox_close(&mailbox);
     buf_free(&uri);
 
-    return ret;
+    return (ret ? ret : HTTP_MULTI_STATUS);
 }
 
 

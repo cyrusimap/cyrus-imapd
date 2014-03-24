@@ -440,15 +440,15 @@ static struct meth_params caldav_params = {
     &caldav_post,
     { CALDAV_SUPP_DATA, (put_proc_t) &caldav_put },
     caldav_props,
-    { { "calendar-query", &report_cal_query, DACL_READ,
-	REPORT_NEED_MBOX | REPORT_MULTISTATUS },
-      { "calendar-multiget", &report_cal_multiget, DACL_READ,
-	REPORT_NEED_MBOX | REPORT_MULTISTATUS },
-      { "free-busy-query", &report_fb_query, DACL_READFB,
-	REPORT_NEED_MBOX },
-      { "sync-collection", &report_sync_col, DACL_READ,
-	REPORT_NEED_MBOX | REPORT_MULTISTATUS | REPORT_NEED_PROPS },
-      { NULL, NULL, 0, 0 } }
+    { { "calendar-query", "multistatus", &report_cal_query,
+	DACL_READ, REPORT_NEED_MBOX },
+      { "calendar-multiget", "multistatus", &report_cal_multiget,
+	DACL_READ, REPORT_NEED_MBOX },
+      { "free-busy-query", NULL, &report_fb_query,
+	DACL_READFB, REPORT_NEED_MBOX },
+      { "sync-collection", "multistatus", &report_sync_col,
+	DACL_READ, REPORT_NEED_MBOX | REPORT_NEED_PROPS },
+      { NULL, NULL, NULL, 0, 0 } }
 };
 
 
@@ -2913,7 +2913,7 @@ static int report_cal_query(struct transaction_t *txn,
     /* RRULEs still populate busytime array */
     if (calfilter.busytime.busy) free(calfilter.busytime.busy);
 
-    return ret;
+    return (ret ? ret : HTTP_MULTI_STATUS);
 }
 
 
@@ -2989,7 +2989,7 @@ static int report_cal_multiget(struct transaction_t *txn,
     mailbox_close(&mailbox);
     buf_free(&uri);
 
-    return ret;
+    return (ret ? ret : HTTP_MULTI_STATUS);
 }
 
 

@@ -431,6 +431,7 @@ typedef int (*report_proc_t)(struct transaction_t *txn, xmlNodePtr inroot,
 
 struct report_type_t {
     const char *name;			/* report name */
+    const char *resp_root;		/* name of XML root element in resp */
     report_proc_t proc;			/* function to generate the report */
     unsigned long reqd_privs;		/* privileges required to run report */
     unsigned flags;			/* report-specific flags */
@@ -439,8 +440,7 @@ struct report_type_t {
 /* Report flags */
 enum {
     REPORT_NEED_MBOX	= (1<<0),
-    REPORT_NEED_PROPS 	= (1<<1),
-    REPORT_MULTISTATUS	= (1<<2)
+    REPORT_NEED_PROPS 	= (1<<1)
 };
 
 /* Overwrite flags */
