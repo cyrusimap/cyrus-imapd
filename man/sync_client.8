@@ -91,6 +91,9 @@ sync_client \- client side of the synchronization (replication) engine
 [
 .B \-m
 ]
+[
+.B \-A
+]
 .br
             [
 .B \-s
@@ -184,6 +187,12 @@ to connect to a different server with each channel.
 .BI \-u
 User mode.
 Remaining arguments are list of users who should be replicated.
+.TP
+.BI \-A
+All users mode.
+Sync every user on the server to the replica (doesn't do non-user mailboxes
+at all... this could be considered a bug and maybe it should do those mailboxes
+independently)
 .TP
 .BI \-m
 Mailbox mode.

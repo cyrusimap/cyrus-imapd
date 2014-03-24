@@ -105,6 +105,8 @@ static int background      = 0;
 static int do_compress     = 0;
 static int no_copyback     = 0;
 
+static char *prev_userid;
+
 #define CAPA_CRC_VERSIONS	    (CAPA_COMPRESS<<1)
 
 static struct protocol_t csync_protocol =
@@ -2918,6 +2920,39 @@ static void do_daemon(const char *channel, const char *sync_shutdown_file,
     }
 }
 
+static int cb_allmbox(void *rock __attribute__((unused)),
+		      const char *key, size_t keylen,
+		      const char *val __attribute__((unused)),
+		      size_t vallen __attribute__((unused)))
+{
+    char *mboxname = xstrndup(key, keylen);
+    const char *userid;
+    int r = 0;
+
+    if (mboxname_isdeletedmailbox(mboxname, NULL))
+	goto done;
+
+    userid = mboxname_to_userid(mboxname);
+
+    if (userid && strcmpsafe(userid, prev_userid)) {
+	printf("%s\n", userid);
+	r = do_user(userid);
+	if (r) {
+	    if (verbose)
+		fprintf(stderr, "Error from do_user(%s): bailing out!\n", userid);
+	    syslog(LOG_ERR, "Error in do_user(%s): bailing out!", userid);
+	    goto done;
+	}
+	free(prev_userid);
+	prev_userid = xstrdup(userid);
+    }
+
+done:
+    free(mboxname);
+
+    return r;
+}
+
 /* ====================================================================== */
 
 static struct sasl_callback mysasl_cb[] = {
@@ -2930,6 +2965,7 @@ enum {
     MODE_UNKNOWN = -1,
     MODE_REPEAT,
     MODE_USER,
+    MODE_ALLUSER,
     MODE_MAILBOX,
     MODE_META
 };
@@ -2960,7 +2996,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:vlS:F:f:w:t:d:n:rRumsozO")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:vlS:F:f:w:t:d:n:rRumsozOA")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -3015,6 +3051,12 @@ int main(int argc, char **argv)
 	    if (mode != MODE_UNKNOWN)
 		fatal("Mutually exclusive options defined", EC_USAGE);
 	    mode = MODE_REPEAT;
+	    break;
+
+	case 'A':
+	    if (mode != MODE_UNKNOWN)
+		fatal("Mutually exclusive options defined", EC_USAGE);
+	    mode = MODE_ALLUSER;
 	    break;
 
 	case 'u':
@@ -3155,6 +3197,16 @@ int main(int argc, char **argv)
 		exit_rc = 1;
 	    }
 	}
+
+	replica_disconnect();
+	break;
+
+    case MODE_ALLUSER:
+	/* Open up connection to server */
+	replica_connect(channel);
+
+	if (mboxlist_allmbox(optind < argc ? argv[optind] : NULL, cb_allmbox, NULL, 0))
+	    exit_rc = 1;
 
 	replica_disconnect();
 	break;
