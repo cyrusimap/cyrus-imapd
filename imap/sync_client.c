@@ -1014,103 +1014,105 @@ static int compare_one_record(struct mailbox *mailbox,
 			      const struct sync_annot_list *rannots,
 			      struct dlist *kaction)
 {
-    int diff = 0;
     int i;
     int r;
 
+    /* if both ends are expunged, then we do no more processing.  This
+     * allows a split brain cleanup to not break things forever.  It
+     * does mean that an expunged message might not replicate in that
+     * case, but the only way to fix this is add ANOTHER special flag
+     * for BROKEN and only ignore GUID mismatches in that case, after
+     * moving the message up.  I guess we could force UNLINK immediately
+     * too... hmm.  Not today. */
+
+    if ((mp->system_flags & FLAG_EXPUNGED) && (rp->system_flags & FLAG_EXPUNGED))
+	return 0;
+
+    /* first of all, check that GUID matches.  If not, we have had a split
+     * brain, so the messages both need to be fixed up to their new UIDs.
+     * After this function succeeds, both the local and remote copies of this
+     * current UID will be actually EXPUNGED, so the earlier return applies. */
+    if (!message_guid_equal(&mp->guid, &rp->guid)) {
+	char *mguid = xstrdup(message_guid_encode(&mp->guid));
+	char *rguid = xstrdup(message_guid_encode(&rp->guid));
+	syslog(LOG_ERR, "SYNCERROR: guid mismatch %s %u (%s %s)",
+	       mailbox->name, mp->uid, rguid, mguid);
+	free(rguid);
+	free(mguid);
+	/* we will need to renumber both ends to get in sync */
+
+	/* ORDERING - always lower GUID first */
+	if (message_guid_cmp(&mp->guid, &rp->guid) > 0) {
+	    r = copyback_one_record(mailbox, rp, rannots, kaction, part_list);
+	    if (!r) r = renumber_one_record(mp, kaction);
+	}
+	else {
+	    r = renumber_one_record(mp, kaction);
+	    if (!r) r = copyback_one_record(mailbox, rp, rannots, kaction, part_list);
+	}
+
+	return r;
+    }
+
     /* are there any differences? */
     if (mp->modseq != rp->modseq)
-	diff = 1;
-    else if (mp->last_updated != rp->last_updated)
-	diff = 1;
-    else if (mp->internaldate != rp->internaldate)
-	diff = 1;
-    else if (mp->system_flags != rp->system_flags)
-	diff = 1;
-    else if (!message_guid_equal(&mp->guid, &rp->guid))
-	diff = 1;
-    else if (mp->cid != rp->cid)
-	diff = 1;
-    else if (diff_annotations(mannots, rannots))
-	diff = 1;
-    else {
-	for (i = 0; i < MAX_USER_FLAGS/32; i++) {
-	    if (mp->user_flags[i] != rp->user_flags[i])
-		diff = 1;
-	}
+	goto diff;
+    if (mp->last_updated != rp->last_updated)
+	goto diff;
+    if (mp->internaldate != rp->internaldate)
+	goto diff;
+    if ((mp->system_flags & FLAGS_GLOBAL) != rp->system_flags)
+	goto diff;
+    if (mp->cid != rp->cid)
+	goto diff;
+    if (diff_annotations(mannots, rannots))
+	goto diff;
+    for (i = 0; i < MAX_USER_FLAGS/32; i++) {
+	if (mp->user_flags[i] != rp->user_flags[i])
+	    goto diff;
     }
 
+    /* no changes found, whoopee */
+    return 0;
+
+ diff:
     /* if differences we'll have to rewrite to bump the modseq
      * so that regular replication will cause an update */
-    if (diff) {
-	/* interesting case - expunged locally */
-	if (mp->system_flags & FLAG_EXPUNGED) {
-	    /* if expunged, fall through - the rewrite will lift
-	     * the modseq to force the change to stick */
-	}
-	else if (rp->system_flags & FLAG_EXPUNGED) {
-	    /* mark expunged - rewrite will cause both sides to agree
-	     * again */
-	    mp->system_flags |= FLAG_EXPUNGED;
-	}
 
-	/* general case */
-	else {
-	    if (!message_guid_equal(&mp->guid, &rp->guid)) {
-		char *mguid = xstrdup(message_guid_encode(&mp->guid));
-		char *rguid = xstrdup(message_guid_encode(&rp->guid));
-		syslog(LOG_ERR, "SYNCERROR: guid mismatch %s %u (%s %s)",
-		       mailbox->name, mp->uid, rguid, mguid);
-		free(rguid);
-		free(mguid);
-		/* we will need to renumber both ends to get in sync */
-
-		/* ORDERING - always lower GUID first */
-		if (message_guid_cmp(&mp->guid, &rp->guid) > 0) {
-		    r = copyback_one_record(mailbox, rp, rannots, kaction);
-		    if (!r) r = renumber_one_record(mp, kaction);
-		}
-		else {
-		    r = renumber_one_record(mp, kaction);
-		    if (!r) r = copyback_one_record(mailbox, rp,
-						    rannots, kaction);
-		}
-
-		return r;
-	    }
-
-	    /* is the replica "newer"? */
-	    if (rp->modseq > mp->modseq &&
-		rp->last_updated >= mp->last_updated) {
-		/* then copy all the flag data over from the replica */
-		mp->system_flags = rp->system_flags;
-		for (i = 0; i < MAX_USER_FLAGS/32; i++)
-		    mp->user_flags[i] = rp->user_flags[i];
-
-		log_mismatch("more recent on replica", mailbox, mp, rp);
-
-		if (kaction) {
-		    r = apply_annotations(mailbox, mp, mannots, rannots, 0);
-		    if (r) return r;
-		}
-	    }
-	    else {
-		if (kaction) {
-		    r = apply_annotations(mailbox, mp, mannots, rannots, 1);
-		    if (r) return r;
-		}
-	    }
-	}
-
-	/* are we making changes yet? */
-	if (!kaction) return 0;
-
-	/* this will bump the modseq and force a resync either way :) */
-	r = mailbox_rewrite_index_record(mailbox, mp);
-	if (r) return r;
+    /* interesting case - expunged locally */
+    if (mp->system_flags & FLAG_EXPUNGED) {
+	/* if expunged, fall through - the rewrite will lift
+	 * the modseq to force the change to stick */
+    }
+    else if (rp->system_flags & FLAG_EXPUNGED) {
+	/* mark expunged - rewrite will cause both sides to agree
+	 * again */
+	mp->system_flags |= FLAG_EXPUNGED;
     }
 
-    return 0;
+    /* otherwise, is the replica "newer"?  Better grab those flags */
+    else {
+	if (rp->modseq > mp->modseq &&
+	    rp->last_updated >= mp->last_updated) {
+	    log_mismatch("more recent on replica", mailbox, mp, rp);
+	    /* then copy all the flag data over from the replica */
+	    mp->system_flags = (rp->system_flags & FLAGS_GLOBAL) |
+			       (mp->system_flags & FLAGS_LOCAL);
+	    mp->cid = rp->cid;
+	    for (i = 0; i < MAX_USER_FLAGS/32; i++)
+		mp->user_flags[i] = rp->user_flags[i];
+	}
+    }
+
+    /* are we making changes yet? */
+    if (!kaction) return 0;
+
+    /* even expunged messages get annotations synced */
+    r = apply_annotations(mailbox, mp, mannots, rannots, 0);
+    if (r) return r;
+
+    /* this will bump the modseq and force a resync either way :) */
+    return mailbox_rewrite_index_record(mailbox, mp);
 }
 
 
