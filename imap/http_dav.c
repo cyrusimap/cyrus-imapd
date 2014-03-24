@@ -122,6 +122,10 @@ static int propfind_principalurl(const xmlChar *name, xmlNsPtr ns,
 				 struct propfind_ctx *fctx, xmlNodePtr resp,
 				 struct propstat propstat[], void *rock);
 
+static int report_prin_search_prop_set(struct transaction_t *txn,
+				       xmlNodePtr inroot,
+				       struct propfind_ctx *fctx);
+
 static int allprop_cb(const char *mailbox __attribute__((unused)),
 		      const char *entry,
 		      const char *userid, struct annotation_data *attrib,
@@ -190,7 +194,11 @@ static const struct prop_entry dav_props[] = {
 
 static struct meth_params princ_params = {
     .parse_path = &prin_parse_path,
-    .lprops = dav_props
+    .lprops = dav_props,
+    .reports =
+    { { "principal-search-property-set", "principal-search-property-set",
+	&report_prin_search_prop_set, 0, 0 },
+      { NULL, NULL, NULL, 0, 0 } }
 };
 
 /* Namespace for WebDAV principals */
@@ -1154,8 +1162,20 @@ static int propfind_reportset(const xmlChar *name, xmlNsPtr ns,
 			      struct propstat propstat[],
 			      void *rock __attribute__((unused)))
 {
-    xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-		 name, ns, NULL, 0);
+    xmlNodePtr s, r, top;
+
+    top = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+		       name, ns, NULL, 0);
+
+    s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
+    r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
+    xmlNewChild(r, fctx->ns[NS_DAV],
+		BAD_CAST "principal-property-search", NULL);
+
+    s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
+    r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
+    xmlNewChild(r, fctx->ns[NS_DAV],
+		BAD_CAST "principal-search-property-set", NULL);
 
     return 0;
 }
@@ -4593,7 +4613,37 @@ int report_sync_col(struct transaction_t *txn,
     if (istate.map) free(istate.map);
     mailbox_close(&mailbox);
 
-    return ret;
+    return (ret ? ret : HTTP_MULTI_STATUS);
+}
+
+
+static int report_prin_search_prop_set(struct transaction_t *txn,
+				       xmlNodePtr inroot,
+				       struct propfind_ctx *fctx)
+{
+    xmlNodePtr node;
+
+    if (fctx->depth != 0) {
+	txn->error.desc = "Depth header field MUST have value zero (0)";
+	return HTTP_BAD_REQUEST;
+    }
+
+    /* Look for child elements in request */
+    for (node = inroot->children; node; node = node->next) {
+	if (node->type == XML_ELEMENT_NODE) break;
+    }
+    if (node) {
+	txn->error.desc =
+	    "DAV:principal-search-property-set XML element MUST be empty";
+	return HTTP_BAD_REQUEST;
+    }
+
+    node = xmlNewChild(fctx->root, NULL,
+		       BAD_CAST "principal-search-property", NULL);
+    node = xmlNewChild(node, NULL, BAD_CAST "prop", NULL);
+    xmlNewChild(node, NULL, BAD_CAST "displayname", NULL);
+
+    return HTTP_OK;
 }
 
 
@@ -4739,8 +4789,8 @@ int meth_report(struct transaction_t *txn, void *params)
     }
 
     /* Start construction of our multistatus response */
-    if ((report->flags & REPORT_MULTISTATUS) &&
-	!(outroot = init_xml_response("multistatus", NS_DAV, inroot, ns))) {
+    if (report->resp_root &&
+	!(outroot = init_xml_response(report->resp_root, NS_DAV, inroot, ns))) {
 	txn->error.desc = "Unable to create XML response\r\n";
 	ret = HTTP_SERVER_ERROR;
 	goto done;
@@ -4773,11 +4823,21 @@ int meth_report(struct transaction_t *txn, void *params)
     if (!ret) ret = (*report->proc)(txn, inroot, &fctx);
 
     /* Output the XML response */
-    if (!ret && outroot) {
-	/* iCalendar data in response should not be transformed */
-	if (fctx.fetcheddata) txn->flags.cc |= CC_NOTRANSFORM;
+    if (outroot) {
+	switch (ret) {
+	case HTTP_OK:
+	case HTTP_MULTI_STATUS:
+	    /* iCalendar data in response should not be transformed */
+	    if (fctx.fetcheddata) txn->flags.cc |= CC_NOTRANSFORM;
 
-	xml_response(HTTP_MULTI_STATUS, txn, outroot->doc);
+	    xml_response(ret, txn, outroot->doc);
+
+	    ret = 0;
+	    break;
+
+	default:
+	    break;
+	}
     }
 
   done:
