@@ -2210,9 +2210,6 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
 
     /* Response Context */
-    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	prot_printf(httpd_out, "Server: %s\r\n", buf_cstring(&serverinfo));
-    }
     if (txn->flags.mime) {
 	prot_puts(httpd_out, "MIME-Version: 1.0\r\n");
     }
@@ -2243,6 +2240,11 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 	    break;
 
 	case METH_OPTIONS:
+	    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
+		prot_printf(httpd_out, "Server: %s\r\n",
+			    buf_cstring(&serverinfo));
+	    }
+
 	    if (txn->req_tgt.allow & ALLOW_DAV) {
 		/* Construct DAV header(s) based on namespace of request URL */
 		prot_printf(httpd_out, "DAV: 1,%s 3, access-control%s\r\n",
