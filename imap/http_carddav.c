@@ -802,14 +802,16 @@ int propfind_abookurl(const xmlChar *name, xmlNsPtr ns,
     xmlNodePtr node;
     const char *abook = (const char *) rock;
 
-    if (!fctx->userid) return HTTP_NOT_FOUND;
+    if (!(namespace_addressbook.enabled && fctx->req_tgt->user))
+	return HTTP_NOT_FOUND;
 
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			name, ns, NULL, 0);
 
     buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, "%s/user/%s/%s", namespace_addressbook.prefix,
-	       fctx->userid, abook ? abook : "");
+    buf_printf(&fctx->buf, "%s/user/%.*s/%s", namespace_addressbook.prefix,
+	       (int) fctx->req_tgt->userlen, fctx->req_tgt->user,
+	       abook ? abook : "");
 
     xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
 

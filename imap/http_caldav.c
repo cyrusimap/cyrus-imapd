@@ -2257,7 +2257,8 @@ int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
     xmlNodePtr node;
     const char *cal = (const char *) rock;
 
-    if (!fctx->userid) return HTTP_NOT_FOUND;
+    if (!(namespace_calendar.enabled && fctx->req_tgt->user))
+	return HTTP_NOT_FOUND;
 
     /* sched-def-cal-URL only defined on sched-inbox-URL */
     if (!xmlStrcmp(name, BAD_CAST "schedule-default-calendar-URL") &&
@@ -2269,8 +2270,9 @@ int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
 			name, ns, NULL, 0);
 
     buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, "%s/user/%s/%s",
-	       namespace_calendar.prefix, fctx->userid, cal ? cal : "");
+    buf_printf(&fctx->buf, "%s/user/%.*s/%s", namespace_calendar.prefix,
+	       (int) fctx->req_tgt->userlen, fctx->req_tgt->user,
+	       cal ? cal : "");
 
     xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
 
@@ -2482,14 +2484,16 @@ int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
 {
     xmlNodePtr node;
 
-    if (!fctx->userid) return HTTP_NOT_FOUND;
+    if (!(namespace_calendar.enabled && fctx->req_tgt->user))
+	return HTTP_NOT_FOUND;
 
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			name, ns, NULL, 0);
 
     /* XXX  This needs to be done via an LDAP/DB lookup */
     buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, "mailto:%s@%s", fctx->userid, config_servername);
+    buf_printf(&fctx->buf, "mailto:%.*s@%s", (int) fctx->req_tgt->userlen,
+	       fctx->req_tgt->user, config_servername);
 
     xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "href",
 		BAD_CAST buf_cstring(&fctx->buf));
