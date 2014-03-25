@@ -477,18 +477,16 @@ int service_init(int argc __attribute__((unused)),
     }
 
     /* Construct serverinfo string */
-    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	buf_printf(&serverinfo, "Cyrus/%s%s Cyrus-SASL/%u.%u.%u",
-		   cyrus_version(), config_mupdate_server ? " (Murder)" : "",
-		   SASL_VERSION_MAJOR, SASL_VERSION_MINOR, SASL_VERSION_STEP);
+    buf_printf(&serverinfo, "Cyrus/%s%s Cyrus-SASL/%u.%u.%u",
+	       cyrus_version(), config_mupdate_server ? " (Murder)" : "",
+	       SASL_VERSION_MAJOR, SASL_VERSION_MINOR, SASL_VERSION_STEP);
 #ifdef HAVE_SSL
-	buf_printf(&serverinfo, " OpenSSL/%s", SHLIB_VERSION_NUMBER);
+    buf_printf(&serverinfo, " OpenSSL/%s", SHLIB_VERSION_NUMBER);
 #endif
+    buf_printf(&serverinfo, " libxml2/%s", LIBXML_DOTTED_VERSION);
 #ifdef HAVE_ZLIB
-	buf_printf(&serverinfo, " zlib/%s", ZLIB_VERSION);
+    buf_printf(&serverinfo, " zlib/%s", ZLIB_VERSION);
 #endif
-	buf_printf(&serverinfo, " libxml2/%s", LIBXML_DOTTED_VERSION);
-    }
 
     /* Do any namespace specific initialization */
     config_httpmodules = config_getbitfield(IMAPOPT_HTTPMODULES);

@@ -513,12 +513,10 @@ static void my_caldav_init(struct buf *serverinfo)
 
     caldav_init();
 
-    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	buf_printf(serverinfo, " libical/%s", ICAL_VERSION);
+    buf_printf(serverinfo, " libical/%s", ICAL_VERSION);
 #ifdef WITH_JSON
-	buf_printf(serverinfo, " Jansson/%s", JANSSON_VERSION);
+    buf_printf(serverinfo, " Jansson/%s", JANSSON_VERSION);
 #endif
-    }
 
     config_allowsched = config_getenum(IMAPOPT_CALDAV_ALLOWSCHEDULING);
     if (config_allowsched) {

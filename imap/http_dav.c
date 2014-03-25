@@ -246,9 +246,7 @@ static void my_dav_init(struct buf *serverinfo)
 
     if (!namespace_principal.enabled) return;
 
-    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	buf_printf(serverinfo, " SQLite/%s", sqlite3_libversion());
-    }
+    buf_printf(serverinfo, " SQLite/%s", sqlite3_libversion());
 }
 
 
