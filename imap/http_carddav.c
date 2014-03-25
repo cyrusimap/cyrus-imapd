@@ -327,8 +327,7 @@ static void my_carddav_init(struct buf *serverinfo)
 
     carddav_init();
 
-    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON &&
-	!strstr(buf_cstring(serverinfo), " libical/")) {
+    if (!strstr(buf_cstring(serverinfo), " libical/")) {
 	buf_printf(serverinfo, " libicalvcal/%s", ICAL_VERSION);
     }
 }

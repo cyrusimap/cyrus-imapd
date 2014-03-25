@@ -165,8 +165,7 @@ static void timezone_init(struct buf *serverinfo)
 	return;
     }
 
-    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON &&
-	!strstr(buf_cstring(serverinfo), " Jansson/")) {
+    if (!strstr(buf_cstring(serverinfo), " Jansson/")) {
 	buf_printf(serverinfo, " Jansson/%s", JANSSON_VERSION);
     }
 
