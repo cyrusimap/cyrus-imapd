@@ -179,7 +179,8 @@ static const struct prop_entry dav_props[] = {
       propfind_calurl, NULL, SCHED_OUTBOX },
     { "calendar-user-address-set", NS_CALDAV, PROP_COLLECTION,
       propfind_caluseraddr, NULL, NULL },
-    { "calendar-user-type", NS_CALDAV, 0, NULL, NULL, NULL },
+    { "calendar-user-type", NS_CALDAV, PROP_COLLECTION,
+      propfind_calusertype, NULL, NULL },
 
     /* CardDAV (RFC 6352) properties */
     { "addressbook-home-set", NS_CARDDAV, PROP_COLLECTION,

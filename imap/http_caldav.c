@@ -2500,6 +2500,24 @@ int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
 }
 
 
+/* Callback to fetch CALDAV:calendar-user-type */
+int propfind_calusertype(const xmlChar *name, xmlNsPtr ns,
+			 struct propfind_ctx *fctx,
+			 xmlNodePtr resp __attribute__((unused)),
+			 struct propstat propstat[],
+			 void *rock __attribute__((unused)))
+{
+    const char *type = fctx->req_tgt->user ? "INDIVIDUAL" : "UNKNOWN";
+
+    if (!namespace_calendar.enabled) return HTTP_NOT_FOUND;
+
+    xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+		 name, ns, BAD_CAST type, 0);
+
+    return 0;
+}
+
+
 /* Callback to fetch CALDAV:schedule-calendar-transp */
 static int propfind_caltransp(const xmlChar *name, xmlNsPtr ns,
 			      struct propfind_ctx *fctx,
