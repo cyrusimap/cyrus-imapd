@@ -122,6 +122,9 @@ static int propfind_principalurl(const xmlChar *name, xmlNsPtr ns,
 				 struct propfind_ctx *fctx, xmlNodePtr resp,
 				 struct propstat propstat[], void *rock);
 
+static int report_prin_prop_search(struct transaction_t *txn,
+				   xmlNodePtr inroot,
+				   struct propfind_ctx *fctx);
 static int report_prin_search_prop_set(struct transaction_t *txn,
 				       xmlNodePtr inroot,
 				       struct propfind_ctx *fctx);
@@ -196,10 +199,13 @@ static const struct prop_entry dav_props[] = {
 static struct meth_params princ_params = {
     .parse_path = &prin_parse_path,
     .lprops = dav_props,
-    .reports =
-    { { "principal-search-property-set", "principal-search-property-set",
-	&report_prin_search_prop_set, 0, 0 },
-      { NULL, NULL, NULL, 0, 0 } }
+    .reports = {
+	{ "principal-property-search", "multistatus",
+	  &report_prin_prop_search, 0, 0 },
+	{ "principal-search-property-set", "principal-search-property-set",
+	  &report_prin_search_prop_set, 0, 0 },
+	{ NULL, NULL, NULL, 0, 0 }
+    }
 };
 
 /* Namespace for WebDAV principals */
@@ -4415,6 +4421,7 @@ static int map_modseq_cmp(const struct index_map *m1,
 }
 
 
+/* DAV:sync-collection REPORT */
 int report_sync_col(struct transaction_t *txn,
 		    xmlNodePtr inroot, struct propfind_ctx *fctx)
 {
@@ -4616,11 +4623,223 @@ int report_sync_col(struct transaction_t *txn,
 }
 
 
+struct search_crit {
+    struct strlist *props;
+    xmlChar *match;
+    struct search_crit *next;
+};
+
+
+/* mboxlist_findall() callback to find user principals (has Inbox) */
+static int principal_search(char *mboxname,
+			    int matchlen __attribute__((unused)),
+			    int maycreate __attribute__((unused)),
+			    void *rock)
+{
+    struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
+    char userid[MAX_MAILBOX_NAME+1], *p;
+    struct search_crit *search_crit;
+    size_t len;
+
+    if (!(p = mboxname_isusermailbox(mboxname, 1))) return 0;
+
+    strlcpy(userid, p, MAX_MAILBOX_NAME+1);
+    mboxname_hiersep_toexternal(&httpd_namespace, userid, 0);
+
+    for (search_crit = (struct search_crit *) fctx->filter_crit;
+	 search_crit; search_crit = search_crit->next) {
+	struct strlist *prop;
+
+	for (prop = search_crit->props; prop; prop = prop->next) {
+	    if (!strcmp(prop->s, "displayname")) {
+		if (!xmlStrcasestr(BAD_CAST userid,
+				   search_crit->match)) return 0;
+	    }
+	    else if (!strcmp(prop->s, "calendar-user-address-set")) {
+		char email[MAX_MAILBOX_NAME+1];
+
+		snprintf(email, MAX_MAILBOX_NAME, "%s@%s",
+			 userid, config_servername);
+		if (!xmlStrcasestr(BAD_CAST email,
+				   search_crit->match)) return 0;
+	    }
+	    else if (!strcmp(prop->s, "calendar-user-type")) {
+		if (!xmlStrcasestr(BAD_CAST "INDIVIDUAL",
+				   search_crit->match)) return 0;
+	    }
+	}
+    }
+
+
+    /* Append principal name to URL path */
+    if (!fctx->req_tgt->user) {
+	len = strlen(namespace_principal.prefix);
+	p = fctx->req_tgt->path + len;
+	len += strlcpy(p, "/user/", MAX_MAILBOX_PATH - len);
+	p = fctx->req_tgt->path + len;
+    }
+    else {
+	p = fctx->req_tgt->user;
+	len = p - fctx->req_tgt->path;
+    }
+    strlcpy(p, userid, MAX_MAILBOX_PATH - len);
+
+    fctx->req_tgt->user = p;
+    fctx->req_tgt->userlen = strlen(p);
+
+    return xml_add_response(fctx, 0);
+}
+
+
+static const struct prop_entry prin_search_props[] = {
+
+    /* WebDAV (RFC 4918) properties */
+    { "displayname", NS_DAV, 0, NULL, NULL, NULL },
+
+    /* CalDAV Scheduling (RFC 6638) properties */
+    { "calendar-user-address-set", NS_CALDAV, 0, NULL, NULL, NULL },
+    { "calendar-user-type", NS_CALDAV, 0, NULL, NULL, NULL },
+
+    { NULL, 0, 0, NULL, NULL, NULL }
+};
+
+
+/* DAV:principal-property-search REPORT */
+static int report_prin_prop_search(struct transaction_t *txn,
+				   xmlNodePtr inroot,
+				   struct propfind_ctx *fctx)
+{
+    int ret = 0;
+    xmlNodePtr node;
+    struct search_crit *search_crit, *next;
+    unsigned apply_prin_set = 0;
+
+    if (fctx->depth != 0) {
+	txn->error.desc = "Depth header field MUST have value zero (0)";
+	return HTTP_BAD_REQUEST;
+    }
+
+    /* Parse children element of report */
+    fctx->filter_crit = NULL;
+    for (node = inroot->children; node; node = node->next) {
+	if (node->type == XML_ELEMENT_NODE) {
+	    if (!xmlStrcmp(node->name, BAD_CAST "property-search")) {
+		xmlNodePtr search;
+
+		search_crit = xzmalloc(sizeof(struct search_crit));
+		search_crit->next = fctx->filter_crit;
+		fctx->filter_crit = search_crit;
+
+		for (search = node->children; search; search = search->next) {
+		    if (search->type == XML_ELEMENT_NODE) {
+			if (!xmlStrcmp(search->name, BAD_CAST "prop")) {
+			    xmlNodePtr prop;
+
+			    for (prop = search->children;
+				 prop; prop = prop->next) {
+				if (prop->type == XML_ELEMENT_NODE) {
+				    const struct prop_entry *entry;
+
+				    for (entry = prin_search_props;
+					 entry->name &&
+					     xmlStrcmp(prop->name,
+						       BAD_CAST entry->name);
+					 entry++);
+
+				    if (!entry->name) {
+					txn->error.desc =
+					    "Unsupported XML search prop";
+					ret = HTTP_BAD_REQUEST;
+					goto done;
+				    }
+				    else {
+					appendstrlist(&search_crit->props,
+						      (char *) entry->name);
+				    }
+				}
+			    }
+			}
+			else if (!xmlStrcmp(search->name, BAD_CAST "match")) {
+			    if (search_crit->match) {
+				txn->error.desc =
+				    "Too many DAV:match XML elements";
+				ret = HTTP_BAD_REQUEST;
+				goto done;
+			    }
+
+			    search_crit->match =
+				xmlNodeListGetString(inroot->doc,
+						     search->children, 1);
+			}
+			else {
+			    txn->error.desc = "Unknown XML element";
+			    ret = HTTP_BAD_REQUEST;
+			    goto done;
+			}
+		    }
+		}
+
+		if (!search_crit->props) {
+		    txn->error.desc = "Missing DAV:prop XML element";
+		    ret = HTTP_BAD_REQUEST;
+		    goto done;
+		}
+		if (!search_crit->match) {
+		    txn->error.desc = "Missing DAV:match XML element";
+		    ret = HTTP_BAD_REQUEST;
+		    goto done;
+		}
+	    }
+	    else if (!xmlStrcmp(node->name, BAD_CAST "prop")) {
+		/* Already parsed in meth_report() */
+	    }
+	    else if (!xmlStrcmp(node->name,
+				BAD_CAST "apply-to-principal-collection-set")) {
+		apply_prin_set = 1;
+	    }
+	    else {
+		txn->error.desc = "Unknown XML element";
+		ret = HTTP_BAD_REQUEST;
+		goto done;
+	    }
+	}
+    }
+
+    if (!fctx->filter_crit) {
+	txn->error.desc = "Missing DAV:property-search XML element";
+	ret = HTTP_BAD_REQUEST;
+	goto done;
+    }
+
+    /* Only search DAV:principal-collection-set */
+    if (apply_prin_set || !fctx->req_tgt->user) {
+	/* XXX  Do LDAP/SQL lookup of CN/email-address(es) here */
+
+	ret = mboxlist_findall(NULL,  /* internal namespace */
+			       "user.%", 1, httpd_userid, 
+			       httpd_authstate, principal_search, fctx);
+    }
+
+  done:
+    for (search_crit = fctx->filter_crit; search_crit; search_crit = next) {
+	next = search_crit->next;
+
+	if (search_crit->match) xmlFree(search_crit->match);
+	freestrlist(search_crit->props);
+	free(search_crit);
+    }
+
+    return (ret ? ret : HTTP_MULTI_STATUS);
+}
+
+
+/* DAV:principal-search-property-set REPORT */
 static int report_prin_search_prop_set(struct transaction_t *txn,
 				       xmlNodePtr inroot,
 				       struct propfind_ctx *fctx)
 {
     xmlNodePtr node;
+    const struct prop_entry *entry;
 
     if (fctx->depth != 0) {
 	txn->error.desc = "Depth header field MUST have value zero (0)";
@@ -4629,18 +4848,22 @@ static int report_prin_search_prop_set(struct transaction_t *txn,
 
     /* Look for child elements in request */
     for (node = inroot->children; node; node = node->next) {
-	if (node->type == XML_ELEMENT_NODE) break;
-    }
-    if (node) {
-	txn->error.desc =
-	    "DAV:principal-search-property-set XML element MUST be empty";
-	return HTTP_BAD_REQUEST;
+	if (node->type == XML_ELEMENT_NODE) {
+	    txn->error.desc =
+		"DAV:principal-search-property-set XML element MUST be empty";
+	    return HTTP_BAD_REQUEST;
+	}
     }
 
-    node = xmlNewChild(fctx->root, NULL,
-		       BAD_CAST "principal-search-property", NULL);
-    node = xmlNewChild(node, NULL, BAD_CAST "prop", NULL);
-    xmlNewChild(node, NULL, BAD_CAST "displayname", NULL);
+    for (entry = prin_search_props; entry->name; entry++) {
+	node = xmlNewChild(fctx->root, NULL,
+			   BAD_CAST "principal-search-property", NULL);
+	node = xmlNewChild(node, NULL, BAD_CAST "prop", NULL);
+	ensure_ns(fctx->ns, entry->ns, fctx->root,
+		  known_namespaces[entry->ns].href,
+		  known_namespaces[entry->ns].prefix);
+	xmlNewChild(node, fctx->ns[entry->ns], BAD_CAST entry->name, NULL);
+    }
 
     return HTTP_OK;
 }
