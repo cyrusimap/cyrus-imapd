@@ -582,6 +582,9 @@ int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
 int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
 			 struct propfind_ctx *fctx, xmlNodePtr resp,
 			 struct propstat propstat[], void *rock);
+int propfind_calusertype(const xmlChar *name, xmlNsPtr ns,
+			 struct propfind_ctx *fctx, xmlNodePtr resp,
+			 struct propstat propstat[], void *rock);
 int propfind_abookurl(const xmlChar *name, xmlNsPtr ns,
 		      struct propfind_ctx *fctx, xmlNodePtr resp,
 		      struct propstat propstat[], void *rock);
