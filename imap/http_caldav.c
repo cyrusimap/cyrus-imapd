@@ -5607,31 +5607,28 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 	    if (old_data) {
 		/* Per RFC 6638, Section 3.2.8: We need to compare
 		   DTSTART, DTEND, DURATION, DUE, RRULE, RDATE, EXDATE */
-		needs_action += propcmp(old_data->comp, comp,
-					ICAL_DTSTART_PROPERTY);
-		needs_action += propcmp(old_data->comp, comp,
-					ICAL_DTEND_PROPERTY);
-		needs_action += propcmp(old_data->comp, comp,
-					ICAL_DURATION_PROPERTY);
-		needs_action += propcmp(old_data->comp, comp,
-					ICAL_DUE_PROPERTY);
-		needs_action += propcmp(old_data->comp, comp,
-					ICAL_RRULE_PROPERTY);
-		needs_action += propcmp(old_data->comp, comp,
-					ICAL_RDATE_PROPERTY);
-		needs_action += propcmp(old_data->comp, comp,
-					ICAL_EXDATE_PROPERTY);
-		/* XXX  Should we check STATUS here? */
-
-		if (needs_action) {
-		    if (old_data->sequence >= icalcomponent_get_sequence(comp)) {
-			/* Make sure SEQUENCE is set properly */
-			icalcomponent_set_sequence(comp,
-						   old_data->sequence + 1);
-		    }
+		if (propcmp(old_data->comp, comp, ICAL_DTSTART_PROPERTY))
+		    needs_action = 1;
+		else if (propcmp(old_data->comp, comp, ICAL_DTEND_PROPERTY))
+		    needs_action = 1;
+		else if (propcmp(old_data->comp, comp, ICAL_DURATION_PROPERTY))
+		    needs_action = 1;
+		else if (propcmp(old_data->comp, comp, ICAL_DUE_PROPERTY))
+		    needs_action = 1;
+		else if (propcmp(old_data->comp, comp, ICAL_RRULE_PROPERTY))
+		    needs_action = 1;
+		else if (propcmp(old_data->comp, comp, ICAL_RDATE_PROPERTY))
+		    needs_action = 1;
+		else if (propcmp(old_data->comp, comp, ICAL_EXDATE_PROPERTY))
+		    needs_action = 1;
+		else if (kind == ICAL_VPOLL_COMPONENT) {
 		}
-		else if (!propcmp(old_data->comp, comp, ICAL_STATUS_PROPERTY)) {
-		    changed = 0;
+
+		if (needs_action &&
+		    (old_data->sequence >= icalcomponent_get_sequence(comp))) {
+		    /* Make sure SEQUENCE is set properly */
+		    icalcomponent_set_sequence(comp,
+					       old_data->sequence + 1);
 		}
 
 		free(old_data);
