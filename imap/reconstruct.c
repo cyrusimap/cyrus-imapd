@@ -83,6 +83,8 @@
 #include "acl.h"
 #include "assert.h"
 #include "bsearch.h"
+#include "caldav_db.h"
+#include "carddav_db.h"
 #include "crc32.h"
 #include "hash.h"
 #include "imparse.h"
@@ -255,6 +257,9 @@ int main(int argc, char **argv)
     quotadb_init(0);
     quotadb_open(NULL);
 
+    caldav_init();
+    carddav_init();
+
     /* Deal with nonexistent mailboxes */
     if (start_part) {
 	/* We were handed a mailbox that does not exist currently */
@@ -392,6 +397,9 @@ int main(int argc, char **argv)
 
     quotadb_close();
     quotadb_done();
+
+    carddav_done();
+    caldav_done();
 
     cyrus_done();
 
