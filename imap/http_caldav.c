@@ -714,20 +714,22 @@ static int caldav_parse_path(const char *path,
   done:
     /* Set proper Allow bits and flags based on path components */
     if (tgt->collection) {
-	if (tgt->resource) {
-	    tgt->allow &= ~ALLOW_WRITECOL;
-	    tgt->allow |= (ALLOW_WRITE|ALLOW_DELETE);
-	}
-	else if (!strcmp(tgt->collection, SCHED_INBOX))
+	if (!strncmp(tgt->collection, SCHED_INBOX, strlen(SCHED_INBOX)))
 	    tgt->flags = TGT_SCHED_INBOX;
-	else if (!strcmp(tgt->collection, SCHED_OUTBOX)) {
+	else if (!strncmp(tgt->collection, SCHED_OUTBOX, strlen(SCHED_OUTBOX)))
 	    tgt->flags = TGT_SCHED_OUTBOX;
-	    tgt->allow |= ALLOW_POST;
+
+	if (tgt->resource) {
+	    if (!tgt->flags) tgt->allow |= ALLOW_WRITE;
+	    tgt->allow |= ALLOW_DELETE;
+	    tgt->allow &= ~ALLOW_WRITECOL;
 	}
-	else if (!strcmp(tgt->collection, SCHED_DEFAULT))
+	else if (tgt->flags != TGT_SCHED_INBOX) {
 	    tgt->allow |= ALLOW_POST;
-	else
-	    tgt->allow |= (ALLOW_POST|ALLOW_DELETE);
+
+	    if (strcmp(tgt->collection, SCHED_DEFAULT))
+		tgt->allow |= ALLOW_DELETE;
+	}
     }
     else if (tgt->user) tgt->allow |= ALLOW_DELETE;
 
@@ -954,6 +956,9 @@ static int caldav_delete_sched(struct transaction_t *txn,
     int r = 0;
 
     if (!(namespace_calendar.allow & ALLOW_CAL_SCHED)) return 0;
+
+    /* Only process deletes on regular calendar collections */
+    if (txn->req_tgt.flags) return 0;
 
     if (!record) {
 	/* XXX  DELETE collection - check all resources for sched objects */
