@@ -2253,7 +2253,8 @@ static uint32_t md5_annot(unsigned int uid, const char *entry,
     MD5Update(&ctx, " ", 1);
     MD5Update(&ctx, entry, strlen(entry));
     MD5Update(&ctx, " ", 1);
-    MD5Update(&ctx, userid, strlen(userid));
+    if (userid)
+	MD5Update(&ctx, userid, strlen(userid));
     MD5Update(&ctx, " ", 1);
     MD5Update(&ctx, value->s, value->len);
 
