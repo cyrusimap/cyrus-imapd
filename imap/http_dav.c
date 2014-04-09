@@ -1862,6 +1862,155 @@ int propfind_fromhdr(const xmlChar *name, xmlNsPtr ns,
     return r;
 }
 
+static struct flaggedresources {
+    const char *name;
+    int flag;
+} fres[] = {
+    { "answered", FLAG_ANSWERED },
+    { "flagged", FLAG_FLAGGED },
+    { "seen", FLAG_SEEN },
+    { NULL, 0 } /* last is always NULL */
+};
+
+/* Callback to write a property to annotation DB */
+static int proppatch_toresource(xmlNodePtr prop, unsigned set,
+			 struct proppatch_ctx *pctx,
+			 struct propstat propstat[],
+			 void *rock __attribute__((unused)))
+{
+    xmlChar *freeme = NULL;
+    annotate_state_t *astate = NULL;
+    struct buf value = BUF_INITIALIZER;
+    int r = 1; /* default to error */
+
+    /* flags only store "exists" */
+
+    if (!strcmp((const char *)prop->ns->href, XML_NS_CYRUS "sysflag/")) {
+	struct flaggedresources *frp;
+	int isset;
+	for (frp = fres; frp->name; frp++) {
+	    if (strcasecmp((const char *)prop->name, frp->name)) continue;
+	    r = 0; /* ok to do nothing */
+	    isset = pctx->record->system_flags & frp->flag;
+	    if (set) {
+		if (isset) goto done;
+		pctx->record->system_flags |= frp->flag;
+	    }
+	    else {
+		if (!isset) goto done;
+		pctx->record->system_flags &= ~frp->flag;
+	    }
+	    r = mailbox_rewrite_index_record(pctx->mailbox, pctx->record);
+	    goto done;
+	}
+	goto done;
+    }
+
+    if (!strcmp((const char *)prop->ns->href, XML_NS_CYRUS "userflag/")) {
+	int userflag = 0;
+	int isset;
+	r = mailbox_user_flag(pctx->mailbox, (const char *)prop->name, &userflag, 1);
+	if (r) goto done;
+	isset = pctx->record->user_flags[userflag/32] & (1<<userflag%31);
+	if (set) {
+	    if (isset) goto done;
+	    pctx->record->user_flags[userflag/32] |= (1<<userflag%31);
+	}
+	else {
+	    if (!isset) goto done;
+	    pctx->record->user_flags[userflag/32] &= ~(1<<userflag%31);
+	}
+	r = mailbox_rewrite_index_record(pctx->mailbox, pctx->record);
+	goto done;
+    }
+
+    /* otherwise it's a database annotation */
+
+    buf_reset(&pctx->buf);
+    buf_printf(&pctx->buf, ANNOT_NS "<%s>%s",
+	       (const char *) prop->ns->href, prop->name);
+
+    if (set) {
+	freeme = xmlNodeGetContent(prop);
+	buf_init_ro_cstr(&value, (const char *)freeme);
+    }
+
+    r = mailbox_get_annotate_state(pctx->mailbox, pctx->record->uid, &astate);
+    if (!r) r = annotate_state_write(astate, buf_cstring(&pctx->buf), /*userid*/NULL, &value);
+
+ done:
+
+    if (!r) {
+	xml_add_prop(HTTP_OK, pctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+		     prop->name, prop->ns, NULL, 0);
+    }
+    else {
+	xml_add_prop(HTTP_SERVER_ERROR, pctx->ns[NS_DAV],
+		     &propstat[PROPSTAT_ERROR], prop->name, prop->ns, NULL, 0);
+    }
+
+    if (freeme) xmlFree(freeme);
+
+    return 0;
+}
+
+
+/* Callback to read a property from annotation DB */
+static int propfind_fromresource(const xmlChar *name, xmlNsPtr ns,
+		    struct propfind_ctx *fctx,
+		    xmlNodePtr resp __attribute__((unused)),
+		    struct propstat propstat[],
+		    void *rock __attribute__((unused)))
+{
+    struct buf attrib = BUF_INITIALIZER;
+    xmlNodePtr node;
+    int r = 0; /* default no error */
+
+    if (!strcmp((const char *)ns->href, XML_NS_CYRUS "sysflag/")) {
+	struct flaggedresources *frp;
+	int isset;
+	for (frp = fres; frp->name; frp++) {
+	    if (strcasecmp((const char *)name, frp->name)) continue;
+	    isset = fctx->record->system_flags & frp->flag;
+	    if (isset)
+		buf_setcstr(&attrib, "1");
+	    goto done;
+	}
+	goto done;
+    }
+
+    if (!strcmp((const char *)ns->href, XML_NS_CYRUS "userflag/")) {
+	int userflag = 0;
+	int isset;
+	r = mailbox_user_flag(fctx->mailbox, (const char *)name, &userflag, 0);
+	if (r) goto done;
+	isset = fctx->record->user_flags[userflag/32] & (1<<userflag%31);
+	if (isset)
+	    buf_setcstr(&attrib, "1");
+	goto done;
+    }
+
+    /* otherwise it's a DB annotation */
+
+    buf_reset(&fctx->buf);
+    buf_printf(&fctx->buf, ANNOT_NS "<%s>%s",
+	       (const char *) ns->href, name);
+
+    r = annotatemore_msg_lookup(fctx->mailbox->name, fctx->record->uid,
+				buf_cstring(&fctx->buf), /* shared */ NULL, &attrib);
+
+done:
+    if (r) return HTTP_SERVER_ERROR;
+    if (!buf_len(&attrib)) return HTTP_NOT_FOUND;
+
+    node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+			name, ns, NULL, 0);
+    xmlAddChild(node, xmlNewCDataBlock(fctx->root->doc,
+				       BAD_CAST buf_cstring(&attrib), buf_len(&attrib)));
+
+    return 0;
+}
+
 
 /* Callback to read a property from annotation DB */
 int propfind_fromdb(const xmlChar *name, xmlNsPtr ns,
@@ -1873,6 +2022,9 @@ int propfind_fromdb(const xmlChar *name, xmlNsPtr ns,
     struct buf attrib = BUF_INITIALIZER;
     xmlNodePtr node;
     int r = 0;
+
+    if (fctx->req_tgt->resource)
+	return propfind_fromresource(name, ns, fctx, NULL, propstat, NULL);
 
     buf_reset(&fctx->buf);
     buf_printf(&fctx->buf, ANNOT_NS "<%s>%s",
@@ -1899,7 +2051,6 @@ int propfind_fromdb(const xmlChar *name, xmlNsPtr ns,
     return 0;
 }
 
-
 /* Callback to write a property to annotation DB */
 int proppatch_todb(xmlNodePtr prop, unsigned set,
 		   struct proppatch_ctx *pctx,
@@ -1910,6 +2061,9 @@ int proppatch_todb(xmlNodePtr prop, unsigned set,
     annotate_state_t *astate = NULL;
     struct buf value = BUF_INITIALIZER;
     int r;
+
+    if (pctx->req_tgt->resource)
+	return proppatch_toresource(prop, set, pctx, propstat, NULL);
 
     buf_reset(&pctx->buf);
     buf_printf(&pctx->buf, ANNOT_NS "<%s>%s",
@@ -2128,15 +2282,15 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 
 	    /* Look for a match against our known properties */
 	    for (entry = fctx->lprops;
-		 entry->name && 
-		     (strcmp((const char *) name, entry->name) ||
-		      strcmp((const char *) ns->href,
+		 entry->name &&
+		     (strcmp((const char *) prop->name, entry->name) ||
+		      strcmp((const char *) prop->ns->href,
 			     known_namespaces[entry->ns].href));
 		 entry++);
 
 	    /* Skip properties already included by allprop */
 	    if (fctx->mode == PROPFIND_ALL && (entry->flags & PROP_ALLPROP))
-		continue;		
+		continue;
 
 	    nentry = xzmalloc(sizeof(struct propfind_entry_list));
 	    nentry->name = name;
@@ -2156,10 +2310,10 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 		ret = *fctx->ret;
 	    }
 	    else {
-		/* No match, treat as a dead property */
-		nentry->flags = PROP_COLLECTION;
+		/* No match, treat as a dead property.  Need to look for both collections
+		 * resources */
+		nentry->flags = PROP_COLLECTION | PROP_RESOURCE;
 		nentry->get = propfind_fromdb;
-		nentry->rock = NULL;
 	    }
 
 	    /* Append new entry to linked list */
@@ -4212,7 +4366,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
  *   DAV:cannot-modify-protected-property
  *   CALDAV:valid-calendar-data (CALDAV:calendar-timezone)
  */
-int meth_proppatch(struct transaction_t *txn,  void *params)
+int meth_proppatch(struct transaction_t *txn, void *params)
 {
     struct meth_params *pparams = (struct meth_params *) params;
     int ret = 0, r = 0, rights;
@@ -4222,6 +4376,8 @@ int meth_proppatch(struct transaction_t *txn,  void *params)
     struct mailbox *mailbox = NULL;
     mbentry_t *mbentry = NULL;
     struct proppatch_ctx pctx;
+    struct index_record record;
+    void *davdb = NULL;
 
     memset(&pctx, 0, sizeof(struct proppatch_ctx));
 
@@ -4232,10 +4388,8 @@ int meth_proppatch(struct transaction_t *txn,  void *params)
     if ((r = pparams->parse_path(txn->req_uri->path,
 				 &txn->req_tgt, &txn->error.desc))) return r;
 
-    /* Make sure method is allowed (only allowed on collections) */
-    if (!(txn->req_tgt.allow & ALLOW_WRITECOL))  {
-	txn->error.desc =
-	    "Properties can only be updated on collections\r\n";
+    if (!txn->req_tgt.collection) {
+	txn->error.desc = "PROPPATCH requires a collection";
 	return HTTP_NOT_ALLOWED;
     }
 
@@ -4323,12 +4477,38 @@ int meth_proppatch(struct transaction_t *txn,  void *params)
     pctx.req_tgt = &txn->req_tgt;
     pctx.meth = txn->meth;
     pctx.mailbox = mailbox;
+    pctx.record = NULL;
     pctx.lprops = pparams->lprops;
     pctx.root = resp;
     pctx.ns = ns;
     pctx.tid = NULL;
     pctx.err = &txn->error;
     pctx.ret = &r;
+
+    if (txn->req_tgt.resource) {
+	struct dav_data *ddata;
+	/* gotta find the resource */
+	/* Open the DAV DB corresponding to the mailbox */
+	davdb = pparams->davdb.open_db(mailbox);
+
+	/* Find message UID for the resource */
+	pparams->davdb.lookup_resource(davdb, txn->req_tgt.mboxname,
+				       txn->req_tgt.resource, 0, (void **) &ddata);
+	if (!ddata->imap_uid) {
+	    ret = HTTP_NOT_FOUND;
+	    goto done;
+	}
+
+	memset(&record, 0, sizeof(struct index_record));
+	/* Mapped URL - Fetch index record for the resource */
+	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &record, NULL);
+	if (r) {
+	    ret = HTTP_NOT_FOUND;
+	    goto done;
+	}
+
+	pctx.record = &record;
+    }
 
     /* Execute the property patch instructions */
     ret = do_proppatch(&pctx, instr);
@@ -4340,6 +4520,7 @@ int meth_proppatch(struct transaction_t *txn,  void *params)
     }
 
   done:
+    if (davdb) pparams->davdb.close_db(davdb);
     mailbox_close(&mailbox);
     buf_free(&pctx.buf);
 

@@ -298,6 +298,7 @@ struct proppatch_ctx {
     struct request_target_t *req_tgt;	/* parsed request target URL */
     unsigned meth;	    		/* requested Method */
     struct mailbox *mailbox;		/* mailbox related to the collection */
+    struct index_record *record;	/* record of the specific resource */
     const struct prop_entry *lprops;	/* Array of known "live" properties */
     xmlNodePtr root;			/* root node to add to XML tree */
     xmlNsPtr *ns;			/* Array of our supported namespaces */
