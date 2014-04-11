@@ -192,7 +192,9 @@ struct request_target_t {
     size_t reslen;
     unsigned flags;		/* target-specific flags/meta-data */
     unsigned long allow;	/* bitmask of allowed features/methods */
+    int mboxtype;		/* mailbox types to match on findall */
     char mboxname[MAX_MAILBOX_BUFFER+1];
+    const char *prefix;		/* namespace prefix */
 };
 
 /* Request target flags */
@@ -354,6 +356,7 @@ struct namespace_t {
     const char *prefix;		/* Prefix of URL path denoting namespace */
     const char *well_known;	/* Any /.well-known/ URI */
     unsigned need_auth;		/* Do we need to auth for this namespace? */
+    int mboxtype;		/* what type of mailbox can be seen in this namespace? */
     unsigned long allow;	/* Bitmask of allowed features/methods */
     void (*init)(struct buf *serverinfo);
     void (*auth)(const char *userid);

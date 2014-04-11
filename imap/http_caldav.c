@@ -565,6 +565,7 @@ static struct meth_params caldav_params = {
 /* Namespace for CalDAV collections */
 struct namespace_t namespace_calendar = {
     URL_NS_CALENDAR, 0, "/dav/calendars", "/.well-known/caldav", 1 /* auth */,
+    MBTYPE_CALENDAR,
     (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DELETE |
 #ifdef HAVE_VAVAILABILITY
      ALLOW_CAL_AVAIL |
@@ -837,6 +838,8 @@ static int caldav_parse_path(const char *path,
 	*errstr = "Namespace mismatch request target path";
 	return HTTP_FORBIDDEN;
     }
+
+    tgt->prefix = namespace_calendar.prefix;
 
     /* Default to bare-bones Allow bits for toplevel collections */
     tgt->allow &= ~(ALLOW_POST|ALLOW_WRITE|ALLOW_DELETE);

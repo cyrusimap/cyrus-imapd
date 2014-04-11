@@ -130,7 +130,9 @@ static struct mime_type_t tz_mime_types[] = {
 
 /* Namespace for TIMEZONE feeds of mailboxes */
 struct namespace_t namespace_timezone = {
-    URL_NS_TIMEZONE, 0, "/timezone", TIMEZONE_WELLKNOWN_URI, 0 /* auth */, ALLOW_READ,
+    URL_NS_TIMEZONE, 0, "/timezone", TIMEZONE_WELLKNOWN_URI, 0 /* auth */,
+    /*mbtype*/0,
+    ALLOW_READ,
     timezone_init, NULL, NULL, timezone_shutdown,
     {
 	{ NULL,			NULL },			/* ACL		*/

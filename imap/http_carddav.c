@@ -286,8 +286,8 @@ static struct meth_params carddav_params = {
 
 /* Namespace for Carddav collections */
 struct namespace_t namespace_addressbook = {
-    URL_NS_ADDRESSBOOK, 0, "/dav/addressbooks", "/.well-known/carddav",
-    1 /* auth */,
+    URL_NS_ADDRESSBOOK, 0, "/dav/addressbooks", "/.well-known/carddav", 1 /* auth */,
+    MBTYPE_ADDRESSBOOK,
 #if 0 /* Until Apple Contacts fixes their add-member implementation */
     (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DELETE |
      ALLOW_DAV | ALLOW_WRITECOL | ALLOW_CARD),
@@ -470,6 +470,8 @@ static int carddav_parse_path(const char *path,
 	*errstr = "Namespace mismatch request target path";
 	return HTTP_FORBIDDEN;
     }
+
+    tgt->prefix = namespace_addressbook.prefix;
 
     /* Default to bare-bones Allow bits for toplevel collections */
     tgt->allow &= ~(ALLOW_POST|ALLOW_WRITE|ALLOW_DELETE);

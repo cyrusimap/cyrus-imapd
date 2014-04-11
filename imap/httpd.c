@@ -252,7 +252,9 @@ const struct known_meth_t http_methods[] = {
 
 /* Namespace to fetch static content from filesystem */
 struct namespace_t namespace_default = {
-    URL_NS_DEFAULT, 1, "", NULL, 0 /* no auth */, ALLOW_READ,
+    URL_NS_DEFAULT, 1, "", NULL, 0 /* no auth */,
+    /*mbtype*/0,
+    ALLOW_READ,
     NULL, NULL, NULL, NULL,
     {
 	{ NULL,			NULL },			/* ACL		*/
@@ -1183,6 +1185,7 @@ static void cmdloop(void)
 	if ((namespace = namespaces[i])) {
 	    txn.req_tgt.namespace = namespace->id;
 	    txn.req_tgt.allow = namespace->allow;
+	    txn.req_tgt.mboxtype = namespace->mboxtype;
 
 	    /* Check if method is supported in this namespace */
 	    meth_t = &namespace->methods[txn.meth];

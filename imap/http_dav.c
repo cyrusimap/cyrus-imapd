@@ -226,6 +226,7 @@ static struct meth_params princ_params = {
 /* Namespace for WebDAV principals */
 struct namespace_t namespace_principal = {
     URL_NS_PRINCIPAL, 0, "/dav/principals", NULL, 1 /* auth */,
+    /*mbtype */ 0,
     ALLOW_READ | ALLOW_DAV,
     NULL, NULL, NULL, NULL,
     {
@@ -4018,23 +4019,32 @@ int propfind_by_collection(char *mboxname, int matchlen,
 {
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
     mbentry_t *mbentry = NULL;
+    struct buf writebuf = BUF_INITIALIZER;
+    struct mboxname_parts parts;
     struct mailbox *mailbox = NULL;
     char *p;
     size_t len;
     int r = 0, rights, root;
+
+    mboxname_init_parts(&parts);
 
     /* If this function is called outside of mboxlist_findall()
        with matchlen == 0, this is the root resource of the PROPFIND */
     root = !matchlen;
 
     /* Check ACL on mailbox for current user */
-    if ((r = mboxlist_lookup(mboxname, &mbentry, NULL))) {
+    r = mboxlist_lookup(mboxname, &mbentry, NULL);
+    if (r == IMAP_MAILBOX_NONEXISTENT) return 0;
+    if (r) {
 	syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
 	       mboxname, error_message(r));
 	fctx->err->desc = error_message(r);
 	*fctx->ret = HTTP_SERVER_ERROR;
 	goto done;
     }
+
+    if (fctx->req_tgt->mboxtype && !(mbentry->mbtype & fctx->req_tgt->mboxtype))
+	goto done;
 
     rights = mbentry->acl ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
     if ((rights & fctx->reqd_privs) != fctx->reqd_privs) goto done;
@@ -4052,22 +4062,29 @@ int propfind_by_collection(char *mboxname, int matchlen,
     fctx->record = NULL;
 
     if (!fctx->req_tgt->resource) {
-	/* Append collection name to URL path */
-	if (!fctx->req_tgt->collection) {
-	    len = strlen(fctx->req_tgt->path);
-	    p = fctx->req_tgt->path + len;
-	}
-	else {
-	    p = fctx->req_tgt->collection;
-	    len = p - fctx->req_tgt->path;
-	}
+	mboxname_to_parts(mboxname, &parts);
 
-	if (p[-1] != '/') {
-	    *p++ = '/';
-	    len++;
+	buf_setcstr(&writebuf, fctx->req_tgt->prefix);
+
+	if (parts.userid) {
+	    buf_printf(&writebuf, "/user/%s", parts.userid);
+	    /* XXX - only if a domain... */
+	    buf_printf(&writebuf, "@%s", parts.domain ? parts.domain : config_defdomain);
 	}
-	strlcpy(p, strrchr(mboxname, '.') + 1, MAX_MAILBOX_PATH - len);
-	strlcat(p, "/", MAX_MAILBOX_PATH - len - 1);
+	buf_putc(&writebuf, '/');
+
+	len = writebuf.len;
+
+	/* one day this will just be the final element of 'boxes' hopefully */
+	p = strrchr(parts.box, '.');
+	if (!p) goto done;
+	buf_appendcstr(&writebuf, p+1);
+
+	/* copy it all back into place... in theory we should check against
+	 * 'last' and make sure it doesn't change from the original request.
+	 * yay for micro-optimised memory usage... */
+	strlcpy(fctx->req_tgt->path, buf_cstring(&writebuf), MAX_MAILBOX_PATH);
+	p = fctx->req_tgt->path + len;
 	fctx->req_tgt->collection = p;
 	fctx->req_tgt->collen = strlen(p);
 
@@ -4112,6 +4129,8 @@ int propfind_by_collection(char *mboxname, int matchlen,
     }
 
   done:
+    buf_free(&writebuf);
+    mboxname_free_parts(&parts);
     mboxlist_entry_free(&mbentry);
     if (mailbox) mailbox_close(&mailbox);
 
@@ -4148,7 +4167,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     /* Check Depth */
     hdr = spool_getheader(txn->req_hdrs, "Depth");
     if (!hdr || !strcmp(hdr[0], "infinity")) {
-	depth = 2;
+	depth = 3;
     }
     else if (!strcmp(hdr[0], "1")) {
 	depth = 1;
@@ -4161,7 +4180,8 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 	return HTTP_BAD_REQUEST;
     }
 
-    if ((txn->req_tgt.namespace != URL_NS_PRINCIPAL) && txn->req_tgt.user) {
+    if ((txn->req_tgt.namespace != URL_NS_PRINCIPAL) && txn->req_tgt.user
+	&& txn->req_tgt.mboxname && txn->req_tgt.mboxname[0]) {
 	mbentry_t *mbentry = NULL;
 	int rights;
 
@@ -4211,7 +4231,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     /* Principal or Local Mailbox */
 
     /* Normalize depth so that:
-     * 0 = home-set collection, 1+ = calendar collection, 2+ = calendar resource
+     * 0 = home-set collection, 1+ = calendar collection, 2+ = calendar resource, 3+ = infinity!
      */
     if (txn->req_tgt.collection) depth++;
     if (txn->req_tgt.resource) depth++;
@@ -4348,11 +4368,16 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 	    propfind_by_collection(txn->req_tgt.mboxname, 0, 0, &fctx);
 	}
 	else {
+	    char *base = NULL;
 	    /* Add responses for all contained calendar collections */
-	    strlcat(txn->req_tgt.mboxname, ".%", sizeof(txn->req_tgt.mboxname));
+	    if (txn->req_tgt.mboxname && txn->req_tgt.mboxname[0])
+		base = strconcat(txn->req_tgt.mboxname, ".%", (const char *)NULL);
+	    else
+		base = xstrdup("*");
 	    r = mboxlist_findall(NULL,  /* internal namespace */
-				 txn->req_tgt.mboxname, 1, httpd_userid, 
+				 base, 1, NULL,
 				 httpd_authstate, propfind_by_collection, &fctx);
+	    free(base);
 	}
 
 	if (fctx.davdb) fctx.close_db(fctx.davdb);
