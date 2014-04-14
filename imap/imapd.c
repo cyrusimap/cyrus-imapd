@@ -5425,7 +5425,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     char *copy = xstrdup(mailboxname);
     lcase(copy);
 
-    if (strstr(copy, "inbox.inbox"))
+    if (strstr(copy, "inbox.inbox."))
 	r = IMAP_MAILBOX_BADNAME;
 
     free(copy);
