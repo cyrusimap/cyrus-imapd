@@ -59,6 +59,7 @@
 extern icalvalue_kind icalproperty_kind_to_value_kind(icalproperty_kind kind);
 extern const char* icalrecur_freq_to_string(icalrecurrencetype_frequency kind);
 extern const char* icalrecur_weekday_to_string(icalrecurrencetype_weekday kind);
+extern const char* icalrecur_skip_to_string(icalrecurrencetype_skip kind);
 
 
 /*
@@ -199,6 +200,15 @@ void icalrecurrencetype_add_as_xxx(struct icalrecurrencetype *recur, void *obj,
 
     add_str(obj, "freq", icalrecur_freq_to_string(recur->freq));
 
+#ifdef HAVE_RSCALE
+    if (*recur->rscale) {
+	add_str(obj, "rscale", recur->rscale);
+
+	if (recur->skip != ICAL_SKIP_BACKWARD)
+	    add_str(obj, "skip", icalrecur_skip_to_string(recur->skip));
+    }
+#endif
+
     /* until and count are mutually exclusive */
     if (recur->until.year) {
 	add_str(obj, "until", icaltime_as_iso_string(recur->until));
@@ -227,6 +237,8 @@ void icalrecurrencetype_add_as_xxx(struct icalrecurrencetype *recur, void *obj,
 	int limit = recurmap[j].limit - 1;
 
 	for (i = 0; i < limit && array[i] != ICAL_RECURRENCE_ARRAY_MAX; i++) {
+	    char temp[20];
+
 	    if (j == 3) { /* BYDAY */
 		const char *daystr;
 		int pos;
@@ -236,14 +248,18 @@ void icalrecurrencetype_add_as_xxx(struct icalrecurrencetype *recur, void *obj,
 		pos = icalrecurrencetype_day_position(array[i]);  
 
 		if (pos != 0) {
-		    char temp[20];
-
 		    snprintf(temp, sizeof(temp), "%d%s", pos, daystr);
 		    daystr = temp;
 		}   
 
 		add_str(obj, recurmap[j].str, daystr);
 	    }
+#ifdef HAVE_RSCALE
+	    else if (j == 7 && ICAL_RSCALE_IS_LEAP_MONTH(array[i])) {
+		snprintf(temp, sizeof(temp), "%dL", ICAL_RSCALE_MONTH_NUM(array[i]));
+		add_str(obj, recurmap[j].str, temp);
+	    }
+#endif
 	    else add_int(obj, recurmap[j].str, array[i]);
 	}
     }
@@ -660,6 +676,9 @@ struct icalrecur_parser {
 };
 
 extern icalrecurrencetype_frequency icalrecur_string_to_freq(const char* str);
+#ifdef HAVE_RSCALE
+extern icalrecurrencetype_skip icalrecur_string_to_skip(const char* str);
+#endif
 extern void icalrecur_add_byrules(struct icalrecur_parser *parser, short *array,
 				  int size, char* vals);
 extern void icalrecur_add_bydayrules(struct icalrecur_parser *parser,
@@ -681,6 +700,14 @@ struct icalrecurrencetype *icalrecur_add_rule(struct icalrecurrencetype **rt,
     if (!strcmp(rpart, "freq")) {
 	(*rt)->freq = icalrecur_string_to_freq(get_str(data));
     }
+#ifdef HAVE_RSCALE
+    else if (!strcmp(rpart, "rscale")) {
+	(*rt)->rscale = icalmemory_tmp_copy(get_str(data));
+    }
+    else if (!strcmp(rpart, "skip")) {
+	(*rt)->skip = icalrecur_string_to_skip(get_str(data));
+    }
+#endif
     else if (!strcmp(rpart, "count")) {
 	(*rt)->count = get_int(data);
     }
@@ -716,6 +743,13 @@ struct icalrecurrencetype *icalrecur_add_rule(struct icalrecurrencetype **rt,
 	    *rt = NULL;
 	}
     }
+
+#ifdef HAVE_RSCALE
+    /* When "RSCALE" is not present the default is "YES".
+       When "RSCALE" is present the default is "BACKWARD". */
+    if (!(*rt)->rscale) (*rt)->skip = ICAL_SKIP_YES;
+    else if ((*rt)->skip == ICAL_SKIP_NO) (*rt)->skip = ICAL_SKIP_BACKWARD;
+#endif
 
     return *rt;
 }

@@ -1155,6 +1155,14 @@ dnl
 		AC_DEFINE(HAVE_VPOLL,[],
 			[Build VPOLL support into httpd?]))
 
+	ENABLE_RSCALE=yes
+	PKG_CHECK_MODULES([ICU], [icu-i18n],, ENABLE_RSCALE=no)
+	if test "$ENABLE_RSCALE" != no; then
+	     AC_SUBST(ICU_CFLAGS)
+	     AC_SUBST(ICU_LIBS)
+	     AC_CHECK_LIB(ical, icalrecur_rscale_token_handling_is_supported,
+		    AC_DEFINE(HAVE_RSCALE,[], [Build RSCALE support into httpd?]))
+	fi
 fi
 AC_SUBST(HTTP_CPPFLAGS)
 AC_SUBST(HTTP_LIBS)

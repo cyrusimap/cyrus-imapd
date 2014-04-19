@@ -324,6 +324,9 @@ static const struct precond_t {
     { "supported-filter", NS_CALDAV },
     { "valid-filter", NS_CALDAV },
 
+    /* RSCALE (draft-daboo-icalendar-rscale) preconditions */
+    { "supported-rscale", NS_CALDAV },
+
     /* CalDAV Scheduling (RFC 6638) preconditions */
     { "valid-scheduling-message", NS_CALDAV },
     { "valid-organizer", NS_CALDAV },
