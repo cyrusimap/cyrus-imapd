@@ -96,6 +96,10 @@
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 
+#ifdef HAVE_RSCALE
+#include <unicode/ucal.h>
+#endif
+
 #define NEW_STAG (1<<8)  /* Make sure we skip over PREFER bits */
 
 
@@ -268,6 +272,9 @@ static int proppatch_timezone(xmlNodePtr prop, unsigned set,
 static int proppatch_availability(xmlNodePtr prop, unsigned set,
 				  struct proppatch_ctx *pctx,
 				  struct propstat propstat[], void *rock);
+static int propfind_rscaleset(const xmlChar *name, xmlNsPtr ns,
+			      struct propfind_ctx *fctx, xmlNodePtr resp,
+			      struct propstat propstat[], void *rock);
 
 static int report_cal_query(struct transaction_t *txn, xmlNodePtr inroot,
 			    struct propfind_ctx *fctx);
@@ -413,6 +420,10 @@ static const struct prop_entry caldav_props[] = {
       PROP_COLLECTION | PROP_PRESCREEN | PROP_NEEDPROP,
       propfind_tz_avail, proppatch_availability, NULL },
 
+    /* RSCALE (draft-daboo-icalendar-rscale) properties */
+    { "supported-rscale-set", NS_CALDAV, PROP_COLLECTION,
+      propfind_rscaleset, NULL, NULL },
+
     /* Apple Calendar Server properties */
     { "getctag", NS_CS, PROP_ALLPROP | PROP_COLLECTION,
       propfind_sync_token, NULL, NULL },
@@ -513,6 +524,9 @@ static void my_caldav_init(struct buf *serverinfo)
     caldav_init();
 
     buf_printf(serverinfo, " libical/%s", ICAL_VERSION);
+#ifdef HAVE_RSCALE
+    buf_printf(serverinfo, " ICU/%s", U_ICU_VERSION);
+#endif
 #ifdef WITH_JSON
     buf_printf(serverinfo, " Jansson/%s", JANSSON_VERSION);
 #endif
@@ -1618,7 +1632,7 @@ static int caldav_put(struct transaction_t *txn,
 	ret = HTTP_FORBIDDEN;
 	goto done;
     }
-    else if (!icalrestriction_check(ical)) {
+    else if (icalcomponent_count_errors(ical) || !icalrestriction_check(ical)) {
 	txn->error.precond = CALDAV_VALID_OBJECT;
 	if ((txn->error.desc = get_icalrestriction_errstr(ical))) {
 	    assert(!buf_len(&txn->buf));
@@ -1629,8 +1643,35 @@ static int caldav_put(struct transaction_t *txn,
 	goto done;
     }
 
-    /* Make sure iCal UIDs [and ORGANIZERs] in all components are the same */
     comp = icalcomponent_get_first_real_component(ical);
+
+#ifdef HAVE_RSCALE
+    /* Make sure we support the provided RSCALE in an RRULE */
+    prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
+    if (prop) {
+	struct icalrecurrencetype rt = icalproperty_get_rrule(prop);
+
+	if (*rt.rscale) {
+	    UEnumeration *en;
+	    UErrorCode stat = U_ZERO_ERROR;
+	    const char *rscale;
+
+	    en = ucal_getKeywordValuesForLocale("calendar", NULL, FALSE, &stat);
+	    while ((rscale = uenum_next(en, NULL, &stat))) {
+		if (!strcasecmp(rscale, rt.rscale)) break;
+	    }
+	    uenum_close(en);
+
+	    if (!rscale) {
+		txn->error.precond = CALDAV_SUPP_RSCALE;
+		ret = HTTP_FORBIDDEN;
+		goto done;
+	    }
+	}
+    }
+#endif /* HAVE_RSCALE */
+
+    /* Make sure iCal UIDs [and ORGANIZERs] in all components are the same */
     kind = icalcomponent_isa(comp);
     uid = icalcomponent_get_uid(comp);
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
@@ -2856,6 +2897,42 @@ static int proppatch_availability(xmlNodePtr prop, unsigned set,
     }
 
     return 0;
+}
+
+
+/* Callback to fetch CALDAV:supported-rscale-set */
+static int propfind_rscaleset(const xmlChar *name, xmlNsPtr ns,
+			      struct propfind_ctx *fctx,
+			      xmlNodePtr resp __attribute__((unused)),
+			      struct propstat propstat[],
+			      void *rock __attribute__((unused)))
+{
+    assert(name && ns && fctx && propstat);
+
+    if (fctx->req_tgt->resource) return HTTP_NOT_FOUND;
+
+#ifdef HAVE_RSCALE
+    if (icalrecur_rscale_token_handling_is_supported()) {
+	xmlNodePtr top;
+	UEnumeration *en;
+	UErrorCode status = U_ZERO_ERROR;
+	const char *rscale;
+
+	top = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+			   name, ns, NULL, 0);
+
+	en = ucal_getKeywordValuesForLocale("calendar", NULL, FALSE, &status);
+	while ((rscale = uenum_next(en, NULL, &status))) {
+	    xmlNewChild(top, fctx->ns[NS_CALDAV],
+			BAD_CAST "supported-rscale", BAD_CAST rscale);
+	}
+	uenum_close(en);
+
+	return 0;
+    }
+#endif
+
+    return HTTP_NOT_FOUND;
 }
 
 

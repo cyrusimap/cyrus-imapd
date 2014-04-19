@@ -190,6 +190,9 @@ enum {
     CALDAV_SUPP_FILTER,
     CALDAV_VALID_FILTER,
 
+    /* RSCALE (draft-daboo-icalendar-rscale) preconditions */
+    CALDAV_SUPP_RSCALE,
+
     /* CalDAV Scheduling (RFC 6638) preconditions */
     CALDAV_VALID_SCHED,
     CALDAV_VALID_ORGANIZER,
