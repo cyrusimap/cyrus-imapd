@@ -946,7 +946,7 @@ static int ptsmodule_get_dn(
         if (rc != PTSM_OK)
             return rc;
 
-	if (ptsm->domain_base_dn && (strrchr(canon_id, '@') != NULL)) {
+	if (ptsm->domain_base_dn && ptsm->domain_base_dn[0] != '\0' && (strrchr(canon_id, '@') != NULL)) {
 	    syslog(LOG_DEBUG, "Attempting to get domain for %s from %s", canon_id, ptsm->domain_base_dn);
 
 	    /* Get the base dn to search from domain_base_dn searched on domain_scope with
