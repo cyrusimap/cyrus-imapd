@@ -3753,8 +3753,12 @@ int propfind_by_collection(char *mboxname, int matchlen,
     if (fctx->depth > 1) {
 	/* Resource(s) */
 
-	/* Open the DAV DB corresponding to the mailbox */
-	if (!fctx->davdb) fctx->davdb = fctx->open_db(mailbox);
+	/* open the DAV DB corresponding to the mailbox.  Note we open the new one
+	 * first before closing the old one, so we get refcounted retaining of the
+	 * open database within a single user */
+	sqlite3 *newdb = fctx->open_db(mailbox);
+	if (fctx->davdb) fctx->close_db(fctx->davdb);
+	fctx->davdb = newdb;
 
 	if (fctx->req_tgt->resource) {
 	    /* Add response for target resource */
