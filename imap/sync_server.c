@@ -1262,6 +1262,11 @@ static int mailbox_compare_update(struct mailbox *mailbox,
 
 	/* found a match, check for updates */
 	if (rrecord.uid == mrecord.uid) {
+	    /* if they're both EXPUNGED then ignore everything else */
+	    if ((mrecord.system_flags & FLAG_EXPUNGED) &&
+		(rrecord.system_flags & FLAG_EXPUNGED))
+		continue;
+
 	    /* higher modseq on the replica is an error */
 	    if (rrecord.modseq > mrecord.modseq) {
 		if (opt_force) {
