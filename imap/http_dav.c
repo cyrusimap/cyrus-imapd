@@ -4078,6 +4078,12 @@ int propfind_by_collection(char *mboxname, int matchlen,
 	/* one day this will just be the final element of 'boxes' hopefully */
 	p = strrchr(parts.box, '.');
 	if (!p) goto done;
+
+	/* special ones? */
+	if (!strncmp(p+1, SCHED_INBOX, strlen(SCHED_INBOX) - 1)) goto done;
+	if (!strncmp(p+1, SCHED_OUTBOX, strlen(SCHED_OUTBOX) - 1)) goto done;
+
+	/* OK, we're doing this mailbox */
 	buf_appendcstr(&writebuf, p+1);
 
 	/* copy it all back into place... in theory we should check against
