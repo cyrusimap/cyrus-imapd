@@ -1878,9 +1878,15 @@ static void add_busytime(icalcomponent *comp, struct icaltime_span *span,
     newp = &busytime->busy[busytime->len++];
     newp->start = icaltime_from_timet_with_zone(span->start, is_date, utc);
     newp->start.is_date = 0;  /* MUST be DATE-TIME */
-    newp->end = icaltime_from_timet_with_zone(span->end, is_date, utc);
-    newp->end.is_date = 0;  /* MUST be DATE-TIME */
-    newp->duration = icaldurationtype_null_duration();
+    if (is_date && icaltime_is_null_time(icalcomponent_get_dtend(comp))) {
+	newp->end = icaltime_null_time();
+	newp->duration = icaldurationtype_from_int(60*60*24);  /* P1D */
+    }
+    else {
+	newp->end = icaltime_from_timet_with_zone(span->end, is_date, utc);
+	newp->end.is_date = 0;  /* MUST be DATE-TIME */
+	newp->duration = icaldurationtype_null_duration();
+    }
 }
 
 
