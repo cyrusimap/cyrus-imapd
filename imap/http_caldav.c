@@ -1657,6 +1657,7 @@ static int caldav_put(struct transaction_t *txn,
 
     comp = icalcomponent_get_first_real_component(ical);
 
+#ifdef HAVE_RSCALE
     /* Make sure we support the provided RSCALE in an RRULE */
     prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
     if (prop && rscale_calendars) {
@@ -1684,6 +1685,7 @@ static int caldav_put(struct transaction_t *txn,
 	    }
 	}
     }
+#endif /* HAVE_RSCALE */
 
     /* Make sure iCal UIDs [and ORGANIZERs] in all components are the same */
     kind = icalcomponent_isa(comp);
