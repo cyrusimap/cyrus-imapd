@@ -97,7 +97,7 @@
 #include "xstrlcpy.h"
 
 #ifdef HAVE_RSCALE
-#include <unicode/ucal.h>
+#include <unicode/uversion.h>
 #endif
 
 #define NEW_STAG (1<<8)  /* Make sure we skip over PREFER bits */
@@ -202,6 +202,7 @@ static struct caldav_db *auth_caldavdb = NULL;
 static time_t compile_time;
 static struct buf ical_prodid_buf = BUF_INITIALIZER;
 static const char *ical_prodid = NULL;
+static icalarray *rscale_calendars = NULL;
 
 static struct caldav_db *my_caldav_open(struct mailbox *mailbox);
 static void my_caldav_close(struct caldav_db *caldavdb);
@@ -510,6 +511,12 @@ static void my_caldav_close(struct caldav_db *caldavdb)
 }
 
 
+static int rscale_cmp(const void *a, const void *b)
+{
+    return strcmp(*((const char **) a), *((const char **) b));
+}
+
+
 static void my_caldav_init(struct buf *serverinfo)
 {
     namespace_calendar.enabled =
@@ -525,7 +532,11 @@ static void my_caldav_init(struct buf *serverinfo)
 
     buf_printf(serverinfo, " libical/%s", ICAL_VERSION);
 #ifdef HAVE_RSCALE
-    buf_printf(serverinfo, " ICU/%s", U_ICU_VERSION);
+    if ((rscale_calendars = icalrecurrencetype_rscale_supported_calendars())) {
+	icalarray_sort(rscale_calendars, &rscale_cmp);
+
+	buf_printf(serverinfo, " ICU/%s", U_ICU_VERSION);
+    }
 #endif
 #ifdef WITH_JSON
     buf_printf(serverinfo, " Jansson/%s", JANSSON_VERSION);
@@ -695,6 +706,7 @@ static void my_caldav_reset(void)
 
 static void my_caldav_shutdown(void)
 {
+    if (rscale_calendars) icalarray_free(rscale_calendars);
     buf_free(&ical_prodid_buf);
 
     caldav_done();
@@ -1628,12 +1640,12 @@ static int caldav_put(struct transaction_t *txn,
     /* Parse and validate the iCal data */
     ical = mime->from_string(buf_cstring(&txn->req_body.payload));
     if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {
-	txn->error.precond = CALDAV_VALID_DATA;
+	txn->error.precond = CALDAV_VALID_OBJECT;
 	ret = HTTP_FORBIDDEN;
 	goto done;
     }
     else if (icalcomponent_count_errors(ical) || !icalrestriction_check(ical)) {
-	txn->error.precond = CALDAV_VALID_OBJECT;
+	txn->error.precond = CALDAV_VALID_DATA;
 	if ((txn->error.desc = get_icalrestriction_errstr(ical))) {
 	    assert(!buf_len(&txn->buf));
 	    buf_setcstr(&txn->buf, txn->error.desc);
@@ -1645,31 +1657,33 @@ static int caldav_put(struct transaction_t *txn,
 
     comp = icalcomponent_get_first_real_component(ical);
 
-#ifdef HAVE_RSCALE
     /* Make sure we support the provided RSCALE in an RRULE */
     prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
-    if (prop) {
+    if (prop && rscale_calendars) {
 	struct icalrecurrencetype rt = icalproperty_get_rrule(prop);
 
-	if (*rt.rscale) {
-	    UEnumeration *en;
-	    UErrorCode stat = U_ZERO_ERROR;
-	    const char *rscale;
+	if (rt.rscale) {
+	    /* Perform binary search on sorted icalarray */
+	    unsigned found = 0, start = 0, end = rscale_calendars->num_elements;
 
-	    en = ucal_getKeywordValuesForLocale("calendar", NULL, FALSE, &stat);
-	    while ((rscale = uenum_next(en, NULL, &stat))) {
-		if (!strcasecmp(rscale, rt.rscale)) break;
+	    lcase(rt.rscale);
+	    while (!found && start < end) {
+		unsigned mid = start + (end - start) / 2;
+		const char **rscale = icalarray_element_at(rscale_calendars, mid);
+		int r = strcmp(rt.rscale, *rscale);
+
+		if (r == 0) found = 1;
+		else if (r < 0) end = mid;
+		else start = mid + 1;
 	    }
-	    uenum_close(en);
 
-	    if (!rscale) {
+	    if (!found) {
 		txn->error.precond = CALDAV_SUPP_RSCALE;
 		ret = HTTP_FORBIDDEN;
 		goto done;
 	    }
 	}
     }
-#endif /* HAVE_RSCALE */
 
     /* Make sure iCal UIDs [and ORGANIZERs] in all components are the same */
     kind = icalcomponent_isa(comp);
@@ -2917,26 +2931,22 @@ static int propfind_rscaleset(const xmlChar *name, xmlNsPtr ns,
 
     if (fctx->req_tgt->resource) return HTTP_NOT_FOUND;
 
-#ifdef HAVE_RSCALE
-    if (icalrecur_rscale_token_handling_is_supported()) {
+    if (rscale_calendars) {
 	xmlNodePtr top;
-	UEnumeration *en;
-	UErrorCode status = U_ZERO_ERROR;
-	const char *rscale;
+	int i, n;
 
 	top = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			   name, ns, NULL, 0);
 
-	en = ucal_getKeywordValuesForLocale("calendar", NULL, FALSE, &status);
-	while ((rscale = uenum_next(en, NULL, &status))) {
+	for (i = 0, n = rscale_calendars->num_elements; i < n; i++) {
+	    const char **rscale = icalarray_element_at(rscale_calendars, i);
+
 	    xmlNewChild(top, fctx->ns[NS_CALDAV],
-			BAD_CAST "supported-rscale", BAD_CAST rscale);
+			BAD_CAST "supported-rscale", BAD_CAST *rscale);
 	}
-	uenum_close(en);
 
 	return 0;
     }
-#endif
 
     return HTTP_NOT_FOUND;
 }

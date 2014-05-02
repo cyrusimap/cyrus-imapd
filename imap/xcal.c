@@ -201,7 +201,7 @@ void icalrecurrencetype_add_as_xxx(struct icalrecurrencetype *recur, void *obj,
     add_str(obj, "freq", icalrecur_freq_to_string(recur->freq));
 
 #ifdef HAVE_RSCALE
-    if (*recur->rscale) {
+    if (recur->rscale) {
 	add_str(obj, "rscale", recur->rscale);
 
 	if (recur->skip != ICAL_SKIP_BACKWARD)
@@ -255,8 +255,10 @@ void icalrecurrencetype_add_as_xxx(struct icalrecurrencetype *recur, void *obj,
 		add_str(obj, recurmap[j].str, daystr);
 	    }
 #ifdef HAVE_RSCALE
-	    else if (j == 7 && ICAL_RSCALE_IS_LEAP_MONTH(array[i])) {
-		snprintf(temp, sizeof(temp), "%dL", ICAL_RSCALE_MONTH_NUM(array[i]));
+	    else if (j == 7 /* BYMONTH */
+		     && icalrecurrencetype_month_is_leap(array[i])) {
+		snprintf(temp, sizeof(temp), "%dL",
+			 icalrecurrencetype_month_month(array[i]));
 		add_str(obj, recurmap[j].str, temp);
 	    }
 #endif
@@ -743,13 +745,6 @@ struct icalrecurrencetype *icalrecur_add_rule(struct icalrecurrencetype **rt,
 	    *rt = NULL;
 	}
     }
-
-#ifdef HAVE_RSCALE
-    /* When "RSCALE" is not present the default is "YES".
-       When "RSCALE" is present the default is "BACKWARD". */
-    if (!(*rt)->rscale) (*rt)->skip = ICAL_SKIP_YES;
-    else if ((*rt)->skip == ICAL_SKIP_NO) (*rt)->skip = ICAL_SKIP_BACKWARD;
-#endif
 
     return *rt;
 }
