@@ -3661,31 +3661,29 @@ int caladdress_lookup(const char *addr, struct sched_param *param)
 	snprintf(mailboxname, sizeof(mailboxname),
 		 "user.%s.%s", param->userid, calendarprefix);
 
-	if ((r = http_mlookup(mailboxname, &param->server, NULL, NULL))) {
+	r = http_mlookup(mailboxname, &param->server, NULL, NULL);
+	if (!r) {
+	    if (param->server) param->flags |= SCHEDTYPE_ISCHEDULE;
+	    return 0;
+	}
+	else {
 	    syslog(LOG_ERR, "mlookup(%s) failed: %s",
 		   mailboxname, error_message(r));
 
-	    switch (r) {
-	    case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	    case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	    default: return HTTP_SERVER_ERROR;
-	    }
+	    /* Fall through and try remote */
 	}
-
-	if (param->server) param->flags |= SCHEDTYPE_ISCHEDULE;
     }
-    else {
-	/* User is outside of our domain(s) -
-	   Do remote scheduling (default = iMIP) */
-	param->flags |= SCHEDTYPE_REMOTE;
+
+    /* User is outside of our domain(s) -
+       Do remote scheduling (default = iMIP) */
+    param->flags |= SCHEDTYPE_REMOTE;
 
 #ifdef WITH_DKIM
-	/* Do iSchedule DNS SRV lookup */
+    /* Do iSchedule DNS SRV lookup */
 
-	/* XXX  If success, set server, port,
-	   and flags |= SCHEDTYPE_ISCHEDULE [ | SCHEDTYPE_SSL ] */
+    /* XXX  If success, set server, port,
+       and flags |= SCHEDTYPE_ISCHEDULE [ | SCHEDTYPE_SSL ] */
 #endif
-    }
 
     return 0;
 }
