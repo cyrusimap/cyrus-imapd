@@ -1518,9 +1518,12 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
     unsigned flags = 0;
 
     if (!fctx->mailbox) return HTTP_NOT_FOUND;
-    if (!((rights = cyrus_acl_myrights(fctx->authstate, fctx->mailbox->acl))
-	  & DACL_ADMIN)) {
-	return HTTP_UNAUTHORIZED;
+    /* owner has explicit admin rights */
+    if (!mboxname_userownsmailbox(httpd_userid, fctx->mailbox->name)) {
+	if (!((rights = cyrus_acl_myrights(fctx->authstate, fctx->mailbox->acl))
+	       & DACL_ADMIN)) {
+	    return HTTP_UNAUTHORIZED;
+	}
     }
 
     if (fctx->req_tgt->namespace == URL_NS_CALENDAR) {
