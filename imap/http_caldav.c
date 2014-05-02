@@ -1268,7 +1268,8 @@ static int dump_calendar(struct transaction_t *txn, int rights)
     txn->resp_body.type = mime->content_type;
 
     /* Set filename of resource */
-    r = annotatemore_lookup(mailbox->name, displayname_annot, /* shared */ NULL, &attrib);
+    r = annotatemore_lookupmask(mailbox->name, displayname_annot, httpd_userid, &attrib);
+    /* fall back to last part of mailbox name */
     if (r || !attrib.len) buf_setcstr(&attrib, strrchr(mailbox->name, '.') + 1);
 
     buf_reset(&txn->buf);
@@ -1426,8 +1427,8 @@ static int list_cal_cb(char *name,
     }
 
     /* Lookup DAV:displayname */
-    r = annotatemore_lookup(name, displayname_annot,
-			    /* shared */ NULL, &displayname);
+    r = annotatemore_lookupmask(name, displayname_annot, httpd_userid, &displayname);
+    /* fall back to the last part of the mailbox name */
     if (r || !displayname.len) buf_setcstr(&displayname, shortname);
 
     /* Add available calendar with link */
@@ -3441,8 +3442,7 @@ static int propfind_calcompset(const xmlChar *name, xmlNsPtr ns,
 
     if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
 
-    r = annotatemore_lookup(fctx->mailbox->name, prop_annot,
-			    /* shared */ NULL, &attrib);
+    r = annotatemore_lookupmask(fctx->mailbox->name, prop_annot, httpd_userid, &attrib);
     if (r) return HTTP_SERVER_ERROR;
 
     if (attrib.len)
@@ -3506,13 +3506,17 @@ static int proppatch_calcompset(xmlNodePtr prop, unsigned set,
 	    /* All component types are valid */
 	    const char *prop_annot =
 		ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
+	    const char *userid = NULL;
 	    annotate_state_t *astate = NULL;
 
 	    buf_reset(&pctx->buf);
 	    buf_printf(&pctx->buf, "%lu", types);
 
+	    if (!mboxname_userownsmailbox(httpd_userid, pctx->mailbox->name))
+		userid = httpd_userid;
+
 	    r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
-	    if (!r) r = annotate_state_write(astate, prop_annot, /*userid*/NULL, &pctx->buf);
+	    if (!r) r = annotate_state_write(astate, prop_annot, userid, &pctx->buf);
 
 	    if (!r) {
 		xml_add_prop(HTTP_OK, pctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
@@ -3709,8 +3713,7 @@ static int propfind_caltransp(const xmlChar *name, xmlNsPtr ns,
 
     if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
 
-    r = annotatemore_lookup(fctx->mailbox->name, prop_annot,
-			    /* shared */ NULL, &attrib);
+    r = annotatemore_lookupmask(fctx->mailbox->name, prop_annot, httpd_userid, &attrib);
 
     if (r) return HTTP_SERVER_ERROR;
     if (!attrib.len) return HTTP_NOT_FOUND;
@@ -3765,8 +3768,11 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
 	    }
 	}
 
+	if (!mboxname_userownsmailbox(httpd_userid, pctx->mailbox->name))
+	    userid = httpd_userid;
+
 	r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
-	if (!r) r = annotate_state_write(astate, prop_annot, /*userid*/NULL, &pctx->buf);
+	if (!r) r = annotate_state_write(astate, prop_annot, userid, &pctx->buf);
 	if (!r) {
 	    xml_add_prop(HTTP_OK, pctx->ns[NS_DAV],
 			 &propstat[PROPSTAT_OK], prop->name, prop->ns, NULL, 0);
@@ -3806,10 +3812,11 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
 	    ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
 	struct buf attrib = BUF_INITIALIZER;
 
-	if (!fctx->mailbox || fctx->record) return HTTP_NOT_FOUND;
-
-	r = annotatemore_lookup(fctx->mailbox->name, prop_annot,
-				/* shared */ NULL, &attrib);
+	if (fctx->mailbox && !fctx->record) {
+	    r = annotatemore_lookupmask(fctx->mailbox->name,
+					buf_cstring(&fctx->buf),
+					httpd_userid, &attrib);
+	}
 
 	if (r) return HTTP_SERVER_ERROR;
 	if (attrib.len)  {
@@ -3820,8 +3827,8 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
 	    /*  Check for CALDAV:calendar-timezone-id */
 	    prop_annot = ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
 
-	    r = annotatemore_lookup(fctx->mailbox->name, prop_annot,
-				    /* shared */ NULL, &attrib);
+	    r = annotatemore_lookupmask(fctx->mailbox->name, prop_annot,
+					httpd_userid, &attrib);
 
 	    if (r) return HTTP_SERVER_ERROR;
 	    if (!attrib.len) return HTTP_NOT_FOUND;
@@ -3939,10 +3946,14 @@ static int proppatch_timezone(xmlNodePtr prop, unsigned set,
 	    /* Remove CALDAV:calendar-timezone-id */
 	    const char *prop_annot =
 		ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
+	    const char *userid = NULL;
 	    annotate_state_t *astate = NULL;
 
+	    if (!mboxname_userownsmailbox(httpd_userid, pctx->mailbox->name))
+		userid = httpd_userid;
+
 	    r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
-	    if (!r) r = annotate_state_write(astate, prop_annot, /*userid*/NULL, &buf);
+	    if (!r) r = annotate_state_write(astate, prop_annot, userid, &buf);
 
 	    if (r) {
 		xml_add_prop(HTTP_SERVER_ERROR, pctx->ns[NS_DAV],
@@ -4144,8 +4155,8 @@ static int propfind_tzid(const xmlChar *name, xmlNsPtr ns,
 	!fctx->req_tgt->collection || fctx->req_tgt->resource)
 	return HTTP_NOT_FOUND;
 
-    r = annotatemore_lookup(fctx->mailbox->name, prop_annot,
-				  /* shared */ NULL, &attrib);
+    r = annotatemore_lookupmask(fctx->mailbox->name, prop_annot,
+				httpd_userid, &attrib);
 
     if (r) return HTTP_SERVER_ERROR;
     if (attrib.len) {
@@ -4156,8 +4167,8 @@ static int propfind_tzid(const xmlChar *name, xmlNsPtr ns,
 	prop_annot = ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
 
 	if (fctx->mailbox && !fctx->record) {
-	    r = annotatemore_lookup(fctx->mailbox->name, prop_annot,
-				    /* shared */ NULL, &attrib);
+	    r = annotatemore_lookupmask(fctx->mailbox->name, prop_annot,
+					httpd_userid, &attrib);
 	}
 
 	if (r) return HTTP_SERVER_ERROR;
@@ -4559,7 +4570,7 @@ static int busytime_by_collection(char *mboxname, int matchlen,
 	const char *prop_annot =
 	    ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
 
-	if (!annotatemore_lookup(mboxname, prop_annot, /* shared */ NULL, &attrib)) {
+	if (!annotatemore_lookupmask(mboxname, prop_annot, httpd_userid, &attrib)) {
 	    if (!strcmp(buf_cstring(&attrib), "transparent")) {
 		buf_free(&attrib);
 		return 0;
@@ -5037,8 +5048,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 	return HTTP_FORBIDDEN;
     }
 
-    if (!annotatemore_lookup(mailbox->name, prop_annot,
-			     /* shared */ NULL, &attrib)
+    if (!annotatemore_lookupmask(mailbox->name, prop_annot, httpd_userid, &attrib)
 	&& attrib.len) {
 	unsigned long supp_comp = strtoul(buf_cstring(&attrib), NULL, 10);
 
@@ -5677,7 +5687,6 @@ int sched_busytime_query(struct transaction_t *txn,
     fctx.req_tgt = &txn->req_tgt;
     fctx.depth = 2;
     fctx.userid = proxy_userid;
-    fctx.int_userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = org_authstate;
     fctx.reqd_privs = 0;  /* handled by CALDAV:schedule-deliver on Inbox */

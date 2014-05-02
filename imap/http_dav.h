@@ -261,7 +261,6 @@ struct propfind_ctx {
     unsigned prefer;			/* bitmask of client preferences */
     hdrcache_t req_hdrs;    		/* Cached HTTP headers */
     const char *userid;			/* userid client has logged in as */
-    const char *int_userid;		/* internal userid */
     int userisadmin;			/* is userid an admin */
     struct auth_state *authstate;	/* authorization state for userid */
     void *davdb;			/* DAV DB corresponding to collection */

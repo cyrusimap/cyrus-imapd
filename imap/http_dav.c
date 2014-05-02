@@ -1510,7 +1510,7 @@ int propfind_curprivset(const xmlChar *name, xmlNsPtr ns,
     if (fctx->userisadmin) {
 	rights |= DACL_ADMIN;
     }
-    else if (mboxname_userownsmailbox(fctx->int_userid, fctx->mailbox->name)) {
+    else if (mboxname_userownsmailbox(httpd_userid, fctx->mailbox->name)) {
 	rights |= config_implicitrights;
     }
 
@@ -1881,6 +1881,7 @@ static int proppatch_toresource(xmlNodePtr prop, unsigned set,
     xmlChar *freeme = NULL;
     annotate_state_t *astate = NULL;
     struct buf value = BUF_INITIALIZER;
+    const char *userid = NULL;
     int r = 1; /* default to error */
 
     /* flags only store "exists" */
@@ -1935,8 +1936,11 @@ static int proppatch_toresource(xmlNodePtr prop, unsigned set,
 	buf_init_ro_cstr(&value, (const char *)freeme);
     }
 
+    if (!mboxname_userownsmailbox(pctx->mailbox->name, httpd_userid))
+	userid = httpd_userid;
+
     r = mailbox_get_annotate_state(pctx->mailbox, pctx->record->uid, &astate);
-    if (!r) r = annotate_state_write(astate, buf_cstring(&pctx->buf), /*userid*/NULL, &value);
+    if (!r) r = annotate_state_write(astate, buf_cstring(&pctx->buf), userid, &value);
 
  done:
 
@@ -1996,8 +2000,8 @@ static int propfind_fromresource(const xmlChar *name, xmlNsPtr ns,
     buf_printf(&fctx->buf, ANNOT_NS "<%s>%s",
 	       (const char *) ns->href, name);
 
-    r = annotatemore_msg_lookup(fctx->mailbox->name, fctx->record->uid,
-				buf_cstring(&fctx->buf), /* shared */ NULL, &attrib);
+    r = annotatemore_msg_lookupmask(fctx->mailbox->name, fctx->record->uid,
+				    buf_cstring(&fctx->buf), httpd_userid, &attrib);
 
 done:
     if (r) return HTTP_SERVER_ERROR;
@@ -2031,8 +2035,8 @@ int propfind_fromdb(const xmlChar *name, xmlNsPtr ns,
 	       (const char *) ns->href, name);
 
     if (fctx->mailbox && !fctx->record &&
-	!(r = annotatemore_lookup(fctx->mailbox->name, buf_cstring(&fctx->buf),
-				  /* shared */ NULL, &attrib))) {
+	!(r = annotatemore_lookupmask(fctx->mailbox->name, buf_cstring(&fctx->buf),
+				      httpd_userid, &attrib))) {
 	if (!buf_len(&attrib) &&
 	    !xmlStrcmp(name, BAD_CAST "displayname")) {
 	    /* Special case empty displayname -- use last segment of path */
@@ -2060,6 +2064,7 @@ int proppatch_todb(xmlNodePtr prop, unsigned set,
     xmlChar *freeme = NULL;
     annotate_state_t *astate = NULL;
     struct buf value = BUF_INITIALIZER;
+    const char *userid = NULL;
     int r;
 
     if (pctx->req_tgt->resource)
@@ -2079,8 +2084,11 @@ int proppatch_todb(xmlNodePtr prop, unsigned set,
 	}
     }
 
+    if (!mboxname_userownsmailbox(pctx->mailbox->name, httpd_userid))
+	userid = httpd_userid;
+
     r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
-    if (!r) r = annotate_state_write(astate, buf_cstring(&pctx->buf), /*userid*/NULL, &value);
+    if (!r) r = annotate_state_write(astate, buf_cstring(&pctx->buf), userid, &value);
 
     if (!r) {
 	xml_add_prop(HTTP_OK, pctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
@@ -4264,7 +4272,6 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     fctx.prefer |= get_preferences(txn);
     fctx.req_hdrs = txn->req_hdrs;
     fctx.userid = proxy_userid;
-    fctx.int_userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = httpd_authstate;
     fctx.mailbox = NULL;
@@ -5565,7 +5572,6 @@ int meth_report(struct transaction_t *txn, void *params)
     fctx.prefer |= get_preferences(txn);
     fctx.req_hdrs = txn->req_hdrs;
     fctx.userid = proxy_userid;
-    fctx.int_userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = httpd_authstate;
     fctx.mailbox = NULL;
