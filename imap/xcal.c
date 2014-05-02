@@ -59,7 +59,9 @@
 extern icalvalue_kind icalproperty_kind_to_value_kind(icalproperty_kind kind);
 extern const char* icalrecur_freq_to_string(icalrecurrencetype_frequency kind);
 extern const char* icalrecur_weekday_to_string(icalrecurrencetype_weekday kind);
+#ifdef HAVE_RSCALE
 extern const char* icalrecur_skip_to_string(icalrecurrencetype_skip kind);
+#endif
 
 
 /*
