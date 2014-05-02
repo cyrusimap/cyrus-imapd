@@ -2255,13 +2255,19 @@ out:
 /**************************  Annotation Storing  *****************************/
 
 EXPORTED int annotatemore_lookup(const char *mboxname, const char *entry,
-			const char *userid, struct buf *value)
+				 const char *userid, struct buf *value)
 {
     return annotatemore_msg_lookup(mboxname, /*uid*/0, entry, userid, value);
 }
 
+EXPORTED int annotatemore_lookupmask(const char *mboxname, const char *entry,
+				     const char *userid, struct buf *value)
+{
+    return annotatemore_msg_lookupmask(mboxname, /*uid*/0, entry, userid, value);
+}
+
 EXPORTED int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const char *entry,
-			    const char *userid, struct buf *value)
+				     const char *userid, struct buf *value)
 {
     char key[MAX_MAILBOX_PATH+1];
     size_t keylen, datalen;
@@ -2290,6 +2296,16 @@ EXPORTED int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const c
     else if (r == CYRUSDB_NOTFOUND) r = 0;
 
     annotate_putdb(&d);
+    return r;
+}
+
+EXPORTED int annotatemore_msg_lookupmask(const char *mboxname, uint32_t uid, const char *entry,
+					 const char *userid, struct buf *value)
+{
+    int r = annotatemore_msg_lookup(mboxname, uid, entry, userid, value);
+    if (value->len == 0) {
+	r = annotatemore_msg_lookup(mboxname, uid, entry, NULL, value);
+    }
     return r;
 }
 

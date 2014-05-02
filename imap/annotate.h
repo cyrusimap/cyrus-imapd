@@ -165,9 +165,15 @@ int annotatemore_rawwrite(const char *mboxname, const char *entry,
 /* lookup a single annotation and return result */
 int annotatemore_lookup(const char *mboxname, const char *entry,
 			const char *userid, struct buf *value);
+/* same but check shared if per-user doesn't exist */
+int annotatemore_lookupmask(const char *mboxname, const char *entry,
+			    const char *userid, struct buf *value);
 /* lookup a single per-message annotation and return result */
 int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const char *entry,
 			    const char *userid, struct buf *value);
+/* same but check shared if per-user doesn't exist */
+int annotatemore_msg_lookupmask(const char *mboxname, uint32_t uid, const char *entry,
+				const char *userid, struct buf *value);
 
 /* store annotations.  Requires an open transaction */
 int annotate_state_store(annotate_state_t *state, struct entryattlist *l);
