@@ -4378,8 +4378,15 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 	    /* Add responses for all contained calendar collections */
 	    if (txn->req_tgt.mboxname && txn->req_tgt.mboxname[0])
 		base = strconcat(txn->req_tgt.mboxname, ".%", (const char *)NULL);
-	    else
-		base = xstrdup("*");
+	    else {
+		struct mboxname_parts parts;
+		mboxname_userid_to_parts(httpd_userid, &parts);
+		if (parts.domain)
+		    base = strconcat(parts.domain, "!user.*", (const char *)NULL);
+		else
+		    base = xstrdup("user.*");
+		mboxname_free_parts(&parts);
+	    }
 	    r = mboxlist_findall(NULL,  /* internal namespace */
 				 base, 1, NULL,
 				 httpd_authstate, propfind_by_collection, &fctx);
