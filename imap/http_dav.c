@@ -1554,7 +1554,7 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
 	rightstr = strchr(userid, '\t');
 	if (!rightstr) break;
 	*rightstr++ = '\0';
-	
+
 	nextid = strchr(rightstr, '\t');
 	if (!nextid) break;
 	*nextid++ = '\0';
@@ -1579,11 +1579,13 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
 	node = xmlNewChild(ace, NULL, BAD_CAST "principal", NULL);
 	if (!strcmp(userid, fctx->userid))
 	    xmlNewChild(node, NULL, BAD_CAST "self", NULL);
-	else if ((strlen(userid) == fctx->req_tgt->userlen) &&
-		 !strncmp(userid, fctx->req_tgt->user, fctx->req_tgt->userlen))
+	else if (mboxname_userownsmailbox(userid, fctx->mailbox->name))
 	    xmlNewChild(node, NULL, BAD_CAST "owner", NULL);
 	else if (!strcmp(userid, "anyone"))
 	    xmlNewChild(node, NULL, BAD_CAST "authenticated", NULL);
+	/* XXX - well, it's better than a user called 'anonymous' */
+	else if (!strcmp(userid, "anonymous"))
+	    xmlNewChild(node, NULL, BAD_CAST "unauthenticated", NULL);
 	else {
 	    buf_reset(&fctx->buf);
 	    buf_printf(&fctx->buf, "%s/user/%s/",
