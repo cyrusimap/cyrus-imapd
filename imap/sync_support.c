@@ -1574,6 +1574,7 @@ int sync_append_copyfile(struct mailbox *mailbox,
     if (r) {
 	/* deal with unlinked master records */
 	if (record->system_flags & FLAG_EXPUNGED) {
+	    /* no need to set 'needs cleanup' here, it's already expunged */
 	    record->system_flags |= FLAG_UNLINKED;
 	    goto just_write;
 	}

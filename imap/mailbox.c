@@ -834,15 +834,6 @@ EXPORTED int mailbox_map_record(struct mailbox *mailbox, struct index_record *re
     fname = mailbox_record_fname(mailbox, record);
 
     msgfd = open(fname, O_RDONLY, 0666);
-    if (msgfd == -1) {
-	/* let's try the other file, just in case we're in the middle
-	 * of an archiving */
-	if (record->system_flags & FLAG_ARCHIVED)
-	    fname = mailbox_spool_fname(mailbox, record->uid);
-	else
-	    fname = mailbox_archive_fname(mailbox, record->uid);
-	msgfd = open(fname, O_RDONLY, 0666);
-    }
     if (msgfd == -1) return errno;
 
     if (fstat(msgfd, &sbuf) == -1) {
@@ -3145,7 +3136,7 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
 
     /* handle immediate expunges here... */
     if (immediate && (record->system_flags & FLAG_EXPUNGED))
-	record->system_flags |= FLAG_UNLINKED;
+	record->system_flags |= FLAG_UNLINKED | FLAG_NEEDS_CLEANUP;
 
     /* make sure highestmodseq gets updated unless we're
      * being silent about it (i.e. marking an already EXPUNGED
@@ -3349,34 +3340,58 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
     return mailbox_refresh_index_map(mailbox);
 }
 
-static void mailbox_record_unlink(struct mailbox *mailbox,
-				  struct index_record *record)
+static void mailbox_record_cleanup(struct mailbox *mailbox,
+				   struct index_record *record)
 {
-    const char *fname = mailbox_record_fname(mailbox, record);
+    const char *spoolfname = mailbox_spool_fname(mailbox, record->uid);
+    const char *archivefname = mailbox_archive_fname(mailbox, record->uid);
     int r;
 
-    /* XXX - reports errors other than ENOENT ? */
+    if (record->system_flags & FLAG_UNLINKED) {
+	/* try to delete both */
 
-    /* no error, we removed a file */
-    if (unlink(fname) == 0) {
-	if (config_auditlog)
-	    syslog(LOG_NOTICE, "auditlog: unlink sessionid=<%s> "
-		   "mailbox=<%s> uniqueid=<%s> uid=<%u>",
-		   session_id(), mailbox->name, mailbox->uniqueid, record->uid);
+	if (unlink(spoolfname) == 0) {
+	    if (config_auditlog)
+		syslog(LOG_NOTICE, "auditlog: unlink sessionid=<%s> "
+		       "mailbox=<%s> uniqueid=<%s> uid=<%u>",
+		       session_id(), mailbox->name, mailbox->uniqueid, record->uid);
+	}
+
+	if (unlink(archivefname) == 0) {
+	    if (config_auditlog)
+		syslog(LOG_NOTICE, "auditlog: unlinkarchive sessionid=<%s> "
+		       "mailbox=<%s> uniqueid=<%s> uid=<%u>",
+		       session_id(), mailbox->name, mailbox->uniqueid, record->uid);
+	}
+
+	r = mailbox_get_annotate_state(mailbox, record->uid, NULL);
+	if (r) {
+	    syslog(LOG_ERR, "IOERROR: failed to open annotations %s %u: %s",
+		   mailbox->name, record->uid, error_message(r));
+	    return;
+	}
+
+	r = annotate_msg_cleanup(mailbox, record->uid);
+	if (r) {
+	    syslog(LOG_ERR, "IOERROR: failed to cleanup annotations %s %u: %s",
+		   mailbox->name, record->uid, error_message(r));
+	    return;
+	}
     }
 
-    r = mailbox_get_annotate_state(mailbox, record->uid, NULL);
-    if (r) {
-	syslog(LOG_ERR, "IOERROR: failed to open annotations %s %u: %s",
-	       mailbox->name, record->uid, error_message(r));
+    /* nothing to cleanup if it's the same file! */
+    if (!strcmp(spoolfname, archivefname))
 	return;
+
+    /* otherwise check for archived/nonarchived */
+    else if (record->system_flags & FLAG_ARCHIVED) {
+	/* XXX - stat to make sure the other file exists first? - we mostly
+	 * trust that we didn't do stupid things everywhere else, so maybe not */
+	unlink(spoolfname);
     }
 
-    r = annotate_msg_cleanup(mailbox, record->uid);
-    if (r) {
-	syslog(LOG_ERR, "IOERROR: failed to cleanup annotations %s %u: %s",
-	       mailbox->name, record->uid, error_message(r));
-	return;
+    else {
+	unlink(archivefname);
     }
 }
 
@@ -3389,15 +3404,25 @@ static int mailbox_index_unlink(struct mailbox *mailbox)
 
     syslog(LOG_INFO, "Unlinking files in mailbox %s", mailbox->name);
 
-    /* note: this may try to unlink the same files more than once,
-     * but them's the breaks - the alternative is yet another
-     * system flag which gets updated once done! */
+    /* NOTE: this gets called for two different cases:
+     * 1) file is actually ready for unlinking (immediate expunge or
+     *    cyr_expire).
+     * 2) file has been archived/unarchived, and the other one needs
+     *    to be removed.
+     */
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	r = mailbox_read_index_record(mailbox, recno, &record);
 	if (r) return r;
 
-	if (record.system_flags & FLAG_UNLINKED)
-	    mailbox_record_unlink(mailbox, &record);
+	/* still gotta check for FLAG_UNLINKED, because it may have been
+	 * created by old code.  Woot */
+	if (record.system_flags & (FLAG_NEEDS_CLEANUP | FLAG_UNLINKED)) {
+	    mailbox_record_cleanup(mailbox, &record);
+	    record.system_flags &= ~FLAG_NEEDS_CLEANUP;
+	    record.silent = 1;
+	    /* XXX - error handling */
+	    mailbox_rewrite_index_record(mailbox, &record);
+	}
     }
 
     /* need to clear the flag, even if nothing needed unlinking! */
@@ -3762,17 +3787,21 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
 	if (repack->old_version >= 12 && repack->i.minor_version < 12 && repack->seqset) {
 	    seqset_add(repack->seqset, record.uid, record.system_flags & FLAG_SEEN ? 1 : 0);
 	    record.system_flags &= ~FLAG_SEEN;
+
+	/* better handle the cleanup just in case it's unlinked too */
+	/* still gotta check for FLAG_UNLINKED, because it may have been
+	 * created by old code.  Woot */
+	if (record.system_flags & (FLAG_NEEDS_CLEANUP | FLAG_UNLINKED)) {
+	    mailbox_record_cleanup(mailbox, &record);
+	    record.system_flags &= ~FLAG_NEEDS_CLEANUP;
+	    /* no need to rewrite - it's already being written to the new file */
 	}
 
 	/* we aren't keeping unlinked files, that's kind of the point */
 	if (record.system_flags & FLAG_UNLINKED) {
-	    /* just in case it was left lying around */
-	    mailbox_record_unlink(mailbox, &record);
-
 	    /* track the modseq for QRESYNC purposes */
 	    if (record.modseq > repack->i.deletedmodseq)
 		repack->i.deletedmodseq = record.modseq;
-
 	    continue;
 	}
 
@@ -3873,7 +3902,7 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
 		continue;
 	    }
 
-	    record.system_flags |= FLAG_ARCHIVED;
+	    record.system_flags |= FLAG_ARCHIVED | FLAG_NEEDS_CLEANUP;
 	    action = "archive";
 	}
 	else {
@@ -3890,7 +3919,7 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
 		continue;
 	    }
 
-	    record.system_flags &= ~FLAG_ARCHIVED;
+	    record.system_flags &= ~FLAG_ARCHIVED | FLAG_NEEDS_CLEANUP;
 	    action = "unarchive";
 	}
 
@@ -3916,15 +3945,12 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
 	record.silent = 1;
 	if (mailbox_rewrite_index_record(mailbox, &record))
 	    continue;
+	mailbox->i.options |= OPT_MAILBOX_NEEDS_UNLINK;
 
 	if (config_auditlog)
 	    syslog(LOG_NOTICE, "auditlog: %s sessionid=<%s> mailbox=<%s> uniqueid=<%s> uid=<%u> guid=<%s> cid=<%s>",
 		   action, session_id(), mailbox->name, mailbox->uniqueid, record.uid,
 		   message_guid_encode(&record.guid), conversation_id_encode(record.cid));
-
-	/* finally clean up the original */
-	if (strcmp(srcname, destname))
-	    unlink(srcname);
     }
 
     /* if we have stale cache records, we'll need a repack */

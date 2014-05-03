@@ -258,12 +258,16 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
 		   mboxname, record.uid, newrecord.uid);
 
 	/* mark the old one unlinked so we don't see it again */
-	record.system_flags |= FLAG_UNLINKED;
+	record.system_flags |= FLAG_UNLINKED | FLAG_NEEDS_CLEANUP;
 	r = mailbox_rewrite_index_record(mailbox, &record);
 	if (r) goto done;
 
 	(*numrestored)++;
     }
+
+    /* better get that seen to */
+    if (*numrestored)
+	mailbox->i.options |= OPT_MAILBOX_NEEDS_UNLINK;
 
 done:
     return r;
