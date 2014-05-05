@@ -3279,6 +3279,7 @@ static int report_fb_query(struct transaction_t *txn,
     struct calquery_filter calfilter;
     xmlNodePtr node;
     icalcomponent *cal;
+    icaltimezone *utc = icaltimezone_get_utc_timezone();
 
     /* Can not be run against a resource */
     if (txn->req_tgt.resource) return HTTP_FORBIDDEN;
@@ -3292,8 +3293,8 @@ static int report_fb_query(struct transaction_t *txn,
 
     memset(&calfilter, 0, sizeof(struct calquery_filter));
     calfilter.comp = CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY;
-    calfilter.start = icaltime_from_timet_with_zone(INT_MIN, 0, NULL);
-    calfilter.end = icaltime_from_timet_with_zone(INT_MAX, 0, NULL);
+    calfilter.start = icaltime_from_timet_with_zone(INT_MIN, 0, utc);
+    calfilter.end = icaltime_from_timet_with_zone(INT_MAX, 0, utc);
     calfilter.save_busytime = 1;
     fctx->filter = apply_calfilter;
     fctx->filter_crit = &calfilter;
@@ -3309,12 +3310,18 @@ static int report_fb_query(struct transaction_t *txn,
 		    calfilter.start = icaltime_from_string((char *) start);
 		    xmlFree(start);
 		}
+syslog(LOG_INFO, "START: valid %d, is_date: %d, is_utc: %d, zone: %d",
+       icaltime_is_valid_time(calfilter.start), icaltime_is_date(calfilter.start),
+       icaltime_is_utc(calfilter.start), calfilter.start.zone != NULL);
 
 		end = xmlGetProp(node, BAD_CAST "end");
 		if (end) {
 		    calfilter.end = icaltime_from_string((char *) end);
 		    xmlFree(end);
 		}
+syslog(LOG_INFO, "END: valid %d, is_date: %d, is_utc: %d, zone: %d",
+       icaltime_is_valid_time(calfilter.end), icaltime_is_date(calfilter.end),
+       icaltime_is_utc(calfilter.end), calfilter.end.zone != NULL);
 
 		if (!is_valid_timerange(calfilter.start, calfilter.end)) {
 		    return HTTP_BAD_REQUEST;
