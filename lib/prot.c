@@ -820,7 +820,7 @@ static void prot_flush_log(struct protstream *s)
 	int n;
 	time_t newtime;
 	char timebuf[20];
-	
+
 	time(&newtime);
 	snprintf(timebuf, sizeof(timebuf), ">%ld>", newtime);
 	n = write(s->logfd, timebuf, strlen(timebuf));
@@ -836,7 +836,9 @@ static void prot_flush_log(struct protstream *s)
 	    }
 	} while (left);
 
-	(void)fsync(s->logfd);
+	/* we don't care THAT much about logs
+	 * (void)fsync(s->logfd);
+	 */
     }
 }
 
