@@ -1585,10 +1585,10 @@ static int action_list(struct transaction_t *txn, int rights)
     write_body(HTTP_OK, txn, buf_cstring(body), buf_len(body));
     buf_reset(body);
 
-    /* Populate list callback rock */
-    http_proto_host(txn->req_hdrs, &lrock.proto, &lrock.host);
-    lrock.txn = txn;
-    lrock.level = &level;
+    /* Create base URL for calendars */
+    http_proto_host(txn->req_hdrs, &proto, &host);
+    buf_reset(&txn->buf);
+    buf_printf(&txn->buf, "%s://%s%s", proto, host, txn->req_tgt.path);
 
     /* Generate list of calendars */
     strlcat(txn->req_tgt.mboxname, ".%", sizeof(txn->req_tgt.mboxname));
@@ -2625,13 +2625,12 @@ static int caldav_put(struct transaction_t *txn,
 	ret = HTTP_FORBIDDEN;
 	goto done;
     }
-
-    icalrestriction_check(ical);
-    if ((txn->error.desc = get_icalcomponent_errstr(ical))) {
-	assert(!buf_len(&txn->buf));
-	buf_setcstr(&txn->buf, txn->error.desc);
-	txn->error.desc = buf_cstring(&txn->buf);
+    else if (!icalrestriction_check(ical)) {
 	txn->error.precond = CALDAV_VALID_DATA;
+	if ((txn->error.desc = get_icalrestriction_errstr(ical))) {
+	    buf_setcstr(&txn->buf, txn->error.desc);
+	    txn->error.desc = buf_cstring(&txn->buf);
+	}
 	ret = HTTP_FORBIDDEN;
 	goto done;
     }
@@ -2727,6 +2726,7 @@ static int caldav_put(struct transaction_t *txn,
 		(strcmp(cdata->dav.mailbox, txn->req_tgt.mboxname) ||
 		 strcmp(cdata->dav.resource, txn->req_tgt.resource))) {
 
+		buf_reset(&txn->buf);
 		buf_printf(&txn->buf, "%s/user/%s/%s/%s",
 			   namespace_calendar.prefix,
 			   userid, strrchr(cdata->dav.mailbox, '.')+1,
