@@ -3310,18 +3310,12 @@ static int report_fb_query(struct transaction_t *txn,
 		    calfilter.start = icaltime_from_string((char *) start);
 		    xmlFree(start);
 		}
-syslog(LOG_INFO, "START: valid %d, is_date: %d, is_utc: %d, zone: %d",
-       icaltime_is_valid_time(calfilter.start), icaltime_is_date(calfilter.start),
-       icaltime_is_utc(calfilter.start), calfilter.start.zone != NULL);
 
 		end = xmlGetProp(node, BAD_CAST "end");
 		if (end) {
 		    calfilter.end = icaltime_from_string((char *) end);
 		    xmlFree(end);
 		}
-syslog(LOG_INFO, "END: valid %d, is_date: %d, is_utc: %d, zone: %d",
-       icaltime_is_valid_time(calfilter.end), icaltime_is_date(calfilter.end),
-       icaltime_is_utc(calfilter.end), calfilter.end.zone != NULL);
 
 		if (!is_valid_timerange(calfilter.start, calfilter.end)) {
 		    return HTTP_BAD_REQUEST;
