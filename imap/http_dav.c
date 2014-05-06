@@ -1684,9 +1684,13 @@ int propfind_quota(const xmlChar *name, xmlNsPtr ns,
     buf_reset(&fctx->buf);
     if (!xmlStrcmp(name, BAD_CAST "quota-available-bytes")) {
 	/* Calculate limit in bytes and subtract usage */
-	uquota_t limit = fctx->quota.limit * QUOTA_UNITS;
-
-	buf_printf(&fctx->buf, UQUOTA_T_FMT, limit - fctx->quota.used);
+	if (fctx->quota.limits[QUOTA_STORAGE] < 0) { // unlimited
+	    buf_printf(&fctx->buf, QUOTA_T_FMT, (quota_t)INT64_MAX);
+	}
+	else {
+	    quota_t limit = fctx->quota.limits[QUOTA_STORAGE] * quota_units[QUOTA_STORAGE];
+	    buf_printf(&fctx->buf, QUOTA_T_FMT, limit - fctx->quota.useds[QUOTA_STORAGE]);
+	}
     }
     else if (fctx->record) {
 	/* Bytes used by resource */
