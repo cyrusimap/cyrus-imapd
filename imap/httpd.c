@@ -3807,6 +3807,18 @@ static int meth_get(struct transaction_t *txn,
     prefix = config_getstring(IMAPOPT_HTTPDOCROOT);
     if (!prefix) return HTTP_NOT_FOUND;
 
+    if (*prefix != '/') {
+	/* Remote content */
+	struct backend *be;
+
+	be = proxy_findserver(prefix, &http_protocol, proxy_userid,
+			      &backend_cached, NULL, NULL, httpd_in);
+	if (!be) return HTTP_UNAVAILABLE;
+
+	return http_pipe_req_resp(be, txn);
+    }
+
+    /* Local content */
     if ((urls = config_getstring(IMAPOPT_HTTPALLOWEDURLS))) {
 	tok_t tok = TOK_INITIALIZER(urls, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
 	char *token;
