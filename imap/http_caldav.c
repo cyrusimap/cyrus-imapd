@@ -3738,18 +3738,16 @@ int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
 			name, ns, NULL, 0);
 
     /* XXX  This needs to be done via an LDAP/DB lookup */
-    for (domains = cua_domains; domains; domains = domains->next) {
-	buf_reset(&fctx->buf);
-	buf_printf(&fctx->buf, "mailto:%.*s@%s", (int) fctx->req_tgt->userlen,
-		   fctx->req_tgt->user, domains->s);
-
-	xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "href",
-		    BAD_CAST buf_cstring(&fctx->buf));
+    buf_reset(&fctx->buf);
+    if (strchr(fctx->userid, '@')) {
+	buf_printf(&fctx->buf, "mailto:%s", fctx->userid);
+    }
+    else {
+	buf_printf(&fctx->buf, "mailto:%s@%s", fctx->userid, config_servername);
     }
 
     return 0;
 }
-
 
 /* Callback to fetch CALDAV:calendar-user-type */
 int propfind_calusertype(const xmlChar *name, xmlNsPtr ns,
