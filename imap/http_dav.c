@@ -4024,13 +4024,21 @@ int propfind_by_collection(char *mboxname, int matchlen,
     struct mailbox *mailbox = NULL;
     char *p;
     size_t len;
-    int r = 0, rights, root;
+    int r = 0, rights, root = 1;
 
     mboxname_init_parts(&parts);
 
     /* If this function is called outside of mboxlist_findall()
-       with matchlen == 0, this is the root resource of the PROPFIND */
-    root = !matchlen;
+     * with matchlen == 0, this is the root resource of the PROPFIND,
+     * otherwise it's just one of many found.  Inbox and Outbox can't
+     * appear unless they are the root */
+    if (matchlen) {
+	p = strrchr(mboxname, '.');
+	if (!p) goto done;
+	if (!strncmp(p+1, SCHED_INBOX, strlen(SCHED_INBOX) - 1)) goto done;
+	if (!strncmp(p+1, SCHED_OUTBOX, strlen(SCHED_OUTBOX) - 1)) goto done;
+	root = 0;
+    }
 
     /* Check ACL on mailbox for current user */
     r = mboxlist_lookup(mboxname, &mbentry, NULL);
@@ -4078,10 +4086,6 @@ int propfind_by_collection(char *mboxname, int matchlen,
 	/* one day this will just be the final element of 'boxes' hopefully */
 	p = strrchr(parts.box, '.');
 	if (!p) goto done;
-
-	/* special ones? */
-	if (!strncmp(p+1, SCHED_INBOX, strlen(SCHED_INBOX) - 1)) goto done;
-	if (!strncmp(p+1, SCHED_OUTBOX, strlen(SCHED_OUTBOX) - 1)) goto done;
 
 	/* OK, we're doing this mailbox */
 	buf_appendcstr(&writebuf, p+1);
