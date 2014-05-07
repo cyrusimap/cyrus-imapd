@@ -166,6 +166,7 @@ service_PROGRAMS += imap/httpd
 user_PROGRAMS += imap/dav_reconstruct
 HTTP_SOURCES = imap/http_err.c \
 	       imap/http_proxy.c \
+	       imap/http_client.c \
 	       imap/http_caldav.c \
 	       imap/http_carddav.c \
 	       imap/http_dav.c \
@@ -925,6 +926,7 @@ imap_httpd_SOURCES = \
 	imap/carddav_db.c \
 	imap/caldav_db.c \
 	imap/http_proxy.c \
+	imap/http_client.c \
 	imap/httpd.c \
 	imap/proxy.c \
 	imap/spool.c \
