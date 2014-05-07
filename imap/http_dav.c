@@ -4035,8 +4035,12 @@ int propfind_by_collection(char *mboxname, int matchlen,
     if (matchlen) {
 	p = strrchr(mboxname, '.');
 	if (!p) goto done;
-	if (!strncmp(p+1, SCHED_INBOX, strlen(SCHED_INBOX) - 1)) goto done;
-	if (!strncmp(p+1, SCHED_OUTBOX, strlen(SCHED_OUTBOX) - 1)) goto done;
+	p++; /* skip dot */
+	if (!strncmp(p, SCHED_INBOX, strlen(SCHED_INBOX) - 1)) goto done;
+	if (!strncmp(p, SCHED_OUTBOX, strlen(SCHED_OUTBOX) - 1)) goto done;
+	/* and while we're at it, reject the fricking top-level folders too.
+	 * XXX - this is evil and bad and wrong */
+	if (*p == '#') goto done;
 	root = 0;
     }
 
