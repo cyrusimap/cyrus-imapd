@@ -244,7 +244,7 @@ int mboxlist_changesub(const char *name, const char *userid,
 
 /* set or create quota root */
 int mboxlist_setquotas(const char *root,
-		       int newquotas[QUOTA_NUMRESOURCES], int force);
+		       quota_t newquotas[QUOTA_NUMRESOURCES], int force);
 int mboxlist_unsetquota(const char *root);
 
 /* open the mailboxes db */

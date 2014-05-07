@@ -78,7 +78,7 @@ struct quota {
 
     /* Information in quota entry */
     quota_t useds[QUOTA_NUMRESOURCES];
-    int limits[QUOTA_NUMRESOURCES];		/* in QUOTA_UNITS */
+    quota_t limits[QUOTA_NUMRESOURCES];		/* in QUOTA_UNITS */
 
     /* information for scanning */
     char *scanmbox;
@@ -89,7 +89,7 @@ struct quota {
 #define QUOTA_UNLIMITED	    (-1)
 
 extern const char * const quota_names[QUOTA_NUMRESOURCES];
-extern const int quota_units[QUOTA_NUMRESOURCES];
+extern const quota_t quota_units[QUOTA_NUMRESOURCES];
 int quota_name_to_resource(const char *str);
 
 typedef int quotaproc_t(struct quota *quota, void *rock);
@@ -140,5 +140,5 @@ void quotadb_init(int flags);
 void quotadb_done(void);
 
 int quota_is_overquota(const struct quota *quota, enum quota_resource res,
-                       int newquotas[QUOTA_NUMRESOURCES]);
+                       quota_t newquotas[QUOTA_NUMRESOURCES]);
 #endif /* INCLUDED_QUOTA_H */

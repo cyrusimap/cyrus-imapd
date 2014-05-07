@@ -7080,7 +7080,7 @@ static void print_quota_used(struct protstream *o, const struct quota *q)
     prot_putc('(', o);
     for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
 	if (q->limits[res] >= 0) {
-	    prot_printf(o, "%s%s " QUOTA_T_FMT " %d",
+	    prot_printf(o, "%s%s " QUOTA_T_FMT " " QUOTA_T_FMT,
 			sep, quota_names[res],
 			q->useds[res]/quota_units[res],
 			q->limits[res]);
@@ -7098,7 +7098,7 @@ static void print_quota_limits(struct protstream *o, const struct quota *q)
     prot_putc('(', o);
     for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
 	if (q->limits[res] >= 0) {
-	    prot_printf(o, "%s%s %d",
+	    prot_printf(o, "%s%s " QUOTA_T_FMT,
 			sep, quota_names[res],
 			q->limits[res]);
 	    sep = " ";
@@ -7318,7 +7318,7 @@ static void cmd_getquotaroot(const char *tag, const char *name)
  */
 void cmd_setquota(const char *tag, const char *quotaroot)
 {
-    int newquotas[QUOTA_NUMRESOURCES];
+    quota_t newquotas[QUOTA_NUMRESOURCES];
     int res;
     int c;
     int force = 0;
@@ -7435,7 +7435,7 @@ out:
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
 	return;
     }
-    
+
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
     return;

@@ -90,7 +90,7 @@ EXPORTED const char * const quota_names[QUOTA_NUMRESOURCES] = {
     "X-NUM-FOLDERS"		/* QUOTA_NUMFOLDERS */
 };
 
-EXPORTED const int quota_units[QUOTA_NUMRESOURCES] = {
+EXPORTED const quota_t quota_units[QUOTA_NUMRESOURCES] = {
     1024,		/* QUOTA_STORAGE -- RFC2087 */
     1,			/* QUOTA_MESSAGE -- RFC2087 */
     1024,		/* QUOTA_ANNOTSTORAGE */
@@ -194,7 +194,7 @@ static int quota_parseval(const char *data, size_t datalen,
 	    goto out;	/* need at least 2 more fields */
 	if (sscanf(fields->data[i++], QUOTA_T_FMT, &quota->useds[res]) != 1)
 	    goto out;
-	if (sscanf(fields->data[i++], "%d", &quota->limits[res]) != 1)
+	if (sscanf(fields->data[i++], QUOTA_T_FMT, &quota->limits[res]) != 1)
 	    goto out;
 	/* skip over temporary extra used data from failed quota -f runs */
 	if (i < fields->count &&
@@ -665,7 +665,7 @@ EXPORTED void quotadb_done(void)
 }
 
 EXPORTED int quota_is_overquota(const struct quota *quota, enum quota_resource res,
-                       int newquotas[QUOTA_NUMRESOURCES])
+                       quota_t newquotas[QUOTA_NUMRESOURCES])
 {
     int limit = newquotas ? newquotas[res] : quota->limits[res];
 

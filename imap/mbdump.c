@@ -505,7 +505,7 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
 	r = quota_read(&q, NULL, 0);
 
 	if (!r) {
-	    prot_printf(pout, "%d", q.limits[QUOTA_STORAGE]);
+	    prot_printf(pout, QUOTA_T_FMT, q.limits[QUOTA_STORAGE]);
 	} else {
 	    prot_printf(pout, "NIL");
 	    if (r == IMAP_QUOTAROOT_NONEXISTENT) r = 0;
@@ -717,7 +717,7 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
 		}
 		prot_printliteral(pout, quota_names[res], strlen(quota_names[res]));
 		prot_putc(' ', pout);
-		prot_printf(pout, "%d", q.limits[res]);
+		prot_printf(pout, QUOTA_T_FMT, q.limits[res]);
 	    }
 	    prot_putc(')', pout);
 	}
@@ -828,8 +828,8 @@ EXPORTED int undump_mailbox(const char *mbname,
     char *mboxkey_file = NULL;
     quota_t old_quota_usage[QUOTA_NUMRESOURCES];
     int res;
-    int newquotas[QUOTA_NUMRESOURCES];
-    int quotalimit = -1;
+    quota_t newquotas[QUOTA_NUMRESOURCES];
+    quota_t quotalimit = -1;
     annotate_state_t *astate = NULL;
 
     memset(&file, 0, sizeof(file));
@@ -856,7 +856,7 @@ EXPORTED int undump_mailbox(const char *mbname,
     if (!strcmp(data.s, "NIL")) {
 	/* Remove any existing quotaroot */
 	mboxlist_unsetquota(mbname);
-    } else if (sscanf(data.s, "%d", &quotalimit) == 1) {
+    } else if (sscanf(data.s, QUOTA_T_FMT, &quotalimit) == 1) {
 	/* Set a Quota (may be -1 for "unlimited") */
 	for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
 	    newquotas[res] = QUOTA_UNLIMITED;

@@ -2809,7 +2809,7 @@ static int child_cb(char *name,
  * Set all the resource quotas on, or create a quota root.
  */
 EXPORTED int mboxlist_setquotas(const char *root,
-		       int newquotas[QUOTA_NUMRESOURCES], int force)
+		       quota_t newquotas[QUOTA_NUMRESOURCES], int force)
 {
     char pattern[MAX_MAILBOX_PATH+1];
     struct quota q;

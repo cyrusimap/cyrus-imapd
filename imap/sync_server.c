@@ -1217,7 +1217,7 @@ static int do_unquota(struct dlist *kin)
 static int do_quota(struct dlist *kin)
 {
     const char *root;
-    int limits[QUOTA_NUMRESOURCES];
+    quota_t limits[QUOTA_NUMRESOURCES];
 
     if (!dlist_getatom(kin, "ROOT", &root))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;

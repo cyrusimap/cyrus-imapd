@@ -643,7 +643,7 @@ void sync_quota_list_free(struct sync_quota_list **lp)
     *lp = NULL;
 }
 
-void sync_encode_quota_limits(struct dlist *kl, const int limits[QUOTA_NUMRESOURCES])
+void sync_encode_quota_limits(struct dlist *kl, const quota_t limits[QUOTA_NUMRESOURCES])
 {
     int res;
 
@@ -662,7 +662,7 @@ void sync_encode_quota_limits(struct dlist *kl, const int limits[QUOTA_NUMRESOUR
     }
 }
 
-void sync_decode_quota_limits(/*const*/ struct dlist *kl, int limits[QUOTA_NUMRESOURCES])
+void sync_decode_quota_limits(/*const*/ struct dlist *kl, quota_t limits[QUOTA_NUMRESOURCES])
 {
     uint32_t limit = 0;
     int res;

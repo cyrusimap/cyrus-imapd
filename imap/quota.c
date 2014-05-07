@@ -669,8 +669,8 @@ int fixquotas(char *domain, char **roots, int nroots)
 static void reportquota_resource(struct quota * quota, const char *root, int res)
 {
     if (quota->limits[res] > 0) {
-	printf(" %7" PRIdMAX " %8" PRIdMAX, (intmax_t)quota->limits[res],
-	    (intmax_t)((((intmax_t)quota->useds[res] / quota_units[res])
+	printf(" %7lld %8lld", quota->limits[res],
+	    (quota_t)((quota_t)((quota->useds[res] / quota_units[res])
 	    * 100) / quota->limits[res]));
     }
     else if (quota->limits[res] == 0) {
@@ -679,8 +679,8 @@ static void reportquota_resource(struct quota * quota, const char *root, int res
     else {
 	printf("                 ");
     }
-    printf(" %8" PRIdMAX " %20s %s\n",
-	(intmax_t)((intmax_t)quota->useds[res] / quota_units[res]),
+    printf(" %8lld %20s %s\n",
+	(quota_t)(quota->useds[res] / quota_units[res]),
 	quota_names[res], root);
 }
 
