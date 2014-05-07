@@ -54,16 +54,13 @@
 
 #include "annotate.h" /* for strlist */
 #include "hash.h"
+#include "http_client.h"
 #include "mailbox.h"
 #include "spool.h"
 
 #define MAX_REQ_LINE	8000  /* minimum size per HTTPbis */
 #define MARKUP_INDENT	2     /* # spaces to indent each line of markup */
 #define GZIP_MIN_LEN	300   /* minimum length of data to gzip */
-
-/* Supported HTTP version */
-#define HTTP_VERSION	 "HTTP/1.1"
-#define HTTP_VERSION_LEN 8
 
 /* Supported TLS version for Upgrade */
 #define TLS_VERSION	 "TLS/1.0"
@@ -100,29 +97,6 @@ extern const struct known_meth_t http_methods[];
 /* Flags for known methods*/
 enum {
     METH_NOBODY =	(1<<0),	/* Method does not expect a body */
-};
-
-/* Index into known HTTP methods - needs to stay in sync with array */
-enum {
-    METH_ACL = 0,
-    METH_COPY,
-    METH_DELETE,
-    METH_GET,
-    METH_HEAD,
-    METH_LOCK,
-    METH_MKCALENDAR,
-    METH_MKCOL,
-    METH_MOVE,
-    METH_OPTIONS,
-    METH_POST,
-    METH_PROPFIND,
-    METH_PROPPATCH,
-    METH_PUT,
-    METH_REPORT,
-    METH_TRACE,
-    METH_UNLOCK,
-
-    METH_UNKNOWN,  /* MUST be last */
 };
 
 
@@ -242,24 +216,6 @@ struct range {
     struct range *next;
 };
 
-/* Context for reading request/response body */
-struct body_t {
-    unsigned char flags;		/* Disposition flags */
-    unsigned char framing;		/* Message framing   */
-    unsigned char te;			/* Transfer-Encoding */
-    unsigned max;			/* Max allowed len   */
-    ulong len; 				/* Content-Length    */
-    struct buf payload;			/* Payload	     */
-};
-
-/* Message Framing flags */
-enum {
-    FRAMING_UNKNOWN = 0,
-    FRAMING_LENGTH,
-    FRAMING_CHUNKED,
-    FRAMING_CLOSE
-};
-
 
 /* Meta-data for response body (payload & representation headers) */
 struct resp_body_t {
@@ -341,24 +297,6 @@ enum {
     CORS_NONE =		0,
     CORS_SIMPLE =	1,
     CORS_PREFLIGHT =	2
-};
-
-/* read_body() flags */
-enum {
-    BODY_RESPONSE =	(1<<0),	/* Response body, otherwise request */
-    BODY_CONTINUE =	(1<<1),	/* Expect:100-continue request */
-    BODY_CLOSE =	(1<<1),	/* Close-delimited response body */
-    BODY_DECODE = 	(1<<2),	/* Decode any Content-Encoding */
-    BODY_DISCARD =	(1<<3),	/* Discard body (don't buffer or decode) */
-    BODY_DONE =		(1<<4)	/* Body has been read */
-};
-
-/* Transfer-Encoding flags (coding of response payload) */
-enum {
-    TE_NONE =		0,
-    TE_DEFLATE =	(1<<0),	/* Implies TE_CHUNKED as final coding */
-    TE_GZIP =		(1<<1),	/* Implies TE_CHUNKED as final coding */
-    TE_CHUNKED =	(1<<2)  /* MUST be last */
 };
 
 /* Content-Encoding flags (coding of representation) */
@@ -457,7 +395,6 @@ extern int config_httpprettytelemetry;
 extern xmlURIPtr parse_uri(unsigned meth, const char *uri, unsigned path_reqd,
 			   const char **errstr);
 extern struct accept *parse_accept(const char **hdr);
-extern int is_mediatype(const char *pat, const char *type);
 extern time_t calc_compile_time(const char *time, const char *date);
 extern const char *http_statusline(long code);
 extern char *rfc3339date_gen(char *buf, size_t len, time_t t);
@@ -479,9 +416,5 @@ extern int meth_trace(struct transaction_t *txn, void *params);
 extern int etagcmp(const char *hdr, const char *etag);
 extern int check_precond(struct transaction_t *txn, const void *data,
 			 const char *etag, time_t lastmod);
-extern int parse_framing(hdrcache_t hdrs, struct body_t *body,
-			 const char **errstr);
-extern int read_body(struct protstream *pin, hdrcache_t hdrs,
-		     struct body_t *body, const char **errstr);
 
 #endif /* HTTPD_H */

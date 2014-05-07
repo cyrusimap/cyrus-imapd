@@ -350,7 +350,8 @@ static int meth_post_isched(struct transaction_t *txn,
 
     /* Read body */
     txn->req_body.flags |= BODY_DECODE;
-    r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, &txn->error.desc);
+    r = http_read_body(httpd_in, httpd_out,
+		       txn->req_hdrs, &txn->req_body, &txn->error.desc);
     if (r) {
 	txn->flags.conn = CONN_CLOSE;
 	return r;

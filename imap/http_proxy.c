@@ -597,76 +597,6 @@ static void write_cachehdr(const char *name, const char *contents, void *rock)
 }
 
 
-/* Read a response from backend */
-int http_read_response(struct backend *be, unsigned meth, unsigned *code,
-		       const char **statline, hdrcache_t *hdrs,
-		       struct body_t *body, const char **errstr)
-{
-    static char statbuf[2048];
-    const char **conn;
-    int c = EOF;
-
-    if (statline) *statline = statbuf;
-    *errstr = NULL;
-    *code = HTTP_BAD_GATEWAY;
-
-    if (*hdrs) spool_free_hdrcache(*hdrs);
-    if (!(*hdrs = spool_new_hdrcache())) {
-	*errstr = "Unable to create header cache for backend response";
-	return HTTP_SERVER_ERROR;
-    }
-    if (!prot_fgets(statbuf, sizeof(statbuf), be->in) ||
-	(sscanf(statbuf, HTTP_VERSION " %u ", code) != 1) ||
-	spool_fill_hdrcache(be->in, NULL, *hdrs, NULL)) {
-	*errstr = "Unable to read status-line/headers from backend";
-	return HTTP_BAD_GATEWAY;
-    }
-    eatline(be->in, c); /* CRLF separating headers & body */
-
-    /* 1xx (provisional) response - nothing else to do */
-    if (*code < 200) return 0;
-
-    /* Final response */
-    if (!body) return 0;  /* body will be piped */
-    if (!(body->flags & BODY_DISCARD)) buf_reset(&body->payload);
-
-    /* Check connection persistence */
-    if (!strncmp(statbuf, "HTTP/1.0 ", 9)) body->flags |= BODY_CLOSE;
-    for (conn = spool_getheader(*hdrs, "Connection"); conn && *conn; conn++) {
-	tok_t tok =
-	    TOK_INITIALIZER(*conn, ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-	char *token;
-
-	while ((token = tok_next(&tok))) {
-	    if (!strcasecmp(token, "keep-alive")) body->flags &= ~BODY_CLOSE;
-	    else if (!strcasecmp(token, "close")) body->flags |= BODY_CLOSE;
-	}
-	tok_fini(&tok);
-    }
-
-    /* Not expecting a body for 204/304 response or any HEAD response */
-    switch (*code){
-    case 204: /* No Content */
-    case 304: /* Not Modified */
-	break;
-
-    default:
-	if (meth == METH_HEAD) break;
-
-	else {
-	    body->flags |= BODY_RESPONSE;
-	    body->framing = FRAMING_UNKNOWN;
-
-	    if (read_body(be->in, *hdrs, body, errstr)) {
-		return HTTP_BAD_GATEWAY;
-	    }
-	}
-    }
-
-    return 0;
-}
-
-
 /* Send a cached response to the client */
 static void send_response(const char *statline, hdrcache_t hdrs,
 			  struct buf *body, struct txn_flags_t *flags)
@@ -754,7 +684,7 @@ static int pipe_resp_body(struct protstream *pin, struct protstream *pout,
 
     if (resp_body->framing == FRAMING_UNKNOWN) {
 	/* Get message framing */
-	int r = parse_framing(resp_hdrs, resp_body, errstr);
+	int r = http_parse_framing(resp_hdrs, resp_body, errstr);
 	if (r) return r;
     }
     
@@ -901,8 +831,8 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 		unsigned len;
 
 		/* Read body from client */
-		r = read_body(httpd_in, txn->req_hdrs, &txn->req_body,
-			      &txn->error.desc);
+		r = http_read_body(httpd_in, httpd_out, txn->req_hdrs,
+				   &txn->req_body, &txn->error.desc);
 		if (r) {
 		    /* Couldn't get the body and can't finish request */
 		    txn->flags.conn = CONN_CLOSE;
