@@ -861,8 +861,6 @@ int xml_add_response(struct propfind_ctx *fctx, long code, unsigned precond)
 	}
     }
 
-    fctx->record = NULL;
-
     return 0;
 }
 
@@ -1814,6 +1812,9 @@ int propfind_sync_token(const xmlChar *name, xmlNsPtr ns,
 {
     if (!fctx->req_tgt->collection || /* until we support sync on cal-home */
 	!fctx->mailbox || fctx->record) return HTTP_NOT_FOUND;
+
+    /* not defined on the top-level collection either (aka #calendars) */
+    if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
 
     buf_reset(&fctx->buf);
     buf_printf(&fctx->buf, SYNC_TOKEN_URL_SCHEME "%u-" MODSEQ_FMT,
@@ -4124,19 +4125,27 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     memset(&fctx, 0, sizeof(struct propfind_ctx));
 
     /* Parse the path */
-    if (fparams->parse_path &&
-	(r = fparams->parse_path(txn->req_uri->path,
-				 &txn->req_tgt, &txn->error.desc))) return r;
+    if (fparams->parse_path) {
+	r = fparams->parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
+	if (r) return r;
+    }
 
     /* Make sure method is allowed */
-    if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED;
+    if (!(txn->req_tgt.allow & ALLOW_DAV))
+	return HTTP_NOT_ALLOWED;
 
     /* Check Depth */
     hdr = spool_getheader(txn->req_hdrs, "Depth");
     if (!hdr || !strcmp(hdr[0], "infinity")) {
 	depth = 2;
     }
-    else if (hdr && ((sscanf(hdr[0], "%u", &depth) != 1) || (depth > 1))) {
+    else if (!strcmp(hdr[0], "1")) {
+	depth = 1;
+    }
+    else if (!strcmp(hdr[0], "0")) {
+	depth = 0;
+    }
+    else {
 	txn->error.desc = "Illegal Depth value\r\n";
 	return HTTP_BAD_REQUEST;
     }
@@ -4209,7 +4218,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 
 	/* Make sure its a propfind element */
 	if (xmlStrcmp(root->name, BAD_CAST "propfind")) {
-	    txn->error.desc = "Missing propfind element in PROFIND request\r\n";
+	    txn->error.desc = "Missing propfind element in PROPFIND request\r\n";
 	    ret = HTTP_BAD_REQUEST;
 	    goto done;
 	}
@@ -4218,16 +4227,18 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 	for (cur = root->children;
 	     cur && cur->type != XML_ELEMENT_NODE; cur = cur->next);
 
+	if (!cur) {
+	    txn->error.desc = "Missing child node element in PROPFIND request\r\n";
+	    ret = HTTP_BAD_REQUEST;
+	    goto done;
+	}
+
 	/* Add propfind type to our header cache */
 	spool_cache_header(xstrdup(":type"), xstrdup((const char *) cur->name),
 			   txn->req_hdrs);
 
 	/* Make sure its a known element */
-	if (!cur) {
-	    ret = HTTP_BAD_REQUEST;
-	    goto done;
-	}
-	else if (!xmlStrcmp(cur->name, BAD_CAST "allprop")) {
+	if (!xmlStrcmp(cur->name, BAD_CAST "allprop")) {
 	    fctx.mode = PROPFIND_ALL;
 	}
 	else if (!xmlStrcmp(cur->name, BAD_CAST "propname")) {
@@ -4260,7 +4271,8 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     }
 
     /* Start construction of our multistatus response */
-    if (!(root = init_xml_response("multistatus", NS_DAV, root, ns))) {
+    root = init_xml_response("multistatus", NS_DAV, root, ns);
+    if (!root) {
 	ret = HTTP_SERVER_ERROR;
 	txn->error.desc = "Unable to create XML response\r\n";
 	goto done;
@@ -4301,23 +4313,20 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     if (!txn->req_tgt.collection &&
 	(!depth || !(fctx.prefer & PREFER_NOROOT))) {
 	/* Add response for principal or home-set collection */
-	struct mailbox *mailbox = NULL;
-
 	if (*txn->req_tgt.mboxname) {
 	    /* Open mailbox for reading */
-	    if ((r = mailbox_open_irl(txn->req_tgt.mboxname, &mailbox))) {
+	    if ((r = mailbox_open_irl(txn->req_tgt.mboxname, &fctx.mailbox))) {
 		syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
 		       txn->req_tgt.mboxname, error_message(r));
 		txn->error.desc = error_message(r);
 		ret = HTTP_SERVER_ERROR;
 		goto done;
 	    }
-	    fctx.mailbox = mailbox;
 	}
 
 	xml_add_response(&fctx, 0, 0);
 
-	mailbox_close(&mailbox);
+	mailbox_close(&fctx.mailbox);
     }
 
     if (depth > 0) {
