@@ -84,6 +84,8 @@ static const char * const badmboxpatterns[] = {
     "*.",
     "*..*",
     "user",
+    "user.anyone",
+    "user.anonymous",
 };
 #define NUM_BADMBOXPATTERNS (sizeof(badmboxpatterns)/sizeof(*badmboxpatterns))
 
