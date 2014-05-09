@@ -85,6 +85,8 @@ static char *badmboxpatterns[] = {
     "*.",
     "*..*",
     "user",
+    "user.anyone",
+    "user.anonymous",
     "*.INBOX.INBOX*",
 };
 #define NUM_BADMBOXPATTERNS (sizeof(badmboxpatterns)/sizeof(*badmboxpatterns))
