@@ -2384,11 +2384,9 @@ int meth_acl(struct transaction_t *txn, void *params)
 	    if (!xmlStrcmp(prin->name, BAD_CAST "self")) {
 		userid = proxy_userid;
 	    }
-#if 0  /* XXX  Do we need to support this? */
 	    else if (!xmlStrcmp(prin->name, BAD_CAST "owner")) {
-		/* XXX construct userid from mailbox name */
+		userid = mboxname_to_userid(mailbox->name);
 	    }
-#endif
 	    else if (!xmlStrcmp(prin->name, BAD_CAST "authenticated")) {
 		userid = "anyone";
 	    }
@@ -2404,6 +2402,7 @@ int meth_acl(struct transaction_t *txn, void *params)
 		    uri->path[plen] == '/') {
 		    memset(&tgt, 0, sizeof(struct request_target_t));
 		    tgt.namespace = URL_NS_PRINCIPAL;
+		    /* XXX: there is no doubt that this leaks memory */
 		    r = prin_parse_path(uri->path, &tgt, &errstr);
 		    if (!r && tgt.user) userid = tgt.user;
 		}
