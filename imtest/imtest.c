@@ -1204,6 +1204,20 @@ static void sigint_handler(int sig __attribute__((unused)))
     gotsigint = 1;
 }
 
+static int haveinput(struct protstream *s)
+{
+    /* Is something currently pending in our protstream's buffer? */
+#ifdef HAVE_SSL
+    if (s->cnt == 0 && s->tls_conn != NULL) {
+	/* Maybe there's data pending in the SSL buffer? */
+	int n = SSL_pending(s->tls_conn);
+	if (verbose) printf("SSL_pending=%d\n", n);
+	return n;
+    }
+#endif
+    return s->cnt;
+}
+
 /* This needs to support 3 modes:
  *
  * 1. Terminal Interface Only
@@ -1368,7 +1382,7 @@ static void interactive(struct protocol_t *protocol, char *filename)
 		    buf[count] = '\0';
 		    printf("%s", buf); 
 		}
-	    } while (pin->cnt > 0);
+	    } while (haveinput(pin) > 0);
 	} else if ((FD_ISSET(fd, &rset)) && (FD_ISSET(sock, &wset))
 		   && (donewritingfile == 0)) {
 	    /* This does input for both socket and file modes */
