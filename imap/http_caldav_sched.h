@@ -115,6 +115,7 @@ struct sched_param {
     struct proplist *props; /* List of attendee iCal properties */
 };
 
+extern const char *get_icalrestriction_errstr(icalcomponent *ical);
 extern int isched_send(struct sched_param *sparam, const char *recipient,
 		       icalcomponent *ical, xmlNodePtr *xml);
 
