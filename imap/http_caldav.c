@@ -535,7 +535,7 @@ static void my_caldav_init(struct buf *serverinfo)
     if ((rscale_calendars = icalrecurrencetype_rscale_supported_calendars())) {
 	icalarray_sort(rscale_calendars, &rscale_cmp);
 
-	buf_printf(serverinfo, " ICU/%s", U_ICU_VERSION);
+	buf_printf(serverinfo, " ICU4C/%s", U_ICU_VERSION);
     }
 #endif
 #ifdef WITH_JSON
