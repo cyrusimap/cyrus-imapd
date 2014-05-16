@@ -1596,7 +1596,7 @@ static int caldav_post(struct transaction_t *txn)
 }
 
 
-static const char *get_icalrestriction_errstr(icalcomponent *ical)
+const char *get_icalrestriction_errstr(icalcomponent *ical)
 {
     icalcomponent *comp;
 
