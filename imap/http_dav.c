@@ -2563,16 +2563,6 @@ int meth_acl(struct transaction_t *txn, void *params)
 
     /* Local Mailbox */
 
-    /* Open mailbox for writing */
-    r = mailbox_open_iwl(txn->req_tgt.mboxname, &mailbox);
-    if (r) {
-	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
-    }
-
     /* Parse the ACL body */
     ret = parse_xml_body(txn, &root);
     if (!ret && !root) {
@@ -2781,26 +2771,25 @@ int meth_acl(struct transaction_t *txn, void *params)
 	    }
 
 	    cyrus_acl_masktostr(rights, rightstr);
-	    buf_printf(&acl, "%s%s\t%s\t",
-		       deny ? "-" : "", userid, rightstr);
+	    buf_printf(&acl, "%s%s", deny ? "-" : "", rightstr);
+
+	    r = mboxlist_setacl(&httpd_namespace, txn->req_tgt.mboxname, userid, buf_cstring(&acl),
+				/*isadmin*/1, httpd_userid, httpd_authstate);
+	    if (r) {
+		syslog(LOG_ERR, "mboxlist_setacl(%s) failed: %s",
+		       txn->req_tgt.mboxname, error_message(r));
+		txn->error.desc = error_message(r);
+		ret = HTTP_SERVER_ERROR;
+		goto done;
+	    }
 	}
     }
-
-    if ((r = mboxlist_sync_setacls(txn->req_tgt.mboxname, buf_cstring(&acl)))) {
-	syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
-    }
-    mailbox_set_acl(mailbox, buf_cstring(&acl), 0);
 
     response_header(HTTP_OK, txn);
 
   done:
     buf_free(&acl);
     if (indoc) xmlFreeDoc(indoc);
-    mailbox_close(&mailbox);
 
     return ret;
 }
