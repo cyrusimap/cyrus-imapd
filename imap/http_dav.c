@@ -2273,14 +2273,16 @@ int meth_acl(struct transaction_t *txn, void *params)
 	}
     }
 
-    /* Check ACL for current user */
-    rights =  aclstr ? cyrus_acl_myrights(httpd_authstate, aclstr) : 0;
-    if (!(rights & DACL_ADMIN)) {
-	/* DAV:need-privileges */
-	txn->error.precond = DAV_NEED_PRIVS;
-	txn->error.resource = txn->req_tgt.path;
-	txn->error.rights = DACL_ADMIN;
-	return HTTP_FORBIDDEN;
+    if (!mboxname_userownsmailbox(httpd_userid, txn->req_tgt.mboxname)) {
+	/* Check ACL for current user */
+	rights =  aclstr ? cyrus_acl_myrights(httpd_authstate, aclstr) : 0;
+	if (!(rights & DACL_ADMIN)) {
+	    /* DAV:need-privileges */
+	    txn->error.precond = DAV_NEED_PRIVS;
+	    txn->error.resource = txn->req_tgt.path;
+	    txn->error.rights = DACL_ADMIN;
+	    return HTTP_FORBIDDEN;
+	}
     }
 
     if (server) {
