@@ -742,7 +742,8 @@ struct allprop_rock {
 
 /* Add a response tree to 'root' for the specified href and 
    either error code or property list */
-static int xml_add_response(struct propfind_ctx *fctx, long code)
+static int xml_add_response(struct propfind_ctx *fctx, long code,
+			    unsigned precond)
 {
     xmlNodePtr resp;
 
@@ -757,6 +758,12 @@ static int xml_add_response(struct propfind_ctx *fctx, long code)
     if (code) {
 	xmlNewChild(resp, NULL, BAD_CAST "status",
 		    BAD_CAST http_statusline(code));
+
+	if (precond) {
+	    xmlNodePtr error = xmlNewChild(resp, NULL, BAD_CAST "error", NULL);
+
+	    xmlNewChild(error, NULL, BAD_CAST preconds[precond].name, NULL);
+	}
     }
     else {
 	struct propstat propstat[NUM_PROPSTAT], *stat;
@@ -3691,7 +3698,7 @@ int propfind_by_resource(void *rock, void *data)
 
     if (!ddata->imap_uid || !fctx->record) {
 	/* Add response for missing target */
-	ret = xml_add_response(fctx, HTTP_NOT_FOUND);
+	ret = xml_add_response(fctx, HTTP_NOT_FOUND, 0);
     }
     else {
 	int add_it = 1;
@@ -3700,7 +3707,7 @@ int propfind_by_resource(void *rock, void *data)
 
 	if (add_it) {
 	    /* Add response for target */
-	    ret = xml_add_response(fctx, 0);
+	    ret = xml_add_response(fctx, 0, 0);
 	}
     }
 
@@ -3776,7 +3783,7 @@ int propfind_by_collection(char *mboxname, int matchlen,
 	   add response for collection */
 	if (!fctx->filter_crit &&
 	    (!root || (fctx->depth == 1) || !(fctx->prefer & PREFER_NOROOT)) &&
-	    (r = xml_add_response(fctx, 0))) goto done;
+	    (r = xml_add_response(fctx, 0, 0))) goto done;
     }
 
     if (fctx->depth > 1) {
@@ -4023,7 +4030,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 	    fctx.mailbox = mailbox;
 	}
 
-	xml_add_response(&fctx, 0);
+	xml_add_response(&fctx, 0, 0);
 
 	mailbox_close(&mailbox);
     }
@@ -4642,7 +4649,7 @@ int report_sync_col(struct transaction_t *txn,
 	highestmodseq = map[nresp-1].modseq;
 
 	/* Tell client we truncated the responses */
-	xml_add_response(fctx, HTTP_NO_STORAGE);
+	xml_add_response(fctx, HTTP_NO_STORAGE, DAV_OVER_LIMIT);
     }
 
     /* Report the resources within the client requested limit (if any) */
@@ -4759,7 +4766,7 @@ static int principal_search(char *mboxname,
     fctx->req_tgt->user = p;
     fctx->req_tgt->userlen = strlen(p);
 
-    return xml_add_response(fctx, 0);
+    return xml_add_response(fctx, 0, 0);
 }
 
 
