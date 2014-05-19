@@ -2711,6 +2711,12 @@ int meth_acl(struct transaction_t *txn, void *params)
 					    BAD_CAST "write-properties"))
 			    rights |= DACL_WRITEPROPS;
 			else if (!xmlStrcmp(priv->name,
+					    BAD_CAST "remove-resource"))
+			    rights |= DACL_RMRSRC;
+			else if (!xmlStrcmp(priv->name,
+					    BAD_CAST "remove-collection"))
+			    rights |= DACL_RMCOL;
+			else if (!xmlStrcmp(priv->name,
 					    BAD_CAST "bind"))
 			    rights |= DACL_BIND;
 			else if (!xmlStrcmp(priv->name,
