@@ -2534,14 +2534,15 @@ int meth_acl(struct transaction_t *txn, void *params)
 	}
     }
 
-    if (!mboxname_userownsmailbox(httpd_userid, txn->req_tgt.mboxname)) {
+    if (!mboxname_userownsmailbox(httpd_userid, mbentry->name)) {
 	/* Check ACL for current user */
-	rights = mbentry ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
+	rights = mbentry->acl ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
 	if (!(rights & DACL_ADMIN)) {
 	    /* DAV:need-privileges */
 	    txn->error.precond = DAV_NEED_PRIVS;
 	    txn->error.resource = txn->req_tgt.path;
 	    txn->error.rights = DACL_ADMIN;
+	    mboxlist_entry_free(&mbentry);
 	    return HTTP_NO_PRIVS;
 	}
     }
