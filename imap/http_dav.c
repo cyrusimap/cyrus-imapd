@@ -2709,6 +2709,9 @@ int meth_acl(struct transaction_t *txn, void *params)
 					    BAD_CAST "read"))
 			    rights |= DACL_READ;
 			else if (!xmlStrcmp(priv->name,
+					    BAD_CAST "read-free-busy"))
+			    rights |= DACL_READFB;
+			else if (!xmlStrcmp(priv->name,
 					    BAD_CAST "write"))
 			    rights |= DACL_WRITE;
 			else if (!xmlStrcmp(priv->name,
