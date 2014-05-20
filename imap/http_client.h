@@ -81,10 +81,10 @@ enum {
 enum {
     BODY_RESPONSE =	(1<<0),	/* Response body, otherwise request */
     BODY_CONTINUE =	(1<<1),	/* Expect:100-continue request */
-    BODY_CLOSE =	(1<<1),	/* Close-delimited response body */
-    BODY_DECODE = 	(1<<2),	/* Decode any Content-Encoding */
-    BODY_DISCARD =	(1<<3),	/* Discard body (don't buffer or decode) */
-    BODY_DONE =		(1<<4)	/* Body has been read */
+    BODY_CLOSE =	(1<<2),	/* Close-delimited response body */
+    BODY_DECODE = 	(1<<3),	/* Decode any Content-Encoding */
+    BODY_DISCARD =	(1<<4),	/* Discard body (don't buffer or decode) */
+    BODY_DONE =		(1<<5)	/* Body has been read */
 };
 
 /* Index into known HTTP methods - needs to stay in sync with array */
