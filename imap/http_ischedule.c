@@ -515,7 +515,7 @@ int isched_send(struct sched_param *sparam, const char *recipient,
     struct backend *be;
     static unsigned send_count = 0;
     static struct buf hdrs = BUF_INITIALIZER;
-    const char *body, *uri;
+    const char *body, *uri, *originator;
     size_t bodylen;
     icalcomponent *comp;
     icalcomponent_kind kind;
@@ -531,11 +531,11 @@ int isched_send(struct sched_param *sparam, const char *recipient,
 
     /* Open connection to iSchedule receiver.
        Use header buffer to construct remote server[:port][/tls] */
-    buf_setcstr(&hdrs, sparam->server);
-    if (sparam->port) buf_printf(&hdrs, ":%u", sparam->port);
-    if (sparam->flags & SCHEDTYPE_SSL) buf_appendcstr(&hdrs, "/tls");
-    if (sparam->flags & SCHEDTYPE_REMOTE) buf_appendcstr(&hdrs, "/noauth");
-    be = proxy_findserver(buf_cstring(&hdrs), &http_protocol, NULL,
+    buf_setcstr(&txn.buf, sparam->server);
+    if (sparam->port) buf_printf(&txn.buf, ":%u", sparam->port);
+    if (sparam->flags & SCHEDTYPE_SSL) buf_appendcstr(&txn.buf, "/tls");
+    if (sparam->flags & SCHEDTYPE_REMOTE) buf_appendcstr(&txn.buf, "/noauth");
+    be = proxy_findserver(buf_cstring(&txn.buf), &http_protocol, NULL,
 			  &backend_cached, NULL, NULL, httpd_in);
     if (!be) return HTTP_UNAVAILABLE;
 
@@ -568,8 +568,21 @@ int isched_send(struct sched_param *sparam, const char *recipient,
 
     buf_printf(&hdrs, "Content-Length: %u\r\n", (unsigned) bodylen);
 
+    /* Determine Originator - XXX  should we pass in as param? */
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-    buf_printf(&hdrs, "Originator: %s\r\n", icalproperty_get_organizer(prop));
+    originator = icalproperty_get_organizer(prop);
+    if (recipient && !strcmp(recipient, originator)) {
+	/* recipient == organizer, this is a reply */
+	if (icalcomponent_isa(comp) == ICAL_VPOLL_COMPONENT) {
+	    prop = icalcomponent_get_first_property(comp, ICAL_VOTER_PROPERTY);
+	    originator = icalproperty_get_voter(prop);
+	}
+	else {
+	    icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+	    originator = icalproperty_get_attendee(prop);
+	}
+    }
+    buf_printf(&hdrs, "Originator: %s\r\n", originator);
 
     if (recipient) {
 	/* Single recipient */
@@ -664,6 +677,16 @@ int isched_send(struct sched_param *sparam, const char *recipient,
 	case 307:
 	case 308:  /* Redirection */
 	    uri = spool_getheader(txn.req_hdrs, "Location")[0];
+	    if (txn.req_body.flags & BODY_CLOSE) {
+		proxy_downserver(be);
+		be = proxy_findserver(buf_cstring(&txn.buf), &http_protocol,
+				      NULL, &backend_cached,
+				      NULL, NULL, httpd_in);
+		if (!be) {
+		    r = HTTP_UNAVAILABLE;
+		    break;
+		}
+	    }
 	    goto redirect;
 
 	default:
@@ -673,6 +696,7 @@ int isched_send(struct sched_param *sparam, const char *recipient,
 
     if (txn.req_hdrs) spool_free_hdrcache(txn.req_hdrs);
     buf_free(&txn.req_body.payload);
+    buf_free(&txn.buf);
 
     return r;
 }
