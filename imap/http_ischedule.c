@@ -569,19 +569,21 @@ int isched_send(struct sched_param *sparam, const char *recipient,
 
     buf_printf(&hdrs, "Content-Length: %u\r\n", (unsigned) bodylen);
 
-    /* Determine Originator - XXX  should we pass in as param? */
-    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-    originator = icalproperty_get_organizer(prop);
-    if (recipient && !strcmp(recipient, originator)) {
-	/* recipient == organizer, this is a reply */
+    /* Determine Originator based on method and component */
+    if (icalcomponent_get_method(ical) == ICAL_METHOD_REPLY) {
 	if (icalcomponent_isa(comp) == ICAL_VPOLL_COMPONENT) {
 	    prop = icalcomponent_get_first_property(comp, ICAL_VOTER_PROPERTY);
 	    originator = icalproperty_get_voter(prop);
 	}
 	else {
-	    icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+	    prop =
+		icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
 	    originator = icalproperty_get_attendee(prop);
 	}
+    }
+    else {
+	prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+	originator = icalproperty_get_organizer(prop);
     }
     buf_printf(&hdrs, "Originator: %s\r\n", originator);
 
