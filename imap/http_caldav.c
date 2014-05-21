@@ -4478,7 +4478,8 @@ static int deliver_merge_pollstatus(icalcomponent *ical, icalcomponent *request)
 
 
 static void sched_pollstatus(const char *organizer,
-			     struct sched_param *sparam, icalcomponent *ical)
+			     struct sched_param *sparam, icalcomponent *ical,
+			     const char *voter)
 {
     struct auth_state *authstate;
     struct sched_data sched_data;
@@ -4564,8 +4565,11 @@ static void sched_pollstatus(const char *organizer,
 	while (voters) { 
 	    struct strlist *next = voters->next;
 
-	    sched_data.itip = stat;
-	    sched_deliver(voters->s, &sched_data, authstate);
+	    /* Don't send status back to VOTER that triggered POLLSTATUS */
+	    if (strcmp(voters->s, voter)) {
+		sched_data.itip = stat;
+		sched_deliver(voters->s, &sched_data, authstate);
+	    }
 
 	    free(voters->s);
 	    free(voters);
@@ -4601,7 +4605,8 @@ deliver_merge_pollstatus(icalcomponent *ical __attribute__((unused)),
 
 static void sched_pollstatus(const char *organizer __attribute__((unused)),
 			     struct sched_param *sparam __attribute__((unused)),
-			     icalcomponent *ical __attribute__((unused)))
+			     icalcomponent *ical __attribute__((unused)),
+			     const char *voter __attribute__((unused)))
 {
     return;
 }
@@ -5197,7 +5202,7 @@ static void sched_deliver_local(const char *recipient,
 	/* Send updates to attendees - skipping sender of reply */
 	comp = icalcomponent_get_first_real_component(ical);
 	if (icalcomponent_isa(comp) == ICAL_VPOLL_COMPONENT)
-	    sched_pollstatus(recipient, sparam, ical);
+	    sched_pollstatus(recipient, sparam, ical, attendee);
 	else
 	    sched_request(recipient, sparam, NULL, ical, attendee);
     }
