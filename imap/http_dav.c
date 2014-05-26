@@ -2770,17 +2770,21 @@ int meth_acl(struct transaction_t *txn, void *params)
 		}
 	    }
 
-	    cyrus_acl_masktostr(rights, rightstr);
-	    buf_printf(&acl, "%s%s", deny ? "-" : "", rightstr);
+	    /* gotta have something to do! */
+	    if (rights) {
+		cyrus_acl_masktostr(rights, rightstr);
+		buf_reset(&acl);
+		buf_printf(&acl, "%s%s", deny ? "-" : "", rightstr);
 
-	    r = mboxlist_setacl(&httpd_namespace, txn->req_tgt.mboxname, userid, buf_cstring(&acl),
-				/*isadmin*/1, httpd_userid, httpd_authstate);
-	    if (r) {
-		syslog(LOG_ERR, "mboxlist_setacl(%s) failed: %s",
-		       txn->req_tgt.mboxname, error_message(r));
-		txn->error.desc = error_message(r);
-		ret = HTTP_SERVER_ERROR;
-		goto done;
+		r = mboxlist_setacl(&httpd_namespace, txn->req_tgt.mboxname, userid, buf_cstring(&acl),
+				    /*isadmin*/1, httpd_userid, httpd_authstate);
+		if (r) {
+		    syslog(LOG_ERR, "mboxlist_setacl(%s) failed: %s",
+			txn->req_tgt.mboxname, error_message(r));
+		    txn->error.desc = error_message(r);
+		    ret = HTTP_SERVER_ERROR;
+		    goto done;
+		}
 	    }
 	}
     }
