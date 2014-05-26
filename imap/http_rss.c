@@ -377,6 +377,7 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
     struct buf *buf = &lrock->txn->resp_body.payload;
 
     if (name) {
+	int rights;
 	mbentry_t *mbentry = NULL;
 	int r;
 
@@ -388,11 +389,13 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
 
 	/* Lookup the mailbox and make sure its readable */
 	r = http_mlookup(name, &mbentry, NULL);
-	if (r || !mbentry->acl || !(cyrus_acl_myrights(httpd_authstate, mbentry->acl) & ACL_READ)) {
-	    mboxlist_entry_free(&mbentry);
-	    return 0;
-	}
+	if (r) return 0;
+
+	rights = httpd_myrights(httpd_authstate, mbentry->acl);
 	mboxlist_entry_free(&mbentry);
+
+	if ((rights & ACL_READ) != ACL_READ)
+	    return 0;
     }
 
     if (name &&

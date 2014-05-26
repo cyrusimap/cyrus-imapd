@@ -68,6 +68,7 @@
 #include "httpd.h"
 #include "http_proxy.h"
 
+#include "acl.h"
 #include "assert.h"
 #include "util.h"
 #include "iptostring.h"

@@ -1390,6 +1390,7 @@ static int list_cal_cb(char *name,
     static size_t inboxlen = 0;
     static size_t outboxlen = 0;
     static size_t defaultlen = 0;
+    int rights;
     char *shortname;
     mbentry_t *mbentry = NULL;
     size_t len;
@@ -1415,7 +1416,10 @@ static int list_cal_cb(char *name,
 
     /* Lookup the mailbox and make sure its readable */
     r = http_mlookup(name, &mbentry, NULL);
-    if (r || !((rights = cyrus_acl_myrights(httpd_authstate, mbentry->acl)) & ACL_READ))
+    if (r) goto done;
+
+    rights = httpd_myrights(httpd_authstate, mbentry->acl);
+    if ((rights & DACL_READ) != DACL_READ)
 	goto done;
 
     /* Is this the default calendar? */
@@ -1699,7 +1703,6 @@ static void success_redirect(struct transaction_t *txn, const char *op)
     write_body(HTTP_SEE_OTHER, txn, buf_cstring(body), buf_len(body));
 }
 
-
 /* Create a new calendar */
 static int action_create(struct transaction_t *txn, int rights)
 {
@@ -1708,8 +1711,9 @@ static int action_create(struct transaction_t *txn, int rights)
     size_t len;
     int ret;
 
-    /* Check rights */
-    if (!(rights & DACL_MKCOL)) {
+    /* Check ACL for current user */
+    rights = httpd_myrights(httpd_authstate, mbentry->acl);
+    if ((rights & DACL_READ) != DACL_READ) {
 	/* DAV:need-privileges */
 	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
@@ -2464,7 +2468,7 @@ static int caldav_post(struct transaction_t *txn)
     }
 
     /* Get rights for current user */
-    rights = mbentry->acl ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
+    rights = httpd_myrights(httpd_authstate, mbentry->acl);
     mboxlist_entry_free(&mbentry);
 
     /* Read body */
@@ -6727,7 +6731,7 @@ static void sched_deliver_local(const char *recipient,
 	goto done;
     }
 
-    rights = cyrus_acl_myrights(authstate, mbentry->acl);
+    rights = httpd_myrights(authstate, mbentry->acl);
     mboxlist_entry_free(&mbentry);
 
     reqd_privs = sched_data->is_reply ? DACL_REPLY : DACL_INVITE;
@@ -7351,7 +7355,7 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 		   outboxname, error_message(r));
 	}
 	else {
-	    rights = cyrus_acl_myrights(httpd_authstate, mbentry->acl);
+	    rights = httpd_myrights(httpd_authstate, mbentry->acl);
 	    mboxlist_entry_free(&mbentry);
 	}
 
@@ -7721,7 +7725,7 @@ static void sched_reply(const char *userid,
 	       outboxname, error_message(r));
     }
     else {
-	rights = cyrus_acl_myrights(httpd_authstate, mbentry->acl);
+	rights = httpd_myrights(httpd_authstate, mbentry->acl);
 	mboxlist_entry_free(&mbentry);
     }
 
