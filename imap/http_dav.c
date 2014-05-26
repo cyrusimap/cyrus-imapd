@@ -2774,7 +2774,7 @@ int meth_acl(struct transaction_t *txn, void *params)
 	    if (rights) {
 		cyrus_acl_masktostr(rights, rightstr);
 		buf_reset(&acl);
-		buf_printf(&acl, "%s%s", deny ? "-" : "", rightstr);
+		buf_printf(&acl, "%s%s", deny ? "-" : "+", rightstr);
 
 		r = mboxlist_setacl(&httpd_namespace, txn->req_tgt.mboxname, userid, buf_cstring(&acl),
 				    /*isadmin*/1, httpd_userid, httpd_authstate);
