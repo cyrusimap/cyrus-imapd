@@ -96,6 +96,8 @@
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 
+//#define IOPTEST
+
 #ifdef HAVE_RSCALE
 #include <unicode/uversion.h>
 #endif
@@ -3262,6 +3264,10 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
 		icalproperty *busy =
 		    icalproperty_new_freebusy(busytime->busy[n]);
 
+		/* Add FBTYPE based on STATUS;TENTATIVE or VAVAILABILITY */
+//		icalproperty_add_parameter(busy,
+//					   icalparameter_new_fbtype(ICAL_FBTYPE_BUSY));
+
 		icalcomponent_add_property(fb, busy);
 	    }
 	}
@@ -3647,6 +3653,13 @@ int caladdress_lookup(const char *addr, struct sched_param *param)
     strlcpy(userid, p, sizeof(userid));
     if ((p = strchr(userid, '@'))) *p++ = '\0';
 
+#ifdef IOPTEST  /* CalConnect ioptest */
+    if (strcmp(p, "ken.name")) {
+      syslog(LOG_INFO, "not local user: %s %s", userid, p);
+      islocal = 0;
+    }
+#endif
+
     if (islocal) {
 	/* User is in a local domain */
 	int r;
@@ -3687,7 +3700,23 @@ int caladdress_lookup(const char *addr, struct sched_param *param)
 
     /* XXX  If success, set server, port,
        and flags |= SCHEDTYPE_ISCHEDULE [ | SCHEDTYPE_SSL ] */
-#endif
+
+#ifdef IOPTEST  /* CalConnect ioptest */
+    if (!strcmp(p, "example.com")) {
+      param->userid = userid;
+      param->server = "ischedule.example.com";
+      param->port = 8008;
+      param->flags |= SCHEDTYPE_ISCHEDULE;
+    }
+    else if (!strcmp(p, "mysite.edu")) {
+      param->userid = userid;
+      param->server = "ischedule.mysite.edu";
+      param->port = 8080;
+      param->flags |= SCHEDTYPE_ISCHEDULE;
+    }
+#endif /* IOPTEST */
+
+#endif /* WITH_DKIM */
 
     return 0;
 }
@@ -3788,7 +3817,7 @@ xmlNodePtr xml_add_schedresponse(xmlNodePtr root, xmlNsPtr dav_ns,
     resp = xmlNewChild(root, NULL, BAD_CAST "response", NULL);
     recip = xmlNewChild(resp, NULL, BAD_CAST "recipient", NULL);
 
-    if (dav_ns) xmlNewChild(recip, dav_ns, BAD_CAST "href", recipient);
+    if (dav_ns) xml_add_href(recip, dav_ns, (const char *) recipient);
     else xmlNodeAddContent(recip, recipient);
 
     if (status)
@@ -3973,6 +4002,9 @@ int sched_busytime_query(struct transaction_t *txn,
 	txn->error.desc = "Unable to create XML response\r\n";
 	goto done;
     }
+
+    /* Need DAV for hrefs */
+    ensure_ns(ns, NS_DAV, root, XML_NS_DAV, "D");
 
     /* Populate our filter and propfind context for local attendees */
     memset(&calfilter, 0, sizeof(struct calquery_filter));
