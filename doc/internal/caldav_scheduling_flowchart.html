@@ -14,9 +14,17 @@
     <li>Check if the new resource is a scheduling resource (contains
       ORGANIZER property).  If not, skip to step 4.</li>
     <li>Check for (and load) any existing resource.</li>
-    <li>Check if the authenticated user matches ORGANIZER.  If yes,
-      goto <a href="#sched_request">sched_request()</a>, otherwise
-      goto <a href="#sched_reply">sched_reply()</a>.</li> 
+    <li>Check if the authenticated user matches ORGANIZER:
+      <ul>
+	<li>If yes:
+	  <ul>
+	    <li>If only voter (VPOLL) responses changed,
+	      goto <a href="#sched_pollstatus">sched_pollstatus()</a>.</li>
+	    <li>Otherwise,
+	    goto <a href="#sched_request">sched_request()</a>.</li>
+	  </ul>
+	<li>Otherwise, goto <a href="#sched_reply">sched_reply()</a>.</li>
+      </ul>
     <li>Store the new/modified resource.</li>
   </ol>
 
@@ -37,6 +45,14 @@
     <li>Check the ACL on the owner's Scheduling Outbox.  If the
       authenticated user doesn't have the DACL_SCHEDFB right, fail.</li>
     <li><a href="#sched_busytime_query">sched_busytime_query()</a>.</li>
+  </ol>
+
+  <hr>
+
+  <h3 id="sched_pollstatus">sched_pollstatus - perform a voter
+    response update</h3>
+  <ol>
+    <li></li>
   </ol>
 
   <hr>
@@ -135,8 +151,13 @@
       <li><a href="#trim_attendees">trim_attendees()</a>.</li>
       <li>Lookup (by RECURRENCE-ID) and remove the component from the
 	hash table of existing components.</li>
-      <li>If the component exists, compare the PARTSTAT of the
-	ATTENDEE to that of the new component.</li>
+      <li>If the component exists:</li>
+      <ol type=i>
+	<li>If component is VPOLL, add voter responses to REPLY
+	  via <a href="#sched_vpoll_reply">sched_vpoll_reply().</a></li>
+	<li>Otherwise, compare the PARTSTAT of the ATTENDEE to that of
+	the new component.</li>
+      </ol>
       <li>If the component is new or the PARTSTAT has changed:</li>
       <ol type=i>
 	<li><a href="#clean_component">clean_component()</a>.</li>
@@ -160,6 +181,12 @@
       than the one corresponding to the owner of the calendar.</li>
     <li>Return the ATTENDEE property of owner, his/her PARTSTAT
       parameter, and the RECURRENCE-ID of the component.</li>
+  </ol>
+
+  <h3 id="sched_vpoll_reply">sched_vpoll_reply() - add voter
+    responses to VPOLL reply</h3>
+  <ol>
+    <li></li>
   </ol>
 
   <h3 id="sched_decline">sched_decline() - decline a recurrence
@@ -217,6 +244,8 @@
 	<a href="#deliver_merge_reply">deliver_merge_reply()</a>.</li>
       <li>If the iTIP method is REQUEST, do
 	<a href="#deliver_merge_request">deliver_merge_request()</a>.</li>
+      <li>If the iTIP method is POLLSTATUS, do
+	<a href="#deliver_merge_pollstatus">deliver_merge_pollstatus()</a>.</li>
     </ol>
     <li>Store the new/updated resource in the recipient's target
       calendar.</li>
@@ -225,7 +254,8 @@
       update from an attendee, store the iTIP message as a new
       resource in the recipient's Inbox.</li>
     <li>If the iTIP method is REPLY, send an update other attendees
-      via <a href="#sched_request">sched_request()</a>.</li>
+      via <a href="#sched_pollstatus">sched_pollstatus()</a> (VPOLL only)
+      or <a href="#sched_request">sched_request()</a>.</li>
   </ol>
 
   <h3 id="deliver_merge_reply">deliver_merge_reply() - update
@@ -254,8 +284,18 @@
 	add new ATTENDEE to the component.</li>
       <li>Set the ATTENDEE PARTSTAT, RSVP, and SCHEDULE-STATUS
 	parameters in the existing component.</li>
+      <li>If the component is VPOLL, update the voter responses in the
+	existing component via
+	<a href="#deliver_merge_vpoll_reply">deliver_merge_vpoll_reply()</a>.</li> 
     </ol>
     <li>Return the sending ATTENDEE.</li>
+  </ol>
+
+  <h3 id="deliver_merge_vpoll_reply">deliver_merge_vpoll_reply() - update
+    an organizer resource with voter responses</h3>
+  <ol>
+    <li>Foreach sub-component in the existing resource, replace any
+	voter response(s) with those from the reply.</li>
   </ol>
 
   <h3 id="deliver_merge_request">deliver_merge_request() -
@@ -292,6 +332,28 @@
 	<li>Remove the existing component from the existing object.</li>
       </ol>
       <li>Add the new component to the existing object.</li>
+    </ol>
+  </ol>
+
+  <h3 id="deliver_merge_pollstatus">deliver_merge_pollstatus() -
+    update voter responses on a voter resource</h3>
+  <ol>
+    <li>Foreach sub-component in the existing resource, add it to our
+	hash table keyed by POLL-ITEM-ID (for comparison against
+	iTIP message).  The sub-component entry includes a hash table
+	of VOTERs.</li>
+    <li>Foreach sub-component in the iTIP message:</li>
+    <ol type=a>
+      <li>Lookup (by POLL-ITEM-ID) the sub-component from the
+	hash table of existing sub-components.</li>
+      <li>If the component exists, foreach VOTER in the sub-component
+	in the iTIP message:
+	<ol type=i>
+	  <li>Lookup VOTER in the hash table of existing
+	    sub-component.</li>
+	  <li>Add/update VOTER response.</li>
+	</ol>
+      </li>
     </ol>
   </ol>
 
