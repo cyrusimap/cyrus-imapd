@@ -73,6 +73,7 @@
 #include <dkim.h>
 
 //#define TEST
+//#define IOPTEST
 
 #define BASE64_LEN(inlen) ((((inlen) + 2) / 3) * 4)
 
@@ -252,13 +253,13 @@ static int meth_get_isched(struct transaction_t *txn,
 	comp = xmlNewChild(node, NULL, BAD_CAST "component", NULL);
 	xmlNewProp(comp, BAD_CAST "name", BAD_CAST "VPOLL");
 	meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
+	xmlNewProp(meth, BAD_CAST "name", BAD_CAST "POLLSTATUS");
+	meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
 	xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REQUEST");
 	meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
 	xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REPLY");
 	meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
 	xmlNewProp(meth, BAD_CAST "name", BAD_CAST "CANCEL");
-	meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
-	xmlNewProp(meth, BAD_CAST "name", BAD_CAST "POLLSTATUS");
 	comp = xmlNewChild(node, NULL, BAD_CAST "component", NULL);
 	xmlNewProp(comp, BAD_CAST "name", BAD_CAST "VFREEBUSY");
 	meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
@@ -729,7 +730,11 @@ static DKIM_CBSTAT isched_get_key(DKIM *dkim, DKIM_SIGINFO *sig,
 	/* Split type/options */
 	if ((opts = strchr(type, '/'))) *opts++ = '\0';
 
+#ifdef IOPTEST  /* CalConnect ioptest */
+	if (1) {
+#else
 	if (!strcmp(type, "private-exchange")) {
+#endif
 	    const char *prefix = config_getstring(IMAPOPT_HTTPDOCROOT);
 	    struct buf path = BUF_INITIALIZER;
 	    FILE *f;
