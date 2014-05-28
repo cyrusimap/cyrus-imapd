@@ -4080,7 +4080,7 @@ int propfind_by_collection(char *mboxname, int matchlen,
 	if (parts.userid) {
 	    buf_printf(&writebuf, "/user/%s", parts.userid);
 	    /* XXX - only if a domain... */
-	    buf_printf(&writebuf, "@%s", parts.domain ? parts.domain : config_defdomain);
+	    buf_printf(&writebuf, "@%s", parts.domain ? parts.domain : httpd_extradomain ? httpd_extradomain : config_defdomain);
 	}
 	buf_putc(&writebuf, '/');
 
