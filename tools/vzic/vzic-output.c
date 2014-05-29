@@ -1105,10 +1105,8 @@ output_zone_components			(FILE		*fp,
   if (VzicUrlPrefix != NULL)
       fprintf (fp, "TZURL:%s/%s\r\n", VzicUrlPrefix, name);
 
-#if 0
   /* We use an 'X-' property to place the city name in. */
   fprintf (fp, "X-LIC-LOCATION:%s\r\n", name);
-#endif
 
   /* We try to find any recurring components first, or they may get output
      as lots of RDATES instead. */
