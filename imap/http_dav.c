@@ -4440,7 +4440,7 @@ int report_sync_col(struct transaction_t *txn,
     int ret = 0, r, userflag;
     struct mailbox *mailbox = NULL;
     uint32_t uidvalidity = 0;
-    modseq_t syncmodseq = 0, highestmodseq;
+    modseq_t syncmodseq = 0, basemodseq = 0, highestmodseq, respmodseq;
     uint32_t limit = -1, recno, nresp;
     xmlNodePtr node;
     struct index_state istate;
@@ -4473,19 +4473,39 @@ int report_sync_col(struct transaction_t *txn,
 	if (node->type == XML_ELEMENT_NODE) {
 	    if (!xmlStrcmp(node->name, BAD_CAST "sync-token") &&
 		(str = xmlNodeListGetString(inroot->doc, node->children, 1))) {
-		size_t slen = strlen(SYNC_TOKEN_URL_SCHEME);
+		/* Parse sync-token */
+		r = sscanf((char *) str, SYNC_TOKEN_URL_SCHEME
+			   "%u-" MODSEQ_FMT "-" MODSEQ_FMT "%1s",
+			   &uidvalidity, &syncmodseq, &basemodseq,
+			   tokenuri /* test for trailing junk */);
 
-		if (xmlStrncmp(str, BAD_CAST SYNC_TOKEN_URL_SCHEME, slen) ||
-		    (sscanf((char *) str + slen, "%u-" MODSEQ_FMT,
-			    &uidvalidity, &syncmodseq) != 2) ||
-		    !syncmodseq ||
+		/* Sanity check the token components */
+		if (r < 2 || r > 3 ||
 		    (uidvalidity != mailbox->i.uidvalidity) ||
-		    (syncmodseq < mailbox->i.deletedmodseq) ||
 		    (syncmodseq > highestmodseq)) {
+		    fctx->err->desc = "Invalid sync-token";
+		}
+		else if (r == 3) {
+		    /* Previous partial read token */
+		    if (basemodseq > highestmodseq) {
+			fctx->err->desc = "Invalid sync-token";
+		    }
+		    else if (basemodseq < mailbox->i.deletedmodseq) {
+			fctx->err->desc = "Stale sync-token";
+		    }
+		}
+		else {
+		    /* Regular token */
+		    if (syncmodseq < mailbox->i.deletedmodseq) {
+			fctx->err->desc = "Stale sync-token";
+		    }
+		}
+
+		if (fctx->err->desc) {
 		    /* DAV:valid-sync-token */
 		    txn->error.precond = DAV_SYNC_TOKEN;
 		    ret = HTTP_FORBIDDEN;
-		}
+		}		    
 	    }
 	    else if (!xmlStrcmp(node->name, BAD_CAST "sync-level") &&
 		(str = xmlNodeListGetString(inroot->doc, node->children, 1))) {
@@ -4525,6 +4545,10 @@ int report_sync_col(struct transaction_t *txn,
 	goto done;
     }
 
+    if (!syncmodseq) {
+	/* Initial sync - set basemodseq in case client limits results */
+	basemodseq = highestmodseq;
+    }
 
     /* Construct array of records for sorting and/or fetching cached header */
     istate.mailbox = mailbox;
@@ -4551,7 +4575,8 @@ int report_sync_col(struct transaction_t *txn,
 	    continue;
 	}
 
-	if (!syncmodseq && (record->system_flags & FLAG_EXPUNGED)) {
+	if ((record->modseq <= basemodseq) &&
+	    (record->system_flags & FLAG_EXPUNGED)) {
 	    /* Initial sync - ignore unmapped resources */
 	    continue;
 	}
@@ -4575,15 +4600,20 @@ int report_sync_col(struct transaction_t *txn,
 	if (!nresp) {
 	    /* DAV:number-of-matches-within-limits */
 	    fctx->err->desc = "Unable to truncate results";
-	    ret = HTTP_FORBIDDEN;  /* HTTP_NO_STORAGE ? */
+	    txn->error.precond = DAV_OVER_LIMIT;
+	    ret = HTTP_NO_STORAGE;
 	    goto done;
 	}
 
-	/* highestmodseq will be modseq of last record we return */
-	highestmodseq = map[nresp-1].record.modseq;
+	/* respmodseq will be modseq of last record we return */
+	respmodseq = map[nresp-1].record.modseq;
 
 	/* Tell client we truncated the responses */
 	xml_add_response(fctx, HTTP_NO_STORAGE, DAV_OVER_LIMIT);
+    }
+    else {
+	/* Full response - respmodseq will be highestmodseq of mailbox */
+	respmodseq = highestmodseq;
     }
 
     /* Report the resources within the client requested limit (if any) */
@@ -4622,9 +4652,17 @@ int report_sync_col(struct transaction_t *txn,
     }
 
     /* Add sync-token element */
-    snprintf(tokenuri, MAX_MAILBOX_PATH,
-	     SYNC_TOKEN_URL_SCHEME "%u-" MODSEQ_FMT,
-	     mailbox->i.uidvalidity, highestmodseq);
+    if (respmodseq < basemodseq) {
+	/* Client limited results of initial sync - include basemodseq */
+	snprintf(tokenuri, MAX_MAILBOX_PATH,
+		 SYNC_TOKEN_URL_SCHEME "%u-" MODSEQ_FMT "-" MODSEQ_FMT,
+		 mailbox->i.uidvalidity, respmodseq, basemodseq);
+    }
+    else {
+	snprintf(tokenuri, MAX_MAILBOX_PATH,
+		 SYNC_TOKEN_URL_SCHEME "%u-" MODSEQ_FMT,
+		 mailbox->i.uidvalidity, respmodseq);
+    }
     xmlNewChild(fctx->root, NULL, BAD_CAST "sync-token", BAD_CAST tokenuri);
 
   done:
