@@ -4093,6 +4093,9 @@ int propfind_by_collection(char *mboxname, int matchlen,
 	/* OK, we're doing this mailbox */
 	buf_appendcstr(&writebuf, p+1);
 
+	/* don't forget the trailing slash */
+	buf_putc(&writebuf, '/');
+
 	/* copy it all back into place... in theory we should check against
 	 * 'last' and make sure it doesn't change from the original request.
 	 * yay for micro-optimised memory usage... */
