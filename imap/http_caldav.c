@@ -3426,12 +3426,12 @@ static int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
     if (!(namespace_calendar.enabled && fctx->req_tgt->user))
 	return HTTP_NOT_FOUND;
 
-    node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			name, ns, NULL, 0);
-
     /* named calendars are only used for scheduling */
     if (cal && !(namespace_calendar.allow & ALLOW_CAL_SCHED))
 	return HTTP_NOT_FOUND;
+
+    node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+			name, ns, NULL, 0);
 
     buf_reset(&fctx->buf);
     buf_printf(&fctx->buf, "%s/user/%.*s/%s", namespace_calendar.prefix,
