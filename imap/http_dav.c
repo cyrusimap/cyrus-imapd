@@ -1513,6 +1513,8 @@ int propfind_curprivset(const xmlChar *name, xmlNsPtr ns,
     }
     else if (mboxname_userownsmailbox(httpd_userid, fctx->mailbox->name)) {
 	rights |= config_implicitrights;
+	/* we always allow admin by the owner in DAV */
+	rights |= DACL_ADMIN;
     }
 
     /* Build the rest of the XML response */
@@ -1550,7 +1552,8 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
     unsigned flags = 0;
 
     if (!fctx->mailbox) return HTTP_NOT_FOUND;
-    /* owner has explicit admin rights */
+
+    /* owner has implicit admin rights */
     if (!mboxname_userownsmailbox(httpd_userid, fctx->mailbox->name)) {
 	int rights = httpd_myrights(fctx->authstate, fctx->mailbox->acl);
 	if (!(rights & DACL_ADMIN))
@@ -1602,18 +1605,22 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
 	ace = xmlNewChild(acl, NULL, BAD_CAST "ace", NULL);
 
 	/* XXX  Need to check for groups.
-	 * Is there any IMAP equivalent to "unauthenticated"?
-	 * Is there any DAV equivalent to "anonymous"?
 	 */
 
 	node = xmlNewChild(ace, NULL, BAD_CAST "principal", NULL);
 	if (!strcmp(userid, fctx->userid))
 	    xmlNewChild(node, NULL, BAD_CAST "self", NULL);
-	else if (mboxname_userownsmailbox(userid, fctx->mailbox->name))
+	else if (mboxname_userownsmailbox(userid, fctx->mailbox->name)) {
 	    xmlNewChild(node, NULL, BAD_CAST "owner", NULL);
+	    /* we always allow admin by the owner in DAV */
+	    rights |= DACL_ADMIN;
+	}
 	else if (!strcmp(userid, "anyone"))
 	    xmlNewChild(node, NULL, BAD_CAST "authenticated", NULL);
-	/* XXX - well, it's better than a user called 'anonymous' */
+	/* XXX - well, it's better than a user called 'anonymous'
+	 * Is there any IMAP equivalent to "unauthenticated"?
+	 * Is there any DAV equivalent to "anonymous"?
+	 */
 	else if (!strcmp(userid, "anonymous"))
 	    xmlNewChild(node, NULL, BAD_CAST "unauthenticated", NULL);
 	else {
