@@ -2051,7 +2051,7 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
 		}
 	    }
 
-	    if (lastr == firstr) match = 0;
+	    if (busytime->len == firstr) match = 0;
 
 	    if (!calfilter->save_busytime) busytime->len = 0;
 
