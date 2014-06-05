@@ -99,11 +99,19 @@
 
 //#define IOPTEST
 
-#ifdef HAVE_RSCALE
-#include <unicode/ucal.h>
-#endif
-
 #define NEW_STAG (1<<8)  /* Make sure we skip over PREFER bits */
+
+
+#ifdef HAVE_RSCALE
+#include <unicode/uversion.h>
+
+static int rscale_cmp(const void *a, const void *b)
+{
+    return strcmp(*((const char **) a), *((const char **) b));
+}
+
+static icalarray *rscale_calendars = NULL;
+#endif /* HAVE_RSCALE */
 
 
 #ifndef HAVE_SCHEDULING_PARAMS
@@ -205,7 +213,6 @@ static struct caldav_db *auth_caldavdb = NULL;
 static time_t compile_time;
 static struct buf ical_prodid_buf = BUF_INITIALIZER;
 static const char *ical_prodid = NULL;
-static icalarray *rscale_calendars = NULL;
 static struct strlist *cua_domains = NULL;
 
 static struct caldav_db *my_caldav_open(struct mailbox *mailbox);
