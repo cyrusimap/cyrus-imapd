@@ -98,11 +98,17 @@
 
 //#define IOPTEST
 
+#define NEW_STAG (1<<8)  /* Make sure we skip over PREFER bits */
+
+
 #ifdef HAVE_RSCALE
 #include <unicode/uversion.h>
-#endif
 
-#define NEW_STAG (1<<8)  /* Make sure we skip over PREFER bits */
+static int rscale_cmp(const void *a, const void *b)
+{
+    return strcmp(*((const char **) a), *((const char **) b));
+}
+#endif /* HAVE_RSCALE */
 
 
 #ifndef HAVE_SCHEDULING_PARAMS
@@ -511,12 +517,6 @@ static struct caldav_db *my_caldav_open(struct mailbox *mailbox)
 static void my_caldav_close(struct caldav_db *caldavdb)
 {
     if (caldavdb && (caldavdb != auth_caldavdb)) caldav_close(caldavdb);
-}
-
-
-static int rscale_cmp(const void *a, const void *b)
-{
-    return strcmp(*((const char **) a), *((const char **) b));
 }
 
 
