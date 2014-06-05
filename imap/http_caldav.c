@@ -205,6 +205,7 @@ static time_t compile_time;
 static struct buf ical_prodid_buf = BUF_INITIALIZER;
 static const char *ical_prodid = NULL;
 static icalarray *rscale_calendars = NULL;
+static struct strlist *cua_domains = NULL;
 
 static struct caldav_db *my_caldav_open(struct mailbox *mailbox);
 static void my_caldav_close(struct caldav_db *caldavdb);
@@ -521,6 +522,10 @@ static int rscale_cmp(const void *a, const void *b)
 
 static void my_caldav_init(struct buf *serverinfo)
 {
+    const char *domains;
+    char *domain;
+    tok_t tok;
+
     namespace_calendar.enabled =
 	config_httpmodules & IMAP_ENUM_HTTPMODULES_CALDAV;
 
@@ -559,6 +564,14 @@ static void my_caldav_init(struct buf *serverinfo)
     buf_printf(&ical_prodid_buf,
 	       "-//CyrusIMAP.org/Cyrus %s//EN", cyrus_version());
     ical_prodid = buf_cstring(&ical_prodid_buf);
+
+    /* Create an array of calendar-user-adddress-set domains */
+    domains = config_getstring(IMAPOPT_CALENDAR_USER_ADDRESS_SET);
+    if (!domains) domains = config_servername;
+
+    tok_init(&tok, domains, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+    while ((domain = tok_next(&tok))) appendstrlist(&cua_domains, domain);
+    tok_fini(&tok);
 }
 
 
@@ -710,6 +723,7 @@ static void my_caldav_shutdown(void)
 {
     if (rscale_calendars) icalarray_free(rscale_calendars);
     buf_free(&ical_prodid_buf);
+    freestrlist(cua_domains);
 
     caldav_done();
 }
@@ -2552,6 +2566,7 @@ int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
 			 void *rock __attribute__((unused)))
 {
     xmlNodePtr node;
+    struct strlist *domains;
 
     if (!(namespace_calendar.enabled && fctx->req_tgt->user))
 	return HTTP_NOT_FOUND;
@@ -2560,12 +2575,14 @@ int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
 			name, ns, NULL, 0);
 
     /* XXX  This needs to be done via an LDAP/DB lookup */
-    buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, "mailto:%.*s@%s", (int) fctx->req_tgt->userlen,
-	       fctx->req_tgt->user, config_servername);
+    for (domains = cua_domains; domains; domains = domains->next) {
+	buf_reset(&fctx->buf);
+	buf_printf(&fctx->buf, "mailto:%.*s@%s", (int) fctx->req_tgt->userlen,
+		   fctx->req_tgt->user, domains->s);
 
-    xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "href",
-		BAD_CAST buf_cstring(&fctx->buf));
+	xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "href",
+		    BAD_CAST buf_cstring(&fctx->buf));
+    }
 
     return 0;
 }
@@ -3651,14 +3668,13 @@ int caladdress_lookup(const char *addr, struct sched_param *param)
     /* XXX  Do LDAP/DB/socket lookup to see if user is local */
     /* XXX  Hack until real lookup stuff is written */
     strlcpy(userid, p, sizeof(userid));
-    if ((p = strchr(userid, '@'))) *p++ = '\0';
+    if ((p = strchr(userid, '@')) && !(*p = '\0') && *++p) {
+	struct strlist *domains = cua_domains;
 
-#ifdef IOPTEST  /* CalConnect ioptest */
-    if (strcmp(p, "ken.name")) {
-      syslog(LOG_INFO, "not local user: %s %s", userid, p);
-      islocal = 0;
+	for (; domains && strcmp(p, domains->s); domains = domains->next);
+
+	if (!domains) islocal = 0;
     }
-#endif
 
     if (islocal) {
 	/* User is in a local domain */
@@ -3684,7 +3700,7 @@ int caladdress_lookup(const char *addr, struct sched_param *param)
 	    return 0;
 	}
 	else {
-	    syslog(LOG_ERR, "mlookup(%s) failed: %s",
+	    syslog(LOG_NOTICE, "mlookup(%s) failed: %s",
 		   mailboxname, error_message(r));
 
 	    /* Fall through and try remote */

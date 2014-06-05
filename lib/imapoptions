@@ -269,6 +269,11 @@ Blank lines and lines beginning with ``#'' are ignored.
    hierarchy will be at the toplevel of the shared namespace.  A
    user's personal calendar hierarchy will be a child of their Inbox. */
 
+{ "calendar_user_address_set", NULL, STRING }
+/* Space-separated list of domains corresponding to calendar user
+   addresses for which the server is responsible.  If not set (the
+   default), the value of the "servername" option will be used. */
+
 { "carddav_realm", NULL, STRING }
 /* The realm to present for HTTP authentication of CardDAV resources.
    If not set (the default), the value of the "servername" option will
