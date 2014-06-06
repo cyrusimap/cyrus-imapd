@@ -1776,17 +1776,6 @@ static int caldav_put(struct transaction_t *txn,
 		goto done;
 	    }
 
-	    if (cdata->organizer) {
-		/* Don't allow ORGANIZER to be changed */
-		const char *p = organizer;
-
-		if (!strncasecmp(p, "mailto:", 7)) p += 7;
-		if (strcmp(cdata->organizer, p)) {
-		    ret = HTTP_FORBIDDEN;
-		    goto done;
-		}
-	    }
-
 	    /* Lookup the organizer */
 	    if (caladdress_lookup(organizer, &sparam)) {
 		syslog(LOG_ERR,
@@ -1811,14 +1800,35 @@ static int caldav_put(struct transaction_t *txn,
 		mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
 	    }
 
+	    if (cdata->organizer) {
+		/* Don't allow ORGANIZER to be changed */
+		const char *p = organizer;
+
+		if (!strncasecmp(p, "mailto:", 7)) p += 7;
+		if (strcmp(cdata->organizer, p)) {
+		    txn->error.desc = "Can not change organizer address";
+		    ret = HTTP_FORBIDDEN;
+		}
+	    }
+
 	    if (!strcmp(sparam.userid, userid)) {
 		/* Organizer scheduling object resource */
+		if (ret) {
+		    txn->error.precond = CALDAV_ALLOWED_ORG_CHANGE;
+		    goto done;
+		}
 		sched_request(organizer, &sparam, oldical, ical, 0);
 	    }
 	    else {
 		/* Attendee scheduling object resource */
+		if (ret) {
+		    txn->error.precond = CALDAV_ALLOWED_ATT_CHANGE;
+		    goto done;
+		}
 		if (!oldical) {
 		    /* Can't reply to a non-existent invitation */
+		    /* XXX  But what about invites over iMIP? */
+		    txn->error.desc = "Can not reply to non-existent resource";
 		    ret = HTTP_FORBIDDEN;
 		    goto done;
 		}
