@@ -1743,7 +1743,7 @@ static int caldav_put(struct transaction_t *txn,
 		/* Don't allow ORGANIZER to be changed */
 		const char *p = organizer;
 
-		if (!strncmp(p, "mailto:", 7)) p += 7;
+		if (!strncasecmp(p, "mailto:", 7)) p += 7;
 		if (strcmp(cdata->organizer, p)) {
 		    ret = HTTP_FORBIDDEN;
 		    goto done;
@@ -3666,7 +3666,7 @@ int caladdress_lookup(const char *addr, struct sched_param *param)
     if (!addr) return HTTP_NOT_FOUND;
 
     p = (char *) addr;
-    if (!strncmp(addr, "mailto:", 7)) p += 7;
+    if (!strncasecmp(addr, "mailto:", 7)) p += 7;
 
     /* XXX  Do LDAP/DB/socket lookup to see if user is local */
     /* XXX  Hack until real lookup stuff is written */
@@ -5168,7 +5168,7 @@ static void sched_deliver_local(const char *recipient,
 		    const char *organizer =
 			organizer = icalproperty_get_organizer(prop);
 
-		    if (!strncmp(organizer, "mailto:", 7)) organizer += 7;
+		    if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
 		    if (strcmp(cdata->organizer, organizer)) reject = 1;
 		}
 	    }
