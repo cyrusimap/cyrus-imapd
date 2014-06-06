@@ -3755,7 +3755,7 @@ static int imip_send(icalcomponent *ical)
     icalproperty *prop;
     icalproperty_method meth;
     icalcomponent_kind kind;
-    const char *argv[8], *organizer, *subject;
+    const char *argv[8], *originator, *subject;
     FILE *sm;
     pid_t pid;
     int r;
@@ -3768,21 +3768,39 @@ static int imip_send(icalcomponent *ical)
     meth = icalcomponent_get_method(ical);
     comp = icalcomponent_get_first_real_component(ical);
     kind = icalcomponent_isa(comp);
-    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-    organizer = icalproperty_get_organizer(prop) + 7;
 
-    if (kind == ICAL_VPOLL_COMPONENT) {
-	recip_kind = ICAL_VOTER_PROPERTY;
-	get_recipient = &icalproperty_get_voter;
+    /* Determine Originator and Recipient(s) based on methond and component */
+    if (meth == ICAL_METHOD_REPLY) {
+	recip_kind = ICAL_ORGANIZER_PROPERTY;
+	get_recipient = &icalproperty_get_organizer;
+
+	if (kind == ICAL_VPOLL_COMPONENT) {
+	    prop = icalcomponent_get_first_property(comp, ICAL_VOTER_PROPERTY);
+	    originator = icalproperty_get_voter(prop) + 7;
+	}
+	else {
+	    prop =
+		icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+	    originator = icalproperty_get_attendee(prop) + 7;
+	}
     }
     else {
-	recip_kind = ICAL_ATTENDEE_PROPERTY;
-	get_recipient = &icalproperty_get_attendee;
+	prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+	originator = icalproperty_get_organizer(prop) + 7;
+
+	if (kind == ICAL_VPOLL_COMPONENT) {
+	    recip_kind = ICAL_VOTER_PROPERTY;
+	    get_recipient = &icalproperty_get_voter;
+	}
+	else {
+	    recip_kind = ICAL_ATTENDEE_PROPERTY;
+	    get_recipient = &icalproperty_get_attendee;
+	}
     }
 
     argv[0] = "sendmail";
     argv[1] = "-f";
-    argv[2] = organizer;
+    argv[2] = originator;
     argv[3] = "-i";
     argv[4] = "-N";
     argv[5] = "failure,delay";
@@ -3793,7 +3811,7 @@ static int imip_send(icalcomponent *ical)
     if (sm == NULL) return HTTP_UNAVAILABLE;
 
     /* Create iMIP message */
-    fprintf(sm, "From: %s\r\n", organizer);
+    fprintf(sm, "From: %s\r\n", originator);
 
     for (prop = icalcomponent_get_first_property(comp, recip_kind);
 	 prop;
