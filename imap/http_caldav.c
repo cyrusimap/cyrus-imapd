@@ -1825,6 +1825,7 @@ static int caldav_put(struct transaction_t *txn,
 		    txn->error.precond = CALDAV_ALLOWED_ATT_CHANGE;
 		    goto done;
 		}
+#if 0
 		if (!oldical) {
 		    /* Can't reply to a non-existent invitation */
 		    /* XXX  But what about invites over iMIP? */
@@ -1832,6 +1833,7 @@ static int caldav_put(struct transaction_t *txn,
 		    ret = HTTP_FORBIDDEN;
 		    goto done;
 		}
+#endif
 		sched_reply(userid, oldical, ical);
 	    }
 
