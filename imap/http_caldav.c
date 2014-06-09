@@ -1621,7 +1621,7 @@ static int caldav_put(struct transaction_t *txn,
 		      struct caldav_db *davdb,
 		      unsigned flags)
 {
-    int ret;
+    int ret = 0;
     icalcomponent *ical = NULL, *comp, *nextcomp;
     icalcomponent_kind kind;
     icalproperty_kind recip_kind;
