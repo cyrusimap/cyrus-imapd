@@ -829,19 +829,19 @@ static void spawn_service(int si)
 
 	    fcntl_unset(STATUS_FD, FD_CLOEXEC);
 	    fcntl_unset(LISTEN_FD, FD_CLOEXEC);
-
-	    /* close all listeners */
-	    for (i = 0; i < nservices; i++) {
-		xclose(Services[i].socket);
-		xclose(Services[i].stat[0]);
-		xclose(Services[i].stat[1]);
-	    }
 	}
 	else {
 	    snprintf(name_env3, sizeof(name_env3), "CYRUS_ISDAEMON=1");
 	    putenv(name_env3);
 	}
 	limit_fds(s->maxfds);
+
+	/* close all listeners */
+	for (i = 0; i < nservices; i++) {
+	    xclose(Services[i].socket);
+	    xclose(Services[i].stat[0]);
+	    xclose(Services[i].stat[1]);
+	}
 
 	syslog(LOG_DEBUG, "about to exec %s", path);
 
