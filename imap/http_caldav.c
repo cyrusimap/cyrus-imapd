@@ -5060,6 +5060,8 @@ static void sched_deliver_local(const char *recipient,
     if (!(rights & reqd_privs)) {
 	sched_data->status =
 	    sched_data->ischedule ? REQSTAT_NOPRIVS : SCHEDSTAT_NOPRIVS;
+	syslog(LOG_DEBUG, "No scheduling receive ACL for user %s on Inbox %s",
+	       httpd_userid, userid);
 	goto done;
     }
 
@@ -5690,6 +5692,8 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 	if (!(rights & DACL_INVITE)) {
 	    /* DAV:need-privileges */
 	    sched_stat = SCHEDSTAT_NOPRIVS;
+	    syslog(LOG_DEBUG, "No scheduling send ACL for user %s on Outbox %s",
+		   httpd_userid, sparam->userid);
 
 	    goto done;
 	}
@@ -6058,6 +6062,8 @@ static void sched_reply(const char *userid,
     if (!(rights & DACL_REPLY)) {
 	/* DAV:need-privileges */
 	if (newical) sched_data->status = SCHEDSTAT_NOPRIVS;
+	syslog(LOG_DEBUG, "No scheduling send ACL for user %s on Outbox %s",
+	       httpd_userid, userid);
 
 	goto done;
     }
