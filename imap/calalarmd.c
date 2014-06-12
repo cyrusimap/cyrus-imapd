@@ -151,9 +151,13 @@ int main(int argc, char **argv)
 	double totaltime;
 	int tosleep;
 
+	signals_poll();
+
 	gettimeofday(&start, 0);
 	caldav_alarm_process();
 	gettimeofday(&end, 0);
+
+	signals_poll();
 
 	totaltime = timesub(&start, &end);
 	tosleep = 10 - round(totaltime);
