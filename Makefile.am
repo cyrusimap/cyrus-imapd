@@ -196,6 +196,14 @@ if MURDER
 service_PROGRAMS += imap/mupdate
 endif # MURDER
 
+if NNTPD
+service_PROGRAMS += imap/nntpd
+endif
+
+if CALALARMD
+user_PROGRAMS += imap/calalarmd
+endif
+
 if HTTPD
 AM_CPPFLAGS += $(HTTP_CPPFLAGS)
 AM_LDFLAGS += $(HTTP_LIBS)
@@ -832,6 +840,9 @@ imap_hammer_cyrusdb_LDADD = $(LD_UTILITY_ADD)
 imap_idled_SOURCES = imap/idled.c imap/mutex_fake.c
 imap_idled_LDADD = $(LD_UTILITY_ADD)
 
+imap_calalarmd_SOURCES = imap/calalarmd.c imap/mutex_fake.c
+imap_calalarmd_LDADD = $(LD_UTILITY_ADD)
+
 imap_imapd_SOURCES = \
 	imap/imap_proxy.c \
 	imap/imap_proxy.h \
@@ -984,7 +995,11 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/caldav_db.c \
 	imap/caldav_db.h \
 	imap/carddav_db.c \
+<<<<<<< HEAD
 	imap/carddav_db.h \
+=======
+	imap/caldav_alarm.c \
+>>>>>>> calalarmd: rebased, repacked, ready to go
 	imap/dav_db.c \
 	imap/dav_db.h \
 	imap/dav_util.c \
@@ -1108,8 +1123,12 @@ nodist_imap_httpd_SOURCES = \
 
 imap_httpd_SOURCES = \
 	imap/caldav_db.c \
+<<<<<<< HEAD
 	imap/carddav_db.c \
 	imap/carddav_db.h \
+=======
+	imap/caldav_alarm.c \
+>>>>>>> calalarmd: rebased, repacked, ready to go
 	imap/dav_db.c \
 	imap/dav_util.c \
 	imap/http_caldav.c \

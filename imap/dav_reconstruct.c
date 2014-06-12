@@ -89,8 +89,6 @@ void usage(void);
 void shut_down(int code);
 
 static int code = 0;
-static struct caldav_db *caldavdb = NULL;
-
 
 static int do_user(const char *userid, void *rock __attribute__((unused)))
 {

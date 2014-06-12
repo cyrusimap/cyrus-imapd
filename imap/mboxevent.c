@@ -86,6 +86,8 @@
 
 #define QUOTA_EVENTS   (EVENT_QUOTA_EXCEED|EVENT_QUOTA_WITHIN|EVENT_QUOTA_CHANGE)
 
+#define CALENDAR_EVENTS (EVENT_CALENDAR_ALARM)
+
 
 #define FILL_STRING_PARAM(e,p,v) e->params[p].value = (uint64_t)v; \
 				 e->params[p].type = EVENT_PARAM_STRING; \
@@ -149,6 +151,26 @@ static struct mboxevent event_template =
     { EVENT_CONVEXISTS, "vnd.fastmail.convExists", EVENT_PARAM_INT, 0, 0 },
     { EVENT_CONVUNSEEN, "vnd.fastmail.convUnseen", EVENT_PARAM_INT, 0, 0 },
     { EVENT_MESSAGE_CID, "vnd.fastmail.cid", EVENT_PARAM_STRING, 0, 0 },
+
+    /* calendar params for calalarmd/notifyd */
+    { EVENT_CALENDAR_ALARM_TIME, "alarmTime", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_CALENDAR_ALARM_RECIPIENTS, "alarmRecipients", EVENT_PARAM_ARRAY, 0, 0 },
+    { EVENT_CALENDAR_USER_ID, "userId", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_CALENDAR_CALENDAR_NAME, "calendarName", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_CALENDAR_UID, "uid", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_CALENDAR_ACTION, "action", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_CALENDAR_SUMMARY, "summary", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_CALENDAR_DESCRIPTION, "description", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_CALENDAR_LOCATION, "location", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_CALENDAR_TIMEZONE, "timezone", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_CALENDAR_START, "start", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_CALENDAR_END, "end", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_CALENDAR_ALLDAY, "allDay", EVENT_PARAM_INT, 0, 0 },
+    { EVENT_CALENDAR_ATTENDEE_NAMES, "attendeeNames", EVENT_PARAM_ARRAY, 0, 0 },
+    { EVENT_CALENDAR_ATTENDEE_EMAILS, "attendeeEmails", EVENT_PARAM_ARRAY, 0, 0 },
+    { EVENT_CALENDAR_ATTENDEE_STATUS, "attendeeStatus", EVENT_PARAM_ARRAY, 0, 0 },
+    { EVENT_CALENDAR_ORGANIZER, "organizer", EVENT_PARAM_STRING, 0, 0 },
+
     /* always at end to let the parser to easily truncate this part */
     /* 31 */ { EVENT_MESSAGE_CONTENT, "messageContent", EVENT_PARAM_STRING, 0, 0 }
   },
@@ -204,6 +226,9 @@ EXPORTED void mboxevent_init(void)
 
     if (groups & IMAP_ENUM_EVENT_GROUPS_MAILBOX)
 	enabled_events |= MAILBOX_EVENTS;
+
+    if (groups & IMAP_ENUM_EVENT_GROUPS_CALENDAR)
+	enabled_events |= CALENDAR_EVENTS;
 }
 
 EXPORTED void mboxevent_setnamespace(struct namespace *n)
@@ -359,8 +384,39 @@ void mboxevent_freequeue(struct mboxevent **mboxevent)
     *mboxevent = NULL;
 }
 
+static int mboxevent_expected_calendar_param(enum event_param param)
+{
+    switch (param) {
+    case EVENT_CALENDAR_ALARM_TIME:
+    case EVENT_CALENDAR_ALARM_RECIPIENTS:
+    case EVENT_CALENDAR_USER_ID:
+    case EVENT_CALENDAR_CALENDAR_NAME:
+    case EVENT_CALENDAR_UID:
+    case EVENT_CALENDAR_ACTION:
+    case EVENT_CALENDAR_SUMMARY:
+    case EVENT_CALENDAR_DESCRIPTION:
+    case EVENT_CALENDAR_LOCATION:
+    case EVENT_CALENDAR_TIMEZONE:
+    case EVENT_CALENDAR_START:
+    case EVENT_CALENDAR_END:
+    case EVENT_CALENDAR_ALLDAY:
+    case EVENT_CALENDAR_ATTENDEE_NAMES:
+    case EVENT_CALENDAR_ATTENDEE_EMAILS:
+    case EVENT_CALENDAR_ATTENDEE_STATUS:
+    case EVENT_CALENDAR_ORGANIZER:
+	return 1;
+    case EVENT_SERVERFQDN: /* needed to see who is master */
+	return 1;
+    default:
+	return 0;
+    }
+}
+
 static int mboxevent_expected_param(enum event_type type, enum event_param param)
 {
+    if (type == EVENT_CALENDAR_ALARM)
+	return mboxevent_expected_calendar_param(param);
+
     switch (param) {
     case EVENT_BODYSTRUCTURE:
 	return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_BODYSTRUCTURE) &&
@@ -472,6 +528,8 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
 	return extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_CONVUNSEEN;
     case EVENT_OLD_UIDSET:
 	return type & (EVENT_MESSAGE_COPY|EVENT_MESSAGE_MOVE);
+    default:
+	return 0;
     }
 
     /* test if the parameter is related to a message event */
@@ -836,6 +894,87 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 	}
     }
 #endif // WITH_DAV
+}
+
+EXPORTED void mboxevent_extract_icalcomponent(struct mboxevent *event,
+					      icalcomponent *ical,
+					      const char *userid,
+					      const char *calname,
+					      enum caldav_alarm_action action,
+					      icaltimetype alarmtime,
+					      const char *timezone,
+					      icaltimetype start,
+					      icaltimetype end,
+					      strarray_t *recipients)
+{
+    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+
+    icalproperty *prop;
+
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_ALARM_TIME,
+		      xstrdup(icaltime_as_ical_string(alarmtime)));
+
+    FILL_ARRAY_PARAM(event, EVENT_CALENDAR_ALARM_RECIPIENTS, recipients);
+
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_USER_ID, xstrdup(userid));
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_CALENDAR_NAME, xstrdup(calname));
+
+    prop = icalcomponent_get_first_property(comp, ICAL_UID_PROPERTY);
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_UID,
+		      xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
+
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_ACTION, xstrdup(
+	action == CALDAV_ALARM_ACTION_DISPLAY	? "display" :
+	action == CALDAV_ALARM_ACTION_EMAIL	? "email" :
+						  ""));
+
+    prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_SUMMARY,
+		      xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
+
+    prop = icalcomponent_get_first_property(comp, ICAL_DESCRIPTION_PROPERTY);
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_DESCRIPTION,
+		      xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
+
+    prop = icalcomponent_get_first_property(comp, ICAL_LOCATION_PROPERTY);
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_LOCATION,
+		      xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
+
+    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_ORGANIZER,
+		      xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
+
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_TIMEZONE,
+		      xstrdup(timezone));
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_START,
+		      xstrdup(icaltime_as_ical_string(start)));
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_END,
+		      xstrdup(icaltime_as_ical_string(end)));
+    FILL_UNSIGNED_PARAM(event, EVENT_CALENDAR_ALLDAY,
+		        icaltime_is_date(start) ? 1 : 0);
+
+    strarray_t *attendee_names = strarray_new();
+    strarray_t *attendee_emails = strarray_new();
+    strarray_t *attendee_status = strarray_new();
+    prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+    while (prop) {
+	const char *email = icalproperty_get_value_as_string(prop);
+	if (!email)
+	    continue;
+	strarray_append(attendee_emails, email);
+
+	const char *name = icalproperty_get_parameter_as_string(prop, "CN");
+	strarray_append(attendee_names, name ? name : "");
+
+	const char *partstat = icalproperty_get_parameter_as_string(prop, "PARTSTAT");
+	strarray_append(attendee_status, partstat ? partstat : "");
+
+	prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY);
+    }
+
+    FILL_ARRAY_PARAM(event, EVENT_CALENDAR_ATTENDEE_NAMES, attendee_names);
+    FILL_ARRAY_PARAM(event, EVENT_CALENDAR_ATTENDEE_EMAILS, attendee_emails);
+    FILL_ARRAY_PARAM(event, EVENT_CALENDAR_ATTENDEE_STATUS, attendee_status);
 }
 
 void mboxevent_extract_copied_record(struct mboxevent *event,
@@ -1208,6 +1347,8 @@ static const char *event_to_name(enum event_type type)
 	return "MailboxUnSubscribe";
     case EVENT_ACL_CHANGE:
 	return "AclChange";
+    case EVENT_CALENDAR_ALARM:
+	return "CalendarAlarm";
     default:
 	fatal("Unknown message event", EC_SOFTWARE);
     }

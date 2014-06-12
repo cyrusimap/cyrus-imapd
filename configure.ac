@@ -1218,6 +1218,13 @@ if test "$enable_murder" != no; then
 fi
 
 dnl
+dnl see if we're compiling with calendar alarm support
+dnl
+AC_ARG_ENABLE(calalarmd,
+        [AS_HELP_STRING([--enable-calalarmd], [enable CalDAV alarm support])],,[enable_calalarmd="no";])
+AM_CONDITIONAL([CALALARMD], [test "$enable_calalarmd" != "no"])
+
+dnl
 dnl see if we're compiling with HTTP support
 dnl
 ENABLE_HTTP=no
@@ -1814,6 +1821,7 @@ Cyrus Imapd configured components
    nntpd:              $enable_nntp
    replication:        $enable_replication
    sieve:              $enable_sieve
+   calalarmd:          $enable_calalarmd
 
 External dependencies:
    ldap:               $have_ldap

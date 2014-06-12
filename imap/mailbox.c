@@ -82,6 +82,7 @@
 #include "assert.h"
 #ifdef WITH_DAV
 #include "caldav_db.h"
+#include "caldav_alarm.h"
 #include "carddav_db.h"
 #endif /* WITH_DAV */
 #include "crc32.h"
@@ -2743,6 +2744,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 {
     const char *userid = mboxname_to_userid(mailbox->name);
     struct caldav_db *caldavdb = NULL;
+    struct caldav_alarm_db *alarmdb = NULL;
     struct param *param;
     struct body *body = NULL;
     struct caldav_data *cdata = NULL;
@@ -2772,6 +2774,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
         }
     }
 
+    alarmdb = caldav_alarm_open();
     caldavdb = caldav_open_mailbox(mailbox, 0);
 
     /* Find existing record for this resource */
@@ -2786,8 +2789,17 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 	/* does it still come from this UID? */
 	if (cdata->dav.imap_uid != new->uid) goto done;
 
+	/* prepare alarm data for removal */
+	struct caldav_alarm_data alarmdata = {
+	    .mailbox    = cdata->dav.mailbox,
+	    .resource   = cdata->dav.resource,
+	};
+
 	/* delete entry */
 	r = caldav_delete(caldavdb, cdata->dav.rowid, 0);
+
+	/* and associated alarms */
+	caldav_alarm_delete(alarmdb, &alarmdata);
     }
     else {
 	struct buf msg_buf = BUF_INITIALIZER;
@@ -2813,6 +2825,31 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 
 	r = caldav_write(caldavdb, cdata, 0);
 
+	caldav_alarm_begin(alarmdb);
+
+	struct caldav_alarm_data alarmdata = {
+	    .mailbox    = mailbox->name,
+	    .resource   = resource,
+	};
+
+	/* remove old ones */
+	int rc = caldav_alarm_delete_all(alarmdb, &alarmdata);
+
+	int i;
+	for (i = CALDAV_ALARM_ACTION_FIRST; i <= CALDAV_ALARM_ACTION_LAST; i++) {
+	    /* prepare alarm data */
+	    if (!rc &&
+		!caldav_alarm_prepare(ical, &alarmdata, i,
+				      icaltime_current_time_with_zone(icaltimezone_get_utc_timezone())))
+		rc = caldav_alarm_add(alarmdb, &alarmdata);
+		caldav_alarm_fini(&alarmdata);
+	}
+
+	if (rc)
+	    caldav_alarm_rollback(alarmdb);
+	else
+	    caldav_alarm_commit(alarmdb);
+
 	icalcomponent_free(ical);
     }
 
@@ -2824,6 +2861,9 @@ done:
 	caldav_commit(caldavdb);
 	caldav_close(caldavdb);
     }
+
+    if (alarmdb)
+	caldav_alarm_close(alarmdb);
 
     return r;
 }

@@ -121,12 +121,15 @@ EXPORTED int caldav_init(void)
     }
     if (caldav_eternity == -1) caldav_eternity = INT_MAX;
 
-    return dav_init();
+    r = dav_init();
+    caldav_alarm_init();
+    return r;
 }
 
 
 EXPORTED int caldav_done(void)
 {
+    caldav_alarm_done();
     return dav_done();
 }
 
@@ -592,7 +595,7 @@ EXPORTED int caldav_delmbox(struct caldav_db *caldavdb, const char *mailbox, int
 
 
 /* Get time period (start/end) of a component based in RFC 4791 Sec 9.9 */
-static void get_period(icalcomponent *comp, icalcomponent_kind kind,
+EXPORTED void caldav_get_period(icalcomponent *comp, icalcomponent_kind kind,
 		       struct icalperiodtype *period)
 {
     icaltimezone *utc = icaltimezone_get_utc_timezone();
@@ -834,6 +837,7 @@ EXPORTED void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata)
 	    break;
 	}
     }
+
     cdata->comp_flags.transp = transp;
 
     /* Initialize span to be nothing */
@@ -894,9 +898,7 @@ EXPORTED void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata)
 	    }
 	}
 
-	/* Check our dtstart and dtend against span */
-	if (icaltime_compare(period.start, span.start) < 0)
-	    memcpy(&span.start, &period.start, sizeof(struct icaltimetype));
+	caldav_get_period(comp, kind, &period);
 
 	if (icaltime_compare(period.end, span.end) > 0)
 	    memcpy(&span.end, &period.end, sizeof(struct icaltimetype));

@@ -49,7 +49,8 @@
 
 #include "mailbox.h"
 #include "mboxname.h"
-
+#include "caldav_db.h"
+#include "caldav_alarm.h"
 
 /*
  * event types defined in RFC 5423 - Internet Message Store Events
@@ -81,7 +82,8 @@ enum event_type {
     EVENT_MAILBOX_SUBSCRIBE   = (1<<18),
     EVENT_MAILBOX_UNSUBSCRIBE = (1<<19),
     EVENT_ACL_CHANGE          = (1<<20),
-    EVENT_CALENDAR            = (1<<21)
+    EVENT_CALENDAR            = (1<<21),
+    EVENT_CALENDAR_ALARM      = (1<<22)
 };
 
 /*
@@ -129,6 +131,23 @@ enum event_param {
     EVENT_CONVEXISTS,
     EVENT_CONVUNSEEN,
     EVENT_MESSAGE_CID,
+    EVENT_CALENDAR_ALARM_TIME,
+    EVENT_CALENDAR_ALARM_RECIPIENTS,
+    EVENT_CALENDAR_USER_ID,
+    EVENT_CALENDAR_CALENDAR_NAME,
+    EVENT_CALENDAR_UID,
+    EVENT_CALENDAR_ACTION,
+    EVENT_CALENDAR_SUMMARY,
+    EVENT_CALENDAR_DESCRIPTION,
+    EVENT_CALENDAR_LOCATION,
+    EVENT_CALENDAR_TIMEZONE,
+    EVENT_CALENDAR_START,
+    EVENT_CALENDAR_END,
+    EVENT_CALENDAR_ALLDAY,
+    EVENT_CALENDAR_ATTENDEE_NAMES,
+    EVENT_CALENDAR_ATTENDEE_EMAILS,
+    EVENT_CALENDAR_ATTENDEE_STATUS,
+    EVENT_CALENDAR_ORGANIZER,
     /* 31 */ EVENT_MESSAGE_CONTENT
 };
 
@@ -295,6 +314,21 @@ void mboxevent_extract_mailbox(struct mboxevent *event, struct mailbox *mailbox)
  */
 void mboxevent_extract_old_mailbox(struct mboxevent *event,
                                    const struct mailbox *mailbox);
+
+/*
+ * Extract data from the given ical object
+ */
+void mboxevent_extract_icalcomponent(struct mboxevent *event,
+                                     icalcomponent *ical,
+                                     const char *userid,
+                                     const char *calname,
+                                     enum caldav_alarm_action action,
+                                     icaltimetype alarmtime,
+                                     const char *timezone,
+                                     icaltimetype start,
+                                     icaltimetype end,
+                                     strarray_t *recipients
+                                     );
 
 
 /*
