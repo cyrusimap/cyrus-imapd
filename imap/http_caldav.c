@@ -106,7 +106,8 @@
 
 static int rscale_cmp(const void *a, const void *b)
 {
-    return strcmp(*((const char **) a), *((const char **) b));
+    /* Convert to uppercase since that's what we prefer to output */
+    return strcmp(ucase(*((char **) a)), ucase(*((char **) b)));
 }
 #endif /* HAVE_RSCALE */
 
@@ -1684,7 +1685,7 @@ static int caldav_put(struct transaction_t *txn,
 	    /* Perform binary search on sorted icalarray */
 	    unsigned found = 0, start = 0, end = rscale_calendars->num_elements;
 
-	    lcase(rt.rscale);
+	    ucase(rt.rscale);
 	    while (!found && start < end) {
 		unsigned mid = start + (end - start) / 2;
 		const char **rscale = icalarray_element_at(rscale_calendars, mid);
