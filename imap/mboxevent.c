@@ -137,6 +137,7 @@ static struct mboxevent event_template =
     /* 21 */ { EVENT_USER, "user", EVENT_PARAM_STRING, 0, 0 },
     /* 22 */ { EVENT_MESSAGE_SIZE, "messageSize", EVENT_PARAM_INT, 0, 0 },
     /* 23 */ { EVENT_MBTYPE, "vnd.cmu.mbtype", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_SERVERFQDN, "serverFQDN", EVENT_PARAM_STRING, 0, 0 },
     { EVENT_MAILBOX_ACL, "vnd.cmu.mailboxACL", EVENT_PARAM_STRING, 0, 0 },
     /* 24 */ { EVENT_DAV_FILENAME, "vnd.cmu.davFilename", EVENT_PARAM_STRING, 0, 0 },
     /* 25 */ { EVENT_DAV_UID, "vnd.cmu.davUid", EVENT_PARAM_STRING, 0, 0 },
@@ -445,6 +446,8 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
 	return 1;
     case EVENT_PID:
 	return 1;
+    case EVENT_SERVERFQDN:
+	return 1;
     case EVENT_USER:
 	return (
 		type & MESSAGE_EVENTS ||
@@ -528,6 +531,10 @@ EXPORTED void mboxevent_notify(struct mboxevent *mboxevents)
 
 	if (mboxevent_expected_param(event->type, EVENT_SERVICE)) {
 	    FILL_STRING_PARAM(event, EVENT_SERVICE, xstrdup(config_ident));
+	}
+
+	if (mboxevent_expected_param(event->type, EVENT_SERVERFQDN)) {
+	    FILL_STRING_PARAM(event, EVENT_SERVERFQDN, xstrdup(config_servername));
 	}
 
 	if (mboxevent_expected_param(event->type, EVENT_TIMESTAMP)) {

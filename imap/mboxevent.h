@@ -118,6 +118,7 @@ enum event_param {
     /* 22 */ EVENT_MESSAGE_SIZE,
     /* 23 */ EVENT_MBTYPE,
     EVENT_MAILBOX_ACL,
+    EVENT_SERVERFQDN,
     /* 24 */ EVENT_DAV_FILENAME,
     /* 25 */ EVENT_DAV_UID,
     /* 26 */ EVENT_ENVELOPE,
