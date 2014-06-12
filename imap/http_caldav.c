@@ -107,7 +107,8 @@
 
 static int rscale_cmp(const void *a, const void *b)
 {
-    return strcmp(*((const char **) a), *((const char **) b));
+    /* Convert to uppercase since that's what we prefer to output */
+    return strcmp(ucase(*((char **) a)), ucase(*((char **) b)));
 }
 
 static icalarray *rscale_calendars = NULL;
@@ -1659,9 +1660,15 @@ static int caldav_put(struct transaction_t *txn,
 	    UErrorCode stat = U_ZERO_ERROR;
 	    const char *rscale;
 
-	    en = ucal_getKeywordValuesForLocale("calendar", NULL, FALSE, &stat);
-	    while ((rscale = uenum_next(en, NULL, &stat))) {
-		if (!strcasecmp(rscale, rt.rscale)) break;
+	    ucase(rt.rscale);
+	    while (!found && start < end) {
+		unsigned mid = start + (end - start) / 2;
+		const char **rscale = icalarray_element_at(rscale_calendars, mid);
+		int r = strcmp(rt.rscale, *rscale);
+
+		if (r == 0) found = 1;
+		else if (r < 0) end = mid;
+		else start = mid + 1;
 	    }
 	    uenum_close(en);
 
