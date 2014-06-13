@@ -258,12 +258,12 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
 	    return -1;
 	wrote += sizeof(int);
 	(*codep)++;
-	/*drop comparator */
+	/*now drop relation*/
 	if(write_int(fd, bc->data[(*codep)].value) == -1)
 	    return -1;
 	wrote += sizeof(int);
 	(*codep)++;    
-	/*now drop relation*/
+	/*drop comparator */
 	if(write_int(fd, bc->data[(*codep)].value) == -1)
 	    return -1;
 	wrote += sizeof(int);
@@ -287,12 +287,12 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
 	    return -1;
 	wrote += sizeof(int);
 	(*codep)++;
-	/*drop comparator */
+	/*now drop relation*/
 	if(write_int(fd, bc->data[(*codep)].value) == -1)
 	    return -1;
 	wrote += sizeof(int);
 	(*codep)++;
-	/*now drop relation*/
+	/*drop comparator */
 	if(write_int(fd, bc->data[(*codep)].value) == -1)
 	    return -1;
 	wrote += sizeof(int);
