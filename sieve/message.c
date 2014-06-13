@@ -181,11 +181,26 @@ int do_keep(action_list_t *a, strarray_t *imapflags)
 
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
-	b = a;
 	if (a->a == ACTION_REJECT)
 	    return SIEVE_RUN_ERROR;
-	if (a->a == ACTION_KEEP) /* don't bother doing it twice */
+	if (a->a == ACTION_KEEP) {
+	    /* don't bother doing it twice */
+	    /* check that we have a valid action */
+	    if (b == NULL) {
+		return SIEVE_INTERNAL_ERROR;
+	    }
+	    /* cut this action out of the list */
+	    b->next = a->next;
+	    a->next = NULL;
+	    /* find the end of the list */
+	    while (b->next != NULL) {
+		b = b-> next;
+	    }
+	    /* add the action to the end of the list */
+	    b->next = a;
 	    return 0;
+	}
+	b = a;
 	a = a->next;
     }
 
