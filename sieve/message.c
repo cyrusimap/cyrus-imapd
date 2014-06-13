@@ -107,6 +107,10 @@ int do_fileinto(action_list_t *a, const char *mbox, int cancel_keep,
 	b = a;
 	if (a->a == ACTION_REJECT)
 	    return SIEVE_RUN_ERROR;
+	if (a->a == ACTION_FILEINTO && !strcmp(a->u.fil.mailbox, mbox)) {
+	    /* don't bother doing it twice */
+	    return 0;
+	}
 	a = a->next;
     }
 
