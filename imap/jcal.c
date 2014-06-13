@@ -84,16 +84,39 @@ static char *icalperiodtype_as_json_string(struct icalperiodtype p)
 /*
  * Add an iCalendar recur-rule-part to a JSON recur object.
  */
+static void icalrecur_add_obj_to_json_object(json_t *jrecur, const char *rpart,
+					     json_t *obj)
+{
+    json_t *old_rpart = json_object_get(jrecur, rpart);
+
+    if (old_rpart) {
+	/* Already have a value for this BY* rpart - needs to be an array */
+	json_t *byarray;
+
+	if (!json_is_array(old_rpart)) {
+	    /* Create an array from existing value */
+	    byarray = json_array();
+	    json_array_append(byarray, old_rpart);
+	    json_object_set_new(jrecur, rpart, byarray);
+	}
+	else byarray = old_rpart;
+
+	/* Append value to array */
+	json_array_append_new(byarray, obj);
+    }
+    else json_object_set_new(jrecur, rpart, obj);
+}
+
 static void icalrecur_add_int_to_json_object(void *jrecur, const char *rpart,
 					     int i)
 {
-    json_object_set_new((json_t *) jrecur, rpart, json_integer(i));
+    icalrecur_add_obj_to_json_object(jrecur, rpart, json_integer(i));
 }
 
 static void icalrecur_add_string_to_json_object(void *jrecur, const char *rpart,
 						const char *s)
 {
-    json_object_set_new((json_t *) jrecur, rpart, json_string(s));
+    icalrecur_add_obj_to_json_object(jrecur, rpart, json_string(s));
 }
 
 
