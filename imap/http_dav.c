@@ -2333,7 +2333,7 @@ int meth_acl(struct transaction_t *txn, void *params)
 			    goto done;
 			}
 
-			for (prin = child->children;
+			for (prin = child->children; prin &&
 			     prin->type != XML_ELEMENT_NODE; prin = prin->next);
 		    }
 		    else if (!xmlStrcmp(child->name, BAD_CAST "grant")) {
@@ -2343,7 +2343,7 @@ int meth_acl(struct transaction_t *txn, void *params)
 			    goto done;
 			}
 
-			for (privs = child->children;
+			for (privs = child->children; privs &&
 			     privs->type != XML_ELEMENT_NODE; privs = privs->next);
 		    }
 		    else if (!xmlStrcmp(child->name, BAD_CAST "deny")) {
@@ -2353,7 +2353,7 @@ int meth_acl(struct transaction_t *txn, void *params)
 			    goto done;
 			}
 
-			for (privs = child->children;
+			for (privs = child->children; privs &&
 			     privs->type != XML_ELEMENT_NODE; privs = privs->next);
 			deny = 1;
 		    }
