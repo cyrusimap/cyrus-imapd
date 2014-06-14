@@ -2449,8 +2449,12 @@ int meth_acl(struct transaction_t *txn, void *params)
 					BAD_CAST XML_NS_DAV)) {
 			/* WebDAV privileges */
 			if (!xmlStrcmp(priv->name,
-				       BAD_CAST "all"))
-			    rights |= DACL_ALL;
+				       BAD_CAST "all")) {
+			    if (deny)
+				rights |= ACL_FULL; /* wipe EVERYTHING */
+			    else
+				rights |= DACL_ALL;
+			}
 			else if (!xmlStrcmp(priv->name,
 					    BAD_CAST "read"))
 			    rights |= DACL_READ;
