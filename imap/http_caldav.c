@@ -911,6 +911,8 @@ static int caldav_parse_path(const char *path,
 	    if (strcmp(tgt->collection, SCHED_DEFAULT))
 		tgt->allow |= ALLOW_DELETE;
 	}
+	else
+	    tgt->allow |= (ALLOW_POST|ALLOW_DELETE);
     }
     else if (tgt->user) tgt->allow |= ALLOW_DELETE;
 
