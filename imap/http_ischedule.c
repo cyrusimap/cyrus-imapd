@@ -395,13 +395,17 @@ static int meth_post_isched(struct transaction_t *txn,
 
     /* Parse the iCal data for important properties */
     ical = mime->from_string(buf_cstring(&txn->req_body.payload));
-    if (!ical || !icalrestriction_check(ical)) {
+    if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {
 	txn->error.precond = ISCHED_INVALID_DATA;
-	if ((txn->error.desc = get_icalrestriction_errstr(ical))) {
-	    assert(!buf_len(&txn->buf));
-	    buf_setcstr(&txn->buf, txn->error.desc);
-	    txn->error.desc = buf_cstring(&txn->buf);
-	}
+	return HTTP_BAD_REQUEST;
+    }
+
+    icalrestriction_check(ical);
+    if ((txn->error.desc = get_icalcomponent_errstr(ical))) {
+	assert(!buf_len(&txn->buf));
+	buf_setcstr(&txn->buf, txn->error.desc);
+	txn->error.desc = buf_cstring(&txn->buf);
+	txn->error.precond = ISCHED_INVALID_DATA;
 	return HTTP_BAD_REQUEST;
     }
 
