@@ -2886,7 +2886,8 @@ static int proppatch_availability(xmlNodePtr prop, unsigned set,
 				  struct propstat propstat[],
 				  void *rock __attribute__((unused)))
 {
-    if (pctx->req_tgt->collection && !pctx->req_tgt->resource) {
+    if (pctx->req_tgt->collection && !pctx->req_tgt->resource &&
+	pctx->req_tgt->flags == TGT_SCHED_INBOX) {
 	xmlChar *type, *ver = NULL, *freeme = NULL;
 	struct mime_type_t *mime;
 	icalcomponent *ical = NULL;
