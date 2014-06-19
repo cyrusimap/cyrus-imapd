@@ -54,6 +54,7 @@
 #include "httpd.h"
 #include "http_dav.h"
 #include "imap_err.h"
+#include "http_err.h"
 #include "libconfig.h"
 #include "mboxname.h"
 #include "util.h"
@@ -143,7 +144,7 @@ EXPORTED struct caldav_alarm_db *caldav_alarm_open()
 
     int rc = sqlite3_open(dbfilename, &db);
     if (rc != SQLITE_OK) {
-	syslog(LOG_ERR, "caldav_alarm_open (open): %s", db ? sqlite3_errmsg(db) : "failed");
+	syslog(LOG_ERR, "IOERROR: caldav_alarm_open (open): %s", db ? sqlite3_errmsg(db) : "failed");
 	sqlite3_close(db);
 	free(dbfilename);
 	return NULL;
@@ -167,7 +168,7 @@ EXPORTED struct caldav_alarm_db *caldav_alarm_open()
     return my_alarmdb;
 
 fail:
-    syslog(LOG_ERR, "caldav_alarm_open (exec): %s", sqlite3_errmsg(db));
+    syslog(LOG_ERR, "IOERROR: caldav_alarm_open (exec): %s", sqlite3_errmsg(db));
     sqlite3_close(db);
     return NULL;
 }
@@ -635,6 +636,8 @@ EXPORTED int caldav_alarm_process()
     struct alarmdata_list *list = NULL, *scan;
 
     struct caldav_alarm_db *alarmdb = caldav_alarm_open();
+    if (!alarmdb)
+	return HTTP_SERVER_ERROR;
 
     int rc = dav_exec(alarmdb->db, CMD_SELECT_ALARM, bval, &alarm_read_cb, &list,
 		  &alarmdb->stmt[STMT_SELECT_ALARM]);
