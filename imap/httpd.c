@@ -1934,11 +1934,17 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 			    (txn->req_tgt.allow & ALLOW_WRITECOL) ?
 			    ", extended-mkcol" : "");
 		if (txn->req_tgt.allow & ALLOW_CAL) {
-		    prot_printf(httpd_out, "DAV: calendar-access%s%s\r\n",
+		    prot_printf(httpd_out, "DAV: calendar-access%s%s%s\r\n",
 				(txn->req_tgt.allow & ALLOW_CAL_AVAIL) ?
 				", calendar-availability" : "",
 				(txn->req_tgt.allow & ALLOW_CAL_SCHED) ?
-				", calendar-auto-schedule" : "");
+				", calendar-auto-schedule" : "",
+
+				/* Backwards compat with Apple VAV clients */
+				((txn->req_tgt.allow &
+				  (ALLOW_CAL_AVAIL | ALLOW_CAL_SCHED)) ==
+				 (ALLOW_CAL_AVAIL | ALLOW_CAL_SCHED)) ?
+				", inbox-availability" : "");
 		}
 		if (txn->req_tgt.allow & ALLOW_CARD) {
 		    prot_puts(httpd_out, "DAV: addressbook\r\n");

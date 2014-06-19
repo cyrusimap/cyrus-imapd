@@ -276,9 +276,9 @@ static int propfind_caltransp(const xmlChar *name, xmlNsPtr ns,
 static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
 			       struct proppatch_ctx *pctx,
 			       struct propstat propstat[], void *rock);
-static int propfind_tz_avail(const xmlChar *name, xmlNsPtr ns,
-			     struct propfind_ctx *fctx, xmlNodePtr resp,
-			     struct propstat propstat[], void *rock);
+static int propfind_icalcomponent(const xmlChar *name, xmlNsPtr ns,
+				  struct propfind_ctx *fctx, xmlNodePtr resp,
+				  struct propstat propstat[], void *rock);
 static int proppatch_timezone(xmlNodePtr prop, unsigned set,
 			      struct proppatch_ctx *pctx,
 			      struct propstat propstat[], void *rock);
@@ -409,7 +409,7 @@ static const struct prop_entry caldav_props[] = {
       propfind_fromdb, proppatch_todb, NULL },
     { "calendar-timezone", NS_CALDAV,
       PROP_COLLECTION | PROP_PRESCREEN | PROP_NEEDPROP,
-      propfind_tz_avail, proppatch_timezone, NULL },
+      propfind_icalcomponent, proppatch_timezone, NULL },
     { "supported-calendar-component-set", NS_CALDAV, PROP_COLLECTION,
       propfind_calcompset, proppatch_calcompset, NULL },
     { "supported-calendar-data", NS_CALDAV, PROP_COLLECTION,
@@ -431,7 +431,12 @@ static const struct prop_entry caldav_props[] = {
     /* Calendar Availability (draft-daboo-calendar-availability) properties */
     { "calendar-availability", NS_CALDAV,
       PROP_COLLECTION | PROP_PRESCREEN | PROP_NEEDPROP,
-      propfind_tz_avail, proppatch_availability, NULL },
+      propfind_icalcomponent, proppatch_availability, NULL },
+
+    /* Backwards compatibility with Apple VAVAILABILITY clients */
+    { "calendar-availability", NS_CS,
+      PROP_COLLECTION | PROP_PRESCREEN | PROP_NEEDPROP,
+      propfind_icalcomponent, proppatch_availability, NULL },
 
     /* RSCALE (draft-daboo-icalendar-rscale) properties */
     { "supported-rscale-set", NS_CALDAV, PROP_COLLECTION,
@@ -2720,11 +2725,11 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
 
 
 /* Callback to prescreen/fetch CALDAV:calendar-timezone/availability */
-static int propfind_tz_avail(const xmlChar *name, xmlNsPtr ns,
-			     struct propfind_ctx *fctx,
-			     xmlNodePtr resp __attribute__((unused)),
-			     struct propstat propstat[],
-			     void *rock)
+static int propfind_icalcomponent(const xmlChar *name, xmlNsPtr ns,
+				  struct propfind_ctx *fctx,
+				  xmlNodePtr resp __attribute__((unused)),
+				  struct propstat propstat[],
+				  void *rock)
 {
     xmlNodePtr prop = (xmlNodePtr) rock;
     struct buf attrib = BUF_INITIALIZER;
@@ -2883,8 +2888,7 @@ static int proppatch_availability(xmlNodePtr prop, unsigned set,
 				  struct propstat propstat[],
 				  void *rock __attribute__((unused)))
 {
-    if (pctx->req_tgt->collection && !pctx->req_tgt->resource &&
-	pctx->req_tgt->flags == TGT_SCHED_INBOX) {
+    if (config_allowsched && pctx->req_tgt->flags == TGT_SCHED_INBOX) {
 	xmlChar *type, *ver = NULL, *freeme = NULL;
 	struct mime_type_t *mime;
 	icalcomponent *ical = NULL;
