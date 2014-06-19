@@ -103,7 +103,13 @@ static int do_user(const char *userid, void *rock __attribute__((unused)))
 	unlink(buf_cstring(&fnamebuf));
     buf_free(&fnamebuf);
 
+    struct caldav_alarm_db *alarmdb = caldav_alarm_open();
+
+    caldav_alarm_delete_user(alarmdb, userid);
+
     mboxlist_allusermbox(userid, do_reconstruct, NULL, 0);
+
+    caldav_alarm_close(alarmdb);
 
     return 0;
 }
@@ -161,8 +167,6 @@ int main(int argc, char **argv)
 	for (i = optind; i < argc; i++)
 	    do_user(argv[i], NULL);
     }
-
-    caldav_close(caldavdb);
 
     carddav_done();
     caldav_done();

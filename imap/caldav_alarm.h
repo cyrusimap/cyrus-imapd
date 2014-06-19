@@ -98,6 +98,9 @@ int caldav_alarm_delete(struct caldav_alarm_db *alarmdb, struct caldav_alarm_dat
 /* delete all alarms matching the event */
 int caldav_alarm_delete_all(struct caldav_alarm_db *alarmdb, struct caldav_alarm_data *alarmdata);
 
+/* delete all alarms for a user */
+int caldav_alarm_delete_user(struct caldav_alarm_db *alarmdb, const char *userid);
+
 /* fill alarmdata with data for next alarm of given type for given entry */
 int caldav_alarm_prepare(icalcomponent *ical, struct caldav_alarm_data *alarmdata, enum caldav_alarm_action action, icaltimetype after);
 

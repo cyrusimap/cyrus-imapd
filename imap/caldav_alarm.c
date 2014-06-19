@@ -69,11 +69,12 @@ enum {
     STMT_INSERT_RECIPIENT,
     STMT_DELETE,
     STMT_DELETEALL,
+    STMT_DELETEUSER,
     STMT_SELECT_ALARM,
     STMT_SELECT_RECIPIENT
 };
 
-#define NUM_STMT 9
+#define NUM_STMT 10
 
 struct caldav_alarm_db {
     sqlite3	    *db;
@@ -342,6 +343,35 @@ EXPORTED int caldav_alarm_delete_all(struct caldav_alarm_db *alarmdb, struct cal
     };
 
     return dav_exec(alarmdb->db, CMD_DELETEALL, bval, NULL, NULL, &alarmdb->stmt[STMT_DELETEALL]);
+}
+
+#define CMD_DELETEUSER		\
+    "DELETE FROM alarms WHERE"	\
+    " mailbox LIKE :prefix"	\
+    ";"
+
+/* delete all alarms matching the event */
+EXPORTED int caldav_alarm_delete_user(struct caldav_alarm_db *alarmdb, const char *userid)
+{
+    assert(alarmdb);
+    char mailboxname[MAX_MAILBOX_NAME];
+    struct mboxname_parts parts;
+
+    mboxname_userid_to_parts(userid, &parts);
+
+    mboxname_parts_to_internal(&parts, mailboxname);
+    size_t len = strlen(mailboxname);
+    if (len + 3 > MAX_MAILBOX_NAME) return IMAP_INTERNAL;
+    mailboxname[len] = '.';
+    mailboxname[len+1] = '%';
+    mailboxname[len+2] = '\0';
+
+    struct bind_val bval[] = {
+	{ ":prefix",	SQLITE_TEXT, { .s = mailboxname  } },
+	{ NULL,		SQLITE_NULL, { .s = NULL		} }
+    };
+
+    return dav_exec(alarmdb->db, CMD_DELETEUSER, bval, NULL, NULL, &alarmdb->stmt[STMT_DELETEUSER]);
 }
 
 enum trigger_type {
