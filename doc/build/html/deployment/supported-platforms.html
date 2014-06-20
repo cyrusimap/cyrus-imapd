@@ -1,0 +1,226 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Supported Platforms and System Requirements &mdash; Cyrus IMAP and SASL 2.4 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/extra.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" />
+    <link rel="up" title="Deployment Guide" href="index.html" />
+    <link rel="next" title="Overview and Concepts" href="overview_and_concepts.html" />
+    <link rel="prev" title="A Guide to Planning a Cyrus IMAP Deployment" href="book_info.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="overview_and_concepts.html" title="Overview and Concepts"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="book_info.html" title="A Guide to Planning a Cyrus IMAP Deployment"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" accesskey="U">Deployment Guide</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="supported-platforms-and-system-requirements">
+<h1>Supported Platforms and System Requirements<a class="headerlink" href="#supported-platforms-and-system-requirements" title="Permalink to this headline">¶</a></h1>
+<p>Cyrus IMAP supports the following platforms;</p>
+<ul>
+<li><p class="first">FreeBSD</p>
+</li>
+<li><p class="first">All reasonably recent versions of Linux, including but not limited to the following distributions, in no particular order other than alphabetic;</p>
+<blockquote>
+<div><ul class="simple">
+<li><a class="reference external" href="http://centos.org">CentOS</a></li>
+<li><a class="reference external" href="http://debian.org">Debian</a></li>
+<li><a class="reference external" href="http://fedoraproject.org">Fedora</a></li>
+<li><a class="reference external" href="http://gentoo.org">Gentoo</a></li>
+<li><a class="reference external" href="http://opensuse.org">openSUSE</a></li>
+<li><a class="reference external" href="http://redhat.com">Red Hat Enterprise Linux</a></li>
+<li><a class="reference external" href="http://www.suse.com">SUSE Linux</a></li>
+</ul>
+<p>Should your Linux distribution not be listed here, please refer to <a class="reference internal" href="../feedback.html"><em>Feedback</em></a> for ways of contacting the Cyrus IMAP team.</p>
+</div></blockquote>
+</li>
+<li><p class="first">Solaris</p>
+</li>
+</ul>
+<p>By reasonably recent versions of Linux, we intend to indicate the Cyrus project can keep up with the latest distribution release earmarked stable.</p>
+<div class="section" id="building-cyrus-imap">
+<h2>Building Cyrus IMAP<a class="headerlink" href="#building-cyrus-imap" title="Permalink to this headline">¶</a></h2>
+<p>In this section, we only list the aspects of building Cyrus IMAP of particular interest to most common deployment scenarios. For more information on all <tt class="docutils literal"><span class="pre">configure</span></tt> options with full details, we refer you to <tt class="docutils literal"><span class="pre">./configure</span> <span class="pre">--help</span></tt>.</p>
+</div>
+<div class="section" id="required-software-components">
+<h2>Required Software Components<a class="headerlink" href="#required-software-components" title="Permalink to this headline">¶</a></h2>
+<p>The following software components are required for Cyrus IMAP to build at all, with minimal functionality;</p>
+<ul class="simple">
+<li><tt class="docutils literal"><span class="pre">autoconf</span></tt></li>
+<li><tt class="docutils literal"><span class="pre">automake</span></tt></li>
+<li><tt class="docutils literal"><span class="pre">zlib</span></tt> (Development Headers)</li>
+</ul>
+<p>Obviously, the list is not complete</p>
+</div>
+<div class="section" id="recommended-software-components">
+<h2>Recommended Software Components<a class="headerlink" href="#recommended-software-components" title="Permalink to this headline">¶</a></h2>
+<p>We recommend you consider building Cyrus IMAP with the following software components included;</p>
+<div class="section" id="idled-support">
+<h3>Idled Support<a class="headerlink" href="#idled-support" title="Permalink to this headline">¶</a></h3>
+<p>To enable near real-time client updates through IMAP IDLE (as described in <a class="reference external" href="http://tools.ietf.org/html/rfc2177">RFC 2177</a>), configure Cyrus IMAP with the <tt class="docutils literal"><span class="pre">--enable-idled</span></tt> option.</p>
+</div>
+<div class="section" id="murder-support">
+<h3>Murder Support<a class="headerlink" href="#murder-support" title="Permalink to this headline">¶</a></h3>
+<p>To enable horizontal scalability, Cyrus IMAP supports the distribution of mailboxes across Cyrus IMAP servers in a Murder setup. To enable murder support in Cyrus IMAP, configure Cyrus IMAP with the <tt class="docutils literal"><span class="pre">--enable-murder</span></tt> option.</p>
+</div>
+<div class="section" id="replication-support">
+<h3>Replication Support<a class="headerlink" href="#replication-support" title="Permalink to this headline">¶</a></h3>
+<p>To enable replication support in Cyrus IMAP, configure Cyrus IMAP with the <tt class="docutils literal"><span class="pre">--enable-replication</span></tt> option.</p>
+<p>Obviously, the list is not complete</p>
+</div>
+</div>
+<div class="section" id="recommended-software-components-enabled-by-default">
+<h2>Recommended Software Components Enabled by Default<a class="headerlink" href="#recommended-software-components-enabled-by-default" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="sieve-support">
+<h3>Sieve Support<a class="headerlink" href="#sieve-support" title="Permalink to this headline">¶</a></h3>
+<p>Without any additional effort, Sieve support is already enabled by default. To disable Sieve, use the <tt class="docutils literal"><span class="pre">--disable-sieve</span></tt> option to <tt class="docutils literal"><span class="pre">configure</span></tt>.</p>
+</div>
+<div class="section" id="optional-software-components">
+<h3>Optional Software Components<a class="headerlink" href="#optional-software-components" title="Permalink to this headline">¶</a></h3>
+<p>When including the following software components during the build process, and providing the options listed here, additional optional functionality can be implemented;</p>
+<p><strong>Berkeley DB</strong> (Development headers)</p>
+<p>To enable using Berkely DB as a database backend, include the Berkeley DB development headers and make sure to configure Cyrus IMAP with <tt class="docutils literal"><span class="pre">--with-bdb</span></tt>.</p>
+<p>Berkeley DB Versions and Conversion</p>
+<p>The Cyrus IMAP <tt class="docutils literal"><span class="pre">configure</span></tt> process attempts to automatically detect and use the latest Berkeley DB technology available on the system. This may, however, not be the same version on your production systems. Since database conversions between versions of the Berkeley DB technology are particularly difficult and therefor NOT considered fully supported, we recommend you do NOT use Berkeley DB.</p>
+<p>Should the Berkeley DB development headers be installed in a non-standard location, or should you need a specific version when multiple versions are available on the system, please consider using any of the following options;</p>
+<div class="highlight-python"><div class="highlight"><pre>--with-bdb=DIR            use Berkeley DB (in DIR) [yes]
+--with-bdb-libdir=DIR     Berkeley DB lib files are in DIR
+--with-bdb-incdir=DIR     Berkeley DB include files are in DIR&lt;/screen&gt;
+</pre></div>
+</div>
+<p><strong>MySQL</strong> (Development headers)</p>
+<p>To enable using MySQL as a database server backend, include the MySQL development headers and make sure to configure Cyrus IMAP with <tt class="docutils literal"><span class="pre">--with-mysql</span></tt>.</p>
+<p>Should MySQL - the client libraries or the development headers - be installed in a non-standard location, please consider using any of the following options;</p>
+<div class="highlight-python"><div class="highlight"><pre>--with-mysql=DIR          use MySQL (in DIR) [no]
+--with-mysql-libdir=DIR   MySQL lib files are in DIR
+--with-mysql-incdir=DIR   MySQL include files are in DIR
+</pre></div>
+</div>
+<p><strong>PostgreSQL</strong> (Development headers)</p>
+<p>To enable using PostgreSQL as a database server backend, include the PostgreSQL development headers and make sure to configure Cyrus IMAP with <tt class="docutils literal"><span class="pre">--with-pgsql</span></tt>.</p>
+<p>Should PostgreSQL - the client libraries or the development headers - be installed in a non-standard location, please consider using any of the following options;</p>
+<div class="highlight-python"><div class="highlight"><pre>--with-pgsql=DIR          use PostgreSQL (in DIR) [no]
+--with-pgsql-libdir=DIR   Pgsql lib files are in DIR
+--with-pgsql-incdir=DIR   Pgsql include files are in DIR
+</pre></div>
+</div>
+<p>Obviously, the list is not complete</p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Supported Platforms and System Requirements</a><ul>
+<li><a class="reference internal" href="#building-cyrus-imap">Building Cyrus IMAP</a></li>
+<li><a class="reference internal" href="#required-software-components">Required Software Components</a></li>
+<li><a class="reference internal" href="#recommended-software-components">Recommended Software Components</a><ul>
+<li><a class="reference internal" href="#idled-support">Idled Support</a></li>
+<li><a class="reference internal" href="#murder-support">Murder Support</a></li>
+<li><a class="reference internal" href="#replication-support">Replication Support</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#recommended-software-components-enabled-by-default">Recommended Software Components Enabled by Default</a><ul>
+<li><a class="reference internal" href="#sieve-support">Sieve Support</a></li>
+<li><a class="reference internal" href="#optional-software-components">Optional Software Components</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="book_info.html"
+                        title="previous chapter">A Guide to Planning a Cyrus IMAP Deployment</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="overview_and_concepts.html"
+                        title="next chapter">Overview and Concepts</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/deployment/supported-platforms.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="overview_and_concepts.html" title="Overview and Concepts"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="book_info.html" title="A Guide to Planning a Cyrus IMAP Deployment"
+             >previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Deployment Guide</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 1993-2014, The Cyrus Team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

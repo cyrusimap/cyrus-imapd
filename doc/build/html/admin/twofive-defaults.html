@@ -1,0 +1,148 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Changes to Default Settings from 2.4 to 2.5 &mdash; Cyrus IMAP and SASL 2.4 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/extra.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" />
+    <link rel="up" title="Administrator Guide" href="index.html" />
+    <link rel="next" title="Deployment Guide" href="../deployment/index.html" />
+    <link rel="prev" title="New Features in Cyrus IMAP 2.5" href="twofive-newfeatures.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../deployment/index.html" title="Deployment Guide"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="twofive-newfeatures.html" title="New Features in Cyrus IMAP 2.5"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" accesskey="U">Administrator Guide</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="changes-to-default-settings-from-2-4-to-2-5">
+<h1>Changes to Default Settings from 2.4 to 2.5<a class="headerlink" href="#changes-to-default-settings-from-2-4-to-2-5" title="Permalink to this headline">¶</a></h1>
+<p>Several settings have changed defaults. For environments that upgrade from 2.4 to 2.5, please be aware of the consequences of these defaults having been changed, listed below.</p>
+<div class="section" id="lmtp-downcase-rcpt">
+<h2>lmtp_downcase_rcpt<a class="headerlink" href="#lmtp-downcase-rcpt" title="Permalink to this headline">¶</a></h2>
+<p>Before Cyrus IMAP 2.5, <strong>lmtp_downcase_rcpt</strong> had defaulted to 0, meaning the recipient address had always been case-sensitive. <a class="reference external" href="http://tools.ietf.org/html/rfc2821">RFC 2821</a> however states:</p>
+<blockquote>
+<div><em>However, exploiting the case sensitivity of mailbox local-parts impedes interoperability and is discouraged.</em></div></blockquote>
+<p>Cyrus IMAP developers and users alike therefor consider converting the mailbox local-parts to lowercase is therefor justified.</p>
+<div class="section" id="preserving-old-behavior">
+<h3>Preserving Old Behavior<a class="headerlink" href="#preserving-old-behavior" title="Permalink to this headline">¶</a></h3>
+<p>To preserve the old behaviour, please make sure <tt class="docutils literal"><span class="pre">/etc/imapd.conf</span></tt> has the following snippet:</p>
+<div class="highlight-python"><div class="highlight"><pre>(...)
+lmtp_downcase_rcpt: 0
+(...)
+</pre></div>
+</div>
+</div>
+<div class="section" id="reference">
+<h3>Reference<a class="headerlink" href="#reference" title="Permalink to this headline">¶</a></h3>
+<p>This switch has been suggested and discussed on the <a class="reference external" href="https://lists.andrew.cmu.edu/mailman/listinfo/cyrus-devel">Cyrus Development mailing list</a>, in <a class="reference external" href="https://lists.andrew.cmu.edu/pipermail/cyrus-devel/2011-February/001734.html">this thread</a>.</p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Changes to Default Settings from 2.4 to 2.5</a><ul>
+<li><a class="reference internal" href="#lmtp-downcase-rcpt">lmtp_downcase_rcpt</a><ul>
+<li><a class="reference internal" href="#preserving-old-behavior">Preserving Old Behavior</a></li>
+<li><a class="reference internal" href="#reference">Reference</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="twofive-newfeatures.html"
+                        title="previous chapter">New Features in Cyrus IMAP 2.5</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="../deployment/index.html"
+                        title="next chapter">Deployment Guide</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/admin/twofive-defaults.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../deployment/index.html" title="Deployment Guide"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="twofive-newfeatures.html" title="New Features in Cyrus IMAP 2.5"
+             >previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Administrator Guide</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 1993-2014, The Cyrus Team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

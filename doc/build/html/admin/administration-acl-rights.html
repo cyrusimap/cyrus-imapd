@@ -1,0 +1,271 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Access Rights &mdash; Cyrus IMAP and SASL 2.4 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/extra.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" />
+    <link rel="up" title="Access Control" href="administration-acl.html" />
+    <link rel="next" title="Combining Access Rights" href="administration-acl-combining.html" />
+    <link rel="prev" title="Access Control" href="administration-acl.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="administration-acl-combining.html" title="Combining Access Rights"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="administration-acl.html" title="Access Control"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
+          <li><a href="administration.html" >Part I. Cyrus IMAP Administration</a> &raquo;</li>
+          <li><a href="administration-acl.html" accesskey="U">Access Control</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="access-rights">
+<h1>Access Rights<a class="headerlink" href="#access-rights" title="Permalink to this headline">¶</a></h1>
+<p>Access rights in Cyrus IMAP are -or should be- fully compatible with <a class="reference external" href="http://tools.ietf.org/html/rfc4314">RFC 4314</a>.</p>
+<div class="section" id="access-rights-available-in-cyrus-imap">
+<h2>Access Rights available in Cyrus IMAP<a class="headerlink" href="#access-rights-available-in-cyrus-imap" title="Permalink to this headline">¶</a></h2>
+<dl class="docutils">
+<dt><tt class="docutils literal"><span class="pre">l</span></tt></dt>
+<dd><p class="first">Stands for <strong>lookup</strong>.</p>
+<p>The ACI subject can lookup this folder, and see that the folder exists, meaning the folder will appear in a <strong>LIST &#8220;&#8221; &#8220;*&#8221;</strong>.</p>
+<p>Folders to which the ACI subject has no lookup rights may still be subscribed to. The lookup right is only required if Cyrus IMAP has been configured with the <strong>allowallsubscribe</strong> setting to <strong>false</strong> (0). In Cyrus IMAP 2.5, this setting defaults to <strong>false</strong> (0). In a Cyrus IMAP Murder, this setting is typically set to <strong>true</strong> (1).</p>
+<p class="last">The <tt class="docutils literal"><span class="pre">l</span></tt> right can be assigned to a folder, without the <tt class="docutils literal"><span class="pre">l</span></tt> right having been given out for the parent folder. Cyrus IMAP will pretend the parent folder does not exist;</p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<div class="last line-block">
+<div class="line">Example 2.1. Example Client - Server Session with <tt class="docutils literal"><span class="pre">l</span></tt> Right on Subfolder Only</div>
+<div class="line"><a class="reference external" href="http://tools.ietf.org/html/rfc4314">RFC 4314</a>, section 4., page 13, states the following example:</div>
+<div class="line"><br /></div>
+<div class="line">Note that if the user has <tt class="docutils literal"><span class="pre">l</span></tt> right to a mailbox &#8220;A/B&#8221;, but not to its parent mailbox &#8220;A&#8221;, the LIST command should behave as if the mailbox &#8220;A&#8221; doesn&#8217;t exist, for example::</div>
+<div class="line"><br /></div>
+<div class="line-block">
+<div class="line">C: A777 LIST &#8220;&#8221; *</div>
+<div class="line">S: * LIST (NoInferiors) &#8220;/&#8221; &#8220;A/B&#8221;</div>
+<div class="line">S: * LIST () &#8220;/&#8221; &#8220;C&#8221;</div>
+<div class="line">S: * LIST (NoInferiors) &#8220;/&#8221; &#8220;C/D&#8221;</div>
+<div class="line">S: A777 OK LIST completed</div>
+</div>
+</div>
+</div>
+<div class="admonition-todo admonition" id="index-0">
+<p class="first admonition-title">Todo</p>
+<p class="last">Fix formatting in the above example</p>
+</div>
+<dl class="docutils">
+<dt><tt class="docutils literal"><span class="pre">r</span></tt></dt>
+<dd><p class="first">Stands for <strong>read</strong>.
+The ACI subject can read the contents of this folder, meaning that the ACI subject is allowed to <strong>SELECT</strong> or <strong>EXAMINE</strong> the folder, query its <strong>STATUS</strong>, <strong>FETCH</strong> data, <strong>SEARCH</strong> the contents, and <strong>COPY</strong> contents from the folder.</p>
+<p class="last">The <tt class="docutils literal"><span class="pre">r</span></tt> right also allows the user to <strong>GETMETADATA</strong> when used in conjunction with the <tt class="docutils literal"><span class="pre">l</span></tt> right, as defined in <a class="reference external" href="http://tools.ietf.org/html/rfc5464">RFC 5464</a>.</p>
+</dd>
+<dt><tt class="docutils literal"><span class="pre">s</span></tt></dt>
+<dd>Stands for <strong>seen</strong>.
+The ACI subject is permitted to maintain the ACI subject&#8217;s seen state for this folder, or the shared seen state in case the <strong>/vendor/cmu/cyrus-imapd/sharedseen</strong> has been set to <strong>true</strong> (see mboxconfig in Chapter 3, cyradm). Additionally, the \Recent flags are preserved for the ACI subject.</dd>
+</dl>
+<div class="admonition-todo admonition" id="index-1">
+<p class="first admonition-title">Todo</p>
+<p class="last">Make the mboxconfig word above into a link to the appropriate cyradm subsection</p>
+</div>
+<dl class="docutils">
+<dt><tt class="docutils literal"><span class="pre">w</span></tt></dt>
+<dd>Stands for <strong>write</strong>.
+The ACI subject is permitted to write to the folder, actually meaning the ACI subject is permitted to maintain flags and keywords other then \Seen and \Deleted, which are controlled using the <tt class="docutils literal"><span class="pre">s</span></tt> and <tt class="docutils literal"><span class="pre">t</span></tt> rights respectively.
+The <tt class="docutils literal"><span class="pre">w</span></tt> right also allows the user to <strong>SETMETADATA</strong> when used in conjunction with the <tt class="docutils literal"><span class="pre">l</span></tt> and <tt class="docutils literal"><span class="pre">r</span></tt> rights, as defined in <a class="reference external" href="http://tools.ietf.org/html/rfc5464">RFC 5464</a>.</dd>
+</dl>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p><strong>IMAP Clients</strong></p>
+<p class="last">IMAP clients may expect to be able to set flags other then \Seen and \Deleted and attempt to set those flags immediately along with a &#8220;Mark as read&#8221; action, without the ACI subject actually being permitted to set some of those flags through the <tt class="docutils literal"><span class="pre">w</span></tt> right.
+<a class="reference external" href="http://tools.ietf.org/html/rfc4314">RFC 4314</a>, section 4., page 15, states that the server SHOULD NOT fail, as the tagged NO response is not handled very will by deployed clients. In order to comply, we have <a class="reference external" href="https://bugzilla.cyrusimap.org/show_bug.cgi?id=3488">Bug #3488</a>, as Cyrus IMAP currently does seem to issue a tagged NO response.</p>
+</div>
+<dl class="docutils">
+<dt><tt class="docutils literal"><span class="pre">i</span></tt></dt>
+<dd>Stands for <strong>insert</strong>.
+The ACI subject is permitted to insert content into a folder, meaning the ACI subject may <strong>COPY</strong> messages with this folder as the target folder, and may <strong>APPEND</strong> messages to this folder.</dd>
+<dt><tt class="docutils literal"><span class="pre">p</span></tt></dt>
+<dd>Stands for <strong>post</strong>.
+The post right currently is exclusive to Cyrus IMAP, and allows the ACI subject to send email to the submission address for the mailbox.
+This right differs from the <tt class="docutils literal"><span class="pre">i</span></tt> right in that the delivery system inserts trace information into submitted messages.
+Example implementations using the <tt class="docutils literal"><span class="pre">p</span></tt> right include shared folders to which specific recipient addresses are delivered through LMTP pre-authorized as the <strong>postuser</strong>, which must then also have the <tt class="docutils literal"><span class="pre">p</span></tt> right on the target folder.</dd>
+<dt><tt class="docutils literal"><span class="pre">c</span></tt></dt>
+<dd>Stands for <strong>create</strong>.
+The create right is a right introduced with <a class="reference external" href="http://tools.ietf.org/html/rfc2086">RFC 2086</a> (IMAP4 ACL extension), indicating the ACI subject&#8217;s right to create new sub-folders in the parent folder on which this right has been assigned, but also to delete the same folder.
+Since <a class="reference external" href="http://tools.ietf.org/html/rfc4314">RFC 4314</a>, the <tt class="docutils literal"><span class="pre">c</span></tt> right has been replaced with the <tt class="docutils literal"><span class="pre">k</span></tt> right to <strong>CREATE</strong> folders with, the <tt class="docutils literal"><span class="pre">x</span></tt> right to <strong>DELETE</strong> folders with.</dd>
+</dl>
+<div class="admonition important">
+<p class="first admonition-title">Important</p>
+<p><strong>The ``c`` right should no longer be used.</strong></p>
+<p class="last">Even though Cyrus IMAP is backwards compatible when it comes to the <tt class="docutils literal"><span class="pre">c</span></tt> right, which it implements as implying as the <tt class="docutils literal"><span class="pre">k</span></tt> right, implementations should not count on the <tt class="docutils literal"><span class="pre">c</span></tt> right backwards compability to be around forever, and to fully implement the legacy <tt class="docutils literal"><span class="pre">c</span></tt> right, use <tt class="docutils literal"><span class="pre">kx</span></tt>.</p>
+</div>
+<dl class="docutils">
+<dt><tt class="docutils literal"><span class="pre">k</span></tt></dt>
+<dd>The ACI subject has the right to <strong>CREATE</strong> a new folder if the <tt class="docutils literal"><span class="pre">k</span></tt> right exists on the parent folder of the folder created.
+The rights required for a <strong>RENAME</strong> to be successful could be illustrated by describing a <strong>RENAME</strong> as a <strong>CREATE</strong> of the new folder, not exactly followed by a <strong>COPY</strong> on the old folder&#8217;s contents, but more like a move like on a filesystem, and finally a <strong>DELETE</strong> on the old folder.
+As such, the <tt class="docutils literal"><span class="pre">k</span></tt> is the right required on the parent folder of the target folder, and the <tt class="docutils literal"><span class="pre">x</span></tt> right on the source folder. To further illustrate;</dd>
+</dl>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p>Example 2.2. Example Client Session with RENAME</p>
+<p class="last">Suppose the ACI subject has the k right on folder &#8220;C/&#8221;, and the x right on folder &#8220;A/B&#8221;, then a RENAME A/B C/B would succeed.</p>
+</div>
+<div class="admonition-todo admonition" id="index-2">
+<p class="first admonition-title">Todo</p>
+<p class="last">Fix formatting of above example.</p>
+</div>
+<dl class="docutils">
+<dt><tt class="docutils literal"><span class="pre">a</span></tt></dt>
+<dd>Stands for <strong>administer</strong>.
+The ACI subject is allowed to administer the folder, meaning the ACI subject is allowed to perform administrative operations on the folder. The <tt class="docutils literal"><span class="pre">a</span></tt> right is needed to successfully execute <strong>SETACL</strong>, <strong>DELETEACL</strong> (short for <strong>SETACL &#8220;&#8221;</strong>) and to execute <strong>GETACL</strong> or <strong>LISTRIGHTS</strong>.</dd>
+</dl>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p><strong>IMAP Clients</strong></p>
+<p>IMAP clients may issue a <strong>GETACL</strong> in order to obtain the ACI subject&#8217;s rights on the folder, where they should be using <strong>MYRIGHTS</strong>, as <strong>GETACL</strong> or <strong>LISTRIGHTS</strong> return the full Access Control List, including other ACI subject&#8217;s identifiers.</p>
+<p class="last">Unless the ACI subject has the <tt class="docutils literal"><span class="pre">a</span></tt> right on a folder, issuing a <strong>GETACL</strong> or <strong>LISTRIGHTS</strong> will cause Cyrus IMAP to send a tagged &#8220;NO: Permission denied&#8221; response if the ACI subject has the <tt class="docutils literal"><span class="pre">l</span></tt> (lookup) right on the folder, and a &#8220;NO: No Such Mailbox&#8221; response otherwise, as per section 8. of <a class="reference external" href="http://tools.ietf.org/html/rfc2086">RFC 2086</a> and section 6. of <a class="reference external" href="http://tools.ietf.org/html/rfc4314">RFC 4314</a> – both conveniently called &#8220;Security Considerations&#8221;.</p>
+</div>
+<dl class="docutils">
+<dt><tt class="docutils literal"><span class="pre">x</span></tt></dt>
+<dd>use this to indicate the ACI subject has the right to delete the mailbox, as opposed to <tt class="docutils literal"><span class="pre">c</span></tt> or <tt class="docutils literal"><span class="pre">d</span></tt></dd>
+<dt><tt class="docutils literal"><span class="pre">t</span></tt></dt>
+<dd><p class="first">The ACI subject is allowed to delete messages from this folder, meaning that the ACI subject is allowed to flag messages as \Deleted.</p>
+<p class="last">In IMAP, messages are only actually deleted in a way that at least makes them invisible to the folder&#8217;s users need to be expunged. For the corresponding <strong>EXPUNGE</strong> however, the <tt class="docutils literal"><span class="pre">x</span></tt> right is required.</p>
+</dd>
+<dt><tt class="docutils literal"><span class="pre">n</span></tt></dt>
+<dd><p class="first">The ACI subject is allowed to annotate individual messages in this folder, in compliance with <a class="reference external" href="http://tools.ietf.org/html/rfc5257">RFC 5257</a>.</p>
+<p class="last">The ACI subject must also have the <tt class="docutils literal"><span class="pre">r</span></tt> right, as otherwise the subject won&#8217;t know which messages are available to annotate.</p>
+</dd>
+<dt><tt class="docutils literal"><span class="pre">e</span></tt></dt>
+<dd><p class="first">Stands for <strong>expunge</strong>.</p>
+<p>The ACI subject is allowed to expunge messages in this folder, meaning the ACI subject has the right to remove all messages that have been flagged as \Deleted from all visibility.</p>
+<p>In IMAP, expunging messages only applies to messages flagged as \Deleted. For the ACI subject to be able to flag messages as \Deleted, the however, the <tt class="docutils literal"><span class="pre">t</span></tt> right is required.</p>
+<p class="last">We say &#8220;remove from all visibility&#8221;, because the implementation of expunging messages in Cyrus IMAP is ACI subject to the <strong>expunge_mode</strong> in <tt class="docutils literal"><span class="pre">/etc/imapd.conf</span></tt>, which when set to <strong>delayed</strong> only causes the reference to the expunged messages to be deleted from the folder index database - effectively removing the expunged message(s) from all visibility, while they remain in place on the Cyrus IMAP server filesystem.</p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p><strong>IMAP Clients</strong></p>
+<p class="last">IMAP clients may expect to be able to <strong>EXPUNGE</strong> a folder regardless of the availability of this right.</p>
+</div>
+<dl class="docutils">
+<dt><tt class="docutils literal"><span class="pre">d</span></tt></dt>
+<dd><p class="first">Stands for <strong>delete</strong>.</p>
+<p>This is the legacy, <a class="reference external" href="http://tools.ietf.org/html/rfc2086">RFC 2086</a> access control right for the delete right. In versions of Cyrus IMAP implementing only this right, ACI subjects were allowed to flag messages as \Deleted and expunge folders.</p>
+<p class="last">The delete right has been split in to three separate rights, <tt class="docutils literal"><span class="pre">t</span></tt> (flag messages as deleted), <tt class="docutils literal"><span class="pre">e</span></tt> (expunge folder) and <tt class="docutils literal"><span class="pre">x</span></tt> (delete folder).</p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p><strong>deleteright setting</strong></p>
+<p class="last">The <strong>deleteright</strong> setting in <tt class="docutils literal"><span class="pre">/etc/imapd.conf</span></tt> controls the <a class="reference external" href="http://tools.ietf.org/html/rfc2086">RFC 2086</a> right which controls whether or not the ACI subject may delete a folder. However, this setting (as the original specification for the delete right was considered ambiguous) is ignored, and if it is set to <tt class="docutils literal"><span class="pre">c</span></tt>, is automatically converted to the <tt class="docutils literal"><span class="pre">x</span></tt> right.</p>
+</div>
+<div class="admonition important">
+<p class="first admonition-title">Important</p>
+<p><strong>The d right should no longer be used</strong></p>
+<p class="last">Even though Cyrus IMAP is backwards compatible when it comes to the <tt class="docutils literal"><span class="pre">d</span></tt> right, which it implements as implying as the <tt class="docutils literal"><span class="pre">e</span></tt> and <tt class="docutils literal"><span class="pre">t</span></tt> rights, implementations should not count on the <tt class="docutils literal"><span class="pre">d</span></tt> right backwards compability to be around forever, instead use <tt class="docutils literal"><span class="pre">te</span></tt> rights.</p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Access Rights</a><ul>
+<li><a class="reference internal" href="#access-rights-available-in-cyrus-imap">Access Rights available in Cyrus IMAP</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="administration-acl.html"
+                        title="previous chapter">Access Control</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="administration-acl-combining.html"
+                        title="next chapter">Combining Access Rights</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/admin/administration-acl-rights.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="administration-acl-combining.html" title="Combining Access Rights"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="administration-acl.html" title="Access Control"
+             >previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
+          <li><a href="administration.html" >Part I. Cyrus IMAP Administration</a> &raquo;</li>
+          <li><a href="administration-acl.html" >Access Control</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 1993-2014, The Cyrus Team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

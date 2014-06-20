@@ -1,0 +1,130 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Reloading Cyrus IMAP Services &mdash; Cyrus IMAP and SASL 2.4 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/extra.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" />
+    <link rel="up" title="Part II. Standard Operating Procedures" href="sop.html" />
+    <link rel="next" title="Alternative Namespace" href="sop-altnamespace.html" />
+    <link rel="prev" title="Mailbox Folders exempt from quota" href="sop-mailbox-quota.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="sop-altnamespace.html" title="Alternative Namespace"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="sop-mailbox-quota.html" title="Mailbox Folders exempt from quota"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
+          <li><a href="sop.html" accesskey="U">Part II. Standard Operating Procedures</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="reloading-cyrus-imap-services">
+<h1>Reloading Cyrus IMAP Services<a class="headerlink" href="#reloading-cyrus-imap-services" title="Permalink to this headline">¶</a></h1>
+<p>After a change has been applied to <strong>/etc/cyrus.conf</strong>, the Cyrus IMAP process <strong>master</strong> will need to be signalled to reload it&#8217;s configuration file.</p>
+<p>Such can be performed by sending a SIGHUP signal to the running process.</p>
+<p>When changes to <strong>/etc/imapd.conf</strong> have been applied however, some options are available to have the new configuration be read.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">All newly spawned processes (controlled by the <strong>master</strong> process) read in the configuration when they start.</p>
+</div>
+<p>Wait for existing processes to be &#8220;cycled&#8221;, or restarted by the <strong>master</strong> process. The default number of connections to cause a process to be cycled is 250.</p>
+<p>Touch the binary file for the process, for example <strong>/usr/lib/cyrus-imapd/imapd</strong>. When the process is idle, it will detect the modification timestamp on its binary file has changed and restart.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Touching the binary file for the process is an easy way to make sure all imapd processes read in the new configuration as soon as they have the chance, but modifies the modification timestamp on the file, potentially causing package file verification (such as RPM Package Management&#8217;s <tt class="docutils literal"><span class="pre">rpm</span> <span class="pre">-qV</span></tt>) to fail.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="sop-mailbox-quota.html"
+                        title="previous chapter">Mailbox Folders exempt from quota</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="sop-altnamespace.html"
+                        title="next chapter">Alternative Namespace</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/admin/sop-reloading.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="sop-altnamespace.html" title="Alternative Namespace"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="sop-mailbox-quota.html" title="Mailbox Folders exempt from quota"
+             >previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
+          <li><a href="sop.html" >Part II. Standard Operating Procedures</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 1993-2014, The Cyrus Team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

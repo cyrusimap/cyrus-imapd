@@ -1,0 +1,192 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Deployment Guide &mdash; Cyrus IMAP and SASL 2.4 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/extra.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" />
+    <link rel="next" title="A Guide to Planning a Cyrus IMAP Deployment" href="book_info.html" />
+    <link rel="prev" title="Changes to Default Settings from 2.4 to 2.5" href="../admin/twofive-defaults.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="book_info.html" title="A Guide to Planning a Cyrus IMAP Deployment"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="../admin/twofive-defaults.html" title="Changes to Default Settings from 2.4 to 2.5"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="deployment-guide">
+<h1>Deployment Guide<a class="headerlink" href="#deployment-guide" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="a-guide-to-planning-a-cyrus-imap-deployment">
+<h2>A Guide to Planning a Cyrus IMAP Deployment<a class="headerlink" href="#a-guide-to-planning-a-cyrus-imap-deployment" title="Permalink to this headline">¶</a></h2>
+<p>A number of considerations need to be made prior to deploying Cyrus IMAP in an existing infrastructure, especially larger ones. This guide addresses these considerations, to aid in planning the successful deployment of Cyrus IMAP.</p>
+</div>
+<div class="section" id="contents">
+<h2>Contents<a class="headerlink" href="#contents" title="Permalink to this headline">¶</a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="book_info.html">A Guide to Planning a Cyrus IMAP Deployment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="supported-platforms.html">Supported Platforms and System Requirements</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="supported-platforms.html#building-cyrus-imap">Building Cyrus IMAP</a></li>
+<li class="toctree-l2"><a class="reference internal" href="supported-platforms.html#required-software-components">Required Software Components</a></li>
+<li class="toctree-l2"><a class="reference internal" href="supported-platforms.html#recommended-software-components">Recommended Software Components</a></li>
+<li class="toctree-l2"><a class="reference internal" href="supported-platforms.html#recommended-software-components-enabled-by-default">Recommended Software Components Enabled by Default</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="overview_and_concepts.html">Overview and Concepts</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="overview_and_concepts.html#cyrus-imap">Cyrus IMAP</a></li>
+<li class="toctree-l2"><a class="reference internal" href="overview_and_concepts.html#cyrus-imap-features">Cyrus IMAP Features</a></li>
+<li class="toctree-l2"><a class="reference internal" href="overview_and_concepts.html#initial-acls-for-newly-created-mailboxes">Initial ACLs for Newly Created Mailboxes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="overview_and_concepts.html#login-authentication">Login Authentication</a></li>
+<li class="toctree-l2"><a class="reference internal" href="overview_and_concepts.html#quota">Quota</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="overview_and_concepts.html#html-block-that-was-commented-out-in-xml">HTML Block that was commented out in XML</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="overview_and_concepts.html#partitions">Partitions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="deployment_scenarios.html">Deployment Scenarios</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="deployment_scenarios.html#single-server-deployments">Single Server Deployments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deployment_scenarios.html#multi-server-deployments">Multi Server Deployments</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="deployment_scenarios.html#id1">Cyrus IMAP Murder</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="deployment_scenarios.html#the-discrete-murder">The Discrete Murder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deployment_scenarios.html#the-unified-murder">The Unified Murder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deployment_scenarios.html#the-shared-murder">The Shared Murder</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="deployment_scenarios.html#cyrus-replication">Cyrus Replication</a></li>
+<li class="toctree-l1"><a class="reference internal" href="deployment_scenarios.html#hosted-environments">Hosted Environments</a></li>
+<li class="toctree-l1"><a class="reference internal" href="deployment_scenarios.html#mailbox-creation-distribution">Mailbox Creation Distribution</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mailbox_creation_distribution.html">Mailbox Creation Distribution</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="mailbox_creation_distribution.html#on-backend">On backend</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mailbox_creation_distribution.html#selection-mode">Selection Mode</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="mailbox_creation_distribution.html#usage-convergence">Usage convergence</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mailbox_creation_distribution.html#computed-weight">Computed weight</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mailbox_creation_distribution.html#special-cases">Special cases</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="mailbox_creation_distribution.html#what-happens-when-two-partitions-are-equal-as-most-fitting">What happens when two partitions are equal as most fitting?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mailbox_creation_distribution.html#what-happens-when-two-partitions-point-to-the-same-device">What happens when two partitions point to the same device?</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="known_protocol_limitations.html">Known Protocol Limitations</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="known_protocol_limitations.html#pop3-and-mailbox-locking">POP3 and Mailbox Locking</a></li>
+<li class="toctree-l2"><a class="reference internal" href="known_protocol_limitations.html#cyrus-imap-pop3-implementation">Cyrus IMAP POP3 Implementation</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="authentication_and_authorization.html">Authentication and Authorization</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="authentication_and_authorization.html#client-authentication">Client Authentication</a></li>
+<li class="toctree-l2"><a class="reference internal" href="authentication_and_authorization.html#users-and-mailboxes">Users and Mailboxes</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="performance_recommendations.html">Performance Recommendations</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="performance_recommendations.html#databases-on-temporary-filesystems">Databases on Temporary Filesystems</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Deployment Guide</a><ul>
+<li><a class="reference internal" href="#a-guide-to-planning-a-cyrus-imap-deployment">A Guide to Planning a Cyrus IMAP Deployment</a></li>
+<li><a class="reference internal" href="#contents">Contents</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="../admin/twofive-defaults.html"
+                        title="previous chapter">Changes to Default Settings from 2.4 to 2.5</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="book_info.html"
+                        title="next chapter">A Guide to Planning a Cyrus IMAP Deployment</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/deployment/index.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="book_info.html" title="A Guide to Planning a Cyrus IMAP Deployment"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="../admin/twofive-defaults.html" title="Changes to Default Settings from 2.4 to 2.5"
+             >previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 1993-2014, The Cyrus Team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

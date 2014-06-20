@@ -1,0 +1,195 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Notes for Packagers &mdash; Cyrus IMAP and SASL 2.4 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/extra.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" />
+    <link rel="up" title="Administrator Guide" href="index.html" />
+    <link rel="next" title="New Features in Cyrus IMAP 2.5" href="twofive-newfeatures.html" />
+    <link rel="prev" title="Mailbox Distribution" href="config-mailboxdistribution.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="twofive-newfeatures.html" title="New Features in Cyrus IMAP 2.5"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="config-mailboxdistribution.html" title="Mailbox Distribution"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" accesskey="U">Administrator Guide</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="notes-for-packagers">
+<h1>Notes for Packagers<a class="headerlink" href="#notes-for-packagers" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="services-in-etc-services">
+<h2>Services in <tt class="docutils literal"><span class="pre">/etc/services</span></tt><a class="headerlink" href="#services-in-etc-services" title="Permalink to this headline">¶</a></h2>
+<p>Listing named services through <tt class="docutils literal"><span class="pre">/etc/services</span></tt> aids in cross-system consistency and cross-platform interoperability. Furthermore, it enables administrators and users to refer to the service by name (for example in <tt class="docutils literal"><span class="pre">/etc/cyrus.conf</span></tt>, &#8216;listen=mupdate&#8217; can be specified instead of &#8216;listen=3905&#8217;).</p>
+<p>Some of the services Cyrus IMAP would like to see available through <tt class="docutils literal"><span class="pre">/etc/services</span></tt> have not been assigned an IANA port number, and few have configuration options.</p>
+<p>The following lists services Cyrus IMAP should have available in <tt class="docutils literal"><span class="pre">/etc/services</span></tt>:</p>
+<ul>
+<li><p class="first"><strong>csync</strong></p>
+<blockquote>
+<div><p>The Cyrus IMAP synchronisation server port, for replication clients to connect to.</p>
+<ul class="simple">
+<li>Description: <em>Cyrus IMAP Replication Daemon</em></li>
+<li>Suggested Port(s): <strong>2005/tcp</strong></li>
+</ul>
+</div></blockquote>
+</li>
+</ul>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p><strong>Default in /etc/imapd.conf</strong></p>
+<p class="last">While <strong>2005/tcp</strong> is the suggested default port for <strong>csync</strong>, the value of the port number is specified through the <strong>sync_port</strong> option in <tt class="docutils literal"><span class="pre">/etc/imapd.conf</span></tt> (generated from <tt class="docutils literal"><span class="pre">lib/imapoptions</span></tt>). Note that when changing the suggested port for <strong>csync</strong> we recommend you also patch <tt class="docutils literal"><span class="pre">lib/imapoptions</span></tt> prior to building Cyrus IMAP.</p>
+</div>
+<ul>
+<li><p class="first"><strong>lmtp</strong></p>
+<blockquote>
+<div><p>Some platforms do not specify the service port for LMTP –like Solaris and Debian. Fedora-based Linux distributions allocate port <strong>24/tcp</strong> for LMTP Mail Delivery, however. Whatever port packagers choose to use, please note they should be the same across all platforms deployed in a single environment.</p>
+<ul class="simple">
+<li>Description: <em>LMTP Mail Delivery</em></li>
+<li>Suggested Port(s): <strong>24/tcp</strong> (Fedora-based platforms), <strong>2003/tcp</strong> (other platforms)</li>
+</ul>
+</div></blockquote>
+</li>
+<li><p class="first"><strong>mupdate</strong></p>
+<blockquote>
+<div><p>The Cyrus IMAP Murder Mailbox Update protocol (MUPDATE) ensures mailboxes</p>
+<ul class="simple">
+<li>Description: <em>Mailbox Update (MUPDATE) protocol</em></li>
+<li>Recommended Port(s): <strong>3905/tcp</strong></li>
+</ul>
+</div></blockquote>
+</li>
+</ul>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p>Default in <tt class="docutils literal"><span class="pre">/etc/imapd.conf</span></tt></p>
+<p class="last"><strong>3905/tcp</strong> is the suggested default port for mupdate, as it is the default value specified for the <strong>mupdate_port</strong> option available in <tt class="docutils literal"><span class="pre">/etc/imapd.conf</span></tt> (generated from <tt class="docutils literal"><span class="pre">lib/imapoptions</span></tt>). Note that when changing the suggested port for mupdate we recommend you also patch <tt class="docutils literal"><span class="pre">lib/imapoptions</span></tt> prior to building Cyrus IMAP.</p>
+</div>
+<ul>
+<li><p class="first"><strong>sieve</strong></p>
+<blockquote>
+<div><ul class="simple">
+<li>Description: <em>ManageSieve protocol</em></li>
+<li>IANA Port: <strong>4190/tcp</strong></li>
+</ul>
+</div></blockquote>
+</li>
+</ul>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p><strong>Port 2000/tcp</strong></p>
+<p class="last"><strong>2000/tcp</strong> is actually sieve-filter with description <em>Sieve Mail Filter Daemon</em>.</p>
+</div>
+<ul>
+<li><p class="first"><strong>smmap</strong></p>
+<blockquote>
+<div><ul class="simple">
+<li>Description: <em>Cyrus smmapd (quota check) service</em></li>
+<li>Suggested Port(s): <strong>/tcp</strong></li>
+</ul>
+</div></blockquote>
+</li>
+</ul>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Notes for Packagers</a><ul>
+<li><a class="reference internal" href="#services-in-etc-services">Services in <tt class="docutils literal"><span class="pre">/etc/services</span></tt></a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="config-mailboxdistribution.html"
+                        title="previous chapter">Mailbox Distribution</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="twofive-newfeatures.html"
+                        title="next chapter">New Features in Cyrus IMAP 2.5</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/admin/packagers.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="twofive-newfeatures.html" title="New Features in Cyrus IMAP 2.5"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="config-mailboxdistribution.html" title="Mailbox Distribution"
+             >previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Administrator Guide</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 1993-2014, The Cyrus Team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

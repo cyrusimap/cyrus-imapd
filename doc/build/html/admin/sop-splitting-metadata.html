@@ -1,0 +1,148 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Splitting Metadata from Partitions &mdash; Cyrus IMAP and SASL 2.4 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/extra.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" />
+    <link rel="up" title="Part II. Standard Operating Procedures" href="sop.html" />
+    <link rel="next" title="Managing user_deny.db" href="sop-userdeny.html" />
+    <link rel="prev" title="Setting up Replication" href="sop-replication.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="sop-userdeny.html" title="Managing user_deny.db"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="sop-replication.html" title="Setting up Replication"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
+          <li><a href="sop.html" accesskey="U">Part II. Standard Operating Procedures</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="splitting-metadata-from-partitions">
+<h1>Splitting Metadata from Partitions<a class="headerlink" href="#splitting-metadata-from-partitions" title="Permalink to this headline">¶</a></h1>
+<div class="admonition important">
+<p class="first admonition-title">Important</p>
+<p class="last">This only applies to Cyrus IMAP version 2.4 and 2.5</p>
+</div>
+<div class="admonition-todo admonition" id="index-0">
+<p class="first admonition-title">Todo</p>
+<p class="last">Find out when exactly the metapartition-* options were added to imapd.conf</p>
+</div>
+<p>The traditional layout for a Cyrus IMAP mailbox spool directory is to include the mailbox message data and mailbox metadata in the same directory tree. The mailbox message data and mailbox metadata differ in size and frequency of updating, which in larger deployments may justify using different storage layers for each.</p>
+<p>The mailbox message data, which consists of many (small) message files, is not updated as frequently and does not require as much storage performance as the mailbox metadata, which consists of databases that are updated frequently and have a high volume of accesses and updates. The mailbox message data usually requires significant storage volumes, while the mailbox metadata does not.</p>
+<p>To transition from the traditional Cyrus IMAP mailbox spool directory tree layout to a split setup, use the following procedure.</p>
+<p><strong>Procedure 13.1. Transition from Traditional Mail Spool to Split Data Mail Spool</strong></p>
+<blockquote>
+<div><p>Create a new partition in <strong>/etc/imapd.conf</strong>, aptly named <strong>splitmeta</strong> in the following example configuration snippet:</p>
+<div class="highlight-python"><div class="highlight"><pre>metapartition_files: header index cache expunge squat
+metapartition-default: /var/spool/imap
+metapartition-splitmeta: /var/spool/splitmeta/metadata
+partition-default: /var/spool/imap
+partition-splitmeta: /var/spool/splitmeta/partition
+</pre></div>
+</div>
+<p>Create the directory tree being referred to in the new configuration:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># su -s /bin/bash - cyrus -c &#39;/usr/lib/cyrus-imapd/mkimap /etc/imapd.conf&#39;</span>
+</pre></div>
+</div>
+<p>Reload the Cyrus IMAP service. Please refer to <a class="reference internal" href="sop-reloading.html"><em>Reloading Cyrus IMAP Services</em></a> for more details on doing so.</p>
+<p>Rename all mailboxes, using the new partition as the location for the renamed mailbox. One example rename command is included below:</p>
+<div class="highlight-python"><div class="highlight"><pre>cyradm&gt; renamemailbox user/john.doe@example.org user/john.doe@example.org splitmeta
+</pre></div>
+</div>
+</div></blockquote>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="sop-replication.html"
+                        title="previous chapter">Setting up Replication</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="sop-userdeny.html"
+                        title="next chapter">Managing user_deny.db</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/admin/sop-splitting-metadata.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="sop-userdeny.html" title="Managing user_deny.db"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="sop-replication.html" title="Setting up Replication"
+             >previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
+          <li><a href="sop.html" >Part II. Standard Operating Procedures</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 1993-2014, The Cyrus Team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

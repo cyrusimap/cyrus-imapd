@@ -1,0 +1,141 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Combining Access Rights &mdash; Cyrus IMAP and SASL 2.4 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/extra.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" />
+    <link rel="up" title="Access Control" href="administration-acl.html" />
+    <link rel="next" title="Access Right Identifiers" href="administration-acl-identifiers.html" />
+    <link rel="prev" title="Access Rights" href="administration-acl-rights.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="administration-acl-identifiers.html" title="Access Right Identifiers"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="administration-acl-rights.html" title="Access Rights"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
+          <li><a href="administration.html" >Part I. Cyrus IMAP Administration</a> &raquo;</li>
+          <li><a href="administration-acl.html" accesskey="U">Access Control</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="combining-access-rights">
+<h1>Combining Access Rights<a class="headerlink" href="#combining-access-rights" title="Permalink to this headline">¶</a></h1>
+<p>Access rights can combined to set a typical set of &#8220;read&#8221;, &#8220;write&#8221; and &#8220;full control&#8221;, potentially making it easier for client implementors to present their users with an interface to administer the ACLs to their mailboxes easily.</p>
+<p>Common sets of ACLs include:</p>
+<p>&lt;aci&gt; lrs</p>
+<p>The set of rights often referred to as &#8220;read-only&#8221;. The ACI subject is allowed to lookup the folder, read its contents and maintain \Seen flags on messages. Meanwhile, the Recent flags are maintained for the ACI subject as well.</p>
+<p>&lt;aci&gt; lirstw</p>
+<p>The set of rights often that could arguably be referred to &#8220;semi-full&#8221;. The ACI subject is allowed to lookup the folder, read its contents and maintain flags on messages, as well as insert new messages in to the folder, and flag messages as \Deleted, but not expunge the folder&#8217;s contents.</p>
+<p>Allowing ACI subjects to flag messages as \Deleted but not delegating the right to <strong>EXPUNGE</strong> the folder&#8217;s contents enables messages to quickly be restored by ACI subjects themselves, if the client used can be configured to show or hide messages flagged \Deleted.</p>
+<p>Please note that the configuration value of <strong>/vendor/cmu/cyrus-imapd/sharedseen</strong> on the folder has no bearing on the \Deleted flag, but only on the \Seen flag. To be more precise, all flags other than \Seen are global.</p>
+<div class="section" id="features-and-combined-access-rights">
+<h2>Features and Combined Access Rights<a class="headerlink" href="#features-and-combined-access-rights" title="Permalink to this headline">¶</a></h2>
+<p>For most features, ACI subjects need certain access rights on a folder in order to perform or control the feature.</p>
+<p>METADATA</p>
+<p>In order to be allowed to retrieve and/or set annotations on a folder, the ACI subject requires the <tt class="docutils literal"><span class="pre">l</span></tt> right, and any of <tt class="docutils literal"><span class="pre">r</span></tt>, <tt class="docutils literal"><span class="pre">s</span></tt>, <tt class="docutils literal"><span class="pre">w</span></tt>, <tt class="docutils literal"><span class="pre">i</span></tt> or <tt class="docutils literal"><span class="pre">p</span></tt> rights.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Combining Access Rights</a><ul>
+<li><a class="reference internal" href="#features-and-combined-access-rights">Features and Combined Access Rights</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="administration-acl-rights.html"
+                        title="previous chapter">Access Rights</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="administration-acl-identifiers.html"
+                        title="next chapter">Access Right Identifiers</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/admin/administration-acl-combining.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="administration-acl-identifiers.html" title="Access Right Identifiers"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="administration-acl-rights.html" title="Access Rights"
+             >previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
+          <li><a href="administration.html" >Part I. Cyrus IMAP Administration</a> &raquo;</li>
+          <li><a href="administration-acl.html" >Access Control</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 1993-2014, The Cyrus Team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

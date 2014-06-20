@@ -1,0 +1,169 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Running Cyrus IMAP Services on Non-Standard Ports &mdash; Cyrus IMAP and SASL 2.4 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/extra.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" />
+    <link rel="up" title="Part I. Cyrus IMAP Administration" href="administration.html" />
+    <link rel="next" title="Access Control" href="administration-acl.html" />
+    <link rel="prev" title="Part I. Cyrus IMAP Administration" href="administration.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="administration-acl.html" title="Access Control"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="administration.html" title="Part I. Cyrus IMAP Administration"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
+          <li><a href="administration.html" accesskey="U">Part I. Cyrus IMAP Administration</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="running-cyrus-imap-services-on-non-standard-ports">
+<h1>Running Cyrus IMAP Services on Non-Standard Ports<a class="headerlink" href="#running-cyrus-imap-services-on-non-standard-ports" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="globally-changing-the-service-port">
+<h2>Globally changing the service port<a class="headerlink" href="#globally-changing-the-service-port" title="Permalink to this headline">¶</a></h2>
+<p>When running on non-standard ports, for example lmtp on port 26,
+update <tt class="docutils literal"><span class="pre">/etc/services</span></tt> and change the default &#8216;24&#8217; to &#8216;26&#8217;. This should
+work correctly if everything on the system needs to know the new port number.</p>
+<div class="highlight-python"><div class="highlight"><pre>lmtp            24/tcp                          # LMTP Mail Delivery
+lmtp            24/udp                          # LMTP Mail Delivery
+</pre></div>
+</div>
+<p>becomes:</p>
+<div class="highlight-python"><div class="highlight"><pre>lmtp            26/tcp                          # LMTP Mail Delivery
+lmtp            26/udp                          # LMTP Mail Delivery
+</pre></div>
+</div>
+</div>
+<div class="section" id="changing-the-service-port-just-for-cyrus">
+<h2>Changing the service port just for Cyrus<a class="headerlink" href="#changing-the-service-port-just-for-cyrus" title="Permalink to this headline">¶</a></h2>
+<p>If you need to run a service on a non-standard port <strong>without changing the port for this service system-wide</strong>, you can add a new service to <tt class="docutils literal"><span class="pre">/etc/services</span></tt> and reference this new service name within <tt class="docutils literal"><span class="pre">cyrus.conf</span></tt></p>
+<p>If you were migrating mail on a server from a different imapd to Cyrus, you might need to run the Cyrus imapd on port 1143 while the original imapd is still on the normal port of 143. To do this, add a new service name to <tt class="docutils literal"><span class="pre">/etc/services</span></tt>.</p>
+<div class="highlight-python"><div class="highlight"><pre>imapnew         1143/tcp            # Temporary imap port
+</pre></div>
+</div>
+<p>and in <tt class="docutils literal"><span class="pre">cyrus.conf</span></tt> the line:</p>
+<div class="highlight-python"><div class="highlight"><pre>imap      cmd=&quot;imapd&quot; listen=&quot;imap&quot; prefork=5
+</pre></div>
+</div>
+<p>would become:</p>
+<div class="highlight-python"><div class="highlight"><pre>imap      cmd=&quot;imapd&quot; listen=&quot;imapnew&quot; prefork=5
+</pre></div>
+</div>
+<p>You may wish to make Cyrus only listen on the loopback interface until the migration is complete. If this is the case, you would use <tt class="docutils literal"><span class="pre">listen=&quot;127.0.0.1:imapnew&quot;</span></tt></p>
+</div>
+<div class="section" id="security-enhanced-linux">
+<h2>Security Enhanced Linux<a class="headerlink" href="#security-enhanced-linux" title="Permalink to this headline">¶</a></h2>
+<p>When running SELinux there are extra steps to take, ...</p>
+<p>verify label for the port with semanage port -l &lt;port&gt;
+label the port used: semanage port -a -t &lt;type&gt; -p tcp &lt;port&gt;</p>
+<div class="admonition-todo admonition" id="index-0">
+<p class="first admonition-title">Todo</p>
+<p class="last">Document this fully with example output!</p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Running Cyrus IMAP Services on Non-Standard Ports</a><ul>
+<li><a class="reference internal" href="#globally-changing-the-service-port">Globally changing the service port</a></li>
+<li><a class="reference internal" href="#changing-the-service-port-just-for-cyrus">Changing the service port just for Cyrus</a></li>
+<li><a class="reference internal" href="#security-enhanced-linux">Security Enhanced Linux</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="administration.html"
+                        title="previous chapter">Part I. Cyrus IMAP Administration</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="administration-acl.html"
+                        title="next chapter">Access Control</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/admin/administration-running.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="administration-acl.html" title="Access Control"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="administration.html" title="Part I. Cyrus IMAP Administration"
+             >previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
+          <li><a href="administration.html" >Part I. Cyrus IMAP Administration</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 1993-2014, The Cyrus Team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

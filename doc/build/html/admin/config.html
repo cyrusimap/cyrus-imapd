@@ -1,0 +1,146 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Part III. Configuration Reference &mdash; Cyrus IMAP and SASL 2.4 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/extra.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" />
+    <link rel="up" title="Administrator Guide" href="index.html" />
+    <link rel="next" title="Mailbox Distribution" href="config-mailboxdistribution.html" />
+    <link rel="prev" title="Managing user_deny.db" href="sop-userdeny.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="config-mailboxdistribution.html" title="Mailbox Distribution"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="sop-userdeny.html" title="Managing user_deny.db"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" accesskey="U">Administrator Guide</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="part-iii-configuration-reference">
+<h1>Part III. Configuration Reference<a class="headerlink" href="#part-iii-configuration-reference" title="Permalink to this headline">¶</a></h1>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="config-mailboxdistribution.html">Mailbox Distribution</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="config-mailboxdistribution.html#a-1-guidelines">A.1. Guidelines</a></li>
+<li class="toctree-l2"><a class="reference internal" href="config-mailboxdistribution.html#a-2-selection-modes">A.2. Selection Modes</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="config-mailboxdistribution.html#available-selection-modes">Available Selection Modes</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="config-mailboxdistribution.html#a-3-special-cases">A.3. Special cases</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="config-mailboxdistribution.html#a-3-1-what-happens-when-two-items-are-equal-as-most-fitting">A.3.1. What happens when two items are equal as most fitting ?</a></li>
+<li class="toctree-l3"><a class="reference internal" href="config-mailboxdistribution.html#a-3-2-what-happens-when-two-items-are-actually-the-same">A.3.2. What happens when two items are actually the same ?</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="config-mailboxdistribution.html#a-4-items-exclusion">A.4. Items Exclusion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="config-mailboxdistribution.html#a-5-items-usage-data-reset">A.5. Items Usage Data Reset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="config-mailboxdistribution.html#a-6-application">A.6. Application</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="config-mailboxdistribution.html#a-6-1-on-backend">A.6.1. On backend</a></li>
+<li class="toctree-l3"><a class="reference internal" href="config-mailboxdistribution.html#a-6-2-on-frontend">A.6.2. On frontend</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="config-mailboxdistribution.html#example-of-backend-representation-on-frontend">Example of backend representation on frontend</a><ul>
+<li class="toctree-l5"><a class="reference internal" href="config-mailboxdistribution.html#a-6-2-1-backends-exclusion">A.6.2.1. Backends Exclusion</a></li>
+</ul>
+</li>
+<li class="toctree-l4"><a class="reference internal" href="config-mailboxdistribution.html#example-of-backend-exclusion-using-serverlist-select-soft-usage-limit">Example of backend exclusion using serverlist_select_soft_usage_limit</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="sop-userdeny.html"
+                        title="previous chapter">Managing user_deny.db</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="config-mailboxdistribution.html"
+                        title="next chapter">Mailbox Distribution</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/admin/config.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="config-mailboxdistribution.html" title="Mailbox Distribution"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="sop-userdeny.html" title="Managing user_deny.db"
+             >previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Administrator Guide</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 1993-2014, The Cyrus Team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

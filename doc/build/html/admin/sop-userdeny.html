@@ -1,0 +1,144 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Managing user_deny.db &mdash; Cyrus IMAP and SASL 2.4 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/extra.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" />
+    <link rel="up" title="Part II. Standard Operating Procedures" href="sop.html" />
+    <link rel="next" title="Part III. Configuration Reference" href="config.html" />
+    <link rel="prev" title="Splitting Metadata from Partitions" href="sop-splitting-metadata.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="config.html" title="Part III. Configuration Reference"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="sop-splitting-metadata.html" title="Splitting Metadata from Partitions"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
+          <li><a href="sop.html" accesskey="U">Part II. Standard Operating Procedures</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="managing-user-deny-db">
+<h1>Managing user_deny.db<a class="headerlink" href="#managing-user-deny-db" title="Permalink to this headline">¶</a></h1>
+<p>The user_deny database allows you to deny access via POP/IMAP even if the user can authenticate to the Cyrus server. For example, if the authentication data is also used for other network services.</p>
+<p>If the user_deny.db file doesn&#8217;t exist in %configdirectory% (often /var/lib/imap) then you&#8217;ll need to create it. In the example below, /var/lib/imap/ is used.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c"># echo &quot;&quot; &gt; /tmp/user_deny.flat</span>
+<span class="c"># /usr/lib/cyrus-imapd/cvt_cyrusdb /tmp/user_deny.flat flat /var/lib/imap/user_deny.db skiplist</span>
+<span class="c"># chown cyrus:cyrus /var/lib/imap/user_deny.db</span>
+</pre></div>
+</div>
+<p>The database specification can be found at <a class="reference external" href="http://cyrusimap.org/docs/cyrus-imapd/2.4.17/internal/database-formats.php">http://cyrusimap.org/docs/cyrus-imapd/2.4.17/internal/database-formats.php</a></p>
+<p><strong>Key:</strong> &lt;Userid&gt;</p>
+<p><strong>Data:</strong> &lt;Version&gt;TAB&lt;Deny List (comma-separated wildmat patterns)&gt;TAB&lt;Deny Message&gt;</p>
+<div class="highlight-python"><div class="highlight"><pre># su - cyrus
+$ cyr_dbtool /var/lib/imap/user_deny.db skiplist set **username** &quot;2     pop3    Can&#39;t use pop.&quot;
+</pre></div>
+</div>
+<p>In order to type a tab character, you will need to escape your tabs. In bash, this is done by typing CTRL-v and then pressing Tab.</p>
+<p>If you got it right, when you authenticate via pop3 you should see something like the following:</p>
+<div class="highlight-python"><div class="highlight"><pre>$ telnet mail.example.org 110
+Trying 192.168.0.2...
+Connected to mail.example.org.
+Escape character is &#39;^]&#39;.
++OK mail.example.org Cyrus POP3 v2.4.17 server ready &lt;18418688457439930663.1399062365@mail.example.org&gt;
+USER **username**
++OK Name is a valid mailbox
+-ERR [SYS/TEMP] Can&#39;t use pop.
+Connection closed by foreign host.
+</pre></div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="sop-splitting-metadata.html"
+                        title="previous chapter">Splitting Metadata from Partitions</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="config.html"
+                        title="next chapter">Part III. Configuration Reference</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/admin/sop-userdeny.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="config.html" title="Part III. Configuration Reference"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="sop-splitting-metadata.html" title="Splitting Metadata from Partitions"
+             >previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
+          <li><a href="sop.html" >Part II. Standard Operating Procedures</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 1993-2014, The Cyrus Team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

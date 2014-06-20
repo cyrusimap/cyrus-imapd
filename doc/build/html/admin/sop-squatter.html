@@ -1,0 +1,151 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Using Squatter for Faster IMAP SEARCH &mdash; Cyrus IMAP and SASL 2.4 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/extra.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" />
+    <link rel="up" title="Part II. Standard Operating Procedures" href="sop.html" />
+    <link rel="next" title="Setting up Replication" href="sop-replication.html" />
+    <link rel="prev" title="Reconstructing Mailboxes" href="sop-reconstructing.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="sop-replication.html" title="Setting up Replication"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="sop-reconstructing.html" title="Reconstructing Mailboxes"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
+          <li><a href="sop.html" accesskey="U">Part II. Standard Operating Procedures</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="using-squatter-for-faster-imap-search">
+<h1>Using Squatter for Faster IMAP SEARCH<a class="headerlink" href="#using-squatter-for-faster-imap-search" title="Permalink to this headline">¶</a></h1>
+<p>IMAP SEARCH, as described in <a class="reference external" href="http://tools.ietf.org/html/rfc3501">RFC 3501</a>, is a IMAP4 (Rev1) command issued by the client, but executed on the server. The Cyrus IMAP server will search the mailbox for the content matching the search command issued. This may be an intensive operation if executed on large mailboxes, and may therefor delay the response to the client.</p>
+<p>To significantly speed up the searching, Cyrus IMAP can create a cache of message contents and meta-data using cyrus-squatter(8). This chapter explains how to generate and maintain these caches.</p>
+<div class="section" id="squatter-invocation">
+<h2>Squatter Invocation<a class="headerlink" href="#squatter-invocation" title="Permalink to this headline">¶</a></h2>
+<p>Consider the following implications of running cyrus-squatter;</p>
+<ul class="simple">
+<li>Squatter creates the search index from all messages in the mailbox</li>
+</ul>
+<div class="admonition-todo admonition" id="index-0">
+<p class="first admonition-title">Todo</p>
+<p class="last">list not complete</p>
+</div>
+</div>
+<div class="section" id="generating-the-search-indexes">
+<h2>Generating the Search Indexes<a class="headerlink" href="#generating-the-search-indexes" title="Permalink to this headline">¶</a></h2>
+<p>To generate the search index for all mailboxes, issue the following command:</p>
+<div class="highlight-python"><div class="highlight"><pre>$ squatter -v
+</pre></div>
+</div>
+<p>While the Cyrus IMAP server now has the search index available for the mailbox contents, it does not automatically update the search index with new messages coming in.</p>
+<div class="admonition-todo admonition" id="index-1">
+<p class="first admonition-title">Todo</p>
+<p class="last">So how does the search index get updated? Do you run squatter on a daily basis from the EVENTS section of /etc/cyrus.conf</p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Using Squatter for Faster IMAP SEARCH</a><ul>
+<li><a class="reference internal" href="#squatter-invocation">Squatter Invocation</a></li>
+<li><a class="reference internal" href="#generating-the-search-indexes">Generating the Search Indexes</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="sop-reconstructing.html"
+                        title="previous chapter">Reconstructing Mailboxes</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="sop-replication.html"
+                        title="next chapter">Setting up Replication</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/admin/sop-squatter.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="sop-replication.html" title="Setting up Replication"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="sop-reconstructing.html" title="Reconstructing Mailboxes"
+             >previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
+          <li><a href="sop.html" >Part II. Standard Operating Procedures</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 1993-2014, The Cyrus Team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

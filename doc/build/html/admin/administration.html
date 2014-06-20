@@ -1,0 +1,208 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Part I. Cyrus IMAP Administration &mdash; Cyrus IMAP and SASL 2.4 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/extra.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" />
+    <link rel="up" title="Administrator Guide" href="index.html" />
+    <link rel="next" title="Running Cyrus IMAP Services on Non-Standard Ports" href="administration-running.html" />
+    <link rel="prev" title="Administrator Guide" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="administration-running.html" title="Running Cyrus IMAP Services on Non-Standard Ports"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="index.html" title="Administrator Guide"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" accesskey="U">Administrator Guide</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="part-i-cyrus-imap-administration">
+<h1>Part I. Cyrus IMAP Administration<a class="headerlink" href="#part-i-cyrus-imap-administration" title="Permalink to this headline">¶</a></h1>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="administration-running.html">Running Cyrus IMAP Services on Non-Standard Ports</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="administration-running.html#globally-changing-the-service-port">Globally changing the service port</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-running.html#changing-the-service-port-just-for-cyrus">Changing the service port just for Cyrus</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-running.html#security-enhanced-linux">Security Enhanced Linux</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="administration-acl.html">Access Control</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="administration-acl-rights.html">Access Rights</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="administration-acl-rights.html#access-rights-available-in-cyrus-imap">Access Rights available in Cyrus IMAP</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="administration-acl-combining.html">Combining Access Rights</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="administration-acl-combining.html#features-and-combined-access-rights">Features and Combined Access Rights</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="administration-acl-identifiers.html">Access Right Identifiers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-acl-defaults.html">Default Access Control Information on new folders</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-acl-defaults.html#getacl-and-myrights">GETACL and MYRIGHTS</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="administration-acl-defaults.html#getacl">GETACL</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-acl-defaults.html#myrights">MYRIGHTS</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="administration-cyradm.html">cyradm</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="administration-cyradm.html#commands-available">Commands available</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#auth">auth</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#authenticate">authenticate</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#cd">cd</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#chdir">chdir</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#connect">connect</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#createmailbox">createmailbox</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#deleteaclmailbox">deleteaclmailbox</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#deletemailbox">deletemailbox</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#disconnect">disconnect</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#exit">exit</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#help">help</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#info">info</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#listaclmailbox">listaclmailbox</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#listmailbox">listmailbox</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#listquota">listquota</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#listquotaroot">listquotaroot</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#login">login</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#mboxcfg">mboxcfg</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#pwd">pwd</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#reconstruct">reconstruct</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#renamemailbox">renamemailbox</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#server">server</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#setaclmailbox">setaclmailbox</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#setinfo">setinfo</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#setquota">setquota</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#subscribe">subscribe</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#unsubscribe">unsubscribe</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#version">version</a></li>
+<li class="toctree-l3"><a class="reference internal" href="administration-cyradm.html#xfermailbox">xfermailbox</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="administration-tools.html">Tools &amp; Utilities</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="administration-tools.html#arbitron">arbitron</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-tools.html#arbitronsort-pl">arbitronsort.pl</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-tools.html#chk-cyrus">chk_cyrus</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-tools.html#convert-sieve-pl">convert-sieve.pl</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-tools.html#ctl-cyrusdb">ctl_cyrusdb</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-tools.html#ctl-deliver">ctl_deliver</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-tools.html#ctl-mboxlist">ctl_mboxlist</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-tools.html#cvt-cyrusdb">cvt_cyrusdb</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-tools.html#cvt-cyrusdb-all">cvt_cyrusdb_all</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-tools.html#cyr-dbtool">cyr_dbtool</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-tools.html#cyr-df">cyr_df</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-tools.html#cyrdump">cyrdump</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-tools.html#cyr-expire">cyr_expire</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-tools.html#cyrfetchnews">cyrfetchnews</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-tools.html#cyr-sequence">cyr_sequence</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-tools.html#cyr-synclog">cyr_synclog</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-tools.html#cyr-userseen">cyr_userseen</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-tools.html#masssievec">masssievec</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-tools.html#mbexamine">mbexamine</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-tools.html#mbpath">mbpath</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-tools.html#migrate-metadata">migrate-metadata</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-tools.html#mkimap">mkimap</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-tools.html#mknewsgroups">mknewsgroups</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-tools.html#rehash">rehash</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-tools.html#translatesieve">translatesieve</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-tools.html#undohash">undohash</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-tools.html#upgradesieve">upgradesieve</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="index.html"
+                        title="previous chapter">Administrator Guide</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="administration-running.html"
+                        title="next chapter">Running Cyrus IMAP Services on Non-Standard Ports</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/admin/administration.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="administration-running.html" title="Running Cyrus IMAP Services on Non-Standard Ports"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="index.html" title="Administrator Guide"
+             >previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Administrator Guide</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 1993-2014, The Cyrus Team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

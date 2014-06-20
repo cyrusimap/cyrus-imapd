@@ -1,0 +1,154 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Part II. Standard Operating Procedures &mdash; Cyrus IMAP and SASL 2.4 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/extra.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" />
+    <link rel="up" title="Administrator Guide" href="index.html" />
+    <link rel="next" title="Mailbox Operations" href="sop-mailbox-operations.html" />
+    <link rel="prev" title="Tools &amp; Utilities" href="administration-tools.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="sop-mailbox-operations.html" title="Mailbox Operations"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="administration-tools.html" title="Tools &amp; Utilities"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" accesskey="U">Administrator Guide</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="part-ii-standard-operating-procedures">
+<h1>Part II. Standard Operating Procedures<a class="headerlink" href="#part-ii-standard-operating-procedures" title="Permalink to this headline">¶</a></h1>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="sop-mailbox-operations.html">Mailbox Operations</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="sop-mailbox-operations.html#determining-the-size-of-a-mailbox">Determining the size of a mailbox</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="sop-reloading.html">Reloading Cyrus IMAP Services</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sop-altnamespace.html">Alternative Namespace</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="sop-altnamespace.html#switching-the-alternative-namespace">Switching the Alternative Namespace</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="sop-databases.html">Database Conversion, Export and Import</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sop-deleting.html">Deleting and Undeleting Messages and Folders</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="sop-deleting.html#terminology-definitions">Terminology &amp; Definitions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sop-deleting.html#expiring-deleted-messages-and-folders">Expiring Deleted Messages and Folders</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sop-deleting.html#undeleting-folders">Undeleting Folders</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sop-deleting.html#undeleting-messages-in-a-mailbox">Undeleting messages in a mailbox</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="sop-reconstructing.html">Reconstructing Mailboxes</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="sop-reconstructing.html#individual-mailboxes-or-folders">Individual mailboxes or folders</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sop-reconstructing.html#recovering-a-complete-spool-directory">Recovering a complete spool directory</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="sop-squatter.html">Using Squatter for Faster IMAP SEARCH</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="sop-squatter.html#squatter-invocation">Squatter Invocation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sop-squatter.html#generating-the-search-indexes">Generating the Search Indexes</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="sop-replication.html">Setting up Replication</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="sop-replication.html#configuring-server">Configuring Server</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sop-replication.html#configuring-client">Configuring Client</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sop-replication.html#initially-synchronizing-mailboxes">Initially synchronizing mailboxes</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="sop-splitting-metadata.html">Splitting Metadata from Partitions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sop-userdeny.html">Managing user_deny.db</a></li>
+</ul>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="administration-tools.html"
+                        title="previous chapter">Tools &amp; Utilities</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="sop-mailbox-operations.html"
+                        title="next chapter">Mailbox Operations</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/admin/sop.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="sop-mailbox-operations.html" title="Mailbox Operations"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="administration-tools.html" title="Tools &amp; Utilities"
+             >previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Administrator Guide</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 1993-2014, The Cyrus Team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

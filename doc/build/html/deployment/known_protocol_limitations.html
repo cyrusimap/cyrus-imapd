@@ -1,0 +1,138 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Known Protocol Limitations &mdash; Cyrus IMAP and SASL 2.4 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/extra.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" />
+    <link rel="up" title="Deployment Guide" href="index.html" />
+    <link rel="next" title="Authentication and Authorization" href="authentication_and_authorization.html" />
+    <link rel="prev" title="Mailbox Creation Distribution" href="mailbox_creation_distribution.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="authentication_and_authorization.html" title="Authentication and Authorization"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="mailbox_creation_distribution.html" title="Mailbox Creation Distribution"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" accesskey="U">Deployment Guide</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="known-protocol-limitations">
+<h1>Known Protocol Limitations<a class="headerlink" href="#known-protocol-limitations" title="Permalink to this headline">¶</a></h1>
+<p>This chapter lists known limitations to protocols commonly in use today, that may impact your deployment.</p>
+<div class="section" id="pop3-and-mailbox-locking">
+<h2>POP3 and Mailbox Locking<a class="headerlink" href="#pop3-and-mailbox-locking" title="Permalink to this headline">¶</a></h2>
+<p>POP3, as described in <a class="reference external" href="http://tools.ietf.org/html/rfc1939">RFC 1939</a>, requires a mailbox to be locked by a POP3 session.</p>
+<p>As such, when POP3 is used simultaneously across multiple clients, and a common set of mailboxes, an error similar to the following would occur:</p>
+<div class="highlight-python"><div class="highlight"><pre>Mailbox locked by POP server.
+</pre></div>
+</div>
+<p>The exact error message may be subject to the specific error message a client application wishes to display.</p>
+</div>
+<div class="section" id="cyrus-imap-pop3-implementation">
+<h2>Cyrus IMAP POP3 Implementation<a class="headerlink" href="#cyrus-imap-pop3-implementation" title="Permalink to this headline">¶</a></h2>
+<p>The Cyrus IMAP POP3 server implementation does not have the aforementioned problem of POP3 sessions locking mailboxes. As of version 2.4.0, Cyrus IMAP allows multiple POP3 sessions to operate on a single mailbox by providing a - virtual - snapshot of the mailbox, and all operations are executed to this snapshot. A safety mechanism ensures no messages are deleted until after all existing operations have closed the mailbox - including IMAP, LMTP and POP.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Known Protocol Limitations</a><ul>
+<li><a class="reference internal" href="#pop3-and-mailbox-locking">POP3 and Mailbox Locking</a></li>
+<li><a class="reference internal" href="#cyrus-imap-pop3-implementation">Cyrus IMAP POP3 Implementation</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="mailbox_creation_distribution.html"
+                        title="previous chapter">Mailbox Creation Distribution</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="authentication_and_authorization.html"
+                        title="next chapter">Authentication and Authorization</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/deployment/known_protocol_limitations.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="authentication_and_authorization.html" title="Authentication and Authorization"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="mailbox_creation_distribution.html" title="Mailbox Creation Distribution"
+             >previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Deployment Guide</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 1993-2014, The Cyrus Team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,195 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Getting Started &mdash; Cyrus IMAP and SASL 2.4 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/extra.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" />
+    <link rel="up" title="Cyrus SASL documentation" href="index.html" />
+    <link rel="next" title="Auxiliary Properties" href="auxiliary_properties.html" />
+    <link rel="prev" title="Cyrus SASL documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="auxiliary_properties.html" title="Auxiliary Properties"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="index.html" title="Cyrus SASL documentation"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" accesskey="U">Cyrus SASL documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="getting-started">
+<h1>Getting Started<a class="headerlink" href="#getting-started" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="sasl">
+<h2>SASL<a class="headerlink" href="#sasl" title="Permalink to this headline">¶</a></h2>
+<p>Simple Authentication and Security Layer (SASL) is a protocol developed by the Internet Engineering Task Force (IETF) for the purpose of providing an extensible and pluggable authentication framework, primarily for non-web related protocols. It is commonly used in email related protocols, such as SMTP, IMAP, and POP, along with XMPP, LDAP, and a few others. In doing so, various implementations of those protocols, such as the Cyrus IMAP or Dovecot servers, can support a wide range of authentication mechanisms with various email clients which implement the IMAP protocol, including Thunderbird, Outlook, and the Android mail client.</p>
+<p>RFC 4422 is the base framework specification for SASL. It provides guidance for protocol designers, server software implementations, and SASL mechanism designers. Protocol definitions, and SASL mechanism specifications in turn make use of this framework to independently support each other. That is, if a protocol were designed 5 years ago to make use of SASL, and a new mechanism were designed today, server implementations and client software could make use of that new mechanism without a change to the original server protocol spec.</p>
+</div>
+<div class="section" id="sasl-authentication-mechanisms">
+<h2>SASL Authentication Mechanisms<a class="headerlink" href="#sasl-authentication-mechanisms" title="Permalink to this headline">¶</a></h2>
+<p>SASL mechanisms are plugable authentication methods that are developed independently of server protocols. For example, the Generic Security Service Application Program Interface (GSSAPI) mechanism, defined in RFC 4752, defines a network oriented protocol for authenticating a client to a server, using Kerberos version 5, a trusted 3rd party ticket based system. The GSSAPI mechanism should work with all clients and servers which implement support for it, regardless of the actual server protocol used (such as IMAP), given the protocol was designed for use with the SASL framework.</p>
+<p>A list of developed SASL mechanisms can be found at the <a class="reference external" href="http://www.iana.org/assignments/sasl-mechanisms/sasl-mechanisms.xml">IANA registered SASL mechanisms</a> page. A more detailed discussion of these mechanisms can be found in <a class="reference internal" href="authentication_mechanisms.html"><em>Authentication Mechanisms</em></a>.</p>
+</div>
+<div class="section" id="security-layers">
+<h2>Security Layers<a class="headerlink" href="#security-layers" title="Permalink to this headline">¶</a></h2>
+<p>SASL Security Layers allow a server and client to negotiate integrity and confidentiality protection for a connection once it has been authenticated. It is only available for mechanisms which themselves are capable of providing such protection (such as GSSAPI). It is capable of being used to encrypt a connection over the public internet, and can be used as an alternative to TLS encryption.</p>
+</div>
+<div class="section" id="channel-binding">
+<h2>Channel Binding<a class="headerlink" href="#channel-binding" title="Permalink to this headline">¶</a></h2>
+<div class="admonition-todo admonition" id="index-0">
+<p class="first admonition-title">Todo</p>
+<p class="last">What&#8217;s channel binding?</p>
+</div>
+</div>
+<div class="section" id="realms">
+<h2>Realms<a class="headerlink" href="#realms" title="Permalink to this headline">¶</a></h2>
+<div class="admonition-todo admonition" id="index-1">
+<p class="first admonition-title">Todo</p>
+<p class="last">What are realms?</p>
+</div>
+</div>
+<div class="section" id="protocols">
+<h2>Protocols<a class="headerlink" href="#protocols" title="Permalink to this headline">¶</a></h2>
+<div class="admonition-todo admonition" id="index-2">
+<p class="first admonition-title">Todo</p>
+<p class="last">What protocols?</p>
+</div>
+</div>
+<div class="section" id="cyrus-sasl">
+<h2>Cyrus SASL<a class="headerlink" href="#cyrus-sasl" title="Permalink to this headline">¶</a></h2>
+<div class="admonition-todo admonition" id="index-3">
+<p class="first admonition-title">Todo</p>
+<p class="last">Something required here</p>
+</div>
+</div>
+<div class="section" id="the-glue-library">
+<h2>The Glue Library<a class="headerlink" href="#the-glue-library" title="Permalink to this headline">¶</a></h2>
+<div class="admonition-todo admonition" id="index-4">
+<p class="first admonition-title">Todo</p>
+<p class="last">A bit stuck with this one too :)</p>
+</div>
+</div>
+<div class="section" id="auxiliary-properties">
+<h2>Auxiliary Properties<a class="headerlink" href="#auxiliary-properties" title="Permalink to this headline">¶</a></h2>
+<div class="admonition-todo admonition" id="index-5">
+<p class="first admonition-title">Todo</p>
+<p class="last">More properties...</p>
+</div>
+</div>
+<div class="section" id="plugins">
+<h2>Plugins<a class="headerlink" href="#plugins" title="Permalink to this headline">¶</a></h2>
+<div class="admonition-todo admonition" id="index-6">
+<p class="first admonition-title">Todo</p>
+<p class="last">Plugins, plugins and plugins</p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Getting Started</a><ul>
+<li><a class="reference internal" href="#sasl">SASL</a></li>
+<li><a class="reference internal" href="#sasl-authentication-mechanisms">SASL Authentication Mechanisms</a></li>
+<li><a class="reference internal" href="#security-layers">Security Layers</a></li>
+<li><a class="reference internal" href="#channel-binding">Channel Binding</a></li>
+<li><a class="reference internal" href="#realms">Realms</a></li>
+<li><a class="reference internal" href="#protocols">Protocols</a></li>
+<li><a class="reference internal" href="#cyrus-sasl">Cyrus SASL</a></li>
+<li><a class="reference internal" href="#the-glue-library">The Glue Library</a></li>
+<li><a class="reference internal" href="#auxiliary-properties">Auxiliary Properties</a></li>
+<li><a class="reference internal" href="#plugins">Plugins</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="index.html"
+                        title="previous chapter">Cyrus SASL documentation</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="auxiliary_properties.html"
+                        title="next chapter">Auxiliary Properties</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/sasl/getting_started.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="auxiliary_properties.html" title="Auxiliary Properties"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="index.html" title="Cyrus SASL documentation"
+             >previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Cyrus SASL documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 1993-2014, The Cyrus Team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

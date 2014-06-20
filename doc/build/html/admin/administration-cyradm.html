@@ -1,0 +1,366 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>cyradm &mdash; Cyrus IMAP and SASL 2.4 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/extra.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" />
+    <link rel="up" title="Part I. Cyrus IMAP Administration" href="administration.html" />
+    <link rel="next" title="Tools &amp; Utilities" href="administration-tools.html" />
+    <link rel="prev" title="Default Access Control Information on new folders" href="administration-acl-defaults.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="administration-tools.html" title="Tools &amp; Utilities"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="administration-acl-defaults.html" title="Default Access Control Information on new folders"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
+          <li><a href="administration.html" accesskey="U">Part I. Cyrus IMAP Administration</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="cyradm">
+<h1>cyradm<a class="headerlink" href="#cyradm" title="Permalink to this headline">¶</a></h1>
+<p>cyradm is a simple command line utility for performing common administrative tasks to a Cyrus IMAP server. The utility can either be executed from a client where it has been installed and connect to the server via IMAP or it can be executed locally via a shell on the server.</p>
+<div class="highlight-python"><div class="highlight"><pre>bash$ cyradm -u cyrus localhost
+</pre></div>
+</div>
+<div class="section" id="commands-available">
+<h2>Commands available<a class="headerlink" href="#commands-available" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="auth">
+<span id="cyradm-auth"></span><h3>auth<a class="headerlink" href="#auth" title="Permalink to this headline">¶</a></h3>
+<p>See <a class="reference internal" href="#cyradm-authenticate"><em>authenticate</em></a></p>
+</div>
+<div class="section" id="authenticate">
+<span id="cyradm-authenticate"></span><h3>authenticate<a class="headerlink" href="#authenticate" title="Permalink to this headline">¶</a></h3>
+<p>Authenticate to a server for which a connection has already been opened either when <strong>cyradm</strong> was started or via the <a class="reference internal" href="#cyradm-connect"><em>connect</em></a> command.</p>
+<div class="highlight-python"><div class="highlight"><pre>cyradm&gt; authenticate &lt;username&gt;
+</pre></div>
+</div>
+<p>The username must be provided as a parameter.</p>
+<p>Aliases: <a class="reference internal" href="#cyradm-login"><em>login</em></a> and <a class="reference internal" href="#cyradm-auth"><em>auth</em></a></p>
+</div>
+<div class="section" id="cd">
+<span id="cyradm-cd"></span><h3>cd<a class="headerlink" href="#cd" title="Permalink to this headline">¶</a></h3>
+<p>See <a class="reference internal" href="#cyradm-chdir"><em>chdir</em></a></p>
+</div>
+<div class="section" id="chdir">
+<span id="cyradm-chdir"></span><h3>chdir<a class="headerlink" href="#chdir" title="Permalink to this headline">¶</a></h3>
+<p>Change the current directory.</p>
+<p>Aliases: <a class="reference internal" href="#cyradm-cd"><em>cd</em></a></p>
+</div>
+<div class="section" id="connect">
+<span id="cyradm-connect"></span><h3>connect<a class="headerlink" href="#connect" title="Permalink to this headline">¶</a></h3>
+<p>Connect to a server if you&#8217;re not already connected, or display the current server if connected and no server name provided.</p>
+<div class="highlight-python"><div class="highlight"><pre>cyradm&gt; connect [&lt;server&gt;]
+</pre></div>
+</div>
+</div>
+<div class="section" id="createmailbox">
+<h3>createmailbox<a class="headerlink" href="#createmailbox" title="Permalink to this headline">¶</a></h3>
+<p>Creates a new mailbox. New mailboxes inherit the ACL permissions of their parent mailbox, except for top-level mailboxes such as the user&#8217;s INBOX. Mailboxes that are the user&#8217;s INBOX are assigned all to the corresponding user.</p>
+<p class="rubric">Example 3.1. Example use of createmailbox</p>
+<div class="highlight-python"><div class="highlight"><pre>localhost&gt; cm user.bovik
+localhost&gt; lm
+user.bovik (\HasNoChildren)
+localhost&gt; lam user.bovik
+bovik lrswipkxtecda
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p><strong>unixhierarchysep</strong></p>
+<p class="last">Note that in the above example, the unixhierarchysep setting in <tt class="docutils literal"><span class="pre">/etc/imapd.conf</span></tt> is set to <strong>false</strong> (0). When using the UNIX hierarchy seperator, the forward slash character (/), as the hierarchy seperator, the example would look as follows.</p>
+</div>
+<p class="rubric">Example 3.2. Example use of createmailbox with unixhierachysep</p>
+<div class="highlight-python"><div class="highlight"><pre>localhost&gt; cm user/bovik
+localhost&gt; lm
+user/bovik (\HasNoChildren)
+localhost&gt; lam user/bovik
+bovik lrswipkxtecda
+</pre></div>
+</div>
+<p>Notice the use of the / (forward slash) character in Example 3.2, &#8220;Example use of createmailbox with unixhierachysep&#8221; as opposed to the . (dot) character in Example 3.1, &#8220;Example use of createmailbox&#8221; to seperate the hierarchical components of the mailbox name.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p><strong>virtdomains</strong></p>
+<p class="last">Also note the above examples use the unqualified, shorthand user identifier bovik as the mailbox name.
+With the use of virtual domains, controlled through the virtdomains imapd.conf(5) configuration option.</p>
+</div>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p><strong>Special mailbox names</strong></p>
+<p>It is possible to create the mailboxes user.anonymous and user.anyone (or user/anonymous and user/anyone with <em>unixhierarchysep</em> set <strong>true</strong>) - both of which have special meanings in the ACL. user.anonymous would be accessible by all users, authenticated or not, and user.anyone would be accessible by all authenticated users.</p>
+<p class="last"><em>This feature is disabled from 2.4.18 onwards to avoid accidents.</em></p>
+</div>
+<p>Aliases: <tt class="docutils literal"><span class="pre">create</span></tt> or <tt class="docutils literal"><span class="pre">cm</span></tt></p>
+</div>
+<div class="section" id="deleteaclmailbox">
+<h3>deleteaclmailbox<a class="headerlink" href="#deleteaclmailbox" title="Permalink to this headline">¶</a></h3>
+<p>Remove ACLs from mailbox</p>
+<p>Aliases: <tt class="docutils literal"><span class="pre">deleteacl</span></tt> or <tt class="docutils literal"><span class="pre">dam</span></tt></p>
+</div>
+<div class="section" id="deletemailbox">
+<h3>deletemailbox<a class="headerlink" href="#deletemailbox" title="Permalink to this headline">¶</a></h3>
+<p>Delete a mailbox from the server.</p>
+<div class="highlight-python"><div class="highlight"><pre>cyradm&gt; deletemailbox user/john.doe@example.org
+</pre></div>
+</div>
+<p>Aliases: <em>delete</em> or <em>dm</em></p>
+</div>
+<div class="section" id="disconnect">
+<h3>disconnect<a class="headerlink" href="#disconnect" title="Permalink to this headline">¶</a></h3>
+<p>Disconnects from the server, but doesn&#8217;t quit <strong>cyradm</strong>.</p>
+</div>
+<div class="section" id="exit">
+<h3>exit<a class="headerlink" href="#exit" title="Permalink to this headline">¶</a></h3>
+<p>Disconnects from the server and exits out of <strong>cyradm</strong> back to the shell.</p>
+</div>
+<div class="section" id="help">
+<h3>help<a class="headerlink" href="#help" title="Permalink to this headline">¶</a></h3>
+<p>Show the commands, their aliases and a short description of each command.</p>
+<div class="highlight-python"><div class="highlight"><pre>authenticate, login, auth         authenticate to server
+chdir, cd                         change current directory
+createmailbox, create, cm         create mailbox
+deleteaclmailbox, deleteacl, dam  remove ACLs from mailbox
+deletemailbox, delete, dm         delete mailbox
+disconnect, disc                  disconnect from current server
+exit, quit                        exit cyradm
+help, ?                           show commands
+info                              display mailbox/server metadata
+listacl, lam, listaclmailbox      list ACLs on mailbox
+listmailbox, lm                   list mailboxes
+listquota, lq                     list quotas on specified root
+listquotaroot, lqr, lqm           show quota roots and quotas for mailbox
+mboxcfg, mboxconfig               configure mailbox
+reconstruct                       reconstruct mailbox (if supported)
+renamemailbox, rename, renm       rename (and optionally relocate) mailbox
+server, servername, connect       show current server or connect to server
+setaclmailbox, sam, setacl        set ACLs on mailbox
+setinfo                           set server metadata
+setquota, sq                      set quota on mailbox or resource
+subscribe, sub                    subscribe to a mailbox
+unsubscribe, unsub                unsubscribe from a mailbox
+version, ver                      display version info of current server
+xfermailbox, xfer                 transfer (relocate) a mailbox to a different server
+</pre></div>
+</div>
+</div>
+<div class="section" id="info">
+<span id="cyradm-info"></span><h3>info<a class="headerlink" href="#info" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="listaclmailbox">
+<span id="cyradm-listaclmailbox"></span><h3>listaclmailbox<a class="headerlink" href="#listaclmailbox" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="listmailbox">
+<span id="cyradm-listmailbox"></span><h3>listmailbox<a class="headerlink" href="#listmailbox" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="listquota">
+<span id="cyradm-listquota"></span><h3>listquota<a class="headerlink" href="#listquota" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="listquotaroot">
+<span id="cyradm-listquotaroot"></span><h3>listquotaroot<a class="headerlink" href="#listquotaroot" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="login">
+<span id="cyradm-login"></span><h3>login<a class="headerlink" href="#login" title="Permalink to this headline">¶</a></h3>
+<p>See <a class="reference internal" href="#cyradm-authenticate"><em>authenticate</em></a></p>
+</div>
+<div class="section" id="mboxcfg">
+<h3>mboxcfg<a class="headerlink" href="#mboxcfg" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="pwd">
+<h3>pwd<a class="headerlink" href="#pwd" title="Permalink to this headline">¶</a></h3>
+<p>Displays the current working directory.</p>
+</div>
+<div class="section" id="reconstruct">
+<h3>reconstruct<a class="headerlink" href="#reconstruct" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="renamemailbox">
+<h3>renamemailbox<a class="headerlink" href="#renamemailbox" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="server">
+<h3>server<a class="headerlink" href="#server" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="setaclmailbox">
+<h3>setaclmailbox<a class="headerlink" href="#setaclmailbox" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="setinfo">
+<h3>setinfo<a class="headerlink" href="#setinfo" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="setquota">
+<h3>setquota<a class="headerlink" href="#setquota" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="subscribe">
+<h3>subscribe<a class="headerlink" href="#subscribe" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="unsubscribe">
+<h3>unsubscribe<a class="headerlink" href="#unsubscribe" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="version">
+<h3>version<a class="headerlink" href="#version" title="Permalink to this headline">¶</a></h3>
+<p>Outputs the current version information for the connected server.</p>
+<div class="highlight-python"><div class="highlight"><pre>name: Cyrus IMAPD
+version: v2.4.17-Kolab-2.4.17-1.el6 d1df8aff 2012-12-01
+vendor: Project Cyrus
+support-url: http://www.cyrusimap.org
+os: Linux
+os-version: 2.6.32-431.3.1.el6.x86_64
+environment: Built w/Cyrus SASL 2.1.23
+             Running w/Cyrus SASL 2.1.23
+             Built w/Berkeley DB 4.7.25: (September 12, 2013)
+             Running w/Berkeley DB 4.7.25: (September 12, 2013)
+             Built w/OpenSSL 1.0.0-fips 29 Mar 2010
+             Running w/OpenSSL 1.0.0-fips 29 Mar 2010
+             Built w/zlib 1.2.3
+             Running w/zlib 1.2.3
+             CMU Sieve 2.4
+             TCP Wrappers
+             mmap = shared
+             lock = fcntl
+             nonblock = fcntl
+             idle = idled
+</pre></div>
+</div>
+</div>
+<div class="section" id="xfermailbox">
+<h3>xfermailbox<a class="headerlink" href="#xfermailbox" title="Permalink to this headline">¶</a></h3>
+<p>Transfer or relocate a mailbox to a different server.</p>
+<div class="highlight-python"><div class="highlight"><pre>xfer user/john.doe@example.org &lt;new.server&gt;
+</pre></div>
+</div>
+<p>Aliases: <tt class="docutils literal"><span class="pre">xfer</span></tt></p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">cyradm</a><ul>
+<li><a class="reference internal" href="#commands-available">Commands available</a><ul>
+<li><a class="reference internal" href="#auth">auth</a></li>
+<li><a class="reference internal" href="#authenticate">authenticate</a></li>
+<li><a class="reference internal" href="#cd">cd</a></li>
+<li><a class="reference internal" href="#chdir">chdir</a></li>
+<li><a class="reference internal" href="#connect">connect</a></li>
+<li><a class="reference internal" href="#createmailbox">createmailbox</a></li>
+<li><a class="reference internal" href="#deleteaclmailbox">deleteaclmailbox</a></li>
+<li><a class="reference internal" href="#deletemailbox">deletemailbox</a></li>
+<li><a class="reference internal" href="#disconnect">disconnect</a></li>
+<li><a class="reference internal" href="#exit">exit</a></li>
+<li><a class="reference internal" href="#help">help</a></li>
+<li><a class="reference internal" href="#info">info</a></li>
+<li><a class="reference internal" href="#listaclmailbox">listaclmailbox</a></li>
+<li><a class="reference internal" href="#listmailbox">listmailbox</a></li>
+<li><a class="reference internal" href="#listquota">listquota</a></li>
+<li><a class="reference internal" href="#listquotaroot">listquotaroot</a></li>
+<li><a class="reference internal" href="#login">login</a></li>
+<li><a class="reference internal" href="#mboxcfg">mboxcfg</a></li>
+<li><a class="reference internal" href="#pwd">pwd</a></li>
+<li><a class="reference internal" href="#reconstruct">reconstruct</a></li>
+<li><a class="reference internal" href="#renamemailbox">renamemailbox</a></li>
+<li><a class="reference internal" href="#server">server</a></li>
+<li><a class="reference internal" href="#setaclmailbox">setaclmailbox</a></li>
+<li><a class="reference internal" href="#setinfo">setinfo</a></li>
+<li><a class="reference internal" href="#setquota">setquota</a></li>
+<li><a class="reference internal" href="#subscribe">subscribe</a></li>
+<li><a class="reference internal" href="#unsubscribe">unsubscribe</a></li>
+<li><a class="reference internal" href="#version">version</a></li>
+<li><a class="reference internal" href="#xfermailbox">xfermailbox</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="administration-acl-defaults.html"
+                        title="previous chapter">Default Access Control Information on new folders</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="administration-tools.html"
+                        title="next chapter">Tools &amp; Utilities</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/admin/administration-cyradm.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="administration-tools.html" title="Tools &amp; Utilities"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="administration-acl-defaults.html" title="Default Access Control Information on new folders"
+             >previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
+          <li><a href="administration.html" >Part I. Cyrus IMAP Administration</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 1993-2014, The Cyrus Team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

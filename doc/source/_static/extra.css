@@ -1,0 +1,73 @@
+div.admonition {
+    border: 1px solid #cccccc;
+    padding: 0px 0px 0px 65px;
+    margin-bottom: 1em;
+}
+
+div.admonition p {
+    padding-right: 10px;
+}
+div.admonition p.admonition-title {
+    color: black;
+    margin: 0 0 0.3em 0;
+    padding: 0.3em 0.5em 0.3em 0.5em;
+    font-weight: bold;
+    display: block;
+}
+
+/* Magenta 'todo' box */
+div.admonition-todo {
+    border: 1px solid #ff00ff;
+    background: url("images/todo.png") no-repeat top left;
+}
+div.admonition-todo p.admonition-title {
+    background-color: #ff00ff;
+    color: #333333;
+    background: url("images/magenta.png") repeat-x top left;
+}
+
+/* Green 'note' box */
+div.admonition.note {
+    border: 1px solid green;
+    background: url("images/note.png") no-repeat top left;
+}
+div.admonition.note p.admonition-title {
+    background-color: #70A070;
+    color: #333333;
+    background: url("images/green.png") repeat-x top left;
+}
+
+/* Yellow 'important' box */
+div.admonition.important {
+    border: 1px solid #FCB614;
+    background: url("images/important.png") no-repeat top left;
+}
+div.admonition.important p.admonition-title {
+    background-color: #FCB614;
+    color: #333333;
+    background: url("images/yellow.png") repeat-x top left;
+}
+
+/* Pink 'warning' box */
+div.admonition.warning {
+    border: 1px solid #ff6347;
+    background: url("images/warning.png") no-repeat top left;
+}
+div.admonition.warning p.admonition-title {
+    background-color: #ff6347;
+    color: #999999;
+    background: url("images/red.png") repeat-x top left;
+}
+
+/* For bold-italic and italic inside other formatting styles */
+/* ``command line `` :italic:`with italics`
+ */
+
+.bolditalic {
+    font-weight: bold;
+    font-style: italic;
+}
+
+.italic {
+    font-style: italic;
+}

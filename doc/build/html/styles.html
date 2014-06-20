@@ -1,0 +1,190 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Document Conventions &mdash; Cyrus IMAP and SASL 2.4 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/extra.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '2.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="index.html" />
+    <link rel="prev" title="Frequently Asked Questions" href="sasl/faq.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="sasl/faq.html" title="Frequently Asked Questions"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="document-conventions">
+<h1>Document Conventions<a class="headerlink" href="#document-conventions" title="Permalink to this headline">¶</a></h1>
+<p>This manual uses several conventions to highlight certain words and phrases and draw attention to specific pieces of information.</p>
+<div class="admonition-todo admonition" id="index-0">
+<p class="first admonition-title">Todo</p>
+<p class="last">Check if all of these styles are relevant (and possible) using reStructuredText formatting. Most of this copied from the XML used with Publican.</p>
+</div>
+<div class="section" id="typographic-conventions">
+<h2>Typographic Conventions<a class="headerlink" href="#typographic-conventions" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="mono-spaced-with-non-white-background">
+<h3>Mono-spaced with non-white background<a class="headerlink" href="#mono-spaced-with-non-white-background" title="Permalink to this headline">¶</a></h3>
+<p>Used to highlight system input, including shell commands, file names and paths. Also used to highlight keycaps and key combinations. For example:</p>
+<blockquote>
+<div>To see the contents of the file <tt class="docutils literal"><span class="pre">my_next_bestselling_novel</span></tt> in your current working directory, enter the <tt class="docutils literal"><span class="pre">cat</span> <span class="pre">my_next_bestselling_novel</span></tt> command at the shell prompt and press <tt class="docutils literal"><span class="pre">Enter</span></tt> to execute the command.</div></blockquote>
+<p>The above includes a filename, a shell command and a keycap, all present in mono-spaced type and all distinguishable thanks to context.</p>
+<p>Key combinations can be distinguished from keycaps by the hyphen connecting each part of a key combinations. For example:</p>
+<blockquote>
+<div><p>Press <tt class="docutils literal"><span class="pre">Enter</span></tt> to execute the command.</p>
+<p>Press <tt class="docutils literal"><span class="pre">Ctrl-Alt-F2</span></tt> to switch to the first virtual terminal. Press <tt class="docutils literal"><span class="pre">Ctrl-Alt-F1</span></tt> to return to your X-Windows session.</p>
+</div></blockquote>
+<p>The first paragraph highlights the particular keycap to press. The second highlights two key combinations (each a set of three keycaps with each set pressed simultaneously).</p>
+<p>If source code is discussed, class names, methods, functions, variable names and returned values mentioned within a paragraph will be presented as above, in <tt class="docutils literal"><span class="pre">mono-spaced</span> <span class="pre">type</span></tt>. For example:</p>
+<blockquote>
+<div>File-related classes include <tt class="docutils literal"><span class="pre">filesystem</span></tt> for file systems, <tt class="docutils literal"><span class="pre">file</span></tt> for files, and <tt class="docutils literal"><span class="pre">dir</span></tt> for directories. Each class has its own associated set of permissions.</div></blockquote>
+</div>
+<div class="section" id="proportional-bold">
+<h3>Proportional Bold<a class="headerlink" href="#proportional-bold" title="Permalink to this headline">¶</a></h3>
+<p>This denotes words or phrases encountered on a system, including application names; dialog box text; labelled buttons; check-box and radio button labels; menu titles and sub-menu titles. For example:</p>
+<blockquote>
+<div>Choose <strong>System</strong> -&gt; <strong>Preferences</strong> -&gt; <strong>Mouse</strong> from the main menu bar to launch <strong>Mouse Preferences</strong>. In the <strong>Buttons</strong> tab, click the <strong>Left-handed mouse</strong> check box and click <strong>Close</strong> to switch the primary mouse button from the left to the right (making the mouse suitable for use in the left hand).</div></blockquote>
+</div>
+<div class="section" id="italic">
+<h3>Italic<a class="headerlink" href="#italic" title="Permalink to this headline">¶</a></h3>
+<p>The addition of italics indicates replaceable or variable text. Italics denotes text you do not input literally or displayed text that changes depending on circumstance. For example:</p>
+<blockquote>
+<div><p>To connect to a remote machine using ssh, type <tt class="docutils literal"><span class="pre">ssh</span> <span class="pre">*username&#64;domain.name*</span></tt> at a shell prompt. If the remote machine is <strong>example.com</strong> and your username on that machine is <strong>john</strong>, type <tt class="docutils literal"><span class="pre">ssh</span> <span class="pre">john&#64;example.com</span></tt></p>
+<p>The <tt class="docutils literal"><span class="pre">mount</span> <span class="pre">-o</span> <span class="pre">remount</span> <span class="pre">*file-system*</span></tt> command remountes the named file system. For example, to remount the <tt class="docutils literal"><span class="pre">/home</span></tt> file system, the command is <tt class="docutils literal"><span class="pre">mount</span> <span class="pre">-o</span> <span class="pre">remount</span> <span class="pre">/home</span></tt>.</p>
+<p>To see the version of a currently installed package, use the <tt class="docutils literal"><span class="pre">rpm</span> <span class="pre">-q</span> <span class="pre">*package*</span></tt> command. It will return a result as follows: <em>package-version-release</em>.</p>
+</div></blockquote>
+<p>Note the words in bold italics above — username, domain.name, file-system, package, version and release. Each word is a placeholder, either for text you enter when issuing a command or for text displayed by the system.</p>
+<p>Aside from standard usage for presenting the title of a work, italics denotes the first use of a new and important term. For example:</p>
+<blockquote>
+<div>Publican is a <em>DocBook</em> publishing system.</div></blockquote>
+</div>
+</div>
+<div class="section" id="pull-quote-conventions">
+<h2>Pull-quote Conventions<a class="headerlink" href="#pull-quote-conventions" title="Permalink to this headline">¶</a></h2>
+<p>Terminal output and source code listings are set off visually from the surrounding text.</p>
+<p>Output sent to a terminal is presented thus:</p>
+<div class="highlight-python"><div class="highlight"><pre>books        Desktop   documentation  drafts  mss    photos   stuff  svn
+books_tests  Desktop1  downloads      images  notes  scripts  svgs
+</pre></div>
+</div>
+<p>Source-code listings are also presented this way but may add syntax highlighting.</p>
+</div>
+<div class="section" id="notes-and-warnings">
+<h2>Notes and Warnings<a class="headerlink" href="#notes-and-warnings" title="Permalink to this headline">¶</a></h2>
+<p>Finally, we use three visual styles to draw attention to information that might otherwise be overlooked.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Notes are tips, shortcuts, or alternative approaches to the task at hand. Ignoring a note should have no negative consequences, but you might miss out on a trick that makes your life easier.</p>
+</div>
+<div class="admonition important">
+<p class="first admonition-title">Important</p>
+<p class="last">Important boxes detail things that are easily missed: configuration changes that only apply to the current session, or services that need restarting before an update will apply. Ignoring a box labelled &#8216;Important&#8217; will not cause data loss but may cause irritation and frustration.</p>
+</div>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">Warnings should not be ignored. Ignoring warnings will most likely cause data loss.</p>
+</div>
+<div class="admonition-todo admonition" id="index-1">
+<p class="first admonition-title">Todo</p>
+<p class="last">To-do sections mean that someone hasn&#8217;t yet written this section, or maybe there is some information missing or potentially inaccurate. It will probably be worth reading the to-do note.</p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Document Conventions</a><ul>
+<li><a class="reference internal" href="#typographic-conventions">Typographic Conventions</a><ul>
+<li><a class="reference internal" href="#mono-spaced-with-non-white-background">Mono-spaced with non-white background</a></li>
+<li><a class="reference internal" href="#proportional-bold">Proportional Bold</a></li>
+<li><a class="reference internal" href="#italic">Italic</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#pull-quote-conventions">Pull-quote Conventions</a></li>
+<li><a class="reference internal" href="#notes-and-warnings">Notes and Warnings</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="sasl/faq.html"
+                        title="previous chapter">Frequently Asked Questions</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/styles.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="sasl/faq.html" title="Frequently Asked Questions"
+             >previous</a> |</li>
+        <li><a href="index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 1993-2014, The Cyrus Team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

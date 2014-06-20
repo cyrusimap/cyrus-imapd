@@ -1,0 +1,159 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Administrator Guide &mdash; Cyrus IMAP and SASL 2.4 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/extra.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" />
+    <link rel="next" title="Part I. Cyrus IMAP Administration" href="administration.html" />
+    <link rel="prev" title="IRC" href="../feedback-irc.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="administration.html" title="Part I. Cyrus IMAP Administration"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="../feedback-irc.html" title="IRC"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="administrator-guide">
+<h1>Administrator Guide<a class="headerlink" href="#administrator-guide" title="Permalink to this headline">¶</a></h1>
+<p class="centered">
+<strong>Simon Amor &lt;simon&#64;leaky.org&gt;</strong></p><p class="centered">
+<strong>Bron Gondwana, Fastmail Pty Ltd &lt;brong&#64;opera.com&gt;</strong></p><p class="centered">
+<strong>Dave McMurtrie, Carnegie Mellon University &lt;dave64&#64;andrew.cmu.edu&gt;</strong></p><p class="centered">
+<strong>Jeroen van Meeuwen, Kolab Systems &lt;vanmeeuwen&#64;kolabsys.com&gt;</strong></p><p class="centered">
+<strong>Adam Williams, Whitemice Consulting &lt;awilliam&#64;whitemice.org&gt;</strong></p><div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="administration.html">Part I. Cyrus IMAP Administration</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="administration-running.html">Running Cyrus IMAP Services on Non-Standard Ports</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-acl.html">Access Control</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-cyradm.html">cyradm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="administration-tools.html">Tools &amp; Utilities</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="sop.html">Part II. Standard Operating Procedures</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="sop-mailbox-operations.html">Mailbox Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sop-reloading.html">Reloading Cyrus IMAP Services</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sop-altnamespace.html">Alternative Namespace</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sop-databases.html">Database Conversion, Export and Import</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sop-deleting.html">Deleting and Undeleting Messages and Folders</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sop-reconstructing.html">Reconstructing Mailboxes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sop-squatter.html">Using Squatter for Faster IMAP SEARCH</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sop-replication.html">Setting up Replication</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sop-splitting-metadata.html">Splitting Metadata from Partitions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sop-userdeny.html">Managing user_deny.db</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="config.html">Part III. Configuration Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="config-mailboxdistribution.html">Mailbox Distribution</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="packagers.html">Notes for Packagers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="packagers.html#services-in-etc-services">Services in <tt class="docutils literal"><span class="pre">/etc/services</span></tt></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="twofive-newfeatures.html">New Features in Cyrus IMAP 2.5</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="twofive-newfeatures.html#support-for-rfc-5464-imap-metadata">Support for RFC 5464: IMAP METADATA</a></li>
+<li class="toctree-l2"><a class="reference internal" href="twofive-newfeatures.html#mailbox-distribution">Mailbox Distribution</a></li>
+<li class="toctree-l2"><a class="reference internal" href="twofive-newfeatures.html#catchall-mailbox-for-lmtp">Catchall Mailbox for LMTP</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="twofive-defaults.html">Changes to Default Settings from 2.4 to 2.5</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="twofive-defaults.html#lmtp-downcase-rcpt">lmtp_downcase_rcpt</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="../feedback-irc.html"
+                        title="previous chapter">IRC</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="administration.html"
+                        title="next chapter">Part I. Cyrus IMAP Administration</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/admin/index.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="administration.html" title="Part I. Cyrus IMAP Administration"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="../feedback-irc.html" title="IRC"
+             >previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 1993-2014, The Cyrus Team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

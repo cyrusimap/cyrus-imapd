@@ -1,0 +1,155 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Authentication and Authorization &mdash; Cyrus IMAP and SASL 2.4 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/extra.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" />
+    <link rel="up" title="Deployment Guide" href="index.html" />
+    <link rel="next" title="Performance Recommendations" href="performance_recommendations.html" />
+    <link rel="prev" title="Known Protocol Limitations" href="known_protocol_limitations.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="performance_recommendations.html" title="Performance Recommendations"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="known_protocol_limitations.html" title="Known Protocol Limitations"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" accesskey="U">Deployment Guide</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="authentication-and-authorization">
+<h1>Authentication and Authorization<a class="headerlink" href="#authentication-and-authorization" title="Permalink to this headline">¶</a></h1>
+<p>The use of Cyrus IMAP may have a significant impact on the design, use and load of the current authentication and authorization infrastructure. In addition, authentication and authorization relates to both to security, and also, in the particular case of Cyrus IMAP, personal privacy.</p>
+<p>Typically, an authentication and authorization database, such as for example LDAP, is already available and in use within an infrastructure. Cyrus IMAP would integrate with a variety of technologies, but a few considerations deserve outlining.</p>
+<p>For example, when a user wants to set group permissions on an IMAP folder, the most intuitive attribute in LDAP to refer to the group is the Common Name (CN). This attribute however is not guaranteed to be unique. Uniqueness can be enforced within LDAP, although that may be too restrictive, and so the groups available in Cyrus IMAP can be limited to scope one, while the cn is used in the rdn (the cn is the naming attribute to compose the dn with); effectively enforcing uniqueness for those groups available to Cyrus IMAP.</p>
+<p>Similarly, many deployments choose to use the mail LDAP attribute value as the mailbox name, while mail is a multi-valued attribute and is not configured to be enforced globally unique in the LDAP information tree under the root dn. In addition, attributes such as amilAlternateAddress and/or alias could potentially hold the same value as anyone&#8217;s mail attribute. These limitations or such implications become very clear when canonification of the authentication ID to the desired authorization ID is attempted.</p>
+<p>For example, if &lt;literal&gt;jdoe&lt;/literal&gt; is the login username, and Cyrus IMAP has a default realm configured &lt;literal&gt;example.org&lt;/literal&gt;, the authentication ID becomes &lt;literal&gt;jdoe&#64;example.org&lt;/literal&gt;. It is this authentication ID, and not the supplied login username, that Cyrus IMAP uses to verify the credentials.</p>
+<p>Cyrus IMAP thereafter allows authorization mechanisms, such as &lt;emphasis&gt;ptclient&lt;/emphasis&gt; modules, to canonify the authentication ID to then ultimately return the authorization ID.</p>
+<p>Suppose in the case of &lt;literal&gt;jdoe&#64;example.org&lt;/literal&gt;, where the authentication ID had been set, an LDAP module for ptloader could search LDAP for a &lt;literal&gt;uid=%U&lt;/literal&gt; (where %U is the local part of the authentication ID), find the mail attribute value is &lt;literal&gt;john.doe&#64;example.org&lt;/literal&gt;, and authorize the user as such. Effectively, this enables Cyrus IMAP users to log in both with their username (uid) as well as their email address (or any of the aliases).</p>
+<p>The process of client authentication and authorization</p>
+<div class="section" id="client-authentication">
+<h2>Client Authentication<a class="headerlink" href="#client-authentication" title="Permalink to this headline">¶</a></h2>
+<p>The exchange and verification of identity information provided by a client, otherwise known as <em>the process of authentication</em>, provides a set of credentials that allow the server to verify that the user is in fact the user, and not an imposter.</p>
+<div class="admonition important">
+<p class="first admonition-title">Important</p>
+<p><strong>Authentication != Authorization</strong></p>
+<p class="last">Authentication and authorization are two separate processes. Authentication is about verifying the credentials supplied by the client, while authorization is the process of determining what rights the client has. Authentication, logically, preseeds authorization.</p>
+</div>
+<p>The most common set of credentials is a <em>username</em> and <em>password</em>, but other forms exist like Kerberos v5 ticket exchange (for which, to obtain such, most often a password is supplied), or certificate based authentication (the secret keys for which are most often locked with a passphrase). In any case, authentication works based on a shared secret, and/or a trusted source for verification. Kerberos v5 works based on shared secrets (keytab), and certificate based authentication works based on shared, trusted sources for verification.</p>
+<p>In the case of usernames and passwords though, the exchange and verification of the credentials is at the basis of its security. Sending plain text usernames and passwords over the wire would not allow any application to verify the source of the credentials is actually the user &amp;ndash;who is supposed to be the only party to know the unique combination of username and password.</p>
+<p>To obfuscate the login credentials, authentication can be encrypted with CRAM-MD5 or DIGEST-MD5, but this requires the server to have a copy of the original, plain text password. The password in this case becomes the shared secret.</p>
+<p>Another method is to allow the plain text username and password to be transmitted over the wire, but ensure Transport Layer Security (TLS) or the more implicit Secure Socket Layer (SSL). The plain text password can now be used to compare it against a SQL database, bind to an LDAP database, attempt PAM authentication with, etc.</p>
+</div>
+<div class="section" id="users-and-mailboxes">
+<h2>Users and Mailboxes<a class="headerlink" href="#users-and-mailboxes" title="Permalink to this headline">¶</a></h2>
+<p>User mailboxes have a globally unique identifier which is not necessarily the same as the login name used. There are three distinguishable aspects to a user&#8217;s entity and the mailbox associated with it;</p>
+<p>The <strong>user login credentials</strong> that are associated with the user authentication entity and verify the user is who the user claims to be.</p>
+<p>For example, the user logs in with username &lt;code&gt;john.doe&#64;example.org&lt;/code&gt; and password &lt;code&gt;verysecret&lt;/code&gt;.</p>
+<p>The <strong>user&#8217;s authentication entity</strong> - with all attributes associated with it - can have one of those attributes be used to create the relationship between the user authentication entity on the one side, and the mailbox entity on the other side.</p>
+<p>For example, the user that authenticated as &lt;code&gt;john.doe&#64;example.org&lt;/code&gt; may have a mailbox named &lt;code&gt;jdoe&lt;/code&gt;.</p>
+<p>The <strong>authorization entity</strong>, used to assign certain permissions to the user, uses the same attribute used to determine the mailbox name.</p>
+<p>For example, the user that authenticated as &lt;code&gt;john.doe&#64;example.com&lt;/code&gt; and has mailbox &lt;code&gt;jdoe&lt;/code&gt; needs an access control list entry on that mailbox that assigns &lt;code&gt;jdoe&lt;/code&gt; certain rights on said mailbox.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Authentication and Authorization</a><ul>
+<li><a class="reference internal" href="#client-authentication">Client Authentication</a></li>
+<li><a class="reference internal" href="#users-and-mailboxes">Users and Mailboxes</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="known_protocol_limitations.html"
+                        title="previous chapter">Known Protocol Limitations</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="performance_recommendations.html"
+                        title="next chapter">Performance Recommendations</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/deployment/authentication_and_authorization.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="performance_recommendations.html" title="Performance Recommendations"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="known_protocol_limitations.html" title="Known Protocol Limitations"
+             >previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Deployment Guide</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 1993-2014, The Cyrus Team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

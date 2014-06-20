@@ -1,0 +1,166 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Reconstructing Mailboxes &mdash; Cyrus IMAP and SASL 2.4 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/extra.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" />
+    <link rel="up" title="Part II. Standard Operating Procedures" href="sop.html" />
+    <link rel="next" title="Using Squatter for Faster IMAP SEARCH" href="sop-squatter.html" />
+    <link rel="prev" title="Deleting and Undeleting Messages and Folders" href="sop-deleting.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="sop-squatter.html" title="Using Squatter for Faster IMAP SEARCH"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="sop-deleting.html" title="Deleting and Undeleting Messages and Folders"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
+          <li><a href="sop.html" accesskey="U">Part II. Standard Operating Procedures</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="reconstructing-mailboxes">
+<h1>Reconstructing Mailboxes<a class="headerlink" href="#reconstructing-mailboxes" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="individual-mailboxes-or-folders">
+<h2>Individual mailboxes or folders<a class="headerlink" href="#individual-mailboxes-or-folders" title="Permalink to this headline">¶</a></h2>
+<p>If you have a mailbox within the filesystem but the folders and/or messages do not show up via IMAP or the cyradm utility, you may need to run <tt class="docutils literal"><span class="pre">reconstruct</span></tt> on the mailbox. This will rebuild the cyrus.* cache files and add any new folders to the internal cyrus mailbox list.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">The <tt class="docutils literal"><span class="pre">-k</span></tt> switch preserves expunged messages so they can be undeleted if required. Without it, anything expunged will be permanently removed (Applies to Cyrus IMAP 2.3 and below.) On Cyrus IMAP 2.4.0 and above, this is not required as preserving the expunged messages is the only mode of operation.</p>
+</div>
+<div class="highlight-python"><div class="highlight"><pre>cyrus $ /usr/lib/cyrus-imapd/reconstruct -k -r -f user/jdoe@example.com
+discovered example.com!user.jdoe.Drafts
+discovered example.com!user.jdoe.Trash
+discovered example.com!user.jdoe.Sent
+user/jdoe@example.com
+user/jdoe/Sent@example.com
+user/jdoe/Trash@example.com
+user/jdoe/Drafts@example.com
+</pre></div>
+</div>
+<p>The above output shows the 3 sub-folders Sent, Trash and Drafts were found in addition to the top level INBOX. Sub-folders are only detected by the presence of a cyrus.header file.</p>
+<p>Once this has been done, the client will probably need to subscribe to the newly discovered folders.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">After restoring folders using reconstruct, you may need to recalculate the quota usage for the mailbox since this is not done by the reconstruct command.</p>
+</div>
+<div class="admonition-todo admonition" id="index-0">
+<p class="first admonition-title">Todo</p>
+<p class="last">Any advanced notes and other examples?</p>
+</div>
+</div>
+<div class="section" id="recovering-a-complete-spool-directory">
+<h2>Recovering a complete spool directory<a class="headerlink" href="#recovering-a-complete-spool-directory" title="Permalink to this headline">¶</a></h2>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">Use the -m switch with caution!</p>
+</div>
+<p>When invoked with the -m switch, <tt class="docutils literal"><span class="pre">reconstruct</span></tt> will rebuild the master mailboxes file. This can (in theory) be used to recover from almost any sort of data corruption.</p>
+<div class="admonition-todo admonition" id="index-1">
+<p class="first admonition-title">Todo</p>
+<p class="last">Is it possible to make things worse? For example if the system is still receiving emails because you forgot to turn off SMTP/LMTP first?</p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Reconstructing Mailboxes</a><ul>
+<li><a class="reference internal" href="#individual-mailboxes-or-folders">Individual mailboxes or folders</a></li>
+<li><a class="reference internal" href="#recovering-a-complete-spool-directory">Recovering a complete spool directory</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="sop-deleting.html"
+                        title="previous chapter">Deleting and Undeleting Messages and Folders</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="sop-squatter.html"
+                        title="next chapter">Using Squatter for Faster IMAP SEARCH</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/admin/sop-reconstructing.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="sop-squatter.html" title="Using Squatter for Faster IMAP SEARCH"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="sop-deleting.html" title="Deleting and Undeleting Messages and Folders"
+             >previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
+          <li><a href="sop.html" >Part II. Standard Operating Procedures</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 1993-2014, The Cyrus Team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

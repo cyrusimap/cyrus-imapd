@@ -1,0 +1,139 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Performance Recommendations &mdash; Cyrus IMAP and SASL 2.4 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/extra.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2.4',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" />
+    <link rel="up" title="Deployment Guide" href="index.html" />
+    <link rel="next" title="Cyrus SASL documentation" href="../sasl/index.html" />
+    <link rel="prev" title="Authentication and Authorization" href="authentication_and_authorization.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../sasl/index.html" title="Cyrus SASL documentation"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="authentication_and_authorization.html" title="Authentication and Authorization"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" accesskey="U">Deployment Guide</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="performance-recommendations">
+<h1>Performance Recommendations<a class="headerlink" href="#performance-recommendations" title="Permalink to this headline">¶</a></h1>
+<p>This chapter lists a variety of options to increase the Cyrus IMAP performance.</p>
+<div class="section" id="databases-on-temporary-filesystems">
+<h2>Databases on Temporary Filesystems<a class="headerlink" href="#databases-on-temporary-filesystems" title="Permalink to this headline">¶</a></h2>
+<p>Some databases and files and directory trees can be moved into a temporary filesystem, which may be an in-memory filesystem.</p>
+<p>In-memory filesystems are faster then disk filesystems, but are limited in space and volatile as well. The following list includes configuration settings that could make the corresponding databases, files and directory trees be created and maintained on a temporary filesystem.</p>
+<ul class="simple">
+<li><tt class="docutils literal"><span class="pre">proc_path</span></tt>: /dev/shm/cyrus-imapd/proc</li>
+<li><tt class="docutils literal"><span class="pre">mboxname_lockpath</span></tt>: /dev/shm/cyrus-imapd/mboxname_lock</li>
+<li><tt class="docutils literal"><span class="pre">duplicate_db_path</span></tt>: /dev/shm/cyrus-imapd/duplicate_db</li>
+<li><tt class="docutils literal"><span class="pre">statuscache_db_path</span></tt>: /dev/shm/cyrus-imapd/statuscache_db</li>
+</ul>
+<div class="admonition important">
+<p class="first admonition-title">Important</p>
+<p class="last">Cyrus IMAP requires the parent directories to exist, and be writeable by the POSIX user account Cyrus IMAP runs under, prior to starting the <tt class="docutils literal"><span class="pre">master</span></tt> process.</p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Performance Recommendations</a><ul>
+<li><a class="reference internal" href="#databases-on-temporary-filesystems">Databases on Temporary Filesystems</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="authentication_and_authorization.html"
+                        title="previous chapter">Authentication and Authorization</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="../sasl/index.html"
+                        title="next chapter">Cyrus SASL documentation</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/deployment/performance_recommendations.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../sasl/index.html" title="Cyrus SASL documentation"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="authentication_and_authorization.html" title="Authentication and Authorization"
+             >previous</a> |</li>
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Deployment Guide</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 1993-2014, The Cyrus Team.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>
