@@ -574,7 +574,13 @@ EXPORTED int caldav_alarm_prepare(
     alarmdata->nextalarm = rdata.nextalarmtime;
 
     /* dtstart timezone is good enough for alarm purposes */
-    const char *tzid = icaltime_get_tzid(icalcomponent_get_dtstart(comp));
+    icalproperty *prop = NULL;
+    icalparameter *param = NULL;
+    const char *tzid = NULL;
+
+    prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
+    if (prop) param = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
+    if (param) tzid = icalparameter_get_tzid(param);
     alarmdata->tzid = xstrdup(tzid ? tzid : "[floating]");
 
     memcpy(&(alarmdata->start), &(rdata.eventstart), sizeof(struct icaltimetype));
