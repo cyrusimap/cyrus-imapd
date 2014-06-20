@@ -81,7 +81,7 @@ char TZIDPrefixExpanded[1024];
    since otherwise RDATEs are more efficient. Actually, I've set this high
    so we only use RRULEs for infinite recurrences. Since expanding RRULEs is
    very time-consuming, this seems sensible. */
-#define MIN_RRULE_OCCURRENCES	1
+#define MIN_RRULE_OCCURRENCES	10
 
 
 /* The year we go up to when dumping the list of timezone changes (used
