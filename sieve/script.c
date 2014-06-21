@@ -334,7 +334,7 @@ static int sieve_addflag(strarray_t *imapflags, const char *flag)
     int n;
     /* search for flag already in list */
     for (n = 0; n < imapflags->count; n++) {
-	if (!strcmp(imapflags->data[n], flag))
+	if (!strcasecmp(imapflags->data[n], flag))
 	    break;
     }
 
@@ -350,7 +350,7 @@ static int sieve_removeflag(strarray_t *imapflags, const char *flag)
     int n;
     /* search for flag already in list */
     for (n = 0; n < imapflags->count; n++) {
-      if (!strcmp(imapflags->data[n], flag))
+      if (!strcasecmp(imapflags->data[n], flag))
 	break;
     }
 
