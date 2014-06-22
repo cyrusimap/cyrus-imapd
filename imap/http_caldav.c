@@ -4521,12 +4521,8 @@ static int report_cal_multiget(struct transaction_t *txn,
 	    fctx->davdb = my_caldav_open(fctx->mailbox);
 
 	    /* Find message UID for the resource */
-	    r = caldav_lookup_resource(fctx->davdb,
+	    caldav_lookup_resource(fctx->davdb,
 				   tgt.mboxname, tgt.resource, 0, &cdata);
-	    if (r) {
-		ret = HTTP_NOT_FOUND;
-		goto done;
-	    }
 	    cdata->dav.resource = tgt.resource;
 	    /* XXX  Check errors */
 
