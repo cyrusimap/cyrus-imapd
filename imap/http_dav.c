@@ -3206,9 +3206,6 @@ int meth_delete(struct transaction_t *txn, void *params)
 	    return HTTP_SERVER_ERROR;
 	}
 
-	/* Open the DAV DB corresponding to the mailbox */
-	davdb = dparams->davdb.open_db(mailbox);
-
 	/* Do any special processing */
 	if (dparams->delete) dparams->delete(txn, mailbox, NULL, NULL);
 
@@ -3232,8 +3229,6 @@ int meth_delete(struct transaction_t *txn, void *params)
 	if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
 	else if (r == IMAP_MAILBOX_NONEXISTENT) ret = HTTP_NOT_FOUND;
 	else if (r) ret = HTTP_SERVER_ERROR;
-
-	dparams->davdb.close_db(davdb);
 
 	goto done;
     }

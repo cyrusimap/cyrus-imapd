@@ -4541,7 +4541,7 @@ static int mailbox_delete_caldav(struct mailbox *mailbox)
 
     caldavdb = caldav_open_mailbox(mailbox, 0);
     if (caldavdb) {
-	int r = caldav_delmbox(caldavdb, mailbox->name, 1);
+	int r = caldav_delmbox(caldavdb, mailbox->name, 0);
 	caldav_close(caldavdb);
 	if (r) return r;
     }
