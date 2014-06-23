@@ -567,11 +567,12 @@ EXPORTED int caldav_alarm_prepare(
 	    &rdata);
 
 	/* Handle overridden recurrences */
-	while ((comp = icalcomponent_get_next_component(comp, ICAL_VEVENT_COMPONENT))) {
+	icalcomponent *subcomp = comp;
+	while ((subcomp = icalcomponent_get_next_component(subcomp, ICAL_VEVENT_COMPONENT))) {
 	    struct icalperiodtype period;
-	    caldav_get_period(comp, ICAL_VEVENT_COMPONENT, &period);
+	    caldav_get_period(subcomp, ICAL_VEVENT_COMPONENT, &period);
 	    icaltime_span span = icaltime_span_new(period.start, period.end, 0);
-	    recur_cb(comp, &span, &rdata);
+	    recur_cb(subcomp, &span, &rdata);
 	}
     }
 
