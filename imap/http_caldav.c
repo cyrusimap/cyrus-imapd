@@ -934,6 +934,12 @@ static int caldav_parse_path(const char *path,
     }
     parts.box = buf_release(&boxbuf);
 
+    /* XXX - hack to allow @domain parts for non-domain-split users */
+    if (httpd_extradomain) {
+	//free(parts.domain); - XXX - fix when converting to real parts
+	parts.domain = NULL;
+    }
+
     mboxname_parts_to_internal(&parts, tgt->mboxname);
 
     mboxname_free_parts(&parts);
