@@ -92,9 +92,6 @@ int caldav_alarm_rollback(struct caldav_alarm_db *alarmdb);
 /* add a calendar alarm */
 int caldav_alarm_add(struct caldav_alarm_db *alarmdb, struct caldav_alarm_data *alarmdata);
 
-/* delete a single alarm */
-int caldav_alarm_delete(struct caldav_alarm_db *alarmdb, struct caldav_alarm_data *alarmdata);
-
 /* delete all alarms matching the event */
 int caldav_alarm_delete_all(struct caldav_alarm_db *alarmdb, struct caldav_alarm_data *alarmdata);
 

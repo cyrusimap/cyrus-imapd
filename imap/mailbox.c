@@ -2799,7 +2799,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 	r = caldav_delete(caldavdb, cdata->dav.rowid, 0);
 
 	/* and associated alarms */
-	caldav_alarm_delete(alarmdb, &alarmdata);
+	caldav_alarm_delete_all(alarmdb, &alarmdata);
     }
     else {
 	struct buf msg_buf = BUF_INITIALIZER;
@@ -2828,8 +2828,8 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 	caldav_alarm_begin(alarmdb);
 
 	struct caldav_alarm_data alarmdata = {
-	    .mailbox    = mailbox->name,
-	    .resource   = resource,
+	    .mailbox    = cdata->dav.mailbox,
+	    .resource   = cdata->dav.resource,
 	};
 
 	/* remove old ones */
@@ -2840,9 +2840,10 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 	    /* prepare alarm data */
 	    if (!rc &&
 		!caldav_alarm_prepare(ical, &alarmdata, i,
-				      icaltime_current_time_with_zone(icaltimezone_get_utc_timezone())))
+				      icaltime_current_time_with_zone(icaltimezone_get_utc_timezone()))) {
 		rc = caldav_alarm_add(alarmdb, &alarmdata);
 		caldav_alarm_fini(&alarmdata);
+	    }
 	}
 
 	if (rc)

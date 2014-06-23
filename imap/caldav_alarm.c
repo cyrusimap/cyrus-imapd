@@ -311,7 +311,7 @@ EXPORTED int caldav_alarm_add(struct caldav_alarm_db *alarmdb, struct caldav_ala
     ";"
 
 /* delete a single alarm */
-EXPORTED int caldav_alarm_delete(struct caldav_alarm_db *alarmdb, struct caldav_alarm_data *alarmdata)
+static int caldav_alarm_delete_row(struct caldav_alarm_db *alarmdb, struct caldav_alarm_data *alarmdata)
 {
     assert(alarmdb);
     assert(alarmdata);
@@ -799,7 +799,7 @@ done_item:
 
     for (scan = list; scan; scan = scan->next)
 	if (scan->do_delete)
-	    caldav_alarm_delete(alarmdb, &scan->data);
+	    caldav_alarm_delete_row(alarmdb, &scan->data);
 
 done:
     caldav_alarm_close(alarmdb);
