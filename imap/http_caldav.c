@@ -4492,6 +4492,10 @@ static int report_cal_multiget(struct transaction_t *txn,
 		goto done;
 	    }
 
+	    /* bogus HREFs, just ignore */
+	    if (!tgt.resource)
+		continue;
+
 	    fctx->req_tgt = &tgt;
 
 	    /* Check if we already have this mailbox open */
