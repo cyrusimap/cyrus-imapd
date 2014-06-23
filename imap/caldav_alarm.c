@@ -129,7 +129,8 @@ EXPORTED int caldav_alarm_done(void)
     ");"						\
     "CREATE INDEX IF NOT EXISTS idx_alarm_id ON alarm_recipients ( alarmid );"
 
-static struct caldav_alarm_db *my_alarmdb = NULL;
+static struct caldav_alarm_db *my_alarmdb;
+static struct mboxlock *my_alarmdb_lock;
 
 /* get a database handle to the alarm db */
 EXPORTED struct caldav_alarm_db *caldav_alarm_open()
@@ -144,11 +145,16 @@ EXPORTED struct caldav_alarm_db *caldav_alarm_open()
 
     char *dbfilename = strconcat(config_dir, "/caldav_alarm.sqlite3", NULL);
 
+    int r = mboxname_lock("$CALDAVALARMDB", &my_alarmdb_lock, LOCK_EXCLUSIVE);
+    if (r)
+	return NULL;
+
     int rc = sqlite3_open(dbfilename, &db);
     if (rc != SQLITE_OK) {
 	syslog(LOG_ERR, "IOERROR: caldav_alarm_open (open): %s", db ? sqlite3_errmsg(db) : "failed");
 	sqlite3_close(db);
 	free(dbfilename);
+	mboxname_release(&my_alarmdb_lock);
 	return NULL;
     }
 
@@ -172,6 +178,7 @@ EXPORTED struct caldav_alarm_db *caldav_alarm_open()
 fail:
     syslog(LOG_ERR, "IOERROR: caldav_alarm_open (exec): %s", sqlite3_errmsg(db));
     sqlite3_close(db);
+    mboxname_release(&my_alarmdb_lock);
     return NULL;
 }
 
@@ -189,6 +196,8 @@ EXPORTED int caldav_alarm_close(struct caldav_alarm_db *alarmdb)
     }
 
     sqlite3_close(my_alarmdb->db);
+
+    mboxname_release(&my_alarmdb_lock);
 
     free(my_alarmdb);
     my_alarmdb = NULL;
