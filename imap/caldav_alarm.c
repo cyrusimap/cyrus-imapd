@@ -69,12 +69,13 @@ enum {
     STMT_INSERT_RECIPIENT,
     STMT_DELETE,
     STMT_DELETEALL,
+    STMT_DELETEMAILBOX,
     STMT_DELETEUSER,
     STMT_SELECT_ALARM,
     STMT_SELECT_RECIPIENT
 };
 
-#define NUM_STMT 10
+#define NUM_STMT 11
 
 struct caldav_alarm_db {
     sqlite3	    *db;
@@ -343,6 +344,24 @@ EXPORTED int caldav_alarm_delete_all(struct caldav_alarm_db *alarmdb, struct cal
     };
 
     return dav_exec(alarmdb->db, CMD_DELETEALL, bval, NULL, NULL, &alarmdb->stmt[STMT_DELETEALL]);
+}
+
+#define CMD_DELETEMAILBOX		\
+    "DELETE FROM alarms WHERE"	\
+    " mailbox = :mailbox"	\
+    ";"
+
+/* delete all alarms matching the event */
+EXPORTED int caldav_alarm_delmbox(struct caldav_alarm_db *alarmdb, const char *mboxname)
+{
+    assert(alarmdb);
+
+    struct bind_val bval[] = {
+	{ ":mailbox",	SQLITE_TEXT, { .s = mboxname  } },
+	{ NULL,		SQLITE_NULL, { .s = NULL	} }
+    };
+
+    return dav_exec(alarmdb->db, CMD_DELETEMAILBOX, bval, NULL, NULL, &alarmdb->stmt[STMT_DELETEMAILBOX]);
 }
 
 #define CMD_DELETEUSER		\

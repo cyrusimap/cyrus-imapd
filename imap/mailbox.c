@@ -4534,6 +4534,51 @@ static int mailbox_delete_internal(struct mailbox **mailboxptr)
     return 0;
 }
 
+static int mailbox_delete_caldav(struct mailbox *mailbox)
+{
+    struct caldav_db *caldavdb = NULL;
+    struct caldav_alarm_db *alarmdb = NULL;
+
+    caldavdb = caldav_open_mailbox(mailbox, 0);
+    if (caldavdb) {
+	int r = caldav_delmbox(caldavdb, mailbox->name, 1);
+	caldav_close(caldavdb);
+	if (r) return r;
+    }
+
+    alarmdb = caldav_alarm_open();
+    if (alarmdb) {
+	int r = caldav_alarm_delmbox(alarmdb, mailbox->name);
+	caldav_alarm_close(alarmdb);
+	if (r) return r;
+    }
+
+    return 0;
+}
+
+static int mailbox_delete_carddav(struct mailbox *mailbox)
+{
+    struct carddav_db *carddavdb = NULL;
+
+    carddavdb = carddav_open_mailbox(mailbox, 0);
+    if (carddavdb) {
+	int r = carddav_delmbox(carddavdb, mailbox->name, 0);
+	carddav_close(carddavdb);
+	if (r) return r;
+    }
+
+    return 0;
+}
+
+static int mailbox_delete_dav(struct mailbox *mailbox)
+{
+    if (mailbox->mbtype & MBTYPE_ADDRESSBOOK)
+	return mailbox_delete_carddav(mailbox);
+    if (mailbox->mbtype & MBTYPE_CALENDAR)
+	return mailbox_delete_caldav(mailbox);
+    return 0;
+}
+
 /*
  * Delete and close the mailbox 'mailbox'.  Closes 'mailbox' whether
  * or not the deletion was successful.  Requires a locked mailbox.
@@ -4544,6 +4589,9 @@ EXPORTED int mailbox_delete(struct mailbox **mailboxptr)
     int r;
 
     r = mailbox_delete_conversations(mailbox);
+    if (r) return r;
+
+    r = mailbox_delete_dav(mailbox);
     if (r) return r;
 
     return mailbox_delete_internal(mailboxptr);

@@ -101,6 +101,9 @@ int caldav_alarm_delete_user(struct caldav_alarm_db *alarmdb, const char *userid
 /* fill alarmdata with data for next alarm of given type for given entry */
 int caldav_alarm_prepare(icalcomponent *ical, struct caldav_alarm_data *alarmdata, enum caldav_alarm_action action, icaltimetype after);
 
+/* delete entire mailbox's alarms */
+int caldav_alarm_delmbox(struct caldav_alarm_db *alarmdb, const char *mboxname);
+
 /* clean up alarmdata after prepare */
 void caldav_alarm_fini(struct caldav_alarm_data *alarmdata);
 
