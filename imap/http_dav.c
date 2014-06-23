@@ -3754,7 +3754,7 @@ int meth_lock(struct transaction_t *txn, void *params)
     root = xmlNewChild(root, NULL, BAD_CAST "lockdiscovery", NULL);
     xml_add_lockdisc(root, txn->req_tgt.path, (struct dav_data *) ddata);
 
-    lparams->davdb.write_resource(davdb, ddata, 1);
+    lparams->davdb.write_resourceLOCKONLY(davdb, ddata, 1);
 
     txn->resp_body.lock = ddata->lock_token;
 
@@ -5863,11 +5863,11 @@ int meth_unlock(struct transaction_t *txn, void *params)
 	ddata->lock_ownerid = NULL;
 	ddata->lock_expire = 0;
 
-	lparams->davdb.write_resource(davdb, ddata, 1);
+	lparams->davdb.write_resourceLOCKONLY(davdb, ddata, 1);
     }
     else {
 	/* Unmapped URL - Treat as lock-null and delete mapping entry */
-	lparams->davdb.delete_resource(davdb, ddata->rowid, 1);
+	lparams->davdb.delete_resourceLOCKONLY(davdb, ddata->rowid, 1);
     }
 
   done:

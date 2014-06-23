@@ -374,9 +374,11 @@ struct davdb_params {
     db_close_proc_t close_db;		/* close DAV DB for a given mailbox */
     db_lookup_proc_t lookup_resource;	/* lookup a specific resource */
     db_foreach_proc_t foreach_resource;	/* process all resources in a mailbox */
-    db_write_proc_t write_resource;	/* write a specific resource */
-    db_delete_proc_t delete_resource;	/* delete a specific resource */
-    db_delmbox_proc_t delete_mbox;	/* delete all resources in mailbox */
+    /* XXX - convert these to lock management only.  For everything else,
+     * we need to go via mailbox.c for replication support */
+    db_write_proc_t write_resourceLOCKONLY;	/* write a specific resource */
+    db_delete_proc_t delete_resourceLOCKONLY;	/* delete a specific resource */
+    db_delmbox_proc_t delete_mboxDONTUSE;	/* delete all resources in mailbox */
 };
 
 /*
