@@ -4089,6 +4089,7 @@ int propfind_by_collection(char *mboxname, int matchlen,
 	len = writebuf.len;
 
 	/* one day this will just be the final element of 'boxes' hopefully */
+	if (!parts.box) goto done;
 	p = strrchr(parts.box, '.');
 	if (!p) goto done;
 
