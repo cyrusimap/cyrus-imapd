@@ -574,6 +574,14 @@ static int get_search_return_opts(struct protstream *pin,
 
     } while (c == ' ');
 
+    /* rfc4731:
+     * If the list of result options is empty, that requests the server to
+     * return an ESEARCH response instead of the SEARCH response.  This is
+     * equivalent to "(ALL)".
+     */
+    if (!searchargs->returnopts)
+	searchargs->returnopts = SEARCH_RETURN_ALL;
+
     if (c != ')') {
 	prot_printf(pout,
 		    "%s BAD Missing close parenthesis in Search\r\n",
