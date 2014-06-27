@@ -3204,13 +3204,20 @@ int meth_delete(struct transaction_t *txn, void *params)
 
 	mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
 
-	/* XXX - delayed delete? */
-	r = mboxlist_deletemailbox(txn->req_tgt.mboxname,
-				   httpd_userisadmin || httpd_userisproxyadmin,
-				   httpd_userid, httpd_authstate, mboxevent,
-				   /*checkack*/1, /*localonly*/0, /*force*/0);
+	if (mboxlist_delayed_delete_isenabled()) {
+	    r = mboxlist_delayed_deletemailbox(txn->req_tgt.mboxname,
+				       httpd_userisadmin || httpd_userisproxyadmin,
+				       httpd_userid, httpd_authstate, mboxevent,
+				       /*checkack*/1, /*force*/0);
+	}
+	else {
+	    r = mboxlist_deletemailbox(txn->req_tgt.mboxname,
+				       httpd_userisadmin || httpd_userisproxyadmin,
+				       httpd_userid, httpd_authstate, mboxevent,
+				       /*checkack*/1, /*localonly*/0, /*force*/0);
+	}
 	if (!r) dparams->davdb.delete_mbox(davdb, txn->req_tgt.mboxname, 0);
-	else if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
+	if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
 	else if (r == IMAP_MAILBOX_NONEXISTENT) ret = HTTP_NOT_FOUND;
 	else if (r) ret = HTTP_SERVER_ERROR;
 
