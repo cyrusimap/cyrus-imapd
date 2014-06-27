@@ -830,6 +830,7 @@ EXPORTED int index_check(struct index_state *state, int usinguid, int printuid)
 	    syslog(LOG_WARNING,
 		   "Mailbox %s has been (re)moved out from under client",
 		   state->mboxname);
+	    mailbox_close(&state->mailbox);
 	    fatal("Mailbox has been (re)moved", EC_IOERR);
 	}
 
