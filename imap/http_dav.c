@@ -2713,9 +2713,6 @@ int meth_acl(struct transaction_t *txn, void *params)
 					    BAD_CAST "read"))
 			    rights |= DACL_READ;
 			else if (!xmlStrcmp(priv->name,
-					    BAD_CAST "read-free-busy"))
-			    rights |= DACL_READFB;
-			else if (!xmlStrcmp(priv->name,
 					    BAD_CAST "write"))
 			    rights |= DACL_WRITE;
 			else if (!xmlStrcmp(priv->name,
@@ -2724,12 +2721,6 @@ int meth_acl(struct transaction_t *txn, void *params)
 			else if (!xmlStrcmp(priv->name,
 					    BAD_CAST "write-properties"))
 			    rights |= DACL_WRITEPROPS;
-			else if (!xmlStrcmp(priv->name,
-					    BAD_CAST "remove-resource"))
-			    rights |= DACL_RMRSRC;
-			else if (!xmlStrcmp(priv->name,
-					    BAD_CAST "remove-collection"))
-			    rights |= DACL_RMCOL;
 			else if (!xmlStrcmp(priv->name,
 					    BAD_CAST "bind"))
 			    rights |= DACL_BIND;
@@ -2749,6 +2740,18 @@ int meth_acl(struct transaction_t *txn, void *params)
 			    ret = HTTP_FORBIDDEN;
 			    goto done;
 			}
+			else {
+			    /* DAV:not-supported-privilege */
+			    txn->error.precond = DAV_SUPP_PRIV;
+			    ret = HTTP_FORBIDDEN;
+			    goto done;
+			}
+		    }
+		    else if (!xmlStrcmp(priv->ns->href,
+				   BAD_CAST XML_NS_CALDAV)) {
+			if (!xmlStrcmp(priv->name,
+				       BAD_CAST "read-free-busy"))
+			    rights |= DACL_READFB;
 			else {
 			    /* DAV:not-supported-privilege */
 			    txn->error.precond = DAV_SUPP_PRIV;
