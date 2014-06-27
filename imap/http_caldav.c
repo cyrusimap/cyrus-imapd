@@ -932,7 +932,7 @@ static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights)
 	    }
 	    break;
 	default:
-	    if (xmlStrcmp(priv->name, BAD_CAST "read-free-busy"))
+	    if (!xmlStrcmp(priv->name, BAD_CAST "read-free-busy"))
 		*rights |= DACL_READFB;
 	    else {
 		/* DAV:not-supported-privilege */
