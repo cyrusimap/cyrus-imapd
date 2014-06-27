@@ -7585,6 +7585,8 @@ int getsearchreturnopts(char *tag, struct searchargs *searchargs)
         return EOF;
     }
 
+    if (!searchargs->returnopts) searchargs->returnopts = SEARCH_RETURN_ALL;
+
     c = prot_getc(imapd_in);
 
     return c;
