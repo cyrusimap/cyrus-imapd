@@ -431,10 +431,15 @@ static void recur_cb(icalcomponent *comp, struct icaltime_span *span, void *rock
     struct recur_cb_data *rdata = (struct recur_cb_data *) rock;
     int is_date = icaltime_is_date(icalcomponent_get_dtstart(comp));
     icaltimezone *utc = icaltimezone_get_utc_timezone();
+
+    /* is_date true ensures that the time is set to 00:00:00, but
+     * we still want to use it as a full datetime later, so we
+     * clear the flag once we're done with it */
     struct icaltimetype start =
 	icaltime_from_timet_with_zone(span->start, is_date, utc);
     struct icaltimetype end =
 	icaltime_from_timet_with_zone(span->end, is_date, utc);
+    start.is_date = end.is_date = 0;
 
     int i;
     for (i = 0; i < rdata->ntriggers; i++) {
