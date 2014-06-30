@@ -2447,8 +2447,9 @@ static int propfind_calcompset(const xmlChar *name, xmlNsPtr ns,
 			       struct propstat propstat[],
 			       void *rock __attribute__((unused)))
 {
-    const char *prop_annot = ANNOT_NS "CALDAV:supported-calendar-component-set";
     struct buf attrib = BUF_INITIALIZER;
+    const char *prop_annot =
+	ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
     unsigned long types = 0;
     xmlNodePtr set, node;
     const struct cal_comp_t *comp;
@@ -2520,7 +2521,7 @@ static int proppatch_calcompset(xmlNodePtr prop, unsigned set,
 	if (!cur) {
 	    /* All component types are valid */
 	    const char *prop_annot =
-		ANNOT_NS "CALDAV:supported-calendar-component-set";
+		ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
 	    annotate_state_t *astate = NULL;
 
 	    buf_reset(&pctx->buf);
@@ -2674,8 +2675,9 @@ static int propfind_caltransp(const xmlChar *name, xmlNsPtr ns,
 			      struct propstat propstat[],
 			      void *rock __attribute__((unused)))
 {
-    const char *prop_annot = ANNOT_NS "CALDAV:schedule-calendar-transp";
     struct buf attrib = BUF_INITIALIZER;
+    const char *prop_annot =
+	ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
     xmlNodePtr node;
     int r = 0;
 
@@ -2707,9 +2709,8 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
 
     if (pctx->req_tgt->collection && !pctx->req_tgt->resource) {
 	const char *prop_annot =
-	    ANNOT_NS "CALDAV:schedule-calendar-transp";
+	    ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
 	annotate_state_t *astate = NULL;
-
 	buf_reset(&pctx->buf);
 
 	if (set) {
@@ -3244,7 +3245,7 @@ static int busytime_by_collection(char *mboxname, int matchlen,
 	/* Check if the collection is marked as transparent */
 	struct buf attrib = BUF_INITIALIZER;
 	const char *prop_annot =
-	    ANNOT_NS "CALDAV:supported-calendar-component-set";
+	    ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
 
 	if (!annotatemore_lookup(mboxname, prop_annot, /* shared */ NULL, &attrib)) {
 	    if (!strcmp(buf_cstring(&attrib), "transparent")) {
@@ -3480,7 +3481,8 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     unsigned mykind = 0;
     char *header;
     const char *organizer = NULL;
-    const char *prop_annot = ANNOT_NS "CALDAV:supported-calendar-component-set";
+    const char *prop_annot =
+	ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
     struct buf attrib = BUF_INITIALIZER;
     struct buf headbuf = BUF_INITIALIZER;
     struct index_record oldrecord;
