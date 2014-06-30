@@ -4403,7 +4403,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 		mboxname_free_parts(&parts);
 	    }
 	    r = mboxlist_findall(NULL,  /* internal namespace */
-				 base, 1, httpd_userid,
+				 base, 1, NULL,
 				 httpd_authstate, propfind_by_collection, &fctx);
 	    free(base);
 	}
