@@ -118,6 +118,9 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
 static int propfind_reportset(const xmlChar *name, xmlNsPtr ns,
 			      struct propfind_ctx *fctx, xmlNodePtr resp,
 			      struct propstat propstat[], void *rock);
+static int propfind_alturiset(const xmlChar *name, xmlNsPtr ns,
+			      struct propfind_ctx *fctx, xmlNodePtr resp,
+			      struct propstat propstat[], void *rock);
 static int propfind_principalurl(const xmlChar *name, xmlNsPtr ns,
 				 struct propfind_ctx *fctx, xmlNodePtr resp,
 				 struct propstat propstat[], void *rock);
@@ -159,7 +162,8 @@ static const struct prop_entry dav_props[] = {
       propfind_reportset, NULL, NULL },
 
     /* WebDAV ACL (RFC 3744) properties */
-    { "alternate-URI-set", NS_DAV, 0, NULL, NULL, NULL },
+    { "alternate-URI-set", NS_DAV, PROP_COLLECTION,
+      propfind_alturiset, NULL, NULL },
     { "principal-URL", NS_DAV, PROP_COLLECTION,
       propfind_principalurl, NULL, NULL },
     { "group-member-set", NS_DAV, 0, NULL, NULL, NULL },
@@ -1096,7 +1100,8 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
     xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
 				   &propstat[PROPSTAT_OK], name, ns, NULL, 0);
 
-    xmlNewChild(node, NULL, BAD_CAST "collection", NULL);
+    if (fctx->req_tgt->user)
+	xmlNewChild(node, NULL, BAD_CAST "principal", NULL);
 
     return 0;
 }
@@ -1196,7 +1201,21 @@ static int propfind_reportset(const xmlChar *name, xmlNsPtr ns,
 }
 
 
-/* Callback to fetch DAV:principalurl */
+/* Callback to fetch DAV:alternate-URI-set */
+static int propfind_alturiset(const xmlChar *name, xmlNsPtr ns,
+			      struct propfind_ctx *fctx,
+			      xmlNodePtr resp __attribute__((unused)),
+			      struct propstat propstat[],
+			      void *rock __attribute__((unused)))
+{
+    xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
+		 &propstat[PROPSTAT_OK], name, ns, NULL, 0);
+
+    return 0;
+}
+
+
+/* Callback to fetch DAV:principal-URL */
 static int propfind_principalurl(const xmlChar *name, xmlNsPtr ns,
 				 struct propfind_ctx *fctx,
 				 xmlNodePtr resp __attribute__((unused)),
