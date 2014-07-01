@@ -192,7 +192,12 @@ icalproperty_get_iana_parameter_by_name(icalproperty *prop, const char *name)
 
 
 struct busytime {
-    struct icalperiodtype *busy;
+    struct icalperiodtype per;
+    icalparameter_fbtype type;
+};
+
+struct busytime_array {
+    struct busytime *busy;
     unsigned len;
     unsigned alloc;
 };
@@ -201,9 +206,9 @@ struct calquery_filter {
     unsigned comp;
     struct icaltimetype start;
     struct icaltimetype end;
-    unsigned check_transp;
-    unsigned save_busytime;
-    struct busytime busytime;    	/* array of found busytime periods */
+    unsigned busytime_query;
+    unsigned check_cal_transp;
+    struct busytime_array busytime;    	/* array of found busytime periods */
 };
 
 static unsigned config_allowsched = IMAP_ENUM_CALDAV_ALLOWSCHEDULING_OFF;
@@ -1938,32 +1943,55 @@ static int caldav_put(struct transaction_t *txn,
 static void add_busytime(icalcomponent *comp, struct icaltime_span *span,
 			 void *rock)
 {
-    struct busytime *busytime = (struct busytime *) rock;
+    struct busytime_array *busytime = (struct busytime_array *) rock;
     int is_date = icaltime_is_date(icalcomponent_get_dtstart(comp));
     icaltimezone *utc = icaltimezone_get_utc_timezone();
-    struct icalperiodtype *newp;
+    struct busytime *newb;
 
     /* Grow the array, if necessary */
     if (busytime->len == busytime->alloc) {
 	busytime->alloc += 100;  /* XXX  arbitrary */
 	busytime->busy = xrealloc(busytime->busy,
 				  busytime->alloc *
-				  sizeof(struct icalperiodtype));
+				  sizeof(struct busytime));
     }
 
     /* Add new busytime */
-    newp = &busytime->busy[busytime->len++];
-    newp->start = icaltime_from_timet_with_zone(span->start, is_date, utc);
-    newp->start.is_date = 0;  /* MUST be DATE-TIME */
+    newb = &busytime->busy[busytime->len++];
+    newb->per.start = icaltime_from_timet_with_zone(span->start, is_date, utc);
+    newb->per.start.is_date = 0;  /* MUST be DATE-TIME */
     if (is_date && icaltime_is_null_time(icalcomponent_get_dtend(comp))) {
-	newp->end = icaltime_null_time();
-	newp->duration = icaldurationtype_from_int(60*60*24);  /* P1D */
+	newb->per.end = icaltime_null_time();
+	newb->per.duration = icaldurationtype_from_int(60*60*24);  /* P1D */
     }
     else {
-	newp->end = icaltime_from_timet_with_zone(span->end, is_date, utc);
-	newp->end.is_date = 0;  /* MUST be DATE-TIME */
-	newp->duration = icaldurationtype_null_duration();
+	newb->per.end = icaltime_from_timet_with_zone(span->end, is_date, utc);
+	newb->per.end.is_date = 0;  /* MUST be DATE-TIME */
+	newb->per.duration = icaldurationtype_null_duration();
     }
+
+    /* Set FBTYPE */
+    newb->type = (icalcomponent_get_status(comp) == ICAL_STATUS_TENTATIVE) ?
+	ICAL_FBTYPE_BUSYTENTATIVE : ICAL_FBTYPE_BUSY;
+}
+
+
+static int is_busytime(struct calquery_filter *calfilter, icalcomponent *comp)
+{
+    if (calfilter->busytime_query) {
+	/* Check TRANSP and STATUS per RFC 4791, section 7.10 */
+	const icalproperty *prop;
+
+	/* Skip transparent events */
+	prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
+	if (prop && icalproperty_get_transp(prop) == ICAL_TRANSP_TRANSPARENT)
+	    return 0;
+
+	/* Skip cancelled events */
+	if (icalcomponent_get_status(comp) == ICAL_STATUS_CANCELLED) return 0;
+    }
+
+    return 1;
 }
 
 
@@ -1982,9 +2010,6 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
 	if (!(cdata->comp_type & calfilter->comp)) return 0;
     }
 
-    /* Skip transparent resources */
-    if (calfilter->check_transp && cdata->transp) return 0;
-
     if (!icaltime_is_null_time(calfilter->start)) {
 	/* Perform CALDAV:time-range filtering */
 	struct icaltimetype dtstart = icaltime_from_string(cdata->dtstart);
@@ -1998,7 +2023,7 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
 	    /* Component is later than range */
 	    return 0;
 	}
-	else if (!cdata->recurring && !calfilter->save_busytime) {
+	else if (!cdata->recurring && !calfilter->busytime_query) {
 	    /* Component is within range, non-recurring,
 	       and we don't need to save busytime */
 	    return 1;
@@ -2008,7 +2033,7 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
 	     * Need to mmap() and parse iCalendar object
 	     * to perform complete check of each recurrence.
 	     */
-	    struct busytime *busytime = &calfilter->busytime;
+	    struct busytime_array *busytime = &calfilter->busytime;
 	    icalcomponent *ical, *comp;
 	    icalcomponent_kind kind;
 	    icaltimezone *utc = icaltimezone_get_utc_timezone();
@@ -2039,10 +2064,13 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
 	    /* Mark start of where recurrences will be added */
 	    firstr = busytime->len;
 
-	    /* Add all recurring busytime in specified time-range */
-	    icalcomponent_foreach_recurrence(comp,
-					     calfilter->start, calfilter->end,
-					     add_busytime, busytime);
+	    if (is_busytime(calfilter, comp)) {
+		/* Add all recurring busytime in specified time-range */
+		icalcomponent_foreach_recurrence(comp,
+						 calfilter->start,
+						 calfilter->end,
+						 add_busytime, busytime);
+	    }
 
 	    /* Mark end of where recurrences were added */
 	    lastr = busytime->len;
@@ -2080,24 +2108,28 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
 		recurid =
 		    icaltime_convert_to_zone(recurid,
 					     icaltimezone_get_utc_timezone());
+		recurid.is_date = 0;  /* make DATE-TIME for comparison */
 
 		/* Check if this overridden instance is in our array */
 		/* XXX  Should we replace this linear search with bsearch() */
 		for (n = firstr; n < lastr; n++) {
 		    if (!icaltime_compare(recurid,
-					  busytime->busy[n].start)) {
+					  busytime->busy[n].per.start)) {
 			/* Remove the instance
 			   by sliding all future instances into its place */
 			/* XXX  Doesn't handle the RANGE=THISANDFUTURE param */
 			busytime->len--;
 			memmove(&busytime->busy[n], &busytime->busy[n+1],
-				sizeof(struct icalperiodtype) *
+				sizeof(struct busytime) *
 				(busytime->len - n));
 			lastr--;
 
 			break;
 		    }
 		}
+
+		/* If override component isn't busytime, skip it */
+		if (!is_busytime(calfilter, comp)) continue;
 
 		/* Check if the new instance is in our time-range */
 		recurspan = icaltime_span_new(icalcomponent_get_dtstart(comp),
@@ -2111,7 +2143,7 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
 
 	    if (busytime->len == firstr) match = 0;
 
-	    if (!calfilter->save_busytime) busytime->len = 0;
+	    if (!calfilter->busytime_query) busytime->len = 0;
 
 	    icalcomponent_free(ical);
 	}
@@ -2433,7 +2465,8 @@ static int propfind_calcompset(const xmlChar *name, xmlNsPtr ns,
 			       struct propstat propstat[],
 			       void *rock __attribute__((unused)))
 {
-    const char *prop_annot = ANNOT_NS "CALDAV:supported-calendar-component-set";
+    const char *prop_annot =
+	ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
     struct annotation_data attrib;
     unsigned long types = 0;
     xmlNodePtr set, node;
@@ -2504,7 +2537,7 @@ static int proppatch_calcompset(xmlNodePtr prop, unsigned set,
 	if (!cur) {
 	    /* All component types are valid */
 	    const char *prop_annot =
-		ANNOT_NS "CALDAV:supported-calendar-component-set";
+		ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
 
 	    buf_reset(&pctx->buf);
 	    buf_printf(&pctx->buf, "%lu", types);
@@ -2657,7 +2690,8 @@ static int propfind_caltransp(const xmlChar *name, xmlNsPtr ns,
 			      struct propstat propstat[],
 			      void *rock __attribute__((unused)))
 {
-    const char *prop_annot = ANNOT_NS "CALDAV:schedule-calendar-transp";
+    const char *prop_annot =
+	ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
     struct annotation_data attrib;
     const char *value = NULL;
     xmlNodePtr node;
@@ -2689,7 +2723,7 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
 {
     if (pctx->req_tgt->collection && !pctx->req_tgt->resource) {
 	const char *prop_annot =
-	    ANNOT_NS "CALDAV:schedule-calendar-transp";
+	    ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
 	const char *transp = "";
 
 	if (set) {
@@ -3026,7 +3060,6 @@ static int report_cal_query(struct transaction_t *txn,
     struct calquery_filter calfilter;
 
     memset(&calfilter, 0, sizeof(struct calquery_filter));
-    calfilter.save_busytime = 0;
 
     fctx->filter_crit = &calfilter;
     fctx->open_db = (db_open_proc_t) &my_caldav_open;
@@ -3202,11 +3235,11 @@ static int busytime_by_collection(char *mboxname, int matchlen,
     struct calquery_filter *calfilter =
 	(struct calquery_filter *) fctx->filter_crit;
 
-    if (calfilter && calfilter->check_transp) {
+    if (calfilter && calfilter->check_cal_transp) {
 	/* Check if the collection is marked as transparent */
 	struct annotation_data attrib;
 	const char *prop_annot =
-	    ANNOT_NS "CALDAV:schedule-calendar-transp";
+	    ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
 
 	if (!annotatemore_lookup(mboxname, prop_annot, /* shared */ "", &attrib)
 	    && attrib.value && !strcmp(attrib.value, "transparent")) return 0;
@@ -3219,10 +3252,13 @@ static int busytime_by_collection(char *mboxname, int matchlen,
 /* Compare start times of busytime period -- used for sorting */
 static int compare_busytime(const void *b1, const void *b2)
 {
-    struct icalperiodtype *a = (struct icalperiodtype *) b1;
-    struct icalperiodtype *b = (struct icalperiodtype *) b2;
+    struct busytime *a = (struct busytime *) b1;
+    struct busytime *b = (struct busytime *) b2;
 
-    return icaltime_compare(a->start, b->start);
+    int r = icaltime_compare(a->per.start, b->per.start);
+
+    if (r == 0) r = -(a->type - b->type);  /* TENTATIVE < BUSY */
+    return r;
 }
 
 
@@ -3237,7 +3273,7 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
 {
     struct calquery_filter *calfilter =
 	(struct calquery_filter *) fctx->filter_crit;
-    struct busytime *busytime = &calfilter->busytime;
+    struct busytime_array *busytime = &calfilter->busytime;
     icalcomponent *cal = NULL;
 
     fctx->open_db = (db_open_proc_t) &my_caldav_open;
@@ -3304,30 +3340,34 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
 	icalcomponent_add_component(cal, fb);
 
 	/* Sort busytime periods by start time */
-	qsort(busytime->busy, busytime->len, sizeof(struct icalperiodtype),
+	qsort(busytime->busy, busytime->len, sizeof(struct busytime),
 	      compare_busytime);
 
 	/* Add busytime periods to VFREEBUSY component, coalescing as needed */
 	for (n = 0; n < busytime->len; n++) {
 	    if ((n+1 < busytime->len) &&
-		icaltime_compare(busytime->busy[n].end,
-				 busytime->busy[n+1].start) >= 0) {
-		/* Periods overlap -- coalesce into next busytime */
-		memcpy(&busytime->busy[n+1].start, &busytime->busy[n].start,
+		busytime->busy[n+1].type == busytime->busy[n].type &&
+		icaltime_compare(busytime->busy[n].per.end,
+				 busytime->busy[n+1].per.start) >= 0) {
+		/* Periods (same type) overlap -- coalesce into next busytime */
+		memcpy(&busytime->busy[n+1].per.start,
+		       &busytime->busy[n].per.start,
 		       sizeof(struct icaltimetype));
-		if (icaltime_compare(busytime->busy[n].end,
-				     busytime->busy[n+1].end) > 0) {
-		    memcpy(&busytime->busy[n+1].end, &busytime->busy[n].end,
+		if (icaltime_compare(busytime->busy[n].per.end,
+				     busytime->busy[n+1].per.end) > 0) {
+		    memcpy(&busytime->busy[n+1].per.end,
+			   &busytime->busy[n].per.end,
 			   sizeof(struct icaltimetype));
 		}
 	    }
 	    else {
 		icalproperty *busy =
-		    icalproperty_new_freebusy(busytime->busy[n]);
+		    icalproperty_new_freebusy(busytime->busy[n].per);
 
-		/* Add FBTYPE based on STATUS;TENTATIVE or VAVAILABILITY */
-//		icalproperty_add_parameter(busy,
-//					   icalparameter_new_fbtype(ICAL_FBTYPE_BUSY));
+		/* Add FBTYPE */
+		icalproperty_add_parameter(
+		    busy,
+		    icalparameter_new_fbtype(busytime->busy[n].type));
 
 		icalcomponent_add_property(fb, busy);
 	    }
@@ -3363,7 +3403,7 @@ static int report_fb_query(struct transaction_t *txn,
     calfilter.comp = CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY;
     calfilter.start = icaltime_from_timet_with_zone(INT_MIN, 0, utc);
     calfilter.end = icaltime_from_timet_with_zone(INT_MAX, 0, utc);
-    calfilter.save_busytime = 1;
+    calfilter.busytime_query = 1;
     fctx->filter = apply_calfilter;
     fctx->filter_crit = &calfilter;
 
@@ -3430,7 +3470,8 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     unsigned mykind = 0;
     char *header;
     const char *organizer = NULL;
-    const char *prop_annot = ANNOT_NS "CALDAV:supported-calendar-component-set";
+    const char *prop_annot =
+	ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
     struct annotation_data attrib;
     struct caldav_data *cdata;
     FILE *f = NULL;
@@ -4089,8 +4130,8 @@ int sched_busytime_query(struct transaction_t *txn,
     calfilter.comp = CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY;
     calfilter.start = icalcomponent_get_dtstart(comp);
     calfilter.end = icalcomponent_get_dtend(comp);
-    calfilter.check_transp = 1;
-    calfilter.save_busytime = 1;
+    calfilter.busytime_query = 1;
+    calfilter.check_cal_transp = 1;
 
     memset(&fctx, 0, sizeof(struct propfind_ctx));
     fctx.req_tgt = &txn->req_tgt;
