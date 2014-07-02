@@ -743,8 +743,7 @@ struct allprop_rock {
 
 /* Add a response tree to 'root' for the specified href and 
    either error code or property list */
-static int xml_add_response(struct propfind_ctx *fctx, long code,
-			    unsigned precond)
+int xml_add_response(struct propfind_ctx *fctx, long code, unsigned precond)
 {
     xmlNodePtr resp;
 
