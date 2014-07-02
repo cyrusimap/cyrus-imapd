@@ -905,13 +905,9 @@ static int report_card_multiget(struct transaction_t *txn,
 				xmlNodePtr inroot, struct propfind_ctx *fctx)
 {
     int r, ret = 0;
-    struct request_target_t tgt;
     struct mailbox *mailbox = NULL;
     xmlNodePtr node;
     struct buf uri = BUF_INITIALIZER;
-
-    memset(&tgt, 0, sizeof(struct request_target_t));
-    tgt.namespace = URL_NS_CALENDAR;
 
     /* Get props for each href */
     for (node = inroot->children; node; node = node->next) {
@@ -919,6 +915,7 @@ static int report_card_multiget(struct transaction_t *txn,
 	    !xmlStrcmp(node->name, BAD_CAST "href")) {
 	    xmlChar *href = xmlNodeListGetString(inroot->doc, node->children, 1);
 	    int len = xmlStrlen(href);
+	    struct request_target_t tgt;
 	    struct carddav_data *cdata;
 
 	    buf_ensure(&uri, len);
@@ -926,6 +923,9 @@ static int report_card_multiget(struct transaction_t *txn,
 	    xmlFree(href);
 
 	    /* Parse the path */
+	    memset(&tgt, 0, sizeof(struct request_target_t));
+	    tgt.namespace = URL_NS_CALENDAR;
+
 	    if ((r = carddav_parse_path(uri.s, &tgt, &fctx->err->desc))) {
 		ret = r;
 		goto done;
@@ -939,7 +939,7 @@ static int report_card_multiget(struct transaction_t *txn,
 
 		/* Open mailbox for reading */
 		r = mailbox_open_irl(tgt.mboxname, &mailbox);
-		if (r) {
+		if (r && r != IMAP_MAILBOX_NONEXISTENT) {
 		    syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
 			   tgt.mboxname, error_message(r));
 		    txn->error.desc = error_message(r);
@@ -948,6 +948,12 @@ static int report_card_multiget(struct transaction_t *txn,
 		}
 
 		fctx->mailbox = mailbox;
+	    }
+
+	    if (!fctx->mailbox || !tgt.resource) {
+		/* Add response for missing target */
+		xml_add_response(fctx, HTTP_NOT_FOUND, 0);
+		continue;
 	    }
 
 	    /* Open the DAV DB corresponding to the mailbox */
