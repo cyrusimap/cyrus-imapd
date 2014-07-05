@@ -1965,6 +1965,17 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 	allow_hdr("Allow", txn->req_tgt.allow);
 	goto authorized;
 
+    case HTTP_BAD_MEDIATYPE:
+	if (txn->req_body.te == TE_UNKNOWN) {
+	    /* Construct Allow-Encoding header for 415 response */
+#ifdef HAVE_ZLIB
+	    prot_puts(httpd_out, "Allow-Encoding: gzip, deflate\r\n");
+#else
+	    prot_puts(httpd_out, "Allow-Encoding: identity\r\n");
+#endif
+	}
+	goto authorized;
+
     case HTTP_UNAUTHORIZED:
 	/* Authentication Challenges */
 	if (!auth_chal->scheme) {

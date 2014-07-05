@@ -74,7 +74,8 @@ enum {
     TE_NONE =		0,
     TE_DEFLATE =	(1<<0),	/* Implies TE_CHUNKED as final coding */
     TE_GZIP =		(1<<1),	/* Implies TE_CHUNKED as final coding */
-    TE_CHUNKED =	(1<<2)  /* MUST be last */
+    TE_CHUNKED =	(1<<2), /* MUST be last */
+    TE_UNKNOWN =	0xff
 };
 
 /* http_read_body() flags */
