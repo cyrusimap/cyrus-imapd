@@ -87,7 +87,7 @@ int token_lookup(char *str, int len __attribute__((unused)))
   if (strcmp(str,"quota")==0) return RESP_CODE_QUOTA;
   if (strcmp(str,"transition-needed")==0) return RESP_CODE_TRANSITION_NEEDED;
   if (strcmp(str,"trylater")==0) return RESP_CODE_TRYLATER;
-  if (strcmp(str,"nonexistant")==0) return RESP_CODE_NONEXISTANT;
+  if (strcmp(str,"nonexistent")==0) return RESP_CODE_NONEXISTENT;
   if (strcmp(str,"alreadyexists")==0) return RESP_CODE_ALREADYEXISTS;
   if (strcmp(str,"warning")==0) return RESP_CODE_WARNINGS;
   if (strcmp(str,"tag")==0) return RESP_CODE_TAG;
