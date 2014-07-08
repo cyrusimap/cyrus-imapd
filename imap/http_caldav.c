@@ -1086,7 +1086,7 @@ static const char *begin_icalendar(struct buf *buf)
 {
     /* Begin iCalendar stream */
     buf_setcstr(buf, "BEGIN:VCALENDAR\r\n");
-    buf_appendcstr(buf, ical_prodid);
+    buf_printf(buf, "PRODID:%s\r\n", ical_prodid);
     buf_appendcstr(buf, "VERSION:2.0\r\n");
 
     return "";
