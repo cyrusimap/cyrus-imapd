@@ -215,7 +215,8 @@ static int login(struct backend *s, const char *userid,
 	if (scheme) {
 	    prot_printf(s->out, "Authorization: %s %s\r\n", 
 			scheme->name, clientout ? clientout : "");
-	    if (userid) prot_printf(s->out, "Authorize-As: %s\r\n", userid);
+	    prot_printf(s->out, "Authorize-As: %s\r\n",
+			userid ? userid : "anonymous");
 	}
 	else {
 	    prot_printf(s->out, "Upgrade: %s\r\n", TLS_VERSION);
@@ -435,7 +436,7 @@ static int ping(struct backend *s, const char *userid)
     prot_puts(s->out, "OPTIONS * HTTP/1.1\r\n");
     prot_printf(s->out, "Host: %s\r\n", s->hostname);
     prot_printf(s->out, "User-Agent: %s\r\n", buf_cstring(&serverinfo));
-    if (userid) prot_printf(s->out, "Authorize-As: %s\r\n", userid);
+    prot_printf(s->out, "Authorize-As: %s\r\n", userid ? userid : "anonymous");
     prot_puts(s->out, "\r\n");
     prot_flush(s->out);
 

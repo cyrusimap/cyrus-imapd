@@ -70,6 +70,11 @@
     "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" " \
     "\"http://www.w3.org/TR/html4/loose.dtd\">"
 
+/* Macro to return proper response code when user privileges are insufficient */
+#define HTTP_NO_PRIVS \
+    (httpd_userid && !is_userid_anonymous(httpd_userid) ? \
+     HTTP_FORBIDDEN : HTTP_UNAUTHORIZED)
+
 /* Macro to access query part of URI */
 #if LIBXML_VERSION >= 20700
 #define URI_QUERY(uri) uri->query_raw

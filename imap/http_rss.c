@@ -145,9 +145,9 @@ static void rss_init(struct buf *serverinfo __attribute__((unused)))
 static int meth_get(struct transaction_t *txn,
 		    void *params __attribute__((unused)))
 {
-    int ret = 0, r;
+    int ret = 0, r, rights;
     struct strlist *param;
-    char *server, *section = NULL;
+    char *server, *acl, *section = NULL;
     uint32_t uid = 0;
     struct mailbox *mailbox = NULL;
 
@@ -165,7 +165,7 @@ static int meth_get(struct transaction_t *txn,
     if (!is_feed(txn->req_tgt.mboxname)) return HTTP_NOT_FOUND;
 
     /* Locate the mailbox */
-    if ((r = http_mlookup(txn->req_tgt.mboxname, &server, NULL, NULL))) {
+    if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
 	syslog(LOG_ERR, "mlookup(%s) failed: %s",
 	       txn->req_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
@@ -176,6 +176,10 @@ static int meth_get(struct transaction_t *txn,
 	default: return HTTP_SERVER_ERROR;
 	}
     }
+
+    /* Check ACL for current user */
+    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
+    if (!(rights & ACL_READ)) return HTTP_NO_PRIVS;
 
     if (server) {
 	/* Remote mailbox */
