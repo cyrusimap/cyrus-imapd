@@ -1120,7 +1120,7 @@ static int dump_calendar(struct transaction_t *txn, int rights)
 	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
 	txn->error.rights = DACL_READ;
-	return HTTP_FORBIDDEN;
+	return HTTP_NO_PRIVS;
     }
 
     /* Check requested MIME type:
@@ -1342,7 +1342,7 @@ static int list_calendars(struct transaction_t *txn, int rights)
 	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
 	txn->error.rights = DACL_READ;
-	return HTTP_FORBIDDEN;
+	return HTTP_NO_PRIVS;
     }
 
     /* stat() mailboxes.db for Last-Modified and ETag */
@@ -1438,7 +1438,7 @@ static int list_actions(struct transaction_t *txn, int rights)
 	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
 	txn->error.rights = DACL_READ;
-	return HTTP_FORBIDDEN;
+	return HTTP_NO_PRIVS;
     }
 
     sprintf(etag, "%ld", compile_time);
@@ -1584,7 +1584,7 @@ static int freebusy_url(struct transaction_t *txn, int rights)
 	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
 	txn->error.rights = DACL_READFB;
-	return HTTP_FORBIDDEN;
+	return HTTP_NO_PRIVS;
     }
 
     /* Check/find 'format' */
@@ -1903,7 +1903,7 @@ static int caldav_post(struct transaction_t *txn)
 		txn->error.precond = DAV_NEED_PRIVS;
 		txn->error.resource = txn->req_tgt.path;
 		txn->error.rights = DACL_SCHEDFB;
-		ret = HTTP_FORBIDDEN;
+		ret = HTTP_NO_PRIVS;
 	    }
 	    else ret = sched_busytime_query(txn, mime, ical);
 	else {

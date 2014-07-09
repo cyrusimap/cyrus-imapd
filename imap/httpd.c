@@ -1214,7 +1214,7 @@ static void cmdloop(void)
 		syslog(LOG_DEBUG, "auth failed - reinit");
 		reset_saslconn(&httpd_saslconn);
 		txn.auth_chal.scheme = NULL;
-		r = SASL_FAIL;
+		ret = HTTP_UNAUTHORIZED;
 	    }
 	}
 	else if (!httpd_userid && txn.auth_chal.scheme) {
@@ -1236,6 +1236,7 @@ static void cmdloop(void)
 		syslog(LOG_DEBUG, "proxy authz failed - reinit");
 		reset_saslconn(&httpd_saslconn);
 		txn.auth_chal.scheme = NULL;
+		ret = HTTP_UNAUTHORIZED;
 	    }
 	    else {
 		httpd_userid = xstrdup(authzid);
@@ -1244,59 +1245,21 @@ static void cmdloop(void)
 	}
 
 	/* Request authentication, if necessary */
-	if (!httpd_userid &&
-	    (r || (namespace->need_auth && txn.meth != METH_OPTIONS))) {
-	  need_auth:
-	    /* User must authenticate */
+	switch (txn.meth) {
+	case METH_GET:
+	case METH_HEAD:
+	case METH_OPTIONS:
+	    /* Let method processing function decide if auth is needed */
+	    break;
 
-	    if (httpd_tls_required) {
-		/* We only support TLS+Basic, so tell client to use TLS */
-
-		/* Check which response is required */
-		if ((hdr = spool_getheader(txn.req_hdrs, "Upgrade")) &&
-		    !strncmp(hdr[0], TLS_VERSION, strcspn(hdr[0], " ,"))) {
-		    /* Client (Murder proxy) supports RFC 2817 (TLS upgrade) */
-
-		    response_header(HTTP_UPGRADE, &txn);
-		}
-		else {
-		    /* All other clients use RFC 2818 (HTTPS) */
-		    const char *path = txn.req_uri->path;
-		    struct buf *html = &txn.resp_body.payload;
-
-		    /* Create https URL */
-		    hdr = spool_getheader(txn.req_hdrs, "Host");
-		    buf_printf(&txn.buf, "https://%s", hdr[0]);
-		    if (strcmp(path, "*")) {
-			buf_appendcstr(&txn.buf, path);
-			if (query) buf_printf(&txn.buf, "?%s", query);
-		    }
-
-		    txn.location = buf_cstring(&txn.buf);
-
-		    /* Create HTML body */
-		    buf_reset(html);
-		    buf_printf(html, tls_message,
-			       buf_cstring(&txn.buf), buf_cstring(&txn.buf));
-
-		    /* Output our HTML response */
-		    txn.resp_body.type = "text/html; charset=utf-8";
-		    write_body(HTTP_MOVED, &txn,
-			       buf_cstring(html), buf_len(html));
-		}
-	    }
-	    else {
-		/* Tell client to authenticate */
+	default:
+	    if (!httpd_userid && namespace->need_auth) {
+		/* Authentication required */
 		ret = HTTP_UNAUTHORIZED;
-		if (r == SASL_CONTINUE)
-		    txn.error.desc = "Continue authentication exchange";
-		else if (r) txn.error.desc = "Authentication failed";
-		else txn.error.desc =
-			 "Must authenticate to access the specified target";
 	    }
-
-	    goto done;
 	}
+
+	if (ret) goto need_auth;
 
 	/* Check if this is a Cross-Origin Resource Sharing request */
 	if (allow_cors && (hdr = spool_getheader(txn.req_hdrs, "Origin"))) {
@@ -1405,7 +1368,57 @@ static void cmdloop(void)
 
 	/* Process the requested method */
 	ret = (*meth_t->proc)(&txn, meth_t->params);
-	if (ret == HTTP_UNAUTHORIZED) goto need_auth;
+
+      need_auth:
+	if (ret == HTTP_UNAUTHORIZED) {
+	    /* User must authenticate */
+
+	    if (httpd_tls_required) {
+		/* We only support TLS+Basic, so tell client to use TLS */
+		ret = 0;
+
+		/* Check which response is required */
+		if ((hdr = spool_getheader(txn.req_hdrs, "Upgrade")) &&
+		    !strncmp(hdr[0], TLS_VERSION, strcspn(hdr[0], " ,"))) {
+		    /* Client (Murder proxy) supports RFC 2817 (TLS upgrade) */
+
+		    response_header(HTTP_UPGRADE, &txn);
+		}
+		else {
+		    /* All other clients use RFC 2818 (HTTPS) */
+		    const char *path = txn.req_uri->path;
+		    struct buf *html = &txn.resp_body.payload;
+
+		    /* Create https URL */
+		    hdr = spool_getheader(txn.req_hdrs, "Host");
+		    buf_printf(&txn.buf, "https://%s", hdr[0]);
+		    if (strcmp(path, "*")) {
+			buf_appendcstr(&txn.buf, path);
+			if (query) buf_printf(&txn.buf, "?%s", query);
+		    }
+
+		    txn.location = buf_cstring(&txn.buf);
+
+		    /* Create HTML body */
+		    buf_reset(html);
+		    buf_printf(html, tls_message,
+			       buf_cstring(&txn.buf), buf_cstring(&txn.buf));
+
+		    /* Output our HTML response */
+		    txn.resp_body.type = "text/html; charset=utf-8";
+		    write_body(HTTP_MOVED, &txn,
+			       buf_cstring(html), buf_len(html));
+		}
+	    }
+	    else {
+		/* Tell client to authenticate */
+		if (r == SASL_CONTINUE)
+		    txn.error.desc = "Continue authentication exchange";
+		else if (r) txn.error.desc = "Authentication failed";
+		else txn.error.desc =
+			 "Must authenticate to access the specified target";
+	    }
+	}
 
       done:
 	/* Handle errors (success responses handled by method functions) */
@@ -2562,7 +2575,7 @@ EXPORTED void error_response(long code, struct transaction_t *txn)
     txn->resp_body.prefs = 0;
 
 #ifdef WITH_DAV
-    if (txn->error.precond) {
+    if (code != HTTP_UNAUTHORIZED && txn->error.precond) {
 	xmlNodePtr root = xml_add_error(NULL, &txn->error, NULL);
 
 	if (root) {

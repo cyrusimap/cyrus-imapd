@@ -145,7 +145,7 @@ static void rss_init(struct buf *serverinfo __attribute__((unused)))
 static int meth_get(struct transaction_t *txn,
 		    void *params __attribute__((unused)))
 {
-    int ret = 0, r;
+    int ret = 0, r, rights;
     struct strlist *param;
     char *section = NULL;
     uint32_t uid = 0;
@@ -178,6 +178,10 @@ static int meth_get(struct transaction_t *txn,
 	default: return HTTP_SERVER_ERROR;
 	}
     }
+
+    /* Check ACL for current user */
+    rights = mbentry ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
+    if (!(rights & ACL_READ)) return HTTP_NO_PRIVS;
 
     if (mbentry->server) {
 	/* Remote mailbox */

@@ -2293,7 +2293,7 @@ int meth_acl(struct transaction_t *txn, void *params)
 	    txn->error.precond = DAV_NEED_PRIVS;
 	    txn->error.resource = txn->req_tgt.path;
 	    txn->error.rights = DACL_ADMIN;
-	    return HTTP_FORBIDDEN;
+	    return HTTP_NO_PRIVS;
 	}
     }
 
@@ -2637,7 +2637,7 @@ int meth_copy(struct transaction_t *txn, void *params)
 	txn->error.rights =
 	    (rights & DACL_READ) != DACL_READ ? DACL_READ : DACL_RMRSRC;
 	mboxlist_entry_free(&mbentry);
-	return HTTP_FORBIDDEN;
+	return HTTP_NO_PRIVS;
     }
 
     if (mbentry->server) {
@@ -2673,7 +2673,7 @@ int meth_copy(struct transaction_t *txn, void *params)
 	txn->error.rights =
 	    !(rights & DACL_ADDRSRC) ? DACL_ADDRSRC : DACL_WRITECONT;
 	mboxlist_entry_free(&mbentry);
-	return HTTP_FORBIDDEN;
+	return HTTP_NO_PRIVS;
     }
 
     if (mbentry->server) {
@@ -2908,9 +2908,8 @@ int meth_delete(struct transaction_t *txn, void *params)
 	/* DAV:need-privileges */
 	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
-	txn->error.rights = txn->req_tgt.resource ? DACL_RMRSRC : DACL_RMCOL;
 	mboxlist_entry_free(&mbentry);
-	return HTTP_FORBIDDEN;
+	return HTTP_NO_PRIVS;
     }
 
     if (mbentry->server) {
@@ -3117,7 +3116,7 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 	txn->error.resource = txn->req_tgt.path;
 	txn->error.rights = DACL_READ;
 	mboxlist_entry_free(&mbentry);
-	return HTTP_FORBIDDEN;
+	return HTTP_NO_PRIVS;
     }
 
     if (mbentry->server) {
@@ -3303,7 +3302,7 @@ int meth_lock(struct transaction_t *txn, void *params)
 	txn->error.rights =
 	    !(rights & DACL_WRITECONT) ? DACL_WRITECONT : DACL_ADDRSRC;
 	mboxlist_entry_free(&mbentry);
-	return HTTP_FORBIDDEN;
+	return HTTP_NO_PRIVS;
     }
 
     if (mbentry->server) {
@@ -3558,9 +3557,11 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 
     case IMAP_MAILBOX_EXISTS:
 	txn->error.precond = DAV_RSRC_EXISTS;
+	ret = HTTP_FORBIDDEN;
+	goto done;
 
     case IMAP_PERMISSION_DENIED:
-	ret = HTTP_FORBIDDEN;
+	ret = HTTP_NO_PRIVS;
 	goto done;
 
     default:
@@ -3665,7 +3666,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
     }
 
     if (!r) ret = HTTP_CREATED;
-    else if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
+    else if (r == IMAP_PERMISSION_DENIED) ret = HTTP_NO_PRIVS;
     else if (r == IMAP_MAILBOX_EXISTS) {
 	txn->error.precond = DAV_RSRC_EXISTS;
 	ret = HTTP_FORBIDDEN;
@@ -3914,8 +3915,8 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 	    txn->error.precond = DAV_NEED_PRIVS;
 	    txn->error.resource = txn->req_tgt.path;
 	    txn->error.rights = DACL_READ;
-	    ret = HTTP_FORBIDDEN;
 	    mboxlist_entry_free(&mbentry);
+	    ret = HTTP_NO_PRIVS;
 	    goto done;
 	}
 
@@ -4171,7 +4172,7 @@ int meth_proppatch(struct transaction_t *txn,  void *params)
 	txn->error.resource = txn->req_tgt.path;
 	txn->error.rights = DACL_WRITEPROPS;
 	mboxlist_entry_free(&mbentry);
-	return HTTP_FORBIDDEN;
+	return HTTP_NO_PRIVS;
     }
 
     if (mbentry->server) {
@@ -4382,7 +4383,7 @@ int meth_put(struct transaction_t *txn, void *params)
 	txn->error.rights =
 	    !(rights & DACL_WRITECONT) ? DACL_WRITECONT : DACL_ADDRSRC;
 	mboxlist_entry_free(&mbentry);
-	return HTTP_FORBIDDEN;
+	return HTTP_NO_PRIVS;
     }
 
     if (mbentry->server) {
@@ -5112,7 +5113,7 @@ int meth_report(struct transaction_t *txn, void *params)
 		txn->error.precond = DAV_NEED_PRIVS;
 		txn->error.resource = txn->req_tgt.path;
 		txn->error.rights = report->reqd_privs;
-		ret = HTTP_FORBIDDEN;
+		ret = HTTP_NO_PRIVS;
 	    }
 	    mboxlist_entry_free(&mbentry);
 	    goto done;
@@ -5344,7 +5345,7 @@ int meth_unlock(struct transaction_t *txn, void *params)
 	    txn->error.precond = DAV_NEED_PRIVS;
 	    txn->error.resource = txn->req_tgt.path;
 	    txn->error.rights = DACL_ADMIN;
-	    ret = HTTP_FORBIDDEN;
+	    ret = HTTP_NO_PRIVS;
 	    goto done;
 	}
     }
