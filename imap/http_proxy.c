@@ -858,7 +858,17 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 	}
     } while (code < 200);
 
-    if (!r) {
+    if (r) proxy_downserver(be);
+    else if (code == 401) {
+	/* Don't pipe a 401 response (discard body).
+	   Frontend should send its own 401 since it will process auth */
+	resp_body.flags |= BODY_DISCARD;
+	http_read_body(be->in, httpd_out,
+		       resp_hdrs, &resp_body, &txn->error.desc);
+
+	r = HTTP_UNAUTHORIZED;
+    }
+    else {
 	/* Send response to client */
 	send_response(statline, resp_hdrs, NULL, &txn->flags);
   
@@ -879,7 +889,7 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 	}
     }
 
-    if (r || (resp_body.flags & BODY_CLOSE)) proxy_downserver(be);
+    if (resp_body.flags & BODY_CLOSE) proxy_downserver(be);
 
     if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
 
