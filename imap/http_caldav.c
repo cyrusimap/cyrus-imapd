@@ -220,6 +220,7 @@ static time_t compile_time;
 static struct buf ical_prodid_buf = BUF_INITIALIZER;
 static const char *ical_prodid = NULL;
 static struct strlist *cua_domains = NULL;
+icalarray *rscale_calendars = NULL;
 
 static struct caldav_db *my_caldav_open(struct mailbox *mailbox);
 static void my_caldav_close(struct caldav_db *caldavdb);
