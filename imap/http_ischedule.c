@@ -217,6 +217,7 @@ static int meth_get_isched(struct transaction_t *txn,
 	xmlNodePtr root, capa, node, comp, meth;
 	xmlNsPtr ns[NUM_NAMESPACE];
 	struct mime_type_t *mime;
+	int i, n;
 
 	/* Start construction of our query-result */
 	if (!(root = init_xml_response("query-result", NS_ISCHED, NULL, ns))) {
@@ -226,11 +227,11 @@ static int meth_get_isched(struct transaction_t *txn,
 
 	capa = xmlNewChild(root, NULL, BAD_CAST "capabilities", NULL);
 
-	node = xmlNewChild(capa, NULL, BAD_CAST "serial-number",
+	xmlNewChild(capa, NULL, BAD_CAST "serial-number",
 			   BAD_CAST buf_cstring(&txn->buf));
 
 	node = xmlNewChild(capa, NULL, BAD_CAST "versions", NULL);
-	node = xmlNewChild(node, NULL, BAD_CAST "version", BAD_CAST "1.0");
+	xmlNewChild(node, NULL, BAD_CAST "version", BAD_CAST "1.0");
 
 	node = xmlNewChild(capa, NULL,
 			   BAD_CAST "scheduling-messages", NULL);
@@ -285,7 +286,21 @@ static int meth_get_isched(struct transaction_t *txn,
 	}
 
 	node = xmlNewChild(capa, NULL, BAD_CAST "attachments", NULL);
-	node = xmlNewChild(node, NULL, BAD_CAST "inline", NULL);
+	xmlNewChild(node, NULL, BAD_CAST "inline", NULL);
+
+	node = xmlNewChild(capa, NULL, BAD_CAST "rscales", NULL);
+	for (i = 0, n = rscale_calendars->num_elements; i < n; i++) {
+	    const char **rscale = icalarray_element_at(rscale_calendars, i);
+
+	    xmlNewChild(node, NULL, BAD_CAST "rscale", BAD_CAST *rscale);
+	}
+
+	/* XXX  need to fill these with values */
+	xmlNewChild(capa, NULL, BAD_CAST "max-content-length", NULL);
+	xmlNewChild(capa, NULL, BAD_CAST "min-date-time", NULL);
+	xmlNewChild(capa, NULL, BAD_CAST "max-date-time", NULL);
+	xmlNewChild(capa, NULL, BAD_CAST "max-recipients", NULL);
+	xmlNewChild(capa, NULL, BAD_CAST "administrator", NULL);
 
 	/* Dump XML response tree into a text buffer */
 	if (buf) xmlFree(buf);
