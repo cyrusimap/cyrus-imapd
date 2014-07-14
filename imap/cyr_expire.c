@@ -58,7 +58,7 @@
 #include "annotate.h"
 #include "duplicate.h"
 #include "exitcodes.h"
-#include "imap_err.h"
+#include "imap/imap_err.h"
 #include "global.h"
 #include "hash.h"
 #include "libcyr_cfg.h"
