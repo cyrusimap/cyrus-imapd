@@ -66,6 +66,8 @@
 #include <openssl/pem.h>
 #include <openssl/x509.h>
 #include <openssl/ssl.h>
+#else
+#include <errno.h>
 #endif /* HAVE_SSL */
 
 #include "assert.h"

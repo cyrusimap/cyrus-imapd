@@ -1630,6 +1630,7 @@ Cyrus Imapd configured components
 
 External dependencies:
    pcre:               $cyrus_cv_pcre_utf8
+   openssl:            $with_ssl
 
 Database support:
    bdb:                $use_berkeley

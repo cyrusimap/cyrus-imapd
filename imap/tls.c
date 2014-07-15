@@ -1377,7 +1377,7 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
 
 #else
 
-int tls_enabled(void)
+EXPORTED int tls_enabled(void)
 {
     return 0;
 }
