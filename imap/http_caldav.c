@@ -3594,7 +3594,19 @@ static int busytime_by_collection(char *mboxname, int matchlen,
 }
 
 
-/* Compare start times of busytime period -- used for sorting */
+/* Compare type of busytime periods -- used for sorting */
+static int compare_busytime_type(struct busytime *a, struct busytime *b)
+{
+    /* UNAVAILABLE < BUSY < TENTATIVE */
+    if (a->type == b->type) return 0;
+
+    else if (a->type == ICAL_FBTYPE_BUSYUNAVAILABLE ||
+	     b->type == ICAL_FBTYPE_BUSYTENTATIVE) return -1;
+
+    else return 1;
+}
+
+/* Compare start/end times and type of busytime periods -- used for sorting */
 static int compare_busytime(const void *b1, const void *b2)
 {
     struct busytime *a = (struct busytime *) b1;
@@ -3602,7 +3614,12 @@ static int compare_busytime(const void *b1, const void *b2)
 
     int r = icaltime_compare(a->per.start, b->per.start);
 
-    if (r == 0) r = -(a->type - b->type);  /* TENTATIVE < BUSY */
+    if (r == 0) {
+	r = icaltime_compare(a->per.end, b->per.end);
+
+	if (r == 0) r = compare_busytime_type(a, b);
+    }
+
     return r;
 }
 
