@@ -549,17 +549,6 @@ static void my_caldav_init(struct buf *serverinfo)
     char *domain;
     tok_t tok;
 
-    namespace_calendar.enabled =
-	config_httpmodules & IMAP_ENUM_HTTPMODULES_CALDAV;
-
-    if (!namespace_calendar.enabled) return;
-
-    if (!config_getstring(IMAPOPT_CALENDARPREFIX)) {
-	fatal("Required 'calendarprefix' option is not set", EC_CONFIG);
-    }
-
-    caldav_init();
-
     buf_printf(serverinfo, " libical/%s", ICAL_VERSION);
 #ifdef HAVE_RSCALE
     if ((rscale_calendars = icalrecurrencetype_rscale_supported_calendars())) {
@@ -572,6 +561,17 @@ static void my_caldav_init(struct buf *serverinfo)
     buf_printf(serverinfo, " Jansson/%s", JANSSON_VERSION);
 #endif
 
+    namespace_calendar.enabled =
+	config_httpmodules & IMAP_ENUM_HTTPMODULES_CALDAV;
+
+    if (!namespace_calendar.enabled) return;
+
+    if (!config_getstring(IMAPOPT_CALENDARPREFIX)) {
+	fatal("Required 'calendarprefix' option is not set", EC_CONFIG);
+    }
+
+    caldav_init();
+
     config_allowsched = config_getenum(IMAPOPT_CALDAV_ALLOWSCHEDULING);
     if (config_allowsched) {
 	namespace_calendar.allow |= ALLOW_CAL_SCHED;
@@ -581,6 +581,10 @@ static void my_caldav_init(struct buf *serverinfo)
 	ical_set_unknown_token_handling_setting(ICAL_ASSUME_IANA_TOKEN);
 #endif
     }
+
+    namespace_principal.enabled = 1;
+    namespace_principal.allow |= namespace_calendar.allow &
+	(ALLOW_CAL | ALLOW_CAL_AVAIL | ALLOW_CAL_SCHED);
 
     compile_time = calc_compile_time(__TIME__, __DATE__);
 
