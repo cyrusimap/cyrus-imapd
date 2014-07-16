@@ -3110,7 +3110,7 @@ static int propfind_icalcomponent(const xmlChar *name, xmlNsPtr ns,
 	int r = 0;
 	buf_reset(&fctx->buf);
 	buf_printf(&fctx->buf, ANNOT_NS "<%s>%s",
-		   (const char *) ns->href, name);
+		   (const char *) XML_NS_CALDAV, name);
 
 	if (fctx->mailbox && !fctx->record) {
 	    r = annotatemore_lookup(fctx->mailbox->name,
@@ -3323,7 +3323,7 @@ static int proppatch_availability(xmlNodePtr prop, unsigned set,
 	    int r;
 	    buf_reset(&pctx->buf);
 	    buf_printf(&pctx->buf, ANNOT_NS "<%s>%s",
-		       (const char *) prop->ns->href, prop->name);
+		       (const char *) XML_NS_CALDAV, prop->name);
 
 	    r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
 	    r = annotate_state_write(astate, buf_cstring(&pctx->buf), /*userid*/NULL, &buf);
