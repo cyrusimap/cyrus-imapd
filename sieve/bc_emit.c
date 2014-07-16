@@ -538,12 +538,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 	}
 	
 	case B_KEEP:
-	    /* Copy (word), Flags Stringlist */
-
-	    if(write_int(fd,bc->data[codep++].value) == -1)
-		return -1;
-
-	    filelen += sizeof(int);
+	    /* Flags Stringlist, Copy (word) */
 
 	    /* Dump a stringlist of flags */
 	    ret = bc_stringlist_emit(fd, &codep, bc);
@@ -551,10 +546,20 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 		return -1;
 	    filelen += ret;
 
+	    if(write_int(fd,bc->data[codep++].value) == -1)
+		return -1;
+
+	    filelen += sizeof(int);
 	    break;
 
 	case B_FILEINTO:
-	    /* Copy (word), Folder String, Flags Stringlist */
+	    /* Flags Stringlist, Copy (word), Folder String */
+
+	    /* Dump a stringlist of flags */
+	    ret = bc_stringlist_emit(fd, &codep, bc);
+	    if(ret < 0)
+		return -1;
+	    filelen += ret;
 
 	    if(write_int(fd,bc->data[codep++].value) == -1)
 		return -1;
@@ -575,12 +580,6 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 		return -1;
 
 	    filelen += len + ret;
-
-	    /* Dump a stringlist of flags */
-	    ret = bc_stringlist_emit(fd, &codep, bc);
-	    if(ret < 0)
-		return -1;
-	    filelen += ret;
 
 	    break;
 
