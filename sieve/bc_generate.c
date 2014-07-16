@@ -703,6 +703,11 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 		*/
 		if (!atleast(retval, codep+1)) return -1;
 		retval->data[codep++].op = B_FILEINTO;
+		/* TODO: find a way to indicate whether to use actionflags
+		 * in the event that the flaglist is empty (does this mean
+		 * no flags or no :flags specified, therefore use internal
+		 * flags variable.
+		 */
 		codep = bc_stringlist_generate(codep, retval, c->u.f.flags);
 		if(codep == -1) return -1;
 		if (!atleast(retval, codep+3)) return -1;
