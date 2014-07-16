@@ -981,7 +981,13 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 #endif
 
     for(ip++; ip<ip_max; ) { 
+	/* In this loop, each case must increment ip for the next iteration.
+	 * The when the case is jumped to initially, ip points to the opcode.
+	 * This should probably change to point to the first parameter to
+	 * support future extensions.
+	 */
 	int copy = 0;
+	strarray_t *actionflags = NULL;
 
 	op=ntohl(bc[ip].op);
 	switch(op) {
@@ -990,10 +996,26 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    break;
 
 	case B_KEEP:/*22*/
+	{
+	    int x;
+	    int list_len=ntohl(bc[ip+1].len);
+	    actionflags = strarray_new();
+
+	    ip+=3; /* skip opcode, list_len, and list data len */
+
+	    for (x=0; x<list_len; x++) {
+		const char *flag;
+		ip = unwrap_string(bc, ip, &flag, NULL);
+		strarray_add_case(actionflags,flag);
+	    }
+	}
+	    copy = ntohl(bc[ip].value);
+	    /* fall through */
 	case B_KEEP_ORIG:/*1*/
-	    res = do_keep(actions, 1, imapflags);
+	    res = do_keep(actions, !copy, imapflags, actionflags);
 	    if (res == SIEVE_RUN_ERROR)
 		*errmsg = "Keep can not be used with Reject";
+	    actionflags = NULL;
 	    ip++;
 	    break;
 
@@ -1012,7 +1034,23 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
 	    break;
 
-	case B_FILEINTO:/*19*/
+	case B_FILEINTO:/*23*/
+	{
+	    int x;
+	    int list_len=ntohl(bc[ip+1].len);
+	    actionflags = strarray_new();
+
+	    ip+=3; /* skip opcode, list_len, and list data len */
+
+	    for (x=0; x<list_len; x++) {
+		const char *flag;
+		ip = unwrap_string(bc, ip, &flag, NULL);
+		strarray_add_case(actionflags,flag);
+	    }
+	    ip--;
+	}
+	    /* fall through */
+	case B_FILEINTO_COPY:/*19*/
 	    copy = ntohl(bc[ip+1].value);
 	    ip+=1;
 
@@ -1021,11 +1059,12 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	{
 	    ip = unwrap_string(bc, ip+1, &data, NULL);
 
-	    res = do_fileinto(actions, data, !copy, imapflags);
+	    res = do_fileinto(actions, data, !copy, imapflags, actionflags);
 
 	    if (res == SIEVE_RUN_ERROR)
 		*errmsg = "Fileinto can not be used with Reject";
 
+	    actionflags = NULL;
 	    break;
 	}
 
