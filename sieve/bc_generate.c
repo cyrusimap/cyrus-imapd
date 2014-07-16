@@ -604,14 +604,15 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 
 	    case KEEP:
 		/* KEEP
-		   VALUE copy
 		   STRINGLIST flags
+		   VALUE copy
 		*/
-		if (!atleast(retval, codep+2)) return -1;
+		if (!atleast(retval, codep+1)) return -1;
 		retval->data[codep++].op = B_KEEP;
-		retval->data[codep++].value = c->u.k.copy;
 		codep = bc_stringlist_generate(codep,retval,c->u.k.flags);
 		if (codep == -1) return -1;
+		if(!atleast(retval,codep+1)) return -1;
+		retval->data[codep++].value = c->u.k.copy;
 		break;
 
 	    case MARK:
@@ -696,17 +697,18 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 
 	    case FILEINTO:
 		/* FILEINTO
+		   STRINGLIST flags
 		   VALUE copy
 		   STRING folder
-		   STRINGLIST flags
 		*/
-		if (!atleast(retval, codep+4)) return -1;
+		if (!atleast(retval, codep+1)) return -1;
 		retval->data[codep++].op = B_FILEINTO;
+		codep = bc_stringlist_generate(codep, retval, c->u.f.flags);
+		if(codep == -1) return -1;
+		if (!atleast(retval, codep+3)) return -1;
 		retval->data[codep++].value = c->u.f.copy;
 		retval->data[codep++].len = strlen(c->u.f.folder);
 		retval->data[codep++].str = c->u.f.folder;
-		codep = bc_stringlist_generate(codep, retval, c->u.f.flags);
-		if(codep == -1) return -1;
 		break;
 
 	    case REDIRECT:
