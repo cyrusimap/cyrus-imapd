@@ -241,19 +241,6 @@ struct namespace_t namespace_principal = {
 
 static void my_dav_init(struct buf *serverinfo)
 {
-    if (config_httpmodules & IMAP_ENUM_HTTPMODULES_CALDAV) {
-	namespace_principal.enabled = 1;
-	namespace_principal.allow |= ALLOW_CAL;
-	if (config_getenum(IMAPOPT_CALDAV_ALLOWSCHEDULING))
-	    namespace_principal.allow |= ALLOW_CAL_SCHED;
-    }
-    if (config_httpmodules & IMAP_ENUM_HTTPMODULES_CARDDAV) {
-	namespace_principal.enabled = 1;
-	namespace_principal.allow |= ALLOW_CARD;
-    }
-
-    if (!namespace_principal.enabled) return;
-
     buf_printf(serverinfo, " SQLite/%s", sqlite3_libversion());
 }
 

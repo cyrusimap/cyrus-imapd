@@ -993,6 +993,11 @@ static void isched_init(struct buf *serverinfo)
 	    config_httpmodules & IMAP_ENUM_HTTPMODULES_ISCHEDULE;
     }
 
+    /* Add OpenDKIM version to serverinfo string */
+    buf_printf(serverinfo, " OpenDKIM/%u.%u.%u",
+	       (ver >> 24) & 0xff, (ver >> 16) & 0xff, (ver >> 8) & 0xff);
+    if (ver & 0xff) buf_printf(serverinfo, ".%u", ver & 0xff);
+
     if (namespace_ischedule.enabled) {
 	int fd;
 	struct buf keypath = BUF_INITIALIZER;
@@ -1012,11 +1017,6 @@ static void isched_init(struct buf *serverinfo)
 	uint32_t ver = dkim_libversion();
 	unsigned need_dkim =
 	    namespace_ischedule.enabled == IMAP_ENUM_HTTPMODULES_ISCHEDULE;
-
-	/* Add OpenDKIM version to serverinfo string */
-	buf_printf(serverinfo, " OpenDKIM/%u.%u.%u",
-		   (ver >> 24) & 0xff, (ver >> 16) & 0xff, (ver >> 8) & 0xff);
-	if (ver & 0xff) buf_printf(serverinfo, ".%u", ver & 0xff);
 
 	/* Initialize DKIM library */
 	if (!(dkim_lib = dkim_init(NULL, NULL))) {

@@ -152,7 +152,7 @@ struct namespace_t namespace_timezone = {
 };
 
 
-static void timezone_init(struct buf *serverinfo)
+static void timezone_init(struct buf *serverinfo __attribute__((unused)))
 {
     namespace_timezone.enabled =
 	config_httpmodules & IMAP_ENUM_HTTPMODULES_TIMEZONE;
@@ -163,10 +163,6 @@ static void timezone_init(struct buf *serverinfo)
     if (zoneinfo_open(NULL)) {
 	namespace_timezone.enabled = 0;
 	return;
-    }
-
-    if (!strstr(buf_cstring(serverinfo), " Jansson/")) {
-	buf_printf(serverinfo, " Jansson/%s", JANSSON_VERSION);
     }
 
     compile_time = calc_compile_time(__TIME__, __DATE__);

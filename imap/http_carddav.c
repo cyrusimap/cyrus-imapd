@@ -314,7 +314,7 @@ static void my_carddav_close(struct carddav_db *carddavdb)
 }
 
 
-static void my_carddav_init(struct buf *serverinfo)
+static void my_carddav_init(struct buf *serverinfo __attribute__((unused)))
 {
     namespace_addressbook.enabled =
 	config_httpmodules & IMAP_ENUM_HTTPMODULES_CARDDAV;
@@ -327,9 +327,8 @@ static void my_carddav_init(struct buf *serverinfo)
 
     carddav_init();
 
-    if (!strstr(buf_cstring(serverinfo), " libical/")) {
-	buf_printf(serverinfo, " libicalvcal/%s", ICAL_VERSION);
-    }
+    namespace_principal.enabled = 1;
+    namespace_principal.allow |= ALLOW_CARD;
 }
 
 
