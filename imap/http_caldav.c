@@ -3128,7 +3128,7 @@ static int propfind_icalcomponent(const xmlChar *name, xmlNsPtr ns,
 
 	buf_reset(&fctx->buf);
 	buf_printf(&fctx->buf, ANNOT_NS "<%s>%s",
-		   (const char *) ns->href, name);
+		   (const char *) XML_NS_CALDAV, name);
 
 	memset(&attrib, 0, sizeof(struct annotation_data));
 
@@ -3321,7 +3321,7 @@ static int proppatch_availability(xmlNodePtr prop, unsigned set,
 	if (valid) {
 	    buf_reset(&pctx->buf);
 	    buf_printf(&pctx->buf, ANNOT_NS "<%s>%s",
-		       (const char *) prop->ns->href, prop->name);
+		       (const char *) XML_NS_CALDAV, prop->name);
 
 	    if (!annotatemore_write_entry(pctx->mailboxname,
 					  buf_cstring(&pctx->buf),
