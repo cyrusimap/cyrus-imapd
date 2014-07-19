@@ -17,8 +17,9 @@
 <li>Authentication for GET/HEAD requests is now done on-demand so that
   free/busy queries and/or calendar subscriptions can be done
   anonymously (subject to ACL).</li>
-<li>Added support for VAVAILABILITY, VPOLL, RSCALE to CalDAV (requires
-  libical from git).</li>
+<li>Added support for VAVAILABILITY, VPOLL, RSCALE to CalDAV based on
+  current drafts (requires libical from git).</li>
+<li>Update http_timezone.c to be compliant with current draft.</li>
 <li>Split merging of scheduling object resources from
   sched_deliver_local() into deliver_merge_request() and
   deliver_merge_reply().</li>
