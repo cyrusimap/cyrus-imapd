@@ -64,7 +64,7 @@ LEX = @LEX@
 COMPILE_ET = @COMPILE_ET@
 
 PACKAGE = cyrus-imapd
-VERSION = 2.4.17-caldav-beta9
+VERSION = 2.4.17-caldav-beta10
 GIT_VERSION = $(VERSION).git$(shell date +'%Y%m%d%H%M')
 
 all:: xversion
