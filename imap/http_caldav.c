@@ -644,6 +644,7 @@ static void my_caldav_auth(const char *userid)
 	    }
 	    mboxlist_entry_free(&mbentry);
 	}
+	else r = 0;
 
 	/* will have been overwritten */
 	mailboxname = caldav_mboxname(userid, NULL);

@@ -378,6 +378,7 @@ static void my_carddav_auth(const char *userid)
 	    }
 	    mboxlist_entry_free(&mbentry);
 	}
+	else r = 0;
 
 	mailboxname = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
 
