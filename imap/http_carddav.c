@@ -395,6 +395,7 @@ static void my_carddav_auth(const char *userid)
 		}
 	    }
 	}
+	else r = 0;
 
 	/* Create locally */
 	if (!r) r = mboxlist_createmailboxcheck(mailboxname, 0, NULL, 0,
