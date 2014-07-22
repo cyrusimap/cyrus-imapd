@@ -1,4 +1,5 @@
-require ["regex", "relational", "comparator-i;ascii-numeric", "subaddress", "envelope", "date", "index"];
+require ["regex", "relational", "comparator-i;ascii-numeric", "subaddress",
+	"envelope", "date", "index", "imap4flags"];
 
 #this is for the extra thigns we have added to sieve
 #test extensions
@@ -178,4 +179,9 @@ if currentdate :zone "-0800" :is "year" ["2003", "2013", "2023"]
 if allof(currentdate :value "ge" "date" "2014-01-01",
          currentdate :value "lt" "date" "2015-01-01")
 {redirect "me+cd2014@blah.com";}
+
+######################################################################
+#FLAGS
+######################################################################
+# TODO: Add test for :flags
 
