@@ -1,4 +1,5 @@
-require ["reject", "fileinto", "imapflags", "vacation", "notify"];
+require ["reject", "fileinto", "imapflags", "vacation", "notify",
+	"imap4flags"];
 
 #this is for the extra thigns we have added to sieve
 
@@ -45,6 +46,23 @@ if header :contains "subject" "sflag2"
 if header :contains "subject" "rflag"
 {removeflag "\\answered";}
 
+#IMAP4FLAGS#
+##############################################
+if header :contains "subject" "imap4flags"
+{
+setflag "existing";
+keep :flags "keepflag";
+fileinto :flags ["fileinto f2"] "INBOX.fileinto.flags";
+
+addflag ["flag0", "flag1"];
+addflag ["my flag is here"];
+removeflag ["is my"];
+
+fileinto "INBOX.fileinto.internalflags";
+fileinto :flags "" "INBOX.fileinto.nullflags";
+
+}
+
 #VACATION
 #############################################
 if header :contains "subject" "vacation"
@@ -72,3 +90,4 @@ if header :contains "subject" "n2"
 
 if header :contains "subject" "denotify" 
 {denotify;}
+

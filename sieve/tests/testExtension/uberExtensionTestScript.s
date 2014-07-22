@@ -1,4 +1,5 @@
-require ["regex", "relational", "comparator-i;ascii-numeric", "subaddress", "envelope"];
+require ["regex", "relational", "comparator-i;ascii-numeric", "subaddress",
+	"envelope", "imap4flags"];
 
 #this is for the extra thigns we have added to sieve
 #test extensions
@@ -145,3 +146,9 @@ if envelope :detail :contains "from" "k"
 
 if envelope :detail :matches "from" "e*k"
 {redirect "me+goodedetailmatches@blah.com";}
+
+######################################################################
+#FLAGS
+######################################################################
+# TODO: Add test for :flags
+
