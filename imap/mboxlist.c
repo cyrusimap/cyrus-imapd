@@ -1824,6 +1824,15 @@ EXPORTED int mboxlist_setacl(struct namespace *namespace, const char *name,
 		   name, cyrusdb_strerror(r));
 	    r = IMAP_IOERROR;
 	}
+
+	/* send a AclChange event notification */
+	struct mboxevent *mboxevent = mboxevent_new(EVENT_ACL_CHANGE);
+	mboxevent_extract_mailbox(mboxevent, mailbox);
+	mboxevent_set_acl(mboxevent, identifier, rights);
+
+	mboxevent_notify(mboxevent);
+	mboxevent_free(&mboxevent);
+
     }
 
     /* 4. Change backup copy (cyrus.header) */
