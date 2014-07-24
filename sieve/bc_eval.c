@@ -370,7 +370,8 @@ static int shouldRespond(void * m, sieve_interp_t *interp,
 
 /* Evaluate a bytecode test */
 static int eval_bc_test(sieve_interp_t *interp, void* m,
-			bytecode_input_t * bc, int * ip)
+			bytecode_input_t * bc, int * ip,
+			strarray_t *workingflags)
 {
     int res=0; 
     int i=*ip;
@@ -392,7 +393,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 
     case BC_NOT:/*2*/
 	i+=1;
-	res = eval_bc_test(interp, m, bc, &i);
+	res = eval_bc_test(interp, m, bc, &i, workingflags);
 	if(res >= 0) res = !res; /* Only invert in non-error case */
 	break;
 
@@ -451,7 +452,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 	 * in the right place */
 	for (x=0; x<list_len && !res; x++) { 
 	    int tmp;
-	    tmp = eval_bc_test(interp, m, bc, &i);
+	    tmp = eval_bc_test(interp, m, bc, &i, workingflags);
 	    if(tmp < 0) {
 		res = tmp;
 		break;
@@ -471,7 +472,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 	/* return 1 unless you find one that isn't true, then return 0 */
 	for (x=0; x<list_len && res; x++) {
 	    int tmp;
-	    tmp = eval_bc_test(interp, m, bc, &i);
+	    tmp = eval_bc_test(interp, m, bc, &i, workingflags);
 	    if(tmp < 0) {
 		res = tmp;
 		break;
@@ -921,7 +922,8 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 		  void *sc, void *m,
 		  strarray_t *imapflags, action_list_t *actions,
-		  notify_list_t *notify_list, const char **errmsg) 
+		  notify_list_t *notify_list, const char **errmsg,
+		  strarray_t *workingflags)
 {
     const char *data;
     int res=0;
@@ -1091,7 +1093,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    int result;
 	   
 	    ip+=2;
-	    result=eval_bc_test(i, m, bc, &ip);
+	    result=eval_bc_test(i, m, bc, &ip, workingflags);
 	    
 	    if (result<0) {
 		*errmsg = "Invalid test";
@@ -1107,11 +1109,23 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
 	case B_MARK:/*8*/
 	    res = do_mark(actions);
+	{
+	    int n = i->markflags->count;
+	    while (n) {
+		strarray_add_case(workingflags,i->markflags->data[--n]);
+	    }
+	}
 	    ip++;
 	    break;
 
 	case B_UNMARK:/*9*/
 	    res = do_unmark(actions);
+	{
+	    int n = i->markflags->count;
+	    while (n) {
+		strarray_remove_all_case(workingflags,i->markflags->data[--n]);
+	    }
+	}
 	    ip++;
 	    break;
 
@@ -1126,6 +1140,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 		ip = unwrap_string(bc, ip, &data, NULL);
 		
 		res = do_addflag(actions, data);
+		strarray_add_case(workingflags, data);
 
 		if (res == SIEVE_RUN_ERROR)
 		    *errmsg = "addflag can not be used with Reject";
@@ -1143,6 +1158,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    ip = unwrap_string(bc, ip, &data, NULL);
 
 	    res = do_setflag(actions, data);
+	    strarray_truncate(workingflags, 0);
+	    strarray_add_case(workingflags, data);
 
 	    if (res == SIEVE_RUN_ERROR) {
 		*errmsg = "setflag can not be used with Reject";
@@ -1151,6 +1168,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 		    ip = unwrap_string(bc, ip, &data, NULL);
 
 		    res = do_addflag(actions, data);
+		    strarray_add_case(workingflags, data);
 
 		    if (res == SIEVE_RUN_ERROR)
 			*errmsg = "setflag can not be used with Reject";
@@ -1171,6 +1189,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 		ip = unwrap_string(bc, ip, &data, NULL);
 
 		res = do_removeflag(actions, data);
+		strarray_remove_all_case(workingflags, data);
 
 		if (res == SIEVE_RUN_ERROR)
 		    *errmsg = "removeflag can not be used with Reject";
@@ -1429,7 +1448,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    if (!res)
 		res = sieve_eval_bc(exe, 1, i,
 				    sc, m, imapflags, actions,
-				    notify_list, errmsg);
+				    notify_list, errmsg, workingflags);
 
 	    break;
 	}
