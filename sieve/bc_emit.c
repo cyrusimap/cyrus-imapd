@@ -301,6 +301,7 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
 	ret = bc_stringlist_emit(fd, codep, bc);
 	if(ret < 0) return -1;
 	wrote+=ret;
+	// TODO: evaluate :count support in hasflag test
 	break;
     }
 

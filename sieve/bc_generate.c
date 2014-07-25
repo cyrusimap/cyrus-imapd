@@ -201,6 +201,7 @@ static int bc_comparator_generate(int codep, bytecode_info_t *retval,
     /* comptag */
     if (!atleast(retval, codep + 1)) return -1;
 
+    /* TODO: How would we have :count and :regex at the same time? */
     switch (comptag) {
     case IS:
         retval->data[codep++].value = B_IS;
