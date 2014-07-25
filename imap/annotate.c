@@ -1183,18 +1183,19 @@ static int annotate_state_set_scope(annotate_state_t *state,
     annotate_state_unset_scope(state);
 
     if (mbentry) {
-	if (!mailbox && !mbentry->server) {
+	assert(!mailbox);
+	assert(!uid);
+	if (!mbentry->server) {
 	    /* local mailbox */
 	    r = mailbox_open_iwl(mbentry->name, &mailbox);
 	    if (r)
 		goto out;
 	    state->mailbox_is_ours = 1;
 	}
-	assert(mailbox);
 	state->mbentry = mbentry;
+	state->which = ANNOTATION_SCOPE_MAILBOX;
     }
-
-    if (uid) {
+    else if (uid) {
 	assert(mailbox);
 	state->which = ANNOTATION_SCOPE_MESSAGE;
     }
