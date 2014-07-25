@@ -51,16 +51,6 @@
 #include "chartable.h"
 #include "util.h"
 
-/* unicode canon translations */
-extern const int chartables_translation_multichar[];
-extern const unsigned char chartables_translation_block16[256];
-extern const unsigned char chartables_translation_block8[][256];
-extern const int chartables_translation[][256];
-
-/* named character sets */
-extern const struct charset chartables_charset_table[];
-extern const int chartables_num_charsets;
-
 struct qp_state {
     int isheader;
     int bytesleft;
@@ -742,12 +732,29 @@ int charset_lookupname(const char *name)
 {
     int i;
 
+    /* translate to canonical name */
+    for (i = 0; charset_aliases[i].name; i++) {
+	if (!strcasecmp(name, charset_aliases[i].name)) {
+	    name = charset_aliases[i].canon_name;
+	    break;
+	}
+    }
+
+    /* look up canonical name */
     for (i = 0; i < chartables_num_charsets; i++) {
 	if (!strcasecmp(name, chartables_charset_table[i].name)) 
 	    return i;
     }
 
     return -1;
+}
+
+static int lookup_buf(const char *buf, int len)
+{
+    char *name = xstrndup(buf, len);
+    int res = charset_lookupname(name);
+    free(name);
+    return res;
 }
 
 /*
@@ -882,20 +889,16 @@ static void mimeheader_cat(struct convert_rock *target, const char *s)
 	 * Get the 1522-word's character set
 	 */
 	start++;
-	for (charset = 0; charset < chartables_num_charsets; charset++) {
-	    if ((int)strlen(chartables_charset_table[charset].name) == endcharset-start &&
-		!strncasecmp(start, chartables_charset_table[charset].name, endcharset-start)) {
-		table_switch(input, charset);
-		break;
-	    }
-	}
-
-	if (charset == chartables_num_charsets) {
+	charset = lookup_buf(start, endcharset-start);
+	if (charset < 0) {
 	    /* Unrecognized charset, nothing will match here */
 	    convert_putc(input, 0xfffd); /* unknown character */
 	}
 	else {
 	    struct convert_rock *extract;
+
+	    table_switch(input, charset);
+
 	    /* choose decoder */
 	    if (encoding[1] == 'q' || encoding[1] == 'Q') {
 		extract = qp_init(1, input);
