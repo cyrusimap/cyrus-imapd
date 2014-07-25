@@ -500,11 +500,19 @@ static int sieve_fileinto(void *ac,
 						   fc->mailbox,
 						   sd->username, namebuf);
     if (!ret) {
+	if(fc->actionflags) {
+	ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
+			      fc->actionflags,
+			      (char *) sd->username, sd->authstate, md->id,
+			      sd->username, mdata->notifyheader,
+			      namebuf, md->date, quotaoverride, 0);
+	} else {
 	ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
 			      fc->imapflags,
 			      (char *) sd->username, sd->authstate, md->id,
 			      sd->username, mdata->notifyheader,
 			      namebuf, md->date, quotaoverride, 0);
+	}
     }
 
     if (ret == IMAP_MAILBOX_NONEXISTENT) {
@@ -512,12 +520,21 @@ static int sieve_fileinto(void *ac,
 	ret = autosieve_createfolder(sd->username, sd->authstate, namebuf);
 
 	/* Try to deliver the mail again. */
-	if (!ret)
+	if (!ret) {
+	    if(fc->actionflags) {
+	    ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
+				  fc->actionflags,
+				  (char *) sd->username, sd->authstate, md->id,
+				  sd->username, mdata->notifyheader,
+				  namebuf, md->date, quotaoverride, 0);
+	    } else {
 	    ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
 				  fc->imapflags,
 				  (char *) sd->username, sd->authstate, md->id,
 				  sd->username, mdata->notifyheader,
 				  namebuf, md->date, quotaoverride, 0);
+	    }
+	}
     }
 
     if (!ret) {
@@ -538,8 +555,13 @@ static int sieve_keep(void *ac,
     deliver_data_t *mydata = (deliver_data_t *) mc;
     int ret;
 
+    if(kc->actionflags) {
+    ret = deliver_local(mydata, kc->actionflags,
+			(char *) sd->username, sd->mailboxname);
+    } else {
     ret = deliver_local(mydata, kc->imapflags,
 			(char *) sd->username, sd->mailboxname);
+    }
 
     if (!ret) {
 	snmp_increment(SIEVE_KEEP, 1);
