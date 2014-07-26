@@ -193,6 +193,10 @@ int mboxlist_findall_alt(struct namespace *namespace,
 			 struct auth_state *auth_state, int (*proc)(),
 			 void *rock);
 
+/* Find a mailbox's parent (if any) */
+int mboxlist_findparent(const char *mboxname,
+			mbentry_t **mbentryp);
+
 /* direct access to subs DB */
 int mboxlist_allsubs(const char *userid, foreach_cb *proc, void *rock);
 int mboxlist_allmbox(const char *prefix, foreach_cb *proc, void *rock, int incdel);

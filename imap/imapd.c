@@ -5363,199 +5363,283 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
 	}
     }
 
-    if (partition && !imapd_userisadmin) {
-	r = IMAP_PERMISSION_DENIED;
+    // A non-admin is not allowed to specify the server nor partition on which
+    // to create the mailbox.
+    if ((server || partition) && !imapd_userisadmin) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(IMAP_PERMISSION_DENIED));
+	goto done;
     }
 
+    /* We don't care about trailing hierarchy delimiters. */
     if (name[0] && name[strlen(name)-1] == imapd_namespace.hier_sep) {
-	/* We don't care about trailing hierarchy delimiters. */
 	name[strlen(name)-1] = '\0';
     }
 
-    if (!r) {
-	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
-						   imapd_userid, mailboxname);
-    }
-
-    /* check for INBOX.INBOX creation by broken Apple clients */
-    if (!r) {
-	char *copy = xstrdup(mailboxname);
-	lcase(copy);
-	if (strstr(copy, "inbox.inbox"))
-	    r = IMAP_MAILBOX_BADNAME;
-	free(copy);
-    }
-
-    if (!r && !localonly && config_mupdate_server) {
-	int guessedpart = 0;
-
-	/* determine if we're creating locally or remotely */
-	if (!partition && !server) {
-	    char *foundpart = NULL;
-	    guessedpart = 1;
-	    r = mboxlist_createmailboxcheck(mailboxname, 0, 0,
-					    imapd_userisadmin || imapd_userisproxyadmin,
-					    imapd_userid, imapd_authstate,
-					    NULL, &foundpart, 0);
-	    partition = foundpart;
-
-	    if (!r && !partition &&
-		(config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD) &&
-		!config_getstring(IMAPOPT_PROXYSERVERS)) {
-		/* proxy-only server, and no parent mailbox */
-		guessedpart = 0;
-
-		/* use defaultserver if specified */
-		partition = config_getstring(IMAPOPT_DEFAULTSERVER);
-
-		/* otherwise, find server with most available space */
-		if (!partition) partition = find_free_server();
-
-		if (!partition) r = IMAP_SERVER_UNAVAILABLE;
-	    }
-	}
-
-	if (!r && !config_partitiondir(partition)) {
-	    /* invalid partition, assume its a server (remote mailbox) */
-	    struct backend *s = NULL;
-	    char *p;
-	    int res;
- 
-	    /* check for a remote partition */
-	    server = partition;
-	    p = strchr(server, '!');
-	    if (p) *p++ = '\0';
-	    partition = guessedpart ? NULL : p;
-
-	    s = proxy_findserver(server, &imap_protocol,
-				 proxy_userid, &backend_cached,
-				 &backend_current, &backend_inbox, imapd_in);
-	    if (!s) r = IMAP_SERVER_UNAVAILABLE;
-
-	    if (!r && imapd_userisadmin && supports_referrals) {
-		/* They aren't an admin remotely, so let's refer them */
-		imapd_refer(tag, server, name);
-		referral_kick = 1;
-		return;
-	    }
-
-	    if (!r) {
-		if (!CAPA(s, CAPA_MUPDATE)) {
-		    /* reserve mailbox on MUPDATE */
-		}
-	    }
-
-	    if (!r) {
-		/* ok, send the create to that server */
-		prot_printf(s->out, "%s CREATE ", tag);
-		prot_printastring(s->out, name);
-		/* special use needs extended support, so pass through extargs */
-		if (specialuse.len) {
-		    prot_printf(s->out, "(USE (%s)", buf_cstring(&specialuse));
-		    if (partition) {
-			prot_printf(s->out, " PARTITION ");
-			prot_printastring(s->out, partition);
-		    }
-		    prot_putc(')', s->out);
-		}
-		/* Send partition as an atom, since its supported by older servers */
-		else if (partition) {
-		    prot_putc(' ', s->out);
-		    prot_printastring(s->out, partition);
-		}
-		prot_printf(s->out, "\r\n");
-
-		res = pipe_until_tag(s, tag, 0);
-
-		if (!CAPA(s, CAPA_MUPDATE)) {
-		    /* do MUPDATE create operations */
-		}
-		/* make sure we've seen the update */
-		if (ultraparanoid && res == PROXY_OK) kick_mupdate();
-	    }
-
-	    imapd_check(s, 0);
-
-	    if (r) {
-		prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-	    } else {
-		/* we're allowed to reference last_result since the noop, if
-		   sent, went to a different server */
-		prot_printf(imapd_out, "%s %s", tag, s->last_result.s);
-	    }
-
-	    goto done;
-	}
-#if 0
-	else if (!r &&
-		 (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD) &&
-		 !config_getstring(IMAPOPT_PROXYSERVERS)) {
-	    /* can't create maiilboxes on proxy-only servers */
-	    r = IMAP_PERMISSION_DENIED;
-	}
-#endif
-
-	/* local mailbox -- fall through */
-	if (guessedpart) {
-	    partition = NULL;
-	    r = 0;
-	}
-    }
-
-    /* local mailbox */
-    if (!r) {
-
-	/* xxx we do forced user creates on LOCALCREATE to facilitate
-	 * mailbox moves */
-	r = mboxlist_createmailbox(mailboxname, mbtype, partition,
-				   imapd_userisadmin || imapd_userisproxyadmin,
-				   imapd_userid, imapd_authstate,
-				   localonly, localonly, 0, 1, NULL);
-
-	if (r == IMAP_PERMISSION_DENIED && !strcasecmp(name, "INBOX") &&
-	    (autocreatequotastorage = config_getint(IMAPOPT_AUTOCREATEQUOTA))) {
-
-	    /* Auto create INBOX is always type zero */
-	    r = mboxlist_createmailbox(mailboxname, /*mbtype*/0, partition,
-				       1, imapd_userid, imapd_authstate,
-				       0, 0, 0, 1, NULL);
-
-	    int autocreatequotamessage = config_getint(IMAPOPT_AUTOCREATEQUOTAMSG);
-	    if (!r && ((autocreatequotastorage > 0) || (autocreatequotamessage > 0))) {
-		int res;
-		int newquotas[QUOTA_NUMRESOURCES];
-
-		for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++)
-		    newquotas[res] = QUOTA_UNLIMITED;
-		newquotas[QUOTA_STORAGE] = autocreatequotastorage;
-		newquotas[QUOTA_MESSAGE] = autocreatequotamessage;
-
-		(void) mboxlist_setquotas(mailboxname, newquotas, 0);
-	    }
-	}
-
-	if (!r && specialuse.len) {
-	    r = annotatemore_write(mailboxname, "/specialuse", imapd_userid, &specialuse);
-	    if (r) {
-		/* XXX - failure here SHOULD cause a cleanup of the created mailbox */
-		syslog(LOG_ERR, "IOERROR: failed to write specialuse for %s on %s (%s)",
-		       imapd_userid, mailboxname, buf_cstring(&specialuse));
-	    }
-	}
-    }
-
-    imapd_check(NULL, 0);
+    r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
+						imapd_userid, mailboxname);
 
     if (r) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+	goto done;
     }
-    else {
-	if (config_mupdate_server)
-	    kick_mupdate();
 
-	prot_printf(imapd_out, "%s OK %s\r\n", tag,
-		    error_message(IMAP_OK_COMPLETED));
+    /* check for INBOX.INBOX creation by broken Apple clients */
+    char *copy = xstrdup(mailboxname);
+    lcase(copy);
+
+    if (strstr(copy, "inbox.inbox"))
+	r = IMAP_MAILBOX_BADNAME;
+
+    free(copy);
+
+    if (r) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+	goto done;
     }
+
+    // If the create command does not mandate the mailbox must be created
+    // locally, let's go and find the most appropriate location.
+    if (!localonly) {
+
+	// If we're running in a Murder, things get more complicated.
+	if (config_mupdate_server) {
+
+	    // Consider your actions on a per type of topology basis.
+	    //
+	    // First up: Standard / discrete murder topology, with dedicated
+	    // imap frontends, or unified -- both allow the IMAP server to either
+	    // need to proxy through, or create locally.
+	    if (
+		    config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD ||
+		    config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_UNIFIED
+		) {
+
+		// The way that we detect whether we're a frontend is by testing
+		// for the proxy servers setting ... :/
+		if (!config_getstring(IMAPOPT_PROXYSERVERS)) {
+		    // Find the parent mailbox, if any.
+		    mbentry_t *parent = NULL;
+
+		    // mboxlist_findparent either supplies the parent
+		    // or has a return code of IMAP_MAILBOX_NONEXISTENT.
+		    r = mboxlist_findparent(mailboxname, &parent);
+
+		    if (r) {
+			if (r != IMAP_MAILBOX_NONEXISTENT) {
+			    prot_printf(imapd_out, "%s NO %s (%s:%d)\r\n", tag, error_message(r), __FILE__, __LINE__);
+			    goto done;
+			}
+		    }
+
+		    if (!server && !partition) {
+			if (!parent) {
+			    server = find_free_server();
+
+			    if (!server) {
+				prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(IMAP_SERVER_UNAVAILABLE));
+				goto done;
+			    }
+
+			} else {
+			    server = parent->server;
+			    partition = parent->partition;
+			}
+		    }
+
+		    struct backend *s_conn = NULL;
+
+		    s_conn = proxy_findserver(
+			    server,
+			    &imap_protocol,
+			    proxy_userid,
+			    &backend_cached,
+			    &backend_current,
+			    &backend_inbox,
+			    imapd_in
+			);
+
+		    if (!s_conn) {
+			prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(IMAP_SERVER_UNAVAILABLE));
+			goto done;
+		    }
+
+		    // Huh?
+		    if (imapd_userisadmin && supports_referrals) {
+			// "They are not an admin remotely, so let's refer them" --
+			//  - Who is they?
+			//  - How did imapd_userisadmin get set all of a sudden?
+			imapd_refer(tag, server, name);
+			referral_kick = 1;
+			return;
+		    }
+
+		    if (!CAPA(s_conn, CAPA_MUPDATE)) {
+			// Huh?
+			// "reserve mailbox on MUPDATE"
+			syslog(LOG_WARNING, "backend %s is not advertising any MUPDATE capability (%s:%d)", server, __FILE__, __LINE__);
+		    }
+
+		    // why not send a LOCALCREATE to the backend?
+		    prot_printf(s_conn->out, "%s CREATE ", tag);
+		    prot_printastring(s_conn->out, name);
+
+		    // special use needs extended support, so pass through extargs
+		    if (specialuse.len) {
+			prot_printf(s_conn->out, "(USE (%s)", buf_cstring(&specialuse));
+
+			if (partition) {
+			    prot_printf(s_conn->out, " PARTITION ");
+			    prot_printastring(s_conn->out, partition);
+			}
+
+			prot_putc(')', s_conn->out);
+		    }
+
+		    // Send partition as an atom, since its supported by older servers
+		    else if (partition) {
+			prot_putc(' ', s_conn->out);
+			prot_printastring(s_conn->out, partition);
+		    }
+
+		    prot_printf(s_conn->out, "\r\n");
+
+		    int res = pipe_until_tag(s_conn, tag, 0);
+
+		    if (!CAPA(s_conn, CAPA_MUPDATE)) {
+			// Huh?
+			// "do MUPDATE create operations"
+			syslog(LOG_WARNING, "backend %s is not advertising any MUPDATE capability (%s:%d)", server, __FILE__, __LINE__);
+		    }
+
+		    /* make sure we've seen the update */
+		    if (ultraparanoid && res == PROXY_OK) kick_mupdate();
+
+		    imapd_check(s_conn, 0);
+
+		    prot_printf(imapd_out, "%s %s\r\n", tag, s_conn->last_result.s);
+
+		    goto done;
+
+		} else { // (!config_getstring(IMAPOPT_PROXYSERVERS))
+		    // I have a standard murder config but also proxy servers configured; I'm a backend!
+		    goto localcreate;
+
+		} // (!config_getstring(IMAPOPT_PROXYSERVERS))
+
+	    } // (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD)
+
+	    else if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_REPLICATED) {
+		// Everything is local
+		goto localcreate;
+	    } // (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_REPLICATED)
+
+	    else {
+		syslog(LOG_ERR, "murder configuration I cannot deal with");
+		prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(IMAP_SERVER_UNAVAILABLE));
+		goto done;
+	    }
+
+	} else { // (config_mupdate_server)
+	    // I'm no part of a Murder, *everything* is localcreate
+	    goto localcreate;
+	} // (config_mupdate_server)
+
+    } else { // (!localonly)
+	goto localcreate;
+    }
+
+localcreate:
+    r = mboxlist_createmailbox(
+	    mailboxname,					// const char name
+	    mbtype,						// int mbtype
+	    partition,						// const char partition
+	    imapd_userisadmin || imapd_userisproxyadmin,	// int isadmin
+	    imapd_userid,					// const char userid
+	    imapd_authstate,					// struct auth_state auth_state
+	    localonly,						// int localonly
+	    localonly,						// int forceuser
+	    0,							// int dbonly
+	    1,							// int notify
+	    NULL						// struct mailbox mailboxptr
+	);
+
+    // Clausing autocreate for the INBOX
+    if (r == IMAP_PERMISSION_DENIED) {
+	if (strcasecmp(name, "INBOX")) {
+	    if ((autocreatequotastorage = config_getint(IMAPOPT_AUTOCREATEQUOTA))) {
+		r = mboxlist_createmailbox(
+			mailboxname,
+			0,
+			partition,
+			1,
+			imapd_userid,
+			imapd_authstate,
+			0,
+			0,
+			0,
+			1,
+			NULL
+		    );
+
+		if (r) {
+		    prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+		    goto done;
+		}
+
+		int autocreatequotamessage = config_getint(IMAPOPT_AUTOCREATEQUOTAMSG);
+
+		if ((autocreatequotastorage > 0) || (autocreatequotamessage > 0)) {
+		    int newquotas[QUOTA_NUMRESOURCES];
+		    int res;
+
+		    for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+			newquotas[res] = QUOTA_UNLIMITED;
+		    }
+
+		    newquotas[QUOTA_STORAGE] = autocreatequotastorage;
+		    newquotas[QUOTA_MESSAGE] = autocreatequotamessage;
+
+		    (void) mboxlist_setquotas(mailboxname, newquotas, 0);
+		} // (autocreatequotastorage > 0) || (autocreatequotamessage > 0)
+
+	    } else { // (autocreatequotastorage = config_getint(IMAPOPT_AUTOCREATEQUOTA))
+		prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(IMAP_PERMISSION_DENIED));
+		goto done;
+
+	    } // (autocreatequotastorage = config_getint(IMAPOPT_AUTOCREATEQUOTA))
+
+	} else { // (!strcasecmp(name, "INBOX"))
+	    prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(IMAP_PERMISSION_DENIED));
+	    goto done;
+	} // (!strcasecmp(name, "INBOX"))
+
+    } else { // (r == IMAP_PERMISSION_DENIED)
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(IMAP_PERMISSION_DENIED));
+	goto done;
+    } // (r == IMAP_PERMISSION_DENIED)
+
+    if (specialuse.len) {
+	r = annotatemore_write(mailboxname, "/specialuse", imapd_userid, &specialuse);
+	if (r) {
+	    /* XXX - failure here SHOULD cause a cleanup of the created mailbox */
+	    syslog(
+		    LOG_ERR,
+		    "IOERROR: failed to write specialuse for %s on %s (%s) (%s:%d)",
+		    imapd_userid,
+		    mailboxname,
+		    buf_cstring(&specialuse),
+		    __FILE__,
+		    __LINE__
+		);
+
+	    prot_printf(imapd_out, "%s NO %s (%s:%d)\r\n", tag, error_message(r), __FILE__, __LINE__);
+	    goto done;
+	}
+    }
+
+    prot_printf(imapd_out, "%s OK Completed\r\n", tag);
+
+    imapd_check(NULL, 0);
 
 done:
     buf_free(&specialuse);
