@@ -5366,8 +5366,8 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     // A non-admin is not allowed to specify the server nor partition on which
     // to create the mailbox.
     if ((server || partition) && !imapd_userisadmin) {
-       prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(IMAP_PERMISSION_DENIED));
-       goto done;
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(IMAP_PERMISSION_DENIED));
+	goto done;
     }
 
     /* We don't care about trailing hierarchy delimiters. */
