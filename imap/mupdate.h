@@ -70,7 +70,7 @@ struct mupdate_handle_s {
 
     /* For client side mupdate_find calls */
     char mailbox_buf[MAX_MAILBOX_BUFFER];
-    char server_buf[MAX_MAILBOX_BUFFER];
+    char location_buf[MAX_MAILBOX_BUFFER];
     char *acl;
     struct mupdate_mailboxdata mailboxdata_buf;
 
@@ -88,7 +88,7 @@ enum settype {
 /* acl MUST be last, since it is what causes the variable size */
 struct mbent {
     char *mailbox;
-    char *server;
+    char *location;
     enum settype t;
     struct mbent *next; /* used for queue */
     char acl[1];

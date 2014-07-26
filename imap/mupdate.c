@@ -209,7 +209,7 @@ static void cmd_authenticate(struct conn *C,
 		      const char *clientstart);
 static void cmd_set(struct conn *C,
 	     const char *tag, const char *mailbox,
-	     const char *server, const char *acl, enum settype t);
+	     const char *location, const char *acl, enum settype t);
 static void cmd_find(struct conn *C, const char *tag, const char *mailbox,
 	      int send_ok, int send_delete);
 static void cmd_list(struct conn *C, const char *tag, const char *host_prefix);
@@ -284,7 +284,7 @@ static struct conn *conn_new(int fd)
 			C->saslprops.ipremoteport,
 			NULL, 0, 
 			&C->saslconn);
-    if(r != SASL_OK) {
+    if (r != SASL_OK) {
 	syslog(LOG_ERR, "failed to start sasl for connection: %s",
 	       sasl_errstring(r, NULL, NULL));	
 	prot_printf(C->pout, SERVER_UNABLE_STRING);
@@ -367,7 +367,7 @@ static void conn_free(struct conn *C)
 #endif
 
     cyrus_close_sock(C->fd);
-    if(C->logfd != -1) close(C->logfd);
+    if (C->logfd != -1) close(C->logfd);
     
     if (C->saslconn) sasl_dispose(&C->saslconn);
 
@@ -380,7 +380,7 @@ static void conn_free(struct conn *C)
     buf_free(&(C->arg2));
     buf_free(&(C->arg3));
 
-    if(C->streaming_hosts) strarray_free(C->streaming_hosts);
+    if (C->streaming_hosts) strarray_free(C->streaming_hosts);
 
     free(C);
 }
@@ -489,27 +489,27 @@ int service_init(int argc, char **argv,
     /* Do minor configuration checking */
     workers_to_start = config_getint(IMAPOPT_MUPDATE_WORKERS_START);
 
-    if(config_getint(IMAPOPT_MUPDATE_WORKERS_MAX) < config_getint(IMAPOPT_MUPDATE_WORKERS_MINSPARE)) {
+    if (config_getint(IMAPOPT_MUPDATE_WORKERS_MAX) < config_getint(IMAPOPT_MUPDATE_WORKERS_MINSPARE)) {
 	syslog(LOG_CRIT, "Maximum total worker threads is less than minimum spare worker threads");
 	return EC_SOFTWARE;
     }
 
-    if(workers_to_start < config_getint(IMAPOPT_MUPDATE_WORKERS_MINSPARE)) {
+    if (workers_to_start < config_getint(IMAPOPT_MUPDATE_WORKERS_MINSPARE)) {
 	syslog(LOG_CRIT, "Starting worker threads is less than minimum spare worker threads");
 	return EC_SOFTWARE;
     }
 
-    if(config_getint(IMAPOPT_MUPDATE_WORKERS_MAXSPARE) < workers_to_start) {
+    if (config_getint(IMAPOPT_MUPDATE_WORKERS_MAXSPARE) < workers_to_start) {
 	syslog(LOG_CRIT, "Maximum spare worker threads is less than starting worker threads");
 	return EC_SOFTWARE;
     }
 
-    if(config_getint(IMAPOPT_MUPDATE_WORKERS_MINSPARE) > workers_to_start) {
+    if (config_getint(IMAPOPT_MUPDATE_WORKERS_MINSPARE) > workers_to_start) {
 	syslog(LOG_CRIT, "Minimum spare worker threads is greater than starting worker threads");
 	return EC_SOFTWARE;
     }
 
-    if(config_getint(IMAPOPT_MUPDATE_WORKERS_MAX) < workers_to_start) {
+    if (config_getint(IMAPOPT_MUPDATE_WORKERS_MAX) < workers_to_start) {
 	syslog(LOG_CRIT, "Maximum total worker threads is less than starting worker threads");
 	return EC_SOFTWARE;
     }
@@ -546,7 +546,7 @@ int service_init(int argc, char **argv,
 	fatal("cannot run mupdate master on a unified server", EC_USAGE);
     }
 
-    if(pipe(conn_pipe) == -1) {
+    if (pipe(conn_pipe) == -1) {
 	syslog(LOG_ERR, "could not setup connection signaling pipe %m");
 	return EC_OSERR;
     }
@@ -555,7 +555,7 @@ int service_init(int argc, char **argv,
 
     if (!masterp) {
 	r = pthread_create(&t, NULL, &mupdate_client_start, NULL);
-	if(r == 0) {
+	if (r == 0) {
 	    pthread_detach(t);
 	} else {
 	    syslog(LOG_ERR, "could not start client thread");
@@ -564,14 +564,14 @@ int service_init(int argc, char **argv,
 
 	/* Wait until they sync the database */
 	pthread_mutex_lock(&synced_mutex);
-	if(!synced)
+	if (!synced)
 	    pthread_cond_wait(&synced_cond, &synced_mutex);
 	pthread_mutex_unlock(&synced_mutex);
     } else {
 	pthread_t t;
 	
 	r = pthread_create(&t, NULL, &mupdate_placebo_kick_start, NULL);
-	if(r == 0) {
+	if (r == 0) {
 	    pthread_detach(t);
 	} else {
 	    syslog(LOG_ERR, "could not start placebo kick thread");
@@ -584,7 +584,7 @@ int service_init(int argc, char **argv,
     /* Now create the worker thread pool */
     for(i=0; i < workers_to_start; i++) {
 	r = pthread_create(&t, NULL, &thread_main, NULL);  
-        if(r == 0) {
+        if (r == 0) {
             pthread_detach(t);
         } else {
             syslog(LOG_ERR, "could not start client thread");
@@ -605,7 +605,7 @@ EXPORTED void fatal(const char *s, int code)
 {
     static int recurse_code = 0;
 
-    if(recurse_code) exit(code);
+    if (recurse_code) exit(code);
     else recurse_code = code;
     
     syslog(LOG_ERR, "%s", s);
@@ -661,7 +661,7 @@ static mupdate_docmd_result_t docmd(struct conn *c)
     
     /* parse command name */
     ch = getword(c->pin, &(c->cmd));
-    if(ch == EOF) {
+    if (ch == EOF) {
 	goto lost_conn;
     } else if (!c->cmd.s[0]) {
 	prot_printf(c->pout, "%s BAD \"Null command\"\r\n", c->tag.s);
@@ -883,11 +883,11 @@ static mupdate_docmd_result_t docmd(struct conn *c)
 	    while(ch == ' ') {
 		/* Hey, look, more bits of a PARTIAL-UPDATE command */
 		ch = getstring(c->pin, c->pout, &(c->arg1));
-		if(c->arg1.s[0] == '\0') {
+		if (c->arg1.s[0] == '\0') {
 		    strarray_free(arg);
 		    goto badargs;
 		}
-		if(counter-- == 0) {
+		if (counter-- == 0) {
 		    strarray_free(arg);
 		    goto extraargs;
 		}
@@ -963,7 +963,7 @@ static mupdate_docmd_result_t docmd(struct conn *c)
     
  done:
     /* Restore the state of the input stream */
-    if(was_blocking)
+    if (was_blocking)
 	prot_BLOCK(c->pin);
     else
 	prot_NONBLOCK(c->pin);    
@@ -1001,7 +1001,7 @@ int service_main_fd(int fd,
 	syslog(LOG_ERR,
 	       "Server too busy, dropping connection.");
 	if (r) return 0; /* filthy hack to avoid warning on 'r' */
-    } else if(write(conn_pipe[1], &fd, sizeof(fd)) == -1) {
+    } else if (write(conn_pipe[1], &fd, sizeof(fd)) == -1) {
 	/* signal that a new file descriptor is available.
 	 * If it fails... */
 
@@ -1028,8 +1028,8 @@ static void dobanner(struct conn *c)
 			&mechs, NULL, &mechcount);
 
     /* Add mupdate:// tag if necessary */
-    if(!masterp) {
-	if(!config_mupdate_server)
+    if (!masterp) {
+	if (!config_mupdate_server)
 	    fatal("mupdate server was not specified for slave",
 		  EC_TEMPFAIL);
 		
@@ -1100,10 +1100,10 @@ static void *thread_main(void *rock __attribute__((unused)))
 	max_worker_flag = (idle_worker_count >=
 			   config_getint(IMAPOPT_MUPDATE_WORKERS_MAXSPARE));
 	/* Increment Idle Workers */
-	if(!max_worker_flag) idle_worker_count++;
+	if (!max_worker_flag) idle_worker_count++;
 	pthread_mutex_unlock(&idle_worker_mutex);
 
-	if(max_worker_flag) goto worker_thread_done;
+	if (max_worker_flag) goto worker_thread_done;
 
     retry_lock:
 
@@ -1377,11 +1377,25 @@ static void database_init(void)
 /* log change to database. database must be locked. */
 static void database_log(const struct mbent *mb, struct txn **mytid)
 {
+    char *c;
+    char *location = NULL;
     mbentry_t *mbentry = NULL;
 
     mbentry = mboxlist_entry_create();
     mbentry->name = xstrdupnull(mb->mailbox);
-    mbentry->server = xstrdupnull(mb->server);
+
+    location = xstrdupnull(mb->location);
+
+    mbentry->server = xstrdupnull(mb->location);
+
+    c = strchr(mbentry->server, '!');
+    if (c) {
+	*c++ = '\0';
+	mbentry->partition = xstrdupnull(c);
+    }
+
+    if (location) free(location);
+
     mbentry->acl = xstrdupnull(mb->acl);
 
     switch (mb->t) {
@@ -1416,7 +1430,7 @@ static struct mbent *database_lookup(const char *name, struct mpool *pool)
 {
     mbentry_t *mbentry = NULL;
     struct mbent *out;
-    char *server = NULL;
+    char *location = NULL;
     int r;
 
     if (!name) return NULL;
@@ -1427,32 +1441,32 @@ static struct mbent *database_lookup(const char *name, struct mpool *pool)
     /* XXX - if mbtype & MBTYPE_DELETED, maybe set a delete */
 
     if (mbentry->mbtype & MBTYPE_RESERVE) {
-	if(!pool) out = xmalloc(sizeof(struct mbent) + 1);
+	if (!pool) out = xmalloc(sizeof(struct mbent) + 1);
 	else out = mpool_malloc(pool, sizeof(struct mbent) + 1);
 	out->t = SET_RESERVE;
 	out->acl[0] = '\0';
     }
     else {
-	if(!pool) out = xmalloc(sizeof(struct mbent) + strlen(mbentry->acl));
+	if (!pool) out = xmalloc(sizeof(struct mbent) + strlen(mbentry->acl));
 	else out = mpool_malloc(pool, sizeof(struct mbent) + strlen(mbentry->acl));
 	out->t = SET_ACTIVE;
 	strcpy(out->acl, mbentry->acl);
     }
 
     if (mbentry->server && mbentry->partition)
-	server = strconcat(mbentry->server, "!", mbentry->partition, NULL);
+	location = strconcat(mbentry->server, "!", mbentry->partition, NULL);
     else if (mbentry->server)
-	server = xstrdup(mbentry->server);
+	location = xstrdup(mbentry->server);
     else if (mbentry->partition)
-	server = xstrdup(mbentry->partition);
+	location = xstrdup(mbentry->partition);
     else
-	server = xstrdup("");
+	location = xstrdup("");
 
     out->mailbox = (pool) ? mpool_strdup(pool, name) : xstrdup(name);
-    out->server = (pool) ? mpool_strdup(pool, server)
-			 : xstrdup(server);
+    out->location = (pool) ? mpool_strdup(pool, location)
+			 : xstrdup(location);
 
-    free(server);
+    free(location);
     mboxlist_entry_free(&mbentry);
 
     return out;
@@ -1505,7 +1519,7 @@ static void cmd_authenticate(struct conn *C,
 
     /* Successful Authentication */
     r = sasl_getprop(C->saslconn, SASL_USERNAME, &val);
-    if(r != SASL_OK) {
+    if (r != SASL_OK) {
 	prot_printf(C->pout, "%s NO \"SASL Error\"\r\n", tag);
 	reset_saslconn(C);
 	return;
@@ -1527,11 +1541,11 @@ static void cmd_authenticate(struct conn *C,
 
 /* Log the update out to anyone who is in our updatelist */
 /* INVARIANT: caller MUST hold mailboxes_mutex */
-/* oldserver is the previous value of the server in this update,
-   thisserver is the current value of the mailbox's server */
+/* oldlocation is the previous value of the location in this update,
+   thislocation is the current value of the mailbox's location */
 static void log_update(const char *mailbox,
-		const char *oldserver,
-		const char *thisserver) 
+		const char *oldlocation,
+		const char *thislocation)
 {
     struct conn *upc;
     
@@ -1542,11 +1556,11 @@ static void log_update(const char *mailbox,
 	strlcpy(p->mailbox, mailbox, sizeof(p->mailbox));
 	
 	/* this might need to be inside the mutex, but I doubt it */
-	if(upc->streaming_hosts
-	   && (!oldserver || strarray_find(upc->streaming_hosts,
-						  oldserver, 0) < 0)
-	   && (!thisserver || strarray_find(upc->streaming_hosts,
-						   thisserver, 0) < 0)) {
+	if (upc->streaming_hosts
+	   && (!oldlocation || strarray_find(upc->streaming_hosts,
+						  oldlocation, 0) < 0)
+	   && (!thislocation || strarray_find(upc->streaming_hosts,
+						   thislocation, 0) < 0)) {
 	    /* No Match! Continue! */
 	    continue;
 	}
@@ -1566,11 +1580,11 @@ static void log_update(const char *mailbox,
 
 static void cmd_set(struct conn *C,
 	     const char *tag, const char *mailbox,
-	     const char *server, const char *acl, enum settype t)
+	     const char *location, const char *acl, enum settype t)
 {
     struct mbent *m;
-    char *oldserver = NULL;
-    char *thisserver = NULL;
+    char *oldlocation = NULL;
+    char *thislocation = NULL;
     char *tmp;
 
     /* Hold any output that we need to do */
@@ -1609,18 +1623,18 @@ static void cmd_set(struct conn *C,
 	    }
 	    /* otherwise do nothing (local delete on master) */
 	} else {
-	    oldserver = xstrdup(m->server);
+	    oldlocation = xstrdup(m->location);
 
 	    /* do the deletion */
 	    m->t = SET_DELETE;
 	}
     } else {
-	if(m)
-	    oldserver = m->server;
+	if (m)
+	    oldlocation = m->location;
 
 	if (m && (!acl || strlen(acl) < strlen(m->acl))) {
 	    /* change what's already there -- the acl is smaller */
-	    m->server = xstrdup(server);
+	    m->location = xstrdup(location);
 	    if (acl) strcpy(m->acl, acl);
 	    else m->acl[0] = '\0';
 
@@ -1635,7 +1649,8 @@ static void cmd_set(struct conn *C,
 		newm = xrealloc(m, sizeof(struct mbent) + 1);
 	    }
 	    newm->mailbox = xstrdup(mailbox);
-	    newm->server = xstrdup(server);
+	    newm->location = xstrdup(location);
+
 	    if (acl) {
 		strcpy(newm->acl, acl);
 	    } else {
@@ -1652,24 +1667,24 @@ static void cmd_set(struct conn *C,
     /* write to disk */
     if (m) database_log(m, NULL);
 
-    if(oldserver) {
-	tmp = strchr(oldserver, '!');
-	if(tmp) *tmp = '\0';
+    if (oldlocation) {
+	tmp = strchr(oldlocation, '!');
+	if (tmp) *tmp = '\0';
     }
 
-    if(server) {
-	thisserver = xstrdup(server);
-	tmp = strchr(thisserver, '!');
-	if(tmp) *tmp = '\0';
+    if (location) {
+	thislocation = xstrdup(location);
+	tmp = strchr(thislocation, '!');
+	if (tmp) *tmp = '\0';
     }
 
     /* post pending changes */
-    log_update(mailbox, oldserver, thisserver);
+    log_update(mailbox, oldlocation, thislocation);
 
     msg = ISOK;
  done:
-    if(thisserver) free(thisserver);
-    if(oldserver) free(oldserver);
+    if (thislocation) free(thislocation);
+    if (oldlocation) free(oldlocation);
     free_mbent(m);
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 
@@ -1709,22 +1724,34 @@ static void cmd_find(struct conn *C, const char *tag, const char *mailbox,
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 
     if (m && m->t == SET_ACTIVE) {
-	prot_printf(C->pout, "%s MAILBOX {" SIZE_T_FMT "+}\r\n%s"
-		    " {" SIZE_T_FMT "+}\r\n%s {" SIZE_T_FMT "+}\r\n%s\r\n",
-		    tag,
-		    strlen(m->mailbox), m->mailbox,
-		    strlen(m->server), m->server,
-		    strlen(m->acl), m->acl);
+	prot_printf(C->pout,
+		"%s MAILBOX "
+		"{" SIZE_T_FMT "+}\r\n%s "
+		"{" SIZE_T_FMT "+}\r\n%s "
+		"{" SIZE_T_FMT "+}\r\n%s\r\n",
+		tag,
+		strlen(m->mailbox), m->mailbox,
+		strlen(m->location), m->location,
+		strlen(m->acl), m->acl
+	    );
+
     } else if (m && m->t == SET_RESERVE) {
-	prot_printf(C->pout, "%s RESERVE {" SIZE_T_FMT "+}\r\n%s"
-		    " {" SIZE_T_FMT "+}\r\n%s\r\n",
-		    tag,
-		    strlen(m->mailbox), m->mailbox,
-		    strlen(m->server), m->server);
+	prot_printf(C->pout,
+		"%s RESERVE "
+		"{" SIZE_T_FMT "+}\r\n%s "
+		"{" SIZE_T_FMT "+}\r\n%s\r\n",
+		tag,
+		strlen(m->mailbox), m->mailbox,
+		strlen(m->location), m->location
+	    );
     } else if (send_delete) {
 	/* not found, if needed, send a delete */
-	prot_printf(C->pout, "%s DELETE {" SIZE_T_FMT "+}\r\n%s\r\n",
-		    tag, strlen(mailbox), mailbox);
+	prot_printf(C->pout,
+		"%s DELETE "
+		"{" SIZE_T_FMT "+}\r\n%s\r\n",
+		tag,
+		strlen(mailbox), mailbox
+	    );
     }
     
     free_mbent(m);
@@ -1743,42 +1770,50 @@ static int sendupdate(char *name,
 {
     struct conn *C = (struct conn *)rock;
     struct mbent *m;
-    char *server = NULL; 
+    char *location = NULL; 
     
-    if(!C) return -1;
+    if (!C) return -1;
     
     m = database_lookup(name, NULL);
-    if(!m) return -1;
+    if (!m) return -1;
 
-    if(!C->list_prefix ||
-       !strncmp(m->server, C->list_prefix, C->list_prefix_len)) {
+    if (!C->list_prefix ||
+       !strncmp(m->location, C->list_prefix, C->list_prefix_len)) {
 	/* Either there is not a prefix to test, or we matched it */
 	char *tmp;
 	
-	if(C->streaming_hosts) {
-	    server = xstrdup(m->server);
-	    tmp = strchr(server, '!');
-	    if(tmp) *tmp = '\0';
+	if (C->streaming_hosts) {
+	    location = xstrdup(m->location);
+	    tmp = strchr(location, '!');
+	    if (tmp) *tmp = '\0';
 	}
 	
-	if(!C->streaming_hosts ||
-	   strarray_find(C->streaming_hosts, server, 0) >= 0) {
+	if (!C->streaming_hosts ||
+	   strarray_find(C->streaming_hosts, location, 0) >= 0) {
 	    switch (m->t) {
 	    case SET_ACTIVE:
 		prot_printf(C->pout,
-			    "%s MAILBOX {" SIZE_T_FMT "+}\r\n%s"
-			    " {" SIZE_T_FMT "+}\r\n%s {" SIZE_T_FMT "+}\r\n%s\r\n",
-			    C->streaming,
-			    strlen(m->mailbox), m->mailbox,
-			    strlen(m->server), m->server,
-			    strlen(m->acl), m->acl);
+			"%s MAILBOX "
+			"{" SIZE_T_FMT "+}\r\n%s "
+			"{" SIZE_T_FMT "+}\r\n%s "
+			"{" SIZE_T_FMT "+}\r\n%s\r\n",
+			C->streaming,
+			strlen(m->mailbox), m->mailbox,
+			strlen(m->location), m->location,
+			strlen(m->acl), m->acl
+		    );
+
 		break;
 	    case SET_RESERVE:
-		prot_printf(C->pout, "%s RESERVE {" SIZE_T_FMT "+}\r\n%s"
-			    " {" SIZE_T_FMT "+}\r\n%s\r\n",
-			    C->streaming,
-			    strlen(m->mailbox), m->mailbox,
-			    strlen(m->server), m->server);
+		prot_printf(C->pout,
+			"%s RESERVE "
+			"{" SIZE_T_FMT "+}\r\n%s "
+			"{" SIZE_T_FMT "+}\r\n%s\r\n",
+			C->streaming,
+			strlen(m->mailbox), m->mailbox,
+			strlen(m->location), m->location
+		    );
+
 		break;
 		
 	    case SET_DELETE:
@@ -1790,7 +1825,7 @@ static int sendupdate(char *name,
 	}
     }
 
-    if(server) free(server);
+    if (location) free(location);
     free_mbent(m);
     return 0;
 }
@@ -1809,7 +1844,7 @@ static void cmd_list(struct conn *C, const char *tag, const char *host_prefix)
     /* since this isn't valid when streaming, just use the same callback */
     C->streaming = tag;
     C->list_prefix = host_prefix;
-    if(C->list_prefix) C->list_prefix_len = strlen(C->list_prefix);
+    if (C->list_prefix) C->list_prefix_len = strlen(C->list_prefix);
     else C->list_prefix_len = 0;
     
     mboxlist_findall(NULL, pattern, 1, NULL,
@@ -1968,11 +2003,11 @@ static void cmd_starttls(struct conn *C, const char *tag)
     if (result != SASL_OK) {
 	fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
     }
-    if(C->saslprops.authid) {
+    if (C->saslprops.authid) {
 	free(C->saslprops.authid);
 	C->saslprops.authid = NULL;
     }
-    if(auth_id)
+    if (auth_id)
         C->saslprops.authid = xstrdup(auth_id);
 
     /* tell the prot layer about our new layers */
@@ -2057,32 +2092,32 @@ static int reset_saslconn(struct conn *c)
     ret = sasl_server_new("mupdate", config_servername,
                          NULL, NULL, NULL,
                          NULL, 0, &c->saslconn);
-    if(ret != SASL_OK) return ret;
+    if (ret != SASL_OK) return ret;
 
-    if(c->saslprops.ipremoteport)
+    if (c->saslprops.ipremoteport)
        ret = sasl_setprop(c->saslconn, SASL_IPREMOTEPORT,
                           c->saslprops.ipremoteport);
-    if(ret != SASL_OK) return ret;
+    if (ret != SASL_OK) return ret;
     
-    if(c->saslprops.iplocalport)
+    if (c->saslprops.iplocalport)
        ret = sasl_setprop(c->saslconn, SASL_IPLOCALPORT,
                           c->saslprops.iplocalport);
-    if(ret != SASL_OK) return ret;
+    if (ret != SASL_OK) return ret;
     
     secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
     ret = sasl_setprop(c->saslconn, SASL_SEC_PROPS, secprops);
-    if(ret != SASL_OK) return ret;
+    if (ret != SASL_OK) return ret;
     /* end of service_main initialization excepting SSF */
 
     /* If we have TLS/SSL info, set it */
-    if(c->saslprops.ssf) {
+    if (c->saslprops.ssf) {
 	ret = sasl_setprop(c->saslconn, SASL_SSF_EXTERNAL, &c->saslprops.ssf);
     }
-    if(ret != SASL_OK) return ret;
+    if (ret != SASL_OK) return ret;
 
-    if(c->saslprops.authid) {
+    if (c->saslprops.authid) {
 	ret = sasl_setprop(c->saslconn, SASL_AUTH_EXTERNAL, c->saslprops.authid);
-	if(ret != SASL_OK) return ret;
+	if (ret != SASL_OK) return ret;
     }
     /* End TLS/SSL Info */
 
@@ -2093,20 +2128,20 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 	       const char *rock, void *context __attribute__((unused)))
 {
     struct mbent *m = NULL;
-    char *oldserver = NULL;
-    char *thisserver = NULL;
+    char *oldlocation = NULL;
+    char *thislocation = NULL;
     char *tmp;
     enum settype t = -1;
     int ret = 0;
 
-    if(!mdata || !rock || !mdata->mailbox) return 1;
+    if (!mdata || !rock || !mdata->mailbox) return 1;
 
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
 
-    if(!strncmp(rock, "DELETE", 6)) {
+    if (!strncmp(rock, "DELETE", 6)) {
 	m = database_lookup(mdata->mailbox, NULL);
 
-	if(!m) {
+	if (!m) {
 	    syslog(LOG_DEBUG, "attempt to delete unknown mailbox %s",
 		   mdata->mailbox);
 	    /* Mailbox doesn't exist - this isn't as fatal as you might
@@ -2116,24 +2151,24 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 	}
 	m->t = t = SET_DELETE;
 
-	oldserver = xstrdup(m->server);
+	oldlocation = xstrdup(m->location);
     } else {
 	m = database_lookup(mdata->mailbox, NULL);
 
-	if(m)
-	    oldserver = m->server;
+	if (m)
+	    oldlocation = m->location;
 
 	if (m && (!mdata->acl || strlen(mdata->acl) < strlen(m->acl))) {
 	    /* change what's already there */
-            /* old m->server freed when oldserver is freed */
-	    m->server = xstrdup(mdata->server);
+            /* old m->location freed when oldlocation is freed */
+	    m->location = xstrdup(mdata->location);
 
 	    if (mdata->acl) strcpy(m->acl, mdata->acl);
 	    else m->acl[0] = '\0';
 
-	    if(!strncmp(rock, "MAILBOX", 6)) {
+	    if (!strncmp(rock, "MAILBOX", 6)) {
 		m->t = t = SET_ACTIVE;
-	    } else if(!strncmp(rock, "RESERVE", 7)) {
+	    } else if (!strncmp(rock, "RESERVE", 7)) {
 		m->t = t = SET_RESERVE;
 	    } else {
 		syslog(LOG_DEBUG,
@@ -2144,9 +2179,9 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 	} else {
 	    struct mbent *newm;
 
-	    if(m) {
+	    if (m) {
 		free(m->mailbox);
-		/* m->server freed when oldserver freed */
+		/* m->location freed when oldlocation freed */
 	    }
 
 	    /* allocate new mailbox */
@@ -2157,7 +2192,7 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 	    }
 
 	    newm->mailbox = xstrdup(mdata->mailbox);
-	    newm->server = xstrdup(mdata->server);
+	    newm->location = xstrdup(mdata->location);
 
 	    if (mdata->acl) {
 		strcpy(newm->acl, mdata->acl);
@@ -2165,9 +2200,9 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 		newm->acl[0] = '\0';
 	    }
 
-	    if(!strncmp(rock, "MAILBOX", 6)) {
+	    if (!strncmp(rock, "MAILBOX", 6)) {
 		newm->t = t = SET_ACTIVE;
-	    } else if(!strncmp(rock, "RESERVE", 7)) {
+	    } else if (!strncmp(rock, "RESERVE", 7)) {
 		newm->t = t = SET_RESERVE;
 	    } else {
 		syslog(LOG_DEBUG,
@@ -2184,23 +2219,23 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
     /* write to disk */
     database_log(m, NULL);
     
-    if(oldserver) {
-	tmp = strchr(oldserver, '!');
-	if(tmp) *tmp = '\0';
+    if (oldlocation) {
+	tmp = strchr(oldlocation, '!');
+	if (tmp) *tmp = '\0';
     }
 
-    if(mdata->server) {
-	thisserver = xstrdup(mdata->server);
-	tmp = strchr(thisserver, '!');
-	if(tmp) *tmp = '\0';
+    if (mdata->location) {
+	thislocation = xstrdup(mdata->location);
+	tmp = strchr(thislocation, '!');
+	if (tmp) *tmp = '\0';
     }
 
     /* post pending changes to anyone we are talking to */
-    log_update(mdata->mailbox, oldserver, thisserver);
+    log_update(mdata->mailbox, oldlocation, thislocation);
 
  done:
-    if(oldserver) free(oldserver);
-    if(thisserver) free(thisserver);
+    if (oldlocation) free(oldlocation);
+    if (thislocation) free(thislocation);
     
     free_mbent(m);
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
@@ -2223,7 +2258,7 @@ static int cmd_resync(struct mupdate_mailboxdata *mdata,
     struct mbent_queue *remote_boxes = r->boxes;
     struct mbent *newm = NULL;
 
-    if(!mdata || !rock || !mdata->mailbox || !remote_boxes) return 1;
+    if (!mdata || !rock || !mdata->mailbox || !remote_boxes) return 1;
 
     /* allocate new mailbox */
     if (mdata->acl) {
@@ -2233,7 +2268,7 @@ static int cmd_resync(struct mupdate_mailboxdata *mdata,
     }
 
     newm->mailbox = mpool_strdup(r->pool, mdata->mailbox);
-    newm->server = mpool_strdup(r->pool, mdata->server);
+    newm->location = mpool_strdup(r->pool, mdata->location);
 
     if (mdata->acl) {
 	strcpy(newm->acl, mdata->acl);
@@ -2241,9 +2276,9 @@ static int cmd_resync(struct mupdate_mailboxdata *mdata,
 	newm->acl[0] = '\0';
     }
 	
-    if(!strncmp(rock, "MAILBOX", 6)) {
+    if (!strncmp(rock, "MAILBOX", 6)) {
 	newm->t = SET_ACTIVE;
-    } else if(!strncmp(rock, "RESERVE", 7)) {
+    } else if (!strncmp(rock, "RESERVE", 7)) {
 	newm->t = SET_RESERVE;
     } else {
 	syslog(LOG_NOTICE,
@@ -2269,11 +2304,11 @@ static int sync_findall_cb(char *name,
     struct mbent_queue *local_boxes = (struct mbent_queue *)r->boxes;
     struct mbent *m;
 
-    if(!local_boxes) return 1;
+    if (!local_boxes) return 1;
 
     m = database_lookup(name, r->pool);
     /* If it doesn't exist, fine... */
-    if(!m) return 0;
+    if (!m) return 0;
     
     m->next = NULL;
     *(local_boxes->tail) = m;
@@ -2288,7 +2323,7 @@ int mupdate_synchronize_remote(mupdate_handle *handle,
 {
     struct sync_rock rock;
   
-    if(!handle || !handle->saslcompleted) return 1;
+    if (!handle || !handle->saslcompleted) return 1;
 
     rock.pool = pool;
   
@@ -2328,6 +2363,7 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
     struct txn *tid = NULL;
     int ret = 0;    
     int err = 0;
+    char *c;
 
     rock.pool = pool;
     
@@ -2347,7 +2383,7 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
 		     NULL, sync_findall_cb, (void*)&rock);
 
     /* Traverse both lists, compare the names */
-    /* If they match, ensure that server and acl are correct, if so,
+    /* If they match, ensure that location and acl are correct, if so,
        move on, if not, fix them */
     /* If the local is before the next remote, delete it */
     /* If the next remote is before theis local, insert it and try again */
@@ -2355,10 +2391,10 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
 	l = local_boxes.head, r = remote_boxes->head) 
     {
 	int ret = strcmp(l->mailbox, r->mailbox);
-	if(!ret) {
+	if (!ret) {
 	    /* Match */
-	    if(l->t != r->t ||
-	       strcmp(l->server, r->server) ||
+	    if (l->t != r->t ||
+	       strcmp(l->location, r->location) ||
 	       strcmp(l->acl,r->acl)) {
 		/* Something didn't match, replace it */
 		/*
@@ -2366,7 +2402,7 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
 		 * change, just warn.
 		 */
 		if ((config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) &&
-			(strchr( l->server, '!' ) == NULL )) {
+			(strchr( l->location, '!' ) == NULL )) {
 		    syslog(LOG_ERR, "local mailbox %s wrong in mailbox list",
 			    l->mailbox );
 		    err++;
@@ -2374,7 +2410,14 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
 		    mbentry_t *mbentry = mboxlist_entry_create();
 		    mbentry->name = xstrdupnull(r->mailbox);
 		    mbentry->mbtype = (r->t == SET_RESERVE ? MBTYPE_RESERVE : 0);
-		    mbentry->server = xstrdupnull(r->server);
+		    mbentry->server = xstrdupnull(r->location);
+
+		    c = strchr(mbentry->server, '!');
+		    if (c) {
+			*c++ = '\0';
+			mbentry->partition = xstrdupnull(c);
+		    }
+
 		    mbentry->acl = xstrdupnull(r->acl);
 		    mboxlist_insertremote(mbentry, &tid);
 		    mboxlist_entry_free(&mbentry);
@@ -2393,12 +2436,12 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
 		 * ctl_mboxlist is the right place to fix the kind
 		 * of configuration error implied.
 		 * 
-		 * A similar problem exists when the server thinks
+		 * A similar problem exists when the location thinks
 		 * it is locally hosting a mailbox, but mupdate master
 		 * thinks it's somewhere else.
 		 */
 	    if ((config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) &&
-		    (strchr( l->server, '!' ) == NULL )) {
+		    (strchr( l->location, '!' ) == NULL )) {
 		syslog(LOG_ERR, "local mailbox %s not in mailbox list",
 			l->mailbox );
 		err++;
@@ -2411,7 +2454,14 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
 	    mbentry_t *mbentry = mboxlist_entry_create();
 	    mbentry->name = xstrdupnull(r->mailbox);
 	    mbentry->mbtype = (r->t == SET_RESERVE ? MBTYPE_RESERVE : 0);
-	    mbentry->server = xstrdupnull(r->server);
+	    mbentry->server = xstrdupnull(r->location);
+
+	    c = strchr(mbentry->server, '!');
+	    if (c) {
+		*c++ = '\0';
+		mbentry->partition = xstrdupnull(c);
+	    }
+
 	    mbentry->acl = xstrdupnull(r->acl);
 	    mboxlist_insertremote(mbentry, &tid);
 	    mboxlist_entry_free(&mbentry);
@@ -2419,11 +2469,11 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
 	}
     }
 
-    if(l && !r) {
+    if (l && !r) {
 	/* we have more deletes to do */
 	while(l) {
 	    if ((config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) &&
-		    (strchr( l->server, '!' ) == NULL )) {
+		    (strchr( l->location, '!' ) == NULL )) {
 		syslog(LOG_ERR, "local mailbox %s not in mailbox list",
 			l->mailbox );
 		err++;
@@ -2439,7 +2489,14 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
 	    mbentry_t *mbentry = mboxlist_entry_create();
 	    mbentry->name = xstrdupnull(r->mailbox);
 	    mbentry->mbtype = (r->t == SET_RESERVE ? MBTYPE_RESERVE : 0);
-	    mbentry->server = xstrdupnull(r->server);
+	    mbentry->server = xstrdupnull(r->location);
+
+	    c = strchr(mbentry->server, '!');
+	    if (c) {
+		*c++ = '\0';
+		mbentry->partition = xstrdupnull(c);
+	    }
+
 	    mbentry->acl = xstrdupnull(r->acl);
 	    mboxlist_insertremote(mbentry, &tid);
 	    mboxlist_entry_free(&mbentry);
@@ -2474,7 +2531,7 @@ void mupdate_ready(void)
 {
     pthread_mutex_lock(&ready_for_connections_mutex);
 
-    if(ready_for_connections) {
+    if (ready_for_connections) {
 	syslog(LOG_CRIT, "mupdate_ready called when already ready");
 	fatal("mupdate_ready called when already ready", EC_TEMPFAIL);
     }
@@ -2500,8 +2557,8 @@ void mupdate_unready(void)
 /* Used to free malloc'd mbent's (not for mpool'd mbents) */
 void free_mbent(struct mbent *p)
 {
-    if(!p) return;
-    free(p->server);
+    if (!p) return;
+    free(p->location);
     free(p->mailbox);
     free(p);
 }

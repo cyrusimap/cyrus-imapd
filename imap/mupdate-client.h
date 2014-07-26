@@ -58,16 +58,16 @@ void mupdate_disconnect(mupdate_handle **h);
 
 /* activate a mailbox */
 int mupdate_activate(mupdate_handle *handle, 
-		     const char *mailbox, const char *server,
+		     const char *mailbox, const char *location,
 		     const char *acl);
 
 /* reserve a piece of namespace */
 int mupdate_reserve(mupdate_handle *handle,
-		    const char *mailbox, const char *server);
+		    const char *mailbox, const char *location);
 
 /* deactivate a mailbox (ACTIVE->RESERVE) */
 int mupdate_deactivate(mupdate_handle *handle,
-		       const char *mailbox, const char *server);
+		       const char *mailbox, const char *location);
 
 /* delete a mailbox */
 int mupdate_delete(mupdate_handle *handle,
@@ -80,7 +80,7 @@ enum mbtype {
 /* mailbox data structure */
 struct mupdate_mailboxdata {
     const char *mailbox;
-    const char *server;
+    const char *location;
     const char *acl;
     enum mbtype t;
 };

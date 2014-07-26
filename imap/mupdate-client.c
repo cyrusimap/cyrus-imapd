@@ -167,12 +167,12 @@ static int mupdate_scarf_one(struct mupdate_mailboxdata *mdata __attribute__((un
 			     const char *cmd,
 			     void *context __attribute__((unused))) 
 {
-    syslog(LOG_ERR, "mupdate_scarf_one was called, but shouldn't be.  Command recieved was %s", cmd);
+    syslog(LOG_ERR, "mupdate_scarf_one was called, but shouldn't be.  Command received was %s", cmd);
     return -1;
 }
 
 EXPORTED int mupdate_activate(mupdate_handle *handle,
-		     const char *mailbox, const char *server,
+		     const char *mailbox, const char *location,
 		     const char *acl)
 {
     int ret;
@@ -180,22 +180,31 @@ EXPORTED int mupdate_activate(mupdate_handle *handle,
     const char *p;
     
     if (!handle) return MUPDATE_BADPARAM;
-    if (!mailbox || !server || !acl) return MUPDATE_BADPARAM;
+    if (!mailbox || !location || !acl) return MUPDATE_BADPARAM;
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
+    syslog(LOG_DEBUG, "mupdate_activate for mailbox: %s, location: %s, acl: %s", mailbox, location, acl);
+
     /* make sure we don't have a double server!partition */
-    if ((p = strchr(server, '!')) && strchr(p+1, '!')) return MUPDATE_BADPARAM;
+    if ((p = strchr(location, '!')) && strchr(p+1, '!')) return MUPDATE_BADPARAM;
 
     if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_REPLICATED) {
 	/* we don't care about the server part, everything is local */
-	if (p) server = p + 1;
+	if (p) location = p + 1;
     }
 
+    syslog(LOG_DEBUG, "mupdate_activate for mailbox: %s, location: %s, acl: %s", mailbox, location, acl);
+
     prot_printf(handle->conn->out,
-		"X%u ACTIVATE {" SIZE_T_FMT "+}\r\n%s"
-		" {" SIZE_T_FMT "+}\r\n%s {" SIZE_T_FMT "+}\r\n%s\r\n", 
-		handle->tagn++, strlen(mailbox), mailbox, 
-		strlen(server), server, strlen(acl), acl);
+		"X%u ACTIVATE "
+		"{" SIZE_T_FMT "+}\r\n%s "
+		"{" SIZE_T_FMT "+}\r\n%s "
+		"{" SIZE_T_FMT "+}\r\n%s\r\n",
+		handle->tagn++,
+		strlen(mailbox), mailbox,
+		strlen(location), location,
+		strlen(acl), acl
+	);
 
     ret = mupdate_scarf(handle, mupdate_scarf_one, NULL, 1, &response);
     if (ret) {
@@ -208,28 +217,34 @@ EXPORTED int mupdate_activate(mupdate_handle *handle,
 }
 
 HIDDEN int mupdate_reserve(mupdate_handle *handle,
-		    const char *mailbox, const char *server)
+		    const char *mailbox, const char *location)
 {
     int ret;
     enum mupdate_cmd_response response;
     const char *p;
     
     if (!handle) return MUPDATE_BADPARAM;
-    if (!mailbox || !server) return MUPDATE_BADPARAM;
+    if (!mailbox || !location) return MUPDATE_BADPARAM;
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
     /* make sure we don't have a double server!partition */
-    if ((p = strchr(server, '!')) && strchr(p+1, '!')) return MUPDATE_BADPARAM;
+    if ((p = strchr(location, '!')) && strchr(p+1, '!')) return MUPDATE_BADPARAM;
 
     if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_REPLICATED) {
-	/* we don't care about the server part, everything is local */
-	if (p) server = p + 1;
+	/* we don't care about the location part, everything is local */
+	if (p) location = p + 1;
     }
 
+    syslog(LOG_DEBUG, "mupdate_reserve for mailbox: %s, location: %s", mailbox, location);
+
     prot_printf(handle->conn->out,
-		"X%u RESERVE {" SIZE_T_FMT "+}\r\n%s {" SIZE_T_FMT "+}\r\n%s\r\n",
-		handle->tagn++, strlen(mailbox), mailbox, 
-		strlen(server), server);
+		"X%u RESERVE "
+		"{" SIZE_T_FMT "+}\r\n%s "
+		"{" SIZE_T_FMT "+}\r\n%s\r\n",
+		handle->tagn++,
+		strlen(mailbox), mailbox,
+		strlen(location), location
+	);
 
     ret = mupdate_scarf(handle, mupdate_scarf_one, NULL, 1, &response);
     if (ret) {
@@ -242,28 +257,32 @@ HIDDEN int mupdate_reserve(mupdate_handle *handle,
 }
 
 EXPORTED int mupdate_deactivate(mupdate_handle *handle,
-		       const char *mailbox, const char *server)
+		       const char *mailbox, const char *location)
 {
     int ret;
     enum mupdate_cmd_response response;
     const char *p;
     
     if (!handle) return MUPDATE_BADPARAM;
-    if (!mailbox || !server) return MUPDATE_BADPARAM;
+    if (!mailbox || !location) return MUPDATE_BADPARAM;
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
-    /* make sure we don't have a double server!partition */
-    if ((p = strchr(server, '!')) && strchr(p+1, '!')) return MUPDATE_BADPARAM;
+    /* make sure we don't have a double location!partition */
+    if ((p = strchr(location, '!')) && strchr(p+1, '!')) return MUPDATE_BADPARAM;
 
     if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_REPLICATED) {
 	/* we don't care about the server part, everything is local */
-	if (p) server = p + 1;
+	if (p) location = p + 1;
     }
 
     prot_printf(handle->conn->out,
-		"X%u DEACTIVATE {" SIZE_T_FMT "+}\r\n%s {" SIZE_T_FMT "+}\r\n%s\r\n",
-		handle->tagn++, strlen(mailbox), mailbox, 
-		strlen(server), server);
+	    "X%u DEACTIVATE "
+	    "{" SIZE_T_FMT "+}\r\n%s "
+	    "{" SIZE_T_FMT "+}\r\n%s\r\n",
+	    handle->tagn++,
+	    strlen(mailbox), mailbox,
+	    strlen(location), location
+	);
 
     ret = mupdate_scarf(handle, mupdate_scarf_one, NULL, 1, &response);
     if (ret) {
@@ -310,7 +329,7 @@ static int mupdate_find_cb(struct mupdate_mailboxdata *mdata,
     /* coyp the data to the handle storage */
     /* xxx why can't we just point to the 'mdata' buffers? */
     strlcpy(h->mailbox_buf, mdata->mailbox, sizeof(h->mailbox_buf));
-    strlcpy(h->server_buf, mdata->server, sizeof(h->server_buf));
+    strlcpy(h->location_buf, mdata->location, sizeof(h->location_buf));
 
     if(!strncmp(cmd, "MAILBOX", 7)) {
 	h->mailboxdata_buf.t = ACTIVE;
@@ -327,7 +346,7 @@ static int mupdate_find_cb(struct mupdate_mailboxdata *mdata,
     }
    
     h->mailboxdata_buf.mailbox = h->mailbox_buf;
-    h->mailboxdata_buf.server = h->server_buf;
+    h->mailboxdata_buf.location = h->location_buf;
     h->mailboxdata_buf.acl = h->acl;
     
     return 0;
@@ -554,7 +573,7 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
 		/* Handle mailbox command */
 		memset(&box, 0, sizeof(box));
 		box.mailbox = handle->arg1.s;
-		box.server = handle->arg2.s;
+		box.location = handle->arg2.s;
 		box.acl = handle->arg3.s;
 		r = callback(&box, handle->cmd.s, context);
 		if (r) { /* callback error ? */
@@ -607,7 +626,7 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
 		/* Handle reserve command */
 		memset(&box, 0, sizeof(box));
 		box.mailbox = handle->arg1.s;
-		box.server = handle->arg2.s;
+		box.location = handle->arg2.s;
 		r = callback(&box, handle->cmd.s, context);
 		if (r) { /* callback error ? */
 		    syslog(LOG_ERR, 
