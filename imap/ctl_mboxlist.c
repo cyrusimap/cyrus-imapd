@@ -214,10 +214,10 @@ static int dump_cb(void *rockp,
 		} // if (r = dlist_getatom())
 
 		if (dl_ace->name && tmp) {
-		    const char *ace = strconcat(xstrdup(dl_ace->name), " ", xstrdup(tmp));
+		    const char *ace = strconcat(xstrdup(dl_ace->name), "\t", xstrdup(tmp));
 
 		    if (acl) {
-			acl = strconcat(xstrdup(acl), " ", ace);
+			acl = strconcat(xstrdup(acl), "\t", ace);
 		    } else {
 			acl = xstrdup(ace);
 		    }
