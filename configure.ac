@@ -1624,7 +1624,7 @@ Cyrus Imapd configured components
    event notification: $enable_event_notification
    idled:              $enable_idled
    murder:             $enable_murder
-   nttpd:              $enable_nntp
+   nntpd:              $enable_nntp
    replication:        $enable_replication
    sieve:              $enable_sieve
 
