@@ -544,7 +544,7 @@ EXPORTED int mboxlist_update(mbentry_t *mbentry, int localonly)
     return r;
 }
 
-static int mboxlist_findparent(const char *mboxname,
+EXPORTED int mboxlist_findparent(const char *mboxname,
 			       mbentry_t **mbentryp)
 {
     mbentry_t *mbentry = NULL;
