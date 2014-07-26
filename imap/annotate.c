@@ -1183,18 +1183,20 @@ static int annotate_state_set_scope(annotate_state_t *state,
     annotate_state_unset_scope(state);
 
     if (mbentry) {
-	if (!mailbox && !mbentry->server) {
+	assert(!mailbox);
+	assert(!uid);
+	if (!mbentry->server) {
 	    /* local mailbox */
 	    r = mailbox_open_iwl(mbentry->name, &mailbox);
 	    if (r)
 		goto out;
 	    state->mailbox_is_ours = 1;
 	}
-	assert(mailbox);
 	state->mbentry = mbentry;
+	state->which = ANNOTATION_SCOPE_MAILBOX;
     }
 
-    if (uid) {
+    else if (uid) {
 	assert(mailbox);
 	state->which = ANNOTATION_SCOPE_MESSAGE;
     }
@@ -1278,6 +1280,8 @@ static void output_entryatt(annotate_state_t *state, const char *entry,
 
     if (state->mailbox)
 	mboxname = state->mailbox->name;
+    else if (state->mbentry)
+	mboxname = state->mbentry->name;
     else
 	mboxname = "";
     /* @mboxname is now an internal mailbox name */
@@ -1367,13 +1371,14 @@ static int _annotate_may_fetch(annotate_state_t *state,
 	return 1;
     }
     else if (state->which == ANNOTATION_SCOPE_MAILBOX) {
-	assert(state->mailbox);
+	assert(state->mailbox || state->mbentry);
 
 	/* Make sure its a local mailbox annotation */
 	if (state->mbentry && state->mbentry->server)
 	    return 0;
 
-	acl = state->mailbox->acl;
+	if (state->mailbox) acl = state->mailbox->acl;
+	else if (state->mbentry) acl = state->mbentry->acl;
 	/* RFC5464 is a trifle vague about access control for mailbox
 	 * annotations but this seems to be compliant */
 	needed = ACL_LOOKUP|ACL_READ;
@@ -1439,16 +1444,19 @@ static void annotation_get_server(annotate_state_t *state,
     r = annotate_state_need_mbentry(state);
     assert(r == 0);
 
+    /* Make sure its a remote mailbox */
+    if (!state->mbentry->server) goto out;
+
     /* Check ACL */
     /* Note that we use a weaker form of access control than
      * normal - we only check for ACL_LOOKUP and we don't refuse
      * access if the mailbox is not local */
-    if (!state->mbentry->acl ||
-        !(cyrus_acl_myrights(state->auth_state, state->mbentry->acl) & ACL_LOOKUP))
+    if (!state->isadmin &&
+	(!state->mbentry->acl ||
+	 !(cyrus_acl_myrights(state->auth_state, state->mbentry->acl) & ACL_LOOKUP)))
 	goto out;
 
-    if (state->mbentry->server)
-	buf_appendcstr(&value, state->mbentry->server);
+    buf_appendcstr(&value, state->mbentry->server);
 
     output_entryatt(state, entry->name, "", &value);
 out:
@@ -1466,13 +1474,16 @@ static void annotation_get_partition(annotate_state_t *state,
     r = annotate_state_need_mbentry(state);
     assert(r == 0);
 
+    /* Make sure its a local mailbox */
+    if (state->mbentry->server) goto out;
+
     /* Check ACL */
-    if (!state->mbentry->acl ||
-        !(cyrus_acl_myrights(state->auth_state, state->mbentry->acl) & ACL_LOOKUP))
+    if (!state->isadmin &&
+	(!state->mbentry->acl ||
+	 !(cyrus_acl_myrights(state->auth_state, state->mbentry->acl) & ACL_LOOKUP)))
 	goto out;
 
-    if (!state->mbentry->server)
-	buf_appendcstr(&value, state->mbentry->partition);
+    buf_appendcstr(&value, state->mbentry->partition);
 
     output_entryatt(state, entry->name, "", &value);
 out:
@@ -2177,7 +2188,7 @@ EXPORTED int annotate_state_fetch(annotate_state_t *state,
 		state->orig_attribute = attribs;
 	    }
 
-	    _annotate_fetch_entries(state, /*proxy_check*/0);
+	    _annotate_fetch_entries(state, /*proxy_check*/1);
 
 	    if (proxy_fetch_func && state->orig_entry && state->mbentry->server &&
 		!hash_lookup(state->mbentry->server, &state->server_table)) {
