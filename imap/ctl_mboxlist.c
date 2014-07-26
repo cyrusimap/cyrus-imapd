@@ -242,13 +242,8 @@ static int dump_cb(void *rockp,
 	    r = dlist_getatom(dl, "T", (const char **)&mbtype_str);
 
 	    if (!r) {
-		syslog(
-			LOG_ERR,
-			"Failed to obtain (T)ype from dlist (%s:%d)",
-			__FILE__,
-			__LINE__
-		    );
-
+		// That's OK, the mailbox is local (0)
+		mbtype = 0;
 	    }
 
 	    mbtype = mboxlist_string_to_mbtype(mbtype_str);
