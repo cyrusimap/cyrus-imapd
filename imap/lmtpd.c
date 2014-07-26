@@ -475,7 +475,7 @@ static int mlookup(const char *name, mbentry_t **mbentryptr)
 
 	mbentry = mboxlist_entry_create();
 	mbentry->acl = xstrdupnull(mailboxdata->acl);
-	mbentry->server = xstrdupnull(mailboxdata->server);
+	mbentry->server = xstrdupnull(mailboxdata->location);
 
 	/* XXX hack for now - should pull this out into mupdate_find */
 	c = strchr(mbentry->server, '!');
