@@ -183,8 +183,6 @@ EXPORTED int mupdate_activate(mupdate_handle *handle,
     if (!mailbox || !location || !acl) return MUPDATE_BADPARAM;
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
-    syslog(LOG_DEBUG, "mupdate_activate for mailbox: %s, location: %s, acl: %s", mailbox, location, acl);
-
     /* make sure we don't have a double server!partition */
     if ((p = strchr(location, '!')) && strchr(p+1, '!')) return MUPDATE_BADPARAM;
 
@@ -192,8 +190,6 @@ EXPORTED int mupdate_activate(mupdate_handle *handle,
 	/* we don't care about the server part, everything is local */
 	if (p) location = p + 1;
     }
-
-    syslog(LOG_DEBUG, "mupdate_activate for mailbox: %s, location: %s, acl: %s", mailbox, location, acl);
 
     prot_printf(handle->conn->out,
 		"X%u ACTIVATE "
