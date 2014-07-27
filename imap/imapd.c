@@ -5527,7 +5527,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
 
 		    imapd_check(s_conn, 0);
 
-		    prot_printf(imapd_out, "%s %s\r\n", tag, s_conn->last_result.s);
+		    prot_printf(imapd_out, "%s %s", tag, s_conn->last_result.s);
 
 		    goto done;
 
