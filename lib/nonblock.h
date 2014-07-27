@@ -38,23 +38,13 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *
- * $Id: nonblock.h,v 1.10 2010/01/06 17:01:46 murch Exp $
  */
 
 #ifndef INCLUDED_NONBLOCK_H
 #define INCLUDED_NONBLOCK_H
 
-#ifndef P
-#ifdef __STDC__
-#define P(x) x
-#else
-#define P(x) ()
-#endif
-#endif
-
 extern const char *nonblock_method_desc;
 
-extern void nonblock P((int fd, int mode));
+extern void nonblock(int fd, int mode);
 
 #endif /* INCLUDED_NONBLOCK_H */

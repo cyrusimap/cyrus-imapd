@@ -38,8 +38,6 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *
- * $Id: lmtpd.c,v 1.167 2010/05/25 20:59:19 wescraig Exp $
  */
 
 #include <config.h>
@@ -336,8 +334,7 @@ void service_abort(int error)
     shut_down(error);
 }
 
-static void
-usage()
+static void usage()
 {
     fprintf(stderr, "421-4.3.0 usage: lmtpd [-C <alt_config>] [-a]\r\n");
     fprintf(stderr, "421 4.3.0 %s\n", cyrus_version());
@@ -479,7 +476,7 @@ static int mlookup(const char *name, char **server, char **aclp, void *tid)
     return r;
 }
 
-/* places msg in mailbox mailboxname.  
+/* places msg in mailbox mailboxname.
  * if you wish to use single instance store, pass stage as non-NULL
  * if you want to deliver message regardless of duplicates, pass id as NULL
  * if you want to notify, pass user
@@ -567,7 +564,7 @@ int deliver_mailbox(FILE *f,
 	    if (strlen(mailboxname) >= inboxlen &&
 		!strncmp(mailboxname, inbox, inboxlen) &&
 		(!mailboxname[inboxlen] || mailboxname[inboxlen] == '.')) {
-		strlcpy(inbox, "INBOX", sizeof(inbox)); 
+		strlcpy(inbox, "INBOX", sizeof(inbox));
 		strlcat(inbox, mailboxname+inboxlen, sizeof(inbox));
 		notify_mailbox = inbox;
 	    }
@@ -650,7 +647,7 @@ void deliver_remote(message_data_t *msgdata,
 	    int j = rc->rcpt_num;
 	    switch (status[j]) {
 	    case s_wait:
-		/* hmmm, if something fails we'll want to try an 
+		/* hmmm, if something fails we'll want to try an
 		   error delivery */
 		if (lt->rcpt[i].result != RCPT_GOOD) {
 		    status[j] = s_err;
@@ -756,7 +753,7 @@ int deliver(message_data_t *msgdata, char *authuser,
     struct message_content content = { NULL, 0, NULL };
     char *notifyheader;
     deliver_data_t mydata;
-    
+
     assert(msgdata);
     nrcpts = msg_getnumrcpt(msgdata);
     assert(nrcpts);
@@ -774,7 +771,7 @@ int deliver(message_data_t *msgdata, char *authuser,
     mydata.namespace = &lmtpd_namespace;
     mydata.authuser = authuser;
     mydata.authstate = authstate;
-    
+
     /* loop through each recipient, attempting delivery for each */
     for (n = 0; n < nrcpts; n++) {
 	char namebuf[MAX_MAILBOX_BUFFER] = "", *server;
@@ -843,7 +840,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	while (d) {
 	    struct dest *nextd = d->next;
 	    struct rcpt *rc = d->to;
-   
+
 	    while (rc) {
 		struct rcpt *nextrc = rc->next;
 		free(rc);
@@ -861,7 +858,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    case s_err:
 	    case s_done:
 		/* yikes, we haven't implemented sieve ! */
-		syslog(LOG_CRIT, 
+		syslog(LOG_CRIT,
 		       "sieve states reached, but we don't implement sieve");
 		abort();
 	    break;
@@ -885,7 +882,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    assert(status[n] == done || status[n] == s_done);
 	}
     }
-   
+
     /* cleanup */
     free(status);
     if (content.base) map_free(&content.base, &content.len);
@@ -903,7 +900,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 void fatal(const char* s, int code)
 {
     static int recurse_code = 0;
-    
+
     if(recurse_code) {
 	/* We were called recursively. Just give up */
 	snmp_increment(ACTIVE_CONNECTIONS, -1);
@@ -917,7 +914,7 @@ void fatal(const char* s, int code)
     if (stage) append_removestage(stage);
 
     syslog(LOG_ERR, "FATAL: %s", s);
-    
+
     /* shouldn't return */
     shut_down(code);
 
@@ -1086,7 +1083,7 @@ char *generate_notify(message_data_t *m)
 		    ret = xrealloc(ret, len += 1024);
 		}
 		pos += sprintf(ret + pos, "%s: ", h);
-		
+
 		/* put the header body.
 		   xxx it would be nice to linewrap.*/
 		/* need: length + '\n' + '\0' */

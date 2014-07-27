@@ -38,8 +38,6 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *
- * $Id: imclient.c,v 1.95 2010/01/06 17:01:45 murch Exp $
  */
 
 #include <config.h>
@@ -196,12 +194,11 @@ static struct imclient_cmdcallback *cmdcallback_freelist;
 /* Forward declarations */
 void imclient_write(struct imclient *imclient,
 		    const char *s, size_t len);
-static int imclient_writeastring P((struct imclient *imclient,
-				     const char *str));
-static void imclient_writebase64 P((struct imclient *imclient,
-				    const char *output, size_t len));
-static void imclient_eof P((struct imclient *imclient));
-static int imclient_decodebase64 P((char *input));
+static int imclient_writeastring(struct imclient *imclient, const char *str);
+static void imclient_writebase64(struct imclient *imclient,
+				 const char *output, size_t len);
+static void imclient_eof(struct imclient *imclient);
+static int imclient_decodebase64(char *input);
 
 /* callbacks we support */
 static const sasl_callback_t callbacks[] = {

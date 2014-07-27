@@ -38,8 +38,6 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *
- * $Id: prot.c,v 1.100 2010/06/28 12:06:43 brong Exp $
  */
 
 #include <config.h>
@@ -228,9 +226,7 @@ int prot_sasldecode(struct protstream *s, int n)
  * Turn on SASL for this connection
  */
 
-int prot_setsasl(s, conn)
-struct protstream *s;
-sasl_conn_t *conn;
+int prot_setsasl(struct protstream *s, sasl_conn_t *conn)
 {
     const void *ssfp;
     int result;

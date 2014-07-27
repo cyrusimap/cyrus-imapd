@@ -38,8 +38,6 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *
- * $Id: lmtpengine.c,v 1.132 2010/01/06 17:01:35 murch Exp $
  */
 
 #include <config.h>
@@ -534,7 +532,7 @@ static char *parseaddr(char *s)
 	    while (Uisalnum(*p) || *p == '.' || *p == '-') p++;
 	}
     }
-    
+
     if (*p++ != '>') return 0;
     if (*p && *p != ' ') return 0;
     len = p - s;
@@ -546,7 +544,7 @@ static char *parseaddr(char *s)
 }
 
 /* clean off the <> from the return path */
-void clean_retpath(char *rpath)
+static void clean_retpath(char *rpath)
 {
     int sl;
 
@@ -567,9 +565,7 @@ void clean_retpath(char *rpath)
  * from string pointed to by 'buf'.  Does not handle continuation header
  * lines.
  */
-void
-clean822space(buf)
-char *buf;
+static void clean822space(char* buf)
 {
     char *from=buf, *to=buf;
     int c;
@@ -1237,7 +1233,7 @@ void lmtpmode(struct lmtp_func *func,
 				  strlcpy(hbuf, "[unknown]", sizeof(hbuf));
 			  }
 			  else
-			      strlcpy(hbuf, "[unix socket]", sizeof(hbuf));		  
+			      strlcpy(hbuf, "[unix socket]", sizeof(hbuf));
 			  syslog(LOG_ERR, "badlogin: %s %s %s",
 				 hbuf, mech, sasl_errdetail(cd.conn));
 		  

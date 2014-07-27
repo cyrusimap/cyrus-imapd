@@ -38,8 +38,6 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *
- * $Id: lmtp_sieve.c,v 1.20 2010/01/06 17:01:35 murch Exp $
  */
 
 #include <config.h>
@@ -320,11 +318,10 @@ static int send_forward(const char *forwardto,
 
     smbuf[0] = "sendmail";
     smbuf[1] = "-i";		/* ignore dots */
+    smbuf[2] = "-f";
     if (return_path && *return_path) {
-	smbuf[2] = "-f";
 	smbuf[3] = return_path;
     } else {
-	smbuf[2] = "-f";
 	smbuf[3] = "<>";
     }
     smbuf[4] = "--";

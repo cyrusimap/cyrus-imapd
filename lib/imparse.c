@@ -38,8 +38,6 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *
- * $Id: imparse.c,v 1.15 2010/01/06 17:01:45 murch Exp $
  */
 
 #include <config.h>
@@ -55,9 +53,7 @@
  * returns the character following the word, and modifies the pointer at
  * 's' to point after the returned character.  Modifies the input buffer.
  */
-int imparse_word(s, retval)
-char **s;
-char **retval;
+int imparse_word(char **s,char **retval)
 {
     int c;
     
@@ -80,9 +76,7 @@ char **retval;
  * at the empty string, and modifies 's' to point around the syntax error.
  * Modifies the input buffer.
  */
-int imparse_astring(s, retval)
-char **s;
-char **retval;
+int imparse_astring(char **s, char **retval)
 {
     int c;
     char *d;
@@ -151,8 +145,7 @@ char **retval;
 /*
  * Return nonzero if 's' matches the grammar for an atom
  */
-int imparse_isatom(s)
-const char *s;
+int imparse_isatom(const char *s)
 {
     int len = 0;
 
