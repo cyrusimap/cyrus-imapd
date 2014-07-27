@@ -181,12 +181,11 @@ static const char charclass[256] = {
 static struct imclient_cmdcallback *cmdcallback_freelist;
 
 /* Forward declarations */
-static int imclient_writeastring P((struct imclient *imclient,
-				     const char *str));
-static void imclient_writebase64 P((struct imclient *imclient,
-				    const char *output, size_t len));
-static void imclient_eof P((struct imclient *imclient));
-static int imclient_decodebase64 P((char *input));
+static int imclient_writeastring(struct imclient *imclient, const char *str);
+static void imclient_writebase64(struct imclient *imclient,
+				 const char *output, size_t len);
+static void imclient_eof(struct imclient *imclient);
+static int imclient_decodebase64(char *input);
 
 /* callbacks we support */
 static const sasl_callback_t callbacks[] = {

@@ -43,16 +43,8 @@
 #ifndef INCLUDED_NONBLOCK_H
 #define INCLUDED_NONBLOCK_H
 
-#ifndef P
-#ifdef __STDC__
-#define P(x) x
-#else
-#define P(x) ()
-#endif
-#endif
-
 extern const char *nonblock_method_desc;
 
-extern void nonblock P((int fd, int mode));
+extern void nonblock(int fd, int mode);
 
 #endif /* INCLUDED_NONBLOCK_H */

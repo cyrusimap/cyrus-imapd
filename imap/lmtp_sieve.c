@@ -324,11 +324,10 @@ static int send_forward(const char *forwardto,
 
     smbuf[0] = "sendmail";
     smbuf[1] = "-i";		/* ignore dots */
+    smbuf[2] = "-f";
     if (return_path && *return_path) {
-	smbuf[2] = "-f";
 	smbuf[3] = return_path;
     } else {
-	smbuf[2] = "-f";
 	smbuf[3] = "<>";
     }
     smbuf[4] = "--";

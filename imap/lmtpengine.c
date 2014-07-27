@@ -553,8 +553,7 @@ static void clean_retpath(char *rpath)
  * from string pointed to by 'buf'.  Does not handle continuation header
  * lines.
  */
-static void
-clean822space(char *buf)
+static void clean822space(char *buf)
 {
     char *from=buf, *to=buf;
     int c;

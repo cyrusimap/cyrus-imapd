@@ -56,8 +56,7 @@ EXPORTED const char *nonblock_method_desc = "ioctl";
  * 'mode' is nonzero, sets non-blocking mode, if 'mode' is zero
  * clears non-blocking mode.
  */
-EXPORTED void
-nonblock(int fd, int mode)
+EXPORTED void nonblock(int fd, int mode)
 {
     mode = mode ? 1 : 0;
 
