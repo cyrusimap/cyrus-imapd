@@ -231,8 +231,6 @@ HIDDEN int mupdate_reserve(mupdate_handle *handle,
 	if (p) location = p + 1;
     }
 
-    syslog(LOG_DEBUG, "mupdate_reserve for mailbox: %s, location: %s", mailbox, location);
-
     prot_printf(handle->conn->out,
 		"X%u RESERVE "
 		"{" SIZE_T_FMT "+}\r\n%s "
