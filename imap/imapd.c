@@ -5613,9 +5613,14 @@ localcreate:
 	    goto done;
 	} // (!strcasecmp(name, "INBOX"))
 
-    } else { // (r == IMAP_PERMISSION_DENIED)
-	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(IMAP_PERMISSION_DENIED));
+    } else if (r) { // (r == IMAP_PERMISSION_DENIED)
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
 	goto done;
+
+    } else { // (r == IMAP_PERMISSION_DENIED)
+	prot_printf(imapd_out, "%s OK %s\r\n", tag, error_message(IMAP_OK_COMPLETED));
+	goto done;
+
     } // (r == IMAP_PERMISSION_DENIED)
 
     if (specialuse.len) {
