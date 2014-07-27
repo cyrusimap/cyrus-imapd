@@ -278,6 +278,10 @@ static int dump_cb(void *rockp,
 		part = strconcat(server, "!", xstrdup(part));
 
 	    } // (mbtype & MBTYPE_REMOTE)
+
+	    // Reset r **NOT** to the return value of ffin dlist functions
+	    r = 0;
+
 	} // if (r = dlist_parsemap())
 	else {
 	    syslog(
