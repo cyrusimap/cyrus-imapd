@@ -7273,11 +7273,13 @@ void cmd_setquota(const char *tag, const char *quotaroot)
 	imapd_check(s, 0);
 
 	prot_printf(s->out, "%s Setquota ", tag);
-	prot_printliteral(s->out, quotaroot, strlen(quotaroot));
+	prot_printstring(s->out, quotaroot);
 	prot_putc(' ', s->out);
+	pipe_command(s, 0);
 	pipe_including_tag(s, tag, 0);
 
-	goto out;
+	return;
+
     }
     mboxlist_entry_free(&mbentry);
 
