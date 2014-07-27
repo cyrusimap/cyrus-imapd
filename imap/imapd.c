@@ -5365,9 +5365,20 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
 
     // A non-admin is not allowed to specify the server nor partition on which
     // to create the mailbox.
+    //
+    // However, this only applies to frontends. If we're a backend, a frontend will
+    // proxy the partition it wishes to create the mailbox on.
     if ((server || partition) && !imapd_userisadmin) {
-	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(IMAP_PERMISSION_DENIED));
-	goto done;
+	if (
+		config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD ||
+		config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_UNIFIED
+	    ) {
+
+	    if (!config_getstring(IMAPOPT_PROXYSERVERS)) {
+		prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(IMAP_PERMISSION_DENIED));
+		goto done;
+	    }
+	}
     }
 
     /* We don't care about trailing hierarchy delimiters. */
