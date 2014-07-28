@@ -602,8 +602,17 @@ xmlNodePtr init_xml_response(const char *resp, int ns,
 xmlNodePtr xml_add_href(xmlNodePtr parent, xmlNsPtr ns, const char *href)
 {
     xmlChar *uri = xmlURIEscapeStr(BAD_CAST href, BAD_CAST ":/?=");
-    xmlNodePtr node = xmlNewChild(parent, ns, BAD_CAST "href", uri);
 
+    /* annoyingly, xmlURIEscapeStr explicitly WILL NOT escape '@', but Apple's
+     * client, at least version 5, has a bug where it can't handle '@' in URIs
+     * and needs it escaped.  So we do this shitty little dance */
+    struct buf buf = BUF_INITIALIZER;
+    buf_setcstr(&buf, (const char *)uri);
+    buf_replace_all(&buf, "@", "%40");
+
+    xmlNodePtr node = xmlNewChild(parent, ns, BAD_CAST "href", BAD_CAST buf_cstring(&buf));
+
+    buf_free(&buf);
     free(uri);
     return node;
 }
