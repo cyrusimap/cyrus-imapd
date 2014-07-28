@@ -184,6 +184,7 @@ static struct ftags *canon_ftags(struct ftags *f);
 static void free_ftags(struct ftags *f);
 
 static int verify_stringlist(sieve_script_t*, strarray_t *sl, int (*verify)(sieve_script_t*, char *));
+static int verify_flaglist(sieve_script_t*, strarray_t *sl);
 static int verify_mailbox(sieve_script_t*, char *s);
 static int verify_address(sieve_script_t*, char *s);
 static int verify_header(sieve_script_t*, char *s);
@@ -339,7 +340,7 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
                                     yyerror(parse_script, "imap4flags MUST be enabled with \"require\"");
                                     YYERROR;
                                    }
-                                  if (!verify_stringlist(parse_script, $2, verify_flag)) {
+                                  if (!verify_flaglist(parse_script, $2)) {
                                     YYERROR; /* vf should call yyerror() */
                                   }
                                   $$ = new_command(SETFLAG);
@@ -349,7 +350,7 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
                                     yyerror(parse_script, "imap4flags MUST be enabled with \"require\"");
                                     YYERROR;
                                     }
-                                  if (!verify_stringlist(parse_script, $2, verify_flag)) {
+                                  if (!verify_flaglist(parse_script, $2)) {
                                     YYERROR; /* vf should call yyerror() */
                                   }
                                   $$ = new_command(ADDFLAG);
@@ -359,7 +360,7 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
                                     yyerror(parse_script, "imap4flags MUST be enabled with \"require\"");
                                     YYERROR;
                                     }
-                                  if (!verify_stringlist(parse_script, $2, verify_flag)) {
+                                  if (!verify_flaglist(parse_script, $2)) {
                                     YYERROR; /* vf should call yyerror() */
                                   }
                                   $$ = new_command(REMOVEFLAG);
@@ -576,7 +577,7 @@ test:     ANYOF testlist	 { $$ = new_test(ANYOF); $$->u.tl = $2; }
 
 	| HASFLAG htags stringlist
 				 {
-				     if (!verify_stringlist(parse_script, $3, verify_flag)) {
+				     if (!verify_flaglist(parse_script, $3)) {
 					 YYERROR; /* vf should call yyerror() */
 				     }
 
@@ -940,7 +941,7 @@ ftags: /* empty */		 { $$ = new_ftags(); }
 				   if ($$->flags != NULL) {
 			yyerror(parse_script, "duplicate flags tag"); YYERROR; }
 				   else {
-				    if (!verify_stringlist($3, verify_flag)) {
+				    if (!verify_flaglist(parse_script, $3)) {
 				     YYERROR; /* vf should call yyerror() */
 				    }
 				   $$->flags = $3; }
@@ -1469,7 +1470,6 @@ static struct ftags *new_ftags(void)
 
 static struct ftags *canon_ftags(struct ftags *f)
 {
-    /* TODO: change "flag1 flag2" to ["flag1", "flag2"] */
     return f;
 }
 
@@ -1487,6 +1487,33 @@ static int verify_stringlist(sieve_script_t *parse_script, strarray_t *sa, int (
 	if (!verify(parse_script, sa->data[i]))
 	    return 0;
     return 1;
+}
+static int verify_flaglist(sieve_script_t *parse_script, strarray_t *sl)
+{
+    int i;
+    char *joined;
+    strarray_t *resplit;
+    // Join all the flags, putting spaces between them
+    joined = strarray_join(sl, " ");
+    // Clear out the sl for reuse
+    strarray_truncate(sl, 0);
+    // Split the joined flag list at spaces
+    resplit = strarray_split(joined, " ", STRARRAY_TRIM);
+
+    // Perform duplicate elimination and flag verification
+    for (i = 0; i < resplit->count ; i++) {
+	// has the side effect of lower-casing system flags
+	if (!verify_flag(parse_script, resplit->data[i])) {
+	    // TODO: [IMAP4FLAGS] says the we MUST ignore invalid flags,
+	    // which probably means we shouldn't fail on an invalid flag.
+	    // Do we pass on the value that isn't a valid flag?
+	    continue;
+	}
+	strarray_add_case(sl, xstrdup(resplit->data[i]));
+    }
+    strarray_free(resplit);
+    free(joined);
+    return (1);
 }
 
 static int verify_address(sieve_script_t *parse_script, char *s)
@@ -1656,7 +1683,6 @@ static int verify_date_part(sieve_script_t *parse_script, char *dp)
 
 
 
-/* TODO: allow space separated list of flags */
 static int verify_flag(sieve_script_t *parse_script, char *f)
 {
     if (f[0] == '\\') {
