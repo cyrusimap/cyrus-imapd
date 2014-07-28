@@ -939,7 +939,12 @@ ftags: /* empty */		 { $$ = new_ftags(); }
 	| ftags FLAGS stringlist { $$ = $1;
 				   if ($$->flags != NULL) {
 			yyerror(parse_script, "duplicate flags tag"); YYERROR; }
-				   else { $$->flags = $3; } }
+				   else {
+				    if (!verify_stringlist($3, verify_flag)) {
+				     YYERROR; /* vf should call yyerror() */
+				    }
+				   $$->flags = $3; }
+				 }
         ;
 
 rtags: /* empty */		 { $$ = 0; }
