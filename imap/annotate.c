@@ -2479,8 +2479,13 @@ static int _annotate_store_entries(annotate_state_t *state)
     struct annotate_entry_list *ee;
     int r;
 
-    /* Loop through the list of provided entries to get */
+    /* Loop through the list of provided entries to set */
     for (ee = state->entry_list ; ee ; ee = ee->next) {
+
+	/* Skip annotations that can't be stored on frontend */
+	if ((ee->desc->proxytype == BACKEND_ONLY) &&
+	    (state->mbentry && state->mbentry->server))
+	    continue;
 
 	if (ee->have_shared &&
 	    !_annotate_may_store(state, /*shared*/1, ee->desc))
@@ -2886,7 +2891,7 @@ EXPORTED int annotate_state_store(annotate_state_t *state, struct entryattlist *
 		goto cleanup;
 	    assert(state->mbentry);
 	}
-	assert(state->mailbox);
+	else assert(state->mailbox);
 
 	r = _annotate_store_entries(state);
 	if (r)
