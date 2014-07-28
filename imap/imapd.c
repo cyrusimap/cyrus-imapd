@@ -423,7 +423,7 @@ static int parse_annotate_fetch_data(const char *tag,
 				     strarray_t *attribs);
 static int parse_metadata_string_or_list(const char *tag,
 					 strarray_t *sa,
-					 int *was_singlep);
+					 int *is_list);
 static int parse_annotate_store_data(const char *tag,
 				     int permessage_flag,
 				     struct entryattlist **entryatts);
@@ -7979,12 +7979,14 @@ static int parse_annotate_fetch_data(const char *tag,
  */
 static int parse_metadata_string_or_list(const char *tag,
 					 strarray_t *entries,
-					 int *was_singlep)
+					 int *is_list)
 {
     int c;
     static struct buf arg;
 
-    *was_singlep = 0;
+    // Assume by default the arguments are a list of entries,
+    // until proven otherwise.
+    *is_list = 1;
 
     c = prot_getc(imapd_in);
     if (c == EOF) {
@@ -8030,7 +8032,9 @@ static int parse_metadata_string_or_list(const char *tag,
 	}
 
 	strarray_append(entries, arg.s);
-	*was_singlep = 1;
+
+	// Not a list
+	*is_list = 0;
     }
 
     if (c == ' ' || c == '\r') return c;
@@ -8609,7 +8613,7 @@ static void cmd_getmetadata(const char *tag)
     strarray_t lists[3] = { STRARRAY_INITIALIZER,
 			    STRARRAY_INITIALIZER,
 			    STRARRAY_INITIALIZER };
-    int was_single[3] = { 0, 0, 0 };
+    int is_list[3] = { 1, 1, 1 };
     int nlists = 0;
     strarray_t *options = NULL;
     strarray_t *mboxes = NULL;
@@ -8631,7 +8635,7 @@ static void cmd_getmetadata(const char *tag)
 
     while (nlists < 3)
     {
-	c = parse_metadata_string_or_list(tag, &lists[nlists], &was_single[nlists]);
+	c = parse_metadata_string_or_list(tag, &lists[nlists], &is_list[nlists]);
 	if (c == EOF)
 	    goto missingargs;
 	nlists++;
@@ -8683,7 +8687,7 @@ static void cmd_getmetadata(const char *tag)
     if (nlists == 2) {
 	/* no options */
 	mboxes = &lists[0];
-	mbox_is_pattern = was_single[0];
+	mbox_is_pattern = is_list[0];
     }
     if (nlists == 3) {
 	/* options, either before or after */
@@ -8697,12 +8701,12 @@ static void cmd_getmetadata(const char *tag)
 	    /* (options) (mailboxes) */
 	    options = &lists[0];
 	    mboxes = &lists[1];
-	    mbox_is_pattern = was_single[1];
+	    mbox_is_pattern = is_list[1];
 	    break;
 	case 2:
 	    /* (mailboxes) (options) */
 	    mboxes = &lists[0];
-	    mbox_is_pattern = was_single[0];
+	    mbox_is_pattern = is_list[0];
 	    options = &lists[1];
 	    break;
 	case 3:
