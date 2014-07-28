@@ -175,7 +175,7 @@ int do_redirect(action_list_t *a, const char *addr, int cancel_keep)
  *
  * incompatible with: reject
  */
-int do_keep(action_list_t *a, strarray_t *imapflags)
+int do_keep(action_list_t *a, int cancel_keep, strarray_t *imapflags)
 {
     action_list_t *b = NULL;
 
@@ -198,21 +198,23 @@ int do_keep(action_list_t *a, strarray_t *imapflags)
 	    }
 	    /* add the action to the end of the list */
 	    b->next = a;
-	    return 0;
+	    break;
 	}
 	b = a;
 	a = a->next;
     }
 
-    /* add to the action list */
-    a = (action_list_t *) xmalloc(sizeof(action_list_t));
-    if (a == NULL)
-	return SIEVE_NOMEM;
+    if(a == NULL) {
+	/* add to the action list */
+	a = new_action_list();
+	if (a == NULL)
+	    return SIEVE_NOMEM;
+	a->next = NULL;
+	b->next = a;
+    }
     a->a = ACTION_KEEP;
-    a->cancel_keep = 1;
+    a->cancel_keep |= cancel_keep;
     a->u.keep.imapflags = imapflags;
-    a->next = NULL;
-    b->next = a;
     return 0;
 }
 

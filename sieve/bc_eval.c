@@ -1330,8 +1330,9 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    res=1;
 	    break;
 
-	case B_KEEP:/*1*/
-	    res = do_keep(actions, imapflags);
+	case B_KEEP:/*22*/
+	case B_KEEP_ORIG:/*1*/
+	    res = do_keep(actions, 1, imapflags);
 	    if (res == SIEVE_RUN_ERROR)
 		*errmsg = "Keep can not be used with Reject";
 	    ip++;
