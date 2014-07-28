@@ -966,7 +966,7 @@ static commandlist_t *build_keep(int t, struct ftags *f)
 
     if (ret) {
 	ret->u.k.copy = f->copy;
-	ret->u.k.flags = f->flags;
+	ret->u.k.flags = f->flags; f->flags = NULL;
 	free_ftags(f);
     }
     return ret;
@@ -980,7 +980,7 @@ static commandlist_t *build_fileinto(int t, struct ftags *f, char *folder)
 
     if (ret) {
 	ret->u.f.copy = f->copy;
-	ret->u.f.flags = f->flags;
+	ret->u.f.flags = f->flags; f->flags = NULL;
 	if (config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO)) {
 	    ret->u.f.folder = xmalloc(5 * strlen(folder) + 1);
 	    UTF8_to_mUTF7(ret->u.f.folder, folder);
@@ -1201,6 +1201,7 @@ static struct ftags *canon_ftags(struct ftags *f)
 
 static void free_ftags(struct ftags *f)
 {
+    if (f->flags) { strarray_free(f->flags); }
     free(f);
 }
 
