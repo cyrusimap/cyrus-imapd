@@ -8636,21 +8636,34 @@ static void cmd_getmetadata(const char *tag)
     while (nlists < 3)
     {
 	c = parse_metadata_string_or_list(tag, &lists[nlists], &is_list[nlists]);
-	if (c == EOF)
-	    goto missingargs;
+	if (c == EOF) {
+	    // Note we have not yet incremented nlists, this should read as
+	    // "not yet two 'lists'", the minimum set of arguments.
+	    if (nlists < 1) {
+		goto missingargs;
+	    }
+	}
+
 	nlists++;
-	if (c == '\r')
+	if (c == '\r' || c == EOF)
 	    break;
     }
 
     /* check for CRLF */
-    if (c == '\r') c = prot_getc(imapd_in);
-    if (c != '\n') {
-	prot_printf(imapd_out,
-		    "%s BAD Unexpected extra arguments to Getannotation\r\n",
-		    tag);
+    if (c == '\r') {
+
+	c = prot_getc(imapd_in);
+
+	if (c != '\n') {
+	    prot_printf(imapd_out,
+			"%s BAD Unexpected extra arguments to Getannotation\r\n",
+			tag);
+	    eatline(imapd_in, c);
+	    goto freeargs;
+	}
+    } else {
+	// Make sure this line is gone
 	eatline(imapd_in, c);
-	goto freeargs;
     }
 
     /*
@@ -8802,7 +8815,7 @@ static void cmd_getmetadata(const char *tag)
 		    tag, error_message(IMAP_OK_COMPLETED));
     }
 
-  freeargs:
+freeargs:
     strarray_fini(&lists[0]);
     strarray_fini(&lists[1]);
     strarray_fini(&lists[2]);
