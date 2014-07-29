@@ -1317,7 +1317,7 @@ int annotate_store_proxy(const char *server, const char *mbox_pat,
 char *find_free_server(void)
 {
     const char *servers = config_getstring(IMAPOPT_SERVERLIST);
-    unsigned long max_avail = 0;
+    unsigned long long int max_avail = 0;
     char *server = NULL;
 
     if (servers) {
@@ -1346,7 +1346,8 @@ char *find_free_server(void)
 				  proxy_userid, &backend_cached,
 				  &backend_current, &backend_inbox, imapd_in);
 	    if (be) {
-		unsigned avail = 0;
+		unsigned long long int avail = 0;
+		static struct buf avail_buf;
 		int c;
 
 		/* fetch annotation from remote */
@@ -1367,31 +1368,41 @@ char *find_free_server(void)
 		    c = chomp(be->in,
 			      "ANNOTATION \"\" "
 			      "\"/vendor/cmu/cyrus-imapd/freespace\" "
-			      "(\"value.shared\" \"");
+			      "(\"value.shared\" ");
+
 		    if (c == EOF) {
 			/* we don't care about this response */
 			eatline(be->in, c);
 			continue;
 		    }
 
-		    /* read uidvalidity */
-		    c = getuint32(be->in, &avail);
-		    if (c != '\"') { c = EOF; break; }
+		    /* read amount of free space */
+		    c = getastring(be->in, be->out, &avail_buf);
+
+		    if (c != '"') { c = EOF; break; }
 		    eatline(be->in, c); /* we don't care about the rest of the line */
 		}
+
 		if (c != EOF) {
 		    prot_ungetc(c, be->in);
 
 		    /* we should be looking at the tag now */
 		    eatline(be->in, c);
 		}
+
 		if (c == EOF) {
 		    /* uh oh, we're not happy */
 		    fatal("Lost connection to backend", EC_UNAVAILABLE);
 		}
+
+		avail = strtoull(avail_buf.s, NULL, 10);
+
 		if (avail > max_avail) {
+		    syslog(LOG_DEBUG, "freespace on %s (%llu) greater than current maximum on %s (%llu)", cur_server, avail, server, max_avail);
 		    server = cur_server;
 		    max_avail = avail;
+		} else {
+		    syslog(LOG_DEBUG, "freespace on %s (%llu) still the current maximum (not %s (%llu))", server, max_avail, cur_server, avail);
 		}
 	    }
 
