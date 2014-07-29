@@ -1079,7 +1079,7 @@ static void buf_replace_buf(struct buf *buf,
 
     if (replace->len > length) {
 	/* string will need to expand */
-	buf_ensure(buf, replace->len - length);
+	buf_ensure(buf, replace->len - length + 1);
     }
     if (length != replace->len) {
 	/* +1 to copy the NULL to keep cstring semantics */
