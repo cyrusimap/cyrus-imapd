@@ -360,7 +360,7 @@ done:
  */
 int buildquotalist(char *domain, char **roots, int nroots)
 {
-    int i, r;
+    int i, r = 0;
     char buf[MAX_MAILBOX_BUFFER], *tail;
     size_t domainlen = 0;
 
@@ -611,7 +611,7 @@ done:
 int fixquota_dopass(char *domain, char **roots, int nroots,
 		    foreach_cb *cb)
 {
-    int i, r;
+    int i, r = 0;
     char buf[MAX_MAILBOX_BUFFER], *tail;
     size_t domainlen = 0;
 
