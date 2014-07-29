@@ -77,6 +77,7 @@ extern struct db *mbdb;
 /* each mailbox has the following data */
 struct mboxlist_entry {
     char *name;
+    char *ext_name;
     time_t mtime;
     uint32_t uidvalidity;
     int mbtype;

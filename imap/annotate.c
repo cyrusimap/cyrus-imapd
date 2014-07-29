@@ -2193,7 +2193,7 @@ EXPORTED int annotate_state_fetch(annotate_state_t *state,
 	    if (proxy_fetch_func && state->orig_entry && state->mbentry->server &&
 		!hash_lookup(state->mbentry->server, &state->server_table)) {
 		/* xxx ignoring result */
-		proxy_fetch_func(state->mbentry->server, state->orig_mailbox,
+		proxy_fetch_func(state->mbentry->server, state->mbentry->ext_name,
 				 state->orig_entry, state->orig_attribute);
 		hash_insert(state->mbentry->server, (void *)0xDEADBEEF, &state->server_table);
 	    }
@@ -2910,7 +2910,7 @@ EXPORTED int annotate_state_store(annotate_state_t *state, struct entryattlist *
 	    if (!r) {
 		/* proxy command to backends */
 		struct proxy_rock prock = { NULL, NULL };
-		prock.mbox_pat = state->mbentry->name;
+		prock.mbox_pat = state->mbentry->ext_name;
 		prock.entryatts = l;
 		hash_enumerate(&state->server_table, store_proxy, &prock);
 	    }

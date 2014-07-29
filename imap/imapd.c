@@ -8342,6 +8342,7 @@ static int apply_cb(char *name, int matchlen,
     annotate_state_t *state = arock->state;
     mbentry_t *mbentry = NULL;
     char int_mboxname[MAX_MAILBOX_BUFFER];
+    char ext_mboxname[MAX_MAILBOX_BUFFER];
     int r;
 
     /* Suppress any output of a partial match */
@@ -8376,6 +8377,11 @@ static int apply_cb(char *name, int matchlen,
     r = annotate_state_set_mailbox_mbe(state, mbentry);
     if (r)
 	goto out;
+
+    // Store the external name in the mbentry as ext_name, for later reference
+    (*imapd_namespace.mboxname_toexternal)(&imapd_namespace, int_mboxname, imapd_userid, ext_mboxname);
+    mbentry->ext_name = xmalloc(sizeof(ext_mboxname)+1);
+    strlcpy(mbentry->ext_name, ext_mboxname, sizeof(ext_mboxname));
 
     r = arock->proc(state, arock->data);
     arock->nseen++;
