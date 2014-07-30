@@ -196,32 +196,36 @@ static int dump_cb(void *rockp,
 	    struct dlist *dl_acl = dlist_getchild(dl, "A");
 	    struct dlist *dl_ace;
 
-	    for (dl_ace = dl_acl->head; dl_ace; dl_ace = dl_ace->next) {
-		const char *tmp;
-		r = dlist_getatom(dl_acl, dl_ace->name, &tmp);
+	    if (dl_acl) {
+		for (dl_ace = dl_acl->head; dl_ace; dl_ace = dl_ace->next) {
+		    const char *tmp;
+		    r = dlist_getatom(dl_acl, dl_ace->name, &tmp);
 
-		if (!r) {
-		    syslog(
-			    LOG_ERR,
-			    "Failed to dlist_getatom for (A)CL "
-			    "dlist_kvlist key '%s' (%s:%d)",
-			    dl_ace->name,
-			    __FILE__,
-			    __LINE__
-			);
+		    if (!r) {
+			syslog(
+				LOG_ERR,
+				"Failed to dlist_getatom for (A)CL "
+				"dlist_kvlist key '%s' (%s:%d)",
+				dl_ace->name,
+				__FILE__,
+				__LINE__
+			    );
 
-		    continue;
-		} // if (r = dlist_getatom())
+			continue;
+		    } // if (r = dlist_getatom())
 
-		if (dl_ace->name && tmp) {
-		    const char *ace = strconcat(xstrdup(dl_ace->name), "\t", xstrdup(tmp));
+		    if (dl_ace->name && tmp) {
+			const char *ace = strconcat(xstrdup(dl_ace->name), "\t", xstrdup(tmp));
 
-		    if (acl) {
-			acl = strconcat(xstrdup(acl), "\t", ace);
-		    } else {
-			acl = xstrdup(ace);
+			if (acl) {
+			    acl = strconcat(xstrdup(acl), "\t", ace);
+			} else {
+			    acl = xstrdup(ace);
+			}
 		    }
 		}
+	    } else { // (dl_acl)
+		syslog(LOG_NOTICE, "Mailbox without an ACL: '%s'", name);
 	    }
 
 	    // The partition is always there...
@@ -230,12 +234,11 @@ static int dump_cb(void *rockp,
 	    if (!r) {
 		syslog(
 			LOG_ERR,
-			"Failed to obtain (P)artition from dlist "
-			"(%s:%d)",
-			__FILE__,
-			__LINE__
+			"No partition for mailbox '%s'",
+			name
 		    );
 
+		part = NULL;
 	    }
 
 	    // The mailbox type is always there too... as a string
