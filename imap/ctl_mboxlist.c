@@ -329,6 +329,9 @@ static int dump_cb(void *rockp,
 	break;
     case M_POPULATE: 
     {
+	if (mbtype & MBTYPE_DELETED)
+	    return 0;
+
 	char *realpart = xmalloc(strlen(config_servername) + 1
 				 + strlen(part) + 1);
 	int skip_flag;
