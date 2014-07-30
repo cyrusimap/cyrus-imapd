@@ -575,6 +575,7 @@ static void get_period(icalcomponent *comp, icalcomponent_kind kind,
 	icaltime_convert_to_zone(icalcomponent_get_dtstart(comp), utc);
     period->end =
 	icaltime_convert_to_zone(icalcomponent_get_dtend(comp), utc);
+    period->duration = icaldurationtype_null_duration();
 
     switch (kind) {
     case ICAL_VEVENT_COMPONENT:
@@ -790,25 +791,28 @@ EXPORTED void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata)
     }
     cdata->transp = transp;
 
-    /* Get base dtstart and dtend */
-    get_period(comp, kind, &span);
+    /* Initialize span to be nothing */
+    span.start = icaltime_from_timet_with_zone(INT_MAX, 0, NULL);
+    span.end = icaltime_from_timet_with_zone(INT_MIN, 0, NULL);
+    span.duration = icaldurationtype_null_duration();
 
-    /* See if its a recurring event */
-    if (icalcomponent_get_first_property(comp,ICAL_RRULE_PROPERTY) ||
-	icalcomponent_get_first_property(comp,ICAL_RDATE_PROPERTY) ||
-	icalcomponent_get_first_property(comp,ICAL_EXDATE_PROPERTY)) {
-	/* Recurring - find widest time range that includes events */
-	recurring = 1;
+    do {
+	/* See if its a recurring event */
+	if (icalcomponent_get_first_property(comp,ICAL_RRULE_PROPERTY) ||
+	    icalcomponent_get_first_property(comp,ICAL_RDATE_PROPERTY) ||
+	    icalcomponent_get_first_property(comp,ICAL_EXDATE_PROPERTY)) {
+	    /* Recurring - find widest time range that includes events */
+	    recurring = 1;
 
-	icalcomponent_foreach_recurrence(
-	    comp,
-	    icaltime_from_timet_with_zone(INT_MIN, 0, NULL),
-	    icaltime_from_timet_with_zone(INT_MAX, 0, NULL),
-	    recur_cb,
-	    &span);
-
-	/* Handle overridden recurrences */
-	while ((comp = icalcomponent_get_next_component(ical, kind))) {
+	    icalcomponent_foreach_recurrence(
+		comp,
+		icaltime_from_timet_with_zone(INT_MIN, 0, NULL),
+		icaltime_from_timet_with_zone(INT_MAX, 0, NULL),
+		recur_cb,
+		&span);
+	}
+	else {
+	    /* Single/overridden occurrence - check dstart/dtend against span */
 	    struct icalperiodtype period;
 
 	    get_period(comp, kind, &period);
@@ -819,7 +823,7 @@ EXPORTED void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata)
 	    if (icaltime_compare(period.end, span.end) > 0)
 		memcpy(&span.end, &period.end, sizeof(struct icaltimetype));
 	}
-    }
+    } while ((comp = icalcomponent_get_next_component(ical, kind)));
 
     cdata->dtstart = icaltime_as_ical_string(span.start);
     cdata->dtend = icaltime_as_ical_string(span.end);
