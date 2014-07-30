@@ -109,7 +109,7 @@ int long_report = 0;
 static struct namespace arb_namespace;
 
 /* forward declarations */
-void usage(void);
+void usage(void) __attribute__((noreturn));
 void run_users(void);
 void make_report(char *key, void *data, void *rock);
 void process_seen(const char *path, const char *user);
