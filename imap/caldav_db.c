@@ -631,7 +631,8 @@ static void get_period(icalcomponent *comp, icalcomponent_kind kind,
 		period->start =
 		    icaltime_convert_to_zone(icalproperty_get_created(prop),
 					     utc);
-		memcpy(&period->end, &period->start, sizeof(struct icaltimetype));
+		period->end =
+		    icaltime_from_timet_with_zone(INT_MAX, 0, NULL);
 	    }
 	    else {
 		/* Always */
