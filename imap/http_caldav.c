@@ -2398,7 +2398,12 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
 	    /* Mark start of where recurrences will be added */
 	    firstr = busytime->len;
 
-	    if (is_busytime(calfilter, comp)) {
+	    /* Find the component containing the RRULE */
+	    for (; comp &&
+		   !icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
+		 comp = icalcomponent_get_next_component(ical, kind));
+
+	    if (comp && is_busytime(calfilter, comp)) {
 		/* Add all recurring busytime in specified time-range */
 		icalcomponent_foreach_recurrence(comp,
 						 calfilter->start,
@@ -2412,7 +2417,8 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
 	    /* XXX  Should we sort busytime array, so we can use bsearch()? */
 
 	    /* Handle overridden recurrences */
-	    while ((comp = icalcomponent_get_next_component(ical, kind))) {
+	    for (comp = icalcomponent_get_first_real_component(ical);
+		 comp; comp = icalcomponent_get_next_component(ical, kind)) {
 		icalproperty *prop;
 		struct icaltimetype recurid;
 		icalparameter *param;
@@ -2424,6 +2430,8 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
 		prop =
 		    icalcomponent_get_first_property(comp,
 						     ICAL_RECURRENCEID_PROPERTY);
+		if (!prop) continue;
+
 		recurid = icalproperty_get_recurrenceid(prop);
 		param =
 		    icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
