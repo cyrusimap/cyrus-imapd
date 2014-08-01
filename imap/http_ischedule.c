@@ -181,6 +181,11 @@ static int meth_get_isched(struct transaction_t *txn,
     /* Initialize */
     if (!lastmod) message_guid_set_null(&prev_guid);
 
+    /* Fill in iSchedule-Capabilities */
+    stat(config_filename, &sbuf);
+    lastmod = MAX(compile_time, sbuf.st_mtime);
+    txn->resp_body.iserial = lastmod + rscale_calendars->num_elements;
+
     /* We don't handle GET on a anything other than ?action=capabilities */
     action = hash_lookup("action", &txn->req_qparams);
     if (!action || action->next || strcmp(action->s, "capabilities")) {
@@ -191,12 +196,9 @@ static int meth_get_isched(struct transaction_t *txn,
     /* Generate ETag based on compile date/time of this source file,
        the number of available RSCALEs and the config file size/mtime */
     assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "%ld-%d",
-	       (long) compile_time, rscale_calendars->num_elements);
-
-    stat(config_filename, &sbuf);
-    lastmod = MAX(compile_time, sbuf.st_mtime);
-    buf_printf(&txn->buf, "-%ld-%ld", sbuf.st_mtime, sbuf.st_size);
+    buf_printf(&txn->buf, "%ld-%d-%ld-%ld",
+	       (long) compile_time, rscale_calendars->num_elements,
+	       sbuf.st_mtime, sbuf.st_size);
 
     message_guid_generate(&guid, buf_cstring(&txn->buf), buf_len(&txn->buf));
     etag = message_guid_encode(&guid);
@@ -209,12 +211,11 @@ static int meth_get_isched(struct transaction_t *txn,
     case HTTP_OK:
     case HTTP_PARTIAL:
     case HTTP_NOT_MODIFIED:
-	/* Fill in Etag,  Last-Modified, Expires, and iSchedule-Capabilities */
+	/* Fill in Etag,  Last-Modified, and Expires */
 	txn->resp_body.etag = etag;
 	txn->resp_body.lastmod = lastmod;
 	txn->resp_body.maxage = 86400;  /* 24 hrs */
 	txn->flags.cc |= CC_MAXAGE;
-	txn->resp_body.iserial = compile_time;
 
 	if (precond != HTTP_NOT_MODIFIED) break;
 
@@ -239,6 +240,8 @@ static int meth_get_isched(struct transaction_t *txn,
 
 	capa = xmlNewChild(root, NULL, BAD_CAST "capabilities", NULL);
 
+	buf_reset(&txn->buf);
+	buf_printf(&txn->buf, "%ld", txn->resp_body.iserial);
 	xmlNewChild(capa, NULL, BAD_CAST "serial-number",
 			   BAD_CAST buf_cstring(&txn->buf));
 
@@ -255,6 +258,7 @@ static int meth_get_isched(struct transaction_t *txn,
 	xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REPLY");
 	meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
 	xmlNewProp(meth, BAD_CAST "name", BAD_CAST "CANCEL");
+
 	comp = xmlNewChild(node, NULL, BAD_CAST "component", NULL);
 	xmlNewProp(comp, BAD_CAST "name", BAD_CAST "VTODO");
 	meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
@@ -263,6 +267,7 @@ static int meth_get_isched(struct transaction_t *txn,
 	xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REPLY");
 	meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
 	xmlNewProp(meth, BAD_CAST "name", BAD_CAST "CANCEL");
+
 #ifdef HAVE_VPOLL
 	comp = xmlNewChild(node, NULL, BAD_CAST "component", NULL);
 	xmlNewProp(comp, BAD_CAST "name", BAD_CAST "VPOLL");
@@ -275,6 +280,7 @@ static int meth_get_isched(struct transaction_t *txn,
 	meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
 	xmlNewProp(meth, BAD_CAST "name", BAD_CAST "CANCEL");
 #endif /* HAVE_VPOLL */
+
 	comp = xmlNewChild(node, NULL, BAD_CAST "component", NULL);
 	xmlNewProp(comp, BAD_CAST "name", BAD_CAST "VFREEBUSY");
 	meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
@@ -330,7 +336,7 @@ static int meth_get_isched(struct transaction_t *txn,
 
 	/* Dump XML response tree into a text buffer */
 	xmlDocDumpFormatMemoryEnc(root->doc, &buf, &bufsiz, "utf-8", 1);
-	xmlFree(root->doc);
+	xmlFreeDoc(root->doc);
 
 	if (!buf) {
 	    txn->error.desc = "Error dumping XML tree";
@@ -362,6 +368,12 @@ static int meth_post_isched(struct transaction_t *txn,
     icalproperty_method meth = 0;
     icalproperty *prop = NULL;
     const char *uid = NULL;
+    struct stat sbuf;
+
+    /* Fill in iSchedule-Capabilities */
+    stat(config_filename, &sbuf);
+    txn->resp_body.iserial = MAX(compile_time, sbuf.st_mtime) +
+	rscale_calendars->num_elements;
 
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
@@ -523,9 +535,6 @@ static int meth_post_isched(struct transaction_t *txn,
 		}
 		tok_fini(&tok);
 	    }
-
-	    /* Fill in iSchedule-Capabilities */
-	    txn->resp_body.iserial = compile_time;
 
 	    xml_response(HTTP_OK, txn, root->doc);
 
