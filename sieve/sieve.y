@@ -123,12 +123,22 @@ struct itags {
   int optional;
 };
 
+struct dttags {
+    int zonetag;
+    char *zone;
+    int comptag;
+    int relation;
+    char *comparator;
+    int date_part;
+};
+
 static char *check_reqs(sieve_script_t *script, strarray_t *sl);
 static test_t *build_address(int t, struct aetags *ae,
 			     strarray_t *sl, strarray_t *pl);
 static test_t *build_header(int t, struct htags *h,
 			    strarray_t *sl, strarray_t *pl);
 static test_t *build_body(int t, struct btags *b, strarray_t *pl);
+static test_t *build_date(int t, struct dttags *dt, char *hn, strarray_t *kl);
 static commandlist_t *build_vacation(int t, struct vtags *h, char *s);
 static commandlist_t *build_notify(int t, struct ntags *n);
 static commandlist_t *build_denotify(int t, struct dtags *n);
@@ -154,6 +164,9 @@ static struct dtags *new_dtags(void);
 static struct dtags *canon_dtags(struct dtags *d);
 static void free_dtags(struct dtags *d);
 static struct itags *new_itags(void);
+static struct dttags *new_dttags(void);
+static struct dttags *canon_dttags(struct dttags *dt);
+static void free_dttags(struct dttags *b);
 
 static int verify_stringlist(sieve_script_t*, strarray_t *sl, int (*verify)(sieve_script_t*, char *));
 static int verify_mailbox(sieve_script_t*, char *s);
@@ -163,6 +176,8 @@ static int verify_addrheader(sieve_script_t*, char *s);
 static int verify_envelope(sieve_script_t*, char *s);
 static int verify_flag(sieve_script_t*, char *s);
 static int verify_relat(sieve_script_t*, char *s);
+static int verify_zone(sieve_script_t*, char *s);
+static int verify_date_part(sieve_script_t *parse_script, char *dp);
 #ifdef ENABLE_REGEX
 static int verify_regex(sieve_script_t*, char *s, int cflags);
 static int verify_regexs(sieve_script_t*,const strarray_t *sl, char *comp);
@@ -194,6 +209,7 @@ extern void sieverestart(FILE *f);
     struct ntags *ntag;
     struct dtags *dtag;
     struct itags *itag;
+    struct dttags *dttag;
 }
 
 %token <nval> NUMBER
@@ -211,6 +227,8 @@ extern void sieverestart(FILE *f);
 %token METHOD ID OPTIONS LOW NORMAL HIGH ANY MESSAGE
 %token INCLUDE PERSONAL GLOBAL RETURN OPTIONAL ONCE
 %token COPY
+%token DATE CURRENTDATE ZONE ORIGINALZONE
+%token YEAR MONTH DAY JULIAN HOUR MINUTE SECOND TIME ISO8601 STD11 ZONE WEEKDAY
 
 %type <cl> commands command action elsif block
 %type <sl> stringlist strings
@@ -224,6 +242,7 @@ extern void sieverestart(FILE *f);
 %type <ntag> ntags
 %type <dtag> dtags
 %type <itag> itags
+%type <dttag> dttags
 %type <nval> priority
 
 %name-prefix="sieve"
@@ -585,6 +604,32 @@ test:     ANYOF testlist	 { $$ = new_test(ANYOF); $$->u.tl = $2; }
 	| NOT test		 { $$ = new_test(NOT); $$->u.t = $2; }
 	| SIZE sizetag NUMBER    { $$ = new_test(SIZE); $$->u.sz.t = $2;
 		                   $$->u.sz.n = $3; }
+        | DATE dttags STRING STRING stringlist
+                                 {
+                                   $2->date_part = verify_date_part(parse_script, $4);
+                                   if ($2->date_part == -1)
+                                     { YYERROR; /*vr called yyerror()*/ }
+
+                                   $2 = canon_dttags($2);
+
+                                   $$ = build_date(DATE, $2, $3, $5);
+                                   if ($$ == NULL) {
+                                     yyerror(parse_script, "unable to find a compatible comparator");
+                                     YYERROR; }
+                                 }
+        | CURRENTDATE dttags STRING STRING stringlist
+                                 {
+                                   $2->date_part = verify_date_part(parse_script, $4);
+                                   if ($2->date_part == -1)
+                                     { YYERROR; /*vr called yyerror()*/ }
+
+                                   $2 = canon_dttags($2);
+
+                                   $$ = build_date(CURRENTDATE, $2, $3, $5);
+                                   if ($$ == NULL) {
+                                     yyerror(parse_script, "unable to find a compatible comparator");
+                                     YYERROR; }
+                                 }
 	| error			 { $$ = NULL; }
 	;
 
@@ -688,6 +733,43 @@ btags: /* empty */		 { $$ = new_btags(); }
 				     $$->comparator = $3; } }
         ;
 
+dttags: /* empty */              { $$ = new_dttags(); }
+        | dttags comptag         { $$ = $1;
+                                   if ($$->comptag != -1) {
+                                     yyerror(parse_script, "duplicate comparator type tag"); YYERROR; }
+                                   else { $$->comptag = $2; } }
+
+        | dttags relcomp STRING  { $$ = $1;
+                                   if ($$->comptag != -1) {
+                                     yyerror(parse_script, "duplicate comparator type tag"); YYERROR; }
+                                   else {
+                                     $$->comptag = $2;
+                                     $$->relation = verify_relat(parse_script, $3);
+                                     if ($$->relation == -1) {
+                                       YYERROR; /*vr called yyerror()*/ } } }
+
+        | dttags COMPARATOR STRING { $$ = $1;
+                                    if ($$->comparator != NULL) {
+                                      yyerror(parse_script, "duplicate comparator tag"); YYERROR; }
+                                    else if (!strcmp($3, "i;ascii-numeric") &&
+                                      !parse_script->support.i_ascii_numeric) {
+                                      yyerror(parse_script, "comparator-i;ascii-numeric MUST be enabled with \"require\"");  YYERROR; }
+                                    else { $$->comparator = $3; } }
+
+        | dttags ZONE STRING     { $$ = $1;
+                                   if ($$->zonetag != -1) {
+                                     yyerror(parse_script, "duplicate zone tag"); YYERROR; }
+                                   else {
+                                     if (verify_zone(parse_script, $3) == -1) {
+                                       YYERROR; /*vr called yyerror()*/ }
+                                     else { $$->zone = $3;
+                                            $$->zonetag = ZONE; } } }
+
+        | dttags ORIGINALZONE    { $$ = $1;
+                                   if ($$->zonetag != -1) {
+                                     yyerror(parse_script, "duplicate zone tag"); YYERROR; }
+                                   else { $$->zonetag = ORIGINALZONE; } }
+        ;
 
 addrparttag: ALL                 { $$ = ALL; }
 	| LOCALPART		 { $$ = LOCALPART; }
@@ -943,6 +1025,27 @@ static commandlist_t *build_include(int t, struct itags *i, char* script)
     return ret;
 }
 
+static test_t *build_date(int t, struct dttags *dt,
+    char *hn, strarray_t *kl)
+{
+    test_t *ret = new_test(t);
+    assert(t == DATE || t == CURRENTDATE);
+
+    if (ret) {
+        ret->u.dt.zone = (dt->zone ? xstrdup(dt->zone) : NULL);
+        ret->u.dt.comparator = xstrdup(dt->comparator);
+        ret->u.dt.zonetag = dt->zonetag;
+        ret->u.dt.comptag = dt->comptag;
+        ret->u.dt.relation = dt->relation;
+        ret->u.dt.date_part = dt->date_part;
+        ret->u.dt.header_name = hn;
+        ret->u.dt.kl = kl;
+        free_dttags(dt);
+    }
+    return ret;
+}
+
+
 static struct aetags *new_aetags(void)
 {
     struct aetags *r = (struct aetags *) xmalloc(sizeof(struct aetags));
@@ -1076,6 +1179,54 @@ static struct itags *new_itags() {
 
     return r;
 }
+
+static struct dttags *new_dttags(void)
+{
+    struct dttags *dt = (struct dttags *) xmalloc(sizeof(struct dttags));
+    dt->comptag = -1;
+    dt->zonetag = -1;
+    dt->relation = -1;
+    dt->comparator = NULL;
+    dt->zone = NULL;
+    dt->date_part = -1;
+    return dt;
+}
+
+static struct dttags *canon_dttags(struct dttags *dt)
+{
+    char zone[6];
+    int gmoffset;
+    int hours;
+    int minutes;
+    struct tm *tm;
+    time_t t;
+
+    if (dt->comparator == NULL) {
+        dt->comparator = xstrdup("i;ascii-casemap");
+    }
+    if (dt->zonetag == -1) {
+        t = time(NULL);
+        tm = localtime(&t);
+        gmoffset = gmtoff_of(tm, &t) / 60;
+        hours = abs(gmoffset) / 60;
+        minutes = abs(gmoffset) % 60;
+        snprintf(zone, 6, "%c%02d%02d", (gmoffset >= 0 ? '+' : '-'), hours, minutes);
+        dt->zone = xstrdup(zone);
+        dt->zonetag = ZONE;
+    }
+    if (dt->comptag == -1) {
+        dt->comptag = IS;
+    }
+    return dt;
+}
+
+static void free_dttags(struct dttags *dt)
+{
+    free(dt->comparator);
+    free(dt->zone);
+    free(dt);
+}
+
 
 static struct ntags *new_ntags(void)
 {
@@ -1240,6 +1391,67 @@ static int verify_relat(sieve_script_t *parse_script, char *r)
 	  return -1;
 	}
 	
+}
+
+static int verify_zone(sieve_script_t *parse_script, char *tz)
+{
+    int valid = 0;
+    unsigned hours;
+    unsigned minutes;
+    char sign;
+
+    if (sscanf(tz, "%c%02u%02u", &sign, &hours, &minutes) != 3) {
+        valid |= -1;
+    }
+
+    // test sign
+    switch (sign) {
+    case '+':
+    case '-':
+        break;
+
+    default:
+        valid |= -1;
+        break;
+    }
+
+    // test minutes
+    if (minutes > 59) {
+            valid |= -1;
+    }
+
+    if (valid != 0) {
+        snprintf(parse_script->sieveerr, ERR_BUF_SIZE,
+                 "flag '%s': not a valid timezone offset", tz);
+        yyerror(parse_script, parse_script->sieveerr);
+    }
+
+    return valid;
+}
+
+static int verify_date_part(sieve_script_t *parse_script, char *dp)
+{
+    lcase(dp);
+    if (!strcmp(dp, "year")) { return YEAR; }
+    else if (!strcmp(dp, "month")) { return MONTH; }
+    else if (!strcmp(dp, "day")) { return DAY; }
+    else if (!strcmp(dp, "date")) { return DATE; }
+    else if (!strcmp(dp, "julian")) { return JULIAN; }
+    else if (!strcmp(dp, "hour")) { return HOUR; }
+    else if (!strcmp(dp, "minute")) { return MINUTE; }
+    else if (!strcmp(dp, "second")) { return SECOND; }
+    else if (!strcmp(dp, "time")) { return TIME; }
+    else if (!strcmp(dp, "iso8601")) { return ISO8601; }
+    else if (!strcmp(dp, "std11")) { return STD11; }
+    else if (!strcmp(dp, "zone")) { return ZONE; }
+    else if (!strcmp(dp, "weekday")) { return WEEKDAY; }
+    else {
+        snprintf(parse_script->sieveerr, ERR_BUF_SIZE,
+                 "flag '%s': not a valid relational operation", dp);
+        yyerror(parse_script, parse_script->sieveerr);
+    }
+
+    return -1;
 }
 
 

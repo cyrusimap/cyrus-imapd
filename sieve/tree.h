@@ -101,6 +101,16 @@ struct Test {
 	    int t; /* tag */
 	    int n; /* param */
 	} sz;
+	struct { /* it's a date test */
+	    int zonetag;
+	    char *zone;
+	    int comptag;
+	    int relation;
+	    char *comparator;
+	    int date_part;
+	    char *header_name;
+	    strarray_t *kl;
+	} dt;
     } u;
 };
 

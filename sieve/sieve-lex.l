@@ -171,6 +171,10 @@ CRLF		(\r\n|\r|\n)
 <INITIAL>:once		return ONCE;
 <INITIAL>return		return RETURN;
 <INITIAL>:copy		return COPY;
+<INITIAL>date           return DATE;
+<INITIAL>currentdate    return CURRENTDATE;
+<INITIAL>:zone          return ZONE;
+<INITIAL>:originalzone  return ORIGINALZONE;
 <INITIAL>[ \t\n\r] ;	/* ignore whitespace */
 <INITIAL>#.* ;		/* ignore hash comments */
 <INITIAL>"/*"([^\*]|\*[^\/])*\*?"*/" ;	/* ignore bracket comments */

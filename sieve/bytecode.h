@@ -158,7 +158,9 @@ enum bytecode_comps {
     BC_ADDRESS,
     BC_ENVELOPE,	/* require envelope */
     BC_HEADER,
-    BC_BODY		/* require body */
+    BC_BODY,            /* require body */
+    BC_DATE,            /* require date */
+    BC_CURRENTDATE      /* require date */
 };
 
 /* currently one enum so as to help determine where values are being misused.
@@ -246,8 +248,34 @@ enum bytecode_tags {
     B_LOCATION_PLACEHOLDER_1,
     B_LOCATION_PLACEHOLDER_2,
     B_LOCATION_PLACEHOLDER_3,
-    B_LOCATION_PLACEHOLDER_4
-  
+    B_LOCATION_PLACEHOLDER_4,
+
+    /* Zones */
+    B_TIMEZONE,
+    B_ORIGINALZONE,
+
+    B_ZONE_PLACEHOLDER_1,
+    B_ZONE_PLACEHOLDER_2,
+
+    /* Date Parts */
+    B_YEAR,
+    B_MONTH,
+    B_DAY,
+    B_DATE,
+    B_JULIAN,
+    B_HOUR,
+    B_MINUTE,
+    B_SECOND,
+    B_TIME,
+    B_ISO8601,
+    B_STD11,
+    B_ZONE,
+    B_WEEKDAY,
+
+    B_DATEPART_PLACEHOLDER_1,
+    B_DATEPART_PLACEHOLDER_2,
+    B_DATEPART_PLACEHOLDER_3,
+    B_DATEPART_PLACEHOLDER_4
 };
 
 #endif

@@ -159,6 +159,13 @@ void free_test(test_t *t)
     case NOT:
 	free_test(t->u.t);
 	break;
+
+    case DATE:
+    case CURRENTDATE:
+	free(t->u.dt.comparator);
+	free(t->u.dt.zone);
+	strarray_free(t->u.dt.kl);
+	break;
     }
 
     free(t);

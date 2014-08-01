@@ -324,6 +324,65 @@ static int dump2_test(bytecode_input_t * d, int i)
 	i=write_list(ntohl(d[i].len), i+1, d);
 	printf("             ]\n");
 	break;
+    case BC_DATE:/*11*/
+    case BC_CURRENTDATE:/*12*/
+	/* current date */
+	if (BC_DATE == ntohl(d[i++].value)) {
+		printf("date [");
+	}
+	else {
+		printf("currentdate [");
+	}
+
+	/* zone tag */
+	{
+		int zone;
+		int timezone_offset;
+
+		printf("Zone-Tag: ");
+		zone = ntohl(d[i++].value);
+		switch (zone) {
+		case B_TIMEZONE:
+			timezone_offset = ntohl(d[i++].value);
+			printf("Specific timezone: offset by %d minutes.\n", timezone_offset);
+			break;
+		case B_ORIGINALZONE:
+			printf("Original zone.\n");
+			break;
+		}
+	}
+
+	i=printComparison(d, i);
+
+	printf("              Date-Type: ");
+	switch(ntohl(d[i++].value))
+	{
+	case B_YEAR: printf("year\n"); break;
+	case B_MONTH: printf("month\n"); break;
+	case B_DAY: printf("day\n"); break;
+	case B_JULIAN: printf("julian\n"); break;
+	case B_HOUR: printf("hour\n"); break;
+	case B_MINUTE: printf("minute\n"); break;
+	case B_SECOND: printf("second\n"); break;
+	case B_TIME: printf("time\n"); break;
+	case B_ISO8601: printf("iso8601\n"); break;
+	case B_STD11: printf("std11\n"); break;
+	case B_ZONE: printf("zone\n"); break;
+	case B_WEEKDAY: printf("weekday\n"); break;
+	}
+
+	/* header name */
+	{
+		const char *data;
+		int len;
+		i = unwrap_string(d, i, &data, &len);
+		printf("              Header Name: {%d}%s\n", len, data);
+	}
+
+	printf("              Key List: ");
+	i=write_list(ntohl(d[i].len), i+1, d);
+	printf("             ]\n");
+	break;
     default:
 	printf("WERT %d ", ntohl(d[i].value));
     }   

@@ -68,6 +68,7 @@ struct sieve_script {
 	int i_ascii_numeric: 1;
 	int include        : 1;
 	int copy           : 1;
+	int date           : 1;
 	int vacation_seconds: 1;
     } support;
 

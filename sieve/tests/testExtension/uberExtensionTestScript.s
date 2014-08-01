@@ -1,4 +1,4 @@
-require ["regex", "relational", "comparator-i;ascii-numeric", "subaddress", "envelope"];
+require ["regex", "relational", "comparator-i;ascii-numeric", "subaddress", "envelope", "date"];
 
 #this is for the extra thigns we have added to sieve
 #test extensions
@@ -145,3 +145,27 @@ if envelope :detail :contains "from" "k"
 
 if envelope :detail :matches "from" "e*k"
 {redirect "me+goodedetailmatches@blah.com";}
+
+######################################################################
+#DATE
+######################################################################
+
+if allof(header :is "from" "boss@example.com",
+         date :value "ge" :originalzone "date" "hour" "09",
+         date :value "lt" :originalzone "date" "hour" "17")
+{redirect "me+urgent@blah.com";}
+
+if anyof(date :is "received" "weekday" "0",
+         date :is "received" "weekday" "6")
+{redirect "me+weekend@blah.com";}
+
+if anyof(date :is :zone "-0800" "received" "weekday" "0",
+         date :is :zone "-0800" "received" "weekday" "6")
+{redirect "me+weekend(pst)@blah.com";}
+
+if date :is "received" "year" [ "1983", "1993", "2003", "2013" ]
+{redirect "me+yearsofthree@blah.com";}
+
+if currentdate :value "ge" :originalzone "received" "year" "2013"
+{redirect "me+yearsofthree@blah.com";}
+

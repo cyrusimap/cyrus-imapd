@@ -180,6 +180,10 @@ int script_require(sieve_script_t *s, char *req)
 	       (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_COPY)) {
 	s->support.copy = 1;
 	return 1;
+    } else if (!strcmp("date", req) &&
+	       (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_DATE)) {
+	s->support.date = 1;
+	return 1;
     }
     return 0;
 }

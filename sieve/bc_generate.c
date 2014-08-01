@@ -249,6 +249,40 @@ static int bc_comparator_generate(int codep, bytecode_info_t *retval,
     return codep;
 }
 
+static int bc_zone_generate(int codep, bytecode_info_t *retval,
+                            int zonetag, const char *zone)
+{
+	unsigned hours;
+	unsigned minutes;
+	char sign;
+
+	assert(retval != NULL);
+
+	/* zonetag */
+	if (!atleast(retval, codep + 1)) return -1;
+
+	switch (zonetag) {
+	case ZONE:
+		retval->data[codep++].value = B_TIMEZONE;
+
+		/* time-zone offset in minutes */
+		if (!atleast(retval, codep + 1) ||
+		    sscanf(zone, "%c%02u%02u", &sign, &hours, &minutes) != 3)
+		    return -1;
+
+		retval->data[codep++].value = (sign == '-' ? -1 : 1) * (hours * 60) + minutes;
+		break;
+	case ORIGINALZONE:
+		retval->data[codep++].value = B_ORIGINALZONE;
+		break;
+	default:
+		return -1;
+	}
+
+	return codep;
+}
+
+
 
 
 /* writes a single test into almost-flat form starting at codep.
@@ -409,6 +443,83 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 	codep = bc_stringlist_generate(codep, retval, t->u.b.pl);
 	if (codep == -1) return -1;
      
+	break;
+    case DATE:
+    case CURRENTDATE:
+	/* BC_DATE { time-zone: string} { c: comparator }
+	 *         { header-name : string } { date-part: string }
+	 *         { key-list : string list }
+	*/
+
+	if(!atleast(retval,codep + 1)) return -1;
+	retval->data[codep++].op = (DATE == t->type) ? BC_DATE : BC_CURRENTDATE;
+
+	/* zone */
+	codep = bc_zone_generate(codep, retval,
+	                         t->u.dt.zonetag,
+	                         t->u.dt.zone);
+	if (codep == -1) return -1;
+
+	/* comparator */
+	codep = bc_comparator_generate(codep, retval,
+	                               t->u.dt.comptag,
+	                               t->u.dt.relation,
+	                               t->u.dt.comparator);
+	if (codep == -1) return -1;
+
+	/* date-part */
+	if(!atleast(retval,codep + 1)) return -1;
+	switch (t->u.dt.date_part) {
+	case YEAR:
+		retval->data[codep++].value = B_YEAR;
+		break;
+	case MONTH:
+		retval->data[codep++].value = B_MONTH;
+		break;
+	case DAY:
+		retval->data[codep++].value = B_DAY;
+		break;
+	case DATE:
+		retval->data[codep++].value = B_DATE;
+		break;
+	case JULIAN:
+		retval->data[codep++].value = B_JULIAN;
+		break;
+	case HOUR:
+		retval->data[codep++].value = B_HOUR;
+		break;
+	case MINUTE:
+		retval->data[codep++].value = B_MINUTE;
+		break;
+	case SECOND:
+		retval->data[codep++].value = B_SECOND;
+		break;
+	case TIME:
+		retval->data[codep++].value = B_TIME;
+		break;
+	case ISO8601:
+		retval->data[codep++].value = B_ISO8601;
+		break;
+	case STD11:
+		retval->data[codep++].value = B_STD11;
+		break;
+	case ZONE:
+		retval->data[codep++].value = B_ZONE;
+		break;
+	case WEEKDAY:
+		retval->data[codep++].value = B_WEEKDAY;
+		break;
+	}
+
+	/* header-name */
+	if(!atleast(retval,codep + 2)) return -1;
+	retval->data[codep++].len = strlen(t->u.dt.header_name);
+	retval->data[codep++].str = t->u.dt.header_name;
+
+	/* keywords */
+	codep = bc_stringlist_generate(codep, retval, t->u.dt.kl);
+	if (codep == -1) return -1;
+
 	break;
     default:
 	return -1;

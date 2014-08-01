@@ -347,6 +347,76 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
 	break;
     }
     
+    case BC_DATE:
+    case BC_CURRENTDATE:
+    {
+	int ret;
+	int datalen;
+	int tmp;
+
+	/* drop zone tag */
+	tmp = bc->data[(*codep)].value;
+	if(write_int(fd, bc->data[(*codep)].value) == -1)
+	    return -1;
+	wrote += sizeof(int);
+	(*codep)++;
+
+	/* drop timezone offset */
+	if (tmp == B_TIMEZONE) {
+		if(write_int(fd, bc->data[(*codep)].value) == -1)
+		    return -1;
+		wrote += sizeof(int);
+		(*codep)++;
+	}
+
+	/* drop match type */
+	if(write_int(fd, bc->data[(*codep)].value) == -1)
+	    return -1;
+	wrote += sizeof(int);
+	(*codep)++;
+
+	/* drop relation */
+	if(write_int(fd, bc->data[(*codep)].value) == -1)
+	    return -1;
+	wrote += sizeof(int);
+	(*codep)++;
+
+	/* drop comparator */
+	if(write_int(fd, bc->data[(*codep)].value) == -1)
+	    return -1;
+	wrote += sizeof(int);
+	(*codep)++;
+
+	/* drop date-part */
+	if(write_int(fd, bc->data[(*codep)].value) == -1)
+	    return -1;
+	wrote += sizeof(int);
+	(*codep)++;
+
+	/* drop header-name */
+	{
+		datalen = bc->data[(*codep)++].len;
+
+		if(write_int(fd, datalen) == -1) return -1;
+		wrote += sizeof(int);
+
+		if(write(fd, bc->data[(*codep)++].str, datalen) == -1) return -1;
+		wrote += datalen;
+
+		ret = align_string(fd,datalen);
+		if(ret == -1) return -1;
+
+		wrote+=ret;
+	}
+
+	/* drop keywords */
+	ret = bc_stringlist_emit(fd, codep, bc);
+	if(ret < 0) return -1;
+	wrote+=ret;
+
+	break;
+    }
+
     default:
 	/* Unknown testcode? */
 	return -1;

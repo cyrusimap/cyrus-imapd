@@ -883,6 +883,195 @@ envelope_err:
 	
 	break;
     }
+    case BC_DATE:/*11*/
+    case BC_CURRENTDATE:/*12*/
+    {
+	char buffer[64];
+	const char **headers = NULL;
+	const char **key;
+	const char **keylist = NULL;
+	const char *header = NULL;
+	const char *header_data;
+	const char *header_name = NULL;
+	int comparator;
+	int date_part;
+	int index;
+	int match;
+	int relation;
+	int timezone_offset = 0;
+	int zone;
+	struct tm *tm;
+	time_t t;
+
+	++i; /* BC_DATE */
+
+	/* zone tag */
+	zone = ntohl(bc[i++].value);
+
+	/* timezone offset */
+	if (zone == B_TIMEZONE) {
+		timezone_offset = ntohl(bc[i++].value);
+	}
+
+	/* comparator */
+	match = ntohl(bc[i++].value);
+	relation = ntohl(bc[i++].value);
+	comparator = ntohl(bc[i++].value);
+
+	/* find comparator function */
+	comp = lookup_comp(comparator, match, relation, &comprock);
+	if(!comp) {
+		res = SIEVE_RUN_ERROR;
+		break;
+	}
+
+	/* date-part */
+	date_part = ntohl(bc[i++].value);
+
+	/* header name */
+	i = unwrap_string(bc, i, &header_name, NULL);
+
+
+	/*
+	 * Process header
+	 */
+
+	/* TODO: implement index extension */
+	index = 0;
+
+	if (interp->getheader(m, header_name, &headers) != SIEVE_OK
+	    || headers[index] == NULL) {
+		res = SIEVE_FAIL;
+		goto alldone;
+	}
+	header = headers[index];
+
+	if (BC_CURRENTDATE == op) {
+		t = time(NULL);
+	}
+	else {
+		/* look for separator */
+		header_data = strrchr(header, ';');
+		if (header_data) {
+			/* separator found, skip character and continue */
+			++header_data;
+		}
+		else {
+			/* separator not found, use full header */
+			header_data = header;
+		}
+
+		if (-1 == time_from_rfc822(header_data, &t)) {
+			res = SIEVE_FAIL;
+			goto alldone;
+		}
+	}
+
+	/* timezone offset */
+	if (zone == B_ORIGINALZONE) {
+		char *zone;
+		char sign;
+		int hours;
+		int minutes;
+
+		zone = strrchr(header, ' ');
+		if (!zone ||
+		    3 != sscanf(zone + 1, "%c%02d%02d", &sign, &hours, &minutes)) {
+			res = SIEVE_FAIL;
+			goto alldone;
+		}
+
+		timezone_offset = (sign == '-' ? -1 : 1) * ((hours * 60) + (minutes));
+	}
+
+	/* apply timezone_offset (if any) */
+	t += timezone_offset * 60;
+
+	/* get tm struct */
+	tm = gmtime(&t);
+
+
+	/*
+	 * Tests
+	 */
+
+	if (match == B_COUNT) {
+		res = SIEVE_OK;
+		goto alldone;
+	}
+
+	keylist = bc_makeArray(bc, &i);
+	for (key = keylist; *key; ++key) {
+		switch (date_part) {
+		case B_YEAR:
+			snprintf(buffer, sizeof(buffer), "%04d", 1900 + tm->tm_year);
+			break;
+		case B_MONTH:
+			snprintf(buffer, sizeof(buffer), "%02d", 1 + tm->tm_mon);
+			break;
+		case B_DAY:
+			snprintf(buffer, sizeof(buffer), "%02d", tm->tm_mday);
+			break;
+		case B_DATE:
+			snprintf(buffer, sizeof(buffer), "%04d-%02d-%02d",
+			    1900 + tm->tm_year, 1 + tm->tm_mon, tm->tm_mday);
+			break;
+		case B_JULIAN: {
+			int month, year;
+			int c, ya;
+
+			month = 1 + tm->tm_mon;
+			year = 1900 + tm->tm_year;
+
+			if (month > 2) {
+			    month -= 3;
+			}
+			else {
+			    month += 9;
+			    --year;
+			}
+			c = year / 100;
+			ya = year - c * 100;
+
+			snprintf(buffer, sizeof(buffer), "%d",
+			    (c * 146097 / 4 + ya * 1461 / 4 +
+			      (month * 153 + 2) / 5 + tm->tm_mday + 1721119));
+			} break;
+		case B_HOUR:
+			snprintf(buffer, sizeof(buffer), "%02d", tm->tm_hour);
+			break;
+		case B_MINUTE:
+			snprintf(buffer, sizeof(buffer), "%02d", tm->tm_min);
+			break;
+		case B_SECOND:
+			snprintf(buffer, sizeof(buffer), "%02d", tm->tm_sec);
+			break;
+		case B_TIME:
+			snprintf(buffer, sizeof(buffer), "%02d:%02d:%02d",
+			    tm->tm_hour, tm->tm_min, tm->tm_sec);
+			break;
+		case B_ISO8601:
+			time_to_iso8601(t, buffer, sizeof(buffer));
+			break;
+		case B_STD11:
+			time_to_rfc822(t, buffer, sizeof(buffer));
+			break;
+		case B_ZONE:
+			snprintf(buffer, sizeof(buffer), "%c%02d%02d",
+			    timezone_offset >= 0 ? '+' : '-',
+			    abs(timezone_offset) / 60,
+			    abs(timezone_offset) % 60);
+			break;
+		case B_WEEKDAY:
+			snprintf(buffer, sizeof(buffer), "%1d", tm->tm_wday);
+			break;
+		}
+
+		res |= comp(buffer, strlen(buffer), *key, comprock);
+	}
+	free(keylist);
+	break;
+    }
     default:
 #if VERBOSE
 	printf("WERT, can't evaluate if statement. %d is not a valid command",
