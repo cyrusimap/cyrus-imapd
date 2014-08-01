@@ -1,4 +1,4 @@
-require ["regex", "relational", "comparator-i;ascii-numeric", "subaddress", "envelope", "date"];
+require ["regex", "relational", "comparator-i;ascii-numeric", "subaddress", "envelope", "date", "index"];
 
 #this is for the extra thigns we have added to sieve
 #test extensions
@@ -165,6 +165,12 @@ if anyof(date :is :zone "-0800" "received" "weekday" "0",
 
 if date :is "received" "year" [ "1983", "1993", "2003", "2013" ]
 {redirect "me+yearsofthree@blah.com";}
+
+if date :is :index 2 "received" "day" "01"
+{redirect "me+firstofthemonth@blah.com";}
+
+if date :is :index 1 :last "received" "day" "01"
+{redirect "me+firstofthemonth@blah.com";}
 
 if currentdate :value "ge" :originalzone "received" "year" "2013"
 {redirect "me+yearsofthree@blah.com";}

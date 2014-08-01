@@ -247,6 +247,11 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
     case BC_HEADER:
     {
 	int ret;
+	/* drop index */
+	if(write_int(fd, bc->data[(*codep)].value) == -1)
+	    return -1;
+	wrote += sizeof(int);
+	(*codep)++;
 	/* Drop match type */
 	if(write_int(fd, bc->data[(*codep)].value) == -1)
 	    return -1;
@@ -274,6 +279,13 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
     }
     
     case BC_ADDRESS:
+	/* drop index */
+	if(write_int(fd, bc->data[(*codep)].value) == -1)
+	    return -1;
+	wrote += sizeof(int);
+	(*codep)++;
+
+	/* fall-through */
     case BC_ENVELOPE:
     {
 	int ret;
@@ -353,6 +365,12 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
 	int ret;
 	int datalen;
 	int tmp;
+
+	/* drop index */
+	if(write_int(fd, bc->data[(*codep)].value) == -1)
+	    return -1;
+	wrote += sizeof(int);
+	(*codep)++;
 
 	/* drop zone tag */
 	tmp = bc->data[(*codep)].value;

@@ -200,7 +200,7 @@ static int printComparison(bytecode_input_t *d ,int i)
 
 static int dump2_test(bytecode_input_t * d, int i)
 {
-    int l,x;
+    int l,x,index;
     switch(ntohl(d[i].value)) {
     case BC_FALSE:
 	printf("false");
@@ -264,6 +264,7 @@ static int dump2_test(bytecode_input_t * d, int i)
 	break;
     case BC_ADDRESS:/*7*/
 	printf("Address [");
+	index = ntohl(d[++i].value);
 	i=printComparison(d, i+1);
 	printf("               type: ");
 	switch(ntohl(d[i++].value))
@@ -273,6 +274,11 @@ static int dump2_test(bytecode_input_t * d, int i)
 	case B_DOMAIN:printf("domain"); break;
 	case B_USER:printf("user"); break;
 	case B_DETAIL:printf("detail"); break;
+	}
+	printf("\n");
+	if (index != 0) {
+		printf("              Index: %d %s\n",
+		    abs(index), index < 0 ? "[LAST]" : "");
 	}
 	printf("              Headers:");
 	i=write_list(ntohl(d[i].len), i+1, d);
@@ -300,7 +306,12 @@ static int dump2_test(bytecode_input_t * d, int i)
 	break;
     case BC_HEADER:/*9*/
 	printf("Header [");
+	index = ntohl(d[++i].value);
 	i= printComparison(d, i+1);
+	if (index != 0) {
+		printf("              Index: %d %s\n",
+		    abs(index), index < 0 ? "[LAST]" : "");
+	}
 	printf("              Headers: ");
 	i=write_list(ntohl(d[i].len), i+1, d);
 	printf("              Data: ");
@@ -333,6 +344,11 @@ static int dump2_test(bytecode_input_t * d, int i)
 	else {
 		printf("currentdate [");
 	}
+
+	/* index */
+	index = ntohl(d[i++].value);
+	printf("              Index: %d %s\n",
+	    abs(index), index < 0 ? "[LAST]" : "");
 
 	/* zone tag */
 	{

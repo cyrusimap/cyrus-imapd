@@ -502,7 +502,7 @@ static int set_up(void)
 	"partition-"PARTITION": "DBDIR"/data\n"
 	"sievenotifier: mailto\n"
 	"sieve_extensions: fileinto reject vacation imapflags notify" \
-	    " envelope body relational regex subaddress copy date\n"
+	    " envelope body relational regex subaddress copy date index\n"
     );
     libcyrus_init();
     return 0;
@@ -946,14 +946,178 @@ static void test_address_localpart(void)
     context_cleanup(&ctx);
 }
 
+static void test_address_index(void)
+{
+    static const char SCRIPT[] =
+    "require [\"index\"];\n"
+    "if address :index 2 :is \"from\" \"zme@true.com\"\n"
+    "{redirect \"me@blah.com\";}\n"
+    ;
+
+    static const char SCRIPT_LAST[] =
+    "require [\"index\"];\n"
+    "if address :index 3 :last :is \"from\" \"zme@true.com\"\n"
+    "{redirect \"me@blah.com\";}\n"
+    ;
+
+    static const char MSG_TRUE[] =
+    "Date: Mon, 25 Jan 2003 08:51:06 -0500\r\n"
+    "From: zme@false.com\r\n"
+    "From: zme@true.com\r\n"
+    "From: zme@false.com\r\n"
+    "From: zme@false.com\r\n"
+    "To: you\r\n"
+    "Subject: simple address test\r\n"
+    "\r\n"
+    "blah\n"
+    ;
+    static const char MSG_FALSE[] =
+    "Date: Mon, 25 Jan 2003 08:51:06 -0500\r\n"
+    "From: zme@true.com\r\n"
+    "From: zme@false.com\r\n"
+    "From: zme@true.com\r\n"
+    "From: zme@true.com\r\n"
+    "To: you\r\n"
+    "Subject: simple address test\r\n"
+    "\r\n"
+    "blah\n"
+    ;
+    sieve_test_context_t ctx;
+
+    /* Test :index */
+    context_setup(&ctx, SCRIPT);
+    CU_ASSERT_EQUAL(ctx.stats.errors, 0);
+
+    run_message(&ctx, MSG_TRUE);
+    CU_ASSERT_EQUAL(ctx.stats.errors, 0);
+    CU_ASSERT_EQUAL(ctx.stats.actions, 1);
+    CU_ASSERT_EQUAL(ctx.stats.redirects, 1);
+    CU_ASSERT_EQUAL(ctx.stats.keeps, 0);
+    CU_ASSERT_STRING_EQUAL(ctx.redirected_to, "me@blah.com");
+
+    run_message(&ctx, MSG_FALSE);
+    CU_ASSERT_EQUAL(ctx.stats.errors, 0);
+    CU_ASSERT_EQUAL(ctx.stats.actions, 2);
+    CU_ASSERT_EQUAL(ctx.stats.redirects, 1);
+    CU_ASSERT_EQUAL(ctx.stats.keeps, 1);
+    CU_ASSERT_STRING_EQUAL(ctx.redirected_to, "me@blah.com");
+
+    context_cleanup(&ctx);
+
+    /* Test :index :last */
+    context_setup(&ctx, SCRIPT_LAST);
+    CU_ASSERT_EQUAL(ctx.stats.errors, 0);
+
+    run_message(&ctx, MSG_TRUE);
+    CU_ASSERT_EQUAL(ctx.stats.errors, 0);
+    CU_ASSERT_EQUAL(ctx.stats.actions, 1);
+    CU_ASSERT_EQUAL(ctx.stats.redirects, 1);
+    CU_ASSERT_EQUAL(ctx.stats.keeps, 0);
+    CU_ASSERT_STRING_EQUAL(ctx.redirected_to, "me@blah.com");
+
+    run_message(&ctx, MSG_FALSE);
+    CU_ASSERT_EQUAL(ctx.stats.errors, 0);
+    CU_ASSERT_EQUAL(ctx.stats.actions, 2);
+    CU_ASSERT_EQUAL(ctx.stats.redirects, 1);
+    CU_ASSERT_EQUAL(ctx.stats.keeps, 1);
+    CU_ASSERT_STRING_EQUAL(ctx.redirected_to, "me@blah.com");
+
+    context_cleanup(&ctx);
+}
+
+static void test_header_index(void)
+{
+    static const char SCRIPT[] =
+    "require [\"index\"];\n"
+    "if header :index 3 :is \"X-Virus-Status\" \"Clean\"\n"
+    "{redirect \"me@blah.com\";}\n"
+    ;
+
+    static const char SCRIPT_LAST[] =
+    "require [\"index\"];\n"
+    "if header :index 2 :last :is \"X-Virus-Status\" \"Clean\"\n"
+    "{redirect \"me@blah.com\";}\n"
+    ;
+
+    static const char MSG_TRUE[] =
+    "Date: Mon, 25 Jan 2003 08:51:06 -0500\r\n"
+    "From: zme@true.com\r\n"
+    "To: you\r\n"
+    "Subject: simple address test\r\n"
+    "X-Virus-Status: *****\r\n"
+    "X-Virus-Status: *****\r\n"
+    "X-Virus-Status: Clean\r\n"
+    "X-Virus-Status: *****\r\n"
+    "\r\n"
+    "blah\n"
+    ;
+    static const char MSG_FALSE[] =
+    "Date: Mon, 25 Jan 2003 08:51:06 -0500\r\n"
+    "From: zme@false.com\r\n"
+    "To: you\r\n"
+    "Subject: simple address test\r\n"
+    "X-Virus-Status: Clean\r\n"
+    "X-Virus-Status: Clean\r\n"
+    "X-Virus-Status: *****\r\n"
+    "X-Virus-Status: Clean\r\n"
+    "\r\n"
+    "blah\n"
+    ;
+    sieve_test_context_t ctx;
+
+    /* Test :index */
+    context_setup(&ctx, SCRIPT);
+    CU_ASSERT_EQUAL(ctx.stats.errors, 0);
+
+    run_message(&ctx, MSG_TRUE);
+    CU_ASSERT_EQUAL(ctx.stats.errors, 0);
+    CU_ASSERT_EQUAL(ctx.stats.actions, 1);
+    CU_ASSERT_EQUAL(ctx.stats.redirects, 1);
+    CU_ASSERT_EQUAL(ctx.stats.keeps, 0);
+    CU_ASSERT_STRING_EQUAL(ctx.redirected_to, "me@blah.com");
+
+    run_message(&ctx, MSG_FALSE);
+    CU_ASSERT_EQUAL(ctx.stats.errors, 0);
+    CU_ASSERT_EQUAL(ctx.stats.actions, 2);
+    CU_ASSERT_EQUAL(ctx.stats.redirects, 1);
+    CU_ASSERT_EQUAL(ctx.stats.keeps, 1);
+    CU_ASSERT_STRING_EQUAL(ctx.redirected_to, "me@blah.com");
+
+    context_cleanup(&ctx);
+
+    /* Test :index :last */
+    context_setup(&ctx, SCRIPT_LAST);
+    CU_ASSERT_EQUAL(ctx.stats.errors, 0);
+
+    run_message(&ctx, MSG_TRUE);
+    CU_ASSERT_EQUAL(ctx.stats.errors, 0);
+    CU_ASSERT_EQUAL(ctx.stats.actions, 1);
+    CU_ASSERT_EQUAL(ctx.stats.redirects, 1);
+    CU_ASSERT_EQUAL(ctx.stats.keeps, 0);
+    CU_ASSERT_STRING_EQUAL(ctx.redirected_to, "me@blah.com");
+
+    run_message(&ctx, MSG_FALSE);
+    CU_ASSERT_EQUAL(ctx.stats.errors, 0);
+    CU_ASSERT_EQUAL(ctx.stats.actions, 2);
+    CU_ASSERT_EQUAL(ctx.stats.redirects, 1);
+    CU_ASSERT_EQUAL(ctx.stats.keeps, 1);
+    CU_ASSERT_STRING_EQUAL(ctx.redirected_to, "me@blah.com");
+
+    context_cleanup(&ctx);
+}
+
 static void test_date_year(void)
 {
     static const char SCRIPT[] =
-    "if date :is \"received\" \"year\" [ \"1983\", \"1993\", \"2003\", \"2013\" ]\n"
+    "require [\"date\", \"index\"];\n"
+    "if date :index 1 :last :is \"received\" \"year\" [ \"1983\", \"1993\", \"2003\", \"2013\" ]\n"
     "{redirect \"me@blah.com\";}\n"
     ;
     static const char MSG_TRUE[] =
     "Date: Sat, 16 Nov 2013 12:46:49 +1100\r\n"
+    "Received: from localhost (localhost [127.0.0.1])\r\n"
+    "           by mail.com (Cyrus v2.3.16) with LMTPA;\r\n"
+    "           Tue, 16 Nov 2010 12:50:12 +1100\r\n"
     "Received: from localhost (localhost [127.0.0.1])\r\n"
     "           by mail.com (Cyrus v2.3.16) with LMTPA;\r\n"
     "           Tue, 16 Nov 2013 12:50:12 +1100\r\n"
@@ -965,6 +1129,9 @@ static void test_date_year(void)
     ;
     static const char MSG_FALSE[] =
     "Date: Tue, 16 Nov 2010 12:46:49 +1100\r\n"
+    "Received: from localhost (localhost [127.0.0.1])\r\n"
+    "           by mail.com (Cyrus v2.3.16) with LMTPA;\r\n"
+    "           Tue, 16 Nov 2013 12:50:12 +1100\r\n"
     "Received: from localhost (localhost [127.0.0.1])\r\n"
     "           by mail.com (Cyrus v2.3.16) with LMTPA;\r\n"
     "           Tue, 16 Nov 2010 12:50:12 +1100\r\n"
@@ -999,6 +1166,7 @@ static void test_date_year(void)
 static void test_date_zone_month(void)
 {
     static const char SCRIPT[] =
+    "require [\"date\"];\n"
     "if date :is :zone \"-0800\" \"date\" \"month\" \"11\"\n"
     "{redirect \"me@blah.com\";}\n"
     ;
@@ -1043,6 +1211,7 @@ static void test_date_zone_month(void)
 static void test_date_date(void)
 {
     static const char SCRIPT[] =
+    "require [\"date\"];\n"
     "if date :is :originalzone \"date\" \"date\" \"2013-11-02\"\n"
     "{redirect \"me@blah.com\";}\n"
     ;
@@ -1087,6 +1256,7 @@ static void test_date_date(void)
 static void test_date_time(void)
 {
     static const char SCRIPT[] =
+    "require [\"date\"];\n"
     "if date :is :originalzone \"date\" \"time\" \"19:46:49\"\n"
     "{redirect \"me@blah.com\";}\n"
     ;
@@ -1131,6 +1301,7 @@ static void test_date_time(void)
 static void test_date_originalzone_day(void)
 {
     static const char SCRIPT[] =
+    "require [\"date\"];\n"
     "if date :is :originalzone \"date\" \"day\" \"16\"\n"
     "{redirect \"me@blah.com\";}\n"
     ;
@@ -1175,6 +1346,7 @@ static void test_date_originalzone_day(void)
 static void test_date_weekend_weekday(void)
 {
     static const char SCRIPT[] =
+    "require [\"date\"];\n"
     "if anyof(date :is :zone \"-0800\" \"date\" \"weekday\" \"0\",\n"
     "         date :is :zone \"-0800\" \"date\" \"weekday\" \"6\")\n"
     "{redirect \"me@blah.com\";}\n"
@@ -1220,6 +1392,7 @@ static void test_date_weekend_weekday(void)
 static void test_date_zone(void)
 {
     static const char SCRIPT[] =
+    "require [\"date\"];\n"
     "if date :is :originalzone \"date\" \"zone\" \"+1100\"\n"
     "{redirect \"me@blah.com\";}\n"
     ;

@@ -82,12 +82,14 @@ struct vtags {
 };
 
 struct htags {
+    int index;
     char *comparator;
     int comptag;
     int relation;
 };
 
 struct aetags {
+    int index;
     int addrtag;
     char *comparator;
     int comptag;
@@ -125,6 +127,7 @@ struct itags {
 };
 
 struct dttags {
+    int index;
     int zonetag;
     char *zone;
     int comptag;
@@ -228,8 +231,8 @@ extern void sieverestart(FILE *f);
 %token METHOD ID OPTIONS LOW NORMAL HIGH ANY MESSAGE
 %token INCLUDE PERSONAL GLOBAL RETURN OPTIONAL ONCE
 %token COPY
-%token DATE CURRENTDATE ZONE ORIGINALZONE
-%token YEAR MONTH DAY JULIAN HOUR MINUTE SECOND TIME ISO8601 STD11 ZONE WEEKDAY
+%token DATE CURRENTDATE INDEX LAST ZONE ORIGINALZONE
+%token YEAR MONTH DAY JULIAN HOUR MINUTE SECOND TIME ISO8601 STD11 WEEKDAY
 
 %type <cl> commands command action elsif block
 %type <sl> stringlist strings
@@ -606,7 +609,10 @@ test:     ANYOF testlist	 { $$ = new_test(ANYOF); $$->u.tl = $2; }
 	| SIZE sizetag NUMBER    { $$ = new_test(SIZE); $$->u.sz.t = $2;
 		                   $$->u.sz.n = $3; }
         | DATE dttags STRING STRING stringlist
-                                 {
+                                 {if (!parse_script->support.date)
+                                     { yyerror(parse_script, "date MUST be enabled with \"require\"");
+                                       YYERROR; }
+
                                    $2->date_part = verify_date_part(parse_script, $4);
                                    if ($2->date_part == -1)
                                      { YYERROR; /*vr called yyerror()*/ }
@@ -619,7 +625,10 @@ test:     ANYOF testlist	 { $$ = new_test(ANYOF); $$->u.tl = $2; }
                                      YYERROR; }
                                  }
         | CURRENTDATE dttags STRING STRING stringlist
-                                 {
+                                 {if (!parse_script->support.date)
+                                     { yyerror(parse_script, "date MUST be enabled with \"require\"");
+                                       YYERROR; }
+
                                    $2->date_part = verify_date_part(parse_script, $4);
                                    if ($2->date_part == -1)
                                      { YYERROR; /*vr called yyerror()*/ }
@@ -668,6 +677,24 @@ aetags: /* empty */              { $$ = new_aetags(); }
 			yyerror(parse_script, "comparator-i;ascii-numeric MUST be enabled with \"require\"");
 			YYERROR; }
 				   else { $$->comparator = $3; } }
+	| aetags INDEX NUMBER   { $$ = $1;
+				   if (!parse_script->support.index)
+				      { yyerror(parse_script, "index MUST be enabled with \"require\"");
+				        YYERROR; }
+				   if ($$->index != 0) {
+				     yyerror(parse_script, "duplicate index argument"); YYERROR; }
+				   if ($3 <= 0) {
+				     yyerror(parse_script, "invalid index value"); YYERROR; }
+				   else { $$->index = $3; } }
+	| aetags LAST           { $$ = $1;
+				   if (!parse_script->support.index)
+				      { yyerror(parse_script, "index MUST be enabled with \"require\"");
+				        YYERROR; }
+				   if ($$->index == 0) {
+				     yyerror(parse_script, "index argument is required"); YYERROR; }
+				   else if ($$->index < 0) {
+				     yyerror(parse_script, "duplicate last argument"); YYERROR; }
+				   else { $$->index *= -1; } }
 	;
 
 htags: /* empty */		 { $$ = new_htags(); }
@@ -691,7 +718,25 @@ htags: /* empty */		 { $$ = new_htags(); }
 			 yyerror(parse_script, "comparator-i;ascii-numeric MUST be enabled with \"require\"");  YYERROR; }
 				   else { 
 				     $$->comparator = $3; } }
-        ;
+	| htags INDEX NUMBER    { $$ = $1;
+				   if (!parse_script->support.index)
+				      { yyerror(parse_script, "index MUST be enabled with \"require\"");
+				        YYERROR; }
+				   if ($$->index != 0) {
+				     yyerror(parse_script, "duplicate index argument"); YYERROR; }
+				   if ($3 <= 0) {
+				     yyerror(parse_script, "invalid index value"); YYERROR; }
+				   else { $$->index = $3; } }
+	| htags LAST            { $$ = $1;
+				   if (!parse_script->support.index)
+				      { yyerror(parse_script, "index MUST be enabled with \"require\"");
+				        YYERROR; }
+				   if ($$->index == 0) {
+				     yyerror(parse_script, "index argument is required"); YYERROR; }
+				   else if ($$->index < 0) {
+				     yyerror(parse_script, "duplicate last argument"); YYERROR; }
+				   else { $$->index *= -1; } }
+	;
 
 btags: /* empty */		 { $$ = new_btags(); }
         | btags RAW	 	 { $$ = $1;
@@ -756,6 +801,26 @@ dttags: /* empty */              { $$ = new_dttags(); }
                                       !parse_script->support.i_ascii_numeric) {
                                       yyerror(parse_script, "comparator-i;ascii-numeric MUST be enabled with \"require\"");  YYERROR; }
                                     else { $$->comparator = $3; } }
+
+        | dttags INDEX NUMBER   { $$ = $1;
+                                   if (!parse_script->support.index)
+                                      { yyerror(parse_script, "index MUST be enabled with \"require\"");
+                                        YYERROR; }
+                                   if ($$->index != 0) {
+                                     yyerror(parse_script, "duplicate index argument"); YYERROR; }
+                                   if ($3 <= 0) {
+                                     yyerror(parse_script, "invalid index value"); YYERROR; }
+                                   else { $$->index = $3; } }
+
+        | dttags LAST           { $$ = $1;
+                                   if (!parse_script->support.index)
+                                      { yyerror(parse_script, "index MUST be enabled with \"require\"");
+                                        YYERROR; }
+                                   if ($$->index == 0) {
+                                     yyerror(parse_script, "index argument is required"); YYERROR; }
+                                   else if ($$->index < 0) {
+                                     yyerror(parse_script, "duplicate last argument"); YYERROR; }
+                                   else { $$->index *= -1; } }
 
         | dttags ZONE STRING     { $$ = $1;
                                    if ($$->zonetag != -1) {
@@ -873,6 +938,7 @@ static test_t *build_address(int t, struct aetags *ae,
     assert((t == ADDRESS) || (t == ENVELOPE));
 
     if (ret) {
+	ret->u.ae.index = ae->index;
 	ret->u.ae.comptag = ae->comptag;
 	ret->u.ae.relation=ae->relation;
 	ret->u.ae.comparator=xstrdup(ae->comparator);
@@ -893,6 +959,7 @@ static test_t *build_header(int t, struct htags *h,
     assert(t == HEADER);
 
     if (ret) {
+	ret->u.h.index = h->index;
 	ret->u.h.comptag = h->comptag;
 	ret->u.h.relation=h->relation;
 	ret->u.h.comparator=xstrdup(h->comparator);
@@ -1033,6 +1100,7 @@ static test_t *build_date(int t, struct dttags *dt,
     assert(t == DATE || t == CURRENTDATE);
 
     if (ret) {
+        ret->u.dt.index = dt->index;
         ret->u.dt.zone = (dt->zone ? xstrdup(dt->zone) : NULL);
         ret->u.dt.comparator = xstrdup(dt->comparator);
         ret->u.dt.zonetag = dt->zonetag;
@@ -1051,6 +1119,7 @@ static struct aetags *new_aetags(void)
 {
     struct aetags *r = (struct aetags *) xmalloc(sizeof(struct aetags));
 
+    r->index = 0;
     r->addrtag = r->comptag = r->relation=-1;
     r->comparator=NULL;
 
@@ -1077,6 +1146,7 @@ static struct htags *new_htags(void)
 {
     struct htags *r = (struct htags *) xmalloc(sizeof(struct htags));
 
+    r->index = 0;
     r->comptag = r->relation= -1;
     
     r->comparator = NULL;
@@ -1185,6 +1255,7 @@ static struct dttags *new_dttags(void)
 {
     struct dttags *dt = (struct dttags *) xmalloc(sizeof(struct dttags));
     dt->comptag = -1;
+    dt->index = 0;
     dt->zonetag = -1;
     dt->relation = -1;
     dt->comparator = NULL;
@@ -1205,10 +1276,13 @@ static struct dttags *canon_dttags(struct dttags *dt)
     if (dt->comparator == NULL) {
         dt->comparator = xstrdup("i;ascii-casemap");
     }
+    if (dt->index == 0) {
+        dt->index = 1;
+    }
     if (dt->zonetag == -1) {
         t = time(NULL);
         tm = localtime(&t);
-        gmoffset = gmtoff_of(tm, t) / 60;
+        gmoffset = gmtoff_of(tm, &t) / 60;
         hours = abs(gmoffset) / 60;
         minutes = abs(gmoffset) % 60;
         snprintf(zone, 6, "%c%02d%02d", (gmoffset >= 0 ? '+' : '-'), hours, minutes);

@@ -70,6 +70,7 @@ struct Test {
 	testlist_t *tl; /* anyof, allof */
 	strarray_t *sl; /* exists */
 	struct { /* it's a header test */
+	    int index;
 	    int comptag;
 	    char * comparator;
 	    int relation;
@@ -78,6 +79,7 @@ struct Test {
 	    strarray_t *pl;
 	} h;
 	struct { /* it's an address or envelope test */
+	    int index;
 	    int comptag;
 	    char * comparator;
 	    int relation; 
@@ -102,6 +104,7 @@ struct Test {
 	    int n; /* param */
 	} sz;
 	struct { /* it's a date test */
+	    int index;
 	    int zonetag;
 	    char *zone;
 	    int comptag;
