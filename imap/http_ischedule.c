@@ -170,11 +170,16 @@ static int meth_get_isched(struct transaction_t *txn,
 {
     int precond;
     struct strlist *action;
+    static struct message_guid prev_guid;
     struct message_guid guid;
     const char *etag;
     static time_t lastmod = 0;
+    struct stat sbuf;
     static xmlChar *buf = NULL;
     static int bufsiz = 0;
+
+    /* Initialize */
+    if (!lastmod) message_guid_set_null(&prev_guid);
 
     /* We don't handle GET on a anything other than ?action=capabilities */
     action = hash_lookup("action", &txn->req_qparams);
@@ -183,17 +188,22 @@ static int meth_get_isched(struct transaction_t *txn,
 	return HTTP_BAD_REQUEST;
     }
 
-    /* Generate ETag based on compile date/time of this source file.
-     * Extend this to include config file size/mtime if we add run-time options.
-     */
+    /* Generate ETag based on compile date/time of this source file,
+       the number of available RSCALEs and the config file size/mtime */
     assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "%ld", (long) compile_time);
+    buf_printf(&txn->buf, "%ld-%d",
+	       (long) compile_time, rscale_calendars->num_elements);
+
+    stat(config_filename, &sbuf);
+    lastmod = MAX(compile_time, sbuf.st_mtime);
+    buf_printf(&txn->buf, "-%ld-%ld", sbuf.st_mtime, sbuf.st_size);
+
     message_guid_generate(&guid, buf_cstring(&txn->buf), buf_len(&txn->buf));
     etag = message_guid_encode(&guid);
 
     /* Check any preconditions, including range request */
     txn->flags.ranges = 1;
-    precond = check_precond(txn, NULL, etag, compile_time);
+    precond = check_precond(txn, NULL, etag, lastmod);
 
     switch (precond) {
     case HTTP_OK:
@@ -201,7 +211,7 @@ static int meth_get_isched(struct transaction_t *txn,
     case HTTP_NOT_MODIFIED:
 	/* Fill in Etag,  Last-Modified, Expires, and iSchedule-Capabilities */
 	txn->resp_body.etag = etag;
-	txn->resp_body.lastmod = compile_time;
+	txn->resp_body.lastmod = lastmod;
 	txn->resp_body.maxage = 86400;  /* 24 hrs */
 	txn->flags.cc |= CC_MAXAGE;
 	txn->resp_body.iserial = compile_time;
@@ -213,11 +223,13 @@ static int meth_get_isched(struct transaction_t *txn,
 	return precond;
     }
 
-    if (txn->resp_body.lastmod > lastmod) {
+    if (!message_guid_equal(&prev_guid, &guid)) {
 	xmlNodePtr root, capa, node, comp, meth;
 	xmlNsPtr ns[NUM_NAMESPACE];
 	struct mime_type_t *mime;
-	int i, n;
+	struct icaltimetype date;
+	icaltimezone *utc = icaltimezone_get_utc_timezone();
+	int i, n, maxlen;
 
 	/* Start construction of our query-result */
 	if (!(root = init_xml_response("query-result", NS_ISCHED, NULL, ns))) {
@@ -251,6 +263,7 @@ static int meth_get_isched(struct transaction_t *txn,
 	xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REPLY");
 	meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
 	xmlNewProp(meth, BAD_CAST "name", BAD_CAST "CANCEL");
+#ifdef HAVE_VPOLL
 	comp = xmlNewChild(node, NULL, BAD_CAST "component", NULL);
 	xmlNewProp(comp, BAD_CAST "name", BAD_CAST "VPOLL");
 	meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
@@ -261,6 +274,7 @@ static int meth_get_isched(struct transaction_t *txn,
 	xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REPLY");
 	meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
 	xmlNewProp(meth, BAD_CAST "name", BAD_CAST "CANCEL");
+#endif /* HAVE_VPOLL */
 	comp = xmlNewChild(node, NULL, BAD_CAST "component", NULL);
 	xmlNewProp(comp, BAD_CAST "name", BAD_CAST "VFREEBUSY");
 	meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
@@ -295,10 +309,22 @@ static int meth_get_isched(struct transaction_t *txn,
 	    xmlNewChild(node, NULL, BAD_CAST "rscale", BAD_CAST *rscale);
 	}
 
+	maxlen = config_getint(IMAPOPT_MAXMESSAGESIZE);
+	if (!maxlen) maxlen = INT_MAX;
+	buf_reset(&txn->buf);
+	buf_printf(&txn->buf, "%d", maxlen);
+	xmlNewChild(capa, NULL, BAD_CAST "max-content-length",
+		    BAD_CAST buf_cstring(&txn->buf));
+
+	date = icaltime_from_timet_with_zone(caldav_epoch, 0, utc);
+	xmlNewChild(capa, NULL, BAD_CAST "min-date-time",
+		    BAD_CAST icaltime_as_ical_string(date));
+
+	date = icaltime_from_timet_with_zone(caldav_eternity, 0, utc);
+	xmlNewChild(capa, NULL, BAD_CAST "max-date-time",
+		    BAD_CAST icaltime_as_ical_string(date));
+
 	/* XXX  need to fill these with values */
-	xmlNewChild(capa, NULL, BAD_CAST "max-content-length", NULL);
-	xmlNewChild(capa, NULL, BAD_CAST "min-date-time", NULL);
-	xmlNewChild(capa, NULL, BAD_CAST "max-date-time", NULL);
 	xmlNewChild(capa, NULL, BAD_CAST "max-recipients", NULL);
 	xmlNewChild(capa, NULL, BAD_CAST "administrator", NULL);
 
@@ -312,7 +338,7 @@ static int meth_get_isched(struct transaction_t *txn,
 	    return HTTP_SERVER_ERROR;
 	}
 
-	lastmod = txn->resp_body.lastmod;
+	message_guid_copy(&prev_guid, &guid);
     }
 
     /* Output the XML response */

@@ -94,16 +94,33 @@ struct caldav_db {
 
 
 static struct namespace caldav_namespace;
+time_t caldav_epoch = -1;
+time_t caldav_eternity = -1;
 
 int caldav_init(void)
 {
     int r;
+    struct icaltimetype date;
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&caldav_namespace, 1))) {
 	syslog(LOG_ERR, "%s", error_message(r));
 	fatal(error_message(r), EC_CONFIG);
     }
+
+    /* Get min date-time */
+    date = icaltime_from_string(config_getstring(IMAPOPT_CALDAV_MINDATETIME));
+    if (!icaltime_is_null_time(date)) {
+	caldav_epoch = icaltime_as_timet_with_zone(date, NULL);
+    }
+    if (caldav_epoch == -1) caldav_epoch = INT_MIN;
+
+    /* Get max date-time */
+    date = icaltime_from_string(config_getstring(IMAPOPT_CALDAV_MAXDATETIME));
+    if (!icaltime_is_null_time(date)) {
+	caldav_eternity = icaltime_as_timet_with_zone(date, NULL);
+    }
+    if (caldav_eternity == -1) caldav_eternity = INT_MAX;
 
     return dav_init();
 }
@@ -632,14 +649,14 @@ static void get_period(icalcomponent *comp, icalcomponent_kind kind,
 		    icaltime_convert_to_zone(icalproperty_get_created(prop),
 					     utc);
 		period->end =
-		    icaltime_from_timet_with_zone(INT_MAX, 0, NULL);
+		    icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
 	    }
 	    else {
 		/* Always */
 		period->start =
-		    icaltime_from_timet_with_zone(INT_MIN, 0, NULL);
+		    icaltime_from_timet_with_zone(caldav_epoch, 0, NULL);
 		period->end =
-		    icaltime_from_timet_with_zone(INT_MAX, 0, NULL);
+		    icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
 	    }
 	}
 	break;
@@ -662,9 +679,9 @@ static void get_period(icalcomponent *comp, icalcomponent_kind kind,
 	else {
 	    /* Never */
 	    period->start =
-		icaltime_from_timet_with_zone(INT_MAX, 0, NULL);
+		icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
 	    period->end =
-		icaltime_from_timet_with_zone(INT_MIN, 0, NULL);
+		icaltime_from_timet_with_zone(caldav_epoch, 0, NULL);
 	}
 	break;
 
@@ -686,9 +703,9 @@ static void get_period(icalcomponent *comp, icalcomponent_kind kind,
 	    else {
 		/* Never */
 		period->start =
-		    icaltime_from_timet_with_zone(INT_MAX, 0, NULL);
+		    icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
 		period->end =
-		    icaltime_from_timet_with_zone(INT_MIN, 0, NULL);
+		    icaltime_from_timet_with_zone(caldav_epoch, 0, NULL);
 	    }
 	}
 	break;
@@ -769,37 +786,70 @@ void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata)
     cdata->transp = transp;
 
     /* Initialize span to be nothing */
-    span.start = icaltime_from_timet_with_zone(INT_MAX, 0, NULL);
-    span.end = icaltime_from_timet_with_zone(INT_MIN, 0, NULL);
+    span.start = icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
+    span.end = icaltime_from_timet_with_zone(caldav_epoch, 0, NULL);
     span.duration = icaldurationtype_null_duration();
 
     do {
+	struct icalperiodtype period;
+	icalproperty *rrule;
+
+	/* Get base dtstart and dtend */
+	get_period(comp, kind, &period);
+
 	/* See if its a recurring event */
-	if (icalcomponent_get_first_property(comp,ICAL_RRULE_PROPERTY) ||
-	    icalcomponent_get_first_property(comp,ICAL_RDATE_PROPERTY) ||
-	    icalcomponent_get_first_property(comp,ICAL_EXDATE_PROPERTY)) {
+	rrule = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
+	if (rrule ||
+	    icalcomponent_get_first_property(comp, ICAL_RDATE_PROPERTY) ||
+	    icalcomponent_get_first_property(comp, ICAL_EXDATE_PROPERTY)) {
 	    /* Recurring - find widest time range that includes events */
-	    recurring = 1;
+	    int expand = recurring = 1;
 
-	    icalcomponent_foreach_recurrence(
-		comp,
-		icaltime_from_timet_with_zone(INT_MIN, 0, NULL),
-		icaltime_from_timet_with_zone(INT_MAX, 0, NULL),
-		recur_cb,
-		&span);
+	    if (rrule) {
+		struct icalrecurrencetype recur = icalproperty_get_rrule(rrule);
+
+		if (!icaltime_is_null_time(recur.until)) {
+		    /* Recurrence ends - calculate dtend of last recurrence */
+		    struct icaldurationtype duration;
+		    icaltimezone *utc = icaltimezone_get_utc_timezone();
+
+		    duration = icaltime_subtract(period.end, period.start);
+		    period.end =
+			icaltime_add(icaltime_convert_to_zone(recur.until, utc),
+				     duration);
+
+		    /* Do RDATE expansion only */
+		    /* XXX  This is destructive but currently doesn't matter */
+		    icalcomponent_remove_property(comp, rrule);
+		    free(rrule);
+		}
+		else if (!recur.count) {
+		    /* Recurrence never ends - set end of span to eternity */
+		    span.end =
+			icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
+
+		    /* Skip RRULE & RDATE expansion */
+		    expand = 0;
+		}
+	    }
+
+	    /* Expand (remaining) recurrences */
+	    if (expand) {
+		icalcomponent_foreach_recurrence(
+		    comp,
+		    icaltime_from_timet_with_zone(caldav_epoch, 0, NULL),
+		    icaltime_from_timet_with_zone(caldav_eternity, 0, NULL),
+		    recur_cb, &span);
+	    }
 	}
-	else {
-	    /* Single/overridden occurrence - check dstart/dtend against span */
-	    struct icalperiodtype period;
 
-	    get_period(comp, kind, &period);
+	/* Check our dtstart and dtend against span */
+	if (icaltime_compare(period.start, span.start) < 0)
+	    memcpy(&span.start, &period.start, sizeof(struct icaltimetype));
 
-	    if (icaltime_compare(period.start, span.start) < 0)
-		memcpy(&span.start, &period.start, sizeof(struct icaltimetype));
+	if (icaltime_compare(period.end, span.end) > 0)
+	    memcpy(&span.end, &period.end, sizeof(struct icaltimetype));
 
-	    if (icaltime_compare(period.end, span.end) > 0)
-		memcpy(&span.end, &period.end, sizeof(struct icaltimetype));
-	}
     } while ((comp = icalcomponent_get_next_component(ical, kind)));
 
     cdata->dtstart = icaltime_as_ical_string(span.start);

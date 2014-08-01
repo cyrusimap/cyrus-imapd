@@ -270,6 +270,12 @@ static int proppatch_calcompset(xmlNodePtr prop, unsigned set,
 static int propfind_suppcaldata(const xmlChar *name, xmlNsPtr ns,
 				struct propfind_ctx *fctx, xmlNodePtr resp,
 				struct propstat propstat[], void *rock);
+static int propfind_maxsize(const xmlChar *name, xmlNsPtr ns,
+			    struct propfind_ctx *fctx, xmlNodePtr resp,
+			    struct propstat propstat[], void *rock);
+static int propfind_minmaxdate(const xmlChar *name, xmlNsPtr ns,
+			       struct propfind_ctx *fctx, xmlNodePtr resp,
+			       struct propstat propstat[], void *rock);
 static int propfind_schedtag(const xmlChar *name, xmlNsPtr ns,
 			     struct propfind_ctx *fctx, xmlNodePtr resp,
 			     struct propstat propstat[], void *rock);
@@ -426,9 +432,12 @@ static const struct prop_entry caldav_props[] = {
       propfind_calcompset, proppatch_calcompset, NULL },
     { "supported-calendar-data", NS_CALDAV, PROP_COLLECTION,
       propfind_suppcaldata, NULL, NULL },
-    { "max-resource-size", NS_CALDAV, 0, NULL, NULL, NULL },
-    { "min-date-time", NS_CALDAV, 0, NULL, NULL, NULL },
-    { "max-date-time", NS_CALDAV, 0, NULL, NULL, NULL },
+    { "max-resource-size", NS_CALDAV, PROP_COLLECTION,
+      propfind_maxsize, NULL, NULL },
+    { "min-date-time", NS_CALDAV, PROP_COLLECTION,
+      propfind_minmaxdate, NULL, &caldav_epoch },
+    { "max-date-time", NS_CALDAV, PROP_COLLECTION,
+      propfind_minmaxdate, NULL, &caldav_eternity },
     { "max-instances", NS_CALDAV, 0, NULL, NULL, NULL },
     { "max-attendees-per-instance", NS_CALDAV, 0, NULL, NULL, NULL },
 
@@ -2585,7 +2594,7 @@ static int parse_comp_filter(xmlNodePtr root, struct calquery_filter *filter,
 		}
 		else {
 		    filter->start =
-			icaltime_from_timet_with_zone(INT_MIN, 0, utc);
+			icaltime_from_timet_with_zone(caldav_epoch, 0, utc);
 		}
 
 		end = xmlGetProp(node, BAD_CAST "end");
@@ -2595,7 +2604,7 @@ static int parse_comp_filter(xmlNodePtr root, struct calquery_filter *filter,
 		}
 		else {
 		    filter->end =
-			icaltime_from_timet_with_zone(INT_MAX, 0, utc);
+			icaltime_from_timet_with_zone(caldav_eternity, 0, utc);
 		}
 
 		if (!is_valid_timerange(filter->start, filter->end)) {
@@ -2931,8 +2940,6 @@ static int propfind_suppcaldata(const xmlChar *name, xmlNsPtr ns,
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			name, ns, NULL, 0);
 
-    assert(!buf_len(&fctx->buf));
-
     for (mime = caldav_mime_types; mime->content_type; mime++) {
 	xmlNodePtr type = xmlNewChild(node, fctx->ns[NS_CALDAV],
 				      BAD_CAST "calendar-data", NULL);
@@ -2949,7 +2956,51 @@ static int propfind_suppcaldata(const xmlChar *name, xmlNsPtr ns,
 	    xmlNewProp(type, BAD_CAST "version", BAD_CAST mime->version);
     }
 
+    return 0;
+}
+
+
+/* Callback to fetch CALDAV:max-resource-size */
+static int propfind_maxsize(const xmlChar *name, xmlNsPtr ns,
+			    struct propfind_ctx *fctx,
+			    xmlNodePtr resp __attribute__((unused)),
+			    struct propstat propstat[],
+			    void *rock __attribute__((unused)))
+{
+    static int maxsize = 0;
+
+    if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
+
+    if (!maxsize) {
+	maxsize = config_getint(IMAPOPT_MAXMESSAGESIZE);
+	if (!maxsize) maxsize = INT_MAX;
+    }
+
     buf_reset(&fctx->buf);
+    buf_printf(&fctx->buf, "%d", maxsize);
+    xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+		 name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
+
+    return 0;
+}
+
+
+/* Callback to fetch CALDAV:min/max-date-time */
+static int propfind_minmaxdate(const xmlChar *name, xmlNsPtr ns,
+			       struct propfind_ctx *fctx,
+			       xmlNodePtr resp __attribute__((unused)),
+			       struct propstat propstat[],
+			       void *rock)
+{
+    struct icaltimetype date;
+
+    if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
+
+    date = icaltime_from_timet_with_zone(*((time_t *) rock), 0,
+					 icaltimezone_get_utc_timezone());
+
+    xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+		 name, ns, BAD_CAST icaltime_as_ical_string(date), 0);
 
     return 0;
 }
@@ -3766,8 +3817,8 @@ static int report_fb_query(struct transaction_t *txn,
 
     memset(&calfilter, 0, sizeof(struct calquery_filter));
     calfilter.comp = CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY;
-    calfilter.start = icaltime_from_timet_with_zone(INT_MIN, 0, utc);
-    calfilter.end = icaltime_from_timet_with_zone(INT_MAX, 0, utc);
+    calfilter.start = icaltime_from_timet_with_zone(caldav_epoch, 0, utc);
+    calfilter.end = icaltime_from_timet_with_zone(caldav_eternity, 0, utc);
     calfilter.busytime_query = 1;
     fctx->filter = apply_calfilter;
     fctx->filter_crit = &calfilter;

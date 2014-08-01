@@ -258,6 +258,18 @@ Blank lines and lines beginning with ``#'' are ignored.
    server will emulate Apple CalendarServer behavior as closely as
    possible. */
 
+{ "caldav_maxdatetime", "20380119T031407Z", STRING }
+/* The latest date and time accepted by the server (ISO format).  This
+   value is also used for expanding non-terminating recurrence rules.
+.PP
+   Note that increasing this value will require the DAV databases for
+   calendars to be reconstructed with the \fBdav_reconstruct\fR
+   utility in order to see its effect on serer-side time-based
+   queries. */
+
+{ "caldav_mindatetime", "19011213T204552Z", STRING }
+/* The earliest date and time accepted by the server (ISO format). */
+
 { "caldav_realm", NULL, STRING }
 /* The realm to present for HTTP authentication of CalDAV resources.
    If not set (the default), the value of the "servername" option will
