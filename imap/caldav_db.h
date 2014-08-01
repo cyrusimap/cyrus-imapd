@@ -46,6 +46,15 @@
 
 #include <config.h>
 
+extern time_t caldav_epoch;
+extern time_t caldav_eternity;
+
+/* prepare for caldav operations in this process */
+int caldav_init(void);
+
+/* done with all caldav operations for this process */
+int caldav_done(void);
+
 #include <libical/ical.h>
 
 #include "dav_db.h"
