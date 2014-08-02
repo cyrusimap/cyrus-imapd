@@ -370,13 +370,17 @@ static int dump_cb(void *rockp,
 		/* No need to update mupdate NOW, we'll get it when we
 		 * untag the mailbox */
 		skip_flag = 1;
-	    } else if (act_head->acl &&
-	       !strcmp(realpart, act_head->location) &&
-	       !strcmp(acl, act_head->acl)) {
-		/* Do not update if location does match, and there is an acl,
-		 * and the acl matches */
+	    } else if (act_head->acl) {
+		if (
+			!strcmp(realpart, act_head->location) &&
+			!strcmp(acl, act_head->acl)
+		    ) {
 
-		skip_flag = 1;
+		    /* Do not update if location does match, and there is an acl,
+		     * and the acl matches */
+
+		    skip_flag = 1;
+		}
 	    } else {
 		skip_flag = 0;
 	    }
