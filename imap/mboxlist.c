@@ -1371,7 +1371,6 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 	mboxent = mboxlist_entry_cstring(newmbentry);
 	r = cyrusdb_store(mbdb, newname, strlen(newname), 
 		          mboxent, strlen(mboxent), &tid);
-	mboxlist_entry_free(&newmbentry);
 	if (r) goto done;
 
 	/* skip ahead to the commit */
