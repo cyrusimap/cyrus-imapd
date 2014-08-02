@@ -809,6 +809,10 @@ static int cmd_authenticate(struct protstream *sieved_out,
 	      /* We want to set up a connection to the backend for proxying */
 	      const char *statusline = NULL;
 
+	      /* get a new copy of the userid */
+	      free(username);
+	      username = xstrdup((const char *) canon_user);
+
 	      backend = backend_connect(NULL, mbentry->server, &sieve_protocol,
 					username, NULL, &statusline, -1);
 
