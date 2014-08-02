@@ -5921,9 +5921,10 @@ static int renmbox(char *name,
 /*
  * Perform a RENAME command
  */
-static void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
+static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
 {
     int r = 0;
+    char *c;
     char oldmailboxname[MAX_MAILBOX_BUFFER];
     char newmailboxname[MAX_MAILBOX_BUFFER];
     char oldmailboxname2[MAX_MAILBOX_BUFFER];
@@ -5938,23 +5939,50 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
     char acl_olduser[128], acl_newuser[128];
     mbentry_t *mbentry = NULL;
 
-    if (partition && !imapd_userisadmin) {
-	r = IMAP_PERMISSION_DENIED;
+    if (location && !imapd_userisadmin) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(IMAP_PERMISSION_DENIED));
+	return;
     }
 
     /* canonicalize names */
-    if (!r) r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, oldname,
-						       imapd_userid, oldmailboxname);
-    if (!r) r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, newname,
-						       imapd_userid, newmailboxname);
+    r = (*imapd_namespace.mboxname_tointernal)(
+	    &imapd_namespace,
+	    oldname,
+	    imapd_userid,
+	    oldmailboxname
+	);
+
+    // This really shouldn't happen, but here we go.
+    if (r) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+	return;
+    }
+
+    r = (*imapd_namespace.mboxname_tointernal)(
+	    &imapd_namespace,
+	    newname,
+	    imapd_userid,
+	    newmailboxname
+	);
+
+    // This really shouldn't happen, but here we go.
+    if (r) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+	return;
+    }
 
     /* Keep temporary copy: master is trashed */
     strcpy(oldmailboxname2, oldmailboxname);
     strcpy(newmailboxname2, newmailboxname);
 
-    if (!r) r = mlookup(NULL, NULL, oldmailboxname, &mbentry);
+    r = mlookup(NULL, NULL, oldmailboxname, &mbentry);
 
-    if (!r && (mbentry->mbtype & MBTYPE_REMOTE)) {
+    if (r) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+	return;
+    }
+
+    if (mbentry->mbtype & MBTYPE_REMOTE) {
 	/* remote mailbox */
 	struct backend *s = NULL;
 	int res;
@@ -5962,92 +5990,73 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	s = proxy_findserver(mbentry->server, &imap_protocol,
 			     proxy_userid, &backend_cached,
 			     &backend_current, &backend_inbox, imapd_in);
-	if (!s) r = IMAP_SERVER_UNAVAILABLE;
 
+	if (!s) {
+	    prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(IMAP_SERVER_UNAVAILABLE));
+	    goto done;
+	}
 
-	/* xxx  start of separate proxy-only code
-	   (remove when we move to a unified environment) */
+	// Server or partition is going to change
+	if (location) {
+	    char *destserver = NULL;
+	    char *destpart = NULL;
 
-	/* Cross Server Rename */
-	if (!r && partition) {
-	    char *destpart;
-	
-	    if (strcmp(oldname, newname)) {
-		prot_printf(imapd_out,
-			    "%s NO Cross-server or cross-partition move w/rename not supported\r\n",
-			    tag);
-		goto done;
-	    }
-
-	    /* dest partition? */
-
-	    destpart = strchr(partition,'!');
-	    if (destpart) {
-		char newserver[MAX_MAILBOX_BUFFER];
-		if (strlen(partition) >= sizeof(newserver)) {
-		    prot_printf(imapd_out,
-				"%s NO Partition name too long\r\n", tag);
-		    goto done;
-		}
-		strcpy(newserver, partition);
-		newserver[destpart-partition] = '\0';
-		destpart++;
-
-		if (!strcmp(mbentry->server, newserver)) {
-		    /* Same Server, different partition */
-		    /* xxx this would require administrative access to the
-		     * backend, which we won't get */
-		    prot_printf(imapd_out,
-				"%s NO Can't move across partitions via a proxy\r\n",
-				tag);
-		    goto done;
-		} else {
-		    /* Cross Server */
-		    /* <tag> XFER <name> <dest server> <dest partition> */
-		    prot_printf(s->out,
-				"%s XFER {" SIZE_T_FMT "+}\r\n%s"
-				" {" SIZE_T_FMT "+}\r\n%s"
-				" {" SIZE_T_FMT "+}\r\n%s\r\n", 
-				tag, strlen(oldname), oldname,
-				strlen(newserver), newserver,
-				strlen(destpart), destpart);
-		}
-	    
+	    destserver = xstrdupnull(location);
+	    c = strchr(location, '!');
+	    if (c) {
+		*c++ = '\0';
+		destpart = xstrdupnull(c);
 	    } else {
-		/* <tag> XFER <name> <dest server> */
-		prot_printf(s->out, "%s XFER {" SIZE_T_FMT "+}\r\n%s"
-			    " {" SIZE_T_FMT "+}\r\n%s\r\n", 
-			    tag, strlen(oldname), oldname,
-			    strlen(partition), partition);
+		destpart = xstrdup(location);
+		free(destserver);
 	    }
 
-	    res = pipe_including_tag(s, tag, 0);
+	    if (destserver) {
+		if (destpart && !strcmp(destserver,config_servername)) {
+		    // XFER
+		    prot_printf(s->out,
+			    "%s XFER \"%s\" \"%s\" %s\r\n",
+			    tag,
+			    oldname,
+			    newname,
+			    location
+			);
+
+		} else {
+		    // RENAME
+		    prot_printf(s->out,
+			    "%s RENAME \"%s\" \"%s\" %s\r\n",
+			    tag,
+			    oldname,
+			    newname,
+			    location
+			);
+		}
+	    } // (destserver)
+
+	    res = pipe_until_tag(s, tag, 0);
 
 	    /* make sure we've seen the update */
 	    if (ultraparanoid && res == PROXY_OK) kick_mupdate();
 
-	    goto done;
-	}
-	/* xxx  end of separate proxy-only code */
-
-	if (!r) {
-	    if (!CAPA(s, CAPA_MUPDATE)) {
-		/* do MUPDATE create operations for new mailbox */
+	} else { // (location)
+	    // a simple rename, old name and new name must not be the same
+	    if (strcmp(oldname, newname)) {
+		prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(IMAP_SERVER_UNAVAILABLE));
+		goto done;
 	    }
 
-	    prot_printf(s->out, "%s RENAME {" SIZE_T_FMT "+}\r\n%s"
-			" {" SIZE_T_FMT "+}\r\n%s\r\n", 
-			tag, strlen(oldname), oldname,
-			strlen(newname), newname);
+	    prot_printf(s->out,
+		    "%s RENAME \"%s\" \"%s\" %s\r\n",
+		    tag,
+		    oldname,
+		    newname
+		);
+
 	    res = pipe_until_tag(s, tag, 0);
 	
-	    if (!CAPA(s, CAPA_MUPDATE)) {
-		/* Activate/abort new mailbox in MUPDATE*/
-		/* delete old mailbox from MUPDATE */
-	    }
-
 	    /* make sure we've seen the update */
-	    if (res == PROXY_OK) kick_mupdate();
+	    if (ultraparanoid && res == PROXY_OK) kick_mupdate();
 	}
 
 	imapd_check(s, 0);
@@ -6067,7 +6076,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 
     /* local mailbox */
 
-    if (!r && partition && !config_partitiondir(partition)) {
+    if (location && !config_partitiondir(location)) {
 	/* invalid partition, assume its a server (remote destination) */
 	char *server;
  
@@ -6079,11 +6088,11 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	}
 
 	/* dest partition? */
-	server = partition;
-	partition = strchr(server, '!');
-	if (partition) *partition++ = '\0';
+	server = location;
+	location = strchr(server, '!');
+	if (location) *location++ = '\0';
 
-	cmd_xfer(tag, oldname, server, partition);
+	cmd_xfer(tag, oldname, server, location);
 
 	goto done;
     }
@@ -6159,7 +6168,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	rock.newuser = newuser;
 	rock.acl_olduser = acl_olduser;
 	rock.acl_newuser = acl_newuser;
-	rock.partition = partition;
+	rock.partition = location;
 	rock.rename_user = rename_user;
 
 	/* Check mboxnames to ensure we can write them all BEFORE we start */
@@ -6177,7 +6186,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	if (strcmp(oldmailboxname, newmailboxname))
 	    mboxevent = mboxevent_new(EVENT_MAILBOX_RENAME);
 
-	r = mboxlist_renamemailbox(oldmailboxname, newmailboxname, partition,
+	r = mboxlist_renamemailbox(oldmailboxname, newmailboxname, location,
 				   0 /* uidvalidity */, imapd_userisadmin,
 				   imapd_userid, imapd_authstate, mboxevent,
 				   0, rename_user);
@@ -6256,7 +6265,7 @@ submboxes:
 	rock.newuser = newuser;
 	rock.acl_olduser = acl_olduser;
 	rock.acl_newuser = acl_newuser;
-	rock.partition = partition;
+	rock.partition = location;
 	rock.rename_user = rename_user;
 	
 	/* add submailboxes; we pretend we're an admin since we successfully
