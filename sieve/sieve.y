@@ -56,6 +56,7 @@
 #include "sieve/tree.h"
 
 #include "imapurl.h"
+#include "lib/gmtoff.h"
 #include "util.h"
 #include "imparse.h"
 #include "libconfig.h"
@@ -1207,7 +1208,7 @@ static struct dttags *canon_dttags(struct dttags *dt)
     if (dt->zonetag == -1) {
         t = time(NULL);
         tm = localtime(&t);
-        gmoffset = gmtoff_of(tm, &t) / 60;
+        gmoffset = gmtoff_of(tm, t) / 60;
         hours = abs(gmoffset) / 60;
         minutes = abs(gmoffset) % 60;
         snprintf(zone, 6, "%c%02d%02d", (gmoffset >= 0 ? '+' : '-'), hours, minutes);
