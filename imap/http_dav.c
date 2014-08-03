@@ -3716,15 +3716,9 @@ int propfind_by_resource(void *rock, void *data)
 	/* Add response for missing target */
 	ret = xml_add_response(fctx, HTTP_NOT_FOUND, 0);
     }
-    else {
-	int add_it = 1;
-
-	if (fctx->filter) add_it = fctx->filter(fctx, data);
-
-	if (add_it) {
-	    /* Add response for target */
-	    ret = xml_add_response(fctx, 0, 0);
-	}
+    else if (!fctx->filter || fctx->filter(fctx, data)) {
+	/* Add response for target */
+	ret = xml_add_response(fctx, 0, 0);
     }
 
     buf_free(&fctx->msg_buf);
