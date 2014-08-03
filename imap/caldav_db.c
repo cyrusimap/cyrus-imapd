@@ -685,8 +685,6 @@ static void get_period(icalcomponent *comp, icalcomponent_kind kind,
 	}
 	break;
 
-    case ICAL_VAVAILABILITY_COMPONENT:
-	/* XXX  Probably need to do something different here */
     case ICAL_VFREEBUSY_COMPONENT:
 	if (icaltime_is_null_time(period->start) ||
 	    icaltime_is_null_time(period->end)) {
@@ -707,6 +705,19 @@ static void get_period(icalcomponent *comp, icalcomponent_kind kind,
 		period->end =
 		    icaltime_from_timet_with_zone(caldav_epoch, 0, NULL);
 	    }
+	}
+	break;
+
+    case ICAL_VAVAILABILITY_COMPONENT:
+	if (icaltime_is_null_time(period->start)) {
+	    /* No DTSTART */
+	    period->start =
+		icaltime_from_timet_with_zone(caldav_epoch, 0, NULL);
+	}
+	if (icaltime_is_null_time(period->end)) {
+	    /* No DTEND */
+	    period->end =
+		icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
 	}
 	break;
 
