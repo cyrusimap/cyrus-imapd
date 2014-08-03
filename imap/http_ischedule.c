@@ -87,6 +87,7 @@ static void isched_init(struct buf *serverinfo);
 static void isched_shutdown(void);
 
 static int meth_get_isched(struct transaction_t *txn, void *params);
+static int meth_options_isched(struct transaction_t *txn, void *params);
 static int meth_post_isched(struct transaction_t *txn, void *params);
 static int dkim_auth(struct transaction_t *txn);
 static int meth_get_domainkey(struct transaction_t *txn, void *params);
@@ -128,7 +129,7 @@ struct namespace_t namespace_ischedule = {
 	{ NULL,			NULL },	/* MKCALENDAR	*/
 	{ NULL,			NULL },	/* MKCOL	*/
 	{ NULL,			NULL },	/* MOVE		*/
-	{ &meth_options,	NULL },	/* OPTIONS	*/
+	{ &meth_options_isched,	NULL },	/* OPTIONS	*/
 	{ &meth_post_isched,	NULL },	/* POST		*/
 	{ NULL,			NULL },	/* PROPFIND	*/
 	{ NULL,			NULL },	/* PROPPATCH	*/
@@ -164,6 +165,16 @@ struct namespace_t namespace_domainkey = {
 };
 
 
+void isched_capa_hdr(struct transaction_t *txn)
+{
+    struct stat sbuf;
+
+    stat(config_filename, &sbuf);
+    txn->resp_body.iserial = MAX(compile_time, sbuf.st_mtime) +
+	rscale_calendars->num_elements;
+}
+
+
 /* iSchedule Receiver Capabilities */
 static int meth_get_isched(struct transaction_t *txn,
 			   void *params __attribute__((unused)))
@@ -182,9 +193,8 @@ static int meth_get_isched(struct transaction_t *txn,
     if (!lastmod) message_guid_set_null(&prev_guid);
 
     /* Fill in iSchedule-Capabilities */
-    stat(config_filename, &sbuf);
-    lastmod = MAX(compile_time, sbuf.st_mtime);
-    txn->resp_body.iserial = lastmod + rscale_calendars->num_elements;
+    isched_capa_hdr(txn);
+    lastmod = txn->resp_body.iserial - rscale_calendars->num_elements;
 
     /* We don't handle GET on a anything other than ?action=capabilities */
     action = hash_lookup("action", &txn->req_qparams);
@@ -356,6 +366,15 @@ static int meth_get_isched(struct transaction_t *txn,
 }
 
 
+static int meth_options_isched(struct transaction_t *txn, void *params)
+{
+    /* Fill in iSchedule-Capabilities */
+    isched_capa_hdr(txn);
+
+    return meth_options(txn, params);
+}
+
+
 /* iSchedule Receiver */
 static int meth_post_isched(struct transaction_t *txn,
 			    void *params __attribute__((unused)))
@@ -368,12 +387,9 @@ static int meth_post_isched(struct transaction_t *txn,
     icalproperty_method meth = 0;
     icalproperty *prop = NULL;
     const char *uid = NULL;
-    struct stat sbuf;
 
     /* Fill in iSchedule-Capabilities */
-    stat(config_filename, &sbuf);
-    txn->resp_body.iserial = MAX(compile_time, sbuf.st_mtime) +
-	rscale_calendars->num_elements;
+    isched_capa_hdr(txn);
 
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
