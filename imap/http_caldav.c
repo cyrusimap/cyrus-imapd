@@ -4029,9 +4029,13 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 	free(header);
     }
 
-    header = charset_encode_mimeheader(icalcomponent_get_summary(comp), 0);
-    fprintf(f, "Subject: %s\r\n", header);
-    free(header);
+    prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
+    if (prop) {
+	header = charset_encode_mimeheader(icalproperty_get_summary(prop), 0);
+	fprintf(f, "Subject: %s\r\n", header);
+	free(header);
+    }
+    else fprintf(f, "Subject: %s\r\n", icalcomponent_kind_to_string(kind));
 
     time_to_rfc822(icaltime_as_timet_with_zone(icalcomponent_get_dtstamp(comp),
 					       icaltimezone_get_utc_timezone()),
