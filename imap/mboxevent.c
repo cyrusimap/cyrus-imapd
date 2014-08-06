@@ -41,6 +41,7 @@
  * Author: Sébastien Michel from Atos Worldline
  */
 #include <config.h>
+#include "imap/mboxevent.h"
 #ifdef ENABLE_MBOXEVENT
 #include <stdlib.h>
 #include <stdio.h>
@@ -60,7 +61,6 @@
 #include "times.h"
 #include "xmalloc.h"
 
-#include "imap/mboxevent.h"
 #include "imap/mboxname.h"
 #include "imap/notify.h"
 
@@ -1179,8 +1179,6 @@ static int filled_params(enum event_type type, struct mboxevent *event)
 
 #else /* !ENABLE_MBOXEVENT */
 
-#include "mboxevent.h"
-
 EXPORTED void mboxevent_init(void)
 {
 }
@@ -1234,7 +1232,7 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event __attribute__((unused
 
 EXPORTED void mboxevent_set_acl(struct mboxevent *event __attribute__((unused)),
 				const char *identifier __attribute__((unused)),
->.......>.......>.......>.......const char *rights __attribute__((unused)))
+				const char *rights __attribute__((unused)))
 {
 }
 
