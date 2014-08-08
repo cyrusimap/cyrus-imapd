@@ -63,7 +63,8 @@ int caldav_done(void);
 
 #ifndef HAVE_VAVAILABILITY
 /* Allow us to compile without #ifdef HAVE_VAVAILABILITY everywhere */
-#define ICAL_VAVAILABILITY_COMPONENT  ICAL_NO_COMPONENT
+#define ICAL_VAVAILABILITY_COMPONENT  ICAL_X_COMPONENT
+#define ICAL_XAVAILABLE_COMPONENT     ICAL_X_COMPONENT
 #endif
 
 #ifndef HAVE_VPOLL
