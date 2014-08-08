@@ -2216,8 +2216,15 @@ static int caldav_put(struct transaction_t *txn,
 	}
 	break;
 
-    default:
+    case ICAL_VJOURNAL_COMPONENT:
+    case ICAL_VFREEBUSY_COMPONENT:
+    case ICAL_VAVAILABILITY_COMPONENT:
 	/* Nothing else to do */
+	break;
+
+    default:
+	txn->error.precond = CALDAV_SUPP_COMP;
+	return HTTP_FORBIDDEN;
 	break;
     }
 
@@ -2318,6 +2325,12 @@ static void add_freebusy(icalcomponent *comp, struct icaltime_span *span,
 	    ICAL_FBTYPE_BUSYTENTATIVE : ICAL_FBTYPE_BUSY;
 	break;
 
+    case ICAL_VFREEBUSY_COMPONENT:
+	/* XXX  Need to do something better here */
+	newfb->type = ICAL_FBTYPE_BUSY;
+	break;
+
+#ifdef HAVE_VAVAILABILITY
     case ICAL_VAVAILABILITY_COMPONENT: {
 	enum icalproperty_busytype busytype = ICAL_BUSYTYPE_BUSYUNAVAILABLE;
 	icalproperty *prop =
@@ -2339,8 +2352,13 @@ static void add_freebusy(icalcomponent *comp, struct icaltime_span *span,
 	break;
     }
 
-    default:
+    case ICAL_XAVAILABLE_COMPONENT:
 	newfb->type = ICAL_FBTYPE_FREE;
+	break;
+#endif /* HAVE_VAVAILABILITY */
+
+    default:
+	newfb->type = ICAL_FBTYPE_NONE;
 	break;
     }
 }
