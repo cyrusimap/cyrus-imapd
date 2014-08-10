@@ -6047,7 +6047,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
 	    }
 
 	    prot_printf(s->out,
-		    "%s RENAME \"%s\" \"%s\" %s\r\n",
+		    "%s RENAME \"%s\" \"%s\"\r\n",
 		    tag,
 		    oldname,
 		    newname
