@@ -143,6 +143,9 @@ EXPORTED const char *sieve_listextensions(sieve_interp_t *i)
 	    strlcat(i->extensions, " subaddress", EXT_LEN);
 	if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_COPY)
 	    strlcat(i->extensions, " copy", EXT_LEN);
+
+	if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_DATE)
+	    strlcat(i->extensions, " date", EXT_LEN);
     }
 
     return i->extensions;
