@@ -8042,8 +8042,11 @@ static int parse_metadata_string_or_list(const char *tag,
 
 	strarray_append(entries, arg.s);
 
-	// Not a list
-	*is_list = 0;
+	// It is only not a list if there are no wildcards
+	if (!strchr(arg.s, '*') && !strchr(arg.s, '%')) {
+	    // Not a list
+	    *is_list = 0;
+	}
     }
 
     if (c == ' ' || c == '\r') return c;
