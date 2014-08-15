@@ -10,6 +10,13 @@
 
 <h1>Upgrading From Previous Versions</h1>
 
+<h2>Upgrading from 2.4.17-caldav-beta10 or earlier</h2>
+<ul>
+<li>The schema used for the CalDAV database has changed. ALL sites
+    MUST run the <tt>dav_reconstruct</tt> utility for each of their
+    CalDAV users.</li>
+</ul>
+
 <h2>Upgrading from 2.4.17-caldav-beta9 or earlier</h2>
 <ul>
 <li>The time span calculations for recurring events in which the

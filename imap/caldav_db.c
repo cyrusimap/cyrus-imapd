@@ -149,8 +149,7 @@ EXPORTED int caldav_done(void)
     " organizer TEXT,"							\
     " dtstart TEXT,"							\
     " dtend TEXT,"							\
-    " recurring INTEGER,"						\
-    " transp INTEGER,"							\
+    " comp_flags INTEGER,"						\
     " sched_tag TEXT,"							\
     " UNIQUE( mailbox, resource ) );"					\
     "CREATE INDEX IF NOT EXISTS idx_ical_uid ON ical_objs ( ical_uid );"
@@ -288,6 +287,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     struct read_rock *rrock = (struct read_rock *) rock;
     struct caldav_db *db = rrock->db;
     struct caldav_data *cdata = rrock->cdata;
+    unsigned flags;
     int r = 0;
 
     memset(cdata, 0, sizeof(struct caldav_data));
@@ -297,8 +297,8 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     cdata->dav.imap_uid = sqlite3_column_int(stmt, 4);
     cdata->dav.lock_expire = sqlite3_column_int(stmt, 8);
     cdata->comp_type = sqlite3_column_int(stmt, 9);
-    cdata->recurring = sqlite3_column_int(stmt, 14);
-    cdata->transp = sqlite3_column_int(stmt, 15);
+    flags = sqlite3_column_int(stmt, 14);
+    memcpy(&cdata->comp_flags, &flags, sizeof(struct comp_flags));
 
     if (rrock->cb) {
 	/* We can use the column data directly for the callback */
@@ -311,7 +311,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 	cdata->organizer = (const char *) sqlite3_column_text(stmt, 11);
 	cdata->dtstart = (const char *) sqlite3_column_text(stmt, 12);
 	cdata->dtend = (const char *) sqlite3_column_text(stmt, 13);
-	cdata->sched_tag = (const char *) sqlite3_column_text(stmt, 16);
+	cdata->sched_tag = (const char *) sqlite3_column_text(stmt, 15);
 	r = rrock->cb(rrock->rock, cdata);
     }
     else {
@@ -346,7 +346,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 13),
 			       &db->dtend);
 	cdata->sched_tag =
-	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 16),
+	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 15),
 			       &db->sched_tag);
     }
 
@@ -358,7 +358,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
     "  comp_type, ical_uid, organizer, dtstart, dtend,"			\
-    "  recurring, transp, sched_tag"					\
+    "  comp_flags, sched_tag"				   		\
     " FROM ical_objs"							\
     " WHERE ( mailbox = :mailbox AND resource = :resource );"
 
@@ -395,7 +395,7 @@ EXPORTED int caldav_lookup_resource(struct caldav_db *caldavdb,
     "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
     "  comp_type, ical_uid, organizer, dtstart, dtend,"			\
-    "  recurring, transp, sched_tag"					\
+    "  comp_flags, sched_tag"				   		\
     " FROM ical_objs"							\
     " WHERE ( ical_uid = :ical_uid AND mailbox != :inbox);"
 
@@ -431,7 +431,7 @@ EXPORTED int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
     "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
     "  comp_type, ical_uid, organizer, dtstart, dtend,"			\
-    "  recurring, transp, sched_tag"					\
+    "  comp_flags, sched_tag"				   	    	\
     " FROM ical_objs WHERE mailbox = :mailbox;"
 
 EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
@@ -454,12 +454,12 @@ EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
     "  creationdate, mailbox, resource, imap_uid,"			\
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
     "  comp_type, ical_uid, organizer, dtstart, dtend,"			\
-    "  recurring, transp, sched_tag )" 	       		  	   	\
+    "  comp_flags, sched_tag )"	      			   	    	\
     " VALUES ("								\
     "  :creationdate, :mailbox, :resource, :imap_uid,"			\
     "  :lock_token, :lock_owner, :lock_ownerid, :lock_expire,"		\
     "  :comp_type, :ical_uid, :organizer, :dtstart, :dtend,"		\
-    "  :recurring, :transp, :sched_tag );"
+    "  :comp_flags, :sched_tag );"
 
 #define CMD_UPDATE		   	\
     "UPDATE ical_objs SET"		\
@@ -473,8 +473,7 @@ EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
     "  organizer    = :organizer,"	\
     "  dtstart      = :dtstart,"	\
     "  dtend        = :dtend,"		\
-    "  recurring    = :recurring,"	\
-    "  transp       = :transp,"		\
+    "  comp_flags   = :comp_flags,"	\
     "  sched_tag    = :sched_tag"	\
     " WHERE rowid = :rowid;"
 
@@ -492,38 +491,43 @@ EXPORTED int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata,
 	{ ":organizer",	   SQLITE_TEXT,	   { .s = cdata->organizer	  } },
 	{ ":dtstart",	   SQLITE_TEXT,	   { .s = cdata->dtstart	  } },
 	{ ":dtend",	   SQLITE_TEXT,	   { .s = cdata->dtend		  } },
-	{ ":recurring",	   SQLITE_INTEGER, { .i = cdata->recurring	  } },
-	{ ":transp",	   SQLITE_INTEGER, { .i = cdata->transp		  } },
 	{ ":sched_tag",	   SQLITE_TEXT,	   { .s = cdata->sched_tag	  } },
+	{ NULL,		   SQLITE_NULL,	   { .s = NULL			  } },
 	{ NULL,		   SQLITE_NULL,	   { .s = NULL			  } },
 	{ NULL,		   SQLITE_NULL,	   { .s = NULL			  } },
 	{ NULL,		   SQLITE_NULL,	   { .s = NULL			  } },
 	{ NULL,		   SQLITE_NULL,	   { .s = NULL			  } } };
     const char *cmd;
     sqlite3_stmt **stmt;
+    unsigned flags;
     int r;
+
+    memcpy(&flags, &cdata->comp_flags, sizeof(struct comp_flags));
+    bval[11].name = ":comp_flags";
+    bval[11].type = SQLITE_INTEGER;
+    bval[11].val.i = flags;
 
     if (cdata->dav.rowid) {
 	cmd = CMD_UPDATE;
 	stmt = &caldavdb->stmt[STMT_UPDATE];
 
-	bval[13].name = ":rowid";
-	bval[13].type = SQLITE_INTEGER;
-	bval[13].val.i = cdata->dav.rowid;
+	bval[12].name = ":rowid";
+	bval[12].type = SQLITE_INTEGER;
+	bval[12].val.i = cdata->dav.rowid;
     }
     else {
 	cmd = CMD_INSERT;
 	stmt = &caldavdb->stmt[STMT_INSERT];
 
-	bval[13].name = ":creationdate";
-	bval[13].type = SQLITE_INTEGER;
-	bval[13].val.i = cdata->dav.creationdate;
-	bval[14].name = ":mailbox";
+	bval[12].name = ":creationdate";
+	bval[12].type = SQLITE_INTEGER;
+	bval[12].val.i = cdata->dav.creationdate;
+	bval[13].name = ":mailbox";
+	bval[13].type = SQLITE_TEXT;
+	bval[13].val.s = cdata->dav.mailbox;
+	bval[14].name = ":resource";
 	bval[14].type = SQLITE_TEXT;
-	bval[14].val.s = cdata->dav.mailbox;
-	bval[15].name = ":resource";
-	bval[15].type = SQLITE_TEXT;
-	bval[15].val.s = cdata->dav.resource;
+	bval[14].val.s = cdata->dav.resource;
     }
 
     r = dav_exec(caldavdb->db, cmd, bval, NULL, NULL, stmt);
@@ -598,16 +602,15 @@ static void get_period(icalcomponent *comp, icalcomponent_kind kind,
     case ICAL_VEVENT_COMPONENT:
 	if (icaltime_is_null_time(period->end)) {
 	    /* No DTEND or DURATION */
-	    memcpy(&period->end, &period->start,
-		   sizeof(struct icaltimetype));
-
 	    if (icaltime_is_date(period->start)) {
 		/* DTSTART is not DATE-TIME */
-		struct icaldurationtype dur;
+		struct icaldurationtype dur = icaldurationtype_null_duration();
 
-		dur = icaldurationtype_from_int(60*60*24 - 1);  /* P1D */
-		icaltime_add(period->end, dur);
+		dur.days = 1;
+		period->end = icaltime_add(period->start, dur);
 	    }
+	    else
+		memcpy(&period->end, &period->start, sizeof(struct icaltimetype));
 	}
 	break;
 
@@ -776,16 +779,23 @@ EXPORTED void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata)
     icalcomponent *comp = icalcomponent_get_first_real_component(ical);
     icalcomponent_kind kind;
     icalproperty *prop;
-    unsigned mykind = 0, recurring = 0, transp = 0;
+    unsigned mykind = 0, recurring = 0, transp = 0, status = 0;
     struct icalperiodtype span;
 
     /* Get iCalendar UID */
     cdata->ical_uid = icalcomponent_get_uid(comp);
 
-    /* Get component type */
+    /* Get component type and optional status */
     kind = icalcomponent_isa(comp);
     switch (kind) {
-    case ICAL_VEVENT_COMPONENT: mykind = CAL_COMP_VEVENT; break;
+    case ICAL_VEVENT_COMPONENT:
+	mykind = CAL_COMP_VEVENT;
+	switch (icalcomponent_get_status(comp)) {
+	case ICAL_STATUS_CANCELLED: status = CAL_STATUS_CANCELED; break;
+	case ICAL_STATUS_TENTATIVE: status = CAL_STATUS_TENTATIVE; break;
+	default: status = CAL_STATUS_BUSY; break;
+	}
+	break;
     case ICAL_VTODO_COMPONENT: mykind = CAL_COMP_VTODO; break;
     case ICAL_VJOURNAL_COMPONENT: mykind = CAL_COMP_VJOURNAL; break;
     case ICAL_VFREEBUSY_COMPONENT: mykind = CAL_COMP_VFREEBUSY; break;
@@ -796,6 +806,7 @@ EXPORTED void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata)
     default: break;
     }
     cdata->comp_type = mykind;
+    cdata->comp_flags.status = status;
 
     /* Get organizer */
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
@@ -818,7 +829,7 @@ EXPORTED void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata)
 	    break;
 	}
     }
-    cdata->transp = transp;
+    cdata->comp_flags.transp = transp;
 
     /* Initialize span to be nothing */
     span.start = icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
@@ -889,7 +900,7 @@ EXPORTED void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata)
 
     cdata->dtstart = icaltime_as_ical_string(span.start);
     cdata->dtend = icaltime_as_ical_string(span.end);
-    cdata->recurring = recurring;
+    cdata->comp_flags.recurring = recurring;
 }
 
 

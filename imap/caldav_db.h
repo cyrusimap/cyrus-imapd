@@ -95,6 +95,20 @@ struct caldav_db;
 #define CALDAV_CREATE 0x01
 #define CALDAV_TRUNC  0x02
 
+struct comp_flags {
+    unsigned recurring	  : 1;
+    unsigned transp	  : 1;
+    unsigned status	  : 2;
+};
+
+/* Status values */
+enum {
+    CAL_STATUS_BUSY = 0,
+    CAL_STATUS_CANCELED,
+    CAL_STATUS_TENTATIVE,
+    CAL_STATUS_UNAVAILABLE
+};
+
 struct caldav_data {
     struct dav_data dav;  /* MUST be first so we can typecast */
     unsigned comp_type;
@@ -102,8 +116,7 @@ struct caldav_data {
     const char *organizer;
     const char *dtstart;
     const char *dtend;
-    unsigned recurring;
-    unsigned transp;
+    struct comp_flags comp_flags;
     const char *sched_tag;
 };
 
