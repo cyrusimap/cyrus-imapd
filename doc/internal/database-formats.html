@@ -246,8 +246,7 @@ CREATE TABLE ical_objs (
  organizer TEXT,
  dtstart TEXT,
  dtend TEXT,
- recurring INTEGER,
- transp INTEGER,
+ comp_flags INTEGER,
  sched_tag TEXT,
  UNIQUE( mailbox, resource )
 );
