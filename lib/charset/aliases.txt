@@ -1,7 +1,10 @@
 # funky names for UTF charsets
 utf8                utf-8
 utf7                utf-7
-unicode-1-1-utf-8   utf8
+unicode-1-1-utf-8   utf-8
+
+# even ASCII is not exempt
+ascii               us-ascii
 
 # Yes, the world does contain a lot of rubbish
 # ways of saying iso-8859-1
