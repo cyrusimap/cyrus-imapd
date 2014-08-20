@@ -7,13 +7,15 @@
 </head>
 <body>
 
-<h1>Cyrus HTTP (RSS, CalDAV, CardDAV, iSchedule, Timezone Service)</h1>
+<h1>Cyrus HTTP (<a href="#RSS">RSS</a>, <a href="#CalDAV">CalDAV</a>,
+  <a href="#CardDAV">CardDAV</a>, <a href="#iSchedule">iSchedule</a>,
+  <a href="#Timezone">Timezone Service</a>)</h1>
 
 <b><i>Note that the HTTP service and associated modules in Cyrus are
     still under development.  This release should be considered beta
     quality.</i></b>
 
-<h2>Introduction</h2>
+<h2 id="Intro">Introduction</h2>
 
 <p>Cyrus <tt>http</tt> service has the ability to:</p>
 
@@ -43,7 +45,7 @@
   configuring a Cyrus server.  If you have not already done so, please
   read and understand the rest of the <a href="install.html">installation</a>
   documentation before continuing. Note: The
-  "<a href="#install">Installation</a>" section below augments the
+  "<a href="#Install">Installation</a>" section below augments the
   "<a href="install-compile.html">Compiling the IMAP Server</a>"
   document.  The remaining sections assume that your Cyrus server has
   already been
@@ -53,7 +55,7 @@
   calendaring, and contacts.</p>
 
 
-<h2 id="install">Installation</h2>
+<h2 id="Install">Installation</h2>
 
 <p>You will need to build Cyrus with 
   the <tt>--enable-http</tt> configure option.  This builds httpd
@@ -146,7 +148,7 @@
   and NTLM authentication schemes respectively, provided that these
   plugins are installed on the server.</p>
 
-<h2>RSS Module</h2>
+<h2 id="RSS">RSS Module</h2>
 
 <h3>Configuration</h3>
 
@@ -171,7 +173,7 @@
   be set on frontend servers, since only those servers have the
   complete mailbox list.</p>
 
-<h2>CalDAV Module</h2>
+<h2 id="CalDAV">CalDAV Module</h2>
 
 <h3>Configuration</h3>
 
@@ -436,7 +438,7 @@
 </p>
 
 
-<h2>CardDAV Module</h2>
+<h2 id="CardDAV">CardDAV Module</h2>
 
 <h3>Configuration</h3>
 
@@ -527,7 +529,7 @@
 </p>
 
 
-<h2>Timezone Service Module</h2>
+<h2 id="Timezone">Timezone Service Module</h2>
 
 <h3>Configuration</h3>
 
@@ -593,7 +595,7 @@
 </p>
 
 
-<h2>iSchedule Module</h2>
+<h2 id="iSchedule">iSchedule Module</h2>
 
 <p>This module will be automatically enabled if and only if both the
   CalDAV module and the <tt>caldav_allowscheduling</tt> options are
