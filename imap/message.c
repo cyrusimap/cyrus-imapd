@@ -943,8 +943,11 @@ static void message_parse_charset(const struct body *body,
     if (!body->type || !strcmp(body->type, "TEXT")) {
 	for (param = body->params; param; param = param->next) {
 	    if (!strcasecmp(param->attribute, "charset")) {
-		if (param->value && *param->value)
+		if (param->value && *param->value) {
 		    charset = charset_lookupname(param->value);
+		    if (charset < 0)
+			syslog(LOG_NOTICE, "message_parse_charset: unknown charset %s for text/%s", param->value, body->subtype);
+		}
 		break;
 	    }
 	}
