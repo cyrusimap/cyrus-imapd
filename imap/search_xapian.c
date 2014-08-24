@@ -2074,6 +2074,10 @@ static int reindex_mb(void *rock,
     if (!seq) goto done;
 
     r = mailbox_open_irl(mboxname, &mailbox);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+	r = 0;  /* it's not an error to have a no-longer-exiting mailbox to index */
+	goto done;
+    }
     if (r) goto done;
 
     if (mailbox->i.uidvalidity != uidvalidity) goto done; /* returns 0, nothing to index */
@@ -2082,6 +2086,7 @@ static int reindex_mb(void *rock,
 	r = mailbox_read_index_record(mailbox, recno, &record);
 	if (r) goto done;
 
+	/* don't index EXPUNGED records */
 	if (record.system_flags & FLAG_EXPUNGED)
 	    continue;
 
