@@ -5,6 +5,7 @@ unicode-1-1-utf-8   utf-8
 
 # even ASCII is not exempt
 ascii               us-ascii
+ANSI_X3.4-1968      us-ascii
 
 # Yes, the world does contain a lot of rubbish
 # ways of saying iso-8859-1
@@ -24,8 +25,14 @@ x-unknown           iso-8859-1
 x-user-defined      iso-8859-1
 none                iso-8859-1
 latin1              iso-8859-1
+ISO8859-1           iso-8859-1
+8859-1              iso-8859-1
+DISPLAY             iso-8859-1
+Any                 iso-8859-1
+
 # sort-of - see Filter::Trigraph
 646                 iso-8859-1
+ISO646-US           iso-8859-1
 
 # other aliases
 8859_2              iso-8859-2
@@ -33,6 +40,7 @@ x-mac-turkish       iso-8859-9
 greek-ccitt         iso-8859-7
 iso-8859-8-i        iso-8859-8
 ISO8859_15_FDIS     iso-8859-15
+ISO8859-15          iso-8859-15
 tis-620             iso-8859-11
 ASMO-708            iso-8859-6
 WIN-KOI8            koi8-r
@@ -50,6 +58,10 @@ win-1251            windows-1251
 cp1252              windows-1252
 win-1252            windows-1252
 
+1254                windows-1254
+cp1254              windows-1254
+win-1254            windows-1254
+
 1255                windows-1255
 cp1255              windows-1255
 win-1255            windows-1255
@@ -57,6 +69,10 @@ win-1255            windows-1255
 1256                windows-1256
 cp1256              windows-1256
 win-1256            windows-1256
+
+1258                windows-1258
+cp1258              windows-1258
+win-1258            windows-1258
 
 # stuff from the FastMail Perl mapping that we
 # don't have support for in Cyrus
