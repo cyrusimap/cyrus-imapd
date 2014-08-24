@@ -88,7 +88,7 @@ enum {
 #define DACL_MKCOL	ACL_CREATE	/* CY:make-collection */
 #define DACL_ADDRSRC	ACL_POST	/* CY:add-resource */
 #define DACL_RMCOL	ACL_DELETEMBOX	/* CY:remove-collection */
-#define DACL_RMRSRC	ACL_DELETEMSG	/* CY:remove-resource */
+#define DACL_RMRSRC	ACL_DELETEMSG|ACL_EXPUNGE	/* CY:remove-resource */
 #define DACL_ADMIN	ACL_ADMIN	/* CY:admin (aggregates
 					   DAV:read-acl, write-acl, unlock) */
 

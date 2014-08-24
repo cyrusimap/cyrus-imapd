@@ -1438,7 +1438,7 @@ static int add_privs(int rights, unsigned flags,
 	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
 	xmlNewChild(priv, ns[NS_CYRUS], BAD_CAST "remove-collection", NULL);
     }
-    if (rights & DACL_RMRSRC) {
+    if ((rights & DACL_RMRSRC) == DACL_RMRSRC) {
 	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
 	xmlNewChild(priv, ns[NS_CYRUS], BAD_CAST "remove-resource", NULL);
     }
