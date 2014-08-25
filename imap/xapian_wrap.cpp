@@ -238,7 +238,6 @@ int xapian_db_open(const char **paths, xapian_db_t **dbp)
 	}
 	db->stemmer = new Xapian::Stem("en");
 	db->parser = new Xapian::QueryParser;
-	db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_ALL);
 	db->parser->set_stemmer(*db->stemmer);
 	db->parser->set_default_op(Xapian::Query::OP_AND);
 	db->parser->set_database(*db->database);
@@ -278,15 +277,33 @@ xapian_query_t *xapian_query_new_match(const xapian_db_t *db, const char *prefix
     try {
 	// We don't use FLAG_BOOLEAN because Cyrus is doing boolean for us
 	// TODO: FLAG_AUTO_SYNONYMS
-	// quote the query for phrase management
-	std::string quoted = std::string("\"") + str + "\"";
-	Xapian::Query query = db->parser->parse_query(
+	int has_highbit = 0;
+	const unsigned char *p;
+	for (p = (const unsigned char *)str; *p; p++)
+	    if (*p > 205) has_highbit = 1;
+
+	if (has_highbit) {
+	    // anything from greek (codepage from 0380) isn't english parsable
+	    // so don't try stemming it!
+	    db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_NONE);
+	    std::string sstr = std::string("") + str;
+	    Xapian::Query query = db->parser->parse_query(
+				    sstr, /*flags*/0,
+				    std::string(prefix));
+	    return (xapian_query_t *)new Xapian::Query(query);
+	}
+	else {
+	    // quote the query for phrase management
+	    std::string quoted = std::string("\"") + str + "\"";
+	    db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_ALL);
+	    Xapian::Query query = db->parser->parse_query(
 				    quoted,
 				    (Xapian::QueryParser::FLAG_PHRASE |
 				     Xapian::QueryParser::FLAG_LOVEHATE |
 				     Xapian::QueryParser::FLAG_WILDCARD),
 				    std::string(prefix));
-	return (xapian_query_t *)new Xapian::Query(query);
+	    return (xapian_query_t *)new Xapian::Query(query);
+	}
     }
     catch (const Xapian::Error &err) {
 	syslog(LOG_ERR, "IOERROR: Xapian: caught exception: %s: %s",
