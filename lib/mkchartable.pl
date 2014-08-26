@@ -104,7 +104,7 @@ sub readmapfile {
 
 	my ($hexcode, $name, $category, $combiningclass, $bidicat, 
 	    $decomposition, $decimal, $digit, $numeric, $mirroredchar,
-	    $uni1name, $comment, $upper, $lower, $title, @rest) = split ';', $line;
+	    $uni1name, $comment, $upper, $lower, @rest) = split ';', $line;
 	my $code = hex($hexcode);
 
 	# This is not RFC5051
@@ -112,10 +112,6 @@ sub readmapfile {
 	   $codemap->{$code}{chars} = [32]; # space
 	   next;
 	}
-
-	# has a mapping to titlecase
-	$codemap->{$code}{title} = hex($title)
-	    if $title;
 
 	# Compatability mapping, skip over the <type> 
 	while ($decomposition ne '') {
@@ -130,7 +126,10 @@ sub readmapfile {
 	    }
 	}
 
-	$codemap->{$code}{chars} ||= [$code];
+	#Lower case equivalence mapping
+	if ($lower) {
+	    $codemap->{$code}{chars} = [hex($lower)];
+	}
     }
 }
 
@@ -294,15 +293,14 @@ EOF
     	    print OUTPUT " { /* Mapping for unicode chars in block $block16 $block8 */\n ";
 	    foreach my $i (0..255) {
 		my $codepoint = ($block16 << 16) + ($block8 << 8) + $i;
-		my $titlepoint = $codemap->{$codepoint}{title} || $codepoint;
-		if (not $codemap->{$titlepoint} or not keys %{$codemap->{$titlepoint}}) {
-		    printf OUTPUT " 0x%04x,", $titlepoint;
+		if (not $codemap->{$codepoint}) {
+		    printf OUTPUT " 0x%04x,", $codepoint;
 		}
-		elsif ($codemap->{$titlepoint}{trans}) {
-		    printf OUTPUT " - %4d,", $codemap->{$titlepoint}{trans};
+		elsif ($codemap->{$codepoint}{trans}) {
+		    printf OUTPUT " - %4d,", $codemap->{$codepoint}{trans};
 		}
 		else {
-		    printf OUTPUT " 0x%04x,", $codemap->{$titlepoint}{chars}[0];
+		    printf OUTPUT " 0x%04x,", $codemap->{$codepoint}{chars}[0];
 		}
  		print OUTPUT "\n " if ($i % 8 == 7);
 	    }
