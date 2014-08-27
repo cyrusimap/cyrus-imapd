@@ -235,11 +235,25 @@ int mboxname_make_parent(char *namebuf);
 char *mboxname_conf_getpath(struct mboxname_parts *parts,
 			    const char *suffix);
 
+/* ======================== COUNTERS ==================== */
+
+struct mboxname_counters {
+    uint32_t generation;
+    uint32_t version;
+    modseq_t highestmodseq;
+    modseq_t mailmodseq;
+    modseq_t caldavmodseq;
+    modseq_t carddavmodseq;
+    uint32_t uidvalidity;
+    uint32_t crc;
+};
+
+int mboxname_read_counters(const char *mboxname, struct mboxname_counters *vals);
 modseq_t mboxname_readmodseq(const char *mboxname);
-modseq_t mboxname_nextmodseq(const char *mboxname, modseq_t last);
-modseq_t mboxname_setmodseq(const char *mboxname, modseq_t val);
+modseq_t mboxname_nextmodseq(const char *mboxname, modseq_t last, int mbtype);
+modseq_t mboxname_setmodseq(const char *mboxname, modseq_t val, int mbtype);
 uint32_t mboxname_readuidvalidity(const char *mboxname);
-uint32_t mboxname_nextuidvalidity(const char *mboxname, uint32_t last);
-uint32_t mboxname_setuidvalidity(const char *mboxname, uint32_t val);
+uint32_t mboxname_nextuidvalidity(const char *mboxname, uint32_t last, int mbtype);
+uint32_t mboxname_setuidvalidity(const char *mboxname, uint32_t val, int mbtype);
 
 #endif

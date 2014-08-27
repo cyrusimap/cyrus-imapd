@@ -341,7 +341,7 @@ static void commitstatus_cb(const char *key, void *data, void *rock)
     conversation_storestatus(state, key, strlen(key), status);
     /* just in case convdb has a higher modseq for any reason (aka deleted and
      * recreated while a replica was still valid with the old user) */
-    mboxname_setmodseq(key+1, status->modseq);
+    mboxname_setmodseq(key+1, status->modseq, /*mbtype */0);
     sync_log_mailbox(key+1); /* skip the leading F */
 }
 

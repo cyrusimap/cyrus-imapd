@@ -1619,7 +1619,7 @@ static int do_mailbox(struct dlist *kin, struct sync_reserve_list *reserve_list)
 
     /* this happens all the time! */
     if (mailbox->i.highestmodseq != highestmodseq) {
-	mboxname_setmodseq(mailbox->name, highestmodseq);
+	mboxname_setmodseq(mailbox->name, highestmodseq, mailbox->mbtype);
 	mailbox->i.highestmodseq = highestmodseq;
     }
 
@@ -1628,7 +1628,7 @@ static int do_mailbox(struct dlist *kin, struct sync_reserve_list *reserve_list)
 	syslog(LOG_NOTICE, "%s uidvalidity changed, updating %u => %u",
 	       mailbox->name, mailbox->i.uidvalidity, uidvalidity);
 	/* make sure nothing new gets created with a lower value */
-	mboxname_setuidvalidity(mailbox->name, uidvalidity);
+	mboxname_setuidvalidity(mailbox->name, uidvalidity, mailbox->mbtype);
 	mailbox->i.uidvalidity = uidvalidity;
     }
 

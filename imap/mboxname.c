@@ -51,6 +51,8 @@
 #endif
 
 #include "assert.h"
+#include "byteorder64.h"
+#include "crc32.h"
 #include "exitcodes.h"
 #include "glob.h"
 #include "global.h"
@@ -1601,7 +1603,7 @@ EXPORTED char *mboxname_conf_getpath(struct mboxname_parts *parts, const char *s
 {
     char *fname = NULL;
     char c[2], d[2];
-    
+
     if (parts->domain) {
 	if (parts->userid) {
 	    fname = strconcat(config_dir,
@@ -1640,7 +1642,9 @@ EXPORTED char *mboxname_conf_getpath(struct mboxname_parts *parts, const char *s
     return fname;
 }
 
-static bit64 mboxname_readval(const char *mboxname, const char *metaname)
+/* ========================= COUNTERS ============================ */
+
+static bit64 mboxname_readval_old(const char *mboxname, const char *metaname)
 {
     bit64 fileval = 0;
     struct mboxname_parts parts;
@@ -1665,10 +1669,11 @@ static bit64 mboxname_readval(const char *mboxname, const char *metaname)
 	    syslog(LOG_ERR, "IOERROR: failed to stat fd %s: %m", fname);
 	    goto done;
 	}
-	map_refresh(fd, 1, &base, &len, sbuf.st_size, metaname, mboxname);
-	if (len > 0)
-	    parsenum(base, NULL, len, &fileval);
-	map_free(&base, &len);
+	if (sbuf.st_size) {
+	    map_refresh(fd, 1, &base, &len, sbuf.st_size, metaname, mboxname);
+	    parsenum(base, NULL, sbuf.st_size, &fileval);
+	    map_free(&base, &len);
+	}
     }
 
  done:
@@ -1678,29 +1683,67 @@ static bit64 mboxname_readval(const char *mboxname, const char *metaname)
     return fileval;
 }
 
+#define MV_OFF_GENERATION 0
+#define MV_OFF_VERSION 4
+#define MV_OFF_HIGHESTMODSEQ 8
+#define MV_OFF_MAILMODSEQ 16
+#define MV_OFF_CALDAVMODSEQ 24
+#define MV_OFF_CARDDAVMODSEQ 32
+#define MV_OFF_UIDVALIDITY 40
+#define MV_OFF_CRC 44
+#define MV_LENGTH 48
+
+/* NOTE: you need a MV_LENGTH byte base here */
+static int mboxname_buf_to_counters(const char *base, struct mboxname_counters *vals)
+{
+    vals->generation = ntohl(*((uint32_t *)(base+MV_OFF_GENERATION)));
+    vals->version = ntohl(*((uint32_t *)(base+MV_OFF_VERSION)));
+    vals->highestmodseq = ntohll(*((uint64_t *)(base+MV_OFF_HIGHESTMODSEQ)));
+    vals->mailmodseq = ntohll(*((uint64_t *)(base+MV_OFF_MAILMODSEQ)));
+    vals->caldavmodseq = ntohll(*((uint64_t *)(base+MV_OFF_CALDAVMODSEQ)));
+    vals->carddavmodseq = ntohll(*((uint64_t *)(base+MV_OFF_CARDDAVMODSEQ)));
+    vals->uidvalidity = ntohl(*((uint32_t *)(base+MV_OFF_UIDVALIDITY)));
+    vals->crc = ntohl(*((uint32_t *)(base+MV_OFF_CRC)));
+
+    if (crc32_map(base, MV_OFF_CRC) != vals->crc)
+	return IMAP_MAILBOX_CHECKSUM;
+
+    return 0;
+}
+
+/* NOTE: you need a MV_LENGTH buffer to write into, aligned on 8 byte boundaries */
+static void mboxname_counters_to_buf(const struct mboxname_counters *vals, char *base)
+{
+    *((uint32_t *)(base+MV_OFF_GENERATION)) = htonl(vals->generation);
+    *((uint32_t *)(base+MV_OFF_VERSION)) = htonl(vals->version);
+    align_htonll(base+MV_OFF_HIGHESTMODSEQ, vals->highestmodseq);
+    align_htonll(base+MV_OFF_MAILMODSEQ, vals->mailmodseq);
+    align_htonll(base+MV_OFF_CALDAVMODSEQ, vals->caldavmodseq);
+    align_htonll(base+MV_OFF_CARDDAVMODSEQ, vals->carddavmodseq);
+    *((uint32_t *)(base+MV_OFF_UIDVALIDITY)) = htonl(vals->uidvalidity);
+    *((uint32_t *)(base+MV_OFF_CRC)) = htonl(crc32_map(base, MV_OFF_CRC));
+}
+
 /* XXX - inform about errors?  Any error causes the value of at least
    last+1 to be returned.  An error only on writing causes
    max(last, fileval) + 1 to still be returned */
-static bit64 mboxname_setval(const char *mboxname, const char *metaname,
-			     bit64 last, int add)
+static int mboxname_load_counters(const char *mboxname, struct mboxname_counters *vals, int *fdp)
 {
     int fd = -1;
-    int newfd = -1;
     char *fname = NULL;
-    char newfname[MAX_MAILBOX_PATH];
     struct stat sbuf, fbuf;
     const char *base = NULL;
     size_t len = 0;
-    bit64 fileval = 0;
-    bit64 retval = last + add;
-    char numbuf[30];
     struct mboxname_parts parts;
-    int n;
+    int r = 0;
 
     mboxname_to_parts(mboxname, &parts);
 
-    fname = mboxname_conf_getpath(&parts, metaname);
-    if (!fname) goto done;
+    fname = mboxname_conf_getpath(&parts, "counters");
+    if (!fname) {
+	r = IMAP_MAILBOX_BADNAME;
+	goto done;
+    }
 
     /* get a blocking lock on fd */
     for (;;) {
@@ -1732,36 +1775,81 @@ static bit64 mboxname_setval(const char *mboxname, const char *metaname,
 	fd = -1;
     }
 
-    /* read the old value */
-    if (fd != -1) {
-	map_refresh(fd, 1, &base, &len, sbuf.st_size, metaname, mboxname);
-	if (len > 0)
-	    parsenum(base, NULL, len, &fileval);
-	map_free(&base, &len);
-	if (fileval > last) last = fileval;
+    if (fd < 0) {
+	r = IMAP_IOERROR;
+	goto done;
     }
 
-    retval = last + add;
+    if (sbuf.st_size >= MV_LENGTH) {
+	/* read the old value */
+	map_refresh(fd, 1, &base, &len, sbuf.st_size, "counters", mboxname);
+	if (len >= MV_LENGTH) {
+	    r = mboxname_buf_to_counters(base, vals);
+	}
+	map_free(&base, &len);
+    }
+    else {
+	/* going to have to read the old files */
+	vals->mailmodseq = vals->caldavmodseq = vals->carddavmodseq =
+	    vals->highestmodseq = mboxname_readval_old(mboxname, "modseq");
+	vals->uidvalidity = mboxname_readval_old(mboxname, "uidvalidity");
+    }
 
-    /* unchanged, no need to write */
-    if (retval == fileval)
+done:
+    if (r) {
+	if (fd != -1) {
+	    lock_unlock(fd, fname);
+	    close(fd);
+	}
+    }
+    else {
+	/* maintain the lock until we're done */
+	*fdp = fd;
+    }
+    mboxname_free_parts(&parts);
+    free(fname);
+    return r;
+}
+
+static int mboxname_set_counters(const char *mboxname, struct mboxname_counters *vals, int fd)
+{
+    char *fname = NULL;
+    struct mboxname_parts parts;
+    char buf[MV_LENGTH];
+    char newfname[MAX_MAILBOX_PATH];
+    int newfd = -1;
+    int n = 0;
+    int r = 0;
+
+    mboxname_to_parts(mboxname, &parts);
+
+    fname = mboxname_conf_getpath(&parts, "counters");
+    if (!fname) {
+	r = IMAP_MAILBOX_BADNAME;
 	goto done;
+    }
 
     snprintf(newfname, MAX_MAILBOX_PATH, "%s.NEW", fname);
     newfd = open(newfname, O_CREAT | O_TRUNC | O_WRONLY, 0644);
     if (newfd == -1) {
+	r = IMAP_IOERROR;
 	syslog(LOG_ERR, "IOERROR: failed to open for write %s: %m", newfname);
 	goto done;
     }
 
-    snprintf(numbuf, 30, "%llu", retval);
-    n = retry_write(newfd, numbuf, strlen(numbuf));
+    /* it's a new generation! */
+    vals->generation++;
+
+    mboxname_counters_to_buf(vals, buf);
+    n = retry_write(newfd, buf, MV_LENGTH);
     if (n < 0) {
+	r = IMAP_IOERROR;
 	syslog(LOG_ERR, "IOERROR: failed to write %s: %m", newfname);
 	goto done;
     }
 
     if (fdatasync(newfd)) {
+	r = IMAP_IOERROR;
 	syslog(LOG_ERR, "IOERROR: failed to fdatasync %s: %m", newfname);
 	goto done;
     }
@@ -1770,6 +1858,7 @@ static bit64 mboxname_setval(const char *mboxname, const char *metaname,
     newfd = -1;
 
     if (rename(newfname, fname)) {
+	r = IMAP_IOERROR;
 	syslog(LOG_ERR, "IOERROR: failed to rename %s: %m", newfname);
 	goto done;
     }
@@ -1782,45 +1871,221 @@ static bit64 mboxname_setval(const char *mboxname, const char *metaname,
     }
     mboxname_free_parts(&parts);
     free(fname);
-    return retval;
+
+    return r;
+}
+
+static int mboxname_unload_counters(int fd)
+{
+    lock_unlock(fd, NULL);
+    close(fd);
+    return 0;
+}
+
+EXPORTED int mboxname_read_counters(const char *mboxname, struct mboxname_counters *vals)
+{
+    int r = 0;
+    struct mboxname_parts parts;
+    struct stat sbuf;
+    char *fname = NULL;
+    const char *base = NULL;
+    size_t len = 0;
+    int fd = -1;
+
+    memset(vals, 0, sizeof(struct mboxname_counters));
+
+    mboxname_to_parts(mboxname, &parts);
+
+    fname = mboxname_conf_getpath(&parts, "counters");
+    if (!fname) {
+	r = IMAP_MAILBOX_BADNAME;
+	goto done;
+    }
+
+    fd = open(fname, O_RDONLY);
+
+    /* if no file, import from the old files potentially, and write a file regardless */
+    if (fd < 0) {
+	/* race => multiple rewrites, won't hurt too much */
+	r = mboxname_load_counters(mboxname, vals, &fd);
+	if (r) goto done;
+	r = mboxname_set_counters(mboxname, vals, fd);
+	fd = -1;
+	if (r) goto done;
+	free(fname);
+	fname = mboxname_conf_getpath(&parts, "modseq");
+	if (fname) unlink(fname);
+	free(fname);
+	fname = mboxname_conf_getpath(&parts, "uidvalidity");
+	if (fname) unlink(fname);
+	goto done;
+    }
+
+    if (fstat(fd, &sbuf)) {
+	syslog(LOG_ERR, "IOERROR: failed to stat fd %s: %m", fname);
+	r = IMAP_IOERROR;
+	goto done;
+    }
+
+    if (sbuf.st_size >= MV_LENGTH) {
+	map_refresh(fd, 1, &base, &len, sbuf.st_size, "counters", mboxname);
+	if (len >= MV_LENGTH)
+	    r = mboxname_buf_to_counters(base, vals);
+	map_free(&base, &len);
+    }
+
+ done:
+    if (fd != -1) close(fd);
+    mboxname_free_parts(&parts);
+    free(fname);
+    return r;
 }
 
 EXPORTED modseq_t mboxname_readmodseq(const char *mboxname)
 {
+    struct mboxname_counters counters;
+
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
 	return 0;
-    return (modseq_t)mboxname_readval(mboxname, "modseq");
+
+    if (mboxname_read_counters(mboxname, &counters))
+	return 0;
+
+    return counters.highestmodseq;
 }
 
-EXPORTED modseq_t mboxname_nextmodseq(const char *mboxname, modseq_t last)
+EXPORTED modseq_t mboxname_nextmodseq(const char *mboxname, modseq_t last, int mbtype)
 {
+    struct mboxname_counters counters;
+    modseq_t *typemodseqp;
+    int fd = -1;
+
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
 	return last + 1;
-    return (modseq_t)mboxname_setval(mboxname, "modseq", (bit64)last, 1);
+
+    /* XXX error handling */
+    if (mboxname_load_counters(mboxname, &counters, &fd))
+	return last + 1;
+
+    if (mbtype & MBTYPE_ADDRESSBOOK)
+	typemodseqp = &counters.carddavmodseq;
+    else if (mbtype & MBTYPE_CALENDAR)
+	typemodseqp = &counters.caldavmodseq;
+    else
+	typemodseqp = &counters.mailmodseq;
+
+    if (counters.highestmodseq < last)
+	counters.highestmodseq = last;
+
+    counters.highestmodseq++;
+
+    *typemodseqp = counters.highestmodseq;
+
+    /* always set, because we always increased */
+    mboxname_set_counters(mboxname, &counters, fd);
+
+    return counters.highestmodseq;
 }
 
-EXPORTED modseq_t mboxname_setmodseq(const char *mboxname, modseq_t val)
+EXPORTED modseq_t mboxname_setmodseq(const char *mboxname, modseq_t val, int mbtype)
 {
-    return (modseq_t)mboxname_setval(mboxname, "modseq", (bit64)val, 0);
+    struct mboxname_counters counters;
+    modseq_t *typemodseqp;
+    int fd = -1;
+    int dirty = 0;
+
+    if (!config_getswitch(IMAPOPT_CONVERSATIONS))
+	return val;
+
+    /* XXX error handling */
+    if (mboxname_load_counters(mboxname, &counters, &fd))
+	return val;
+
+    if (mbtype & MBTYPE_ADDRESSBOOK)
+	typemodseqp = &counters.carddavmodseq;
+    else if (mbtype & MBTYPE_CALENDAR)
+	typemodseqp = &counters.caldavmodseq;
+    else
+	typemodseqp = &counters.mailmodseq;
+
+    if (counters.highestmodseq < val) {
+	counters.highestmodseq = val;
+	dirty = 1;
+    }
+
+    if (*typemodseqp < val) {
+	*typemodseqp = val;
+	dirty = 1;
+    }
+
+    if (dirty)
+	mboxname_set_counters(mboxname, &counters, fd);
+    else
+	mboxname_unload_counters(fd);
+
+    return val;
 }
 
 EXPORTED uint32_t mboxname_readuidvalidity(const char *mboxname)
 {
+    struct mboxname_counters counters;
+
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
 	return 0;
-    return (uint32_t)mboxname_readval(mboxname, "uidvalidity");
+
+    if (mboxname_read_counters(mboxname, &counters))
+	return 0;
+
+    return counters.uidvalidity;
 }
 
-EXPORTED uint32_t mboxname_nextuidvalidity(const char *mboxname, uint32_t last)
+EXPORTED uint32_t mboxname_nextuidvalidity(const char *mboxname, uint32_t last, int mbtype __attribute__((unused)))
 {
+    struct mboxname_counters counters;
+    int fd = -1;
+
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
 	return last + 1;
-    return (uint32_t)mboxname_setval(mboxname, "uidvalidity", (bit64)last, 1);
+
+    /* XXX error handling */
+    if (mboxname_load_counters(mboxname, &counters, &fd))
+	return last + 1;
+
+    if (counters.uidvalidity < last)
+	counters.uidvalidity = last;
+
+    counters.uidvalidity++;
+
+    /* always set, because we always increased */
+    mboxname_set_counters(mboxname, &counters, fd);
+
+    return counters.uidvalidity;
 }
 
-EXPORTED uint32_t mboxname_setuidvalidity(const char *mboxname, uint32_t val)
+EXPORTED uint32_t mboxname_setuidvalidity(const char *mboxname, uint32_t val, int mbtype __attribute__((unused)))
 {
-    return (uint32_t)mboxname_setval(mboxname, "uidvalidity", (bit64)val, 0);
+    struct mboxname_counters counters;
+    int fd = -1;
+    int dirty = 0;
+
+    if (!config_getswitch(IMAPOPT_CONVERSATIONS))
+	return val;
+
+    /* XXX error handling */
+    if (mboxname_load_counters(mboxname, &counters, &fd))
+	return val;
+
+    if (counters.uidvalidity < val) {
+	counters.uidvalidity = val;
+	dirty = 1;
+    }
+
+    if (dirty)
+	mboxname_set_counters(mboxname, &counters, fd);
+    else
+	mboxname_unload_counters(fd);
+
+    return val;
 }
 
 

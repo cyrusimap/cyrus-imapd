@@ -151,6 +151,9 @@ static struct mboxevent event_template =
     { EVENT_CONVEXISTS, "vnd.fastmail.convExists", EVENT_PARAM_INT, 0, 0 },
     { EVENT_CONVUNSEEN, "vnd.fastmail.convUnseen", EVENT_PARAM_INT, 0, 0 },
     { EVENT_MESSAGE_CID, "vnd.fastmail.cid", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_CLIENT_ID, "vnd.fastmail.clientId", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_SESSION_ID, "vnd.fastmail.sessionId", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_COUNTERS, "vnd.fastmail.counters", EVENT_PARAM_STRING, 0, 0 },
 
     /* calendar params for calalarmd/notifyd */
     { EVENT_CALENDAR_ALARM_TIME, "alarmTime", EVENT_PARAM_STRING, 0, 0 },
@@ -526,6 +529,8 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
 	return extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_CONVEXISTS;
     case EVENT_CONVUNSEEN:
 	return extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_CONVUNSEEN;
+    case EVENT_COUNTERS:
+	return extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_COUNTERS;
     case EVENT_OLD_UIDSET:
 	return type & (EVENT_MESSAGE_COPY|EVENT_MESSAGE_MOVE);
     default:
@@ -1256,6 +1261,19 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
 
 	if (mboxevent_expected_param(event->type, EVENT_CONVUNSEEN))
 	    FILL_UNSIGNED_PARAM(event, EVENT_CONVUNSEEN, status.unseen);
+    }
+
+    if (mboxevent_expected_param(event->type, EVENT_COUNTERS)) {
+	struct mboxname_counters counters;
+	struct buf value = BUF_INITIALIZER;
+
+	mboxname_read_counters(mailbox->name, &counters);
+	buf_printf(&value, "%u %llu %llu %llu %llu %u",
+	           counters.version, counters.highestmodseq,
+	           counters.mailmodseq, counters.caldavmodseq,
+	           counters.carddavmodseq, counters.uidvalidity);
+
+	FILL_STRING_PARAM(event, EVENT_COUNTERS, buf_release(&value));
     }
 }
 
