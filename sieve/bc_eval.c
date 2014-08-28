@@ -955,7 +955,7 @@ envelope_err:
 	struct tm *tm;
 	time_t t;
 
-	++i; /* BC_DATE */
+	++i; /* BC_DATE | BC_CURRENTDATE */
 
 	/* index */
 	index = ntohl(bc[i++].value);
@@ -983,44 +983,40 @@ envelope_err:
 	/* date-part */
 	date_part = ntohl(bc[i++].value);
 
-	/* header name */
-	i = unwrap_string(bc, i, &header_name, NULL);
+	if (BC_DATE == op) {
+		/* header name */
+		i = unwrap_string(bc, i, &header_name, NULL);
 
+		/*
+		 * Process header
+		 */
 
-	/*
-	 * Process header
-	 */
+		if (interp->getheader(m, header_name, &headers) != SIEVE_OK) {
+			res = SIEVE_FAIL;
+			goto alldone;
+		}
 
-	if (interp->getheader(m, header_name, &headers) != SIEVE_OK) {
-		res = SIEVE_FAIL;
-		goto alldone;
-	}
+		/* count results */
+		header_count = 0;
+		while (headers[header_count] != NULL) {
+			++header_count;
+		}
 
-	/* count results */
-	header_count = 0;
-	while (headers[header_count] != NULL) {
-		++header_count;
-	}
+		/* convert index argument value to array index */
+		if (index > 0) {
+			--index;
+		}
+		else {
+			index += header_count;
+		}
 
-	/* convert index argument value to array index */
-	if (index > 0) {
-		--index;
-	}
-	else {
-		index += header_count;
-	}
+		/* check if index is out of bounds */
+		if (index < 0 || index >= header_count) {
+			res = SIEVE_FAIL;
+			goto alldone;
+		}
+		header = headers[index];
 
-	/* check if index is out of bounds */
-	if (index < 0 || index >= header_count) {
-		res = SIEVE_FAIL;
-		goto alldone;
-	}
-	header = headers[index];
-
-	if (BC_CURRENTDATE == op) {
-		t = time(NULL);
-	}
-	else {
 		/* look for separator */
 		header_data = strrchr(header, ';');
 		if (header_data) {
@@ -1036,23 +1032,26 @@ envelope_err:
 			res = SIEVE_FAIL;
 			goto alldone;
 		}
-	}
 
-	/* timezone offset */
-	if (zone == B_ORIGINALZONE) {
-		char *zone;
-		char sign;
-		int hours;
-		int minutes;
+		/* timezone offset */
+		if (zone == B_ORIGINALZONE) {
+			char *zone;
+			char sign;
+			int hours;
+			int minutes;
 
-		zone = strrchr(header, ' ');
-		if (!zone ||
-		    3 != sscanf(zone + 1, "%c%02d%02d", &sign, &hours, &minutes)) {
-			res = SIEVE_FAIL;
-			goto alldone;
+			zone = strrchr(header, ' ');
+			if (!zone ||
+			    3 != sscanf(zone + 1, "%c%02d%02d", &sign, &hours, &minutes)) {
+				res = SIEVE_FAIL;
+				goto alldone;
+			}
+
+			timezone_offset = (sign == '-' ? -1 : 1) * ((hours * 60) + (minutes));
 		}
-
-		timezone_offset = (sign == '-' ? -1 : 1) * ((hours * 60) + (minutes));
+	}
+	else { /* CURRENTDATE */
+		t = interp->time;
 	}
 
 	/* apply timezone_offset (if any) */

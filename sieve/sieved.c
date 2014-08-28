@@ -201,7 +201,10 @@ static int printComparison(bytecode_input_t *d ,int i)
 static int dump2_test(bytecode_input_t * d, int i)
 {
     int l,x,index;
-    switch(ntohl(d[i].value)) {
+    int opcode;
+
+    opcode = ntohl(d[i].value);
+    switch(opcode) {
     case BC_FALSE:
 	printf("false");
 	i++;
@@ -337,8 +340,9 @@ static int dump2_test(bytecode_input_t * d, int i)
 	break;
     case BC_DATE:/*11*/
     case BC_CURRENTDATE:/*12*/
-	/* current date */
-	if (BC_DATE == ntohl(d[i++].value)) {
+	++i; /* skip opcode */
+
+	if (BC_DATE == opcode) {
 		printf("date [");
 	}
 	else {
@@ -388,7 +392,7 @@ static int dump2_test(bytecode_input_t * d, int i)
 	}
 
 	/* header name */
-	{
+	if (BC_DATE == opcode) {
 		const char *data;
 		int len;
 		i = unwrap_string(d, i, &data, &len);

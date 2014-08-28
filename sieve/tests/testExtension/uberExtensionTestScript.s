@@ -172,6 +172,10 @@ if date :is :index 2 "received" "day" "01"
 if date :is :index 1 :last "received" "day" "01"
 {redirect "me+firstofthemonth@blah.com";}
 
-if currentdate :value "ge" :originalzone "received" "year" "2013"
-{redirect "me+yearsofthree@blah.com";}
+if currentdate :zone "-0800" :is "year" ["2003", "2013", "2023"]
+{redirect "me+currentdateis@blah.com";}
+
+if allof(currentdate :value "ge" "date" "2014-01-01",
+         currentdate :value "lt" "date" "2015-01-01")
+{redirect "me+cd2014@blah.com";}
 

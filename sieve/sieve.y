@@ -624,18 +624,22 @@ test:     ANYOF testlist	 { $$ = new_test(ANYOF); $$->u.tl = $2; }
                                      yyerror(parse_script, "unable to find a compatible comparator");
                                      YYERROR; }
                                  }
-        | CURRENTDATE dttags STRING STRING stringlist
+        | CURRENTDATE dttags STRING stringlist
                                  {if (!parse_script->support.date)
                                      { yyerror(parse_script, "date MUST be enabled with \"require\"");
                                        YYERROR; }
 
-                                   $2->date_part = verify_date_part(parse_script, $4);
+                                   if ($2->zonetag == ORIGINALZONE) {
+                                     yyerror(parse_script, "originalzone argument is not allowed in currentdate");
+                                     YYERROR; }
+
+                                   $2->date_part = verify_date_part(parse_script, $3);
                                    if ($2->date_part == -1)
                                      { YYERROR; /*vr called yyerror()*/ }
 
                                    $2 = canon_dttags($2);
 
-                                   $$ = build_date(CURRENTDATE, $2, $3, $5);
+                                   $$ = build_date(CURRENTDATE, $2, NULL, $4);
                                    if ($$ == NULL) {
                                      yyerror(parse_script, "unable to find a compatible comparator");
                                      YYERROR; }
@@ -1107,7 +1111,7 @@ static test_t *build_date(int t, struct dttags *dt,
         ret->u.dt.comptag = dt->comptag;
         ret->u.dt.relation = dt->relation;
         ret->u.dt.date_part = dt->date_part;
-        ret->u.dt.header_name = hn;
+        ret->u.dt.header_name = (hn ? xstrdup(hn) : NULL);
         ret->u.dt.kl = kl;
         free_dttags(dt);
     }

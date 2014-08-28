@@ -459,6 +459,9 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 	/* BC_DATE { time-zone: string} { c: comparator }
 	 *         { header-name : string } { date-part: string }
 	 *         { key-list : string list }
+	 *
+	 * BC_CURRENTDATE { time-zone: string} { c: comparator }
+	 *         { date-part: string } { key-list : string list }
 	*/
 
 	if(!atleast(retval,codep + 1)) return -1;
@@ -525,10 +528,12 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 		break;
 	}
 
-	/* header-name */
-	if(!atleast(retval,codep + 2)) return -1;
-	retval->data[codep++].len = strlen(t->u.dt.header_name);
-	retval->data[codep++].str = t->u.dt.header_name;
+	if (DATE == t->type) {
+		/* header-name */
+		if(!atleast(retval,codep + 2)) return -1;
+		retval->data[codep++].len = strlen(t->u.dt.header_name);
+		retval->data[codep++].str = t->u.dt.header_name;
+	}
 
 	/* keywords */
 	codep = bc_stringlist_generate(codep, retval, t->u.dt.kl);

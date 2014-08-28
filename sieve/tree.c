@@ -161,6 +161,8 @@ void free_test(test_t *t)
 	break;
 
     case DATE:
+	free(t->u.dt.header_name);
+	/* fall-through */
     case CURRENTDATE:
 	free(t->u.dt.comparator);
 	free(t->u.dt.zone);
