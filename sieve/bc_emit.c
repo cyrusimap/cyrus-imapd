@@ -186,17 +186,18 @@ static int bc_testlist_emit(int fd, int *codep, bytecode_info_t *bc)
  * emitted bytecode on success */
 static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc) 
 {
+    int opcode;
     int wrote=0;/* Relative offset to account for interleaved strings */
-    
     
     int ret; /* Temporary Return Value Variable */
     
     /* Output this opcode */
-    if(write_int(fd, bc->data[(*codep)].op) == -1)
+    opcode = bc->data[(*codep)++].op;
+    if(write_int(fd, opcode) == -1)
 	return -1;
     wrote += sizeof(int);
     
-    switch(bc->data[(*codep)++].op) {
+    switch(opcode) {
     case BC_TRUE:
     case BC_FALSE:
 	/* No parameter opcodes */
@@ -247,6 +248,11 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
     case BC_HEADER:
     {
 	int ret;
+	/* drop index */
+	if(write_int(fd, bc->data[(*codep)].value) == -1)
+	    return -1;
+	wrote += sizeof(int);
+	(*codep)++;
 	/* Drop match type */
 	if(write_int(fd, bc->data[(*codep)].value) == -1)
 	    return -1;
@@ -274,6 +280,13 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
     }
     
     case BC_ADDRESS:
+	/* drop index */
+	if(write_int(fd, bc->data[(*codep)].value) == -1)
+	    return -1;
+	wrote += sizeof(int);
+	(*codep)++;
+
+	/* fall-through */
     case BC_ENVELOPE:
     {
 	int ret;
@@ -354,6 +367,12 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
 	int datalen;
 	int tmp;
 
+	/* drop index */
+	if(write_int(fd, bc->data[(*codep)].value) == -1)
+	    return -1;
+	wrote += sizeof(int);
+	(*codep)++;
+
 	/* drop zone tag */
 	tmp = bc->data[(*codep)].value;
 	if(write_int(fd, bc->data[(*codep)].value) == -1)
@@ -393,8 +412,8 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
 	wrote += sizeof(int);
 	(*codep)++;
 
-	/* drop header-name */
-	{
+	if (BC_DATE == opcode) {
+		/* drop header-name */
 		datalen = bc->data[(*codep)++].len;
 
 		if(write_int(fd, datalen) == -1) return -1;

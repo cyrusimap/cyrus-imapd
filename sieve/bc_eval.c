@@ -468,7 +468,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 	const struct address *a;
 	char *addr;
 
- 	int headersi=i+5;/* the i value for the begining of the headers */
+	int headersi=address+i+5;/* the i value for the begining of the headers */
 	int datai=(ntohl(bc[headersi+1].value)/4);
 
 	int numheaders=ntohl(bc[headersi].len);
@@ -476,10 +476,12 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 
 	int currh, currd; /* current header, current data */
 
-	int match=ntohl(bc[i+1].value);
-	int relation=ntohl(bc[i+2].value);
-	int comparator=ntohl(bc[i+3].value);
-	int apart=ntohl(bc[i+4].value);
+	int header_count;
+	int index=address ? ntohl(bc[i+1].value) : 0; // used for address only
+	int match=ntohl(bc[address+i+1].value);
+	int relation=ntohl(bc[address+i+2].value);
+	int comparator=ntohl(bc[address+i+3].value);
+	int apart=ntohl(bc[address+i+4].value);
 	int count=0;
 	int isReg = (match==B_REGEX);
 	int ctag = 0;
@@ -532,11 +534,34 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 		    continue;
 	    }
 	
+	    /* count results */
+	    header_count = 0;
+	    while (val[header_count] != NULL) {
+		++header_count;
+	    }
+
+	    /* convert index argument value to array index */
+	    if (index > 0) {
+		--index;
+		if (index >= header_count) {
+			res = SIEVE_FAIL;
+			goto alldone;
+		}
+		header_count = index + 1;
+	    }
+	    else if (index < 0) {
+		index += header_count;
+		if (index < 0) {
+			res = SIEVE_FAIL;
+			goto alldone;
+		}
+		header_count = index + 1;
+	    }
+
 	    /*header exists, now to test it*/
 	    /*search through all the headers that match*/
 	    
-	    for (y=0; val[y]!=NULL && !res; y++) {
-		
+	    for (y = index; y < header_count && !res; y++) {
 #if VERBOSE
 		printf("about to parse %s\n", val[y]);
 #endif
@@ -643,7 +668,7 @@ envelope_err:
     {
 	const char** val;
 
-	int headersi=i+4;/*the i value for the begining of hte headers*/
+	int headersi=i+5;/*the i value for the begining of hte headers*/
 	int datai=(ntohl(bc[headersi+1].value)/4);
 
 	int numheaders=ntohl(bc[headersi].len);
@@ -651,9 +676,11 @@ envelope_err:
 
 	int currh, currd; /*current header, current data*/
 
-	int match=ntohl(bc[i+1].value);
-	int relation=ntohl(bc[i+2].value);
-	int comparator=ntohl(bc[i+3].value);
+	int header_count;
+	int index=ntohl(bc[i+1].value);
+	int match=ntohl(bc[i+2].value);
+	int relation=ntohl(bc[i+3].value);
+	int comparator=ntohl(bc[i+4].value);
 	int count=0;	
 	int isReg = (match==B_REGEX);
 	int ctag = 0;
@@ -697,10 +724,34 @@ envelope_err:
 #if VERBOSE
 	    printf ("val %s %s %s\n", val[0], val[1], val[2]);
 #endif
-	    
+
+	    /* count results */
+	    header_count = 0;
+	    while (val[header_count] != NULL) {
+		++header_count;
+	    }
+
+	    /* convert index argument value to array index */
+	    if (index > 0) {
+		--index;
+		if (index >= header_count) {
+			res = SIEVE_FAIL;
+			goto alldone;
+		}
+		header_count = index + 1;
+	    }
+	    else if (index < 0) {
+		index += header_count;
+		if (index < 0) {
+			res = SIEVE_FAIL;
+			goto alldone;
+		}
+		header_count = index + 1;
+	    }
+
 	    /* search through all the headers that match */
 	    
-	    for (y = 0; val[y] && !res; y++)
+	    for (y = index; y < header_count && !res; y++)
 	    {
 		if  (match == B_COUNT) {
 		    count++;
@@ -895,6 +946,7 @@ envelope_err:
 	const char *header_name = NULL;
 	int comparator;
 	int date_part;
+	int header_count;
 	int index;
 	int match;
 	int relation;
@@ -903,7 +955,10 @@ envelope_err:
 	struct tm *tm;
 	time_t t;
 
-	++i; /* BC_DATE */
+	++i; /* BC_DATE | BC_CURRENTDATE */
+
+	/* index */
+	index = ntohl(bc[i++].value);
 
 	/* zone tag */
 	zone = ntohl(bc[i++].value);
@@ -928,28 +983,40 @@ envelope_err:
 	/* date-part */
 	date_part = ntohl(bc[i++].value);
 
-	/* header name */
-	i = unwrap_string(bc, i, &header_name, NULL);
+	if (BC_DATE == op) {
+		/* header name */
+		i = unwrap_string(bc, i, &header_name, NULL);
 
+		/*
+		 * Process header
+		 */
 
-	/*
-	 * Process header
-	 */
+		if (interp->getheader(m, header_name, &headers) != SIEVE_OK) {
+			res = SIEVE_FAIL;
+			goto alldone;
+		}
 
-	/* TODO: implement index extension */
-	index = 0;
+		/* count results */
+		header_count = 0;
+		while (headers[header_count] != NULL) {
+			++header_count;
+		}
 
-	if (interp->getheader(m, header_name, &headers) != SIEVE_OK
-	    || headers[index] == NULL) {
-		res = SIEVE_FAIL;
-		goto alldone;
-	}
-	header = headers[index];
+		/* convert index argument value to array index */
+		if (index > 0) {
+			--index;
+		}
+		else {
+			index += header_count;
+		}
 
-	if (BC_CURRENTDATE == op) {
-		t = time(NULL);
-	}
-	else {
+		/* check if index is out of bounds */
+		if (index < 0 || index >= header_count) {
+			res = SIEVE_FAIL;
+			goto alldone;
+		}
+		header = headers[index];
+
 		/* look for separator */
 		header_data = strrchr(header, ';');
 		if (header_data) {
@@ -965,23 +1032,26 @@ envelope_err:
 			res = SIEVE_FAIL;
 			goto alldone;
 		}
-	}
 
-	/* timezone offset */
-	if (zone == B_ORIGINALZONE) {
-		char *zone;
-		char sign;
-		int hours;
-		int minutes;
+		/* timezone offset */
+		if (zone == B_ORIGINALZONE) {
+			char *zone;
+			char sign;
+			int hours;
+			int minutes;
 
-		zone = strrchr(header, ' ');
-		if (!zone ||
-		    3 != sscanf(zone + 1, "%c%02d%02d", &sign, &hours, &minutes)) {
-			res = SIEVE_FAIL;
-			goto alldone;
+			zone = strrchr(header, ' ');
+			if (!zone ||
+			    3 != sscanf(zone + 1, "%c%02d%02d", &sign, &hours, &minutes)) {
+				res = SIEVE_FAIL;
+				goto alldone;
+			}
+
+			timezone_offset = (sign == '-' ? -1 : 1) * ((hours * 60) + (minutes));
 		}
-
-		timezone_offset = (sign == '-' ? -1 : 1) * ((hours * 60) + (minutes));
+	}
+	else { /* CURRENTDATE */
+		t = interp->time;
 	}
 
 	/* apply timezone_offset (if any) */

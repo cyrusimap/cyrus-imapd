@@ -140,6 +140,8 @@ static int dump_test(bytecode_info_t *d, int ip, int level ) {
     case BC_HEADER:
 	printf("%d: HEADER (\n",ip++);
 	print_spaces(level);
+	printf("      INDEX %d\n" , d->data[ip++].value);
+	print_spaces(level);
 	if (d->data[ip].value == B_COUNT || d->data[ip].value == B_VALUE)
 	{
 	    printf("      MATCH:%d RELATION:%d COMP:%d HEADERS:\n",
@@ -157,8 +159,15 @@ static int dump_test(bytecode_info_t *d, int ip, int level ) {
 	
     case BC_ADDRESS:
     case BC_ENVELOPE:
-	printf("%d: %s (\n",ip,
-	       d->data[ip++].op == BC_ADDRESS ? "ADDRESS" : "ENVELOPE");
+	if (d->data[ip].op == BC_ADDRESS) {
+		printf("%d: ADDRESS (\n",ip++);
+		print_spaces(level);
+		printf("      INDEX %d\n" , d->data[ip++].value);
+	}
+	else {
+		printf("%d: ENVELOPE (\n",ip++);
+	}
+
 	print_spaces(level);
 	if (d->data[ip].value == B_COUNT || d->data[ip].value == B_VALUE)
 	{

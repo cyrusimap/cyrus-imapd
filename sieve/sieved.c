@@ -200,8 +200,11 @@ static int printComparison(bytecode_input_t *d ,int i)
 
 static int dump2_test(bytecode_input_t * d, int i)
 {
-    int l,x;
-    switch(ntohl(d[i].value)) {
+    int l,x,index;
+    int opcode;
+
+    opcode = ntohl(d[i].value);
+    switch(opcode) {
     case BC_FALSE:
 	printf("false");
 	i++;
@@ -264,6 +267,7 @@ static int dump2_test(bytecode_input_t * d, int i)
 	break;
     case BC_ADDRESS:/*7*/
 	printf("Address [");
+	index = ntohl(d[++i].value);
 	i=printComparison(d, i+1);
 	printf("               type: ");
 	switch(ntohl(d[i++].value))
@@ -273,6 +277,11 @@ static int dump2_test(bytecode_input_t * d, int i)
 	case B_DOMAIN:printf("domain"); break;
 	case B_USER:printf("user"); break;
 	case B_DETAIL:printf("detail"); break;
+	}
+	printf("\n");
+	if (index != 0) {
+		printf("              Index: %d %s\n",
+		    abs(index), index < 0 ? "[LAST]" : "");
 	}
 	printf("              Headers:");
 	i=write_list(ntohl(d[i].len), i+1, d);
@@ -300,7 +309,12 @@ static int dump2_test(bytecode_input_t * d, int i)
 	break;
     case BC_HEADER:/*9*/
 	printf("Header [");
+	index = ntohl(d[++i].value);
 	i= printComparison(d, i+1);
+	if (index != 0) {
+		printf("              Index: %d %s\n",
+		    abs(index), index < 0 ? "[LAST]" : "");
+	}
 	printf("              Headers: ");
 	i=write_list(ntohl(d[i].len), i+1, d);
 	printf("              Data: ");
@@ -326,13 +340,19 @@ static int dump2_test(bytecode_input_t * d, int i)
 	break;
     case BC_DATE:/*11*/
     case BC_CURRENTDATE:/*12*/
-	/* current date */
-	if (BC_DATE == ntohl(d[i++].value)) {
+	++i; /* skip opcode */
+
+	if (BC_DATE == opcode) {
 		printf("date [");
 	}
 	else {
 		printf("currentdate [");
 	}
+
+	/* index */
+	index = ntohl(d[i++].value);
+	printf("              Index: %d %s\n",
+	    abs(index), index < 0 ? "[LAST]" : "");
 
 	/* zone tag */
 	{
@@ -372,7 +392,7 @@ static int dump2_test(bytecode_input_t * d, int i)
 	}
 
 	/* header name */
-	{
+	if (BC_DATE == opcode) {
 		const char *data;
 		int len;
 		i = unwrap_string(d, i, &data, &len);

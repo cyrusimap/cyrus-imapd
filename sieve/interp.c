@@ -87,6 +87,8 @@ EXPORTED sieve_interp_t *sieve_interp_alloc(void *interp_context)
     i->lastitem = NULL;
     i->extensions[0] = '\0';
 
+    i->time = time(NULL);
+
     return i;
 }
 

@@ -337,6 +337,10 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 	if(!atleast(retval,codep + 1)) return -1;
 	retval->data[codep++].op = BC_HEADER;
       
+	/* index */
+	if(!atleast(retval,codep + 1)) return -1;
+	retval->data[codep++].value = t->u.ae.index;
+
 	/* comparator */
 	codep = bc_comparator_generate(codep, retval,
 				       t->u.h.comptag,
@@ -363,6 +367,12 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 	retval->data[codep++].op = (t->type == ADDRESS)
 	    ? BC_ADDRESS : BC_ENVELOPE;
             
+	/* index */
+	if (t->type == ADDRESS) {
+		if(!atleast(retval,codep+1)) return -1;
+		retval->data[codep++].value = t->u.ae.index;
+	}
+
 	codep = bc_comparator_generate(codep, retval,t->u.ae.comptag,
 				       t->u.ae.relation, 
 				       t->u.ae.comparator);
@@ -449,10 +459,17 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 	/* BC_DATE { time-zone: string} { c: comparator }
 	 *         { header-name : string } { date-part: string }
 	 *         { key-list : string list }
+	 *
+	 * BC_CURRENTDATE { time-zone: string} { c: comparator }
+	 *         { date-part: string } { key-list : string list }
 	*/
 
 	if(!atleast(retval,codep + 1)) return -1;
 	retval->data[codep++].op = (DATE == t->type) ? BC_DATE : BC_CURRENTDATE;
+
+	/* index */
+	if(!atleast(retval,codep + 1)) return -1;
+	retval->data[codep++].value = t->u.dt.index;
 
 	/* zone */
 	codep = bc_zone_generate(codep, retval,
@@ -511,10 +528,12 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 		break;
 	}
 
-	/* header-name */
-	if(!atleast(retval,codep + 2)) return -1;
-	retval->data[codep++].len = strlen(t->u.dt.header_name);
-	retval->data[codep++].str = t->u.dt.header_name;
+	if (DATE == t->type) {
+		/* header-name */
+		if(!atleast(retval,codep + 2)) return -1;
+		retval->data[codep++].len = strlen(t->u.dt.header_name);
+		retval->data[codep++].str = t->u.dt.header_name;
+	}
 
 	/* keywords */
 	codep = bc_stringlist_generate(codep, retval, t->u.dt.kl);
