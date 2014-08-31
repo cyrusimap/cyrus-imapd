@@ -952,7 +952,7 @@ envelope_err:
 	int relation;
 	int timezone_offset = 0;
 	int zone;
-	struct tm *tm;
+	struct tm tm;
 	time_t t;
 
 	++i; /* BC_DATE | BC_CURRENTDATE */
@@ -1058,7 +1058,7 @@ envelope_err:
 	t += timezone_offset * 60;
 
 	/* get tm struct */
-	gmtime_r(&t, tm);
+	gmtime_r(&t, &tm);
 
 
 	/*
@@ -1074,24 +1074,24 @@ envelope_err:
 	for (key = keylist; *key; ++key) {
 		switch (date_part) {
 		case B_YEAR:
-			snprintf(buffer, sizeof(buffer), "%04d", 1900 + tm->tm_year);
+			snprintf(buffer, sizeof(buffer), "%04d", 1900 + tm.tm_year);
 			break;
 		case B_MONTH:
-			snprintf(buffer, sizeof(buffer), "%02d", 1 + tm->tm_mon);
+			snprintf(buffer, sizeof(buffer), "%02d", 1 + tm.tm_mon);
 			break;
 		case B_DAY:
-			snprintf(buffer, sizeof(buffer), "%02d", tm->tm_mday);
+			snprintf(buffer, sizeof(buffer), "%02d", tm.tm_mday);
 			break;
 		case B_DATE:
 			snprintf(buffer, sizeof(buffer), "%04d-%02d-%02d",
-			    1900 + tm->tm_year, 1 + tm->tm_mon, tm->tm_mday);
+			    1900 + tm.tm_year, 1 + tm.tm_mon, tm.tm_mday);
 			break;
 		case B_JULIAN: {
 			int month, year;
 			int c, ya;
 
-			month = 1 + tm->tm_mon;
-			year = 1900 + tm->tm_year;
+			month = 1 + tm.tm_mon;
+			year = 1900 + tm.tm_year;
 
 			if (month > 2) {
 			    month -= 3;
@@ -1105,20 +1105,20 @@ envelope_err:
 
 			snprintf(buffer, sizeof(buffer), "%d",
 			    (c * 146097 / 4 + ya * 1461 / 4 +
-			      (month * 153 + 2) / 5 + tm->tm_mday + 1721119));
+			      (month * 153 + 2) / 5 + tm.tm_mday + 1721119));
 			} break;
 		case B_HOUR:
-			snprintf(buffer, sizeof(buffer), "%02d", tm->tm_hour);
+			snprintf(buffer, sizeof(buffer), "%02d", tm.tm_hour);
 			break;
 		case B_MINUTE:
-			snprintf(buffer, sizeof(buffer), "%02d", tm->tm_min);
+			snprintf(buffer, sizeof(buffer), "%02d", tm.tm_min);
 			break;
 		case B_SECOND:
-			snprintf(buffer, sizeof(buffer), "%02d", tm->tm_sec);
+			snprintf(buffer, sizeof(buffer), "%02d", tm.tm_sec);
 			break;
 		case B_TIME:
 			snprintf(buffer, sizeof(buffer), "%02d:%02d:%02d",
-			    tm->tm_hour, tm->tm_min, tm->tm_sec);
+			    tm.tm_hour, tm.tm_min, tm.tm_sec);
 			break;
 		case B_ISO8601:
 			time_to_iso8601(t, buffer, sizeof(buffer));
@@ -1133,7 +1133,7 @@ envelope_err:
 			    abs(timezone_offset) % 60);
 			break;
 		case B_WEEKDAY:
-			snprintf(buffer, sizeof(buffer), "%1d", tm->tm_wday);
+			snprintf(buffer, sizeof(buffer), "%1d", tm.tm_wday);
 			break;
 		}
 

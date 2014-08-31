@@ -1274,7 +1274,7 @@ static struct dttags *canon_dttags(struct dttags *dt)
     int gmoffset;
     int hours;
     int minutes;
-    struct tm *tm;
+    struct tm tm;
     time_t t;
 
     if (dt->comparator == NULL) {
@@ -1285,8 +1285,8 @@ static struct dttags *canon_dttags(struct dttags *dt)
     }
     if (dt->zonetag == -1) {
         t = time(NULL);
-        localtime_r(&t, tm);
-        gmoffset = gmtoff_of(tm, &t) / 60;
+        localtime_r(&t, &tm);
+        gmoffset = gmtoff_of(&tm, t) / 60;
         hours = abs(gmoffset) / 60;
         minutes = abs(gmoffset) % 60;
         snprintf(zone, 6, "%c%02d%02d", (gmoffset >= 0 ? '+' : '-'), hours, minutes);
