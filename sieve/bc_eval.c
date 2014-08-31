@@ -1058,7 +1058,7 @@ envelope_err:
 	t += timezone_offset * 60;
 
 	/* get tm struct */
-	tm = gmtime(&t);
+	gmtime_r(&t, tm);
 
 
 	/*
