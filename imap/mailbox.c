@@ -2573,7 +2573,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 	r = mailbox_map_record(mailbox, new, &msg_buf);
 	if (r) goto done;
 
-	vcard = Parse_MIME(buf_base(&msg_buf) + new->header_size,
+	vcard = Parse_MIME(buf_cstring(&msg_buf) + new->header_size,
 			   new->size - new->header_size);
 	buf_free(&msg_buf);
 	if (!vcard) goto done;
@@ -2679,7 +2679,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 	r = mailbox_map_record(mailbox, new, &msg_buf);
 	if (r) goto done;
 
-	ical = icalparser_parse_string(buf_base(&msg_buf) + new->header_size);
+	ical = icalparser_parse_string(buf_cstring(&msg_buf) + new->header_size);
 	buf_free(&msg_buf);
 	if (!ical) goto done;
 
