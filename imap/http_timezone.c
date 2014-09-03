@@ -506,6 +506,7 @@ static void expand_vtimezone(icalcomponent *vtz, icalarray *obsarray,
 	nextc = icalcomponent_get_next_component(vtz, ICAL_ANY_COMPONENT);
 
 	memset(&obs, 0, sizeof(struct observance));
+	obs.offset_from = obs.offset_to = INT_MAX;
 	obs.is_daylight = (icalcomponent_isa(comp) == ICAL_XDAYLIGHT_COMPONENT);
 
 	/* Grab the properties that we require to expand recurrences */
@@ -549,7 +550,8 @@ static void expand_vtimezone(icalcomponent *vtz, icalarray *obsarray,
 	}
 
 	/* We MUST have DTSTART, TZNAME, TZOFFSETFROM, and TZOFFSETTO */
-	if (!dtstart_prop || !obs.name || !obs.offset_from || !obs.offset_to) {
+	if (!dtstart_prop || !obs.name ||
+	    obs.offset_from == INT_MAX || obs.offset_to == INT_MAX) {
 	    icalarray_free(rdate_array);
 	    continue;
 	}
@@ -707,8 +709,9 @@ static void expand_vtimezone(icalcomponent *vtz, icalarray *obsarray,
 	}
     }
 
-    if (icaltime_compare(tombstone.onset, start) < 0) {
-	/* Need to add tombstone component/observance starting at window open */
+    if (tombstone.name && icaltime_compare(tombstone.onset, start) < 0) {
+	/* Need to add tombstone component/observance starting at window open
+	   as long as its not prior to start of TZ data */
 	if (truncate) {
 	    comp = icalcomponent_vanew(
 		tombstone.is_daylight ?
@@ -915,10 +918,21 @@ static int observance_compare(const void *obs1, const void *obs2)
 			    ((struct observance *) obs2)->onset);
 }
 
+
+static const char *dow[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+static const char *mon[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+			     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+
+#define CTIME_FMT "%s %s %2d %02d:%02d:%02d %4d"
+#define CTIME_ARGS(tt) \
+    dow[icaltime_day_of_week(tt)-1], mon[tt.month-1], \
+    tt.day, tt.hour, tt.minute, tt.second, tt.year
+
+
 /* Perform an expand action */
 static int action_expand(struct transaction_t *txn)
 {
-    int r, precond;
+    int r, precond, zdump = 0;
     struct strlist *param;
     const char *tzid;
     struct zoneinfo zi;
@@ -970,6 +984,24 @@ static int action_expand(struct transaction_t *txn)
 	end.year += 10;
     }
     end.is_date = 0;
+
+    /* Check requested format (debugging only) */
+    param = hash_lookup("format", &txn->req_qparams);
+    if (param) {
+	if (strcmp(param->s, "zdump") || param->next  /* optional, once only */)
+	    return json_error_response(txn, TZ_INVALID_FORMAT);
+
+	/* Mimic zdump(8) output for comparision:
+	   For each zonename on the command line, print  the  time  at  the
+	   lowest  possible  time  value, the time one day after the lowest
+	   possible time value,  the  times  both  one  second  before  and
+	   exactly at each detected time discontinuity, the time at one day
+	   less than the highest possible time value, and the time  at  the
+	   highest  possible time value, Each line ends with isdst=1 if the
+	   given time is Daylight Saving Time or isdst=0 otherwise.
+	*/
+	zdump = 1;
+    }
 
     /* Get info record from the database */
     if ((r = zoneinfo_lookup(tzid, &zi))) {
@@ -1034,12 +1066,28 @@ static int action_expand(struct transaction_t *txn)
 	close(fd);
 
 	/* Start constructing our response */
-	rfc3339date_gen(dtstamp, sizeof(dtstamp), lastmod);
-	root = json_pack("{s:s s:[]}", "dtstamp", dtstamp, "observances");
-	if (!root) {
-	    txn->error.desc = "Unable to create JSON response";
-	    return HTTP_SERVER_ERROR;
+	if (zdump) {
+	    struct buf *body = &txn->resp_body.payload;
+	    const time_t min_time =
+		((time_t) -1 < 0
+		 ? (time_t) -1 << (CHAR_BIT * sizeof (time_t) - 1)
+		 : 0);
+
+	    txn->resp_body.type = "text/plain; charset=us-ascii";
+
+	    /* Lowest possible time value and day after lowest time value */
+	    buf_printf(body, "%s  %ld = NULL\n", tzid, min_time);
+	    buf_printf(body, "%s  %ld = NULL\n", tzid, min_time + 86400);
 	}
+	else {
+	    rfc3339date_gen(dtstamp, sizeof(dtstamp), lastmod);
+	    root = json_pack("{s:s s:[]}", "dtstamp", dtstamp, "observances");
+	    if (!root) {
+		txn->error.desc = "Unable to create JSON response";
+		return HTTP_SERVER_ERROR;
+	    }
+	}
+	
 
 	/* Create an array of observances */
 	obsarray = icalarray_new(sizeof(struct observance), 20);
@@ -1049,26 +1097,89 @@ static int action_expand(struct transaction_t *txn)
 	/* Sort the observances by onset */
 	icalarray_sort(obsarray, &observance_compare);
 
-	/* Add observances to JSON array */
-	jobsarray = json_object_get(root, "observances");
-	for (n = 0; n < obsarray->num_elements; n++) {
-	    struct observance *obs = icalarray_element_at(obsarray, n);
+	if (zdump) {
+	    struct buf *body = &txn->resp_body.payload;
+	    struct icaldurationtype off = icaldurationtype_null_duration();
+	    const char *prev_name = "LMT";
+	    int prev_isdst = 0;
 
-	    json_array_append_new(jobsarray,
-				  json_pack("{s:s s:s s:i s:i}",
-					    "name", obs->name,
-					    "onset",
-					    icaltime_as_iso_string(obs->onset),
-					    "utc-offset-from", obs->offset_from,
-					    "utc-offset-to", obs->offset_to));
+	    for (n = 0; n < obsarray->num_elements; n++) {
+		struct observance *obs = icalarray_element_at(obsarray, n);
+		struct icaltimetype local, ut;
+
+		/* Skip any no-ops as zdump doesn't output them */
+		if (obs->offset_from == obs->offset_to
+		    && prev_isdst == obs->is_daylight
+		    && !strcmp(prev_name, obs->name)) continue;
+
+		/* UT and local time 1 second before onset */
+		off.seconds = -1;
+		local = icaltime_add(obs->onset, off);
+
+		off.seconds = -obs->offset_from;
+		ut = icaltime_add(local, off);
+
+		buf_printf(body,
+			   "%s  " CTIME_FMT " UT = " CTIME_FMT " %s"
+			   " isdst=%d gmtoff=%d\n",
+			   tzid, CTIME_ARGS(ut), CTIME_ARGS(local),
+			   prev_name, prev_isdst, obs->offset_from);
+
+		/* UT and local time at onset */
+		icaltime_adjust(&ut, 0, 0, 0, 1);
+
+		off.seconds = obs->offset_to;
+		local = icaltime_add(ut, off);
+
+		buf_printf(body,
+			   "%s  " CTIME_FMT " UT = " CTIME_FMT " %s"
+			   " isdst=%d gmtoff=%d\n",
+			   tzid, CTIME_ARGS(ut), CTIME_ARGS(local),
+			   obs->name, obs->is_daylight, obs->offset_to);
+
+		prev_name = obs->name;
+		prev_isdst = obs->is_daylight;
+	    }
+	}
+	else {
+	    /* Add observances to JSON array */
+	    jobsarray = json_object_get(root, "observances");
+	    for (n = 0; n < obsarray->num_elements; n++) {
+		struct observance *obs = icalarray_element_at(obsarray, n);
+
+		json_array_append_new(jobsarray,
+				      json_pack(
+					  "{s:s s:s s:i s:i}",
+					  "name", obs->name,
+					  "onset",
+					  icaltime_as_iso_string(obs->onset),
+					  "utc-offset-from", obs->offset_from,
+					  "utc-offset-to", obs->offset_to));
+	    }
 	}
 	icalarray_free(obsarray);
 
 	icalcomponent_free(ical);
     }
 
-    /* Output the JSON object */
-    return json_response(precond, txn, root, NULL);
+    if (zdump) {
+	struct buf *body = &txn->resp_body.payload;
+	const time_t max_time =
+	    ((time_t) -1 < 0
+	     ? - (~ 0 < 0) - ((time_t) -1 << (CHAR_BIT * sizeof (time_t) - 1))
+	     : -1);
+
+	/* Day before highest possible time value and highest time value */
+	buf_printf(body, "%s  %ld = NULL\n", tzid, max_time - 86400);
+	buf_printf(body, "%s  %ld = NULL\n", tzid, max_time);
+	write_body(precond, txn, buf_cstring(body), buf_len(body));
+
+	return 0;
+    }
+    else {
+	/* Output the JSON object */
+	return json_response(precond, txn, root, NULL);
+    }
 }
 
 
