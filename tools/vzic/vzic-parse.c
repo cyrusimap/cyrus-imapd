@@ -444,6 +444,13 @@ parse_rule_line			(ParsingData	*data)
     exit (1);
   }
 
+  /* We also want to know the maximum year used in any TO/FROM value, so we
+     know where to expand all the infinite Rule data to. */
+  if (rule.to_year != YEAR_MAXIMUM)
+    data->max_until_year = MAX (data->max_until_year, rule.to_year);
+  else if (rule.from_year != YEAR_MINIMUM)
+    data->max_until_year = MAX (data->max_until_year, rule.from_year);
+
   if (!strcmp (data->fields[RULE_TYPE], "-"))
     rule.type = NULL;
   else {
@@ -746,11 +753,14 @@ parse_time			(ParsingData	*data,
     exit (1);
   }
 
+#if 0
+  /* Hack to work around older libical that doesn't support BYDAY + BYYEARDAY */
   if (hours == 24) {
     hours = 23;
     minutes = 59;
     seconds = 59;
   }
+#endif
 
 #if 0
   printf ("Time: %s -> %i:%02i:%02i\n", field, hours, minutes, seconds);
