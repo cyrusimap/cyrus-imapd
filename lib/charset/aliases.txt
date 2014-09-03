@@ -20,6 +20,7 @@ unknown-8bit        iso-8859-1
 x-unknown           iso-8859-1
 x-user-defined      iso-8859-1
 none                iso-8859-1
+latin1              iso-8859-1
 # sort-of - see Filter::Trigraph
 646                 iso-8859-1
 
