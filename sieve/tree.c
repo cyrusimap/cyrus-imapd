@@ -138,6 +138,7 @@ void free_test(test_t *t)
     case STRUE:
 	break;
 
+    case HASFLAG:
     case HEADER:
 	strarray_free(t->u.h.sl);
 	strarray_free(t->u.h.pl);
@@ -181,6 +182,7 @@ void free_tree(commandlist_t *cl)
 
 	case FILEINTO:
 	    if (cl->u.f.folder) free(cl->u.f.folder);
+	    if (cl->u.f.flags) strarray_free(cl->u.f.flags);
 	    break;
 
 	case REDIRECT:
@@ -204,6 +206,9 @@ void free_tree(commandlist_t *cl)
 	    break;
 
 	case KEEP:
+	    if (cl->u.k.flags) strarray_free(cl->u.k.flags);
+	    break;
+
 	case STOP:
 	case DISCARD:
 	case RETURN:
