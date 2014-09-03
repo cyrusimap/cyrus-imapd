@@ -81,7 +81,7 @@ char TZIDPrefixExpanded[1024];
    since otherwise RDATEs are more efficient. Actually, I've set this high
    so we only use RRULEs for infinite recurrences. Since expanding RRULEs is
    very time-consuming, this seems sensible. */
-#define MIN_RRULE_OCCURRENCES	10
+#define MIN_RRULE_OCCURRENCES	3
 
 
 /* The year we go up to when dumping the list of timezone changes (used
@@ -835,10 +835,19 @@ add_rule_changes			(ZoneLineData	*zone_line,
     vzictime.walloff = stdoff + rule->save_seconds;
     vzictime.is_infinite = (rule->to_year == YEAR_MAXIMUM) ? TRUE : FALSE;
 
-    /* If the rule time is before the given start time, skip it. */
+    /* If the rule time is before or on the given start time, skip it. */
     if (compare_times (&vzictime, stdoff, walloff,
-		       start, prev_stdoff, prev_walloff) < 0)
+		       start, prev_stdoff, prev_walloff) <= 0) {
+      /* Our next rule may start while this one is in effect
+	 so we keep track of its name.
+
+	 This seems to eliminate the need to guess in expand_tzname()
+	 but hasn't had enough testing to prove foolproof as of yet. */
+      found_start_letter_s = TRUE;
+      *start_letter_s = rule->letter_s;
+
       continue;
+    }
 
     /* If the previous Rule was a daylight Rule, then we may want to use the
        walloff from that. */
@@ -1756,7 +1765,9 @@ calculate_wall_time			(int		 time,
 
   switch (time_code) {
   case TIME_WALL:
-    return time;
+    /* We don't just return here so we can handle 24:00:00 below */
+    result = time;
+    break;
   case TIME_STANDARD:
     /* We have a local standard time, so we have to subtract stdoff to get
        back to UTC, then add walloff to get wall time. */
