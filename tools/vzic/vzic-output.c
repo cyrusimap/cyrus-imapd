@@ -162,6 +162,7 @@ static int	rule_sort_func			(const void	*arg1,
 static void	output_zone			(char		*directory,
 						 ZoneData	*zone,
 						 char		*zone_name,
+						 ZoneDescription *zone_desc,
 						 GHashTable	*rule_data);
 static gboolean	parse_zone_name			(char		*name,
 						 char	       **directory,
@@ -169,6 +170,7 @@ static gboolean	parse_zone_name			(char		*name,
 						 char	       **filename);
 static void	output_zone_to_files		(ZoneData	*zone,
 						 char		*zone_name,
+						 ZoneDescription *zone_desc,
 						 GHashTable	*rule_data,
 						 FILE		*fp,
 						 FILE		*changes_fp);
@@ -199,6 +201,7 @@ static gboolean times_match			(VzicTime	*time1,
 						 int		 walloff2);
 static void	output_zone_components		(FILE		*fp,
 						 char		*name,
+						 ZoneDescription *zone_desc,
 						 GArray		*changes);
 static void	set_previous_offsets		(GArray		*changes);
 static gboolean	check_for_recurrence		(FILE		*fp,
@@ -274,9 +277,11 @@ output_vtimezone_files		(char		*directory,
 				 GArray		*zone_data,
 				 GHashTable	*rule_data,
 				 GHashTable	*link_data,
+				 GHashTable	*zones_hash,
 				 int		 max_until_year)
 {
   ZoneData *zone;
+  ZoneDescription *zone_desc;
   GList *links;
   char *link_to;
   int i;
@@ -292,7 +297,8 @@ output_vtimezone_files		(char		*directory,
   /* Output each timezone. */
   for (i = 0; i < zone_data->len; i++) {
     zone = &g_array_index (zone_data, ZoneData, i);
-    output_zone (directory, zone, zone->zone_name, rule_data);
+    zone_desc = g_hash_table_lookup (zones_hash, zone->zone_name);
+    output_zone (directory, zone, zone->zone_name, zone_desc, rule_data);
 
     /* Look for any links from this zone. */
     links = g_hash_table_lookup (link_data, zone->zone_name);
@@ -303,7 +309,7 @@ output_vtimezone_files		(char		*directory,
       /* We ignore Links that don't have a '/' in them (things like 'EST5EDT').
        */
       if (strchr (link_to, '/')) {
-	output_zone (directory, zone, link_to, rule_data);
+	output_zone (directory, zone, link_to, NULL, rule_data);
       }
 
       links = links->next;
@@ -474,6 +480,7 @@ static void
 output_zone			(char		*directory,
 				 ZoneData	*zone,
 				 char		*zone_name,
+				 ZoneDescription *zone_desc,
 				 GHashTable	*rule_data)
 {
   FILE *fp, *changes_fp = NULL;
@@ -561,7 +568,7 @@ output_zone			(char		*directory,
   fprintf (fp, "\r\nVERSION:2.0\r\n");
 
 
-  output_zone_to_files (zone, zone_name, rule_data, fp, changes_fp);
+  output_zone_to_files (zone, zone_name, zone_desc, rule_data, fp, changes_fp);
 
   if (ferror (fp)) {
     fprintf (stderr, "Error writing file: %s\n", filename);
@@ -651,6 +658,7 @@ parse_zone_name			(char		*name,
 static void
 output_zone_to_files		(ZoneData	*zone,
 				 char		*zone_name,
+				 ZoneDescription *zone_desc,
 				 GHashTable	*rule_data,
 				 FILE		*fp,
 				 FILE		*changes_fp)
@@ -760,7 +768,7 @@ output_zone_to_files		(ZoneData	*zone,
 
   set_previous_offsets (changes);
 
-  output_zone_components (fp, zone_name, changes);
+  output_zone_components (fp, zone_name, zone_desc, changes);
 
   if (VzicDumpChanges)
     dump_changes (changes_fp, zone_name, changes);
@@ -1095,9 +1103,18 @@ times_match				(VzicTime	*time1,
 }
 
 
+/* Convert degrees-minutes-seconds into decimal degrees */
+static float
+dms_to_dd				(int dms[])
+{
+  return dms[0] + dms[1]/60.0 + dms[2]/3600.0;
+}
+
+
 static void
 output_zone_components			(FILE		*fp,
 					 char		*name,
+					 ZoneDescription *zone_desc,
 					 GArray		*changes)
 {
   VzicTime *vzictime;
@@ -1108,6 +1125,17 @@ output_zone_components			(FILE		*fp,
   struct tm *tm = gmtime(&now);
 
   fprintf (fp, "BEGIN:VTIMEZONE\r\nTZID:%s%s\r\n", TZIDPrefixExpanded, name);
+
+  if (zone_desc) {
+    /* Add COMMENT */
+    if (zone_desc->comment) fprintf (fp, "COMMENT:%s\r\n", zone_desc->comment);
+
+#if 0
+    /* Add GEO */
+    fprintf (fp, "GEO:%+.6f,%+.6f\r\n",
+	     dms_to_dd(zone_desc->latitude), dms_to_dd(zone_desc->longitude));
+#endif
+  }
 
   /* Use current time as LAST-MODIFIED */
   fprintf (fp, "LAST-MODIFIED:%04i%02i%02iT%02i%02i%02iZ\r\n",
