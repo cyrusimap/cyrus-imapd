@@ -1146,6 +1146,10 @@ static int action_expand(struct transaction_t *txn)
 	    for (n = 0; n < obsarray->num_elements; n++) {
 		struct observance *obs = icalarray_element_at(obsarray, n);
 
+		/* Adjust onset to UTC */
+		icaltime_adjust(&obs->onset, 0, 0, 0, -obs->offset_from);
+		obs->onset.is_utc = 1;
+
 		json_array_append_new(jobsarray,
 				      json_pack(
 					  "{s:s s:s s:i s:i}",
