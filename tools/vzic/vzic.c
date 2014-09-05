@@ -52,7 +52,8 @@ char*    VzicOlsonDir                   = OLSON_DIR;
 
 GList*	 VzicTimeZoneNames		= NULL;
 
-static void	convert_olson_file		(char		*olson_file);
+static void	convert_olson_file		(char		*olson_file,
+						 GHashTable	*zones_hash);
 
 static void	usage				(void);
 
@@ -154,47 +155,47 @@ main				(int		 argc,
     ensure_directory_exists (directory);
   }
 
+  sprintf (filename, "%s/zone.tab", VzicOlsonDir);
+  zones_hash = parse_zone_tab (filename);
+
   /*
    * Convert the Olson timezone files.
    */
-  convert_olson_file ("africa");
-  convert_olson_file ("antarctica");
-  convert_olson_file ("asia");
-  convert_olson_file ("australasia");
-  convert_olson_file ("europe");
-  convert_olson_file ("northamerica");
-  convert_olson_file ("southamerica");
+  convert_olson_file ("africa", zones_hash);
+  convert_olson_file ("antarctica", zones_hash);
+  convert_olson_file ("asia", zones_hash);
+  convert_olson_file ("australasia", zones_hash);
+  convert_olson_file ("europe", zones_hash);
+  convert_olson_file ("northamerica", zones_hash);
+  convert_olson_file ("southamerica", zones_hash);
 
   /* These are backwards-compatability and weird stuff. */
-  convert_olson_file ("backward");
-  convert_olson_file ("etcetera");
+  convert_olson_file ("backward", zones_hash);
+  convert_olson_file ("etcetera", zones_hash);
 #if 0
-  convert_olson_file ("leapseconds");
-  convert_olson_file ("pacificnew");
-  convert_olson_file ("solar87");
-  convert_olson_file ("solar88");
-  convert_olson_file ("solar89");
+  convert_olson_file ("leapseconds", zones_hash);
+  convert_olson_file ("pacificnew", zones_hash);
+  convert_olson_file ("solar87", zones_hash);
+  convert_olson_file ("solar88", zones_hash);
+  convert_olson_file ("solar89", zones_hash);
 #endif
 
   /* This doesn't really do anything and it messes up vzic-dump.pl so we
      don't bother. */
 #if 0
-  convert_olson_file ("factory");
+  convert_olson_file ("factory", zones_hash);
 #endif
 
   /* This is old System V stuff, which we don't currently support since it
      uses 'min' as a Rule FROM value which messes up our algorithm, making
      it too slow and use too much memory. */
 #if 0
-  convert_olson_file ("systemv");
+  convert_olson_file ("systemv", zones_hash);
 #endif
 
   /* Output the timezone names and coordinates in a zone.tab file, and
      the translatable strings to feed to gettext. */
   if (VzicDumpZoneNamesAndCoords) {
-    sprintf (filename, "%s/zone.tab", VzicOlsonDir);
-    zones_hash = parse_zone_tab (filename);
-
     dump_time_zone_names (VzicTimeZoneNames, VzicOutputDir, zones_hash);
   }
 
@@ -203,8 +204,10 @@ main				(int		 argc,
 
 
 static void
-convert_olson_file		(char		*olson_file)
+convert_olson_file		(char		*olson_file,
+				 GHashTable	*zones_hash)
 {
+
   char input_filename[PATHNAME_BUFFER_SIZE];
   GArray *zone_data;
   GHashTable *rule_data, *link_data;
@@ -226,7 +229,7 @@ convert_olson_file		(char		*olson_file)
   }
 
   output_vtimezone_files (VzicOutputDir, zone_data, rule_data, link_data,
-			  max_until_year);
+			  zones_hash, max_until_year);
 
   free_zone_data (zone_data);
   g_hash_table_foreach (rule_data, free_rule_array, NULL);
