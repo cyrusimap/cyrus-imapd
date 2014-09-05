@@ -1368,6 +1368,10 @@ if test "$enable_unit_tests" = "yes" ; then
 	AC_MSG_NOTICE([Disabling unit tests because the required CUnit library is not installed])
 	enable_unit_tests=no
     fi
+    AC_CHECK_HEADER([CUnit/Basic.h],
+	AC_CHECK_TYPE([CU_SetUpFunc],AC_DEFINE(HAVE_CU_SETUPFUNC,[],[Do we have CU_SetUpFunc?]),,
+	    [#include <CUnit/Basic.h>])
+	,)
 fi
 if test "$enable_unit_tests" = "yes" ; then
     dnl Valgrind is an amazingly useful tool for running tests.  It doesn't
