@@ -215,12 +215,20 @@ static int dump_cb(void *rockp,
 		    } // if (r = dlist_getatom())
 
 		    if (dl_ace->name && tmp) {
-			if (acl) {
-			    acl = strconcat(xstrdup(acl), "\t", dl_ace->name, "\t", tmp);
+			if (acl != NULL) {
+			    // Temporary placeholder for the original
+			    char *_acl = xstrdup(acl);
+			    acl = xmalloc(strlen(acl) + 2 + strlen(dl_ace->name) + strlen(tmp) + 1);
+			    sprintf(acl, "%s\t%s\t%s", _acl, dl_ace->name, tmp);
+			    free(_acl);
 			} else {
-			    acl = strconcat(dl_ace->name, "\t", tmp);
+			    acl = xmalloc(1 + strlen(dl_ace->name) + strlen(tmp) + 1);
+			    sprintf(acl, "%s\t%s", dl_ace->name, tmp);
 			}
+
+			syslog(LOG_DEBUG, "Mailbox ACL: '%s %s' (acl now: %s)", dl_ace->name, tmp, acl);
 		    }
+		    if (tmp) free(tmp);
 		}
 	    } else { // (dl_acl)
 		syslog(LOG_NOTICE, "Mailbox without an ACL: '%s'", name);
