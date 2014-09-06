@@ -1128,7 +1128,23 @@ output_zone_components			(FILE		*fp,
 
   if (zone_desc) {
     /* Add COMMENT */
-    if (zone_desc->comment) fprintf (fp, "COMMENT:%s\r\n", zone_desc->comment);
+    fprintf (fp, "COMMENT:[%.2s] ", zone_desc->country_code);
+    if (zone_desc->comment) {
+      const char *p;
+
+      for (p = zone_desc->comment; *p; p++) {
+	switch (*p) {
+	case '\\':
+	case ',':
+	case ';':
+	  fprintf (fp, "\\");
+	  break;
+	}
+
+	fprintf (fp, "%c", *p);
+      }
+    }
+    fprintf (fp, "\r\n");
 
 #if 0
     /* Add GEO */
