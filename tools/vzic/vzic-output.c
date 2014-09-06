@@ -1589,16 +1589,16 @@ output_component_start			(char		*buffer,
   else
     prev_walloff = vzictime->prev_walloff;
 
-  sprintf (line2, "TZOFFSETFROM:%s\r\n",
+  if (vzictime->tzname)
+    sprintf (line2, "TZNAME:%s\r\n", vzictime->tzname);
+  else
+    line2[0] = '\0';
+
+  sprintf (line3, "TZOFFSETFROM:%s\r\n",
 	   format_tz_offset (prev_walloff, !VzicPureOutput));
 
-  sprintf (line3, "TZOFFSETTO:%s\r\n",
+  sprintf (line4, "TZOFFSETTO:%s\r\n",
 	   format_tz_offset (vzictime->walloff, !VzicPureOutput));
-
-  if (vzictime->tzname)
-    sprintf (line4, "TZNAME:%s\r\n", vzictime->tzname);
-  else
-    line4[0] = '\0';
 
   formatted_time = format_time (tmp_vzictime.year, tmp_vzictime.month,
 				tmp_vzictime.day_number,
