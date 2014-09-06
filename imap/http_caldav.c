@@ -1787,6 +1787,168 @@ static int freebusy_url(struct transaction_t *txn, int rights)
 }
 
 
+static int server_info(struct transaction_t *txn)
+{
+    int precond;
+    static struct message_guid prev_guid;
+    struct message_guid guid;
+    const char *etag;
+    static time_t lastmod = 0;
+    struct stat sbuf;
+    static xmlChar *buf = NULL;
+    static int bufsiz = 0;
+
+    if (!httpd_userid) return HTTP_UNAUTHORIZED;
+
+    /* Initialize */
+    if (!lastmod) message_guid_set_null(&prev_guid);
+
+    /* Generate ETag based on compile date/time of this source file,
+       the number of available RSCALEs and the config file size/mtime */
+    stat(config_filename, &sbuf);
+    lastmod = MAX(compile_time, sbuf.st_mtime);
+
+    assert(!buf_len(&txn->buf));
+    buf_printf(&txn->buf, "%ld-%ld-%ld", (long) compile_time,
+	       sbuf.st_mtime, sbuf.st_size);
+
+    message_guid_generate(&guid, buf_cstring(&txn->buf), buf_len(&txn->buf));
+    etag = message_guid_encode(&guid);
+
+    /* Check any preconditions, including range request */
+    txn->flags.ranges = 1;
+    precond = check_precond(txn, NULL, etag, lastmod);
+
+    switch (precond) {
+    case HTTP_OK:
+    case HTTP_PARTIAL:
+    case HTTP_NOT_MODIFIED:
+	/* Fill in Etag,  Last-Modified, and Expires */
+	txn->resp_body.etag = etag;
+	txn->resp_body.lastmod = lastmod;
+	txn->resp_body.maxage = 86400;  /* 24 hrs */
+	txn->flags.cc |= CC_MAXAGE;
+
+	if (precond != HTTP_NOT_MODIFIED) break;
+
+    default:
+	/* We failed a precondition - don't perform the request */
+	return precond;
+    }
+
+    if (!message_guid_equal(&prev_guid, &guid)) {
+	xmlNodePtr root, node, service;
+	xmlNsPtr ns[NUM_NAMESPACE];
+
+	/* Start construction of our query-result */
+	if (!(root = init_xml_response("server-info", NS_DAV, NULL, ns))) {
+	    txn->error.desc = "Unable to create XML response";
+	    return HTTP_SERVER_ERROR;
+	}
+
+	node = xmlNewChild(root, NULL, BAD_CAST "services", NULL);
+
+	service = xmlNewChild(node, NULL, BAD_CAST "service", NULL);
+	ensure_ns(ns, NS_CALDAV, service, XML_NS_CALDAV, "C");
+	xmlNewChild(service, ns[NS_CALDAV], BAD_CAST "name", BAD_CAST "caldav");
+
+	/* Add href */
+	{
+	    const char **hdr = spool_getheader(txn->req_hdrs, "Host");
+	    buf_reset(&txn->buf);
+	    buf_printf(&txn->buf, "%s://%s",
+		       https? "https" : "http", hdr[0]);
+	    buf_appendcstr(&txn->buf, namespace_calendar.prefix);
+	    xml_add_href(service, ns[NS_DAV], buf_cstring(&txn->buf));
+	}
+
+	/* Add features */
+	node = xmlNewChild(service, NULL, BAD_CAST "features", NULL);
+	xmlNewChild(node, ns[NS_DAV], BAD_CAST "feature", BAD_CAST "1");
+	xmlNewChild(node, ns[NS_DAV], BAD_CAST "feature", BAD_CAST "2");
+	xmlNewChild(node, ns[NS_DAV], BAD_CAST "feature", BAD_CAST "3");
+	xmlNewChild(node, ns[NS_DAV], BAD_CAST "feature",
+		    BAD_CAST "access-control");
+	xmlNewChild(node, ns[NS_DAV], BAD_CAST "feature",
+		    BAD_CAST "extended-mkcol");
+	xmlNewChild(node, ns[NS_CALDAV], BAD_CAST "feature",
+		    BAD_CAST "calendar-access");
+	if (namespace_calendar.allow & ALLOW_CAL_AVAIL)
+	    xmlNewChild(node, ns[NS_CALDAV], BAD_CAST "feature",
+			BAD_CAST "calendar-availability");
+	if (namespace_calendar.allow & ALLOW_CAL_SCHED)
+	    xmlNewChild(node, ns[NS_CALDAV], BAD_CAST "feature",
+			BAD_CAST "calendar-auto-schedule");
+
+	/* Add properties */
+	{
+	    struct propfind_ctx fctx;
+	    struct request_target_t req_tgt;
+	    struct mailbox mailbox;
+	    struct index_record record;
+	    struct propstat propstat[PROPSTAT_OK+1];
+
+	    /* Setup a dummy propfind_ctx and propstat */
+	    memset(&fctx, 0, sizeof(struct propfind_ctx));
+	    memset(&req_tgt, 0, sizeof(struct request_target_t));
+	    fctx.req_tgt = &req_tgt;
+	    fctx.req_tgt->collection = "";
+	    fctx.mailbox = &mailbox;
+	    fctx.record = &record;
+	    fctx.ns = ns;
+
+	    propstat[PROPSTAT_OK].root = xmlNewNode(NULL, BAD_CAST "");
+	    node = xmlNewChild(propstat[PROPSTAT_OK].root,
+			       ns[NS_DAV], BAD_CAST "properties", NULL);
+
+	    propfind_suplock(BAD_CAST "supportedlock", ns[NS_DAV],
+			     &fctx, NULL, &propstat[PROPSTAT_OK], NULL);
+	    propfind_aclrestrict(BAD_CAST "acl-restrictions", ns[NS_DAV],
+				 &fctx, NULL, &propstat[PROPSTAT_OK], NULL);
+	    propfind_suppcaldata(BAD_CAST "supported-calendar-data",
+				 ns[NS_CALDAV],
+				 &fctx, NULL, &propstat[PROPSTAT_OK], NULL);
+	    propfind_rscaleset(BAD_CAST "supported-rscale-set", ns[NS_CALDAV],
+			       &fctx, NULL, &propstat[PROPSTAT_OK], NULL);
+	    propfind_maxsize(BAD_CAST "max-resource-size", ns[NS_CALDAV],
+			     &fctx, NULL, &propstat[PROPSTAT_OK], NULL);
+	    propfind_minmaxdate(BAD_CAST "min-date-time", ns[NS_CALDAV],
+				&fctx, NULL, &propstat[PROPSTAT_OK],
+				&caldav_epoch);
+	    propfind_minmaxdate(BAD_CAST "max-date-time", ns[NS_CALDAV],
+				&fctx, NULL, &propstat[PROPSTAT_OK],
+				&caldav_eternity);
+
+	    /* Unlink properties from propstat and link to service */
+	    xmlUnlinkNode(node);
+	    xmlAddChild(service, node);
+
+	    /* Cleanup */
+	    xmlFreeNode(propstat[PROPSTAT_OK].root);
+	    buf_free(&fctx.buf);
+	}
+
+	/* Dump XML response tree into a text buffer */
+	if (buf) xmlFree(buf);
+	xmlDocDumpFormatMemoryEnc(root->doc, &buf, &bufsiz, "utf-8", 1);
+	xmlFreeDoc(root->doc);
+
+	if (!buf) {
+	    txn->error.desc = "Error dumping XML tree";
+	    return HTTP_SERVER_ERROR;
+	}
+
+	message_guid_copy(&prev_guid, &guid);
+    }
+
+    /* Output the XML response */
+    txn->resp_body.type = "application/xml; charset=utf-8";
+    write_body(precond, txn, (char *) buf, bufsiz);
+
+    return 0;
+}
+
+
 /* Perform a GET/HEAD request on a CalDAV resource */
 static int meth_get(struct transaction_t *txn, void *params)
 {
@@ -1794,6 +1956,14 @@ static int meth_get(struct transaction_t *txn, void *params)
     struct strlist *action;
     int r, rights;
     char *server, *acl;
+
+    action = hash_lookup("action", &txn->req_qparams);
+    if (action) {
+	if (action->next) return HTTP_BAD_REQUEST;
+
+	/* GET server-info resource */
+	if (!strcmp(action->s, "server-info")) return server_info(txn);
+    }
 
     /* Parse the path */
     if ((r = gparams->parse_path(txn->req_uri->path,
@@ -1833,8 +2003,6 @@ static int meth_get(struct transaction_t *txn, void *params)
 
     /* Get an entire calendar collection */ 
     if (txn->req_tgt.collection) return dump_calendar(txn, rights);
-
-    action = hash_lookup("action", &txn->req_qparams);
 
     /* Display available actions HTML page */
     if (!action) return list_actions(txn, rights);
