@@ -487,7 +487,7 @@ static void expand_vtimezone(icalcomponent *vtz, icalarray *obsarray,
 			     icaltimetype start, icaltimetype end)
 {
     int truncate = !obsarray;
-    icalcomponent *comp, *nextc;
+    icalcomponent *comp, *nextc, *tomb_std = NULL, *tomb_day = NULL;
     struct observance tombstone;
 
     memset(&tombstone, 0, sizeof(struct observance));
@@ -702,9 +702,23 @@ static void expand_vtimezone(icalcomponent *vtz, icalarray *obsarray,
 
 	/* Final check */
 	if (truncate && dtstart_prop) {
-	    /* All observances in comp occur prior to window open, remove it */
-	    icalcomponent_remove_component(vtz, comp);
-	    icalcomponent_free(comp);
+	    /* All observances in comp occur prior to window open, remove it
+	       unless we haven't saved a tombstone comp of this type yet */
+	    if (icalcomponent_isa(comp) == ICAL_XDAYLIGHT_COMPONENT) {
+		if (!tomb_day) {
+		    tomb_day = comp;
+		    comp = NULL;
+		}
+	    }
+	    else if (!tomb_std) {
+		tomb_std = comp;
+		comp = NULL;
+	    }
+
+	    if (comp) {
+		icalcomponent_remove_component(vtz, comp);
+		icalcomponent_free(comp);
+	    }
 	}
     }
 
@@ -712,15 +726,52 @@ static void expand_vtimezone(icalcomponent *vtz, icalarray *obsarray,
 	/* Need to add tombstone component/observance starting at window open
 	   as long as its not prior to start of TZ data */
 	if (truncate) {
-	    comp = icalcomponent_vanew(
-		tombstone.is_daylight ?
-		ICAL_XDAYLIGHT_COMPONENT : ICAL_XSTANDARD_COMPONENT,
-		icalproperty_new_tzoffsetfrom(tombstone.offset_from),
-		icalproperty_new_tzoffsetto(tombstone.offset_to),
-		icalproperty_new_tzname(tombstone.name),
-		icalproperty_new_dtstart(start),
-		0);
-	    icalcomponent_add_component(vtz, comp);
+	    /* Determine which tombstone component we need */
+	    icalcomponent *tomb, *remove;
+	    icalproperty *prop, *nextp;
+
+	    if (tombstone.is_daylight) {
+		tomb = tomb_day;
+		remove = tomb_std;
+	    }
+	    else {
+		tomb = tomb_std;
+		remove = tomb_day;
+	    }
+
+	    /* Remove unused tombstone component */
+	    if (remove) {
+		icalcomponent_remove_component(vtz, remove);
+		icalcomponent_free(remove);
+	    }
+
+	    /* Adjust property values on our tombstone */
+	    for (prop =
+		     icalcomponent_get_first_property(tomb, ICAL_ANY_PROPERTY);
+		 prop; prop = nextp) {
+
+		nextp =
+		    icalcomponent_get_next_property(tomb, ICAL_ANY_PROPERTY);
+
+		switch (icalproperty_isa(prop)) {
+		case ICAL_TZNAME_PROPERTY:
+		    icalproperty_set_tzname(prop, tombstone.name);
+		    break;
+		case ICAL_TZOFFSETFROM_PROPERTY:
+		    icalproperty_set_tzoffsetfrom(prop, tombstone.offset_from);
+		    break;
+		case ICAL_TZOFFSETTO_PROPERTY:
+		    icalproperty_set_tzoffsetto(prop, tombstone.offset_to);
+		    break;
+		case ICAL_DTSTART_PROPERTY:
+		    icalproperty_set_dtstart(prop, start);
+		    break;
+		default:
+		    icalcomponent_remove_property(tomb, prop);
+		    icalproperty_free(prop);
+		    break;
+		}
+	    }
 	}
 	else {
 	    tombstone.onset = start;
