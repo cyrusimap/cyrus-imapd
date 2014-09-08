@@ -300,7 +300,7 @@ static int action_capa(struct transaction_t *txn)
 
 			 "name", "find", "parameters",
 //			 "name", "lang", "required", 0, "multi", 1,
-			 "name", "name", "required", 1, "multi", 0);
+			 "name", "pattern", "required", 1, "multi", 0);
 	freestrlist(info.data);
 
 	if (!root) {
@@ -366,9 +366,9 @@ static int action_list(struct transaction_t *txn)
     /* Sanity check the parameters */
     param = hash_lookup("action", &txn->req_qparams);
     if (!strcmp("find", param->s)) {
-	name = hash_lookup("name", &txn->req_qparams);
+	name = hash_lookup("pattern", &txn->req_qparams);
 	if (!name || name->next  /* mandatory, once only */) {
-	    return json_error_response(txn, TZ_INVALID_NAME);
+	    return json_error_response(txn, TZ_INVALID_PATTERN);
 	}
 	tzid_only = 0;
     }
