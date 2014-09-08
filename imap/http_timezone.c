@@ -85,7 +85,8 @@ static int action_get(struct transaction_t *txn);
 static int action_expand(struct transaction_t *txn);
 static int json_response(int code, struct transaction_t *txn, json_t *root,
 			 char **resp);
-static int json_error_response(struct transaction_t *txn, long code);
+static int json_error_response(struct transaction_t *txn, long tz_code,
+			       struct strlist *param, icaltimetype *time);
 
 struct observance {
     const char *name;
@@ -190,8 +191,10 @@ static int meth_get(struct transaction_t *txn,
 	for (ap = actions; ap->name && strcmp(action->s, ap->name); ap++);
     }
 
-    if (!ap || !ap->name) ret = json_error_response(txn, TZ_INVALID_ACTION);
-    else ret = ap->proc(txn);
+    if (!ap || !ap->name)
+	ret = json_error_response(txn, TZ_INVALID_ACTION, action, NULL);
+    else
+	ret = ap->proc(txn);
 
     return ret;
 }
@@ -363,31 +366,37 @@ static int action_list(struct transaction_t *txn)
 {
     int r, precond, tzid_only = 1;
     struct strlist *param, *name = NULL;
+    icaltimetype changedsince = icaltime_null_time();
     struct resp_body_t *resp_body = &txn->resp_body;
     struct zoneinfo info;
-    time_t lastmod, changedsince = 0;
+    time_t lastmod;
     json_t *root = NULL;
 
     /* Sanity check the parameters */
     param = hash_lookup("action", &txn->req_qparams);
     if (!strcmp("find", param->s)) {
 	name = hash_lookup("pattern", &txn->req_qparams);
-	if (!name || name->next  /* mandatory, once only */) {
-	    return json_error_response(txn, TZ_INVALID_PATTERN);
+	if (!name || name->next) {  /* mandatory, once only */
+	    return json_error_response(txn, TZ_INVALID_PATTERN, name, NULL);
 	}
 	tzid_only = 0;
     }
     else {
 	param = hash_lookup("changedsince", &txn->req_qparams);
 	if (param) {
-	    changedsince = icaltime_as_timet(icaltime_from_string(param->s));
-	    if (!changedsince || param->next  /* once only */)
-		return json_error_response(txn, TZ_INVALID_CHANGEDSINCE);
+	    changedsince = icaltime_from_string(param->s);
+	    if (param->next || !changedsince.is_utc) {  /* once only, UTC */
+		return json_error_response(txn, TZ_INVALID_CHANGEDSINCE,
+					   param, &changedsince);
+	    }
 	}
 
 	name = hash_lookup("tzid", &txn->req_qparams);
 	if (name) {
-	    if (changedsince) return json_error_response(txn, TZ_INVALID_TZID);
+	    if (changedsince.is_utc) {
+		return json_error_response(txn, TZ_INVALID_TZID,
+					   param, &changedsince);
+	    }
 	    else {
 		/* Check for tzid=*, and revert to empty list */
 		struct strlist *sl;
@@ -452,8 +461,8 @@ static int action_list(struct transaction_t *txn)
 
 	/* Add timezones to array */
 	do {
-	    zoneinfo_find(name ? name->s : NULL, tzid_only, changedsince,
-			  &list_cb, &lrock);
+	    zoneinfo_find(name ? name->s : NULL, tzid_only,
+			  icaltime_as_timet(changedsince), &list_cb, &lrock);
 	} while (name && (name = name->next));
 
 	if (!tzid_only) free_hash_table(&tzids, NULL);
@@ -852,9 +861,11 @@ static int action_get(struct transaction_t *txn)
 
     /* Sanity check the parameters */
     param = hash_lookup("tzid", &txn->req_qparams);
-    if (!param || param->next  /* mandatory, once only */
-	|| strchr(param->s, '.')  /* paranoia */) {
-	return json_error_response(txn, TZ_INVALID_TZID);
+    if (!param || param->next) { /* mandatory, once only */
+	return json_error_response(txn, TZ_INVALID_TZID, param, NULL);
+    }
+    if (strchr(param->s, '.')) {  /* paranoia */
+	return json_error_response(txn, TZ_NOT_FOUND, NULL, NULL);
     }
     tzid = param->s;
 
@@ -868,23 +879,24 @@ static int action_get(struct transaction_t *txn)
     else mime = tz_mime_types;
 
     if (!mime || !mime->content_type) {
-	return json_error_response(txn, TZ_INVALID_FORMAT);
+	return json_error_response(txn, TZ_INVALID_FORMAT, param, NULL);
     }
 
     /* Check for any truncation */
     param = hash_lookup("truncate", &txn->req_qparams);
     if (param) {
 	truncate = icaltime_from_string(param->s);
-	if (!truncate.is_utc  /* MUST be UTC */
-	    || icaltime_is_null_time(truncate)
-	    || param->next  /* once only */)
-	    return json_error_response(txn, TZ_INVALID_TRUNCATE);
+	if (param->next || !truncate.is_utc) {  /* once only, UTC */
+	    return json_error_response(txn, TZ_INVALID_TRUNCATE,
+				       param, &truncate);
+	}
     }
 
     /* Get info record from the database */
     if ((r = zoneinfo_lookup(tzid, &zi))) {
 	return (r == CYRUSDB_NOTFOUND ?
-		json_error_response(txn, TZ_NOT_FOUND) : HTTP_SERVER_ERROR);
+		json_error_response(txn, TZ_NOT_FOUND, NULL, NULL)
+		: HTTP_SERVER_ERROR);
     }
 
     /* Generate ETag & Last-Modified from info record */
@@ -965,7 +977,7 @@ static int action_get(struct transaction_t *txn)
 		       (int) strcspn(mime->content_type, ";"),
 		       mime->content_type);
 	}
-	if (!icaltime_is_null_time(truncate)) {
+	if (truncate.is_utc) {
 	    buf_printf(&pathbuf, "&truncate=%s",
 		       icaltime_as_ical_string(truncate));
 
@@ -1021,41 +1033,45 @@ static int action_expand(struct transaction_t *txn)
     struct strlist *param;
     const char *tzid;
     struct zoneinfo zi;
-    time_t lastmod, changedsince = 0;
-    icaltimetype start, end;
+    time_t lastmod;
+    icaltimetype start, end, changedsince = icaltime_null_time();
     struct resp_body_t *resp_body = &txn->resp_body;
     json_t *root = NULL;
 
     /* Sanity check the parameters */
     param = hash_lookup("tzid", &txn->req_qparams);
-    if (!param || param->next  /* mandatory, once only */
-	|| strchr(param->s, '.')  /* paranoia */) {
-	return json_error_response(txn, TZ_INVALID_TZID);
+    if (!param || param->next) {  /* mandatory, once only */
+	return json_error_response(txn, TZ_INVALID_TZID, param, NULL);
+    }
+    if (strchr(param->s, '.')) {  /* paranoia */
+	return json_error_response(txn, TZ_NOT_FOUND, NULL, NULL);
     }
     tzid = param->s;
 
     param = hash_lookup("changedsince", &txn->req_qparams);
     if (param) {
-	changedsince = icaltime_as_timet(icaltime_from_string(param->s));
-	if (!changedsince || param->next  /* once only */)
-	    return json_error_response(txn, TZ_INVALID_CHANGEDSINCE);
+	changedsince = icaltime_from_string(param->s);
+	if (param->next || !changedsince.is_utc) {  /* once only, UTC */
+	    return json_error_response(txn, TZ_INVALID_CHANGEDSINCE,
+				       param, &changedsince);
+	}
     }
 
     param = hash_lookup("start", &txn->req_qparams);
     if (!param || param->next)  /* mandatory, once only */
-	return json_error_response(txn, TZ_INVALID_START);
+	return json_error_response(txn, TZ_INVALID_START, param, NULL);
 
     start = icaltime_from_string(param->s);
-    if (!start.is_utc || icaltime_is_null_time(start)  /* MUST be UTC */)
-	return json_error_response(txn, TZ_INVALID_START);
+    if (!start.is_utc)  /* MUST be UTC */
+	return json_error_response(txn, TZ_INVALID_START, param, &start);
 
     param = hash_lookup("end", &txn->req_qparams);
     if (param) {
 	end = icaltime_from_string(param->s);
-	if (!end.is_utc  /* MUST be UTC */
-	    || icaltime_compare(end, start) <= 0  /* end MUST be > start */
-	    || param->next  /* once only */)
-	    return json_error_response(txn, TZ_INVALID_END);
+	if (param->next || !end.is_utc  /* once only, UTC */
+	    || icaltime_compare(end, start) <= 0) {  /* end MUST be > start */
+	    return json_error_response(txn, TZ_INVALID_END, param, &end);
+	}
     }
     else {
 	/* Default to start + 10 years */
@@ -1066,8 +1082,8 @@ static int action_expand(struct transaction_t *txn)
     /* Check requested format (debugging only) */
     param = hash_lookup("format", &txn->req_qparams);
     if (param) {
-	if (strcmp(param->s, "zdump") || param->next  /* optional, once only */)
-	    return json_error_response(txn, TZ_INVALID_FORMAT);
+	if (param->next || strcmp(param->s, "zdump"))  /* optional, once only */
+	    return json_error_response(txn, TZ_INVALID_FORMAT, param, NULL);
 
 	/* Mimic zdump(8) output for comparision:
 	   For each zonename on the command line, print  the  time  at  the
@@ -1084,7 +1100,8 @@ static int action_expand(struct transaction_t *txn)
     /* Get info record from the database */
     if ((r = zoneinfo_lookup(tzid, &zi))) {
 	return (r == CYRUSDB_NOTFOUND ?
-		json_error_response(txn, TZ_NOT_FOUND) : HTTP_SERVER_ERROR);
+		json_error_response(txn, TZ_NOT_FOUND, NULL, NULL)
+		: HTTP_SERVER_ERROR);
     }
 
     /* Generate ETag & Last-Modified from info record */
@@ -1095,7 +1112,7 @@ static int action_expand(struct transaction_t *txn)
 
     /* Check any preconditions, including range request */
     txn->flags.ranges = 1;
-    if (lastmod <= changedsince) precond = HTTP_NOT_MODIFIED;
+    if (lastmod <= icaltime_as_timet(changedsince)) precond = HTTP_NOT_MODIFIED;
     else precond = check_precond(txn, NULL, buf_cstring(&txn->buf), lastmod);
 
     switch (precond) {
@@ -1295,25 +1312,56 @@ static int json_response(int code, struct transaction_t *txn, json_t *root,
 }
 
 
-static int json_error_response(struct transaction_t *txn, long tz_code)
-{
-    json_t *root;
-    long http_code;
+/* Array of parameter names - MUST be kept in sync with tz_err.et */
+static const char *param_names[] = {
+    "action",
+    "tzid",
+    "pattern",
+    "format",
+    "start",
+    "end",
+    "changedsince",
+    "truncate",
+    "tzid"
+};
 
-    root = json_pack("{s:s}", "error", error_message(tz_code));
+static int json_error_response(struct transaction_t *txn, long tz_code,
+			       struct strlist *param, icaltimetype *time)
+{
+    long http_code = HTTP_BAD_REQUEST;
+    const char *param_name, *fmt = NULL;
+    char desc[100];
+    json_t *root;
+
+    param_name = param_names[tz_code - tz_err_base];
+
+    if (!param) fmt = "missing %s parameter";
+    else if (param->next) fmt = "multiple %s parameters";
+    else if (!time) fmt = "unknown %s value";
+    else if (!time->is_utc) fmt = "invalid %s UTC value";
+
+    switch (tz_code) {
+    case TZ_INVALID_TZID:
+	if (!fmt) fmt = "tzid used with changedsince";
+	break;
+
+    case TZ_INVALID_END:
+	if (!fmt) fmt = "end <= start";
+	break;
+
+    case TZ_NOT_FOUND:
+	http_code = HTTP_NOT_FOUND;
+	fmt = "time zone not found";
+	break;
+    }
+
+    snprintf(desc, sizeof(desc), fmt ? fmt : "unknown error", param_name);
+
+    root = json_pack("{s:s s:s}", "error", error_message(tz_code),
+		     "description", desc);
     if (!root) {
 	txn->error.desc = "Unable to create JSON response";
 	return HTTP_SERVER_ERROR;
-    }
-
-    switch (tz_code) {
-    case TZ_NOT_FOUND:
-	http_code = HTTP_NOT_FOUND;
-	break;
-
-    default:
-	http_code = HTTP_BAD_REQUEST;
-	break;
     }
 
     return json_response(http_code, txn, root, NULL);
