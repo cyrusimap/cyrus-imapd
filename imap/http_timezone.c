@@ -246,7 +246,12 @@ static int action_capa(struct transaction_t *txn)
 
 	/* Construct our response */
 	root = json_pack("{s:i"				/* version */
-			 "  s:{s:s s:{s:b s:b} s:[]}"	/* info */
+			 "  s:{"			/* info */
+			 "      s:s"			/*   primary-source */
+			 "      s:{s:b s:b}"		/*   truncated */
+			 "      s:s"   			/*   provider-details */
+			 "      s:[]"  			/*   contacts */
+			 "    }"
 			 "  s:["			/* actions */
 			 "    {s:s s:[]}"		/*   capabilities */
 			 "    {s:s s:["			/*   list */
@@ -269,12 +274,13 @@ static int action_capa(struct transaction_t *txn)
 			 "    ]}"
 			 "    {s:s s:["			/*   find */
 //			 "      {s:s s:b s:b}"		/*     lang */
-			 "      {s:s s:b s:b}"		/*     name */
+			 "      {s:s s:b s:b}"		/*     pattern */
 			 "    ]}"
 			 "  ]}",
 			 "version", 1,
 			 "info", "primary-source", info.data->s,
-			 "truncated", "any", 1, "untruncated", 1, "contacts",
+			 "truncated", "any", 1, "untruncated", 1,
+			 "provider-details", "", "contacts",
 			 "actions",
 			 "name", "capabilities", "parameters",
 
