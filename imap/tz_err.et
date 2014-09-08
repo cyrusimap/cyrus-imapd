@@ -48,7 +48,7 @@ ec TZ_INVALID_ACTION,
 ec TZ_INVALID_TZID,
    "invalid-tzid"
 
-ec TZ_INVALID_NAME,
+ec TZ_INVALID_PATTERN,
    "invalid-name"
 
 ec TZ_INVALID_FORMAT,
