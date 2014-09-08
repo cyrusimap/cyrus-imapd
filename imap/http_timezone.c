@@ -295,7 +295,7 @@ static int action_capa(struct transaction_t *txn)
 //			 "name", "lang", "required", 0, "multi", 1,
 			 "name", "tzid", "required", 1, "multi", 0,
 			 "name", "changedsince", "required", 0, "multi", 0,
-			 "name", "start", "required", 0, "multi", 0,
+			 "name", "start", "required", 1, "multi", 0,
 			 "name", "end", "required", 0, "multi", 0,
 
 			 "name", "find", "parameters",
@@ -870,8 +870,9 @@ static int action_get(struct transaction_t *txn)
     param = hash_lookup("truncate", &txn->req_qparams);
     if (param) {
 	truncate = icaltime_from_string(param->s);
-	if (truncate.is_date || !truncate.is_utc  /* MUST be UTC date-time */
-	    || icaltime_is_null_time(truncate) || param->next  /* once only */)
+	if (!truncate.is_utc  /* MUST be UTC */
+	    || icaltime_is_null_time(truncate)
+	    || param->next  /* once only */)
 	    return json_error_response(txn, TZ_INVALID_TRUNCATE);
     }
 
@@ -1036,26 +1037,17 @@ static int action_expand(struct transaction_t *txn)
     }
 
     param = hash_lookup("start", &txn->req_qparams);
-    if (param) {
-	start = icaltime_from_string(param->s);
-	if (start.is_date || !start.is_utc  /* MUST be UTC date-time */
-	    || icaltime_is_null_time(start) || param->next  /* once only */)
-	    return json_error_response(txn, TZ_INVALID_START);
-    }
-    else {
-	/* Default to start of current year */
-	time_t now = time(0);
-	struct tm *tm = gmtime(&now);
+    if (!param || param->next)  /* mandatory, once only */
+	return json_error_response(txn, TZ_INVALID_START);
 
-	start = icaltime_from_day_of_year(1, tm->tm_year + 1900);
-	start.is_date = start.hour = start.minute = start.second = 0;
-	start.is_utc = 1;
-    }
+    start = icaltime_from_string(param->s);
+    if (!start.is_utc || icaltime_is_null_time(start)  /* MUST be UTC */)
+	return json_error_response(txn, TZ_INVALID_START);
 
     param = hash_lookup("end", &txn->req_qparams);
     if (param) {
 	end = icaltime_from_string(param->s);
-	if (end.is_date || !end.is_utc  /* MUST be UTC date-time */
+	if (!end.is_utc  /* MUST be UTC */
 	    || icaltime_compare(end, start) <= 0  /* end MUST be > start */
 	    || param->next  /* once only */)
 	    return json_error_response(txn, TZ_INVALID_END);
