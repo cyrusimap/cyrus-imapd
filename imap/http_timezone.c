@@ -468,7 +468,7 @@ static void check_tombstone(struct observance *tombstone,
 	tombstone->name = icalmemory_tmp_copy(obs->name);
 	tombstone->offset_from = tombstone->offset_to = obs->offset_to;
 	tombstone->is_daylight = obs->is_daylight;
-	memcpy(&tombstone->onset, onset, sizeof(icaltimetype));
+	tombstone->onset = *onset;
     }
 }
 
@@ -555,6 +555,10 @@ static void expand_vtimezone(icalcomponent *vtz, icalarray *obsarray,
 	    continue;
 	}
 
+	/* Adjust DTSTART observance to UTC */
+	icaltime_adjust(&obs.onset, 0, 0, 0, -obs.offset_from);
+	obs.onset.is_utc = 1;
+
 	/* Check DTSTART vs window close */
 	if (icaltime_compare(obs.onset, end) >= 0) {
 	    /* All observances occur on/after window close, nothing to do */
@@ -584,25 +588,16 @@ static void expand_vtimezone(icalcomponent *vtz, icalarray *obsarray,
 	else if (rrule_prop) {
 	    /* RRULE starts prior to our window open - 
 	       bump RRULE start to 1 year prior to our window open */
-	    obs.onset.year = start.year - 1;
-	    obs.onset.month = start.month;
-	    obs.onset.day = start.day;
+	    dtstart.year = start.year - 1;
 	}
 
 	if (rrule_prop) {
 	    /* Add any RRULE observances within our window */
-	    struct icalrecurrencetype rrule;
-
-	    rrule = icalproperty_get_rrule(rrule_prop);
+	    struct icalrecurrencetype rrule =
+		icalproperty_get_rrule(rrule_prop);
 
 	    /* Check RRULE duration */
 	    if (!icaltime_is_null_time(rrule.until)) {
-		if (rrule.until.is_utc) {
-		    /* Adjust UNTIL to local time */
-		    icaltime_adjust(&rrule.until, 0, 0, 0, obs.offset_from);
-		    rrule.until.is_utc = 0;
-		}
-
 		if (icaltime_compare(rrule.until, start) < 0) {
 		    /* RRULE ends prior to our window open */
 		    if (truncate) {
@@ -615,14 +610,25 @@ static void expand_vtimezone(icalcomponent *vtz, icalarray *obsarray,
 		    /* Check UNTIL vs tombstone */
 		    check_tombstone(&tombstone, &obs, &rrule.until);
 		}
+
+		if (rrule.until.is_utc) {
+		    /* Adjust UNTIL to local time */
+		    icaltime_adjust(&rrule.until, 0, 0, 0, obs.offset_from);
+		    rrule.until.is_utc = 0;
+		}
 	    }
 
 	    if (rrule_prop) {
-		icalrecur_iterator *ritr;
+		icaltimetype recur;
+		icalrecur_iterator *ritr =
+		    icalrecur_iterator_new(rrule, dtstart);
 
-		ritr = icalrecur_iterator_new(rrule, obs.onset);
-		while (!icaltime_is_null_time(obs.onset =
+		while (!icaltime_is_null_time(obs.onset = recur =
 					      icalrecur_iterator_next(ritr))) {
+
+		    /* Adjust observance to UTC */
+		    icaltime_adjust(&obs.onset, 0, 0, 0, -obs.offset_from);
+		    obs.onset.is_utc = 1;
 
 		    if (icaltime_compare(obs.onset, end) >= 0) {
 			/* Observance is on/after window close - we're done */
@@ -642,12 +648,12 @@ static void expand_vtimezone(icalcomponent *vtz, icalarray *obsarray,
 			if (truncate && dtstart_prop) {
 			    unsigned ydiff;
 
-			    /* Make first observance the new DTSTART */
-			    icalproperty_set_dtstart(dtstart_prop, obs.onset);
+			    /* Make this observance the new DTSTART */
+			    icalproperty_set_dtstart(dtstart_prop, recur);
 			    dtstart_prop = NULL;
 
 			    /* Check if new DSTART is within 1 year of UNTIL */
-			    ydiff = rrule.until.year - obs.onset.year;
+			    ydiff = rrule.until.year - recur.year;
 			    if (ydiff <= 1) {
 				/* Remove RRULE */
 				icalcomponent_remove_property(comp, rrule_prop);
@@ -684,6 +690,11 @@ static void expand_vtimezone(icalcomponent *vtz, icalarray *obsarray,
 	    struct rdate *rdate = icalarray_element_at(rdate_array, n);
 
 	    obs.onset = rdate->date.time;
+
+	    /* Adjust observance to UTC */
+	    icaltime_adjust(&obs.onset, 0, 0, 0, -obs.offset_from);
+	    obs.onset.is_utc = 1;
+
 	    if (icaltime_compare(obs.onset, end) >= 0) {
 		/* RDATE is after our window close - we're done */
 		break;
@@ -708,7 +719,7 @@ static void expand_vtimezone(icalcomponent *vtz, icalarray *obsarray,
 		    }
 		    break;
 		}
-		else if (icaltime_compare(obs.onset, dtstart) != 0) {
+		else if (icaltime_compare(rdate->date.time, dtstart) != 0) {
 		    /* RDATE != DTSTART - add observance to our array */
 		    icalarray_append(obsarray, &obs);
 		}
@@ -779,6 +790,10 @@ static void expand_vtimezone(icalcomponent *vtz, icalarray *obsarray,
 		    icalproperty_set_tzoffsetto(prop, tombstone.offset_to);
 		    break;
 		case ICAL_DTSTART_PROPERTY:
+		    /* Adjust DTSTART to local time */
+		    icaltime_adjust(&start, 0, 0, 0, tombstone.offset_from);
+		    start.is_utc = 0;
+
 		    icalproperty_set_dtstart(prop, start);
 		    break;
 		default:
@@ -813,20 +828,6 @@ static void truncate_vtimezone(icalcomponent *vtz, icaltimetype start)
     icaltimetype end = icaltime_from_day_of_year(1, tm->tm_year + 1900);
 
     expand_vtimezone(vtz, NULL, start, end);
-}
-
-/* Version of icaltime_from_string() which supports just YYYY */
-static icaltimetype icaltime_from_year_string(const char *str)
-{
-    struct icaltimetype tt;
-    size_t size = strlen(str);
-
-    if (size < 4 || size > 4) return icaltime_null_time();
-
-    tt = icaltime_from_day_of_year(1, atoi(str));
-    tt.is_date = tt.hour = tt.minute = tt.second = 0;
-
-    return tt;
 }
 
 /* Perform a get action */
@@ -867,8 +868,9 @@ static int action_get(struct transaction_t *txn)
     /* Check for any truncation */
     param = hash_lookup("truncate", &txn->req_qparams);
     if (param) {
-	truncate = icaltime_from_year_string(param->s);
-	if (icaltime_is_null_time(truncate) || param->next  /* once only */)
+	truncate = icaltime_from_string(param->s);
+	if (truncate.is_date || !truncate.is_utc  /* MUST be UTC date-time */
+	    || icaltime_is_null_time(truncate) || param->next  /* once only */)
 	    return json_error_response(txn, TZ_INVALID_TRUNCATE);
     }
 
@@ -957,7 +959,8 @@ static int action_get(struct transaction_t *txn)
 		       mime->content_type);
 	}
 	if (!icaltime_is_null_time(truncate)) {
-	    buf_printf(&pathbuf, "&truncate=%d", truncate.year);
+	    buf_printf(&pathbuf, "&truncate=%s",
+		       icaltime_as_ical_string(truncate));
 
 	    /* Truncate the VTIMEZONE */
 	    truncate_vtimezone(vtz, truncate);
@@ -1033,32 +1036,34 @@ static int action_expand(struct transaction_t *txn)
 
     param = hash_lookup("start", &txn->req_qparams);
     if (param) {
-	start = icaltime_from_year_string(param->s);
-	if (icaltime_is_null_time(start) || param->next  /* once only */)
+	start = icaltime_from_string(param->s);
+	if (start.is_date || !start.is_utc  /* MUST be UTC date-time */
+	    || icaltime_is_null_time(start) || param->next  /* once only */)
 	    return json_error_response(txn, TZ_INVALID_START);
     }
     else {
-	/* Default to current year */
+	/* Default to start of current year */
 	time_t now = time(0);
 	struct tm *tm = gmtime(&now);
 
 	start = icaltime_from_day_of_year(1, tm->tm_year + 1900);
+	start.is_date = start.hour = start.minute = start.second = 0;
+	start.is_utc = 1;
     }
-    start.is_date = 0;
 
     param = hash_lookup("end", &txn->req_qparams);
     if (param) {
-	end = icaltime_from_year_string(param->s);
-	if (icaltime_compare(end, start) <= 0  /* end MUST be > start */
+	end = icaltime_from_string(param->s);
+	if (end.is_date || !end.is_utc  /* MUST be UTC date-time */
+	    || icaltime_compare(end, start) <= 0  /* end MUST be > start */
 	    || param->next  /* once only */)
 	    return json_error_response(txn, TZ_INVALID_END);
     }
     else {
-	/* Default to start year + 10 */
-	memcpy(&end, &start, sizeof(icaltimetype));
+	/* Default to start + 10 years */
+	end = start;
 	end.year += 10;
     }
-    end.is_date = 0;
 
     /* Check requested format (debugging only) */
     param = hash_lookup("format", &txn->req_qparams);
@@ -1189,10 +1194,10 @@ static int action_expand(struct transaction_t *txn)
 
 		/* UT and local time 1 second before onset */
 		off.seconds = -1;
-		local = icaltime_add(obs->onset, off);
+		ut = icaltime_add(obs->onset, off);
 
-		off.seconds = -obs->offset_from;
-		ut = icaltime_add(local, off);
+		off.seconds = obs->offset_from;
+		local = icaltime_add(ut, off);
 
 		buf_printf(body,
 			   "%s  " CTIME_FMT " UT = " CTIME_FMT " %s"
@@ -1221,10 +1226,6 @@ static int action_expand(struct transaction_t *txn)
 	    jobsarray = json_object_get(root, "observances");
 	    for (n = 0; n < obsarray->num_elements; n++) {
 		struct observance *obs = icalarray_element_at(obsarray, n);
-
-		/* Adjust onset to UTC */
-		icaltime_adjust(&obs->onset, 0, 0, 0, -obs->offset_from);
-		obs->onset.is_utc = 1;
 
 		json_array_append_new(jobsarray,
 				      json_pack(
