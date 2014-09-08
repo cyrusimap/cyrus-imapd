@@ -306,7 +306,7 @@ static int rss_parse_path(const char *path,
     size_t len;
 
     /* Clip off RSS prefix */
-    start = path + strlen("/rss");
+    start = path + strlen(namespace_rss.prefix);
     if (*start == '/') start++;
     end = start + strlen(start);
 
