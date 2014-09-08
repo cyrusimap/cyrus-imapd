@@ -728,22 +728,16 @@ static void expand_vtimezone(icalcomponent *vtz, icalarray *obsarray,
 	   as long as its not prior to start of TZ data */
 	if (truncate) {
 	    /* Determine which tombstone component we need */
-	    icalcomponent *tomb, *remove;
+	    icalcomponent *tomb;
 	    icalproperty *prop, *nextp;
 
 	    if (tombstone.is_daylight) {
 		tomb = tomb_day;
-		remove = tomb_std;
+		tomb_day = NULL;
 	    }
 	    else {
 		tomb = tomb_std;
-		remove = tomb_day;
-	    }
-
-	    /* Remove unused tombstone component */
-	    if (remove) {
-		icalcomponent_remove_component(vtz, remove);
-		icalcomponent_free(remove);
+		tomb_std = NULL;
 	    }
 
 	    /* Adjust property values on our tombstone */
@@ -778,6 +772,16 @@ static void expand_vtimezone(icalcomponent *vtz, icalarray *obsarray,
 	    tombstone.onset = start;
 	    icalarray_append(obsarray, &tombstone);
 	}
+    }
+
+    /* Remove any unused tombstone components */
+    if (tomb_std) {
+	icalcomponent_remove_component(vtz, tomb_std);
+	icalcomponent_free(tomb_std);
+    }
+    if (tomb_day) {
+	icalcomponent_remove_component(vtz, tomb_day);
+	icalcomponent_free(tomb_day);
     }
 }
 
