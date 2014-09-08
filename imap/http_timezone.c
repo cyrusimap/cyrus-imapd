@@ -641,9 +641,30 @@ static void expand_vtimezone(icalcomponent *vtz, icalarray *obsarray,
 		    if (r >= 0) {
 			/* Observance is on/after our window open */
 			if (truncate && dtstart_prop) {
+			    unsigned ydiff;
+
 			    /* Make first observance the new DTSTART */
 			    icalproperty_set_dtstart(dtstart_prop, obs.onset);
 			    dtstart_prop = NULL;
+
+			    /* Check if new DSTART is within 1 year of UNTIL */
+			    ydiff = rrule.until.year - obs.onset.year;
+			    if (ydiff <= 1) {
+				/* Remove RRULE */
+				icalcomponent_remove_property(comp, rrule_prop);
+				icalproperty_free(rrule_prop);
+				rrule_prop = NULL;
+
+				if (ydiff) {
+				    /* Add UNTIL as RDATE */
+				    struct icaldatetimeperiodtype rdate = {
+					rrule.until,
+					icalperiodtype_null_period()
+				    };
+				    prop = icalproperty_new_rdate(rdate);
+				    icalcomponent_add_property(comp, prop);
+				}
+			    }
 			    break;
 			}
 			else {
