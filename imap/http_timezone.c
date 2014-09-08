@@ -1154,7 +1154,8 @@ static int action_expand(struct transaction_t *txn)
 	}
 	else {
 	    rfc3339date_gen(dtstamp, sizeof(dtstamp), lastmod);
-	    root = json_pack("{s:s s:[]}", "dtstamp", dtstamp, "observances");
+	    root = json_pack("{s:s s:s s:[]}",
+			     "dtstamp", dtstamp, "tzid", tzid, "observances");
 	    if (!root) {
 		txn->error.desc = "Unable to create JSON response";
 		return HTTP_SERVER_ERROR;
