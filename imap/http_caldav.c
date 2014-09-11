@@ -482,6 +482,10 @@ static const struct prop_entry caldav_props[] = {
     { "supported-rscale-set", NS_CALDAV, PROP_COLLECTION,
       propfind_rscaleset, NULL, NULL },
 
+    /* CalDAV Extensions (draft-daboo-caldav-extensions) properties */
+    { "supported-calendar-component-sets", NS_CALDAV, PROP_COLLECTION,
+      propfind_calcompset, NULL, NULL },
+
     /* Apple Calendar Server properties */
     { "getctag", NS_CS, PROP_ALLPROP | PROP_COLLECTION,
       propfind_sync_token, NULL, NULL },
@@ -1894,6 +1898,7 @@ static int server_info(struct transaction_t *txn)
 	    fctx.req_tgt = &req_tgt;
 	    fctx.req_tgt->collection = "";
 	    fctx.mailbox = &mailbox;
+	    fctx.mailbox->name = "";
 	    fctx.record = &record;
 	    fctx.ns = ns;
 
@@ -1906,6 +1911,9 @@ static int server_info(struct transaction_t *txn)
 	    propfind_aclrestrict(BAD_CAST "acl-restrictions", ns[NS_DAV],
 				 &fctx, NULL, &propstat[PROPSTAT_OK], NULL);
 	    propfind_suppcaldata(BAD_CAST "supported-calendar-data",
+				 ns[NS_CALDAV],
+				 &fctx, NULL, &propstat[PROPSTAT_OK], NULL);
+	    propfind_calcompset(BAD_CAST "supported-calendar-component-sets",
 				 ns[NS_CALDAV],
 				 &fctx, NULL, &propstat[PROPSTAT_OK], NULL);
 	    propfind_rscaleset(BAD_CAST "supported-rscale-set", ns[NS_CALDAV],
@@ -3091,7 +3099,7 @@ int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
 }
 
 
-/* Callback to fetch CALDAV:supported-calendar-component-set */
+/* Callback to fetch CALDAV:supported-calendar-component-set[s] */
 static const struct cal_comp_t {
     const char *name;
     unsigned long type;
