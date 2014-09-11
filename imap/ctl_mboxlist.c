@@ -228,7 +228,6 @@ static int dump_cb(void *rockp,
 
 			syslog(LOG_DEBUG, "Mailbox ACL: '%s %s' (acl now: %s)", dl_ace->name, tmp, acl);
 		    }
-		    if (tmp) free(tmp);
 		}
 	    } else { // (dl_acl)
 		syslog(LOG_NOTICE, "Mailbox without an ACL: '%s'", name);
@@ -904,51 +903,58 @@ static int compar_mbox(const void *v1, const void *v2)
 
 static int verify_cb(void *rockp,
 		     const char *key, size_t keylen,
-		     const char *data, size_t datalen __attribute__((unused)))
+		     const char *data, size_t datalen)
 {
+    // This function is called for every entry in the database,
+    // and supplied an inventory in &found. *data however does
+    // not pass dlist_parsemap() unlike is the case with dump_db().
+
     struct found_list *found = (struct found_list *) rockp;
-    int r;
-    char *p;
-    char *name, *part, *acl;
-    int mbtype;
+    int r = 0;
+    char *name, *part;
+    mbentry_t *mbentry = NULL;
 
     /* \0 terminate 'name' */
     name = xstrndup(key, keylen);
 
-    /* Get mailbox type */
-    mbtype = strtol(data, &p, 10);
-    if (mbtype < 0) { /* impossible, but keeps the compiler happy */
-	abort();
-    }
+    // Look up the mailbox db entry
+    r = mboxlist_lookup(name, &mbentry, NULL);
+    part = xstrdup(mbentry->partition);
+    mboxlist_entry_free(&mbentry);
 
-    p = strchr(data, ' ');
-    if (p == NULL) {
-	abort();
-    }
-    p++;
-    acl = strchr(p, ' ');
-    if (acl == NULL) {
-	abort();
-    }
-    /* grab 'part', \0 terminate */
-    part = xstrndup(p, acl - p);
+    if (r) {
+	printf("'%s' has a directory '%s' but no DB entry\n",
+		found->data[found->idx].mboxname,
+		found->data[found->idx].path
+	    );
+    } else {
+	// Walk the directories to see if the mailbox from data does have
+	// paths on the filesystem.
+	do {
+	    r = -1;
+	    if (
+		    (found->idx >= found->size) ||		/* end of array */
+		    !(found->data[found->idx].type & MBOX) ||	/* end of mailboxes */
+		    (r = strcmp(name, found->data[found->idx].mboxname)) < 0
+	    ) {
+		printf("'%s' has a DB entry but no directory on partition '%s'\n",
+			name,
+			part
+		    );
 
-    do {
-	r = -1;
-	if ((found->idx >= found->size) ||		/* end of array */
-	    !(found->data[found->idx].type & MBOX) ||	/* end of mailboxes */
-	    (r = strcmp(name, found->data[found->idx].mboxname)) < 0) {
-	    printf("'%s' has a DB entry but no directory on partition '%s'\n",
-		   name, part);
-	}
-	else if (r > 0) {
-	    printf("'%s' has a directory '%s' but no DB entry\n",
-		   found->data[found->idx].mboxname,
-		   found->data[found->idx].path);
-	    found->idx++;
-	}
-	else found->idx++;
-    } while (r > 0);
+	    }
+	    else if (r > 0) {
+		printf("'%s' has a directory '%s' but no DB entry\n",
+			found->data[found->idx].mboxname,
+			found->data[found->idx].path
+		    );
+
+		found->idx++;
+	    }
+	    else found->idx++;
+	} while (r > 0);
+
+    }
 
     free(name);
     free(part);
