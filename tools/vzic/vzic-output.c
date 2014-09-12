@@ -1164,6 +1164,11 @@ output_zone_components			(FILE		*fp,
   /* We use an 'X-' property to place the city name in. */
   fprintf (fp, "X-LIC-LOCATION:%s\r\n", name);
 
+  /* We use an 'X-' property to place the proleptic tzname in. */
+  vzictime = &g_array_index (changes, VzicTime, 0);
+  if (vzictime->tzname)
+    fprintf( fp, "X-PROLEPTIC-TZNAME:%s\r\n", vzictime->tzname);
+
   /* We try to find any recurring components first, or they may get output
      as lots of RDATES instead. */
   if (!VzicNoRRules) {
