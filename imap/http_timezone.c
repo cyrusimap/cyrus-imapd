@@ -884,6 +884,22 @@ static void truncate_vtimezone(icalcomponent *vtz,
     }
 }
 
+#ifndef HAVE_TZDIST_PROPS
+static icalproperty *icalproperty_new_equivalenttzid(const char *v)
+{
+    icalproperty *prop = icalproperty_new_x(v);
+    icalproperty_set_x_name(prop, "EQUIVALENT-TZID");
+    return prop;
+}
+
+static icalproperty *icalproperty_new_tzuntil(struct icaltimetype v)
+{
+    icalproperty *prop = icalproperty_new_x(icaltime_as_ical_string(v));
+    icalproperty_set_x_name(prop, "TZUNTIL");
+    return prop;
+}
+#endif /* HAVE_TZDIST_PROPS */
+
 /* Perform a get action */
 static int action_get(struct transaction_t *txn)
 {
@@ -1019,10 +1035,9 @@ static int action_get(struct transaction_t *txn)
 	if (zi.type == ZI_LINK) {
 	    /* Add EQUIVALENT-TZID */
 	    const char *equiv = icalproperty_get_tzid(prop);
-	    icalproperty *eprop = icalproperty_new_x(equiv);
+	    icalproperty *etzid = icalproperty_new_equivalenttzid(equiv);
 
-	    icalproperty_set_x_name(eprop, "EQUIVALENT-TZID");	
-	    icalcomponent_add_property(vtz, eprop);
+	    icalcomponent_add_property(vtz, etzid);
 
 	    /* Substitute TZID alias */
 	    icalproperty_set_tzid(prop, tzid);
@@ -1039,11 +1054,11 @@ static int action_get(struct transaction_t *txn)
 		       mime->content_type);
 	}
 	if (truncate) {
-	    /* Add TZUNTIL to VTIMEZONE */
-	    icalproperty *tzuntil =
-		icalproperty_new_x(icaltime_as_ical_string(end));
-	    icalproperty_set_x_name(tzuntil, "TZUNTIL");
-	    icalcomponent_add_property(vtz, tzuntil);
+	    if (!icaltime_is_null_time(end)) {
+		/* Add TZUNTIL to VTIMEZONE */
+		icalproperty *tzuntil = icalproperty_new_tzuntil(end);
+		icalcomponent_add_property(vtz, tzuntil);
+	    }
 
 	    /* Add truncation parameter to TZURL */
 	    buf_printf(&pathbuf, "&truncate=%s", truncate);
