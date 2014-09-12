@@ -698,11 +698,6 @@ static void truncate_vtimezone(icalcomponent *vtz,
 
 		    if (r >= 0) {
 			/* Observance is on/after our window open */
-			if (obsarray) {
-			    /* Add the observance to our array */
-			    icalarray_append(obsarray, &obs);
-			}
-
 			if (trunc_dtstart) {
 			    /* Make this observance the new DTSTART */
 			    icalproperty_set_dtstart(dtstart_prop, recur);
@@ -727,7 +722,12 @@ static void truncate_vtimezone(icalcomponent *vtz,
 				}
 			    }
 			}
-			if (!trunc_until) {
+
+			if (obsarray) {
+			    /* Add the observance to our array */
+			    icalarray_append(obsarray, &obs);
+			}
+			else if (!trunc_until) {
 			    /* We're done */
 			    break;
 			}
@@ -774,11 +774,6 @@ static void truncate_vtimezone(icalcomponent *vtz,
 
 	    if (r >= 0) {
 		/* RDATE is on/after our window open */
-		if (obsarray) {
-		    /* Add the observance to our array */
-		    icalarray_append(obsarray, &obs);
-		}
-
 		if (trunc_dtstart) {
 		    /* Make this RDATE the new DTSTART */
 		    icalproperty_set_dtstart(dtstart_prop,
@@ -787,6 +782,11 @@ static void truncate_vtimezone(icalcomponent *vtz,
 
 		    icalcomponent_remove_property(comp, rdate->prop);
 		    icalproperty_free(rdate->prop);
+		}
+
+		if (obsarray) {
+		    /* Add the observance to our array */
+		    icalarray_append(obsarray, &obs);
 		}
 	    }
 	    else {
@@ -1151,14 +1151,10 @@ static int action_expand(struct transaction_t *txn)
 	if (param->next || strcmp(param->s, "zdump"))  /* optional, once only */
 	    return json_error_response(txn, TZ_INVALID_FORMAT, param, NULL);
 
-	/* Mimic zdump(8) output for comparision:
-	   For each zonename on the command line, print  the  time  at  the
-	   lowest  possible  time  value, the time one day after the lowest
-	   possible time value,  the  times  both  one  second  before  and
-	   exactly at each detected time discontinuity, the time at one day
-	   less than the highest possible time value, and the time  at  the
-	   highest  possible time value, Each line ends with isdst=1 if the
-	   given time is Daylight Saving Time or isdst=0 otherwise.
+	/* Mimic zdump(8) -V output for comparision:
+	   Print the times both one second before and exactly at each
+	   detected time discontinuity.  Each line ends with isdst=1
+	   if the given time is Daylight Saving Time or isdst=0 otherwise.
 	*/
 	zdump = 1;
     }
@@ -1228,17 +1224,7 @@ static int action_expand(struct transaction_t *txn)
 
 	/* Start constructing our response */
 	if (zdump) {
-	    struct buf *body = &txn->resp_body.payload;
-	    const time_t min_time =
-		((time_t) -1 < 0
-		 ? (time_t) -1 << (CHAR_BIT * sizeof (time_t) - 1)
-		 : 0);
-
 	    txn->resp_body.type = "text/plain; charset=us-ascii";
-
-	    /* Lowest possible time value and day after lowest time value */
-	    buf_printf(body, "%s  %ld = NULL\n", tzid, min_time);
-	    buf_printf(body, "%s  %ld = NULL\n", tzid, min_time + 86400);
 	}
 	else {
 	    rfc3339date_gen(dtstamp, sizeof(dtstamp), lastmod);
@@ -1326,14 +1312,7 @@ static int action_expand(struct transaction_t *txn)
 
     if (zdump) {
 	struct buf *body = &txn->resp_body.payload;
-	const time_t max_time =
-	    ((time_t) -1 < 0
-	     ? - (~ 0 < 0) - ((time_t) -1 << (CHAR_BIT * sizeof (time_t) - 1))
-	     : -1);
 
-	/* Day before highest possible time value and highest time value */
-	buf_printf(body, "%s  %ld = NULL\n", tzid, max_time - 86400);
-	buf_printf(body, "%s  %ld = NULL\n", tzid, max_time);
 	write_body(precond, txn, buf_cstring(body), buf_len(body));
 
 	return 0;
