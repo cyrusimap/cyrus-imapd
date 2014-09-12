@@ -574,8 +574,16 @@ static void expand_vtimezone(icalcomponent *vtz, icalarray *obsarray,
 	obs.onset.is_utc = 1;
 
 	/* Check DTSTART vs window close */
-	if (icaltime_compare(obs.onset, end) >= 0) {
-	    /* All observances occur on/after window close, nothing to do */
+	if (!icaltime_is_null_time(end) &&
+	    icaltime_compare(obs.onset, end) >= 0) {
+	    /* All observances occur on/after window close */
+	    if (truncate) {
+		/* Remove component */
+		icalcomponent_remove_component(vtz, comp);
+		icalcomponent_free(comp);
+	    }
+
+	    /* Nothing else to do */
 	    icalarray_free(rdate_array);
 	    continue;
 	}
@@ -585,49 +593,30 @@ static void expand_vtimezone(icalcomponent *vtz, icalarray *obsarray,
 	if (r <= 0) {
 	    /* DTSTART is on/prior to our window open - check it vs tombstone */
 	    check_tombstone(&tombstone, &obs);
+
+	    if (r < 0) {
+		/* DTSTART is prior to our window open - need to adjust it */
+		trunc_dtstart = 1;
+	    }
 	}
 
-	if (r >= 0) {
+	if (!trunc_dtstart) {
 	    /* DTSTART is on/after our window open */
-	    if (truncate) {
-		/* All observances occur on/after window open - nothing to do */
-		icalarray_free(rdate_array);
-		continue;
-	    }
-	    else if (!rrule_prop) {
+	    if (!truncate && !rrule_prop) {
 		/* Add the DTSTART observance to our array */
 		icalarray_append(obsarray, &obs);
 	    }
-	}
-	else {
-	    /* DTSTART is prior to our window open - need to adjust it */
-	    trunc_dtstart = 1;
 	}
 
 	if (rrule_prop) {
 	    struct icalrecurrencetype rrule =
 		icalproperty_get_rrule(rrule_prop);
 	    icalrecur_iterator *ritr = NULL;
+	    unsigned infinite = icaltime_is_null_time(rrule.until);
+	    unsigned trunc_until = 0;
 
 	    /* Check RRULE duration */
-	    if (icaltime_is_null_time(rrule.until) ||
-		icaltime_compare(rrule.until, start) >= 0) {
-		/* RRULE ends on/after our window open */
-
-		if (rrule.until.is_utc) {
-		    /* Adjust UNTIL to local time */
-		    icaltime_adjust(&rrule.until, 0, 0, 0, obs.offset_from);
-		    rrule.until.is_utc = 0;
-		}
-
-		if (trunc_dtstart) {
-		    /* Bump RRULE start to 1 year prior to our window open */
-		    dtstart.year = start.year - 1;
-		}
-
-		ritr = icalrecur_iterator_new(rrule, dtstart);
-	    }
-	    else {
+	    if (!infinite && icaltime_compare(rrule.until, start) < 0) {
 		/* RRULE ends prior to our window open -
 		   check UNTIL vs tombstone */
 		obs.onset = rrule.until;
@@ -639,20 +628,69 @@ static void expand_vtimezone(icalcomponent *vtz, icalarray *obsarray,
 		    icalproperty_free(rrule_prop);
 		}
 	    }
+	    else {
+		/* RRULE ends on/after our window open */
+		if (!icaltime_is_null_time(end) &&
+		    (infinite || icaltime_compare(rrule.until, end) > 0)) {
+		    /* RRULE ends after our window close - need to adjust it */
+		    trunc_until = 1;
+		}
+
+		if (!infinite) {
+		    /* Adjust UNTIL to local time (for iterator) */
+		    icaltime_adjust(&rrule.until, 0, 0, 0, obs.offset_from);
+		    rrule.until.is_utc = 0;
+		}
+
+		if (trunc_dtstart) {
+		    /* Bump RRULE start to 1 year prior to our window open */
+		    dtstart.year = start.year - 1;
+		}
+
+		ritr = icalrecur_iterator_new(rrule, dtstart);
+	    }
 
 	    /* Add any RRULE observances within our window */
 	    if (ritr) {
-		icaltimetype recur;
+		icaltimetype recur, prev_onset;
+
+		/* Mark original DTSTART (UTC) */
+		dtstart = obs.onset;
 
 		while (!icaltime_is_null_time(obs.onset = recur =
 					      icalrecur_iterator_next(ritr))) {
+		    unsigned ydiff;
 
 		    /* Adjust observance to UTC */
 		    icaltime_adjust(&obs.onset, 0, 0, 0, -obs.offset_from);
 		    obs.onset.is_utc = 1;
 
-		    if (icaltime_compare(obs.onset, end) >= 0) {
+		    if (trunc_until && icaltime_compare(obs.onset, end) > 0) {
 			/* Observance is on/after window close - we're done */
+			if (truncate) {
+			    /* Check if DSTART is within 1yr of prev onset */
+			    ydiff = prev_onset.year - dtstart.year;
+			    if (ydiff <= 1) {
+				/* Remove RRULE */
+				icalcomponent_remove_property(comp, rrule_prop);
+				icalproperty_free(rrule_prop);
+
+				if (ydiff) {
+				    /* Add previous onset as RDATE */
+				    struct icaldatetimeperiodtype rdate = {
+					prev_onset,
+					icalperiodtype_null_period()
+				    };
+				    prop = icalproperty_new_rdate(rdate);
+				    icalcomponent_add_property(comp, prop);
+				}
+			    }
+			    else {
+				/* Set UNTIL to previous onset */
+				rrule.until = prev_onset;
+				icalproperty_set_rrule(rrule_prop, rrule);
+			    }
+			}
 			break;
 		    }
 
@@ -666,37 +704,43 @@ static void expand_vtimezone(icalcomponent *vtz, icalarray *obsarray,
 
 		    if (r >= 0) {
 			/* Observance is on/after our window open */
-			if (truncate && trunc_dtstart) {
-			    unsigned ydiff;
+			if (truncate) {
+			    if (trunc_dtstart) {
+				/* Make this observance the new DTSTART */
+				icalproperty_set_dtstart(dtstart_prop, recur);
+				dtstart = obs.onset;
+				trunc_dtstart = 0;
 
-			    /* Make this observance the new DTSTART */
-			    icalproperty_set_dtstart(dtstart_prop, recur);
-			    trunc_dtstart = 0;
+				/* Check if new DSTART is within 1yr of UNTIL */
+				ydiff = rrule.until.year - recur.year;
+				if (!trunc_until && ydiff <= 1) {
+				    /* Remove RRULE */
+				    icalcomponent_remove_property(comp,
+								  rrule_prop);
+				    icalproperty_free(rrule_prop);
 
-			    /* Check if new DSTART is within 1 year of UNTIL */
-			    ydiff = rrule.until.year - recur.year;
-			    if (ydiff <= 1) {
-				/* Remove RRULE */
-				icalcomponent_remove_property(comp, rrule_prop);
-				icalproperty_free(rrule_prop);
-
-				if (ydiff) {
-				    /* Add UNTIL as RDATE */
-				    struct icaldatetimeperiodtype rdate = {
-					rrule.until,
-					icalperiodtype_null_period()
-				    };
-				    prop = icalproperty_new_rdate(rdate);
-				    icalcomponent_add_property(comp, prop);
+				    if (ydiff) {
+					/* Add UNTIL as RDATE */
+					struct icaldatetimeperiodtype rdate = {
+					    rrule.until,
+					    icalperiodtype_null_period()
+					};
+					prop = icalproperty_new_rdate(rdate);
+					icalcomponent_add_property(comp, prop);
+				    }
 				}
 			    }
-			    break;
+			    if (!trunc_until) {
+				/* We're done */
+				break;
+			    }
 			}
 			else {
 			    /* Add the observance to our array */
 			    icalarray_append(obsarray, &obs);
 			}
 		    }
+		    prev_onset = obs.onset;
 		}
 		icalrecur_iterator_free(ritr);
 	    }
@@ -715,9 +759,19 @@ static void expand_vtimezone(icalcomponent *vtz, icalarray *obsarray,
 	    icaltime_adjust(&obs.onset, 0, 0, 0, -obs.offset_from);
 	    obs.onset.is_utc = 1;
 
-	    if (icaltime_compare(obs.onset, end) >= 0) {
-		/* RDATE is after our window close - we're done */
-		break;
+	    if (!icaltime_is_null_time(end) &&
+		icaltime_compare(obs.onset, end) >= 0) {
+		/* RDATE is after our window close */
+		if (truncate) {
+		    /* Remove it */
+		    icalcomponent_remove_property(comp, rdate->prop);
+		    icalproperty_free(rdate->prop);
+		    continue;
+		}
+		else {
+		    /* We're done */
+		    break;
+		}
 	    }
 
 	    r = icaltime_compare(obs.onset, start);
@@ -738,7 +792,6 @@ static void expand_vtimezone(icalcomponent *vtz, icalarray *obsarray,
 			icalcomponent_remove_property(comp, rdate->prop);
 			icalproperty_free(rdate->prop);
 		    }
-		    break;
 		}
 		else if (icaltime_compare(rdate->date.time, dtstart) != 0) {
 		    /* RDATE != DTSTART - add observance to our array */
@@ -792,7 +845,7 @@ static void expand_vtimezone(icalcomponent *vtz, icalarray *obsarray,
 		tomb_std = NULL;
 	    }
 
-	    /* Adjust property values on our tombstone */
+	    /* Set property values on our tombstone */
 	    for (prop =
 		     icalcomponent_get_first_property(tomb, ICAL_ANY_PROPERTY);
 		 prop; prop = nextp) {
@@ -811,7 +864,7 @@ static void expand_vtimezone(icalcomponent *vtz, icalarray *obsarray,
 		    icalproperty_set_tzoffsetto(prop, tombstone.offset_to);
 		    break;
 		case ICAL_DTSTART_PROPERTY:
-		    /* Adjust DTSTART to local time */
+		    /* Adjust window DTSTART to local time */
 		    icaltime_adjust(&start, 0, 0, 0, tombstone.offset_from);
 		    start.is_utc = 0;
 
@@ -841,25 +894,15 @@ static void expand_vtimezone(icalcomponent *vtz, icalarray *obsarray,
     }
 }
 
-static void truncate_vtimezone(icalcomponent *vtz, icaltimetype start)
-{
-    /* We don't have an end date for truncation, so use "end of time" */
-    time_t now = INT_MAX;
-    struct tm *tm = gmtime(&now);
-    icaltimetype end = icaltime_from_day_of_year(1, tm->tm_year + 1900);
-
-    expand_vtimezone(vtz, NULL, start, end);
-}
-
 /* Perform a get action */
 static int action_get(struct transaction_t *txn)
 {
     int r, precond;
     struct strlist *param;
-    const char *tzid;
+    const char *tzid, *truncate = NULL;
     struct zoneinfo zi;
     time_t lastmod;
-    icaltimetype truncate = icaltime_null_time();
+    icaltimetype start = icaltime_null_time(), end = icaltime_null_time();
     char *data = NULL;
     unsigned long datalen = 0;
     struct resp_body_t *resp_body = &txn->resp_body;
@@ -891,11 +934,33 @@ static int action_get(struct transaction_t *txn)
     /* Check for any truncation */
     param = hash_lookup("truncate", &txn->req_qparams);
     if (param) {
-	truncate = icaltime_from_string(param->s);
-	if (param->next || !truncate.is_utc) {  /* once only, UTC */
-	    return json_error_response(txn, TZ_INVALID_TRUNCATE,
-				       param, &truncate);
+	tok_t tok;
+	char *token;
+
+	truncate = param->s;
+
+	if (param->next) {  /* once only */
+	    return json_error_response(txn, TZ_INVALID_TRUNCATE, param, NULL);
 	}
+
+	tok_init(&tok, truncate, ",", TOK_TRIMLEFT|TOK_TRIMRIGHT|TOK_EMPTY);
+	token = tok_next(&tok);
+	if (!token ||
+	    (strcmp(token, "*") &&
+	     !icaltime_is_utc((start = icaltime_from_string(token))))) {
+	    return json_error_response(txn, TZ_INVALID_TRUNCATE, param, &start);
+	}
+	token = tok_next(&tok);
+	if (!token ||
+	    (strcmp(token, "*") &&
+	     (!icaltime_is_utc((end = icaltime_from_string(token))) ||
+	      icaltime_compare(end, start) <= 0))) {
+	    return json_error_response(txn, TZ_INVALID_TRUNCATE, param, &end);
+	}
+	if (tok_next(&tok)) {
+	    return json_error_response(txn, TZ_INVALID_TRUNCATE, param, NULL);
+	}
+	tok_fini(&tok);
     }
 
     /* Get info record from the database */
@@ -983,12 +1048,18 @@ static int action_get(struct transaction_t *txn)
 		       (int) strcspn(mime->content_type, ";"),
 		       mime->content_type);
 	}
-	if (truncate.is_utc) {
-	    buf_printf(&pathbuf, "&truncate=%s",
-		       icaltime_as_ical_string(truncate));
+	if (truncate) {
+	    /* Add TZUNTIL to VTIMEZONE */
+	    icalproperty *tzuntil =
+		icalproperty_new_x(icaltime_as_ical_string(end));
+	    icalproperty_set_x_name(tzuntil, "TZUNTIL");
+	    icalcomponent_add_property(vtz, tzuntil);
+
+	    /* Add truncation parameter to TZURL */
+	    buf_printf(&pathbuf, "&truncate=%s", truncate);
 
 	    /* Truncate the VTIMEZONE */
-	    truncate_vtimezone(vtz, truncate);
+	    expand_vtimezone(vtz, NULL, start, end);
 	}
 
 	/* Set TZURL property */
@@ -1352,6 +1423,10 @@ static int json_error_response(struct transaction_t *txn, long tz_code,
 	break;
 
     case TZ_INVALID_END:
+	if (!fmt) fmt = "end <= start";
+	break;
+
+    case TZ_INVALID_TRUNCATE:
 	if (!fmt) fmt = "end <= start";
 	break;
 
