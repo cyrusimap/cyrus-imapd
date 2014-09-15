@@ -496,19 +496,35 @@ static int rdate_compare(const void *rdate1, const void *rdate2)
 			    ((struct rdate *) rdate2)->date.time);
 }
 
-static void truncate_vtimezone(icalcomponent *vtz,
-			       icaltimetype start, icaltimetype end,
-			       icalarray *obsarray)
+static const struct observance *truncate_vtimezone(icalcomponent *vtz,
+						   icaltimetype start,
+						   icaltimetype end,
+						   icalarray *obsarray)
 {
     icalcomponent *comp, *nextc, *tomb_std = NULL, *tomb_day = NULL;
-    struct observance tombstone;
+    icalproperty *prop, *proleptic_prop = NULL;
+    static struct observance tombstone;
+    unsigned need_tomb = !icaltime_is_null_time(start);
+
+    /* See if we have a proleptic tzname in VTIMEZONE */
+    for (prop = icalcomponent_get_first_property(vtz, ICAL_X_PROPERTY);
+	 prop;
+	 prop = icalcomponent_get_next_property(vtz, ICAL_X_PROPERTY)) {
+	if (!strcmp("X-PROLEPTIC-TZNAME", icalproperty_get_x_name(prop))) {
+	    proleptic_prop = prop;
+	    break;
+	}
+    }
 
     memset(&tombstone, 0, sizeof(struct observance));
+    tombstone.name = icalmemory_tmp_copy(proleptic_prop ?
+					 icalproperty_get_x(proleptic_prop) :
+					 "LMT");
 
     /* Process each VTMEZONE STANDARD/DAYLIGHT subcomponent */
     for (comp = icalcomponent_get_first_component(vtz, ICAL_ANY_COMPONENT);
 	 comp; comp = nextc) {
-	icalproperty *prop, *dtstart_prop = NULL, *rrule_prop = NULL;
+	icalproperty *dtstart_prop = NULL, *rrule_prop = NULL;
 	icalarray *rdate_array = icalarray_new(sizeof(struct rdate), 10);
 	icaltimetype dtstart;
 	struct observance obs;
@@ -586,21 +602,21 @@ static void truncate_vtimezone(icalcomponent *vtz,
 
 	/* Check DTSTART vs window open */
 	r = icaltime_compare(obs.onset, start);
-	if (r <= 0) {
-	    /* DTSTART is on/prior to our window open - check it vs tombstone */
-	    check_tombstone(&tombstone, &obs);
-	}
+	if (r < 0) {
+	    /* DTSTART is prior to our window open - check it vs tombstone */
+	    if (need_tomb) check_tombstone(&tombstone, &obs);
 
-	if (r >= 0) {
+	    /* Adjust it */
+	    trunc_dtstart = 1;
+	}
+	else {
 	    /* DTSTART is on/after our window open */
+	    if (r == 0) need_tomb = 0;
+
 	    if (obsarray && !rrule_prop) {
 		/* Add the DTSTART observance to our array */
 		icalarray_append(obsarray, &obs);
 	    }
-	}
-	else {
-	    /* DTSTART is prior to our window open - need to adjust it */
-	    trunc_dtstart = 1;
 	}
 
 	if (rrule_prop) {
@@ -615,7 +631,7 @@ static void truncate_vtimezone(icalcomponent *vtz,
 		/* RRULE ends prior to our window open -
 		   check UNTIL vs tombstone */
 		obs.onset = rrule.until;
-		check_tombstone(&tombstone, &obs);
+		if (need_tomb) check_tombstone(&tombstone, &obs);
 
 		/* Remove RRULE */
 		icalcomponent_remove_property(comp, rrule_prop);
@@ -690,14 +706,15 @@ static void truncate_vtimezone(icalcomponent *vtz,
 
 		    /* Check observance vs our window open */
 		    r = icaltime_compare(obs.onset, start);
-		    if (r <= 0) {
-			/* Observance is on/prior to our window open -
+		    if (r < 0) {
+			/* Observance is prior to our window open -
 			   check it vs tombstone */
-			check_tombstone(&tombstone, &obs);
+			if (need_tomb) check_tombstone(&tombstone, &obs);
 		    }
-
-		    if (r >= 0) {
+		    else {
 			/* Observance is on/after our window open */
+			if (r == 0) need_tomb = 0;
+
 			if (trunc_dtstart) {
 			    /* Make this observance the new DTSTART */
 			    icalproperty_set_dtstart(dtstart_prop, recur);
@@ -767,13 +784,18 @@ static void truncate_vtimezone(icalcomponent *vtz,
 	    }
 
 	    r = icaltime_compare(obs.onset, start);
-	    if (r <= 0) {
-		/* RDATE is on/prior to window open - check it vs tombstone */
-		check_tombstone(&tombstone, &obs);
-	    }
+	    if (r < 0) {
+		/* RDATE is prior to window open - check it vs tombstone */
+		if (need_tomb) check_tombstone(&tombstone, &obs);
 
-	    if (r >= 0) {
+		/* Remove it */
+		icalcomponent_remove_property(comp, rdate->prop);
+		icalproperty_free(rdate->prop);
+	    }
+	    else {
 		/* RDATE is on/after our window open */
+		if (r == 0) need_tomb = 0;
+
 		if (trunc_dtstart) {
 		    /* Make this RDATE the new DTSTART */
 		    icalproperty_set_dtstart(dtstart_prop,
@@ -788,11 +810,6 @@ static void truncate_vtimezone(icalcomponent *vtz,
 		    /* Add the observance to our array */
 		    icalarray_append(obsarray, &obs);
 		}
-	    }
-	    else {
-		/* RDATE is prior to our window open - remove it */
-		icalcomponent_remove_property(comp, rdate->prop);
-		icalproperty_free(rdate->prop);
 	    }
 	}
 	icalarray_free(rdate_array);
@@ -819,7 +836,7 @@ static void truncate_vtimezone(icalcomponent *vtz,
 	}
     }
 
-    if (tombstone.name && icaltime_compare(tombstone.onset, start) < 0) {
+    if (need_tomb && !icaltime_is_null_time(tombstone.onset)) {
 	/* Need to add tombstone component/observance starting at window open
 	   as long as its not prior to start of TZ data */
 	icalcomponent *tomb;
@@ -870,6 +887,12 @@ static void truncate_vtimezone(icalcomponent *vtz,
 		break;
 	    }
 	}
+
+	/* Remove X-PROLEPTIC-TZNAME as it no longer applies */
+	if (proleptic_prop) {
+	    icalcomponent_remove_property(vtz, proleptic_prop);
+	    icalproperty_free(proleptic_prop);
+	}
     }
 
     /* Remove any unused tombstone components */
@@ -881,6 +904,8 @@ static void truncate_vtimezone(icalcomponent *vtz,
 	icalcomponent_remove_component(vtz, tomb_day);
 	icalcomponent_free(tomb_day);
     }
+
+    return &tombstone;
 }
 
 #ifndef HAVE_TZDIST_PROPS
@@ -1217,6 +1242,7 @@ static int action_expand(struct transaction_t *txn)
 	const char *path, *msg_base = NULL;
 	unsigned long msg_size = 0;
 	icalcomponent *ical, *vtz;
+	const struct observance *proleptic;
 	char dtstamp[21];
 	icalarray *obsarray;
 	json_t *jobsarray;
@@ -1255,7 +1281,7 @@ static int action_expand(struct transaction_t *txn)
 	/* Create an array of observances */
 	obsarray = icalarray_new(sizeof(struct observance), 20);
 	vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
-	truncate_vtimezone(vtz, start, end, obsarray);
+	proleptic = truncate_vtimezone(vtz, start, end, obsarray);
 
 	/* Sort the observances by onset */
 	icalarray_sort(obsarray, &observance_compare);
@@ -1263,8 +1289,8 @@ static int action_expand(struct transaction_t *txn)
 	if (zdump) {
 	    struct buf *body = &txn->resp_body.payload;
 	    struct icaldurationtype off = icaldurationtype_null_duration();
-	    const char *prev_name = "LMT";
-	    int prev_isdst = 0;
+	    const char *prev_name = proleptic->name;
+	    int prev_isdst = proleptic->is_daylight;
 
 	    for (n = 0; n < obsarray->num_elements; n++) {
 		struct observance *obs = icalarray_element_at(obsarray, n);
