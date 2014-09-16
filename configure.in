@@ -1066,7 +1066,7 @@ if test "$ENABLE_RSS" != no -o "$ENABLE_DAV" != no; then
          HTTP_OBJS="$HTTP_OBJS \$(TIMEZONE_OBJS)"
          AC_SUBST(JSON_CFLAGS)
 	 AC_SUBST(JSON_LIBS)
-         AC_DEFINE(WITH_JSON,[],[Build jCal/jCard/TZ-service support into httpd?])
+         AC_DEFINE(WITH_JSON,[],[Build jCal/jCard/TZdist support into httpd?])
       fi
    fi
 fi
