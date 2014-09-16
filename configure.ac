@@ -1136,6 +1136,10 @@ dnl
 	AC_DEFINE(WITH_DAV,[],[Build DAV support into httpd?])
 	AC_DEFINE(WITH_JSON,[],[Build jCal/jCard/TZdist support into httpd?])
 
+	AC_EGREP_HEADER(ICAL_TZUNTIL_PROPERTY, ical.h,
+		AC_DEFINE(HAVE_TZDIST_PROPS,[],
+			[Do we have built-in support for TZdist props?]))
+
 	CYRUS_OPENDKIM_CHK()
 	if test "$opendkimlib" = "yes"; then
 	    AC_SUBST(DKIM_CFLAGS)
