@@ -1134,7 +1134,7 @@ dnl
 	AC_DEFINE(HAVE_SQLITE3,[],[Build in SQLite support?])
 
 	AC_DEFINE(WITH_DAV,[],[Build DAV support into httpd?])
-	AC_DEFINE(WITH_JSON,[],[Build jCal/jCard support into httpd?])
+	AC_DEFINE(WITH_JSON,[],[Build jCal/jCard/TZdist support into httpd?])
 
 	CYRUS_OPENDKIM_CHK()
 	if test "$opendkimlib" = "yes"; then
