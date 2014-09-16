@@ -1067,6 +1067,10 @@ if test "$ENABLE_RSS" != no -o "$ENABLE_DAV" != no; then
          AC_SUBST(JSON_CFLAGS)
 	 AC_SUBST(JSON_LIBS)
          AC_DEFINE(WITH_JSON,[],[Build jCal/jCard/TZdist support into httpd?])
+
+         AC_EGREP_HEADER(ICAL_TZUNTIL_PROPERTY, ical.h,
+      		AC_DEFINE(HAVE_TZDIST_PROPS,[],
+			[Do we have built-in support for TZdist props?]))
       fi
    fi
 fi
