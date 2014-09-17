@@ -3303,6 +3303,7 @@ int meth_delete(struct transaction_t *txn, void *params)
 
 	mboxevent_extract_record(mboxevent, mailbox, &record);
 	mboxevent_extract_mailbox(mboxevent, mailbox);
+	mboxevent_set_numunseen(mboxevent, mailbox, -1);
     }
 
     /* Do any special processing */
