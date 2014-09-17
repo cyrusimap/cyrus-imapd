@@ -247,6 +247,8 @@ void do_zonedir(const char *dir, struct hash_table *tzentries,
 	    ical = icalparser_parse_string(base);
 	    map_free(&base, &len);
 
+	    if (!ical) continue;  /* skip non-iCalendar files */
+
 	    comp = icalcomponent_get_first_component(ical,
 						     ICAL_VTIMEZONE_COMPONENT);
 	    prop = icalcomponent_get_first_property(comp, ICAL_TZID_PROPERTY);
