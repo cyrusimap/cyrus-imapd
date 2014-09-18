@@ -169,6 +169,8 @@ int zoneinfo_lookup(const char *tzid, struct zoneinfo *zi)
 
     if (r || !data || (datalen < 6)) return r ? r : CYRUSDB_IOERROR;
 
+    if (!zi) return 0;
+
     return parse_zoneinfo(data, datalen, zi, 1);
 }
 
