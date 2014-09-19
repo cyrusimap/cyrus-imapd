@@ -1136,6 +1136,10 @@ dnl
 	AC_DEFINE(WITH_DAV,[],[Build DAV support into httpd?])
 	AC_DEFINE(WITH_JSON,[],[Build jCal/jCard/TZdist support into httpd?])
 
+	AC_CHECK_LIB(ical, icaltimezone_set_builtin_tzdata,
+		AC_DEFINE(HAVE_TZ_BY_REF,[],
+			[Build TZ by ref support into httpd?]))
+
 	AC_EGREP_HEADER(ICAL_TZUNTIL_PROPERTY, ical.h,
 		AC_DEFINE(HAVE_TZDIST_PROPS,[],
 			[Do we have built-in support for TZdist props?]))

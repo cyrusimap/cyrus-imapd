@@ -318,6 +318,9 @@ static const struct precond_t {
     /* RSCALE (draft-daboo-icalendar-rscale) preconditions */
     { "supported-rscale", NS_CALDAV },
 
+    /* TZ by Ref (draft-ietf-tzdist-caldav-timezone-ref) preconditions */
+    { "valid-timezone", NS_CALDAV },
+
     /* CalDAV Scheduling (RFC 6638) preconditions */
     { "valid-scheduling-message", NS_CALDAV },
     { "valid-organizer", NS_CALDAV },
@@ -1868,7 +1871,7 @@ int propfind_fromdb(const xmlChar *name, xmlNsPtr ns,
 int proppatch_todb(xmlNodePtr prop, unsigned set,
 		   struct proppatch_ctx *pctx,
 		   struct propstat propstat[],
-		   void *rock __attribute__((unused)))
+		   void *rock)
 {
     xmlChar *freeme = NULL;
     annotate_state_t *astate = NULL;
@@ -1880,8 +1883,13 @@ int proppatch_todb(xmlNodePtr prop, unsigned set,
 	       (const char *) prop->ns->href, prop->name);
 
     if (set) {
-	freeme = xmlNodeGetContent(prop);
-	buf_init_ro_cstr(&value, (const char *)freeme);
+	if (rock) {
+	    buf_init_ro_cstr(&value, (const char *)rock);
+	}
+	else {
+	    freeme = xmlNodeGetContent(prop);
+	    buf_init_ro_cstr(&value, (const char *)freeme);
+	}
     }
 
     r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
@@ -4002,6 +4010,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     fctx.req_tgt = &txn->req_tgt;
     fctx.depth = depth;
     fctx.prefer |= get_preferences(txn);
+    fctx.req_hdrs = txn->req_hdrs;
     fctx.userid = proxy_userid;
     fctx.int_userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
@@ -5160,6 +5169,7 @@ int meth_report(struct transaction_t *txn, void *params)
     fctx.req_tgt = &txn->req_tgt;
     fctx.depth = depth;
     fctx.prefer |= get_preferences(txn);
+    fctx.req_hdrs = txn->req_hdrs;
     fctx.userid = proxy_userid;
     fctx.int_userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;

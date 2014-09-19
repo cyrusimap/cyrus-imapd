@@ -79,6 +79,7 @@
 #include "index.h"
 #include "jcal.h"
 #include "xcal.h"
+#include "map.h"
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "md5.h"
@@ -96,6 +97,7 @@
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
+#include "zoneinfo_db.h"
 
 //#define IOPTEST
 
@@ -222,6 +224,7 @@ struct calquery_filter {
     unsigned flags;
     struct icaltimetype start;
     struct icaltimetype end;
+    icaltimezone *tz;
     struct freebusy_array freebusy;	/* array of found freebusy periods */
     struct vavailability_array vavail;	/* array of found vavail components */
 };
@@ -307,15 +310,27 @@ static int propfind_caltransp(const xmlChar *name, xmlNsPtr ns,
 static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
 			       struct proppatch_ctx *pctx,
 			       struct propstat propstat[], void *rock);
-static int propfind_icalcomponent(const xmlChar *name, xmlNsPtr ns,
-				  struct propfind_ctx *fctx, xmlNodePtr resp,
-				  struct propstat propstat[], void *rock);
+static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
+			     struct propfind_ctx *fctx, xmlNodePtr resp,
+			     struct propstat propstat[], void *rock);
 static int proppatch_timezone(xmlNodePtr prop, unsigned set,
 			      struct proppatch_ctx *pctx,
 			      struct propstat propstat[], void *rock);
+static int propfind_availability(const xmlChar *name, xmlNsPtr ns,
+				 struct propfind_ctx *fctx, xmlNodePtr resp,
+				 struct propstat propstat[], void *rock);
 static int proppatch_availability(xmlNodePtr prop, unsigned set,
 				  struct proppatch_ctx *pctx,
 				  struct propstat propstat[], void *rock);
+static int propfind_tzservset(const xmlChar *name, xmlNsPtr ns,
+			      struct propfind_ctx *fctx, xmlNodePtr resp,
+			      struct propstat propstat[], void *rock);
+static int propfind_tzid(const xmlChar *name, xmlNsPtr ns,
+			 struct propfind_ctx *fctx, xmlNodePtr resp,
+			 struct propstat propstat[], void *rock);
+static int proppatch_tzid(xmlNodePtr prop, unsigned set,
+			  struct proppatch_ctx *pctx,
+			  struct propstat propstat[], void *rock);
 static int propfind_rscaleset(const xmlChar *name, xmlNsPtr ns,
 			      struct propfind_ctx *fctx, xmlNodePtr resp,
 			      struct propstat propstat[], void *rock);
@@ -449,7 +464,7 @@ static const struct prop_entry caldav_props[] = {
       propfind_fromdb, proppatch_todb, NULL },
     { "calendar-timezone", NS_CALDAV,
       PROP_COLLECTION | PROP_PRESCREEN | PROP_NEEDPROP,
-      propfind_icalcomponent, proppatch_timezone, NULL },
+      propfind_timezone, proppatch_timezone, NULL },
     { "supported-calendar-component-set", NS_CALDAV, PROP_COLLECTION,
       propfind_calcompset, proppatch_calcompset, NULL },
     { "supported-calendar-data", NS_CALDAV, PROP_COLLECTION,
@@ -474,12 +489,18 @@ static const struct prop_entry caldav_props[] = {
     /* Calendar Availability (draft-daboo-calendar-availability) properties */
     { "calendar-availability", NS_CALDAV,
       PROP_COLLECTION | PROP_PRESCREEN | PROP_NEEDPROP,
-      propfind_icalcomponent, proppatch_availability, NULL },
+      propfind_availability, proppatch_availability, NULL },
 
     /* Backwards compatibility with Apple VAVAILABILITY clients */
     { "calendar-availability", NS_CS,
       PROP_COLLECTION | PROP_PRESCREEN | PROP_NEEDPROP,
-      propfind_icalcomponent, proppatch_availability, NULL },
+      propfind_availability, proppatch_availability, NULL },
+
+    /* TZ by Ref (draft-ietf-tzdist-caldav-timezone-ref) properties */
+    { "timezone-service-set", NS_CALDAV, PROP_COLLECTION,
+      propfind_tzservset, NULL, NULL },
+    { "calendar-timezone-id", NS_CALDAV, PROP_COLLECTION,
+      propfind_tzid, proppatch_tzid, NULL },
 
     /* RSCALE (draft-daboo-icalendar-rscale) properties */
     { "supported-rscale-set", NS_CALDAV, PROP_COLLECTION,
@@ -589,9 +610,6 @@ static void my_caldav_init(struct buf *serverinfo)
 	buf_printf(serverinfo, " ICU4C/%s", U_ICU_VERSION);
     }
 #endif
-#ifdef WITH_JSON
-    buf_printf(serverinfo, " Jansson/%s", JANSSON_VERSION);
-#endif
 
     namespace_calendar.enabled =
 	config_httpmodules & IMAP_ENUM_HTTPMODULES_CALDAV;
@@ -613,6 +631,20 @@ static void my_caldav_init(struct buf *serverinfo)
 	ical_set_unknown_token_handling_setting(ICAL_ASSUME_IANA_TOKEN);
 #endif
     }
+
+#ifdef HAVE_TZ_BY_REF
+    if (namespace_timezone.enabled) {
+	char zonedir[MAX_MAILBOX_PATH+1];
+
+	snprintf(zonedir, MAX_MAILBOX_PATH, "%s%s",
+		 config_dir, FNAME_ZONEINFODIR);
+	set_zone_directory(zonedir);
+	icaltimezone_set_tzid_prefix("");
+	icaltimezone_set_builtin_tzdata(1);
+
+	namespace_calendar.allow |= ALLOW_CAL_NOTZ;
+    }
+#endif
 
     namespace_principal.enabled = 1;
     namespace_principal.allow |= namespace_calendar.allow &
@@ -2740,7 +2772,6 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
 	     * Need to mmap() and parse iCalendar object
 	     * to perform complete check of each recurrence.
 	     */
-	    struct busytime_array *busytime = &calfilter->busytime;
 	    const char *data;
 	    size_t len;
 	    icalcomponent *ical;
@@ -3465,48 +3496,71 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
 }
 
 
-/* Callback to prescreen/fetch CALDAV:calendar-timezone/availability */
-static int propfind_icalcomponent(const xmlChar *name, xmlNsPtr ns,
-				  struct propfind_ctx *fctx,
-				  xmlNodePtr resp __attribute__((unused)),
-				  struct propstat propstat[],
-				  void *rock)
+/* Callback to prescreen/fetch CALDAV:calendar-timezone */
+static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
+			     struct propfind_ctx *fctx,
+			     xmlNodePtr resp __attribute__((unused)),
+			     struct propstat propstat[],
+			     void *rock)
 {
     xmlNodePtr prop = (xmlNodePtr) rock;
-    struct buf attrib = BUF_INITIALIZER;
-    int ret = 0;
+    const char *data = NULL, *msg_base = NULL;
+    unsigned long datalen = 0;
+    int r = 0;
 
     if (propstat) {
-	int r = 0;
-	buf_reset(&fctx->buf);
-	buf_printf(&fctx->buf, ANNOT_NS "<%s>%s",
-		   (const char *) XML_NS_CALDAV, name);
+	const char *prop_annot =
+	    ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
+	struct buf attrib = BUF_INITIALIZER;
 
-	if (fctx->mailbox && !fctx->record) {
-	    r = annotatemore_lookup(fctx->mailbox->name,
-				    buf_cstring(&fctx->buf),
+	if (!fctx->mailbox || fctx->record) return HTTP_NOT_FOUND;
+
+	r = annotatemore_lookup(fctx->mailbox->name, prop_annot,
+				/* shared */ NULL, &attrib);
+
+	if (r) return HTTP_SERVER_ERROR;
+	if (attrib.len)  {
+	    data = buf_cstring(&attrib);
+	    datalen = attrib.len;
+	}
+	else {
+	    /*  Check for CALDAV:calendar-timezone-id */
+	    prop_annot = ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
+
+	    r = annotatemore_lookup(fctx->mailbox->name, prop_annot,
 				    /* shared */ NULL, &attrib);
-	}
 
-	if (r) {
-	    ret = HTTP_SERVER_ERROR;
-	    goto done;
-	}
+	    if (r) return HTTP_SERVER_ERROR;
+	    if (!attrib.len) return HTTP_NOT_FOUND;
+	    else {
+		const char *path;
+		int fd;
 
-	if (!attrib.len) {
-	    ret = HTTP_NOT_FOUND;
-	    goto done;
+		/* Open and mmap the timezone file */
+		buf_reset(&fctx->buf);
+		buf_printf(&fctx->buf, "%s%s/%s.ics",
+			   config_dir, FNAME_ZONEINFODIR, buf_cstring(&attrib));
+
+		path = buf_cstring(&fctx->buf);
+		if ((fd = open(path, O_RDONLY)) == -1) return HTTP_SERVER_ERROR;
+
+		map_refresh(fd, 1, &msg_base, &datalen,
+			    MAP_UNKNOWN_LEN, path, NULL);
+		close(fd);
+
+		if (!msg_base) return HTTP_SERVER_ERROR;
+
+		data = msg_base;
+	    }
 	}
     }
 
-    buf_cstring(&attrib); /* ensure a valid pointer */
+    r = propfind_getdata(name, ns, fctx, propstat, prop, caldav_mime_types,
+			 CALDAV_SUPP_DATA, data, datalen);
 
-    ret = propfind_getdata(name, ns, fctx, propstat, prop, caldav_mime_types,
-			   CALDAV_SUPP_DATA, attrib.s, attrib.len);
+    if (msg_base) map_free(&msg_base, &datalen);
 
-done:
-    buf_free(&attrib);
-    return ret;
+    return r;
 }
 
 
@@ -3522,7 +3576,6 @@ static int proppatch_timezone(xmlNodePtr prop, unsigned set,
 	xmlChar *type, *ver = NULL, *freeme = NULL;
 	struct buf buf = BUF_INITIALIZER;
 	struct mime_type_t *mime;
-	icalcomponent *ical = NULL;
 	unsigned valid = 1;
 
 	type = xmlGetProp(prop, BAD_CAST "content-type");
@@ -3556,6 +3609,8 @@ static int proppatch_timezone(xmlNodePtr prop, unsigned set,
 	    valid = 0;
 	}
 	else if (set) {
+	    icalcomponent *ical = NULL;
+
 	    freeme = xmlNodeGetContent(prop);
 
 	    /* Parse and validate the iCal data */
@@ -3587,26 +3642,26 @@ static int proppatch_timezone(xmlNodePtr prop, unsigned set,
 	}
 
 	if (valid) {
+	    /* Remove CALDAV:calendar-timezone-id */
+	    const char *prop_annot =
+		ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
 	    annotate_state_t *astate = NULL;
 
-	    buf_reset(&pctx->buf);
-	    buf_printf(&pctx->buf, ANNOT_NS "<%s>%s",
-		       (const char *) prop->ns->href, prop->name);
-
 	    r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
-	    if (!r) r = annotate_state_write(astate, buf_cstring(&pctx->buf), /*userid*/NULL, &buf);
-	    if (!r) {
-		xml_add_prop(HTTP_OK, pctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			     prop->name, prop->ns, NULL, 0);
-	    }
-	    else {
+	    if (!r) r = annotate_state_write(astate, prop_annot, /*userid*/NULL, &buf);
+
+	    if (r) {
 		xml_add_prop(HTTP_SERVER_ERROR, pctx->ns[NS_DAV],
 			     &propstat[PROPSTAT_ERROR],
 			     prop->name, prop->ns, NULL, 0);
+		*pctx->ret = HTTP_SERVER_ERROR;
+	    }
+	    else {
+		/* Set CALDAV:calendar-timezone */
+		proppatch_todb(prop, set, pctx, propstat, (void *) buf_cstring(&buf));
 	    }
 	}
 
-	if (ical) icalcomponent_free(ical);
 	if (freeme) xmlFree(freeme);
 	if (type) xmlFree(type);
 	if (ver) xmlFree(ver);
@@ -3623,6 +3678,40 @@ static int proppatch_timezone(xmlNodePtr prop, unsigned set,
 }
 
 
+/* Callback to prescreen/fetch CALDAV:calendar-availability */
+static int propfind_availability(const xmlChar *name, xmlNsPtr ns,
+				 struct propfind_ctx *fctx,
+				 xmlNodePtr resp __attribute__((unused)),
+				 struct propstat propstat[],
+				 void *rock)
+{
+    xmlNodePtr prop = (xmlNodePtr) rock;
+    const char *data = NULL;
+    unsigned long datalen = 0;
+
+    if (propstat) {
+	const char *prop_annot =
+	    ANNOT_NS "<" XML_NS_CALDAV ">calendar-availability";
+	struct buf attrib = BUF_INITIALIZER;
+	int r = 0;
+
+	if (fctx->mailbox && !fctx->record) {
+	    r = annotatemore_lookup(fctx->mailbox->name, prop_annot,
+				    /* shared */ NULL, &attrib);
+	}
+
+	if (r) return HTTP_SERVER_ERROR;
+	if (!attrib.len) return HTTP_NOT_FOUND;
+
+	data = buf_cstring(&attrib);
+	datalen = attrib.len;
+    }
+
+    return propfind_getdata(name, ns, fctx, propstat, prop, caldav_mime_types,
+			    CALDAV_SUPP_DATA, data, datalen);
+}
+
+
 /* Callback to write calendar-availability property */
 static int proppatch_availability(xmlNodePtr prop, unsigned set,
 				  struct proppatch_ctx *pctx,
@@ -3634,6 +3723,7 @@ static int proppatch_availability(xmlNodePtr prop, unsigned set,
 	xmlChar *type, *ver = NULL, *freeme = NULL;
 	struct mime_type_t *mime;
 	icalcomponent *ical = NULL;
+	const char *value = NULL;
 	unsigned valid = 1;
 
 	type = xmlGetProp(prop, BAD_CAST "content-type");
@@ -3689,30 +3779,170 @@ static int proppatch_availability(xmlNodePtr prop, unsigned set,
 	}
 
 	if (valid) {
-	    struct annotate_state *astate = NULL;
-	    int r;
-	    buf_reset(&pctx->buf);
-	    buf_printf(&pctx->buf, ANNOT_NS "<%s>%s",
-		       (const char *) XML_NS_CALDAV, prop->name);
-
-	    r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
-	    r = annotate_state_write(astate, buf_cstring(&pctx->buf), /*userid*/NULL, &buf);
-	    if (!r) {
-		xml_add_prop(HTTP_OK, pctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			     prop->name, prop->ns, NULL, 0);
-	    }
-	    else {
-		xml_add_prop(HTTP_SERVER_ERROR, pctx->ns[NS_DAV],
-			     &propstat[PROPSTAT_ERROR],
-			     prop->name, prop->ns, NULL, 0);
-	    }
+	    proppatch_todb(prop, set, pctx, propstat, (void *) value);
 	}
 
 	if (ical) icalcomponent_free(ical);
 	if (freeme) xmlFree(freeme);
 	if (type) xmlFree(type);
 	if (ver) xmlFree(ver);
-	buf_free(&buf);
+    }
+    else {
+	xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
+		     &propstat[PROPSTAT_FORBID], prop->name, prop->ns, NULL, 0);
+
+	*pctx->ret = HTTP_FORBIDDEN;
+    }
+
+    return 0;
+}
+
+
+/* Callback to fetch CALDAV:timezone-service-set */
+static int propfind_tzservset(const xmlChar *name, xmlNsPtr ns,
+			      struct propfind_ctx *fctx,
+			      xmlNodePtr resp __attribute__((unused)),
+			      struct propstat propstat[],
+			      void *rock __attribute__((unused)))
+{
+    assert(name && ns && fctx && propstat);
+
+    if (fctx->req_tgt->resource) return HTTP_NOT_FOUND;
+
+    if (namespace_calendar.allow & ALLOW_CAL_NOTZ) {
+	xmlNodePtr node;
+	const char *proto = NULL, *host = NULL;
+
+	node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+			    name, ns, NULL, 0);
+
+	http_proto_host(fctx->req_hdrs, &proto, &host);
+
+	buf_reset(&fctx->buf);
+	buf_printf(&fctx->buf, "%s://%s%s",
+		   proto, host, namespace_timezone.prefix);
+
+	xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+
+	return 0;
+    }
+
+    return HTTP_NOT_FOUND;
+}
+
+
+/* Callback to fetch CALDAV:calendar-timezone-id property */
+static int propfind_tzid(const xmlChar *name, xmlNsPtr ns,
+			 struct propfind_ctx *fctx,
+			 xmlNodePtr resp __attribute__((unused)),
+			 struct propstat propstat[],
+			 void *rock __attribute__((unused)))
+{
+    const char *prop_annot =
+	ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
+    struct buf attrib = BUF_INITIALIZER;
+    const char *value = NULL;
+    int r = 0;
+
+    if (!fctx->req_tgt->collection || fctx->req_tgt->resource)
+	return HTTP_NOT_FOUND;
+
+    r = annotatemore_lookup(fctx->mailbox->name, prop_annot,
+				  /* shared */ NULL, &attrib);
+
+    if (r) return HTTP_SERVER_ERROR;
+    if (attrib.len) {
+	value = buf_cstring(&attrib);
+    }
+    if (!value) {
+	/*  Check for CALDAV:calendar-timezone */
+	prop_annot = ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
+
+	if (fctx->mailbox && !fctx->record) {
+	    r = annotatemore_lookup(fctx->mailbox->name, prop_annot,
+				    /* shared */ NULL, &attrib);
+	}
+
+	if (r) return HTTP_SERVER_ERROR;
+	if (!attrib.len) return HTTP_NOT_FOUND;
+	else {
+	    icalcomponent *ical, *vtz;
+	    icalproperty *tzid;
+
+	    ical = icalparser_parse_string(buf_cstring(&attrib));
+	    vtz = icalcomponent_get_first_component(ical,
+						    ICAL_VTIMEZONE_COMPONENT);
+	    tzid = icalcomponent_get_first_property(vtz, ICAL_TZID_PROPERTY);
+	    value = icalmemory_tmp_copy(icalproperty_get_tzid(tzid));
+	    icalcomponent_free(ical);
+	}
+    }
+
+    xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+		 name, ns, BAD_CAST value, 0);
+
+    return 0;
+}
+
+
+/* Callback to write CALDAV:calendar-timezone-id property */
+static int proppatch_tzid(xmlNodePtr prop, unsigned set,
+			  struct proppatch_ctx *pctx,
+			  struct propstat propstat[],
+			  void *rock __attribute__((unused)))
+{
+    if ((namespace_calendar.allow & ALLOW_CAL_NOTZ) &&
+	pctx->req_tgt->collection && !pctx->req_tgt->resource) {
+	xmlChar *freeme = NULL;
+	const char *tzid = NULL;
+	unsigned valid = 1;
+	int r;
+
+	if (set) {
+	    freeme = xmlNodeGetContent(prop);
+	    tzid = (const char *) freeme;
+
+	    /* Verify we have tzid record in the database */
+	    r = zoneinfo_lookup(tzid, NULL);
+	    if (r) {
+		if (r == CYRUSDB_NOTFOUND) {
+		    xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
+				 &propstat[PROPSTAT_FORBID],
+				 prop->name, prop->ns, NULL,
+				 CALDAV_VALID_TIMEZONE);
+		}
+		else {
+		    xml_add_prop(HTTP_SERVER_ERROR, pctx->ns[NS_DAV],
+				 &propstat[PROPSTAT_ERROR],
+				 prop->name, prop->ns, NULL, 0);
+		}
+		*pctx->ret = HTTP_FORBIDDEN;
+		valid = 0;
+	    }
+	}
+
+	if (valid) {
+	    /* Remove CALDAV:calendar-timezone */
+	    const char *prop_annot =
+		ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
+	    annotate_state_t *astate = NULL;
+
+	    r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
+	    if (!r) r = annotate_state_write(astate, prop_annot, /*userid*/NULL, NULL);
+
+	    if (r) {
+		xml_add_prop(HTTP_SERVER_ERROR, pctx->ns[NS_DAV],
+			     &propstat[PROPSTAT_ERROR],
+			     prop->name, prop->ns, NULL, 0);
+		*pctx->ret = HTTP_SERVER_ERROR;
+	    }
+	    else {
+		/* Set CALDAV:calendar-timezone-id */
+		proppatch_todb(prop, set, pctx, propstat, (void *) tzid);
+	    }
+	}
+
+	if (freeme) xmlFree(freeme);
     }
     else {
 	xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
@@ -3786,23 +4016,39 @@ static int report_cal_query(struct transaction_t *txn,
 		else fctx->filter = apply_calfilter;
 	    }
 	    else if (!xmlStrcmp(node->name, BAD_CAST "timezone")) {
-		xmlChar *tz = NULL;
-		icalcomponent *ical = NULL;
+		xmlChar *tzdata = NULL;
+		icalcomponent *ical = NULL, *tz = NULL;
 
+		/* XXX  Need to do pass this to query for floating time */
 		syslog(LOG_WARNING, "REPORT calendar-query w/timezone");
-		tz = xmlNodeGetContent(node);
+		tzdata = xmlNodeGetContent(node);
 		ical = icalparser_parse_string((const char *) tz);
-		if (!ical ||
-		    (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT) ||
-		    !icalcomponent_get_first_component(ical,
-						       ICAL_VTIMEZONE_COMPONENT)
-		    || icalcomponent_get_first_real_component(ical)) {
+		if (ical) tz = icalcomponent_get_first_component(ical,
+								 ICAL_VTIMEZONE_COMPONENT);
+		if (!tz || icalcomponent_get_first_real_component(ical)) {
 		    txn->error.precond = CALDAV_VALID_DATA;
 		    ret = HTTP_FORBIDDEN;
 		}
+		else {
+		    icalcomponent_remove_component(ical, tz);
+		    calfilter.tz = icaltimezone_new();
+		    icaltimezone_set_component(calfilter.tz, tz);
+		}
 
-		if (tz) xmlFree(tz);
+		if (tzdata) xmlFree(tzdata);
 		if (ical) icalcomponent_free(ical);
+		if (ret) return ret;
+	    }
+	    else if (!xmlStrcmp(node->name, BAD_CAST "timezone-id")) {
+		xmlChar *tzid = NULL;
+
+		/* XXX  Need to pass this to query for floating time */
+		syslog(LOG_WARNING, "REPORT calendar-query w/tzid");
+		tzid = xmlNodeGetContent(node);
+
+		/* XXX  Need to load timezone */
+
+		if (tzid) xmlFree(tzid);
 		if (ret) return ret;
 	    }
 	}
@@ -3826,6 +4072,8 @@ static int report_cal_query(struct transaction_t *txn,
 
 	ret = *fctx->ret;
     }
+
+    if (calfilter.tz) icaltimezone_free(calfilter.tz, 1);
 
     /* Expanded recurrences still populate busytime array */
     if (calfilter.freebusy.fb) free(calfilter.freebusy.fb);
@@ -3980,11 +4228,10 @@ static int busytime_by_resource(void *rock, void *data)
 	    (struct calquery_filter *) fctx->filter_crit;
 	icalcomponent *vav;
 
-	mailbox_map_message(fctx->mailbox, fctx->record->uid,
-			    &fctx->msg_base, &fctx->msg_size);
+	mailbox_map_record(fctx->mailbox, fctx->record, &fctx->msg_buf);
 
 	vav =
-	    icalparser_parse_string(fctx->msg_base + fctx->record->header_size);
+	    icalparser_parse_string(buf_cstring(&fctx->msg_buf) + fctx->record->header_size);
 
 	add_vavailability(&calfilter->vavail, vav);
     }
@@ -4241,16 +4488,14 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
 
     if (calfilter->flags & CHECK_USER_AVAIL) {
 	/* Check for CALDAV:calendar-availability on user's Inbox */
-	struct annotation_data attrib;
+	struct buf attrib = BUF_INITIALIZER;
 	const char *prop_annot =
 	    ANNOT_NS "<" XML_NS_CALDAV ">calendar-availability";
-	char *userid;
-
-	userid = mboxname_to_userid(mailboxname);
-	caldav_mboxname(SCHED_INBOX, userid, mailboxname);
-	if (!annotatemore_lookup(mailboxname, prop_annot,
-				 /* shared */ "", &attrib) && attrib.value) {
-	    add_vavailability(vavail, icalparser_parse_string(attrib.value));
+	const char *userid = mboxname_to_userid(mailboxname);
+	const char *mboxname = caldav_mboxname(userid, SCHED_INBOX);
+	if (!annotatemore_lookup(mboxname, prop_annot,
+				 /* shared */ "", &attrib) && attrib.len) {
+	    add_vavailability(vavail, icalparser_parse_string(buf_cstring(&attrib)));
 	}
     }
 

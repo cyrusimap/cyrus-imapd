@@ -154,8 +154,10 @@ struct namespace_t namespace_timezone = {
 };
 
 
-static void timezone_init(struct buf *serverinfo __attribute__((unused)))
+static void timezone_init(struct buf *serverinfo)
 {
+    buf_printf(serverinfo, " Jansson/%s", JANSSON_VERSION);
+
     namespace_timezone.enabled =
 	config_httpmodules & IMAP_ENUM_HTTPMODULES_TIMEZONE;
 
