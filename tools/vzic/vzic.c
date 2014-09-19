@@ -42,8 +42,8 @@ gboolean VzicPureOutput			= FALSE;
 
 gboolean VzicDumpOutput			= FALSE;
 gboolean VzicDumpChanges		= FALSE;
-gboolean VzicDumpZoneNamesAndCoords	= FALSE;
-gboolean VzicDumpZoneTranslatableStrings= TRUE;
+gboolean VzicDumpZoneNamesAndCoords	= TRUE;
+gboolean VzicDumpZoneTranslatableStrings= FALSE;
 gboolean VzicNoRRules			= FALSE;
 gboolean VzicNoRDates			= FALSE;
 char*    VzicOutputDir			= "zoneinfo";

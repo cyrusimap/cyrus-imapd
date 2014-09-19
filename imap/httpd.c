@@ -280,18 +280,16 @@ struct namespace_t namespace_default = {
 /* Array of different namespaces and features supported by the server */
 struct namespace_t *namespaces[] = {
 #ifdef WITH_DAV
+#ifdef WITH_JSON
+    &namespace_timezone,	/* MUST be before namespace_calendar!! */
+#endif /* WITH_JSON */
     &namespace_principal,
     &namespace_calendar,
     &namespace_addressbook,
     &namespace_ischedule,
     &namespace_domainkey,
-#ifdef WITH_JSON
-    &namespace_timezone,
-#endif
-#endif
-#ifdef WITH_RSS
+#endif /* WITH_DAV */
     &namespace_rss,
-#endif
     &namespace_default,		/* MUST be present and be last!! */
     NULL,
 };
@@ -1948,11 +1946,13 @@ void response_header(long code, struct transaction_t *txn)
 			    (txn->req_tgt.allow & ALLOW_WRITECOL) ?
 			    ", extended-mkcol" : "");
 		if (txn->req_tgt.allow & ALLOW_CAL) {
-		    prot_printf(httpd_out, "DAV: calendar-access%s%s\r\n",
+		    prot_printf(httpd_out, "DAV: calendar-access%s%s%s\r\n",
 				(txn->req_tgt.allow & ALLOW_CAL_AVAIL) ?
 				", calendar-availability" : "",
 				(txn->req_tgt.allow & ALLOW_CAL_SCHED) ?
-				", calendar-auto-schedule" : "");
+				", calendar-auto-schedule" : "",
+				(txn->req_tgt.allow & ALLOW_CAL_NOTZ) ?
+				", calendar-no-timezone" : "");
 
 		    /* Backwards compatibility with Apple VAV clients */
 		    if ((txn->req_tgt.allow &

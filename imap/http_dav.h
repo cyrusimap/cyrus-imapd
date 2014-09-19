@@ -193,6 +193,9 @@ enum {
     /* RSCALE (draft-daboo-icalendar-rscale) preconditions */
     CALDAV_SUPP_RSCALE,
 
+    /* TZ by Ref (draft-ietf-tzdist-caldav-timezone-ref) preconditions */
+    CALDAV_VALID_TIMEZONE,
+
     /* CalDAV Scheduling (RFC 6638) preconditions */
     CALDAV_VALID_SCHED,
     CALDAV_VALID_ORGANIZER,
@@ -255,6 +258,7 @@ struct propfind_ctx {
     unsigned mode;	    		/* none, allprop, propname, prop */
     unsigned depth;	    		/* 0 = root, 1 = calendar, 2 = resrc */
     unsigned prefer;			/* bitmask of client preferences */
+    hdrcache_t req_hdrs;    		/* Cached HTTP headers */
     const char *userid;			/* userid client has logged in as */
     const char *int_userid;		/* internal userid */
     int userisadmin;			/* is userid an admin */
