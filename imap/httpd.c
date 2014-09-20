@@ -481,9 +481,9 @@ int service_init(int argc __attribute__((unused)),
     buf_printf(&serverinfo, " OpenSSL/%s", SHLIB_VERSION_NUMBER);
 #endif
 #ifdef HAVE_ZLIB
-    buf_printf(&serverinfo, " zlib/%s", ZLIB_VERSION);
+    buf_printf(&serverinfo, " Zlib/%s", ZLIB_VERSION);
 #endif
-    buf_printf(&serverinfo, " libxml/%s", LIBXML_DOTTED_VERSION);
+    buf_printf(&serverinfo, " LibXML%s", LIBXML_DOTTED_VERSION);
 
     /* Do any namespace specific initialization */
     config_httpmodules = config_getbitfield(IMAPOPT_HTTPMODULES);

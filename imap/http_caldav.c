@@ -599,13 +599,17 @@ static void my_caldav_init(struct buf *serverinfo)
     char *domain;
     tok_t tok;
 
-    buf_printf(serverinfo, " libical/%s", ICAL_VERSION);
+    buf_printf(serverinfo, " SQLite/%s", sqlite3_libversion());
+    buf_printf(serverinfo, " Libical/%s", ICAL_VERSION);
 #ifdef HAVE_RSCALE
     if ((rscale_calendars = icalrecurrencetype_rscale_supported_calendars())) {
 	icalarray_sort(rscale_calendars, &rscale_cmp);
 
 	buf_printf(serverinfo, " ICU4C/%s", U_ICU_VERSION);
     }
+#endif
+#ifdef WITH_JSON
+    buf_printf(serverinfo, " Jansson/%s", JANSSON_VERSION);
 #endif
 
     namespace_calendar.enabled =
