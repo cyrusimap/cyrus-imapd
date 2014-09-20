@@ -107,8 +107,6 @@ enum {
     PROPFIND_PROP
 };
 
-static void my_dav_init(struct buf *serverinfo);
-
 static int prin_parse_path(const char *path,
 			   struct request_target_t *tgt, const char **errstr);
 static int propfind_displayname(const xmlChar *name, xmlNsPtr ns,
@@ -219,7 +217,7 @@ static struct meth_params princ_params = {
 struct namespace_t namespace_principal = {
     URL_NS_PRINCIPAL, 0, "/dav/principals", NULL, 1 /* auth */,
     ALLOW_READ | ALLOW_DAV,
-    &my_dav_init, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL,
     {
 	{ NULL,			NULL },			/* ACL		*/
 	{ NULL,			NULL },			/* COPY		*/
@@ -240,12 +238,6 @@ struct namespace_t namespace_principal = {
 	{ NULL,			NULL }			/* UNLOCK	*/
     }
 };
-
-
-static void my_dav_init(struct buf *serverinfo)
-{
-    buf_printf(serverinfo, " SQLite/%s", sqlite3_libversion());
-}
 
 
 /* Linked-list of properties for fetching */
