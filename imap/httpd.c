@@ -1954,11 +1954,16 @@ void response_header(long code, struct transaction_t *txn)
 				(txn->req_tgt.allow & ALLOW_CAL_NOTZ) ?
 				", calendar-no-timezone" : "");
 
-		    /* Backwards compatibility with Apple VAV clients */
+		    /* Backwards compatibility with older Apple VAV clients */
 		    if ((txn->req_tgt.allow &
 			 (ALLOW_CAL_AVAIL | ALLOW_CAL_SCHED)) ==
-			(ALLOW_CAL_AVAIL | ALLOW_CAL_SCHED))
-			prot_printf(httpd_out, "DAV: inbox-availability\r\n");
+			(ALLOW_CAL_AVAIL | ALLOW_CAL_SCHED)) {
+			if ((hdr = spool_getheader(txn->req_hdrs, "User-Agent"))
+			    && strstr(hdr[0], "CalendarAgent/")) {
+			    prot_printf(httpd_out,
+					"DAV: inbox-availability\r\n");
+			}
+		    }
 		}
 		if (txn->req_tgt.allow & ALLOW_CARD) {
 		    prot_puts(httpd_out, "DAV: addressbook\r\n");
