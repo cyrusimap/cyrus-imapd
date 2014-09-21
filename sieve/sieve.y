@@ -493,7 +493,7 @@ vtags: /* empty */		 { $$ = new_vtags(); }
 					yyerror(parse_script, "duplicate :from");
 					YYERROR;
 				   } else if (!verify_address(parse_script, $3)) {
-				        YYERROR; /* vu should call yyerror() */
+				        YYERROR; /* va should call yyerror() */
 				   } else { $$->from = $3; } }
 	| vtags HANDLE STRING	 { if ($$->handle != NULL) { 
 					yyerror(parse_script, "duplicate :handle");
