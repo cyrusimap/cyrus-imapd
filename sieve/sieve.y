@@ -437,7 +437,7 @@ vtags: /* empty */		 { $$ = new_vtags(); }
 					yyerror("duplicate :from"); 
 					YYERROR;
 				   } else if (!verify_address($3)) {
-				        YYERROR; /* vu should call yyerror() */
+				        YYERROR; /* va should call yyerror() */
 				   } else { $$->from = $3; } }
 	| vtags HANDLE STRING	 { if ($$->handle != NULL) { 
 					yyerror("duplicate :handle"); 
