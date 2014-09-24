@@ -256,6 +256,7 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
     }
     
     case BC_HEADER:
+    case BC_HASFLAG:
     {
 	int ret;
 	/* Drop match type */
@@ -273,43 +274,17 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
 	    return -1;
 	wrote += sizeof(int);
 	(*codep)++;
-	/* Now drop headers */
+	/* Now drop haystacks */
 	ret = bc_stringlist_emit(fd, codep, bc);
 	if(ret < 0) return -1;
 	wrote+=ret;
-	/* Now drop data */
+	/* Now drop needles */
 	ret = bc_stringlist_emit(fd, codep, bc);
 	if(ret < 0) return -1;
 	wrote+=ret;
 	break;
     }
     
-    case BC_HASFLAG:
-    {
-	int ret;
-	/* Drop match type */
-	if(write_int(fd, bc->data[(*codep)].value) == -1)
-	    return -1;
-	wrote += sizeof(int);
-	(*codep)++;
-	/*now drop relation*/
-	if(write_int(fd, bc->data[(*codep)].value) == -1)
-	    return -1;
-	wrote += sizeof(int);
-	(*codep)++;
-	/*drop comparator */
-	if(write_int(fd, bc->data[(*codep)].value) == -1)
-	    return -1;
-	wrote += sizeof(int);
-	(*codep)++;
-	/* Now drop flags */
-	ret = bc_stringlist_emit(fd, codep, bc);
-	if(ret < 0) return -1;
-	wrote+=ret;
-	// TODO: evaluate :count support in hasflag test
-	break;
-    }
-
     case BC_ADDRESS:
     case BC_ENVELOPE:
     {

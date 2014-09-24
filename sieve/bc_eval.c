@@ -784,7 +784,8 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
     {
 	const char** val;
 
-	int needlesi=i+4;/*the i value for the beginning of the flags*/
+	int haystacksi=i+4;/*the i value for the beginning of the variables*/
+	int needlesi=(ntohl(bc[haystacksi+1].value)/4);
 
 	int numneedles=ntohl(bc[needlesi].len); // number of search flags
 
