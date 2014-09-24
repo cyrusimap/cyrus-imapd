@@ -149,7 +149,7 @@ static test_t *build_header(int t, struct htags *h,
 static test_t *build_body(int t, struct btags *b, strarray_t *pl);
 static test_t *build_date(int t, struct dttags *dt, char *hn, strarray_t *kl);
 static test_t *build_hasflag(int t, struct htags *h,
-			    strarray_t *sl);
+			    strarray_t *pl);
 static commandlist_t *build_vacation(int t, struct vtags *h, char *s);
 static commandlist_t *build_notify(int t, struct ntags *n);
 static commandlist_t *build_denotify(int t, struct dtags *n);
@@ -1032,9 +1032,9 @@ static test_t *build_address(int t, struct aetags *ae,
 static test_t *build_header(int t, struct htags *h,
 			    strarray_t *sl, strarray_t *pl)
 {
-    test_t *ret = new_test(t);	/* can be HEADER */
+    test_t *ret = new_test(t);	/* can be HEADER or HASFLAG */
 
-    assert(t == HEADER);
+    assert((t == HEADER) || (t == HASFLAG));
 
     if (ret) {
 	ret->u.h.index = h->index;
@@ -1049,21 +1049,9 @@ static test_t *build_header(int t, struct htags *h,
 }
 
 static test_t *build_hasflag(int t, struct htags *h,
-			    strarray_t *sl)
+			    strarray_t *pl)
 {
-    test_t *ret = new_test(t);	/* can be HASFLAG */
-
-    assert(t == HASFLAG);
-
-    if (ret) {
-	ret->u.h.comptag = h->comptag;
-	ret->u.h.relation=h->relation;
-	ret->u.h.comparator=xstrdup(h->comparator);
-	ret->u.h.sl = sl;
-	ret->u.h.pl = NULL;
-	free_htags(h);
-    }
-    return ret;
+    return build_header(t,h,NULL,pl);
 }
 
 static test_t *build_body(int t, struct btags *b, strarray_t *pl)

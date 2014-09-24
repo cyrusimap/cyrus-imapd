@@ -331,12 +331,14 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 	if (codep == -1) return -1;
 	break;
     case HEADER:
-	/* BC_HEADER { i: index } { c: comparator } { headers : string list }
-	   { patterns : string list } 
+    case HASFLAG:
+	/* (BC_HEADER | BC_HASFLAG) { i: index } { c: comparator }
+	   { haystacks : string list } { patterns : string list }
 	*/
       
 	if(!atleast(retval,codep + 1)) return -1;
-	retval->data[codep++].op = BC_HEADER;
+	retval->data[codep++].op = (t->type == HEADER)
+	    ? BC_HEADER : BC_HASFLAG;
       
 	/* index */
 	if(!atleast(retval,codep + 1)) return -1;
@@ -349,29 +351,12 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 				       t->u.h.comparator);
 	if (codep == -1) return -1;
       
-	/* headers */
+	/* haystacks */
 	codep = bc_stringlist_generate(codep, retval, t->u.h.sl);
 	if (codep == -1) return -1;
       
 	/* pattern */
 	codep = bc_stringlist_generate(codep, retval, t->u.h.pl);
-	if (codep == -1) return -1;
-	break;
-    case HASFLAG:
-	/* BC_HASFLAG { c: comparator } { flags : string list } */
-
-	if(!atleast(retval,codep + 1)) return -1;
-	retval->data[codep++].op = BC_HASFLAG;
-
-	/* comparator */
-	codep = bc_comparator_generate(codep, retval,
-				       t->u.h.comptag,
-				       t->u.h.relation,
-				       t->u.h.comparator);
-	if (codep == -1) return -1;
-
-	/* flags */
-	codep = bc_stringlist_generate(codep, retval, t->u.h.sl);
 	if (codep == -1) return -1;
 	break;
     case ADDRESS:
