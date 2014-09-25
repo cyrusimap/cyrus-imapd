@@ -86,41 +86,45 @@ enum event_type {
 /* The number representing the last available position in
  * event_param, which should always be messageContent.
  */
-#define MAX_PARAM 23
+#define MAX_PARAM 25
 
 /*
  * event parameters defined in RFC 5423 - Internet Message Store Events
  *
  * ordered to optimize the parsing of the notification message
+ *
+ * NOTE that the order here needs to be the exact same as the order in
+ * mboxevent.c's event_template mboxevent struct
  */
 enum event_param {
-    EVENT_TIMESTAMP,
-    EVENT_SERVICE,
-    EVENT_SERVER_ADDRESS, /* gather serverDomain and serverPort together */
-    EVENT_CLIENT_ADDRESS, /* gather clientIP and clientPort together */
-    EVENT_OLD_MAILBOX_ID,
-    EVENT_OLD_UIDSET,
-    EVENT_MAILBOX_ID,
-    EVENT_URI,
-    EVENT_MODSEQ,
-    EVENT_DISK_QUOTA,
-    EVENT_DISK_USED,
-    EVENT_MAX_MESSAGES,
-    EVENT_MESSAGES,
-    EVENT_UNSEEN_MESSAGES,
-    EVENT_UIDNEXT,
-    EVENT_UIDSET,
-    EVENT_MIDSET,
-    EVENT_FLAG_NAMES,
-    EVENT_PID,
-    EVENT_ACL_SUBJECT,
-    EVENT_ACL_RIGHTS,
-    EVENT_USER,
-    EVENT_MESSAGE_SIZE,
-    EVENT_ENVELOPE,
-    EVENT_BODYSTRUCTURE,
-    EVENT_MESSAGE_CONTENT
+    /*  0 */ EVENT_TIMESTAMP,
+    /*  1 */ EVENT_SERVICE,
+    /*  2 */ EVENT_SERVER_ADDRESS, /* gather serverDomain and serverPort together */
+    /*  3 */ EVENT_CLIENT_ADDRESS, /* gather clientIP and clientPort together */
+    /*  4 */ EVENT_OLD_MAILBOX_ID,
+    /*  5 */ EVENT_OLD_UIDSET,
+    /*  6 */ EVENT_MAILBOX_ID,
+    /*  7 */ EVENT_URI,
+    /*  8 */ EVENT_MODSEQ,
+    /*  9 */ EVENT_DISK_QUOTA,
+    /* 10 */ EVENT_DISK_USED,
+    /* 11 */ EVENT_MAX_MESSAGES,
+    /* 12 */ EVENT_MESSAGES,
+    /* 13 */ EVENT_UNSEEN_MESSAGES,
+    /* 14 */ EVENT_UIDNEXT,
+    /* 15 */ EVENT_UIDSET,
+    /* 16 */ EVENT_MIDSET,
+    /* 17 */ EVENT_FLAG_NAMES,
+    /* 18 */ EVENT_PID,
+    /* 19 */ EVENT_ACL_SUBJECT,
+    /* 20 */ EVENT_ACL_RIGHTS,
+    /* 21 */ EVENT_USER,
+    /* 22 */ EVENT_MESSAGE_SIZE,
+    /* 23 */ EVENT_ENVELOPE,
+    /* 24 */ EVENT_BODYSTRUCTURE,
+    /* 25 */ EVENT_MESSAGE_CONTENT
 };
+
 
 enum event_param_type {
     EVENT_PARAM_INT,
