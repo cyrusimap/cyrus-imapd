@@ -11435,8 +11435,13 @@ static void list_response(const char *name, int attributes,
     if (listargs->cmd & LIST_CMD_EXTENDED &&
 	attributes & MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED) {
 	prot_printf(imapd_out, " (CHILDINFO (");
+	/* RFC 5258:
+	 *     ; Note 2: The selection options are always returned
+	 *     ; quoted, unlike their specification in
+	 *     ; the extended LIST command.
+	 */
 	if (attributes & MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED)
-	    prot_printf(imapd_out, "SUBSCRIBED");
+	    prot_printf(imapd_out, "\"SUBSCRIBED\"");
 	prot_printf(imapd_out, "))");
     }
 
