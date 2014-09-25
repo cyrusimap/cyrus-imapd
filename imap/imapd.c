@@ -2871,7 +2871,7 @@ static void cmd_id(char *tag)
 	    if (!strcmp(field.s, "os") && !strcmp(arg.s, "iOS")) {
 		is_ios = 1;
 	    }
-	    if (is_ios && !strcmp(field.s, "os-version") && (arg.s[0] == '7' || arg.s[0] == '8')) {
+	    if (is_ios && !strcmp(field.s, "os-version") && (arg.s[0] == '7' || arg.s[0] == '8' || arg.s[0] == '9')) {
 		imapd_id.quirks |= QUIRK_SEARCHFUZZY;
 	    }
 
