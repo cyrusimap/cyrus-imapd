@@ -1795,12 +1795,22 @@ EXPORTED int index_search(struct index_state *state,
 	}
 	if (nmsg) {
 	    if (usinguid) prot_printf(state->out, " UID");
-	    if (searchargs->returnopts & SEARCH_RETURN_MIN)
+	    if (searchargs->returnopts & SEARCH_RETURN_MIN) {
 		prot_printf(state->out, " MIN %u", search_folder_get_min(folder));
-	    if (searchargs->returnopts & SEARCH_RETURN_MAX)
+		if (highestmodseq && searchargs->returnopts == SEARCH_RETURN_MIN)
+		     highestmodseq = search_folder_get_first_modseq(folder);
+	    }
+	    if (searchargs->returnopts & SEARCH_RETURN_MAX) {
 		prot_printf(state->out, " MAX %u", search_folder_get_max(folder));
-	    if (highestmodseq)
-		prot_printf(state->out, " MODSEQ " MODSEQ_FMT, highestmodseq);
+		if (highestmodseq && searchargs->returnopts == SEARCH_RETURN_MAX)
+		     highestmodseq = search_folder_get_last_modseq(folder);
+	    }
+	    if (highestmodseq && searchargs->returnopts == (SEARCH_RETURN_MIN|SEARCH_RETURN_MAX)) {
+		/* special case min and max should be greatest of the two */
+		uint64_t last = search_folder_get_last_modseq(folder);
+		highestmodseq = search_folder_get_first_modseq(folder);
+		if (last > highestmodseq) highestmodseq = last;
+	    }
 	    if (searchargs->returnopts & SEARCH_RETURN_ALL) {
 		struct seqset *seq = search_folder_get_seqset(folder);
 
@@ -1821,6 +1831,8 @@ EXPORTED int index_search(struct index_state *state,
 		}
 		prot_printf(state->out, ")");
 	    }
+	    if (highestmodseq)
+		prot_printf(state->out, " MODSEQ " MODSEQ_FMT, highestmodseq);
 	}
 	if (searchargs->returnopts & SEARCH_RETURN_COUNT) {
 	    prot_printf(state->out, " COUNT %u", nmsg);

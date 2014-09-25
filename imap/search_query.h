@@ -60,6 +60,8 @@ struct search_folder {
     char *mboxname;
     uint32_t uidvalidity;
     uint64_t highest_modseq; /* of returned messages, not the folder */
+    uint64_t first_modseq; /* of returned messages, not the folder */
+    uint64_t last_modseq; /* of returned messages, not the folder */
     int id;
     bitvector_t uids;
     bitvector_t unchecked_uids;
@@ -170,6 +172,8 @@ extern unsigned int search_folder_get_count(const search_folder_t *);
 	 (u) != -1 ; \
 	 (u) = bv_next_set(&(folder)->uids, (u)+1))
 extern uint64_t search_folder_get_highest_modseq(const search_folder_t *);
+extern uint64_t search_folder_get_first_modseq(const search_folder_t *);
+extern uint64_t search_folder_get_last_modseq(const search_folder_t *);
 
 
 #endif /* __CYRUS_SEARCH_RESULT_H__ */

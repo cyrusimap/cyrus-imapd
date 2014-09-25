@@ -228,6 +228,16 @@ EXPORTED uint64_t search_folder_get_highest_modseq(const search_folder_t *folder
     return folder->highest_modseq;
 }
 
+EXPORTED uint64_t search_folder_get_first_modseq(const search_folder_t *folder)
+{
+    return folder->first_modseq;
+}
+
+EXPORTED uint64_t search_folder_get_last_modseq(const search_folder_t *folder)
+{
+    return folder->last_modseq;
+}
+
 /* ====================================================================== */
 
 static search_folder_t *query_get_folder(search_query_t *query, const char *mboxname)
@@ -497,6 +507,9 @@ static void subquery_post_indexed(const char *key, void *data, void *rock)
 	folder_add_modseq(folder, im->modseq);
 	if (query->sortcrit)
 	    msgno_list[nmsgs++] = msgno;
+	/* track first and last for MIN/MAX queries */
+	if (!folder->first_modseq) folder->first_modseq = im->modseq;
+	folder->last_modseq = im->modseq;
     }
 
     /* msgno_list contains only the MSNs for newly
@@ -674,6 +687,10 @@ static int subquery_run_one_folder(search_query_t *query,
 
 	if (query->sortcrit)
 	    msgno_list[nmsgs++] = msgno;
+
+	/* track first and last for MIN/MAX queries */
+	if (!folder->first_modseq) folder->first_modseq = im->modseq;
+	folder->last_modseq = im->modseq;
     }
 
     if (query->sortcrit && nmsgs)
