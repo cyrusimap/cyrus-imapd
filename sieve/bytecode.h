@@ -155,10 +155,14 @@ enum bytecode_comps {
     BC_SIZE,
     BC_ANYOF,
     BC_ALLOF,
-    BC_ADDRESS,
+    BC_ADDRESS_PRE_INDEX,
     BC_ENVELOPE,	/* require envelope */
-    BC_HEADER,
+    BC_HEADER_PRE_INDEX,
     BC_BODY,            /* require body */
+    BC_DATE_PRE_INDEX,        /* require date */
+    BC_CURRENTDATE_PRE_INDEX, /* require date */
+    BC_ADDRESS,
+    BC_HEADER,
     BC_DATE,            /* require date */
     BC_CURRENTDATE      /* require date */
 };

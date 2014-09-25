@@ -202,6 +202,7 @@ static int dump2_test(bytecode_input_t * d, int i)
 {
     int l,x,index;
     int opcode;
+    int has_index=0;/* used to differentiate between pre and post index tests */
 
     opcode = ntohl(d[i].value);
     switch(opcode) {
@@ -265,9 +266,12 @@ static int dump2_test(bytecode_input_t * d, int i)
 	
 	printf(")\n");
 	break;
-    case BC_ADDRESS:/*7*/
+    case BC_ADDRESS: /*13*/
+	has_index=1;
+	/*fall-through*/
+    case BC_ADDRESS_PRE_INDEX: /*7*/
 	printf("Address [");
-	index = ntohl(d[++i].value);
+	index = has_index ? ntohl(d[++i].value) : 0;
 	i=printComparison(d, i+1);
 	printf("               type: ");
 	switch(ntohl(d[i++].value))
@@ -307,9 +311,12 @@ static int dump2_test(bytecode_input_t * d, int i)
 	i=write_list(ntohl(d[i].len), i+1, d);
 	printf("             ]\n");
 	break;
-    case BC_HEADER:/*9*/
+    case BC_HEADER: /*14*/
+	has_index=1;
+	/*fall-through*/
+    case BC_HEADER_PRE_INDEX:/*9*/
 	printf("Header [");
-	index = ntohl(d[++i].value);
+	index = has_index ? ntohl(d[++i].value) : 0;
 	i= printComparison(d, i+1);
 	if (index != 0) {
 		printf("              Index: %d %s\n",
@@ -338,8 +345,12 @@ static int dump2_test(bytecode_input_t * d, int i)
 	i=write_list(ntohl(d[i].len), i+1, d);
 	printf("             ]\n");
 	break;
-    case BC_DATE:/*11*/
-    case BC_CURRENTDATE:/*12*/
+    case BC_DATE:/*15*/
+    case BC_CURRENTDATE:/*16*/
+	has_index=1;
+	/*fall-through*/
+    case BC_DATE_PRE_INDEX:/*11*/
+    case BC_CURRENTDATE_PRE_INDEX:/*12*/
 	++i; /* skip opcode */
 
 	if (BC_DATE == opcode) {
@@ -350,7 +361,7 @@ static int dump2_test(bytecode_input_t * d, int i)
 	}
 
 	/* index */
-	index = ntohl(d[i++].value);
+	index = has_index ? ntohl(d[i++].value) : 0;
 	printf("              Index: %d %s\n",
 	    abs(index), index < 0 ? "[LAST]" : "");
 
