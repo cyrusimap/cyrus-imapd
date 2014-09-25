@@ -367,13 +367,13 @@ static void test_nextmodseq(void)
     mboxname_free_parts(&parts);
 
     /* initial value should be 1 without file */
-    CU_ASSERT_EQUAL(mboxname_nextmodseq(FREDNAME, 0), 1);
+    CU_ASSERT_EQUAL(mboxname_nextmodseq(FREDNAME, 0, 0), 1);
     /* next value should always increment */
-    CU_ASSERT_EQUAL(mboxname_nextmodseq(FREDNAME, 0), 2);
+    CU_ASSERT_EQUAL(mboxname_nextmodseq(FREDNAME, 0, 0), 2);
     /* higher value should force a jump */
-    CU_ASSERT_EQUAL(mboxname_nextmodseq(FREDNAME, 100), 101);
+    CU_ASSERT_EQUAL(mboxname_nextmodseq(FREDNAME, 100, 0), 101);
     /* lower value should not decrease */
-    CU_ASSERT_EQUAL(mboxname_nextmodseq(FREDNAME, 5), 102);
+    CU_ASSERT_EQUAL(mboxname_nextmodseq(FREDNAME, 5, 0), 102);
 }
 
 static enum enum_value old_config_virtdomains;
