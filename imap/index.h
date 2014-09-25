@@ -66,6 +66,9 @@
  */
 #define LOAD_IDS	256
 
+/* client capabilities by ENABLE command */
+extern unsigned client_capa;
+
 struct message;
 
 struct vanished_params {
@@ -82,7 +85,6 @@ struct index_init {
     struct auth_state *authstate;
     struct protstream *out;
     int examine_mode;
-    int qresync;
     int select;
     int want_expunged;
     struct vanished_params vanished;
@@ -125,7 +127,6 @@ struct index_state {
     char *userid;
     char *mboxname;
     struct protstream *out;
-    int qresync;
     struct auth_state *authstate;
     int want_expunged;
     unsigned num_expunged;

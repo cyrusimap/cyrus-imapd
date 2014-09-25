@@ -87,12 +87,13 @@
 #include "index.h"
 #include "sync_log.h"
 
+EXPORTED unsigned client_capa;
+
 /* Forward declarations */
 static void index_refresh_locked(struct index_state *state);
 static void index_tellexists(struct index_state *state);
 static int index_lock(struct index_state *state);
 static void index_unlock(struct index_state *state);
-// extern struct namespace imapd_namespace;
 
 struct index_modified_flags {
     int added_flags;
@@ -294,7 +295,6 @@ EXPORTED int index_open(const char *name, struct index_init *init,
 	state->examining = init->examine_mode;
 	state->mboxname = xstrdup(name);
 	state->out = init->out;
-	state->qresync = init->qresync;
 	state->userid = xstrdupnull(init->userid);
 	state->want_expunged = init->want_expunged;
 
@@ -855,7 +855,7 @@ EXPORTED int index_check(struct index_state *state, int usinguid, int printuid)
 	    fatal("Mailbox has been (re)moved", EC_IOERR);
 	}
 
-	if (state->exists && state->qresync) {
+	if (state->exists && (client_capa & CAPA_QRESYNC)) {
 	    /* XXX - is it OK to just expand to entire possible range? */
 	    prot_printf(state->out, "* VANISHED 1:%lu\r\n", state->last_uid);
 	}
@@ -3662,7 +3662,7 @@ static void index_tellexpunge(struct index_state *state)
 	    if (msgno > state->oldexists)
 		continue;
 	    state->oldexists--;
-	    if (state->qresync)
+	    if ((client_capa & CAPA_QRESYNC))
 		seqset_add(vanishedlist, im->uid, 1);
 	    else
 		prot_printf(state->out, "* %u EXPUNGE\r\n", msgno);
@@ -3844,9 +3844,9 @@ static void index_printflags(struct index_state *state,
     /* http://www.rfc-editor.org/errata_search.php?rfc=5162
      * Errata ID: 1807 - MUST send UID and MODSEQ to all
      * untagged FETCH unsolicited responses */
-    if (usinguid || state->qresync)
+    if (usinguid || (client_capa & CAPA_QRESYNC))
 	prot_printf(state->out, " UID %u", im->uid);
-    if (printmodseq || state->qresync)
+    if (printmodseq || (client_capa & CAPA_CONDSTORE))
 	prot_printf(state->out, " MODSEQ (" MODSEQ_FMT ")", im->modseq);
     prot_printf(state->out, ")\r\n");
 }
@@ -4529,7 +4529,7 @@ static int index_storeflag(struct index_state *state,
      * must always been told, and we prefer just to tell flags
      * as well in this case, it's simpler and not much more
      * bandwidth */
-    if (!state->qresync && storeargs->silent && im->told_modseq == oldmodseq)
+    if (!(client_capa & CAPA_CONDSTORE) && storeargs->silent && im->told_modseq == oldmodseq)
 	im->told_modseq = im->modseq;
 
     return 0;
@@ -4568,7 +4568,7 @@ static int index_store_annotation(struct index_state *state,
     if (r) goto out;
 
     /* if it's silent and unchanged, update the seen value */
-    if (!state->qresync && storeargs->silent && im->told_modseq == oldmodseq)
+    if (!(client_capa & CAPA_CONDSTORE) && storeargs->silent && im->told_modseq == oldmodseq)
 	im->told_modseq = im->modseq;
 
 out:
