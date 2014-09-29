@@ -3545,7 +3545,7 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
 	    data = attrib.value;
 	    datalen = attrib.size;
 	}
-	else {
+	else if ((namespace_calendar.allow & ALLOW_CAL_NOTZ)) {
 	    /*  Check for CALDAV:calendar-timezone-id */
 	    prop_annot = ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
 
@@ -3575,6 +3575,7 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
 		data = msg_base;
 	    }
 	}
+	else return HTTP_NOT_FOUND;
     }
 
     r = propfind_getdata(name, ns, fctx, propstat, prop, caldav_mime_types,
@@ -3818,6 +3819,7 @@ static int propfind_tzservset(const xmlChar *name, xmlNsPtr ns,
 {
     assert(name && ns && fctx && propstat);
 
+#ifdef HAVE_TZ_BY_REF
     if (fctx->req_tgt->resource) return HTTP_NOT_FOUND;
 
     if (namespace_calendar.allow & ALLOW_CAL_NOTZ) {
@@ -3837,6 +3839,7 @@ static int propfind_tzservset(const xmlChar *name, xmlNsPtr ns,
 
 	return 0;
     }
+#endif /* HAVE_TZ_BY_REF */
 
     return HTTP_NOT_FOUND;
 }
@@ -3855,7 +3858,8 @@ static int propfind_tzid(const xmlChar *name, xmlNsPtr ns,
     const char *value = NULL;
     int r = 0;
 
-    if (!fctx->req_tgt->collection || fctx->req_tgt->resource)
+    if (!(namespace_calendar.allow & ALLOW_CAL_NOTZ) ||
+	!fctx->req_tgt->collection || fctx->req_tgt->resource)
 	return HTTP_NOT_FOUND;
 
     if (!(r = annotatemore_lookup(fctx->mailbox->name, prop_annot,
@@ -3901,6 +3905,7 @@ static int proppatch_tzid(xmlNodePtr prop, unsigned set,
 			  struct propstat propstat[],
 			  void *rock __attribute__((unused)))
 {
+#ifdef HAVE_TZ_BY_REF
     if ((namespace_calendar.allow & ALLOW_CAL_NOTZ) &&
 	pctx->req_tgt->collection && !pctx->req_tgt->resource) {
 	xmlChar *freeme = NULL;
@@ -3954,13 +3959,17 @@ static int proppatch_tzid(xmlNodePtr prop, unsigned set,
 	}
 
 	if (freeme) xmlFree(freeme);
-    }
-    else {
-	xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
-		     &propstat[PROPSTAT_FORBID], prop->name, prop->ns, NULL, 0);
 
-	*pctx->ret = HTTP_FORBIDDEN;
+	return 0;
     }
+#else
+    (void) set;  /* squash compiler warning */
+#endif /* HAVE_TZ_BY_REF */
+
+    xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
+		 &propstat[PROPSTAT_FORBID], prop->name, prop->ns, NULL, 0);
+	    
+    *pctx->ret = HTTP_FORBIDDEN;
 
     return 0;
 }
