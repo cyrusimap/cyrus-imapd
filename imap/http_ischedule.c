@@ -1049,6 +1049,7 @@ static void isched_init(struct buf *serverinfo)
     }
 
     /* Add OpenDKIM version to serverinfo string */
+    uint32_t ver = dkim_libversion();
     buf_printf(serverinfo, " OpenDKIM/%u.%u.%u",
 	       (ver >> 24) & 0xff, (ver >> 16) & 0xff, (ver >> 8) & 0xff);
     if (ver & 0xff) buf_printf(serverinfo, ".%u", ver & 0xff);
@@ -1069,7 +1070,6 @@ static void isched_init(struct buf *serverinfo)
 				   "TE", "Trailer", "Transfer-Encoding",
 				   "Upgrade", "Via", NULL };
 	const char *senderhdrs[] = { "Originator", NULL };
-	uint32_t ver = dkim_libversion();
 	unsigned need_dkim =
 	    namespace_ischedule.enabled == IMAP_ENUM_HTTPMODULES_ISCHEDULE;
 
