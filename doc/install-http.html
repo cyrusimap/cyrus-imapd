@@ -9,7 +9,7 @@
 
 <h1>Cyrus HTTP (<a href="#RSS">RSS</a>, <a href="#CalDAV">CalDAV</a>,
   <a href="#CardDAV">CardDAV</a>, <a href="#iSchedule">iSchedule</a>,
-  <a href="#Timezone">Timezone Service</a>)</h1>
+  <a href="#TimeZone">TimeZone</a>)</h1>
 
 <b><i>Note that the HTTP service and associated modules in Cyrus are
     still under development.  This release should be considered beta
@@ -30,7 +30,7 @@
 <li>Allow scheduling transactions between separate calendaring and
   scheduling systems via the iSchedule protocol <i>(currently only used
   within a Cyrus Murder)</i>.</li>
-<li>Act as a Timezone Service by serving iCalendar (VTIMEZONE)
+<li>Act as a Time Zone Distribution Service by serving iCalendar (VTIMEZONE)
   data to client systems.</li>
 <li>Serve static content (such as the RSS feed list template and/or
   the CalDAV/CardDAV JavaScript clients mentioned below).</li>
@@ -65,7 +65,7 @@
 <h3>General Requirements</h3>
 
 <ul>
-<li>Must have <a href="http://xmlsoft.org/">libxml2</a>
+<li>Must have <a href="http://xmlsoft.org/">LibXML2</a>
   installed.</li>
 <li>Must have a recent <a href="http://www.cyrusimap.org/">SASL</a>
   release (v2.1.26 or later) in order to support HTTP Digest,
@@ -76,7 +76,7 @@
 <h3>Additional CalDAV / CardDAV Requirements</h3>
 <ul>
 <li>Must
-  have <a href="http://freeassociation.sourceforge.net/">libical</a>
+  have <a href="http://libical.github.io/libical/">Libical</a>
   installed.</li>
 <li>Must have <a href="http://www.sqlite.org/">SQLite</a> v3.x (or
   later) installed.</li>
@@ -95,10 +95,10 @@
 </ul>
 -->
 
-<h3>Additional Timezone Service Requirements</h3>
+<h3>Additional Time Zone Distribution Service Requirements</h3>
 <ul>
 <li>Must
-  have <a href="http://freeassociation.sourceforge.net/">libical</a>
+  have <a href="http://libical.github.io/libical/">Libical</a>
   installed.</li>
 <li>Must have <a href="http://www.digip.org/jansson/">Jansson</a>
   installed.</li>
@@ -529,13 +529,13 @@
 </p>
 
 
-<h2 id="Timezone">Timezone Service Module</h2>
+<h2 id="TimeZone">Time Zone Distribution Service Module</h2>
 
 <h3>Configuration</h3>
 
-<p>When enabled, the Timezone module allows Cyrus to function as a
-  timezone service, providing timezone data to client systems.  This
-  module stores timezone data in the <tt>zoneinfo/</tt> subdirectory of
+<p>When enabled, the Time Zone module allows Cyrus to function as a
+  Time Zone Distribution Service, providing time zone data to client systems.  This
+  module stores time zone data in the <tt>zoneinfo/</tt> subdirectory of
   the Cyrus configuration directory (as specified by
   the <tt>configdir</tt> option).  The data is indexed by a database
   whose location is specified by the <tt>zoneinfo_db_path</tt> option,
@@ -543,7 +543,7 @@
 
 <h3>Administration</h3>
 
-<p>This module is designed to use the <i>Time Zone Database</i> data
+<p>This module is designed to use the <i>IANA Time Zone Database</i> data
   (a.k.a. <i>Olson Database</i>) converted to the iCalendar format.  The
   steps to populate the Cyrus <tt>zoneinfo/</tt> directory are as follows:
 
@@ -555,7 +555,7 @@
 <li>Download the latest version of the Time Zone Database data
   from <a href="http://www.iana.org/time-zones">IANA</a>.  <i>Only the
     data is required, NOT the code</i>.</li>
-<li>Expand the downloaded timezone data into the temporary directory
+<li>Expand the downloaded time zone data into the temporary directory
   of your choice.</li>
 <li>Populate <tt>configdir/zoneinfo/</tt> with iCalendar data:
   <p><i>Initial Install Only</i></p>
@@ -587,7 +587,7 @@
   running <tt>ctl_zoneinfo</tt> as follows:
   <p><tt>ctl_zoneinfo -r &lt;version-string&gt;</tt></p>
   <p>where <tt>&lt;version-string&gt;</tt> describes the recently
-  downloaded timezone data (e.g. "Time Zone Database
+  downloaded time zone data (e.g. "IANA Time Zone Database
   v.2013h").</p></li>
 <li>Verify that the zoneinfo index database and all iCalendar data
   files/links are readable by the <tt>cyrus</tt> user.</li>
