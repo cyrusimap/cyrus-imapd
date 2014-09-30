@@ -49,7 +49,7 @@ ec TZ_INVALID_TZID,
    "invalid-tzid"
 
 ec TZ_INVALID_PATTERN,
-   "invalid-name"
+   "invalid-pattern"
 
 ec TZ_INVALID_FORMAT,
    "invalid-format"
