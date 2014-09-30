@@ -73,7 +73,6 @@
 #include <dkim.h>
 
 //#define TEST
-//#define IOPTEST
 
 #define BASE64_LEN(inlen) ((((inlen) + 2) / 3) * 4)
 

@@ -44,6 +44,8 @@
 #ifndef HTTP_CALDAV_SCHED_H
 #define HTTP_CALDAV_SCHED_H
 
+//#define IOPTEST
+
 #include <libical/ical.h>
 
 #ifdef WITH_DKIM

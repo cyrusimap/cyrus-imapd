@@ -98,7 +98,6 @@
 #include "xstrlcpy.h"
 #include "zoneinfo_db.h"
 
-//#define IOPTEST
 
 #define NEW_STAG (1<<8)  /* Make sure we skip over PREFER bits */
 
@@ -5036,6 +5035,12 @@ int caladdress_lookup(const char *addr, struct sched_param *param)
       param->server = "ischedule.mysite.edu";
       param->port = 8080;
       param->flags |= SCHEDTYPE_ISCHEDULE;
+    }
+    else if (!strcmp(p, "bedework.org")) {
+      param->userid = userid;
+      param->server = "www.bedework.org";
+      param->port = 443;
+      param->flags |= SCHEDTYPE_ISCHEDULE | SCHEDTYPE_SSL;
     }
 #endif /* IOPTEST */
 
