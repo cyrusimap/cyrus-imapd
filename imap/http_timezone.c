@@ -143,7 +143,7 @@ struct namespace_t namespace_timezone = {
 	{ NULL,			NULL },			/* MKCOL	*/
 	{ NULL,			NULL },			/* MOVE		*/
 	{ &meth_options,	NULL },			/* OPTIONS	*/
-	{ &meth_get,		NULL },			/* POST	*/
+	{ NULL,			NULL },			/* POST	*/
 	{ NULL,			NULL },			/* PROPFIND	*/
 	{ NULL,			NULL },			/* PROPPATCH	*/
 	{ NULL,			NULL },			/* PUT		*/
@@ -377,7 +377,9 @@ static int action_list(struct transaction_t *txn)
     param = hash_lookup("action", &txn->req_qparams);
     if (!strcmp("find", param->s)) {
 	name = hash_lookup("pattern", &txn->req_qparams);
-	if (!name || name->next) {  /* mandatory, once only */
+	if (!name || name->next		  /* mandatory, once only */
+	    || !name->s || !*name->s	  /* not empty */
+	    || !strcspn(name->s, "*")) {  /* not (*)+ */
 	    return json_error_response(txn, TZ_INVALID_PATTERN, name, NULL);
 	}
 	tzid_only = 0;
@@ -1424,6 +1426,7 @@ static int json_error_response(struct transaction_t *txn, long tz_code,
 
     if (!param) fmt = "missing %s parameter";
     else if (param->next) fmt = "multiple %s parameters";
+    else if (!param->s || !param->s[0]) fmt = "missing %s value";
     else if (!time) fmt = "unknown %s value";
     else if (!time->is_utc) fmt = "invalid %s UTC value";
 
@@ -1433,9 +1436,6 @@ static int json_error_response(struct transaction_t *txn, long tz_code,
 	break;
 
     case TZ_INVALID_END:
-	if (!fmt) fmt = "end <= start";
-	break;
-
     case TZ_INVALID_TRUNCATE:
 	if (!fmt) fmt = "end <= start";
 	break;
