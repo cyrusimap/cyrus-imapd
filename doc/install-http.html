@@ -71,6 +71,10 @@
   release (v2.1.26 or later) in order to support HTTP Digest,
   Negotiate, and NTLM authentication.  Otherwise, only HTTP Basic
   authentication will be available.</li>
+<li>Optionally install <a href="http://www.openssl.org/">OpenSSL</a>
+  for HTTPS support.</li>
+<li>Optionally install <a href="http://www.zlib.net/">Zlib</a> for
+  compression support.</li>
 </ul>
 
 <h3>Additional CalDAV / CardDAV Requirements</h3>
@@ -83,17 +87,22 @@
 <li>Optionally
   install <a href="http://www.digip.org/jansson/">Jansson</a> for
   jCal/jCard support.</li>
+<li>Optionally
+  install <a href="http://site.icu-project.org/">ICU4C</a> for
+  non-Gregorian calendar support,
+  if <a href="http://libical.github.io/libical/">Libical</a> has
+  support for the RSCALE extension.</li>
 </ul>
 
-<!--
 <h3>Additional iSchedule Requirements</h3>
 <ul>
 <li>Must meet CalDAV requirements above.</li>
 <li>Must
-  have <a href="http://www.opendkim.org/">OpenDKIM v2.x.x (or higher)</a>
-  installed.</li>
+  have <a href="http://www.opendkim.org/">OpenDKIM</a> with support
+  for iSchedule canonicalization installed (currently requires a
+  <a href="http://git.cyrusimap.org/cyrus-imapd/plain/contrib/dkim_canon_ischedule.patch?h=caldav-2.4"/>
+  CMU patch</a>).</li> 
 </ul>
--->
 
 <h3>Additional Time Zone Distribution Service Requirements</h3>
 <ul>
