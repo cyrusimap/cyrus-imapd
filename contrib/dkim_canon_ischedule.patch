@@ -1,0 +1,80 @@
+diff --git a/libopendkim/dkim-canon.c b/libopendkim/dkim-canon.c
+index 125bf12..3531273 100644
+--- a/libopendkim/dkim-canon.c
++++ b/libopendkim/dkim-canon.c
+@@ -342,6 +342,7 @@ dkim_canon_header_string(struct dkim_dstring *dstr, dkim_canon_t canon,
+ 		break;
+ 
+ 	  case DKIM_CANON_RELAXED:
++	  case DKIM_CANON_ISCHEDULE:
+ 		/* process header field name (before colon) first */
+ 		for (p = hdr; p < hdr + hdrlen; p++)
+ 		{
+@@ -847,7 +848,8 @@ dkim_add_canon(DKIM *dkim, _Bool hdr, dkim_canon_t canon, int hashtype,
+ 	DKIM_CANON *new;
+ 
+ 	assert(dkim != NULL);
+-	assert(canon == DKIM_CANON_SIMPLE || canon == DKIM_CANON_RELAXED);
++	assert(canon == DKIM_CANON_SIMPLE || canon == DKIM_CANON_RELAXED ||
++	       canon == DKIM_CANON_ISCHEDULE);
+ 	if (dkim_libfeature(dkim->dkim_libhandle, DKIM_FEATURE_SHA256))
+ 	{
+ 		assert(hashtype == DKIM_HASHTYPE_SHA1 ||
+@@ -1381,7 +1383,8 @@ dkim_canon_runheaders(DKIM *dkim)
+ 		tmphdr.hdr_flags = 0;
+ 		tmphdr.hdr_next = NULL;
+ 
+-		if (cur->canon_canon == DKIM_CANON_RELAXED)
++		if (cur->canon_canon == DKIM_CANON_RELAXED ||
++		    cur->canon_canon == DKIM_CANON_ISCHEDULE)
+ 			dkim_lowerhdr(tmphdr.hdr_text);
+ 		(void) dkim_canon_header(dkim, cur, &tmphdr, FALSE);
+ 		dkim_canon_buffer(cur, NULL, 0);
+@@ -1510,7 +1513,8 @@ dkim_canon_signature(DKIM *dkim, struct dkim_header *hdr)
+ 		tmphdr.hdr_textlen = dkim_dstring_len(dkim->dkim_hdrbuf);
+ 		tmphdr.hdr_flags = 0;
+ 		tmphdr.hdr_next = NULL;
+-		if (cur->canon_canon == DKIM_CANON_RELAXED)
++		if (cur->canon_canon == DKIM_CANON_RELAXED ||
++		    cur->canon_canon == DKIM_CANON_ISCHEDULE)
+ 			dkim_lowerhdr(tmphdr.hdr_text);
+ 		
+ 		/* canonicalize the signature */
+diff --git a/libopendkim/dkim-tables.c b/libopendkim/dkim-tables.c
+index 3b1aaea..d22c8bb 100644
+--- a/libopendkim/dkim-tables.c
++++ b/libopendkim/dkim-tables.c
+@@ -94,6 +94,7 @@ static struct nametable prv_canonicalizations[] = /* canonicalizations */
+ {
+ 	{ "simple",	DKIM_CANON_SIMPLE },
+ 	{ "relaxed",	DKIM_CANON_RELAXED },
++	{ "ischedule-relaxed",	DKIM_CANON_ISCHEDULE },
+ 	{ NULL,		-1 },
+ };
+ struct nametable *canonicalizations = prv_canonicalizations;
+diff --git a/libopendkim/dkim.c b/libopendkim/dkim.c
+index 4dd9a95..4a9c02f 100644
+--- a/libopendkim/dkim.c
++++ b/libopendkim/dkim.c
+@@ -5200,7 +5200,8 @@ dkim_sign(DKIM_LIB *libhandle, const unsigned char *id, void *memclosure,
+ 	assert(selector != NULL);
+ 	assert(domain != NULL);
+ 	assert(hdrcanonalg == DKIM_CANON_SIMPLE ||
+-	       hdrcanonalg == DKIM_CANON_RELAXED);
++	       hdrcanonalg == DKIM_CANON_RELAXED ||
++	       hdrcanonalg == DKIM_CANON_ISCHEDULE);
+ 	assert(bodycanonalg == DKIM_CANON_SIMPLE ||
+ 	       bodycanonalg == DKIM_CANON_RELAXED);
+ 	assert(signalg == DKIM_SIGN_DEFAULT ||
+diff --git a/libopendkim/dkim.h b/libopendkim/dkim.h
+index 09b70f4..fc8f762 100644
+--- a/libopendkim/dkim.h
++++ b/libopendkim/dkim.h
+@@ -173,6 +173,7 @@ typedef int dkim_canon_t;
+ #define DKIM_CANON_UNKNOWN	(-1)	/* unknown method */
+ #define DKIM_CANON_SIMPLE	0	/* as specified in DKIM spec */
+ #define DKIM_CANON_RELAXED	1	/* as specified in DKIM spec */
++#define DKIM_CANON_ISCHEDULE	2	/* as specified in iSchedule spec */
+ 
+ #define DKIM_CANON_DEFAULT	DKIM_CANON_SIMPLE
+ 
