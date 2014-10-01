@@ -52,6 +52,7 @@
 
 #include "strarray.h"
 #include "sieve/sieve_err.h"
+#include "varlist.h"
 
 /* external sieve types */
 typedef struct sieve_interp sieve_interp_t;
