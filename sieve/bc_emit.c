@@ -512,7 +512,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 	    if(testdist == -1)return -1;
 	    filelen +=testdist;
 	    
-            /*store the location for hte end of the test
+            /*store the location for the end of the test
 	     *this is important for short circuiting of allof/anyof*/
 	    jumpto=filelen/4;
 	    if(lseek(fd, testEndLoc, SEEK_SET) == -1)
@@ -881,7 +881,7 @@ EXPORTED int sieve_emit_bytecode(int fd, bytecode_info_t *bc)
     dump(bc, 0);
 #endif
 
-    /*the sizeof(int) is to account for the version # at the begining*/
+    /*the sizeof(int) is to account for the version # at the beginning*/
     return bc_action_emit(fd, 0, bc->scriptend, bc, sizeof(int) + BYTECODE_MAGIC_LEN);
 }
 

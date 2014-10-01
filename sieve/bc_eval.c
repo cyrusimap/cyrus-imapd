@@ -468,7 +468,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 	const struct address *a;
 	char *addr;
 
-	int headersi=address+i+5;/* the i value for the begining of the headers */
+	int headersi=address+i+5;/* the i value for the beginning of the headers */
 	int datai=(ntohl(bc[headersi+1].value)/4);
 
 	int numheaders=ntohl(bc[headersi].len);
@@ -668,7 +668,7 @@ envelope_err:
     {
 	const char** val;
 
-	int headersi=i+5;/*the i value for the begining of hte headers*/
+	int headersi=i+5;/*the i value for the beginning of the headers*/
 	int datai=(ntohl(bc[headersi+1].value)/4);
 
 	int numheaders=ntohl(bc[headersi].len);
@@ -816,7 +816,7 @@ envelope_err:
 	sieve_bodypart_t ** val;
 	const char **content_types = NULL;
 
-	int typesi=i+6;/* the i value for the begining of the content-types */
+	int typesi=i+6;/* the i value for the beginning of the content-types */
  	int datai=(ntohl(bc[typesi+1].value)/4);
 
 	int numdata=ntohl(bc[datai].len);
