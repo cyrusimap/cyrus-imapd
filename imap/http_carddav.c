@@ -1056,7 +1056,7 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 	    time_t lastmod = oldrecord.internaldate;
 	    int precond = check_precond(txn, cdata, etag, lastmod);
 
-	    if (precond == HTTP_OK)
+	    if (precond != HTTP_OK)
 		return HTTP_PRECOND_FAILED;
 	}
 
