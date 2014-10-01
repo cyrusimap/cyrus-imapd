@@ -65,8 +65,7 @@ if test "$gssapi" != no; then
     fi
   fi
   AC_CHECK_HEADER([gssapi.h],,
-                  [AC_CHECK_HEADER([gssapi/gssapi.h],,
-                                   [AC_WARN([Disabling GSSAPI - no include files found]); gssapi=no])])
+                  [AC_CHECK_HEADER([gssapi/gssapi.h],, [gssapi=no])])
   AC_CHECK_HEADERS(gssapi/gssapi_ext.h)
   CPPFLAGS=$cmu_saved_CPPFLAGS
 

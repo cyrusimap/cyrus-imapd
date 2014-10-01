@@ -866,7 +866,7 @@ if test "$with_des" != no; then
       fi,
                  AC_WARN(No Kerberos V4 found); krb4=no,
       	   $KRB_LIBS),
-    AC_WARN(No Kerberos V4 found); krb4=no)
+    krb4=no)
 else
   AC_WARN(No DES library found for Kerberos V4 support)
   krb4=no
@@ -1622,7 +1622,9 @@ echo "
 Cyrus Imapd configured components
 
    event notification: $enable_event_notification
+   gssapi:             $gssapi
    idled:              $enable_idled
+   kerberos V4:        $krb4
    murder:             $enable_murder
    nntpd:              $enable_nntp
    replication:        $enable_replication
