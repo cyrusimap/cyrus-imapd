@@ -5034,8 +5034,8 @@ int caladdress_lookup(const char *addr, struct sched_param *param)
     else if (!strcmp(p, "bedework.org")) {
       param->userid = userid;
       param->server = "www.bedework.org";
-      param->port = 443;
-      param->flags |= SCHEDTYPE_ISCHEDULE | SCHEDTYPE_SSL;
+      param->port = 80;
+      param->flags |= SCHEDTYPE_ISCHEDULE;
     }
 #endif /* IOPTEST */
 
