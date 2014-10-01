@@ -360,10 +360,10 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 
     switch(op)
     {
-    case BC_FALSE:
+    case BC_FALSE:/*0*/
 	res=0; i++; break;
 
-    case BC_TRUE:
+    case BC_TRUE:/*1*/
 	res=1; i++; break;
 
     case BC_NOT:/*2*/
@@ -1305,17 +1305,17 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    break;
 	}
 
-	case B_MARK:/*8*/
+	case B_MARK:/*7*/
 	    res = do_mark(actions);
 	    ip++;
 	    break;
 
-	case B_UNMARK:/*9*/
+	case B_UNMARK:/*8*/
 	    res = do_unmark(actions);
 	    ip++;
 	    break;
 
-	case B_ADDFLAG:/*10*/ 
+	case B_ADDFLAG:/*9*/
 	{
 	    int x;
 	    int list_len=ntohl(bc[ip+1].len);
@@ -1333,7 +1333,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    break;
 	}
 
-	case B_SETFLAG:
+	case B_SETFLAG:/*10*/
 	{
 	    int x;
 	    int list_len=ntohl(bc[ip+1].len);
@@ -1360,7 +1360,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    break;
 	}
 
-	case B_REMOVEFLAG:
+	case B_REMOVEFLAG:/*11*/
 	{
 	    int x;
 	    int list_len=ntohl(bc[ip+1].len);
@@ -1378,7 +1378,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    break;
 	}
 
-	case B_NOTIFY:
+	case B_NOTIFY:/*12*/
 	{
 	    const char * id;
 	    const char * method;
@@ -1428,7 +1428,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
 	    break;
 	}
-	case B_DENOTIFY:
+	case B_DENOTIFY:/*13*/
 	{
          /*
 	  * i really have no idea what the count matchtype should do here.
@@ -1511,8 +1511,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    
 	    break;
 	}
-	case B_VACATION_ORIG:
-	case B_VACATION:
+	case B_VACATION_ORIG:/*14*/
+	case B_VACATION:/*21*/
 	{
 	    int respond;
 	    char *fromaddr = NULL; /* relative to message we send */
