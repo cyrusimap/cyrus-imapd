@@ -447,11 +447,10 @@ static int meth_post_isched(struct transaction_t *txn,
     }
 
     /* Check authorization */
-    if (httpd_userid) {
-syslog(LOG_INFO, "userid: %s", httpd_userid);
+    if (httpd_userisadmin ||
+	global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
 	/* Allow admins or proxyservers to auth and use iSchedule */
-	authd = httpd_userisadmin ||
-	    global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS);
+	authd = 1;
     }
     else if (config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS)) {
 	authd = 1;
