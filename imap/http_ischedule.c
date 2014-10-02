@@ -452,6 +452,9 @@ static int meth_post_isched(struct transaction_t *txn,
 	authd = httpd_userisadmin ||
 	    global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS);
     }
+    else if (config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS)) {
+	authd = 1;
+    }
     else if (proxy_userid) {
 	authd = 1;
     }
