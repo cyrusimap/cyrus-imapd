@@ -453,6 +453,9 @@ static int meth_post_isched(struct transaction_t *txn,
 	authd = httpd_userisadmin ||
 	    global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS);
     }
+    else if (proxy_userid) {
+	authd = 1;
+    }
     else if (!spool_getheader(txn->req_hdrs, "DKIM-Signature")) {
 	txn->error.desc = "No signature";
     }
