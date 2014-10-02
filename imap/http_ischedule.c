@@ -449,6 +449,7 @@ static int meth_post_isched(struct transaction_t *txn,
 
     /* Check authorization */
     if (httpd_userid) {
+syslog(LOG_INFO, "userid: %s", httpd_userid);
 	/* Allow admins or proxyservers to auth and use iSchedule */
 	authd = httpd_userisadmin ||
 	    global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS);
