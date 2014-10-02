@@ -12918,7 +12918,7 @@ static void cmd_enable(char *tag)
 {
     static struct buf arg;
     int c;
-    unsigned new_capa = client_capa;
+    unsigned new_capa = 0;
 
     /* RFC5161 says that enable while selected is actually bogus,
      * but it's no skin off our nose to support it, so don't
@@ -12934,9 +12934,9 @@ static void cmd_enable(char *tag)
 	    return;
 	}
 	if (!strcasecmp(arg.s, "condstore"))
-	    new_capa = CAPA_CONDSTORE;
+	    new_capa |= CAPA_CONDSTORE;
 	else if (!strcasecmp(arg.s, "qresync"))
-	    new_capa = CAPA_QRESYNC | CAPA_CONDSTORE;
+	    new_capa |= CAPA_QRESYNC | CAPA_CONDSTORE;
     } while (c == ' ');
 
     /* check for CRLF */
