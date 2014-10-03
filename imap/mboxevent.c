@@ -661,7 +661,16 @@ EXPORTED void mboxevent_set_acl(struct mboxevent *event, const char *identifier,
 	return;
 
     FILL_STRING_PARAM(event, EVENT_ACL_SUBJECT, xstrdup(identifier));
-    FILL_STRING_PARAM(event, EVENT_ACL_RIGHTS, xstrdup(rights));
+    // If rights == 0x0, perhaps this is a Deleteacl command, that
+    // deletes the rights for a subject, rather than a *setting* the
+    // acl to an empty string like Setacl: Setacl <folder> <subject> ""
+    if (rights == 0x0) {
+	// Pretend it is filled, but do it with null or mboxevent_free
+	// will trip.
+	FILL_STRING_PARAM(event, EVENT_ACL_RIGHTS, '\0');
+    } else {
+	FILL_STRING_PARAM(event, EVENT_ACL_RIGHTS, xstrdup(rights));
+    }
 }
 
 EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *mailbox,
