@@ -228,6 +228,22 @@ static void test_tourl_user(void)
     CU_ASSERT_STRING_EQUAL(buf, URL);
 }
 
+static void test_tourl_shared(void)
+{
+    static const char URL[] = "imap://wooster@jeeves/shared/test";
+    struct imapurl iurl;
+    char buf[300];
+
+    memset(&iurl, 0, sizeof(iurl));
+    iurl.user = "wooster";
+    iurl.server = "jeeves";
+    iurl.mailbox = "shared/test";
+    memset(buf, 0x45, sizeof(buf));
+    imapurl_toURL(buf, &iurl);
+    CU_ASSERT_STRING_EQUAL(buf, URL);
+}
+
+
 static void test_tourl_options(void)
 {
     static const char URL[] = "imap://jeeves/deverill"

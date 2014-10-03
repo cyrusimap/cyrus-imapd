@@ -565,84 +565,41 @@ static int mboxname_toexternal(struct namespace *namespace, const char *mboxname
 }
 
 /* Handle conversion from the internal namespace to the alternate namespace */
-static int mboxname_toexternal_alt(struct namespace *namespace, const char *name,
+static int mboxname_toexternal_alt(struct namespace *namespace, const char *mboxname,
 				  const char *userid, char *result)
 {
-    char *domain;
-    size_t userlen, resultlen;
+    char iresult[MAX_MAILBOX_NAME];
+    int r = 0;
 
-    /* Blank the result, just in case */
-    result[0] = '\0';
+    // Make this abundantly simple
+    mboxname_toexternal(namespace, mboxname, userid, iresult);
 
-    if(strlen(name) > MAX_MAILBOX_NAME) return IMAP_MAILBOX_BADNAME;
-    
-    if (!userid) return IMAP_MAILBOX_BADNAME;
+    r = strncasecmp(iresult, "inbox", 5);
 
-    userlen = strlen(userid);
-
-    if (config_virtdomains && (domain = strchr(userid, '@'))) {
-	size_t domainlen = strlen(domain);
-
-	userlen = domain - userid;
-
-	if (!strncmp(name, domain+1, domainlen-1) &&
-	    name[domainlen-1] == '!') {
-	    name += domainlen;
+    if (!r) {
+	if (iresult[5] == '\0') {
+	    sprintf(result, "%s", iresult);
+	} else if (iresult[5] == namespace->hier_sep) {
+	    sprintf(result, "%s", iresult+6);
 	}
+
+	return 0;
     }
 
-    /* Personal (INBOX) namespace */
-    if (!strncasecmp(name, "inbox", 5) &&
-	(name[5] == '\0' || name[5] == '.')) {
-	if (name[5] == '\0')
-	    strcpy(result, name);
-	else
-	    strcpy(result, name+6);
-    }
-    /* paranoia - this shouldn't be needed */
-    else if (!strncmp(name, "user.", 5) &&
-	     !strncmp(name+5, userid, userlen) &&
-	     (name[5+userlen] == '\0' ||
-	      name[5+userlen] == '.')) {
-	if (name[5+userlen] == '\0')
-	    strcpy(result, "INBOX");
-	else
-	    strcpy(result, name+5+userlen+1);
-    }
+    r = strncasecmp(iresult, "user", 4);
 
-    /* Other Users namespace */
-    else if (!strncmp(name, "user", 4) &&
-	     (name[4] == '\0' || name[4] == '.')) {
-	size_t prefixlen = strlen(namespace->prefix[NAMESPACE_USER]);
-
-	if ((prefixlen > MAX_MAILBOX_NAME) || 
-	    ((name[4] == '.') && 
-	     ((prefixlen+1+strlen(name+5)) > MAX_MAILBOX_NAME)))
-	    return IMAP_MAILBOX_BADNAME;
-
-	sprintf(result, "%.*s",
-		(int) (prefixlen-1), namespace->prefix[NAMESPACE_USER]);
-	resultlen = strlen(result);
-	if (name[4] == '.') {
-	    sprintf(result+resultlen, "%c%s", namespace->hier_sep, name+5);
+    if (!r) {
+	if (iresult[4] == namespace->hier_sep) {
+	    // The namespace already has a hierarchy separator
+	    sprintf(result, "%s%s", namespace->prefix[NAMESPACE_USER], iresult+5);
 	}
+
+	return 0;
     }
 
-    /* Shared namespace */
-    else {
-	/* special case:  LIST/LSUB "" % */
-	if (!strncmp(name, namespace->prefix[NAMESPACE_SHARED],
-		     strlen(namespace->prefix[NAMESPACE_SHARED])-1)) {
-	    strcpy(result, name);
-	}
-	else {
-	    strcpy(result, namespace->prefix[NAMESPACE_SHARED]);
-	    strcat(result, name);
-	}
-    }
+    // The namespace already has a hierarchy separator
+    sprintf(result, "%s%s", namespace->prefix[NAMESPACE_SHARED], iresult);
 
-    /* Translate any separators in mailboxname */
-    mboxname_hiersep_toexternal(namespace, result, 0);
     return 0;
 }
 
