@@ -1,5 +1,6 @@
 require ["reject", "fileinto", "imapflags", "vacation", "notify",
-	"vacation-seconds", "copy", "imap4flags"];
+	"vacation-seconds", "copy", "imap4flags", "relational",
+	"comparator-i;ascii-numeric"];
 
 #this is for the extra thigns we have added to sieve
 

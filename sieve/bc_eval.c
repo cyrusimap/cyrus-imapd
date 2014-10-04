@@ -900,6 +900,24 @@ envelope_err:
 	    break;
 	}
 
+	if  (match == B_COUNT )
+	{
+	    count = workingflags->count;
+	    snprintf(scount, SCOUNT_SIZE, "%u", count);
+	    /*search through all the data*/
+	    currneedle=needlesi+2;
+	    for (z=0; z<numneedles && !res; z++)
+	    {
+		const char *this_needle;
+
+		currneedle = unwrap_string(bc, currneedle, &this_needle, NULL);
+#if VERBOSE
+		printf("%d, %s \n", count, data_val);
+#endif
+		res |= comp(scount, strlen(scount), this_needle, comprock);
+	    }
+	} else {
+
 	/* search through the haystack for the needles */
 	currneedle=needlesi+2;
 	for(x=0; x<numneedles && !res; x++)
@@ -937,28 +955,8 @@ envelope_err:
 		    res |= comp(active_flag, strlen(active_flag),
 				this_needle, comprock);
 		}
-		if  (match == B_COUNT && res) {
-		    count++;
-		}
 	    }
 	}
-
-	// TODO: support :count in hasflag
-	if  (0 && match == B_COUNT )
-	{
-	    snprintf(scount, SCOUNT_SIZE, "%u", count);
-	    /*search through all the data*/
-	    for (z=0; z < workingflags->count && !res; z++)
-	    {
-		const char *active_flag;
-
-		active_flag = workingflags->data[z];
-#if VERBOSE
-		printf("%d, %s \n", count, active_flag);
-#endif
-		res |= comp(scount, strlen(scount), active_flag, comprock);
-	    }
-
 	}
 
 	/* Update IP */
