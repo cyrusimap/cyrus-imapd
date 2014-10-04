@@ -447,15 +447,9 @@ static int meth_post_isched(struct transaction_t *txn,
     }
 
     /* Check authorization */
-    if (httpd_userisadmin ||
-	global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
-	/* Allow admins or proxyservers to auth and use iSchedule */
-	authd = 1;
-    }
-    else if (config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS)) {
-	authd = 1;
-    }
-    else if (proxy_userid) {
+    if (httpd_userid &&
+	config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS)) {
+	/* Allow frontends to HTTP auth to backends and use iSchedule */
 	authd = 1;
     }
     else if (!spool_getheader(txn->req_hdrs, "DKIM-Signature")) {
@@ -615,7 +609,7 @@ int isched_send(struct sched_param *sparam, const char *recipient,
     if (sparam->port) buf_printf(&txn.buf, ":%u", sparam->port);
     if (sparam->flags & SCHEDTYPE_SSL) buf_appendcstr(&txn.buf, "/tls");
     if (sparam->flags & SCHEDTYPE_REMOTE) buf_appendcstr(&txn.buf, "/noauth");
-    be = proxy_findserver(buf_cstring(&txn.buf), &http_protocol, NULL,
+    be = proxy_findserver(buf_cstring(&txn.buf), &http_protocol, proxy_userid,
 			  &backend_cached, NULL, NULL, httpd_in);
     if (!be) return HTTP_UNAVAILABLE;
 
@@ -1043,7 +1037,7 @@ static void isched_init(struct buf *serverinfo)
     compile_time = calc_compile_time(__TIME__, __DATE__);
 
     if (config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS)) {
-	/* If backend server, we require ISCHEDULE (w/o DKIM) */
+	/* If backend server, we require iSchedule (w/o DKIM) */
 	namespace_ischedule.enabled = -1;
 	buf_len(serverinfo);  // squash compiler warning when #undef WITH_DKIM
     }
