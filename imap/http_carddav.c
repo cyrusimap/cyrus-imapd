@@ -116,9 +116,6 @@ static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
 static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
 			    struct propfind_ctx *fctx, xmlNodePtr resp,
 			    struct propstat propstat[], void *rock);
-static int propfind_reportset(const xmlChar *name, xmlNsPtr ns,
-			      struct propfind_ctx *fctx, xmlNodePtr resp,
-			      struct propstat propstat[], void *rock);
 static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
 			     struct propfind_ctx *fctx, xmlNodePtr resp,
 			     struct propstat propstat[], void *rock);
@@ -143,6 +140,26 @@ static struct mime_type_t carddav_mime_types[] = {
       (void (*)(void *)) &cleanVObject, NULL, NULL
     },
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
+};
+
+/* Array of supported REPORTs */
+static const struct report_type_t carddav_reports[] = {
+
+    /* WebDAV Versioning (RFC 3253) REPORTs */
+    { "expand-property", NS_DAV, "multistatus", &report_expand_prop,
+      DACL_READ, 0 },
+
+    /* WebDAV Sync (RFC 6578) REPORTs */
+    { "sync-collection", NS_DAV, "multistatus", &report_sync_col,
+      DACL_READ, REPORT_NEED_MBOX | REPORT_NEED_PROPS },
+
+    /* CardDAV (RFC 6352) REPORTs */
+    { "addressbook-query", NS_CARDDAV, "multistatus", &report_card_query,
+      DACL_READ, REPORT_NEED_MBOX },
+    { "addressbook-multiget", NS_CARDDAV, "multistatus", &report_card_multiget,
+      DACL_READ, REPORT_NEED_MBOX },
+
+    { NULL, 0, NULL, NULL, 0, 0 }
 };
 
 /* Array of known "live" properties */
@@ -178,10 +195,10 @@ static const struct prop_entry carddav_props[] = {
 
     /* WebDAV Versioning (RFC 3253) properties */
     { "supported-report-set", NS_DAV, PROP_COLLECTION,
-      propfind_reportset, NULL, NULL },
+      propfind_reportset, NULL, (void *) carddav_reports },
 
     /* WebDAV ACL (RFC 3744) properties */
-    { "owner", NS_DAV, PROP_COLLECTION | PROP_RESOURCE,
+    { "owner", NS_DAV, PROP_COLLECTION | PROP_RESOURCE | PROP_EXPAND,
       propfind_owner, NULL, NULL },
     { "group", NS_DAV, 0, NULL, NULL, NULL },
     { "supported-privilege-set", NS_DAV, PROP_COLLECTION | PROP_RESOURCE,
@@ -203,7 +220,8 @@ static const struct prop_entry carddav_props[] = {
       propfind_quota, NULL, NULL },
 
     /* WebDAV Current Principal (RFC 5397) properties */
-    { "current-user-principal", NS_DAV, PROP_COLLECTION | PROP_RESOURCE,
+    { "current-user-principal", NS_DAV,
+      PROP_COLLECTION | PROP_RESOURCE | PROP_EXPAND,
       propfind_curprin, NULL, NULL },
 
     /* WebDAV POST (RFC 5995) properties */
@@ -249,13 +267,7 @@ static struct meth_params carddav_params = {
     NULL,		  	      		/* No special POST handling */
     { CARDDAV_SUPP_DATA, (put_proc_t) &carddav_put },
     carddav_props,
-    { { "addressbook-query", "multistatus", &report_card_query,
-	DACL_READ, REPORT_NEED_MBOX },
-      { "addressbook-multiget", "multistatus", &report_card_multiget,
-	DACL_READ, REPORT_NEED_MBOX },
-      { "sync-collection", "multistatus", &report_sync_col,
-	DACL_READ, REPORT_NEED_MBOX | REPORT_NEED_PROPS },
-      { NULL, NULL, NULL, 0, 0 } }
+    carddav_reports
 };
 
 
@@ -703,38 +715,6 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
 }
 
 
-/* Callback to fetch DAV:supported-report-set */
-static int propfind_reportset(const xmlChar *name, xmlNsPtr ns,
-			      struct propfind_ctx *fctx,
-			      xmlNodePtr resp,
-			      struct propstat propstat[],
-			      void *rock __attribute__((unused)))
-{
-    xmlNodePtr s, r, top;
-
-    top = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-		       name, ns, NULL, 0);
-
-    if (fctx->req_tgt->collection && !fctx->req_tgt->resource) {
-	s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
-	r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
-	xmlNewChild(r, fctx->ns[NS_DAV], BAD_CAST "sync-collection", NULL);
-    }
-
-    ensure_ns(fctx->ns, NS_CARDDAV, resp->parent, XML_NS_CARDDAV, "C");
-
-    s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
-    r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
-    xmlNewChild(r, fctx->ns[NS_CARDDAV], BAD_CAST "addressbook-query", NULL);
-
-    s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
-    r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
-    xmlNewChild(r, fctx->ns[NS_CARDDAV], BAD_CAST "addressbook-multiget", NULL);
-
-    return 0;
-}
-
-
 /* Callback to prescreen/fetch CARDDAV:address-data */
 static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
 			     struct propfind_ctx *fctx,
@@ -763,14 +743,14 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
 
 
 /* Callback to fetch CARDDAV:addressbook-home-set */
-int propfind_abookurl(const xmlChar *name, xmlNsPtr ns,
-		      struct propfind_ctx *fctx,
-		      xmlNodePtr resp __attribute__((unused)),
-		      struct propstat propstat[],
-		      void *rock)
+int propfind_abookhome(const xmlChar *name, xmlNsPtr ns,
+		       struct propfind_ctx *fctx,
+		       xmlNodePtr resp __attribute__((unused)),
+		       struct propstat propstat[],
+		       void *rock)
 {
     xmlNodePtr node;
-    const char *abook = (const char *) rock;
+    xmlNodePtr expand = (xmlNodePtr) rock;
 
     if (!(namespace_addressbook.enabled && fctx->req_tgt->user))
 	return HTTP_NOT_FOUND;
@@ -779,11 +759,19 @@ int propfind_abookurl(const xmlChar *name, xmlNsPtr ns,
 			name, ns, NULL, 0);
 
     buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, "%s/user/%.*s/%s", namespace_addressbook.prefix,
-	       (int) fctx->req_tgt->userlen, fctx->req_tgt->user,
-	       abook ? abook : "");
+    buf_printf(&fctx->buf, "%s/user/%.*s/", namespace_addressbook.prefix,
+	       (int) fctx->req_tgt->userlen, fctx->req_tgt->user);
 
-    xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+    if (expand) {
+	/* Return properties for this URL */
+	expand_property(expand, fctx, buf_cstring(&fctx->buf),
+			&carddav_parse_path, carddav_props, node, 0);
+
+    }
+    else {
+	/* Return just the URL */
+	xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+    }
 
     return 0;
 }
