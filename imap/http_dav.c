@@ -102,7 +102,8 @@ enum {
     PROPFIND_NONE = 0,			/* only used with REPORT */
     PROPFIND_ALL,
     PROPFIND_NAME,
-    PROPFIND_PROP
+    PROPFIND_PROP,
+    PROPFIND_EXPAND			/* only used with expand-prop REPORT */
 };
 
 static int prin_parse_path(const char *path,
@@ -113,9 +114,6 @@ static int propfind_displayname(const xmlChar *name, xmlNsPtr ns,
 static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
 			    struct propfind_ctx *fctx, xmlNodePtr resp,
 			    struct propstat propstat[], void *rock);
-static int propfind_reportset(const xmlChar *name, xmlNsPtr ns,
-			      struct propfind_ctx *fctx, xmlNodePtr resp,
-			      struct propstat propstat[], void *rock);
 static int propfind_alturiset(const xmlChar *name, xmlNsPtr ns,
 			      struct propfind_ctx *fctx, xmlNodePtr resp,
 			      struct propstat propstat[], void *rock);
@@ -134,6 +132,22 @@ static int allprop_cb(const char *mailbox __attribute__((unused)),
 		      const char *entry,
 		      const char *userid, struct annotation_data *attrib,
 		      void *rock);
+
+/* Array of supported REPORTs */
+static const struct report_type_t dav_reports[] = {
+
+    /* WebDAV Versioning (RFC 3253) REPORTs */
+    { "expand-property", NS_DAV, "multistatus", &report_expand_prop,
+      DACL_READ, 0 },
+
+    /* WebDAV ACL (RFC 3744) REPORTs */
+    { "principal-property-search", NS_DAV, "multistatus",
+      &report_prin_prop_search, 0, 0 },
+    { "principal-search-property-set", NS_DAV, "principal-search-property-set",
+      &report_prin_search_prop_set, 0, 0 },
+
+    { NULL, 0, NULL, NULL, 0, 0 }
+};
 
 /* Array of known "live" properties */
 static const struct prop_entry dav_props[] = {
@@ -157,12 +171,12 @@ static const struct prop_entry dav_props[] = {
 
     /* WebDAV Versioning (RFC 3253) properties */
     { "supported-report-set", NS_DAV, PROP_COLLECTION,
-      propfind_reportset, NULL, NULL },
+      propfind_reportset, NULL, (void *) dav_reports },
 
     /* WebDAV ACL (RFC 3744) properties */
     { "alternate-URI-set", NS_DAV, PROP_COLLECTION,
       propfind_alturiset, NULL, NULL },
-    { "principal-URL", NS_DAV, PROP_COLLECTION,
+    { "principal-URL", NS_DAV, PROP_COLLECTION | PROP_EXPAND,
       propfind_principalurl, NULL, NULL },
     { "group-member-set", NS_DAV, 0, NULL, NULL, NULL },
     { "group-membership", NS_DAV, 0, NULL, NULL, NULL },
@@ -170,26 +184,26 @@ static const struct prop_entry dav_props[] = {
       propfind_princolset, NULL, NULL },
 
     /* WebDAV Current Principal (RFC 5397) properties */
-    { "current-user-principal", NS_DAV, PROP_COLLECTION,
+    { "current-user-principal", NS_DAV, PROP_COLLECTION | PROP_EXPAND,
       propfind_curprin, NULL, NULL },
 
     /* CalDAV (RFC 4791) properties */
-    { "calendar-home-set", NS_CALDAV, PROP_COLLECTION,
-      propfind_calurl, NULL, NULL },
+    { "calendar-home-set", NS_CALDAV, PROP_COLLECTION | PROP_EXPAND,
+      propfind_calhome, NULL, NULL },
 
     /* CalDAV Scheduling (RFC 6638) properties */
-    { "schedule-inbox-URL", NS_CALDAV, PROP_COLLECTION,
-      propfind_calurl, NULL, SCHED_INBOX },
-    { "schedule-outbox-URL", NS_CALDAV, PROP_COLLECTION,
-      propfind_calurl, NULL, SCHED_OUTBOX },
+    { "schedule-inbox-URL", NS_CALDAV, PROP_COLLECTION | PROP_EXPAND,
+      propfind_schedinbox, NULL, NULL },
+    { "schedule-outbox-URL", NS_CALDAV, PROP_COLLECTION | PROP_EXPAND,
+      propfind_schedoutbox, NULL, NULL },
     { "calendar-user-address-set", NS_CALDAV, PROP_COLLECTION,
       propfind_caluseraddr, NULL, NULL },
     { "calendar-user-type", NS_CALDAV, PROP_COLLECTION,
       propfind_calusertype, NULL, NULL },
 
     /* CardDAV (RFC 6352) properties */
-    { "addressbook-home-set", NS_CARDDAV, PROP_COLLECTION,
-      propfind_abookurl, NULL, NULL },
+    { "addressbook-home-set", NS_CARDDAV, PROP_COLLECTION | PROP_EXPAND,
+      propfind_abookhome, NULL, NULL },
 
     /* Apple Calendar Server properties */
     { "getctag", NS_CS, PROP_ALLPROP, NULL, NULL, NULL },
@@ -201,13 +215,7 @@ static const struct prop_entry dav_props[] = {
 static struct meth_params princ_params = {
     .parse_path = &prin_parse_path,
     .lprops = dav_props,
-    .reports = {
-	{ "principal-property-search", "multistatus",
-	  &report_prin_prop_search, 0, 0 },
-	{ "principal-search-property-set", "principal-search-property-set",
-	  &report_prin_search_prop_set, 0, 0 },
-	{ NULL, NULL, NULL, 0, 0 }
-    }
+    .reports = dav_reports
 };
 
 /* Namespace for WebDAV principals */
@@ -239,7 +247,7 @@ struct namespace_t namespace_principal = {
 
 /* Linked-list of properties for fetching */
 struct propfind_entry_list {
-    const xmlChar *name;		/* Property name */
+    xmlChar *name;			/* Property name (needs to be freed) */
     xmlNsPtr ns;			/* Property namespace */
     unsigned char flags;		/* Flags for how/where prop apply */
     int (*get)(const xmlChar *name,	/* Callback to fetch property */
@@ -1157,26 +1165,28 @@ int propfind_suplock(const xmlChar *name, xmlNsPtr ns,
 
 
 /* Callback to fetch DAV:supported-report-set */
-static int propfind_reportset(const xmlChar *name, xmlNsPtr ns,
-			      struct propfind_ctx *fctx,
-			      xmlNodePtr resp __attribute__((unused)),
-			      struct propstat propstat[],
-			      void *rock __attribute__((unused)))
+int propfind_reportset(const xmlChar *name, xmlNsPtr ns,
+		       struct propfind_ctx *fctx,
+		       xmlNodePtr resp __attribute__((unused)),
+		       struct propstat propstat[],
+		       void *rock __attribute__((unused)))
 {
-    xmlNodePtr s, r, top;
+    xmlNodePtr top, node;
+    const struct report_type_t *report;
 
     top = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 		       name, ns, NULL, 0);
 
-    s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
-    r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
-    xmlNewChild(r, fctx->ns[NS_DAV],
-		BAD_CAST "principal-property-search", NULL);
+    for (report = (const struct report_type_t *) rock;
+	 report && report->name; report++) {
+	node = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
+	node = xmlNewChild(node, NULL, BAD_CAST "report", NULL);
 
-    s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
-    r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
-    xmlNewChild(r, fctx->ns[NS_DAV],
-		BAD_CAST "principal-search-property-set", NULL);
+	ensure_ns(fctx->ns, report->ns, resp->parent,
+		  known_namespaces[report->ns].href,
+		  known_namespaces[report->ns].prefix);
+	xmlNewChild(node, fctx->ns[report->ns], BAD_CAST report->name, NULL);
+    }
 
     return 0;
 }
@@ -1208,11 +1218,21 @@ static int propfind_principalurl(const xmlChar *name, xmlNsPtr ns,
 
     buf_reset(&fctx->buf);
     if (fctx->req_tgt->user) {
+	xmlNodePtr expand = (xmlNodePtr) rock;
+
 	buf_printf(&fctx->buf, "%s/user/%.*s/",
 		   namespace_principal.prefix,
 		   (int) fctx->req_tgt->userlen, fctx->req_tgt->user);
+
+	if (expand) {
+	    /* Return properties for this URL */
+	    expand_property(expand, fctx, buf_cstring(&fctx->buf),
+			    &prin_parse_path, dav_props, node, 0);
+	    return 0;
+	}
     }
 
+    /* Return just the URL */
     xml_add_href(node, NULL, buf_cstring(&fctx->buf));
 
     return 0;
@@ -1230,12 +1250,22 @@ int propfind_owner(const xmlChar *name, xmlNsPtr ns,
 				   &propstat[PROPSTAT_OK], name, ns, NULL, 0);
 
     if (fctx->req_tgt->user) {
+	xmlNodePtr expand = (xmlNodePtr) rock;
+
 	buf_reset(&fctx->buf);
 	buf_printf(&fctx->buf, "%s/user/%.*s/",
 		   namespace_principal.prefix,
 		   (int) fctx->req_tgt->userlen, fctx->req_tgt->user);
 
-	xml_add_href(node, NULL, buf_cstring(&fctx->buf));
+	if (expand) {
+	    /* Return properties for this URL */
+	    expand_property(expand, fctx, buf_cstring(&fctx->buf),
+			    &prin_parse_path, dav_props, node, 0);
+	}
+	else {
+	    /* Return just the URL */
+	    xml_add_href(node, NULL, buf_cstring(&fctx->buf));
+	}
     }
 
     return 0;
@@ -1714,16 +1744,27 @@ int propfind_curprin(const xmlChar *name, xmlNsPtr ns,
 		     struct propfind_ctx *fctx,
 		     xmlNodePtr resp __attribute__((unused)),
 		     struct propstat propstat[],
-		     void *rock __attribute__((unused)))
+		     void *rock)
 {
     xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
 				   &propstat[PROPSTAT_OK], name, ns, NULL, 0);
 
     if (fctx->userid) {
+	xmlNodePtr expand = (xmlNodePtr) rock;
+
 	buf_reset(&fctx->buf);
 	buf_printf(&fctx->buf, "%s/user/%s/",
 		   namespace_principal.prefix, fctx->userid);
-	xml_add_href(node, NULL, buf_cstring(&fctx->buf));
+
+	if (expand) {
+	    /* Return properties for this URL */
+	    expand_property(expand, fctx, buf_cstring(&fctx->buf),
+			    &prin_parse_path, dav_props, node, 0);
+	}
+	else {
+	    /* Return just the URL */
+	    xml_add_href(node, NULL, buf_cstring(&fctx->buf));
+	}
     }
     else {
 	xmlNewChild(node, NULL, BAD_CAST "unauthenticated", NULL);
@@ -1989,6 +2030,7 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
     int ret = 0;
     xmlNodePtr prop;
     const struct prop_entry *entry;
+    struct propfind_entry_list *tail = NULL;
 
     if (fctx->mode == PROPFIND_ALL || fctx->mode == PROPFIND_NAME) {
 	xmlNsPtr nsDef;
@@ -2014,8 +2056,13 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 			nentry->get = entry->get;
 			nentry->rock = entry->rock;
 		    }
-		    nentry->next = fctx->elist;
-		    fctx->elist = nentry;
+
+		    /* Append new entry to linked list */
+		    if (tail) {
+			tail->next = nentry;
+			tail = nentry;
+		    }
+		    else tail = fctx->elist = nentry;
 		}
 	    }
 	}
@@ -2032,28 +2079,58 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
     for (prop = proplist; !*fctx->ret && prop; prop = prop->next) {
 	if (prop->type == XML_ELEMENT_NODE) {
 	    struct propfind_entry_list *nentry;
+	    xmlChar *name, *ns_href = NULL, *freeme = NULL;
+	    xmlNsPtr ns = NULL;
+
+	    /* Get name and namespace of property to fetch */
+	    if (fctx->mode == PROPFIND_EXPAND) {
+		/* <property> node - use name/namespace properties */
+		name = xmlGetProp(prop, BAD_CAST "name");
+		freeme = ns_href = xmlGetProp(prop, BAD_CAST "namespace");
+	    }
+	    else {
+		/* node is property */
+		name = xmlStrdup(prop->name);
+	    }
+
+	    if (!ns_href) {
+		/* Use namespace from node */
+		ns = prop->ns;
+		ns_href = (xmlChar *) ns->href;
+	    }
 
 	    /* Look for a match against our known properties */
-	    for (entry = fctx->lprops;
-		 entry->name && 
-		     (strcmp((const char *) prop->name, entry->name) ||
-		      strcmp((const char *) prop->ns->href,
-			     known_namespaces[entry->ns].href));
-		 entry++);
+	    for (entry = fctx->lprops; entry->name; entry++) {
+		if (!strcmp((const char *) name, entry->name) &&
+		    !strcmp((const char *) ns_href,
+			    known_namespaces[entry->ns].href)) {
+		    if (!ns) {
+			ensure_ns(fctx->ns, entry->ns, fctx->root,
+				  known_namespaces[entry->ns].href,
+				  known_namespaces[entry->ns].prefix);
+			ns = fctx->ns[entry->ns];
+		    }
+		    break;
+		}
+	    }
+
+	    if (freeme) xmlFree(freeme);
 
 	    /* Skip properties already included by allprop */
 	    if (fctx->mode == PROPFIND_ALL && (entry->flags & PROP_ALLPROP))
 		continue;		
 
 	    nentry = xzmalloc(sizeof(struct propfind_entry_list));
-	    nentry->name = prop->name;
-	    nentry->ns = prop->ns;
+	    nentry->name = name;
+	    nentry->ns = ns;
 	    if (entry->name) {
 		/* Found a match - Pre-screen request based on prop flags */
 		if (prescreen_prop(entry, prop, fctx)) {
 		    nentry->flags = entry->flags;
 		    nentry->get = entry->get;
-		    if (entry->flags & PROP_NEEDPROP)
+		    if ((entry->flags & PROP_NEEDPROP) ||
+			((entry->flags & PROP_EXPAND) &&
+			 fctx->mode == PROPFIND_EXPAND))
 			nentry->rock = prop;
 		    else
 			nentry->rock = entry->rock;
@@ -2066,8 +2143,13 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 		nentry->get = propfind_fromdb;
 		nentry->rock = NULL;
 	    }
-	    nentry->next = fctx->elist;
-	    fctx->elist = nentry;
+
+	    /* Append new entry to linked list */
+	    if (tail) {
+		tail->next = nentry;
+		tail = nentry;
+	    }
+	    else tail = fctx->elist = nentry;
 	}
     }
 
@@ -4042,6 +4124,7 @@ int meth_propfind(struct transaction_t *txn, void *params)
     while (elist) {
 	struct propfind_entry_list *freeme = elist;
 	elist = elist->next;
+	xmlFree(freeme->name);
 	free(freeme);
     }
 
@@ -4688,6 +4771,108 @@ int report_sync_col(struct transaction_t *txn,
 }
 
 
+int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
+		    const char *href, parse_path_t parse_path,
+		    const struct prop_entry *lprops,
+		    xmlNodePtr root, int depth)
+{
+    int ret = 0, r;
+    struct propfind_ctx prev_ctx;
+    struct request_target_t req_tgt;
+
+    memcpy(&prev_ctx, fctx, sizeof(struct propfind_ctx));
+
+    fctx->mode = PROPFIND_EXPAND;
+    if (href) {
+	/* Parse the URL */
+	memset(&req_tgt, 0, sizeof(struct request_target_t));
+	parse_path(href, &req_tgt, &fctx->err->desc);
+
+	fctx->req_tgt = &req_tgt;
+    }
+    fctx->lprops = lprops;
+    fctx->elist = NULL;
+    fctx->root = root;
+    fctx->depth = depth;
+    fctx->mailbox = NULL;
+
+    ret = preload_proplist(inroot->children, fctx);
+    if (ret) goto done;
+
+    if (!fctx->req_tgt->collection && !fctx->depth) {
+	/* Add response for principal or home-set collection */
+	struct mailbox *mailbox = NULL;
+
+	if (*fctx->req_tgt->mboxname) {
+	    /* Open mailbox for reading */
+	    if ((r = mailbox_open_irl(fctx->req_tgt->mboxname, &mailbox))) {
+		syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
+		       fctx->req_tgt->mboxname, error_message(r));
+		fctx->err->desc = error_message(r);
+		ret = HTTP_SERVER_ERROR;
+		goto done;
+	    }
+	    fctx->mailbox = mailbox;
+	}
+
+	xml_add_response(fctx, 0, 0);
+
+	mailbox_close(&mailbox);
+    }
+
+    if (fctx->depth > 0) {
+	/* Calendar collection(s) */
+
+	if (fctx->req_tgt->collection) {
+	    /* Add response for target calendar collection */
+	    propfind_by_collection(fctx->req_tgt->mboxname, 0, 0, fctx);
+	}
+	else {
+	    /* Add responses for all contained calendar collections */
+	    strlcat(fctx->req_tgt->mboxname, ".%",
+		    sizeof(fctx->req_tgt->mboxname));
+	    r = mboxlist_findall(NULL,  /* internal namespace */
+				 fctx->req_tgt->mboxname, 1, httpd_userid, 
+				 httpd_authstate, propfind_by_collection, fctx);
+	}
+
+	if (fctx->davdb) fctx->close_db(fctx->davdb);
+
+	ret = *fctx->ret;
+    }
+
+  done:
+    /* Free the entry list */
+    while (fctx->elist) {
+	struct propfind_entry_list *freeme = fctx->elist;
+	fctx->elist = freeme->next;
+	xmlFree(freeme->name);
+	free(freeme);
+    }
+
+    fctx->mailbox = prev_ctx.mailbox;
+    fctx->depth = prev_ctx.depth;
+    fctx->root = prev_ctx.root;
+    fctx->elist = prev_ctx.elist;
+    fctx->lprops = prev_ctx.lprops;
+    fctx->req_tgt = prev_ctx.req_tgt;
+
+    return ret;
+}
+
+
+
+/* DAV:expand-property REPORT */
+int report_expand_prop(struct transaction_t *txn __attribute__((unused)),
+		       xmlNodePtr inroot, struct propfind_ctx *fctx)
+{
+    int ret = expand_property(inroot, fctx, NULL, NULL, fctx->lprops,
+			      fctx->root, fctx->depth);
+
+    return (ret ? ret : HTTP_MULTI_STATUS);
+}
+
+
 struct search_crit {
     struct strlist *props;
     xmlChar *match;
@@ -5134,6 +5319,7 @@ int meth_report(struct transaction_t *txn, void *params)
     while (elist) {
 	struct propfind_entry_list *freeme = elist;
 	elist = elist->next;
+	xmlFree(freeme->name);
 	free(freeme);
     }
 

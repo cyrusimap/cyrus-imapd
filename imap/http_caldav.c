@@ -276,9 +276,6 @@ static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
 static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
 			    struct propfind_ctx *fctx, xmlNodePtr resp,
 			    struct propstat propstat[], void *rock);
-static int propfind_reportset(const xmlChar *name, xmlNsPtr ns,
-			      struct propfind_ctx *fctx, xmlNodePtr resp,
-			      struct propstat propstat[], void *rock);
 static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 			    struct propfind_ctx *fctx, xmlNodePtr resp,
 			    struct propstat propstat[], void *rock);
@@ -297,6 +294,9 @@ static int propfind_maxsize(const xmlChar *name, xmlNsPtr ns,
 static int propfind_minmaxdate(const xmlChar *name, xmlNsPtr ns,
 			       struct propfind_ctx *fctx, xmlNodePtr resp,
 			       struct propstat propstat[], void *rock);
+static int propfind_scheddefault(const xmlChar *name, xmlNsPtr ns,
+				 struct propfind_ctx *fctx, xmlNodePtr resp,
+				 struct propstat propstat[], void *rock);
 static int propfind_schedtag(const xmlChar *name, xmlNsPtr ns,
 			     struct propfind_ctx *fctx, xmlNodePtr resp,
 			     struct propstat propstat[], void *rock);
@@ -383,6 +383,28 @@ static struct mime_type_t caldav_mime_types[] = {
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
 
+/* Array of supported REPORTs */
+static const struct report_type_t caldav_reports[] = {
+
+    /* WebDAV Versioning (RFC 3253) REPORTs */
+    { "expand-property", NS_DAV, "multistatus", &report_expand_prop,
+      DACL_READ, 0 },
+
+    /* WebDAV Sync (RFC 6578) REPORTs */
+    { "sync-collection", NS_DAV, "multistatus", &report_sync_col,
+      DACL_READ, REPORT_NEED_MBOX | REPORT_NEED_PROPS },
+
+    /* CalDAV (RFC 4791) REPORTs */
+    { "calendar-query", NS_CALDAV, "multistatus", &report_cal_query,
+      DACL_READ, REPORT_NEED_MBOX },
+    { "calendar-multiget", NS_CALDAV, "multistatus", &report_cal_multiget,
+      DACL_READ, REPORT_NEED_MBOX },
+    { "free-busy-query", NS_CALDAV, NULL, &report_fb_query,
+      DACL_READFB, REPORT_NEED_MBOX },
+
+    { NULL, 0, NULL, NULL, 0, 0 }
+};
+
 /* Array of known "live" properties */
 static const struct prop_entry caldav_props[] = {
 
@@ -416,10 +438,10 @@ static const struct prop_entry caldav_props[] = {
 
     /* WebDAV Versioning (RFC 3253) properties */
     { "supported-report-set", NS_DAV, PROP_COLLECTION,
-      propfind_reportset, NULL, NULL },
+      propfind_reportset, NULL, (void *) caldav_reports },
 
     /* WebDAV ACL (RFC 3744) properties */
-    { "owner", NS_DAV, PROP_COLLECTION | PROP_RESOURCE,
+    { "owner", NS_DAV, PROP_COLLECTION | PROP_RESOURCE | PROP_EXPAND,
       propfind_owner, NULL, NULL },
     { "group", NS_DAV, 0, NULL, NULL, NULL },
     { "supported-privilege-set", NS_DAV, PROP_COLLECTION | PROP_RESOURCE,
@@ -441,7 +463,8 @@ static const struct prop_entry caldav_props[] = {
       propfind_quota, NULL, NULL },
 
     /* WebDAV Current Principal (RFC 5397) properties */
-    { "current-user-principal", NS_DAV, PROP_COLLECTION | PROP_RESOURCE,
+    { "current-user-principal", NS_DAV,
+      PROP_COLLECTION | PROP_RESOURCE | PROP_EXPAND,
       propfind_curprin, NULL, NULL },
 
     /* WebDAV POST (RFC 5995) properties */
@@ -477,8 +500,8 @@ static const struct prop_entry caldav_props[] = {
     /* CalDAV Scheduling (RFC 6638) properties */
     { "schedule-tag", NS_CALDAV, PROP_RESOURCE,
       propfind_schedtag, NULL, NULL },
-    { "schedule-default-calendar-URL", NS_CALDAV, PROP_COLLECTION,
-      propfind_calurl, NULL, SCHED_DEFAULT },
+    { "schedule-default-calendar-URL", NS_CALDAV, PROP_COLLECTION | PROP_EXPAND,
+      propfind_scheddefault, NULL, NULL },
     { "schedule-calendar-transp", NS_CALDAV, PROP_COLLECTION,
       propfind_caltransp, proppatch_caltransp, NULL },
 
@@ -532,15 +555,7 @@ static struct meth_params caldav_params = {
     &caldav_post,
     { CALDAV_SUPP_DATA, (put_proc_t) &caldav_put },
     caldav_props,
-    { { "calendar-query", "multistatus", &report_cal_query,
-	DACL_READ, REPORT_NEED_MBOX },
-      { "calendar-multiget", "multistatus", &report_cal_multiget,
-	DACL_READ, REPORT_NEED_MBOX },
-      { "free-busy-query", NULL, &report_fb_query,
-	DACL_READFB, REPORT_NEED_MBOX },
-      { "sync-collection", "multistatus", &report_sync_col,
-	DACL_READ, REPORT_NEED_MBOX | REPORT_NEED_PROPS },
-      { NULL, NULL, NULL, 0, 0 } }
+    caldav_reports
 };
 
 
@@ -3033,42 +3048,6 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
 }
 
 
-/* Callback to fetch DAV:supported-report-set */
-static int propfind_reportset(const xmlChar *name, xmlNsPtr ns,
-			      struct propfind_ctx *fctx,
-			      xmlNodePtr resp,
-			      struct propstat propstat[],
-			      void *rock __attribute__((unused)))
-{
-    xmlNodePtr s, r, top;
-
-    top = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-		       name, ns, NULL, 0);
-
-    if (fctx->req_tgt->collection && !fctx->req_tgt->resource) {
-	s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
-	r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
-	xmlNewChild(r, fctx->ns[NS_DAV], BAD_CAST "sync-collection", NULL);
-    }
-
-    ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
-
-    s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
-    r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
-    xmlNewChild(r, fctx->ns[NS_CALDAV], BAD_CAST "calendar-query", NULL);
-
-    s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
-    r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
-    xmlNewChild(r, fctx->ns[NS_CALDAV], BAD_CAST "calendar-multiget", NULL);
-
-    s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
-    r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
-    xmlNewChild(r, fctx->ns[NS_CALDAV], BAD_CAST "free-busy-query", NULL);
-
-    return 0;
-}
-
-
 /* Callback to prescreen/fetch CALDAV:calendar-data */
 static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 			    struct propfind_ctx *fctx,
@@ -3098,26 +3077,20 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 }
 
 
-/* Callback to fetch CALDAV:calendar-home-set,
+/* Helper function to fetch CALDAV:calendar-home-set,
  * CALDAV:schedule-inbox-URL, CALDAV:schedule-outbox-URL,
  * and CALDAV:schedule-default-calendar-URL
  */
-int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
-		    struct propfind_ctx *fctx,
-		    xmlNodePtr resp __attribute__((unused)),
-		    struct propstat propstat[],
-		    void *rock)
+static int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
+			   struct propfind_ctx *fctx,
+			   xmlNodePtr resp __attribute__((unused)),
+			   struct propstat propstat[],
+			   xmlNodePtr expand,
+			   const char *cal)
 {
     xmlNodePtr node;
-    const char *cal = (const char *) rock;
 
     if (!(namespace_calendar.enabled && fctx->req_tgt->user))
-	return HTTP_NOT_FOUND;
-
-    /* sched-def-cal-URL only defined on sched-inbox-URL */
-    if (!xmlStrcmp(name, BAD_CAST "schedule-default-calendar-URL") &&
-	(!fctx->req_tgt->collection ||
-	 strcmp(fctx->req_tgt->collection, SCHED_INBOX)))
 	return HTTP_NOT_FOUND;
 
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
@@ -3128,9 +3101,59 @@ int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
 	       (int) fctx->req_tgt->userlen, fctx->req_tgt->user,
 	       cal ? cal : "");
 
-    xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+    if (expand) {
+	/* Return properties for this URL */
+	expand_property(expand, fctx, buf_cstring(&fctx->buf),
+			&caldav_parse_path, caldav_props, node, cal ? 1 : 0);
+
+    }
+    else {
+	/* Return just the URL */
+	xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+    }
 
     return 0;
+}
+
+
+/* Callback to fetch CALDAV:calendar-home-set */
+int propfind_calhome(const xmlChar *name, xmlNsPtr ns,
+		     struct propfind_ctx *fctx, xmlNodePtr resp,
+		     struct propstat propstat[], void *rock)
+{
+    return propfind_calurl(name, ns, fctx, resp, propstat, rock, NULL);
+}
+
+
+/* Callback to fetch CALDAV:schedule-inbox-URL */
+int propfind_schedinbox(const xmlChar *name, xmlNsPtr ns,
+			struct propfind_ctx *fctx, xmlNodePtr resp,
+			struct propstat propstat[], void *rock)
+{
+    return propfind_calurl(name, ns, fctx, resp, propstat, rock, SCHED_INBOX);
+}
+
+
+/* Callback to fetch CALDAV:schedule-outbox-URL */
+int propfind_schedoutbox(const xmlChar *name, xmlNsPtr ns,
+			 struct propfind_ctx *fctx, xmlNodePtr resp,
+			 struct propstat propstat[], void *rock)
+{
+    return propfind_calurl(name, ns, fctx, resp, propstat, rock, SCHED_OUTBOX);
+}
+
+
+/* Callback to fetch CALDAV:schedule-default-calendar-URL */
+static int propfind_scheddefault(const xmlChar *name, xmlNsPtr ns,
+				 struct propfind_ctx *fctx, xmlNodePtr resp,
+				 struct propstat propstat[], void *rock)
+{
+    /* Only defined on CALDAV:schedule-inbox-URL */
+    if (!fctx->req_tgt->collection ||
+	strcmp(fctx->req_tgt->collection, SCHED_INBOX))
+	return HTTP_NOT_FOUND;
+
+    return propfind_calurl(name, ns, fctx, resp, propstat, rock, SCHED_DEFAULT);
 }
 
 
