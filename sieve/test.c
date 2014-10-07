@@ -446,13 +446,6 @@ int fileinto(void *ac, void *ic, void *sc __attribute__((unused)),
 
     printf("filing message '%s' into '%s'\n", m->name, fc->mailbox);
 
-    if (fc->actionflags && fc->actionflags->count) {
-	char *s = strarray_join(fc->actionflags, "' '");
-	if (s) {
-	    printf("\twith flags '%s'\n", s);
-	    free(s);
-	}
-    } else
     if (fc->imapflags->count) {
 	char *s = strarray_join(fc->imapflags, "' '");
 	if (s) {
@@ -472,13 +465,6 @@ int keep(void *ac, void *ic, void *sc __attribute__((unused)),
     int *force_fail = (int*) ic;
 
     printf("keeping message '%s'\n", m->name);
-    if (kc->actionflags && kc->actionflags->count) {
-	char *s = strarray_join(kc->actionflags, "' '");
-	if (s) {
-	    printf("\twith flags '%s'\n", s);
-	    free(s);
-	}
-    } else
     if (kc->imapflags->count) {
 	char *s = strarray_join(kc->imapflags, "' '");
 	if (s) {
