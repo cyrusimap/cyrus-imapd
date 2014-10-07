@@ -91,7 +91,7 @@ test: $(DEPLIBS) libsieve.a test.o ../imap/message.o
 OBJS = sieve_err.o \
        sieve.o sieve-lex.o comparator.o interp.o message.o \
        bc_generate.o bc_dump.o bc_emit.o bc_eval.o \
-       script.o tree.o addr.o addr-lex.o varlist.o
+       script.o tree.o addr.o addr-lex.o flags.o varlist.o
 
 sieve-lex.c: sieve-lex.l sieve.h
 

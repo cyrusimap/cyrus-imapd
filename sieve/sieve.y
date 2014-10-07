@@ -57,6 +57,7 @@
 #include "interp.h"
 #include "script.h"
 #include "tree.h"
+#include "flags.h"
 
 #include "../lib/imapurl.h"
 #include "../lib/util.h"
@@ -157,13 +158,11 @@ static struct dtags *canon_dtags(struct dtags *d);
 static void free_dtags(struct dtags *d);
 
 static int verify_stringlist(strarray_t *sl, int (*verify)(char *));
-static int verify_flaglist(strarray_t *sl);
 static int verify_mailbox(char *s);
 static int verify_address(char *s);
 static int verify_header(char *s);
 static int verify_addrheader(char *s);
 static int verify_envelope(char *s);
-static int verify_flag(char *s);
 static int verify_relat(char *s);
 static struct ftags *new_ftags(void);
 static struct ftags *canon_ftags(struct ftags *f);
@@ -525,9 +524,6 @@ test:     ANYOF testlist	 { $$ = new_test(ANYOF); $$->u.tl = $2; }
 				     if (!parse_script->support.imap4flags) {
                                        yyerror("imap4flags MUST be enabled with \"require\"");
 				       YYERROR;
-				     }
-				     if (!verify_flaglist($3)) {
-					 YYERROR; /* vf should call yyerror() */
 				     }
 
 				     $2 = canon_htags($2);
@@ -1210,33 +1206,6 @@ static int verify_stringlist(strarray_t *sa, int (*verify)(char *))
 	    return 0;
     return 1;
 }
-static int verify_flaglist(strarray_t *sl)
-{
-    int i;
-    char *joined;
-    strarray_t *resplit;
-    // Join all the flags, putting spaces between them
-    joined = strarray_join(sl, " ");
-    // Clear out the sl for reuse
-    strarray_truncate(sl, 0);
-    // Split the joined flag list at spaces
-    resplit = strarray_split(joined, " ", STRARRAY_TRIM);
-
-    // Perform duplicate elimination and flag verification
-    for (i = 0; i < resplit->count ; i++) {
-	// has the side effect of lower-casing system flags
-	if (!verify_flag(resplit->data[i])) {
-	    // TODO: [IMAP4FLAGS] says the we MUST ignore invalid flags,
-	    // which probably means we shouldn't fail on an invalid flag.
-	    // Do we pass on the value that isn't a valid flag?
-	    continue;
-	}
-	strarray_add_case(sl, xstrdup(resplit->data[i]));
-    }
-    strarray_free(resplit);
-    free(joined);
-    return (1);
-}
 
 char *addrptr;		/* pointer to address string for address lexer */
 char addrerr[500];	/* buffer for address parser error messages */
@@ -1345,29 +1314,6 @@ static int verify_relat(char *r)
 
 
 
-static int verify_flag(char *f)
-{
-    if (f[0] == '\\') {
-	lcase(f);
-	if (strcmp(f, "\\seen") && strcmp(f, "\\answered") &&
-	    strcmp(f, "\\flagged") && strcmp(f, "\\draft") &&
-	    strcmp(f, "\\deleted")) {
-	    snprintf(errbuf, ERR_BUF_SIZE,
-		     "flag '%s': not a system flag", f);
-	    yyerror(errbuf);
-	    return 0;
-	}
-	return 1;
-    }
-    if (!imparse_isatom(f)) {
-	snprintf(errbuf, ERR_BUF_SIZE,
-		 "flag '%s': not a valid keyword", f);
-	yyerror(errbuf);
-	return 0;
-    }
-    return 1;
-}
- 
 #ifdef ENABLE_REGEX
 static int verify_regex(char *s, int cflags)
 {
