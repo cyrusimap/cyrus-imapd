@@ -125,7 +125,7 @@ int do_discard(action_list_t *m);
 int do_vacation(action_list_t *m, char *addr, char *fromaddr,
 		char *subj, const char *msg, int seconds, int mime,
 		const char *handle);
-int do_setflag(action_list_t *m, const char *flag);
+int do_setflag(action_list_t *m);
 int do_addflag(action_list_t *m, const char *flag);
 int do_removeflag(action_list_t *m, const char *flag);
 int do_mark(action_list_t *m);

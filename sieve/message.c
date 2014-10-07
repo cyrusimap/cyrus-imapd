@@ -302,7 +302,7 @@ int do_vacation(action_list_t *a, char *addr, char *fromaddr,
  *
  * incompatible with: reject
  */
-int do_setflag(action_list_t *a, const char *flag)
+int do_setflag(action_list_t *a)
 {
     action_list_t *b = NULL;
  
@@ -320,7 +320,6 @@ int do_setflag(action_list_t *a, const char *flag)
 	return SIEVE_NOMEM;
     a->a = ACTION_SETFLAG;
     a->cancel_keep = 0;
-    a->u.fla.flag = flag;
     b->next = a;
     a->next = NULL;
     return 0;

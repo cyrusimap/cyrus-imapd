@@ -1458,7 +1458,9 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    for (x=0; x<list_len; x++) {
 		const char *flag;
 		ip = unwrap_string(bc, ip, &flag, NULL);
+		if (flag[0]) {
 		strarray_add_case(actionflags,flag);
+		}
 	    }
 	}
 	    copy = ntohl(bc[ip].value);
@@ -1500,7 +1502,9 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    for (x=0; x<list_len; x++) {
 		const char *flag;
 		ip = unwrap_string(bc, ip, &flag, NULL);
+		if (flag[0]) {
 		strarray_add_case(actionflags,flag);
+		}
 	    }
 	}
 	    /* fall through */
@@ -1609,20 +1613,19 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
 	    ip+=3; /* skip opcode, list_len, and list data len */
 
-	    ip = unwrap_string(bc, ip, &data, NULL);
 
-	    res = do_setflag(actions, data);
+	    res = do_setflag(actions);
 	    strarray_truncate(workingvars->var, 0);
-	    strarray_add_case(workingvars->var, data);
 
 	    if (res == SIEVE_RUN_ERROR) {
 		*errmsg = "setflag can not be used with Reject";
 	    } else {
-		for (x=1; x<list_len; x++) {
+		for (x=0; x<list_len; x++) {
 		    ip = unwrap_string(bc, ip, &data, NULL);
-
+		    if (data[0]) {
 		    res = do_addflag(actions, data);
 		    strarray_add_case(workingvars->var, data);
+		    }
 
 		    if (res == SIEVE_RUN_ERROR)
 			*errmsg = "setflag can not be used with Reject";
