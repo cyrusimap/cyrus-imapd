@@ -401,8 +401,13 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
     case EVENT_PID:
 	return 1;
     case EVENT_USER:
-	return type & (EVENT_MAILBOX_SUBSCRIBE|EVENT_MAILBOX_UNSUBSCRIBE|\
-		       EVENT_LOGIN|EVENT_LOGOUT);
+	return (
+		type & MESSAGE_EVENTS ||
+		type & FLAGS_EVENTS ||
+		type & MAILBOX_EVENTS ||
+		type & SUBS_EVENTS ||
+		type & (EVENT_LOGIN|EVENT_LOGOUT|EVENT_QUOTA_CHANGE)
+	    );
     case EVENT_MIDSET:
 	if (!(extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_MIDSET))
 	    return 0;
