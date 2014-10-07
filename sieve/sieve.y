@@ -301,9 +301,7 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
                                     yyerror("imap4flags MUST be enabled with \"require\"");
                                     YYERROR;
                                    }
-                                  if (!verify_flaglist($2)) {
-                                    YYERROR; /* vf should call yyerror() */
-                                  }
+                                  verify_flaglist($2);
                                   $$ = new_command(SETFLAG);
                                   $$->u.sl = $2; }
          | ADDFLAG stringlist     { if (!(parse_script->support.imapflags ||
@@ -311,9 +309,7 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
                                     yyerror("imap4flags MUST be enabled with \"require\"");
                                     YYERROR;
                                     }
-                                  if (!verify_flaglist($2)) {
-                                    YYERROR; /* vf should call yyerror() */
-                                  }
+                                  verify_flaglist($2);
                                   $$ = new_command(ADDFLAG);
                                   $$->u.sl = $2; }
          | REMOVEFLAG stringlist  { if (!(parse_script->support.imapflags ||
@@ -321,9 +317,7 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
                                     yyerror("imap4flags MUST be enabled with \"require\"");
                                     YYERROR;
                                     }
-                                  if (!verify_flaglist($2)) {
-                                    YYERROR; /* vf should call yyerror() */
-                                  }
+                                  verify_flaglist($2);
                                   $$ = new_command(REMOVEFLAG);
                                   $$->u.sl = $2; }
          | MARK                   { if (!parse_script->support.imapflags) {
@@ -757,9 +751,7 @@ ftags: /* empty */		 { $$ = new_ftags(); }
 				   if ($$->flags != NULL) {
 			yyerror("duplicate flags tag"); YYERROR; }
 				   else {
-				    if (!verify_flaglist($3)) {
-				     YYERROR; /* vf should call yyerror() */
-				    }
+				    verify_flaglist($3);
 				   $$->flags = $3; }
 				 }
         ;
