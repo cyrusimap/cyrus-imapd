@@ -302,6 +302,9 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
                                     YYERROR;
                                    }
                                   verify_flaglist($2);
+                                  if(!$2->count) {
+                                      strarray_add($2, "");
+                                  }
                                   $$ = new_command(SETFLAG);
                                   $$->u.sl = $2; }
          | ADDFLAG stringlist     { if (!(parse_script->support.imapflags ||
@@ -310,6 +313,9 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
                                     YYERROR;
                                     }
                                   verify_flaglist($2);
+                                  if(!$2->count) {
+                                      strarray_add($2, "");
+                                  }
                                   $$ = new_command(ADDFLAG);
                                   $$->u.sl = $2; }
          | REMOVEFLAG stringlist  { if (!(parse_script->support.imapflags ||
@@ -318,6 +324,9 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
                                     YYERROR;
                                     }
                                   verify_flaglist($2);
+                                  if(!$2->count) {
+                                      strarray_add($2, "");
+                                  }
                                   $$ = new_command(REMOVEFLAG);
                                   $$->u.sl = $2; }
          | MARK                   { if (!parse_script->support.imapflags) {
@@ -752,6 +761,9 @@ ftags: /* empty */		 { $$ = new_ftags(); }
 			yyerror("duplicate flags tag"); YYERROR; }
 				   else {
 				    verify_flaglist($3);
+				    if(!$3->count) {
+				        strarray_add($3, "");
+				    }
 				   $$->flags = $3; }
 				 }
         ;
