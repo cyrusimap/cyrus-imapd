@@ -329,38 +329,6 @@ static int build_notify_message(sieve_interp_t *i,
     return SIEVE_OK;
 }
 
-static int sieve_addflag(strarray_t *imapflags, const char *flag)
-{
-    int n;
-    /* search for flag already in list */
-    for (n = 0; n < imapflags->count; n++) {
-	if (!strcasecmp(imapflags->data[n], flag))
-	    break;
-    }
-
-    /* add flag to list, iff not in list */
-    if (n == imapflags->count)
-	strarray_append(imapflags, flag);
-
-    return SIEVE_OK;
-}
-
-static int sieve_removeflag(strarray_t *imapflags, const char *flag)
-{
-    int n;
-    /* search for flag already in list */
-    for (n = 0; n < imapflags->count; n++) {
-      if (!strcasecmp(imapflags->data[n], flag))
-	break;
-    }
-
-     /* remove flag from list, iff in list */
-    if (n < imapflags->count)
-	free(strarray_remove(imapflags, n));
-
-    return SIEVE_OK;
-}
-
 static int send_notify_callback(sieve_interp_t *interp,
 				void *message_context, 
 				void * script_context, notify_list_t *notify, 
@@ -803,12 +771,12 @@ static int do_action_list(sieve_interp_t *interp,
 	    strarray_fini(imapflags);
 	    break;
 	case ACTION_ADDFLAG:
-	    ret = sieve_addflag(imapflags, a->u.fla.flag);
+	    strarray_add_case(imapflags, a->u.fla.flag);
 	    free(interp->lastitem);
 	    interp->lastitem = xstrdup(a->u.fla.flag);
 	    break;
 	case ACTION_REMOVEFLAG:
-	    ret = sieve_removeflag(imapflags, a->u.fla.flag);
+	    strarray_remove_all_case(imapflags, a->u.fla.flag);
 	    free(interp->lastitem);
 	    interp->lastitem = xstrdup(a->u.fla.flag);
 	    break;
@@ -817,8 +785,8 @@ static int do_action_list(sieve_interp_t *interp,
 		int n = interp->markflags->count;
 
 		ret = SIEVE_OK;
-		while (n && ret == SIEVE_OK) {
-		    ret = sieve_addflag(imapflags,
+		while (n) {
+		    strarray_add_case(imapflags,
 					interp->markflags->data[--n]);
 		}
 		free(interp->lastitem);
@@ -830,8 +798,8 @@ static int do_action_list(sieve_interp_t *interp,
 	   
 		int n = interp->markflags->count;
 		ret = SIEVE_OK;
-		while (n && ret == SIEVE_OK) {
-		    ret = sieve_removeflag(imapflags,
+		while (n) {
+		    strarray_remove_all_case(imapflags,
 					   interp->markflags->data[--n]);
 		}
 		free(interp->lastitem);
