@@ -634,7 +634,6 @@ static int do_sieve_error(int ret,
 	sieve_keep_context_t keep_context;
 	int keep_ret;
 	keep_context.imapflags = imapflags;
-	keep_context.actionflags = NULL;
  
 	lastaction = ACTION_KEEP;
 	keep_ret = interp->keep(&keep_context, interp->interp_context,
