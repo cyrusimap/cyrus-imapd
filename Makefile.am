@@ -1208,6 +1208,8 @@ sieve_libcyrus_sieve_la_SOURCES = \
 	sieve/bc_generate.c \
 	sieve/comparator.c \
 	sieve/comparator.h \
+	sieve/flags.c \
+	sieve/flags.h \
 	sieve/interp.c \
 	sieve/interp.h \
 	sieve/message.c \
