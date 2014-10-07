@@ -221,6 +221,7 @@ static void sync_reset(void)
 	sync_saslconn = NULL;
     }
     sync_starttls_done = 0;
+    sync_compress_done = 0;
 
     if(saslprops.iplocalport) {
        free(saslprops.iplocalport);
