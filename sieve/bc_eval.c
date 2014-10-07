@@ -1125,7 +1125,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    /* fall through */
 	case B_KEEP_ORIG:/*1*/
 	    res = do_keep(actions, !copy,
-		    actionflags ? actionflags : flagvars->var, NULL);
+		    actionflags ? actionflags : flagvars->var);
 	    if (res == SIEVE_RUN_ERROR)
 		*errmsg = "Keep can not be used with Reject";
 	    actionflags = NULL;
@@ -1177,7 +1177,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    ip = unwrap_string(bc, ip+1, &data, NULL);
 
 	    res = do_fileinto(actions, data, !copy,
-		    actionflags ? actionflags : flagvars->var, NULL);
+		    actionflags ? actionflags : flagvars->var);
 
 	    if (res == SIEVE_RUN_ERROR)
 		*errmsg = "Fileinto can not be used with Reject";
