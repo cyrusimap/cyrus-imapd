@@ -117,10 +117,9 @@ void free_notify_list(notify_list_t *n);
  * action list */
 int do_reject(action_list_t *m, const char *msg);
 int do_fileinto(action_list_t *m, const char *mbox, int cancel_keep,
-		strarray_t *imapflags, strarray_t *actionflags);
+		strarray_t *imapflags);
 int do_redirect(action_list_t *m, const char *addr, int cancel_keep);
-int do_keep(action_list_t *m, int cancel_keep, strarray_t *imapflags,
-	    strarray_t *actionflags);
+int do_keep(action_list_t *m, int cancel_keep, strarray_t *imapflags);
 int do_discard(action_list_t *m);
 int do_vacation(action_list_t *m, char *addr, char *fromaddr,
 		char *subj, const char *msg, int seconds, int mime,
