@@ -128,9 +128,10 @@ static struct mboxevent event_template =
     /* 21 */ { EVENT_USER, "user", EVENT_PARAM_STRING, 0, 0 },
     /* 22 */ { EVENT_MESSAGE_SIZE, "messageSize", EVENT_PARAM_INT, 0, 0 },
     /* 23 */ { EVENT_ENVELOPE, "vnd.cmu.envelope", EVENT_PARAM_STRING, 0, 0 },
-    /* 24 */ { EVENT_BODYSTRUCTURE, "bodyStructure", EVENT_PARAM_STRING, 0, 0 },
+    /* 24 */ { EVENT_SESSIONID, "vnd.cmu.sessionId", EVENT_PARAM_STRING, 0, 0 },
+    /* 25 */ { EVENT_BODYSTRUCTURE, "bodyStructure", EVENT_PARAM_STRING, 0, 0 },
     /* always at end to let the parser to easily truncate this part */
-    /* 25 */ { EVENT_MESSAGE_CONTENT, "messageContent", EVENT_PARAM_STRING, 0, 0 }
+    /* 26 */ { EVENT_MESSAGE_CONTENT, "messageContent", EVENT_PARAM_STRING, 0, 0 }
   },
   STRARRAY_INITIALIZER, { 0, 0 }, NULL, STRARRAY_INITIALIZER, NULL, NULL, NULL
 };
@@ -256,6 +257,9 @@ EXPORTED struct mboxevent *mboxevent_new(enum event_type type)
 	gettimeofday(&mboxevent->timestamp, NULL);
 
     FILL_UNSIGNED_PARAM(mboxevent, EVENT_PID, getpid());
+
+    if (mboxevent_expected_param(type, EVENT_SESSIONID))
+	FILL_STRING_PARAM(mboxevent, EVENT_SESSIONID, xstrdup(session_id()));
 
     return mboxevent;
 }
@@ -412,6 +416,8 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
 	if (!(extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_MIDSET))
 	    return 0;
 	break;
+    case EVENT_SESSIONID:
+	return extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_SESSIONID;
     case EVENT_UNSEEN_MESSAGES:
 	if (!(extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_UNSEENMESSAGES))
 	    return 0;

@@ -86,7 +86,7 @@ enum event_type {
 /* The number representing the last available position in
  * event_param, which should always be messageContent.
  */
-#define MAX_PARAM 25
+#define MAX_PARAM 26
 
 /*
  * event parameters defined in RFC 5423 - Internet Message Store Events
@@ -121,8 +121,9 @@ enum event_param {
     /* 21 */ EVENT_USER,
     /* 22 */ EVENT_MESSAGE_SIZE,
     /* 23 */ EVENT_ENVELOPE,
-    /* 24 */ EVENT_BODYSTRUCTURE,
-    /* 25 */ EVENT_MESSAGE_CONTENT
+    /* 24 */ EVENT_SESSIONID,
+    /* 25 */ EVENT_BODYSTRUCTURE,
+    /* 26 */ EVENT_MESSAGE_CONTENT
 };
 
 
