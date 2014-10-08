@@ -629,6 +629,10 @@ test:     ANYOF testlist	 { $$ = new_test(ANYOF); $$->u.tl = $2; }
                                      { yyerror(parse_script, "date MUST be enabled with \"require\"");
                                        YYERROR; }
 
+                                   if ($2->index != 0) {
+                                     yyerror(parse_script, "index argument is not allowed in currentdate");
+                                     YYERROR; }
+
                                    if ($2->zonetag == ORIGINALZONE) {
                                      yyerror(parse_script, "originalzone argument is not allowed in currentdate");
                                      YYERROR; }

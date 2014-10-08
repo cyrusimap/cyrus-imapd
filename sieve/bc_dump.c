@@ -98,9 +98,12 @@ static int dump_tl(bytecode_info_t *d, int ip, int level)
 
 /* Dump a test, return the last address used by the test */
 static int dump_test(bytecode_info_t *d, int ip, int level ) {
+    int has_index=0;
+
+    const int opcode = d->data[ip].op;
 
     print_spaces(level);
-    switch(d->data[ip].op) {
+    switch(opcode) {
     case BC_TRUE:
 	printf("%d: TRUE\n",ip);
 	break;
@@ -138,9 +141,15 @@ static int dump_test(bytecode_info_t *d, int ip, int level ) {
 	break;
 
     case BC_HEADER:
+	has_index=1;
+    case BC_HEADER_PRE_INDEX:
 	printf("%d: HEADER (\n",ip++);
-	print_spaces(level);
-	printf("      INDEX %d\n" , d->data[ip++].value);
+
+	if (has_index) {
+		print_spaces(level);
+		printf("      INDEX:%d\n", d->data[ip++].value);
+	}
+
 	print_spaces(level);
 	if (d->data[ip].value == B_COUNT || d->data[ip].value == B_VALUE)
 	{
@@ -158,14 +167,19 @@ static int dump_test(bytecode_info_t *d, int ip, int level ) {
 	break;
 	
     case BC_ADDRESS:
+	has_index = 1;
+    case BC_ADDRESS_PRE_INDEX:
     case BC_ENVELOPE:
 	if (d->data[ip].op == BC_ADDRESS) {
 		printf("%d: ADDRESS (\n",ip++);
-		print_spaces(level);
-		printf("      INDEX %d\n" , d->data[ip++].value);
 	}
 	else {
 		printf("%d: ENVELOPE (\n",ip++);
+	}
+
+	if (has_index) {
+		print_spaces(level);
+		printf("      INDEX:%d\n", d->data[ip++].value);
 	}
 
 	print_spaces(level);
@@ -202,6 +216,64 @@ static int dump_test(bytecode_info_t *d, int ip, int level ) {
 	print_spaces(level);
 	printf("      DATA:\n");
 	ip = dump_sl(d,ip,level);
+	break;
+
+    case BC_DATE:
+	has_index=1;
+    case BC_CURRENTDATE:
+	if (BC_DATE == opcode) {
+		printf("%d: DATE (\n", ip++);
+	}
+	else {
+		printf("%d: CURRENTDATE (\n", ip++);
+	}
+
+	/* index */
+	if (has_index) {
+		print_spaces(level);
+		printf("      INDEX:%d\n", d->data[ip++].value);
+	}
+
+	/* zone tag */
+	print_spaces(level);
+	printf("      ZONE-TAG:%d ", d->data[ip].value);
+
+	switch (d->data[ip++].value) {
+	case B_TIMEZONE:
+		printf("TIMEZONE:%d\n", d->data[ip++].value);
+		break;
+	case B_ORIGINALZONE:
+		printf("ORIGINALZONE\n");
+		break;
+	}
+
+	/* comparison */
+	print_spaces(level);
+	if (d->data[ip].value == B_COUNT || d->data[ip].value == B_VALUE)
+	{
+	    printf("      MATCH:%d RELATION:%d COMP:%d\n",
+		   d->data[ip].value, d->data[ip+1].value, d->data[ip+2].value);
+	} else {
+	    printf("      MATCH:%d COMP:%d\n", d->data[ip].value, d->data[ip+2].value);
+	}
+	ip+=3;
+
+	/* date type */
+	print_spaces(level);
+	printf("      DATE-TYPE:%d\n", d->data[ip++].value);
+
+	/* header name */
+	if (BC_DATE == opcode) {
+		print_spaces(level);
+		printf("      HEADER NAME: {%d}", d->data[ip++].len);
+		printf("%s\n",d->data[ip++].str);
+	}
+
+	print_spaces(level);
+	printf("      KEY LIST:\n");
+	ip = dump_sl(d,ip,level);
+	break;
+
 	break;
 
     default:

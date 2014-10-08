@@ -459,10 +459,10 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 	i = list_end; /* handle short-circuiting */
 	
 	break;
-    case BC_ADDRESS: /*13*/
+    case BC_ADDRESS:/*13*/
 	has_index=1;
 	/* fall through */
-    case BC_ADDRESS_PRE_INDEX: /*7*/
+    case BC_ADDRESS_PRE_INDEX:/*7*/
 	address=1;
 	/* fall through */
     case BC_ENVELOPE:/*8*/
@@ -668,7 +668,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 envelope_err:
 	break;
     }
-    case BC_HEADER: /*14*/
+    case BC_HEADER:/*14*/
 	has_index=1;
 	/* fall through */
     case BC_HEADER_PRE_INDEX:/*9*/
@@ -941,12 +941,9 @@ envelope_err:
 	
 	break;
     }
-    case BC_DATE:/*15*/
-    case BC_CURRENTDATE:/*16*/
+    case BC_DATE:/*11*/
 	has_index=1;
-	/* fall through */
-    case BC_DATE_PRE_INDEX:/*11*/
-    case BC_CURRENTDATE_PRE_INDEX:/*12*/
+    case BC_CURRENTDATE:/*12*/
     {
 	char buffer[64];
 	const char **headers = NULL;
@@ -1016,9 +1013,19 @@ envelope_err:
 		/* convert index argument value to array index */
 		if (index > 0) {
 			--index;
+			if (index >= header_count) {
+				res = SIEVE_FAIL;
+				goto alldone;
+			}
+			header_count = index + 1;
 		}
-		else {
+		else if (index < 0) {
 			index += header_count;
+			if (index < 0) {
+				res = SIEVE_FAIL;
+				goto alldone;
+			}
+			header_count = index + 1;
 		}
 
 		/* check if index is out of bounds */

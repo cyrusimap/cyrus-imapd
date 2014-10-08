@@ -464,7 +464,7 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 	 *         { header-name : string } { date-part: string }
 	 *         { key-list : string list }
 	 *
-	 * BC_CURRENTDATE { i: index } { time-zone: string} { c: comparator }
+	 * BC_CURRENTDATE { time-zone: string} { c: comparator }
 	 *         { date-part: string } { key-list : string list }
 	*/
 
@@ -472,8 +472,10 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 	retval->data[codep++].op = (DATE == t->type) ? BC_DATE : BC_CURRENTDATE;
 
 	/* index */
-	if(!atleast(retval,codep + 1)) return -1;
-	retval->data[codep++].value = t->u.dt.index;
+	if (DATE == t->type) {
+		if(!atleast(retval,codep + 1)) return -1;
+		retval->data[codep++].value = t->u.dt.index;
+	}
 
 	/* zone */
 	codep = bc_zone_generate(codep, retval,

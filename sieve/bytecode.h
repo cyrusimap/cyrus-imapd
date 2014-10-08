@@ -159,12 +159,10 @@ enum bytecode_comps {
     BC_ENVELOPE,	/* require envelope */
     BC_HEADER_PRE_INDEX,
     BC_BODY,            /* require body */
-    BC_DATE_PRE_INDEX,        /* require date */
-    BC_CURRENTDATE_PRE_INDEX, /* require date */
-    BC_ADDRESS,
-    BC_HEADER,
     BC_DATE,            /* require date */
-    BC_CURRENTDATE      /* require date */
+    BC_CURRENTDATE,     /* require date */
+    BC_ADDRESS,
+    BC_HEADER
 };
 
 /* currently one enum so as to help determine where values are being misused.

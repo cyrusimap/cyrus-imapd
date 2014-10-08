@@ -266,10 +266,10 @@ static int dump2_test(bytecode_input_t * d, int i)
 	
 	printf(")\n");
 	break;
-    case BC_ADDRESS: /*13*/
+    case BC_ADDRESS:/*13*/
 	has_index=1;
 	/*fall-through*/
-    case BC_ADDRESS_PRE_INDEX: /*7*/
+    case BC_ADDRESS_PRE_INDEX:/*7*/
 	printf("Address [");
 	index = has_index ? ntohl(d[++i].value) : 0;
 	i=printComparison(d, i+1);
@@ -311,7 +311,7 @@ static int dump2_test(bytecode_input_t * d, int i)
 	i=write_list(ntohl(d[i].len), i+1, d);
 	printf("             ]\n");
 	break;
-    case BC_HEADER: /*14*/
+    case BC_HEADER:/*14*/
 	has_index=1;
 	/*fall-through*/
     case BC_HEADER_PRE_INDEX:/*9*/
@@ -345,12 +345,9 @@ static int dump2_test(bytecode_input_t * d, int i)
 	i=write_list(ntohl(d[i].len), i+1, d);
 	printf("             ]\n");
 	break;
-    case BC_DATE:/*15*/
-    case BC_CURRENTDATE:/*16*/
+    case BC_DATE:/*11*/
 	has_index=1;
-	/*fall-through*/
-    case BC_DATE_PRE_INDEX:/*11*/
-    case BC_CURRENTDATE_PRE_INDEX:/*12*/
+    case BC_CURRENTDATE:/*12*/
 	++i; /* skip opcode */
 
 	if (BC_DATE == opcode) {
@@ -362,20 +359,17 @@ static int dump2_test(bytecode_input_t * d, int i)
 
 	/* index */
 	index = has_index ? ntohl(d[i++].value) : 0;
-	printf("              Index: %d %s\n",
-	    abs(index), index < 0 ? "[LAST]" : "");
+	if (index != 0) {
+		printf("              Index: %d %s\n",
+		    abs(index), index < 0 ? "[LAST]" : "");
+	}
 
 	/* zone tag */
 	{
-		int zone;
-		int timezone_offset;
-
 		printf("Zone-Tag: ");
-		zone = ntohl(d[i++].value);
-		switch (zone) {
+		switch (ntohl(d[i++].value)) {
 		case B_TIMEZONE:
-			timezone_offset = ntohl(d[i++].value);
-			printf("Specific timezone: offset by %d minutes.\n", timezone_offset);
+			printf("Specific timezone: offset by %d minutes.\n", ntohl(d[i++].value));
 			break;
 		case B_ORIGINALZONE:
 			printf("Original zone.\n");
