@@ -103,8 +103,9 @@ typedef union
  * version 0x05 scripts implemented updated VACATION (:from and :handle)
  * version 0x06 scripts implemented updated VACATION (:seconds)
  * version 0x07 scripts implemented updated INCLUDE (:once and :optional)
+ * version 0x08 scripts implemented DATE and INDEX extensions
  */
-#define BYTECODE_VERSION 0x07
+#define BYTECODE_VERSION 0x08
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
 #define BYTECODE_MAGIC "CyrSBytecode"
 #define BYTECODE_MAGIC_LEN 12 /* Should be multiple of 4 */
