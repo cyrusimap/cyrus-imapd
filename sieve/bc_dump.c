@@ -171,7 +171,6 @@ static int dump_test(bytecode_info_t *d, int ip, int level ) {
     case BC_HASFLAG:
 	printf("%d: HASFLAG (\n",ip++);
 	print_spaces(level);
-	ip++; // ignore index since it means nothing in hasflag test
 	if (d->data[ip].value == B_COUNT || d->data[ip].value == B_VALUE)
 	{
 	    printf("      MATCH:%d RELATION:%d COMP:%d FLAG-VARS:\n",

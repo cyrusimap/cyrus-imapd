@@ -249,11 +249,13 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
     case BC_HASFLAG:
     {
 	int ret;
+	if (BC_HEADER == opcode) {
 	/* drop index */
 	if(write_int(fd, bc->data[(*codep)].value) == -1)
 	    return -1;
 	wrote += sizeof(int);
 	(*codep)++;
+	}
 	/* Drop match type */
 	if(write_int(fd, bc->data[(*codep)].value) == -1)
 	    return -1;

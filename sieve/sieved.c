@@ -368,7 +368,6 @@ static int dump2_test(bytecode_input_t * d, int i)
 	break;
     case BC_HASFLAG:/*15*/
 	printf("Hasflag [");
-	index = ntohl(d[++i].value); // not used
 	i= printComparison(d, i+1);
 	printf("              Variables: ");
 	i=write_list(ntohl(d[i].len), i+1, d);

@@ -861,17 +861,16 @@ envelope_err:
     {
 	const char** val;
 
-	int haystacksi=i+5;/*the i value for the beginning of the variables*/
+	int haystacksi=i+4;/*the i value for the beginning of the variables*/
 	int needlesi=(ntohl(bc[haystacksi+1].value)/4);
 
 	int numneedles=ntohl(bc[needlesi].len); // number of search flags
 
 	int currneedle; /* current needle */
 
-	/* ntohl(bc[i+1].value) is unused "index" */
-	int match=ntohl(bc[i+2].value);
-	int relation=ntohl(bc[i+3].value);
-	int comparator=ntohl(bc[i+4].value);
+	int match=ntohl(bc[i+1].value);
+	int relation=ntohl(bc[i+2].value);
+	int comparator=ntohl(bc[i+3].value);
 	int count=0;
 	int isReg = (match==B_REGEX);
 	int ctag = 0;
