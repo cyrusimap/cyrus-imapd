@@ -692,13 +692,15 @@ int isched_send(struct sched_param *sparam, const char *recipient,
 	DKIM_STAT stat;
 	unsigned char *sig = NULL;
 	size_t siglen;
+	const char *selector = config_getstring(IMAPOPT_ISCHEDULE_DKIM_SELECTOR);
+	const char *domain = config_getstring(IMAPOPT_ISCHEDULE_DKIM_DOMAIN);
 
 	/* Create iSchedule/DKIM signature */
 	if (dkim_lib &&
 	    (dkim = dkim_sign(dkim_lib, NULL /* id */, NULL,
 			      (dkim_sigkey_t) buf_cstring(&privkey),
-			      (const u_char *) config_getstring(IMAPOPT_DKIM_SELECTOR),
-			      (const u_char *) config_getstring(IMAPOPT_DKIM_DOMAIN),
+			      (const u_char *) selector,
+			      (const u_char *) domain,
 			      /* Requires modified version of OpenDKIM
 				 until we get OpenDOSETA */
 			      DKIM_CANON_ISCHEDULE, DKIM_CANON_SIMPLE,
@@ -1055,7 +1057,6 @@ static void isched_init(struct buf *serverinfo)
 
     if (namespace_ischedule.enabled) {
 	int fd;
-	struct buf keypath = BUF_INITIALIZER;
 	unsigned flags = ( DKIM_LIBFLAGS_BADSIGHANDLES | DKIM_LIBFLAGS_CACHE |
 //			   DKIM_LIBFLAGS_KEEPFILES | DKIM_LIBFLAGS_TMPFILES |
 			   DKIM_LIBFLAGS_VERIFYONE );
@@ -1069,6 +1070,7 @@ static void isched_init(struct buf *serverinfo)
 				   "TE", "Trailer", "Transfer-Encoding",
 				   "Upgrade", "Via", NULL };
 	const char *senderhdrs[] = { "Originator", NULL };
+	const char *keyfile = config_getstring(IMAPOPT_ISCHEDULE_DKIM_KEY_FILE);
 	unsigned need_dkim =
 	    namespace_ischedule.enabled == IMAP_ENUM_HTTPMODULES_ISCHEDULE;
 
@@ -1102,23 +1104,19 @@ static void isched_init(struct buf *serverinfo)
 		     senderhdrs, sizeof(const char **));
 
 	/* Fetch DKIM private key for signing */
-	buf_printf(&keypath, "%s/dkim.private", config_dir);
-	if ((fd = open(buf_cstring(&keypath), O_RDONLY)) != -1) {
+	if ((fd = open(keyfile, O_RDONLY)) != -1) {
 	    const char *base = NULL;
 	    unsigned long len = 0;
 
-	    map_refresh(fd, 1, &base, &len,
-			MAP_UNKNOWN_LEN, buf_cstring(&keypath), NULL);
+	    map_refresh(fd, 1, &base, &len, MAP_UNKNOWN_LEN, keyfile, NULL);
 	    buf_setmap(&privkey, base, len);
 	    map_free(&base, &len);
 	    close(fd);
 	}
 	else {
-	    syslog(LOG_ERR, "unable to open private key file %s",
-		   buf_cstring(&keypath));
+	    syslog(LOG_ERR, "unable to open private key file %s", keyfile);
 	    namespace_ischedule.enabled = !need_dkim;	    
 	}
-	buf_free(&keypath);
 
 	namespace_domainkey.enabled =
 	    config_httpmodules & IMAP_ENUM_HTTPMODULES_DOMAINKEY;
