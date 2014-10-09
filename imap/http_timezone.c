@@ -912,10 +912,10 @@ static const struct observance *truncate_vtimezone(icalcomponent *vtz,
 }
 
 #ifndef HAVE_TZDIST_PROPS
-static icalproperty *icalproperty_new_equivalenttzid(const char *v)
+static icalproperty *icalproperty_new_tzidaliasof(const char *v)
 {
     icalproperty *prop = icalproperty_new_x(v);
-    icalproperty_set_x_name(prop, "EQUIVALENT-TZID");
+    icalproperty_set_x_name(prop, "TZID-ALIAS-OF");
     return prop;
 }
 
@@ -1060,11 +1060,11 @@ static int action_get(struct transaction_t *txn)
 	prop = icalcomponent_get_first_property(vtz, ICAL_TZID_PROPERTY);
 
 	if (zi.type == ZI_LINK) {
-	    /* Add EQUIVALENT-TZID */
-	    const char *equiv = icalproperty_get_tzid(prop);
-	    icalproperty *etzid = icalproperty_new_equivalenttzid(equiv);
+	    /* Add TZID-ALIAS-OF */
+	    const char *aliasof = icalproperty_get_tzid(prop);
+	    icalproperty *atzid = icalproperty_new_tzidaliasof(aliasof);
 
-	    icalcomponent_add_property(vtz, etzid);
+	    icalcomponent_add_property(vtz, atzid);
 
 	    /* Substitute TZID alias */
 	    icalproperty_set_tzid(prop, tzid);
@@ -1195,9 +1195,16 @@ static int action_expand(struct transaction_t *txn)
 	    return json_error_response(txn, TZ_INVALID_FORMAT, param, NULL);
 
 	/* Mimic zdump(8) -V output for comparision:
-	   Print the times both one second before and exactly at each
-	   detected time discontinuity.  Each line ends with isdst=1
-	   if the given time is Daylight Saving Time or isdst=0 otherwise.
+
+	   For each zonename, print the times both one  second  before  and
+	   exactly at each detected time discontinuity, the time at one day
+	   less than the highest possible time value, and the time  at  the
+	   highest  possible  time value.  Each line is followed by isdst=D
+	   where D is positive, zero, or negative depending on whether  the
+	   given time is daylight saving time, standard time, or an unknown
+	   time type, respectively.  Each line is also followed by gmtoff=N
+	   if  the given local time is known to be N seconds east of Green‐
+	   wich.
 	*/
 	zdump = 1;
     }
