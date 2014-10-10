@@ -4542,25 +4542,53 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
 	  sizeof(struct freebusy), compare_freebusy_with_type);
 
     /* Coalesce busytime periods of same type into one */
-    for (n = 0; n < freebusy->len; n++) {
-	struct freebusy *fb = &freebusy->fb[n];
+    for (n = 0; n < freebusy->len - 1; n++) {
+	struct freebusy *fb, *next_fb;
+	icaltimetype end, next_end;
+	int isdur, next_isdur;
+
+	fb = &freebusy->fb[n];
+	next_fb = &freebusy->fb[n+1];
 
 	/* Ignore overridden instances */
 	if (fb->type == ICAL_FBTYPE_NONE) continue;
 
-	if ((n+1 < freebusy->len) && ((fb+1)->type == fb->type) &&
-	    icaltime_compare(fb->per.end, (fb+1)->per.start) >= 0) {
-	    /* Periods (same type) overlap -- coalesce into next busytime */
-	    (fb+1)->per.start = fb->per.start;
+	isdur = !icaldurationtype_is_null_duration(fb->per.duration);
+	end = !isdur ? fb->per.end :
+	    icaltime_add(fb->per.start, fb->per.duration);
+	    
+	/* Skip periods of different type or that don't overlap */
+	if ((fb->type != next_fb->type) ||
+	    icaltime_compare(end, next_fb->per.start) < 0) continue;
 
-	    if (icaltime_compare(fb->per.end, (fb+1)->per.end) > 0) {
-		(fb+1)->per.end = fb->per.end;
-	    }
-
-	    /* "Remove" the instance
-	       by setting fbtype to NONE (we ignore these later) */
-	    fb->type = ICAL_FBTYPE_NONE;
+	/* Coalesce into next busytime */
+	next_isdur = !icaldurationtype_is_null_duration(next_fb->per.duration);
+	next_end = !next_isdur ? next_fb->per.end :
+	    icaltime_add(next_fb->per.start, next_fb->per.duration);
+	    
+	if (icaltime_compare(end, next_end) >= 0) {
+	    /* Current period subsumes next */
+	    next_fb->per.end = fb->per.end;
+	    next_fb->per.duration = fb->per.duration;
 	}
+	else if (isdur && next_isdur) {
+	    /* Both periods are durations */
+	    struct icaldurationtype overlap =
+		icaltime_subtract(end, next_fb->per.start);
+
+	    next_fb->per.duration.days += fb->per.duration.days - overlap.days;
+	}
+	else {
+	    /* Need to use explicit period */
+	    next_fb->per.end = next_end;
+	    next_fb->per.duration = icaldurationtype_null_duration();
+	}
+
+	next_fb->per.start = fb->per.start;
+
+	/* "Remove" the instance
+	   by setting fbtype to NONE (we ignore these later) */
+	fb->type = ICAL_FBTYPE_NONE;
     }
 
     /* Sort busytime periods by start/end times for addition to VFREEBUSY */
