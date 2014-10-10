@@ -62,14 +62,23 @@ ec HTTP_OK,
 ec HTTP_CREATED,
    "201 Created"
 
+ec HTTP_ACCEPTED,
+   "202 Accepted"
+
 ec HTTP_NO_CONTENT,
    "204 No Content"
+
+ec HTTP_RESET_CONTENT,
+   "205 Reset Content"
 
 ec HTTP_PARTIAL,
    "206 Partial Content"
 
 ec HTTP_MOVED,
    "301 Moved Permanently"
+
+ec HTTP_SEE_OTHER,
+   "303 See Other"
 
 ec HTTP_NOT_MODIFIED,
    "304 Not Modified"
@@ -170,7 +179,7 @@ ec HTTP_NO_STORAGE,
 
 
 
-# draft-reschke-http-status-308
+# Permanent Redirect (RFC 7238)
 
 ec HTTP_PERM_REDIRECT,
    "308 Permanent Redirect"
