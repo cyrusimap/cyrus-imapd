@@ -3658,6 +3658,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 
     default:
 	ret = HTTP_SERVER_ERROR;
+	txn->error.desc = error_message(r);
 	goto done;
     }
 
