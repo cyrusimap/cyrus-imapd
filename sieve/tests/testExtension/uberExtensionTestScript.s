@@ -181,7 +181,90 @@ if allof(currentdate :value "ge" "date" "2014-01-01",
 {redirect "me+cd2014@blah.com";}
 
 ######################################################################
-#FLAGS
+#HASFLAG
 ######################################################################
-# TODO: Add test for :flags
+
+if header :contains "subject" "imap4flags"
+{
+
+#
+# Positive :count tests
+#
+setflag "";
+
+if hasflag :count "lt" :comparator "i;ascii-numeric" ["1"]
+{redirect "me+good.hasflag.count.lt.1.pos@blah.com";}
+else
+{redirect "me+bad.hasflag.count.lt.1.pos@blah.com";}
+
+if hasflag :count "le" :comparator "i;ascii-numeric" ["0"]
+{redirect "me+good.hasflag.count.le.0.pos@blah.com";}
+else
+{redirect "me+bad.hasflag.count.le.0.pos@blah.com";}
+
+setflag "flag1 flag2";
+
+if hasflag :count "le" :comparator "i;ascii-numeric" ["2"]
+{redirect "me+good.hasflag.count.le.2.pos@blah.com";}
+else
+{redirect "me+bad.hasflag.count.le.2.pos@blah.com";}
+
+#
+# Negative :count tests
+#
+setflag "";
+
+if hasflag :count "lt" :comparator "i;ascii-numeric" ["0"]
+{redirect "me+bad.hasflag.count.lt.0.neg@blah.com";}
+else
+{redirect "me+good.hasflag.count.lt.0.neg@blah.com";}
+
+if hasflag :count "ge" :comparator "i;ascii-numeric" ["1"]
+{redirect "me+bad.hasflag.count.ge.1.neg@blah.com";}
+else
+{redirect "me+good.hasflag.count.ge.1.neg@blah.com";}
+
+setflag "flag1 flag2";
+
+if hasflag :count "lt" :comparator "i;ascii-numeric" ["2"]
+{redirect "me+bad.hasflag.count.lt.2.neg@blah.com";}
+else
+{redirect "me+good.hasflag.count.lt.2.neg@blah.com";}
+
+#
+# Positive tests
+#
+setflag "there";
+
+if hasflag :contains ["myflag", "here"]
+{redirect "me+good.hasflag.contains.pos@blah.com";}
+else
+{redirect "me+bad.hasflag.contains.pos@blah.com";}
+
+if hasflag :contains ""
+{redirect "me+good.hasflag.contains.null.pos@blah.com";}
+else
+{redirect "me+bad.hasflag.contains.null.pos@blah.com";}
+
+#
+# Negative tests
+#
+setflag "flag";
+
+if hasflag ""
+{redirect "me+bad.hasflag.null.neg@blah.com";}
+else
+{redirect "me+good.hasflag.null.neg@blah.com";}
+
+if hasflag :contains "flags"
+{redirect "me+bad.hasflag.contains.neg@blah.com";}
+else
+{redirect "me+good.hasflag.contains.neg@blah.com";}
+
+if hasflag "lag"
+{redirect "me+bad.hasflag.neg@blah.com";}
+else
+{redirect "me+good.hasflag.neg@blah.com";}
+
+}
 
