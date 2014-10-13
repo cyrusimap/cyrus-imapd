@@ -744,7 +744,7 @@ copy: COPY			 { if (!parse_script->support.copy) {
 				     yyerror("copy MUST be enabled with \"require\"");
 	                             YYERROR;
                                    }
-				   $$ = COPY; }
+				   $$ = 1; }
 	;
 
 ftags: /* empty */		 { $$ = new_ftags(); }
