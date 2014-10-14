@@ -567,16 +567,16 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 	    if (index > 0) {
 		--index;
 		if (index >= header_count) {
-			res = SIEVE_FAIL;
-			goto alldone;
+			res = 0;
+			break;
 		}
 		header_count = index + 1;
 	    }
 	    else if (index < 0) {
 		index += header_count;
 		if (index < 0) {
-			res = SIEVE_FAIL;
-			goto alldone;
+			res = 0;
+			break;
 		}
 		header_count = index + 1;
 	    }
@@ -780,16 +780,16 @@ envelope_err:
 	    if (index > 0) {
 		--index;
 		if (index >= header_count) {
-			res = SIEVE_FAIL;
-			goto alldone;
+			res = 0;
+			break;
 		}
 		header_count = index + 1;
 	    }
 	    else if (index < 0) {
 		index += header_count;
 		if (index < 0) {
-			res = SIEVE_FAIL;
-			goto alldone;
+			res = 0;
+			break;
 		}
 		header_count = index + 1;
 	    }
@@ -1077,8 +1077,9 @@ envelope_err:
 		 */
 
 		if (interp->getheader(m, header_name, &headers) != SIEVE_OK) {
-			res = SIEVE_FAIL;
-			goto alldone;
+			res = 0;
+			free(bc_makeArray(bc, &i));
+			break;
 		}
 
 		/* count results */
@@ -1091,24 +1092,27 @@ envelope_err:
 		if (index > 0) {
 			--index;
 			if (index >= header_count) {
-				res = SIEVE_FAIL;
-				goto alldone;
+				res = 0;
+				free(bc_makeArray(bc, &i));
+				break;
 			}
 			header_count = index + 1;
 		}
 		else if (index < 0) {
 			index += header_count;
 			if (index < 0) {
-				res = SIEVE_FAIL;
-				goto alldone;
+				res = 0;
+				free(bc_makeArray(bc, &i));
+				break;
 			}
 			header_count = index + 1;
 		}
 
 		/* check if index is out of bounds */
 		if (index < 0 || index >= header_count) {
-			res = SIEVE_FAIL;
-			goto alldone;
+			res = 0;
+			free(bc_makeArray(bc, &i));
+			break;
 		}
 		header = headers[index];
 
@@ -1124,8 +1128,9 @@ envelope_err:
 		}
 
 		if (-1 == time_from_rfc822(header_data, &t)) {
-			res = SIEVE_FAIL;
-			goto alldone;
+			res = 0;
+			free(bc_makeArray(bc, &i));
+			break;
 		}
 
 		/* timezone offset */
@@ -1138,8 +1143,9 @@ envelope_err:
 			zone = strrchr(header, ' ');
 			if (!zone ||
 			    3 != sscanf(zone + 1, "%c%02d%02d", &sign, &hours, &minutes)) {
-				res = SIEVE_FAIL;
-				goto alldone;
+				res = 0;
+				free(bc_makeArray(bc, &i));
+				break;
 			}
 
 			timezone_offset = (sign == '-' ? -1 : 1) * ((hours * 60) + (minutes));
