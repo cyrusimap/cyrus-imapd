@@ -70,6 +70,9 @@
     "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" " \
     "\"http://www.w3.org/TR/html4/loose.dtd\">"
 
+#define XML_DECLARATION \
+    "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+
 /* Macro to return proper response code when user privileges are insufficient */
 #define HTTP_NO_PRIVS \
     (httpd_userid && !is_userid_anonymous(httpd_userid) ? \

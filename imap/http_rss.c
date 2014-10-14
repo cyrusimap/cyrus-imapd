@@ -812,7 +812,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
     /* Start XML */
     buf_reset(buf);
-    buf_printf_markup(buf, level, "<?xml version=\"1.0\" encoding=\"utf-8\"?>");
+    buf_printf_markup(buf, level, XML_DECLARATION);
 
     /* Set up the Atom <feed> response for the mailbox */
     buf_printf_markup(buf, level++,
