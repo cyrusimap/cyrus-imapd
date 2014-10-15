@@ -4542,7 +4542,7 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
 	  sizeof(struct freebusy), compare_freebusy_with_type);
 
     /* Coalesce busytime periods of same type into one */
-    for (n = 0; n < freebusy->len - 1; n++) {
+    for (n = 0; n + 1 < freebusy->len; n++) {
 	struct freebusy *fb, *next_fb;
 	icaltimetype end, next_end;
 	int isdur, next_isdur;
