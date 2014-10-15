@@ -216,8 +216,6 @@ char *mboxname_lockpath(const char *mboxname);
  */
 int mboxname_policycheck(const char *name);
 
-int mboxname_netnewscheck(const char *name);
-
 void mboxname_todeleted(const char *name, char *result, int withtime);
 
 /*
