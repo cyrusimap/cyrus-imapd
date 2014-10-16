@@ -1105,7 +1105,7 @@ int proppatch_restype(xmlNodePtr prop, unsigned set,
     const char *coltype = (const char *) rock;
     unsigned precond = 0;
 
-    if (set && (pctx->meth == METH_MKCOL || pctx->meth == METH_MKCALENDAR)) {
+    if (set && (pctx->meth != METH_PROPPATCH)) {
 	/* "Writeable" for MKCOL/MKCALENDAR only */
 	xmlNodePtr cur;
 
