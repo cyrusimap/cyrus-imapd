@@ -593,6 +593,26 @@ struct namespace_t namespace_calendar = {
 };
 
 
+static const struct cal_comp_t {
+    const char *name;
+    unsigned long type;
+} cal_comps[] = {
+    { "VEVENT",		CAL_COMP_VEVENT },
+    { "VTODO",		CAL_COMP_VTODO },
+    { "VJOURNAL",	CAL_COMP_VJOURNAL },
+    { "VFREEBUSY",	CAL_COMP_VFREEBUSY },
+#ifdef HAVE_VAVAILABILITY
+    { "VAVAILABILITY",	CAL_COMP_VAVAILABILITY },
+#endif
+#ifdef HAVE_VPOLL
+    { "VPOLL",		CAL_COMP_VPOLL },
+#endif
+//    { "VTIMEZONE",	CAL_COMP_VTIMEZONE },
+//    { "VALARM",	  	CAL_COMP_VALARM },
+    { NULL, 0 }
+};
+
+
 static struct caldav_db *my_caldav_open(struct mailbox *mailbox)
 {
     if (httpd_userid && mboxname_userownsmailbox(httpd_userid, mailbox->name)) {
@@ -1351,26 +1371,39 @@ static int dump_calendar(struct transaction_t *txn, int rights)
 /*
  * mboxlist_findall() callback function to list calendars
  */
-static int list_cb(char *name,
-		   int matchlen __attribute__((unused)),
-		   int maycreate __attribute__((unused)),
-		   void *rock)
+
+struct list_cal_rock {
+    struct transaction_t *txn;
+    const char *proto;
+    const char *host;
+    const char *base;
+    unsigned *level;
+};
+
+static int list_cal_cb(char *name,
+		       int matchlen __attribute__((unused)),
+		       int maycreate __attribute__((unused)),
+		       void *rock)
 {
-    struct transaction_t *txn = (struct transaction_t *) rock;
+    struct list_cal_rock *lrock = (struct list_cal_rock *) rock;
+    struct transaction_t *txn = lrock->txn;
     struct buf *body = &txn->resp_body.payload;
-    struct buf *url = &txn->buf;
+    const char *base_path = txn->req_tgt.path, *calstyle = "";
+    unsigned *level = lrock->level;
     static size_t inboxlen = 0;
     static size_t outboxlen = 0;
+    static size_t defaultlen = 0;
     char *shortname;
     mbentry_t *mbentry = NULL;
     size_t len;
-    int r;
+    int r, rights, isdefault = 0;
     static const char *displayname_annot =
 	ANNOT_NS "<" XML_NS_DAV ">displayname";
     struct buf displayname = BUF_INITIALIZER;
 
     if (!inboxlen) inboxlen = strlen(SCHED_INBOX) - 1;
     if (!outboxlen) outboxlen = strlen(SCHED_OUTBOX) - 1;
+    if (!defaultlen) defaultlen = strlen(SCHED_DEFAULT) - 1;
 
     shortname = strrchr(name, '.') + 1;
     len = strlen(shortname);
@@ -1385,8 +1418,14 @@ static int list_cb(char *name,
 
     /* Lookup the mailbox and make sure its readable */
     r = http_mlookup(name, &mbentry, NULL);
-    if (r || !mbentry->acl || !(cyrus_acl_myrights(httpd_authstate, mbentry->acl) & ACL_READ))
+    if (r || !((rights = cyrus_acl_myrights(httpd_authstate, mbentry->acl)) & ACL_READ))
 	goto done;
+
+    /* Is this the default calendar? */
+    if (len == defaultlen && !strncmp(shortname, SCHED_DEFAULT, defaultlen)) {
+	isdefault = 1;
+	calstyle = "<b>";
+    }
 
     /* Send a body chunk once in a while */
     if (buf_len(body) > PROT_BUFSIZE) {
@@ -1400,10 +1439,25 @@ static int list_cb(char *name,
     if (r || !displayname.len) buf_setcstr(&displayname, shortname);
 
     /* Add available calendar with link */
-    len = buf_len(url);
-    buf_printf_markup(body, 3, "<li><a href=\"%s%s\">%s</a></li>",
-		      buf_cstring(url), shortname, buf_cstring(&displayname));
+    buf_printf_markup(body, (*level)++, "<tr>");
+    buf_printf_markup(body, *level, "<td>%s%s%s",
+		      calstyle, buf_cstring(&displayname), calstyle);
 
+    buf_printf_markup(body, *level,
+		      "<td><a href=\"webcal://%s%s%s\">Subscribe</a>",
+		      lrock->host, base_path, shortname);
+
+    buf_printf_markup(body, *level,
+		      "<td><a href=\"%s%s\">Download</a>",
+		      base_path, shortname);
+
+    if (!isdefault && (rights & DACL_RMCOL)) {
+	buf_printf_markup(body, *level,
+			  "<td><a href=\"%s%s?action=delete\">Delete</a>",
+			  base_path, shortname);
+    }
+
+    --(*level);
 done:
     buf_free(&displayname);
     mboxlist_entry_free(&mbentry);
@@ -1412,17 +1466,39 @@ done:
 }
 
 
+struct list_tzid_rock {
+    struct buf *body;
+    unsigned *level;
+};
+
+int list_tzid_cb(const char *tzid,
+		 int tzidlen __attribute__((unused)),
+		 struct zoneinfo *zi __attribute__((unused)),
+		 void *rock)
+{
+    struct list_tzid_rock *tzrock = (struct list_tzid_rock *) rock;
+
+    /* Skip Etc and other non-standard zones */
+    if (strchr(tzid, '/') && strncmp(tzid, "Etc/", 4)) {
+	buf_printf_markup(tzrock->body, *tzrock->level,
+			  "<option>%s</option>", tzid);
+    }
+
+    return 0;
+}
+
+
 /* Create a HTML document listing all calendars available to the user */
-static int list_calendars(struct transaction_t *txn, int rights)
+static int action_list(struct transaction_t *txn, int rights)
 {
     int ret = 0, precond;
-    time_t lastmod = compile_time;
     char mboxlist[MAX_MAILBOX_PATH+1];
     struct stat sbuf;
-    static char etag[63];
+    time_t lastmod;
+    const char *etag;
     unsigned level = 0;
     struct buf *body = &txn->resp_body.payload;
-    const char *proto = NULL, *host = NULL;
+    struct list_cal_rock lrock;
 
     /* Check rights */
     if ((rights & DACL_READ) != DACL_READ) {
@@ -1437,7 +1513,15 @@ static int list_calendars(struct transaction_t *txn, int rights)
     snprintf(mboxlist, MAX_MAILBOX_PATH, "%s%s", config_dir, FNAME_MBOXLIST);
     stat(mboxlist, &sbuf);
     lastmod = MAX(compile_time, sbuf.st_mtime);
-    sprintf(etag, "%ld-%ld-%ld", compile_time, sbuf.st_mtime, sbuf.st_size);
+    assert(!buf_len(&txn->buf));
+    buf_printf(&txn->buf, "%ld-%ld-%ld",
+	       compile_time, sbuf.st_mtime, sbuf.st_size);
+
+    /* stat() config file for Last-Modified and ETag */
+    stat(config_filename, &sbuf);
+    lastmod = MAX(lastmod, sbuf.st_mtime);
+    buf_printf(&txn->buf, "-%ld-%ld", sbuf.st_mtime, sbuf.st_size);
+    etag = buf_cstring(&txn->buf);
 
     /* Check any preconditions */
     precond = caldav_check_precond(txn, NULL, etag, lastmod);
@@ -1448,8 +1532,7 @@ static int list_calendars(struct transaction_t *txn, int rights)
 	/* Fill in ETag, Last-Modified, and Expires */
 	txn->resp_body.etag = etag;
 	txn->resp_body.lastmod = lastmod;
-	txn->resp_body.maxage = 86400;  /* 24 hrs */
-	txn->flags.cc |= CC_MAXAGE;
+	txn->flags.cc |= CC_REVALIDATE;
 
 	if (precond != HTTP_NOT_MODIFIED) break;
 
@@ -1478,26 +1561,80 @@ static int list_calendars(struct transaction_t *txn, int rights)
     buf_printf_markup(body, --level, "</head>");
     buf_printf_markup(body, level++, "<body>");
     buf_printf_markup(body, level, "<h2>%s</h2>", "Available Calendars");
-    buf_printf_markup(body, level++, "<ul>");
+    buf_printf_markup(body, level++, "<table border cellpadding=5>");
     write_body(HTTP_OK, txn, buf_cstring(body), buf_len(body));
     buf_reset(body);
 
-    /* Create base URL for calendars */
-    http_proto_host(txn->req_hdrs, &proto, &host);
-    assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "%s://%s%s", proto, host, txn->req_tgt.path);
+    /* Populate list callback rock */
+    http_proto_host(txn->req_hdrs, &lrock.proto, &lrock.host);
+    lrock.txn = txn;
+    lrock.level = &level;
 
     /* Generate list of calendars */
     strlcat(txn->req_tgt.mboxname, ".%", sizeof(txn->req_tgt.mboxname));
 
     mboxlist_findall(NULL, txn->req_tgt.mboxname, 1, httpd_userid,
-		     httpd_authstate, list_cb, txn);
+		     httpd_authstate, list_cal_cb, &lrock);
 
     if (buf_len(body)) write_body(0, txn, buf_cstring(body), buf_len(body));
 
-    /* Finish HTML */
+    /* Finish list */
     buf_reset(body);
-    buf_printf_markup(body, --level, "</ul>");
+    buf_printf_markup(body, --level, "</table>");
+
+    if (rights & DACL_MKCOL) {
+	/* Add "create" form */
+	const struct cal_comp_t *comp;
+	struct list_tzid_rock tzrock = { body, &level };
+
+	buf_printf_markup(body, level, "<p><hr>");
+	buf_printf_markup(body, level, "<h3>%s</h3>", "Create New Calendar");
+	buf_printf_markup(body, level++,
+			  "<form method=GET action=\"%s\">",
+			  txn->req_tgt.path);
+	buf_printf_markup(body, level,
+			  "<input type=hidden name=action value=create>");
+	buf_printf_markup(body, level++, "<table cellpadding=5>");
+	buf_printf_markup(body, level++, "<tr>");
+	buf_printf_markup(body, level, "<td align=right>Name:");
+	buf_printf_markup(body, level--,
+			  "<td><input name=name size=30 maxlength=40>");
+	buf_printf_markup(body, level++, "<tr>");
+	buf_printf_markup(body, level, "<td align=right>Description:");
+	buf_printf_markup(body, level--,
+			  "<td><input name=desc size=75 maxlength=120>");
+
+	buf_printf_markup(body, level++, "<tr>");
+	buf_printf_markup(body, level, "<td align=right>Components:"
+			  "<br><sub>(default = ALL)</sub>");
+	buf_printf_markup(body, level++, "<td>");
+	for (comp = cal_comps; comp->name; comp++) {
+	    buf_printf_markup(body, level,
+			      "<input type=checkbox name=comp value=%s>%s",
+			      comp->name, comp->name);
+	}
+	level -= 2;
+
+	if (namespace_calendar.allow & ALLOW_CAL_NOTZ) {
+	    buf_printf_markup(body, level++, "<tr>");
+	    buf_printf_markup(body, level, "<td align=right>Time Zone:");
+	    buf_printf_markup(body, level++, "<td>");
+	    buf_printf_markup(body, level++, "<select name=tzid>");
+	    buf_printf_markup(body, level, "<option></option>");
+	    zoneinfo_find(NULL, 1, 0, &list_tzid_cb, &tzrock);
+	    buf_printf_markup(body, --level, "</select>");
+	    level -= 2;
+	}
+
+	buf_printf_markup(body, level++, "<tr>");
+	buf_printf_markup(body, level, "<td>");
+	buf_printf_markup(body, level--,
+			  "<td><input type=submit value=Create>");
+	buf_printf_markup(body, --level, "</table>");
+	buf_printf_markup(body, --level, "</form>");
+    }
+
+    /* Finish HTML */
     buf_printf_markup(body, --level, "</body>");
     buf_printf_markup(body, --level, "</html>");
     write_body(0, txn, buf_cstring(body), buf_len(body));
@@ -1506,6 +1643,154 @@ static int list_calendars(struct transaction_t *txn, int rights)
     write_body(0, txn, NULL, 0);
 
   done:
+    return ret;
+}
+
+
+/* Redirect client back to the "list" page */
+static void success_redirect(struct transaction_t *txn, const char *op)
+{
+    struct buf *body = &txn->resp_body.payload;
+    unsigned level = 0;
+
+    txn->resp_body.type = "text/html; charset=utf-8";
+    buf_reset(body);
+    buf_printf_markup(body, level, HTML_DOCTYPE);
+    buf_printf_markup(body, level++, "<html>");
+    buf_printf_markup(body, level++, "<head>");
+    buf_printf_markup(body, level, "<title>%s</title>", "Success");
+    buf_printf_markup(body, --level, "</head>");
+    buf_printf_markup(body, level++, "<body>");
+    buf_printf_markup(body, level,
+		      "<h4>%s of calendar <tt>%s</tt> was successful</h4>",
+		      op, txn->req_tgt.path);
+
+    *txn->req_tgt.collection = '\0';
+    buf_reset(&txn->buf);
+    buf_printf(&txn->buf, "%s?action=list", txn->req_tgt.path);
+    txn->location = buf_cstring(&txn->buf);
+
+    buf_printf_markup(body, level,
+		      "<p>Return to <a href=\"%s\">Available Calendars</a>",
+		      txn->location);
+    buf_printf_markup(body, --level, "</body>");
+    buf_printf_markup(body, --level, "</html>");
+
+    write_body(HTTP_SEE_OTHER, txn, buf_cstring(body), buf_len(body));
+}
+
+
+/* Create a new calendar */
+static int action_create(struct transaction_t *txn, int rights)
+{
+    struct buf *body = &txn->req_body.payload;
+    struct strlist *name, *desc, *comp, *tzid;
+    size_t len;
+    int ret;
+
+    /* Check rights */
+    if (!(rights & DACL_MKCOL)) {
+	/* DAV:need-privileges */
+	txn->error.precond = DAV_NEED_PRIVS;
+	txn->error.resource = txn->req_tgt.path;
+	txn->error.rights = DACL_MKCOL;
+	return HTTP_NO_PRIVS;
+    }
+
+    name = hash_lookup("name", &txn->req_qparams);
+    if (!name || name->next || !*name->s) {
+	txn->error.desc = "Multiple/missing/empty name parameter(s)";
+	return HTTP_BAD_REQUEST;
+    }
+
+    desc = hash_lookup("desc", &txn->req_qparams);
+    if (desc && desc->next) {
+	txn->error.desc = "Multiple desc parameter(s)";
+	return HTTP_BAD_REQUEST;
+    }
+
+    tzid = hash_lookup("tzid", &txn->req_qparams);
+    if (tzid && tzid->next) {
+	txn->error.desc = "Multiple tzid parameter(s)";
+	return HTTP_BAD_REQUEST;
+    }
+
+    /* Append a unique resource name to URL path */
+    len = strlen(txn->req_tgt.path);
+    txn->req_tgt.collection = txn->req_tgt.path + len;
+    txn->req_tgt.collen =
+	snprintf(txn->req_tgt.collection, MAX_MAILBOX_PATH - len,
+		 "%x-%x-%d-%ld", strhash(txn->req_tgt.path),
+		 strhash(name->s), getpid(), time(0));
+
+    xmlFreeURI(txn->req_uri);
+    txn->req_uri = parse_uri(METH_MKCALENDAR, txn->req_tgt.path, 1,
+			     &txn->error.desc);
+
+    /* Construct a MKCALENDAR request body */
+    txn->req_body.flags = BODY_DONE;
+    spool_cache_header(xstrdup("Content-Type"), xstrdup("application/xml"),
+		       txn->req_hdrs);
+    buf_setcstr(body, XML_DECLARATION);
+    buf_printf(body,
+	       "<C:mkcalendar xmlns:D=\"%s\" xmlns:C=\"%s\"><D:set><D:prop>",
+	       XML_NS_DAV, XML_NS_CALDAV);
+    buf_printf(body, "<D:displayname>%s</D:displayname>", name->s);
+    if (desc && *desc->s) {
+	buf_printf(body, "<C:calendar-description>%s</C:calendar-description>",
+		   desc->s);
+    }
+
+    comp = hash_lookup("comp", &txn->req_qparams);
+    if (comp) {
+	buf_appendcstr(body, "<C:supported-calendar-component-set>");
+	do {
+	    buf_printf(body, "<C:comp name=\"%s\"/>", comp->s);
+	} while ((comp = comp->next));
+	buf_appendcstr(body, "</C:supported-calendar-component-set>");
+    }
+
+    if (tzid && *tzid->s) {
+	buf_printf(body, "<C:calendar-timezone-id>%s</C:calendar-timezone-id>",
+		   tzid->s);
+    }
+    buf_appendcstr(body, "</D:prop></D:set></C:mkcalendar>");
+
+    /* Perform MKCALENDAR */
+    ret = meth_mkcol(txn, &caldav_params);
+
+    if (ret == HTTP_CREATED) {
+	/* Success - tell client to go back to list page */
+	success_redirect(txn, "Creation");
+	return 0;
+    }
+
+    return ret;
+}
+
+
+/* Delete a calendar */
+static int action_delete(struct transaction_t *txn, int rights)
+{
+    int ret;
+
+    /* Check rights */
+    if (!(rights & DACL_RMCOL)) {
+	/* DAV:need-privileges */
+	txn->error.precond = DAV_NEED_PRIVS;
+	txn->error.resource = txn->req_tgt.path;
+	txn->error.rights = DACL_RMCOL;
+	return HTTP_NO_PRIVS;
+    }
+
+    ret = meth_delete(txn, &caldav_params);
+
+    if (ret == HTTP_NO_CONTENT) {
+	/* Success - tell client to go back to list page */
+	success_redirect(txn, "Deletion");
+	return 0;
+    }
+
     return ret;
 }
 
@@ -1653,7 +1938,7 @@ static struct icaltimetype icaltime_from_rfc3339_string(const char *str)
 
 /* Execute a free/busy query per
    http://www.calconnect.org/pubdocs/CD0903%20Freebusy%20Read%20URL.pdf */
-static int freebusy_url(struct transaction_t *txn, int rights)
+static int action_freebusy(struct transaction_t *txn, int rights)
 {
     int ret = 0;
     struct tm *tm;
@@ -1931,8 +2216,8 @@ static int server_info(struct transaction_t *txn)
 				 ns[NS_CALDAV],
 				 &fctx, NULL, &propstat[PROPSTAT_OK], NULL);
 	    propfind_calcompset(BAD_CAST "supported-calendar-component-sets",
-				 ns[NS_CALDAV],
-				 &fctx, NULL, &propstat[PROPSTAT_OK], NULL);
+				ns[NS_CALDAV],
+				&fctx, NULL, &propstat[PROPSTAT_OK], NULL);
 	    propfind_rscaleset(BAD_CAST "supported-rscale-set", ns[NS_CALDAV],
 			       &fctx, NULL, &propstat[PROPSTAT_OK], NULL);
 	    propfind_maxsize(BAD_CAST "max-resource-size", ns[NS_CALDAV],
@@ -2029,17 +2314,26 @@ static int meth_get(struct transaction_t *txn, void *params)
     rights = mbentry->acl ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
     mboxlist_entry_free(&mbentry);
 
-    /* Get an entire calendar collection */ 
-    if (txn->req_tgt.collection) return dump_calendar(txn, rights);
+    if (txn->req_tgt.collection) {
+	/* Download an entire calendar collection */ 
+	if (!action) return dump_calendar(txn, rights);
 
-    /* Display available actions HTML page */
-    if (!action) return list_actions(txn, rights);
+	/* Delete a calendar collection */
+	if (!strcmp(action->s, "delete")) return action_delete(txn, rights);
+    }
+    else {
+	/* Display available actions HTML page */
+	if (!action) return list_actions(txn, rights);
 
-    /* GET a list of calendars under calendar-home-set */
-    if (!strcmp(action->s, "list")) return list_calendars(txn, rights);
+	/* GET a list of calendars under calendar-home-set */
+	if (!strcmp(action->s, "list")) return action_list(txn, rights);
 	
-    /* GET busytime of the user */
-    if (!strcmp(action->s, "freebusy")) return freebusy_url(txn, rights);
+	/* Create a new calendar under calendar-home-set */
+	if (!strcmp(action->s, "create")) return action_create(txn, rights);
+	
+	/* GET busytime of the user */
+	if (!strcmp(action->s, "freebusy")) return action_freebusy(txn, rights);
+    }
 
     /* Unknown action */
     return HTTP_BAD_REQUEST;
@@ -3139,25 +3433,6 @@ static int propfind_scheddefault(const xmlChar *name, xmlNsPtr ns,
 
 
 /* Callback to fetch CALDAV:supported-calendar-component-set[s] */
-static const struct cal_comp_t {
-    const char *name;
-    unsigned long type;
-} cal_comps[] = {
-    { "VEVENT",		CAL_COMP_VEVENT },
-    { "VTODO",		CAL_COMP_VTODO },
-    { "VJOURNAL",	CAL_COMP_VJOURNAL },
-    { "VFREEBUSY",	CAL_COMP_VFREEBUSY },
-#ifdef HAVE_VAVAILABILITY
-    { "VAVAILABILITY",	CAL_COMP_VAVAILABILITY },
-#endif
-#ifdef HAVE_VPOLL
-    { "VPOLL",		CAL_COMP_VPOLL },
-#endif
-//    { "VTIMEZONE",	CAL_COMP_VTIMEZONE },
-//    { "VALARM",	  	CAL_COMP_VALARM },
-    { NULL, 0 }
-};
-
 static int propfind_calcompset(const xmlChar *name, xmlNsPtr ns,
 			       struct propfind_ctx *fctx,
 			       xmlNodePtr resp __attribute__((unused)),
@@ -3211,7 +3486,7 @@ static int proppatch_calcompset(xmlNodePtr prop, unsigned set,
     int r = 0;
     unsigned precond = 0;
 
-    if (set && (pctx->meth == METH_MKCOL || pctx->meth == METH_MKCALENDAR)) {
+    if (set && (pctx->meth != METH_PROPPATCH)) {
 	/* "Writeable" for MKCOL/MKCALENDAR only */
 	xmlNodePtr cur;
 	unsigned long types = 0;
