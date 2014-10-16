@@ -631,6 +631,7 @@ int     tls_init_serverengine(const char *ident,
     const char   *s_cert_file;
     const char   *s_key_file;
     int    requirecert;
+    int    server_cipher_order;
     int    timeout;
 
     if (tls_serverengine)
@@ -646,13 +647,6 @@ int     tls_init_serverengine(const char *ident,
 	return -1;
     }
 
-#if 0
-    if (tlsonly) {
-	s_ctx = SSL_CTX_new(TLSv1_server_method());
-    } else {
-	s_ctx = SSL_CTX_new(SSLv23_server_method());
-    }
-#endif
     /* even if we want TLS only, we use SSLv23 server method so we can
        deal with a client sending an SSLv2 greeting message */
 
@@ -662,10 +656,40 @@ int     tls_init_serverengine(const char *ident,
     };
 
     off |= SSL_OP_ALL;		/* Work around all known bugs */
-    if (tlsonly) {
+
+    const char *tls_versions = config_getstring(IMAPOPT_TLS_VERSIONS);
+
+    if (strstr(tls_versions, "ssl2") == NULL || tlsonly) {
 	off |= SSL_OP_NO_SSLv2;
+    }
+
+    if (strstr(tls_versions, "ssl3") == NULL || tlsonly) {
 	off |= SSL_OP_NO_SSLv3;
     }
+
+    if (strstr(tls_versions, "tls1_2") == NULL) {
+#if (OPENSSL_VERSION_NUMBER >= 0x1000105fL)
+	off |= SSL_OP_NO_TLSv1_2;
+#else
+	syslog(LOG_ERR, "ERROR: TLSv1.2 configured, OpenSSL < 1.0.1e insufficient");
+#endif
+    }
+
+    if (strstr(tls_versions, "tls1_1") == NULL) {
+#if (OPENSSL_VERSION_NUMBER >= 0x1000000fL)
+	off |= SSL_OP_NO_TLSv1_1;
+#else
+	syslog(LOG_ERR, "ERROR: TLSv1.1 configured, OpenSSL < 1.0.0 insufficient");
+#endif
+    }
+    if (strstr(tls_versions, "tls1_0") == NULL) {
+	off |= SSL_OP_NO_TLSv1;
+    }
+
+    server_cipher_order = config_getswitch(IMAPOPT_TLS_PREFER_SERVER_CIPHERS);
+    if (server_cipher_order)
+        off |= SSL_OP_CIPHER_SERVER_PREFERENCE;
+
     SSL_CTX_set_options(s_ctx, off);
     SSL_CTX_set_info_callback(s_ctx, (void (*)()) apps_ssl_info_callback);
 
@@ -679,10 +703,15 @@ int     tls_init_serverengine(const char *ident,
     CAfile = config_getstring(IMAPOPT_TLS_CA_FILE);
     CApath = config_getstring(IMAPOPT_TLS_CA_PATH);
 
-    if ((!SSL_CTX_load_verify_locations(s_ctx, CAfile, CApath)) ||
-	(!SSL_CTX_set_default_verify_paths(s_ctx))) {
-	/* just a warning since this is only necessary for client auth */
-	syslog(LOG_NOTICE,"TLS server engine: cannot load CA data");	
+    if (CAfile || CApath) {
+	if ((!SSL_CTX_load_verify_locations(s_ctx, CAfile, CApath)) ||
+	    (!SSL_CTX_set_default_verify_paths(s_ctx))) {
+	    /* just a warning since this is only necessary for client auth */
+	    syslog(LOG_NOTICE,"TLS server engine: cannot load CA data. Disabling client certs.");
+	    askcert = 0;
+	}
+    } else {
+	askcert = 0;
     }
 
     s_cert_file = config_getstring(IMAPOPT_TLS_CERT_FILE);
@@ -697,11 +726,23 @@ int     tls_init_serverengine(const char *ident,
 #if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
     /* Load DH params for DHE-* key exchanges */
     SSL_CTX_set_tmp_dh(s_ctx, load_dh_param(s_key_file, s_cert_file));
-    /* FIXME: Load ECDH params for ECDHE suites when 0.9.9 is released */
+#endif
+
+#if (OPENSSL_VERSION_NUMBER >= 0x1000103fL)
+    const char *ec = config_getstring(IMAPOPT_TLS_ECCURVE);
+    int openssl_nid = OBJ_sn2nid(ec);
+    if (openssl_nid != 0) {
+	EC_KEY *ecdh;
+	ecdh = EC_KEY_new_by_curve_name(openssl_nid);
+	if (ecdh != NULL) {
+	    SSL_CTX_set_tmp_ecdh(s_ctx, ecdh);
+	    EC_KEY_free(ecdh);
+	}
+    }
 #endif
 
     verify_depth = verifydepth;
-    if (askcert!=0)
+    if (askcert != 0)
 	verify_flags |= SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE;
 
     requirecert = config_getswitch(IMAPOPT_TLS_REQUIRE_CERT);
@@ -714,7 +755,7 @@ int     tls_init_serverengine(const char *ident,
       if (CAfile == NULL) {
 	  syslog(LOG_ERR, 
 		 "TLS server engine: No CA file specified. "
-		 "Client side certs may not work");
+		 "Client side certs will not work.");
       } else {
 	  SSL_CTX_set_client_CA_list(s_ctx, SSL_load_client_CA_file(CAfile));
       }
@@ -1209,7 +1250,7 @@ int tls_init_clientengine(int verifydepth,
 	return -1;
     }
     
-    c_ctx = SSL_CTX_new(TLSv1_client_method());
+    c_ctx = SSL_CTX_new(SSLv23_client_method());
     if (c_ctx == NULL) {
 	return (-1);
     };
@@ -1224,7 +1265,7 @@ int tls_init_clientengine(int verifydepth,
     if ((!SSL_CTX_load_verify_locations(c_ctx, CAfile, CApath)) ||
 	(!SSL_CTX_set_default_verify_paths(c_ctx))) {
 	/* just a warning since this is only necessary for client auth */
-	syslog(LOG_NOTICE,"TLS client engine: cannot load CA data");	
+	syslog(LOG_NOTICE,"TLS client engine: cannot load CA data");
     }
 
     if (strlen(var_tls_cert_file) == 0)
