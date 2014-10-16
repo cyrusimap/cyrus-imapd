@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 
@@ -25,10 +27,7 @@
     <script type="text/javascript" src="../_static/underscore.js"></script>
     <script type="text/javascript" src="../_static/doctools.js"></script>
     <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
-    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" />
-    <link rel="up" title="Part II. Standard Operating Procedures" href="sop.html" />
-    <link rel="next" title="Managing user_deny.db" href="sop-userdeny.html" />
-    <link rel="prev" title="Setting up Replication" href="sop-replication.html" /> 
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" /> 
   </head>
   <body>
     <div class="related">
@@ -37,15 +36,7 @@
         <li class="right" style="margin-right: 10px">
           <a href="../genindex.html" title="General Index"
              accesskey="I">index</a></li>
-        <li class="right" >
-          <a href="sop-userdeny.html" title="Managing user_deny.db"
-             accesskey="N">next</a> |</li>
-        <li class="right" >
-          <a href="sop-replication.html" title="Setting up Replication"
-             accesskey="P">previous</a> |</li>
-        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
-          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
-          <li><a href="sop.html" accesskey="U">Part II. Standard Operating Procedures</a> &raquo;</li> 
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li> 
       </ul>
     </div>  
 
@@ -70,12 +61,11 @@
 <p><strong>Procedure 13.1. Transition from Traditional Mail Spool to Split Data Mail Spool</strong></p>
 <blockquote>
 <div><p>Create a new partition in <strong>/etc/imapd.conf</strong>, aptly named <strong>splitmeta</strong> in the following example configuration snippet:</p>
-<div class="highlight-python"><div class="highlight"><pre>metapartition_files: header index cache expunge squat
+<div class="highlight-python"><pre>metapartition_files: header index cache expunge squat
 metapartition-default: /var/spool/imap
 metapartition-splitmeta: /var/spool/splitmeta/metadata
 partition-default: /var/spool/imap
-partition-splitmeta: /var/spool/splitmeta/partition
-</pre></div>
+partition-splitmeta: /var/spool/splitmeta/partition</pre>
 </div>
 <p>Create the directory tree being referred to in the new configuration:</p>
 <div class="highlight-python"><div class="highlight"><pre><span class="c"># su -s /bin/bash - cyrus -c &#39;/usr/lib/cyrus-imapd/mkimap /etc/imapd.conf&#39;</span>
@@ -83,8 +73,7 @@ partition-splitmeta: /var/spool/splitmeta/partition
 </div>
 <p>Reload the Cyrus IMAP service. Please refer to <a class="reference internal" href="sop-reloading.html"><em>Reloading Cyrus IMAP Services</em></a> for more details on doing so.</p>
 <p>Rename all mailboxes, using the new partition as the location for the renamed mailbox. One example rename command is included below:</p>
-<div class="highlight-python"><div class="highlight"><pre>cyradm&gt; renamemailbox user/john.doe@example.org user/john.doe@example.org splitmeta
-</pre></div>
+<div class="highlight-python"><pre>cyradm&gt; renamemailbox user/john.doe@example.org user/john.doe@example.org splitmeta</pre>
 </div>
 </div></blockquote>
 </div>
@@ -95,12 +84,6 @@ partition-splitmeta: /var/spool/splitmeta/partition
       </div>
       <div class="sphinxsidebar">
         <div class="sphinxsidebarwrapper">
-  <h4>Previous topic</h4>
-  <p class="topless"><a href="sop-replication.html"
-                        title="previous chapter">Setting up Replication</a></p>
-  <h4>Next topic</h4>
-  <p class="topless"><a href="sop-userdeny.html"
-                        title="next chapter">Managing user_deny.db</a></p>
   <h3>This Page</h3>
   <ul class="this-page-menu">
     <li><a href="../_sources/admin/sop-splitting-metadata.txt"
@@ -129,20 +112,12 @@ partition-splitmeta: /var/spool/splitmeta/partition
         <li class="right" style="margin-right: 10px">
           <a href="../genindex.html" title="General Index"
              >index</a></li>
-        <li class="right" >
-          <a href="sop-userdeny.html" title="Managing user_deny.db"
-             >next</a> |</li>
-        <li class="right" >
-          <a href="sop-replication.html" title="Setting up Replication"
-             >previous</a> |</li>
-        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
-          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
-          <li><a href="sop.html" >Part II. Standard Operating Procedures</a> &raquo;</li> 
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li> 
       </ul>
     </div>
     <div class="footer">
         &copy; Copyright 1993-2014, The Cyrus Team.
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
     </div>
   </body>
 </html>

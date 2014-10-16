@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 
@@ -25,10 +27,7 @@
     <script type="text/javascript" src="../_static/underscore.js"></script>
     <script type="text/javascript" src="../_static/doctools.js"></script>
     <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
-    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" />
-    <link rel="up" title="Part II. Standard Operating Procedures" href="sop.html" />
-    <link rel="next" title="Part III. Configuration Reference" href="config.html" />
-    <link rel="prev" title="Splitting Metadata from Partitions" href="sop-splitting-metadata.html" /> 
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" /> 
   </head>
   <body>
     <div class="related">
@@ -37,15 +36,7 @@
         <li class="right" style="margin-right: 10px">
           <a href="../genindex.html" title="General Index"
              accesskey="I">index</a></li>
-        <li class="right" >
-          <a href="config.html" title="Part III. Configuration Reference"
-             accesskey="N">next</a> |</li>
-        <li class="right" >
-          <a href="sop-splitting-metadata.html" title="Splitting Metadata from Partitions"
-             accesskey="P">previous</a> |</li>
-        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
-          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
-          <li><a href="sop.html" accesskey="U">Part II. Standard Operating Procedures</a> &raquo;</li> 
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li> 
       </ul>
     </div>  
 
@@ -66,22 +57,20 @@
 <p>The database specification can be found at <a class="reference external" href="http://cyrusimap.org/docs/cyrus-imapd/2.4.17/internal/database-formats.php">http://cyrusimap.org/docs/cyrus-imapd/2.4.17/internal/database-formats.php</a></p>
 <p><strong>Key:</strong> &lt;Userid&gt;</p>
 <p><strong>Data:</strong> &lt;Version&gt;TAB&lt;Deny List (comma-separated wildmat patterns)&gt;TAB&lt;Deny Message&gt;</p>
-<div class="highlight-python"><div class="highlight"><pre># su - cyrus
-$ cyr_dbtool /var/lib/imap/user_deny.db skiplist set **username** &quot;2     pop3    Can&#39;t use pop.&quot;
-</pre></div>
+<div class="highlight-python"><pre># su - cyrus
+$ cyr_dbtool /var/lib/imap/user_deny.db skiplist set **username** "2     pop3    Can't use pop."</pre>
 </div>
 <p>In order to type a tab character, you will need to escape your tabs. In bash, this is done by typing CTRL-v and then pressing Tab.</p>
 <p>If you got it right, when you authenticate via pop3 you should see something like the following:</p>
-<div class="highlight-python"><div class="highlight"><pre>$ telnet mail.example.org 110
+<div class="highlight-python"><pre>$ telnet mail.example.org 110
 Trying 192.168.0.2...
 Connected to mail.example.org.
-Escape character is &#39;^]&#39;.
+Escape character is '^]'.
 +OK mail.example.org Cyrus POP3 v2.4.17 server ready &lt;18418688457439930663.1399062365@mail.example.org&gt;
 USER **username**
 +OK Name is a valid mailbox
--ERR [SYS/TEMP] Can&#39;t use pop.
-Connection closed by foreign host.
-</pre></div>
+-ERR [SYS/TEMP] Can't use pop.
+Connection closed by foreign host.</pre>
 </div>
 </div>
 
@@ -91,12 +80,6 @@ Connection closed by foreign host.
       </div>
       <div class="sphinxsidebar">
         <div class="sphinxsidebarwrapper">
-  <h4>Previous topic</h4>
-  <p class="topless"><a href="sop-splitting-metadata.html"
-                        title="previous chapter">Splitting Metadata from Partitions</a></p>
-  <h4>Next topic</h4>
-  <p class="topless"><a href="config.html"
-                        title="next chapter">Part III. Configuration Reference</a></p>
   <h3>This Page</h3>
   <ul class="this-page-menu">
     <li><a href="../_sources/admin/sop-userdeny.txt"
@@ -125,20 +108,12 @@ Connection closed by foreign host.
         <li class="right" style="margin-right: 10px">
           <a href="../genindex.html" title="General Index"
              >index</a></li>
-        <li class="right" >
-          <a href="config.html" title="Part III. Configuration Reference"
-             >next</a> |</li>
-        <li class="right" >
-          <a href="sop-splitting-metadata.html" title="Splitting Metadata from Partitions"
-             >previous</a> |</li>
-        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
-          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
-          <li><a href="sop.html" >Part II. Standard Operating Procedures</a> &raquo;</li> 
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li> 
       </ul>
     </div>
     <div class="footer">
         &copy; Copyright 1993-2014, The Cyrus Team.
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
     </div>
   </body>
 </html>

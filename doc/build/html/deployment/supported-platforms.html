@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 
@@ -122,26 +124,23 @@
 <p>Berkeley DB Versions and Conversion</p>
 <p>The Cyrus IMAP <tt class="docutils literal"><span class="pre">configure</span></tt> process attempts to automatically detect and use the latest Berkeley DB technology available on the system. This may, however, not be the same version on your production systems. Since database conversions between versions of the Berkeley DB technology are particularly difficult and therefor NOT considered fully supported, we recommend you do NOT use Berkeley DB.</p>
 <p>Should the Berkeley DB development headers be installed in a non-standard location, or should you need a specific version when multiple versions are available on the system, please consider using any of the following options;</p>
-<div class="highlight-python"><div class="highlight"><pre>--with-bdb=DIR            use Berkeley DB (in DIR) [yes]
+<div class="highlight-python"><pre>--with-bdb=DIR            use Berkeley DB (in DIR) [yes]
 --with-bdb-libdir=DIR     Berkeley DB lib files are in DIR
---with-bdb-incdir=DIR     Berkeley DB include files are in DIR&lt;/screen&gt;
-</pre></div>
+--with-bdb-incdir=DIR     Berkeley DB include files are in DIR&lt;/screen&gt;</pre>
 </div>
 <p><strong>MySQL</strong> (Development headers)</p>
 <p>To enable using MySQL as a database server backend, include the MySQL development headers and make sure to configure Cyrus IMAP with <tt class="docutils literal"><span class="pre">--with-mysql</span></tt>.</p>
 <p>Should MySQL - the client libraries or the development headers - be installed in a non-standard location, please consider using any of the following options;</p>
-<div class="highlight-python"><div class="highlight"><pre>--with-mysql=DIR          use MySQL (in DIR) [no]
+<div class="highlight-python"><pre>--with-mysql=DIR          use MySQL (in DIR) [no]
 --with-mysql-libdir=DIR   MySQL lib files are in DIR
---with-mysql-incdir=DIR   MySQL include files are in DIR
-</pre></div>
+--with-mysql-incdir=DIR   MySQL include files are in DIR</pre>
 </div>
 <p><strong>PostgreSQL</strong> (Development headers)</p>
 <p>To enable using PostgreSQL as a database server backend, include the PostgreSQL development headers and make sure to configure Cyrus IMAP with <tt class="docutils literal"><span class="pre">--with-pgsql</span></tt>.</p>
 <p>Should PostgreSQL - the client libraries or the development headers - be installed in a non-standard location, please consider using any of the following options;</p>
-<div class="highlight-python"><div class="highlight"><pre>--with-pgsql=DIR          use PostgreSQL (in DIR) [no]
+<div class="highlight-python"><pre>--with-pgsql=DIR          use PostgreSQL (in DIR) [no]
 --with-pgsql-libdir=DIR   Pgsql lib files are in DIR
---with-pgsql-incdir=DIR   Pgsql include files are in DIR
-</pre></div>
+--with-pgsql-incdir=DIR   Pgsql include files are in DIR</pre>
 </div>
 <p>Obviously, the list is not complete</p>
 </div>
@@ -220,7 +219,7 @@
     </div>
     <div class="footer">
         &copy; Copyright 1993-2014, The Cyrus Team.
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
     </div>
   </body>
 </html>

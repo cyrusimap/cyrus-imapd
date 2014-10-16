@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 
@@ -85,7 +87,7 @@ supported-platforms.rst</p>
 <li>In <tt class="docutils literal"><span class="pre">imapd.conf</span></tt>, set <tt class="docutils literal"><span class="pre">unixhierarchysep</span></tt> to <tt class="docutils literal"><span class="pre">0</span></tt>.</li>
 <li>Attempt to create a mailbox for user <em>bovik&#64;example.org</em> using the shorthand qualifier (e.g. <cite>bovik</cite>), and the fully qualified user identifier (e.g. <tt class="docutils literal"><span class="pre">bovik&#64;example.org</span></tt>).</li>
 </ol>
-<div class="highlight-python"><div class="highlight"><pre>$ cyradm -u cyrus localhost
+<div class="highlight-python"><pre>$ cyradm -u cyrus localhost
 verify error:num=18:self signed certificate
 IMAP Password:
 localhost.localdomain&amp;gt; lm
@@ -95,23 +97,21 @@ localhost.localdomain&amp;gt; cm user.bovik
 localhost.localdomain&amp;gt; lm
 user.bovik (\HasNoChildren)
 localhost.localdomain&amp;gt; lam user.bovik
-bovik lrswipkxtecda
-</pre></div>
+bovik lrswipkxtecda</pre>
 </div>
 <p>As you can see, the mailbox has been created succesfully using the shorthand qualifier.</p>
-<div class="highlight-python"><div class="highlight"><pre>localhost.localdomain&amp;gt; cm user.bovik@example.org
+<div class="highlight-python"><pre>localhost.localdomain&amp;gt; cm user.bovik@example.org
 createmailbox: Permission denied
 localhost.localdomain&amp;gt; sam user.bovik cyrus all
 localhost.localdomain&amp;gt; cm user.bovik@example.org
 createmailbox: Permission denied
 localhost.localdomain&amp;gt; dm user.bovik
 localhost.localdomain&amp;gt; cm user.bovik@example.org
-createmailbox: Permission denied
-</pre></div>
+createmailbox: Permission denied</pre>
 </div>
 <p>In <tt class="docutils literal"><span class="pre">imapd.conf</span></tt>, set <tt class="docutils literal"><span class="pre">unixhierarchysep</span></tt> to <tt class="docutils literal"><span class="pre">1</span></tt>.</p>
 <p>Attempt to create a mailbox for user <em>bovik&#64;example.org</em> using the shorthand qualifier (e.g. <tt class="docutils literal"><span class="pre">bovik</span></tt>), and the fully qualified user identifier (e.g. <tt class="docutils literal"><span class="pre">bovik&#64;example.org</span></tt>).</p>
-<div class="highlight-python"><div class="highlight"><pre>$ cyradm -u cyrus localhost
+<div class="highlight-python"><pre>$ cyradm -u cyrus localhost
 verify error:num=18:self signed certificate
 IMAP Password:
 localhost.localdomain&amp;gt; lm
@@ -131,8 +131,7 @@ localhost.localdomain&amp;gt; sam user/bovik@example.org cyrus all
 localhost.localdomain&amp;gt; dm user/bovik
 localhost.localdomain&amp;gt; dm user/bovik@example.org
 localhost.localdomain&amp;gt; lm
-localhost.localdomain&amp;gt;
-</pre></div>
+localhost.localdomain&amp;gt;</pre>
 </div>
 <p>As you can see, the mailbox has been created succesfully using the shorthand qualifier, and has been created using the fully qualified user identifier as well.</p>
 </div>
@@ -237,9 +236,8 @@ localhost.localdomain&amp;gt;
 <p class="last">In the paragraph above, make sure &#8216;Login Authentication&#8217; links to the appropriate section.</p>
 </div>
 <p>In the Unix authorization mechanism, identifiers are either a valid userid or the string &#8220;<tt class="docutils literal"><span class="pre">group</span></tt>&#8221;: followed by a group listed in <tt class="docutils literal"><span class="pre">/etc/group</span></tt>. Thus:</p>
-<div class="highlight-python"><div class="highlight"><pre>root                Refers to the user root
-group:staff         Refers to the group staff
-</pre></div>
+<div class="highlight-python"><pre>root                Refers to the user root
+group:staff         Refers to the group staff</pre>
 </div>
 <p>It is also possible to use unix groups with users authenticated through a non-/etc/passwd backend. Note that using unix groups in this way (without associated &lt;filename&gt;/etc/passwd&lt;/filename&gt; entries) is not recommended.</p>
 <div class="admonition-todo admonition" id="index-3">
@@ -251,8 +249,7 @@ group:staff         Refers to the group staff
 <div>&lt;emphasis&gt;$principal&lt;/emphasis&gt;.&lt;emphasis&gt;$instance&lt;/emphasis&gt;&#64;&lt;emphasis&gt;$realm&lt;/emphasis&gt;&lt;/screen&gt;</div></blockquote>
 <p>If <tt class="docutils literal"><span class="pre">$instance</span></tt> is omitted, it defaults to the null string. If <tt class="docutils literal"><span class="pre">$realm</span></tt> is omitted, it defaults to the local realm.</p>
 <p>The file <tt class="docutils literal"><span class="pre">/etc/krb.equiv</span></tt> contains mappings between Kerberos principals. The file contains zero or more lines, each containing two fields. Any identity matching the first field of a line is changed to the second identity during canonicalization. For example, a line in <tt class="docutils literal"><span class="pre">/etc/krb.equiv</span></tt> of:</p>
-<div class="highlight-python"><div class="highlight"><pre>bovik@REMOTE.COM bovik
-</pre></div>
+<div class="highlight-python"><pre>bovik@REMOTE.COM bovik</pre>
 </div>
 <p>will cause the identity <tt class="docutils literal"><span class="pre">bovik&#64;REMOTE.COM</span></tt> to be treated as if it were the local identity <tt class="docutils literal"><span class="pre">bovik</span></tt>.</p>
 <p>A site may wish to write their own authorization mechanism, perhaps to implement a local group mechanism. If it does so (by implementing an &lt;code&gt;auth_[whatever]&lt;/code&gt; PTS module), it will dictate its own form and meaning of identifiers.</p>
@@ -267,10 +264,9 @@ group:staff         Refers to the group staff
 <blockquote>
 <div>&lt;example id=&#8221;exam-Deployment_Guide-Calculating_the_Users_Rights-Example_ACL_with_Negative_User_Rights&#8221;&gt;
 &lt;title&gt;Example ACL with Negative User Rights&lt;/title&gt;</div></blockquote>
-<div class="highlight-python"><div class="highlight"><pre>anyone       lrsp
+<div class="highlight-python"><pre>anyone       lrsp
 fred         lwi
--anonymous   s
-</pre></div>
+-anonymous   s</pre>
 </div>
 <p>&lt;/example&gt;</p>
 <p>The user &#8220;&lt;code&gt;fred&lt;/code&gt;&#8221; will be granted the rights &#8220;&lt;code&gt;lrswip&lt;/code&gt;&#8221; and the anonymous user will be granted the rights &#8220;&lt;code&gt;lrp&lt;/code&gt;&#8221;.</p>
@@ -696,7 +692,7 @@ up this configuration, see &lt;A href=&#8221;install-murder.php&#8221;&gt;here&l
     </div>
     <div class="footer">
         &copy; Copyright 1993-2014, The Cyrus Team.
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
     </div>
   </body>
 </html>

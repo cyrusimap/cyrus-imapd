@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 
@@ -25,10 +27,7 @@
     <script type="text/javascript" src="../_static/underscore.js"></script>
     <script type="text/javascript" src="../_static/doctools.js"></script>
     <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
-    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" />
-    <link rel="up" title="Part II. Standard Operating Procedures" href="sop.html" />
-    <link rel="next" title="Reconstructing Mailboxes" href="sop-reconstructing.html" />
-    <link rel="prev" title="Database Conversion, Export and Import" href="sop-databases.html" /> 
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" /> 
   </head>
   <body>
     <div class="related">
@@ -37,15 +36,7 @@
         <li class="right" style="margin-right: 10px">
           <a href="../genindex.html" title="General Index"
              accesskey="I">index</a></li>
-        <li class="right" >
-          <a href="sop-reconstructing.html" title="Reconstructing Mailboxes"
-             accesskey="N">next</a> |</li>
-        <li class="right" >
-          <a href="sop-databases.html" title="Database Conversion, Export and Import"
-             accesskey="P">previous</a> |</li>
-        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
-          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
-          <li><a href="sop.html" accesskey="U">Part II. Standard Operating Procedures</a> &raquo;</li> 
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li> 
       </ul>
     </div>  
 
@@ -93,8 +84,7 @@
 <div class="section" id="expiring-deleted-messages-and-folders">
 <h2>Expiring Deleted Messages and Folders<a class="headerlink" href="#expiring-deleted-messages-and-folders" title="Permalink to this headline">¶</a></h2>
 <p>In the EVENTS block of cyrus.conf, you should have a line similar to the following:</p>
-<div class="highlight-python"><div class="highlight"><pre>delprune  cmd=&quot;cyr_expire -E 1 -D 7 -X 7 -a&quot; at=2300
-</pre></div>
+<div class="highlight-python"><pre>delprune  cmd="cyr_expire -E 1 -D 7 -X 7 -a" at=2300</pre>
 </div>
 <dl class="docutils">
 <dt>-D 7</dt>
@@ -105,12 +95,10 @@
 <dd>permanently deletes from the filesystem expunged messages that were expunged more than 7 days ago.</dd>
 </dl>
 <p>To use delayed deletion of mailboxes, you need the following entry in imapd.conf and a version at least 2.3.9:</p>
-<div class="highlight-python"><div class="highlight"><pre>delete_mode: delayed
-</pre></div>
+<div class="highlight-python"><pre>delete_mode: delayed</pre>
 </div>
 <p>The default prefix for deleted mailboxes is DELETED but it probably doesn&#8217;t hurt to specify it in imapd.conf as well:</p>
-<div class="highlight-python"><div class="highlight"><pre>deletedprefix: DELETED
-</pre></div>
+<div class="highlight-python"><pre>deletedprefix: DELETED</pre>
 </div>
 </div>
 <div class="section" id="undeleting-folders">
@@ -118,9 +106,8 @@
 <p>The following assumes that unixhierarchysep is on. If it&#8217;s off then replace &#8216;/&#8217; in the names with &#8216;.&#8217;</p>
 <p>With the previous configuration options in place, whenever a mail folder or mailbox is deleted, it will be renamed to DELETED/mailfoldername/4D5C6B7A where 4D5C6B7A is a hex-encoded timestamp and DELETED/ is the prefix for deleted mailboxes.</p>
 <p>4D5C6B7A can be converted back to a human-readable time using a simple one-liner in Perl:</p>
-<div class="highlight-python"><div class="highlight"><pre>$ perl -le &#39;print scalar(localtime(hex(&quot;4D5C6B7A&quot;)));&#39;
-Thu Feb 17 00:27:38 2011
-</pre></div>
+<div class="highlight-python"><pre>$ perl -le 'print scalar(localtime(hex("4D5C6B7A")));'
+Thu Feb 17 00:27:38 2011</pre>
 </div>
 <div class="admonition note">
 <p class="first admonition-title">Note</p>
@@ -128,12 +115,11 @@ Thu Feb 17 00:27:38 2011
 <p class="last">The ACL on the deleted folder remains the same so undeleting it is as simple as renaming it as a sub-folder of the recreated mailbox or back to the original folder name depending on whether the mailbox has been recreated or not. If you have to add an ACL to be able to delete the mailbox, you may wish to remove the ACL after the undelete has been finished.</p>
 </div>
 <p>The following examples assume a mailbox for <a class="reference external" href="mailto:info&#37;&#52;&#48;example&#46;com">info<span>&#64;</span>example<span>&#46;</span>com</a> has been deleted:</p>
-<div class="highlight-python"><div class="highlight"><pre>cyradm&gt; listmailbox user/info*@example.com
-</pre></div>
+<div class="highlight-python"><pre>cyradm&gt; listmailbox user/info*@example.com</pre>
 </div>
 <p>If there&#8217;s no output from the above command, the mailbox has not been recreated since being deleted and you can rename the mailbox and any folders back to the original name as follows. If the mailbox has been recreated, you will probably want to rename the deleted folders into a subfolder of the new mailbox, for example <a class="reference external" href="mailto:user/info/4D88AF31&#37;&#52;&#48;example&#46;com">user/info/4D88AF31<span>&#64;</span>example<span>&#46;</span>com</a> becomes <a class="reference external" href="mailto:user/info/restored&#37;&#52;&#48;example&#46;com">user/info/restored<span>&#64;</span>example<span>&#46;</span>com</a> and <a class="reference external" href="mailto:user/info/Sent/4D88AF34&#37;&#52;&#48;example&#46;com">user/info/Sent/4D88AF34<span>&#64;</span>example<span>&#46;</span>com</a> becomes <a class="reference external" href="mailto:user/info/restored/Sent&#37;&#52;&#48;example&#46;com">user/info/restored/Sent<span>&#64;</span>example<span>&#46;</span>com</a></p>
 <p>In either case the commands are similar but with the latter option you need to insert the extra &#8220;/restored&#8221; after the user/info:</p>
-<div class="highlight-python"><div class="highlight"><pre>cyradm&gt; listmailbox DELETED/user/info*@example.com
+<div class="highlight-python"><pre>cyradm&gt; listmailbox DELETED/user/info*@example.com
 DELETED/user/info/4D88AF31@example.com (\HasNoChildren)
 DELETED/user/info/Drafts/4D88AF34@example.com (\HasNoChildren)
 DELETED/user/info/Sent/4D88AF34@example.com (\HasNoChildren)
@@ -141,8 +127,7 @@ DELETED/user/info/Trash/4D88AF35@example.com (\HasNoChildren)
 cyradm&gt; renamemailbox DELETED/user/info/4D88AF31@example.com user/info@example.com
 cyradm&gt; renamemailbox DELETED/user/info/Drafts/4D88AF34@example.com user/info/Drafts@example.com
 cyradm&gt; renamemailbox DELETED/user/info/Sent/4D88AF34@example.com user/info/Sent@example.com
-cyradm&gt; renamemailbox DELETED/user/info/Trash/4D88AF35@example.com user/info/Trash@example.com
-</pre></div>
+cyradm&gt; renamemailbox DELETED/user/info/Trash/4D88AF35@example.com user/info/Trash@example.com</pre>
 </div>
 <p>Unfortunately there&#8217;s no easy way to rename the entire mailbox back including all the subfolders and the hex timestamp can vary between folders in the same mailbox if it was a mailbox with some large folders. This is because it&#8217;s the time that particular folder was deleted, not when the first folder was deleted.</p>
 <p>Recursively undeleting a mailbox and all subfolders: <a class="reference external" href="http://git.kolab.org/pykolab/tree/pykolab/imap/cyrus.py">http://git.kolab.org/pykolab/tree/pykolab/imap/cyrus.py</a>.</p>
@@ -155,7 +140,7 @@ cyradm&gt; renamemailbox DELETED/user/info/Trash/4D88AF35@example.com user/info/
 </pre></div>
 </div>
 <p>Each message will give you something like the following:</p>
-<div class="highlight-python"><div class="highlight"><pre>UID: 11422
+<div class="highlight-python"><pre>UID: 11422
     Size: 7786
     Sent: Mon Mar 10 12:00:00 2014
     Recv: Mon Mar 10 16:06:32 2014
@@ -165,15 +150,13 @@ cyradm&gt; renamemailbox DELETED/user/info/Trash/4D88AF35@example.com user/info/
     Cc  :
     Bcc :
     Subj: {44}
-re: some random subject of length 44 chars.&quot;
-</pre></div>
+re: some random subject of length 44 chars."</pre>
 </div>
 <p>To unexpunge a single message:</p>
-<div class="highlight-python"><div class="highlight"><pre># su cyrus -c &quot;/usr/lib/cyrus-imapd/unexpunge -udv user/simon@example.org 11422&quot;
-restoring expunged messages in mailbox &#39;user/simon@example.org&#39;
+<div class="highlight-python"><pre># su cyrus -c "/usr/lib/cyrus-imapd/unexpunge -udv user/simon@example.org 11422"
+restoring expunged messages in mailbox 'user/simon@example.org'
 Unexpunged user/simon@example.org: 11422 =&gt; 11438
-restored 1 expunged messages
-</pre></div>
+restored 1 expunged messages</pre>
 </div>
 <p>To unexpunge all the messages and mark them as undeleted as well:</p>
 <div class="highlight-python"><div class="highlight"><pre><span class="c"># su cyrus -c &quot;/usr/lib/cyrus-imapd/unexpunge -adv user/simon@example.org&quot;</span>
@@ -184,12 +167,11 @@ restored 1 expunged messages
 <p class="last">This isn&#8217;t recursive. It will only restore the inbox.</p>
 </div>
 <p>To find other folders, ctl_mboxlist can be used.</p>
-<div class="highlight-python"><div class="highlight"><pre># su cyrus -c &quot;/usr/lib/cyrus-imapd/ctl_mboxlist -d&quot; | grep example.org
+<div class="highlight-python"><pre># su cyrus -c "/usr/lib/cyrus-imapd/ctl_mboxlist -d" | grep example.org
 example.org!user.simon    0 default simon@example.org   lrswipkxtecda
 example.org!user.simon.Lists  0 default simon@example.org   lrswipkxtecda
 example.org!user.simon.Lists.cyrus    0 default simon@example.org   lrswipkxtecda
-example.org!user.simon.Deleted Messages   0 default simon@example.org   lrswipkxtecda
-</pre></div>
+example.org!user.simon.Deleted Messages   0 default simon@example.org   lrswipkxtecda</pre>
 </div>
 <p>Run the unexpunge command for every folder that needs to have mail undeleted.</p>
 <p>For folder names that have spaces &#8216; &#8216;, the spaces need to be escaped with a backslash</p>
@@ -220,12 +202,6 @@ example.org!user.simon.Deleted Messages   0 default simon@example.org   lrswipkx
 </li>
 </ul>
 
-  <h4>Previous topic</h4>
-  <p class="topless"><a href="sop-databases.html"
-                        title="previous chapter">Database Conversion, Export and Import</a></p>
-  <h4>Next topic</h4>
-  <p class="topless"><a href="sop-reconstructing.html"
-                        title="next chapter">Reconstructing Mailboxes</a></p>
   <h3>This Page</h3>
   <ul class="this-page-menu">
     <li><a href="../_sources/admin/sop-deleting.txt"
@@ -254,20 +230,12 @@ example.org!user.simon.Deleted Messages   0 default simon@example.org   lrswipkx
         <li class="right" style="margin-right: 10px">
           <a href="../genindex.html" title="General Index"
              >index</a></li>
-        <li class="right" >
-          <a href="sop-reconstructing.html" title="Reconstructing Mailboxes"
-             >next</a> |</li>
-        <li class="right" >
-          <a href="sop-databases.html" title="Database Conversion, Export and Import"
-             >previous</a> |</li>
-        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
-          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
-          <li><a href="sop.html" >Part II. Standard Operating Procedures</a> &raquo;</li> 
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li> 
       </ul>
     </div>
     <div class="footer">
         &copy; Copyright 1993-2014, The Cyrus Team.
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
     </div>
   </body>
 </html>

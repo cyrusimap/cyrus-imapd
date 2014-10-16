@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 
@@ -25,10 +27,7 @@
     <script type="text/javascript" src="../_static/underscore.js"></script>
     <script type="text/javascript" src="../_static/doctools.js"></script>
     <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
-    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" />
-    <link rel="up" title="Mailbox Operations" href="sop-mailbox-operations.html" />
-    <link rel="next" title="Reloading Cyrus IMAP Services" href="sop-reloading.html" />
-    <link rel="prev" title="Mailbox Operations" href="sop-mailbox-operations.html" /> 
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" /> 
   </head>
   <body>
     <div class="related">
@@ -37,16 +36,7 @@
         <li class="right" style="margin-right: 10px">
           <a href="../genindex.html" title="General Index"
              accesskey="I">index</a></li>
-        <li class="right" >
-          <a href="sop-reloading.html" title="Reloading Cyrus IMAP Services"
-             accesskey="N">next</a> |</li>
-        <li class="right" >
-          <a href="sop-mailbox-operations.html" title="Mailbox Operations"
-             accesskey="P">previous</a> |</li>
-        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
-          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
-          <li><a href="sop.html" >Part II. Standard Operating Procedures</a> &raquo;</li>
-          <li><a href="sop-mailbox-operations.html" accesskey="U">Mailbox Operations</a> &raquo;</li> 
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li> 
       </ul>
     </div>  
 
@@ -61,13 +51,12 @@
 <div class="admonition note">
 <p class="first admonition-title">Note</p>
 <p>Making an INBOX/Archive/ Folder exempt from quota:</p>
-<div class="last highlight-python"><div class="highlight"><pre>cyradm&gt; createmailbox user/john.doe@example.org
+<div class="last highlight-python"><pre>cyradm&gt; createmailbox user/john.doe@example.org
 cyradm&gt; setquota user/john.doe@example.org 2097152
 cyradm&gt; listquotaroot user/john.doe@example.org
 cyradm&gt; createmailbox user/john.doe/Archive@example.org
 cyradm&gt; setquota user/john.doe/Archive@example.org
-cyradm&gt; listquotaroot user/john.doe/Archive@example.org
-</pre></div>
+cyradm&gt; listquotaroot user/john.doe/Archive@example.org</pre>
 </div>
 </div>
 </div>
@@ -78,12 +67,6 @@ cyradm&gt; listquotaroot user/john.doe/Archive@example.org
       </div>
       <div class="sphinxsidebar">
         <div class="sphinxsidebarwrapper">
-  <h4>Previous topic</h4>
-  <p class="topless"><a href="sop-mailbox-operations.html"
-                        title="previous chapter">Mailbox Operations</a></p>
-  <h4>Next topic</h4>
-  <p class="topless"><a href="sop-reloading.html"
-                        title="next chapter">Reloading Cyrus IMAP Services</a></p>
   <h3>This Page</h3>
   <ul class="this-page-menu">
     <li><a href="../_sources/admin/sop-mailbox-quota.txt"
@@ -112,21 +95,12 @@ cyradm&gt; listquotaroot user/john.doe/Archive@example.org
         <li class="right" style="margin-right: 10px">
           <a href="../genindex.html" title="General Index"
              >index</a></li>
-        <li class="right" >
-          <a href="sop-reloading.html" title="Reloading Cyrus IMAP Services"
-             >next</a> |</li>
-        <li class="right" >
-          <a href="sop-mailbox-operations.html" title="Mailbox Operations"
-             >previous</a> |</li>
-        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
-          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
-          <li><a href="sop.html" >Part II. Standard Operating Procedures</a> &raquo;</li>
-          <li><a href="sop-mailbox-operations.html" >Mailbox Operations</a> &raquo;</li> 
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li> 
       </ul>
     </div>
     <div class="footer">
         &copy; Copyright 1993-2014, The Cyrus Team.
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
     </div>
   </body>
 </html>

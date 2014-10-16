@@ -1,4 +1,1 @@
-*/en-US/auth-*.xml
-*/en-US/sect-*.xml
-!Common_Content/en-US/auth-*.xml
-!Common_Content/en-US/sect-*.xml
+build/

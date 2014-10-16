@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 
@@ -25,10 +27,7 @@
     <script type="text/javascript" src="../_static/underscore.js"></script>
     <script type="text/javascript" src="../_static/doctools.js"></script>
     <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
-    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" />
-    <link rel="up" title="Part III. Configuration Reference" href="config.html" />
-    <link rel="next" title="Notes for Packagers" href="packagers.html" />
-    <link rel="prev" title="Part III. Configuration Reference" href="config.html" /> 
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" /> 
   </head>
   <body>
     <div class="related">
@@ -37,15 +36,7 @@
         <li class="right" style="margin-right: 10px">
           <a href="../genindex.html" title="General Index"
              accesskey="I">index</a></li>
-        <li class="right" >
-          <a href="packagers.html" title="Notes for Packagers"
-             accesskey="N">next</a> |</li>
-        <li class="right" >
-          <a href="config.html" title="Part III. Configuration Reference"
-             accesskey="P">previous</a> |</li>
-        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
-          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
-          <li><a href="config.html" accesskey="U">Part III. Configuration Reference</a> &raquo;</li> 
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li> 
       </ul>
     </div>  
 
@@ -118,18 +109,16 @@ Please remember that when using a unified mupdate configuration, a server is bot
 As such, the more free space the item has, the more chances it has to be selected.</div></blockquote>
 <p>Example A.3. Example of freespace-percent-weighted Selection
 In the same conditions than Example A.1, “Example of freespace-most Selection”, the weight of each item would be:</p>
-<div class="highlight-python"><div class="highlight"><pre>40 for item1
+<div class="highlight-python"><pre>40 for item1
 60 for item2
 30 for item3
-70 for item4
-</pre></div>
+70 for item4</pre>
 </div>
 <p>The sum of the weights being 200, the probability for each item to be selected as most fitting would be:</p>
-<div class="highlight-python"><div class="highlight"><pre>100 * (40 / 200) = 20% for item1
+<div class="highlight-python"><pre>100 * (40 / 200) = 20% for item1
 100 * (60 / 200) = 30% for item2
 100 * (30 / 200) = 15% for item3
-100 * (70 / 200) = 35% for item4
-</pre></div>
+100 * (70 / 200) = 35% for item4</pre>
 </div>
 <div class="admonition note">
 <p class="first admonition-title">Note</p>
@@ -154,18 +143,16 @@ The added 0.5 in items weight is so that selection gets smoother when all items 
 </div>
 <p>Example A.4. Example of freespace-percent-weighted-delta Selection
 In the same conditions than Example A.1, “Example of freespace-most Selection”, the weight of each item would be:</p>
-<div class="highlight-python"><div class="highlight"><pre>40 - 30 + 0.5 = 10.5 for item1
+<div class="highlight-python"><pre>40 - 30 + 0.5 = 10.5 for item1
 60 - 30 + 0.5 = 30.5 for item2
 30 - 30 + 0.5 = 0.5 for item3
-70 - 30 + 0.5 = 40.5 for item4
-</pre></div>
+70 - 30 + 0.5 = 40.5 for item4</pre>
 </div>
 <p>The sum of the weights being 82, the probability for each item to be selected as most fitting would be:</p>
-<div class="highlight-python"><div class="highlight"><pre>100 * (10.5 / 82) = 12.8% for item1
+<div class="highlight-python"><pre>100 * (10.5 / 82) = 12.8% for item1
 100 * (30.5 / 82) = 37.2% for item2
 100 * (0.5 / 82) = 0.6% for item3
-100 * (40.5 / 82) = 49.4% for item4
-</pre></div>
+100 * (40.5 / 82) = 49.4% for item4</pre>
 </div>
 <div class="admonition note">
 <p class="first admonition-title">Note</p>
@@ -299,12 +286,6 @@ If you tend to use the same service instance for a long lapse of time and perfor
 </li>
 </ul>
 
-  <h4>Previous topic</h4>
-  <p class="topless"><a href="config.html"
-                        title="previous chapter">Part III. Configuration Reference</a></p>
-  <h4>Next topic</h4>
-  <p class="topless"><a href="packagers.html"
-                        title="next chapter">Notes for Packagers</a></p>
   <h3>This Page</h3>
   <ul class="this-page-menu">
     <li><a href="../_sources/admin/config-mailboxdistribution.txt"
@@ -333,20 +314,12 @@ If you tend to use the same service instance for a long lapse of time and perfor
         <li class="right" style="margin-right: 10px">
           <a href="../genindex.html" title="General Index"
              >index</a></li>
-        <li class="right" >
-          <a href="packagers.html" title="Notes for Packagers"
-             >next</a> |</li>
-        <li class="right" >
-          <a href="config.html" title="Part III. Configuration Reference"
-             >previous</a> |</li>
-        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
-          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
-          <li><a href="config.html" >Part III. Configuration Reference</a> &raquo;</li> 
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li> 
       </ul>
     </div>
     <div class="footer">
         &copy; Copyright 1993-2014, The Cyrus Team.
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
     </div>
   </body>
 </html>

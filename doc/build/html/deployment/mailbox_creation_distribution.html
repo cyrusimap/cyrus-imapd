@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 
@@ -183,35 +185,20 @@
 <div class="section" id="what-happens-when-two-partitions-point-to-the-same-device">
 <h2>What happens when two partitions point to the same device?<a class="headerlink" href="#what-happens-when-two-partitions-point-to-the-same-device" title="Permalink to this headline">¶</a></h2>
 <p>Suppose you are using the <tt class="docutils literal"><span class="pre">freespace-most</span></tt> or <tt class="docutils literal"><span class="pre">freespace-percent-most</span></tt> selection mode, and that two (or more) partitions actually point to the same device (that is the device id is the same).</p>
-<p>In that case, only one of those partitions will be checked, as if the others were not configured. You may not know in advance which one will be: it depends of the order in which configured partitions are stored in memory (&lt;emphasis&gt;hashtable&lt;/emphasis&gt;). In particular, it may not be the first one that appears listed in your &lt;filename&gt;/etc/imapd.conf&lt;/filename&gt; configuration file.</p>
+<p>In that case, only one of those partitions will be checked, as if the others were not configured. You may not know in advance which one will be: it depends of the order in which configured partitions are stored in memory (<tt class="docutils literal"><span class="pre">hashtable</span></tt>). In particular, it may not be the first one that appears listed in your &lt;filename&gt;/etc/imapd.conf&lt;/filename&gt; configuration file.</p>
+</div>
+<div class="section" id="partitions-exclusion">
+<h2>Partitions Exclusion<a class="headerlink" href="#partitions-exclusion" title="Permalink to this headline">¶</a></h2>
+<p>Partitions listed in the <tt class="docutils literal"><span class="pre">partition_mode_exclude</span></tt> setting are permanently excluded from being selected.</p>
+<p><tt class="docutils literal"><span class="pre">partition_mode_exclude</span></tt></p>
+<p>Listed partitions names are separated by space or comma. Only configured partition names (and not paths) are expected.</p>
 <blockquote>
-<div><dl class="docutils">
-<dt>&lt;section id=&#8221;sect-Deployment_Guide-On_backend-Partitions_Exclusion&#8221;&gt;</dt>
-<dd><p class="first">&lt;title&gt;Partitions Exclusion&lt;/title&gt;
-&lt;para&gt;</p>
-<blockquote>
-<div>Partitions listed in the <tt class="docutils literal"><span class="pre">partition_mode_exclude</span></tt> setting are permanently excluded from being selected.</div></blockquote>
-<p>&lt;/para&gt;
-&lt;note&gt;</p>
-<blockquote>
-<div><p>&lt;title&gt;``partition_mode_exclude``&lt;/title&gt;
-&lt;para&gt;</p>
-<blockquote>
-<div>Listed partitions names are separated by space or comma. Only configured partition names (and not paths) are expected.</div></blockquote>
-<p>&lt;/para&gt;</p>
-</div></blockquote>
-<p>&lt;/note&gt;
-&lt;para&gt;</p>
-<blockquote class="last">
 <div><dl class="docutils">
 <dt>&lt;example id=&#8221;exam-Deployment_Guide-Partitions_Exclusion-Example_of_permanent_partition_exclusion&#8221;&gt;</dt>
 <dd><p class="first">&lt;title&gt;Example of permanent partition exclusion&lt;/title&gt;
 &lt;para&gt;</p>
 <blockquote class="last">
 <div>With the following configuration in &lt;filename&gt;/etc/imapd.conf&lt;/filename&gt;, <tt class="docutils literal"><span class="pre">parta</span></tt> and <tt class="docutils literal"><span class="pre">partb</span></tt> would be permanently excluded from being selected:</div></blockquote>
-</dd>
-</dl>
-</div></blockquote>
 </dd>
 </dl>
 </div></blockquote>
@@ -299,234 +286,81 @@ partition-partb: /path/to/partb</p>
 <p>&lt;/section&gt;</p>
 </div></blockquote>
 <p>&lt;/section&gt;</p>
-<dl class="docutils">
-<dt>&lt;section id=&#8221;sect-Deployment_Guide-Mailbox_Creation_Distribution-Through_murder_frontend&#8221;&gt;</dt>
-<dd><p class="first">&lt;title&gt;Through &lt;emphasis&gt;murder frontend&lt;/emphasis&gt;&lt;/title&gt;
-&lt;para&gt;</p>
-<blockquote>
-<div>Upon creating a user mailbox, if the target server is not given as extra parameter, the mailbox is either created on</div></blockquote>
-<p>&lt;/para&gt;
-&lt;para&gt;</p>
+</div></blockquote>
+<p>tion id=&#8221;sect-Deployment_Guide-Mailbox_Creation_Distribution-Through_murder_frontend&#8221;&gt;
+Through <tt class="docutils literal"><span class="pre">murder</span> <span class="pre">frontend</span></tt></p>
+<p>Upon creating a user mailbox, if the target server is not given as extra parameter, the mailbox is either created on</p>
+<ul>
+<li><p class="first">the configured <tt class="docutils literal"><span class="pre">defaultserver</span></tt> backend</p>
+</li>
+<li><p class="first">the most fitting backend among the servers listed in the <tt class="docutils literal"><span class="pre">serverlist</span></tt> setting, if <tt class="docutils literal"><span class="pre">defaultserver</span></tt> is not configured</p>
 <blockquote>
 <div><dl class="docutils">
-<dt>&lt;itemizedlist&gt;</dt>
-<dd><dl class="first docutils">
-<dt>&lt;listitem&gt;</dt>
-<dd><dl class="first docutils">
-<dt>&lt;para&gt;</dt>
-<dd>the configured <tt class="docutils literal"><span class="pre">defaultserver</span></tt> backend</dd>
-</dl>
-<p class="last">&lt;/para&gt;</p>
-</dd>
-</dl>
-<p>&lt;/listitem&gt;
-&lt;listitem&gt;</p>
-<blockquote>
-<div><dl class="docutils">
-<dt>&lt;para&gt;</dt>
-<dd>the most fitting backend among the servers listed in the <tt class="docutils literal"><span class="pre">serverlist</span></tt> setting, if <tt class="docutils literal"><span class="pre">defaultserver</span></tt> is not configured</dd>
-</dl>
-<p>&lt;/para&gt;</p>
-</div></blockquote>
-<p class="last">&lt;/listitem&gt;</p>
-</dd>
-</dl>
-<p>&lt;/itemizedlist&gt;</p>
-</div></blockquote>
-<p>&lt;/para&gt;
-&lt;section id=&#8221;sect-Deployment_Guide-Through_murder_frontend-Selection_Mode&#8221;&gt;</p>
-<blockquote>
-<div><p>&lt;title&gt;Selection Mode&lt;/title&gt;
+<dt>&lt;section id=&#8221;sect-Deployment_Guide-Through_murder_frontend-Selection_Mode&#8221;&gt;</dt>
+<dd><p class="first">&lt;title&gt;Selection Mode&lt;/title&gt;
 &lt;para&gt;</p>
 <blockquote>
-<div>Among the backends, how the most fitting one is selected depends on the configured selection mode: <tt class="docutils literal"><span class="pre">serverlist_mode</span></tt> setting in &lt;filename&gt;/etc/imapd.conf&lt;/filename&gt;.</div></blockquote>
+<div><p>Among the backends, how the most fitting one is selected depends on the configured selection mode: <tt class="docutils literal"><span class="pre">serverlist_mode</span></tt> setting in &lt;filename&gt;/etc/imapd.conf&lt;/filename&gt;.</p>
+</div></blockquote>
 <p>&lt;/para&gt;
 &lt;para&gt;</p>
 <blockquote>
-<div>The principle is similar to the mailbox creation distribution on backend (see &lt;xref linkend=&#8221;sect-Deployment_Guide-Mailbox_Creation_Distribution-On_backend&#8221; /&gt;).</div></blockquote>
-<p>&lt;/para&gt;
+<div><p>The principle is similar to the mailbox creation distribution on backend (see &lt;xref linkend=&#8221;sect-Deployment_Guide-Mailbox_Creation_Distribution-On_backend&#8221; /&gt;).</p>
+</div></blockquote>
+<p class="last">&lt;/para&gt;
 &lt;variablelist id=&#8221;vari-Deployment_Guide-Selection_Mode-Available_Selection_Modes_on_Frontend&#8221;&gt;</p>
-<blockquote>
-<div><p>&lt;title&gt;Available Selection Modes on Frontend&lt;/title&gt;
-&lt;varlistentry&gt;</p>
-<blockquote>
-<div><p>&lt;term&gt;random&lt;/term&gt;
-&lt;listitem&gt;</p>
-<blockquote>
-<div><dl class="docutils">
-<dt>&lt;para&gt;</dt>
-<dd>Choice is (pseudo-)random. Each backend has the same probability of being selected.</dd>
-</dl>
-<p>&lt;/para&gt;</p>
-</div></blockquote>
-<p>&lt;/listitem&gt;</p>
-</div></blockquote>
-<p>&lt;/varlistentry&gt;
-&lt;varlistentry&gt;</p>
-<blockquote>
-<div><p>&lt;term&gt;freespace-most&lt;/term&gt;
-&lt;listitem&gt;</p>
-<blockquote>
-<div><dl class="docutils">
-<dt>&lt;para&gt;</dt>
-<dd>The backend which has the most free space (counted in KiB units) is selected. The considered free space is the sum of all available partitions free space on the backend.</dd>
-</dl>
-<p>&lt;/para&gt;
-&lt;para&gt;</p>
-<blockquote>
-<div><dl class="docutils">
-<dt>&lt;example id=&#8221;exam-Deployment_Guide-Available_Selection_Modes_on_Frontend-Example_of_freespace_most_Selection_on_Frontend&#8221;&gt;</dt>
-<dd><p class="first">&lt;title&gt;Example of <tt class="docutils literal"><span class="pre">freespace-most</span></tt> Selection on Frontend&lt;/title&gt;
-&lt;para&gt;</p>
-<blockquote>
-<div>Suppose that the configured backends are:</div></blockquote>
-<p>&lt;/para&gt;
-&lt;para&gt;</p>
-<blockquote>
-<div><dl class="docutils">
-<dt>&lt;itemizedlist&gt;</dt>
-<dd><dl class="first docutils">
-<dt>&lt;listitem&gt;</dt>
-<dd><dl class="first docutils">
-<dt>&lt;para&gt;</dt>
-<dd><tt class="docutils literal"><span class="pre">backend1</span></tt> which has a 2000GiB capacity, 1000GiB being free (that is, 50% free space), composed of 2 partitions</dd>
-</dl>
-<p>&lt;/para&gt;
-&lt;para&gt;</p>
-<blockquote>
-<div><dl class="docutils">
-<dt>&lt;itemizedlist&gt;</dt>
-<dd><dl class="first docutils">
-<dt>&lt;listitem&gt;</dt>
-<dd><dl class="first docutils">
-<dt>&lt;para&gt;</dt>
-<dd><tt class="docutils literal"><span class="pre">part1</span></tt> which has a 1000GiB capacity, 500GiB being free (that is, 50% free space)</dd>
-</dl>
-<p class="last">&lt;/para&gt;</p>
 </dd>
 </dl>
-<p>&lt;/listitem&gt;
-&lt;listitem&gt;</p>
+</div></blockquote>
+</li>
+</ul>
+</div>
+<div class="section" id="available-selection-modes-on-frontend">
+<h2>Available Selection Modes on Frontend<a class="headerlink" href="#available-selection-modes-on-frontend" title="Permalink to this headline">¶</a></h2>
+<p>random</p>
+<p>Choice is (pseudo-)random. Each backend has the same probability of being selected.</p>
+<p>freespace-most</p>
+<p>The backend which has the most free space (counted in KiB units) is selected. The considered free space is the sum of all available partitions free space on the backend.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p>Example of <tt class="docutils literal"><span class="pre">freespace-most</span></tt> Selection on Frontend</p>
+<p>Suppose that the configured backends are:</p>
+<ul class="last">
+<li><p class="first"><tt class="docutils literal"><span class="pre">backend1</span></tt> which has a 2000GiB capacity, 1000GiB being free (that is, 50% free space), composed of 2 partitions</p>
+</li>
+<li><p class="first"><tt class="docutils literal"><span class="pre">part1</span></tt> which has a 1000GiB capacity, 500GiB being free (that is, 50% free space)</p>
+</li>
+<li><p class="first"><tt class="docutils literal"><span class="pre">part2</span></tt> which has a 1000GiB capacity, 500GiB being free (that is, 50% free space)</p>
 <blockquote>
-<div><dl class="docutils">
-<dt>&lt;para&gt;</dt>
-<dd><tt class="docutils literal"><span class="pre">part2</span></tt> which has a 1000GiB capacity, 500GiB being free (that is, 50% free space)</dd>
-</dl>
-<p>&lt;/para&gt;</p>
-</div></blockquote>
-<p class="last">&lt;/listitem&gt;</p>
-</dd>
-</dl>
-<p>&lt;/itemizedlist&gt;</p>
-</div></blockquote>
-<p class="last">&lt;/para&gt;</p>
-</dd>
-</dl>
-<p>&lt;/listitem&gt;
-&lt;listitem&gt;</p>
+<div><ul>
+<li><p class="first"><tt class="docutils literal"><span class="pre">backend2</span></tt> which has a 2000GiB capacity, 900GiB being free (that is, 45% free space), composed of 2 partitions</p>
+</li>
+<li><p class="first"><tt class="docutils literal"><span class="pre">part1</span></tt> which has a 1000GiB capacity, 200GiB being free (that is, 20% free space)</p>
+</li>
+<li><p class="first"><tt class="docutils literal"><span class="pre">part2</span></tt> which has a 1000GiB capacity, 700GiB being free (that is, 70% free space)</p>
 <blockquote>
-<div><dl class="docutils">
-<dt>&lt;para&gt;</dt>
-<dd><tt class="docutils literal"><span class="pre">backend2</span></tt> which has a 2000GiB capacity, 900GiB being free (that is, 45% free space), composed of 2 partitions</dd>
-</dl>
-<p>&lt;/para&gt;
-&lt;para&gt;</p>
+<div><ul class="simple">
+<li><tt class="docutils literal"><span class="pre">backend3</span></tt> which has a 200GiB capacity, 110GiB being free (that is, 55% free space), composed of 2 partitions</li>
+<li><tt class="docutils literal"><span class="pre">part1</span></tt> which has a 100GiB capacity, 30GiB being free (that is, 30% free space)</li>
+<li><tt class="docutils literal"><span class="pre">part2</span></tt> which has a 100GiB capacity, 80GiB being free (that is, 80% free space)</li>
+</ul>
+</div></blockquote>
+</li>
+</ul>
+</div></blockquote>
+</li>
+<li><p class="first">In that case <tt class="docutils literal"><span class="pre">backend1</span></tt> will be selected as most fitting, since 1000GiB of free space is the biggest of all backends.</p>
+</li>
+</ul>
+</div>
+<p>freespace-percent-most</p>
+<p>On each backend, the partition with the most percentage of free space is considered. The selected backend is the one whose partition has the most percentage of free space.</p>
 <blockquote>
-<div><dl class="docutils">
-<dt>&lt;itemizedlist&gt;</dt>
-<dd><dl class="first docutils">
-<dt>&lt;listitem&gt;</dt>
-<dd><dl class="first docutils">
-<dt>&lt;para&gt;</dt>
-<dd><tt class="docutils literal"><span class="pre">part1</span></tt> which has a 1000GiB capacity, 200GiB being free (that is, 20% free space)</dd>
-</dl>
-<p class="last">&lt;/para&gt;</p>
-</dd>
-</dl>
-<p>&lt;/listitem&gt;
-&lt;listitem&gt;</p>
-<blockquote>
-<div><dl class="docutils">
-<dt>&lt;para&gt;</dt>
-<dd><tt class="docutils literal"><span class="pre">part2</span></tt> which has a 1000GiB capacity, 700GiB being free (that is, 70% free space)</dd>
-</dl>
-<p>&lt;/para&gt;</p>
-</div></blockquote>
-<p class="last">&lt;/listitem&gt;</p>
-</dd>
-</dl>
-<p>&lt;/itemizedlist&gt;</p>
-</div></blockquote>
-<p>&lt;/para&gt;</p>
-</div></blockquote>
-<p>&lt;/listitem&gt;
-&lt;listitem&gt;</p>
-<blockquote>
-<div><dl class="docutils">
-<dt>&lt;para&gt;</dt>
-<dd><tt class="docutils literal"><span class="pre">backend3</span></tt> which has a 200GiB capacity, 110GiB being free (that is, 55% free space), composed of 2 partitions</dd>
-</dl>
-<p>&lt;/para&gt;
-&lt;para&gt;</p>
-<blockquote>
-<div><dl class="docutils">
-<dt>&lt;itemizedlist&gt;</dt>
-<dd><dl class="first docutils">
-<dt>&lt;listitem&gt;</dt>
-<dd><dl class="first docutils">
-<dt>&lt;para&gt;</dt>
-<dd><tt class="docutils literal"><span class="pre">part1</span></tt> which has a 100GiB capacity, 30GiB being free (that is, 30% free space)</dd>
-</dl>
-<p class="last">&lt;/para&gt;</p>
-</dd>
-</dl>
-<p>&lt;/listitem&gt;
-&lt;listitem&gt;</p>
-<blockquote>
-<div><dl class="docutils">
-<dt>&lt;para&gt;</dt>
-<dd><tt class="docutils literal"><span class="pre">part2</span></tt> which has a 100GiB capacity, 80GiB being free (that is, 80% free space)</dd>
-</dl>
-<p>&lt;/para&gt;</p>
-</div></blockquote>
-<p class="last">&lt;/listitem&gt;</p>
-</dd>
-</dl>
-<p>&lt;/itemizedlist&gt;</p>
-</div></blockquote>
-<p>&lt;/para&gt;</p>
-</div></blockquote>
-<p class="last">&lt;/listitem&gt;</p>
-</dd>
-</dl>
-<p>&lt;/itemizedlist&gt;</p>
-</div></blockquote>
-<p>&lt;/para&gt;
-&lt;para&gt;</p>
-<blockquote>
-<div>In that case <tt class="docutils literal"><span class="pre">backend1</span></tt> will be selected as most fitting, since 1000GiB of free space is the biggest of all backends.</div></blockquote>
-<p class="last">&lt;/para&gt;</p>
-</dd>
-</dl>
-<p>&lt;/example&gt;</p>
-</div></blockquote>
-<p>&lt;/para&gt;</p>
-</div></blockquote>
-<p>&lt;/listitem&gt;</p>
-</div></blockquote>
-<p>&lt;/varlistentry&gt;
-&lt;varlistentry&gt;</p>
-<blockquote>
-<div><p>&lt;term&gt;freespace-percent-most&lt;/term&gt;
-&lt;listitem&gt;</p>
-<blockquote>
-<div><dl class="docutils">
-<dt>&lt;para&gt;</dt>
-<dd>On each backend, the partition with the most percentage of free space is considered. The selected backend is the one whose partition has the most percentage of free space.</dd>
-</dl>
-<p>&lt;/para&gt;
-&lt;para&gt;</p>
-<blockquote>
+<div><blockquote>
+<div><blockquote>
+<div><blockquote>
+<div><blockquote>
+<div><blockquote>
 <div><dl class="docutils">
 <dt>&lt;example id=&#8221;exam-Deployment_Guide-Available_Selection_Modes_on_Frontend-Example_of_freespace_percent_most_Selection_on_Frontend&#8221;&gt;</dt>
 <dd><p class="first">&lt;title&gt;Example of <tt class="docutils literal"><span class="pre">freespace-percent-most</span></tt> Selection on Frontend&lt;/title&gt;
@@ -763,15 +597,15 @@ partition-partb: /path/to/partb</p>
 <p>&lt;/variablelist&gt;</p>
 </div></blockquote>
 <p>&lt;/section&gt;</p>
-<dl class="docutils">
-<dt>&lt;section id=&#8221;sect-Deployment_Guide-Through_murder_frontend-Backends_Exclusion&#8221;&gt;</dt>
-<dd><p class="first">&lt;title&gt;Backends Exclusion&lt;/title&gt;
-&lt;para&gt;</p>
+</div></blockquote>
+</div>
+</div>
+<div class="section" id="backends-exclusion">
+<h1>Backends Exclusion<a class="headerlink" href="#backends-exclusion" title="Permalink to this headline">¶</a></h1>
+<p>When using a selection mode other than <tt class="docutils literal"><span class="pre">random</span></tt>, backends are automatically excluded if their considered usage percentage is beyond the <tt class="docutils literal"><span class="pre">serverlist_mode_soft_usage_limit</span></tt> integer setting.</p>
 <blockquote>
-<div>When using a selection mode other than <tt class="docutils literal"><span class="pre">random</span></tt>, backends are automatically excluded if their considered usage percentage is beyond the <tt class="docutils literal"><span class="pre">serverlist_mode_soft_usage_limit</span></tt> integer setting.</div></blockquote>
-<p>&lt;/para&gt;
-&lt;note&gt;</p>
-<blockquote>
+<div><blockquote>
+<div><blockquote>
 <div><p>&lt;title&gt;``partition_mode_soft_usage_limit``&lt;/title&gt;
 &lt;para&gt;</p>
 <blockquote>
@@ -809,30 +643,15 @@ partition-partb: /path/to/partb</p>
 <div>Mailboxes previously created on such backends are of course still accessible.</div></blockquote>
 <p>&lt;/para&gt;</p>
 </div></blockquote>
-<p class="last">&lt;/important&gt;</p>
-</dd>
-</dl>
-<p>&lt;/section&gt;</p>
-<dl class="docutils">
-<dt>&lt;section id=&#8221;sect-Deployment_Guide-Through_murder_frontend-Backends_Usage_Data_Reset&#8221;&gt;</dt>
-<dd><p class="first">&lt;title&gt;Backends Usage Data Reset&lt;/title&gt;
-&lt;para&gt;</p>
-<blockquote>
-<div>By default backends usage data are retrieved only once upon service initialization. This only concerns selection modes other than <tt class="docutils literal"><span class="pre">random</span></tt>.</div></blockquote>
-<p>&lt;/para&gt;
-&lt;para&gt;</p>
-<blockquote>
-<div>If you tend to use the same service instance for a long lapse of time and performs a large amount of mailboxes creation, it may be useful to configure the <tt class="docutils literal"><span class="pre">serverlist_mode_usage_reinit</span></tt> so that backends usage data are refreshed after the configured number of creation requests.</div></blockquote>
-<p class="last">&lt;/para&gt;</p>
-</dd>
-</dl>
-<p class="last">&lt;/section&gt;</p>
-</dd>
-</dl>
+<p>&lt;/important&gt;</p>
+</div></blockquote>
 <p>&lt;/section&gt;</p>
 </div></blockquote>
-<p>&lt;/chapter&gt;</p>
 </div>
+<div class="section" id="backends-usage-data-reset">
+<h1>Backends Usage Data Reset<a class="headerlink" href="#backends-usage-data-reset" title="Permalink to this headline">¶</a></h1>
+<p>By default backends usage data are retrieved only once upon service initialization. This only concerns selection modes other than <tt class="docutils literal"><span class="pre">random</span></tt>.</p>
+<p>If you tend to use the same service instance for a long lapse of time and performs a large amount of mailboxes creation, it may be useful to configure the <tt class="docutils literal"><span class="pre">serverlist_mode_usage_reinit</span></tt> so that backends usage data are refreshed after the configured number of creation requests.</p>
 </div>
 
 
@@ -856,8 +675,12 @@ partition-partb: /path/to/partb</p>
 <li><a class="reference internal" href="#special-cases">Special cases</a><ul>
 <li><a class="reference internal" href="#what-happens-when-two-partitions-are-equal-as-most-fitting">What happens when two partitions are equal as most fitting?</a></li>
 <li><a class="reference internal" href="#what-happens-when-two-partitions-point-to-the-same-device">What happens when two partitions point to the same device?</a></li>
+<li><a class="reference internal" href="#partitions-exclusion">Partitions Exclusion</a></li>
+<li><a class="reference internal" href="#available-selection-modes-on-frontend">Available Selection Modes on Frontend</a></li>
 </ul>
 </li>
+<li><a class="reference internal" href="#backends-exclusion">Backends Exclusion</a></li>
+<li><a class="reference internal" href="#backends-usage-data-reset">Backends Usage Data Reset</a></li>
 </ul>
 
   <h4>Previous topic</h4>
@@ -906,7 +729,7 @@ partition-partb: /path/to/partb</p>
     </div>
     <div class="footer">
         &copy; Copyright 1993-2014, The Cyrus Team.
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
     </div>
   </body>
 </html>

@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 
@@ -25,10 +27,7 @@
     <script type="text/javascript" src="../_static/underscore.js"></script>
     <script type="text/javascript" src="../_static/doctools.js"></script>
     <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
-    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" />
-    <link rel="up" title="Part I. Cyrus IMAP Administration" href="administration.html" />
-    <link rel="next" title="Tools &amp; Utilities" href="administration-tools.html" />
-    <link rel="prev" title="Default Access Control Information on new folders" href="administration-acl-defaults.html" /> 
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" /> 
   </head>
   <body>
     <div class="related">
@@ -37,15 +36,7 @@
         <li class="right" style="margin-right: 10px">
           <a href="../genindex.html" title="General Index"
              accesskey="I">index</a></li>
-        <li class="right" >
-          <a href="administration-tools.html" title="Tools &amp; Utilities"
-             accesskey="N">next</a> |</li>
-        <li class="right" >
-          <a href="administration-acl-defaults.html" title="Default Access Control Information on new folders"
-             accesskey="P">previous</a> |</li>
-        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
-          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
-          <li><a href="administration.html" accesskey="U">Part I. Cyrus IMAP Administration</a> &raquo;</li> 
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li> 
       </ul>
     </div>  
 
@@ -57,8 +48,7 @@
   <div class="section" id="cyradm">
 <h1>cyradm<a class="headerlink" href="#cyradm" title="Permalink to this headline">¶</a></h1>
 <p>cyradm is a simple command line utility for performing common administrative tasks to a Cyrus IMAP server. The utility can either be executed from a client where it has been installed and connect to the server via IMAP or it can be executed locally via a shell on the server.</p>
-<div class="highlight-python"><div class="highlight"><pre>bash$ cyradm -u cyrus localhost
-</pre></div>
+<div class="highlight-python"><pre>bash$ cyradm -u cyrus localhost</pre>
 </div>
 <div class="section" id="commands-available">
 <h2>Commands available<a class="headerlink" href="#commands-available" title="Permalink to this headline">¶</a></h2>
@@ -69,8 +59,7 @@
 <div class="section" id="authenticate">
 <span id="cyradm-authenticate"></span><h3>authenticate<a class="headerlink" href="#authenticate" title="Permalink to this headline">¶</a></h3>
 <p>Authenticate to a server for which a connection has already been opened either when <strong>cyradm</strong> was started or via the <a class="reference internal" href="#cyradm-connect"><em>connect</em></a> command.</p>
-<div class="highlight-python"><div class="highlight"><pre>cyradm&gt; authenticate &lt;username&gt;
-</pre></div>
+<div class="highlight-python"><pre>cyradm&gt; authenticate &lt;username&gt;</pre>
 </div>
 <p>The username must be provided as a parameter.</p>
 <p>Aliases: <a class="reference internal" href="#cyradm-login"><em>login</em></a> and <a class="reference internal" href="#cyradm-auth"><em>auth</em></a></p>
@@ -87,20 +76,18 @@
 <div class="section" id="connect">
 <span id="cyradm-connect"></span><h3>connect<a class="headerlink" href="#connect" title="Permalink to this headline">¶</a></h3>
 <p>Connect to a server if you&#8217;re not already connected, or display the current server if connected and no server name provided.</p>
-<div class="highlight-python"><div class="highlight"><pre>cyradm&gt; connect [&lt;server&gt;]
-</pre></div>
+<div class="highlight-python"><pre>cyradm&gt; connect [&lt;server&gt;]</pre>
 </div>
 </div>
 <div class="section" id="createmailbox">
 <h3>createmailbox<a class="headerlink" href="#createmailbox" title="Permalink to this headline">¶</a></h3>
 <p>Creates a new mailbox. New mailboxes inherit the ACL permissions of their parent mailbox, except for top-level mailboxes such as the user&#8217;s INBOX. Mailboxes that are the user&#8217;s INBOX are assigned all to the corresponding user.</p>
 <p class="rubric">Example 3.1. Example use of createmailbox</p>
-<div class="highlight-python"><div class="highlight"><pre>localhost&gt; cm user.bovik
+<div class="highlight-python"><pre>localhost&gt; cm user.bovik
 localhost&gt; lm
 user.bovik (\HasNoChildren)
 localhost&gt; lam user.bovik
-bovik lrswipkxtecda
-</pre></div>
+bovik lrswipkxtecda</pre>
 </div>
 <div class="admonition note">
 <p class="first admonition-title">Note</p>
@@ -108,12 +95,11 @@ bovik lrswipkxtecda
 <p class="last">Note that in the above example, the unixhierarchysep setting in <tt class="docutils literal"><span class="pre">/etc/imapd.conf</span></tt> is set to <strong>false</strong> (0). When using the UNIX hierarchy seperator, the forward slash character (/), as the hierarchy seperator, the example would look as follows.</p>
 </div>
 <p class="rubric">Example 3.2. Example use of createmailbox with unixhierachysep</p>
-<div class="highlight-python"><div class="highlight"><pre>localhost&gt; cm user/bovik
+<div class="highlight-python"><pre>localhost&gt; cm user/bovik
 localhost&gt; lm
 user/bovik (\HasNoChildren)
 localhost&gt; lam user/bovik
-bovik lrswipkxtecda
-</pre></div>
+bovik lrswipkxtecda</pre>
 </div>
 <p>Notice the use of the / (forward slash) character in Example 3.2, &#8220;Example use of createmailbox with unixhierachysep&#8221; as opposed to the . (dot) character in Example 3.1, &#8220;Example use of createmailbox&#8221; to seperate the hierarchical components of the mailbox name.</p>
 <div class="admonition note">
@@ -138,8 +124,7 @@ With the use of virtual domains, controlled through the virtdomains imapd.conf(5
 <div class="section" id="deletemailbox">
 <h3>deletemailbox<a class="headerlink" href="#deletemailbox" title="Permalink to this headline">¶</a></h3>
 <p>Delete a mailbox from the server.</p>
-<div class="highlight-python"><div class="highlight"><pre>cyradm&gt; deletemailbox user/john.doe@example.org
-</pre></div>
+<div class="highlight-python"><pre>cyradm&gt; deletemailbox user/john.doe@example.org</pre>
 </div>
 <p>Aliases: <em>delete</em> or <em>dm</em></p>
 </div>
@@ -154,7 +139,7 @@ With the use of virtual domains, controlled through the virtdomains imapd.conf(5
 <div class="section" id="help">
 <h3>help<a class="headerlink" href="#help" title="Permalink to this headline">¶</a></h3>
 <p>Show the commands, their aliases and a short description of each command.</p>
-<div class="highlight-python"><div class="highlight"><pre>authenticate, login, auth         authenticate to server
+<div class="highlight-python"><pre>authenticate, login, auth         authenticate to server
 chdir, cd                         change current directory
 createmailbox, create, cm         create mailbox
 deleteaclmailbox, deleteacl, dam  remove ACLs from mailbox
@@ -177,8 +162,7 @@ setquota, sq                      set quota on mailbox or resource
 subscribe, sub                    subscribe to a mailbox
 unsubscribe, unsub                unsubscribe from a mailbox
 version, ver                      display version info of current server
-xfermailbox, xfer                 transfer (relocate) a mailbox to a different server
-</pre></div>
+xfermailbox, xfer                 transfer (relocate) a mailbox to a different server</pre>
 </div>
 </div>
 <div class="section" id="info">
@@ -234,7 +218,7 @@ xfermailbox, xfer                 transfer (relocate) a mailbox to a different s
 <div class="section" id="version">
 <h3>version<a class="headerlink" href="#version" title="Permalink to this headline">¶</a></h3>
 <p>Outputs the current version information for the connected server.</p>
-<div class="highlight-python"><div class="highlight"><pre>name: Cyrus IMAPD
+<div class="highlight-python"><pre>name: Cyrus IMAPD
 version: v2.4.17-Kolab-2.4.17-1.el6 d1df8aff 2012-12-01
 vendor: Project Cyrus
 support-url: http://www.cyrusimap.org
@@ -253,15 +237,13 @@ environment: Built w/Cyrus SASL 2.1.23
              mmap = shared
              lock = fcntl
              nonblock = fcntl
-             idle = idled
-</pre></div>
+             idle = idled</pre>
 </div>
 </div>
 <div class="section" id="xfermailbox">
 <h3>xfermailbox<a class="headerlink" href="#xfermailbox" title="Permalink to this headline">¶</a></h3>
 <p>Transfer or relocate a mailbox to a different server.</p>
-<div class="highlight-python"><div class="highlight"><pre>xfer user/john.doe@example.org &lt;new.server&gt;
-</pre></div>
+<div class="highlight-python"><pre>xfer user/john.doe@example.org &lt;new.server&gt;</pre>
 </div>
 <p>Aliases: <tt class="docutils literal"><span class="pre">xfer</span></tt></p>
 </div>
@@ -313,12 +295,6 @@ environment: Built w/Cyrus SASL 2.1.23
 </li>
 </ul>
 
-  <h4>Previous topic</h4>
-  <p class="topless"><a href="administration-acl-defaults.html"
-                        title="previous chapter">Default Access Control Information on new folders</a></p>
-  <h4>Next topic</h4>
-  <p class="topless"><a href="administration-tools.html"
-                        title="next chapter">Tools &amp; Utilities</a></p>
   <h3>This Page</h3>
   <ul class="this-page-menu">
     <li><a href="../_sources/admin/administration-cyradm.txt"
@@ -347,20 +323,12 @@ environment: Built w/Cyrus SASL 2.1.23
         <li class="right" style="margin-right: 10px">
           <a href="../genindex.html" title="General Index"
              >index</a></li>
-        <li class="right" >
-          <a href="administration-tools.html" title="Tools &amp; Utilities"
-             >next</a> |</li>
-        <li class="right" >
-          <a href="administration-acl-defaults.html" title="Default Access Control Information on new folders"
-             >previous</a> |</li>
-        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
-          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
-          <li><a href="administration.html" >Part I. Cyrus IMAP Administration</a> &raquo;</li> 
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li> 
       </ul>
     </div>
     <div class="footer">
         &copy; Copyright 1993-2014, The Cyrus Team.
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
     </div>
   </body>
 </html>

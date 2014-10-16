@@ -134,21 +134,17 @@ What happens when two partitions point to the same device?
 
 Suppose you are using the ``freespace-most`` or ``freespace-percent-most`` selection mode, and that two (or more) partitions actually point to the same device (that is the device id is the same).
 
-In that case, only one of those partitions will be checked, as if the others were not configured. You may not know in advance which one will be: it depends of the order in which configured partitions are stored in memory (<emphasis>hashtable</emphasis>). In particular, it may not be the first one that appears listed in your <filename>/etc/imapd.conf</filename> configuration file.
+In that case, only one of those partitions will be checked, as if the others were not configured. You may not know in advance which one will be: it depends of the order in which configured partitions are stored in memory (``hashtable``). In particular, it may not be the first one that appears listed in your <filename>/etc/imapd.conf</filename> configuration file.
 
-        <section id="sect-Deployment_Guide-On_backend-Partitions_Exclusion">
-            <title>Partitions Exclusion</title>
-            <para>
-                Partitions listed in the ``partition_mode_exclude`` setting are permanently excluded from being selected.
-            </para>
-            <note>
-                <title>``partition_mode_exclude``</title>
-                <para>
-                    Listed partitions names are separated by space or comma. Only configured partition names (and not paths) are expected.
-                </para>
+Partitions Exclusion
+--------------------
 
-            </note>
-            <para>
+Partitions listed in the ``partition_mode_exclude`` setting are permanently excluded from being selected.
+
+``partition_mode_exclude``
+
+Listed partitions names are separated by space or comma. Only configured partition names (and not paths) are expected.
+
                 <example id="exam-Deployment_Guide-Partitions_Exclusion-Example_of_permanent_partition_exclusion">
                     <title>Example of permanent partition exclusion</title>
                     <para>
@@ -222,29 +218,14 @@ partition_mode_exclude: parta partb
 
     </section>
 
-    <section id="sect-Deployment_Guide-Mailbox_Creation_Distribution-Through_murder_frontend">
-        <title>Through <emphasis>murder frontend</emphasis></title>
-        <para>
-            Upon creating a user mailbox, if the target server is not given as extra parameter, the mailbox is either created on
-        </para>
-        <para>
-            <itemizedlist>
-                <listitem>
-                    <para>
-                        the configured ``defaultserver`` backend
-                    </para>
+tion id="sect-Deployment_Guide-Mailbox_Creation_Distribution-Through_murder_frontend">
+Through ``murder frontend``
 
-                </listitem>
-                <listitem>
-                    <para>
-                        the most fitting backend among the servers listed in the ``serverlist`` setting, if ``defaultserver`` is not configured
-                    </para>
+Upon creating a user mailbox, if the target server is not given as extra parameter, the mailbox is either created on
 
-                </listitem>
+* the configured ``defaultserver`` backend
+* the most fitting backend among the servers listed in the ``serverlist`` setting, if ``defaultserver`` is not configured
 
-            </itemizedlist>
-
-        </para>
         <section id="sect-Deployment_Guide-Through_murder_frontend-Selection_Mode">
             <title>Selection Mode</title>
             <para>
@@ -254,125 +235,41 @@ partition_mode_exclude: parta partb
                 The principle is similar to the mailbox creation distribution on backend (see <xref linkend="sect-Deployment_Guide-Mailbox_Creation_Distribution-On_backend" />).
             </para>
             <variablelist id="vari-Deployment_Guide-Selection_Mode-Available_Selection_Modes_on_Frontend">
-                <title>Available Selection Modes on Frontend</title>
-                <varlistentry>
-                    <term>random</term>
-                    <listitem>
-                        <para>
-                            Choice is (pseudo-)random. Each backend has the same probability of being selected.
-                        </para>
 
-                    </listitem>
+Available Selection Modes on Frontend
+-------------------------------------
 
-                </varlistentry>
-                <varlistentry>
-                    <term>freespace-most</term>
-                    <listitem>
-                        <para>
-                            The backend which has the most free space (counted in KiB units) is selected. The considered free space is the sum of all available partitions free space on the backend.
-                        </para>
-                        <para>
-                            <example id="exam-Deployment_Guide-Available_Selection_Modes_on_Frontend-Example_of_freespace_most_Selection_on_Frontend">
-                                <title>Example of ``freespace-most`` Selection on Frontend</title>
-                                <para>
-                                    Suppose that the configured backends are:
-                                </para>
-                                <para>
-                                    <itemizedlist>
-                                        <listitem>
-                                            <para>
-                                                ``backend1`` which has a 2000GiB capacity, 1000GiB being free (that is, 50% free space), composed of 2 partitions
-                                            </para>
-                                            <para>
-                                                <itemizedlist>
-                                                    <listitem>
-                                                        <para>
-                                                            ``part1`` which has a 1000GiB capacity, 500GiB being free (that is, 50% free space)
-                                                        </para>
+random
 
-                                                    </listitem>
-                                                    <listitem>
-                                                        <para>
-                                                            ``part2`` which has a 1000GiB capacity, 500GiB being free (that is, 50% free space)
-                                                        </para>
+Choice is (pseudo-)random. Each backend has the same probability of being selected.
 
-                                                    </listitem>
+freespace-most
 
-                                                </itemizedlist>
+The backend which has the most free space (counted in KiB units) is selected. The considered free space is the sum of all available partitions free space on the backend.
 
-                                            </para>
+.. note ::
+    Example of ``freespace-most`` Selection on Frontend
 
-                                        </listitem>
-                                        <listitem>
-                                            <para>
-                                                ``backend2`` which has a 2000GiB capacity, 900GiB being free (that is, 45% free space), composed of 2 partitions
-                                            </para>
-                                            <para>
-                                                <itemizedlist>
-                                                    <listitem>
-                                                        <para>
-                                                            ``part1`` which has a 1000GiB capacity, 200GiB being free (that is, 20% free space)
-                                                        </para>
+    Suppose that the configured backends are:
 
-                                                    </listitem>
-                                                    <listitem>
-                                                        <para>
-                                                            ``part2`` which has a 1000GiB capacity, 700GiB being free (that is, 70% free space)
-                                                        </para>
+    * ``backend1`` which has a 2000GiB capacity, 1000GiB being free (that is, 50% free space), composed of 2 partitions
+    * ``part1`` which has a 1000GiB capacity, 500GiB being free (that is, 50% free space)
+    * ``part2`` which has a 1000GiB capacity, 500GiB being free (that is, 50% free space)
 
-                                                    </listitem>
+        * ``backend2`` which has a 2000GiB capacity, 900GiB being free (that is, 45% free space), composed of 2 partitions
+        * ``part1`` which has a 1000GiB capacity, 200GiB being free (that is, 20% free space)
+        * ``part2`` which has a 1000GiB capacity, 700GiB being free (that is, 70% free space)
 
-                                                </itemizedlist>
+            * ``backend3`` which has a 200GiB capacity, 110GiB being free (that is, 55% free space), composed of 2 partitions
+            * ``part1`` which has a 100GiB capacity, 30GiB being free (that is, 30% free space)
+            * ``part2`` which has a 100GiB capacity, 80GiB being free (that is, 80% free space)
 
-                                            </para>
+    * In that case ``backend1`` will be selected as most fitting, since 1000GiB of free space is the biggest of all backends.
 
-                                        </listitem>
-                                        <listitem>
-                                            <para>
-                                                ``backend3`` which has a 200GiB capacity, 110GiB being free (that is, 55% free space), composed of 2 partitions
-                                            </para>
-                                            <para>
-                                                <itemizedlist>
-                                                    <listitem>
-                                                        <para>
-                                                            ``part1`` which has a 100GiB capacity, 30GiB being free (that is, 30% free space)
-                                                        </para>
+freespace-percent-most
 
-                                                    </listitem>
-                                                    <listitem>
-                                                        <para>
-                                                            ``part2`` which has a 100GiB capacity, 80GiB being free (that is, 80% free space)
-                                                        </para>
+On each backend, the partition with the most percentage of free space is considered. The selected backend is the one whose partition has the most percentage of free space.
 
-                                                    </listitem>
-
-                                                </itemizedlist>
-
-                                            </para>
-
-                                        </listitem>
-
-                                    </itemizedlist>
-
-                                </para>
-                                <para>
-                                    In that case ``backend1`` will be selected as most fitting, since 1000GiB of free space is the biggest of all backends.
-                                </para>
-
-                            </example>
-
-                        </para>
-
-                    </listitem>
-
-                </varlistentry>
-                <varlistentry>
-                    <term>freespace-percent-most</term>
-                    <listitem>
-                        <para>
-                            On each backend, the partition with the most percentage of free space is considered. The selected backend is the one whose partition has the most percentage of free space.
-                        </para>
-                        <para>
                             <example id="exam-Deployment_Guide-Available_Selection_Modes_on_Frontend-Example_of_freespace_percent_most_Selection_on_Frontend">
                                 <title>Example of ``freespace-percent-most`` Selection on Frontend</title>
                                 <para>
@@ -536,12 +433,11 @@ partition_mode_exclude: parta partb
 
         </section>
 
-        <section id="sect-Deployment_Guide-Through_murder_frontend-Backends_Exclusion">
-            <title>Backends Exclusion</title>
-            <para>
-                When using a selection mode other than ``random``, backends are automatically excluded if their considered usage percentage is beyond the ``serverlist_mode_soft_usage_limit`` integer setting.
-            </para>
-            <note>
+Backends Exclusion
+==================
+
+When using a selection mode other than ``random``, backends are automatically excluded if their considered usage percentage is beyond the ``serverlist_mode_soft_usage_limit`` integer setting.
+
                 <title>``partition_mode_soft_usage_limit``</title>
                 <para>
                     If all backends are beyond the configured value, this feature is automatically deactivated. A backend is thus selected as if the setting was not set.
@@ -574,20 +470,10 @@ partition_mode_exclude: parta partb
 
         </section>
 
-        <section id="sect-Deployment_Guide-Through_murder_frontend-Backends_Usage_Data_Reset">
-            <title>Backends Usage Data Reset</title>
-            <para>
-                By default backends usage data are retrieved only once upon service initialization. This only concerns selection modes other than ``random``.
-            </para>
-            <para>
-                If you tend to use the same service instance for a long lapse of time and performs a large amount of mailboxes creation, it may be useful to configure the ``serverlist_mode_usage_reinit`` so that backends usage data are refreshed after the configured number of creation requests.
-            </para>
+Backends Usage Data Reset
+=========================
 
-        </section>
+By default backends usage data are retrieved only once upon service initialization. This only concerns selection modes other than ``random``.
 
-
-    </section>
-
-
-</chapter>
+If you tend to use the same service instance for a long lapse of time and performs a large amount of mailboxes creation, it may be useful to configure the ``serverlist_mode_usage_reinit`` so that backends usage data are refreshed after the configured number of creation requests.
 

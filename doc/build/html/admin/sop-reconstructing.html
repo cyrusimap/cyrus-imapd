@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 
@@ -25,10 +27,7 @@
     <script type="text/javascript" src="../_static/underscore.js"></script>
     <script type="text/javascript" src="../_static/doctools.js"></script>
     <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
-    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" />
-    <link rel="up" title="Part II. Standard Operating Procedures" href="sop.html" />
-    <link rel="next" title="Using Squatter for Faster IMAP SEARCH" href="sop-squatter.html" />
-    <link rel="prev" title="Deleting and Undeleting Messages and Folders" href="sop-deleting.html" /> 
+    <link rel="top" title="Cyrus IMAP and SASL 2.4 documentation" href="../index.html" /> 
   </head>
   <body>
     <div class="related">
@@ -37,15 +36,7 @@
         <li class="right" style="margin-right: 10px">
           <a href="../genindex.html" title="General Index"
              accesskey="I">index</a></li>
-        <li class="right" >
-          <a href="sop-squatter.html" title="Using Squatter for Faster IMAP SEARCH"
-             accesskey="N">next</a> |</li>
-        <li class="right" >
-          <a href="sop-deleting.html" title="Deleting and Undeleting Messages and Folders"
-             accesskey="P">previous</a> |</li>
-        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
-          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
-          <li><a href="sop.html" accesskey="U">Part II. Standard Operating Procedures</a> &raquo;</li> 
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li> 
       </ul>
     </div>  
 
@@ -63,15 +54,14 @@
 <p class="first admonition-title">Note</p>
 <p class="last">The <tt class="docutils literal"><span class="pre">-k</span></tt> switch preserves expunged messages so they can be undeleted if required. Without it, anything expunged will be permanently removed (Applies to Cyrus IMAP 2.3 and below.) On Cyrus IMAP 2.4.0 and above, this is not required as preserving the expunged messages is the only mode of operation.</p>
 </div>
-<div class="highlight-python"><div class="highlight"><pre>cyrus $ /usr/lib/cyrus-imapd/reconstruct -k -r -f user/jdoe@example.com
+<div class="highlight-python"><pre>cyrus $ /usr/lib/cyrus-imapd/reconstruct -k -r -f user/jdoe@example.com
 discovered example.com!user.jdoe.Drafts
 discovered example.com!user.jdoe.Trash
 discovered example.com!user.jdoe.Sent
 user/jdoe@example.com
 user/jdoe/Sent@example.com
 user/jdoe/Trash@example.com
-user/jdoe/Drafts@example.com
-</pre></div>
+user/jdoe/Drafts@example.com</pre>
 </div>
 <p>The above output shows the 3 sub-folders Sent, Trash and Drafts were found in addition to the top level INBOX. Sub-folders are only detected by the presence of a cyrus.header file.</p>
 <p>Once this has been done, the client will probably need to subscribe to the newly discovered folders.</p>
@@ -113,12 +103,6 @@ user/jdoe/Drafts@example.com
 </li>
 </ul>
 
-  <h4>Previous topic</h4>
-  <p class="topless"><a href="sop-deleting.html"
-                        title="previous chapter">Deleting and Undeleting Messages and Folders</a></p>
-  <h4>Next topic</h4>
-  <p class="topless"><a href="sop-squatter.html"
-                        title="next chapter">Using Squatter for Faster IMAP SEARCH</a></p>
   <h3>This Page</h3>
   <ul class="this-page-menu">
     <li><a href="../_sources/admin/sop-reconstructing.txt"
@@ -147,20 +131,12 @@ user/jdoe/Drafts@example.com
         <li class="right" style="margin-right: 10px">
           <a href="../genindex.html" title="General Index"
              >index</a></li>
-        <li class="right" >
-          <a href="sop-squatter.html" title="Using Squatter for Faster IMAP SEARCH"
-             >next</a> |</li>
-        <li class="right" >
-          <a href="sop-deleting.html" title="Deleting and Undeleting Messages and Folders"
-             >previous</a> |</li>
-        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li>
-          <li><a href="index.html" >Administrator Guide</a> &raquo;</li>
-          <li><a href="sop.html" >Part II. Standard Operating Procedures</a> &raquo;</li> 
+        <li><a href="../index.html">Cyrus IMAP and SASL 2.4 documentation</a> &raquo;</li> 
       </ul>
     </div>
     <div class="footer">
         &copy; Copyright 1993-2014, The Cyrus Team.
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
     </div>
   </body>
 </html>
