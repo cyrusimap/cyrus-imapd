@@ -506,7 +506,7 @@ static int tls_init_clientengine(int verifydepth, char *var_tls_cert_file, char 
 	return IMTEST_FAIL;
     }
     
-    tls_ctx = SSL_CTX_new(TLSv1_client_method());
+    tls_ctx = SSL_CTX_new(SSLv23_client_method());
     if (tls_ctx == NULL) {
 	return IMTEST_FAIL;
     };

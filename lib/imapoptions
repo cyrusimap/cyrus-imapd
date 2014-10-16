@@ -1510,9 +1510,19 @@ product version in the capabilities */
 /* The list of SSL/TLS ciphers to allow.  The format of the string is
    described in ciphers(1). */
 
+{ "tls_compression", 0, SWITCH }
+/* deactivate TLS compression by default */
+
+{ "tls_eccurve", "prime256v1", STRING }
+/* The elliptic curve used for ECDHE. Default is NIST Suite B prime256.
+   See 'openssl ecparam -list_curves' for possible values. */
+
 { "tls_key_file", NULL, STRING }
 /* File containing the private key belonging to the server
    certificate.  A value of "disabled" will disable SSL/TLS. */
+
+{ "tls_prefer_server_ciphers", 0, SWITCH }
+/* Prefer the ciphers on the server side instead of client side */
 
 { "tls_require_cert", 0, SWITCH }
 /* Require a client certificate for ALL services (imap, pop3, lmtp, sieve). */
@@ -1521,6 +1531,12 @@ product version in the capabilities */
 /* The length of time (in minutes) that a TLS session will be cached
    for later reuse.  The maximum value is 1440 (24 hours), the
    default.  A value of 0 will disable session caching. */
+
+{ "tls_versions", "ssl2 ssl3 tls1_0 tls1_1 tls1_2", STRING }
+/* A list of SSL/TLS versions to not disable. Cyrus IMAP SSL/TLS starts
+   with all protocols, and substracts protocols not in this list. Newer
+   versions of SSL/TLS will need to be added here to allow them to get
+   disabled. */
 
 { "umask", "077", STRING }
 /* The umask value used by various Cyrus IMAP programs. */
