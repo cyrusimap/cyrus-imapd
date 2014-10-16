@@ -71,3 +71,7 @@ div.admonition.warning p.admonition-title {
 .italic {
     font-style: italic;
 }
+
+div.related {
+    background-color: #1F8FC0;
+}
