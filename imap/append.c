@@ -1012,6 +1012,7 @@ out:
      * present in body structure ? */
     mboxevent_extract_record(mboxevent, mailbox, &record);
     mboxevent_extract_mailbox(mboxevent, mailbox);
+    mboxevent_set_access(mboxevent, NULL, NULL, as->userid, NULL);
     mboxevent_set_numunseen(mboxevent, mailbox, -1);
 
     return 0;

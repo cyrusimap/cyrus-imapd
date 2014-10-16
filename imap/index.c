@@ -412,6 +412,7 @@ EXPORTED int index_expunge(struct index_state *state, char *sequence,
     seqset_free(seq);
 
     mboxevent_extract_mailbox(mboxevent, state->mailbox);
+    mboxevent_set_access(mboxevent, NULL, NULL, state->userid, state->mailbox->name);
     mboxevent_set_numunseen(mboxevent, state->mailbox, state->numunseen);
 
     /* unlock before responding */
@@ -1106,6 +1107,7 @@ EXPORTED int index_fetch(struct index_state *state,
 	}
 
 	mboxevent_extract_mailbox(mboxevent, state->mailbox);
+	mboxevent_set_access(mboxevent, NULL, NULL, state->userid, state->mailbox->name);
 	mboxevent_set_numunseen(mboxevent, state->mailbox,
 				state->numunseen);
     }
@@ -1256,7 +1258,10 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
      * and FlagsSet events */
     mboxevent_extract_mailbox(flagsset, mailbox);
     mboxevent_set_numunseen(flagsset, mailbox, state->numunseen);
+    mboxevent_set_access(flagsset, NULL, NULL, state->userid, state->mailbox->name);
+
     mboxevent_extract_mailbox(flagsclear, mailbox);
+    mboxevent_set_access(flagsclear, NULL, NULL, state->userid, state->mailbox->name);
     mboxevent_set_numunseen(flagsclear, mailbox, state->numunseen);
 
     mboxevent_notify(mboxevents);
