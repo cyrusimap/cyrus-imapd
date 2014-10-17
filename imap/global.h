@@ -155,13 +155,15 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 int getint32(struct protstream *pin, int *num);
 int getsint32(struct protstream *pin, int *num);
 int getuint32(struct protstream *pin, unsigned int *num);
+int getint64(struct protstream *pin, int64_t *num);
+int getsint64(struct protstream *pin, int64_t *num);
+int getuint64(struct protstream *pin, uint64_t *num);
 int getmodseq(struct protstream *pin, modseq_t *num);
 
 void eatline(struct protstream *pin, int c);
 
 /* Misc utils */
 extern int shutdown_file(char *buf, int size);
-extern char *find_free_partition(unsigned long *tavail);
 extern char *find_msgid(char *, char **);
 #define UNIX_SOCKET "[unix socket]"
 extern const char *get_clienthost(int s,

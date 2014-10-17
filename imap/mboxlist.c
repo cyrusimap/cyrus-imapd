@@ -70,6 +70,7 @@
 #include "imap/imap_err.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
+#include "partlist.h"
 #include "xstrlcat.h"
 #include "user.h"
 
@@ -588,12 +589,12 @@ static int mboxlist_create_partition(const char *mboxname,
     if (!part && config_defpartition)
 	part = config_defpartition;
 
-    /* look for partition with free space */
+    /* look for most fitting partition */
     if (!part)
-	part = find_free_partition(NULL);
+	part = partlist_local_select();
 
     /* Configuration error */
-    if (strlen(part) > MAX_PARTITION_LEN)
+    if (!part || (strlen(part) > MAX_PARTITION_LEN))
 	goto err;
 
     if (!config_partitiondir(part))

@@ -55,6 +55,7 @@
 #include "annotate.h"
 #include "assert.h"
 #include "exitcodes.h"
+#include "global.h"
 #include "imapurl.h"
 #include "libconfig.h"
 #include "map.h"

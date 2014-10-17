@@ -97,6 +97,7 @@
 #include "mboxname.h"
 #include "mbdump.h"
 #include "mupdate-client.h"
+#include "partlist.h"
 #include "proc.h"
 #include "quota.h"
 #include "seen.h"
@@ -1083,6 +1084,8 @@ void shut_down(int code)
 	statuscache_close();
 	statuscache_done();
     }
+
+    partlist_local_done();
 
     if (imapd_in) {
 	/* Flush the incoming buffer */
@@ -3033,7 +3036,7 @@ static void capa_response(int flags)
     if (!imapd_compress_done && !imapd_tls_comp) {
 	prot_printf(imapd_out, " COMPRESS=DEFLATE");
     }
-#endif
+#endif // HAVE_ZLIB
 
     for (i = 0 ; i < QUOTA_NUMRESOURCES ; i++)
 	prot_printf(imapd_out, " X-QUOTA=%s", quota_names[i]);
@@ -7494,7 +7497,7 @@ void cmd_starttls(char *tag, int imaps)
     fatal("cmd_starttls() executed, but starttls isn't implemented!",
 	  EC_SOFTWARE);
 }
-#endif /* HAVE_SSL */
+#endif // (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
 
 static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
 {
@@ -12348,7 +12351,7 @@ static void cmd_compress(char *tag, char *alg)
 		    "%s NO [COMPRESSIONACTIVE] %s active via TLS\r\n",
 		    tag, SSL_COMP_get_name(imapd_tls_comp));
     }
-#endif
+#endif defined(HAVE_SSL) && (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
     else if (strcasecmp(alg, "DEFLATE")) {
 	prot_printf(imapd_out,
 		    "%s NO Unknown COMPRESS algorithm: %s\r\n", tag, alg);

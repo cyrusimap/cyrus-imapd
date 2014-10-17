@@ -297,7 +297,80 @@ EXPORTED int getuint32(struct protstream *pin, uint32_t *num)
     return c;
 }
 
-/* This would be called getuint64() if
+EXPORTED int getint64(struct protstream *pin, int64_t *num)
+{
+    int64_t result = 0;
+    char c;
+    int gotchar = 0;
+
+    /* LLONG_MAX == 9223372036854775807LL */
+    while ((c = prot_getc(pin)) != EOF && cyrus_isdigit(c)) {
+	if (result > 922337203685477580LL || (result == 922337203685477580LL && (c > '7')))
+	    fatal("num too big", EC_IOERR);
+	result = result * 10 + c - '0';
+	gotchar = 1;
+    }
+
+    if (!gotchar)
+	return EOF;
+
+    *num = result;
+
+    return c;
+}
+
+/* Like getint64() but explicitly signed, i.e. negative numbers
+ * are accepted */
+EXPORTED int getsint64(struct protstream *pin, int64_t *num)
+{
+    int c;
+    int sgn = 1;
+
+    c = prot_getc(pin);
+    if (c == EOF)
+	return EOF;
+
+    if (c == '-')
+	sgn = -1;
+    else if (c == '+')
+	sgn = 1;
+    else
+	prot_ungetc(c, pin);
+
+    c = getint64(pin, num);
+    if (c == EOF)
+	return EOF;
+    /* this is slightly buggy: the number LLONG_MIN == -9223372036854775808LL
+     * is a valid signed 64b int but is not accepted */
+    if (sgn < 0)
+	*num = - (*num);
+    return c;
+}
+
+/* can't flag with -1 if there is no number here, so return EOF */
+EXPORTED int getuint64(struct protstream *pin, uint64_t *num)
+{
+    uint64_t result = 0;
+    char c;
+    int gotchar = 0;
+
+    /* ULLONG_MAX == 18446744073709551615ULL */
+    while ((c = prot_getc(pin)) != EOF && cyrus_isdigit(c)) {
+	if (result > 1844674407370955161ULL || (result == 1844674407370955161ULL && (c > '5')))
+	    fatal("num too big", EC_IOERR);
+	result = result * 10 + c - '0';
+	gotchar = 1;
+    }
+
+    if (!gotchar)
+	return EOF;
+
+    *num = result;
+
+    return c;
+}
+
+/* This would call getuint64() if
  * all were right with the world */
 EXPORTED int getmodseq(struct protstream *pin, modseq_t *num)
 {

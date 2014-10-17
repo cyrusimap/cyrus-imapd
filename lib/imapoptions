@@ -1048,6 +1048,42 @@ And the notification message will be available on \fIstdin\fR.
    value of the \fBdefaultpartion\fR option is \fBdefault\fR, then the
    \fBpartition-default\fR field is required. */
 
+{ "partition_select_mode", "freespace-most", STRINGLIST("random", "freespace-most", "freespace-percent-most", "freespace-percent-weighted", "freespace-percent-weighted-delta") }
+/* Partition selection mode.
+.PP
+.IP \fIrandom\fR 5
+(pseudo-)random selection
+.IP \fIfreespace-most\fR 5
+partition with the most free space (KiB)
+.IP \fIfreespace-percent-most\fR 5
+partition with the most free space (%)
+.IP \fIfreespace-percent-weighted\fR 5
+each partition is weighted according to its free space (%); the more free space
+the partition has, the more chances it has to be selected
+.IP \fIfreespace-percent-weighted-delta\fR 5
+each partition is weighted according to its difference of free space (%)
+compared to the most used partition; the more the partition is lagging behind
+the most used
+partition, the more chances it has to be selected
+.PP
+Note that actually even the most used partition has a few chances to be
+selected, and those chances increase when other partitions get closer
+ */
+
+{ "partition_select_exclude", NULL, STRING }
+/* List of partitions to exclude from selection mode. */
+
+{ "partition_select_usage_reinit", 0, INT }
+/* For a given session, number of \fBoperations\fR (e.g. partition selection)
+   for which partitions usage data are cached. */
+
+{ "partition_select_soft_usage_limit", 0, INT }
+/* Limit of partition usage (%): if a partition is over that limit, it is
+   automatically excluded from selection mode.
+.PP
+If all partitions are over that limit, this feature is not used anymore.
+ */
+
 { "plaintextloginpause", 0, INT }
 /* Number of seconds to pause after a successful plaintext login.  For
    systems that support strong authentication, this permits users to
@@ -1285,6 +1321,34 @@ And the notification message will be available on \fIstdin\fR.
 /* Whitespace separated list of backend server names.  Used for
    finding server with the most available free space for proxying
    CREATE. */
+
+{ "serverlist_select_mode", "freespace-most", STRINGLIST("random", "freespace-most", "freespace-percent-most", "freespace-percent-weighted", "freespace-percent-weighted-delta") }
+/* Server selection mode.
+.PP
+.IP \fIrandom\fR 5
+(pseudo-)random selection
+.IP \fIfreespace-most\fR 5
+backend with the most (total) free space (KiB)
+.IP \fIfreespace-percent-most\fR 5
+backend whose partition has the most free space (%)
+.IP \fIfreespace-percent-weighted\fR 5
+same as for partition selection, comparing the free space (%) of the least used
+partition of each backend
+.IP \fIfreespace-percent-weighted-delta\fR 5
+same as for partition selection, comparing the free space (%) of the least used
+partition of each backend
+ */
+
+{ "serverlist_select_usage_reinit", 0, INT }
+/* For a given session, number of \fBoperations\fR (e.g. backend selection)
+   for which backend usage data are cached. */
+
+{ "serverlist_select_soft_usage_limit", 0, INT }
+/* Limit of backend usage (%): if a backend is over that limit, it is
+   automatically excluded from selection mode.
+.PP
+If all backends are over that limit, this feature is not used anymore.
+ */
 
 { "servername", NULL, STRING }
 /* This is the hostname visible in the greeting messages of the POP,

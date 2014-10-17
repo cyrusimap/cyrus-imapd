@@ -59,6 +59,7 @@
 #include "proxy.h"
 #include "mboxname.h"
 #include "mupdate-client.h"
+#include "partlist.h"
 #include "prot.h"
 #include "util.h"
 #include "xmalloc.h"
@@ -68,6 +69,10 @@ extern struct protstream *imapd_in, *imapd_out;
 extern struct backend *backend_inbox, *backend_current, **backend_cached;
 extern char *imapd_userid, *proxy_userid;
 extern struct namespace imapd_namespace;
+
+static partlist_t *server_parts = NULL;
+
+static void proxy_part_filldata(partlist_t *part_list, int idx);
 
 static void imap_postcapability(struct backend *s)
 {
@@ -1317,103 +1322,118 @@ int annotate_store_proxy(const char *server, const char *mbox_pat,
 char *find_free_server(void)
 {
     const char *servers = config_getstring(IMAPOPT_SERVERLIST);
-    unsigned long long int max_avail = 0;
     char *server = NULL;
 
     if (servers) {
-	char *tmpbuf, *cur_server, *next_server;
-	char mytag[128];
-	struct backend *be;
+	if (!server_parts) {
+	    server_parts = xzmalloc(sizeof(partlist_t));
 
-	/* make a working copy of the list */
-	cur_server = tmpbuf = xstrdup(servers);
+	    partlist_initialize(
+		    server_parts,
+		    proxy_part_filldata,
+		    NULL,
+		    servers,
+		    NULL,
+		    partlist_getmode(config_getstring(IMAPOPT_SERVERLIST_SELECT_MODE)),
+		    config_getint(IMAPOPT_SERVERLIST_SELECT_SOFT_USAGE_LIMIT),
+		    config_getint(IMAPOPT_SERVERLIST_SELECT_USAGE_REINIT)
+		);
 
-	while (cur_server) {
-	    /* eat any leading whitespace */
-	    while (Uisspace(*cur_server)) cur_server++;
-
-	    if (!*cur_server) break;
-
-	    /* find end of server */
-	    if ((next_server = strchr(cur_server, ' ')) ||
-		(next_server = strchr(cur_server, '\t')))
-		*next_server++ = '\0';
-
-	    syslog(LOG_DEBUG, "checking free space on server '%s'", cur_server);
-
-	    /* connect to server */
-	    be = proxy_findserver(cur_server, &imap_protocol,
-				  proxy_userid, &backend_cached,
-				  &backend_current, &backend_inbox, imapd_in);
-	    if (be) {
-		unsigned long long int avail = 0;
-		static struct buf avail_buf;
-		int c;
-
-		/* fetch annotation from remote */
-		proxy_gentag(mytag, sizeof(mytag));
-		prot_printf(be->out,
-			    "%s GETANNOTATION \"\" "
-			    "\"/vendor/cmu/cyrus-imapd/freespace\" "
-			    "\"value.shared\"\r\n", mytag);
-		prot_flush(be->out);
-
-		for (/* each annotation response */;;) {
-		    /* read a line */
-		    c = prot_getc(be->in);
-		    if (c != '*') break;
-		    c = prot_getc(be->in);
-		    if (c != ' ') { /* protocol error */ c = EOF; break; }
-
-		    c = chomp(be->in,
-			      "ANNOTATION \"\" "
-			      "\"/vendor/cmu/cyrus-imapd/freespace\" "
-			      "(\"value.shared\" ");
-
-		    if (c == EOF) {
-			/* we don't care about this response */
-			eatline(be->in, c);
-			continue;
-		    }
-
-		    /* read amount of free space */
-		    c = getastring(be->in, be->out, &avail_buf);
-
-		    if (c != '"') { c = EOF; break; }
-		    eatline(be->in, c); /* we don't care about the rest of the line */
-		}
-
-		if (c != EOF) {
-		    prot_ungetc(c, be->in);
-
-		    /* we should be looking at the tag now */
-		    eatline(be->in, c);
-		}
-
-		if (c == EOF) {
-		    /* uh oh, we're not happy */
-		    fatal("Lost connection to backend", EC_UNAVAILABLE);
-		}
-
-		avail = strtoull(avail_buf.s, NULL, 10);
-
-		if (avail > max_avail) {
-		    syslog(LOG_DEBUG, "freespace on %s (%llu) greater than current maximum on %s (%llu)", cur_server, avail, server, max_avail);
-		    server = cur_server;
-		    max_avail = avail;
-		} else {
-		    syslog(LOG_DEBUG, "freespace on %s (%llu) still the current maximum (not %s (%llu))", server, max_avail, cur_server, avail);
-		}
-	    }
-
-	    /* move to next server */
-	    cur_server = next_server;
 	}
 
-	if (server) server = xstrdup(server);
-
-	free(tmpbuf);
+	server = (char *)partlist_select_value(server_parts);
     }
 
     return server;
+}
+
+
+static void proxy_part_filldata(partlist_t *part_list, int idx)
+{
+    char mytag[128];
+    struct backend *be;
+    partitem_t *item = &part_list->items[idx];
+
+    item->id = 0;
+    item->available = 0;
+    item->total = 0;
+    item->quota = 0.;
+
+    syslog(LOG_DEBUG, "checking free space on server '%s'", item->value);
+
+    /* connect to server */
+    be = proxy_findserver(item->value, &imap_protocol,
+	    proxy_userid, &backend_cached,
+	    &backend_current, &backend_inbox, imapd_in);
+
+    if (be) {
+	uint64_t server_available = 0;
+	uint64_t server_total = 0;
+	int c;
+
+	/* fetch annotation from remote */
+	proxy_gentag(mytag, sizeof(mytag));
+	if (part_list->mode == PART_SELECT_MODE_FREESPACE_MOST) {
+	    prot_printf(be->out,
+		"%s GETANNOTATION \"\" "
+		"\"/vendor/cmu/cyrus-imapd/freespace/total\" "
+		"\"value.shared\"\r\n", mytag);
+	}
+	else {
+	    prot_printf(be->out,
+		"%s GETANNOTATION \"\" "
+		"\"/vendor/cmu/cyrus-imapd/freespace/percent/most\" "
+		"\"value.shared\"\r\n", mytag);
+	}
+	prot_flush(be->out);
+
+	for (/* each annotation response */;;) {
+	    /* read a line */
+	    c = prot_getc(be->in);
+	    if (c != '*') break;
+	    c = prot_getc(be->in);
+	    if (c != ' ') { /* protocol error */ c = EOF; break; }
+
+	    if (part_list->mode == PART_SELECT_MODE_FREESPACE_MOST) {
+		c = chomp(be->in,
+		    "ANNOTATION \"\" "
+		    "\"/vendor/cmu/cyrus-imapd/freespace/total\" "
+		    "(\"value.shared\" ");
+	    } else {
+		c = chomp(be->in,
+		    "ANNOTATION \"\" "
+		    "\"/vendor/cmu/cyrus-imapd/freespace/percent/most\" "
+		    "(\"value.shared\" ");
+	    }
+	    if ((c == EOF) || (c != '\"')) {
+		/* we don't care about this response */
+		eatline(be->in, c);
+		continue;
+	    }
+
+	    /* read available */
+	    c = getuint64(be->in, &server_available);
+	    if (c != ';') { c = EOF; break; }
+
+	    /* read total */
+	    c = getuint64(be->in, &server_total);
+	    if (c != '\"') { c = EOF; break; }
+	    eatline(be->in, c); /* we don't care about the rest of the line */
+	}
+	if (c != EOF) {
+	    prot_ungetc(c, be->in);
+
+	    /* we should be looking at the tag now */
+	    eatline(be->in, c);
+	}
+	if (c == EOF) {
+	    /* uh oh, we're not happy */
+	    fatal("Lost connection to backend", EC_UNAVAILABLE);
+	}
+
+	/* unique id */
+	item->id = idx;
+	item->available = server_available;
+	item->total = server_total;
+    }
 }

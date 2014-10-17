@@ -49,6 +49,11 @@
 #include <unistd.h>
 #endif
 #include <errno.h>
+#ifdef HAVE_INTTYPES_H
+# include <inttypes.h>
+#elif defined(HAVE_STDINT_H)
+# include <stdint.h>
+#endif
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
@@ -67,6 +72,7 @@
 #include "times.h"
 #include "imap/imap_err.h"
 #include "mboxlist.h"
+#include "partlist.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "ptrarray.h"
@@ -1424,11 +1430,37 @@ static void annotation_get_fromfile(annotate_state_t *state,
 static void annotation_get_freespace(annotate_state_t *state,
 				     struct annotate_entry_list *entry)
 {
-    unsigned long tavail;
+    uint64_t tavail = 0;
     struct buf value = BUF_INITIALIZER;
 
-    (void) find_free_partition(&tavail);
-    buf_printf(&value, "%lu", tavail);
+    (void) partlist_local_find_freespace_most(0, NULL, NULL, &tavail, NULL);
+    buf_printf(&value, "%" PRIuMAX, (uintmax_t)tavail);
+    output_entryatt(state, entry->name, "", &value);
+    buf_free(&value);
+}
+
+static void annotation_get_freespace_total(annotate_state_t *state,
+                     struct annotate_entry_list *entry)
+{
+    uint64_t tavail = 0;
+    uint64_t ttotal = 0;
+    struct buf value = BUF_INITIALIZER;
+
+    (void) partlist_local_find_freespace_most(0, NULL, NULL, &tavail, &ttotal);
+    buf_printf(&value, "%" PRIuMAX ";%" PRIuMAX, (uintmax_t)tavail, (uintmax_t)ttotal);
+    output_entryatt(state, entry->name, "", &value);
+    buf_free(&value);
+}
+
+static void annotation_get_freespace_percent_most(annotate_state_t *state,
+                     struct annotate_entry_list *entry)
+{
+    uint64_t avail = 0;
+    uint64_t total = 0;
+    struct buf value = BUF_INITIALIZER;
+
+    (void) partlist_local_find_freespace_most(1, &avail, &total, NULL, NULL);
+    buf_printf(&value, "%" PRIuMAX ";%" PRIuMAX, (uintmax_t)avail, (uintmax_t)total);
     output_entryatt(state, entry->name, "", &value);
     buf_free(&value);
 }
@@ -1960,6 +1992,24 @@ static const annotate_entrydesc_t server_builtin_entries[] =
 	annotation_get_freespace,
 	/*set*/NULL,
 	NULL
+    },{
+    "/vendor/cmu/cyrus-imapd/freespace/total",
+    ATTRIB_TYPE_STRING,
+    BACKEND_ONLY,
+    ATTRIB_VALUE_SHARED,
+    0,
+    annotation_get_freespace_total,
+    /*set*/NULL,
+    NULL
+    },{
+    "/vendor/cmu/cyrus-imapd/freespace/percent/most",
+    ATTRIB_TYPE_STRING,
+    BACKEND_ONLY,
+    ATTRIB_VALUE_SHARED,
+    0,
+    annotation_get_freespace_percent_most,
+    /*set*/NULL,
+    NULL
     },{
 	"/vendor/cmu/cyrus-imapd/shutdown",
 	ATTRIB_TYPE_STRING,
