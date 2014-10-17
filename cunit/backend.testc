@@ -1246,16 +1246,16 @@ static int set_up(void)
     old_config_dir = (char *)config_dir;
     config_dir = xstrdup(cwd);
 
-    old_tls_ca_file = (char *)imapopts[IMAPOPT_TLS_CA_FILE].val.s;
-    imapopts[IMAPOPT_TLS_CA_FILE].val.s =
+    old_tls_ca_file = (char *)imapopts[IMAPOPT_TLS_SERVER_CA_FILE].val.s;
+    imapopts[IMAPOPT_TLS_SERVER_CA_FILE].val.s =
 	    strconcat(cwd, "/cacert.pem", (char *)NULL);
 
-    old_tls_cert_file = (char *)imapopts[IMAPOPT_TLS_CERT_FILE].val.s;
-    imapopts[IMAPOPT_TLS_CERT_FILE].val.s =
+    old_tls_cert_file = (char *)imapopts[IMAPOPT_TLS_SERVER_CERT].val.s;
+    imapopts[IMAPOPT_TLS_SERVER_CERT].val.s =
 	    strconcat(cwd, "/cert.pem", (char *)NULL);
 
-    old_tls_key_file = (char *)imapopts[IMAPOPT_TLS_KEY_FILE].val.s;
-    imapopts[IMAPOPT_TLS_KEY_FILE].val.s =
+    old_tls_key_file = (char *)imapopts[IMAPOPT_TLS_SERVER_KEY].val.s;
+    imapopts[IMAPOPT_TLS_SERVER_KEY].val.s =
 	    strconcat(cwd, "/key.pem", (char *)NULL);
 
     /* disable SSL session caching */
@@ -1322,14 +1322,14 @@ static int tear_down(void)
 
     imapopts[IMAPOPT_TLS_SESSION_TIMEOUT].val.i = old_session_timeout;
 
-    free((char *)imapopts[IMAPOPT_TLS_CA_FILE].val.s);
-    imapopts[IMAPOPT_TLS_CA_FILE].val.s = old_tls_ca_file;
+    free((char *)imapopts[IMAPOPT_TLS_SERVER_CA_FILE].val.s);
+    imapopts[IMAPOPT_TLS_SERVER_CA_FILE].val.s = old_tls_ca_file;
 
-    free((char *)imapopts[IMAPOPT_TLS_CERT_FILE].val.s);
-    imapopts[IMAPOPT_TLS_CERT_FILE].val.s = old_tls_cert_file;
+    free((char *)imapopts[IMAPOPT_TLS_SERVER_CERT].val.s);
+    imapopts[IMAPOPT_TLS_SERVER_CERT].val.s = old_tls_cert_file;
 
-    free((char *)imapopts[IMAPOPT_TLS_KEY_FILE].val.s);
-    imapopts[IMAPOPT_TLS_KEY_FILE].val.s = old_tls_key_file;
+    free((char *)imapopts[IMAPOPT_TLS_SERVER_KEY].val.s);
+    imapopts[IMAPOPT_TLS_SERVER_KEY].val.s = old_tls_key_file;
 
     return 0;
 }
