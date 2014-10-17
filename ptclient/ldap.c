@@ -77,6 +77,7 @@
 #include "auth_pts.h"
 #include "strhash.h"
 #include "xmalloc.h"
+#include "xstrlcat.h"
 
 /* xxx this just uses the UNIX canonicalization semantics, which is
  * most likely wrong */
@@ -628,7 +629,7 @@ static int ptsmodule_escape(
     return PTSM_OK;
 }
 
-static int *ptsmodule_standard_root_dn(const char *domain, const char **result)
+static int ptsmodule_standard_root_dn(char *domain, const char **result)
 {
     /* number of dots */
     int dots;
@@ -1110,8 +1111,7 @@ static int ptsmodule_make_authstate_attribute(
               if (Uisupper(rdn[0][j]))
                   rdn[0][j]=tolower(rdn[0][j]);
             }
-            strlcat((*newstate)->groups[i].id, rdn[0],
-                sizeof((*newstate)->groups[i].id));
+            strlcat((*newstate)->groups[i].id, rdn[0], sizeof((*newstate)->groups[i].id));
             (*newstate)->groups[i].hash = strhash((*newstate)->groups[i].id);
         }
 
@@ -1278,8 +1278,7 @@ static int ptsmodule_make_authstate_filter(
         vals[0][j]=tolower(vals[0][j]);
     }
 
-    strlcat((*newstate)->groups[i].id, vals[0],
-        sizeof((*newstate)->groups[i].id));
+    strlcat((*newstate)->groups[i].id, vals[0], sizeof((*newstate)->groups[i].id));
     (*newstate)->groups[i].hash = strhash((*newstate)->groups[i].id);
 
     ldap_value_free(vals);
@@ -1314,7 +1313,7 @@ static int ptsmodule_make_authstate_group(
     char domain_filter[1024];
     char *domain_attrs[] = {(char *)ptsm->domain_name_attribute,(char *)ptsm->domain_result_attribute,NULL};
     int rc;
-    int i; int n;
+    int n;
     LDAPMessage *res = NULL;
     LDAPMessage *entry = NULL;
     char **vals = NULL;
