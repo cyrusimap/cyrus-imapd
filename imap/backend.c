@@ -472,7 +472,10 @@ static int do_compress(struct backend *s, struct simple_cmd_t *compress_cmd)
 #endif /* HAVE_ZLIB */
 }
 
-EXPORTED int backend_starttls(struct backend *s, struct tls_cmd_t *tls_cmd)
+EXPORTED int backend_starttls(	struct backend *s,
+				struct tls_cmd_t *tls_cmd,
+				const char *c_cert_file,
+				const char *c_key_file)
 {
 #ifndef HAVE_SSL
     return -1;
@@ -493,7 +496,7 @@ EXPORTED int backend_starttls(struct backend *s, struct tls_cmd_t *tls_cmd)
 	    return -1;
     }
 
-    r = tls_init_clientengine(5, "", "");
+    r = tls_init_clientengine(5, c_cert_file, c_key_file);
     if (r == -1) return -1;
 
     /* SASL and openssl have different ideas about whether ssf is signed */
@@ -591,7 +594,6 @@ static int backend_authenticate(struct backend *s, const char *userid,
     socklen_t addrsize;
     char buf[2048], optstr[128], *p;
     const char *mech_conf, *pass;
-
     if (prot->type != TYPE_STD) return SASL_FAIL;
 
     /* set the IP addresses */
@@ -642,6 +644,30 @@ static int backend_authenticate(struct backend *s, const char *userid,
     if (!mech_conf)
 	mech_conf = config_getstring(IMAPOPT_FORCE_SASL_CLIENT_MECH);
 
+#ifdef HAVE_SSL
+    strlcpy(optstr, s->hostname, sizeof(optstr));
+    p = strchr(optstr, '.');
+    if (p) *p = '\0';
+
+    strlcat(optstr, "_client_cert", sizeof(optstr));
+    const char *c_cert_file = config_getoverflowstring(optstr, NULL);
+
+    if (!c_cert_file) {
+	c_cert_file = config_getstring(IMAPOPT_TLS_CLIENT_CERT);
+    }
+
+    strlcpy(optstr, s->hostname, sizeof(optstr));
+    p = strchr(optstr, '.');
+    if (p) *p = '\0';
+
+    strlcat(optstr, "_client_key", sizeof(optstr));
+
+    const char *c_key_file = config_getoverflowstring(optstr, NULL);
+    if (!c_key_file) {
+	c_key_file = config_getstring(IMAPOPT_TLS_CLIENT_KEY);
+    }
+#endif
+
     mechlist = backend_get_cap_params(s, CAPA_AUTH);
 
     do {
@@ -673,7 +699,7 @@ static int backend_authenticate(struct backend *s, const char *userid,
 
 	/* If we don't have a usable mech, do TLS and try again */
     } while (r == SASL_NOMECH && CAPA(s, CAPA_STARTTLS) &&
-	     backend_starttls(s, &prot->u.std.tls_cmd) != -1 &&
+	     backend_starttls(s, &prot->u.std.tls_cmd, c_cert_file, c_key_file) != -1 &&
 	     (mechlist = backend_get_cap_params(s, CAPA_AUTH)));
 
     if (r == SASL_OK) {
@@ -771,8 +797,9 @@ static int backend_login(struct backend *ret, const char *userid,
 		    strcmp(new_mechlist, old_mechlist)) {
 		    syslog(LOG_ERR, "possible MITM attack:"
 			   "list of available SASL mechanisms changed");
-		    free(new_mechlist);
-		    free(old_mechlist);
+
+		    if (new_mechlist) free(new_mechlist);
+		    if (old_mechlist) free(old_mechlist);
 		    return -1;
 		}
 		free(new_mechlist);
@@ -967,7 +994,7 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
     prot_setisclient(ret->out, 1);
 
     /* Start TLS if required */
-    if (do_tls) r = backend_starttls(ret, NULL);
+    if (do_tls) r = backend_starttls(ret, NULL, NULL, NULL);
 
     /* Login to the server */
     if (prot->type == TYPE_SPEC)

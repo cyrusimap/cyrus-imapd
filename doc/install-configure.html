@@ -508,15 +508,15 @@ example: <kbd>chown cyrus /var/imap/server.pem</kbd>
 <li>Add the following to <tt>/etc/imapd.conf</tt> to tell the server
 where to find the certificate and key files (used for ALL services):
 
-<pre>tls_cert_file: /var/imap/server.pem
-tls_key_file: /var/imap/server.pem
+<pre>server_cert_file: /var/imap/server.cert
+server_key_file: /var/imap/server.key
 </pre>
 
 Optionally, you can use separate certificates and key files for each
 service:
 
-<pre>[servicename]_tls_cert_file: /var/imap/imap-server.pem
-[servicename]_tls_key_file: /var/imap/imap-server.pem
+<pre>[servicename]_server_cert_file: /var/imap/imap-server.cert
+[servicename]_server_key_file: /var/imap/imap-server.key
 </pre>
 
 &quot;servicename&quot; here refers to the name of the service as specified

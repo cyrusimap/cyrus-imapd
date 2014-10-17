@@ -776,6 +776,8 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/telemetry.h \
 	imap/tls.c \
 	imap/tls.h \
+	imap/tls_th-lock.c \
+	imap/tls_th-lock.h \
 	imap/upgrade_index.c \
 	imap/upgrade_index.h \
 	imap/user.c \
@@ -831,6 +833,7 @@ imap_mupdate_SOURCES = \
 	imap/mupdate.h \
 	imap/mupdate-slave.c \
 	imap/mutex_pthread.c \
+	imap/tls_th-lock.c \
 	master/service-thread.c
 imap_mupdate_LDADD = $(LD_SERVER_ADD) -lpthread
 

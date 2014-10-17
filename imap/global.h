@@ -179,7 +179,7 @@ extern const char *config_annotation_db;
 extern const char *config_seenstate_db;
 extern const char *config_mboxkey_db;
 extern const char *config_duplicate_db;
-extern const char *config_tlscache_db;
+extern const char *config_tls_sessions_db;
 extern const char *config_ptscache_db;
 extern const char *config_statuscache_db;
 extern const char *config_userdeny_db;

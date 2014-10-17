@@ -95,7 +95,7 @@ static struct cyrusdb {
     { FNAME_QUOTADB,		&config_quota_db,	NULL,	1 },
     { FNAME_GLOBALANNOTATIONS,	&config_annotation_db,	NULL,	1 },
     { FNAME_DELIVERDB,		&config_duplicate_db,	NULL,	0 },
-    { FNAME_TLSSESSIONS,	&config_tlscache_db,	NULL,	0 },
+    { FNAME_TLSSESSIONS,	&config_tls_sessions_db,NULL,	0 },
     { FNAME_PTSDB,		&config_ptscache_db,	NULL,	0 },
     { FNAME_STATUSCACHEDB,	&config_statuscache_db,	NULL,	0 },
     { NULL,			NULL,			NULL,	0 }

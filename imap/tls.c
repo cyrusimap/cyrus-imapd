@@ -122,12 +122,13 @@
 #include "nonblock.h"
 #include "xmalloc.h"
 #include "tls.h"
+#include "tls_th-lock.h"
 
 /* Session caching/reuse stuff */
 #include "global.h"
 #include "cyrusdb.h"
 
-#define DB (config_tlscache_db) /* sessions are binary -> MUST use DB3 */
+#define DB (config_tls_sessions_db) /* sessions are binary -> MUST use DB3 */
 
 static struct db *sessdb = NULL;
 static int sess_dbopen = 0;
@@ -152,10 +153,10 @@ EXPORTED int tls_enabled(void)
 {
     const char *val;
 
-    val = config_getstring(IMAPOPT_TLS_CERT_FILE);
+    val = config_getstring(IMAPOPT_TLS_SERVER_CERT);
     if (!val || !strcasecmp(val, "disabled")) return 0;
 
-    val = config_getstring(IMAPOPT_TLS_KEY_FILE);
+    val = config_getstring(IMAPOPT_TLS_SERVER_KEY);
     if (!val || !strcasecmp(val, "disabled")) return 0;
 
     return 1;
@@ -219,7 +220,7 @@ static RSA *tmp_rsa_cb(SSL * s __attribute__((unused)),
 #if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
 /* Logic copied from OpenSSL apps/s_server.c: give the TLS context
  * DH params to work with DHE-* cipher suites. Hardcoded fallback
- * in case no DH params in tls_key_file or tls_cert_file.
+ * in case no DH params in server_key or server_cert.
  */
 static DH *get_dh1024(void)
 {
@@ -623,6 +624,7 @@ static int tls_rand_init(void)
   */
 
 /* must be called after cyrus_init */
+// I am the server
 EXPORTED int     tls_init_serverengine(const char *ident,
 			      int verifydepth,
 			      int askcert,
@@ -631,12 +633,22 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     int     off = 0;
     int     verify_flags = SSL_VERIFY_NONE;
     const char   *cipher_list;
-    const char   *CApath;
-    const char   *CAfile;
-    const char   *s_cert_file;
-    const char   *s_key_file;
-    int    requirecert;
-    int    timeout;
+    const char   *client_ca_dir;
+    const char   *client_ca_file;
+    const char   *server_ca_file;
+    const char   *server_cert_file;
+    const char   *server_key_file;
+    enum enum_value tls_client_certs;
+    int server_cipher_order;
+    int timeout;
+
+    /* Whether or not to use any client certificate CA context to
+     * verify client SSL certificates with.
+     *
+     * This is initially switched off by a value of "off" for the
+     * tls_client_certs setting, or should no client_ca_dir nor
+     * client_ca_file be specified. */
+    int use_client_certs = 1;
 
     if (tls_serverengine)
 	return (0);				/* already running */
@@ -651,83 +663,183 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 	return -1;
     }
 
-#if 0
-    if (tlsonly) {
-	s_ctx = SSL_CTX_new(TLSv1_server_method());
-    } else {
-	s_ctx = SSL_CTX_new(SSLv23_server_method());
-    }
-#endif
     /* even if we want TLS only, we use SSLv23 server method so we can
        deal with a client sending an SSLv2 greeting message */
-
     s_ctx = SSL_CTX_new(SSLv23_server_method());
     if (s_ctx == NULL) {
 	return (-1);
     };
 
     off |= SSL_OP_ALL;		/* Work around all known bugs */
-    if (tlsonly) {
+
+    const char *tls_versions = config_getstring(IMAPOPT_TLS_VERSIONS);
+
+    if (strstr(tls_versions, "ssl2") == NULL || tlsonly) {
 	off |= SSL_OP_NO_SSLv2;
+    }
+
+    if (strstr(tls_versions, "ssl3") == NULL || tlsonly) {
 	off |= SSL_OP_NO_SSLv3;
     }
+
+    if (strstr(tls_versions, "tls1_2") == NULL) {
+#if (OPENSSL_VERSION_NUMBER >= 0x1000105fL)
+	off |= SSL_OP_NO_TLSv1_2;
+#else
+	syslog(LOG_ERR, "ERROR: TLSv1.2 configured, OpenSSL < 1.0.1e insufficient");
+#endif
+    }
+
+    if (strstr(tls_versions, "tls1_1") == NULL) {
+#if (OPENSSL_VERSION_NUMBER >= 0x1000000fL)
+	off |= SSL_OP_NO_TLSv1_1;
+#else
+	syslog(LOG_ERR, "ERROR: TLSv1.1 configured, OpenSSL < 1.0.0 insufficient");
+#endif
+    }
+
+    if (strstr(tls_versions, "tls1_0") == NULL) {
+	off |= SSL_OP_NO_TLSv1;
+    }
+
+    server_cipher_order = config_getswitch(IMAPOPT_TLS_PREFER_SERVER_CIPHERS);
+    if (server_cipher_order)
+	off |= SSL_OP_CIPHER_SERVER_PREFERENCE;
+
+    if (!config_getswitch(IMAPOPT_TLS_COMPRESSION)) {
+	off |= SSL_OP_NO_COMPRESSION;
+	syslog(LOG_DEBUG, "TLS client engine: Setting SSL_OP_NO_COMPRESSION");
+    }
+    
     SSL_CTX_set_options(s_ctx, off);
     SSL_CTX_set_info_callback(s_ctx, apps_ssl_info_callback);
 
-    cipher_list = config_getstring(IMAPOPT_TLS_CIPHER_LIST);
+    cipher_list = config_getstring(IMAPOPT_TLS_CIPHERS);
     if (!SSL_CTX_set_cipher_list(s_ctx, cipher_list)) {
 	syslog(LOG_ERR,"TLS server engine: cannot load cipher list '%s'",
 	       cipher_list);
 	return (-1);
     }
 
-    CAfile = config_getstring(IMAPOPT_TLS_CA_FILE);
-    CApath = config_getstring(IMAPOPT_TLS_CA_PATH);
+    tls_client_certs = config_getenum(IMAPOPT_TLS_CLIENT_CERTS);
 
-    if ((!SSL_CTX_load_verify_locations(s_ctx, CAfile, CApath)) ||
-	(!SSL_CTX_set_default_verify_paths(s_ctx))) {
-	/* just a warning since this is only necessary for client auth */
-	syslog(LOG_NOTICE,"TLS server engine: cannot load CA data");	
+    if (tls_client_certs != IMAP_ENUM_TLS_CLIENT_CERTS_OFF) {
+	client_ca_dir  = config_getstring(IMAPOPT_TLS_CLIENT_CA_DIR);
+	client_ca_file = config_getstring(IMAPOPT_TLS_CLIENT_CA_FILE);
+
+	if (client_ca_dir || client_ca_file) {
+	    if ((!SSL_CTX_load_verify_locations(s_ctx, client_ca_file, client_ca_dir)) ||
+		(!SSL_CTX_set_default_verify_paths(s_ctx))) {
+		/* just a warning since this is only necessary for client auth */
+		syslog(LOG_NOTICE,"TLS server engine: Failed to load CA data.");
+		use_client_certs = 0;
+	    }
+	} else {
+	    syslog(LOG_NOTICE,"TLS server engine: Cannot load CA data.");
+	    use_client_certs = 0;
+	}
+    } else {
+	use_client_certs = 0;
     }
 
-    s_cert_file = config_getstring(IMAPOPT_TLS_CERT_FILE);
-    s_key_file = config_getstring(IMAPOPT_TLS_KEY_FILE);
+    server_ca_file = config_getstring(IMAPOPT_TLS_SERVER_CA_FILE);
+    server_cert_file = config_getstring(IMAPOPT_TLS_SERVER_CERT);
+    server_key_file = config_getstring(IMAPOPT_TLS_SERVER_KEY);
 
-    if (!set_cert_stuff(s_ctx, s_cert_file, s_key_file)) {
-	syslog(LOG_ERR,"TLS server engine: cannot load cert/key data");
+    /* Only consider adding additional CA certificates -used to verify certificates
+     * issued to clients, which may have been issued by an intermediate CA and
+     * not the CA that issued our server certificate- when indeed we are using
+     * SSL/TLS on this server.
+     */
+    if (server_ca_file && !strcasecmp(server_cert_file, "disabled")) {
+	SSL_CTX_set_mode(s_ctx,SSL_CTX_get_mode(s_ctx) | SSL_MODE_NO_AUTO_CHAIN);
+	BIO *filebio = BIO_new_file(server_ca_file, "r");
+
+	if (filebio) {
+	    X509 *cacert;
+	    syslog(LOG_DEBUG,"TLS server engine: loading additional client_ca_cert from file %s", server_ca_file);
+
+	    while ((cacert = PEM_read_bio_X509(filebio,NULL,NULL,NULL)) != NULL) {
+		char buf[256];
+		X509_NAME_oneline(X509_get_subject_name(cacert), buf, sizeof(buf));
+		if (!SSL_CTX_add_extra_chain_cert(s_ctx,cacert)) {
+		    syslog(LOG_ERR,"TLS server engine: failed to add client_ca_cert to chain: %s",buf);
+		    X509_free(cacert);
+		} else {
+		    syslog(LOG_DEBUG,"TLS server engine: added CA cert to chain: %s",buf);
+		}
+	    }
+
+	    BIO_free(filebio);
+	} else {
+	    syslog(LOG_ERR,"TLS server engine: Cannot load client_ca_cert from file %s", server_ca_file);
+	    return (-1);
+	}
+    }
+
+    if (!set_cert_stuff(s_ctx, server_cert_file, server_key_file)) {
+	syslog(LOG_ERR,"TLS server engine: cannot load server cert/key data");
 	return (-1);
     }
+
     SSL_CTX_set_tmp_rsa_callback(s_ctx, tmp_rsa_cb);
 
 #if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
     /* Load DH params for DHE-* key exchanges */
-    SSL_CTX_set_tmp_dh(s_ctx, load_dh_param(s_key_file, s_cert_file));
-    /* FIXME: Load ECDH params for ECDHE suites when 0.9.9 is released */
+    SSL_CTX_set_tmp_dh(s_ctx, load_dh_param(server_key_file, server_cert_file));
+#endif
+
+#if (OPENSSL_VERSION_NUMBER >= 0x1000103fL)
+    const char *ec = config_getstring(IMAPOPT_TLS_ECCURVE);
+    int openssl_nid = OBJ_sn2nid(ec);
+    if (openssl_nid != 0) {
+	EC_KEY *ecdh;
+	ecdh = EC_KEY_new_by_curve_name(openssl_nid);
+	if (ecdh != NULL) {
+	    SSL_CTX_set_tmp_ecdh(s_ctx, ecdh);
+	    EC_KEY_free(ecdh);
+	}
+    }
 #endif
 
     verify_depth = verifydepth;
-    if (askcert!=0)
-	verify_flags |= SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE;
+    tls_client_certs = config_getenum(IMAPOPT_TLS_CLIENT_CERTS);
 
-    requirecert = config_getswitch(IMAPOPT_TLS_REQUIRE_CERT);
-    if (requirecert)
-	verify_flags |= SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT
-	    | SSL_VERIFY_CLIENT_ONCE;
+    if (!use_client_certs) {
+	if ((tls_client_certs != IMAP_ENUM_TLS_CLIENT_CERTS_OFF) || askcert)
+	    syslog(LOG_ERR, "TLS server engine: No client cert CA specified.");
+
+    } else {
+	STACK_OF(X509_NAME) *CAnames = SSL_load_client_CA_file(client_ca_file);
+
+	if (!CAnames || sk_num(CAnames) < 1) {
+	    syslog(LOG_ERR,
+		"TLS server engine: No client CA certs specified. "
+		"Client side certs may not work");
+
+	} else {
+	    if (askcert || tls_client_certs)
+		verify_flags = SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE;
+
+	    if (tls_client_certs)
+		verify_flags |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
+
+	    SSL_CTX_set_client_CA_list(s_ctx, CAnames);
+
+	    syslog(
+		    LOG_DEBUG,
+		    "Set client CA list: Client cert %srequested, %srequired",
+		    verify_flags & SSL_VERIFY_PEER ? "" : "not ",
+		    verify_flags & SSL_VERIFY_FAIL_IF_NO_PEER_CERT ? "":"not "
+		);
+	}
+    }
+
     SSL_CTX_set_verify(s_ctx, verify_flags, verify_callback);
 
 #if (OPENSSL_VERSION_NUMBER >= 0x0090806fL)
     SSL_CTX_set_tlsext_servername_callback(s_ctx, servername_callback);
 #endif
-
-    if (askcert || requirecert) {
-      if (CAfile == NULL) {
-	  syslog(LOG_ERR, 
-		 "TLS server engine: No CA file specified. "
-		 "Client side certs may not work");
-      } else {
-	  SSL_CTX_set_client_CA_list(s_ctx, SSL_load_client_CA_file(CAfile));
-      }
-    }
 
     /* Don't use an internal session cache */
     SSL_CTX_sess_set_cache_size(s_ctx, 1);  /* 0 is unlimited, so use 1 */
@@ -757,7 +869,7 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 	SSL_CTX_sess_set_remove_cb(s_ctx, remove_session_cb);
 	SSL_CTX_sess_set_get_cb(s_ctx, get_session_cb);
 
-	fname = config_getstring(IMAPOPT_TLSCACHE_DB_PATH);
+	fname = config_getstring(IMAPOPT_TLS_SESSIONS_DB_PATH);
 
 	/* create the name of the db file */
 	if (!fname) {
@@ -1002,18 +1114,30 @@ EXPORTED int tls_start_servertls(int readfd, int writefd, int timeout,
     }
 
     if (authid && *authid) {
-	syslog(LOG_NOTICE, "starttls: %s with cipher %s (%d/%d bits %s)"
-	                   " authenticated as %s", 
-	       tls_protocol, tls_cipher_name,
-	       tls_cipher_usebits, tls_cipher_algbits, 
-	       SSL_session_reused(tls_conn) ? "reused" : "new",
-	       *authid);
+	syslog(
+		LOG_NOTICE,
+		"starttls: %s with cipher %s (%d/%d bits %s) "
+		"authenticated as %s",
+		tls_protocol,
+		tls_cipher_name,
+		tls_cipher_usebits,
+		tls_cipher_algbits, 
+		SSL_session_reused(tls_conn) ? "reused" : "new",
+		*authid
+	    );
+
     } else {
-	syslog(LOG_NOTICE, "starttls: %s with cipher %s (%d/%d bits %s)"
-	                   " no authentication", 
-	       tls_protocol, tls_cipher_name,
-	       tls_cipher_usebits, tls_cipher_algbits,
-	       SSL_session_reused(tls_conn) ? "reused" : "new");
+	syslog(
+		LOG_NOTICE,
+		"starttls: %s with cipher %s (%d/%d bits %s) "
+		"no authentication",
+		tls_protocol,
+		tls_cipher_name,
+		tls_cipher_usebits,
+		tls_cipher_algbits,
+		SSL_session_reused(tls_conn) ? "reused" : "new"
+	    );
+
     }
 
  done:
@@ -1137,7 +1261,7 @@ EXPORTED int tls_prune_sessions(void)
     int ret;
     struct prunerock prock;
 
-    fname = config_getstring(IMAPOPT_TLSCACHE_DB_PATH);
+    fname = config_getstring(IMAPOPT_TLS_SESSIONS_DB_PATH);
 
    /* create the name of the db file */
     if (!fname) {
@@ -1184,16 +1308,17 @@ EXPORTED int tls_get_info(SSL *conn, char *buf, size_t len)
     return (strlen(buf));
 }
 
+// I am the client
 HIDDEN int tls_init_clientengine(int verifydepth,
-			  char *var_tls_cert_file,
-			  char *var_tls_key_file)
+			  const char *var_server_cert,
+			  const char *var_server_key)
 {
     int     off = 0;
     int     verify_flags = SSL_VERIFY_NONE;
-    const char   *CApath;
-    const char   *CAfile;
-    char   *c_cert_file;
-    char   *c_key_file;
+    const char   *server_ca_dir;
+    const char   *server_ca_file;
+    char   *client_cert;
+    char   *client_key;
     
     if (tls_clientengine)
 	return (0);				/* already running */
@@ -1209,7 +1334,7 @@ HIDDEN int tls_init_clientengine(int verifydepth,
     }
 
     /* XXX  May need to use only SSLv3 for iSchedule */
-    c_ctx = SSL_CTX_new(TLSv1_client_method());
+    c_ctx = SSL_CTX_new(SSLv23_client_method());
     if (c_ctx == NULL) {
 	return (-1);
     };
@@ -1217,31 +1342,40 @@ HIDDEN int tls_init_clientengine(int verifydepth,
     off |= SSL_OP_ALL;		/* Work around all known bugs */
     SSL_CTX_set_options(c_ctx, off);
     SSL_CTX_set_info_callback(c_ctx, apps_ssl_info_callback);
-    
-    CAfile = config_getstring(IMAPOPT_TLS_CA_FILE);
-    CApath = config_getstring(IMAPOPT_TLS_CA_PATH);
 
-    if ((!SSL_CTX_load_verify_locations(c_ctx, CAfile, CApath)) ||
-	(!SSL_CTX_set_default_verify_paths(c_ctx))) {
-	/* just a warning since this is only necessary for client auth */
-	syslog(LOG_NOTICE,"TLS client engine: cannot load CA data");	
+    if (!config_getswitch(IMAPOPT_TLS_COMPRESSION)) {
+	off |= SSL_OP_NO_COMPRESSION;
+	syslog(LOG_DEBUG, "TLS client engine: Setting SSL_OP_NO_COMPRESSION");
+    }
+    
+    server_ca_dir = config_getstring(IMAPOPT_TLS_SERVER_CA_DIR);
+    server_ca_file = config_getstring(IMAPOPT_TLS_SERVER_CA_FILE);
+
+    if (server_ca_dir || server_ca_file) {
+	if ((!SSL_CTX_load_verify_locations(c_ctx, server_ca_file, server_ca_dir)) ||
+	    (!SSL_CTX_set_default_verify_paths(c_ctx))) {
+	    /* just a warning since this is only necessary for client auth */
+	    syslog(LOG_NOTICE,"TLS client engine: cannot load CA data");
+	}
     }
 
-    if (strlen(var_tls_cert_file) == 0)
-	c_cert_file = NULL;
+    if (var_server_cert && strlen(var_server_cert) == 0)
+	client_cert = NULL;
     else
-	c_cert_file = var_tls_cert_file;
-    if (strlen(var_tls_key_file) == 0)
-	c_key_file = NULL;
+	client_cert = xstrdup(var_server_cert);
+
+    if (var_server_key && strlen(var_server_key) == 0)
+	client_key = NULL;
     else
-	c_key_file = var_tls_key_file;
+	client_key = xstrdup(var_server_key);
     
-    if (c_cert_file || c_key_file) {
-	if (!set_cert_stuff(c_ctx, c_cert_file, c_key_file)) {
-	    syslog(LOG_ERR,"TLS client engine: cannot load cert/key data");
+    if (client_cert || client_key) {
+	if (!set_cert_stuff(c_ctx, client_cert, client_key)) {
+	    syslog(LOG_ERR,"TLS client engine: cannot load client cert/key data");
 	    return (-1);
 	}
     }
+
     SSL_CTX_set_tmp_rsa_callback(c_ctx, tmp_rsa_cb);
     
     verify_depth = verifydepth;

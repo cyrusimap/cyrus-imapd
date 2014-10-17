@@ -84,6 +84,7 @@
 #include "nonblock.h"
 #include "prot.h"
 #include "tls.h"
+#include "tls_th-lock.h"
 #include "util.h"
 #include "version.h"
 #include "xmalloc.h"
@@ -553,6 +554,10 @@ int service_init(int argc, char **argv,
 
     database_init();
 
+#ifdef HAVE_SSL
+    CRYPTO_thread_setup();
+#endif
+
     if (!masterp) {
 	r = pthread_create(&t, NULL, &mupdate_client_start, NULL);
 	if (r == 0) {
@@ -598,6 +603,9 @@ int service_init(int argc, char **argv,
 /* Called by service API to shut down the service */
 void service_abort(int error)
 {
+#ifdef HAVE_SSL
+    CRYPTO_thread_cleanup();
+#endif
     shut_down(error);
 }
 

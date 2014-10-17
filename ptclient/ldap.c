@@ -506,12 +506,12 @@ static void myinit(void)
         config_getstring(IMAPOPT_LDAP_PASSWORD) : config_getstring(IMAPOPT_LDAP_SASL_PASSWORD));
 
     ptsm->start_tls = config_getswitch(IMAPOPT_LDAP_START_TLS);
-    ptsm->tls_check_peer = config_getswitch(IMAPOPT_LDAP_TLS_CHECK_PEER);
-    ptsm->tls_cacert_file = config_getstring(IMAPOPT_LDAP_TLS_CACERT_FILE);
-    ptsm->tls_cacert_dir = config_getstring(IMAPOPT_LDAP_TLS_CACERT_DIR);
-    ptsm->tls_ciphers = config_getstring(IMAPOPT_LDAP_TLS_CIPHERS);
-    ptsm->tls_cert = config_getstring(IMAPOPT_LDAP_TLS_CERT);
-    ptsm->tls_key = config_getstring(IMAPOPT_LDAP_TLS_KEY);
+    ptsm->tls_check_peer = config_getswitch(IMAPOPT_LDAP_VERIFY_PEER);
+    ptsm->tls_cacert_file = config_getstring(IMAPOPT_LDAP_CA_FILE);
+    ptsm->tls_cacert_dir = config_getstring(IMAPOPT_LDAP_CA_DIR);
+    ptsm->tls_ciphers = config_getstring(IMAPOPT_LDAP_CIPHERS);
+    ptsm->tls_cert = config_getstring(IMAPOPT_LDAP_CLIENT_CERT);
+    ptsm->tls_key = config_getstring(IMAPOPT_LDAP_CLIENT_KEY);
 
     p = config_getstring(IMAPOPT_LDAP_MEMBER_METHOD);
     if (!strcasecmp(p, "filter")) {

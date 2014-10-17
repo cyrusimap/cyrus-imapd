@@ -64,8 +64,8 @@ int tls_init_serverengine(const char *ident,
 			  int tlsonly);
 
 int tls_init_clientengine(int verifydepth,
-			  char *var_tls_cert_file,
-			  char *var_tls_key_file);
+			  const char *var_server_cert,
+			  const char *var_server_key);
 
 /* start tls negotiation */
 int tls_start_servertls(int readfd, int writefd, int timeout,
