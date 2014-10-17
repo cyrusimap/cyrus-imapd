@@ -389,7 +389,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    mailboxes hierarchy.  The hierarchy delimiter will be automatically
    appended. */
 
-{ "delete_mode", "immediate", ENUM("immediate", "delayed") }
+{ "delete_mode", "delayed", ENUM("immediate", "delayed") }
 /*  The manner in which mailboxes are deleted. "immediate" mode is the
     default behavior in which mailboxes are removed immediately.  In
     "delayed" mode, mailboxes are renamed to a special hiearchy defined
@@ -462,7 +462,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Notifyd(8) method to use for "EVENT" notifications which are based on
    the RFC 5423.  If not set, "EVENT" notifications are disabled. */
 
-{ "expunge_mode", "default", ENUM("default", "immediate", "delayed") }
+{ "expunge_mode", "delayed", ENUM("default", "immediate", "delayed") }
 /* The mode in which messages (and their corresponding cache entries)
    are expunged.  "default" mode is the default behavior in which the
    message files are purged at the time of the EXPUNGE, but index
