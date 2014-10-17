@@ -64,7 +64,9 @@
 
 #include "assert.h"
 #include "acl.h"
+#ifdef USE_AUTOCREATE
 #include "autocreate.h"
+#endif
 #include "util.h"
 #include "auth.h"
 #include "global.h"
@@ -1796,6 +1798,7 @@ int openinbox(void)
 
     r = mboxlist_lookup(inboxname, &mbentry, NULL);
 
+#ifdef USE_AUTOCREATE
     /* Try once again after autocreate_inbox */
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	/* NOTE - if we have a subfolder, autocreateinbox should still create
@@ -1803,6 +1806,7 @@ int openinbox(void)
 	r = autocreate_user(&popd_namespace, popd_userid);
 	if (!r) r = mboxlist_lookup(inboxname, &mbentry, NULL);
     }
+#endif
 
     if (!r && (config_popuseacl = config_getswitch(IMAPOPT_POPUSEACL)) &&
 	(!mbentry->acl ||

@@ -67,7 +67,9 @@
 #include "append.h"
 #include "assert.h"
 #include "auth.h"
+#ifdef USE_AUTOCREATE
 #include "autocreate.h"
+#endif
 #include "backend.h"
 #include "duplicate.h"
 #include "exitcodes.h"
@@ -119,7 +121,9 @@ void shut_down(int code);
 static FILE *spoolfile(message_data_t *msgdata);
 static void removespool(message_data_t *msgdata);
 
+#ifdef USE_AUTOCREATE
 static int autocreate_inbox(const char *user, const char *domain);
+#endif
 
 /* current namespace */
 static struct namespace lmtpd_namespace;
@@ -1044,7 +1048,7 @@ void shut_down(int code)
     exit(code);
 }
 
-
+#ifdef USE_AUTOCREATE
 /*
  * Autocreate Inbox and subfolders upon login
  */
@@ -1088,6 +1092,7 @@ int autocreate_inbox(const char *user, const char *domain)
 
     return r;
 }
+#endif // USE_AUTOCREATE
 
 static int verify_user(const char *user, const char *domain, char *mailbox,
 		       quota_t quotastorage_check, quota_t quotamessage_check,
@@ -1133,11 +1138,13 @@ static int verify_user(const char *user, const char *domain, char *mailbox,
 	 */
 	r = mlookup(namebuf, &mbentry);
 
+#ifdef USE_AUTOCREATE
 	/* If user mailbox does not exist, then invoke autocreate inbox function */
 	if (r == IMAP_MAILBOX_NONEXISTENT) {
 	    r = autocreate_inbox(user, domain);
 	    if (!r) r = mlookup(namebuf, &mbentry);
 	}
+#endif // USE_AUTOCREATE
 
 	if (r == IMAP_MAILBOX_NONEXISTENT && !user &&
 	    config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH) &&

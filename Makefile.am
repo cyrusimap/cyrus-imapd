@@ -54,17 +54,37 @@ AM_LDFLAGS = $(COV_LDFLAGS)
 BUILT_SOURCES = xversion.h \
 	imap/imap_err.c \
 	lib/imapopts.c
-DISTCLEANFILES = imap/imap_err.c imap/imap_err.h imap/mupdate_err.c imap/mupdate_err.h imap/nntp_err.c imap/nntp_err.h \
+DISTCLEANFILES = imap/imap_err.c \
+	imap/imap_err.h \
+	imap/mupdate_err.c \
+	imap/mupdate_err.h \
+	imap/nntp_err.c \
+	imap/nntp_err.h \
 	com_err/et/compile_et \
-	perl/annotator/Makefile perl/annotator/Makefile.PL perl/imap/Makefile perl/imap/Makefile.PL perl/sieve/managesieve/Makefile perl/sieve/managesieve/Makefile.PL perl/sieve/scripts/installsieve perl/sieve/scripts/sieveshell \
-	sieve/sieve_err.c sieve/sieve_err.h
+	perl/annotator/Makefile \
+	perl/annotator/Makefile.PL \
+	perl/imap/Makefile \
+	perl/imap/Makefile.PL \
+	perl/sieve/managesieve/Makefile \
+	perl/sieve/managesieve/Makefile.PL \
+	perl/sieve/scripts/installsieve \
+	perl/sieve/scripts/sieveshell \
+	sieve/sieve_err.c \
+	sieve/sieve_err.h
 
 MAINTAINERCLEANFILES = \
-	doc/murder.png doc/netnews.png \
-	doc/man/cyradm.1.html man/imapd.conf.5 man/sieveshell.1 doc/man/sieveshell.1.html \
-	imap/lmtpstats.h imap/pushstats.h \
-	lib/chartable.c lib/imapopts.h \
-	sieve/addr.h sieve/sieve.h
+	doc/murder.png \
+	doc/netnews.png \
+	doc/man/cyradm.1.html \
+	man/imapd.conf.5 \
+	man/sieveshell.1 \
+	doc/man/sieveshell.1.html \
+	imap/lmtpstats.h \
+	imap/pushstats.h \
+	lib/chartable.c \
+	lib/imapopts.h \
+	sieve/addr.h \
+	sieve/sieve.h
 
 SUBDIRS = .
 DIST_SUBDIRS = .
@@ -391,7 +411,6 @@ dist_noinst_SCRIPTS = \
 	com_err/et/config_script \
 	imap/lmtpstats.snmp \
 	imap/pushstats.snmp \
-	lib/imapoptions \
 	lib/mkchartable.pl \
 	lib/test/run \
 	perl/sieve/scripts/installsieve.pl \
@@ -689,9 +708,14 @@ imap_imapd_SOURCES = \
 	imap/pushstats.h \
 	imap/proxy.c \
 	imap/proxy.h \
-	master/service.c \
+	master/service.c
+
+if AUTOCREATE
+imap_imapd_SOURCES += \
 	imap/autocreate.h \
 	imap/autocreate.c
+endif
+
 imap_imapd_LDADD =
 if SIEVE
 imap_imapd_LDADD += sieve/libcyrus_sieve.la
@@ -748,6 +772,8 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/mutex.h \
 	imap/notify.c \
 	imap/notify.h \
+	imap/partlist.c \
+	imap/partlist.h \
 	imap/proc.c \
 	imap/proc.h \
 	imap/protocol.h \
@@ -794,8 +820,6 @@ imap_libcyrus_imap_la_CFLAGS += $(JANSSON_CFLAGS)
 endif
 
 imap_lmtpd_SOURCES = \
-	imap/autocreate.c \
-	imap/autocreate.h \
 	imap/lmtpd.c \
 	imap/lmtpd.h \
 	imap/lmtpengine.c \
@@ -806,6 +830,13 @@ imap_lmtpd_SOURCES = \
 	imap/proxy.c \
 	imap/spool.c \
 	master/service.c
+
+if AUTOCREATE
+imap_lmtpd_SOURCES += \
+	imap/autocreate.c \
+	imap/autocreate.h
+endif
+
 imap_lmtpd_LDADD =
 if SIEVE
 imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/lmtp_sieve.h imap/smtpclient.c
@@ -852,12 +883,17 @@ imap_nntpd_SOURCES = \
 imap_nntpd_LDADD = $(LD_SERVER_ADD)
 
 imap_pop3d_SOURCES = \
-	imap/autocreate.c \
-	imap/autocreate.h \
 	imap/mutex_fake.c \
 	imap/pop3d.c \
 	imap/proxy.c \
 	master/service.c
+
+if AUTOCREATE
+imap_pop3d_SOURCES += \
+	imap/autocreate.c \
+	imap/autocreate.h
+endif
+
 imap_pop3d_LDADD =
 if SIEVE
 imap_pop3d_LDADD += sieve/libcyrus_sieve.la

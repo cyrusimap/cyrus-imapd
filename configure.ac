@@ -1076,6 +1076,12 @@ MASTERPIDFILE="\"$MASTERPIDFILE\""
 AC_DEFINE_UNQUOTED(MASTER_PIDFILE, $MASTERPIDFILE,[Name of the pidfile for master])
 
 dnl
+dnl see if we're compiling with autocreate support
+dnl
+AC_ARG_ENABLE(autocreate,
+        [AS_HELP_STRING([--enable-autocreate], [enable autocreate support])],,[enable_autocreate="no";])
+AM_CONDITIONAL([AUTOCREATE], [test "$enable_autocreate" != "no"])
+dnl
 dnl see if we're compiling with IMAP idled support
 dnl
 AC_ARG_ENABLE(idled,
@@ -1623,6 +1629,7 @@ Cyrus Imapd configured components
 
    event notification: $enable_event_notification
    gssapi:             $gssapi
+   autocreate:         $enable_autocreate
    idled:              $enable_idled
    kerberos V4:        $krb4
    murder:             $enable_murder

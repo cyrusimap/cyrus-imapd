@@ -70,7 +70,9 @@
 #include "annotate.h"
 #include "append.h"
 #include "auth.h"
+#ifdef USE_AUTOCREATE
 #include "autocreate.h"
+#endif // USE_AUTOCREATE
 #include "assert.h"
 #include "backend.h"
 #include "bsearch.h"
@@ -2245,6 +2247,7 @@ static void cmdloop(void)
     }
 }
 
+#ifdef USE_AUTOCREATE
 /*
  * Autocreate Inbox and subfolders upon login
  */
@@ -2261,6 +2264,7 @@ static void autocreate_inbox(void)
 	autocreate_user(&imapd_namespace, imapd_userid);
     }
 }
+#endif // USE_AUTOCREATE
 
 static void authentication_success(void)
 {
@@ -2301,7 +2305,9 @@ static void authentication_success(void)
 	mboxevent_free(&mboxevent);
     }
 
+#ifdef USE_AUTOCREATE
     autocreate_inbox();
+#endif // USE_AUTOCREATE
 }
 
 static int checklimits(const char *tag)
@@ -5332,7 +5338,6 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
 {
     int r = 0;
     char mailboxname[MAX_MAILBOX_BUFFER];
-    int autocreatequotastorage;
     int mbtype = 0;
     const char *partition = NULL;
     const char *server = NULL;
@@ -5574,10 +5579,11 @@ localcreate:
 	    NULL						// struct mailbox mailboxptr
 	);
 
+#ifdef USE_AUTOCREATE
     // Clausing autocreate for the INBOX
     if (r == IMAP_PERMISSION_DENIED) {
 	if (strcasecmp(name, "INBOX")) {
-	    if ((autocreatequotastorage = config_getint(IMAPOPT_AUTOCREATE_QUOTA))) {
+	    if ((int autocreatequotastorage = config_getint(IMAPOPT_AUTOCREATE_QUOTA))) {
 		r = mboxlist_createmailbox(
 			mailboxname,
 			0,
@@ -5633,6 +5639,18 @@ localcreate:
 	goto done;
 
     } // (r == IMAP_PERMISSION_DENIED)
+
+#else // USE_AUTOCREATE
+    if (r) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+	goto done;
+
+    } else { // (r)
+	prot_printf(imapd_out, "%s OK %s\r\n", tag, error_message(IMAP_OK_COMPLETED));
+	goto done;
+
+    } // (r)
+#endif // USE_AUTOCREATE
 
     if (specialuse.len) {
 	r = annotatemore_write(mailboxname, "/specialuse", imapd_userid, &specialuse);
@@ -6541,7 +6559,9 @@ static void getlistargs(char *tag, struct listargs *listargs)
 	goto freeargs;
     }
 
+#ifdef USE_AUTOCREATE
     autocreate_inbox();
+#endif // USE_AUTOCREATE
 
     return;
 
