@@ -674,6 +674,7 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
     ret->in = prot_new(sock, 0);
     ret->out = prot_new(sock, 1);
     ret->sock = sock;
+    prot_settimeout(ret->in, config_getint(IMAPOPT_CLIENT_TIMEOUT));
     prot_setflushonread(ret->in, ret->out);
     ret->prot = prot;
 
@@ -697,6 +698,7 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
 	if (!ret_backend) free(ret);
 	ret = NULL;
     }
+    else prot_settimeout(ret->in, 0);
     
     if (!ret_backend) ret_backend = ret;
 	    
