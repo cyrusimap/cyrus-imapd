@@ -1073,11 +1073,11 @@ int autocreate_inbox(const char *user, const char *domain)
     /*
      * Check for autocreatequota and createonpost
      */
-    if (!config_getint(IMAPOPT_AUTOCREATEQUOTA)) {
+    if (!config_getint(IMAPOPT_AUTOCREATE_QUOTA)) {
 	free(username);
 	return IMAP_MAILBOX_NONEXISTENT;
     }
-    if (!config_getswitch(IMAPOPT_CREATEONPOST)) {
+    if (!config_getswitch(IMAPOPT_AUTOCREATE_POST)) {
 	free(username);
 	return IMAP_MAILBOX_NONEXISTENT;
     }

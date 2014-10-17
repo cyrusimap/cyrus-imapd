@@ -951,7 +951,7 @@ static int autosieve_createfolder(const char *userid, struct auth_state *auth_st
     if (config_getswitch(IMAPOPT_ANYSIEVEFOLDER)) {
 	createsievefolder = 1;
     }
-    else if ((subf = config_getstring(IMAPOPT_AUTOSIEVEFOLDERS)) != NULL) {
+    else if ((subf = config_getstring(IMAPOPT_AUTOCREATE_SIEVE_FOLDERS)) != NULL) {
 	strarray_t *create = strarray_split(subf, SEP, STRARRAY_TRIM);
 
 	for (n = 0; n < create->count; n++) {

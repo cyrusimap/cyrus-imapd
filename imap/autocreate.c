@@ -145,7 +145,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
     }
 
     /* Check if autocreate_sieve_compiledscript is defined in imapd.conf */
-    if(!(compiled_source_script = config_getstring(IMAPOPT_AUTOCREATE_SIEVE_COMPILEDSCRIPT))) {
+    if(!(compiled_source_script = config_getstring(IMAPOPT_AUTOCREATE_SIEVE_SCRIPT_COMPILED))) {
 	syslog(LOG_WARNING, "autocreate_sieve: autocreate_sieve_compiledscript option is not defined. Compiling it");
 	do_compile = 1;
     }
@@ -361,7 +361,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
      * to generate the global script so that it is not compiled each time then we create it.
      */
     if(do_compile &&
-	  config_getswitch(IMAPOPT_GENERATE_COMPILED_SIEVE_SCRIPT)) {
+	  config_getswitch(IMAPOPT_AUTOCREATE_SIEVE_SCRIPT_COMPILE)) {
 
 	if(!compiled_source_script) {
 	    syslog(LOG_WARNING, "autocreate_sieve: To save a compiled sieve script, autocreate_sieve_compiledscript must have been defined in imapd.conf");
@@ -588,7 +588,7 @@ static void autosubscribe_sharedfolders(struct namespace *namespace,
      * subscribe user to every shared folder one has the apropriate
      * permissions.
      */
-    if (config_getswitch(IMAPOPT_AUTOSUBSCRIBE_ALL_SHAREDFOLDERS)) {
+    if (config_getswitch(IMAPOPT_AUTOCREATE_SUBSCRIBE_SHAREDFOLDERS_ALL)) {
 	/* don't care about errors here, the sub will log them */
 	mboxlist_findall(namespace, "*", 0, userid, auth_state,
 			 autochangesub, &changesub_rock);
@@ -597,7 +597,7 @@ static void autosubscribe_sharedfolders(struct namespace *namespace,
 
     /* otherwise, check if there are particular folders to subscribe */
 
-    sub = config_getstring(IMAPOPT_AUTOSUBSCRIBESHAREDFOLDERS);
+    sub = config_getstring(IMAPOPT_AUTOCREATE_SUBSCRIBE_SHAREDFOLDERS);
     if (!sub) return;
 
     changesub_rock.was_explicit = 1;
@@ -618,8 +618,8 @@ int autocreate_user(struct namespace *namespace,
 		    const char *userid)
 {
     int r = IMAP_MAILBOX_NONEXISTENT; /* default error if we break early */
-    int autocreatequota = config_getint(IMAPOPT_AUTOCREATEQUOTA);
-    int autocreatequotamessage = config_getint(IMAPOPT_AUTOCREATEQUOTAMSG);
+    int autocreatequota = config_getint(IMAPOPT_AUTOCREATE_QUOTA);
+    int autocreatequotamessage = config_getint(IMAPOPT_AUTOCREATE_QUOTA_MESSAGES);
     int n;
     char *inboxname = mboxname_user_mbox(userid, NULL);
     struct auth_state *auth_state = NULL;
@@ -719,8 +719,8 @@ int autocreate_user(struct namespace *namespace,
     syslog(LOG_NOTICE, "autocreateinbox: User %s, INBOX was successfully created", 
 	   userid);
 
-    create = strarray_split(config_getstring(IMAPOPT_AUTOCREATEINBOXFOLDERS), SEP, STRARRAY_TRIM);
-    subscribe = strarray_split(config_getstring(IMAPOPT_AUTOSUBSCRIBEINBOXFOLDERS), SEP, STRARRAY_TRIM);
+    create = strarray_split(config_getstring(IMAPOPT_AUTOCREATE_INBOX_FOLDERS), SEP, STRARRAY_TRIM);
+    subscribe = strarray_split(config_getstring(IMAPOPT_AUTOCREATE_SUBSCRIBE_FOLDERS), SEP, STRARRAY_TRIM);
 
     /* need to convert all names to internal namespace first */
     for (n = 0; n < create->count; n++)
