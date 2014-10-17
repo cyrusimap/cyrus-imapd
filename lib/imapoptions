@@ -1698,10 +1698,11 @@ product version in the capabilities */
    with a backend (such as LDAP) that can make getgrent() calls very
    slow) */
 
-{ "unixhierarchysep", 0, SWITCH }
+{ "unixhierarchysep", 1, SWITCH }
 /* Use the UNIX separator character '/' for delimiting levels of
-   mailbox hierarchy.  The default is to use the netnews separator
-   character '.'. */
+   mailbox hierarchy.  Turn off to use the netnews separator
+   character '.'. Note that with the newnews separator, no dots may
+   occur in mailbox names. */
 
 { "virtdomains", "off", ENUM("off", "userid", "on") }
 /* Enable virtual domain support.  If enabled, the user's domain will
