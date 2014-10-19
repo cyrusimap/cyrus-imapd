@@ -263,6 +263,33 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "auth_mech", "unix", STRINGLIST("unix", "pts", "krb", "krb5")}
 /* The authorization mechanism to use. */
 
+{ "autocreateinboxfolders", NULL, STRING }
+/* Deprecated in favor of \fIautocreate_inbox_folders\fR. */
+
+{ "autocreatequota", 0, INT }
+/* Deprecated in favor of \fIautocreate_quota\fR. */
+
+{ "autocreatequotamsg", -1, INT }
+/* Deprecated in favor of \fIautocreate_quota_messages\fR. */
+
+{ "autosievefolders", NULL, STRING }
+/* Deprecated in favor of \fIautocreate_sieve_folders\fR. */
+
+{ "generate_compiled_sieve_script", NULL, SWITCH }
+/* Deprecated in favor of \fIautocreate_sieve_script_compile\fR. */
+
+{ "autocreate_sieve_compiled_script", NULL, STRING }
+/* Deprecated in favor of \fIautocreate_sieve_script_compiled\fR. */
+
+{ "autosubscribeinboxfolders", NULL, STRING }
+/* Deprecated in favor of \fIautocreate_subscribe_folders\fR. */
+
+{ "autosubscribesharedfolders", NULL, STRING }
+/* Deprecated in favor of \fIautocreate_subscribe_sharedfolders\fR. */
+
+{ "autosubscribe_all_sharedfolders", 0, SWITCH }
+/* Deprecated in favor of \fIautocreate_subscribe_sharedfolders_all\fR. */
+
 { "autocreate_inbox_folders", NULL, STRING }
 /* If a user does not have an INBOX created then the INBOX as well as some INBOX
    subfolders are created under two conditions.
@@ -360,6 +387,9 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "configdirectory", NULL, STRING }
 /* The pathname of the IMAP configuration directory.  This field is
    required. */
+
+{ "createonpost", 0, SWITCH }
+/* Deprecated in favor of \fIautocreate_post\fR. */
 
 { "debug_command", NULL, STRING }
 /* Debug command to be used by processes started with -D option.  The string
@@ -742,6 +772,24 @@ Blank lines and lines beginning with ``#'' are ignored.
 
 { "ldap_client_key", NULL, STRING }
 /* File containing the private client key. */
+
+{ "ldap_tls_cacert_dir", NULL, STRING }
+/* Deprecated in favor of \fIldap_ca_dir\fR. */
+
+{ "ldap_tls_cacert_file", NULL, STRING }
+/* Deprecated in favor of \fIldap_ca_file\fR. */
+
+{ "ldap_tls_cert", NULL, STRING }
+/* Deprecated in favor of \fIldap_client_cert\fR. */
+
+{ "ldap_tls_key", NULL, STRING }
+/* Deprecated in favor of \fIldap_client_key\fR. */
+
+{ "ldap_tls_check_peer", NULL, STRING }
+/* Deprecated in favor of \fIldap_verify_peer\fR. */
+
+{ "ldap_tls_ciphers", NULL, STRING }
+/* Deprecated in favor of \fIldap_ciphers\fR. */
 
 { "ldap_uri", NULL, STRING }
 /* Contains a list of the URLs of all the LDAP servers when using the
@@ -1606,6 +1654,18 @@ product version in the capabilities */
 /* The length of the IMAP server's inactivity autologout timer,
    in minutes.  The minimum value is 30, the default. */
 
+{ "tls_ca_file", "DEFAULT", STRING }
+/* Deprecated in favor of \fItls_client_ca_file\fR. */
+
+{ "tls_ca_path", "DEFAULT", STRING }
+/* Deprecated in favor of \fItls_client_ca_dir\fR. */
+
+{ "tls_cert_file", "DEFAULT", STRING }
+/* Deprecated in favor of \fItls_server_cert\fR. */
+
+{ "tls_cipher_list", "DEFAULT", STRING }
+/* Deprecated in favor of \fItls_ciphers\fR. */
+
 { "tls_ciphers", "DEFAULT", STRING }
 /* The list of SSL/TLS ciphers to allow.  The format of the string is
    described in ciphers(1). */
@@ -1638,6 +1698,9 @@ product version in the capabilities */
 { "tls_eccurve", "prime256v1", STRING }
 /* The elliptic curve used for ECDHE. Default is NIST Suite B prime256.
    See 'openssl ecparam -list_curves' for possible values. */
+
+{ "tls_key_file", "DEFAULT", STRING }
+/* Deprecated in favor of \fItls_server_key\fR. */
 
 { "tls_prefer_server_ciphers", 0, SWITCH }
 /* Prefer the ciphers on the server side instead of client side. */

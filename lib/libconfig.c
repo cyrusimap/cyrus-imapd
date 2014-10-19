@@ -65,6 +65,7 @@
 			   * because it is for overflow only */
 #define INCLUDEHASHSIZE 5 /* relatively small,
 			    * but how many includes are reasonable? */
+
 static struct hash_table confighash, includehash;
 
 /* cached configuration variables accessible to the external world */
@@ -155,8 +156,8 @@ EXPORTED const char *config_getoverflowstring(const char *key, const char *def)
     /* First lookup <ident>_key, to see if we have a service-specific
      * override */
 
-    if(config_ident) {
-	if(snprintf(buf,sizeof(buf),"%s_%s",config_ident,key) == -1)
+    if (config_ident) {
+	if (snprintf(buf,sizeof(buf),"%s_%s",config_ident,key) == -1)
 	    fatal("key too long in config_getoverflowstring", EC_TEMPFAIL);
 
 	lcase(buf);
@@ -164,7 +165,7 @@ EXPORTED const char *config_getoverflowstring(const char *key, const char *def)
     }
     
     /* No service-specific override, check the actual key */
-    if(!ret)
+    if (!ret)
 	ret = hash_lookup(key, &confighash);
 
     /* Return what we got or the default */
@@ -183,9 +184,9 @@ EXPORTED const char *config_partitiondir(const char *partition)
 {
     char buf[80];
 
-    if(strlcpy(buf, "partition-", sizeof(buf)) >= sizeof(buf))
+    if (strlcpy(buf, "partition-", sizeof(buf)) >= sizeof(buf))
 	return 0;
-    if(strlcat(buf, partition, sizeof(buf)) >= sizeof(buf))
+    if (strlcat(buf, partition, sizeof(buf)) >= sizeof(buf))
 	return 0;
 
     return config_getoverflowstring(buf, NULL);
@@ -195,9 +196,9 @@ EXPORTED const char *config_metapartitiondir(const char *partition)
 {
     char buf[80];
 
-    if(strlcpy(buf, "metapartition-", sizeof(buf)) >= sizeof(buf))
+    if (strlcpy(buf, "metapartition-", sizeof(buf)) >= sizeof(buf))
 	return 0;
-    if(strlcat(buf, partition, sizeof(buf)) >= sizeof(buf))
+    if (strlcat(buf, partition, sizeof(buf)) >= sizeof(buf))
 	return 0;
 
     return config_getoverflowstring(buf, NULL);
@@ -210,6 +211,135 @@ static void config_ispartition(const char *key,
     int *found = (int *) rock;
 
     if (!strncmp("partition-", key, 10)) *found = 1;
+}
+
+static void config_option_deprecate(const int dopt, const int opt, char *since)
+{
+    syslog(
+	    LOG_WARNING,
+	    "Option '%s' is deprecated in favor of '%s' since version %s.",
+	    imapopts[dopt].optname,
+	    imapopts[opt].optname,
+	    since
+	);
+
+    switch (imapopts[dopt].t) {
+	    case OPT_BITFIELD: {
+		    imapopts[opt].val.x = imapopts[dopt].val.x;
+		    break;
+		}
+	    case OPT_ENUM: {
+		    imapopts[opt].val.e = imapopts[dopt].val.e;
+		    break;
+		}
+	    case OPT_SWITCH: {
+		    imapopts[opt].val.b = imapopts[dopt].val.b;
+		    break;
+		}
+	    case OPT_INT: {
+		    imapopts[opt].val.i = imapopts[dopt].val.i;
+		    break;
+		}
+	    case OPT_STRINGLIST:
+	    case OPT_STRING: {
+		    imapopts[opt].val.s = xstrdup(imapopts[dopt].val.s);
+		    free((char *)imapopts[dopt].val.s);
+		    break;
+		}
+	    default: {
+		    break;
+		}
+	}
+}
+
+static void config_option_deprecated(const int opt)
+{
+    switch (opt) {
+	case IMAPOPT_AUTOCREATEINBOXFOLDERS: {
+	    config_option_deprecate(opt, IMAPOPT_AUTOCREATE_INBOX_FOLDERS, "2.5.0");
+	    break;
+	}
+	case IMAPOPT_AUTOCREATEQUOTA: {
+	    config_option_deprecate(opt, IMAPOPT_AUTOCREATE_QUOTA, "2.5.0");
+	    break;
+	}
+	case IMAPOPT_AUTOCREATEQUOTAMSG: {
+	    config_option_deprecate(opt, IMAPOPT_AUTOCREATE_QUOTA_MESSAGES, "2.5.0");
+	    break;
+	}
+	case IMAPOPT_AUTOSIEVEFOLDERS: {
+	    config_option_deprecate(opt, IMAPOPT_AUTOCREATE_SIEVE_FOLDERS, "2.5.0");
+	    break;
+	}
+	case IMAPOPT_AUTOCREATE_SIEVE_COMPILED_SCRIPT: {
+	    config_option_deprecate(opt, IMAPOPT_AUTOCREATE_SIEVE_SCRIPT_COMPILED, "2.5.0");
+	    break;
+	}
+	case IMAPOPT_AUTOSUBSCRIBEINBOXFOLDERS: {
+	    config_option_deprecate(opt, IMAPOPT_AUTOCREATE_SUBSCRIBE_FOLDERS, "2.5.0");
+	    break;
+	}
+	case IMAPOPT_AUTOSUBSCRIBESHAREDFOLDERS: {
+	    config_option_deprecate(opt, IMAPOPT_AUTOCREATE_SUBSCRIBE_SHAREDFOLDERS, "2.5.0");
+	    break;
+	}
+	case IMAPOPT_AUTOSUBSCRIBE_ALL_SHAREDFOLDERS: {
+	    config_option_deprecate(opt, IMAPOPT_AUTOCREATE_SUBSCRIBE_SHAREDFOLDERS_ALL, "2.5.0");
+	    break;
+	}
+	case IMAPOPT_CREATEONPOST: {
+	    config_option_deprecate(opt, IMAPOPT_AUTOCREATE_POST, "2.5.0");
+	    break;
+	}
+	case IMAPOPT_GENERATE_COMPILED_SIEVE_SCRIPT: {
+	    config_option_deprecate(opt, IMAPOPT_AUTOCREATE_SIEVE_SCRIPT_COMPILE, "2.5.0");
+	    break;
+	}
+	case IMAPOPT_LDAP_TLS_CACERT_DIR: {
+	    config_option_deprecate(opt, IMAPOPT_LDAP_CA_DIR, "2.5.0");
+	    break;
+	}
+	case IMAPOPT_LDAP_TLS_CACERT_FILE: {
+	    config_option_deprecate(opt, IMAPOPT_LDAP_CA_FILE, "2.5.0");
+	    break;
+	}
+	case IMAPOPT_LDAP_TLS_CERT: {
+	    config_option_deprecate(opt, IMAPOPT_LDAP_CLIENT_CERT, "2.5.0");
+	    break;
+	}
+	case IMAPOPT_LDAP_TLS_CHECK_PEER: {
+	    config_option_deprecate(opt, IMAPOPT_LDAP_VERIFY_PEER, "2.5.0");
+	    break;
+	}
+	case IMAPOPT_LDAP_TLS_CIPHERS: {
+	    config_option_deprecate(opt, IMAPOPT_LDAP_CIPHERS, "2.5.0");
+	    break;
+	}
+	case IMAPOPT_LDAP_TLS_KEY: {
+	    config_option_deprecate(opt, IMAPOPT_LDAP_CLIENT_KEY, "2.5.0");
+	    break;
+	}
+	case IMAPOPT_TLS_CA_FILE: {
+	    config_option_deprecate(opt, IMAPOPT_TLS_CLIENT_CA_FILE, "2.5.0");
+	    break;
+	}
+	case IMAPOPT_TLS_CA_PATH: {
+	    config_option_deprecate(opt, IMAPOPT_TLS_CLIENT_CA_DIR, "2.5.0");
+	    break;
+	}
+	case IMAPOPT_TLS_CERT_FILE: {
+	    config_option_deprecate(opt, IMAPOPT_TLS_SERVER_CERT, "2.5.0");
+	    break;
+	}
+	case IMAPOPT_TLS_CIPHER_LIST: {
+	    config_option_deprecate(opt, IMAPOPT_TLS_CIPHERS, "2.5.0");
+	    break;
+	}
+	case IMAPOPT_TLS_KEY_FILE: {
+	    config_option_deprecate(opt, IMAPOPT_TLS_SERVER_KEY, "2.5.0");
+	    break;
+	}
+    }
 }
 
 /*
@@ -277,14 +407,14 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
     int ival;
 
     /* xxx this is leaked, this may be able to be better in 2.2 (cyrus_done) */
-    if(alt_config) config_filename = xstrdup(alt_config);
+    if (alt_config) config_filename = xstrdup(alt_config);
     else config_filename = xstrdup(CONFIG_FILENAME);
 
-    if(!construct_hash_table(&confighash, CONFIGHASHSIZE, 1)) {
+    if (!construct_hash_table(&confighash, CONFIGHASHSIZE, 1)) {
 	fatal("could not construct configuration hash table", EC_CONFIG);
     }
 
-    if(!construct_hash_table(&includehash, INCLUDEHASHSIZE, 1)) {
+    if (!construct_hash_table(&includehash, INCLUDEHASHSIZE, 1)) {
 	fatal("could not construct include file  hash table", EC_CONFIG);
     }
 
@@ -298,22 +428,26 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
 	      EC_CONFIG);
     }
 
-    /* Scan options to see if we need to replace {configdirectory} */
-    /* xxx need to scan overflow options as well! */
-    for(opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
-	if(!imapopts[opt].val.s ||
-	   imapopts[opt].t != OPT_STRING ||
-	   opt == IMAPOPT_CONFIGDIRECTORY) {
-	    /* Skip options that have a NULL value, aren't strings, or
-	     * are the configdirectory option */
+    for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
+	/* Scan options to see if we need to replace {configdirectory} */
+	/* xxx need to scan overflow options as well! */
+
+	/* Skip options that have a NULL value, aren't strings, or
+	 * are the configdirectory option */
+	if (
+		!imapopts[opt].val.s ||
+		imapopts[opt].t != OPT_STRING ||
+		opt == IMAPOPT_CONFIGDIRECTORY
+	    ) {
+
 	    continue;
 	}
-	
+
 	/* We use some magic numbers here,
 	 * 17 is the length of "{configdirectory}",
 	 * 16 is one less than that length, so that the replacement string
 	 *    that is malloced has room for the '\0' */
-	if(!strncasecmp(imapopts[opt].val.s,"{configdirectory}",17)) {
+	if (!strncasecmp(imapopts[opt].val.s,"{configdirectory}",17)) {
 	    const char *str = imapopts[opt].val.s;
 	    char *newstring =
 		xmalloc(strlen(config_dir) + strlen(str) - 16);
@@ -322,7 +456,7 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
 	    /* we need to replace this string, will we need to free
 	     * the current value?  -- only if we've actually seen it in
 	     * the config file. */
-	    if(imapopts[opt].seen)
+	    if (imapopts[opt].seen)
 		freeme = (char *)str;
 
 	    /* Build replacement string from configdirectory option */
@@ -331,7 +465,15 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
 
 	    imapopts[opt].val.s = newstring;
 
-	    if(freeme) free(freeme);
+	    if (freeme) free(freeme);
+	}
+    }
+
+    for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
+	/* See if the option configured is a part of the deprecated hash.
+	 */
+	if (imapopts[opt].seen) {
+	    config_option_deprecated(opt);
 	}
     }
 
@@ -539,14 +681,14 @@ static void config_read_file(const char *filename)
 	}
 
 	/* Find if there is a <service>_ prefix */
-	if(config_ident && !strncasecmp(key, config_ident, idlen) 
+	if (config_ident && !strncasecmp(key, config_ident, idlen) 
 	   && key[idlen] == '_') {
 	    /* skip service_ prefix */
 	    srvkey = key + idlen + 1;
 	}
 	
 	/* look for a service_ prefix match in imapopts */
-	if(srvkey) {
+	if (srvkey) {
 	    for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
 		if (!strcasecmp(imapopts[opt].optname, srvkey)) {
 		    key = srvkey;
@@ -558,7 +700,7 @@ static void config_read_file(const char *filename)
 	
 	/* Did not find a service_ specific match, try looking for an
 	 * exact match */
-	if(!service_specific) {
+	if (!service_specific) {
 	    for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
 		if (!strcasecmp(imapopts[opt].optname, key)) {
 		    break;
@@ -578,22 +720,26 @@ static void config_read_file(const char *filename)
 	     *  If we have already seen a service-specific form, and this is
 	     *  a generic form, just skip it and don't moan.
 	     */
-	    if((imapopts[opt].seen == 1 && !service_specific) 
-	     ||(imapopts[opt].seen == 2 && service_specific)) {
+	    if (
+		    (imapopts[opt].seen == 1 && !service_specific) ||
+		    (imapopts[opt].seen == 2 && service_specific)
+		) {
+
 		sprintf(errbuf,
 			"option '%s' was specified twice in config file (second occurance on line %d)",
 			fullkey, lineno);
 		fatal(errbuf, EC_CONFIG);
-	    } else if(imapopts[opt].seen == 2 && !service_specific) {
+
+	    } else if (imapopts[opt].seen == 2 && !service_specific) {
 		continue;
 	    }
 
 	    /* If we've seen it already, we're replacing it, so we need
 	     * to free the current string if there is one */
-	    if(imapopts[opt].seen && imapopts[opt].t == OPT_STRING)
+	    if (imapopts[opt].seen && imapopts[opt].t == OPT_STRING)
 		free((char *)imapopts[opt].val.s);
 
-            if(service_specific)
+            if (service_specific)
 		imapopts[opt].seen = 2;
 	    else
 		imapopts[opt].seen = 1;
@@ -604,7 +750,7 @@ static void config_read_file(const char *filename)
 	    {		    
 		imapopts[opt].val.s = xstrdup(p);
 
-		if(opt == IMAPOPT_CONFIGDIRECTORY)
+		if (opt == IMAPOPT_CONFIGDIRECTORY)
 		    config_dir = imapopts[opt].val.s;
 
 		break;
@@ -710,7 +856,7 @@ static void config_read_file(const char *filename)
   xxx this would be nice if it wasn't for other services who might be
       sharing this config file and whose names we cannot predict
 
-	    if(strncasecmp(key,"sasl_",5)
+	    if (strncasecmp(key,"sasl_",5)
 	    && strncasecmp(key,"partition-",10)) {
 		sprintf(errbuf,
 			"option '%s' is unknown on line %d of config file",
@@ -722,7 +868,7 @@ static void config_read_file(const char *filename)
 	    /* Put it in the overflow hash table */
 	    newval = xstrdup(p);
 	    val = hash_insert(key, newval, &confighash);
-	    if(val != newval) {
+	    if (val != newval) {
 		snprintf(errbuf, sizeof(errbuf), 
 			"option '%s' was specified twice in config file (second occurance on line %d)",
 			fullkey, lineno);
@@ -730,6 +876,7 @@ static void config_read_file(const char *filename)
 	    }
 	}
     }
+
     fclose(infile);
     free(buf);
 }
