@@ -247,7 +247,7 @@ int buf_getline(struct buf *buf, FILE *fp);
 size_t buf_len(const struct buf *buf);
 const char *buf_base(const struct buf *buf);
 void buf_reset(struct buf *buf);
-void buf_truncate(struct buf *buf, size_t len);
+void buf_truncate(struct buf *buf, ssize_t len);
 void buf_setcstr(struct buf *buf, const char *str);
 void buf_setmap(struct buf *buf, const char *base, size_t len);
 void buf_copy(struct buf *dst, const struct buf *src);

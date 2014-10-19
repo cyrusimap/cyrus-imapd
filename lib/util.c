@@ -950,9 +950,13 @@ EXPORTED void buf_reset(struct buf *buf)
     buf->flags = 0;
 }
 
-EXPORTED void buf_truncate(struct buf *buf, size_t len)
+EXPORTED void buf_truncate(struct buf *buf, ssize_t len)
 {
-    if (len > buf->alloc) {
+    if (len < 0) {
+	len = buf->len + len;
+	if (len < 0) len = 0;
+    }
+    if ((size_t)len > buf->alloc) {
 	/* grow the buffer and zero-fill the new bytes */
 	size_t more = len - buf->len;
 	buf_ensure(buf, more);
