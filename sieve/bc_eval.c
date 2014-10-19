@@ -464,6 +464,25 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 	/* fall through */
     case BC_ADDRESS_PRE_INDEX:/*7*/
 	address=1;
+	if (BC_ADDRESS_PRE_INDEX == op) {
+	    /* There was a version of the bytecode that had the index extension
+	     * but did not update the bytecode codepoints, nor did it increment
+	     * the bytecode version number.  This tests if the index extension
+	     * was in the bytecode based on the position of the match-type
+	     * argument.
+	     */
+	    switch (bc[i+2].value) {
+	    case B_IS:
+	    case B_CONTAINS:
+	    case B_MATCHES:
+	    case B_REGEX:
+	    case B_COUNT:
+	    case B_VALUE:
+		has_index = 1;
+	    default:
+		has_index = 0;
+	    }
+	}
 	/* fall through */
     case BC_ENVELOPE:/*8*/
     {
@@ -672,6 +691,25 @@ envelope_err:
 	has_index=1;
 	/* fall through */
     case BC_HEADER_PRE_INDEX:/*9*/
+	if (BC_HEADER_PRE_INDEX == op) {
+	    /* There was a version of the bytecode that had the index extension
+	     * but did not update the bytecode codepoints, nor did it increment
+	     * the bytecode version number.  This tests if the index extension
+	     * was in the bytecode based on the position of the match-type
+	     * argument.
+	     */
+	    switch (ntohl(bc[i+2].value)) {
+	    case B_IS:
+	    case B_CONTAINS:
+	    case B_MATCHES:
+	    case B_REGEX:
+	    case B_COUNT:
+	    case B_VALUE:
+		    has_index = 1;
+	    default:
+		    has_index = 0;
+	    }
+	}
     {
 	const char** val;
 
@@ -944,6 +982,45 @@ envelope_err:
     case BC_DATE:/*11*/
 	has_index=1;
     case BC_CURRENTDATE:/*12*/
+	if (BC_CURRENTDATE/*12*/ == op || BC_DATE/*11*/ == op) {
+	    /* There was a version of the bytecode that had the index extension
+	     * but did not update the bytecode codepoints, nor did it increment
+	     * the bytecode version number.  This tests if the index extension
+	     * was in the bytecode based on the position of the match-type
+	     * or comparator argument.  This will correctly identify whether
+	     * the index extension was supported in every case except the case
+	     * of a timezone that is 61 minutes offset (since 61 corresponds to
+	     * B_ORIGINALZONE).
+	     * There was also an unnumbered version of BC_CURRENTDATE that did
+	     * allow :index.  This also covers that case.
+	     */
+	    switch (ntohl(bc[i+4].value)) {
+	    case B_ASCIICASEMAP:
+	    case B_OCTET:
+	    case B_ASCIINUMERIC:
+		has_index = 0;
+		break;
+	    default:
+		if (B_TIMEZONE == ntohl(bc[i+1].value) &&
+			B_ORIGINALZONE != ntohl(bc[i+2].value)) {
+		    switch (ntohl(bc[i+3].value)) {
+		    case B_IS:
+		    case B_CONTAINS:
+		    case B_MATCHES:
+		    case B_REGEX:
+		    case B_COUNT:
+		    case B_VALUE:
+			has_index = 0;
+			break;
+		    default:
+			has_index = 1;
+
+		    }
+		} else {
+		    has_index = 1;
+		}
+	    }
+	}
     {
 	char buffer[64];
 	const char **headers = NULL;
