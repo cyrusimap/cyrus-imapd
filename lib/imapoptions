@@ -1158,6 +1158,11 @@ If all partitions are over that limit, this feature is not used anymore.
    the "shared.blah" folder.  By default, an email address of
    "+shared.blah" would be used. */
 
+{ "proc_path", NULL, STRING }
+/* Path to proc directory.  Default is NULL - must be an absolute path
+   if specified.  If not specified, the path $confdir/proc/ will be 
+   used. */
+
 { "proxy_authname", "proxy", STRING }
 /* The authentication name to use when authenticating to a backend server
    in the Cyrus Murder. */

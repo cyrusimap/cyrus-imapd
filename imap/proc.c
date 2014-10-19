@@ -89,17 +89,31 @@ static char *proc_getdir(void)
 
 static char *proc_getpath(pid_t pid, int isnew)
 {
-    char *path;
+    char *procfname;
 
     assert(pid > 0);
-    path = xmalloc(strlen(config_dir)+sizeof(FNAME_PROCDIR)+16);
-    sprintf(path, "%s%s/%s%u%s",
-		config_dir,
-		FNAME_PROCDIR,
-		(isnew ? "." : ""),
-		(unsigned)pid,
-		(isnew ? ".new" : ""));
-    return path;
+    if (config_getstring(IMAPOPT_PROC_PATH)) {
+	const char *procpath = config_getstring(IMAPOPT_PROC_PATH);
+	int len = strlen(procpath);
+	if (procpath[0] != '/')
+	    fatal("proc path must be fully qualified", EC_CONFIG);
+
+	if (len < 2)
+	    fatal("proc path must not be '/'", EC_CONFIG);
+
+	procfname = xmalloc(len + 11); /* space for trailing slash */
+
+	if (procpath[len-1] != '/')
+	    sprintf(procfname, "%s/%u", procpath, pid);
+	else
+	    sprintf(procfname, "%s%u", procpath, pid);
+    }
+    else {
+	procfname = xmalloc(strlen(config_dir)+sizeof(FNAME_PROCDIR)+10);
+	sprintf(procfname, "%s%s%u", config_dir, FNAME_PROCDIR, pid);
+    }
+
+    return procfname;
 }
 
 EXPORTED int proc_register(const char *servicename, const char *clienthost,
