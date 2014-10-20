@@ -1359,12 +1359,12 @@ HIDDEN int tls_init_clientengine(int verifydepth,
 	}
     }
 
-    if (var_server_cert && strlen(var_server_cert) == 0)
+    if (!var_server_cert || strlen(var_server_cert) == 0)
 	client_cert = NULL;
     else
 	client_cert = xstrdup(var_server_cert);
 
-    if (var_server_key && strlen(var_server_key) == 0)
+    if (!var_server_key || strlen(var_server_key) == 0)
 	client_key = NULL;
     else
 	client_key = xstrdup(var_server_key);
