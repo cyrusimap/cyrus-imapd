@@ -12351,7 +12351,7 @@ static void cmd_compress(char *tag, char *alg)
 		    "%s NO [COMPRESSIONACTIVE] %s active via TLS\r\n",
 		    tag, SSL_COMP_get_name(imapd_tls_comp));
     }
-#endif defined(HAVE_SSL) && (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
+#endif // defined(HAVE_SSL) && (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
     else if (strcasecmp(alg, "DEFLATE")) {
 	prot_printf(imapd_out,
 		    "%s NO Unknown COMPRESS algorithm: %s\r\n", tag, alg);
