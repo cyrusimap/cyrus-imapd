@@ -51,6 +51,7 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <sys/stat.h>
+#include <openssl/rand.h>
 
 #if HAVE_UNISTD_H
 # include <unistd.h>
@@ -763,16 +764,18 @@ EXPORTED int shutdown_file(char *buf, int size)
 EXPORTED void session_new_id(void)
 {
     const char *base;
+    unsigned char random[8];
     int now = time(NULL);
     if (now != session_id_time) {
         session_id_time = now;
         session_id_count = 0;
     }
+    RAND_bytes(random, sizeof(random));
     ++session_id_count;
     base = config_getstring(IMAPOPT_SYSLOG_PREFIX);
     if (!base) base = config_servername;
-    snprintf(session_id_buf, MAX_SESSIONID_SIZE, "%.128s-%d-%d-%d",
-             base, getpid(), session_id_time, session_id_count);
+    snprintf(session_id_buf, MAX_SESSIONID_SIZE, "%.128s-%d-%d-%d-%llu",
+             base, getpid(), session_id_time, session_id_count, (unsigned long long)(*((uint64_t *)random)));
 }
 
 /* Return the session id */
