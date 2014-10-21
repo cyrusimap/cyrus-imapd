@@ -517,7 +517,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "failedloginpause", 3, INT }
 /* Number of seconds to pause after a failed login. */
 
-{ "flushseenstate", 0, SWITCH }
+{ "flushseenstate", 1, SWITCH }
 /* If enabled, changes to the seen state will be flushed to disk
    immediately, otherwise changes will be cached and flushed when the
    mailbox is closed.  This option may be used to fix the problem of
