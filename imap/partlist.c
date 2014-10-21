@@ -46,11 +46,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
+#include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <sys/types.h>
 
+
 #include "libconfig.h"
 #include "partlist.h"
+#include "util.h"
 #include "xmalloc.h"
 
 
@@ -437,8 +440,8 @@ static void partlist_fill(const char *key, const char *value, void *rock)
 {
     partlist_conf_t *part_list_conf = (partlist_conf_t *)rock;
     partlist_t *part_list = part_list_conf->part_list;
-    int key_prefix_len = (part_list_conf->key_prefix ? strlen(part_list_conf->key_prefix) : 0);
-    int i;
+    size_t key_prefix_len = (part_list_conf->key_prefix ? strlen(part_list_conf->key_prefix) : 0);
+    unsigned i;
 
     if (key_prefix_len) {
 	if ((strncmp(part_list_conf->key_prefix, key, key_prefix_len) != 0) || (strlen(key) <= key_prefix_len)) {
