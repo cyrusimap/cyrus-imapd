@@ -78,6 +78,8 @@ sub default
 	    debug_command => '@prefix@/utils/gdbtramp %s %d',
 	    # everyone should be running this
 	    improved_mboxlist_sort => 'yes',
+	    # default changed, we want to be explicit about it
+	    unixhierarchysep => 'no',
 	);
 	my $defs = Cassandane::Cassini->instance()->get_section('config');
 	$default->set(%$defs);
