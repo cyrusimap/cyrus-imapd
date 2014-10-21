@@ -249,7 +249,7 @@ static int login(struct backend *s, const char *userid,
 		    if (status) *status = "TLS already active";
 		    break;
 		}
-		else if (backend_starttls(s, NULL)) {
+		else if (backend_starttls(s, NULL, NULL, NULL)) {
 		    r = HTTP_SERVER_ERROR;
 		    if (status) *status = "Unable to start TLS";
 		    break;
