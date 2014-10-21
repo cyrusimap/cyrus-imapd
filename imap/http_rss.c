@@ -614,7 +614,7 @@ static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
     buf_reset(msg_buf);
 
     /* Fetch index record for the message */
-    if (uid) r = mailbox_find_index_record(mailbox, uid, record, NULL);
+    if (uid) r = mailbox_find_index_record(mailbox, uid, record);
     else r = mailbox_read_index_record(mailbox, recno, record);
     if ((r == CYRUSDB_NOTFOUND) ||
 	(record->system_flags & (FLAG_DELETED|FLAG_EXPUNGED))) {
