@@ -1782,8 +1782,9 @@ product version in the capabilities */
    domain (if set). */
 
 { "lmtp_catchall_mailbox", NULL, STRING }
-/* Send mail to mailboxes, which do not exists, to this user. NOTE: This must
-   be an existing local mailbox name. NOT an email address! */
+/* Mail sent to mailboxes which do not exist, will be delivered to
+   this user.  NOTE: This must be an existing local user name with an
+   INBOX, NOT an email address! */
 
 /*
 .SH SEE ALSO
