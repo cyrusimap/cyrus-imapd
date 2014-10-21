@@ -71,6 +71,8 @@
 #include "autocreate.h"
 #endif
 #include "backend.h"
+#include "caldav_db.h"
+#include "carddav_db.h"
 #include "duplicate.h"
 #include "exitcodes.h"
 #include "global.h"
@@ -236,7 +238,7 @@ int service_init(int argc __attribute__((unused)),
 
 	/* open the user deny db */
 	denydb_init(0);
-	denydb_open(NULL);
+	denydb_open(0);
 
 	/* so we can do DAV opterations */
 	caldav_init();
