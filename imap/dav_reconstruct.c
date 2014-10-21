@@ -172,18 +172,19 @@ void usage(void)
 static int do_reconstruct(void *rock __attribute__((unused)),
 			  const char *key,
 			  size_t keylen,
-			  const char *data,
-			  size_t datalen)
+			  const char *data __attribute__((unused)),
+			  size_t datalen __attribute__((unused)))
 {
     int r = 0;
     char ext_name_buf[MAX_MAILBOX_PATH+1];
     mbentry_t *mbentry = NULL;
     struct mailbox *mailbox = NULL;
+    char *name = xstrndup(key, keylen);
 
     signals_poll();
 
-    r = mboxlist_parse_entry(&mbentry, key, keylen, data, datalen);
-    if (r) return 0;
+    r = mboxlist_lookup(name, &mbentry, NULL);
+    if (r) goto done;
 
     /* Convert internal name to external */
     (*recon_namespace.mboxname_toexternal)(&recon_namespace, mbentry->name,
@@ -198,6 +199,7 @@ static int do_reconstruct(void *rock __attribute__((unused)),
 	mailbox_close(&mailbox);
     }
 
+done:
     mboxlist_entry_free(&mbentry);
     return r;
 }
