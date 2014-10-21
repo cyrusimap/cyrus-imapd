@@ -903,7 +903,8 @@ static int compar_mbox(const void *v1, const void *v2)
 
 static int verify_cb(void *rockp,
 		     const char *key, size_t keylen,
-		     const char *data, size_t datalen)
+		     const char *data __attribute__((unused)),
+		     size_t dataleni __attribute__((unused)))
 {
     // This function is called for every entry in the database,
     // and supplied an inventory in &found. *data however does
