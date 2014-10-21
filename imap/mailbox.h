@@ -424,6 +424,7 @@ extern char *mailbox_datapath(struct mailbox *mailbox);
 /* map individual messages in */
 extern int mailbox_map_message(struct mailbox *mailbox, unsigned long uid,
 				  const char **basep, size_t *lenp);
+extern int mailbox_map_record(struct mailbox *mailbox, struct index_record *record, struct buf *buf);
 extern void mailbox_unmap_message(struct mailbox *mailbox,
 				  unsigned long uid,
 				  const char **basep, size_t *lenp);

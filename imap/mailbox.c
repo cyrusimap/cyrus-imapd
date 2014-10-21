@@ -789,6 +789,17 @@ EXPORTED int mailbox_map_message(struct mailbox *mailbox, unsigned long uid,
     return 0;
 }
 
+EXPORTED int mailbox_map_record(struct mailbox *mailbox, struct index_record *record, struct buf *buf)
+{
+    const char *data;
+    size_t len;
+    int r = mailbox_map_message(mailbox, record->uid, &data, &len);
+    if (r) return r;
+
+    buf_init_mmap(buf, data, len);
+    return 0;
+}
+
 /*
  * Releases the buffer obtained from mailbox_map_message()
  */
