@@ -89,6 +89,7 @@
 #include "statuscache.h"
 #include "telemetry.h"
 #include "tls.h"
+#include "userdeny.h"
 #include "util.h"
 #include "version.h"
 #include "xmalloc.h"
@@ -232,6 +233,10 @@ int service_init(int argc __attribute__((unused)),
 	/* so we can do quota operations */
 	quotadb_init(0);
 	quotadb_open(NULL);
+
+	/* open the user deny db */
+	denydb_init(0);
+	denydb_open(NULL);
 
 	/* Initialize the annotatemore db (for sieve on shared mailboxes) */
 	annotate_init(NULL, NULL);
@@ -1022,6 +1027,9 @@ void shut_down(int code)
 	quotadb_close();
 	quotadb_done();
 
+	denydb_close();
+	denydb_done();
+
 	annotatemore_close();
 	annotate_done();
 
@@ -1178,6 +1186,18 @@ static int verify_user(const char *user, const char *domain, char *mailbox,
 	}
 
 	mboxlist_entry_free(&mbentry);
+    }
+
+    if (!r) {
+	char msg[MAX_MAILBOX_PATH+1];
+
+	if (domain) {
+	    snprintf(namebuf, sizeof(namebuf), "%s@%s", user, domain);
+	    user = namebuf;
+	}
+
+	if (userdeny(user, config_ident, msg, sizeof(msg)))
+	    return IMAP_MAILBOX_DISABLED;
     }
 
     if (r) syslog(LOG_DEBUG, "verify_user(%s) failed: %s", namebuf,
