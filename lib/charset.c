@@ -49,6 +49,35 @@
 #include "chartable.h"
 #include "util.h"
 
+#define U_REPLACEMENT	0xfffd
+
+#define unicode_isvalid(c) \
+	(!((c >= 0xd800 && c <= 0xdfff) || ((unsigned)c > 0x10ffff)))
+
+char QPSAFECHAR[256] = {
+/* control chars are unsafe */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+/* http://en.wikipedia.org/wiki/Quoted-printable */
+/* All printable ASCII characters (decimal values between 33 and 126) */
+/* may be represented by themselves, except "=" (decimal 61). */
+    0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0,
+/* all high bits are unsafe */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};
+
 struct qp_state {
     int isheader;
     int bytesleft;
@@ -1346,5 +1375,43 @@ EXPORTED char *charset_encode_mimebody(const char *msg_base, size_t len,
     *d++ = '\n';
 
     return (b64_len ? retval : NULL);
+}
+
+/* returns a buffer which the caller must free */
+EXPORTED char *charset_encode_mimeheader(const char *header, size_t len)
+{
+    struct buf buf = BUF_INITIALIZER;
+    size_t n;
+    int need_quote = 0;
+
+    if (!header) return NULL;
+
+    if (!len) len = strlen(header);
+
+    for (n = 0; n < len; n++) {
+	unsigned char this = header[n];
+	if (QPSAFECHAR[this] || this == ' ') continue;
+	need_quote = 1;
+	break;
+    }
+
+    if (need_quote) {
+	buf_printf(&buf, "=?UTF-8?Q?");
+	for (n = 0; n < len; n++) {
+	    unsigned char this = header[n];
+	    if (QPSAFECHAR[this]) {
+		buf_putc(&buf, (char)this);
+	    }
+	    else {
+		buf_printf(&buf, "=%02X", this);
+	    }
+	}
+	buf_printf(&buf, "?=");
+    }
+    else {
+	buf_setmap(&buf, header, len);
+    }
+
+    return buf_release(&buf);
 }
 
