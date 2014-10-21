@@ -97,6 +97,9 @@ ec IMAP_MAILBOX_RESERVED,
 ec IMAP_MAILBOX_LOCKED,
    "Mailbox is locked"
 
+ec IMAP_MAILBOX_DISABLED,
+   "Delivery to mailbox is disabled"
+
 ec IMAP_PARTITION_UNKNOWN,
    "Unknown/invalid partition"
 
