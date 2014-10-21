@@ -812,7 +812,7 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     } else {
 	STACK_OF(X509_NAME) *CAnames = SSL_load_client_CA_file(client_ca_file);
 
-	if (!CAnames || sk_num(CAnames) < 1) {
+	if (!CAnames || sk_num((_STACK *)CAnames) < 1) {
 	    syslog(LOG_ERR,
 		"TLS server engine: No client CA certs specified. "
 		"Client side certs may not work");
