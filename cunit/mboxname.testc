@@ -49,278 +49,41 @@ static void test_dir_hash_c(void)
     CU_ASSERT_EQUAL(c, 'J');
 }
 
-static void test_mboxname_to_parts_user(void)
+static void test_to_parts(void)
 {
-    static const char USER[] = "user.john";
-    static const char USER_SUB[] = "user.john.sub";
-
+    static const char FRED_DRAFTS[] = "user.fred.Drafts";
+    static const char JANEAT_SENT[] = "bloggs.com!user.jane.Sent";
+    static const char SHARED[] = "shared.Gossip";
+    static const char SHAREDAT[] = "foonly.com!shared.Tattle";
     struct mboxname_parts parts;
     int r;
 
-    r = mboxname_to_parts(USER, &parts);
+    r = mboxname_to_parts(FRED_DRAFTS, &parts);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NULL(parts.domain);
-    CU_ASSERT_EQUAL(parts.is_deleted, 0);
-    CU_ASSERT_STRING_EQUAL(parts.userid, "john");
-    CU_ASSERT_PTR_NULL(parts.box);
+    CU_ASSERT_STRING_EQUAL(parts.userid, "fred");
+    CU_ASSERT_STRING_EQUAL(parts.box, "Drafts");
     mboxname_free_parts(&parts);
 
-    r = mboxname_to_parts(USER_SUB, &parts);
+    r = mboxname_to_parts(JANEAT_SENT, &parts);
     CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_PTR_NULL(parts.domain);
-    CU_ASSERT_EQUAL(parts.is_deleted, 0);
-    CU_ASSERT_STRING_EQUAL(parts.userid, "john");
-    CU_ASSERT_STRING_EQUAL(parts.box, "sub");
+    CU_ASSERT_STRING_EQUAL(parts.domain, "bloggs.com");
+    CU_ASSERT_STRING_EQUAL(parts.userid, "jane");
+    CU_ASSERT_STRING_EQUAL(parts.box, "Sent");
     mboxname_free_parts(&parts);
-}
-
-static void test_mboxname_to_parts_duser(void)
-{
-    static const char DUSER[] = "example.org!user.john";
-    static const char DUSER_SUB[] = "example.org!user.john.sub";
-
-    struct mboxname_parts parts;
-    int r;
-
-    r = mboxname_to_parts(DUSER, &parts);
-    CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_STRING_EQUAL(parts.domain, "example.org");
-    CU_ASSERT_EQUAL(parts.is_deleted, 0);
-    CU_ASSERT_STRING_EQUAL(parts.userid, "john");
-    CU_ASSERT_PTR_NULL(parts.box);
-    mboxname_free_parts(&parts);
-
-    r = mboxname_to_parts(DUSER_SUB, &parts);
-    CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_STRING_EQUAL(parts.domain, "example.org");
-    CU_ASSERT_EQUAL(parts.is_deleted, 0);
-    CU_ASSERT_STRING_EQUAL(parts.userid, "john");
-    CU_ASSERT_STRING_EQUAL(parts.box, "sub");
-    mboxname_free_parts(&parts);
-}
-
-static void test_mboxname_to_parts_suser(void)
-{
-    static const char SUSER[] = "user.john^doe";
-    static const char SUSER_SUB[] = "user.john^doe.sub";
-
-    struct mboxname_parts parts;
-    int r;
-
-    r = mboxname_to_parts(SUSER, &parts);
-    CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_PTR_NULL(parts.domain);
-    CU_ASSERT_EQUAL(parts.is_deleted, 0);
-    CU_ASSERT_STRING_EQUAL(parts.userid, "john^doe");
-    CU_ASSERT_PTR_NULL(parts.box);
-    mboxname_free_parts(&parts);
-
-    r = mboxname_to_parts(SUSER_SUB, &parts);
-    CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_PTR_NULL(parts.domain);
-    CU_ASSERT_EQUAL(parts.is_deleted, 0);
-    CU_ASSERT_STRING_EQUAL(parts.userid, "john^doe");
-    CU_ASSERT_STRING_EQUAL(parts.box, "sub");
-    mboxname_free_parts(&parts);
-}
-
-static void test_mboxname_to_parts_sduser(void)
-{
-    static const char SDUSER[] = "example.org!user.john^doe";
-    static const char SDUSER_SUB[] = "example.org!user.john^doe.sub";
-
-    struct mboxname_parts parts;
-    int r;
-
-    r = mboxname_to_parts(SDUSER, &parts);
-    CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_STRING_EQUAL(parts.domain, "example.org");
-    CU_ASSERT_EQUAL(parts.is_deleted, 0);
-    CU_ASSERT_STRING_EQUAL(parts.userid, "john^doe");
-    CU_ASSERT_PTR_NULL(parts.box);
-    mboxname_free_parts(&parts);
-
-    r = mboxname_to_parts(SDUSER_SUB, &parts);
-    CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_STRING_EQUAL(parts.domain, "example.org");
-    CU_ASSERT_EQUAL(parts.is_deleted, 0);
-    CU_ASSERT_STRING_EQUAL(parts.userid, "john^doe");
-    CU_ASSERT_STRING_EQUAL(parts.box, "sub");
-    mboxname_free_parts(&parts);
-}
-
-static void test_mboxname_to_parts_xuser(void)
-{
-    static const char XUSER[] = "DELETED.user.john";
-    static const char XUSER_SUB[] = "DELETED.user.john.sub";
-
-    struct mboxname_parts parts;
-    int r;
-
-    r = mboxname_to_parts(XUSER, &parts);
-    CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_PTR_NULL(parts.domain);
-    CU_ASSERT_EQUAL(parts.is_deleted, 1);
-    CU_ASSERT_STRING_EQUAL(parts.userid, "john");
-    CU_ASSERT_PTR_NULL(parts.box);
-    mboxname_free_parts(&parts);
-
-    r = mboxname_to_parts(XUSER_SUB, &parts);
-    CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_PTR_NULL(parts.domain);
-    CU_ASSERT_EQUAL(parts.is_deleted, 1);
-    CU_ASSERT_STRING_EQUAL(parts.userid, "john");
-    CU_ASSERT_STRING_EQUAL(parts.box, "sub");
-    mboxname_free_parts(&parts);
-}
-
-static void test_mboxname_to_parts_sxuser(void)
-{
-    static const char SXUSER[] = "DELETED.user.john^doe";
-    static const char SXUSER_SUB[] = "DELETED.user.john^doe.sub";
-
-    struct mboxname_parts parts;
-    int r;
-
-    r = mboxname_to_parts(SXUSER, &parts);
-    CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_PTR_NULL(parts.domain);
-    CU_ASSERT_EQUAL(parts.is_deleted, 1);
-    CU_ASSERT_STRING_EQUAL(parts.userid, "john^doe");
-    CU_ASSERT_PTR_NULL(parts.box);
-    mboxname_free_parts(&parts);
-
-    r = mboxname_to_parts(SXUSER_SUB, &parts);
-    CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_PTR_NULL(parts.domain);
-    CU_ASSERT_EQUAL(parts.is_deleted, 1);
-    CU_ASSERT_STRING_EQUAL(parts.userid, "john^doe");
-    CU_ASSERT_STRING_EQUAL(parts.box, "sub");
-    mboxname_free_parts(&parts);
-}
-
-static void test_mboxname_to_parts_dxuser(void)
-{
-    static const char DXUSER[] = "example.org!DELETED.user.john";
-    static const char DXUSER_SUB[] = "example.org!DELETED.user.john.sub";
-
-    struct mboxname_parts parts;
-    int r;
-
-    r = mboxname_to_parts(DXUSER, &parts);
-    CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_STRING_EQUAL(parts.domain, "example.org");
-    CU_ASSERT_EQUAL(parts.is_deleted, 1);
-    CU_ASSERT_STRING_EQUAL(parts.userid, "john");
-    CU_ASSERT_PTR_NULL(parts.box);
-    mboxname_free_parts(&parts);
-
-    r = mboxname_to_parts(DXUSER_SUB, &parts);
-    CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_STRING_EQUAL(parts.domain, "example.org");
-    CU_ASSERT_EQUAL(parts.is_deleted, 1);
-    CU_ASSERT_STRING_EQUAL(parts.userid, "john");
-    CU_ASSERT_STRING_EQUAL(parts.box, "sub");
-    mboxname_free_parts(&parts);
-}
-
-static void test_mboxname_to_parts_dsxuser(void)
-{
-    static const char DSXUSER[] = "example.org!DELETED.user.john^doe";
-    static const char DSXUSER_SUB[] = "example.org!DELETED.user.john^doe.sub";
-
-    struct mboxname_parts parts;
-    int r;
-
-    r = mboxname_to_parts(DSXUSER, &parts);
-    CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_STRING_EQUAL(parts.domain, "example.org");
-    CU_ASSERT_EQUAL(parts.is_deleted, 1);
-    CU_ASSERT_STRING_EQUAL(parts.userid, "john^doe");
-    CU_ASSERT_PTR_NULL(parts.box);
-    mboxname_free_parts(&parts);
-
-    r = mboxname_to_parts(DSXUSER_SUB, &parts);
-    CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_STRING_EQUAL(parts.domain, "example.org");
-    CU_ASSERT_EQUAL(parts.is_deleted, 1);
-    CU_ASSERT_STRING_EQUAL(parts.userid, "john^doe");
-    CU_ASSERT_STRING_EQUAL(parts.box, "sub");
-    mboxname_free_parts(&parts);
-}
-
-static void test_mboxname_to_parts_shared(void)
-{
-    static const char SHARED[] = "shared.foo";
-    static const char SHARED_SUB[] = "shared.foo.bar";
-
-    struct mboxname_parts parts;
-    int r;
 
     r = mboxname_to_parts(SHARED, &parts);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NULL(parts.domain);
-    CU_ASSERT_EQUAL(parts.is_deleted, 0);
     CU_ASSERT_PTR_NULL(parts.userid);
-    CU_ASSERT_STRING_EQUAL(parts.box, "shared.foo");
+    CU_ASSERT_STRING_EQUAL(parts.box, "shared.Gossip");
     mboxname_free_parts(&parts);
 
-    r = mboxname_to_parts(SHARED_SUB, &parts);
+    r = mboxname_to_parts(SHAREDAT, &parts);
     CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_PTR_NULL(parts.domain);
-    CU_ASSERT_EQUAL(parts.is_deleted, 0);
+    CU_ASSERT_STRING_EQUAL(parts.domain, "foonly.com");
     CU_ASSERT_PTR_NULL(parts.userid);
-    CU_ASSERT_STRING_EQUAL(parts.box, "shared.foo.bar");
-    mboxname_free_parts(&parts);
-}
-
-static void test_mboxname_to_parts_dshared(void)
-{
-    static const char DSHARED[] = "example.org!shared.foo";
-    static const char DSHARED_SUB[] = "example.org!shared.foo.bar";
-
-    struct mboxname_parts parts;
-    int r;
-
-    r = mboxname_to_parts(DSHARED, &parts);
-    CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_STRING_EQUAL(parts.domain, "example.org");
-    CU_ASSERT_EQUAL(parts.is_deleted, 0);
-    CU_ASSERT_PTR_NULL(parts.userid);
-    CU_ASSERT_STRING_EQUAL(parts.box, "shared.foo");
-    mboxname_free_parts(&parts);
-
-    r = mboxname_to_parts(DSHARED_SUB, &parts);
-    CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_STRING_EQUAL(parts.domain, "example.org");
-    CU_ASSERT_EQUAL(parts.is_deleted, 0);
-    CU_ASSERT_PTR_NULL(parts.userid);
-    CU_ASSERT_STRING_EQUAL(parts.box, "shared.foo.bar");
-    mboxname_free_parts(&parts);
-}
-
-static void test_mboxname_to_parts_dxshared(void)
-{
-    static const char DXSHARED[] = "example.org!DELETED.shared.foo";
-    static const char DXSHARED_SUB[] = "example.org!DELETED.shared.foo.bar";
-
-    struct mboxname_parts parts;
-    int r;
-
-    r = mboxname_to_parts(DXSHARED, &parts);
-    CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_STRING_EQUAL(parts.domain, "example.org");
-    CU_ASSERT_EQUAL(parts.is_deleted, 1);
-    CU_ASSERT_PTR_NULL(parts.userid);
-    CU_ASSERT_STRING_EQUAL(parts.box, "shared.foo");
-    mboxname_free_parts(&parts);
-
-    r = mboxname_to_parts(DXSHARED_SUB, &parts);
-    CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_STRING_EQUAL(parts.domain, "example.org");
-    CU_ASSERT_EQUAL(parts.is_deleted, 1);
-    CU_ASSERT_PTR_NULL(parts.userid);
-    CU_ASSERT_STRING_EQUAL(parts.box, "shared.foo.bar");
+    CU_ASSERT_STRING_EQUAL(parts.box, "shared.Tattle");
     mboxname_free_parts(&parts);
 }
 
@@ -585,48 +348,7 @@ static void test_toexternal_alt(void)
     toexternal_helper("user.jane", "Uvvers.jane");
     toexternal_helper("user.jane.baz", "Uvvers.jane.baz");
     toexternal_helper("shared.quux", "Chaired.shared.quux");
-
-    conf.virtdomains = IMAP_ENUM_VIRTDOMAINS_ON;
-    toexternal_helper("example.org!shared.quux", "Chaired.shared.quux@example.org");
-    conf.userid = "john@example.org";
-    toexternal_helper("example.org!shared.quux", "Chaired.shared.quux");
-    conf.isadmin = 1;
-    toexternal_helper("example.org!shared.quux", "shared.quux");
-
 }
-
-static void test_altnamespace_unixhierarchysep(void)
-{
-    memset(&conf, 0, sizeof(conf));
-    conf.altnamespace = 1;
-    conf.unixhierarchysep = 1;
-    conf.userprefix = "Other Users";
-    conf.sharedprefix = "Shared Folders";
-    conf.isadmin = 1;
-
-    toexternal_helper("user.fred", "user/fred");
-    toexternal_helper("user.fred.foo", "user/fred/foo");
-    toexternal_helper("user.fred.foo.barracuda", "user/fred/foo/barracuda");
-
-    conf.isadmin = 0;
-    conf.userid = "fred";
-
-    toexternal_helper("user.jane", "Other Users/jane");
-    toexternal_helper("user.jane.baz", "Other Users/jane/baz");
-    toexternal_helper("shared.quux", "Shared Folders/shared/quux");
-
-    conf.virtdomains = IMAP_ENUM_VIRTDOMAINS_ON;
-    conf.userid = "fred@example.org";
-    toexternal_helper("example.org!shared.quux", "Shared Folders/shared/quux");
-
-    conf.isadmin = 1;
-    toexternal_helper("example.org!shared.quux", "shared/quux");
-
-    conf.userid = "cyrus-admin";
-    toexternal_helper("example.org!shared.quux", "shared/quux@example.org");
-
-}
-
 
 static enum enum_value old_config_virtdomains;
 
