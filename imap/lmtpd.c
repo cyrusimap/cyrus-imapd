@@ -1227,6 +1227,18 @@ static int verify_user(const char *user, const char *domain, char *mailbox,
 	    return IMAP_MAILBOX_DISABLED;
     }
 
+    if (!r) {
+	char msg[MAX_MAILBOX_PATH+1];
+
+	if (domain) {
+	    snprintf(namebuf, sizeof(namebuf), "%s@%s", user, domain);
+	    user = namebuf;
+	}
+
+	if (userdeny(user, config_ident, msg, sizeof(msg)))
+	    return IMAP_MAILBOX_DISABLED;
+    }
+
     if (r) syslog(LOG_DEBUG, "verify_user(%s) failed: %s", namebuf,
 		  error_message(r));
 
