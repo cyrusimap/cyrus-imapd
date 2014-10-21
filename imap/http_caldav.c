@@ -2927,6 +2927,7 @@ static int proppatch_availability(xmlNodePtr prop, unsigned set,
 				  void *rock __attribute__((unused)))
 {
     if (config_allowsched && pctx->req_tgt->flags == TGT_SCHED_INBOX) {
+	struct buf buf = BUF_INITIALIZER;
 	xmlChar *type, *ver = NULL, *freeme = NULL;
 	struct mime_type_t *mime;
 	icalcomponent *ical = NULL;
