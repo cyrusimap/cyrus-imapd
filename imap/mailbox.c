@@ -3715,7 +3715,7 @@ EXPORTED int mailbox_add_dav(struct mailbox *mailbox)
     return 0;
 }
 
-static int mailbox_delete_internal(struct mailbox **mailboxptr)
+EXPORTED int mailbox_delete(struct mailbox **mailboxptr)
 {
     int r = 0;
     struct mailbox *mailbox = *mailboxptr;
