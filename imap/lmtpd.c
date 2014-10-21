@@ -236,7 +236,7 @@ int service_init(int argc __attribute__((unused)),
 
 	/* open the user deny db */
 	denydb_init(0);
-	denydb_open(NULL);
+	denydb_open(0);
 
 	/* Initialize the annotatemore db (for sieve on shared mailboxes) */
 	annotate_init(NULL, NULL);
