@@ -46,16 +46,15 @@ void CRYPTO_thread_cleanup(void)
     OPENSSL_free(lock_count);
 }
 
-void pthreads_locking_callback(
-	int mode,
-	int type,
-	char *file,
-	int line
-) {
+void pthreads_locking_callback(int mode, int type,
+			       char *file __attribute__((unused)),
+			       int line __attribute__((unused)))
+{
     if (mode & CRYPTO_LOCK) {
 	pthread_mutex_lock(&(lock_cs[type]));
 	lock_count[type]++;
-    } else {
+    }
+    else {
 	pthread_mutex_unlock(&(lock_cs[type]));
     }
 }
