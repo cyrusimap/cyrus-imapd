@@ -859,8 +859,6 @@ envelope_err:
     }
     case BC_HASFLAG:/*15*/
     {
-	const char** val;
-
 	int haystacksi=i+4;/*the i value for the beginning of the variables*/
 	int needlesi=(ntohl(bc[haystacksi+1].value)/4);
 
