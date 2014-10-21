@@ -66,6 +66,7 @@
 
 #include "imap/mboxname.h"
 #include "imap/notify.h"
+#include "imap/message.h"
 
 
 #define MESSAGE_EVENTS (EVENT_MESSAGE_APPEND|EVENT_MESSAGE_EXPIRE|\
