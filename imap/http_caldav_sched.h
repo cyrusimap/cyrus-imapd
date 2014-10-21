@@ -44,7 +44,7 @@
 #ifndef HTTP_CALDAV_SCHED_H
 #define HTTP_CALDAV_SCHED_H
 
-#define IOPTEST
+//#define IOPTEST
 
 #include <libical/ical.h>
 
