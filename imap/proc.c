@@ -82,38 +82,41 @@
 
 static char *procfname = 0;
 
-static char *proc_getdir(void)
-{
-    return strconcat(config_dir, FNAME_PROCDIR, (char *)NULL);
-}
-
 static char *proc_getpath(pid_t pid, int isnew)
 {
-    char *procfname;
+    struct buf buf = BUF_INITIALIZER;
 
-    assert(pid > 0);
     if (config_getstring(IMAPOPT_PROC_PATH)) {
 	const char *procpath = config_getstring(IMAPOPT_PROC_PATH);
-	int len = strlen(procpath);
+
 	if (procpath[0] != '/')
 	    fatal("proc path must be fully qualified", EC_CONFIG);
 
-	if (len < 2)
+	if (strlen(procpath) < 2)
 	    fatal("proc path must not be '/'", EC_CONFIG);
 
-	procfname = xmalloc(len + 11); /* space for trailing slash */
+	buf_setcstr(&buf, procpath);
 
-	if (procpath[len-1] != '/')
-	    sprintf(procfname, "%s/%u", procpath, pid);
-	else
-	    sprintf(procfname, "%s%u", procpath, pid);
+	if (buf.s[buf.len-1] != '/')
+	    buf_putc(&buf, '/');
     }
     else {
-	procfname = xmalloc(strlen(config_dir)+sizeof(FNAME_PROCDIR)+10);
-	sprintf(procfname, "%s%s%u", config_dir, FNAME_PROCDIR, pid);
+	buf_setcstr(&buf, config_dir);
+	buf_appendcstr(&buf, FNAME_PROCDIR);
     }
 
-    return procfname;
+    if (pid)
+	buf_printf(&buf, "%u", pid);
+
+    if (isnew)
+	buf_appendcstr(&buf, ".new");
+
+    return buf_release(&buf);
+}
+
+static char *proc_getdir(void)
+{
+    return proc_getpath(0, 0);
 }
 
 EXPORTED int proc_register(const char *servicename, const char *clienthost,
