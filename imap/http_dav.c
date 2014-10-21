@@ -2269,7 +2269,7 @@ int meth_acl(struct transaction_t *txn, void *params)
 
     if (!mboxname_userownsmailbox(httpd_userid, txn->req_tgt.mboxname)) {
 	/* Check ACL for current user */
-	rights =  aclstr ? cyrus_acl_myrights(httpd_authstate, aclstr) : 0;
+	rights = mbentry ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
 	if (!(rights & DACL_ADMIN)) {
 	    /* DAV:need-privileges */
 	    txn->error.precond = DAV_NEED_PRIVS;
