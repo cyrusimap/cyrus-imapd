@@ -2928,6 +2928,20 @@ static void do_daemon(const char *channel, const char *sync_shutdown_file,
     }
 }
 
+static int do_mailbox(const char *mboxname)
+{
+    struct sync_name_list *list = sync_name_list_create();
+    int r;
+
+    sync_name_list_add(list, mboxname);
+
+    r = do_mailboxes(list);
+
+    sync_name_list_free(&list);
+
+    return r;
+}
+
 static int cb_allmbox(void *rock __attribute__((unused)),
 		      const char *key, size_t keylen,
 		      const char *val __attribute__((unused)),
@@ -2937,22 +2951,38 @@ static int cb_allmbox(void *rock __attribute__((unused)),
     const char *userid;
     int r = 0;
 
-    if (mboxname_isdeletedmailbox(mboxname, NULL))
-	goto done;
-
     userid = mboxname_to_userid(mboxname);
 
-    if (userid && strcmpsafe(userid, prev_userid)) {
-	printf("%s\n", userid);
-	r = do_user(userid);
+    if (userid) {
+	/* skip deleted mailboxes only because the are out of order, and you would
+	 * otherwise have to sync the user twice thanks to our naive logic */
+	if (mboxname_isdeletedmailbox(mboxname, NULL))
+	    goto done;
+
+	/* only sync if we haven't just done the user */
+	if (strcmpsafe(userid, prev_userid)) {
+	    printf("USER: %s\n", userid);
+	    r = do_user(userid);
+	    if (r) {
+		if (verbose)
+		    fprintf(stderr, "Error from do_user(%s): bailing out!\n", userid);
+		syslog(LOG_ERR, "Error in do_user(%s): bailing out!", userid);
+		goto done;
+	    }
+	    free(prev_userid);
+	    prev_userid = xstrdup(userid);
+	}
+    }
+    else {
+	/* all shared mailboxes, including DELETED ones, sync alone */
+	/* XXX: batch in hundreds? */
+	r = do_mailbox(mboxname);
 	if (r) {
 	    if (verbose)
-		fprintf(stderr, "Error from do_user(%s): bailing out!\n", userid);
-	    syslog(LOG_ERR, "Error in do_user(%s): bailing out!", userid);
+		fprintf(stderr, "Error from do_user(%s): bailing out!\n", mboxname);
+	    syslog(LOG_ERR, "Error in do_user(%s): bailing out!", mboxname);
 	    goto done;
 	}
-	free(prev_userid);
-	prev_userid = xstrdup(userid);
     }
 
 done:
