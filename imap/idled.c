@@ -301,8 +301,7 @@ int main(int argc, char **argv)
     /* count the number of mailboxes */
     mboxlist_init(0);
     mboxlist_open(NULL);
-    cyrusdb_foreach(mbdb, "", 0, NULL, &mbox_count_cb,
-				&nmbox, NULL);
+    mboxlist_allmbox("", &mbox_count_cb, &nmbox, /*incdel*/0);
     mboxlist_close();
     mboxlist_done();
 
