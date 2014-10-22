@@ -117,6 +117,7 @@ enum {
     URL_NS_ISCHEDULE,
     URL_NS_DOMAINKEY,
     URL_NS_TIMEZONE,
+    URL_NS_JMAP,
     URL_NS_RSS
 };
 
@@ -381,6 +382,7 @@ extern struct namespace_t namespace_addressbook;
 extern struct namespace_t namespace_ischedule;
 extern struct namespace_t namespace_domainkey;
 extern struct namespace_t namespace_timezone;
+extern struct namespace_t namespace_jmap;
 extern struct namespace_t namespace_rss;
 
 
