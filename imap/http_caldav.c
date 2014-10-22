@@ -1181,7 +1181,7 @@ static int caldav_delete_sched(struct transaction_t *txn,
 	    goto done;
 	}
 
-	if (!strcmp(sparam.userid, userid)) {
+	if (!strcmpsafe(sparam.userid, userid)) {
 	    /* Organizer scheduling object resource */
 	    sched_request(organizer, &sparam, ical, NULL, 0);
 	}
@@ -2712,7 +2712,7 @@ static int caldav_put(struct transaction_t *txn,
 		}
 	    }
 
-	    if (!strcmp(sparam.userid, userid)) {
+	    if (!strcmpsafe(sparam.userid, userid)) {
 		/* Organizer scheduling object resource */
 		if (ret) {
 		    txn->error.precond = CALDAV_ALLOWED_ORG_CHANGE;
@@ -7567,7 +7567,7 @@ static icalcomponent *trim_attendees(icalcomponent *comp, const char *userid,
 	if (!myattendee &&
 	    !caladdress_lookup(att, &sparam) &&
 	    !(sparam.flags & SCHEDTYPE_REMOTE) &&
-	    !strcmp(sparam.userid, userid)) {
+	    !strcmpsafe(sparam.userid, userid)) {
 	    /* Found it */
 	    myattendee = prop;
 
