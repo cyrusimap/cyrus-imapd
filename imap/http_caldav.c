@@ -929,22 +929,6 @@ static int caldav_parse_path(const char *path,
     }
     parts.box = buf_release(&boxbuf);
 
-    /* XXX - hack to allow @domain parts for non-domain-split users */
-    if (httpd_userid && !httpd_userisadmin) {
-	struct mboxname_parts userparts;
-	mboxname_init_parts(&userparts);
-	mboxname_userid_to_parts(httpd_userid, &userparts);
-	if (!parts.domain) {
-	    /* super XXX hack for FastMail magic */
-	    return HTTP_NOT_FOUND;
-	}
-	if (parts.domain && !userparts.domain) {
-	    //free(parts.domain); - XXX - fix when converting to real parts
-	    parts.domain = NULL;
-	}
-	mboxname_free_parts(&userparts);
-    }
-
     mboxname_parts_to_internal(&parts, tgt->mboxname);
 
     mboxname_free_parts(&parts);
