@@ -351,6 +351,10 @@ EXPORTED int carddav_lookup_resource(struct carddav_db *carddavdb,
 		 &carddavdb->stmt[STMT_SELRSRC]);
     if (!r && !cdata.dav.rowid) r = CYRUSDB_NOTFOUND;
 
+    /* always mailbox and resource so error paths don't fail */
+    cdata.dav.mailbox = mailbox;
+    cdata.dav.resource = resource;
+
     return r;
 }
 

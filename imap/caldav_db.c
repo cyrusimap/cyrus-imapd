@@ -387,6 +387,11 @@ EXPORTED int caldav_lookup_resource(struct caldav_db *caldavdb,
 		 &caldavdb->stmt[STMT_SELRSRC]);
     if (!r && !cdata.dav.rowid) r = CYRUSDB_NOTFOUND;
 
+    /* always add the mailbox and resource, so error responses don't
+     * crash out */
+    cdata.dav.mailbox = mailbox;
+    cdata.dav.resource = resource;
+
     return r;
 }
 
