@@ -1013,6 +1013,7 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/http_dav.h \
 	imap/http_dblookup.c \
 	imap/http_ischedule.c \
+	imap/http_jmap.c \
 	imap/http_proxy.c \
 	imap/http_proxy.h \
 	imap/http_rss.c \
@@ -1137,6 +1138,7 @@ imap_httpd_SOURCES = \
 	imap/http_dav.c \
 	imap/http_dblookup.c \
 	imap/http_ischedule.c \
+	imap/http_jmap.c \
 	imap/http_proxy.c \
 	imap/http_rss.c \
 	imap/http_timezone.c \

@@ -290,6 +290,9 @@ struct namespace_t *namespaces[] = {
     &namespace_ischedule,
     &namespace_domainkey,
 #endif /* WITH_DAV */
+#ifdef WITH_JSON
+    &namespace_jmap,
+#endif /* WITH_JSON */
     &namespace_rss,
     &namespace_dblookup,
     &namespace_default,		/* MUST be present and be last!! */
