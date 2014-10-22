@@ -345,7 +345,7 @@ out:
 /* Evaluate a bytecode test */
 static int eval_bc_test(sieve_interp_t *interp, void* m,
 			bytecode_input_t * bc, int * ip,
-			strarray_t *workingflags)
+			strarray_t *workingflags, int version)
 {
     int res=0; 
     int i=*ip;
@@ -370,7 +370,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 
     case BC_NOT:/*2*/
 	i+=1;
-	res = eval_bc_test(interp, m, bc, &i, workingflags);
+	res = eval_bc_test(interp, m, bc, &i, workingflags, version);
 	if(res >= 0) res = !res; /* Only invert in non-error case */
 	break;
 
@@ -429,7 +429,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 	 * in the right place */
 	for (x=0; x<list_len && !res; x++) { 
 	    int tmp;
-	    tmp = eval_bc_test(interp, m, bc, &i, workingflags);
+	    tmp = eval_bc_test(interp, m, bc, &i, workingflags, version);
 	    if(tmp < 0) {
 		res = tmp;
 		break;
@@ -449,7 +449,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 	/* return 1 unless you find one that isn't true, then return 0 */
 	for (x=0; x<list_len && res; x++) {
 	    int tmp;
-	    tmp = eval_bc_test(interp, m, bc, &i, workingflags);
+	    tmp = eval_bc_test(interp, m, bc, &i, workingflags, version);
 	    if(tmp < 0) {
 		res = tmp;
 		break;
@@ -465,14 +465,15 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 	/* fall through */
     case BC_ADDRESS_PRE_INDEX:/*7*/
 	address=1;
-	if (BC_ADDRESS_PRE_INDEX == op) {
+	if (0x07 == version && BC_ADDRESS_PRE_INDEX == op) {
 	    /* There was a version of the bytecode that had the index extension
 	     * but did not update the bytecode codepoints, nor did it increment
 	     * the bytecode version number.  This tests if the index extension
 	     * was in the bytecode based on the position of the match-type
 	     * argument.
+	     * We test for the applicable version number explicitly.
 	     */
-	    switch (bc[i+2].value) {
+	    switch (ntohl(bc[i+2].value)) {
 	    case B_IS:
 	    case B_CONTAINS:
 	    case B_MATCHES:
@@ -480,6 +481,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 	    case B_COUNT:
 	    case B_VALUE:
 		has_index = 1;
+		break;
 	    default:
 		has_index = 0;
 	    }
@@ -692,12 +694,13 @@ envelope_err:
 	has_index=1;
 	/* fall through */
     case BC_HEADER_PRE_INDEX:/*9*/
-	if (BC_HEADER_PRE_INDEX == op) {
+	if (0x07 == version && BC_HEADER_PRE_INDEX == op) {
 	    /* There was a version of the bytecode that had the index extension
 	     * but did not update the bytecode codepoints, nor did it increment
 	     * the bytecode version number.  This tests if the index extension
 	     * was in the bytecode based on the position of the match-type
 	     * argument.
+	     * We test for the applicable version number explicitly.
 	     */
 	    switch (ntohl(bc[i+2].value)) {
 	    case B_IS:
@@ -707,6 +710,7 @@ envelope_err:
 	    case B_COUNT:
 	    case B_VALUE:
 		    has_index = 1;
+		    break;
 	    default:
 		    has_index = 0;
 	    }
@@ -1087,7 +1091,7 @@ envelope_err:
     case BC_DATE:/*11*/
 	has_index=1;
     case BC_CURRENTDATE:/*12*/
-	if (BC_CURRENTDATE/*12*/ == op || BC_DATE/*11*/ == op) {
+	if (0x07 == version) {
 	    /* There was a version of the bytecode that had the index extension
 	     * but did not update the bytecode codepoints, nor did it increment
 	     * the bytecode version number.  This tests if the index extension
@@ -1098,30 +1102,59 @@ envelope_err:
 	     * B_ORIGINALZONE).
 	     * There was also an unnumbered version of BC_CURRENTDATE that did
 	     * allow :index.  This also covers that case.
+	     * We test for the applicable version number explicitly.
 	     */
 	    switch (ntohl(bc[i+4].value)) {
+	    /* if the 4th parameter is a comparator, we have neither :index nor
+	     *  :zone tags.  B_ORIGINALZONE is the first parameter.
+	     */
 	    case B_ASCIICASEMAP:
 	    case B_OCTET:
 	    case B_ASCIINUMERIC:
 		has_index = 0;
 		break;
 	    default:
-		if (B_TIMEZONE == ntohl(bc[i+1].value) &&
-			B_ORIGINALZONE != ntohl(bc[i+2].value)) {
-		    switch (ntohl(bc[i+3].value)) {
-		    case B_IS:
-		    case B_CONTAINS:
-		    case B_MATCHES:
-		    case B_REGEX:
-		    case B_COUNT:
-		    case B_VALUE:
+		/* otherwise, we either have a :zone tag, an :index tag, or
+		 * both
+		 */
+		switch (ntohl(bc[i+5].value)) {
+		/* if the 5th paramater is a comparator, we have either :index
+		 * or :zone, but not both.
+		 */
+		case B_ASCIICASEMAP:
+		case B_OCTET:
+		case B_ASCIINUMERIC:
+		    /* The ambiguous case is B_TIMEZONE as 1st parameter and
+		     * B_ORIGINALZONE as second parameter, which could mean
+		     * either ':index 60 :originalzone' or ':zone "+0101"'
+		     */
+		    if (B_TIMEZONE == ntohl(bc[i+1].value) &&
+			    B_ORIGINALZONE == ntohl(bc[i+2].value)) {
+			/* This is the ambiguous case.  Resolve the ambiguity
+			 * by assuming that there is no :index tag since the
+			 * unnumbered bytecode that shipped with Kolab
+			 * Groupware 3.3 included support for the date
+			 * extension, but not for the index extension.
+			 */
 			has_index = 0;
-			break;
-		    default:
-			has_index = 1;
 
+		    } else if (B_TIMEZONE == ntohl(bc[i+1].value)) {
+			/* if the first parameter is B_TIMEZONE, and the above
+			 * test was false, it must be a :zone tag, and we
+			 * don't have :index.
+			 */
+			has_index = 0;
+		    } else {
+			/* if the first parameter is not B_TIMEZONE, it must
+			 * be an :index tag, and we don't have :zone.
+			 */
+			has_index = 1;
 		    }
-		} else {
+		    break;
+		default:
+		    /* if the 5th parameter is not a comparator, the 6th is,
+		     * and we have both :index and :zone
+		     */
 		    has_index = 1;
 		}
 	    }
@@ -1547,7 +1580,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    int result;
 	   
 	    ip+=2;
-	    result=eval_bc_test(i, m, bc, &ip, workingvars->var);
+	    result=eval_bc_test(i, m, bc, &ip, workingvars->var, version);
 	    
 	    if (result<0) {
 		*errmsg = "Invalid test";

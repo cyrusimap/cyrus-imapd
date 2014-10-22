@@ -62,7 +62,7 @@
 #include "map.h"
 
 static void dump2(bytecode_input_t *d, int len);
-static int dump2_test(bytecode_input_t * d, int i);
+static int dump2_test(bytecode_input_t * d, int i, int version);
  
 /* from bc_eval.c */
 int unwrap_string(bytecode_input_t *bc, int pos, const char **str, int *len);
@@ -198,7 +198,7 @@ static int printComparison(bytecode_input_t *d ,int i)
 }
 
 
-static int dump2_test(bytecode_input_t * d, int i)
+static int dump2_test(bytecode_input_t * d, int i, int version)
 {
     int l,x,index;
     int opcode;
@@ -220,7 +220,7 @@ static int dump2_test(bytecode_input_t * d, int i)
 	   no idea what it does, but it isn't carried to here...
 	   see bytecodee.c */
 	printf(" not(");
-	i=dump2_test(d, i+1);
+	i=dump2_test(d, i+1, version);
 	printf(")\n");
 	break;
     case BC_EXISTS:
@@ -245,7 +245,7 @@ static int dump2_test(bytecode_input_t * d, int i)
 	
 	for (x=0; x<l; x++)
 	{
-	    i=dump2_test(d,i);
+	    i=dump2_test(d, i, version);
 	    if((x+1)<l)
 		printf(" OR ");
 	}
@@ -259,7 +259,7 @@ static int dump2_test(bytecode_input_t * d, int i)
 	
 	for (x=0; x<l; x++)
 	{
-	    i=dump2_test(d,i);
+	    i=dump2_test(d, i, version);
 	    if((x+1)<l)
 		printf(" AND ");
 	}
@@ -270,14 +270,15 @@ static int dump2_test(bytecode_input_t * d, int i)
 	has_index=1;
 	/*fall-through*/
     case BC_ADDRESS_PRE_INDEX:/*7*/
-	if (BC_ADDRESS_PRE_INDEX == opcode) {
+	if (0x07 == version && BC_ADDRESS_PRE_INDEX == opcode) {
 	    /* There was a version of the bytecode that had the index extension
 	     * but did not update the bytecode codepoints, nor did it increment
 	     * the bytecode version number.  This tests if the index extension
 	     * was in the bytecode based on the position of the match-type
 	     * argument.
+	     * We test for the applicable version number explicitly.
 	     */
-	    switch (d[i+2].value) {
+	    switch (ntohl(d[i+2].value)) {
 	    case B_IS:
 	    case B_CONTAINS:
 	    case B_MATCHES:
@@ -285,6 +286,7 @@ static int dump2_test(bytecode_input_t * d, int i)
 	    case B_COUNT:
 	    case B_VALUE:
 		has_index = 1;
+		break;
 	    default:
 		has_index = 0;
 	    }
@@ -334,12 +336,13 @@ static int dump2_test(bytecode_input_t * d, int i)
 	has_index=1;
 	/*fall-through*/
     case BC_HEADER_PRE_INDEX:/*9*/
-	if (BC_HEADER_PRE_INDEX == opcode) {
+	if (0x07 == version && BC_HEADER_PRE_INDEX == opcode) {
 	    /* There was a version of the bytecode that had the index extension
 	     * but did not update the bytecode codepoints, nor did it increment
 	     * the bytecode version number.  This tests if the index extension
 	     * was in the bytecode based on the position of the match-type
 	     * argument.
+	     * We test for the applicable version number explicitly.
 	     */
 	    switch (ntohl(d[i+2].value)) {
 	    case B_IS:
@@ -349,6 +352,7 @@ static int dump2_test(bytecode_input_t * d, int i)
 	    case B_COUNT:
 	    case B_VALUE:
 		    has_index = 1;
+		    break;
 	    default:
 		    has_index = 0;
 	    }
@@ -395,7 +399,7 @@ static int dump2_test(bytecode_input_t * d, int i)
     case BC_DATE:/*11*/
 	has_index=1;
     case BC_CURRENTDATE:/*12*/
-	if (BC_CURRENTDATE/*12*/ == opcode || BC_DATE/*11*/ == opcode) {
+	if (0x07 == version) {
 	    /* There was a version of the bytecode that had the index extension
 	     * but did not update the bytecode codepoints, nor did it increment
 	     * the bytecode version number.  This tests if the index extension
@@ -406,30 +410,59 @@ static int dump2_test(bytecode_input_t * d, int i)
 	     * B_ORIGINALZONE).
 	     * There was also an unnumbered version of BC_CURRENTDATE that did
 	     * allow :index.  This also covers that case.
+	     * We test for the applicable version number explicitly.
 	     */
 	    switch (ntohl(d[i+4].value)) {
+	    /* if the 4th parameter is a comparator, we have neither :index nor
+	     *  :zone tags.  B_ORIGINALZONE is the first parameter.
+	     */
 	    case B_ASCIICASEMAP:
 	    case B_OCTET:
 	    case B_ASCIINUMERIC:
 		has_index = 0;
 		break;
 	    default:
-		if (B_TIMEZONE == ntohl(d[i+1].value) &&
-			B_ORIGINALZONE != ntohl(d[i+2].value)) {
-		    switch (ntohl(d[i+3].value)) {
-		    case B_IS:
-		    case B_CONTAINS:
-		    case B_MATCHES:
-		    case B_REGEX:
-		    case B_COUNT:
-		    case B_VALUE:
+		/* otherwise, we either have a :zone tag, an :index tag, or
+		 * both
+		 */
+		switch (ntohl(d[i+5].value)) {
+		/* if the 5th paramater is a comparator, we have either :index
+		 * or :zone, but not both.
+		 */
+		case B_ASCIICASEMAP:
+		case B_OCTET:
+		case B_ASCIINUMERIC:
+		    /* The ambiguous case is B_TIMEZONE as 1st parameter and
+		     * B_ORIGINALZONE as second parameter, which could mean
+		     * either ':index 60 :originalzone' or ':zone "+0101"'
+		     */
+		    if (B_TIMEZONE == ntohl(d[i+1].value) &&
+			    B_ORIGINALZONE == ntohl(d[i+2].value)) {
+			/* This is the ambiguous case.  Resolve the ambiguity
+			 * by assuming that there is no :index tag since the
+			 * unnumbered bytecode that shipped with Kolab
+			 * Groupware 3.3 included support for the date
+			 * extension, but not for the index extension.
+			 */
 			has_index = 0;
-			break;
-		    default:
-			has_index = 1;
 
+		    } else if (B_TIMEZONE == ntohl(d[i+1].value)) {
+			/* if the first parameter is B_TIMEZONE, and the above
+			 * test was false, it must be a :zone tag, and we
+			 * don't have :index.
+			 */
+			has_index = 0;
+		    } else {
+			/* if the first parameter is not B_TIMEZONE, it must
+			 * be an :index tag, and we don't have :zone.
+			 */
+			has_index = 1;
 		    }
-		} else {
+		    break;
+		default:
+		    /* if the 5th parameter is not a comparator, the 6th is,
+		     * and we have both :index and :zone
+		     */
 		    has_index = 1;
 		}
 	    }
@@ -589,7 +622,7 @@ static void dump2(bytecode_input_t *d, int bc_len)
 	    printf("IF (ends at %d)", ntohl(d[i].value));
 
             /* there is no short circuiting involved here*/
-	    i = dump2_test(d,i+1);
+	    i = dump2_test(d, i+1, version);
 	    printf("\n");
 
 	    break;
