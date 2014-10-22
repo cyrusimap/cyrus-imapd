@@ -113,7 +113,8 @@ static struct namespace recon_namespace;
 
 /* forward declarations */
 static void do_mboxlist(void);
-static int do_reconstruct(char *name, int matchlen, int maycreate, void *rock);
+static int do_reconstruct(const char *name, int matchlen, int maycreate, void *rock);
+static int do_reconstruct_p(void *rock, const char *key, size_t keylen, const char *data, size_t datalen);
 static void usage(void);
 
 extern cyrus_acl_canonproc_t mboxlist_ensureOwnerRights;
@@ -124,6 +125,7 @@ static int setversion = 0;
 int main(int argc, char **argv)
 {
     int opt, i, r;
+    int dousers = 0;
     int rflag = 0;
     int mflag = 0;
     int fflag = 0;
@@ -140,7 +142,7 @@ int main(int argc, char **argv)
 
     construct_hash_table(&unqid_table, 2047, 1);
 
-    while ((opt = getopt(argc, argv, "C:kp:rmfsxgGqRUoOnV:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:kp:rmfsxgGqRUoOnV:u")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -152,6 +154,10 @@ int main(int argc, char **argv)
 
 	case 'r':
 	    rflag = 1;
+	    break;
+
+	case 'u':
+	    dousers = 1;
 	    break;
 
 	case 'm':
@@ -307,7 +313,7 @@ int main(int argc, char **argv)
 
     /* Normal Operation */
     if (optind == argc) {
-	if (rflag) {
+	if (rflag || dousers) {
 	    fprintf(stderr, "please specify a mailbox to recurse from\n");
 	    cyrus_done();
 	    exit(EC_USAGE);
@@ -319,6 +325,10 @@ int main(int argc, char **argv)
     }
 
     for (i = optind; i < argc; i++) {
+	if (dousers) {
+	    mboxlist_allusermbox(argv[i], do_reconstruct_p, NULL, /*include_deleted*/1);
+	    continue;
+	}
 	char *domain = NULL;
 
 	/* save domain */
@@ -397,15 +407,34 @@ int main(int argc, char **argv)
 static void usage(void)
 {
     fprintf(stderr,
-	    "usage: reconstruct [-C <alt_config>] [-p partition] [-ksrfx] mailbox...\n");
+	    "usage: reconstruct [-C <alt_config>] [-p partition] [-ksrfxu] mailbox...\n");
     fprintf(stderr, "       reconstruct [-C <alt_config>] -m\n");
     exit(EC_USAGE);
 }
 
 /*
+ *
+ */
+static int do_reconstruct_p(void *rock, const char *key, size_t keylen,
+                            const char *data, size_t datalen)
+{
+    mbentry_t *mbentry = NULL;
+
+    if (mboxlist_parse_entry(&mbentry, key, keylen, data, datalen))
+	return 0;
+
+    if (!(mbentry->mbtype & MBTYPE_DELETED))
+	do_reconstruct(mbentry->name, keylen, 0, rock);
+
+    mboxlist_entry_free(&mbentry);
+
+    return 0;
+}
+
+/*
  * mboxlist_findall() callback function to reconstruct a mailbox
  */
-static int do_reconstruct(char *name,
+static int do_reconstruct(const char *name,
 			  int matchlen,
 			  int maycreate __attribute__((unused)),
 			  void *rock)
