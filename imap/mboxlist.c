@@ -355,7 +355,7 @@ int parseentry_cb(int type, struct dlistsax_data *d)
  *  T: _t_ype
  *  V: uid_v_alidity
  */
-static int mboxlist_parse_entry(mbentry_t **mbentryptr,
+EXPORTED int mboxlist_parse_entry(mbentry_t **mbentryptr,
 				const char *name, size_t namelen,
 				const char *data, size_t datalen)
 {

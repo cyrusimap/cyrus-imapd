@@ -214,8 +214,8 @@ static unsigned userflag_cb(struct mailbox *mailbox __attribute__((unused)),
  * - build a hash table of mailboxes in which we expired messages,
  * - and perform a cleanup of expunged messages
  */
-static int expire(char *name, int matchlen __attribute__((unused)),
-		  int maycreate __attribute__((unused)), void *rock)
+static int expire(void *rock, const char *key, size_t keylen,
+			      const char *data, size_t datalen)
 {
     mbentry_t *mbentry = NULL;
     struct expire_rock *erock = (struct expire_rock *) rock;
@@ -228,30 +228,27 @@ static int expire(char *name, int matchlen __attribute__((unused)),
     int did_expunge = 0;
 
     if (sigquit) {
+	/* don't care if we leak some memory, we are shutting down */
 	return 1;
     }
-    r = mboxlist_lookup(name, &mbentry, NULL);
-
-    /* Skip deleted mailboxes */
-    if (r == IMAP_MAILBOX_NONEXISTENT)
-	return 0;
-
-    if (r) {
-	if (verbose) {
-	    printf("error looking up %s: %s\n", name, error_message(r));
-	}
-	syslog(LOG_ERR, "error looking up %s: %s\n", name, error_message(r));
-	return 0; /* still keep going */
-    }
+    if (mboxlist_parse_entry(&mbentry, key, keylen, data, datalen))
+	goto done; /* xxx - syslog? */
 
     /* Skip remote mailboxes */
-    if (mbentry->mbtype & MBTYPE_REMOTE) {
-	mboxlist_entry_free(&mbentry);
-	return 0;
-    }
-    mboxlist_entry_free(&mbentry);
+    if (mbentry->mbtype & MBTYPE_REMOTE)
+	goto done;
 
-    buf = xstrdup(name);
+    /* clean up deleted entries after 7 days */
+    if (mbentry->mbtype & MBTYPE_DELETED) {
+	if (time(0) - mbentry->mtime > 86400*7) {
+	    syslog(LOG_NOTICE, "Removing stale tombstone for %s", mbentry->name);
+	    cyrusdb_delete(mbdb, key, keylen, NULL, /*force*/1);
+	}
+
+	goto done;
+    }
+
+    buf = xstrdup(mbentry->name);
 
     /* see if we need to expire messages.
      * since mailboxes inherit /vendor/cmu/cyrus-imapd/expire,
@@ -273,19 +270,19 @@ static int expire(char *name, int matchlen __attribute__((unused)),
 
     memset(erock->userflags, 0, sizeof(erock->userflags));
 
-    r = mailbox_open_iwl(name, &mailbox);
+    r = mailbox_open_iwl(mbentry->name, &mailbox);
     if (r) {
 	/* mailbox corrupt/nonexistent -- skip it */
 	syslog(LOG_WARNING, "unable to open mailbox %s: %s",
-	       name, error_message(r));
-	return 0;
+	       mbentry->name, error_message(r));
+	goto done;
     }
 
     if (attrib.s && parse_duration(attrib.s, &expire_seconds)) {
 	/* add mailbox to table */
 	erock->expire_mark = expire_seconds ?
 			     time(0) - expire_seconds : 0 /* never */ ;
-	hash_insert(name,
+	hash_insert(mbentry->name,
 		    xmemdup(&erock->expire_mark, sizeof(erock->expire_mark)),
 		    &erock->table);
 
@@ -293,13 +290,13 @@ static int expire(char *name, int matchlen __attribute__((unused)),
 	    if (verbose) {
 		fprintf(stderr,
 			"expiring messages in %s older than %0.2f days\n",
-			name, ((double)expire_seconds/86400));
+			mbentry->name, ((double)expire_seconds/86400));
 	    }
 
 	    r = mailbox_expunge(mailbox, expire_cb, erock, NULL,
 				EVENT_MESSAGE_EXPIRE);
 	    if (r)
-		syslog(LOG_ERR, "failed to expire old messages: %s", mailbox->name);
+		syslog(LOG_ERR, "failed to expire old messages: %s", mbentry->name);
 	    did_expunge = 1;
 	}
     }
@@ -310,7 +307,7 @@ static int expire(char *name, int matchlen __attribute__((unused)),
 			    EVENT_MESSAGE_EXPIRE);
 	if (r)
 	    syslog(LOG_ERR, "failed to scan user flags for %s: %s",
-		    mailbox->name, error_message(r));
+		   mbentry->name, error_message(r));
     }
 
     erock->messages_seen += mailbox->i.num_records;
@@ -324,12 +321,13 @@ static int expire(char *name, int matchlen __attribute__((unused)),
     erock->mailboxes_seen++;
 
     if (r) {
-	syslog(LOG_WARNING, "failure expiring %s: %s", name, error_message(r));
+	syslog(LOG_WARNING, "failure expiring %s: %s", mbentry->name, error_message(r));
 	annotate_state_abort(&mailbox->annot_state);
     }
 
+done:
+    mboxlist_entry_free(&mbentry);
     mailbox_close(&mailbox);
-
     /* Even if we had a problem with one mailbox, continue with the others */
     return 0;
 }

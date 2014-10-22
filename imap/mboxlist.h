@@ -115,6 +115,11 @@ int mboxlist_lookup_allow_reserved(const char *name,
 				   mbentry_t **mbentryptr,
 				   struct txn **tid);
 
+int mboxlist_parse_entry(mbentry_t **mbentryptr,
+			 const char *name, size_t namelen,
+			 const char *data, size_t datalen);
+
+
 /* insert/delete stub entries */
 int mboxlist_insertremote(mbentry_t *mbentry, struct txn **rettid);
 int mboxlist_deleteremote(const char *name, struct txn **in_tid);
