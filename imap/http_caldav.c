@@ -756,6 +756,8 @@ static void my_caldav_auth(const char *userid)
 				   NULL, 0,
 				   userid, httpd_authstate,
 				   0, 0, 0, 0, NULL);
+	if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+		      mailboxname, error_message(r));
     }
 
     /* Default calendar */
