@@ -777,7 +777,8 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 	    }
 	}
 
-	FILL_STRING_PARAM(event, EVENT_DAV_FILENAME, xstrdup(resource));
+	if (resource)
+	    FILL_STRING_PARAM(event, EVENT_DAV_FILENAME, xstrdup(resource));
 
 	if (mboxevent_expected_param(event->type, EVENT_DAV_UID)) {
 	    if (mailbox->mbtype & MBTYPE_ADDRESSBOOK) {
