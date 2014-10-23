@@ -203,6 +203,6 @@ extern int capa_is_disabled(const char *str);
 #define caldav_done()
 #define carddav_init()
 #define carddav_done()
-#endif
+#endif // HTTP_DAV
 
 #endif /* INCLUDED_GLOBAL_H */
