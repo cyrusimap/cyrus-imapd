@@ -936,7 +936,6 @@ imap_httpd_SOURCES = \
 	imap/httpd.c \
 	imap/proxy.c \
 	imap/spool.c \
-	imap/spool.h \
 	imap/http_rss.c \
 	imap/http_dav.c \
 	imap/http_dblookup.c \
