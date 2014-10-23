@@ -71,7 +71,7 @@
 #include "autocreate.h"
 #endif
 #include "backend.h"
-#ifdef HTTP_DAV
+#ifdef WITH_DAV
 #include "caldav_db.h"
 #include "carddav_db.h"
 #endif

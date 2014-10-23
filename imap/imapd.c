@@ -5945,7 +5945,7 @@ static int renmbox(char *name,
 	    user_copyquotaroot(name, text->newmailboxname);
 	    user_renameacl(text->namespace, text->newmailboxname,
 			   text->acl_olduser, text->acl_newuser);
-#ifdef HTTP_DAV
+#ifdef WITH_DAV
 	    if (mbentry->mbtype & (MBTYPE_CALENDAR|MBTYPE_ADDRESSBOOK)) {
 		struct mailbox *mailbox = NULL;
 		r = mailbox_open_irl(text->newmailboxname, &mailbox);

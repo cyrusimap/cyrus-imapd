@@ -4515,7 +4515,7 @@ int meth_proppatch(struct transaction_t *txn, void *params)
 
 	memset(&record, 0, sizeof(struct index_record));
 	/* Mapped URL - Fetch index record for the resource */
-	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &record, NULL);
+	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &record);
 	if (r) {
 	    ret = HTTP_NOT_FOUND;
 	    goto done;
@@ -4964,7 +4964,6 @@ int report_sync_col(struct transaction_t *txn,
 	istate.map[nresp].system_flags = record.system_flags;
 	for (i = 0; i < MAX_USER_FLAGS/32; i++)
 	    istate.map[nresp].user_flags[i] = record.user_flags[i];
-	istate.map[nresp].cache_offset = record.cache_offset;
 
 	nresp++;
     }

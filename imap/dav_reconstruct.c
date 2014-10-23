@@ -190,7 +190,7 @@ static int do_reconstruct(void *rock __attribute__((unused)),
     (*recon_namespace.mboxname_toexternal)(&recon_namespace, mbentry->name,
 					   "cyrus", ext_name_buf);
 
-#ifdef HTTP_DAV
+#ifdef WITH_DAV
     if (mbentry->mbtype & (MBTYPE_CALENDAR|MBTYPE_ADDRESSBOOK)) {
 	printf("Inserting DAV DB entries for %s...\n", ext_name_buf);
 

@@ -2509,7 +2509,7 @@ out:
     return r;
 }
 
-#ifdef HTTP_DAV
+#ifdef WITH_DAV
 static int mailbox_update_carddav(struct mailbox *mailbox,
 				 struct index_record *old,
 				 struct index_record *new)
@@ -2718,7 +2718,7 @@ static int mailbox_update_dav(struct mailbox *mailbox,
 	return mailbox_update_caldav(mailbox, old, new);
     return 0;
 }
-#endif // HTTP_DAV
+#endif // WITH_DAV
 
 /* NOTE: maybe make this able to return error codes if we have
  * support for transactional mailbox updates later.  For now,
@@ -2727,7 +2727,7 @@ static int mailbox_update_indexes(struct mailbox *mailbox,
 				  struct index_record *old,
 				  struct index_record *new)
 {
-#ifdef HTTP_DAV
+#ifdef WITH_DAV
     int r = 0;
     r = mailbox_update_dav(mailbox, old, new);
     if (r) return r;
@@ -3702,7 +3702,7 @@ static int chkchildren(char *name,
     return r;
 }
 
-#ifdef HTTP_DAV
+#ifdef WITH_DAV
 EXPORTED int mailbox_add_dav(struct mailbox *mailbox)
 {
     struct index_record record;
