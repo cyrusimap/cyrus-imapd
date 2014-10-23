@@ -1627,10 +1627,8 @@ EXPORTED int index_status(struct index_state *state, struct statusdata *sdata)
 {
     int items = STATUS_MESSAGES | STATUS_UIDNEXT | STATUS_UIDVALIDITY |
 		STATUS_HIGHESTMODSEQ | STATUS_RECENT | STATUS_UNSEEN;
-    int r;
 
-    r = index_refresh(state);
-    if (r) return r;
+    index_refresh(state);
 
     statuscache_fill(sdata, state->userid, state->mailbox, items,
 		     state->numrecent, state->numunseen);
