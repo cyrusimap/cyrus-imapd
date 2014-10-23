@@ -1424,14 +1424,14 @@ static int list_cal_cb(char *name,
     struct list_cal_rock *lrock = (struct list_cal_rock *) rock;
     struct transaction_t *txn = lrock->txn;
     struct buf *body = &txn->resp_body.payload;
-    const char *base_path = txn->req_tgt.path, *calstyle = "";
+    const char *base_path = txn->req_tgt.path;
     unsigned *level = lrock->level;
     static size_t inboxlen = 0;
     static size_t outboxlen = 0;
     static size_t defaultlen = 0;
     char *acl, *shortname;
     size_t len;
-    int r, rights, isdefault = 0;
+    int r, rights, any_rights = 0, isdefault = 0;
     static const char *displayname_annot =
 	ANNOT_NS "<" XML_NS_DAV ">displayname";
     struct annotation_data displayname;
@@ -1459,7 +1459,6 @@ static int list_cal_cb(char *name,
     /* Is this the default calendar? */
     if (len == defaultlen && !strncmp(shortname, SCHED_DEFAULT, defaultlen)) {
 	isdefault = 1;
-	calstyle = "<b>";
     }
 
     /* Send a body chunk once in a while */
@@ -1476,24 +1475,39 @@ static int list_cal_cb(char *name,
 
     /* Add available calendar with link */
     buf_printf_markup(body, (*level)++, "<tr>");
-    buf_printf_markup(body, *level, "<td>%s%s%s",
-		      calstyle, displayname.value, calstyle);
+    buf_printf_markup(body, *level, "<td>%s%s%s", isdefault ? "<b>" : "",
+		      displayname.value, isdefault ? "</b>" : "");
 
     buf_printf_markup(body, *level,
-		      "<td><a href=\"webcal://%s%s%s\">Subscribe</a>",
+		      "<td><a href=\"webcal://%s%s%s\">Subscribe</a></td>",
 		      lrock->host, base_path, shortname);
 
-    buf_printf_markup(body, *level,
-		      "<td><a href=\"%s%s\">Download</a>",
+    buf_printf_markup(body, *level, "<td><a href=\"%s%s\">Download</a></td>",
 		      base_path, shortname);
 
     if (!isdefault && (rights & DACL_RMCOL)) {
 	buf_printf_markup(body, *level,
-			  "<td><a href=\"%s%s?action=delete\">Delete</a>",
+			  "<td><a href=\"%s%s?action=delete\">Delete</a></td>",
 			  base_path, shortname);
     }
+    else buf_printf_markup(body, *level, "<td></td>");
 
-    --(*level);
+    if (acl) {
+	struct auth_state *auth_anyone = auth_newstate("anyone");
+
+	any_rights = cyrus_acl_myrights(auth_anyone, acl);
+	auth_freestate(auth_anyone);
+    }
+
+    buf_printf_markup(body, *level,
+		      "<td><input type=checkbox%s%s onclick=\""
+		      "httpGet('%s%s?action=setacl&amp;share=' + this.checked)"
+		      "\">Public</td>",
+		      !(rights & DACL_ADMIN) ? " disabled" : "",
+		      (any_rights & DACL_READ) == ACL_READ ? " checked" : "",
+		      base_path, shortname);
+
+    buf_printf_markup(body, --(*level), "</tr>");
 
     return 0;
 }
@@ -1591,6 +1605,14 @@ static int action_list(struct transaction_t *txn, int rights)
     buf_printf_markup(body, level++, "<html>");
     buf_printf_markup(body, level++, "<head>");
     buf_printf_markup(body, level, "<title>%s</title>", "Available Calendars");
+    buf_printf_markup(body, level++, "<script type=\"text/javascript\">");
+    buf_printf_markup(body, level, "function httpGet(url)");
+    buf_printf_markup(body, level++, "{");
+    buf_printf_markup(body, level, "var req = new XMLHttpRequest();");
+    buf_printf_markup(body, level, "req.open('GET', url, true);");
+    buf_printf_markup(body, level, "req.send(null);");
+    buf_printf_markup(body, --level, "}");
+    buf_printf_markup(body, --level, "</script>");
     buf_printf_markup(body, --level, "</head>");
     buf_printf_markup(body, level++, "<body>");
     buf_printf_markup(body, level, "<h2>%s</h2>", "Available Calendars");
@@ -1822,6 +1844,56 @@ static int action_delete(struct transaction_t *txn, int rights)
 	/* Success - tell client to go back to list page */
 	success_redirect(txn, "Deletion");
 	return 0;
+    }
+
+    return ret;
+}
+
+
+/* [Un]share a calendar */
+static int action_setacl(struct transaction_t *txn, int rights)
+{
+    struct strlist *share;
+    char acl[100];
+    int r, ret;
+
+    /* Check rights */
+    if (!(rights & DACL_ADMIN)) {
+	/* DAV:need-privileges */
+	txn->error.precond = DAV_NEED_PRIVS;
+	txn->error.resource = txn->req_tgt.path;
+	txn->error.rights = DACL_ADMIN;
+	return HTTP_NO_PRIVS;
+    }
+
+    share = hash_lookup("share", &txn->req_qparams);
+    if (!share || share->next || !*share->s) {
+	txn->error.desc = "Multiple/missing/empty share parameter(s)";
+	return HTTP_BAD_REQUEST;
+    }
+
+    acl[0] = !strcasecmp(share->s, "true") ? '+' : '-';
+    cyrus_acl_masktostr(DACL_READ, acl+1);
+
+    r = mboxlist_setacl(txn->req_tgt.mboxname, "anyone", acl, 0,
+			httpd_userid, httpd_authstate);
+
+    switch (r) {
+    case 0:
+	ret = HTTP_NO_CONTENT;
+	break;
+
+    case IMAP_MAILBOX_NONEXISTENT:
+	ret = HTTP_NOT_FOUND;
+	break;
+
+    case IMAP_PERMISSION_DENIED:
+	ret = HTTP_FORBIDDEN;
+	break;
+
+    default:
+	ret = HTTP_SERVER_ERROR;
+	break;
     }
 
     return ret;
@@ -2350,6 +2422,9 @@ static int meth_get(struct transaction_t *txn, void *params)
 
 	/* Delete a calendar collection */
 	if (!strcmp(action->s, "delete")) return action_delete(txn, rights);
+
+	/* [Un]share a calendar collection */
+	if (!strcmp(action->s, "setacl")) return action_setacl(txn, rights);
     }
     else {
 	/* Display available actions HTML page */

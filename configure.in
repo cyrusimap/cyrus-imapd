@@ -1021,6 +1021,15 @@ if test "$ENABLE_RSS" != no -o "$ENABLE_DAV" != no; then
       HTTP_OBJS="$HTTP_OBJS \$(RSS_OBJS)"
    fi
 
+   ENABLE_JSON=yes
+   PKG_CHECK_MODULES([JSON], [jansson],, ENABLE_JSON=no)
+   if test "$ENABLE_JSON" != no; then
+      HTTP_OBJS="$HTTP_OBJS \$(JMAP_OBJS)"
+      AC_SUBST(JSON_CFLAGS)
+      AC_SUBST(JSON_LIBS)
+      AC_DEFINE(WITH_JSON,[],[Build JSON support into httpd?])
+   fi
+
    if test "$ENABLE_DAV" != no; then
       AC_DEFINE(WITH_DAV,[],[Build DAV support into httpd?])
 
@@ -1059,14 +1068,9 @@ if test "$ENABLE_RSS" != no -o "$ENABLE_DAV" != no; then
 	 AC_DEFINE(WITH_DKIM,[],[Build DKIM support into iSchedule?]) 
       fi
 
-      ENABLE_JSON=yes
-      PKG_CHECK_MODULES([JSON], [jansson],, ENABLE_JSON=no)
       if test "$ENABLE_JSON" != no; then
          IMAP_PROGS="$IMAP_PROGS ctl_zoneinfo"
          HTTP_OBJS="$HTTP_OBJS \$(TIMEZONE_OBJS)"
-         AC_SUBST(JSON_CFLAGS)
-	 AC_SUBST(JSON_LIBS)
-         AC_DEFINE(WITH_JSON,[],[Build jCal/jCard/TZdist support into httpd?])
 
          AC_CHECK_LIB(ical, icaltimezone_set_builtin_tzdata,
       		AC_DEFINE(HAVE_TZ_BY_REF,[],
