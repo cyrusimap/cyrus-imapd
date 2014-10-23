@@ -1043,12 +1043,12 @@ static int compare_one_record(struct mailbox *mailbox,
 
 	/* ORDERING - always lower GUID first */
 	if (message_guid_cmp(&mp->guid, &rp->guid) > 0) {
-	    r = copyback_one_record(mailbox, rp, rannots, kaction, part_list);
+	    r = copyback_one_record(mailbox, rp, rannots, kaction);
 	    if (!r) r = renumber_one_record(mp, kaction);
 	}
 	else {
 	    r = renumber_one_record(mp, kaction);
-	    if (!r) r = copyback_one_record(mailbox, rp, rannots, kaction, part_list);
+	    if (!r) r = copyback_one_record(mailbox, rp, rannots, kaction);
 	}
 
 	return r;
