@@ -78,8 +78,10 @@
 #include "acl.h"
 #include "assert.h"
 #include "bsearch.h"
+#ifdef WITH_DAV
 #include "caldav_db.h"
 #include "carddav_db.h"
+#endif
 #include "crc32.h"
 #include "hash.h"
 #include "imap/global.h"
@@ -237,8 +239,10 @@ int main(int argc, char **argv)
     quotadb_init(0);
     quotadb_open(NULL);
 
+#ifdef WITH_DAV
     caldav_init();
     carddav_init();
+#endif
 
     /* Deal with nonexistent mailboxes */
     if (start_part) {
@@ -377,8 +381,10 @@ int main(int argc, char **argv)
     quotadb_done();
 
     partlist_local_done();
+#ifdef WITH_DAV
     carddav_done();
     caldav_done();
+#endif
 
     cyrus_done();
 

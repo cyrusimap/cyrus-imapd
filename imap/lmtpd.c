@@ -242,9 +242,11 @@ int service_init(int argc __attribute__((unused)),
 	denydb_init(0);
 	denydb_open(0);
 
+#ifdef WITH_DAV
 	/* so we can do DAV opterations */
 	caldav_init();
 	carddav_init();
+#endif
 
 	/* Initialize the annotatemore db (for sieve on shared mailboxes) */
 	annotate_init(NULL, NULL);
@@ -1038,8 +1040,10 @@ void shut_down(int code)
 	denydb_close();
 	denydb_done();
 
+#ifdef WITH_DAV
 	carddav_done();
 	caldav_done();
+#endif
 
 	annotatemore_close();
 	annotate_done();

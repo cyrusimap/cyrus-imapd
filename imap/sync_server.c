@@ -292,9 +292,11 @@ int service_init(int argc __attribute__((unused)),
 	statuscache_open();
     }
 
+#ifdef WITH_DAV
     dav_init();
     caldav_init();
     carddav_init();
+#endif
 
     return 0;
 }
@@ -456,9 +458,11 @@ void shut_down(int code)
 
     proc_cleanup();
 
+#ifdef WITH_DAV
     carddav_done();
     caldav_done();
     dav_done();
+#endif
 
     if (config_getswitch(IMAPOPT_STATUSCACHE)) {
 	statuscache_close();
