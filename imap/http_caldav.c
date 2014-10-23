@@ -2027,7 +2027,6 @@ static int action_freebusy(struct transaction_t *txn, int rights)
     fctx.req_tgt = &txn->req_tgt;
     fctx.depth = 2;
     fctx.userid = proxy_userid;
-    fctx.int_userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = httpd_authstate;
     fctx.reqd_privs = 0;  /* handled by CALDAV:schedule-deliver on Inbox */
