@@ -1702,6 +1702,7 @@ Cyrus Imapd configured components
    gssapi:             $gssapi
    autocreate:         $enable_autocreate
    idled:              $enable_idled
+   http:               $enable_http
    kerberos V4:        $krb4
    murder:             $enable_murder
    nntpd:              $enable_nntp
