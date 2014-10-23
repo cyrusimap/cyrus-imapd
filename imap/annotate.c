@@ -2514,7 +2514,7 @@ EXPORTED int annotatemore_msg_write(const char *mboxname, uint32_t uid, const ch
     r = write_entry(mailbox, uid, entry, userid, value, /*ignorequota*/1);
     if (r) goto done;
 
-    r = annotate_commit(&d);
+    r = annotate_commit(d);
 
 done:
     annotate_putdb(&d);
