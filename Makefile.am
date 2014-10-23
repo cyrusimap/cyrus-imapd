@@ -927,27 +927,27 @@ nodist_imap_httpd_SOURCES = \
 	imap/tz_err.c \
 	imap/tz_err.h
 imap_httpd_SOURCES = \
-	imap/mutex_fake.c \
 	imap/carddav_db.c \
 	imap/caldav_db.c \
-	imap/http_proxy.c \
-	imap/http_client.c \
-	imap/httpd.c \
-	imap/proxy.c \
-	imap/spool.c \
-	imap/http_rss.c \
-	imap/http_dav.c \
-	imap/http_dblookup.c \
 	imap/dav_db.c \
 	imap/dav_util.c \
-	imap/http_ischedule.c \
-	imap/http_carddav.c \
 	imap/http_caldav.c \
+	imap/http_carddav.c \
+	imap/http_client.c \
+	imap/http_dav.c \
+	imap/http_dblookup.c \
+	imap/http_ischedule.c \
+	imap/http_proxy.c \
+	imap/http_rss.c \
 	imap/http_timezone.c \
-	imap/zoneinfo_db.c \
-	imap/smtpclient.c \
-	imap/xcal.c \
+	imap/httpd.c \
 	imap/jcal.c \
+	imap/mutex_fake.c \
+	imap/proxy.c \
+	imap/smtpclient.c \
+	imap/spool.c \
+	imap/xcal.c \
+	imap/zoneinfo_db.c \
 	master/service.c
 imap_httpd_LDADD = $(LD_SERVER_ADD)
 
