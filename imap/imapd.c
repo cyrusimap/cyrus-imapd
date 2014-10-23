@@ -6022,7 +6022,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
 
     if (r) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-	return;
+	goto done;
     }
 
     if (mbentry->mbtype & MBTYPE_REMOTE) {
@@ -6097,7 +6097,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
 		);
 
 	    res = pipe_until_tag(s, tag, 0);
-	
+
 	    /* make sure we've seen the update */
 	    if (ultraparanoid && res == PROXY_OK) kick_mupdate();
 	}
@@ -6122,7 +6122,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
     if (location && !config_partitiondir(location)) {
 	/* invalid partition, assume its a server (remote destination) */
 	char *server;
- 
+
 	if (strcmp(oldname, newname)) {
 	    prot_printf(imapd_out,
 			"%s NO Cross-server or cross-partition move w/rename not supported\r\n",
@@ -6310,7 +6310,7 @@ submboxes:
 	rock.acl_newuser = acl_newuser;
 	rock.partition = location;
 	rock.rename_user = rename_user;
-	
+
 	/* add submailboxes; we pretend we're an admin since we successfully
 	   renamed the parent - we're using internal names here */
 	r = mboxlist_findall(NULL, oldmailboxname, 1, imapd_userid,
@@ -6318,7 +6318,7 @@ submboxes:
     }
 
     /* take care of deleting old ACLs, subscriptions, seen state and quotas */
-    if (!r && rename_user)
+    if (!r && rename_user) {
 	user_deletedata(olduser, 1);
 	/* allow the replica to get the correct new quotaroot
 	 * and acls copied across */
