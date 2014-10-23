@@ -89,6 +89,4 @@ extern int deliver_mailbox(FILE *f,
 			   int quotaoverride,
 			   int acloverride);
 
-int fuzzy_match(char *mboxname);
-
 #endif /* LMTPD_H */

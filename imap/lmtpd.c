@@ -426,7 +426,7 @@ static int fuzzy_match_cb(char *name,
     return 0;
 }
 
-int fuzzy_match(char *mboxname)
+static int fuzzy_match(char *mboxname)
 {
     char name[MAX_MAILBOX_BUFFER], prefix[MAX_MAILBOX_BUFFER], *p = NULL;
     size_t prefixlen;
