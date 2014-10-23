@@ -161,31 +161,30 @@ endif
 if HTTPD
 AM_CPPFLAGS += $(HTTP_CPPFLAGS)
 AM_LDFLAGS += $(HTTP_LIBS)
-BUILT_SOURCES += imap/http_err.c imap/http_err.h
+BUILT_SOURCES += imap/http_err.c imap/http_err.h imap/tz_err.c imap/tz_err.h
 service_PROGRAMS += imap/httpd
 user_PROGRAMS += imap/dav_reconstruct
-HTTP_SOURCES = imap/http_err.c \
-	       imap/http_proxy.c \
-	       imap/http_client.c \
-	       imap/http_caldav.c \
-	       imap/http_carddav.c \
-	       imap/http_dav.c \
-	       imap/http_dblookup.c \
-	       imap/http_ischedule.c \
-	       imap/http_rss.c \
-	       imap/http_timezone.c \
-	       imap/zoneinfo_db.c \
-	       imap/tz_err.c \
-	       imap/caldav_db.c \
-	       imap/proxy.c \
-	       imap/smtpclient.c \
-	       imap/spool.c \
-	       imap/carddav_db.c \
-	       imap/dav_db.c \
-	       imap/dav_util.c \
-	       imap/jcal.c \
-	       imap/xcal.c \
-	       imap/httpd.c
+HTTP_SOURCES = \
+	imap/http_proxy.c \
+	imap/http_client.c \
+	imap/http_caldav.c \
+	imap/http_carddav.c \
+	imap/http_dav.c \
+	imap/http_dblookup.c \
+	imap/http_ischedule.c \
+	imap/http_rss.c \
+	imap/http_timezone.c \
+	imap/zoneinfo_db.c \
+	imap/caldav_db.c \
+	imap/proxy.c \
+	imap/smtpclient.c \
+	imap/spool.c \
+	imap/carddav_db.c \
+	imap/dav_db.c \
+	imap/dav_util.c \
+	imap/jcal.c \
+	imap/xcal.c \
+	imap/httpd.c
 endif
 if REPLICATION
 user_PROGRAMS += imap/sync_client imap/sync_reset
@@ -271,10 +270,12 @@ EXTRA_DIST = \
 	cunit/key.pem \
 	cunit/vg.supp \
 	doc \
+	imap/http_err.et \
 	imap/imap_err.et \
 	imap/mupdate_err.et \
 	imap/nntp_err.et \
 	imap/rfc822_header.st \
+	imap/tz_err.et \
 	lib/charset/aliases.txt \
 	lib/charset/big5.t \
 	lib/charset/gb2312.t \
@@ -853,6 +854,9 @@ imap_libcyrus_imap_la_CFLAGS += $(JANSSON_CFLAGS)
 endif
 if HTTPD
 imap_libcyrus_imap_la_SOURCES += $(HTTP_SOURCES)
+nodist_imap_libcyrus_imap_la_SOURCES += \
+	imap/http_err.c \
+	imap/tz_err.c
 endif
 
 imap_lmtpd_SOURCES = \
@@ -920,7 +924,9 @@ imap_nntpd_LDADD = $(LD_SERVER_ADD)
 
 nodist_imap_httpd_SOURCES = \
 	imap/http_err.c \
-	imap/http_err.h
+	imap/http_err.h \
+	imap/tz_err.c \
+	imap/tz_err.h
 imap_httpd_SOURCES = \
 	imap/mutex_fake.c \
 	imap/carddav_db.c \
@@ -941,7 +947,6 @@ imap_httpd_SOURCES = \
 	imap/http_caldav.c \
 	imap/http_timezone.c \
 	imap/zoneinfo_db.c \
-	imap/tz_err.c \
 	imap/smtpclient.c \
 	imap/xcal.c \
 	imap/jcal.c \
