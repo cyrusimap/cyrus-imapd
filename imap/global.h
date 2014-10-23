@@ -196,13 +196,4 @@ extern void parse_sessionid(const char *str, char *sessionid);
 /* Capability suppression */
 extern int capa_is_disabled(const char *str);
 
-#ifndef HTTP_DAV
-#define dav_init()
-#define dav_done()
-#define caldav_init()
-#define caldav_done()
-#define carddav_init()
-#define carddav_done()
-#endif // HTTP_DAV
-
 #endif /* INCLUDED_GLOBAL_H */
