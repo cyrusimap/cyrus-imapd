@@ -45,10 +45,8 @@
 #define HTTPD_H
 
 #include <sasl/sasl.h>
-#ifdef HTTP_DAV
 #include <libxml/tree.h>
 #include <libxml/uri.h>
-#endif // HTTP_DAV
 
 #ifdef HAVE_ZLIB
 #include <zlib.h>
