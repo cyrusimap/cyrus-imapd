@@ -1570,8 +1570,7 @@ static int do_mailbox(struct dlist *kin)
 			 (mailbox->i.options & ~MAILBOX_OPTIONS_MASK);
 
     /* this happens all the time! */
-    if (mailbox->i.highestmodseq != highestmodseq) {
-	mboxname_setmodseq(mailbox->name, highestmodseq);
+    if (mailbox->i.highestmodseq < highestmodseq) {
 	mailbox->i.highestmodseq = highestmodseq;
     }
 
