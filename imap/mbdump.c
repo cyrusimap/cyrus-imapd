@@ -620,6 +620,7 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
 		fname = mboxkey_getpath(userid);
 		ftag = "MBOXKEY";
 		break;
+#ifdef HTTP_DAV
 	    case DAV_DB: {
 		struct buf dav_file = BUF_INITIALIZER;
 
@@ -628,6 +629,7 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
 		ftag = "DAV";
 		break;
 	    }
+#endif
 	    default:
 		fatal("unknown user data file", EC_OSFILE);
 	    }
@@ -1062,12 +1064,14 @@ EXPORTED int undump_mailbox(const char *mbname,
 	    char *s = user_hash_subs(userid);
 	    strlcpy(fnamebuf, s, sizeof(fnamebuf));
 	    free(s);
+#ifdef HAVE_DAV
 	} else if (userid && !strcmp(file.s, "DAV")) {
 	    /* overwriting this outright is absolutely what we want to do */
 	    struct buf dav_file = BUF_INITIALIZER;
 	    dav_getpath_byuserid(&dav_file, userid);
 	    strlcpy(fnamebuf, buf_cstring(&dav_file), sizeof(fnamebuf));
 	    buf_free(&dav_file);
+#endif
 	} else if (userid && !strcmp(file.s, "SEEN")) {
 	    seen_file = seen_getpath(userid);
 

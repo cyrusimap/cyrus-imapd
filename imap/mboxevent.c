@@ -759,6 +759,7 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 				   cacheitem_size(record, CACHE_BODYSTRUCTURE)));
     }
 
+#ifdef HTTP_DAV
     /* add caldav items */
     if ((mailbox->mbtype & (MBTYPES_DAV)) &&
 	(mboxevent_expected_param(event->type, EVENT_DAV_FILENAME) ||
@@ -799,6 +800,7 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 	    }
 	}
     }
+#endif // HTTP_DAV
 }
 
 void mboxevent_extract_copied_record(struct mboxevent *event,

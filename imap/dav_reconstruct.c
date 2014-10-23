@@ -190,6 +190,7 @@ static int do_reconstruct(void *rock __attribute__((unused)),
     (*recon_namespace.mboxname_toexternal)(&recon_namespace, mbentry->name,
 					   "cyrus", ext_name_buf);
 
+#ifdef HTTP_DAV
     if (mbentry->mbtype & (MBTYPE_CALENDAR|MBTYPE_ADDRESSBOOK)) {
 	printf("Inserting DAV DB entries for %s...\n", ext_name_buf);
 
@@ -198,6 +199,7 @@ static int do_reconstruct(void *rock __attribute__((unused)),
 	if (!r) r = mailbox_add_dav(mailbox);
 	mailbox_close(&mailbox);
     }
+#endif
 
 done:
     mboxlist_entry_free(&mbentry);

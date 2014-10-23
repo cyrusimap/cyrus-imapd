@@ -45,8 +45,10 @@
 #define HTTPD_H
 
 #include <sasl/sasl.h>
+#ifdef HTTP_DAV
 #include <libxml/tree.h>
 #include <libxml/uri.h>
+#endif // HTTP_DAV
 
 #ifdef HAVE_ZLIB
 #include <zlib.h>
@@ -93,7 +95,6 @@
   #define HTTP_DIGEST_MECH NULL  /* not supported by our SASL version */
   #define SASL_USAGE_FLAGS SASL_SUCCESS_DATA
 #endif /* SASL_NEED_HTTP */
-
 
 /* Array of HTTP methods known by our server. */
 struct known_meth_t {
