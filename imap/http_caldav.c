@@ -3738,6 +3738,7 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
     if (pctx->req_tgt->collection && !pctx->req_tgt->resource) {
 	const char *prop_annot =
 	    ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
+	const char *userid = NULL;
 	annotate_state_t *astate = NULL;
 	buf_reset(&pctx->buf);
 
