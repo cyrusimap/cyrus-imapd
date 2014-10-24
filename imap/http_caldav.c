@@ -3444,10 +3444,17 @@ static int propfind_calcompset(const xmlChar *name, xmlNsPtr ns,
     r = annotatemore_lookupmask(fctx->mailbox->name, prop_annot, httpd_userid, &attrib);
     if (r) return HTTP_SERVER_ERROR;
 
-    if (attrib.len)
+    if (attrib.len) {
 	types = strtoul(buf_cstring(&attrib), NULL, 10);
-    else
+    }
+    else {
+	const char **hdr = spool_getheader(fctx->req_hdrs, "User-Agent");
+
 	types = -1;  /* ALL components types */
+
+	/* XXX  iOS/8 doesn't like VPOLL */
+	if (hdr && strstr(hdr[0], "iOS/8")) types &= ~CAL_COMP_VPOLL;
+    }
 
     buf_free(&attrib);
 
