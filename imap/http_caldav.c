@@ -3547,8 +3547,14 @@ static int propfind_calcompset(const xmlChar *name, xmlNsPtr ns,
 				  /* shared */ "", &attrib))) {
 	if (attrib.value)
 	    types = strtoul(attrib.value, NULL, 10);
-	else
+	else {
+	    const char **hdr = spool_getheader(fctx->req_hdrs, "User-Agent");
+
 	    types = -1;  /* ALL components types */
+
+	    /* XXX  iOS/8 doesn't like VPOLL */
+	    if (hdr && strstr(hdr[0], "iOS/8")) types &= ~CAL_COMP_VPOLL;
+	}
     }
 
     if (r) return HTTP_SERVER_ERROR;
