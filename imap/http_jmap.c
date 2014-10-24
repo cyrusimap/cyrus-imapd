@@ -52,26 +52,35 @@
 #include <assert.h>
 #include <jansson.h>
 
+#include "acl.h"
 #include "global.h"
 #include "hash.h"
 #include "httpd.h"
 #include "http_err.h"
 #include "http_proxy.h"
+#include "mailbox.h"
+#include "mboxlist.h"
+#include "statuscache.h"
 #include "util.h"
 #include "version.h"
+#include "xstrlcat.h"
+#include "xstrlcpy.h"
 
+
+struct namespace jmap_namespace;
 
 static time_t compile_time;
 static void jmap_init(struct buf *serverinfo);
+static void jmap_auth(const char *userid);
 static int meth_get(struct transaction_t *txn, void *params);
 static int meth_post(struct transaction_t *txn, void *params);
-static json_t *msg_getMailboxes(json_t *args);
+static json_t *getMailboxes(json_t *args);
 
 static const struct message_t {
     const char *name;
     json_t *(*proc)(json_t *args);
 } messages[] = {
-    { "getMailboxes",	&msg_getMailboxes },
+    { "getMailboxes",	&getMailboxes },
     { NULL,		NULL}
 };
 
@@ -79,7 +88,7 @@ static const struct message_t {
 /* Namespace for JMAP */
 struct namespace_t namespace_jmap = {
     URL_NS_JMAP, 0, "/jmap", NULL, 1 /* auth */, (ALLOW_READ | ALLOW_POST),
-    jmap_init, NULL, NULL, NULL,
+    &jmap_init, &jmap_auth, NULL, NULL,
     {
 	{ NULL,			NULL },			/* ACL		*/
 	{ NULL,			NULL },			/* COPY		*/
@@ -110,6 +119,14 @@ static void jmap_init(struct buf *serverinfo __attribute__((unused)))
     if (!namespace_jmap.enabled) return;
 
     compile_time = calc_compile_time(__TIME__, __DATE__);
+}
+
+
+static void jmap_auth(const char *userid __attribute__((unused)))
+{
+    /* Set namespace */
+    mboxname_init_namespace(&jmap_namespace,
+			    httpd_userisadmin || httpd_userisproxyadmin);
 }
 
 
@@ -221,19 +238,93 @@ static int meth_post(struct transaction_t *txn,
 }
 
 
-/* Execute a getMailboxes message */
-static json_t *msg_getMailboxes(json_t *args __attribute__((unused)))
+/* mboxlist_findall() callback to list mailboxes */
+int getMailboxes_cb(char *mboxname, int matchlen __attribute__((unused)),
+		    int maycreate __attribute__((unused)),
+		    void *rock)
 {
-    json_t *resp, *list;
+    json_t *list = (json_t *) rock, *mbox;
+    char internal_name[MAX_MAILBOX_PATH+1];
+    struct mboxlist_entry mbentry;
+    struct mailbox *mailbox = NULL;
+    int r = 0, rights;
+    unsigned statusitems = STATUS_MESSAGES | STATUS_UNSEEN;
+    struct statusdata sdata;
+
+    /* first convert "INBOX" to "user.<userid>" */
+    if (!strncasecmp(mboxname, "inbox", 5)
+	&& (!mboxname[5] || mboxname[5] == '.') ) {
+	(*jmap_namespace.mboxname_tointernal)(&jmap_namespace, "INBOX",
+					       httpd_userid, internal_name);
+	strlcat(internal_name, mboxname+5, sizeof(internal_name));
+    }
+    else
+	strlcpy(internal_name, mboxname, sizeof(internal_name));
+
+    /* Check ACL on mailbox for current user */
+    if ((r = mboxlist_lookup(internal_name, &mbentry, NULL))) {
+	syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
+	       internal_name, error_message(r));
+	goto done;
+    }
+
+    rights = mbentry.acl ? cyrus_acl_myrights(httpd_authstate, mbentry.acl) : 0;
+    if ((rights & (ACL_LOOKUP | ACL_READ)) != (ACL_LOOKUP | ACL_READ)) {
+	goto done;
+    }
+
+    /* Open mailbox for reading */
+    if ((r = mailbox_open_irl(internal_name, &mailbox))) {
+	syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
+	       internal_name, error_message(r));
+	goto done;
+    }
+
+    r = status_lookup(internal_name, httpd_userid, statusitems, &sdata);
+
+    mbox = json_pack("{s:s s:s s:n s:n s:b s:b s:b s:b s:i s:i}",
+		     "id", mailbox->uniqueid,
+		     "name", mboxname,
+		     "parentId",
+		     "role",
+		     "mayAddMessages", rights & ACL_INSERT,
+		     "mayRemoveMessages", rights & ACL_DELETEMSG,
+		     "mayCreateChild", rights & ACL_CREATE,
+		     "mayDeleteMailbox", rights & ACL_DELETEMBOX,
+		     "totalMessages", sdata.messages,
+		     "unreadMessages", sdata.unseen);
+    json_array_append_new(list, mbox);
+
+    mailbox_close(&mailbox);
+
+  done:
+
+    return 0;
+}
+
+
+/* Execute a getMailboxes message */
+static json_t *getMailboxes(json_t *args __attribute__((unused)))
+{
+    json_t *resp, *mailboxes, *list, *notFound;
 
     /* Start constructing our response */
-    resp = json_pack("[s {s:s s:s s:[] s:n}]", "mailboxes", "accountId",
-		     httpd_userid, "state", "XXX", "list", "notFound");
+    resp = json_pack("[s {s:s s:s}]", "mailboxes",
+		     "accountId", httpd_userid,
+		     "state", "XXX");
     if (!resp) return NULL;
 
-    list = json_object_get(resp, "list");
+    list = json_array();
 
     /* Generate list of mailboxes */
+    mboxlist_findall(&jmap_namespace, "*", httpd_userisadmin, httpd_userid, 
+		     httpd_authstate, &getMailboxes_cb, list);
+
+    mailboxes = json_array_get(resp, 1);
+    json_object_set_new(mailboxes, "list", list);
+
+    notFound = json_null();
+    json_object_set_new(mailboxes, "notFound", notFound);
 
     return resp;
 }
