@@ -214,6 +214,7 @@ static const struct prop_entry dav_props[] = {
 
 static struct meth_params princ_params = {
     .parse_path = &prin_parse_path,
+    .get = NULL,
     .lprops = dav_props,
     .reports = dav_reports
 };
@@ -227,8 +228,8 @@ struct namespace_t namespace_principal = {
 	{ NULL,			NULL },			/* ACL		*/
 	{ NULL,			NULL },			/* COPY		*/
 	{ NULL,			NULL },			/* DELETE	*/
-	{ &meth_get_dav,	&princ_params },	/* GET		*/
-	{ &meth_get_dav,	&princ_params },	/* HEAD		*/
+	{ &meth_get,		&princ_params },	/* GET		*/
+	{ &meth_get,		&princ_params },	/* HEAD		*/
 	{ NULL,			NULL },			/* LOCK		*/
 	{ NULL,			NULL },			/* MKCALENDAR	*/
 	{ NULL,			NULL },			/* MKCOL	*/
@@ -3116,7 +3117,7 @@ int meth_delete(struct transaction_t *txn, void *params)
 
 
 /* Perform a GET/HEAD request on a DAV resource */
-int meth_get_dav(struct transaction_t *txn, void *params)
+int meth_get(struct transaction_t *txn, void *params)
 {
     struct meth_params *gparams = (struct meth_params *) params;
     const char **hdr;
@@ -3137,8 +3138,12 @@ int meth_get_dav(struct transaction_t *txn, void *params)
     if ((r = gparams->parse_path(txn->req_uri->path,
 				 &txn->req_tgt, &txn->error.desc))) return r;
 
-    /* We don't handle GET on a collection (yet) */
-    if (!txn->req_tgt.resource) return HTTP_NO_CONTENT;
+    if (!txn->req_tgt.resource) {
+	if (gparams->get) return gparams->get(txn, NULL, NULL, NULL);
+
+	/* We don't handle GET on a collection (yet) */
+	return HTTP_NO_CONTENT;
+    }
 
     /* Check requested MIME type:
        1st entry in gparams->mime_types array MUST be default MIME type */
