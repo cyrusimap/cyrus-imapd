@@ -1708,7 +1708,6 @@ Cyrus Imapd configured components
    nntpd:              $enable_nntp
    replication:        $enable_replication
    sieve:              $enable_sieve
-   http:               $enable_http
 
 External dependencies:
    pcre:               $cyrus_cv_pcre_utf8
