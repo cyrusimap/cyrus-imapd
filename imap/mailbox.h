@@ -444,12 +444,11 @@ int mailbox_append_cache(struct mailbox *mailbox,
 			 struct index_record *record);
 char *mailbox_cache_get_msgid(struct mailbox *mailbox,
 			      struct index_record *record);
+
+/* field-based lookup functions */
 const char *cacheitem_base(struct index_record *record, int field);
 unsigned cacheitem_size(struct index_record *record, int field);
 struct buf *cacheitem_buf(struct index_record *record, int field);
-const char *cache_base(struct index_record *record);
-size_t cache_len(struct index_record *record);
-struct buf *cache_buf(struct index_record *record);
 
 /* opening and closing */
 extern int mailbox_open_iwl(const char *name,

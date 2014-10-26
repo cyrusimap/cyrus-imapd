@@ -375,18 +375,18 @@ HIDDEN unsigned mailbox_cached_header_inline(const char *text)
     return BIT32_MAX;
 }
 
-const char *cache_base(struct index_record *record)
+static const char *cache_base(struct index_record *record)
 {
     const char *base = record->crec.base->s;
     return base + record->crec.offset;
 }
 
-size_t cache_len(struct index_record *record)
+static size_t cache_len(struct index_record *record)
 {
     return record->crec.len;
 }
 
-struct buf *cache_buf(struct index_record *record)
+static struct buf *cache_buf(struct index_record *record)
 {
     static struct buf staticbuf;
 
