@@ -571,13 +571,6 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "failedloginpause", 3, INT }
 /* Number of seconds to pause after a failed login. */
 
-{ "flushseenstate", 1, SWITCH }
-/* If enabled, changes to the seen state will be flushed to disk
-   immediately, otherwise changes will be cached and flushed when the
-   mailbox is closed.  This option may be used to fix the problem of
-   previously read messages being marked as unread in Microsoft
-   Outlook, at the expense of a loss of performance/scalability. */
-
 { "foolstupidclients", 0, SWITCH }
 /* If enabled, only list the personal namespace when a LIST "*" is performed
    (it changes the request to a LIST "INBOX*"). */
