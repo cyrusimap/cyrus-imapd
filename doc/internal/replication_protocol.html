@@ -2,537 +2,79 @@
 "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-<title>Cyrus IMAP Server: Replication Protocol</title>
+<title>Cyrus IMAP Server: Replication Protocol v2.4+</title>
 </head>
 <body>
 
-<h1>Cyrus IMAP Server: Replication Protocol</h1>
+<h1>Cyrus IMAP Server: Replication Protocol v2.4+</h1>
 
-<h2>Replication Wire protocol : types</h2>
-<pre>
-ulong::
-  Unsigned long integer 0 &lt;= x &lt;= (2^32)-1
+<h2>DList 1.0</h2>
 
-quota_t::
-  EITHER : Unsigned long integer      :: 0 &lt;= x &lt;= (2^32)-1
-      OR : Unsigned long long integer :: 0 &lt;= x &lt;= (2^64)-1
+<p>The DList protocol is based closely on the IMAP wire protocol,
+using atoms and literals as the basis, but with two extended types
+of data:</p>
 
-time_t::
-  Timestamp (currently 32 bit unsigned integer, offset into Unix epoch)
-
-literal+::
-  {count+}\r\n
-Arbitrary string of count bytes\r\n
-
-astring::
-  Atom or string
-
-qstring::
-  Quoted string
-
-flag_list_t
-  List of system and user flags of the form: (\Deleted \Answered Hello World)
-</pre>
-
-<h3>Return values</h3>
-
-<p>Each command sent to the server is a single logical line of arbitrary length
-(literal encoding may make the single logical line span multiple lines).</p>
-
-<p>Responses follow the IMAP three state module:</p>
-
-<pre>
- OK English text\r\n   -- Operation completed okay
- NO English text\r\n   -- Operation failed: reason attached
-BAD English text\r\n   -- replication protocol error.
-</pre>
-
-<h3>Unsolicited/Multiline responses</h3>
-
-<p>Some commands generate responses which span multiple lines. The final line
-in the response will start "OK", "NO", or "BAD". Intermediate lines will
-all start "*". Some commands may generate structured responses (e.g: a list
-of mailboxes plus all of their contents) where the number of "*" at the
-start of the line defines the structure of the response.</p>
-
-<h2>Replication Wire Protocol : Brief text descriptions</h2>
-
-<p>The replication protocol defines 32 verbs at the time of writing.</p>
-
-<hr/>
-<h4>ADDSUB</h4>
-<pre>  subscription :: astring</pre>
-
-<p>Add string to list of subscription on server.</p>
-
-<hr/>
-<h4>ACTIVATE_SIEVE</h4>
-<pre>  sieve_name :: astring</pre>
-
-<p>Activate sieve file of given name for this user.</p>
-
-<hr/>
-<h4>CREATE</h4>
-<pre>
-  mailboxname :: astring  -- e.g: user.dpc22.zzz
-  uniqueid    :: astring  -- Cyrus UniqueID (currently 64bit hex number)
-  acl         :: astring  -- Initial ACL for this mailbox
-  mbtype      :: int
-  uidvalidity :: ulong
-</pre>
-
-<p>Create mailbox with given name. UniqueID currently derived from
-UIDvalidity and mailbox name, but no guarantee that this will always
-be the case.</p>
-
-<p>Special value "NIL" for ACL means that mailbox has come from UW world or
-some other location without ACL. We construct appropriate default ACL:</p>
-
-<pre>
-     userid    --&gt; "lrswipcda"
-     anonymous --&gt; "0"           (for FUD daemon)
-</pre>
-
-<hr/>
-<h4>CONTENTS</h4>
-
-<p>Dump complete contents of current folder to output screen. Used for
-downloading messages from Cyrus into UW world.</p>
-
-<p>Response is series of lines of the form:</p>
-
-<pre>
-  * [uid] [internaldate]
-    [flags :: flag_list_t]
-    [message body :: literal]
-</pre>
-
-<p>followed by final "OK" line. flag_list includes \Seen state for current
-users, unlike STATUS, USER_ALL and USER_SOME.</p>
-
-<hr/>
-<h4>DEACTIVATE_SIEVE</h4>
-
-<p>Deactivate the active sieve file for this user.</p>
-
-<hr/>
-<h4>DELETE</h4>
-<pre>  mailbox :: astring.</pre>
-
-<p>Delete mailbox with given name.</p>
-
-<hr/>
-<h4>DELSUB</h4>
-<pre>  mailbox :: astring</pre>
-
-<p>Delete subscription with given name</p>
-
-<hr/>
-<h4>DELETE_SIEVE</h4>
-<pre>  sieve_name :: astring</pre>
-
-<p>Delete sieve file with given name.</p>
-
-<hr/>
-<h4>EXIT</h4>
-
-<p>Shut down sync_server</p>
-
-<hr/>
-<h4>EXPUNGE</h4>
-<pre>
-  uid0 :: ulong
-     . . .
-  uidn :: ulong
-</pre>
-
-<p>Remove messages matching given list of UIDS from currently selected
-folder. Will return single line "OK Expunge Complete" on success.</p>
-
-<hr/>
-<h4>ENDUSER</h4>
-
-<p>Unlock current user  and call auth_freestate() to discard current
-authentication.</p>
-
-<hr/>
-<h4>GET_SIEVE sieve_name :: astring</h4>
-
-<p>Get sieve script with given name. Successful response is of form:</p>
-
-<pre>
-OK {%lu+}\r\n
-Sieve script
-\r\n
-</pre>
-
-<hr/>
-<h4>INFO</h4>
-
-<p>Get meta information for currently selected folder. Response is single line
-of the form:</p>
-
-<pre>
-OK
-  UIDvalidity :: ulong
-  UIDlast     :: ulong
-  Flags       :: flag_list_t
-</pre>
-
-<p>"INFO" command is almost certainly historical baggage and should be
-removed.</p>
-
-<hr/>
-<h4>LIST</h4>
-
-<p>List mail folders for currently selected list. Multiline response of
-the form:</p>
-
-<pre>
-   * [Uniqueid :: astring] [Name :: astring] [Acl :: astring]
-      . . .
-   * [Uniqueid :: astring] [Name :: astring] [Acl :: astring]
-   OK List complete
-</pre>
-
-<p>List command probably obsolete with advent of USER_ALL and USER_SOME
-commands.</p>
-
-<hr/>
-<h4>LSUB</h4>
-
-<p>List subscriptions for currently selected user. Multiline response of the
-form:</p>
-
-<pre>
-   * [Subscription :: astring]
-     . . .
-   * [Subscription :: astring]
-   OK Lsub complete
-</pre>
-
-<hr/>
-<h4>LIST_SIEVE</h4>
-
-<p>List available sieve files for currently selected users. Multiline
-response of the form:</p>
-
-<pre>
-   * [Sieve_name :: astring]   [*]   &lt;-- "*" for active sieve file
-     . . .
-   * [Sieve_name :: astring]
-   OK List_sieve complete
-</pre>
-
-<hr/>
-<h4>QUOTA</h4>
-<pre>  quota_root :: astring</pre>
-
-<p>Get quota root information. Response is single line of the form:</p>
-
-<pre>
-OK
-  Limit                 :: quota_t   (Kbytes)
-  Expunged_timeout      :: ulong     (seconds)
-  Expunged_vol_min      :: quota_t   (KBytes)
-  Expunged_vol_max      :: quota_t   (KBytes)
-  Expunged_vol_overflow :: quota_t   (KBytes)
-  Mailbox_limit         :: ulong     (KBytes)
-</pre>
-
-<hr/>
-<h4>RENAME</h4>
-<pre>
-  old_name :: astring
-  new_name :: astring
-</pre>
-
-<p>Rename mailbox old_name --&gt; new_name</p>
-
-<hr/>
-<h4>RESET</h4>
-<pre>  account :: astring</pre>
-
-<p>Reset named account back to initial state. Wipes all of the
-following:</p>
 <ul>
-<li>mailboxes</li>
-<li>subscriptions</li>
-<li>seen data</li>
-<li>Sieve files.</li>
+<li>kvlist</li>
+<li>rfc822-object</li>
 </ul>
 
-<hr/>
-<h4>RESERVE</h4>
-<pre>
-  mailbox :: astring
-  guid0 :: ulong
-     . . .
-  guidn :: ulong
-</pre>
+A wart of the protocol is the rfc822-object, which contains an
+explicit cyrus backend partition.  This will be removed in future
+versions of Cyrus.
 
-<p>Reserves collection of messages matching list of GUIDs in given mailbox.
-Message data is linked into /var/spool/imap/sync. staging directory
-so that we can later link the messages into other folders even if the
-original has been expunged. Multiline response of the form:</p>
+<h3>types</h3>
 
-<pre>
-  * [GUID :: astring]
-    . . .
-  * [GUID :: astring]
-  OK Reserve complete
-</pre>
+<h4>atom</h4>
 
-<p>so that client knows which reserve operations have been complete and which
-have failed.</p>
+<p>An atom is actually a sequence of any character other than '\0',
+the NULL byte.  Character encoding is not specified, but it can
+contain 8 bit characters, and is probably utf8</p>
 
-<hr/>
-<h4>RESTART</h4>
+<h4>flag</h4>
 
-<p>sync_client wants to negotiate a restart to clear up. Clears out all staged
-messages causes by upload and reserve sync_server child process exits
-cleanly, parent forks off a new child to resolve any memory leaks.</p>
+<p>Flag is a horrible special case of atom to allow \word to be
+represented as an IMAP atom on the wire.  This is one of many
+special cases in the IMAP protocol, and is duplicated into dlist
+just to make it easier to read</p>
 
-Responds:
-<pre>
-OK restarting.
-</pre>
+<h4>num32/num</h4>
 
-<hr/>
-<h4>SELECT</h4>
-<pre>  mailbox :: astring</pre>
+<p>Both stored as 64 bit integers internally, and sent as decimal
+numbers over the wire, this type exists only in the API, it just
+looks like a string on the wire.</p>
 
-<p>Select named mailbox as current folder (calls mailbox_open()).</p>
+<h4>hex32/hex</h4>
 
-<hr/>
-<h4>STATUS</h4>
+<p>Stored like num internally, but sent as an 8 or 16 character
+hexadecimal string on the wire</p>
 
-<p>Return complete status of currently selected mailbox. Multiline response:</p>
+<h4>map</h4>
 
-<pre>
-  * [uid :: ulong] [guid :: astring] [flags :: flag_list]
-    . . .
-  * [uid :: ulong] [guid :: astring] [flags :: flag_list]
-  OK [last_uid :: ulong]
-</pre>
+<p>Like atom, but can contain NULL.  All values are parsed off
+the wire as 'map' type and then converted on demand into the
+requested type</p>
 
-<p>Believe that this command has been obsoleted by USER_ALL and USER_SOME.
-Occasionally useful for debugging purposes.</p>
+<h4>list</h4>
 
-<hr/>
-<h4>SETFLAGS</h4>
-<pre>
-  [
-    uid   :: ulong
-    flags :: flag_list_t     e.g: (\Deleted \Flagged Hello World)
-  ] +
-</pre>
+<p>Encoded in parentheses like so (item item item) a list type can
+be nested inside other lists: (item (sub sub) item)</p>
 
-<p>Set flags for messages with given series of UIDs. SETFLAGS can take
-an arbitrary number of "uid (flags) " pairs on a single line.</p>
+<h4>kvlist</h4>
 
-<hr/>
-<h4>SETSEEN</h4>
-<pre>
-  user       :: astring
-  lastread   :: time_t
-  lastuid    :: time_t
-  lastchange :: time_t
-  seenuid    :: astring
-</pre>
+<p>A kvlist allows named parameters, and is indicated with a leading
+% character.  % is invalid in atoms, so parsing is unambiguous, e.g:</p>
 
-<p>Update seen database for current selected mailbox + nominated userid.
-seenuid is opaque string used by seendb code. The replication engine
-doesn't attempt to decompose seenuid strings to work out if anything
-has changed, it just uses the lastchange timestamp to work out if
-the seenuid string should be updated.</p>
+<p>%(key1 value1 key2 (list of values) key3 value3)</p>
 
-Successful Response:
-<pre>
-  OK Setseen Succeeded
-</pre>
+<h4>rfc822-object/file</h4>
 
-<hr/>
-<h4>SETACL</h4>
-<pre>
-  mailbox :: astring
-  acl :: astring
-</pre>
-
-<p>Set ACL on given mailbox. ACL will typically contain tab characters,
-so the astring will be the quoted form e.g:</p>
+<p>Finally the ugly one.  These look like a literal, but with a leading %
+and two more fields:</p>
 
 <pre>
-  "dpc22\ttlrswipcda\tanonymous\t0\t"
-</pre>
-
-<hr/>
-<h4>SETQUOTA</h4>
-<pre>
-  quotaroot :: astring
-  limit     :: quota_t
-  expunged_timeout :: ulong
-  expunged_vol_min :: ulong
-  expunged_vol_max :: ulong
-  expunged_vol_overflow :: ulong
-  mailbox_limit         :: ulong     (KBytes)
-</pre>
-
-<p>Set limits and overrides for given quota root.</p>
-
-<hr/>
-<h4>UPLOAD</h4>
-<pre>
-  newlastuid      :: ulong
-  last_appenddate :: time_t
-</pre>
-
-<p>Arbitrary list of messages on single logical line , with three forms:</p>
-
-<pre>
-   SIMPLE                          # Unparsed message that we need to parse
-     GUID          :: astring
-     UID           :: ulong        # "NIL" =&gt; Use GUID 0.
-     internaldate  :: time_t
-     sentdate      :: time_t
-     last_updated  :: time_t
-     flags         :: flag_list_t
-     message_text  :: literal+
-
-   PARSED                          # Message plus pre-parsed cyrus.cache entry
-     GUID          :: astring
-     UID           :: ulong
-     internaldate  :: time_t
-     sentdate      :: time_t
-     last_updated  :: time_t
-     flags         :: flag_list_t
-     message_cache :: literal+
-     message_text  :: literal+
-
-   COPY                           # Copy of message which has already
-     GUID          :: astring     # been UPLOADED or RESERVED
-     UID           :: ulong       # Message body and cache available
-     internaldate  :: time_t      # from staging directory
-     sentdate      :: time_t
-</pre>
-
-<p>Upload an arbitrary list of messages to the currently selected folder.</p>
-
-<p>Will normally only add messages to the end of the mailfolder in current use
-(and the code has special optimised path for that case).  However if
-message list contains UIDs which belong in the middle of a mailbox, or a
-given UID exists on both client and server but the GUID values don't match
-(which normally indicates the two ends have lost sync with each other),
-the the UPLOAD command will merge in new and replacement messages.</p>
-
-Response:
-<pre>
-  OK Upload %lu messages okay
-</pre>
-
-<hr/>
-<h4>UIDLAST</h4>
-<pre>
-  last_uid        :: ulong
-  last_appenddate :: ulong
-</pre>
-
-<p>Update last_uid and last_appenddate timestamps on mailfolder. Typically
-used when new messages have been arrived and then been expunged between
-replication runs. Essentially UPLOAD operation with an empty message list.</p>
-
-<hr/>
-<h4>USER</h4>
-<pre>
-  user ::astring
-</pre>
-
-<p>Select given user: locks out concurrent access from other replication
-runners and calls auth_newstate to authenticate us as the user in question.</p>
-
-Response:
-<pre>
-  OK Locked [username]
-</pre>
-
-<hr/>
-<h4>USER_ALL</h4>
-<pre>
-  user ::astring
-</pre>
-
-<p>Select given user: locks out concurrent access from other replication
-runners and calls auth_newstate to authenticate us as the user in question.</p>
-
-<p>Response is a complete list of _everything_ in the target account on
-the replica system in a single round trip. Multi line response,
-with various kinds of "*" response indicating different objects.
-Format should be familiar from other commands which examine only a
-portion of the target account.</p>
-
-<pre>
-**** Sieve script. Single line response of the form:
-
-  **** [name :: astring]
-       [last_update :: time_t]
-       [* - if active Sieve]
-
-*** Subscription. Single line response of the form:
-
-  *** [name :: astring]
-
-** Mailbox. Single line response of the form:
-
-  ** [uniqueid   :: astring]
-     [name       :: astring]
-     [acl        :: astring]
-     [lastuid    :: ulong]
-     [lastchange :: time_t]
-
-* Message within last mailbox listed as a "**" item. Format is the
-  same as that generated by STATUS command:
-
-  * [uid :: ulong]
-    [guid :: astring]
-    [flags :: flag_list_t]
-</pre>
-
-<p>Final line of successful response is used to report QUOTA information
-in the same format:</p>
-
-<pre>
-OK
-  Limit                 :: quota_t   (Kbytes)
-  expunged_timeout      :: ulong     (seconds)
-  expunged_vol_min      :: quota_t   (KBytes)
-  expunged_vol_max      :: quota_t   (KBytes)
-  expunged_vol_overflow :: quota_t   (KBytes)
-  mailbox_limit         :: ulong     (KBytes)
-</pre>
-
-<hr/>
-<h4>USER_SOME</h4>
-<pre>
-  user     :: astring
-  mailbox1 :: astring
-    . . .
-  mailboxn :: astring
-</pre>
-
-<p>Similar to USER_ALL command, but only returns mailbox and message lists
-for given set of mailboxes. Doesn't return sieve or subscription
-info.</p>
-
-<hr/>
-<h4>UPLOAD_SIEVE</h4>
-<pre>
-  sieve_name :: astring
-  sieve_file :: literal+
-</pre>
-
-<p>Response on success:</p>
-<pre>
-  Upload_sieve completed.
+%{partition sha1 size}\r\n
+data
 </pre>
 
 </body>
