@@ -134,7 +134,7 @@ sub check_folder_not_ondisk
 }
 
 sub test_self_inbox_imm
-    :ImmediateDelete
+    :ImmediateDelete :DefaultExpunge
 {
     my ($self) = @_;
 
@@ -202,7 +202,7 @@ sub test_self_inbox_imm
 }
 
 sub test_self_inbox_del
-    :DelayedDelete
+    :DelayedDelete :DefaultExpunge
 {
     my ($self) = @_;
 
@@ -277,7 +277,7 @@ sub test_self_inbox_del
 }
 
 sub test_admin_inbox_imm
-    :ImmediateDelete
+    :ImmediateDelete :DefaultExpunge
 {
     my ($self) = @_;
 
@@ -327,9 +327,8 @@ sub test_admin_inbox_imm
 	local $SIG{__WARN__} = sub { 1 };
 
 	xlog "Client was disconnected";
-	eval { $talk->select($inbox) };
-	my $Err = $@;
-	$self->assert_matches(qr/IMAP Connection closed by other end/, $Err);
+	my $Res = eval { $talk->select($inbox) };
+	$self->assert_null($Res);
 
 	# reconnect 
 	$talk = $store->get_client();
@@ -352,7 +351,7 @@ sub test_admin_inbox_imm
 }
 
 sub test_admin_inbox_del
-    :DelayedDelete
+    :DelayedDelete :DefaultExpunge
 {
     my ($self) = @_;
 
@@ -402,9 +401,8 @@ sub test_admin_inbox_del
 	local $SIG{__WARN__} = sub { 1 };
 
 	xlog "Client was disconnected";
-	eval { $talk->select($inbox) };
-	my $Err = $@;
-	$self->assert_matches(qr/IMAP Connection closed by other end/, $Err);
+	my $Res = eval { $talk->select($inbox) };
+	$self->assert_null($Res);
 
 	# reconnect 
 	$talk = $store->get_client();
@@ -434,7 +432,7 @@ sub test_admin_inbox_del
 }
 
 sub test_bz3781
-    :ImmediateDelete
+    :ImmediateDelete :DefaultExpunge
 {
     my ($self) = @_;
 

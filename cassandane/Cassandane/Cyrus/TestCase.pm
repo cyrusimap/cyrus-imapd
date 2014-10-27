@@ -172,6 +172,9 @@ magic(UnixHierarchySep => sub {
 magic(ImmediateExpunge => sub {
     shift->config_set(expunge_mode => 'immediate');
 });
+magic(DefaultExpunge => sub {
+    shift->config_set(expunge_mode => 'default');
+});
 magic(DelayedExpunge => sub {
     shift->config_set(expunge_mode => 'delayed');
 });
