@@ -265,8 +265,7 @@ static int caldav_copy(struct transaction_t *txn,
 static int caldav_delete_sched(struct transaction_t *txn,
 			       struct mailbox *mailbox,
 			       struct index_record *record, void *data);
-static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
-		      struct index_record *record, void *data);
+static int meth_get(struct transaction_t *txn, void *params);
 static int caldav_post(struct transaction_t *txn);
 static int caldav_put(struct transaction_t *txn,
 		      struct mime_type_t *mime,
@@ -555,7 +554,6 @@ static struct meth_params caldav_params = {
     &caldav_acl,
     (copy_proc_t) &caldav_copy,
     &caldav_delete_sched,
-    &caldav_get,
     { MBTYPE_CALENDAR, "mkcalendar", "mkcalendar-response", NS_CALDAV },
     &caldav_post,
     { CALDAV_SUPP_DATA, (put_proc_t) &caldav_put },
@@ -2254,11 +2252,9 @@ static int server_info(struct transaction_t *txn)
 
 
 /* Perform a GET/HEAD request on a CalDAV resource */
-static int caldav_get(struct transaction_t *txn,
-		      struct mailbox *mailbox __attribute__((unused)),
-		      struct index_record *record __attribute__((unused)),
-		      void *data __attribute__((unused)))
+static int meth_get(struct transaction_t *txn, void *params)
 {
+    struct meth_params *gparams = (struct meth_params *) params;
     struct strlist *action;
     int r, rights;
     mbentry_t *mbentry = NULL;
@@ -2270,6 +2266,13 @@ static int caldav_get(struct transaction_t *txn,
 	/* GET server-info resource */
 	if (!strcmp(action->s, "server-info")) return server_info(txn);
     }
+
+    /* Parse the path */
+    if ((r = gparams->parse_path(txn->req_uri->path,
+				 &txn->req_tgt, &txn->error.desc))) return r;
+
+    /* GET an individual resource */
+    if (txn->req_tgt.resource) return meth_get_dav(txn, gparams);
 
     /* Locate the mailbox */
     r = http_mlookup(txn->req_tgt.mboxname, &mbentry, NULL);

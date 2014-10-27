@@ -396,10 +396,6 @@ typedef int (*copy_proc_t)(struct transaction_t *txn,
 typedef int (*delete_proc_t)(struct transaction_t *txn, struct mailbox *mailbox,
 			     struct index_record *record, void *data);
 
-/* Function to do special processing for GET method (optional) */
-typedef int (*get_proc_t)(struct transaction_t *txn, struct mailbox *mailbox,
-			  struct index_record *record, void *data);
-
 /* Function to convert to/from MIME type */
 struct mime_type_t {
     const char *content_type;
@@ -471,7 +467,6 @@ struct meth_params {
     acl_proc_t acl_ext;			/* special ACL handling (extensions) */
     copy_proc_t copy;			/* function to process & COPY a rsrc */
     delete_proc_t delete;		/* special DELETE handling (optional) */
-    get_proc_t get;			/* special GET handling (optional) */
     struct mkcol_params mkcol;		/* params for creating collection */
     post_proc_t post;			/* special POST handling (optional) */
     struct put_params put;		/* params for putting a resource */
@@ -520,7 +515,7 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
 int meth_acl(struct transaction_t *txn, void *params);
 int meth_copy(struct transaction_t *txn, void *params);
 int meth_delete(struct transaction_t *txn, void *params);
-int meth_get(struct transaction_t *txn, void *params);
+int meth_get_dav(struct transaction_t *txn, void *params);
 int meth_lock(struct transaction_t *txn, void *params);
 int meth_mkcol(struct transaction_t *txn, void *params);
 int meth_propfind(struct transaction_t *txn, void *params);
