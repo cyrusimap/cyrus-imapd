@@ -233,8 +233,8 @@ struct namespace_t namespace_principal = {
 	{ NULL,			NULL },			/* ACL		*/
 	{ NULL,			NULL },			/* COPY		*/
 	{ NULL,			NULL },			/* DELETE	*/
-	{ &meth_get,		&princ_params },	/* GET		*/
-	{ &meth_get,		&princ_params },	/* HEAD		*/
+	{ &meth_get_dav,	&princ_params },	/* GET		*/
+	{ &meth_get_dav,	&princ_params },	/* HEAD		*/
 	{ NULL,			NULL },			/* LOCK		*/
 	{ NULL,			NULL },			/* MKCALENDAR	*/
 	{ NULL,			NULL },			/* MKCOL	*/
@@ -3322,7 +3322,7 @@ int meth_delete(struct transaction_t *txn, void *params)
 
 
 /* Perform a GET/HEAD request on a DAV resource */
-int meth_get(struct transaction_t *txn, void *params)
+int meth_get_dav(struct transaction_t *txn, void *params)
 {
     struct meth_params *gparams = (struct meth_params *) params;
     const char **hdr;
