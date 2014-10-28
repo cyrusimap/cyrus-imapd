@@ -524,6 +524,9 @@ int main(int argc, char *argv[])
     static strarray_t mark = STRARRAY_INITIALIZER;
     static strarray_t e_from = STRARRAY_INITIALIZER;
     static strarray_t e_to = STRARRAY_INITIALIZER;
+    /* prevent crashes if -e or -t aren't specified */
+    strarray_append(&e_from, "");
+    strarray_append(&e_to, "");
 
     while ((c = getopt(argc, argv, "v:fe:t:r:")) != EOF)
 	switch (c) {
@@ -534,9 +537,11 @@ int main(int argc, char *argv[])
 	    force_fail = 1;
 	    break;
 	case 'e':
+	    strarray_fini(&e_from);
 	    strarray_append(&e_from, optarg);
 	    break;
 	case 't':
+	    strarray_fini(&e_to);
 	    strarray_append(&e_to, optarg);
 	    break;
 	case 'r':
