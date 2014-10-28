@@ -288,8 +288,8 @@ struct namespace_t namespace_addressbook = {
 	{ &meth_acl,		&carddav_params },	/* ACL		*/
 	{ &meth_copy,		&carddav_params },	/* COPY		*/
 	{ &meth_delete,		&carddav_params },	/* DELETE	*/
-	{ &meth_get,		&carddav_params },	/* GET		*/
-	{ &meth_get,		&carddav_params },	/* HEAD		*/
+	{ &meth_get_dav,	&carddav_params },	/* GET		*/
+	{ &meth_get_dav,	&carddav_params },	/* HEAD		*/
 	{ &meth_lock,		&carddav_params },	/* LOCK		*/
 	{ NULL,			NULL },			/* MKCALENDAR	*/
 	{ &meth_mkcol,		&carddav_params },	/* MKCOL	*/

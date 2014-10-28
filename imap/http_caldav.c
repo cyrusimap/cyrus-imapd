@@ -574,8 +574,8 @@ struct namespace_t namespace_calendar = {
 	{ &meth_acl,		&caldav_params },	/* ACL		*/
 	{ &meth_copy,		&caldav_params },	/* COPY		*/
 	{ &meth_delete,		&caldav_params },	/* DELETE	*/
-	{ &meth_get,		&caldav_params },	/* GET		*/
-	{ &meth_get,		&caldav_params },	/* HEAD		*/
+	{ &meth_get_dav,	&caldav_params },	/* GET		*/
+	{ &meth_get_dav,	&caldav_params },	/* HEAD		*/
 	{ &meth_lock,		&caldav_params },	/* LOCK		*/
 	{ &meth_mkcol,		&caldav_params },	/* MKCALENDAR	*/
 	{ &meth_mkcol,		&caldav_params },	/* MKCOL	*/

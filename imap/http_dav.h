@@ -520,7 +520,7 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
 int meth_acl(struct transaction_t *txn, void *params);
 int meth_copy(struct transaction_t *txn, void *params);
 int meth_delete(struct transaction_t *txn, void *params);
-int meth_get(struct transaction_t *txn, void *params);
+int meth_get_dav(struct transaction_t *txn, void *params);
 int meth_lock(struct transaction_t *txn, void *params);
 int meth_mkcol(struct transaction_t *txn, void *params);
 int meth_propfind(struct transaction_t *txn, void *params);
