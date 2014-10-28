@@ -323,7 +323,6 @@ EXPORTED int index_open(const char *name, struct index_init *init,
 
 	state->internalseen = mailbox_internal_seen(state->mailbox,
 						    state->userid);
-	state->keepingseen = (state->myrights & ACL_SETSEEN);
     }
     else {
 	r = mailbox_open_iwl(name, &state->mailbox);
@@ -1103,7 +1102,7 @@ EXPORTED int index_fetch(struct index_state *state,
     seq = _parse_sequence(state, sequence, usinguid);
 
     /* set the \Seen flag if necessary - while we still have the lock */
-    if (fetchargs->fetchitems & FETCH_SETSEEN && !state->examining) {
+    if (fetchargs->fetchitems & FETCH_SETSEEN && !state->examining && state->myrights & ACL_SETSEEN) {
 	mboxevent = mboxevent_new(EVENT_MESSAGE_READ);
 
 	for (msgno = 1; msgno <= state->exists; msgno++) {

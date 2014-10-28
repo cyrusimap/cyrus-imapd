@@ -110,7 +110,6 @@ struct index_state {
     int internalseen;
     int skipped_expunge;
     int seen_dirty;
-    int keepingseen;
     int examining;
     int myrights;
     unsigned numrecent;
