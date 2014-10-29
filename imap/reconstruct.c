@@ -137,10 +137,6 @@ int main(int argc, char **argv)
 	fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    /* Ensure we're up-to-date on the index file format */
-    assert(INDEX_HEADER_SIZE == (OFFSET_HEADER_CRC+4));
-    assert(INDEX_RECORD_SIZE == (OFFSET_RECORD_CRC+4));
-
     construct_hash_table(&unqid_table, 2047, 1);
 
     while ((opt = getopt(argc, argv, "C:kp:rmfsxgGqRUoOn")) != EOF) {
