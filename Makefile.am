@@ -817,8 +817,6 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/tls.h \
 	imap/tls_th-lock.c \
 	imap/tls_th-lock.h \
-	imap/upgrade_index.c \
-	imap/upgrade_index.h \
 	imap/user.c \
 	imap/user.h \
 	imap/userdeny_db.c \

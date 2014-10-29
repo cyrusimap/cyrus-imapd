@@ -65,6 +65,12 @@
      "\"The best thing about this system was that it had lots of goals.\"\n" \
      "\t--Jim Morris on Andrew\n")
 
+
+/* NOTE: the mailbox minor version must be changed whenever any on-disk
+ * format changes are made to any mailbox files.  It is also important to
+ * make sure all the mailbox upgrade and downgrade code in mailbox.c is
+ * changed to be able to convert both backwards and forwards between the
+ * new version and all supported previous versions */
 #define MAILBOX_MINOR_VERSION	13
 #define MAILBOX_CACHE_MINOR_VERSION 3
 
@@ -136,7 +142,6 @@ struct index_record {
     modseq_t modseq;
     bit64 cid;
     bit32 cache_crc;
-    bit32 record_crc;
 
     /* metadata */
     uint32_t recno;
@@ -180,7 +185,6 @@ struct index_header {
     uint32_t recentuid;
     time_t recenttime;
 
-    uint32_t header_crc;
     time_t pop3_show_after;
     quota_t quota_annot_used;
 };
@@ -542,12 +546,6 @@ struct mailbox_repack {
 #define MAILBOX_CRC_VERSION_MIN		1
 #define MAILBOX_CRC_VERSION_MAX		2
 
-extern int mailbox_repack_setup(struct mailbox *mailbox,
-			        struct mailbox_repack **repackptr);
-extern int mailbox_repack_add(struct mailbox_repack *repack,
-			      struct index_record *record);
-extern void mailbox_repack_abort(struct mailbox_repack **repackptr);
-extern int mailbox_repack_commit(struct mailbox_repack **repackptr);
 extern int mailbox_index_recalc(struct mailbox *mailbox);
 
 #define mailbox_quota_check(mailbox, delta) \
