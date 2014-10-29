@@ -74,11 +74,11 @@
 #include "annotate.h"
 #include "append.h"
 #include "auth.h"
-#ifdef USE_HTTPD
+#ifdef WITH_DAV
 #include "caldav_db.h"
 #include "carddav_db.h"
 #include "dav_db.h"
-#endif /* USE_HTTPD */
+#endif /* WITH_DAV */
 #include "dlist.h"
 #include "exitcodes.h"
 #include "global.h"

@@ -81,10 +81,10 @@
 
 #include "annotate.h"
 #include "assert.h"
-#ifdef USE_HTTPD
+#ifdef WITH_DAV
 #include "caldav_db.h"
 #include "carddav_db.h"
-#endif
+#endif /* WITH_DAV */
 #include "crc32.h"
 #include "md5.h"
 #include "exitcodes.h"
