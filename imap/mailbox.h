@@ -531,18 +531,6 @@ extern void mailbox_make_uniqueid(struct mailbox *mailbox);
 
 extern int mailbox_setversion(struct mailbox *mailbox, int version);
 /* for upgrade index */
-extern int mailbox_buf_to_index_record(const char *buf,
-				       struct index_record *record);
-extern int mailbox_buf_to_index_header(const char *buf,
-				       struct index_header *i);
-
-/* for repack */
-struct mailbox_repack {
-    struct mailbox *mailbox;
-    struct index_header i;
-    int newindex_fd;
-    int newcache_fd;
-};
 
 #define MAILBOX_CRC_VERSION_MIN		1
 #define MAILBOX_CRC_VERSION_MAX		2
