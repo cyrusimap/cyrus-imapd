@@ -121,8 +121,8 @@ static void index_fetchheader(struct index_state *state,
 			      unsigned size,
 			      const strarray_t *headers,
 			      const strarray_t *headers_not);
-static void index_fetchcacheheader(struct index_state *state, struct index_record *record, 
-				   const strarray_t *headers, unsigned start_octet, 
+static void index_fetchcacheheader(struct index_state *state, struct index_record *record,
+				   const strarray_t *headers, unsigned start_octet,
 				   unsigned octet_count);
 static void index_listflags(struct index_state *state);
 static void index_fetchflags(struct index_state *state, uint32_t msgno);
@@ -480,6 +480,7 @@ static int index_writeseen(struct index_state *state)
     struct seendata oldsd = SEENDATA_INITIALIZER;
     struct seendata sd = SEENDATA_INITIALIZER;
     struct mailbox *mailbox = state->mailbox;
+    const char *userid = (mailbox->i.options & OPT_IMAP_SHAREDSEEN) ? "anyone" : state->userid;
 
     if (!state->seen_dirty)
 	return 0;
@@ -499,7 +500,7 @@ static int index_writeseen(struct index_state *state)
 	return 0;
     }
 
-    r = seen_open(state->userid, SEEN_CREATE, &seendb);
+    r = seen_open(userid, SEEN_CREATE, &seendb);
     if (r) return r;
 
     r = seen_lockread(seendb, mailbox->uniqueid, &oldsd);
@@ -551,9 +552,10 @@ static struct seqset *_readseen(struct index_state *state, unsigned *recentuid)
     else if (state->userid) {
 	struct seen *seendb = NULL;
 	struct seendata sd = SEENDATA_INITIALIZER;
+	const char *userid = (mailbox->i.options & OPT_IMAP_SHAREDSEEN) ? "anyone" : state->userid;
 	int r;
 
-	r = seen_open(state->userid, SEEN_CREATE, &seendb);
+	r = seen_open(userid, SEEN_CREATE, &seendb);
 	if (!r) r = seen_read(seendb, mailbox->uniqueid, &sd);
 	seen_close(&seendb);
 
@@ -563,7 +565,7 @@ static struct seqset *_readseen(struct index_state *state, unsigned *recentuid)
 	    prot_printf(state->out, "* OK (seen state failure) %s: %s\r\n",
 		   error_message(IMAP_NO_CHECKPRESERVE), error_message(r));
 	    syslog(LOG_ERR, "Could not open seen state for %s (%s)",
-		   state->userid, error_message(r));
+		   userid, error_message(r));
 	}
 	else {
 	    *recentuid = sd.lastuid;
