@@ -119,6 +119,7 @@ static void usage(void);
 extern cyrus_acl_canonproc_t mboxlist_ensureOwnerRights;
 
 static int reconstruct_flags = RECONSTRUCT_MAKE_CHANGES | RECONSTRUCT_DO_STAT;
+static int setversion = 0;
 
 int main(int argc, char **argv)
 {
@@ -139,7 +140,7 @@ int main(int argc, char **argv)
 
     construct_hash_table(&unqid_table, 2047, 1);
 
-    while ((opt = getopt(argc, argv, "C:kp:rmfsxgGqRUoOn")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:kp:rmfsxgGqRUoOnV:")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -203,6 +204,10 @@ int main(int argc, char **argv)
 
 	case 'O':
 	    reconstruct_flags |= RECONSTRUCT_REMOVE_ODDFILES;
+	    break;
+
+	case 'V':
+	    setversion = atoi(optarg);
 	    break;
 
 	default:
@@ -455,6 +460,17 @@ static int do_reconstruct(char *name,
 	printf("%s\n", buf);
 
     strncpy(outpath, mailbox_meta_fname(mailbox, META_HEADER), MAX_MAILBOX_NAME);
+
+    if (setversion) {
+	/* need to re-set the version! */
+	int r = mailbox_setversion(mailbox, setversion);
+	if (r) {
+	    printf("FAILED TO REPACK %s with new version %s\n", buf, error_message(r));
+	}
+	else {
+	    printf("Repacked %s to version %d\n", buf, setversion);
+	}
+    }
     mailbox_close(&mailbox);
 
     if (discovered) {
