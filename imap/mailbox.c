@@ -581,6 +581,18 @@ static struct mappedfile *mailbox_cachefile(struct mailbox *mailbox,
     return cache_getfile(&mailbox->caches, fname, mailbox->is_readonly, mailbox->i.generation_no);
 }
 
+/* for repack */
+struct mailbox_repack {
+    struct mailbox *mailbox;
+    struct index_header i;
+    struct seqset *seqset;
+    const char *userid;
+    int old_version;
+    int newindex_fd;
+    int newcache_fd;
+    ptrarray_t caches;
+};
+
 static struct mappedfile *repack_cachefile(struct mailbox_repack *repack,
 					   struct index_record *record)
 {
@@ -640,6 +652,7 @@ EXPORTED int mailbox_cacherecord(struct mailbox *mailbox,
 				 struct index_record *record)
 {
     struct mappedfile *cachefile;
+    bit32 crc;
     int r = 0;
 
     /* do we already have a record loaded? */
@@ -3463,17 +3476,6 @@ static int mailbox_index_unlink(struct mailbox *mailbox)
 
     return 0;
 }
-
-/* for repack */
-struct mailbox_repack {
-    struct mailbox *mailbox;
-    struct index_header i;
-    struct seqset *seqset;
-    const char *userid;
-    int old_version;
-    int newindex_fd;
-    int newcache_fd;
-};
 
 /* clean up memory structures and abort repack */
 static void mailbox_repack_abort(struct mailbox_repack **repackptr)
