@@ -57,7 +57,7 @@
 #ifdef USE_HTTPD
 #include "caldav_db.h"
 #include "carddav_db.h"
-#endif
+#endif /* USE_HTTPD */
 #include "exitcodes.h"
 #include "global.h"
 #include "imapurl.h"

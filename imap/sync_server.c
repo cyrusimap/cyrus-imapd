@@ -78,7 +78,7 @@
 #include "caldav_db.h"
 #include "carddav_db.h"
 #include "dav_db.h"
-#endif USE_HTTPD
+#endif /* USE_HTTPD */
 #include "dlist.h"
 #include "exitcodes.h"
 #include "global.h"
