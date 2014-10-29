@@ -54,8 +54,10 @@
 
 #include "annotate.h"
 #include "assert.h"
+#ifdef USE_HTTPD
 #include "caldav_db.h"
 #include "carddav_db.h"
+#endif
 #include "exitcodes.h"
 #include "global.h"
 #include "imapurl.h"
