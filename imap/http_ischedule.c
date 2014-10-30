@@ -1104,7 +1104,7 @@ static void isched_init(struct buf *serverinfo)
 		     senderhdrs, sizeof(const char **));
 
 	/* Fetch DKIM private key for signing */
-	if ((fd = open(keyfile, O_RDONLY)) != -1) {
+	if (keyfile && (fd = open(keyfile, O_RDONLY)) != -1) {
 	    const char *base = NULL;
 	    unsigned long len = 0;
 
