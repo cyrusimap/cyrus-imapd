@@ -706,10 +706,12 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     if (server_cipher_order)
 	off |= SSL_OP_CIPHER_SERVER_PREFERENCE;
 
+#if (OPENSSL_VERSION_NUMBER >= 0x1000000fL)
     if (!config_getswitch(IMAPOPT_TLS_COMPRESSION)) {
 	off |= SSL_OP_NO_COMPRESSION;
 	syslog(LOG_DEBUG, "TLS client engine: Setting SSL_OP_NO_COMPRESSION");
     }
+#endif
     
     SSL_CTX_set_options(s_ctx, off);
     SSL_CTX_set_info_callback(s_ctx, apps_ssl_info_callback);
