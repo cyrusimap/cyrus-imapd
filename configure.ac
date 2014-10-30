@@ -1710,8 +1710,9 @@ Cyrus Imapd configured components
    sieve:              $enable_sieve
 
 External dependencies:
-   pcre:               $cyrus_cv_pcre_utf8
+   ldap:               $have_ldap
    openssl:            $with_ssl
+   pcre:               $cyrus_cv_pcre_utf8
 
 Database support:
    bdb:                $use_berkeley
