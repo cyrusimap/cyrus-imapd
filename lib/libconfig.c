@@ -291,6 +291,14 @@ static void config_option_deprecated(const int opt)
 	    config_option_deprecate(opt, IMAPOPT_AUTOCREATE_POST, "2.5.0");
 	    break;
 	}
+	case IMAPOPT_FLUSHSEENSTATE: {
+	    syslog(
+		    LOG_WARNING,
+		    "Option '%s' is deprecated in version 2.5.0.",
+		    imapopts[opt].optname
+		);
+	    break;
+	}
 	case IMAPOPT_GENERATE_COMPILED_SIEVE_SCRIPT: {
 	    config_option_deprecate(opt, IMAPOPT_AUTOCREATE_SIEVE_SCRIPT_COMPILE, "2.5.0");
 	    break;
