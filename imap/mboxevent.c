@@ -371,8 +371,10 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
 		(type & (EVENT_MESSAGE_APPEND|EVENT_MESSAGE_NEW)));
     case EVENT_MAILBOX_ID:
 	return (type & MAILBOX_EVENTS);
+#ifdef WITH_DAV
     case EVENT_MBTYPE:
 	return (type & MAILBOX_EVENTS);
+#endif
     case EVENT_MAX_MESSAGES:
 	return type & QUOTA_EVENTS;
     case EVENT_MESSAGE_CONTENT:
@@ -1007,8 +1009,10 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     imapurl_toURL(url, &imapurl);
     FILL_STRING_PARAM(event, EVENT_URI, xstrdup(url));
 
+#ifdef WITH_DAV
     FILL_STRING_PARAM(event, EVENT_MBTYPE,
 	xstrdup(mboxlist_mbtype_to_string(mailbox->mbtype)));
+#endif
 
     /* mailbox related events also require mailboxID */
     if (event->type & MAILBOX_EVENTS) {
