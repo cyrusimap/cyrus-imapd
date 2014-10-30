@@ -695,7 +695,7 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 	off |= SSL_OP_NO_TLSv1_2;
 #else
 	syslog(LOG_ERR, "ERROR: TLSv1.2 configured, OpenSSL < 1.0.1e insufficient");
-#endif
+#endif // (OPENSSL_VERSION_NUMBER >= 0x1000105fL)
     }
 
     if (strstr(tls_versions, "tls1_1") == NULL) {
@@ -704,7 +704,7 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 	off |= SSL_OP_NO_TLSv1_1;
 #else
 	syslog(LOG_ERR, "ERROR: TLSv1.1 configured, OpenSSL < 1.0.0 insufficient");
-#endif
+#endif // (OPENSSL_VERSION_NUMBER >= 0x1000000fL)
     }
 
     if (strstr(tls_versions, "tls1_0") == NULL) {
@@ -721,7 +721,7 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 	off |= SSL_OP_NO_COMPRESSION;
 	syslog(LOG_DEBUG, "TLS client engine: Setting SSL_OP_NO_COMPRESSION");
     }
-#endif
+#endif // (OPENSSL_VERSION_NUMBER >= 0x1000000fL)
     
     SSL_CTX_set_options(s_ctx, off);
     SSL_CTX_set_info_callback(s_ctx, apps_ssl_info_callback);
@@ -1393,10 +1393,12 @@ HIDDEN int tls_init_clientengine(int verifydepth,
     SSL_CTX_set_options(c_ctx, off);
     SSL_CTX_set_info_callback(c_ctx, apps_ssl_info_callback);
 
+#if (OPENSSL_VERSION_NUMBER >= 0x1000000fL)
     if (!config_getswitch(IMAPOPT_TLS_COMPRESSION)) {
 	off |= SSL_OP_NO_COMPRESSION;
 	syslog(LOG_DEBUG, "TLS client engine: Setting SSL_OP_NO_COMPRESSION");
     }
+#endif // (OPENSSL_VERSION_NUMBER >= 0x1000000fL)
     
     server_ca_dir = config_getstring(IMAPOPT_TLS_SERVER_CA_DIR);
     server_ca_file = config_getstring(IMAPOPT_TLS_SERVER_CA_FILE);
