@@ -954,6 +954,7 @@ EXPORTED int mboxlist_createmailbox(const char *name, int mbtype,
 	/* send a MailboxCreate event notification */
 	struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_CREATE);
 	mboxevent_extract_mailbox(mboxevent, mailbox);
+	mboxevent_set_access(mboxevent, NULL, NULL, userid, mailbox->name);
 
 	mboxevent_notify(mboxevent);
 	mboxevent_free(&mboxevent);
@@ -1295,6 +1296,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
 	/* only on a real delete do we delete from the remote end as well */
 	sync_log_unmailbox(mailbox->name);
 	mboxevent_extract_mailbox(mboxevent, mailbox);
+	mboxevent_set_access(mboxevent, NULL, NULL, userid, mailbox->name);
 
 	r = mailbox_delete(&mailbox);
 	/* abort event notification */
@@ -1544,6 +1546,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 	if (newmailbox) {
 	    /* prepare the event notification */
 	    if (mboxevent) {
+
 		/* case of delayed delete */
 		if (mboxevent->type == EVENT_MAILBOX_DELETE)
 		    mboxevent_extract_mailbox(mboxevent, oldmailbox);
@@ -1551,6 +1554,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 		    mboxevent_extract_mailbox(mboxevent, newmailbox);
 		    mboxevent_extract_old_mailbox(mboxevent, oldmailbox);
 		}
+		mboxevent_set_access(mboxevent, NULL, NULL, userid, newmailbox->name);
 	    }
 
 	    mailbox_rename_cleanup(&oldmailbox, isusermbox);
@@ -1858,6 +1862,7 @@ EXPORTED int mboxlist_setacl(struct namespace *namespace, const char *name,
 	struct mboxevent *mboxevent = mboxevent_new(EVENT_ACL_CHANGE);
 	mboxevent_extract_mailbox(mboxevent, mailbox);
 	mboxevent_set_acl(mboxevent, identifier, rights);
+	mboxevent_set_access(mboxevent, NULL, NULL, userid, mailbox->name);
 
 	mboxevent_notify(mboxevent);
 	mboxevent_free(&mboxevent);
