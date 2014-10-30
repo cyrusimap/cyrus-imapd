@@ -825,10 +825,12 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/version.h
 imap_libcyrus_imap_la_LIBADD = $(COM_ERR_LIBS) $(LIB_UUID) lib/libcyrus_min.la lib/libcyrus.la
 imap_libcyrus_imap_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
+
 if JANSSON
 imap_libcyrus_imap_la_LIBADD += $(JANSSON_LIBS)
 imap_libcyrus_imap_la_CFLAGS += $(JANSSON_CFLAGS)
 endif
+
 if HTTPD
 imap_libcyrus_imap_la_SOURCES += \
 	imap/caldav_db.c \
@@ -924,6 +926,7 @@ nodist_imap_httpd_SOURCES = \
 	imap/http_err.h \
 	imap/tz_err.c \
 	imap/tz_err.h
+
 imap_httpd_SOURCES = \
 	imap/carddav_db.c \
 	imap/caldav_db.c \
@@ -947,6 +950,7 @@ imap_httpd_SOURCES = \
 	imap/xcal.c \
 	imap/zoneinfo_db.c \
 	master/service.c
+
 imap_httpd_LDADD = $(LD_SERVER_ADD)
 
 imap_pop3d_SOURCES = \
@@ -1167,7 +1171,6 @@ dist_man_MANS = \
 	man/deliver.8 \
 	man/fetchnews.8 \
 	man/fud.8 \
-	man/httpd.8 \
 	man/idled.8 \
 	man/imapd.8 \
 	man/ipurge.8 \
@@ -1190,6 +1193,11 @@ dist_man_MANS = \
 	man/timsieved.8 \
 	man/tls_prune.8 \
 	man/unexpunge.8
+
+if HTTPD
+dist_man_MANS += \
+	man/httpd.8
+endif
 
 master_master_SOURCES = \
 	master/cyrusMasterMIB.c \
