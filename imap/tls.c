@@ -434,8 +434,13 @@ static int set_cert_stuff(SSL_CTX * ctx,
 	/* Now we know that a key and cert have been set against
          * the SSL context */
 	if (!SSL_CTX_check_private_key(ctx)) {
-	    syslog(LOG_ERR,
-		   "Private key does not match the certificate public key");
+	    syslog(
+		    LOG_ERR,
+		    "Private key '%s' does not match public key '%s'",
+		    cert_file,
+		    key_file
+		);
+
 	    return (0);
 	}
     }
@@ -675,15 +680,18 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     const char *tls_versions = config_getstring(IMAPOPT_TLS_VERSIONS);
 
     if (strstr(tls_versions, "ssl2") == NULL || tlsonly) {
+	//syslog(LOG_DEBUG, "TLS server engine: Disabled SSLv2");
 	off |= SSL_OP_NO_SSLv2;
     }
 
     if (strstr(tls_versions, "ssl3") == NULL || tlsonly) {
+	//syslog(LOG_DEBUG, "TLS server engine: Disabled SSLv3");
 	off |= SSL_OP_NO_SSLv3;
     }
 
     if (strstr(tls_versions, "tls1_2") == NULL) {
 #if (OPENSSL_VERSION_NUMBER >= 0x1000105fL)
+	//syslog(LOG_DEBUG, "TLS server engine: Disabled TLSv1.2");
 	off |= SSL_OP_NO_TLSv1_2;
 #else
 	syslog(LOG_ERR, "ERROR: TLSv1.2 configured, OpenSSL < 1.0.1e insufficient");
@@ -692,6 +700,7 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 
     if (strstr(tls_versions, "tls1_1") == NULL) {
 #if (OPENSSL_VERSION_NUMBER >= 0x1000000fL)
+	//syslog(LOG_DEBUG, "TLS server engine: Disabled TLSv1.1");
 	off |= SSL_OP_NO_TLSv1_1;
 #else
 	syslog(LOG_ERR, "ERROR: TLSv1.1 configured, OpenSSL < 1.0.0 insufficient");
@@ -699,6 +708,7 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     }
 
     if (strstr(tls_versions, "tls1_0") == NULL) {
+	//syslog(LOG_DEBUG, "TLS server engine: Disabled TLSv1.0");
 	off |= SSL_OP_NO_TLSv1;
     }
 
@@ -718,30 +728,53 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 
     cipher_list = config_getstring(IMAPOPT_TLS_CIPHERS);
     if (!SSL_CTX_set_cipher_list(s_ctx, cipher_list)) {
-	syslog(LOG_ERR,"TLS server engine: cannot load cipher list '%s'",
-	       cipher_list);
+	syslog(
+		LOG_ERR,
+		"TLS server engine: cannot load cipher list '%s'",
+		cipher_list
+	    );
+
 	return (-1);
     }
 
     tls_client_certs = config_getenum(IMAPOPT_TLS_CLIENT_CERTS);
 
     if (tls_client_certs != IMAP_ENUM_TLS_CLIENT_CERTS_OFF) {
+	// The use of client certificates for authentication is
+	// optional or required.
 	client_ca_dir  = config_getstring(IMAPOPT_TLS_CLIENT_CA_DIR);
 	client_ca_file = config_getstring(IMAPOPT_TLS_CLIENT_CA_FILE);
 
 	if (client_ca_dir || client_ca_file) {
+	    // Attempt to load client_ca_dir and/or client_ca_file
 	    if ((!SSL_CTX_load_verify_locations(s_ctx, client_ca_file, client_ca_dir)) ||
 		(!SSL_CTX_set_default_verify_paths(s_ctx))) {
-		/* just a warning since this is only necessary for client auth */
-		syslog(LOG_NOTICE,"TLS server engine: Failed to load CA data.");
+
+		// Just a warning since this is only necessary for client auth.
+		syslog(
+			LOG_WARNING,
+			"TLS server engine: Failed loading client CA "
+			"data, cert auth disabled."
+		    );
+
 		use_client_certs = 0;
 	    }
-	} else {
-	    syslog(LOG_NOTICE,"TLS server engine: Cannot load CA data.");
+	} else { // (client_ca_dir || client_ca_file)
+	    // We have no CA to verify client certificates against.
+	    syslog(LOG_DEBUG, "TLS server engine: No client CA data configured.");
+
+	    // This is fatal should client certificates be required.
+	    if (tls_client_certs == IMAP_ENUM_TLS_CLIENT_CERTS_REQUIRE) {
+		return (-1);
+	    }
+
 	    use_client_certs = 0;
 	}
-    } else {
+
+    } else { // (tls_client_certs != IMAP_ENUM_TLS_CLIENT_CERTS_OFF)
+	// The use of client certificates is turned off.
 	use_client_certs = 0;
+	syslog(LOG_DEBUG, "%s:%d", __FILE__, __LINE__);
     }
 
     server_ca_file = config_getstring(IMAPOPT_TLS_SERVER_CA_FILE);
@@ -759,28 +792,44 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 
 	if (filebio) {
 	    X509 *cacert;
-	    syslog(LOG_DEBUG,"TLS server engine: loading additional client_ca_cert from file %s", server_ca_file);
+
+	    syslog(
+		    LOG_DEBUG,
+		    "TLS server engine: loading additional client CA information from file %s",
+		    server_ca_file
+		);
 
 	    while ((cacert = PEM_read_bio_X509(filebio,NULL,NULL,NULL)) != NULL) {
 		char buf[256];
 		X509_NAME_oneline(X509_get_subject_name(cacert), buf, sizeof(buf));
-		if (!SSL_CTX_add_extra_chain_cert(s_ctx,cacert)) {
-		    syslog(LOG_ERR,"TLS server engine: failed to add client_ca_cert to chain: %s",buf);
+
+		if (!SSL_CTX_add_extra_chain_cert(s_ctx, cacert)) {
+		    syslog(
+			    LOG_ERR,
+			    "TLS server engine: failed to add client_ca_cert to chain: %s",
+			    buf
+			);
+
 		    X509_free(cacert);
 		} else {
-		    syslog(LOG_DEBUG,"TLS server engine: added CA cert to chain: %s",buf);
+		    syslog(LOG_DEBUG, "TLS server engine: added CA cert to chain: %s", buf);
 		}
 	    }
 
 	    BIO_free(filebio);
 	} else {
-	    syslog(LOG_ERR,"TLS server engine: Cannot load client_ca_cert from file %s", server_ca_file);
+	    syslog(
+		    LOG_ERR,
+		    "TLS server engine: Cannot load additional client CA information from file %s",
+		    server_ca_file
+		);
+
 	    return (-1);
 	}
     }
 
     if (!set_cert_stuff(s_ctx, server_cert_file, server_key_file)) {
-	syslog(LOG_ERR,"TLS server engine: cannot load server cert/key data");
+	syslog(LOG_ERR, "TLS server engine: cannot load server cert/key data");
 	return (-1);
     }
 
@@ -805,10 +854,9 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 #endif
 
     verify_depth = verifydepth;
-    tls_client_certs = config_getenum(IMAPOPT_TLS_CLIENT_CERTS);
 
     if (!use_client_certs) {
-	if ((tls_client_certs != IMAP_ENUM_TLS_CLIENT_CERTS_OFF) || askcert)
+	if ((tls_client_certs == IMAP_ENUM_TLS_CLIENT_CERTS_REQUIRE) && askcert)
 	    syslog(LOG_ERR, "TLS server engine: No client cert CA specified.");
 
     } else {
@@ -823,7 +871,7 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 	    if (askcert || tls_client_certs)
 		verify_flags = SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE;
 
-	    if (tls_client_certs)
+	    if (tls_client_certs == IMAP_ENUM_TLS_CLIENT_CERTS_REQUIRE)
 		verify_flags |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
 
 	    SSL_CTX_set_client_CA_list(s_ctx, CAnames);
