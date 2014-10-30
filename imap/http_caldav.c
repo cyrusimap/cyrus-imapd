@@ -1410,12 +1410,23 @@ static int dump_calendar(struct transaction_t *txn, int rights)
  * mboxlist_findall() callback function to list calendars
  */
 
+struct cal_info {
+    char shortname[MAX_MAILBOX_NAME];
+    char displayname[MAX_MAILBOX_NAME];
+    unsigned flags;
+};
+
+enum {
+    CAL_IS_DEFAULT =	(1<<0),
+    CAL_CAN_DELETE =	(1<<1),
+    CAL_CAN_ADMIN =	(1<<2),
+    CAL_IS_PUBLIC =	(1<<3)
+};
+
 struct list_cal_rock {
-    struct transaction_t *txn;
-    const char *proto;
-    const char *host;
-    const char *base;
-    unsigned *level;
+    struct cal_info *cal;
+    unsigned len;
+    unsigned alloc;
 };
 
 static int list_cal_cb(char *name,
@@ -1424,16 +1435,13 @@ static int list_cal_cb(char *name,
 		       void *rock)
 {
     struct list_cal_rock *lrock = (struct list_cal_rock *) rock;
-    struct transaction_t *txn = lrock->txn;
-    struct buf *body = &txn->resp_body.payload;
-    const char *base_path = txn->req_tgt.path;
-    unsigned *level = lrock->level;
+    struct cal_info *cal;
     static size_t inboxlen = 0;
     static size_t outboxlen = 0;
     static size_t defaultlen = 0;
     char *acl, *shortname;
     size_t len;
-    int r, rights, any_rights = 0, isdefault = 0;
+    int r, rights, any_rights = 0;
     static const char *displayname_annot =
 	ANNOT_NS "<" XML_NS_DAV ">displayname";
     struct annotation_data displayname;
@@ -1458,60 +1466,61 @@ static int list_cal_cb(char *name,
     rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
     if (!(rights & ACL_READ)) return 0;
 
-    /* Is this the default calendar? */
-    if (len == defaultlen && !strncmp(shortname, SCHED_DEFAULT, defaultlen)) {
-	isdefault = 1;
-    }
-
-    /* Send a body chunk once in a while */
-    if (buf_len(body) > PROT_BUFSIZE) {
-	write_body(0, txn, buf_cstring(body), buf_len(body));
-	buf_reset(body);
-    }
-
     /* Lookup DAV:displayname */
-    memset(&displayname, 0, sizeof(struct annotation_data));
     r = annotatemore_lookup(name, displayname_annot,
 			    /* shared */ "", &displayname);
     if (r || !displayname.value) displayname.value = shortname;
 
-    /* Add available calendar with link */
-    buf_printf_markup(body, (*level)++, "<tr>");
-    buf_printf_markup(body, *level, "<td>%s%s%s", isdefault ? "<b>" : "",
-		      displayname.value, isdefault ? "</b>" : "");
-
-    buf_printf_markup(body, *level,
-		      "<td><a href=\"webcal://%s%s%s\">Subscribe</a></td>",
-		      lrock->host, base_path, shortname);
-
-    buf_printf_markup(body, *level, "<td><a href=\"%s%s\">Download</a></td>",
-		      base_path, shortname);
-
-    if (!isdefault && (rights & DACL_RMCOL)) {
-	buf_printf_markup(body, *level,
-			  "<td><a href=\"%s%s?action=delete\">Delete</a></td>",
-			  base_path, shortname);
+    /* Make sure we have room in our array */
+    if (lrock->len == lrock->alloc) {
+	lrock->alloc += 100;
+	lrock->cal = xrealloc(lrock->cal,
+			      lrock->alloc * sizeof(struct cal_info));
     }
-    else buf_printf_markup(body, *level, "<td></td>");
 
+    /* Add our calendar to the array */
+    cal = &lrock->cal[lrock->len];
+    strlcpy(cal->shortname, shortname, MAX_MAILBOX_NAME);
+    strlcpy(cal->displayname, displayname.value, MAX_MAILBOX_NAME);
+    cal->flags = 0;
+
+    /* Is this the default calendar? */
+    if (len == defaultlen && !strncmp(shortname, SCHED_DEFAULT, defaultlen)) {
+	cal->flags |= CAL_IS_DEFAULT;
+    }
+
+    /* Can we delete this calendar? */
+    else if (rights & DACL_RMCOL) {
+	cal->flags |= CAL_CAN_DELETE;
+    }
+
+    /* Can we admin this calendar? */
+    if (rights & DACL_ADMIN) {
+	cal->flags |= CAL_CAN_ADMIN;
+    }
+
+    /* Is this calendar public? */
     if (acl) {
 	struct auth_state *auth_anyone = auth_newstate("anyone");
 
 	any_rights = cyrus_acl_myrights(auth_anyone, acl);
 	auth_freestate(auth_anyone);
     }
+    if ((any_rights & DACL_READ) == DACL_READ) {
+	cal->flags |= CAL_IS_PUBLIC;
+    }
 
-    buf_printf_markup(body, *level,
-		      "<td><input type=checkbox%s%s onclick=\""
-		      "httpGet('%s%s?action=setacl&amp;share=' + this.checked)"
-		      "\">Public</td>",
-		      !(rights & DACL_ADMIN) ? " disabled" : "",
-		      (any_rights & DACL_READ) == ACL_READ ? " checked" : "",
-		      base_path, shortname);
-
-    buf_printf_markup(body, --(*level), "</tr>");
+    lrock->len++;
 
     return 0;
+}
+
+static int cal_compare(const void *a, const void *b)
+{
+    struct cal_info *c1 = (struct cal_info *) a;
+    struct cal_info *c2 = (struct cal_info *) b;
+
+    return strcmp(c1->displayname, c2->displayname);
 }
 
 
@@ -1544,8 +1553,8 @@ static int action_list(struct transaction_t *txn, int rights)
     char mboxlist[MAX_MAILBOX_PATH+1];
     struct stat sbuf;
     time_t lastmod;
-    const char *etag;
-    unsigned level = 0;
+    const char *etag, *proto, *host, *base_path = txn->req_tgt.path;
+    unsigned level = 0, i;
     struct buf *body = &txn->resp_body.payload;
     struct list_cal_rock lrock;
 
@@ -1622,21 +1631,63 @@ static int action_list(struct transaction_t *txn, int rights)
     write_body(HTTP_OK, txn, buf_cstring(body), buf_len(body));
     buf_reset(body);
 
-    /* Populate list callback rock */
-    http_proto_host(txn->req_hdrs, &lrock.proto, &lrock.host);
-    lrock.txn = txn;
-    lrock.level = &level;
+    http_proto_host(txn->req_hdrs, &proto, &host);
 
     /* Generate list of calendars */
     strlcat(txn->req_tgt.mboxname, ".%", sizeof(txn->req_tgt.mboxname));
 
+    memset(&lrock, 0, sizeof(struct list_cal_rock));
     mboxlist_findall(NULL, txn->req_tgt.mboxname, 1, httpd_userid,
 		     httpd_authstate, list_cal_cb, &lrock);
 
-    if (buf_len(body)) write_body(0, txn, buf_cstring(body), buf_len(body));
+    /* Sort calendars by displayname */
+    qsort(lrock.cal, lrock.len, sizeof(struct cal_info), &cal_compare);
+
+    /* Add available calendars with link(s) */
+    for (i = 0; i < lrock.len; i++) {
+	struct cal_info *cal = &lrock.cal[i];
+
+	/* Send a body chunk once in a while */
+	if (buf_len(body) > PROT_BUFSIZE) {
+	    write_body(0, txn, buf_cstring(body), buf_len(body));
+	    buf_reset(body);
+	}
+
+	/* Add available calendar with link */
+	buf_printf_markup(body, level, "<tr>");
+	buf_printf_markup(body, level, "<td>%s%s%s",
+			  (cal->flags & CAL_IS_DEFAULT) ? "<b>" : "",
+			  cal->displayname,
+			  (cal->flags & CAL_IS_DEFAULT) ? "</b>" : "");
+
+	buf_printf_markup(body, level,
+			  "<td><a href=\"webcal://%s%s%s\">Subscribe</a></td>",
+			  host, base_path, cal->shortname);
+
+	buf_printf_markup(body, level, "<td><a href=\"%s%s\">Download</a></td>",
+			  base_path, cal->shortname);
+
+	if (cal->flags & CAL_CAN_DELETE) {
+	    buf_printf_markup(body, level,
+			      "<td><a href=\"%s%s?action=delete\">Delete</a></td>",
+			      base_path, cal->shortname);
+	}
+	else buf_printf_markup(body, level, "<td></td>");
+
+	buf_printf_markup(body, level,
+			  "<td><input type=checkbox%s%s onclick=\""
+			  "httpGet('%s%s?action=setacl&amp;share=' + this.checked)"
+			  "\">Public</td>",
+			  !(cal->flags & CAL_CAN_ADMIN) ? " disabled" : "",
+			  (cal->flags & CAL_IS_PUBLIC) ? " checked" : "",
+			  base_path, cal->shortname);
+
+	buf_printf_markup(body, --level, "</tr>");
+    }
+
+    free(lrock.cal);
 
     /* Finish list */
-    buf_reset(body);
     buf_printf_markup(body, --level, "</table>");
 
     if (rights & DACL_MKCOL) {
