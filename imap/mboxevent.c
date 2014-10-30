@@ -371,9 +371,11 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
 		(type & (EVENT_MESSAGE_APPEND|EVENT_MESSAGE_NEW)));
     case EVENT_MAILBOX_ID:
 	return (type & MAILBOX_EVENTS);
-#ifdef WITH_DAV
     case EVENT_MBTYPE:
+#ifdef WITH_DAV
 	return (type & MAILBOX_EVENTS);
+#else
+	return 0;
 #endif
     case EVENT_MAX_MESSAGES:
 	return type & QUOTA_EVENTS;
