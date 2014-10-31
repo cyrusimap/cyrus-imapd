@@ -2579,6 +2579,10 @@ void mboxlist_init(int myflags)
 
     if (myflags & MBOXLIST_SYNC) {
 	r = DB->sync();
+	if (r) {
+	    syslog(LOG_ERR, "DBERROR: error sync'ing mailboxes: %s",
+		   cyrusdb_strerror(r));
+	}
     }
 }
 

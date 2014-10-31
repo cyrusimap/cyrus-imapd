@@ -226,6 +226,10 @@ void annotatemore_init(int myflags,
 
     if (myflags & ANNOTATE_SYNC) {
 	r = DB->sync();
+	if (r) {
+	    syslog(LOG_ERR, "DBERROR: error sync'ing annotations: %s",
+		   cyrusdb_strerror(r));
+	}
     }
 
     if (fetch_func) {

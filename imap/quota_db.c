@@ -281,6 +281,10 @@ void quotadb_init(int myflags)
 
     if (myflags & QUOTADB_SYNC) {
 	r = QDB->sync();
+	if (r) {
+	    syslog(LOG_ERR, "DBERROR: error sync'ing quotas: %s",
+		   cyrusdb_strerror(r));
+	}
     }
 }
 

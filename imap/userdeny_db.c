@@ -168,6 +168,10 @@ void denydb_init(int myflags)
 
     if (myflags & DENYDB_SYNC) {
 	r = DENYDB->sync();
+	if (r) {
+	    syslog(LOG_ERR, "DENYDB_ERROR: error sync'ing: %s",
+		   cyrusdb_strerror(r));
+	}
     }
 }
 

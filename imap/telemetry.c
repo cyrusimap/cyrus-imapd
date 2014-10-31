@@ -65,7 +65,6 @@ int telemetry_log(const char *userid, struct protstream *pin,
     char buf[1024];
     int fd = -1;
     time_t now;
-    int n;
 
     if(usetimestamp) {
 	struct timeval tv;
@@ -89,7 +88,7 @@ int telemetry_log(const char *userid, struct protstream *pin,
 	now = time(NULL);
 	snprintf(buf, sizeof(buf), "---------- %s %s\n", 
 		 userid, ctime(&now));
-	n = write(fd, buf, strlen(buf));
+	write(fd, buf, strlen(buf));
 
 	prot_setlog(pin, fd);
 	prot_setlog(pout, fd);

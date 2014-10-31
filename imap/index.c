@@ -1566,7 +1566,7 @@ static int index_appendremote(struct index_state *state, uint32_t msgno,
     struct mailbox *mailbox = state->mailbox;
     const char *msg_base = 0;
     unsigned long msg_size = 0;
-    unsigned flag, flagmask;
+    unsigned flag, flagmask = 0;
     char datebuf[30];
     char sepchar = '(';
     struct index_map *im = &state->map[msgno-1];
