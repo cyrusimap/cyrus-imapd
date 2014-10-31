@@ -126,8 +126,21 @@ static struct mailboxlist *open_mailboxes = NULL;
                          (m).index_fd = -1; \
                          (m).header_fd = -1; }
 
+/* for repack */
+struct mailbox_repack {
+    struct mailbox *mailbox;
+    struct index_header i;
+    struct seqset *seqset;
+    const char *userid;
+    int old_version;
+    int newindex_fd;
+    int newcache_fd;
+    ptrarray_t caches;
+};
+
 static int mailbox_index_unlink(struct mailbox *mailbox);
 static int mailbox_index_repack(struct mailbox *mailbox, int version);
+static void mailbox_repack_abort(struct mailbox_repack **repackptr);
 static int mailbox_lock_index_internal(struct mailbox *mailbox,
 				       int locktype);
 static void cleanup_stale_expunged(struct mailbox *mailbox);
@@ -581,18 +594,6 @@ static struct mappedfile *mailbox_cachefile(struct mailbox *mailbox,
     return cache_getfile(&mailbox->caches, fname, mailbox->is_readonly, mailbox->i.generation_no);
 }
 
-/* for repack */
-struct mailbox_repack {
-    struct mailbox *mailbox;
-    struct index_header i;
-    struct seqset *seqset;
-    const char *userid;
-    int old_version;
-    int newindex_fd;
-    int newcache_fd;
-    ptrarray_t caches;
-};
-
 static struct mappedfile *repack_cachefile(struct mailbox_repack *repack,
 					   struct index_record *record)
 {
@@ -670,12 +671,11 @@ EXPORTED int mailbox_cacherecord(struct mailbox *mailbox,
 
     /* try to parse the cache record */
     r = cache_parserecord(cachefile, record->cache_offset, &record->crec);
-
-    if (r) goto done;
+    if (r) goto err;
 
     /* old-style record */
     if (!record->cache_crc)
-	goto done;
+	goto err;
 
     crc = crc32_buf(cache_buf(record));
     if (crc != record->cache_crc)
@@ -714,35 +714,6 @@ err:
 
 	record->cache_offset = 0;
     }
-
-    return 0;
-}
-
-int cache_append_record(int fd, struct index_record *record)
-{
-    size_t offset;
-    size_t len = cache_len(record);
-    int n;
-
-    /* no parsed cache present */
-    if (!record->crec.len)
-	return 0;
-
-    /* cache offset already there - probably already been written */
-    if (record->cache_offset)
-	return 0;
-
-    if (record->cache_crc && record->cache_crc != crc32_buf(cache_buf(record)))
-	return IMAP_MAILBOX_CHECKSUM;
-
-    offset = lseek(fd, 0L, SEEK_END);
-    n = retry_write(fd, cache_base(record), len);
-    if (n < 0) {
-	syslog(LOG_ERR, "failed to append " SIZE_T_FMT " bytes to cache", len);
-	return IMAP_IOERROR;
-    }
-
-    record->cache_offset = offset;
 
     return 0;
 }
@@ -1834,7 +1805,6 @@ static int mailbox_lock_index_internal(struct mailbox *mailbox, int locktype)
     assert(mailbox->index_fd != -1);
     assert(!mailbox->index_locktype);
 
-restart:
     r = 0;
 
     if (locktype == LOCK_EXCLUSIVE) {
@@ -3477,19 +3447,6 @@ static int mailbox_index_unlink(struct mailbox *mailbox)
     return 0;
 }
 
-/* clean up memory structures and abort repack */
-static void mailbox_repack_abort(struct mailbox_repack **repackptr)
-{
-    struct mailbox_repack *repack = *repackptr;
-    if (!repack) return; /* safe against double-free */
-    seqset_free(repack->seqset);
-    xclose(repack->newcache_fd);
-    unlink(mailbox_meta_newfname(repack->mailbox, META_CACHE));
-    xclose(repack->newindex_fd);
-    unlink(mailbox_meta_newfname(repack->mailbox, META_INDEX));
-    free(repack);
-    *repackptr = NULL;
-}
 
 static int mailbox_repack_setup(struct mailbox *mailbox, int version,
 			        struct mailbox_repack **repackptr)
@@ -3654,12 +3611,14 @@ static int mailbox_repack_add(struct mailbox_repack *repack,
     return 0;
 }
 
-static int mailbox_repack_commit(struct mailbox_repack **repackptr)
+static void mailbox_repack_abort(struct mailbox_repack **repackptr)
 {
     struct mailbox_repack *repack = *repackptr;
     int i;
 
     if (!repack) return; /* safe against double-free */
+
+    seqset_free(repack->seqset);
 
     /* close and remove index */
     xclose(repack->newindex_fd);
@@ -3679,6 +3638,8 @@ static int mailbox_repack_commit(struct mailbox_repack **repackptr)
 
     free(repack);
     *repackptr = NULL;
+
+    return;
 }
 
 HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
@@ -3767,6 +3728,8 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
     }
 
     strarray_fini(&cachefiles);
+
+    seqset_free(repack->seqset);
     free(repack);
     *repackptr = NULL;
     return 0;
@@ -3819,6 +3782,7 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
 	if (repack->old_version >= 12 && repack->i.minor_version < 12 && repack->seqset) {
 	    seqset_add(repack->seqset, record.uid, record.system_flags & FLAG_SEEN ? 1 : 0);
 	    record.system_flags &= ~FLAG_SEEN;
+	}
 
 	/* better handle the cleanup just in case it's unlinked too */
 	/* still gotta check for FLAG_UNLINKED, because it may have been
