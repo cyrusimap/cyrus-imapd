@@ -265,7 +265,7 @@ static const struct prop_entry carddav_props[] = {
 static struct meth_params carddav_params = {
     carddav_mime_types,
     &carddav_parse_path,
-    &check_precond,
+    &dav_check_precond,
     { (db_open_proc_t) &my_carddav_open,
       (db_close_proc_t) &my_carddav_close,
       (db_lookup_proc_t) &carddav_lookup_resource,
@@ -1022,7 +1022,7 @@ static int store_resource(struct transaction_t *txn, struct vparse_card *vcard,
 	    /* Check any preconditions */
 	    const char *etag = message_guid_encode(&oldrecord.guid);
 	    time_t lastmod = oldrecord.internaldate;
-	    int precond = check_precond(txn, cdata, etag, lastmod);
+	    int precond = dav_check_precond(txn, cdata, etag, lastmod);
 
 	    if (precond != HTTP_OK) {
 		ret = HTTP_PRECOND_FAILED;
