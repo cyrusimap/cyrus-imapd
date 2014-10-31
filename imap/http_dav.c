@@ -3450,7 +3450,7 @@ int meth_get_dav(struct transaction_t *txn, void *params)
     struct mime_type_t *mime;
     int ret = 0, r, precond, rights;
     const char *data = NULL;
-    unsigned long datalen, offset;
+    unsigned long datalen = 0, offset = 0;
     struct buf msg_buf = BUF_INITIALIZER;
     struct resp_body_t *resp_body = &txn->resp_body;
     struct mailbox *mailbox = NULL;
@@ -3468,9 +3468,10 @@ int meth_get_dav(struct transaction_t *txn, void *params)
     if (ret) return ret;
 
     if (!txn->req_tgt.resource) {
+	/* Do any collection processing */
 	if (gparams->get) return gparams->get(txn, NULL, NULL, NULL);
 
-	/* We don't handle GET on a collection (yet) */
+	/* We don't handle GET on a collection */
 	return HTTP_NO_CONTENT;
     }
 
@@ -3551,17 +3552,12 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 	    goto done;
 	}
 
-	/* Resource length doesn't include RFC 5322 header */
-	offset = record.header_size;
-	datalen = record.size - offset;
-
 	txn->flags.ranges = 1;
 	etag = message_guid_encode(&record.guid);
 	lastmod = record.internaldate;
     }
     else {
 	/* Unmapped URL (empty resource) */
-	offset = datalen = 0;
 	txn->flags.ranges = 0;
 	etag = NULL_ETAG;
 	lastmod = ddata->creationdate;
@@ -3588,9 +3584,19 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 	goto done;
     }
 
+    /* Do any special processing */
+    if (gparams->get) {
+	ret = gparams->get(txn, mailbox, &record, ddata);
+	if (ret) goto done;
+    }
+
     if (record.uid) {
 	txn->flags.vary |= VARY_ACCEPT;
 	resp_body->type = mime->content_type;
+
+	/* Resource length doesn't include RFC 5322 header */
+	offset = record.header_size;
+	datalen = record.size - offset;
 
 	if (txn->meth == METH_GET) {
 	    /* Load message containing the resource */
@@ -5000,7 +5006,7 @@ static int map_modseq_cmp(const struct index_map *m1,
 int report_sync_col(struct transaction_t *txn,
 		    xmlNodePtr inroot, struct propfind_ctx *fctx)
 {
-    int ret = 0, r, userflag, i;
+    int ret = 0, r, i, unbind_flag = -1, unchanged_flag = -1;
     struct mailbox *mailbox = NULL;
     uint32_t uidvalidity = 0;
     modseq_t syncmodseq = 0;
@@ -5034,7 +5040,8 @@ int report_sync_col(struct transaction_t *txn,
     fctx->mailbox = mailbox;
 
     highestmodseq = mailbox->i.highestmodseq;
-    if (mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag, 0)) userflag = -1;
+    mailbox_user_flag(mailbox, DFLAG_UNBIND, &unbind_flag, 1);
+    mailbox_user_flag(mailbox, DFLAG_UNCHANGED, &unchanged_flag, 1);
 
     /* Parse children element of report */
     for (node = inroot->children; node; node = node->next) {
@@ -5135,14 +5142,25 @@ int report_sync_col(struct transaction_t *txn,
 	if (record.modseq <= syncmodseq)
 	    continue;
 
-	/* Resource replaced by a PUT, COPY, or MOVE - ignore it */
-	if ((userflag >= 0) &&
-	    record.user_flags[userflag / 32] & (1 << (userflag & 31)))
+	if ((unbind_flag >= 0) &&
+	    record.user_flags[unbind_flag / 32] & (1 << (unbind_flag & 31))) {
+	    /* Resource replaced by a PUT, COPY, or MOVE - ignore it */
 	    continue;
+	}
 
-	/* Initial sync - ignore unmapped resources */
-	if (record.modseq <= basemodseq && (record.system_flags & FLAG_EXPUNGED))
+	if ((record.modseq - syncmodseq == 1) &&
+	    (unchanged_flag >= 0) &&
+	    (record.user_flags[unchanged_flag / 32] &
+	     (1 << (unchanged_flag & 31)))) {
+	    /* Resource has just had VTIMEZONEs stripped - ignore it */
 	    continue;
+	}
+
+	if ((record.modseq <= basemodseq) &&
+	    (record.system_flags & FLAG_EXPUNGED)) {
+	    /* Initial sync - ignore unmapped resources */
+	    continue;
+	}
 
 	/* copy data into map (just like index.c - XXX helper fn? */
 	istate.map[nresp].recno = recno;
@@ -5214,12 +5232,12 @@ int report_sync_col(struct transaction_t *txn,
 	    /* report as NOT FOUND
 	       IMAP UID of 0 will cause index record to be ignored
 	       propfind_by_resource() will append our resource name */
-	    propfind_by_resource(fctx, &ddata);
+	    fctx->proc_by_resource(fctx, &ddata);
 	}
 	else {
 	    fctx->record = &record;
 	    ddata.imap_uid = record.uid;
-	    propfind_by_resource(fctx, &ddata);
+	    fctx->proc_by_resource(fctx, &ddata);
 	}
     }
 
@@ -5863,7 +5881,10 @@ int meth_report(struct transaction_t *txn, void *params)
     fctx.fetcheddata = 0;
 
     /* Parse the list of properties and build a list of callbacks */
-    if (fctx.mode) ret = preload_proplist(props, &fctx);
+    if (fctx.mode) {
+	fctx.proc_by_resource = &propfind_by_resource;
+	ret = preload_proplist(props, &fctx);
+    }
 
     /* Process the requested report */
     if (!ret) ret = (*report->proc)(txn, inroot, &fctx);

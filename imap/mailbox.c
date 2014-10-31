@@ -2541,6 +2541,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
     struct caldav_data *cdata = NULL;
     const char *resource = NULL;
     const char *sched_tag = NULL;
+    unsigned tzbyref = 0;
     int r = 0;
 
     /* conditions in which there's nothing to do */
@@ -2563,6 +2564,9 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
         else if (!strcmp(param->attribute, "SCHEDULE-TAG")) {
             sched_tag = param->value;
         }
+        else if (!strcmp(param->attribute, "TZ-BY-REF")) {
+	    tzbyref = !strcasecmp(param->value, "TRUE");
+	}
     }
 
     caldavdb = caldav_open_mailbox(mailbox, 0);
@@ -2601,6 +2605,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 	cdata->dav.imap_uid = new->uid;
 	cdata->dav.resource = resource;
 	cdata->sched_tag = sched_tag;
+	cdata->comp_flags.tzbyref = tzbyref;
 
 	caldav_make_entry(ical, cdata);
 
