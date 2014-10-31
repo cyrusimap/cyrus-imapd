@@ -400,6 +400,127 @@ static int prin_parse_path(const char *path,
 }
 
 
+/* Evaluate If header.  Note that we can't short-circuit any of the tests
+   because we need to check for a lock-token anywhere in the header */
+static int eval_if(const char *hdr, const char *etag, const char *lock_token,
+		   unsigned *locked)
+{
+    unsigned ret = 0;
+    tok_t tok_l;
+    char *list;
+
+    /* Process each list, ORing the results */
+    tok_init(&tok_l, hdr, ")", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+    while ((list = tok_next(&tok_l))) {
+	unsigned ret_l = 1;
+	tok_t tok_c;
+	char *cond;
+
+	/* XXX  Need to handle Resource-Tag for Tagged-list (COPY/MOVE dest) */
+
+	/* Process each condition, ANDing the results */
+	tok_initm(&tok_c, list+1, "]>", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+	while ((cond = tok_next(&tok_c))) {
+	    unsigned r, not = 0;
+
+	    if (!strncmp(cond, "Not", 3)) {
+		not = 1;
+		cond += 3;
+		while (*cond == ' ') cond++;
+	    }
+	    if (*cond == '[') {
+		/* ETag */
+		r = !etagcmp(cond+1, etag);
+	    }
+	    else {
+		/* State Token */
+		if (!lock_token) r = 0;
+		else {
+		    r = !strcmp(cond+1, lock_token);
+		    if (r) {
+			/* Correct lock-token has been provided */
+			*locked = 0;
+		    }
+		}
+	    }
+
+	    ret_l &= (not ? !r : r);
+	}
+
+	tok_fini(&tok_c);
+
+	ret |= ret_l;
+    }
+
+    tok_fini(&tok_l);
+
+    return (ret || locked);
+}
+
+
+/* Check headers for any preconditions */
+int dav_check_precond(struct transaction_t *txn, const void *data,
+		      const char *etag, time_t lastmod)
+{
+    const struct dav_data *ddata = (const struct dav_data *) data;
+    hdrcache_t hdrcache = txn->req_hdrs;
+    const char **hdr;
+    const char *lock_token = NULL;
+    unsigned locked = 0;
+
+    /* Check for a write-lock on the source */
+    if (ddata && ddata->lock_expire > time(NULL)) {
+	lock_token = ddata->lock_token;
+
+	switch (txn->meth) {
+	case METH_DELETE:
+	case METH_LOCK:
+	case METH_MOVE:
+	case METH_POST:
+	case METH_PUT:
+	    /* State-changing method: Only the lock owner can execute
+	       and MUST provide the correct lock-token in an If header */
+	    if (strcmp(ddata->lock_ownerid, httpd_userid)) return HTTP_LOCKED;
+
+	    locked = 1;
+	    break;
+
+	case METH_UNLOCK:
+	    /* State-changing method: Authorized in meth_unlock() */
+	    break;
+
+	case METH_ACL:
+	case METH_MKCALENDAR:
+	case METH_MKCOL:
+	case METH_PROPPATCH:
+	    /* State-changing method: Locks on collections unsupported */
+	    break;
+
+	default:
+	    /* Non-state-changing method: Always allowed */
+	    break;
+	}
+    }
+
+    /* Per RFC 4918, If is similar to If-Match, but with lock-token submission.
+       Per RFC 7232, LOCK errors supercede preconditions */
+    if ((hdr = spool_getheader(hdrcache, "If"))) {
+	/* State tokens (sync-token, lock-token) and Etags */
+	if (!eval_if(hdr[0], etag, lock_token, &locked))
+	    return HTTP_PRECOND_FAILED;
+    }
+
+    if (locked) {
+	/* Correct lock-token was not provided in If header */
+	return HTTP_LOCKED;
+    }
+
+
+    /* Do normal HTTP checks */
+    return check_precond(txn, data, etag, lastmod);
+}
+
+
 unsigned get_preferences(struct transaction_t *txn)
 {
     unsigned mask = 0, prefs = 0;
@@ -2865,7 +2986,7 @@ int meth_copy(struct transaction_t *txn, void *params)
     }
 
     /* Check any preconditions on source */
-    precond = check_precond(txn, (void **) ddata, etag, lastmod);
+    precond = cparams->check_precond(txn, (void **) ddata, etag, lastmod);
 
     switch (precond) {
     case HTTP_OK:

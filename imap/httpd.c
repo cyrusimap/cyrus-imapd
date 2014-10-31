@@ -998,7 +998,7 @@ static void cmdloop(void)
 	if (p[-1] == '\n') *--p = '\0';
 	if (p[-1] == '\r') *--p = '\0';
 
-	/* Ignore 1 empty line before request-line per HTTPbis Part 1 Sec 3.5 */
+	/* Ignore 1 empty line before request-line per RFC 7230 Sec 3.5 */
 	if (!empty++ && !*req_line->buf) goto req_line;
 
 	/* Parse request-line = method SP request-target SP HTTP-version CRLF */
@@ -2594,7 +2594,7 @@ void error_response(long code, struct transaction_t *txn)
 	    return;
 	}
     }
-#endif
+#endif /* WITH_DAV */
 
     if (!txn->error.desc) {
 	switch (code) {
@@ -3102,64 +3102,6 @@ static unsigned etag_match(const char *hdr[], const char *etag)
 }
 
 
-/* Evaluate If header.  Note that we can't short-circuit any of the tests
-   because we need to check for a lock-token anywhere in the header */
-static int eval_if(const char *hdr, const char *etag, const char *lock_token,
-		   unsigned *locked)
-{
-    unsigned ret = 0;
-    tok_t tok_l;
-    char *list;
-
-    /* Process each list, ORing the results */
-    tok_init(&tok_l, hdr, ")", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-    while ((list = tok_next(&tok_l))) {
-	unsigned ret_l = 1;
-	tok_t tok_c;
-	char *cond;
-
-	/* XXX  Need to handle Resource-Tag for Tagged-list (COPY/MOVE dest) */
-
-	/* Process each condition, ANDing the results */
-	tok_initm(&tok_c, list+1, "]>", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-	while ((cond = tok_next(&tok_c))) {
-	    unsigned r, not = 0;
-
-	    if (!strncmp(cond, "Not", 3)) {
-		not = 1;
-		cond += 3;
-		while (*cond == ' ') cond++;
-	    }
-	    if (*cond == '[') {
-		/* ETag */
-		r = !etagcmp(cond+1, etag);
-	    }
-	    else {
-		/* State Token */
-		if (!lock_token) r = 0;
-		else {
-		    r = !strcmp(cond+1, lock_token);
-		    if (r) {
-			/* Correct lock-token has been provided */
-			*locked = 0;
-		    }
-		}
-	    }
-
-	    ret_l &= (not ? !r : r);
-	}
-
-	tok_fini(&tok_c);
-
-	ret |= ret_l;
-    }
-
-    tok_fini(&tok_l);
-
-    return (ret || locked);
-}
-
-
 static int parse_ranges(const char *hdr, unsigned long len,
 			struct range **ranges)
 {
@@ -3235,72 +3177,15 @@ static int parse_ranges(const char *hdr, unsigned long len,
 
 /* Check headers for any preconditions.
  *
- * Interaction is complex and is documented in RFC 4918 and
- * Section 5 of HTTPbis, Part 4.
+ * Interaction is complex and is documented in RFC 7232
  */
-int check_precond(struct transaction_t *txn, const void *data,
+int check_precond(struct transaction_t *txn,
+		  const void *data __attribute__((unused)),
 		  const char *etag, time_t lastmod)
 {
-    const char *lock_token = NULL;
-    unsigned locked = 0;
     hdrcache_t hdrcache = txn->req_hdrs;
     const char **hdr;
     time_t since;
-
-#ifdef WITH_DAV
-    struct dav_data *ddata = (struct dav_data *) data;
-
-    /* Check for a write-lock on the source */
-    if (ddata && ddata->lock_expire > time(NULL)) {
-	lock_token = ddata->lock_token;
-
-	switch (txn->meth) {
-	case METH_DELETE:
-	case METH_LOCK:
-	case METH_MOVE:
-	case METH_POST:
-	case METH_PUT:
-	    /* State-changing method: Only the lock owner can execute
-	       and MUST provide the correct lock-token in an If header */
-	    if (strcmp(ddata->lock_ownerid, httpd_userid)) return HTTP_LOCKED;
-
-	    locked = 1;
-	    break;
-
-	case METH_UNLOCK:
-	    /* State-changing method: Authorized in meth_unlock() */
-	    break;
-
-	case METH_ACL:
-	case METH_MKCALENDAR:
-	case METH_MKCOL:
-	case METH_PROPPATCH:
-	    /* State-changing method: Locks on collections unsupported */
-	    break;
-
-	default:
-	    /* Non-state-changing method: Always allowed */
-	    break;
-	}
-    }
-#else
-    assert(!data);
-#endif /* WITH_DAV */
-
-    /* Per RFC 4918, If is similar to If-Match, but with lock-token submission.
-       Per Section 5 of HTTPbis, Part 4, LOCK errors supercede preconditions */
-    if ((hdr = spool_getheader(hdrcache, "If"))) {
-	/* State tokens (sync-token, lock-token) and Etags */
-	if (!eval_if(hdr[0], etag, lock_token, &locked))
-	    return HTTP_PRECOND_FAILED;
-    }
-
-    if (locked) {
-	/* Correct lock-token was not provided in If header */
-	return HTTP_LOCKED;
-    }
-
-    /* Evaluate other precondition headers per Section 5 of HTTPbis, Part 4 */
 
     /* Step 1 */
     if ((hdr = spool_getheader(hdrcache, "If-Match"))) {
@@ -3727,7 +3612,7 @@ static int meth_propfind_root(struct transaction_t *txn,
 	txn->req_tgt.allow |= ALLOW_DAV;
 	return meth_propfind(txn, &root_params);
     }
-#endif
+#endif /* WITH_DAV */
 
     return HTTP_NOT_ALLOWED;
 }

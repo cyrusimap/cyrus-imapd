@@ -996,7 +996,7 @@ static int caldav_check_precond(struct transaction_t *txn, const void *data,
     int precond;
 
     /* Do normal WebDAV/HTTP checks (primarily for lock-token via If header) */
-    precond = check_precond(txn, data, etag, lastmod);
+    precond = dav_check_precond(txn, data, etag, lastmod);
     if (!(precond == HTTP_OK || precond == HTTP_PARTIAL)) return precond;
 
     /* Per RFC 6638, check Schedule-Tag */
