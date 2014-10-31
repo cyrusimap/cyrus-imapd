@@ -57,6 +57,7 @@
 			/* SHA1("") */
 
 #define DFLAG_UNBIND	"DAV:unbind"
+#define DFLAG_UNCHANGED	"DAV:unchanged"
 
 #define ANNOT_NS	"/vendor/cmu/cyrus-httpd/"
 

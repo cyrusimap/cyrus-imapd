@@ -100,6 +100,7 @@
 
 
 #define NEW_STAG (1<<8)  /* Make sure we skip over PREFER bits */
+#define TZ_STRIP (1<<9)
 
 
 #ifdef HAVE_RSCALE
@@ -990,7 +991,7 @@ static int caldav_check_precond(struct transaction_t *txn, const void *data,
 				const char *etag, time_t lastmod)
 {
     const struct caldav_data *cdata = (const struct caldav_data *) data;
-    const char *stag = cdata ? cdata->sched_tag : NULL;
+    const char *stag = cdata && cdata->organizer ? cdata->sched_tag : NULL;
     const char **hdr;
     int precond;
 
@@ -2418,15 +2419,73 @@ static int server_info(struct transaction_t *txn)
 
 
 /* Perform a GET/HEAD request on a CalDAV resource */
-static int caldav_get(struct transaction_t *txn,
-		      struct mailbox *mailbox __attribute__((unused)),
-		      struct index_record *record __attribute__((unused)),
-		      void *data __attribute__((unused)))
+static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
+		      struct index_record *record, void *data)
 {
     struct strlist *action;
     int r, rights;
     char *server, *acl;
 
+    if (record && record->uid) {
+	/* GET on a resource */
+	struct caldav_data *cdata = (struct caldav_data *) data;
+	int ret = 0;
+
+	if (cdata->comp_flags.tzbyref) {
+	    int unchanged_flag = -1;
+
+	    mailbox_user_flag(mailbox, DFLAG_UNCHANGED, &unchanged_flag);
+
+	    if ((unchanged_flag >= 0) &&
+		record->user_flags[unchanged_flag / 32] &
+		(1 << (unchanged_flag & 31))) {
+		/* Resource has just had VTIMEZONEs stripped -
+		   check if conditional matches previous ETag */
+
+		if (check_precond(txn, data, cdata->sched_tag,
+				  record->internaldate) == HTTP_NOT_MODIFIED) {
+		    /* Fill in previous ETag and don't return Last-Modified */
+		    txn->resp_body.etag = cdata->sched_tag;
+		    txn->resp_body.lastmod = 0;
+		    ret = HTTP_NOT_MODIFIED;
+		}
+	    }
+	}
+	else if (namespace_calendar.allow & ALLOW_CAL_NOTZ) {
+	    /* Strip known VTIMEZONEs */
+	    const char *msg_base = NULL;
+	    unsigned long msg_size = 0;
+	    icalcomponent *ical;
+	    struct caldav_db *caldavdb = my_caldav_open(mailbox);
+
+	    mailbox_map_message(mailbox, record->uid, &msg_base, &msg_size);
+	    ical = icalparser_parse_string(msg_base + record->header_size);
+	    mailbox_unmap_message(mailbox, record->uid, &msg_base, &msg_size);
+
+	    mailbox_unlock_index(mailbox, NULL);
+	    store_resource(txn, ical, mailbox, cdata->dav.resource,
+			   caldavdb, OVERWRITE_YES,
+			   TZ_STRIP | (!cdata->sched_tag ? NEW_STAG : 0));
+
+	    icalcomponent_free(ical);
+
+	    /* Fetch the new DAV and index records */
+	    caldav_lookup_resource(caldavdb, mailbox->name,
+				  cdata->dav.resource, 0, data);
+
+	    mailbox_find_index_record(mailbox, cdata->dav.imap_uid, record);
+
+	    /* Fill in new ETag and Last-Modified */
+	    txn->resp_body.etag = message_guid_encode(&record->guid);
+	    txn->resp_body.lastmod = record->internaldate;
+
+	    my_caldav_close(caldavdb);
+	}
+
+	return ret;
+    }
+
+    /* Get on a user/collection */
     action = hash_lookup("action", &txn->req_qparams);
     if (action) {
 	if (action->next) return HTTP_BAD_REQUEST;
@@ -3399,6 +3458,64 @@ static int parse_comp_filter(xmlNodePtr root, struct calquery_filter *filter,
 }
 
 
+/* dav_foreach() callback to find props on a CalDAV resource
+ *
+ * This function will strip any known VTIMEZONEs from the existing resource
+ * and store as a new resource before returning properties
+ */
+static int caldav_propfind_by_resource(void *rock, void *data)
+{
+    struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
+    struct caldav_data *cdata = (struct caldav_data *) data;
+
+    if (cdata->dav.imap_uid && !cdata->comp_flags.tzbyref) {
+	struct index_record record;
+
+	if (!fctx->record) {
+	    /* Fetch index record for the resource */
+	    int r = mailbox_find_index_record(fctx->mailbox,
+					      cdata->dav.imap_uid, &record);
+	    /* XXX  Check errors */
+
+	    fctx->record = r ? NULL : &record;
+	}
+
+	if (fctx->record) mailbox_map_message(fctx->mailbox, fctx->record->uid,
+					      &fctx->msg_base, &fctx->msg_size);
+
+	if (fctx->msg_base) {
+	    /* Parse the resource and re-store it */
+	    struct transaction_t txn;
+	    icalcomponent *ical;
+
+	    ical = icalparser_parse_string(fctx->msg_base
+					   + fctx->record->header_size);
+
+	    mailbox_unmap_message(fctx->mailbox, fctx->record->uid,
+				  &fctx->msg_base, &fctx->msg_size);
+
+	    memset(&txn, 0, sizeof(struct transaction_t));
+	    mailbox_unlock_index(fctx->mailbox, NULL);
+	    store_resource(&txn, ical, fctx->mailbox, cdata->dav.resource,
+			   fctx->davdb, OVERWRITE_YES,
+			   TZ_STRIP | (!cdata->sched_tag ? NEW_STAG : 0));
+	    buf_free(&txn.buf);
+
+	    icalcomponent_free(ical);
+
+	    fctx->lookup_resource(fctx->davdb, fctx->mailbox->name,
+				  cdata->dav.resource, 0, &data);
+	}
+
+	fctx->record = NULL;
+	fctx->msg_base = NULL;
+	fctx->msg_size = 0;
+    }
+
+    return propfind_by_resource(rock, data);
+}
+
+
 /* Callback to fetch DAV:getcontenttype */
 static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
 				   struct propfind_ctx *fctx,
@@ -3487,6 +3604,10 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 
 	data = fctx->msg_base + fctx->record->header_size;
 	datalen = fctx->record->size - fctx->record->header_size;
+    }
+    else if (namespace_calendar.allow & ALLOW_CAL_NOTZ) {
+	/* We want to strip known VTIMEZONEs */
+	fctx->proc_by_resource = &caldav_propfind_by_resource;
     }
 
     return propfind_getdata(name, ns, fctx, propstat, prop, caldav_mime_types,
@@ -4447,7 +4568,6 @@ static int report_cal_query(struct transaction_t *txn,
     fctx->close_db = (db_close_proc_t) &my_caldav_close;
     fctx->lookup_resource = (db_lookup_proc_t) &caldav_lookup_resource;
     fctx->foreach_resource = (db_foreach_proc_t) &caldav_foreach;
-    fctx->proc_by_resource = &propfind_by_resource;
 
     /* Parse children element of report */
     for (node = inroot->children; node; node = node->next) {
@@ -4588,7 +4708,7 @@ static int report_cal_multiget(struct transaction_t *txn,
 	    cdata->dav.resource = tgt.resource;
 	    /* XXX  Check errors */
 
-	    propfind_by_resource(fctx, cdata);
+	    fctx->proc_by_resource(fctx, cdata);
 
 	    my_caldav_close(fctx->davdb);
 	}
@@ -5139,7 +5259,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     icalcomponent_kind kind;
     icalproperty_method meth;
     icalproperty *prop;
-    unsigned mykind = 0;
+    unsigned mykind = 0, tzbyref = 0;
     char *header;
     const char *organizer = NULL;
     const char *prop_annot =
@@ -5155,8 +5275,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     time_t now = time(NULL);
     char datestr[80];
     struct appendstate as;
-    static char sched_tag[64];
-    static unsigned store_count = 0;
+    const char *sched_tag;
 
     /* Check for supported component type */
     comp = icalcomponent_get_first_real_component(ical);
@@ -5242,8 +5361,29 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 	return HTTP_SERVER_ERROR;
     }
 
-    /* Remove all X-LIC-ERROR properties*/
+    /* Remove all X-LIC-ERROR properties */
     icalcomponent_strip_errors(ical);
+
+    /* Remove all VTIMEZONE components for known TZIDs */
+    if (namespace_calendar.allow & ALLOW_CAL_NOTZ) {
+	icalcomponent *vtz, *next;
+
+	for (vtz = icalcomponent_get_first_component(ical,
+						     ICAL_VTIMEZONE_COMPONENT);
+	     vtz; vtz = next) {
+
+	    next = icalcomponent_get_next_component(ical,
+						    ICAL_VTIMEZONE_COMPONENT);
+
+	    prop = icalcomponent_get_first_property(vtz, ICAL_TZID_PROPERTY);
+	    if (!zoneinfo_lookup(icalproperty_get_tzid(prop), NULL)) {
+		icalcomponent_remove_component(ical, vtz);
+		icalcomponent_free(vtz);
+	    }
+	}
+
+	tzbyref = 1;
+    }
 
     ics = icalcomponent_as_ical_string(ical);
 
@@ -5301,16 +5441,17 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     fprintf(f, "; component=%s\r\n", icalcomponent_kind_to_string(kind));
 
     fprintf(f, "Content-Length: %u\r\n", (unsigned) strlen(ics));
-    fprintf(f, "Content-Disposition: inline; filename=\"%s\"", resource);
-    if (organizer) {
-	const char *stag;
-	if (flags & NEW_STAG) {
-	    sprintf(sched_tag, "%d-%ld-%u", getpid(), now, store_count++);
-	    stag = sched_tag;
-	}
-	else stag = cdata->sched_tag;
-	if (stag) fprintf(f, ";\r\n\tschedule-tag=%s", stag);
+    fprintf(f, "Content-Disposition: inline;\r\n\tfilename=\"%s\"", resource);
+
+    if (flags & NEW_STAG) {
+	if (expunge_uid) sched_tag = message_guid_encode(&oldrecord.guid);
+	else sched_tag = NULL_ETAG;
     }
+    else if (organizer) sched_tag = cdata->sched_tag;
+    else sched_tag = cdata->sched_tag = NULL;
+    if (sched_tag) fprintf(f, ";\r\n\tschedule-tag=%s", sched_tag);
+    
+    if (tzbyref) fprintf(f, ";\r\n\ttz-by-ref=true");
     fprintf(f, "\r\n");
 
     /* XXX  Check domain of data and use appropriate CTE */
@@ -5326,7 +5467,8 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 
 
     /* Prepare to append the iMIP message to calendar mailbox */
-    if ((r = append_setup(&as, mailbox->name, NULL, NULL, 0, size))) {
+    if ((r = append_setup(&as, mailbox->name,
+			  httpd_userid, httpd_authstate, 0, size))) {
 	syslog(LOG_ERR, "append_setup(%s) failed: %s",
 	       mailbox->name, error_message(r));
 	ret = HTTP_SERVER_ERROR;
@@ -5334,9 +5476,17 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     }
     else {
 	struct body *body = NULL;
+	const char *iflag[] = { NULL };
+	int nflags = 0;
+
+	/* If we are just stripping VTIMEZONEs from resource, flag it */
+	if (flags & TZ_STRIP) {
+	    *iflag = DFLAG_UNCHANGED;
+	    nflags = 1;
+	}
 
 	/* Append the iMIP file to the calendar mailbox */
-	if ((r = append_fromstage(&as, &body, stage, now, NULL, 0, 0))) {
+	if ((r = append_fromstage(&as, &body, stage, now, iflag, nflags, 0))) {
 	    syslog(LOG_ERR, "append_fromstage() failed");
 	    ret = HTTP_SERVER_ERROR;
 	    txn->error.desc = "append_fromstage() failed\r\n";

@@ -101,6 +101,7 @@ struct comp_flags {
     unsigned recurring	  : 1;
     unsigned transp	  : 1;
     unsigned status	  : 2;
+    unsigned tzbyref	  : 1;
 };
 
 /* Status values */
