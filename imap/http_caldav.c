@@ -1624,6 +1624,15 @@ static int action_list(struct transaction_t *txn, int rights)
     buf_printf_markup(body, level, "req.open('GET', url, true);");
     buf_printf_markup(body, level, "req.send(null);");
     buf_printf_markup(body, --level, "}");
+    buf_printf_markup(body, level++, "function httpDelete(url) {");
+    buf_printf_markup(body, level++,
+		      "if (confirm('Are you sure you want to delete this calendar?')) {");
+    buf_printf_markup(body, level, "var req = new XMLHttpRequest();");
+    buf_printf_markup(body, level, "req.open('DELETE', url);");
+    buf_printf_markup(body, level, "req.send(null);");
+    buf_printf_markup(body, level, "location.reload();");
+    buf_printf_markup(body, --level, "}");
+    buf_printf_markup(body, --level, "}");
     buf_printf_markup(body, --level, "</script>");
     buf_printf_markup(body, --level, "</head>");
     buf_printf_markup(body, level++, "<body>");
@@ -1668,12 +1677,11 @@ static int action_list(struct transaction_t *txn, int rights)
 	buf_printf_markup(body, level, "<td><a href=\"%s%s\">Download</a></td>",
 			  base_path, cal->shortname);
 
-	if (cal->flags & CAL_CAN_DELETE) {
-	    buf_printf_markup(body, level,
-			      "<td><a href=\"%s%s?action=delete\">Delete</a></td>",
-			      base_path, cal->shortname);
-	}
-	else buf_printf_markup(body, level, "<td></td>");
+	buf_printf_markup(body, level,
+			  "<td><input type=button%s value='Delete'"
+			  " onclick=\"httpDelete('%s%s')\"></td>",
+			  !(cal->flags & CAL_CAN_DELETE) ? " disabled" : "",
+			  base_path, cal->shortname);
 
 	buf_printf_markup(body, level,
 			  "<td><input type=checkbox%s%s onclick=\""
@@ -1871,32 +1879,6 @@ static int action_create(struct transaction_t *txn, int rights)
     if (ret == HTTP_CREATED) {
 	/* Success - tell client to go back to list page */
 	success_redirect(txn, "Creation");
-	return 0;
-    }
-
-    return ret;
-}
-
-
-/* Delete a calendar */
-static int action_delete(struct transaction_t *txn, int rights)
-{
-    int ret;
-
-    /* Check rights */
-    if (!(rights & DACL_RMCOL)) {
-	/* DAV:need-privileges */
-	txn->error.precond = DAV_NEED_PRIVS;
-	txn->error.resource = txn->req_tgt.path;
-	txn->error.rights = DACL_RMCOL;
-	return HTTP_NO_PRIVS;
-    }
-
-    ret = meth_delete(txn, &caldav_params);
-
-    if (ret == HTTP_NO_CONTENT) {
-	/* Success - tell client to go back to list page */
-	success_redirect(txn, "Deletion");
 	return 0;
     }
 
