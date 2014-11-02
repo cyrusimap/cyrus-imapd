@@ -1618,10 +1618,9 @@ static int action_list(struct transaction_t *txn, int rights)
     buf_printf_markup(body, level++, "<head>");
     buf_printf_markup(body, level, "<title>%s</title>", "Available Calendars");
     buf_printf_markup(body, level++, "<script type=\"text/javascript\">");
-    buf_printf_markup(body, level, "function httpGet(url)");
-    buf_printf_markup(body, level++, "{");
+    buf_printf_markup(body, level++, "function httpGet(url) {");
     buf_printf_markup(body, level, "var req = new XMLHttpRequest();");
-    buf_printf_markup(body, level, "req.open('GET', url, true);");
+    buf_printf_markup(body, level, "req.open('GET', url);");
     buf_printf_markup(body, level, "req.send(null);");
     buf_printf_markup(body, --level, "}");
     buf_printf_markup(body, level++, "function httpDelete(url) {");
@@ -1630,7 +1629,7 @@ static int action_list(struct transaction_t *txn, int rights)
     buf_printf_markup(body, level, "var req = new XMLHttpRequest();");
     buf_printf_markup(body, level, "req.open('DELETE', url);");
     buf_printf_markup(body, level, "req.send(null);");
-    buf_printf_markup(body, level, "location.reload();");
+    buf_printf_markup(body, level, "document.location.reload();");
     buf_printf_markup(body, --level, "}");
     buf_printf_markup(body, --level, "}");
     buf_printf_markup(body, --level, "</script>");
@@ -2508,9 +2507,6 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
     if (txn->req_tgt.collection) {
 	/* Download an entire calendar collection */ 
 	if (!action) return dump_calendar(txn, rights);
-
-	/* Delete a calendar collection */
-	if (!strcmp(action->s, "delete")) return action_delete(txn, rights);
 
 	/* [Un]share a calendar collection */
 	if (!strcmp(action->s, "setacl")) return action_setacl(txn, rights);
