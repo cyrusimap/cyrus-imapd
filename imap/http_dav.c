@@ -2621,12 +2621,13 @@ int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
 int meth_acl(struct transaction_t *txn, void *params)
 {
     struct meth_params *aparams = (struct meth_params *) params;
-    int ret = 0, r, rights;
+    int ret = 0, r, rights, overwrite = OVERWRITE_YES;
     xmlDocPtr indoc = NULL;
     xmlNodePtr root, ace;
     struct mailbox *mailbox = NULL;
     mbentry_t *mbentry = NULL;
     struct buf acl = BUF_INITIALIZER;
+    const char **hdr;
 
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
@@ -2684,6 +2685,24 @@ int meth_acl(struct transaction_t *txn, void *params)
     mboxlist_entry_free(&mbentry);
 
     /* Local Mailbox */
+
+    /* Check for "IMAP-mode" */
+    if ((hdr = spool_getheader(txn->req_hdrs, "Overwrite")) &&
+	!strcmp(hdr[0], "F")) {
+	overwrite = OVERWRITE_NO;
+    }
+
+    if (overwrite) {
+	/* Open mailbox for writing */
+	r = mailbox_open_iwl(txn->req_tgt.mboxname, &mailbox);
+	if (r) {
+	    syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+		   txn->req_tgt.mboxname, error_message(r));
+	    txn->error.desc = error_message(r);
+	    ret = HTTP_SERVER_ERROR;
+	    goto done;
+	}
+    }
 
     /* Parse the ACL body */
     ret = parse_xml_body(txn, &root);
@@ -2762,10 +2781,13 @@ int meth_acl(struct transaction_t *txn, void *params)
 		userid = proxy_userid;
 	    }
 	    else if (!xmlStrcmp(prin->name, BAD_CAST "owner")) {
-		userid = mboxname_to_userid(mailbox->name);
+		userid = mboxname_to_userid(txn->req_tgt.mboxname);
 	    }
 	    else if (!xmlStrcmp(prin->name, BAD_CAST "authenticated")) {
 		userid = "anyone";
+	    }
+	    else if (!xmlStrcmp(prin->name, BAD_CAST "unauthenticated")) {
+		userid = "anonymous";
 	    }
 	    else if (!xmlStrcmp(prin->name, BAD_CAST "href")) {
 		xmlChar *href = xmlNodeGetContent(prin);
@@ -2901,20 +2923,40 @@ int meth_acl(struct transaction_t *txn, void *params)
 	    /* gotta have something to do! */
 	    if (rights) {
 		cyrus_acl_masktostr(rights, rightstr);
-		buf_reset(&acl);
-		buf_printf(&acl, "%s%s", deny ? "-" : "+", rightstr);
+		if (overwrite) {
+		    buf_printf(&acl, "%s%s\t%s\t",
+			       deny ? "-" : "", userid, rightstr);
+		}
+		else {
+		    buf_reset(&acl);
+		    buf_printf(&acl, "%s%s", deny ? "-" : "+", rightstr);
 
-		r = mboxlist_setacl(&httpd_namespace, txn->req_tgt.mboxname, userid, buf_cstring(&acl),
-				    /*isadmin*/1, httpd_userid, httpd_authstate);
-		if (r) {
-		    syslog(LOG_ERR, "mboxlist_setacl(%s) failed: %s",
-			txn->req_tgt.mboxname, error_message(r));
-		    txn->error.desc = error_message(r);
-		    ret = HTTP_SERVER_ERROR;
-		    goto done;
+		    r = mboxlist_setacl(&httpd_namespace, txn->req_tgt.mboxname,
+					userid, buf_cstring(&acl),
+					httpd_userisadmin || httpd_userisproxyadmin,
+					httpd_userid, httpd_authstate);
+		    if (r) {
+			syslog(LOG_ERR, "mboxlist_setacl(%s) failed: %s",
+			       txn->req_tgt.mboxname, error_message(r));
+			txn->error.desc = error_message(r);
+			ret = HTTP_SERVER_ERROR;
+			goto done;
+		    }
 		}
 	    }
 	}
+    }
+
+    if (overwrite) {
+	r = mboxlist_sync_setacls(txn->req_tgt.mboxname, buf_cstring(&acl));
+	if (r) {
+	    syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
+		   txn->req_tgt.mboxname, error_message(r));
+	    txn->error.desc = error_message(r);
+	    ret = HTTP_SERVER_ERROR;
+	    goto done;
+	}
+	mailbox_set_acl(mailbox, buf_cstring(&acl), 0);
     }
 
     response_header(HTTP_OK, txn);
@@ -2922,6 +2964,7 @@ int meth_acl(struct transaction_t *txn, void *params)
   done:
     buf_free(&acl);
     if (indoc) xmlFreeDoc(indoc);
+    mailbox_close(&mailbox);
 
     return ret;
 }
