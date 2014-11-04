@@ -2469,12 +2469,13 @@ int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
 int meth_acl(struct transaction_t *txn, void *params)
 {
     struct meth_params *aparams = (struct meth_params *) params;
-    int ret = 0, r, rights;
+    int ret = 0, r, rights, overwrite = OVERWRITE_YES;
     xmlDocPtr indoc = NULL;
     xmlNodePtr root, ace;
     char *server, *aclstr;
     struct mailbox *mailbox = NULL;
     struct buf acl = BUF_INITIALIZER;
+    const char **hdr;
 
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
@@ -2528,8 +2529,14 @@ int meth_acl(struct transaction_t *txn, void *params)
 
     /* Local Mailbox */
 
+    /* Check for "IMAP-mode" */
+    if ((hdr = spool_getheader(txn->req_hdrs, "Overwrite")) &&
+	!strcmp(hdr[0], "F")) {
+	overwrite = OVERWRITE_NO;
+    }
+
     /* Open mailbox for writing */
-    r = mailbox_open_iwl(txn->req_tgt.mboxname, &mailbox);
+    if (overwrite) r = mailbox_open_iwl(txn->req_tgt.mboxname, &mailbox);
     if (r) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
 	       txn->req_tgt.mboxname, error_message(r));
@@ -2615,10 +2622,13 @@ int meth_acl(struct transaction_t *txn, void *params)
 		userid = proxy_userid;
 	    }
 	    else if (!xmlStrcmp(prin->name, BAD_CAST "owner")) {
-		userid = mboxname_to_userid(mailbox->name);
+		userid = mboxname_to_userid(txn->req_tgt.mboxname);
 	    }
 	    else if (!xmlStrcmp(prin->name, BAD_CAST "authenticated")) {
 		userid = "anyone";
+	    }
+	    else if (!xmlStrcmp(prin->name, BAD_CAST "unauthenticated")) {
+		userid = "anonymous";
 	    }
 	    else if (!xmlStrcmp(prin->name, BAD_CAST "href")) {
 		xmlChar *href = xmlNodeGetContent(prin);
@@ -2742,20 +2752,39 @@ int meth_acl(struct transaction_t *txn, void *params)
 		}
 	    }
 
-	    cyrus_acl_masktostr(rights, rightstr);
-	    buf_printf(&acl, "%s%s\t%s\t",
-		       deny ? "-" : "", userid, rightstr);
+	    if (overwrite) {
+		cyrus_acl_masktostr(rights, rightstr);
+		buf_printf(&acl, "%s%s\t%s\t",
+			   deny ? "-" : "", userid, rightstr);
+	    }
+	    else {
+		rightstr[0] = deny ? '-' : '+';
+		cyrus_acl_masktostr(rights, rightstr+1);
+		r = mboxlist_setacl(txn->req_tgt.mboxname, userid, rightstr,
+				    httpd_userisadmin || httpd_userisproxyadmin,
+				    httpd_userid, httpd_authstate);
+		if (r) {
+		    syslog(LOG_ERR, "mboxlist_setacl(%s) failed: %s",
+			   txn->req_tgt.mboxname, error_message(r));
+		    txn->error.desc = error_message(r);
+		    ret = HTTP_SERVER_ERROR;
+		    goto done;
+		}
+	    }
 	}
     }
 
-    if ((r = mboxlist_sync_setacls(txn->req_tgt.mboxname, buf_cstring(&acl)))) {
-	syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
+    if (overwrite) {
+	r = mboxlist_sync_setacls(txn->req_tgt.mboxname, buf_cstring(&acl));
+	if (r) {
+	    syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
+		   txn->req_tgt.mboxname, error_message(r));
+	    txn->error.desc = error_message(r);
+	    ret = HTTP_SERVER_ERROR;
+	    goto done;
+	}
+	mailbox_set_acl(mailbox, buf_cstring(&acl), 0);
     }
-    mailbox_set_acl(mailbox, buf_cstring(&acl), 0);
 
     response_header(HTTP_OK, txn);
 
