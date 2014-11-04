@@ -1461,15 +1461,18 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 #endif
 
     for(ip++; ip<ip_max; ) { 
-	/* In this loop, each case must increment ip for the next iteration.
-	 * The when the case is jumped to initially, ip points to the opcode.
-	 * This should probably change to point to the first parameter to
-	 * support future extensions.
+	/* In this loop, when a case is switch'ed to, ip points to the first
+	 * parameter of the action.  This makes it easier to add future
+	 * extensions.  Extensions that change an existing action should add
+	 * any new parameters to the beginning of the particular action's
+	 * bytecode.  This will allow the new code to fall through to the
+	 * older code, which will then parse the older parameters and should
+	 * require only a minimal set of changes to support any new extension.
 	 */
 	int copy = 0;
 	strarray_t *actionflags = NULL;
 
-	op=ntohl(bc[ip].op);
+	op=ntohl(bc[ip++].op);
 	switch(op) {
 	case B_STOP:/*0*/
 	    res=1;
@@ -1478,9 +1481,9 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	case B_KEEP:/*22*/
 	{
 	    int x;
-	    int list_len=ntohl(bc[ip+1].len);
+	    int list_len=ntohl(bc[ip].len);
 
-	    ip+=3; /* skip opcode, list_len, and list data len */
+	    ip+=2; /* skip opcode, list_len, and list data len */
 
 	    if (list_len) {
 		actionflags = (varlist_extend(flagvars))->var;
@@ -1493,7 +1496,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 		}
 	    }
 	}
-	    copy = ntohl(bc[ip].value);
+	    copy = ntohl(bc[ip++].value);
 	    /* fall through */
 	case B_KEEP_ORIG:/*1*/
 	    res = do_keep(actions, !copy,
@@ -1501,16 +1504,14 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    if (res == SIEVE_RUN_ERROR)
 		*errmsg = "Keep can not be used with Reject";
 	    actionflags = NULL;
-	    ip++;
 	    break;
 
 	case B_DISCARD:/*2*/
 	    res=do_discard(actions);
-	    ip++;
 	    break;
 
 	case B_REJECT:/*3*/
-	    ip = unwrap_string(bc, ip+1, &data, NULL);
+	    ip = unwrap_string(bc, ip, &data, NULL);
 	    
 	    res = do_reject(actions, data);
 	
@@ -1522,9 +1523,9 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	case B_FILEINTO:/*23*/
 	{
 	    int x;
-	    int list_len=ntohl(bc[ip+1].len);
+	    int list_len=ntohl(bc[ip].len);
 
-	    ip+=3; /* skip opcode, list_len, and list data len */
+	    ip+=2; /* skip opcode, list_len, and list data len */
 
 	    if (list_len) {
 		actionflags = (varlist_extend(flagvars))->var;
@@ -1558,13 +1559,13 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	}
 
 	case B_REDIRECT:/*20*/
-	    copy = ntohl(bc[ip+1].value);
+	    copy = ntohl(bc[ip].value);
 	    ip+=1;
 
 	    /* fall through */
 	case B_REDIRECT_ORIG:/*5*/
 	{
-	    ip = unwrap_string(bc, ip+1, &data, NULL);
+	    ip = unwrap_string(bc, ip, &data, NULL);
 
 	    res = do_redirect(actions, data, !copy);
 
@@ -1576,10 +1577,10 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
 	case B_IF:/*6*/
 	{
-	    int testend=ntohl(bc[ip+1].value);
+	    int testend=ntohl(bc[ip].value);
 	    int result;
 	   
-	    ip+=2;
+	    ip+=1;
 	    result=eval_bc_test(i, m, bc, &ip, workingvars->var, version);
 	    
 	    if (result<0) {
@@ -1602,7 +1603,6 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 		strarray_add_case(workingvars->var, i->markflags->data[--n]);
 	    }
 	}
-	    ip++;
 	    break;
 
 	case B_UNMARK:/*8*/
@@ -1614,15 +1614,14 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 			i->markflags->data[--n]);
 	    }
 	}
-	    ip++;
 	    break;
 
 	case B_ADDFLAG:/*9*/
 	{
 	    int x;
-	    int list_len=ntohl(bc[ip+1].len);
+	    int list_len=ntohl(bc[ip].len);
 
-	    ip+=3; /* skip opcode, list_len, and list data len */
+	    ip+=2; /* skip opcode, list_len, and list data len */
 
 	    for (x=0; x<list_len; x++) {
 		ip = unwrap_string(bc, ip, &data, NULL);
@@ -1639,9 +1638,9 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	case B_SETFLAG:/*10*/
 	{
 	    int x;
-	    int list_len=ntohl(bc[ip+1].len);
+	    int list_len=ntohl(bc[ip].len);
 
-	    ip+=3; /* skip opcode, list_len, and list data len */
+	    ip+=2; /* skip opcode, list_len, and list data len */
 
 
 	    res = do_setflag(actions);
@@ -1668,9 +1667,9 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	case B_REMOVEFLAG:/*11*/
 	{
 	    int x;
-	    int list_len=ntohl(bc[ip+1].len);
+	    int list_len=ntohl(bc[ip].len);
 
-	    ip+=3; /* skip opcode, list_len, and list data len */
+	    ip+=2; /* skip opcode, list_len, and list data len */
 
 	    for (x=0; x<list_len; x++) {
 		ip = unwrap_string(bc, ip, &data, NULL);
@@ -1693,8 +1692,6 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    const char * message;
 	    int pri;
 	    
-	    ip++;
-
 	    /* method */
 	    ip = unwrap_string(bc, ip, &method, NULL);
 
@@ -1754,7 +1751,6 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    int comparator;
 	    int pri;
 	    
-	    ip++;
 	    pri=ntohl(bc[ip].value);
 	    ip++;
 	    
@@ -1829,8 +1825,6 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    char buf[128];
 	    char subject[1024];
 	    int x;
-
-	    ip++;
 
 	    x = ntohl(bc[ip].len);
 	    
@@ -1912,21 +1906,20 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    break;
 	}
 	case B_NULL:/*15*/
-	    ip++;
 	    break;
 
 	case B_JUMP:/*16*/
-	    ip= ntohl(bc[ip+1].jump);
+	    ip= ntohl(bc[ip].jump);
 	    break;
 
 	case B_INCLUDE:/*17*/
 	{
-	    int isglobal = (ntohl(bc[ip+1].value) & 63) == B_GLOBAL;
-	    int once = ntohl(bc[ip+1].value) & 64 ? 1 : 0;
-	    int isoptional = ntohl(bc[ip+1].value) & 128 ? 1 : 0;
+	    int isglobal = (ntohl(bc[ip].value) & 63) == B_GLOBAL;
+	    int once = ntohl(bc[ip].value) & 64 ? 1 : 0;
+	    int isoptional = ntohl(bc[ip].value) & 128 ? 1 : 0;
 	    char fpath[4096];
 
-	    ip = unwrap_string(bc, ip+2, &data, NULL);
+	    ip = unwrap_string(bc, ip+1, &data, NULL);
 
 	    res = i->getinclude(sc, data, isglobal, fpath, sizeof(fpath));
 	    if (res != SIEVE_OK) {
