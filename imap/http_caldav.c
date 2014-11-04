@@ -1554,7 +1554,7 @@ static int action_list(struct transaction_t *txn, int rights)
     char mboxlist[MAX_MAILBOX_PATH+1];
     struct stat sbuf;
     time_t lastmod;
-    const char *etag, *proto, *host, *base_path = txn->req_tgt.path;
+    const char *etag, *host, *base_path = txn->req_tgt.path;
     unsigned level = 0, i;
     struct buf *body = &txn->resp_body.payload;
     struct list_cal_rock lrock;
@@ -1617,21 +1617,7 @@ static int action_list(struct transaction_t *txn, int rights)
     buf_printf_markup(body, level++, "<html>");
     buf_printf_markup(body, level++, "<head>");
     buf_printf_markup(body, level, "<title>%s</title>", "Available Calendars");
-    buf_printf_markup(body, level++, "<script type=\"text/javascript\">");
-    buf_printf_markup(body, level++, "function httpGet(url) {");
-    buf_printf_markup(body, level, "var req = new XMLHttpRequest();");
-    buf_printf_markup(body, level, "req.open('GET', url);");
-    buf_printf_markup(body, level, "req.send(null);");
-    buf_printf_markup(body, --level, "}");
-    buf_printf_markup(body, level++, "function httpDelete(url) {");
-    buf_printf_markup(body, level++,
-		      "if (confirm('Are you sure you want to delete this calendar?')) {");
-    buf_printf_markup(body, level, "var req = new XMLHttpRequest();");
-    buf_printf_markup(body, level, "req.open('DELETE', url);");
-    buf_printf_markup(body, level, "req.send(null);");
-    buf_printf_markup(body, level, "document.location.reload();");
-    buf_printf_markup(body, --level, "}");
-    buf_printf_markup(body, --level, "}");
+    buf_printf_markup(body, level++, "<script src=\"/http_caldav.js\">");
     buf_printf_markup(body, --level, "</script>");
     buf_printf_markup(body, --level, "</head>");
     buf_printf_markup(body, level++, "<body>");
@@ -1640,7 +1626,7 @@ static int action_list(struct transaction_t *txn, int rights)
     write_body(HTTP_OK, txn, buf_cstring(body), buf_len(body));
     buf_reset(body);
 
-    http_proto_host(txn->req_hdrs, &proto, &host);
+    http_proto_host(txn->req_hdrs, NULL, &host);
 
     /* Generate list of calendars */
     strlcat(txn->req_tgt.mboxname, ".%", sizeof(txn->req_tgt.mboxname));
@@ -1652,7 +1638,7 @@ static int action_list(struct transaction_t *txn, int rights)
     /* Sort calendars by displayname */
     qsort(lrock.cal, lrock.len, sizeof(struct cal_info), &cal_compare);
 
-    /* Add available calendars with link(s) */
+    /* Add available calendars with action items */
     for (i = 0; i < lrock.len; i++) {
 	struct cal_info *cal = &lrock.cal[i];
 
@@ -1662,8 +1648,7 @@ static int action_list(struct transaction_t *txn, int rights)
 	    buf_reset(body);
 	}
 
-	/* Add available calendar with link */
-	buf_printf_markup(body, level, "<tr>");
+	buf_printf_markup(body, level++, "<tr>");
 	buf_printf_markup(body, level, "<td>%s%s%s",
 			  (cal->flags & CAL_IS_DEFAULT) ? "<b>" : "",
 			  cal->displayname,
@@ -1678,14 +1663,13 @@ static int action_list(struct transaction_t *txn, int rights)
 
 	buf_printf_markup(body, level,
 			  "<td><input type=button%s value='Delete'"
-			  " onclick=\"httpDelete('%s%s')\"></td>",
+			  " onclick=\"deleteCalendar('%s%s', '%s')\"></td>",
 			  !(cal->flags & CAL_CAN_DELETE) ? " disabled" : "",
-			  base_path, cal->shortname);
+			  base_path, cal->shortname, cal->displayname);
 
 	buf_printf_markup(body, level,
-			  "<td><input type=checkbox%s%s onclick=\""
-			  "httpGet('%s%s?action=setacl&amp;share=' + this.checked)"
-			  "\">Public</td>",
+			  "<td><input type=checkbox%s%s name=share onclick=\""
+			  "shareCalendar('%s%s', this.checked)\">Public</td>",
 			  !(cal->flags & CAL_CAN_ADMIN) ? " disabled" : "",
 			  (cal->flags & CAL_IS_PUBLIC) ? " checked" : "",
 			  base_path, cal->shortname);
@@ -1705,47 +1689,53 @@ static int action_list(struct transaction_t *txn, int rights)
 
 	buf_printf_markup(body, level, "<p><hr>");
 	buf_printf_markup(body, level, "<h3>%s</h3>", "Create New Calendar");
-	buf_printf_markup(body, level++,
-			  "<form method=GET action=\"%s\">",
-			  txn->req_tgt.path);
-	buf_printf_markup(body, level,
-			  "<input type=hidden name=action value=create>");
+	buf_printf_markup(body, level++, "<form name='create'>");
 	buf_printf_markup(body, level++, "<table cellpadding=5>");
 	buf_printf_markup(body, level++, "<tr>");
-	buf_printf_markup(body, level, "<td align=right>Name:");
-	buf_printf_markup(body, level--,
-			  "<td><input name=name size=30 maxlength=40>");
+	buf_printf_markup(body, level, "<td align=right>Name:</td>");
+	buf_printf_markup(body, level,
+			  "<td><input name=name size=30 maxlength=40></td>");
+	buf_printf_markup(body, --level, "</tr>");
+
 	buf_printf_markup(body, level++, "<tr>");
-	buf_printf_markup(body, level, "<td align=right>Description:");
-	buf_printf_markup(body, level--,
-			  "<td><input name=desc size=75 maxlength=120>");
+	buf_printf_markup(body, level, "<td align=right>Description:</td>");
+	buf_printf_markup(body, level,
+			  "<td><input name=desc size=75 maxlength=120></td>");
+	buf_printf_markup(body, --level, "</tr>");
 
 	buf_printf_markup(body, level++, "<tr>");
 	buf_printf_markup(body, level, "<td align=right>Components:"
-			  "<br><sub>(default = ALL)</sub>");
+			  "<br><sub>(default = ALL)</sub></td>");
 	buf_printf_markup(body, level++, "<td>");
 	for (comp = cal_comps; comp->name; comp++) {
 	    buf_printf_markup(body, level,
 			      "<input type=checkbox name=comp value=%s>%s",
 			      comp->name, comp->name);
 	}
-	level -= 2;
+	buf_printf_markup(body, --level, "</td>");
+	buf_printf_markup(body, --level, "</tr>");
 
 	if (namespace_calendar.allow & ALLOW_CAL_NOTZ) {
 	    buf_printf_markup(body, level++, "<tr>");
-	    buf_printf_markup(body, level, "<td align=right>Time Zone:");
+	    buf_printf_markup(body, level, "<td align=right>Time Zone:</td>");
 	    buf_printf_markup(body, level++, "<td>");
 	    buf_printf_markup(body, level++, "<select name=tzid>");
 	    buf_printf_markup(body, level, "<option></option>");
 	    zoneinfo_find(NULL, 1, 0, &list_tzid_cb, &tzrock);
 	    buf_printf_markup(body, --level, "</select>");
-	    level -= 2;
+	    buf_printf_markup(body, --level, "</td>");
+	    buf_printf_markup(body, --level, "</tr>");
 	}
 
 	buf_printf_markup(body, level++, "<tr>");
-	buf_printf_markup(body, level, "<td>");
-	buf_printf_markup(body, level--,
-			  "<td><input type=submit value=Create>");
+	buf_printf_markup(body, level, "<td></td>");
+	buf_printf_markup(body, level,
+			  "<td><br><input type=button value='Create'"
+			  " onclick=\"createCalendar('%s')\">"
+			  " <input type=reset></td>",
+			  base_path);
+	buf_printf_markup(body, --level, "</tr>");
+
 	buf_printf_markup(body, --level, "</table>");
 	buf_printf_markup(body, --level, "</form>");
     }
@@ -1759,178 +1749,6 @@ static int action_list(struct transaction_t *txn, int rights)
     write_body(0, txn, NULL, 0);
 
   done:
-    return ret;
-}
-
-
-/* Redirect client back to the "list" page */
-static void success_redirect(struct transaction_t *txn, const char *op)
-{
-    struct buf *body = &txn->resp_body.payload;
-    unsigned level = 0;
-
-    txn->resp_body.type = "text/html; charset=utf-8";
-    buf_reset(body);
-    buf_printf_markup(body, level, HTML_DOCTYPE);
-    buf_printf_markup(body, level++, "<html>");
-    buf_printf_markup(body, level++, "<head>");
-    buf_printf_markup(body, level, "<title>%s</title>", "Success");
-    buf_printf_markup(body, --level, "</head>");
-    buf_printf_markup(body, level++, "<body>");
-    buf_printf_markup(body, level,
-		      "<h4>%s of calendar <tt>%s</tt> was successful</h4>",
-		      op, txn->req_tgt.path);
-
-    *txn->req_tgt.collection = '\0';
-    buf_reset(&txn->buf);
-    buf_printf(&txn->buf, "%s?action=list", txn->req_tgt.path);
-    txn->location = buf_cstring(&txn->buf);
-
-    buf_printf_markup(body, level,
-		      "<p>Return to <a href=\"%s\">Available Calendars</a>",
-		      txn->location);
-    buf_printf_markup(body, --level, "</body>");
-    buf_printf_markup(body, --level, "</html>");
-
-    write_body(HTTP_SEE_OTHER, txn, buf_cstring(body), buf_len(body));
-}
-
-
-/* Create a new calendar */
-static int action_create(struct transaction_t *txn, int rights)
-{
-    struct buf *body = &txn->req_body.payload;
-    struct strlist *name, *desc, *comp, *tzid;
-    size_t len;
-    int ret;
-
-    /* Check rights */
-    if (!(rights & DACL_MKCOL)) {
-	/* DAV:need-privileges */
-	txn->error.precond = DAV_NEED_PRIVS;
-	txn->error.resource = txn->req_tgt.path;
-	txn->error.rights = DACL_MKCOL;
-	return HTTP_NO_PRIVS;
-    }
-
-    name = hash_lookup("name", &txn->req_qparams);
-    if (!name || name->next || !*name->s) {
-	txn->error.desc = "Multiple/missing/empty name parameter(s)";
-	return HTTP_BAD_REQUEST;
-    }
-
-    desc = hash_lookup("desc", &txn->req_qparams);
-    if (desc && desc->next) {
-	txn->error.desc = "Multiple desc parameter(s)";
-	return HTTP_BAD_REQUEST;
-    }
-
-    tzid = hash_lookup("tzid", &txn->req_qparams);
-    if (tzid && tzid->next) {
-	txn->error.desc = "Multiple tzid parameter(s)";
-	return HTTP_BAD_REQUEST;
-    }
-
-    /* Append a unique resource name to URL path */
-    len = strlen(txn->req_tgt.path);
-    txn->req_tgt.collection = txn->req_tgt.path + len;
-    txn->req_tgt.collen =
-	snprintf(txn->req_tgt.collection, MAX_MAILBOX_PATH - len,
-		 "%x-%x-%d-%ld", strhash(txn->req_tgt.path),
-		 strhash(name->s), getpid(), time(0));
-
-    xmlFreeURI(txn->req_uri);
-    txn->req_uri = parse_uri(METH_MKCALENDAR, txn->req_tgt.path, 1,
-			     &txn->error.desc);
-
-    /* Construct a MKCALENDAR request body */
-    txn->req_body.flags = BODY_DONE;
-    spool_cache_header(xstrdup("Content-Type"), xstrdup("application/xml"),
-		       txn->req_hdrs);
-    buf_setcstr(body, XML_DECLARATION);
-    buf_printf(body,
-	       "<C:mkcalendar xmlns:D=\"%s\" xmlns:C=\"%s\"><D:set><D:prop>",
-	       XML_NS_DAV, XML_NS_CALDAV);
-    buf_printf(body, "<D:displayname>%s</D:displayname>", name->s);
-    if (desc && *desc->s) {
-	buf_printf(body, "<C:calendar-description>%s</C:calendar-description>",
-		   desc->s);
-    }
-
-    comp = hash_lookup("comp", &txn->req_qparams);
-    if (comp) {
-	buf_appendcstr(body, "<C:supported-calendar-component-set>");
-	do {
-	    buf_printf(body, "<C:comp name=\"%s\"/>", comp->s);
-	} while ((comp = comp->next));
-	buf_appendcstr(body, "</C:supported-calendar-component-set>");
-    }
-
-    if (tzid && *tzid->s) {
-	buf_printf(body, "<C:calendar-timezone-id>%s</C:calendar-timezone-id>",
-		   tzid->s);
-    }
-    buf_appendcstr(body, "</D:prop></D:set></C:mkcalendar>");
-
-    /* Perform MKCALENDAR */
-    ret = meth_mkcol(txn, &caldav_params);
-
-    if (ret == HTTP_CREATED) {
-	/* Success - tell client to go back to list page */
-	success_redirect(txn, "Creation");
-	return 0;
-    }
-
-    return ret;
-}
-
-
-/* [Un]share a calendar */
-static int action_setacl(struct transaction_t *txn, int rights)
-{
-    struct strlist *share;
-    char acl[100];
-    int r, ret;
-
-    /* Check rights */
-    if (!(rights & DACL_ADMIN)) {
-	/* DAV:need-privileges */
-	txn->error.precond = DAV_NEED_PRIVS;
-	txn->error.resource = txn->req_tgt.path;
-	txn->error.rights = DACL_ADMIN;
-	return HTTP_NO_PRIVS;
-    }
-
-    share = hash_lookup("share", &txn->req_qparams);
-    if (!share || share->next || !*share->s) {
-	txn->error.desc = "Multiple/missing/empty share parameter(s)";
-	return HTTP_BAD_REQUEST;
-    }
-
-    acl[0] = !strcasecmp(share->s, "true") ? '+' : '-';
-    cyrus_acl_masktostr(DACL_READ, acl+1);
-
-    r = mboxlist_setacl(txn->req_tgt.mboxname, "anyone", acl, 0,
-			httpd_userid, httpd_authstate);
-
-    switch (r) {
-    case 0:
-	ret = HTTP_NO_CONTENT;
-	break;
-
-    case IMAP_MAILBOX_NONEXISTENT:
-	ret = HTTP_NOT_FOUND;
-	break;
-
-    case IMAP_PERMISSION_DENIED:
-	ret = HTTP_FORBIDDEN;
-	break;
-
-    default:
-	ret = HTTP_SERVER_ERROR;
-	break;
-    }
-
     return ret;
 }
 
@@ -2507,9 +2325,6 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
     if (txn->req_tgt.collection) {
 	/* Download an entire calendar collection */ 
 	if (!action) return dump_calendar(txn, rights);
-
-	/* [Un]share a calendar collection */
-	if (!strcmp(action->s, "setacl")) return action_setacl(txn, rights);
     }
     else {
 	/* Display available actions HTML page */
@@ -2517,9 +2332,6 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 
 	/* GET a list of calendars under calendar-home-set */
 	if (!strcmp(action->s, "list")) return action_list(txn, rights);
-	
-	/* Create a new calendar under calendar-home-set */
-	if (!strcmp(action->s, "create")) return action_create(txn, rights);
 	
 	/* GET busytime of the user */
 	if (!strcmp(action->s, "freebusy")) return action_freebusy(txn, rights);
