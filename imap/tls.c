@@ -753,8 +753,7 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 		// Just a warning since this is only necessary for client auth.
 		syslog(
 			LOG_WARNING,
-			"TLS server engine: Failed loading client CA "
-			"data, cert auth disabled."
+			"TLS server engine: Failed loading client CA data, cert auth disabled."
 		    );
 
 		use_client_certs = 0;
@@ -774,7 +773,6 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     } else { // (tls_client_certs != IMAP_ENUM_TLS_CLIENT_CERTS_OFF)
 	// The use of client certificates is turned off.
 	use_client_certs = 0;
-	syslog(LOG_DEBUG, "%s:%d", __FILE__, __LINE__);
     }
 
     server_ca_file = config_getstring(IMAPOPT_TLS_SERVER_CA_FILE);
@@ -829,7 +827,7 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     }
 
     if (!set_cert_stuff(s_ctx, server_cert_file, server_key_file)) {
-	syslog(LOG_ERR, "TLS server engine: cannot load server cert/key data");
+	syslog(LOG_ERR, "TLS server engine: cannot load server cert/key data.");
 	return (-1);
     }
 
@@ -863,9 +861,10 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 	STACK_OF(X509_NAME) *CAnames = SSL_load_client_CA_file(client_ca_file);
 
 	if (!CAnames || sk_num((_STACK *)CAnames) < 1) {
-	    syslog(LOG_ERR,
-		"TLS server engine: No client CA certs specified. "
-		"Client side certs may not work");
+	    syslog(
+		    LOG_ERR,
+		    "TLS server engine: No client CA certs specified. Client side certs may not work"
+		);
 
 	} else {
 	    if (askcert || tls_client_certs)

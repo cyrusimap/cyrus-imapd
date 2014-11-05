@@ -96,9 +96,11 @@ int masterconf_init(const char *ident, const char *alt_config)
     config_ident = ident;
     config_read(alt_config, 0);
 
+    setlogmask(~LOG_MASK(LOG_DEBUG));
+
     prefix = config_getstring(IMAPOPT_SYSLOG_PREFIX);
     
-    if(prefix) {
+    if (prefix) {
 	int size = strlen(prefix) + 1 + strlen(ident) + 1;
 	buf = xmalloc(size);
 	strlcpy(buf, prefix, size);
@@ -110,6 +112,9 @@ int masterconf_init(const char *ident, const char *alt_config)
 	openlog(buf, LOG_PID, SYSLOG_FACILITY);
 
         /* don't free the openlog() string! */
+    } else {
+	closelog();
+	openlog(ident, LOG_PID, SYSLOG_FACILITY);
     }
 
     /* drop debug messages locally */
