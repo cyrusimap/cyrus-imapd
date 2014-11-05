@@ -119,6 +119,7 @@ CRLF            (\r\n|\r|\n)
 <INITIAL>not            return NOT;
 <INITIAL>size           return SIZE;
 <INITIAL>hasflag        return HASFLAG;
+<INITIAL>string         return yylval->nval = STRINGT;
 <INITIAL>reject         return REJCT;
 <INITIAL>fileinto       return FILEINTO;
 <INITIAL>redirect       return REDIRECT;
@@ -185,6 +186,13 @@ CRLF            (\r\n|\r|\n)
 <INITIAL>metadataexists return METADATAEXISTS;
 <INITIAL>servermetadata       return SERVERMETADATA;
 <INITIAL>servermetadataexists return SERVERMETADATAEXISTS;
+<INITIAL>set            return yylval->nval = SET;
+<INITIAL>:lower         return yylval->nval = LOWER;
+<INITIAL>:upper	        return yylval->nval = UPPER;
+<INITIAL>:lowerfirst    return yylval->nval = LOWERFIRST;
+<INITIAL>:upperfirst    return yylval->nval = UPPERFIRST;
+<INITIAL>:quotewildcard return yylval->nval = QUOTEWILDCARD;
+<INITIAL>:length        return yylval->nval = LENGTH;
 <INITIAL>[ \t\n\r] ;    /* ignore whitespace */
 <INITIAL>#.* ;          /* ignore hash comments */
 <INITIAL>"/*"([^\*]|\*[^\/])*\*?"*/" ;  /* ignore bracket comments */
