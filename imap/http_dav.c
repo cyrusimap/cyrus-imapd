@@ -106,8 +106,8 @@ enum {
     PROPFIND_EXPAND			/* only used with expand-prop REPORT */
 };
 
-static int prin_parse_path(const char *path,
-			   struct request_target_t *tgt, const char **errstr);
+static int principal_parse_path(const char *path, struct request_target_t *tgt,
+				const char **errstr);
 static int propfind_displayname(const xmlChar *name, xmlNsPtr ns,
 				struct propfind_ctx *fctx, xmlNodePtr resp,
 				struct propstat propstat[], void *rock);
@@ -134,7 +134,7 @@ static int allprop_cb(const char *mailbox __attribute__((unused)),
 		      void *rock);
 
 /* Array of supported REPORTs */
-static const struct report_type_t dav_reports[] = {
+static const struct report_type_t principal_reports[] = {
 
     /* WebDAV Versioning (RFC 3253) REPORTs */
     { "expand-property", NS_DAV, "multistatus", &report_expand_prop,
@@ -142,15 +142,15 @@ static const struct report_type_t dav_reports[] = {
 
     /* WebDAV ACL (RFC 3744) REPORTs */
     { "principal-property-search", NS_DAV, "multistatus",
-      &report_prin_prop_search, 0, 0 },
+      &report_prin_prop_search, 0, REPORT_ALLOW_PROPS | REPORT_DEPTH_ZERO },
     { "principal-search-property-set", NS_DAV, "principal-search-property-set",
-      &report_prin_search_prop_set, 0, 0 },
+      &report_prin_search_prop_set, 0, REPORT_DEPTH_ZERO },
 
     { NULL, 0, NULL, NULL, 0, 0 }
 };
 
 /* Array of known "live" properties */
-static const struct prop_entry dav_props[] = {
+static const struct prop_entry principal_props[] = {
 
     /* WebDAV (RFC 4918) properties */
     { "creationdate", NS_DAV, PROP_ALLPROP, NULL, NULL, NULL },
@@ -171,7 +171,7 @@ static const struct prop_entry dav_props[] = {
 
     /* WebDAV Versioning (RFC 3253) properties */
     { "supported-report-set", NS_DAV, PROP_COLLECTION,
-      propfind_reportset, NULL, (void *) dav_reports },
+      propfind_reportset, NULL, (void *) principal_reports },
 
     /* WebDAV ACL (RFC 3744) properties */
     { "alternate-URI-set", NS_DAV, PROP_COLLECTION,
@@ -213,10 +213,10 @@ static const struct prop_entry dav_props[] = {
 
 
 static struct meth_params princ_params = {
-    .parse_path = &prin_parse_path,
+    .parse_path = &principal_parse_path,
     .get = NULL,
-    .lprops = dav_props,
-    .reports = dav_reports
+    .lprops = principal_props,
+    .reports = principal_reports
 };
 
 /* Namespace for WebDAV principals */
@@ -350,8 +350,8 @@ static const struct precond_t {
 
 
 /* Parse request-target path in DAV principals namespace */
-static int prin_parse_path(const char *path,
-			   struct request_target_t *tgt, const char **errstr)
+static int principal_parse_path(const char *path, struct request_target_t *tgt,
+				const char **errstr)
 {
     char *p;
     size_t len;
@@ -1349,7 +1349,7 @@ static int propfind_principalurl(const xmlChar *name, xmlNsPtr ns,
 	if (expand) {
 	    /* Return properties for this URL */
 	    expand_property(expand, fctx, buf_cstring(&fctx->buf),
-			    &prin_parse_path, dav_props, node, 0);
+			    &principal_parse_path, principal_props, node, 0);
 	    return 0;
 	}
     }
@@ -1382,7 +1382,7 @@ int propfind_owner(const xmlChar *name, xmlNsPtr ns,
 	if (expand) {
 	    /* Return properties for this URL */
 	    expand_property(expand, fctx, buf_cstring(&fctx->buf),
-			    &prin_parse_path, dav_props, node, 0);
+			    &principal_parse_path, principal_props, node, 0);
 	}
 	else {
 	    /* Return just the URL */
@@ -1881,7 +1881,7 @@ int propfind_curprin(const xmlChar *name, xmlNsPtr ns,
 	if (expand) {
 	    /* Return properties for this URL */
 	    expand_property(expand, fctx, buf_cstring(&fctx->buf),
-			    &prin_parse_path, dav_props, node, 0);
+			    &principal_parse_path, principal_props, node, 0);
 	}
 	else {
 	    /* Return just the URL */
@@ -2643,7 +2643,7 @@ int meth_acl(struct transaction_t *txn, void *params)
 		    memset(&tgt, 0, sizeof(struct request_target_t));
 		    tgt.namespace = URL_NS_PRINCIPAL;
 		    /* XXX: there is no doubt that this leaks memory */
-		    r = prin_parse_path(uri->path, &tgt, &errstr);
+		    r = principal_parse_path(uri->path, &tgt, &errstr);
 		    if (!r && tgt.user) userid = tgt.user;
 		}
 		if (uri) xmlFreeURI(uri);
@@ -5128,6 +5128,69 @@ int report_expand_prop(struct transaction_t *txn __attribute__((unused)),
 }
 
 
+/* DAV:acl-principal-prop-set REPORT */
+int report_acl_prin_prop(struct transaction_t *txn, xmlNodePtr inroot,
+			 struct propfind_ctx *fctx)
+{
+    int ret = 0;
+    struct request_target_t req_tgt;
+    char *aclstr, *userid, *nextid;
+    xmlNodePtr cur;
+
+    /* Get ACL of resource */
+    http_mlookup(txn->req_tgt.mboxname, NULL, &aclstr, NULL);
+    if (!aclstr) goto done;
+
+    /* Generate URL for user principal collection */
+    buf_reset(&fctx->buf);
+    buf_printf(&fctx->buf, "%s/user/", namespace_principal.prefix);
+
+    /* Allowed properties are for principals, NOT the request URL */
+    memset(&req_tgt, 0, sizeof(struct request_target_t));
+    principal_parse_path(buf_cstring(&fctx->buf), &req_tgt, &fctx->err->desc);
+    fctx->req_tgt = &req_tgt;
+    fctx->lprops = principal_props;
+    fctx->proc_by_resource = &propfind_by_resource;
+
+    /* Parse children element of report */
+    for (cur = inroot->children; cur; cur = cur->next) {
+	if (cur->type == XML_ELEMENT_NODE &&
+	    !xmlStrcmp(cur->name, BAD_CAST "prop")) {
+
+	    if ((ret = preload_proplist(cur->children, fctx))) goto done;
+	    break;
+	}
+    }
+
+    /* Parse the ACL string (userid/rights pairs) */
+    for (userid = aclstr = xstrdup(aclstr); userid; userid = nextid) {
+	char *rightstr;
+
+	rightstr = strchr(userid, '\t');
+	if (!rightstr) break;
+	*rightstr++ = '\0';
+
+	nextid = strchr(rightstr, '\t');
+	if (!nextid) break;
+	*nextid++ = '\0';
+
+	if (strcmp(userid, "anyone") && strcmp(userid, "anonymous")) {
+	    /* Add userid to principal URL */
+	    strcpy(req_tgt.tail, userid);
+	    req_tgt.user = userid;
+	    req_tgt.userlen = strlen(userid);
+
+	    /* Add response for URL */
+	    xml_add_response(fctx, 0, 0);
+	}
+    }
+    free(aclstr);
+
+  done:
+    return (ret ? ret : HTTP_MULTI_STATUS);
+}
+
+
 struct search_crit {
     struct strlist *props;
     xmlChar *match;
@@ -5218,11 +5281,6 @@ static int report_prin_prop_search(struct transaction_t *txn,
     xmlNodePtr node;
     struct search_crit *search_crit, *next;
     unsigned apply_prin_set = 0;
-
-    if (fctx->depth != 0) {
-	txn->error.desc = "Depth header field MUST have value zero (0)";
-	return HTTP_BAD_REQUEST;
-    }
 
     /* Parse children element of report */
     fctx->filter_crit = NULL;
@@ -5346,11 +5404,6 @@ static int report_prin_search_prop_set(struct transaction_t *txn,
     xmlNodePtr node;
     const struct prop_entry *entry;
 
-    if (fctx->depth != 0) {
-	txn->error.desc = "Depth header field MUST have value zero (0)";
-	return HTTP_BAD_REQUEST;
-    }
-
     /* Look for child elements in request */
     for (node = inroot->children; node; node = node->next) {
 	if (node->type == XML_ELEMENT_NODE) {
@@ -5408,12 +5461,6 @@ int meth_report(struct transaction_t *txn, void *params)
 	}
     }
 
-    /* Normalize depth so that:
-     * 0 = home-set collection, 1+ = calendar collection, 2+ = calendar resource
-     */
-    if (txn->req_tgt.collection) depth++;
-    if (txn->req_tgt.resource) depth++;
-
     /* Parse the REPORT body */
     ret = parse_xml_body(txn, &inroot);
     if (!ret && !inroot) {
@@ -5438,6 +5485,20 @@ int meth_report(struct transaction_t *txn, void *params)
 	goto done;
     }
 
+    /* Check any depth limit */
+    if (depth && (report->flags & REPORT_DEPTH_ZERO)) {
+	txn->error.desc = "Depth header field MUST have value zero (0)";
+	ret = HTTP_BAD_REQUEST;
+	goto done;
+    }
+
+    /* Normalize depth so that:
+     * 0 = home-set collection, 1+ = calendar collection, 2+ = calendar resource
+     */
+    if (txn->req_tgt.collection) depth++;
+    if (txn->req_tgt.resource) depth++;
+
+    /* Check ACL and location of mailbox */
     if (report->flags & REPORT_NEED_MBOX) {
 	char *server, *acl;
 	int rights;
@@ -5486,33 +5547,35 @@ int meth_report(struct transaction_t *txn, void *params)
 
     /* Principal or Local Mailbox */
 
-    /* Parse children element of report */
-    for (cur = inroot->children; cur; cur = cur->next) {
-	if (cur->type == XML_ELEMENT_NODE) {
-	    if (!xmlStrcmp(cur->name, BAD_CAST "allprop")) {
-		fctx.mode = PROPFIND_ALL;
-		prop = cur;
-		break;
-	    }
-	    else if (!xmlStrcmp(cur->name, BAD_CAST "propname")) {
-		fctx.mode = PROPFIND_NAME;
-		fctx.prefer = PREFER_MIN;  /* Don't want 404 (Not Found) */
-		prop = cur;
-		break;
-	    }
-	    else if (!xmlStrcmp(cur->name, BAD_CAST "prop")) {
-		fctx.mode = PROPFIND_PROP;
-		prop = cur;
-		props = cur->children;
-		break;
+    if (report->flags & (REPORT_NEED_PROPS | REPORT_ALLOW_PROPS)) {
+	/* Parse children element of report */
+	for (cur = inroot->children; cur; cur = cur->next) {
+	    if (cur->type == XML_ELEMENT_NODE) {
+		if (!xmlStrcmp(cur->name, BAD_CAST "allprop")) {
+		    fctx.mode = PROPFIND_ALL;
+		    prop = cur;
+		    break;
+		}
+		else if (!xmlStrcmp(cur->name, BAD_CAST "propname")) {
+		    fctx.mode = PROPFIND_NAME;
+		    fctx.prefer = PREFER_MIN;  /* Don't want 404 (Not Found) */
+		    prop = cur;
+		    break;
+		}
+		else if (!xmlStrcmp(cur->name, BAD_CAST "prop")) {
+		    fctx.mode = PROPFIND_PROP;
+		    prop = cur;
+		    props = cur->children;
+		    break;
+		}
 	    }
 	}
-    }
 
-    if (!prop && (report->flags & REPORT_NEED_PROPS)) {
-	txn->error.desc = "Missing <prop> element in REPORT\r\n";
-	ret = HTTP_BAD_REQUEST;
-	goto done;
+	if (!prop && (report->flags & REPORT_NEED_PROPS)) {
+	    txn->error.desc = "Missing <prop> element in REPORT\r\n";
+	    ret = HTTP_BAD_REQUEST;
+	    goto done;
+	}
     }
 
     /* Start construction of our multistatus response */

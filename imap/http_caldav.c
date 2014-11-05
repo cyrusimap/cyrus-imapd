@@ -392,15 +392,19 @@ static const struct report_type_t caldav_reports[] = {
     { "expand-property", NS_DAV, "multistatus", &report_expand_prop,
       DACL_READ, 0 },
 
+    /* WebDAV ACL (RFC 3744) REPORTs */
+    { "acl-principal-prop-set", NS_DAV, "multistatus", &report_acl_prin_prop,
+      DACL_ADMIN, REPORT_NEED_MBOX | REPORT_DEPTH_ZERO },
+
     /* WebDAV Sync (RFC 6578) REPORTs */
     { "sync-collection", NS_DAV, "multistatus", &report_sync_col,
       DACL_READ, REPORT_NEED_MBOX | REPORT_NEED_PROPS },
 
     /* CalDAV (RFC 4791) REPORTs */
     { "calendar-query", NS_CALDAV, "multistatus", &report_cal_query,
-      DACL_READ, REPORT_NEED_MBOX },
+      DACL_READ, REPORT_NEED_MBOX | REPORT_ALLOW_PROPS },
     { "calendar-multiget", NS_CALDAV, "multistatus", &report_cal_multiget,
-      DACL_READ, REPORT_NEED_MBOX },
+      DACL_READ, REPORT_NEED_MBOX | REPORT_ALLOW_PROPS },
     { "free-busy-query", NS_CALDAV, NULL, &report_fb_query,
       DACL_READFB, REPORT_NEED_MBOX },
 

@@ -149,15 +149,19 @@ static const struct report_type_t carddav_reports[] = {
     { "expand-property", NS_DAV, "multistatus", &report_expand_prop,
       DACL_READ, 0 },
 
+    /* WebDAV ACL (RFC 3744) REPORTs */
+    { "acl-principal-prop-set", NS_DAV, "multistatus", &report_acl_prin_prop,
+      DACL_ADMIN, REPORT_NEED_MBOX | REPORT_DEPTH_ZERO },
+
     /* WebDAV Sync (RFC 6578) REPORTs */
     { "sync-collection", NS_DAV, "multistatus", &report_sync_col,
       DACL_READ, REPORT_NEED_MBOX | REPORT_NEED_PROPS },
 
     /* CardDAV (RFC 6352) REPORTs */
     { "addressbook-query", NS_CARDDAV, "multistatus", &report_card_query,
-      DACL_READ, REPORT_NEED_MBOX },
+      DACL_READ, REPORT_NEED_MBOX | REPORT_ALLOW_PROPS },
     { "addressbook-multiget", NS_CARDDAV, "multistatus", &report_card_multiget,
-      DACL_READ, REPORT_NEED_MBOX },
+      DACL_READ, REPORT_NEED_MBOX | REPORT_ALLOW_PROPS },
 
     { NULL, 0, NULL, NULL, 0, 0 }
 };

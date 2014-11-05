@@ -454,7 +454,9 @@ struct report_type_t {
 /* Report flags */
 enum {
     REPORT_NEED_MBOX	= (1<<0),
-    REPORT_NEED_PROPS 	= (1<<1)
+    REPORT_NEED_PROPS 	= (1<<1),
+    REPORT_ALLOW_PROPS 	= (1<<2),
+    REPORT_DEPTH_ZERO 	= (1<<3)
 };
 
 /* Overwrite flags */
@@ -482,6 +484,8 @@ struct meth_params {
 
 int report_expand_prop(struct transaction_t *txn, xmlNodePtr inroot,
 		       struct propfind_ctx *fctx);
+int report_acl_prin_prop(struct transaction_t *txn, xmlNodePtr inroot,
+			 struct propfind_ctx *fctx);
 int report_sync_col(struct transaction_t *txn, xmlNodePtr inroot,
 		    struct propfind_ctx *fctx);
 
