@@ -1,8 +1,8 @@
 require ["reject", "fileinto", "imapflags", "vacation", "notify",
         "vacation-seconds", "copy", "imap4flags", "relational",
-        "comparator-i;ascii-numeric"];
+        "comparator-i;ascii-numeric", "variables"];
 
-#this is for the extra thigns we have added to sieve
+#this is for the extra things we have added to sieve
 
 #action extensions
 #reject fileinto imapflags vacation notify
@@ -63,6 +63,23 @@ fileinto "INBOX.fileinto.internalflags";
 fileinto :flags "" "INBOX.fileinto.nullflags";
 
 }
+
+#VARIABLES
+##############################################
+if header :contains "subject" "variables"
+{
+set :lowerfirst "myvar" "myval";
+set :lower :upperfirst :quotewildcard "myvar2" "my*val2";
+
+set "mystring" "string1";
+set "mystring2" "00${mystring}00";
+
+if string "myvar2" "my*val2" {
+fileinto :copy "INBOX.stringtest.true";
+}
+
+}
+
 
 #VACATION
 #############################################
