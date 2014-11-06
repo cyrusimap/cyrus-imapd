@@ -926,6 +926,9 @@ EXPORTED int sieve_execute_bytecode(sieve_execute_t *exe, sieve_interp_t *interp
 
     variables.var = &imapflags;
 
+    varlist_extend(&variables)->name = xstrdup(VL_MATCH_VARS);
+    varlist_extend(&variables)->name = xstrdup(VL_PARSED_STRINGS);
+
     if (!interp) return SIEVE_FAIL;
 
     if (interp->notify) {
