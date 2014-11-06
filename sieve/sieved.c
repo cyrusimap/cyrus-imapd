@@ -371,7 +371,12 @@ static int dump2_test(bytecode_input_t * d, int i, int version)
         printf("             ]\n");
         break;
     case BC_HASFLAG:/*15*/
-        printf("Hasflag [");
+    case BC_STRING:/*21*/
+        if (BC_HASFLAG == opcode) {
+            printf("Hasflag [");
+        } else {
+            printf("String [");
+        }
         i= printComparison(d, i+1);
         printf("              Variables: ");
         i=write_list(ntohl(d[i].len), i+1, d);
@@ -725,6 +730,21 @@ static void dump2(bytecode_input_t *d, int bc_len)
                 ntohl(d[i].value) & 128 ? "yes" : "no");
             i = unwrap_string(d, i+1, &data, &len);
             printf(" {%d}%s\n", len, data);
+            break;
+
+        case B_SET: /*25*/
+        {
+            int m = ntohl(d[i++].value);
+            i = unwrap_string(d, i, &data, &len);
+            printf("SET ");
+            printf("LOWER(%d) UPPER(%d) LOWERFIRST(%d) UPPERFIRST(%d) "
+                   "QUOTEWILDCARD(%d) LENGTH(%d)\n",
+		   m & BFV_LOWER, m & BFV_UPPER, m & BFV_LOWERFIRST,
+		   m & BFV_UPPERFIRST, m & BFV_QUOTEWILDCARD, m & BFV_LENGTH);
+            printf("              VARS({%d}%s)", len, data);
+            i = unwrap_string(d, i, &data, &len);
+            printf(" VALS({%d}%s)\n", len, data);
+        }
             break;
 
         case B_RETURN:/*18*/
