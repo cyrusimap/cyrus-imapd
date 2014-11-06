@@ -150,6 +150,13 @@ struct ftags {
     strarray_t *flags;
 };
 
+struct stags {
+    int mod40; /* :lower or :upper */
+    int mod30; /* :lowerfirst or :upperfirst */
+    int mod20; /* :quotewildcard */
+    int mod10; /* :length */
+};
+
 static test_t *build_address(int t, struct aetags *ae,
                              strarray_t *sl, strarray_t *pl);
 static test_t *build_header(int t, struct htags *h,
@@ -167,6 +174,7 @@ static commandlist_t *build_keep(int t, struct ftags *f);
 static commandlist_t *build_fileinto(int t, struct ftags *f, char *folder);
 static commandlist_t *build_redirect(int t, int c, char *a);
 static commandlist_t *build_include(int, struct itags *, char*);
+static commandlist_t *build_set(int t, struct stags *s, char *variable, char *value);
 static struct aetags *new_aetags(void);
 static struct aetags *canon_aetags(struct aetags *ae);
 static void free_aetags(struct aetags *ae);
@@ -195,6 +203,9 @@ static void free_ftags(struct ftags *f);
 static struct mtags *new_mtags(void);
 static struct mtags *canon_mtags(struct mtags *h);
 static void free_mtags(struct mtags *h);
+static struct stags *new_stags(void);
+static struct stags *canon_stags(struct stags *s);
+static void free_stags(struct stags *s);
 
 static int verify_stringlist(sieve_script_t*, strarray_t *sl, int (*verify)(sieve_script_t*, char *));
 static int verify_mailbox(sieve_script_t*, char *s);
@@ -240,6 +251,7 @@ extern void sieverestart(FILE *f);
     struct itags *itag;
     struct dttags *dttag;
     struct ftags *ftag;
+    struct stags *stag;
 }
 
 %token <nval> NUMBER
@@ -280,6 +292,8 @@ extern void sieverestart(FILE *f);
 %type <dttag> dttags
 %type <nval> priority
 %type <ftag> ftags
+%type <stag> stags
+%type <nval> mod40 mod30 mod20 mod10
 
 %name-prefix "sieve"
 %defines
@@ -433,6 +447,47 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
                                     YYERROR;
                                   }
                                    $$ = new_command(RETURN); }
+
+         | SET stags STRING STRING {
+                                   if (!parse_script->support.variables) {
+                                     yyerror(parse_script, "variables MUST be enabled with \"require\"");
+                                     YYERROR;
+                                   }
+                                   if (!verify_identifier(parse_script, $3)) {
+                                     YYERROR; /* vi should call yyerror() */
+                                   }
+                                   if (!verify_utf8(parse_script, $4)) {
+                                     YYERROR; /* vu should call yyerror() */
+                                   }
+                                   $2 = canon_stags($2);
+                                   $$ = build_set($1, $2, $3, $4);
+                                 }
+        ;
+
+stags: /* empty */               { $$ = new_stags(); }
+        | stags mod40            { if ($$->mod40) {
+                                     yyerror(parse_script, "duplicate mod40 (:lower or :upper)"); YYERROR; }
+                                   else { $$->mod40 = $2; }}
+        | stags mod30            { if ($$->mod30) {
+                                     yyerror(parse_script, "duplicate mod30 (:lowerfirst or :upperfirst)"); YYERROR; }
+                                   else { $$->mod30 = $2; }}
+        | stags mod20            { if ($$->mod20) {
+                                     yyerror(parse_script, "duplicate :quotewildcard"); YYERROR; }
+                                   else { $$->mod20 = $2; }}
+        | stags mod10            { if ($$->mod10) {
+                                     yyerror(parse_script, "duplicate :length"); YYERROR; }
+                                   else { $$->mod10 = $2; }}
+;
+
+mod40:  LOWER
+        | UPPER
+        ;
+mod30:  LOWERFIRST
+        | UPPERFIRST
+        ;
+mod20:  QUOTEWILDCARD
+        ;
+mod10:  LENGTH
         ;
 
 itags: /* empty */               { $$ = new_itags(); }
@@ -1350,6 +1405,25 @@ static test_t *build_date(int t, struct dttags *dt,
     return ret;
 }
 
+static commandlist_t *build_set(int t, struct stags *s, char *variable, char *value)
+{
+    commandlist_t *ret = new_command(t);
+
+    assert(t == SET);
+
+    if (ret) {
+        ret->u.s.mod40 = s->mod40;
+        ret->u.s.mod30 = s->mod30;
+        ret->u.s.mod20 = s->mod20;
+        ret->u.s.mod10 = s->mod10;
+        ret->u.s.variable = xstrdup(variable);
+        ret->u.s.value = xstrdup(value);
+
+        free_stags(s);
+    }
+
+    return ret;
+}
 
 static struct aetags *new_aetags(void)
 {
@@ -1628,6 +1702,28 @@ static struct ftags *canon_ftags(struct ftags *f)
     return f;
 }
 
+static struct stags *new_stags(void)
+{
+    struct stags *s = (struct stags *) xmalloc(sizeof(struct stags));
+
+    s->mod40 = 0;
+    s->mod30 = 0;
+    s->mod20 = 0;
+    s->mod10 = 0;
+
+    return s;
+}
+
+static struct stags *canon_stags(struct stags *s)
+{
+    return s;
+}
+
+static void free_stags(struct stags *s)
+{
+    free(s);
+}
+
 static void free_ftags(struct ftags *f)
 {
     if (!f) return;
@@ -1640,7 +1736,7 @@ static int verify_identifier(sieve_script_t *parse_script, char *s)
     /* identifier         = (ALPHA / "_") *(ALPHA / DIGIT / "_") */
 
     int i = 0;
-    while (s && *s) {
+    while (s && s[i]) {
         if (s[i] == '_' || (s[i] >= 'a' && s[i] <= 'z')
             || (s[i] >= 'A' && s[i] <= 'A')
             || (i && (s[i] >= '0' && s[i] <= '9'))) {
