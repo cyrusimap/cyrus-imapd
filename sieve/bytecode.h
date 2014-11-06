@@ -151,7 +151,9 @@ enum bytecode {
 
     B_KEEP,
     B_FILEINTO_FLAGS,   /* legacy fileinto w/o support for :create */
-    B_FILEINTO          /* require mailbox, imap4flags, copy */
+    B_FILEINTO,         /* require mailbox, imap4flags, copy */
+
+    B_SET               /* require variables */
 };
 
 enum bytecode_comps {
@@ -175,7 +177,8 @@ enum bytecode_comps {
     BC_METADATA,        /* require mboxmetadata */
     BC_METADATAEXISTS,
     BC_SERVERMETADATA,  /* require servermetadata */
-    BC_SERVERMETADATAEXISTS
+    BC_SERVERMETADATAEXISTS,
+    BC_STRING	        /* require variables */
 };
 
 /* currently one enum so as to help determine where values are being misused.
@@ -291,6 +294,15 @@ enum bytecode_tags {
     B_DATEPART_PLACEHOLDER_2,
     B_DATEPART_PLACEHOLDER_3,
     B_DATEPART_PLACEHOLDER_4
+};
+
+enum bytecode_variables_bitflags {
+    BFV_LOWER	        = 1<<0,
+    BFV_UPPER	        = 1<<1,
+    BFV_LOWERFIRST      = 1<<2,
+    BFV_UPPERFIRST      = 1<<3,
+    BFV_QUOTEWILDCARD   = 1<<4,
+    BFV_LENGTH	        = 1<<5
 };
 
 #endif
