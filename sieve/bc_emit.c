@@ -1112,6 +1112,8 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 /* spew the bytecode to disk */
 EXPORTED int sieve_emit_bytecode(int fd, bytecode_info_t *bc)
 {
+    int codep = 0;
+
     /* First output version number (4 bytes) */
     int data = BYTECODE_VERSION;
 
@@ -1121,11 +1123,17 @@ EXPORTED int sieve_emit_bytecode(int fd, bytecode_info_t *bc)
 
     if(write_int(fd, data) == -1) return -1;
 
+    /* write extensions bitfield */
+    if (write_int(fd, bc->data[codep++].value) == -1) return -1;
+
 #if DUMPCODE
     dump(bc, 0);
 #endif
 
-    /*the sizeof(int) is to account for the version # at the beginning*/
-    return bc_action_emit(fd, 0, bc->scriptend, bc, sizeof(int) + BYTECODE_MAGIC_LEN);
+    /* the 2*sizeof(int) is to account for the version number and requires at
+     * the beginning
+     */
+    return bc_action_emit(fd, codep, bc->scriptend, bc,
+                          2*sizeof(int) + BYTECODE_MAGIC_LEN);
 }
 

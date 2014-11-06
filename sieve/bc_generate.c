@@ -1077,6 +1077,8 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 EXPORTED int sieve_generate_bytecode(bytecode_info_t **retval, sieve_script_t *s)
 {
     commandlist_t *c;
+    int requires = 0;
+    int codep = 0;
 
     if(!retval) return -1;
     if(!s) return -1;
@@ -1085,13 +1087,20 @@ EXPORTED int sieve_generate_bytecode(bytecode_info_t **retval, sieve_script_t *s
        with only BC_NULL is returned
     */
 
-
+    /* populate requires field */
+    if (s->support.variables) {
+	requires |= BFE_VARIABLES;
+    }
+    
     *retval = xmalloc(sizeof(bytecode_info_t));
     if(!(*retval)) return -1;
 
     memset(*retval, 0, sizeof(bytecode_info_t));
 
-    return bc_action_generate(0, *retval, c);
+    if (!atleast(*retval, codep+1)) return -1;
+    (*retval)->data[codep++].value = requires;
+
+    return bc_action_generate(codep, *retval, c);
 }
 
 
