@@ -210,6 +210,7 @@ static int verify_regex(sieve_script_t*, char *s, int cflags);
 static int verify_regexs(sieve_script_t*,const strarray_t *sl, char *comp);
 #endif
 static int verify_utf8(sieve_script_t*, char *s);
+static int verify_identifier(sieve_script_t*, char *s);
 
 void yyerror(sieve_script_t*, const char *msg);
 extern int yylex(void*, sieve_script_t*);
@@ -593,7 +594,28 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
                                          YYERROR; }
                                  }
 
-
+        | STRINGT htags stringlist stringlist
+                                 {
+                                     if (!parse_script->support.variables) {
+                                         yyerror(parse_script, "variables MUST be enabled with \"require\"");
+                                         YYERROR;
+                                     }
+                                     if (!verify_stringlist(parse_script, $3, verify_identifier)) {
+                                         YYERROR; /* vi should call yyerror() */
+                                     }
+                                     if (!verify_stringlist(parse_script, $4, verify_utf8)) {
+                                         YYERROR; /* vu should call yyerror() */
+                                     }
+                                     $2 = canon_htags($2);
+#ifdef ENABLE_REGEX
+                                     if ($2->comptag == REGEX) {
+                                         if (!(verify_regexs(parse_script, $4, $2->comparator))) {
+                                             YYERROR;
+                                         }
+                                     }
+#endif
+                                     $$ = build_header($1, $2, $3, $4);
+                                 }
 
         | HASFLAG htags stringlist
                                  {
@@ -1123,9 +1145,9 @@ static test_t *build_address(int t, struct aetags *ae,
 static test_t *build_header(int t, struct htags *h,
                             strarray_t *sl, strarray_t *pl)
 {
-    test_t *ret = new_test(t);  /* can be HEADER or HASFLAG */
+    test_t *ret = new_test(t);  /* can be HEADER or HASFLAG or STRINGT */
 
-    assert((t == HEADER) || (t == HASFLAG));
+    assert((t == HEADER) || (t == HASFLAG) || (t == STRINGT));
 
     if (ret) {
         ret->u.h.index = h->index;
@@ -1611,6 +1633,26 @@ static void free_ftags(struct ftags *f)
     if (!f) return;
     if (f->flags) { strarray_free(f->flags); }
     free(f);
+}
+
+static int verify_identifier(sieve_script_t *parse_script, char *s)
+{
+    /* identifier         = (ALPHA / "_") *(ALPHA / DIGIT / "_") */
+
+    int i = 0;
+    while (s && *s) {
+        if (s[i] == '_' || (s[i] >= 'a' && s[i] <= 'z')
+            || (s[i] >= 'A' && s[i] <= 'A')
+            || (i && (s[i] >= '0' && s[i] <= '9'))) {
+            i++;
+        } else {
+            snprintf(parse_script->sieveerr, ERR_BUF_SIZE,
+                     "string '%s': not a valid sieve identifier", s);
+            yyerror(parse_script, parse_script->sieveerr);
+            return 0;
+        }
+    }
+    return 1;
 }
 
 static int verify_stringlist(sieve_script_t *parse_script, strarray_t *sa, int (*verify)(sieve_script_t*, char *))
