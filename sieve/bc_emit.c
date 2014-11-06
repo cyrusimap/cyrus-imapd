@@ -247,6 +247,7 @@ static int bc_test_emit(int fd, int *codep, bytecode_info_t *bc)
 
     case BC_HEADER:
     case BC_HASFLAG:
+    case BC_STRING:
     {
         int ret;
         if (BC_HEADER == opcode) {
@@ -1043,6 +1044,54 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 
             filelen += len + ret;
             break;
+
+        case B_SET:
+            /* BITFIELD modifiers
+               STRING variable
+               STRING value
+            */
+            /* write modifiers */
+            if(write_int(fd,bc->data[codep++].value) == -1)
+                return -1;
+
+            filelen += sizeof(int);
+
+            /* write string length of variable */
+            len = bc->data[codep++].len;
+            if(write_int(fd,len) == -1)
+                return -1;
+
+            filelen+=sizeof(int);
+
+            /* write variable */
+            if(write(fd,bc->data[codep++].str,len) == -1)
+                return -1;
+
+            ret = align_string(fd, len);
+            if(ret == -1)
+                return -1;
+
+            filelen += len + ret;
+
+            /* write string length of value */
+            len = bc->data[codep++].len;
+            if(write_int(fd,len) == -1)
+                return -1;
+
+            filelen+=sizeof(int);
+
+            /* write value */
+            if(write(fd,bc->data[codep++].str,len) == -1)
+                return -1;
+
+            ret = align_string(fd, len);
+            if(ret == -1)
+                return -1;
+
+            filelen += len + ret;
+
+            break;
+
         case B_NULL:
         case B_STOP:
         case B_DISCARD:
