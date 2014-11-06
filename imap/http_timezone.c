@@ -97,15 +97,15 @@ struct observance {
 };
 
 static const struct action_t {
-    const char *name;
+    const char *path;
+    int need_tzid;
     int (*proc)(struct transaction_t *txn);
 } actions[] = {
-    { "capabilities",	&action_capa },
-    { "list",		&action_list },
-    { "get",		&action_get },
-    { "expand",		&action_expand },
-    { "find",		&action_list },
-    { NULL,		NULL}
+    { "capabilities",	0,	&action_capa },
+    { "zones",		0,	&action_list },
+    { "zones",		1,	&action_get },
+    { "observances",	1,	&action_expand },
+    { NULL,		0,	NULL}
 };
 
 
@@ -182,21 +182,51 @@ static void timezone_shutdown(void)
 static int meth_get(struct transaction_t *txn,
 		    void *params __attribute__((unused)))
 {
-    int ret;
-    struct strlist *action;
+    struct request_target_t *tgt = &txn->req_tgt;
     const struct action_t *ap = NULL;
+    char *p;
 
-    action = hash_lookup("action", &txn->req_qparams);
-    if (action && !action->next  /* mandatory, once only */) {
-	for (ap = actions; ap->name && strcmp(action->s, ap->name); ap++);
+    /* Make a working copy of target path */
+    strlcpy(tgt->path, txn->req_uri->path, sizeof(tgt->path));
+    p = tgt->path;
+
+    /* Skip namespace */
+    p += strlen(namespace_timezone.prefix);
+    if (*p == '/') *p++ = '\0';
+
+    /* Check for path after prefix */
+    if (*p) {
+	/* Get collection (action) */
+	tgt->collection = p;
+	p += strcspn(p, "/");
+	if (*p == '/') *p++ = '\0';
+
+	if (*p) {
+	    /* Get resource (tzid) */
+	    tgt->resource = p;
+	    p += strlen(p);
+	    if (p[-1] == '/') *--p = '\0';
+	}
+
+	/* Search known actions for matching path */
+	for (ap = actions; ap->path; ap++) {
+
+	    if (!strcmp(tgt->collection, ap->path)) {
+		if (ap->need_tzid) {
+		    if (tgt->resource) break;
+		}
+		else if (!tgt->resource) break;
+	    }
+	}
     }
 
-    if (!ap || !ap->name)
-	ret = json_error_response(txn, TZ_INVALID_ACTION, action, NULL);
-    else
-	ret = ap->proc(txn);
+    if (!ap || !ap->path)
+	return json_error_response(txn, TZ_INVALID_ACTION, NULL, NULL);
 
-    return ret;
+    if (tgt->resource && strchr(tgt->resource, '.'))  /* paranoia */
+	return json_error_response(txn, TZ_NOT_FOUND, NULL, NULL);
+
+    return ap->proc(txn);
 }
 
 
@@ -241,79 +271,75 @@ static int action_capa(struct transaction_t *txn)
 
     if (txn->resp_body.lastmod > lastmod) {
 	struct zoneinfo info;
+	struct mime_type_t *mime;
+	json_t *formats;
 	int r;
 
 	/* Get info record from the database */
 	if ((r = zoneinfo_lookup_info(&info))) return HTTP_SERVER_ERROR;
 
 	/* Construct our response */
-	root = json_pack("{s:i"				/* version */
+	root = json_pack("{ s:i"			/* version */
 			 "  s:{"			/* info */
 			 "      s:s"			/*   primary-source */
+			 "      s:[]"			/*   formats */
 			 "      s:{s:b s:b}"		/*   truncated */
-			 "      s:s"   			/*   provider-details */
+			 "      s:n"   			/*   provider-details */
 			 "      s:[]"  			/*   contacts */
 			 "    }"
 			 "  s:["			/* actions */
-			 "    {s:s s:[]}"		/*   capabilities */
 			 "    {s:s s:["			/*   list */
-//			 "      {s:s s:b s:b}"		/*     lang */
-			 "      {s:s s:b s:b}"		/*     tzid */
-			 "      {s:s s:b s:b}"		/*     changedsince */
+			 "      {s:s}"			/*     changedsince */
 			 "    ]}"
 			 "    {s:s s:["			/*   get */
-//			 "      {s:s s:b s:b}"		/*     lang */
-			 "      {s:s s:b s:b}"		/*     tzid */
-			 "      {s:s s:b s:b s:[s s s]}"/*     format */
-			 "      {s:s s:b s:b}"		/*     truncate */
+			 "      {s:s}"			/*     start */
+			 "      {s:s}"			/*     end */
 			 "    ]}"
 			 "    {s:s s:["			/*   expand */
-//			 "      {s:s s:b s:b}"		/*     lang */
-			 "      {s:s s:b s:b}"		/*     tzid */
-			 "      {s:s s:b s:b}"		/*     changedsince */
-			 "      {s:s s:b s:b}"		/*     start */
-			 "      {s:s s:b s:b}"		/*     end */
+			 "      {s:s s:b}"		/*     start */
+			 "      {s:s}"			/*     end */
+			 "      {s:s}"			/*     changedsince */
 			 "    ]}"
 			 "    {s:s s:["			/*   find */
-//			 "      {s:s s:b s:b}"		/*     lang */
-			 "      {s:s s:b s:b}"		/*     pattern */
+			 "      {s:s s:b}"		/*     pattern */
 			 "    ]}"
-			 "  ]}",
-			 "version", 1,
-			 "info", "primary-source", info.data->s,
-			 "truncated", "any", 1, "untruncated", 1,
-			 "provider-details", "", "contacts",
-			 "actions",
-			 "name", "capabilities", "parameters",
+			 "  ]",
+			 "}",
 
+			 "version", 1,
+
+			 "info", "primary-source", info.data->s, "formats",
+			 "truncated", "any", 1, "untruncated", 1,
+			 "provider-details", "contacts",
+
+			 "actions",
 			 "name", "list", "parameters",
-//			 "name", "lang", "required", 0, "multi", 1,
-			 "name", "tzid", "required", 0, "multi", 1,
-			 "name", "changedsince", "required", 0, "multi", 0,
+			 "name", "changedsince",
 
 			 "name", "get", "parameters",
-//			 "name", "lang", "required", 0, "multi", 1,
-			 "name", "tzid", "required", 1, "multi", 0,
-			 "name", "format", "required", 0, "multi", 0,
-			 "values", "text/calendar", "application/calendar+xml",
-			 "application/calendar+json",
-			 "name", "truncate", "required", 0, "multi", 0,
+			 "name", "start",
+			 "name", "end",
 
 			 "name", "expand", "parameters",
-//			 "name", "lang", "required", 0, "multi", 1,
-			 "name", "tzid", "required", 1, "multi", 0,
-			 "name", "changedsince", "required", 0, "multi", 0,
-			 "name", "start", "required", 1, "multi", 0,
-			 "name", "end", "required", 0, "multi", 0,
+			 "name", "start", "required", 1,
+			 "name", "end",
+			 "name", "changedsince",
 
 			 "name", "find", "parameters",
-//			 "name", "lang", "required", 0, "multi", 1,
-			 "name", "pattern", "required", 1, "multi", 0);
+			 "name", "pattern", "required", 1);
 	freestrlist(info.data);
 
 	if (!root) {
 	    txn->error.desc = "Unable to create JSON response";
 	    return HTTP_SERVER_ERROR;
+	}
+
+	/* Add supported formats */
+	formats = json_object_get(json_object_get(root, "info"), "formats");
+	for (mime = tz_mime_types; mime->content_type; mime++) {
+	    buf_setcstr(&txn->buf, mime->content_type);
+	    buf_truncate(&txn->buf, strcspn(mime->content_type, ";"));
+	    json_array_append_new(formats, json_string(buf_cstring(&txn->buf)));
 	}
 
 	/* Update lastmod */
@@ -364,8 +390,9 @@ static int list_cb(const char *tzid, int tzidlen,
 /* Perform a list action */
 static int action_list(struct transaction_t *txn)
 {
-    int r, precond, tzid_only = 1;
-    struct strlist *param, *name = NULL;
+    int r, precond;
+    struct strlist *param;
+    const char *pattern = NULL;
     icaltimetype changedsince = icaltime_null_time();
     struct resp_body_t *resp_body = &txn->resp_body;
     struct zoneinfo info;
@@ -373,39 +400,19 @@ static int action_list(struct transaction_t *txn)
     json_t *root = NULL;
 
     /* Sanity check the parameters */
-    param = hash_lookup("action", &txn->req_qparams);
-    if (!strcmp("find", param->s)) {
-	name = hash_lookup("pattern", &txn->req_qparams);
-	if (!name || name->next		  /* mandatory, once only */
-	    || !name->s || !*name->s	  /* not empty */
-	    || !strcspn(name->s, "*")) {  /* not (*)+ */
-	    return json_error_response(txn, TZ_INVALID_PATTERN, name, NULL);
+    if ((param = hash_lookup("pattern", &txn->req_qparams))) {
+	if (param->next			  /* once only */
+	    || !param->s || !*param->s	  /* not empty */
+	    || !strcspn(param->s, "*")) {  /* not (*)+ */
+	    return json_error_response(txn, TZ_INVALID_PATTERN, param, NULL);
 	}
-	tzid_only = 0;
+	pattern = param->s;
     }
-    else {
-	param = hash_lookup("changedsince", &txn->req_qparams);
-	if (param) {
-	    changedsince = icaltime_from_string(param->s);
-	    if (param->next || !changedsince.is_utc) {  /* once only, UTC */
-		return json_error_response(txn, TZ_INVALID_CHANGEDSINCE,
-					   param, &changedsince);
-	    }
-	}
-
-	name = hash_lookup("tzid", &txn->req_qparams);
-	if (name) {
-	    if (changedsince.is_utc) {
-		return json_error_response(txn, TZ_INVALID_TZID,
-					   param, &changedsince);
-	    }
-	    else {
-		/* Check for tzid=*, and revert to empty list */
-		struct strlist *sl;
-
-		for (sl = name; sl && strcmp(sl->s, "*"); sl = sl->next);
-		if (sl) name = NULL;
-	    }
+    else if ((param = hash_lookup("changedsince", &txn->req_qparams))) {
+	changedsince = icaltime_from_string(param->s);
+	if (param->next || !changedsince.is_utc) {  /* once only, UTC */
+	    return json_error_response(txn, TZ_INVALID_CHANGEDSINCE,
+				       param, &changedsince);
 	}
     }
 
@@ -456,18 +463,16 @@ static int action_list(struct transaction_t *txn)
 	}
 
 	lrock.tzarray = json_object_get(root, "timezones");
-	if (!tzid_only) {
+	if (pattern) {
 	    construct_hash_table(&tzids, 500, 1);
 	    lrock.tztable = &tzids;
 	}
 
 	/* Add timezones to array */
-	do {
-	    zoneinfo_find(name ? name->s : NULL, tzid_only,
-			  icaltime_as_timet(changedsince), &list_cb, &lrock);
-	} while (name && (name = name->next));
+	zoneinfo_find(pattern, !pattern,
+		      icaltime_as_timet(changedsince), &list_cb, &lrock);
 
-	if (!tzid_only) free_hash_table(&tzids, NULL);
+	if (pattern) free_hash_table(&tzids, NULL);
     }
 
     /* Output the JSON object */
@@ -931,7 +936,7 @@ static int action_get(struct transaction_t *txn)
 {
     int r, precond;
     struct strlist *param;
-    const char *tzid, *truncate = NULL;
+    const char *tzid = txn->req_tgt.resource;
     struct zoneinfo zi;
     time_t lastmod;
     icaltimetype start = icaltime_null_time(), end = icaltime_null_time();
@@ -939,60 +944,30 @@ static int action_get(struct transaction_t *txn)
     unsigned long datalen = 0;
     struct resp_body_t *resp_body = &txn->resp_body;
     struct mime_type_t *mime = NULL;
+    const char **hdr;
 
-    /* Sanity check the parameters */
-    param = hash_lookup("tzid", &txn->req_qparams);
-    if (!param || param->next) { /* mandatory, once only */
-	return json_error_response(txn, TZ_INVALID_TZID, param, NULL);
-    }
-    if (strchr(param->s, '.')) {  /* paranoia */
-	return json_error_response(txn, TZ_NOT_FOUND, NULL, NULL);
-    }
-    tzid = param->s;
-
-    /* Check/find requested MIME type */
-    param = hash_lookup("format", &txn->req_qparams);
-    if (param && !param->next  /* optional, once only */) {
-	for (mime = tz_mime_types; mime->content_type; mime++) {
-	    if (is_mediatype(param->s, mime->content_type)) break;
-	}
-    }
+    /* Check/find requested MIME type:
+       1st entry in gparams->mime_types array MUST be default MIME type */
+    if ((hdr = spool_getheader(txn->req_hdrs, "Accept")))
+	mime = get_accept_type(hdr, tz_mime_types);
     else mime = tz_mime_types;
 
-    if (!mime || !mime->content_type) {
-	return json_error_response(txn, TZ_INVALID_FORMAT, param, NULL);
+    if (!mime) return json_error_response(txn, TZ_INVALID_FORMAT, NULL, NULL);
+
+    /* Sanity check the parameters */
+    if ((param = hash_lookup("start", &txn->req_qparams))) {
+	start = icaltime_from_string(param->s);
+	if (param->next || !start.is_utc) {  /* once only, UTC */
+	    return json_error_response(txn, TZ_INVALID_START, param, &start);
+	}
     }
 
-    /* Check for any truncation */
-    param = hash_lookup("truncate", &txn->req_qparams);
-    if (param) {
-	tok_t tok;
-	char *token;
-
-	truncate = param->s;
-
-	if (param->next) {  /* once only */
-	    return json_error_response(txn, TZ_INVALID_TRUNCATE, param, NULL);
+    if ((param = hash_lookup("end", &txn->req_qparams))) {
+	end = icaltime_from_string(param->s);
+	if (param->next || !end.is_utc  /* once only, UTC */
+	    || icaltime_compare(end, start) <= 0) {  /* end MUST be > start */
+	    return json_error_response(txn, TZ_INVALID_END, param, &end);
 	}
-
-	tok_init(&tok, truncate, ",", TOK_TRIMLEFT|TOK_TRIMRIGHT|TOK_EMPTY);
-	token = tok_next(&tok);
-	if (!token ||
-	    (strcmp(token, "*") &&
-	     !icaltime_is_utc((start = icaltime_from_string(token))))) {
-	    return json_error_response(txn, TZ_INVALID_TRUNCATE, param, &start);
-	}
-	token = tok_next(&tok);
-	if (!token ||
-	    (strcmp(token, "*") &&
-	     (!icaltime_is_utc((end = icaltime_from_string(token))) ||
-	      icaltime_compare(end, start) <= 0))) {
-	    return json_error_response(txn, TZ_INVALID_TRUNCATE, param, &end);
-	}
-	if (tok_next(&tok)) {
-	    return json_error_response(txn, TZ_INVALID_TRUNCATE, param, NULL);
-	}
-	tok_fini(&tok);
     }
 
     /* Get info record from the database */
@@ -1072,22 +1047,18 @@ static int action_get(struct transaction_t *txn)
 	/* Start constructing TZURL */
 	buf_reset(&pathbuf);
 	http_proto_host(txn->req_hdrs, &proto, &host);
-	buf_printf(&pathbuf, "%s://%s%s?action=get&tzid=%s",
-		   proto, host, namespace_timezone.prefix, tzid);
-	if (mime != tz_mime_types) {
-	    buf_printf(&pathbuf, "&format=%.*s",
-		       (int) strcspn(mime->content_type, ";"),
-		       mime->content_type);
-	}
-	if (truncate) {
+	buf_printf(&pathbuf, "%s://%s%s", proto, host, txn->req_uri->path);
+
+	if (!icaltime_is_null_time(start) || !icaltime_is_null_time(end)) {
+
 	    if (!icaltime_is_null_time(end)) {
 		/* Add TZUNTIL to VTIMEZONE */
 		icalproperty *tzuntil = icalproperty_new_tzuntil(end);
 		icalcomponent_add_property(vtz, tzuntil);
 	    }
 
-	    /* Add truncation parameter to TZURL */
-	    buf_printf(&pathbuf, "&truncate=%s", truncate);
+	    /* Add truncation parameter(s) to TZURL */
+	    buf_printf(&pathbuf, "?%s", URI_QUERY(txn->req_uri));
 
 	    /* Truncate the VTIMEZONE */
 	    truncate_vtimezone(vtz, start, end, NULL);
@@ -1105,6 +1076,8 @@ static int action_get(struct transaction_t *txn)
 	buf_reset(&pathbuf);
 	buf_printf(&pathbuf, "%s.%s", tzid, mime->file_ext);
 	resp_body->fname = buf_cstring(&pathbuf);
+
+	txn->flags.vary |= VARY_ACCEPT;
 
 	icalcomponent_free(ical);
     }
@@ -1139,7 +1112,7 @@ static int action_expand(struct transaction_t *txn)
 {
     int r, precond, zdump = 0;
     struct strlist *param;
-    const char *tzid;
+    const char *tzid = txn->req_tgt.resource;
     struct zoneinfo zi;
     time_t lastmod;
     icaltimetype start, end, changedsince = icaltime_null_time();
@@ -1147,17 +1120,7 @@ static int action_expand(struct transaction_t *txn)
     json_t *root = NULL;
 
     /* Sanity check the parameters */
-    param = hash_lookup("tzid", &txn->req_qparams);
-    if (!param || param->next) {  /* mandatory, once only */
-	return json_error_response(txn, TZ_INVALID_TZID, param, NULL);
-    }
-    if (strchr(param->s, '.')) {  /* paranoia */
-	return json_error_response(txn, TZ_NOT_FOUND, NULL, NULL);
-    }
-    tzid = param->s;
-
-    param = hash_lookup("changedsince", &txn->req_qparams);
-    if (param) {
+    if ((param = hash_lookup("changedsince", &txn->req_qparams))) {
 	changedsince = icaltime_from_string(param->s);
 	if (param->next || !changedsince.is_utc) {  /* once only, UTC */
 	    return json_error_response(txn, TZ_INVALID_CHANGEDSINCE,
@@ -1173,8 +1136,7 @@ static int action_expand(struct transaction_t *txn)
     if (!start.is_utc)  /* MUST be UTC */
 	return json_error_response(txn, TZ_INVALID_START, param, &start);
 
-    param = hash_lookup("end", &txn->req_qparams);
-    if (param) {
+    if ((param = hash_lookup("end", &txn->req_qparams))) {
 	end = icaltime_from_string(param->s);
 	if (param->next || !end.is_utc  /* once only, UTC */
 	    || icaltime_compare(end, start) <= 0) {  /* end MUST be > start */
@@ -1188,11 +1150,7 @@ static int action_expand(struct transaction_t *txn)
     }
 
     /* Check requested format (debugging only) */
-    param = hash_lookup("format", &txn->req_qparams);
-    if (param) {
-	if (param->next || strcmp(param->s, "zdump"))  /* optional, once only */
-	    return json_error_response(txn, TZ_INVALID_FORMAT, param, NULL);
-
+    if ((param = hash_lookup("zdump", &txn->req_qparams))) {
 	/* Mimic zdump(8) -V output for comparision:
 
 	   For each zonename, print the times both one  second  before  and
@@ -1398,7 +1356,10 @@ static int json_response(int code, struct transaction_t *txn, json_t *root,
     else if (resp) buf = *resp;
 
     /* Output the JSON object */
-    txn->resp_body.type = "application/json; charset=utf-8";
+    if (code == HTTP_OK)
+	txn->resp_body.type = "application/json; charset=utf-8";
+    else
+	txn->resp_body.type = "application/problem+json; charset=utf-8";
     write_body(code, txn, buf, buf ? strlen(buf) : 0);
 
     if (!resp && buf) free(buf);
@@ -1410,13 +1371,11 @@ static int json_response(int code, struct transaction_t *txn, json_t *root,
 /* Array of parameter names - MUST be kept in sync with tz_err.et */
 static const char *param_names[] = {
     "action",
-    "tzid",
     "pattern",
     "format",
     "start",
     "end",
     "changedsince",
-    "truncate",
     "tzid"
 };
 
@@ -1425,37 +1384,43 @@ static int json_error_response(struct transaction_t *txn, long tz_code,
 {
     long http_code = HTTP_BAD_REQUEST;
     const char *param_name, *fmt = NULL;
-    char desc[100];
     json_t *root;
 
     param_name = param_names[tz_code - tz_err_base];
 
-    if (!param) fmt = "missing %s parameter";
-    else if (param->next) fmt = "multiple %s parameters";
-    else if (!param->s || !param->s[0]) fmt = "missing %s value";
-    else if (!time) fmt = "unknown %s value";
-    else if (!time->is_utc) fmt = "invalid %s UTC value";
+    if (!param) {
+	switch (tz_code) {
+	case TZ_INVALID_ACTION:
+	    fmt = "Request URI doesn't map to a known action";
+	    break;
 
-    switch (tz_code) {
-    case TZ_INVALID_TZID:
-	if (!fmt) fmt = "tzid used with changedsince";
-	break;
+	case TZ_INVALID_FORMAT:
+	    http_code = HTTP_NOT_ACCEPTABLE;
+	    fmt = "Unsupported media type";
+	    break;
 
-    case TZ_INVALID_END:
-    case TZ_INVALID_TRUNCATE:
-	if (!fmt) fmt = "end <= start";
-	break;
+	case TZ_NOT_FOUND:
+	    http_code = HTTP_NOT_FOUND;
+	    fmt = "Time zone identifier not found";
+	    break;
 
-    case TZ_NOT_FOUND:
-	http_code = HTTP_NOT_FOUND;
-	fmt = "time zone not found";
-	break;
+	default:
+	    fmt = "Missing %s parameter";
+	    break;
+	}
     }
+    else if (param->next) fmt = "Multiple %s parameters";
+    else if (!param->s || !param->s[0]) fmt = "Missing %s value";
+    else if (!time) fmt = "Invalid %s value";
+    else if (!time->is_utc) fmt = "Invalid %s UTC value";
+    else fmt = "End date-time <= start date-time";
 
-    snprintf(desc, sizeof(desc), fmt ? fmt : "unknown error", param_name);
+    assert(!buf_len(&txn->buf));
+    buf_printf(&txn->buf, fmt, param_name);
 
-    root = json_pack("{s:s s:s}", "error", error_message(tz_code),
-		     "description", desc);
+    root = json_pack("{s:s s:s s:i}", "title", buf_cstring(&txn->buf),
+		     "error-code", error_message(tz_code),
+		     "status", atoi(error_message(http_code)));;
     if (!root) {
 	txn->error.desc = "Unable to create JSON response";
 	return HTTP_SERVER_ERROR;

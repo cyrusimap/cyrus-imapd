@@ -45,9 +45,6 @@ error_table tz
 ec TZ_INVALID_ACTION,
    "invalid-action"
 
-ec TZ_INVALID_TZID,
-   "invalid-tzid"
-
 ec TZ_INVALID_PATTERN,
    "invalid-pattern"
 
@@ -62,9 +59,6 @@ ec TZ_INVALID_END,
 
 ec TZ_INVALID_CHANGEDSINCE,
    "invalid-changedsince"
-
-ec TZ_INVALID_TRUNCATE,
-   "invalid-truncate"
 
 ec TZ_NOT_FOUND,
    "tzid-not-found"
