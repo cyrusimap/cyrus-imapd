@@ -599,15 +599,7 @@ static void dump2(bytecode_input_t *d, int bc_len)
 	    /* fall through */
 	case B_FILEINTO_ORIG: /*4*/
 	    i = unwrap_string(d, i, &data, &len);
-	    if(B_FILEINTO <= op) {
-	    /* TODO: implement :flags parameter */
-		printf("FILEINTO COPY(%d) FOLDER({%d}%s) FLAGS {%d}\n",copy,len,data,ntohl(d[i].listlen));
-		i=write_list(ntohl(d[i].listlen), i+1, d);
-	    }
-	    else {
 	    printf("FILEINTO COPY(%d) FOLDER({%d}%s)\n",copy,len,data);
-	    }
-
 	    break;
 
 	case B_REDIRECT: /*20*/

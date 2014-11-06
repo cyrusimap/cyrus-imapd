@@ -144,7 +144,6 @@ static int dump_test(bytecode_info_t *d, int ip, int level ) {
 
     case BC_HEADER:
 	has_index=1;
-    case BC_HEADER_PRE_INDEX:
 	printf("%d: HEADER (\n",ip++);
 
 	if (has_index) {
@@ -188,7 +187,6 @@ static int dump_test(bytecode_info_t *d, int ip, int level ) {
 
     case BC_ADDRESS:
 	has_index = 1;
-    case BC_ADDRESS_PRE_INDEX:
     case BC_ENVELOPE:
 	if (d->data[ip].op == BC_ADDRESS) {
 		printf("%d: ADDRESS (\n",ip++);
