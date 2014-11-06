@@ -144,6 +144,10 @@ int script_require(sieve_script_t *s, char *req)
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_IMAP4FLAGS)) {
         s->support.imap4flags = 1;
         return 1;
+    } else if (!strcmp("variables", req) &&
+            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VARIABLES)) {
+        s->support.variables = 1;
+        return 1;
     } else if (!strcmp("notify",req)) {
         if (s->interp.notify &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_NOTIFY)) {
