@@ -55,6 +55,7 @@
 #include "sieve/script.h"
 #include "sieve/tree.h"
 #include "sieve/flags.h"
+#include "sieve/grammar.h"
 
 #include "imapurl.h"
 #include "lib/gmtoff.h"
@@ -1735,18 +1736,11 @@ static int verify_identifier(sieve_script_t *parse_script, char *s)
 {
     /* identifier         = (ALPHA / "_") *(ALPHA / DIGIT / "_") */
 
-    int i = 0;
-    while (s && s[i]) {
-        if (s[i] == '_' || (s[i] >= 'a' && s[i] <= 'z')
-            || (s[i] >= 'A' && s[i] <= 'A')
-            || (i && (s[i] >= '0' && s[i] <= '9'))) {
-            i++;
-        } else {
-            snprintf(parse_script->sieveerr, ERR_BUF_SIZE,
-                     "string '%s': not a valid sieve identifier", s);
-            yyerror(parse_script, parse_script->sieveerr);
-            return 0;
-        }
+    if (!is_identifier(s)) {
+        snprintf(parse_script->sieveerr, ERR_BUF_SIZE,
+                 "string '%s': not a valid sieve identifier", s);
+        yyerror(parse_script, parse_script->sieveerr);
+        return 0;
     }
     return 1;
 }
