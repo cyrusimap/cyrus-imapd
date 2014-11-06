@@ -69,7 +69,7 @@ struct Test {
     union {
         testlist_t *tl; /* anyof, allof */
         strarray_t *sl; /* exists */
-        struct { /* it's a header or hasflag test */
+        struct { /* it's a header or hasflag or string test */
             int index;
             int comptag;
             char * comparator;
