@@ -331,16 +331,26 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
         break;
     case HEADER:
     case HASFLAG:
+    case STRINGT:
         /* BC_HEADER { i: index } { c: comparator }
          * { haystacks : string list } { patterns : string list }
          *
-         * BC_HASFLAG { c: comparator }
+         * (BC_HASFLAG | BC_STRING) { c: comparator }
          * { haystacks : string list } { patterns : string list }
          */
 
         if(!atleast(retval,codep + 1)) return -1;
-        retval->data[codep++].op = (t->type == HEADER)
-            ? BC_HEADER : BC_HASFLAG;
+        switch (t->type) {
+        case HEADER:
+            retval->data[codep++].op = BC_HEADER;
+            break;
+        case HASFLAG:
+            retval->data[codep++].op = BC_HASFLAG;
+            break;
+        case STRINGT:
+            retval->data[codep++].op = BC_STRING;
+            break;
+        }
 
         if (t->type == HEADER) {
         /* index */
@@ -941,6 +951,50 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 retval->data[codep++].len = strlen(c->u.inc.script);
                 retval->data[codep++].str = c->u.inc.script;
                 break;
+
+            case SET:
+            {
+                /* SET
+                   BITFIELD modifiers
+                   STRING variable
+                   STRING value
+                */
+                if (!atleast(retval, codep+6)) return -1;
+                retval->data[codep++].op = B_SET;
+                retval->data[codep].value = 0;
+                switch(c->u.s.mod40) {
+                case LOWER:
+                    retval->data[codep].value |= BFV_LOWER;
+                    break;
+                case UPPER:
+                    retval->data[codep].value |= BFV_UPPER;
+                    break;
+                }
+                switch(c->u.s.mod30) {
+                case LOWERFIRST:
+                    retval->data[codep].value |= BFV_LOWERFIRST;
+                    break;
+                case UPPERFIRST:
+                    retval->data[codep].value |= BFV_UPPERFIRST;
+                    break;
+                }
+                switch(c->u.s.mod20) {
+                case QUOTEWILDCARD:
+                    retval->data[codep].value |= BFV_QUOTEWILDCARD;
+                    break;
+                }
+                switch(c->u.s.mod10) {
+                case LENGTH:
+                    retval->data[codep].value |= BFV_LENGTH;
+                    break;
+                }
+                codep++;
+                retval->data[codep++].len = strlen(c->u.s.variable);
+                retval->data[codep++].str = c->u.s.variable;
+                retval->data[codep++].len = strlen(c->u.s.value);
+                retval->data[codep++].str = c->u.s.value;
+            }
+            break;
 
             case IF:
             {
