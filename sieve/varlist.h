@@ -17,6 +17,8 @@ typedef struct variable_list {
 } variable_list_t;
 
 #define VARIABLE_LIST_INITIALIZER {NULL, NULL, NULL}
+#define VL_PARSED_STRINGS "@@STRINGS_PARSED@@"
+#define VL_MATCH_VARS "@@MATCH_VARS@@"
 
 EXPORTED variable_list_t *varlist_new(void);
 
