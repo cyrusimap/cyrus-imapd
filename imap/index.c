@@ -1699,11 +1699,13 @@ EXPORTED int index_status(struct index_state *state, struct statusdata *sdata)
 		STATUS_HIGHESTMODSEQ | STATUS_RECENT | STATUS_UNSEEN;
     int r;
 
-    r = index_refresh(state);
+    r = index_lock(state);
     if (r) return r;
 
     statuscache_fill(sdata, state->userid, state->mailbox, items,
 		     state->numrecent, state->numunseen);
+
+    index_unlock(state);
     return 0;
 }
 
