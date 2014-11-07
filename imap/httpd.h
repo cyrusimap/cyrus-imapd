@@ -427,4 +427,6 @@ extern int etagcmp(const char *hdr, const char *etag);
 extern int check_precond(struct transaction_t *txn, const void *data,
 			 const char *etag, time_t lastmod);
 
+extern int httpd_myrights(struct auth_state *authstate, const char *acl);
+
 #endif /* HTTPD_H */

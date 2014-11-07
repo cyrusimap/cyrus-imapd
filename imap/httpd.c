@@ -75,6 +75,7 @@
 #include "tls.h"
 #include "map.h"
 
+#include "acl.h"
 #include "exitcodes.h"
 #include "imapd.h"
 #include "imap_err.h"
@@ -3817,4 +3818,12 @@ EXPORTED int meth_trace(struct transaction_t *txn, void *params)
     write_body(HTTP_OK, txn, buf_cstring(msg), buf_len(msg));
 
     return 0;
+}
+
+/* simple wrapper to implicity add READFB if we have the READ ACL */
+EXPORTED int httpd_myrights(struct auth_state *authstate, const char *acl)
+{
+    int rights = acl ? cyrus_acl_myrights(authstate, acl) : 0;
+    if ((rights & DACL_READ) == DACL_READ) rights |= DACL_READFB;
+    return rights;
 }
