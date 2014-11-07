@@ -3244,7 +3244,6 @@ int meth_delete(struct transaction_t *txn, void *params)
 				       httpd_userid, httpd_authstate, mboxevent,
 				       /*checkack*/1, /*localonly*/0, /*force*/0);
 	}
-	if (!r) dparams->davdb.delete_mbox(davdb, txn->req_tgt.mboxname, 0);
 	if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
 	else if (r == IMAP_MAILBOX_NONEXISTENT) ret = HTTP_NOT_FOUND;
 	else if (r) ret = HTTP_SERVER_ERROR;
