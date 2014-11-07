@@ -699,7 +699,7 @@ int autocreate_user(struct namespace *namespace,
     }
 
     if (autocreatequota >= 0 || autocreatequotamessage >= 0) {
-	int newquotas[QUOTA_NUMRESOURCES];
+	quota_t newquotas[QUOTA_NUMRESOURCES];
 	int res;
 
 	for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++)
