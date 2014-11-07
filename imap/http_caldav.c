@@ -1155,7 +1155,12 @@ static int caldav_delete_sched(struct transaction_t *txn,
 	prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
 	organizer = icalproperty_get_organizer(prop);
 
-	if (caladdress_lookup(organizer, &sparam)) {
+	r = caladdress_lookup(organizer, &sparam);
+	if (r == HTTP_NOT_FOUND) {
+	    r = 0;
+	    goto done;
+	}
+	if (r) {
 	    syslog(LOG_ERR,
 		   "meth_delete: failed to process scheduling message in %s"
 		   " (org=%s, att=%s)",
@@ -2653,7 +2658,10 @@ static int caldav_put(struct transaction_t *txn,
 	    }
 
 	    /* Lookup the organizer */
-	    if (caladdress_lookup(organizer, &sparam)) {
+	    r = caladdress_lookup(organizer, &sparam);
+	    if (r == HTTP_NOT_FOUND)
+		break;  /* not a local organiser?  Just skip it */
+	    if (r) {
 		syslog(LOG_ERR,
 		       "meth_put: failed to process scheduling message in %s"
 		       " (org=%s)",
