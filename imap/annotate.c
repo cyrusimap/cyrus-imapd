@@ -2302,10 +2302,14 @@ EXPORTED int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const c
 EXPORTED int annotatemore_msg_lookupmask(const char *mboxname, uint32_t uid, const char *entry,
 					 const char *userid, struct buf *value)
 {
-    int r = annotatemore_msg_lookup(mboxname, uid, entry, userid, value);
-    if (value->len == 0) {
+    int r;
+    value->len = 0; /* just in case! */
+    /* only if the user isn't the owner, we look for a masking value */
+    if (!mboxname_userownsmailbox(userid, mboxname))
+	r = annotatemore_msg_lookup(mboxname, uid, entry, userid, value);
+    /* and if there isn't one, we fall through to the shared value */
+    if (value->len == 0)
 	r = annotatemore_msg_lookup(mboxname, uid, entry, NULL, value);
-    }
     return r;
 }
 
@@ -2532,11 +2536,23 @@ EXPORTED int annotate_state_write(annotate_state_t *state,
 		       entry, userid, value, /*ignorequota*/1);
 }
 
+EXPORTED int annotate_state_writemask(annotate_state_t *state,
+				      const char *entry,
+				      const char *userid,
+				      const struct buf *value)
+{
+    /* if the user is the owner, then write to the shared namespace */
+    if (mboxname_userownsmailbox(userid, state->mailbox->name))
+	return annotate_state_write(state, entry, NULL, value);
+    else
+	return annotate_state_write(state, entry, userid, value);
+}
+
 static int annotate_canon_value(struct buf *value, int type)
 {
     char *p = NULL;
-    unsigned long uwhatever;
-    long whatever;
+    unsigned long uwhatever = 0;
+    long whatever = 0;
 
     /* check for NIL */
     if (value->s == NULL)

@@ -1881,7 +1881,6 @@ static int proppatch_toresource(xmlNodePtr prop, unsigned set,
     xmlChar *freeme = NULL;
     annotate_state_t *astate = NULL;
     struct buf value = BUF_INITIALIZER;
-    const char *userid = NULL;
     int r = 1; /* default to error */
 
     /* flags only store "exists" */
@@ -1936,11 +1935,8 @@ static int proppatch_toresource(xmlNodePtr prop, unsigned set,
 	buf_init_ro_cstr(&value, (const char *)freeme);
     }
 
-    if (!mboxname_userownsmailbox(pctx->mailbox->name, httpd_userid))
-	userid = httpd_userid;
-
     r = mailbox_get_annotate_state(pctx->mailbox, pctx->record->uid, &astate);
-    if (!r) r = annotate_state_write(astate, buf_cstring(&pctx->buf), userid, &value);
+    if (!r) r = annotate_state_writemask(astate, buf_cstring(&pctx->buf), httpd_userid, &value);
 
  done:
 
@@ -2064,7 +2060,6 @@ int proppatch_todb(xmlNodePtr prop, unsigned set,
     xmlChar *freeme = NULL;
     annotate_state_t *astate = NULL;
     struct buf value = BUF_INITIALIZER;
-    const char *userid = NULL;
     int r;
 
     if (pctx->req_tgt->resource)
@@ -2084,11 +2079,8 @@ int proppatch_todb(xmlNodePtr prop, unsigned set,
 	}
     }
 
-    if (!mboxname_userownsmailbox(pctx->mailbox->name, httpd_userid))
-	userid = httpd_userid;
-
     r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
-    if (!r) r = annotate_state_write(astate, buf_cstring(&pctx->buf), userid, &value);
+    if (!r) r = annotate_state_writemask(astate, buf_cstring(&pctx->buf), httpd_userid, &value);
 
     if (!r) {
 	xml_add_prop(HTTP_OK, pctx->ns[NS_DAV], &propstat[PROPSTAT_OK],

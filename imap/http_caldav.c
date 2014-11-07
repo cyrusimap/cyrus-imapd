@@ -3512,17 +3512,13 @@ static int proppatch_calcompset(xmlNodePtr prop, unsigned set,
 	    /* All component types are valid */
 	    const char *prop_annot =
 		ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
-	    const char *userid = NULL;
 	    annotate_state_t *astate = NULL;
 
 	    buf_reset(&pctx->buf);
 	    buf_printf(&pctx->buf, "%lu", types);
 
-	    if (!mboxname_userownsmailbox(httpd_userid, pctx->mailbox->name))
-		userid = httpd_userid;
-
 	    r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
-	    if (!r) r = annotate_state_write(astate, prop_annot, userid, &pctx->buf);
+	    if (!r) r = annotate_state_writemask(astate, prop_annot, httpd_userid, &pctx->buf);
 
 	    if (!r) {
 		xml_add_prop(HTTP_OK, pctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
@@ -3745,7 +3741,6 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
     if (pctx->req_tgt->collection && !pctx->req_tgt->resource) {
 	const char *prop_annot =
 	    ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
-	const char *userid = NULL;
 	annotate_state_t *astate = NULL;
 	buf_reset(&pctx->buf);
 
@@ -3775,11 +3770,8 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
 	    }
 	}
 
-	if (!mboxname_userownsmailbox(httpd_userid, pctx->mailbox->name))
-	    userid = httpd_userid;
-
 	r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
-	if (!r) r = annotate_state_write(astate, prop_annot, userid, &pctx->buf);
+	if (!r) r = annotate_state_writemask(astate, prop_annot, httpd_userid, &pctx->buf);
 	if (!r) {
 	    xml_add_prop(HTTP_OK, pctx->ns[NS_DAV],
 			 &propstat[PROPSTAT_OK], prop->name, prop->ns, NULL, 0);
@@ -3953,24 +3945,19 @@ static int proppatch_timezone(xmlNodePtr prop, unsigned set,
 	    /* Remove CALDAV:calendar-timezone-id */
 	    const char *prop_annot =
 		ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
-	    const char *userid = NULL;
 	    annotate_state_t *astate = NULL;
 
-	    if (!mboxname_userownsmailbox(httpd_userid, pctx->mailbox->name))
-		userid = httpd_userid;
-
 	    r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
-	    if (!r) r = annotate_state_write(astate, prop_annot, userid, &buf);
-
-	    if (r) {
+	    if (!r) r = annotate_state_writemask(astate, prop_annot, httpd_userid, &buf);
+	    if (!r) {
+		xml_add_prop(HTTP_OK, pctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+			     prop->name, prop->ns, NULL, 0);
+	    }
+	    else {
 		xml_add_prop(HTTP_SERVER_ERROR, pctx->ns[NS_DAV],
 			     &propstat[PROPSTAT_ERROR],
 			     prop->name, prop->ns, NULL, 0);
 		*pctx->ret = HTTP_SERVER_ERROR;
-	    }
-	    else {
-		/* Set CALDAV:calendar-timezone */
-		proppatch_todb(prop, set, pctx, propstat, (void *) buf_cstring(&buf));
 	    }
 	}
 
