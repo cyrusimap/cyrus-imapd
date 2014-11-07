@@ -862,6 +862,8 @@ int xml_add_response(struct propfind_ctx *fctx, long code, unsigned precond)
 	}
     }
 
+    fctx->record = NULL;
+
     return 0;
 }
 
@@ -2577,6 +2579,16 @@ int meth_acl(struct transaction_t *txn, void *params)
 
     /* Local Mailbox */
 
+    /* Open mailbox for writing */
+    r = mailbox_open_iwl(txn->req_tgt.mboxname, &mailbox);
+    if (r) {
+	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+	       txn->req_tgt.mboxname, error_message(r));
+	txn->error.desc = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
     /* Parse the ACL body */
     ret = parse_xml_body(txn, &root);
     if (!ret && !root) {
@@ -2817,6 +2829,7 @@ int meth_acl(struct transaction_t *txn, void *params)
   done:
     buf_free(&acl);
     if (indoc) xmlFreeDoc(indoc);
+    mailbox_close(&mailbox);
 
     return ret;
 }
@@ -3209,6 +3222,9 @@ int meth_delete(struct transaction_t *txn, void *params)
 	    return HTTP_SERVER_ERROR;
 	}
 
+	/* Open the DAV DB corresponding to the mailbox */
+	davdb = dparams->davdb.open_db(mailbox);
+
 	/* Do any special processing */
 	if (dparams->delete) dparams->delete(txn, mailbox, NULL, NULL);
 
@@ -3228,9 +3244,12 @@ int meth_delete(struct transaction_t *txn, void *params)
 				       httpd_userid, httpd_authstate, mboxevent,
 				       /*checkack*/1, /*localonly*/0, /*force*/0);
 	}
+	if (!r) dparams->davdb.delete_mbox(davdb, txn->req_tgt.mboxname, 0);
 	if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
 	else if (r == IMAP_MAILBOX_NONEXISTENT) ret = HTTP_NOT_FOUND;
 	else if (r) ret = HTTP_SERVER_ERROR;
+
+	dparams->davdb.close_db(davdb);
 
 	goto done;
     }

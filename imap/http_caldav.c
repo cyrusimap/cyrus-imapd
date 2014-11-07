@@ -1721,7 +1721,8 @@ static int action_create(struct transaction_t *txn, int rights)
 
     /* Check ACL for current user */
     rights = httpd_myrights(httpd_authstate, mbentry->acl);
-    if ((rights & DACL_READ) != DACL_READ) {
+    /* Check rights */
+    if (!(rights & DACL_MKCOL)) {
 	/* DAV:need-privileges */
 	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
@@ -2637,12 +2638,12 @@ static int caldav_put(struct transaction_t *txn,
 	ret = HTTP_FORBIDDEN;
 	goto done;
     }
-    else if (!icalrestriction_check(ical)) {
+
+    icalrestriction_check(ical);
+    if ((txn->error.desc = get_icalcomponent_errstr(ical))) {
+	buf_setcstr(&txn->buf, txn->error.desc);
+	txn->error.desc = buf_cstring(&txn->buf);
 	txn->error.precond = CALDAV_VALID_DATA;
-	if ((txn->error.desc = get_icalrestriction_errstr(ical))) {
-	    buf_setcstr(&txn->buf, txn->error.desc);
-	    txn->error.desc = buf_cstring(&txn->buf);
-	}
 	ret = HTTP_FORBIDDEN;
 	goto done;
     }
@@ -3750,12 +3751,13 @@ int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
 			name, ns, NULL, 0);
 
     /* XXX  This needs to be done via an LDAP/DB lookup */
-    buf_reset(&fctx->buf);
-    if (strchr(fctx->userid, '@')) {
-	buf_printf(&fctx->buf, "mailto:%s", fctx->userid);
-    }
-    else {
-	buf_printf(&fctx->buf, "mailto:%s@%s", fctx->userid, config_servername);
+    for (domains = cua_domains; domains; domains = domains->next) {
+	buf_reset(&fctx->buf);
+	buf_printf(&fctx->buf, "mailto:%.*s@%s", (int) fctx->req_tgt->userlen,
+		   fctx->req_tgt->user, domains->s);
+
+	xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "href",
+		    BAD_CAST buf_cstring(&fctx->buf));
     }
 
     return 0;
@@ -4531,8 +4533,12 @@ static int report_cal_multiget(struct transaction_t *txn,
 	    fctx->davdb = my_caldav_open(fctx->mailbox);
 
 	    /* Find message UID for the resource */
-	    caldav_lookup_resource(fctx->davdb,
+	    r = caldav_lookup_resource(fctx->davdb,
 				   tgt.mboxname, tgt.resource, 0, &cdata);
+	    if (r) {
+		ret = HTTP_NOT_FOUND;
+		goto done;
+	    }
 	    cdata->dav.resource = tgt.resource;
 	    /* XXX  Check errors */
 

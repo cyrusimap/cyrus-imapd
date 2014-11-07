@@ -898,7 +898,9 @@ EXPORTED void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata)
 	    }
 	}
 
-	caldav_get_period(comp, kind, &period);
+	/* Check our dtstart and dtend against span */
+	if (icaltime_compare(period.start, span.start) < 0)
+	    memcpy(&span.start, &period.start, sizeof(struct icaltimetype));
 
 	if (icaltime_compare(period.end, span.end) > 0)
 	    memcpy(&span.end, &period.end, sizeof(struct icaltimetype));
