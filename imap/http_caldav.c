@@ -7708,7 +7708,7 @@ static int meth_get_fb(struct transaction_t *txn,
 
     if (txn->req_tgt.resource ||
 	!(txn->req_tgt.user || txn->req_tgt.collection)) {
-	/* We don't handle GET on a resource */
+	/* We don't handle GET on a resources or non-calendar collections */
 	return HTTP_NO_CONTENT;
     }
 
