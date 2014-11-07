@@ -504,9 +504,9 @@ static int dump_cb(void *rockp,
 	break;
     }
 
-    if (name) free(name);
-    if (part) free(part);
-    if (acl) free(acl);
+    free(name);
+    free(part);
+    free(acl);
 
     return r;
 }
