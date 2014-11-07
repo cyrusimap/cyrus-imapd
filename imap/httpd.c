@@ -282,6 +282,7 @@ struct namespace_t *namespaces[] = {
 #endif /* WITH_JSON */
     &namespace_principal,
     &namespace_calendar,
+    &namespace_freebusy,
     &namespace_addressbook,
 #ifdef HAVE_IANA_PARAMS
     &namespace_ischedule,
