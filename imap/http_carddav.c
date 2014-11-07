@@ -1023,7 +1023,7 @@ static int store_resource(struct transaction_t *txn, struct vparse_card *vcard,
 
     if (cdata->dav.imap_uid) {
 	/* Fetch index record for the resource */
-	r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &oldrecord);
+	r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &oldrecord, NULL);
 
 	if (overwrite == OVERWRITE_CHECK) {
 	    /* Check any preconditions */
