@@ -514,10 +514,14 @@ Blank lines and lines beginning with ``#'' are ignored.
    provisional responses every \fIhttpkeepalive\fR seconds until the
    final response can be sent */
 
-{ "httpmodules", "", BITFIELD("caldav", "carddav", "domainkey", "ischedule", "jmap", "rss", "timezone") }
+{ "httpmodules", "", BITFIELD("caldav", "carddav", "domainkey", "freebusy", "ischedule", "jmap", "rss", "timezone") }
 /* Space-separated list of HTTP modules that will be enabled in
    httpd(8).  This option has no effect on modules that are disabled
-   at compile time due to missing dependencies (e.g. libical). */
+   at compile time due to missing dependencies (e.g. libical).
+.PP
+   Note that "domainkey" depends on "ischedule" being enabled, and
+   that both "freebusy" and "ischedule" depend on "caldav" being
+   enabled. */
 
 { "httpprettytelemetry", 0, SWITCH }
 /* If enabled, HTTP response payloads including server-generated

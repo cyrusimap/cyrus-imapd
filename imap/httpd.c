@@ -285,6 +285,7 @@ struct namespace_t *namespaces[] = {
 #endif /* WITH_JSON */
     &namespace_principal,
     &namespace_calendar,
+    &namespace_freebusy,
     &namespace_addressbook,
     &namespace_ischedule,
     &namespace_domainkey,

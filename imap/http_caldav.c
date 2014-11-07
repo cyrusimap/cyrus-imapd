@@ -241,6 +241,8 @@ static const char *ical_prodid = NULL;
 static struct strlist *cua_domains = NULL;
 icalarray *rscale_calendars = NULL;
 
+static int meth_get_fb(struct transaction_t *txn, void *params);
+
 static struct caldav_db *my_caldav_open(struct mailbox *mailbox);
 static void my_caldav_close(struct caldav_db *caldavdb);
 static void my_caldav_init(struct buf *serverinfo);
@@ -597,6 +599,32 @@ struct namespace_t namespace_calendar = {
 };
 
 
+/* Namespace for Freebusy Read URL */
+struct namespace_t namespace_freebusy = {
+    URL_NS_FREEBUSY, 0, "/freebusy", NULL, 1 /* auth */, ALLOW_READ,
+    NULL, NULL, NULL, NULL,
+    {
+	{ NULL,			NULL },			/* ACL		*/
+	{ NULL,			NULL },			/* COPY		*/
+	{ NULL,			NULL },			/* DELETE	*/
+	{ &meth_get_fb,		NULL },			/* GET		*/
+	{ &meth_get_fb,		NULL },			/* HEAD		*/
+	{ NULL,			NULL },			/* LOCK		*/
+	{ NULL,			NULL },			/* MKCALENDAR	*/
+	{ NULL,			NULL },			/* MKCOL	*/
+	{ NULL,			NULL },			/* MOVE		*/
+	{ &meth_options,	&caldav_parse_path },	/* OPTIONS	*/
+	{ NULL,			NULL },			/* POST		*/
+	{ NULL,			NULL },			/* PROPFIND	*/
+	{ NULL,			NULL },			/* PROPPATCH	*/
+	{ NULL,			NULL },			/* PUT		*/
+	{ NULL,			NULL },			/* REPORT	*/
+	{ &meth_trace,		&caldav_parse_path },	/* TRACE	*/
+	{ NULL,			NULL }			/* UNLOCK	*/
+    }
+};
+
+
 static const struct cal_comp_t {
     const char *name;
     unsigned long type;
@@ -691,6 +719,9 @@ static void my_caldav_init(struct buf *serverinfo)
     namespace_principal.enabled = 1;
     namespace_principal.allow |= namespace_calendar.allow &
 	(ALLOW_CAL | ALLOW_CAL_AVAIL | ALLOW_CAL_SCHED);
+
+    namespace_freebusy.enabled =
+	config_httpmodules & IMAP_ENUM_HTTPMODULES_FREEBUSY;
 
     compile_time = calc_compile_time(__TIME__, __DATE__);
 
@@ -869,7 +900,8 @@ static int caldav_parse_path(const char *path,
 {
     char *p;
     size_t len, siz;
-    static const char *prefix = NULL;
+    const char *nameprefix;
+    static const char *calprefix = NULL;
 
     /* Make a working copy of target path */
     strlcpy(tgt->path, path, sizeof(tgt->path));
@@ -878,10 +910,14 @@ static int caldav_parse_path(const char *path,
     p = tgt->path;
 
     /* Sanity check namespace */
-    len = strlen(namespace_calendar.prefix);
+    if (tgt->namespace == URL_NS_FREEBUSY)
+	nameprefix = namespace_freebusy.prefix;
+    else
+	nameprefix = namespace_calendar.prefix;
+
+    len = strlen(nameprefix);
     if (strlen(p) < len ||
-	strncmp(namespace_calendar.prefix, p, len) ||
-	(path[len] && path[len] != '/')) {
+	strncmp(nameprefix, p, len) || (path[len] && path[len] != '/')) {
 	*errstr = "Namespace mismatch request target path";
 	return HTTP_FORBIDDEN;
     }
@@ -961,7 +997,7 @@ static int caldav_parse_path(const char *path,
 
 
     /* Create mailbox name from the parsed path */ 
-    if (!prefix) prefix = config_getstring(IMAPOPT_CALENDARPREFIX);
+    if (!calprefix) calprefix = config_getstring(IMAPOPT_CALENDARPREFIX);
 
     p = tgt->mboxname;
     siz = MAX_MAILBOX_BUFFER;
@@ -978,7 +1014,7 @@ static int caldav_parse_path(const char *path,
 	}
     }
 
-    len = snprintf(p, siz, "%s%s", p != tgt->mboxname ? "." : "", prefix);
+    len = snprintf(p, siz, "%s%s", p != tgt->mboxname ? "." : "", calprefix);
     p += len;
     siz -= len;
 
@@ -1552,7 +1588,7 @@ int list_tzid_cb(const char *tzid,
 
 
 /* Create a HTML document listing all calendars available to the user */
-static int action_list(struct transaction_t *txn, int rights)
+static int list_calendars(struct transaction_t *txn, int rights)
 {
     int ret = 0, precond;
     char mboxlist[MAX_MAILBOX_PATH+1];
@@ -1757,93 +1793,6 @@ static int action_list(struct transaction_t *txn, int rights)
 }
 
 
-/* Create a HTML document listing all actions available on the cal-home-set */
-static int list_actions(struct transaction_t *txn, int rights)
-{
-    int ret = 0, precond;
-    time_t lastmod = compile_time;
-    static char etag[21];
-    unsigned level = 0;
-    struct buf *body = &txn->resp_body.payload;
-    const char *proto = NULL, *host = NULL;
-
-    /* Check rights */
-    if ((rights & DACL_READ) != DACL_READ) {
-	/* DAV:need-privileges */
-	txn->error.precond = DAV_NEED_PRIVS;
-	txn->error.resource = txn->req_tgt.path;
-	txn->error.rights = DACL_READ;
-	return HTTP_NO_PRIVS;
-    }
-
-    sprintf(etag, "%ld", compile_time);
-
-    /* Check any preconditions */
-    precond = caldav_check_precond(txn, NULL, etag, lastmod);
-
-    switch (precond) {
-    case HTTP_OK:
-    case HTTP_NOT_MODIFIED:
-	/* Fill in ETag, Last-Modified, and Expires */
-	txn->resp_body.etag = etag;
-	txn->resp_body.lastmod = lastmod;
-	txn->resp_body.maxage = 86400;  /* 24 hrs */
-	txn->flags.cc |= CC_MAXAGE;
-
-	if (precond != HTTP_NOT_MODIFIED) break;
-
-    default:
-	/* We failed a precondition - don't perform the request */
-	ret = precond;
-	goto done;
-    }
-
-    /* Setup for chunked response */
-    txn->flags.te |= TE_CHUNKED;
-    txn->resp_body.type = "text/html; charset=utf-8";
-
-    /* Short-circuit for HEAD request */
-    if (txn->meth == METH_HEAD) {
-	response_header(HTTP_OK, txn);
-	goto done;
-    }
-
-    /* Send HTML header */
-    buf_reset(body);
-    buf_printf_markup(body, level, HTML_DOCTYPE);
-    buf_printf_markup(body, level++, "<html>");
-    buf_printf_markup(body, level++, "<head>");
-    buf_printf_markup(body, level, "<title>%s</title>", "Available Actions");
-    buf_printf_markup(body, --level, "</head>");
-    buf_printf_markup(body, level++, "<body>");
-    buf_printf_markup(body, level, "<h2>%s</h2>", "Available Actions");
-    buf_printf_markup(body, level++, "<ul>");
-
-    /* Generate list of actions */
-    http_proto_host(txn->req_hdrs, &proto, &host);
-    buf_printf_markup(body, level,
-		      "<li><a href=\"%s://%s%s?action=%s\">%s</a></li>",
-		      proto, host, txn->req_tgt.path,
-		      "list", "Available Calendars");
-    buf_printf_markup(body, level,
-		      "<li><a href=\"%s://%s%s?action=%s\">%s</a></li>",
-		      proto, host, txn->req_tgt.path,
-		      "freebusy", "Free/Busy Query");
-
-    /* Finish HTML */
-    buf_printf_markup(body, --level, "</ul>");
-    buf_printf_markup(body, --level, "</body>");
-    buf_printf_markup(body, --level, "</html>");
-    write_body(HTTP_OK, txn, buf_cstring(body), buf_len(body));
-
-    /* End of output */
-    write_body(0, txn, NULL, 0);
-
-  done:
-    return ret;
-}
-
-
 /* Parse an RFC3339 date/time per
    http://www.calconnect.org/pubdocs/CD0903%20Freebusy%20Read%20URL.pdf */
 static struct icaltimetype icaltime_from_rfc3339_string(const char *str)
@@ -1895,163 +1844,6 @@ static struct icaltimetype icaltime_from_rfc3339_string(const char *str)
 
   fail:
     return icaltime_null_time();
-}
-
-
-/* Execute a free/busy query per
-   http://www.calconnect.org/pubdocs/CD0903%20Freebusy%20Read%20URL.pdf */
-static int action_freebusy(struct transaction_t *txn, int rights)
-{
-    int ret = 0;
-    struct tm *tm;
-    struct strlist *param;
-    struct mime_type_t *mime = NULL;
-    struct propfind_ctx fctx;
-    struct calquery_filter calfilter;
-    time_t start;
-    struct icaldurationtype period = icaldurationtype_null_duration();
-    icaltimezone *utc = icaltimezone_get_utc_timezone();
-    icalcomponent *cal;
-
-    /* Check rights */
-    if (!(rights & DACL_READFB)) {
-	/* DAV:need-privileges */
-	txn->error.precond = DAV_NEED_PRIVS;
-	txn->error.resource = txn->req_tgt.path;
-	txn->error.rights = DACL_READFB;
-	return HTTP_NO_PRIVS;
-    }
-
-    /* Check/find 'format' */
-    param = hash_lookup("format", &txn->req_qparams);
-    if (param) {
-	if (param->next  /* once only */) return HTTP_BAD_REQUEST;
-
-	for (mime = caldav_mime_types; mime->content_type; mime++) {
-	    if (is_mediatype(param->s, mime->content_type)) break;
-	}
-    }
-    else mime = caldav_mime_types;
-
-    if (!mime || !mime->content_type) return HTTP_NOT_ACCEPTABLE;
-
-    memset(&calfilter, 0, sizeof(struct calquery_filter));
-    calfilter.comp =
-	CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY | CAL_COMP_VAVAILABILITY;
-    calfilter.flags = BUSYTIME_QUERY | CHECK_CAL_TRANSP | CHECK_USER_AVAIL;
-
-    /* Check for 'start' */
-    param = hash_lookup("start", &txn->req_qparams);
-    if (param) {
-	if (param->next  /* once only */) return HTTP_BAD_REQUEST;
-
-	calfilter.start = icaltime_from_rfc3339_string(param->s);
-	if (icaltime_is_null_time(calfilter.start)) return HTTP_BAD_REQUEST;
-
-	/* Default to end of given day */	
-	start = icaltime_as_timet_with_zone(calfilter.start, utc);
-	tm = localtime(&start);
-
-	period.seconds = 60 - tm->tm_sec;
-	period.minutes = 59 - tm->tm_min;
-	period.hours   = 23 - tm->tm_hour;
-    }
-    else {
-	/* Default to start of current day */
-	start = time(0);
-	tm = localtime(&start);
-	tm->tm_hour = tm->tm_min = tm->tm_sec = 0;
-	calfilter.start = icaltime_from_timet_with_zone(mktime(tm), 0, utc);
-
-	/* Default to 42 day period */
-	period.days = 42;
-    }
-
-    /* Check for 'period' */
-    param = hash_lookup("period", &txn->req_qparams);
-    if (param) {
-	if (param->next  /* once only */ ||
-	    hash_lookup("end", &txn->req_qparams)  /* can't use with 'end' */)
-	    return HTTP_BAD_REQUEST;
-
-	period = icaldurationtype_from_string(param->s);
-	if (icaldurationtype_is_bad_duration(period)) return HTTP_BAD_REQUEST;
-    }
-
-    /* Check for 'end' */
-    param = hash_lookup("end", &txn->req_qparams);
-    if (param) {
-	if (param->next  /* once only */) return HTTP_BAD_REQUEST;
-
-	calfilter.end = icaltime_from_rfc3339_string(param->s);
-	if (icaltime_is_null_time(calfilter.end)) return HTTP_BAD_REQUEST;
-    }
-    else {
-	/* Set end based on period */
-	calfilter.end = icaltime_add(calfilter.start, period);
-    }
-
-
-    memset(&fctx, 0, sizeof(struct propfind_ctx));
-    fctx.req_tgt = &txn->req_tgt;
-    fctx.depth = 2;
-    fctx.userid = proxy_userid;
-    fctx.int_userid = httpd_userid;
-    fctx.userisadmin = httpd_userisadmin;
-    fctx.authstate = httpd_authstate;
-    fctx.reqd_privs = 0;  /* handled by CALDAV:schedule-deliver on Inbox */
-    fctx.filter = apply_calfilter;
-    fctx.filter_crit = &calfilter;
-    fctx.err = &txn->error;
-    fctx.ret = &ret;
-    fctx.fetcheddata = 0;
-
-    cal = busytime_query_local(txn, &fctx, txn->req_tgt.mboxname,
-			       0, NULL, NULL, NULL);
-
-    if (calfilter.freebusy.fb) free(calfilter.freebusy.fb);
-
-    if (cal) {
-	const char *proto, *host;
-	icalcomponent *fb;
-	icalproperty *url;
-	char *cal_str;
-
-	/* Construct URL */
-	buf_reset(&txn->buf);
-	http_proto_host(txn->req_hdrs, &proto, &host);
-	buf_printf(&txn->buf, "%s://%s%s/user/%.*s/?%s",
-		   proto, host, namespace_calendar.prefix,
-		   (int) txn->req_tgt.userlen, txn->req_tgt.user,
-		   URI_QUERY(txn->req_uri));
-
-	/* Set URL property */
-	fb = icalcomponent_get_first_component(cal, ICAL_VFREEBUSY_COMPONENT);
-	url = icalproperty_new_url(buf_cstring(&txn->buf));
-	icalcomponent_add_property(fb, url);
-
-	/* Set filename of resource */
-	buf_reset(&txn->buf);
-	buf_printf(&txn->buf, "%.*s.%s",
-		   (int) txn->req_tgt.userlen, txn->req_tgt.user,
-		   mime->file_ext2);
-	txn->resp_body.fname = buf_cstring(&txn->buf);
-
-	txn->resp_body.type = mime->content_type;
-
-	/* iCalendar data in response should not be transformed */
-	txn->flags.cc |= CC_NOTRANSFORM;
-
-	/* Output the iCalendar object */
-	cal_str = mime->to_string(cal);
-	icalcomponent_free(cal);
-
-	write_body(HTTP_OK, txn, cal_str, strlen(cal_str));
-	free(cal_str);
-    }
-    else ret = HTTP_NOT_FOUND;
-
-    return ret;
 }
 
 
@@ -2124,8 +1916,7 @@ static int server_info(struct transaction_t *txn)
 	{
 	    const char **hdr = spool_getheader(txn->req_hdrs, "Host");
 	    buf_reset(&txn->buf);
-	    buf_printf(&txn->buf, "%s://%s",
-		       https? "https" : "http", hdr[0]);
+	    buf_printf(&txn->buf, "%s://%s", https? "https" : "http", hdr[0]);
 	    buf_appendcstr(&txn->buf, namespace_calendar.prefix);
 	    xml_add_href(service, ns[NS_DAV], buf_cstring(&txn->buf));
 	}
@@ -2161,6 +1952,7 @@ static int server_info(struct transaction_t *txn)
 	    memset(&req_tgt, 0, sizeof(struct request_target_t));
 	    fctx.req_tgt = &req_tgt;
 	    fctx.req_tgt->collection = "";
+	    fctx.req_hdrs = txn->req_hdrs;
 	    fctx.mailbox = &mailbox;
 	    fctx.mailbox->name = "";
 	    fctx.record = &record;
@@ -2225,7 +2017,6 @@ static int server_info(struct transaction_t *txn)
 static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 		      struct index_record *record, void *data)
 {
-    struct strlist *action;
     int r, rights;
     char *server, *acl;
 
@@ -2289,12 +2080,9 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
     }
 
     /* Get on a user/collection */
-    action = hash_lookup("action", &txn->req_qparams);
-    if (action) {
-	if (action->next) return HTTP_BAD_REQUEST;
-
+    if (!(txn->req_tgt.collection || txn->req_tgt.user)) {
 	/* GET server-info resource */
-	if (!strcmp(action->s, "server-info")) return server_info(txn);
+	return server_info(txn);
     }
 
     /* Locate the mailbox */
@@ -2328,21 +2116,15 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 
     if (txn->req_tgt.collection) {
 	/* Download an entire calendar collection */ 
-	if (!action) return dump_calendar(txn, rights);
+	return dump_calendar(txn, rights);
     }
-    else {
-	/* Display available actions HTML page */
-	if (!action) return list_actions(txn, rights);
-
+    else if (txn->req_tgt.user) {
 	/* GET a list of calendars under calendar-home-set */
-	if (!strcmp(action->s, "list")) return action_list(txn, rights);
-	
-	/* GET busytime of the user */
-	if (!strcmp(action->s, "freebusy")) return action_freebusy(txn, rights);
+	return list_calendars(txn, rights);
     }
 
     /* Unknown action */
-    return HTTP_BAD_REQUEST;
+    return HTTP_NO_CONTENT;
 }
 
 
@@ -7899,4 +7681,201 @@ static void sched_reply(const char *userid,
 
     /* Cleanup */
     free_sched_data(sched_data);
+}
+
+
+/* Execute a free/busy query per
+   http://www.calconnect.org/pubdocs/CD0903%20Freebusy%20Read%20URL.pdf */
+static int meth_get_fb(struct transaction_t *txn,
+		       void *params __attribute__((unused)))
+
+{
+    int ret = 0, r, rights;
+    char *server, *acl;
+    struct tm *tm;
+    struct strlist *param;
+    struct mime_type_t *mime = NULL;
+    struct propfind_ctx fctx;
+    struct calquery_filter calfilter;
+    time_t start;
+    struct icaldurationtype period = icaldurationtype_null_duration();
+    icaltimezone *utc = icaltimezone_get_utc_timezone();
+    icalcomponent *cal;
+
+    /* Parse the path */
+    if ((r = caldav_parse_path(txn->req_uri->path,
+			       &txn->req_tgt, &txn->error.desc))) return r;
+
+    if (txn->req_tgt.resource ||
+	!(txn->req_tgt.user || txn->req_tgt.collection)) {
+	/* We don't handle GET on a resource */
+	return HTTP_NO_CONTENT;
+    }
+
+    /* Locate the mailbox */
+    if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
+	syslog(LOG_ERR, "mlookup(%s) failed: %s",
+	       txn->req_tgt.mboxname, error_message(r));
+	txn->error.desc = error_message(r);
+
+	switch (r) {
+	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	default: return HTTP_SERVER_ERROR;
+	}
+    }
+
+    /* Check ACL for current user */
+    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
+    if (!(rights & DACL_READFB)) {
+	/* DAV:need-privileges */
+	txn->error.precond = DAV_NEED_PRIVS;
+	txn->error.resource = txn->req_tgt.path;
+	txn->error.rights = DACL_READFB;
+	return HTTP_NO_PRIVS;
+    }
+
+    if (server) {
+	/* Remote mailbox */
+	struct backend *be;
+
+	be = proxy_findserver(server, &http_protocol, proxy_userid,
+			      &backend_cached, NULL, NULL, httpd_in);
+	if (!be) return HTTP_UNAVAILABLE;
+
+	return http_pipe_req_resp(be, txn);
+    }
+
+    /* Local Mailbox */
+
+    /* Check/find 'format' */
+    param = hash_lookup("format", &txn->req_qparams);
+    if (param) {
+	if (param->next  /* once only */) return HTTP_BAD_REQUEST;
+
+	for (mime = caldav_mime_types; mime->content_type; mime++) {
+	    if (is_mediatype(param->s, mime->content_type)) break;
+	}
+    }
+    else mime = caldav_mime_types;
+
+    if (!mime || !mime->content_type) return HTTP_NOT_ACCEPTABLE;
+
+    memset(&calfilter, 0, sizeof(struct calquery_filter));
+    calfilter.comp =
+	CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY | CAL_COMP_VAVAILABILITY;
+    calfilter.flags = BUSYTIME_QUERY | CHECK_CAL_TRANSP | CHECK_USER_AVAIL;
+
+    /* Check for 'start' */
+    param = hash_lookup("start", &txn->req_qparams);
+    if (param) {
+	if (param->next  /* once only */) return HTTP_BAD_REQUEST;
+
+	calfilter.start = icaltime_from_rfc3339_string(param->s);
+	if (icaltime_is_null_time(calfilter.start)) return HTTP_BAD_REQUEST;
+
+	/* Default to end of given day */	
+	start = icaltime_as_timet_with_zone(calfilter.start, utc);
+	tm = localtime(&start);
+
+	period.seconds = 60 - tm->tm_sec;
+	period.minutes = 59 - tm->tm_min;
+	period.hours   = 23 - tm->tm_hour;
+    }
+    else {
+	/* Default to start of current day */
+	start = time(0);
+	tm = localtime(&start);
+	tm->tm_hour = tm->tm_min = tm->tm_sec = 0;
+	calfilter.start = icaltime_from_timet_with_zone(mktime(tm), 0, utc);
+
+	/* Default to 42 day period */
+	period.days = 42;
+    }
+
+    /* Check for 'period' */
+    param = hash_lookup("period", &txn->req_qparams);
+    if (param) {
+	if (param->next  /* once only */ ||
+	    hash_lookup("end", &txn->req_qparams)  /* can't use with 'end' */)
+	    return HTTP_BAD_REQUEST;
+
+	period = icaldurationtype_from_string(param->s);
+	if (icaldurationtype_is_bad_duration(period)) return HTTP_BAD_REQUEST;
+    }
+
+    /* Check for 'end' */
+    param = hash_lookup("end", &txn->req_qparams);
+    if (param) {
+	if (param->next  /* once only */) return HTTP_BAD_REQUEST;
+
+	calfilter.end = icaltime_from_rfc3339_string(param->s);
+	if (icaltime_is_null_time(calfilter.end)) return HTTP_BAD_REQUEST;
+    }
+    else {
+	/* Set end based on period */
+	calfilter.end = icaltime_add(calfilter.start, period);
+    }
+
+
+    memset(&fctx, 0, sizeof(struct propfind_ctx));
+    fctx.req_tgt = &txn->req_tgt;
+    fctx.depth = 2;
+    fctx.userid = proxy_userid;
+    fctx.int_userid = httpd_userid;
+    fctx.userisadmin = httpd_userisadmin;
+    fctx.authstate = httpd_authstate;
+    fctx.reqd_privs = 0;  /* handled by CALDAV:schedule-deliver on Inbox */
+    fctx.filter = apply_calfilter;
+    fctx.filter_crit = &calfilter;
+    fctx.err = &txn->error;
+    fctx.ret = &ret;
+    fctx.fetcheddata = 0;
+
+    cal = busytime_query_local(txn, &fctx, txn->req_tgt.mboxname,
+			       0, NULL, NULL, NULL);
+
+    if (calfilter.freebusy.fb) free(calfilter.freebusy.fb);
+
+    if (cal) {
+	const char *proto, *host;
+	icalcomponent *fb;
+	icalproperty *url;
+	char *cal_str;
+
+	/* Construct URL */
+	buf_reset(&txn->buf);
+	http_proto_host(txn->req_hdrs, &proto, &host);
+	buf_printf(&txn->buf, "%s://%s%s/user/%.*s/?%s",
+		   proto, host, namespace_calendar.prefix,
+		   (int) txn->req_tgt.userlen, txn->req_tgt.user,
+		   URI_QUERY(txn->req_uri));
+
+	/* Set URL property */
+	fb = icalcomponent_get_first_component(cal, ICAL_VFREEBUSY_COMPONENT);
+	url = icalproperty_new_url(buf_cstring(&txn->buf));
+	icalcomponent_add_property(fb, url);
+
+	/* Set filename of resource */
+	buf_reset(&txn->buf);
+	buf_printf(&txn->buf, "%.*s.%s",
+		   (int) txn->req_tgt.userlen, txn->req_tgt.user,
+		   mime->file_ext2);
+	txn->resp_body.fname = buf_cstring(&txn->buf);
+
+	txn->resp_body.type = mime->content_type;
+
+	/* iCalendar data in response should not be transformed */
+	txn->flags.cc |= CC_NOTRANSFORM;
+
+	/* Output the iCalendar object */
+	cal_str = mime->to_string(cal);
+	icalcomponent_free(cal);
+
+	write_body(HTTP_OK, txn, cal_str, strlen(cal_str));
+	free(cal_str);
+    }
+    else ret = HTTP_NOT_FOUND;
+
+    return ret;
 }
