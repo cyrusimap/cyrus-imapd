@@ -97,6 +97,8 @@ static const struct dav_namespace_t {
     { XML_NS_ISCHED, NULL },
     { XML_NS_CS, "CS" },
     { XML_NS_CYRUS, "CY" },
+    { XML_NS_USERFLAG, "UF" },
+    { XML_NS_SYSFLAG, "SF" },
 };
 
 /* PROPFIND modes */
@@ -1885,7 +1887,7 @@ static int proppatch_toresource(xmlNodePtr prop, unsigned set,
 
     /* flags only store "exists" */
 
-    if (!strcmp((const char *)prop->ns->href, XML_NS_CYRUS "sysflag/")) {
+    if (!strcmp((const char *)prop->ns->href, XML_NS_SYSFLAG)) {
 	struct flaggedresources *frp;
 	int isset;
 	for (frp = fres; frp->name; frp++) {
@@ -1906,7 +1908,7 @@ static int proppatch_toresource(xmlNodePtr prop, unsigned set,
 	goto done;
     }
 
-    if (!strcmp((const char *)prop->ns->href, XML_NS_CYRUS "userflag/")) {
+    if (!strcmp((const char *)prop->ns->href, XML_NS_USERFLAG)) {
 	int userflag = 0;
 	int isset;
 	r = mailbox_user_flag(pctx->mailbox, (const char *)prop->name, &userflag, 1);
@@ -1966,7 +1968,7 @@ static int propfind_fromresource(const xmlChar *name, xmlNsPtr ns,
     xmlNodePtr node;
     int r = 0; /* default no error */
 
-    if (!strcmp((const char *)ns->href, XML_NS_CYRUS "sysflag/")) {
+    if (!strcmp((const char *)ns->href, XML_NS_SYSFLAG)) {
 	struct flaggedresources *frp;
 	int isset;
 	for (frp = fres; frp->name; frp++) {
@@ -1979,7 +1981,7 @@ static int propfind_fromresource(const xmlChar *name, xmlNsPtr ns,
 	goto done;
     }
 
-    if (!strcmp((const char *)ns->href, XML_NS_CYRUS "userflag/")) {
+    if (!strcmp((const char *)ns->href, XML_NS_USERFLAG)) {
 	int userflag = 0;
 	int isset;
 	r = mailbox_user_flag(fctx->mailbox, (const char *)name, &userflag, 0);

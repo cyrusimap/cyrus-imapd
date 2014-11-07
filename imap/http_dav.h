@@ -72,6 +72,8 @@
 #define XML_NS_ISCHED	"urn:ietf:params:xml:ns:ischedule"
 #define XML_NS_CS	"http://calendarserver.org/ns/"
 #define XML_NS_CYRUS	"http://cyrusimap.org/ns/"
+#define XML_NS_USERFLAG	"http://cyrusimap.org/ns/userflag/"
+#define XML_NS_SYSFLAG	"http://cyrusimap.org/ns/sysflag/"
 
 /* Index into known namespace array */
 enum {
