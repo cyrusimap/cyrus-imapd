@@ -5077,7 +5077,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 	const char *owner = mboxname_to_userid(cdata->dav.mailbox);
 
 	txn->error.precond = CALDAV_UID_CONFLICT;
-	assert(!buf_len(&txn->buf));
+	buf_reset(&txn->buf);
 	buf_printf(&txn->buf, "%s/user/%s/%s/%s",
 		   namespace_calendar.prefix, owner,
 		   strrchr(cdata->dav.mailbox, '.')+1, cdata->dav.resource);
@@ -5675,8 +5675,6 @@ int sched_busytime_query(struct transaction_t *txn,
 
     /* Create hash table for any remote attendee servers */
     construct_hash_table(&remote_table, 10, 1);
-
-    assert(!buf_len(&txn->buf));
 
     /* Process each attendee */
     for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
