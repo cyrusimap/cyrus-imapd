@@ -21,7 +21,7 @@ EXPORTED variable_list_t *varlist_select(variable_list_t *vl, const char *name) 
     if (!vl) {
 	return NULL;
     }
-    if ((!name && !vl->name) || (!(name && vl->name) && strcmp(name, vl->name))) {
+    if ((!name && !vl->name) || ((name && vl->name) && !strcasecmp(name, vl->name))) {
 	return vl;
     }
     return varlist_select(vl->next, name);
