@@ -1048,6 +1048,17 @@ static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights)
     return 0;
 }
 
+static icalcomponent *record_to_ical(struct mailbox *mailbox, struct index_record *record)
+{
+    struct buf buf = BUF_INITIALIZER;
+    icalcomponent *ical = NULL;;
+    /* Load message containing the resource and parse iCal data */
+    if (!mailbox_map_record(mailbox, record, &buf)) {
+	ical = icalparser_parse_string(buf_cstring(&buf) + record->header_size);
+	buf_free(&buf);
+    }
+    return ical;
+}
 
 /* Perform a COPY/MOVE request
  *
@@ -1075,14 +1086,8 @@ static int caldav_copy(struct transaction_t *txn,
     const char *organizer = NULL;
     icalcomponent *ical, *comp;
     icalproperty *prop;
-    const char *base;
-    size_t len;
 
-    /* Load message containing the resource and parse iCal data */
-    r = mailbox_map_message(src_mbox, src_rec->uid, &base, &len);
-    if (r) return r;
-    ical = icalparser_parse_string(base + src_rec->header_size);
-    mailbox_unmap_message(src_mbox, src_rec->uid, &base, &len);
+    ical = record_to_ical(src_mbox, src_rec);
 
     if (!ical) {
 	txn->error.precond = CALDAV_VALID_DATA;
@@ -1131,14 +1136,9 @@ static int caldav_delete_sched(struct transaction_t *txn,
 	icalcomponent *ical, *comp;
 	icalproperty *prop;
 	struct sched_param sparam;
-	const char *base;
-	size_t len;
 
 	/* Load message containing the resource and parse iCal data */
-	r = mailbox_map_message(mailbox, record->uid, &base, &len);
-	if (r) return r;
-	ical = icalparser_parse_string(base + record->header_size);
-	mailbox_unmap_message(mailbox, record->uid, &base, &len);
+	ical = record_to_ical(mailbox, record);
 
 	if (!ical) {
 	    syslog(LOG_ERR,
@@ -1293,8 +1293,6 @@ static int dump_calendar(struct transaction_t *txn, int rights)
     write_body(HTTP_OK, txn, buf_cstring(buf), buf_len(buf));
 
     for (r = 0, recno = 1; recno <= mailbox->i.num_records; recno++) {
-	const char *data;
-	size_t len;
 	icalcomponent *ical;
 
 	if (mailbox_read_index_record(mailbox, recno, &record)) continue;
@@ -1302,9 +1300,7 @@ static int dump_calendar(struct transaction_t *txn, int rights)
 	if (record.system_flags & (FLAG_EXPUNGED | FLAG_DELETED)) continue;
 
 	/* Map and parse existing iCalendar resource */
-	if (mailbox_map_message(mailbox, record.uid, &data, &len)) continue;
-	ical = icalparser_parse_string(data + record.header_size);
-	mailbox_unmap_message(mailbox, record.uid, &data, &len);
+	ical = record_to_ical(mailbox, &record);
 
 	if (ical) {
 	    icalcomponent *comp;
@@ -2634,6 +2630,7 @@ static int caldav_put(struct transaction_t *txn,
 	    struct caldav_data *cdata;
 	    struct sched_param sparam;
 	    icalcomponent *oldical = NULL;
+	    int r;
 
 	    /* Construct userid corresponding to mailbox */
 	    userid = mboxname_to_userid(txn->req_tgt.mboxname);
@@ -2669,20 +2666,15 @@ static int caldav_put(struct transaction_t *txn,
 	    if (cdata->dav.imap_uid) {
 		/* Update existing object */
 		struct index_record record;
-		const char *data;
-		size_t len;
-		int r;
 
 		/* Load message containing the resource and parse iCal data */
 		r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
-		if (!r) r = mailbox_map_message(mailbox, record.uid, &data, &len);
 		if (r) {
 		    txn->error.desc = "Failed to read record \r\n";
 		    ret = HTTP_SERVER_ERROR;
 		    goto done;
 		}
-		oldical = icalparser_parse_string(data + record.header_size);
-		mailbox_unmap_message(mailbox, record.uid, &data, &len);
+		oldical = record_to_ical(mailbox, &record);
 	    }
 
 	    if (cdata->organizer) {
@@ -3076,17 +3068,8 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
 	     * Need to mmap() and parse iCalendar object
 	     * to perform complete check of each recurrence.
 	     */
-	    const char *data;
-	    size_t len;
-	    icalcomponent *ical;
+	    icalcomponent *ical = record_to_ical(fctx->mailbox, fctx->record);
 	    icalcomponent_kind kind;
-
-	    /* XXX - error */
-	    if (mailbox_map_message(fctx->mailbox, fctx->record->uid, &data, &len))
-		return 0;
-
-	    ical = icalparser_parse_string(data + fctx->record->header_size);
-	    mailbox_unmap_message(fctx->mailbox, fctx->record->uid, &data, &len);
 
 	    kind =
 		icalcomponent_isa(icalcomponent_get_first_real_component(ical));
@@ -6763,18 +6746,10 @@ static void sched_deliver_local(const char *recipient,
 
     if (cdata->dav.imap_uid) {
 	struct index_record record;
-	struct buf msg_buf = BUF_INITIALIZER;
 
 	/* Load message containing the resource and parse iCal data */
 	r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
-	if (!r) r = mailbox_map_record(mailbox, &record, &msg_buf);
-	if (r) {
-	    syslog(LOG_ERR, "mailbox_map_record(%s, %u) failed: %s",
-		   mailbox->name, record.uid, error_message(r));
-	    goto done;
-	}
-	ical = icalparser_parse_string(buf_base(&msg_buf) + record.header_size);
-	buf_free(&msg_buf);
+	ical = record_to_ical(mailbox, &record);
 
 	for (comp = icalcomponent_get_first_component(sched_data->itip,
 						      ICAL_ANY_COMPONENT);
