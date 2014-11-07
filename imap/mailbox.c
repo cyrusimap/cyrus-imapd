@@ -3680,7 +3680,6 @@ static int mailbox_repack_commit(struct mailbox_repack **repackptr)
 }
 
 HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
->>>>>>> archive partition support
 {
     strarray_t cachefiles = STRARRAY_INITIALIZER;
     indexbuffer_t ibuf;
