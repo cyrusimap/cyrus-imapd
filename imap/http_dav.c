@@ -4065,6 +4065,8 @@ int propfind_by_collection(char *mboxname, int matchlen,
 	root = 0;
     }
 
+    syslog(LOG_NOTICE, "propfind_by_collection() %s", mboxname);
+
     /* Check ACL on mailbox for current user */
     r = mboxlist_lookup(mboxname, &mbentry, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) return 0;
