@@ -850,7 +850,7 @@ EXPORTED void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata)
 	icalproperty *rrule;
 
 	/* Get base dtstart and dtend */
-	get_period(comp, kind, &period);
+	caldav_get_period(comp, kind, &period);
 
 	/* See if its a recurring event */
 	rrule = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);

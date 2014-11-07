@@ -1398,7 +1398,6 @@ static int list_cal_cb(char *name,
     static size_t inboxlen = 0;
     static size_t outboxlen = 0;
     static size_t defaultlen = 0;
-    int rights;
     char *shortname;
     mbentry_t *mbentry = NULL;
     size_t len;
@@ -1523,6 +1522,8 @@ static int action_list(struct transaction_t *txn, int rights)
     unsigned level = 0;
     struct buf *body = &txn->resp_body.payload;
     struct list_cal_rock lrock;
+    const char *proto = NULL;
+    const char *host = NULL;
 
     /* Check rights */
     if ((rights & DACL_READ) != DACL_READ) {
@@ -1719,8 +1720,6 @@ static int action_create(struct transaction_t *txn, int rights)
     size_t len;
     int ret;
 
-    /* Check ACL for current user */
-    rights = httpd_myrights(httpd_authstate, mbentry->acl);
     /* Check rights */
     if (!(rights & DACL_MKCOL)) {
 	/* DAV:need-privileges */
@@ -2768,7 +2767,7 @@ static int caldav_put(struct transaction_t *txn,
 		struct index_record record;
 
 		/* Load message containing the resource and parse iCal data */
-		r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
+		r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record, NULL);
 		if (r) {
 		    txn->error.desc = "Failed to read record \r\n";
 		    ret = HTTP_SERVER_ERROR;
@@ -4609,7 +4608,7 @@ static int busytime_by_resource(void *rock, void *data)
     if (!cdata->dav.imap_uid) return 0;
 
     /* Fetch index record for the resource */
-    r = mailbox_find_index_record(fctx->mailbox, cdata->dav.imap_uid, &record);
+    r = mailbox_find_index_record(fctx->mailbox, cdata->dav.imap_uid, &record, NULL);
     if (r) return 0;
 
     fctx->record = &record;
@@ -5153,7 +5152,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
      * else can ACTUALLY change it */
     if (cdata->dav.imap_uid) {
 	/* Fetch index record for the resource */
-	r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &oldrecord);
+	r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &oldrecord, NULL);
 	if (r) return HTTP_SERVER_ERROR;
 
 	if (overwrite == OVERWRITE_CHECK) {
@@ -6839,7 +6838,7 @@ static void sched_deliver_local(const char *recipient,
 	struct index_record record;
 
 	/* Load message containing the resource and parse iCal data */
-	r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
+	r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record, NULL);
 	ical = record_to_ical(mailbox, &record);
 
 	for (comp = icalcomponent_get_first_component(sched_data->itip,

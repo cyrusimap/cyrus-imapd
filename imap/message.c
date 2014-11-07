@@ -3060,7 +3060,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
      * msgid in In-Reply-To:), so we weed those out before proceeding
      * to the database.
      */
-    if (cache_len(record)) {
+    if (cacheitem_base(record, CACHE_HEADERS)) {
 	/* we have cache loaded, get what we need there */
 	strarray_t want = STRARRAY_INITIALIZER;
 	char *envtokens[NUMENVTOKENS];
