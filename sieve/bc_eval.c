@@ -355,7 +355,7 @@ out:
 /* Evaluate a bytecode test */
 static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
                         bytecode_input_t * bc, int * ip,
-                        strarray_t *workingflags, int version)
+                        variable_list_t *variables, int version)
 {
     int res=0;
     int i=*ip;
@@ -380,7 +380,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
 
     case BC_NOT:/*2*/
         i+=1;
-        res = eval_bc_test(interp, m, sc, bc, &i, workingflags, version);
+        res = eval_bc_test(interp, m, sc, bc, &i, variables, version);
         if(res >= 0) res = !res; /* Only invert in non-error case */
         break;
 
@@ -439,7 +439,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
          * in the right place */
         for (x=0; x<list_len && !res; x++) {
             int tmp;
-            tmp = eval_bc_test(interp, m, sc, bc, &i, workingflags, version);
+            tmp = eval_bc_test(interp, m, sc, bc, &i, variables, version);
             if(tmp < 0) {
                 res = tmp;
                 break;
@@ -459,7 +459,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
         /* return 1 unless you find one that isn't true, then return 0 */
         for (x=0; x<list_len && res; x++) {
             int tmp;
-            tmp = eval_bc_test(interp, m, sc, bc, &i, workingflags, version);
+            tmp = eval_bc_test(interp, m, sc, bc, &i, variables, version);
             if(tmp < 0) {
                 res = tmp;
                 break;
@@ -913,7 +913,7 @@ envelope_err:
 
         if  (match == B_COUNT )
         {
-            count = workingflags->count;
+            count = variables->var->count;
             snprintf(scount, SCOUNT_SIZE, "%u", count);
             /*search through all the data*/
             currneedle=needlesi+2;
@@ -943,11 +943,11 @@ envelope_err:
 
             /* search through all the flags */
 
-            for (y=0; y < workingflags->count && !res; y++)
+            for (y=0; y < variables->var->count && !res; y++)
             {
                 const char *active_flag;
 
-                active_flag = workingflags->data[y];
+                active_flag = variables->var->data[y];
 
                 if (isReg) {
                     reg= bc_compile_regex(this_needle, ctag, errbuf,
@@ -1855,7 +1855,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             int result;
 
             ip+=1;
-            result=eval_bc_test(i, m, sc, bc, &ip, variables->var, version);
+            result=eval_bc_test(i, m, sc, bc, &ip, variables, version);
 
             if (result<0) {
                 *errmsg = "Invalid test";
