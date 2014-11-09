@@ -56,6 +56,7 @@
 #include "sieve/sieve.h"
 #include "bytecode.h"
 #include "util.h"
+#include "xmalloc.h"
 
 /*!!! uses B_CONTAINS not CONTAINS, etc, only works with bytecode*/
 
@@ -198,12 +199,26 @@ static int octet_contains(const char *text, size_t tlen, const char *pat,
     return octet_contains_(text, tlen, pat, 0);
 }
 
+static void append_var(int var_num, const char* val_start, const char* val_end,
+                       strarray_t *match_vars)
+{
+    char *val;
+    val = xzmalloc(val_end - val_start + 1);
+    snprintf(val, val_end - val_start + 1, "%s", val_start);
+    val[val_end-val_start] = '\0';
+    strarray_setm(match_vars, var_num, val);
+}
+
 static int octet_matches_(const char *text, size_t tlen,
-                          const char *pat, int casemap)
+                          const char *pat, int casemap, strarray_t *match_vars)
 {
     const char *p;
     const char *t;
     char c;
+    int var_num;
+    int eaten_chars = 0;
+    const char *val_start = text;
+    strarray_t returned_vars = STRARRAY_INITIALIZER;
 
     t = text;
     p = pat;
@@ -215,33 +230,73 @@ static int octet_matches_(const char *text, size_t tlen,
         c = *p++;
         switch (c) {
         case '?':
+            var_num = strarray_append(match_vars, "");
+            val_start = t;
             if (!tlen) {
                 return 0;
             }
             t++; tlen--;
+            append_var(var_num, val_start, t, match_vars);
             break;
         case '*':
+            var_num = strarray_append(match_vars, "");
+            val_start = t;
             while (*p == '*' || *p == '?') {
                 if (*p == '?') {
                     /* eat the character now */
                     if (!tlen) {
                         return 0;
                     }
-                    t++; tlen--;
+                    t++; tlen--; eaten_chars++;
+                } else {
+                    for (t -= eaten_chars; eaten_chars; eaten_chars--) {
+                        t++;
+                        var_num = strarray_append(match_vars, "");
+                        append_var(var_num, val_start, t, match_vars);
+                        val_start = t;
+                    }
+                    var_num = strarray_append(match_vars, "");
+                    val_start = t;
                 }
                 /* coalesce into a single wildcard */
                 p++;
             }
             if (*p == '\0') {
                 /* wildcard at end of string, any remaining text is ok */
+                t += tlen;
+                t -= eaten_chars;
+                append_var(var_num, val_start, t, match_vars);
+                for (val_start = t; eaten_chars; eaten_chars--) {
+                    t++;
+                    var_num = strarray_append(match_vars, "");
+                    append_var(var_num, val_start, t, match_vars);
+                    val_start = t;
+                }
                 return 1;
             }
 
             while (tlen) {
                 /* recurse */
-                if (octet_matches_(t, tlen, p, casemap)) return 1;
+                if (octet_matches_(t, tlen, p, casemap, &returned_vars)) {
+                    int i;
+                    t -= eaten_chars;
+                    append_var(var_num, val_start, t, match_vars);
+                    for (val_start = t; eaten_chars; eaten_chars--) {
+                        t++;
+                        var_num = strarray_append(match_vars, "");
+                        append_var(var_num, val_start, t, match_vars);
+                        val_start = t;
+                    }
+                    for (i = 0; i < returned_vars.count; i++) {
+                        strarray_append(match_vars, returned_vars.data[i]);
+                    }
+                    strarray_fini(&returned_vars);
+                    return 1;
+                }
+                strarray_fini(&returned_vars);
                 t++; tlen--;
             }
+            append_var(var_num, val_start, t, match_vars);
             break;
         case '\\':
             c = *p++;
@@ -260,9 +315,16 @@ static int octet_matches_(const char *text, size_t tlen,
 }
 
 static int octet_matches(const char *text, size_t tlen, const char *pat,
-                         void *rock __attribute__((unused)))
+                         void *rock)
 {
-    return octet_matches_(text, tlen, pat, 0);
+    int ret;
+    strarray_fini((strarray_t*) rock);
+    strarray_add((strarray_t*) rock, text);
+    ret = octet_matches_(text, tlen, pat, 0, rock);
+    if (!ret) {
+        strarray_fini((strarray_t*) rock);
+    }
+    return ret;
 }
 
 
@@ -315,9 +377,16 @@ static int ascii_casemap_contains(const char *text, size_t tlen,
 
 static int ascii_casemap_matches(const char *text, size_t tlen,
                                  const char *pat,
-                                 void *rock __attribute__((unused)))
+                                 void *rock)
 {
-    return octet_matches_(text, tlen, pat, 1);
+    int ret;
+    strarray_fini((strarray_t*) rock);
+    strarray_add((strarray_t*) rock, text);
+    ret = octet_matches_(text, tlen, pat, 1, rock);
+    if (!ret) {
+        strarray_fini((strarray_t*) rock);
+    }
+    return ret;
 }
 
 /* i;ascii-numeric; only supports relational tests
