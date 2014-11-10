@@ -718,8 +718,9 @@ static void my_caldav_auth(const char *userid)
 	/* admin or proxy from frontend - won't have DAV database */
 	return;
     }
-    else if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
+    if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
 	/* proxy-only server - won't have DAV database */
+	return;
     }
     else {
 	/* Open CalDAV DB for 'userid' */
@@ -747,7 +748,6 @@ static void my_caldav_auth(const char *userid)
 	    }
 	    mboxlist_entry_free(&mbentry);
 	}
-	else r = 0;
 
 	/* will have been overwritten */
 	mailboxname = caldav_mboxname(userid, NULL);
