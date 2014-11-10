@@ -761,41 +761,6 @@ static void my_caldav_auth(const char *userid)
 		      mailboxname, error_message(r));
     }
 
-    /* Default calendar */
-    mailboxname = caldav_mboxname(userid, SCHED_DEFAULT);
-    r = mboxlist_lookup(mailboxname, NULL, NULL);
-    if (r == IMAP_MAILBOX_NONEXISTENT) {
-	r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR,
-				   NULL, 0,
-				   userid, httpd_authstate,
-				   0, 0, 0, 0, NULL);
-	if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-		      mailboxname, error_message(r));
-    }
-
-    /* Scheduling Inbox */
-    mailboxname = caldav_mboxname(userid, SCHED_INBOX);
-    r = mboxlist_lookup(mailboxname, NULL, NULL);
-    if (r == IMAP_MAILBOX_NONEXISTENT) {
-	r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR,
-				   NULL, 0,
-				   userid, httpd_authstate,
-				   0, 0, 0, 0, NULL);
-	if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-		      mailboxname, error_message(r));
-    }
-
-    /* Scheduling Outbox */
-    mailboxname = caldav_mboxname(userid, SCHED_OUTBOX);
-    r = mboxlist_lookup(mailboxname, NULL, NULL);
-    if (r == IMAP_MAILBOX_NONEXISTENT) {
-	r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR,
-				   NULL, 0,
-				   userid, httpd_authstate,
-				   0, 0, 0, 0, NULL);
-	if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-		      mailboxname, error_message(r));
-    }
 }
 
 
@@ -3430,13 +3395,49 @@ static int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
 			   const char *cal)
 {
     xmlNodePtr node;
+    struct buf calbuf = BUF_INITIALIZER;
+    int r = HTTP_NOT_FOUND; /* error condition if we bail early */
 
     if (!(namespace_calendar.enabled && fctx->req_tgt->user))
-	return HTTP_NOT_FOUND;
+	goto done;
 
-    /* named calendars are only used for scheduling */
-    if (cal && !(namespace_calendar.allow & ALLOW_CAL_SCHED))
-	return HTTP_NOT_FOUND;
+    if (cal) {
+	const char *annotname = NULL;
+	const char *mailboxname;
+
+	/* named calendars are only used for scheduling */
+	if (!(namespace_calendar.allow & ALLOW_CAL_SCHED))
+	    goto done;
+
+	/* check for renamed calendars - property on the homeset */
+	mailboxname = caldav_mboxname(httpd_userid, NULL);
+	if (!strcmp(cal, SCHED_DEFAULT))
+	    annotname = ANNOT_NS "<" XML_NS_CALDAV ">schedule-default-calendar";
+	else if (!strcmp(cal, SCHED_INBOX))
+	    annotname = ANNOT_NS "<" XML_NS_CALDAV ">schedule-inbox";
+	else if (!strcmp(cal, SCHED_OUTBOX))
+	    annotname = ANNOT_NS "<" XML_NS_CALDAV ">schedule-outbox";
+
+	if (annotname) {
+	    r = annotatemore_lookupmask(mailboxname, annotname, fctx->req_tgt->user, &calbuf);
+	    if (!r) cal = buf_cstring(&calbuf);
+	}
+
+	/* make sure the mailbox exists */
+	mailboxname = caldav_mboxname(fctx->req_tgt->user, cal);
+	r = mboxlist_lookup(mailboxname, NULL, NULL);
+	if (r == IMAP_MAILBOX_NONEXISTENT) {
+	    r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR,
+				       NULL, 0,
+				       fctx->req_tgt->user, httpd_authstate,
+				       0, 0, 0, 0, NULL);
+	    if (r) {
+		syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+		       mailboxname, error_message(r));
+		goto done;
+	    }
+	}
+    }
 
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			name, ns, NULL, 0);
@@ -3450,17 +3451,13 @@ static int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
 	/* Return properties for this URL */
 	expand_property(expand, fctx, buf_cstring(&fctx->buf),
 			&caldav_parse_path, caldav_props, node, cal ? 1 : 0);
-
-    }
-    else {
-	/* Return just the URL */
-        buf_printf(&fctx->buf, "%s/user/%s@%s/%s",
-	           namespace_calendar.prefix, fctx->userid,
-		   httpd_extradomain ? httpd_extradomain : config_servername,
-		   cal ? cal : "");
     }
 
-    return 0;
+    r = 0;
+done:
+    buf_free(&calbuf);
+
+    return r;
 }
 
 
