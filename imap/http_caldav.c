@@ -3456,7 +3456,7 @@ static int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
 	/* Return just the URL */
         buf_printf(&fctx->buf, "%s/user/%s@%s/%s",
 	           namespace_calendar.prefix, fctx->userid,
-		   httpd_extradomain ? httpd_extradomain : "internal",
+		   httpd_extradomain ? httpd_extradomain : config_servername,
 		   cal ? cal : "");
     }
 
