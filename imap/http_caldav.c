@@ -1051,7 +1051,7 @@ static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights)
 static icalcomponent *record_to_ical(struct mailbox *mailbox, struct index_record *record)
 {
     struct buf buf = BUF_INITIALIZER;
-    icalcomponent *ical = NULL;;
+    icalcomponent *ical = NULL;
     /* Load message containing the resource and parse iCal data */
     if (!mailbox_map_record(mailbox, record, &buf)) {
 	ical = icalparser_parse_string(buf_cstring(&buf) + record->header_size);
