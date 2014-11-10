@@ -30,6 +30,16 @@ EXPORTED int is_identifier(char *s)
     return 1;
 }
 
+EXPORTED int is_number(char *s)
+{
+    char *tail;
+
+    if (s && *s && (strtol(s, &tail, 10) || !*tail) && !*tail) {
+        return 1;
+    }
+    return 0;
+}
+
 /* TODO: implement parse_string() with a proper yacc/bison lexer/parser */
 EXPORTED char *parse_string(const char *s, variable_list_t *vars)
 {
@@ -44,6 +54,8 @@ EXPORTED char *parse_string(const char *s, variable_list_t *vars)
     strarray_t stringparts = STRARRAY_INITIALIZER;
     variable_list_t *variable = NULL;
     char *test_str;
+    int is_match_var;
+    int match_var;
     strarray_append(&stringparts, s);
     test_str = stringparts.data[stringparts.count-1];
     while (test_str && *test_str) {
@@ -71,17 +83,34 @@ EXPORTED char *parse_string(const char *s, variable_list_t *vars)
         }
         /* create a null-terminated string for comparison */
         *variable_ref_end = '\0';
+        /* check if the string is a number */
+        is_match_var = is_number(test_str);
         /* if we've found a valid variable, add its value to stringparts */
-        if (is_identifier(test_str)) {
+        if (is_identifier(test_str) || is_match_var) {
+            /* capture the match_var variable number */
+            match_var = strtol(test_str, NULL, 10);
             /* NULL-terminate the previous stringpart */
             *variable_ref_begin = '\0';
+            /* attempt to find the variable */
+            if (is_match_var) {
+                variable = varlist_select(vars, VL_MATCH_VARS);
+                if (match_var >= variable->var->count) {
+                    variable = NULL;
+                }
+            } else {
+                variable = varlist_select(vars, test_str);
+            }
             /* add the value of the requested variable to stringparts if
              * the variable is found
              */
-            if ((variable = varlist_select(vars, test_str))) {
-       		char *temp;
-	       	temp = strarray_join(variable->var, " ");
-	       	if (temp) {
+            if (variable) {
+                char *temp;
+                if (is_match_var) {
+                    temp = xstrdup(variable->var->data[match_var]);
+                } else {
+                    temp = strarray_join(variable->var, " ");
+	       	}
+                if (temp) {
                     strarray_append(&stringparts, temp);
                     free (temp);
 	       	}
