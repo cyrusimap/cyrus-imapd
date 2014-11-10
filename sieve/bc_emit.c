@@ -84,7 +84,8 @@ static int align_string(int fd, int string_len)
 /*all functions keep codep up to date as they use it.
   the amount that has been written to the file is maintained by the
   filelen variable in bc_action_emit
-  the other bc_xxx_emit funtions keep track of how much they (and any functions they call) have written and return this value
+  the other bc_xxx_emit funtions keep track of how much they (and any functions
+  they call) have written and return this value
 */
 
 
