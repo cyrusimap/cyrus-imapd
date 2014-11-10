@@ -6,7 +6,6 @@
  */
 
 #include "varlist.h"
-#include <memory.h>
 #include "xmalloc.h"
 
 
