@@ -1,24 +1,24 @@
 require ["regex", "relational", "comparator-i;ascii-numeric", "subaddress",
-        "envelope", "date", "index", "imap4flags"];
+	"envelope", "date", "index", "imap4flags", "variables"];
 
 #this is for the extra thigns we have added to sieve
 #test extensions
 #envelope regex relational comparators subaddress(user and detail)
 
-
+/*
 #need better relational and comparator tests...
 
-if header :value "gt"
-        :comparator "i;ascii-numeric"
-        ["number"] ["10"]
+if header :value "gt" 
+	:comparator "i;ascii-numeric" 
+	["number"] ["10"]
 {redirect "me+numberover10@blah.com";}
-
-
-if header :count "gt"
-        :comparator "i;ascii-numeric"
-        ["X"] ["3"]
+   
+  
+if header :count "gt" 
+	:comparator "i;ascii-numeric" 
+	["X"] ["3"]
 {redirect "me+X@blah.com";}
-
+       
 #header regex
 
 if header :regex "Date" "Tue,(.*)Feb(.*)"
@@ -179,12 +179,17 @@ if currentdate :zone "-0800" :is "year" ["2003", "2013", "2023"]
 if allof(currentdate :value "ge" "date" "2014-01-01",
          currentdate :value "lt" "date" "2015-01-01")
 {redirect "me+cd2014@blah.com";}
-
+*/
 ######################################################################
 #HASFLAG
 ######################################################################
 
-if header :contains "subject" "imap4flags"
+if allof (
+header :matches "subject" "*i*?*?s",
+header :matches "subject" "*i?*?*s",
+header :matches "subject" "*i*??*s",
+header :matches "subject" "*i?**?s"
+)
 {
 
 #
@@ -236,12 +241,12 @@ else
 #
 setflag "there";
 
-if hasflag :contains ["myflag", "here"]
+if hasflag :matches ["m?*?g", "*h??e*"]
 {redirect "me+good.hasflag.contains.pos@blah.com";}
 else
 {redirect "me+bad.hasflag.contains.pos@blah.com";}
 
-if hasflag :contains ""
+if hasflag :matches "**"
 {redirect "me+good.hasflag.contains.null.pos@blah.com";}
 else
 {redirect "me+bad.hasflag.contains.null.pos@blah.com";}
@@ -251,7 +256,7 @@ else
 #
 setflag "flag";
 
-if hasflag ""
+if hasflag :matches "?*?*?*?*?*?"
 {redirect "me+bad.hasflag.null.neg@blah.com";}
 else
 {redirect "me+good.hasflag.null.neg@blah.com";}
@@ -261,7 +266,45 @@ if hasflag :contains "flags"
 else
 {redirect "me+good.hasflag.contains.neg@blah.com";}
 
-if hasflag "lag"
+if hasflag :matches "?la?g*"
+{redirect "me+bad.hasflag.neg@blah.com";}
+else
+{redirect "me+good.hasflag.neg@blah.com";}
+
+
+      set "state" "${state} pending";
+      if string :matches " ${state} " "* pending *" {
+redirect "string.matches.true+good@blah.com";
+      } else
+{redirect "string.matches.false+bad@blah.com";}
+      if string :matches " ${state}" "* pending *" {
+redirect "string.matches.true+bad@blah.com";
+      } else {
+redirect "string.matches.false+good@blah.com";
+}
+
+if string " mystring pending" "* pending *"
+{redirect "me+bad.string.false@blah.com";}
+else
+{redirect "me+good.string.false@blah.com";}
+
+
+if hasflag :matches "state" "?*?*?*?*?*?"
+{redirect "me+good.hasflag.match.pos@blah.com";}
+else
+{redirect "me+bad.hasflag.match.pos@blah.com";}
+
+if hasflag :contains "state" "pend"
+{redirect "me+good.hasflag.contains.pos@blah.com";}
+else
+{redirect "me+bad.hasflag.contains.pos@blah.com";}
+
+if hasflag "state" "pending"
+{redirect "me+good.hasflag.is.pos@blah.com";}
+else
+{redirect "me+bad.hasflag.is.pos@blah.com";}
+
+if hasflag :matches "?la?g*"
 {redirect "me+bad.hasflag.neg@blah.com";}
 else
 {redirect "me+good.hasflag.neg@blah.com";}
