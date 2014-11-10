@@ -297,7 +297,7 @@ static int action_capa(struct transaction_t *txn)
 			 "    ]}"
 			 "    {s:s s:["			/*   expand */
 			 "      {s:s s:b}"		/*     start */
-			 "      {s:s}"			/*     end */
+			 "      {s:s s:b}"		/*     end */
 			 "      {s:s}"			/*     changedsince */
 			 "    ]}"
 			 "    {s:s s:["			/*   find */
@@ -322,7 +322,7 @@ static int action_capa(struct transaction_t *txn)
 
 			 "name", "expand", "parameters",
 			 "name", "start", "required", 1,
-			 "name", "end",
+			 "name", "end", "required", 1,
 			 "name", "changedsince",
 
 			 "name", "find", "parameters",
@@ -1136,17 +1136,14 @@ static int action_expand(struct transaction_t *txn)
     if (!start.is_utc)  /* MUST be UTC */
 	return json_error_response(txn, TZ_INVALID_START, param, &start);
 
-    if ((param = hash_lookup("end", &txn->req_qparams))) {
-	end = icaltime_from_string(param->s);
-	if (param->next || !end.is_utc  /* once only, UTC */
-	    || icaltime_compare(end, start) <= 0) {  /* end MUST be > start */
-	    return json_error_response(txn, TZ_INVALID_END, param, &end);
-	}
-    }
-    else {
-	/* Default to start + 10 years */
-	end = start;
-	end.year += 10;
+    param = hash_lookup("end", &txn->req_qparams);
+    if (!param || param->next)  /* mandatory, once only */
+	return json_error_response(txn, TZ_INVALID_END, param, NULL);
+
+    end = icaltime_from_string(param->s);
+    if (!end.is_utc  /* MUST be UTC */
+	|| icaltime_compare(end, start) <= 0) {  /* end MUST be > start */
+	return json_error_response(txn, TZ_INVALID_END, param, &end);
     }
 
     /* Check requested format (debugging only) */
