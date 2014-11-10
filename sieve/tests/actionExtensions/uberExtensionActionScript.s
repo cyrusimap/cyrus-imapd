@@ -9,13 +9,13 @@ require ["reject", "fileinto", "imapflags", "vacation", "notify",
 
 #REJECT
 ##############################################
-if header :contains "subject" "reject"
-{reject "rejected";}
+if header :matches "subject" "*reject*"
+{reject "${0} rejected";}
 
 #FILEINTO
 ##############################################
-if header :contains "subject" "fileinto"
-{fileinto "INBOX.good";}
+if header :matches "subject" "*fileinto*"
+{fileinto "INBOX.good.${0}";}
 
 #IMAPFLAGS
 ##############################################
@@ -28,36 +28,36 @@ if header :contains "subject" "unmark"
 {unmark;}
 
 #addflag
-if header :contains "subject" "aflag1"
-{addflag "\\seen";}
+if header :matches "subject" "*aflag1*"
+{addflag "\\seen ${0}";}
 
 #addflag
-if header :contains "subject" "aflag2"
-{addflag ["\\draft", "\\answered", "\\flagged"];}
+if header :matches "subject" "*aflag2*"
+{addflag ["\\draft", "\\answered", "\\flagged ${0}"];}
 
 #setflag
-if header :contains "subject" "sflag1"
-{setflag "\\deleted";}
+if header :matches "subject" "*sflag1*"
+{setflag "\\deleted ${0}";}
 
 #setflag
-if header :contains "subject" "sflag2"
-{setflag "\\draft";}
+if header :matches "subject" "*sflag2*"
+{setflag "\\draft ${0}";}
 
 #removeflag
-if header :contains "subject" "rflag"
-{removeflag "\\answered";}
+if header :matches "subject" "*rflag*"
+{removeflag "\\answered ${0}";}
 
 #IMAP4FLAGS#
 ##############################################
-if header :contains "subject" "imap4flags"
+if header :matches "subject" "*imap4flags*"
 {
-setflag "existing";
-keep :flags "keepflag";
-fileinto :flags ["fileinto f2"] "INBOX.fileinto.flags";
+setflag "existing ${0}";
+keep :flags "keepflag ${0}";
+fileinto :flags ["fileinto f2"] "INBOX.fileinto.flags ${0}";
 
-addflag ["flag0", "flag1"];
+addflag ["flag0", "flag1 ${0}"];
 addflag ["my flag is here"];
-removeflag ["is my"];
+removeflag ["is my ${0}"];
 
 fileinto "INBOX.fileinto.internalflags";
 fileinto :flags "" "INBOX.fileinto.nullflags";
@@ -66,16 +66,17 @@ fileinto :flags "" "INBOX.fileinto.nullflags";
 
 #VARIABLES
 ##############################################
-if header :contains "subject" "variables"
+if header :matches "subject" "i?ap4f*gs"
 {
 set :lowerfirst "myvar" "myval";
 set :lower :upperfirst :quotewildcard "myvar2" "my*val2";
 
 set "mystring" "string1";
 set "mystring2" "00${mystring}00";
+set "mystring3" "${0} ${1} ${2} ${mystring2}";
 
-if string "myvar2" "my*val2" {
-fileinto :copy "INBOX.stringtest.true";
+if string :matches "${myvar2}" "my*val2" {
+fileinto :copy "INBOX.stringtest.true${1}";
 }
 
 }
@@ -83,13 +84,13 @@ fileinto :copy "INBOX.stringtest.true";
 
 #VACATION
 #############################################
-if header :contains "subject" "vacation"
+if header :matches "subject" "*vacation*"
 {
 
 vacation :days 5
          :addresses ["me@blah.com" , "me@somewhereelse.com"]
          :subject "i'm at the beach"
-         "I'll respond in a week or two, when i get back";
+	 "I'll respond in a week or two, when i get back ${0}";
 }
 
 #VACATION-SECONDS
@@ -105,16 +106,16 @@ vacation :seconds 60
 
 #NOTIFY and DENOTIFY
 #############################################
-if header :contains "subject" "notify"
-{notify  :high :id "foobar" :message "whee: $subject$";}
+if header :matches "subject" "*notify*"
+{notify  :high :id "foobar ${0}" :message "whee: $subject$ ${0}";}
 
-if header :contains "subject" "not"
-{denotify :is "foobar" :high;
+if header :matches "subject" "*not*" 
+{denotify :is "foobar ${0}" :high;
 
 }
 
-if header :contains "subject" "n2"
-{notify   :id "foobar" :message "whee: $subject$";}
+if header :matches "subject" "*n2*"
+{notify   :id "foobar" :message "whee: $subject$ ${0}";}
 
 
 if header :contains "subject" "denotify"
