@@ -636,6 +636,9 @@ int main(int argc, char *argv[])
 
     if (m)
 	free_msg(m);
+    strarray_fini(&e_from);
+    strarray_fini(&e_to);
+    strarray_fini(&mark);
 
     return 0;
 }
