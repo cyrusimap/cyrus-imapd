@@ -43,7 +43,7 @@
 
 /*
  * TODO:
- * - Implement localized names and "lang" parameter
+ * - Implement localized names / handle Accept-Language header field?
  */
 
 #include <config.h>
