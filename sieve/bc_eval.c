@@ -1733,7 +1733,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             ip+=2; /* skip opcode, list_len, and list data len */
 
             if (list_len) {
-                actionflags = (varlist_extend(rename_to_variables_TODO))->var;
+                actionflags = (varlist_extend(variables))->var;
             }
             for (x=0; x<list_len; x++) {
                 const char *flag;
@@ -1780,7 +1780,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             ip+=2; /* skip opcode, list_len, and list data len */
 
             if (list_len) {
-                actionflags = (varlist_extend(rename_to_variables_TODO))->var;
+                actionflags = (varlist_extend(variables))->var;
             }
             for (x=0; x<list_len; x++) {
                 const char *flag;
