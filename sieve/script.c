@@ -945,9 +945,9 @@ static int do_action_list(sieve_interp_t *interp,
 /* execute some bytecode */
 int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                   void *sc, void *m,
-                  variable_list_t * flagvars, action_list_t *actions,
+                  variable_list_t *variables, action_list_t *actions,
                   notify_list_t *notify_list, const char **errmsg,
-                  variable_list_t *workingvars);
+                  variable_list_t *rename_to_variables_TODO);
 
 EXPORTED int sieve_execute_bytecode(sieve_execute_t *exe, sieve_interp_t *interp,
                            void *script_context, void *message_context)
@@ -961,11 +961,11 @@ EXPORTED int sieve_execute_bytecode(sieve_execute_t *exe, sieve_interp_t *interp
     const char *errmsg = NULL;
     strarray_t imapflags = STRARRAY_INITIALIZER;
     strarray_t workingflags = STRARRAY_INITIALIZER;
-    variable_list_t flagvars = VARIABLE_LIST_INITIALIZER;
-    variable_list_t workingvars = VARIABLE_LIST_INITIALIZER;
+    variable_list_t rename_to_variables_TODO = VARIABLE_LIST_INITIALIZER;
+    variable_list_t variables = VARIABLE_LIST_INITIALIZER;
 
-    flagvars.var = &imapflags;
-    workingvars.var = &workingflags;
+    rename_to_variables_TODO.var = &imapflags;
+    variables.var = &workingflags;
 
     if (!interp) return SIEVE_FAIL;
 
@@ -989,8 +989,8 @@ EXPORTED int sieve_execute_bytecode(sieve_execute_t *exe, sieve_interp_t *interp
     else {
         ret = sieve_eval_bc(exe, 0, interp,
                             script_context, message_context,
-                            &flagvars, actions, notify_list, &errmsg,
-                            &workingvars);
+                            &rename_to_variables_TODO, actions, notify_list, &errmsg,
+                            &variables);
 
         if (ret < 0) {
             ret = do_sieve_error(SIEVE_RUN_ERROR, interp,
@@ -1006,8 +1006,8 @@ EXPORTED int sieve_execute_bytecode(sieve_execute_t *exe, sieve_interp_t *interp
         }
     }
 
-    varlist_fini(&flagvars);
-    varlist_fini(&workingvars);
+    varlist_fini(&rename_to_variables_TODO);
+    varlist_fini(&variables);
 
     return ret;
 }

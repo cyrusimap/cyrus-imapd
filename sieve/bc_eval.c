@@ -1645,9 +1645,9 @@ envelope_err:
 /* The entrypoint for bytecode evaluation */
 int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                   void *sc, void *m,
-                  variable_list_t *flagvars, action_list_t *actions,
+                  variable_list_t *rename_to_variables_TODO, action_list_t *actions,
                   notify_list_t *notify_list, const char **errmsg,
-                  variable_list_t *workingvars)
+                  variable_list_t *variables)
 {
     const char *data;
     int res=0;
@@ -1733,7 +1733,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             ip+=2; /* skip opcode, list_len, and list data len */
 
             if (list_len) {
-                actionflags = (varlist_extend(flagvars))->var;
+                actionflags = (varlist_extend(rename_to_variables_TODO))->var;
             }
             for (x=0; x<list_len; x++) {
                 const char *flag;
@@ -1747,7 +1747,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             /* fall through */
         case B_KEEP_ORIG:/*1*/
             res = do_keep(actions, !copy,
-                    actionflags ? actionflags : flagvars->var);
+                    actionflags ? actionflags : rename_to_variables_TODO->var);
             if (res == SIEVE_RUN_ERROR)
                 *errmsg = "Keep can not be used with Reject";
             actionflags = NULL;
@@ -1780,7 +1780,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             ip+=2; /* skip opcode, list_len, and list data len */
 
             if (list_len) {
-                actionflags = (varlist_extend(flagvars))->var;
+                actionflags = (varlist_extend(rename_to_variables_TODO))->var;
             }
             for (x=0; x<list_len; x++) {
                 const char *flag;
@@ -1801,7 +1801,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             ip = unwrap_string(bc, ip, &data, NULL);
 
             res = do_fileinto(actions, data, !copy, create,
-                    actionflags ? actionflags : flagvars->var);
+                    actionflags ? actionflags : rename_to_variables_TODO->var);
 
             if (res == SIEVE_RUN_ERROR)
                 *errmsg = "Fileinto can not be used with Reject";
@@ -1833,7 +1833,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             int result;
 
             ip+=1;
-            result=eval_bc_test(i, m, sc, bc, &ip, workingvars->var, version);
+            result=eval_bc_test(i, m, sc, bc, &ip, variables->var, version);
 
             if (result<0) {
                 *errmsg = "Invalid test";
@@ -1852,7 +1852,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
         {
             int n = i->markflags->count;
             while (n) {
-                strarray_add_case(workingvars->var, i->markflags->data[--n]);
+                strarray_add_case(variables->var, i->markflags->data[--n]);
             }
         }
             break;
@@ -1862,7 +1862,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
         {
             int n = i->markflags->count;
             while (n) {
-                strarray_remove_all_case(workingvars->var,
+                strarray_remove_all_case(variables->var,
                         i->markflags->data[--n]);
             }
         }
@@ -1879,7 +1879,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 ip = unwrap_string(bc, ip, &data, NULL);
 
                 res = do_addflag(actions, data);
-                strarray_add_case(workingvars->var, data);
+                strarray_add_case(variables->var, data);
             }
             break;
         }
@@ -1893,13 +1893,13 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
 
             res = do_setflag(actions);
-            strarray_truncate(workingvars->var, 0);
+            strarray_truncate(variables->var, 0);
 
             for (x=0; x<list_len; x++) {
                 ip = unwrap_string(bc, ip, &data, NULL);
                 if (data[0]) {
                     res = do_addflag(actions, data);
-                    strarray_add_case(workingvars->var, data);
+                    strarray_add_case(variables->var, data);
                 }
             }
 
@@ -1917,7 +1917,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 ip = unwrap_string(bc, ip, &data, NULL);
 
                 res = do_removeflag(actions, data);
-                strarray_remove_all_case(workingvars->var, data);
+                strarray_remove_all_case(variables->var, data);
             }
             break;
         }
@@ -2183,8 +2183,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             }
 
             res = sieve_eval_bc(exe, 1, i,
-                                sc, m, flagvars, actions,
-                                notify_list, errmsg, workingvars);
+				sc, m, rename_to_variables_TODO, actions,
+				notify_list, errmsg, variables);
             break;
         }
 
