@@ -696,7 +696,7 @@ static void my_caldav_init(struct buf *serverinfo)
 #endif /* HAVE_IANA_PARAMS */
 
 #ifdef HAVE_TZ_BY_REF
-    if (namespace_timezone.enabled) {
+    if (namespace_tzdist.enabled) {
 	char zonedir[MAX_MAILBOX_PATH+1];
 
 	snprintf(zonedir, MAX_MAILBOX_PATH, "%s%s",
@@ -4233,7 +4233,7 @@ static int propfind_tzservset(const xmlChar *name, xmlNsPtr ns,
 
 	buf_reset(&fctx->buf);
 	buf_printf(&fctx->buf, "%s://%s%s",
-		   proto, host, namespace_timezone.prefix);
+		   proto, host, namespace_tzdist.prefix);
 
 	xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
 

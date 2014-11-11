@@ -953,7 +953,7 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/http_proxy.c \
 	imap/http_proxy.h \
 	imap/http_rss.c \
-	imap/http_timezone.c \
+	imap/http_tzdist.c \
 	imap/httpd.c \
 	imap/httpd.h \
 	imap/jcal.c \
@@ -1060,7 +1060,7 @@ imap_httpd_SOURCES = \
 	imap/http_ischedule.c \
 	imap/http_proxy.c \
 	imap/http_rss.c \
-	imap/http_timezone.c \
+	imap/http_tzdist.c \
 	imap/httpd.c \
 	imap/jcal.c \
 	imap/mutex_fake.c \
