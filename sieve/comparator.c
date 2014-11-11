@@ -318,10 +318,17 @@ static int octet_matches(const char *text, size_t tlen, const char *pat,
                          void *rock)
 {
     int ret;
-    strarray_fini((strarray_t*) rock);
+    int needs_free = 0;
+    strarray_t temp = STRARRAY_INITIALIZER;
+    if (rock) {
+        strarray_fini((strarray_t*) rock);
+    } else {
+        rock = &temp;
+        needs_free = 1;
+    }
     strarray_add((strarray_t*) rock, text);
     ret = octet_matches_(text, tlen, pat, 0, rock);
-    if (!ret) {
+    if (!ret || needs_free) {
         strarray_fini((strarray_t*) rock);
     }
     return ret;
@@ -380,10 +387,17 @@ static int ascii_casemap_matches(const char *text, size_t tlen,
                                  void *rock)
 {
     int ret;
-    strarray_fini((strarray_t*) rock);
+    int needs_free = 0;
+    strarray_t temp = STRARRAY_INITIALIZER;
+    if (rock) {
+        strarray_fini((strarray_t*) rock);
+    } else {
+        rock = &temp;
+        needs_free = 1;
+    }
     strarray_add((strarray_t*) rock, text);
     ret = octet_matches_(text, tlen, pat, 1, rock);
-    if (!ret) {
+    if (!ret || needs_free) {
         strarray_fini((strarray_t*) rock);
     }
     return ret;
