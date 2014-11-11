@@ -879,47 +879,6 @@ static int do_action_list(sieve_interp_t *interp,
                 break;
             }
 
-
-        case ACTION_SETFLAG:
-            strarray_fini(imapflags);
-            break;
-        case ACTION_ADDFLAG:
-            strarray_add_case(imapflags, a->u.fla.flag);
-            free(interp->lastitem);
-            interp->lastitem = xstrdup(a->u.fla.flag);
-            break;
-        case ACTION_REMOVEFLAG:
-            strarray_remove_all_case(imapflags, a->u.fla.flag);
-            free(interp->lastitem);
-            interp->lastitem = xstrdup(a->u.fla.flag);
-            break;
-        case ACTION_MARK:
-            {
-                int n = interp->markflags->count;
-
-                ret = SIEVE_OK;
-                while (n) {
-                    strarray_add_case(imapflags,
-                                        interp->markflags->data[--n]);
-                }
-                free(interp->lastitem);
-                interp->lastitem = NULL;
-                break;
-            }
-        case ACTION_UNMARK:
-          {
-
-                int n = interp->markflags->count;
-                ret = SIEVE_OK;
-                while (n) {
-                    strarray_remove_all_case(imapflags,
-                                           interp->markflags->data[--n]);
-                }
-                free(interp->lastitem);
-                interp->lastitem = NULL;
-                break;
-            }
-
         case ACTION_NONE:
             break;
 
@@ -946,8 +905,7 @@ static int do_action_list(sieve_interp_t *interp,
 int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                   void *sc, void *m,
                   variable_list_t *variables, action_list_t *actions,
-                  notify_list_t *notify_list, const char **errmsg,
-                  variable_list_t *rename_to_variables_TODO);
+                  notify_list_t *notify_list, const char **errmsg);
 
 EXPORTED int sieve_execute_bytecode(sieve_execute_t *exe, sieve_interp_t *interp,
                            void *script_context, void *message_context)
@@ -960,12 +918,9 @@ EXPORTED int sieve_execute_bytecode(sieve_execute_t *exe, sieve_interp_t *interp
     char actions_string[ACTIONS_STRING_LEN] = "";
     const char *errmsg = NULL;
     strarray_t imapflags = STRARRAY_INITIALIZER;
-    strarray_t workingflags = STRARRAY_INITIALIZER;
-    variable_list_t rename_to_variables_TODO = VARIABLE_LIST_INITIALIZER;
     variable_list_t variables = VARIABLE_LIST_INITIALIZER;
 
-    rename_to_variables_TODO.var = &imapflags;
-    variables.var = &workingflags;
+    variables.var = &imapflags;
 
     if (!interp) return SIEVE_FAIL;
 
@@ -989,8 +944,7 @@ EXPORTED int sieve_execute_bytecode(sieve_execute_t *exe, sieve_interp_t *interp
     else {
         ret = sieve_eval_bc(exe, 0, interp,
                             script_context, message_context,
-                            &rename_to_variables_TODO, actions, notify_list, &errmsg,
-                            &variables);
+                            &variables, actions, notify_list, &errmsg);
 
         if (ret < 0) {
             ret = do_sieve_error(SIEVE_RUN_ERROR, interp,
@@ -1006,7 +960,6 @@ EXPORTED int sieve_execute_bytecode(sieve_execute_t *exe, sieve_interp_t *interp
         }
     }
 
-    varlist_fini(&rename_to_variables_TODO);
     varlist_fini(&variables);
 
     return ret;
