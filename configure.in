@@ -1070,7 +1070,7 @@ if test "$ENABLE_RSS" != no -o "$ENABLE_DAV" != no; then
 
       if test "$ENABLE_JSON" != no; then
          IMAP_PROGS="$IMAP_PROGS ctl_zoneinfo"
-         HTTP_OBJS="$HTTP_OBJS \$(TIMEZONE_OBJS)"
+         HTTP_OBJS="$HTTP_OBJS \$(TZDIST_OBJS)"
 
          AC_CHECK_LIB(ical, icaltimezone_set_builtin_tzdata,
       		AC_DEFINE(HAVE_TZ_BY_REF,[],

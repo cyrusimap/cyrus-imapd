@@ -1,4 +1,4 @@
-/* http_timezone.c -- Routines for handling timezone service requests in httpd
+/* http_tzdist.c -- Routines for handling tzdist service requests in httpd
  *
  * Copyright (c) 1994-2014 Carnegie Mellon University.  All rights reserved.
  *
@@ -73,11 +73,11 @@
 #include "zoneinfo_db.h"
 
 
-#define TIMEZONE_WELLKNOWN_URI "/.well-known/timezone"
+#define TZDIST_WELLKNOWN_URI "/.well-known/timezone"
 
 static time_t compile_time;
-static void timezone_init(struct buf *serverinfo);
-static void timezone_shutdown(void);
+static void tzdist_init(struct buf *serverinfo);
+static void tzdist_shutdown(void);
 static int meth_get(struct transaction_t *txn, void *params);
 static int action_capa(struct transaction_t *txn);
 static int action_list(struct transaction_t *txn);
@@ -127,10 +127,10 @@ static struct mime_type_t tz_mime_types[] = {
 };
 
 
-/* Namespace for TIMEZONE feeds of mailboxes */
-struct namespace_t namespace_timezone = {
-    URL_NS_TIMEZONE, 0, "/timezone", TIMEZONE_WELLKNOWN_URI, 0 /* auth */, ALLOW_READ,
-    timezone_init, NULL, NULL, timezone_shutdown,
+/* Namespace for tzdist service */
+struct namespace_t namespace_tzdist = {
+    URL_NS_TZDIST, 0, "/tzdist", TZDIST_WELLKNOWN_URI, 0 /* auth */, ALLOW_READ,
+    tzdist_init, NULL, NULL, tzdist_shutdown,
     {
 	{ NULL,			NULL },			/* ACL		*/
 	{ NULL,			NULL },			/* COPY		*/
@@ -153,16 +153,16 @@ struct namespace_t namespace_timezone = {
 };
 
 
-static void timezone_init(struct buf *serverinfo __attribute__((unused)))
+static void tzdist_init(struct buf *serverinfo __attribute__((unused)))
 {
-    namespace_timezone.enabled =
-	config_httpmodules & IMAP_ENUM_HTTPMODULES_TIMEZONE;
+    namespace_tzdist.enabled =
+	config_httpmodules & IMAP_ENUM_HTTPMODULES_TZDIST;
 
-    if (!namespace_timezone.enabled) return;
+    if (!namespace_tzdist.enabled) return;
 
     /* Open zoneinfo db */
     if (zoneinfo_open(NULL)) {
-	namespace_timezone.enabled = 0;
+	namespace_tzdist.enabled = 0;
 	return;
     }
 
@@ -172,7 +172,7 @@ static void timezone_init(struct buf *serverinfo __attribute__((unused)))
 }
 
 
-static void timezone_shutdown(void)
+static void tzdist_shutdown(void)
 {
     zoneinfo_close(NULL);
 }
@@ -191,7 +191,7 @@ static int meth_get(struct transaction_t *txn,
     p = tgt->path;
 
     /* Skip namespace */
-    p += strlen(namespace_timezone.prefix);
+    p += strlen(namespace_tzdist.prefix);
     if (*p == '/') *p++ = '\0';
 
     /* Check for path after prefix */

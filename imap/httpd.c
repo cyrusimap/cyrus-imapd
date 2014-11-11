@@ -281,7 +281,7 @@ struct namespace_t namespace_default = {
 struct namespace_t *namespaces[] = {
 #ifdef WITH_DAV
 #ifdef WITH_JSON
-    &namespace_timezone,	/* MUST be before namespace_calendar!! */
+    &namespace_tzdist,		/* MUST be before namespace_calendar!! */
 #endif /* WITH_JSON */
     &namespace_principal,
     &namespace_calendar,
