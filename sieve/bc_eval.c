@@ -49,6 +49,7 @@
 #include "message.h"
 #include "script.h"
 #include "parseaddr.h"
+#include "flags.h"
 
 #include "bytecode.h"
 
@@ -1746,6 +1747,15 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             copy = ntohl(bc[ip++].value);
             /* fall through */
         case B_KEEP_ORIG:/*1*/
+            /* if there's no :flags parameter, use the internal flags var*/
+            if (!actionflags) {
+                variable_list_t *temp = varlist_extend(variables);
+                actionflags = strarray_dup(variables->var);
+                strarray_free(temp->var);
+                temp->var = actionflags;
+            }
+            verify_flaglist(actionflags);
+
             res = do_keep(actions, !copy,
                     actionflags ? actionflags : rename_to_variables_TODO->var);
             if (res == SIEVE_RUN_ERROR)
@@ -1798,6 +1808,17 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             /* fall through */
         case B_FILEINTO_ORIG:/*4*/
         {
+            /* if there's no :flags parameter, use the internal flags var*/
+            if (!actionflags) {
+                variable_list_t *temp = varlist_extend(variables);
+                actionflags = strarray_dup(variables->var);
+                strarray_free(temp->var);
+                temp->var = actionflags;
+            }
+            verify_flaglist(actionflags);
+
+	    ip = unwrap_string(bc, ip, &data, NULL);
+
             ip = unwrap_string(bc, ip, &data, NULL);
 
             res = do_fileinto(actions, data, !copy, create,
