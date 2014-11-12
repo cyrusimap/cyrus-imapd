@@ -2005,9 +2005,11 @@ static int myconsistent(struct dbengine *db, struct txn *tid, int locked)
 static int recovery(struct dbengine *db, int flags)
 {
     const char *ptr, *keyptr;
+    unsigned filesize = db->map_size;
     unsigned updateoffsets[SKIPLIST_MAXLEVEL+1];
     uint32_t offset, offsetnet, myoff = 0;
-    int r = 0, need_checkpoint = 0;
+    int r = 0;
+    int need_checkpoint = libcyrus_config_getswitch(CYRUSOPT_SKIPLIST_ALWAYS_CHECKPOINT);
     time_t start = time(NULL);
     unsigned i;
 
@@ -2076,7 +2078,7 @@ static int recovery(struct dbengine *db, int flags)
     
     /* reset the data that was written INORDER by the last checkpoint */
     offset = DUMMY_OFFSET(db) + DUMMY_SIZE(db);
-    while (!r && (offset < db->map_size)
+    while (!r && (offset < filesize)
 	      && TYPE(db->map_base + offset) == INORDER) {
 	ptr = db->map_base + offset;
 	offsetnet = htonl(offset);
@@ -2086,7 +2088,7 @@ static int recovery(struct dbengine *db, int flags)
 	/* xxx check \0 fill on key */
 
 	/* xxx check \0 fill on data */
-	    
+
 	/* update previous pointers, record these for updating */
 	for (i = 0; !r && i < LEVEL_safe(db, ptr); i++) {
 	    r = lseek(db->fd, updateoffsets[i], SEEK_SET);
@@ -2111,15 +2113,23 @@ static int recovery(struct dbengine *db, int flags)
 	    updateoffsets[i] = offset + (PTR(ptr, i) - ptr);
 	}
 
-	/* check padding */
-	if (!r && PADDING_safe(db, ptr) != (uint32_t) -1) {
-	    syslog(LOG_ERR, "DBERROR: %s: offset %04X padding not -1",
-		   db->fname, offset);
-	    r = CYRUSDB_IOERROR;
-	}
-
 	if (!r) {
-	    offset += RECSIZE_safe(db, ptr);
+	    unsigned size = RECSIZE_safe(db, ptr);
+	    if (!size) {
+		syslog(LOG_ERR, "skiplist recovery %s: damaged record at %u, truncating here",
+		       db->fname, offset);
+		filesize = offset;
+		break;
+	    }
+
+	    if (PADDING_safe(db, ptr) != (uint32_t) -1) {
+		syslog(LOG_ERR, "DBERROR: %s: offset %04X padding not -1",
+		       db->fname, offset);
+		filesize = offset;
+		break;
+	    }
+
+	    offset += size;
 	}
     }
 
@@ -2154,7 +2164,7 @@ static int recovery(struct dbengine *db, int flags)
     }
 
     /* replay the log */
-    while (!r && offset < db->map_size) {
+    while (!r && offset < filesize) {
 	const char *p, *q;
 
 	/* refresh map, so we see the writes we've just done */
@@ -2166,7 +2176,7 @@ static int recovery(struct dbengine *db, int flags)
 	/* bugs in recovery truncates could have left some bogus zeros here */
 	if (TYPE(ptr) == 0) {
 	    int orig = offset;
-	    while (TYPE(ptr) == 0 && offset < db->map_size) {
+	    while (TYPE(ptr) == 0 && offset < filesize) {
 		offset += 4;
 		ptr = db->map_base + offset;
 	    }
@@ -2193,7 +2203,7 @@ static int recovery(struct dbengine *db, int flags)
 	}
 
 	/* look ahead for a commit */
-	q = db->map_base + db->map_size;
+	q = db->map_base + filesize;
 	p = ptr;
 	for (;;) {
             if (RECSIZE_safe(db, p) <= 0) {
@@ -2214,16 +2224,7 @@ static int recovery(struct dbengine *db, int flags)
 		   "skiplist recovery %s: found partial txn, not replaying",
 		   db->fname);
 
-	    /* no commit, we should truncate */
-	    if (ftruncate(db->fd, offset) < 0) {
-		syslog(LOG_ERR, 
-		       "DBERROR: skiplist recovery %s: ftruncate: %m",
-		       db->fname);
-		r = CYRUSDB_IOERROR;
-	    }
-
-	    /* set the map size back as well */
-	    db->map_size = offset;
+	    filesize = offset;
 
 	    break;
 	}
@@ -2355,21 +2356,22 @@ static int recovery(struct dbengine *db, int flags)
 	}
 
 	/* move to next record */
-	offset += RECSIZE_safe(db, ptr);
+	unsigned size = RECSIZE_safe(db, ptr);
+	if (!size) break;
+	offset += size;
     }
 
-    if (libcyrus_config_getswitch(CYRUSOPT_SKIPLIST_ALWAYS_CHECKPOINT)) {
-	/* refresh map, so we see the writes we've just done */
-	map_refresh(db->fd, 0, &db->map_base, &db->map_len, db->map_size,
-		    db->fname, 0);
-
-	r = mycheckpoint(db);
-
-	if (r || !(flags & RECOVERY_CALLER_LOCKED)) {
-	    unlock(db);
+    /* didn't read the exact end?  We should truncate */
+    if (offset < db->map_size) {
+	if (ftruncate(db->fd, offset) < 0) {
+	    syslog(LOG_ERR,
+		   "DBERROR: skiplist recovery %s: ftruncate: %m",
+		   db->fname);
+	    r = CYRUSDB_IOERROR;
 	}
-    
-	return r;
+
+	/* set the map size back as well */
+	db->map_size = offset;
     }
 
     /* fsync the recovered database */
@@ -2402,13 +2404,16 @@ static int recovery(struct dbengine *db, int flags)
     }
 
     if (!r && need_checkpoint) {
+	/* refresh map, so we see the writes we've just done */
+	map_refresh(db->fd, 0, &db->map_base, &db->map_len, db->map_size,
+		    db->fname, 0);
 	r = mycheckpoint(db);
     }
 
-    if(r || !(flags & RECOVERY_CALLER_LOCKED)) {
+    if (r || !(flags & RECOVERY_CALLER_LOCKED)) {
 	unlock(db);
     }
-    
+
     return r;
 }
 
