@@ -303,8 +303,7 @@ static int action_capa(struct transaction_t *txn)
 			 "    {s:s s:["			/*   find */
 			 "      {s:s s:b}"		/*     pattern */
 			 "    ]}"
-			 "  ]",
-			 "}",
+			 "  ]}",
 
 			 "version", 1,
 
