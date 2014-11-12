@@ -424,46 +424,6 @@ static unsigned RECSIZE_safe(struct dbengine *db, const char *ptr)
     return ret;
 }
 
-/* how many levels does this record have? */
-static unsigned LEVEL(const char *ptr)
-{
-    const uint32_t *p, *q;
-
-    assert(TYPE(ptr) == DUMMY || TYPE(ptr) == INORDER || TYPE(ptr) == ADD);
-    p = q = (uint32_t *) FIRSTPTR(ptr);
-    while (*p != (uint32_t)-1) p++;
-    return (p - q);
-}
-
-/* how big is this record? */
-static unsigned RECSIZE(const char *ptr)
-{
-    int ret = 0;
-    switch (TYPE(ptr)) {
-    case DUMMY:
-    case INORDER:
-    case ADD:
-	ret += 4;			/* tag */
-	ret += 4;			/* keylen */
-	ret += ROUNDUP(KEYLEN(ptr));    /* key */
-	ret += 4;			/* datalen */
-	ret += ROUNDUP(DATALEN(ptr));   /* data */
-	ret += 4 * LEVEL(ptr);	        /* pointers */
-	ret += 4;			/* padding */
-	break;
-
-    case DELETE:
-	ret += 8;
-	break;
-
-    case COMMIT:
-	ret += 4;
-	break;
-    }
-
-    return ret;
-}
-
 /* Determine if it is safe to append to this skiplist database.
  *  e.g. does it end in 4 bytes of -1 followed by a commit record? 
  * *or* does it end with 'DELETE' + 4 bytes + a commit record?
@@ -524,7 +484,7 @@ static int newtxn(struct dbengine *db, struct txn **tidptr)
 }
 
 
-#define PADDING(ptr) (ntohl(*((uint32_t *)((ptr) + RECSIZE(ptr) - 4))))
+#define PADDING_safe(db, ptr) (ntohl(*((uint32_t *)((ptr) + RECSIZE_safe(db, ptr) - 4))))
 
 /* given an open, mapped db, read in the header information */
 static int read_header(struct dbengine *db)
@@ -595,9 +555,9 @@ static int read_header(struct dbengine *db)
 	       db->fname);
 	r = CYRUSDB_IOERROR;
     }
-    if (!r && LEVEL(dptr) != db->maxlevel) {
+    if (!r && LEVEL_safe(db, dptr) != db->maxlevel) {
 	syslog(LOG_ERR, "DBERROR: %s: DUMMY level(%d) != db->maxlevel(%d)",
-	       db->fname, LEVEL(dptr), db->maxlevel);
+	       db->fname, LEVEL_safe(db, dptr), db->maxlevel);
 	r = CYRUSDB_IOERROR;
     }
 
@@ -1306,7 +1266,7 @@ static int mystore(struct dbengine *db,
 	    return CYRUSDB_EXISTS;
 	} else {
 	    /* replace with an equal height node */
-	    lvl = LEVEL(ptr);
+	    lvl = LEVEL_safe(db, ptr);
 
 	    /* log a removal */
 	    WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) &delrectype, 4);
@@ -1600,8 +1560,8 @@ static int myabort(struct dbengine *db, struct txn *tid)
 
 	/* find the last log entry */
 	for (offset = tid->logstart, ptr = db->map_base + offset; 
-	     offset + RECSIZE(ptr) != (uint32_t) tid->logend;
-	     offset += RECSIZE(ptr), ptr = db->map_base + offset) ;
+	     offset + RECSIZE_safe(db, ptr) != (uint32_t) tid->logend;
+	     offset += RECSIZE_safe(db, ptr), ptr = db->map_base + offset) ;
 	
 	offset = ptr - db->map_base;
 
@@ -1638,7 +1598,7 @@ static int myabort(struct dbengine *db, struct txn *tid)
 	    /* re-add this record.  it can't exist right now. */
 	    netnewoffset = *((uint32_t *)(ptr + 4));
 	    q = db->map_base + ntohl(netnewoffset);
-	    lvl = LEVEL(q);
+	    lvl = LEVEL_safe(db, q);
 	    (void) find_node(db, KEY(q), KEYLEN(q), updateoffsets);
 	    for (i = 0; i < lvl; i++) {
 		/* the current pointers FROM this node are correct,
@@ -1653,7 +1613,7 @@ static int myabort(struct dbengine *db, struct txn *tid)
 	}
 
 	/* remove looking at this */
-	tid->logend -= RECSIZE(ptr);
+	tid->logend -= RECSIZE_safe(db, ptr);
     }
 
     /* truncate the file to remove log entries */
@@ -1767,13 +1727,13 @@ static int mycheckpoint(struct dbengine *db)
 	uint32_t netnewoffset;
 
 	ptr = db->map_base + offset;
-	lvl = LEVEL(ptr);
+	lvl = LEVEL_safe(db, ptr);
 	db->listsize++;
 
 	num_iov = 0;
 	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) &iorectype, 4);
 	/* copy all but the rectype from the record */
-	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) ptr + 4, RECSIZE(ptr) - 4);
+	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) ptr + 4, RECSIZE_safe(db, ptr) - 4);
 
 	newoffset = lseek(db->fd, 0, SEEK_END);
 	netnewoffset = htonl(newoffset);
@@ -1940,9 +1900,9 @@ static int dump(struct dbengine *db, int detail __attribute__((unused)))
 	case INORDER:
 	case ADD:
 	    printf("kl=%d dl=%d lvl=%d\n",
-		   KEYLEN(ptr), DATALEN(ptr), LEVEL(ptr));
+		   KEYLEN(ptr), DATALEN(ptr), LEVEL_safe(db, ptr));
 	    printf("\t");
-	    for (i = 0; i < LEVEL(ptr); i++) {
+	    for (i = 0; i < LEVEL_safe(db, ptr); i++) {
 		printf("%04X ", FORWARD(ptr, i));
 	    }
 	    printf("\n");
@@ -1957,7 +1917,7 @@ static int dump(struct dbengine *db, int detail __attribute__((unused)))
 	    break;
 	}
 
-	ptr += RECSIZE(ptr);
+	ptr += RECSIZE_safe(db, ptr);
     }
 
     unlock(db);
@@ -1986,7 +1946,7 @@ static int myconsistent(struct dbengine *db, struct txn *tid, int locked)
 
 	ptr = db->map_base + offset;
 
-	for (i = 0; i < LEVEL(ptr); i++) {
+	for (i = 0; i < LEVEL_safe(db, ptr); i++) {
 	    offset = FORWARD(ptr, i);
 
 	    if (offset > db->map_size) {
@@ -2086,11 +2046,11 @@ static int recovery(struct dbengine *db, int flags)
     }
 
     /* pointers for db->maxlevel */
-    if (!r && LEVEL(ptr) != db->maxlevel) {
+    if (!r && LEVEL_safe(db, ptr) != db->maxlevel) {
 	r = CYRUSDB_IOERROR;
 	syslog(LOG_ERR, 
 	       "DBERROR: skiplist recovery %s: dummy node level: %d != %d",
-	       db->fname, LEVEL(ptr), db->maxlevel);
+	       db->fname, LEVEL_safe(db, ptr), db->maxlevel);
     }
     
     for (i = 0; i < db->maxlevel; i++) {
@@ -2113,7 +2073,7 @@ static int recovery(struct dbengine *db, int flags)
 	/* xxx check \0 fill on data */
 	    
 	/* update previous pointers, record these for updating */
-	for (i = 0; !r && i < LEVEL(ptr); i++) {
+	for (i = 0; !r && i < LEVEL_safe(db, ptr); i++) {
 	    r = lseek(db->fd, updateoffsets[i], SEEK_SET);
 	    if (r < 0) {
 		syslog(LOG_ERR, "DBERROR: lseek %s: %m", db->fname);
@@ -2137,14 +2097,14 @@ static int recovery(struct dbengine *db, int flags)
 	}
 
 	/* check padding */
-	if (!r && PADDING(ptr) != (uint32_t) -1) {
+	if (!r && PADDING_safe(db, ptr) != (uint32_t) -1) {
 	    syslog(LOG_ERR, "DBERROR: %s: offset %04X padding not -1",
 		   db->fname, offset);
 	    r = CYRUSDB_IOERROR;
 	}
 
 	if (!r) {
-	    offset += RECSIZE(ptr);
+	    offset += RECSIZE_safe(db, ptr);
 	}
     }
 
@@ -2204,7 +2164,7 @@ static int recovery(struct dbengine *db, int flags)
 
 	/* if this is a commit, we've processed everything in this txn */
 	if (TYPE(ptr) == COMMIT) {
-	    offset += RECSIZE(ptr);
+	    offset += RECSIZE_safe(db, ptr);
 	    continue;
 	}
 
@@ -2230,7 +2190,7 @@ static int recovery(struct dbengine *db, int flags)
                 p = q;
                 break;
             }
-	    p += RECSIZE(p);
+	    p += RECSIZE_safe(db, p);
 	    if (p >= q) break;
 	    if (TYPE(p) == COMMIT) break;
 	}
@@ -2314,7 +2274,7 @@ static int recovery(struct dbengine *db, int flags)
 	    }
 	    offsetnet = htonl(offset);
 
-	    lvl = LEVEL(ptr);
+	    lvl = LEVEL_safe(db, ptr);
 	    if (lvl > SKIPLIST_MAXLEVEL) {
 		syslog(LOG_ERR,
 		       "DBERROR: skiplist recovery %s: node claims level %d (greater than max %d)",
@@ -2323,15 +2283,15 @@ static int recovery(struct dbengine *db, int flags)
 	    } else {
 		/* NOTE - in the bogus case where a record with the same key already
 		 * exists, there are three possible cases:
-		 * lvl == LEVEL(keyptr)
+		 * lvl == LEVEL_safe(db, keyptr)
 		 *    * trivial: all to me, all mine to keyptr's FORWARD
-		 * lvl > LEVEL(keyptr)	 -
+		 * lvl > LEVEL_safe(db, keyptr)	 -
 		 *    * all updateoffsets values should point to me
-		 *    * up until LEVEL(keyptr) set to keyptr's next values
+		 *    * up until LEVEL_safe(db, keyptr) set to keyptr's next values
 		 *      (updateoffsets[i] should be keyptr in these cases)
 		 *      then point all my higher pointers are updateoffsets[i]'s
 		 *      FORWARD instead.
-		 * lvl < LEVEL(keyptr)
+		 * lvl < LEVEL_safe(db, keyptr)
 		 *    * updateoffsets values up to lvl should point to me
 		 *    * all mine should point to keyptr's next values
 		 *    * from lvl up, all updateoffsets[i] should point to
@@ -2343,7 +2303,7 @@ static int recovery(struct dbengine *db, int flags)
 		 */
 		for (i = 0; i < lvl; i++) {
 		    /* set our next pointers */
-		    if (keyptr && i < LEVEL(keyptr)) {
+		    if (keyptr && i < LEVEL_safe(db, keyptr)) {
                         /* need to replace the matching record key */
 			newoffsets[i] = 
 			    htonl(FORWARD(keyptr, i));
@@ -2362,9 +2322,9 @@ static int recovery(struct dbengine *db, int flags)
 		lseek(db->fd, FIRSTPTR(ptr) - db->map_base, SEEK_SET);
 		retry_write(db->fd, (char *) newoffsets, 4 * lvl);
                 
-		if (keyptr && lvl < LEVEL(keyptr)) {
+		if (keyptr && lvl < LEVEL_safe(db, keyptr)) {
 		    uint32_t newoffsetnet;
-		    for (i = lvl; i < LEVEL(keyptr); i++) {
+		    for (i = lvl; i < LEVEL_safe(db, keyptr); i++) {
 			newoffsetnet = htonl(FORWARD(keyptr, i));
 			/* replace 'updateoffsets' to point onwards */
 			lseek(db->fd, 
@@ -2380,7 +2340,7 @@ static int recovery(struct dbengine *db, int flags)
 	}
 
 	/* move to next record */
-	offset += RECSIZE(ptr);
+	offset += RECSIZE_safe(db, ptr);
     }
 
     if (libcyrus_config_getswitch(CYRUSOPT_SKIPLIST_ALWAYS_CHECKPOINT)) {
