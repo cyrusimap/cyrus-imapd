@@ -399,7 +399,7 @@ static unsigned RECSIZE_safe(struct dbengine *db, const char *ptr)
     case ADD:
 	level = LEVEL_safe(db, ptr);
 	if (!level) {
-	    syslog(LOG_ERR, "IOERROR: skiplist2 RECSIZE_safe not safe %s, offset %u",
+	    syslog(LOG_ERR, "IOERROR: skiplist RECSIZE not safe %s, offset %u",
 		   db->fname, (unsigned)(ptr - db->map_base));
 	    return 0;
 	}
@@ -413,10 +413,20 @@ static unsigned RECSIZE_safe(struct dbengine *db, const char *ptr)
 	break;
 
     case DELETE:
+	if (!is_safe(db, ptr+8)) {
+	    syslog(LOG_ERR, "IOERROR: skiplist RECSIZE not safe %s, offset %u",
+		   db->fname, (unsigned)(ptr - db->map_base));
+	    return 0;
+	}
 	ret += 8;
 	break;
 
     case COMMIT:
+	if (!is_safe(db, ptr+4)) {
+	    syslog(LOG_ERR, "IOERROR: skiplist RECSIZE not safe %s, offset %u",
+		   db->fname, (unsigned)(ptr - db->map_base));
+	    return 0;
+	}
 	ret += 4;
 	break;
     }
@@ -484,7 +494,12 @@ static int newtxn(struct dbengine *db, struct txn **tidptr)
 }
 
 
-#define PADDING_safe(db, ptr) (ntohl(*((uint32_t *)((ptr) + RECSIZE_safe(db, ptr) - 4))))
+static unsigned PADDING_safe(struct dbengine *db, const char *ptr)
+{
+    unsigned size = RECSIZE_safe(db, ptr);
+    if (!size) return 0;
+    return ntohl(*((uint32_t *)((ptr) + size - 4)));
+}
 
 /* given an open, mapped db, read in the header information */
 static int read_header(struct dbengine *db)
