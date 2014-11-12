@@ -284,8 +284,8 @@ static int action_capa(struct transaction_t *txn)
 			 "      s:s"			/*   primary-source */
 			 "      s:[]"			/*   formats */
 			 "      s:{s:b s:b}"		/*   truncated */
-			 "      s:n"   			/*   provider-details */
-			 "      s:[]"  			/*   contacts */
+//			 "      s:s"   			/*   provider-details */
+//			 "      s:[]"  			/*   contacts */
 			 "    }"
 			 "  s:["			/* actions */
 			 "    {s:s s:["			/*   list */
@@ -309,7 +309,7 @@ static int action_capa(struct transaction_t *txn)
 
 			 "info", "primary-source", info.data->s, "formats",
 			 "truncated", "any", 1, "untruncated", 1,
-			 "provider-details", "contacts",
+//			 "provider-details", "", "contacts",
 
 			 "actions",
 			 "name", "list", "parameters",
