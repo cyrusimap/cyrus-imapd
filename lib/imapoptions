@@ -169,7 +169,7 @@ are listed with ``<none>''.
    affect LMTP delivery of messages directly to mailboxes via
    plus-addressing. */
 
-{ "annotation_db", "skiplist", STRINGLIST("berkeley", "berkeley-hash", "skiplist", "twoskip")}
+{ "annotation_db", "twoskip", STRINGLIST("berkeley", "berkeley-hash", "skiplist", "twoskip")}
 /* The cyrusdb backend to use for mailbox annotations. */
 
 { "annotation_db_path", NULL, STRING }
@@ -508,7 +508,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    specifies the actual key used for iSchedule DKIM signing within the
    domain. */
 
-{ "duplicate_db", "skiplist", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql", "twoskip")}
+{ "duplicate_db", "twoskip", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql", "twoskip")}
 /* The cyrusdb backend to use for the duplicate delivery suppression
    and sieve. */
 
@@ -1013,10 +1013,10 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "maxword", 131072, INT }
 /* Maximum size of a single word for the parser.  Default 128k */
 
-{ "mboxkey_db", "skiplist", STRINGLIST("berkeley", "skiplist", "twoskip") }
+{ "mboxkey_db", "twoskip", STRINGLIST("berkeley", "skiplist", "twoskip") }
 /* The cyrusdb backend to use for mailbox keys. */
 
-{ "mboxlist_db", "skiplist", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist", "sql", "twoskip")}
+{ "mboxlist_db", "twoskip", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist", "sql", "twoskip")}
 /* The cyrusdb backend to use for the mailbox list. */
 
 { "mboxlist_db_path", NULL, STRING }
@@ -1376,7 +1376,7 @@ If all partitions are over that limit, this feature is not used anymore.
 /* Unix domain socket that ptloader listens on.
    (defaults to configdir/ptclient/ptsock) */
 
-{ "ptscache_db", "skiplist", STRINGLIST("berkeley", "berkeley-hash", "skiplist", "twoskip")}
+{ "ptscache_db", "twoskip", STRINGLIST("berkeley", "berkeley-hash", "skiplist", "twoskip")}
 /* The cyrusdb backend to use for the pts cache. */
 
 { "ptscache_db_path", NULL, STRING }
@@ -1401,7 +1401,7 @@ If all partitions are over that limit, this feature is not used anymore.
 /* This specifies the Class Selector or Differentiated Services Code Point
    designation on IP headers (in the ToS field). */
 
-{ "quota_db", "quotalegacy", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist", "sql", "quotalegacy", "twoskip")}
+{ "quota_db", "twoskip", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist", "sql", "quotalegacy", "twoskip")}
 /* The cyrusdb backend to use for quotas. */
 
 { "quota_db_path", NULL, STRING }
@@ -1521,7 +1521,7 @@ If all partitions are over that limit, this feature is not used anymore.
    recommended for most cases - it's a good compromise which
    keeps words separate. */
 
-{ "seenstate_db", "skiplist", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist", "twoskip")}
+{ "seenstate_db", "twoskip", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist", "twoskip")}
 /* The cyrusdb backend to use for the seen state. */
 
 { "sendmail", "/usr/lib/sendmail", STRING }
@@ -1715,7 +1715,7 @@ product version in the capabilities */
 { "statuscache", 0, SWITCH }
 /* Enable/disable the imap status cache. */
 
-{ "statuscache_db", "skiplist", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql", "twoskip") }
+{ "statuscache_db", "twoskip", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql", "twoskip") }
 /* The cyrusdb backend to use for the imap status cache. */
 
 { "statuscache_db_path", NULL, STRING }
@@ -1880,7 +1880,7 @@ product version in the capabilities */
 /* File containing the private key belonging to the certificate in
    tls_server_cert. */
 
-{ "tls_sessions_db", "skiplist", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql", "twoskip")}
+{ "tls_sessions_db", "twoskip", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql", "twoskip")}
 /* The cyrusdb backend to use for the TLS cache. */
 
 { "tls_sessions_db_path", NULL, STRING }
