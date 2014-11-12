@@ -1944,7 +1944,7 @@ product version in the capabilities */
    this user.  NOTE: This must be an existing local user name with an
    INBOX, NOT an email address! */
 
-{ "zoneinfo_db", "skiplist", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist")}
+{ "zoneinfo_db", "skiplist", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist", "twoskip")}
 /* The cyrusdb backend to use for zoneinfo. */
 
 { "zoneinfo_db_path", NULL, STRING }
