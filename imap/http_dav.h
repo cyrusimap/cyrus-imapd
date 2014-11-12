@@ -408,7 +408,6 @@ struct mime_type_t {
     const char *content_type;
     const char *version;
     const char *file_ext;
-    const char *file_ext2;
     char* (*to_string)(void *);
     void* (*from_string)(const char *);
     void (*free)(void *);

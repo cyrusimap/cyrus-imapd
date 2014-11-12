@@ -148,11 +148,11 @@ static void free_vparser(void *vparser) {
 
 static struct mime_type_t carddav_mime_types[] = {
     /* First item MUST be the default type and storage format */
-    { "text/vcard; charset=utf-8", "3.0", NULL, "vcf", NULL,
+    { "text/vcard; charset=utf-8", "3.0", "vcf", NULL,
       (void * (*)(const char*)) &vcard_string_as_vparser,
       (void (*)(void *)) &free_vparser, NULL, NULL
     },
-    { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
+    { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
 
 /* Array of supported REPORTs */
