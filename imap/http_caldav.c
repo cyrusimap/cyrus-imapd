@@ -367,24 +367,24 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
 
 static struct mime_type_t caldav_mime_types[] = {
     /* First item MUST be the default type and storage format */
-    { "text/calendar; charset=utf-8", "2.0", "ics", "ifb",
+    { "text/calendar; charset=utf-8", "2.0", "ics",
       (char* (*)(void *)) &icalcomponent_as_ical_string_r,
       (void * (*)(const char*)) &icalparser_parse_string,
       (void (*)(void *)) &icalcomponent_free, &begin_icalendar, &end_icalendar
     },
-    { "application/calendar+xml; charset=utf-8", NULL, "xcs", "xfb",
+    { "application/calendar+xml; charset=utf-8", NULL, "xcs",
       (char* (*)(void *)) &icalcomponent_as_xcal_string,
       (void * (*)(const char*)) &xcal_string_as_icalcomponent,
       NULL, &begin_xcal, &end_xcal
     },
 #ifdef WITH_JSON
-    { "application/calendar+json; charset=utf-8", NULL, "jcs", "jfb",
+    { "application/calendar+json; charset=utf-8", NULL, "jcs",
       (char* (*)(void *)) &icalcomponent_as_jcal_string,
       (void * (*)(const char*)) &jcal_string_as_icalcomponent,
       NULL, &begin_jcal, &end_jcal
     },
 #endif
-    { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
+    { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
 
 /* Array of supported REPORTs */
@@ -7684,6 +7684,26 @@ static void sched_reply(const char *userid,
 }
 
 
+static struct mime_type_t freebusy_mime_types[] = {
+    /* First item MUST be the default type */
+    { "text/calendar; charset=utf-8", "2.0", "ifb",
+      (char* (*)(void *)) &icalcomponent_as_ical_string_r,
+      NULL, NULL, NULL, NULL
+    },
+    { "application/calendar+xml; charset=utf-8", NULL, "xfb",
+      (char* (*)(void *)) &icalcomponent_as_xcal_string,
+      NULL, NULL, NULL, NULL
+    },
+#ifdef WITH_JSON
+    { "application/calendar+json; charset=utf-8", NULL, "jfb",
+      (char* (*)(void *)) &icalcomponent_as_jcal_string,
+      NULL, NULL, NULL, NULL
+    },
+#endif
+    { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
+};
+
+
 /* Execute a free/busy query per
    http://www.calconnect.org/pubdocs/CD0903%20Freebusy%20Read%20URL.pdf */
 static int meth_get_fb(struct transaction_t *txn,
@@ -7753,11 +7773,11 @@ static int meth_get_fb(struct transaction_t *txn,
     if (param) {
 	if (param->next  /* once only */) return HTTP_BAD_REQUEST;
 
-	for (mime = caldav_mime_types; mime->content_type; mime++) {
+	for (mime = freebusy_mime_types; mime->content_type; mime++) {
 	    if (is_mediatype(param->s, mime->content_type)) break;
 	}
     }
-    else mime = caldav_mime_types;
+    else mime = freebusy_mime_types;
 
     if (!mime || !mime->content_type) return HTTP_NOT_ACCEPTABLE;
 
@@ -7846,10 +7866,9 @@ static int meth_get_fb(struct transaction_t *txn,
 	/* Construct URL */
 	buf_reset(&txn->buf);
 	http_proto_host(txn->req_hdrs, &proto, &host);
-	buf_printf(&txn->buf, "%s://%s%s/user/%.*s/?%s",
-		   proto, host, namespace_calendar.prefix,
-		   (int) txn->req_tgt.userlen, txn->req_tgt.user,
-		   URI_QUERY(txn->req_uri));
+	buf_printf(&txn->buf, "%s://%s%s", proto, host, txn->req_uri->path);
+	if (URI_QUERY(txn->req_uri))
+	    buf_printf(&txn->buf, "?%s", URI_QUERY(txn->req_uri));
 
 	/* Set URL property */
 	fb = icalcomponent_get_first_component(cal, ICAL_VFREEBUSY_COMPONENT);
@@ -7860,7 +7879,7 @@ static int meth_get_fb(struct transaction_t *txn,
 	buf_reset(&txn->buf);
 	buf_printf(&txn->buf, "%.*s.%s",
 		   (int) txn->req_tgt.userlen, txn->req_tgt.user,
-		   mime->file_ext2);
+		   mime->file_ext);
 	txn->resp_body.fname = buf_cstring(&txn->buf);
 
 	txn->resp_body.type = mime->content_type;

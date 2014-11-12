@@ -111,19 +111,19 @@ static const struct action_t {
 
 static struct mime_type_t tz_mime_types[] = {
     /* First item MUST be the default type and storage format */
-    { "text/calendar; charset=utf-8", "2.0", "ics", "ifb",
+    { "text/calendar; charset=utf-8", "2.0", "ics",
       (char* (*)(void *)) &icalcomponent_as_ical_string_r,
       NULL, NULL, NULL, NULL
     },
-    { "application/calendar+xml; charset=utf-8", NULL, "xcs", "xfb",
+    { "application/calendar+xml; charset=utf-8", NULL, "xcs",
       (char* (*)(void *)) &icalcomponent_as_xcal_string,
       NULL, NULL, NULL, NULL
     },
-    { "application/calendar+json; charset=utf-8", NULL, "jcs", "jfb",
+    { "application/calendar+json; charset=utf-8", NULL, "jcs",
       (char* (*)(void *)) &icalcomponent_as_jcal_string,
       NULL, NULL, NULL, NULL
     },
-    { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
+    { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
 
 
