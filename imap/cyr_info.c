@@ -53,7 +53,6 @@
 
 #include "global.h"
 #include "exitcodes.h"
-#include "libcyr_cfg.h"
 #include "proc.h"
 #include "util.h"
 #include "../master/masterconf.h"
@@ -77,10 +76,11 @@ static void usage(void)
     fprintf(stderr, "\n");
     fprintf(stderr, "Where command is one of:\n");
     fprintf(stderr, "\n");
-    fprintf(stderr, "  * proc       - listing of all open processes\n");
-    fprintf(stderr, "  * allconf    - listing of all config values\n");
-    fprintf(stderr, "  * conf       - listing of non-default config values\n");
-    fprintf(stderr, "  * lint       - unknown config keys\n");
+    fprintf(stderr, "  * conf-all      - listing of all config values\n");
+    fprintf(stderr, "  * conf          - listing of non-default config values\n");
+    fprintf(stderr, "  * conf-defaults - listing of all default config values\n");
+    fprintf(stderr, "  * conf-lint     - unknown config keys\n");
+    fprintf(stderr, "  * proc          - listing of all open processes\n");
     cyrus_done();
     exit(-1);
 }
@@ -119,71 +119,125 @@ static void do_conf(int only_changed)
 
     for (i = 1; i < IMAPOPT_LAST; i++) {
 	switch (imapopts[i].t) {
-	case OPT_STRING:
-	case OPT_STRINGLIST:
-	    if (only_changed) {
-		const char *defvalue = imapopts[i].def.s;
-		char *freeme = NULL;
+	    case OPT_BITFIELD:
+		if (only_changed) {
+		    if (imapopts[i].def.x == imapopts[i].val.x) break;
+		}
+		printf("%s:", imapopts[i].optname);
+		for (j = 0; imapopts[i].enum_options[j].name; j++) {
+		    if (imapopts[i].val.x & (1<<j)) {
+			printf(" %s", imapopts[i].enum_options[j].name);
+		    }
+		}
+		printf("\n");
+		break;
 
-		if (defvalue &&
-		    !strncasecmp(defvalue, "{configdirectory}", 17))
-		{
-		    freeme = strconcat(imapopts[IMAPOPT_CONFIGDIRECTORY].val.s,
-				       defvalue+17, (char *)NULL);
-		    defvalue = freeme;
+	    case OPT_ENUM:
+		if (only_changed) {
+		    if (imapopts[i].def.e == imapopts[i].val.e) break;
 		}
-		if (!strcmpsafe(defvalue, imapopts[i].val.s)) {
+		printf("%s:", imapopts[i].optname);
+		for (j = 0; imapopts[i].enum_options[j].name; j++) {
+		    if (imapopts[i].val.e == imapopts[i].enum_options[j].val) {
+			printf(" %s", imapopts[i].enum_options[j].name);
+			break;
+		    }
+		}
+		printf("\n");
+		break;
+
+	    case OPT_INT:
+		if (only_changed) {
+		    if (imapopts[i].def.i == imapopts[i].val.i) break;
+		}
+		printf("%s: %ld\n", imapopts[i].optname, imapopts[i].val.i);
+		break;
+
+	    case OPT_STRING:
+	    case OPT_STRINGLIST:
+		if (only_changed) {
+		    const char *defvalue = imapopts[i].def.s;
+		    char *freeme = NULL;
+
+		    if (defvalue &&
+			!strncasecmp(defvalue, "{configdirectory}", 17))
+		    {
+			freeme = strconcat(imapopts[IMAPOPT_CONFIGDIRECTORY].val.s,
+					   defvalue+17, (char *)NULL);
+			defvalue = freeme;
+		    }
+		    if (!strcmpsafe(defvalue, imapopts[i].val.s)) {
+			free(freeme);
+			break;
+		    }
 		    free(freeme);
-		    break;
 		}
-		free(freeme);
-	    }
-	    printf("%s: %s\n", imapopts[i].optname, imapopts[i].val.s ? imapopts[i].val.s : "");
-	    break;
-	case OPT_INT:
-	    if (only_changed) {
-		if (imapopts[i].def.i == imapopts[i].val.i) break;
-	    }
-	    printf("%s: %ld\n", imapopts[i].optname, imapopts[i].val.i);
-	    break;
-	case OPT_SWITCH:
-	    if (only_changed) {
-		if (imapopts[i].def.b == imapopts[i].val.b) break;
-	    }
-	    printf("%s: %s\n", imapopts[i].optname, imapopts[i].val.b ? "yes" : "no");
-	    break;
-	case OPT_ENUM:
-	    if (only_changed) {
-		if (imapopts[i].def.e == imapopts[i].val.e) break;
-	    }
-	    printf("%s:", imapopts[i].optname);
-	    for (j = 0; imapopts[i].enum_options[j].name; j++) {
-		if (imapopts[i].val.e == imapopts[i].enum_options[j].val) {
-		    printf(" %s", imapopts[i].enum_options[j].name);
-		    break;
+		printf("%s: %s\n", imapopts[i].optname, imapopts[i].val.s ? imapopts[i].val.s : "");
+		break;
+
+	    case OPT_SWITCH:
+		if (only_changed) {
+		    if (imapopts[i].def.b == imapopts[i].val.b) break;
 		}
-	    }
-	    printf("\n");
-	    break;
-	case OPT_BITFIELD:
-	    if (only_changed) {
-		if (imapopts[i].def.x == imapopts[i].val.x) break;
-	    }
-	    printf("%s:", imapopts[i].optname);
-	    for (j = 0; imapopts[i].enum_options[j].name; j++) {
-		if (imapopts[i].val.x & (1<<j)) {
-		    printf(" %s", imapopts[i].enum_options[j].name);
-		}
-	    }
-	    printf("\n");
-	    break;
-	default:
-	    abort();
+		printf("%s: %s\n", imapopts[i].optname, imapopts[i].val.b ? "yes" : "no");
+		break;
+
+	    default:
+		abort();
 	}
     }
 
     /* and the overflows */
     config_foreachoverflowstring(print_overflow, NULL);
+}
+
+static void do_defconf(void)
+{
+    int i;
+    unsigned j;
+
+    /* XXX: this is semi-sorted, but the overflow strings aren't sorted at all */
+
+    for (i = 1; i < IMAPOPT_LAST; i++) {
+	switch (imapopts[i].t) {
+	    case OPT_BITFIELD:
+		printf("%s:", imapopts[i].optname);
+		for (j = 0; imapopts[i].enum_options[j].name; j++) {
+		    if (imapopts[i].def.x & (1<<j)) {
+			printf(" %s", imapopts[i].enum_options[j].name);
+		    }
+		}
+		printf("\n");
+		break;
+
+	    case OPT_ENUM:
+		printf("%s:", imapopts[i].optname);
+		for (j = 0; imapopts[i].enum_options[j].name; j++) {
+		    if (imapopts[i].val.e == imapopts[i].enum_options[j].val) {
+			printf(" %s", imapopts[i].enum_options[j].name);
+			break;
+		    }
+		}
+		printf("\n");
+		break;
+
+	    case OPT_INT:
+		printf("%s: %ld\n", imapopts[i].optname, imapopts[i].def.i);
+		break;
+
+	    case OPT_STRING:
+	    case OPT_STRINGLIST:
+		printf("%s: %s\n", imapopts[i].optname, imapopts[i].def.s ? imapopts[i].def.s : "");
+		break;
+
+	    case OPT_SWITCH:
+		printf("%s: %s\n", imapopts[i].optname, imapopts[i].def.b ? "yes" : "no");
+		break;
+
+	    default:
+		abort();
+	}
+    }
 }
 
 static int known_overflowkey(const char *key)
@@ -311,11 +365,13 @@ int main(int argc, char *argv[])
 
     if (!strcmp(argv[optind], "proc"))
 	do_proc();
-    else if (!strcmp(argv[optind], "allconf"))
+    else if (!strcmp(argv[optind], "conf-all"))
 	do_conf(0);
     else if (!strcmp(argv[optind], "conf"))
 	do_conf(1);
-    else if (!strcmp(argv[optind], "lint"))
+    else if (!strcmp(argv[optind], "conf-default"))
+	do_defconf();
+    else if (!strcmp(argv[optind], "conf-lint"))
 	do_lint();
     else
 	usage();
