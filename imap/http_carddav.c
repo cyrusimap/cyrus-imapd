@@ -955,19 +955,11 @@ static int store_resource(struct transaction_t *txn, struct vparse_card *vcard,
 			  struct carddav_db *carddavdb, int overwrite,
 			  unsigned flags)
 {
-    int ret = HTTP_CREATED, r;
     struct vparse_entry *ventry;
     struct carddav_data *cdata;
-    FILE *f = NULL;
-    struct index_record oldrecord;
-    struct stagemsg *stage;
-    char *header;
+    struct index_record *oldrecord = NULL, record;
+    char *mimehdr;
     const char *version = NULL, *uid = NULL, *fullname = NULL;
-    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
-    uint32_t expunge_uid = 0;
-    time_t now = time(NULL);
-    char datestr[80];
-    struct appendstate as;
 
     /* Fetch some important properties */
     for (ventry = vcard->properties; ventry; ventry = ventry->next) {
@@ -981,8 +973,7 @@ static int store_resource(struct transaction_t *txn, struct vparse_card *vcard,
 	    version = propval;
 	    if (strcmp(version, "3.0")) {
 		txn->error.precond = CARDDAV_SUPP_DATA;
-		ret = HTTP_FORBIDDEN;
-		goto done;
+		return HTTP_FORBIDDEN;
 	    }
 	}
 
@@ -996,8 +987,7 @@ static int store_resource(struct transaction_t *txn, struct vparse_card *vcard,
     /* Sanity check data */
     if (!version || !uid || !fullname) {
 	txn->error.precond = CARDDAV_VALID_DATA;
-	ret = HTTP_FORBIDDEN;
-	goto done;
+	return HTTP_FORBIDDEN;
     }
 
     /* Check for existing vCard UID */
@@ -1014,148 +1004,49 @@ static int store_resource(struct transaction_t *txn, struct vparse_card *vcard,
 		   namespace_addressbook.prefix, owner,
 		   strrchr(cdata->dav.mailbox, '.')+1, cdata->dav.resource);
 	txn->error.resource = buf_cstring(&txn->buf);
-	ret = HTTP_FORBIDDEN;
-	goto done;
+	return HTTP_FORBIDDEN;
     }
 
     if (cdata->dav.imap_uid) {
 	/* Fetch index record for the resource */
-	r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &oldrecord);
+	oldrecord = &record;
+	mailbox_find_index_record(mailbox, cdata->dav.imap_uid, oldrecord);
 
 	if (overwrite == OVERWRITE_CHECK) {
 	    /* Check any preconditions */
-	    const char *etag = message_guid_encode(&oldrecord.guid);
-	    time_t lastmod = oldrecord.internaldate;
+	    const char *etag = message_guid_encode(&oldrecord->guid);
+	    time_t lastmod = oldrecord->internaldate;
 	    int precond = dav_check_precond(txn, cdata, etag, lastmod);
 
-	    if (precond != HTTP_OK) {
-		ret = HTTP_PRECOND_FAILED;
-		goto done;
-	    }
+	    if (precond != HTTP_OK) return HTTP_PRECOND_FAILED;
 	}
-
-	expunge_uid = oldrecord.uid;
     }
 
-    /* Prepare to stage the message */
-    if (!(f = append_newstage(mailbox->name, now, 0, &stage))) {
-	syslog(LOG_ERR, "append_newstage(%s) failed", mailbox->name);
-	txn->error.desc = "append_newstage() failed\r\n";
-	ret = HTTP_SERVER_ERROR;
-	goto done;
-    }
+    /* Create and cache RFC 5322 header fields for resource */
+    mimehdr = charset_encode_mimeheader(fullname, 0);
+    spool_cache_header(xstrdup("Subject"), mimehdr, txn->req_hdrs);
 
-    /* Create iMIP header for resource */
-
-    /* XXX  This needs to be done via an LDAP/DB lookup */
-    header = charset_encode_mimeheader(proxy_userid, 0);
-    fprintf(f, "From: %s <>\r\n", header);
-    free(header);
-
-    header = charset_encode_mimeheader(fullname, 0);
-    fprintf(f, "Subject: %s\r\n", header);
-    free(header);
-
-    time_to_rfc822(now, datestr, sizeof(datestr));
-
-    fprintf(f, "Date: %s\r\n", datestr);
-
-    fprintf(f, "Message-ID: <%s@%s>\r\n", uid, config_servername);
-
-    fprintf(f, "Content-Type: text/vcard; charset=utf-8\r\n");
-
-    fprintf(f, "Content-Length: %u\r\n", (unsigned)buf_len(&txn->req_body.payload));
-    fprintf(f, "Content-Disposition: inline; filename=\"%s\"\r\n", resource);
-
-    /* XXX  Check domain of data and use appropriate CTE */
-
-    fprintf(f, "MIME-Version: 1.0\r\n");
-    fprintf(f, "\r\n");
-
-    /* Write the vCard data to the file */
-    fprintf(f, "%s", buf_cstring(&txn->req_body.payload));
-
-    qdiffs[QUOTA_STORAGE] = ftell(f);
-    qdiffs[QUOTA_MESSAGE] = 1;
-
-    fclose(f);
-
-    /* Prepare to append the iMIP message to calendar mailbox */
-    if ((r = append_setup_mbox(&as, mailbox, NULL, NULL, 0, qdiffs, 0, 0, EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
-	syslog(LOG_ERR, "append_setup(%s) failed: %s",
-	       mailbox->name, error_message(r));
-	ret = HTTP_SERVER_ERROR;
-	txn->error.desc = "append_setup() failed\r\n";
+    /* XXX - validate uid for mime safety? */
+    if (strchr(uid, '@')) {
+	spool_cache_header(xstrdup("Message-ID"), xstrdup(uid), txn->req_hdrs);
     }
     else {
-	struct body *body = NULL;
-
-	/* Append the iMIP file to the calendar mailbox */
-	if ((r = append_fromstage(&as, &body, stage, now, NULL, 0, 0))) {
-	    syslog(LOG_ERR, "append_fromstage() failed");
-	    ret = HTTP_SERVER_ERROR;
-	    txn->error.desc = "append_fromstage() failed\r\n";
-	}
-	if (body) {
-	    message_free_body(body);
-	    free(body);
-	}
-
-	if (r) append_abort(&as);
-	else {
-	    /* Commit the append to the calendar mailbox */
-	    r = append_commit(&as);
-	    if (r) {
-		syslog(LOG_ERR, "append_commit() failed");
-		ret = HTTP_SERVER_ERROR;
-		txn->error.desc = "append_commit() failed\r\n";
-	    }
-	    else {
-		/* append_commit() returns a write-locked index */
-		struct index_record newrecord;
-
-		/* Read index record for new message (always the last one) */
-		mailbox_read_index_record(mailbox, mailbox->i.num_records,
-					  &newrecord);
-
-		if (expunge_uid) {
-		    /* Now that we have the replacement message in place
-		       and the mailbox locked, re-read the old record
-		       and see if we should overwrite it.  Either way,
-		       one of our records will have to be expunged.
-		    */
-		    int userflag;
-
-		    ret = HTTP_NO_CONTENT;
-
-		    /* Perform the actual expunge */
-		    r = mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag, 1);
-		    if (!r) {
-			oldrecord.user_flags[userflag/32] |= 1<<(userflag&31);
-			oldrecord.system_flags |= FLAG_EXPUNGED;
-			r = mailbox_rewrite_index_record(mailbox, &oldrecord);
-		    }
-		    if (r) {
-			syslog(LOG_ERR, "expunging record (%s) failed: %s",
-			       mailbox->name, error_message(r));
-			txn->error.desc = error_message(r);
-			ret = HTTP_SERVER_ERROR;
-		    }
-		}
-
-		if (!r) {
-		    struct resp_body_t *resp_body = &txn->resp_body;
-
-		    /* Tell client about the new resource */
-		    resp_body->lastmod = newrecord.internaldate;
-		    resp_body->etag = message_guid_encode(&newrecord.guid);
-		}
-	    }
-	}
+	assert(!buf_len(&txn->buf));
+	buf_printf(&txn->buf, "<%s@%s>", uid, config_servername);
+	spool_cache_header(xstrdup("Message-ID"),
+			   buf_release(&txn->buf), txn->req_hdrs);
     }
 
-    append_removestage(stage);
+    assert(!buf_len(&txn->buf));
+    buf_printf(&txn->buf, "text/vcard; version=%s; charset=utf-8", version);
+    spool_cache_header(xstrdup("Content-Type"),
+		       buf_release(&txn->buf), txn->req_hdrs);
 
-done:
-    return ret;
+    buf_printf(&txn->buf, "inline;\r\n\tfilename=\"%s\"", resource);
+    spool_cache_header(xstrdup("Content-Disposition"),
+		       buf_release(&txn->buf), txn->req_hdrs);
+
+    /* Store the resource */
+    return dav_store_resource(txn, buf_cstring(&txn->req_body.payload), 0,
+			      mailbox, oldrecord, NULL);
 }
