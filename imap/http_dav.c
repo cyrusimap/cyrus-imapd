@@ -5818,3 +5818,196 @@ int meth_unlock(struct transaction_t *txn, void *params)
 
     return ret;
 }
+
+
+static char *strnchr(const char *s, int c, size_t n)
+{
+    if (!s) return NULL;
+
+    for (; n; n--, s++) if (*s == c) return ((char *) s);
+
+    return NULL;
+}
+
+static const char *spool_getheader_last(hdrcache_t cache, const char *phead)
+{
+    const char **hdr = spool_getheader(cache, phead);
+
+    if (!hdr) return NULL;
+    while (*(hdr+1)) hdr++;
+    return *hdr;
+}
+
+
+int dav_store_resource(struct transaction_t *txn,
+		       const char *data, size_t datalen,
+		       struct mailbox *mailbox, struct index_record *oldrecord,
+		       const char *imapflags[], unsigned nflags)
+{
+    int ret = HTTP_CREATED, r;
+    hdrcache_t hdrcache = txn->req_hdrs;
+    struct stagemsg *stage;
+    FILE *f = NULL;
+    const char *hdr, *cte;
+    uquota_t size;
+    time_t now = time(NULL);
+    struct appendstate as;
+
+    /* Prepare to stage the message */
+    if (!(f = append_newstage(mailbox->name, now, 0, &stage))) {
+	syslog(LOG_ERR, "append_newstage(%s) failed", mailbox->name);
+	txn->error.desc = "append_newstage() failed\r\n";
+	return HTTP_SERVER_ERROR;
+    }
+
+    /* Create RFC 5322 header for resource */
+    if ((hdr = spool_getheader_last(hdrcache, "User-Agent"))) {
+	fprintf(f, "User-Agent: %s\r\n", hdr);
+    }
+
+    if ((hdr = spool_getheader_last(hdrcache, "From"))) {
+	fprintf(f, "From: %s\r\n", hdr);
+    }
+    else {
+	char *mimehdr;
+
+	assert(!buf_len(&txn->buf));
+	if (strchr(proxy_userid, '@')) {
+	    /* XXX  This needs to be done via an LDAP/DB lookup */
+	    buf_printf(&txn->buf, "<%s>", proxy_userid);
+	}
+	else {
+	    buf_printf(&txn->buf, "<%s@%s>", proxy_userid, config_servername);
+	}
+
+	mimehdr = charset_encode_mimeheader(buf_cstring(&txn->buf),
+					    buf_len(&txn->buf));
+	fprintf(f, "From: %s\r\n", mimehdr);
+	free(mimehdr);
+	buf_reset(&txn->buf);
+    }
+
+    if ((hdr = spool_getheader_last(hdrcache, "Subject"))) {
+	fprintf(f, "Subject: %s\r\n", hdr);
+    }
+
+    if ((hdr = spool_getheader_last(hdrcache, "Date"))) {
+	fprintf(f, "Date: %s\r\n", hdr);
+    }
+    else {
+	char datestr[80];
+	rfc822date_gen(datestr, sizeof(datestr), now);
+	fprintf(f, "Date: %s\r\n", datestr);
+    }
+
+    if ((hdr = spool_getheader_last(hdrcache, "Message-ID"))) {
+	fprintf(f, "Message-ID: %s\r\n", hdr);
+    }
+
+    if ((hdr = spool_getheader_last(hdrcache, "Content-Type"))) {
+	fprintf(f, "Content-Type: %s\r\n", hdr);
+    }
+    else fputs("Content-Type: application/octet-stream\r\n", f);
+
+    if (!datalen) {
+	datalen = strlen(data);
+	cte = "8bit";
+    }
+    else {
+	cte = strnchr(data, '\0', datalen) ? "binary" : "8bit";
+    }
+    fprintf(f, "Content-Transfer-Encoding: %s\r\n", cte);
+
+    if ((hdr = spool_getheader_last(hdrcache, "Content-Disposition"))) {
+	fprintf(f, "Content-Disposition: %s\r\n", hdr);
+    }
+
+    fprintf(f, "Content-Length: %u\r\n", (unsigned) datalen);
+
+    fputs("MIME-Version: 1.0\r\n\r\n", f);
+
+    /* Write the data to the file */
+    fwrite(data, datalen, 1, f);
+    size = ftell(f);
+
+    fclose(f);
+
+
+    /* Prepare to append the message to the mailbox */
+    if ((r = append_setup(&as, mailbox->name,
+			  httpd_userid, httpd_authstate, 0, size))) {
+	syslog(LOG_ERR, "append_setup(%s) failed: %s",
+	       mailbox->name, error_message(r));
+	ret = HTTP_SERVER_ERROR;
+	txn->error.desc = "append_setup() failed\r\n";
+    }
+    else {
+	struct body *body = NULL;
+
+	/* Append the message to the mailbox */
+	if ((r = append_fromstage(&as, &body, stage, now, imapflags, nflags, 0))) {
+	    syslog(LOG_ERR, "append_fromstage() failed");
+	    ret = HTTP_SERVER_ERROR;
+	    txn->error.desc = "append_fromstage() failed\r\n";
+	}
+	if (body) {
+	    message_free_body(body);
+	    free(body);
+	}
+
+	if (r) append_abort(&as);
+	else {
+	    /* Commit the append to the mailbox */
+	    if ((r = append_commit(&as, size, NULL, NULL, NULL, &mailbox))) {
+		syslog(LOG_ERR, "append_commit() failed");
+		ret = HTTP_SERVER_ERROR;
+		txn->error.desc = "append_commit() failed\r\n";
+	    }
+	    else {
+		/* append_commit() returns a write-locked index */
+		struct index_record newrecord;
+
+		/* Read index record for new message (always the last one) */
+		mailbox_read_index_record(mailbox, mailbox->i.num_records,
+					  &newrecord);
+
+		if (oldrecord) {
+		    /* Now that we have the replacement message in place
+		       expunge the old one. */
+		    int userflag;
+
+		    ret = HTTP_NO_CONTENT;
+
+		    /* Perform the actual expunge */
+		    r = mailbox_user_flag(mailbox, DFLAG_UNBIND,  &userflag);
+		    if (!r) {
+			oldrecord->user_flags[userflag/32] |= 1 << (userflag & 31);
+			oldrecord->system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
+			r = mailbox_rewrite_index_record(mailbox, oldrecord);
+		    }
+		    if (r) {
+			syslog(LOG_ERR, "expunging record (%s) failed: %s",
+			       mailbox->name, error_message(r));
+			txn->error.desc = error_message(r);
+			ret = HTTP_SERVER_ERROR;
+		    }
+		}
+
+		if (!r) {
+		    struct resp_body_t *resp_body = &txn->resp_body;
+
+		    /* Tell client about the new resource */
+		    resp_body->lastmod = newrecord.internaldate;
+		    resp_body->etag = message_guid_encode(&newrecord.guid);
+		}
+
+		/* need to close mailbox returned to us by append_commit */
+		mailbox_close(&mailbox);
+	    }
+	}
+    }
+
+    append_removestage(stage);
+
+    return ret;
+}

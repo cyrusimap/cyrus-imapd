@@ -4830,28 +4830,23 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			  struct caldav_db *caldavdb, int overwrite,
 			  unsigned flags)
 {
-    int ret = HTTP_CREATED, r;
+    int ret;
     icalcomponent *comp;
     icalcomponent_kind kind;
     icalproperty_method meth;
     icalproperty *prop;
     unsigned mykind = 0, tzbyref = 0;
-    char *header;
     const char *organizer = NULL;
     const char *prop_annot =
 	ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
     struct annotation_data attrib;
     struct caldav_data *cdata;
-    FILE *f = NULL;
-    struct stagemsg *stage;
-    const char *uid, *ics;
-    uquota_t size;
-    uint32_t expunge_uid = 0;
-    struct index_record oldrecord;
-    time_t now = time(NULL);
-    char datestr[80];
-    struct appendstate as;
+    const char *uid;
+    struct index_record *oldrecord = NULL, record;
+    char datestr[80], *mimehdr;
     const char *sched_tag;
+    const char *imapflags[] = { NULL };
+    int nflags = 0;
 
     /* Check for supported component type */
     comp = icalcomponent_get_first_real_component(ical);
@@ -4881,7 +4876,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 	}
     }
 
-    /* Find iCalendar UID for the current resource, if exists */
+    /* Check for change of iCalendar UID */
     uid = icalcomponent_get_uid(comp);
     caldav_lookup_resource(caldavdb,
 			   mailbox->name, resource, 0, &cdata);
@@ -4889,27 +4884,6 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 	/* CALDAV:no-uid-conflict */
 	txn->error.precond = CALDAV_UID_CONFLICT;
 	return HTTP_FORBIDDEN;
-    }
-
-    /* XXX - theoretical race, but the mailbox is locked, so nothing
-     * else can ACTUALLY change it */
-    if (cdata->dav.imap_uid) {
-	/* Fetch index record for the resource */
-	r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid,
-				      &oldrecord);
-
-	if (overwrite == OVERWRITE_CHECK) {
-	    /* Check any preconditions */
-	    const char *etag = message_guid_encode(&oldrecord.guid);
-	    time_t lastmod = oldrecord.internaldate;
-	    int precond = caldav_check_precond(txn, cdata,
-					       etag, lastmod);
-
-	    if (precond != HTTP_OK)
-		return HTTP_PRECOND_FAILED;
-	}
-
-	expunge_uid = cdata->dav.imap_uid;
     }
 
     /* Check for existing iCalendar UID */
@@ -4930,11 +4904,21 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 	return HTTP_FORBIDDEN;
     }
 
-    /* Prepare to stage the message */
-    if (!(f = append_newstage(mailbox->name, now, 0, &stage))) {
-	syslog(LOG_ERR, "append_newstage(%s) failed", mailbox->name);
-	txn->error.desc = "append_newstage() failed\r\n";
-	return HTTP_SERVER_ERROR;
+    /* XXX - theoretical race, but the mailbox is locked, so nothing
+     * else can ACTUALLY change it */
+    if (cdata->dav.imap_uid) {
+	/* Fetch index record for the resource */
+	oldrecord = &record;
+	mailbox_find_index_record(mailbox, cdata->dav.imap_uid, oldrecord);
+
+	if (overwrite == OVERWRITE_CHECK) {
+	    /* Check any preconditions */
+	    const char *etag = message_guid_encode(&oldrecord->guid);
+	    time_t lastmod = oldrecord->internaldate;
+	    int precond = caldav_check_precond(txn, cdata, etag, lastmod);
+
+	    if (precond != HTTP_OK) return HTTP_PRECOND_FAILED;
+	}
     }
 
     /* Remove all X-LIC-ERROR properties */
@@ -4961,179 +4945,90 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 	tzbyref = 1;
     }
 
-    ics = icalcomponent_as_ical_string(ical);
-
-    /* Create iMIP header for resource */
-    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-    if (prop) {
-	organizer = icalproperty_get_organizer(prop)+7;
-	header = charset_encode_mimeheader(organizer, 0);
-	fprintf(f, "From: %s\r\n", header);
-	free(header);
-    }
-    else if (strchr(proxy_userid, '@')) {
-	/* XXX  This needs to be done via an LDAP/DB lookup */
-	header = charset_encode_mimeheader(proxy_userid, 0);
-	fprintf(f, "From: %s\r\n", header);
-	free(header);
-    }
-    else {
-	struct buf *headbuf = &txn->buf;
-
-	assert(!headbuf->len);
-	buf_printf(headbuf, "%s@%s", proxy_userid, config_servername);
-	header = charset_encode_mimeheader(headbuf->s, headbuf->len);
-	buf_reset(headbuf);
-
-	fprintf(f, "From: %s\r\n", header);
-	free(header);
+    /* If we are just stripping VTIMEZONEs from resource, flag it */
+    if (flags & TZ_STRIP) {
+	*imapflags = DFLAG_UNCHANGED;
+	nflags = 1;
     }
 
-    prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
-    if (prop) {
-	header = charset_encode_mimeheader(icalproperty_get_summary(prop), 0);
-	fprintf(f, "Subject: %s\r\n", header);
-	free(header);
-    }
-    else fprintf(f, "Subject: %s\r\n", icalcomponent_kind_to_string(kind));
-
-    rfc822date_gen(datestr, sizeof(datestr),
-		   icaltime_as_timet_with_zone(icalcomponent_get_dtstamp(comp),
-					       icaltimezone_get_utc_timezone()));
-    fprintf(f, "Date: %s\r\n", datestr);
-
-    /* XXX - validate uid for mime safety? */
-    if (strchr(uid, '@')) {
-	fprintf(f, "Message-ID: <%s>\r\n", uid);
-    }
-    else {
-	fprintf(f, "Message-ID: <%s@%s>\r\n", uid, config_servername);
-    }
-
-    fprintf(f, "Content-Type: text/calendar; charset=utf-8");
-    if ((meth = icalcomponent_get_method(ical)) != ICAL_METHOD_NONE) {
-	fprintf(f, "; method=%s", icalproperty_method_to_string(meth));
-    }
-    fprintf(f, "; component=%s\r\n", icalcomponent_kind_to_string(kind));
-
-    fprintf(f, "Content-Length: %u\r\n", (unsigned) strlen(ics));
-    fprintf(f, "Content-Disposition: inline;\r\n\tfilename=\"%s\"", resource);
-
+    /* Set Schedule-Tag, if any */
     if (flags & NEW_STAG) {
-	if (expunge_uid) sched_tag = message_guid_encode(&oldrecord.guid);
+	if (oldrecord) sched_tag = message_guid_encode(&oldrecord->guid);
 	else sched_tag = NULL_ETAG;
     }
     else if (organizer) sched_tag = cdata->sched_tag;
     else sched_tag = cdata->sched_tag = NULL;
-    if (sched_tag) fprintf(f, ";\r\n\tschedule-tag=%s", sched_tag);
-    
-    if (tzbyref) fprintf(f, ";\r\n\ttz-by-ref=true");
-    fprintf(f, "\r\n");
 
-    /* XXX  Check domain of data and use appropriate CTE */
+    /* Create and cache RFC 5322 header fields for resource */
+    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    if (prop) {
+	organizer = icalproperty_get_organizer(prop)+7;
+	assert(!buf_len(&txn->buf));
+	buf_printf(&txn->buf, "<%s>", organizer);
+	mimehdr = charset_encode_mimeheader(buf_cstring(&txn->buf),
+					    buf_len(&txn->buf));
+	spool_cache_header(xstrdup("From"), mimehdr, txn->req_hdrs);
+	buf_reset(&txn->buf);
+    }
 
-    fprintf(f, "MIME-Version: 1.0\r\n");
-    fprintf(f, "\r\n");
+    prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
+    if (prop) {
+	mimehdr = charset_encode_mimeheader(icalproperty_get_summary(prop), 0);
+	spool_cache_header(xstrdup("Subject"), mimehdr, txn->req_hdrs);
+    }
+    else spool_cache_header(xstrdup("Subject"),
+			    xstrdup(icalcomponent_kind_to_string(kind)),
+			    txn->req_hdrs);
 
-    /* Write the iCal data to the file */
-    fprintf(f, "%s", ics);
-    size = ftell(f);
+    rfc822date_gen(datestr, sizeof(datestr),
+		   icaltime_as_timet_with_zone(icalcomponent_get_dtstamp(comp),
+					       icaltimezone_get_utc_timezone()));
+    spool_cache_header(xstrdup("Date"), xstrdup(datestr), txn->req_hdrs);
 
-    fclose(f);
-
-
-    /* Prepare to append the iMIP message to calendar mailbox */
-    if ((r = append_setup(&as, mailbox->name,
-			  httpd_userid, httpd_authstate, 0, size))) {
-	syslog(LOG_ERR, "append_setup(%s) failed: %s",
-	       mailbox->name, error_message(r));
-	ret = HTTP_SERVER_ERROR;
-	txn->error.desc = "append_setup() failed\r\n";
+    /* XXX - validate uid for mime safety? */
+    if (strchr(uid, '@')) {
+	spool_cache_header(xstrdup("Message-ID"), xstrdup(uid), txn->req_hdrs);
     }
     else {
-	struct body *body = NULL;
-	const char *iflag[] = { NULL };
-	int nflags = 0;
-
-	/* If we are just stripping VTIMEZONEs from resource, flag it */
-	if (flags & TZ_STRIP) {
-	    *iflag = DFLAG_UNCHANGED;
-	    nflags = 1;
-	}
-
-	/* Append the iMIP file to the calendar mailbox */
-	if ((r = append_fromstage(&as, &body, stage, now, iflag, nflags, 0))) {
-	    syslog(LOG_ERR, "append_fromstage() failed");
-	    ret = HTTP_SERVER_ERROR;
-	    txn->error.desc = "append_fromstage() failed\r\n";
-	}
-	if (body) {
-	    message_free_body(body);
-	    free(body);
-	}
-
-	if (r) append_abort(&as);
-	else {
-	    /* Commit the append to the calendar mailbox */
-	    if ((r = append_commit(&as, size, NULL, NULL, NULL, &mailbox))) {
-		syslog(LOG_ERR, "append_commit() failed");
-		ret = HTTP_SERVER_ERROR;
-		txn->error.desc = "append_commit() failed\r\n";
-	    }
-	    else {
-		/* append_commit() returns a write-locked index */
-		struct index_record newrecord;
-
-		/* Read index record for new message (always the last one) */
-		mailbox_read_index_record(mailbox, mailbox->i.num_records,
-					  &newrecord);
-
-		if (expunge_uid) {
-		    /* Now that we have the replacement message in place
-		       and the mailbox locked, re-read the old record
-		       and see if we should overwrite it.  Either way,
-		       one of our records will have to be expunged.
-		    */
-		    int userflag;
-
-		    ret = HTTP_NO_CONTENT;
-
-		    /* Perform the actual expunge */
-		    r = mailbox_user_flag(mailbox, DFLAG_UNBIND,  &userflag);
-		    if (!r) {
-			oldrecord.user_flags[userflag/32] |= 1<<(userflag&31);
-			oldrecord.system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
-			r = mailbox_rewrite_index_record(mailbox, &oldrecord);
-		    }
-		    if (r) {
-			syslog(LOG_ERR, "expunging record (%s) failed: %s",
-			       mailbox->name, error_message(r));
-			txn->error.desc = error_message(r);
-			ret = HTTP_SERVER_ERROR;
-		    }
-		}
-
-		if (!r) {
-		    struct resp_body_t *resp_body = &txn->resp_body;
-
-		    if (cdata->organizer && (flags & NEW_STAG)) {
-			resp_body->stag = sched_tag;
-		    }
-
-		    if ((flags & PREFER_REP) || !(flags & NEW_STAG)) {
-			/* Tell client about the new resource */
-			resp_body->lastmod = newrecord.internaldate;
-			resp_body->etag = message_guid_encode(&newrecord.guid);
-		    }
-		}
-
-		/* need to close mailbox returned to us by append_commit */
-		mailbox_close(&mailbox);
-	    }
-	}
+	assert(!buf_len(&txn->buf));
+	buf_printf(&txn->buf, "<%s@%s>", uid, config_servername);
+	spool_cache_header(xstrdup("Message-ID"),
+			   buf_release(&txn->buf), txn->req_hdrs);
     }
 
-    append_removestage(stage);
+    assert(!buf_len(&txn->buf));
+    buf_setcstr(&txn->buf, "text/calendar; charset=utf-8");
+    if ((meth = icalcomponent_get_method(ical)) != ICAL_METHOD_NONE) {
+	buf_printf(&txn->buf, "; method=%s", icalproperty_method_to_string(meth));
+    }
+    buf_printf(&txn->buf, "; component=%s", icalcomponent_kind_to_string(kind));
+    spool_cache_header(xstrdup("Content-Type"),
+		       buf_release(&txn->buf), txn->req_hdrs);
+
+    buf_printf(&txn->buf, "inline;\r\n\tfilename=\"%s\"", resource);
+    if (sched_tag) buf_printf(&txn->buf, ";\r\n\tschedule-tag=%s", sched_tag);    
+    if (tzbyref) buf_printf(&txn->buf, ";\r\n\ttz-by-ref=true");
+    spool_cache_header(xstrdup("Content-Disposition"),
+		       buf_release(&txn->buf), txn->req_hdrs);
+
+    /* Store the resource */
+    ret = dav_store_resource(txn, icalcomponent_as_ical_string(ical), 0,
+			     mailbox, oldrecord, imapflags, nflags);
+
+    switch (ret) {
+    case HTTP_CREATED:
+    case HTTP_NO_CONTENT:
+	if (cdata->organizer && (flags & NEW_STAG)) {
+	    txn->resp_body.stag = sched_tag;
+	}
+
+	if (!(flags & PREFER_REP)) {
+	    /* iCal data has been rewritten - don't return validators */
+	    txn->resp_body.lastmod = 0;
+	    txn->resp_body.etag = NULL;
+	}
+	break;
+    }
 
     return ret;
 }
