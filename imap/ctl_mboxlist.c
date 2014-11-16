@@ -920,7 +920,12 @@ static int verify_cb(void *rockp,
 
     // Look up the mailbox db entry
     r = mboxlist_lookup(name, &mbentry, NULL);
-    part = xstrdup(mbentry->partition);
+
+    if (!r && mbentry->partition)
+	part = xstrdup(mbentry->partition);
+    else
+	part = NULL;
+
     mboxlist_entry_free(&mbentry);
 
     if (r) {
@@ -957,8 +962,11 @@ static int verify_cb(void *rockp,
 
     }
 
-    free(name);
-    free(part);
+    if (name)
+	free(name);
+
+    if (part)
+	free(part);
 
     return 0;
 }
