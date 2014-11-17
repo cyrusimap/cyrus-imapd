@@ -791,7 +791,9 @@ int deliver_local(deliver_data_t *mydata, const strarray_t *flags,
 				   mydata->authuser, mydata->authstate, md->id,
 				   username, mydata->notifyheader,
 				   namebuf, md->date, quotaoverride, 0);
+
 	}
+
 	if (ret2 == IMAP_MAILBOX_NONEXISTENT && mailboxname &&
 	    config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH) &&
 	    fuzzy_match(namebuf)) {
@@ -802,7 +804,11 @@ int deliver_local(deliver_data_t *mydata, const strarray_t *flags,
 				   username, mydata->notifyheader,
 				   namebuf, md->date, quotaoverride, 0);
 	}
+
 	if (ret2) {
+	    // Authn/authz knows little about the internal naming.
+	    mboxname_hiersep_toexternal(&lmtpd_namespace, username, config_virtdomains ? strcspn(username, "@") : 0);
+
 	    /* normal delivery to INBOX */
 	    struct auth_state *authstate = auth_newstate(username);
 
@@ -903,7 +909,8 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    }
 	}
 
-	telemetry_rusage( userbuf );
+	telemetry_rusage(userbuf);
+
 	msg_setrcpt_status(msgdata, n, r);
 
 	mboxlist_entry_free(&mbentry);

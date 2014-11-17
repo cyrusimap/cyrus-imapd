@@ -1602,7 +1602,11 @@ static void cmdloop(void)
 			    error_message(IMAP_BYE_LOGOUT));
 		prot_printf(imapd_out, "%s OK %s\r\n", tag.s, 
 			    error_message(IMAP_OK_COMPLETED));
-               telemetry_rusage( imapd_userid );
+
+		// Translate the name to external
+		mboxname_hiersep_toexternal(&imapd_namespace, imapd_userid, config_virtdomains ? strcspn(imapd_userid, "@") : 0);
+		telemetry_rusage(imapd_userid);
+
 		return;
 	    }
 	    else if (!imapd_userid) goto nologin;
