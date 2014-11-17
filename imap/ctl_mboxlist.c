@@ -225,8 +225,6 @@ static int dump_cb(void *rockp,
 			    acl = xmalloc(1 + strlen(dl_ace->name) + strlen(tmp) + 1);
 			    sprintf(acl, "%s\t%s", dl_ace->name, tmp);
 			}
-
-			syslog(LOG_DEBUG, "Mailbox ACL: '%s %s' (acl now: %s)", dl_ace->name, tmp, acl);
 		    }
 		}
 	    } else { // (dl_acl)
