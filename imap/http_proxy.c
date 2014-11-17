@@ -136,7 +136,7 @@ static int login(struct backend *s, const char *userid,
 	{ 0, 0xFF, PROT_BUFSIZE, 0, NULL, NULL }; /* default secprops */
     const char *mech_conf, *pass, *clientout = NULL;
     struct auth_scheme_t *scheme = NULL;
-    unsigned need_tls = 0, tls_done = 0, clientoutlen;
+    unsigned need_tls = 0, tls_done = 0, auth_done = 0, clientoutlen;
     hdrcache_t hdrs = NULL;
 
     if (status) *status = NULL;
@@ -286,9 +286,14 @@ static int login(struct backend *s, const char *userid,
 	    /* Fall through and process any success data */
 
 	case 401: /* Unauthorized */
+	    if (auth_done) {
+		r = SASL_BADAUTH;
+		break;
+	    }
+
 	    if (!serverin) {
 		int i = 0;
-		
+
 		hdr = spool_getheader(hdrs, "WWW-Authenticate");
 
 		if (!scheme) {
@@ -394,6 +399,7 @@ static int login(struct backend *s, const char *userid,
 		    buf_printf(&buf, "%s:%s", authid, pass);
 		    clientout = buf_cstring(&buf);
 		    clientoutlen = buf_len(&buf);
+		    auth_done = 1;
 		}
 		else {
 		    /* Base64 decode any server challenge, if necessary */
@@ -409,6 +415,7 @@ static int login(struct backend *s, const char *userid,
 		    r = sasl_client_step(s->saslconn, serverin, serverinlen,
 					 NULL,		/* no prompts */
 					 &clientout, &clientoutlen);
+		    if (r == SASL_OK) auth_done = 1;
 		}
 	    }
 	    break;  /* case 401 */
