@@ -289,6 +289,8 @@ static int action_capa(struct transaction_t *txn)
 //			 "      s:[]"  			/*   contacts */
 			 "    }"
 			 "  s:["			/* actions */
+			 "    {s:s s:["			/*   capabilities */
+			 "    ]}"
 			 "    {s:s s:["			/*   list */
 			 "      {s:s}"			/*     changedsince */
 			 "    ]}"
@@ -313,6 +315,8 @@ static int action_capa(struct transaction_t *txn)
 //			 "provider-details", "", "contacts",
 
 			 "actions",
+			 "name", "capabilities", "parameters",
+
 			 "name", "list", "parameters",
 			 "name", "changedsince",
 
