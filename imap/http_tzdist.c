@@ -406,7 +406,7 @@ static int action_list(struct transaction_t *txn)
     if ((param = hash_lookup("pattern", &txn->req_qparams))) {
 	if (param->next			  /* once only */
 	    || !param->s || !*param->s	  /* not empty */
-	    || !strcspn(param->s, "*")) {  /* not (*)+ */
+	    || strspn(param->s, "*") == strlen(param->s)) {  /* not (*)+ */
 	    return json_error_response(txn, TZ_INVALID_PATTERN, param, NULL);
 	}
 	pattern = param->s;
