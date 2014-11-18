@@ -1339,27 +1339,36 @@ static void cmdloop(void)
 
 	/* Parse any query parameters */
 	if (query) {
-	    /* Parse the query string and add param/value pairs to hash table */
+	    /* Parse the query string and add key/value pairs to hash table */
 	    tok_t tok;
 	    char *param;
 
 	    assert(!buf_len(&txn.buf));  /* Unescape buffer */
 
-	    tok_init(&tok, (char *) query, ";&=",
+	    tok_init(&tok, (char *) query, ";&",
 		     TOK_TRIMLEFT|TOK_TRIMRIGHT|TOK_EMPTY);
 	    while ((param = tok_next(&tok))) {
 		struct strlist *vals;
-		char *value = tok_next(&tok);
+		char *key, *value;
+		tok_t tok2;
 		size_t len;
+
+		/* Split param into key and optional value */
+		tok_initm(&tok2, param, "=",
+			 TOK_TRIMLEFT|TOK_TRIMRIGHT|TOK_EMPTY);
+		key = tok_next(&tok2);
+		value = tok_next(&tok2);
 
 		if (!value) value = "";
 		len = strlen(value);
 		buf_ensure(&txn.buf, len);
 
-		vals = hash_lookup(param, &txn.req_qparams);
+		vals = hash_lookup(key, &txn.req_qparams);
 		appendstrlist(&vals,
 			      xmlURIUnescapeString(value, len, txn.buf.s));
-		hash_insert(param, vals, &txn.req_qparams);
+		hash_insert(key, vals, &txn.req_qparams);
+
+		tok_fini(&tok2);
 	    }
 	    tok_fini(&tok);
 
