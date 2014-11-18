@@ -3071,10 +3071,13 @@ static int caldav_propfind_by_resource(void *rock, void *data)
 				  &fctx->msg_base, &fctx->msg_size);
 
 	    memset(&txn, 0, sizeof(struct transaction_t));
+	    txn.req_hdrs = spool_new_hdrcache();
+
 	    mailbox_unlock_index(fctx->mailbox, NULL);
 	    store_resource(&txn, ical, fctx->mailbox, cdata->dav.resource,
 			   fctx->davdb, OVERWRITE_YES,
 			   TZ_STRIP | (!cdata->sched_tag ? NEW_STAG : 0));
+	    spool_free_hdrcache(txn.req_hdrs);
 	    buf_free(&txn.buf);
 
 	    icalcomponent_free(ical);
