@@ -6096,7 +6096,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
 
 	} else { // (location)
 	    // a simple rename, old name and new name must not be the same
-	    if (strcmp(oldname, newname)) {
+	    if (!strcmp(oldname, newname)) {
 		prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(IMAP_SERVER_UNAVAILABLE));
 		goto done;
 	    }
