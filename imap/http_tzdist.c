@@ -184,6 +184,7 @@ static int meth_get(struct transaction_t *txn,
 {
     struct request_target_t *tgt = &txn->req_tgt;
     const struct action_t *ap = NULL;
+    unsigned levels = 0;
     char *p;
 
     /* Make a working copy of target path */
@@ -206,6 +207,10 @@ static int meth_get(struct transaction_t *txn,
 	    tgt->resource = p;
 	    p += strlen(p);
 	    if (p[-1] == '/') *--p = '\0';
+
+	    /* XXX  Hack - probably need to check for %2F vs '/'
+	       Count the number of "levels".  Current tzids have a max of 3. */
+	    for (p = tgt->resource; p && ++levels; (p = strchr(p+1, '/')));
 	}
 
 	/* Search known actions for matching path */
@@ -220,7 +225,7 @@ static int meth_get(struct transaction_t *txn,
 	}
     }
 
-    if (!ap || !ap->path)
+    if (!ap || !ap->path || levels > 3)
 	return json_error_response(txn, TZ_INVALID_ACTION, NULL, NULL);
 
     if (tgt->resource && strchr(tgt->resource, '.'))  /* paranoia */
