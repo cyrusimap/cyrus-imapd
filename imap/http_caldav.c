@@ -3193,7 +3193,7 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
     }
     else if (namespace_calendar.allow & ALLOW_CAL_NOTZ) {
 	/* We want to strip known VTIMEZONEs */
-	fctx->proc_by_resource = &caldav_propfind_by_resource;
+//	fctx->proc_by_resource = &caldav_propfind_by_resource;
     }
 
     return propfind_getdata(name, ns, fctx, propstat, prop, caldav_mime_types,
