@@ -3066,6 +3066,12 @@ static int caldav_propfind_by_resource(void *rock, void *data)
 
 	    ical = icalparser_parse_string(fctx->msg_base
 					   + fctx->record->header_size);
+	    if (!ical) {
+		syslog(LOG_NOTICE,
+		       "Unable to parse iCal %s:%u prior to stripping TZ",
+		       fctx->mailbox->name, fctx->record->uid);
+		goto done;
+	    }
 
 	    mailbox_unmap_message(fctx->mailbox, fctx->record->uid,
 				  &fctx->msg_base, &fctx->msg_size);
@@ -3091,6 +3097,7 @@ static int caldav_propfind_by_resource(void *rock, void *data)
 	fctx->msg_size = 0;
     }
 
+  done:
     return propfind_by_resource(rock, data);
 }
 
