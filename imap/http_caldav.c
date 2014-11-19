@@ -5101,6 +5101,7 @@ int caladdress_lookup(const char *addr, struct sched_param *param)
 
     /* User is outside of our domain(s) -
        Do remote scheduling (default = iMIP) */
+    param->userid = userid;
     param->flags |= SCHEDTYPE_REMOTE;
 
 #ifdef WITH_DKIM
@@ -5111,22 +5112,19 @@ int caladdress_lookup(const char *addr, struct sched_param *param)
 
 #ifdef IOPTEST  /* CalConnect ioptest */
     if (!strcmp(p, "example.com")) {
-      param->userid = userid;
-      param->server = "ischedule.example.com";
-      param->port = 8008;
-      param->flags |= SCHEDTYPE_ISCHEDULE;
+	param->server = "ischedule.example.com";
+	param->port = 8008;
+	param->flags |= SCHEDTYPE_ISCHEDULE;
     }
     else if (!strcmp(p, "mysite.edu")) {
-      param->userid = userid;
-      param->server = "ischedule.mysite.edu";
-      param->port = 8080;
-      param->flags |= SCHEDTYPE_ISCHEDULE;
+	param->server = "ischedule.mysite.edu";
+	param->port = 8080;
+	param->flags |= SCHEDTYPE_ISCHEDULE;
     }
     else if (!strcmp(p, "bedework.org")) {
-      param->userid = userid;
-      param->server = "www.bedework.org";
-      param->port = 80;
-      param->flags |= SCHEDTYPE_ISCHEDULE;
+	param->server = "www.bedework.org";
+	param->port = 80;
+	param->flags |= SCHEDTYPE_ISCHEDULE;
     }
 #endif /* IOPTEST */
 
