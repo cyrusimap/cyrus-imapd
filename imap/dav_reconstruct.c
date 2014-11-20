@@ -243,6 +243,9 @@ int do_reconstruct(char *mboxname,
 	    else if (!strcmp(param->attribute, "SCHEDULE-TAG")) {
 		cdata.sched_tag = param->value;
 	    }
+	    else if (!strcmp(param->attribute, "TZ-BY-REF")) {
+		cdata.comp_flags.tzbyref = !strcasecmp(param->value, "TRUE");
+	    }
 	}
 
 	caldav_make_entry(ical, &cdata);
