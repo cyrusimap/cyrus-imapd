@@ -3430,6 +3430,11 @@ static int caldav_propfind_by_resource(void *rock, void *data)
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
     struct caldav_data *cdata = (struct caldav_data *) data;
 
+    if (sqlite3_libversion_number() < 3003008) {
+	/* Can't write to a table while a SELECT is active */
+	goto done;
+    }
+
     if (cdata->dav.imap_uid && !cdata->comp_flags.tzbyref) {
 	struct index_record record;
 	struct buf msg_buf = BUF_INITIALIZER;
