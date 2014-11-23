@@ -1012,7 +1012,7 @@ out:
      * present in body structure ? */
     mboxevent_extract_record(mboxevent, mailbox, &record);
     mboxevent_extract_mailbox(mboxevent, mailbox);
-    mboxevent_set_access(mboxevent, NULL, NULL, as->userid, as->mailbox->name);
+    mboxevent_set_access(mboxevent, NULL, NULL, as->userid, as->mailbox->name, 1);
     mboxevent_set_numunseen(mboxevent, mailbox, -1);
 
     return 0;
@@ -1124,7 +1124,7 @@ out:
      * present in body structure */
     mboxevent_extract_record(mboxevent, mailbox, &record);
     mboxevent_extract_mailbox(mboxevent, mailbox);
-    mboxevent_set_access(mboxevent, NULL, NULL, as->userid, as->mailbox->name);
+    mboxevent_set_access(mboxevent, NULL, NULL, as->userid, as->mailbox->name, 1);
     mboxevent_set_numunseen(mboxevent, mailbox, -1);
 
     return 0;
@@ -1327,7 +1327,7 @@ out:
     }
 
     mboxevent_extract_mailbox(mboxevent, as->mailbox);
-    mboxevent_set_access(mboxevent, NULL, NULL, as->userid, as->mailbox->name);
+    mboxevent_set_access(mboxevent, NULL, NULL, as->userid, as->mailbox->name, 0);
     mboxevent_set_numunseen(mboxevent, as->mailbox, -1);
 
     return 0;

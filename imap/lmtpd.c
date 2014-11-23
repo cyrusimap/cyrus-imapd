@@ -814,6 +814,9 @@ int deliver_local(deliver_data_t *mydata, const strarray_t *flags,
 
 	    *tail = '\0';
 
+	    // However, the rest of this stuff knows little about what authn/authz understands
+	    mboxname_hiersep_tointernal(&lmtpd_namespace, username, config_virtdomains ? strcspn(username, "@") : 0);
+
 	    ret = deliver_mailbox(md->f, mydata->content, mydata->stage,
 				  md->size, flags,
 				  (char *) username, authstate, md->id,
@@ -909,6 +912,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    }
 	}
 
+	mboxname_hiersep_toexternal(&lmtpd_namespace, userbuf, config_virtdomains ? strcspn(userbuf, "@") : 0);
 	telemetry_rusage(userbuf);
 
 	msg_setrcpt_status(msgdata, n, r);

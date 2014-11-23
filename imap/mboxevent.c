@@ -618,7 +618,8 @@ void mboxevent_add_flag(struct mboxevent *event, const char *flag)
 
 EXPORTED void mboxevent_set_access(struct mboxevent *event,
 				   const char *serveraddr, const char *clientaddr,
-				   const char *userid, const char *mailboxname)
+				   const char *userid, const char *mailboxname,
+				   const int ext_name)
 {
     char url[MAX_MAILBOX_PATH+1];
     struct imapurl imapurl;
@@ -648,7 +649,7 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
 
 	    /* translate any separators in user */
 	    userbuf = (char *)mboxname_to_userid(mailboxname);
-	    if (userbuf != NULL)
+	    if (userbuf != NULL && ext_name)
 		mboxname_hiersep_toexternal(&namespace, userbuf,
 					    config_virtdomains ? strcspn(userbuf, "@") : 0);
 
@@ -673,7 +674,7 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
     if (userid && mboxevent_expected_param(event->type, EVENT_USER)) {
 	/* translate any separators in user */
 	userbuf = xstrdup(userid);
-	if (userbuf != NULL)
+	if (userbuf != NULL && ext_name)
 	    mboxname_hiersep_toexternal(&namespace, userbuf,
 				    config_virtdomains ? strcspn(userbuf, "@") : 0);
 
@@ -1314,7 +1315,8 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event __attribute__((unused
 				   const char *serveraddr __attribute__((unused)),
 				   const char *clientaddr __attribute__((unused)),
 				   const char *userid __attribute__((unused)),
-				   const char *mailboxname __attribute__((unused)))
+				   const char *mailboxname __attribute__((unused)),
+				   const int ext_name __attribute__((unused)))
 {
 }
 

@@ -976,7 +976,7 @@ int service_main(int argc __attribute__((unused)),
     /* send a Logout event notification */
     if ((mboxevent = mboxevent_new(EVENT_LOGOUT))) {
 	mboxevent_set_access(mboxevent, saslprops.iplocalport,
-			     saslprops.ipremoteport, imapd_userid, NULL);
+			     saslprops.ipremoteport, imapd_userid, NULL, 1);
 
 	mboxevent_notify(mboxevent);
 	mboxevent_free(&mboxevent);
@@ -1606,6 +1606,7 @@ static void cmdloop(void)
 		// Translate the name to external
 		mboxname_hiersep_toexternal(&imapd_namespace, imapd_userid, config_virtdomains ? strcspn(imapd_userid, "@") : 0);
 		telemetry_rusage(imapd_userid);
+		mboxname_hiersep_tointernal(&imapd_namespace, imapd_userid, config_virtdomains ? strcspn(imapd_userid, "@") : 0);
 
 		return;
 	    }
@@ -2312,7 +2313,7 @@ static void authentication_success(void)
     /* send a Login event notification */
     if ((mboxevent = mboxevent_new(EVENT_LOGIN))) {
 	mboxevent_set_access(mboxevent, saslprops.iplocalport,
-			     saslprops.ipremoteport, imapd_userid, NULL);
+			     saslprops.ipremoteport, imapd_userid, NULL, 1);
 
 	mboxevent_notify(mboxevent);
 	mboxevent_free(&mboxevent);

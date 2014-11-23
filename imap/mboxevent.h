@@ -223,7 +223,7 @@ void mboxevent_add_flag(struct mboxevent *event, const char *flag);
  */
 void mboxevent_set_access(struct mboxevent *event,
                           const char *serveraddr, const char *clientaddr,
-                          const char *userid, const char *mailboxname);
+                          const char *userid, const char *mailboxname, const int ext_name);
 
 /*
  * Shortcut to setting event notification parameters
