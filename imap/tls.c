@@ -148,6 +148,10 @@ static int tls_serverengine = 0; /* server engine initialized? */
 static int tls_clientengine = 0; /* client engine initialized? */
 static int do_dump = 0;		/* actively dumping protocol? */
 
+#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
+static DH *dh_params = NULL;
+#endif
+
 
 EXPORTED int tls_enabled(void)
 {
@@ -844,7 +848,8 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 
 #if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
     /* Load DH params for DHE-* key exchanges */
-    SSL_CTX_set_tmp_dh(s_ctx, load_dh_param(server_key_file, server_cert_file));
+    dh_params = load_dh_param(server_key_file, server_cert_file);
+    SSL_CTX_set_tmp_dh(s_ctx, dh_params);
 #endif
 
 #if (OPENSSL_VERSION_NUMBER >= 0x1000103fL)
@@ -1244,14 +1249,20 @@ EXPORTED int tls_shutdown_serverengine(void)
 {
     int r;
 
-    if (tls_serverengine && sess_dbopen) {
-	r = cyrusdb_close(sessdb);
-	if (r) {
-	    syslog(LOG_ERR, "DBERROR: error closing tlsdb: %s",
-		   cyrusdb_strerror(r));
+    if (tls_serverengine) {
+	if (sess_dbopen) {
+	    r = cyrusdb_close(sessdb);
+	    if (r) {
+		syslog(LOG_ERR, "DBERROR: error closing tlsdb: %s",
+		       cyrusdb_strerror(r));
+	    }
+	    sessdb = NULL;
+	    sess_dbopen = 0;
 	}
-	sessdb = NULL;
-	sess_dbopen = 0;
+
+#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
+	if (dh_params) DH_free(dh_params);
+#endif
     }
 
     return 0;
