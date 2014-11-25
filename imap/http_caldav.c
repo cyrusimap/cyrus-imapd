@@ -1156,7 +1156,7 @@ static int caldav_delete_sched(struct transaction_t *txn,
     if (!record) {
 	/* XXX  DELETE collection - check all resources for sched objects */
     }
-    else if (cdata->sched_tag) {
+    else if (cdata->organizer) {
 	/* Scheduling object resource */
 	const char *userid, *organizer, **hdr;
 	icalcomponent *ical, *comp;
@@ -3883,7 +3883,7 @@ static int propfind_schedtag(const xmlChar *name, xmlNsPtr ns,
 {
     struct caldav_data *cdata = (struct caldav_data *) fctx->data;
 
-    if (!cdata->sched_tag) return HTTP_NOT_FOUND;
+    if (!cdata->organizer || !cdata->sched_tag) return HTTP_NOT_FOUND;
 
     /* add DQUOTEs */
     buf_reset(&fctx->buf);
