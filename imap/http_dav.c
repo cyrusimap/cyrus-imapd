@@ -517,7 +517,7 @@ int dav_check_precond(struct transaction_t *txn, const void *data,
 
 
     /* Do normal HTTP checks */
-    return check_precond(txn, data, etag, lastmod);
+    return check_precond(txn, etag, lastmod);
 }
 
 

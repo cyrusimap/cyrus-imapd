@@ -216,7 +216,7 @@ static int meth_get_isched(struct transaction_t *txn,
 
     /* Check any preconditions, including range request */
     txn->flags.ranges = 1;
-    precond = check_precond(txn, NULL, etag, lastmod);
+    precond = check_precond(txn, etag, lastmod);
 
     switch (precond) {
     case HTTP_OK:
@@ -989,7 +989,7 @@ static int meth_get_domainkey(struct transaction_t *txn,
 
     /* Check any preconditions, including range request */
     txn->flags.ranges = 1;
-    precond = check_precond(txn, NULL, buf_cstring(&txn->buf), sbuf.st_mtime);
+    precond = check_precond(txn, buf_cstring(&txn->buf), sbuf.st_mtime);
 
     switch (precond) {
     case HTTP_OK:

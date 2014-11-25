@@ -255,7 +255,7 @@ static int action_capa(struct transaction_t *txn)
 
     /* Check any preconditions, including range request */
     txn->flags.ranges = 1;
-    precond = check_precond(txn, NULL, etag, compile_time);
+    precond = check_precond(txn, etag, compile_time);
 
     switch (precond) {
     case HTTP_OK:
@@ -435,7 +435,7 @@ static int action_list(struct transaction_t *txn)
 
     /* Check any preconditions, including range request */
     txn->flags.ranges = 1;
-    precond = check_precond(txn, NULL, buf_cstring(&txn->buf), lastmod);
+    precond = check_precond(txn, buf_cstring(&txn->buf), lastmod);
 
     switch (precond) {
     case HTTP_OK:
@@ -993,7 +993,7 @@ static int action_get(struct transaction_t *txn)
 
     /* Check any preconditions, including range request */
     txn->flags.ranges = 1;
-    precond = check_precond(txn, NULL, buf_cstring(&txn->buf), lastmod);
+    precond = check_precond(txn, buf_cstring(&txn->buf), lastmod);
 
     switch (precond) {
     case HTTP_OK:
@@ -1187,7 +1187,7 @@ static int action_expand(struct transaction_t *txn)
     /* Check any preconditions, including range request */
     txn->flags.ranges = 1;
     if (lastmod <= icaltime_as_timet(changedsince)) precond = HTTP_NOT_MODIFIED;
-    else precond = check_precond(txn, NULL, buf_cstring(&txn->buf), lastmod);
+    else precond = check_precond(txn, buf_cstring(&txn->buf), lastmod);
 
     switch (precond) {
     case HTTP_OK:

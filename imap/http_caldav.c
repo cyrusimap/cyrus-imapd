@@ -1329,7 +1329,7 @@ static int dump_calendar(struct transaction_t *txn, int rights)
     /* Check any preconditions */
     sprintf(etag, "%u-%u-%u",
 	    mailbox->i.uidvalidity, mailbox->i.last_uid, mailbox->i.exists);
-    precond = caldav_check_precond(txn, NULL, etag, mailbox->index_mtime);
+    precond = check_precond(txn, etag, mailbox->index_mtime);
 
     switch (precond) {
     case HTTP_OK:
@@ -1623,7 +1623,7 @@ static int list_calendars(struct transaction_t *txn, int rights)
     etag = buf_cstring(&txn->buf);
 
     /* Check any preconditions */
-    precond = caldav_check_precond(txn, NULL, etag, lastmod);
+    precond = check_precond(txn, etag, lastmod);
 
     switch (precond) {
     case HTTP_OK:
@@ -1877,7 +1877,7 @@ static int server_info(struct transaction_t *txn)
 
     /* Check any preconditions, including range request */
     txn->flags.ranges = 1;
-    precond = check_precond(txn, NULL, etag, lastmod);
+    precond = check_precond(txn, etag, lastmod);
 
     switch (precond) {
     case HTTP_OK:
@@ -2036,7 +2036,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 		/* Resource has just had VTIMEZONEs stripped -
 		   check if conditional matches previous ETag */
 
-		if (check_precond(txn, data, cdata->sched_tag,
+		if (check_precond(txn, cdata->sched_tag,
 				  record->internaldate) == HTTP_NOT_MODIFIED) {
 		    /* Fill in previous ETag and don't return Last-Modified */
 		    txn->resp_body.etag = cdata->sched_tag;

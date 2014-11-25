@@ -427,7 +427,7 @@ extern void write_multipart_body(long code, struct transaction_t *txn,
 extern int meth_options(struct transaction_t *txn, void *params);
 extern int meth_trace(struct transaction_t *txn, void *params);
 extern int etagcmp(const char *hdr, const char *etag);
-extern int check_precond(struct transaction_t *txn, const void *data,
+extern int check_precond(struct transaction_t *txn,
 			 const char *etag, time_t lastmod);
 
 #endif /* HTTPD_H */
