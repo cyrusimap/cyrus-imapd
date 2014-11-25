@@ -250,7 +250,7 @@ static int meth_get(struct transaction_t *txn,
 
 	    etag = message_guid_encode(&record.guid);
 	    lastmod = record.internaldate;
-	    precond = check_precond(txn, NULL, etag, lastmod);
+	    precond = check_precond(txn, etag, lastmod);
 
 	    switch (precond) {
 	    case HTTP_OK:
@@ -545,7 +545,7 @@ static int list_feeds(struct transaction_t *txn)
     buf_printf(&txn->buf, "-%ld-%ld", sbuf.st_mtime, sbuf.st_size);
 
     /* Check any preconditions */
-    precond = check_precond(txn, NULL, buf_cstring(&txn->buf), lastmod);
+    precond = check_precond(txn, buf_cstring(&txn->buf), lastmod);
 
     switch (precond) {
     case HTTP_OK:
@@ -731,7 +731,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     lastmod = mailbox->i.last_appenddate;
     sprintf(etag, "%u-%u-%u",
 	    mailbox->i.uidvalidity, mailbox->i.last_uid, mailbox->i.exists);
-    precond = check_precond(txn, NULL, etag, lastmod);
+    precond = check_precond(txn, etag, lastmod);
 
     switch (precond) {
     case HTTP_OK:

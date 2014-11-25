@@ -3187,8 +3187,7 @@ static int parse_ranges(const char *hdr, unsigned long len,
  * Interaction is complex and is documented in RFC 7232
  */
 EXPORTED int check_precond(struct transaction_t *txn,
-		  const void *data __attribute__((unused)),
-		  const char *etag, time_t lastmod)
+			   const char *etag, time_t lastmod)
 {
     hdrcache_t hdrcache = txn->req_hdrs;
     const char **hdr;
@@ -3330,7 +3329,7 @@ static int list_well_known(struct transaction_t *txn)
 
     /* Check any preconditions, including range request */
     txn->flags.ranges = 1;
-    precond = check_precond(txn, NULL, buf_cstring(&txn->buf), sbuf.st_mtime);
+    precond = check_precond(txn, buf_cstring(&txn->buf), sbuf.st_mtime);
 
     switch (precond) {
     case HTTP_OK:
@@ -3484,7 +3483,7 @@ static int meth_get(struct transaction_t *txn,
 
     /* Check any preconditions, including range request */
     txn->flags.ranges = 1;
-    precond = check_precond(txn, NULL, buf_cstring(&txn->buf), sbuf.st_mtime);
+    precond = check_precond(txn, buf_cstring(&txn->buf), sbuf.st_mtime);
 
     switch (precond) {
     case HTTP_OK:
