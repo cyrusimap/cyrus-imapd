@@ -1037,6 +1037,13 @@ static int caldav_check_precond(struct transaction_t *txn, const void *data,
 
     /* Do normal WebDAV/HTTP checks (primarily for lock-token via If header) */
     precond = dav_check_precond(txn, data, etag, lastmod);
+    if (precond == HTTP_PRECOND_FAILED &&
+	cdata->comp_flags.tzbyref && !cdata->organizer && cdata->sched_tag) {
+	/* Resource has just had VTIMEZONEs stripped -
+	   check if conditional matches previous ETag */
+
+	precond = check_precond(txn, cdata->sched_tag, lastmod);
+    }
     if (!(precond == HTTP_OK || precond == HTTP_PARTIAL)) return precond;
 
     /* Per RFC 6638, check Schedule-Tag */
@@ -2026,13 +2033,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 	int ret = 0;
 
 	if (cdata->comp_flags.tzbyref) {
-	    int unchanged_flag = -1;
-
-	    mailbox_user_flag(mailbox, DFLAG_UNCHANGED, &unchanged_flag);
-
-	    if ((unchanged_flag >= 0) &&
-		record->user_flags[unchanged_flag / 32] &
-		(1 << (unchanged_flag & 31))) {
+	    if (!cdata->organizer && cdata->sched_tag) {
 		/* Resource has just had VTIMEZONEs stripped -
 		   check if conditional matches previous ETag */
 
@@ -3093,8 +3094,8 @@ static int caldav_propfind_by_resource(void *rock, void *data)
 
 	    icalcomponent_free(ical);
 
-	    fctx->lookup_resource(fctx->davdb, fctx->mailbox->name,
-				  cdata->dav.resource, 0, &data);
+	    caldav_lookup_resource(fctx->davdb, fctx->mailbox->name,
+				   cdata->dav.resource, 0, &cdata);
 	}
 
 	fctx->record = NULL;
