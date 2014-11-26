@@ -5184,12 +5184,9 @@ static void busytime_query_remote(const char *server __attribute__((unused)),
     }
 
     if (remote->flags == SCHEDTYPE_REMOTE) {
-	/* Use iMIP */
-
-	r = imip_send(rrock->ical);
-
-	if (!r) status = REQSTAT_SENT;
-	else status = REQSTAT_TEMPFAIL;
+	/* Use iMIP -
+	   don't bother sending, its not very useful and not well supported */
+	status = REQSTAT_TEMPFAIL;
     }
     else {
 	/* Use iSchedule */
