@@ -321,6 +321,9 @@ static const struct precond_t {
     /* TZ by Ref (draft-ietf-tzdist-caldav-timezone-ref) preconditions */
     { "valid-timezone", NS_CALDAV },
 
+    /* Managed Attachments (draft-daboo-caldav-attachments) preconditions */
+    { "valid-managed-id", NS_CALDAV },
+
     /* CalDAV Scheduling (RFC 6638) preconditions */
     { "valid-scheduling-message", NS_CALDAV },
     { "valid-organizer", NS_CALDAV },
@@ -1237,7 +1240,7 @@ int proppatch_restype(xmlNodePtr prop, unsigned set,
 	    if (cur->type != XML_ELEMENT_NODE) continue;
 	    /* Make sure we have valid resourcetypes for the collection */
 	    if (xmlStrcmp(cur->name, BAD_CAST "collection") &&
-		xmlStrcmp(cur->name, BAD_CAST coltype)) break;
+		(!coltype || xmlStrcmp(cur->name, BAD_CAST coltype))) break;
 	}
 
 	if (!cur) {
@@ -3276,7 +3279,7 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 {
     struct meth_params *gparams = (struct meth_params *) params;
     const char **hdr;
-    struct mime_type_t *mime;
+    struct mime_type_t *mime = NULL;
     int ret = 0, r, precond, rights;
     const char *msg_base = NULL, *data = NULL;
     unsigned long msg_size = 0, datalen = 0, offset = 0;
@@ -3301,12 +3304,14 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 	return HTTP_NO_CONTENT;
     }
 
-    /* Check requested MIME type:
-       1st entry in gparams->mime_types array MUST be default MIME type */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Accept")))
-	mime = get_accept_type(hdr, gparams->mime_types);
-    else mime = gparams->mime_types;
-    if (!mime) return HTTP_NOT_ACCEPTABLE;
+    if (gparams->mime_types) {
+	/* Check requested MIME type:
+	   1st entry in gparams->mime_types array MUST be default MIME type */
+	if ((hdr = spool_getheader(txn->req_hdrs, "Accept")))
+	    mime = get_accept_type(hdr, gparams->mime_types);
+	else mime = gparams->mime_types;
+	if (!mime) return HTTP_NOT_ACCEPTABLE;
+    }
 
     /* Locate the mailbox */
     if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
@@ -3414,8 +3419,10 @@ int meth_get_dav(struct transaction_t *txn, void *params)
     }
 
     if (record.uid) {
-	txn->flags.vary |= VARY_ACCEPT;
-	resp_body->type = mime->content_type;
+	if (mime) {
+	    txn->flags.vary |= VARY_ACCEPT;
+	    resp_body->type = mime->content_type;
+	}
 
 	/* Resource length doesn't include RFC 5322 header */
 	offset = record.header_size;
@@ -6003,6 +6010,10 @@ int dav_store_resource(struct transaction_t *txn,
 
     if ((hdr = spool_getheader_last(hdrcache, "Content-Disposition"))) {
 	fprintf(f, "Content-Disposition: %s\r\n", hdr);
+    }
+
+    if ((hdr = spool_getheader_last(hdrcache, "Content-Description"))) {
+	fprintf(f, "Content-Description: %s\r\n", hdr);
     }
 
     fprintf(f, "Content-Length: %u\r\n", (unsigned) datalen);
