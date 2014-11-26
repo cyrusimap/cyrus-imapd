@@ -353,12 +353,12 @@ static int propfind_rscaleset(const xmlChar *name, xmlNsPtr ns,
 			      struct propfind_ctx *fctx, xmlNodePtr resp,
 			      struct propstat propstat[], void *rock);
 
-static int report_cal_query(struct transaction_t *txn, xmlNodePtr inroot,
-			    struct propfind_ctx *fctx);
-static int report_cal_multiget(struct transaction_t *txn, xmlNodePtr inroot,
-			       struct propfind_ctx *fctx);
-static int report_fb_query(struct transaction_t *txn, xmlNodePtr inroot,
-			   struct propfind_ctx *fctx);
+static int report_cal_query(struct transaction_t *txn,
+			    struct meth_params *rparams,
+			    xmlNodePtr inroot, struct propfind_ctx *fctx);
+static int report_fb_query(struct transaction_t *txn,
+			   struct meth_params *rparams,
+			   xmlNodePtr inroot, struct propfind_ctx *fctx);
 
 static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			  struct mailbox *mailbox, const char *resource,
@@ -422,7 +422,7 @@ static const struct report_type_t caldav_reports[] = {
     /* CalDAV (RFC 4791) REPORTs */
     { "calendar-query", NS_CALDAV, "multistatus", &report_cal_query,
       DACL_READ, REPORT_NEED_MBOX | REPORT_ALLOW_PROPS },
-    { "calendar-multiget", NS_CALDAV, "multistatus", &report_cal_multiget,
+    { "calendar-multiget", NS_CALDAV, "multistatus", &report_multiget,
       DACL_READ, REPORT_NEED_MBOX | REPORT_ALLOW_PROPS },
     { "free-busy-query", NS_CALDAV, NULL, &report_fb_query,
       DACL_READFB, REPORT_NEED_MBOX },
@@ -4144,6 +4144,7 @@ static int propfind_rscaleset(const xmlChar *name, xmlNsPtr ns,
 
 
 static int report_cal_query(struct transaction_t *txn,
+			    struct meth_params *rparams __attribute__((unused)),
 			    xmlNodePtr inroot, struct propfind_ctx *fctx)
 {
     int ret = 0;
@@ -4228,88 +4229,6 @@ static int report_cal_query(struct transaction_t *txn,
 
     /* Expanded recurrences still populate busytime array */
     if (calfilter.freebusy.fb) free(calfilter.freebusy.fb);
-
-    return (ret ? ret : HTTP_MULTI_STATUS);
-}
-
-
-static int report_cal_multiget(struct transaction_t *txn,
-			       xmlNodePtr inroot, struct propfind_ctx *fctx)
-{
-    int r, ret = 0;
-    struct mailbox *mailbox = NULL;
-    xmlNodePtr node;
-    struct buf uri = BUF_INITIALIZER;
-
-    /* Get props for each href */
-    for (node = inroot->children; node; node = node->next) {
-	if ((node->type == XML_ELEMENT_NODE) &&
-	    !xmlStrcmp(node->name, BAD_CAST "href")) {
-	    xmlChar *href = xmlNodeListGetString(inroot->doc, node->children, 1);
-	    int len = xmlStrlen(href);
-	    struct request_target_t tgt;
-	    struct caldav_data *cdata;
-
-	    buf_ensure(&uri, len);
-	    xmlURIUnescapeString((const char *) href, len, uri.s);
-	    xmlFree(href);
-
-	    /* Parse the path */
-	    memset(&tgt, 0, sizeof(struct request_target_t));
-	    tgt.namespace = URL_NS_CALENDAR;
-
-	    if ((r = caldav_parse_path(uri.s, &tgt, &fctx->err->desc))) {
-		ret = r;
-		goto done;
-	    }
-
-	    fctx->req_tgt = &tgt;
-
-	    /* Check if we already have this mailbox open */
-	    if (!mailbox || strcmp(mailbox->name, tgt.mboxname)) {
-		if (mailbox) mailbox_close(&mailbox);
-
-		/* Open mailbox for reading */
-		r = mailbox_open_irl(tgt.mboxname, &mailbox);
-		if (r && r != IMAP_MAILBOX_NONEXISTENT) {
-		    syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-			   tgt.mboxname, error_message(r));
-		    txn->error.desc = error_message(r);
-		    ret = HTTP_SERVER_ERROR;
-		    goto done;
-		}
-
-		fctx->mailbox = mailbox;
-	    }
-
-	    if (!fctx->mailbox || !tgt.resource) {
-		/* Add response for missing target */
-		xml_add_response(fctx, HTTP_NOT_FOUND, 0);
-		continue;
-	    }
-
-	    /* Open the DAV DB corresponding to the mailbox */
-	    fctx->davdb = my_caldav_open(fctx->mailbox);
-
-	    /* Find message UID for the resource */
-	    r = caldav_lookup_resource(fctx->davdb,
-				   tgt.mboxname, tgt.resource, 0, &cdata);
-	    if (r) {
-		ret = HTTP_NOT_FOUND;
-		goto done;
-	    }
-	    cdata->dav.resource = tgt.resource;
-	    /* XXX  Check errors */
-
-	    fctx->proc_by_resource(fctx, cdata);
-
-	    my_caldav_close(fctx->davdb);
-	}
-    }
-
-  done:
-    mailbox_close(&mailbox);
-    buf_free(&uri);
 
     return (ret ? ret : HTTP_MULTI_STATUS);
 }
@@ -4760,6 +4679,7 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
 
 
 static int report_fb_query(struct transaction_t *txn,
+			   struct meth_params *rparams __attribute__((unused)),
 			   xmlNodePtr inroot, struct propfind_ctx *fctx)
 {
     int ret = 0;

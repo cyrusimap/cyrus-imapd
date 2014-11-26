@@ -439,8 +439,10 @@ struct put_params {
 };
 
 /* meth_report() parameters */
-typedef int (*report_proc_t)(struct transaction_t *txn, xmlNodePtr inroot,
-			     struct propfind_ctx *fctx);
+struct meth_params;
+typedef int (*report_proc_t)(struct transaction_t *txn,
+			     struct meth_params *rparams,
+			     xmlNodePtr inroot, struct propfind_ctx *fctx);
 
 struct report_type_t {
     const char *name;			/* report name */
@@ -481,12 +483,14 @@ struct meth_params {
     const struct report_type_t *reports;/* array of reports & proc functions */
 };
 
-int report_expand_prop(struct transaction_t *txn, xmlNodePtr inroot,
-		       struct propfind_ctx *fctx);
-int report_acl_prin_prop(struct transaction_t *txn, xmlNodePtr inroot,
-			 struct propfind_ctx *fctx);
-int report_sync_col(struct transaction_t *txn, xmlNodePtr inroot,
-		    struct propfind_ctx *fctx);
+int report_expand_prop(struct transaction_t *txn, struct meth_params *rparams,
+		       xmlNodePtr inroot, struct propfind_ctx *fctx);
+int report_acl_prin_prop(struct transaction_t *txn, struct meth_params *rparams,
+			 xmlNodePtr inroot, struct propfind_ctx *fctx);
+int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
+		    xmlNodePtr inroot, struct propfind_ctx *fctx);
+int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
+		    xmlNodePtr inroot, struct propfind_ctx *fctx);
 
 
 int dav_check_precond(struct transaction_t *txn, const void *data,

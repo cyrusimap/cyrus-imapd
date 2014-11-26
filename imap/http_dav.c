@@ -126,9 +126,11 @@ static int propfind_principalurl(const xmlChar *name, xmlNsPtr ns,
 				 struct propstat propstat[], void *rock);
 
 static int report_prin_prop_search(struct transaction_t *txn,
+				   struct meth_params *rparams,
 				   xmlNodePtr inroot,
 				   struct propfind_ctx *fctx);
 static int report_prin_search_prop_set(struct transaction_t *txn,
+				       struct meth_params *rparams,
 				       xmlNodePtr inroot,
 				       struct propfind_ctx *fctx);
 
@@ -5033,8 +5035,88 @@ static int map_modseq_cmp(const struct index_map *m1,
 }
 
 
+/* CALDAV:calendar-multiget/CARDDAV:addressbook-multiget REPORT */
+int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
+		    xmlNodePtr inroot, struct propfind_ctx *fctx)
+{
+    int r, ret = 0;
+    struct mailbox *mailbox = NULL;
+    xmlNodePtr node;
+    struct buf uri = BUF_INITIALIZER;
+
+    /* Get props for each href */
+    for (node = inroot->children; node; node = node->next) {
+	if ((node->type == XML_ELEMENT_NODE) &&
+	    !xmlStrcmp(node->name, BAD_CAST "href")) {
+	    xmlChar *href = xmlNodeListGetString(inroot->doc, node->children, 1);
+	    int len = xmlStrlen(href);
+	    struct request_target_t tgt;
+	    struct dav_data *ddata;
+
+	    buf_ensure(&uri, len);
+	    xmlURIUnescapeString((const char *) href, len, uri.s);
+	    xmlFree(href);
+
+	    /* Parse the path */
+	    memset(&tgt, 0, sizeof(struct request_target_t));
+	    tgt.namespace = txn->req_tgt.namespace;
+
+	    if ((r = rparams->parse_path(uri.s, &tgt, &fctx->err->desc))) {
+		ret = r;
+		goto done;
+	    }
+
+	    fctx->req_tgt = &tgt;
+
+	    /* Check if we already have this mailbox open */
+	    if (!mailbox || strcmp(mailbox->name, tgt.mboxname)) {
+		if (mailbox) mailbox_close(&mailbox);
+
+		/* Open mailbox for reading */
+		r = mailbox_open_irl(tgt.mboxname, &mailbox);
+		if (r && r != IMAP_MAILBOX_NONEXISTENT) {
+		    syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+			   tgt.mboxname, error_message(r));
+		    txn->error.desc = error_message(r);
+		    ret = HTTP_SERVER_ERROR;
+		    goto done;
+		}
+
+		fctx->mailbox = mailbox;
+	    }
+
+	    if (!fctx->mailbox || !tgt.resource) {
+		/* Add response for missing target */
+		xml_add_response(fctx, HTTP_NOT_FOUND, 0);
+		continue;
+	    }
+
+	    /* Open the DAV DB corresponding to the mailbox */
+	    fctx->davdb = rparams->davdb.open_db(fctx->mailbox);
+
+	    /* Find message UID for the resource */
+	    rparams->davdb.lookup_resource(fctx->davdb, tgt.mboxname,
+					   tgt.resource, 0, (void **) &ddata);
+	    ddata->resource = tgt.resource;
+	    /* XXX  Check errors */
+
+	    fctx->proc_by_resource(fctx, ddata);
+
+	    rparams->davdb.close_db(fctx->davdb);
+	}
+    }
+
+  done:
+    mailbox_close(&mailbox);
+    buf_free(&uri);
+
+    return (ret ? ret : HTTP_MULTI_STATUS);
+}
+
+
 /* DAV:sync-collection REPORT */
 int report_sync_col(struct transaction_t *txn,
+		    struct meth_params *rparams __attribute__((unused)),
 		    xmlNodePtr inroot, struct propfind_ctx *fctx)
 {
     int ret = 0, r, i, unbind_flag = -1, unchanged_flag = -1;
@@ -5400,6 +5482,7 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
 
 /* DAV:expand-property REPORT */
 int report_expand_prop(struct transaction_t *txn __attribute__((unused)),
+		       struct meth_params *rparams __attribute__((unused)),
 		       xmlNodePtr inroot, struct propfind_ctx *fctx)
 {
     int ret = expand_property(inroot, fctx, NULL, NULL, fctx->lprops,
@@ -5410,8 +5493,9 @@ int report_expand_prop(struct transaction_t *txn __attribute__((unused)),
 
 
 /* DAV:acl-principal-prop-set REPORT */
-int report_acl_prin_prop(struct transaction_t *txn, xmlNodePtr inroot,
-			 struct propfind_ctx *fctx)
+int report_acl_prin_prop(struct transaction_t *txn,
+			 struct meth_params *rparams __attribute__((unused)),
+			 xmlNodePtr inroot, struct propfind_ctx *fctx)
 {
     int ret = 0, r;
     struct request_target_t req_tgt;
@@ -5575,6 +5659,7 @@ static const struct prop_entry prin_search_props[] = {
 
 /* DAV:principal-property-search REPORT */
 static int report_prin_prop_search(struct transaction_t *txn,
+				   struct meth_params *rparams __attribute__((unused)),
 				   xmlNodePtr inroot,
 				   struct propfind_ctx *fctx)
 {
@@ -5699,6 +5784,7 @@ static int report_prin_prop_search(struct transaction_t *txn,
 
 /* DAV:principal-search-property-set REPORT */
 static int report_prin_search_prop_set(struct transaction_t *txn,
+				       struct meth_params *rparams __attribute__((unused)),
 				       xmlNodePtr inroot,
 				       struct propfind_ctx *fctx)
 {
@@ -5918,7 +6004,7 @@ int meth_report(struct transaction_t *txn, void *params)
     }
 
     /* Process the requested report */
-    if (!ret) ret = (*report->proc)(txn, inroot, &fctx);
+    if (!ret) ret = (*report->proc)(txn, rparams, inroot, &fctx);
 
     /* Output the XML response */
     if (outroot) {
