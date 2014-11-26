@@ -329,7 +329,7 @@ static struct carddav_db *my_carddav_open(struct mailbox *mailbox)
 	return auth_carddavdb;
     }
     else {
-	return carddav_open_mailbox(mailbox, CALDAV_CREATE);
+	return carddav_open_mailbox(mailbox, CARDDAV_CREATE);
     }
 }
 
@@ -832,13 +832,13 @@ static int report_card_query(struct transaction_t *txn,
     }
 
     if (fctx->depth++ > 0) {
-	/* Calendar collection(s) */
+	/* Addressbook collection(s) */
 	if (txn->req_tgt.collection) {
-	    /* Add response for target calendar collection */
+	    /* Add response for target addressbook collection */
 	    propfind_by_collection(txn->req_tgt.mboxname, 0, 0, fctx);
 	}
 	else {
-	    /* Add responses for all contained calendar collections */
+	    /* Add responses for all contained addressbook collections */
 	    strlcat(txn->req_tgt.mboxname, ".%", sizeof(txn->req_tgt.mboxname));
 	    mboxlist_findall(NULL,  /* internal namespace */
 			     txn->req_tgt.mboxname, 1, httpd_userid, 
