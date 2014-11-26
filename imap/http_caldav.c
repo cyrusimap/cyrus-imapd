@@ -4937,7 +4937,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     spool_cache_header(xstrdup("Content-Type"),
 		       buf_release(&txn->buf), txn->req_hdrs);
 
-    buf_printf(&txn->buf, "inline;\r\n\tfilename=\"%s\"", resource);
+    buf_printf(&txn->buf, "attachment;\r\n\tfilename=\"%s\"", resource);
     if (sched_tag) buf_printf(&txn->buf, ";\r\n\tschedule-tag=%s", sched_tag);    
     if (tzbyref) buf_printf(&txn->buf, ";\r\n\ttz-by-ref=true");
     spool_cache_header(xstrdup("Content-Disposition"),
@@ -5145,7 +5145,7 @@ static int imip_send(icalcomponent *ical)
 	    icalproperty_method_to_string(meth),
 	    icalcomponent_kind_to_string(kind));
 
-    fputs("Content-Disposition: inline\r\n", sm);
+    fputs("Content-Disposition: attachment\r\n", sm);
 
     fputs("MIME-Version: 1.0\r\n", sm);
     fputs("\r\n", sm);

@@ -961,7 +961,7 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
     spool_cache_header(xstrdup("Content-Type"),
 		       buf_release(&txn->buf), txn->req_hdrs);
 
-    buf_printf(&txn->buf, "inline;\r\n\tfilename=\"%s\"", resource);
+    buf_printf(&txn->buf, "attachment;\r\n\tfilename=\"%s\"", resource);
     spool_cache_header(xstrdup("Content-Disposition"),
 		       buf_release(&txn->buf), txn->req_hdrs);
 
