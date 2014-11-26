@@ -1974,8 +1974,7 @@ void response_header(long code, struct transaction_t *txn)
 			(ALLOW_CAL_AVAIL | ALLOW_CAL_SCHED)) {
 			if ((hdr = spool_getheader(txn->req_hdrs, "User-Agent"))
 			    && strstr(hdr[0], "CalendarAgent/")) {
-			    prot_printf(httpd_out,
-					"DAV: inbox-availability\r\n");
+			    prot_puts(httpd_out, "DAV: inbox-availability\r\n");
 			}
 		    }
 		}
