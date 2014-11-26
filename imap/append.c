@@ -153,24 +153,51 @@ done:
  *
  * On success, the struct pointed to by 'as' is set up.
  *
+ * When you commit or abort, the mailbox is closed
  */
 int append_setup(struct appendstate *as, const char *name,
 		 const char *userid, struct auth_state *auth_state,
 		 long aclcheck, quota_t quotacheck)
 {
     int r;
+    struct mailbox *mailbox = NULL;
+
+    r = mailbox_open_iwl(name, &mailbox);
+    if (r) return r;
+
+    r = append_setup_mbox(as, mailbox,
+			  userid, auth_state, aclcheck, quotacheck);
+    if (r) mailbox_close(&mailbox);
+    else as->close_mailbox_when_done = 1;
+
+    return r;
+}
+
+
+/*
+ * Setup for append with an existing mailbox
+ *
+ * Same as append_setup(), but when you commit,
+ * the mailbox remains open and locked.
+ *
+ * Requires as write locked mailbox (of course)
+ */
+int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
+		      const char *userid, struct auth_state *auth_state,
+		      long aclcheck, quota_t quotacheck)
+{
+    int r;
     struct quota q;
 
-    as->mailbox = NULL;
-    r = mailbox_open_iwl(name, &as->mailbox);
-    if (r) return r;
+    memset(as, 0, sizeof(struct appendstate));
+
+    as->mailbox = mailbox;
 
     as->myrights = cyrus_acl_myrights(auth_state, as->mailbox->acl);
 
     if ((as->myrights & aclcheck) != aclcheck) {
 	r = (as->myrights & ACL_LOOKUP) ?
 	  IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
-	mailbox_close(&as->mailbox);
 	return r;
     }
 
@@ -184,10 +211,7 @@ int append_setup(struct appendstate *as, const char *name,
     }
     else if (r == IMAP_QUOTAROOT_NONEXISTENT) r = 0;
 
-    if (r) {
-	mailbox_close(&as->mailbox);
-	return r;
-    }
+    if (r) return r;
 
     if (userid) {
 	strlcpy(as->userid, userid, sizeof(as->userid));
@@ -197,10 +221,7 @@ int append_setup(struct appendstate *as, const char *name,
 
     /* we'll need the cache file open */
     r = mailbox_open_cache(as->mailbox);
-    if (r) {
-	mailbox_close(&as->mailbox);
-	return r;
-    }
+    if (r) return r;
 
     /* initialize seen list creator */
     as->internalseen = mailbox_internal_seen(as->mailbox, as->userid);
@@ -255,7 +276,7 @@ int append_commit(struct appendstate *as,
     if (mailboxptr) {
 	*mailboxptr = as->mailbox;
     }
-    else {
+    else if (as->close_mailbox_when_done) {
 	mailbox_close(&as->mailbox);
     }
 
@@ -275,7 +296,7 @@ int append_abort(struct appendstate *as)
     /* XXX - clean up neatly so we don't crash and burn here... */
 
     /* close mailbox */
-    mailbox_close(&as->mailbox);
+    if (as->close_mailbox_when_done) mailbox_close(&as->mailbox);
 
     seqset_free(as->seen_seq);
 

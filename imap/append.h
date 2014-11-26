@@ -72,6 +72,8 @@ struct copymsg {
 struct appendstate {
     /* mailbox we're appending to */
     struct mailbox *mailbox;
+    /* do we own it? */
+    int close_mailbox_when_done:1;
     int myrights;
     char userid[MAX_MAILBOX_BUFFER];
 
@@ -99,6 +101,9 @@ extern int append_check(const char *name,
 extern int append_setup(struct appendstate *as, const char *name,
 			const char *userid, struct auth_state *auth_state,
 			long aclcheck, quota_t quotacheck);
+extern int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
+			     const char *userid, struct auth_state *auth_state,
+			     long aclcheck, quota_t quotacheck);
 
 extern int append_commit(struct appendstate *as,
 			 quota_t quotacheck,
