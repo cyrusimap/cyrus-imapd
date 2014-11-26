@@ -390,11 +390,9 @@ typedef int (*acl_proc_t)(struct transaction_t *txn, xmlNodePtr priv,
 			  int *rights);
 
 /* Function to process and COPY a resource */
-typedef int (*copy_proc_t)(struct transaction_t *txn,
-			   struct mailbox *src_mbox, struct index_record *src_rec,
+typedef int (*copy_proc_t)(struct transaction_t *txn, void *obj,
 			   struct mailbox *dest_mbox, const char *dest_rsrc,
-			   void *dest_davdb,
-			   unsigned overwrite, unsigned flags);
+			   void *dest_davdb, unsigned flags);
 
 /* Function to do special processing for DELETE method (optional) */
 typedef int (*delete_proc_t)(struct transaction_t *txn, struct mailbox *mailbox,
@@ -463,8 +461,7 @@ enum {
 
 /* Overwrite flags */
 enum {
-    OVERWRITE_CHECK = -1,
-    OVERWRITE_NO,
+    OVERWRITE_NO = 0,
     OVERWRITE_YES
 };
 

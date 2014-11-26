@@ -513,6 +513,7 @@ extern unsigned mailbox_count_unseen(struct mailbox *mailbox);
 
 /* index locking operations */
 extern int mailbox_lock_index(struct mailbox *mailbox, int locktype);
+extern int mailbox_index_islocked(struct mailbox *mailbox, int write);
 
 extern int mailbox_expunge_cleanup(struct mailbox *mailbox, time_t expunge_mark,
 				   unsigned *ndeleted);

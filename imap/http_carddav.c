@@ -95,11 +95,9 @@ static void my_carddav_shutdown(void);
 static int carddav_parse_path(const char *path,
 			      struct request_target_t *tgt, const char **errstr);
 
-static int carddav_copy(struct transaction_t *txn,
-			struct mailbox *src_mbox, struct index_record *src_rec,
+static int carddav_copy(struct transaction_t *txn, void *obj,
 			struct mailbox *dest_mbox, const char *dest_rsrc,
-			struct carddav_db *dest_davdb,
-			unsigned overwrite, unsigned flags);
+			struct carddav_db *dest_davdb, unsigned flags);
 static int carddav_put(struct transaction_t *txn, 
 		       struct mime_type_t *mime,
 		       struct mailbox *mailbox,
@@ -126,8 +124,7 @@ static int report_card_multiget(struct transaction_t *txn, xmlNodePtr inroot,
 
 static int store_resource(struct transaction_t *txn, struct vparse_card *vcard,
 			  struct mailbox *mailbox, const char *resource,
-			  struct carddav_db *carddavdb, int overwrite,
-			  unsigned flags);
+			  struct carddav_db *carddavdb, unsigned flags);
 
 static struct vparse_state *vcard_string_as_vparser(const char *str) {
     struct vparse_state *vparser;
@@ -574,35 +571,22 @@ static int carddav_parse_path(const char *path,
  *   CARDDAV:addressbook-collection-location-ok
  *   CARDDAV:max-resource-size
  */
-static int carddav_copy(struct transaction_t *txn,
-			struct mailbox *src_mbox, struct index_record *src_rec,
+static int carddav_copy(struct transaction_t *txn, void *obj,
 			struct mailbox *dest_mbox, const char *dest_rsrc,
-			struct carddav_db *dest_davdb,
-			unsigned overwrite, unsigned flags)
+			struct carddav_db *dest_davdb, unsigned flags)
 {
     int r;
-    struct buf msg_buf = BUF_INITIALIZER;
-    struct vparse_state *vparser;
+    struct vparse_state *vparser = (struct vparse_state *) obj;
 
-    /* Load message containing the resource and parse vCard data */
-    r = mailbox_map_record(src_mbox, src_rec, &msg_buf);
-    if (r) return r;
-    vparser = vcard_string_as_vparser(buf_base(&msg_buf) + src_rec->header_size);
-    buf_free(&msg_buf);
 
     if (!vparser || !vparser->card || !vparser->card->objects) {
 	txn->error.precond = CARDDAV_VALID_DATA;
 	return HTTP_FORBIDDEN;
     }
 
-    /* Finished our initial read of source mailbox */
-    mailbox_unlock_index(src_mbox, NULL);
-
     /* Store source resource at destination */
-    r = store_resource(txn, vparser->card->objects, dest_mbox, dest_rsrc, dest_davdb,
-			 overwrite, flags);
-
-    free_vparser(vparser);
+    r = store_resource(txn, vparser->card->objects,
+			 dest_mbox, dest_rsrc, dest_davdb, flags);
 
     return r;
 }
@@ -637,8 +621,8 @@ static int carddav_put(struct transaction_t *txn,
     }
 
     /* Store resource at target */
-    ret = store_resource(txn, vparser->card->objects, mailbox, txn->req_tgt.resource,
-			 davdb, OVERWRITE_CHECK, flags);
+    ret = store_resource(txn, vparser->card->objects, mailbox,
+			 txn->req_tgt.resource, davdb, flags);
 
     if (flags & PREFER_REP) {
 	struct resp_body_t *resp_body = &txn->resp_body;
@@ -952,8 +936,7 @@ static int report_card_multiget(struct transaction_t *txn,
 /* Store the vCard data in the specified addressbook/resource */
 static int store_resource(struct transaction_t *txn, struct vparse_card *vcard,
 			  struct mailbox *mailbox, const char *resource,
-			  struct carddav_db *carddavdb, int overwrite,
-			  unsigned flags)
+			  struct carddav_db *carddavdb, unsigned flags)
 {
     struct vparse_entry *ventry;
     struct carddav_data *cdata;
@@ -1011,15 +994,6 @@ static int store_resource(struct transaction_t *txn, struct vparse_card *vcard,
 	/* Fetch index record for the resource */
 	oldrecord = &record;
 	mailbox_find_index_record(mailbox, cdata->dav.imap_uid, oldrecord);
-
-	if (overwrite == OVERWRITE_CHECK) {
-	    /* Check any preconditions */
-	    const char *etag = message_guid_encode(&oldrecord->guid);
-	    time_t lastmod = oldrecord->internaldate;
-	    int precond = dav_check_precond(txn, cdata, etag, lastmod);
-
-	    if (precond != HTTP_OK) return HTTP_PRECOND_FAILED;
-	}
     }
 
     /* Create and cache RFC 5322 header fields for resource */

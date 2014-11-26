@@ -2978,7 +2978,7 @@ int meth_acl(struct transaction_t *txn, void *params)
 int meth_copy(struct transaction_t *txn, void *params)
 {
     struct meth_params *cparams = (struct meth_params *) params;
-    int ret = HTTP_CREATED, r, precond, rights, overwrite = OVERWRITE_YES;
+    int ret = HTTP_CREATED, r, precond, rights;
     const char **hdr;
     xmlURIPtr dest_uri;
     static struct request_target_t dest_tgt;  /* Parsed destination URL */
@@ -2990,7 +2990,8 @@ int meth_copy(struct transaction_t *txn, void *params)
     const char *etag = NULL;
     time_t lastmod = 0;
     unsigned flags = 0;
-    void *src_davdb = NULL, *dest_davdb = NULL;
+    void *src_davdb = NULL, *dest_davdb = NULL, *obj = NULL;
+    struct buf msg_buf = BUF_INITIALIZER;
 
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
@@ -3124,43 +3125,17 @@ int meth_copy(struct transaction_t *txn, void *params)
 
     /* Local Mailbox */
 
-    /* Open dest mailbox for reading */
-    r = mailbox_open_irl(dest_tgt.mboxname, &dest_mbox);
-    if (r) {
-	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
-	       dest_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
+    if (txn->meth == METH_MOVE) {
+	/* Open source mailbox for writiing */
+	r = mailbox_open_iwl(txn->req_tgt.mboxname, &src_mbox);
     }
-
-    /* Open the DAV DB corresponding to the dest mailbox */
-    dest_davdb = cparams->davdb.open_db(dest_mbox);
-
-    /* Find message UID for the dest resource, if exists */
-    cparams->davdb.lookup_resource(dest_davdb, dest_tgt.mboxname,
-				   dest_tgt.resource, 0, (void **) &ddata);
-    /* XXX  Check errors */
-
-    /* Finished our initial read of dest mailbox */
-    mailbox_unlock_index(dest_mbox, NULL);
-
-    /* Check any preconditions on destination */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Overwrite")) &&
-	!strcmp(hdr[0], "F")) {
-
-	if (ddata->rowid) {
-	    /* Don't overwrite the destination resource */
-	    ret = HTTP_PRECOND_FAILED;
-	    goto done;
-	}
-	overwrite = OVERWRITE_NO;
+    else {
+	/* Open source mailbox for reading */
+	r = mailbox_open_irl(txn->req_tgt.mboxname, &src_mbox);
     }
-
-    /* Open source mailbox for reading */
-    r = mailbox_open_irl(txn->req_tgt.mboxname, &src_mbox);
     if (r) {
-	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+	syslog(LOG_ERR, "mailbox_open_%s(%s) failed: %s",
+	       txn->meth == METH_MOVE ? "iwl" : "irl",
 	       txn->req_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
@@ -3213,22 +3188,53 @@ int meth_copy(struct transaction_t *txn, void *params)
 	goto done;
     }
 
-    if (get_preferences(txn) & PREFER_REP) flags |= PREFER_REP;
-    if ((txn->meth == METH_MOVE) && (dest_mbox == src_mbox))
-	flags |= NO_DUP_CHECK;
+    /* Load message containing the resource and parse data */
+    mailbox_map_record(src_mbox, &src_rec, &msg_buf);
+    obj = cparams->mime_types[0].from_string(buf_base(&msg_buf) +
+					     src_rec.header_size);
+    buf_free(&msg_buf);
 
-    r = mailbox_lock_index(dest_mbox, LOCK_EXCLUSIVE);
+    if (txn->meth != METH_MOVE) {
+	/* Done with source mailbox */
+	mailbox_unlock_index(src_mbox, NULL);
+    }
+
+    /* Open dest mailbox for writing */
+    r = mailbox_open_iwl(dest_tgt.mboxname, &dest_mbox);
     if (r) {
-	syslog(LOG_ERR, "relock index(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
+	syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+	       dest_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
 
-    /* Parse, validate, and store the resource */
-    ret = cparams->copy(txn, src_mbox, &src_rec, dest_mbox, dest_tgt.resource,
-			dest_davdb, overwrite, flags);
+    /* Open the DAV DB corresponding to the dest mailbox */
+    dest_davdb = cparams->davdb.open_db(dest_mbox);
+
+    /* Find message UID for the dest resource, if exists */
+    cparams->davdb.lookup_resource(dest_davdb, dest_tgt.mboxname,
+				   dest_tgt.resource, 0, (void **) &ddata);
+    /* XXX  Check errors */
+
+    /* Check any preconditions on destination */
+    if ((hdr = spool_getheader(txn->req_hdrs, "Overwrite")) &&
+	!strcmp(hdr[0], "F")) {
+
+	if (ddata->rowid) {
+	    /* Don't overwrite the destination resource */
+	    ret = HTTP_PRECOND_FAILED;
+	    goto done;
+	}
+    }
+
+    if (get_preferences(txn) & PREFER_REP) flags |= PREFER_REP;
+    if ((txn->meth == METH_MOVE) && (dest_mbox == src_mbox))
+	flags |= NO_DUP_CHECK;
+
+    /* Store the resource at destination */
+    ret = cparams->copy(txn, obj, dest_mbox,
+			dest_tgt.resource, dest_davdb, flags);
 
     /* we're done, no need to keep this */
     mailbox_unlock_index(dest_mbox, NULL);
@@ -3236,27 +3242,14 @@ int meth_copy(struct transaction_t *txn, void *params)
     /* For MOVE, we need to delete the source resource */
     if ((txn->meth == METH_MOVE) &&
 	(ret == HTTP_CREATED || ret == HTTP_NO_CONTENT)) {
-	/* Lock source mailbox */
-	mailbox_lock_index(src_mbox, LOCK_EXCLUSIVE);
 
-	/* Find message UID for the source resource */
-	cparams->davdb.lookup_resource(src_davdb, txn->req_tgt.mboxname,
-				       txn->req_tgt.resource, 0, (void **) &ddata);
-	/* XXX  Check errors */
-
-	/* Fetch index record for the source resource */
-	if (ddata->imap_uid &&
-	    !mailbox_find_index_record(src_mbox, ddata->imap_uid, &src_rec)) {
-
-	    /* Expunge the source message */
-	    src_rec.system_flags |= FLAG_EXPUNGED;
-	    if ((r = mailbox_rewrite_index_record(src_mbox, &src_rec))) {
-		syslog(LOG_ERR, "expunging src record (%s) failed: %s",
-		       txn->req_tgt.mboxname, error_message(r));
-		txn->error.desc = error_message(r);
-		ret = HTTP_SERVER_ERROR;
-		goto done;
-	    }
+	/* Expunge the source message */
+	src_rec.system_flags |= FLAG_EXPUNGED;
+	if ((r = mailbox_rewrite_index_record(src_mbox, &src_rec))) {
+	    syslog(LOG_ERR, "expunging src record (%s) failed: %s",
+		   txn->req_tgt.mboxname, error_message(r));
+	    txn->error.desc = error_message(r);
+	    ret = HTTP_SERVER_ERROR;
 	}
     }
 
@@ -3270,6 +3263,7 @@ int meth_copy(struct transaction_t *txn, void *params)
 	txn->resp_body.etag = NULL;
     }
 
+    if (obj) cparams->mime_types[0].free(obj);
     if (dest_davdb) cparams->davdb.close_db(dest_davdb);
     mailbox_close(&dest_mbox);
     if (src_davdb) cparams->davdb.close_db(src_davdb);
@@ -4869,14 +4863,38 @@ int meth_put(struct transaction_t *txn, void *params)
 
     /* Local Mailbox */
 
-    /* Open mailbox for reading */
-    r = mailbox_open_irl(txn->req_tgt.mboxname, &mailbox);
+    /* Read body */
+    txn->req_body.flags |= BODY_DECODE;
+    ret = http_read_body(httpd_in, httpd_out,
+			 txn->req_hdrs, &txn->req_body, &txn->error.desc);
+    if (ret) {
+	txn->flags.conn = CONN_CLOSE;
+	return ret;
+    }
+
+    /* Make sure we have a body */
+    qdiffs[QUOTA_STORAGE] = buf_len(&txn->req_body.payload);
+    if (!qdiffs[QUOTA_STORAGE]) {
+	txn->error.desc = "Missing request body\r\n";
+	return HTTP_BAD_REQUEST;
+    }
+
+    /* Check if we can append a new message to mailbox */
+    if ((r = append_check(txn->req_tgt.mboxname,
+			  httpd_authstate, ACL_INSERT, qdiffs))) {
+	syslog(LOG_ERR, "append_check(%s) failed: %s",
+	       txn->req_tgt.mboxname, error_message(r));
+	txn->error.desc = error_message(r);
+	return HTTP_SERVER_ERROR;
+    }
+
+    /* Open mailbox for writing */
+    r = mailbox_open_iwl(txn->req_tgt.mboxname, &mailbox);
     if (r) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
 	       txn->req_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
+	return HTTP_SERVER_ERROR;
     }
 
     /* Open the DAV DB corresponding to the mailbox */
@@ -4969,9 +4987,6 @@ int meth_put(struct transaction_t *txn, void *params)
 	}
     }
 
-    /* Finished our initial read */
-    mailbox_unlock_index(mailbox, NULL);
-
     switch (precond) {
     case HTTP_OK:
 	break;
@@ -4983,33 +4998,6 @@ int meth_put(struct transaction_t *txn, void *params)
     default:
 	/* We failed a precondition - don't perform the request */
 	ret = precond;
-	goto done;
-    }
-
-    /* Read body */
-    txn->req_body.flags |= BODY_DECODE;
-    ret = http_read_body(httpd_in, httpd_out,
-			 txn->req_hdrs, &txn->req_body, &txn->error.desc);
-    if (ret) {
-	txn->flags.conn = CONN_CLOSE;
-	goto done;
-    }
-
-    /* Make sure we have a body */
-    qdiffs[QUOTA_STORAGE] = buf_len(&txn->req_body.payload);
-    if (!qdiffs[QUOTA_STORAGE]) {
-	txn->error.desc = "Missing request body\r\n";
-	ret = HTTP_BAD_REQUEST;
-	goto done;
-    }
-
-    /* Check if we can append a new message to mailbox */
-    if ((r = append_check(txn->req_tgt.mboxname,
-			  httpd_authstate, ACL_INSERT, qdiffs))) {
-	syslog(LOG_ERR, "append_check(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
 
@@ -6256,7 +6244,7 @@ int dav_store_resource(struct transaction_t *txn,
     qdiffs[QUOTA_MESSAGE] = 1;
 
     /* Prepare to append the message to the mailbox */
-    if ((r = append_setup(&as, mailbox->name, httpd_userid, httpd_authstate,
+    if ((r = append_setup_mbox(&as, mailbox, httpd_userid, httpd_authstate,
 			  0, qdiffs, 0, 0, EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
 	syslog(LOG_ERR, "append_setup(%s) failed: %s",
 	       mailbox->name, error_message(r));
@@ -6286,7 +6274,6 @@ int dav_store_resource(struct transaction_t *txn,
 		txn->error.desc = "append_commit() failed\r\n";
 	    }
 	    else {
-		/* append_commit() returns a write-locked index */
 		struct index_record newrecord;
 
 		/* Read index record for new message (always the last one) */
@@ -6322,9 +6309,6 @@ int dav_store_resource(struct transaction_t *txn,
 		    resp_body->lastmod = newrecord.internaldate;
 		    resp_body->etag = message_guid_encode(&newrecord.guid);
 		}
-
-		/* need to close mailbox returned to us by append_commit */
-		mailbox_close(&mailbox);
 	    }
 	}
     }

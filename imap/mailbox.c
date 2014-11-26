@@ -552,7 +552,7 @@ fail:
     return IMAP_IOERROR;
 }
 
-static int mailbox_index_islocked(struct mailbox *mailbox, int write)
+EXPORTED int mailbox_index_islocked(struct mailbox *mailbox, int write)
 {
     if (mailbox->index_locktype == LOCK_EXCLUSIVE) return 1;
     if (mailbox->index_locktype == LOCK_SHARED && !write) return 1;
