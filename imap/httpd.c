@@ -2083,7 +2083,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
 	if (resp_body->fname) {
 	    prot_printf(httpd_out,
-			"Content-Disposition: inline; filename=\"%s\"\r\n",
+			"Content-Disposition: attachment; filename=\"%s\"\r\n",
 			resp_body->fname);
 	}
 	if (txn->resp_body.enc) {
