@@ -95,11 +95,9 @@ static void my_carddav_shutdown(void);
 static int carddav_parse_path(const char *path,
 			      struct request_target_t *tgt, const char **errstr);
 
-static int carddav_copy(struct transaction_t *txn,
-			struct mailbox *src_mbox, struct index_record *src_rec,
+static int carddav_copy(struct transaction_t *txn, void *obj,
 			struct mailbox *dest_mbox, const char *dest_rsrc,
-			struct carddav_db *dest_davdb,
-			unsigned overwrite, unsigned flags);
+			struct carddav_db *dest_davdb, unsigned flags);
 static int carddav_put(struct transaction_t *txn, 
 		       struct mime_type_t *mime,
 		       struct mailbox *mailbox,
@@ -108,6 +106,11 @@ static int carddav_put(struct transaction_t *txn,
 static VObject *vcard_string_as_vobject(const char *str)
 {
     return Parse_MIME(str, strlen(str));
+}
+static void free_vobject(VObject *vobj)
+{
+    cleanVObject(vobj);
+    cleanStrTbl();
 }
 
 static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
@@ -130,14 +133,13 @@ static int report_card_multiget(struct transaction_t *txn, xmlNodePtr inroot,
 
 static int store_resource(struct transaction_t *txn, VObject *vcard,
 			  struct mailbox *mailbox, const char *resource,
-			  struct carddav_db *carddavdb, int overwrite,
-			  unsigned flags);
+			  struct carddav_db *carddavdb, unsigned flags);
 
 static struct mime_type_t carddav_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { "text/vcard; charset=utf-8", "3.0", "vcf", NULL,
       (void * (*)(const char*)) &vcard_string_as_vobject,
-      (void (*)(void *)) &cleanVObject, NULL, NULL
+      (void (*)(void *)) &free_vobject, NULL, NULL
     },
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
@@ -596,37 +598,20 @@ static int carddav_parse_path(const char *path,
  *   CARDDAV:addressbook-collection-location-ok
  *   CARDDAV:max-resource-size
  */
-static int carddav_copy(struct transaction_t *txn,
-			struct mailbox *src_mbox, struct index_record *src_rec,
+static int carddav_copy(struct transaction_t *txn, void *obj,
 			struct mailbox *dest_mbox, const char *dest_rsrc,
-			struct carddav_db *dest_davdb,
-			unsigned overwrite, unsigned flags)
+			struct carddav_db *dest_davdb, unsigned flags)
 {
     int ret;
-    const char *msg_base = NULL;
-    unsigned long msg_size = 0;
-    VObject *vcard;
-
-    /* Load message containing the resource and parse vCard data */
-    mailbox_map_message(src_mbox, src_rec->uid, &msg_base, &msg_size);
-    vcard = Parse_MIME(msg_base + src_rec->header_size,
-		       src_rec->size - src_rec->header_size);
-    mailbox_unmap_message(src_mbox, src_rec->uid, &msg_base, &msg_size);
+    VObject *vcard = (VObject *) obj;
 
     if (!vcard) {
 	txn->error.precond = CARDDAV_VALID_DATA;
 	return HTTP_FORBIDDEN;
     }
 
-    /* Finished our initial read of source mailbox */
-    mailbox_unlock_index(src_mbox, NULL);
-
     /* Store source resource at destination */
-    ret = store_resource(txn, vcard, dest_mbox, dest_rsrc, dest_davdb,
-			 overwrite, flags);
-
-    cleanVObject(vcard);
-    cleanStrTbl();
+    ret = store_resource(txn, vcard, dest_mbox, dest_rsrc, dest_davdb, flags);
 
     return ret;
 }
@@ -657,8 +642,8 @@ static int carddav_put(struct transaction_t *txn,
     }
 
     /* Store resource at target */
-    ret = store_resource(txn, vcard, mailbox, txn->req_tgt.resource,
-			 davdb, OVERWRITE_CHECK, flags);
+    ret = store_resource(txn, vcard, mailbox,
+			 txn->req_tgt.resource, davdb, flags);
 
     if (flags & PREFER_REP) {
 	struct resp_body_t *resp_body = &txn->resp_body;
@@ -976,8 +961,7 @@ static int report_card_multiget(struct transaction_t *txn,
 /* Store the vCard data in the specified addressbook/resource */
 static int store_resource(struct transaction_t *txn, VObject *vcard,
 			  struct mailbox *mailbox, const char *resource,
-			  struct carddav_db *carddavdb, int overwrite,
-			  unsigned flags)
+			  struct carddav_db *carddavdb, unsigned flags)
 {
     VObjectIterator iter;
     struct carddav_data *cdata;
@@ -1034,15 +1018,6 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 	/* Fetch index record for the resource */
 	oldrecord = &record;
 	mailbox_find_index_record(mailbox, cdata->dav.imap_uid, oldrecord);
-
-	if (overwrite == OVERWRITE_CHECK) {
-	    /* Check any preconditions */
-	    const char *etag = message_guid_encode(&oldrecord->guid);
-	    time_t lastmod = oldrecord->internaldate;
-	    int precond = dav_check_precond(txn, cdata, etag, lastmod);
-
-	    if (precond != HTTP_OK) return HTTP_PRECOND_FAILED;
-	}
     }
 
     /* Create and cache RFC 5322 header fields for resource */
