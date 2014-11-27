@@ -1327,7 +1327,7 @@ out:
     }
 
     mboxevent_extract_mailbox(mboxevent, as->mailbox);
-    mboxevent_set_access(mboxevent, NULL, NULL, as->userid, as->mailbox->name, 0);
+    mboxevent_set_access(mboxevent, NULL, NULL, as->userid, as->mailbox->name, 1);
     mboxevent_set_numunseen(mboxevent, as->mailbox, -1);
 
     return 0;
