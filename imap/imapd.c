@@ -5170,8 +5170,6 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
 	    goto done;
 	}
 
-	assert(!ismove); /* XXX - support proxying moves */
-
 	if (s != backend_current) {
 	    /* this is the hard case; we have to fetch the messages and append
 	       them to the other mailbox */
@@ -5182,9 +5180,16 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
 	/* xxx  end of separate proxy-only code */
 
 	/* simply send the COPY to the backend */
-	prot_printf(backend_current->out, "%s %s %s {" SIZE_T_FMT "+}\r\n%s\r\n",
-		    tag, usinguid ? "UID Copy" : "Copy",
-		    sequence, strlen(name), name);
+	prot_printf(
+		backend_current->out,
+		"%s %s %s {" SIZE_T_FMT "+}\r\n%s\r\n",
+		tag,
+		usinguid ? (ismove ? "UID Move" : "UID Copy") : (ismove ? "Move" : "Copy"),
+		sequence,
+		strlen(name),
+		name
+	    );
+
 	pipe_including_tag(backend_current, tag, 0);
 
 	goto cleanup;
