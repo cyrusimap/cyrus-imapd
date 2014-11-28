@@ -71,6 +71,8 @@ extern struct db *mbdb;
 #define MBTYPE_CALENDAR (1<<5) /* Calendar Mailbox */
 #define MBTYPE_ADDRESSBOOK (1<<6) /* Addressbook Mailbox */
 
+#define MBTYPES_DAV (MBTYPE_CALENDAR|MBTYPE_ADDRESSBOOK)
+
 /* master name of the mailboxes file */
 #define FNAME_MBOXLIST "/mailboxes.db"
 

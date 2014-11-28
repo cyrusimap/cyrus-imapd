@@ -2254,19 +2254,47 @@ done:
 
     return r;
 }
+
+static int mailbox_update_dav(struct mailbox *mailbox,
+			      struct index_record *old,
+			      struct index_record *new)
+{
+    if (mailbox->mbtype & MBTYPE_ADDRESSBOOK)
+	return mailbox_update_carddav(mailbox, old, new);
+    if (mailbox->mbtype & MBTYPE_CALENDAR)
+	return mailbox_update_caldav(mailbox, old, new);
+    return 0;
+}
+
+int mailbox_add_dav(struct mailbox *mailbox)
+{
+    struct index_record record;
+    uint32_t recno;
+    int r = 0;
+
+    if (!(mailbox->mbtype & (MBTYPES_DAV)))
+	return 0;
+
+    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
+	r = mailbox_read_index_record(mailbox, recno, &record);
+	if (r) return r;
+
+	r = mailbox_update_dav(mailbox, NULL, &record);
+	if (r) return r;
+    }
+
+    return 0;
+}
 #else
 static int
-mailbox_update_carddav(struct mailbox *mailbox __attribute__((unused)),
-		       struct index_record *old __attribute__((unused)),
-		       struct index_record *new __attribute__((unused)))
+mailbox_update_dav(struct mailbox *mailbox __attribute__((unused)),
+		   struct index_record *old __attribute__((unused)),
+		   struct index_record *new __attribute__((unused)))
 {
     return 0;
 }
 
-static int
-mailbox_update_caldav(struct mailbox *mailbox __attribute__((unused)),
-		      struct index_record *old __attribute__((unused)),
-		      struct index_record *new __attribute__((unused)))
+int mailbox_add_dav(struct mailbox *mailbox __attribute__((unused)))
 {
     return 0;
 }
@@ -2279,25 +2307,17 @@ static int mailbox_update_indexes(struct mailbox *mailbox,
 				  struct index_record *old,
 				  struct index_record *new)
 {
-    const char *userid = mboxname_to_userid(mailbox->name);
     int r = 0;
+
+    r = mailbox_update_dav(mailbox, old, new);
+    if (r) return r;
+
+    /* NOTE - we do these last, once the counts are updated */
 
     if (old)
 	mailbox_index_update_counts(mailbox, old, 0);
     if (new)
 	mailbox_index_update_counts(mailbox, new, 1);
-
-    if (!userid) return 0;
-
-    if (mailbox->mbtype & MBTYPE_CALENDAR) {
-	r = mailbox_update_caldav(mailbox, old, new);
-	if (r) return r;
-    }
-
-    if (mailbox->mbtype & MBTYPE_ADDRESSBOOK) {
-	r = mailbox_update_carddav(mailbox, old, new);
-	if (r) return r;
-    }
 
     return 0;
 }
