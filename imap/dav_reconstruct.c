@@ -137,8 +137,9 @@ int main(int argc, char **argv)
     dav_getpath_byuserid(&fnamebuf, userid);
     if (buf_len(&fnamebuf)) unlink(buf_cstring(&fnamebuf));
 
-    r = (*recon_namespace.mboxname_tointernal)(&recon_namespace, "INBOX",
-					       userid, buf);
+    /* Generate INBOX name of user */
+    (*recon_namespace.mboxname_tointernal)(&recon_namespace,
+					   "INBOX", userid, buf);
     strlcat(buf, ".*", sizeof(buf));
     (*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0, 0,
 					do_reconstruct, NULL);
