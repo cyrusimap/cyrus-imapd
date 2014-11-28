@@ -2151,6 +2151,11 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
     }
 
 done:
+    if (body) {
+	message_free_body(body);
+	free(body);
+    }
+
     if (carddavdb) {
 	carddav_commit(carddavdb);
 	carddav_close(carddavdb);
@@ -2244,8 +2249,10 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
     }
 
 done:
-    message_free_body(body);
-    free(body);
+    if (body) {
+	message_free_body(body);
+	free(body);
+    }
 
     if (caldavdb) {
 	caldav_commit(caldavdb);
