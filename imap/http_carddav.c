@@ -944,7 +944,7 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
     struct index_record oldrecord;
     struct stagemsg *stage;
     char *header;
-    const char *version = NULL, *uid = NULL, *fullname = NULL;
+    char *version = NULL, *uid = NULL, *fullname = NULL;
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
     uint32_t expunge_uid = 0;
     time_t now = time(NULL);
@@ -956,26 +956,36 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
     while (moreIteration(&i)) {
 	VObject *prop = nextVObject(&i);
 	const char *name = vObjectName(prop);
+	const wchar_t *value = NULL;
 
 	if (!strcmp(name, "VERSION")) {
-	    version = fakeCString(vObjectUStringZValue(prop));
-	    if (strcmp(version, "3.0")) {
-		txn->error.precond = CARDDAV_SUPP_DATA;
-		return HTTP_FORBIDDEN;
+	    value = vObjectUStringZValue(prop);
+	    if (value) {
+		version = fakeCString(value);
+		if (strcmp(version, "3.0")) {
+		    txn->error.precond = CARDDAV_SUPP_DATA;
+		    ret = HTTP_FORBIDDEN;
+		    goto done;
+		}
 	    }
 	}
 	else if (!strcmp(name, "UID")) {
-	    uid = fakeCString(vObjectUStringZValue(prop));
+	    value = vObjectUStringZValue(prop);
+	    if (value)
+		uid = fakeCString(value);
 	}
 	else if (!strcmp(name, "FN")) {
-	    fullname = fakeCString(vObjectUStringZValue(prop));
+	    value = vObjectUStringZValue(prop);
+	    if (value)
+		fullname = fakeCString(value);
 	}
     }
 
     /* Sanity check data */
     if (!version || !uid || !fullname) {
 	txn->error.precond = CARDDAV_VALID_DATA;
-	return HTTP_FORBIDDEN;
+	ret = HTTP_FORBIDDEN;
+	goto done;
     }
 
     /* Check for existing vCard UID */
@@ -992,7 +1002,8 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 		   namespace_addressbook.prefix, owner,
 		   strrchr(cdata->dav.mailbox, '.')+1, cdata->dav.resource);
 	txn->error.resource = buf_cstring(&txn->buf);
-	return HTTP_FORBIDDEN;
+	ret = HTTP_FORBIDDEN;
+	goto done;
     }
 
     if (cdata->dav.imap_uid) {
@@ -1005,8 +1016,10 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
 	    time_t lastmod = oldrecord.internaldate;
 	    int precond = check_precond(txn, cdata, etag, lastmod);
 
-	    if (precond != HTTP_OK)
-		return HTTP_PRECOND_FAILED;
+	    if (precond != HTTP_OK) {
+		ret = HTTP_PRECOND_FAILED;
+		goto done;
+	    }
 	}
 
 	expunge_uid = oldrecord.uid;
@@ -1016,7 +1029,8 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
     if (!(f = append_newstage(mailbox->name, now, 0, &stage))) {
 	syslog(LOG_ERR, "append_newstage(%s) failed", mailbox->name);
 	txn->error.desc = "append_newstage() failed\r\n";
-	return HTTP_SERVER_ERROR;
+	ret = HTTP_SERVER_ERROR;
+	goto done;
     }
 
     /* Create iMIP header for resource */
@@ -1129,6 +1143,11 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
     }
 
     append_removestage(stage);
+
+done:
+    free(version);
+    free(uid);
+    free(fullname);
 
     return ret;
 }
