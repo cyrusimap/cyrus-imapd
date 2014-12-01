@@ -92,20 +92,42 @@ static int code = 0;
 static struct caldav_db *caldavdb = NULL;
 
 
+static int do_user(const char *userid, void *rock __attribute__((unused)))
+{
+    struct buf fnamebuf = BUF_INITIALIZER;
+
+    printf("Reconstructing DAV DB for %s...\n", userid);
+
+    /* remove existing database entirely */
+    /* XXX - build a new file and rename into place? */
+    dav_getpath_byuserid(&fnamebuf, userid);
+    if (buf_len(&fnamebuf))
+	unlink(buf_cstring(&fnamebuf));
+    buf_free(&fnamebuf);
+
+    mboxlist_allusermbox(userid, do_reconstruct, NULL, 0);
+
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     int opt, r;
-    char *alt_config = NULL, *userid;
-    struct buf fnamebuf = BUF_INITIALIZER;
+    char *alt_config = NULL;
+    int allusers = 0;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
 	fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((opt = getopt(argc, argv, "C:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:a")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
+	    break;
+
+	case 'a':
+	    allusers = 1;
 	    break;
 
 	default:
@@ -127,29 +149,28 @@ int main(int argc, char **argv)
     signals_set_shutdown(&shut_down);
     signals_add_handlers(0);
 
-    if (optind == argc) usage();
-
-    userid = argv[optind];
-
-    printf("Reconstructing DAV DB for %s...\n", userid);
     caldav_init();
     carddav_init();
 
-    /* remove existing database entirely */
-    /* XXX - build a new file and rename into place? */
-    dav_getpath_byuserid(&fnamebuf, userid);
-    if (buf_len(&fnamebuf))
-	unlink(buf_cstring(&fnamebuf));
-
-    mboxlist_allusermbox(userid, do_reconstruct, NULL, 0);
+    if (allusers) {
+	mboxlist_alluser(do_user, NULL);
+    }
+    else if (optind == argc) {
+	 usage();
+    }
+    else {
+	int i;
+	for (i = optind; i < argc; i++)
+	    do_user(argv[i], NULL);
+    }
 
     caldav_close(caldavdb);
+
+    carddav_done();
     caldav_done();
 
     mboxlist_close();
     mboxlist_done();
-
-    buf_free(&fnamebuf);
 
     exit(code);
 }
