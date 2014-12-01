@@ -430,7 +430,7 @@ struct mkcol_params {
 typedef int (*post_proc_t)(struct transaction_t *txn);
 
 /* meth_put() parameters */
-typedef int (*put_proc_t)(struct transaction_t *txn, struct mime_type_t *mime,
+typedef int (*put_proc_t)(struct transaction_t *txn, void *obj,
 			  struct mailbox *mailbox, void *davdb, unsigned flags);
 
 struct put_params {

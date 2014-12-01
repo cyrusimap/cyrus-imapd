@@ -286,10 +286,8 @@ static int caldav_delete_sched(struct transaction_t *txn,
 static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 		      struct index_record *record, void *data);
 static int caldav_post(struct transaction_t *txn);
-static int caldav_put(struct transaction_t *txn,
-		      struct mime_type_t *mime,
-		      struct mailbox *mailbox,
-		      struct caldav_db *caldavdb,
+static int caldav_put(struct transaction_t *txn, icalcomponent *ical,
+		      struct mailbox *mailbox, struct caldav_db *caldavdb,
 		      unsigned flags);
 
 static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
@@ -2300,21 +2298,18 @@ const char *get_icalcomponent_errstr(icalcomponent *ical)
  *   CALDAV:max-instances
  *   CALDAV:max-attendees-per-instance
  */
-static int caldav_put(struct transaction_t *txn,
-		      struct mime_type_t *mime,
-		      struct mailbox *mailbox,
-		      struct caldav_db *davdb,
+static int caldav_put(struct transaction_t *txn, icalcomponent *ical,
+		      struct mailbox *mailbox, struct caldav_db *davdb,
 		      unsigned flags)
 {
     int ret = 0;
-    icalcomponent *ical = NULL, *comp, *nextcomp;
+    icalcomponent *comp, *nextcomp;
     icalcomponent_kind kind;
     icalproperty_kind recip_kind;
     icalproperty *prop;
     const char *uid, *organizer = NULL;
 
-    /* Parse and validate the iCal data */
-    ical = mime->from_string(buf_cstring(&txn->req_body.payload));
+    /* Validate the iCal data */
     if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {
 	txn->error.precond = CALDAV_VALID_DATA;
 	ret = HTTP_FORBIDDEN;
@@ -2518,52 +2513,7 @@ static int caldav_put(struct transaction_t *txn,
     ret = store_resource(txn, ical, mailbox,
 			 txn->req_tgt.resource, davdb, flags);
 
-    if (flags & PREFER_REP) {
-	struct resp_body_t *resp_body = &txn->resp_body;
-	const char **hdr;
-	char *data;
-
-	if ((hdr = spool_getheader(txn->req_hdrs, "Accept")))
-	    mime = get_accept_type(hdr, caldav_mime_types);
-	if (!mime) goto done;
-
-	switch (ret) {
-	case HTTP_NO_CONTENT:
-	    ret = HTTP_OK;
-
-	case HTTP_CREATED:
-	    /* Convert into requested MIME type */
-	    data = mime->to_string(ical);
-
-	    /* Fill in Content-Type, Content-Length */
-	    resp_body->type = mime->content_type;
-	    resp_body->len = strlen(data);
-
-	    /* Fill in Content-Location */
-	    resp_body->loc = txn->req_tgt.path;
-
-	    /* Fill in Expires and Cache-Control */
-	    resp_body->maxage = 3600;	/* 1 hr */
-	    txn->flags.cc = CC_MAXAGE
-		| CC_REVALIDATE		/* don't use stale data */
-		| CC_NOTRANSFORM;	/* don't alter iCal data */
-
-	    /* Output current representation */
-	    write_body(ret, txn, data, resp_body->len);
-
-	    free(data);
-	    ret = 0;
-	    break;
-
-	default:
-	    /* failure - do nothing */
-	    break;
-	}
-    }
-
   done:
-    if (ical) icalcomponent_free(ical);
-
     return ret;
 }
 

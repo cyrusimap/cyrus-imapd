@@ -98,10 +98,8 @@ static int carddav_parse_path(const char *path,
 static int carddav_copy(struct transaction_t *txn, void *obj,
 			struct mailbox *dest_mbox, const char *dest_rsrc,
 			struct carddav_db *dest_davdb, unsigned flags);
-static int carddav_put(struct transaction_t *txn, 
-		       struct mime_type_t *mime,
-		       struct mailbox *mailbox,
-		       struct carddav_db *carddavdb,
+static int carddav_put(struct transaction_t *txn, struct vparse_state *vparser,
+		       struct mailbox *mailbox, struct carddav_db *davdb,
 		       unsigned flags);
 
 static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
@@ -598,72 +596,28 @@ static int carddav_copy(struct transaction_t *txn, void *obj,
  *   CARDDAV:no-uid-conflict (DAV:href)
  *   CARDDAV:max-resource-size
  */
-static int carddav_put(struct transaction_t *txn, 
-		       struct mime_type_t *mime,
-		       struct mailbox *mailbox,
-		       struct carddav_db *davdb,
+static int carddav_put(struct transaction_t *txn, struct vparse_state *vparser,
+		       struct mailbox *mailbox, struct carddav_db *davdb,
 		       unsigned flags)
 {
     int ret;
-    struct vparse_state *vparser = NULL;
 
-    /* Parse and validate the vCard data */
-    vparser = mime->from_string(buf_cstring(&txn->req_body.payload));
+    /* Validate the vCard data */
     if (!vparser ||
 	!vparser->card ||
 	!vparser->card->objects ||
 	!vparser->card->objects->type ||
 	strcmp(vparser->card->objects->type, "vcard")) {
 	txn->error.precond = CARDDAV_VALID_DATA;
-	ret = HTTP_FORBIDDEN;
-	goto done;
+	return HTTP_FORBIDDEN;
     }
 
     /* Store resource at target */
     ret = store_resource(txn, vparser->card->objects, mailbox,
 			 txn->req_tgt.resource, davdb, flags);
 
-    if (flags & PREFER_REP) {
-	struct resp_body_t *resp_body = &txn->resp_body;
-	const char *data;
-
-	switch (ret) {
-	case HTTP_NO_CONTENT:
-	    ret = HTTP_OK;
-
-	case HTTP_CREATED:
-	    /* Use the request data */
-	    data = buf_cstring(&txn->req_body.payload);
-
-	    /* Fill in Content-Type, Content-Length */
-	    resp_body->type = mime->content_type;
-	    resp_body->len = strlen(data);
-
-	    /* Fill in Content-Location */
-	    resp_body->loc = txn->req_tgt.path;
-
-	    /* Fill in Expires and Cache-Control */
-	    resp_body->maxage = 3600;	/* 1 hr */
-	    txn->flags.cc = CC_MAXAGE
-		| CC_REVALIDATE		/* don't use stale data */
-		| CC_NOTRANSFORM;	/* don't alter vCard data */
-
-	    /* Output current representation */
-	    write_body(ret, txn, data, resp_body->len);
-	    ret = 0;
-	    break;
-
-	default:
-	    /* failure - do nothing */
-	    break;
-	}
-    }
-
-  done:
-    if (vparser)
-	free_vparser(vparser);
-
     return ret;
+
 }
 
 

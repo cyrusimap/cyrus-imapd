@@ -4799,7 +4799,10 @@ int meth_put(struct transaction_t *txn, void *params)
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
     time_t lastmod;
     unsigned flags = 0;
-    void *davdb = NULL;
+    void *davdb = NULL, *obj = NULL;
+    struct buf msg_buf = BUF_INITIALIZER;
+    char *data;
+    unsigned long datalen;
 
     if (txn->meth == METH_PUT) {
 	/* Response should not be cached */
@@ -4941,35 +4944,67 @@ int meth_put(struct transaction_t *txn, void *params)
 	lastmod = 0;
     }
 
+    /* Check any preferences */
+    if (get_preferences(txn) & PREFER_REP) flags |= PREFER_REP;
+
     /* Check any preconditions */
-    precond = pparams->check_precond(txn, ddata, etag, lastmod);
+    ret = precond = pparams->check_precond(txn, ddata, etag, lastmod);
 
-    if ((precond == HTTP_PRECOND_FAILED) &&
-	(get_preferences(txn) & PREFER_REP)) {
-	struct buf msg_buf = BUF_INITIALIZER;
+    switch (precond) {
+    case HTTP_OK:
+	/* Parse, validate, and store the resource */
+	obj = mime->from_string(buf_cstring(&txn->req_body.payload));
+	ret = pparams->put.proc(txn, obj, mailbox, davdb, flags);
+	break;
 
-	/* Load message containing the resource */
-	r = mailbox_map_record(mailbox, &oldrecord, &msg_buf);
+    case HTTP_PRECOND_FAILED:
+	if (flags & PREFER_REP) {
+	    unsigned offset;
 
-	if (!r) {
-	    const char *data = NULL;
-	    unsigned long datalen, offset;
-	    struct resp_body_t *resp_body = &txn->resp_body;
-	    char *freeme = NULL;
+	    /* Load message containing the resource */
+	    mailbox_map_record(mailbox, &oldrecord, &msg_buf);
 
 	    /* Resource length doesn't include RFC 5322 header */
 	    offset = oldrecord.header_size;
 	    data = buf_base(&msg_buf) + offset;
 	    datalen = oldrecord.size - offset;
 
-	    if (mime != pparams->mime_types) {
-		/* Not the storage format - convert into requested MIME type */
-		void *obj = pparams->mime_types[0].from_string(data);
+	    /* Parse existing resource */
+	    obj = pparams->mime_types[0].from_string(data);
 
-		data = freeme = mime->to_string(obj);
-		datalen = strlen(data);
-		pparams->mime_types[0].free(obj);
-	    }
+	    /* Fill in ETag and Last-Modified */
+	    txn->resp_body.etag = etag;
+	    txn->resp_body.lastmod = lastmod;
+	}
+	break;
+
+    case HTTP_LOCKED:
+	txn->error.precond = DAV_NEED_LOCK_TOKEN;
+	txn->error.resource = txn->req_tgt.path;
+
+    default:
+	/* We failed a precondition */
+	goto done;
+    }
+
+    if (flags & PREFER_REP) {
+	struct resp_body_t *resp_body = &txn->resp_body;
+	const char **hdr;
+
+	if ((hdr = spool_getheader(txn->req_hdrs, "Accept"))) {
+	    mime = get_accept_type(hdr, pparams->mime_types);
+	    if (!mime) goto done;
+	}
+
+	switch (ret) {
+	case HTTP_NO_CONTENT:
+	    ret = HTTP_OK;
+
+	case HTTP_CREATED:
+	case HTTP_PRECOND_FAILED:
+	    /* Convert into requested MIME type */
+	    data = mime->to_string(obj);
+	    datalen = strlen(data);
 
 	    /* Fill in Content-Type, Content-Length */
 	    resp_body->type = mime->content_type;
@@ -4978,53 +5013,30 @@ int meth_put(struct transaction_t *txn, void *params)
 	    /* Fill in Content-Location */
 	    resp_body->loc = txn->req_tgt.path;
 
-	    /* Fill in ETag, Last-Modified, Expires, and Cache-Control */
-	    resp_body->etag = etag;
-	    resp_body->lastmod = lastmod;
+	    /* Fill in Expires and Cache-Control */
 	    resp_body->maxage = 3600;	/* 1 hr */
 	    txn->flags.cc = CC_MAXAGE
 		| CC_REVALIDATE		/* don't use stale data */
 		| CC_NOTRANSFORM;	/* don't alter iCal data */
 
 	    /* Output current representation */
-	    write_body(precond, txn, data, datalen);
+	    write_body(ret, txn, data, datalen);
 
-	    buf_free(&msg_buf);
-	    free(freeme);
+	    free(data);
+	    ret = 0;
+	    break;
 
-	    precond = 0;
+	default:
+	    /* failure - do nothing */
+	    break;
 	}
     }
 
-    switch (precond) {
-    case HTTP_OK:
-	break;
-
-    case HTTP_LOCKED:
-	txn->error.precond = DAV_NEED_LOCK_TOKEN;
-	txn->error.resource = txn->req_tgt.path;
-
-    default:
-	/* We failed a precondition - don't perform the request */
-	ret = precond;
-	goto done;
-    }
-
-    if (get_preferences(txn) & PREFER_REP) flags |= PREFER_REP;
-
-    r = mailbox_lock_index(mailbox, LOCK_EXCLUSIVE);
-    if (r) {
-	syslog(LOG_ERR, "relock index(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
-    }
-
-    /* Parse, validate, and store the resource */
-    ret = pparams->put.proc(txn, mime, mailbox, davdb, flags);
-
   done:
+    if (obj) {
+	pparams->mime_types[0].free(obj);
+	buf_free(&msg_buf);
+    }
     if (davdb) pparams->davdb.close_db(davdb);
     mailbox_close(&mailbox);
 
