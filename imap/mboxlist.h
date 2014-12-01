@@ -209,8 +209,10 @@ int mboxlist_findparent(const char *mboxname,
 			mbentry_t **mbentryp);
 
 /* direct access to subs DB */
+typedef int user_cb(const char *userid, void *rock);
 int mboxlist_allsubs(const char *userid, foreach_cb *proc, void *rock);
 int mboxlist_allmbox(const char *prefix, foreach_cb *proc, void *rock, int incdel);
+int mboxlist_alluser(user_cb *proc, void *rock);
 int mboxlist_allusermbox(const char *userid, foreach_cb *proc, void *rock,
 			 int include_deleted);
 

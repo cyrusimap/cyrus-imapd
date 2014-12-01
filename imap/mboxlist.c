@@ -2287,6 +2287,46 @@ EXPORTED int mboxlist_allmbox(const char *prefix, foreach_cb *proc, void *rock,
 			   proc, rock, 0);
 }
 
+struct alluser_rock {
+    char *prev;
+    user_cb *proc;
+    void *rock;
+};
+
+static int alluser_cb(void *rock,
+		      const char *key, size_t keylen,
+		      const char *val __attribute__((unused)),
+		      size_t vallen __attribute__((unused)))
+{
+    struct alluser_rock *urock = (struct alluser_rock *)rock;
+    char *mboxname = xstrndup(key, keylen);
+    const char *userid = mboxname_to_userid(mboxname);
+    int r = 0;
+
+    if (userid) {
+	if (strcmpsafe(urock->prev, userid)) {
+	    r = urock->proc(userid, urock->rock);
+	    free(urock->prev);
+	    urock->prev = xstrdup(userid);
+	}
+    }
+
+    free(mboxname);
+    return r;
+}
+
+EXPORTED int mboxlist_alluser(user_cb *proc, void *rock)
+{
+    struct alluser_rock urock;
+    int r = 0;
+    urock.prev = NULL;
+    urock.proc = proc;
+    urock.rock = rock;
+    r = cyrusdb_foreach(mbdb, "", 0, skipdel_cb, alluser_cb, &urock, NULL);
+    free(urock.prev);
+    return r;
+}
+
 EXPORTED int mboxlist_allusermbox(const char *userid, foreach_cb *proc,
 				  void *rock, int incdel)
 {
