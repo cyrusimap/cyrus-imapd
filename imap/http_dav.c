@@ -4536,16 +4536,17 @@ int meth_put(struct transaction_t *txn, void *params)
 {
     struct meth_params *pparams = (struct meth_params *) params;
     int ret, r, precond, rights;
-    const char **hdr, *etag;
+    const char **hdr, *etag, *msg_base = NULL;
     struct mime_type_t *mime = NULL;
-    char *server, *acl;
+    char *server, *acl, *data;
     struct mailbox *mailbox = NULL;
     struct dav_data *ddata;
     struct index_record oldrecord;
     time_t lastmod;
     uquota_t size = 0;
     unsigned flags = 0;
-    void *davdb = NULL;
+    void *davdb = NULL, *obj = NULL;
+    unsigned long msg_size = 0, datalen;
 
     if (txn->meth == METH_PUT) {
 	/* Response should not be cached */
@@ -4682,59 +4683,38 @@ int meth_put(struct transaction_t *txn, void *params)
 	lastmod = 0;
     }
 
+    /* Check any preferences */
+    if (get_preferences(txn) & PREFER_REP) flags |= PREFER_REP;
+
     /* Check any preconditions */
-    precond = pparams->check_precond(txn, ddata, etag, lastmod);
-
-    if ((precond == HTTP_PRECOND_FAILED) &&
-	(get_preferences(txn) & PREFER_REP)) {
-	const char *msg_base = NULL, *data = NULL;
-	unsigned long msg_size = 0, datalen, offset;
-	struct resp_body_t *resp_body = &txn->resp_body;
-	char *freeme = NULL;
-
-	/* Load message containing the resource */
-	mailbox_map_message(mailbox, oldrecord.uid, &msg_base, &msg_size);
-
-	/* Resource length doesn't include RFC 5322 header */
-	offset = oldrecord.header_size;
-	data = msg_base + offset;
-	datalen = oldrecord.size - offset;
-
-	if (mime != pparams->mime_types) {
-	    /* Not the storage format - convert into requested MIME type */
-	    void *obj = pparams->mime_types[0].from_string(data);
-
-	    data = freeme = mime->to_string(obj);
-	    datalen = strlen(data);
-	    pparams->mime_types[0].free(obj);
-	}
-
-	/* Fill in Content-Type, Content-Length */
-	resp_body->type = mime->content_type;
-	resp_body->len = datalen;
-
-	/* Fill in Content-Location */
-	resp_body->loc = txn->req_tgt.path;
-
-	/* Fill in ETag, Last-Modified, Expires, and Cache-Control */
-	resp_body->etag = etag;
-	resp_body->lastmod = lastmod;
-	resp_body->maxage = 3600;	/* 1 hr */
-	txn->flags.cc = CC_MAXAGE
-	    | CC_REVALIDATE		/* don't use stale data */
-	    | CC_NOTRANSFORM;		/* don't alter iCal data */
-
-	/* Output current representation */
-	write_body(precond, txn, data, datalen);
-
-	mailbox_unmap_message(mailbox, oldrecord.uid, &msg_base, &msg_size);
-	if (freeme) free(freeme);
-
-	precond = 0;
-    }
+    ret = precond = pparams->check_precond(txn, ddata, etag, lastmod);
 
     switch (precond) {
     case HTTP_OK:
+	/* Parse, validate, and store the resource */
+	obj = mime->from_string(buf_cstring(&txn->req_body.payload));
+	ret = pparams->put.proc(txn, obj, mailbox, davdb, flags);
+	break;
+
+    case HTTP_PRECOND_FAILED:
+	if (flags & PREFER_REP) {
+	    unsigned offset;
+
+	    /* Load message containing the resource */
+	    mailbox_map_message(mailbox, oldrecord.uid, &msg_base, &msg_size);
+
+	    /* Resource length doesn't include RFC 5322 header */
+	    offset = oldrecord.header_size;
+	    data = (char *) msg_base + offset;
+	    datalen = oldrecord.size - offset;
+
+	    /* Parse existing resource */
+	    obj = pparams->mime_types[0].from_string(data);
+
+	    /* Fill in ETag and Last-Modified */
+	    txn->resp_body.etag = etag;
+	    txn->resp_body.lastmod = lastmod;
+	}
 	break;
 
     case HTTP_LOCKED:
@@ -4742,17 +4722,61 @@ int meth_put(struct transaction_t *txn, void *params)
 	txn->error.resource = txn->req_tgt.path;
 
     default:
-	/* We failed a precondition - don't perform the request */
-	ret = precond;
+	/* We failed a precondition */
 	goto done;
     }
 
-    if (get_preferences(txn) & PREFER_REP) flags |= PREFER_REP;
+    if (flags & PREFER_REP) {
+	struct resp_body_t *resp_body = &txn->resp_body;
+	const char **hdr;
 
-    /* Parse, validate, and store the resource */
-    ret = pparams->put.proc(txn, mime, mailbox, davdb, flags);
+	if ((hdr = spool_getheader(txn->req_hdrs, "Accept"))) {
+	    mime = get_accept_type(hdr, pparams->mime_types);
+	    if (!mime) goto done;
+	}
+
+	switch (ret) {
+	case HTTP_NO_CONTENT:
+	    ret = HTTP_OK;
+
+	case HTTP_CREATED:
+	case HTTP_PRECOND_FAILED:
+	    /* Convert into requested MIME type */
+	    data = mime->to_string(obj);
+	    datalen = strlen(data);
+
+	    /* Fill in Content-Type, Content-Length */
+	    resp_body->type = mime->content_type;
+	    resp_body->len = datalen;
+
+	    /* Fill in Content-Location */
+	    resp_body->loc = txn->req_tgt.path;
+
+	    /* Fill in Expires and Cache-Control */
+	    resp_body->maxage = 3600;	/* 1 hr */
+	    txn->flags.cc = CC_MAXAGE
+		| CC_REVALIDATE		/* don't use stale data */
+		| CC_NOTRANSFORM;	/* don't alter iCal data */
+
+	    /* Output current representation */
+	    write_body(ret, txn, data, datalen);
+
+	    free(data);
+	    ret = 0;
+	    break;
+
+	default:
+	    /* failure - do nothing */
+	    break;
+	}
+    }
 
   done:
+    if (obj) {
+	pparams->mime_types[0].free(obj);
+	if (msg_base)
+	    mailbox_unmap_message(mailbox, oldrecord.uid, &msg_base, &msg_size);
+    }
     if (davdb) pparams->davdb.close_db(davdb);
     mailbox_close(&mailbox);
 
