@@ -1639,13 +1639,12 @@ EXPORTED int mailbox_read_index_record(struct mailbox *mailbox,
 /*
  * bsearch() function to compare two index record buffers by UID
  */
-static int rec_compar(const void *a, const void *b)
+static int rec_compar(const void *key, const void *mem)
 {
-    uint32_t uida = *((uint32_t *) a);
-    uint32_t uidb = *((uint32_t *) b);
-
-    if (uida < uidb) return -1;
-    return (uida > uidb);
+    uint32_t uid = *((uint32_t *) key);
+    uint32_t recuid = ntohl(*((bit32 *)((const char *)mem+OFFSET_UID)));
+    if (uid < recuid) return -1;
+    return (uid > recuid);
 }
 
 /*
