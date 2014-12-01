@@ -1698,6 +1698,7 @@ static int rec_compar(const void *key, const void *mem)
     return (uid > recuid);
 }
 
+
 static uint32_t mailbox_getuid(struct mailbox *mailbox, uint32_t recno)
 {
     struct index_record record;
