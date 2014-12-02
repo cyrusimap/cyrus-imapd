@@ -737,12 +737,16 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
 	if (mailboxname != NULL) {
 	    char *user = (char *)mboxname_to_userid(mailboxname);
 
+	    assert(namespace.mboxname_toexternal != NULL);
+	    if (ext_name)
+		(*namespace.mboxname_toexternal)(&namespace, mailboxname, user, extname);
 	    imapurl.mailbox = extname;
 
 	    if (user) {
 		/* translate any separators in user */
-		mboxname_hiersep_toexternal(&namespace, user,
-					    config_virtdomains ? strcspn(user, "@") : 0);
+		if (ext_name)
+		    mboxname_hiersep_toexternal(&namespace, user,
+						config_virtdomains ? strcspn(user, "@") : 0);
 		imapurl.user = user;
 	    }
 	}
