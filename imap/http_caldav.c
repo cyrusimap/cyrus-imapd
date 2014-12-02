@@ -2280,8 +2280,10 @@ const char *get_icalcomponent_errstr(icalcomponent *ical)
 		    char propname[256];
 		    if (sscanf(errstr,
 			       "No value for %s property", propname) == 1) {
-			/* Empty LOCATION is OK */
-			if (!strcmp(propname, "LOCATION")) continue;
+			/* Empty LOCATION, COMMENT, DESCRIPTION is OK */
+			if (!strcasecmp(propname, "LOCATION")) continue;
+			if (!strcasecmp(propname, "COMMENT")) continue;
+			if (!strcasecmp(propname, "DESCRIPTION")) continue;
 		    }
 		}
 
