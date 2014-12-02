@@ -71,7 +71,7 @@ typedef struct deliver_data {
 /* forward declarations */
 extern int deliver_local(deliver_data_t *mydata,
 			 const strarray_t *flags,
-			 const char *username,
+			 char *username,
 			 const char *mailboxname);
 
 extern int deliver_mailbox(FILE *f,

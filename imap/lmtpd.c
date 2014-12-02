@@ -753,8 +753,8 @@ static void deliver_remote(message_data_t *msgdata,
     }
 }
 
-int deliver_local(deliver_data_t *mydata, const strarray_t *flags,
-		  const char *username, const char *mailboxname)
+EXPORTED int deliver_local(deliver_data_t *mydata, const strarray_t *flags,
+		  char *username, const char *mailboxname)
 {
     char namebuf[MAX_MAILBOX_BUFFER] = "", *tail;
     message_data_t *md = mydata->m;
