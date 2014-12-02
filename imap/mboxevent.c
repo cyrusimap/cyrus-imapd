@@ -765,7 +765,6 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
 	/* translate any separators in user */
 	char *user = xstrdup(userid);
 	mboxname_hiersep_toexternal(&namespace, user,
-				    config_virtdomains ? strcspn(user, "@") : 0);
 	FILL_STRING_PARAM(event, EVENT_USER, user); /* note, absorbs the user */
     }
 }
