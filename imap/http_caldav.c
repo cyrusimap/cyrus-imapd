@@ -2271,12 +2271,20 @@ const char *get_icalcomponent_errstr(icalcomponent *ical)
 		    char propname[256];
 		    if (sscanf(errstr,
 			       "No value for %s property", propname) == 1) {
-			/* Empty LOCATION is OK */
+			/* Empty LOCATION, COMMENT, DESCRIPTION is OK */
 			if (!strcasecmp(propname, "LOCATION")) continue;
 			if (!strcasecmp(propname, "COMMENT")) continue;
 			if (!strcasecmp(propname, "DESCRIPTION")) continue;
 		    }
 		}
+		else if (icalparameter_get_xlicerrortype(param) ==
+			 ICAL_XLICERRORTYPE_PROPERTYPARSEERROR) {
+		    /* Ignore unknown property errors */
+		    if (!strncmp(errstr, "Parse error in property name", 28))
+			continue;
+		}
+
+		return errstr;
 	    }
 	}
     }
