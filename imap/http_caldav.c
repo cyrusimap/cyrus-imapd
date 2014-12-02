@@ -2286,6 +2286,12 @@ const char *get_icalcomponent_errstr(icalcomponent *ical)
 			if (!strcasecmp(propname, "DESCRIPTION")) continue;
 		    }
 		}
+		else if (icalparameter_get_xlicerrortype(param) ==
+			 ICAL_XLICERRORTYPE_PROPERTYPARSEERROR) {
+		    /* Ignore unknown property errors */
+		    if (!strncmp(errstr, "Parse error in property name", 28))
+			continue;
+		}
 
 		return errstr;
 	    }
