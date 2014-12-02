@@ -103,6 +103,7 @@ static char *proc_getpath(pid_t pid, int isnew)
     else {
 	buf_setcstr(&buf, config_dir);
 	buf_appendcstr(&buf, FNAME_PROCDIR);
+	buf_putc(&buf, '/');
     }
 
     if (pid)
