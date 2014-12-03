@@ -517,7 +517,10 @@ int main(int argc, char *argv[])
 	    }
 	}
 
-	mboxlist_findall(NULL, find_prefix, 1, 0, 0, expire, &erock);
+	if (do_user)
+	    mboxlist_allusermbox(do_user, expire, &erock, /*include_deleted*/1);
+	else
+	    mboxlist_allmbox(find_prefix, expire, &erock, /*include_deleted*/1);
 
 	syslog(LOG_NOTICE, "Expired %lu and expunged %lu out of %lu "
 			    "messages from %lu mailboxes",
