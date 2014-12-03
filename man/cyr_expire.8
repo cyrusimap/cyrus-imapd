@@ -60,6 +60,9 @@ cyr_expire \- expire messages and duplicate delivery database entries
 .BI \-p " mailbox-prefix"
 ]
 [
+.BI \-u " username"
+]
+[
 .B \-t
 ]
 [
@@ -139,6 +142,10 @@ up the duplicate database without overloading the machine.
 \fB\-p \fImailbox-prefix\fR
 Only find mailboxes starting with this prefix,  e.g.
 "user.justgotspammedlots".
+.TP
+\fB\-u \fIuserid\fR
+Only find mailboxes belonging to this user,  e.g.
+"justgotspammedlots@example.com".
 .TP
 \fB\-t\fR
 Remove any user flags which are not used by remaining (not expunged) messages.
