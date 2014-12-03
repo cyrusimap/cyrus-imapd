@@ -390,6 +390,7 @@ int main(int argc, char *argv[])
     int expire_seconds = 0;
     char *alt_config = NULL;
     const char *find_prefix = "*";
+    const char *do_user = NULL;
     struct expire_rock erock;
     struct delete_rock drock;
     struct sigaction action;
@@ -404,7 +405,7 @@ int main(int argc, char *argv[])
     memset(&drock, 0, sizeof(drock));
     strarray_init(&drock.to_delete);
 
-    while ((opt = getopt(argc, argv, "C:D:E:X:p:vaxt")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:D:E:X:p:u:vaxt")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -427,6 +428,10 @@ int main(int argc, char *argv[])
 
 	case 'p':
 	    find_prefix = optarg;
+	    break;
+
+	case 'u':
+	    do_user = optarg;
 	    break;
 
 	case 'v':
