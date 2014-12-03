@@ -50,7 +50,6 @@
 
 #include <syslog.h>
 
-#include <libical/vcc.h>
 #include <libxml/tree.h>
 #include <libxml/uri.h>
 #include <sys/types.h>
@@ -79,6 +78,7 @@
 #include "times.h"
 #include "util.h"
 #include "version.h"
+#include "vparse.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
@@ -105,10 +105,6 @@ static int carddav_put(struct transaction_t *txn,
 		       struct mailbox *mailbox,
 		       struct carddav_db *carddavdb,
 		       unsigned flags);
-static VObject *vcard_string_as_vobject(const char *str)
-{
-    return Parse_MIME(str, strlen(str));
-}
 
 static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
 				   struct propfind_ctx *fctx, xmlNodePtr resp,
@@ -128,16 +124,33 @@ static int report_card_query(struct transaction_t *txn, xmlNodePtr inroot,
 static int report_card_multiget(struct transaction_t *txn, xmlNodePtr inroot,
 				struct propfind_ctx *fctx);
 
-static int store_resource(struct transaction_t *txn, VObject *vcard,
+static int store_resource(struct transaction_t *txn, struct vparse_state *vparser,
 			  struct mailbox *mailbox, const char *resource,
 			  struct carddav_db *carddavdb, int overwrite,
 			  unsigned flags);
 
+static struct vparse_state *vcard_string_as_vparser(const char *str) {
+    struct vparse_state *vparser;
+    int vr;
+
+    vparser = (struct vparse_state *) xzmalloc(sizeof(struct vparse_state));
+    vparser->base = str;
+    vr = vparse_parse(vparser, 0);
+    if (vr) return NULL; // XXX report error
+
+    return vparser;
+}
+
+static void free_vparser(void *vparser) {
+    vparse_free((struct vparse_state *) vparser);
+    free(vparser);
+}
+
 static struct mime_type_t carddav_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { "text/vcard; charset=utf-8", "3.0", NULL, "vcf", NULL,
-      (void * (*)(const char*)) &vcard_string_as_vobject,
-      (void (*)(void *)) &cleanVObject, NULL, NULL
+      (void * (*)(const char*)) &vcard_string_as_vparser,
+      (void (*)(void *)) &free_vparser, NULL, NULL
     },
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
@@ -564,16 +577,15 @@ static int carddav_copy(struct transaction_t *txn,
 {
     int r;
     struct buf msg_buf = BUF_INITIALIZER;
-    VObject *vcard;
+    struct vparse_state *vparser;
 
     /* Load message containing the resource and parse vCard data */
     r = mailbox_map_record(src_mbox, src_rec, &msg_buf);
     if (r) return r;
-    vcard = Parse_MIME(buf_base(&msg_buf) + src_rec->header_size,
-		       src_rec->size - src_rec->header_size);
+    vparser = vcard_string_as_vparser(buf_base(&msg_buf) + src_rec->header_size);
     buf_free(&msg_buf);
 
-    if (!vcard) {
+    if (!vparser) {
 	txn->error.precond = CARDDAV_VALID_DATA;
 	return HTTP_FORBIDDEN;
     }
@@ -582,11 +594,10 @@ static int carddav_copy(struct transaction_t *txn,
     mailbox_unlock_index(src_mbox, NULL);
 
     /* Store source resource at destination */
-    r = store_resource(txn, vcard, dest_mbox, dest_rsrc, dest_davdb,
+    r = store_resource(txn, vparser, dest_mbox, dest_rsrc, dest_davdb,
 			 overwrite, flags);
 
-    cleanVObject(vcard);
-    cleanStrTbl();
+    free_vparser(vparser);
 
     return r;
 }
@@ -606,18 +617,18 @@ static int carddav_put(struct transaction_t *txn,
 		       unsigned flags)
 {
     int ret;
-    VObject *vcard = NULL;
+    struct vparse_state *vparser = NULL;
 
     /* Parse and validate the vCard data */
-    vcard = mime->from_string(buf_cstring(&txn->req_body.payload));
-    if (!vcard || strcmp(vObjectName(vcard), "VCARD")) {
+    vparser = mime->from_string(buf_cstring(&txn->req_body.payload));
+    if (!vparser || strcmp(vparser->card->type, "vcard")) {
 	txn->error.precond = CARDDAV_VALID_DATA;
 	ret = HTTP_FORBIDDEN;
 	goto done;
     }
 
     /* Store resource at target */
-    ret = store_resource(txn, vcard, mailbox, txn->req_tgt.resource,
+    ret = store_resource(txn, vparser, mailbox, txn->req_tgt.resource,
 			 davdb, OVERWRITE_CHECK, flags);
 
     if (flags & PREFER_REP) {
@@ -657,10 +668,8 @@ static int carddav_put(struct transaction_t *txn,
     }
 
   done:
-    if (vcard) {
-	cleanVObject(vcard);
-	cleanStrTbl();
-    }
+    if (vparser)
+	free_vparser(vparser);
 
     return ret;
 }
@@ -932,19 +941,19 @@ static int report_card_multiget(struct transaction_t *txn,
 
 
 /* Store the vCard data in the specified addressbook/resource */
-static int store_resource(struct transaction_t *txn, VObject *vcard,
+static int store_resource(struct transaction_t *txn, struct vparse_state *vparser,
 			  struct mailbox *mailbox, const char *resource,
 			  struct carddav_db *carddavdb, int overwrite,
 			  unsigned flags)
 {
     int ret = HTTP_CREATED, r;
-    VObjectIterator i;
+    struct vparse_entry *ventry;
     struct carddav_data *cdata;
     FILE *f = NULL;
     struct index_record oldrecord;
     struct stagemsg *stage;
     char *header;
-    char *version = NULL, *uid = NULL, *fullname = NULL;
+    const char *version = NULL, *uid = NULL, *fullname = NULL;
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
     uint32_t expunge_uid = 0;
     time_t now = time(NULL);
@@ -952,33 +961,27 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
     struct appendstate as;
 
     /* Fetch some important properties */
-    initPropIterator(&i, vcard);
-    while (moreIteration(&i)) {
-	VObject *prop = nextVObject(&i);
-	const char *name = vObjectName(prop);
-	const wchar_t *value = NULL;
+    for (ventry = vparser->card->properties; ventry; ventry = ventry->next) {
+	const char *name = ventry->name;
+	const char *propval = ventry->v.value;
 
-	if (!strcmp(name, "VERSION")) {
-	    value = vObjectUStringZValue(prop);
-	    if (value) {
-		version = fakeCString(value);
-		if (strcmp(version, "3.0")) {
-		    txn->error.precond = CARDDAV_SUPP_DATA;
-		    ret = HTTP_FORBIDDEN;
-		    goto done;
-		}
+	if (!name) continue;
+	if (!propval) continue;
+
+	if (!strcmp(name, "version")) {
+	    version = propval;
+	    if (strcmp(version, "3.0")) {
+		txn->error.precond = CARDDAV_SUPP_DATA;
+		ret = HTTP_FORBIDDEN;
+		goto done;
 	    }
 	}
-	else if (!strcmp(name, "UID")) {
-	    value = vObjectUStringZValue(prop);
-	    if (value)
-		uid = fakeCString(value);
-	}
-	else if (!strcmp(name, "FN")) {
-	    value = vObjectUStringZValue(prop);
-	    if (value)
-		fullname = fakeCString(value);
-	}
+
+	else if (!strcmp(name, "uid"))
+	    uid = propval;
+
+	else if (!strcmp(name, "fn"))
+	    fullname = propval;
     }
 
     /* Sanity check data */
@@ -1145,9 +1148,5 @@ static int store_resource(struct transaction_t *txn, VObject *vcard,
     append_removestage(stage);
 
 done:
-    free(version);
-    free(uid);
-    free(fullname);
-
     return ret;
 }

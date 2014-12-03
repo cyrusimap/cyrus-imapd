@@ -51,9 +51,6 @@
 #elif defined(HAVE_STDINT_H)
 # include <stdint.h>
 #endif
-#ifdef WITH_DAV
-#include <libical/vcc.h>
-#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -107,6 +104,7 @@
 #include "statuscache.h"
 #include "strarray.h"
 #include "sync_log.h"
+#include "vparse.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 
@@ -2666,8 +2664,9 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
     }
     else {
 	struct buf msg_buf = BUF_INITIALIZER;
-	VObjectIterator i;
-	VObject *vcard;
+	struct vparse_state vparser;
+	struct vparse_entry *ventry;
+	int vr;
 
 	/* already seen this message, so do we update it?  No */
 	if (old) goto done;
@@ -2676,10 +2675,11 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 	r = mailbox_map_record(mailbox, new, &msg_buf);
 	if (r) goto done;
 
-	vcard = Parse_MIME(buf_cstring(&msg_buf) + new->header_size,
-			   new->size - new->header_size);
+	memset(&vparser, 0, sizeof(struct vparse_state));
+	vparser.base = buf_cstring(&msg_buf) + new->header_size;
+	vr = vparse_parse(&vparser, 0);
 	buf_free(&msg_buf);
-	if (!vcard) goto done;
+	if (vr) goto done; // XXX report error
 
 	/* Create mapping entry from resource name to UID */
 	cdata->dav.mailbox = mailbox->name;
@@ -2689,39 +2689,39 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 	if (!cdata->dav.creationdate)
 	    cdata->dav.creationdate = new->internaldate;
 
-	initPropIterator(&i, vcard);
-	while (moreIteration(&i)) {
-	    VObject *prop = nextVObject(&i);
-	    const char *name = vObjectName(prop);
-	    const wchar_t *propval = vObjectUStringZValue(prop);
+	for (ventry = vparser.card->properties; ventry; ventry = ventry->next) {
+	    const char *name = ventry->name;
+	    const char *propval = ventry->v.value;
 
 	    if (!name) continue;
 	    if (!propval) continue;
 
-	    if (!strcmp(name, "UID")) {
-		cdata->vcard_uid = fakeCString(propval);
+	    if (!strcmp(name, "uid")) {
+		cdata->vcard_uid = propval;
 	    }
-	    else if (!strcmp(name, "N")) {
-		cdata->name = fakeCString(propval);
+	    else if (!strcmp(name, "n")) {
+		cdata->name = propval;
 	    }
-	    else if (!strcmp(name, "FN")) {
-		cdata->fullname = fakeCString(propval);
+	    else if (!strcmp(name, "fn")) {
+		cdata->fullname = propval;
 	    }
-	    else if (!strcmp(name, "NICKNAME")) {
-		cdata->nickname = fakeCString(propval);
+	    else if (!strcmp(name, "nickname")) {
+		cdata->nickname = propval;
 	    }
-	    else if (!strcmp(name, "EMAIL")) {
+	    else if (!strcmp(name, "email")) {
 		/* XXX - insert if primary */
-		strarray_append(&cdata->emails, fakeCString(propval));
+		strarray_append(&cdata->emails, propval);
 	    }
-	    else if (!strcmp(name, "X-ADDRESSBOOKSERVER-MEMBER")) {
-		const char *item = fakeCString(propval);
+	    else if (!strcmp(name, "x-addressbookserver-member")) {
+		const char *item = propval;
 		if (!strncmp(item, "urn:uuid:", 9))
 		    strarray_append(&cdata->member_uids, item+9);
 	    }
 	}
 
 	r = carddav_write(carddavdb, cdata, 0);
+
+	vparse_free(&vparser);
     }
 
 done:

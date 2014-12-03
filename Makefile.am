@@ -629,6 +629,7 @@ include_HEADERS = \
 	lib/sysexits.h \
 	lib/times.h \
 	lib/tok.h \
+	lib/vparse.h
 	lib/wildmat.h \
 	lib/xmalloc.h
 nobase_include_HEADERS = sieve/sieve_interface.h
@@ -1099,6 +1100,7 @@ lib_libcyrus_min_la_SOURCES = \
 	lib/strarray.c \
 	lib/strhash.c \
 	lib/util.c \
+	lib/vparse.c \
 	lib/xmalloc.c \
 	lib/xstrlcat.c \
 	lib/xstrlcpy.c
