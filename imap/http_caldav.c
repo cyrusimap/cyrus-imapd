@@ -267,8 +267,8 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 		      struct index_record *record, void *data);
 static int caldav_post(struct transaction_t *txn);
 static int caldav_put(struct transaction_t *txn, icalcomponent *ical,
-		      struct mailbox *mailbox, struct caldav_db *caldavdb,
-		      unsigned flags);
+		      struct mailbox *mailbox, const char *resource,
+		      struct caldav_db *caldavdb, unsigned flags);
 
 static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
 				   struct propfind_ctx *fctx, xmlNodePtr resp,
@@ -552,7 +552,7 @@ static struct meth_params caldav_params = {
       (db_delete_proc_t) &caldav_delete,
       (db_delmbox_proc_t) &caldav_delmbox },
     &caldav_acl,
-    (copy_proc_t) &caldav_copy,
+    (put_proc_t) &caldav_copy,
     &caldav_delete_sched,
     &caldav_get,
     { MBTYPE_CALENDAR, "mkcalendar", "mkcalendar-response", NS_CALDAV },
@@ -2316,8 +2316,8 @@ const char *get_icalcomponent_errstr(icalcomponent *ical)
  *   CALDAV:max-attendees-per-instance
  */
 static int caldav_put(struct transaction_t *txn, icalcomponent *ical,
-		      struct mailbox *mailbox, struct caldav_db *davdb,
-		      unsigned flags)
+		      struct mailbox *mailbox, const char *resource,
+		      struct caldav_db *davdb, unsigned flags)
 {
     int ret = 0;
     icalcomponent *comp, *nextcomp;
@@ -2421,15 +2421,15 @@ static int caldav_put(struct transaction_t *txn, icalcomponent *ical,
 	    icalcomponent *oldical = NULL;
 
 	    /* Construct userid corresponding to mailbox */
-	    userid = mboxname_to_userid(txn->req_tgt.mboxname);
+	    userid = mboxname_to_userid(mailbox->name);
 
 	    /* Make sure iCal UID is unique for this user */
 	    caldav_lookup_uid(davdb, uid, 0, &cdata);
 	    /* XXX  Check errors */
 
 	    if (cdata->dav.mailbox &&
-		(strcmp(cdata->dav.mailbox, txn->req_tgt.mboxname) ||
-		 strcmp(cdata->dav.resource, txn->req_tgt.resource))) {
+		(strcmp(cdata->dav.mailbox, mailbox->name) ||
+		 strcmp(cdata->dav.resource, resource))) {
 		/* CALDAV:unique-scheduling-object-resource */
 		char ext_userid[MAX_MAILBOX_NAME+1];
 
@@ -2527,8 +2527,7 @@ static int caldav_put(struct transaction_t *txn, icalcomponent *ical,
     }
 
     /* Store resource at target */
-    ret = store_resource(txn, ical, mailbox,
-			 txn->req_tgt.resource, davdb, flags);
+    ret = store_resource(txn, ical, mailbox, resource, davdb, flags);
 
   done:
     return ret;

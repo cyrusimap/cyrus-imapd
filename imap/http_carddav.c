@@ -95,9 +95,6 @@ static void my_carddav_shutdown(void);
 static int carddav_parse_path(const char *path,
 			      struct request_target_t *tgt, const char **errstr);
 
-static int carddav_copy(struct transaction_t *txn, void *obj,
-			struct mailbox *dest_mbox, const char *dest_rsrc,
-			struct carddav_db *dest_davdb, unsigned flags);
 static int carddav_put(struct transaction_t *txn, VObject *vcard,
 		       struct mailbox *mailbox, struct carddav_db *davdb,
 		       unsigned flags);
@@ -264,7 +261,7 @@ static struct meth_params carddav_params = {
       (db_delete_proc_t) &carddav_delete,
       (db_delmbox_proc_t) &carddav_delmbox },
     NULL,					/* No ACL extensions */
-    (copy_proc_t) &carddav_copy,
+    (put_proc_t) &carddav_put,
     NULL,		  	      		/* No special DELETE handling */
     NULL,		  	      		/* No special GET handling */
     { MBTYPE_ADDRESSBOOK, NULL, NULL, 0 },	/* No special MK* method */
@@ -585,36 +582,7 @@ static int carddav_parse_path(const char *path,
     return 0;
 }
 
-
-/* Perform a COPY/MOVE request
- *
- * preconditions:
- *   CARDDAV:supported-address-data
- *   CARDDAV:valid-address-data
- *   CARDDAV:no-uid-conflict (DAV:href)
- *   CARDDAV:addressbook-collection-location-ok
- *   CARDDAV:max-resource-size
- */
-static int carddav_copy(struct transaction_t *txn, void *obj,
-			struct mailbox *dest_mbox, const char *dest_rsrc,
-			struct carddav_db *dest_davdb, unsigned flags)
-{
-    int ret;
-    VObject *vcard = (VObject *) obj;
-
-    if (!vcard) {
-	txn->error.precond = CARDDAV_VALID_DATA;
-	return HTTP_FORBIDDEN;
-    }
-
-    /* Store source resource at destination */
-    ret = store_resource(txn, vcard, dest_mbox, dest_rsrc, dest_davdb, flags);
-
-    return ret;
-}
-
-
-/* Perform a PUT request
+/* Perform a COPY/MOVE/PUT request
  *
  * preconditions:
  *   CARDDAV:valid-address-data
