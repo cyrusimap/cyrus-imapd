@@ -389,11 +389,6 @@ struct davdb_params {
 typedef int (*acl_proc_t)(struct transaction_t *txn, xmlNodePtr priv,
 			  int *rights);
 
-/* Function to process and COPY a resource */
-typedef int (*copy_proc_t)(struct transaction_t *txn, void *obj,
-			   struct mailbox *dest_mbox, const char *dest_rsrc,
-			   void *dest_davdb, unsigned flags);
-
 /* Function to do special processing for DELETE method (optional) */
 typedef int (*delete_proc_t)(struct transaction_t *txn, struct mailbox *mailbox,
 			     struct index_record *record, void *data);
@@ -431,7 +426,8 @@ typedef int (*post_proc_t)(struct transaction_t *txn);
 
 /* meth_put() parameters */
 typedef int (*put_proc_t)(struct transaction_t *txn, void *obj,
-			  struct mailbox *mailbox, void *davdb, unsigned flags);
+			  struct mailbox *mailbox, const char *resource,
+			  void *davdb, unsigned flags);
 
 struct put_params {
     unsigned supp_data_precond;		/* precond code for unsupported data */
@@ -473,7 +469,7 @@ struct meth_params {
     check_precond_t check_precond;	/* check headers for preconditions */
     struct davdb_params davdb;		/* DAV DB access functions */
     acl_proc_t acl_ext;			/* special ACL handling (extensions) */
-    copy_proc_t copy;			/* function to process & COPY a rsrc */
+    put_proc_t copy;			/* function to process & COPY a rsrc */
     delete_proc_t delete;		/* special DELETE handling (optional) */
     get_proc_t get;			/* special GET handling (optional) */
     struct mkcol_params mkcol;		/* params for creating collection */

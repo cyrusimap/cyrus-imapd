@@ -4954,7 +4954,8 @@ int meth_put(struct transaction_t *txn, void *params)
     case HTTP_OK:
 	/* Parse, validate, and store the resource */
 	obj = mime->from_string(buf_cstring(&txn->req_body.payload));
-	ret = pparams->put.proc(txn, obj, mailbox, davdb, flags);
+	ret = pparams->put.proc(txn, obj, mailbox,
+				txn->req_tgt.resource, davdb, flags);
 	break;
 
     case HTTP_PRECOND_FAILED:
