@@ -2102,7 +2102,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 	r = carddav_delete(carddavdb, cdata->dav.rowid, 0);
     }
     else {
-	const char *uid = NULL, *fullname = NULL, *nickname = NULL;
+	char *uid = NULL, *fullname = NULL, *nickname = NULL;
 	VObjectIterator i;
 	const char *msg_base = NULL;
 	size_t msg_size = 0;
@@ -2148,6 +2148,10 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 	    cdata->dav.creationdate = new->internaldate;
 
 	r = carddav_write(carddavdb, cdata, 0);
+
+	if (nickname) free(nickname);
+	if (fullname) free(fullname);
+	if (uid) free(uid);
     }
 
 done:
