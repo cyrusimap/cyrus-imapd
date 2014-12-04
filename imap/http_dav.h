@@ -66,6 +66,7 @@
 #define SCHED_INBOX	"Inbox/"
 #define SCHED_OUTBOX	"Outbox/"
 #define SCHED_DEFAULT	"Default/"
+#define MANAGED_ATTACH	"Attachments/"
 
 /* XML namespace URIs */
 #define XML_NS_DAV	"DAV:"
@@ -200,6 +201,9 @@ enum {
 
     /* TZ by Ref (draft-ietf-tzdist-caldav-timezone-ref) preconditions */
     CALDAV_VALID_TIMEZONE,
+
+    /* Managed Attachments (draft-daboo-caldav-attachments) preconditions */
+    CALDAV_VALID_MANAGEDID,
 
     /* CalDAV Scheduling (RFC 6638) preconditions */
     CALDAV_VALID_SCHED,
@@ -478,6 +482,8 @@ struct meth_params {
     const struct prop_entry *lprops;	/* array of "live" properties */
     const struct report_type_t *reports;/* array of reports & proc functions */
 };
+
+extern struct meth_params webdav_params;
 
 int report_expand_prop(struct transaction_t *txn, struct meth_params *rparams,
 		       xmlNodePtr inroot, struct propfind_ctx *fctx);

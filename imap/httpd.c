@@ -1928,6 +1928,10 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 			resp_body->iserial);
 	}
     }
+    if (resp_body->cmid) {
+	prot_printf(httpd_out, "Cal-Managed-ID: \"%s\"\r\n", resp_body->cmid);
+	if (txn->flags.cors) Access_Control_Expose("Cal-Managed-ID");
+    }
     if (resp_body->prefs) {
 	/* Construct Preference-Applied header */
 	const char *prefs[] =
@@ -1967,6 +1971,8 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 				", calendar-auto-schedule" : "",
 				(txn->req_tgt.allow & ALLOW_CAL_NOTZ) ?
 				", calendar-no-timezone" : "");
+		    prot_puts(httpd_out, "DAV: calendar-managed-attachments"
+			      ", calendar-managed-attachments-no-recurrence\r\n");
 
 		    /* Backwards compatibility with older Apple VAV clients */
 		    if ((txn->req_tgt.allow &

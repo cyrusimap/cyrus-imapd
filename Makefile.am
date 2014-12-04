@@ -954,6 +954,7 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/http_proxy.h \
 	imap/http_rss.c \
 	imap/http_tzdist.c \
+	imap/http_webdav.c \
 	imap/httpd.c \
 	imap/httpd.h \
 	imap/jcal.c \
@@ -964,6 +965,8 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/smtpclient.h \
 	imap/spool.c \
 	imap/spool.h \
+	imap/webdav_db.c \
+	imap/webdav_db.h \
 	imap/xcal.c \
 	imap/xcal.h \
 	imap/zoneinfo_db.c \
@@ -1061,12 +1064,14 @@ imap_httpd_SOURCES = \
 	imap/http_proxy.c \
 	imap/http_rss.c \
 	imap/http_tzdist.c \
+	imap/http_webdav.c \
 	imap/httpd.c \
 	imap/jcal.c \
 	imap/mutex_fake.c \
 	imap/proxy.c \
 	imap/smtpclient.c \
 	imap/spool.c \
+	imap/webdav_db.c \
 	imap/xcal.c \
 	imap/zoneinfo_db.c \
 	master/service.c

@@ -199,7 +199,8 @@ struct request_target_t {
 /* Request target flags */
 enum {
     TGT_SCHED_INBOX = 1,
-    TGT_SCHED_OUTBOX
+    TGT_SCHED_OUTBOX,
+    TGT_MANAGED_ATTACH
 };
 
 /* Function to parse URI path and generate a mailbox name */
@@ -243,6 +244,7 @@ struct resp_body_t {
     time_t lastmod;	/* Last-Modified    */
     time_t maxage;	/* Expires	    */
     const char *stag;	/* Schedule-Tag     */
+    const char *cmid;	/* Cal-Managed-ID   */
     time_t iserial;	/* iSched serial#   */
     struct buf payload;	/* Payload	    */
 };

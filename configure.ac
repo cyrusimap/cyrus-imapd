@@ -1199,6 +1199,10 @@ dnl
 		AC_DEFINE(HAVE_SCHEDULING_PARAMS,[],
 			[Do we have built-in support for scheduling params?]))
 
+	AC_EGREP_HEADER(ICAL_MANAGEDID_PARAMETER, ical.h,
+		AC_DEFINE(HAVE_MANAGED_ATTACH_PARAMS,[],
+			[Do we have built-in support for managed attachment params?]))
+
 	AC_EGREP_HEADER(ICAL_VAVAILABILITY_COMPONENT, ical.h,
 		AC_DEFINE(HAVE_VAVAILABILITY,[],
 			[Build VAVAILABILITY support into httpd?]))
