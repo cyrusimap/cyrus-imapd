@@ -96,8 +96,8 @@ static int carddav_parse_path(const char *path,
 			      struct request_target_t *tgt, const char **errstr);
 
 static int carddav_put(struct transaction_t *txn, VObject *vcard,
-		       struct mailbox *mailbox, struct carddav_db *davdb,
-		       unsigned flags);
+		       struct mailbox *mailbox, const char *resource,
+		       struct carddav_db *davdb, unsigned flags);
 static VObject *vcard_string_as_vobject(const char *str)
 {
     return Parse_MIME(str, strlen(str));
@@ -124,10 +124,6 @@ static int propfind_suppaddrdata(const xmlChar *name, xmlNsPtr ns,
 static int report_card_query(struct transaction_t *txn,
 			     struct meth_params *rparams,
 			     xmlNodePtr inroot, struct propfind_ctx *fctx);
-
-static int store_resource(struct transaction_t *txn, VObject *vcard,
-			  struct mailbox *mailbox, const char *resource,
-			  struct carddav_db *carddavdb, unsigned flags);
 
 static struct mime_type_t carddav_mime_types[] = {
     /* First item MUST be the default type and storage format */
@@ -590,10 +586,15 @@ static int carddav_parse_path(const char *path,
  *   CARDDAV:max-resource-size
  */
 static int carddav_put(struct transaction_t *txn, VObject *vcard,
-		       struct mailbox *mailbox, struct carddav_db *davdb,
-		       unsigned flags)
+		       struct mailbox *mailbox, const char *resource,
+		       struct carddav_db *davdb, unsigned flags)
 {
-    int ret;
+    int ret = 0;
+    VObjectIterator iter;
+    struct carddav_data *cdata;
+    char *version = NULL, *uid = NULL, *fullname = NULL;
+    char *mimehdr;
+    struct index_record *oldrecord = NULL, record;
 
     /* Validate the vCard data */
     if (!vcard || strcmp(vObjectName(vcard), "VCARD")) {
@@ -601,12 +602,94 @@ static int carddav_put(struct transaction_t *txn, VObject *vcard,
 	return HTTP_FORBIDDEN;
     }
 
-    /* Store resource at target */
-    ret = store_resource(txn, vcard, mailbox,
-			 txn->req_tgt.resource, davdb, flags);
+    /* Fetch some important properties */
+    initPropIterator(&iter, vcard);
+    while (moreIteration(&iter)) {
+	VObject *prop = nextVObject(&iter);
+	const char *name = vObjectName(prop);
+
+	if (!strcmp(name, "VERSION")) {
+	    version = fakeCString(vObjectUStringZValue(prop));
+	    if (strcmp(version, "3.0")) {
+		txn->error.precond = CARDDAV_SUPP_DATA;
+		goto done;
+		ret = HTTP_FORBIDDEN;
+	    }
+	}
+	else if (!strcmp(name, "UID")) {
+	    uid = fakeCString(vObjectUStringZValue(prop));
+	}
+	else if (!strcmp(name, "FN")) {
+	    fullname = fakeCString(vObjectUStringZValue(prop));
+	}
+    }
+
+    /* Sanity check data */
+    if (!version || !uid || !fullname) {
+	txn->error.precond = CARDDAV_VALID_DATA;
+	ret = HTTP_FORBIDDEN;
+	goto done;
+    }
+
+    /* Check for existing vCard UID */
+    carddav_lookup_uid(davdb, uid, 0, &cdata);
+    if (!(flags & NO_DUP_CHECK) &&
+	cdata->dav.mailbox && !strcmp(cdata->dav.mailbox, mailbox->name) &&
+	strcmp(cdata->dav.resource, resource)) {
+	/* CARDDAV:no-uid-conflict */
+	char *owner = mboxname_to_userid(cdata->dav.mailbox);
+	mboxname_hiersep_toexternal(&httpd_namespace, owner, 0);
+
+	txn->error.precond = CARDDAV_UID_CONFLICT;
+	assert(!buf_len(&txn->buf));
+	buf_printf(&txn->buf, "%s/user/%s/%s/%s",
+		   namespace_addressbook.prefix, owner,
+		   strrchr(cdata->dav.mailbox, '.')+1, cdata->dav.resource);
+	txn->error.resource = buf_cstring(&txn->buf);
+	ret = HTTP_FORBIDDEN;
+	goto done;
+    }
+
+    if (cdata->dav.imap_uid) {
+	/* Fetch index record for the resource */
+	oldrecord = &record;
+	mailbox_find_index_record(mailbox, cdata->dav.imap_uid, oldrecord);
+    }
+
+    /* Create and cache RFC 5322 header fields for resource */
+    mimehdr = charset_encode_mimeheader(fullname, 0);
+    spool_cache_header(xstrdup("Subject"), mimehdr, txn->req_hdrs);
+
+    /* XXX - validate uid for mime safety? */
+    if (strchr(uid, '@')) {
+	spool_cache_header(xstrdup("Message-ID"), xstrdup(uid), txn->req_hdrs);
+    }
+    else {
+	assert(!buf_len(&txn->buf));
+	buf_printf(&txn->buf, "<%s@%s>", uid, config_servername);
+	spool_cache_header(xstrdup("Message-ID"),
+			   buf_release(&txn->buf), txn->req_hdrs);
+    }
+
+    assert(!buf_len(&txn->buf));
+    buf_printf(&txn->buf, "text/vcard; version=%s; charset=utf-8", version);
+    spool_cache_header(xstrdup("Content-Type"),
+		       buf_release(&txn->buf), txn->req_hdrs);
+
+    buf_printf(&txn->buf, "attachment;\r\n\tfilename=\"%s\"", resource);
+    spool_cache_header(xstrdup("Content-Disposition"),
+		       buf_release(&txn->buf), txn->req_hdrs);
+
+    /* Store the resource */
+    ret = dav_store_resource(txn, buf_cstring(&txn->req_body.payload), 0,
+			     mailbox, oldrecord, NULL, 0);
+
+  done:
+    if (uid) free(uid);
+    if (version) free(version);
+    if (fullname) free(fullname);
 
     return ret;
-
 }
 
 
@@ -796,96 +879,4 @@ static int report_card_query(struct transaction_t *txn,
     }
 
     return (ret ? ret : HTTP_MULTI_STATUS);
-}
-
-
-/* Store the vCard data in the specified addressbook/resource */
-static int store_resource(struct transaction_t *txn, VObject *vcard,
-			  struct mailbox *mailbox, const char *resource,
-			  struct carddav_db *carddavdb, unsigned flags)
-{
-    VObjectIterator iter;
-    struct carddav_data *cdata;
-    const char *version = NULL, *uid = NULL, *fullname = NULL;
-    char *mimehdr;
-    struct index_record *oldrecord = NULL, record;
-
-    /* Fetch some important properties */
-    initPropIterator(&iter, vcard);
-    while (moreIteration(&iter)) {
-	VObject *prop = nextVObject(&iter);
-	const char *name = vObjectName(prop);
-
-	if (!strcmp(name, "VERSION")) {
-	    version = fakeCString(vObjectUStringZValue(prop));
-	    if (strcmp(version, "3.0")) {
-		txn->error.precond = CARDDAV_SUPP_DATA;
-		return HTTP_FORBIDDEN;
-	    }
-	}
-	else if (!strcmp(name, "UID")) {
-	    uid = fakeCString(vObjectUStringZValue(prop));
-	}
-	else if (!strcmp(name, "FN")) {
-	    fullname = fakeCString(vObjectUStringZValue(prop));
-	}
-    }
-
-    /* Sanity check data */
-    if (!version || !uid || !fullname) {
-	txn->error.precond = CARDDAV_VALID_DATA;
-	return HTTP_FORBIDDEN;
-    }
-
-    /* Check for existing vCard UID */
-    carddav_lookup_uid(carddavdb, uid, 0, &cdata);
-    if (!(flags & NO_DUP_CHECK) &&
-	cdata->dav.mailbox && !strcmp(cdata->dav.mailbox, mailbox->name) &&
-	strcmp(cdata->dav.resource, resource)) {
-	/* CARDDAV:no-uid-conflict */
-	char *owner = mboxname_to_userid(cdata->dav.mailbox);
-	mboxname_hiersep_toexternal(&httpd_namespace, owner, 0);
-
-	txn->error.precond = CARDDAV_UID_CONFLICT;
-	assert(!buf_len(&txn->buf));
-	buf_printf(&txn->buf, "%s/user/%s/%s/%s",
-		   namespace_addressbook.prefix, owner,
-		   strrchr(cdata->dav.mailbox, '.')+1, cdata->dav.resource);
-	txn->error.resource = buf_cstring(&txn->buf);
-	return HTTP_FORBIDDEN;
-    }
-
-    if (cdata->dav.imap_uid) {
-	/* Fetch index record for the resource */
-	oldrecord = &record;
-	mailbox_find_index_record(mailbox, cdata->dav.imap_uid, oldrecord);
-    }
-
-    /* Create and cache RFC 5322 header fields for resource */
-    mimehdr = charset_encode_mimeheader(fullname, 0);
-    spool_cache_header(xstrdup("Subject"), mimehdr, txn->req_hdrs);
-
-    /* XXX - validate uid for mime safety? */
-    if (strchr(uid, '@')) {
-	spool_cache_header(xstrdup("Message-ID"), xstrdup(uid), txn->req_hdrs);
-    }
-    else {
-	assert(!buf_len(&txn->buf));
-	buf_printf(&txn->buf, "<%s@%s>", uid, config_servername);
-	spool_cache_header(xstrdup("Message-ID"),
-			   buf_release(&txn->buf), txn->req_hdrs);
-    }
-
-    assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "text/vcard; version=%s; charset=utf-8", version);
-    spool_cache_header(xstrdup("Content-Type"),
-		       buf_release(&txn->buf), txn->req_hdrs);
-
-    buf_printf(&txn->buf, "attachment;\r\n\tfilename=\"%s\"", resource);
-    spool_cache_header(xstrdup("Content-Disposition"),
-		       buf_release(&txn->buf), txn->req_hdrs);
-
-    /* Store the resource */
-    return dav_store_resource(txn, buf_cstring(&txn->req_body.payload), 0,
-			      mailbox, oldrecord, NULL, 0);
 }
