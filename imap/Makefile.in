@@ -66,6 +66,7 @@ RSS_OBJS = http_rss.o
 DAV_OBJS = http_dav.o dav_db.o
 CALDAV_OBJS = http_caldav.o caldav_db.o smtpclient.o xcal.o jcal.o
 CARDDAV_OBJS = http_carddav.o carddav_db.o
+WEBDAV_OBJS = http_webdav.o webdav_db.o
 ISCHED_OBJS = http_ischedule.o
 TZDIST_OBJS = http_tzdist.o zoneinfo_db.o tz_err.o
 JMAP_OBJS = http_jmap.o
@@ -113,7 +114,7 @@ LOBJS= append.o mailbox.o mboxlist.o mupdate-client.o mboxname.o message.o \
 	imapparse.o telemetry.o user.o notify.o idle.o quota_db.o \
 	sync_log.o $(SEEN) mboxkey.o backend.o tls.o message_guid.o \
 	statuscache_db.o userdeny_db.o sequence.o upgrade_index.o \
-	dlist.o version.o dav_util.o caldav_db.o carddav_db.o dav_db.o
+	dlist.o version.o dav_util.o caldav_db.o carddav_db.o webdav_db.o dav_db.o
 
 IMAPDOBJS=pushstats.o imapd.o proxy.o imap_proxy.o index.o sync_support.o
 

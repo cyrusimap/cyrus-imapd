@@ -93,6 +93,7 @@
 #include "tok.h"
 #include "util.h"
 #include "version.h"
+#include "webdav_db.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
@@ -112,6 +113,99 @@ static int rscale_cmp(const void *a, const void *b)
     return strcmp(ucase(*((char **) a)), ucase(*((char **) b)));
 }
 #endif /* HAVE_RSCALE */
+
+
+#ifndef HAVE_MANAGED_ATTACH_PARAMS
+
+/* Functions to replace those not available in libical < v2.0 */
+
+static icalparameter*
+icalproperty_get_iana_parameter_by_name(icalproperty *prop, const char *name)
+{
+    icalparameter *param;
+
+    for (param = icalproperty_get_first_parameter(prop, ICAL_IANA_PARAMETER);
+	 param && strcmp(icalparameter_get_iana_name(param), name);
+	 param = icalproperty_get_next_parameter(prop, ICAL_IANA_PARAMETER));
+
+    return param;
+}
+
+static icalparameter *icalparameter_new_filename(const char *fname)
+{
+    icalparameter *param = icalparameter_new(ICAL_IANA_PARAMETER);
+
+    icalparameter_set_iana_name(param, "FILENAME");
+    icalparameter_set_iana_value(param, fname);
+
+    return param;
+}
+
+static void icalparameter_set_filename(icalparameter *param, const char *fname)
+{
+    icalparameter_set_iana_value(param, fname);
+}
+
+static icalparameter *icalparameter_new_managedid(const char *id)
+{
+    icalparameter *param = icalparameter_new(ICAL_IANA_PARAMETER);
+
+    icalparameter_set_iana_name(param, "MANAGED-ID");
+    icalparameter_set_iana_value(param, id);
+
+    return param;
+}
+
+static const char *icalparameter_get_managedid(icalparameter *param)
+{
+    return icalparameter_get_iana_value(param);
+}
+
+static void icalparameter_set_managedid(icalparameter *param, const char *id)
+{
+    icalparameter_set_iana_value(param, id);
+}
+
+static icalparameter *icalparameter_new_size(const char *sz)
+{
+    icalparameter *param = icalparameter_new(ICAL_IANA_PARAMETER);
+
+    icalparameter_set_iana_name(param, "SIZE");
+    icalparameter_set_iana_value(param, sz);
+
+    return param;
+}
+
+static void icalparameter_set_size(icalparameter *param, const char *sz)
+{
+    icalparameter_set_iana_value(param, sz);
+}
+
+/* Wrappers to fetch managed attachment parameters by kind */
+
+#define icalproperty_get_filename_parameter(prop) \
+    icalproperty_get_iana_parameter_by_name(prop, "FILENAME")
+
+#define icalproperty_get_managedid_parameter(prop) \
+    icalproperty_get_iana_parameter_by_name(prop, "MANAGED-ID")
+
+#define icalproperty_get_size_parameter(prop) \
+    icalproperty_get_iana_parameter_by_name(prop, "SIZE")
+
+#else
+
+/* Wrappers to fetch managed attachment parameters by kind */
+
+#define icalproperty_get_filename_parameter(prop) \
+    icalproperty_get_first_parameter(prop, ICAL_FILENAME_PARAMETER)
+
+#define icalproperty_get_managedid_parameter(prop) \
+    icalproperty_get_first_parameter(prop, ICAL_MANAGEDID_PARAMETER)
+
+#define icalproperty_get_size_parameter(prop) \
+    icalproperty_get_first_parameter(prop, ICAL_SIZE_PARAMETER)
+
+#endif /* HAVE_MANAGED_ATTACH_PARAMS */
 
 
 #ifndef HAVE_SCHEDULING_PARAMS
@@ -155,18 +249,6 @@ static icalparameter *icalparameter_new_schedulestatus(const char *stat)
 }
 
 /* Wrappers to fetch scheduling parameters by kind */
-
-static icalparameter*
-icalproperty_get_iana_parameter_by_name(icalproperty *prop, const char *name)
-{
-    icalparameter *param;
-
-    for (param = icalproperty_get_first_parameter(prop, ICAL_IANA_PARAMETER);
-	 param && strcmp(icalparameter_get_iana_name(param), name);
-	 param = icalproperty_get_next_parameter(prop, ICAL_IANA_PARAMETER));
-
-    return param;
-}
 
 #define icalproperty_get_scheduleagent_parameter(prop) \
     icalproperty_get_iana_parameter_by_name(prop, "SCHEDULE-AGENT")
@@ -241,6 +323,7 @@ static const char *ical_prodid = NULL;
 static struct strlist *cua_domains = NULL;
 icalarray *rscale_calendars = NULL;
 
+static int meth_get_cal(struct transaction_t *txn, void *params);
 static int meth_get_fb(struct transaction_t *txn, void *params);
 
 static struct caldav_db *my_caldav_open(struct mailbox *mailbox);
@@ -576,8 +659,8 @@ struct namespace_t namespace_calendar = {
 	{ &meth_acl,		&caldav_params },	/* ACL		*/
 	{ &meth_copy,		&caldav_params },	/* COPY		*/
 	{ &meth_delete,		&caldav_params },	/* DELETE	*/
-	{ &meth_get_dav,	&caldav_params },	/* GET		*/
-	{ &meth_get_dav,	&caldav_params },	/* HEAD		*/
+	{ &meth_get_cal,	&caldav_params },	/* GET		*/
+	{ &meth_get_cal,	&caldav_params },	/* HEAD		*/
 	{ &meth_lock,		&caldav_params },	/* LOCK		*/
 	{ &meth_mkcol,		&caldav_params },	/* MKCALENDAR	*/
 	{ &meth_mkcol,		&caldav_params },	/* MKCOL	*/
@@ -640,6 +723,21 @@ static const struct cal_comp_t {
 };
 
 
+static int meth_get_cal(struct transaction_t *txn, void *gparams)
+
+{
+    int r;
+
+    /* Parse the path */
+    if ((r = caldav_parse_path(txn->req_uri->path,
+			       &txn->req_tgt, &txn->error.desc))) return r;
+
+    if (txn->req_tgt.flags == TGT_MANAGED_ATTACH) gparams = &webdav_params;
+
+    return meth_get_dav(txn, gparams);
+}
+
+
 static struct caldav_db *my_caldav_open(struct mailbox *mailbox)
 {
     if (httpd_userid && mboxname_userownsmailbox(httpd_userid, mailbox->name)) {
@@ -686,6 +784,7 @@ static void my_caldav_init(struct buf *serverinfo)
     }
 
     caldav_init();
+    webdav_init();
 
     config_allowsched = config_getenum(IMAPOPT_CALDAV_ALLOWSCHEDULING);
     if (config_allowsched) {
@@ -885,6 +984,7 @@ static void my_caldav_shutdown(void)
     buf_free(&ical_prodid_buf);
     freestrlist(cua_domains);
 
+    webdav_done();
     caldav_done();
 }
 
@@ -975,9 +1075,16 @@ static int caldav_parse_path(const char *path,
 	    tgt->flags = TGT_SCHED_INBOX;
 	else if (!strncmp(tgt->collection, SCHED_OUTBOX, strlen(SCHED_OUTBOX)))
 	    tgt->flags = TGT_SCHED_OUTBOX;
+	else if (!strncmp(tgt->collection,
+			  MANAGED_ATTACH, strlen(MANAGED_ATTACH)))
+	    tgt->flags = TGT_MANAGED_ATTACH;
 
-	if (tgt->resource) {
-	    if (!tgt->flags) tgt->allow |= ALLOW_WRITE;
+	if (tgt->flags == TGT_MANAGED_ATTACH) {
+	    /* Read-only non-calendar collection */
+	    tgt->allow &= ~(ALLOW_WRITECOL|ALLOW_CAL);
+	}
+	else if (tgt->resource) {
+	    if (!tgt->flags) tgt->allow |= ALLOW_WRITE|ALLOW_POST;
 	    tgt->allow |= ALLOW_DELETE;
 	    tgt->allow &= ~ALLOW_WRITECOL;
 	}
@@ -2117,11 +2224,379 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 }
 
 
-/* Perform a busy time request, if necessary */
-static int caldav_post(struct transaction_t *txn)
+enum {
+    ATTACH_ADD,
+    ATTACH_UPDATE,
+    ATTACH_REMOVE
+};
+
+
+/* Manage attachment */
+static int caldav_post_attach(struct transaction_t *txn, int rights)
 {
-    int ret = 0, r, rights;
-    char *acl, orgid[MAX_MAILBOX_NAME+1] = "";
+    int ret = 0, r, precond;
+    struct resp_body_t *resp_body = &txn->resp_body;
+    struct strlist *action, *mid, *rid;
+    struct mime_type_t *mime = NULL;
+    struct mailbox *calendar = NULL, *attachments = NULL;
+    struct caldav_db *caldavdb = NULL;
+    struct caldav_data *cdata;
+    struct webdav_db *webdavdb = NULL;
+    struct webdav_data *wdata;
+    struct index_record record;
+    const char *etag = NULL, **hdr, *resource, *msg_base = NULL;
+    unsigned long msg_size = 0;
+    char namebuf[MAX_MAILBOX_NAME+1];
+    time_t lastmod = 0;
+    static unsigned post_count = 0;
+    icalcomponent *ical = NULL, *comp;
+    icalcomponent_kind kind;
+    icalproperty *aprop, *prop;
+    icalparameter *param;
+    unsigned op, return_rep;
+
+    /* Check ACL for current user */
+    if (!(rights & DACL_WRITECONT)) {
+	/* DAV:need-privileges */
+	txn->error.precond = DAV_NEED_PRIVS;
+	txn->error.resource = txn->req_tgt.path;
+	txn->error.rights = DACL_WRITECONT;
+	return HTTP_NO_PRIVS;
+    }
+
+    if ((return_rep = (get_preferences(txn) & PREFER_REP))) {
+	/* Check requested MIME type:
+	   1st entry in gparams->mime_types array MUST be default MIME type */
+	if ((hdr = spool_getheader(txn->req_hdrs, "Accept")))
+	    mime = get_accept_type(hdr, caldav_mime_types);
+	else mime = caldav_mime_types;
+	if (!mime) return HTTP_NOT_ACCEPTABLE;
+    }
+
+    /* Fetch and sanity check parameters */
+    action = hash_lookup("action", &txn->req_qparams);
+    mid = hash_lookup("managed-id", &txn->req_qparams);
+    rid = hash_lookup("rid", &txn->req_qparams);
+
+    if (rid) return HTTP_BAD_REQUEST;  /* not supported (yet) */
+
+    if (!action || action->next) return HTTP_BAD_REQUEST;
+    else if (!strcmp(action->s, "attachment-add")) op = ATTACH_ADD;
+    else if (!strcmp(action->s, "attachment-update")) op = ATTACH_UPDATE;
+    else if (!strcmp(action->s, "attachment-remove")) op = ATTACH_REMOVE;
+    else return HTTP_BAD_REQUEST;
+
+    switch (op) {
+    case ATTACH_ADD:
+	if (mid) return HTTP_BAD_REQUEST;
+	break;
+
+    case ATTACH_UPDATE:
+	if (rid) return HTTP_BAD_REQUEST;
+
+    case ATTACH_REMOVE:
+	if (!mid || mid->next) return HTTP_BAD_REQUEST;
+	break;
+    }
+
+    /* Open calendar for writing */
+    r = mailbox_open_iwl(txn->req_tgt.mboxname, &calendar);
+    if (r) {
+	syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+	       txn->req_tgt.mboxname, error_message(r));
+	txn->error.desc = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
+    /* Open the CalDAV DB corresponding to the calendar */
+    caldavdb = my_caldav_open(calendar);
+
+    /* Find message UID for the cal resource */
+    caldav_lookup_resource(caldavdb, txn->req_tgt.mboxname,
+			   txn->req_tgt.resource, 0, &cdata);
+    if (!cdata->dav.rowid) ret = HTTP_NOT_FOUND;
+    else if (!cdata->dav.imap_uid) ret = HTTP_CONFLICT;
+    if (ret) goto done;
+
+    /* Fetch index record for the cal resource */
+    memset(&record, 0, sizeof(struct index_record));
+    r = mailbox_find_index_record(calendar, cdata->dav.imap_uid, &record);
+    if (r) {
+	txn->error.desc = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
+    etag = message_guid_encode(&record.guid);
+    lastmod = record.internaldate;
+
+    /* Load and parse message containing the resource */
+    mailbox_map_message(calendar, record.uid, &msg_base, &msg_size);
+    ical = icalparser_parse_string(msg_base + record.header_size);
+    mailbox_unmap_message(calendar, record.uid, &msg_base, &msg_size);
+    comp = icalcomponent_get_first_real_component(ical);
+    kind = icalcomponent_isa(comp);
+
+    /* Check any preconditions */
+    precond = caldav_check_precond(txn, cdata, etag, lastmod);
+
+    switch (precond) {
+    case HTTP_OK:
+	break;
+
+    case HTTP_LOCKED:
+	txn->error.precond = DAV_NEED_LOCK_TOKEN;
+	txn->error.resource = txn->req_tgt.path;
+
+    default:
+	/* We failed a precondition - don't perform the request */
+	ret = precond;
+
+	if ((precond == HTTP_PRECOND_FAILED) && return_rep) goto return_rep;
+	else goto done;
+    }
+
+    /* Open attachments collection for writing */
+    caldav_mboxname(MANAGED_ATTACH, httpd_userid, namebuf);
+    r = mailbox_open_iwl(namebuf, &attachments);
+    if (r) {
+	syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+	       txn->req_tgt.mboxname, error_message(r));
+	txn->error.desc = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
+    /* Open the WebDAV DB corresponding to the attachments collection */
+    webdavdb = webdav_open(attachments, WEBDAV_CREATE);
+
+    switch (op) {
+    case ATTACH_ADD: {
+	const char *proto = NULL, *host = NULL;
+	icalattach *attach;
+
+	/* Create resource name for attachment */
+	hdr = spool_getheader(txn->req_hdrs, "Content-Disposition");
+	snprintf(namebuf, MAX_MAILBOX_NAME, "%s-%ld-%d-%u",
+		 cdata->ical_uid, time(0), getpid(), post_count++);
+	resource = namebuf;
+
+	/* Create new ATTACH property */
+	assert(!buf_len(&txn->buf));
+	http_proto_host(txn->req_hdrs, &proto, &host);
+	buf_printf(&txn->buf, "%s://%s%s/user/%.*s/%s%s",
+		   proto, host, namespace_calendar.prefix,
+		   (int) txn->req_tgt.userlen, txn->req_tgt.user,
+		   MANAGED_ATTACH, resource);
+	attach = icalattach_new_from_url(buf_cstring(&txn->buf));
+	buf_reset(&txn->buf);
+
+	aprop = icalproperty_new_attach(attach);
+	icalcomponent_add_property(comp, aprop);
+	break;
+    }
+
+    case ATTACH_UPDATE:
+    case ATTACH_REMOVE:
+	/* Verify managed-id */
+	for (aprop = icalcomponent_get_first_property(comp,
+						      ICAL_ATTACH_PROPERTY);
+	     aprop;
+	     aprop = icalcomponent_get_next_property(comp,
+						     ICAL_ATTACH_PROPERTY)) {
+	    param = icalproperty_get_managedid_parameter(aprop);
+	    if (!strcmp(mid->s, icalparameter_get_managedid(param))) break;
+	}
+	if (!aprop) {
+	    txn->error.precond = CALDAV_VALID_MANAGEDID;
+	    ret = HTTP_BAD_REQUEST;
+	    goto done;
+	}
+
+	/* Find DAV record for the attachment */
+	webdav_lookup_uid(webdavdb, mid->s, 0, &wdata);
+	if (!wdata->dav.rowid) {
+	    txn->error.precond = CALDAV_VALID_MANAGEDID;
+	    ret = HTTP_BAD_REQUEST;
+	    goto done;
+	}
+
+	resource = wdata->dav.resource;
+    }
+
+    switch (op) {
+    case ATTACH_ADD:
+    case ATTACH_UPDATE: {
+	/* Read body */
+	txn->req_body.flags |= BODY_DECODE;
+	r = http_read_body(httpd_in, httpd_out,
+			   txn->req_hdrs, &txn->req_body, &txn->error.desc);
+	if (r) {
+	    txn->flags.conn = CONN_CLOSE;
+	    return r;
+	}
+
+	/* Make sure we have a body */
+	if (!buf_len(&txn->req_body.payload)) {
+	    txn->error.desc = "Missing request body";
+	    ret = HTTP_BAD_REQUEST;
+	    goto done;
+	}
+
+	/* Store the new/updated attachment using WebDAV callback */
+	ret = webdav_params.put.proc(txn, &txn->req_body.payload,
+				     attachments, resource, webdavdb, 0);
+
+	/* Finished with attachment collection */
+	mailbox_unlock_index(attachments, NULL);
+
+	switch (ret) {
+	case HTTP_CREATED:
+	case HTTP_NO_CONTENT:
+	    resp_body->cmid = resp_body->etag;
+	    resp_body->etag = NULL;
+	    break;
+
+	default:
+	    goto done;
+	    break;
+	}
+
+	/* Lookup new/updated resource record */
+	webdav_lookup_resource(webdavdb, attachments->name,
+			       resource, 0, &wdata);
+
+	/* Update ATTACH parameters */
+	param = icalproperty_get_managedid_parameter(aprop);
+	if (param) icalparameter_set_managedid(param, resp_body->cmid);
+	else {
+	    param = icalparameter_new_managedid(resp_body->cmid);
+	    icalproperty_add_parameter(aprop, param);
+	}
+
+	if (wdata->filename) {
+	    param = icalproperty_get_filename_parameter(aprop);
+	    if (param) icalparameter_set_filename(param, wdata->filename);
+	    else {
+		param = icalparameter_new_filename(wdata->filename);
+		icalproperty_add_parameter(aprop, param);
+	    }
+	}
+
+	assert(!buf_len(&txn->buf));
+	buf_printf(&txn->buf, "%u", buf_len(&txn->req_body.payload));
+	param = icalproperty_get_size_parameter(aprop);
+	if (param) icalparameter_set_size(param, buf_cstring(&txn->buf));
+	else {
+	    param = icalparameter_new_size(buf_cstring(&txn->buf));
+	    icalproperty_add_parameter(aprop, param);
+	}
+	buf_reset(&txn->buf);
+
+	if ((hdr = spool_getheader(txn->req_hdrs, "Content-Type"))) {
+	    param = icalproperty_get_first_parameter(aprop,
+						     ICAL_FMTTYPE_PARAMETER);
+	    if (param) icalparameter_set_fmttype(param, *hdr);
+	    else {
+		param = icalparameter_new_fmttype(*hdr);
+		icalproperty_add_parameter(aprop, param);
+	    }
+	}
+
+	for (comp = icalcomponent_get_next_component(ical, kind);
+	     comp; comp = icalcomponent_get_next_component(ical, kind)) {
+	    for (prop = icalcomponent_get_first_property(comp,
+							 ICAL_ATTACH_PROPERTY);
+		 prop;
+		 prop = icalcomponent_get_next_property(comp,
+							ICAL_ATTACH_PROPERTY)) {
+		param = icalproperty_get_managedid_parameter(prop);
+		if (!strcmp(mid->s, icalparameter_get_managedid(param))) {
+		    icalcomponent_remove_property(comp, prop);
+		    icalproperty_free(prop);
+		    break;
+		}
+	    }
+	    icalcomponent_add_property(comp, icalproperty_new_clone(aprop));
+	}
+	break;
+    }
+
+    case ATTACH_REMOVE:
+	/* XXX  Delete attachment resource? */
+
+	/* Remove ATTACH properties */
+	icalcomponent_remove_property(comp, aprop);
+	icalproperty_free(aprop);
+
+	for (comp = icalcomponent_get_next_component(ical, kind);
+	     comp; comp = icalcomponent_get_next_component(ical, kind)) {
+	    for (prop = icalcomponent_get_first_property(comp,
+							 ICAL_ATTACH_PROPERTY);
+		 prop;
+		 prop = icalcomponent_get_next_property(comp,
+							ICAL_ATTACH_PROPERTY)) {
+		param = icalproperty_get_managedid_parameter(prop);
+		if (!strcmp(mid->s, icalparameter_get_managedid(param))) {
+		    icalcomponent_remove_property(comp, prop);
+		    icalproperty_free(prop);
+		    break;
+		}
+	    }
+	}
+	break;
+    }
+
+    /* Store updated calendar resource */
+    ret = store_resource(txn, ical, calendar,
+			 txn->req_tgt.resource, caldavdb, 0);
+
+    if (ret == HTTP_NO_CONTENT && return_rep) {
+	char *data;
+
+	ret = (op == ATTACH_ADD) ? HTTP_CREATED : HTTP_OK;
+
+      return_rep:
+	/* Convert into requested MIME type */
+	data = mime->to_string(ical);
+
+	/* Fill in Content-Type, Content-Length */
+	resp_body->type = mime->content_type;
+	resp_body->len = strlen(data);
+
+	/* Fill in Content-Location */
+	resp_body->loc = txn->req_tgt.path;
+
+	/* Fill in Expires and Cache-Control */
+	resp_body->maxage = 3600;	/* 1 hr */
+	txn->flags.cc = CC_MAXAGE
+	    | CC_REVALIDATE		/* don't use stale data */
+	    | CC_NOTRANSFORM;		/* don't alter iCal data */
+
+	/* Output current representation */
+	write_body(ret, txn, data, resp_body->len);
+
+	free(data);
+	ret = 0;
+    }
+
+  done:
+    if (ical) icalcomponent_free(ical);
+    if (webdavdb) webdav_close(webdavdb);
+    if (caldavdb) my_caldav_close(caldavdb);
+    mailbox_close(&attachments);
+    mailbox_close(&calendar);
+
+    return ret;
+}
+
+
+/* Perform a busy time request */
+static int caldav_post_outbox(struct transaction_t *txn, int rights)
+{
+    int ret = 0, r;
+    char orgid[MAX_MAILBOX_NAME+1] = "";
     const char **hdr;
     struct mime_type_t *mime = NULL;
     icalcomponent *ical = NULL, *comp;
@@ -2130,17 +2605,6 @@ static int caldav_post(struct transaction_t *txn)
     icalproperty *prop = NULL;
     const char *uid = NULL, *organizer = NULL;
     struct sched_param sparam;
-
-    if (!(namespace_calendar.allow & ALLOW_CAL_SCHED) || !txn->req_tgt.flags) {
-	/* POST to regular calendar collection */
-	return HTTP_CONTINUE;
-    }
-    else if (txn->req_tgt.flags == TGT_SCHED_INBOX) {
-	/* Don't allow POST to schedule-inbox */
-	return HTTP_NOT_ALLOWED;
-    }
-
-    /* POST to schedule-outbox */
 
     /* Check Content-Type */
     if ((hdr = spool_getheader(txn->req_hdrs, "Content-Type"))) {
@@ -2152,22 +2616,6 @@ static int caldav_post(struct transaction_t *txn)
 	txn->error.precond = CALDAV_SUPP_DATA;
 	return HTTP_BAD_REQUEST;
     }
-
-    /* Locate the mailbox */
-    if ((r = http_mlookup(txn->req_tgt.mboxname, NULL, &acl, NULL))) {
-	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-
-	switch (r) {
-	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	default: return HTTP_SERVER_ERROR;
-	}
-    }
-
-    /* Get rights for current user */
-    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
 
     /* Read body */
     txn->req_body.flags |= BODY_DECODE;
@@ -2249,6 +2697,63 @@ static int caldav_post(struct transaction_t *txn)
     if (ical) icalcomponent_free(ical);
 
     return ret;
+}
+
+
+static int caldav_post(struct transaction_t *txn)
+{
+    char *server, *acl;
+    int r, rights;
+
+    /* Locate the mailbox */
+    if ((r = http_mlookup(txn->req_tgt.mboxname, &server, &acl, NULL))) {
+	syslog(LOG_ERR, "mlookup(%s) failed: %s",
+	       txn->req_tgt.mboxname, error_message(r));
+	txn->error.desc = error_message(r);
+
+	switch (r) {
+	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	default: return HTTP_SERVER_ERROR;
+	}
+    }
+
+    /* Get rights for current user */
+    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
+
+    if (txn->req_tgt.resource) {
+	if (txn->req_tgt.flags) {
+	    /* Don't allow POST on resources in special collections */
+	    return HTTP_NOT_ALLOWED;
+	}
+
+	if (server) {
+	    /* Remote mailbox */
+	    struct backend *be;
+
+	    be = proxy_findserver(server, &http_protocol, proxy_userid,
+				  &backend_cached, NULL, NULL, httpd_in);
+	    if (!be) return HTTP_UNAVAILABLE;
+
+	    return http_pipe_req_resp(be, txn);
+	}
+
+	/* Local Mailbox */
+	return caldav_post_attach(txn, rights);
+    }
+    else if ((namespace_calendar.allow & ALLOW_CAL_SCHED) &&
+	     txn->req_tgt.flags == TGT_SCHED_OUTBOX) {
+	/* POST to schedule-outbox */
+	return caldav_post_outbox(txn, rights);
+    }
+    else if (txn->req_tgt.flags) {
+	/* Don't allow POST to special collections */
+	return HTTP_NOT_ALLOWED;
+    }
+    else {
+	/* POST to regular calendar collection */
+	return HTTP_CONTINUE;
+    }
 }
 
 
@@ -3111,7 +3616,8 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
     if (!fctx->record) {
 	xmlNewChild(node, NULL, BAD_CAST "collection", NULL);
 
-	if (fctx->req_tgt->collection) {
+	if (fctx->req_tgt->collection &&
+	    fctx->mailbox->mbtype == MBTYPE_CALENDAR) {
 	    ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
 	    if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX)) {
 		xmlNewChild(node, fctx->ns[NS_CALDAV],

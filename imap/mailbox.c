@@ -92,6 +92,7 @@
 #include "sequence.h"
 #include "statuscache.h"
 #include "sync_log.h"
+#include "webdav_db.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
@@ -2266,6 +2267,79 @@ done:
     return r;
 }
 
+static int mailbox_update_webdav(struct mailbox *mailbox,
+				 struct index_record *old,
+				 struct index_record *new)
+{
+    struct webdav_db *webdavdb = NULL;
+    struct param *param;
+    struct body *body = NULL;
+    struct webdav_data *wdata = NULL;
+    const char *resource = NULL;
+    int r = 0;
+
+    /* conditions in which there's nothing to do */
+    if (!new) goto done;
+
+    /* phantom record - never really existed here */
+    if (!old && (new->system_flags & FLAG_EXPUNGED))
+	goto done;
+
+    r = mailbox_cacherecord(mailbox, new);
+    if (r) goto done;
+
+    /* Get resource URL from filename param in Content-Disposition header */
+    message_read_bodystructure(new, &body);
+    for (param = body->disposition_params; param; param = param->next) {
+        if (!strcmp(param->attribute, "FILENAME")) {
+            resource = param->value;
+        }
+    }
+
+    webdavdb = webdav_open(mailbox, 0);
+
+    /* Find existing record for this resource */
+    webdav_lookup_resource(webdavdb, mailbox->name, resource, 1, &wdata);
+
+    /* XXX - if not matching by UID, skip - this record doesn't refer to the current item */
+
+    if (new->system_flags & FLAG_EXPUNGED) {
+	/* is there an existing record? */
+	if (!wdata) goto done;
+
+	/* does it still come from this UID? */
+	if (wdata->dav.imap_uid != new->uid) goto done;
+
+	/* delete entry */
+	r = webdav_delete(webdavdb, wdata->dav.rowid, 0);
+    }
+    else {
+	wdata->dav.creationdate = new->internaldate;
+	wdata->dav.mailbox = mailbox->name;
+	wdata->dav.imap_uid = new->uid;
+	wdata->dav.resource = resource;
+	wdata->filename = body->description;
+	wdata->type = lcase(body->type);
+	wdata->subtype = lcase(body->subtype);
+	wdata->res_uid = message_guid_encode(&new->guid);
+
+	r = webdav_write(webdavdb, wdata, 0);
+    }
+
+done:
+    if (body) {
+	message_free_body(body);
+	free(body);
+    }
+
+    if (webdavdb) {
+	webdav_commit(webdavdb);
+	webdav_close(webdavdb);
+    }
+
+    return r;
+}
+
 static int mailbox_update_dav(struct mailbox *mailbox,
 			      struct index_record *old,
 			      struct index_record *new)
@@ -2274,6 +2348,9 @@ static int mailbox_update_dav(struct mailbox *mailbox,
 	return mailbox_update_carddav(mailbox, old, new);
     if (mailbox->mbtype & MBTYPE_CALENDAR)
 	return mailbox_update_caldav(mailbox, old, new);
+    if (mailbox->mbtype & MBTYPE_COLLECTION)
+	return mailbox_update_webdav(mailbox, old, new);
+
     return 0;
 }
 

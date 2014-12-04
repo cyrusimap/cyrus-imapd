@@ -68,10 +68,11 @@ extern struct db *mbdb;
 #define MBTYPE_NETNEWS (1<<2) /* Netnews Mailbox - NO LONGER USED */
 #define MBTYPE_MOVING (1<<3) /* Mailbox in mid-transfer (part is remotehost!localpart) */
 #define MBTYPE_DELETED (1<<4) /* Mailbox has been deleted, but not yet cleaned up */
-#define MBTYPE_CALENDAR (1<<5) /* Calendar Mailbox */
-#define MBTYPE_ADDRESSBOOK (1<<6) /* Addressbook Mailbox */
+#define MBTYPE_CALENDAR (1<<5) /* CalDAV Calendar Mailbox */
+#define MBTYPE_ADDRESSBOOK (1<<6) /* CardDAV Addressbook Mailbox */
+#define MBTYPE_COLLECTION (1<<7) /* WebDAV Collection Mailbox */
 
-#define MBTYPES_DAV (MBTYPE_CALENDAR|MBTYPE_ADDRESSBOOK)
+#define MBTYPES_DAV (MBTYPE_CALENDAR|MBTYPE_ADDRESSBOOK|MBTYPE_COLLECTION)
 
 /* master name of the mailboxes file */
 #define FNAME_MBOXLIST "/mailboxes.db"

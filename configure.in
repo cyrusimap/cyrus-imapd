@@ -1034,7 +1034,7 @@ if test "$ENABLE_RSS" != no -o "$ENABLE_DAV" != no; then
       AC_DEFINE(WITH_DAV,[],[Build DAV support into httpd?])
 
       IMAP_PROGS="$IMAP_PROGS dav_reconstruct"
-      HTTP_OBJS="$HTTP_OBJS \$(DAV_OBJS) \$(CALDAV_OBJS) \$(CARDDAV_OBJS) \$(ISCHED_OBJS)"
+      HTTP_OBJS="$HTTP_OBJS \$(DAV_OBJS) \$(CALDAV_OBJS) \$(CARDDAV_OBJS) \$(WEBDAV_OBJS) \$(ISCHED_OBJS)"
       AC_SUBST(ICAL_CFLAGS)
       AC_SUBST(ICAL_LIBS)
       AC_SUBST(SQLITE3_CFLAGS)
@@ -1043,6 +1043,10 @@ if test "$ENABLE_RSS" != no -o "$ENABLE_DAV" != no; then
       AC_EGREP_HEADER(ICAL_SCHEDULESTATUS_PARAMETER, ical.h,
       		AC_DEFINE(HAVE_SCHEDULING_PARAMS,[],
 			[Do we have built-in support for scheduling params?]))
+
+      AC_EGREP_HEADER(ICAL_MANAGEDID_PARAMETER, ical.h,
+      		AC_DEFINE(HAVE_MANAGED_ATTACH_PARAMS,[],
+			[Do we have built-in support for managed attachment params?]))
 
       AC_EGREP_HEADER(ICAL_VAVAILABILITY_COMPONENT, ical.h,
       		AC_DEFINE(HAVE_VAVAILABILITY,[],
