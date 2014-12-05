@@ -259,7 +259,7 @@ extern void sieverestart(FILE *f);
 %token <sval> STRING
 %token IF ELSIF ELSE
 %token REJCT FILEINTO REDIRECT KEEP STOP DISCARD VACATION REQUIRE
-%token SETFLAG ADDFLAG REMOVEFLAG MARK UNMARK HASFLAG FLAGS
+%token SETFLAG ADDFLAG REMOVEFLAG MARK UNMARK FLAGS
 %token NOTIFY DENOTIFY
 %token ANYOF ALLOF EXISTS SFALSE STRUE HEADER NOT SIZE ADDRESS ENVELOPE BODY
 %token COMPARATOR IS CONTAINS MATCHES REGEX COUNT VALUE OVER UNDER
@@ -276,6 +276,7 @@ extern void sieverestart(FILE *f);
 %token SERVERMETADATA SERVERMETADATAEXISTS
 %token YEAR MONTH DAY JULIAN HOUR MINUTE SECOND TIME ISO8601 STD11 WEEKDAY
 %token <nval> STRINGT SET LOWER UPPER LOWERFIRST UPPERFIRST QUOTEWILDCARD LENGTH
+%token <nval> HASFLAG
 
 %type <cl> commands command action elsif block
 %type <sl> stringlist strings
@@ -295,6 +296,7 @@ extern void sieverestart(FILE *f);
 %type <ftag> ftags
 %type <stag> stags
 %type <nval> mod40 mod30 mod20 mod10
+%type <nval> variablestest
 
 %name-prefix "sieve"
 %defines
@@ -650,13 +652,16 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
                                          YYERROR; }
                                  }
 
-        | STRINGT htags stringlist stringlist
-                                 {
+        | variablestest htags stringlist stringlist {
                                      if (!parse_script->support.variables) {
                                          yyerror(parse_script, "variables MUST be enabled with \"require\"");
                                          YYERROR;
                                      }
-                                     if (!verify_stringlist(parse_script, $3, verify_identifier)) {
+                                     if (STRINGT == $1) {
+                                         if (!verify_stringlist(parse_script, $3, verify_utf8)) {
+                                             YYERROR; /* vu should call yyerror() */
+                                         }
+                                     } else if (!verify_stringlist(parse_script, $3, verify_identifier)) {
                                          YYERROR; /* vi should call yyerror() */
                                      }
                                      if (!verify_stringlist(parse_script, $4, verify_utf8)) {
@@ -827,6 +832,10 @@ test:     ANYOF testlist         { $$ = new_test(ANYOF); $$->u.tl = $2; }
                                      YYERROR; }
                                  }
         | error                  { $$ = NULL; }
+        ;
+
+variablestest: STRINGT
+        | HASFLAG
         ;
 
 addrorenv: ADDRESS               { $$ = ADDRESS; }

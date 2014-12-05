@@ -118,7 +118,7 @@ CRLF            (\r\n|\r|\n)
 <INITIAL>body           return BODY;
 <INITIAL>not            return NOT;
 <INITIAL>size           return SIZE;
-<INITIAL>hasflag        return HASFLAG;
+<INITIAL>hasflag        return yylval->nval = HASFLAG;
 <INITIAL>string         return yylval->nval = STRINGT;
 <INITIAL>reject         return REJCT;
 <INITIAL>fileinto       return FILEINTO;
