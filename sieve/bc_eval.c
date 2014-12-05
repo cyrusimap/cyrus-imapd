@@ -1072,13 +1072,15 @@ envelope_err:
                 }
             }
             } // (is_string) else
+
         } // loop on each item of the current haystack
 	{
 	    /* for debugging purposes only */
 	    char *temp;
 	    temp = strarray_join(varlist_select(variables, VL_MATCH_VARS)->var,
 		    ", ");
-	    printf("B_hasflag: %s\n\n", temp);
+	    printf((!is_string ? "B_hasflag:" : "B_STRING"));
+	    printf(" %s\n\n", temp);
 	    free (temp);
 	}
         } // loop on each variable or string
