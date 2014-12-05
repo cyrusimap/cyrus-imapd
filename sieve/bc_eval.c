@@ -374,6 +374,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
     int list_end; /* for allof/anyof/exists */
     int address=0;/*to differentiate between address and envelope*/
     int has_index=0;/* used to differentiate between pre and post index tests */
+    int is_string = 0; /* differentiate between string and hasflag tests */
     comparator_t * comp=NULL;
     void * comprock=NULL;
     int op= ntohl(bc[i].op);
@@ -916,15 +917,19 @@ envelope_err:
 
         break;
     }
-    case BC_HASFLAG:/*15*/
     case BC_STRING:/*21*/
+        is_string = 1;
+
+    case BC_HASFLAG:/*15*/
     {
         int haystacksi=i+4;/*the i value for the beginning of the variables*/
         int needlesi=(ntohl(bc[haystacksi+1].value)/4);
 
+        int numhaystacks=ntohl(bc[haystacksi].len); // number of vars to search
         int numneedles=ntohl(bc[needlesi].len); // number of search flags
 
         int currneedle; /* current needle */
+        int currhaystack; /* current needle */
 
         int match=ntohl(bc[i+1].value);
         int relation=ntohl(bc[i+2].value);
@@ -981,7 +986,29 @@ envelope_err:
 #endif
                 res |= comp(scount, strlen(scount), this_needle, comprock);
             }
-        } else {
+        } else { /* match == B_COUNT is false */
+
+            /* loop on each haystack */
+            currhaystack = haystacksi+2;
+            for (z = 0; z < (is_string ? numhaystacks :
+                             numhaystacks ? numhaystacks : 1); z++) {
+                const char *this_haystack;
+                strarray_t *this_var;
+
+                if (numhaystacks) {
+                    currhaystack = unwrap_string(bc, currhaystack, &this_haystack,
+                                                 NULL);
+                }
+
+                if (is_string) {
+                    if (requires & BFE_VARIABLES) {
+                        this_haystack = parse_string(this_haystack, variables);
+                    }
+                } else if (numhaystacks) { // selecte the var
+                    this_var = varlist_select(variables, this_haystack)->var;
+                } else { // internal variable
+                    this_var = variables->var;
+                }
 
         /* search through the haystack for the needles */
         currneedle=needlesi+2;
@@ -999,13 +1026,32 @@ envelope_err:
             printf ("val %s %s %s\n", val[0], val[1], val[2]);
 #endif
 
+            if (is_string) {
+                if (isReg) {
+                    reg = bc_compile_regex(this_needle, ctag, errbuf,
+                                           sizeof(errbuf));
+                    if (!reg)
+                        {
+                            /* Oops */
+                            res=-1;
+                            goto alldone;
+                        }
+
+                    res |= comp(this_haystack, strlen(this_haystack),
+                                (const char *)reg, comprock);
+                    free(reg);
+                } else {
+                    res |= comp(this_haystack, strlen(this_haystack),
+                                this_needle, comprock);
+                }
+            } else {
             /* search through all the flags */
 
-            for (y=0; y < variables->var->count && !res; y++)
+            for (y=0; y < this_var->count && !res; y++)
             {
                 const char *active_flag;
 
-                active_flag = variables->var->data[y];
+                active_flag = this_var->data[y];
 
                 if (isReg) {
                     reg= bc_compile_regex(this_needle, ctag, errbuf,
@@ -1025,7 +1071,8 @@ envelope_err:
                                 this_needle, comprock);
                 }
             }
-        }
+            } // (is_string) else
+        } // loop on each item of the current haystack
 	{
 	    /* for debugging purposes only */
 	    char *temp;
@@ -1034,7 +1081,8 @@ envelope_err:
 	    printf("B_hasflag: %s\n\n", temp);
 	    free (temp);
 	}
-        }
+        } // loop on each variable or string
+        } // end else (match == B_COUNT)
 
         /* Update IP */
         i=(ntohl(bc[needlesi+1].value)/4);
