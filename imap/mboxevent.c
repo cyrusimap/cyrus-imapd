@@ -730,34 +730,29 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
     }
 
     /* all events needs uri parameter */
-    if (!event->params[EVENT_URI].filled) {
-	memset(&imapurl, 0, sizeof(struct imapurl));
-	imapurl.server = config_servername;
+    memset(&imapurl, 0, sizeof(struct imapurl));
+    imapurl.server = config_servername;
 
-	if (mailboxname != NULL) {
-	    char *user = (char *)mboxname_to_userid(mailboxname);
+    if (mailboxname != NULL) {
+	char *user = (char *)mboxname_to_userid(mailboxname);
 
-	    assert(namespace.mboxname_toexternal != NULL);
+	assert(namespace.mboxname_toexternal != NULL);
+	if (ext_name)
+	    (*namespace.mboxname_toexternal)(&namespace, mailboxname, user, extname);
+	imapurl.mailbox = extname;
+
+	if (user) {
+	    /* translate any separators in user */
 	    if (ext_name)
-		(*namespace.mboxname_toexternal)(&namespace, mailboxname, user, extname);
-	    imapurl.mailbox = extname;
-
-	    if (user) {
-		/* translate any separators in user */
-		if (ext_name)
-		    mboxname_hiersep_toexternal(&namespace, user,
-						config_virtdomains ? strcspn(user, "@") : 0);
-		imapurl.user = user;
-	    }
-	}
-
-	imapurl_toURL(url, &imapurl);
-	FILL_STRING_PARAM(event, EVENT_URI, xstrdup(url));
-
-	if (event->type & MAILBOX_EVENTS) {
-	    FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(url));
+		mboxname_hiersep_toexternal(&namespace, user,
+					    config_virtdomains ? strcspn(user, "@") : 0);
+	    imapurl.user = user;
 	}
     }
+
+    imapurl_toURL(url, &imapurl);
+    FILL_STRING_PARAM(event, EVENT_URI, xstrdup(url));
+    FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(url));
 
     if (serveraddr && mboxevent_expected_param(event->type, EVENT_SERVER_ADDRESS)) {
 	FILL_STRING_PARAM(event, EVENT_SERVER_ADDRESS, xstrdup(serveraddr));
