@@ -273,12 +273,13 @@ int getMailboxes_cb(char *mboxname, int matchlen __attribute__((unused)),
 	goto done;
     }
 
-    /* Open mailbox for reading */
+    /* Open mailbox to get uniqueid */
     if ((r = mailbox_open_irl(internal_name, &mailbox))) {
 	syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
 	       internal_name, error_message(r));
 	goto done;
     }
+    mailbox_unlock_index(mailbox, NULL);
 
     r = status_lookup(internal_name, httpd_userid, statusitems, &sdata);
 
@@ -311,7 +312,7 @@ static json_t *getMailboxes(json_t *args __attribute__((unused)))
     /* Start constructing our response */
     resp = json_pack("[s {s:s s:s}]", "mailboxes",
 		     "accountId", httpd_userid,
-		     "state", "XXX");
+		     "state", "");
     if (!resp) return NULL;
 
     list = json_array();
