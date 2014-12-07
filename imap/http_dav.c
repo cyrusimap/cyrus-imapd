@@ -3201,6 +3201,7 @@ int meth_delete(struct transaction_t *txn, void *params)
 	mailbox_close(&mailbox);
 
 	mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
+	mboxevent_set_access(mboxevent, NULL, NULL, httpd_userid, txn->req_tgt.mboxname, 0);
 
 	if (mboxlist_delayed_delete_isenabled()) {
 	    r = mboxlist_delayed_deletemailbox(txn->req_tgt.mboxname,
@@ -3299,6 +3300,7 @@ int meth_delete(struct transaction_t *txn, void *params)
 	    goto done;
 	}
 
+	mboxevent_set_access(mboxevent, NULL, NULL, httpd_userid, txn->req_tgt.mboxname, 0);
 	mboxevent_extract_record(mboxevent, mailbox, &record);
 	mboxevent_extract_mailbox(mboxevent, mailbox);
 	mboxevent_set_numunseen(mboxevent, mailbox, -1);
