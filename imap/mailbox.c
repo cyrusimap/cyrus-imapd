@@ -2680,6 +2680,10 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 	vr = vparse_parse(&vparser, 0);
 	buf_free(&msg_buf);
 	if (vr) goto done; // XXX report error
+	if (!vparser.card || !vparser.card->objects) {
+	    vparse_free(&vparser);
+	    goto done;
+	}
 
 	/* Create mapping entry from resource name to UID */
 	cdata->dav.mailbox = mailbox->name;
@@ -2689,7 +2693,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 	if (!cdata->dav.creationdate)
 	    cdata->dav.creationdate = new->internaldate;
 
-	for (ventry = vparser.card->properties; ventry; ventry = ventry->next) {
+	for (ventry = vparser.card->objects->properties; ventry; ventry = ventry->next) {
 	    const char *name = ventry->name;
 	    const char *propval = ventry->v.value;
 

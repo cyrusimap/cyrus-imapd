@@ -124,7 +124,7 @@ static int report_card_query(struct transaction_t *txn, xmlNodePtr inroot,
 static int report_card_multiget(struct transaction_t *txn, xmlNodePtr inroot,
 				struct propfind_ctx *fctx);
 
-static int store_resource(struct transaction_t *txn, struct vparse_state *vparser,
+static int store_resource(struct transaction_t *txn, struct vparse_card *vcard,
 			  struct mailbox *mailbox, const char *resource,
 			  struct carddav_db *carddavdb, int overwrite,
 			  unsigned flags);
@@ -585,7 +585,7 @@ static int carddav_copy(struct transaction_t *txn,
     vparser = vcard_string_as_vparser(buf_base(&msg_buf) + src_rec->header_size);
     buf_free(&msg_buf);
 
-    if (!vparser) {
+    if (!vparser || !vparser->card || !vparser->card->objects) {
 	txn->error.precond = CARDDAV_VALID_DATA;
 	return HTTP_FORBIDDEN;
     }
@@ -594,7 +594,7 @@ static int carddav_copy(struct transaction_t *txn,
     mailbox_unlock_index(src_mbox, NULL);
 
     /* Store source resource at destination */
-    r = store_resource(txn, vparser, dest_mbox, dest_rsrc, dest_davdb,
+    r = store_resource(txn, vparser->card->objects, dest_mbox, dest_rsrc, dest_davdb,
 			 overwrite, flags);
 
     free_vparser(vparser);
@@ -621,14 +621,18 @@ static int carddav_put(struct transaction_t *txn,
 
     /* Parse and validate the vCard data */
     vparser = mime->from_string(buf_cstring(&txn->req_body.payload));
-    if (!vparser || strcmp(vparser->card->type, "vcard")) {
+    if (!vparser ||
+	!vparser->card ||
+	!vparser->card->objects ||
+	!vparser->card->objects->type ||
+	strcmp(vparser->card->objects->type, "vcard")) {
 	txn->error.precond = CARDDAV_VALID_DATA;
 	ret = HTTP_FORBIDDEN;
 	goto done;
     }
 
     /* Store resource at target */
-    ret = store_resource(txn, vparser, mailbox, txn->req_tgt.resource,
+    ret = store_resource(txn, vparser->card->objects, mailbox, txn->req_tgt.resource,
 			 davdb, OVERWRITE_CHECK, flags);
 
     if (flags & PREFER_REP) {
@@ -941,7 +945,7 @@ static int report_card_multiget(struct transaction_t *txn,
 
 
 /* Store the vCard data in the specified addressbook/resource */
-static int store_resource(struct transaction_t *txn, struct vparse_state *vparser,
+static int store_resource(struct transaction_t *txn, struct vparse_card *vcard,
 			  struct mailbox *mailbox, const char *resource,
 			  struct carddav_db *carddavdb, int overwrite,
 			  unsigned flags)
@@ -961,7 +965,7 @@ static int store_resource(struct transaction_t *txn, struct vparse_state *vparse
     struct appendstate as;
 
     /* Fetch some important properties */
-    for (ventry = vparser->card->properties; ventry; ventry = ventry->next) {
+    for (ventry = vcard->properties; ventry; ventry = ventry->next) {
 	const char *name = ventry->name;
 	const char *propval = ventry->v.value;
 
