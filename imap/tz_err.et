@@ -43,24 +43,24 @@
 error_table tz
 
 ec TZ_INVALID_ACTION,
-   "invalid-action"
+   "urn:ietf:params:tzdist:error:invalid-action"
 
 ec TZ_INVALID_PATTERN,
-   "invalid-pattern"
+   "urn:ietf:params:tzdist:error:invalid-pattern"
 
 ec TZ_INVALID_FORMAT,
-   "invalid-format"
+   "urn:ietf:params:tzdist:error:invalid-format"
 
 ec TZ_INVALID_START,
-   "invalid-start"
+   "urn:ietf:params:tzdist:error:invalid-start"
 
 ec TZ_INVALID_END,
-   "invalid-end"
+   "urn:ietf:params:tzdist:error:invalid-end"
 
 ec TZ_INVALID_CHANGEDSINCE,
-   "invalid-changedsince"
+   "urn:ietf:params:tzdist:error:invalid-changedsince"
 
 ec TZ_NOT_FOUND,
-   "tzid-not-found"
+   "urn:ietf:params:tzdist:error:tzid-not-found"
 
 end
