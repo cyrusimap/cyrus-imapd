@@ -48,6 +48,7 @@
 
 #include "dav_db.h"
 #include "strarray.h"
+#include "vparse.h"
 
 struct carddav_db;
 
@@ -117,5 +118,8 @@ int carddav_commit(struct carddav_db *carddavdb);
 
 /* abort transaction */
 int carddav_abort(struct carddav_db *carddavdb);
+
+/* create carddav_data from vparse_card */
+void carddav_make_entry(struct vparse_card *vcard, struct carddav_data *cdata);
 
 #endif /* CARDDAV_DB_H */

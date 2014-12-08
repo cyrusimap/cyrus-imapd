@@ -2665,7 +2665,6 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
     else {
 	struct buf msg_buf = BUF_INITIALIZER;
 	struct vparse_state vparser;
-	struct vparse_entry *ventry;
 	int vr;
 
 	/* already seen this message, so do we update it?  No */
@@ -2693,35 +2692,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 	if (!cdata->dav.creationdate)
 	    cdata->dav.creationdate = new->internaldate;
 
-	for (ventry = vparser.card->objects->properties; ventry; ventry = ventry->next) {
-	    const char *name = ventry->name;
-	    const char *propval = ventry->v.value;
-
-	    if (!name) continue;
-	    if (!propval) continue;
-
-	    if (!strcmp(name, "uid")) {
-		cdata->vcard_uid = propval;
-	    }
-	    else if (!strcmp(name, "n")) {
-		cdata->name = propval;
-	    }
-	    else if (!strcmp(name, "fn")) {
-		cdata->fullname = propval;
-	    }
-	    else if (!strcmp(name, "nickname")) {
-		cdata->nickname = propval;
-	    }
-	    else if (!strcmp(name, "email")) {
-		/* XXX - insert if primary */
-		strarray_append(&cdata->emails, propval);
-	    }
-	    else if (!strcmp(name, "x-addressbookserver-member")) {
-		const char *item = propval;
-		if (!strncmp(item, "urn:uuid:", 9))
-		    strarray_append(&cdata->member_uids, item+9);
-	    }
-	}
+	carddav_make_entry(vparser.card->objects, cdata);
 
 	r = carddav_write(carddavdb, cdata, 0);
 
@@ -2729,6 +2700,9 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
     }
 
 done:
+    message_free_body(body);
+    free(body);
+
     if (carddavdb) {
 	carddav_commit(carddavdb);
 	carddav_close(carddavdb);

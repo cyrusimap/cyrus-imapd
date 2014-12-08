@@ -635,3 +635,39 @@ EXPORTED int carddav_delmbox(struct carddav_db *carddavdb, const char *mailbox, 
 
     return 0;
 }
+
+EXPORTED void carddav_make_entry(struct vparse_card *vcard, struct carddav_data *cdata)
+{
+    struct vparse_entry *ventry;
+
+    for (ventry = vcard->properties; ventry; ventry = ventry->next) {
+	const char *name = ventry->name;
+	const char *propval = ventry->v.value;
+
+	if (!name) continue;
+	if (!propval) continue;
+
+	if (!strcmp(name, "uid")) {
+	    cdata->vcard_uid = propval;
+	}
+	else if (!strcmp(name, "n")) {
+	    cdata->name = propval;
+	}
+	else if (!strcmp(name, "fn")) {
+	    cdata->fullname = propval;
+	}
+	else if (!strcmp(name, "nickname")) {
+	    cdata->nickname = propval;
+	}
+	else if (!strcmp(name, "email")) {
+	    /* XXX - insert if primary */
+	    strarray_append(&cdata->emails, propval);
+	}
+	else if (!strcmp(name, "x-addressbookserver-member")) {
+	    const char *item = propval;
+	    if (!strncmp(item, "urn:uuid:", 9))
+		strarray_append(&cdata->member_uids, item+9);
+	}
+    }
+
+}
