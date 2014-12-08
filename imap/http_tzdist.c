@@ -184,7 +184,7 @@ static int meth_get(struct transaction_t *txn,
 		    void *params __attribute__((unused)))
 {
     struct request_target_t *tgt = &txn->req_tgt;
-    const struct action_t *ap = NULL;
+    int (*action)(struct transaction_t *txn) = NULL;
     unsigned levels = 0;
     char *p;
 
@@ -203,36 +203,41 @@ static int meth_get(struct transaction_t *txn,
 	p += strcspn(p, "/");
 	if (*p == '/') *p++ = '\0';
 
-	if (*p) {
-	    /* Get resource (tzid) */
-	    tgt->resource = p;
-	    p += strlen(p);
-	    if (p[-1] == '/') *--p = '\0';
-
-	    /* XXX  Hack - probably need to check for %2F vs '/'
-	       Count the number of "levels".  Current tzids have a max of 3. */
-	    for (p = tgt->resource; p && ++levels; (p = strchr(p+1, '/')));
+	if (!strcmp(tgt->collection, "capabilities")) {
+	    if (!*p) action = &action_capa;
 	}
+	else if (!strcmp(tgt->collection, "zones")) {
+	    if (!*p) {
+		action = &action_list;
+	    }
+	    else {
+		/* Get resource (tzid) */
+		tgt->resource = p;
+		p += strlen(p);
+		if (p[-1] == '/') *--p = '\0';
 
-	/* Search known actions for matching path */
-	for (ap = actions; ap->path; ap++) {
-
-	    if (!strcmp(tgt->collection, ap->path)) {
-		if (ap->need_tzid) {
-		    if (tgt->resource) break;
+		/* Check for sub-action */
+		p = strrchr(tgt->resource, '/');
+		if (p && !strcmp(p+1, "observances")) {
+		    action = &action_expand;
+		    *p = '\0';
 		}
-		else if (!tgt->resource) break;
+		else action = &action_get;
+
+		/* XXX  Hack - probably need to check for %2F vs '/'
+		   Count the number of "levels".  Current tzid have max of 3. */
+		for (p = tgt->resource; p && ++levels; (p = strchr(p+1, '/')));
 	    }
 	}
     }
 
-    if (!ap || !ap->path || levels > 3)
+    if (!action || levels > 3)
 	return json_error_response(txn, TZ_INVALID_ACTION, NULL, NULL);
 
     if (tgt->resource && strchr(tgt->resource, '.'))  /* paranoia */
 	return json_error_response(txn, TZ_NOT_FOUND, NULL, NULL);
 
-    return ap->proc(txn);
+    return action(txn);
 }
 
 
@@ -294,21 +299,21 @@ static int action_capa(struct transaction_t *txn)
 //			 "      s:[]"  			/*   contacts */
 			 "    }"
 			 "  s:["			/* actions */
-			 "    {s:s s:["			/*   capabilities */
+			 "    {s:s s:s s:["		/*   capabilities */
 			 "    ]}"
-			 "    {s:s s:["			/*   list */
+			 "    {s:s s:s s:["		/*   list */
 			 "      {s:s}"			/*     changedsince */
 			 "    ]}"
-			 "    {s:s s:["			/*   get */
+			 "    {s:s s:s s:["		/*   get */
 			 "      {s:s}"			/*     start */
 			 "      {s:s}"			/*     end */
 			 "    ]}"
-			 "    {s:s s:["			/*   expand */
+			 "    {s:s s:s s:["		/*   expand */
 			 "      {s:s s:b}"		/*     start */
 			 "      {s:s s:b}"		/*     end */
 			 "      {s:s}"			/*     changedsince */
 			 "    ]}"
-			 "    {s:s s:["			/*   find */
+			 "    {s:s s:s s:["		/*   find */
 			 "      {s:s s:b}"		/*     pattern */
 			 "    ]}"
 			 "  ]}",
@@ -320,21 +325,27 @@ static int action_capa(struct transaction_t *txn)
 //			 "provider-details", "", "contacts",
 
 			 "actions",
-			 "name", "capabilities", "parameters",
+			 "name", "capabilities",
+			 "uri-template", "/capabilities", "parameters",
 
-			 "name", "list", "parameters",
+			 "name", "list",
+			 "uri-template", "/zones{?changedsince}", "parameters",
 			 "name", "changedsince",
 
-			 "name", "get", "parameters",
+			 "name", "get", "uri-template",
+			 "/zones{/tzid}{?start,end}", "parameters",
 			 "name", "start",
 			 "name", "end",
 
-			 "name", "expand", "parameters",
+			 "name", "expand", "uri-template",
+			 "/zones{/tzid}/observances{?start,end,changedsince}",
+			 "parameters",
 			 "name", "start", "required", 1,
 			 "name", "end", "required", 1,
 			 "name", "changedsince",
 
-			 "name", "find", "parameters",
+			 "name", "find",
+			 "uri-template", "/zones{?pattern}", "parameters",
 			 "name", "pattern", "required", 1);
 	freestrlist(info.data);
 
@@ -512,15 +523,24 @@ static int rdate_compare(const void *rdate1, const void *rdate2)
 			    ((struct rdate *) rdate2)->date.time);
 }
 
+static int observance_compare(const void *obs1, const void *obs2)
+{
+    return icaltime_compare(((struct observance *) obs1)->onset,
+			    ((struct observance *) obs2)->onset);
+}
+
 static const struct observance *truncate_vtimezone(icalcomponent *vtz,
-						   icaltimetype start,
-						   icaltimetype end,
+						   icaltimetype *startp,
+						   icaltimetype *endp,
 						   icalarray *obsarray)
 {
+    icaltimetype start = *startp, end = *endp;
     icalcomponent *comp, *nextc, *tomb_std = NULL, *tomb_day = NULL;
     icalproperty *prop, *proleptic_prop = NULL;
     static struct observance tombstone;
     unsigned need_tomb = !icaltime_is_null_time(start);
+    unsigned adjust_start = !icaltime_is_null_time(start);
+    unsigned adjust_end = !icaltime_is_null_time(end);
 
     /* See if we have a proleptic tzname in VTIMEZONE */
     for (prop = icalcomponent_get_first_property(vtz, ICAL_X_PROPERTY);
@@ -611,6 +631,9 @@ static const struct observance *truncate_vtimezone(icalcomponent *vtz,
 	    icalcomponent_remove_component(vtz, comp);
 	    icalcomponent_free(comp);
 
+	    /* Actual range end == request range end */
+	    adjust_end = 0;
+
 	    /* Nothing else to do */
 	    icalarray_free(rdate_array);
 	    continue;
@@ -624,6 +647,9 @@ static const struct observance *truncate_vtimezone(icalcomponent *vtz,
 
 	    /* Adjust it */
 	    trunc_dtstart = 1;
+
+	    /* Actual range start == request range start */
+	    adjust_start = 0;
 	}
 	else {
 	    /* DTSTART is on/after our window open */
@@ -656,9 +682,12 @@ static const struct observance *truncate_vtimezone(icalcomponent *vtz,
 	    else {
 		/* RRULE ends on/after our window open */
 		if (!icaltime_is_null_time(end) &&
-		    (infinite || icaltime_compare(rrule.until, end) > 0)) {
+		    (infinite || icaltime_compare(rrule.until, end) >= 0)) {
 		    /* RRULE ends after our window close - need to adjust it */
 		    trunc_until = 1;
+
+		    /* Actual range end == request range end */
+		    adjust_end = 0;
 		}
 
 		if (!infinite) {
@@ -690,7 +719,7 @@ static const struct observance *truncate_vtimezone(icalcomponent *vtz,
 		    icaltime_adjust(&obs.onset, 0, 0, 0, -obs.offset_from);
 		    obs.onset.is_utc = 1;
 
-		    if (trunc_until && icaltime_compare(obs.onset, end) > 0) {
+		    if (trunc_until && icaltime_compare(obs.onset, end) >= 0) {
 			/* Observance is on/after window close */
 
 			/* Check if DSTART is within 1yr of prev onset */
@@ -796,6 +825,10 @@ static const struct observance *truncate_vtimezone(icalcomponent *vtz,
 		/* RDATE is after our window close - remove it */
 		icalcomponent_remove_property(comp, rdate->prop);
 		icalproperty_free(rdate->prop);
+
+		/* Actual range end == request range end */
+		adjust_end = 0;
+
 		continue;
 	    }
 
@@ -807,6 +840,9 @@ static const struct observance *truncate_vtimezone(icalcomponent *vtz,
 		/* Remove it */
 		icalcomponent_remove_property(comp, rdate->prop);
 		icalproperty_free(rdate->prop);
+
+		/* Actual range start == request range start */
+		adjust_start = 0;
 	    }
 	    else {
 		/* RDATE is on/after our window open */
@@ -919,6 +955,24 @@ static const struct observance *truncate_vtimezone(icalcomponent *vtz,
     if (tomb_day) {
 	icalcomponent_remove_component(vtz, tomb_day);
 	icalcomponent_free(tomb_day);
+    }
+
+    if (obsarray) {
+	struct observance *obs;
+
+	/* Sort the observances by onset */
+	icalarray_sort(obsarray, &observance_compare);
+
+	/* Adjust actual range if necessary */
+	if (adjust_start) {
+	    obs = icalarray_element_at(obsarray, 0);
+	    *startp = obs->onset;
+	}
+	if (adjust_end) {
+	    obs = icalarray_element_at(obsarray, obsarray->num_elements-1);
+	    *endp = obs->onset;
+	    icaltime_adjust(endp, 0, 0, 0, 1);
+	}
     }
 
     return &tombstone;
@@ -1056,7 +1110,14 @@ static int action_get(struct transaction_t *txn)
 	/* Start constructing TZURL */
 	buf_reset(&pathbuf);
 	http_proto_host(txn->req_hdrs, &proto, &host);
-	buf_printf(&pathbuf, "%s://%s%s", proto, host, txn->req_uri->path);
+	buf_printf(&pathbuf, "%s://%s%s/zones/",
+		   proto, host, namespace_tzdist.prefix);
+
+	/* Escape '/' in tzid */
+	for (; *tzid; tzid++) {
+	    if (*tzid == '/') buf_appendcstr(&pathbuf, "%2F");
+	    else buf_putc(&pathbuf, *tzid);
+	}
 
 	if (!icaltime_is_null_time(start) || !icaltime_is_null_time(end)) {
 
@@ -1070,7 +1131,7 @@ static int action_get(struct transaction_t *txn)
 	    buf_printf(&pathbuf, "?%s", URI_QUERY(txn->req_uri));
 
 	    /* Truncate the VTIMEZONE */
-	    truncate_vtimezone(vtz, start, end, NULL);
+	    truncate_vtimezone(vtz, &start, &end, NULL);
 	}
 
 	/* Set TZURL property */
@@ -1096,13 +1157,6 @@ static int action_get(struct transaction_t *txn)
     if (data) free(data);
 
     return 0;
-}
-
-
-static int observance_compare(const void *obs1, const void *obs2)
-{
-    return icaltime_compare(((struct observance *) obs1)->onset,
-			    ((struct observance *) obs2)->onset);
 }
 
 
@@ -1236,28 +1290,11 @@ static int action_expand(struct transaction_t *txn)
 	map_free(&msg_base, &msg_size);
 	close(fd);
 
-	/* Start constructing our response */
-	if (zdump) {
-	    txn->resp_body.type = "text/plain; charset=us-ascii";
-	}
-	else {
-	    rfc3339date_gen(dtstamp, sizeof(dtstamp), lastmod);
-	    root = json_pack("{s:s s:s s:[]}",
-			     "dtstamp", dtstamp, "tzid", tzid, "observances");
-	    if (!root) {
-		txn->error.desc = "Unable to create JSON response";
-		return HTTP_SERVER_ERROR;
-	    }
-	}
-	
 
 	/* Create an array of observances */
 	obsarray = icalarray_new(sizeof(struct observance), 20);
 	vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
-	proleptic = truncate_vtimezone(vtz, start, end, obsarray);
-
-	/* Sort the observances by onset */
-	icalarray_sort(obsarray, &observance_compare);
+	proleptic = truncate_vtimezone(vtz, &start, &end, obsarray);
 
 	if (zdump) {
 	    struct buf *body = &txn->resp_body.payload;
@@ -1304,8 +1341,21 @@ static int action_expand(struct transaction_t *txn)
 	    }
 	}
 	else {
+	    /* Start constructing our response */
+	    rfc3339date_gen(dtstamp, sizeof(dtstamp), lastmod);
+	    root = json_pack("{s:s s:s}", "dtstamp", dtstamp, "tzid", tzid);
+	    if (!root) {
+		txn->error.desc = "Unable to create JSON response";
+		return HTTP_SERVER_ERROR;
+	    }
+
+	    json_object_set_new(root, "start",
+				json_string(icaltime_as_iso_string(start)));
+	    json_object_set_new(root, "end",
+				json_string(icaltime_as_iso_string(end)));
+
 	    /* Add observances to JSON array */
-	    jobsarray = json_object_get(root, "observances");
+	    jobsarray = json_array();
 	    for (n = 0; n < obsarray->num_elements; n++) {
 		struct observance *obs = icalarray_element_at(obsarray, n);
 
@@ -1318,6 +1368,7 @@ static int action_expand(struct transaction_t *txn)
 					  "utc-offset-from", obs->offset_from,
 					  "utc-offset-to", obs->offset_to));
 	    }
+	    json_object_set_new(root, "observances", jobsarray);
 	}
 	icalarray_free(obsarray);
 
@@ -1325,9 +1376,12 @@ static int action_expand(struct transaction_t *txn)
     }
 
     if (zdump) {
-	struct buf *body = &txn->resp_body.payload;
+	struct resp_body_t *body = &txn->resp_body;
 
-	write_body(precond, txn, buf_cstring(body), buf_len(body));
+	body->type = "text/plain; charset=us-ascii";
+
+	write_body(precond, txn,
+		   buf_cstring(&body->payload), buf_len(&body->payload));
 
 	return 0;
     }
@@ -1425,8 +1479,8 @@ static int json_error_response(struct transaction_t *txn, long tz_code,
     buf_printf(&txn->buf, fmt, param_name);
 
     root = json_pack("{s:s s:s s:i}", "title", buf_cstring(&txn->buf),
-		     "error-code", error_message(tz_code),
-		     "status", atoi(error_message(http_code)));;
+		     "type", error_message(tz_code),
+		     "status", atoi(error_message(http_code)));
     if (!root) {
 	txn->error.desc = "Unable to create JSON response";
 	return HTTP_SERVER_ERROR;
