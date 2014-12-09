@@ -180,7 +180,7 @@ EXPORTED int mupdate_activate(mupdate_handle *handle,
     const char *p;
     
     if (!handle) return MUPDATE_BADPARAM;
-    if (!mailbox || !location || !acl) return MUPDATE_BADPARAM;
+    if (!mailbox || !location) return MUPDATE_BADPARAM;
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
     /* make sure we don't have a double server!partition */
@@ -199,7 +199,7 @@ EXPORTED int mupdate_activate(mupdate_handle *handle,
 		handle->tagn++,
 		strlen(mailbox), mailbox,
 		strlen(location), location,
-		strlen(acl), acl
+		(acl ? strlen(acl): 0), (acl ? acl : "")
 	);
 
     ret = mupdate_scarf(handle, mupdate_scarf_one, NULL, 1, &response);

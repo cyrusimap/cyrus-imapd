@@ -75,6 +75,7 @@
 #include "dlist.h"
 #include "exitcodes.h"
 #include "imap/imap_err.h"
+#include "imap/mupdate_err.h"
 #include "global.h"
 #include "libcyr_cfg.h"
 #include "mboxlist.h"
@@ -480,20 +481,29 @@ static int dump_cb(void *rockp,
 	    free(realpart);
 	    break;
 	}
+
 	r = mupdate_activate(d->h,name,realpart,acl);
 
-	free(realpart);
-	
 	if (r == MUPDATE_NOCONN) {
 	    fprintf(stderr, "permanant failure storing '%s'\n", name);
 	    r = IMAP_IOERROR;
 	} else if (r == MUPDATE_FAIL) {
 	    fprintf(stderr,
-		    "temporary failure storing '%s' (update continuing)",
+		    "temporary failure storing '%s' (update continuing)\n",
 		    name);
 	    r = 0;
+       } else if (r) {
+           fprintf(
+                   stderr,
+                   "error storing '%s' (update continuing): %s\n",
+                   name,
+                   error_message(r)
+               );
+           r = 0;
 	}
 	    
+	free(realpart);
+
 	break;
     }
 
