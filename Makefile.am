@@ -1461,7 +1461,7 @@ endif
 	@$(MKDIR_P) $(DESTDIR)$(bindir)
 	cd $(DESTDIR)$(bindir) && \
 	  $(LN_S) -f imtest lmtptest && \
-	  $(LN_S) -f imtest mupatetest && \
+	  $(LN_S) -f imtest mupdatetest && \
 	  $(LN_S) -f imtest nntptest && \
 	  $(LN_S) -f imtest pop3test && \
 	  $(LN_S) -f imtest sivtest && \
