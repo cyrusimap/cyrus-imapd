@@ -1220,18 +1220,12 @@ static int filled_params(enum event_type type, struct mboxevent *event)
 	if (mboxevent_expected_param(type, param) &&
 		!event->params[param].filled) {
 	    switch (event->params[param].id) {
-	    case EVENT_DISK_QUOTA:
-		return event->params[EVENT_MAX_MESSAGES].filled;
-	    case EVENT_DISK_USED:
-		return event->params[EVENT_MESSAGES].filled;
 	    case EVENT_FLAG_NAMES:
 		/* flagNames may be included with MessageAppend and MessageNew
 		 * also we don't expect it here. */
 		if (!(type & (EVENT_MESSAGE_APPEND|EVENT_MESSAGE_NEW)))
 		    buf_appendcstr(&missing, " flagNames");
 		break;
-	    case EVENT_MAX_MESSAGES:
-		return event->params[EVENT_DISK_QUOTA].filled;
 	    case EVENT_MESSAGE_CONTENT:
 		/* messageContent is not included in standard mode if the size
 		 * of the message exceed the limit */
@@ -1239,8 +1233,6 @@ static int filled_params(enum event_type type, struct mboxevent *event)
 		    IMAP_ENUM_EVENT_CONTENT_INCLUSION_MODE_STANDARD)
 		    buf_appendcstr(&missing, " messageContent");
 		break;
-	    case EVENT_MESSAGES:
-		return event->params[EVENT_DISK_USED].filled;
 	    case EVENT_MODSEQ:
 		/* modseq is not included if notification refers to several
 		 * messages */

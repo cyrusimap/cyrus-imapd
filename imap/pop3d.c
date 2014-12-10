@@ -876,9 +876,9 @@ static int expunge_deleted(void)
     }
 
     /* send the MessageExpunge event notification */
-    mboxevent_set_access(mboxevent, NULL, NULL, popd_userid, NULL, 0);
     mboxevent_extract_mailbox(mboxevent, popd_mailbox);
     mboxevent_set_numunseen(mboxevent, popd_mailbox, -1);
+    mboxevent_set_access(mboxevent, NULL, NULL, popd_userid, NULL, 0);
     mboxevent_notify(mboxevent);
     mboxevent_free(&mboxevent);
 
