@@ -1926,6 +1926,8 @@ static int do_mailbox_info(void *rock,
     char *name = xstrndup(key, keylen);
     int r = 0;
 
+    /* XXX - check for deleted? */
+
     r = mailbox_open_irl(name, &mailbox);
     /* doesn't exist?  Probably not finished creating or removing yet */
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -1986,7 +1988,6 @@ static int do_user_main(const char *user,
 			struct sync_folder_list *replica_folders,
 			struct sync_quota_list *replica_quota)
 {
-    char buf[MAX_MAILBOX_BUFFER];
     int r = 0;
     struct sync_name_list *mboxname_list = sync_name_list_create();
     struct sync_name_list *master_quotaroots = sync_name_list_create();
@@ -1995,24 +1996,7 @@ static int do_user_main(const char *user,
     info.mboxlist = mboxname_list;
     info.quotalist = master_quotaroots;
 
-    /* XXX - convert all this to an allusermbox */
-
-    /* Generate full list of folders on client side */
-    (sync_namespace.mboxname_tointernal)(&sync_namespace, "INBOX",
-					  user, buf);
-    do_mailbox_info(&info, buf, strlen(buf), NULL, 0);
-
-    /* deleted namespace items if enabled */
-    if (mboxlist_delayed_delete_isenabled()) {
-	char deletedname[MAX_MAILBOX_BUFFER];
-	mboxname_todeleted(buf, deletedname, 0);
-	r = mboxlist_allmbox(deletedname, do_mailbox_info, &info, /*incdel*/1);
-    }
-
-    /* subfolders */
-    if (!r) {
-	r = mboxlist_allmbox(buf, do_mailbox_info, &info, /*incdel*/0);
-    }
+    r = mboxlist_allusermbox(user, do_mailbox_info, &info, /*incdel*/1);
 
     /* we know all the folders present on the master, so it's safe to delete
      * anything not mentioned here on the replica - at least until we get
