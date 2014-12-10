@@ -1480,10 +1480,6 @@ static int filled_params(enum event_type type, struct mboxevent *event)
 		if (!event->uidset || (seqset_first(event->uidset) == seqset_last(event->uidset)))
 		    buf_appendcstr(&missing, " modseq");
 		break;
-	    case EVENT_CLIENT_ID:
-		return event->params[EVENT_CLIENT_ID].filled;
-	    case EVENT_SESSION_ID:
-		return event->params[EVENT_SESSION_ID].filled;
 	    default:
 		buf_appendcstr(&missing, " ");
 		buf_appendcstr(&missing, event->params[param].name);
