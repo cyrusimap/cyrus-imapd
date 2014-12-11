@@ -311,7 +311,6 @@ static int action_capa(struct transaction_t *txn)
 			 "    {s:s s:s s:["		/*   expand */
 			 "      {s:s s:b}"		/*     start */
 			 "      {s:s s:b}"		/*     end */
-			 "      {s:s}"			/*     changedsince */
 			 "    ]}"
 			 "    {s:s s:s s:["		/*   find */
 			 "      {s:s s:b}"		/*     pattern */
@@ -338,11 +337,10 @@ static int action_capa(struct transaction_t *txn)
 			 "name", "end",
 
 			 "name", "expand", "uri-template",
-			 "/zones{/tzid}/observances{?start,end,changedsince}",
+			 "/zones{/tzid}/observances{?start,end}",
 			 "parameters",
 			 "name", "start", "required", 1,
 			 "name", "end", "required", 1,
-			 "name", "changedsince",
 
 			 "name", "find",
 			 "uri-template", "/zones{?pattern}", "parameters",
@@ -1178,19 +1176,11 @@ static int action_expand(struct transaction_t *txn)
     const char *tzid = txn->req_tgt.resource;
     struct zoneinfo zi;
     time_t lastmod;
-    icaltimetype start, end, changedsince = icaltime_null_time();
+    icaltimetype start, end;
     struct resp_body_t *resp_body = &txn->resp_body;
     json_t *root = NULL;
 
     /* Sanity check the parameters */
-    if ((param = hash_lookup("changedsince", &txn->req_qparams))) {
-	changedsince = icaltime_from_string(param->s);
-	if (param->next || !changedsince.is_utc) {  /* once only, UTC */
-	    return json_error_response(txn, TZ_INVALID_CHANGEDSINCE,
-				       param, &changedsince);
-	}
-    }
-
     param = hash_lookup("start", &txn->req_qparams);
     if (!param || param->next)  /* mandatory, once only */
 	return json_error_response(txn, TZ_INVALID_START, param, NULL);
@@ -1241,8 +1231,7 @@ static int action_expand(struct transaction_t *txn)
 
     /* Check any preconditions, including range request */
     txn->flags.ranges = 1;
-    if (lastmod <= icaltime_as_timet(changedsince)) precond = HTTP_NOT_MODIFIED;
-    else precond = check_precond(txn, buf_cstring(&txn->buf), lastmod);
+    precond = check_precond(txn, buf_cstring(&txn->buf), lastmod);
 
     switch (precond) {
     case HTTP_OK:
@@ -1270,7 +1259,6 @@ static int action_expand(struct transaction_t *txn)
 	unsigned long msg_size = 0;
 	icalcomponent *ical, *vtz;
 	const struct observance *proleptic;
-	char dtstamp[21];
 	icalarray *obsarray;
 	json_t *jobsarray;
 	unsigned n;
@@ -1342,8 +1330,7 @@ static int action_expand(struct transaction_t *txn)
 	}
 	else {
 	    /* Start constructing our response */
-	    rfc3339date_gen(dtstamp, sizeof(dtstamp), lastmod);
-	    root = json_pack("{s:s s:s}", "dtstamp", dtstamp, "tzid", tzid);
+	    root = json_pack("{s:s}", "tzid", tzid);
 	    if (!root) {
 		txn->error.desc = "Unable to create JSON response";
 		return HTTP_SERVER_ERROR;
