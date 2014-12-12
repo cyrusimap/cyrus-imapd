@@ -682,9 +682,6 @@ static const struct observance *truncate_vtimezone(icalcomponent *vtz,
 		    (infinite || icaltime_compare(rrule.until, end) >= 0)) {
 		    /* RRULE ends after our window close - need to adjust it */
 		    trunc_until = 1;
-
-		    /* Actual range end == request range end */
-		    adjust_end = 0;
 		}
 
 		if (!infinite) {
@@ -718,6 +715,9 @@ static const struct observance *truncate_vtimezone(icalcomponent *vtz,
 
 		    if (trunc_until && icaltime_compare(obs.onset, end) >= 0) {
 			/* Observance is on/after window close */
+
+			/* Actual range end == request range end */
+			adjust_end = 0;
 
 			/* Check if DSTART is within 1yr of prev onset */
 			ydiff = prev_onset.year - dtstart.year;
@@ -1070,7 +1070,7 @@ static int action_get(struct transaction_t *txn)
 
     if (txn->meth != METH_HEAD) {
 	static struct buf pathbuf = BUF_INITIALIZER;
-	const char *path, *proto, *host, *msg_base = NULL;
+	const char *p, *path, *proto, *host, *msg_base = NULL;
 	unsigned long msg_size = 0;
 	icalcomponent *ical, *vtz;
 	icalproperty *prop;
@@ -1111,15 +1111,15 @@ static int action_get(struct transaction_t *txn)
 		   proto, host, namespace_tzdist.prefix);
 
 	/* Escape '/' and ' ' in tzid */
-	for (; *tzid; tzid++) {
-	    switch (*tzid) {
+	for (p = tzid; *p; p++) {
+	    switch (*p) {
 	    case '/':
 	    case ' ':
-		buf_printf(&pathbuf, "%%%02x", *tzid);
+		buf_printf(&pathbuf, "%%%02x", *p);
 		break;
 
 	    default:
-		buf_putc(&pathbuf, *tzid);
+		buf_putc(&pathbuf, *p);
 		break;
 	    }
 	}
