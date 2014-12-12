@@ -362,7 +362,7 @@ static int is_safe(struct dbengine *db, const char *ptr)
 {
     if (ptr < db->map_base)
 	return 0;
-    if (ptr >= db->map_base + db->map_size)
+    if (ptr > db->map_base + db->map_size)
 	return 0;
 
     return 1;
@@ -2189,7 +2189,9 @@ static int recovery(struct dbengine *db, int flags)
 
 	/* if this is a commit, we've processed everything in this txn */
 	if (TYPE(ptr) == COMMIT) {
-	    offset += RECSIZE_safe(db, ptr);
+	    unsigned size = RECSIZE_safe(db, ptr);
+	    if (!size) break;
+	    offset += size;
 	    continue;
 	}
 
@@ -2206,7 +2208,8 @@ static int recovery(struct dbengine *db, int flags)
 	q = db->map_base + filesize;
 	p = ptr;
 	for (;;) {
-            if (RECSIZE_safe(db, p) <= 0) {
+	    unsigned size = RECSIZE_safe(db, p);
+            if (!size) {
                 /* hmm, we can't trust this transaction */
 		syslog(LOG_ERR,
 		       "DBERROR: skiplist recovery %s: found a RECSIZE of 0, "
@@ -2215,7 +2218,7 @@ static int recovery(struct dbengine *db, int flags)
                 p = q;
                 break;
             }
-	    p += RECSIZE_safe(db, p);
+	    p += size;
 	    if (p >= q) break;
 	    if (TYPE(p) == COMMIT) break;
 	}
