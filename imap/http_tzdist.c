@@ -1116,7 +1116,7 @@ static int action_get(struct transaction_t *txn)
 	    switch (*p) {
 	    case '/':
 	    case ' ':
-		buf_printf(&pathbuf, "%%%02x", *p);
+		buf_printf(&pathbuf, "%%%02X", *p);
 		break;
 
 	    default:
