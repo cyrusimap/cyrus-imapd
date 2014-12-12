@@ -1111,10 +1111,18 @@ static int action_get(struct transaction_t *txn)
 	buf_printf(&pathbuf, "%s://%s%s/zones/",
 		   proto, host, namespace_tzdist.prefix);
 
-	/* Escape '/' in tzid */
+	/* Escape '/' and ' ' in tzid */
 	for (; *tzid; tzid++) {
-	    if (*tzid == '/') buf_appendcstr(&pathbuf, "%2F");
-	    else buf_putc(&pathbuf, *tzid);
+	    switch (*tzid) {
+	    case '/':
+	    case ' ':
+		buf_printf(&pathbuf, "%%%02x", *tzid);
+		break;
+
+	    default:
+		buf_putc(&pathbuf, *tzid);
+		break;
+	    }
 	}
 
 	if (!icaltime_is_null_time(start) || !icaltime_is_null_time(end)) {
