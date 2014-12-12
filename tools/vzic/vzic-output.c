@@ -1338,6 +1338,14 @@ set_previous_offsets		(GArray		*changes)
   for (i = 1; i < changes->len; i++) {
     vzictime = &g_array_index (changes, VzicTime, i);
 
+    if (vzictime->stdoff == prev_vzictime->stdoff &&
+	vzictime->walloff == prev_vzictime->walloff &&
+	!strcmp(vzictime->tzname, prev_vzictime->tzname)) {
+      /* Ignore no-op transitions */
+      vzictime->output = TRUE;
+      continue;
+    }
+
     vzictime->prev_stdoff = prev_vzictime->stdoff;
     vzictime->prev_walloff = prev_vzictime->walloff;
 
