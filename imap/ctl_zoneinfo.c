@@ -54,6 +54,7 @@
 #include <sys/types.h>
 
 #include <libical/ical.h>
+#include <libxml/tree.h>
 
 #include "annotate.h" /* for strlist functionality */
 #include "exitcodes.h"
@@ -84,14 +85,15 @@ void shut_down(int code);
 int main(int argc, char **argv)
 {
     int opt, r = 0;
-    char *alt_config = NULL, *version = NULL;
-    enum { REBUILD, NONE } op = NONE;
+    char *alt_config = NULL, *version = NULL, *winfile = NULL;
+    char prefix[2048];
+    enum { REBUILD, WINZONES, NONE } op = NONE;
 
     if ((geteuid()) == 0 && (become_cyrus(/*ismaster*/0) != 0)) {
 	fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((opt = getopt(argc, argv, "C:r:v")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:r:vw:")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -109,6 +111,14 @@ int main(int argc, char **argv)
 	    verbose = 1;
 	    break;
 
+	case 'w':
+	    if (op == NONE) {
+		op = WINZONES;
+		winfile = optarg;
+	    }
+	    else usage();
+	    break;
+
 	default:
 	    usage();
 	}
@@ -119,12 +129,13 @@ int main(int argc, char **argv)
     signals_set_shutdown(&shut_down);
     signals_add_handlers(0);
 
+    snprintf(prefix, sizeof(prefix), "%s%s", config_dir, FNAME_ZONEINFODIR);
+
     switch (op) {
     case REBUILD: {
 	struct hash_table tzentries;
 	struct zoneinfo *zi;
 	struct txn *tid = NULL;
-	char prefix[2048];
 
 	construct_hash_table(&tzentries, 500, 1);
 
@@ -133,8 +144,6 @@ int main(int argc, char **argv)
 	zi->type = ZI_INFO;
 	appendstrlist(&zi->data, version);
 	hash_insert(INFO_TZID, zi, &tzentries);
-
-	snprintf(prefix, sizeof(prefix), "%s%s", config_dir, FNAME_ZONEINFODIR);
 
 	do_zonedir(prefix, &tzentries, zi);
 
@@ -145,6 +154,113 @@ int main(int argc, char **argv)
 	zoneinfo_close(tid);
 
 	free_hash_table(&tzentries, &free_zoneinfo);
+	break;
+    }
+
+    case WINZONES: {
+	xmlParserCtxtPtr ctxt;
+	xmlDocPtr doc;
+	xmlNodePtr node;
+	struct buf tzidbuf = BUF_INITIALIZER;
+	struct buf aliasbuf = BUF_INITIALIZER;
+
+	if (verbose) printf("Processing Windows Zone file %s\n", winfile);
+
+	/* Parse the XML file */
+	ctxt = xmlNewParserCtxt();
+	if (!ctxt) {
+	    fprintf(stderr, "Failed to create XML parser context\n");
+	    break;
+	}
+
+	doc = xmlCtxtReadFile(ctxt, winfile, NULL, 0);
+	xmlFreeParserCtxt(ctxt);
+	if (!doc) {
+	    fprintf(stderr, "Failed to parse XML document\n");
+	    break;
+	}
+
+	node = xmlDocGetRootElement(doc);
+	if (!node || xmlStrcmp(node->name, BAD_CAST "supplementalData")) {
+	    fprintf(stderr, "Incorrect root node\n");
+	    goto done;
+	}
+
+	for (node = xmlFirstElementChild(node);
+	     node && xmlStrcmp(node->name, BAD_CAST "windowsZones");
+	     node = xmlNextElementSibling(node));
+	if (!node) {
+	    fprintf(stderr, "Missing windowsZones node\n");
+	    goto done;
+	}
+
+	node = xmlFirstElementChild(node);
+	if (!node || xmlStrcmp(node->name, BAD_CAST "mapTimezones")) {
+	    fprintf(stderr, "Missing mapTimezones node\n");
+	    goto done;
+	}
+
+	if (chdir(prefix)) {
+	    fprintf(stderr, "chdir(%s) failed\n", prefix);
+	    goto done;
+	}
+
+	for (node = xmlFirstElementChild(node);
+	     node;
+	     node = xmlNextElementSibling(node)) {
+	    if (!xmlStrcmp(node->name, BAD_CAST "mapZone") &&
+		!xmlStrcmp(xmlGetProp(node, BAD_CAST "territory"),
+			   BAD_CAST "001")) {
+		const char *tzid, *alias;
+
+		buf_setcstr(&tzidbuf,
+			    (const char *) xmlGetProp(node, BAD_CAST "type"));
+		buf_appendcstr(&tzidbuf, ".ics");
+		tzid = buf_cstring(&tzidbuf);
+		buf_setcstr(&aliasbuf,
+			    (const char *) xmlGetProp(node, BAD_CAST "other"));
+		buf_appendcstr(&aliasbuf, ".ics");
+		alias = buf_cstring(&aliasbuf);
+
+		if (verbose) printf("\tLINK: %s -> %s\n", alias, tzid);
+
+		if (symlink(tzid, alias)) {
+		    if (errno == EEXIST) {
+			struct stat sbuf;
+
+			if (stat(alias, &sbuf)) {
+			    fprintf(stderr, "stat(%s) failed: %s\n",
+				    alias, strerror(errno));
+			    errno = EEXIST;
+			}
+			else if (sbuf.st_mode & S_IFLNK) {
+			    char link[MAX_MAILBOX_PATH+1];
+			    int n = readlink(alias, link, MAX_MAILBOX_PATH);
+
+			    if (n == -1) {
+				fprintf(stderr, "readlink(%s) failed: %s\n",
+					alias, strerror(errno));
+				errno = EEXIST;
+			    }
+			    else if (n == (int) strlen(tzid) &&
+				     !strncmp(tzid, link, n)) {
+				errno = 0;
+			    }
+			}
+		    }
+
+		    if (errno) {
+			fprintf(stderr, "symlink(%s, %s) failed: %s\n",
+				tzid, alias, strerror(errno));
+		    }
+		}
+	    }
+	}
+
+  done:
+	buf_free(&aliasbuf);
+	buf_free(&tzidbuf);
+	xmlFreeDoc(doc);
 	break;
     }
 
