@@ -526,6 +526,18 @@ static int observance_compare(const void *obs1, const void *obs2)
 			    ((struct observance *) obs2)->onset);
 }
 
+static icalproperty *icalcomponent_get_x_property_by_name(icalcomponent *comp,
+							  const char *name)
+{
+    icalproperty *prop;
+
+    for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY);
+	 prop && strcmp(icalproperty_get_x_name(prop), name);
+	 prop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY));
+
+    return prop;
+}
+
 static const struct observance *truncate_vtimezone(icalcomponent *vtz,
 						   icaltimetype *startp,
 						   icaltimetype *endp,
@@ -540,14 +552,8 @@ static const struct observance *truncate_vtimezone(icalcomponent *vtz,
     unsigned adjust_end = !icaltime_is_null_time(end);
 
     /* See if we have a proleptic tzname in VTIMEZONE */
-    for (prop = icalcomponent_get_first_property(vtz, ICAL_X_PROPERTY);
-	 prop;
-	 prop = icalcomponent_get_next_property(vtz, ICAL_X_PROPERTY)) {
-	if (!strcmp("X-PROLEPTIC-TZNAME", icalproperty_get_x_name(prop))) {
-	    proleptic_prop = prop;
-	    break;
-	}
-    }
+    proleptic_prop = icalcomponent_get_x_property_by_name(vtz,
+							  "X-PROLEPTIC-TZNAME");
 
     memset(&tombstone, 0, sizeof(struct observance));
     tombstone.name = icalmemory_tmp_copy(proleptic_prop ?
@@ -966,8 +972,15 @@ static const struct observance *truncate_vtimezone(icalcomponent *vtz,
 	    *startp = obs->onset;
 	}
 	if (adjust_end) {
-	    obs = icalarray_element_at(obsarray, obsarray->num_elements-1);
-	    *endp = obs->onset;
+	    /* Use X-TZUNTIL if exists, otherwise use last observance */
+	    prop = icalcomponent_get_x_property_by_name(vtz, "X-TZUNTIL");
+	    if (prop) {
+		*endp = icaltime_from_string(icalproperty_get_x(prop));
+	    }
+	    else {
+		obs = icalarray_element_at(obsarray, obsarray->num_elements-1);
+		*endp = obs->onset;
+	    }
 	    icaltime_adjust(endp, 0, 0, 0, 1);
 	}
     }
@@ -1124,12 +1137,22 @@ static int action_get(struct transaction_t *txn)
 	    }
 	}
 
+	/* Rename X-TZUNTIL (if exists) */
+	prop = icalcomponent_get_x_property_by_name(vtz, "X-TZUNTIL");
+	if (prop) icalproperty_set_x_name(prop, "TZUNTIL");
+
 	if (!icaltime_is_null_time(start) || !icaltime_is_null_time(end)) {
 
 	    if (!icaltime_is_null_time(end)) {
 		/* Add TZUNTIL to VTIMEZONE */
-		icalproperty *tzuntil = icalproperty_new_tzuntil(end);
-		icalcomponent_add_property(vtz, tzuntil);
+		if (prop) {
+		    /* Use existing TZUNTIL */
+		    icalproperty_set_x(prop, icaltime_as_ical_string(end));
+		}
+		else {
+		    prop = icalproperty_new_tzuntil(end);
+		    icalcomponent_add_property(vtz, prop);
+		}
 	    }
 
 	    /* Add truncation parameter(s) to TZURL */
