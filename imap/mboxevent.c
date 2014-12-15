@@ -714,11 +714,10 @@ void mboxevent_add_flag(struct mboxevent *event, const char *flag)
 EXPORTED void mboxevent_set_access(struct mboxevent *event,
 				   const char *serveraddr, const char *clientaddr,
 				   const char *userid, const char *mailboxname,
-				   const int ext_name)
+				   const int ext_name __attribute__((unused)))
 {
     char url[MAX_MAILBOX_PATH+1];
     struct imapurl imapurl;
-    char extname[MAX_MAILBOX_NAME];
 
     if (!event)
 	return;
@@ -734,19 +733,14 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
     imapurl.server = config_servername;
 
     if (mailboxname != NULL) {
-	char *user = (char *)mboxname_to_userid(mailboxname);
+	struct mboxname_parts parts;
+	mboxname_to_parts(mailboxname, &parts);
 
-	assert(namespace.mboxname_toexternal != NULL);
-	if (ext_name)
-	    (*namespace.mboxname_toexternal)(&namespace, mailboxname, user, extname);
-	imapurl.mailbox = extname;
+	imapurl.mailbox = parts.box;
 
-	if (user) {
-	    /* translate any separators in user */
-	    if (ext_name)
-		mboxname_hiersep_toexternal(&namespace, user,
-					    config_virtdomains ? strcspn(user, "@") : 0);
-	    imapurl.user = user;
+	if (parts.userid) {
+	    imapurl.user = parts.userid;
+	    if (parts.domain) imapurl.server = parts.domain;
 	}
     }
 
