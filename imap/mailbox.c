@@ -3916,7 +3916,8 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
 		continue;
 	    }
 
-	    record.system_flags &= ~FLAG_ARCHIVED | FLAG_NEEDS_CLEANUP;
+	    record.system_flags &= ~FLAG_ARCHIVED;
+	    record.system_flags |= FLAG_NEEDS_CLEANUP;
 	    action = "unarchive";
 	}
 
