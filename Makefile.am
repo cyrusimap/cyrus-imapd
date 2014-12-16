@@ -629,7 +629,7 @@ include_HEADERS = \
 	lib/sysexits.h \
 	lib/times.h \
 	lib/tok.h \
-	lib/vparse.h
+	lib/vparse.h \
 	lib/wildmat.h \
 	lib/xmalloc.h
 nobase_include_HEADERS = sieve/sieve_interface.h
