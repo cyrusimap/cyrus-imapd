@@ -4840,6 +4840,7 @@ int report_sync_col(struct transaction_t *txn,
 
     /* XXX  Handle Depth (cal-home-set at toplevel) */
 
+    memset(&istate, 0, sizeof(struct index_state));
     istate.map = NULL;
 
     /* Open mailbox for reading */
