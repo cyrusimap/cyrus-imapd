@@ -277,6 +277,9 @@ static int archive(void *rock, const char *key, size_t keylen,
     if (mailbox_open_iwl(mbentry->name, &mailbox))
 	goto done;
 
+    if (verbose)
+	fprintf(stderr, "archiving mailbox %s", mbentry->name);
+
     mailbox_archive(mailbox, archive_cb, rock);
 
 done:
@@ -320,6 +323,8 @@ static int expire(void *rock, const char *key, size_t keylen,
     /* clean up deleted entries after 7 days */
     if (mbentry->mbtype & MBTYPE_DELETED) {
 	if (time(0) - mbentry->mtime > 86400*7) {
+	    if (verbose)
+		fprintf(stderr, "Removing stale tombstone for %s\n", mbentry->name);
 	    syslog(LOG_NOTICE, "Removing stale tombstone for %s", mbentry->name);
 	    cyrusdb_delete(mbdb, key, keylen, NULL, /*force*/1);
 	}
@@ -393,6 +398,9 @@ static int expire(void *rock, const char *key, size_t keylen,
     if (erock->do_userflags)
 	expunge_userflags(mailbox, erock);
 
+    if (verbose)
+	fprintf(stderr, "cleaning up expunged messages in %s\n", mbentry->name);
+
     r = mailbox_expunge_cleanup(mailbox, erock->expunge_mark, &numexpunged);
 
     erock->messages_expunged += numexpunged;
@@ -436,6 +444,9 @@ static int delete(void *rock, const char *key, size_t keylen,
 
     if ((timestamp == 0) || (timestamp > drock->delete_mark))
 	goto done;
+
+    if (verbose)
+	fprintf(stderr, "Cleaning up %s\n", mbentry->name);
 
     /* Add this mailbox to list of mailboxes to delete */
     strarray_append(&drock->to_delete, mbentry->name);
