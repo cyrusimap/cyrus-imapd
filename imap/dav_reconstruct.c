@@ -69,6 +69,7 @@
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
+#include "zoneinfo_db.h"
 
 extern int optind;
 extern char *optarg;
@@ -148,6 +149,16 @@ int main(int argc, char **argv)
 
     signals_set_shutdown(&shut_down);
     signals_add_handlers(0);
+
+#ifdef HAVE_TZ_BY_REF
+    /* Use TZdist VTIMEZONEs if we have them */
+    if (config_getbitfield(IMAPOPT_HTTPMODULES) & IMAP_ENUM_HTTPMODULES_TZDIST) {
+	snprintf(buf, MAX_MAILBOX_PATH, "%s%s", config_dir, FNAME_ZONEINFODIR);
+	set_zone_directory(buf);
+	icaltimezone_set_tzid_prefix("");
+	icaltimezone_set_builtin_tzdata(1);
+    }
+#endif
 
     caldav_init();
     carddav_init();
