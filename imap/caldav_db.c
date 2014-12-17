@@ -285,12 +285,26 @@ static const char *column_text_to_buf(const char *text, struct buf *buf)
     return text;
 }
 
+static void _num_to_comp_flags(struct comp_flags *flags, unsigned num)
+{
+    flags->recurring = num & 1;
+    flags->transp = (num<<1) & 1;
+    flags->status = (num<<2) & 3;
+}
+
+static unsigned _comp_flags_to_num(struct comp_flags *flags)
+{
+   return (flags->recurring & 1)
+       + ((flags->transp & 1) >> 1)
+       + ((flags->status & 3) >> 2);
+}
+
+
 static int read_cb(sqlite3_stmt *stmt, void *rock)
 {
     struct read_rock *rrock = (struct read_rock *) rock;
     struct caldav_db *db = rrock->db;
     struct caldav_data *cdata = rrock->cdata;
-    unsigned flags;
     int r = 0;
 
     memset(cdata, 0, sizeof(struct caldav_data));
@@ -300,8 +314,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     cdata->dav.imap_uid = sqlite3_column_int(stmt, 4);
     cdata->dav.lock_expire = sqlite3_column_int(stmt, 8);
     cdata->comp_type = sqlite3_column_int(stmt, 9);
-    flags = sqlite3_column_int(stmt, 14);
-    memcpy(&cdata->comp_flags, &flags, sizeof(struct comp_flags));
+    _num_to_comp_flags(&cdata->comp_flags, sqlite3_column_int(stmt, 14));
 
     if (rrock->cb) {
 	/* We can use the column data directly for the callback */
@@ -507,13 +520,11 @@ EXPORTED int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata,
 	{ NULL,		   SQLITE_NULL,	   { .s = NULL			  } } };
     const char *cmd;
     sqlite3_stmt **stmt;
-    unsigned flags;
     int r;
 
-    memcpy(&flags, &cdata->comp_flags, sizeof(struct comp_flags));
     bval[11].name = ":comp_flags";
     bval[11].type = SQLITE_INTEGER;
-    bval[11].val.i = flags;
+    bval[11].val.i = _comp_flags_to_num(&cdata->comp_flags);
 
     if (cdata->dav.rowid) {
 	cmd = CMD_UPDATE;
