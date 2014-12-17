@@ -123,6 +123,13 @@
 
 #define CMD_CREATE CMD_CREATE_CAL CMD_CREATE_OBJ CMD_CREATE_EM CMD_CREATE_GR
 
+/* leaves these unused columns around, but that's life.  A dav_reconstruct
+ * will fix them */
+#define CMD_DBUPDGRADEv2						\
+    "ALTER TABLE ical_objs ADD COLUMN comp_flags INTEGER;"		\
+    "UPDATE ical_objs SET comp_flags = recurring + 2 * transp;"
+
+#define DB_VERSION 2
 
 struct open_davdb {
     sqlite3 *db;
@@ -175,6 +182,23 @@ static void free_dav_open(struct open_davdb *open)
     free(open);
 }
 
+static int version_cb(void *rock, int ncol, char **vals, char **names __attribute__((unused)))
+{
+    int *vptr = (int *)rock;
+    if (ncol == 1 && vals[0])
+        *vptr = atoi(vals[0]);
+    return 0;
+}
+
+/* this is only called if there's some schema with the old-style value */
+static int synthetic_cb(void *rock, int ncol, char **vals, char **names __attribute__((unused)))
+{
+    int *vptr = (int *)rock;
+    if (ncol == 2 && vals[0])
+        *vptr = 1;
+    return 0;
+}
+
 /* Open DAV DB corresponding in file */
 static sqlite3 *dav_open(const char *fname)
 {
@@ -186,7 +210,7 @@ static sqlite3 *dav_open(const char *fname)
 	if (!strcmp(open->path, fname)) {
 	    /* already open! */
 	    open->refcount++;
-	    goto docmds;
+	    return open->db;
 	}
     }
 
@@ -218,18 +242,62 @@ static sqlite3 *dav_open(const char *fname)
 	sqlite3_trace(open->db, dav_debug, open->path);
     }
 
+    int current_version = 0;
+    sqlite3_exec(open->db, "PRAGMA user_version", version_cb, &current_version, NULL);
+    /* check for synthetic v1 - exists but not the right format */
+    if (!current_version) {
+	sqlite3_exec(open->db, "SELECT COUNT(*),transp FROM ical_objs", synthetic_cb, &current_version, NULL);
+    }
+
+    if (current_version != DB_VERSION) {
+	struct buf buf = BUF_INITIALIZER;
+
+	switch (current_version) {
+	case 0:
+	    syslog(LOG_NOTICE, "creating dav_db %s", open->path);
+	    rc = sqlite3_exec(open->db, CMD_CREATE, NULL, NULL, NULL);
+	    if (rc != SQLITE_OK) {
+		syslog(LOG_ERR, "dav_open(%s) create: %s",
+		    open->path, sqlite3_errmsg(open->db));
+		sqlite3_close(open->db);
+		free_dav_open(open);
+		return NULL;
+	    }
+	    break;
+
+	case 1:
+	    syslog(LOG_NOTICE, "upgrading dav_db %s", open->path);
+	    rc = sqlite3_exec(open->db, CMD_DBUPDGRADEv2, NULL, NULL, NULL);
+	    if (rc != SQLITE_OK) {
+		syslog(LOG_ERR, "dav_open(%s) upgrade v2: %s",
+		    open->path, sqlite3_errmsg(open->db));
+		sqlite3_close(open->db);
+		free_dav_open(open);
+		return NULL;
+	    }
+	    break;
+
+	default:
+	    abort();  /* unknown version */
+	}
+
+	buf_printf(&buf, "PRAGMA user_version = %d", DB_VERSION);
+	rc = sqlite3_exec(open->db, buf_cstring(&buf), NULL, NULL, NULL);
+	buf_free(&buf);
+	if (rc != SQLITE_OK) {
+	    /* XXX - fatal? */
+	    syslog(LOG_ERR, "dav_open(%s) user_version: %s",
+		  open->path, sqlite3_errmsg(open->db));
+	    sqlite3_close(open->db);
+	    free_dav_open(open);
+	    return NULL;
+	}
+    }
+
     /* stitch on up */
     open->refcount = 1;
     open->next = open_davdbs;
     open_davdbs = open;
-
-  docmds:
-    rc = sqlite3_exec(open->db, CMD_CREATE, NULL, NULL, NULL);
-    if (rc != SQLITE_OK) {
-	/* XXX - fatal? */
-	syslog(LOG_ERR, "dav_open(%s) cmds: %s",
-	       open->path, sqlite3_errmsg(open->db));
-    }
 
     return open->db;
 }
