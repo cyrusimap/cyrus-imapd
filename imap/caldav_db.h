@@ -86,9 +86,6 @@ enum {
 
 struct caldav_db;
 
-#define CALDAV_CREATE 0x01
-#define CALDAV_TRUNC  0x02
-
 struct comp_flags {
     unsigned recurring	  : 1;
     unsigned transp	  : 1;
@@ -121,8 +118,8 @@ int caldav_init(void);
 int caldav_done(void);
 
 /* get a database handle corresponding to mailbox */
-struct caldav_db *caldav_open_mailbox(struct mailbox *mailbox, int flags);
-struct caldav_db *caldav_open_userid(const char *userid, int flags);
+struct caldav_db *caldav_open_mailbox(struct mailbox *mailbox);
+struct caldav_db *caldav_open_userid(const char *userid);
 
 /* close this handle */
 int caldav_close(struct caldav_db *caldavdb);

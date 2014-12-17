@@ -133,56 +133,15 @@ EXPORTED int caldav_done(void)
     return dav_done();
 }
 
-
-#define CMD_DROP "DROP TABLE IF EXISTS ical_objs;"
-
-#define CMD_CREATE							\
-    "CREATE TABLE IF NOT EXISTS ical_objs ("				\
-    " rowid INTEGER PRIMARY KEY,"					\
-    " creationdate INTEGER,"						\
-    " mailbox TEXT NOT NULL,"						\
-    " resource TEXT NOT NULL,"						\
-    " imap_uid INTEGER,"						\
-    " lock_token TEXT,"							\
-    " lock_owner TEXT,"							\
-    " lock_ownerid TEXT,"						\
-    " lock_expire INTEGER,"						\
-    " comp_type INTEGER,"						\
-    " ical_uid TEXT,"							\
-    " organizer TEXT,"							\
-    " dtstart TEXT,"							\
-    " dtend TEXT,"							\
-    " comp_flags INTEGER,"						\
-    " sched_tag TEXT,"							\
-    " UNIQUE( mailbox, resource ) );"					\
-    "CREATE INDEX IF NOT EXISTS idx_ical_uid ON ical_objs ( ical_uid );"
-
-static struct caldav_db *caldav_open_fname(const char *fname, int flags)
-{
-    sqlite3 *db;
-    struct caldav_db *caldavdb = NULL;
-    const char *cmds = CMD_CREATE;
-
-    if (flags & CALDAV_TRUNC) cmds = CMD_DROP CMD_CREATE;
-
-    db = dav_open(fname, cmds);
-
-    if (db) {
-	caldavdb = xzmalloc(sizeof(struct caldav_db));
-	caldavdb->db = db;
-    }
-
-    return caldavdb;
-}
-
-EXPORTED struct caldav_db *caldav_open_userid(const char *userid, int flags)
+EXPORTED struct caldav_db *caldav_open_userid(const char *userid)
 {
     struct caldav_db *caldavdb = NULL;
-    struct buf fname = BUF_INITIALIZER;
 
-    dav_getpath_byuserid(&fname, userid);
-    caldavdb = caldav_open_fname(buf_cstring(&fname), flags);
-    buf_free(&fname);
+    sqlite3 *db = dav_open_userid(userid);
+    if (!db) return NULL;
+
+    caldavdb = xzmalloc(sizeof(struct caldav_db));
+    caldavdb->db = db;
 
     /* Construct mbox name corresponding to userid's scheduling Inbox */
     strncpy(caldavdb->sched_inbox, caldav_mboxname(userid, SCHED_INBOX), sizeof(caldavdb->sched_inbox));
@@ -191,24 +150,22 @@ EXPORTED struct caldav_db *caldav_open_userid(const char *userid, int flags)
 }
 
 /* Open DAV DB corresponding to userid */
-EXPORTED struct caldav_db *caldav_open_mailbox(struct mailbox *mailbox, int flags)
+EXPORTED struct caldav_db *caldav_open_mailbox(struct mailbox *mailbox)
 {
     struct caldav_db *caldavdb = NULL;
     const char *userid = mboxname_to_userid(mailbox->name);
 
-    if (userid) {
-	caldavdb = caldav_open_userid(userid, flags);
-    }
-    else {
-	struct buf fname = BUF_INITIALIZER;
-	dav_getpath(&fname, mailbox);
-	caldavdb = caldav_open_fname(buf_cstring(&fname), flags);
-	buf_free(&fname);
-    }
+    if (userid)
+	return caldav_open_userid(userid);
+
+    sqlite3 *db = dav_open_mailbox(mailbox);
+    if (!db) return NULL;
+
+    caldavdb = xzmalloc(sizeof(struct caldav_db));
+    caldavdb->db = db;
 
     return caldavdb;
 }
-
 
 /* Close DAV DB */
 EXPORTED int caldav_close(struct caldav_db *caldavdb)

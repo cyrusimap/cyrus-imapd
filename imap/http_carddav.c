@@ -328,7 +328,7 @@ static struct carddav_db *my_carddav_open(struct mailbox *mailbox)
 	return auth_carddavdb;
     }
     else {
-	return carddav_open_mailbox(mailbox, CALDAV_CREATE);
+	return carddav_open_mailbox(mailbox);
     }
 }
 
@@ -378,7 +378,7 @@ static void my_carddav_auth(const char *userid)
     else {
 	/* Open CardDAV DB for 'userid' */
 	my_carddav_reset();
-	auth_carddavdb = carddav_open_userid(userid, CARDDAV_CREATE);
+	auth_carddavdb = carddav_open_userid(userid);
 	if (!auth_carddavdb) fatal("Unable to open CardDAV DB", EC_IOERR);
     }
 

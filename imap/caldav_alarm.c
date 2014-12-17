@@ -745,7 +745,7 @@ EXPORTED int caldav_alarm_process()
 
 	userid = xstrdup(mboxname_to_userid(mailbox->name));
 
-	caldavdb = caldav_open_mailbox(mailbox, 0);
+	caldavdb = caldav_open_mailbox(mailbox);
 	if (!caldavdb) {
 	    /* XXX mailbox exists but caldav structure doesn't? delete event? */
 	    scan->do_delete = 0;

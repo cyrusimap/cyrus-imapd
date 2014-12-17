@@ -46,6 +46,7 @@
 
 #include <sqlite3.h>
 #include "dav_util.h"
+#include "mailbox.h"
 
 struct dav_data {
     unsigned rowid;
@@ -75,7 +76,8 @@ int dav_init(void);
 int dav_done(void);
 
 /* get a database handle corresponding to mailbox */
-sqlite3 *dav_open(const char *fname, const char *cmds);
+sqlite3 *dav_open_userid(const char *userid);
+sqlite3 *dav_open_mailbox(struct mailbox *mailbox);
 
 /* close this handle */
 int dav_close(sqlite3 *davdb);

@@ -84,7 +84,7 @@ static int get_email(struct transaction_t *txn __attribute__((unused)),
     int ret = HTTP_NOT_FOUND;
 
     /* XXX init just incase carddav not enabled? */
-    db = carddav_open_userid(userid, /*flags*/0);
+    db = carddav_open_userid(userid);
     if (!db) goto done;
 
     if (carddav_getemail(db, key))
@@ -105,7 +105,7 @@ static int get_group(struct transaction_t *txn, const char *userid, const char *
     int i;
 
     /* XXX init just incase carddav not enabled? */
-    db = carddav_open_userid(userid, /*flags*/0);
+    db = carddav_open_userid(userid);
     if (!db) goto done;
 
     array = carddav_getgroup(db, key);

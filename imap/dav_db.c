@@ -62,6 +62,68 @@
 
 #define FNAME_DAVSUFFIX ".dav" /* per-user DAV DB extension */
 
+#define CMD_CREATE_CAL							\
+    "CREATE TABLE IF NOT EXISTS ical_objs ("				\
+    " rowid INTEGER PRIMARY KEY,"					\
+    " creationdate INTEGER,"						\
+    " mailbox TEXT NOT NULL,"						\
+    " resource TEXT NOT NULL,"						\
+    " imap_uid INTEGER,"						\
+    " lock_token TEXT,"							\
+    " lock_owner TEXT,"							\
+    " lock_ownerid TEXT,"						\
+    " lock_expire INTEGER,"						\
+    " comp_type INTEGER,"						\
+    " ical_uid TEXT,"							\
+    " organizer TEXT,"							\
+    " dtstart TEXT,"							\
+    " dtend TEXT,"							\
+    " comp_flags INTEGER,"						\
+    " sched_tag TEXT,"							\
+    " UNIQUE( mailbox, resource ) );"					\
+    "CREATE INDEX IF NOT EXISTS idx_ical_uid ON ical_objs ( ical_uid );"
+
+#define CMD_CREATE_OBJ							\
+    "CREATE TABLE IF NOT EXISTS vcard_objs ("				\
+    " rowid INTEGER PRIMARY KEY,"					\
+    " creationdate INTEGER,"						\
+    " mailbox TEXT NOT NULL,"						\
+    " resource TEXT NOT NULL,"						\
+    " imap_uid INTEGER,"						\
+    " lock_token TEXT,"							\
+    " lock_owner TEXT,"							\
+    " lock_ownerid TEXT,"						\
+    " lock_expire INTEGER,"						\
+    " version INTEGER,"							\
+    " vcard_uid TEXT,"							\
+    " kind INTEGER,"							\
+    " fullname TEXT,"							\
+    " name TEXT,"							\
+    " nickname TEXT,"							\
+    " UNIQUE( mailbox, resource ) );"					\
+    "CREATE INDEX IF NOT EXISTS idx_vcard_fn ON vcard_objs ( fullname );" \
+    "CREATE INDEX IF NOT EXISTS idx_vcard_uid ON vcard_objs ( vcard_uid );"
+
+#define CMD_CREATE_EM							\
+    "CREATE TABLE IF NOT EXISTS vcard_emails ("				\
+    " rowid INTEGER PRIMARY KEY,"					\
+    " objid INTEGER,"							\
+    " pos INTEGER NOT NULL," /* for sorting */				\
+    " email TEXT NOT NULL,"						\
+    " FOREIGN KEY (objid) REFERENCES vcard_objs (rowid) ON DELETE CASCADE );" \
+    "CREATE INDEX IF NOT EXISTS idx_vcard_email ON vcard_emails ( email );"
+
+#define CMD_CREATE_GR							\
+    "CREATE TABLE IF NOT EXISTS vcard_groups ("				\
+    " rowid INTEGER PRIMARY KEY,"					\
+    " objid INTEGER,"							\
+    " pos INTEGER NOT NULL," /* for sorting */				\
+    " member_uid TEXT NOT NULL,"					\
+    " FOREIGN KEY (objid) REFERENCES vcard_objs (rowid) ON DELETE CASCADE );"
+
+#define CMD_CREATE CMD_CREATE_CAL CMD_CREATE_OBJ CMD_CREATE_EM CMD_CREATE_GR
+
+
 struct open_davdb {
     sqlite3 *db;
     char *path;
@@ -114,7 +176,7 @@ static void free_dav_open(struct open_davdb *open)
 }
 
 /* Open DAV DB corresponding in file */
-EXPORTED sqlite3 *dav_open(const char *fname, const char *cmds)
+static sqlite3 *dav_open(const char *fname)
 {
     int rc = SQLITE_OK;
     struct stat sbuf;
@@ -162,18 +224,35 @@ EXPORTED sqlite3 *dav_open(const char *fname, const char *cmds)
     open_davdbs = open;
 
   docmds:
-    if (cmds) {
-	rc = sqlite3_exec(open->db, cmds, NULL, NULL, NULL);
-	if (rc != SQLITE_OK) {
-	    /* XXX - fatal? */
-	    syslog(LOG_ERR, "dav_open(%s) cmds: %s",
-		   open->path, sqlite3_errmsg(open->db));
-	}
+    rc = sqlite3_exec(open->db, CMD_CREATE, NULL, NULL, NULL);
+    if (rc != SQLITE_OK) {
+	/* XXX - fatal? */
+	syslog(LOG_ERR, "dav_open(%s) cmds: %s",
+	       open->path, sqlite3_errmsg(open->db));
     }
 
     return open->db;
 }
 
+EXPORTED sqlite3 *dav_open_userid(const char *userid)
+{
+    sqlite3 *db = NULL;
+    struct buf fname = BUF_INITIALIZER;
+    dav_getpath_byuserid(&fname, userid);
+    db = dav_open(buf_cstring(&fname));
+    buf_free(&fname);
+    return db;
+}
+
+EXPORTED sqlite3 *dav_open_mailbox(struct mailbox *mailbox)
+{
+    sqlite3 *db = NULL;
+    struct buf fname = BUF_INITIALIZER;
+    dav_getpath(&fname, mailbox);
+    db = dav_open(buf_cstring(&fname));
+    buf_free(&fname);
+    return db;
+}
 
 /* Close DAV DB */
 EXPORTED int dav_close(sqlite3 *davdb)

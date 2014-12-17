@@ -52,9 +52,6 @@
 
 struct carddav_db;
 
-#define CARDDAV_CREATE 0x01
-#define CARDDAV_TRUNC  0x02
-
 struct carddav_data {
     struct dav_data dav;  /* MUST be first so we can typecast */
     unsigned version;
@@ -74,8 +71,8 @@ int carddav_init(void);
 int carddav_done(void);
 
 /* get a database handle corresponding to mailbox */
-struct carddav_db *carddav_open_mailbox(struct mailbox *mailbox, int flags);
-struct carddav_db *carddav_open_userid(const char *userid, int flags);
+struct carddav_db *carddav_open_mailbox(struct mailbox *mailbox);
+struct carddav_db *carddav_open_userid(const char *userid);
 
 /* close this handle */
 int carddav_close(struct carddav_db *carddavdb);

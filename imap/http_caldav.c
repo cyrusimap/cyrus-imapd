@@ -620,7 +620,7 @@ static struct caldav_db *my_caldav_open(struct mailbox *mailbox)
 	return auth_caldavdb;
     }
     else {
-	return caldav_open_mailbox(mailbox, CALDAV_CREATE);
+	return caldav_open_mailbox(mailbox);
     }
 }
 
@@ -725,7 +725,7 @@ static void my_caldav_auth(const char *userid)
     else {
 	/* Open CalDAV DB for 'userid' */
 	my_caldav_reset();
-	auth_caldavdb = caldav_open_userid(userid, CALDAV_CREATE);
+	auth_caldavdb = caldav_open_userid(userid);
 	if (!auth_caldavdb) fatal("Unable to open CalDAV DB", EC_IOERR);
     }
 
@@ -6766,7 +6766,7 @@ static void sched_deliver_local(const char *recipient,
     method = icalcomponent_get_method(sched_data->itip);
 
     /* Search for iCal UID in recipient's calendars */
-    caldavdb = caldav_open_userid(userid, CALDAV_CREATE);
+    caldavdb = caldav_open_userid(userid);
     if (!caldavdb) {
 	sched_data->status =
 	    sched_data->ischedule ? REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;

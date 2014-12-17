@@ -93,93 +93,32 @@ EXPORTED int carddav_done(void)
     return dav_done();
 }
 
-
-#define CMD_DROP_OBJ "DROP TABLE IF EXISTS vcard_objs;"
-
-#define CMD_CREATE_OBJ							\
-    "CREATE TABLE IF NOT EXISTS vcard_objs ("				\
-    " rowid INTEGER PRIMARY KEY,"					\
-    " creationdate INTEGER,"						\
-    " mailbox TEXT NOT NULL,"						\
-    " resource TEXT NOT NULL,"						\
-    " imap_uid INTEGER,"						\
-    " lock_token TEXT,"							\
-    " lock_owner TEXT,"							\
-    " lock_ownerid TEXT,"						\
-    " lock_expire INTEGER,"						\
-    " version INTEGER,"							\
-    " vcard_uid TEXT,"							\
-    " kind INTEGER,"							\
-    " fullname TEXT,"							\
-    " name TEXT,"							\
-    " nickname TEXT,"							\
-    " UNIQUE( mailbox, resource ) );"					\
-    "CREATE INDEX IF NOT EXISTS idx_vcard_fn ON vcard_objs ( fullname );" \
-    "CREATE INDEX IF NOT EXISTS idx_vcard_uid ON vcard_objs ( vcard_uid );"
-
-#define CMD_DROP_EM "DROP TABLE IF EXISTS vcard_emails;"
-
-#define CMD_CREATE_EM							\
-    "CREATE TABLE IF NOT EXISTS vcard_emails ("				\
-    " rowid INTEGER PRIMARY KEY,"					\
-    " objid INTEGER,"							\
-    " pos INTEGER NOT NULL," /* for sorting */				\
-    " email TEXT NOT NULL,"						\
-    " FOREIGN KEY (objid) REFERENCES vcard_objs (rowid) ON DELETE CASCADE );" \
-    "CREATE INDEX IF NOT EXISTS idx_vcard_email ON vcard_emails ( email );"
-
-#define CMD_DROP_GR "DROP TABLE IF EXISTS vcard_groups;"
-
-#define CMD_CREATE_GR							\
-    "CREATE TABLE IF NOT EXISTS vcard_groups ("				\
-    " rowid INTEGER PRIMARY KEY,"					\
-    " objid INTEGER,"							\
-    " pos INTEGER NOT NULL," /* for sorting */				\
-    " member_uid TEXT NOT NULL,"					\
-    " FOREIGN KEY (objid) REFERENCES vcard_objs (rowid) ON DELETE CASCADE );"
-
-#define CMD_DROP CMD_DROP_OBJ CMD_DROP_EM CMD_DROP_GR
-#define CMD_CREATE CMD_CREATE_OBJ CMD_CREATE_EM CMD_CREATE_GR
-
-/* Open DAV DB corresponding to mailbox */
-static struct carddav_db *carddav_open_fname(const char *fname, int flags)
+EXPORTED struct carddav_db *carddav_open_userid(const char *userid)
 {
-    sqlite3 *db;
     struct carddav_db *carddavdb = NULL;
-    const char *cmds = CMD_CREATE;
 
-    if (flags & CARDDAV_TRUNC) cmds = CMD_DROP CMD_CREATE;
+    sqlite3 *db = dav_open_userid(userid);
+    if (!db) return NULL;
 
-    db = dav_open(fname, cmds);
-
-    if (db) {
-	carddavdb = xzmalloc(sizeof(struct carddav_db));
-	carddavdb->db = db;
-    }
+    carddavdb = xzmalloc(sizeof(struct carddav_db));
+    carddavdb->db = db;
 
     return carddavdb;
 }
 
-EXPORTED struct carddav_db *carddav_open_userid(const char *userid, int flags)
+EXPORTED struct carddav_db *carddav_open_mailbox(struct mailbox *mailbox)
 {
-    struct buf fname = BUF_INITIALIZER;
     struct carddav_db *carddavdb = NULL;
+    const char *userid = mboxname_to_userid(mailbox->name);
 
-    dav_getpath_byuserid(&fname, userid);
-    carddavdb = carddav_open_fname(buf_cstring(&fname), flags);
-    buf_free(&fname);
+    if (userid)
+	return carddav_open_userid(userid);
 
-    return carddavdb;
-}
+    sqlite3 *db = dav_open_mailbox(mailbox);
+    if (!db) return NULL;
 
-EXPORTED struct carddav_db *carddav_open_mailbox(struct mailbox *mailbox, int flags)
-{
-    struct buf fname = BUF_INITIALIZER;
-    struct carddav_db *carddavdb = NULL;
-
-    dav_getpath(&fname, mailbox);
-    carddavdb = carddav_open_fname(buf_cstring(&fname), flags);
-    buf_free(&fname);
+    carddavdb = xzmalloc(sizeof(struct carddav_db));
+    carddavdb->db = db;
 
     return carddavdb;
 }

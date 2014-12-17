@@ -2643,7 +2643,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 
     assert(resource);
 
-    carddavdb = carddav_open_mailbox(mailbox, 0);
+    carddavdb = carddav_open_mailbox(mailbox);
 
     /* Find existing record for this resource */
     carddav_lookup_resource(carddavdb, mailbox->name, resource, 1, &cdata);
@@ -2744,7 +2744,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
         }
     }
 
-    caldavdb = caldav_open_mailbox(mailbox, 0);
+    caldavdb = caldav_open_mailbox(mailbox);
 
     /* Find existing record for this resource */
     caldav_lookup_resource(caldavdb, mailbox->name, resource, 1, &cdata);
@@ -4495,7 +4495,7 @@ static int mailbox_delete_caldav(struct mailbox *mailbox)
 {
     struct caldav_db *caldavdb = NULL;
 
-    caldavdb = caldav_open_mailbox(mailbox, 0);
+    caldavdb = caldav_open_mailbox(mailbox);
     if (caldavdb) {
 	int r = caldav_delmbox(caldavdb, mailbox->name, 0);
 	caldav_close(caldavdb);
@@ -4516,7 +4516,7 @@ static int mailbox_delete_carddav(struct mailbox *mailbox)
 {
     struct carddav_db *carddavdb = NULL;
 
-    carddavdb = carddav_open_mailbox(mailbox, 0);
+    carddavdb = carddav_open_mailbox(mailbox);
     if (carddavdb) {
 	int r = carddav_delmbox(carddavdb, mailbox->name, 0);
 	carddav_close(carddavdb);
