@@ -80,11 +80,6 @@ static struct namespace recon_namespace;
 const int config_need_data = 0;
 
 /* forward declarations */
-static int do_reconstruct(void *rock,
-			  const char *key,
-			  size_t keylen,
-			  const char *data,
-			  size_t datalen);
 void usage(void);
 void shut_down(int code);
 
@@ -92,26 +87,9 @@ static int code = 0;
 
 static int do_user(const char *userid, void *rock __attribute__((unused)))
 {
-    struct buf fnamebuf = BUF_INITIALIZER;
-
     printf("Reconstructing DAV DB for %s...\n", userid);
 
-    /* remove existing database entirely */
-    /* XXX - build a new file and rename into place? */
-    dav_getpath_byuserid(&fnamebuf, userid);
-    if (buf_len(&fnamebuf))
-	unlink(buf_cstring(&fnamebuf));
-    buf_free(&fnamebuf);
-
-    struct caldav_alarm_db *alarmdb = caldav_alarm_open();
-
-    caldav_alarm_delete_user(alarmdb, userid);
-
-    mboxlist_allusermbox(userid, do_reconstruct, NULL, 0);
-
-    caldav_alarm_close(alarmdb);
-
-    return 0;
+    return dav_reconstruct_user(userid);
 }
 
 int main(int argc, char **argv)
@@ -183,46 +161,6 @@ void usage(void)
     fprintf(stderr,
 	    "usage: dav_reconstruct [-C <alt_config>] userid\n");
     exit(EC_USAGE);
-}
-
-/*
- * mboxlist_findall() callback function to create DAV DB entries for a mailbox
- */
-static int do_reconstruct(void *rock __attribute__((unused)),
-			  const char *key,
-			  size_t keylen,
-			  const char *data __attribute__((unused)),
-			  size_t datalen __attribute__((unused)))
-{
-    int r = 0;
-    char ext_name_buf[MAX_MAILBOX_PATH+1];
-    mbentry_t *mbentry = NULL;
-    struct mailbox *mailbox = NULL;
-    char *name = xstrndup(key, keylen);
-
-    signals_poll();
-
-    r = mboxlist_lookup(name, &mbentry, NULL);
-    if (r) goto done;
-
-    /* Convert internal name to external */
-    (*recon_namespace.mboxname_toexternal)(&recon_namespace, mbentry->name,
-					   "cyrus", ext_name_buf);
-
-#ifdef WITH_DAV
-    if (mbentry->mbtype & (MBTYPE_CALENDAR|MBTYPE_ADDRESSBOOK)) {
-	printf("Inserting DAV DB entries for %s...\n", ext_name_buf);
-
-	/* Open/lock header */
-	r = mailbox_open_irl(mbentry->name, &mailbox);
-	if (!r) r = mailbox_add_dav(mailbox);
-	mailbox_close(&mailbox);
-    }
-#endif
-
-done:
-    mboxlist_entry_free(&mbentry);
-    return r;
 }
 
 /*

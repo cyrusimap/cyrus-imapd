@@ -89,4 +89,6 @@ int dav_exec(sqlite3 *davdb, const char *cmd, struct bind_val bval[],
 /* delete database corresponding to mailbox */
 int dav_delete(struct mailbox *mailbox);
 
+int dav_reconstruct_user(const char *userid);
+
 #endif /* DAV_DB_H */

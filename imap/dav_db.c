@@ -278,3 +278,60 @@ EXPORTED int dav_delete(struct mailbox *mailbox)
 
     return r;
 }
+
+/*
+ * mboxlist_findall() callback function to create DAV DB entries for a mailbox
+ */
+static int _dav_reconstruct_mb(void *rock __attribute__((unused)),
+			       const char *key,
+			       size_t keylen,
+			       const char *data __attribute__((unused)),
+			       size_t datalen __attribute__((unused)))
+{
+    int r = 0;
+    char *name = xstrndup(key, keylen);
+    mbentry_t *mbentry = NULL;
+
+    signals_poll();
+
+    r = mboxlist_lookup(name, &mbentry, NULL);
+    if (r) goto done;
+
+#ifdef WITH_DAV
+    if (mbentry->mbtype & MBTYPES_DAV) {
+	struct mailbox *mailbox = NULL;
+	/* Open/lock header */
+	r = mailbox_open_irl(mbentry->name, &mailbox);
+	if (!r) r = mailbox_add_dav(mailbox);
+	mailbox_close(&mailbox);
+    }
+#endif
+
+done:
+    mboxlist_entry_free(&mbentry);
+    return r;
+}
+
+EXPORTED int dav_reconstruct_user(const char *userid)
+{
+    struct buf fnamebuf = BUF_INITIALIZER;
+
+    syslog(LOG_NOTICE, "dav_reconstruct_user: %s", userid);
+
+    /* remove existing database entirely */
+    /* XXX - build a new file and rename into place? */
+    dav_getpath_byuserid(&fnamebuf, userid);
+    if (buf_len(&fnamebuf))
+	unlink(buf_cstring(&fnamebuf));
+    buf_free(&fnamebuf);
+
+    struct caldav_alarm_db *alarmdb = caldav_alarm_open();
+
+    caldav_alarm_delete_user(alarmdb, userid);
+
+    mboxlist_allusermbox(userid, _dav_reconstruct_mb, NULL, 0);
+
+    caldav_alarm_close(alarmdb);
+
+    return 0;
+}
