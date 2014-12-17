@@ -288,7 +288,7 @@ done:
 }
 
 /*
- * mboxlist_findall() callback function to:
+ * callback function to:
  * - expire messages from mailboxes,
  * - build a hash table of mailboxes in which we expired messages,
  * - and perform a cleanup of expunged messages
@@ -413,19 +413,20 @@ done:
 static int delete(void *rock, const char *key, size_t keylen,
 			      const char *data, size_t datalen)
 {
-    mbentry_t *mbentry = NULL;
     struct delete_rock *drock = (struct delete_rock *) rock;
+    mbentry_t *mbentry = NULL;
     time_t timestamp;
 
-    if (sigquit) {
-	/* don't care if we leak some memory, we are shutting down */
+    if (sigquit)
 	return 1;
-    }
 
+    /* Skip mailboxes with errors */
     if (mboxlist_parse_entry(&mbentry, key, keylen, data, datalen))
 	goto done; /* xxx - syslog? */
 
-    /* Skip remote mailboxes */
+    if (mbentry->mbtype & MBTYPE_DELETED)
+	goto done;
+
     if (mbentry->mbtype & MBTYPE_REMOTE)
 	goto done;
 
@@ -442,24 +443,38 @@ static int delete(void *rock, const char *key, size_t keylen,
 done:
     mboxlist_entry_free(&mbentry);
 
+    /* Even if we had a problem with one mailbox, continue with the others */
     return 0;
 }
 
-static int expire_conversations(char *name,
-				int matchlen __attribute__((unused)),
-				int maycreate __attribute__((unused)),
-				void *rock)
+static int expire_conversations(void *rock, const char *key, size_t keylen,
+				const char *data, size_t datalen)
 {
     struct conversations_rock *crock = (struct conversations_rock *)rock;
-    char *filename = conversations_getmboxpath(name);
     struct conversations_state *state = NULL;
     unsigned int nseen = 0, ndeleted = 0;
+    mbentry_t *mbentry = NULL;
+    char *filename;
 
-    if (!filename) goto out;
+    if (sigquit)
+	return 1;
+
+    /* Skip mailboxes with errors */
+    if (mboxlist_parse_entry(&mbentry, key, keylen, data, datalen))
+	goto done; /* xxx - syslog? */
+
+    if (mbentry->mbtype & MBTYPE_DELETED)
+	goto done;
+
+    if (mbentry->mbtype & MBTYPE_REMOTE)
+	goto done;
+
+    filename = conversations_getmboxpath(mbentry->name);
+    if (!filename)
+	goto done;
 
     if (hash_lookup(filename, &crock->seen))
-	goto out;
-    hash_insert(filename, (void *)1, &crock->seen);
+	goto done;
 
     if (verbose)
 	fprintf(stderr, "Pruning conversations from db %s\n", filename);
@@ -469,12 +484,15 @@ static int expire_conversations(char *name,
 	conversations_commit(&state);
     }
 
+    hash_insert(filename, (void *)1, &crock->seen);
+
     crock->databases_seen++;
     crock->msgids_seen += nseen;
     crock->msgids_expired += ndeleted;
 
-out:
+done:
     free(filename);
+    mboxlist_entry_free(&mbentry);
     return 0;
 }
 
@@ -496,7 +514,7 @@ int main(int argc, char *argv[])
     int cid_expire_seconds;
     int do_cid_expire = -1;
     char *alt_config = NULL;
-    const char *find_prefix = "";
+    const char *find_prefix = NULL;
     const char *do_user = NULL;
     struct expire_rock erock;
     struct delete_rock drock;
@@ -702,8 +720,10 @@ int main(int argc, char *argv[])
 		    "Removing conversation entries older than %0.2f days\n",
 		    (double)(cid_expire_seconds/86400));
 
-	mboxlist_findall(NULL, find_prefix, 1, 0, 0,
-			 expire_conversations, &crock);
+	if (do_user)
+	    mboxlist_allusermbox(do_user, expire_conversations, &crock, /*include_deleted*/1);
+	else
+	    mboxlist_allmbox(find_prefix, expire_conversations, &crock, /*include_deleted*/1);
 
 	syslog(LOG_NOTICE, "Expired %lu entries of %lu entries seen "
 			    "in %lu conversation databases",
