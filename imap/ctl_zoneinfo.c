@@ -80,7 +80,7 @@ void do_zonedir(const char *prefix, struct hash_table *tzentries,
 		struct zoneinfo *info);
 void shut_down(int code);
 
-#ifdef HAVE_XML_FIRSTCHILD
+#ifndef HAVE_XML_FIRSTCHILD
 xmlNodePtr xmlGetNextNode(xmlNodePtr node)
 {
     for (; node && node->type != XML_ELEMENT_NODE; node = node->next);
