@@ -1175,6 +1175,10 @@ dnl
 	AC_DEFINE(WITH_DAV,[],[Build DAV support into httpd?])
 	AC_DEFINE(WITH_JSON,[],[Build jCal/jCard/TZdist support into httpd?])
 
+	AC_CHECK_LIB(xml2, xmlFirstElementChild,
+		AC_DEFINE(HAVE_XML_FIRSTCHILD,[],
+			[Do we have support for xmlFirstElementChild()?]))
+
 	AC_CHECK_LIB(ical, icaltimezone_set_builtin_tzdata,
 		AC_DEFINE(HAVE_TZ_BY_REF,[],
 			[Build TZ by ref support into httpd?]))
