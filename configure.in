@@ -1015,6 +1015,8 @@ if test "$ENABLE_RSS" != no -o "$ENABLE_DAV" != no; then
    IMAP_PROGS="$IMAP_PROGS httpd"
    AC_SUBST(XML2_CFLAGS)
    AC_SUBST(XML2_LIBS)
+   AC_CHECK_LIB(xml2, xmlFirstElementChild,
+   	AC_DEFINE(HAVE_XML_FIRSTCHILD,[], [Do we have support for xmlFirstElementChild()?]))
 
    if test "$ENABLE_RSS" != no; then
       AC_DEFINE(WITH_RSS,[],[Build RSS support into httpd?])
