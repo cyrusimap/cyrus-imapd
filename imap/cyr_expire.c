@@ -255,10 +255,9 @@ static unsigned archive_cb(struct mailbox *mailbox,
     return 0;
 }
 
-static int archive(char *name, int matchlen __attribute__((unused)),
-		   int maycreate __attribute__((unused)), void *rock)
+static int archive(void *rock, const char *key, size_t keylen,
+			       const char *data, size_t datalen)
 {
-    int r;
     mbentry_t *mbentry = NULL;
     struct mailbox *mailbox = NULL;
 
@@ -266,31 +265,23 @@ static int archive(char *name, int matchlen __attribute__((unused)),
 	return 1;
 
     /* Skip mailboxes with errors */
-    r = mboxlist_lookup(name, &mbentry, NULL);
-    if (r == IMAP_MAILBOX_NONEXISTENT)
+    if (mboxlist_parse_entry(&mbentry, key, keylen, data, datalen))
+	goto done; /* xxx - syslog? */
+
+    if (mbentry->mbtype & MBTYPE_DELETED)
 	goto done;
-    if (r) {
-	if (verbose)
-	    printf("error looking up %s: %s\n", name, error_message(r));
-	goto done;
-    }
 
     if (mbentry->mbtype & MBTYPE_REMOTE)
 	goto done;
 
-    r = mailbox_open_iwl(name, &mailbox);
-    if (r) {
-	/* mailbox corrupt/nonexistent -- skip it */
-	syslog(LOG_WARNING, "unable to open mailbox %s: %s",
-	       name, error_message(r));
+    if (mailbox_open_iwl(mbentry->name, &mailbox))
 	goto done;
-    }
 
     mailbox_archive(mailbox, archive_cb, rock);
 
 done:
-    mboxlist_entry_free(&mbentry);
     mailbox_close(&mailbox);
+    mboxlist_entry_free(&mbentry);
 
     /* move on to the next mailbox regardless of errors */
     return 0;
@@ -646,8 +637,11 @@ int main(int argc, char *argv[])
 
     if (archive_seconds >= 0) {
 	time_t archive_mark = time(0) - archive_seconds;
-	mboxlist_findall(NULL, find_prefix, 1, 0, 0, archive, &archive_mark);
 	/* XXX - add syslog? */
+	if (do_user)
+	    mboxlist_allusermbox(do_user, archive, &archive_mark, /*include_deleted*/1);
+	else
+	    mboxlist_allmbox(find_prefix, archive, &archive_mark, /*include_deleted*/1);
     }
 
     if (do_expunge && (expunge_seconds >= 0 || expire_seconds || erock.do_userflags)) {
