@@ -242,6 +242,15 @@ static sqlite3 *dav_open(const char *fname)
 	sqlite3_trace(open->db, dav_debug, open->path);
     }
 
+    rc = sqlite3_exec(open->db, "PRAGMA foreign_keys = ON;", NULL, NULL, NULL);
+    if (rc != SQLITE_OK) {
+	syslog(LOG_ERR, "dav_open(%s) enabled foreign_keys: %s",
+	    open->path, sqlite3_errmsg(open->db));
+	sqlite3_close(open->db);
+	free_dav_open(open);
+	return NULL;
+    }
+
     int current_version = 0;
     sqlite3_exec(open->db, "PRAGMA user_version", version_cb, &current_version, NULL);
     /* check for synthetic v1 - exists but not the right format */
