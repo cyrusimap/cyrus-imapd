@@ -488,8 +488,7 @@ static int carddav_parse_path(const char *path,
 
 	/* Get user id */
 	len = strcspn(p, "/");
-	tgt->user = p;
-	tgt->userlen = len;
+	tgt->userid = xstrndup(p, len);
 
 	p += len;
 	if (!*p || !*++p) goto done;
@@ -533,19 +532,15 @@ static int carddav_parse_path(const char *path,
 	else tgt->allow |= ALLOW_DELETE;
 #endif
     }
-    else if (tgt->user) tgt->allow |= ALLOW_DELETE;
+    else if (tgt->userid) tgt->allow |= ALLOW_DELETE;
 
 
     /* Create mailbox name from the parsed path */
 
     mboxname_init_parts(&parts);
 
-    if (tgt->user && tgt->userlen) {
-        /* holy "avoid copying" batman */
-        char *userid = xstrndup(tgt->user, tgt->userlen);
-        mboxname_userid_to_parts(userid, &parts);
-        free(userid);
-    }
+    if (tgt->userid)
+        mboxname_userid_to_parts(tgt->userid, &parts);
 
     buf_setcstr(&boxbuf, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
     if (tgt->collen) {
@@ -765,15 +760,15 @@ int propfind_abookhome(const xmlChar *name, xmlNsPtr ns,
     xmlNodePtr node;
     xmlNodePtr expand = (xmlNodePtr) rock;
 
-    if (!(namespace_addressbook.enabled && fctx->req_tgt->user))
+    if (!(namespace_addressbook.enabled && fctx->req_tgt->userid))
 	return HTTP_NOT_FOUND;
 
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			name, ns, NULL, 0);
 
     buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, "%s/user/%.*s/", namespace_addressbook.prefix,
-	       (int) fctx->req_tgt->userlen, fctx->req_tgt->user);
+    buf_printf(&fctx->buf, "%s/user/%s/", namespace_addressbook.prefix,
+	       fctx->req_tgt->userid);
 
     if (expand) {
 	/* Return properties for this URL */

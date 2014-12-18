@@ -184,8 +184,7 @@ struct request_target_t {
     char path[MAX_MAILBOX_PATH+1]; /* working copy of URL path */
     char *tail;			/* tail of original request path */
     unsigned namespace;		/* namespace of path */
-    char *user;			/* ptr to owner of collection (NULL = shared) */
-    size_t userlen;
+    char *userid;		/* owner of collection (needs freeing) */
     char *collection;		/* ptr to collection name */
     size_t collen;
     char *resource;		/* ptr to resource name */

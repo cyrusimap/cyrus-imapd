@@ -821,8 +821,7 @@ static int caldav_parse_path(const char *path,
 
 	/* Get user id */
 	len = strcspn(p, "/");
-	tgt->user = p;
-	tgt->userlen = len;
+	tgt->userid = xstrndup(p, len);
 
 	p += len;
 	if (!*p || !*++p) {
@@ -879,18 +878,14 @@ static int caldav_parse_path(const char *path,
 	else
 	    tgt->allow |= (ALLOW_POST|ALLOW_DELETE);
     }
-    else if (tgt->user) tgt->allow |= ALLOW_DELETE;
+    else if (tgt->userid) tgt->allow |= ALLOW_DELETE;
 
     /* Create mailbox name from the parsed path */
 
     mboxname_init_parts(&parts);
 
-    if (tgt->user && tgt->userlen) {
-	/* holy "avoid copying" batman */
-	char *userid = xstrndup(tgt->user, tgt->userlen);
-	mboxname_userid_to_parts(userid, &parts);
-	free(userid);
-    }
+    if (tgt->userid)
+	mboxname_userid_to_parts(tgt->userid, &parts);
 
     buf_setcstr(&boxbuf, config_getstring(IMAPOPT_CALENDARPREFIX));
     if (tgt->collen) {
@@ -2104,9 +2099,9 @@ static int action_freebusy(struct transaction_t *txn, int rights)
 	/* Construct URL */
 	buf_reset(&txn->buf);
 	http_proto_host(txn->req_hdrs, &proto, &host);
-	buf_printf(&txn->buf, "%s://%s%s/user/%.*s/?%s",
+	buf_printf(&txn->buf, "%s://%s%s/user/%s/?%s",
 		   proto, host, namespace_calendar.prefix,
-		   (int) txn->req_tgt.userlen, txn->req_tgt.user,
+		   txn->req_tgt.userid,
 		   URI_QUERY(txn->req_uri));
 
 	/* Set URL property */
@@ -2116,8 +2111,8 @@ static int action_freebusy(struct transaction_t *txn, int rights)
 
 	/* Set filename of resource */
 	buf_reset(&txn->buf);
-	buf_printf(&txn->buf, "%.*s.%s",
-		   (int) txn->req_tgt.userlen, txn->req_tgt.user,
+	buf_printf(&txn->buf, "%s.%s",
+		   txn->req_tgt.userid,
 		   mime->file_ext2);
 	txn->resp_body.fname = buf_cstring(&txn->buf);
 
@@ -2492,7 +2487,7 @@ static int caldav_post(struct transaction_t *txn)
 	}
     }
 
-    if (strncmp(orgid, txn->req_tgt.user, txn->req_tgt.userlen)) {
+    if (strcasecmp(orgid, txn->req_tgt.userid)) {
 	txn->error.precond = CALDAV_VALID_ORGANIZER;
 	ret = HTTP_FORBIDDEN;
 	goto done;
@@ -3398,7 +3393,7 @@ static int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
     struct buf calbuf = BUF_INITIALIZER;
     int r = HTTP_NOT_FOUND; /* error condition if we bail early */
 
-    if (!(namespace_calendar.enabled && fctx->req_tgt->user))
+    if (!(namespace_calendar.enabled && fctx->req_tgt->userid))
 	goto done;
 
     if (cal) {
@@ -3419,17 +3414,17 @@ static int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
 	    annotname = ANNOT_NS "<" XML_NS_CALDAV ">schedule-outbox";
 
 	if (annotname) {
-	    r = annotatemore_lookupmask(mailboxname, annotname, fctx->req_tgt->user, &calbuf);
+	    r = annotatemore_lookupmask(mailboxname, annotname, fctx->req_tgt->userid, &calbuf);
 	    if (!r) cal = calbuf.len ? buf_cstring(&calbuf) : NULL;
 	}
 
 	/* make sure the mailbox exists */
-	mailboxname = caldav_mboxname(fctx->req_tgt->user, cal);
+	mailboxname = caldav_mboxname(fctx->req_tgt->userid, cal);
 	r = mboxlist_lookup(mailboxname, NULL, NULL);
 	if (r == IMAP_MAILBOX_NONEXISTENT) {
 	    r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR,
 				       NULL, 0,
-				       fctx->req_tgt->user, httpd_authstate,
+				       fctx->req_tgt->userid, httpd_authstate,
 				       0, 0, 0, 0, NULL);
 	    if (r) {
 		syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
@@ -3443,9 +3438,8 @@ static int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
 			name, ns, NULL, 0);
 
     buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, "%s/user/%.*s/%s", namespace_calendar.prefix,
-	       (int) fctx->req_tgt->userlen, fctx->req_tgt->user,
-	       cal ? cal : "");
+    buf_printf(&fctx->buf, "%s/user/%s/%s", namespace_calendar.prefix,
+	       fctx->req_tgt->userid, cal ? cal : "");
 
     if (expand) {
 	/* Return properties for this URL */
@@ -3740,23 +3734,20 @@ int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
 			 void *rock __attribute__((unused)))
 {
     xmlNodePtr node;
-    struct strlist *domains;
 
-    if (!(namespace_calendar.enabled && fctx->req_tgt->user))
+    if (!(namespace_calendar.enabled && fctx->req_tgt->userid))
 	return HTTP_NOT_FOUND;
 
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			name, ns, NULL, 0);
 
-    /* XXX  This needs to be done via an LDAP/DB lookup */
-    for (domains = cua_domains; domains; domains = domains->next) {
-	buf_reset(&fctx->buf);
-	buf_printf(&fctx->buf, "mailto:%.*s@%s", (int) fctx->req_tgt->userlen,
-		   fctx->req_tgt->user, domains->s);
+    buf_reset(&fctx->buf);
+    if (strchr(fctx->req_tgt->userid, '@'))
+	buf_printf(&fctx->buf, "mailto:%s", fctx->req_tgt->userid);
+    else
+	buf_printf(&fctx->buf, "mailto:%s@%s", fctx->req_tgt->userid, config_defdomain);
 
-	xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "href",
-		    BAD_CAST buf_cstring(&fctx->buf));
-    }
+    xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
 
     return 0;
 }
@@ -3768,7 +3759,7 @@ int propfind_calusertype(const xmlChar *name, xmlNsPtr ns,
 			 struct propstat propstat[],
 			 void *rock __attribute__((unused)))
 {
-    const char *type = fctx->req_tgt->user ? "INDIVIDUAL" : "UNKNOWN";
+    const char *type = fctx->req_tgt->userid ? "INDIVIDUAL" : "UNKNOWN";
 
     if (!namespace_calendar.enabled) return HTTP_NOT_FOUND;
 

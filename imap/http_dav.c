@@ -388,8 +388,7 @@ static int prin_parse_path(const char *path,
 
 	/* Get user id */
 	len = strcspn(p, "/");
-	tgt->user = p;
-	tgt->userlen = len;
+	tgt->userid = xstrndup(p, len);
 
 	p += len;
 	if (!*p || !*++p) return 0;
@@ -980,10 +979,9 @@ static int propfind_displayname(const xmlChar *name, xmlNsPtr ns,
     /* XXX  Do LDAP/SQL lookup here */
 
     buf_reset(&fctx->buf);
-    if (fctx->req_tgt->user) {
-	buf_printf(&fctx->buf, "%.*s",
-		   (int) fctx->req_tgt->userlen, fctx->req_tgt->user);
-    }
+
+    if (fctx->req_tgt->userid)
+	buf_printf(&fctx->buf, "%s", fctx->req_tgt->userid);
 
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 		 name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
@@ -1094,7 +1092,7 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
     xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
 				   &propstat[PROPSTAT_OK], name, ns, NULL, 0);
 
-    if (fctx->req_tgt->user)
+    if (fctx->req_tgt->userid)
 	xmlNewChild(node, NULL, BAD_CAST "principal", NULL);
 
     return 0;
@@ -1222,12 +1220,11 @@ static int propfind_principalurl(const xmlChar *name, xmlNsPtr ns,
 				   &propstat[PROPSTAT_OK], name, ns, NULL, 0);
 
     buf_reset(&fctx->buf);
-    if (fctx->req_tgt->user) {
+    if (fctx->req_tgt->userid) {
 	xmlNodePtr expand = (xmlNodePtr) rock;
 
-	buf_printf(&fctx->buf, "%s/user/%.*s/",
-		   namespace_principal.prefix,
-		   (int) fctx->req_tgt->userlen, fctx->req_tgt->user);
+	buf_printf(&fctx->buf, "%s/user/%s/",
+		   namespace_principal.prefix, fctx->req_tgt->userid);
 
 	if (expand) {
 	    /* Return properties for this URL */
@@ -1254,13 +1251,12 @@ int propfind_owner(const xmlChar *name, xmlNsPtr ns,
     xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
 				   &propstat[PROPSTAT_OK], name, ns, NULL, 0);
 
-    if (fctx->req_tgt->user) {
+    if (fctx->req_tgt->userid) {
 	xmlNodePtr expand = (xmlNodePtr) rock;
 
 	buf_reset(&fctx->buf);
-	buf_printf(&fctx->buf, "%s/user/%.*s/",
-		   namespace_principal.prefix,
-		   (int) fctx->req_tgt->userlen, fctx->req_tgt->user);
+	buf_printf(&fctx->buf, "%s/user/%s/",
+		   namespace_principal.prefix, fctx->req_tgt->userid);
 
 	if (expand) {
 	    /* Return properties for this URL */
@@ -2685,7 +2681,7 @@ int meth_acl(struct transaction_t *txn, void *params)
 		    tgt.namespace = URL_NS_PRINCIPAL;
 		    /* XXX: there is no doubt that this leaks memory */
 		    r = prin_parse_path(uri->path, &tgt, &errstr);
-		    if (!r && tgt.user) userid = tgt.user;
+		    if (!r && tgt.userid) userid = tgt.userid;
 		}
 		if (uri) xmlFreeURI(uri);
 		xmlFree(href);
@@ -4221,7 +4217,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 	return HTTP_BAD_REQUEST;
     }
 
-    if ((txn->req_tgt.namespace != URL_NS_PRINCIPAL) && txn->req_tgt.user
+    if ((txn->req_tgt.namespace != URL_NS_PRINCIPAL) && txn->req_tgt.userid
 	&& txn->req_tgt.mboxname && txn->req_tgt.mboxname[0]) {
 	mbentry_t *mbentry = NULL;
 	int rights;
@@ -5277,14 +5273,10 @@ static int principal_search(char *mboxname,
 			    void *rock)
 {
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
-    char userid[MAX_MAILBOX_NAME+1], *p;
+    const char *userid = mboxname_to_userid(mboxname);
     struct search_crit *search_crit;
     size_t len;
-
-    if (!(p = mboxname_isusermailbox(mboxname, 1))) return 0;
-
-    strlcpy(userid, p, MAX_MAILBOX_NAME+1);
-    mboxname_hiersep_toexternal(&httpd_namespace, userid, 0);
+    char *p;
 
     for (search_crit = (struct search_crit *) fctx->filter_crit;
 	 search_crit; search_crit = search_crit->next) {
@@ -5310,22 +5302,15 @@ static int principal_search(char *mboxname,
 	}
     }
 
-
     /* Append principal name to URL path */
-    if (!fctx->req_tgt->user) {
-	len = strlen(namespace_principal.prefix);
-	p = fctx->req_tgt->path + len;
-	len += strlcpy(p, "/user/", MAX_MAILBOX_PATH - len);
-	p = fctx->req_tgt->path + len;
-    }
-    else {
-	p = fctx->req_tgt->user;
-	len = p - fctx->req_tgt->path;
-    }
+    len = strlen(namespace_principal.prefix);
+    p = fctx->req_tgt->path + len;
+    len += strlcpy(p, "/user/", MAX_MAILBOX_PATH - len);
+    p = fctx->req_tgt->path + len;
     strlcpy(p, userid, MAX_MAILBOX_PATH - len);
 
-    fctx->req_tgt->user = p;
-    fctx->req_tgt->userlen = strlen(p);
+    free(fctx->req_tgt->userid);
+    fctx->req_tgt->userid = xstrdup(userid);
 
     return xml_add_response(fctx, 0, 0);
 }
@@ -5452,7 +5437,7 @@ static int report_prin_prop_search(struct transaction_t *txn,
     }
 
     /* Only search DAV:principal-collection-set */
-    if (apply_prin_set || !fctx->req_tgt->user) {
+    if (apply_prin_set || !fctx->req_tgt->userid) {
 	/* XXX  Do LDAP/SQL lookup of CN/email-address(es) here */
 
 	ret = mboxlist_findall(NULL,  /* internal namespace */
