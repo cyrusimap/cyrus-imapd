@@ -68,8 +68,10 @@ enum {
     STMT_ROLLBACK,
     STMT_INSERT_EMAIL,
     STMT_INSERT_GROUP,
-    STMT_GETEMAIL,
-    STMT_GETGROUP,
+    STMT_GETEMAIL_EXISTS,
+    STMT_GETEMAIL_GROUPS,
+    STMT_GETGROUP_EXISTS,
+    STMT_GETGROUP_MEMBERS,
     NUM_STMT
 };
 
@@ -352,13 +354,27 @@ EXPORTED int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
 		    &carddavdb->stmt[STMT_SELMBOX]);
 }
 
-#define CMD_GETEMAIL \
+#define CMD_GETEMAIL_EXISTS \
+    "SELECT rowid " \
+    " FROM vcard_emails" \
+    " WHERE email = :email" \
+    " LIMIT 1"
+
+#define CMD_GETEMAIL_GROUPS \
     "SELECT GO.vcard_uid FROM vcard_objs GO" \
     " JOIN vcard_groups G JOIN vcard_objs CO JOIN vcard_emails E" \
     " WHERE E.objid = CO.rowid AND CO.vcard_uid = G.member_uid" \
     " AND G.objid = GO.rowid AND E.email = :email"
 
-static int foundemail_cb(sqlite3_stmt *stmt, void *rock)
+static int emailexists_cb(sqlite3_stmt *stmt, void *rock)
+{
+    int *exists = (int *)rock;
+    if (sqlite3_column_int(stmt, 0))
+	*exists = 1;
+    return 0;
+}
+
+static int emailgroups_cb(sqlite3_stmt *stmt, void *rock)
 {
     strarray_t *array = (strarray_t *)rock;
     strarray_add(array, (const char *)sqlite3_column_text(stmt, 0));
@@ -371,25 +387,50 @@ EXPORTED strarray_t *carddav_getemail(struct carddav_db *carddavdb, const char *
 	{ ":email", SQLITE_TEXT, { .s = email } },
 	{ NULL,     SQLITE_NULL, { .s = NULL  } }
     };
-    strarray_t *found = strarray_new();
+
+    int exists = 0;
+    strarray_t *groups;
     int r;
 
-    r = dav_exec(carddavdb->db, CMD_GETEMAIL, bval, &foundemail_cb, found,
-		 &carddavdb->stmt[STMT_GETEMAIL]);
+    r = dav_exec(carddavdb->db, CMD_GETEMAIL_EXISTS, bval, &emailexists_cb, &exists,
+		 &carddavdb->stmt[STMT_GETEMAIL_EXISTS]);
+    if (r) {
+	/* XXX syslog */
+	return NULL;
+    }
+
+    groups = strarray_new();
+
+    r = dav_exec(carddavdb->db, CMD_GETEMAIL_GROUPS, bval, &emailgroups_cb, groups,
+		 &carddavdb->stmt[STMT_GETEMAIL_GROUPS]);
     if (r) {
 	/* XXX syslog */
     }
 
-    return found;
+    return groups;
 }
 
-#define CMD_GETGROUP \
+#define CMD_GETGROUP_EXISTS \
+    "SELECT GO.rowid " \
+    " FROM vcard_objs GO JOIN vcard_groups G" \
+    " WHERE GO.rowid = G.objid AND vcal_uid = :group" \
+    " LIMIT 1"
+
+#define CMD_GETGROUP_MEMBERS \
     "SELECT E.email FROM vcard_emails E" \
     " JOIN vcard_objs CO JOIN vcard_groups G JOIN vcard_objs GO" \
     " WHERE E.objid = CO.rowid AND CO.vcard_uid = G.member_uid AND G.objid = GO.rowid" \
     " AND E.pos = 0 AND GO.vcard_uid = :group"
 
-static int foundgroup_cb(sqlite3_stmt *stmt, void *rock)
+static int groupexists_cb(sqlite3_stmt *stmt, void *rock)
+{
+    int *exists = (int *)rock;
+    if (sqlite3_column_int(stmt, 0))
+	*exists = 1;
+    return 0;
+}
+
+static int groupmembers_cb(sqlite3_stmt *stmt, void *rock)
 {
     strarray_t *array = (strarray_t *)rock;
     strarray_add(array, (const char *)sqlite3_column_text(stmt, 0));
@@ -402,16 +443,27 @@ EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *
 	{ ":group", SQLITE_TEXT, { .s = group } },
 	{ NULL,     SQLITE_NULL, { .s = NULL  } }
     };
-    strarray_t *found = strarray_new();
+
+    int exists = 0;
+    strarray_t *members;
     int r;
 
-    r = dav_exec(carddavdb->db, CMD_GETGROUP, bval, &foundgroup_cb, found,
-		 &carddavdb->stmt[STMT_GETGROUP]);
+    r = dav_exec(carddavdb->db, CMD_GETGROUP_EXISTS, bval, &groupexists_cb, &exists,
+		 &carddavdb->stmt[STMT_GETGROUP_EXISTS]);
+    if (r) {
+	/* XXX syslog */
+	return NULL;
+    }
+
+    members = strarray_new();
+
+    r = dav_exec(carddavdb->db, CMD_GETGROUP_MEMBERS, bval, &groupmembers_cb, members,
+		 &carddavdb->stmt[STMT_GETGROUP_MEMBERS]);
     if (r) {
 	/* XXX syslog */
     }
 
-    return found;
+    return members;
 }
 
 
