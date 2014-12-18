@@ -411,11 +411,6 @@ EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *
 	/* XXX syslog */
     }
 
-    if (!strarray_size(found)) {
-	strarray_free(found);
-	return NULL;
-    }
-
     return found;
 }
 
