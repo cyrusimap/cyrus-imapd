@@ -416,7 +416,7 @@ EXPORTED strarray_t *carddav_getemail(struct carddav_db *carddavdb, const char *
 #define CMD_GETGROUP_EXISTS \
     "SELECT GO.rowid " \
     " FROM vcard_objs GO JOIN vcard_groups G" \
-    " WHERE GO.rowid = G.objid AND vcal_uid = :group" \
+    " WHERE GO.rowid = G.objid AND vcard_uid = :group" \
     " LIMIT 1"
 
 #define CMD_GETGROUP_MEMBERS \
