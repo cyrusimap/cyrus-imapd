@@ -134,7 +134,6 @@ struct mailbox_repack {
     const char *userid;
     int old_version;
     int newindex_fd;
-    int newcache_fd;
     ptrarray_t caches;
 };
 
@@ -3565,10 +3564,6 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
 
     /* prepare initial header buffer */
     mailbox_index_header_to_buf(&repack->i, buf);
-
-    /* write initial headers */
-    n = retry_write(repack->newcache_fd, buf, 4);
-    if (n == -1) goto fail;
 
     n = retry_write(repack->newindex_fd, buf, repack->i.start_offset);
     if (n == -1) goto fail;
