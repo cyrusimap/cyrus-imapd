@@ -3453,6 +3453,8 @@ static int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
 			&caldav_parse_path, caldav_props, node, cal ? 1 : 0);
     }
 
+    xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+
     r = 0;
 done:
     buf_free(&calbuf);
