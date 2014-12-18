@@ -387,7 +387,7 @@ EXPORTED int carddav_getemail(struct carddav_db *carddavdb, const char *email)
     "SELECT E.email FROM vcard_emails E" \
     " JOIN vcard_objs CO JOIN vcard_groups G JOIN vcard_objs GO" \
     " WHERE E.objid = CO.rowid AND CO.vcard_uid = G.member_uid AND G.objid = GO.rowid" \
-    " AND E.pos = 0 AND GO.fullname = :group"
+    " AND E.pos = 0 AND GO.vcard_uid = :group"
 
 static int foundgroup_cb(sqlite3_stmt *stmt, void *rock)
 {
