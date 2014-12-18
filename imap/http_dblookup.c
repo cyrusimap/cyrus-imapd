@@ -81,16 +81,36 @@ static int get_email(struct transaction_t *txn __attribute__((unused)),
 		     const char *userid, const char *key)
 {
     struct carddav_db *db = NULL;
+    strarray_t *array = NULL;
+    char *result = NULL;
+    json_t *json;
     int ret = HTTP_NOT_FOUND;
+    int i;
 
     /* XXX init just incase carddav not enabled? */
     db = carddav_open_userid(userid);
     if (!db) goto done;
 
-    if (carddav_getemail(db, key))
-	ret = HTTP_NO_CONTENT;
+    array = carddav_getemail(db, key);
+    if (!array) goto done;
+
+    json = json_array();
+    for (i = 0; i < strarray_size(array); i++) {
+	json_array_append_new(json, json_string(strarray_nth(array, i)));
+    }
+
+    result = json_dumps(json, JSON_PRESERVE_ORDER|JSON_COMPACT);
+    json_decref(json);
+
+    txn->resp_body.type = "application/json";
+    txn->resp_body.len = strlen(result);
+
+    write_body(HTTP_OK, txn, result, txn->resp_body.len);
+    ret = 0;
 
 done:
+    free(result);
+    if (array) strarray_free(array);
     if (db) carddav_close(db);
     return ret;
 }

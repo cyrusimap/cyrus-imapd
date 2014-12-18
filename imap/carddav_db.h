@@ -88,8 +88,12 @@ int carddav_lookup_resource(struct carddav_db *carddavdb,
 int carddav_lookup_uid(struct carddav_db *carddavdb, const char *ical_uid,
 		      int lock, struct carddav_data **result);
 
-/* check if an email address exists on any card */
-int carddav_getemail(struct carddav_db *carddavdb, const char *key);
+/* check if an email address exists on any card.
+   returns the groups its in (if any) */
+strarray_t *carddav_getemail(struct carddav_db *carddavdb, const char *key);
+
+/* checks if a group exists (by id).
+   returns emails of its members (if any) */
 strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *key);
 
 /* process each entry for 'mailbox' in 'carddavdb' with cb() */

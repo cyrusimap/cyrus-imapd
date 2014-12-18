@@ -352,29 +352,29 @@ EXPORTED int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
 		    &carddavdb->stmt[STMT_SELMBOX]);
 }
 
-#define CMD_GETEMAIL							\
-    "SELECT rowid"							\
-    " FROM vcard_emails"						\
-    " WHERE ( email = :email );"
+#define CMD_GETEMAIL \
+    "SELECT GO.vcard_uid FROM vcard_objs GO" \
+    " JOIN vcard_groups G JOIN vcard_objs CO JOIN vcard_emails E" \
+    " WHERE E.objid = CO.rowid AND CO.vcard_uid = G.member_uid" \
+    " AND G.objid = GO.rowid AND E.email = :email"
 
 static int foundemail_cb(sqlite3_stmt *stmt, void *rock)
 {
-    int *foundp = (int *)rock;
-    if (sqlite3_column_int(stmt, 0))
-	*foundp = 1;
+    strarray_t *array = (strarray_t *)rock;
+    strarray_add(array, (const char *)sqlite3_column_text(stmt, 0));
     return 0;
 }
 
-EXPORTED int carddav_getemail(struct carddav_db *carddavdb, const char *email)
+EXPORTED strarray_t *carddav_getemail(struct carddav_db *carddavdb, const char *email)
 {
     struct bind_val bval[] = {
 	{ ":email", SQLITE_TEXT, { .s = email } },
 	{ NULL,     SQLITE_NULL, { .s = NULL  } }
     };
-    int found = 0;
+    strarray_t *found = strarray_new();
     int r;
 
-    r = dav_exec(carddavdb->db, CMD_GETEMAIL, bval, &foundemail_cb, &found,
+    r = dav_exec(carddavdb->db, CMD_GETEMAIL, bval, &foundemail_cb, found,
 		 &carddavdb->stmt[STMT_GETEMAIL]);
     if (r) {
 	/* XXX syslog */
