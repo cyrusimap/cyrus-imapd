@@ -278,7 +278,7 @@ static int archive(void *rock, const char *key, size_t keylen,
 	goto done;
 
     if (verbose)
-	fprintf(stderr, "archiving mailbox %s", mbentry->name);
+	fprintf(stderr, "archiving mailbox %s\n", mbentry->name);
 
     mailbox_archive(mailbox, archive_cb, rock);
 
