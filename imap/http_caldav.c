@@ -3420,7 +3420,7 @@ static int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
 
 	if (annotname) {
 	    r = annotatemore_lookupmask(mailboxname, annotname, fctx->req_tgt->user, &calbuf);
-	    if (!r) cal = buf_cstring(&calbuf);
+	    if (!r) cal = calbuf.len ? buf_cstring(&calbuf) : NULL;
 	}
 
 	/* make sure the mailbox exists */
