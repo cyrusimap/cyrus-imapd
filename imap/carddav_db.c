@@ -399,6 +399,9 @@ EXPORTED strarray_t *carddav_getemail(struct carddav_db *carddavdb, const char *
 	return NULL;
     }
 
+    if (!exists)
+	return NULL;
+
     groups = strarray_new();
 
     r = dav_exec(carddavdb->db, CMD_GETEMAIL_GROUPS, bval, &emailgroups_cb, groups,
@@ -454,6 +457,9 @@ EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *
 	/* XXX syslog */
 	return NULL;
     }
+
+    if (!exists)
+	return NULL;
 
     members = strarray_new();
 
