@@ -84,7 +84,7 @@ static int get_email(struct transaction_t *txn __attribute__((unused)),
     strarray_t *array = NULL;
     char *result = NULL;
     json_t *json;
-    int ret = HTTP_NOT_FOUND;
+    int ret = HTTP_NO_CONTENT;
     int i;
 
     /* XXX init just incase carddav not enabled? */
@@ -121,7 +121,7 @@ static int get_group(struct transaction_t *txn, const char *userid, const char *
     strarray_t *array = NULL;
     char *result = NULL;
     json_t *json;
-    int ret = HTTP_NOT_FOUND;
+    int ret = HTTP_NO_CONTENT;
     int i;
 
     /* XXX init just incase carddav not enabled? */
