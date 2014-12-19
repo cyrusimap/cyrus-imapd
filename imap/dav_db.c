@@ -186,7 +186,9 @@ static int version_cb(void *rock, int ncol, char **vals, char **names __attribut
 {
     int *vptr = (int *)rock;
     if (ncol == 1 && vals[0])
-        *vptr = atoi(vals[0]);
+	*vptr = atoi(vals[0]);
+    else
+	abort();
     return 0;
 }
 
@@ -195,7 +197,9 @@ static int synthetic_cb(void *rock, int ncol, char **vals, char **names __attrib
 {
     int *vptr = (int *)rock;
     if (ncol == 2 && vals[0])
-        *vptr = 1;
+	*vptr = 1;
+    else
+	abort();
     return 0;
 }
 
