@@ -252,10 +252,10 @@ static sqlite3 *dav_open(const char *fname)
     }
 
     int current_version = 0;
-    sqlite3_exec(open->db, "PRAGMA user_version", version_cb, &current_version, NULL);
+    sqlite3_exec(open->db, "PRAGMA user_version;", version_cb, &current_version, NULL);
     /* check for synthetic v1 - exists but not the right format */
     if (!current_version) {
-	sqlite3_exec(open->db, "SELECT COUNT(*),transp FROM ical_objs", synthetic_cb, &current_version, NULL);
+	sqlite3_exec(open->db, "SELECT COUNT(*),transp FROM ical_objs;", synthetic_cb, &current_version, NULL);
     }
 
     if (current_version != DB_VERSION) {
@@ -290,7 +290,7 @@ static sqlite3 *dav_open(const char *fname)
 	    abort();  /* unknown version */
 	}
 
-	buf_printf(&buf, "PRAGMA user_version = %d", DB_VERSION);
+	buf_printf(&buf, "PRAGMA user_version = %d;", DB_VERSION);
 	rc = sqlite3_exec(open->db, buf_cstring(&buf), NULL, NULL, NULL);
 	buf_free(&buf);
 	if (rc != SQLITE_OK) {
