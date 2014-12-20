@@ -248,7 +248,7 @@ static sqlite3 *dav_open(const char *fname)
 
     rc = sqlite3_exec(open->db, "PRAGMA foreign_keys = ON;", NULL, NULL, NULL);
     if (rc != SQLITE_OK) {
-	syslog(LOG_ERR, "dav_open(%s) enabled foreign_keys: %s",
+	syslog(LOG_ERR, "dav_open(%s) enable foreign_keys: %s",
 	    open->path, sqlite3_errmsg(open->db));
 	sqlite3_close(open->db);
 	free_dav_open(open);
@@ -256,7 +256,18 @@ static sqlite3 *dav_open(const char *fname)
     }
 
     int current_version = 0;
-    sqlite3_exec(open->db, "PRAGMA user_version;", version_cb, &current_version, NULL);
+    int i;
+    for (i = 0; i < 10; i++) {
+	rc = sqlite3_exec(open->db, "PRAGMA user_version;", version_cb, &current_version, NULL);
+	if (rc == SQLITE_OK) break;
+    }
+    if (rc != SQLITE_OK) {
+	syslog(LOG_ERR, "dav_open(%s) get user_version: %s",
+	    open->path, sqlite3_errmsg(open->db));
+	sqlite3_close(open->db);
+	free_dav_open(open);
+	return NULL;
+    }
     if (current_version == DB_VERSION) goto out;
 
     rc = sqlite3_exec(open->db, "BEGIN IMMEDIATE;", NULL, NULL, NULL);
@@ -268,7 +279,15 @@ static sqlite3 *dav_open(const char *fname)
 	return NULL;
     }
 
-    sqlite3_exec(open->db, "PRAGMA user_version;", version_cb, &current_version, NULL);
+    rc = sqlite3_exec(open->db, "PRAGMA user_version;", version_cb, &current_version, NULL);
+    if (rc != SQLITE_OK) {
+	syslog(LOG_ERR, "dav_open(%s) get user_version: %s",
+	    open->path, sqlite3_errmsg(open->db));
+	sqlite3_close(open->db);
+	free_dav_open(open);
+	return NULL;
+    }
+    if (current_version == DB_VERSION) goto out;
     /* check for synthetic v1 - exists but not the right format */
     if (!current_version) {
 	sqlite3_exec(open->db, "SELECT COUNT(*),transp FROM ical_objs;", synthetic_cb, &current_version, NULL);
