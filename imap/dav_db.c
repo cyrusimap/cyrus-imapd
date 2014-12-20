@@ -262,8 +262,8 @@ static sqlite3 *dav_open(const char *fname)
 	if (rc == SQLITE_OK) break;
     }
     if (rc != SQLITE_OK) {
-	syslog(LOG_ERR, "dav_open(%s) get user_version: %s",
-	    open->path, sqlite3_errmsg(open->db));
+	syslog(LOG_ERR, "dav_open(%s) get user_version: %s (%d)",
+	    open->path, sqlite3_errmsg(open->db), rc);
 	sqlite3_close(open->db);
 	free_dav_open(open);
 	return NULL;
@@ -281,7 +281,7 @@ static sqlite3 *dav_open(const char *fname)
 
     rc = sqlite3_exec(open->db, "PRAGMA user_version;", version_cb, &current_version, NULL);
     if (rc != SQLITE_OK) {
-	syslog(LOG_ERR, "dav_open(%s) get user_version: %s",
+	syslog(LOG_ERR, "dav_open(%s) get user_version locked: %s",
 	    open->path, sqlite3_errmsg(open->db));
 	sqlite3_close(open->db);
 	free_dav_open(open);
