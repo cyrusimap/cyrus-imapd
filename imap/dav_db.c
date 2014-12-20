@@ -246,6 +246,8 @@ static sqlite3 *dav_open(const char *fname)
 	sqlite3_trace(open->db, dav_debug, open->path);
     }
 
+    sqlite3_busy_timeout(open->db, 20*1000); /* 20 seconds is an eternity */
+
     rc = sqlite3_exec(open->db, "PRAGMA foreign_keys = ON;", NULL, NULL, NULL);
     if (rc != SQLITE_OK) {
 	syslog(LOG_ERR, "dav_open(%s) enable foreign_keys: %s",
