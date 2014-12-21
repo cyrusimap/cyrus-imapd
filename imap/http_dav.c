@@ -1756,18 +1756,22 @@ EXPORTED int propfind_curprin(const xmlChar *name, xmlNsPtr ns,
     xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
 				   &propstat[PROPSTAT_OK], name, ns, NULL, 0);
 
-    if (fctx->userid) {
+    if (httpd_userid) {
 	xmlNodePtr expand = (xmlNodePtr) rock;
 
 	buf_reset(&fctx->buf);
 
-	if (strchr(fctx->userid, '@')) {
+	if (strchr(httpd_userid, '@')) {
 	    buf_printf(&fctx->buf, "%s/user/%s/",
-		    namespace_principal.prefix, fctx->userid);
+		    namespace_principal.prefix, httpd_userid);
+	}
+	else if (httpd_extradomain) {
+	    buf_printf(&fctx->buf, "%s/user/%s@%s/",
+		       namespace_principal.prefix, httpd_userid, httpd_extradomain);
 	}
 	else {
 	    buf_printf(&fctx->buf, "%s/user/%s@%s/",
-		    namespace_principal.prefix, fctx->userid, httpd_extradomain);
+		       namespace_principal.prefix, httpd_userid, config_defdomain);
 	}
 
 	if (expand) {
