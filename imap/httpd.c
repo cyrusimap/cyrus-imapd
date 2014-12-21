@@ -1447,6 +1447,9 @@ static void cmdloop(void)
 	if (txn.req_hdrs) spool_free_hdrcache(txn.req_hdrs);
 	free_hash_table(&txn.req_qparams, (void (*)(void *)) &freestrlist);
 
+	/* XXX - split this into a req_tgt cleanup */
+	free(txn.req_tgt.userid);
+
 	if (txn.flags.conn & CONN_CLOSE) {
 	    buf_free(&txn.buf);
 	    buf_free(&txn.req_body.payload);
