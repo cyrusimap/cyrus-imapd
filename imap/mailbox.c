@@ -3200,6 +3200,15 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
 	return IMAP_IOERROR;
     }
 
+    if (config_auditlog)
+	syslog(LOG_NOTICE, "auditlog: touched sessionid=<%s> "
+	       "mailbox=<%s> uniqueid=<%s> uid=<%u> guid=<%s> cid=<%s> "
+	       "modseq=<" MODSEQ_FMT "> oldflags=<%u> sysflags=<%u>",
+	    session_id(), mailbox->name, mailbox->uniqueid,
+	    record->uid, message_guid_encode(&record->guid),
+	    conversation_id_encode(record->cid), record->modseq,
+	    oldrecord.system_flags, record->system_flags);
+
     /* expunged tracking */
     if ((record->system_flags & FLAG_EXPUNGED) &&
 	!(oldrecord.system_flags & FLAG_EXPUNGED)) {
@@ -3212,10 +3221,11 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
 
 	if (config_auditlog)
 	    syslog(LOG_NOTICE, "auditlog: expunge sessionid=<%s> "
-		   "mailbox=<%s> uniqueid=<%s> uid=<%u> guid=<%s> cid=<%s>",
+		   "mailbox=<%s> uniqueid=<%s> uid=<%u> guid=<%s> cid=<%s> modseq=<" MODSEQ_FMT ">",
 		session_id(), mailbox->name, mailbox->uniqueid,
 		record->uid, message_guid_encode(&record->guid),
-	        conversation_id_encode(record->cid));
+		conversation_id_encode(record->cid),
+		record->modseq);
     }
 
     return mailbox_refresh_index_map(mailbox);
@@ -3323,10 +3333,11 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
     mailbox->index_size += mailbox->i.record_size;
 
     if (config_auditlog)
-	syslog(LOG_NOTICE, "auditlog: append sessionid=<%s> mailbox=<%s> uniqueid=<%s> uid=<%u> guid=<%s> cid=<%s>",
+	syslog(LOG_NOTICE, "auditlog: append sessionid=<%s> mailbox=<%s> uniqueid=<%s> uid=<%u> guid=<%s> cid=<%s> sysflags=<%u>",
 	    session_id(), mailbox->name, mailbox->uniqueid, record->uid,
 	    message_guid_encode(&record->guid),
-	    conversation_id_encode(record->cid));
+	    conversation_id_encode(record->cid),
+	    record->system_flags);
 
     /* expunged tracking */
     if (record->system_flags & FLAG_EXPUNGED) {
@@ -3336,19 +3347,20 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
 
 	if (config_auditlog)
 	    syslog(LOG_NOTICE, "auditlog: expunge sessionid=<%s> "
-		   "mailbox=<%s> uniqueid=<%s> uid=<%u> guid=<%s> cid=<%s>",
+		   "mailbox=<%s> uniqueid=<%s> uid=<%u> guid=<%s> cid=<%s> sysflags=<%u>",
 		   session_id(), mailbox->name, mailbox->uniqueid,
 		   record->uid, message_guid_encode(&record->guid),
-		   conversation_id_encode(record->cid));
+		   conversation_id_encode(record->cid),
+		   record->system_flags);
     }
 
     /* yep, it could even be pre-unlinked in 'default' expunge mode, joy */
     if (record->system_flags & FLAG_UNLINKED) {
 	if (config_auditlog)
 	    syslog(LOG_NOTICE, "auditlog: unlink sessionid=<%s> "
-		   "mailbox=<%s> uniqueid=<%s> uid=<%u>",
+		   "mailbox=<%s> uniqueid=<%s> uid=<%u> sysflags=<%u>",
 		   session_id(), mailbox->name, mailbox->uniqueid,
-		   record->uid);
+		   record->uid, record->system_flags);
     }
 
     return mailbox_refresh_index_map(mailbox);
@@ -3367,15 +3379,17 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
 	if (unlink(spoolfname) == 0) {
 	    if (config_auditlog)
 		syslog(LOG_NOTICE, "auditlog: unlink sessionid=<%s> "
-		       "mailbox=<%s> uniqueid=<%s> uid=<%u>",
-		       session_id(), mailbox->name, mailbox->uniqueid, record->uid);
+		       "mailbox=<%s> uniqueid=<%s> uid=<%u> sysflags=<%u>",
+		       session_id(), mailbox->name, mailbox->uniqueid,
+		       record->uid, record->system_flags);
 	}
 
 	if (unlink(archivefname) == 0) {
 	    if (config_auditlog)
 		syslog(LOG_NOTICE, "auditlog: unlinkarchive sessionid=<%s> "
-		       "mailbox=<%s> uniqueid=<%s> uid=<%u>",
-		       session_id(), mailbox->name, mailbox->uniqueid, record->uid);
+		       "mailbox=<%s> uniqueid=<%s> uid=<%u> sysflags=<%u>",
+		       session_id(), mailbox->name, mailbox->uniqueid,
+		       record->uid, record->system_flags);
 	}
 
 	r = mailbox_get_annotate_state(mailbox, record->uid, NULL);
@@ -3941,9 +3955,10 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
 	mailbox->i.options |= OPT_MAILBOX_NEEDS_UNLINK;
 
 	if (config_auditlog)
-	    syslog(LOG_NOTICE, "auditlog: %s sessionid=<%s> mailbox=<%s> uniqueid=<%s> uid=<%u> guid=<%s> cid=<%s>",
+	    syslog(LOG_NOTICE, "auditlog: %s sessionid=<%s> mailbox=<%s> uniqueid=<%s> uid=<%u> guid=<%s> cid=<%s> sysflags=<%u>",
 		   action, session_id(), mailbox->name, mailbox->uniqueid, record.uid,
-		   message_guid_encode(&record.guid), conversation_id_encode(record.cid));
+		   message_guid_encode(&record.guid), conversation_id_encode(record.cid),
+		   record.system_flags);
     }
 
     /* if we have stale cache records, we'll need a repack */
