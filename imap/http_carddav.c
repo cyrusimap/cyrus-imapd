@@ -832,6 +832,7 @@ static int report_card_query(struct transaction_t *txn,
     fctx->lookup_resource = (db_lookup_proc_t) &carddav_lookup_resource;
     fctx->foreach_resource = (db_foreach_proc_t) &carddav_foreach;
     fctx->proc_by_resource = &propfind_by_resource;
+    fctx->davdb = NULL;
 
     /* Parse children element of report */
     for (node = inroot->children; node; node = node->next) {
@@ -851,15 +852,19 @@ static int report_card_query(struct transaction_t *txn,
 	}
 	else {
 	    /* Add responses for all contained calendar collections */
+	    /* XXX - support cross-user propfind here, just like caldav */
 	    strlcat(txn->req_tgt.mboxname, ".%", sizeof(txn->req_tgt.mboxname));
 	    mboxlist_findall(NULL,  /* internal namespace */
 			     txn->req_tgt.mboxname, 1, httpd_userid, 
 			     httpd_authstate, propfind_by_collection, fctx);
 	}
 
-	if (fctx->davdb) my_carddav_close(fctx->davdb);
-
 	ret = *fctx->ret;
+    }
+
+    if (fctx->davdb) {
+	fctx->close_db(fctx->davdb);
+	fctx->davdb = NULL;
     }
 
     return (ret ? ret : HTTP_MULTI_STATUS);
