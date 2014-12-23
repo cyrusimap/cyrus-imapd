@@ -324,18 +324,13 @@ struct namespace_t namespace_addressbook = {
 
 static struct carddav_db *my_carddav_open(struct mailbox *mailbox)
 {
-    if (httpd_userid && mboxname_userownsmailbox(httpd_userid, mailbox->name)) {
-	return auth_carddavdb;
-    }
-    else {
-	return carddav_open_mailbox(mailbox);
-    }
+    return carddav_open_mailbox(mailbox);
 }
 
 
 static void my_carddav_close(struct carddav_db *carddavdb)
 {
-    if (carddavdb && (carddavdb != auth_carddavdb)) carddav_close(carddavdb);
+    carddav_close(carddavdb);
 }
 
 
