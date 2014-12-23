@@ -4469,6 +4469,11 @@ static int report_cal_multiget(struct transaction_t *txn,
     xmlNodePtr node;
     struct buf uri = BUF_INITIALIZER;
 
+    /* XXX - assert? */
+    fctx->open_db = (db_open_proc_t) &my_caldav_open;
+    fctx->close_db = (db_close_proc_t) &my_caldav_close;
+    fctx->davdb = NULL;
+
     /* Get props for each href */
     for (node = inroot->children; node; node = node->next) {
 	if ((node->type == XML_ELEMENT_NODE) &&
@@ -4477,6 +4482,7 @@ static int report_cal_multiget(struct transaction_t *txn,
 	    int len = xmlStrlen(href);
 	    struct request_target_t tgt;
 	    struct caldav_data *cdata;
+	    struct caldav_db *current_db;
 
 	    buf_ensure(&uri, len);
 	    xmlURIUnescapeString((const char *) href, len, uri.s);
@@ -4521,11 +4527,13 @@ static int report_cal_multiget(struct transaction_t *txn,
 	    }
 
 	    /* Open the DAV DB corresponding to the mailbox */
-	    fctx->davdb = my_caldav_open(fctx->mailbox);
+	    current_db = fctx->davdb;
+	    fctx->davdb = fctx->open_db(fctx->mailbox);
+	    if (current_db) fctx->close_db(current_db);
 
 	    /* Find message UID for the resource */
 	    r = caldav_lookup_resource(fctx->davdb,
-				   tgt.mboxname, tgt.resource, 0, &cdata);
+				       tgt.mboxname, tgt.resource, 0, &cdata);
 	    if (r) {
 		ret = HTTP_NOT_FOUND;
 		goto done;
@@ -4534,12 +4542,14 @@ static int report_cal_multiget(struct transaction_t *txn,
 	    /* XXX  Check errors */
 
 	    propfind_by_resource(fctx, cdata);
-
-	    my_caldav_close(fctx->davdb);
 	}
     }
 
   done:
+    if (fctx->davdb) {
+	fctx->close_db(fctx->davdb);
+	fctx->davdb = NULL;
+    }
     mailbox_close(&mailbox);
     buf_free(&uri);
 
