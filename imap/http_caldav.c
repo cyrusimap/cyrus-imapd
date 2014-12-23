@@ -3436,8 +3436,9 @@ static int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
 			name, ns, NULL, 0);
 
     buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, "%s/user/%s/%s", namespace_calendar.prefix,
-	       fctx->req_tgt->userid, cal ? cal : "");
+    buf_printf(&fctx->buf, "%s/user/%s/", namespace_calendar.prefix,
+	       fctx->req_tgt->userid);
+    if (cal) buf_printf(&fctx->buf, "%s/", cal);
 
     if (expand) {
 	/* Return properties for this URL */

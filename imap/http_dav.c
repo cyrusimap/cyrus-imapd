@@ -5294,6 +5294,7 @@ static int principal_search(char *mboxname,
     len += strlcpy(p, "/user/", MAX_MAILBOX_PATH - len);
     p = fctx->req_tgt->path + len;
     strlcpy(p, userid, MAX_MAILBOX_PATH - len);
+    strlcpy(p, "/", MAX_MAILBOX_PATH - len);
 
     free(fctx->req_tgt->userid);
     fctx->req_tgt->userid = xstrdup(userid);
