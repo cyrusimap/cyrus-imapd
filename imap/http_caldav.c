@@ -616,18 +616,13 @@ static const struct cal_comp_t {
 
 static struct caldav_db *my_caldav_open(struct mailbox *mailbox)
 {
-    if (httpd_userid && mboxname_userownsmailbox(httpd_userid, mailbox->name)) {
-	return auth_caldavdb;
-    }
-    else {
-	return caldav_open_mailbox(mailbox);
-    }
+    return caldav_open_mailbox(mailbox);
 }
 
 
 static void my_caldav_close(struct caldav_db *caldavdb)
 {
-    if (caldavdb && (caldavdb != auth_caldavdb)) caldav_close(caldavdb);
+    caldav_close(caldavdb);
 }
 
 
