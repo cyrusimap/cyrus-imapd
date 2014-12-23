@@ -910,7 +910,7 @@ static int report_card_multiget(struct transaction_t *txn,
 
 	    /* Check if we already have this mailbox open */
 	    if (!mailbox || strcmp(mailbox->name, tgt.mboxname)) {
-		if (mailbox) mailbox_unlock_index(mailbox, NULL);
+		mailbox_close(&mailbox);
 
 		/* Open mailbox for reading */
 		r = mailbox_open_irl(tgt.mboxname, &mailbox);
