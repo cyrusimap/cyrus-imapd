@@ -967,6 +967,7 @@ envelope_err:
 
         if  (match == B_COUNT )
         {
+	    /* TODO: support STRING test */
             count = variables->var->count;
             snprintf(scount, SCOUNT_SIZE, "%u", count);
             /*search through all the data*/
@@ -1004,8 +1005,20 @@ envelope_err:
                     if (requires & BFE_VARIABLES) {
                         this_haystack = parse_string(this_haystack, variables);
                     }
-                } else if (numhaystacks) { // selecte the var
-                    this_var = varlist_select(variables, this_haystack)->var;
+	    } else if (numhaystacks) { // select the var
+		variable_list_t *vl;
+		vl = varlist_select(variables, this_haystack);
+		if (!vl) {
+		    vl = varlist_extend(variables);
+		    vl->name = xstrdup(this_haystack);
+		} else {
+		    variable_list_t *vl_temp = varlist_extend(variables);
+		    strarray_free(vl_temp->var);
+		    vl_temp->var = strarray_dup(vl->var);
+		    verify_flaglist(vl_temp->var);
+		    vl = vl_temp;
+		}
+		this_var = vl->var;
                 } else { // internal variable
                     this_var = variables->var;
                 }
