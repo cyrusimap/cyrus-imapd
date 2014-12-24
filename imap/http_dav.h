@@ -171,6 +171,8 @@ enum {
     DAV_NO_ABSTRACT,
     DAV_SUPP_PRIV,
     DAV_RECOG_PRINC,
+    DAV_ALLOW_PRINC,
+    DAV_GRANT_ONLY,
 
     /* WebDAV Quota (RFC 4331) preconditions */
     DAV_OVER_QUOTA,

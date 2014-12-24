@@ -296,6 +296,8 @@ static const struct precond_t {
     { "no-abstract", NS_DAV },
     { "not-supported-privilege", NS_DAV },
     { "recognized-principal", NS_DAV },
+    { "allowed-principal", NS_DAV },
+    { "grant-only", NS_DAV },
 
     /* WebDAV Quota (RFC 4331) preconditions */
     { "quota-not-exceeded", NS_DAV },
@@ -2495,6 +2497,33 @@ int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
     return 0;
 }
 
+static void set_system_acls(struct buf *buf, mbentry_t *mbentry)
+{
+    char *userid, *aclstr;
+
+    /* Parse the ACL string (userid/rights pairs) */
+    userid = aclstr = xstrdup(mbentry->acl);
+
+    while (userid) {
+	char *rightstr, *nextid;
+
+	rightstr = strchr(userid, '\t');
+	if (!rightstr) break;
+	*rightstr++ = '\0';
+
+	nextid = strchr(rightstr, '\t');
+	if (!nextid) break;
+	*nextid++ = '\0';
+
+	/* we only want system users */
+	if (is_system_user(userid))
+	    buf_printf(buf, "%s\t%s\t", userid, rightstr);
+
+	userid = nextid;
+    }
+
+    free(aclstr);
+}
 
 /* Perform an ACL request
  *
@@ -2594,12 +2623,14 @@ int meth_acl(struct transaction_t *txn, void *params)
 	goto done;
     }
 
+    set_system_acls(&acl, mbentry);
+
     /* Parse the DAV:ace elements */
     for (ace = root->children; ace; ace = ace->next) {
 	if (ace->type == XML_ELEMENT_NODE) {
 	    xmlNodePtr child = NULL, prin = NULL, privs = NULL;
 	    const char *userid = NULL;
-	    int deny = 0, rights = 0;
+	    int rights = 0;
 	    char rightstr[100];
 	    struct request_target_t tgt;
 
@@ -2626,15 +2657,10 @@ int meth_acl(struct transaction_t *txn, void *params)
 			     privs->type != XML_ELEMENT_NODE; privs = privs->next);
 		    }
 		    else if (!xmlStrcmp(child->name, BAD_CAST "deny")) {
-			if (privs) {
-			    txn->error.desc = "Multiple grant|deny in ACE\r\n";
-			    ret = HTTP_BAD_REQUEST;
-			    goto done;
-			}
-
-			for (privs = child->children; privs &&
-			     privs->type != XML_ELEMENT_NODE; privs = privs->next);
-			deny = 1;
+			/* DAV:grant-only */
+			txn->error.precond = DAV_GRANT_ONLY;
+			ret = HTTP_FORBIDDEN;
+			goto done;
 		    }
 		    else if (!xmlStrcmp(child->name, BAD_CAST "invert")) {
 			/* DAV:no-invert */
@@ -2686,6 +2712,13 @@ int meth_acl(struct transaction_t *txn, void *params)
 		goto done;
 	    }
 
+	    if (is_system_user(userid)) {
+		/* DAV:allowed-principal */
+		txn->error.precond = DAV_ALLOW_PRINC;
+		ret = HTTP_FORBIDDEN;
+		goto done;
+	    }
+
 	    for (; privs; privs = privs->next) {
 		if (privs->type == XML_ELEMENT_NODE) {
 		    xmlNodePtr priv = privs->children;
@@ -2704,10 +2737,7 @@ int meth_acl(struct transaction_t *txn, void *params)
 			/* WebDAV privileges */
 			if (!xmlStrcmp(priv->name,
 				       BAD_CAST "all")) {
-			    if (deny)
-				rights |= ACL_FULL; /* wipe EVERYTHING */
-			    else
-				rights |= DACL_ALL;
+			    rights |= DACL_ALL;
 			}
 			else if (!xmlStrcmp(priv->name,
 					    BAD_CAST "read"))
@@ -2796,20 +2826,18 @@ int meth_acl(struct transaction_t *txn, void *params)
 	    /* gotta have something to do! */
 	    if (rights) {
 		cyrus_acl_masktostr(rights, rightstr);
-		buf_reset(&acl);
-		buf_printf(&acl, "%s%s", deny ? "-" : "+", rightstr);
-
-		r = mboxlist_setacl(&httpd_namespace, txn->req_tgt.mboxname, userid, buf_cstring(&acl),
-				    /*isadmin*/1, httpd_userid, httpd_authstate);
-		if (r) {
-		    syslog(LOG_ERR, "mboxlist_setacl(%s) failed: %s",
-			txn->req_tgt.mboxname, error_message(r));
-		    txn->error.desc = error_message(r);
-		    ret = HTTP_SERVER_ERROR;
-		    goto done;
-		}
+		buf_printf(&acl, "%s\t%s\t", userid, rightstr);
 	    }
 	}
+    }
+
+    r = mboxlist_sync_setacls(mbentry->name, buf_cstring(&acl));
+    if (r) {
+	syslog(LOG_ERR, "mboxlist_setacl(%s) failed: %s",
+	       mbentry->name, error_message(r));
+	txn->error.desc = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
     }
 
     response_header(HTTP_OK, txn);
