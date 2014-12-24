@@ -3169,7 +3169,7 @@ int meth_copy(struct transaction_t *txn, void *params)
 int meth_delete(struct transaction_t *txn, void *params)
 {
     struct meth_params *dparams = (struct meth_params *) params;
-    int ret = HTTP_NO_CONTENT, r = 0, precond, rights;
+    int ret = HTTP_NO_CONTENT, r = 0, precond, rights, needrights;
     struct mboxevent *mboxevent = NULL;
     struct mailbox *mailbox = NULL;
     mbentry_t *mbentry = NULL;
@@ -3206,8 +3206,8 @@ int meth_delete(struct transaction_t *txn, void *params)
 
     /* Check ACL for current user */
     rights = httpd_myrights(httpd_authstate, mbentry->acl);
-    if ((txn->req_tgt.resource && !(rights & DACL_RMRSRC)) ||
-	!(rights & DACL_RMCOL)) {
+    needrights = txn->req_tgt.resource ? DACL_RMRSRC : DACL_RMCOL;
+    if (!(rights & needrights)) {
 	/* DAV:need-privileges */
 	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
