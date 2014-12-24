@@ -1292,7 +1292,8 @@ EXPORTED int mailbox_set_quotaroot(struct mailbox *mailbox, const char *quotaroo
     return 0;
 }
 
-/* find or create a user flag - dirty header if change needed */
+/* find or create a user flag - dirty header if change needed.  If 'create'
+ * is 1, then only 100 flags may be created.  If >1, then you can use all 128 */
 EXPORTED int mailbox_user_flag(struct mailbox *mailbox, const char *flag,
 		      int *flagnum, int create)
 {
@@ -1316,7 +1317,11 @@ EXPORTED int mailbox_user_flag(struct mailbox *mailbox, const char *flag,
 	if (!create)
 	    return IMAP_NOTFOUND;
 
-	if (emptyflag == -1) 
+	if (emptyflag == -1)
+	    return IMAP_USERFLAG_EXHAUSTED;
+
+	/* stop imapd exhausting flags */
+	if (emptyflag >= 100 && create == 1)
 	    return IMAP_USERFLAG_EXHAUSTED;
 
 	/* need to be index locked to make flag changes */

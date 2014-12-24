@@ -210,7 +210,7 @@ int sync_getflags(struct dlist *kl,
 	    }
 	}
 	else {
-	    if (mailbox_user_flag(mailbox, s, &userflag, 1)) {
+	    if (mailbox_user_flag(mailbox, s, &userflag, /*allow all*/2)) {
 		syslog(LOG_ERR, "Unable to record user flag: %s", s);
 		free(s);
 		return IMAP_IOERROR;
