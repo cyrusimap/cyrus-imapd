@@ -1582,7 +1582,6 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
 	int rights;
 	char *rightstr, *nextid;
 	xmlNodePtr ace, node;
-	int deny = 0;
 
 	rightstr = strchr(userid, '\t');
 	if (!rightstr) break;
@@ -1595,17 +1594,14 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
 	/* Check for negative rights */
 	/* XXX  Does this correspond to DAV:deny? */
 	if (*userid == '-') {
-	    deny = 1;
-	    userid++;
+	    userid = nextid;
+	    continue;
 	}
 
 	rights = cyrus_acl_strtomask(rightstr);
 
 	/* Add ace XML element for this userid/right pair */
 	ace = xmlNewChild(acl, NULL, BAD_CAST "ace", NULL);
-
-	/* XXX  Need to check for groups.
-	 */
 
 	node = xmlNewChild(ace, NULL, BAD_CAST "principal", NULL);
 	if (!strcmp(userid, fctx->userid))
@@ -1623,6 +1619,12 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
 	 */
 	else if (!strcmp(userid, "anonymous"))
 	    xmlNewChild(node, NULL, BAD_CAST "unauthenticated", NULL);
+	else if (!strncmp(userid, "group:", 6)) {
+	    buf_reset(&fctx->buf);
+	    buf_printf(&fctx->buf, "%s/group/%s/",
+		       namespace_principal.prefix, userid+6);
+	    xml_add_href(node, NULL, buf_cstring(&fctx->buf));
+	}
 	else {
 	    buf_reset(&fctx->buf);
 	    buf_printf(&fctx->buf, "%s/user/%s/",
@@ -1630,9 +1632,12 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
 	    xml_add_href(node, NULL, buf_cstring(&fctx->buf));
 	}
 
-	node = xmlNewChild(ace, NULL,
-			   BAD_CAST (deny ? "deny" : "grant"), NULL);
+	node = xmlNewChild(ace, NULL, BAD_CAST "grant", NULL);
 	add_privs(rights, flags, node, resp->parent, fctx->ns);
+
+	/* system userids are protected */
+	if (is_system_user(userid))
+	    xmlNewChild(ace, NULL, BAD_CAST "protected", NULL);
 
 	if (fctx->req_tgt->resource) {
 	    node = xmlNewChild(ace, NULL, BAD_CAST "inherited", NULL);
