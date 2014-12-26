@@ -866,9 +866,7 @@ static int caldav_parse_path(const char *path,
 	}
 	else if (tgt->flags != TGT_SCHED_INBOX) {
 	    tgt->allow |= ALLOW_POST;
-
-	    if (strcmp(tgt->collection, SCHED_DEFAULT))
-		tgt->allow |= ALLOW_DELETE;
+	    tgt->allow |= ALLOW_DELETE;
 	}
 	else
 	    tgt->allow |= (ALLOW_POST|ALLOW_DELETE);
