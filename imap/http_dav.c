@@ -3269,8 +3269,6 @@ int meth_delete(struct transaction_t *txn, void *params)
 	else if (r == IMAP_MAILBOX_NONEXISTENT) ret = HTTP_NOT_FOUND;
 	else if (r) ret = HTTP_SERVER_ERROR;
 
-	dparams->davdb.close_db(davdb);
-
 	goto done;
     }
 
