@@ -3358,15 +3358,19 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 {
     xmlNodePtr prop = (xmlNodePtr) rock;
     struct buf buf = BUF_INITIALIZER;
+    const char *data = NULL;
+    size_t datalen = 0;
     int r = 0;
 
     if (propstat) {
 	if (!fctx->record) return HTTP_NOT_FOUND;
 	mailbox_map_record(fctx->mailbox, fctx->record, &buf);
+	data = buf_cstring(&buf) + fctx->record->header_size;
+	datalen = buf_len(&buf) - fctx->record->header_size;
     }
 
     r = propfind_getdata(name, ns, fctx, propstat, prop, caldav_mime_types,
-			 CALDAV_SUPP_DATA, buf_cstring(&buf), buf_len(&buf));
+			 CALDAV_SUPP_DATA, data, datalen);
 
     buf_free(&buf);
 
