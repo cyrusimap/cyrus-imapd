@@ -43,6 +43,7 @@
 #ifndef SIEVE_BYTECODE_H
 #define SIEVE_BYTECODE_H
 
+#include <stddef.h>
 
 /* for debugging*/
 #define DUMPCODE 0
@@ -303,7 +304,8 @@ enum bytecode_variables_bitflags {
     BFV_LOWERFIRST      = 1<<2,
     BFV_UPPERFIRST      = 1<<3,
     BFV_QUOTEWILDCARD   = 1<<4,
-    BFV_LENGTH	        = 1<<5
+    BFV_ENCODEURL	= 1<<5,
+    BFV_LENGTH		= 1<<6
 };
 
 enum bytecode_required_extensions {
