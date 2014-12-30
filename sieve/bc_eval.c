@@ -50,6 +50,7 @@
 #include "script.h"
 #include "parseaddr.h"
 #include "flags.h"
+#include "variables.h"
 
 #include "bytecode.h"
 
@@ -2459,30 +2460,6 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
         case B_SET:/*25*/
         {
-	    /* TODO: :encodeurl
-               RFC 5435 (Sieve Extension: Notifications)
-               6.  Modifier encodeurl to the 'set' Action
-
-               Usage:  ":encodeurl"
-
-               When the Sieve script specifies both "variables" [Variables] and
-               "enotify" capabilities in the "require", a new "set" action modifier
-               (see [Variables]) ":encodeurl" becomes available to Sieve scripts.
-               This modifier performs percent-encoding of any octet in the string
-               that doesn't belong to the "unreserved" set (see [URI]).  The
-               percent-encoding procedure is described in [URI].
-
-               The ":encodeurl" modifier has precedence 15.
-
-               Example 6:
-               require ["enotify", "variables"];
-
-               set :encodeurl "body_param" "Safe body&evil=evilbody";
-
-               notify "mailto:tim@example.com?body=${body_param}";
-
-            */
-
             int modifiers = ntohl(bc[ip++].value);
 
             /* get the variable name */
@@ -2511,8 +2488,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
             strarray_fini(variable->var);
             data = parse_string(data, variables);
-            /* TODO: apply modifiers to data */
-            strarray_append(variable->var, data);
+            strarray_appendm(variable->var,
+                             variables_modify_string(data, modifiers));
 	    printf("\nB_SET:%s\n\n", strarray_nth(variable->var, -1));
 
             actionflags = NULL;

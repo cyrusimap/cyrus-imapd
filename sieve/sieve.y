@@ -477,6 +477,32 @@ stags: /* empty */               { $$ = new_stags(); }
         | stags mod20            { if ($$->mod20) {
                                      yyerror(parse_script, "duplicate :quotewildcard"); YYERROR; }
                                    else { $$->mod20 = $2; }}
+        /* TODO: :encodeurl
+           Requires "enotify" extension, which has not been implemented yet.
+
+           RFC 5435 (Sieve Extension: Notifications)
+           6.  Modifier encodeurl to the 'set' Action
+
+           Usage:  ":encodeurl"
+
+           When the Sieve script specifies both "variables" [Variables] and
+           "enotify" capabilities in the "require", a new "set" action modifier
+           (see [Variables]) ":encodeurl" becomes available to Sieve scripts.
+           This modifier performs percent-encoding of any octet in the string
+           that doesn't belong to the "unreserved" set (see [URI]).  The
+           percent-encoding procedure is described in [URI].
+
+           The ":encodeurl" modifier has precedence 15.
+
+           Example 6:
+               require ["enotify", "variables"];
+
+               set :encodeurl "body_param" "Safe body&evil=evilbody";
+
+               notify "mailto:tim@example.com?body=${body_param}";
+
+        */
+
         | stags mod10            { if ($$->mod10) {
                                      yyerror(parse_script, "duplicate :length"); YYERROR; }
                                    else { $$->mod10 = $2; }}
