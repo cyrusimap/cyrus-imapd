@@ -14,11 +14,16 @@
 #include "xmalloc.h"
 
 #include <string.h>
+#include <ctype.h>
 
 EXPORTED char *variables_modify_string (const char *string, int modifiers) {
-    int len;
-    char * result;
+    int len, i, j;
+    char *result;
+    char *working_buffer;
     len = strlen(string);
+    if (!len) {
+	return (BFV_LENGTH & modifiers) ? xstrdup("0") : xstrdup("");
+    }
     /* Consider the string '\\\'
      * length will be doubled with :quotewildcard
      * length will then be tripled with :encodeurl
@@ -26,7 +31,10 @@ EXPORTED char *variables_modify_string (const char *string, int modifiers) {
      * case final string of 2 * 3 = 6 times the length
      * of the original string
      */
-    result = xzmalloc(2 * 3 * len + 1);
+    result = xstrdup(string);
+    working_buffer = xstrdup(string);
+    result = xrealloc(result, 2 * 3 * len + 1);
+    working_buffer = xrealloc(working_buffer, 2 * 3 * len + 1);
 
     /*
      * +--------------------------------+
@@ -48,24 +56,59 @@ EXPORTED char *variables_modify_string (const char *string, int modifiers) {
     /* Precedence 40 */
     switch ((BFV_LOWER | BFV_UPPER) & modifiers) {
     case BFV_LOWER:
-
+	for (i = 0; i < len; i++) {
+	    result[i] = tolower(result[i]);
+	}
 	break;
     case BFV_UPPER:
-
+	for (i = 0; i < len; i++) {
+	    result[i] = tolower(result[i]);
+	}
 	break;
     }
     /* Precedence 30 */
     switch ((BFV_LOWERFIRST | BFV_UPPERFIRST) & modifiers) {
     case BFV_LOWERFIRST:
-
+	result[0] = tolower(result[0]);
 	break;
     case BFV_UPPERFIRST:
-
+	result[0] = toupper(result[0]);
 	break;
     }
+    /*
+     * 4.1.2.  Modifier ":quotewildcard"
+
+   This modifier adds the necessary quoting to ensure that the expanded
+   text will only match a literal occurrence if used as a parameter to
+   :matches.  Every character with special meaning ("*", "?",  and "\")
+   is prefixed with "\" in the expansion.
+     *
+     */
     /* Precedence 20 */
     if (BFV_QUOTEWILDCARD & modifiers) {
-
+	char *original, *quoted;
+	original = result;
+	quoted = working_buffer;
+	while (*original) {
+	    switch (*original) {
+	    case '*':
+	    case '?':
+	    case '\\':
+		*quoted = '\\';
+		quoted++;
+		break;
+	    }
+	    *quoted = *original;
+	    quoted++;
+	    original++;
+	}
+	*quoted = '\0';
+	{
+	    char *temp;
+	    temp = result;
+	    result = working_buffer;
+	    working_buffer = temp;
+	}
     }
     /*
      *
@@ -112,10 +155,43 @@ EXPORTED char *variables_modify_string (const char *string, int modifiers) {
      */
     /* Precedence 15 */
     if (BFV_ENCODEURL & modifiers) {
+	char *original, *quoted;
+	original = result;
+	quoted = working_buffer;
 
+	while (*original) {
+	    switch (*original) {
+	    case 'a' ... 'z':
+	    case 'A' ... 'Z':
+	    case '0' ... '9':
+		*quoted = *original;
+		quoted ++;
+		break;
+	    default:
+		snprintf(quoted, 4, "%%%02X", *original);
+		quoted += 3;
+		break;
+	    }
+	    original++;
+	}
+	*quoted = '\0';
+	{
+	    char *temp;
+	    temp = result;
+	    result = working_buffer;
+	    working_buffer = temp;
+	}
     }
     /* Precedence 10 */
     if (BFV_LENGTH & modifiers) {
-
+	snprintf(working_buffer, strlen(result), "%zu", strlen(result));
+	{
+	    char *temp;
+	    temp = result;
+	    result = working_buffer;
+	    working_buffer = temp;
+	}
     }
+    free(working_buffer);
+    return result;
 }
