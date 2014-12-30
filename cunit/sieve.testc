@@ -11,6 +11,7 @@
 #include "sieve/comparator.h"
 #include "sieve/message.h"
 #include "sieve/sieve_interface.h"
+#include "sieve/variables.h"
 #include "imap/message.h"
 #include "prot.h"
 #include "retry.h"
@@ -68,6 +69,38 @@ typedef struct {
 int autorespond_reponse = SIEVE_OK;
 
 extern int verbose;
+
+static void test_variable_modifiers(void)
+{
+    /*
+   Examples:
+      # The value assigned to the variable is printed after the arrow
+      set "a" "juMBlEd lETteRS";             => "juMBlEd lETteRS"
+      set :length "b" "${a}";                => "15"
+      set :lower "b" "${a}";                 => "jumbled letters"
+      set :upperfirst "b" "${a}";            => "JuMBlEd lETteRS"
+      set :upperfirst :lower "b" "${a}";     => "Jumbled letters"
+      set :quotewildcard "b" "Rock*";        => "Rock\*"
+     */
+    const char *a = "juMBlEd lETteRS";
+    char *b;
+    CU_ASSERT_STRING_EQUAL(a, "juMBlEd lETteRS");
+    b = variables_modify_string(a, BFV_LENGTH);
+    CU_ASSERT_STRING_EQUAL(b, "15");
+    free(b);
+    b = variables_modify_string(a, BFV_LOWER);
+    CU_ASSERT_STRING_EQUAL(b, "jumbled letters");
+    free(b);
+    b = variables_modify_string(a, BFV_UPPERFIRST);
+    CU_ASSERT_STRING_EQUAL(b, "JuMBlEd lETteRS");
+    free(b);
+    b = variables_modify_string(a, BFV_UPPERFIRST | BFV_LOWER);
+    CU_ASSERT_STRING_EQUAL(b, "Jumbled letters");
+    free(b);
+    b = variables_modify_string("Rock*", BFV_QUOTEWILDCARD);
+    CU_ASSERT_STRING_EQUAL(b, "Rock\\*");
+    free(b);
+}
 
 #define TESTCASE(_comp, _mode, _pat, _text, _result)            \
     comprock = NULL;                                            \
