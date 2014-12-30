@@ -11,8 +11,23 @@
 
 #include "variables.h"
 #include "bytecode.h"
+#include "xmalloc.h"
+
+#include <string.h>
 
 EXPORTED char *variables_modify_string (const char *string, int modifiers) {
+    int len;
+    char * result;
+    len = strlen(string);
+    /* Consider the string '\\\'
+     * length will be doubled with :quotewildcard
+     * length will then be tripled with :encodeurl
+     * so we allocate a buffer to encode the worst
+     * case final string of 2 * 3 = 6 times the length
+     * of the original string
+     */
+    result = xzmalloc(2 * 3 * len + 1);
+
     /*
      * +--------------------------------+
      * | Precedence     Modifier        |
