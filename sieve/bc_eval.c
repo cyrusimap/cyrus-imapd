@@ -1147,9 +1147,21 @@ envelope_err:
             res = SIEVE_RUN_ERROR;
             break;
         }
-        if (!comprock) {
-            comprock = varlist_select(variables, VL_MATCH_VARS)->var;
-        }
+	/*
+          RFC 5173         Sieve Email Filtering: Body Extension        April 2008
+
+          6. Interaction with Other Sieve Extensions
+
+          Any extension that extends the grammar for the COMPARATOR or MATCH-
+          TYPE nonterminals will also affect the implementation of "body".
+
+          Wildcard expressions used with "body" are exempt from the side
+          effects described in [VARIABLES].  That is, they MUST NOT set match
+          variables (${1}, ${2}...) to the input values corresponding to
+          wildcard sequences in the matched pattern.  However, if the extension
+          is present, variable references in the key strings or content type
+          strings are evaluated as described in this document
+        */
 
         if (transform == B_RAW) {
             /* XXX - we never handled this properly, it has to search the
