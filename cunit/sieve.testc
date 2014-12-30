@@ -100,6 +100,9 @@ static void test_variable_modifiers(void)
     b = variables_modify_string("Rock*", BFV_QUOTEWILDCARD);
     CU_ASSERT_STRING_EQUAL(b, "Rock\\*");
     free(b);
+    b = variables_modify_string("Rock\\*", BFV_QUOTEWILDCARD | BFV_ENCODEURL);
+    CU_ASSERT_STRING_EQUAL(b, "Rock%5C%5C%5C%2A");
+    free(b);
 }
 
 #define TESTCASE(_comp, _mode, _pat, _text, _result)            \
