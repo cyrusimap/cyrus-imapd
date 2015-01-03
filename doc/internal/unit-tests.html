@@ -562,7 +562,9 @@ It may be <tt>static</tt> or <tt>extern</tt>, but I recommend <tt>static</tt>.
 Functions with this signature are automatically discovered in the source
 code by the Cyrus unit test infrastructure, so all you have to do is
 write the function.  Later, a CUnit test named "whatever" will be
-created automatically for your <tt>test_whatever</tt> function.
+created automatically for your <tt>test_whatever</tt> function.  Note that the
+opening curly brace must be on the next line or the unit test infrastructure
+will not find the function.
 </dd>
 
 <dt><span class="note">(b)</span></dt>
