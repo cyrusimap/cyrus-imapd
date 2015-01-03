@@ -639,17 +639,23 @@ static void dump2(bytecode_input_t *d, int bc_len)
             printf("UNMARK\n");
             break;
 
-        case B_ADDFLAG: /*9*/
+        case B_ADDFLAG: /*26*/
+        case B_ADDFLAG_ORIG: /*9*/
             printf("ADDFLAG  {%d}\n",ntohl(d[i].len));
             i=write_list(ntohl(d[i].len),i+1,d);
             break;
 
-        case B_SETFLAG: /*10*/
-            printf("SETFLAG  {%d}\n",ntohl(d[i].len));
+        case B_SETFLAG: /*27*/
+            i = unwrap_string(d, i, &data, &len);
+            printf("SETFLAG VARIABLE({%d}%s)\n", len, data);
+            /* fall through */
+        case B_SETFLAG_ORIG: /*10*/
+            printf("SETFLAG FLAGS {%d}\n",ntohl(d[i].len));
             i=write_list(ntohl(d[i].len),i+1,d);
             break;
 
-        case B_REMOVEFLAG: /*11*/
+        case B_REMOVEFLAG: /*28*/
+        case B_REMOVEFLAG_ORIG: /*11*/
             printf("REMOVEFLAG  {%d}\n",ntohl(d[i].len));
             i=write_list(ntohl(d[i].len),i+1,d);
             break;

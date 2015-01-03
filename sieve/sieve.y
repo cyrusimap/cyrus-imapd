@@ -176,6 +176,7 @@ static commandlist_t *build_fileinto(int t, struct ftags *f, char *folder);
 static commandlist_t *build_redirect(int t, int c, char *a);
 static commandlist_t *build_include(int, struct itags *, char*);
 static commandlist_t *build_set(int t, struct stags *s, char *variable, char *value);
+static commandlist_t *build_flag(int t, char *variable, strarray_t *flags);
 static struct aetags *new_aetags(void);
 static struct aetags *canon_aetags(struct aetags *ae);
 static void free_aetags(struct aetags *ae);
@@ -297,6 +298,7 @@ extern void sieverestart(FILE *f);
 %type <stag> stags
 %type <nval> mod40 mod30 mod20 mod10
 %type <nval> variablestest
+%type <sval> flagtags
 
 %name-prefix "sieve"
 %defines
@@ -370,17 +372,21 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
                                    }
                                    $$ = build_vacation(VACATION,
                                             canon_vtags(parse_script, $2), $3); }
-        | SETFLAG stringlist     { if (!(parse_script->support.imapflags ||
+    | SETFLAG flagtags stringlist {
+	if (!(parse_script->support.imapflags ||
                                         parse_script->support.imap4flags)) {
-                                    yyerror(parse_script, "imap4flags MUST be enabled with \"require\"");
+	    yyerror(parse_script, "imap4flags MUST be enabled with "
+		    "\"require\"");
                                     YYERROR;
                                    }
-                                  verify_flaglist($2);
-                                  if(!$2->count) {
-                                      strarray_add($2, "");
+	if (!parse_script->support.variables) {
+	    verify_flaglist($3);
+	}
+	if (!$3->count) {
+	    strarray_add($3, "");
+	}
+	$$ = build_flag(SETFLAG, $2, $3);
                                   }
-                                  $$ = new_command(SETFLAG);
-                                  $$->u.sl = $2; }
          | ADDFLAG stringlist     { if (!(parse_script->support.imapflags ||
                                         parse_script->support.imap4flags)) {
                                     yyerror(parse_script, "imap4flags MUST be enabled with \"require\"");
@@ -464,6 +470,24 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
                                    }
                                    $2 = canon_stags($2);
                                    $$ = build_set($1, $2, $3, $4);
+                                 }
+        ;
+
+flagtags: /* empty */            { $$ = NULL; }
+        | flagtags STRING        {
+                                   if (!(parse_script->support.imap4flags)) {
+                                     yyerror(parse_script, "imap4flags MUST be enabled with \"require\"");
+                                     YYERROR;
+                                   }
+	                           if ($1) {
+	                             yyerror(parse_script, "duplicate variablename");
+	                             YYERROR;
+	                           }
+	                           if (!is_identifier($2)) {
+	                             yyerror(parse_script, "variablename must be a valid identifier");
+	                             YYERROR;
+	                           }
+	                           $$ = $2;
                                  }
         ;
 
@@ -1153,7 +1177,9 @@ ftags: /* empty */               { $$ = new_ftags(); }
                                    if ($$->flags != NULL) {
                         yyerror(parse_script, "duplicate flags tag"); YYERROR; }
                                    else {
+				    if (!parse_script->support.variables) {
                                     verify_flaglist($3);
+				    }
                                     if(!$3->count) {
                                         strarray_add($3, "");
                                     }
@@ -1456,6 +1482,21 @@ static commandlist_t *build_set(int t, struct stags *s, char *variable, char *va
         ret->u.s.value = xstrdup(value);
 
         free_stags(s);
+    }
+
+    return ret;
+}
+
+static commandlist_t *build_flag(int t, char *variable, strarray_t *flags)
+{
+    commandlist_t *ret = new_command(t);
+
+    assert(t == SETFLAG || t == ADDFLAG || t == REMOVEFLAG);
+
+    if (ret) {
+        ret->u.f.folder = variable ? variable : "";
+        ret->u.f.flags = flags;
+        ret->u.f.copy = 0; /* unused */
     }
 
     return ret;

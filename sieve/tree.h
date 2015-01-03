@@ -158,7 +158,7 @@ struct Commandlist {
             int copy;
             strarray_t *flags;
         } k;
-        struct { /* it's a fileinto action */
+        struct { /* it's a fileinto or a flag action */
             char *folder;
             int copy;
             int create;
