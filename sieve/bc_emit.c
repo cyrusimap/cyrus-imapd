@@ -834,9 +834,27 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
             break;
 
         case B_SETFLAG:
+            /* Variablename String, Flags Stringlist */
+
+            /* Write string length of Variablename */
+            len = bc->data[codep++].len;
+            if(write_int(fd,len) == -1)
+                return -1;
+
+            filelen+=sizeof(int);
+
+            /* Write Folder */
+            if(write(fd,bc->data[codep++].str,len) == -1)
+                return -1;
+
+            ret = align_string(fd, len);
+            if(ret == -1)
+                return -1;
+
+            filelen += len + ret;
+
         case B_ADDFLAG:
         case B_REMOVEFLAG:
-            /* Dump just a stringlist */
             ret = bc_stringlist_emit(fd, &codep, bc);
             if(ret < 0)
                 return -1;

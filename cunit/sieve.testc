@@ -55,6 +55,7 @@ typedef struct {
     char *vacation_from;
     strarray_t *compile_errors;
     strarray_t *run_errors;
+    strarray_t *flags;
 } sieve_test_context_t;
 
 typedef struct {
@@ -398,6 +399,8 @@ static int fileinto(void *ac, void *ic, void *sc __attribute__((unused)),
     ctx->filed_mailbox = xstrdup(fc->mailbox);
     free(ctx->filed_flags);
     ctx->filed_flags = strarray_join(fc->imapflags, " ");
+    strarray_free(ctx->flags);
+    ctx->flags = strarray_dup(fc->imapflags);
 
     /* TODO: test returning SIEVE_FAIL */
     return SIEVE_OK;
@@ -414,6 +417,8 @@ static int keep(void *ac, void *ic, void *sc __attribute__((unused)),
     ctx->stats.keeps++;
     free(ctx->filed_flags);
     ctx->filed_flags = strarray_join(kc->imapflags, " ");
+    strarray_free(ctx->flags);
+    ctx->flags = strarray_dup(kc->imapflags);
 
     /* TODO: test returning SIEVE_FAIL */
     return SIEVE_OK;
@@ -539,7 +544,8 @@ static int set_up(void)
         "partition-"PARTITION": "DBDIR"/data\n"
         "sievenotifier: mailto\n"
         "sieve_extensions: fileinto reject vacation imapflags notify" \
-            " envelope body relational regex subaddress copy date index\n"
+	    " envelope body relational regex subaddress copy date index" \
+	    " imap4flags variables\n"
     );
     libcyrus_init();
     return 0;
@@ -688,6 +694,7 @@ static void context_cleanup(sieve_test_context_t *ctx)
     free(ctx->vacation_from);
     strarray_free(ctx->compile_errors);
     strarray_free(ctx->run_errors);
+    strarray_free(ctx->flags);
 }
 
 
@@ -1531,6 +1538,40 @@ static void test_currentdate_false(void)
     CU_ASSERT_STRING_EQUAL(ctx.redirected_to, NULL);
 
     context_cleanup(&ctx);
+}
+
+static void test_imap4flags_setflag(void)
+{
+    static const char SCRIPT_INTERNAL[] =
+    "require [\"imap4flags\", \"variables\"];\n"
+    "setflag \"myvar\" [\"myval1\", \"myval2\"];\n"
+    "keep :flags \"${myvar}\";\n"
+    ;
+
+    static const char MSG_TRUE[] =
+    "Date: Mon, 25 Jan 2003 08:51:06 -0500\r\n"
+    "From: zme@true.com\r\n"
+    "To: you\r\n"
+    "Subject: simple flag test\r\n"
+    "\r\n"
+    "blah\n"
+    ;
+    sieve_test_context_t ctx;
+
+    /* Test setflag "variablename" "flags" */
+    context_setup(&ctx, SCRIPT_INTERNAL);
+    CU_ASSERT_EQUAL(ctx.stats.errors, 0);
+
+    run_message(&ctx, MSG_TRUE);
+    CU_ASSERT_EQUAL(ctx.stats.errors, 0);
+    CU_ASSERT_EQUAL(ctx.stats.actions, 1);
+    CU_ASSERT_EQUAL(ctx.stats.keeps, 1);
+    CU_ASSERT_NOT_EQUAL(strarray_find_case(ctx.flags,"myval1",0),-1);
+    CU_ASSERT_NOT_EQUAL(strarray_find_case(ctx.flags,"myval2",0),-1);
+
+    context_cleanup(&ctx);
+
+    /* Test #2 */
 }
 
 // TODO: test

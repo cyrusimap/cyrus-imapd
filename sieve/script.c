@@ -925,6 +925,7 @@ EXPORTED int sieve_execute_bytecode(sieve_execute_t *exe, sieve_interp_t *interp
     variable_list_t variables = VARIABLE_LIST_INITIALIZER;
 
     variables.var = &imapflags;
+    variables.name = xstrdup("");
 
     varlist_extend(&variables)->name = xstrdup(VL_MATCH_VARS);
     varlist_extend(&variables)->name = xstrdup(VL_PARSED_STRINGS);

@@ -2070,7 +2070,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
         }
             break;
 
-        case B_ADDFLAG:/*9*/
+        case B_ADDFLAG:/*26*/
+        case B_ADDFLAG_ORIG:/*9*/
         {
             int x;
             int list_len=ntohl(bc[ip].len);
@@ -2090,14 +2091,41 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             break;
         }
 
-        case B_SETFLAG:/*10*/
+        case B_SETFLAG:/*27*/
+            /* get the variable name */
+            ip = unwrap_string(bc, ip, &data, NULL);
+            /* RFC 5229, 3. Interpretation of Strings
+               Strings where no variable substitutions take place are referred to as
+               constant strings.  Future extensions may specify that passing non-
+               constant strings as arguments to its actions or tests is an error.
+
+               The name MUST be a constant string and conform
+               to the syntax of variable-name.
+               (this is done in the parser in sieve.y)
+            */
+
+            /* select or create the variable */
+            variable = varlist_select(variables, data);
+            if (variable) {
+                actionflags = variable->var;
+            } else {
+                actionflags = (variable = varlist_extend(variables))->var;
+                variable->name = xstrdup(data);
+            }
+
+            /* fall through */
+        case B_SETFLAG_ORIG:/*10*/
         {
             int x;
             int list_len=ntohl(bc[ip].len);
 
             ip+=2; /* skip opcode, list_len, and list data len */
 
-            strarray_truncate(variables->var, 0);
+            if (!actionflags) {
+                actionflags = variables->var;
+            }
+
+            strarray_fini(actionflags);
 
             for (x=0; x<list_len; x++) {
                 ip = unwrap_string(bc, ip, &data, NULL);
@@ -2107,15 +2135,16 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 }
 
                 if (data[0]) {
-                    strarray_add_case(variables->var, data);
+                    strarray_add_case(actionflags, data);
                 }
             }
 
-            verify_flaglist(variables->var);
+	    verify_flaglist(actionflags);
             break;
         }
 
-        case B_REMOVEFLAG:/*11*/
+        case B_REMOVEFLAG:/*28*/
+        case B_REMOVEFLAG_ORIG:/*11*/
         {
           int x, y;
             int list_len=ntohl(bc[ip].len);

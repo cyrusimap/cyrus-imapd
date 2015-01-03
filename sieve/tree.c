@@ -202,6 +202,7 @@ void free_tree(commandlist_t *cl)
             free(cl->u.inc.script);
             break;
 
+        case SETFLAG:
         case FILEINTO:
             free(cl->u.f.folder);
             strarray_free(cl->u.f.flags);
@@ -221,7 +222,6 @@ void free_tree(commandlist_t *cl)
             free(cl->u.v.message);
             break;
 
-        case SETFLAG:
         case ADDFLAG:
         case REMOVEFLAG:
             strarray_free(cl->u.sl);
