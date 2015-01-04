@@ -2071,6 +2071,28 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             break;
 
         case B_ADDFLAG:/*26*/
+            /* get the variable name */
+            ip = unwrap_string(bc, ip, &data, NULL);
+            /* RFC 5229, 3. Interpretation of Strings
+               Strings where no variable substitutions take place are referred to as
+               constant strings.  Future extensions may specify that passing non-
+               constant strings as arguments to its actions or tests is an error.
+
+               The name MUST be a constant string and conform
+               to the syntax of variable-name.
+               (this is done in the parser in sieve.y)
+            */
+
+            /* select or create the variable */
+            variable = varlist_select(variables, data);
+            if (variable) {
+                actionflags = variable->var;
+            } else {
+                actionflags = (variable = varlist_extend(variables))->var;
+                variable->name = xstrdup(data);
+            }
+
+            /* fall through */
         case B_ADDFLAG_ORIG:/*9*/
         {
             int x;
@@ -2078,16 +2100,19 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
             ip+=2; /* skip opcode, list_len, and list data len */
 
+            if (!actionflags) {
+                actionflags = variables->var;
+            }
+
             for (x=0; x<list_len; x++) {
                 ip = unwrap_string(bc, ip, &data, NULL);
 
                 if (requires & BFE_VARIABLES) {
                     data = parse_string(data, variables);
                 }
-
-                strarray_add_case(variables->var, data);
+                strarray_add_case(actionflags, data);
             }
-            verify_flaglist(variables->var);
+            verify_flaglist(actionflags);
             break;
         }
 
@@ -2144,6 +2169,28 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
         }
 
         case B_REMOVEFLAG:/*28*/
+            /* get the variable name */
+            ip = unwrap_string(bc, ip, &data, NULL);
+            /* RFC 5229, 3. Interpretation of Strings
+               Strings where no variable substitutions take place are referred to as
+               constant strings.  Future extensions may specify that passing non-
+               constant strings as arguments to its actions or tests is an error.
+
+               The name MUST be a constant string and conform
+               to the syntax of variable-name.
+               (this is done in the parser in sieve.y)
+            */
+
+            /* select or create the variable */
+            variable = varlist_select(variables, data);
+            if (variable) {
+                actionflags = variable->var;
+            } else {
+                /* variable doesn't exist, so we're done */
+                break;
+            }
+
+            /* fall through */
         case B_REMOVEFLAG_ORIG:/*11*/
         {
           int x, y;
@@ -2151,6 +2198,11 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             strarray_t temp = STRARRAY_INITIALIZER;
 
             ip+=2; /* skip opcode, list_len, and list data len */
+
+            if (!actionflags) {
+                actionflags = variables->var;
+            }
+	    verify_flaglist(actionflags);
 
             for (x=0; x<list_len; x++) {
                 ip = unwrap_string(bc, ip, &data, NULL);
@@ -2164,7 +2216,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
                 for (y = 0; y < temp.count; y++) {
                     data = temp.data[y];
-                    strarray_remove_all_case(variables->var, data);
+                    strarray_remove_all_case(actionflags, data);
                 }
 
 		strarray_fini(&temp);

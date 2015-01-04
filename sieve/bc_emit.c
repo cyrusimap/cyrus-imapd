@@ -834,6 +834,8 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
             break;
 
         case B_SETFLAG:
+        case B_ADDFLAG:
+        case B_REMOVEFLAG:
             /* Variablename String, Flags Stringlist */
 
             /* Write string length of Variablename */
@@ -853,8 +855,6 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 
             filelen += len + ret;
 
-        case B_ADDFLAG:
-        case B_REMOVEFLAG:
             ret = bc_stringlist_emit(fd, &codep, bc);
             if(ret < 0)
                 return -1;

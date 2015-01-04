@@ -796,28 +796,24 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 break;
 
             case ADDFLAG:
-                /* ADDFLAG stringlist */
-                if (!atleast(retval, codep+1)) return -1;
-                retval->data[codep++].op = B_ADDFLAG;
-                codep = bc_stringlist_generate(codep,retval,c->u.sl);
-                if (codep == -1) return -1;
-                break;
-
             case SETFLAG:
-                /* SETFLAG string stringlist */
+            case REMOVEFLAG:
+                /* (ADDFLAG | SETFLAG | REMOVEFLAG) string stringlist */
                 if (!atleast(retval, codep+3)) return -1;
-                retval->data[codep++].op = B_SETFLAG;
+                switch(c->type) {
+                case ADDFLAG:
+                    retval->data[codep++].op = B_ADDFLAG;
+                    break;
+                case SETFLAG:
+                    retval->data[codep++].op = B_SETFLAG;
+                    break;
+                case REMOVEFLAG:
+                    retval->data[codep++].op = B_REMOVEFLAG;
+                    break;
+                }
                 retval->data[codep++].len = strlen(c->u.f.folder);
                 retval->data[codep++].str = c->u.f.folder;
                 codep = bc_stringlist_generate(codep,retval,c->u.f.flags);
-                if (codep == -1) return -1;
-                break;
-
-            case REMOVEFLAG:
-                /* REMOVEFLAG stringlist */
-                if (!atleast(retval, codep+1)) return -1;
-                retval->data[codep++].op = B_REMOVEFLAG;
-                codep = bc_stringlist_generate(codep,retval,c->u.sl);
                 if (codep == -1) return -1;
                 break;
 
