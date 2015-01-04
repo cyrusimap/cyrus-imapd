@@ -203,6 +203,8 @@ void free_tree(commandlist_t *cl)
             break;
 
         case SETFLAG:
+        case ADDFLAG:
+        case REMOVEFLAG:
         case FILEINTO:
             free(cl->u.f.folder);
             strarray_free(cl->u.f.flags);
@@ -220,11 +222,6 @@ void free_tree(commandlist_t *cl)
             free(cl->u.v.subject);
             strarray_free(cl->u.v.addresses);
             free(cl->u.v.message);
-            break;
-
-        case ADDFLAG:
-        case REMOVEFLAG:
-            strarray_free(cl->u.sl);
             break;
 
         case KEEP:
