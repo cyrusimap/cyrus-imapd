@@ -127,9 +127,9 @@ CRLF            (\r\n|\r|\n)
 <INITIAL>require        return REQUIRE;
 <INITIAL>stop           return STOP;
 <INITIAL>discard        return DISCARD;
-<INITIAL>setflag        return SETFLAG;
-<INITIAL>addflag        return ADDFLAG;
-<INITIAL>removeflag     return REMOVEFLAG;
+<INITIAL>setflag        return yylval->nval = SETFLAG;
+<INITIAL>addflag        return yylval->nval = ADDFLAG;
+<INITIAL>removeflag     return yylval->nval = REMOVEFLAG;
 <INITIAL>mark           return MARK;
 <INITIAL>unmark         return UNMARK;
 <INITIAL>notify         return NOTIFY;
