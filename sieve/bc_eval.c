@@ -1033,7 +1033,8 @@ envelope_err:
 #endif
 		    res |= comp(scount, strlen(scount), this_needle, comprock);
 		}
-	    } else { /* match == B_COUNT is false */
+		break;
+	    }
 
         /* search through the haystack for the needles */
         currneedle=needlesi+2;
@@ -1108,7 +1109,6 @@ envelope_err:
 	    printf(" %s\n\n", temp);
 	    free (temp);
 	}
-        } // end else (match == B_COUNT)
 	} // loop on each variable or string
 
         /* Update IP */
