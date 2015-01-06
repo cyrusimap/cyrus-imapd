@@ -1001,8 +1001,20 @@ envelope_err:
                 }
 
 	    if (match == B_COUNT) {
-		/* TODO: support STRING test */
-		count = variables->var->count;
+		if (is_string) {
+		    if (this_haystack[0] != '\0') {
+			count += 1;
+		    }
+		} else {
+		    count += this_var->count;
+		}
+		/* don't compare the values until all haystacks have been
+		 * counted.
+		 */
+		if (z < numhaystacks - 1) {
+		    continue;
+		}
+
 		snprintf(scount, SCOUNT_SIZE, "%u", count);
 		/*search through all the data*/
 		currneedle=needlesi+2;
