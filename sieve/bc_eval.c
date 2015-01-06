@@ -966,30 +966,6 @@ envelope_err:
             comprock = varlist_select(variables, VL_MATCH_VARS)->var;
         }
 
-        if  (match == B_COUNT )
-        {
-	    /* TODO: support STRING test */
-            count = variables->var->count;
-            snprintf(scount, SCOUNT_SIZE, "%u", count);
-            /*search through all the data*/
-            currneedle=needlesi+2;
-            for (z=0; z<numneedles && !res; z++)
-            {
-                const char *this_needle;
-
-                currneedle = unwrap_string(bc, currneedle, &this_needle, NULL);
-
-                if (requires & BFE_VARIABLES) {
-                    this_needle = parse_string(this_needle, variables);
-                }
-
-#if VERBOSE
-                printf("%d, %s \n", count, data_val);
-#endif
-                res |= comp(scount, strlen(scount), this_needle, comprock);
-            }
-        } else { /* match == B_COUNT is false */
-
             /* loop on each haystack */
             currhaystack = haystacksi+2;
             for (z = 0; z < (is_string ? numhaystacks :
@@ -1023,6 +999,29 @@ envelope_err:
                 } else { // internal variable
                     this_var = variables->var;
                 }
+
+	    if (match == B_COUNT) {
+		/* TODO: support STRING test */
+		count = variables->var->count;
+		snprintf(scount, SCOUNT_SIZE, "%u", count);
+		/*search through all the data*/
+		currneedle=needlesi+2;
+		for (z=0; z<numneedles && !res; z++) {
+		    const char *this_needle;
+
+		    currneedle = unwrap_string(bc, currneedle, &this_needle,
+			    NULL);
+
+		    if (requires & BFE_VARIABLES) {
+			this_needle = parse_string(this_needle, variables);
+		    }
+
+#if VERBOSE
+		    printf("%d, %s \n", count, data_val);
+#endif
+		    res |= comp(scount, strlen(scount), this_needle, comprock);
+		}
+	    } else { /* match == B_COUNT is false */
 
         /* search through the haystack for the needles */
         currneedle=needlesi+2;
@@ -1097,8 +1096,8 @@ envelope_err:
 	    printf(" %s\n\n", temp);
 	    free (temp);
 	}
-        } // loop on each variable or string
         } // end else (match == B_COUNT)
+	} // loop on each variable or string
 
         /* Update IP */
         i=(ntohl(bc[needlesi+1].value)/4);
