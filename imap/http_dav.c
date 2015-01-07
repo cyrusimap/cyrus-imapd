@@ -2224,7 +2224,7 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 			      known_namespaces[entry->ns].href,
 			      known_namespaces[entry->ns].prefix);
 
-		    nentry->name = BAD_CAST entry->name;
+		    nentry->name = xmlStrdup(BAD_CAST entry->name);
 		    nentry->ns = fctx->ns[entry->ns];
 		    if (allowed) {
 			nentry->flags = entry->flags;
