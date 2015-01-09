@@ -10,6 +10,6 @@
 
 #include "strarray.h"
 
-EXPORTED int verify_flaglist(strarray_t *sl);
+int verify_flaglist(strarray_t *sl);
 
 #endif /* FLAGS_H_ */
