@@ -6817,6 +6817,9 @@ static void sched_deliver_local(const char *recipient,
     icalproperty *prop;
     struct transaction_t txn;
 
+    /* Start with an empty (clean) transaction */
+    memset(&txn, 0, sizeof(struct transaction_t));
+
     /* Check ACL of sender on recipient's Scheduling Inbox */
     caldav_mboxname(SCHED_INBOX, userid, namebuf);
     if ((r = mboxlist_lookup(namebuf, &mbentry, NULL))) {
@@ -7019,9 +7022,13 @@ static void sched_deliver_local(const char *recipient,
 	goto inbox;
     }
 
+    /* Create header cache */
+    txn.req_hdrs = spool_new_hdrcache();
+    if (!txn.req_hdrs) r = HTTP_SERVER_ERROR;
+
     /* Store the (updated) object in the recipients's calendar */
-    r = store_resource(&txn, ical, mailbox,
-		       buf_cstring(&resource), caldavdb, NEW_STAG);
+    if (!r) r = store_resource(&txn, ical, mailbox,
+			       buf_cstring(&resource), caldavdb, NEW_STAG);
 
     if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
 	sched_data->status =
@@ -7064,6 +7071,8 @@ static void sched_deliver_local(const char *recipient,
     mailbox_close(&inbox);
     mailbox_close(&mailbox);
     if (caldavdb) caldav_close(caldavdb);
+    spool_free_hdrcache(txn.req_hdrs);
+    buf_free(&txn.buf);
 }
 
 
