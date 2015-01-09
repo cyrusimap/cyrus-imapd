@@ -56,6 +56,7 @@ EXPORTED char *parse_string(const char *s, variable_list_t *vars)
     char *test_str;
     int is_match_var;
     int match_var;
+    int fail = 0;
     strarray_append(&stringparts, s);
     test_str = stringparts.data[stringparts.count-1];
     while (test_str && *test_str) {
@@ -123,6 +124,22 @@ EXPORTED char *parse_string(const char *s, variable_list_t *vars)
                 test_str = stringparts.data[stringparts.count-1];
             }
         } else {
+	    /* first check if this is a namespace, which we don't yet support.
+   RFC 5229, Sieve: Variables Extension, Section 3. Interpretation of Strings:
+   References to namespaces without a prior require statement for the
+   relevant extension MUST cause an error.
+	     */
+	    {
+		char *dot;
+		if ((dot = strchr(test_str, '.'))) {
+		    *dot = '\0';
+		    if (is_identifier(test_str)) {
+			fail = 1;
+		    } else {
+			*dot = '.';
+		    }
+		}
+	    }
             /* if we haven't found a valid variable, restore the overwritten
              * character
              */
@@ -138,6 +155,12 @@ EXPORTED char *parse_string(const char *s, variable_list_t *vars)
         strarray_appendm(varlist_select(vars, VL_PARSED_STRINGS)->var, test_str);
     }
     strarray_fini(&stringparts);
+
+    /* TODO: test this in the sieve parser, not at script runtime */
+    if (0 && fail) {
+	free(test_str);
+	test_str = NULL;
+    }
 
     return test_str;
 }
