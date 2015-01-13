@@ -109,9 +109,9 @@
     " rowid INTEGER PRIMARY KEY,"					\
     " objid INTEGER,"							\
     " pos INTEGER NOT NULL," /* for sorting */				\
-    " email TEXT NOT NULL,"						\
+    " email TEXT NOT NULL COLLATE NOCASE,"				\
     " FOREIGN KEY (objid) REFERENCES vcard_objs (rowid) ON DELETE CASCADE );" \
-    "CREATE INDEX IF NOT EXISTS idx_vcard_email ON vcard_emails ( email );"
+    "CREATE INDEX IF NOT EXISTS idx_vcard_email ON vcard_emails ( email COLLATE NOCASE );"
 
 #define CMD_CREATE_GR							\
     "CREATE TABLE IF NOT EXISTS vcard_groups ("				\
