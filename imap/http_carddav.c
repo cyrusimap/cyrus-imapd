@@ -118,6 +118,9 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
 static int propfind_suppaddrdata(const xmlChar *name, xmlNsPtr ns,
 				 struct propfind_ctx *fctx, xmlNodePtr resp,
 				 struct propstat propstat[], void *rock);
+static int propfind_addrgroups(const xmlChar *name, xmlNsPtr ns,
+			       struct propfind_ctx *fctx, xmlNodePtr resp,
+			       struct propstat propstat[], void *rock);
 
 static int report_card_query(struct transaction_t *txn, xmlNodePtr inroot,
 			     struct propfind_ctx *fctx);
@@ -258,6 +261,11 @@ static const struct prop_entry carddav_props[] = {
     /* Apple Calendar Server properties */
     { "getctag", NS_CS, PROP_ALLPROP | PROP_COLLECTION,
       propfind_sync_token, NULL, NULL },
+
+    /* Cyrus properties */
+    { "address-groups", NS_CYRUS,
+      PROP_RESOURCE,
+      propfind_addrgroups, NULL, NULL },
 
     { NULL, 0, 0, NULL, NULL, NULL }
 };
@@ -819,6 +827,57 @@ static int propfind_suppaddrdata(const xmlChar *name, xmlNsPtr ns,
     return 0;
 }
 
+/* Callback to fetch CY:address-groups */
+int propfind_addrgroups(const xmlChar *name, xmlNsPtr ns,
+		        struct propfind_ctx *fctx,
+		        xmlNodePtr resp __attribute__((unused)),
+		        struct propstat propstat[],
+		        void *rock __attribute__((unused)))
+{
+    int r = 0;
+    struct carddav_db *davdb = NULL;
+    struct carddav_data *cdata = NULL;
+    strarray_t *groups;
+    xmlNodePtr node;
+    int i;
+
+    if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
+
+    /* If we're here via report_sync_col then we don't have a db handle yet, so
+     * lets just manage this ourselves */
+    davdb = my_carddav_open(fctx->mailbox);
+    if (davdb == NULL) {
+	r = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
+    r = carddav_lookup_resource(davdb, fctx->req_tgt->mboxname, fctx->req_tgt->resource, 0, &cdata);
+    if (r)
+	goto done;
+
+    node = xml_add_prop(HTTP_OK, fctx->ns[NS_CYRUS], &propstat[PROPSTAT_OK],
+			name, ns, NULL, 0);
+
+    groups = carddav_getuid_groups(davdb, cdata->vcard_uid);
+    if (groups == NULL)
+	goto done;
+
+    for (i = 0; i < strarray_size(groups); i++) {
+	const char *group_uid = strarray_nth(groups, i);
+
+	xmlNodePtr group = xmlNewChild(node, fctx->ns[NS_CYRUS],
+				       BAD_CAST "address-group", NULL);
+	xmlAddChild(group,
+		    xmlNewCDataBlock(fctx->root->doc,
+				     BAD_CAST group_uid, strlen(group_uid)));
+    }
+
+    strarray_free(groups);
+
+done:
+    my_carddav_close(davdb);
+    return r;
+}
 
 static int report_card_query(struct transaction_t *txn,
 			     xmlNodePtr inroot, struct propfind_ctx *fctx)

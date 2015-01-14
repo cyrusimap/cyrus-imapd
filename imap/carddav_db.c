@@ -68,6 +68,7 @@ enum {
     STMT_ROLLBACK,
     STMT_INSERT_EMAIL,
     STMT_INSERT_GROUP,
+    STMT_GETUID_GROUPS,
     STMT_GETEMAIL_EXISTS,
     STMT_GETEMAIL_GROUPS,
     STMT_GETGROUP_EXISTS,
@@ -352,6 +353,40 @@ EXPORTED int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
 
     return dav_exec(carddavdb->db, CMD_SELMBOX, bval, &read_cb, &rrock,
 		    &carddavdb->stmt[STMT_SELMBOX]);
+}
+
+#define CMD_GETUID_GROUPS \
+    "SELECT GO.vcard_uid FROM vcard_objs GO" \
+    " JOIN vcard_groups G" \
+    " WHERE G.objid = GO.rowid" \
+    " AND G.member_uid = :uid"
+
+static int uidgroups_cb(sqlite3_stmt *stmt, void *rock)
+{
+    strarray_t *array = (strarray_t *)rock;
+    strarray_add(array, (const char *)sqlite3_column_text(stmt, 0));
+    return 0;
+}
+
+EXPORTED strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const char *uid)
+{
+    struct bind_val bval[] = {
+	{ ":uid", SQLITE_TEXT, { .s = uid } },
+	{ NULL,   SQLITE_NULL, { .s = NULL  } }
+    };
+
+    strarray_t *groups;
+    int r;
+
+    groups = strarray_new();
+
+    r = dav_exec(carddavdb->db, CMD_GETUID_GROUPS, bval, &uidgroups_cb, groups,
+		 &carddavdb->stmt[STMT_GETUID_GROUPS]);
+    if (r) {
+	/* XXX syslog */
+    }
+
+    return groups;
 }
 
 #define CMD_GETEMAIL_EXISTS \

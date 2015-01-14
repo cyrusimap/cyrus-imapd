@@ -96,6 +96,9 @@ strarray_t *carddav_getemail(struct carddav_db *carddavdb, const char *key);
    returns emails of its members (if any) */
 strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *mailbox, const char *group);
 
+/* get a list of groups the given uid is a member of */
+strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const char *uid);
+
 /* process each entry for 'mailbox' in 'carddavdb' with cb() */
 int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
 		   int (*cb)(void *rock, void *data),
