@@ -229,22 +229,23 @@ struct range {
 
 /* Meta-data for response body (payload & representation headers) */
 struct resp_body_t {
-    ulong len; 		/* Content-Length   */
-    struct range *range;/* Content-Range    */
-    const char *fname;	/* Content-Dispo    */
-    unsigned char enc;	/* Content-Encoding */
-    const char *lang;	/* Content-Language */
-    const char *loc;	/* Content-Location */
-    const u_char *md5;	/* Content-MD5      */
-    const char *type;	/* Content-Type     */
-    unsigned prefs;	/* Prefer	    */
-    const char *lock;	/* Lock-Token       */
-    const char *etag;	/* ETag             */
-    time_t lastmod;	/* Last-Modified    */
-    time_t maxage;	/* Expires	    */
-    const char *stag;	/* Schedule-Tag     */
-    time_t iserial;	/* iSched serial#   */
-    struct buf payload;	/* Payload	    */
+    ulong len;		   /* Content-Length   */
+    struct range *range;   /* Content-Range    */
+    const char *fname;	   /* Content-Dispo    */
+    unsigned char enc;	   /* Content-Encoding */
+    const char *lang;	   /* Content-Language */
+    const char *loc;	   /* Content-Location */
+    const u_char *md5;	   /* Content-MD5      */
+    const char *type;	   /* Content-Type     */
+    unsigned prefs;	   /* Prefer	    */
+    const char *lock;	   /* Lock-Token       */
+    const char *etag;	   /* ETag             */
+    time_t lastmod;	   /* Last-Modified    */
+    time_t maxage;	   /* Expires	    */
+    const char *stag;	   /* Schedule-Tag     */
+    time_t iserial;	   /* iSched serial#   */
+    const char *synctoken; /* DAV:sync-token */
+    struct buf payload;	   /* Payload	    */
 };
 
 /* Transaction flags */

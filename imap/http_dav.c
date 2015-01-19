@@ -1828,6 +1828,16 @@ int propfind_addmember(const xmlChar *name, xmlNsPtr ns,
 }
 
 
+static int get_synctoken(struct mailbox *mailbox, struct buf *buf)
+{
+    buf_reset(buf);
+    buf_printf(buf, SYNC_TOKEN_URL_SCHEME "%u-" MODSEQ_FMT,
+	       mailbox->i.uidvalidity,
+	       mailbox->i.highestmodseq);
+
+    return 0;
+}
+
 /* Callback to fetch DAV:sync-token and CS:getctag */
 int propfind_sync_token(const xmlChar *name, xmlNsPtr ns,
 			struct propfind_ctx *fctx,
@@ -1841,10 +1851,7 @@ int propfind_sync_token(const xmlChar *name, xmlNsPtr ns,
     /* not defined on the top-level collection either (aka #calendars) */
     if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
 
-    buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, SYNC_TOKEN_URL_SCHEME "%u-" MODSEQ_FMT,
-	       fctx->mailbox->i.uidvalidity,
-	       fctx->mailbox->i.highestmodseq);
+    get_synctoken(fctx->mailbox, &fctx->buf);
 
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 		 name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
@@ -3175,6 +3182,7 @@ int meth_delete(struct transaction_t *txn, void *params)
 {
     struct meth_params *dparams = (struct meth_params *) params;
     int ret = HTTP_NO_CONTENT, r = 0, precond, rights, needrights;
+    struct buf synctoken = BUF_INITIALIZER;
     struct mboxevent *mboxevent = NULL;
     struct mailbox *mailbox = NULL;
     mbentry_t *mbentry = NULL;
@@ -3361,6 +3369,13 @@ int meth_delete(struct transaction_t *txn, void *params)
     /* Do any special processing */
     if (dparams->delete) dparams->delete(txn, mailbox, &record, ddata);
 
+    get_synctoken(mailbox, &synctoken);
+    txn->resp_body.synctoken = buf_cstring(&synctoken);
+
+    write_body(ret, txn, NULL, 0);
+
+    buf_free(&synctoken);
+
   done:
     if (davdb) dparams->davdb.close_db(davdb);
     mailbox_close(&mailbox);
@@ -3382,7 +3397,7 @@ int meth_get_dav(struct transaction_t *txn, void *params)
     int ret = 0, r, precond, rights;
     const char *data = NULL;
     unsigned long datalen, offset;
-    struct buf msg_buf = BUF_INITIALIZER;
+    struct buf msg_buf = BUF_INITIALIZER, synctoken = BUF_INITIALIZER;
     struct resp_body_t *resp_body = &txn->resp_body;
     struct mailbox *mailbox = NULL;
     mbentry_t *mbentry = NULL;
@@ -3540,11 +3555,17 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 	}
     }
 
+    r = get_synctoken(mailbox, &synctoken);
+    if (r) goto done;
+    resp_body->synctoken = buf_cstring(&synctoken);
+
     write_body(precond, txn, data, datalen);
 
     buf_free(&msg_buf);
 
   done:
+    buf_free(&synctoken);
+
     if (davdb) gparams->davdb.close_db(davdb);
     if (r) {
 	txn->error.desc = error_message(r);
@@ -4713,6 +4734,7 @@ int meth_put(struct transaction_t *txn, void *params)
     int ret, r, precond, rights;
     const char **hdr, *etag;
     struct mime_type_t *mime = NULL;
+    struct buf synctoken = BUF_INITIALIZER;
     struct mailbox *mailbox = NULL;
     mbentry_t *mbentry = NULL;
     struct dav_data *ddata;
@@ -4898,6 +4920,13 @@ int meth_put(struct transaction_t *txn, void *params)
 
     /* Parse, validate, and store the resource */
     ret = pparams->put.proc(txn, mime, mailbox, davdb, flags);
+
+    get_synctoken(mailbox, &synctoken);
+    txn->resp_body.synctoken = buf_cstring(&synctoken);
+
+    write_body(ret, txn, NULL, 0);
+
+    buf_free(&synctoken);
 
   done:
     if (davdb) pparams->davdb.close_db(davdb);
