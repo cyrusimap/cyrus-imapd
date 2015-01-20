@@ -62,6 +62,7 @@ extern time_t caldav_eternity;
 #ifndef HAVE_VPOLL
 /* Allow us to compile without #ifdef HAVE_VPOLL everywhere */
 #define ICAL_VPOLL_COMPONENT   	      ICAL_NO_COMPONENT
+#define ICAL_VVOTER_COMPONENT         ICAL_X_COMPONENT
 #define ICAL_METHOD_POLLSTATUS	      ICAL_METHOD_NONE
 #define ICAL_VOTER_PROPERTY	      ICAL_NO_PROPERTY
 #define icalproperty_get_voter	      icalproperty_get_attendee
