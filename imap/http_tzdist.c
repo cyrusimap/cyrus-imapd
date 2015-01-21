@@ -271,6 +271,7 @@ static int action_capa(struct transaction_t *txn)
 	txn->resp_body.lastmod = compile_time;
 	txn->resp_body.maxage = 86400;  /* 24 hrs */
 	txn->flags.cc |= CC_MAXAGE;
+	if (!httpd_userisanonymous) txn->flags.cc |= CC_PUBLIC;
 
 	if (precond != HTTP_NOT_MODIFIED) break;
 
@@ -455,7 +456,7 @@ static int action_list(struct transaction_t *txn)
 	resp_body->lastmod = lastmod;
 	resp_body->maxage = 86400;  /* 24 hrs */
 	txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;
-	if (httpd_userid) txn->flags.cc |= CC_PUBLIC;
+	if (!httpd_userisanonymous) txn->flags.cc |= CC_PUBLIC;
 
 	if (precond != HTTP_NOT_MODIFIED) break;
 
@@ -1070,7 +1071,7 @@ static int action_get(struct transaction_t *txn)
 	resp_body->lastmod = lastmod;
 	resp_body->maxage = 86400;  /* 24 hrs */
 	txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;
-	if (httpd_userid) txn->flags.cc |= CC_PUBLIC;
+	if (!httpd_userisanonymous) txn->flags.cc |= CC_PUBLIC;
 
 	if (precond != HTTP_NOT_MODIFIED) break;
 
@@ -1272,7 +1273,7 @@ static int action_expand(struct transaction_t *txn)
 	resp_body->lastmod = lastmod;
 	resp_body->maxage = 86400;  /* 24 hrs */
 	txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;
-	if (httpd_userid) txn->flags.cc |= CC_PUBLIC;
+	if (!httpd_userisanonymous) txn->flags.cc |= CC_PUBLIC;
 
 	if (precond != HTTP_NOT_MODIFIED) break;
 

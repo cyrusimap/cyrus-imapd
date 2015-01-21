@@ -400,6 +400,7 @@ extern int httpd_tls_done;
 extern int httpd_timeout;
 extern int httpd_userisadmin;
 extern int httpd_userisproxyadmin;
+extern int httpd_userisanonymous;
 extern char *httpd_userid, *proxy_userid;
 extern struct auth_state *httpd_authstate;
 extern struct namespace httpd_namespace;

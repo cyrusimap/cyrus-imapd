@@ -1001,7 +1001,7 @@ static int meth_get_domainkey(struct transaction_t *txn,
 	resp_body->lastmod = sbuf.st_mtime;
 	resp_body->maxage = 86400;  /* 24 hrs */
 	txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;
-	if (httpd_userid) txn->flags.cc |= CC_PUBLIC;
+	if (!httpd_userisanonymous) txn->flags.cc |= CC_PUBLIC;
 
 	if (precond != HTTP_NOT_MODIFIED) break;
 

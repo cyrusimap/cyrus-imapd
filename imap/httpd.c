@@ -131,6 +131,7 @@ char *httpd_userid = NULL, *proxy_userid = NULL;
 struct auth_state *httpd_authstate = 0;
 int httpd_userisadmin = 0;
 int httpd_userisproxyadmin = 0;
+int httpd_userisanonymous = 1;
 struct sockaddr_storage httpd_localaddr, httpd_remoteaddr;
 int httpd_haveaddr = 0;
 char httpd_clienthost[NI_MAXHOST*2+1] = "[local]";
@@ -366,6 +367,7 @@ static void httpd_reset(void)
 	free(httpd_userid);
 	httpd_userid = NULL;
     }
+    httpd_userisanonymous = 1;
     if (proxy_userid != NULL) {
 	free(proxy_userid);
 	proxy_userid = NULL;
@@ -2773,6 +2775,8 @@ static void auth_success(struct transaction_t *txn)
     struct auth_scheme_t *scheme = txn->auth_chal.scheme;
     int i;
 
+    httpd_userisanonymous = is_userid_anonymous(httpd_userid);
+
     proc_register("httpd", httpd_clienthost, httpd_userid, (char *)0);
 
     syslog(LOG_NOTICE, "login: %s %s %s%s %s SESSIONID=<%s>",
@@ -3506,7 +3510,7 @@ static int meth_get(struct transaction_t *txn,
 	resp_body->lastmod = sbuf.st_mtime;
 	resp_body->maxage = 86400;  /* 24 hrs */
 	txn->flags.cc |= CC_MAXAGE;
-	if (httpd_userid) txn->flags.cc |= CC_PUBLIC;
+	if (!httpd_userisanonymous) txn->flags.cc |= CC_PUBLIC;
 
 	if (precond != HTTP_NOT_MODIFIED) break;
 
