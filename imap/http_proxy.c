@@ -281,9 +281,11 @@ static int login(struct backend *s, const char *userid,
 	case 200: /* OK */
 	    if (scheme->recv_success &&
 		(serverin = scheme->recv_success(hdrs))) {
+		/* Process success data */
 		serverinlen = strlen(serverin);
+		goto challenge;
 	    }
-	    /* Fall through and process any success data */
+	    break;
 
 	case 401: /* Unauthorized */
 	    if (auth_done) {
@@ -386,6 +388,7 @@ static int login(struct backend *s, const char *userid,
 		}
 	    }
 
+	challenge:
 	    if (serverin) {
 		/* Perform the next step in the auth exchange */
 
