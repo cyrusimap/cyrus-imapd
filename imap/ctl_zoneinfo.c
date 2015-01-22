@@ -98,7 +98,7 @@ xmlNodePtr xmlGetNextNode(xmlNodePtr node)
 int main(int argc, char **argv)
 {
     int opt, r = 0;
-    char *alt_config = NULL, *version = NULL, *winfile = NULL;
+    char *alt_config = NULL, *pub = NULL, *ver = NULL, *winfile = NULL;
     char prefix[2048];
     enum { REBUILD, WINZONES, NONE } op = NONE;
 
@@ -115,7 +115,10 @@ int main(int argc, char **argv)
 	case 'r':
 	    if (op == NONE) {
 		op = REBUILD;
-		version = optarg;
+		pub = optarg;
+		ver = strchr(optarg, ':');
+		if (ver) *ver++ = '\0';
+		else usage();
 	    }
 	    else usage();
 	    break;
@@ -155,7 +158,8 @@ int main(int argc, char **argv)
 	/* Add INFO record (overall lastmod and TZ DB source version) */
 	zi = xzmalloc(sizeof(struct zoneinfo));
 	zi->type = ZI_INFO;
-	appendstrlist(&zi->data, version);
+	appendstrlist(&zi->data, pub);
+	appendstrlist(&zi->data, ver);
 	hash_insert(INFO_TZID, zi, &tzentries);
 
 	do_zonedir(prefix, &tzentries, zi);
@@ -293,7 +297,7 @@ void usage(void)
 {
     fprintf(stderr,
 	    "usage: zoneinfo_reconstruct [-C <alt_config>] [-v]"
-	    " -r <version-string>\n");
+	    " -r <publisher>:<version>\n");
     exit(EC_USAGE);
 }
 
