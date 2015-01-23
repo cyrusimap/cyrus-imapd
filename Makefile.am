@@ -1467,7 +1467,7 @@ endif
 	  $(LN_S) -f imtest nntptest && \
 	  $(LN_S) -f imtest pop3test && \
 	  $(LN_S) -f imtest sivtest && \
-	  $(LN_S) -f imtest smpttest && \
+	  $(LN_S) -f imtest smtptest && \
 	  $(LN_S) -f imtest synctest
 
 SUFFIXES = .fig.png
