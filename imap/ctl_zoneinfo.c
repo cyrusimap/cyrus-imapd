@@ -150,22 +150,63 @@ int main(int argc, char **argv)
     switch (op) {
     case REBUILD: {
 	struct hash_table tzentries;
-	struct zoneinfo *zi;
+	struct zoneinfo *info;
 	struct txn *tid = NULL;
+	char buf[1024];
+	FILE *fp;
 
 	construct_hash_table(&tzentries, 500, 1);
 
 	/* Add INFO record (overall lastmod and TZ DB source version) */
-	zi = xzmalloc(sizeof(struct zoneinfo));
-	zi->type = ZI_INFO;
-	appendstrlist(&zi->data, pub);
-	appendstrlist(&zi->data, ver);
-	hash_insert(INFO_TZID, zi, &tzentries);
+	info = xzmalloc(sizeof(struct zoneinfo));
+	info->type = ZI_INFO;
+	appendstrlist(&info->data, pub);
+	appendstrlist(&info->data, ver);
+	hash_insert(INFO_TZID, info, &tzentries);
 
-	do_zonedir(prefix, &tzentries, zi);
+	/* Add LEAP record (last updated and hash) */
+	snprintf(buf, sizeof(buf), "%s%s", prefix, FNAME_LEAPSECFILE);
+	if (verbose) printf("Processing leap seconds file %s\n", buf);
+	if (!(fp = fopen(buf, "r"))) {
+	    fprintf(stderr, "Could not open leap seconds file %s\n", buf);
+	}
+	else {
+	    struct zoneinfo *leap = xzmalloc(sizeof(struct zoneinfo));
+	    leap->type = ZI_INFO;
+
+	    while(fgets(buf, sizeof(buf), fp)) {
+		if (buf[0] == '#') {
+		    /* comment line */
+
+		    if (buf[1] == '$') {
+			/* last updated */
+			unsigned long last;
+
+			sscanf(buf+2, "\t%lu", &last);
+			leap->dtstamp = last - NIST_EPOCH_OFFSET;
+		    }
+		    else if (buf[1] == 'h') {
+			/* hash */
+			char *p, *hash = buf+3 /* skip "#h\t" */;
+
+			/* trim trailing whitespace */
+			for (p = hash + strlen(hash); isspace(*--p); *p = '\0');
+			appendstrlist(&leap->data, hash);
+		    }
+		}
+	    }
+	    fclose(fp);
+
+	    hash_insert(LEAP_TZID, leap, &tzentries);
+	    info->dtstamp = leap->dtstamp;
+	}
+
+	/* Add ZONE/LINK records */
+	do_zonedir(prefix, &tzentries, info);
 
 	zoneinfo_open(NULL);
 
+	/* Store records */
 	hash_enumerate(&tzentries, &store_zoneinfo, &tid);
 
 	zoneinfo_close(tid);

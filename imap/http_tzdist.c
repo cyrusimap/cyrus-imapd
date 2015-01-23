@@ -390,12 +390,111 @@ static int action_capa(struct transaction_t *txn)
     return json_response(precond, txn, root, &resp);
 }
 
+
 /* Perform a leapseconds action */
 static int action_leap(struct transaction_t *txn)
 {
-    (void) txn;
+    int r, ret = 0, precond;
+    struct resp_body_t *resp_body = &txn->resp_body;
+    struct zoneinfo info, leap;
 
-    return HTTP_NOT_FOUND;
+    /* Get info record from the database */
+    if ((r = zoneinfo_lookup_info(&info))) return HTTP_SERVER_ERROR;
+
+    /* Get leap record from the database */
+    if ((r = zoneinfo_lookup_leap(&leap))) {
+	ret = (r == CYRUSDB_NOTFOUND ? HTTP_NOT_FOUND : HTTP_SERVER_ERROR);
+	goto done;
+    }
+
+    /* Check any preconditions, including range request */
+    txn->flags.ranges = 1;
+    precond = check_precond(txn, leap.data->s, leap.dtstamp);
+
+    switch (precond) {
+    case HTTP_OK:
+    case HTTP_PARTIAL:
+    case HTTP_NOT_MODIFIED:
+	/* Fill in ETag, Last-Modified, and Expires */
+	resp_body->etag = leap.data->s;
+	resp_body->lastmod = leap.dtstamp;
+	resp_body->maxage = 86400;  /* 24 hrs */
+	txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;
+	if (!httpd_userisanonymous) txn->flags.cc |= CC_PUBLIC;
+
+	if (precond != HTTP_NOT_MODIFIED) break;
+
+    default:
+	/* We failed a precondition - don't perform the request */
+	resp_body->type = NULL;
+	ret = precond;
+	goto done;
+    }
+
+
+    if (txn->meth != METH_HEAD) {
+	json_t *root, *expires, *leapseconds;
+	char buf[1024];
+	FILE *fp;
+
+	snprintf(buf, sizeof(buf), "%s%s%s",
+		 config_dir, FNAME_ZONEINFODIR, FNAME_LEAPSECFILE);
+	if (!(fp = fopen(buf, "r"))) {
+	    syslog(LOG_ERR, "Failed to open file %s", buf);
+	    ret = HTTP_NOT_FOUND;
+	    goto done;
+	}
+
+	/* Construct our response */
+	root = json_pack("{s:s s:s s:s s:[]}",
+			 "expires", "", "publisher", info.data->s,
+			 "version", info.data->next->s, "leapseconds");
+	if (!root) {
+	    txn->error.desc = "Unable to create JSON response";
+	    ret = HTTP_SERVER_ERROR;
+	    fclose(fp);
+	    goto done;
+	}
+
+	expires = json_object_get(root, "expires");
+	leapseconds = json_object_get(root, "leapseconds");
+
+	while (fgets(buf, sizeof(buf), fp)) {
+	    unsigned long epoch;
+
+	    if (buf[0] == '#') {
+		/* comment line */
+
+		if (buf[1] == '@') {
+		    /* expires */
+		    sscanf(buf+2, "\t%lu", &epoch);
+		    json_string_set(expires,
+				    rfc3339date_gen(buf, 11, /* clip time */
+						    epoch - NIST_EPOCH_OFFSET));
+		}
+	    }
+	    else if (isdigit(buf[0])) {
+		/* leap second */
+		int utcoff;
+		json_t *leap;
+
+		sscanf(buf, "%lu\t%d", &epoch, &utcoff);
+		leap = json_pack("{s:i s:s}", "utc_offset", utcoff, "onset",
+				 rfc3339date_gen(buf, 11, /* clip time */
+						 epoch - NIST_EPOCH_OFFSET));
+		json_array_append_new(leapseconds, leap);
+	    }
+	}
+	fclose(fp);
+
+	/* Output the JSON object */
+	ret = json_response(precond, txn, root, NULL);
+    }
+
+  done:
+    freestrlist(leap.data);
+    freestrlist(info.data);
+    return ret;
 }
 
 
