@@ -128,5 +128,7 @@ extern void sched_deliver(const char *recipient, void *data, void *rock);
 extern xmlNodePtr xml_add_schedresponse(xmlNodePtr root, xmlNsPtr dav_ns,
 					xmlChar *recipient, xmlChar *status);
 extern int caladdress_lookup(const char *addr, struct sched_param *param);
+extern icalproperty *icalcomponent_get_first_invitee(icalcomponent *comp);
+extern const char *icalproperty_get_invitee(icalproperty *prop);
 
 #endif /* HTTP_CALDAV_SCHED_H */
