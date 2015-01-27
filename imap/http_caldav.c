@@ -2825,7 +2825,7 @@ static void icalcomponent_remove_invitee(icalcomponent *comp,
 }
 
 
-static icalproperty *icalcomponent_get_first_invitee(icalcomponent *comp)
+icalproperty *icalcomponent_get_first_invitee(icalcomponent *comp)
 {
     icalproperty *prop;
 
@@ -2860,7 +2860,7 @@ static icalproperty *icalcomponent_get_next_invitee(icalcomponent *comp)
     return prop;
 }
 
-static const char *icalproperty_get_invitee(icalproperty *prop)
+const char *icalproperty_get_invitee(icalproperty *prop)
 {
     const char *recip;
 
@@ -6087,19 +6087,7 @@ static void sched_deliver_remote(const char *recipient,
 {
     int r;
 
-    if (sparam->flags == SCHEDTYPE_REMOTE) {
-	/* Use iMIP */
-	r = imip_send(sched_data->itip);
-	if (!r) {
-	    sched_data->status =
-		sched_data->ischedule ? REQSTAT_SENT : SCHEDSTAT_SENT;
-	}
-	else {
-	    sched_data->status = sched_data->ischedule ?
-		REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
-	}
-    }
-    else {
+    if (sparam->flags & SCHEDTYPE_ISCHEDULE) {
 	/* Use iSchedule */
 	xmlNodePtr xml;
 
@@ -6149,6 +6137,18 @@ static void sched_deliver_remote(const char *recipient,
 		xmlFree(status);
 		xmlFree(recip);
 	    }
+	}
+    }
+    else {
+	/* Use iMIP */
+	r = imip_send(sched_data->itip);
+	if (!r) {
+	    sched_data->status =
+		sched_data->ischedule ? REQSTAT_SENT : SCHEDSTAT_SENT;
+	}
+	else {
+	    sched_data->status = sched_data->ischedule ?
+		REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
 	}
     }
 }
