@@ -820,6 +820,8 @@ static DKIM_CBSTAT isched_get_key(DKIM *dkim, DKIM_SIGINFO *sig,
 	    buf_setcstr(&path, prefix);
 	    buf_printf(&path, "%s/%s/%s",
 		       namespace_domainkey.prefix, domain, selector);
+	    syslog(LOG_DEBUG, "using public key from path: %s",
+		   buf_cstring(&path));
 
 	    if (!(f = fopen(buf_cstring(&path), "r"))) {
 		syslog(LOG_NOTICE, "%s: fopen(): %s",
@@ -1060,7 +1062,7 @@ static void isched_init(struct buf *serverinfo)
 	int fd;
 	unsigned flags = ( DKIM_LIBFLAGS_BADSIGHANDLES | DKIM_LIBFLAGS_CACHE |
 //			   DKIM_LIBFLAGS_KEEPFILES | DKIM_LIBFLAGS_TMPFILES |
-			   DKIM_LIBFLAGS_VERIFYONE );
+			   DKIM_LIBFLAGS_VERIFYONE | DKIM_LIBFLAGS_EOHCHECK );
 	uint64_t ttl = 3600;  /* 1 hour */
 	const char *requiredhdrs[] = { "Content-Type", "iSchedule-Version",
 				       "Originator", "Recipient", NULL };
