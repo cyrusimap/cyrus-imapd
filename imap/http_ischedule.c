@@ -745,6 +745,9 @@ int isched_send(struct sched_param *sparam, const char *recipient,
     txn.req_body.flags = BODY_DECODE;
     r = http_read_response(be, METH_POST, &code, NULL,
 			   &txn.req_hdrs, &txn.req_body, &txn.error.desc);
+    syslog(LOG_INFO, "isched_send(%s, %s) => %u",
+	   recipient, buf_cstring(&txn.buf), code);
+
     if (!r) {
 	switch (code) {
 	case 200:  /* Successful */
