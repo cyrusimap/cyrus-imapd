@@ -591,6 +591,7 @@ int isched_send(struct sched_param *sparam, const char *recipient,
     static struct buf hdrs = BUF_INITIALIZER;
     const char *body, *uri, *originator;
     size_t bodylen;
+    icalproperty_method method;
     icalcomponent *comp;
     icalcomponent_kind kind;
     icalproperty *prop;
@@ -635,24 +636,19 @@ int isched_send(struct sched_param *sparam, const char *recipient,
 	       getpid(), time(NULL), send_count++, config_servername);
     buf_printf(&hdrs, "Content-Type: text/calendar; charset=utf-8");
 
+    method = icalcomponent_get_method(ical);
     comp = icalcomponent_get_first_real_component(ical);
     kind = icalcomponent_isa(comp);
-    buf_printf(&hdrs, "; method=REQUEST; component=%s\r\n",
+    buf_printf(&hdrs, "; method=%s; component=%s\r\n",
+	       icalproperty_method_to_string(method),
 	       icalcomponent_kind_to_string(kind));
 
     buf_printf(&hdrs, "Content-Length: %u\r\n", (unsigned) bodylen);
 
     /* Determine Originator based on method and component */
-    if (icalcomponent_get_method(ical) == ICAL_METHOD_REPLY) {
-	if (icalcomponent_isa(comp) == ICAL_VPOLL_COMPONENT) {
-	    prop = icalcomponent_get_first_property(comp, ICAL_VOTER_PROPERTY);
-	    originator = icalproperty_get_voter(prop);
-	}
-	else {
-	    prop =
-		icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
-	    originator = icalproperty_get_attendee(prop);
-	}
+    if (method == ICAL_METHOD_REPLY) {
+	prop = icalcomponent_get_first_invitee(comp);
+	originator = icalproperty_get_invitee(prop);
     }
     else {
 	prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
