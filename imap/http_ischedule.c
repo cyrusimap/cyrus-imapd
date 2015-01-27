@@ -676,12 +676,6 @@ int isched_send(struct sched_param *sparam, const char *recipient,
 	buf_printf(&hdrs, "\r\n");
     }
 
-    buf_printf(&hdrs, "\r\n");
-
-  redirect:
-    /* Send request line */
-    prot_printf(be->out, "POST %s %s\r\n", uri, HTTP_VERSION);
-
     if (sparam->flags & SCHEDTYPE_REMOTE) {
 #ifdef WITH_DKIM
 	DKIM *dkim = NULL;
@@ -714,6 +708,7 @@ int isched_send(struct sched_param *sparam, const char *recipient,
 	    /* Process the headers and body */
 	    stat = dkim_chunk(dkim,
 			      (u_char *) buf_cstring(&hdrs), buf_len(&hdrs));
+	    stat = dkim_chunk(dkim, (u_char *) "\r\n", 2);
 	    stat = dkim_chunk(dkim, (u_char *) body, bodylen);
 	    stat = dkim_chunk(dkim, NULL, 0);
 	    stat = dkim_eom(dkim, NULL);
@@ -721,9 +716,8 @@ int isched_send(struct sched_param *sparam, const char *recipient,
 	    /* Generate the signature */
 	    stat = dkim_getsighdr_d(dkim, strlen(DKIM_SIGNHEADER) + 2,
 				    &sig, &siglen);
-
-	    /* Prepend a DKIM-Signature header */
-	    prot_printf(be->out, "%s: %s\r\n", DKIM_SIGNHEADER, sig);
+	    /* Append a DKIM-Signature header */
+	    buf_printf(&hdrs, "%s: %s\r\n", DKIM_SIGNHEADER, sig);
 
 	    dkim_free(dkim);
 	}
@@ -732,8 +726,13 @@ int isched_send(struct sched_param *sparam, const char *recipient,
 #endif /* WITH_DKIM */
     }
 
+  redirect:
+    /* Send request line */
+    prot_printf(be->out, "POST %s %s\r\n", uri, HTTP_VERSION);
+
     /* Send request headers and body */
     prot_putbuf(be->out, &hdrs);
+    prot_puts(be->out, "\r\n");
     prot_write(be->out, body, bodylen);
 
     /* Read response (req_hdr and req_body are actually the response) */
