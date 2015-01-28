@@ -605,11 +605,14 @@ int isched_send(struct sched_param *sparam, const char *recipient,
     else uri = namespace_ischedule.prefix;
 
     /* Open connection to iSchedule receiver.
-       Use header buffer to construct remote server[:port][/tls] */
+       Use header buffer to construct remote server[:port][/tls][/noauth] */
     buf_setcstr(&txn.buf, sparam->server);
     if (sparam->port) buf_printf(&txn.buf, ":%u", sparam->port);
     if (sparam->flags & SCHEDTYPE_SSL) buf_appendcstr(&txn.buf, "/tls");
-    if (sparam->flags & SCHEDTYPE_REMOTE) buf_appendcstr(&txn.buf, "/noauth");
+    if (sparam->flags & SCHEDTYPE_REMOTE) {
+	/* Using DKIM rather than HTTP Auth */
+	buf_appendcstr(&txn.buf, "/noauth");
+    }
     be = proxy_findserver(buf_cstring(&txn.buf), &http_protocol, proxy_userid,
 			  &backend_cached, NULL, NULL, httpd_in);
     if (!be) return HTTP_UNAVAILABLE;
@@ -640,6 +643,8 @@ int isched_send(struct sched_param *sparam, const char *recipient,
     comp = icalcomponent_get_first_real_component(ical);
     kind = icalcomponent_isa(comp);
     buf_printf(&hdrs, "; method=%s; component=%s\r\n",
+	       /* XXX  Hack until we fix libical */
+	       method == ICAL_METHOD_POLLSTATUS ? "POLLSTATUS" :
 	       icalproperty_method_to_string(method),
 	       icalcomponent_kind_to_string(kind));
 
