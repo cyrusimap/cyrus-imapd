@@ -479,7 +479,7 @@ static int action_leap(struct transaction_t *txn)
 		json_t *leap;
 
 		sscanf(buf, "%lu\t%d", &epoch, &utcoff);
-		leap = json_pack("{s:i s:s}", "utc_offset", utcoff, "onset",
+		leap = json_pack("{s:i s:s}", "utc-offset", utcoff, "onset",
 				 rfc3339date_gen(buf, 11, /* clip time */
 						 epoch - NIST_EPOCH_OFFSET));
 		json_array_append_new(leapseconds, leap);
