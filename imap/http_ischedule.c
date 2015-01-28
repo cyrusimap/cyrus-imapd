@@ -932,7 +932,7 @@ static int dkim_auth(struct transaction_t *txn)
 	DKIM_SIGINFO *sig = dkim_getsignature(dkim);
 
 	if (sig) {
-	    const char *sigerr;
+	    const char *sigerr, *sslerr;
 
 	    if (dkim_sig_getbh(sig) == DKIM_SIGBH_MISMATCH)
 		sigerr = "body hash mismatch";
@@ -945,6 +945,8 @@ static int dkim_auth(struct transaction_t *txn)
 	    assert(!buf_len(&txn->buf));
 	    buf_printf(&txn->buf, "%s: %s",
 		       dkim_getresultstr(stat), sigerr);
+	    if ((sslerr = dkim_sig_getsslbuf(sig)))
+		buf_printf(&txn->buf, ": %s", sslerr);
 	    txn->error.desc = buf_cstring(&txn->buf);
 	}
 	else txn->error.desc = dkim_getresultstr(stat);
@@ -1059,7 +1061,7 @@ static void isched_init(struct buf *serverinfo)
 	int fd;
 	unsigned flags = ( DKIM_LIBFLAGS_BADSIGHANDLES | DKIM_LIBFLAGS_CACHE |
 //			   DKIM_LIBFLAGS_KEEPFILES | DKIM_LIBFLAGS_TMPFILES |
-			   DKIM_LIBFLAGS_VERIFYONE | DKIM_LIBFLAGS_EOHCHECK );
+			   DKIM_LIBFLAGS_VERIFYONE );
 	uint64_t ttl = 3600;  /* 1 hour */
 	const char *requiredhdrs[] = { "Content-Type", "iSchedule-Version",
 				       "Originator", "Recipient", NULL };
