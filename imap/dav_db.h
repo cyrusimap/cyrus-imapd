@@ -47,6 +47,7 @@
 #include <sqlite3.h>
 #include "dav_util.h"
 #include "mailbox.h"
+#include "util.h"
 
 struct dav_data {
     unsigned rowid;
@@ -54,6 +55,7 @@ struct dav_data {
     const char *mailbox;
     const char *resource;
     uint32_t imap_uid;		/* zero (0) until URL is mapped */
+    modseq_t modseq;
     const char *lock_token;
     const char *lock_owner;
     const char *lock_ownerid;

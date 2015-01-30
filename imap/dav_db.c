@@ -69,6 +69,7 @@
     " mailbox TEXT NOT NULL,"						\
     " resource TEXT NOT NULL,"						\
     " imap_uid INTEGER,"						\
+    " modseq INTEGER,"							\
     " lock_token TEXT,"							\
     " lock_owner TEXT,"							\
     " lock_ownerid TEXT,"						\
@@ -90,6 +91,7 @@
     " mailbox TEXT NOT NULL,"						\
     " resource TEXT NOT NULL,"						\
     " imap_uid INTEGER,"						\
+    " modseq INTEGER,"							\
     " lock_token TEXT,"							\
     " lock_owner TEXT,"							\
     " lock_ownerid TEXT,"						\
@@ -129,7 +131,13 @@
     "ALTER TABLE ical_objs ADD COLUMN comp_flags INTEGER;"		\
     "UPDATE ical_objs SET comp_flags = recurring + 2 * transp;"
 
-#define DB_VERSION 2
+#define CMD_DBUPDGRADEv3						\
+    "ALTER TABLE ical_objs ADD COLUMN modseq INTEGER;"		\
+    "UPDATE ical_objs SET modseq = 1;"				\
+    "ALTER TABLE vcard_objs ADD COLUMN modseq INTEGER;"		\
+    "UPDATE vcard_objs SET modseq = 1;"
+
+#define DB_VERSION 3
 
 struct open_davdb {
     sqlite3 *db;
@@ -312,10 +320,22 @@ static sqlite3 *dav_open(const char *fname)
 	    break;
 
 	case 1:
-	    syslog(LOG_NOTICE, "upgrading dav_db %s", open->path);
+	    syslog(LOG_NOTICE, "upgrading dav_db to v2 %s", open->path);
 	    rc = sqlite3_exec(open->db, CMD_DBUPDGRADEv2, NULL, NULL, NULL);
 	    if (rc != SQLITE_OK) {
 		syslog(LOG_ERR, "dav_open(%s) upgrade v2: %s",
+		    open->path, sqlite3_errmsg(open->db));
+		sqlite3_close(open->db);
+		free_dav_open(open);
+		return NULL;
+	    }
+	    /* fall through */
+
+	case 2:
+	    syslog(LOG_NOTICE, "upgrading dav_db to v3 %s", open->path);
+	    rc = sqlite3_exec(open->db, CMD_DBUPDGRADEv3, NULL, NULL, NULL);
+	    if (rc != SQLITE_OK) {
+		syslog(LOG_ERR, "dav_open(%s) upgrade v3: %s",
 		    open->path, sqlite3_errmsg(open->db));
 		sqlite3_close(open->db);
 		free_dav_open(open);

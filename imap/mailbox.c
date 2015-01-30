@@ -2685,6 +2685,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 	cdata->dav.mailbox = mailbox->name;
 	cdata->dav.resource = resource;
 	cdata->dav.imap_uid = new->uid;
+	cdata->dav.modseq = new->modseq;
 
 	if (!cdata->dav.creationdate)
 	    cdata->dav.creationdate = new->internaldate;
@@ -2788,6 +2789,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 	cdata->dav.creationdate = new->internaldate;
 	cdata->dav.mailbox = mailbox->name;
 	cdata->dav.imap_uid = new->uid;
+	cdata->dav.modseq = new->modseq;
 	cdata->dav.resource = resource;
 	cdata->sched_tag = sched_tag;
 

@@ -429,12 +429,12 @@ EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
 
 #define CMD_INSERT							\
     "INSERT INTO ical_objs ("						\
-    "  creationdate, mailbox, resource, imap_uid,"			\
+    "  creationdate, mailbox, resource, imap_uid, modseq,"		\
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
     "  comp_type, ical_uid, organizer, dtstart, dtend,"			\
     "  comp_flags, sched_tag )"	      			   	    	\
     " VALUES ("								\
-    "  :creationdate, :mailbox, :resource, :imap_uid,"			\
+    "  :creationdate, :mailbox, :resource, :imap_uid, :modseq,"		\
     "  :lock_token, :lock_owner, :lock_ownerid, :lock_expire,"		\
     "  :comp_type, :ical_uid, :organizer, :dtstart, :dtend,"		\
     "  :comp_flags, :sched_tag );"
@@ -448,6 +448,7 @@ EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
     "  lock_expire = :lock_expire,"	\
     "  comp_type    = :comp_type,"	\
     "  ical_uid     = :ical_uid,"	\
+    "  modseq       = :modseq,"	\
     "  organizer    = :organizer,"	\
     "  dtstart      = :dtstart,"	\
     "  dtend        = :dtend,"		\
@@ -460,6 +461,7 @@ EXPORTED int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata,
 {
     struct bind_val bval[] = {
 	{ ":imap_uid",	   SQLITE_INTEGER, { .i = cdata->dav.imap_uid	  } },
+	{ ":modseq",	   SQLITE_INTEGER, { .i = cdata->dav.modseq	  } },
 	{ ":lock_token",   SQLITE_TEXT,	   { .s = cdata->dav.lock_token	  } },
 	{ ":lock_owner",   SQLITE_TEXT,	   { .s = cdata->dav.lock_owner	  } },
 	{ ":lock_ownerid", SQLITE_TEXT,	   { .s = cdata->dav.lock_ownerid } },
@@ -479,31 +481,31 @@ EXPORTED int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata,
     sqlite3_stmt **stmt;
     int r;
 
-    bval[11].name = ":comp_flags";
-    bval[11].type = SQLITE_INTEGER;
-    bval[11].val.i = _comp_flags_to_num(&cdata->comp_flags);
+    bval[12].name = ":comp_flags";
+    bval[12].type = SQLITE_INTEGER;
+    bval[12].val.i = _comp_flags_to_num(&cdata->comp_flags);
 
     if (cdata->dav.rowid) {
 	cmd = CMD_UPDATE;
 	stmt = &caldavdb->stmt[STMT_UPDATE];
 
-	bval[12].name = ":rowid";
-	bval[12].type = SQLITE_INTEGER;
-	bval[12].val.i = cdata->dav.rowid;
+	bval[13].name = ":rowid";
+	bval[13].type = SQLITE_INTEGER;
+	bval[13].val.i = cdata->dav.rowid;
     }
     else {
 	cmd = CMD_INSERT;
 	stmt = &caldavdb->stmt[STMT_INSERT];
 
-	bval[12].name = ":creationdate";
-	bval[12].type = SQLITE_INTEGER;
-	bval[12].val.i = cdata->dav.creationdate;
-	bval[13].name = ":mailbox";
-	bval[13].type = SQLITE_TEXT;
-	bval[13].val.s = cdata->dav.mailbox;
-	bval[14].name = ":resource";
+	bval[13].name = ":creationdate";
+	bval[13].type = SQLITE_INTEGER;
+	bval[13].val.i = cdata->dav.creationdate;
+	bval[14].name = ":mailbox";
 	bval[14].type = SQLITE_TEXT;
-	bval[14].val.s = cdata->dav.resource;
+	bval[14].val.s = cdata->dav.mailbox;
+	bval[15].name = ":resource";
+	bval[15].type = SQLITE_TEXT;
+	bval[15].val.s = cdata->dav.resource;
     }
 
     r = dav_exec(caldavdb->db, cmd, bval, NULL, NULL, stmt);

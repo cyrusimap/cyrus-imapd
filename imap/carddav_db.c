@@ -562,11 +562,11 @@ static int carddav_write_groups(struct carddav_db *carddavdb, struct carddav_dat
 
 #define CMD_INSERT							\
     "INSERT INTO vcard_objs ("						\
-    "  creationdate, mailbox, resource, imap_uid,"			\
+    "  creationdate, mailbox, resource, imap_uid, modseq,"		\
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
     "  version, vcard_uid, kind, fullname, name, nickname)"		\
     " VALUES ("								\
-    "  :creationdate, :mailbox, :resource, :imap_uid,"			\
+    "  :creationdate, :mailbox, :resource, :imap_uid, :modseq,"		\
     "  :lock_token, :lock_owner, :lock_ownerid, :lock_expire,"		\
     "  :version, :vcard_uid, :kind, :fullname, :name, :nickname );"
 
@@ -578,6 +578,7 @@ EXPORTED int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cd
 	{ ":mailbox",	   SQLITE_TEXT,	   { .s = cdata->dav.mailbox	  } },
 	{ ":resource",	   SQLITE_TEXT,	   { .s = cdata->dav.resource	  } },
 	{ ":imap_uid",	   SQLITE_INTEGER, { .i = cdata->dav.imap_uid	  } },
+	{ ":modseq",	   SQLITE_INTEGER, { .i = cdata->dav.modseq	  } },
 	{ ":lock_token",   SQLITE_TEXT,	   { .s = cdata->dav.lock_token	  } },
 	{ ":lock_owner",   SQLITE_TEXT,	   { .s = cdata->dav.lock_owner	  } },
 	{ ":lock_ownerid", SQLITE_TEXT,	   { .s = cdata->dav.lock_ownerid } },
