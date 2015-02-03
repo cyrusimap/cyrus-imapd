@@ -1390,7 +1390,7 @@ int sync_mailbox(struct mailbox *mailbox,
     if (r) goto done;
 
     if (annots) {
-	encode_annotations(kl, annots);
+	encode_annotations(kl, NULL, annots);
 	sync_annot_list_free(&annots);
     }
 
@@ -1454,7 +1454,7 @@ int sync_mailbox(struct mailbox *mailbox,
 	    if (r) goto done;
 
 	    if (annots) {
-		encode_annotations(il, annots);
+		encode_annotations(il, &record, annots);
 		sync_annot_list_free(&annots);
 	    }
 	}
@@ -1628,6 +1628,7 @@ int read_annotations(const struct mailbox *mailbox,
  * structure with the given @parent.
  */
 void encode_annotations(struct dlist *parent,
+			struct index_record *record,
 			const struct sync_annot_list *sal)
 {
     const struct sync_annot *sa;
@@ -1644,6 +1645,13 @@ void encode_annotations(struct dlist *parent,
 	dlist_setatom(aa, "ENTRY", sa->entry);
 	dlist_setatom(aa, "USERID", sa->userid);
 	dlist_setmap(aa, "VALUE", sa->value.s, sa->value.len);
+    }
+
+    if (record && record->thrid) {
+	aa = dlist_newkvlist(annots, NULL);
+	dlist_setatom(aa, "ENTRY", "/vendor/cmu/cyrus-imapd/thrid");
+	dlist_setatom(aa, "USERID", NULL);
+	dlist_sethex64(aa, "VALUE", record->thrid);
     }
 }
 

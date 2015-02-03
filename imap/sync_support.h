@@ -419,6 +419,7 @@ int read_annotations(const struct mailbox *,
 		     const struct index_record *,
 		     struct sync_annot_list **);
 void encode_annotations(struct dlist *parent,
+			struct index_record *record,
 			const struct sync_annot_list *);
 int decode_annotations(/*const*/struct dlist *,
 		       struct sync_annot_list **,
