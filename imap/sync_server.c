@@ -146,7 +146,6 @@ static void cmd_compress(char *alg);
 
 /* generic commands - in dlist format */
 static void cmd_get(struct dlist *kl);
-static void cmd_set(const struct dlist *kl);
 static void cmd_apply(struct dlist *kl,
 		      struct sync_reserve_list *reserve_list);
 
@@ -331,10 +330,6 @@ static void dobanner(void)
 #endif
     }
 
-    /* Tell the client about how we're willing to do SYNC_CRCs */
-    prot_printf(sync_out, "* CRC_VERSIONS %u-%u\r\n",
-		MAILBOX_CRC_VERSION_MIN, MAILBOX_CRC_VERSION_MAX);
-
     prot_printf(sync_out,
 		"* OK %s Cyrus sync server %s\r\n",
 		config_servername, cyrus_version());
@@ -423,9 +418,6 @@ int service_main(int argc __attribute__((unused)),
     sync_log_init();
     if (!config_getswitch(IMAPOPT_SYNC_LOG_CHAIN))
 	sync_log_suppress();
-
-    /* initialise with defaults */
-    sync_crc_setup(MAILBOX_CRC_VERSION_MIN, MAILBOX_CRC_VERSION_MIN, /*strict*/1);
 
     dobanner();
 
@@ -722,18 +714,6 @@ static void cmdloop(void)
 		    continue;
 		}
 		cmd_starttls();
-		continue;
-	    }
-	    else if (!strcmp(cmd.s, "Set")) {
-		kl = sync_parseline(sync_in);
-		if (kl) {
-		    cmd_set(kl);
-		    dlist_free(&kl);
-		}
-		else {
-		    syslog(LOG_ERR, "IOERROR: received bad SET command");
-		    prot_printf(sync_out, "BAD IMAP_PROTOCOL_ERROR Failed to parse SET line\r\n");
-		}
 		continue;
 	    }
 	    break;
@@ -1373,6 +1353,13 @@ out:
     return r;
 }
 
+static int crceq(struct synccrcs a, struct synccrcs b)
+{
+    if (a.basic != b.basic) return 0;
+    if (a.annot != b.annot) return 0;
+    return 1;
+}
+
 static int do_mailbox(struct dlist *kin)
 {
     /* fields from the request */
@@ -1391,7 +1378,7 @@ static int do_mailbox(struct dlist *kin)
     uint32_t uidvalidity;
     const char *acl;
     const char *options_str;
-    uint32_t sync_crc;
+    struct synccrcs synccrcs;
 
     uint32_t options;
 
@@ -1433,13 +1420,14 @@ static int do_mailbox(struct dlist *kin)
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
     /* Get the CRC */
-    if (!dlist_getnum32(kin, "SYNC_CRC", &sync_crc))
+    if (!dlist_getnum32(kin, "SYNC_CRC", &synccrcs.basic))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
     /* optional */
     dlist_getlist(kin, "ANNOTATIONS", &ka);
     dlist_getdate(kin, "POP3_SHOW_AFTER", &pop3_show_after);
     dlist_getatom(kin, "MBOXTYPE", &mboxtype);
+    dlist_getnum32(kin, "SYNC_CRC_ANNOT", &synccrcs.annot);
 
     options = sync_parse_options(options_str);
     mbtype = mboxlist_string_to_mbtype(mboxtype);
@@ -1593,9 +1581,9 @@ done:
     sync_annot_list_free(&rannots);
 
     /* check the CRC too */
-    if (!r && sync_crc != sync_crc_calc(mailbox, 0)) {
+    if (!r && !crceq(synccrcs, mailbox_synccrcs(mailbox, 0))) {
 	/* try forcing a recalculation */
-	if (sync_crc != sync_crc_calc(mailbox, 1))
+	if (!crceq(synccrcs, mailbox_synccrcs(mailbox, 1)))
 	    r = IMAP_SYNC_CHECKSUM;
     }
 
@@ -2430,37 +2418,3 @@ static void cmd_get(struct dlist *kin)
 
     print_response(r);
 }
-
-static int do_set_options(const struct dlist *kin)
-{
-    int r = 0;
-    struct dlist *child;
-    uint32_t crc_version = MAILBOX_CRC_VERSION_MIN;
-
-    for (child = kin->head ; child ; child = child->next) {
-	if (!strcmp(child->name, "CRC_VERSION")) {
-	    dlist_tonum32(child, &crc_version);
-	    r = sync_crc_setup(crc_version, crc_version, /*strict*/1);
-	    if (r < 0) return r;
-	    r = 0;
-	}
-	else {
-	    return IMAP_PROTOCOL_ERROR;
-	}
-    }
-
-    return r;
-}
-
-static void cmd_set(const struct dlist *kin)
-{
-    int r;
-
-    if (!strcmp(kin->name, "OPTIONS"))
-	r = do_set_options(kin);
-    else
-	r = IMAP_PROTOCOL_ERROR;
-
-    print_response(r);
-}
-

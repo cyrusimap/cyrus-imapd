@@ -142,7 +142,7 @@ struct sync_folder {
     modseq_t highestmodseq;
     uint32_t options;
     uint32_t uidvalidity;
-    uint32_t sync_crc;
+    struct synccrcs synccrcs;
     uint32_t recentuid;
     time_t recenttime;
     time_t pop3_last_login;
@@ -168,7 +168,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
 					 uint32_t uidvalidity,
 					 uint32_t last_uid,
 					 modseq_t highestmodseq,
-					 uint32_t crc,
+					 struct synccrcs synccrcs,
 					 uint32_t recentuid,
 					 time_t recenttime,
 					 time_t pop3_last_login,
@@ -429,11 +429,6 @@ int apply_annotations(struct mailbox *mailbox,
 		      int local_wins);
 int diff_annotations(const struct sync_annot_list *local_annots,
 		     const struct sync_annot_list *remote_annots);
-
-/* ====================================================================== */
-
-int sync_crc_setup(unsigned minv, unsigned maxv, int strict);
-uint32_t sync_crc_calc(struct mailbox *mailbox, int force);
 
 /* ====================================================================== */
 

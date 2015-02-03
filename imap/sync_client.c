@@ -107,8 +107,6 @@ static int no_copyback     = 0;
 
 static char *prev_userid;
 
-#define CAPA_CRC_VERSIONS	    (CAPA_COMPRESS<<1)
-
 static struct protocol_t csync_protocol =
 { "csync", "csync", TYPE_STD,
   { { { 1, "* OK" },
@@ -117,7 +115,6 @@ static struct protocol_t csync_protocol =
 	{ { "SASL", CAPA_AUTH },
 	  { "STARTTLS", CAPA_STARTTLS },
 	  { "COMPRESS=DEFLATE", CAPA_COMPRESS },
-	  { "CRC_VERSIONS", CAPA_CRC_VERSIONS },
 	  { NULL, 0 } } },
       { "STARTTLS", "OK", "NO", 1 },
       { "AUTHENTICATE", USHRT_MAX, 0, "OK", "NO", "+ ", "*", NULL, 0 },
@@ -237,7 +234,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
 			     mailbox->mbtype,
 			     mailbox->part, mailbox->acl, mailbox->i.options,
 			     mailbox->i.uidvalidity, mailbox->i.last_uid,
-			     mailbox->i.highestmodseq, 0,
+			     mailbox->i.highestmodseq, mailbox->i.synccrcs,
 			     mailbox->i.recentuid, mailbox->i.recenttime,
 			     mailbox->i.pop3_last_login,
 			     mailbox->i.pop3_show_after, NULL);
@@ -454,7 +451,7 @@ static int response_parse(const char *cmd,
 	    modseq_t highestmodseq = 0;
 	    uint32_t uidvalidity = 0;
 	    uint32_t last_uid = 0;
-	    uint32_t sync_crc = 0;
+	    struct synccrcs synccrcs = { 0, 0 };
 	    uint32_t recentuid = 0;
 	    time_t recenttime = 0;
 	    time_t pop3_last_login = 0;
@@ -470,13 +467,14 @@ static int response_parse(const char *cmd,
 	    if (!dlist_getnum64(kl, "HIGHESTMODSEQ", &highestmodseq)) goto parse_err;
 	    if (!dlist_getnum32(kl, "UIDVALIDITY", &uidvalidity)) goto parse_err;
 	    if (!dlist_getnum32(kl, "LAST_UID", &last_uid)) goto parse_err;
-	    if (!dlist_getnum32(kl, "SYNC_CRC", &sync_crc)) goto parse_err;
+	    if (!dlist_getnum32(kl, "SYNC_CRC", &synccrcs.basic)) goto parse_err;
 	    if (!dlist_getnum32(kl, "RECENTUID", &recentuid)) goto parse_err;
 	    if (!dlist_getdate(kl, "RECENTTIME", &recenttime)) goto parse_err;
 	    if (!dlist_getdate(kl, "POP3_LAST_LOGIN", &pop3_last_login)) goto parse_err;
 	    /* optional */
 	    dlist_getdate(kl, "POP3_SHOW_AFTER", &pop3_show_after);
 	    dlist_getatom(kl, "MBOXTYPE", &mboxtype);
+	    dlist_getnum32(kl, "SYNC_CRC_ANNOT", &synccrcs.annot);
 
 	    if (dlist_getlist(kl, "ANNOTATIONS", &al))
 		decode_annotations(al, &annots);
@@ -486,7 +484,7 @@ static int response_parse(const char *cmd,
 				 part, acl,
 				 sync_parse_options(options),
 				 uidvalidity, last_uid,
-				 highestmodseq, sync_crc,
+				 highestmodseq, synccrcs,
 				 recentuid, recenttime,
 				 pop3_last_login,
 				 pop3_show_after, annots);
@@ -1402,6 +1400,13 @@ done:
     return r;
 }
 
+static int crceq(struct synccrcs a, struct synccrcs b)
+{
+    if (a.basic != b.basic) return 0;
+    if (a.annot != b.annot) return 0;
+    return 1;
+}
+
 static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
 {
     /* look for any mismatches */
@@ -1419,7 +1424,7 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
     if (remote->options != options) return 0;
     if (strcmp(remote->acl, mailbox->acl)) return 0;
 
-    if (remote->sync_crc != sync_crc_calc(mailbox, /*force*/0)) return 0;
+    if (!crceq(remote->synccrcs, mailbox_synccrcs(mailbox, /*force*/0))) return 0;
 
     /* compare annotations */
     {
@@ -2838,46 +2843,6 @@ static void replica_connect(const char *channel)
     timeout = config_getint(IMAPOPT_SYNC_TIMEOUT);
     if (timeout < 3) timeout = 3;
     prot_settimeout(sync_in, timeout);
-
-    /* SYNC_CRC version negotiation.  We look for the server's
-     * capabilities, and if they're provided then try to use them
-     * to initialise ourself.  If that fails (e.g. the server
-     * uses only versions unknown to us), fail miserably. */
-    {
-	char *vers_str = backend_get_cap_params(sync_backend, CAPA_CRC_VERSIONS);
-	unsigned min_vers = 0, max_vers = 0, version = 0;
-	struct dlist *kl;
-	int r = 0;
-
-	if (vers_str &&
-	    sscanf(vers_str, "%u-%u", &min_vers, &max_vers) == 2) {
-
-	    version = sync_crc_setup(min_vers, max_vers, /*strict*/0);
-	    if (!version) {
-negfailed:
-		fprintf(stderr, "Can not negotiate SYNC_CRC version with server '%s'\n",
-			servername);
-		syslog(LOG_ERR, "Can not negotiate SYNC_CRC version with server '%s'\n",
-			servername);
-		_exit(1);
-	    }
-
-	    /* server advertised the caps, presumably it knows
-	     * how to handle a SET */
-	    kl = dlist_newkvlist(NULL, "OPTIONS");
-	    dlist_setnum32(kl, "CRC_VERSION", version);
-	    sync_send_set(kl, sync_out);
-	    dlist_free(&kl);
-
-	    r = sync_parse_response("SET", sync_in, NULL);
-	    if (r) goto negfailed;
-	}
-	else {
-	    sync_crc_setup(MAILBOX_CRC_VERSION_MIN, MAILBOX_CRC_VERSION_MIN, /*strict*/0);
-	}
-
-	free(vers_str);
-    }
 
     /* Force use of LITERAL+ so we don't need two way communications */
     prot_setisclient(sync_in, 1);

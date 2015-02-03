@@ -427,7 +427,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
 					 uint32_t uidvalidity,
 					 uint32_t last_uid,
 					 modseq_t highestmodseq,
-					 uint32_t crc,
+					 struct synccrcs synccrcs,
 					 uint32_t recentuid,
 					 time_t recenttime,
 					 time_t pop3_last_login,
@@ -454,7 +454,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
     result->last_uid = last_uid;
     result->highestmodseq = highestmodseq;
     result->options = options;
-    result->sync_crc = crc;
+    result->synccrcs = synccrcs;
     result->recentuid = recentuid;
     result->recenttime = recenttime;
     result->pop3_last_login = pop3_last_login;
@@ -1362,6 +1362,7 @@ int sync_mailbox(struct mailbox *mailbox,
 		 int printrecords)
 {
     struct sync_annot_list *annots = NULL;
+    struct synccrcs synccrcs = mailbox_synccrcs(mailbox, /*force*/0);
     int r = 0;
 
     dlist_setatom(kl, "UNIQUEID", mailbox->uniqueid);
@@ -1379,7 +1380,8 @@ int sync_mailbox(struct mailbox *mailbox,
     dlist_setatom(kl, "PARTITION", mailbox->part);
     dlist_setatom(kl, "ACL", mailbox->acl);
     dlist_setatom(kl, "OPTIONS", sync_encode_options(mailbox->i.options));
-    dlist_setnum32(kl, "SYNC_CRC", sync_crc_calc(mailbox, /*force*/0));
+    dlist_setnum32(kl, "SYNC_CRC", synccrcs.basic);
+    dlist_setnum32(kl, "SYNC_CRC_ANNOT", synccrcs.annot);
     if (mailbox->quotaroot)
 	dlist_setatom(kl, "QUOTAROOT", mailbox->quotaroot);
 
@@ -1798,29 +1800,6 @@ out:
     /* else, the struct mailbox manages it for us */
 
     return r;
-}
-
-/* ====================================================================== */
-
-static unsigned sync_crc_vers;
-
-int sync_crc_setup(unsigned minvers, unsigned maxvers, int strict)
-{
-    sync_crc_vers = mailbox_best_crcvers(minvers, maxvers);
-    if (strict) {
-	if (sync_crc_vers < minvers || sync_crc_vers > maxvers) {
-	    syslog(LOG_ERR, "IOERROR: failed to negotiate CRC: %u (%u %u)",
-		   sync_crc_vers, minvers, maxvers);
-	    return IMAP_PROTOCOL_ERROR;
-	}
-    }
-
-    return sync_crc_vers;
-}
-
-uint32_t sync_crc_calc(struct mailbox *mailbox, int force)
-{
-    return mailbox_sync_crc(mailbox, sync_crc_vers, force);
 }
 
 /* ====================================================================== */
