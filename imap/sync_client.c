@@ -1883,8 +1883,10 @@ static int do_folders(struct sync_name_list *mboxname_list,
 
 	if (!rename_success) {
 	    /* Scanned entire list without a match */
+	    const char *name = "unknown";
+	    if (item2) name = item2->oldname;
 	    syslog(LOG_ERR,
-		   "do_folders(): failed to order folders correctly");
+		   "do_folders(): failed to order folders correctly at %s", name);
 	    r = IMAP_AGAIN;
 	    goto bail;
 	}
