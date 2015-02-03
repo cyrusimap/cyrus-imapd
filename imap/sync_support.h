@@ -421,7 +421,8 @@ int read_annotations(const struct mailbox *,
 void encode_annotations(struct dlist *parent,
 			const struct sync_annot_list *);
 int decode_annotations(/*const*/struct dlist *,
-		       struct sync_annot_list **);
+		       struct sync_annot_list **,
+		       struct index_record *);
 int apply_annotations(struct mailbox *mailbox,
 		      const struct index_record *record,
 		      const struct sync_annot_list *local_annots,

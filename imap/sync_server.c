@@ -1533,7 +1533,7 @@ static int do_mailbox(struct dlist *kin)
     /* take all mailbox (not message) annotations - aka metadata,
      * they're not versioned either */
     if (ka)
-	decode_annotations(ka, &mannots);
+	decode_annotations(ka, &mannots, NULL);
 
     r = read_annotations(mailbox, NULL, &rannots);
     if (!r) r = apply_annotations(mailbox, NULL, rannots, mannots, 0);

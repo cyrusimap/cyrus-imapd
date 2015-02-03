@@ -203,6 +203,8 @@ int dlist_gethex64(struct dlist *parent, const char *name,
 		   bit64 *valp);
 int dlist_getmap(struct dlist *parent, const char *name,
 		 const char **valp, size_t *lenp);
+int dlist_getbuf(struct dlist *parent, const char *name,
+		 struct buf *buf);
 int dlist_getlist(struct dlist *parent, const char *name,
 		  struct dlist **valp);
 int dlist_getkvlist(struct dlist *parent, const char *name,

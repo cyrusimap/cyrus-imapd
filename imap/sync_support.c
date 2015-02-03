@@ -257,7 +257,7 @@ int parse_upload(struct dlist *kr, struct mailbox *mailbox,
 
     /* the ANNOTATIONS list is optional too */
     if (salp && dlist_getlist(kr, "ANNOTATIONS", &fl))
-	decode_annotations(fl, salp);
+	decode_annotations(fl, salp, record);
 
     return 0;
 }
@@ -1655,30 +1655,36 @@ void encode_annotations(struct dlist *parent,
  * Returns: zero on success or Cyrus error code.
  */
 int decode_annotations(/*const*/struct dlist *annots,
-		       struct sync_annot_list **salp)
+		       struct sync_annot_list **salp,
+		       struct index_record *record)
 {
     struct dlist *aa;
     const char *entry;
     const char *userid;
-    const char *v;
-    size_t l;
-    struct buf value = BUF_INITIALIZER;
 
     *salp = NULL;
     if (strcmp(annots->name, "ANNOTATIONS"))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
     for (aa = annots->head ; aa ; aa = aa->next) {
+	struct buf value = BUF_INITIALIZER;
 	if (!*salp)
 	    *salp = sync_annot_list_create();
 	if (!dlist_getatom(aa, "ENTRY", &entry))
 	    return IMAP_PROTOCOL_BAD_PARAMETERS;
 	if (!dlist_getatom(aa, "USERID", &userid))
 	    return IMAP_PROTOCOL_BAD_PARAMETERS;
-	if (!dlist_getmap(aa, "VALUE", &v, &l))
+	if (!dlist_getbuf(aa, "VALUE", &value))
 	    return IMAP_PROTOCOL_BAD_PARAMETERS;
-	buf_init_ro(&value, v, l);
-	sync_annot_list_add(*salp, entry, userid, &value);
+	if (!strcmp(entry, "/vendor/cmu/cyrus-imapd/thrid")) {
+	    if (record) {
+		record->thrid = atoll(buf_cstring(&value));
+	    }
+	}
+	else {
+	    sync_annot_list_add(*salp, entry, userid, &value);
+	}
+	buf_free(&value);
     }
     return 0;
 }

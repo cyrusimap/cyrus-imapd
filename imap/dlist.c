@@ -1406,6 +1406,17 @@ EXPORTED int dlist_getmap(struct dlist *parent, const char *name,
     return dlist_tomap(child, valp, lenp);
 }
 
+EXPORTED int dlist_getbuf(struct dlist *parent, const char *name,
+			  struct buf *value)
+{
+    const char *v;
+    size_t l;
+    int r = dlist_getmap(parent, name, &v, &l);
+    if (r) return r;
+    buf_init_ro(value, v, l);
+    return 0;
+}
+
 int dlist_getfile(struct dlist *parent, const char *name,
 		  const char **partp,
 		  struct message_guid **guidp,

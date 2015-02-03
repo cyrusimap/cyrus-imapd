@@ -477,7 +477,7 @@ static int response_parse(const char *cmd,
 	    dlist_getnum32(kl, "SYNC_CRC_ANNOT", &synccrcs.annot);
 
 	    if (dlist_getlist(kl, "ANNOTATIONS", &al))
-		decode_annotations(al, &annots);
+		decode_annotations(al, &annots, NULL);
 
 	    sync_folder_list_add(folder_list, uniqueid, mboxname,
 				 mboxlist_string_to_mbtype(mboxtype),
@@ -1338,7 +1338,7 @@ static int mailbox_full_update(const char *mboxname)
     /* ugly variable reuse */
     dlist_getlist(kl, "ANNOTATIONS", &ka);
 
-    if (ka) decode_annotations(ka, &rannots);
+    if (ka) decode_annotations(ka, &rannots, NULL);
     r = read_annotations(mailbox, NULL, &mannots);
     if (r) goto cleanup;
     r = apply_annotations(mailbox, NULL, mannots, rannots,
