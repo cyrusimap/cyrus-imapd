@@ -416,13 +416,13 @@ EXPORTED strarray_t *carddav_getemail(struct carddav_db *carddavdb, const char *
 #define CMD_GETGROUP_EXISTS \
     "SELECT rowid " \
     " FROM vcard_objs" \
-    " WHERE vcard_uid = :group"
+    " WHERE mailbox = :mailbox AND vcard_uid = :group"
 
 #define CMD_GETGROUP_MEMBERS \
     "SELECT E.email FROM vcard_emails E" \
     " JOIN vcard_objs CO JOIN vcard_groups G JOIN vcard_objs GO" \
     " WHERE E.objid = CO.rowid AND CO.vcard_uid = G.member_uid AND G.objid = GO.rowid" \
-    " AND E.pos = 0 AND GO.vcard_uid = :group"
+    " AND E.pos = 0 AND GO.mailbox = :mailbox AND GO.vcard_uid = :group"
 
 static int groupexists_cb(sqlite3_stmt *stmt, void *rock)
 {
@@ -439,11 +439,12 @@ static int groupmembers_cb(sqlite3_stmt *stmt, void *rock)
     return 0;
 }
 
-EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *group)
+EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *mailbox, const char *group)
 {
     struct bind_val bval[] = {
-	{ ":group", SQLITE_TEXT, { .s = group } },
-	{ NULL,     SQLITE_NULL, { .s = NULL  } }
+	{ ":mailbox", SQLITE_TEXT, { .s = mailbox } },
+	{ ":group",   SQLITE_TEXT, { .s = group   } },
+	{ NULL,       SQLITE_NULL, { .s = NULL    } }
     };
 
     int exists = 0;
