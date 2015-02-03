@@ -1579,7 +1579,7 @@ static int mailbox_buf_to_index_record(const char *buf,
     if (version < 12)
 	return 0;
 
-    /* CID got inserted before cache_crc32 in version 12 */
+    /* THRID got inserted before cache_crc32 in version 12 */
     if (version == 12) {
 	record->cache_crc = ntohl(*((bit32 *)(buf+88)));
 
@@ -1589,7 +1589,7 @@ static int mailbox_buf_to_index_record(const char *buf,
 	return 0;
     }
 
-    record->cid = ntohll(*(bit64 *)(buf+OFFSET_CID));
+    record->thrid = ntohll(*(bit64 *)(buf+OFFSET_THRID));
     record->cache_crc = ntohl(*((bit32 *)(buf+OFFSET_CACHE_CRC)));
 
     /* check CRC32 */
@@ -2126,7 +2126,7 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record, int versio
 	return crc;
     }
 
-    *((bit64 *)(buf+OFFSET_CID)) = htonll(record->cid);
+    *((bit64 *)(buf+OFFSET_THRID)) = htonll(record->thrid);
     *((bit32 *)(buf+OFFSET_CACHE_CRC)) = htonl(record->cache_crc);
 
     /* calculate the checksum */
@@ -2253,10 +2253,10 @@ static uint32_t crc_virtannot(struct mailbox *mailbox __attribute__((unused)),
 			      struct index_record *record)
 {
     uint32_t crc = 0;
-    if (record->cid) {
+    if (record->thrid) {
 	struct buf buf = BUF_INITIALIZER;
-	buf_printf(&buf, "%llx", record->cid);
-	crc ^= crc_annot(record->uid, "/vendor/cmu/cyrus-imapd/cid", NULL, &buf);
+	buf_printf(&buf, "%llx", record->thrid);
+	crc ^= crc_annot(record->uid, "/vendor/cmu/cyrus-imapd/thrid", NULL, &buf);
 	buf_free(&buf);
     }
     return crc;

@@ -140,7 +140,7 @@ struct index_record {
     uint32_t cache_version;
     struct message_guid guid;
     modseq_t modseq;
-    bit64 cid;
+    bit64 thrid;
     bit32 cache_crc;
 
     /* metadata */
@@ -304,7 +304,7 @@ struct mailbox {
 #define OFFSET_CACHE_VERSION 56
 #define OFFSET_MESSAGE_GUID 60
 #define OFFSET_MODSEQ 80 /* CONDSTORE (64-bit modseq) */
-#define OFFSET_CID 88       /* conversation id, added in v13 */
+#define OFFSET_THRID 88       /* conversation id, added in v13 */
 #define OFFSET_CACHE_CRC 96 /* CRC32 of cache record */
 #define OFFSET_RECORD_CRC 100
 

@@ -1061,7 +1061,7 @@ static int compare_one_record(struct mailbox *mailbox,
 	goto diff;
     if ((mp->system_flags & FLAGS_GLOBAL) != rp->system_flags)
 	goto diff;
-    if (mp->cid != rp->cid)
+    if (mp->thrid != rp->thrid)
 	goto diff;
     if (diff_annotations(mannots, rannots))
 	goto diff;
@@ -1096,7 +1096,7 @@ static int compare_one_record(struct mailbox *mailbox,
 	    /* then copy all the flag data over from the replica */
 	    mp->system_flags = (rp->system_flags & FLAGS_GLOBAL) |
 			       (mp->system_flags & FLAGS_LOCAL);
-	    mp->cid = rp->cid;
+	    mp->thrid = rp->thrid;
 	    for (i = 0; i < MAX_USER_FLAGS/32; i++)
 		mp->user_flags[i] = rp->user_flags[i];
 	}

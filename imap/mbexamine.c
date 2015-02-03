@@ -308,7 +308,7 @@ static int do_examine(char *name,
 	}
 
 	if (mailbox->i.minor_version >= 13) {
-	    printf(" CID: %llu", record.cid);
+	    printf("  THIRD: %llx", record.thrid);
 	}
 
 	printf("\n");
