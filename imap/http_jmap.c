@@ -53,6 +53,7 @@
 #include <jansson.h>
 
 #include "acl.h"
+#include "carddav_db.h"
 #include "global.h"
 #include "hash.h"
 #include "httpd.h"
@@ -75,12 +76,14 @@ static void jmap_auth(const char *userid);
 static int meth_get(struct transaction_t *txn, void *params);
 static int meth_post(struct transaction_t *txn, void *params);
 static json_t *getMailboxes(json_t *args);
+static json_t *getContactGroups(json_t *args);
 
 static const struct message_t {
     const char *name;
     json_t *(*proc)(json_t *args);
 } messages[] = {
     { "getMailboxes",	&getMailboxes },
+    { "getContactGroups",	&getContactGroups },
     { NULL,		NULL}
 };
 
@@ -88,7 +91,7 @@ static const struct message_t {
 /* Namespace for JMAP */
 struct namespace_t namespace_jmap = {
     URL_NS_JMAP, 0, "/jmap", NULL, 1 /* auth */, (ALLOW_READ | ALLOW_POST),
-    &jmap_init, &jmap_auth, NULL, NULL,
+    /*type*/0, &jmap_init, &jmap_auth, NULL, NULL,
     {
 	{ NULL,			NULL },			/* ACL		*/
 	{ NULL,			NULL },			/* COPY		*/
@@ -328,4 +331,25 @@ static json_t *getMailboxes(json_t *args __attribute__((unused)))
     json_object_set_new(mailboxes, "notFound", notFound);
 
     return resp;
+}
+
+json_t *getContactGroups(json_t *args __attribute__((unused)))
+{
+    json_t *resp;
+    json_t *list = json_pack("[]");
+    json_t *mailboxes = json_pack("{}");
+    struct carddav_db *db = carddav_open_userid(httpd_userid);
+    if (!db) return NULL;
+
+    resp = carddav_getContactGroups(db);
+    if (!resp) return NULL;
+
+    json_object_set_new(mailboxes, "list", resp);
+    json_object_set_new(mailboxes, "notFound", json_null());
+    json_object_set_new(mailboxes, "accountId", json_string(httpd_userid));
+
+    json_array_append_new(list, json_string("contactGroups"));
+    json_array_append_new(list, mailboxes);
+
+    return list;
 }
