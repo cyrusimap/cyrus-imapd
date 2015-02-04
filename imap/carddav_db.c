@@ -270,7 +270,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
     "  version, vcard_uid, kind, fullname, name, nickname"		\
     " FROM vcard_objs"							\
-    " WHERE ( mailbox = :mailbox AND resource = :resource );"
+    " WHERE mailbox = :mailbox AND resource = :resource AND exists = 1;"
 
 EXPORTED int carddav_lookup_resource(struct carddav_db *carddavdb,
 			   const char *mailbox, const char *resource,
@@ -310,7 +310,7 @@ EXPORTED int carddav_lookup_resource(struct carddav_db *carddavdb,
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
     "  version, vcard_uid, kind, fullname, name, nickname"		\
     " FROM vcard_objs"							\
-    " WHERE ( vcard_uid = :vcard_uid );"
+    " WHERE vcard_uid = :vcard_uid AND exists = 1;"
 
 EXPORTED int carddav_lookup_uid(struct carddav_db *carddavdb, const char *vcard_uid,
 		      int lock, struct carddav_data **result)
@@ -343,7 +343,7 @@ EXPORTED int carddav_lookup_uid(struct carddav_db *carddavdb, const char *vcard_
     "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
     "  version, vcard_uid, kind, fullname, name, nickname"		\
-    " FROM vcard_objs WHERE mailbox = :mailbox;"
+    " FROM vcard_objs WHERE mailbox = :mailbox AND exists = 1;"
 
 EXPORTED int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
 		   int (*cb)(void *rock, void *data),
@@ -363,7 +363,7 @@ EXPORTED int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
     "SELECT GO.vcard_uid FROM vcard_objs GO" \
     " JOIN vcard_groups G" \
     " WHERE G.objid = GO.rowid" \
-    " AND G.member_uid = :uid"
+    " AND G.member_uid = :uid AND GO.exists = 1;"
 
 static int uidgroups_cb(sqlite3_stmt *stmt, void *rock)
 {
@@ -394,16 +394,17 @@ EXPORTED strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const c
 }
 
 #define CMD_GETEMAIL_EXISTS \
-    "SELECT rowid " \
-    " FROM vcard_emails" \
-    " WHERE email = :email" \
+    "SELECT E.rowid " \
+    " FROM vcard_emails E JOIN vcard_objs CO" \
+    " WHERE E.objid = CO.rowid AND E.email = :email AND CO.exists = 1" \
     " LIMIT 1"
 
 #define CMD_GETEMAIL_GROUPS \
     "SELECT GO.vcard_uid FROM vcard_objs GO" \
     " JOIN vcard_groups G JOIN vcard_objs CO JOIN vcard_emails E" \
     " WHERE E.objid = CO.rowid AND CO.vcard_uid = G.member_uid" \
-    " AND G.objid = GO.rowid AND E.email = :email"
+    " AND G.objid = GO.rowid AND E.email = :email" \
+    " AND GO.exists = 1 AND CO.exists = 1;"
 
 static int emailexists_cb(sqlite3_stmt *stmt, void *rock)
 {
@@ -455,13 +456,14 @@ EXPORTED strarray_t *carddav_getemail(struct carddav_db *carddavdb, const char *
 #define CMD_GETGROUP_EXISTS \
     "SELECT rowid " \
     " FROM vcard_objs" \
-    " WHERE mailbox = :mailbox AND vcard_uid = :group"
+    " WHERE mailbox = :mailbox AND vcard_uid = :group AND exists = 1;"
 
 #define CMD_GETGROUP_MEMBERS \
     "SELECT E.email FROM vcard_emails E" \
     " JOIN vcard_objs CO JOIN vcard_groups G JOIN vcard_objs GO" \
     " WHERE E.objid = CO.rowid AND CO.vcard_uid = G.member_uid AND G.objid = GO.rowid" \
-    " AND E.pos = 0 AND GO.mailbox = :mailbox AND GO.vcard_uid = :group"
+    " AND E.pos = 0 AND GO.mailbox = :mailbox AND GO.vcard_uid = :group" \
+    " AND GO.exists = 1 AND CO.exists = 1;"
 
 static int groupexists_cb(sqlite3_stmt *stmt, void *rock)
 {
@@ -568,11 +570,11 @@ static int carddav_write_groups(struct carddav_db *carddavdb, struct carddav_dat
     "INSERT INTO vcard_objs ("						\
     "  creationdate, mailbox, resource, imap_uid, modseq,"		\
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
-    "  version, vcard_uid, kind, fullname, name, nickname)"		\
+    "  version, vcard_uid, kind, fullname, name, nickname, exists)"	\
     " VALUES ("								\
     "  :creationdate, :mailbox, :resource, :imap_uid, :modseq,"		\
     "  :lock_token, :lock_owner, :lock_ownerid, :lock_expire,"		\
-    "  :version, :vcard_uid, :kind, :fullname, :name, :nickname );"
+    "  :version, :vcard_uid, :kind, :fullname, :name, :nickname, 1 );"
 
 EXPORTED int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cdata,
 		 int commit)
@@ -669,10 +671,11 @@ EXPORTED int carddav_delmbox(struct carddav_db *carddavdb, const char *mailbox, 
 }
 
 #define CMD_GETGROUPS \
-    "SELECT O.mailbox, O.resource, O.fullname, C.mailbox, C.resource FROM vcard_objs O" \
-    " LEFT JOIN vcard_groups G LEFT JOIN vcard_objs C" \
-    " WHERE O.rowid = G.objid AND G.member_uid = C.vcard_uid" \
-    " ORDER BY O.rowid, G.pos"
+    "SELECT GO.mailbox, GO.resource, GO.fullname, CO.mailbox, CO.resource FROM vcard_objs GO" \
+    " LEFT JOIN vcard_groups G LEFT JOIN vcard_objs CO" \
+    " WHERE GO.rowid = G.objid AND G.member_uid = CO.vcard_uid" \
+    " AND GO.exists = 1 AND CO.exists = 1" \
+    " ORDER BY CO.rowid, G.pos"
 
 struct groups_rock {
     json_t *array;
@@ -803,3 +806,4 @@ EXPORTED void carddav_make_entry(struct vparse_card *vcard, struct carddav_data 
     }
 
 }
+

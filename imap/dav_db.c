@@ -81,6 +81,7 @@
     " dtend TEXT,"							\
     " comp_flags INTEGER,"						\
     " sched_tag TEXT,"							\
+    " exists INTEGER,"							\
     " UNIQUE( mailbox, resource ) );"					\
     "CREATE INDEX IF NOT EXISTS idx_ical_uid ON ical_objs ( ical_uid );"
 
@@ -102,6 +103,7 @@
     " fullname TEXT,"							\
     " name TEXT,"							\
     " nickname TEXT,"							\
+    " exists INTEGER,"							\
     " UNIQUE( mailbox, resource ) );"					\
     "CREATE INDEX IF NOT EXISTS idx_vcard_fn ON vcard_objs ( fullname );" \
     "CREATE INDEX IF NOT EXISTS idx_vcard_uid ON vcard_objs ( vcard_uid );"
@@ -131,13 +133,20 @@
     "ALTER TABLE ical_objs ADD COLUMN comp_flags INTEGER;"		\
     "UPDATE ical_objs SET comp_flags = recurring + 2 * transp;"
 
-#define CMD_DBUPDGRADEv3						\
+#define CMD_DBUPDGRADEv3					\
     "ALTER TABLE ical_objs ADD COLUMN modseq INTEGER;"		\
     "UPDATE ical_objs SET modseq = 1;"				\
     "ALTER TABLE vcard_objs ADD COLUMN modseq INTEGER;"		\
     "UPDATE vcard_objs SET modseq = 1;"
 
-#define DB_VERSION 3
+#define CMD_DBUPDGRADEv4					\
+    "ALTER TABLE ical_objs ADD COLUMN exists INTEGER;"		\
+    "UPDATE ical_objs SET exists = 1;"				\
+    "ALTER TABLE vcard_objs ADD COLUMN exists INTEGER;"		\
+    "UPDATE vcard_objs SET exists = 1;"
+
+
+#define DB_VERSION 4
 
 struct open_davdb {
     sqlite3 *db;
@@ -336,6 +345,18 @@ static sqlite3 *dav_open(const char *fname)
 	    rc = sqlite3_exec(open->db, CMD_DBUPDGRADEv3, NULL, NULL, NULL);
 	    if (rc != SQLITE_OK) {
 		syslog(LOG_ERR, "dav_open(%s) upgrade v3: %s",
+		    open->path, sqlite3_errmsg(open->db));
+		sqlite3_close(open->db);
+		free_dav_open(open);
+		return NULL;
+	    }
+	    /* fall through */
+
+	case 3:
+	    syslog(LOG_NOTICE, "upgrading dav_db to v4 %s", open->path);
+	    rc = sqlite3_exec(open->db, CMD_DBUPDGRADEv4, NULL, NULL, NULL);
+	    if (rc != SQLITE_OK) {
+		syslog(LOG_ERR, "dav_open(%s) upgrade v4: %s",
 		    open->path, sqlite3_errmsg(open->db));
 		sqlite3_close(open->db);
 		free_dav_open(open);
