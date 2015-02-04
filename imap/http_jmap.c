@@ -245,7 +245,7 @@ int getMailboxes_cb(char *mboxname, int matchlen __attribute__((unused)),
 {
     json_t *list = (json_t *) rock, *mbox;
     char internal_name[MAX_MAILBOX_PATH+1];
-    struct mboxlist_entry mbentry;
+    struct mboxlist_entry *mbentry = NULL;
     struct mailbox *mailbox = NULL;
     int r = 0, rights;
     unsigned statusitems = STATUS_MESSAGES | STATUS_UNSEEN;
@@ -268,7 +268,7 @@ int getMailboxes_cb(char *mboxname, int matchlen __attribute__((unused)),
 	goto done;
     }
 
-    rights = mbentry.acl ? cyrus_acl_myrights(httpd_authstate, mbentry.acl) : 0;
+    rights = mbentry->acl ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
     if ((rights & (ACL_LOOKUP | ACL_READ)) != (ACL_LOOKUP | ACL_READ)) {
 	goto done;
     }
@@ -318,7 +318,7 @@ static json_t *getMailboxes(json_t *args __attribute__((unused)))
     list = json_array();
 
     /* Generate list of mailboxes */
-    mboxlist_findall(&jmap_namespace, "*", httpd_userisadmin, httpd_userid, 
+    mboxlist_findall(&jmap_namespace, "*", httpd_userisadmin, httpd_userid,
 		     httpd_authstate, &getMailboxes_cb, list);
 
     mailboxes = json_array_get(resp, 1);
