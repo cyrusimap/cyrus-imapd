@@ -5678,10 +5678,6 @@ localcreate:
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
 	goto done;
 
-    } else { // (r)
-	prot_printf(imapd_out, "%s OK %s\r\n", tag, error_message(IMAP_OK_COMPLETED));
-	goto done;
-
     } // (r)
 #endif // USE_AUTOCREATE
 
