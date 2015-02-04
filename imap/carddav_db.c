@@ -669,9 +669,9 @@ EXPORTED int carddav_delmbox(struct carddav_db *carddavdb, const char *mailbox, 
 }
 
 #define CMD_GETGROUPS \
-    "SELECT O.mailbox, O.resource, O.fullname, G.mailbox, G.resource FROM vcard_objs O" \
-    " LEFT JOIN vcard_groups G" \
-    " WHERE O.rowid = G.objid" \
+    "SELECT O.mailbox, O.resource, O.fullname, C.mailbox, C.resource FROM vcard_objs O" \
+    " LEFT JOIN vcard_groups G LEFT JOIN vcard_objs C" \
+    " WHERE O.rowid = G.objid AND G.member_uid = C.vcard_uid" \
     " ORDER BY O.rowid, G.pos"
 
 struct groups_rock {
