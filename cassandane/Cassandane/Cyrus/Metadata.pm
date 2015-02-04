@@ -445,6 +445,29 @@ sub test_specialuse
 
 }
 
+sub test_createspecialuse
+{
+    my ($self) = @_;
+
+    xlog "testing create specialuse";
+
+    my $imaptalk = $self->{store}->get_client();
+    my $res;
+    my $entry = '/private/specialuse';
+    my $folder = "INBOX.Archive";
+    my $use = "\\Archive";
+    $imaptalk->create($folder, "(USE ($use))")
+	or die "Cannot create mailbox $folder with special-use $use: $@";
+
+    xlog "initial value for $folder is $use";
+    $res = $imaptalk->getmetadata($folder, $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals({
+	$folder => { $entry => $use }
+    }, $res);
+}
+
 #
 # Test the /shared/motd server annotation.
 #
