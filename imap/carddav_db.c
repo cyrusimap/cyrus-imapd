@@ -669,7 +669,7 @@ EXPORTED int carddav_delmbox(struct carddav_db *carddavdb, const char *mailbox, 
 }
 
 #define CMD_GETGROUPS \
-    "SELECT O.vcard_uid, O.fullname, G.member_uid FROM vcard_objs O" \
+    "SELECT O.mailbox, O.resource, O.fullname, G.mailbox, G.resource FROM vcard_objs O" \
     " LEFT JOIN vcard_groups G" \
     " WHERE O.rowid = G.objid" \
     " ORDER BY O.rowid, G.pos"
@@ -680,33 +680,55 @@ struct groups_rock {
     struct hash_table *need;
 };
 
+static void _build_id(const char *mailbox, const char *resource, struct buf *buf)
+{
+    const char *mboxuserid = mboxname_to_userid(mailbox);
+    struct mboxname_parts parts;
+    size_t abooklen = strlen(config_getstring(IMAPOPT_ADDRESSBOOKPREFIX)) + 1;
+    mboxname_to_parts(mailbox, &parts);
+    if (strcmp(mboxuserid, httpd_userid)) {
+	buf_printf(buf, "/dav/addressbooks/user/%s/", mboxuserid);
+    }
+    buf_printf(buf, "%s/%s", parts.box + abooklen, resource);
+    mboxname_free_parts(&parts);
+}
+
 static int getgroups_cb(sqlite3_stmt *stmt, void *rock)
 {
     struct groups_rock *grock = (struct groups_rock *)rock;
-    const char *id = (const char *)sqlite3_column_text(stmt, 0);
-    const char *name = (const char *)sqlite3_column_text(stmt, 1);
-    const char *member = (const char *)sqlite3_column_text(stmt, 2);
+    const char *group_mailbox = (const char *)sqlite3_column_text(stmt, 0);
+    const char *group_resource = (const char *)sqlite3_column_text(stmt, 1);
+    const char *group_name = (const char *)sqlite3_column_text(stmt, 2);
+    const char *card_mailbox = (const char *)sqlite3_column_text(stmt, 3);
+    const char *card_resource = (const char *)sqlite3_column_text(stmt, 4);
+    struct buf groupid = BUF_INITIALIZER;
+    struct buf cardid = BUF_INITIALIZER;
+
+    _build_id(group_mailbox, group_resource, &groupid);
+    if (card_resource) _build_id(card_mailbox, card_resource, &cardid);
+
     if (grock->need) {
-	int *val = hash_lookup(id, grock->need);
+	int *val = hash_lookup(buf_cstring(&groupid), grock->need);
 	if (!val) return 0;
 	if (!*val) {
 	    *val = 1;
-	    hash_insert(id, val, grock->need);
+	    hash_insert(buf_cstring(&groupid), val, grock->need);
 	}
     }
-    json_t *members = hash_lookup(id, grock->hash);
+
+    json_t *members = hash_lookup(buf_cstring(&groupid), grock->hash);
     if (!members) {
 	json_t *obj;
 	members = json_pack("[]");
 	obj = json_pack("{s:s, s:s, s:o}",
-	    "id", id,
-	    "name", name,
+	    "id", buf_cstring(&groupid),
+	    "name", group_name,
 	    "contactIds", members
 	);
 	json_array_append(grock->array, obj);
-	hash_insert(id, members, grock->hash);
+	hash_insert(buf_cstring(&groupid), members, grock->hash);
     }
-    if (member) json_array_append(members, json_string(member));
+    if (card_resource) json_array_append(members, json_string(buf_cstring(&cardid)));
     return 0;
 }
 
