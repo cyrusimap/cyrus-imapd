@@ -73,6 +73,10 @@ enum {
     STMT_GETEMAIL_GROUPS,
     STMT_GETGROUP_EXISTS,
     STMT_GETGROUP_MEMBERS,
+    STMT_GETGROUPS,
+    STMT_GETGROUPUPDATES,
+    STMT_GETCONTACTS,
+    STMT_GETCONTACTUPDATES,
     NUM_STMT
 };
 
@@ -663,6 +667,84 @@ EXPORTED int carddav_delmbox(struct carddav_db *carddavdb, const char *mailbox, 
 
     return 0;
 }
+
+#define CMD_GETGROUPS \
+    "SELECT O.vcard_uid, O.fullname, G.member_uid FROM vcard_objs O" \
+    " LEFT JOIN vcard_groups G" \
+    " WHERE O.rowid = G.objid" \
+    " ORDER BY O.rowid, G.pos"
+
+struct groups_rock {
+    json_t *array;
+    struct hash_table *hash;
+    struct hash_table *need;
+};
+
+static int getgroups_cb(sqlite3_stmt *stmt, void *rock)
+{
+    struct groups_rock *grock = (struct groups_rock *)rock;
+    const char *id = (const char *)sqlite3_column_text(stmt, 0);
+    const char *name = (const char *)sqlite3_column_text(stmt, 1);
+    const char *member = (const char *)sqlite3_column_text(stmt, 2);
+    if (grock->need) {
+	int *val = hash_lookup(id, grock->need);
+	if (!val) return 0;
+	if (!*val) {
+	    *val = 1;
+	    hash_insert(id, val, grock->need);
+	}
+    }
+    json_t *members = hash_lookup(id, grock->hash);
+    if (!members) {
+	json_t *obj;
+	members = json_pack("[]");
+	obj = json_pack("{s:s, s:s, s:o}",
+	    "id", id,
+	    "name", name,
+	    "contactIds", members
+	);
+	json_array_append(grock->array, obj);
+	hash_insert(id, members, grock->hash);
+    }
+    if (member) json_array_append(members, json_string(member));
+    return 0;
+}
+
+/* jmap contact APIs */
+EXPORTED json_t *carddav_getContactGroups(struct carddav_db *carddavdb)
+{
+    struct bind_val bval[] = {
+	{ NULL,     SQLITE_NULL, { .s = NULL  } }
+    };
+    struct groups_rock rock;
+    int r;
+
+    rock.array = json_pack("[]");
+    rock.need = NULL;  /* XXX - support getting a list of IDs */
+    rock.hash = xzmalloc(sizeof(struct hash_table));
+    construct_hash_table(rock.hash, 1024, 0);
+
+    r = dav_exec(carddavdb->db, CMD_GETGROUPS, bval, &getgroups_cb, &rock,
+		 &carddavdb->stmt[STMT_GETGROUPS]);
+    if (r) {
+	syslog(LOG_ERR, "caldav error %s", error_message(r));
+	return NULL;
+    }
+
+    free_hash_table(rock.hash, NULL);
+    free(rock.hash);
+    if (rock.need) {
+	free_hash_table(rock.need, NULL);
+	free(rock.need);
+    }
+
+    return rock.array;
+}
+
+json_t *carddav_getContactGroupUpdates(struct carddav_db *carddavdb, modseq_t modseq);
+json_t *carddav_getContacts(struct carddav_db *carddavdb);
+json_t *carddav_getContactUpdates(struct carddav_db *carddavdb, modseq_t modseq);
+
 
 EXPORTED void carddav_make_entry(struct vparse_card *vcard, struct carddav_data *cdata)
 {

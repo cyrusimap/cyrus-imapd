@@ -46,8 +46,11 @@
 
 #include <config.h>
 
+#include <jansson.h>
+
 #include "dav_db.h"
 #include "strarray.h"
+#include "util.h"
 #include "vparse.h"
 
 struct carddav_db;
@@ -101,6 +104,12 @@ strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const char *uid)
 
 /* get a list of groups the given uid is a member of */
 strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const char *uid);
+
+/* jmap contact APIs */
+json_t *carddav_getContactGroups(struct carddav_db *carddavdb);
+json_t *carddav_getContactGroupUpdates(struct carddav_db *carddavdb, modseq_t modseq);
+json_t *carddav_getContacts(struct carddav_db *carddavdb);
+json_t *carddav_getContactUpdates(struct carddav_db *carddavdb, modseq_t modseq);
 
 /* process each entry for 'mailbox' in 'carddavdb' with cb() */
 int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
