@@ -331,9 +331,9 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
     "  comp_type, ical_uid, organizer, dtstart, dtend,"			\
-    "  comp_flags, sched_tag"				   		\
+    "  comp_flags, sched_tag"						\
     " FROM ical_objs"							\
-    " WHERE ( mailbox = :mailbox AND resource = :resource );"
+    " WHERE mailbox = :mailbox AND resource = :resource AND exists = 1;"
 
 EXPORTED int caldav_lookup_resource(struct caldav_db *caldavdb,
 			   const char *mailbox, const char *resource,
@@ -373,9 +373,9 @@ EXPORTED int caldav_lookup_resource(struct caldav_db *caldavdb,
     "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
     "  comp_type, ical_uid, organizer, dtstart, dtend,"			\
-    "  comp_flags, sched_tag"				   		\
+    "  comp_flags, sched_tag"						\
     " FROM ical_objs"							\
-    " WHERE ( ical_uid = :ical_uid AND mailbox != :inbox);"
+    " WHERE ical_uid = :ical_uid AND mailbox != :inbox AND exists = 1;"
 
 EXPORTED int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
 		      int lock, struct caldav_data **result)
@@ -409,8 +409,8 @@ EXPORTED int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
     "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
     "  comp_type, ical_uid, organizer, dtstart, dtend,"			\
-    "  comp_flags, sched_tag"				   	    	\
-    " FROM ical_objs WHERE mailbox = :mailbox;"
+    "  comp_flags, sched_tag"						\
+    " FROM ical_objs WHERE mailbox = :mailbox AND exists = 1;"
 
 EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
 		   int (*cb)(void *rock, void *data),
@@ -432,23 +432,23 @@ EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
     "  creationdate, mailbox, resource, imap_uid, modseq,"		\
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
     "  comp_type, ical_uid, organizer, dtstart, dtend,"			\
-    "  comp_flags, sched_tag )"	      			   	    	\
+    "  comp_flags, sched_tag, exists )"					\
     " VALUES ("								\
     "  :creationdate, :mailbox, :resource, :imap_uid, :modseq,"		\
     "  :lock_token, :lock_owner, :lock_ownerid, :lock_expire,"		\
     "  :comp_type, :ical_uid, :organizer, :dtstart, :dtend,"		\
-    "  :comp_flags, :sched_tag );"
+    "  :comp_flags, :sched_tag, 1 );"
 
-#define CMD_UPDATE		   	\
+#define CMD_UPDATE			\
     "UPDATE ical_objs SET"		\
     "  imap_uid     = :imap_uid,"	\
     "  lock_token   = :lock_token,"	\
     "  lock_owner   = :lock_owner,"	\
     "  lock_ownerid = :lock_ownerid,"	\
-    "  lock_expire = :lock_expire,"	\
+    "  lock_expire  = :lock_expire,"	\
     "  comp_type    = :comp_type,"	\
     "  ical_uid     = :ical_uid,"	\
-    "  modseq       = :modseq,"	\
+    "  modseq       = :modseq,"		\
     "  organizer    = :organizer,"	\
     "  dtstart      = :dtstart,"	\
     "  dtend        = :dtend,"		\
