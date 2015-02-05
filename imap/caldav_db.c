@@ -437,10 +437,11 @@ EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
     "  :creationdate, :mailbox, :resource, :imap_uid, :modseq,"		\
     "  :lock_token, :lock_owner, :lock_ownerid, :lock_expire,"		\
     "  :comp_type, :ical_uid, :organizer, :dtstart, :dtend,"		\
-    "  :comp_flags, :sched_tag, 1 );"
+    "  :comp_flags, :sched_tag, :exists` );"
 
 #define CMD_UPDATE			\
     "UPDATE ical_objs SET"		\
+    "  exists       = :exists,"		\
     "  imap_uid     = :imap_uid,"	\
     "  lock_token   = :lock_token,"	\
     "  lock_owner   = :lock_owner,"	\
@@ -460,6 +461,7 @@ EXPORTED int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata,
 		 int commit)
 {
     struct bind_val bval[] = {
+	{ ":exists",	   SQLITE_INTEGER, { .s = cdata->dav.exists	  } },
 	{ ":imap_uid",	   SQLITE_INTEGER, { .i = cdata->dav.imap_uid	  } },
 	{ ":modseq",	   SQLITE_INTEGER, { .i = cdata->dav.modseq	  } },
 	{ ":lock_token",   SQLITE_TEXT,	   { .s = cdata->dav.lock_token	  } },
