@@ -182,9 +182,11 @@ EXPORTED int carddav_abort(struct carddav_db *carddavdb)
 }
 
 
+#define RROCK_FLAG_TOMBSTONES (1<<0)
 struct read_rock {
     struct carddav_db *db;
     struct carddav_data *cdata;
+    int flags;
     int (*cb)(void *rock, void *data);
     void *rock;
 };
@@ -199,6 +201,12 @@ static const char *column_text_to_buf(const char *text, struct buf *buf)
     return text;
 }
 
+#define CMD_GETFIELDS							\
+    "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
+    "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
+    "  version, vcard_uid, kind, fullname, name, nickname, exists"	\
+    " FROM vcard_objs"
+
 static int read_cb(sqlite3_stmt *stmt, void *rock)
 {
     struct read_rock *rrock = (struct read_rock *) rock;
@@ -207,6 +215,10 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     int r = 0;
 
     memset(cdata, 0, sizeof(struct carddav_data));
+
+    cdata->dav.exists = sqlite3_column_int(stmt, 15);
+    if (!(rrock->flags & RROCK_FLAG_TOMBSTONES) && !cdata->dav.exists)
+	return 0;
 
     cdata->dav.rowid = sqlite3_column_int(stmt, 0);
     cdata->dav.creationdate = sqlite3_column_int(stmt, 1);
@@ -264,13 +276,8 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     return r;
 }
 
-
-#define CMD_SELRSRC							\
-    "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
-    "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
-    "  version, vcard_uid, kind, fullname, name, nickname"		\
-    " FROM vcard_objs"							\
-    " WHERE mailbox = :mailbox AND resource = :resource AND exists = 1;"
+#define CMD_SELRSRC CMD_GETFIELDS \
+    " WHERE mailbox = :mailbox AND resource = :resource;"
 
 EXPORTED int carddav_lookup_resource(struct carddav_db *carddavdb,
 			   const char *mailbox, const char *resource,
@@ -281,7 +288,7 @@ EXPORTED int carddav_lookup_resource(struct carddav_db *carddavdb,
 	{ ":resource", SQLITE_TEXT, { .s = resource	 } },
 	{ NULL,	       SQLITE_NULL, { .s = NULL		 } } };
     static struct carddav_data cdata;
-    struct read_rock rrock = { carddavdb, &cdata, NULL, NULL };
+    struct read_rock rrock = { carddavdb, &cdata, 0, NULL, NULL };
     int r;
 
     *result = memset(&cdata, 0, sizeof(struct carddav_data));
@@ -305,12 +312,8 @@ EXPORTED int carddav_lookup_resource(struct carddav_db *carddavdb,
 }
 
 
-#define CMD_SELUID							\
-    "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
-    "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
-    "  version, vcard_uid, kind, fullname, name, nickname"		\
-    " FROM vcard_objs"							\
-    " WHERE vcard_uid = :vcard_uid AND exists = 1;"
+#define CMD_SELUID CMD_GETFIELDS \
+    " WHERE vcard_uid = :vcard_uid;"
 
 EXPORTED int carddav_lookup_uid(struct carddav_db *carddavdb, const char *vcard_uid,
 		      int lock, struct carddav_data **result)
@@ -319,7 +322,7 @@ EXPORTED int carddav_lookup_uid(struct carddav_db *carddavdb, const char *vcard_
 	{ ":vcard_uid", SQLITE_TEXT, { .s = vcard_uid		 } },
 	{ NULL,	        SQLITE_NULL, { .s = NULL		 } } };
     static struct carddav_data cdata;
-    struct read_rock rrock = { carddavdb, &cdata, NULL, NULL };
+    struct read_rock rrock = { carddavdb, &cdata, 0, NULL, NULL };
     int r;
 
     *result = memset(&cdata, 0, sizeof(struct carddav_data));
@@ -339,11 +342,8 @@ EXPORTED int carddav_lookup_uid(struct carddav_db *carddavdb, const char *vcard_
 }
 
 
-#define CMD_SELMBOX							\
-    "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
-    "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
-    "  version, vcard_uid, kind, fullname, name, nickname"		\
-    " FROM vcard_objs WHERE mailbox = :mailbox AND exists = 1;"
+#define CMD_SELMBOX CMD_GETFIELDS \
+    " WHERE mailbox = :mailbox;"
 
 EXPORTED int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
 		   int (*cb)(void *rock, void *data),
@@ -353,7 +353,7 @@ EXPORTED int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
 	{ ":mailbox", SQLITE_TEXT, { .s = mailbox } },
 	{ NULL,	      SQLITE_NULL, { .s = NULL    } } };
     struct carddav_data cdata;
-    struct read_rock rrock = { carddavdb, &cdata, cb, rock };
+    struct read_rock rrock = { carddavdb, &cdata, 0, cb, rock };
 
     return dav_exec(carddavdb->db, CMD_SELMBOX, bval, &read_cb, &rrock,
 		    &carddavdb->stmt[STMT_SELMBOX]);
