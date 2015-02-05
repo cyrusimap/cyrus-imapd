@@ -344,17 +344,16 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 
 EXPORTED int caldav_lookup_resource(struct caldav_db *caldavdb,
 			   const char *mailbox, const char *resource,
-			   int lock, struct caldav_data **result)
+			   int lock, struct caldav_data **result,
+			   int tombstones)
 {
     struct bind_val bval[] = {
 	{ ":mailbox",  SQLITE_TEXT, { .s = mailbox	 } },
 	{ ":resource", SQLITE_TEXT, { .s = resource	 } },
 	{ NULL,	       SQLITE_NULL, { .s = NULL		 } } };
     static struct caldav_data cdata;
-    struct read_rock rrock = { caldavdb, &cdata, 0, NULL, NULL };
+    struct read_rock rrock = { caldavdb, &cdata, tombstones, NULL, NULL };
     int r;
-
-    /* XXX - ability to pass through the tombstones flag */
 
     *result = memset(&cdata, 0, sizeof(struct caldav_data));
 

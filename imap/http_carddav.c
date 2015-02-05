@@ -851,7 +851,7 @@ int propfind_addrgroups(const xmlChar *name, xmlNsPtr ns,
 	goto done;
     }
 
-    r = carddav_lookup_resource(davdb, fctx->req_tgt->mboxname, fctx->req_tgt->resource, 0, &cdata);
+    r = carddav_lookup_resource(davdb, fctx->req_tgt->mboxname, fctx->req_tgt->resource, 0, &cdata, 0);
     if (r)
 	goto done;
 
@@ -997,7 +997,7 @@ static int report_card_multiget(struct transaction_t *txn,
 
 	    /* Find message UID for the resource */
 	    carddav_lookup_resource(fctx->davdb,
-				   tgt.mboxname, tgt.resource, 0, &cdata);
+				   tgt.mboxname, tgt.resource, 0, &cdata, 0);
 	    cdata->dav.resource = tgt.resource;
 	    /* XXX  Check errors */
 

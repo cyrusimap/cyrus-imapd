@@ -186,7 +186,7 @@ EXPORTED int carddav_abort(struct carddav_db *carddavdb)
 struct read_rock {
     struct carddav_db *db;
     struct carddav_data *cdata;
-    int flags;
+    int tombstones;
     int (*cb)(void *rock, void *data);
     void *rock;
 };
@@ -217,7 +217,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     memset(cdata, 0, sizeof(struct carddav_data));
 
     cdata->dav.exists = sqlite3_column_int(stmt, 15);
-    if (!(rrock->flags & RROCK_FLAG_TOMBSTONES) && !cdata->dav.exists)
+    if (!rrock->tombstones && !cdata->dav.exists)
 	return 0;
 
     cdata->dav.rowid = sqlite3_column_int(stmt, 0);
@@ -281,14 +281,15 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 
 EXPORTED int carddav_lookup_resource(struct carddav_db *carddavdb,
 			   const char *mailbox, const char *resource,
-			   int lock, struct carddav_data **result)
+			   int lock, struct carddav_data **result,
+			   int tombstones)
 {
     struct bind_val bval[] = {
 	{ ":mailbox",  SQLITE_TEXT, { .s = mailbox	 } },
 	{ ":resource", SQLITE_TEXT, { .s = resource	 } },
 	{ NULL,	       SQLITE_NULL, { .s = NULL		 } } };
     static struct carddav_data cdata;
-    struct read_rock rrock = { carddavdb, &cdata, 0, NULL, NULL };
+    struct read_rock rrock = { carddavdb, &cdata, tombstones, NULL, NULL };
     int r;
 
     *result = memset(&cdata, 0, sizeof(struct carddav_data));

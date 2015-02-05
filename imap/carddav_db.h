@@ -84,7 +84,8 @@ int carddav_close(struct carddav_db *carddavdb);
    (optionally inside a transaction for updates) */
 int carddav_lookup_resource(struct carddav_db *carddavdb,
 			   const char *mailbox, const char *resource,
-			   int lock, struct carddav_data **result);
+			   int lock, struct carddav_data **result,
+			   int tombstones);
 
 /* lookup an entry from 'carddavdb' by iCal UID
    (optionally inside a transaction for updates) */

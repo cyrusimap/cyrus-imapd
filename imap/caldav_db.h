@@ -128,7 +128,8 @@ int caldav_close(struct caldav_db *caldavdb);
    (optionally inside a transaction for updates) */
 int caldav_lookup_resource(struct caldav_db *caldavdb,
 			   const char *mailbox, const char *resource,
-			   int lock, struct caldav_data **result);
+			   int lock, struct caldav_data **result,
+			   int tombstones);
 
 /* lookup an entry from 'caldavdb' by iCal UID
    (optionally inside a transaction for updates) */

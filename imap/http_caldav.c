@@ -4529,7 +4529,7 @@ static int report_cal_multiget(struct transaction_t *txn,
 
 	    /* Find message UID for the resource */
 	    r = caldav_lookup_resource(fctx->davdb,
-				       tgt.mboxname, tgt.resource, 0, &cdata);
+				       tgt.mboxname, tgt.resource, 0, &cdata, 0);
 	    if (r) {
 		ret = HTTP_NOT_FOUND;
 		goto done;
@@ -5139,7 +5139,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     /* Find iCalendar UID for the current resource, if exists */
     uid = icalcomponent_get_uid(comp);
     caldav_lookup_resource(caldavdb,
-			   mailbox->name, resource, 0, &cdata);
+			   mailbox->name, resource, 0, &cdata, 0);
     if (cdata->ical_uid && strcmp(cdata->ical_uid, uid)) {
 	/* CALDAV:no-uid-conflict */
 	txn->error.precond = CALDAV_UID_CONFLICT;

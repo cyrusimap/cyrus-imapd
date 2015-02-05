@@ -3037,7 +3037,7 @@ int meth_copy(struct transaction_t *txn, void *params)
 
     /* Find message UID for the dest resource, if exists */
     cparams->davdb.lookup_resource(dest_davdb, dest_tgt.mboxname,
-				   dest_tgt.resource, 0, (void **) &ddata);
+				   dest_tgt.resource, 0, (void **) &ddata, 0);
     /* XXX  Check errors */
 
     /* Finished our initial read of dest mailbox */
@@ -3070,7 +3070,7 @@ int meth_copy(struct transaction_t *txn, void *params)
 
     /* Find message UID for the source resource */
     cparams->davdb.lookup_resource(src_davdb, txn->req_tgt.mboxname,
-				   txn->req_tgt.resource, 0, (void **) &ddata);
+				   txn->req_tgt.resource, 0, (void **) &ddata, 0);
     if (!ddata->rowid) {
 	ret = HTTP_NOT_FOUND;
 	goto done;
@@ -3139,7 +3139,7 @@ int meth_copy(struct transaction_t *txn, void *params)
 
 	/* Find message UID for the source resource */
 	cparams->davdb.lookup_resource(src_davdb, txn->req_tgt.mboxname,
-				       txn->req_tgt.resource, 0, (void **) &ddata);
+				       txn->req_tgt.resource, 0, (void **) &ddata, 0);
 	/* XXX  Check errors */
 
 	/* Fetch index record for the source resource */
@@ -3302,7 +3302,7 @@ int meth_delete(struct transaction_t *txn, void *params)
 
     /* Find message UID for the resource, if exists */
     dparams->davdb.lookup_resource(davdb, txn->req_tgt.mboxname,
-				   txn->req_tgt.resource, 0, (void **) &ddata);
+				   txn->req_tgt.resource, 0, (void **) &ddata, 0);
     if (!ddata->rowid) {
 	ret = HTTP_NOT_FOUND;
 	goto done;
@@ -3477,7 +3477,7 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 
     /* Find message UID for the resource */
     gparams->davdb.lookup_resource(davdb, txn->req_tgt.mboxname,
-				   txn->req_tgt.resource, 0, (void **) &ddata);
+				   txn->req_tgt.resource, 0, (void **) &ddata, 0);
     if (!ddata->rowid) {
 	ret = HTTP_NOT_FOUND;
 	goto done;
@@ -3671,7 +3671,7 @@ int meth_lock(struct transaction_t *txn, void *params)
 
     /* Find message UID for the resource, if exists */
     lparams->davdb.lookup_resource(davdb, txn->req_tgt.mboxname,
-				   txn->req_tgt.resource, 1, (void *) &ddata);
+				   txn->req_tgt.resource, 1, (void *) &ddata, 0);
 
     if (ddata->imap_uid) {
 	/* Locking existing resource */
@@ -4197,7 +4197,7 @@ int propfind_by_collection(char *mboxname, int matchlen,
 
 	    /* Find message UID for the resource */
 	    fctx->lookup_resource(fctx->davdb,
-				  mboxname, fctx->req_tgt->resource, 0, &data);
+				  mboxname, fctx->req_tgt->resource, 0, &data, 0);
 	    /* XXX  Check errors */
 
 	    r = fctx->proc_by_resource(rock, data);
@@ -4635,7 +4635,7 @@ int meth_proppatch(struct transaction_t *txn, void *params)
 
 	/* Find message UID for the resource */
 	pparams->davdb.lookup_resource(davdb, txn->req_tgt.mboxname,
-				       txn->req_tgt.resource, 0, (void **) &ddata);
+				       txn->req_tgt.resource, 0, (void **) &ddata, 0);
 	if (!ddata->imap_uid) {
 	    ret = HTTP_NOT_FOUND;
 	    goto done;
@@ -4830,7 +4830,7 @@ int meth_put(struct transaction_t *txn, void *params)
 
     /* Find message UID for the resource, if exists */
     pparams->davdb.lookup_resource(davdb, txn->req_tgt.mboxname,
-				   txn->req_tgt.resource, 0, (void *) &ddata);
+				   txn->req_tgt.resource, 0, (void *) &ddata, 0);
     /* XXX  Check errors */
 
     if (ddata->imap_uid) {
@@ -5849,7 +5849,7 @@ int meth_unlock(struct transaction_t *txn, void *params)
 
     /* Find message UID for the resource, if exists */
     lparams->davdb.lookup_resource(davdb, txn->req_tgt.mboxname,
-				   txn->req_tgt.resource, 1, (void **) &ddata);
+				   txn->req_tgt.resource, 1, (void **) &ddata, 0);
     if (!ddata->rowid) {
 	ret = HTTP_NOT_FOUND;
 	goto done;

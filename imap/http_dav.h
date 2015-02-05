@@ -247,7 +247,8 @@ typedef void (*db_close_proc_t)(void *davdb);
  * placing the record in 'data'
  */
 typedef int (*db_lookup_proc_t)(void *davdb, const char *mailbox,
-				const char *resource, int lock, void **data);
+				const char *resource, int lock, void **data,
+				int tombstones);
 
 /* Function to process each DAV resource in 'mailbox' with 'cb' */
 typedef int (*db_foreach_proc_t)(void *davdb, const char *mailbox,
@@ -260,7 +261,7 @@ struct error_t;
 
 struct propfind_ctx {
     struct request_target_t *req_tgt;	/* parsed request target URL */
-    unsigned mode;	    		/* none, allprop, propname, prop */
+    unsigned mode;			/* none, allprop, propname, prop */
     unsigned depth;	    		/* 0 = root, 1 = calendar, 2 = resrc */
     unsigned prefer;			/* bitmask of client preferences */
     hdrcache_t req_hdrs;    		/* Cached HTTP headers */

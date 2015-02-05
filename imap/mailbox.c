@@ -2645,16 +2645,14 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
     carddavdb = carddav_open_mailbox(mailbox);
 
     /* Find existing record for this resource */
-    carddav_lookup_resource(carddavdb, mailbox->name, resource, 1, &cdata);
+    carddav_lookup_resource(carddavdb, mailbox->name, resource, /*lock*/1, &cdata, /*tombstones*/1);
 
-    /* XXX - if not matching by UID, skip - this record doesn't refer to the current item */
+    /* does it still come from this UID? */
+    if (cdata->dav.imap_uid > new->uid) goto done;
 
-    if (new->system_flags & FLAG_EXPUNGED) {
+    if (new->system_flags & FLAG_UNLINKED) {
 	/* is there an existing record? */
 	if (!cdata) goto done;
-
-	/* does it still come from this UID? */
-	if (cdata->dav.imap_uid != new->uid) goto done;
 
 	/* delete entry */
 	r = carddav_delete(carddavdb, cdata->dav.rowid, 0);
@@ -2664,8 +2662,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 	struct vparse_state vparser;
 	int vr;
 
-	/* already seen this message, so do we update it?  No */
-	if (old) goto done;
+	/* XXX - optimisation, only update the record if old... */
 
 	/* Load message containing the resource and parse vcard data */
 	r = mailbox_map_record(mailbox, new, &msg_buf);
@@ -2686,6 +2683,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 	cdata->dav.resource = resource;
 	cdata->dav.imap_uid = new->uid;
 	cdata->dav.modseq = new->modseq;
+	cdata->dav.exists = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
 
 	if (!cdata->dav.creationdate)
 	    cdata->dav.creationdate = new->internaldate;
@@ -2726,8 +2724,8 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
     if (!new) goto done;
     if (!userid) goto done;
 
-    /* phantom record - never really existed here */
-    if (!old && (new->system_flags & FLAG_EXPUNGED))
+    /* phantom record - never really existed at all */
+    if (!old && (new->system_flags & FLAG_UNLINKED))
 	goto done;
 
     r = mailbox_cacherecord(mailbox, new);
@@ -2747,16 +2745,14 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
     caldavdb = caldav_open_mailbox(mailbox);
 
     /* Find existing record for this resource */
-    caldav_lookup_resource(caldavdb, mailbox->name, resource, 1, &cdata);
+    caldav_lookup_resource(caldavdb, mailbox->name, resource, 1, &cdata, 1);
 
-    /* XXX - if not matching by UID, skip - this record doesn't refer to the current item */
+    /* does it still come from this UID? */
+    if (cdata->dav.imap_uid > new->uid) goto done;
 
-    if (new->system_flags & FLAG_EXPUNGED) {
+    if (new->system_flags & FLAG_UNLINKED) {
 	/* is there an existing record? */
 	if (!cdata) goto done;
-
-	/* does it still come from this UID? */
-	if (cdata->dav.imap_uid != new->uid) goto done;
 
 	/* prepare alarm data for removal */
 	struct caldav_alarm_data alarmdata = {
@@ -2776,9 +2772,6 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 	struct buf msg_buf = BUF_INITIALIZER;
 	icalcomponent *ical = NULL;
 
-	/* already seen this message, so do we update it?  No */
-	if (old) goto done;
-
 	r = mailbox_map_record(mailbox, new, &msg_buf);
 	if (r) goto done;
 
@@ -2791,6 +2784,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 	cdata->dav.imap_uid = new->uid;
 	cdata->dav.modseq = new->modseq;
 	cdata->dav.resource = resource;
+	cdata->dav.exists = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
 	cdata->sched_tag = sched_tag;
 
 	caldav_make_entry(ical, cdata);
@@ -2812,14 +2806,17 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 	/* remove old ones */
 	int rc = caldav_alarm_delete_all(alarmdb, &alarmdata);
 
-	int i;
-	for (i = CALDAV_ALARM_ACTION_FIRST; i <= CALDAV_ALARM_ACTION_LAST; i++) {
-	    /* prepare alarm data */
-	    if (!rc &&
-		!caldav_alarm_prepare(ical, &alarmdata, i,
-				      icaltime_current_time_with_zone(icaltimezone_get_utc_timezone()))) {
-		rc = caldav_alarm_add(alarmdb, &alarmdata);
-		caldav_alarm_fini(&alarmdata);
+	/* add new ones unless this record is expunged */
+	if (cdata->dav.exists) {
+	    int i;
+	    for (i = CALDAV_ALARM_ACTION_FIRST; i <= CALDAV_ALARM_ACTION_LAST; i++) {
+		/* prepare alarm data */
+		if (!rc &&
+		    !caldav_alarm_prepare(ical, &alarmdata, i,
+					icaltime_current_time_with_zone(icaltimezone_get_utc_timezone()))) {
+		    rc = caldav_alarm_add(alarmdb, &alarmdata);
+		    caldav_alarm_fini(&alarmdata);
+		}
 	    }
 	}
 
