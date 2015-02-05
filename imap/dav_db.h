@@ -60,6 +60,7 @@ struct dav_data {
     const char *lock_owner;
     const char *lock_ownerid;
     time_t lock_expire;
+    int exists;
 };
 
 struct bind_val {

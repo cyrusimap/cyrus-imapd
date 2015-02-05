@@ -89,7 +89,6 @@ struct caldav_db {
     struct buf dtstart;
     struct buf dtend;
     struct buf sched_tag;
-    int exists;
 };
 
 
@@ -226,9 +225,11 @@ EXPORTED int caldav_abort(struct caldav_db *caldavdb)
 }
 
 
+#define RROCK_FLAG_TOMBSTONES (1<<0)
 struct read_rock {
     struct caldav_db *db;
     struct caldav_data *cdata;
+    int flags;
     int (*cb)(void *rock, void *data);
     void *rock;
 };
@@ -257,6 +258,12 @@ static unsigned _comp_flags_to_num(struct comp_flags *flags)
        + ((flags->status & 3) >> 2);
 }
 
+#define CMD_READFIELDS							\
+    "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
+    "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
+    "  comp_type, ical_uid, organizer, dtstart, dtend,"			\
+    "  comp_flags, sched_tag, exists"					\
+    " FROM ical_objs"							\
 
 static int read_cb(sqlite3_stmt *stmt, void *rock)
 {
@@ -266,6 +273,10 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     int r = 0;
 
     memset(cdata, 0, sizeof(struct caldav_data));
+
+    cdata->dav.exists = sqlite3_column_int(stmt, 16);
+    if (!(rrock->flags && RROCK_FLAG_TOMBSTONES) && !cdata->dav.exists)
+	return 0;
 
     cdata->dav.rowid = sqlite3_column_int(stmt, 0);
     cdata->dav.creationdate = sqlite3_column_int(stmt, 1);
@@ -328,13 +339,8 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 }
 
 
-#define CMD_SELRSRC							\
-    "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
-    "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
-    "  comp_type, ical_uid, organizer, dtstart, dtend,"			\
-    "  comp_flags, sched_tag"						\
-    " FROM ical_objs"							\
-    " WHERE mailbox = :mailbox AND resource = :resource AND exists = 1;"
+#define CMD_SELRSRC CMD_READFIELDS \
+    " WHERE mailbox = :mailbox AND resource = :resource;"
 
 EXPORTED int caldav_lookup_resource(struct caldav_db *caldavdb,
 			   const char *mailbox, const char *resource,
@@ -345,8 +351,10 @@ EXPORTED int caldav_lookup_resource(struct caldav_db *caldavdb,
 	{ ":resource", SQLITE_TEXT, { .s = resource	 } },
 	{ NULL,	       SQLITE_NULL, { .s = NULL		 } } };
     static struct caldav_data cdata;
-    struct read_rock rrock = { caldavdb, &cdata, NULL, NULL };
+    struct read_rock rrock = { caldavdb, &cdata, 0, NULL, NULL };
     int r;
+
+    /* XXX - ability to pass through the tombstones flag */
 
     *result = memset(&cdata, 0, sizeof(struct caldav_data));
 
@@ -370,13 +378,8 @@ EXPORTED int caldav_lookup_resource(struct caldav_db *caldavdb,
 }
 
 
-#define CMD_SELUID							\
-    "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
-    "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
-    "  comp_type, ical_uid, organizer, dtstart, dtend,"			\
-    "  comp_flags, sched_tag"						\
-    " FROM ical_objs"							\
-    " WHERE ical_uid = :ical_uid AND mailbox != :inbox AND exists = 1;"
+#define CMD_SELUID CMD_READFIELDS \
+    " WHERE ical_uid = :ical_uid AND mailbox != :inbox;"
 
 EXPORTED int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
 		      int lock, struct caldav_data **result)
@@ -386,8 +389,10 @@ EXPORTED int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
 	{ ":inbox",    SQLITE_TEXT, { .s = caldavdb->sched_inbox } },
 	{ NULL,	       SQLITE_NULL, { .s = NULL			 } } };
     static struct caldav_data cdata;
-    struct read_rock rrock = { caldavdb, &cdata, NULL, NULL };
+    struct read_rock rrock = { caldavdb, &cdata, 0, NULL, NULL };
     int r;
+
+    /* XXX - ability to pass through the tombstones flag */
 
     *result = memset(&cdata, 0, sizeof(struct caldav_data));
 
@@ -406,12 +411,8 @@ EXPORTED int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
 }
 
 
-#define CMD_SELMBOX							\
-    "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
-    "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
-    "  comp_type, ical_uid, organizer, dtstart, dtend,"			\
-    "  comp_flags, sched_tag"						\
-    " FROM ical_objs WHERE mailbox = :mailbox AND exists = 1;"
+#define CMD_SELMBOX CMD_READFIELDS \
+    " WHERE mailbox = :mailbox AND exists = 1;"
 
 EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
 		   int (*cb)(void *rock, void *data),
@@ -421,7 +422,9 @@ EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
 	{ ":mailbox", SQLITE_TEXT, { .s = mailbox } },
 	{ NULL,	      SQLITE_NULL, { .s = NULL    } } };
     struct caldav_data cdata;
-    struct read_rock rrock = { caldavdb, &cdata, cb, rock };
+    struct read_rock rrock = { caldavdb, &cdata, 0, cb, rock };
+
+    /* XXX - tombstones */
 
     return dav_exec(caldavdb->db, CMD_SELMBOX, bval, &read_cb, &rrock,
 		    &caldavdb->stmt[STMT_SELMBOX]);
@@ -462,7 +465,7 @@ EXPORTED int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata,
 		 int commit)
 {
     struct bind_val bval[] = {
-	{ ":exists",	   SQLITE_INTEGER, { .s = cdata->dav.exists	  } },
+	{ ":exists",	   SQLITE_INTEGER, { .i = cdata->dav.exists	  } },
 	{ ":imap_uid",	   SQLITE_INTEGER, { .i = cdata->dav.imap_uid	  } },
 	{ ":modseq",	   SQLITE_INTEGER, { .i = cdata->dav.modseq	  } },
 	{ ":lock_token",   SQLITE_TEXT,	   { .s = cdata->dav.lock_token	  } },
