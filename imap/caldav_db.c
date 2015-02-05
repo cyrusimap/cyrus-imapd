@@ -89,6 +89,7 @@ struct caldav_db {
     struct buf dtstart;
     struct buf dtend;
     struct buf sched_tag;
+    int exists;
 };
 
 
@@ -429,15 +430,15 @@ EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
 
 #define CMD_INSERT							\
     "INSERT INTO ical_objs ("						\
-    "  creationdate, mailbox, resource, imap_uid, modseq,"		\
+    "  exists, creationdate, mailbox, resource, imap_uid, modseq,"	\
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
     "  comp_type, ical_uid, organizer, dtstart, dtend,"			\
-    "  comp_flags, sched_tag, exists )"					\
+    "  comp_flags, sched_tag )"					\
     " VALUES ("								\
-    "  :creationdate, :mailbox, :resource, :imap_uid, :modseq,"		\
+    "  :exists, :creationdate, :mailbox, :resource, :imap_uid, :modseq,"\
     "  :lock_token, :lock_owner, :lock_ownerid, :lock_expire,"		\
     "  :comp_type, :ical_uid, :organizer, :dtstart, :dtend,"		\
-    "  :comp_flags, :sched_tag, :exists` );"
+    "  :comp_flags, :sched_tag );"
 
 #define CMD_UPDATE			\
     "UPDATE ical_objs SET"		\
