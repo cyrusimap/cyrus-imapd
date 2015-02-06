@@ -2644,11 +2644,11 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 
     carddavdb = carddav_open_mailbox(mailbox);
 
-    /* Find existing record for this resource */
+    /* find existing record for this resource */
     carddav_lookup_resource(carddavdb, mailbox->name, resource, /*lock*/1, &cdata, /*tombstones*/1);
 
     /* does it still come from this UID? */
-    if (cdata->dav.imap_uid > new->uid) goto done;
+    if (cdata && cdata->dav.imap_uid > new->uid) goto done;
 
     if (new->system_flags & FLAG_UNLINKED) {
 	/* is there an existing record? */
@@ -2657,12 +2657,10 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 	/* delete entry */
 	r = carddav_delete(carddavdb, cdata->dav.rowid, 0);
     }
-    else {
+    else if (!cdata || cdata->dav.imap_uid != new->uid) {
 	struct buf msg_buf = BUF_INITIALIZER;
 	struct vparse_state vparser;
 	int vr;
-
-	/* XXX - optimisation, only update the record if old... */
 
 	/* Load message containing the resource and parse vcard data */
 	r = mailbox_map_record(mailbox, new, &msg_buf);
@@ -2693,6 +2691,11 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 	r = carddav_write(carddavdb, cdata, 0);
 
 	vparse_free(&vparser);
+    } else {
+	/* just a flag change on an existing record */
+	cdata->dav.modseq = new->modseq;
+	cdata->dav.exists = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
+	r = carddav_write(carddavdb, cdata, 0);
     }
 
 done:
@@ -2731,7 +2734,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
     r = mailbox_cacherecord(mailbox, new);
     if (r) goto done;
 
-    /* Get resource URL from filename param in Content-Disposition header */
+    /* get resource URL from filename param in Content-Disposition header */
     message_read_bodystructure(new, &body);
     for (param = body->disposition_params; param; param = param->next) {
         if (!strcmp(param->attribute, "FILENAME")) {
@@ -2748,7 +2751,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
     caldav_lookup_resource(caldavdb, mailbox->name, resource, 1, &cdata, 1);
 
     /* does it still come from this UID? */
-    if (cdata->dav.imap_uid > new->uid) goto done;
+    if (cdata && cdata->dav.imap_uid > new->uid) goto done;
 
     if (new->system_flags & FLAG_UNLINKED) {
 	/* is there an existing record? */
@@ -2766,67 +2769,66 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 	/* delete entry */
 	r = caldav_delete(caldavdb, cdata->dav.rowid, 0);
     }
-    else {
-	/* if there's no existing entry for this UID, we need to add/update */
-	if (!cdata || cdata->dav.imap_uid != new->uid) {
-	    struct buf msg_buf = BUF_INITIALIZER;
-	    icalcomponent *ical = NULL;
+    else if (!cdata || cdata->dav.imap_uid != new->uid) {
+	struct buf msg_buf = BUF_INITIALIZER;
+	icalcomponent *ical = NULL;
 
-	    r = mailbox_map_record(mailbox, new, &msg_buf);
-	    if (r) goto done;
+	r = mailbox_map_record(mailbox, new, &msg_buf);
+	if (r) goto done;
 
-	    ical = icalparser_parse_string(buf_cstring(&msg_buf) + new->header_size);
-	    buf_free(&msg_buf);
-	    if (!ical) goto done;
+	ical = icalparser_parse_string(buf_cstring(&msg_buf) + new->header_size);
+	buf_free(&msg_buf);
+	if (!ical) goto done;
 
-	    cdata->dav.creationdate = new->internaldate;
-	    cdata->dav.mailbox = mailbox->name;
-	    cdata->dav.imap_uid = new->uid;
-	    cdata->dav.modseq = new->modseq;
-	    cdata->dav.resource = resource;
-	    cdata->sched_tag = sched_tag;
-	    cdata->dav.exists = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
+	cdata->dav.creationdate = new->internaldate;
+	cdata->dav.mailbox = mailbox->name;
+	cdata->dav.imap_uid = new->uid;
+	cdata->dav.modseq = new->modseq;
+	cdata->dav.exists = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
+	cdata->dav.resource = resource;
+	cdata->sched_tag = sched_tag;
 
-	    caldav_make_entry(ical, cdata);
+	caldav_make_entry(ical, cdata);
 
-	    struct caldav_alarm_db *alarmdb = caldav_alarm_open();
-	    caldav_alarm_begin(alarmdb);
+	struct caldav_alarm_db *alarmdb = caldav_alarm_open();
+	caldav_alarm_begin(alarmdb);
 
-	    struct caldav_alarm_data alarmdata = {
-		.mailbox    = cdata->dav.mailbox,
-		.resource   = cdata->dav.resource,
-	    };
+	struct caldav_alarm_data alarmdata = {
+	    .mailbox    = cdata->dav.mailbox,
+	    .resource   = cdata->dav.resource,
+	};
 
-	    /* remove old ones */
-	    int rc = caldav_alarm_delete_all(alarmdb, &alarmdata);
+	/* remove old ones */
+	int rc = caldav_alarm_delete_all(alarmdb, &alarmdata);
 
-	    /* add new ones unless this record is expunged */
-	    if (cdata->dav.exists) {
-		int i;
-		for (i = CALDAV_ALARM_ACTION_FIRST; i <= CALDAV_ALARM_ACTION_LAST; i++) {
-		    /* prepare alarm data */
-		    if (!rc &&
-			!caldav_alarm_prepare(ical, &alarmdata, i,
-					    icaltime_current_time_with_zone(icaltimezone_get_utc_timezone()))) {
-			rc = caldav_alarm_add(alarmdb, &alarmdata);
-			caldav_alarm_fini(&alarmdata);
-		    }
+	/* add new ones unless this record is expunged */
+	if (cdata->dav.exists) {
+	    int i;
+	    for (i = CALDAV_ALARM_ACTION_FIRST; i <= CALDAV_ALARM_ACTION_LAST; i++) {
+		/* prepare alarm data */
+		if (!rc &&
+		    !caldav_alarm_prepare(ical, &alarmdata, i,
+					icaltime_current_time_with_zone(icaltimezone_get_utc_timezone()))) {
+		    rc = caldav_alarm_add(alarmdb, &alarmdata);
+		    caldav_alarm_fini(&alarmdata);
 		}
 	    }
+	}
 
-	    if (rc)
-		caldav_alarm_rollback(alarmdb);
-	    else
-		caldav_alarm_commit(alarmdb);
-	    caldav_alarm_close(alarmdb);
-	    r = caldav_write(caldavdb, cdata, 0);
-	    icalcomponent_free(ical);
-	}
-	else {
-	    /* update the exists status regardless */
-	    cdata->dav.exists = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
-	    r = caldav_write(caldavdb, cdata, 0);
-	}
+	if (rc)
+	    caldav_alarm_rollback(alarmdb);
+	else
+	    caldav_alarm_commit(alarmdb);
+	caldav_alarm_close(alarmdb);
+
+	r = caldav_write(caldavdb, cdata, 0);
+	icalcomponent_free(ical);
+    }
+    else {
+	/* just a flags update to an existing record */
+	cdata->dav.modseq = new->modseq;
+	cdata->dav.exists = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
+	r = caldav_write(caldavdb, cdata, 0);
     }
 
 done:
