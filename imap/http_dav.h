@@ -382,6 +382,7 @@ struct davdb_params {
     db_write_proc_t write_resourceLOCKONLY;	/* write a specific resource */
     db_delete_proc_t delete_resourceLOCKONLY;	/* delete a specific resource */
     db_delmbox_proc_t delete_mboxDONTUSE;	/* delete all resources in mailbox */
+    int hi;
 };
 
 /*
