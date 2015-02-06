@@ -77,6 +77,9 @@ static int meth_get(struct transaction_t *txn, void *params);
 static int meth_post(struct transaction_t *txn, void *params);
 static int getMailboxes(json_t *args, json_t *response, const char *tag);
 static int getContactGroups(json_t *args, json_t *response, const char *tag);
+static int getContactGroupUpdates(json_t *args, json_t *response, const char *tag);
+static int getContacts(json_t *args, json_t *response, const char *tag);
+static int getContactUpdates(json_t *args, json_t *response, const char *tag);
 
 static const struct message_t {
     const char *name;
@@ -84,6 +87,9 @@ static const struct message_t {
 } messages[] = {
     { "getMailboxes",	&getMailboxes },
     { "getContactGroups",	&getContactGroups },
+    { "getContactGroupUpdates",	&getContactGroupUpdates },
+    { "getContacts",		&getContacts },
+    { "getContactUpdates",	&getContactUpdates },
     { NULL,		NULL}
 };
 
