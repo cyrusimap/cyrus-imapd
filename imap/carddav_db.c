@@ -186,7 +186,6 @@ EXPORTED int carddav_abort(struct carddav_db *carddavdb)
 }
 
 
-#define RROCK_FLAG_TOMBSTONES (1<<0)
 struct read_rock {
     struct carddav_db *db;
     struct carddav_data *cdata;
