@@ -86,6 +86,7 @@ struct carddav_db {
     sqlite3 *db;			/* DB handle */
     sqlite3_stmt *stmt[NUM_STMT];	/* prepared statements */
     struct buf bufs[NUM_BUFS];		/* buffers for copies of column text */
+    char *userid;
 };
 
 
@@ -108,6 +109,7 @@ EXPORTED struct carddav_db *carddav_open_userid(const char *userid)
     if (!db) return NULL;
 
     carddavdb = xzmalloc(sizeof(struct carddav_db));
+    carddavdb->userid = xstrdup(userid);
     carddavdb->db = db;
 
     return carddavdb;
@@ -125,6 +127,7 @@ EXPORTED struct carddav_db *carddav_open_mailbox(struct mailbox *mailbox)
     if (!db) return NULL;
 
     carddavdb = xzmalloc(sizeof(struct carddav_db));
+    carddavdb->userid = xstrdup(userid);
     carddavdb->db = db;
 
     return carddavdb;
@@ -149,6 +152,7 @@ EXPORTED int carddav_close(struct carddav_db *carddavdb)
 
     r = dav_close(carddavdb->db);
 
+    free(carddavdb->userid);
     free(carddavdb);
 
     return r;
@@ -712,12 +716,11 @@ static int getgroups_cb(sqlite3_stmt *stmt, void *rock)
     if (card_resource) _build_id(card_mailbox, card_resource, &cardid);
 
     if (grock->need) {
-	int *val = hash_lookup(buf_cstring(&groupid), grock->need);
-	if (!val) return 0;
-	if (!*val) {
-	    *val = 1;
-	    hash_insert(buf_cstring(&groupid), val, grock->need);
-	}
+	/* skip records not in hash */
+	if (!hash_lookup(buf_cstring(&groupid), grock->need))
+	    return 0;
+	/* mark 2 == seen */
+	hash_insert(buf_cstring(&groupid), (void *)2, grock->need);
     }
 
     json_t *members = hash_lookup(buf_cstring(&groupid), grock->hash);
@@ -736,6 +739,14 @@ static int getgroups_cb(sqlite3_stmt *stmt, void *rock)
     return 0;
 }
 
+static void _add_notfound(const char *key, void *data, void *rock)
+{
+    json_t *list = (json_t *)rock;
+    /* magic "pointer" of 1 equals wanted but not found */
+    if (data == (void *)1)
+	json_array_append_new(list, json_string(key));
+}
+
 /* jmap contact APIs */
 EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb,
 				      json_t *args,
@@ -747,15 +758,19 @@ EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb,
     };
     struct groups_rock rock;
     int r;
-    json_t *want;
 
-    want = json_object_get(args, "ids");
+    /* XXX - how about a lock around this? */
+    const char *mboxname = mboxname_user_mbox(carddavdb->userid, NULL);
+    modseq_t highestmodseq = mboxname_readmodseq(mboxname);
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, "%llu", highestmodseq);
 
     rock.array = json_pack("[]");
     rock.need = NULL;  /* XXX - support getting a list of IDs */
     rock.hash = xzmalloc(sizeof(struct hash_table));
     construct_hash_table(rock.hash, 1024, 0);
 
+    json_t *want = json_object_get(args, "ids");
     if (want) {
 	rock.need = xzmalloc(sizeof(struct hash_table));
 	construct_hash_table(rock.need, 1024, 0);
@@ -763,6 +778,7 @@ EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb,
 	int size = json_array_size(want);
 	for (i = 0; i < size; i++) {
 	    const char *id = json_string_value(json_array_get(want, i));
+	    /* 1 == want */
 	    hash_insert(id, (void *)1, rock.need);
 	}
     }
@@ -777,15 +793,20 @@ EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb,
 
     free_hash_table(rock.hash, NULL);
     free(rock.hash);
+
+    json_t *mailboxes = json_pack("{}");
+    json_object_set_new(mailboxes, "accountId", json_string(httpd_userid));
+    json_object_set_new(mailboxes, "state", json_string(buf_cstring(&buf)));
+    json_object_set_new(mailboxes, "list", rock.array);
     if (rock.need) {
+	json_t *notfound = json_array();
+	hash_enumerate(rock.need, _add_notfound, notfound);
 	free_hash_table(rock.need, NULL);
 	free(rock.need);
     }
-
-    json_t *mailboxes = json_pack("{}");
-    json_object_set_new(mailboxes, "list", rock.array);
-    json_object_set_new(mailboxes, "notFound", json_null());
-    json_object_set_new(mailboxes, "accountId", json_string(httpd_userid));
+    else {
+	json_object_set_new(mailboxes, "notFound", json_null());
+    }
 
     json_t *item = json_pack("[]");
     json_array_append_new(item, json_string("contactGroups"));
