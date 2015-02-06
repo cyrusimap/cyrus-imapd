@@ -797,10 +797,29 @@ EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb,
     return 0;
 }
 
-int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, json_t *args, json_t *response, const char *tag);
-int carddav_getContacts(struct carddav_db *carddavdb, json_t *args, json_t *response, const char *tag);
-int carddav_getContactUpdates(struct carddav_db *carddavdb, json_t *args, json_t *response, const char *tag);
+EXPORTED int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, json_t *args,
+					    json_t *response, const char *tag)
+{
+    if (carddavdb && args && response && tag)
+	return 0;
+    return -1;
+}
 
+EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, json_t *args,
+				 json_t *response, const char *tag)
+{
+    if (carddavdb && args && response && tag)
+	return 0;
+    return -1;
+}
+
+EXPORTED int carddav_getContactUpdates(struct carddav_db *carddavdb, json_t *args,
+				       json_t *response, const char *tag)
+{
+    if (carddavdb && args && response && tag)
+	return 0;
+    return -1;
+}
 
 EXPORTED void carddav_make_entry(struct vparse_card *vcard, struct carddav_data *cdata)
 {
