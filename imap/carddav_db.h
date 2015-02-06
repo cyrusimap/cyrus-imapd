@@ -107,10 +107,14 @@ strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const char *uid)
 strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const char *uid);
 
 /* jmap contact APIs */
-json_t *carddav_getContactGroups(struct carddav_db *carddavdb);
-json_t *carddav_getContactGroupUpdates(struct carddav_db *carddavdb, modseq_t modseq);
-json_t *carddav_getContacts(struct carddav_db *carddavdb);
-json_t *carddav_getContactUpdates(struct carddav_db *carddavdb, modseq_t modseq);
+int carddav_getContactGroups(struct carddav_db *carddavdb, json_t *args,
+			     json_t *response, const char *tag);
+int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, json_t *args, modseq_t modseq,
+				   json_t *response, const char *tag);
+int carddav_getContacts(struct carddav_db *carddavdb, json_t *args,
+			json_t *response, const char *tag);
+int carddav_getContactUpdates(struct carddav_db *carddavdb, modseq_t modseq, json_t *args,
+			      json_t *response, const char *tag);
 
 /* process each entry for 'mailbox' in 'carddavdb' with cb() */
 int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,

@@ -75,12 +75,12 @@ static void jmap_init(struct buf *serverinfo);
 static void jmap_auth(const char *userid);
 static int meth_get(struct transaction_t *txn, void *params);
 static int meth_post(struct transaction_t *txn, void *params);
-static json_t *getMailboxes(json_t *args);
-static json_t *getContactGroups(json_t *args);
+static int getMailboxes(json_t *args, json_t *response, const char *tag);
+static int getContactGroups(json_t *args, json_t *response, const char *tag);
 
 static const struct message_t {
     const char *name;
-    json_t *(*proc)(json_t *args);
+    int (*proc)(json_t *args, json_t *response, const char *tag);
 } messages[] = {
     { "getMailboxes",	&getMailboxes },
     { "getContactGroups",	&getContactGroups },
@@ -192,24 +192,20 @@ static int meth_post(struct transaction_t *txn,
 	const char *name = json_string_value(json_array_get(msg, 0));
 	json_t *args = json_array_get(msg, 1);
 	json_t *id = json_array_get(msg, 2);
-	json_t *mresp;
+	/* XXX - better error reporting */
+	if (!id) continue;
+	const char *tag = json_string_value(id);
 	int r = 0;
 
 	/* Find the message processor */
 	for (mp = messages; mp->name && strcmp(name, mp->name); mp++);
 
-	if (!mp || !mp->name)
-	    mresp = json_pack("[s {s:s}]", "error", "type", "unknownMethod");
-	else
-	    mresp = mp->proc(args);
+	if (!mp || !mp->name) {
+	    json_array_append(resp, json_pack("[s {s:s} s]", "error", "type", "unknownMethod", tag));
+	    continue;
+	}
 
-	if (!mresp) r = -1;
-
-	/* Append client-id to message response */
-	if (!r) r = json_array_append(mresp, id);
-
-	/* Append response to overall response array */
-	if (!r) r = json_array_append_new(resp, mresp);
+	r = mp->proc(args, resp, tag);
 
 	if (r) {
 	    txn->error.desc = "Unable to create JSON response body\r\n";
@@ -308,15 +304,15 @@ int getMailboxes_cb(char *mboxname, int matchlen __attribute__((unused)),
 
 
 /* Execute a getMailboxes message */
-static json_t *getMailboxes(json_t *args __attribute__((unused)))
+static int getMailboxes(json_t *args __attribute__((unused)), json_t *response, const char *tag)
 {
-    json_t *resp, *mailboxes, *list, *notFound;
+    json_t *item, *mailboxes, *list;
 
     /* Start constructing our response */
-    resp = json_pack("[s {s:s s:s}]", "mailboxes",
+    item = json_pack("[s {s:s s:s} s]", "mailboxes",
 		     "accountId", httpd_userid,
-		     "state", "");
-    if (!resp) return NULL;
+		     "state", "",
+		     tag);
 
     list = json_array();
 
@@ -324,32 +320,47 @@ static json_t *getMailboxes(json_t *args __attribute__((unused)))
     mboxlist_findall(&jmap_namespace, "*", httpd_userisadmin, httpd_userid,
 		     httpd_authstate, &getMailboxes_cb, list);
 
-    mailboxes = json_array_get(resp, 1);
+    mailboxes = json_array_get(item, 1);
     json_object_set_new(mailboxes, "list", list);
 
-    notFound = json_null();
-    json_object_set_new(mailboxes, "notFound", notFound);
-
-    return resp;
-}
-
-json_t *getContactGroups(json_t *args __attribute__((unused)))
-{
-    json_t *resp;
-    json_t *list = json_pack("[]");
-    json_t *mailboxes = json_pack("{}");
-    struct carddav_db *db = carddav_open_userid(httpd_userid);
-    if (!db) return NULL;
-
-    resp = carddav_getContactGroups(db);
-    if (!resp) return NULL;
-
-    json_object_set_new(mailboxes, "list", resp);
+    /* xxx - args */
     json_object_set_new(mailboxes, "notFound", json_null());
-    json_object_set_new(mailboxes, "accountId", json_string(httpd_userid));
 
-    json_array_append_new(list, json_string("contactGroups"));
-    json_array_append_new(list, mailboxes);
+    json_array_append_new(response, item);
 
-    return list;
+    return 0;
 }
+
+static int getContactGroups(json_t *args, json_t *response, const char *tag)
+{
+    struct carddav_db *db = carddav_open_userid(httpd_userid);
+    if (!db) return -1;
+    int r = carddav_getContactGroups(db, args, response, tag);
+    return r;
+}
+
+
+static int getContactGroupUpdates(json_t *args, json_t *response, const char *tag)
+{
+    struct carddav_db *db = carddav_open_userid(httpd_userid);
+    if (!db) return -1;
+    int r = carddav_getContactGroupUpdates(db, args, response, tag);
+    return r;
+}
+
+static int getContacts(json_t *args, json_t *response, const char *tag)
+{
+    struct carddav_db *db = carddav_open_userid(httpd_userid);
+    if (!db) return -1;
+    int r = carddav_getContacts(db, args, response, tag);
+    return r;
+}
+
+static int getContactUpdates(json_t *args, json_t *response, const char *tag)
+{
+    struct carddav_db *db = carddav_open_userid(httpd_userid);
+    if (!db) return -1;
+    int r = carddav_getContactUpdates(db, args, response, tag);
+    return r;
+}
+

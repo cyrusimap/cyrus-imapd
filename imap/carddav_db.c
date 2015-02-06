@@ -737,24 +737,41 @@ static int getgroups_cb(sqlite3_stmt *stmt, void *rock)
 }
 
 /* jmap contact APIs */
-EXPORTED json_t *carddav_getContactGroups(struct carddav_db *carddavdb)
+EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb,
+				      json_t *args,
+				      json_t *response,
+				      const char *tag)
 {
     struct bind_val bval[] = {
 	{ NULL,     SQLITE_NULL, { .s = NULL  } }
     };
     struct groups_rock rock;
     int r;
+    json_t *want;
+
+    want = json_object_get(args, "ids");
 
     rock.array = json_pack("[]");
     rock.need = NULL;  /* XXX - support getting a list of IDs */
     rock.hash = xzmalloc(sizeof(struct hash_table));
     construct_hash_table(rock.hash, 1024, 0);
 
+    if (want) {
+	rock.need = xzmalloc(sizeof(struct hash_table));
+	construct_hash_table(rock.need, 1024, 0);
+	int i;
+	int size = json_array_size(want);
+	for (i = 0; i < size; i++) {
+	    const char *id = json_string_value(json_array_get(want, i));
+	}
+    }
+
     r = dav_exec(carddavdb->db, CMD_GETGROUPS, bval, &getgroups_cb, &rock,
 		 &carddavdb->stmt[STMT_GETGROUPS]);
     if (r) {
 	syslog(LOG_ERR, "caldav error %s", error_message(r));
-	return NULL;
+	/* XXX - free memory */
+	return r;
     }
 
     free_hash_table(rock.hash, NULL);
@@ -764,12 +781,24 @@ EXPORTED json_t *carddav_getContactGroups(struct carddav_db *carddavdb)
 	free(rock.need);
     }
 
-    return rock.array;
+    json_t *mailboxes = json_pack("{}");
+    json_object_set_new(mailboxes, "list", rock.array);
+    json_object_set_new(mailboxes, "notFound", json_null());
+    json_object_set_new(mailboxes, "accountId", json_string(httpd_userid));
+
+    json_t *item = json_pack("[]");
+    json_array_append_new(item, json_string("contactGroups"));
+    json_array_append_new(item, mailboxes);
+    json_array_append_new(item, json_string(tag));
+
+    json_array_append_new(response, item);
+
+    return 0;
 }
 
-json_t *carddav_getContactGroupUpdates(struct carddav_db *carddavdb, modseq_t modseq);
-json_t *carddav_getContacts(struct carddav_db *carddavdb);
-json_t *carddav_getContactUpdates(struct carddav_db *carddavdb, modseq_t modseq);
+int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, modseq_t modseq, json_t *response, const char *tag);
+int carddav_getContacts(struct carddav_db *carddavdb, json_t *response, const char *tag);
+int carddav_getContactUpdates(struct carddav_db *carddavdb, modseq_t modseq, json_t *response, const char *tag);
 
 
 EXPORTED void carddav_make_entry(struct vparse_card *vcard, struct carddav_data *cdata)
@@ -805,6 +834,5 @@ EXPORTED void carddav_make_entry(struct vparse_card *vcard, struct carddav_data 
 		strarray_append(&cdata->member_uids, item+9);
 	}
     }
-
 }
 
