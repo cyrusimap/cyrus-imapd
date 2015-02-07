@@ -830,7 +830,7 @@ EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb,
 #define CMD_GETGROUPUPDATES \
   "SELECT GO.mailbox, GO.resource, GO.alive " \
   "FROM vcard_objs GO "\
-  "WHERE GO.kind = :kind;"
+  "WHERE GO.kind = :kind AND GO.modseq > :modseq;"
 
 struct grup_rock {
     json_t *changed;
@@ -872,9 +872,9 @@ EXPORTED int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, json_t
     rock.changed = json_array();
     rock.removed = json_array();
     struct bind_val bval[] = {
-	{ "modseq", SQLITE_INTEGER, { .i = oldmodseq } },
-	{ "kind",   SQLITE_INTEGER, { .i = CARDDAV_KIND_GROUP } },
-	{ NULL,     SQLITE_NULL,    { .s = NULL  } }
+	{ ":modseq", SQLITE_INTEGER, { .i = oldmodseq } },
+	{ ":kind",   SQLITE_INTEGER, { .i = CARDDAV_KIND_GROUP } },
+	{ NULL,      SQLITE_NULL,    { .s = NULL  } }
     };
 
     r = dav_exec(carddavdb->db, CMD_GETGROUPUPDATES, bval, &getgroupupdates_cb, &rock,
