@@ -829,8 +829,7 @@ EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb,
 
 #define CMD_GETGROUPUPDATES \
   "SELECT GO.mailbox, GO.resource, GO.alive " \
-  "FROM vcard_objs GO " \
-  "WHERE GO.kind = :kind AND GO.modseq > :modseq;"
+  "FROM vcard_objs GO ";
 
 struct grup_rock {
     json_t *changed;
