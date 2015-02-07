@@ -889,8 +889,8 @@ EXPORTED int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, json_t
     json_object_set_new(contactGroupUpdates, "accountId", json_string(httpd_userid));
     json_object_set_new(contactGroupUpdates, "oldState", json_string(json_string_value(since)));
     json_object_set_new(contactGroupUpdates, "newState", json_string(buf_cstring(&buf)));
-    json_object_set_new(contactGroupUpdates, "changed", rock.changed);
-    json_object_set_new(contactGroupUpdates, "removed", rock.removed);
+    json_object_set(contactGroupUpdates, "changed", rock.changed);
+    json_object_set(contactGroupUpdates, "removed", rock.removed);
 
     json_t *item = json_pack("[]");
     json_array_append_new(item, json_string("contactGroupUpdates"));
@@ -905,6 +905,9 @@ EXPORTED int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, json_t
 	r = carddav_getContactGroups(carddavdb, getargs, modseq, response, tag);
 	json_decref(getargs);
     }
+
+    json_decref(rock.changed);
+    json_decref(rock.removed);
 
     buf_free(&buf);
     return r;
