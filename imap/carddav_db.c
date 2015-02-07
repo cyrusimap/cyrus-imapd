@@ -799,6 +799,13 @@ EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb,
 	hash_enumerate(rock.need, _add_notfound, notfound);
 	free_hash_table(rock.need, NULL);
 	free(rock.need);
+	if (json_array_size(notfound)) {
+	    json_object_set_new(mailboxes, "notFound", notfound);
+	}
+	else {
+	    json_decref(notfound);
+	    json_object_set_new(mailboxes, "notFound", json_null());
+	}
     }
     else {
 	json_object_set_new(mailboxes, "notFound", json_null());
