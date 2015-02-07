@@ -872,6 +872,7 @@ EXPORTED int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, json_t
     json_t *since = json_object_get(args, "sinceState");
     if (!since) return -1;
     modseq_t oldmodseq = str2uint64(json_string_value(since));
+    syslog(LOG_NOTICE, "OLDMODSEQ: %s %llu", json_string_value(since), oldmodseq);
     rock.changed = json_array();
     rock.removed = json_array();
     struct bind_val bval[] = {
