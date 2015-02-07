@@ -821,12 +821,24 @@ EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb,
     return 0;
 }
 
+struct grup_rock {
+    modseq_t oldmodseq;
+    json_t *changed;
+    json_t *deleted;
+};
+
 EXPORTED int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, json_t *args,
 					    modseq_t modseq, json_t *response, const char *tag)
 {
-    if (carddavdb && args && response && tag && modseq)
-	return 0;
-    return -1;
+    struct grup_rock rock;
+    struct bind_val bval[] = {
+	{ NULL,     SQLITE_NULL, { .s = NULL  } }
+    };
+    json_t *since = json_object_get(args, "sinceState");
+    if (!since) return -1;
+    rock.oldmodseq = str2uint64(json_string_get(since));
+    rock.changed = json_array();
+    rock.deleted = json_array();
 }
 
 EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, json_t *args,
