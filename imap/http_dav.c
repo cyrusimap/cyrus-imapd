@@ -4999,6 +4999,7 @@ int report_sync_col(struct transaction_t *txn,
 			   &uidvalidity, &syncmodseq, &basemodseq,
 			   tokenuri /* test for trailing junk */);
 
+		syslog(LOG_ERR, "scanned token %s to %d %u %llu %llu", str, r, uidvalidity, syncmodseq, basemodseq);
 		/* Sanity check the token components */
 		if (r < 2 || r > 3 ||
 		    (uidvalidity != mailbox->i.uidvalidity) ||
