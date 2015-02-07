@@ -460,7 +460,7 @@ EXPORTED strarray_t *carddav_getemail(struct carddav_db *carddavdb, const char *
 #define CMD_GETGROUP_EXISTS \
     "SELECT rowid " \
     " FROM vcard_objs" \
-    " WHERE mailbox = :mailbox AND vcard_uid = :group AND alive = 1;"
+    " WHERE mailbox = :mailbox AND kind = :kind AND vcard_uid = :group AND alive = 1;"
 
 #define CMD_GETGROUP_MEMBERS \
     "SELECT E.email FROM vcard_emails E" \
@@ -487,9 +487,10 @@ static int groupmembers_cb(sqlite3_stmt *stmt, void *rock)
 EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *mailbox, const char *group)
 {
     struct bind_val bval[] = {
-	{ ":mailbox", SQLITE_TEXT, { .s = mailbox } },
-	{ ":group",   SQLITE_TEXT, { .s = group   } },
-	{ NULL,       SQLITE_NULL, { .s = NULL    } }
+	{ ":mailbox", SQLITE_TEXT,    { .s = mailbox } },
+	{ ":group",   SQLITE_TEXT,    { .s = group   } },
+	{ ":kind",    SQLITE_INTEGER, { .i = CARDDAV_KIND_GROUP } },
+	{ NULL,       SQLITE_NULL,    { .s = NULL    } }
     };
 
     int exists = 0;
@@ -675,11 +676,13 @@ EXPORTED int carddav_delmbox(struct carddav_db *carddavdb, const char *mailbox, 
 }
 
 #define CMD_GETGROUPS \
-    "SELECT GO.mailbox, GO.resource, GO.fullname, CO.mailbox, CO.resource FROM vcard_objs GO" \
-    " LEFT JOIN vcard_groups G LEFT JOIN vcard_objs CO" \
-    " WHERE GO.rowid = G.objid AND G.member_uid = CO.vcard_uid" \
-    " AND GO.alive = 1 AND CO.alive = 1" \
-    " ORDER BY CO.rowid, G.pos"
+  "SELECT GO.mailbox, GO.resource, GO.fullname, F.mailbox, F.resource " \
+  "FROM vcard_objs GO LEFT JOIN (" \
+    "SELECT G.objid AS rowid, CO.mailbox, CO.resource FROM vcard_groups G " \
+    "JOIN vcard_objs CO ON (G.member_uid = CO.vcard_uid) " \
+    "WHERE CO.alive = 1 ORDER BY CO.rowid, G.pos" \
+  ") AS F USING (rowid)" \
+  "WHERE GO.kind = 1 AND GO.alive = 1;"
 
 struct groups_rock {
     json_t *array;
@@ -717,7 +720,7 @@ static int getgroups_cb(sqlite3_stmt *stmt, void *rock)
     if (grock->need) {
 	/* skip records not in hash */
 	if (!hash_lookup(buf_cstring(&groupid), grock->need))
-	    return 0;
+	    goto done;
 	/* mark 2 == seen */
 	hash_insert(buf_cstring(&groupid), (void *)2, grock->need);
     }
@@ -735,6 +738,9 @@ static int getgroups_cb(sqlite3_stmt *stmt, void *rock)
 	hash_insert(buf_cstring(&groupid), members, grock->hash);
     }
     if (card_resource) json_array_append(members, json_string(buf_cstring(&cardid)));
+done:
+    buf_free(&groupid);
+    buf_free(&cardid);
     return 0;
 }
 
@@ -790,30 +796,30 @@ EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb,
     free_hash_table(rock.hash, NULL);
     free(rock.hash);
 
-    json_t *mailboxes = json_pack("{}");
-    json_object_set_new(mailboxes, "accountId", json_string(httpd_userid));
-    json_object_set_new(mailboxes, "state", json_string(buf_cstring(&buf)));
-    json_object_set_new(mailboxes, "list", rock.array);
+    json_t *contactGroups = json_pack("{}");
+    json_object_set_new(contactGroups, "accountId", json_string(httpd_userid));
+    json_object_set_new(contactGroups, "state", json_string(buf_cstring(&buf)));
+    json_object_set_new(contactGroups, "list", rock.array);
     if (rock.need) {
 	json_t *notfound = json_array();
 	hash_enumerate(rock.need, _add_notfound, notfound);
 	free_hash_table(rock.need, NULL);
 	free(rock.need);
 	if (json_array_size(notfound)) {
-	    json_object_set_new(mailboxes, "notFound", notfound);
+	    json_object_set_new(contactGroups, "notFound", notfound);
 	}
 	else {
 	    json_decref(notfound);
-	    json_object_set_new(mailboxes, "notFound", json_null());
+	    json_object_set_new(contactGroups, "notFound", json_null());
 	}
     }
     else {
-	json_object_set_new(mailboxes, "notFound", json_null());
+	json_object_set_new(contactGroups, "notFound", json_null());
     }
 
     json_t *item = json_pack("[]");
     json_array_append_new(item, json_string("contactGroups"));
-    json_array_append_new(item, mailboxes);
+    json_array_append_new(item, contactGroups);
     json_array_append_new(item, json_string(tag));
 
     json_array_append_new(response, item);
@@ -821,24 +827,89 @@ EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb,
     return 0;
 }
 
+#define CMD_GETGROUPUPDATES \
+  "SELECT GO.mailbox, GO.resource, GO.alive " \
+  "FROM vcard_objs GO LEFT JOIN (" \
+    "SELECT G.objid AS rowid, MAX(CO.modseq) AS modseq FROM vcard_groups G " \
+    "JOIN vcard_objs CO ON (G.member_uid = CO.vcard_uid) " \
+    "GROUP BY G.objid" \
+  ") AS F USING (rowid) " \
+  "WHERE GO.kind = :kind AND (GO.modseq > :modseq OR F.modseq > :modseq);"
+
 struct grup_rock {
-    modseq_t oldmodseq;
     json_t *changed;
-    json_t *deleted;
+    json_t *removed;
 };
+
+static int getgroupupdates_cb(sqlite3_stmt *stmt, void *rock)
+{
+    struct grup_rock *grock = (struct grup_rock *)rock;
+    const char *group_mailbox = (const char *)sqlite3_column_text(stmt, 0);
+    const char *group_resource = (const char *)sqlite3_column_text(stmt, 1);
+    int group_alive = sqlite3_column_int(stmt, 2);
+    struct buf groupid = BUF_INITIALIZER;
+
+    _build_id(group_mailbox, group_resource, &groupid);
+
+    if (group_alive) {
+	json_array_append_new(grock->changed, json_string(buf_cstring(&groupid)));
+    }
+    else {
+	json_array_append_new(grock->removed, json_string(buf_cstring(&groupid)));
+    }
+
+    buf_free(&groupid);
+    return 0;
+}
 
 EXPORTED int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, json_t *args,
 					    modseq_t modseq, json_t *response, const char *tag)
 {
     struct grup_rock rock;
-    struct bind_val bval[] = {
-	{ NULL,     SQLITE_NULL, { .s = NULL  } }
-    };
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, "%llu", modseq);
+    int r;
     json_t *since = json_object_get(args, "sinceState");
     if (!since) return -1;
-    rock.oldmodseq = str2uint64(json_string_get(since));
+    modseq_t oldmodseq = str2uint64(json_string_value(since));
     rock.changed = json_array();
-    rock.deleted = json_array();
+    rock.removed = json_array();
+    struct bind_val bval[] = {
+	{ "modseq", SQLITE_INTEGER, { .i = oldmodseq } },
+	{ "kind",   SQLITE_INTEGER, { .i = CARDDAV_KIND_GROUP } },
+	{ NULL,     SQLITE_NULL,    { .s = NULL  } }
+    };
+
+    r = dav_exec(carddavdb->db, CMD_GETGROUPUPDATES, bval, &getgroupupdates_cb, &rock,
+		 &carddavdb->stmt[STMT_GETGROUPUPDATES]);
+    if (r) {
+	syslog(LOG_ERR, "caldav error %s", error_message(r));
+	/* XXX - free memory */
+	return r;
+    }
+
+    json_t *contactGroupUpdates = json_pack("{}");
+    json_object_set_new(contactGroupUpdates, "accountId", json_string(httpd_userid));
+    json_object_set_new(contactGroupUpdates, "oldState", json_string(json_string_value(since)));
+    json_object_set_new(contactGroupUpdates, "newState", json_string(buf_cstring(&buf)));
+    json_object_set_new(contactGroupUpdates, "changed", rock.changed);
+    json_object_set_new(contactGroupUpdates, "removed", rock.removed);
+
+    json_t *item = json_pack("[]");
+    json_array_append_new(item, json_string("contactGroupUpdates"));
+    json_array_append_new(item, mailboxes);
+    json_array_append_new(item, json_string(tag));
+
+    json_array_append_new(response, item);
+
+    json_t dofetch = json_object_get(args, "fetchContactGroups");
+    if (dofetch && json_is_true(dofetch)) {
+	json_t *getargs = json_pack("{s:o}", "ids", rock.changed);
+	r = carddav_getContactGroups(carddavdb, getargs, modseq, response, tag);
+    }
+
+    buf_free(&buf);
+    return r;
 }
 
 EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, json_t *args,
