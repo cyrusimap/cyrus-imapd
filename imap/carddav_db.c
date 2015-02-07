@@ -845,7 +845,6 @@ static int getgroupupdates_cb(sqlite3_stmt *stmt, void *rock)
     int group_alive = sqlite3_column_int(stmt, 2);
     struct buf groupid = BUF_INITIALIZER;
 
-    syslog(LOG_NOTICE, "FOUND ITEM %s", buf_cstring(&groupid));
     _build_id(group_mailbox, group_resource, &groupid);
 
     if (group_alive) {
