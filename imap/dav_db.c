@@ -81,7 +81,7 @@
     " dtend TEXT,"							\
     " comp_flags INTEGER,"						\
     " sched_tag TEXT,"							\
-    " exists INTEGER,"							\
+    " alive INTEGER,"							\
     " UNIQUE( mailbox, resource ) );"					\
     "CREATE INDEX IF NOT EXISTS idx_ical_uid ON ical_objs ( ical_uid );"
 
@@ -103,7 +103,7 @@
     " fullname TEXT,"							\
     " name TEXT,"							\
     " nickname TEXT,"							\
-    " exists INTEGER,"							\
+    " alive INTEGER,"							\
     " UNIQUE( mailbox, resource ) );"					\
     "CREATE INDEX IF NOT EXISTS idx_vcard_fn ON vcard_objs ( fullname );" \
     "CREATE INDEX IF NOT EXISTS idx_vcard_uid ON vcard_objs ( vcard_uid );"
@@ -140,10 +140,10 @@
     "UPDATE vcard_objs SET modseq = 1;"
 
 #define CMD_DBUPDGRADEv4					\
-    "ALTER TABLE ical_objs ADD COLUMN exists INTEGER;"		\
-    "UPDATE ical_objs SET exists = 1;"				\
-    "ALTER TABLE vcard_objs ADD COLUMN exists INTEGER;"		\
-    "UPDATE vcard_objs SET exists = 1;"
+    "ALTER TABLE ical_objs ADD COLUMN alive INTEGER;"		\
+    "UPDATE ical_objs SET alive = 1;"				\
+    "ALTER TABLE vcard_objs ADD COLUMN alive INTEGER;"		\
+    "UPDATE vcard_objs SET alive = 1;"
 
 
 #define DB_VERSION 4

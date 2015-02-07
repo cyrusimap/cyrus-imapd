@@ -2681,7 +2681,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 	cdata->dav.resource = resource;
 	cdata->dav.imap_uid = new->uid;
 	cdata->dav.modseq = new->modseq;
-	cdata->dav.exists = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
+	cdata->dav.alive = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
 
 	if (!cdata->dav.creationdate)
 	    cdata->dav.creationdate = new->internaldate;
@@ -2694,7 +2694,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
     } else {
 	/* just a flag change on an existing record */
 	cdata->dav.modseq = new->modseq;
-	cdata->dav.exists = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
+	cdata->dav.alive = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
 	r = carddav_write(carddavdb, cdata, 0);
     }
 
@@ -2784,7 +2784,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 	cdata->dav.mailbox = mailbox->name;
 	cdata->dav.imap_uid = new->uid;
 	cdata->dav.modseq = new->modseq;
-	cdata->dav.exists = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
+	cdata->dav.alive = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
 	cdata->dav.resource = resource;
 	cdata->sched_tag = sched_tag;
 
@@ -2802,7 +2802,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 	int rc = caldav_alarm_delete_all(alarmdb, &alarmdata);
 
 	/* add new ones unless this record is expunged */
-	if (cdata->dav.exists) {
+	if (cdata->dav.alive) {
 	    int i;
 	    for (i = CALDAV_ALARM_ACTION_FIRST; i <= CALDAV_ALARM_ACTION_LAST; i++) {
 		/* prepare alarm data */
@@ -2827,7 +2827,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
     else {
 	/* just a flags update to an existing record */
 	cdata->dav.modseq = new->modseq;
-	cdata->dav.exists = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
+	cdata->dav.alive = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
 	r = caldav_write(caldavdb, cdata, 0);
     }
 

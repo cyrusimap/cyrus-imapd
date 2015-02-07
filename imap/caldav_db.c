@@ -262,7 +262,7 @@ static unsigned _comp_flags_to_num(struct comp_flags *flags)
     "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
     "  comp_type, ical_uid, organizer, dtstart, dtend,"			\
-    "  comp_flags, sched_tag, exists"					\
+    "  comp_flags, sched_tag, alive"					\
     " FROM ical_objs"							\
 
 static int read_cb(sqlite3_stmt *stmt, void *rock)
@@ -274,8 +274,8 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 
     memset(cdata, 0, sizeof(struct caldav_data));
 
-    cdata->dav.exists = sqlite3_column_int(stmt, 16);
-    if (!(rrock->flags && RROCK_FLAG_TOMBSTONES) && !cdata->dav.exists)
+    cdata->dav.alive = sqlite3_column_int(stmt, 16);
+    if (!(rrock->flags && RROCK_FLAG_TOMBSTONES) && !cdata->dav.alive)
 	return 0;
 
     cdata->dav.rowid = sqlite3_column_int(stmt, 0);
@@ -411,7 +411,7 @@ EXPORTED int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
 
 
 #define CMD_SELMBOX CMD_READFIELDS \
-    " WHERE mailbox = :mailbox AND exists = 1;"
+    " WHERE mailbox = :mailbox AND alive = 1;"
 
 EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
 		   int (*cb)(void *rock, void *data),
@@ -432,19 +432,19 @@ EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
 
 #define CMD_INSERT							\
     "INSERT INTO ical_objs ("						\
-    "  exists, creationdate, mailbox, resource, imap_uid, modseq,"	\
+    "  alive, creationdate, mailbox, resource, imap_uid, modseq,"	\
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
     "  comp_type, ical_uid, organizer, dtstart, dtend,"			\
     "  comp_flags, sched_tag )"					\
     " VALUES ("								\
-    "  :exists, :creationdate, :mailbox, :resource, :imap_uid, :modseq,"\
+    "  :alive, :creationdate, :mailbox, :resource, :imap_uid, :modseq,"\
     "  :lock_token, :lock_owner, :lock_ownerid, :lock_expire,"		\
     "  :comp_type, :ical_uid, :organizer, :dtstart, :dtend,"		\
     "  :comp_flags, :sched_tag );"
 
 #define CMD_UPDATE			\
     "UPDATE ical_objs SET"		\
-    "  exists       = :exists,"		\
+    "  alive       = :alive,"		\
     "  imap_uid     = :imap_uid,"	\
     "  lock_token   = :lock_token,"	\
     "  lock_owner   = :lock_owner,"	\
@@ -464,7 +464,7 @@ EXPORTED int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata,
 		 int commit)
 {
     struct bind_val bval[] = {
-	{ ":exists",	   SQLITE_INTEGER, { .i = cdata->dav.exists	  } },
+	{ ":alive",	   SQLITE_INTEGER, { .i = cdata->dav.alive	  } },
 	{ ":imap_uid",	   SQLITE_INTEGER, { .i = cdata->dav.imap_uid	  } },
 	{ ":modseq",	   SQLITE_INTEGER, { .i = cdata->dav.modseq	  } },
 	{ ":lock_token",   SQLITE_TEXT,	   { .s = cdata->dav.lock_token	  } },
