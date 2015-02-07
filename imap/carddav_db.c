@@ -901,7 +901,8 @@ EXPORTED int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, json_t
 
     json_t *dofetch = json_object_get(args, "fetchContactGroups");
     if (dofetch && json_is_true(dofetch)) {
-	json_t *getargs = json_pack("{s:o}", "ids", rock.changed);
+	json_t *getargs = json_pack("{}");
+	json_object_set(getargs, "ids", rock.changed);
 	r = carddav_getContactGroups(carddavdb, getargs, modseq, response, tag);
 	json_decref(getargs);
     }
