@@ -749,6 +749,7 @@ static void _add_notfound(const char *key, void *data, void *rock)
 /* jmap contact APIs */
 EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb,
 				      json_t *args,
+				      modseq_t modseq,
 				      json_t *response,
 				      const char *tag)
 {
@@ -757,12 +758,8 @@ EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb,
     };
     struct groups_rock rock;
     int r;
-
-    /* XXX - how about a lock around this? */
-    const char *mboxname = mboxname_user_mbox(carddavdb->userid, NULL);
-    modseq_t highestmodseq = mboxname_readmodseq(mboxname);
     struct buf buf = BUF_INITIALIZER;
-    buf_printf(&buf, "%llu", highestmodseq);
+    buf_printf(&buf, "%llu", modseq);
 
     rock.array = json_pack("[]");
     rock.need = NULL;  /* XXX - support getting a list of IDs */
@@ -818,25 +815,25 @@ EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb,
 }
 
 EXPORTED int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, json_t *args,
-					    json_t *response, const char *tag)
+					    modseq_t modseq, json_t *response, const char *tag)
 {
-    if (carddavdb && args && response && tag)
+    if (carddavdb && args && response && tag && modseq)
 	return 0;
     return -1;
 }
 
 EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, json_t *args,
-				 json_t *response, const char *tag)
+				 modseq_t modseq, json_t *response, const char *tag)
 {
-    if (carddavdb && args && response && tag)
+    if (carddavdb && args && response && tag && modseq)
 	return 0;
     return -1;
 }
 
 EXPORTED int carddav_getContactUpdates(struct carddav_db *carddavdb, json_t *args,
-				       json_t *response, const char *tag)
+				       modseq_t modseq, json_t *response, const char *tag)
 {
-    if (carddavdb && args && response && tag)
+    if (carddavdb && args && response && tag && modseq)
 	return 0;
     return -1;
 }

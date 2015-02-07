@@ -75,15 +75,15 @@ static void jmap_init(struct buf *serverinfo);
 static void jmap_auth(const char *userid);
 static int meth_get(struct transaction_t *txn, void *params);
 static int meth_post(struct transaction_t *txn, void *params);
-static int getMailboxes(json_t *args, json_t *response, const char *tag);
-static int getContactGroups(json_t *args, json_t *response, const char *tag);
-static int getContactGroupUpdates(json_t *args, json_t *response, const char *tag);
-static int getContacts(json_t *args, json_t *response, const char *tag);
-static int getContactUpdates(json_t *args, json_t *response, const char *tag);
+static int getMailboxes(json_t *args, modseq_t modseq, json_t *response, const char *tag);
+static int getContactGroups(json_t *args, modseq_t modseq, json_t *response, const char *tag);
+static int getContactGroupUpdates(json_t *args, modseq_t modseq, json_t *response, const char *tag);
+static int getContacts(json_t *args, modseq_t modseq, json_t *response, const char *tag);
+static int getContactUpdates(json_t *args, modseq_t modseq, json_t *response, const char *tag);
 
 static const struct message_t {
     const char *name;
-    int (*proc)(json_t *args, json_t *response, const char *tag);
+    int (*proc)(json_t *args, modseq_t modseq, json_t *response, const char *tag);
 } messages[] = {
     { "getMailboxes",	&getMailboxes },
     { "getContactGroups",	&getContactGroups },
@@ -192,6 +192,19 @@ static int meth_post(struct transaction_t *txn,
 	goto done;
     }
 
+    const char *inboxname = mboxname_user_mbox(httpd_userid, NULL);
+
+    /* we lock the user's INBOX before we start any operation, because that way we
+     * guarantee (via conversations magic) that nothing changes the modseqs except
+     * our operations */
+    struct mailbox *mailbox = NULL;
+    int r = mailbox_open_iwl(inboxname, &mailbox);
+    if (r) {
+	txn->error.desc = "Unable to lock user INBOX\r\n";
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
     /* Process each message in the request */
     for (i = 0; i < json_array_size(req); i++) {
 	json_t *msg = json_array_get(req, i);
@@ -211,7 +224,12 @@ static int meth_post(struct transaction_t *txn,
 	    continue;
 	}
 
-	r = mp->proc(args, resp, tag);
+	/* read the modseq again every time, just in case something changed it
+	 * in our actions */
+	modseq_t modseq = mboxname_readmodseq(inboxname);
+
+	r = mp->proc(args, modseq, resp, tag);
+
 
 	if (r) {
 	    txn->error.desc = "Unable to create JSON response body\r\n";
@@ -219,6 +237,9 @@ static int meth_post(struct transaction_t *txn,
 	    goto done;
 	}
     }
+
+    /* unlock here so that we don't block on writing */
+    mailbox_unlock_index(mailbox, NULL);
 
     /* Dump JSON object into a text buffer */
     flags |= (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
@@ -236,6 +257,7 @@ static int meth_post(struct transaction_t *txn,
     free(buf);
 
   done:
+    mailbox_close(&mailbox);
     if (req) json_decref(req);
     if (resp) json_decref(resp);
 
@@ -310,14 +332,16 @@ int getMailboxes_cb(char *mboxname, int matchlen __attribute__((unused)),
 
 
 /* Execute a getMailboxes message */
-static int getMailboxes(json_t *args __attribute__((unused)), json_t *response, const char *tag)
+static int getMailboxes(json_t *args __attribute__((unused)), modseq_t modseq, json_t *response, const char *tag)
 {
     json_t *item, *mailboxes, *list;
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, "%llu", modseq);
 
     /* Start constructing our response */
     item = json_pack("[s {s:s s:s} s]", "mailboxes",
 		     "accountId", httpd_userid,
-		     "state", "",
+		     "state", buf_cstring(&buf),
 		     tag);
 
     list = json_array();
@@ -334,39 +358,40 @@ static int getMailboxes(json_t *args __attribute__((unused)), json_t *response, 
 
     json_array_append_new(response, item);
 
+    buf_free(&buf);
     return 0;
 }
 
-static int getContactGroups(json_t *args, json_t *response, const char *tag)
+static int getContactGroups(json_t *args, modseq_t modseq, json_t *response, const char *tag)
 {
     struct carddav_db *db = carddav_open_userid(httpd_userid);
     if (!db) return -1;
-    int r = carddav_getContactGroups(db, args, response, tag);
+    int r = carddav_getContactGroups(db, args, modseq, response, tag);
     return r;
 }
 
 
-static int getContactGroupUpdates(json_t *args, json_t *response, const char *tag)
+static int getContactGroupUpdates(json_t *args, modseq_t modseq, json_t *response, const char *tag)
 {
     struct carddav_db *db = carddav_open_userid(httpd_userid);
     if (!db) return -1;
-    int r = carddav_getContactGroupUpdates(db, args, response, tag);
+    int r = carddav_getContactGroupUpdates(db, args, modseq, response, tag);
     return r;
 }
 
-static int getContacts(json_t *args, json_t *response, const char *tag)
+static int getContacts(json_t *args, modseq_t modseq, json_t *response, const char *tag)
 {
     struct carddav_db *db = carddav_open_userid(httpd_userid);
     if (!db) return -1;
-    int r = carddav_getContacts(db, args, response, tag);
+    int r = carddav_getContacts(db, args, modseq, response, tag);
     return r;
 }
 
-static int getContactUpdates(json_t *args, json_t *response, const char *tag)
+static int getContactUpdates(json_t *args, modseq_t modseq, json_t *response, const char *tag)
 {
     struct carddav_db *db = carddav_open_userid(httpd_userid);
     if (!db) return -1;
-    int r = carddav_getContactUpdates(db, args, response, tag);
+    int r = carddav_getContactUpdates(db, args, modseq, response, tag);
     return r;
 }
 
