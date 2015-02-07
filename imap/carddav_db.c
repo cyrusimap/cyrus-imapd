@@ -829,12 +829,8 @@ EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb,
 
 #define CMD_GETGROUPUPDATES \
   "SELECT GO.mailbox, GO.resource, GO.alive " \
-  "FROM vcard_objs GO LEFT JOIN (" \
-    "SELECT G.objid AS rowid, MAX(CO.modseq) AS modseq FROM vcard_groups G " \
-    "JOIN vcard_objs CO ON (G.member_uid = CO.vcard_uid) " \
-    "GROUP BY G.objid" \
-  ") AS F USING (rowid) " \
-  "WHERE GO.kind = :kind AND (GO.modseq > :modseq OR F.modseq > :modseq);"
+  "FROM vcard_objs GO " \
+  "WHERE GO.kind = :kind AND GO.modseq > :modseq;"
 
 struct grup_rock {
     json_t *changed;
@@ -872,7 +868,6 @@ EXPORTED int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, json_t
     json_t *since = json_object_get(args, "sinceState");
     if (!since) return -1;
     modseq_t oldmodseq = str2uint64(json_string_value(since));
-    syslog(LOG_NOTICE, "OLDMODSEQ: %s %llu", json_string_value(since), oldmodseq);
     rock.changed = json_array();
     rock.removed = json_array();
     struct bind_val bval[] = {
