@@ -913,12 +913,121 @@ EXPORTED int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, json_t
     return r;
 }
 
+struct contacts_rock {
+    json_t *array;
+    struct hash_table *hash;
+    struct hash_table *need;
+    struct hash_table *props;
+};
+
+static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
+{
+    struct contacts_rock *grock = (struct contacts_rock *)rock;
+    const char *card_mailbox = (const char *)sqlite3_column_text(stmt, 0);
+    const char *card_resource = (const char *)sqlite3_column_text(stmt, 1);
+    uint32_t uid = sqlite3_column_int(stmt, 2);
+    struct buf cardid = BUF_INITIALIZER;
+
+    _build_id(card_mailbox, card_resource, &cardid);
+
+    if (grock->need) {
+	/* skip records not in hash */
+	if (!hash_lookup(buf_cstring(&cardid), grock->need))
+	    goto done;
+	/* mark 2 == seen */
+	hash_insert(buf_cstring(&cardid), (void *)2, grock->need);
+    }
+
+    /* XXX - add the actual record */
+
+done:
+    buf_free(&cardid);
+    return 0;
+}
+
 EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, json_t *args,
 				 modseq_t modseq, json_t *response, const char *tag)
 {
-    if (carddavdb && args && response && tag && modseq)
-	return 0;
-    return -1;
+    struct bind_val bval[] = {
+	{ NULL,     SQLITE_NULL, { .s = NULL  } }
+    };
+    struct contacts_rock rock;
+    int r;
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, "%llu", modseq);
+
+    rock.array = json_pack("[]");
+    rock.need = NULL;  /* XXX - support getting a list of IDs */
+    rock.hash = xzmalloc(sizeof(struct hash_table));
+    construct_hash_table(rock.hash, 1024, 0);
+
+    json_t *want = json_object_get(args, "ids");
+    if (want) {
+	rock.need = xzmalloc(sizeof(struct hash_table));
+	construct_hash_table(rock.need, 1024, 0);
+	int i;
+	int size = json_array_size(want);
+	for (i = 0; i < size; i++) {
+	    const char *id = json_string_value(json_array_get(want, i));
+	    /* 1 == want */
+	    hash_insert(id, (void *)1, rock.need);
+	}
+    }
+
+    json_t *properties = json_object_get(args, "properties");
+    if (properties) {
+	rock.props = xzmalloc(sizeof(struct hash_table));
+	construct_hash_table(rock.props, 1024, 0);
+	int i;
+	int size = json_array_size(properties);
+	for (i = 0; i < size; i++) {
+	    const char *id = json_string_value(json_array_get(properties, i));
+	    /* 1 == properties */
+	    hash_insert(id, (void *)1, rock.props);
+	}
+    }
+
+    r = dav_exec(carddavdb->db, CMD_GETCONTACTS, bval, &getcontacts_cb, &rock,
+		 &carddavdb->stmt[STMT_GETCONTACTS]);
+    if (r) {
+	syslog(LOG_ERR, "caldav error %s", error_message(r));
+	/* XXX - free memory */
+	return r;
+    }
+
+    free_hash_table(rock.hash, NULL);
+    free(rock.hash);
+
+    json_t *contacts = json_pack("{}");
+    json_object_set_new(contacts, "accountId", json_string(httpd_userid));
+    json_object_set_new(contacts, "state", json_string(buf_cstring(&buf)));
+    json_object_set_new(contacts, "list", rock.array);
+    if (rock.need) {
+	json_t *notfound = json_array();
+	hash_enumerate(rock.need, _add_notfound, notfound);
+	free_hash_table(rock.need, NULL);
+	free(rock.need);
+	if (json_array_size(notfound)) {
+	    json_object_set_new(contacts, "notFound", notfound);
+	}
+	else {
+	    json_decref(notfound);
+	    json_object_set_new(contacts, "notFound", json_null());
+	}
+    }
+    else {
+	json_object_set_new(contacts, "notFound", json_null());
+    }
+
+    json_t *item = json_pack("[]");
+    json_array_append_new(item, json_string("contacts"));
+    json_array_append_new(item, contacts);
+    json_array_append_new(item, json_string(tag));
+
+    json_array_append_new(response, item);
+
+    return 0;
+}
 }
 
 EXPORTED int carddav_getContactUpdates(struct carddav_db *carddavdb, json_t *args,
