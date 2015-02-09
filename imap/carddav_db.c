@@ -967,7 +967,7 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
     memset(&vparser, 0, sizeof(struct vparse_state));
     vparser.base = buf_cstring(&msg_buf) + record.header_size;
     vparse_set_multival(&vparser, "adr");
-    //vparse_set_multival(&vparser, "org");
+    vparse_set_multival(&vparser, "org");
     vparse_set_multival(&vparser, "n");
     r = vparse_parse(&vparser, 0);
     buf_free(&msg_buf);
@@ -991,6 +991,10 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
     const struct vparse_list *foo = first ? first->next : NULL;
     const struct vparse_list *prefix = foo ? foo->next : NULL;
 
+    const struct vparse_list *company = vparse_multival(card, "org");
+    const struct vparse_list *department = company ? company->next : NULL;
+
+    /* name fields */
     if (_wantprop(grock->props, "lastName"))
 	json_object_set_new(obj, "lastName", json_string(last ? last->s : ""));
     if (_wantprop(grock->props, "firstName"))
@@ -998,9 +1002,56 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
     if (_wantprop(grock->props, "prefix"))
 	json_object_set_new(obj, "prefix", json_string(prefix ? prefix->s : ""));
 
-    if (_wantprop(grock->props, "nickname")) {
-	const char *item = vparse_stringval(card, "nickname");
-	json_object_set_new(obj, "nickname", json_string(item ? item : ""));
+    /* org fields */
+    if (_wantprop(grock->props, "company"))
+	json_object_set_new(obj, "company", json_string(company ? company->s : ""));
+    if (_wantprop(grock->props, "department"))
+	json_object_set_new(obj, "department", json_string(department ? department->s : ""));
+
+    /* address - we need to open code this, because it's repeated */
+    if (_wantprop(grock->props, "addresses")) {
+	json_t *adr = json_array();
+
+	struct vparse_entry *entry;
+	for (entry = card->properties; entry; entry = entry->next) {
+	    if (strcasecmp(entry->name, "adr")) continue;
+	    json_t *item = json_pack("{}");
+
+	    /* XXX - type and label */
+	    const struct vparse_list *pobox = entry->v.values;
+	    const struct vparse_list *ext = pobox ? pobox->next : NULL;
+	    const struct vparse_list *street = ext ? ext->next : NULL;
+	    const struct vparse_list *locality = street ? street->next : NULL;
+	    const struct vparse_list *region = locality ? locality->next : NULL;
+	    const struct vparse_list *postcode = region ? region->next : NULL;
+	    const struct vparse_list *country = postcode ? postcode->next : NULL;
+
+	    json_object_set_new(item, "locality", json_string(locality ? locality->s : ""));
+	    json_object_set_new(item, "region", json_string(region ? region->s : ""));
+	    json_object_set_new(item, "postcode", json_string(postcode ? postcode->s : ""));
+	    json_object_set_new(item, "country", json_string(country ? country->s : ""));
+
+	    json_array_append_new(adr, item);
+	}
+
+	json_object_set_new(obj, "addresses", adr);
+    }
+
+    /* address - we need to open code this, because it's repeated */
+    if (_wantprop(grock->props, "emails")) {
+	json_t *emails = json_array();
+
+	struct vparse_entry *entry;
+	for (entry = card->properties; entry; entry = entry->next) {
+	    if (strcasecmp(entry->name, "email")) continue;
+	    json_t *item = json_pack("{}");
+
+	    json_object_set_new(item, "value", json_string(entry->v.value));
+
+	    json_array_append_new(emails, item);
+	}
+
+	json_object_set_new(obj, "emails", emails);
     }
 
     if (_wantprop(grock->props, "nickname")) {
@@ -1008,9 +1059,9 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 	json_object_set_new(obj, "nickname", json_string(item ? item : ""));
     }
 
-    if (_wantprop(grock->props, "company")) {
-	const char *item = vparse_stringval(card, "org");
-	json_object_set_new(obj, "company", json_string(item ? item : ""));
+    if (_wantprop(grock->props, "nickname")) {
+	const char *item = vparse_stringval(card, "nickname");
+	json_object_set_new(obj, "nickname", json_string(item ? item : ""));
     }
 
     /* XXX - other fields */
