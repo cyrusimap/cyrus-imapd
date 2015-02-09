@@ -74,9 +74,8 @@ enum {
     STMT_GETGROUP_EXISTS,
     STMT_GETGROUP_MEMBERS,
     STMT_GETGROUPS,
-    STMT_GETGROUPUPDATES,
     STMT_GETCONTACTS,
-    STMT_GETCONTACTUPDATES,
+    STMT_GETUPDATES,
     NUM_STMT
 };
 
@@ -827,19 +826,19 @@ EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb,
     return 0;
 }
 
-#define CMD_GETGROUPUPDATES \
-  "SELECT GO.mailbox, GO.resource, GO.alive " \
-  "FROM vcard_objs GO "\
-  "WHERE GO.kind = :kind AND GO.modseq > :modseq;"
+#define CMD_GETUPDATES \
+  "SELECT mailbox, resource, alive " \
+  "FROM vcard_objs "\
+  "WHERE kind = :kind AND modseq > :modseq;"
 
-struct grup_rock {
+struct updates_rock {
     json_t *changed;
     json_t *removed;
 };
 
 static int getgroupupdates_cb(sqlite3_stmt *stmt, void *rock)
 {
-    struct grup_rock *grock = (struct grup_rock *)rock;
+    struct updates_rock *grock = (struct updates_rock *)rock;
     const char *group_mailbox = (const char *)sqlite3_column_text(stmt, 0);
     const char *group_resource = (const char *)sqlite3_column_text(stmt, 1);
     int group_alive = sqlite3_column_int(stmt, 2);
@@ -861,7 +860,7 @@ static int getgroupupdates_cb(sqlite3_stmt *stmt, void *rock)
 EXPORTED int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, json_t *args,
 					    modseq_t modseq, json_t *response, const char *tag)
 {
-    struct grup_rock rock;
+    struct updates_rock rock;
     struct buf buf = BUF_INITIALIZER;
     buf_printf(&buf, "%llu", modseq);
     int r;
@@ -876,8 +875,8 @@ EXPORTED int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, json_t
 	{ NULL,      SQLITE_NULL,    { .s = NULL  } }
     };
 
-    r = dav_exec(carddavdb->db, CMD_GETGROUPUPDATES, bval, &getgroupupdates_cb, &rock,
-		 &carddavdb->stmt[STMT_GETGROUPUPDATES]);
+    r = dav_exec(carddavdb->db, CMD_GETUPDATES, bval, &getgroupupdates_cb, &rock,
+		 &carddavdb->stmt[STMT_GETUPDATES]);
     if (r) {
 	syslog(LOG_ERR, "caldav error %s", error_message(r));
 	/* XXX - free memory */
@@ -1251,12 +1250,82 @@ EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, json_t *args,
     return 0;
 }
 
+static int getcontactupdates_cb(sqlite3_stmt *stmt, void *rock)
+{
+    struct updates_rock *grock = (struct updates_rock *)rock;
+    const char *contact_mailbox = (const char *)sqlite3_column_text(stmt, 0);
+    const char *contact_resource = (const char *)sqlite3_column_text(stmt, 1);
+    int contact_alive = sqlite3_column_int(stmt, 2);
+    struct buf contactid = BUF_INITIALIZER;
+
+    _build_id(contact_mailbox, contact_resource, &contactid);
+
+    if (contact_alive) {
+	json_array_append_new(grock->changed, json_string(buf_cstring(&contactid)));
+    }
+    else {
+	json_array_append_new(grock->removed, json_string(buf_cstring(&contactid)));
+    }
+
+    buf_free(&contactid);
+    return 0;
+}
+
 EXPORTED int carddav_getContactUpdates(struct carddav_db *carddavdb, json_t *args,
 				       modseq_t modseq, json_t *response, const char *tag)
 {
-    if (carddavdb && args && response && tag && modseq)
-	return 0;
-    return -1;
+    struct updates_rock rock;
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, "%llu", modseq);
+    int r;
+    json_t *since = json_object_get(args, "sinceState");
+    if (!since) return -1;
+    modseq_t oldmodseq = str2uint64(json_string_value(since));
+    rock.changed = json_array();
+    rock.removed = json_array();
+    struct bind_val bval[] = {
+	{ ":modseq", SQLITE_INTEGER, { .i = oldmodseq } },
+	{ ":kind",   SQLITE_INTEGER, { .i = 0 } },
+	{ NULL,      SQLITE_NULL,    { .s = NULL  } }
+    };
+
+    r = dav_exec(carddavdb->db, CMD_GETUPDATES, bval, &getcontactupdates_cb, &rock,
+		 &carddavdb->stmt[STMT_GETUPDATES]);
+    if (r) {
+	syslog(LOG_ERR, "caldav error %s", error_message(r));
+	/* XXX - free memory */
+	return r;
+    }
+
+    json_t *contactUpdates = json_pack("{}");
+    json_object_set_new(contactUpdates, "accountId", json_string(httpd_userid));
+    json_object_set_new(contactUpdates, "oldState", json_string(json_string_value(since)));
+    json_object_set_new(contactUpdates, "newState", json_string(buf_cstring(&buf)));
+    json_object_set(contactUpdates, "changed", rock.changed);
+    json_object_set(contactUpdates, "removed", rock.removed);
+
+    json_t *item = json_pack("[]");
+    json_array_append_new(item, json_string("contactUpdates"));
+    json_array_append_new(item, contactUpdates);
+    json_array_append_new(item, json_string(tag));
+
+    json_array_append_new(response, item);
+
+    json_t *dofetch = json_object_get(args, "fetchContacts");
+    if (dofetch && json_is_true(dofetch)) {
+	json_t *getargs = json_pack("{}");
+	json_t *props = json_object_get(args, "fetchContactProperties");
+	json_object_set(getargs, "ids", rock.changed);
+	if (props) json_object_set(getargs, "properties", props);
+	r = carddav_getContactGroups(carddavdb, getargs, modseq, response, tag);
+	json_decref(getargs);
+    }
+
+    json_decref(rock.changed);
+    json_decref(rock.removed);
+
+    buf_free(&buf);
+    return r;
 }
 
 EXPORTED void carddav_make_entry(struct vparse_card *vcard, struct carddav_data *cdata)
