@@ -724,6 +724,15 @@ const struct vparse_list *vparse_multival(const struct vparse_card *card, const 
     return NULL;
 }
 
+void vparse_set_multival(struct vparse_state *state, const char *name)
+{
+    struct vparse_list *list;
+    MAKE(list, vparse_list);
+    list->s = strdup(name);
+    list->next = state->multival;
+    state->multival = list;
+}
+
 #ifdef DEBUG
 static int _dump_card(struct vparse_card *card)
 {
