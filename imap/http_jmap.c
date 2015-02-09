@@ -154,6 +154,7 @@ static int meth_post(struct transaction_t *txn,
     json_t *req, *resp = NULL;
     json_error_t jerr;
     const struct message_t *mp = NULL;
+    struct mailbox *mailbox = NULL;
     size_t i, flags = JSON_PRESERVE_ORDER;
     int ret;
     char *buf;
@@ -197,7 +198,6 @@ static int meth_post(struct transaction_t *txn,
     /* we lock the user's INBOX before we start any operation, because that way we
      * guarantee (via conversations magic) that nothing changes the modseqs except
      * our operations */
-    struct mailbox *mailbox = NULL;
     int r = mailbox_open_iwl(inboxname, &mailbox);
     if (r) {
 	txn->error.desc = "Unable to lock user INBOX\r\n";
