@@ -1026,6 +1026,35 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 	    const struct vparse_list *postcode = region ? region->next : NULL;
 	    const struct vparse_list *country = postcode ? postcode->next : NULL;
 
+	    const struct vparse_param *param;
+	    const char *type = "other";
+	    const char *label = NULL;
+	    for (param = entry->params; param; param = param->next) {
+		if (!strcasecmp(param->name, "type")) {
+		    if (!strcasecmp(param->value, "home")) {
+			type = "home";
+			break;
+		    }
+		    else if (!strcasecmp(param->value, "work")) {
+			type = "work";
+			break;
+		    }
+		    else if (!strcasecmp(param->value, "billing")) {
+			type = "billing";
+			break;
+		    }
+		    else if (!strcasecmp(param->value, "postal")) {
+			type = "postal";
+			break;
+		    }
+		}
+		else if (!strcasecmp(param->name, "label")) {
+		    label = param->value;
+		}
+	    }
+	    json_object_set_new(item, "type", json_string(type));
+	    if (label) json_object_set_new(item, "label", json_string(label));
+
 	    json_object_set_new(item, "locality", json_string(locality ? locality->s : ""));
 	    json_object_set_new(item, "region", json_string(region ? region->s : ""));
 	    json_object_set_new(item, "postcode", json_string(postcode ? postcode->s : ""));
