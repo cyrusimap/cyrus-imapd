@@ -83,5 +83,8 @@ extern void vparse_free(struct vparse_state *state);
 extern void vparse_fillpos(struct vparse_state *state, struct vparse_errorpos *pos);
 extern const char *vparse_errstr(int err);
 
+extern const char *vparse_stringval(const struct vparse_card *card, const char *name);
+extern const struct vparse_list *vparse_multival(const struct vparse_card *card, const char *name);
+
 #endif /* VCARDFAST_H */
 

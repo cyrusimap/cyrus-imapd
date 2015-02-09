@@ -702,6 +702,28 @@ EXPORTED const char *vparse_errstr(int err)
     return "Unknown error";
 }
 
+const char *vparse_stringval(const struct vparse_card *card, const char *name)
+{
+    struct vparse_entry *entry;
+    for (entry = card->properties; entry; entry = entry->next) {
+	if (entry->multivalue == 1) continue;
+	if (!strcasecmp(name, entry->name))
+	    return entry->v.value;
+    }
+    return NULL;
+}
+
+const struct vparse_list *vparse_multival(const struct vparse_card *card, const char *name)
+{
+    struct vparse_entry *entry;
+    for (entry = card->properties; entry; entry = entry->next) {
+	if (entry->multivalue == 0) continue;
+	if (!strcasecmp(name, entry->name))
+	    return entry->v.values;
+    }
+    return NULL;
+}
+
 #ifdef DEBUG
 static int _dump_card(struct vparse_card *card)
 {
