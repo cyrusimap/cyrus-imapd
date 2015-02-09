@@ -2626,7 +2626,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
     if (!userid) goto done;
 
     /* phantom record - never really existed here */
-    if (!old && (new->system_flags & FLAG_EXPUNGED))
+    if (!old && (new->system_flags & FLAG_UNLINKED))
 	goto done;
 
     r = mailbox_cacherecord(mailbox, new);
