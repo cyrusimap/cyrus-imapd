@@ -983,7 +983,7 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
     json_object_set_new(obj, "id", json_string(buf_cstring(&cardid)));
 
     if (_wantprop(grock->props, "isFlagged")) {
-	json_object_set_new(obj, "isFlagged", json_boolean(record.system_flags & FLAG_FLAGGED));
+	json_object_set_new(obj, "isFlagged", record.system_flags & FLAG_FLAGGED ? json_true() : json_false());
     }
 
     struct vparse_entry *entry;
