@@ -1317,7 +1317,7 @@ EXPORTED int carddav_getContactUpdates(struct carddav_db *carddavdb, json_t *arg
 	json_t *props = json_object_get(args, "fetchContactProperties");
 	json_object_set(getargs, "ids", rock.changed);
 	if (props) json_object_set(getargs, "properties", props);
-	r = carddav_getContactGroups(carddavdb, getargs, modseq, response, tag);
+	r = carddav_getContacts(carddavdb, getargs, modseq, response, tag);
 	json_decref(getargs);
     }
 
