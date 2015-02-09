@@ -774,12 +774,10 @@ EXPORTED int caldav_alarm_process()
 	    goto done_item;
 	}
 
-	ical = icalparser_parse_string(buf_base(&msg_buf) + record.header_size);
-	buf_free(&msg_buf);
+	ical = icalparser_parse_string(buf_cstring(&msg_buf) + record.header_size);
 
 	rc = annotatemore_lookup(mailbox->name, displayname_annot, NULL, &calname_buf);
 	if (rc || !calname_buf.len) buf_setcstr(&calname_buf, strrchr(mailbox->name, '.') + 1);
-	buf_cstring(&calname_buf);
 
 	mailbox_close(&mailbox);
 	mailbox = NULL;
@@ -802,7 +800,7 @@ EXPORTED int caldav_alarm_process()
 		      &alarmdb->stmt[STMT_SELECT_RECIPIENT]);
 
 	struct mboxevent *event = mboxevent_new(EVENT_CALENDAR_ALARM);
-	mboxevent_extract_icalcomponent(event, ical, userid, buf_base(&calname_buf),
+	mboxevent_extract_icalcomponent(event, ical, userid, buf_cstring(&calname_buf),
 					scan->data.action, scan->data.nextalarm,
 					scan->data.tzid,
 					scan->data.start, scan->data.end,
