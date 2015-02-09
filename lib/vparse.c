@@ -702,7 +702,7 @@ EXPORTED const char *vparse_errstr(int err)
     return "Unknown error";
 }
 
-const char *vparse_stringval(const struct vparse_card *card, const char *name)
+EXPORTED const char *vparse_stringval(const struct vparse_card *card, const char *name)
 {
     struct vparse_entry *entry;
     for (entry = card->properties; entry; entry = entry->next) {
@@ -713,7 +713,7 @@ const char *vparse_stringval(const struct vparse_card *card, const char *name)
     return NULL;
 }
 
-const struct vparse_list *vparse_multival(const struct vparse_card *card, const char *name)
+EXPORTED const struct vparse_list *vparse_multival(const struct vparse_card *card, const char *name)
 {
     struct vparse_entry *entry;
     for (entry = card->properties; entry; entry = entry->next) {
@@ -724,7 +724,7 @@ const struct vparse_list *vparse_multival(const struct vparse_card *card, const 
     return NULL;
 }
 
-void vparse_set_multival(struct vparse_state *state, const char *name)
+EXPORTED void vparse_set_multival(struct vparse_state *state, const char *name)
 {
     struct vparse_list *list;
     MAKE(list, vparse_list);

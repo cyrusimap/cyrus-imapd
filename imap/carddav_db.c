@@ -915,18 +915,27 @@ EXPORTED int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, json_t
 
 struct contacts_rock {
     json_t *array;
-    struct hash_table *hash;
     struct hash_table *need;
     struct hash_table *props;
+    struct mailbox *mailbox;
 };
+
+static int _wantprop(hash_table *props, const char *name)
+{
+    if (!props) return 1;
+    if (hash_lookup(name, props)) return 1;
+    return 0;
+}
 
 static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 {
     struct contacts_rock *grock = (struct contacts_rock *)rock;
     const char *card_mailbox = (const char *)sqlite3_column_text(stmt, 0);
     const char *card_resource = (const char *)sqlite3_column_text(stmt, 1);
+    struct index_record record;
     uint32_t uid = sqlite3_column_int(stmt, 2);
     struct buf cardid = BUF_INITIALIZER;
+    int r = 0;
 
     _build_id(card_mailbox, card_resource, &cardid);
 
@@ -938,12 +947,77 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 	hash_insert(buf_cstring(&cardid), (void *)2, grock->need);
     }
 
-    /* XXX - add the actual record */
+    if (!grock->mailbox || strcmp(grock->mailbox->name, card_mailbox)) {
+	mailbox_close(&grock->mailbox);
+	r = mailbox_open_irl(card_mailbox, &grock->mailbox);
+	if (r) goto done;
+    }
+
+    r = mailbox_find_index_record(grock->mailbox, uid, &record, NULL);
+    if (r) goto done;
+
+    /* XXX - this could definitely be refactored from here and mailbox.c */
+    struct buf msg_buf = BUF_INITIALIZER;
+    struct vparse_state vparser;
+
+    /* Load message containing the resource and parse vcard data */
+    r = mailbox_map_record(grock->mailbox, &record, &msg_buf);
+    if (r) goto done;
+
+    memset(&vparser, 0, sizeof(struct vparse_state));
+    vparser.base = buf_cstring(&msg_buf) + record.header_size;
+    vparse_set_multival(&vparser, "adr");
+    vparse_set_multival(&vparser, "org");
+    vparse_set_multival(&vparser, "n");
+    r = vparse_parse(&vparser, 0);
+    buf_free(&msg_buf);
+    if (r) goto done; // XXX report error
+    if (!vparser.card || !vparser.card->objects) {
+        vparse_free(&vparser);
+        goto done;
+    }
+    struct vparse_card *card = vparser.card->objects;
+
+    json_t *obj = json_pack("{}");
+
+    json_object_set_new(obj, "id", json_string(buf_cstring(&cardid)));
+
+    if (_wantprop(grock->props, "isFlagged")) {
+	json_object_set_new(obj, "isFlagged", json_boolean(record.system_flags & FLAG_FLAGGED));
+    }
+
+    struct vparse_entry *entry;
+    // XXX - need to reverse this, less efficient, but bloody JMAP insists that
+    // every single field be present in the response even if it's not in the card
+    for (entry = card->properties; entry; entry = entry->next) {
+	if (!strcasecmp(entry->name, "n")) {
+	    struct vparse_list *last = entry->v.values;
+	    struct vparse_list *first = last ? last->next : NULL;
+	    struct vparse_list *foo = first ? first->next : NULL;
+	    struct vparse_list *prefix = foo ? foo->next : NULL;
+	    if (_wantprop(grock->props, "lastName"))
+		json_object_set_new(obj, "lastName", json_string(last ? last->s : ""));
+	    if (_wantprop(grock->props, "firstName"))
+		json_object_set_new(obj, "firstName", json_string(first ? first->s : ""));
+	    if (_wantprop(grock->props, "prefix"))
+		json_object_set_new(obj, "prefix", json_string(prefix ? prefix->s : ""));
+	}
+	if (!strcasecmp(entry->name, "nickname")) {
+	    if (_wantprop(grock->props, "nickname"))
+		json_object_set_new(obj, "nickname", json_string(entry->v.value ? entry->v.value : ""));
+	}
+    }
+
 
 done:
     buf_free(&cardid);
-    return 0;
+    return r;
 }
+
+#define CMD_GETCONTACTS \
+  "SELECT mailbox, resource, imap_uid" \
+  " FROM vcard_objs" \
+  " WHERE kind = 0 AND alive = 1;"
 
 EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, json_t *args,
 				 modseq_t modseq, json_t *response, const char *tag)
@@ -957,9 +1031,9 @@ EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, json_t *args,
     buf_printf(&buf, "%llu", modseq);
 
     rock.array = json_pack("[]");
-    rock.need = NULL;  /* XXX - support getting a list of IDs */
-    rock.hash = xzmalloc(sizeof(struct hash_table));
-    construct_hash_table(rock.hash, 1024, 0);
+    rock.need = NULL;
+    rock.props = NULL;
+    rock.mailbox = NULL;
 
     json_t *want = json_object_get(args, "ids");
     if (want) {
@@ -995,8 +1069,7 @@ EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, json_t *args,
 	return r;
     }
 
-    free_hash_table(rock.hash, NULL);
-    free(rock.hash);
+    mailbox_close(&rock.mailbox);
 
     json_t *contacts = json_pack("{}");
     json_object_set_new(contacts, "accountId", json_string(httpd_userid));
@@ -1027,7 +1100,6 @@ EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, json_t *args,
     json_array_append_new(response, item);
 
     return 0;
-}
 }
 
 EXPORTED int carddav_getContactUpdates(struct carddav_db *carddavdb, json_t *args,

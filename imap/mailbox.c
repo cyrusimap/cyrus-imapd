@@ -2677,15 +2677,10 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 	}
 
 	/* default of 0 is unknown kind */
-	struct vparse_entry *entry;
-	for (entry = vparser.card->objects->properties; entry; entry = entry->next) {
-	    if (strcasecmp(entry->name, "X-ADDRESSBOOKSERVER-KIND"))
-		continue;
-	    if (!strcasecmp(entry->v.value, "group"))
-		cdata->kind = CARDDAV_KIND_GROUP;
-	    /* XXX - other kinds? */
-	    break;
-	}
+	const char *kind = vparse_stringval(vparser.card->objects, "X-ADDRESSBOOKSERVER-KIND");
+	if (kind && !strcasecmp(kind, "group"))
+	    cdata->kind = CARDDAV_KIND_GROUP;
+	/* XXX - other kinds? */
 
 	/* Create mapping entry from resource name to UID */
 	cdata->dav.mailbox = mailbox->name;
