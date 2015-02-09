@@ -967,7 +967,7 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
     memset(&vparser, 0, sizeof(struct vparse_state));
     vparser.base = buf_cstring(&msg_buf) + record.header_size;
     vparse_set_multival(&vparser, "adr");
-    vparse_set_multival(&vparser, "org");
+    //vparse_set_multival(&vparser, "org");
     vparse_set_multival(&vparser, "n");
     r = vparse_parse(&vparser, 0);
     buf_free(&msg_buf);
@@ -989,24 +989,34 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
     struct vparse_entry *entry;
     // XXX - need to reverse this, less efficient, but bloody JMAP insists that
     // every single field be present in the response even if it's not in the card
-    for (entry = card->properties; entry; entry = entry->next) {
-	if (!strcasecmp(entry->name, "n")) {
-	    struct vparse_list *last = entry->v.values;
-	    struct vparse_list *first = last ? last->next : NULL;
-	    struct vparse_list *foo = first ? first->next : NULL;
-	    struct vparse_list *prefix = foo ? foo->next : NULL;
-	    if (_wantprop(grock->props, "lastName"))
-		json_object_set_new(obj, "lastName", json_string(last ? last->s : ""));
-	    if (_wantprop(grock->props, "firstName"))
-		json_object_set_new(obj, "firstName", json_string(first ? first->s : ""));
-	    if (_wantprop(grock->props, "prefix"))
-		json_object_set_new(obj, "prefix", json_string(prefix ? prefix->s : ""));
-	}
-	if (!strcasecmp(entry->name, "nickname")) {
-	    if (_wantprop(grock->props, "nickname"))
-		json_object_set_new(obj, "nickname", json_string(entry->v.value ? entry->v.value : ""));
-	}
+    struct vparse_list *last = vparse_multival(card, "n");
+    struct vparse_list *first = last ? last->next : NULL;
+    struct vparse_list *foo = first ? first->next : NULL;
+    struct vparse_list *prefix = foo ? foo->next : NULL;
+
+    if (_wantprop(grock->props, "lastName"))
+	json_object_set_new(obj, "lastName", json_string(last ? last->s : ""));
+    if (_wantprop(grock->props, "firstName"))
+	json_object_set_new(obj, "firstName", json_string(nlist ? nlist->s : ""));
+    if (_wantprop(grock->props, "prefix"))
+	json_object_set_new(obj, "prefix", json_string(prefix ? prefix->s : ""));
+
+    if (_wantprop(grock->props, "nickname")) {
+	const char *item = vparse_stringval(card, "nickname");
+	json_object_set_new(obj, "nickname", json_string(item ? item : ""));
     }
+
+    if (_wantprop(grock->props, "nickname")) {
+	const char *item = vparse_stringval(card, "nickname");
+	json_object_set_new(obj, "nickname", json_string(item ? item : ""));
+    }
+
+    if (_wantprop(grock->props, "company")) {
+	const char *item = vparse_stringval(card, "org");
+	json_object_set_new(obj, "company", json_string(item ? item : ""));
+    }
+
+    /* XXX - other fields */
 
     json_array_append_new(grock->array, obj);
 
