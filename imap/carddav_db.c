@@ -1008,6 +1008,7 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 	}
     }
 
+    json_array_append_new(grock->array, obj);
 
 done:
     buf_free(&cardid);
