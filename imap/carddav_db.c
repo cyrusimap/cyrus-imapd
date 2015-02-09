@@ -986,18 +986,15 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 	json_object_set_new(obj, "isFlagged", record.system_flags & FLAG_FLAGGED ? json_true() : json_false());
     }
 
-    struct vparse_entry *entry;
-    // XXX - need to reverse this, less efficient, but bloody JMAP insists that
-    // every single field be present in the response even if it's not in the card
-    struct vparse_list *last = vparse_multival(card, "n");
-    struct vparse_list *first = last ? last->next : NULL;
-    struct vparse_list *foo = first ? first->next : NULL;
-    struct vparse_list *prefix = foo ? foo->next : NULL;
+    const struct vparse_list *last = vparse_multival(card, "n");
+    const struct vparse_list *first = last ? last->next : NULL;
+    const struct vparse_list *foo = first ? first->next : NULL;
+    const struct vparse_list *prefix = foo ? foo->next : NULL;
 
     if (_wantprop(grock->props, "lastName"))
 	json_object_set_new(obj, "lastName", json_string(last ? last->s : ""));
     if (_wantprop(grock->props, "firstName"))
-	json_object_set_new(obj, "firstName", json_string(nlist ? nlist->s : ""));
+	json_object_set_new(obj, "firstName", json_string(first ? first->s : ""));
     if (_wantprop(grock->props, "prefix"))
 	json_object_set_new(obj, "prefix", json_string(prefix ? prefix->s : ""));
 
