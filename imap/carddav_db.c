@@ -572,18 +572,19 @@ static int carddav_write_groups(struct carddav_db *carddavdb, struct carddav_dat
 
 #define CMD_INSERT							\
     "INSERT INTO vcard_objs ("						\
-    "  creationdate, mailbox, resource, imap_uid, modseq,"		\
+    "  alive, creationdate, mailbox, resource, imap_uid, modseq,"	\
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
-    "  version, vcard_uid, kind, fullname, name, nickname, alive)"	\
+    "  version, vcard_uid, kind, fullname, name, nickname)"		\
     " VALUES ("								\
-    "  :creationdate, :mailbox, :resource, :imap_uid, :modseq,"		\
+    "  :alive, :creationdate, :mailbox, :resource, :imap_uid, :modseq,"	\
     "  :lock_token, :lock_owner, :lock_ownerid, :lock_expire,"		\
-    "  :version, :vcard_uid, :kind, :fullname, :name, :nickname, 1 );"
+    "  :version, :vcard_uid, :kind, :fullname, :name, :nickname );"
 
 EXPORTED int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cdata,
 		 int commit)
 {
     struct bind_val bval[] = {
+	{ ":alive",	   SQLITE_INTEGER, { .i = cdata->dav.alive	  } },
 	{ ":creationdate", SQLITE_INTEGER, { .i = cdata->dav.creationdate } },
 	{ ":mailbox",	   SQLITE_TEXT,	   { .s = cdata->dav.mailbox	  } },
 	{ ":resource",	   SQLITE_TEXT,	   { .s = cdata->dav.resource	  } },

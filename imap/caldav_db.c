@@ -444,7 +444,7 @@ EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
 
 #define CMD_UPDATE			\
     "UPDATE ical_objs SET"		\
-    "  alive       = :alive,"		\
+    "  alive        = :alive,"		\
     "  imap_uid     = :imap_uid,"	\
     "  lock_token   = :lock_token,"	\
     "  lock_owner   = :lock_owner,"	\
