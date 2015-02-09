@@ -1033,19 +1033,15 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 		if (!strcasecmp(param->name, "type")) {
 		    if (!strcasecmp(param->value, "home")) {
 			type = "home";
-			break;
 		    }
 		    else if (!strcasecmp(param->value, "work")) {
 			type = "work";
-			break;
 		    }
 		    else if (!strcasecmp(param->value, "billing")) {
 			type = "billing";
-			break;
 		    }
 		    else if (!strcasecmp(param->value, "postal")) {
 			type = "postal";
-			break;
 		    }
 		}
 		else if (!strcasecmp(param->name, "label")) {
@@ -1074,6 +1070,24 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 	for (entry = card->properties; entry; entry = entry->next) {
 	    if (strcasecmp(entry->name, "email")) continue;
 	    json_t *item = json_pack("{}");
+	    const struct vparse_param *param;
+	    const char *type = "other";
+	    const char *label = NULL;
+	    for (param = entry->params; param; param = param->next) {
+		if (!strcasecmp(param->name, "type")) {
+		    if (!strcasecmp(param->value, "personal")) {
+			type = "personal";
+		    }
+		    else if (!strcasecmp(param->value, "work")) {
+			type = "work";
+		    }
+		}
+		else if (!strcasecmp(param->name, "label")) {
+		    label = param->value;
+		}
+	    }
+	    json_object_set_new(item, "type", json_string(type));
+	    if (label) json_object_set_new(item, "label", json_string(label));
 
 	    json_object_set_new(item, "value", json_string(entry->v.value));
 
