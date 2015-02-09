@@ -1097,6 +1097,53 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 	json_object_set_new(obj, "emails", emails);
     }
 
+    /* address - we need to open code this, because it's repeated */
+    if (_wantprop(grock->props, "phones")) {
+	json_t *phones = json_array();
+
+	struct vparse_entry *entry;
+	for (entry = card->properties; entry; entry = entry->next) {
+	    if (strcasecmp(entry->name, "tel")) continue;
+	    json_t *item = json_pack("{}");
+	    const struct vparse_param *param;
+	    const char *type = "other";
+	    const char *label = NULL;
+	    for (param = entry->params; param; param = param->next) {
+		if (!strcasecmp(param->name, "type")) {
+		    if (!strcasecmp(param->value, "home")) {
+			type = "home";
+		    }
+		    else if (!strcasecmp(param->value, "work")) {
+			type = "work";
+		    }
+		    else if (!strcasecmp(param->value, "cell")) {
+			type = "mobile";
+		    }
+		    else if (!strcasecmp(param->value, "mobile")) {
+			type = "mobile";
+		    }
+		    else if (!strcasecmp(param->value, "fax")) {
+			type = "fax";
+		    }
+		    else if (!strcasecmp(param->value, "pager")) {
+			type = "pager";
+		    }
+		}
+		else if (!strcasecmp(param->name, "label")) {
+		    label = param->value;
+		}
+	    }
+	    json_object_set_new(item, "type", json_string(type));
+	    if (label) json_object_set_new(item, "label", json_string(label));
+
+	    json_object_set_new(item, "value", json_string(entry->v.value));
+
+	    json_array_append_new(phones, item);
+	}
+
+	json_object_set_new(obj, "phones", phones);
+    }
+
     if (_wantprop(grock->props, "nickname")) {
 	const char *item = vparse_stringval(card, "nickname");
 	json_object_set_new(obj, "nickname", json_string(item ? item : ""));
