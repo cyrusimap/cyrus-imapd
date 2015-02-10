@@ -890,7 +890,7 @@ static int caldav_parse_path(const char *path,
     /* XXX - hack to allow @domain parts for non-domain-split users */
     if (httpd_extradomain) {
 	/* not allowed to be cross domain */
-	if (parts.userid && strcmp(parts.domain, httpd_extradomain))
+	if (parts.userid && strcmpsafe(parts.domain, httpd_extradomain))
 	    return HTTP_NOT_FOUND;
 	//free(parts.domain); - XXX - fix when converting to real parts
 	parts.domain = NULL;
