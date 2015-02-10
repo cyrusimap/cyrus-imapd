@@ -378,6 +378,8 @@ static int prin_parse_path(const char *path,
 	return HTTP_FORBIDDEN;
     }
 
+    tgt->prefix = namespace_principal.prefix;
+
     /* Skip namespace */
     p += len;
     if (!*p || !*++p) return 0;
