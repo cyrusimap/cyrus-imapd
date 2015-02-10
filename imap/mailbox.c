@@ -74,10 +74,6 @@
 # endif
 #endif
 
-#ifdef HAVE_LIBUUID
-#include <uuid/uuid.h>
-#endif
-
 #include "annotate.h"
 #include "assert.h"
 #ifdef WITH_DAV
@@ -752,43 +748,13 @@ mailbox_notifyproc_t *mailbox_get_updatenotifier(void)
 /*
  * Create the unique identifier for a mailbox named 'name' with
  * uidvalidity 'uidvalidity'.  We use Ted Ts'o's libuuid if available,
- * otherwise we fall back to the legacy Cyrus algorithm which uses the
- * mailbox name hashed to 32 bits followed by the uid, both converted to
- * hex.
+ * otherwise we use some random bits.
  */
 
 EXPORTED void mailbox_make_uniqueid(struct mailbox *mailbox)
 {
-#ifdef HAVE_LIBUUID
-    uuid_t uu;
-
-    uuid_clear(uu);	/* Just In Case */
-    uuid_generate(uu);
     free(mailbox->uniqueid);
-    /* 36 bytes of uuid plus \0 */
-    mailbox->uniqueid = xmalloc(37);
-    /* Solaris has an older libuuid which has uuid_unparse() but not
-     * uuid_unparse_lower(), so we post-process the result ourself. */
-    uuid_unparse(uu, mailbox->uniqueid);
-    lcase(mailbox->uniqueid);
-#else
-#define PRIME (2147484043UL)
-    unsigned hash = 0;
-    const char *name = mailbox->name;
-
-    while (*name) {
-	hash *= 251;
-	hash += *name++;
-	hash %= PRIME;
-    }
-
-    free(mailbox->uniqueid);
-    mailbox->uniqueid = xmalloc(32);
-
-    snprintf(mailbox->uniqueid, 32, "%08x%08x",
-	     hash, mailbox->i.uidvalidity);
-#endif /* !HAVE_LIBUUID */
-
+    mailbox->uniqueid = makeuuid();
     mailbox->header_dirty = 1;
 }
 
