@@ -4100,7 +4100,8 @@ int propfind_by_collection(char *mboxname, int matchlen,
 	goto done;
     }
 
-    if (fctx->req_tgt->mboxtype && !(mbentry->mbtype & fctx->req_tgt->mboxtype))
+    /* if finding all, we only match known types */
+    if (matchlen && !(mbentry->mbtype & fctx->req_tgt->mboxtype))
 	goto done;
 
     rights = httpd_myrights(httpd_authstate, mbentry->acl);
