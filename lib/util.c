@@ -76,6 +76,10 @@
 #ifdef HAVE_ZLIB
 #include "zlib.h"
 #endif
+#ifdef HAVE_LIBUUID
+#include <uuid/uuid.h>
+#endif
+
 
 #define BEAUTYBUFSIZE 4096
 
@@ -1633,4 +1637,27 @@ EXPORTED int warmup_file(const char *filename,
     close(fd);
 
     return r;
+}
+
+EXPORTED char *makeuuid()
+{
+    /* 36 bytes of uuid plus \0 */
+    char *res = xzmalloc(37);
+#ifdef HAVE_LIBUUID
+    uuid_t uu;
+    uuid_clear(uu); /* Just In Case */
+    uuid_generate(uu);
+    /* Solaris has an older libuuid which has uuid_unparse() but not
+     * uuid_unparse_lower(), so we post-process the result ourself. */
+    uuid_unparse(uu, res);
+    lcase(res);
+#else
+    /* some random nonsense for 24 chars - probably less secure */
+    int i;
+    for (i = 0; i < 24; i++) {
+	int item = rand() % 36;
+	res[i] = (item <= 10 ? '0' + item : 'a' + item);
+    }
+#endif
+    return res;
 }
