@@ -1144,7 +1144,9 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	json_array_append_new(req->response, item);
 	return 0;
     }
-    json_t *item = json_pack("{}");
+    json_t *item = json_pack("{s:s,s:s}",
+			     "oldState", req->state,
+			     "accountId", req->userid);
 
     json_t *create = json_object_get(req->args, "create");
     if (create) {
@@ -1153,7 +1155,8 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	const char *key;
 	json_t *arg;
 	json_object_foreach(create, key, arg) {
-	    
+	    char *uid = makeuuid();
+	    vparse_parse xxx
 	}
 	if (json_object_size(created))
 	    json_object_set(
