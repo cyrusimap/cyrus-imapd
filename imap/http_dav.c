@@ -4159,7 +4159,7 @@ int propfind_by_collection(char *mboxname, int matchlen,
 	    (r = xml_add_response(fctx, 0, 0))) goto done;
     }
 
-    if (fctx->depth > 1) {
+    if (fctx->depth > 1 && fctx->open_db) { // can't do davdb searches if no dav db
 	/* Resource(s) */
 
 	/* Open the DAV DB corresponding to the mailbox.
