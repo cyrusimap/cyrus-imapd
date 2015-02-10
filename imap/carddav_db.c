@@ -1131,6 +1131,16 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
     return 0;
 }
 
+EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_req *req)
+{
+    struct carddav_data *cdata = NULL;
+    /* XXX - should we lock?... it's tricky because we're going to need to lock the DB anyway */
+    // maybe a foreach would be better
+    int r = carddav_lookup_uid(carddavdb, req->tag, 0, &cdata);
+
+    return r;
+}
+
 EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, struct jmap_req *req)
 {
     struct bind_val bval[] = {
@@ -1261,6 +1271,16 @@ EXPORTED int carddav_getContactUpdates(struct carddav_db *carddavdb, struct jmap
 
     json_decref(rock.changed);
     json_decref(rock.removed);
+
+    return r;
+}
+
+EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *req)
+{
+    struct carddav_data *cdata = NULL;
+    /* XXX - should we lock?... it's tricky because we're going to need to lock the DB anyway */
+    // maybe a foreach would be better
+    int r = carddav_lookup_uid(carddavdb, req->tag, 0, &cdata);
 
     return r;
 }

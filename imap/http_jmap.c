@@ -79,8 +79,10 @@ static int meth_post(struct transaction_t *txn, void *params);
 static int getMailboxes(struct jmap_req *req);
 static int getContactGroups(struct jmap_req *req);
 static int getContactGroupUpdates(struct jmap_req *req);
+static int setContactGroups(struct jmap_req *req);
 static int getContacts(struct jmap_req *req);
 static int getContactUpdates(struct jmap_req *req);
+static int setContacts(struct jmap_req *req);
 
 static const struct message_t {
     const char *name;
@@ -89,8 +91,10 @@ static const struct message_t {
     { "getMailboxes",	&getMailboxes },
     { "getContactGroups",	&getContactGroups },
     { "getContactGroupUpdates",	&getContactGroupUpdates },
+    { "setContactGroups",	&setContactGroups },
     { "getContacts",		&getContacts },
     { "getContactUpdates",	&getContactUpdates },
+    { "setContacts",		&setContacts },
     { NULL,		NULL}
 };
 
@@ -376,6 +380,14 @@ static int getContactGroupUpdates(struct jmap_req *req)
     return r;
 }
 
+static int setContactGroups(struct jmap_req *req)
+{
+    struct carddav_db *db = carddav_open_userid(req->userid);
+    if (!db) return -1;
+    int r = carddav_setContactGroups(db, req);
+    return r;
+}
+
 static int getContacts(struct jmap_req *req)
 {
     struct carddav_db *db = carddav_open_userid(req->userid);
@@ -389,6 +401,14 @@ static int getContactUpdates(struct jmap_req *req)
     struct carddav_db *db = carddav_open_userid(req->userid);
     if (!db) return -1;
     int r = carddav_getContactUpdates(db, req);
+    return r;
+}
+
+static int setContacts(struct jmap_req *req)
+{
+    struct carddav_db *db = carddav_open_userid(req->userid);
+    if (!db) return -1;
+    int r = carddav_setContacts(db, req);
     return r;
 }
 
