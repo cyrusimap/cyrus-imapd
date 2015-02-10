@@ -59,6 +59,7 @@
 #include "httpd.h"
 #include "http_err.h"
 #include "http_proxy.h"
+#include "jmap.h"
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "statuscache.h"
@@ -75,15 +76,15 @@ static void jmap_init(struct buf *serverinfo);
 static void jmap_auth(const char *userid);
 static int meth_get(struct transaction_t *txn, void *params);
 static int meth_post(struct transaction_t *txn, void *params);
-static int getMailboxes(json_t *args, modseq_t modseq, json_t *response, const char *tag);
-static int getContactGroups(json_t *args, modseq_t modseq, json_t *response, const char *tag);
-static int getContactGroupUpdates(json_t *args, modseq_t modseq, json_t *response, const char *tag);
-static int getContacts(json_t *args, modseq_t modseq, json_t *response, const char *tag);
-static int getContactUpdates(json_t *args, modseq_t modseq, json_t *response, const char *tag);
+static int getMailboxes(struct jmap_req *req);
+static int getContactGroups(struct jmap_req *req);
+static int getContactGroupUpdates(struct jmap_req *req);
+static int getContacts(struct jmap_req *req);
+static int getContactUpdates(struct jmap_req *req);
 
 static const struct message_t {
     const char *name;
-    int (*proc)(json_t *args, modseq_t modseq, json_t *response, const char *tag);
+    int (*proc)(struct jmap_req *req);
 } messages[] = {
     { "getMailboxes",	&getMailboxes },
     { "getContactGroups",	&getContactGroups },
@@ -226,10 +227,20 @@ static int meth_post(struct transaction_t *txn,
 
 	/* read the modseq again every time, just in case something changed it
 	 * in our actions */
+	struct buf buf = BUF_INITIALIZER;
 	modseq_t modseq = mboxname_readmodseq(inboxname);
+	buf_printf(&buf, "%llu", modseq);
 
-	r = mp->proc(args, modseq, resp, tag);
+	struct jmap_req req;
+	req.userid = httpd_userid;
+	req.args = args;
+	req.state = buf_cstring(&buf);
+	req.response = resp;
+	req.tag = tag;
 
+	r = mp->proc(&req);
+
+	buf_free(&buf);
 
 	if (r) {
 	    txn->error.desc = "Unable to create JSON response body\r\n";
@@ -271,27 +282,16 @@ int getMailboxes_cb(char *mboxname, int matchlen __attribute__((unused)),
 		    void *rock)
 {
     json_t *list = (json_t *) rock, *mbox;
-    char internal_name[MAX_MAILBOX_PATH+1];
     struct mboxlist_entry *mbentry = NULL;
     struct mailbox *mailbox = NULL;
     int r = 0, rights;
     unsigned statusitems = STATUS_MESSAGES | STATUS_UNSEEN;
     struct statusdata sdata;
 
-    /* first convert "INBOX" to "user.<userid>" */
-    if (!strncasecmp(mboxname, "inbox", 5)
-	&& (!mboxname[5] || mboxname[5] == '.') ) {
-	(*jmap_namespace.mboxname_tointernal)(&jmap_namespace, "INBOX",
-					       httpd_userid, internal_name);
-	strlcat(internal_name, mboxname+5, sizeof(internal_name));
-    }
-    else
-	strlcpy(internal_name, mboxname, sizeof(internal_name));
-
     /* Check ACL on mailbox for current user */
-    if ((r = mboxlist_lookup(internal_name, &mbentry, NULL))) {
+    if ((r = mboxlist_lookup(mboxname, &mbentry, NULL))) {
 	syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
-	       internal_name, error_message(r));
+	       mboxname, error_message(r));
 	goto done;
     }
 
@@ -301,14 +301,14 @@ int getMailboxes_cb(char *mboxname, int matchlen __attribute__((unused)),
     }
 
     /* Open mailbox to get uniqueid */
-    if ((r = mailbox_open_irl(internal_name, &mailbox))) {
+    if ((r = mailbox_open_irl(mboxname, &mailbox))) {
 	syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
-	       internal_name, error_message(r));
+	       mboxname, error_message(r));
 	goto done;
     }
     mailbox_unlock_index(mailbox, NULL);
 
-    r = status_lookup(internal_name, httpd_userid, statusitems, &sdata);
+    r = status_lookup(mboxname, httpd_userid, statusitems, &sdata);
 
     mbox = json_pack("{s:s s:s s:n s:n s:b s:b s:b s:b s:i s:i}",
 		     "id", mailbox->uniqueid,
@@ -332,22 +332,20 @@ int getMailboxes_cb(char *mboxname, int matchlen __attribute__((unused)),
 
 
 /* Execute a getMailboxes message */
-static int getMailboxes(json_t *args __attribute__((unused)), modseq_t modseq, json_t *response, const char *tag)
+static int getMailboxes(struct jmap_req *req)
 {
     json_t *item, *mailboxes, *list;
-    struct buf buf = BUF_INITIALIZER;
-    buf_printf(&buf, "%llu", modseq);
 
     /* Start constructing our response */
     item = json_pack("[s {s:s s:s} s]", "mailboxes",
-		     "accountId", httpd_userid,
-		     "state", buf_cstring(&buf),
-		     tag);
+		     "accountId", req->userid,
+		     "state", req->state,
+		     req->tag);
 
     list = json_array();
 
     /* Generate list of mailboxes */
-    mboxlist_findall(&jmap_namespace, "*", httpd_userisadmin, httpd_userid,
+    mboxlist_findall(&jmap_namespace, "*", httpd_userisadmin, req->userid,
 		     httpd_authstate, &getMailboxes_cb, list);
 
     mailboxes = json_array_get(item, 1);
@@ -356,42 +354,41 @@ static int getMailboxes(json_t *args __attribute__((unused)), modseq_t modseq, j
     /* xxx - args */
     json_object_set_new(mailboxes, "notFound", json_null());
 
-    json_array_append_new(response, item);
+    json_array_append_new(req->response, item);
 
-    buf_free(&buf);
     return 0;
 }
 
-static int getContactGroups(json_t *args, modseq_t modseq, json_t *response, const char *tag)
+static int getContactGroups(struct jmap_req *req)
 {
-    struct carddav_db *db = carddav_open_userid(httpd_userid);
+    struct carddav_db *db = carddav_open_userid(req->userid);
     if (!db) return -1;
-    int r = carddav_getContactGroups(db, args, modseq, response, tag);
+    int r = carddav_getContactGroups(db, req);
     return r;
 }
 
 
-static int getContactGroupUpdates(json_t *args, modseq_t modseq, json_t *response, const char *tag)
+static int getContactGroupUpdates(struct jmap_req *req)
 {
-    struct carddav_db *db = carddav_open_userid(httpd_userid);
+    struct carddav_db *db = carddav_open_userid(req->userid);
     if (!db) return -1;
-    int r = carddav_getContactGroupUpdates(db, args, modseq, response, tag);
+    int r = carddav_getContactGroupUpdates(db, req);
     return r;
 }
 
-static int getContacts(json_t *args, modseq_t modseq, json_t *response, const char *tag)
+static int getContacts(struct jmap_req *req)
 {
-    struct carddav_db *db = carddav_open_userid(httpd_userid);
+    struct carddav_db *db = carddav_open_userid(req->userid);
     if (!db) return -1;
-    int r = carddav_getContacts(db, args, modseq, response, tag);
+    int r = carddav_getContacts(db, req);
     return r;
 }
 
-static int getContactUpdates(json_t *args, modseq_t modseq, json_t *response, const char *tag)
+static int getContactUpdates(struct jmap_req *req)
 {
-    struct carddav_db *db = carddav_open_userid(httpd_userid);
+    struct carddav_db *db = carddav_open_userid(req->userid);
     if (!db) return -1;
-    int r = carddav_getContactUpdates(db, args, modseq, response, tag);
+    int r = carddav_getContactUpdates(db, req);
     return r;
 }
 

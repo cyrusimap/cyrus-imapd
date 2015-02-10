@@ -685,18 +685,19 @@ EXPORTED int carddav_delmbox(struct carddav_db *carddavdb, const char *mailbox, 
   "WHERE GO.kind = 1 AND GO.alive = 1;"
 
 struct groups_rock {
+    struct jmap_req *req;
     json_t *array;
     struct hash_table *hash;
     struct hash_table *need;
 };
 
-static void _build_id(const char *mailbox, const char *resource, struct buf *buf)
+static void _build_id(struct jmap_req *req, const char *mailbox, const char *resource, struct buf *buf)
 {
     const char *mboxuserid = mboxname_to_userid(mailbox);
     struct mboxname_parts parts;
     size_t abooklen = strlen(config_getstring(IMAPOPT_ADDRESSBOOKPREFIX)) + 1;
     mboxname_to_parts(mailbox, &parts);
-    if (strcmp(mboxuserid, httpd_userid)) {
+    if (strcmp(mboxuserid, req->userid)) {
 	buf_printf(buf, "/dav/addressbooks/user/%s/", mboxuserid);
     }
     buf_printf(buf, "%s/%s", parts.box + abooklen, resource);
@@ -714,8 +715,8 @@ static int getgroups_cb(sqlite3_stmt *stmt, void *rock)
     struct buf groupid = BUF_INITIALIZER;
     struct buf cardid = BUF_INITIALIZER;
 
-    _build_id(group_mailbox, group_resource, &groupid);
-    if (card_resource) _build_id(card_mailbox, card_resource, &cardid);
+    _build_id(grock->req, group_mailbox, group_resource, &groupid);
+    if (card_resource) _build_id(grock->req, card_mailbox, card_resource, &cardid);
 
     if (grock->need) {
 	/* skip records not in hash */
@@ -753,26 +754,20 @@ static void _add_notfound(const char *key, void *data, void *rock)
 }
 
 /* jmap contact APIs */
-EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb,
-				      json_t *args,
-				      modseq_t modseq,
-				      json_t *response,
-				      const char *tag)
+EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb, struct jmap_req *req)
 {
     struct bind_val bval[] = {
 	{ NULL,     SQLITE_NULL, { .s = NULL  } }
     };
     struct groups_rock rock;
     int r;
-    struct buf buf = BUF_INITIALIZER;
-    buf_printf(&buf, "%llu", modseq);
 
     rock.array = json_pack("[]");
     rock.need = NULL;  /* XXX - support getting a list of IDs */
     rock.hash = xzmalloc(sizeof(struct hash_table));
     construct_hash_table(rock.hash, 1024, 0);
 
-    json_t *want = json_object_get(args, "ids");
+    json_t *want = json_object_get(req->args, "ids");
     if (want) {
 	rock.need = xzmalloc(sizeof(struct hash_table));
 	construct_hash_table(rock.need, 1024, 0);
@@ -797,8 +792,8 @@ EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb,
     free(rock.hash);
 
     json_t *contactGroups = json_pack("{}");
-    json_object_set_new(contactGroups, "accountId", json_string(httpd_userid));
-    json_object_set_new(contactGroups, "state", json_string(buf_cstring(&buf)));
+    json_object_set_new(contactGroups, "accountId", json_string(req->userid));
+    json_object_set_new(contactGroups, "state", json_string(req->state));
     json_object_set_new(contactGroups, "list", rock.array);
     if (rock.need) {
 	json_t *notfound = json_array();
@@ -820,9 +815,9 @@ EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb,
     json_t *item = json_pack("[]");
     json_array_append_new(item, json_string("contactGroups"));
     json_array_append_new(item, contactGroups);
-    json_array_append_new(item, json_string(tag));
+    json_array_append_new(item, json_string(req->tag));
 
-    json_array_append_new(response, item);
+    json_array_append_new(req->response, item);
 
     return 0;
 }
@@ -833,6 +828,7 @@ EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb,
   "WHERE kind = :kind AND modseq > :modseq;"
 
 struct updates_rock {
+    struct jmap_req *req;
     json_t *changed;
     json_t *removed;
 };
@@ -845,7 +841,7 @@ static int getgroupupdates_cb(sqlite3_stmt *stmt, void *rock)
     int group_alive = sqlite3_column_int(stmt, 2);
     struct buf groupid = BUF_INITIALIZER;
 
-    _build_id(group_mailbox, group_resource, &groupid);
+    _build_id(grock->req, group_mailbox, group_resource, &groupid);
 
     if (group_alive) {
 	json_array_append_new(grock->changed, json_string(buf_cstring(&groupid)));
@@ -858,14 +854,11 @@ static int getgroupupdates_cb(sqlite3_stmt *stmt, void *rock)
     return 0;
 }
 
-EXPORTED int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, json_t *args,
-					    modseq_t modseq, json_t *response, const char *tag)
+EXPORTED int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, struct jmap_req *req)
 {
     struct updates_rock rock;
-    struct buf buf = BUF_INITIALIZER;
-    buf_printf(&buf, "%llu", modseq);
     int r;
-    json_t *since = json_object_get(args, "sinceState");
+    json_t *since = json_object_get(req->args, "sinceState");
     if (!since) return -1;
     modseq_t oldmodseq = str2uint64(json_string_value(since));
     rock.changed = json_array();
@@ -885,35 +878,36 @@ EXPORTED int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, json_t
     }
 
     json_t *contactGroupUpdates = json_pack("{}");
-    json_object_set_new(contactGroupUpdates, "accountId", json_string(httpd_userid));
-    json_object_set_new(contactGroupUpdates, "oldState", json_string(json_string_value(since)));
-    json_object_set_new(contactGroupUpdates, "newState", json_string(buf_cstring(&buf)));
+    json_object_set_new(contactGroupUpdates, "accountId", json_string(req->userid));
+    json_object_set_new(contactGroupUpdates, "oldState", json_string(json_string_value(since))); // XXX - just use refcounted
+    json_object_set_new(contactGroupUpdates, "newState", json_string(req->state));
     json_object_set(contactGroupUpdates, "changed", rock.changed);
     json_object_set(contactGroupUpdates, "removed", rock.removed);
 
     json_t *item = json_pack("[]");
     json_array_append_new(item, json_string("contactGroupUpdates"));
     json_array_append_new(item, contactGroupUpdates);
-    json_array_append_new(item, json_string(tag));
+    json_array_append_new(item, json_string(req->tag));
 
-    json_array_append_new(response, item);
+    json_array_append_new(req->response, item);
 
-    json_t *dofetch = json_object_get(args, "fetchContactGroups");
+    json_t *dofetch = json_object_get(req->args, "fetchContactGroups");
     if (dofetch && json_is_true(dofetch)) {
-	json_t *getargs = json_pack("{}");
-	json_object_set(getargs, "ids", rock.changed);
-	r = carddav_getContactGroups(carddavdb, getargs, modseq, response, tag);
-	json_decref(getargs);
+	struct jmap_req subreq = *req; // struct copy, woot
+	subreq.args = json_pack("{}");
+	json_object_set(subreq.args, "ids", rock.changed);
+	r = carddav_getContactGroups(carddavdb, &subreq);
+	json_decref(subreq.args);
     }
 
     json_decref(rock.changed);
     json_decref(rock.removed);
 
-    buf_free(&buf);
     return r;
 }
 
 struct contacts_rock {
+    struct jmap_req *req;
     json_t *array;
     struct hash_table *need;
     struct hash_table *props;
@@ -937,7 +931,7 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
     struct buf cardid = BUF_INITIALIZER;
     int r = 0;
 
-    _build_id(card_mailbox, card_resource, &cardid);
+    _build_id(grock->req, card_mailbox, card_resource, &cardid);
 
     if (grock->need) {
 	/* skip records not in hash */
@@ -1168,23 +1162,20 @@ done:
   " FROM vcard_objs" \
   " WHERE kind = 0 AND alive = 1;"
 
-EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, json_t *args,
-				 modseq_t modseq, json_t *response, const char *tag)
+EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, struct jmap_req *req)
 {
     struct bind_val bval[] = {
 	{ NULL,     SQLITE_NULL, { .s = NULL  } }
     };
     struct contacts_rock rock;
     int r;
-    struct buf buf = BUF_INITIALIZER;
-    buf_printf(&buf, "%llu", modseq);
 
     rock.array = json_pack("[]");
     rock.need = NULL;
     rock.props = NULL;
     rock.mailbox = NULL;
 
-    json_t *want = json_object_get(args, "ids");
+    json_t *want = json_object_get(req->args, "ids");
     if (want) {
 	rock.need = xzmalloc(sizeof(struct hash_table));
 	construct_hash_table(rock.need, 1024, 0);
@@ -1197,7 +1188,7 @@ EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, json_t *args,
 	}
     }
 
-    json_t *properties = json_object_get(args, "properties");
+    json_t *properties = json_object_get(req->args, "properties");
     if (properties) {
 	rock.props = xzmalloc(sizeof(struct hash_table));
 	construct_hash_table(rock.props, 1024, 0);
@@ -1221,8 +1212,8 @@ EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, json_t *args,
     mailbox_close(&rock.mailbox);
 
     json_t *contacts = json_pack("{}");
-    json_object_set_new(contacts, "accountId", json_string(httpd_userid));
-    json_object_set_new(contacts, "state", json_string(buf_cstring(&buf)));
+    json_object_set_new(contacts, "accountId", json_string(req->userid));
+    json_object_set_new(contacts, "state", json_string(req->state));
     json_object_set_new(contacts, "list", rock.array);
     if (rock.need) {
 	json_t *notfound = json_array();
@@ -1244,9 +1235,9 @@ EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, json_t *args,
     json_t *item = json_pack("[]");
     json_array_append_new(item, json_string("contacts"));
     json_array_append_new(item, contacts);
-    json_array_append_new(item, json_string(tag));
+    json_array_append_new(item, json_string(req->tag));
 
-    json_array_append_new(response, item);
+    json_array_append_new(req->response, item);
 
     return 0;
 }
@@ -1259,7 +1250,7 @@ static int getcontactupdates_cb(sqlite3_stmt *stmt, void *rock)
     int contact_alive = sqlite3_column_int(stmt, 2);
     struct buf contactid = BUF_INITIALIZER;
 
-    _build_id(contact_mailbox, contact_resource, &contactid);
+    _build_id(grock->req, contact_mailbox, contact_resource, &contactid);
 
     if (contact_alive) {
 	json_array_append_new(grock->changed, json_string(buf_cstring(&contactid)));
@@ -1272,14 +1263,11 @@ static int getcontactupdates_cb(sqlite3_stmt *stmt, void *rock)
     return 0;
 }
 
-EXPORTED int carddav_getContactUpdates(struct carddav_db *carddavdb, json_t *args,
-				       modseq_t modseq, json_t *response, const char *tag)
+EXPORTED int carddav_getContactUpdates(struct carddav_db *carddavdb, struct jmap_req *req)
 {
     struct updates_rock rock;
-    struct buf buf = BUF_INITIALIZER;
-    buf_printf(&buf, "%llu", modseq);
     int r;
-    json_t *since = json_object_get(args, "sinceState");
+    json_t *since = json_object_get(req->args, "sinceState");
     if (!since) return -1;
     modseq_t oldmodseq = str2uint64(json_string_value(since));
     rock.changed = json_array();
@@ -1299,33 +1287,33 @@ EXPORTED int carddav_getContactUpdates(struct carddav_db *carddavdb, json_t *arg
     }
 
     json_t *contactUpdates = json_pack("{}");
-    json_object_set_new(contactUpdates, "accountId", json_string(httpd_userid));
+    json_object_set_new(contactUpdates, "accountId", json_string(req->userid));
     json_object_set_new(contactUpdates, "oldState", json_string(json_string_value(since)));
-    json_object_set_new(contactUpdates, "newState", json_string(buf_cstring(&buf)));
+    json_object_set_new(contactUpdates, "newState", json_string(req->state));
     json_object_set(contactUpdates, "changed", rock.changed);
     json_object_set(contactUpdates, "removed", rock.removed);
 
     json_t *item = json_pack("[]");
     json_array_append_new(item, json_string("contactUpdates"));
     json_array_append_new(item, contactUpdates);
-    json_array_append_new(item, json_string(tag));
+    json_array_append_new(item, json_string(req->tag));
 
-    json_array_append_new(response, item);
+    json_array_append_new(req->response, item);
 
-    json_t *dofetch = json_object_get(args, "fetchContacts");
+    json_t *dofetch = json_object_get(req->args, "fetchContacts");
+    json_t *doprops = json_object_get(req->args, "fetchContactProperties");
     if (dofetch && json_is_true(dofetch)) {
-	json_t *getargs = json_pack("{}");
-	json_t *props = json_object_get(args, "fetchContactProperties");
-	json_object_set(getargs, "ids", rock.changed);
-	if (props) json_object_set(getargs, "properties", props);
-	r = carddav_getContacts(carddavdb, getargs, modseq, response, tag);
-	json_decref(getargs);
+	struct jmap_req subreq = *req;
+	subreq.args = json_pack("{}");
+	json_object_set(subreq.args, "ids", rock.changed);
+	if (doprops) json_object_set(subreq.args, "properties", doprops);
+	r = carddav_getContacts(carddavdb, &subreq);
+	json_decref(subreq.args);
     }
 
     json_decref(rock.changed);
     json_decref(rock.removed);
 
-    buf_free(&buf);
     return r;
 }
 

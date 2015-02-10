@@ -46,9 +46,8 @@
 
 #include <config.h>
 
-#include <jansson.h>
-
 #include "dav_db.h"
+#include "jmap.h"
 #include "strarray.h"
 #include "util.h"
 #include "vparse.h"
@@ -108,14 +107,10 @@ strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const char *uid)
 strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const char *uid);
 
 /* jmap contact APIs */
-int carddav_getContactGroups(struct carddav_db *carddavdb, json_t *args, modseq_t modseq,
-			     json_t *response, const char *tag);
-int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, json_t *args, modseq_t modseq,
-				   json_t *response, const char *tag);
-int carddav_getContacts(struct carddav_db *carddavdb, json_t *args, modseq_t modseq,
-			json_t *response, const char *tag);
-int carddav_getContactUpdates(struct carddav_db *carddavdb, json_t *args, modseq_t modseq,
-			      json_t *response, const char *tag);
+int carddav_getContactGroups(struct carddav_db *carddavdb, struct jmap_req *req);
+int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, struct jmap_req *req);
+int carddav_getContacts(struct carddav_db *carddavdb, struct jmap_req *req);
+int carddav_getContactUpdates(struct carddav_db *carddavdb, struct jmap_req *req);
 
 /* process each entry for 'mailbox' in 'carddavdb' with cb() */
 int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
