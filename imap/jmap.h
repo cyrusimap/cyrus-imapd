@@ -55,6 +55,7 @@
 
 struct jmap_req {
     const char *userid;
+    struct hash_table *idmap;
     json_t *args;
     json_t *response;
     const char *state; // if changing things, this is pre-change state

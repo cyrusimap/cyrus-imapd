@@ -1138,7 +1138,28 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
     // maybe a foreach would be better
     int r = carddav_lookup_uid(carddavdb, req->tag, 0, &cdata);
 
-    return r;
+    json_t *checkState = json_object_get(req->args, "ifInState");
+    if (checkState && strcmp(req->state, json_string_value(checkState))) {
+	json_t *item = json_pack("[s, {s:s}, s]", "error", "type", "stateMismatch", req->tag);
+	json_array_append_new(req->response, item);
+	return 0;
+    }
+    json_t *item = json_pack("{}");
+
+    json_t *create = json_object_get(req->args, "create");
+    if (create) {
+	json_t *created = json_pack("{}");
+	json_t *notCreated = json_pack("{}");
+	const char *key;
+	json_t *arg;
+	json_object_foreach(create, key, arg) {
+	    
+	}
+	if (json_object_size(created))
+	    json_object_set(
+    }
+
+    return 0;
 }
 
 EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, struct jmap_req *req)

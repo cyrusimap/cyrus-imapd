@@ -160,9 +160,12 @@ static int meth_post(struct transaction_t *txn,
     json_error_t jerr;
     const struct message_t *mp = NULL;
     struct mailbox *mailbox = NULL;
+    struct hash_table idmap;
     size_t i, flags = JSON_PRESERVE_ORDER;
     int ret;
     char *buf;
+
+    construct_hash_table(&idmap, 1024, 0);
 
     /* Read body */
     txn->req_body.flags |= BODY_DECODE;
@@ -241,6 +244,7 @@ static int meth_post(struct transaction_t *txn,
 	req.state = buf_cstring(&buf);
 	req.response = resp;
 	req.tag = tag;
+	req.idmap = &idmap;
 
 	r = mp->proc(&req);
 
@@ -272,6 +276,7 @@ static int meth_post(struct transaction_t *txn,
     free(buf);
 
   done:
+    free_hash_table(&idmap, free);
     mailbox_close(&mailbox);
     if (req) json_decref(req);
     if (resp) json_decref(resp);
