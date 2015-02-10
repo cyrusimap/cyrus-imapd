@@ -359,5 +359,7 @@ int buf_deflate(struct buf *buf, int compLevel, int scheme);
 /* simple function to request a file gets pre-loaded by the OS */
 int warmup_file(const char *filename, off_t offset, off_t length);
 
+char *makeuuid();
+
 #endif /* INCLUDED_UTIL_H */
 

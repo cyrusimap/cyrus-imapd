@@ -923,7 +923,7 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/version.c \
 	imap/version.h
 
-imap_libcyrus_imap_la_LIBADD = $(COM_ERR_LIBS) $(LIB_UUID) lib/libcyrus_min.la lib/libcyrus.la
+imap_libcyrus_imap_la_LIBADD = $(COM_ERR_LIBS) lib/libcyrus_min.la lib/libcyrus.la
 imap_libcyrus_imap_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 if JANSSON
@@ -1242,7 +1242,7 @@ else
 lib_libcyrus_min_la_SOURCES += lib/map_nommap.c
 endif
 endif
-lib_libcyrus_min_la_LIBADD = $(LTLIBOBJS)
+lib_libcyrus_min_la_LIBADD = $(LTLIBOBJS) $(LIB_UUID)
 lib_libcyrus_min_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 lib/chartable.c: lib/mkchartable.pl lib/charset/unifix.txt \
