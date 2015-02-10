@@ -676,11 +676,11 @@ EXPORTED int carddav_delmbox(struct carddav_db *carddavdb, const char *mailbox, 
 }
 
 #define CMD_GETGROUPS \
-  "SELECT GO.mailbox, GO.resource, GO.fullname, F.mailbox, F.resource " \
+  "SELECT GO.vcard_uid, GO.fullname, F.vcard_uid " \
   "FROM vcard_objs GO LEFT JOIN (" \
-    "SELECT G.objid AS rowid, CO.mailbox, CO.resource FROM vcard_groups G " \
+    "SELECT G.objid AS rowid, CO.vcard_uid FROM vcard_groups G " \
     "JOIN vcard_objs CO ON (G.member_uid = CO.vcard_uid) " \
-    "WHERE CO.alive = 1 ORDER BY CO.rowid, G.pos" \
+    "WHERE CO.alive = 1 ORDER BY G.objid, G.pos" \
   ") AS F USING (rowid)" \
   "WHERE GO.kind = 1 AND GO.alive = 1;"
 
@@ -691,57 +691,35 @@ struct groups_rock {
     struct hash_table *need;
 };
 
-static void _build_id(struct jmap_req *req, const char *mailbox, const char *resource, struct buf *buf)
-{
-    const char *mboxuserid = mboxname_to_userid(mailbox);
-    struct mboxname_parts parts;
-    size_t abooklen = strlen(config_getstring(IMAPOPT_ADDRESSBOOKPREFIX)) + 1;
-    mboxname_to_parts(mailbox, &parts);
-    if (strcmp(mboxuserid, req->userid)) {
-	buf_printf(buf, "/dav/addressbooks/user/%s/", mboxuserid);
-    }
-    buf_printf(buf, "%s/%s", parts.box + abooklen, resource);
-    mboxname_free_parts(&parts);
-}
-
 static int getgroups_cb(sqlite3_stmt *stmt, void *rock)
 {
     struct groups_rock *grock = (struct groups_rock *)rock;
-    const char *group_mailbox = (const char *)sqlite3_column_text(stmt, 0);
-    const char *group_resource = (const char *)sqlite3_column_text(stmt, 1);
-    const char *group_name = (const char *)sqlite3_column_text(stmt, 2);
-    const char *card_mailbox = (const char *)sqlite3_column_text(stmt, 3);
-    const char *card_resource = (const char *)sqlite3_column_text(stmt, 4);
-    struct buf groupid = BUF_INITIALIZER;
-    struct buf cardid = BUF_INITIALIZER;
-
-    _build_id(grock->req, group_mailbox, group_resource, &groupid);
-    if (card_resource) _build_id(grock->req, card_mailbox, card_resource, &cardid);
+    const char *group_uid = (const char *)sqlite3_column_text(stmt, 0);
+    const char *group_name = (const char *)sqlite3_column_text(stmt, 1);
+    const char *card_uid = (const char *)sqlite3_column_text(stmt, 2);
 
     if (grock->need) {
 	/* skip records not in hash */
-	if (!hash_lookup(buf_cstring(&groupid), grock->need))
-	    goto done;
+	if (!hash_lookup(group_uid, grock->need))
+	    return 0;
 	/* mark 2 == seen */
-	hash_insert(buf_cstring(&groupid), (void *)2, grock->need);
+	hash_insert(group_uid, (void *)2, grock->need);
     }
 
-    json_t *members = hash_lookup(buf_cstring(&groupid), grock->hash);
+    json_t *members = hash_lookup(group_uid, grock->hash);
     if (!members) {
 	json_t *obj;
 	members = json_pack("[]");
 	obj = json_pack("{s:s, s:s, s:o}",
-	    "id", buf_cstring(&groupid),
+	    "id", group_uid,
 	    "name", group_name,
 	    "contactIds", members
 	);
 	json_array_append(grock->array, obj);
-	hash_insert(buf_cstring(&groupid), members, grock->hash);
+	hash_insert(group_uid, members, grock->hash);
     }
-    if (card_resource) json_array_append(members, json_string(buf_cstring(&cardid)));
-done:
-    buf_free(&groupid);
-    buf_free(&cardid);
+    if (card_uid) json_array_append(members, json_string(card_uid));
+
     return 0;
 }
 
@@ -823,7 +801,7 @@ EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb, struct jmap_
 }
 
 #define CMD_GETUPDATES \
-  "SELECT mailbox, resource, alive " \
+  "SELECT vcard_uid, alive " \
   "FROM vcard_objs "\
   "WHERE kind = :kind AND modseq > :modseq;"
 
@@ -833,24 +811,19 @@ struct updates_rock {
     json_t *removed;
 };
 
-static int getgroupupdates_cb(sqlite3_stmt *stmt, void *rock)
+static int getupdates_cb(sqlite3_stmt *stmt, void *rock)
 {
     struct updates_rock *grock = (struct updates_rock *)rock;
-    const char *group_mailbox = (const char *)sqlite3_column_text(stmt, 0);
-    const char *group_resource = (const char *)sqlite3_column_text(stmt, 1);
-    int group_alive = sqlite3_column_int(stmt, 2);
-    struct buf groupid = BUF_INITIALIZER;
-
-    _build_id(grock->req, group_mailbox, group_resource, &groupid);
+    const char *group_uid = (const char *)sqlite3_column_text(stmt, 0);
+    int group_alive = sqlite3_column_int(stmt, 1);
 
     if (group_alive) {
-	json_array_append_new(grock->changed, json_string(buf_cstring(&groupid)));
+	json_array_append_new(grock->changed, json_string(group_uid));
     }
     else {
-	json_array_append_new(grock->removed, json_string(buf_cstring(&groupid)));
+	json_array_append_new(grock->removed, json_string(group_uid));
     }
 
-    buf_free(&groupid);
     return 0;
 }
 
@@ -869,7 +842,7 @@ EXPORTED int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, struct
 	{ NULL,      SQLITE_NULL,    { .s = NULL  } }
     };
 
-    r = dav_exec(carddavdb->db, CMD_GETUPDATES, bval, &getgroupupdates_cb, &rock,
+    r = dav_exec(carddavdb->db, CMD_GETUPDATES, bval, &getupdates_cb, &rock,
 		 &carddavdb->stmt[STMT_GETUPDATES]);
     if (r) {
 	syslog(LOG_ERR, "caldav error %s", error_message(r));
@@ -921,34 +894,37 @@ static int _wantprop(hash_table *props, const char *name)
     return 0;
 }
 
+#define CMD_GETCONTACTS \
+  "SELECT vard_uid, mailbox, imap_uid" \
+  " FROM vcard_objs" \
+  " WHERE kind = 0 AND alive = 1" \
+  " ORDER BY mailbox, imap_uid;"
+
 static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 {
     struct contacts_rock *grock = (struct contacts_rock *)rock;
-    const char *card_mailbox = (const char *)sqlite3_column_text(stmt, 0);
-    const char *card_resource = (const char *)sqlite3_column_text(stmt, 1);
-    struct index_record record;
+    const char *card_uid = (const char *)sqlite3_column_text(stmt, 0);
+    const char *mboxname = (const char *)sqlite3_column_text(stmt, 1);
     uint32_t uid = sqlite3_column_int(stmt, 2);
-    struct buf cardid = BUF_INITIALIZER;
+    struct index_record record;
     int r = 0;
-
-    _build_id(grock->req, card_mailbox, card_resource, &cardid);
 
     if (grock->need) {
 	/* skip records not in hash */
-	if (!hash_lookup(buf_cstring(&cardid), grock->need))
-	    goto done;
+	if (!hash_lookup(card_uid, grock->need))
+	    return 0;
 	/* mark 2 == seen */
-	hash_insert(buf_cstring(&cardid), (void *)2, grock->need);
+	hash_insert(card_uid, (void *)2, grock->need);
     }
 
-    if (!grock->mailbox || strcmp(grock->mailbox->name, card_mailbox)) {
+    if (!grock->mailbox || strcmp(grock->mailbox->name, mboxname)) {
 	mailbox_close(&grock->mailbox);
-	r = mailbox_open_irl(card_mailbox, &grock->mailbox);
-	if (r) goto done;
+	r = mailbox_open_irl(mboxname, &grock->mailbox);
+	if (r) return r;
     }
 
     r = mailbox_find_index_record(grock->mailbox, uid, &record, NULL);
-    if (r) goto done;
+    if (r) return r;
 
     /* XXX - this could definitely be refactored from here and mailbox.c */
     struct buf msg_buf = BUF_INITIALIZER;
@@ -956,7 +932,7 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 
     /* Load message containing the resource and parse vcard data */
     r = mailbox_map_record(grock->mailbox, &record, &msg_buf);
-    if (r) goto done;
+    if (r) return r;
 
     memset(&vparser, 0, sizeof(struct vparse_state));
     vparser.base = buf_cstring(&msg_buf) + record.header_size;
@@ -965,16 +941,16 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
     vparse_set_multival(&vparser, "n");
     r = vparse_parse(&vparser, 0);
     buf_free(&msg_buf);
-    if (r) goto done; // XXX report error
+    if (r) return r;
     if (!vparser.card || !vparser.card->objects) {
         vparse_free(&vparser);
-        goto done;
+        return r;
     }
     struct vparse_card *card = vparser.card->objects;
 
     json_t *obj = json_pack("{}");
 
-    json_object_set_new(obj, "id", json_string(buf_cstring(&cardid)));
+    json_object_set_new(obj, "id", json_string(card_uid));
 
     if (_wantprop(grock->props, "isFlagged")) {
 	json_object_set_new(obj, "isFlagged", record.system_flags & FLAG_FLAGGED ? json_true() : json_false());
@@ -1152,15 +1128,8 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 
     json_array_append_new(grock->array, obj);
 
-done:
-    buf_free(&cardid);
-    return r;
+    return 0;
 }
-
-#define CMD_GETCONTACTS \
-  "SELECT mailbox, resource, imap_uid" \
-  " FROM vcard_objs" \
-  " WHERE kind = 0 AND alive = 1;"
 
 EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, struct jmap_req *req)
 {
@@ -1242,27 +1211,6 @@ EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, struct jmap_req *
     return 0;
 }
 
-static int getcontactupdates_cb(sqlite3_stmt *stmt, void *rock)
-{
-    struct updates_rock *grock = (struct updates_rock *)rock;
-    const char *contact_mailbox = (const char *)sqlite3_column_text(stmt, 0);
-    const char *contact_resource = (const char *)sqlite3_column_text(stmt, 1);
-    int contact_alive = sqlite3_column_int(stmt, 2);
-    struct buf contactid = BUF_INITIALIZER;
-
-    _build_id(grock->req, contact_mailbox, contact_resource, &contactid);
-
-    if (contact_alive) {
-	json_array_append_new(grock->changed, json_string(buf_cstring(&contactid)));
-    }
-    else {
-	json_array_append_new(grock->removed, json_string(buf_cstring(&contactid)));
-    }
-
-    buf_free(&contactid);
-    return 0;
-}
-
 EXPORTED int carddav_getContactUpdates(struct carddav_db *carddavdb, struct jmap_req *req)
 {
     struct updates_rock rock;
@@ -1278,7 +1226,7 @@ EXPORTED int carddav_getContactUpdates(struct carddav_db *carddavdb, struct jmap
 	{ NULL,      SQLITE_NULL,    { .s = NULL  } }
     };
 
-    r = dav_exec(carddavdb->db, CMD_GETUPDATES, bval, &getcontactupdates_cb, &rock,
+    r = dav_exec(carddavdb->db, CMD_GETUPDATES, bval, &getupdates_cb, &rock,
 		 &carddavdb->stmt[STMT_GETUPDATES]);
     if (r) {
 	syslog(LOG_ERR, "caldav error %s", error_message(r));
