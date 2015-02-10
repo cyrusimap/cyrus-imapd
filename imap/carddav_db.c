@@ -895,7 +895,7 @@ static int _wantprop(hash_table *props, const char *name)
 }
 
 #define CMD_GETCONTACTS \
-  "SELECT vard_uid, mailbox, imap_uid" \
+  "SELECT vcard_uid, mailbox, imap_uid" \
   " FROM vcard_objs" \
   " WHERE kind = 0 AND alive = 1" \
   " ORDER BY mailbox, imap_uid;"
