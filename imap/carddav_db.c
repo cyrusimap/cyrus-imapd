@@ -900,6 +900,11 @@ static int _wantprop(hash_table *props, const char *name)
   " WHERE kind = 0 AND alive = 1" \
   " ORDER BY mailbox, imap_uid;"
 
+static json_t *_optstring(const char *str)
+{
+    return json_string(str ? str : "");
+}
+
 static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 {
     struct contacts_rock *grock = (struct contacts_rock *)rock;
@@ -956,27 +961,22 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 	json_object_set_new(obj, "isFlagged", record.system_flags & FLAG_FLAGGED ? json_true() : json_false());
     }
 
-    const struct vparse_list *last = vparse_multival(card, "n");
-    const struct vparse_list *first = last ? last->next : NULL;
-    const struct vparse_list *foo = first ? first->next : NULL;
-    const struct vparse_list *prefix = foo ? foo->next : NULL;
-
-    const struct vparse_list *company = vparse_multival(card, "org");
-    const struct vparse_list *department = company ? company->next : NULL;
+    const strarray_t *n = vparse_multival(card, "n");
+    const strarray_t *org = vparse_multival(card, "org");
 
     /* name fields */
     if (_wantprop(grock->props, "lastName"))
-	json_object_set_new(obj, "lastName", json_string(last ? last->s : ""));
+	json_object_set_new(obj, "lastName", _optstring(strarray_nth(n, 0)));
     if (_wantprop(grock->props, "firstName"))
-	json_object_set_new(obj, "firstName", json_string(first ? first->s : ""));
+	json_object_set_new(obj, "firstName", _optstring(strarray_nth(n, 1)));
     if (_wantprop(grock->props, "prefix"))
-	json_object_set_new(obj, "prefix", json_string(prefix ? prefix->s : ""));
+	json_object_set_new(obj, "prefix", _optstring(strarray_nth(n, 3)));
 
     /* org fields */
     if (_wantprop(grock->props, "company"))
-	json_object_set_new(obj, "company", json_string(company ? company->s : ""));
+	json_object_set_new(obj, "company", _optstring(strarray_nth(org, 0)));
     if (_wantprop(grock->props, "department"))
-	json_object_set_new(obj, "department", json_string(department ? department->s : ""));
+	json_object_set_new(obj, "department", _optstring(strarray_nth(org, 1)));
 
     /* address - we need to open code this, because it's repeated */
     if (_wantprop(grock->props, "addresses")) {
@@ -988,13 +988,7 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 	    json_t *item = json_pack("{}");
 
 	    /* XXX - type and label */
-	    const struct vparse_list *pobox = entry->v.values;
-	    const struct vparse_list *ext = pobox ? pobox->next : NULL;
-	    const struct vparse_list *street = ext ? ext->next : NULL;
-	    const struct vparse_list *locality = street ? street->next : NULL;
-	    const struct vparse_list *region = locality ? locality->next : NULL;
-	    const struct vparse_list *postcode = region ? region->next : NULL;
-	    const struct vparse_list *country = postcode ? postcode->next : NULL;
+	    const strarray_t *a = entry->v.values;
 
 	    const struct vparse_param *param;
 	    const char *type = "other";
@@ -1021,10 +1015,11 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 	    json_object_set_new(item, "type", json_string(type));
 	    if (label) json_object_set_new(item, "label", json_string(label));
 
-	    json_object_set_new(item, "locality", json_string(locality ? locality->s : ""));
-	    json_object_set_new(item, "region", json_string(region ? region->s : ""));
-	    json_object_set_new(item, "postcode", json_string(postcode ? postcode->s : ""));
-	    json_object_set_new(item, "country", json_string(country ? country->s : ""));
+	    json_object_set_new(item, "street", _optstring(strarray_nth(a, 2)));
+	    json_object_set_new(item, "locality", _optstring(strarray_nth(a, 3)));
+	    json_object_set_new(item, "region", _optstring(strarray_nth(a, 4)));
+	    json_object_set_new(item, "postcode", _optstring(strarray_nth(a, 5)));
+	    json_object_set_new(item, "country", _optstring(strarray_nth(a, 6)));
 
 	    json_array_append_new(adr, item);
 	}
