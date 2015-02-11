@@ -1128,10 +1128,6 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 
 EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_req *req)
 {
-    struct carddav_data *cdata = NULL;
-    /* XXX - should we lock?... it's tricky because we're going to need to lock the DB anyway */
-    // maybe a foreach would be better
-    int r = carddav_lookup_uid(carddavdb, req->tag, 0, &cdata);
 
     json_t *checkState = json_object_get(req->args, "ifInState");
     if (checkState && strcmp(req->state, json_string_value(checkState))) {
@@ -1139,23 +1135,46 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	json_array_append_new(req->response, item);
 	return 0;
     }
-    json_t *item = json_pack("{s:s,s:s}",
-			     "oldState", req->state,
-			     "accountId", req->userid);
+    json_t *set = json_pack("{s:s,s:s}",
+			    "oldState", req->state,
+			    "accountId", req->userid);
 
     json_t *create = json_object_get(req->args, "create");
     if (create) {
 	json_t *created = json_pack("{}");
 	json_t *notCreated = json_pack("{}");
+
 	const char *key;
 	json_t *arg;
 	json_object_foreach(create, key, arg) {
-	    char *uid = makeuuid();
-	    vparse_parse xxx
+//	    char *uid = makeuuid();
+	    struct vparse_card *card = vparse_new_card("VCARD");
+	    vparse_add_entry(card, NULL, "VERSION", "3.0");
 	}
+
 	if (json_object_size(created))
-	    json_object_set(
+	    json_object_set(set, "created", created);
+	json_decref(created);
+	if (json_object_size(notCreated))
+	    json_object_set(set, "notCreated", notCreated);
+	json_decref(notCreated);
     }
+
+    json_t *update = json_object_get(req->args, "update");
+    if (update) {
+	struct carddav_data *cdata = NULL;
+	/* XXX - should we lock?... it's tricky because we're going to need to lock the DB anyway */
+	// maybe a foreach would be better
+	int r = carddav_lookup_uid(carddavdb, req->tag, 0, &cdata);
+	if (r) return r;
+    }
+
+    json_t *item = json_pack("[]");
+    json_array_append_new(item, json_string("contactsSet"));
+    json_array_append_new(item, set);
+    json_array_append_new(item, json_string(req->tag));
+
+    json_array_append_new(req->response, item);
 
     return 0;
 }
