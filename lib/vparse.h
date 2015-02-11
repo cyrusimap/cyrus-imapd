@@ -84,9 +84,10 @@ extern const char *vparse_stringval(const struct vparse_card *card, const char *
 extern const strarray_t *vparse_multival(const struct vparse_card *card, const char *name);
 
 /* editing functions */
+extern struct vparse_card *vparse_new_card(const char *type);
 extern int vparse_delete_entries(struct vparse_card *card, const char *group, const char *name);
 extern struct vparse_entry *vparse_get_entry(struct vparse_card *card, const char *group, const char *name);
-extern struct vparse_entry *vparse_add_entry(struct vparse_card *card, const char *group, const char *name);
+extern struct vparse_entry *vparse_add_entry(struct vparse_card *card, const char *group, const char *name, const char *value);
 extern void vparse_set_value(struct vparse_entry *entry, const char *value);
 /* XXX - multivalue should be strarray_t */
 //extern void vparse_set_multivalue(struct vparse_entry *entry, const strarray_t *values);
