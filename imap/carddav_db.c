@@ -1128,12 +1128,12 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 
 static void _add_group_entries(struct vparse_card *card, json_t *members)
 {
-
+    if (card && members)
+	return;
 }
 
 EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_req *req)
 {
-
     json_t *checkState = json_object_get(req->args, "ifInState");
     if (checkState && strcmp(req->state, json_string_value(checkState))) {
 	json_t *item = json_pack("[s, {s:s}, s]", "error", "type", "stateMismatch", req->tag);
@@ -1144,10 +1144,14 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 			    "oldState", req->state,
 			    "accountId", req->userid);
 
+    struct mailbox *mailbox = NULL;
+
     json_t *create = json_object_get(req->args, "create");
     if (create) {
 	json_t *created = json_pack("{}");
 	json_t *notCreated = json_pack("{}");
+	/* XXX - default name finding */
+	const char *mboxname = mboxname_user_mbox(req->userid, "#addressbooks.Default");
 
 	const char *key;
 	json_t *arg;
@@ -1161,6 +1165,18 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    vparse_add_entry(card, NULL, "UID", uid);
 	    json_t *members = json_object_get(arg, "contactIds");
 	    _add_group_entries(card, members);
+
+	    /* we need to create and append a record */
+	    if (!mailbox || strcmp(mailbox->name, mboxname)) {
+		mailbox_close(&mailbox);
+		int r = mailbox_open_iwl(mboxname, &mailbox);
+		if (r) return r;
+	    }
+
+// XXX - write the card
+
+	    vparse_free_card(card);
+	    free(uid);
 	}
 
 	if (json_object_size(created))
@@ -1173,37 +1189,103 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 
     json_t *update = json_object_get(req->args, "update");
     if (update) {
-	struct carddav_data *cdata = NULL;
-	/* XXX - should we lock?... it's tricky because we're going to need to lock the DB anyway */
-	// maybe a foreach would be better
-	int r = carddav_lookup_uid(carddavdb, req->tag, 0, &cdata);
-	if (r) return r;
+	json_t *updated = json_pack("{}");
+	json_t *notUpdated = json_pack("{}");
 
-	/* XXX - this could definitely be refactored from here and mailbox.c */
-	struct buf msg_buf = BUF_INITIALIZER;
-	struct vparse_state vparser;
+	const char *uid;
+	json_t *arg;
+	json_object_foreach(update, uid, arg) {
+	    struct carddav_data *cdata = NULL;
+	    int r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
+	    if (r) return r;
 
-	/* Load message containing the resource and parse vcard data */
-	r = mailbox_map_record(grock->mailbox, &record, &msg_buf);
-	if (r) return r;
+	    if (!mailbox || strcmp(mailbox->name, cdata->dav.mailbox)) {
+		mailbox_close(&mailbox);
+		int r = mailbox_open_iwl(cdata->dav.mailbox, &mailbox);
+		if (r) return r;
+	    }
 
-	memset(&vparser, 0, sizeof(struct vparse_state));
-	vparser.base = buf_cstring(&msg_buf) + record.header_size;
-	vparse_set_multival(&vparser, "adr");
-	vparse_set_multival(&vparser, "org");
-	vparse_set_multival(&vparser, "n");
-	r = vparse_parse(&vparser, 0);
-	buf_free(&msg_buf);
-	if (r) return r;
-	if (!vparser.card || !vparser.card->objects) {
+	    /* XXX - this could definitely be refactored from here and mailbox.c */
+	    struct buf msg_buf = BUF_INITIALIZER;
+	    struct vparse_state vparser;
+	    struct index_record record;
+
+	    /* Load message containing the resource and parse vcard data */
+	    r = mailbox_map_record(mailbox, &record, &msg_buf);
+	    if (r) return r;
+
+	    memset(&vparser, 0, sizeof(struct vparse_state));
+	    vparser.base = buf_cstring(&msg_buf) + record.header_size;
+	    vparse_set_multival(&vparser, "adr");
+	    vparse_set_multival(&vparser, "org");
+	    vparse_set_multival(&vparser, "n");
+	    r = vparse_parse(&vparser, 0);
+	    buf_free(&msg_buf);
+	    if (r) return r;
+	    if (!vparser.card || !vparser.card->objects) {
+		vparse_free(&vparser);
+		return r;
+	    }
+	    struct vparse_card *card = vparser.card->objects;
+
+	    json_t *namep = json_object_get(arg, "name");
+	    if (namep) {
+		const char *name = json_string_value(namep);
+		struct vparse_entry *entry = vparse_get_entry(card, NULL, "FN");
+		if (entry) {
+		    free(entry->v.value);
+		    entry->v.value = xstrdup(name);
+		}
+		else {
+		    vparse_add_entry(card, NULL, "FN", name);
+		}
+	    }
+
+	    json_t *members = json_object_get(arg, "contactIds");
+	    if (members) {
+		vparse_delete_entries(card, NULL, "X-ADDRESSBOOKSERVER-MEMBER");
+		_add_group_entries(card, members);
+	    }
+
+/* XXX store card */
+
 	    vparse_free(&vparser);
-	    return r;
 	}
-	struct vparse_card *card = vparser.card->objects;
+
+	if (json_object_size(updated))
+	    json_object_set(set, "updated", updated);
+	json_decref(updated);
+	if (json_object_size(notUpdated))
+	    json_object_set(set, "notUpdated", notUpdated);
+	json_decref(notUpdated);
+    }
+
+    json_t *delete = json_object_get(req->args, "delete");
+    if (delete) {
+	json_t *deleted = json_pack("{}");
+	json_t *notDeleted = json_pack("{}");
+
+	size_t index;
+	json_t *uidp;
+	json_array_foreach(delete, index, uidp) {
+	    const char *uid = json_string_value(uidp);
+	    struct carddav_data *cdata = NULL;
+	    int r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
+	    if (r) return r;
+
+	    /* open mailbox, delete record */
+	}
+
+	if (json_object_size(deleted))
+	    json_object_set(set, "deleted", deleted);
+	json_decref(deleted);
+	if (json_object_size(notDeleted))
+	    json_object_set(set, "notDeleted", notDeleted);
+	json_decref(notDeleted);
     }
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("contactsSet"));
+    json_array_append_new(item, json_string("contactGroupsSet"));
     json_array_append_new(item, set);
     json_array_append_new(item, json_string(req->tag));
 
