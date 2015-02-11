@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <fcntl.h>
 
+#include "xmalloc.h"
 #include "vparse.h"
 
 #define LC(s) do { char *p; for (p = s; *p; p++) if (*p >= 'A' && *p <= 'Z') *p += ('a' - 'A'); } while (0)
@@ -26,7 +27,7 @@ static char *buf_dup_lcstring(struct buf *buf)
 }
 
 #define NOTESTART() state->itemstart = state->p
-#define MAKE(X, Y) X = malloc(sizeof(struct Y)); memset(X, 0, sizeof(struct Y))
+#define MAKE(X, Y) X = xzmalloc(sizeof(struct Y));
 #define PUTC(C) buf_putc(&state->buf, C)
 #define INC(I) state->p += I
 
@@ -612,6 +613,11 @@ EXPORTED void vparse_free(struct vparse_state *state)
     _free_state(state);
 }
 
+EXPORTED void vparse_free_card(struct vparse_card *card)
+{
+    _free_card(card);
+}
+
 EXPORTED void vparse_fillpos(struct vparse_state *state, struct vparse_errorpos *pos)
 {
     int l = 1;
@@ -852,6 +858,24 @@ EXPORTED void vparse_tobuf(const struct vparse_card *card, struct buf *buf)
     tgt.last = 0;
     for (; card; card = card->next)
 	_card_to_tgt(card, &tgt);
+}
+
+EXPORTED struct vparse_card *vparse_new_card(const char *type)
+{
+    struct vparse_card *card = xzmalloc(sizeof(struct vparse_card));
+    card->type = xstrdupnull(type);
+    return card;
+}
+
+EXPORTED struct vparse_entry *vparse_add_entry(struct vparse_card *card, const char *group, const char *name, const char *value)
+{
+    struct vparse_entry **entryp = &card->properties;
+    while (*entryp) entryp = &((*entryp)->next);
+    struct vparse_entry *entry = *entryp = xzmalloc(sizeof(struct vparse_card));
+    entry->group = xstrdupnull(group);
+    entry->name = xstrdupnull(name);
+    entry->v.value = xstrdupnull(value);
+    return entry;
 }
 
 #ifdef DEBUG
