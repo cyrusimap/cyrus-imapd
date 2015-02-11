@@ -970,6 +970,10 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/xstats.h \
 	imap/xstats_metrics.h
 
+imap_libcyrus_imap_la_LIBADD = $(COM_ERR_LIBS) lib/libcyrus_min.la lib/libcyrus.la
+imap_libcyrus_imap_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
+imap_libcyrus_imap_la_CXXFLAGS =
+
 if USE_SQUAT
 imap_libcyrus_imap_la_SOURCES += \
 	imap/search_squat.c \
@@ -992,14 +996,11 @@ endif
 
 if HTTPD
 imap_libcyrus_imap_la_SOURCES += \
+	imap/caldav_alarm.c \
 	imap/caldav_db.c \
 	imap/caldav_db.h \
 	imap/carddav_db.c \
-<<<<<<< HEAD
 	imap/carddav_db.h \
-=======
-	imap/caldav_alarm.c \
->>>>>>> calalarmd: rebased, repacked, ready to go
 	imap/dav_db.c \
 	imap/dav_db.h \
 	imap/dav_util.c \
@@ -1123,13 +1124,10 @@ nodist_imap_httpd_SOURCES = \
 	imap/tz_err.h
 
 imap_httpd_SOURCES = \
+	imap/caldav_alarm.c \
 	imap/caldav_db.c \
-<<<<<<< HEAD
 	imap/carddav_db.c \
 	imap/carddav_db.h \
-=======
-	imap/caldav_alarm.c \
->>>>>>> calalarmd: rebased, repacked, ready to go
 	imap/dav_db.c \
 	imap/dav_util.c \
 	imap/http_caldav.c \
@@ -1337,7 +1335,7 @@ else
 lib_libcyrus_min_la_SOURCES += lib/map_nommap.c
 endif
 endif
-lib_libcyrus_min_la_LIBADD = $(LTLIBOBJS)
+lib_libcyrus_min_la_LIBADD = $(LTLIBOBJS) $(LIB_UUID)
 lib_libcyrus_min_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 lib/chartable.c: lib/mkchartable.pl lib/charset/unifix.txt \
