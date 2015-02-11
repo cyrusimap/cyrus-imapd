@@ -159,7 +159,6 @@ static int _parse_param_key(struct vparse_state *state, int *haseq)
 static int _parse_entry_params(struct vparse_state *state)
 {
     struct vparse_param **paramp = &state->entry->params;
-    struct vparse_list *item;
     int multiparam = 0;
     int haseq = 0;
     int r;
@@ -174,12 +173,8 @@ repeat:
     r = _parse_param_key(state, &haseq);
     if (r) return r;
 
-    for (item = state->multiparam; item; item = item->next) {
-        if (!strcmp(state->param->name, item->s)) {
-            multiparam = 1;
-            break;
-        }
-    }
+    if (strarray_find(state->multiparam, state->param->name, 0))
+        multiparam = 1;
 
     /* now get the value */
     while (*state->p) {
@@ -342,14 +337,10 @@ static int _parse_entry_key(struct vparse_state *state)
 
 static int _parse_entry_multivalue(struct vparse_state *state)
 {
-    struct vparse_list **valp = &state->entry->v.values;
-
     state->entry->multivalue = 1;
+    state->entry->v.values = strarray_new();
 
     NOTESTART();
-
-repeat:
-    MAKE(state->value, vparse_list);
 
     while (*state->p) {
         switch (*state->p) {
@@ -372,11 +363,9 @@ repeat:
             break;
 
         case ';':
-            state->value->s = buf_dup_cstring(&state->buf);
-            *valp = state->value;
-            valp = &state->value->next;
+            strarray_appendm(state->entry->v.values, buf_dup_cstring(&state->buf));
             INC(1);
-            goto repeat;
+            break;
 
         case '\r':
             INC(1);
@@ -400,19 +389,14 @@ repeat:
 out:
     /* reaching the end of the file isn't a failure here,
      * it's just another type of end-of-value */
-    state->value->s = buf_dup_cstring(&state->buf);
-    *valp = state->value;
-    state->value = NULL;
+    strarray_appendm(state->entry->v.values, buf_dup_cstring(&state->buf));
     return 0;
 }
 
 static int _parse_entry_value(struct vparse_state *state)
 {
-    struct vparse_list *item;
-
-    for (item = state->multival; item; item = item->next)
-        if (!strcmp(state->entry->name, item->s))
-            return _parse_entry_multivalue(state);
+    if (strarray_find(state->multival, state->entry->name, 0))
+        return _parse_entry_multivalue(state);
 
     NOTESTART();
 
@@ -465,17 +449,6 @@ out:
 
 /* FREE MEMORY */
 
-static void _free_list(struct vparse_list *list)
-{
-    struct vparse_list *listnext;
-
-    for (; list; list = listnext) {
-        listnext = list->next;
-        free(list->s);
-        free(list);
-    }
-}
-
 static void _free_param(struct vparse_param *param)
 {
     struct vparse_param *paramnext;
@@ -497,7 +470,7 @@ static void _free_entry(struct vparse_entry *entry)
         free(entry->name);
         free(entry->group);
         if (entry->multivalue)
-            _free_list(entry->v.values);
+            strarray_free(entry->v.values);
         else
             free(entry->v.value);
         _free_param(entry->params);
@@ -522,7 +495,6 @@ static void _free_state(struct vparse_state *state)
 {
     buf_free(&state->buf);
     _free_card(state->card);
-    _free_list(state->value);
     _free_entry(state->entry);
     _free_param(state->param);
 
@@ -713,7 +685,7 @@ EXPORTED const char *vparse_stringval(const struct vparse_card *card, const char
     return NULL;
 }
 
-EXPORTED const struct vparse_list *vparse_multival(const struct vparse_card *card, const char *name)
+EXPORTED const strarray_t *vparse_multival(const struct vparse_card *card, const char *name)
 {
     struct vparse_entry *entry;
     for (entry = card->properties; entry; entry = entry->next) {
@@ -726,11 +698,7 @@ EXPORTED const struct vparse_list *vparse_multival(const struct vparse_card *car
 
 EXPORTED void vparse_set_multival(struct vparse_state *state, const char *name)
 {
-    struct vparse_list *list;
-    MAKE(list, vparse_list);
-    list->s = strdup(name);
-    list->next = state->multival;
-    state->multival = list;
+    strarray_append(state->multival, name);
 }
 
 struct vparse_target {
@@ -838,10 +806,10 @@ static void _entry_to_tgt(const struct vparse_entry *entry, struct vparse_target
     buf_putc(tgt->buf, ':');
 
     if (entry->multivalue) {
-	struct vparse_list *item;
-	for (item = entry->v.values; item; item = item->next) {
-	    _value_to_tgt(item->s, tgt);
-	    if (item->next) buf_putc(tgt->buf, ';');
+	int i;
+	for (i = 0; i < entry->v.values->count; i++) {
+	    if (i) buf_putc(tgt->buf, ';');
+	    _value_to_tgt(strarray_nth(entry->v.values, i), tgt);
 	}
     }
     else {

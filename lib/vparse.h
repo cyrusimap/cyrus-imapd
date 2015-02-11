@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include "util.h"
+#include "strarray.h"
 
 enum parse_error {
 PE_OK = 0,
@@ -23,25 +24,19 @@ PE_QSTRING_COMMA,
 PE_NUMERR /* last */
 };
 
-struct vparse_list {
-    char *s;
-    struct vparse_list *next;
-};
-
 struct vparse_state {
     struct buf buf;
     const char *base;
     const char *itemstart;
     const char *p;
-    struct vparse_list *multival;
-    struct vparse_list *multiparam;
+    strarray_t *multival;
+    strarray_t *multiparam;
     int barekeys;
 
     /* current items */
     struct vparse_card *card;
     struct vparse_param *param;
     struct vparse_entry *entry;
-    struct vparse_list *value;
 };
 
 struct vparse_param {
@@ -56,7 +51,7 @@ struct vparse_entry {
     int multivalue;
     union {
 	char *value;
-	struct vparse_list *values;
+	strarray_t *values;
     } v;
     struct vparse_param *params;
     struct vparse_entry *next;
@@ -86,7 +81,7 @@ extern const char *vparse_errstr(int err);
 extern void vparse_set_multival(struct vparse_state *state, const char *name);
 
 extern const char *vparse_stringval(const struct vparse_card *card, const char *name);
-extern const struct vparse_list *vparse_multival(const struct vparse_card *card, const char *name);
+extern const strarray_t *vparse_multival(const struct vparse_card *card, const char *name);
 
 /* editing functions */
 extern int vparse_delete_entries(struct vparse_card *card, const char *group, const char *name);
