@@ -88,6 +88,18 @@ extern void vparse_set_multival(struct vparse_state *state, const char *name);
 extern const char *vparse_stringval(const struct vparse_card *card, const char *name);
 extern const struct vparse_list *vparse_multival(const struct vparse_card *card, const char *name);
 
+/* editing functions */
+extern int vparse_delete_entries(struct vparse_card *card, const char *group, const char *name);
+extern struct vparse_entry *vparse_get_entry(struct vparse_card *card, const char *group, const char *name);
+extern struct vparse_entry *vparse_add_entry(struct vparse_card *card, const char *group, const char *name);
+extern void vparse_set_value(struct vparse_entry *entry, const char *value);
+/* XXX - multivalue should be strarray_t */
+//extern void vparse_set_multivalue(struct vparse_entry *entry, const strarray_t *values);
+
+extern int vparse_delete_params(struct vparse_entry *entry, const char *name);
+extern struct vparse_param *vparse_get_param(struct vparse_entry *entry, const char *name);
+extern struct vparse_param *vparse_add_param(struct vparse_entry *entry, const char *name, const char *value);
+
 extern void vparse_tobuf(const struct vparse_card *card, struct buf *buf);
 
 #endif /* VCARDFAST_H */
