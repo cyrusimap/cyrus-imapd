@@ -733,6 +733,159 @@ EXPORTED void vparse_set_multival(struct vparse_state *state, const char *name)
     state->multival = list;
 }
 
+struct vparse_target {
+    struct buf *buf;
+    size_t last;
+};
+
+static void _endline(struct vparse_target *tgt)
+{
+    buf_appendcstr(tgt->buf, "\r\n");
+    tgt->last = buf_len(tgt->buf);
+}
+
+static void _checkwrap(unsigned char c, struct vparse_target *tgt)
+{
+    if (buf_len(tgt->buf) - tgt->last < 75)
+	return; /* still short line */
+
+    if (c >= 0x80 && c < 0xC0)
+	return; /* never wrap continuation chars */
+
+    /* wrap */
+    _endline(tgt);
+    buf_putc(tgt->buf, ' ');
+}
+
+static void _value_to_tgt(const char *value, struct vparse_target *tgt)
+{
+    for (; *value; value++) {
+	_checkwrap(*value, tgt);
+	switch (*value) {
+	case '\r':
+	    break;
+	case '\n':
+	    buf_putc(tgt->buf, '\\');
+	    buf_putc(tgt->buf, 'N');
+	    break;
+	case ';':
+	case ',':
+	case '\\':
+	    buf_putc(tgt->buf, '\\');
+	    buf_putc(tgt->buf, *value);
+	    break;
+	default:
+	    buf_putc(tgt->buf, *value);
+	}
+    }
+}
+
+static void _paramval_to_tgt(const char *value, struct vparse_target *tgt)
+{
+    for (; *value; value++) {
+	_checkwrap(*value, tgt);
+	switch (*value) {
+	case '\r':
+	    break;
+	case '\n':
+	    buf_putc(tgt->buf, '^');
+	    buf_putc(tgt->buf, 'n');
+	    break;
+	case '^':
+	    buf_putc(tgt->buf, '^');
+	    buf_putc(tgt->buf, '^');
+	    break;
+	case '"':
+	    buf_putc(tgt->buf, '^');
+	    buf_putc(tgt->buf, '\'');
+	    break;
+	default:
+	    buf_putc(tgt->buf, *value);
+	}
+    }
+}
+
+static void _key_to_tgt(const char *key, struct vparse_target *tgt)
+{
+    /* uppercase keys */
+    for (; *key; key++) {
+	_checkwrap(*key, tgt);
+	buf_putc(tgt->buf, toupper(*key));
+    }
+}
+
+static void _entry_to_tgt(const struct vparse_entry *entry, struct vparse_target *tgt)
+{
+    struct vparse_param *param;
+
+    // rfc6350 3.3 - it is RECOMMENDED that property and parameter names be upper-case on output.
+    if (entry->group) {
+	_key_to_tgt(entry->group, tgt);
+	buf_putc(tgt->buf, '.');
+    }
+    _key_to_tgt(entry->name, tgt);
+
+    for (param = entry->params; param; param = param->next) {
+	buf_putc(tgt->buf, ';');
+	_key_to_tgt(param->name, tgt);
+	buf_putc(tgt->buf, '=');
+	/* XXX - smart quoting? */
+	buf_putc(tgt->buf, '"');
+	_paramval_to_tgt(param->value, tgt);
+	buf_putc(tgt->buf, '"');
+    }
+
+    buf_putc(tgt->buf, ':');
+
+    if (entry->multivalue) {
+	struct vparse_list *item;
+	for (item = entry->v.values; item; item = item->next) {
+	    _value_to_tgt(item->s, tgt);
+	    if (item->next) buf_putc(tgt->buf, ';');
+	}
+    }
+    else {
+	_value_to_tgt(entry->v.value, tgt);
+    }
+
+    _endline(tgt);
+}
+
+static void _card_to_tgt(const struct vparse_card *card, struct vparse_target *tgt)
+{
+    const struct vparse_entry *entry;
+    const struct vparse_card *sub;
+
+    if (card->type) {
+	_key_to_tgt("BEGIN", tgt);
+	buf_putc(tgt->buf, ':');
+	_key_to_tgt(card->type, tgt);
+	_endline(tgt);
+    }
+
+    for (entry = card->properties; entry; entry = entry->next)
+	_entry_to_tgt(entry, tgt);
+
+    for (sub = card->objects; sub; sub = sub->next)
+	_card_to_tgt(sub, tgt);
+
+    if (card->type) {
+	_key_to_tgt("END", tgt);
+	buf_putc(tgt->buf, ':');
+	_key_to_tgt(card->type, tgt);
+	_endline(tgt);
+    }
+}
+
+EXPORTED void vparse_tobuf(const struct vparse_card *card, struct buf *buf)
+{
+    struct vparse_target tgt;
+    tgt.buf = buf;
+    tgt.last = 0;
+    for (; card; card = card->next)
+	_card_to_tgt(card, &tgt);
+}
+
 #ifdef DEBUG
 static int _dump_card(struct vparse_card *card)
 {
