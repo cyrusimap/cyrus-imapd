@@ -1126,6 +1126,11 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
     return 0;
 }
 
+static void _add_group_entries(struct vparse_card *card, json_t *members)
+{
+
+}
+
 EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_req *req)
 {
 
@@ -1147,9 +1152,15 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	const char *key;
 	json_t *arg;
 	json_object_foreach(create, key, arg) {
-//	    char *uid = makeuuid();
+	    char *uid = makeuuid();
+	    json_t *namep = json_object_get(arg, "name");
+	    const char *name = namep ? json_string_value(namep) : NULL;
 	    struct vparse_card *card = vparse_new_card("VCARD");
 	    vparse_add_entry(card, NULL, "VERSION", "3.0");
+	    vparse_add_entry(card, NULL, "FN", name ? name : key); // why not ;)
+	    vparse_add_entry(card, NULL, "UID", uid);
+	    json_t *members = json_object_get(arg, "contactIds");
+	    _add_group_entries(card, members);
 	}
 
 	if (json_object_size(created))
@@ -1167,6 +1178,28 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	// maybe a foreach would be better
 	int r = carddav_lookup_uid(carddavdb, req->tag, 0, &cdata);
 	if (r) return r;
+
+	/* XXX - this could definitely be refactored from here and mailbox.c */
+	struct buf msg_buf = BUF_INITIALIZER;
+	struct vparse_state vparser;
+
+	/* Load message containing the resource and parse vcard data */
+	r = mailbox_map_record(grock->mailbox, &record, &msg_buf);
+	if (r) return r;
+
+	memset(&vparser, 0, sizeof(struct vparse_state));
+	vparser.base = buf_cstring(&msg_buf) + record.header_size;
+	vparse_set_multival(&vparser, "adr");
+	vparse_set_multival(&vparser, "org");
+	vparse_set_multival(&vparser, "n");
+	r = vparse_parse(&vparser, 0);
+	buf_free(&msg_buf);
+	if (r) return r;
+	if (!vparser.card || !vparser.card->objects) {
+	    vparse_free(&vparser);
+	    return r;
+	}
+	struct vparse_card *card = vparser.card->objects;
     }
 
     json_t *item = json_pack("[]");
