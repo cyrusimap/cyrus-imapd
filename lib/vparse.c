@@ -871,7 +871,7 @@ EXPORTED struct vparse_entry *vparse_add_entry(struct vparse_card *card, const c
 {
     struct vparse_entry **entryp = &card->properties;
     while (*entryp) entryp = &((*entryp)->next);
-    struct vparse_entry *entry = xzmalloc(sizeof(struct vparse_card));
+    struct vparse_entry *entry = xzmalloc(sizeof(struct vparse_entry));
     entry->group = xstrdupnull(group);
     entry->name = xstrdupnull(name);
     entry->v.value = xstrdupnull(value);
