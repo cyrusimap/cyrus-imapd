@@ -1188,14 +1188,21 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	json_object_foreach(create, key, arg) {
 	    char *uid = makeuuid();
 	    json_t *name = json_object_get(arg, "name");
+	    if (!name) {
+		json_t *err = json_pack("{s:s}", "type", "missingParameters");
+		json_object_set_new(notCreated, uid, err);
+		continue;
+	    }
 	    // XXX - no name => notCreated
 	    struct vparse_card *card = vparse_new_card("VCARD");
 	    vparse_add_entry(card, NULL, "VERSION", "3.0");
 	    vparse_add_entry(card, NULL, "FN", json_string_value(name));
 	    vparse_add_entry(card, NULL, "UID", uid);
+	    vparse_add_entry(card, NULL, "X-ADDRESSBOOKSERVER-KIND", "group");
 
+	    /* it's legal to create an empty group */
 	    json_t *members = json_object_get(arg, "contactIds");
-	    _add_group_entries(carddavdb, req, card, members);
+	    if (members) _add_group_entries(carddavdb, req, card, members);
 
 	    /* we need to create and append a record */
 	    if (!mailbox || strcmp(mailbox->name, mboxname)) {
