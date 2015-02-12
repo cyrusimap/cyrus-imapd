@@ -1344,6 +1344,18 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	json_decref(notDeleted);
     }
 
+    /* force modseq to stable */
+    if (mailbox) mailbox_unlock_index(mailbox, NULL);
+
+    /* read the modseq again every time, just in case something changed it
+     * in our actions */
+    struct buf buf = BUF_INITIALIZER;
+    const char *inboxname = mboxname_user_mbox(req->userid, NULL);
+    modseq_t modseq = mboxname_readmodseq(inboxname);
+    buf_printf(&buf, "%llu", modseq);
+    json_object_set_new(set, "newState", json_string(buf_cstring(&buf)));
+    buf_free(&buf);
+
     json_t *item = json_pack("[]");
     json_array_append_new(item, json_string("contactGroupsSet"));
     json_array_append_new(item, set);
