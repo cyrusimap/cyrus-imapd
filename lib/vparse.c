@@ -886,7 +886,7 @@ EXPORTED struct vparse_entry *vparse_get_entry(struct vparse_card *card, const c
     struct vparse_entry *entry = NULL;
 
     for (entry = card->properties; entry; entry = entry->next) {
-	if (!strcmpsafe(entry->group, group) && !strcmpsafe(entry->name, name))
+	if (!strcasecmpsafe(entry->group, group) && !strcasecmpsafe(entry->name, name))
 	    break;
     }
 
@@ -898,7 +898,7 @@ EXPORTED void vparse_delete_entries(struct vparse_card *card, const char *group,
     struct vparse_entry **entryp = &card->properties;
     while (*entryp) {
 	struct vparse_entry *entry = *entryp;
-	if (!strcmpsafe(entry->group, group) && !strcmpsafe(entry->name, name)) {
+	if (!strcasecmpsafe(entry->group, group) && !strcasecmpsafe(entry->name, name)) {
 	    *entryp = entry->next;
 	    _free_entry(entry);
 	}
