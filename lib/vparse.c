@@ -396,7 +396,7 @@ out:
 
 static int _parse_entry_value(struct vparse_state *state)
 {
-    if (strarray_find(state->multival, state->entry->name, 0))
+    if (state->multival && strarray_find(state->multival, state->entry->name, 0))
         return _parse_entry_multivalue(state);
 
     NOTESTART();
@@ -498,6 +498,7 @@ static void _free_state(struct vparse_state *state)
     _free_card(state->card);
     _free_entry(state->entry);
     _free_param(state->param);
+    if (state->multival) strarray_free(state->multival);
 
     memset(state, 0, sizeof(struct vparse_state));
 }
@@ -704,6 +705,7 @@ EXPORTED const strarray_t *vparse_multival(const struct vparse_card *card, const
 
 EXPORTED void vparse_set_multival(struct vparse_state *state, const char *name)
 {
+    if (!state->multival) state->multival = strarray_new();
     strarray_append(state->multival, name);
 }
 
