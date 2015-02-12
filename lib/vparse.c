@@ -878,6 +878,33 @@ EXPORTED struct vparse_entry *vparse_add_entry(struct vparse_card *card, const c
     return entry;
 }
 
+EXPORTED struct vparse_entry *vparse_get_entry(struct vparse_card *card, const char *group, const char *name)
+{
+    struct vparse_entry *entry = NULL;
+
+    for (entry = card->properties; entry; entry = entry->next) {
+	if (!strcmpsafe(entry->group, group) && !strcmpsafe(entry->name, name))
+	    break;
+    }
+
+    return entry;
+}
+
+EXPORTED void vparse_delete_entries(struct vparse_card *card, const char *group, const char *name)
+{
+    struct vparse_entry **entryp = &card->properties;
+    while (*entryp) {
+	struct vparse_entry *entry = *entryp;
+	if (!strcmpsafe(entry->group, group) && !strcmpsafe(entry->name, name)) {
+	    *entryp = entry->next;
+	    _free_entry(entry);
+	}
+	else {
+	    entryp = &((*entryp)->next);
+	}
+    }
+}
+
 #ifdef DEBUG
 static int _dump_card(struct vparse_card *card)
 {
