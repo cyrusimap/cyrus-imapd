@@ -1130,8 +1130,16 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 
 static void _add_group_entries(struct vparse_card *card, json_t *members)
 {
-    if (card && members)
-	return;
+    vparse_delete_entries(card, NULL, "X-ADDRESSBOOKSERVER-MEMBER");
+    size_t index;
+    struct buf buf = BUF_INITIALIZER;
+    for (index = 0; index < json_array_size(members); index++) {
+	json_t *item = json_array_get(members, index);
+	buf_setcstr(&buf, "urn:uuid:");
+	buf_appendcstr(&buf, json_string_value(item));
+	vparse_add_entry(card, NULL, "X-ADDRESSBOOKSERVER-MEMBER", buf_cstring(&buf));
+    }
+    buf_free(&buf);
 }
 
 EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_req *req)
@@ -1160,12 +1168,13 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	json_t *arg;
 	json_object_foreach(create, key, arg) {
 	    char *uid = makeuuid();
-	    json_t *namep = json_object_get(arg, "name");
-	    const char *name = namep ? json_string_value(namep) : NULL;
+	    json_t *name = json_object_get(arg, "name");
+	    // XXX - no name => notCreated
 	    struct vparse_card *card = vparse_new_card("VCARD");
 	    vparse_add_entry(card, NULL, "VERSION", "3.0");
-	    vparse_add_entry(card, NULL, "FN", name ? name : key); // why not ;)
+	    vparse_add_entry(card, NULL, "FN", json_string_value(name));
 	    vparse_add_entry(card, NULL, "UID", uid);
+
 	    json_t *members = json_object_get(arg, "contactIds");
 	    _add_group_entries(card, members);
 
@@ -1173,13 +1182,14 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    if (!mailbox || strcmp(mailbox->name, mboxname)) {
 		mailbox_close(&mailbox);
 		r = mailbox_open_iwl(mboxname, &mailbox);
-		if (r) goto done;
 	    }
 
-// XXX - write the card
+	    if (!r) r = carddav_store(mailbox, card, NULL, NULL);
 
 	    vparse_free_card(card);
 	    free(uid);
+
+	    if (r) goto done;
 	}
 
 	if (json_object_size(created))
@@ -1201,6 +1211,8 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    struct carddav_data *cdata = NULL;
 	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
 	    if (r) goto done;
+
+	    // XXX - no cdata->dav.uid => notUpdated
 
 	    if (!mailbox || strcmp(mailbox->name, cdata->dav.mailbox)) {
 		mailbox_close(&mailbox);
@@ -1249,11 +1261,10 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 
 	    json_t *members = json_object_get(arg, "contactIds");
 	    if (members) {
-		vparse_delete_entries(card, NULL, "X-ADDRESSBOOKSERVER-MEMBER");
 		_add_group_entries(card, members);
 	    }
 
-/* XXX store card */
+	    if (!r) r = carddav_store(mailbox, card, &record, cdata);
 
 	    vparse_free(&vparser);
 	}
@@ -1290,8 +1301,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    r = mailbox_read_index_record(mailbox, cdata->dav.imap_uid, &record);
 	    if (r) goto done;
 
-	    record.system_flags |= FLAG_EXPUNGED;
-	    r = mailbox_rewrite_index_record(mailbox, &record);
+	    r = carddav_remove(mailbox, &record);
 	    if (r) goto done;
 	}
 
