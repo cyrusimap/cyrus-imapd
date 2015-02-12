@@ -1235,16 +1235,27 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	json_object_foreach(update, uid, arg) {
 	    struct carddav_data *cdata = NULL;
 	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
-	    if (r) goto done;
+	    if (r) {
+		syslog(LOG_ERR, "IOERROR: failed to lookup carddav %s", uid);
+		goto done;
+	    }
 
 	    // XXX - no cdata->dav.imap_uid => notUpdated
 	    // XXX - not a group => notUpdated
 	    // XXX - not alive => notUpdated
+	    if (!cdata || !cdata->dav.imap_uid || cdata->kind != CARDDAV_KIND_GROUP) {
+		json_t *err = json_pack("{s:s}", "type", "notFound");
+		json_object_set_new(notUpdated, uid, err);
+		continue;
+	    }
 
 	    if (!mailbox || strcmp(mailbox->name, cdata->dav.mailbox)) {
 		mailbox_close(&mailbox);
 		r = mailbox_open_iwl(cdata->dav.mailbox, &mailbox);
-		if (r) goto done;
+		if (r) {
+		    syslog(LOG_ERR, "IOERROR: failed to open %s", cdata->dav.mailbox);
+		    goto done;
+		}
 	    }
 
 	    /* XXX - this could definitely be refactored from here and mailbox.c */
