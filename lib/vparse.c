@@ -174,7 +174,7 @@ repeat:
     r = _parse_param_key(state, &haseq);
     if (r) return r;
 
-    if (strarray_find(state->multiparam, state->param->name, 0))
+    if (state->multiparam && strarray_find(state->multiparam, state->param->name, 0))
         multiparam = 1;
 
     /* now get the value */
@@ -499,6 +499,7 @@ static void _free_state(struct vparse_state *state)
     _free_entry(state->entry);
     _free_param(state->param);
     if (state->multival) strarray_free(state->multival);
+    if (state->multiparam) strarray_free(state->multiparam);
 
     memset(state, 0, sizeof(struct vparse_state));
 }
@@ -707,6 +708,12 @@ EXPORTED void vparse_set_multival(struct vparse_state *state, const char *name)
 {
     if (!state->multival) state->multival = strarray_new();
     strarray_append(state->multival, name);
+}
+
+EXPORTED void vparse_set_multiparam(struct vparse_state *state, const char *name)
+{
+    if (!state->multiparam) state->multiparam = strarray_new();
+    strarray_append(state->multiparam, name);
 }
 
 struct vparse_target {

@@ -79,6 +79,7 @@ extern void vparse_fillpos(struct vparse_state *state, struct vparse_errorpos *p
 extern const char *vparse_errstr(int err);
 
 extern void vparse_set_multival(struct vparse_state *state, const char *name);
+extern void vparse_set_multiparam(struct vparse_state *state, const char *name);
 
 extern const char *vparse_stringval(const struct vparse_card *card, const char *name);
 extern const strarray_t *vparse_multival(const struct vparse_card *card, const char *name);
