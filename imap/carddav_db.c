@@ -1340,7 +1340,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    /* is it a valid group? */
 	    if (!cdata || !cdata->dav.imap_uid || cdata->kind != CARDDAV_KIND_GROUP) {
 		json_t *err = json_pack("{s:s}", "type", "notFound");
-		json_object_set_new(notUpdated, uid, err);
+		json_object_set_new(notDeleted, uid, err);
 		continue;
 	    }
 
