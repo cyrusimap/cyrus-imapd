@@ -1128,18 +1128,37 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
     return 0;
 }
 
-static void _add_group_entries(struct vparse_card *card, json_t *members)
+static const char *_resolveid(struct jmap_req *req, const char *id)
+{
+    const char *newid = hash_lookup(id, req->idmap);
+    if (newid) return newid;
+    return id;
+}
+
+static int _add_group_entries(struct carddav_db *carddavdb, struct jmap_req *req,
+			      struct vparse_card *card, json_t *members)
 {
     vparse_delete_entries(card, NULL, "X-ADDRESSBOOKSERVER-MEMBER");
+    int r = 0;
     size_t index;
     struct buf buf = BUF_INITIALIZER;
     for (index = 0; index < json_array_size(members); index++) {
 	json_t *item = json_array_get(members, index);
+	const char *uid = _resolveid(req, json_string_value(item));
+	struct carddav_data *cdata = NULL;
+	r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
+	if (r) goto done;
+	if (!cdata || !cdata->dav.imap_uid || !cdata->dav.alive) {
+	    r = -1;
+	    goto done;
+	}
 	buf_setcstr(&buf, "urn:uuid:");
 	buf_appendcstr(&buf, json_string_value(item));
 	vparse_add_entry(card, NULL, "X-ADDRESSBOOKSERVER-MEMBER", buf_cstring(&buf));
     }
+done:
     buf_free(&buf);
+    return r;
 }
 
 EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_req *req)
@@ -1176,7 +1195,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    vparse_add_entry(card, NULL, "UID", uid);
 
 	    json_t *members = json_object_get(arg, "contactIds");
-	    _add_group_entries(card, members);
+	    _add_group_entries(carddavdb, req, card, members);
 
 	    /* we need to create and append a record */
 	    if (!mailbox || strcmp(mailbox->name, mboxname)) {
@@ -1187,9 +1206,15 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    if (!r) r = carddav_store(mailbox, card, NULL, NULL);
 
 	    vparse_free_card(card);
-	    free(uid);
 
-	    if (r) goto done;
+	    if (r) {
+		free(uid);
+		goto done;
+	    }
+
+	    json_object_set(created, key, json_string(uid));
+	    /* hash_insert takes ownership of uid here, skanky I know */
+	    hash_insert(key, uid, req->idmap);
 	}
 
 	if (json_object_size(created))
@@ -1202,7 +1227,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 
     json_t *update = json_object_get(req->args, "update");
     if (update) {
-	json_t *updated = json_pack("{}");
+	json_t *updated = json_pack("[]");
 	json_t *notUpdated = json_pack("{}");
 
 	const char *uid;
@@ -1212,7 +1237,9 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
 	    if (r) goto done;
 
-	    // XXX - no cdata->dav.uid => notUpdated
+	    // XXX - no cdata->dav.imap_uid => notUpdated
+	    // XXX - not a group => notUpdated
+	    // XXX - not alive => notUpdated
 
 	    if (!mailbox || strcmp(mailbox->name, cdata->dav.mailbox)) {
 		mailbox_close(&mailbox);
@@ -1261,12 +1288,14 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 
 	    json_t *members = json_object_get(arg, "contactIds");
 	    if (members) {
-		_add_group_entries(card, members);
+		_add_group_entries(carddavdb, req, card, members);
 	    }
 
 	    if (!r) r = carddav_store(mailbox, card, &record, cdata);
 
 	    vparse_free(&vparser);
+
+	    json_array_append_new(updated, json_string(uid));
 	}
 
 	if (json_object_size(updated))
@@ -1303,6 +1332,8 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 
 	    r = carddav_remove(mailbox, &record);
 	    if (r) goto done;
+
+	    json_array_append_new(deleted, json_string(uid));
 	}
 
 	if (json_object_size(deleted))
