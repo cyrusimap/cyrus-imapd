@@ -1242,13 +1242,9 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	json_object_foreach(update, uid, arg) {
 	    struct carddav_data *cdata = NULL;
 	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
-	    if (r) {
-		syslog(LOG_ERR, "IOERROR: setContactGroups lookup failed for %s", uid);
-		goto done;
-	    }
 
 	    /* is it a valid group? */
-	    if (!cdata || !cdata->dav.imap_uid || cdata->kind != CARDDAV_KIND_GROUP) {
+	    if (r || !cdata || !cdata->dav.imap_uid || cdata->kind != CARDDAV_KIND_GROUP) {
 		json_t *err = json_pack("{s:s}", "type", "notFound");
 		json_object_set_new(notUpdated, uid, err);
 		continue;
@@ -1332,13 +1328,9 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    const char *uid = json_string_value(json_array_get(delete, index));
 	    struct carddav_data *cdata = NULL;
 	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
-	    if (r) {
-		syslog(LOG_ERR, "IOERROR: setContactGroups lookup failed for %s", uid);
-		goto done;
-	    }
 
 	    /* is it a valid group? */
-	    if (!cdata || !cdata->dav.imap_uid || cdata->kind != CARDDAV_KIND_GROUP) {
+	    if (r || !cdata || !cdata->dav.imap_uid || cdata->kind != CARDDAV_KIND_GROUP) {
 		json_t *err = json_pack("{s:s}", "type", "notFound");
 		json_object_set_new(notDeleted, uid, err);
 		continue;
