@@ -914,6 +914,7 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
     const char *mboxname = (const char *)sqlite3_column_text(stmt, 1);
     uint32_t uid = sqlite3_column_int(stmt, 2);
     struct index_record record;
+    strarray_t *empty = NULL;
     int r = 0;
 
     if (grock->need) {
@@ -965,6 +966,8 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 
     const strarray_t *n = vparse_multival(card, "n");
     const strarray_t *org = vparse_multival(card, "org");
+    if (!n) n = empty ? empty : (empty = strarray_new());
+    if (!org) org = empty ? empty : (empty = strarray_new());
 
     /* name fields */
     if (_wantprop(grock->props, "lastName"))
@@ -1124,6 +1127,8 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
     /* XXX - other fields */
 
     json_array_append_new(grock->array, obj);
+
+    if (empty) strarray_free(empty);
 
     return 0;
 }
