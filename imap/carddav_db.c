@@ -46,11 +46,13 @@
 #include <syslog.h>
 #include <string.h>
 
+#include "append.h"
 #include "carddav_db.h"
 #include "cyrusdb.h"
 #include "httpd.h"
 #include "http_dav.h"
 #include "libconfig.h"
+#include "times.h"
 #include "util.h"
 #include "xstrlcat.h"
 #include "xmalloc.h"
@@ -1134,6 +1136,7 @@ static void _add_group_entries(struct vparse_card *card, json_t *members)
 
 EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_req *req)
 {
+    int r = 0;
     json_t *checkState = json_object_get(req->args, "ifInState");
     if (checkState && strcmp(req->state, json_string_value(checkState))) {
 	json_t *item = json_pack("[s, {s:s}, s]", "error", "type", "stateMismatch", req->tag);
@@ -1169,8 +1172,8 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    /* we need to create and append a record */
 	    if (!mailbox || strcmp(mailbox->name, mboxname)) {
 		mailbox_close(&mailbox);
-		int r = mailbox_open_iwl(mboxname, &mailbox);
-		if (r) return r;
+		r = mailbox_open_iwl(mboxname, &mailbox);
+		if (r) goto done;
 	    }
 
 // XXX - write the card
@@ -1196,13 +1199,13 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	json_t *arg;
 	json_object_foreach(update, uid, arg) {
 	    struct carddav_data *cdata = NULL;
-	    int r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
-	    if (r) return r;
+	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
+	    if (r) goto done;
 
 	    if (!mailbox || strcmp(mailbox->name, cdata->dav.mailbox)) {
 		mailbox_close(&mailbox);
-		int r = mailbox_open_iwl(cdata->dav.mailbox, &mailbox);
-		if (r) return r;
+		r = mailbox_open_iwl(cdata->dav.mailbox, &mailbox);
+		if (r) goto done;
 	    }
 
 	    /* XXX - this could definitely be refactored from here and mailbox.c */
@@ -1210,9 +1213,12 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    struct vparse_state vparser;
 	    struct index_record record;
 
+	    r = mailbox_read_index_record(mailbox, cdata->dav.imap_uid, &record);
+	    if (r) goto done;
+
 	    /* Load message containing the resource and parse vcard data */
 	    r = mailbox_map_record(mailbox, &record, &msg_buf);
-	    if (r) return r;
+	    if (r) goto done;
 
 	    memset(&vparser, 0, sizeof(struct vparse_state));
 	    vparser.base = buf_cstring(&msg_buf) + record.header_size;
@@ -1221,10 +1227,10 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    vparse_set_multival(&vparser, "n");
 	    r = vparse_parse(&vparser, 0);
 	    buf_free(&msg_buf);
-	    if (r) return r;
+	    if (r) goto done;
 	    if (!vparser.card || !vparser.card->objects) {
 		vparse_free(&vparser);
-		return r;
+		goto done;
 	    }
 	    struct vparse_card *card = vparser.card->objects;
 
@@ -1266,14 +1272,27 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	json_t *notDeleted = json_pack("{}");
 
 	size_t index;
-	json_t *uidp;
-	json_array_foreach(delete, index, uidp) {
-	    const char *uid = json_string_value(uidp);
+	for (index = 0; index < json_array_size(delete); index++) {
+	    const char *uid = json_string_value(json_array_get(delete, index));
 	    struct carddav_data *cdata = NULL;
-	    int r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
-	    if (r) return r;
+	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
+	    if (r) goto done;
 
-	    /* open mailbox, delete record */
+	    if (!mailbox || strcmp(mailbox->name, cdata->dav.mailbox)) {
+		mailbox_close(&mailbox);
+		r = mailbox_open_iwl(cdata->dav.mailbox, &mailbox);
+		if (r) goto done;
+	    }
+
+	    /* XXX - fricking mboxevent */
+
+	    struct index_record record;
+	    r = mailbox_read_index_record(mailbox, cdata->dav.imap_uid, &record);
+	    if (r) goto done;
+
+	    record.system_flags |= FLAG_EXPUNGED;
+	    r = mailbox_rewrite_index_record(mailbox, &record);
+	    if (r) goto done;
 	}
 
 	if (json_object_size(deleted))
@@ -1291,7 +1310,10 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 
     json_array_append_new(req->response, item);
 
-    return 0;
+done:
+    mailbox_close(&mailbox);
+
+    return r;
 }
 
 EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, struct jmap_req *req)
@@ -1472,4 +1494,139 @@ EXPORTED void carddav_make_entry(struct vparse_card *vcard, struct carddav_data 
 	}
     }
 }
+
+EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
+			   struct index_record *oldrecord, struct carddav_data *cdata)
+{
+    int r = 0;
+    FILE *f = NULL;
+    struct stagemsg *stage;
+    char *header;
+    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;   
+    struct appendstate as;
+    time_t now = time(0);
+
+    /* Prepare to stage the message */
+    if (!(f = append_newstage(mailbox->name, now, 0, &stage))) {
+	syslog(LOG_ERR, "append_newstage(%s) failed", mailbox->name);
+	return -1;
+    }
+
+    /* Create header for resource */
+    const char *uid = vparse_stringval(vcard, "uid");
+    const char *fullname = vparse_stringval(vcard, "fn");
+    char *resource = cdata ? xstrdup(cdata->dav.resource) : strconcat(uid, ".vcf", (char *)NULL);
+    char datestr[80];
+    time_to_rfc822(now, datestr, sizeof(datestr));
+    struct buf buf = BUF_INITIALIZER;
+    vparse_tobuf(vcard, &buf);
+    const char *userid = mboxname_to_userid(mailbox->name);
+
+    /* XXX  This needs to be done via an LDAP/DB lookup */
+    header = charset_encode_mimeheader(userid, 0);
+    fprintf(f, "From: %s <>\r\n", header);
+    free(header);
+
+    header = charset_encode_mimeheader(fullname, 0);
+    fprintf(f, "Subject: %s\r\n", header);
+    free(header);
+
+    fprintf(f, "Date: %s\r\n", datestr);
+
+    if (strchr(uid, '@'))
+	fprintf(f, "Message-ID: <%s>\r\n", uid);
+    else
+	fprintf(f, "Message-ID: <%s@%s>\r\n", uid, config_servername);
+
+    fprintf(f, "Content-Type: text/vcard; charset=utf-8\r\n");
+
+    fprintf(f, "Content-Length: %u\r\n", (unsigned)buf_len(&buf));
+    fprintf(f, "Content-Disposition: inline; filename=\"%s\"\r\n", resource);
+
+    /* XXX  Check domain of data and use appropriate CTE */
+
+    fprintf(f, "MIME-Version: 1.0\r\n");
+    fprintf(f, "\r\n");
+
+    /* Write the vCard data to the file */
+    fprintf(f, "%s", buf_cstring(&buf));
+    buf_free(&buf);
+
+    qdiffs[QUOTA_STORAGE] = ftell(f);
+    qdiffs[QUOTA_MESSAGE] = 1;
+
+    fclose(f);
+
+    if ((r = append_setup_mbox(&as, mailbox, NULL, NULL, 0, qdiffs, 0, 0, EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
+	syslog(LOG_ERR, "append_setup(%s) failed: %s",
+	       mailbox->name, error_message(r));
+	goto done;
+    }
+
+    struct body *body = NULL;
+
+    r = append_fromstage(&as, &body, stage, now, NULL, 0, 0);
+    if (body) {
+	message_free_body(body);
+	free(body);
+    }
+
+    if (r) {
+	syslog(LOG_ERR, "append_fromstage() failed");
+	append_abort(&as);
+        goto done;
+    }
+
+    /* Commit the append to the calendar mailbox */
+    r = append_commit(&as);
+    if (r) {
+	syslog(LOG_ERR, "append_commit() failed");
+	goto done;
+    }
+
+    if (oldrecord) {
+	/* Now that we have the replacement message in place
+	   and the mailbox locked, re-read the old record
+	   and see if we should overwrite it.  Either way,
+	   one of our records will have to be expunged.
+	*/
+	int userflag;
+	r = mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag, 1);
+	if (!r) {
+	    oldrecord->user_flags[userflag/32] |= 1<<(userflag&31);
+	    oldrecord->system_flags |= FLAG_EXPUNGED;
+	    r = mailbox_rewrite_index_record(mailbox, oldrecord);
+	}
+	if (r) {
+	    syslog(LOG_ERR, "expunging record (%s) failed: %s",
+		   mailbox->name, error_message(r));
+	    goto done;
+	}
+    }
+
+done:
+    append_removestage(stage);
+    free(resource);
+    return r;
+}
+
+EXPORTED int carddav_remove(struct mailbox *mailbox,
+			    struct index_record *oldrecord)
+{
+
+    int userflag;
+    int r = mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag, 1);
+    if (!r) {
+	oldrecord->user_flags[userflag/32] |= 1<<(userflag&31);
+	oldrecord->system_flags |= FLAG_EXPUNGED;
+	r = mailbox_rewrite_index_record(mailbox, oldrecord);
+    }
+    if (r) {
+	syslog(LOG_ERR, "expunging record (%s) failed: %s",
+	       mailbox->name, error_message(r));
+    }
+    return r;
+}
+
+
 

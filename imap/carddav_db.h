@@ -142,4 +142,10 @@ int carddav_abort(struct carddav_db *carddavdb);
 /* create carddav_data from vparse_card */
 void carddav_make_entry(struct vparse_card *vcard, struct carddav_data *cdata);
 
+int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
+		  struct index_record *oldrecord, struct carddav_data *cdata);
+int carddav_remove(struct mailbox *mailbox,
+		   struct index_record *oldrecord);
+
+
 #endif /* CARDDAV_DB_H */
