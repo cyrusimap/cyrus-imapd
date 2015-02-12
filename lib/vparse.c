@@ -396,7 +396,7 @@ out:
 
 static int _parse_entry_value(struct vparse_state *state)
 {
-    if (state->multival && strarray_find(state->multival, state->entry->name, 0))
+    if (state->multival && strarray_find(state->multival, state->entry->name, 0) >= 0)
         return _parse_entry_multivalue(state);
 
     NOTESTART();
