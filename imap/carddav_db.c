@@ -1243,13 +1243,11 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    struct carddav_data *cdata = NULL;
 	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
 	    if (r) {
-		syslog(LOG_ERR, "IOERROR: failed to lookup carddav %s", uid);
+		syslog(LOG_ERR, "IOERROR: setContactGroups lookup failed for %s", uid);
 		goto done;
 	    }
 
-	    // XXX - no cdata->dav.imap_uid => notUpdated
-	    // XXX - not a group => notUpdated
-	    // XXX - not alive => notUpdated
+	    /* is it a valid group? */
 	    if (!cdata || !cdata->dav.imap_uid || cdata->kind != CARDDAV_KIND_GROUP) {
 		json_t *err = json_pack("{s:s}", "type", "notFound");
 		json_object_set_new(notUpdated, uid, err);
@@ -1326,7 +1324,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 
     json_t *delete = json_object_get(req->args, "delete");
     if (delete) {
-	json_t *deleted = json_pack("{}");
+	json_t *deleted = json_pack("[]");
 	json_t *notDeleted = json_pack("{}");
 
 	size_t index;
@@ -1334,7 +1332,17 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    const char *uid = json_string_value(json_array_get(delete, index));
 	    struct carddav_data *cdata = NULL;
 	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
-	    if (r) goto done;
+	    if (r) {
+		syslog(LOG_ERR, "IOERROR: setContactGroups lookup failed for %s", uid);
+		goto done;
+	    }
+
+	    /* is it a valid group? */
+	    if (!cdata || !cdata->dav.imap_uid || cdata->kind != CARDDAV_KIND_GROUP) {
+		json_t *err = json_pack("{s:s}", "type", "notFound");
+		json_object_set_new(notUpdated, uid, err);
+		continue;
+	    }
 
 	    if (!mailbox || strcmp(mailbox->name, cdata->dav.mailbox)) {
 		mailbox_close(&mailbox);
@@ -1346,10 +1354,18 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 
 	    struct index_record record;
 	    r = mailbox_read_index_record(mailbox, cdata->dav.imap_uid, &record);
-	    if (r) goto done;
+	    if (r) {
+		syslog(LOG_ERR, "IOERROR: setContactGroups index_read failed for %s %u", mailbox->name, cdata->dav.imap_uid);
+		goto done;
+	    }
+
+	    /* XXX - alive check */
 
 	    r = carddav_remove(mailbox, &record);
-	    if (r) goto done;
+	    if (r) {
+		syslog(LOG_ERR, "IOERROR: setContactGroups remove failed for %s %u", mailbox->name, cdata->dav.imap_uid);
+		goto done;
+	    }
 
 	    json_array_append_new(deleted, json_string(uid));
 	}
