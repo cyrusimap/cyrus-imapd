@@ -1310,7 +1310,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    json_array_append_new(updated, json_string(uid));
 	}
 
-	if (json_object_size(updated))
+	if (json_array_size(updated))
 	    json_object_set(set, "updated", updated);
 	json_decref(updated);
 	if (json_object_size(notUpdated))
@@ -1362,7 +1362,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    json_array_append_new(deleted, json_string(uid));
 	}
 
-	if (json_object_size(deleted))
+	if (json_array_size(deleted))
 	    json_object_set(set, "deleted", deleted);
 	json_decref(deleted);
 	if (json_object_size(notDeleted))
