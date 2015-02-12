@@ -867,7 +867,7 @@ EXPORTED int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, struct
     json_array_append_new(req->response, item);
 
     json_t *dofetch = json_object_get(req->args, "fetchContactGroups");
-    if (dofetch && json_is_true(dofetch)) {
+    if (dofetch && json_is_true(dofetch) && json_array_size(rock.changed)) {
 	struct jmap_req subreq = *req; // struct copy, woot
 	subreq.args = json_pack("{}");
 	json_object_set(subreq.args, "ids", rock.changed);
@@ -1514,7 +1514,7 @@ EXPORTED int carddav_getContactUpdates(struct carddav_db *carddavdb, struct jmap
 
     json_t *dofetch = json_object_get(req->args, "fetchContacts");
     json_t *doprops = json_object_get(req->args, "fetchContactProperties");
-    if (dofetch && json_is_true(dofetch)) {
+    if (dofetch && json_is_true(dofetch) && json_array_size(rock.changed)) {
 	struct jmap_req subreq = *req;
 	subreq.args = json_pack("{}");
 	json_object_set(subreq.args, "ids", rock.changed);
