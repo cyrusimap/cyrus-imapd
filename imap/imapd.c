@@ -1604,10 +1604,12 @@ static void cmdloop(void)
 		prot_printf(imapd_out, "%s OK %s\r\n", tag.s, 
 			    error_message(IMAP_OK_COMPLETED));
 
-		// Translate the name to external
-		mboxname_hiersep_toexternal(&imapd_namespace, imapd_userid, config_virtdomains ? strcspn(imapd_userid, "@") : 0);
-		telemetry_rusage(imapd_userid);
-		mboxname_hiersep_tointernal(&imapd_namespace, imapd_userid, config_virtdomains ? strcspn(imapd_userid, "@") : 0);
+		if (imapd_userid && *imapd_userid) {
+		    // Translate the name to external
+		    mboxname_hiersep_toexternal(&imapd_namespace, imapd_userid, config_virtdomains ? strcspn(imapd_userid, "@") : 0);
+		    telemetry_rusage(imapd_userid);
+		    mboxname_hiersep_tointernal(&imapd_namespace, imapd_userid, config_virtdomains ? strcspn(imapd_userid, "@") : 0);
+		}
 
 		return;
 	    }
