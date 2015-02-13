@@ -907,6 +907,14 @@ static json_t *_optstring(const char *str)
     return json_string(str ? str : "");
 }
 
+static void _date_to_jmap(const char *date, struct buf *buf)
+{
+    if (date)
+	buf_setcstr(buf, date);
+    else
+	buf_setcstr(buf, "0000-00-00");
+}
+
 static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 {
     struct contacts_rock *grock = (struct contacts_rock *)rock;
@@ -937,6 +945,7 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
     /* XXX - this could definitely be refactored from here and mailbox.c */
     struct buf msg_buf = BUF_INITIALIZER;
     struct vparse_state vparser;
+    struct buf tmp_buf = BUF_INITIALIZER;
 
     /* Load message containing the resource and parse vcard data */
     r = mailbox_map_record(grock->mailbox, &record, &msg_buf);
@@ -1119,9 +1128,10 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 	json_object_set_new(obj, "nickname", json_string(item ? item : ""));
     }
 
-    if (_wantprop(grock->props, "nickname")) {
-	const char *item = vparse_stringval(card, "nickname");
-	json_object_set_new(obj, "nickname", json_string(item ? item : ""));
+    if (_wantprop(grock->props, "birthday")) {
+	const char *item = vparse_stringval(card, "bday");
+	_date_to_jmap(item, &tmp_buf);
+	json_object_set_new(obj, "birthday", json_string(buf_cstring(&tmp_buf)));
     }
 
     /* XXX - other fields */
@@ -1129,6 +1139,8 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
     json_array_append_new(grock->array, obj);
 
     if (empty) strarray_free(empty);
+
+    buf_free(&tmp_buf);
 
     return 0;
 }
