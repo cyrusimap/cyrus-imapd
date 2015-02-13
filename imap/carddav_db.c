@@ -1536,10 +1536,209 @@ EXPORTED int carddav_getContactUpdates(struct carddav_db *carddavdb, struct jmap
 
 EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *req)
 {
-    struct carddav_data *cdata = NULL;
-    /* XXX - should we lock?... it's tricky because we're going to need to lock the DB anyway */
-    // maybe a foreach would be better
-    int r = carddav_lookup_uid(carddavdb, req->tag, 0, &cdata);
+    int r = 0;
+    json_t *checkState = json_object_get(req->args, "ifInState");
+    if (checkState && strcmp(req->state, json_string_value(checkState))) {
+	json_t *item = json_pack("[s, {s:s}, s]", "error", "type", "stateMismatch", req->tag);
+	json_array_append_new(req->response, item);
+	return 0;
+    }
+    json_t *set = json_pack("{s:s,s:s}",
+			    "oldState", req->state,
+			    "accountId", req->userid);
+
+    struct mailbox *mailbox = NULL;
+
+    json_t *create = json_object_get(req->args, "create");
+    if (create) {
+	json_t *created = json_pack("{}");
+	json_t *notCreated = json_pack("{}");
+	/* XXX - default name finding */
+	const char *mboxname = mboxname_user_mbox(req->userid, "#addressbooks.Default");
+
+	const char *key;
+	json_t *arg;
+	json_object_foreach(create, key, arg) {
+	    char *uid = makeuuid();
+
+	    /* XXX - tons of work to do here */
+
+	    struct vparse_card *card = vparse_new_card("VCARD");
+	    vparse_add_entry(card, NULL, "VERSION", "3.0");
+	    vparse_add_entry(card, NULL, "FN", json_string_value(name));
+	    vparse_add_entry(card, NULL, "UID", uid);
+
+	    /* we need to create and append a record */
+	    if (!mailbox || strcmp(mailbox->name, mboxname)) {
+		mailbox_close(&mailbox);
+		r = mailbox_open_iwl(mboxname, &mailbox);
+	    }
+
+	    if (!r) r = carddav_store(mailbox, card, NULL, NULL);
+
+	    vparse_free_card(card);
+
+	    if (r) {
+		free(uid);
+		goto done;
+	    }
+
+	    json_object_set(created, key, json_string(uid));
+	    /* hash_insert takes ownership of uid here, skanky I know */
+	    hash_insert(key, uid, req->idmap);
+	}
+
+	if (json_object_size(created))
+	    json_object_set(set, "created", created);
+	json_decref(created);
+	if (json_object_size(notCreated))
+	    json_object_set(set, "notCreated", notCreated);
+	json_decref(notCreated);
+    }
+
+    json_t *update = json_object_get(req->args, "update");
+    if (update) {
+	json_t *updated = json_pack("[]");
+	json_t *notUpdated = json_pack("{}");
+
+	const char *uid;
+	json_t *arg;
+	json_object_foreach(update, uid, arg) {
+	    struct carddav_data *cdata = NULL;
+	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
+
+	    /* is it a valid non-group (kind == 0)? */
+	    if (r || !cdata || !cdata->dav.imap_uid || cdata->kind) {
+		json_t *err = json_pack("{s:s}", "type", "notFound");
+		json_object_set_new(notUpdated, uid, err);
+		continue;
+	    }
+
+	    if (!mailbox || strcmp(mailbox->name, cdata->dav.mailbox)) {
+		mailbox_close(&mailbox);
+		r = mailbox_open_iwl(cdata->dav.mailbox, &mailbox);
+		if (r) {
+		    syslog(LOG_ERR, "IOERROR: failed to open %s", cdata->dav.mailbox);
+		    goto done;
+		}
+	    }
+
+	    /* XXX - this could definitely be refactored from here and mailbox.c */
+	    struct buf msg_buf = BUF_INITIALIZER;
+	    struct vparse_state vparser;
+	    struct index_record record;
+
+	    r = mailbox_read_index_record(mailbox, cdata->dav.imap_uid, &record);
+	    if (r) goto done;
+
+	    /* Load message containing the resource and parse vcard data */
+	    r = mailbox_map_record(mailbox, &record, &msg_buf);
+	    if (r) goto done;
+
+	    memset(&vparser, 0, sizeof(struct vparse_state));
+	    vparser.base = buf_cstring(&msg_buf) + record.header_size;
+	    vparse_set_multival(&vparser, "adr");
+	    vparse_set_multival(&vparser, "org");
+	    vparse_set_multival(&vparser, "n");
+	    r = vparse_parse(&vparser, 0);
+	    buf_free(&msg_buf);
+	    if (r) goto done;
+	    if (!vparser.card || !vparser.card->objects) {
+		vparse_free(&vparser);
+		goto done;
+	    }
+	    struct vparse_card *card = vparser.card->objects;
+
+	    /* XXX - apply updates */
+
+	    if (!r) r = carddav_store(mailbox, card, &record, cdata);
+
+	    vparse_free(&vparser);
+
+	    json_array_append_new(updated, json_string(uid));
+	}
+
+	if (json_array_size(updated))
+	    json_object_set(set, "updated", updated);
+	json_decref(updated);
+	if (json_object_size(notUpdated))
+	    json_object_set(set, "notUpdated", notUpdated);
+	json_decref(notUpdated);
+    }
+
+    json_t *delete = json_object_get(req->args, "delete");
+    if (delete) {
+	json_t *deleted = json_pack("[]");
+	json_t *notDeleted = json_pack("{}");
+
+	size_t index;
+	for (index = 0; index < json_array_size(delete); index++) {
+	    const char *uid = json_string_value(json_array_get(delete, index));
+	    struct carddav_data *cdata = NULL;
+	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
+
+	    /* is it a valid non-group (kind == 0)? */
+	    if (r || !cdata || !cdata->dav.imap_uid || cdata->kind) {
+		json_t *err = json_pack("{s:s}", "type", "notFound");
+		json_object_set_new(notDeleted, uid, err);
+		continue;
+	    }
+
+	    if (!mailbox || strcmp(mailbox->name, cdata->dav.mailbox)) {
+		mailbox_close(&mailbox);
+		r = mailbox_open_iwl(cdata->dav.mailbox, &mailbox);
+		if (r) goto done;
+	    }
+
+	    /* XXX - fricking mboxevent */
+
+	    struct index_record record;
+	    r = mailbox_read_index_record(mailbox, cdata->dav.imap_uid, &record);
+	    if (r) {
+		syslog(LOG_ERR, "IOERROR: setContactGroups index_read failed for %s %u", mailbox->name, cdata->dav.imap_uid);
+		goto done;
+	    }
+
+	    /* XXX - alive check */
+
+	    r = carddav_remove(mailbox, &record);
+	    if (r) {
+		syslog(LOG_ERR, "IOERROR: setContactGroups remove failed for %s %u", mailbox->name, cdata->dav.imap_uid);
+		goto done;
+	    }
+
+	    json_array_append_new(deleted, json_string(uid));
+	}
+
+	if (json_array_size(deleted))
+	    json_object_set(set, "deleted", deleted);
+	json_decref(deleted);
+	if (json_object_size(notDeleted))
+	    json_object_set(set, "notDeleted", notDeleted);
+	json_decref(notDeleted);
+    }
+
+    /* force modseq to stable */
+    if (mailbox) mailbox_unlock_index(mailbox, NULL);
+
+    /* read the modseq again every time, just in case something changed it
+     * in our actions */
+    struct buf buf = BUF_INITIALIZER;
+    const char *inboxname = mboxname_user_mbox(req->userid, NULL);
+    modseq_t modseq = mboxname_readmodseq(inboxname);
+    buf_printf(&buf, "%llu", modseq);
+    json_object_set_new(set, "newState", json_string(buf_cstring(&buf)));
+    buf_free(&buf);
+
+    json_t *item = json_pack("[]");
+    json_array_append_new(item, json_string("contactGroupsSet"));
+    json_array_append_new(item, set);
+    json_array_append_new(item, json_string(req->tag));
+
+    json_array_append_new(req->response, item);
+
+done:
+    mailbox_close(&mailbox);
 
     return r;
 }
