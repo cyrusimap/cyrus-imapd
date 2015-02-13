@@ -991,6 +991,7 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 	json_object_set_new(obj, "company", _optstring(strarray_nth(org, 0)));
     if (_wantprop(grock->props, "department"))
 	json_object_set_new(obj, "department", _optstring(strarray_nth(org, 1)));
+    /* XXX - position? */
 
     /* address - we need to open code this, because it's repeated */
     if (_wantprop(grock->props, "addresses")) {
@@ -1077,6 +1078,30 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
     }
 
     /* address - we need to open code this, because it's repeated */
+    if (_wantprop(grock->props, "defaultEmailIndex")) {
+
+	int pos = -1;
+	int n = -1;
+	struct vparse_entry *entry;
+	for (entry = card->properties; entry; entry = entry->next) {
+	    if (strcasecmp(entry->name, "email")) continue;
+	    n++;
+	    const struct vparse_param *param;
+	    for (param = entry->params; param; param = param->next) {
+		if (!strcasecmp(param->name, "type")) {
+		    if (!strcasecmp(param->value, "pref")) {
+			pos = n;
+			goto out;
+		    }
+		}
+	    }
+	}
+	out:
+
+	json_object_set_new(obj, "defaultEmailIndex", json_integer(pos));
+    }
+
+    /* address - we need to open code this, because it's repeated */
     if (_wantprop(grock->props, "phones")) {
 	json_t *phones = json_array();
 
@@ -1121,6 +1146,32 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 	}
 
 	json_object_set_new(obj, "phones", phones);
+    }
+
+    /* address - we need to open code this, because it's repeated */
+    if (_wantprop(grock->props, "online")) {
+	json_t *online = json_array();
+
+	struct vparse_entry *entry;
+	for (entry = card->properties; entry; entry = entry->next) {
+	    if (!strcasecmp(entry->name, "url")) {
+		json_t *item = json_pack("{}");
+		const struct vparse_param *param;
+		const char *label = NULL;
+		for (param = entry->params; param; param = param->next) {
+		    if (!strcasecmp(param->name, "label")) {
+			label = param->value;
+		    }
+		}
+		json_object_set_new(item, "type", json_string("web"));
+		if (label) json_object_set_new(item, "label", json_string(label));
+		json_object_set_new(item, "value", json_string(entry->v.value));
+	        json_array_append_new(online, item);
+	    }
+
+	}
+
+	json_object_set_new(obj, "online", online);
     }
 
     if (_wantprop(grock->props, "nickname")) {
