@@ -845,7 +845,7 @@ static int fetch_file(struct mailbox *mailbox, unsigned uid,
     msgid = sync_msgid_lookup(part_list, &rp->guid);
 
     /* already reserved? great */
-    if (msgid && !msgid->need_upload) {
+    if (msgid && msgid->fname) {
 	syslog(LOG_NOTICE, "trying to get already uploaded %u: %s", uid, message_guid_encode(&rp->guid));
 	return 0;
     }
