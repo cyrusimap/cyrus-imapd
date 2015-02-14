@@ -829,7 +829,7 @@ static int copy_local(struct mailbox *mailbox, unsigned long uid)
     return IMAP_MAILBOX_NONEXISTENT;
 }
 
-static int fetch_file(struct mailbox *mailbox, unsigned long uid,
+static int fetch_file(struct mailbox *mailbox, unsigned uid,
 		      struct index_record *rp, struct sync_msgid_list *part_list)
 {
     const char *cmd = "FETCH";
@@ -844,8 +844,10 @@ static int fetch_file(struct mailbox *mailbox, unsigned long uid,
     msgid = sync_msgid_lookup(part_list, &rp->guid);
 
     /* already reserved? great */
-    if (msgid && !msgid->need_upload)
+    if (msgid && !msgid->need_upload) {
+	syslog(LOG_NOTICE, "trying to get already uploaded %u", uid);
 	return 0;
+    }
 
     kl = dlist_newkvlist(NULL, cmd);
     dlist_setatom(kl, "MBOXNAME", mailbox->name);
@@ -856,10 +858,14 @@ static int fetch_file(struct mailbox *mailbox, unsigned long uid,
     dlist_free(&kl);
 
     r = sync_parse_response(cmd, sync_in, &kin);
-    if (r) return r;
+    if (r) {
+	syslog(LOG_ERR, "IOERROR: fetch_file failed %s", error_message(r));
+	return r;
+    }
 
     if (!dlist_tofile(kin->head, NULL, &guid, &size, &fname)) {
 	r = IMAP_MAILBOX_NONEXISTENT;
+	syslog(LOG_ERR, "IOERROR: fetch_file failed tofile %s", error_message(r));
 	goto done;
     }
 
@@ -870,6 +876,8 @@ static int fetch_file(struct mailbox *mailbox, unsigned long uid,
 	msgid->fname = xstrdup(fname);
     }
     else {
+	r = IMAP_MAILBOX_NONEXISTENT;
+	syslog(LOG_ERR, "IOERROR: fetch_file GUID MISMATCH %s", error_message(r));
 	r = IMAP_IOERROR;
     }
 
@@ -888,7 +896,10 @@ static int copy_remote(struct mailbox *mailbox, uint32_t uid,
 
     for (ki = kr->head; ki; ki = ki->next) {
 	r = parse_upload(ki, mailbox, &record, &annots);
-	if (r) return r;
+	if (r) {
+	    syslog(LOG_ERR, "IOERROR: failed to parse upload for %u", uid);
+	    return r;
+	}
 	if (record.uid == uid) {
 	    /* choose the destination UID */
 	    record.uid = mailbox->i.last_uid + 1;
@@ -903,6 +914,7 @@ static int copy_remote(struct mailbox *mailbox, uint32_t uid,
 	sync_annot_list_free(&annots);
     }
     /* not finding the record is an error! (should never happen) */
+    syslog(LOG_ERR, "IOERROR: copy_remote didn't find the record for %u", uid);
     return IMAP_MAILBOX_NONEXISTENT;
 }
 
