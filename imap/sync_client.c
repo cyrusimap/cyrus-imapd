@@ -870,9 +870,10 @@ static int fetch_file(struct mailbox *mailbox, unsigned uid,
 	goto done;
     }
 
+    /* well, we can copy it back or we can re-reserve... */
     if (message_guid_equal(guid, &rp->guid) && (size == rp->size)) {
 	msgid = sync_msgid_insert(part_list, &rp->guid);
-	msgid->need_upload = 0;
+	msgid->need_upload = 1;
 	msgid->size = size;
 	msgid->fname = xstrdup(fname);
     }
