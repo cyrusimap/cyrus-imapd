@@ -826,6 +826,7 @@ static int copy_local(struct mailbox *mailbox, unsigned long uid)
     }
 
     /* not finding the record is an error! (should never happen) */
+    syslog(LOG_ERR, "IOERROR: copy_local didn't find the record for %u", uid);
     return IMAP_MAILBOX_NONEXISTENT;
 }
 
