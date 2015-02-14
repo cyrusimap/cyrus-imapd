@@ -772,7 +772,7 @@ static int user_sub(const char *userid, const char *mboxname)
     }
 }
 
-static int copy_local(struct mailbox *mailbox, unsigned long uid)
+static int copy_local(struct mailbox *mailbox, unsigned uid)
 {
     uint32_t recno;
     struct index_record oldrecord;
