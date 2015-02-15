@@ -1332,7 +1332,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    struct vparse_state vparser;
 	    struct index_record record;
 
-	    r = mailbox_read_index_record(mailbox, cdata->dav.imap_uid, &record);
+	    r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record, NULL);
 	    if (r) goto done;
 
 	    /* Load message containing the resource and parse vcard data */
@@ -1413,7 +1413,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    /* XXX - fricking mboxevent */
 
 	    struct index_record record;
-	    r = mailbox_read_index_record(mailbox, cdata->dav.imap_uid, &record);
+	    r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record, NULL);
 	    if (r) {
 		syslog(LOG_ERR, "IOERROR: setContactGroups index_read failed for %s %u", mailbox->name, cdata->dav.imap_uid);
 		goto done;
