@@ -1615,8 +1615,21 @@ static struct vparse_entry *_card_multi(struct vparse_card *card, const char *na
 
 static void _emails_to_card(struct vparse_card *card, json_t *arg)
 {
-    if (card && arg)
-	return;
+    vparse_delete_entries(card, NULL, "emails");
+    size_t index;
+    for (index = 0; index < json_array_size(arg); index++) {
+	json_t *item = json_array_get(arg, index);
+	struct vparse_entry *entry = vparse_add_entry(card, "email");
+	json_t *jtype = json_object_get(item, "type");
+	const char *type = json_string_value(jtype);
+	if (strcmp(type, "other")) {
+	    /* XXX - add type */
+	}
+	json_t *jlabel = json_object_get(item, "label");
+	/* XXX - add label */
+	json_t *jvalue = json_object_get(item, "value");
+	entry->v.value = xstrdup(json_string_value(jvalue));
+    }
 }
 
 static void _phones_to_card(struct vparse_card *card, json_t *arg)
@@ -1684,7 +1697,8 @@ static int _json_to_card(struct vparse_card *card, json_t *arg)
     json_t *val;
     struct vparse_entry *fn = vparse_get_entry(card, NULL, "fn");
     int name_is_dirty = 0;
-    /* we'll be updating you later anyway... */
+    /* we'll be updating you later anyway... create early so that it's
+     * at the top of the card */
     if (!fn) {
 	fn = vparse_add_entry(card, NULL, "fn", "No Name");
 	name_is_dirty = 1;
