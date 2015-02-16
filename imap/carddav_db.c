@@ -1615,7 +1615,7 @@ static struct vparse_entry *_card_multi(struct vparse_card *card, const char *na
 
 static int _emails_to_card(struct vparse_card *card, json_t *arg)
 {
-    vparse_delete_entries(card, NULL, "emails");
+    vparse_delete_entries(card, NULL, "email");
     size_t index;
     for (index = 0; index < json_array_size(arg); index++) {
 	json_t *item = json_array_get(arg, index);
