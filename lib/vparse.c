@@ -915,6 +915,42 @@ EXPORTED void vparse_delete_entries(struct vparse_card *card, const char *group,
     }
 }
 
+EXPORTED struct vparse_param *vparse_get_param(struct vparse_entry *entry, const char *name)
+{
+    struct vparse_param *param;
+    for (param = entry->params; param; param = param->next) {
+	if (!strcasecmp(param->name, name))
+	    return param;
+    }
+    return NULL;
+}
+
+EXPORTED struct vparse_param *vparse_add_param(struct vparse_entry *entry, const char *name, const char *value)
+{
+    struct vparse_param **paramp = &entry->params;
+    while (*paramp) paramp = &((*paramp)->next);
+    struct vparse_param *param = xzmalloc(sizeof(struct vparse_param));
+    param->name = xstrdupnull(name);
+    param->value = xstrdupnull(value);
+    *paramp = param;
+    return param;
+}
+
+EXPORTED void vparse_delete_params(struct vparse_entry *entry, const char *name)
+{
+    struct vparse_param **paramp = &entry->params;
+    while (*paramp) {
+	struct vparse_param *param = *paramp;
+	if (!strcasecmpsafe(param->name, name)) {
+	    *paramp = param->next;
+	    _free_param(param);
+	}
+	else {
+	    paramp = &((*paramp)->next);
+	}
+    }
+}
+
 #ifdef DEBUG
 static int _dump_card(struct vparse_card *card)
 {

@@ -94,7 +94,7 @@ extern void vparse_set_value(struct vparse_entry *entry, const char *value);
 /* XXX - multivalue should be strarray_t */
 //extern void vparse_set_multivalue(struct vparse_entry *entry, const strarray_t *values);
 
-extern int vparse_delete_params(struct vparse_entry *entry, const char *name);
+extern void vparse_delete_params(struct vparse_entry *entry, const char *name);
 extern struct vparse_param *vparse_get_param(struct vparse_entry *entry, const char *name);
 extern struct vparse_param *vparse_add_param(struct vparse_entry *entry, const char *name, const char *value);
 
