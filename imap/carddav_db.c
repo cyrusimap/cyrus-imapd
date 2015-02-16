@@ -1278,7 +1278,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 		r = mailbox_open_iwl(mboxname, &mailbox);
 	    }
 
-	    if (!r) r = carddav_store(mailbox, 0, card);
+	    if (!r) r = carddav_store(mailbox, 0, card, NULL);
 
 	    vparse_free_card(card);
 
@@ -1311,14 +1311,17 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    struct carddav_data *cdata = NULL;
 	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
 	    uint32_t olduid;
+	    char *resource = NULL;
 
 	    /* is it a valid group? */
-	    if (r || !cdata || !cdata->dav.imap_uid || cdata->kind != CARDDAV_KIND_GROUP) {
+	    if (r || !cdata || !cdata->dav.imap_uid || !cdata->dav.resource
+		  || cdata->kind != CARDDAV_KIND_GROUP) {
 		json_t *err = json_pack("{s:s}", "type", "notFound");
 		json_object_set_new(notUpdated, uid, err);
 		continue;
 	    }
 	    olduid = cdata->dav.imap_uid;
+	    resource = xstrdup(cdata->dav.resource);
 
 	    if (!mailbox || strcmp(mailbox->name, cdata->dav.mailbox)) {
 		mailbox_close(&mailbox);
@@ -1373,9 +1376,10 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 		_add_group_entries(carddavdb, req, card, members);
 	    }
 
-	    if (!r) r = carddav_store(mailbox, olduid, card);
+	    if (!r) r = carddav_store(mailbox, olduid, card, resource);
 
 	    vparse_free(&vparser);
+	    free(resource);
 
 	    json_array_append_new(updated, json_string(uid));
 	}
@@ -1641,7 +1645,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 		r = mailbox_open_iwl(mboxname, &mailbox);
 	    }
 
-	    if (!r) r = carddav_store(mailbox, 0, card);
+	    if (!r) r = carddav_store(mailbox, 0, card, NULL);
 
 	    vparse_free_card(card);
 
@@ -1674,6 +1678,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 	    struct carddav_data *cdata = NULL;
 	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
 	    uint32_t olduid;
+	    char *resource = NULL;
 
 	    /* is it a valid non-group (kind == 0)? */
 	    if (r || !cdata || !cdata->dav.imap_uid || cdata->kind) {
@@ -1682,6 +1687,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 		continue;
 	    }
 	    olduid = cdata->dav.imap_uid;
+	    resource = xstrdup(cdata->dav.resource);
 
 	    if (!mailbox || strcmp(mailbox->name, cdata->dav.mailbox)) {
 		mailbox_close(&mailbox);
@@ -1720,9 +1726,10 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 
 	    /* XXX - apply updates */
 
-	    if (!r) r = carddav_store(mailbox, olduid, card);
+	    if (!r) r = carddav_store(mailbox, olduid, card, resource);
 
 	    vparse_free(&vparser);
+	    free(resource);
 
 	    json_array_append_new(updated, json_string(uid));
 	}
@@ -1840,7 +1847,8 @@ EXPORTED void carddav_make_entry(struct vparse_card *vcard, struct carddav_data 
     }
 }
 
-EXPORTED int carddav_store(struct mailbox *mailbox, uint32_t olduid, struct vparse_card *vcard)
+EXPORTED int carddav_store(struct mailbox *mailbox, uint32_t olduid,
+			   struct vparse_card *vcard, const char *resource)
 {
     int r = 0;
     FILE *f = NULL;
@@ -1849,6 +1857,8 @@ EXPORTED int carddav_store(struct mailbox *mailbox, uint32_t olduid, struct vpar
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;   
     struct appendstate as;
     time_t now = time(0);
+    struct index_record oldrecord;
+    char *freeme = NULL;
 
     /* Prepare to stage the message */
     if (!(f = append_newstage(mailbox->name, now, 0, &stage))) {
@@ -1859,7 +1869,7 @@ EXPORTED int carddav_store(struct mailbox *mailbox, uint32_t olduid, struct vpar
     /* Create header for resource */
     const char *uid = vparse_stringval(vcard, "uid");
     const char *fullname = vparse_stringval(vcard, "fn");
-    char *resource = cdata ? xstrdup(cdata->dav.resource) : strconcat(uid, ".vcf", (char *)NULL);
+    if (!resource) resource = freeme = strconcat(uid, ".vcf", (char *)NULL);
     char datestr[80];
     time_to_rfc822(now, datestr, sizeof(datestr));
     struct buf buf = BUF_INITIALIZER;
@@ -1928,7 +1938,7 @@ EXPORTED int carddav_store(struct mailbox *mailbox, uint32_t olduid, struct vpar
 	goto done;
     }
 
-    if (oldrecord) {
+    if (olduid) {
 	/* Now that we have the replacement message in place
 	   and the mailbox locked, re-read the old record
 	   and see if we should overwrite it.  Either way,
@@ -1937,9 +1947,9 @@ EXPORTED int carddav_store(struct mailbox *mailbox, uint32_t olduid, struct vpar
 	int userflag;
 	r = mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag, 1);
 	if (!r) {
-	    oldrecord->user_flags[userflag/32] |= 1<<(userflag&31);
-	    oldrecord->system_flags |= FLAG_EXPUNGED;
-	    r = mailbox_rewrite_index_record(mailbox, oldrecord);
+	    oldrecord.user_flags[userflag/32] |= 1<<(userflag&31);
+	    oldrecord.system_flags |= FLAG_EXPUNGED;
+	    r = mailbox_rewrite_index_record(mailbox, &oldrecord);
 	}
 	if (r) {
 	    syslog(LOG_ERR, "expunging record (%s) failed: %s",
@@ -1950,7 +1960,7 @@ EXPORTED int carddav_store(struct mailbox *mailbox, uint32_t olduid, struct vpar
 
 done:
     append_removestage(stage);
-    free(resource);
+    free(freeme);
     return r;
 }
 
@@ -1959,12 +1969,12 @@ EXPORTED int carddav_remove(struct mailbox *mailbox, uint32_t olduid)
 
     int userflag;
     int r = mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag, 1);
-    struct index_record record;
-    if (!r) r = mailbox_find_index_record(mailbox, olduid, &record, NULL);
-    if (!r && !(record.system_flags & FLAG_EXPUNGED)) {
-	oldrecord->user_flags[userflag/32] |= 1<<(userflag&31);
-	oldrecord->system_flags |= FLAG_EXPUNGED;
-	r = mailbox_rewrite_index_record(mailbox, oldrecord);
+    struct index_record oldrecord;
+    if (!r) r = mailbox_find_index_record(mailbox, olduid, &oldrecord, NULL);
+    if (!r && !(oldrecord.system_flags & FLAG_EXPUNGED)) {
+	oldrecord.user_flags[userflag/32] |= 1<<(userflag&31);
+	oldrecord.system_flags |= FLAG_EXPUNGED;
+	r = mailbox_rewrite_index_record(mailbox, &oldrecord);
     }
     if (r) {
 	syslog(LOG_ERR, "expunging record (%s) failed: %s",
