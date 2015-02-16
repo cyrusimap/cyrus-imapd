@@ -1810,7 +1810,6 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 
 	    struct vparse_card *card = vparse_new_card("VCARD");
 	    vparse_add_entry(card, NULL, "VERSION", "3.0");
-	    //vparse_add_entry(card, NULL, "FN", json_string_value(name));
 	    vparse_add_entry(card, NULL, "UID", uid);
 
 	    /* we need to create and append a record */
