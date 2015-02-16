@@ -1613,40 +1613,52 @@ static struct vparse_entry *_card_multi(struct vparse_card *card, const char *na
     return res;
 }
 
-static void _emails_to_card(struct vparse_card *card, json_t *arg)
+static int _emails_to_card(struct vparse_card *card, json_t *arg)
 {
     vparse_delete_entries(card, NULL, "emails");
     size_t index;
     for (index = 0; index < json_array_size(arg); index++) {
 	json_t *item = json_array_get(arg, index);
 	json_t *jvalue = json_object_get(item, "value");
+	if (!jvalue) return -1;
 	struct vparse_entry *entry = vparse_add_entry(card, NULL, "email", json_string_value(jvalue));
 	json_t *jtype = json_object_get(item, "type");
+	if (!jtype) return -1;
 	const char *type = json_string_value(jtype);
-	if (strcmp(type, "other"))
+	if (!strcmp(type, "personal"))
 	    vparse_add_param(entry, "type", type);
+	else if (!strcmp(type, "work"))
+	    vparse_add_param(entry, "type", type);
+	else if (!strcmp(type, "other"))
+	    {} // no param
+	else
+	    return -1;  // all other types
 	json_t *jlabel = json_object_get(item, "label");
 	if (jlabel)
 	    vparse_add_param(entry, "label", json_string_value(jlabel));
     }
+    return 0;
 }
 
-static void _phones_to_card(struct vparse_card *card, json_t *arg)
+static int _phones_to_card(struct vparse_card *card, json_t *arg)
 {
     if (card && arg)
-	return;
+	return 0;
+    return 1;
 }
 
-static void _online_to_card(struct vparse_card *card, json_t *arg)
+static int _online_to_card(struct vparse_card *card, json_t *arg)
 {
     if (card && arg)
-	return;
+	return 0;
+    return 1;
 }
 
-static void _addresses_to_card(struct vparse_card *card, json_t *arg)
+static int _addresses_to_card(struct vparse_card *card, json_t *arg)
 {
     if (card && arg)
-	return;
+	return 0;
+    return 1;
 }
 
 static void _make_fn(struct vparse_card *card)
@@ -1754,16 +1766,20 @@ static int _json_to_card(struct vparse_card *card, json_t *arg)
 	    strarray_set(org->v.values, 2, json_string_value(val));
 	}
 	else if (!strcmp(key, "emails")) {
-	    _emails_to_card(card, val);
+	    int r = _emails_to_card(card, val);
+	    if (r) return r;
 	}
 	else if (!strcmp(key, "phones")) {
-	    _phones_to_card(card, val);
+	    int r = _phones_to_card(card, val);
+	    if (r) return r;
 	}
 	else if (!strcmp(key, "online")) {
-	    _online_to_card(card, val);
+	    int r = _online_to_card(card, val);
+	    if (r) return r;
 	}
 	else if (!strcmp(key, "addresses")) {
-	    _addresses_to_card(card, val);
+	    int r = _addresses_to_card(card, val);
+	    if (r) return r;
 	}
 	else if (!strcmp(key, "notes")) {
 	    _card_val(card, "note", json_string_value(val));
