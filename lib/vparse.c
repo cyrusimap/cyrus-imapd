@@ -742,6 +742,7 @@ static void _checkwrap(unsigned char c, struct vparse_target *tgt)
 
 static void _value_to_tgt(const char *value, struct vparse_target *tgt)
 {
+    if (!value) return; /* null fields or array items are empty string */
     for (; *value; value++) {
 	_checkwrap(*value, tgt);
 	switch (*value) {
