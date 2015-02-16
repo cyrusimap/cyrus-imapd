@@ -1053,6 +1053,7 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 	    const struct vparse_param *param;
 	    const char *type = "other";
 	    const char *label = NULL;
+	    int is_default = 0;
 	    for (param = entry->params; param; param = param->next) {
 		if (!strcasecmp(param->name, "type")) {
 		    if (!strcasecmp(param->value, "personal")) {
@@ -1061,12 +1062,16 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 		    else if (!strcasecmp(param->value, "work")) {
 			type = "work";
 		    }
+		    else if (!strcasecmp(param->value, "prev")) {
+			is_default = 1;
+		    }
 		}
 		else if (!strcasecmp(param->name, "label")) {
 		    label = param->value;
 		}
 	    }
 	    json_object_set_new(item, "type", json_string(type));
+	    json_object_set_new(item, "isDefault", is_default ? json_true() : json_false());
 	    if (label) json_object_set_new(item, "label", json_string(label));
 
 	    json_object_set_new(item, "value", json_string(entry->v.value));
@@ -1075,30 +1080,6 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 	}
 
 	json_object_set_new(obj, "emails", emails);
-    }
-
-    /* address - we need to open code this, because it's repeated */
-    if (_wantprop(grock->props, "defaultEmailIndex")) {
-
-	int pos = -1;
-	int n = -1;
-	struct vparse_entry *entry;
-	for (entry = card->properties; entry; entry = entry->next) {
-	    if (strcasecmp(entry->name, "email")) continue;
-	    n++;
-	    const struct vparse_param *param;
-	    for (param = entry->params; param; param = param->next) {
-		if (!strcasecmp(param->name, "type")) {
-		    if (!strcasecmp(param->value, "pref")) {
-			pos = n;
-			goto out;
-		    }
-		}
-	    }
-	}
-	out:
-
-	json_object_set_new(obj, "defaultEmailIndex", json_integer(pos));
     }
 
     /* address - we need to open code this, because it's repeated */
@@ -1613,6 +1594,178 @@ EXPORTED int carddav_getContactUpdates(struct carddav_db *carddavdb, struct jmap
     return r;
 }
 
+static void _card_val(struct vparse_card *card, const char *name, const char *value)
+{
+    struct vparse_entry *res = vparse_get_entry(card, NULL, name);
+    if (!res) res = vparse_add_entry(card, NULL, name, NULL);
+    free(res->v.value);
+    res->v.value = xstrdupnull(value);
+}
+
+static struct vparse_entry *_card_multi(struct vparse_card *card, const char *name)
+{
+    struct vparse_entry *res = vparse_get_entry(card, NULL, name);
+    if (!res) {
+	res = vparse_add_entry(card, NULL, name, NULL);
+	res->multivalue = 1;
+	res->v.values = strarray_new();
+    }
+    return res;
+}
+
+static void _emails_to_card(struct vparse_card *card, json_t *arg)
+{
+    if (card && arg)
+	return;
+}
+
+static void _phones_to_card(struct vparse_card *card, json_t *arg)
+{
+    if (card && arg)
+	return;
+}
+
+static void _online_to_card(struct vparse_card *card, json_t *arg)
+{
+    if (card && arg)
+	return;
+}
+
+static void _addresses_to_card(struct vparse_card *card, json_t *arg)
+{
+    if (card && arg)
+	return;
+}
+
+static void _make_fn(struct vparse_card *card)
+{
+    struct vparse_entry *n = vparse_get_entry(card, NULL, "n");
+    strarray_t *name = strarray_new();
+    const char *v;
+
+    v = strarray_nth(n->v.values, 3); // prefix
+    if (v && v[0]) strarray_append(name, v);
+
+    v = strarray_nth(n->v.values, 1); // first
+    if (v && v[0]) strarray_append(name, v);
+
+    v = strarray_nth(n->v.values, 2); // middle
+    if (v && v[0]) strarray_append(name, v);
+
+    v = strarray_nth(n->v.values, 0); // last
+    if (v && v[0]) strarray_append(name, v);
+
+    v = strarray_nth(n->v.values, 4); // suffix
+    if (v && v[0]) strarray_append(name, v);
+
+    if (!strarray_size(name)) {
+	v = vparse_stringval(card, "nickname");
+	if (v && v[0]) strarray_append(name, v);
+    }
+
+    if (!strarray_size(name)) {
+	/* XXX - grep type=pref?  Meh */
+	v = vparse_stringval(card, "email");
+	if (v && v[0]) strarray_append(name, v);
+    }
+
+    if (!strarray_size(name)) {
+	strarray_append(name, "No Name");
+    }
+
+    char *fn = strarray_join(name, " ");
+
+     _card_val(card, "fn", fn);
+}
+
+static int _json_to_card(struct vparse_card *card, json_t *arg)
+{
+    const char *key;
+    json_t *val;
+    struct vparse_entry *fn = vparse_get_entry(card, NULL, "fn");
+    int name_is_dirty = 0;
+    /* we'll be updating you later anyway... */
+    if (!fn) {
+	fn = vparse_add_entry(card, NULL, "fn", "No Name");
+	name_is_dirty = 1;
+    }
+
+    json_object_foreach(arg, key, val) {
+	if (!strcmp(key, "isFlagged")) {
+	    /* XXX - way to add flagged info? */
+	}
+	else if (!strcmp(key, "avatar")) {
+	    /* XXX - file handling */
+	}
+	else if (!strcmp(key, "prefix")) {
+	    name_is_dirty = 1;
+	    struct vparse_entry *n = _card_multi(card, "n");
+	    strarray_set(n->v.values, 3, json_string_value(val));
+	}
+	else if (!strcmp(key, "firstName")) {
+	    name_is_dirty = 1;
+	    struct vparse_entry *n = _card_multi(card, "n");
+	    strarray_set(n->v.values, 1, json_string_value(val));
+	}
+	else if (!strcmp(key, "lastName")) {
+	    name_is_dirty = 1;
+	    struct vparse_entry *n = _card_multi(card, "n");
+	    strarray_set(n->v.values, 0, json_string_value(val));
+	}
+	else if (!strcmp(key, "suffix")) {
+	    name_is_dirty = 1;
+	    struct vparse_entry *n = _card_multi(card, "n");
+	    strarray_set(n->v.values, 4, json_string_value(val));
+	}
+	else if (!strcmp(key, "nickname")) {
+	    _card_val(card, "nickname", json_string_value(val));
+	}
+	else if (!strcmp(key, "birthday")) {
+	    _card_val(card, "bday", json_string_value(val));
+	}
+	else if (!strcmp(key, "anniversary")) {
+	    _card_val(card, "anniversary", json_string_value(val));
+	}
+	else if (!strcmp(key, "company")) {
+	    struct vparse_entry *org = _card_multi(card, "org");
+	    strarray_set(org->v.values, 0, json_string_value(val));
+	}
+	else if (!strcmp(key, "department")) {
+	    struct vparse_entry *org = _card_multi(card, "org");
+	    strarray_set(org->v.values, 1, json_string_value(val));
+	}
+	else if (!strcmp(key, "jobTitle")) {
+	    struct vparse_entry *org = _card_multi(card, "org");
+	    strarray_set(org->v.values, 2, json_string_value(val));
+	}
+	else if (!strcmp(key, "emails")) {
+	    _emails_to_card(card, val);
+	}
+	else if (!strcmp(key, "phones")) {
+	    _phones_to_card(card, val);
+	}
+	else if (!strcmp(key, "online")) {
+	    _online_to_card(card, val);
+	}
+	else if (!strcmp(key, "addresses")) {
+	    _addresses_to_card(card, val);
+	}
+	else if (!strcmp(key, "notes")) {
+	    _card_val(card, "note", json_string_value(val));
+	}
+
+	else {
+	    /* INVALID PARAM */
+	    return -1; /* XXX - need codes */
+	}
+    }
+
+    if (name_is_dirty)
+	_make_fn(card);
+
+    return 0;
+}
+
 EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *req)
 {
     int r = 0;
@@ -1640,8 +1793,6 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 	json_object_foreach(create, key, arg) {
 	    char *uid = makeuuid();
 
-	    /* XXX - tons of work to do here */
-
 	    struct vparse_card *card = vparse_new_card("VCARD");
 	    vparse_add_entry(card, NULL, "VERSION", "3.0");
 	    //vparse_add_entry(card, NULL, "FN", json_string_value(name));
@@ -1653,6 +1804,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 		r = mailbox_open_iwl(mboxname, &mailbox);
 	    }
 
+	    if (!r) r = _json_to_card(card, arg);
 	    if (!r) r = carddav_store(mailbox, 0, card, NULL);
 
 	    vparse_free_card(card);
@@ -1688,8 +1840,8 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 	    uint32_t olduid;
 	    char *resource = NULL;
 
-	    /* is it a valid non-group (kind == 0)? */
-	    if (r || !cdata || !cdata->dav.imap_uid || cdata->kind) {
+	    if (r || !cdata || !cdata->dav.imap_uid
+		  || cdata->kind != CARDDAV_KIND_CONTACT) {
 		json_t *err = json_pack("{s:s}", "type", "notFound");
 		json_object_set_new(notUpdated, uid, err);
 		continue;
@@ -1732,12 +1884,13 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 	    }
 	    struct vparse_card *card = vparser.card->objects;
 
-	    /* XXX - apply updates */
-
+	    if (!r) r = _json_to_card(card, arg);
 	    if (!r) r = carddav_store(mailbox, olduid, card, resource);
 
 	    vparse_free(&vparser);
 	    free(resource);
+
+	    if (r) goto done;
 
 	    json_array_append_new(updated, json_string(uid));
 	}
@@ -1762,8 +1915,8 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
 	    uint32_t olduid;
 
-	    /* is it a valid non-group (kind == 0)? */
-	    if (r || !cdata || !cdata->dav.imap_uid || cdata->kind) {
+	    if (r || !cdata || !cdata->dav.imap_uid
+		  || cdata->kind != CARDDAV_KIND_CONTACT) {
 		json_t *err = json_pack("{s:s}", "type", "notFound");
 		json_object_set_new(notDeleted, uid, err);
 		continue;
