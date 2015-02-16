@@ -1619,16 +1619,15 @@ static void _emails_to_card(struct vparse_card *card, json_t *arg)
     size_t index;
     for (index = 0; index < json_array_size(arg); index++) {
 	json_t *item = json_array_get(arg, index);
-	struct vparse_entry *entry = vparse_add_entry(card, "email");
+	json_t *jvalue = json_object_get(item, "value");
+	struct vparse_entry *entry = vparse_add_entry(card, NULL, "email", json_string_value(jvalue));
 	json_t *jtype = json_object_get(item, "type");
 	const char *type = json_string_value(jtype);
-	if (strcmp(type, "other")) {
-	    /* XXX - add type */
-	}
+	if (strcmp(type, "other"))
+	    vparse_add_param(entry, "type", type);
 	json_t *jlabel = json_object_get(item, "label");
-	/* XXX - add label */
-	json_t *jvalue = json_object_get(item, "value");
-	entry->v.value = xstrdup(json_string_value(jvalue));
+	if (jlabel)
+	    vparse_add_param(entry, "label", json_string_value(jlabel));
     }
 }
 
