@@ -1271,7 +1271,13 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 
 	    /* it's legal to create an empty group */
 	    json_t *members = json_object_get(arg, "contactIds");
-	    if (members) _add_group_entries(carddavdb, req, card, members);
+	    if (members) {
+		r = _add_group_entries(carddavdb, req, card, members);
+		if (r) {
+		    free(uid);
+		    goto done;
+		}
+	    }
 
 	    /* we need to create and append a record */
 	    if (!mailbox || strcmp(mailbox->name, mboxname)) {
@@ -1374,10 +1380,11 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 
 	    json_t *members = json_object_get(arg, "contactIds");
 	    if (members) {
-		_add_group_entries(carddavdb, req, card, members);
+		r = _add_group_entries(carddavdb, req, card, members);
+		if (r) goto done;
 	    }
 
-	    if (!r) r = carddav_store(mailbox, olduid, card, resource);
+	    r = carddav_store(mailbox, olduid, card, resource);
 
 	    vparse_free(&vparser);
 	    free(resource);
