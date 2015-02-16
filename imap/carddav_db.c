@@ -1216,7 +1216,8 @@ static int _add_group_entries(struct carddav_db *carddavdb, struct jmap_req *req
 	struct carddav_data *cdata = NULL;
 	r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
 	if (r) goto done;
-	if (!cdata || !cdata->dav.imap_uid || !cdata->dav.alive) {
+	if (!cdata || !cdata->dav.imap_uid || !cdata->dav.alive
+	    || cdata->kind != CARDDAV_KIND_CONTACT) {
 	    r = -1;
 	    goto done;
 	}
