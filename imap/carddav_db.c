@@ -1278,7 +1278,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 		r = mailbox_open_iwl(mboxname, &mailbox);
 	    }
 
-	    if (!r) r = carddav_store(mailbox, card, NULL, NULL);
+	    if (!r) r = carddav_store(mailbox, 0, card);
 
 	    vparse_free_card(card);
 
@@ -1310,6 +1310,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	json_object_foreach(update, uid, arg) {
 	    struct carddav_data *cdata = NULL;
 	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
+	    uint32_t olduid;
 
 	    /* is it a valid group? */
 	    if (r || !cdata || !cdata->dav.imap_uid || cdata->kind != CARDDAV_KIND_GROUP) {
@@ -1317,6 +1318,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 		json_object_set_new(notUpdated, uid, err);
 		continue;
 	    }
+	    olduid = cdata->dav.imap_uid;
 
 	    if (!mailbox || strcmp(mailbox->name, cdata->dav.mailbox)) {
 		mailbox_close(&mailbox);
@@ -1371,7 +1373,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 		_add_group_entries(carddavdb, req, card, members);
 	    }
 
-	    if (!r) r = carddav_store(mailbox, card, &record, cdata);
+	    if (!r) r = carddav_store(mailbox, olduid, card);
 
 	    vparse_free(&vparser);
 
@@ -1396,6 +1398,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    const char *uid = json_string_value(json_array_get(delete, index));
 	    struct carddav_data *cdata = NULL;
 	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
+	    uint32_t olduid;
 
 	    /* is it a valid group? */
 	    if (r || !cdata || !cdata->dav.imap_uid || cdata->kind != CARDDAV_KIND_GROUP) {
@@ -1403,6 +1406,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 		json_object_set_new(notDeleted, uid, err);
 		continue;
 	    }
+	    olduid = cdata->dav.imap_uid;
 
 	    if (!mailbox || strcmp(mailbox->name, cdata->dav.mailbox)) {
 		mailbox_close(&mailbox);
@@ -1421,7 +1425,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 
 	    /* XXX - alive check */
 
-	    r = carddav_remove(mailbox, &record);
+	    r = carddav_remove(mailbox, olduid);
 	    if (r) {
 		syslog(LOG_ERR, "IOERROR: setContactGroups remove failed for %s %u", mailbox->name, cdata->dav.imap_uid);
 		goto done;
@@ -1637,7 +1641,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 		r = mailbox_open_iwl(mboxname, &mailbox);
 	    }
 
-	    if (!r) r = carddav_store(mailbox, card, NULL, NULL);
+	    if (!r) r = carddav_store(mailbox, 0, card);
 
 	    vparse_free_card(card);
 
@@ -1669,6 +1673,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 	json_object_foreach(update, uid, arg) {
 	    struct carddav_data *cdata = NULL;
 	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
+	    uint32_t olduid;
 
 	    /* is it a valid non-group (kind == 0)? */
 	    if (r || !cdata || !cdata->dav.imap_uid || cdata->kind) {
@@ -1676,6 +1681,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 		json_object_set_new(notUpdated, uid, err);
 		continue;
 	    }
+	    olduid = cdata->dav.imap_uid;
 
 	    if (!mailbox || strcmp(mailbox->name, cdata->dav.mailbox)) {
 		mailbox_close(&mailbox);
@@ -1714,7 +1720,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 
 	    /* XXX - apply updates */
 
-	    if (!r) r = carddav_store(mailbox, card, &record, cdata);
+	    if (!r) r = carddav_store(mailbox, olduid, card);
 
 	    vparse_free(&vparser);
 
@@ -1739,6 +1745,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 	    const char *uid = json_string_value(json_array_get(delete, index));
 	    struct carddav_data *cdata = NULL;
 	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
+	    uint32_t olduid;
 
 	    /* is it a valid non-group (kind == 0)? */
 	    if (r || !cdata || !cdata->dav.imap_uid || cdata->kind) {
@@ -1746,6 +1753,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 		json_object_set_new(notDeleted, uid, err);
 		continue;
 	    }
+	    olduid = cdata->dav.imap_uid;
 
 	    if (!mailbox || strcmp(mailbox->name, cdata->dav.mailbox)) {
 		mailbox_close(&mailbox);
@@ -1755,18 +1763,9 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 
 	    /* XXX - fricking mboxevent */
 
-	    struct index_record record;
-	    r = mailbox_read_index_record(mailbox, cdata->dav.imap_uid, &record);
+	    r = carddav_remove(mailbox, olduid);
 	    if (r) {
-		syslog(LOG_ERR, "IOERROR: setContactGroups index_read failed for %s %u", mailbox->name, cdata->dav.imap_uid);
-		goto done;
-	    }
-
-	    /* XXX - alive check */
-
-	    r = carddav_remove(mailbox, &record);
-	    if (r) {
-		syslog(LOG_ERR, "IOERROR: setContactGroups remove failed for %s %u", mailbox->name, cdata->dav.imap_uid);
+		syslog(LOG_ERR, "IOERROR: setContactGroups remove failed for %s %u", mailbox->name, olduid);
 		goto done;
 	    }
 
@@ -1841,8 +1840,7 @@ EXPORTED void carddav_make_entry(struct vparse_card *vcard, struct carddav_data 
     }
 }
 
-EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
-			   struct index_record *oldrecord, struct carddav_data *cdata)
+EXPORTED int carddav_store(struct mailbox *mailbox, uint32_t olduid, struct vparse_card *vcard)
 {
     int r = 0;
     FILE *f = NULL;
@@ -1956,13 +1954,14 @@ done:
     return r;
 }
 
-EXPORTED int carddav_remove(struct mailbox *mailbox,
-			    struct index_record *oldrecord)
+EXPORTED int carddav_remove(struct mailbox *mailbox, uint32_t olduid)
 {
 
     int userflag;
     int r = mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag, 1);
-    if (!r) {
+    struct index_record record;
+    if (!r) r = mailbox_find_index_record(mailbox, olduid, &record, NULL);
+    if (!r && !(record.system_flags & FLAG_EXPUNGED)) {
 	oldrecord->user_flags[userflag/32] |= 1<<(userflag&31);
 	oldrecord->system_flags |= FLAG_EXPUNGED;
 	r = mailbox_rewrite_index_record(mailbox, oldrecord);
