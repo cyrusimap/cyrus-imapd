@@ -1857,7 +1857,6 @@ EXPORTED int carddav_store(struct mailbox *mailbox, uint32_t olduid,
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;   
     struct appendstate as;
     time_t now = time(0);
-    struct index_record oldrecord;
     char *freeme = NULL;
 
     /* Prepare to stage the message */
@@ -1944,8 +1943,10 @@ EXPORTED int carddav_store(struct mailbox *mailbox, uint32_t olduid,
 	   and see if we should overwrite it.  Either way,
 	   one of our records will have to be expunged.
 	*/
+	struct index_record oldrecord;
 	int userflag;
 	r = mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag, 1);
+	if (!r) r = mailbox_find_index_record(mailbox, olduid, &oldrecord, NULL);
 	if (!r) {
 	    oldrecord.user_flags[userflag/32] |= 1<<(userflag&31);
 	    oldrecord.system_flags |= FLAG_EXPUNGED;
