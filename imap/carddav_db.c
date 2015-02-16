@@ -1877,7 +1877,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 	    struct vparse_state vparser;
 	    struct index_record record;
 
-	    r = mailbox_read_index_record(mailbox, cdata->dav.imap_uid, &record);
+	    r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record, NULL);
 	    if (r) goto done;
 
 	    /* Load message containing the resource and parse vcard data */
