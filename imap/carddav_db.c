@@ -1655,20 +1655,22 @@ static void _make_fn(struct vparse_card *card)
     strarray_t *name = strarray_new();
     const char *v;
 
-    v = strarray_nth(n->v.values, 3); // prefix
-    if (v && v[0]) strarray_append(name, v);
+    if (n) {
+	v = strarray_nth(n->v.values, 3); // prefix
+	if (v && v[0]) strarray_append(name, v);
 
-    v = strarray_nth(n->v.values, 1); // first
-    if (v && v[0]) strarray_append(name, v);
+	v = strarray_nth(n->v.values, 1); // first
+	if (v && v[0]) strarray_append(name, v);
 
-    v = strarray_nth(n->v.values, 2); // middle
-    if (v && v[0]) strarray_append(name, v);
+	v = strarray_nth(n->v.values, 2); // middle
+	if (v && v[0]) strarray_append(name, v);
 
-    v = strarray_nth(n->v.values, 0); // last
-    if (v && v[0]) strarray_append(name, v);
+	v = strarray_nth(n->v.values, 0); // last
+	if (v && v[0]) strarray_append(name, v);
 
-    v = strarray_nth(n->v.values, 4); // suffix
-    if (v && v[0]) strarray_append(name, v);
+	v = strarray_nth(n->v.values, 4); // suffix
+	if (v && v[0]) strarray_append(name, v);
+    }
 
     if (!strarray_size(name)) {
 	v = vparse_stringval(card, "nickname");
