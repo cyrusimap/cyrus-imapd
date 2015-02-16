@@ -929,6 +929,7 @@ EXPORTED void vparse_delete_entries(struct vparse_card *card, const char *group,
 	struct vparse_entry *entry = *entryp;
 	if (!strcasecmpsafe(entry->group, group) && !strcasecmpsafe(entry->name, name)) {
 	    *entryp = entry->next;
+	    entry->next = NULL; /* so free doesn't walk the chain */
 	    _free_entry(entry);
 	}
 	else {
@@ -965,6 +966,7 @@ EXPORTED void vparse_delete_params(struct vparse_entry *entry, const char *name)
 	struct vparse_param *param = *paramp;
 	if (!strcasecmpsafe(param->name, name)) {
 	    *paramp = param->next;
+	    param->next = NULL;
 	    _free_param(param);
 	}
 	else {
