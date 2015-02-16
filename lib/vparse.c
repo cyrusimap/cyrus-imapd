@@ -798,6 +798,22 @@ static void _key_to_tgt(const char *key, struct vparse_target *tgt)
     }
 }
 
+static int _needsquote(const char *p)
+{
+    while (*p++) {
+	switch (*p) {
+	case '"':
+	case ',':
+	case ':':
+	case ';':
+	case ' ':  // in theory, whitespace is legal
+	case '\t': // in theory, whitespace is legal
+	    return 1;
+	}
+    }
+    return 0;
+}
+
 static void _entry_to_tgt(const struct vparse_entry *entry, struct vparse_target *tgt)
 {
     struct vparse_param *param;
@@ -813,10 +829,15 @@ static void _entry_to_tgt(const struct vparse_entry *entry, struct vparse_target
 	buf_putc(tgt->buf, ';');
 	_key_to_tgt(param->name, tgt);
 	buf_putc(tgt->buf, '=');
-	/* XXX - smart quoting? */
-	buf_putc(tgt->buf, '"');
-	_paramval_to_tgt(param->value, tgt);
-	buf_putc(tgt->buf, '"');
+	if (_needsquote(param->value)) {
+	    /* XXX - smart quoting? */
+	    buf_putc(tgt->buf, '"');
+	    _paramval_to_tgt(param->value, tgt);
+	    buf_putc(tgt->buf, '"');
+	}
+	else {
+	    _paramval_to_tgt(param->value, tgt);
+	}
     }
 
     buf_putc(tgt->buf, ':');
