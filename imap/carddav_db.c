@@ -1240,7 +1240,8 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    json_t *name = json_object_get(arg, "name");
 	    if (!name) {
 		json_t *err = json_pack("{s:s}", "type", "missingParameters");
-		json_object_set_new(notCreated, uid, err);
+		json_object_set_new(notCreated, key, err);
+		free(uid);
 		continue;
 	    }
 	    // XXX - no name => notCreated
@@ -1255,8 +1256,13 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    if (members) {
 		r = _add_group_entries(carddavdb, req, card, members);
 		if (r) {
+		    /* this one is legit - it just means we'll be adding an error instead */
+		    r = 0;
+		    json_t *err = json_pack("{s:s}", "type", "invalidContactId");
+		    json_object_set_new(notCreated, key, err);
 		    free(uid);
-		    goto done;
+		    vparse_free_card(card);
+		    continue;
 		}
 	    }
 
@@ -1271,6 +1277,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    vparse_free_card(card);
 
 	    if (r) {
+		/* these are real "should never happen" errors */
 		free(uid);
 		goto done;
 	    }
@@ -1339,10 +1346,11 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    vparse_set_multival(&vparser, "n");
 	    r = vparse_parse(&vparser, 0);
 	    buf_free(&msg_buf);
-	    if (r) goto done;
-	    if (!vparser.card || !vparser.card->objects) {
+	    if (r || !vparser.card || !vparser.card->objects) {
+		json_t *err = json_pack("{s:s}", "type", "parseError");
+		json_object_set_new(notUpdated, uid, err);
 		vparse_free(&vparser);
-		goto done;
+		continue;
 	    }
 	    struct vparse_card *card = vparser.card->objects;
 
@@ -1362,13 +1370,21 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    json_t *members = json_object_get(arg, "contactIds");
 	    if (members) {
 		r = _add_group_entries(carddavdb, req, card, members);
-		if (r) goto done;
+		if (r) {
+		    /* this one is legit - it just means we'll be adding an error instead */
+		    r = 0;
+		    json_t *err = json_pack("{s:s}", "type", "invalidContactId");
+		    json_object_set_new(notUpdated, uid, err);
+		    vparse_free(&vparser);
+		    continue;
+		}
 	    }
 
 	    r = carddav_store(mailbox, olduid, card, resource);
 
 	    vparse_free(&vparser);
 	    free(resource);
+	    if (r) goto done;
 
 	    json_array_append_new(updated, json_string(uid));
 	}
@@ -1405,15 +1421,6 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 		mailbox_close(&mailbox);
 		r = mailbox_open_iwl(cdata->dav.mailbox, &mailbox);
 		if (r) goto done;
-	    }
-
-	    /* XXX - fricking mboxevent */
-
-	    struct index_record record;
-	    r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record, NULL);
-	    if (r) {
-		syslog(LOG_ERR, "IOERROR: setContactGroups index_read failed for %s %u", mailbox->name, cdata->dav.imap_uid);
-		goto done;
 	    }
 
 	    /* XXX - alive check */
@@ -1832,11 +1839,25 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 	    if (!mailbox || strcmp(mailbox->name, mboxname)) {
 		mailbox_close(&mailbox);
 		r = mailbox_open_iwl(mboxname, &mailbox);
+		if (r) {
+		    free(uid);
+		    vparse_free_card(card);
+		    goto done;
+		}
 	    }
 
-	    if (!r) r = _json_to_card(card, arg);
-	    if (!r) r = carddav_store(mailbox, 0, card, NULL);
+	    r = _json_to_card(card, arg);
+	    if (r) {
+		/* this is just a failure */
+		r = 0;
+		json_t *err = json_pack("{s:s}", "type", "invalidParameters");
+		json_object_set_new(notCreated, key, err);
+		free(uid);
+		vparse_free_card(card);
+		continue;
+	    }
 
+	    r = carddav_store(mailbox, 0, card, NULL);
 	    vparse_free_card(card);
 
 	    if (r) {
@@ -1907,15 +1928,24 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 	    vparse_set_multival(&vparser, "n");
 	    r = vparse_parse(&vparser, 0);
 	    buf_free(&msg_buf);
-	    if (r) goto done;
-	    if (!vparser.card || !vparser.card->objects) {
+	    if (r || !vparser.card || !vparser.card->objects) {
+		json_t *err = json_pack("{s:s}", "type", "parseError");
+		json_object_set_new(notUpdated, uid, err);
 		vparse_free(&vparser);
-		goto done;
+		continue;
 	    }
 	    struct vparse_card *card = vparser.card->objects;
 
-	    if (!r) r = _json_to_card(card, arg);
-	    if (!r) r = carddav_store(mailbox, olduid, card, resource);
+	    r = _json_to_card(card, arg);
+	    if (r) {
+		/* this is just a failure to create the JSON, not an error */
+		r = 0;
+		json_t *err = json_pack("{s:s}", "type", "invalidParameters");
+		json_object_set_new(notUpdated, uid, err);
+		vparse_free(&vparser);
+		continue;
+	    }
+	    r = carddav_store(mailbox, olduid, card, resource);
 
 	    vparse_free(&vparser);
 	    free(resource);
