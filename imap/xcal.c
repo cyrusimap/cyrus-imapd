@@ -206,7 +206,7 @@ void icalrecurrencetype_add_as_xxx(struct icalrecurrencetype *recur, void *obj,
     if (recur->rscale) {
 	add_str(obj, "rscale", recur->rscale);
 
-	if (recur->skip != ICAL_SKIP_BACKWARD)
+	if (recur->skip != ICAL_SKIP_OMIT)
 	    add_str(obj, "skip", icalrecur_skip_to_string(recur->skip));
     }
 #endif
