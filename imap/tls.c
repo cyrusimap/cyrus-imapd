@@ -159,6 +159,9 @@ EXPORTED int tls_enabled(void)
     val = config_getstring(IMAPOPT_TLS_SERVER_KEY);
     if (!val || !strcasecmp(val, "disabled")) return 0;
 
+    if (config_getswitch(IMAPOPT_CHATTY))
+	    syslog(LOG_INFO, "TLS is available.");
+
     return 1;
 }
 
@@ -745,6 +748,13 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 	client_ca_dir  = config_getstring(IMAPOPT_TLS_CLIENT_CA_DIR);
 	client_ca_file = config_getstring(IMAPOPT_TLS_CLIENT_CA_FILE);
 
+	    if (config_debug) {
+		    syslog(
+			LOG_DEBUG, "tls_client_ca_dir=%s tls_client_ca_file=%s",
+			IS_NULL(client_ca_dir), IS_NULL(client_ca_file)
+		    );
+	    }
+
 	if (client_ca_dir || client_ca_file) {
 	    // Attempt to load client_ca_dir and/or client_ca_file
 	    if ((!SSL_CTX_load_verify_locations(s_ctx, client_ca_file, client_ca_dir)) ||
@@ -778,6 +788,13 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     server_ca_file = config_getstring(IMAPOPT_TLS_SERVER_CA_FILE);
     server_cert_file = config_getstring(IMAPOPT_TLS_SERVER_CERT);
     server_key_file = config_getstring(IMAPOPT_TLS_SERVER_KEY);
+
+    if (config_debug) {
+	    syslog(
+		LOG_DEBUG, "tls_server_cert=%s tls_server_key=%s",
+		IS_NULL(server_cert_file), IS_NULL(server_key_file)
+	    );
+    }
 
     /* Only consider adding additional CA certificates -used to verify certificates
      * issued to clients, which may have been issued by an intermediate CA and
@@ -1401,6 +1418,13 @@ HIDDEN int tls_init_clientengine(int verifydepth,
     
     server_ca_dir = config_getstring(IMAPOPT_TLS_SERVER_CA_DIR);
     server_ca_file = config_getstring(IMAPOPT_TLS_SERVER_CA_FILE);
+
+    if (config_debug) {
+	    syslog(
+		LOG_DEBUG, "tls_server_ca_dir=%s tls_server_ca_file=%s",
+		IS_NULL(server_ca_dir), IS_NULL(server_ca_file)
+	    );
+    }
 
     if (server_ca_dir || server_ca_file) {
 	if ((!SSL_CTX_load_verify_locations(c_ctx, server_ca_file, server_ca_dir)) ||

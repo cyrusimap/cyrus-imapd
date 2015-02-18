@@ -112,6 +112,11 @@ extern const unsigned char convert_to_uppercase[256];
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #endif
 
+/* Some BSDs don't print "NULL" for a NULL pointer string. */ 
+#ifndef IS_NULL
+#define IS_NULL(s)	((s) == NULL ? "(NULL)" : (s))
+#endif
+
 /* Calculate the number of entries in a vector */
 #define VECTOR_SIZE(vector) (sizeof(vector)/sizeof(vector[0]))
 

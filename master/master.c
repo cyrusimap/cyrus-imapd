@@ -2026,9 +2026,9 @@ int main(int argc, char **argv)
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
 #ifdef HAVE_NETSNMP
-    while ((opt = getopt(argc, argv, "C:L:M:p:l:Ddj:P:x:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:L:M:p:l:Ddj:vP:x:")) != EOF) {
 #else
-    while ((opt = getopt(argc, argv, "C:L:M:p:l:Ddj:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:L:M:p:l:Ddj:v")) != EOF) {
 #endif
 	switch (opt) {
 	case 'C': /* alt imapd.conf file */
@@ -2071,6 +2071,9 @@ int main(int argc, char **argv)
 	    agentxsocket = optarg;
 	    break;
 #endif
+	case 'v':
+		verbose++;
+		break;
 	default:
 	    break;
 	}
@@ -2138,6 +2141,16 @@ int main(int argc, char **argv)
 	    syslog(LOG_ERR, "can't create startup pipe (%m)");
 	    exit(EX_OSERR);
 	}
+
+	/* Set the current working directory where cores can go to die. */
+	char *path = config_getstring(IMAPOPT_CONFIGDIRECTORY);
+	if (path == NULL) {
+		path = getenv("TMPDIR");
+		if (path == NULL)
+			path = "/tmp";
+	}
+	(void) chdir(path);
+	(void) chdir("cores");
 
 	do {
 	    pid = fork();

@@ -96,8 +96,6 @@ int masterconf_init(const char *ident, const char *alt_config)
     config_ident = ident;
     config_read(alt_config, 0);
 
-    setlogmask(~LOG_MASK(LOG_DEBUG));
-
     prefix = config_getstring(IMAPOPT_SYSLOG_PREFIX);
     
     if (prefix) {
