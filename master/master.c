@@ -2143,7 +2143,7 @@ int main(int argc, char **argv)
 	}
 
 	/* Set the current working directory where cores can go to die. */
-	char *path = config_getstring(IMAPOPT_CONFIGDIRECTORY);
+	const char *path = config_getstring(IMAPOPT_CONFIGDIRECTORY);
 	if (path == NULL) {
 		path = getenv("TMPDIR");
 		if (path == NULL)
