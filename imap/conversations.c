@@ -734,7 +734,7 @@ EXPORTED void conversation_normalise_subject(struct buf *s)
 	assert(r == 0);
 	r = regcomp(&blob_start_re, "^[ \t]*\\[[^]]+\\]", REG_EXTENDED);
 	assert(r == 0);
-	r = regcomp(&blob_end_re, "[ \t]*\\[(SEC|DLM)=[^]]+\\]$", REG_EXTENDED);
+	r = regcomp(&blob_end_re, "\\[(SEC|DLM)=[^]]+\\][ \t]*$", REG_EXTENDED);
 	assert(r == 0);
 	initialised_res = 1;
     }
