@@ -4,3 +4,4 @@ registers.h
 reports
 unit
 .cunit-*.c
+*.*-cunit.c

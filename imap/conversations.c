@@ -710,13 +710,21 @@ EXPORTED int conversations_get_msgid(struct conversations_state *state,
  *    get away with this because the normalised subject is never directly
  *    seen by human eyes, so some information loss is acceptable as long
  *    as the subjects in different messages match correctly.
+ *
+ *  - We eliminate trailing tokens like [SEC=UNCLASSIFIED],
+ *    [DLM=Sensitive], etc which are automatically added by Australian
+ *    Government department email systems.  In theory there should be no
+ *    more than one of these on an email subject but in practice multiple
+ *    have been seen.
+ *    http://www.finance.gov.au/files/2012/04/EPMS2012.3.pdf
  */
 EXPORTED void conversation_normalise_subject(struct buf *s)
 {
     static int initialised_res = 0;
     static regex_t whitespace_re;
     static regex_t relike_token_re;
-    static regex_t blob_re;
+    static regex_t blob_start_re;
+    static regex_t blob_end_re;
     int r;
 
     if (!initialised_res) {
@@ -724,7 +732,9 @@ EXPORTED void conversation_normalise_subject(struct buf *s)
 	assert(r == 0);
 	r = regcomp(&relike_token_re, "^[ \t]*[A-Za-z0-9]+:", REG_EXTENDED);
 	assert(r == 0);
-	r = regcomp(&blob_re, "^[ \t]*\\[[^]]+\\]", REG_EXTENDED);
+	r = regcomp(&blob_start_re, "^[ \t]*\\[[^]]+\\]", REG_EXTENDED);
+	assert(r == 0);
+	r = regcomp(&blob_end_re, "[ \t]*\\[(SEC|DLM)=[^]]+\\]$", REG_EXTENDED);
 	assert(r == 0);
 	initialised_res = 1;
     }
@@ -733,9 +743,10 @@ EXPORTED void conversation_normalise_subject(struct buf *s)
      * field, but we assume that has already happened */
 
     /* step 2 is to eliminate all "Re:"-like tokens and [] blobs
-     * at the start */
+     * at the start, and AusGov [] blobs at the end */
     while (buf_replace_one_re(s, &relike_token_re, NULL) ||
-	   buf_replace_one_re(s, &blob_re, NULL))
+	   buf_replace_one_re(s, &blob_start_re, NULL) ||
+	   buf_replace_one_re(s, &blob_end_re, NULL))
 	;
 
     /* step 3 is eliminating whitespace. */
