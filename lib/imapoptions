@@ -1924,7 +1924,7 @@ product version in the capabilities */
    with a backend (such as LDAP) that can make getgrent() calls very
    slow) */
 
-{ "unixhierarchysep", 1, SWITCH }
+{ "unixhierarchysep", 0, SWITCH }
 /* Use the UNIX separator character '/' for delimiting levels of
    mailbox hierarchy.  Turn off to use the netnews separator
    character '.'. Note that with the newnews separator, no dots may
