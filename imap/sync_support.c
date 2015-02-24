@@ -255,10 +255,6 @@ int parse_upload(struct dlist *kr, struct mailbox *mailbox,
     r = sync_getflags(fl, mailbox, record);
     if (r) return r;
 
-    /* OK if it doesn't have one */
-    record->cid = NULLCONVERSATION;
-    dlist_gethex64(kr, "CID", &record->cid);
-
     /* the ANNOTATIONS list is optional too */
     if (salp && dlist_getlist(kr, "ANNOTATIONS", &fl))
 	decode_annotations(fl, salp, record);
@@ -1469,8 +1465,6 @@ int sync_mailbox(struct mailbox *mailbox,
 	    dlist_setnum32(il, "SIZE", record.size);
 	    dlist_setatom(il, "GUID", message_guid_encode(&record.guid));
 
-	    dlist_sethex64(il, "CID", record.cid);
-
 	    r = read_annotations(mailbox, &record, &annots);
 	    if (r) goto done;
 
@@ -1676,13 +1670,13 @@ void encode_annotations(struct dlist *parent,
 	}
     }
 
-    if (record && record->thrid) {
+    if (record && record->cid) {
 	if (!annots)
 	    annots = dlist_newlist(parent, "ANNOTATIONS");
 	aa = dlist_newkvlist(annots, NULL);
 	dlist_setatom(aa, "ENTRY", "/vendor/cmu/cyrus-imapd/thrid");
 	dlist_setatom(aa, "USERID", NULL);
-	dlist_sethex64(aa, "VALUE", record->thrid);
+	dlist_sethex64(aa, "VALUE", record->cid);
     }
 }
 
@@ -1718,7 +1712,7 @@ int decode_annotations(/*const*/struct dlist *annots,
 	if (!strcmp(entry, "/vendor/cmu/cyrus-imapd/thrid")) {
 	    if (record) {
 		const char *p = buf_cstring(&value);
-		parsehex(p, &p, 16, &record->thrid);
+		parsehex(p, &p, 16, &record->cid);
 		/* XXX - check on p? */
 	    }
 	}

@@ -147,7 +147,7 @@ struct index_record {
     uint32_t cache_version;
     struct message_guid guid;
     modseq_t modseq;
-    bit64 thrid;
+    bit64 cid;
     bit32 cache_crc;
 
     /* metadata */

@@ -1580,7 +1580,7 @@ static int mailbox_buf_to_index_record(const char *buf,
 	return 0;
     }
 
-    record->thrid = ntohll(*(bit64 *)(buf+OFFSET_THRID));
+    record->cid = ntohll(*(bit64 *)(buf+OFFSET_THRID));
     record->cache_crc = ntohl(*((bit32 *)(buf+OFFSET_CACHE_CRC)));
 
     /* check CRC32 */
@@ -2250,7 +2250,7 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record, int versio
 	return crc;
     }
 
-    *((bit64 *)(buf+OFFSET_THRID)) = htonll(record->thrid);
+    *((bit64 *)(buf+OFFSET_THRID)) = htonll(record->cid);
     *((bit32 *)(buf+OFFSET_CACHE_CRC)) = htonl(record->cache_crc);
 
     /* calculate the checksum */
@@ -2381,9 +2381,9 @@ static uint32_t crc_virtannot(struct mailbox *mailbox __attribute__((unused)),
     if (record->system_flags & FLAG_EXPUNGED)
 	return 0;
 
-    if (record->thrid) {
+    if (record->cid) {
 	struct buf buf = BUF_INITIALIZER;
-	buf_printf(&buf, "%llx", record->thrid);
+	buf_printf(&buf, "%llx", record->cid);
 	crc ^= crc_annot(record->uid, "/vendor/cmu/cyrus-imapd/thrid", NULL, &buf);
 	buf_free(&buf);
     }
