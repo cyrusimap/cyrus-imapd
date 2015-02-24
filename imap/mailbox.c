@@ -2401,7 +2401,7 @@ EXPORTED void mailbox_annot_changed(struct mailbox *mailbox,
     if (uid) {
 	/* check that the record isn't already expunged */
 	struct index_record record;
-	int r = mailbox_find_index_record(mailbox, uid, &record);
+	int r = mailbox_find_index_record(mailbox, uid, &record, NULL);
 	if (r || record.system_flags & FLAG_EXPUNGED)
 	    return;
 	if (oldval->len)
