@@ -2253,6 +2253,10 @@ static uint32_t crc_virtannot(struct mailbox *mailbox __attribute__((unused)),
 			      struct index_record *record)
 {
     uint32_t crc = 0;
+
+    if (record->system_flags & FLAG_EXPUNGED)
+	return 0;
+
     if (record->thrid) {
 	struct buf buf = BUF_INITIALIZER;
 	buf_printf(&buf, "%llx", record->thrid);
