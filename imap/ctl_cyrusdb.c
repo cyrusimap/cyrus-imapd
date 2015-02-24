@@ -348,7 +348,6 @@ int main(int argc, char *argv[])
 		    closedir(dirp);
 		}
 		r2 = rmdir(backup2);
-		free(path);
 
 		/* move db.backup1 to db.backup2 */
 		if (r2 == 0 || errno == ENOENT)
