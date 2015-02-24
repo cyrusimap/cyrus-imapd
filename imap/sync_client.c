@@ -1424,8 +1424,6 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
     if (remote->options != options) return 0;
     if (strcmp(remote->acl, mailbox->acl)) return 0;
 
-    if (!crceq(remote->synccrcs, mailbox_synccrcs(mailbox, /*force*/0))) return 0;
-
     /* compare annotations */
     {
 	struct sync_annot_list *mannots = NULL;
@@ -1438,6 +1436,11 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
 	}
 	sync_annot_list_free(&mannots);
     }
+
+    /* if we got here then we should force check the CRCs */
+    if (!crceq(remote->synccrcs, mailbox_synccrcs(mailbox, /*force*/0)))
+	if (!crceq(remote->synccrcs, mailbox_synccrcs(mailbox, /*force*/1)))
+	    return 0;
 
     /* otherwise it's unchanged! */
     return 1;
