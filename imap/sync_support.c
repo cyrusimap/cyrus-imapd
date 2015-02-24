@@ -1684,7 +1684,9 @@ int decode_annotations(/*const*/struct dlist *annots,
 	    return IMAP_PROTOCOL_BAD_PARAMETERS;
 	if (!strcmp(entry, "/vendor/cmu/cyrus-imapd/thrid")) {
 	    if (record) {
-		record->thrid = atoll(buf_cstring(&value));
+		const char *p = buf_cstring(&value);
+		parsehex(p, &p, 16, &record->thrid);
+		/* XXX - check on p? */
 	    }
 	}
 	else {
