@@ -1389,10 +1389,8 @@ int sync_mailbox(struct mailbox *mailbox,
     r = read_annotations(mailbox, NULL, &annots);
     if (r) goto done;
 
-    if (annots) {
-	encode_annotations(kl, NULL, annots);
-	sync_annot_list_free(&annots);
-    }
+    encode_annotations(kl, NULL, annots);
+    sync_annot_list_free(&annots);
 
     if (printrecords) {
 	struct index_record record;
@@ -1633,19 +1631,21 @@ void encode_annotations(struct dlist *parent,
     struct dlist *annots = NULL;
     struct dlist *aa;
 
-    if (!sal)
-	return;
-    for (sa = sal->head ; sa ; sa = sa->next) {
-	if (!annots)
-	    annots = dlist_newlist(parent, "ANNOTATIONS");
+    if (sal) {
+	for (sa = sal->head ; sa ; sa = sa->next) {
+	    if (!annots)
+		annots = dlist_newlist(parent, "ANNOTATIONS");
 
-	aa = dlist_newkvlist(annots, NULL);
-	dlist_setatom(aa, "ENTRY", sa->entry);
-	dlist_setatom(aa, "USERID", sa->userid);
-	dlist_setmap(aa, "VALUE", sa->value.s, sa->value.len);
+	    aa = dlist_newkvlist(annots, NULL);
+	    dlist_setatom(aa, "ENTRY", sa->entry);
+	    dlist_setatom(aa, "USERID", sa->userid);
+	    dlist_setmap(aa, "VALUE", sa->value.s, sa->value.len);
+	}
     }
 
     if (record && record->thrid) {
+	if (!annots)
+	    annots = dlist_newlist(parent, "ANNOTATIONS");
 	aa = dlist_newkvlist(annots, NULL);
 	dlist_setatom(aa, "ENTRY", "/vendor/cmu/cyrus-imapd/thrid");
 	dlist_setatom(aa, "USERID", NULL);
