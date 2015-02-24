@@ -2325,7 +2325,8 @@ static void mailbox_annot_update_counts(struct mailbox *mailbox,
     annotatemore_findall(mailbox->name, record ? record->uid : 0, /* all entries*/"*",
 			 calc_one_annot, &cr);
 
-    mailbox->i.synccrcs.annot ^= cr.annot;
+    if (record)
+	mailbox->i.synccrcs.annot ^= cr.annot;
 
     if (is_add)
 	mailbox->i.quota_annot_used += cr.used;
