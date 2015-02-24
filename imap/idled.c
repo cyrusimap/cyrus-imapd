@@ -222,8 +222,7 @@ static void send_alert(const char *key,
     int r;
 
     msg.which = IDLE_MSG_ALERT;
-    strncpy(msg.mboxname, ".", sizeof(msg.mboxname));
-
+    (void) strlcpy(msg.mboxname, ".", sizeof(msg.mboxname));
 
     for ( ; t ; t = n) {
 	n = t->next;

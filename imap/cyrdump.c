@@ -66,7 +66,7 @@
 static int verbose = 0;
 
 static int dump_me(char *name, int matchlen, int maycreate, void *rock);
-static void print_seq(const char *tag, const char *attrib, 
+static void print_seq(const char *tag, const char *attrib,
 		      unsigned *seq, int n);
 static int usage(const char *name);
 
@@ -134,7 +134,7 @@ int main(int argc, char *argv[])
     mboxlist_done();
 
     cyrus_done();
-    
+
     return 0;
 }
 
@@ -148,8 +148,8 @@ static int usage(const char *name)
 static void generate_boundary(char *boundary, size_t size)
 {
     assert(size >= 100);
-    
-    snprintf(boundary, size, "dump-%ld-%ld-%ld", 
+
+    snprintf(boundary, size, "dump-%ld-%ld-%ld",
 	     (long) getpid(), (long) time(NULL), (long) rand());
 }
 
@@ -197,7 +197,7 @@ static int dump_me(char *name, int matchlen __attribute__((unused)),
     memset(&url, 0, sizeof(struct imapurl));
     url.server = config_servername;
     url.mailbox = name;
-    imapurl_toURL(imapurl, &url);
+    imapurl_toURL(imapurl, sizeof (imapurl), &url);
     printf("  <mailbox-url>%s</mailbox-url>\n", imapurl);
     printf("  <incremental-uid>%d</incremental-uid>\n", irec->incruid);
     printf("  <nextuid>%u</nextuid>\n", state->mailbox->i.last_uid + 1);

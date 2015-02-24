@@ -138,7 +138,7 @@ struct backend *proxy_findinboxserver(const char *userid)
 /* pipe_response() reads from 's->in' until either the tagged response
    starting with 'tag' appears, or if 'tag' is NULL, to the end of the
    current line.  If 'include_last' is set, the last/tagged line is included
-   in the output, otherwise the last/tagged line is stored in 's->last_result'. 
+   in the output, otherwise the last/tagged line is stored in 's->last_result'.
    In either case, the result of the tagged command is returned.
 
    's->last_result' assumes that tagged responses don't contain literals.
@@ -210,7 +210,7 @@ static int pipe_response(struct backend *s, const char *tag, int include_last,
 
 		last = 1;
 	    }
-	
+
 	    if (last && !include_last) {
 		/* Store the tagged line */
 		buf_appendcstr(&s->last_result, buf+taglen+1);
@@ -222,7 +222,7 @@ static int pipe_response(struct backend *s, const char *tag, int include_last,
             /* only got part of a line */
 	    /* we save the last 64 characters in case it has important
 	       literal information */
-	    strcpy(eol, buf + sl - 64);
+	    STRLCPY_LOG(eol, buf + sl - 64, sizeof (eol));
 
 	    /* write out this part, but we have to keep reading until we
 	       hit the end of the line */
@@ -237,9 +237,9 @@ static int pipe_response(struct backend *s, const char *tag, int include_last,
 
 	    /* now we have to see if this line ends with a literal */
 	    if (sl < 64) {
-		strcat(eol, buf);
+		STRLCAT_LOG(eol, buf, sizeof (eol));
 	    } else {
-		strcat(eol, buf + sl - 63);
+		STRLCAT_LOG(eol, buf + sl - 63, sizeof (eol));
 	    }
 
 	    /* eol now contains the last characters from the line; we want
@@ -263,7 +263,7 @@ static int pipe_response(struct backend *s, const char *tag, int include_last,
 		while (litlen > 0) {
 		    int j = (litlen > (int) sizeof(buf) ?
 			     (int) sizeof(buf) : litlen);
-		    
+
 		    j = prot_read(s->in, buf, j);
 		    if(!j) {
 			/* EOF or other error */
@@ -275,7 +275,7 @@ static int pipe_response(struct backend *s, const char *tag, int include_last,
 
 		/* none of our saved information has any relevance now */
 		eol[0] = '\0';
-		
+
 		/* have to keep going for the end of the line */
 		cont = 1;
 		continue;
@@ -328,7 +328,7 @@ int pipe_command(struct backend *s, int optimistic_literal)
     int sl;
 
     s->timeout->mark = time(NULL) + IDLE_TIMEOUT;
-    
+
     eol[0] = '\0';
 
     /* again, the complication here are literals */
@@ -342,7 +342,7 @@ int pipe_command(struct backend *s, int optimistic_literal)
 
 	if (sl == (sizeof(buf) - 1) && buf[sl-1] != '\n') {
             /* only got part of a line */
-	    strcpy(eol, buf + sl - 64);
+	    STRLCPY_LOG(eol, buf + sl - 64, sizeof (eol));
 
 	    /* and write this out, except for what we've saved */
 	    prot_write(s->out, buf, sl - 64);
@@ -351,13 +351,13 @@ int pipe_command(struct backend *s, int optimistic_literal)
 	    int i, nonsynch = 0, islit = 0, litlen = 0;
 
 	    if (sl < 64) {
-		strcat(eol, buf);
+		STRLCAT_LOG(eol, buf, sizeof (eol));
 	    } else {
 		/* write out what we have, and copy the last 64 characters
 		   to eol */
 		prot_printf(s->out, "%s", eol);
 		prot_write(s->out, buf, sl - 64);
-		strcpy(eol, buf + sl - 64);
+		STRLCPY_LOG(eol, buf + sl - 64, sizeof (eol));
 	    }
 
 	    /* now determine if eol has a literal in it */
@@ -418,7 +418,7 @@ int pipe_command(struct backend *s, int optimistic_literal)
 		}
 
 		eol[0] = '\0';
-		
+
 		/* have to keep going for the send of the command */
 		continue;
 	    } else {
@@ -440,7 +440,7 @@ int pipe_command(struct backend *s, int optimistic_literal)
  * down the response when this is the case.
  */
 int pipe_lsub(struct backend *s, const char *userid, const char *tag,
-	      int force_notfatal, const char *resp) 
+	      int force_notfatal, const char *resp)
 {
     int taglen = strlen(tag);
     int c;
@@ -455,12 +455,12 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 				      NULL };
     const char *mid_strip_flags[] = { "\\NonExistent ",
 				      "\\Noselect ",
-				      NULL 
+				      NULL
 				    };
 
     assert(s);
     assert(s->timeout);
-    
+
     s->timeout->mark = time(NULL) + IDLE_TIMEOUT;
 
     while(1) {
@@ -483,7 +483,7 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 		proxy_downserver(s);
 		r = PROXY_NOCONNECTION;
 		goto out;
-	    }	
+	    }
 	    /* Got the end of the response */
 	    buf_appendcstr(&s->last_result, buf);
 	    buf_cstring(&s->last_result);
@@ -543,7 +543,7 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 		/* get the next character */
  		c = prot_getc(s->in);
 	    }
-	    
+
 	    if(c != ' ') {
 		if(s == backend_current && !force_notfatal)
 		    fatal("Bad LSUB response from selected backend",
@@ -686,7 +686,7 @@ static char *editflags(char *flags)
 	    if (p[7] == ' ') {
 		/* shift everything over so that \recent vanishes */
 		char *q;
-		
+
 		q = p + 8;
 		while (*q) {
 		    *p++ = *q++;
@@ -721,8 +721,8 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
 
     /* find out what the flags & internaldate for this message are */
     proxy_gentag(mytag, sizeof(mytag));
-    prot_printf(backend_current->out, 
-		"%s %s %s (Flags Internaldate)\r\n", 
+    prot_printf(backend_current->out,
+		"%s %s %s (Flags Internaldate)\r\n",
 		tag, usinguid ? "Uid Fetch" : "Fetch", sequence);
     head = (struct d *) xmalloc(sizeof(struct d));
     head->flags = NULL; head->idate = NULL;
@@ -739,7 +739,7 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
 	if (c != '*') break;
 	c = prot_getc(backend_current->in);
 	if (c != ' ') { /* protocol error */ c = EOF; break; }
-	    
+
 	/* check for OK/NO/BAD/BYE response */
 	if (!isdigit(c = prot_getc(backend_current->in))) {
 	    prot_printf(imapd_out, "* %c", c);
@@ -820,7 +820,7 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
 	   we can't handle, and we should die. */
 	if (c == ')') c = prot_getc(backend_current->in);
 	if (c == '\r') c = prot_getc(backend_current->in);
-	if (c != '\n') { 
+	if (c != '\n') {
 	    c = EOF;
 	    free(flags);
 	    free(idate);
@@ -955,7 +955,7 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
 
 		if (c != EOF) {
 		    /* append p to s->out */
-		    prot_printf(s->out, " (%s) \"%s\" {%d+}\r\n", 
+		    prot_printf(s->out, " (%s) \"%s\" {%d+}\r\n",
 				q->flags, q->idate, sz);
 		    while (sz) {
 			char buf[2048];
@@ -1006,7 +1006,7 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
 	   to return as part of our COPYUID response code */
 	prot_printf(s->out, "\r\n");
 
-	/* should be looking at 'mytag' on 'backend_current', 
+	/* should be looking at 'mytag' on 'backend_current',
 	   'tag' on 's' */
 	pipe_until_tag(backend_current, mytag, 0);
 	res = pipe_until_tag(s, tag, 0);
@@ -1037,7 +1037,7 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
 	prot_printf(s->out, " {0+}\r\n\r\n");
 	pipe_until_tag(backend_current, mytag, 0);
 	pipe_until_tag(s, tag, 0);
-	    
+
 	/* report failure */
 	prot_printf(imapd_out, "%s NO inter-server COPY failed\r\n", tag);
     }
@@ -1116,7 +1116,7 @@ int proxy_catenate_url(struct backend *s, struct imapurl *url, FILE *f,
 	if (c != '*') break;
 	c = prot_getc(s->in);
 	if (c != ' ') { /* protocol error */ c = EOF; break; }
-	    
+
 	/* read seqno */
 	c = getuint32(s->in, &seqno);
 	if (seqno == 0 || c != ' ') {
@@ -1167,7 +1167,7 @@ int proxy_catenate_url(struct backend *s, struct imapurl *url, FILE *f,
 		    /* catenate to f */
 		    found = 1;
 		    *size = sz;
-		    
+
 		    while (sz) {
 			char buf[2048];
 			int j = (sz > sizeof(buf) ? sizeof(buf) : sz);
@@ -1250,9 +1250,9 @@ int annotate_fetch_proxy(const char *server, const char *mbox_pat,
     struct backend *be;
     int i;
     char mytag[128];
-    
+
     assert(server && mbox_pat && entry_pat && attribute_pat);
-    
+
     be = proxy_findserver(server, &imap_protocol,
 			  proxy_userid, &backend_cached,
 			  &backend_current, &backend_inbox, imapd_in);
@@ -1286,9 +1286,9 @@ int annotate_store_proxy(const char *server, const char *mbox_pat,
     struct entryattlist *e;
     struct attvaluelist *av;
     char mytag[128];
-    
+
     assert(server && mbox_pat && entryatts);
-    
+
     be = proxy_findserver(server, &imap_protocol,
 			  proxy_userid, &backend_cached,
 			  &backend_current, &backend_inbox, imapd_in);

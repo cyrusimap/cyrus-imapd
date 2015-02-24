@@ -171,7 +171,7 @@ static struct proxy_context nntp_proxyctx = {
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
 /*
- * values for article parts 
+ * values for article parts
  * these correspond to the last digit of the response code
  */
 enum {
@@ -228,7 +228,7 @@ extern int saslserver(sasl_conn_t *conn, const char *mech,
 		      struct protstream *pin, struct protstream *pout,
 		      int *sasl_result, char **success_data);
 
-static struct 
+static struct
 {
     char *ipremoteport;
     char *iplocalport;
@@ -277,7 +277,7 @@ static int mlookup(const char *name, mbentry_t **mbentryptr)
 {
     mbentry_t *mbentry = NULL;
     int r;
-    
+
     r = mboxlist_lookup(name, &mbentry, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT && config_mupdate_server) {
 	kick_mupdate();
@@ -360,7 +360,7 @@ static void nntp_reset(void)
     if (nntp_in) {
 	prot_NONBLOCK(nntp_in);
 	prot_fill(nntp_in);
-	
+
 	prot_free(nntp_in);
     }
 
@@ -368,7 +368,7 @@ static void nntp_reset(void)
 	prot_flush(nntp_out);
 	prot_free(nntp_out);
     }
-    
+
     nntp_in = nntp_out = NULL;
 
     if (protin) protgroup_reset(protin);
@@ -451,7 +451,7 @@ int service_init(int argc __attribute__((unused)),
 
     /* initialize duplicate delivery database */
     if (duplicate_init(NULL) != 0) {
-	syslog(LOG_ERR, 
+	syslog(LOG_ERR,
 	       "unable to init duplicate delivery database\n");
 	fatal("unable to init duplicate delivery database", EC_SOFTWARE);
     }
@@ -540,22 +540,22 @@ int service_main(int argc __attribute__((unused)),
     /* other params should be filled in */
     if (sasl_server_new("nntp", config_servername, NULL, NULL, NULL,
 			NULL, SASL_SUCCESS_DATA, &nntp_saslconn) != SASL_OK)
-	fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL); 
+	fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL);
 
     /* will always return something valid */
     secprops = mysasl_secprops(0);
     sasl_setprop(nntp_saslconn, SASL_SEC_PROPS, secprops);
     sasl_setprop(nntp_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf);
-    
+
     if (localip) {
 	sasl_setprop(nntp_saslconn, SASL_IPLOCALPORT, localip);
 	saslprops.iplocalport = xstrdup(localip);
     }
-    
+
     if (remoteip) {
 	char hbuf[NI_MAXHOST], *p;
 
-	sasl_setprop(nntp_saslconn, SASL_IPREMOTEPORT, remoteip);  
+	sasl_setprop(nntp_saslconn, SASL_IPREMOTEPORT, remoteip);
 	saslprops.ipremoteport = xstrdup(remoteip);
 
 	/* Create pre-authentication telemetry log based on client IP */
@@ -571,7 +571,7 @@ int service_main(int argc __attribute__((unused)),
     prot_settimeout(nntp_in, nntp_timeout);
     prot_setflushonread(nntp_in, nntp_out);
 
-    /* we were connected on nntps port so we should do 
+    /* we were connected on nntps port so we should do
        TLS negotiation immediatly */
     if (nntps == 1) cmd_starttls(1);
 
@@ -706,7 +706,7 @@ EXPORTED void fatal(const char* s, int code)
 }
 
 /* Reset the given sasl_conn_t to a sane state */
-static int reset_saslconn(sasl_conn_t **conn) 
+static int reset_saslconn(sasl_conn_t **conn)
 {
     int ret;
     sasl_security_properties_t *secprops = NULL;
@@ -722,7 +722,7 @@ static int reset_saslconn(sasl_conn_t **conn)
        ret = sasl_setprop(*conn, SASL_IPREMOTEPORT,
                           saslprops.ipremoteport);
     if(ret != SASL_OK) return ret;
-    
+
     if(saslprops.iplocalport)
        ret = sasl_setprop(*conn, SASL_IPLOCALPORT,
                           saslprops.iplocalport);
@@ -774,7 +774,7 @@ static int is_newsgroup(const char *mbox)
     /* otherwise, its usable */
     return 1;
 }
-    
+
 
 /*
  * Top-level command loop parsing
@@ -843,7 +843,7 @@ static void cmdloop(void)
 	    eatline(nntp_in, c);
 	    continue;
 	}
-	if (Uislower(cmd.s[0])) 
+	if (Uislower(cmd.s[0]))
 	    cmd.s[0] = toupper((unsigned char) cmd.s[0]);
 	for (p = &cmd.s[1]; *p; p++) {
 	    if (Uisupper(*p)) *p = tolower((unsigned char) *p);
@@ -867,7 +867,7 @@ static void cmdloop(void)
 
 	/* In case a [LIST]GROUP fails or
 	   a retrieval by msgid makes us switch groups */
-	strcpy(curgroup, group_state ? group_state->mboxname : "");
+	STRLCPY_LOG(curgroup, group_state ? group_state->mboxname : "", sizeof (curgroup));
 
 	switch (cmd.s[0]) {
 	case 'A':
@@ -1389,7 +1389,7 @@ static void cmdloop(void)
 		goto article;
 	    }
 	    else if (!nntp_authstate && !allowanonymous) goto nologin;
-	    else if (!strcmp(cmd.s, "Slave")) {	
+	    else if (!strcmp(cmd.s, "Slave")) {
 		if (c == '\r') c = prot_getc(nntp_in);
 		if (c != '\n') goto extraargs;
 
@@ -1737,7 +1737,7 @@ static int open_group(char *name, int has_prefix, struct backend **ret,
     struct backend *backend_next = NULL;
 
     /* close local group */
-    if (group_state) 
+    if (group_state)
 	index_close(&group_state);
 
     if (!has_prefix) {
@@ -2053,7 +2053,7 @@ static void cmd_authinfo_pass(char *pass)
 			    nntp_userid,
 			    strlen(nntp_userid),
 			    pass,
-			    strlen(pass))!=SASL_OK) { 
+			    strlen(pass))!=SASL_OK) {
 	syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
 	       nntp_clienthost, nntp_userid, sasl_errdetail(nntp_saslconn));
 	failedloginpause = config_getint(IMAPOPT_FAILEDLOGINPAUSE);
@@ -2123,7 +2123,7 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
 	    int mechnum;
 
 	    prot_printf(nntp_out, "281 List of mechanisms follows\r\n");
-      
+
 	    /* CRLF separated, dot terminated */
 	    if (sasl_listmech(nntp_saslconn, NULL,
 			      "", "\r\n", "\r\n",
@@ -2133,7 +2133,7 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
 		    prot_printf(nntp_out, "%s", sasllist);
 		}
 	    }
-      
+
 	    prot_printf(nntp_out, ".\r\n");
 	    return;
 	}
@@ -2167,7 +2167,7 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
 			"482 Error reading client response: %s\r\n",
 			errorstring ? errorstring : "");
 	    break;
-	default: 
+	default:
 	    /* failed authentication */
 	    switch (sasl_result) {
 	    case SASL_NOMECH:
@@ -2214,9 +2214,9 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
      */
     sasl_result = sasl_getprop(nntp_saslconn, SASL_USERNAME, &val);
     if (sasl_result != SASL_OK) {
-	prot_printf(nntp_out, "481 weird SASL error %d SASL_USERNAME\r\n", 
+	prot_printf(nntp_out, "481 weird SASL error %d SASL_USERNAME\r\n",
 		    sasl_result);
-	syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME", 
+	syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME",
 	       sasl_result);
 	reset_saslconn(&nntp_saslconn);
 	return;
@@ -2485,7 +2485,7 @@ static int list_cb(char *name, int matchlen,
     if (matchlen == (int) strlen(lastname) &&
 	!strncmp(name, lastname, matchlen)) return 0;
 
-    strncpy(lastname, name, matchlen);
+    (void) strncpy(lastname, name, matchlen);
     lastname[matchlen] = '\0';
 
     /* see if the mailbox matches one of our specified wildmats */
@@ -2653,8 +2653,8 @@ static void cmd_list(char *arg1, char *arg2)
 
 	prot_printf(nntp_out, "215 List of newsgroups follows:\r\n");
 
-	strcpy(pattern, newsprefix);
-	strcat(pattern, "*");
+	(void) strlcpy(pattern, newsprefix, sizeof (pattern));
+	STRLCAT_LOG(pattern, "*", sizeof (pattern));
 	list_cb(NULL, 0, 0, NULL);
 	mboxlist_findall(NULL, pattern, 0,
 			 nntp_authstate ? nntp_userid : NULL, nntp_authstate,
@@ -2714,8 +2714,8 @@ static void cmd_list(char *arg1, char *arg2)
 
 	prot_printf(nntp_out, "215 List of newsgroups follows:\r\n");
 
-	strcpy(pattern, newsprefix);
-	strcat(pattern, "*");
+	(void) strlcpy(pattern, newsprefix, sizeof (pattern));
+	STRLCAT_LOG(pattern, "*", sizeof (pattern));
 	list_cb(NULL, 0, 0, NULL);
 	mboxlist_findall(NULL, pattern, 0,
 			 nntp_authstate ? nntp_userid : NULL, nntp_authstate,
@@ -2724,8 +2724,8 @@ static void cmd_list(char *arg1, char *arg2)
 	/* proxy to the backends */
 	hash_enumerate(&lrock.server_table, list_proxy, &erock);
 
-	strcpy(pattern, newsprefix);
-	strcat(pattern, "*");
+	(void) strlcpy(pattern, newsprefix, sizeof (pattern));
+	STRLCAT_LOG(pattern, "*", sizeof (pattern));
 	annotatemore_findall(pattern, 0, "/comment",
 			     newsgroups_cb, lrock.wild);
 
@@ -2919,7 +2919,7 @@ struct message_data {
     char *control;		/* control message */
     unsigned long size;		/* size of message in bytes */
     strarray_t rcpt;		/* mailboxes to post message */
-    char *date;			/* date field of header */ 
+    char *date;			/* date field of header */
 
     hdrcache_t hdrcache;
 };
@@ -3115,9 +3115,10 @@ static int savemsg(message_data_t *m, FILE *f)
     } else {
 	/* no message-id, create one */
 	pid_t p = getpid();
+	size_t size = 40 + strlen(config_servername);
 
-	m->id = xmalloc(40 + strlen(config_servername));
-	sprintf(m->id, "<cmu-nntpd-%d-%d-%d@%s>", p, (int) now, 
+	m->id = xmalloc(size);
+	SNPRINTF_LOG(m->id, size, "<cmu-nntpd-%d-%d-%d@%s>", p, (int) now,
 		post_count++, config_servername);
 	fprintf(f, "Message-ID: %s\r\n", m->id);
 	spool_cache_header(xstrdup("Message-ID"), xstrdup(m->id), m->hdrcache);
@@ -3139,15 +3140,16 @@ static int savemsg(message_data_t *m, FILE *f)
 
     /* get control */
     if ((body = spool_getheader(m->hdrcache, "control")) != NULL) {
-	size_t len;
+	size_t len, size;
 	char *s;
 
 	m->control = xstrdup(body[0]);
 
 	/* create a recipient for the appropriate pseudo newsgroup */
 	len = strcspn(m->control, " \t\r\n");
-	s = xmalloc(strlen(newsprefix) + 8 + len + 1);
-	sprintf(s, "%scontrol.%.*s", newsprefix, (int) len, m->control);
+	size = strlen(newsprefix) + 8 + len + 1;
+	s = xmalloc(size);
+	SNPRINTF_LOG(s, size, "%scontrol.%.*s", newsprefix, (int) len, m->control);
 
 	strarray_appendm(&m->rcpt, s);
     } else {
@@ -3353,7 +3355,7 @@ static int deliver(message_data_t *msg)
 	    static const quota_t qdiffs[QUOTA_NUMRESOURCES] =
 				    QUOTA_DIFFS_INITIALIZER;
 
-	    if (msg->id && 
+	    if (msg->id &&
 		duplicate_check(&dkey)) {
 		/* duplicate message */
 		duplicate_log(&dkey, "nntp delivery");
@@ -3374,16 +3376,16 @@ static int deliver(message_data_t *msg)
 		    /* XXX should never get here */
 		    r = append_fromstream(&as, &body, msg->data, msg->size, 0, NULL);
 		}
-		if (r || ( msg->id && duplicate_check(&dkey) ) ) {    
+		if (r || ( msg->id && duplicate_check(&dkey) ) ) {
 		    append_abort(&as);
-                   
+
 		    if (!r) {
 			/* duplicate message */
 			duplicate_log(&dkey, "nntp delivery");
 			continue;
-		    }            
-		}                
-		else {           
+		    }
+		}
+		else {
 		    r = append_commit(&as);
 		}
 	    }
@@ -3599,10 +3601,10 @@ static int strip_post_addresses(char *body)
 	    /* found a post address.  since we always add the post
 	     * addresses to the end of the header, truncate it right here.
 	     */
-	    strcpy(end, "\r\n");
+	    /* ACH: DANGER end's position near end of body */ strcpy(end, "\r\n");
 	    break;
 	}
-	
+
 	nonpost = 1;
     }
 
@@ -3691,7 +3693,7 @@ static void feedpeer(char *peer, message_data_t *msg)
     }
 
     if (!feed) return;
-    
+
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
@@ -3716,7 +3718,7 @@ static void feedpeer(char *peer, message_data_t *msg)
 	syslog(LOG_ERR, "connect(%s:%s) failed: %m", host, port);
 	return;
     }
-    
+
     pin = prot_new(sock, 0);
     pout = prot_new(sock, 1);
     prot_setflushonread(pin, pout);
@@ -3826,7 +3828,7 @@ static void feedpeer(char *peer, message_data_t *msg)
 
     /* close/free socket & prot layer */
     close(sock);
-    
+
     prot_free(pin);
     prot_free(pout);
 
@@ -4073,12 +4075,12 @@ static void cmd_starttls(int nntps)
     char *auth_id;
 
     if (nntp_starttls_done == 1) {
-	prot_printf(nntp_out, "502 %s\r\n", 
+	prot_printf(nntp_out, "502 %s\r\n",
 		    "TLS is already active");
 	return;
     }
     if (nntp_authstate) {
-	prot_printf(nntp_out, "502 %s\r\n", 
+	prot_printf(nntp_out, "502 %s\r\n",
 		    "Already authenticated");
 	return;
     }
@@ -4108,7 +4110,7 @@ static void cmd_starttls(int nntps)
 	/* must flush our buffers before starting tls */
 	prot_flush(nntp_out);
     }
-  
+
     result=tls_start_servertls(0, /* read */
 			       1, /* write */
 			       nntps ? 180 : nntp_timeout,

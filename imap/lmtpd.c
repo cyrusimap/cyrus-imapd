@@ -1188,7 +1188,7 @@ static int verify_user(const char *user, const char *domain, char *mailbox,
 	       will be no longer than the original, so we can copy over
 	       the existing mailbox.  The keeps us from having to do the
 	       fuzzy match multiple times. */
-	    strcpy(mailbox, domain ? namebuf+strlen(domain)+1 : namebuf);
+	    STRLCPY_LOG(mailbox, domain ? namebuf+strlen(domain)+1 : namebuf, MAX_MAILBOX_BUFFER);
 
 	    r = mlookup(namebuf, &mbentry);
 	}
@@ -1218,7 +1218,7 @@ static int verify_user(const char *user, const char *domain, char *mailbox,
 	char msg[MAX_MAILBOX_PATH+1];
 
 	if (domain) {
-	    snprintf(namebuf, sizeof(namebuf), "%s@%s", user, domain);
+	    SNPRINTF_LOG(namebuf, sizeof(namebuf), "%s@%s", user, domain);
 	    user = namebuf;
 	}
 
@@ -1250,12 +1250,14 @@ char *generate_notify(message_data_t *m)
 	    int j;
 
 	    for (j = 0; body[j] != NULL; j++) {
+	        /*** ACH: Why do in two parts? Why not just in one go? ***/
+
 		/* put the header */
 		/* need: length + ": " + '\0'*/
 		while (pos + strlen(h) + 3 > len) {
 		    ret = xrealloc(ret, len += 1024);
 		}
-		pos += sprintf(ret + pos, "%s: ", h);
+		pos += snprintf(ret+pos, len-pos, "%s: ", h);
 
 		/* put the header body.
 		   xxx it would be nice to linewrap.*/
@@ -1263,7 +1265,7 @@ char *generate_notify(message_data_t *m)
 		while (pos + strlen(body[j]) + 2 > len) {
 		    ret = xrealloc(ret, len += 1024);
 		}
-		pos += sprintf(ret + pos, "%s\n", body[j]);
+		pos += snprintf(ret+pos, len-pos, "%s\n", body[j]);
 	    }
 	}
     }

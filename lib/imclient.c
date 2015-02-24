@@ -119,14 +119,14 @@ struct imclient {
     size_t replyliteralleft;
     size_t replylen;
     size_t alloc_replybuf;
-    
+
     /* Protection mechanism data */
     /* struct sasl_client *mech;
     sasl_encodefunc_t *encodefunc;
     sasl_decodefunc_t *decodefunc;*/
     void *state;
     int maxplain;
-    
+
     unsigned long gensym;	/* Tag value for previous command */
 
     unsigned long readytag;	/* Tag of command waiting for ready response */
@@ -189,9 +189,9 @@ static int imclient_decodebase64(char *input);
 
 /* callbacks we support */
 static const sasl_callback_t callbacks[] = {
-  { SASL_CB_USER, NULL, NULL }, 
-  { SASL_CB_GETREALM, NULL, NULL }, 
-  { SASL_CB_AUTHNAME, NULL, NULL }, 
+  { SASL_CB_USER, NULL, NULL },
+  { SASL_CB_GETREALM, NULL, NULL },
+  { SASL_CB_AUTHNAME, NULL, NULL },
   { SASL_CB_PASS, NULL, NULL },
   { SASL_CB_LIST_END, NULL, NULL }
 };
@@ -205,8 +205,8 @@ static const sasl_callback_t callbacks[] = {
  * use sasl callbacks 'cbs'
  */
 EXPORTED int imclient_connect(struct imclient **imclient,
-		     const char *host, 
-		     const char *port, 
+		     const char *host,
+		     const char *port,
 		     sasl_callback_t *cbs)
 {
     int s = -1;
@@ -343,7 +343,7 @@ imclient_servername(struct imclient *imclient)
  * imclient_send(), imclient_eof(), imclient_processoneevent(), or
  * imclient_authenticate() on the connection.  The callback function
  * may scribble on the text of the untagged data.
- * 
+ *
  */
 EXPORTED void imclient_addcallback(struct imclient *imclient, ...)
 {
@@ -361,7 +361,7 @@ EXPORTED void imclient_addcallback(struct imclient *imclient, ...)
 	flags = va_arg(pvar, int);
 	proc = va_arg(pvar, imclient_proc_t *);
 	rock = va_arg(pvar, void *);
-	
+
 	/* Search for existing callback matching keyword and flags */
 	for (i = 0; i < imclient->callback_num; i++) {
 	    if (imclient->callback[i].flags == flags &&
@@ -411,7 +411,7 @@ EXPORTED void imclient_addcallback(struct imclient *imclient, ...)
  *   %v -- #astring (arg is an null-terminated array of (char *)
  *         which are written as space separated astrings)
  *   %B -- (internal use only) base64-encoded data at end of command line
- */ 
+ */
 EXPORTED void
 imclient_send(struct imclient *imclient, imclient_proc_t *finishproc,
 	      void *finishrock, const char *fmt, ...)
@@ -449,7 +449,7 @@ imclient_send(struct imclient *imclient, imclient_proc_t *finishproc,
 	newcmdcallback->rock = finishrock;
 	imclient->cmdcallback = newcmdcallback;
     }
-    
+
     /* Write the tag */
     snprintf(buf, sizeof(buf), "%lu ", imclient->gensym);
     imclient_write(imclient, buf, strlen(buf));
@@ -472,7 +472,7 @@ imclient_send(struct imclient *imclient, imclient_proc_t *finishproc,
 	    abortcommand = imclient_writeastring(imclient, str);
 	    if (abortcommand) goto fail;
 	    break;
-	    
+
 	case 'd':
 	    num = va_arg(pvar, int);
 	    snprintf(buf, sizeof(buf), "%d", num);
@@ -528,7 +528,7 @@ static int imclient_writeastring(struct imclient *imclient, const char *str)
 
     assert(imclient);
     assert(str);
-    
+
     for (p = str; *p; p++) {
 	len++;
 	if (class > charclass[(unsigned char)*p]) {
@@ -573,7 +573,7 @@ void imclient_write(struct imclient *imclient, const char *s, size_t len)
 {
     assert(imclient);
     assert(s);
-    
+
     /* If no data pending for output, reset the buffer */
     if (imclient->outptr == imclient->outstart) {
 	imclient->outstart = imclient->outptr = imclient->outbuf;
@@ -628,7 +628,7 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
 
     assert(imclient);
     assert(buf);
-    
+
     if (imclient->saslcompleted == 1) {
 	/* decrypt what we have */
 	if ((result = sasl_decode(imclient->saslconn, buf, len,
@@ -671,7 +671,7 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
 	    imclient->replystart = imclient->replybuf;
 	}
     }
-    
+
     /* Remember where new data starts */
     parsed = imclient->replylen;
 
@@ -757,7 +757,7 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
 	else {
 	    reply.msgno = -1;
 	}
-	
+
 	/* parse keyword */
 	reply.keyword = (char *)p;
 	while (*p && *p != ' ' && *p != '\n') p++;
@@ -773,7 +773,7 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
 
 	/* Handle tagged replies */
 	if (replytag != 0) {
-	    int iscompletion = 
+	    int iscompletion =
 		((keywordlen == 3 && reply.keyword[0] == 'B' &&
 		     reply.keyword[1] == 'A' && reply.keyword[2] == 'D') ||
 		    (keywordlen == 2 &&
@@ -785,7 +785,7 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
 		endreply[-1] == '\r' && endreply[-2] == '}' &&
 		Uisdigit(endreply[-3])) {
 		p = endreply - 4;
-		while (p > imclient->replystart && 
+		while (p > imclient->replystart &&
 		       Uisdigit(*p)) {
 		    p--;
 		}
@@ -827,7 +827,7 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
 		reply.keyword[keywordlen] = '\0';
 		(*cmdcbtemp->proc)(imclient, cmdcbtemp->rock, &reply);
 	    }
-	    
+
 	    continue;
 	}
 
@@ -842,7 +842,7 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
 	    }
 	    if (!strncmp(imclient->callback[keywordindex].keyword,
 			 reply.keyword, keywordlen) &&
-		imclient->callback[keywordindex].keyword[keywordlen] == '\0' 
+		imclient->callback[keywordindex].keyword[keywordlen] == '\0'
 		&& imclient->callback[keywordindex].proc)
 	      break;
 	}
@@ -856,7 +856,7 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
 		endreply[-1] == '\r' && endreply[-2] == '}' &&
 		Uisdigit(endreply[-3])) {
 		p = endreply - 4;
-		while (p > imclient->replystart && 
+		while (p > imclient->replystart &&
 		       Uisdigit(*p)) {
 		    p--;
 		}
@@ -929,7 +929,7 @@ EXPORTED void imclient_getselectinfo(struct imclient *imclient, int *fd,
     assert(imclient);
     assert(fd);
     assert(wanttowrite);
-    
+
     *fd = imclient->fd;
     *wanttowrite = imclient->outptr - imclient->outstart;
 }
@@ -973,8 +973,8 @@ EXPORTED void imclient_processoneevent(struct imclient *imclient)
 	  n = write(imclient->fd, cryptptr,
 		    cryptlen);
 #endif /* HAVE_SSL */
-	  	  
-	  if (n > 0) {	    
+
+	  if (n > 0) {
 	    imclient->outstart += writelen;
 	    return;
 	  }
@@ -1008,7 +1008,7 @@ EXPORTED void imclient_processoneevent(struct imclient *imclient)
 
 	if (FD_ISSET(imclient->fd, &rfds))
 	{
-#ifdef HAVE_SSL	  
+#ifdef HAVE_SSL
 	  /* just do a SSL read instead if we're under a tls layer */
 	  if (imclient->tls_on==1)
 	  {
@@ -1153,10 +1153,10 @@ EXPORTED void fillin_interactions(struct imclient *context,
  *  1 - failure
  *  2 - severe failure?
  */
-static int imclient_authenticate_sub(struct imclient *imclient, 
-				     char *mechlist, 
+static int imclient_authenticate_sub(struct imclient *imclient,
+				     char *mechlist,
 				     char *user,
-				     int minssf, 
+				     int minssf,
 				     int maxssf,
 				     const char **mechusing)
 {
@@ -1174,7 +1174,7 @@ static int imclient_authenticate_sub(struct imclient *imclient,
 
   assert(imclient);
   assert(mechlist);
-  
+
   /*******
    * Now set the SASL properties
    *******/
@@ -1210,7 +1210,7 @@ static int imclient_authenticate_sub(struct imclient *imclient,
   /********
    * SASL is setup. Now try the actual authentication
    ********/
-    
+
   saslresult=SASL_INTERACT;
 
   /* call sasl client start */
@@ -1237,7 +1237,7 @@ static int imclient_authenticate_sub(struct imclient *imclient,
     while (imclient->readytag) {
       imclient_processoneevent(imclient);
     }
-    
+
     /* stop looping on command completion */
     if (!imclient->readytxt) break;
 
@@ -1260,15 +1260,15 @@ static int imclient_authenticate_sub(struct imclient *imclient,
 	while (saslresult == SASL_INTERACT) {
 	    saslresult=sasl_client_step(imclient->saslconn,
 					imclient->readytxt,
-					inlen, 
+					inlen,
 					&client_interact,
 					&out,
 					&outlen);
-	    
+
 	    if (saslresult == SASL_INTERACT) {
 		/* fill in prompts */
 		fillin_interactions(imclient,
-				    client_interact, user); 
+				    client_interact, user);
 	    }
 	}
     }
@@ -1295,10 +1295,10 @@ static int imclient_authenticate_sub(struct imclient *imclient,
 
 /* xxx service is not needed here */
 EXPORTED int imclient_authenticate(struct imclient *imclient,
-			  char *mechlist, 
+			  char *mechlist,
 			  char *service __attribute__((unused)),
 			  char *user,
-			  int minssf, 
+			  int minssf,
 			  int maxssf)
 {
     int r;
@@ -1323,7 +1323,8 @@ EXPORTED int imclient_authenticate(struct imclient *imclient,
 
 	/* eliminate mtried (mechanism tried) from mlist */
 	if (r != 0 && mtried) {
-	    char *newlist = xmalloc(strlen(mlist)+1);
+	    size_t size = strlen(mlist)+1;
+	    char *newlist = xmalloc(size);
 	    char *mtr = xstrdup(mtried);
 	    char *tmp;
 
@@ -1335,15 +1336,15 @@ EXPORTED int imclient_authenticate(struct imclient *imclient,
 		break;
 	    }
 	    *tmp = '\0';
-	    strcpy(newlist,mlist);
-	    
+	    STRLCPY_LOG(newlist, mlist, size);
+
 	    /* Use tmp+1 here to skip the \0 we just put in.
 	     * this is safe because even if the mechs are one character
 	     * long there would still be another trailing \0 */
 	    tmp = strchr(tmp+1,' ');
-	    if (tmp) {		
+	    if (tmp) {
 		tmp++; /* skip the space */
-		strcat(newlist,tmp);
+		STRLCAT_LOG(newlist, tmp, size);
 	    }
 
 	    free(mtr);
@@ -1411,7 +1412,7 @@ static int imclient_decodebase64(char *input)
 	c2 = *input++;
 	if (CHAR64(c2) == XX) return -1;
 	c3 = *input++;
-	if (c3 != '=' && CHAR64(c3) == XX) return -1; 
+	if (c3 != '=' && CHAR64(c3) == XX) return -1;
 	c4 = *input++;
 	if (c4 != '=' && CHAR64(c4) == XX) return -1;
 	*output++ = (CHAR64(c1) << 2) | (CHAR64(c2) >> 4);
@@ -1426,7 +1427,7 @@ static int imclient_decodebase64(char *input)
 
     return len;
 }
-	
+
 /*
  * Write to the connection 'imclient' the base-64 encoded data
  * 'output', of (unencoded) length 'len'.
@@ -1447,7 +1448,7 @@ static void imclient_writebase64(struct imclient *imclient,
 	    imclient_write(imclient, buf, buflen);
 	    buflen = 0;
 	}
-	
+
 	c1 = (unsigned char)*output++;
 	buf[buflen++] = basis_64[c1>>2];
 
@@ -1604,7 +1605,7 @@ static int tls_rand_init(void)
 }
 
  /*
-  * This is the setup routine for the SSL client. 
+  * This is the setup routine for the SSL client.
   *
   * The skeleton of this function is taken from OpenSSL apps/s_client.c.
   */
@@ -1638,7 +1639,7 @@ static int tls_init_clientengine(struct imclient *imclient,
 
     off |= SSL_OP_ALL;		/* Work around all known bugs */
     SSL_CTX_set_options(imclient->tls_ctx, off);
-    
+
     /* debugging   SSL_CTX_set_info_callback(imclient->tls_ctx, apps_ssl_info_callback); */
 
     if (var_tls_CAfile == NULL || strlen(var_tls_CAfile) == 0)
@@ -1715,15 +1716,15 @@ static int tls_dump(const char *s, int len)
 	buf[0] = '\0';				/* start with empty string */
 	ss = buf;
 
-	sprintf(ss, "%04x ", i * DUMP_WIDTH);
+	SNPRINTF_LOG(ss, sizeof (buf), "%04x ", i * DUMP_WIDTH);
 	ss += strlen(ss);
 	for (j = 0; j < DUMP_WIDTH; j++) {
 	    if (((i * DUMP_WIDTH) + j) >= len) {
-		strcpy(ss, "   ");
+		STRLCPY_LOG(ss, "   ", sizeof (buf) - (ss-buf));
 	    } else {
 		ch = ((unsigned char) *((char *) (s) + i * DUMP_WIDTH + j))
 		    & 0xff;
-		sprintf(ss, "%02x[%c]%c", ch, ch, j == 7 ? '|' : ' ');
+		SNPRINTF_LOG(ss, sizeof (buf) - (ss-buf), "%02x[%c]%c", ch, ch, j == 7 ? '|' : ' ');
 		ss += 6;
 	    }
 	}
@@ -1737,7 +1738,7 @@ static int tls_dump(const char *s, int len)
 	    if (j == 7) *ss+= ' ';
 	}
 	*ss = 0;
-	/* 
+	/*
 	 * if this is the last call then update the ddt_dump thing so that
          * we will move the selection point in the debug window
          */
@@ -1746,7 +1747,7 @@ static int tls_dump(const char *s, int len)
     }
 #ifdef TRUNCATE
     if (trunc > 0) {
-	sprintf(buf, "%04x - <SPACES/NULS>\n", len+ trunc);
+	SNPRINTF_LOG(buf, sizeof (buf), "%04x - <SPACES/NULS>\n", len+ trunc);
 	printf("%s\n", buf);
 	ret += strlen(buf);
     }
@@ -1766,13 +1767,13 @@ static long bio_dump_cb(BIO * bio,
 	return (ret);
 
     if (cmd == (BIO_CB_READ | BIO_CB_RETURN)) {
-	printf("read from %08X [%08lX] (%d bytes => %ld (0x%X))\n", (unsigned int) bio, 
+	printf("read from %08X [%08lX] (%d bytes => %ld (0x%X))\n", (unsigned int) bio,
 	       (unsigned long) argp,
 	       argi, ret, (unsigned int) ret);
 	tls_dump(argp, (int) ret);
 	return (ret);
     } else if (cmd == (BIO_CB_WRITE | BIO_CB_RETURN)) {
-	printf("write to %08X [%08lX] (%d bytes => %ld (0x%X))\n", (unsigned int) bio, 
+	printf("write to %08X [%08lX] (%d bytes => %ld (0x%X))\n", (unsigned int) bio,
 	       (unsigned long) argp,
 	       argi, ret, (unsigned int) ret);
 	tls_dump(argp, (int) ret);
@@ -1913,7 +1914,7 @@ EXPORTED int imclient_starttls(struct imclient *imclient,
   struct authresult theresult;
   sasl_ssf_t ssf;
   char *auth_id;
-  
+
   imclient_send(imclient, tlsresult, (void *)&theresult,
 		"STARTTLS");
 
@@ -1931,7 +1932,7 @@ EXPORTED int imclient_starttls(struct imclient *imclient,
     return 1;
   } else {
     result=tls_start_clienttls(imclient, &ssf, &auth_id, imclient->fd);
-    
+
     if (result!=0) {
       printf("[ TLS negotiation did not succeed ]\n");
       return 1;

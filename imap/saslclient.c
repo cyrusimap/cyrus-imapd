@@ -121,7 +121,7 @@ EXPORTED sasl_callback_t *mysasl_callbacks(const char *username,
 	ret[n].proc = (mysasl_cb_ft *) &mysasl_simple_cb;
 	ret[n].context = (char *) username;
 	n++;
-    }	
+    }
 
     if (authname) {
 	/* authname */
@@ -144,7 +144,7 @@ EXPORTED sasl_callback_t *mysasl_callbacks(const char *username,
 	size_t len = strlen(password);
 
 	secret = (sasl_secret_t *)xmalloc(sizeof(sasl_secret_t) + len);
-	strcpy((char *) secret->data, password);
+	(void) strlcpy((char *) secret->data, password, len);
 	secret->len = len;
 
 	/* password */
@@ -153,7 +153,7 @@ EXPORTED sasl_callback_t *mysasl_callbacks(const char *username,
 	ret[n].context = secret;
 	n++;
     }
-    
+
     ret[n].id = SASL_CB_LIST_END;
     ret[n].proc = NULL;
     ret[n].context = NULL;
@@ -169,7 +169,7 @@ EXPORTED void free_callbacks(sasl_callback_t *in)
     for(i=0; in[i].id != SASL_CB_LIST_END; i++)
 	if(in[i].id == SASL_CB_PASS)
 	    free(in[i].context);
-    
+
     free(in);
 }
 
@@ -199,15 +199,15 @@ HIDDEN int saslclient(sasl_conn_t *conn, struct sasl_cmd_t *sasl_cmd,
 
     if (r != SASL_OK && r != SASL_CONTINUE) {
 	if (sasl_result) *sasl_result = r;
-	if (status) *status = sasl_errdetail(conn);	
+	if (status) *status = sasl_errdetail(conn);
 	return IMAP_SASL_FAIL;
     }
 
     /* build the auth command */
     if (sasl_cmd->quote)
-	sprintf(cmdbuf, "%s \"%s\"", sasl_cmd->cmd, mech);
+	SNPRINTF_LOG(cmdbuf, sizeof (cmdbuf), "%s \"%s\"", sasl_cmd->cmd, mech);
     else
-	sprintf(cmdbuf, "%s %s", sasl_cmd->cmd, mech);
+	SNPRINTF_LOG(cmdbuf, sizeof (cmdbuf), "%s %s", sasl_cmd->cmd, mech);
     prot_printf(pout, "%s", cmdbuf);
 
     if (!clientout) goto noinitresp;  /* no initial response */

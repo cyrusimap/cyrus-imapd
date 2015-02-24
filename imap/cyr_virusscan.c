@@ -133,7 +133,7 @@ void *clamav_init()
     if ( ! st->av_engine ) {
       fatal("Failed to initialize AV engine", EC_SOFTWARE);
     }
-    
+
     /* load all available databases from default directory */
     if ((r = cl_load(cl_retdbdir(), st->av_engine, &sigs, CL_DB_STDOPT))) {
 	syslog(LOG_ERR, "cl_load: %s", cl_strerror(r));
@@ -157,7 +157,7 @@ void *clamav_init()
      * never be exceeded
      */
     cl_engine_set_num(st->av_engine, CL_ENGINE_MAX_SCANSIZE, 100 * 1048576);
-    /* compressed files will only be decompressed and scanned up to 
+    /* compressed files will only be decompressed and scanned up to
      * this size (10 MB)
      */
     cl_engine_set_num(st->av_engine, CL_ENGINE_MAX_FILESIZE, 10 * 1048576);
@@ -286,12 +286,12 @@ int main (int argc, char *argv[]) {
     mboxevent_setnamespace(&scan_namespace);
 
     if (optind == argc) { /* do the whole partition */
-	strcpy(buf, "*");
+	(void) strcpy(buf, "*");
 	(*scan_namespace.mboxlist_findall)(&scan_namespace, buf, 1, 0, 0,
 					   scan_me, NULL);
     } else {
 	for (; optind < argc; optind++) {
-	    strncpy(buf, argv[optind], MAX_MAILBOX_BUFFER);
+	    (void) strlcpy(buf, argv[optind], MAX_MAILBOX_BUFFER);
 	    /* Translate any separators in mailboxname */
 	    mboxname_hiersep_tointernal(&scan_namespace, buf,
 					config_virtdomains ?
@@ -463,7 +463,7 @@ void append_notifications()
 	    fprintf(f, "Return-Path: <>\r\n");
 	    t = time(NULL);
 	    snprintf(buf, sizeof(buf), "<cmu-cyrus-%d-%d-%d@%s>",
-		     (int) p, (int) t, 
+		     (int) p, (int) t,
 		     outgoing_count++, config_servername);
 	    fprintf(f, "Message-ID: %s\r\n", buf);
 	    time_to_rfc822(t, datestr, sizeof(datestr));
@@ -519,7 +519,7 @@ void append_notifications()
 	    prot_free(pout);
 	    fclose(f);
 	}
-	
+
 	user = i_mbox->next;
 
 	/* free owner info */

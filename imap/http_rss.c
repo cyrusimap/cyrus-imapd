@@ -198,7 +198,7 @@ static int meth_get(struct transaction_t *txn,
 	}
     }
 
-    /* Check query params, if any */    
+    /* Check query params, if any */
     param = hash_lookup("uid", &txn->req_qparams);
     if (param) {
 	uid = strtoul(param->s, NULL, 10);
@@ -286,7 +286,7 @@ static int meth_get(struct transaction_t *txn,
 }
 
 
-/* Create a mailbox name from the request URL */ 
+/* Create a mailbox name from the request URL */
 static int rss_parse_path(const char *path, struct request_target_t *tgt,
 			  const char **errstr)
 {
@@ -304,7 +304,7 @@ static int rss_parse_path(const char *path, struct request_target_t *tgt,
     len = end - start;
     if (len > MAX_MAILBOX_BUFFER) return IMAP_MAILBOX_BADNAME;
 
-    strncpy(mboxname, start, len);
+    (void) strncpy(mboxname, start, len);
     mboxname[len] = '\0';
 
     mboxname_hiersep_tointernal(&httpd_namespace, mboxname, len);
@@ -312,6 +312,9 @@ static int rss_parse_path(const char *path, struct request_target_t *tgt,
     /* Locate the mailbox */
     if (*mboxname) {
 	int r = http_mlookup(mboxname, &tgt->mbentry, NULL);
+
+
+
 	if (r) {
 	    syslog(LOG_ERR, "mlookup(%s) failed: %s",
 		   mboxname, error_message(r));
@@ -353,7 +356,7 @@ static int is_feed(const char *mbox)
     /* otherwise, its usable */
     return 1;
 }
-    
+
 
 /*
  * mboxlist_findall() callback function to list RSS feeds as a tree
@@ -430,7 +433,7 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
 	else href = path;
 
 	/* Populate new/updated node */
-	strncpy(node->name, name, len);
+	STRLCPY_LOG(node->name, name, sizeof (node->name));
 	node->name[len] = '\0';
 	node->len = len;
 	node->parent = last;
@@ -733,9 +736,11 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
     /* Check any preconditions */
     lastmod = mailbox->i.last_appenddate;
-    sprintf(etag, "%u-%u-%u",
-	    mailbox->i.uidvalidity, mailbox->i.last_uid, mailbox->i.exists);
-    precond = check_precond(txn, etag, lastmod);
+    SNPRINTF_LOG(
+    	etag, sizeof (etag), "%u-%u-%u",
+	mailbox->i.uidvalidity, mailbox->i.last_uid, mailbox->i.exists
+    );
+    precond = check_precond(txn, NULL, etag, lastmod);
 
     switch (precond) {
     case HTTP_OK:

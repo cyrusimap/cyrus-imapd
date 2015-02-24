@@ -159,7 +159,7 @@ static int _open(const char *backend, const char *fname,
 	    db->backend = cyrusdb_fromname(realname);
 	}
     }
-    
+
     r = db->backend->open(fname, flags, &db->engine, tid);
 
 done:
@@ -297,8 +297,8 @@ EXPORTED void cyrusdb_init(void)
     const char *confdir = libcyrus_config_getstring(CYRUSOPT_CONFIG_DIR);
     int initflags = libcyrus_config_getint(CYRUSOPT_DB_INIT_FLAGS);
 
-    strcpy(dbdir, confdir);
-    strcat(dbdir, FNAME_DBDIR);
+    (void) strlcpy(dbdir, confdir, sizeof (dbdir));
+    STRLCAT_LOG(dbdir, FNAME_DBDIR, sizeof (dbdir));
 
     for(i=0; _backends[i]; i++) {
 	r = (_backends[i])->init(dbdir, initflags);
@@ -312,7 +312,7 @@ EXPORTED void cyrusdb_init(void)
 EXPORTED void cyrusdb_done(void)
 {
     int i;
-    
+
     for(i=0; _backends[i]; i++) {
 	(_backends[i])->done();
     }
@@ -330,8 +330,8 @@ struct db_rock {
 
 static int delete_cb(void *rock,
 		     const char *key, size_t keylen,
-		     const char *data __attribute__((unused)), 
-		     size_t datalen __attribute__((unused))) 
+		     const char *data __attribute__((unused)),
+		     size_t datalen __attribute__((unused)))
 {
     struct db_rock *cr = (struct db_rock *)rock;
     return cyrusdb_delete(cr->db, key, keylen, cr->tid, 1);
@@ -339,7 +339,7 @@ static int delete_cb(void *rock,
 
 static int print_cb(void *rock,
 		    const char *key, size_t keylen,
-		    const char *data, size_t datalen) 
+		    const char *data, size_t datalen)
 {
     FILE *f = (FILE *)rock;
 
@@ -409,7 +409,7 @@ EXPORTED int cyrusdb_undumpfile(struct db *db,
 
 static int converter_cb(void *rock,
 			const char *key, size_t keylen,
-			const char *data, size_t datalen) 
+			const char *data, size_t datalen)
 {
     struct db_rock *cr = (struct db_rock *)rock;
     return cyrusdb_store(cr->db, key, keylen, data, datalen, cr->tid);
@@ -572,12 +572,12 @@ HIDDEN int cyrusdb_generic_archive(const strarray_t *fnames,
     int length, rest;
     int i;
     int r;
-    
+
     strlcpy(dstname, dirname, sizeof(dstname));
     length = strlen(dstname);
     dp = dstname + length;
     rest = sizeof(dstname) - length;
-    
+
     /* archive those files specified by the app */
     for (i = 0; i < fnames->count; i++) {
 	const char *fname = strarray_nth(fnames, i);

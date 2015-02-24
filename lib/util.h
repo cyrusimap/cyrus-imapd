@@ -52,6 +52,7 @@
 #include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <syslog.h>
 
 #ifdef ENABLE_REGEX
 # ifdef HAVE_PCREPOSIX_H
@@ -116,10 +117,38 @@ extern const unsigned char convert_to_uppercase[256];
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #endif
 
-/* Some BSDs don't print "NULL" for a NULL pointer string. */ 
+/* Some BSDs don't print "NULL" for a NULL pointer string. */
 #ifndef IS_NULL
 #define IS_NULL(s)	((s) == NULL ? "(NULL)" : (s))
 #endif
+
+#define LOG_OVERFLOW	syslog(LOG_ERR, "%s:%d buffer overflow", __FILE__, __LINE__)
+#define STRLCPY_LOG(d,s,n)	do { if ((n) <= strlcpy((d),(s),(n))) LOG_OVERFLOW; } while (0)
+#define STRLCAT_LOG(d,s,n)	do { if ((n) <= strlcat((d),(s),(n))) LOG_OVERFLOW; } while (0)
+#define VSNPRINTF_LOG(d,n,f,a)	do { if ((n) <= vsnprintf((d),(n),(f),(a))) LOG_OVERFLOW; } while (0)
+#define SNPRINTF_LOG(d,n,...) do { if ((n) <= snprintf((d),(n),__VA_ARGS__)) LOG_OVERFLOW; } while (0)
+
+/* Special version for chaining appends to end of buffer. */
+#define SNPRINTF_APPEND_LOG(buf, size, end, ...) \
+do { \
+	int len = snprintf((end), (size)-((end)-(buf)), __VA_ARGS__); \
+	if ((size)-((end)-(buf)) <= len) \
+		LOG_OVERFLOW; \
+	end += len; \
+} while (0)
+
+#define ERR_OVERFLOW	(void) fprintf(stderr, "%s:%d buffer overflow\n", __FILE__, __LINE__)
+#define STRLCPY_ERR(d,s,n)	do { if ((n) <= strlcpy((d),(s),(n))) ERR_OVERFLOW; } while (0)
+#define STRLCAT_ERR(d,s,n)	do { if ((n) <= strlcat((d),(s),(n))) ERR_OVERFLOW; } while (0)
+#define VSNPRINTF_ERR(d,n,f,a)	do { if ((n) <= vsnprintf((d),(n),(f),(a))) ERR_OVERFLOW; } while (0)
+#define SNPRINTF_ERR(d,n,f,...) do { if ((n) <= snprintf((d),(n),(f),__VA_ARGS__)) ERR_OVERFLOW; } while (0)
+
+/* Length of a static string. */
+#ifndef STRLEN
+#define STRLEN(ss)      (sizeof (ss)-1)
+#endif
+
+extern void log_cwd(void);
 
 /* Calculate the number of entries in a vector */
 #define VECTOR_SIZE(vector) (sizeof(vector)/sizeof(vector[0]))
@@ -174,7 +203,7 @@ extern int dir_hash_c(const char *name, int full);
  */
 extern char *dir_hash_b(const char *name, int full, char buf[2]);
 
-/* 
+/*
  * create an [unlinked] temporary file and return the file descriptor.
  */
 extern int create_tempfile(const char *path);
@@ -348,7 +377,12 @@ int buf_deflate(struct buf *buf, int compLevel, int scheme);
  * implementation of the BSD strlcpy() which has this semantic,
  * but that isn't a highly optimised libc or compiler provided
  * function like strncpy(), and we can trivially and eficiently
- * add the NUL termination semantic on top of strncpy(). */
+ * add the NUL termination semantic on top of strncpy().
+ *
+ * *** HOWEVER it does not provide the return semantics of strlcpy
+ * *** that allows for overflow detection and/or buffer size
+ * *** requirement.
+ */
 #define xstrncpy(d, s, n) \
     do { \
 	char *_d = (d); \

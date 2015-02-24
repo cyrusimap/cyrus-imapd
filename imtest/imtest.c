@@ -141,7 +141,7 @@ static sasl_callback_t callbacks[] = {
     }, {
 	SASL_CB_AUTHNAME, NULL, NULL
     }, {
-	SASL_CB_PASS, NULL, NULL    
+	SASL_CB_PASS, NULL, NULL
     }, {
       SASL_CB_GETOPT, (int (*)(void))&mysasl_config, NULL
     }, {
@@ -263,7 +263,7 @@ EXPORTED void fatal(const char *msg, int code __attribute__((unused)))
     imtest_fatal(msg);
 }
 
-int mysasl_config(void *context __attribute__((unused)), 
+int mysasl_config(void *context __attribute__((unused)),
 		  const char *plugin_name,
 		  const char *option,
 		  const char **result,
@@ -290,7 +290,7 @@ int mysasl_config(void *context __attribute__((unused)),
 	if (len) { *len = strlen(*result); }
 	return SASL_OK;
     }
-   
+
     return SASL_FAIL;
 }
 
@@ -352,16 +352,16 @@ static int verify_callback(int ok, X509_STORE_CTX * ctx)
     X509   *err_cert;
     int     err;
     int     depth;
-    
+
     err_cert = X509_STORE_CTX_get_current_cert(ctx);
     err = X509_STORE_CTX_get_error(ctx);
     depth = X509_STORE_CTX_get_error_depth(ctx);
-    
+
     X509_NAME_oneline(X509_get_subject_name(err_cert), buf, 256);
-    
+
     if (verbose==1)
 	printf("Peer cert verify depth=%d %s\n", depth, buf);
-    
+
     if (!ok) {
 	printf("verify error:num=%d:%s\n", err,
 	       X509_verify_cert_error_string(err));
@@ -387,10 +387,10 @@ static int verify_callback(int ok, X509_STORE_CTX * ctx)
 	printf("cert has expired\n");
 	break;
     }
-    
+
     if (verbose==1)
 	printf("verify return:%d\n", ok);
-    
+
     return (ok);
 }
 
@@ -401,14 +401,14 @@ static RSA *tmp_rsa_cb(SSL * s __attribute__((unused)),
 		       int export __attribute__((unused)), int keylength)
 {
     static RSA *rsa_tmp = NULL;
-    
+
     if (rsa_tmp == NULL) {
 	rsa_tmp = RSA_generate_key(keylength, RSA_F4, NULL, NULL);
     }
     return (rsa_tmp);
 }
 
-/* taken from OpenSSL apps/s_cb.c 
+/* taken from OpenSSL apps/s_cb.c
  * tim - this seems to just be giving logging messages
  */
 
@@ -416,18 +416,18 @@ static void apps_ssl_info_callback(const SSL * s, int where, int ret)
 {
     char   *str;
     int     w;
-    
+
     if (verbose==0) return;
-    
+
     w = where & ~SSL_ST_MASK;
-    
+
     if (w & SSL_ST_CONNECT)
 	str = "SSL_connect";
     else if (w & SSL_ST_ACCEPT)
 	str = "SSL_accept";
     else
 	str = "undefined";
-    
+
     if (where & SSL_CB_LOOP) {
 	printf("%s:%s\n", str, SSL_state_string_long(s));
     } else if (where & SSL_CB_ALERT) {
@@ -465,7 +465,7 @@ static int tls_rand_init(void)
 static char *var_tls_CAfile="";
 static char *var_tls_CApath="";
 /*
- * This is the setup routine for the SSL client. 
+ * This is the setup routine for the SSL client.
  *
  * The skeleton of this function is taken from OpenSSL apps/s_client.c.
  */
@@ -478,27 +478,27 @@ static int tls_init_clientengine(int verifydepth, char *var_tls_cert_file, char 
     char   *CAfile;
     char   *c_cert_file;
     char   *c_key_file;
-    
-    
+
+
     if (verbose==1)
 	printf("starting TLS engine\n");
-    
+
     SSL_load_error_strings();
     SSLeay_add_ssl_algorithms();
     if (tls_rand_init() == -1) {
 	printf("TLS engine: cannot seed PRNG\n");
 	return IMTEST_FAIL;
     }
-    
+
     tls_ctx = SSL_CTX_new(SSLv23_client_method());
     if (tls_ctx == NULL) {
 	return IMTEST_FAIL;
     };
-    
+
     off |= SSL_OP_ALL;		/* Work around all known bugs */
     SSL_CTX_set_options(tls_ctx, off);
     SSL_CTX_set_info_callback(tls_ctx, apps_ssl_info_callback);
-    
+
     if (strlen(var_tls_CAfile) == 0)
 	CAfile = NULL;
     else
@@ -507,7 +507,7 @@ static int tls_init_clientengine(int verifydepth, char *var_tls_cert_file, char 
 	CApath = NULL;
     else
 	CApath = var_tls_CApath;
-    
+
     if (CAfile || CApath)
 	if ((!SSL_CTX_load_verify_locations(tls_ctx, CAfile, CApath)) ||
 	    (!SSL_CTX_set_default_verify_paths(tls_ctx))) {
@@ -522,17 +522,17 @@ static int tls_init_clientengine(int verifydepth, char *var_tls_cert_file, char 
 	c_key_file = NULL;
     else
 	c_key_file = var_tls_key_file;
-    
+
     if (c_cert_file || c_key_file)
 	if (!set_cert_stuff(tls_ctx, c_cert_file, c_key_file)) {
 	    printf("TLS engine: cannot load cert/key data\n");
 	    return IMTEST_FAIL;
 	}
     SSL_CTX_set_tmp_rsa_callback(tls_ctx, tmp_rsa_cb);
-    
+
     verify_depth = verifydepth;
     SSL_CTX_set_verify(tls_ctx, verify_flags, verify_callback);
-    
+
     return IMTEST_OK;
 }
 
@@ -554,31 +554,31 @@ static int tls_dump(const char *s, int len)
     int     rows;
     int     trunc;
     unsigned char ch;
-    
+
     trunc = 0;
-    
+
 #ifdef TRUNCATE
     for (; (len > 0) && ((s[len - 1] == ' ') || (s[len - 1] == '\0')); len--)
 	trunc++;
 #endif
-    
+
     rows = (len / DUMP_WIDTH);
     if ((rows * DUMP_WIDTH) < len)
 	rows++;
-    
+
     for (i = 0; i < rows; i++) {
 	buf[0] = '\0';				/* start with empty string */
 	ss = buf;
-	
-	sprintf(ss, "%04x ", i * DUMP_WIDTH);
+
+	SNPRINTF_ERR(ss, sizeof (buf)-(ss-buf), "%04x ", i * DUMP_WIDTH);
 	ss += strlen(ss);
 	for (j = 0; j < DUMP_WIDTH; j++) {
 	    if (((i * DUMP_WIDTH) + j) >= len) {
-		strcpy(ss, "   ");
+		STRLCPY_ERR(ss, "   ", sizeof (buf)-(ss-buf));
 	    } else {
 		ch = ((unsigned char) *((char *) (s) + i * DUMP_WIDTH + j))
 		    & 0xff;
-		sprintf(ss, "%02x%c", ch, j == 7 ? '|' : ' ');
+		SNPRINTF_ERR(ss, sizeof (buf)-(ss-buf), "%02x%c", ch, j == 7 ? '|' : ' ');
 		ss += 3;
 	    }
 	}
@@ -592,7 +592,7 @@ static int tls_dump(const char *s, int len)
 	    if (j == 7) *ss+= ' ';
 	}
 	*ss = 0;
-	/* 
+	/*
 	 * if this is the last call then update the ddt_dump thing so that
          * we will move the selection point in the debug window
          */
@@ -601,7 +601,7 @@ static int tls_dump(const char *s, int len)
     }
 #ifdef TRUNCATE
     if (trunc > 0) {
-	sprintf(buf, "%04x - <SPACES/NULS>\n", len+ trunc);
+	SNPRINTF_ERR(buf, sizeof (buf), "%04x - <SPACES/NULS>\n", len+ trunc);
 	printf("%s\n", buf);
 	ret += strlen(buf);
     }
@@ -617,7 +617,7 @@ static long bio_dump_cb(BIO * bio, int cmd, const char *argp, int argi,
 {
     if (!do_dump)
 	return (ret);
-    
+
     if (cmd == (BIO_CB_READ | BIO_CB_RETURN)) {
 	printf("read from %08lX [%08lX] (%d bytes => %ld (0x%lX))\n",
 	       (unsigned long) bio, (unsigned long) argp,
@@ -638,10 +638,10 @@ static int tls_start_clienttls(unsigned *layer, char **authid)
     int     sts;
     const SSL_CIPHER *cipher;
     X509   *peer;
-    
+
     if (verbose==1)
 	printf("setting up TLS connection\n");
-    
+
     if (tls_conn == NULL) {
 	tls_conn = (SSL *) SSL_new(tls_ctx);
     }
@@ -650,7 +650,7 @@ static int tls_start_clienttls(unsigned *layer, char **authid)
 	return IMTEST_FAIL;
     }
     SSL_clear(tls_conn);
-    
+
     if (!SSL_set_fd(tls_conn, sock)) {
 	printf("SSL_set_fd failed\n");
 	return IMTEST_FAIL;
@@ -660,8 +660,8 @@ static int tls_start_clienttls(unsigned *layer, char **authid)
      * and will check the client cert etc.
      */
     SSL_set_connect_state(tls_conn);
-    
-    
+
+
     /*
      * We do have an SSL_set_fd() and now suddenly a BIO_ routine is called?
      * Well there is a BIO below the SSL routines that is automatically
@@ -669,7 +669,7 @@ static int tls_start_clienttls(unsigned *layer, char **authid)
      */
     if (verbose==1)
 	BIO_set_callback(SSL_get_rbio(tls_conn), bio_dump_cb);
-    
+
     /* Dump the negotiation for loglevels 3 and 4 */
     if (verbose==1)
 	do_dump = 1;
@@ -690,7 +690,7 @@ static int tls_start_clienttls(unsigned *layer, char **authid)
 	tls_conn = NULL;
 	return IMTEST_FAIL;
     }
-    
+
     /*
      * Lets see, whether a peer certificate is available and what is
      * the actual information. We want to save it for later use.
@@ -705,20 +705,20 @@ static int tls_start_clienttls(unsigned *layer, char **authid)
 	if (verbose==1)
 	    printf("subject_CN=%s, issuer_CN=%s\n", peer_CN, issuer_CN);
 	tls_issuer_CN = issuer_CN;
-	
+
     }
     tls_protocol = SSL_get_version(tls_conn);
     cipher = SSL_get_current_cipher(tls_conn);
     tls_cipher_name = SSL_CIPHER_get_name(cipher);
     tls_cipher_usebits = SSL_CIPHER_get_bits(cipher,
 					     &tls_cipher_algbits);
-    
+
     if (layer!=NULL)
 	*layer = tls_cipher_usebits;
-    
+
     if (authid!=NULL)
 	*authid = tls_peer_CN;
-    
+
     printf("TLS connection established: %s with cipher %s (%d/%d bits)\n",
 	   tls_protocol, tls_cipher_name,
 	   tls_cipher_usebits, tls_cipher_algbits);
@@ -729,7 +729,7 @@ static void do_starttls(int ssl, char *keyfile, unsigned *ssf)
 {
     int result;
     char *auth_id;
-    
+
     result=tls_init_clientengine(10, keyfile, keyfile);
     if (result!=IMTEST_OK)
 	{
@@ -741,27 +741,27 @@ static void do_starttls(int ssl, char *keyfile, unsigned *ssf)
 	    }
 	} else {
 	    result=tls_start_clienttls(ssf, &auth_id);
-	    
+
 	    if (result!=IMTEST_OK)
 		imtest_fatal("TLS negotiation failed!\n");
 	}
-    
+
     /* TLS negotiation suceeded */
     tls_sess = SSL_get_session(tls_conn); /* Save the session for reuse */
-    
+
     /* tell SASL about the negotiated layer */
     result=sasl_setprop(conn,
 			SASL_SSF_EXTERNAL,
 			ssf);
     if (result!=SASL_OK)
 	imtest_fatal("Error setting SASL property (external ssf)");
-    
+
     result=sasl_setprop(conn,
 			SASL_AUTH_EXTERNAL,
 			auth_id);
     if (result!=SASL_OK)
 	imtest_fatal("Error setting SASL property (external auth_id)");
-    
+
     prot_settls (pin,  tls_conn);
     prot_settls (pout, tls_conn);
 }
@@ -772,15 +772,15 @@ static sasl_security_properties_t *make_secprops(int min,int max)
 {
     sasl_security_properties_t *ret=(sasl_security_properties_t *)
 	malloc(sizeof(sasl_security_properties_t));
-    
+
     ret->maxbufsize=1024;
     ret->min_ssf=min;
     ret->max_ssf=max;
-    
+
     ret->security_flags=0;
     ret->property_names=NULL;
     ret->property_values=NULL;
-    
+
     return ret;
 }
 
@@ -796,22 +796,22 @@ static int init_sasl(char *service, char *serverFQDN, int minssf, int maxssf,
     char localip[60], remoteip[60];
     struct sockaddr_storage saddr_l;
     struct sockaddr_storage saddr_r;
-    
+
     addrsize=sizeof(struct sockaddr_storage);
     if (getpeername(sock,(struct sockaddr *)&saddr_r,&addrsize)!=0)
 	return IMTEST_FAIL;
-    
+
     addrsize=sizeof(struct sockaddr_storage);
     if (getsockname(sock,(struct sockaddr *)&saddr_l,&addrsize)!=0)
 	return IMTEST_FAIL;
-    
+
     if(iptostring((struct sockaddr *)&saddr_l, addrsize, localip, 60))
 	return IMTEST_FAIL;
-    
+
     if(iptostring((struct sockaddr *)&saddr_r, addrsize, remoteip, 60))
 	return IMTEST_FAIL;
-    
-    
+
+
     /* client new connection */
     saslresult=sasl_client_new(service,
 			       serverFQDN,
@@ -820,9 +820,9 @@ static int init_sasl(char *service, char *serverFQDN, int minssf, int maxssf,
 			       NULL,
 			       flags,
 			       &conn);
-    
+
     if (saslresult!=SASL_OK) return IMTEST_FAIL;
-    
+
     /* create a security structure and give it to sasl */
     secprops = make_secprops(minssf, maxssf);
     if (secprops != NULL)
@@ -830,7 +830,7 @@ static int init_sasl(char *service, char *serverFQDN, int minssf, int maxssf,
 	    sasl_setprop(conn, SASL_SEC_PROPS, secprops);
 	    free(secprops);
 	}
-    
+
     return IMTEST_OK;
 }
 
@@ -846,13 +846,13 @@ static imt_stat getauthline(struct sasl_cmd_t *sasl_cmd, char **line, int *linel
 
     *line = NULL;
     *linelen = 0;
-    
+
     do {
 	str = prot_fgets(str, BUFSIZE, pin);
 	if (str == NULL) imtest_fatal("prot layer failure");
 	printf("S: %s",str);
     } while(str[0] == '*');      /* Ignore potential untagged responses */
-    
+
     if (!strncasecmp(str, sasl_cmd->ok, strlen(sasl_cmd->ok))) {
 	if (sasl_cmd->parse_success) {
 	    str = sasl_cmd->parse_success(str);
@@ -879,7 +879,7 @@ static imt_stat getauthline(struct sasl_cmd_t *sasl_cmd, char **line, int *linel
 	    imtest_fatal("prot layer failure");
 	printf("S: %s", str);
     }
-    
+
     if (*str != '\r') {
 	/* trim CRLF */
 	char *p = str + strlen(str) - 1;
@@ -892,9 +892,9 @@ static imt_stat getauthline(struct sasl_cmd_t *sasl_cmd, char **line, int *linel
 	if ((*line) == NULL) {
 	    return STAT_NO;
 	}
-    
+
 	/* decode this line */
-	saslresult = sasl_decode64(str, strlen(str), 
+	saslresult = sasl_decode64(str, strlen(str),
 				   *line, len, (unsigned *) linelen);
 	if (saslresult != SASL_OK) {
 	    printf("base64 decoding error\n");
@@ -905,7 +905,7 @@ static imt_stat getauthline(struct sasl_cmd_t *sasl_cmd, char **line, int *linel
 	*line = NULL;
 	*linelen = 0;
     }
-    
+
     return ret;
 }
 
@@ -923,33 +923,33 @@ static void interaction (int id, const char *challenge, const char *prompt,
 	*tresult = s;
 	return;
     } else if (id==SASL_CB_PASS && cmdline_password) {
-	strcpy(result, cmdline_password);
+	STRLCPY_ERR(result, cmdline_password, sizeof (result));
     } else if (id==SASL_CB_USER) {
 	if (username != NULL) {
-	    strcpy(result, username);
+	    STRLCPY_ERR(result, username, sizeof (result));
 	} else {
-	    strcpy(result, "");
+	    (void) strcpy(result, "");
 	}
     } else if (id==SASL_CB_AUTHNAME) {
 	if (authname != NULL) {
-	    strcpy(result, authname);
+	    STRLCPY_ERR(result, authname, sizeof (result));
 	} else {
-	    strcpy(result, getpwuid(getuid())->pw_name);
+	    STRLCPY_ERR(result, getpwuid(getuid())->pw_name, sizeof (result));
 	}
 #ifdef SASL_CB_GETREALM
     } else if ((id==SASL_CB_GETREALM) && (realm != NULL)) {
-	strcpy(result, realm);
+	STRLCPY_ERR(result, realm, sizeof (result));
 #endif
     } else {
 	int c;
-	
+
 	if (((id==SASL_CB_ECHOPROMPT) || (id==SASL_CB_NOECHOPROMPT)) &&
 	    (challenge != NULL)) {
 	    printf("Server challenge: %s\n", challenge);
 	}
 	printf("%s: ",prompt);
 	if (id==SASL_CB_NOECHOPROMPT) {
-	    strcpy(result, cyrus_getpass(""));
+	    STRLCPY_ERR(result, cyrus_getpass(""), sizeof (result));
 	} else {
 	    result[0] = '\0';
 	    if (fgets(result, sizeof(result) - 1, stdin) != NULL) {
@@ -970,17 +970,17 @@ static void fillin_interactions(sasl_interact_t *tlist)
     while (tlist->id!=SASL_CB_LIST_END)
 	{
 	    interaction(tlist->id, tlist->challenge, tlist->prompt,
-			(void *) &(tlist->result), 
+			(void *) &(tlist->result),
 			&(tlist->len));
 	    tlist++;
 	}
-    
+
 }
 
 static char *waitfor(char *tag, char *tag2, int echo)
 {
     static char str[1024];
-    
+
     do {
 	if (prot_fgets(str, sizeof(str), pin) == NULL) {
 	    imtest_fatal("prot layer failure");
@@ -988,7 +988,7 @@ static char *waitfor(char *tag, char *tag2, int echo)
 	if(echo) printf("S: %s", str);
     } while (strncmp(str, tag, strlen(tag)) &&
 	     (tag2 ? strncmp(str, tag2, strlen(tag2)) : 1));
-    
+
     return str;
 }
 
@@ -1007,10 +1007,10 @@ static int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
     int sendliteral;
     int initial_response = 1;
     imt_stat status;
-    
+
     if (!sasl_cmd || !sasl_cmd->cmd) return IMTEST_FAIL;
     sendliteral = sasl_cmd->quote;
-    
+
     do { /* start authentication */
 	saslresult = sasl_client_start(conn, mechlist, &client_interact,
 				       /* do we support initial response? */
@@ -1018,19 +1018,19 @@ static int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
 				       &outlen, &mechusing);
 
 	if (saslresult == SASL_INTERACT)
-	    fillin_interactions(client_interact); /* fill in prompts */      
+	    fillin_interactions(client_interact); /* fill in prompts */
     } while (saslresult == SASL_INTERACT);
-    
+
     if ((saslresult != SASL_OK) && (saslresult != SASL_CONTINUE)) {
 	return saslresult;
     }
 
     /* build the auth command */
     if (sasl_cmd->quote) {
-	sprintf(cmdbuf, "%s \"%s\"", sasl_cmd->cmd, mechusing);
+	SNPRINTF_ERR(cmdbuf, sizeof (cmdbuf), "%s \"%s\"", sasl_cmd->cmd, mechusing);
     }
     else {
-	sprintf(cmdbuf, "%s %s", sasl_cmd->cmd, mechusing);
+	SNPRINTF_ERR(cmdbuf, sizeof (cmdbuf), "%s %s", sasl_cmd->cmd, mechusing);
     }
     printf("C: %s", cmdbuf);
     prot_printf(pout, "%s", cmdbuf);
@@ -1084,7 +1084,7 @@ static int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
 	}
       noinitresp:
 	initial_response = 0;
-	
+
 	printf("\r\n");
 	prot_printf(pout, "\r\n");
 	prot_flush(pout);
@@ -1098,7 +1098,7 @@ static int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
 		saslresult = sasl_client_step(conn, in, inlen,
 					      &client_interact,
 					      &out, &outlen);
-	    
+
 		if (saslresult == SASL_INTERACT)
 		    fillin_interactions(client_interact); /* fill in prompts */
 	    } while (saslresult == SASL_INTERACT);
@@ -1118,7 +1118,7 @@ static int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
 	sendliteral = !sasl_cmd->cont;
 
     } while (status == STAT_CONT);
-	
+
     return (status == STAT_OK) ? IMTEST_OK : IMTEST_FAIL;
 }
 
@@ -1138,7 +1138,7 @@ static int init_net(char *serverFQDN, char *port)
     }
 
     if (res0->ai_canonname)
-	strncpy(serverFQDN, res0->ai_canonname, 1023);
+	/* ACH: hard coded buffer size */ STRLCPY_ERR(serverFQDN, res0->ai_canonname, 1024);
     for (res = res0; res; res = res->ai_next) {
 	sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
 	if (sock < 0)
@@ -1148,13 +1148,13 @@ static int init_net(char *serverFQDN, char *port)
 	close(sock);
 	sock = -1;
     }
-    
+
     freeaddrinfo(res0);
     if(sock < 0) {
 	perror("connect");
 	return IMTEST_FAIL;
     }
-    
+
     return IMTEST_OK;
 }
 
@@ -1224,10 +1224,10 @@ static void interactive(struct protocol_t *protocol, char *filename)
     } else if(output_socket) {
 	struct timeval tv;
 	struct stat sbuf;
-	
+
 	/* can't have this and a file for input */
 	sunsock.sun_family = AF_UNIX;
-	strcpy(sunsock.sun_path, output_socket);
+	STRLCPY_ERR(sunsock.sun_path, output_socket, sizeof (sunsock.sun_path));
 	unlink(output_socket);
 
 	listen_sock = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -1263,7 +1263,7 @@ static void interactive(struct protocol_t *protocol, char *filename)
 	tv.tv_usec = 0;
 
 	aset = accept_set;
-	
+
 	/* Have the separate select so that signals will wake us up
 	 * and we get a timeout to use on our own imap connection */
 	if(select(listen_sock + 1, &aset, NULL, NULL, &tv) <= 0) {
@@ -1273,23 +1273,23 @@ static void interactive(struct protocol_t *protocol, char *filename)
 
 	fd = fd_out = accept(listen_sock, NULL, NULL);
 	if(fd < 0) imtest_fatal("accept failure");
-	    
+
 	if(protocol->init_conn) rock = protocol->init_conn();
     }
-    
+
     FD_ZERO(&read_set);
     FD_SET(fd, &read_set);  /* In the terminal case fd == 0 */
     FD_SET(sock, &read_set);
-    
+
     FD_ZERO(&write_set);
     FD_SET(fd_out, &write_set);
     FD_SET(sock, &write_set);
-    
+
     nfds = fd;
     if (nfds < sock) nfds = sock;
     if (nfds < fd_out) nfds = fd_out;
     nfds++;
-    
+
     if (filename != NULL) {
 	donewritingfile = 0;
     }
@@ -1306,7 +1306,7 @@ static void interactive(struct protocol_t *protocol, char *filename)
 	    perror("select");
 	    imtest_fatal("select");
 	}
-	
+
 	if (!output_socket &&
 	    (FD_ISSET(0, &rset)) && (FD_ISSET(sock, &wset)))  {
 	    /* There is explicit terminal input -- note this is only possible
@@ -1351,14 +1351,14 @@ static void interactive(struct protocol_t *protocol, char *filename)
 		else {
 		    /* use the stream API */
 		    buf[count] = '\0';
-		    printf("%s", buf); 
+		    printf("%s", buf);
 		}
 	    } while (haveinput(pin) > 0);
 	} else if ((FD_ISSET(fd, &rset)) && (FD_ISSET(sock, &wset))
 		   && (donewritingfile == 0)) {
 	    /* This does input for both socket and file modes */
 	    int numr = read(fd, buf, sizeof(buf));
-	    
+
 	    /* and send out over wire */
 	    if (numr < 0)
 	    {
@@ -1372,7 +1372,7 @@ static void interactive(struct protocol_t *protocol, char *filename)
 		    } else
 			/* no protocol->reset, we're done */
 			goto cleanup;
-		    
+
 		    close(fd);
 		    fd = 0;
 		    fd_out = 1;
@@ -1380,9 +1380,9 @@ static void interactive(struct protocol_t *protocol, char *filename)
 		} else {
 		    /* we're done, cleanup */
 		    donewritingfile = 1;
-		    
+
 		    FD_CLR(fd,&read_set);
-			
+
 		    /* send LOGOUT */
 		    logout(&protocol->logout_cmd, 0);
 		}
@@ -1390,7 +1390,7 @@ static void interactive(struct protocol_t *protocol, char *filename)
 		if (!output_socket) {
 		    /* echo for the user - if not in socket mode */
 		    retry_write(1, buf, numr);
-		} 
+		}
 
 		if (output_socket && protocol->pipe) {
 		    if(protocol->pipe(buf, numr, rock) == IMTEST_CLOSEME) {
@@ -1400,7 +1400,7 @@ static void interactive(struct protocol_t *protocol, char *filename)
 			} else
 			    /* no protocol->reset, we're done */
 			    goto cleanup;
-			
+
 			close(fd);
 			fd = 0;
 			fd_out = 1;
@@ -1416,7 +1416,7 @@ static void interactive(struct protocol_t *protocol, char *filename)
 	    /* if can't do anything else sleep */
 	    usleep(1000);
 	}
-	
+
 	/* received interrupt signal, logout */
 	if (gotsigint) goto cleanup;
     }
@@ -1426,7 +1426,7 @@ static void interactive(struct protocol_t *protocol, char *filename)
 
     if(output_socket && output_socket_opened) {
 	struct stat sbuf;
-	
+
 	close(fd);
 	if (listen_sock != -1) close(listen_sock);
 
@@ -1435,12 +1435,12 @@ static void interactive(struct protocol_t *protocol, char *filename)
 	    unlink(output_socket);
 	}
     }
-    
+
     logout(&protocol->logout_cmd, 0);
     close(sock);
-    
+
     printf("Connection closed.\n");
-    
+
     /* remove handler for SIGINT */
     signal(SIGINT, SIG_DFL);
     return;
@@ -1463,7 +1463,7 @@ static char *ask_capability(struct protocol_t *prot,
 {
     char str[1024] = "";
     char *ret = NULL, *tmp, *resp;
-    
+
     /* default state of login command unless toggled by capabilities */
     *capabilities = prot->login_enabled;
 
@@ -1472,7 +1472,7 @@ static char *ask_capability(struct protocol_t *prot,
     if (!automatic) {
 	/* no capability command */
 	if (!prot->capa_cmd.cmd) return NULL;
-	
+
 	/* request capabilities of server */
 	printf("C: %s\r\n", prot->capa_cmd.cmd);
 	prot_printf(pout, "%s\r\n", prot->capa_cmd.cmd);
@@ -1491,19 +1491,19 @@ static char *ask_capability(struct protocol_t *prot,
 	    strstr(str, prot->capa_cmd.login) != NULL) {
 	    *capabilities ^= CAPA_LOGIN;
 	}
-	
+
 	/* check for starttls */
 	if (prot->capa_cmd.tls &&
 	    strstr(str, prot->capa_cmd.tls) != NULL) {
 	    *capabilities |= CAPA_STARTTLS;
 	}
-	
+
 	/* check for compress */
 	if (prot->capa_cmd.compress &&
 	    strstr(str, prot->capa_cmd.compress) != NULL) {
 	    *capabilities |= CAPA_COMPRESS;
 	}
-	
+
 	/* check for auth */
 	if (prot->capa_cmd.auth &&
 	    (tmp = strstr(str, prot->capa_cmd.auth)) != NULL) {
@@ -1522,24 +1522,24 @@ static char *ask_capability(struct protocol_t *prot,
 
  	/* look for the end of the capabilities */
     } while (!resp || strncasecmp(str, resp, strlen(resp)));
-    
+
     prot_BLOCK(pin);
     return ret;
 }
 
 /* generic pipe functionality - break it into one line at a time, and
  * pass that into a per-protocol pipe function. */
-struct generic_context_t 
+struct generic_context_t
 {
     int (*pipe_oneline)(char *buf, int len, void *rock);
     void *rock;
-    
+
     /* Deal with half-finished lines */
     char *midLine;
     size_t midLineLen;
 };
 
-static int generic_pipe(char *buf, int len, void *rock) 
+static int generic_pipe(char *buf, int len, void *rock)
 {
     struct generic_context_t *text = (struct generic_context_t *)rock;
     char *toWrite = NULL, *toSend = NULL;
@@ -1554,7 +1554,7 @@ static int generic_pipe(char *buf, int len, void *rock)
 	memcpy(text->midLine+text->midLineLen, buf, len);
 	text->midLineLen += len;
 	text->midLine[text->midLineLen] = '\0';
-	
+
 	toWrite = text->midLine;
 	toWriteLen = text->midLineLen;
     } else {
@@ -1567,7 +1567,7 @@ static int generic_pipe(char *buf, int len, void *rock)
 	size_t len_todo;
 
 	len_todo = lineEnd - toWrite + 1; /* +1 is to include the newline! */
-	
+
 	toSend = (char *)xrealloc(toSend, len_todo + 1);
 
 	memcpy(toSend, toWrite, len_todo);
@@ -1577,7 +1577,7 @@ static int generic_pipe(char *buf, int len, void *rock)
 	if(ret != IMTEST_OK) break;
 
 	toWrite = lineEnd+1; /* +1 is to skip the newline! */
-	toWriteLen -= len_todo; 
+	toWriteLen -= len_todo;
 
 	if(toWriteLen <= 0) toWrite = NULL;
 
@@ -1612,28 +1612,29 @@ static int generic_pipe(char *buf, int len, void *rock)
 
 static char *imap_parse_mechlist(const char *str, struct protocol_t *prot)
 {
-    char *ret = xzmalloc(strlen(str)+1);
+    size_t ret_size = strlen(str)+1;
+    char *ret = xzmalloc(ret_size);
     char *tmp;
     int num = 0;
-    
+
     if (strstr(str, " SASL-IR")) {
 	/* server supports initial response in AUTHENTICATE command */
 	prot->sasl_cmd.maxlen = USHRT_MAX;
     }
-    
+
     while ((tmp = strstr(str, " AUTH="))) {
-	char *end = (tmp += 6);
-	
+	char *end = (tmp += STRLEN(" AUTH="));
+
 	while((*end != ' ') && (*end != '\0')) end++;
-	
+
 	/* add entry to list */
-	if (num++ > 0) strcat(ret, " ");
-	strlcat(ret, tmp, strlen(ret) + (end - tmp) + 1);
-	
+	if (num++ > 0) (void) strlcat(ret, " ", ret_size);
+	STRLCAT_ERR(ret, tmp, ret_size);
+
 	/* reset the string */
 	str = end;
     }
-    
+
     return ret;
 }
 
@@ -1648,20 +1649,20 @@ static int auth_imap(void)
     char *tag = "L01 ";
 
     str[0] = '\0';
-    
+
     interaction(SASL_CB_AUTHNAME, NULL, "Authname", &username, &userlen);
     interaction(SASL_CB_PASS, NULL, "Please enter your password",
 		&pass, &passlen);
-    
+
     printf("C: %sLOGIN %s {%d}\r\n", tag, username, passlen);
     prot_printf(pout,"%sLOGIN %s {%d}\r\n", tag, username, passlen);
     prot_flush(pout);
-    
+
     if (!strncmp(waitfor("+", tag, 1), "+", 1)) {
 	printf("C: <omitted>\r\n");
 	prot_printf(pout,"%s\r\n", pass);
 	prot_flush(pout);
-	
+
 	do {
 	    if (prot_fgets(str, sizeof(str), pin) == NULL) {
 		imtest_fatal("prot layer failure");
@@ -1669,7 +1670,7 @@ static int auth_imap(void)
 	    printf("S: %s", str);
 	} while (strncmp(str, tag, strlen(tag)));
     }
-    
+
     if (!strncasecmp(str+strlen(tag), "OK", 2)) {
 	return IMTEST_OK;
     } else {
@@ -1707,7 +1708,7 @@ static int imap_do_auth(struct sasl_cmd_t *sasl_cmd,
     return result;
 }
 
-struct imap_context_t 
+struct imap_context_t
 {
     int inLiteral;
 };
@@ -1775,10 +1776,10 @@ static int imap_pipe_oneline(char *buf, int len, void *rock) {
     return IMTEST_OK;
 }
 
-static void * imap_init_conn(void) 
+static void * imap_init_conn(void)
 {
     struct generic_context_t *ret;
-    
+
     ret =
 	(void *)xmalloc(sizeof(struct generic_context_t));
     memset(ret, 0, sizeof(struct generic_context_t));
@@ -1792,7 +1793,7 @@ static void * imap_init_conn(void)
     return ret;
 }
 
-static int imap_reset(void *rock) 
+static int imap_reset(void *rock)
 {
     struct generic_context_t *gentext = (struct generic_context_t *)rock;
     struct imap_context_t *text = (struct imap_context_t *)gentext->rock;
@@ -1808,7 +1809,7 @@ static int imap_reset(void *rock)
 
     return IMTEST_OK;
 }
-    
+
 #define HEADERS "Date: Mon, 7 Feb 1994 21:52:25 -0800 (PST)\r\n \
 From: Fred Foobar <foobar@Blurdybloop.COM>\r\n \
 Subject: afternoon meeting\r\n \
@@ -1820,20 +1821,20 @@ Content-Type: TEXT/PLAIN; CHARSET=US-ASCII\r\n\r\n"
 static int append_msg(char *mbox, int size)
 {
     int lup;
-    
+
     prot_printf(pout,"A003 APPEND %s (\\Seen) {" SIZE_T_FMT "}\r\n",
 		mbox,size+strlen(HEADERS));
     /* do normal header foo */
     prot_printf(pout,HEADERS);
-    
+
     for (lup=0;lup<size/10;lup++)
 	prot_printf(pout,"0123456789");
     prot_printf(pout,"\r\n");
-    
+
     prot_flush(pout);
-    
+
     waitfor("A003", NULL, 1);
-    
+
     return IMTEST_OK;
 }
 
@@ -1845,7 +1846,7 @@ static int append_msg(char *mbox, int size)
  *  Creat mailbox
  *  Append message of 200 bytes, 2000 bytes, 20k, 200k, 2M
  *  Delete mailbox
- *  
+ *
  *************/
 
 
@@ -1854,28 +1855,28 @@ static void send_recv_test(void)
     char *mboxname="inbox.imtest";
     time_t start, end;
     int lup;
-    
+
     start=time(NULL);
-    
+
     for (lup=0;lup<10;lup++)
 	{
 	    prot_printf(pout,"C01 CREATE %s\r\n",mboxname);
-	    prot_flush(pout);  
+	    prot_flush(pout);
 	    waitfor("C01", NULL, 1);
-	    
+
 	    append_msg(mboxname,200);
 	    append_msg(mboxname,2000);
 	    append_msg(mboxname,20000);
 	    append_msg(mboxname,200000);
 	    append_msg(mboxname,2000000);
-	    
+
 	    prot_printf(pout,"D01 DELETE %s\r\n",mboxname);
-	    prot_flush(pout);  
+	    prot_flush(pout);
 	    waitfor("D01", NULL, 1);
 	}
-    
+
     end=time(NULL);
-    
+
     printf("took %ld seconds\n", end - start);
 }
 
@@ -1885,7 +1886,7 @@ static void *pop3_parse_banner(char *str)
 {
     char *cp, *start;
     char *chal = NULL;
-    
+
     /* look for APOP challenge in banner '<...@...>' */
     cp = str+3;
     while (cp && (start = strchr(cp, '<'))) {
@@ -1912,34 +1913,34 @@ static int auth_pop(void)
     unsigned int userlen;
     char *pass;
     unsigned int passlen;
-    
+
     interaction(SASL_CB_AUTHNAME, NULL, "Authname", &username, &userlen);
-    
+
     printf("C: USER %s\r\n", username);
     prot_printf(pout,"USER %s\r\n", username);
     prot_flush(pout);
-    
+
     if (prot_fgets(str, 1024, pin) == NULL) {
 	imtest_fatal("prot layer failure");
     }
-    
+
     printf("S: %s", str);
-    
+
     if (strncasecmp(str, "+OK", 3)) return IMTEST_FAIL;
-    
+
     interaction(SASL_CB_PASS, NULL, "Please enter your password",
 		&pass, &passlen);
 
     printf("C: PASS <omitted>\r\n");
     prot_printf(pout,"PASS %s\r\n",pass);
     prot_flush(pout);
-    
+
     if (prot_fgets(str, 1024, pin) == NULL) {
 	imtest_fatal("prot layer failure");
     }
-    
+
     printf("S: %s", str);
-    
+
     if (!strncasecmp(str, "+OK", 3)) {
 	return IMTEST_OK;
     } else {
@@ -1959,30 +1960,30 @@ static int auth_apop(char *apop_chal)
     MD5_CTX ctx;
     unsigned char digest[MD5_DIGEST_LENGTH];
     char digeststr[2*MD5_DIGEST_LENGTH+1];
-    
+
     interaction(SASL_CB_AUTHNAME, NULL, "Authname", &username, &userlen);
     interaction(SASL_CB_PASS,NULL, "Please enter your password",
 		&pass, &passlen);
-    
+
     MD5Init(&ctx);
     MD5Update(&ctx,apop_chal,strlen(apop_chal));
     MD5Update(&ctx,pass,passlen);
     MD5Final(digest, &ctx);
-    
+
     /* convert digest from binary to ASCII hex */
     for (i = 0; i < 16; i++)
-	sprintf(digeststr + (i*2), "%02x", digest[i]);
-    
+	SNPRINTF_ERR(digeststr + (i*2), sizeof (digeststr) - i*2, "%02x", digest[i]);
+
     printf("C: APOP %s %s\r\n", username, digeststr);
     prot_printf(pout,"APOP %s %s\r\n", username, digeststr);
     prot_flush(pout);
-    
+
     if(prot_fgets(str, 1024, pin) == NULL) {
 	imtest_fatal("prot layer failure");
     }
-    
+
     printf("S: %s", str);
-    
+
     if (!strncasecmp(str, "+OK", 3)) {
 	return IMTEST_OK;
     } else {
@@ -1994,7 +1995,7 @@ static int pop3_do_auth(struct sasl_cmd_t *sasl_cmd, void *apop_chal,
 			int user_enabled, char *mech, char *mechlist)
 {
     int result = IMTEST_FAIL;
-    
+
     if (mech) {
 	if (!strcasecmp(mech, "apop")) {
 	    if (!apop_chal) {
@@ -2036,19 +2037,19 @@ static int auth_nntp()
     unsigned int userlen;
     char *pass;
     unsigned int passlen;
-    
+
     interaction(SASL_CB_AUTHNAME, NULL, "Authname", &username, &userlen);
-    
+
     printf("C: AUTHINFO USER %s\r\n", username);
     prot_printf(pout,"AUTHINFO USER %s\r\n", username);
     prot_flush(pout);
-    
+
     if (prot_fgets(str, 1024, pin) == NULL) {
 	imtest_fatal("prot layer failure");
     }
-    
+
     printf("S: %s", str);
-    
+
     if (!strncmp(str, "381", 3)) {
 	interaction(SASL_CB_PASS, NULL, "Please enter your password",
 		    &pass, &passlen);
@@ -2056,14 +2057,14 @@ static int auth_nntp()
 	printf("C: AUTHINFO PASS <omitted>\r\n");
 	prot_printf(pout,"AUTHINFO PASS %s\r\n",pass);
 	prot_flush(pout);
-    
+
 	if (prot_fgets(str, 1024, pin) == NULL) {
 	    imtest_fatal("prot layer failure");
 	}
-    
+
 	printf("S: %s", str);
     }
-    
+
     if (!strncmp(str, "281", 3)) {
 	return IMTEST_OK;
     } else {
@@ -2133,7 +2134,7 @@ static int xmtp_do_auth(struct sasl_cmd_t *sasl_cmd,
     return result;
 }
 
-struct xmtp_context_t 
+struct xmtp_context_t
 {
     int inData;
 };
@@ -2156,17 +2157,17 @@ static int xmtp_pipe_oneline(char *buf, int len, void *rock) {
 	    return IMTEST_CLOSEME;
 	}
     }
-        
+
     prot_write(pout, buf, len);
     prot_flush(pout);
 
     return IMTEST_OK;
 }
 
-static void *xmtp_init_conn(void) 
+static void *xmtp_init_conn(void)
 {
     struct generic_context_t *ret;
-    
+
     ret =
 	(void *)xmalloc(sizeof(struct generic_context_t));
     memset(ret, 0, sizeof(struct generic_context_t));
@@ -2174,13 +2175,13 @@ static void *xmtp_init_conn(void)
     ret->rock =
 	(void *)xmalloc(sizeof(struct xmtp_context_t));
     memset(ret->rock, 0, sizeof(struct xmtp_context_t));
-    
+
     ret->pipe_oneline = &xmtp_pipe_oneline;
 
     return ret;
 }
 
-static int xmtp_reset(void *rock) 
+static int xmtp_reset(void *rock)
 {
     struct generic_context_t *gentext = (struct generic_context_t *)rock;
     struct xmtp_context_t *text = (struct xmtp_context_t *)gentext->rock;
@@ -2259,7 +2260,7 @@ static void usage(char *prog, char *prot)
     printf("  -I file  : output my PID to (file) (useful with -X)\n");
     printf("  -x file  : open the named socket for the interactive portion\n");
     printf("  -X file  : same as -X, except close all file descriptors & dameonize\n");
-    
+
     exit(1);
 }
 
@@ -2352,7 +2353,7 @@ int main(int argc, char **argv)
     char *mechanism = NULL;
     char servername[1024];
     char *filename=NULL;
-    
+
     char *mechlist = NULL;
     unsigned ext_ssf = 0;
     const void *ssfp;
@@ -2362,7 +2363,7 @@ int main(int argc, char **argv)
     int c;
     int result;
     int errflg = 0;
-    
+
 #ifdef HAVE_SSL
     #define WITH_SSL_ONLY /**/
 #else
@@ -2392,7 +2393,7 @@ int main(int argc, char **argv)
     setbuf(stdin, NULL);
     setbuf(stdout, NULL);
     setbuf(stderr, NULL);
-    
+
     prog = strrchr(argv[0], '/') ? strrchr(argv[0], '/')+1 : argv[0];
 
     /* look at all the extra args */
@@ -2428,10 +2429,10 @@ int main(int argc, char **argv)
 	    verbose=1;
 	    break;
 	case 'k':
-	    minssf=atoi(optarg);      
+	    minssf=atoi(optarg);
 	    break;
 	case 'l':
-	    maxssf=atoi(optarg);      
+	    maxssf=atoi(optarg);
 	    break;
 	case 'p':
 	    port = optarg;
@@ -2478,7 +2479,7 @@ int main(int argc, char **argv)
 		imtest_fatal("cannot pipe a file when using unix domain socket output");
 	    if(output_socket)
 		imtest_fatal("cannot specify both -X and -x");
-	    
+
 	    output_socket = optarg;
 
 	    if(c == 'X'){
@@ -2492,7 +2493,7 @@ int main(int argc, char **argv)
 		/* background ourselves and lose the process group info */
 		for(i=0;i<3;i++) if(fork()) exit(0);
 	    }
-	    
+
 	    break;
 
 	case 'o':
@@ -2538,7 +2539,7 @@ int main(int argc, char **argv)
 
     if (!protocol->protocol)
 	imtest_fatal("unknown protocol\n");
-    
+
     if (dossl && !protocol->sprotocol)
 	imtest_fatal("protocol cannot be SSL-wrapped\n");
 
@@ -2556,18 +2557,18 @@ int main(int argc, char **argv)
 	    port=protocol->protocol;
 	}
     }
-    
+
     /* last arg is server name */
     if (optind < argc)
-	strncpy(servername, argv[optind], 1023);
+	(void) strlcpy(servername, argv[optind], sizeof (servername));
     else {
 	fprintf(stderr, "WARNING: no hostname supplied, assuming localhost\n\n");
-	strncpy(servername, "localhost", 1023);
+	(void) strlcpy(servername, "localhost", sizeof (servername));
     }
-    
+
     if(pidfile) {
 	FILE *pf;
-	pf = fopen(pidfile, "w");  
+	pf = fopen(pidfile, "w");
 	if(!pf) {
 	    fprintf(stderr, "could not open %s for writing\n",pidfile);
 	    perror("error");
@@ -2575,8 +2576,8 @@ int main(int argc, char **argv)
 	}
 	fprintf(pf, "%d", getpid());
 	fclose(pf);
-    } 
-    
+    }
+
     /* attempt to start sasl */
     if (sasl_client_init(callbacks+(!dochallenge ? 2 : 0)) != IMTEST_OK) {
 	imtest_fatal("SASL initialization");
@@ -2588,7 +2589,7 @@ int main(int argc, char **argv)
 	    /* send LOGOUT */
 	    logout(&protocol->logout_cmd, 1);
 	    printf("Connection closed.\n\n");
-	    
+
 	    prot_free(pin);
 	    prot_free(pout);
 
@@ -2599,9 +2600,9 @@ int main(int argc, char **argv)
 		SSL_set_shutdown(tls_conn, SSL_SENT_SHUTDOWN|SSL_RECEIVED_SHUTDOWN);
 	    }
 #endif
-	    
+
 	    close(sock);
-	    
+
 	    sasl_dispose(&conn);
 	}
 
@@ -2609,17 +2610,17 @@ int main(int argc, char **argv)
 	    imtest_fatal("Network initialization - cannot connect to %s:%s",
 			 servername, port);
 	}
-    
+
 	if (init_sasl(protocol->service, servername, minssf, maxssf,
 		      protocol->sasl_cmd.parse_success ?
 		      SASL_SUCCESS_DATA : 0) != IMTEST_OK) {
 	    imtest_fatal("SASL initialization");
 	}
-	
+
 	/* set up the prot layer */
 	pin = prot_new(sock, 0);
-	pout = prot_new(sock, 1); 
-	
+	pout = prot_new(sock, 1);
+
 #ifdef HAVE_SSL
 	if (dossl==1) {
 	    do_starttls(1, "", &ext_ssf);
@@ -2640,17 +2641,17 @@ int main(int argc, char **argv)
 		    imtest_fatal("prot layer failure");
 		}
 		printf("S: %s", str);
-		
+
 		/* parse it if need be */
 		if (protocol->banner.parse_banner)
 		    rock = protocol->banner.parse_banner(str);
 	    } while (strncasecmp(str, protocol->banner.resp,
 				 strlen(protocol->banner.resp)));
-	}	
+	}
 	if (!protocol->banner.is_capa) {
 	    mechlist = ask_capability(protocol, &capabilities, AUTO_NO);
 	}
-	
+
 #ifdef HAVE_SSL
 	if ((dossl==0) && (dotls==1) && (capabilities & CAPA_STARTTLS)) {
 	    char *resp;
@@ -2658,14 +2659,14 @@ int main(int argc, char **argv)
 	    printf("C: %s\r\n", protocol->tls_cmd.cmd);
 	    prot_printf(pout, "%s\r\n", protocol->tls_cmd.cmd);
 	    prot_flush(pout);
-	    
+
 	    resp = waitfor(protocol->tls_cmd.ok, protocol->tls_cmd.fail, 1);
-	    
+
 	    if (!strncasecmp(resp, protocol->tls_cmd.ok,
 			     strlen(protocol->tls_cmd.ok))) {
 
 		do_starttls(0, tls_keyfile, &ext_ssf);
-		
+
 		/* ask for the capabilities again */
 		if (verbose==1)
 		    printf("Asking for capabilities again "
@@ -2674,7 +2675,7 @@ int main(int argc, char **argv)
 		mechlist = ask_capability(protocol, &capabilities,
 					  protocol->tls_cmd.auto_capa);
 	    }
-	    
+
 	} else if ((dotls==1) && !(capabilities & CAPA_STARTTLS)) {
 	    imtest_fatal("STARTTLS not supported by the server!\n");
 	}
@@ -2687,9 +2688,9 @@ int main(int argc, char **argv)
 	printf("C: %s\r\n", protocol->compress_cmd.cmd);
 	prot_printf(pout, "%s\r\n", protocol->compress_cmd.cmd);
 	prot_flush(pout);
-	    
+
 	resp = waitfor(protocol->compress_cmd.ok, protocol->compress_cmd.fail, 1);
-	    
+
 	if (!strncasecmp(resp, protocol->compress_cmd.ok,
 			 strlen(protocol->compress_cmd.ok))) {
 	    prot_setcompress(pin);
@@ -2716,21 +2717,21 @@ int main(int argc, char **argv)
 		result = IMTEST_FAIL;
 	    }
 	}
-	
+
 	if (rock) free(rock);
-	
+
 	if (result == IMTEST_OK) {
 	    printf("Authenticated.\n");
-	    
+
 	    /* turn on layer if need be */
 	    prot_setsasl(pin,  conn);
 	    prot_setsasl(pout, conn);
 	} else {
 	    const char *s = sasl_errstring(result, NULL, NULL);
-	    
+
 	    printf("Authentication failed. %s\n", s);
 	}
-	
+
 	result = sasl_getprop(conn, SASL_SSF, &ssfp);
 	ssf = *((sasl_ssf_t *) ssfp);
 	if (result != SASL_OK) {
@@ -2779,7 +2780,7 @@ int main(int argc, char **argv)
     if (run_stress_test == 1) {
 	send_recv_test();
     } else {
-	/* else run in interactive mode or 
+	/* else run in interactive mode or
 	   pipe in a filename if applicable */
 	interactive(protocol, filename);
     }

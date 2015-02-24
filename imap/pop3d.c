@@ -794,7 +794,7 @@ void kpop(void)
 	shut_down(0);
     }
 
-    strcpy(instance, "*");
+    (void) strlcpy(instance, "*", sizeof (instance));
     r = krb_recvauth(0L, 0, &ticket, "pop", instance,
 		     (struct sockaddr_in *) &popd_remoteaddr,
 		     (struct sockaddr_in *) NULL,

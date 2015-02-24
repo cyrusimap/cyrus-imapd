@@ -93,7 +93,7 @@ EXPORTED void *xrealloc (void* ptr, unsigned size)
 EXPORTED char *xstrdup(const char* str)
 {
     char *p = xmalloc(strlen(str)+1);
-    strcpy(p, str);
+    (void) strcpy(p, str);
     return p;
 }
 
@@ -112,7 +112,7 @@ EXPORTED char *xstrdupnull(const char *str)
 EXPORTED char *xstrndup(const char* str, unsigned len)
 {
     char *p = xmalloc(len+1);
-    if (len) strncpy(p, str, len);
+    if (len) (void) strncpy(p, str, len);
     p[len] = '\0';
     return p;
 }

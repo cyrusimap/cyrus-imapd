@@ -136,7 +136,7 @@ void imclient_xs_cb(struct imclient *client, void *prock,
   if (reply->msgno != -1) {
     char tmp[100];
     XPUSHs(sv_2mortal(newSVpv("-msgno", 0)));
-    sprintf(tmp,"%ld",reply->msgno);
+    (void) snprintf(tmp, sizeof (tmp),"%ld",reply->msgno);
     XPUSHs(sv_2mortal(newSVpv(tmp, 0)));
   }
   PUTBACK;
@@ -187,7 +187,7 @@ static int get_username(void *context, int id,
 	    *result = "";
 	}
 	return SASL_OK;
-  } 
+  }
   return SASL_FAIL;
 }
 
@@ -198,16 +198,16 @@ static int get_password(sasl_conn_t *conn, void *context, int id,
   if(!text->password) {
 	char *ptr;
 	/* Using fprintf because printf won't flush under perl 5.8.0 for some
-	 * reason */ 
+	 * reason */
 	fprintf(stdout, "Password: ");
 	fflush(stdout);
 	ptr = cyrus_getpass("");
 	text->password = safemalloc(sizeof(sasl_secret_t) + strlen(ptr));
 	text->password->len = strlen(ptr);
-	strncpy((char *) text->password->data, ptr, text->password->len);
+	(void) strncpy((char *) text->password->data, ptr, text->password->len);
   }
   *psecret = text->password;
-  return SASL_OK;  
+  return SASL_OK;
 }
 
 /* callbacks we support */
@@ -291,7 +291,7 @@ CODE:
 	case 0:
 	  if (client) {
 	    rv->class = safemalloc(strlen(class) + 1);
-	    strcpy(rv->class, class);
+	    (void) strcpy(rv->class, class);
 	    rv->username = rv->authname = NULL;
 	    rv->password = NULL;
 	    rv->imclient = client;
@@ -406,7 +406,7 @@ CODE:
 	    client->password =
 		safemalloc(sizeof(sasl_secret_t) + strlen(password));
 	    client->password->len = strlen(password);
-	    strncpy((char *) client->password->data, password, client->password->len);
+	    (void) strncpy((char *) client->password->data, password, client->password->len);
 	}
 
 	rc = imclient_authenticate(client->imclient, mechlist, service, user,
@@ -495,7 +495,7 @@ PPCODE:
 	    Perl_croak(aTHX_ "addcallback: arg %d missing trigger", arg);
 	  if ((((val = hv_fetch(cb, "-flags", 6, 0)) ||
 		 (val = hv_fetch(cb, "Flags", 5, 0)))))
-	  {	
+	  {
 	    flags = SvIV(*val);
           } else {
             flags = 0;
@@ -546,7 +546,7 @@ PPCODE:
 	    xcb = (struct xscb *) safemalloc(sizeof *xcb);
 	    xcb->prev = 0;
 	    xcb->name = safemalloc(strlen(keyword) + 1);
-	    strcpy(xcb->name, keyword);
+	    (void) strcpy(xcb->name, keyword);
 	    xcb->flags = flags;
 	    xcb->next = client->cb;
 	    client->cb = xcb;
@@ -563,7 +563,7 @@ PPCODE:
 	    safefree(xcb);
 	  }
 	}
-	
+
 void
 imclient__send(client, finishproc, finishrock, str)
 	Cyrus_IMAP client
@@ -708,7 +708,7 @@ PPCODE:
 
 	/* newSVpv copies the above */
 	safefree(imapurl.freeme);
-	
+
 	XSRETURN(2);
 
 void
@@ -727,7 +727,7 @@ PPCODE:
 	memset(&imapurl, 0, sizeof(struct imapurl));
 	imapurl.server = server;
 	imapurl.mailbox = box;
-	imapurl_toURL(out_buf, &imapurl);
+	imapurl_toURL(out_buf, 4*len, &imapurl);
 
 	if(!out_buf[0]) {
 		safefree(out_buf);
@@ -738,5 +738,5 @@ PPCODE:
 
 	/* newSVpv copies this */
 	safefree(out_buf);
-	
+
 	XSRETURN(1);

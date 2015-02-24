@@ -43,6 +43,7 @@
 #include <config.h>
 
 #include "notify_log.h"
+#include "util.h"
 
 #include <syslog.h>
 #include <string.h>
@@ -59,12 +60,12 @@ char* notify_log(const char *class, const char *priority,
     int i;
 
     if (nopt) {
-	strcpy(opt_str, "(");
+	char *tail = opt_str + strlcpy(opt_str, "(", sizeof (opt_str));
 	for (i = 0; i < nopt; i++, sep = ", ") {
-	    snprintf(opt_str+strlen(opt_str), sizeof(opt_str) - 2, "%s%s",
+	    SNPRINTF_APPEND_LOG(opt_str, sizeof (opt_str), tail, "%s%s",
 		     sep, options[i]);
 	}
-	strcat(opt_str, ")");
+	STRLCAT_LOG(opt_str, ")", sizeof (opt_str));
     }
 
 /*  Not needed, we opened the log file in cyrus_init */

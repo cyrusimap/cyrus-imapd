@@ -98,7 +98,7 @@ static char *append_word(char *w1, const char *w2)
     int len2 = strlen(w2);
     w1 = xrealloc(w1, len1 + len2 + 2);
     w1[len1] = ' ';
-    strcpy(w1+len1+1, w2);
+    (void) strcpy(w1+len1+1, w2);
     return w1;
 }
 
@@ -530,7 +530,8 @@ EXPORTED int backend_starttls(	struct backend *s __attribute__((unused)),
 
 EXPORTED char *intersect_mechlists( char *config, char *server )
 {
-    char *newmechlist = xzmalloc( strlen( config ) + 1 );
+    size_t size = strlen(config)+1;
+    char *newmechlist = xzmalloc(size);
     char *cmech = NULL, *smech = NULL, *s;
     int count = 0;
     char csave, ssave;
@@ -558,9 +559,9 @@ EXPORTED char *intersect_mechlists( char *config, char *server )
 
 			    if ( strcasecmp( cmech, smech ) == 0 ) {
 				if ( count > 0 ) {
-				    strcat( newmechlist, " " );
+				    STRLCAT_LOG(newmechlist, " ", size);
 				}
-				strcat( newmechlist, cmech );
+				STRLCAT_LOG(newmechlist, cmech, size);
 				count++;
 
 				*s = ssave;
@@ -641,32 +642,32 @@ static int backend_authenticate(struct backend *s, const char *userid,
 
     /* Get SASL mechanism list.  We can force a particular
        mechanism using a <shorthost>_mechs option */
-    strcpy(buf, s->hostname);
+    (void) strlcpy(buf, s->hostname, sizeof (buf));
     p = strchr(buf, '.');
     if (p) *p = '\0';
-    strcat(buf, "_mechs");
+    STRLCAT_LOG(buf, "_mechs", sizeof (buf));
     mech_conf = config_getoverflowstring(buf, NULL);
 
     if (!mech_conf)
 	mech_conf = config_getstring(IMAPOPT_FORCE_SASL_CLIENT_MECH);
 
 #ifdef HAVE_SSL
-    strlcpy(optstr, s->hostname, sizeof(optstr));
+    STRLCPY_LOG(optstr, s->hostname, sizeof(optstr));
     p = strchr(optstr, '.');
     if (p) *p = '\0';
 
-    strlcat(optstr, "_client_cert", sizeof(optstr));
+    STRLCAT_LOG(optstr, "_client_cert", sizeof(optstr));
     const char *c_cert_file = config_getoverflowstring(optstr, NULL);
 
     if (!c_cert_file) {
 	c_cert_file = config_getstring(IMAPOPT_TLS_CLIENT_CERT);
     }
 
-    strlcpy(optstr, s->hostname, sizeof(optstr));
+    STRLCPY_LOG(optstr, s->hostname, sizeof(optstr));
     p = strchr(optstr, '.');
     if (p) *p = '\0';
 
-    strlcat(optstr, "_client_key", sizeof(optstr));
+    STRLCAT_LOG(optstr, "_client_key", sizeof(optstr));
 
     const char *c_key_file = config_getoverflowstring(optstr, NULL);
     if (!c_key_file) {

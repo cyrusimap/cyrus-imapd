@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -59,6 +59,7 @@
 
 #include "error_table.h"
 #include "internal.h"
+#include "util.h"
 
 EXPORTED struct et_list * _et_list = (struct et_list *) NULL;
 
@@ -76,7 +77,7 @@ EXPORTED struct et_list * _et_list = (struct et_list *) NULL;
 
 /*
  * XXX for now, we define error_message by hand.  Ultimately, we
- * should fix up com_err.h so that it's safe to #include here 
+ * should fix up com_err.h so that it's safe to #include here
  * directly.
  */
 #if defined(__STDC__) || defined(_WINDOWS)
@@ -100,15 +101,15 @@ static void
 
     *errbuf = '\0';
     if (whoami) {
-	strcat (errbuf, whoami);
-	strcat (errbuf, ": ");
+	SNPRINTF_LOG(errbuf, sizeof (errbuf), "%s: ", whoami);
     }
     if (code) {
-	strcat (errbuf, error_message(code));
-	strcat (errbuf, " ");
+	(void) strlcat(errbuf, error_message(code), sizeof (errbuf));
+	STRLCAT_LOG(errbuf, " ", sizeof (errbuf));
     }
     if (fmt) {
-        vsprintf (errbuf + strlen (errbuf), fmt, args);
+    	size_t len = strlen(errbuf);
+        VSNPRINTF_LOG(errbuf+len, sizeof (errbuf)-len, fmt, args);
     }
 #ifdef _WINDOWS
     MessageBox (NULL, errbuf, "Kerboros", MB_ICONEXCLAMATION);

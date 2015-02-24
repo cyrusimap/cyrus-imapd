@@ -699,7 +699,7 @@ struct namespace_t namespace_calendar = {
 #endif
      ALLOW_DAV | ALLOW_WRITECOL | ALLOW_CAL ),
     &my_caldav_init, &my_caldav_auth, my_caldav_reset, &my_caldav_shutdown,
-    { 
+    {
 	{ &meth_acl,		&caldav_params },	/* ACL		*/
 	{ &meth_copy,		&caldav_params },	/* COPY		*/
 	{ &meth_delete,		&caldav_params },	/* DELETE	*/
@@ -723,7 +723,7 @@ struct namespace_t namespace_calendar = {
 
 /* Namespace for Freebusy Read URL */
 struct namespace_t namespace_freebusy = {
-    URL_NS_FREEBUSY, 0, "/freebusy", NULL, 1 /* auth */, 
+    URL_NS_FREEBUSY, 0, "/freebusy", NULL, 1 /* auth */,
     MBTYPE_CALENDAR,
     ALLOW_READ,
     NULL, NULL, NULL, NULL,
@@ -1486,9 +1486,11 @@ static int dump_calendar(struct transaction_t *txn, int rights)
     }
 
     /* Check any preconditions */
-    sprintf(etag, "%u-%u-%u",
-	    mailbox->i.uidvalidity, mailbox->i.last_uid, mailbox->i.exists);
-    precond = check_precond(txn, etag, mailbox->index_mtime);
+    SNPRINTF_LOG(
+    	etag, sizeof (etag), "%u-%u-%u", mailbox->i.uidvalidity,
+    	mailbox->i.last_uid, mailbox->i.exists
+    );
+    precond = caldav_check_precond(txn, NULL, etag, mailbox->index_mtime);
 
     switch (precond) {
     case HTTP_OK:
@@ -2269,7 +2271,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 	cyrus_acl_myrights(httpd_authstate, txn->req_tgt.mbentry->acl) : 0;
 
     if (txn->req_tgt.collection) {
-	/* Download an entire calendar collection */ 
+	/* Download an entire calendar collection */
 	return dump_calendar(txn, rights);
     }
     else if (txn->req_tgt.userid) {
@@ -2625,7 +2627,6 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 	resp_body->type = mime->content_type;
 	resp_body->len = strlen(data);
 
-	/* Fill in Content-Location */
 	resp_body->loc = txn->req_tgt.path;
 
 	/* Fill in Expires and Cache-Control */
@@ -4652,7 +4653,7 @@ static int propfind_tzid(const xmlChar *name, xmlNsPtr ns,
 			 name, ns, BAD_CAST value, 0);
 
     buf_free(&attrib);
-    
+
     return r;
 }
 
@@ -4727,7 +4728,7 @@ static int proppatch_tzid(xmlNodePtr prop, unsigned set,
 
     xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
 		 &propstat[PROPSTAT_FORBID], prop->name, prop->ns, NULL, 0);
-	    
+
     *pctx->ret = HTTP_FORBIDDEN;
 
     return 0;
@@ -4844,7 +4845,7 @@ static int report_cal_query(struct transaction_t *txn,
 			 strlen(txn->req_tgt.mbentry->name)+3);
 	    strcat(txn->req_tgt.mbentry->name, ".%");
 	    mboxlist_findall(NULL,  /* internal namespace */
-			     txn->req_tgt.mbentry->name, 1, httpd_userid, 
+			     txn->req_tgt.mbentry->name, 1, httpd_userid,
 			     httpd_authstate, propfind_by_collection, fctx);
 	}
 
@@ -5179,7 +5180,7 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
 	    char mboxpat[MAX_MAILBOX_BUFFER+1];
 	    snprintf(mboxpat, sizeof(mboxpat), "%s.%%", mailboxname);
 	    mboxlist_findall(NULL,  /* internal namespace */
-			     mboxpat, 1, httpd_userid, 
+			     mboxpat, 1, httpd_userid,
 			     httpd_authstate, busytime_by_collection, fctx);
 	}
 
@@ -5223,7 +5224,7 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
 	isdur = !icaldurationtype_is_null_duration(fb->per.duration);
 	end = !isdur ? fb->per.end :
 	    icaltime_add(fb->per.start, fb->per.duration);
-	    
+
 	/* Skip periods of different type or that don't overlap */
 	if ((fb->type != next_fb->type) ||
 	    icaltime_compare(end, next_fb->per.start) < 0) continue;
@@ -5232,7 +5233,7 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
 	next_isdur = !icaldurationtype_is_null_duration(next_fb->per.duration);
 	next_end = !next_isdur ? next_fb->per.end :
 	    icaltime_add(next_fb->per.start, next_fb->per.duration);
-	    
+
 	if (icaltime_compare(end, next_end) >= 0) {
 	    /* Current period subsumes next */
 	    next_fb->per.end = fb->per.end;
@@ -5560,7 +5561,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 		       buf_release(&txn->buf), txn->req_hdrs);
 
     buf_printf(&txn->buf, "attachment;\r\n\tfilename=\"%s\"", resource);
-    if (sched_tag) buf_printf(&txn->buf, ";\r\n\tschedule-tag=%s", sched_tag);    
+    if (sched_tag) buf_printf(&txn->buf, ";\r\n\tschedule-tag=%s", sched_tag);
     if (tzbyref) buf_printf(&txn->buf, ";\r\n\ttz-by-ref=true");
     spool_cache_header(xstrdup("Content-Disposition"),
 		       buf_release(&txn->buf), txn->req_hdrs);
@@ -6203,7 +6204,7 @@ static void sched_deliver_remote(const char *recipient,
 			strlcpy(statbuf, (const char *) status, sizeof(statbuf));
 		    else
 			strlcpy(statbuf, (const char *) status, 4);
-		    
+
 		    sched_data->status = statbuf;
 		}
 
@@ -6408,7 +6409,7 @@ static void sched_pollstatus(const char *organizer,
 	}
 
 	/* Attempt to deliver to each voter in the list - removing as we go */
-	while (voters) { 
+	while (voters) {
 	    struct strlist *next = voters->next;
 
 	    sched_data.itip = stat;
@@ -6742,7 +6743,7 @@ static int deliver_merge_request(const char *attendee,
 	    if (param &&
 		icalparameter_get_partstat(param) ==
 		ICAL_PARTSTAT_NEEDSACTION) {
-		prop = 
+		prop =
 		    icalcomponent_get_first_property(new_comp,
 						     ICAL_TRANSP_PROPERTY);
 		if (prop)
@@ -7199,7 +7200,7 @@ static void sched_exclude(const char *attendee __attribute__((unused)),
 /*
  * sched_request() helper function
  *
- * Process all attendees in the given component and add a 
+ * Process all attendees in the given component and add a
  * properly modified component to the attendee's iTIP request if necessary
  */
 static void process_attendees(icalcomponent *comp, unsigned ncomp,
@@ -7645,7 +7646,7 @@ static icalcomponent *trim_attendees(icalcomponent *comp, const char *userid,
 
 	    if (partstat) {
 		/* Get the PARTSTAT */
-		icalparameter *param = 
+		icalparameter *param =
 		    icalproperty_get_first_parameter(myattendee,
 						     ICAL_PARTSTAT_PARAMETER);
 		if (param) *partstat = icalparameter_get_partstat(param);
@@ -8004,7 +8005,7 @@ static int meth_get_fb(struct transaction_t *txn,
 	calfilter.start = icaltime_from_rfc3339_string(param->s);
 	if (icaltime_is_null_time(calfilter.start)) return HTTP_BAD_REQUEST;
 
-	/* Default to end of given day */	
+	/* Default to end of given day */
 	start = icaltime_as_timet_with_zone(calfilter.start, utc);
 	tm = localtime(&start);
 

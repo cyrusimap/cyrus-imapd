@@ -151,7 +151,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
   int ret = FALSE;
 
   /* get one token from the lexer */
-  while(token == EOL) 
+  while(token == EOL)
       token = timlex(NULL, NULL, sieved_in);
 
   if (!authenticated && (token > 255) && (token!=AUTHENTICATE) &&
@@ -216,7 +216,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 	goto error;
       }
 
-      token = timlex(NULL, NULL, sieved_in);      
+      token = timlex(NULL, NULL, sieved_in);
     }
 
     if (token != EOL)
@@ -286,19 +286,19 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 	  error_msg = "SPACE must occur after HAVESPACE";
 	  goto error;
       }
-      
+
       if (timlex(&sieve_name, NULL, sieved_in)!=STRING)
       {
 	  error_msg = "Did not specify script name";
 	  goto error;
       }
-      
+
       if (timlex(NULL, NULL, sieved_in)!=SPACE)
       {
 	  error_msg = "Expected SPACE after SCRIPTNAME";
 	  goto error;
       }
-      
+
       if (timlex(NULL, &num, sieved_in)!=NUMBER)
       {
 	  error_msg = "Expected Number";
@@ -320,7 +320,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 
   case LOGOUT:
       token = timlex(NULL, NULL, sieved_in);
-      
+
       /* timlex() will return LOGOUT when the remote disconnects badly */
       if (token!=EOL && token!=EOF && token!=LOGOUT)
       {
@@ -331,7 +331,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
       /* no referral for logout */
 
       cmd_logout(sieved_out, sieved_in);
-      
+
       ret = TRUE;
       goto done;
       break;
@@ -359,7 +359,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 	goto do_referral;
 
     getscript(sieved_out, &sieve_name);
-    
+
     break;
 
 
@@ -398,7 +398,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 	goto do_referral;
 
     putscript(sieved_out, &sieve_name, &sieve_data, verify_only);
-    
+
     break;
 
   case SETACTIVE:
@@ -424,7 +424,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 	goto do_referral;
 
     setactive(sieved_out, &sieve_name);
-    
+
     break;
 
   case DELETESCRIPT:
@@ -450,7 +450,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 	goto do_referral;
 
     deletescript(sieved_out, &sieve_name);
-    
+
     break;
 
   case LISTSCRIPTS:
@@ -463,9 +463,9 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 
     if(referral_host)
 	goto do_referral;
-    
+
     listscripts(sieved_out);
-    
+
     break;
 
   case STARTTLS:
@@ -483,7 +483,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 	goto do_referral;
 
     cmd_starttls(sieved_out, sieved_in);
-    
+
     break;
 
   case NOOP:
@@ -504,7 +504,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 	goto error;
       }
 
-      token = timlex(NULL, NULL, sieved_in);      
+      token = timlex(NULL, NULL, sieved_in);
     }
 
     if (token != EOL)
@@ -537,13 +537,13 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 
   }
 
- done: 
+ done:
   /* free memory */
   buf_free(&mechanism_name);
   buf_free(&initial_challenge);
   buf_free(&sieve_name);
   buf_free(&sieve_data);
- 
+
   prot_flush(sieved_out);
 
   return ret;
@@ -570,7 +570,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
       strlcpy(buf, referral_host, sizeof(buf));
       c = strchr(buf, '!');
       if(c) *c = '\0';
-      
+
       prot_printf(sieved_out, "BYE (REFERRAL \"sieve://%s\") \"Try Remote.\"\r\n",
 		  buf);
       ret = TRUE;
@@ -627,7 +627,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
   {
       /* a value was provided on the wire, possibly of zero length */
       clientin = xmalloc(initial_challenge->len*2);
-      
+
       if (initial_challenge->len) {
 	  sasl_result=sasl_decode64(initial_challenge->s,
 				    initial_challenge->len,
@@ -746,7 +746,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
       struct namespace sieved_namespace;
       char inboxname[MAX_MAILBOX_BUFFER];
       int r;
-      
+
       /* Set namespace */
       if ((r = mboxname_init_namespace(&sieved_namespace, 0)) != 0) {
 	  syslog(LOG_ERR, "%s", error_message(r));
@@ -762,7 +762,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
 					     username, inboxname);
 
       r = mboxlist_lookup(inboxname, &mbentry, NULL);
-      
+
       if(r && !sieved_userisadmin) {
 	  /* lookup error */
 	  syslog(LOG_ERR, "%s", error_message(r));
@@ -797,7 +797,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
 		  referral_host =
 		      (char*) xmalloc(strlen(authname)+1+strlen(username)+1+
 				      strlen(mbentry->server)+1);
-		  sprintf((char*) referral_host, "%s;%s@%s",
+		  (void) sprintf((char*) referral_host, "%s;%s@%s",
 			  authname, username, mbentry->server);
 
 		  free(authname);
@@ -848,7 +848,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
   } else {
       prot_printf(sieved_out, "OK\r\n");
   }
-  
+
   syslog(LOG_NOTICE, "login: %s %s %s%s %s", sieved_clienthost, username,
 	 mech, starttls_done ? "+TLS" : "", "User logged in");
 
@@ -938,7 +938,7 @@ static int cmd_starttls(struct protstream *sieved_out, struct protstream *sieved
     if (result != SASL_OK) {
         fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
     }
-            
+
     result = sasl_setprop(sieved_saslconn, SASL_AUTH_EXTERNAL, authid);
 
     if (result != SASL_OK) {

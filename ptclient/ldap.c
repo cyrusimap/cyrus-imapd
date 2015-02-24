@@ -285,7 +285,7 @@ static char *ptsmodule_canonifyid(const char *identifier, size_t len)
 }
 
 
-static int ptsmodule_connect(void) 
+static int ptsmodule_connect(void)
 {
 	int rc = 0;
 
@@ -399,7 +399,7 @@ static int ptsmodule_connect(void)
 			return PTSM_FAIL;
 		}
 	}
-	
+
 	if (ptsm->sasl) {
 
 		if (EMPTY(ptsm->mech))
@@ -419,13 +419,13 @@ static int ptsmodule_connect(void)
 		}
 
 		rc = ldap_sasl_interactive_bind_s(
-			ptsm->ld, 
+			ptsm->ld,
 			ptsm->bind_dn,
-			ptsm->mech, 
-			NULL, 
-			NULL, 
-			LDAP_SASL_QUIET, 
-			ptsmodule_interact, 
+			ptsm->mech,
+			NULL,
+			NULL,
+			LDAP_SASL_QUIET,
+			ptsmodule_interact,
 			ptsm);
 	} else
 		rc = ldap_simple_bind_s(ptsm->ld, ptsm->bind_dn, ptsm->password);
@@ -583,12 +583,14 @@ static int ptsmodule_escape(
     char **result)
 {
     char *buf;
+    size_t buf_size;
     char *end, *ptr, *temp;
 
     if (n > strlen(s))  // Sanity check, just in case
         return PTSM_FAIL;
 
-    buf = xmalloc(n * 5 + 1);
+    buf_size = n * 5 + 1;
+    buf = xmalloc(buf_size);
     if (buf == NULL) {
         return PTSM_NOMEM;
     }
@@ -600,29 +602,32 @@ static int ptsmodule_escape(
     while (((temp = strpbrk(ptr, "*()\\\0"))!=NULL) && (temp<end)) {
 
         if (temp>ptr)
-            strncat(buf, ptr, temp-ptr);
+            /* Copy just the segment between ptr to just before the delimiter. */
+            (void) strncat(buf, ptr, temp-ptr);
 
+	/* Append the expanded delimiter. */
         switch (*temp) {
             case '*':
-                strcat(buf, "\\2a");
+                STRLCAT_LOG(buf, "\\2a", buf_size);
                 break;
             case '(':
-                strcat(buf, "\\28");
+                STRLCAT_LOG(buf, "\\28", buf_size);
                 break;
             case ')':
-                strcat(buf, "\\29");
+                STRLCAT_LOG(buf, "\\29", buf_size);
                 break;
             case '\\':
-                strcat(buf, "\\5c");
+                STRLCAT_LOG(buf, "\\5c", buf_size);
                 break;
             case '\0':
-                strcat(buf, "\\00");
+                STRLCAT_LOG(buf, "\\00", buf_size);
                 break;
         }
         ptr=temp+1;
     }
     if (ptr<end)
-        strncat(buf, ptr, end-ptr);
+    	/* Append the remainder of string s. */
+        STRLCAT_LOG(buf, ptr, buf_size);
 
     *result = buf;
 
@@ -662,9 +667,9 @@ static int ptsmodule_standard_root_dn(char *domain, const char **result)
 
     while (part != NULL) {
 	syslog(LOG_DEBUG, "Root DN now %s", buf);
-	strcat(buf, ",dc=");
+	STRLCAT_LOG(buf, ",dc=", root_dn_len);
 	syslog(LOG_DEBUG, "Root DN now %s", buf);
-	strcat(buf, part);
+	STRLCAT_LOG(buf, part, root_dn_len);
 	syslog(LOG_DEBUG, "Root DN now %s", buf);
 	part = strtok_r(NULL, ".", &ptr);
     }
@@ -749,6 +754,7 @@ static int ptsmodule_expand_tokens(
     const char *dn,
     char **result)
 {
+    size_t buf_size;
     char *buf;
     char *end, *ptr, *temp;
     char *ebuf, *user;
@@ -779,8 +785,9 @@ static int ptsmodule_expand_tokens(
 
     /* percents * 3 * maxparamlength because we need to account for
          * an entirely-escaped worst-case-length parameter */
-    buf = xmalloc(strlen(pattern) + (percents * 3 * maxparamlength) +1);
-    if (buf == NULL)
+    buf_size = strlen(pattern) + (percents * 3 * maxparamlength) +1;
+    buf=xmalloc(buf_size);
+    if(buf == NULL)
         return PTSM_NOMEM;
 
     buf[0] = '\0';
@@ -791,7 +798,8 @@ static int ptsmodule_expand_tokens(
     while ((temp=strchr(ptr,'%')) != NULL) {
 
         if ((temp-ptr) > 0)
-            strncat(buf, ptr, temp-ptr);
+            /* Copy segment of s between ptr upto, but not including the '%' delimiter. */
+            (void) strncat(buf, ptr, temp-ptr);
 
         if ((temp+1) >= end) {
             syslog(LOG_DEBUG, "Incomplete lookup substitution format");
@@ -800,13 +808,14 @@ static int ptsmodule_expand_tokens(
 
         switch (*(temp+1)) {
             case '%':
-                strncat(buf,temp+1,1);
+            	/* Copy literal percent-sign. */
+                (void) strncat(buf,temp+1,1);
                 break;
             case 'u':
                 if (ISSET(username)) {
                     rc = ptsmodule_escape(username, strlen(username), &ebuf);
                     if (rc == PTSM_OK) {
-                        strcat(buf,ebuf);
+                        STRLCAT_LOG(buf,ebuf, buf_size);
                         free(ebuf);
                     }
                 } else
@@ -818,7 +827,7 @@ static int ptsmodule_expand_tokens(
                     user = strchr(username, '@');
                     rc = ptsmodule_escape(username, (user ? (unsigned char)(user - username) : strlen(username)), &ebuf);
                     if (rc == PTSM_OK) {
-                        strcat(buf,ebuf);
+                        STRLCAT_LOG(buf,ebuf, buf_size);
                         free(ebuf);
                     }
                 } else
@@ -836,7 +845,7 @@ static int ptsmodule_expand_tokens(
                 if (ISSET(username) && (domain = strchr(username, '@')) && domain[1]!='\0') {
                     rc=ptsmodule_tokenize_domains(domain+1, (int) *(temp+1)-48, &ebuf);
                     if (rc == PTSM_OK) {
-                        strcat(buf,ebuf);
+                        STRLCAT_LOG(buf,ebuf, buf_size);
                         free(ebuf);
                     }
                 } else
@@ -848,8 +857,8 @@ static int ptsmodule_expand_tokens(
                     rc=ptsmodule_escape(domain+1, strlen(domain+1), &ebuf);
                     if (rc == PTSM_OK) {
                         if (*(temp+1) == 'R')
-                            strcat(buf,"@");
-                        strcat(buf,ebuf);
+                            (void) strlcat(buf,"@", buf_size);
+                        STRLCAT_LOG(buf,ebuf, buf_size);
                         free(ebuf);
                     }
                     break;
@@ -859,7 +868,7 @@ static int ptsmodule_expand_tokens(
                 if (ISSET(dn)) {
                     rc = ptsmodule_escape(dn, strlen(dn), &ebuf);
                     if (rc == PTSM_OK) {
-                        strcat(buf,ebuf);
+                        STRLCAT_LOG(buf,ebuf, buf_size);
                         free(ebuf);
                     }
                 } else
@@ -871,7 +880,7 @@ static int ptsmodule_expand_tokens(
         ptr=temp+2;
     }
     if (temp<end)
-        strcat(buf, ptr);
+        STRLCAT_LOG(buf, ptr, buf_size);
 
     *result = buf;
 
@@ -914,8 +923,8 @@ static int ptsmodule_get_dn(
         if (authzid == NULL)
             return PTSM_NOMEM;
 
-        strcpy(authzid, "u:");
-        strcpy(authzid+2, canon_id);
+        (void) strcpy(authzid, "u:");
+        STRLCPY_LOG(authzid+STRLEN("u:"), canon_id, size+1);
         c.ldctl_oid = LDAP_CONTROL_PROXY_AUTHZ;
         c.ldctl_value.bv_val = authzid;
         c.ldctl_value.bv_len = size + 2;
@@ -1106,13 +1115,13 @@ static int ptsmodule_make_authstate_attribute(
         (*newstate)->userid.id[0] = '\0';
         for (i = 0; i < numvals; i++) {
             unsigned int j;
-            strcpy((*newstate)->groups[i].id, "group:");
+            (void) strlcpy((*newstate)->groups[i].id, "group:", sizeof ((*newstate)->groups[i].id));
             rdn = ldap_explode_rdn(vals[i],1);
             for (j = 0; j < strlen(rdn[0]); j++) {
               if (Uisupper(rdn[0][j]))
                   rdn[0][j]=tolower(rdn[0][j]);
             }
-            strlcat((*newstate)->groups[i].id, rdn[0], sizeof((*newstate)->groups[i].id));
+            STRLCAT_LOG((*newstate)->groups[i].id, rdn[0], sizeof((*newstate)->groups[i].id));
             (*newstate)->groups[i].hash = strhash((*newstate)->groups[i].id);
         }
 
@@ -1141,7 +1150,7 @@ static int ptsmodule_make_authstate_attribute(
                     }
 
                     size=strlen(vals[0]);
-                    strcpy((*newstate)->userid.id, ptsmodule_canonifyid(vals[0],size));
+                    STRLCPY_LOG((*newstate)->userid.id, ptsmodule_canonifyid(vals[0],size), sizeof ((*newstate)->userid.id));
                     (*newstate)->userid.hash = strhash((*newstate)->userid.id);
                 }
 
@@ -1165,7 +1174,7 @@ static int ptsmodule_make_authstate_attribute(
 
     /* fill in the rest of our new state structure */
     if ((*newstate)->userid.id[0]=='\0') {
-        strcpy((*newstate)->userid.id, canon_id);
+        STRLCPY_LOG((*newstate)->userid.id, canon_id, sizeof ((*newstate)->userid.id));
         (*newstate)->userid.hash = strhash(canon_id);
     }
     (*newstate)->mark = time(0);
@@ -1252,7 +1261,7 @@ static int ptsmodule_make_authstate_filter(
         goto done;
     }
     (*newstate)->ngroups = n;
-    strcpy((*newstate)->userid.id, canon_id);
+    STRLCPY_LOG((*newstate)->userid.id, canon_id, sizeof ((*newstate)->userid.id));
     (*newstate)->userid.hash = strhash(canon_id);
     (*newstate)->mark = time(0);
 
@@ -1271,7 +1280,7 @@ static int ptsmodule_make_authstate_filter(
         goto done;
     }
 
-    strcpy((*newstate)->groups[i].id, "group:");
+    (void) strlcpy((*newstate)->groups[i].id, "group:", sizeof ((*newstate)->groups[i].id));
 
     unsigned int j;
     for (j =0; j < strlen(vals[0]); j++) {
@@ -1279,7 +1288,7 @@ static int ptsmodule_make_authstate_filter(
         vals[0][j]=tolower(vals[0][j]);
     }
 
-    strlcat((*newstate)->groups[i].id, vals[0], sizeof((*newstate)->groups[i].id));
+    STRLCAT_LOG((*newstate)->groups[i].id, vals[0], sizeof((*newstate)->groups[i].id));
     (*newstate)->groups[i].hash = strhash((*newstate)->groups[i].id);
 
     ldap_value_free(vals);
@@ -1351,7 +1360,7 @@ static int ptsmodule_make_authstate_group(
 
 	syslog(LOG_DEBUG, "(groups) Input domain would be %s", domain);
 
-	snprintf(domain_filter, sizeof(domain_filter), ptsm->domain_filter, domain);
+	SNPRINTF_LOG(domain_filter, sizeof(domain_filter), ptsm->domain_filter, domain);
 
 	syslog(LOG_DEBUG, "(groups) Domain filter: %s", domain_filter);
 
@@ -1436,7 +1445,7 @@ static int ptsmodule_make_authstate_group(
         goto done;
     }
     (*newstate)->ngroups = 0;
-    strcpy((*newstate)->userid.id, canon_id);
+    STRLCPY_LOG((*newstate)->userid.id, canon_id, sizeof ((*newstate)->userid.id));
     (*newstate)->userid.hash = strhash(canon_id);
     (*newstate)->mark = time(0);
 

@@ -55,6 +55,7 @@
 
 #include "acl.h"
 #include "auth.h"
+#include "util.h"
 #include "xmalloc.h"
 #include "strarray.h"
 #include "libconfig.h"
@@ -109,6 +110,7 @@ EXPORTED int cyrus_acl_set(char **acl, const char *identifier,
 		  cyrus_acl_canonproc_t *canonproc,
 		  void *canonrock)
 {
+    size_t size;
     const char *canonid;
     char *newidentifier = 0;
     char *newacl;
@@ -120,9 +122,10 @@ EXPORTED int cyrus_acl_set(char **acl, const char *identifier,
     canonid = auth_canonifyid(*identifier == '-' ? identifier+1 : identifier, 0);
     if (canonid) {
 	if (*identifier == '-') {
-	    newidentifier = xmalloc(strlen(canonid)+2);
+	    size = strlen(canonid)+2;
+	    newidentifier = xmalloc(size);
 	    newidentifier[0] = '-';
-	    strcpy(newidentifier+1, canonid);
+	    (void) strlcpy(newidentifier+1, canonid, sizeof (newidentifier)-1);
 	    identifier = newidentifier;
 	} else {
 	    identifier = canonid;
@@ -185,26 +188,27 @@ EXPORTED int cyrus_acl_set(char **acl, const char *identifier,
 	/* Remove any existing entry for 'identifier'.
 	   Special case: When we try to delete an invalid/non-existent identifier,
 	   both 'thisid' and 'nextid' point to the end of *acl. */
-	newacl = xmalloc(strlen(*acl) + strlen(nextid) - strlen(thisid) + 1);
+	size = strlen(*acl) + strlen(nextid) - strlen(thisid) + 1;
+	newacl = xmalloc(size);
 	/* Copy existing ACLs without the current identifier.
 	   Note: The buffer will not be zero terminated. */
-	strncpy(newacl, *acl, (thisid - *acl));
+	(void) strncpy(newacl, *acl, (thisid - *acl));
 	/* Append the remaining ACL string. Zero-terminates the string. */
-	strcpy(newacl + (thisid - *acl), nextid);
+	STRLCPY_LOG(newacl + (thisid - *acl), nextid, size - (thisid - *acl));
 
 	free(*acl);
 	*acl = newacl;
     }
     else {
 	/* Replace any existing entry for 'identifier' */
-	newacl = xmalloc((thisid - *acl) + strlen(identifier) + 40 +
-			 strlen(nextid));
-	strncpy(newacl, *acl, (thisid - *acl));
-	strcpy(newacl + (thisid - *acl), identifier);
-	strcat(newacl, "\t");
+	size = (thisid - *acl) + strlen(identifier) + 40 + strlen(nextid);
+	newacl = xmalloc(size);
+	/* ACH: missing NUL at end of string */ (void) strncpy(newacl, *acl, (thisid - *acl));
+	(void) strlcpy(newacl + (thisid - *acl), identifier, size - (thisid - *acl));
+	(void) strlcat(newacl, "\t", size);
 	(void) cyrus_acl_masktostr(access, newacl + strlen(newacl));
-	strcat(newacl, "\t");
-	strcat(newacl, nextid);
+	(void) strlcat(newacl, "\t", size);
+	STRLCAT_LOG(newacl, nextid, size);
 	free(*acl);
 	*acl = newacl;
     }

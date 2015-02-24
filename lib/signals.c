@@ -148,7 +148,7 @@ static char *describe_process(pid_t pid)
     char buf[1024+32];
     char cmdline[1024];
 
-    snprintf(buf, sizeof(buf), "/proc/%d/cmdline", (int)pid);
+    (void) snprintf(buf, sizeof(buf), "/proc/%d/cmdline", (int)pid);
     cmdline[0] = '\0';
     fd = open(buf, O_RDONLY, 0);
     if (fd >= 0) {
@@ -165,12 +165,12 @@ static char *describe_process(pid_t pid)
 	close(fd);
     }
     if (!cmdline[0])
-	strcpy(cmdline, "unknown");
-    snprintf(buf, sizeof(buf), "%d (%s)", (int)pid, cmdline);
+	(void) strlcpy(cmdline, "unknown", sizeof (cmdline));
+    (void) snprintf(buf, sizeof(buf), "%d (%s)", (int)pid, cmdline);
     return xstrdup(buf);
 #else
     char buf[32];
-    snprintf(buf, sizeof(buf), "%d", (int)pid);
+    (void) snprintf(buf, sizeof(buf), "%d", (int)pid);
     return xstrdup(buf);
 #endif
 }

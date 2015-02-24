@@ -40,13 +40,11 @@ int appkey(void *rock,
     if (r) {
 	newlen = strlen(r) + keylen + 2;
 	r = xrealloc(r, newlen);
-	strcat(r, " ");
-	strncpy(r + strlen(r), key, keylen);
-	r[newlen-1] = '\0';
+	(void) strlcat(r, " ", newlen);
+	(void) strlcpy(r + strlen(r), key, keylen);
     } else {
 	r = xmalloc(keylen + 1);
-	strncpy(r, key, keylen);
-	r[keylen] = '\0';
+	(void) strlcpy(r, key, keylen+1);
     }
 
     *(char **)rock = r;

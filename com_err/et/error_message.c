@@ -54,6 +54,7 @@
 #include "error_table.h"
 #include "mit-sipb-copyright.h"
 #include "internal.h"
+#include "util.h"
 
 static const char copyright[] =
     "Copyright 1986, 1987, 1988 by the Student Information Processing Board\nand the department of Information Systems\nof the Massachusetts Institute of Technology";
@@ -69,8 +70,6 @@ long code;
     long l_offset;
     struct et_list *et;
     long table_num;
-    int started = 0;
-    char *cp;
 
     l_offset = code & ((1<<ERRCODE_RANGE)-1);
     offset = (int) l_offset;
@@ -94,23 +93,12 @@ long code;
 	}
     }
 oops:
-    strcpy (buffer, "Unknown code ");
-    if (table_num) {
-	strcat (buffer, error_table_name (table_num));
-	strcat (buffer, " ");
-    }
-    for (cp = buffer; *cp; cp++)
-	;
-    if (offset >= 100) {
-	*cp++ = '0' + offset / 100;
-	offset %= 100;
-	started++;
-    }
-    if (started || offset >= 10) {
-	*cp++ = '0' + offset / 10;
-	offset %= 10;
-    }
-    *cp++ = '0' + offset;
-    *cp = '\0';
+    SNPRINTF_LOG(
+    	buffer, sizeof (buffer), "Unknown code %s%s%03d",
+    	table_num ? error_table_name(table_num) : "",
+    	table_num ? " " : "",
+    	offset
+    );
+
     return(buffer);
 }

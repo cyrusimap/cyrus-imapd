@@ -83,7 +83,7 @@ static int add_arg(char *buf, int max_size, const char *arg, int *buflen)
 
     if (*buflen + len > max_size) return -1;
 
-    strcat(buf+*buflen, myarg);
+    (void) strcat(buf+*buflen, myarg);
     *buflen += len;
 
     return 0;
@@ -109,7 +109,7 @@ static int notify(const char *notifyd_path, const char *method,
 
     memset((char *)&sun, 0, sizeof(sun));
     sun.sun_family = AF_UNIX;
-    strncpy(sun.sun_path, notifyd_path, sizeof(sun.sun_path));
+    (void) strlcpy(sun.sun_path, notifyd_path, sizeof(sun.sun_path));
 
     /*
      * build request of the form:
@@ -124,7 +124,7 @@ static int notify(const char *notifyd_path, const char *method,
     if (!r) r = add_arg(buf, MAXSIZE, user, &buflen);
     if (!r) r = add_arg(buf, MAXSIZE, mailbox, &buflen);
 
-    snprintf(noptstr, sizeof(noptstr), "%d", nopt);
+    (void) snprintf(noptstr, sizeof(noptstr), "%d", nopt);
     if (!r) r = add_arg(buf, MAXSIZE, noptstr, &buflen);
 
     for (i = 0; !r && i < nopt; i++) {
@@ -201,7 +201,7 @@ main(int argc, char *argv[])
       fprintf(stderr,"too many options (> %d)\n", MAX_OPT);
       exit(1);
   }
- 
+
   if (!*user) user = getpwuid(getuid())->pw_name;
 
   return notify(path, method, class, priority, user, mailbox,
