@@ -2381,6 +2381,8 @@ EXPORTED struct synccrcs mailbox_synccrcs(struct mailbox *mailbox, int force)
 	struct annot_calc_rock cr = { 0, 0 };
 	annotatemore_findall(mailbox->name, record.uid, /* all entries*/"*",
 			     calc_one_annot, &cr);
+
+	crcs.annot ^= cr.annot;
     }
 
     /* possibly upgrade the stored value */
