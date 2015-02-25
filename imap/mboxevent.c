@@ -743,7 +743,7 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
 	}
     }
 
-    imapurl_toURL(url, &imapurl);
+    imapurl_toURL(url, sizeof (url), &imapurl);
     FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(url));
 
     if (serveraddr && mboxevent_expected_param(event->type, EVENT_SERVER_ADDRESS)) {
