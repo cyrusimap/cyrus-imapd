@@ -6043,12 +6043,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
 
     r = mlookup(NULL, NULL, oldmailboxname, &mbentry);
 
-    if (r) {
-	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-	goto done;
-    }
-
-    if (mbentry->mbtype & MBTYPE_REMOTE) {
+    if (!r && mbentry->mbtype & MBTYPE_REMOTE) {
 	/* remote mailbox */
 	struct backend *s = NULL;
 	int res;
