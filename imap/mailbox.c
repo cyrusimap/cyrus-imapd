@@ -2273,23 +2273,22 @@ EXPORTED void mailbox_annot_changed(struct mailbox *mailbox,
 			   const struct buf *oldval,
 			   const struct buf *newval)
 {
-    /* check that the record isn't already expunged */
-    struct index_record record;
-    int r = mailbox_find_index_record(mailbox, uid, &record);
-    if (r || record.system_flags & FLAG_EXPUNGED)
-	return;
-
-    /* we are dirtying both index and quota */
-    mailbox_index_dirty(mailbox);
-    mailbox_quota_dirty(mailbox);
-
     /* update sync_crc - NOTE, only per-message annotations count */
     if (uid) {
+	/* check that the record isn't already expunged */
+	struct index_record record;
+	int r = mailbox_find_index_record(mailbox, uid, &record);
+	if (r || record.system_flags & FLAG_EXPUNGED)
+	    return;
 	if (oldval->len)
 	    mailbox->i.synccrcs.annot ^= crc_annot(uid, entry, userid, oldval);
 	if (newval->len)
 	    mailbox->i.synccrcs.annot ^= crc_annot(uid, entry, userid, newval);
     }
+
+    /* we are dirtying both index and quota */
+    mailbox_index_dirty(mailbox);
+    mailbox_quota_dirty(mailbox);
 
     /* corruption prevention - check we don't go negative */
     if (mailbox->i.quota_annot_used > (quota_t)oldval->len)
