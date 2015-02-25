@@ -12,6 +12,8 @@
 
 #include "tls_th-lock.h"
 
+#ifdef HAVE_SSL
+
 static pthread_mutex_t *lock_cs;
 static long *lock_count;
 
@@ -67,3 +69,4 @@ unsigned long pthreads_thread_id(void)
     return(ret);
 }
 
+#endif /* HAVE_SSL */

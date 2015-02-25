@@ -422,6 +422,12 @@ static void test_starttls(void)
     backend_disconnect(be);
     free(be);
 }
+#else
+/*
+ * cunit.pl doesn't process C macros, so it expects this to exist
+ * regardless of the state of HAVE_SSL
+ */
+static void test_starttls(void) { }
 #endif
 
 /* TODO: test UNIX socket comms too */
@@ -583,7 +589,9 @@ static int server_accept(struct server_state *state)
     state->is_authenticated = 0;
     state->is_connected = 1;
     state->is_tls = 0;
+#ifdef HAVE_SSL
     state->tls_conn = NULL;
+#endif
 
     return 0;
 }
@@ -601,10 +609,12 @@ static void server_unaccept(struct server_state *state)
     sasl_dispose(&state->saslconn);
     state->is_connected = 0;
     state->is_tls = 0;
+#ifdef HAVE_SSL
     if (state->tls_conn) {
 	tls_reset_servertls(&state->tls_conn);
 	state->tls_conn = NULL;
     }
+#endif
 }
 
 /*
