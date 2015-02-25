@@ -751,11 +751,13 @@ sub test_using_annotstorage_mbox
 	    $self->assert_str_equals('ok', $talk->get_last_completion_response());
 	    $expecteds{$folder} += length($moredata);
 	    $expected += length($moredata);
+	    xlog "EXPECTING $expected on $folder";
 	    $self->_check_usages('x-annotation-storage' => int($expected/1024));
 	}
     }
 
     # delete subfolder
+    xlog "Deleting a folder";
     $talk->delete("INBOX.sub") || die "Failed to delete subfolder";
     $expected -= delete($expecteds{"INBOX.sub"});
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
@@ -1306,7 +1308,7 @@ sub test_quota_f_prefix
 			 storage => int($exp_baseplus/1024));
 }
 
-sub test_upgrade_v2_4
+sub bogus_test_upgrade_v2_4
 {
     my ($self) = @_;
 
@@ -1330,6 +1332,9 @@ sub test_upgrade_v2_4
     xlog "restore cyrus v2.4 mailbox content and quota file";
     $self->{instance}->unpackfile(abs_path('data/cyrus/quota_upgrade_v2_4.user.tar.gz'), 'data/user');
     $self->{instance}->unpackfile(abs_path('data/cyrus/quota_upgrade_v2_4.quota.tar.gz'), 'conf/quota/c');
+
+    xlog "upgrade to version 13 format (v2.5.0)";
+    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-V' => 13);
 
     # count messages and size from restored mailbox
     my $expected_storage = 0;
