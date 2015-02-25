@@ -666,6 +666,9 @@ static int backend_authenticate(struct backend *s, const char *userid,
     if (!c_key_file) {
 	c_key_file = config_getstring(IMAPOPT_TLS_CLIENT_KEY);
     }
+#else
+    const char *c_cert_file = NULL;
+    const char *c_key_file = NULL;
 #endif
 
     mechlist = backend_get_cap_params(s, CAPA_AUTH);
