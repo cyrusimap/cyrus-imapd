@@ -894,7 +894,9 @@ sub test_unchangedsince_multi
     $self->assert_deep_equals($modified, ['13:15']);
 
     xlog "sent untagged FETCH responses with the new modseq?";
-    $self->assert_num_equals(20, scalar keys %fetched);
+    # also tells about the 3 messages which were deleted since
+    # the last command
+    $self->assert_num_equals(23, scalar keys %fetched);
     foreach my $i (1..3, 7..12, 16..26)
     {
 	my $letter = chr(64 + $i);
