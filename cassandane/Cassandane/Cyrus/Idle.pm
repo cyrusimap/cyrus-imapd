@@ -419,7 +419,7 @@ sub test_sigterm
     # User logged in SESSIONID=<0604061-29539-1337148251-1>
     my $rem = $talk->get_response_code('remainder');
     my ($name, $imapd_pid, $start, $n) =
-	($rem =~ m/SESSIONID=<([^-]+)-(\d+)-(\d+)-(\d+)>/);
+	($rem =~ m/SESSIONID=<([^-]+)-(\d+)-(\d+)-(\d+)/);
     $self->assert_not_null($imapd_pid);
     $imapd_pid = 0 + $imapd_pid;
     $self->assert($imapd_pid > 1);
