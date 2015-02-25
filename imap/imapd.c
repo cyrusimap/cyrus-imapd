@@ -8737,14 +8737,6 @@ static void cmd_getmetadata(const char *tag)
     while (nlists < 3)
     {
 	c = parse_metadata_string_or_list(tag, &lists[nlists], &is_list[nlists]);
-	if (c == EOF) {
-	    // Note we have not yet incremented nlists, this should read as
-	    // "not yet two 'lists'", the minimum set of arguments.
-	    if (nlists < 1) {
-		goto missingargs;
-	    }
-	}
-
 	nlists++;
 	if (c == '\r' || c == EOF)
 	    break;
@@ -8801,7 +8793,7 @@ static void cmd_getmetadata(const char *tag)
     if (nlists == 2) {
 	/* no options */
 	mboxes = &lists[0];
-	mbox_is_pattern = is_list[0];
+	mbox_is_pattern = !is_list[0];
     }
     if (nlists == 3) {
 	/* options, either before or after */
