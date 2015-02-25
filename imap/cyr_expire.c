@@ -332,46 +332,39 @@ done:
     return 0;
 }
 
-static int delete(char *name,
-		  int matchlen __attribute__((unused)),
-		  int maycreate __attribute__((unused)),
-		  void *rock)
+static int delete(void *rock, const char *key, size_t keylen,
+			      const char *data, size_t datalen)
 {
     mbentry_t *mbentry = NULL;
     struct delete_rock *drock = (struct delete_rock *) rock;
-    int r;
     time_t timestamp;
 
     if (sigquit) {
+	/* don't care if we leak some memory, we are shutting down */
 	return 1;
     }
 
-    /* check if this is a mailbox we want to examine */
-    if (!mboxname_isdeletedmailbox(name, &timestamp))
-	return 0;
+    if (mboxlist_parse_entry(&mbentry, key, keylen, data, datalen))
+	goto done; /* xxx - syslog? */
 
     /* Skip remote mailboxes */
-    r = mboxlist_lookup(name, &mbentry, NULL);
-    if (r) {
-	if (verbose) {
-	    printf("error looking up %s: %s\n", name, error_message(r));
-	}
-	return 1;
-    }
+    if (mbentry->mbtype & MBTYPE_REMOTE)
+	goto done;
 
-    if (mbentry->mbtype & MBTYPE_REMOTE) {
-	mboxlist_entry_free(&mbentry);
-	return 0;
-    }
-    mboxlist_entry_free(&mbentry);
+    /* check if this is a mailbox we want to examine */
+    if (!mboxname_isdeletedmailbox(mbentry->name, &timestamp))
+	goto done;
 
     if ((timestamp == 0) || (timestamp > drock->delete_mark))
-	return 0;
+	goto done;
 
     /* Add this mailbox to list of mailboxes to delete */
-    strarray_append(&drock->to_delete, name);
+    strarray_append(&drock->to_delete, mbentry->name);
 
-    return(0);
+done:
+    mboxlist_entry_free(&mbentry);
+
+    return 0;
 }
 
 static void sighandler (int sig __attribute((unused)))
@@ -389,7 +382,7 @@ int main(int argc, char *argv[])
     int delete_seconds = -1;
     int expire_seconds = 0;
     char *alt_config = NULL;
-    const char *find_prefix = "*";
+    const char *find_prefix = "";
     const char *do_user = NULL;
     struct expire_rock erock;
     struct delete_rock drock;
@@ -565,7 +558,10 @@ int main(int argc, char *argv[])
 
 	drock.delete_mark = time(0) - delete_seconds;
 
-	mboxlist_findall(NULL, find_prefix, 1, 0, 0, delete, &drock);
+	if (do_user)
+	    mboxlist_allusermbox(do_user, delete, &drock, /*include_deleted*/1);
+	else
+	    mboxlist_allmbox(find_prefix, delete, &drock, /*include_deleted*/1);
 
 	for (i = 0 ; i < drock.to_delete.count ; i++) {
 	    char *name = drock.to_delete.data[i];
