@@ -671,8 +671,12 @@ void sync_decode_quota_limits(/*const*/ struct dlist *kl, quota_t limits[QUOTA_N
 	limits[res] = QUOTA_UNLIMITED;
 
     /* For backwards compatibility */
-    if (dlist_getnum32(kl, "LIMIT", &limit))
-	limits[QUOTA_STORAGE] = limit;
+    if (dlist_getnum32(kl, "LIMIT", &limit)) {
+	if (limit == 4294967295)
+	    limits[QUOTA_STORAGE] = -1;
+	else
+	    limits[QUOTA_STORAGE] = limit;
+    }
 
     for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
 	if (dlist_getnum32(kl, quota_names[res], &limit))
