@@ -276,10 +276,80 @@ sub test_userflag
 
 #
 # Test that
-#  - 128 separate user flags can be used
-#  - no more can be used
+#  - the $Foobar flag can be set
+#  - the $Foobar flag can be cleared again
+#  - cyr_expire -t can remove the $Foobar flag from the mailbox permanentflags
 #
-use constant MAX_USER_FLAGS => 128;
+#
+sub test_expunge_removeflag
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $talk->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    my $perm = $talk->get_response_code('permanentflags');
+    my @flags = grep { !m{^\\} } @$perm;
+    $self->assert_deep_equals([], \@flags);
+
+    xlog "Add two messages";
+    my %msg;
+    $msg{A} = $self->make_message('Message A');
+    $msg{A}->set_attributes(id => 1,
+			    uid => 1,
+			    flags => []);
+    $msg{B} = $self->make_message('Message B');
+    $msg{B}->set_attributes(id => 2,
+			    uid => 2,
+			    flags => []);
+    $self->check_messages(\%msg);
+
+    xlog "Set \$Foobar on message A";
+    $talk->store('1', '+flags', '($Foobar)');
+    $msg{A}->set_attribute(flags => ['$Foobar']);
+    $self->check_messages(\%msg);
+
+    xlog "Clear \$Foobar on message A";
+    $talk->store('1', '-flags', '($Foobar)');
+    $msg{A}->set_attribute(flags => []);
+    $self->check_messages(\%msg);
+
+    $self->{store}->disconnect();
+    $self->{store}->connect();
+    $self->{store}->_select();
+    $talk = $self->{store}->get_client();
+
+    $self->check_messages(\%msg);
+
+    xlog "Flag is still in the mailbox";
+
+    $perm = $talk->get_response_code('permanentflags');
+    @flags = grep { !m{^\\} } @$perm;
+    $self->assert_deep_equals(['$Foobar'], \@flags);
+
+    $self->{store}->disconnect();
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-t');
+
+    $self->{store}->connect();
+    $self->{store}->_select();
+    $talk = $self->{store}->get_client();
+
+    $perm = $talk->get_response_code('permanentflags');
+    @flags = grep { !m{^\\} } @$perm;
+    $self->assert_deep_equals([], \@flags);
+}
+
+#
+# Test that
+#  - 100 separate user flags can be used
+#  - no more can be used
+#  - (we lock out at 100 except for replication to avoid
+#  -  one-extra problems)
+#
+use constant MAX_USER_FLAGS => 100;
 sub test_max_userflags
 {
     my ($self) = @_;
