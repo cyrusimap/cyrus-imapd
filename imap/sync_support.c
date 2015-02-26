@@ -1574,16 +1574,18 @@ int sync_append_copyfile(struct mailbox *mailbox,
 	return r;
     }
 
+ just_write:
+    r = mailbox_append_index_record(mailbox, record);
+    if (r) return r;
+
     /* apply the remote annotations */
     r = apply_annotations(mailbox, record, NULL, annots, 0);
     if (r) {
 	syslog(LOG_ERR, "Failed to apply annotations: %s",
 	       error_message(r));
-	return r;
     }
 
- just_write:
-    return mailbox_append_index_record(mailbox, record);
+    return r;
 }
 
 /* ====================================================================== */
