@@ -1292,8 +1292,11 @@ EXPORTED int mailbox_user_flag(struct mailbox *mailbox, const char *flag,
 	    return IMAP_USERFLAG_EXHAUSTED;
 
 	/* stop imapd exhausting flags */
-	if (emptyflag >= 100 && create == 1)
+	if (emptyflag >= 100 && create == 1) {
+	    syslog(LOG_ERR, "IOERROR: out of flags on %s (%s)",
+		   mailbox->name, flag);
 	    return IMAP_USERFLAG_EXHAUSTED;
+	}
 
 	/* need to be index locked to make flag changes */
 	if (!mailbox_index_islocked(mailbox, 1))
