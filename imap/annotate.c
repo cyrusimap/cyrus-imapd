@@ -2362,24 +2362,21 @@ static int write_entry(struct mailbox *mailbox,
 
     if (mailbox) {
 	r = read_old_value(d, key, keylen, &oldval);
-	if (r)
-	    goto out;
-    }
+	if (r) goto out;
 
-    if (!ignorequota && mailbox) {
-	quota_t qdiffs[QUOTA_NUMRESOURCES] =
-		QUOTA_DIFFS_DONTCARE_INITIALIZER;
-	qdiffs[QUOTA_ANNOTSTORAGE] = value->len - (quota_t)oldval.len;
-	r = mailbox_quota_check(mailbox, qdiffs);
-	if (r)
-	    goto out;
-    }
+	if (!ignorequota) {
+	    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
+	    qdiffs[QUOTA_ANNOTSTORAGE] = value->len - (quota_t)oldval.len;
+	    r = mailbox_quota_check(mailbox, qdiffs);
+	    if (r) goto out;
+	}
 
-    /* do the annot-changed here before altering the DB */
-    if (mailbox)
+	/* do the annot-changed here before altering the DB */
 	mailbox_annot_changed(mailbox, uid, entry, userid, &oldval, value);
+    }
 
-    if (value->s == NULL) {
+    /* zero length annotation is also deletion I think */
+    if (!value->len) {
 
 #if DEBUG
 	syslog(LOG_ERR, "write_entry: deleting key %s from %s",
