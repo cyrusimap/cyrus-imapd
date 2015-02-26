@@ -465,7 +465,7 @@ static int expire_conversations(void *rock, const char *key, size_t keylen,
     struct conversations_state *state = NULL;
     unsigned int nseen = 0, ndeleted = 0;
     mbentry_t *mbentry = NULL;
-    char *filename;
+    char *filename = NULL;
 
     if (sigquit)
 	return 1;
