@@ -965,7 +965,19 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
 	}
 	flags = newflags;
     }
-    if (!r && (user_annots || system_annots)) {
+
+    /* Handle flags the user wants to set in the message */
+    if (flags) {
+	r = append_apply_flags(as, mboxevent, &record, flags);
+	if (r) goto out;
+    }
+
+    /* Write out index file entry */
+    r = mailbox_append_index_record(mailbox, &record);
+    if (r) goto out;
+
+    /* Apply the annotations afterwards, so that the record already exists */
+    if (user_annots || system_annots) {
 	annotate_state_t *astate = NULL;
 	r = mailbox_get_annotate_state(as->mailbox, record.uid, &astate);
 	if (r) goto out;
@@ -974,29 +986,15 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
 				    as->userid, as->auth_state);
 	    r = annotate_state_store(astate, user_annots);
 	}
-	if (!r && system_annots) {
+	if (r) goto out;
+	if (system_annots) {
 	    /* pretend to be admin to avoid ACL checks */
 	    annotate_state_set_auth(astate, /*isadmin*/1,
 				    as->userid, as->auth_state);
 	    r = annotate_state_store(astate, system_annots);
-	    if (r) {
-		syslog(LOG_ERR, "Setting annnotations from annotator "
-				"callout failed (%s), ignoring\n",
-				error_message(r));
-		r = 0;
-	    }
 	}
-    }
-    if (r)
-	goto out;
-
-    /* Handle flags the user wants to set in the message */
-    if (flags) {
-	r = append_apply_flags(as, mboxevent, &record, flags);
 	if (r) goto out;
     }
-    /* Write out index file entry */
-    r = mailbox_append_index_record(mailbox, &record);
 
 out:
     if (newflags)
