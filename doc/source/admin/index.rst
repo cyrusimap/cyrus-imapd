@@ -16,12 +16,11 @@ Administrator Guide
 
 .. centered:: Adam Williams, Whitemice Consulting <awilliam\@whitemice.org>
 
-.. Contents
-.. --------
+Contents
+--------
 
 .. toctree::
    :maxdepth: 2
-   :includehidden:
 
    administration
    sop
