@@ -1,0 +1,120 @@
+a {
+    color: #1f8fc0;
+}
+
+blockquote.epigraph div p {
+    font-style: italic;
+}
+
+body {
+    font-family: sans-serif;
+    letter-spacing: 0;
+}
+
+cite, code, pre, tt {
+    font-family: "Liberation Mono", "Consolas","Deja Vu Sans Mono","Bitstream Vera Sans Mono", monospace;
+}
+
+div.admonition {
+    border-left: 0.5em solid #59bc00;
+    border-top: none;
+    border-right: none;
+    border-bottom: none;
+    margin-bottom: 1em;
+    padding-bottom: 0.5em;
+    padding-left: 1.5em;
+    padding-top: 0.5em;
+}
+
+div.admonition > div:last-child > *:last-child {
+    margin-bottom: 0;
+}
+
+div.admonition p {
+    margin: 1em 0 0.5em 0.5em;
+    padding: 0;
+}
+
+div.admonition p.admonition-title {
+    color: black;
+    margin: 1em 0 0.5em 0.5em;
+    padding: 0;
+    font-weight: bold;
+    display: block;
+    background-color: inherit;
+    border-bottom: none;
+}
+
+/* Green 'note' box */
+div.admonition.note {
+    border-left: 0.5em solid #59bc00;
+}
+
+div.admonition.important {
+    border-color: #ffc200;
+}
+
+div.admonition.warning {
+    border-color: #ff0000;
+}
+
+div.admonition.tip {
+    border-color: #1e90ff;
+}
+
+div.admonition-todo {
+    border-color: #cccccc;
+}
+
+div.admonition.caution {
+    border-color: #950000;
+}
+
+div.body a {
+    text-decoration: none;
+    color: #1F8FC0;
+}
+
+div.body h1, div.body h2, div.body h3 {
+    color: #002e50;
+}
+
+div.highlight {
+    border-left: 0.5em solid #666666;
+    padding: 0;
+    margin: 1em 0 0.5em 0;
+}
+
+div.highlight pre {
+    border: 0px solid;
+    margin: 1em 0.5em 0.5em 0.5em;
+    padding-bottom: 0.5em;
+    padding-left: 1.5em;
+    padding-top: 0.5em;
+}
+
+div.related ul li a {
+    color: #1F8FC0;
+}
+
+div.sphinxsidebar h3, div.sphinxsidebar h4 {
+    background-color: #002e50;
+    border: 1px solid white;
+}
+
+/* For bold-italic and italic inside other formatting styles */
+/* ``command line `` :italic:`with italics`
+ */
+
+.bolditalic {
+    font-weight: bold;
+    font-style: italic;
+}
+
+.italic {
+    font-style: italic;
+}
+
+div.related {
+    background-color: #1F8FC0;
+}
