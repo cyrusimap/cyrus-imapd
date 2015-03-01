@@ -18,14 +18,19 @@ administrators to run:
 
 .. parsed-literal::
 
-    # :command:`reconstruct -V max`
+    # :command:`/path/to/reconstruct -V max`
+
+.. IMPORTANT::
+
+    The above command can run while the Cyrus IMAP services are in
+    operation, and does **not** interfere with the service's operations.
 
 .. _relnotes-2.5.0-new-features:
 
 New Features
 ============
 
-.. _relnotes-2.5.0-index-namelock-release
+.. _relnotes-2.5.0-index-namelock-release:
 
 Index Namelock Release
 ----------------------
@@ -108,9 +113,11 @@ The database format for mailboxes.db has been upgraded, adding;
     In versions of Cyrus IMAP prior to 2.5.0, mailboxes that were
     deleted may have become unavailable for actual cleanup expecting
     another session on the same mailbox to clean up the directories and
-    files. See also :ref:`relnotes-2.5.0-index-namelock-release`
+    files. See also :ref:`relnotes-2.5.0-index-namelock-release`.
 
-*
+*   A key-value storage format is used, allowing for faster and better
+    parsing of :file:`mailboxes.db`, more granular updates to runtime
+    environments, and more sustainable future upgrades.
 
 New Database Format ``twoskip``
 -------------------------------
