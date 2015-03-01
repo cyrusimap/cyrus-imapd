@@ -2,6 +2,10 @@ a {
     color: #1f8fc0;
 }
 
+a tt {
+    color: #1f8fc0;
+}
+
 blockquote.epigraph div p {
     font-style: italic;
 }
