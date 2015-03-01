@@ -97,6 +97,10 @@ div.highlight pre {
     padding-top: 0.5em;
 }
 
+div.related {
+    background-color: #1F8FC0;
+}
+
 div.related ul li a {
     color: #1F8FC0;
 }
@@ -104,6 +108,10 @@ div.related ul li a {
 div.sphinxsidebar h3, div.sphinxsidebar h4 {
     background-color: #002e50;
     border: 1px solid white;
+}
+
+ol.arabic li {
+    margin-top: 1em;
 }
 
 /* For bold-italic and italic inside other formatting styles */
@@ -119,6 +127,3 @@ div.sphinxsidebar h3, div.sphinxsidebar h4 {
     font-style: italic;
 }
 
-div.related {
-    background-color: #1F8FC0;
-}
