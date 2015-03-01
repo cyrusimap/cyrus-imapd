@@ -18,12 +18,18 @@ administrators to run:
 
 .. parsed-literal::
 
-    # :command:`/path/to/reconstruct -V max`
+    # :command:`/path/to/reconstruct -V max` [options]
 
 .. IMPORTANT::
 
     The above command can run while the Cyrus IMAP services are in
     operation, and does **not** interfere with the service's operations.
+
+.. NOTE::
+
+    Additional options can be specified to :manpage:`reconstruct(8)` to
+    more granularly specify which mailboxes' :file:`cyrus.index` is to
+    be upgraded.
 
 .. _relnotes-2.5.0-new-features:
 
@@ -207,6 +213,12 @@ user basis, using the settings ``maxlogins_per_host`` and
 
 Configuration Option Changes and Enhancements
 =============================================
+
+.. IMPORTANT::
+
+    While it is not mandatory to update your configuration file with
+    these new settings, not doing so may have undesired side-effects,
+    including but not limited to deprecation warnings in log messages.
 
 Option Name Changes for ``autocreate``
 --------------------------------------
