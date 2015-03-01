@@ -37,8 +37,6 @@ Additional features of this functionality include;
 
 *   automatic subscription to a selection of or all shared folders.
 
-See :manpage:`imapd.conf(5)` for the full documentation of all options.
-
 .. IMPORTANT::
 
     Third party solutions incorporating Cyrus IMAP, and distributors of
@@ -49,3 +47,26 @@ See :manpage:`imapd.conf(5)` for the full documentation of all options.
     rendered irrelevant by the functionality not being built in, so
     while the man-page on your system may refer to settings related to
     this functionality, the actual functionality may not be available.
+
+To enable the automatic creation of mailboxes, set the following options
+in :manpage:`imapd.conf(5)`:
+
+*   ``autocreate_quota``
+
+    Set ``autocreate_quota`` to a value of zero or greater to allow
+    successful login events to create a user's INBOX if it does not
+    already exist.
+
+    .. NOTE::
+
+        A value of ``0`` corresponds with no quota. The value depicts
+        quota in kilobytes.
+
+        The default is for this configuration option is ``-1``.
+
+*   ``autocreate_post``
+
+    Set ``autocreate_post`` to ``1`` to allow :manpage:`lmtpd(8)` to
+    create user's INBOX (and sub-) folders.
+
+See :manpage:`imapd.conf(5)` for the full documentation of all options.
