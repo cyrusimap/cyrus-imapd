@@ -41,7 +41,9 @@ Additional features of this functionality include;
 
     Third party solutions incorporating Cyrus IMAP, and distributors of
     Cyrus IMAP (such as your Linux distribution) may have disabled this
-    functionality altogether, during the building of the packages.
+    functionality altogether, during the building of the packages --
+    most likely because they employ different means to get user's
+    mailboxes created.
 
     Cyrus IMAP does not currently strip options from man-pages that are
     rendered irrelevant by the functionality not being built in, so
@@ -70,3 +72,33 @@ in :manpage:`imapd.conf(5)`:
     create user's INBOX (and sub-) folders.
 
 See :manpage:`imapd.conf(5)` for the full documentation of all options.
+
+Limitations to the Automatic Creation of Mailboxes
+==================================================
+
+#.  A user may in fact be able to succesfully login to IMAP with both a
+    full primary recipient email address such as
+    ``john.doe@example.org``, as well as a secondary recipient email
+    address such as ``jdoe@example.org``.
+
+    Unless a process known as login username canonification is used,
+    this could result in two different mailbox hierarchies being
+    created;
+
+    *   ``user/john.doe@example.org``
+
+    *   ``user/jdoe@example.org``
+
+#.  When a user *Jane Gi <jane.gi@example.org>* marries *John Doe* and
+    adopts her new husband's surname, her primary recipient email
+    address may change to become ``jane.doe@example.org``.
+
+    Note that *John Doe* does not need to be an ``example.org`` user for
+    such event to occur, and that many countries allow the husband to
+    take the maiden name of their spouse instead -- so even if the
+    employees and/or associates of an organization running Cyrus IMAP
+    are exclusively male, this may still apply to that organization.
+
+    The functionality stated in this document does **not** rename
+    ``user/jane.gi@example.org`` to become
+    ``user/jane.doe@example.org``.
