@@ -47,21 +47,22 @@ Cyrus SASL
     sasl/pwcheck
     sasl/faq
 
-Authors, Contributors, Sponsors and Thanks
-==========================================
+..
+    Authors, Contributors, Sponsors and Thanks
+    ==========================================
 
-*   Simon Amor <simon@leaky.org>
+    *   Simon Amor <simon@leaky.org>
 
-*   Bron Gondwana, Fastmail Pty Ltd <brong@opera.com>
+    *   Bron Gondwana, Fastmail Pty Ltd <brong@fastmail.fm>
 
-*   Ken Murchison, Carnegie Mellon University <murch@andrew.cmu.edu>
+    *   Ken Murchison, Carnegie Mellon University <murch@andrew.cmu.edu>
 
-*   Dave McMurtrie, Carnegie Mellon University <dave64@andrew.cmu.edu>
+    *   Dave McMurtrie, Carnegie Mellon University <dave64@andrew.cmu.edu>
 
-*   Jeroen van Meeuwen, Kolab Systems <vanmeeuwen@kolabsys.com>
+    *   Jeroen van Meeuwen, Kolab Systems <vanmeeuwen@kolabsys.com>
 
-*   Adam Williams, Whitemice Consulting <awilliam@whitemice.org>
+    *   Adam Williams, Whitemice Consulting <awilliam@whitemice.org>
 
-*   Дилян Палаузов, Association des États Généraux des Étudiants de l’Europe <git-dpa@aegee.org>
+    *   Дилян Палаузов, Association des États Généraux des Étudiants de l’Europe <git-dpa@aegee.org>
 
 .. _Cyrus Foundation: https://cyrus.foundation
