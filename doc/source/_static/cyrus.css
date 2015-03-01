@@ -97,6 +97,10 @@ div.highlight pre {
     padding-top: 0.5em;
 }
 
+div.linenodiv pre {
+    padding: 0.5em 0 0;
+}
+
 div.related {
     background-color: #1F8FC0;
 }
