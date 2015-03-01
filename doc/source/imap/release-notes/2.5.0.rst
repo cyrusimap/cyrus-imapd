@@ -475,10 +475,4 @@ The GIT repository for the documentation is at
 
     http://opera.brong.fastmail.fm.user.fm/talks/twoskip/twoskip-yapc12.pdf
 
-.. [#]
-
-    You can set ``unixhierarchysep: 0`` in your current
-    :manpage:`imapd.conf(5)` without consequence, before you upgrade to
-    Cyrus IMAP 2.5.0.
-
 .. _RFC 5464: http://tools.ietf.org/html/rfc5464>
