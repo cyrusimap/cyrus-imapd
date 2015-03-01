@@ -1038,8 +1038,10 @@ EXPORTED int mailbox_setversion(struct mailbox *mailbox, int version)
 	if (!r) r = mailbox_index_repack(mailbox, version);
 
 	/* and let's just update the counts too */
+	mailbox_unlock_index(mailbox, NULL);
 	if (!r) r = mailbox_mboxlock_reopen(listitem, LOCK_EXCLUSIVE);
 	if (!r) r = mailbox_open_index(mailbox);
+	if (!r) r = mailbox_lock_index_internal(mailbox, LOCK_EXCLUSIVE);
 	if (!r) r = mailbox_index_recalc(mailbox);
     }
 
