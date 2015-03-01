@@ -380,27 +380,6 @@ New Options for ``tls_*``
 
     Disable SSL/TLS protocols not in this list.
 
-Default Change: ``unixhierarchysep``
-------------------------------------
-
-The default for the :manpage:`imapd.conf(5)` configuration option
-``unixhierarchysep`` has changed from ``0`` (off) to ``1`` (on).
-
-The setting controls whether to use the UNIX hierarchy separator
-character '/', or use the netnews hierarchy separator '.'.
-
-.. WARNING::
-
-    Changing the option in a production run-time with clients will
-    cause all clients to need to resynchronize their entire folder
-    hierarchy at least.
-
-    It is not uncommon for IMAP client software to not understand
-    the change and fail.
-
-Should you wish to preserve the current default, then set
-``unixhierarchysep: 0`` in :manpage:`imapd.conf(5)` [#]_.
-
 .. _relnotes-2.5.0-development-autoconf:
 
 Development: Switch to ``autoconf`` and ``libtool``
