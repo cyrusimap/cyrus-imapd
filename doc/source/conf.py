@@ -42,10 +42,6 @@ todo_include_todos = True
 locale_dirs = [ 'locale/' ]
 gettext_compact = False
 
-def setup(app):
-    app.add_stylesheet('extra.css')
-
-
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
