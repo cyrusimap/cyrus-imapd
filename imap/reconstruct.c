@@ -213,7 +213,10 @@ int main(int argc, char **argv)
 	    break;
 
 	case 'V':
-	    setversion = atoi(optarg);
+	    if (!strcasecmp(optarg, "max"))
+		setversion = MAILBOX_MINOR_VERSION;
+	    else
+		setversion = atoi(optarg);
 	    break;
 
 	default:
