@@ -6,16 +6,44 @@ Cyrus IMAP 2.5.0 Release Notes
 
 *   :ref:`relnotes-2.5.0-config-option-changes`
 *   :ref:`relnotes-2.5.0-development-autoconf`
+*   :ref:`relnotes-2.5.0-development-phabricator`
+*   :ref:`relnotes-2.5.0-development-documentation`
+
+Upgrading to Cyrus IMAP 2.5.0
+=============================
+
+Upgrading to Cyrus IMAP 2.5.0 requires the upgrade of database formats,
+for which the reconstruct utility has been modified allowing
+administrators to run:
+
+.. parsed-literal::
+
+    # :command:`reconstruct -V max`
 
 .. _relnotes-2.5.0-new-features:
 
 New Features
 ============
 
-Something called "Index Namelock Release"
------------------------------------------
+.. _relnotes-2.5.0-index-namelock-release
 
-deletes and cleanups work with long-running connections.
+Index Namelock Release
+----------------------
+
+Long-running (idling) connections may have previously intervened with
+mailbox deletions and general cleanup work, resulting in one connection
+blocking another from, for example, deleting and recreating a mailbox:
+
+.. code-block:: bash
+    :linenos:
+
+    C1: SELECT "Foo"
+    C2: DELETE "Foo"
+    C2: CREATE "Foo"
+
+The ``CREATE`` command on line 3 (by client 2, while client 1 still has
+the ``Foo`` mailbox selected) would have failed before, but does now
+succeed.
 
 Extended Quota Types
 --------------------
@@ -23,26 +51,39 @@ Extended Quota Types
 New ways to restrict resource usage:
 
 *   Number of Folders,
-*   Number of Messages (per folder (hierarchy?)),
+*   Number of Messages,
 *   Number of Annotations
 
 CalDAV and CardDAV Support
 --------------------------
 
+CalDAV and CardDAV support no longer live out-of-tree in the same GIT
+repository, but are now mainstream and included in Cyrus IMAP 2.5.0.
+
+This has been a major effort by Carnegie Mellon University and FastMail,
+and continues to be, enriching the experience of Cyrus IMAP users
+globally.
+
 Support for RFC 5464: IMAP METADATA
 -----------------------------------
 
-Cyrus IMAP now fully supports `RFC 5464`_, "*The IMAP METADATA
-Extension*". This also means the support for the ANNOTATEMORE draft for
-IMAP will ultimately be dropped.
+Cyrus IMAP now fully supports :rfc:`5464`, *The IMAP METADATA
+Extension*.
 
-*   Per message annotations
+This also means the support for the ANNOTATEMORE draft for IMAP will
+ultimately be dropped.
 
-Replication-based XFER
-----------------------
+Aside from the trusted folder metadata, this also introduces message
+annotations. Users will need to be given the ``n`` right to allow them
+to set message annotations.
 
 Event Notifications
 -------------------
+
+Various events occuring in Cyrus IMAP, among which mailbox, message and
+access events, can now be pushed out through a side-channel and notify
+client applications or provide other infrastructure with detailed
+information.
 
 Mailbox Distribution Enhancements: Backend and Partition Selection
 ------------------------------------------------------------------
@@ -59,6 +100,17 @@ more details.
 
 New Database Format for ``mailboxes.db``
 ----------------------------------------
+
+The database format for mailboxes.db has been upgraded, adding;
+
+*   A new mailbox type for deleted mailboxes.
+
+    In versions of Cyrus IMAP prior to 2.5.0, mailboxes that were
+    deleted may have become unavailable for actual cleanup expecting
+    another session on the same mailbox to clean up the directories and
+    files. See also :ref:`relnotes-2.5.0-index-namelock-release`
+
+*
 
 New Database Format ``twoskip``
 -------------------------------
@@ -88,7 +140,9 @@ Miscellaneous
 Allowing Undefined Annotations
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-``annotation_allow_undefined``
+Cyrus IMAP 2.5.0 allows administrators to configure that undefined
+annotations should be allowed, using a new
+``annotation_allow_undefined`` setting in :manpage:`imapd.conf(5)`.
 
 Catchall Mailbox for LMTP
 ^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -127,19 +181,20 @@ UNCONFIRMED
 Can the lmtp_catchall_mailbox be a shared folder?
 +++++++++++++++++++++++++++++++++++++++++++++++++
 
-UNCONFIRMED 
+UNCONFIRMED
 
 Callout for SETMETADATA
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-``annotation_callout``
+A callout program can be called when annotations are set, configured
+through ``annotation_callout``.
 
 Host & User Login Restrictions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-``maxlogins_per_host``
-
-``maxlogins_per_user``
+Logins can now be restricted on a per host (source IP address) or per
+user basis, using the settings ``maxlogins_per_host`` and
+``maxlogins_per_user``.
 
 .. _relnotes-2.5.0-config-option-changes:
 
@@ -217,7 +272,7 @@ The following *autocreate* options are now available:
 
     List the folder names of shared folders to which the user for which
     a mailbox is being automatically created should be subscribed.
-    
+
     Separate the folder names by ``|``.
 
 **autocreate_subscribe_sharedfolders_all** (was: ``autosubscribe_all_sharedfolders``)
@@ -311,7 +366,7 @@ Configuration option names for SSL/TLS configuration in
 :manpage:`imapd.conf(5)` have been changed to better reflect how
 they are used, as enhancements would otherwise create great confusion.
 
-**tls_client_ca_dir** (was: ``tls_ca_dir``)
+**tls_client_ca_dir** (was: ``tls_ca_path``)
 
 **tls_client_ca_file** (was: ``tls_ca_file``)
 
@@ -339,7 +394,7 @@ New Options for ``tls_*``
 **tls_client_cert** (<none>)
 
 **tls_client_key** (<none>)
-    
+
     Client SSL certificate and key to use when cyrus-imapd behaves as
     a client (to other cyrus-imapd server (instances)).
 
@@ -387,6 +442,32 @@ Development: Switch to ``autoconf`` and ``libtool``
 
 With the release of Cyrus IMAP 2.5.0, the Cyrus IMAP project has
 switched to using autoconf and libtool.
+
+.. _relnotes-2.5.0-development-phabricator:
+
+Development: Switch to Phabricator
+==================================
+
+An instance of Phabricator is going to be replacing our old Bugzilla.
+
+We believe this better facilitates our processes, and will make it
+easier to contribute code and collaborate.
+
+Please see https://git.cyrus.foundation/.
+
+.. _relnotes-2.5.0-development-documentation:
+
+Development: Sphinx for Documentation
+=====================================
+
+While a work in progress still, you're looking at the new and improved
+documentation effort for the Cyrus project as a whole.
+
+This documentation is written in reStructuredText, and rendered by
+Sphinx.
+
+The GIT repository for the documentation is at
+
 
 .. rubric:: Footnotes
 
