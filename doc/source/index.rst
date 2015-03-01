@@ -8,11 +8,14 @@ by the `Cyrus Foundation`_.
 Cyrus IMAP
 ==========
 
+The latest stable version of Cyrus IMAP is |imap_latest_stable_version|.
+
 .. toctree::
     :maxdepth: 1
 
     imap/introduction
     imap/installation
+    imap/features
     imap/cyrus-imap-murder
     imap/deployment
     imap/admin
@@ -47,22 +50,9 @@ Cyrus SASL
     sasl/pwcheck
     sasl/faq
 
-..
-    Authors, Contributors, Sponsors and Thanks
-    ==========================================
+.. toctree::
+    :hidden:
 
-    *   Simon Amor <simon@leaky.org>
-
-    *   Bron Gondwana, Fastmail Pty Ltd <brong@fastmail.fm>
-
-    *   Ken Murchison, Carnegie Mellon University <murch@andrew.cmu.edu>
-
-    *   Dave McMurtrie, Carnegie Mellon University <dave64@andrew.cmu.edu>
-
-    *   Jeroen van Meeuwen, Kolab Systems <vanmeeuwen@kolabsys.com>
-
-    *   Adam Williams, Whitemice Consulting <awilliam@whitemice.org>
-
-    *   Дилян Палаузов, Association des États Généraux des Étudiants de l’Europe <git-dpa@aegee.org>
+    imap/rfc-support
 
 .. _Cyrus Foundation: https://cyrus.foundation
