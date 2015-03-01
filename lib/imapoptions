@@ -297,35 +297,65 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Deprecated in favor of \fIautocreate_subscribe_sharedfolders_all\fR. */
 
 { "autocreate_inbox_folders", NULL, STRING }
-/* If a user does not have an INBOX created then the INBOX as well as some INBOX
-   subfolders are created under two conditions.
-     1. The user logins via the IMAP or the POP3 protocol. (autocreatequota option must have a nonzero value)
-     2. A message arrives for the user through the LMTPD protocol.(createonpost option must be yes)
-   autocreate_inbox_folders is a list of INBOX's subfolders separated by a "|", that
-   are automatically created by the server under the previous two situations. */
+/* If a user does not have an INBOX already, and the INBOX is to be
+   created, create the list of folders in this setting as well.
+.PP
+   INBOX folders are created under both the following conditions:
+.\"
+.IP 1.
+   The user logins via the IMAP or the POP3 protocol.
+   \fIautocreate_quota\fR option must have a value of zero or greater.
+.IP 2.
+   A message arrives for the user through the \fIlmtpd(8)\fR.
+   \fIautocreate_post\fR option must be enabled.
+.PP
+   \fIautocreate_inbox_folders\fR is a list of INBOX's subfolders
+   separated by a "|", that are automatically created by the server
+   under the previous two scenarios. Leading and trailing whitespace is
+   stripped, so "Junk | Trash" results in two folders: "Junk" and
+   "Trash". */
 
 { "autocreate_post", 0, SWITCH }
-/* If enabled, when lmtpd receives an incoming mail for an INBOX that does not exist,
-   then the INBOX is automatically created by lmtpd. */
+/* If enabled, when \fIlmtpd(8)\fR receives an incoming mail for an
+   INBOX that does not exist, then the INBOX is automatically created
+   by \fIlmtpd(8)\fR and delivery of the message continues. */
 
-{ "autocreate_quota", 0, INT }
-/* If nonzero, normal users may create their own IMAP accounts by
-   creating the mailbox INBOX.  The user's quota is set to the value
-   if it is positive, otherwise the user has unlimited quota. */
+{ "autocreate_quota", -1, INT }
+/* If set to a value of zero or higher, users have their INBOX folders
+   created upon a successful login event or upon \fIlmtpd(8)\fR
+   message delivery if \fIautocreate_post\fR is enabled, provided their
+   INBOX did not yet already exist.
+.PP
+   The user's quota is set to the value if it is greater than zero,
+   otherwise the user has unlimited quota.
+.PP
+   Note that quota is specified in kilobytes. */
 
 { "autocreate_quota_messages", -1, INT }
-/* When users create their own IMAP accounts by creating the mailbox INBOX,
-   their message quota is set to this value. Default value (-1) is unlimited. */
+/* If set to a value of zero or higher, users who have their INBOX
+   folders created upon a successful login event (see
+   \fIautocreate_quota\fR), or upon \fIlmtpd(8)\fR message delivery if
+   \fIautocreate_post\fR is enabled, receive the message quota
+   configured in this option.
+.PP
+   The default of -1 disables assigning message quota. */
 
 { "autocreate_sieve_folders", NULL, STRING }
-/* It is a "|" separated list of subfolders of INBOX that will be automatically created,
-   if requested by a sieve filter, through the "fileinto" action. (default = null)
-   i.e. autocreate_sieve_folders: Junk | Spam */
+/* A "|" separated list of subfolders of INBOX that will be
+   automatically created, if requested by a sieve filter, through the
+   "fileinto" action. The default is to create no folders
+   automatically.
+.PP
+   Leading and trailing whitespace is stripped from each folder, so a
+   setting of "Junk | Trash" will create two folders: "Junk" and
+   "Trash". */
 
 { "autocreate_sieve_script", NULL, STRING }
-/* The full path of a file that contains a sieve script. This script automatically becomes a
-   user's initial default sieve filter script. When this option is not defined, no default
-   sieve filter is created. The file must be readable by the cyrus daemon. */
+/* The full path of a file that contains a sieve script. This script
+   automatically becomes a user's initial default sieve filter script.
+.PP
+    When this option is not defined, no default sieve filter is created.
+    The file must be readable by the Cyrus daemon. */
 
 { "autocreate_sieve_script_compile", 0, SWITCH }
 /* If set to yes and no compiled sieve script file exists, the sieve script which is
