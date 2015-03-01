@@ -21,6 +21,26 @@ system, issue the following command:
 
     # :command:`yum install cyrus-imapd`
 
+Next, set a password for the default administrative user ``cyrus``:
+
+.. parsed-literal::
+
+    # :command:`passwd cyrus`
+    Changing password for user cyrus.
+    New password:
+    Retype new password:
+    passwd: all authentication tokens updated successfully.
+
+Start the service, and (optionally) ensure the service starts up when the
+system boots:
+
+.. parsed-literal::
+
+    # :command:`service cyrus-imapd start`
+    # :command:`chkconfig cyrus-imapd on`
+
+Next, continue with :ref:`imap-configuring-the-mta`.
+
 Other Versions of Cyrus IMAP
 ----------------------------
 

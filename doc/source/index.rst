@@ -2,7 +2,8 @@
 Cyrus IMAP and SASL
 ===================
 
-Welcome to the Cyrus IMAP and SASL documentation pages.
+Welcome to the Cyrus IMAP and SASL documentation site, provided to you
+by the `Cyrus Foundation`_.
 
 Cyrus IMAP
 ==========
@@ -63,3 +64,4 @@ Authors, Contributors, Sponsors and Thanks
 
 *   Дилян Палаузов, Association des États Généraux des Étudiants de l’Europe <git-dpa@aegee.org>
 
+.. _Cyrus Foundation: https://cyrus.foundation
