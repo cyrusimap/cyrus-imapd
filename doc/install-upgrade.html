@@ -10,6 +10,26 @@
 
 <h1>Upgrading From Previous Versions</h1>
 
+<h2>Upgrading from all 2.4 series to 2.5</h2>
+<ul>
+<li>The most important thing is that index file upgrades are
+    no longer automatic.  This avoids the IO storm caused by
+    upgrades from 2.3 to 2.4.  Even if you are upgrading from
+    Cyrus 2.2, it won't cause an IO storm any more.<br/>
+    Instead, you need to run <tt>reconstruct -V max</tt> to
+    upgrade each mailbox in turn.  This will upgrade all
+    mailboxes to the current minor version 13.  Older version
+    mailboxes will continue to work, though newer features
+    like annotations will fail.</li>
+<li>It is advised to shut down the server completely while
+    performing the upgrade, because newer daemons will write
+    mailboxes.db entries which aren't compatible with the old
+    daemons, and may cause crashes if you try to upgrade
+    a running server.</li>
+<li>Many configuration options have changed and new features
+    have been added, read the release notes.</li>
+</ul>
+
 <h2>Upgrading from 2.4.17-caldav-beta10 or earlier</h2>
 <ul>
 <li>The schema used for the CalDAV database has changed. ALL sites
