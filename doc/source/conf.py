@@ -350,12 +350,20 @@ rst_prolog = """
 .. |imap_el7_stock_version| replace:: 2.4.17
 """
 
-# The version in which the altnamespace setting default changes (was off).
+# The version in which compatibility support for RFC 2086 (the 'c' and
+# 'd' rights is dropped.
+rst_prolog += """
+.. |imap_version_rfc2086_dropped| replace:: 3.0
+"""
+
+# The version in which the altnamespace setting default changes (was
+# off).
 rst_prolog += """
 .. |imap_version_altnamespace_default_on| replace:: 3.0
 """
 
-# The version in which the unixhierarchysep setting default changes (was off).
+# The version in which the unixhierarchysep setting default changes (was
+# off).
 rst_prolog += """
 .. |imap_version_unixhierarchysep_default_on| replace:: 3.0
 """
