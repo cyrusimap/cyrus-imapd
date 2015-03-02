@@ -4,6 +4,7 @@
 Cyrus IMAP 2.5.0 Release Notes
 ==============================
 
+*   :ref:`relnotes-2.5.0-new-features`
 *   :ref:`relnotes-2.5.0-config-option-changes`
 *   :ref:`relnotes-2.5.0-development-autoconf`
 *   :ref:`relnotes-2.5.0-development-phabricator`
@@ -12,13 +13,17 @@ Cyrus IMAP 2.5.0 Release Notes
 Upgrading to Cyrus IMAP 2.5.0
 =============================
 
-Upgrading to Cyrus IMAP 2.5.0 requires the upgrade of database formats,
-for which the reconstruct utility has been modified allowing
+Upgrading to Cyrus IMAP 2.5.0 recommends the upgrade of database
+formats, for which the reconstruct utility has been modified allowing
 administrators to run:
 
 .. parsed-literal::
 
     # :command:`/path/to/reconstruct -V max` [options]
+
+This command can be run at the administrator's convenience, and while
+running the database format upgrade process is not strictly required, it
+is certainly strongly recommended.
 
 .. IMPORTANT::
 
