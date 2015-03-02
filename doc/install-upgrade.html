@@ -21,13 +21,19 @@
     mailboxes to the current minor version 13.  Older version
     mailboxes will continue to work, though newer features
     like annotations will fail.</li>
-<li>It is advised to shut down the server completely while
+<li>After all mailboxes are upgraded, you should run <tt>quota -f</tt>
+    to make sure all the message and folder count quotas are correct.
+    Cyrus 2.5 supports new quota types, and the counts need to be
+    calculated.</li>
+<li>It is strongly advised to shut down the server completely while
     performing the upgrade, because newer daemons will write
     mailboxes.db entries which aren't compatible with the old
     daemons, and may cause crashes if you try to upgrade
     a running server.</li>
 <li>Many configuration options have changed and new features
     have been added, read the release notes.</li>
+<li>Just go read the release notes already:
+    <a href="https://docs.cyrus.foundation/imap/release-notes/2.5.0.html">https://docs.cyrus.foundation/imap/release-notes/2.5.0.html</a></li>
 </ul>
 
 <h2>Upgrading from 2.4.17-caldav-beta10 or earlier</h2>
