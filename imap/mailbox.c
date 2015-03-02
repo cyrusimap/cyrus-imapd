@@ -1928,15 +1928,11 @@ static bit32 mailbox_index_header_to_buf(struct index_header *i, unsigned char *
     *((bit32 *)(buf+OFFSET_MINOR_VERSION)) = htonl(i->minor_version);
     *((bit32 *)(buf+OFFSET_START_OFFSET)) = htonl(i->start_offset);
     *((bit32 *)(buf+OFFSET_RECORD_SIZE)) = htonl(i->record_size);
-    if (i->minor_version >= 12) {
-	*((bit32 *)(buf+OFFSET_NUM_RECORDS)) = htonl(i->num_records);
-    }
-    else {
-	/* this was moved to make upgrades clean, because num_records was
-	 * the same as exists back then, we didn't keep expunged in the
-	 * record */
-	*((bit32 *)(buf+OFFSET_NUM_RECORDS)) = htonl(i->exists);
-    }
+    /* this was moved to make upgrades clean, because num_records was
+     * the same as exists back then, we didn't keep expunged in the
+     * record - but we always have to write NUM_RECORDS so that expunged
+     * handing over repack works */
+    *((bit32 *)(buf+OFFSET_NUM_RECORDS)) = htonl(i->num_records);
     *((bit32 *)(buf+OFFSET_LAST_APPENDDATE)) = htonl(i->last_appenddate);
     *((bit32 *)(buf+OFFSET_LAST_UID)) = htonl(i->last_uid);
 
