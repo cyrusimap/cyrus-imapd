@@ -74,9 +74,18 @@ AC_SUBST(COV_LDFLAGS)
 AC_ARG_WITH(login,,AC_MSG_ERROR([--with-login is no longer supported.
 Configure SASL appropriately instead.]))
 
+dnl We need to derive default values for --with-cyrus-prefix and
+dnl --with-service-path based on $prefix, but $prefix may currently
+dnl be set to "NONE" for autoconf reasons, so work around that.
+if test "x$prefix" = "xNONE"; then
+    myprefix="$ac_default_prefix"
+else
+    myprefix="$prefix"
+fi
+
 AC_ARG_WITH(cyrus-prefix,
 	[AS_HELP_STRING([--with-cyrus-prefix=DIR], [use DIR as cyrus server install directory [PREFIX/cyrus]])],
-	cyrus_prefix="$withval",cyrus_prefix="$prefix/cyrus")
+	cyrus_prefix="$withval",cyrus_prefix="$myprefix/cyrus")
 AC_DEFINE_UNQUOTED(CYRUS_PATH,"$cyrus_prefix",[Where will we be installed?])
 AC_ARG_WITH(service-path,
 	[AS_HELP_STRING([--with-service-path=DIR], [use DIR as service install directory [CYRUSPREFIX/bin]])],
