@@ -4305,8 +4305,7 @@ static void cleanup_stale_expunged(struct mailbox *mailbox)
     for (erecno = 1; erecno <= expunge_num; erecno++) {
 	bufp = expunge_base + eoffset + (erecno-1)*expungerecord_size;
 	uid = ntohl(*((bit32 *)(bufp+OFFSET_UID)));
-	fname = mailbox_message_fname(mailbox, uid);
-	unlink(fname);
+	mailbox_message_unlink(mailbox, uid);
     }
 
     fname = mailbox_meta_fname(mailbox, META_EXPUNGE);
