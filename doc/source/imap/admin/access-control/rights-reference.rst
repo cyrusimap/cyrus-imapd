@@ -13,7 +13,7 @@ Access rights in Cyrus IMAP are fully compatible with :rfc:`4314`,
 Additional documentation on Access Control is available in the following
 documents:
 
-*   :ref:`imap-admin-access-control-combining`
+*   :ref:`imap-admin-access-control-combining-rights`
 *   :ref:`imap-admin-access-control-defaults`
 *   :ref:`imap-admin-access-control-identifiers`
 
