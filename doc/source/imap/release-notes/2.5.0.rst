@@ -25,6 +25,9 @@ This command can be run at the administrator's convenience, and while
 running the database format upgrade process is not strictly required, it
 is certainly strongly recommended.
 
+This upgrade path supports upgrades from Cyrus IMAP version 2.2.12 and
+later versions.
+
 .. IMPORTANT::
 
     The above command can run while the Cyrus IMAP services are in
