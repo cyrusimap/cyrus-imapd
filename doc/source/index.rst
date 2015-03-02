@@ -20,15 +20,6 @@ The latest stable version of Cyrus IMAP is |imap_latest_stable_version|.
     imap/deployment
     imap/admin
 
-Cyrus IMAP HOWTOs
------------------
-
-.. toctree::
-    :maxdepth: 1
-    :glob:
-
-    imap/howtos/nginx-proxy
-
 Cyrus IMAP Release Notes
 ------------------------
 
