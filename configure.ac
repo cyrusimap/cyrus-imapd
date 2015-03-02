@@ -76,12 +76,11 @@ Configure SASL appropriately instead.]))
 
 AC_ARG_WITH(cyrus-prefix,
 	[AS_HELP_STRING([--with-cyrus-prefix=DIR], [use DIR as cyrus server install directory [PREFIX/cyrus]])],
-	cyrus_prefix="$withval",cyrus_prefix="\${prefix}/cyrus")
-AC_SUBST(cyrus_prefix)
+	cyrus_prefix="$withval",cyrus_prefix="$prefix/cyrus")
 AC_DEFINE_UNQUOTED(CYRUS_PATH,"$cyrus_prefix",[Where will we be installed?])
 AC_ARG_WITH(service-path,
 	[AS_HELP_STRING([--with-service-path=DIR], [use DIR as service install directory [CYRUSPREFIX/bin]])],
-	servicedir="$withval",servicedir="\${cyrus_prefix}/bin")
+	servicedir="$withval",servicedir="$cyrus_prefix/bin")
 userdir=$servicedir
 AC_SUBST(userdir)
 AC_SUBST(servicedir)
