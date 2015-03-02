@@ -11,6 +11,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
     The completion of this part of the documentation is awaiting the
     resolution of :task:`48`.
 
+:rfc:`2086`
+
+    IMAP4 ACL Extension, obsoleted by :rfc:`4314`.
+
 :rfc:`2087`
 
     IMAP4 QUOTA extension
@@ -39,6 +43,18 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     IMAP4 Binary Content Extension
 
+:rfc:`4314`
+
+    IMAP4 Access Control Lists (ACL) Extension
+
 :rfc:`4469`
 
     Internet Message Access Protocol CATENATE Extension
+
+:rfc:`5257`
+
+    Internet Message Access Protocol - ANNOTATE Extension
+
+:rfc:`5464`
+
+    The IMAP METADATA Extension
