@@ -34,6 +34,8 @@ com_err/et/compile_et
 coverage.xml
 cscope.out
 depcomp
+doc/man/
+doc/text/
 imap/arbitron
 imap/chk_cyrus
 imap/ctl_cyrusdb
