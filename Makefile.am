@@ -169,7 +169,7 @@ endif # HAVE_CLAMAV
 
 if NNTPD
 service_PROGRAMS += imap/nntpd
-user_PROGRAMS += imap/fetchnews imap/syncnews
+user_PROGRAMS += imap/fetchnews
 endif # NNTPD
 
 service_PROGRAMS += imap/fud
@@ -1318,14 +1318,12 @@ dist_man_MANS = \
 if NNTPD
 dist_man_MANS += \
 	man/fetchnews.8 \
-	man/nntpd.8 \
-	man/syncnews.8
+	man/nntpd.8
 
 else # NNTPD
 EXTRA_DIST += \
 	man/fetchnews.8 \
-	man/nntpd.8 \
-	man/syncnews.8
+	man/nntpd.8
 
 endif # NNTPD
 
