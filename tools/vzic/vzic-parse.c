@@ -810,7 +810,7 @@ parse_number			(ParsingData	*data,
 #endif
 
   // potential null value where '-' is specified. assume zero.
-  if (*p == NULL) {
+  if (!p || !*p) {
     return 0;
   }
 

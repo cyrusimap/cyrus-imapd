@@ -94,7 +94,7 @@ EXPORTED int zoneinfo_open(const char *fname)
     return ret;
 }
 
-void zoneinfo_close(struct txn *tid)
+EXPORTED void zoneinfo_close(struct txn *tid)
 {
     if (zoneinfo_dbopen) {
 	int r;
