@@ -4,16 +4,31 @@
 Cyrus IMAP 2.5.0 Release Notes
 ==============================
 
+.. IMPORTANT::
+
+    Make sure to read the :ref:`imap-relnotes-2.5.0-upgrading` notes
+    (all of them).
+
 *   :ref:`relnotes-2.5.0-new-features`
 *   :ref:`relnotes-2.5.0-config-option-changes`
 *   :ref:`relnotes-2.5.0-development-autoconf`
 *   :ref:`relnotes-2.5.0-development-phabricator`
 *   :ref:`relnotes-2.5.0-development-documentation`
 
+.. _imap-relnotes-2.5.0-upgrading:
+
 Upgrading to Cyrus IMAP 2.5.0
 =============================
 
-.. rubric:: ``cyrus.index`` database format upgrade
+It is strongly recommended to shut down the Cyrus IMAP services before
+performing the upgrade, as the newer binaries will end up writing to
+``mailboxes.db`` in a way that is not compatible with the older binaries
+(that would otherwise still be running).
+
+You can start the server immediately after upgrading, however.
+
+Database Format Upgrade for Mailboxes
+-------------------------------------
 
 Upgrading to Cyrus IMAP 2.5.0 recommends the upgrade of database
 formats, for which the reconstruct utility has been modified allowing
@@ -21,11 +36,35 @@ administrators to run:
 
 .. parsed-literal::
 
-    # :command:`/path/to/reconstruct -V max` [options]
+    # :command:`/usr/lib/cyrus-imapd/reconstruct -V max` [options]
 
 This command can be run at the administrator's convenience, and while
 running the database format upgrade process is not strictly required, it
 is certainly strongly recommended.
+
+Releases prior to 2.5.0, namely the 2.4 series, upgraded ``cyrus.index``
+database formats in-line (i.e. as the mailbox in question as being
+used). This may have caused an I/O storm in some situations, which 2.5.0
+aims to address.
+
+The minor version of the ``cyrus.index`` file in 2.5.0 is **13**. While
+mailboxes with an older format will continue to work "forever", newer
+features such as annotation quotas will fail, as there is no space in
+the database formats prior to version 13 to store the new feature's
+information.
+
+Until you upgrade the database format, you may experience slightly
+inconsistent search results, due to the ``cyrus.cache`` format in Cyrus
+IMAP versions prior to 2.4.0 running words together and not obeying word
+boundaries (as well as versions in the 2.4 and 2.5 series).
+
+If you were running Cyrus 2.3.x with ``expunge_mode: delayed``, then the
+contents of the ``cyrus.expunge`` file will be removed the first time
+the mailbox is opened, and the mailbox will act as if ``expunge_mode``
+was set to ``immediate`` -- until it is upgraded.
+
+This is because version 2.3 mailboxes used the ``cyrus.expunge`` file,
+and it's not worth the complexity to try to recreate that file.
 
 This upgrade path supports upgrades from Cyrus IMAP version 2.2.12 and
 later versions.
@@ -41,13 +80,15 @@ later versions.
     more granularly specify which mailboxes' :file:`cyrus.index` is to
     be upgraded.
 
-.. rubric:: Quota fixes and enhancements
+Quota Fixes and Enhancements
+----------------------------
 
 After all mailboxes are upgraded, you should run ``quota -f`` to make
 all message and folder counts are correct. The new quota types that
 Cyrus IMAP 2.5.0 supports require the counts to need to be accurate.
 
-.. rubric:: Cyrus IMAP Murder Topologies
+Cyrus IMAP Murder Topologies
+----------------------------
 
 Environments that run a Cyrus IMAP Murder topology will want to upgrade
 their backends before they upgrade their frontends. See :task:`16` for
