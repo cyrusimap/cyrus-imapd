@@ -163,9 +163,13 @@ user_PROGRAMS += \
 	imap/reconstruct \
 	imap/squatter
 
+if HAVE_CLAMAV
+user_PROGRAMS += imap/cyr_virusscan
+endif # HAVE_CLAMAV
+
 if NNTPD
 service_PROGRAMS += imap/nntpd
-user_PROGRAMS += imap/fetchnews
+user_PROGRAMS += imap/fetchnews imap/syncnews
 endif # NNTPD
 
 service_PROGRAMS += imap/fud
@@ -189,7 +193,10 @@ BUILT_SOURCES += \
 	imap/tz_err.h
 
 service_PROGRAMS += imap/httpd
-user_PROGRAMS += imap/dav_reconstruct
+user_PROGRAMS += \
+	imap/ctl_zoneinfo \
+	imap/dav_reconstruct
+
 endif # HTTPD
 
 if REPLICATION
@@ -754,8 +761,23 @@ imap_cyr_synclog_LDADD = $(LD_UTILITY_ADD)
 imap_cyr_userseen_SOURCES = imap/cli_fatal.c imap/cyr_userseen.c imap/mutex_fake.c
 imap_cyr_userseen_LDADD = $(LD_UTILITY_ADD)
 
-#imap_cyr_virusscan_SOURCES = imap/cli_fatal.c imap/cyr_virusscan.c imap/mutex_fake.c
-#imap_cyr_virusscan_LDADD = $(LD_UTILITY_ADD) -lclamav
+if HAVE_CLAMAV
+imap_cyr_virusscan_SOURCES = imap/cli_fatal.c imap/cyr_virusscan.c imap/mutex_fake.c
+imap_cyr_virusscan_LDADD = $(LD_UTILITY_ADD) -lclamav
+else # HAVE_CLAMAV
+EXTRA_DIST += \
+	imap/cyr_virusscan.c
+
+endif # HAVE_CLAMAV
+
+if HTTPD
+imap_ctl_zoneinfo_SOURCES = imap/cli_fatal.c imap/ctl_zoneinfo.c imap/mutex_fake.c
+imap_ctl_zoneinfo_LDADD = $(LD_UTILITY_ADD)
+else # HTTPD
+EXTRA_DIST += \
+	imap/ctl_zoneinfo.c
+
+endif # HTTPD
 
 imap_deliver_SOURCES = \
 	imap/deliver.c \
@@ -764,6 +786,7 @@ imap_deliver_SOURCES = \
 	imap/mutex_fake.c \
 	imap/proxy.c \
 	imap/spool.c
+
 imap_deliver_LDADD = $(LD_UTILITY_ADD)
 
 imap_fetchnews_SOURCES = imap/cli_fatal.c imap/fetchnews.c imap/mutex_fake.c
@@ -794,9 +817,11 @@ imap_imapd_SOURCES += \
 endif
 
 imap_imapd_LDADD =
+
 if SIEVE
 imap_imapd_LDADD += sieve/libcyrus_sieve.la
 endif
+
 imap_imapd_LDADD += $(LD_SERVER_ADD)
 
 imap_ipurge_SOURCES = imap/cli_fatal.c imap/ipurge.c imap/mutex_fake.c
@@ -903,6 +928,8 @@ if HTTPD
 imap_libcyrus_imap_la_SOURCES += \
 	imap/caldav_db.c \
 	imap/caldav_db.h \
+	imap/carddav_db.c \
+	imap/carddav_db.h \
 	imap/dav_db.c \
 	imap/dav_db.h \
 	imap/dav_util.c \
@@ -938,6 +965,15 @@ imap_libcyrus_imap_la_SOURCES += \
 nodist_imap_libcyrus_imap_la_SOURCES += \
 	imap/http_err.c \
 	imap/tz_err.c
+
+SUBDIRS += \
+	tools/vzic/
+
+else # HTTPD
+
+EXTRA_DIST += \
+	$(wildcard tools/vzic/*)
+
 endif # HTTPD
 
 imap_lmtpd_SOURCES = \
@@ -956,13 +992,15 @@ if AUTOCREATE
 imap_lmtpd_SOURCES += \
 	imap/autocreate.c \
 	imap/autocreate.h
-endif
+endif # AUTOCREATE
 
 imap_lmtpd_LDADD =
+
 if SIEVE
 imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/lmtp_sieve.h imap/smtpclient.c
 imap_lmtpd_LDADD += sieve/libcyrus_sieve.la
-endif
+endif # SIEVE
+
 imap_lmtpd_LDADD += $(LD_SERVER_ADD)
 
 imap/lmtpstats.c: imap/lmtpstats.snmp snmp/snmpgen
@@ -1010,8 +1048,9 @@ nodist_imap_httpd_SOURCES = \
 	imap/tz_err.h
 
 imap_httpd_SOURCES = \
-	imap/carddav_db.c \
 	imap/caldav_db.c \
+	imap/carddav_db.c \
+	imap/carddav_db.h \
 	imap/dav_db.c \
 	imap/dav_util.c \
 	imap/http_caldav.c \
@@ -1045,12 +1084,14 @@ if AUTOCREATE
 imap_pop3d_SOURCES += \
 	imap/autocreate.c \
 	imap/autocreate.h
-endif
+endif # AUTOCREATE
 
 imap_pop3d_LDADD =
+
 if SIEVE
 imap_pop3d_LDADD += sieve/libcyrus_sieve.la
-endif
+endif # SIEVE
+
 imap_pop3d_LDADD += $(LD_SERVER_ADD)
 
 imap_quota_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/quota.c imap/quota.h
@@ -1252,7 +1293,6 @@ dist_man_MANS = \
 	man/cyr_info.8 \
 	man/cyr_synclog.8 \
 	man/deliver.8 \
-	man/fetchnews.8 \
 	man/fud.8 \
 	man/idled.8 \
 	man/imapd.8 \
@@ -1261,7 +1301,6 @@ dist_man_MANS = \
 	man/master.8 \
 	man/mbexamine.8 \
 	man/mbpath.8 \
-	man/nntpd.8 \
 	man/notifyd.8 \
 	man/pop3d.8 \
 	man/quota.8 \
@@ -1269,7 +1308,6 @@ dist_man_MANS = \
 	man/rmnews.8 \
 	man/smmapd.8 \
 	man/squatter.8 \
-	man/syncnews.8 \
 	man/sync_client.8 \
 	man/sync_reset.8 \
 	man/sync_server.8 \
@@ -1277,10 +1315,31 @@ dist_man_MANS = \
 	man/tls_prune.8 \
 	man/unexpunge.8
 
+if NNTPD
+dist_man_MANS += \
+	man/fetchnews.8 \
+	man/nntpd.8 \
+	man/syncnews.8
+
+else # NNTPD
+EXTRA_DIST += \
+	man/fetchnews.8 \
+	man/nntpd.8 \
+	man/syncnews.8
+
+endif # NNTPD
+
 if HTTPD
 dist_man_MANS += \
+	man/ctl_zoneinfo.8 \
 	man/httpd.8
-endif
+
+else # HTTPD
+EXTRA_DIST += \
+	man/ctl_zoneinfo.8 \
+	man/httpd.8
+
+endif # HTTPD
 
 master_master_SOURCES = \
 	master/cyrusMasterMIB.c \
