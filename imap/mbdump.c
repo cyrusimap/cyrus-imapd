@@ -59,7 +59,9 @@
 #include <utime.h>
 
 #include "annotate.h"
+#ifdef WITH_DAV
 #include "dav_util.h"
+#endif
 #include "exitcodes.h"
 #include "global.h"
 #include "imap/imap_err.h"
