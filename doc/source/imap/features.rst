@@ -1,3 +1,5 @@
+.. _imap-features:
+
 =============
 IMAP Features
 =============
