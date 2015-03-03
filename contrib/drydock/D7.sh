@@ -19,7 +19,10 @@ function test_path() {
 
     shift; shift; shift
 
-    ./configure "$@" >/dev/null 2>&1
+    echo "============================================================="
+    echo "Testing options: $@"
+    echo "============================================================="
+    ./configure "$@"
 
     eval "$(grep -E '^(service|user)dir=' config.log)"
 
