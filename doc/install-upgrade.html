@@ -12,26 +12,41 @@
 
 <h2>Upgrading from all 2.4 series to 2.5</h2>
 <ul>
-<li>The most important thing is that index file upgrades are
+<li>It is strongly advised to shut down the server completely while
+    performing the upgrade, because newer daemons will write
+    mailboxes.db entries which aren't compatible with the old
+    daemons, and may cause crashes if you try to upgrade
+    a running server.  You can start the server again immediately
+    with the new daemons installed.</li>
+<li>The most important change is that index file upgrades are
     no longer automatic.  This avoids the IO storm caused by
     upgrades from 2.3 to 2.4.  Even if you are upgrading from
     Cyrus 2.2, it won't cause an IO storm any more.<br/>
     Instead, you need to run <tt>reconstruct -V max</tt> to
     upgrade each mailbox in turn.  This will upgrade all
-    mailboxes to the current minor version 13.  Older version
-    mailboxes will continue to work, though newer features
-    like annotations will fail.</li>
+    mailboxes to the current minor version 13.  This can
+    be safely done while the server is running.</li>
+<li>Older version mailboxes will continue to work "forever",
+    though newer features like annotation quotas will fail,
+    since there's no space in the mailbox header to store them.<br/>
+    There may be slightly inconsistent search results until you upgrade.
+    The cyrus.cache format in 2.3 and earlier ran words together
+    in cache, so searches won't obey word boundaries like they
+    do in 2.4+</li>
+<li>If you were running Cyrus 2.3.x with expunge_mode: delayed,
+    then the contents of the cyrus.expunge file will be removed
+    the first time the mailbox is opened, and the mailbox will
+    act as if expunge_mode: immediate was set until it is upgraded.
+    This is because version 2.3 mailboxes used the cyrus.expunge
+    file, and it's not worth the complexity to try to recreate
+    that file.</li>
 <li>After all mailboxes are upgraded, you should run <tt>quota -f</tt>
     to make sure all the message and folder count quotas are correct.
     Cyrus 2.5 supports new quota types, and the counts need to be
     calculated.</li>
-<li>It is strongly advised to shut down the server completely while
-    performing the upgrade, because newer daemons will write
-    mailboxes.db entries which aren't compatible with the old
-    daemons, and may cause crashes if you try to upgrade
-    a running server.</li>
 <li>Many configuration options have changed and new features
     have been added, read the release notes.</li>
+<li>Mailboxes.db and quota internal formats have changed.
 <li>Just go read the release notes already:
     <a href="https://docs.cyrus.foundation/imap/release-notes/2.5.0.html">https://docs.cyrus.foundation/imap/release-notes/2.5.0.html</a></li>
 </ul>
