@@ -404,3 +404,5 @@ and performs a large amounts of mailbox creations, it may be useful to
 configure the ``serverlist_select_usage_reinit`` so that the backend's
 disk usage information is refreshed after the configured number of
 creation requests.
+
+Back to :ref:`imap-features`

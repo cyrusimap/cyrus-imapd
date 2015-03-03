@@ -27,3 +27,5 @@ idling and you want to keep it busy.
 Cyrus IMAP employs technology to detect an attempt to deliver a
 duplicate of a message already delivered, and can suppress the duplicate
 from being posted to the users' mailboxes.
+
+Back to :ref:`imap-features`

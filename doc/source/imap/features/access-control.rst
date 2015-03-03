@@ -14,6 +14,9 @@ Access Control
 Cyrus IMAP features powerful access control compliant with :rfc:`2086`,
 :rfc:`4314`, :rfc:`5257` and :rfc:`5464`.
 
+Combined, this provides powerful mechanisms to enable or restrict access
+to information contained within the Cyrus IMAP mailspool.
+
 .. _imap-features-access-control-lists-discretionary:
 
 Discretionary Access Control
@@ -41,3 +44,5 @@ Two means exist to suppress sharing folders between users:
     :glob:
 
     access-control/*
+
+Back to :ref:`imap-features`

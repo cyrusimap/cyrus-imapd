@@ -399,3 +399,5 @@ operations to result in very large, long lists of folders.
 .. seealso::
 
     *   :ref:`imap-howto-shared-folder-mail-delivery`
+
+Back to :ref:`imap-features`

@@ -87,3 +87,5 @@ the total storage).
     Monitoring the storage used is critical, because actually running
     out of disk space is very costly -- and not a problem the customer
     themselves could recover from.
+
+Back to :ref:`imap-features`

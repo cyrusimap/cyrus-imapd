@@ -20,7 +20,7 @@ To illustrate, let John's IMAP client connect to ``imap.example.org``:
 
 .. graphviz::
 
-    digraph joe {
+    digraph john {
             rankdir = LR;
             splines = true;
             overlab = prism;
@@ -40,7 +40,7 @@ The client connection is therefore to be proxied to the appropriate
 
 .. graphviz::
 
-    digraph joe {
+    digraph john {
             rankdir = LR;
             splines = true;
             overlab = prism;
@@ -191,7 +191,8 @@ Cyrus IMAP can do so in either one of three topologies:
 #.  :ref:`imap-features-murder-unified`
 
     There's no distinction between backends and frontends, and all
-    backends perform frontend roles as well.
+    backends perform frontend roles, but not all frontends are
+    automatically also backends.
 
 .. NOTE::
 
@@ -240,8 +241,8 @@ connection model:
             "f+" -> "b+";
         }
 
-(1) A frontend connects to the mupdate master server and receives
-    updates from the mupdate master server.
+(1) A frontend (f) connects to the mupdate (m) master server and
+    receives updates from the mupdate master server.
 
     The frontend continues to receive updates about deleted, renamed or
     created mailboxes for as long as the connection from the frontend to
@@ -254,10 +255,8 @@ connection model:
 
     A backend reconnects to the mupdate master server as needed.
 
-
-
-Mailbox Creation
-Backend Startup
+Murder Backend Startup Process
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. graphviz::
     :caption: Communication during Backend startup (1)
@@ -298,12 +297,30 @@ Backend Startup
             "f+" -> "b+" [color=white];
         }
 
-(1)
+(1) The backend (b) pushes its list of mailboxes to the mupdate master
+    (m) using ``ctl_mboxlist -m``.
 
-    (b) pushes its list of mailboxes to (m) using ``ctl_mboxlist -m``.
+    The list of local mailboxes on the backend is routinely compared
+    with the current state of the rest of the murder topology;
 
-(2)
+    *   Mailboxes that exist locally but are not in MUPDATE are pushed
+        to the mupdate master server.
 
+    *   Mailboxes that exist locally but for which the mupdate master
+        server has an entry for the mailbox to live on a different
+        server are deleted locally.
+
+        .. NOTE::
+
+            Additional options to
+            :ref:`imap-admin-commands-ctl_mboxlist` allow the deletion
+            to be prevented.
+
+    *   Mailboxes that do not exist locally but exists in MUPDATE as
+        living locally are removed from the mupdate master server.
+
+(2) The mupdate (m) master server pushes updates to the existing list of
+    mailboxes to the frontend (f) server.
 
 .. graphviz::
 
@@ -332,6 +349,8 @@ Replicated Murder
 
 Unified Murder
 --------------
+
+Back to :ref:`imap-features`
 
 .. rubric:: Footnotes
 

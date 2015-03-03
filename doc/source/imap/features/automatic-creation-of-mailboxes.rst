@@ -102,3 +102,5 @@ Limitations to the Automatic Creation of Mailboxes
     The functionality stated in this document does **not** rename
     ``user/jane.gi@example.org`` to become
     ``user/jane.doe@example.org``.
+
+Back to :ref:`imap-features`
