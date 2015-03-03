@@ -39,6 +39,10 @@ later versions.
     more granularly specify which mailboxes' :file:`cyrus.index` is to
     be upgraded.
 
+After all mailboxes are upgraded, you should run ``quota -f`` to make
+all message and folder counts are correct. The new quota types that
+Cyrus IMAP 2.5.0 supports require the counts to need to be accurate.
+
 .. _relnotes-2.5.0-new-features:
 
 New Features
