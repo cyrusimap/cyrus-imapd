@@ -1,7 +1,7 @@
 .. _imap-features-murder:
 
 ======================================
-Server Aggregation (Cyrus IMAP Murder)
+Cyrus IMAP Murder (Server Aggregation)
 ======================================
 
 A Cyrus IMAP Murder consists of a group of Cyrus IMAP servers

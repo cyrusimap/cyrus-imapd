@@ -73,6 +73,12 @@ in :manpage:`imapd.conf(5)`:
 
 See :manpage:`imapd.conf(5)` for the full documentation of all options.
 
+.. seealso::
+
+    *   :ref:`imap-features-murder`
+    *   :ref:`imap-features-mailbox-distribution`
+    *   :ref:`imap-features-quota`
+
 Limitations to the Automatic Creation of Mailboxes
 ==================================================
 
