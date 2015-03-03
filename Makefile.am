@@ -971,10 +971,6 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/xstats.h \
 	imap/xstats_metrics.h
 
-imap_libcyrus_imap_la_LIBADD = $(COM_ERR_LIBS) lib/libcyrus_min.la lib/libcyrus.la
-imap_libcyrus_imap_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
-imap_libcyrus_imap_la_CXXFLAGS =
-
 if USE_SQUAT
 imap_libcyrus_imap_la_SOURCES += \
 	imap/search_squat.c \
