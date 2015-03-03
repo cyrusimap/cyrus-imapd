@@ -692,8 +692,8 @@ if test "x$enable_afs" = "xyes"; then
       AC_DEFINE(AFSPTS_USE_KRB5,[],[Should the AFS PTS plugin use krb5?])    
     ])
 
-    CFLAGS="${CFLAGS} -I${with_afs_incdir}/include"
-    AFS_LIBS="${with_afs_libdir}/afs/libkauth.a ${with_afs_libdir}/afs/libprot.a  ${with_afs_libdir}/afs/libauth.a ${with_afs_libdir}/afs/libsys.a ${with_afs_libdir}/librxkad.a ${with_afs_libdir}/librx.a ${with_afs_libdir}/afs/libsys.a ${with_afs_libdir}/libubik.a  ${with_afs_libdir}/liblwp.a ${with_afs_libdir}/afs/util.a ${with_afs_libdir}/afs/libcom_err.a"
+    CFLAGS="${CFLAGS} -I${with_afs_incdir}"
+    AFS_LIBS="${with_afs_libdir}/afs/libkauth.a ${with_afs_libdir}/afs/libprot.a  ${with_afs_libdir}/afs/libauth.a ${with_afs_libdir}/afs/libsys.a ${with_afs_libdir}/librxkad.a ${with_afs_libdir}/librx.a ${with_afs_libdir}/afs/libsys.a ${with_afs_libdir}/libubik.a  ${with_afs_libdir}/afs/liblwp.a ${with_afs_libdir}/afs/util.a ${with_afs_libdir}/afs/libafscom_err.a -lresolv"
     if test -f ${with_afs_libdir}/afs/libaudit.a; then
       AFS_LIBS="$AFS_LIBS ${with_afs_libdir}/afs/libaudit.a"
     fi
@@ -740,7 +740,7 @@ if test "x$enable_afs" = "xyes"; then
     AC_SUBST(AFS_LDFLAGS)
     AC_SUBST(AFS_LIBS)
 fi
-AM_CONDITIONAL([USE_AFSKRB], [test "$HAVE_AFSKRB" = "1"])
+AM_CONDITIONAL([USE_AFSKRB], [grep HAVE_AFSKRB confdefs.h >/dev/null])
 
 have_ldap=no
 LDAP_CPPFLAGS=
