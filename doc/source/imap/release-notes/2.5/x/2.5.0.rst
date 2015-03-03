@@ -13,6 +13,8 @@ Cyrus IMAP 2.5.0 Release Notes
 Upgrading to Cyrus IMAP 2.5.0
 =============================
 
+.. rubric:: ``cyrus.index`` database format upgrade
+
 Upgrading to Cyrus IMAP 2.5.0 recommends the upgrade of database
 formats, for which the reconstruct utility has been modified allowing
 administrators to run:
@@ -39,9 +41,17 @@ later versions.
     more granularly specify which mailboxes' :file:`cyrus.index` is to
     be upgraded.
 
+.. rubric:: Quota fixes and enhancements
+
 After all mailboxes are upgraded, you should run ``quota -f`` to make
 all message and folder counts are correct. The new quota types that
 Cyrus IMAP 2.5.0 supports require the counts to need to be accurate.
+
+.. rubric:: Cyrus IMAP Murder Topologies
+
+Environments that run a Cyrus IMAP Murder topology will want to upgrade
+their backends before they upgrade their frontends. See :task:`16` for
+details.
 
 .. _relnotes-2.5.0-new-features:
 
