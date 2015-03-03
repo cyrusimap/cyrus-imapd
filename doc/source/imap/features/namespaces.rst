@@ -25,6 +25,8 @@ By default, up to versions prior to Cyrus IMAP version
 *netnews* namespace convention -- a ``.`` (dot) character is used as the
 hierarchy separator.
 
+Further implications and limitations of this convention include:
+
 *   Mailbox names are case-sensitive,
 *   A mailbox name may not start with a ``.`` (dot) character,
 *   A mailbox name may not contain two ``.`` (dot) characters in a row,
