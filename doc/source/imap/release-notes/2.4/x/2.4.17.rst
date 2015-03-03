@@ -1,0 +1,24 @@
+===============================
+Cyrus IMAP 2.4.17 Release Notes
+===============================
+
+*   A bunch of cleanups and fixes to compiling
+*   A bunch of sieve cleanups
+*   Fixed bug #3691: unixhierarchysep is now obeyed when printing the mailbox name in unexpunge
+*   Fixed bug #3718: crashes fetching message parts
+*   Fixed bug #3719: pop3 seen update of final message in a mailbox
+*   Improved documentation of "proxyservers" option
+*   Fixed bug #3737: lost emails in XFER delivery race
+*   Fixed bug #3725: inefficient statuscache use in some cases
+*   Fixed bug #3484: use of sasl property types (compile fix)
+*   Fixed bug #3754: failure to support binary append. This was found by a popular library switching to using binary appends
+*   Fixed bug #3735: user prefix searching now works with fulldirhash
+*   Fixed bug #3696: can no longer rename the same mailbox twice, which left things in a corrupted state if you caught the race.
+*   Fixed bug #3715: using berkeley for mailboxes.db was very broken. It now works.
+*   Fixed bug #3733: reconstruct with missing cyrus.index will use file timestamps for internaldate rather than setting it to NOW if internaldate_heuristic is set to standard
+*   Fixed bug #3729: better documentation for xlist-* in 2.4.
+*   Fixed bug #2717: fetches of individual messages or short ranges no longer need to parse over the entire index.
+*   Fixed bug #3742: reconstruct can now fix multiple folders with the same uniqueid again (regression from 2.3) and also sync_client avoids a crash in that broken case.
+
+
+:ref:`imap-release-notes-2.4`

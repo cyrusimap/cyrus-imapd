@@ -1,0 +1,15 @@
+==============================
+Cyrus IMAP 2.4.1 Release Notes
+==============================
+
+Changes to the Cyrus IMAP Server since 2.4.0
+
+*   Fix cyrdump to work with -C for alternate config
+*   Change master to process all pending child messages once per loop, which fixes a DoS situation if there is too much message churn in a slower box - thanks to Henrique de Moraes Holschuh <hmh@debian.org>
+*   Reconstruct added flags -R, -U, -o, -O to give options handling corrupt or missing files
+*   Reconstruct fixed a pile of bugs, including a nasty one which created mailboxes with a UIDVALIDITY of 0
+*   Fixed EXPUNGE in murder
+*   Fixed LSUB where subscribed mailboxes are on different murder backends
+*   New build system using git commit ID rather than CVS date information to uniquely identify a release or development build via the "ID" command. Also changes the CYRUS_VERSION string for builds directly from git.
+
+:ref:`imap-release-notes-2.4`

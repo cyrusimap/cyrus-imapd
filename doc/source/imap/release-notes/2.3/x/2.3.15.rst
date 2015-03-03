@@ -1,0 +1,23 @@
+===============================
+Cyrus IMAP 2.3.15 Release Notes
+===============================
+
+Changes to the Cyrus IMAP Server since 2.3.14
+
+*   Fixed CERT VU#336053 - Potential buffer overflow in Sieve.
+*   Added new cyr_df tool for reporting Cyrus spool partition disk space usage.
+*   Fixed a crash when selecting a folder after using the SCAN command
+*   Split mupdate_synchronize() into network scarfing and mailbox comparision pieces. This allows us to not lock out the mailboxes.db and mupdate clients while scarfing the UPDATE response, which can be quite time consuming over slow links.
+*   Added support for MUPDATE COMPRESS and IMAP COMPRESS commands which help speed up bulk data commands over slow links. Inspired by work of Dave Cridland <dave@cridland.net>
+*   Allow frontend servers in a Murder to proxy the CREATE, DELETE, SETACL, SETQUOTA, and GETQUOTA commands for toplevel mailboxes. In order for a frontend to know where to CREATE a toplevel mailbox, either the defaultserver option must be set (ALL new toplevel mailboxes are created on this particular server), or the serverlist option must be set (new toplevel mailboxes are created on whichever server has the most available spool space).
+*   Use delayed expunge in ipurge to avoid corrupting cache file and as a bonus make it unexpungable.
+*   Run daily tasks at the same time each day instead of exactly 24 hours apart to detect daylight savings changes
+*   Fixed Bug #2727 by immediately expunging old messages on INBOX to INBOX.sub rename
+*   Fixed incorrect quota calculations on sync_server when replicating unexpunged messages (thanks David Carter)
+*   Allow user rename to succeed even if the user is over quota
+*   Fixed a skiplist foreach bug and various datatype size issues that caused problems on some 64 bit architectures
+*   Added additional logging of mailbox events if condstore is enabled to ensure modseq values are always correctly replicated
+*   Fixed "DBERROR db4: environment reference count went negative" by forking idled before opening the database environment.
+*   Fixed a squatter bug where any short search term (< 4 characters) would cause squatter to return all messages regardless of the other filters being applied
+
+:ref:`imap-release-notes-2.3`

@@ -1,0 +1,16 @@
+==============================
+Cyrus IMAP 2.3.4 Release Notes
+==============================
+
+Changes to the Cyrus IMAP Server since 2.3.3
+
+*   Added support for BINARY APPEND (including CATENATE). Based on contributions from Tom Esh <esh@lucent.com>.
+*   Added support for CONDSTORE (must be enabled on a per-mailbox basis with the /vendor/cmu/cyrus-imapd/condstore mailbox annotation.
+*   Fixed bug in reconstruct using bad name for cyrus.header.
+*   Fixed bug with replication and default partition.
+*   ctl_mboxlist now dumps/undumps the mailbox type flags, making it useful for remote mailboxes.
+*   Better logging to facilitate message tracking (Wes Craig <wes@umich.edu>).
+*   Implemented CAPABILITY response in banner and after authentication.
+*   Fixed miscellaneous bugs and build issues.
+
+:ref:`imap-release-notes-2.3`

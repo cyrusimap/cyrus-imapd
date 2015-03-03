@@ -1,0 +1,27 @@
+===============================
+Cyrus IMAP 2.4.14 Release Notes
+===============================
+
+Changes to the Cyrus IMAP Server since 2.4.13
+
+*   Bug #2685 - folder delete and annotations
+*   Bug #3381 - tools/rehash script is not 64bit safe
+*   Bug #3405 - Cyrus IMAP tls support for ctl_mboxlist
+*   Bug #3485 - cyr_expire tries to delete parent directories that are not empty
+*   Bug #3582 - Extra LF+SP characters been inserted in the middle of the XML attachments
+*   Bug #3598 - lmtp auditlog for murder proxy mode
+*   Bug #3623 - OpenBSD (and other platforms without working mmap) multiple bugs
+*   Bug #3626 - Renaming a mailbox doesn't remove old folder
+*   Bug #3628 - folders with spaces and subfolders with same prefix as parent folder don't show up
+*   Bug #3634 - RENAME INBOX no longer works
+*   Bug #3635 - cmd_rename() fails to check error codes
+*   Bug #3636 - unexpunge locks mailbox until all output is emitted
+*   Bug #3637 - imapd and ipop3d in 2.4 no longer log expunge events to syslog
+*   Bug #3638 - sessionid logging improvements for murder environments
+*   Bug #3640 - LMTP accepts NULL bytes in headers, resulting in incorrect header/mail size in meta-data
+*   Bug #3642 - iPhone 5 expects SPECIAL-USE in LIST output
+*   Bug #3649 - unable to remove mailbox
+*   Bug #3650 - ENVELOPE contains unexpected CRLF
+*   Bug #3645 - Ability to delete folder "shared"
+
+:ref:`imap-release-notes-2.4`

@@ -1,0 +1,18 @@
+==============================
+Cyrus IMAP 2.3.2 Release Notes
+==============================
+
+Changes to the Cyrus IMAP Server since 2.3.1
+
+*   Added more extensive output to arbitron.
+*   Allow responses of any length from backend when proxing IMAP/POP3/NNTP traffic.
+*   Properly handle timeouts when proxying.
+*   Added plaintextloginalert option.
+*   Fixed segfault in deliver.
+*   Only allow mbpath to be run as Cyrus user.
+*   Added nntptimeout option for nntpd.
+*   Added berkeley_hash and berkeley_hash_nosync cyrusdb backends (seem to perform better under heavy loads).
+*   Added TLS support to cyradm.
+*   Fixed miscellaneous bugs and build issues.
+
+:ref:`imap-release-notes-2.3`
