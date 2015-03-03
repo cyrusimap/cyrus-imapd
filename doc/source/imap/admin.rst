@@ -1,20 +1,27 @@
-.. Cyrus IMAP Administrator Guide file, created by
-   sphinx-quickstart on Fri Apr 18 12:12:45 2014.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+.. _imap-admin:
 
+===================
 Administrator Guide
 ===================
 
 .. toctree::
     :maxdepth: 2
 
-    admin/administration
+    admin/tweaking
     admin/sop
-    admin/config
-    admin/packagers
+    admin/commands
+    admin/access-control
+
+References
+==========
+
+.. toctree::
+    :maxdepth: 1
+
+    admin/access-control/rights-reference
 
 .. toctree::
     :maxdepth: 2
 
-    howtos/nginx-proxy.rst
+    howtos/nginx-proxy
+    howtos/shared-folder-mail-delivery
