@@ -33,9 +33,11 @@ extensions = [
     'sphinx.ext.extlinks',
     'sphinx.ext.graphviz',
     'sphinx.ext.ifconfig',
-#    'sphinx.ext.mathjax',
+    'sphinx.ext.mathjax',
     'sphinx.ext.todo',
 ]
+
+mathjax_path = 'https://cdn.mathjax.org/mathjax/latest/MathJax.js'
 
 todo_include_todos = True
 
@@ -367,6 +369,16 @@ rst_prolog += """
 rst_prolog += """
 .. |imap_version_unixhierarchysep_default_on| replace:: 3.0
 """
+
+# Uncomment this if you publish to, like, www.cyrusimap.org/~vanmeeuwen/
+#rst_prolog += """
+#.. WARNING::
+
+    #You are looking at documentation that is maintained by interval.
+
+    #Please see https://docs.cyrus.foundation/ for better maintained
+    #documentation.
+#"""
 
 # Use this as :task:`18`
 extlinks = {
