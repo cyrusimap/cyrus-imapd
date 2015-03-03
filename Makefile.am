@@ -43,18 +43,30 @@
 
 ACLOCAL_AMFLAGS = -I cmulocal
 AM_CFLAGS = @PERL_CCCDLFLAGS@ $(COV_CFLAGS)
-AM_CPPFLAGS = $(COM_ERR_CPPFLAGS) \
-	-I${top_builddir} -I${top_builddir}/lib \
-	-I${top_srcdir} -I${top_srcdir}/lib \
-	${DEFS} ${LOCALDEFS} $(SASLFLAGS) $(SSL_CPPFLAGS)
+
+AM_CPPFLAGS = \
+	$(COM_ERR_CPPFLAGS) \
+	-I${top_builddir} \
+	-I${top_builddir}/lib \
+	-I${top_srcdir} \
+	-I${top_srcdir}/lib \
+	${DEFS} \
+	${LOCALDEFS} \
+	$(SASLFLAGS) \
+	$(SSL_CPPFLAGS)
+
 if HAVE_LDAP
 AM_CPPFLAGS += $(LDAP_CPPFLAGS)
-endif
+endif # HAVE_LDAP
+
 AM_LDFLAGS = $(COV_LDFLAGS)
-BUILT_SOURCES = xversion.h \
+BUILT_SOURCES = \
+	xversion.h \
 	imap/imap_err.c \
 	lib/imapopts.c
-DISTCLEANFILES = imap/imap_err.c \
+
+DISTCLEANFILES = \
+	imap/imap_err.c \
 	imap/imap_err.h \
 	imap/mupdate_err.c \
 	imap/mupdate_err.h \
@@ -99,14 +111,16 @@ check_PROGRAMS =
 service_PROGRAMS =
 user_PROGRAMS =
 CLEANFILES =
+EXTRA_DIST =
 
 if COM_ERR
 COMPILE_ET_DEP = com_err/et/compile_et
 BUILT_SOURCES += com_err/et/compile_et
 lib_LTLIBRARIES += com_err/et/libcyrus_com_err.la
-endif
+endif # COM_ERR
 
 bin_PROGRAMS = imtest/imtest
+
 if SERVER
 BUILT_SOURCES += \
 	imap/mupdate_err.c \
@@ -115,12 +129,15 @@ BUILT_SOURCES += \
 	imap/pushstats.c \
 	imap/rfc822_header.c \
 	imap/rfc822_header.h
+
 lib_LTLIBRARIES += imap/libcyrus_imap.la
+
 service_PROGRAMS += \
 	imap/imapd \
 	imap/lmtpd \
 	imap/pop3d \
 	imap/smmapd
+
 user_PROGRAMS += \
 	imap/arbitron \
 	imap/chk_cyrus \
@@ -145,69 +162,107 @@ user_PROGRAMS += \
 	imap/quota \
 	imap/reconstruct \
 	imap/squatter
-if NNTPD
-user_PROGRAMS += imap/fetchnews
-endif
-service_PROGRAMS += imap/fud
-if IDLED
-user_PROGRAMS += imap/idled
-endif
-if MURDER
-service_PROGRAMS += imap/mupdate
-endif
+
 if NNTPD
 service_PROGRAMS += imap/nntpd
-endif
+user_PROGRAMS += imap/fetchnews
+endif # NNTPD
+
+service_PROGRAMS += imap/fud
+
+if IDLED
+user_PROGRAMS += imap/idled
+endif # IDLED
+
+if MURDER
+service_PROGRAMS += imap/mupdate
+endif # MURDER
+
 if HTTPD
 AM_CPPFLAGS += $(HTTP_CPPFLAGS)
 AM_LDFLAGS += $(HTTP_LIBS)
-BUILT_SOURCES += imap/http_err.c imap/http_err.h imap/tz_err.c imap/tz_err.h
+
+BUILT_SOURCES += \
+	imap/http_err.c \
+	imap/http_err.h \
+	imap/tz_err.c \
+	imap/tz_err.h
+
 service_PROGRAMS += imap/httpd
 user_PROGRAMS += imap/dav_reconstruct
-endif
+endif # HTTPD
+
 if REPLICATION
 user_PROGRAMS += imap/sync_client imap/sync_reset
 service_PROGRAMS += imap/sync_server
-endif
+endif # REPLICATION
+
 if HAVE_SSL
 user_PROGRAMS += imap/tls_prune
-endif
+endif # HAVE_SSL
+
 user_PROGRAMS += imap/unexpunge master/master
-endif
+
+if SIEVE
+check_PROGRAMS += notifyd/notifytest
+service_PROGRAMS += notifyd/notifyd
+endif # SIEVE
+
+else # SERVER
+EXTRA_DIST += \
+    imap/mupdate_err.c \
+    imap/nntp_err.c \
+    imap/lmtpstats.c \
+    imap/pushstats.c \
+    imap/rfc822_header.c \
+    imap/rfc822_header.h
+
+if !HTTPD
+EXTRA_DIST += \
+	imap/http_err.c \
+	imap/http_err.h \
+	imap/tz_err.c \
+	imap/tz_err.h
+endif # HTTPD
+
+endif # SERVER
+
 if CMULOCAL
 dist_sysconf_DATA += depot/rc.local.imap depot/rc.local.ptclient
 user_PROGRAMS += netnews/remotepurge
-endif
-if SIEVE
-if SERVER
-check_PROGRAMS += notifyd/notifytest
-service_PROGRAMS += notifyd/notifyd
-endif
-endif
+endif # CMULOCAL
+
 if PTCLIENT
 user_PROGRAMS += ptclient/ptdump ptclient/ptexpire
-service_PROGRAMS += ptclient/ptloader
-# ptclient/ptextract
-endif
+service_PROGRAMS += \
+	ptclient/ptloader \
+	ptclient/ptextract
+endif # PTCLIENT
+
 if PERL
 SUBDIRS += perl/annotator perl/imap
 noinst_LTLIBRARIES = perl/libcyrus.la perl/libcyrus_min.la
-endif
+endif # PERL
+
 if SIEVE
+
 if PERL
 SUBDIRS += perl/sieve/managesieve
 noinst_LIBRARIES = perl/sieve/lib/libisieve.a
-endif
+endif # PERL
+
 BUILT_SOURCES += sieve/addr.c sieve/sieve.c sieve/sieve_err.c
 lib_LTLIBRARIES += sieve/libcyrus_sieve.la
 check_PROGRAMS += sieve/test
 user_PROGRAMS += sieve/sievec sieve/sieved
+
 if SERVER
 service_PROGRAMS += timsieved/timsieved
-endif
-endif
+endif # SERVER
 
-EXTRA_DIST = \
+endif # SIEVE
+
+EXTRA_DIST += \
 	COPYRIGHT \
 	README.andrew \
 	SMakefile \
@@ -234,6 +289,7 @@ EXTRA_DIST = \
 	contrib/cyrus-graphtools.1.0/script/cyrus.pl \
 	contrib/cyrus-graphtools.1.0/script/run \
 	contrib/cyrus-graphtools.1.0/script/cyrusrc \
+	contrib/dkim_canon_ischedule.patch \
 	contrib/notify_unix/notify \
 	contrib/notify_unix/net-server-prefork-0.01.tgz \
 	contrib/notify_unix/README \
@@ -249,7 +305,6 @@ EXTRA_DIST = \
 	cunit/key.pem \
 	cunit/vg.supp \
 	doc \
-	imap/dav_util.h \
 	imap/http_err.et \
 	imap/imap_err.et \
 	imap/mupdate_err.et \
@@ -539,9 +594,11 @@ cunit_TESTS = \
 	cunit/ptrarray.testc \
 	cunit/quota.testc \
 	cunit/rfc822tok.testc
+
 if SIEVE
 cunit_TESTS += cunit/sieve.testc
 endif
+
 cunit_TESTS += \
 	cunit/spool.testc \
 	cunit/squat.testc \
@@ -553,9 +610,11 @@ cunit_TESTS += \
 cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
 		imap/mutex_fake.c imap/spool.c
 cunit_unit_LDADD =
+
 if SIEVE
 cunit_unit_LDADD += sieve/libcyrus_sieve.la
 endif
+
 cunit_unit_LDADD += $(LD_UTILITY_ADD) -lcunit
 
 CUNIT_PL = cunit/cunit.pl --project $(CUNIT_PROJECT)
@@ -589,6 +648,7 @@ endif
 doc_text_htmlstrip_SOURCE = doc/text/htmlstrip.c
 
 includedir=@includedir@/cyrus
+
 include_HEADERS = \
 	lib/acl.h \
 	lib/arrayu64.h \
@@ -634,6 +694,7 @@ include_HEADERS = \
 	lib/vparse.h \
 	lib/wildmat.h \
 	lib/xmalloc.h
+
 nobase_include_HEADERS = sieve/sieve_interface.h
 nobase_nodist_include_HEADERS = sieve/sieve_err.h
 
@@ -745,6 +806,9 @@ nodist_imap_libcyrus_imap_la_SOURCES = \
 	imap/imap_err.c \
 	imap/mupdate_err.c \
 	imap/mupdate_err.h
+
+dist_imap_libcyrus_imap_la_SOURCES =
+
 imap_libcyrus_imap_la_SOURCES = \
 	imap/annotate.c \
 	imap/annotate.h \
@@ -826,6 +890,7 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/userdeny.h \
 	imap/version.c \
 	imap/version.h
+
 imap_libcyrus_imap_la_LIBADD = $(COM_ERR_LIBS) $(LIB_UUID) lib/libcyrus_min.la lib/libcyrus.la
 imap_libcyrus_imap_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
@@ -837,29 +902,43 @@ endif
 if HTTPD
 imap_libcyrus_imap_la_SOURCES += \
 	imap/caldav_db.c \
-	imap/carddav_db.c \
+	imap/caldav_db.h \
 	imap/dav_db.c \
+	imap/dav_db.h \
 	imap/dav_util.c \
+	imap/dav_util.h \
 	imap/http_caldav.c \
+	imap/http_caldav_sched.h \
 	imap/http_carddav.c \
 	imap/http_client.c \
+	imap/http_client.h \
 	imap/http_dav.c \
+	imap/http_dav.h \
 	imap/http_dblookup.c \
 	imap/http_ischedule.c \
 	imap/http_proxy.c \
+	imap/http_proxy.h \
 	imap/http_rss.c \
 	imap/http_timezone.c \
 	imap/httpd.c \
+	imap/httpd.h \
 	imap/jcal.c \
+	imap/jcal.h \
 	imap/proxy.c \
+	imap/proxy.h \
 	imap/smtpclient.c \
+	imap/smtpclient.h \
 	imap/spool.c \
+	imap/spool.h \
 	imap/xcal.c \
-	imap/zoneinfo_db.c
+	imap/xcal.h \
+	imap/zoneinfo_db.c \
+	imap/zoneinfo_db.h
+
 nodist_imap_libcyrus_imap_la_SOURCES += \
 	imap/http_err.c \
 	imap/tz_err.c
-endif
+endif # HTTPD
 
 imap_lmtpd_SOURCES = \
 	imap/lmtpd.c \
