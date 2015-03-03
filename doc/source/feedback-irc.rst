@@ -1,9 +1,13 @@
-IRC
-===
+========
+IRC Chat
+========
 
-Refer to irc://irc.freenode.net/cyrus here. 
+We found chatting on IRC has just that little more bandwidth available
+for a conversation as opposed to mailing lists and/or bugzilla, so we
+would like to invite you to join us on IRC if you're interested.
 
-We found chatting on IRC has just that little more bandwidth available for a conversation as opposed to mailing lists and/or bugzilla, so we would like to invite you to join us on IRC if you're interested. There are often Cyrus developers and experienced administrators hanging around to talk to in a friendly, helpful environment.
+There are often Cyrus developers and experienced administrators hanging
+around to talk to in a friendly, helpful environment.
 
 Network: **FreeNode (irc.freenode.net)**
 
