@@ -4,6 +4,12 @@
 Storage and Message Quota
 =========================
 
+.. NOTE::
+
+    Cyrus IMAP documentation is a work in progress. The completion of
+    this particular part of the documentation is pending the resolution
+    of :task:`70`.
+
 Quota allows administrators to restrict the amount of resources used by
 hierarchies of mailboxes.
 
