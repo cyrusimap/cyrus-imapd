@@ -3,6 +3,9 @@
 # This script applies the standard operating procedure to build a
 # release tarball.
 
+CFLAGS="-g -fPIC -W -Wall -Wextra -Werror"
+export CFLAGS
+
 # Figure out the branch so we can figure out the product series
 for branch in `git branch --contains ${commit} | sed -e 's/  //g' -e 's/* //g'`; do
     git checkout ${branch}
@@ -36,10 +39,15 @@ for branch in `git branch --contains ${commit} | sed -e 's/  //g' -e 's/* //g'`;
     git checkout ${commit}
     git clean -d -f -x
 
-    autoreconf -vi && \
-        ./configure --enable-maintainer-mode && \
-        make && \
-        make dist
+    autoreconf -vi || exit 123
+    ./configure --enable-maintainer-mode || exit 124
+
+    # Work around a broken lex (??)
+    make sieve/sieve-lex.c && \
+        perl -p -i -e "s/int yyl;/yy_size_t yyl;/" sieve/sieve-lex.c
+
+    make -j4 || exit 125
+    make dist || exit 126
 
     # Repack the tarball
     rm -rf cyrus-imapd-*.tar.bz2
@@ -52,8 +60,9 @@ for branch in `git branch --contains ${commit} | sed -e 's/  //g' -e 's/* //g'`;
 
     pushd cyrus-imapd-${version}/
 
-    ./configure && \
-        make
+    ./configure || exit 224
+    make || exit 225
+
     popd
 
     for file in `git ls-files`; do
