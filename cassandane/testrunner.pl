@@ -41,6 +41,7 @@
 
 use strict;
 use warnings;
+use lib '.';
 use Cassandane::Util::Setup;
 use Cassandane::Unit::Runner;
 use Cassandane::Unit::RunnerPretty;
