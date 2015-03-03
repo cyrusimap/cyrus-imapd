@@ -122,6 +122,10 @@ ol.arabic li {
     margin-top: 1em;
 }
 
+p.caption {
+    font-style: italic;
+}
+
 /* For bold-italic and italic inside other formatting styles */
 /* ``command line `` :italic:`with italics`
  */
