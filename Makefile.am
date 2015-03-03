@@ -312,6 +312,7 @@ EXTRA_DIST += \
 	cunit/key.pem \
 	cunit/vg.supp \
 	doc \
+	imap/dav_util.h \
 	imap/http_err.et \
 	imap/imap_err.et \
 	imap/mupdate_err.et \
