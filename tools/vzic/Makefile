@@ -82,9 +82,11 @@ test-changes: vzic test-vzic
 	@echo "#"
 	diff -ru zoneinfo/ChangesVzic test-output
 
+check:
+
 clean:
 	-rm -rf vzic $(OBJECTS) *~ ChangesVzic RulesVzic ZonesVzic RulesPerl ZonesPerl test-vzic test-vzic.o
 
-.PHONY: clean perl-dump test-parse
+.PHONY: clean perl-dump test-parse check
 
 
