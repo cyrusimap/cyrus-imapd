@@ -47,8 +47,8 @@ for branch in `git branch --contains ${commit} | sed -e 's/  //g' -e 's/* //g'`;
     # Work around a broken lex (??)
     make sieve/sieve-lex.c && \
         sed -r -i \
-            -e "s/int yyl;/yy_size_t yyl;/" \
-            -e "s/\s\s+int i;/yy_size_t i;/" \
+            -e 's/int yyl;/yy_size_t yyl;/' \
+            -e 's/\tint i;/\tyy_size_t i;/' \
             sieve/sieve-lex.c
 
     make -j4 || exit 125
