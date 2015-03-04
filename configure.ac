@@ -53,6 +53,35 @@ AC_CANONICAL_SYSTEM
 
 AM_INIT_AUTOMAKE([-Wall -Werror -Wno-portability foreign dist-bzip2 no-installinfo subdir-objects])
 AC_CONFIG_LIBOBJ_DIR([lib])
+
+dnl if the git repository is here we also have git
+if test -d ".git/"; then
+    git_bin=$(which git 2>/dev/null)
+    if test "x$git_bin" != "x"; then
+        if test -x "/$(which git 2>/dev/null)"; then
+            git_branch=$(git branch -l | grep ^* | sed -e 's/* //g')
+
+            case "$git_branch" in
+                cyrus-imapd-*)
+                        git_tag=$(git tag -l | grep -E "$git_branch\." | sort --version-sort | tail -n 1)
+                        git_revs=$(git log $git_tag..HEAD --pretty=oneline 2>/dev/null | wc -l)
+                        if test "x$git_revs" != "x0"; then
+                            git_version=".$git_revs"
+                        fi
+                    ;;
+
+                master)
+                        git_revs=$(git log 777a1b46..HEAD --pretty=oneline | wc -l)
+                        git_version="-dev$git_revs"
+                    ;;
+
+            esac
+        fi
+    fi
+fi
+
+AC_SUBST(git_version)
+
 dnl Useful hook for distributions
 AC_ARG_WITH(extraident,
         [AS_HELP_STRING([--with-extraident=STRING],[use STRING as extra version information])],
