@@ -243,8 +243,7 @@ endif # CMULOCAL
 if PTCLIENT
 user_PROGRAMS += ptclient/ptdump ptclient/ptexpire
 service_PROGRAMS += \
-	ptclient/ptloader \
-	ptclient/ptextract
+	ptclient/ptloader
 endif # PTCLIENT
 
 if PERL
@@ -1395,9 +1394,6 @@ ptclient_ptdump_SOURCES = imap/cli_fatal.c imap/mutex_fake.c ptclient/ptdump.c
 ptclient_ptdump_LDADD = $(LD_UTILITY_ADD)
 ptclient_ptexpire_SOURCES = imap/cli_fatal.c imap/mutex_fake.c ptclient/ptexpire.c
 ptclient_ptexpire_LDADD = $(LD_UTILITY_ADD)
-
-#ptclient_ptextract_SOURCES = imap/cli_fatal.c imap/mutex_fake.c ptclient/ptextract.c
-#ptclient_ptextract_LDADD = $(LD_UTILITY_ADD)
 
 ptclient_ptloader_SOURCES = \
 	imap/mutex_fake.c \
