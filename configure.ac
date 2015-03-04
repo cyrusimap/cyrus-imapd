@@ -1535,6 +1535,8 @@ if test "$enable_unit_tests" = "yes" ; then
     dnl different package to the main valgrind binary, and so might not be
     dnl installed.
     AC_CHECK_HEADERS([valgrind/valgrind.h])
+
+    USE_MAINTAINER_MODE=yes
 fi
 
 AM_CONDITIONAL([CUNIT], [test "$enable_unit_tests" = "yes"])
