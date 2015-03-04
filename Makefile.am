@@ -1472,7 +1472,18 @@ timsieved_timsieved_SOURCES = \
 	timsieved/scripttest.c \
 	timsieved/scripttest.h \
 	timsieved/timsieved.c
+
 timsieved_timsieved_LDADD = sieve/libcyrus_sieve.la $(LD_SERVER_ADD)
+
+# TODO: Should not really stay around, but GNU software is hard to
+# contribute fixes to. Needed when building with the following:
+# CFLAGS="-g -fPIC -W -Wall -Wextra -Werror"
+lex-fix: sieve/addr-lex.c sieve/sieve-lex.c
+	sed -r -i \
+		-e 's/int yyl;/yy_size_t yyl;/' \
+		-e 's/\tint i;/\tyy_size_t i;/' \
+		sieve/addr-lex.c \
+		sieve/sieve-lex.c
 
 GIT_VERSION = $(PACKAGE_VERSION)@git_version@
 
