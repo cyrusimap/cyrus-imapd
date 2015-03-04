@@ -35,8 +35,10 @@ for branch in `git branch --contains ${commit} | sed -e 's/  //g' -e 's/* //g'`;
     fi
 
     # $version is now "3.0-dev45" or "2.5.0.16" or something
+    if [ ! -z "$(git log ${commit}..HEAD 2>/dev/null)" ]; then
+        git checkout ${commit}
+    fi
 
-    git checkout ${commit}
     git clean -d -f -x
 
     autoreconf -vi || exit 123

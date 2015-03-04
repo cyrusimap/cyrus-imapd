@@ -1,0 +1,20 @@
+Cyrus IMAP Installation Instructions
+====================================
+
+From GIT:
+
+    $ autoreconf -vi
+    $ ./configure
+    $ make
+    $ sudo make install
+
+From tarball releases:
+
+    $ ./configure
+    $ make
+    $ sudo make install
+
+For more documentation, see:
+
+  https://docs.cyrus.foundation/
+
