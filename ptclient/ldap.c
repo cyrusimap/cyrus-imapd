@@ -192,7 +192,7 @@ typedef struct _ptsm {
 static t_ptsm *ptsm = NULL;
 
 static int ptsmodule_interact(
-    LDAP *ld,
+    LDAP *ld __attribute__((unused)),
     unsigned flags __attribute__((unused)),
     void *def,
     void *inter)
@@ -767,27 +767,28 @@ static int ptsmodule_expand_tokens(
     /* find the longest param of username and realm,
        do not worry about domain because it is always shorter
        then username                                           */
-    user_len=username ? strlen(username) : 0;
-    dn_len=dn ? strlen(dn) : 0;
+    user_len = username ? strlen(username) : 0;
+    dn_len = dn ? strlen(dn) : 0;
 
     maxparamlength = PTSM_MAX(user_len+1, dn_len); /* +1 for %R when '@' is prepended */
 
     /* find the number of occurences of percent sign in filter */
-    for( percents=0, buf=(char *)pattern; *buf; buf++ ) {
-        if( *buf == '%' ) percents++;
+    for (percents=0, buf=(char *)pattern; *buf; buf++) {
+        if (*buf == '%') percents++;
     }
 
     /* percents * 3 * maxparamlength because we need to account for
          * an entirely-escaped worst-case-length parameter */
-    buf=xmalloc(strlen(pattern) + (percents * 3 * maxparamlength) +1);
-    if(buf == NULL)
+    buf = xmalloc(strlen(pattern) + (percents * 3 * maxparamlength) +1);
+    if (buf == NULL)
         return PTSM_NOMEM;
+
     buf[0] = '\0';
 
     ptr = (char *)pattern;
     end = ptr + strlen(ptr);
 
-    while ((temp=strchr(ptr,'%'))!=NULL ) {
+    while ((temp=strchr(ptr,'%')) != NULL) {
 
         if ((temp-ptr) > 0)
             strncat(buf, ptr, temp-ptr);
@@ -803,7 +804,7 @@ static int ptsmodule_expand_tokens(
                 break;
             case 'u':
                 if (ISSET(username)) {
-                    rc=ptsmodule_escape(username, strlen(username), &ebuf);
+                    rc = ptsmodule_escape(username, strlen(username), &ebuf);
                     if (rc == PTSM_OK) {
                         strcat(buf,ebuf);
                         free(ebuf);
@@ -815,7 +816,7 @@ static int ptsmodule_expand_tokens(
                 if (ISSET(username)) {
 
                     user = strchr(username, '@');
-                    rc=ptsmodule_escape(username, (user ? user - username : strlen(username)), &ebuf);
+                    rc = ptsmodule_escape(username, (user ? (unsigned char)(user - username) : strlen(username)), &ebuf);
                     if (rc == PTSM_OK) {
                         strcat(buf,ebuf);
                         free(ebuf);
@@ -1104,7 +1105,7 @@ static int ptsmodule_make_authstate_attribute(
         (*newstate)->ngroups = numvals;
         (*newstate)->userid.id[0] = '\0';
         for (i = 0; i < numvals; i++) {
-            int j;
+            unsigned int j;
             strcpy((*newstate)->groups[i].id, "group:");
             rdn = ldap_explode_rdn(vals[i],1);
             for (j = 0; j < strlen(rdn[0]); j++) {
@@ -1272,8 +1273,8 @@ static int ptsmodule_make_authstate_filter(
 
     strcpy((*newstate)->groups[i].id, "group:");
 
-    int j;
-    for(j =0; j < strlen(vals[0]); j++) {
+    unsigned int j;
+    for (j =0; j < strlen(vals[0]); j++) {
       if(Uisupper(vals[0][j]))
         vals[0][j]=tolower(vals[0][j]);
     }
@@ -1303,7 +1304,7 @@ done:;
 
 static int ptsmodule_make_authstate_group(
     const char *canon_id,
-    size_t size,
+    size_t size __attribute__((unused)),
     const char **reply,
     int *dsize,
     struct auth_state **newstate)
