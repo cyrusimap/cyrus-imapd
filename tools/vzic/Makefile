@@ -87,6 +87,8 @@ check:
 clean:
 	-rm -rf vzic $(OBJECTS) *~ ChangesVzic RulesVzic ZonesVzic RulesPerl ZonesPerl test-vzic test-vzic.o
 
+install:
+
 .PHONY: clean perl-dump test-parse check
 
 
