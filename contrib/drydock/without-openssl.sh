@@ -19,10 +19,12 @@ autoreconf -vi || exit 3
 ./configure --with-openssl=no || exit 4
 
 # Work around a broken lex (??)
-make sieve/sieve-lex.c && \
+make sieve/addr-lex.c \
+    sieve/sieve-lex.c && \
     sed -r -i \
         -e 's/int yyl;/yy_size_t yyl;/' \
         -e 's/\tint i;/\tyy_size_t i;/' \
+        sieve/addr-lex.c \
         sieve/sieve-lex.c
 
 make -j4 || exit 5
@@ -35,10 +37,12 @@ export CFLAGS
 ./configure --with-openssl=no || exit 6
 
 # Work around a broken lex (??)
-make sieve/sieve-lex.c && \
+make sieve/addr-lex.c \
+    sieve/sieve-lex.c && \
     sed -r -i \
         -e 's/int yyl;/yy_size_t yyl;/' \
         -e 's/\tint i;/\tyy_size_t i;/' \
+        sieve/addr-lex.c \
         sieve/sieve-lex.c
 
 make -j4 || exit 7
