@@ -270,7 +270,8 @@ endif # SERVER
 endif # SIEVE
 
 EXTRA_DIST += \
-	COPYRIGHT \
+	COPYING \
+	INSTALL \
 	README.andrew \
 	SMakefile \
 	xversion.h \
