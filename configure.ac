@@ -1065,7 +1065,38 @@ fi
 dnl
 dnl Test for zlib
 dnl
-CMU_HAVE_ZLIB
+AC_ARG_WITH(zlib, [AS_HELP_STRING([--with-zlib=DIR],[use zlib from DIR])],
+    with_zlib=$withval, with_zlib="yes")
+
+save_CPPFLAGS=$CPPFLAGS
+save_LDFLAGS=$LDFLAGS
+
+if test -d $with_zlib; then
+    CPPFLAGS="${CPPFLAGS} -I${with_lib}/include"
+    CMU_ADD_LIBPATH(${with_zlib}/$CMU_LIB_SUBDIR)
+fi
+
+ZLIB=""
+case "$with_zlib" in
+    no)
+      with_zlib="no";;
+    *)
+    AC_CHECK_HEADER(zlib.h, [
+        AC_CHECK_LIB(z, deflate,
+                LIBS="${LIBS} -lz"; with_zlib="yes",
+                with_zlib="no",)],
+        with_zlib=no)
+    ;;
+esac
+
+if test "$with_zlib" != "no"; then
+    AC_DEFINE(HAVE_ZLIB,[],[Do we have zlib?])
+    ZLIB="-lz"
+else
+    CPPFLAGS=$save_CPPFLAGS
+    LDFLAGS=$save_LDFLAGS
+fi
+
 AC_MSG_CHECKING(for zlib)
 AC_MSG_RESULT($with_zlib)
 AC_SUBST(ZLIB)
