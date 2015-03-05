@@ -4186,10 +4186,7 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
     else if (!strcasecmp(hdr, "subject")) {
 	int r = message_need(m, M_CACHE);
 	if (r) return r;
-	buf_setmap(&raw, cacheitem_base(&m->record, CACHE_SUBJECT),
-			 cacheitem_size(&m->record, CACHE_SUBJECT));
-	if (raw.len == 3 && raw.s[0] == 'N' && raw.s[1] == 'I' && raw.s[2] == 'L')
-	    buf_reset(&raw);
+	message1_get_subject(&m->record, &raw);
 	hasname = 0;
     }
 
