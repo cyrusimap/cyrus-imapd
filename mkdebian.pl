@@ -34,7 +34,7 @@ Maintainer: Bron Gondwana <brong\@fastmail.fm>
 Build-Depends: libssl-dev, zlib1g-dev, comerr-dev, libsasl2-dev,
 	libzephyr-dev, libpcre3-dev, autoconf, libxapian-dev,
 	libxml2-dev, libical-dev, libsqlite3-dev,
-	flex, bison, debhelper, libsnmp-dev
+	flex, bison, debhelper, libsnmp-dev, libglib2.0-dev
 
 Package: $basename
 Architecture: all
