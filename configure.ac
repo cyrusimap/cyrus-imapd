@@ -168,7 +168,6 @@ else
   AC_MSG_ERROR(The Cyrus IMAPD requires support for long long int)
 fi
 
-CMU_C___ATTRIBUTE__
 CMU_C_FPIC
 
 dnl check for -R, etc. switch
@@ -1629,11 +1628,6 @@ AH_BOTTOM([
 #  else
 #    define O_DSYNC     O_FSYNC         /* BSD */
 #  endif
-#endif
-
-#ifndef HAVE___ATTRIBUTE__
-/* Can't use attributes... */
-#define __attribute__(foo)
 #endif
 
 #ifndef HAVE_SOCKLEN_T

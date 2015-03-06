@@ -50,10 +50,6 @@
 #include <CUnit/CUnit.h>
 #include "cunit-syslog.h"
 
-#if !HAVE___ATTRIBUTE__
-#define __attribute__(x)
-#endif
-
 extern int verbose;
 
 struct slmatch
