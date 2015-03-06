@@ -184,8 +184,6 @@ else
   AC_MSG_ERROR(The Cyrus IMAPD requires support for long long int)
 fi
 
-CMU_C_FPIC
-
 dnl check for -R, etc. switch
 CMU_GUESS_RUNPATH_SWITCH
 
