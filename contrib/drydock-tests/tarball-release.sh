@@ -3,6 +3,12 @@
 # This script applies the standard operating procedure to build a
 # release tarball.
 
+. contrib/drydock-functions.sh
+
+_git_clean
+
+_git_checkout_commit
+
 CFLAGS="-g -fPIC -W -Wall -Wextra -Werror"
 export CFLAGS
 

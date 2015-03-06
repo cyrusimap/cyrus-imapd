@@ -5,11 +5,11 @@
 #   - https://git.cyrus.foundation/D7
 #   - https://git.cyrus.foundation/T26
 
-git clean -d -f -x || exit 2
+. contrib/drydock-functions.sh
 
-if [ ! -z "${commit}" ]; then
-    git checkout -f ${commit} || exit 2
-fi
+_git_clean
+
+_git_checkout_commit
 
 _autoreconf
 
