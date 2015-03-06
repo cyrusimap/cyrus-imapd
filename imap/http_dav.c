@@ -3176,6 +3176,13 @@ int meth_copy(struct transaction_t *txn, void *params)
     return ret;
 }
 
+/* this is when a user tries to delete a mailbox that they don't own, and don't
+ * have permission to delete */
+static int remove_user_acl(const char *userid, const char *mboxname)
+{
+    return mboxlist_setacl(&httpd_namespace, mboxname, userid, /*rights*/NULL,
+			   /*isadmin*/1, httpd_userid, httpd_authstate);
+}
 
 /* Perform a DELETE request */
 int meth_delete(struct transaction_t *txn, void *params)
@@ -3201,7 +3208,7 @@ int meth_delete(struct transaction_t *txn, void *params)
     if (r) return r;
 
     /* Make sure method is allowed */
-    if (!(txn->req_tgt.allow & ALLOW_DELETE)) return HTTP_NOT_ALLOWED; 
+    if (!(txn->req_tgt.allow & ALLOW_DELETE)) return HTTP_NOT_ALLOWED;
 
     /* Locate the mailbox */
     r = http_mlookup(txn->req_tgt.mboxname, &mbentry, NULL);
@@ -3221,10 +3228,13 @@ int meth_delete(struct transaction_t *txn, void *params)
     rights = httpd_myrights(httpd_authstate, mbentry->acl);
     needrights = txn->req_tgt.resource ? DACL_RMRSRC : DACL_RMCOL;
     if (!(rights & needrights)) {
+	mboxlist_entry_free(&mbentry);
+	/* special case delete mailbox where not the owner */
+	if (!txn->req_tgt.resource && !mboxname_userownsmailbox(httpd_userid, txn->req_tgt.mboxname))
+	    return remove_user_acl(httpd_userid, txn->req_tgt.mboxname);
 	/* DAV:need-privileges */
 	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
-	mboxlist_entry_free(&mbentry);
 	return HTTP_NO_PRIVS;
     }
 
