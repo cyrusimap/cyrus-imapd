@@ -66,6 +66,10 @@
 # endif /* HAVE_PCREPOSIX_H */
 #endif /* ENABLE_REGEX */
 
+#ifndef __GNUC__
+typedef int (*__compar_fn_t)(const void *, const void *);
+#endif
+
 #define BIT32_MAX 4294967295U
 
 #if UINT_MAX == BIT32_MAX
