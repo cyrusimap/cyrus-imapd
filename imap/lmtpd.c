@@ -1061,7 +1061,7 @@ static int verify_user(const char *user, const char *domain, char *mailbox,
 	}
     }
 
-    if (!r) {
+    if (!r && user) {
 	char msg[MAX_MAILBOX_PATH+1];
 
 	if (domain) {
