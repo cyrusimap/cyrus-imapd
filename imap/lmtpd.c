@@ -1214,43 +1214,7 @@ static int verify_user(const char *user, const char *domain, char *mailbox,
 	mboxlist_entry_free(&mbentry);
     }
 
-    if (!r) {
-	char msg[MAX_MAILBOX_PATH+1];
-
-	if (domain) {
-	    snprintf(namebuf, sizeof(namebuf), "%s@%s", user, domain);
-	    user = namebuf;
-	}
-
-	if (userdeny(user, config_ident, msg, sizeof(msg)))
-	    return IMAP_MAILBOX_DISABLED;
-    }
-
-    if (!r) {
-	char msg[MAX_MAILBOX_PATH+1];
-
-	if (domain) {
-	    snprintf(namebuf, sizeof(namebuf), "%s@%s", user, domain);
-	    user = namebuf;
-	}
-
-	if (userdeny(user, config_ident, msg, sizeof(msg)))
-	    return IMAP_MAILBOX_DISABLED;
-    }
-
-    if (!r) {
-	char msg[MAX_MAILBOX_PATH+1];
-
-	if (domain) {
-	    snprintf(namebuf, sizeof(namebuf), "%s@%s", user, domain);
-	    user = namebuf;
-	}
-
-	if (userdeny(user, config_ident, msg, sizeof(msg)))
-	    return IMAP_MAILBOX_DISABLED;
-    }
-
-    if (!r) {
+    if (!r && user) {
 	char msg[MAX_MAILBOX_PATH+1];
 
 	if (domain) {
