@@ -57,10 +57,6 @@
 
 #include "registers.h"
 
-#if !HAVE___ATTRIBUTE__
-#define __attribute__(x)
-#endif
-
 int verbose = 0;
 int num_testspecs = 0;
 const char **testspecs;
