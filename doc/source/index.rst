@@ -19,6 +19,7 @@ The latest stable version of Cyrus IMAP is |imap_latest_stable_version|.
     imap/cyrus-imap-murder
     imap/deployment
     imap/admin
+    imap/developer
 
 Cyrus IMAP Release Notes
 ------------------------
