@@ -11,22 +11,14 @@ if [ ! -z "${commit}" ]; then
     git checkout -f ${commit} || exit 2
 fi
 
-autoreconf -vi || exit 3
+_autoreconf
 
 ./configure --enable-maintainer-mode || exit 124
 
 # Once normally
 ./configure --with-openssl=no || exit 4
 
-# Work around a broken lex (??)
-make sieve/addr-lex.c \
-    sieve/sieve-lex.c && \
-    sed -r -i \
-        -e 's/int yyl;/yy_size_t yyl;/' \
-        -e 's/\tint i;/\tyy_size_t i;/' \
-        sieve/addr-lex.c \
-        sieve/sieve-lex.c
-
+make lex-fix
 make -j4 || exit 5
 
 make clean
@@ -36,14 +28,6 @@ CFLAGS="-g -fPIC -W -Wall -Wextra -Werror"
 export CFLAGS
 ./configure --with-openssl=no || exit 6
 
-# Work around a broken lex (??)
-make sieve/addr-lex.c \
-    sieve/sieve-lex.c && \
-    sed -r -i \
-        -e 's/int yyl;/yy_size_t yyl;/' \
-        -e 's/\tint i;/\tyy_size_t i;/' \
-        sieve/addr-lex.c \
-        sieve/sieve-lex.c
-
+make lex-fix
 make -j4 || exit 7
 

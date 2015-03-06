@@ -41,17 +41,11 @@ for branch in `git branch --contains ${commit} | sed -e 's/  //g' -e 's/* //g'`;
 
     git clean -d -f -x
 
-    autoreconf -vi || exit 123
+    _autoreconf
+
     ./configure --enable-maintainer-mode || exit 124
 
-    # Work around a broken lex (??)
-    make sieve/addr-lex.c \
-        sieve/sieve-lex.c && \
-        sed -r -i \
-            -e 's/int yyl;/yy_size_t yyl;/' \
-            -e 's/\tint i;/\tyy_size_t i;/' \
-            sieve/addr-lex.c \
-            sieve/sieve-lex.c
+    make lex-fix
 
     make -j4 || exit 125
     make dist || exit 126

@@ -5,20 +5,13 @@
 #   - https://git.cyrus.foundation/D7
 #   - https://git.cyrus.foundation/T26
 
-git clean -d -f -x || exit 2
+. contrib/drydock-functions.sh
 
-if [ ! -z "${commit}" ]; then
-    git checkout -f ${commit} || exit 2
-fi
+_git_clean
 
-autoreconf -vi || exit 3
+_git_checkout_commit
 
-function test_fail() {
-    echo "test failed (expected $1 but got $2)"
-    shift; shift
-    echo "  configure options: $@"
-    exit 1
-}
+_autoreconf
 
 function test_path() {
     sdir=$1
@@ -30,7 +23,7 @@ function test_path() {
     echo "============================================================="
     echo "Testing options: $@"
     echo "============================================================="
-    ./configure "$@"
+    _configure "$@"
 
     eval "$(grep -E '^(service|user)dir=' config.log)"
 

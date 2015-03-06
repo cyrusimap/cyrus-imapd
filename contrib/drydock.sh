@@ -10,5 +10,9 @@ if [ -z "${commit}" ]; then
 fi
 
 for script in `find contrib/drydock/ -type f -name "*.sh" | sort`; do
-    ./$script || exit $?
+    if [ -x $script ]; then
+        ./$script || exit $?
+    else
+        echo "Skipping $script"
+    fi
 done
