@@ -9,7 +9,7 @@ if [ -z "${commit}" ]; then
     export commit
 fi
 
-for script in `find contrib/drydock/ -type f -name "*.sh" | sort`; do
+for script in `find contrib/drydock-tests/ -type f -name "*.sh" | sort`; do
     if [ -x $script ]; then
         ./$script || exit $?
     else
