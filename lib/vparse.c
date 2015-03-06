@@ -6,12 +6,13 @@
 #include <fcntl.h>
 
 #include "vparse.h"
+#include "xmalloc.h"
 
 #define LC(s) do { char *p; for (p = s; *p; p++) if (*p >= 'A' && *p <= 'Z') *p += ('a' - 'A'); } while (0)
 
 static char *buf_dup_cstring(struct buf *buf)
 {
-    char *ret = strndup(buf->s, buf->len);
+    char *ret = xstrndup(buf->s, buf->len);
     /* more space efficient than returning overlength buffers, and
      * you would just wind up mallocing another buffer anyway */
     buf->len = 0;
