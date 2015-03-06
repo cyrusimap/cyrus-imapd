@@ -111,7 +111,8 @@ check_PROGRAMS =
 service_PROGRAMS =
 user_PROGRAMS =
 CLEANFILES =
-EXTRA_DIST =
+EXTRA_DIST = \
+	$(wildcard tools/vzic/*)
 
 if COM_ERR
 COMPILE_ET_DEP = com_err/et/compile_et
@@ -967,14 +968,6 @@ imap_libcyrus_imap_la_SOURCES += \
 nodist_imap_libcyrus_imap_la_SOURCES += \
 	imap/http_err.c \
 	imap/tz_err.c
-
-SUBDIRS += \
-	tools/vzic/
-
-else # HTTPD
-
-EXTRA_DIST += \
-	$(wildcard tools/vzic/*)
 
 endif # HTTPD
 
