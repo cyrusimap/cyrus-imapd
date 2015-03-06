@@ -14,9 +14,7 @@ function _git_clean {
 }
 
 function _git_checkout_commit {
-    if [ -z "${commit}" ]; then
-        # TODO - check for a buildable
-    else
+    if [ ! -z "${commit}" ]; then
         # If there is no other commits we don't need to check it out at all
         if [ ! -z "$(git log ${commit}..HEAD --pretty=oneline 2>/dev/null)" ]; then
             git checkout -f ${commit}
