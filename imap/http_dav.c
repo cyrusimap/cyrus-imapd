@@ -3231,7 +3231,8 @@ int meth_delete(struct transaction_t *txn, void *params)
 	mboxlist_entry_free(&mbentry);
 	/* special case delete mailbox where not the owner */
 	if (!txn->req_tgt.resource && !mboxname_userownsmailbox(httpd_userid, txn->req_tgt.mboxname))
-	    return remove_user_acl(httpd_userid, txn->req_tgt.mboxname);
+	    if (!remove_user_acl(httpd_userid, txn->req_tgt.mboxname))
+		return HTTP_OK;
 	/* DAV:need-privileges */
 	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
