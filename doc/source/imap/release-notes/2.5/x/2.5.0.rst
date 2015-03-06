@@ -15,6 +15,16 @@ Cyrus IMAP 2.5.0 Release Notes
 *   :ref:`relnotes-2.5.0-development-phabricator`
 *   :ref:`relnotes-2.5.0-development-documentation`
 
+Download via HTTP:
+
+    *   http://www.cyrusimap.org/releases/cyrus-imapd-2.5.0.tar.gz
+    *   http://www.cyrusimap.org/releases/cyrus-imapd-2.5.0.tar.gz.sig
+
+Download via FTP:
+
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-2.5.0.tar.gz
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-2.5.0.tar.gz.sig
+
 .. _imap-relnotes-2.5.0-upgrading:
 
 Upgrading to Cyrus IMAP 2.5.0
