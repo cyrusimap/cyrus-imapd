@@ -66,10 +66,6 @@
 #include "util.h"
 #include "xmalloc.h"
 
-#if !HAVE___ATTRIBUTE__
-#define __attribute__(x)
-#endif
-
 /* config.c stuff */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 static struct namespace conv_namespace;
