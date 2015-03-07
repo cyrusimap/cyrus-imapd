@@ -762,18 +762,15 @@ EXPORTED void mailbox_make_uniqueid(struct mailbox *mailbox)
     mailbox->header_dirty = 1;
 }
 
-/*
- * Maps in the content for the message with UID 'uid' in 'mailbox'.
- * Returns map in 'basep' and 'lenp'
- */
-EXPORTED int mailbox_map_message(struct mailbox *mailbox, unsigned long uid,
-			const char **basep, size_t *lenp)
+EXPORTED int mailbox_map_record(struct mailbox *mailbox, struct index_record *record, struct buf *buf)
 {
+    const char *data = NULL;
+    size_t len = 0;
     int msgfd;
-    char *fname;
+    const char *fname;
     struct stat sbuf;
 
-    fname = mailbox_message_fname(mailbox, uid);
+    fname = mailbox_message_fname(mailbox, record->uid);
 
     msgfd = open(fname, O_RDONLY, 0666);
     if (msgfd == -1) return errno;
@@ -782,33 +779,11 @@ EXPORTED int mailbox_map_message(struct mailbox *mailbox, unsigned long uid,
 	syslog(LOG_ERR, "IOERROR: fstat on %s: %m", fname);
 	fatal("can't fstat message file", EC_OSFILE);
     }
-    *basep = 0;
-    *lenp = 0;
-    map_refresh(msgfd, 1, basep, lenp, sbuf.st_size, fname, mailbox->name);
+    map_refresh(msgfd, 1, &data, &len, sbuf.st_size, fname, mailbox->name);
     close(msgfd);
-
-    return 0;
-}
-
-EXPORTED int mailbox_map_record(struct mailbox *mailbox, struct index_record *record, struct buf *buf)
-{
-    const char *data;
-    size_t len;
-    int r = mailbox_map_message(mailbox, record->uid, &data, &len);
-    if (r) return r;
 
     buf_init_mmap(buf, data, len);
     return 0;
-}
-
-/*
- * Releases the buffer obtained from mailbox_map_message()
- */
-EXPORTED void mailbox_unmap_message(struct mailbox *mailbox __attribute__((unused)),
-			   unsigned long uid __attribute__((unused)),
-			   const char **basep, size_t *lenp)
-{
-    map_free(basep, lenp);
 }
 
 static void mailbox_release_resources(struct mailbox *mailbox)

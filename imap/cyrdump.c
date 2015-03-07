@@ -226,8 +226,8 @@ static int dump_me(char *name, int matchlen __attribute__((unused)),
     printf("</imapdump>\n");
 
     for (i = 0; i < numuids; i++) {
-	const char *base;
-	size_t len;
+	struct buf buf = BUF_INITIALIZER;
+	struct index_record record;
 
 	if (uids[i] < irec->incruid) {
 	    /* already dumped this message */
@@ -240,7 +240,8 @@ static int dump_me(char *name, int matchlen __attribute__((unused)),
 	printf("Content-Type: message/rfc822\n");
 	printf("Content-ID: %d\n", uids[i]);
 	printf("\n");
-	r = mailbox_map_message(state->mailbox, uids[i], &base, &len);
+	r = mailbox_find_index_record(state->mailbox, uids[i], &record);
+	if (!r) r = mailbox_map_record(state->mailbox, &record, &buf);
 	if (r) {
 	    if (verbose) {
 		printf("error mapping message %d: %s\n", uids[i], 
@@ -248,8 +249,8 @@ static int dump_me(char *name, int matchlen __attribute__((unused)),
 	    }
 	    break;
 	}
-	fwrite(base, 1, len, stdout);
-	mailbox_unmap_message(state->mailbox, uids[i], &base, &len);
+	fwrite(buf.s, 1, buf.len, stdout);
+	buf_free(&buf);
     }
 
     printf("\n--%s--\n", boundary);
