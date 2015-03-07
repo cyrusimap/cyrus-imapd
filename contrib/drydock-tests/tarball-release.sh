@@ -3,6 +3,12 @@
 # This script applies the standard operating procedure to build a
 # release tarball.
 
+. contrib/drydock-functions.sh
+
+_git_clean
+
+_git_checkout_commit
+
 CFLAGS="-g -fPIC -W -Wall -Wextra -Werror"
 export CFLAGS
 
@@ -41,12 +47,11 @@ for branch in `git branch --contains ${commit} | sed -e 's/  //g' -e 's/* //g'`;
 
     git clean -d -f -x
 
-    autoreconf -vi || exit 123
+    _autoreconf
+
     ./configure --enable-maintainer-mode || exit 124
 
-    # Work around a broken lex (??)
-    make sieve/sieve-lex.c && \
-        perl -p -i -e "s/int yyl;/yy_size_t yyl;/" sieve/sieve-lex.c
+    make lex-fix
 
     make -j4 || exit 125
     make dist || exit 126

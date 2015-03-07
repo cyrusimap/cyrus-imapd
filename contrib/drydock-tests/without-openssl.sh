@@ -5,23 +5,20 @@
 #   - https://git.cyrus.foundation/D7
 #   - https://git.cyrus.foundation/T26
 
-git clean -d -f -x || exit 2
+. contrib/drydock-functions.sh
 
-if [ ! -z "${commit}" ]; then
-    git checkout -f ${commit} || exit 2
-fi
+_git_clean
 
-autoreconf -vi || exit 3
+_git_checkout_commit
+
+_autoreconf
 
 ./configure --enable-maintainer-mode || exit 124
 
 # Once normally
 ./configure --with-openssl=no || exit 4
 
-# Work around a broken lex (??)
-make sieve/sieve-lex.c && \
-    perl -p -i -e "s/int yyl;/yy_size_t yyl;/" sieve/sieve-lex.c
-
+make lex-fix
 make -j4 || exit 5
 
 make clean
@@ -31,9 +28,6 @@ CFLAGS="-g -fPIC -W -Wall -Wextra -Werror"
 export CFLAGS
 ./configure --with-openssl=no || exit 6
 
-# Work around a broken lex (??)
-make sieve/sieve-lex.c && \
-    perl -p -i -e "s/int yyl;/yy_size_t yyl;/" sieve/sieve-lex.c
-
+make lex-fix
 make -j4 || exit 7
 
