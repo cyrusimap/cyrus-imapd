@@ -65,10 +65,6 @@
 #include "util.h"
 #include "xmalloc.h"
 
-#if !HAVE___ATTRIBUTE__
-#define __attribute__(x)
-#endif
-
 static int usage(const char *name);
 
 int verbose = 0;
