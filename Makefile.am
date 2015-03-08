@@ -1254,6 +1254,8 @@ lib/chartable.c: lib/mkchartable.pl lib/charset/unifix.txt \
 	perl $(top_srcdir)/lib/mkchartable.pl -m $(top_srcdir)/lib/charset/unifix.txt -m $(top_srcdir)/lib/charset/UnicodeData.txt -a $(top_srcdir)/lib/charset/aliases.txt -o $@ $(top_srcdir)/lib/charset/*.t || (rm -f $@ && exit 1)
 	@echo "### Done building chartables."
 
+lib/imapopts.h: lib/imapopts.c
+
 lib/imapopts.c: lib/imapoptions tools/config2header
 	$(top_srcdir)/tools/config2header CC="$(CC)" $(top_builddir)/lib/imapopts.c $(top_builddir)/lib/imapopts.h < $(top_srcdir)/lib/imapoptions
 
