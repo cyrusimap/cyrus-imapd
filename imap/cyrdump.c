@@ -236,7 +236,7 @@ static int dump_me(char *name, int matchlen __attribute__((unused)),
 
     for (msgno = 1; msgno <= state->exists; msgno++) {
 	struct index_map *im = &state->map[msgno-1];
-	struct buf msg = BUF_INITIALIZER;
+	struct buf buf = BUF_INITIALIZER;
 	struct index_record record;
 
 	while (im->uid > uids[i] && i < numuids)
