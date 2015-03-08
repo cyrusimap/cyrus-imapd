@@ -767,19 +767,18 @@ EXPORTED int shutdown_file(char *buf, int size)
 EXPORTED void session_new_id(void)
 {
     const char *base;
-    unsigned char random[8];
     int now = time(NULL);
     if (now != session_id_time) {
         session_id_time = now;
         session_id_count = 0;
     }
-    #ifdef HAVE_SSL
-    RAND_bytes(random, sizeof(random));
-    #endif
     ++session_id_count;
     base = config_getstring(IMAPOPT_SYSLOG_PREFIX);
     if (!base) base = config_servername;
+
     #ifdef HAVE_SSL
+    unsigned char random[8];
+    RAND_bytes(random, sizeof(random));
     snprintf(session_id_buf, MAX_SESSIONID_SIZE, "%.128s-%d-%d-%d-%llu",
              base, getpid(), session_id_time, session_id_count, (unsigned long long)(*((uint64_t *)random)));
     #else

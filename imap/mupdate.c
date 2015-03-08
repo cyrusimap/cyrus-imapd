@@ -2030,7 +2030,8 @@ static void cmd_starttls(struct conn *C, const char *tag)
     dobanner(C);
 }
 #else
-void cmd_starttls(struct conn *C, const char *tag)
+void cmd_starttls(struct conn *C __attribute__((unused)),
+                  const char *tag __attribute__((unused)))
 {
     fatal("cmd_starttls() executed, but starttls isn't implemented!",
 	  EC_SOFTWARE);

@@ -472,14 +472,12 @@ static int do_compress(struct backend *s, struct simple_cmd_t *compress_cmd)
 #endif /* HAVE_ZLIB */
 }
 
+#ifdef HAVE_SSL
 EXPORTED int backend_starttls(	struct backend *s,
 				struct tls_cmd_t *tls_cmd,
 				const char *c_cert_file,
 				const char *c_key_file)
 {
-#ifndef HAVE_SSL
-    return -1;
-#else
     char *auth_id = NULL;
     int *layerp = NULL;
     int r = 0;
@@ -519,8 +517,16 @@ EXPORTED int backend_starttls(	struct backend *s,
     ask_capability(s, /*dobanner*/1, tls_cmd->auto_capa);
 
     return 0;
-#endif /* HAVE_SSL */
 }
+#else
+EXPORTED int backend_starttls(	struct backend *s __attribute__((unused)),
+				struct tls_cmd_t *tls_cmd __attribute__((unused)),
+				const char *c_cert_file __attribute__((unused)),
+				const char *c_key_file __attribute__((unused)))
+{
+    return -1;
+}
+#endif /* HAVE_SSL */
 
 EXPORTED char *intersect_mechlists( char *config, char *server )
 {
