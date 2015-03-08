@@ -62,10 +62,6 @@
 
 /* Note that some of these may be undefined symbols
  * if libcyrus was not built with support for them */
-extern struct cyrusdb_backend cyrusdb_berkeley;
-extern struct cyrusdb_backend cyrusdb_berkeley_nosync;
-extern struct cyrusdb_backend cyrusdb_berkeley_hash;
-extern struct cyrusdb_backend cyrusdb_berkeley_hash_nosync;
 extern struct cyrusdb_backend cyrusdb_flat;
 extern struct cyrusdb_backend cyrusdb_skiplist;
 extern struct cyrusdb_backend cyrusdb_quotalegacy;
@@ -73,12 +69,6 @@ extern struct cyrusdb_backend cyrusdb_sql;
 extern struct cyrusdb_backend cyrusdb_twoskip;
 
 static struct cyrusdb_backend *_backends[] = {
-#ifdef HAVE_BDB
-    &cyrusdb_berkeley,
-    &cyrusdb_berkeley_nosync,
-    &cyrusdb_berkeley_hash,
-    &cyrusdb_berkeley_hash_nosync,
-#endif
     &cyrusdb_flat,
     &cyrusdb_skiplist,
     &cyrusdb_quotalegacy,
@@ -492,7 +482,6 @@ EXPORTED const char *cyrusdb_detect(const char *fname)
     FILE *f;
     char buf[16];
     int n;
-    uint32_t bdb_magic;
 
     f = fopen(fname, "r");
     if (!f) return NULL;
@@ -509,14 +498,6 @@ EXPORTED const char *cyrusdb_detect(const char *fname)
 
     if (!strncmp(buf, "\241\002\213\015twoskip file\0\0\0\0", 16))
 	return "twoskip";
-
-    bdb_magic = *(uint32_t *)(buf+12);
-
-    if (bdb_magic == 0x053162) /* BDB BTREE MAGIC */
-	return "berkeley";
-
-    if (bdb_magic == 0x061561) /* BDB HASH MAGIC */
-	return "berkeley-hash";
 
     /* unable to detect SQLite databases or flat files explicitly here */
     return NULL;

@@ -230,57 +230,6 @@ AC_FUNC_VPRINTF
 dnl function for doing each of the database backends
 dnl parameters: backend name, variable to set, withval
 
-dnl Berkeley DB Detection
-
-AC_ARG_WITH(bdb,
-	[AS_HELP_STRING([--with-bdb=DIR], [use Berkeley DB (in DIR) [yes]])],
-	with_bdb=$withval, with_bdb="yes")
-
-dnl support old-style
-AC_ARG_WITH(dbdir,, with_bdb=$withval)
-
-case "$with_bdb" in
-  no)
-	use_berkeley="no"
-	;;
-  yes)
-	use_berkeley="yes"
-	with_bdb_lib=none
-	with_bdb_inc=none
-	;;
-  *)
-	use_berkeley="yes"
-	with_bdb_lib="$with_bdb/lib"
-	with_bdb_inc="$with_bdb/include"
-	;;
-esac
-
-if test "$use_berkeley" != "no"; then
-  CYRUS_BERKELEY_DB_CHK()
-
-  if test "$dblib" = "no"; then
-    AC_MSG_ERROR([Berkeley DB 3.x or later was not found.  You may need to 
-    supply the --with-bdb-libdir or --with-bdb-incdir configure options.])
-  fi
-
-  if test "$with_bdb_lib" != "none"; then
-    CMU_ADD_LIBPATH($with_bdb_lib)
-  fi
-
-  BDB_INC=${BDB_INCADD}
-  BDB_LIB=${BDB_LIBADD}
-  AC_SUBST(BDB_INC)
-  AC_SUBST(BDB_LIB)
-
-  LIBS="${LIBS} ${BDB_LIBADD}"
-  CPPFLAGS="${BDB_INCADD} ${CPPFLAGS}"
-  AC_DEFINE(HAVE_BDB,[],[Build in Berkeley DB support?])
-fi
-AM_CONDITIONAL([USE_BERKELEY], [test "$use_berkeley" != "no"])
-
-dnl End Berkeley DB Detection
-
-
 dnl SQL DB Detection
 
 HAVE_SQL=0
@@ -1820,7 +1769,6 @@ External dependencies:
    pcre:               $cyrus_cv_pcre_utf8
 
 Database support:
-   bdb:                $use_berkeley
    mysql:              $with_mysql
    postgresql:         $use_pgsql
    sqlite:             $use_sqlite

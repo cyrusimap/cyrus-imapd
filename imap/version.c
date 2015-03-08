@@ -44,9 +44,6 @@
 
 #include <sasl/sasl.h>
 #include <sys/utsname.h>
-#ifdef HAVE_BDB
-#include <db.h>
-#endif
 #ifdef HAVE_KRB
 #include <krb.h>
 #endif

@@ -169,7 +169,7 @@ are listed with ``<none>''.
    affect LMTP delivery of messages directly to mailboxes via
    plus-addressing. */
 
-{ "annotation_db", "twoskip", STRINGLIST("berkeley", "berkeley-hash", "skiplist", "twoskip")}
+{ "annotation_db", "twoskip", STRINGLIST("skiplist", "twoskip")}
 /* The cyrusdb backend to use for mailbox annotations. */
 
 { "annotation_db_path", NULL, STRING }
@@ -389,19 +389,6 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* A space separated list of users and/or groups that are allowed their INBOX to be
    automatically created. */
 
-{ "berkeley_cachesize", 512, INT }
-/* Size (in kilobytes) of the shared memory buffer pool (cache) used
-   by the berkeley environment.  The minimum allowed value is 20.  The
-   maximum allowed value is 4194303 (4GB). */
-
-{ "berkeley_locks_max", 50000, INT }
-/* Maximum number of locks to be held or requested in the berkeley
-   environment. */
-
-{ "berkeley_txns_max", 100, INT }
-/* Maximum number of transactions to be supported in the berkeley
-   environment. */
-
 { "boundary_limit", 1000, INT }
 /* messages are parsed recursively and a deep enough MIME structure
    can cause a stack overflow.  Do not parse deeper than this many
@@ -542,7 +529,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    specifies the actual key used for iSchedule DKIM signing within the
    domain. */
 
-{ "duplicate_db", "twoskip", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql", "twoskip")}
+{ "duplicate_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip")}
 /* The cyrusdb backend to use for the duplicate delivery suppression
    and sieve. */
 
@@ -1047,10 +1034,10 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "maxword", 131072, INT }
 /* Maximum size of a single word for the parser.  Default 128k */
 
-{ "mboxkey_db", "twoskip", STRINGLIST("berkeley", "skiplist", "twoskip") }
+{ "mboxkey_db", "twoskip", STRINGLIST("skiplist", "twoskip") }
 /* The cyrusdb backend to use for mailbox keys. */
 
-{ "mboxlist_db", "twoskip", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist", "sql", "twoskip")}
+{ "mboxlist_db", "twoskip", STRINGLIST("flat", "skiplist", "sql", "twoskip")}
 /* The cyrusdb backend to use for the mailbox list. */
 
 { "mboxlist_db_path", NULL, STRING }
@@ -1410,7 +1397,7 @@ If all partitions are over that limit, this feature is not used anymore.
 /* Unix domain socket that ptloader listens on.
    (defaults to configdir/ptclient/ptsock) */
 
-{ "ptscache_db", "twoskip", STRINGLIST("berkeley", "berkeley-hash", "skiplist", "twoskip")}
+{ "ptscache_db", "twoskip", STRINGLIST("skiplist", "twoskip")}
 /* The cyrusdb backend to use for the pts cache. */
 
 { "ptscache_db_path", NULL, STRING }
@@ -1435,7 +1422,7 @@ If all partitions are over that limit, this feature is not used anymore.
 /* This specifies the Class Selector or Differentiated Services Code Point
    designation on IP headers (in the ToS field). */
 
-{ "quota_db", "quotalegacy", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist", "sql", "quotalegacy", "twoskip")}
+{ "quota_db", "quotalegacy", STRINGLIST("flat", "skiplist", "sql", "quotalegacy", "twoskip")}
 /* The cyrusdb backend to use for quotas. */
 
 { "quota_db_path", NULL, STRING }
@@ -1555,7 +1542,7 @@ If all partitions are over that limit, this feature is not used anymore.
    recommended for most cases - it's a good compromise which
    keeps words separate. */
 
-{ "seenstate_db", "twoskip", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist", "twoskip")}
+{ "seenstate_db", "twoskip", STRINGLIST("flat", "skiplist", "twoskip")}
 /* The cyrusdb backend to use for the seen state. */
 
 { "sendmail", "/usr/lib/sendmail", STRING }
@@ -1736,7 +1723,7 @@ product version in the capabilities */
    allowed to fetch the contents of any valid "urlauth=submit+" IMAP URL:
    use with caution. */
 
-{ "subscription_db", "flat", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist", "twoskip")}
+{ "subscription_db", "flat", STRINGLIST("flat", "skiplist", "twoskip")}
 /* The cyrusdb backend to use for the subscriptions list. */
 
 { "suppress_capabilities", NULL, STRING }
@@ -1749,7 +1736,7 @@ product version in the capabilities */
 { "statuscache", 0, SWITCH }
 /* Enable/disable the imap status cache. */
 
-{ "statuscache_db", "twoskip", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql", "twoskip") }
+{ "statuscache_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip") }
 /* The cyrusdb backend to use for the imap status cache. */
 
 { "statuscache_db_path", NULL, STRING }
@@ -1914,7 +1901,7 @@ product version in the capabilities */
 /* File containing the private key belonging to the certificate in
    tls_server_cert. */
 
-{ "tls_sessions_db", "twoskip", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql", "twoskip")}
+{ "tls_sessions_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip")}
 /* The cyrusdb backend to use for the TLS cache. */
 
 { "tls_sessions_db_path", NULL, STRING }
@@ -1935,7 +1922,7 @@ product version in the capabilities */
 { "umask", "077", STRING }
 /* The umask value used by various Cyrus IMAP programs. */
 
-{ "userdeny_db", "flat", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist", "sql", "twoskip")}
+{ "userdeny_db", "flat", STRINGLIST("flat", "skiplist", "sql", "twoskip")}
 /* The cyrusdb backend to use for the user access list. */
 
 { "userdeny_db_path", NULL, STRING }
@@ -1978,7 +1965,7 @@ product version in the capabilities */
    this user.  NOTE: This must be an existing local user name with an
    INBOX, NOT an email address! */
 
-{ "zoneinfo_db", "twoskip", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist", "twoskip")}
+{ "zoneinfo_db", "twoskip", STRINGLIST("flat", "skiplist", "twoskip")}
 /* The cyrusdb backend to use for zoneinfo. */
 
 { "zoneinfo_db_path", NULL, STRING }

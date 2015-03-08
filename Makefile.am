@@ -1189,9 +1189,6 @@ lib_libcyrus_la_SOURCES = \
 	lib/times.c \
 	lib/tok.c \
 	lib/wildmat.c
-if USE_BERKELEY
-lib_libcyrus_la_SOURCES += lib/cyrusdb_berkeley.c
-endif
 if USE_SQL
 lib_libcyrus_la_SOURCES += lib/cyrusdb_sql.c
 endif

@@ -288,14 +288,8 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
 				  config_getstring(IMAPOPT_PTLOADER_SOCK));
 	libcyrus_config_setswitch(CYRUSOPT_VIRTDOMAINS,
 				  config_getenum(IMAPOPT_VIRTDOMAINS));
-	libcyrus_config_setint(CYRUSOPT_BERKELEY_CACHESIZE,
-			       config_getint(IMAPOPT_BERKELEY_CACHESIZE));
 	libcyrus_config_setstring(CYRUSOPT_AUTH_MECH,
 				  config_getstring(IMAPOPT_AUTH_MECH));
-	libcyrus_config_setint(CYRUSOPT_BERKELEY_LOCKS_MAX,
-			       config_getint(IMAPOPT_BERKELEY_LOCKS_MAX));
-	libcyrus_config_setint(CYRUSOPT_BERKELEY_TXNS_MAX,
-			       config_getint(IMAPOPT_BERKELEY_TXNS_MAX));
 	libcyrus_config_setstring(CYRUSOPT_DELETERIGHT,
 				  config_getstring(IMAPOPT_DELETERIGHT));
 	libcyrus_config_setstring(CYRUSOPT_SQL_DATABASE,

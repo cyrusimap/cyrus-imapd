@@ -108,21 +108,9 @@ static struct cyrusopt_s cyrus_options[] = {
       CFGVAL(long, 0),
       CYRUS_OPT_SWITCH },
 
-    { CYRUSOPT_BERKELEY_CACHESIZE,
-      CFGVAL(long, 512 * 1024), /* 512KB */
-      CYRUS_OPT_INT },
-
     { CYRUSOPT_AUTH_MECH,
       CFGVAL(const char *, "unix"),
       CYRUS_OPT_STRING },
-
-    { CYRUSOPT_BERKELEY_LOCKS_MAX,
-      CFGVAL(long, 50000),
-      CYRUS_OPT_INT },
-
-    { CYRUSOPT_BERKELEY_TXNS_MAX,
-      CFGVAL(long, 100),
-      CYRUS_OPT_INT },
 
     { CYRUSOPT_DELETERIGHT,
       CFGVAL(const char *, "c"),
