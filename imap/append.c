@@ -1231,7 +1231,8 @@ EXPORTED int append_copy(struct mailbox *mailbox,
 {
     int msg;
     struct index_record record;
-    char *srcfname, *destfname = NULL;
+    char *srcfname = NULL;
+    char *destfname = NULL;
     int r = 0;
     int flag, userflag;
     annotate_state_t *astate = NULL;
