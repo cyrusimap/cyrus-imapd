@@ -115,7 +115,10 @@ static void vlog(int prio, const char *fmt, va_list args)
 		    fprintf(stderr, "\nSYSLOG matched /%s/\n", slmatches[i].re);
 		slmatches[i].count++;
 		break;
+	    } else {
+		fprintf(stderr, "\nSYSLOG didn't match '%s' against '%s'\n", line, slmatches[i].re);
 	    }
+
 	    if (r != REG_NOMATCH) {
 		/* error */
 		const char *msg = match_error(&slmatches[i], r);
