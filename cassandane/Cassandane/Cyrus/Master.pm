@@ -677,21 +677,23 @@ sub test_service_dup_port
 
     my $lemmA = lemming_connect($srvA);
 
+    my $census = $self->lemming_census();
+    my ($winner) = keys %$census;  # either could be the one that runs
     xlog "connected so one lemming forked";
-    $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
+    $self->assert_deep_equals({ $winner => { live => 1, dead => 0 } },
 			      $self->lemming_census());
 
     my $lemmB = lemming_connect($srvB);
 
     xlog "the port is owned by service A";
-    $self->assert_deep_equals({ A => { live => 2, dead => 0 } },
+    $self->assert_deep_equals({ $winner => { live => 2, dead => 0 } },
 			      $self->lemming_census());
 
     lemming_push($lemmA, 'success');
     lemming_push($lemmB, 'success');
 
     xlog "no more live lemmings";
-    $self->assert_deep_equals({ A => { live => 0, dead => 2 } },
+    $self->assert_deep_equals({ $winner => { live => 0, dead => 2 } },
 			      $self->lemming_census());
 }
 
