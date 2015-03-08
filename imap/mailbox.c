@@ -4277,6 +4277,7 @@ static void cleanup_stale_expunged(struct mailbox *mailbox)
 	struct index_record record;
 	bufp = expunge_base + eoffset + (erecno-1)*expungerecord_size;
 	mailbox_buf_to_index_record(bufp, eversion, &record);
+	record.system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
 	mailbox_record_unlink(mailbox, &record);
     }
 
