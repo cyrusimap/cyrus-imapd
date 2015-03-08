@@ -12,6 +12,8 @@ _git_checkout_commit
 CFLAGS="-g -fPIC -W -Wall -Wextra -Werror"
 export CFLAGS
 
+[ -z "${commit}" ] && commit="HEAD"
+
 # Figure out the branch so we can figure out the product series
 for branch in `git branch --contains ${commit} | sed -e 's/  //g' -e 's/* //g'`; do
     git checkout ${branch}
