@@ -2903,8 +2903,8 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
     return mailbox_refresh_index_map(mailbox);
 }
 
-static void mailbox_message_unlink(struct mailbox *mailbox,
-				   struct index_record *record)
+static void mailbox_record_unlink(struct mailbox *mailbox,
+				  struct index_record *record)
 {
     const char *fname = mailbox_record_fname(mailbox, record);
     int r;
@@ -2951,7 +2951,7 @@ static int mailbox_index_unlink(struct mailbox *mailbox)
 	if (r) return r;
 
 	if (record.system_flags & FLAG_UNLINKED)
-	    mailbox_message_unlink(mailbox, &record);
+	    mailbox_record_unlink(mailbox, &record);
     }
 
     /* need to clear the flag, even if nothing needed unlinking! */
@@ -3244,7 +3244,7 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
 
 	/* version changes? */
 	if (repack->old_version < 12 && repack->i.minor_version >= 12 && repack->seqset) {
-	    const char *fname = mailbox_message_fname(mailbox, record.uid);
+	    const char *fname = mailbox_record_fname(mailbox, &record);
 
 	    if (seqset_ismember(repack->seqset, record.uid))
 		record.system_flags |= FLAG_SEEN;
@@ -3269,7 +3269,7 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
 	/* we aren't keeping unlinked files, that's kind of the point */
 	if (record.system_flags & FLAG_UNLINKED) {
 	    /* just in case it was left lying around */
-	    mailbox_message_unlink(mailbox, &record);
+	    mailbox_record_unlink(mailbox, &record);
 
 	    /* track the modseq for QRESYNC purposes */
 	    if (record.modseq > repack->i.deletedmodseq)
@@ -4232,7 +4232,7 @@ static void cleanup_stale_expunged(struct mailbox *mailbox)
     unsigned long expunge_num;
     unsigned long emapnum;
     uint32_t erecno;
-    uint32_t uid;
+    uint32_t eversion;
     bit32 eoffset, expungerecord_size;
     const char *bufp;
     struct stat sbuf;
@@ -4266,6 +4266,7 @@ static void cleanup_stale_expunged(struct mailbox *mailbox)
 	goto done;
 
     expunge_num = ntohl(*((bit32 *)(expunge_base+OFFSET_NUM_RECORDS)));
+    eversion = ntohl(*((bit32 *)(expunge_base+OFFSET_MINOR_VERSION)));
     emapnum = (sbuf.st_size - eoffset) / expungerecord_size;
     if (emapnum < expunge_num) {
 	expunge_num = emapnum;
@@ -4273,9 +4274,10 @@ static void cleanup_stale_expunged(struct mailbox *mailbox)
 
     /* add every UID to the files list */
     for (erecno = 1; erecno <= expunge_num; erecno++) {
+	struct index_record record;
 	bufp = expunge_base + eoffset + (erecno-1)*expungerecord_size;
-	uid = ntohl(*((bit32 *)(bufp+OFFSET_UID)));
-	mailbox_message_unlink(mailbox, uid);
+	mailbox_buf_to_index_record(bufp, eversion, &record);
+	mailbox_record_unlink(mailbox, &record);
     }
 
     fname = mailbox_meta_fname(mailbox, META_EXPUNGE);
