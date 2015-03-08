@@ -3899,8 +3899,8 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 	sepchar = ' ';
     }
     if (fetchitems & FETCH_FILESIZE) {
-	unsigned int msg_size = msg.len;
-	if (!msg.s) {
+	unsigned int msg_size = buf.len;
+	if (!buf.s) {
 	    const char *fname = mailbox_record_fname(mailbox, &record);
 	    struct stat sbuf;
 	    /* Find the size of the message file */
@@ -3915,7 +3915,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     }
     if (fetchitems & FETCH_SHA1) {
 	struct message_guid tmpguid;
-	message_guid_generate(&tmpguid, msg_base, msg_size);
+	message_guid_generate(&tmpguid, buf.s, buf.len);
 	prot_printf(state->out, "%cRFC822.SHA1 %s", sepchar, message_guid_encode(&tmpguid));
 	sepchar = ' ';
     }

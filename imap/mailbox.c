@@ -760,11 +760,9 @@ EXPORTED void mailbox_make_uniqueid(struct mailbox *mailbox)
 
 EXPORTED int mailbox_map_record(struct mailbox *mailbox, struct index_record *record, struct buf *buf)
 {
-    const char *data = NULL;
-    size_t len = 0;
-    int msgfd;
     const char *fname;
     struct stat sbuf;
+    int msgfd;
 
     xstats_inc(MESSAGE_MAP);
     fname = mailbox_record_fname(mailbox, record);
@@ -777,7 +775,7 @@ EXPORTED int mailbox_map_record(struct mailbox *mailbox, struct index_record *re
 	fatal("can't fstat message file", EC_OSFILE);
     }
 
-    buf_init_mmap(&buf, /*onceonly*/1, msgfd, fname, sbuf.st_size, mailbox->name);
+    buf_init_mmap(buf, /*onceonly*/1, msgfd, fname, sbuf.st_size, mailbox->name);
     close(msgfd);
 
     return 0;
