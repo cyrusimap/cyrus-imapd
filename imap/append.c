@@ -1331,7 +1331,7 @@ out:
     return 0;
 }
 
-void append_setseen(struct appendstate *as, struct index_record *record)
+static void append_setseen(struct appendstate *as, struct index_record *record)
 {
     if (as->internalseen)
 	record->system_flags |= FLAG_SEEN;
