@@ -8,4 +8,7 @@ Other Cyrus IMAP 2.4-caldav Releases
     :maxdepth: 1
     :glob:
 
-    x/*
+    x/?.?.?-caldav-beta?
+    x/?.?.?-caldav-beta??
+    x/?.?.??-caldav-beta?
+    x/?.?.??-caldav-beta??

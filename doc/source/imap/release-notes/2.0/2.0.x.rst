@@ -1,3 +1,7 @@
+==============================
+Cyrus IMAP 2.0.x Release Notes
+==============================
+
 Changes to the Cyrus IMAP Server since 2.0.16
 
 *   migrated to SASLv2 (Rob Siemborski)

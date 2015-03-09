@@ -1,3 +1,7 @@
+==============================
+Cyrus IMAP 2.2.x Release Notes
+==============================
+
 Changes to the Cyrus IMAP Server since 2.2.13
 
 *   ctl_mboxlist now dumps/undumps the mailbox type flags, making it useful for remote mailboxes.

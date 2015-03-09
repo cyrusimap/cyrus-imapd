@@ -8,4 +8,5 @@ Other Cyrus IMAP 2.5 Releases
        :maxdepth: 1
     :glob:
 
-    x/*
+    x/?.?.?
+    x/?.?.??

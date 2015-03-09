@@ -1,3 +1,7 @@
+============================
+Cyrus IMAP 1.x Release Notes
+============================
+
 Changes to the Cyrus IMAP Server Since Version 1.6.20
 
 *   Some fixes to the TLS support to gracefully degrade service.

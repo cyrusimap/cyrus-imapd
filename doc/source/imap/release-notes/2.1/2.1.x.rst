@@ -1,3 +1,7 @@
+==============================
+Cyrus IMAP 2.1.x Release Notes
+==============================
+
 Changes to the Cyrus IMAP Server since 2.1.14
 
 *   Correct a potential DOS attack in the fud daemon.
