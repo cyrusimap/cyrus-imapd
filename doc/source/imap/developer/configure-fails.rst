@@ -12,6 +12,8 @@ up a Docker container of your own, with an interactive shell.
 Normally, the script ``/entrypoint.sh`` is executed, so you can
 reproduce this as follows:
 
+.. parsed-literal::
+
     $ :command:`COMMIT=<id> /entrypoint.sh`
 
 It *should* output the commands it issues.

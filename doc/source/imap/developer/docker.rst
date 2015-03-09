@@ -53,6 +53,19 @@ Quick Notes
 
         Do not specify the ``D`` in the variable, just the number.
 
+*   The images come with **vim** pre-installed and pre-configured to:
+
+    #.  Remember the last position in a file you've opened,
+
+    #.  Employ syntax highlighting,
+
+    #.  Apply the current latest indentation policy for Cyrus IMAP.
+
+*   In an interactive shell, ``PROMPT_COMMAND`` is set to have the
+    terminal window you have open reflect the name of the image you are
+    running and running multiple of them is not just a bunch of windows
+    titled with container IDs.
+
 Environment Variables
 =====================
 
@@ -160,6 +173,22 @@ This will give you an interactive shell.
 
 The images are configured with an entry point of :file:`/entrypoint.sh`,
 so maybe you want to execute that.
+
+Functions for Your Convenience
+==============================
+
+Functions are pulled from :file:`/entrypoint.sh` so you can
+:command:`source /functions.sh` which gives you the following commands:
+
+``_make_relaxed``
+
+    This command configures the build with relaxed ``CFLAGS``, as
+    opposed to ``-g -Wall -Wextra -Werror``.
+
+``_make_strict``
+
+    This command configures the build with strict ``CFLAGS``, turning
+    all warnings to errors: ``-g -Wall -Wextra -Werror``.
 
 Build Process Steps
 ===================
