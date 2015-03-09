@@ -1,0 +1,13 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 3.0.0 Release Notes
+==============================
+
+.. WARNING::
+
+    Cyrus IMAP 3.0 is under active development, and subject to change.
+
+    Do **NOT** use this version unless you're a developer of sorts.
+
+*   Dropped support for Berkeley DB.
