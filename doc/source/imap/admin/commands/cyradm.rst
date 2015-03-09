@@ -1,4 +1,4 @@
-.. _imap-admin-cyradm:
+.. _imap-admin-commands-cyradm:
 
 ==========
 ``cyradm``
@@ -84,7 +84,7 @@ authenticate
 
 Authenticate to a server for which a connection has already been opened
 either when ``cyradm`` was started or via the
-:ref:`imap-admin-cyradm-connect` command.
+:ref:`imap-admin-commands-cyradm-connect` command.
 
 .. parsed-literal::
 
