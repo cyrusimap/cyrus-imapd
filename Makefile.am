@@ -1476,11 +1476,14 @@ timsieved_timsieved_LDADD = sieve/libcyrus_sieve.la $(LD_SERVER_ADD)
 # contribute fixes to. Needed when building with the following:
 # CFLAGS="-g -fPIC -W -Wall -Wextra -Werror"
 lex-fix: sieve/addr-lex.c sieve/sieve-lex.c
-	sed -r -i \
-		-e 's/int yyl;/yy_size_t yyl;/' \
-		-e 's/\tint i;/\tyy_size_t i;/' \
-		sieve/addr-lex.c \
-		sieve/sieve-lex.c
+	grep -E '^yy_size_t sieveleng;$$' sieve/sieve-lex.c && \
+    	sed -r -i -e 's/int yyl;/yy_size_t yyl;/g' sieve/sieve-lex.c || :
+
+	grep -E ' yy_size_t  _yybytes_len ' sieve/sieve-lex.c && \
+    	sed -r -i -s 's/\tint i;/\tyy_size_t i;/g' sieve/sieve-lex.c || :
+
+	grep -E ' yy_size_t  _yybytes_len ' sieve/addr-lex.c && \
+    	sed -r -i -s 's/\tint i;/\tyy_size_t i;/g' sieve/addr-lex.c || :
 
 GIT_VERSION = $(PACKAGE_VERSION)@git_version@
 
