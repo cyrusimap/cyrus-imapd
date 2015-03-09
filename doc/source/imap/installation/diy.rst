@@ -5,8 +5,18 @@ Do It Yourself
 The following guides outline building Cyrus IMAP from a fresh clone of
 the GIT repository's branches, or a tarball of a released version.
 
+.. WARNING::
+
+    The level of technical difficulty involved with home-brew or DIY
+    Cyrus IMAP versions is **high**.
+
+    You are specifically requested **not** to build your own unless you
+    have an appropriate comprehension
+
 From GIT
 ========
+
+Clone the GIT repository:
 
 .. parsed-literal::
 
@@ -17,16 +27,27 @@ Check out the desired branch or revision:
 .. parsed-literal::
 
     $ :command:`git branch -la`
+    * master
+      (...snip...)
+      remotes/origin/cyrus-imapd-2.3
+      remotes/origin/cyrus-imapd-2.4
+      remotes/origin/cyrus-imapd-2.5
     $ :command:`git checkout` *$branch*
 
-Continue with :ref:`installation-diy-build-dependencies`.
+Continue with :ref:`imap-installation-diy-build-dependencies`.
 
 From Tarball
 ============
 
-Continue with :ref:`installation-diy-build-dependencies`.
+Extract the tarball:
 
-.. _installation-diy-build-dependencies:
+.. parsed-literal::
+
+    $ :command:`tar xzvf cyrus-imapd-x.y.z.tar.gz`
+
+Continue with :ref:`imap-installation-diy-build-dependencies`.
+
+.. _imap-installation-diy-build-dependencies:
 
 Build Dependencies
 ==================
@@ -77,6 +98,10 @@ distributions:
 
     from http://gcc.gnu.org
 
+**gperf**
+
+    from http://www.gnu.org/software/gperf/
+
 **libtool**
 
     from http://www.gnu.org/software/libtool/
@@ -99,14 +124,20 @@ Optional Build Dependencies
 The following build dependencies are optional, and enable functionality,
 Cyrus IMAP code maintenance tasks or documentation rendering.
 
-
-
 **CUnit-devel**
 
     Development headers for compiling Cyrus IMAP's unit tests, from
     http://cunit.sourceforge.net/.
 
     Used for ``make check``.
+
+**cyrus-sasl-plain** version 2.1.7 or higher
+
+    Cyrus SASL package that ships the library required to pass Cyrus
+    IMAP's PLAIN authentication unit tests, from
+    http://asg.web.cmu.edu/sasl/sasl-library.html
+
+    Used with ``make check``.
 
 **cyrus-sasl-md5** version 2.1.7 or higher
 
@@ -118,6 +149,11 @@ Cyrus IMAP code maintenance tasks or documentation rendering.
 
 **db4-devel** or **libdb-devel** version 3.0.55 or higher
 
+    .. NOTE::
+
+        Berkeley DB support has been dropped in versions of Cyrus IMAP
+        equal to or higher than Cyrus IMAP 3.0.
+
     Berkely DB backend for Cyrus IMAP databases, from
     http://www.oracle.com/database/berkeley-db/.
 
@@ -127,6 +163,11 @@ Cyrus IMAP code maintenance tasks or documentation rendering.
         and is likely to be obsoleted.
 
 **db4-utils** or **libdb-utils** version 3.0.55 or higher
+
+    .. NOTE::
+
+        Berkeley DB support has been dropped in versions of Cyrus IMAP
+        equal to or higher than Cyrus IMAP 3.0.
 
     Utilities for Berkeley DB databases, from
     http://www.oracle.com/database/berkeley-db/, needed to pass unit
@@ -145,7 +186,8 @@ Cyrus IMAP code maintenance tasks or documentation rendering.
 
     Required for the event notifications feature.
 
-    Configure option: ``--enable-event-notifications``.
+    Configure options: ``--enable-event-notifications`` and
+    ``--enable-http``.
 
     .. NOTE::
 
@@ -164,7 +206,21 @@ Cyrus IMAP code maintenance tasks or documentation rendering.
 
 **libical-devel**
 
+    .. IMPORTANT::
+
+        **libical >= 0.48** is required for scheduling support.
+
     from http://freeassociation.sourceforge.net/
+
+    .. NOTE::
+
+        Linux distributions Enterprise Linux 6 and Debian Squeeze are
+        known to ship outdated **libical** packages versions 0.43 and
+        0.44 respectively. The platforms will not support scheduling.
+
+**libxml2-devel**
+
+    from http://xmlsoft.org/
 
 **mariadb-devel** or **mysql-devel**
 
@@ -175,8 +231,13 @@ Cyrus IMAP code maintenance tasks or documentation rendering.
 
     **mysql-devel** from http://www.mysql.com
 
-    Configure options: ``--with-mysql``, ``--with-mysql-incdir``,
-    ``--with-mysql-libdir``.
+    Configure option: ``--with-mysql``
+
+    .. versionadded:: 2.5.0
+
+    Configure options: ``--with-mysql-incdir``, ``--with-mysql-libdir``
+
+    *Prior to version 2.5*.
 
 **net-snmp-devel** version 4.2 or higher
 
@@ -220,5 +281,50 @@ Cyrus IMAP code maintenance tasks or documentation rendering.
 
     from http://www.xfig.org/
 
+**valgrind**
 
-Continue with
+    from http://www.valgrind.org/
+
+Continue with :ref:`imap-installation-diy-configure`
+
+.. _imap-installation-diy-configure:
+
+Configure the Build
+===================
+
+.. parsed-literal::
+
+    $ :command:`autoreconf -vi`
+    $ :command:`./configure` [options]
+
+Check the summary after ``./configure`` completes successfully. The
+following segment shows the defaults in version 2.5.0, so yours may
+differ:
+
+.. parsed-literal::
+
+    Cyrus Imapd configured components
+
+        event notification: yes
+        gssapi:             yes
+        autocreate:         no
+        idled:              no
+        http:               no
+        kerberos V4:        no
+        murder:             no
+        nntpd:              no
+        replication:        no
+        sieve:              yes
+
+    External dependencies:
+        ldap:               no
+        openssl:            yes
+        pcre:               yes
+
+    Database support:
+        bdb:                yes
+        mysql:              no
+        postgresql:         no
+        sqlite:             no
+
+To view additional options,
