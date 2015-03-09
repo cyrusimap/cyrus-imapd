@@ -4,15 +4,15 @@
 Introduction to Cyrus IMAP
 ==========================
 
-Cyrus IMAP is a `Carnegie Mellon University`_ (CMU) software
+Cyrus IMAP is a `Carnegie Mellon University`_ (|CMU|) software
 development project for a highly scalable enterprise mail system.
 
 Cyrus IMAP is one of two primary software development projects
 undertaken by the Cyrus project -- the other one being :ref:`sasl`.
 
 The project as a whole started in 1994 and has its roots in replacing
-the Andrew Mail System (AMS) that CMU had been using, and has replaced
-:acronym:`AMS` between 1998 and 2002.
+the Andrew Mail System (|AMS|) that |CMU| had been using, and has
+replaced |AMS| between 1998 and 2002.
 
 The project name, Cyrus, comes from the inventor of the first modern
 "packet-switching"-based mail system, the forerunner of every major
