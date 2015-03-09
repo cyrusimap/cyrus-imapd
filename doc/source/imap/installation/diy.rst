@@ -298,8 +298,9 @@ Configure the Build
     $ :command:`./configure` [options]
 
 Check the summary after ``./configure`` completes successfully. The
-following segment shows the defaults in version 2.5.0, so yours may
-differ:
+following segment shows the defaults in version 2.5.0, ran on a system
+with all mandatory and optional build dependencies installed, so yours
+may (read: will) differ:
 
 .. parsed-literal::
 
@@ -327,4 +328,10 @@ differ:
         postgresql:         no
         sqlite:             no
 
-To view additional options,
+To view additional options, and disable or enable specific features,
+please see:
+
+.. parsed-literal::
+
+    # :command:`./configure --help`
+
