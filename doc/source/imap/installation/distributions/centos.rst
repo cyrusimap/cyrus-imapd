@@ -34,11 +34,11 @@ Next, set a password for the default administrative user ``cyrus``:
 Start and configure to start when the system boots, the
 :manpage:`saslauthd(8)` service:
 
-    .. parsed-literal::
+.. parsed-literal::
 
-        # :command:`service saslauthd start`
-        Starting saslauthd:                                     [  OK  ]
-        # :command:`chkconfig saslauthd on`
+    # :command:`service saslauthd start`
+    Starting saslauthd:                                        [  OK  ]
+    # :command:`chkconfig saslauthd on`
 
 You should at this moment be able to authenticate against
 :manpage:`saslauthd(8)`:
