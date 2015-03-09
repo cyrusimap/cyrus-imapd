@@ -9,7 +9,7 @@ functioning as one large, transparent IMAP cluster.
 
 In a Cyrus IMAP Murder, one or more servers with a *frontend* role
 receive client connections, and proxy connections through to one of the
-servers with a *backend* role -- these host to payload for the cluster
+servers with a *backend* role -- these host the payload for the cluster
 -- on the basis of where the current mailbox selected resides.
 
 This makes access to mailboxes transparent to the client, even though
@@ -74,9 +74,13 @@ common practice:
             "http://www.example.org/" -> "www1.example.org" [label="Dynamic Content"];
         }
 
-In the case of reverse web proxies, an application looks at (for
-example) the request URI, and based on a set of rules, forwards
-(proxies) the request on to the appropriate (internal) node.
+In the case of reverse web proxies, the proxy looks at (for example)
+the request URI, and based on a set of rules, forwards (proxies) the
+request on to the appropriate (internal) node. This architecture allows
+application servers (www[0-9]+.example.org) to be scaled up and down by
+application processing needs *separately* from the few web servers
+typically needed to serve static files such as images and scripts (that
+require no server-side processing).
 
 In the case of IMAP, a commonly used IMAP proxy is NGINX. However,
 NGINX can proxy John's connection to only one backend at a time. NGINX
@@ -97,7 +101,7 @@ application proxy:
             node [shape=record, fontname=Calibri, fontsize=11];
 
             "imap.example.org" [label="imap.example.org\n(NGINX)"];
-            "backend1.example.org" [label="backend1.example.org\n(user/joe)"];
+            "backend1.example.org" [label="backend1.example.org\n(user/john)"];
             "backend2.example.org" [label="backend2.example.org\n(user/jane)"];
             "Desktop Client" -> "imap.example.org" [label="Client Connection"];
             "imap.example.org" -> "backend1.example.org" [label="Proxied Connection",color="green"];
@@ -106,16 +110,16 @@ application proxy:
 
 This means that John could not open a mailbox that does not reside on
 the same backend node his client connection is proxied to, and John nor
-Jane can share their mailboxes with one another.
+Jane can share their mailboxes with one another [#]_.
 
 For the proxy to be fully-featured, the proxy would need to catch all
-IMAP commands that John's client issues, and determine what is the most
-appropriate backend to serve the request -- not unlike the
+IMAP commands that John's client issues [#]_, and determine what is the
+most appropriate backend to serve the request -- not unlike the
 aforementioned web proxies.
 
 So, when John's client issues a ``SELECT INBOX``, the connection is to
 be proxied to ``backend1.example.org``, but when John's client is to
-issue a ``SELECT "Other Users/jane``, the connection is to be proxied
+issue a ``SELECT "Other Users/jane"``, the connection is to be proxied
 to ``backend2.example.org``.
 
 **This** is where the Cyrus IMAP Murder functionality kicks in:
@@ -132,7 +136,11 @@ to ``backend2.example.org``.
 
 *   Nodes with a :term:`frontend` role capture connections on the
     protocol level and decide where the connection needs to be proxied
-    to.
+    to
+
+*   Nodes with a :term:`frontend` role also arbiter between backends
+    when a message is moved from John's ``INBOX`` to Jane's ``INBOX`` or
+    vice-versa.
 
 Use-Cases for the Cyrus IMAP Murder
 ===================================
@@ -369,6 +377,16 @@ Back to :ref:`imap-features`
 .. [#]
 
     See also: :ref:`imap-howto-nginx-proxy`.
+
+.. [#]
+
+    More literally speaking, John and Jane can *share*, just neither can
+    make use of the privilege.
+
+.. [#]
+
+    Including but not limited to ``SELECT``, ``UID MOVE``, ``RENAME``,
+    etc.
 
 .. [#]
 
