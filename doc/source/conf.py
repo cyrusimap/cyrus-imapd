@@ -342,18 +342,18 @@ epub_exclude_files = ['search.html']
 #epub_use_index = True
 
 rst_prolog = """
-.. |imap_latest_stable_version| replace:: 2.4.17
-.. |imap_next_stable_version| replace:: 2.4.17 + patches
-.. |imap_latest_stable_branch| replace:: `cyrus-imapd-2.4`
-.. |imap_latest_development_version| replace:: 2.5
+.. |imap_latest_stable_version| replace:: 2.5.0
+.. |imap_next_stable_version| replace:: 2.5.0 + patches
+.. |imap_latest_stable_branch| replace:: `cyrus-imapd-2.5`
+.. |imap_latest_development_version| replace:: 3.0
 .. |imap_latest_development_branch| replace:: master
-.. |imap_el5_stock_version| replace:: 2.3.7
-.. |imap_el6_stock_version| replace:: 2.3.16
-.. |imap_el7_stock_version| replace:: 2.4.17
+.. |imap_tikanga_stock_version| replace:: 2.3.7
+.. |imap_santiago_stock_version| replace:: 2.3.16
+.. |imap_maipo_stock_version| replace:: 2.4.17
 """
 
 # The version in which compatibility support for RFC 2086 (the 'c' and
-# 'd' rights is dropped.
+# 'd' rights) is dropped.
 rst_prolog += """
 .. |imap_version_rfc2086_dropped| replace:: 3.0
 """
@@ -368,6 +368,11 @@ rst_prolog += """
 # off).
 rst_prolog += """
 .. |imap_version_unixhierarchysep_default_on| replace:: 3.0
+"""
+
+rst_prolog += """
+.. |AMS| replace:: :abbr:`AMS (Andrew Mail System)`
+.. |CMU| replace:: :abbr:`CMU (Carnegie Mellon University)`
 """
 
 # Uncomment this if you publish to, like, www.cyrusimap.org/~vanmeeuwen/
