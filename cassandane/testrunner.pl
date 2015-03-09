@@ -149,7 +149,7 @@ become_cyrus();
 
 sub usage
 {
-    printf STDERR "Usage: testrunner.pl [ -f xml | -f tap | -f pretty ] [testname...]\n";
+    printf STDERR "Usage: testrunner.pl [options] -f <xml|tap|pretty> [testname...]\n";
     exit(1);
 }
 
