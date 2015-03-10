@@ -37,6 +37,15 @@ performing the upgrade, as the newer binaries will end up writing to
 
 You can start the server immediately after upgrading, however.
 
+Underscores in ``cmd`` Names in :manpage:`cyrus.conf(5)`
+--------------------------------------------------------
+
+Underscores (the ``_`` character) are no longer allowed in the
+``START``, ``SERVICES`` and ``EVENTS`` sections of
+:manpage:`cyrus.conf(5)`, as they interfere with configuration options
+in :manpage:`imapd.conf(5)` being prefixed by service names and an
+underscore (``_``) character.
+
 Database Format Upgrade for Mailboxes
 -------------------------------------
 
