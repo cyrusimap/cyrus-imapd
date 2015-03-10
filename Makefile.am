@@ -1495,7 +1495,6 @@ snapshot::
 	@echo "#define _CYRUS_VERSION \"$(GIT_VERSION)\"" >> snapshot/$(PACKAGE_NAME)-$(GIT_VERSION)/xversion.h
 	@echo "#define CYRUS_GITVERSION \"`git log --abbrev=8 --pretty=\"format:%h %ci\" -1 | cut -d\" \" -f1,2`\"" >> snapshot/$(PACKAGE_NAME)-$(GIT_VERSION)/xversion.h
 	@touch snapshot/$(PACKAGE_NAME)-$(GIT_VERSION)/xversion
-	@cd snapshot/$(PACKAGE_NAME)-$(GIT_VERSION) ; autoreconf -vi
 	@echo "creating tarfile"
 	tar -C snapshot -c -f - $(PACKAGE_NAME)-$(GIT_VERSION) | gzip -9 > $(PACKAGE_NAME)-$(GIT_VERSION).tar.gz
 	@rm -rf snapshot
