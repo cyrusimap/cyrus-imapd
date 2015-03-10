@@ -1,0 +1,46 @@
+{
+    "event": "MessageNew",
+    "messageContent": {
+        "6": "Return-Path: <john@example.org>\r\nReceived: from imap.example.org ([unix socket])\r\n\t by imap.example.org (Cyrus git2.5+0-Kolab-2.5-67.el6.kolab_3.4) with LMTPA;\r\n\t Mon, 20 Oct 2014 13:34:14 +0200\r\nX-Sieve: CMU Sieve 2.4\r\nX-Virus-Scanned: amavisd-new at example.org\r\nX-Spam-Flag: NO\r\nX-Spam-Score: -0.002\r\nX-Spam-Level: \r\nX-Spam-Status: No, score=-0.002 tagged_above=-10 required=6.2\r\n\ttests=[NO_RECEIVED=-0.001, NO_RELAYS=-0.001] autolearn=ham\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=US-ASCII;\r\n format=flowed\r\nContent-Transfer-Encoding: 7bit\r\nDate: Mon, 20 Oct 2014 13:32:41 +0200\r\nFrom: =?UTF-8?Q?Br=C3=BCederli=2C_Thomas?= <john@example.org>\r\nTo: \"Doe, John\" <john@example.org>\r\nSubject: MessageNew event test\r\nMessage-ID: <a8486f5db6ec207de9b9f069850546ee@example.org>\r\nX-Sender: john@example.org\r\n\r\nThis message should trigger the MessageNew event for john...\r\n...and MessageAppend to /Sent for the sender.\r\n"
+    },
+    "messageHeaders": {
+        "6": {
+            "Content-Transfer-Encoding": "7bit",
+            "Content-Type": "text/plain",
+            "Date": "2014-10-20T11:32:41Z",
+            "From": [
+                "Br\u00fcederli, Thomas <john@example.org>"
+            ],
+            "MIME-Version": "1.0",
+            "Message-ID": "<a8486f5db6ec207de9b9f069850546ee@example.org>",
+            "Received": "from imap.example.org ([unix socket])\r\n\t by imap.example.org (Cyrus git2.5+0-Kolab-2.5-67.el6.kolab_3.4) with LMTPA;\r\n\t Mon, 20 Oct 2014 13:34:14 +0200",
+            "Return-Path": "<john@example.org>",
+            "Subject": "MessageNew event test",
+            "To": [
+                "Doe, John <john@example.org>"
+            ],
+            "X-Sender": "john@example.org",
+            "X-Sieve": "CMU Sieve 2.4",
+            "X-Spam-Flag": "NO",
+            "X-Spam-Level": "",
+            "X-Spam-Score": "-0.002",
+            "X-Spam-Status": "No, score=-0.002 tagged_above=-10 required=6.2\r\n\ttests=[NO_RECEIVED=-0.001, NO_RELAYS=-0.001] autolearn=ham",
+            "X-Virus-Scanned": "amavisd-new at example.org"
+        }
+    },
+    "messageSize": 976,
+    "messages": 6,
+    "modseq": 20,
+    "pid": 2340,
+    "service": "lmtpunix",
+    "timestamp": "2014-10-20T13:34:14.966+02:00",
+    "uidnext": 7,
+    "uidset": "6",
+    "uri": "imap://john@example.org@imap.example.org/INBOX;UIDVALIDITY=1411487714/;UID=6",
+    "user": "john@example.org",
+    "vnd.cmu.midset": [
+        "<a8486f5db6ec207de9b9f069850546ee@example.org>"
+    ],
+    "vnd.cmu.sessionId": "imap.example.org-2340-1413804854-1",
+    "vnd.cmu.unseenMessages": 3
+}
