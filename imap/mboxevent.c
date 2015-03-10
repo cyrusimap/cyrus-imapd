@@ -119,9 +119,9 @@ static struct mboxevent event_template =
     /*  6 */ { EVENT_MAILBOX_ID, "mailboxID", EVENT_PARAM_STRING, 0, 0 },
     /*  7 */ { EVENT_URI, "uri", EVENT_PARAM_STRING, 0, 0 },
     /*  8 */ { EVENT_MODSEQ, "modseq", EVENT_PARAM_INT, 0, 0 },
-    /*  9 */ { EVENT_DISK_QUOTA, "diskQuota", EVENT_PARAM_INT, 0, 0 },
+    /*  9 */ { EVENT_QUOTA_STORAGE, "diskQuota", EVENT_PARAM_INT, 0, 0 },
     /* 10 */ { EVENT_DISK_USED, "diskUsed", EVENT_PARAM_INT, 0, 0 },
-    /* 11 */ { EVENT_MAX_MESSAGES, "maxMessages", EVENT_PARAM_INT, 0, 0 },
+    /* 11 */ { EVENT_QUOTA_MESSAGES, "maxMessages", EVENT_PARAM_INT, 0, 0 },
     /* 12 */ { EVENT_MESSAGES, "messages", EVENT_PARAM_INT, 0, 0 },
     /* 13 */ { EVENT_UNSEEN_MESSAGES, "vnd.cmu.unseenMessages", EVENT_PARAM_INT, 0, 0 },
     /* 14 */ { EVENT_UIDNEXT, "uidnext", EVENT_PARAM_INT, 0, 0 },
@@ -352,7 +352,7 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
     case EVENT_CLIENT_ADDRESS:
 	return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_CLIENTADDRESS) &&
 	       (type & (EVENT_LOGIN|EVENT_LOGOUT));
-    case EVENT_DISK_QUOTA:
+    case EVENT_QUOTA_STORAGE:
 	return type & QUOTA_EVENTS;
     case EVENT_DISK_USED:
 	return (type & (EVENT_QUOTA_EXCEED|EVENT_QUOTA_WITHIN) ||
@@ -377,7 +377,7 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
 #else
 	return 0;
 #endif
-    case EVENT_MAX_MESSAGES:
+    case EVENT_QUOTA_MESSAGES:
 	return type & QUOTA_EVENTS;
     case EVENT_MESSAGE_CONTENT:
 	return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_MESSAGECONTENT) &&
@@ -495,8 +495,8 @@ EXPORTED void mboxevent_notify(struct mboxevent *mboxevents)
 
 	/* others quota are not supported by RFC 5423 */
 	if ((event->type & QUOTA_EVENTS) &&
-	    !event->params[EVENT_DISK_QUOTA].filled &&
-	    !event->params[EVENT_MAX_MESSAGES].filled)
+	    !event->params[EVENT_QUOTA_STORAGE].filled &&
+	    !event->params[EVENT_QUOTA_MESSAGES].filled)
 	    continue;
 
 	/* finish to fill event parameters structure */
@@ -524,7 +524,9 @@ EXPORTED void mboxevent_notify(struct mboxevent *mboxevents)
 	/* may split FlagsSet event in several event notifications */
 	do {
 	    type = event->type;
-	    /* prefer MessageRead and MessageTrash to FlagsSet as advised in the RFC */
+	    /* prefer MessageRead and MessageTrash to FlagsSet as
+	     * advised in RFC 5423 section 4.2
+	     */
 	    if (type == EVENT_FLAGS_SET) {
 		int i;
 
@@ -900,9 +902,9 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
 
     switch(res) {
     case QUOTA_STORAGE:
-	if (mboxevent_expected_param(event->type, EVENT_DISK_QUOTA)) {
+	if (mboxevent_expected_param(event->type, EVENT_QUOTA_STORAGE)) {
 	    if (quota->limits[res] >= 0)
-		FILL_UNSIGNED_PARAM(event, EVENT_DISK_QUOTA, quota->limits[res]);
+		FILL_UNSIGNED_PARAM(event, EVENT_QUOTA_STORAGE, quota->limits[res]);
 	}
 	if (mboxevent_expected_param(event->type, EVENT_DISK_USED)) {
 	    FILL_UNSIGNED_PARAM(event, EVENT_DISK_USED,
@@ -910,8 +912,7 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
 	}
 	break;
     case QUOTA_MESSAGE:
-	if (quota->limits[res] >= 0)
-	    FILL_UNSIGNED_PARAM(event, EVENT_MAX_MESSAGES, quota->limits[res]);
+	FILL_UNSIGNED_PARAM(event, EVENT_QUOTA_MESSAGES, quota->limits[res]);
 	FILL_UNSIGNED_PARAM(event, EVENT_MESSAGES, quota->useds[res]);
 	break;
     default:
@@ -926,7 +927,7 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
      * It seems that it does not correspond to the concept of
      * quota root specified in RFC 2087. Thus we fill uri with quota root
      */
-    if (!event->params[EVENT_URI].filled && event->type & QUOTA_EVENTS) {
+    if (event->type & QUOTA_EVENTS) {
 	/* translate internal mailbox name to external */
 	assert(namespace.mboxname_toexternal != NULL);
 	(*namespace.mboxname_toexternal)(&namespace, quota->root,
@@ -944,7 +945,15 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
 	imapurl.mailbox = extname;
 	imapurl.user = userbuf;
 	imapurl_toURL(url, &imapurl);
-	FILL_STRING_PARAM(event, EVENT_URI, xstrdup(url));
+
+	if (!event->params[EVENT_URI].filled) {
+	    FILL_STRING_PARAM(event, EVENT_URI, xstrdup(url));
+	}
+
+	/* Note that userbuf for shared folders is NULL */
+	if (!event->params[EVENT_USER].filled) {
+	    FILL_STRING_PARAM(event, EVENT_USER, userbuf);
+	}
     }
 }
 
