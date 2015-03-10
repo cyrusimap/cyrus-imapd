@@ -387,8 +387,3 @@ Back to :ref:`imap-features`
 
     Including but not limited to ``SELECT``, ``UID MOVE``, ``RENAME``,
     etc.
-
-.. [#]
-
-    Cyrus IMAP instances can create a multi-server topology on a fewer
-    compute nodes.
