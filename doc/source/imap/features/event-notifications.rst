@@ -8,7 +8,10 @@ Event Notifications
     this particular part of the documentation is pending the resolution
     of :task:`43`.
 
-:rfc:`5465` outlines an extension the IMAP NOTIFY extensions.
+:rfc:`5423` standardizes the emission of message store event
+notifications, and :rfc:`5465` outlines the IMAP NOTIFY extensions.
+
+.. versionadded:: 2.5.0
 
 Available Event Notifications
 =============================
@@ -45,6 +48,10 @@ AclChange
 
 The ACL Change notification is emitted when a command ``SETACL`` is
 issued.
+
+.. NOTE::
+
+    This event notification is added to Cyrus IMAP outside of any RFC.
 
 .. literalinclude:: ../../_static/event_notifications/AclChange.json
     :language: json
@@ -130,6 +137,14 @@ MailboxCreate
 
 MailboxDelete
 -------------
+
+.. NOTE::
+
+    A mailbox deletion event notification is issued once for each top-
+    level mailbox in a hierarchy being deleted.
+
+..
+    Mar 10 13:59:36 kolab notifyd[18204]: EVENT, , , ,  "{"event":"MailboxDelete","timestamp":"2015-03-10T13:59:36.279+01:00","service":"imaps","mailboxID":"imap://jane.doe@example.org@kolab.example.org/INBOX;UIDVALIDITY=1425991710","uri":"imap://jane.doe@example.org@kolab.example.org/INBOX;UIDVALIDITY=1425991710","pid":18210,"user":"cyrus-admin","vnd.cmu.sessionId":"kolab.example.org-18210-1425992375-1-10616182148387168471"}"
 
 .. literalinclude:: ../../_static/event_notifications/MailboxDelete.json
     :language: json
@@ -230,19 +245,85 @@ MessageTrash
     :language: json
     :linenos:
 
+.. _imap-features-event-notifications-quotachange:
+
+QuotaChange
+-----------
+
+.. NOTE::
+
+    This event may be followed by a
+    :ref:`imap-features-event-notifications-quotawithin` event
+    notification, if the quota change leads the quota root to allow more
+    resources than currently in use.
+
+.. literalinclude:: ../../_static/event_notifications/QuotaChange.json
+    :language: json
+    :linenos:
+
 .. _imap-features-event-notifications-quotaexceed:
 
 QuotaExceed
 -----------
+
+The ``user`` parameter in the event notification is the user to whom the
+quota applies, that is being exceeded, otherwise known as the owner of
+the :ref:`imap-features-namespaces-personal`.
+
+.. NOTE::
+
+    Quota being exceeded on shared folders cannot include an "owner" for
+    the quota root.
+
+.. literalinclude:: ../../_static/event_notifications/QuotaExceed.json
+    :language: json
+    :linenos:
 
 .. _imap-features-event-notifications-quotawithin:
 
 QuotaWithin
 -----------
 
-.. _imap-features-event-notifications-quotachange:
+The ``QuotaWithin`` event typically follows a
+:ref:`imap-features-event-notifications-mailboxdelete` [#]_,
+:ref:`imap-features-event-notifications-messageexpunge` [#]_,
+:ref:`imap-features-event-notifications-messagemove` [#]_, or
+:ref:`imap-features-event-notifications-quotachange` [#]_.
 
-QuotaChange
------------
+.. literalinclude:: ../../_static/event_notifications/QuotaWithin.json
+    :language: json
+    :linenos:
+
+.. rubric:: Footnotes for QuotaWithin
+
+.. [#]
+
+    A ``QuotaWithin`` event follows a ``MailboxDelete`` event if the
+    mailbox deleted resides inside a quota root, and lowers the
+    resources used to below the existing quota thresholds.
+
+.. [#]
+
+    A ``QuotaWithin`` event follows a ``MessageExpunge`` event if the
+    messages purged reside inside a quota root, and amount to a number
+    or size that lowers the amount of resources used to below the
+    existing quota thresholds.
+
+.. [#]
+
+    A ``QuotaWithin`` event follows a ``MessageMove`` event if the
+    source folder of the messages moved resides inside a quota root, and
+    the target folder to which the messages have been moved does not
+    reside within the same quota root, and the number or size of the
+    messages moves lowers the amount of resources used in the quota root
+    for the source folder of the messages to below the existing
+    quota thresholds.
+
+.. [#]
+
+    A ``QuotaWithin`` event follows a ``QuotaChange`` event if the quota
+    change raised the threshold on the amount of resources used within
+    the quota root to a level higher than the existing amount of
+    resources used.
 
 Back to :ref:`imap-features`
