@@ -31,7 +31,7 @@ Available Event Notifications
 *   :ref:`imap-features-event-notifications-messagenew`
 *   :ref:`imap-features-event-notifications-messageread`
 *   :ref:`imap-features-event-notifications-messagetrash`
-*   :ref:`imap-features-event-notifications-quotaexceeded`
+*   :ref:`imap-features-event-notifications-quotaexceed`
 *   :ref:`imap-features-event-notifications-quotawithin`
 *   :ref:`imap-features-event-notifications-quotachange`
 
@@ -230,10 +230,10 @@ MessageTrash
     :language: json
     :linenos:
 
-.. _imap-features-event-notifications-quotaexceeded:
+.. _imap-features-event-notifications-quotaexceed:
 
-QuotaExceeded
--------------
+QuotaExceed
+-----------
 
 .. _imap-features-event-notifications-quotawithin:
 
