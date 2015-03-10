@@ -95,7 +95,7 @@ Individual Rights Reference
     ``/vendor/cmu/cyrus-imapd/sharedseen`` has been set to ``1`` (see
     :ref:`imap-admin-cyradm`).
 
-    Additionally, the ``\\Recent`` flags are preserved for the ACI
+    Additionally, the ``\Recent`` flags are preserved for the ACI
     subject.
 
 .. _imap-admin-access-control-right-w:
