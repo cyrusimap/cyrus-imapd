@@ -1477,23 +1477,14 @@ timsieved_timsieved_LDADD = sieve/libcyrus_sieve.la $(LD_SERVER_ADD)
 GIT_VERSION = $(PACKAGE_VERSION)@git_version@
 
 snapshot::
-	@echo "creating snapshot $(GIT_VERSION)"
+	@echo "Creating snapshot $(PACKAGE_NAME)-$(GIT_VERSION)"
 	@$(MKDIR_P) snapshot
 	@git archive --format=tar --prefix=$(PACKAGE_NAME)-$(GIT_VERSION)/ HEAD | tar -C snapshot/ -x -f -
 	@echo "/* $(PACKAGE_NAME) $(GIT_VERSION) */" > snapshot/$(PACKAGE_NAME)-$(GIT_VERSION)/xversion.h
 	@echo "#define _CYRUS_VERSION \"$(GIT_VERSION)\"" >> snapshot/$(PACKAGE_NAME)-$(GIT_VERSION)/xversion.h
 	@echo "#define CYRUS_GITVERSION \"`git log --abbrev=8 --pretty=\"format:%h %ci\" -1 | cut -d\" \" -f1,2`\"" >> snapshot/$(PACKAGE_NAME)-$(GIT_VERSION)/xversion.h
 	@touch snapshot/$(PACKAGE_NAME)-$(GIT_VERSION)/xversion
-	@cd snapshot/$(PACKAGE_NAME)-$(GIT_VERSION) ; sh SMakefile
-	@for d in $(DIST_SUBDIRS); \
-	do \
-	(cd snapshot/$(PACKAGE_NAME)-$(GIT_VERSION)/$$d; \
-	if [ -f Makefile.dist ]; then \
-	echo "### Making" snapshot "in" `pwd`; \
-	$(MAKE) $(MFLAGS) YACC='$(YACC)' LEX='$(LEX)' \
-	COMPILE_ET='$(COMPILE_ET)' -f Makefile.dist dist ; \
-	fi) || exit 1; \
-	done
+	@cd snapshot/$(PACKAGE_NAME)-$(GIT_VERSION) ; autoreconf -vi
 	@echo "creating tarfile"
 	tar -C snapshot -c -f - $(PACKAGE_NAME)-$(GIT_VERSION) | gzip -9 > $(PACKAGE_NAME)-$(GIT_VERSION).tar.gz
 	@rm -rf snapshot
