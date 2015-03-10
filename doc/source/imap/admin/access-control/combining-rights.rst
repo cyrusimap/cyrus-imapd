@@ -15,7 +15,7 @@ mailboxes easily.
     an untagged ``READ-ONLY`` or ``READ-WRITE`` response to a ``SELECT``
     command, depending on whether the user has flag modification rights
     such as the :ref:`imap-admin-access-control-right-t` for maintaining
-    ``\\Deleted`` flags on messages, and the
+    ``\Deleted`` flags on messages, and the
     :ref:`imap-admin-access-control-right-w` right for maintaining non-
     system flags on messages.
 
@@ -32,7 +32,7 @@ lrs
 ===
 
 The set of rights often referred to as "read-only". The ACI subject is
-allowed to lookup the folder, read its contents and maintain ``\\Seen``
+allowed to lookup the folder, read its contents and maintain ``\Seen``
 flags on messages. Meanwhile, the ``\Recent`` flags are maintained for
 the ACI subject as well.
 
@@ -43,14 +43,14 @@ The set of rights that could arguably be referred to "semi-full".
 
 The ACI subject is allowed to lookup the folder, read its contents and
 maintain flags on messages, as well as insert new messages in to the
-folder, and flag messages as ``\\Deleted``, but not expunge the folder's
+folder, and flag messages as ``\Deleted``, but not expunge the folder's
 contents.
 
-Allowing ACI subjects to flag messages as ``\\Deleted`` but not
+Allowing ACI subjects to flag messages as ``\Deleted`` but not
 delegating the right to ``EXPUNGE`` the folder's contents enables
 messages to quickly be restored by ACI subjects themselves, if the
 client used can be configured to show or hide messages flagged
-``\\Deleted``.
+``\Deleted``.
 
 .. seealso::
 
@@ -58,8 +58,8 @@ client used can be configured to show or hide messages flagged
 
 Please note that the configuration value of
 ``/vendor/cmu/cyrus-imapd/sharedseen`` on the folder has no bearing on
-the ``\\Deleted`` flag, but only on the ``\\Seen`` flag. To be more
-precise, all flags other than ``\\Seen`` are global.
+the ``\Deleted`` flag, but only on the ``\Seen`` flag. To be more
+precise, all flags other than ``\Seen`` are global.
 
 Features and Combined Access Rights
 -----------------------------------

@@ -59,7 +59,7 @@ Options
 
 .. option:: -d
 
-    Not only unexpunge the messages, but also remove the ``\\Deleted``
+    Not only unexpunge the messages, but also remove the ``\Deleted``
     flag.
 
 .. option:: -f flagname

@@ -17,7 +17,7 @@ Description
 ===========
 
 Arbitron collects and reports readership statistics for mailboxes on the
-server. It also optionally prunes the mailboxes of ``\\Seen`` state for
+server. It also optionally prunes the mailboxes of ``\Seen`` state for
 dormant users.
 
 Arbitron produces one line of output per mailbox, reporting the mailbox

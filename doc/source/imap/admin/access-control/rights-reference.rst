@@ -107,7 +107,7 @@ Individual Rights Reference
 
     The ACI subject is permitted to write to the folder, actually
     meaning the ACI subject is permitted to maintain flags and keywords
-    other then ``\\Seen`` and ``\\Deleted``, which are controlled using
+    other then ``\Seen`` and ``\Deleted``, which are controlled using
     the :ref:`imap-admin-access-control-right-s` and
     :ref:`imap-admin-access-control-right-t` rights respectively.
 
@@ -120,7 +120,7 @@ Individual Rights Reference
     .. NOTE::
 
         IMAP clients may expect to be able to set flags other than
-        ``\\Seen`` and ``\\Deleted`` and attempt to set those flags
+        ``\Seen`` and ``\Deleted`` and attempt to set those flags
         immediately along with a "Mark as read" action, but without the
         ACI subject actually being permitted to set some of those flags
         through the :ref:`imap-admin-access-control-right-w` right.
@@ -276,7 +276,7 @@ Individual Rights Reference
 
     The ACI subject is allowed to delete messages from this folder,
     meaning that the ACI subject is allowed to flag messages as
-    ``\\Deleted``.
+    ``\Deleted``.
 
     In IMAP, messages are only actually deleted (i.e. in a way that
     makes them invisble to users of the folder) after the folder's
@@ -311,11 +311,11 @@ Individual Rights Reference
 
     The ACI subject is allowed to expunge messages in this folder,
     meaning the ACI subject has the right to remove all messages that
-    have been flagged as ``\\Deleted`` from all visibility.
+    have been flagged as ``\Deleted`` from all visibility.
 
     In IMAP, expunging messages only applies to messages flagged as
-    ``\\Deleted``. For the ACI subject to be able to flag messages as
-    ``\\Deleted`` however, the :ref:`imap-admin-access-control-right-t`
+    ``\Deleted``. For the ACI subject to be able to flag messages as
+    ``\Deleted`` however, the :ref:`imap-admin-access-control-right-t`
     right is required.
 
     We say "remove from all visibility", because the implementation of
@@ -350,11 +350,11 @@ Individual Rights Reference
 
     In versions of Cyrus IMAP implementing only this right (prior to
     2.3.7), ACI subjects were allowed to flag messages as
-    ``\\Deleted``, and ``EXPUNGE`` and ``DELETE`` folders.
+    ``\Deleted``, and ``EXPUNGE`` and ``DELETE`` folders.
 
     The delete right has been split in to three separate rights,
     :ref:`imap-admin-access-control-right-t` (flag messages as
-    ``\\Deleted``), :ref:`imap-admin-access-control-right-e`
+    ``\Deleted``), :ref:`imap-admin-access-control-right-e`
     (``EXPUNGE`` folder) and :ref:`imap-admin-access-control-right-x`
     (``DELETE`` folder).
 

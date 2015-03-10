@@ -15,15 +15,15 @@ Message context
 
     Delete
 
-        sets the ``\\Deleted`` flag on the message using
-        ``STORE +Flags \\Deleted`` via IMAP client
+        sets the ``\Deleted`` flag on the message using
+        ``STORE +Flags \Deleted`` via IMAP client
 
 .. glossary::
 
     Expunge
 
         delete messages from the cyrus folder index that have the
-        ``\\Deleted`` flag set using EXPUNGE via IMAP client. With
+        ``\Deleted`` flag set using EXPUNGE via IMAP client. With
         ``expunge_mode: delayed``, this doesn't delete the file from
         the filesystem.
 
@@ -38,8 +38,8 @@ Message context
 
     Undelete
 
-        remove the ``\\Deleted`` flag on the message using
-        ``STORE -Flags \\Deleted`` via IMAP client.
+        remove the ``\Deleted`` flag on the message using
+        ``STORE -Flags \Deleted`` via IMAP client.
 
 Folder context
 --------------
