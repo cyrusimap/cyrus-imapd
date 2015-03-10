@@ -950,9 +950,14 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
 	    FILL_STRING_PARAM(event, EVENT_URI, xstrdup(url));
 	}
 
-	/* Note that userbuf for shared folders is NULL */
+	/* Note that userbuf for shared folders is NULL, and xstrdup
+	 * doesn't like it. However, shared folder hierarchies can have
+	 * quotas applied too, and it really requires the 'user' param
+	 * to be filled.
+	 */
+
 	if (!event->params[EVENT_USER].filled) {
-	    FILL_STRING_PARAM(event, EVENT_USER, userbuf);
+	    FILL_STRING_PARAM(event, EVENT_USER, (userbuf == NULL ? '\0' : xstrdup(userbuf)));
 	}
     }
 }
