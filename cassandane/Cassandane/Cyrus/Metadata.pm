@@ -2721,7 +2721,7 @@ sub test_getmetadata_maxsize
     xlog "Getting metadata with a small MAXSIZE in the right place";
     $res = getmetadata($imaptalk, [ MAXSIZE => 8 ], $folder, $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_deep_equals({ longentries => 36 } , $res);
+    $self->assert_deep_equals({ longentries => length($uuid) } , $res);
 
     xlog "Getting metadata with a large MAXSIZE in the wrong place";
     $res = getmetadata($imaptalk, $folder, [ MAXSIZE => 2048 ], $entry);
@@ -2732,7 +2732,7 @@ sub test_getmetadata_maxsize
     xlog "Getting metadata with a small MAXSIZE in the wrong place";
     $res = getmetadata($imaptalk, $folder, [ MAXSIZE => 8 ], $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_deep_equals({ longentries => 36 } , $res);
+    $self->assert_deep_equals({ longentries => length($uuid) } , $res);
 }
 
 sub test_getmetadata_depth
