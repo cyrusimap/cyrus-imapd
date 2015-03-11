@@ -4480,7 +4480,7 @@ static int report_cal_multiget(struct transaction_t *txn,
 	    struct caldav_data *cdata;
 	    struct caldav_db *current_db;
 
-	    buf_ensure(&uri, len);
+	    buf_ensure(&uri, len+1);
 	    xmlURIUnescapeString((const char *) href, len, uri.s);
 	    xmlFree(href);
 

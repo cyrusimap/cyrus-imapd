@@ -952,7 +952,7 @@ static int report_card_multiget(struct transaction_t *txn,
 	    struct carddav_data *cdata;
 	    struct carddav_db *current_db;
 
-	    buf_ensure(&uri, len);
+	    buf_ensure(&uri, len+1);
 	    xmlURIUnescapeString((const char *) href, len, uri.s);
 	    xmlFree(href);
 

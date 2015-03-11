@@ -1363,7 +1363,7 @@ static void cmdloop(void)
 
 		if (!value) value = "";
 		len = strlen(value);
-		buf_ensure(&txn.buf, len);
+		buf_ensure(&txn.buf, len+1);
 
 		vals = hash_lookup(param, &txn.req_qparams);
 		appendstrlist(&vals,
