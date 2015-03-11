@@ -2526,4 +2526,147 @@ sub test_bug3735
     $self->assert(grep { m/user\.ab/ } @res);
 }
 
+sub test_rename_withannot
+{
+    my ($self) = @_;
+
+    xlog "test resources usage survives rename";
+
+    $self->_set_quotaroot('user.cassandane');
+    my $src = 'INBOX.src';
+    my $dest = 'INBOX.dest';
+    my $fentry = '/private/comment';
+    my $mentry1 = '/comment';
+    my $mentry2 = '/altsubject';
+    my $mattrib = 'value.priv';
+    my $vendsize = "/shared/vendor/cmu/cyrus-imapd/size";
+    my $vendannot = "/shared/vendor/cmu/cyrus-imapd/annotsize";
+
+    my $store = $self->{store};
+    $store->set_fetch_attributes('uid',
+				 "annotation ($mentry1 $mattrib)",
+				 "annotation ($mentry2 $mattrib)");
+    my $talk = $store->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $talk->create($src) || die "Failed to create subfolder";
+    $store->set_folder($src);
+
+    xlog "set ourselves a basic limit";
+    $self->_set_limits(
+	storage => 100000,
+	message => 50000,
+	'x-annotation-storage' => 100000,
+    );
+    $self->_check_usages(
+	storage => 0,
+	message => 0,
+	'x-annotation-storage' => 0,
+    );
+    my $expected_annotation_storage = 0;
+    my $expected_storage = 0;
+    my $expected_message = 0;
+
+    xlog "store annotations";
+    my $data = $self->make_random_data(10);
+    $expected_annotation_storage += length($data);
+    $talk->setmetadata($src, $fentry, { Quote => $data });
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog "add some messages";
+    my $uid = 1;
+    my %exp;
+    for (1..10)
+    {
+	my $msg = $self->make_message("Message $_",
+				      extra_lines => 10 + rand(5000));
+	$exp{$uid} = $msg;
+	my $data1 = $self->make_random_data(7);
+	my $data2 = $self->make_random_data(3);
+	$msg->set_attribute('uid', $uid);
+	$msg->set_annotation($mentry1, $mattrib, $data1);
+	$msg->set_annotation($mentry2, $mattrib, $data2);
+	$talk->store('' . $uid, 'annotation',
+		    [$mentry1, [$mattrib, { Quote => $data1 }],
+		     $mentry2, [$mattrib, { Quote => $data2 }]]);
+	$self->assert_str_equals('ok', $talk->get_last_completion_response());
+	$expected_annotation_storage += (length($data1) + length($data2));
+	$expected_storage += length($msg->as_string());
+	$expected_message++;
+	$uid++;
+    }
+
+    my $res;
+
+    xlog "Check the messages are all there";
+    $self->check_messages(\%exp);
+
+    xlog "check that the used size matches";
+    $res = $talk->getmetadata($src, $vendsize);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_deep_equals({
+	$src => { $vendsize => $expected_storage },
+    }, $res);
+
+    xlog "check that the annot size matches";
+    $res = $talk->getmetadata($src, $vendannot);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_deep_equals({
+	$src => { $vendannot => $expected_annotation_storage },
+    }, $res);
+
+    xlog "Check the mailbox annotation is still there";
+    $res = $talk->getmetadata($src, $fentry);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_deep_equals({
+	$src => { $fentry => $data }
+    }, $res);
+
+    xlog "Check the quota usage is as expected";
+    $self->_check_usages(
+	storage => int($expected_storage/1024),
+	message => $expected_message,
+	'x-annotation-storage' => int($expected_annotation_storage/1024),
+    );
+
+    xlog "rename $src to $dest";
+    $talk->rename($src, $dest);
+    $store->set_folder($dest);
+
+    xlog "Check the messages are all there";
+    $self->check_messages(\%exp);
+
+    xlog "Check the old mailbox annotation is not there";
+    $res = $talk->getmetadata($src, $fentry);
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+
+    xlog "Check the new mailbox annotation is there";
+    $res = $talk->getmetadata($dest, $fentry);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_deep_equals({
+	$dest => { $fentry => $data }
+    }, $res);
+
+    xlog "check that the used size still matches";
+    $res = $talk->getmetadata($dest, $vendsize);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_deep_equals({
+	$dest => { $vendsize => $expected_storage },
+    }, $res);
+
+    xlog "check that the annot size still matches";
+    $res = $talk->getmetadata($dest, $vendannot);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_deep_equals({
+	$dest => { $vendannot => $expected_annotation_storage },
+    }, $res);
+
+    xlog "Check the quota usage is still as expected";
+    $self->_check_usages(
+	storage => int($expected_storage/1024),
+	message => $expected_message,
+	'x-annotation-storage' => int($expected_annotation_storage/1024),
+    );
+}
+
 1;
