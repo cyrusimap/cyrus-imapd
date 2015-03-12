@@ -306,7 +306,7 @@ EXPORTED void cyrusdb_done(void)
     }
 }
 
-HIDDEN int cyrusdb_copyfile(const char *srcname, const char *dstname)
+EXPORTED int cyrusdb_copyfile(const char *srcname, const char *dstname)
 {
     return cyrus_copyfile(srcname, dstname, COPYFILE_NOLINK);
 }
@@ -338,16 +338,16 @@ static int print_cb(void *rock,
 }
 
 
-int cyrusdb_dumpfile(struct db *db,
-		     const char *prefix, size_t prefixlen,
-		     FILE *f,
-		     struct txn **tid)
+EXPORTED int cyrusdb_dumpfile(struct db *db,
+			      const char *prefix, size_t prefixlen,
+			      FILE *f,
+			      struct txn **tid)
 {
     return cyrusdb_foreach(db, prefix, prefixlen, NULL, print_cb, f, tid);
 }
 
-int cyrusdb_truncate(struct db *db,
-		     struct txn **tid)
+EXPORTED int cyrusdb_truncate(struct db *db,
+			      struct txn **tid)
 {
     struct db_rock tr;
 
@@ -357,9 +357,9 @@ int cyrusdb_truncate(struct db *db,
     return cyrusdb_foreach(db, "", 0, NULL, delete_cb, &tr, tid);
 }
 
-int cyrusdb_undumpfile(struct db *db,
-		       FILE *f,
-		       struct txn **tid)
+EXPORTED int cyrusdb_undumpfile(struct db *db,
+				FILE *f,
+				struct txn **tid)
 {
     struct buf line = BUF_INITIALIZER;
     const char *tab;

@@ -252,6 +252,7 @@ EXPORTED int proc_foreach(procdata_t *func, void *rock)
     const char *p;
     pid_t pid;
     char *end = NULL;
+    size_t len;
     int r = 0;
 
     path = proc_getdir();
@@ -261,6 +262,8 @@ EXPORTED int proc_foreach(procdata_t *func, void *rock)
 	while ((dirent = readdir(dirp)) != NULL) {
 	    p = dirent->d_name;
 	    if (*p == '.') continue; /* dot files */
+	    len = strlen(p);
+	    if (len > 4 && !strcmp(p + len - 4, ".new")) continue; /* temporary new file */
 	    pid = strtoul(p, &end, 10);
 	    if (pid == 0 || end == NULL || *end || end == p) {
 		syslog(LOG_ERR, "IOERROR: bogus filename \"%s/%s\" in proc_foreach",

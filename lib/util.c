@@ -788,6 +788,16 @@ EXPORTED int parsenum(const char *p, const char **ptr, int maxlen, bit64 *res)
     return 0;
 }
 
+EXPORTED uint64_t str2uint64(const char *p)
+{
+    const char *rest = p;
+    bit64 res = 0;
+    if (parsenum(p, &rest, 0, &res))
+	return 0;
+    if (*rest) return 0;
+    return res;
+}
+
 EXPORTED int parsehex(const char *p, const char **ptr, int maxlen, bit64 *res)
 {
     bit64 result = 0;

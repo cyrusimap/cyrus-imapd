@@ -101,6 +101,8 @@ EXPORTED void signals_add_handlers(int alarm)
 	fatal("unable to install signal handler for SIGINT", EC_TEMPFAIL);
     if (sigaction(SIGTERM, &action, NULL) < 0)
 	fatal("unable to install signal handler for SIGTERM", EC_TEMPFAIL);
+    if (sigaction(SIGUSR2, &action, NULL) < 0)
+	fatal("unable to install signal handler for SIGTERM", EC_TEMPFAIL);
 
     signals_reset_sighup_handler(1);
 }
@@ -201,6 +203,7 @@ static int signals_poll_mask(sigset_t *oldmaskp)
 	else exit(EC_TEMPFAIL);
     }
     for (sig = 1 ; sig < _NSIG ; sig++) {
+	if (sig == SIGUSR2) continue; /* only ever polled explicitly */
 	if (gotsignal[sig])
 	    return sig;
     }
@@ -271,4 +274,20 @@ EXPORTED int signals_select(int nfds, fd_set *rfds, fd_set *wfds,
 
     return r;
 #endif
+}
+
+EXPORTED void signals_clear(int sig)
+{
+    if (sig >= 0 && sig < _NSIG)
+	gotsignal[sig] = 0;
+}
+
+EXPORTED int signals_cancelled()
+{
+    if (gotsignal[SIGUSR2]) {
+	gotsignal[SIGUSR2] = 0;
+	return 1;
+    }
+
+    return 0;
 }

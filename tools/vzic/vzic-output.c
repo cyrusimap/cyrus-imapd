@@ -2337,7 +2337,7 @@ dump_change				(FILE		*fp,
   fprintf (fp, "%s\t", zone_name);
 
   if (year == YEAR_MINIMUM) {
-    fprintf (fp, " 1 Jan 0001\t 0:00:00", zone_name);
+    fprintf (fp, " 1 Jan 0001\t 0:00:00");
   } else if (year == YEAR_MAXIMUM) {
     fprintf (stderr, "Maximum year found in change time\n");
     exit (1);

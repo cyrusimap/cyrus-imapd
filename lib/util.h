@@ -218,6 +218,7 @@ int parseint32(const char *p, const char **ptr, int32_t *res);
 int parseuint32(const char *p, const char **ptr, uint32_t *res);
 int parsenum(const char *p, const char **ptr, int maxlen, bit64 *res);
 int parsehex(const char *p, const char **ptr, int maxlen, bit64 *res);
+uint64_t str2uint64(const char *p);
 
 /* Timing related funcs/vars */
 extern void cmdtime_settimer(int enable);
