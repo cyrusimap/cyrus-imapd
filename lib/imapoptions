@@ -463,7 +463,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    database with ctl_conversationsdb if you change this option on a
    running server, or the counts will be wrong.  */
 
-{ "conversations_db", "skiplist", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql", "twoskip")}
+{ "conversations_db", "skiplist", STRINGLIST("skiplist", "sql", "twoskip")}
 /* The cyrusdb backend to use for the per-user conversations database. */
 
 { "conversations_expire_days", 90, INT }
@@ -1570,7 +1570,7 @@ If all partitions are over that limit, this feature is not used anymore.
  * headers can still be searched, the searches will just be slower.
  */
 
-{ "search_indexed_db", "twoskip", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist", "twoskip")}
+{ "search_indexed_db", "twoskip", STRINGLIST("flat", "skiplist", "twoskip")}
 /* The cyrusdb backend to use for the search latest indexed uid state. */
 
 { "search_skipdiacrit", 1, SWITCH }
@@ -1733,7 +1733,7 @@ product version in the capabilities */
    successfully authenticate.  Otherwise lmtpd returns permanent failures
    (causing the mail to bounce immediately). */
 
-{ "sortcache_db", "twoskip", STRINGLIST("berkeley", "berkeley-hash", "skiplist", "twoskip")}
+{ "sortcache_db", "twoskip", STRINGLIST("skiplist", "twoskip")}
 /* The cyrusdb backend to use for caching sort results (currently only
    used for xconvmultisort) */
 
