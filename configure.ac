@@ -1208,6 +1208,11 @@ dnl
 	    AC_DEFINE(WITH_DKIM,[],[Build DKIM support into iSchedule?]) 
 	fi
 
+	AC_EGREP_HEADER(ICAL_IANA_PARAMETER, ical.h,
+		AC_DEFINE(HAVE_IANA_PARAMS,[],
+			[Do we have support for IANA params?]),
+		AC_MSG_WARN([Your version of libical can not support scheduling or managed attachments.  Consider upgrading to libical >= 0.48]))
+
 	AC_EGREP_HEADER(ICAL_SCHEDULESTATUS_PARAMETER, ical.h,
 		AC_DEFINE(HAVE_SCHEDULING_PARAMS,[],
 			[Do we have built-in support for scheduling params?]))
