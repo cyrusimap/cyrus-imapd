@@ -131,4 +131,7 @@ extern int cyrus_acl_set(char **acl, const char *identifier,
 extern int cyrus_acl_remove(char **acl, const char *identifier,
 		      cyrus_acl_canonproc_t *canonproc, void *canonrock);
 
+/* look up a user to see if they are a system user */
+extern int is_system_user(const char *userid);
+
 #endif /* INCLUDED_ACL_H */

@@ -56,6 +56,8 @@
 #include "acl.h"
 #include "auth.h"
 #include "xmalloc.h"
+#include "strarray.h"
+#include "libconfig.h"
 
 /*
  * Calculate the set of rights the user in 'auth_state' has in the ACL 'acl'.
@@ -219,4 +221,18 @@ EXPORTED int cyrus_acl_remove(char **acl, const char *identifier,
 	       cyrus_acl_canonproc_t canonproc, void *canonrock)
 {
     return cyrus_acl_set(acl, identifier, ACL_MODE_SET, 0, canonproc, canonrock);
+}
+
+EXPORTED int is_system_user(const char *userid)
+{
+    static strarray_t *admins = NULL;
+
+    if (!admins) admins = strarray_split(config_getstring(IMAPOPT_ADMINS), NULL, STRARRAY_TRIM);
+
+    if (!strcmp(userid, "anyone")) return 1;
+    if (!strcmp(userid, "anonymous")) return 1;
+    if (strarray_find(admins, userid, 0) >= 0)
+	return 1;
+
+    return 0;
 }
