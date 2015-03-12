@@ -12,9 +12,9 @@
 #include "xmalloc.h"
 
 #define DBDIR	"test-dbdir"
-#define DBNAME	"conversations.db"
-#define DBNAME2	"conversations2.db"
-#define DBNAME3	"conversations.db"
+#define DBNAME	DBDIR "/conversations.db"
+#define DBNAME2	DBDIR "/conversations2.db"
+#define DBNAME3	DBDIR "/conversations.db"
 
 static void test_open(void)
 {
@@ -1492,7 +1492,7 @@ static int set_up(void)
 
     libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
     cyrusdb_init();
-    config_conversations_db = "berkeley";
+    config_conversations_db = "twoskip";
 
     return 0;
 }
