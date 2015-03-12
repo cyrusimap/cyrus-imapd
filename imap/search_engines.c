@@ -249,7 +249,7 @@ cleanup:
 static int search_squat(unsigned* msg_list, struct index_state *state,
 			const struct searchargs *searchargs)
 {
-    char *fname;
+    const char *fname;
     int fd;
     SquatSearchIndex* index;
     unsigned char* msg_vector;

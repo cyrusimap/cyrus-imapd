@@ -128,12 +128,12 @@ static void index_listflags(struct index_state *state);
 static void index_fetchflags(struct index_state *state, uint32_t msgno);
 static int index_search_evaluate(struct index_state *state,
 				 const struct searchargs *searchargs,
-				 uint32_t msgno, struct mapfile *msgfile);
+				 uint32_t msgno, struct buf *buf);
 static int index_searchmsg(char *substr, comp_pat *pat,
-			   struct mapfile *msgfile,
+			   struct buf *buf,
 			   int skipheader, const char *cachestr);
 static int index_searchheader(char *name, char *substr, comp_pat *pat,
-			      struct mapfile *msgfile,
+			      struct buf *buf,
 			      int size);
 static int index_searchcacheheader(struct index_state *state, uint32_t msgno, char *name, char *substr,
 				   comp_pat *pat);
@@ -1299,7 +1299,8 @@ static void prefetch_messages(struct index_state *state,
     struct mailbox *mailbox = state->mailbox;
     struct index_map *im;
     uint32_t msgno;
-    char *fname;
+    const char *fname;
+    struct index_record record;
 
     syslog(LOG_ERR, "Prefetching initial parts of messages\n");
 
@@ -1308,7 +1309,10 @@ static void prefetch_messages(struct index_state *state,
 	if (!seqset_ismember(seq, usinguid ? im->uid : msgno))
 	    continue;
 
-	fname = mailbox_message_fname(mailbox, im->uid);
+	if (index_reload_record(state, msgno, &record))
+	    continue;
+
+	fname = mailbox_record_fname(mailbox, &record);
 	if (!fname)
 	    continue;
 
@@ -1416,7 +1420,6 @@ EXPORTED int index_scan(struct index_state *state, const char *contents)
     struct strlist strlist;
     unsigned long length;
     struct mailbox *mailbox = state->mailbox;
-    struct index_map *im;
 
     if (!(contents && contents[0])) return(0);
 
@@ -1441,18 +1444,19 @@ EXPORTED int index_scan(struct index_state *state, const char *contents)
     listcount = search_prefilter_messages(msgno_list, state, &searchargs);
 
     for (listindex = 0; !n && listindex < listcount; listindex++) {
-	struct mapfile msgfile = MAPFILE_INITIALIZER;
+	struct buf buf = BUF_INITIALIZER;
+	struct index_record record;
 	msgno = msgno_list[listindex];
-	im = &state->map[msgno-1];
 
-	if (mailbox_map_message(mailbox, im->uid,
-				&msgfile.base, &msgfile.size))
+	if (index_reload_record(state, msgno, &record))
 	    continue;
 
-	n += index_scan_work(msgfile.base, msgfile.size, contents, length);
+	if (mailbox_map_record(mailbox, &record, &buf))
+	    continue;
 
-	mailbox_unmap_message(mailbox, im->uid,
-			      &msgfile.base, &msgfile.size);
+	n += index_scan_work(buf.s, buf.len, contents, length);
+
+	buf_free(&buf);
     }
 
     free(strlist.s);
@@ -1981,8 +1985,7 @@ static int index_appendremote(struct index_state *state, uint32_t msgno,
 			      struct protstream *pout)
 {
     struct mailbox *mailbox = state->mailbox;
-    const char *msg_base = 0;
-    size_t msg_size = 0;
+    struct buf buf = BUF_INITIALIZER;
     unsigned flag, flagmask = 0;
     char datebuf[RFC3501_DATETIME_MAX+1];
     char sepchar = '(';
@@ -1993,7 +1996,7 @@ static int index_appendremote(struct index_state *state, uint32_t msgno,
     if (r) return r;
 
     /* Open the message file */
-    if (mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size)) 
+    if (mailbox_map_record(mailbox, &record, &buf))
 	return IMAP_NO_MSGGONE;
 
     /* start the individual append */
@@ -2037,11 +2040,10 @@ static int index_appendremote(struct index_state *state, uint32_t msgno,
     prot_printf(pout, ") \"%s\" ", datebuf);
 
     /* message literal */
-    index_fetchmsg(state, msg_base, msg_size, 0, record.size, 0, 0);
+    index_fetchmsg(state, buf.s, buf.len, 0, record.size, 0, 0);
 
     /* close the message file */
-    if (msg_base) 
-	mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
+    buf_free(&buf);
 
     return 0;
 }
@@ -2939,8 +2941,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 {
     struct mailbox *mailbox = state->mailbox;
     int fetchitems = fetchargs->fetchitems;
-    const char *msg_base = NULL;
-    size_t msg_size = 0;
+    struct buf buf = BUF_INITIALIZER;
     struct octetinfo *oi = NULL;
     int sepchar = '(';
     int started = 0;
@@ -2969,10 +2970,10 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 
     /* Open the message file if we're going to need it */
     if ((fetchitems & (FETCH_HEADER|FETCH_TEXT|FETCH_RFC822)) ||
-	fetchargs->cache_atleast > record.cache_version || 
+	fetchargs->cache_atleast > record.cache_version ||
 	fetchargs->binsections || fetchargs->sizesections ||
 	fetchargs->bodysections) {
-	if (mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size)) {
+	if (mailbox_map_record(mailbox, &record, &buf)) {
 	    prot_printf(state->out, "* OK ");
 	    prot_printf(state->out, error_message(IMAP_NO_MSGGONE), msgno);
 	    prot_printf(state->out, "\r\n");
@@ -3047,7 +3048,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     if (fetchitems & FETCH_HEADER) {
 	prot_printf(state->out, "%cRFC822.HEADER ", sepchar);
 	sepchar = ' ';
-	index_fetchmsg(state, msg_base, msg_size, 0,
+	index_fetchmsg(state, buf.s, buf.len, 0,
 		       record.header_size,
 		       (fetchitems & FETCH_IS_PARTIAL) ?
 		         fetchargs->start_octet : 0,
@@ -3058,7 +3059,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 	prot_printf(state->out, "%cRFC822.HEADER ", sepchar);
 	sepchar = ' ';
 	if (fetchargs->cache_atleast > record.cache_version) {
-	    index_fetchheader(state, msg_base, msg_size,
+	    index_fetchheader(state, buf.s, buf.len,
 			      record.header_size,
 			      &fetchargs->headers, &fetchargs->headers_not);
 	} else {
@@ -3069,7 +3070,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     if (fetchitems & FETCH_TEXT) {
 	prot_printf(state->out, "%cRFC822.TEXT ", sepchar);
 	sepchar = ' ';
-	index_fetchmsg(state, msg_base, msg_size,
+	index_fetchmsg(state, buf.s, buf.len,
 		       record.header_size, record.size - record.header_size,
 		       (fetchitems & FETCH_IS_PARTIAL) ?
 		         fetchargs->start_octet : 0,
@@ -3079,7 +3080,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     if (fetchitems & FETCH_RFC822) {
 	prot_printf(state->out, "%cRFC822 ", sepchar);
 	sepchar = ' ';
-	index_fetchmsg(state, msg_base, msg_size, 0, record.size,
+	index_fetchmsg(state, buf.s, buf.len, 0, record.size,
 		       (fetchitems & FETCH_IS_PARTIAL) ?
 		         fetchargs->start_octet : 0,
 		       (fetchitems & FETCH_IS_PARTIAL) ?
@@ -3103,7 +3104,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 
 	if (fetchargs->cache_atleast > record.cache_version) {
 	    if (!mailbox_cacherecord(mailbox, &record))
-		index_fetchfsection(state, msg_base, msg_size,
+		index_fetchfsection(state, buf.s, buf.len,
 				    fsection,
 				    cacheitem_base(&record, CACHE_SECTION),
 				    (fetchitems & FETCH_IS_PARTIAL) ?
@@ -3135,7 +3136,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 
 	if (!mailbox_cacherecord(mailbox, &record)) {
 	    r = index_fetchsection(state, respbuf,
-				   msg_base, msg_size,
+				   buf.s, buf.len,
 				   section->name, cacheitem_base(&record, CACHE_SECTION),
 				   record.size,
 				   (fetchitems & FETCH_IS_PARTIAL) ?
@@ -3157,7 +3158,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 	if (!mailbox_cacherecord(mailbox, &record)) {
 	    oi = &section->octetinfo;
 	    r = index_fetchsection(state, respbuf,
-				   msg_base, msg_size,
+				   buf.s, buf.len,
 				   section->name, cacheitem_base(&record, CACHE_SECTION),
 				   record.size,
 				   (fetchitems & FETCH_IS_PARTIAL) ?
@@ -3178,7 +3179,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 
         if (!mailbox_cacherecord(mailbox, &record)) {
 	    r = index_fetchsection(state, respbuf,
-				   msg_base, msg_size,
+				   buf.s, buf.len,
 				   section->name, cacheitem_base(&record, CACHE_SECTION),
 				   record.size,
 				   fetchargs->start_octet, fetchargs->octet_count);
@@ -3189,8 +3190,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 	/* finsh the response if we have one */
 	prot_printf(state->out, ")\r\n");
     }
-    if (msg_base) 
-	mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
+    buf_free(&buf);
 
     return r;
 }
@@ -3218,10 +3218,10 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
      * genius.  I can sort of see how TEXT.MIME kinda == "HEADER",
      * so there we go */
     static char text_mime[] = "HEADER";
-    const char *data, *msg_base = 0;
-    size_t msg_size = 0;
+    struct buf buf = BUF_INITIALIZER;
     const char *cacheitem;
     int fetchmime = 0, domain = DOMAIN_7BIT;
+    const char *data;
     size_t size;
     int32_t skip = 0;
     int n, r = 0;
@@ -3235,18 +3235,17 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
     if (outsize) *outsize = 0;
 
     r = index_reload_record(state, msgno, &record);
+    if (r) return r;
 
     r = mailbox_cacherecord(mailbox, &record);
     if (r) return r;
 
     /* Open the message file */
-    if (mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size))
+    if (mailbox_map_record(mailbox, &record, &buf))
 	return IMAP_NO_MSGGONE;
 
-    data = msg_base;
-    size = record.size;
-
-    if (size > msg_size) size = msg_size;
+    data = buf.s;
+    size = buf.len;
 
     cacheitem = cacheitem_base(&record, CACHE_SECTION);
 
@@ -3386,7 +3385,7 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
 
   done:
     /* Close the message file */
-    mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
+    buf_free(&buf);
 
     if (decbuf) free(decbuf);
     return r;
@@ -3691,12 +3690,12 @@ out:
 /*
  * Evaluate a searchargs structure on a msgno
  *
- * Note: msgfile argument must be 0 if msg is not mapped in.
+ * Note: buf argument must be 0 if msg is not mapped in.
  */
 static int index_search_evaluate(struct index_state *state,
 				 const struct searchargs *searchargs,
 				 uint32_t msgno,
-				 struct mapfile *msgfile)
+				 struct buf *buf)
 {
     unsigned i;
     struct strlist *l, *h;
@@ -3705,13 +3704,13 @@ static int index_search_evaluate(struct index_state *state,
     struct index_map *im = &state->map[msgno-1];
     struct index_record record;
     struct searchannot *sa;
-    struct mapfile localmap = MAPFILE_INITIALIZER;
+    struct buf localbuf = BUF_INITIALIZER;
     int retval = 0;
 
     if (index_reload_record(state, msgno, &record))
 	goto zero;
 
-    if (!msgfile) msgfile = &localmap;
+    if (!buf) buf = &localbuf;
 
     if ((searchargs->flags & SEARCH_RECENT_SET) && !im->isrecent)
 	goto zero;
@@ -3836,28 +3835,26 @@ static int index_search_evaluate(struct index_state *state,
     }
 
     for (s = searchargs->sublist; s; s = s->next) {
-	if (index_search_evaluate(state, s->sub1, msgno, msgfile)) {
+	if (index_search_evaluate(state, s->sub1, msgno, buf)) {
 	    if (!s->sub2) goto zero;
 	}
 	else {
 	    if (s->sub2 &&
-		!index_search_evaluate(state, s->sub2, msgno, msgfile))
+		!index_search_evaluate(state, s->sub2, msgno, buf))
 	      goto zero;
 	}
     }
 
     if (searchargs->body || searchargs->text ||
 	searchargs->cache_atleast > record.cache_version) {
-	if (!msgfile->size) { /* Map the message in if we haven't before */
-	    if (mailbox_map_message(state->mailbox, record.uid,
-				    &msgfile->base, &msgfile->size)) {
+	if (!buf->len) { /* Map the message in if we haven't before */
+	    if (mailbox_map_record(state->mailbox, &record, buf))
 		goto zero;
-	    }
 	}
 
 	h = searchargs->header_name;
 	for (l = searchargs->header; l; (l = l->next), (h = h->next)) {
-	    if (!index_searchheader(h->s, l->s, l->p, msgfile,
+	    if (!index_searchheader(h->s, l->s, l->p, buf,
 				    record.header_size)) goto zero;
 	}
 
@@ -3865,11 +3862,11 @@ static int index_search_evaluate(struct index_state *state,
 	    goto zero;
 
 	for (l = searchargs->body; l; l = l->next) {
-	    if (!index_searchmsg(l->s, l->p, msgfile, 1,
+	    if (!index_searchmsg(l->s, l->p, buf, 1,
 				 cacheitem_base(&record, CACHE_SECTION))) goto zero;
 	}
 	for (l = searchargs->text; l; l = l->next) {
-	    if (!index_searchmsg(l->s, l->p, msgfile, 0,
+	    if (!index_searchmsg(l->s, l->p, buf, 0,
 				 cacheitem_base(&record, CACHE_SECTION))) goto zero;
 	}
     }
@@ -3884,12 +3881,8 @@ static int index_search_evaluate(struct index_state *state,
     retval = 1;
 
 zero:
-
     /* unmap if we mapped it */
-    if (localmap.size) {
-	mailbox_unmap_message(state->mailbox, record.uid,
-			      &localmap.base, &localmap.size);
-    }
+    buf_free(&localbuf);
 
     return retval;
 }
@@ -3900,7 +3893,7 @@ zero:
  */
 static int index_searchmsg(char *substr,
 			   comp_pat *pat,
-			   struct mapfile *msgfile,
+			   struct buf *buf,
 			   int skipheader,
 			   const char *cachestr)
 {
@@ -3909,9 +3902,9 @@ static int index_searchmsg(char *substr,
     unsigned long start;
     int len, charset, encoding;
     char *p;
-    
+
     /* Won't find anything in a truncated file */
-    if (msgfile->size == 0) return 0;
+    if (buf->len == 0) return 0;
 
     while (partsleft--) {
 	subparts = CACHE_ITEM_BIT32(cachestr);
@@ -3925,7 +3918,7 @@ static int index_searchmsg(char *substr,
 	    else {
 		len = CACHE_ITEM_BIT32(cachestr + CACHE_ITEM_SIZE_SKIP);
 		if (len > 0) {
-		    p = index_readheader(msgfile->base, msgfile->size,
+		    p = index_readheader(buf->s, buf->len,
 					 CACHE_ITEM_BIT32(cachestr),
 					 len);
 		    if (p) {
@@ -3942,10 +3935,10 @@ static int index_searchmsg(char *substr,
 		charset = CACHE_ITEM_BIT32(cachestr+4*4) >> 16;
 		encoding = CACHE_ITEM_BIT32(cachestr+4*4) & 0xff;
 
-		if (start < msgfile->size && len > 0 &&
+		if (start < buf->len && len > 0 &&
 		    charset >= 0 && charset < 0xffff) {
 		    if (charset_searchfile(substr, pat,
-					   msgfile->base + start,
+					   buf->s + start,
 					   len, charset, encoding, charset_flags)) return 1;
 		}
 		cachestr += 5*4;
@@ -3962,7 +3955,7 @@ static int index_searchmsg(char *substr,
 static int index_searchheader(char *name,
 			      char *substr,
 			      comp_pat *pat,
-			      struct mapfile *msgfile,
+			      struct buf *buf,
 			      int size)
 {
     char *p;
@@ -3970,7 +3963,7 @@ static int index_searchheader(char *name,
 
     strarray_append(&header, name);
 
-    p = index_readheader(msgfile->base, msgfile->size, 0, size);
+    p = index_readheader(buf->s, buf->len, 0, size);
     index_pruneheader(p, &header, 0);
     strarray_fini(&header);
 
@@ -4027,12 +4020,12 @@ static int index_searchcacheheader(struct index_state *state, uint32_t msgno,
    we call charset_extractfile to send the entire text out to 'receiver'.
    Keep this in sync with index_searchmsg! */
 static void index_getsearchtextmsg(struct index_state *state,
-				   int uid,
+				   struct index_record *record,
 				   index_search_text_receiver_t receiver,
 				   void *rock,
 				   char const *cachestr)
 {
-    struct mapfile msgfile = MAPFILE_INITIALIZER;
+    struct buf buf = BUF_INITIALIZER;
     int partsleft = 1;
     int subparts;
     unsigned long start;
@@ -4040,12 +4033,12 @@ static void index_getsearchtextmsg(struct index_state *state,
     int partcount = 0;
     char *p, *q;
     struct mailbox *mailbox = state->mailbox;
-  
-    if (mailbox_map_message(mailbox, uid, &msgfile.base, &msgfile.size))
+
+    if (mailbox_map_record(mailbox, record, &buf))
 	return;
 
     /* Won't find anything in a truncated file */
-    if (msgfile.size > 0) {
+    if (buf.len > 0) {
 	while (partsleft--) {
 	    subparts = CACHE_ITEM_BIT32(cachestr);
 	    cachestr += 4;
@@ -4056,19 +4049,19 @@ static void index_getsearchtextmsg(struct index_state *state,
 
 		len = CACHE_ITEM_BIT32(cachestr+4);
 		if (len > 0) {
-		    p = index_readheader(msgfile.base, msgfile.size,
+		    p = index_readheader(buf.s, buf.len,
 					 CACHE_ITEM_BIT32(cachestr),
 					 len);
 		    if (p) {
 			/* push search normalised here */
 			q = charset_decode_mimeheader(p, charset_flags);
 			if (partcount == 1) {
-			    receiver(uid, SEARCHINDEX_PART_HEADERS,
+			    receiver(record->uid, SEARCHINDEX_PART_HEADERS,
 				     SEARCHINDEX_CMD_STUFFPART, q, strlen(q), rock);
-			    receiver(uid, SEARCHINDEX_PART_BODY,
+			    receiver(record->uid, SEARCHINDEX_PART_BODY,
 				     SEARCHINDEX_CMD_BEGINPART, NULL, 0, rock);
 			} else {
-			    receiver(uid, SEARCHINDEX_PART_BODY,
+			    receiver(record->uid, SEARCHINDEX_PART_BODY,
 				 SEARCHINDEX_CMD_APPENDPART, q, strlen(q), rock);
 			}
 			free(q);
@@ -4082,9 +4075,9 @@ static void index_getsearchtextmsg(struct index_state *state,
 		    charset = CACHE_ITEM_BIT32(cachestr+4*4) >> 16;
 		    encoding = CACHE_ITEM_BIT32(cachestr+4*4) & 0xff;
 
-		    if (start < msgfile.size && len > 0) {
-		      charset_extractfile(receiver, rock, uid,
-					  msgfile.base + start,
+		    if (start < buf.len && len > 0) {
+		      charset_extractfile(receiver, rock, record->uid,
+					  buf.s + start,
 					  len, charset, encoding, charset_flags);
 		    }
 		    cachestr += 5*4;
@@ -4092,11 +4085,11 @@ static void index_getsearchtextmsg(struct index_state *state,
 	    }
 	}
 
-	receiver(uid, SEARCHINDEX_PART_BODY,
+	receiver(record->uid, SEARCHINDEX_PART_BODY,
 		 SEARCHINDEX_CMD_ENDPART, NULL, 0, rock);
     }
 
-    mailbox_unmap_message(mailbox, uid, &msgfile.base, &msgfile.size);
+    buf_free(&buf);
 }
 
 EXPORTED void index_getsearchtext_single(struct index_state *state, uint32_t msgno,
@@ -4115,7 +4108,7 @@ EXPORTED void index_getsearchtext_single(struct index_state *state, uint32_t msg
     if (mailbox_cacherecord(mailbox, &record))
 	return;
 
-    index_getsearchtextmsg(state, record.uid, receiver, rock,
+    index_getsearchtextmsg(state, &record, receiver, rock,
 			   cacheitem_base(&record, CACHE_SECTION));
 
     charset_extractitem(receiver, rock, record.uid,
@@ -5718,52 +5711,34 @@ EXPORTED extern struct nntp_overview *index_overview(struct index_state *state,
 EXPORTED extern char *index_getheader(struct index_state *state,
 				      uint32_t msgno, char *hdr)
 {
-    static const char *msg_base = 0;
-    static size_t msg_size = 0;
+    static struct buf staticbuf = BUF_INITIALIZER;
     strarray_t headers = STRARRAY_INITIALIZER;
-    static char *alloc = NULL;
-    static unsigned allocsize = 0;
-    unsigned size;
-    char *buf;
     struct mailbox *mailbox = state->mailbox;
     struct index_record record;
+    char *buf;
 
     if (index_reload_record(state, msgno, &record))
 	return NULL;
 
-    if (msg_base) {
-	mailbox_unmap_message(NULL, 0, &msg_base, &msg_size);
-	msg_base = 0;
-	msg_size = 0;
-    }
-
     /* see if the header is cached */
     if (mailbox_cached_header(hdr) != BIT32_MAX &&
         !mailbox_cacherecord(mailbox, &record)) {
-    
-	size = cacheitem_size(&record, CACHE_HEADERS);
-	if (allocsize < size+2) {
-	    allocsize = size+100;
-	    alloc = xrealloc(alloc, allocsize);
-	}
-
-	memcpy(alloc, cacheitem_base(&record, CACHE_HEADERS), size);
-	alloc[size] = '\0';
-
-	buf = alloc;
+	buf_copy(&staticbuf, cacheitem_buf(&record, CACHE_HEADERS));
     }
     else {
 	/* uncached header */
-	if (mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size))
+	struct buf msgbuf = BUF_INITIALIZER;
+	if (mailbox_map_record(mailbox, &record, &msgbuf))
 	    return NULL;
-
-	buf = index_readheader(msg_base, msg_size, 0, record.header_size);
+	buf_setcstr(&staticbuf, index_readheader(msgbuf.s, msgbuf.len, 0, record.header_size));
+	buf_free(&msgbuf);
     }
 
     strarray_append(&headers, hdr);
-    index_pruneheader(buf, &headers, NULL);
+    index_pruneheader(staticbuf.s, &headers, NULL);
     strarray_fini(&headers);
 
+    buf = staticbuf.s;
     if (*buf) {
 	buf += strlen(hdr) + 1; /* skip header: */
 	massage_header(buf);

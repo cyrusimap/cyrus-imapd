@@ -44,7 +44,7 @@ dnl configure.ac for the Cyrus imapd
 dnl
 
 
-AC_INIT([cyrus-imapd], [2.5.0], [http://bugzilla.cyrusimap.org],,[http://www.cyrusimap.org])
+AC_INIT([cyrus-imapd], [3.0], [http://bugzilla.cyrusimap.org],,[http://www.cyrusimap.org])
 AC_PREREQ([2.63])
 AC_CONFIG_SRCDIR([imap/imapd.c])
 AC_CONFIG_HEADERS(config.h)
@@ -184,9 +184,6 @@ else
   AC_MSG_ERROR(The Cyrus IMAPD requires support for long long int)
 fi
 
-CMU_C___ATTRIBUTE__
-CMU_C_FPIC
-
 dnl check for -R, etc. switch
 CMU_GUESS_RUNPATH_SWITCH
 
@@ -232,57 +229,6 @@ AC_FUNC_VPRINTF
 
 dnl function for doing each of the database backends
 dnl parameters: backend name, variable to set, withval
-
-dnl Berkeley DB Detection
-
-AC_ARG_WITH(bdb,
-	[AS_HELP_STRING([--with-bdb=DIR], [use Berkeley DB (in DIR) [yes]])],
-	with_bdb=$withval, with_bdb="yes")
-
-dnl support old-style
-AC_ARG_WITH(dbdir,, with_bdb=$withval)
-
-case "$with_bdb" in
-  no)
-	use_berkeley="no"
-	;;
-  yes)
-	use_berkeley="yes"
-	with_bdb_lib=none
-	with_bdb_inc=none
-	;;
-  *)
-	use_berkeley="yes"
-	with_bdb_lib="$with_bdb/lib"
-	with_bdb_inc="$with_bdb/include"
-	;;
-esac
-
-if test "$use_berkeley" != "no"; then
-  CYRUS_BERKELEY_DB_CHK()
-
-  if test "$dblib" = "no"; then
-    AC_MSG_ERROR([Berkeley DB 3.x or later was not found.  You may need to 
-    supply the --with-bdb-libdir or --with-bdb-incdir configure options.])
-  fi
-
-  if test "$with_bdb_lib" != "none"; then
-    CMU_ADD_LIBPATH($with_bdb_lib)
-  fi
-
-  BDB_INC=${BDB_INCADD}
-  BDB_LIB=${BDB_LIBADD}
-  AC_SUBST(BDB_INC)
-  AC_SUBST(BDB_LIB)
-
-  LIBS="${LIBS} ${BDB_LIBADD}"
-  CPPFLAGS="${BDB_INCADD} ${CPPFLAGS}"
-  AC_DEFINE(HAVE_BDB,[],[Build in Berkeley DB support?])
-fi
-AM_CONDITIONAL([USE_BERKELEY], [test "$use_berkeley" != "no"])
-
-dnl End Berkeley DB Detection
-
 
 dnl SQL DB Detection
 
@@ -1656,11 +1602,6 @@ AH_BOTTOM([
 #  endif
 #endif
 
-#ifndef HAVE___ATTRIBUTE__
-/* Can't use attributes... */
-#define __attribute__(foo)
-#endif
-
 #ifndef HAVE_SOCKLEN_T
 typedef unsigned int socklen_t;
 #endif
@@ -1828,7 +1769,6 @@ External dependencies:
    pcre:               $cyrus_cv_pcre_utf8
 
 Database support:
-   bdb:                $use_berkeley
    mysql:              $with_mysql
    postgresql:         $use_pgsql
    sqlite:             $use_sqlite

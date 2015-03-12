@@ -1345,7 +1345,7 @@ static int sync_send_file(struct mailbox *mailbox,
 
     /* we'll trust that it exists - if not, we'll bail later,
      * but right now we're under locks, so be fast */
-    fname = mailbox_message_fname(mailbox, record->uid);
+    fname = mailbox_record_fname(mailbox, record);
     if (!fname) return IMAP_MAILBOX_BADNAME;
 
     dlist_setfile(kupload, "MESSAGE", mailbox->part,
@@ -1565,7 +1565,7 @@ int sync_append_copyfile(struct mailbox *mailbox,
 	return IMAP_IOERROR;
     }
 
-    destname = mailbox_message_fname(mailbox, record->uid);
+    destname = mailbox_record_fname(mailbox, record);
     cyrus_mkdir(destname, 0755);
     r = mailbox_copyfile(fname, destname, 0);
     if (r) {

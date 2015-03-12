@@ -129,13 +129,6 @@ struct copyargs {
     int msgalloc;
 };
 
-struct mapfile {
-    const char *base;
-    size_t size;
-};
-
-#define MAPFILE_INITIALIZER { NULL, 0 }
-
 typedef struct msgdata {
     bit32 uid;                  /* UID for output purposes */
     uint32_t msgno;		/* message number */

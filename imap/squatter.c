@@ -373,8 +373,8 @@ static void stats_callback(void *closure __attribute__ ((unused)),
 static int squat_single(struct index_state *state, int incremental)
 {
     struct mailbox *mailbox = state->mailbox;
-    char *fname;
-    char *newfname;
+    const char *fname;
+    const char *newfname;
     SquatStats stats;
     SquatOptions options;
     SquatReceiverData data;
@@ -531,7 +531,7 @@ static int index_me(char *name, int matchlen __attribute__((unused)),
     mbentry_t *mbentry = NULL;
     struct index_state *state = NULL;
     int r;
-    char *fname;
+    const char *fname;
     struct stat sbuf;
     char extname[MAX_MAILBOX_BUFFER];
     int use_annot = *((int *) rock);

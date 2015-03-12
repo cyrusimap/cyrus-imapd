@@ -297,10 +297,10 @@ EXPORTED int URLtoMailbox(char *dst, const char *src)
  *  dst can be the same location as src,
  *  since the decoded length will be shorter than the encoded length
  */
-static int decode_url(char *dst, char *src)
+static int decode_url(char *dst, const char *src)
 {
     unsigned char c;
-    
+
     while ((c = (unsigned char)*src) != '\0') {
         ++src;
         /* undo hex-encoding */
@@ -342,19 +342,19 @@ EXPORTED int imapurl_fromURL(struct imapurl *url, const char *s)
 	char *se;
 	char *at;
 	char *mbox = NULL;
-	
+
 	if (!strncmp(src, "imap://", 7)) { /* absolute URL */
 	    src += 7; /* skip imap:// */
 	    se = strchr(src, '/');
 	    if (se == NULL) return -1;
 	    at = strchr(src, '@');
-	
+
 	    if (at) {
 		*at = '\0';
+		r = decode_url(src, src);
 		url->user = src;
-		r = decode_url((char *) url->user, (char *) url->user);
 		if (r) return r;
-		src = at + 1; 
+		src = at + 1;
 	    }
 	    *se = '\0';
 	    url->server = src;
@@ -449,7 +449,7 @@ EXPORTED int imapurl_fromURL(struct imapurl *url, const char *s)
     return 0;
 }
 
-EXPORTED void imapurl_toURL(char *dst, struct imapurl *url)
+EXPORTED void imapurl_toURL(char *dst, const struct imapurl *url)
 {
 
     if (url->server) {

@@ -93,7 +93,7 @@ static SSL *tls_conn = NULL;
 extern int sieved_timeout;
 
 /* from elsewhere */
-void fatal(const char *s, int code);
+void fatal(const char *s, int code) __attribute__((noreturn));
 extern int sieved_logfd;
 extern struct backend *backend;
 
@@ -956,7 +956,8 @@ static int cmd_starttls(struct protstream *sieved_out, struct protstream *sieved
 			authenticated, sasl_ssf);
 }
 #else
-static int cmd_starttls(struct protstream *sieved_out, struct protstream *sieved_in)
+static int cmd_starttls(struct protstream *sieved_out __attribute__((unused)),
+                        struct protstream *sieved_in __attribute__((unused)))
 {
     fatal("cmd_starttls() called, but no OpenSSL", EC_SOFTWARE);
 }

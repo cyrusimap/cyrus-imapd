@@ -1069,6 +1069,7 @@ static void authresult(struct imclient *imclient __attribute__((unused)),
 }
 
 /* Command completion for starttls */
+#ifdef HAVE_SSL
 static void tlsresult(struct imclient *imclient __attribute__((unused)),
 		      void *rock,
 		      struct imclient_reply *reply)
@@ -1086,6 +1087,7 @@ static void tlsresult(struct imclient *imclient __attribute__((unused)),
     }
     else result->replytype = replytype_bad;
 }
+#endif /* HAVE_SSL */
 
 
 static sasl_security_properties_t *make_secprops(int min,int max)
@@ -1900,13 +1902,13 @@ EXPORTED int imclient_havetls(void)
 #endif
 }
 
+#ifdef HAVE_SSL
 EXPORTED int imclient_starttls(struct imclient *imclient,
 			     char *cert_file,
 			     char *key_file,
                              char *CAfile,
                              char *CApath)
 {
-#ifdef HAVE_SSL
   int result;
   struct authresult theresult;
   sasl_ssf_t ssf;
@@ -1958,8 +1960,15 @@ EXPORTED int imclient_starttls(struct imclient *imclient,
   if (result!=SASL_OK) return 1;
 
   return 0;
+}
 #else
+EXPORTED int imclient_starttls(struct imclient *imclient __attribute__((unused)),
+			     char *cert_file __attribute__((unused)),
+			     char *key_file __attribute__((unused)),
+                             char *CAfile __attribute__((unused)),
+                             char *CApath __attribute__((unused)))
+{
   printf("[ TLS support not present (imclient_starttls) ]\n");
   return 1;
-#endif /* HAVE_SSL */
 }
+#endif /* HAVE_SSL */

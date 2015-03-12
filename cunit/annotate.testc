@@ -1373,13 +1373,14 @@ static void test_broken_definitions_file_8(void)
 {
     set_annotation_definitions(
 	EXENTRY",server,string,\n");
-    CU_SYSLOG_MATCH("short line");
+    CU_SYSLOG_MATCH("invalid annotation attributes.*");
 
     annotate_init(NULL, NULL);
     /* if we got here, we didn't fatal() */
 
     /* but we did complain to syslog */
-    CU_ASSERT_SYSLOG(/*all*/0, 1);
+    /* Please note that this one complains to syslog twice */
+    CU_ASSERT_SYSLOG(/*all*/0, 2);
 }
 
 static void test_broken_definitions_file_9(void)

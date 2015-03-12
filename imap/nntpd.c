@@ -1888,7 +1888,8 @@ static void build_xref(const char *msgid, struct buf *buf, int body_only)
 static void cmd_article(int part, char *msgid, unsigned long uid)
 {
     int msgno, by_msgid = (msgid != NULL);
-    char *fname;
+    struct index_record record;
+    const char *fname;
     FILE *msgfile;
 
     msgno = index_finduid(group_state, uid);
@@ -1897,7 +1898,11 @@ static void cmd_article(int part, char *msgid, unsigned long uid)
 	return;
     }
 
-    fname = mailbox_message_fname(group_state->mailbox, uid);
+    if (mailbox_find_index_record(group_state->mailbox, uid, &record)) {
+	prot_printf(nntp_out, "502 Could not read message file\r\n");
+	return;
+    }
+    fname = mailbox_record_fname(group_state->mailbox, &record);
 
     msgfile = fopen(fname, "r");
     if (!msgfile) {

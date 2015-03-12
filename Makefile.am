@@ -111,7 +111,8 @@ check_PROGRAMS =
 service_PROGRAMS =
 user_PROGRAMS =
 CLEANFILES =
-EXTRA_DIST =
+EXTRA_DIST = \
+	$(wildcard tools/vzic/*)
 
 if COM_ERR
 COMPILE_ET_DEP = com_err/et/compile_et
@@ -971,14 +972,6 @@ nodist_imap_libcyrus_imap_la_SOURCES += \
 	imap/http_err.c \
 	imap/tz_err.c
 
-SUBDIRS += \
-	tools/vzic/
-
-else # HTTPD
-
-EXTRA_DIST += \
-	$(wildcard tools/vzic/*)
-
 endif # HTTPD
 
 imap_lmtpd_SOURCES = \
@@ -1196,9 +1189,6 @@ lib_libcyrus_la_SOURCES = \
 	lib/times.c \
 	lib/tok.c \
 	lib/wildmat.c
-if USE_BERKELEY
-lib_libcyrus_la_SOURCES += lib/cyrusdb_berkeley.c
-endif
 if USE_SQL
 lib_libcyrus_la_SOURCES += lib/cyrusdb_sql.c
 endif
@@ -1260,6 +1250,8 @@ lib/chartable.c: lib/mkchartable.pl lib/charset/unifix.txt \
 	@echo "### Building chartables..."
 	perl $(top_srcdir)/lib/mkchartable.pl -m $(top_srcdir)/lib/charset/unifix.txt -m $(top_srcdir)/lib/charset/UnicodeData.txt -a $(top_srcdir)/lib/charset/aliases.txt -o $@ $(top_srcdir)/lib/charset/*.t || (rm -f $@ && exit 1)
 	@echo "### Done building chartables."
+
+lib/imapopts.h: lib/imapopts.c
 
 lib/imapopts.c: lib/imapoptions tools/config2header
 	$(top_srcdir)/tools/config2header CC="$(CC)" $(top_builddir)/lib/imapopts.c $(top_builddir)/lib/imapopts.h < $(top_srcdir)/lib/imapoptions
@@ -1484,32 +1476,25 @@ timsieved_timsieved_LDADD = sieve/libcyrus_sieve.la $(LD_SERVER_ADD)
 # contribute fixes to. Needed when building with the following:
 # CFLAGS="-g -fPIC -W -Wall -Wextra -Werror"
 lex-fix: sieve/addr-lex.c sieve/sieve-lex.c
-	sed -r -i \
-		-e 's/int yyl;/yy_size_t yyl;/' \
-		-e 's/\tint i;/\tyy_size_t i;/' \
-		sieve/addr-lex.c \
-		sieve/sieve-lex.c
+	grep -E '^yy_size_t sieveleng;$$' sieve/sieve-lex.c && \
+    	sed -r -i -e 's/int yyl;/yy_size_t yyl;/g' sieve/sieve-lex.c || :
+
+	grep -E ' yy_size_t  _yybytes_len ' sieve/sieve-lex.c && \
+    	sed -r -i -s 's/\tint i;/\tyy_size_t i;/g' sieve/sieve-lex.c || :
+
+	grep -E ' yy_size_t  _yybytes_len ' sieve/addr-lex.c && \
+    	sed -r -i -s 's/\tint i;/\tyy_size_t i;/g' sieve/addr-lex.c || :
 
 GIT_VERSION = $(PACKAGE_VERSION)@git_version@
 
 snapshot::
-	@echo "creating snapshot $(GIT_VERSION)"
+	@echo "Creating snapshot $(PACKAGE_NAME)-$(GIT_VERSION)"
 	@$(MKDIR_P) snapshot
 	@git archive --format=tar --prefix=$(PACKAGE_NAME)-$(GIT_VERSION)/ HEAD | tar -C snapshot/ -x -f -
 	@echo "/* $(PACKAGE_NAME) $(GIT_VERSION) */" > snapshot/$(PACKAGE_NAME)-$(GIT_VERSION)/xversion.h
 	@echo "#define _CYRUS_VERSION \"$(GIT_VERSION)\"" >> snapshot/$(PACKAGE_NAME)-$(GIT_VERSION)/xversion.h
 	@echo "#define CYRUS_GITVERSION \"`git log --abbrev=8 --pretty=\"format:%h %ci\" -1 | cut -d\" \" -f1,2`\"" >> snapshot/$(PACKAGE_NAME)-$(GIT_VERSION)/xversion.h
 	@touch snapshot/$(PACKAGE_NAME)-$(GIT_VERSION)/xversion
-	@cd snapshot/$(PACKAGE_NAME)-$(GIT_VERSION) ; sh SMakefile
-	@for d in $(DIST_SUBDIRS); \
-	do \
-	(cd snapshot/$(PACKAGE_NAME)-$(GIT_VERSION)/$$d; \
-	if [ -f Makefile.dist ]; then \
-	echo "### Making" snapshot "in" `pwd`; \
-	$(MAKE) $(MFLAGS) YACC='$(YACC)' LEX='$(LEX)' \
-	COMPILE_ET='$(COMPILE_ET)' -f Makefile.dist dist ; \
-	fi) || exit 1; \
-	done
 	@echo "creating tarfile"
 	tar -C snapshot -c -f - $(PACKAGE_NAME)-$(GIT_VERSION) | gzip -9 > $(PACKAGE_NAME)-$(GIT_VERSION).tar.gz
 	@rm -rf snapshot

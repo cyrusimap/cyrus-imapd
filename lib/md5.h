@@ -49,7 +49,7 @@
 #include <sasl/md5.h>
 
 #define MD5Init			    _sasl_MD5Init
-#define MD5Update		    _sasl_MD5Update
+#define MD5Update(c,d,l)	    _sasl_MD5Update(c, (unsigned char*)d, l)
 #define MD5Final		    _sasl_MD5Final
 
 #endif /* !HAVE_SSL */

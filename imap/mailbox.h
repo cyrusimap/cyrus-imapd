@@ -427,21 +427,16 @@ extern mailbox_notifyproc_t *mailbox_get_updatenotifier(void);
 
 /* file names on disk */
 #define META_FNAME_NEW 1
-extern char *mailbox_meta_fname(struct mailbox *mailbox, int metafile);
-extern char *mailbox_meta_newfname(struct mailbox *mailbox, int metafile);
+extern const char *mailbox_meta_fname(struct mailbox *mailbox, int metafile);
+extern const char *mailbox_meta_newfname(struct mailbox *mailbox, int metafile);
 extern int mailbox_meta_rename(struct mailbox *mailbox, int metafile);
 
-extern char *mailbox_message_fname(struct mailbox *mailbox,
-				   unsigned long uid);
-extern char *mailbox_datapath(struct mailbox *mailbox);
+extern const char *mailbox_record_fname(struct mailbox *mailbox,
+					struct index_record *record);
+extern const char *mailbox_datapath(struct mailbox *mailbox);
 
 /* map individual messages in */
-extern int mailbox_map_message(struct mailbox *mailbox, unsigned long uid,
-				  const char **basep, size_t *lenp);
 extern int mailbox_map_record(struct mailbox *mailbox, struct index_record *record, struct buf *buf);
-extern void mailbox_unmap_message(struct mailbox *mailbox,
-				  unsigned long uid,
-				  const char **basep, size_t *lenp);
 
 /* cache record API */
 int mailbox_ensure_cache(struct mailbox *mailbox, size_t len);

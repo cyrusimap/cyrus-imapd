@@ -2363,11 +2363,17 @@ int main(int argc, char **argv)
     int result;
     int errflg = 0;
     
+#ifdef HAVE_SSL
+    #define WITH_SSL_ONLY /**/
+#else
+    #define WITH_SSL_ONLY __attribute__((unused))
+#endif
+
     char *prog;
-    char *tls_keyfile="";
+    char *tls_keyfile WITH_SSL_ONLY = "";
     char *port = "", *prot = "";
     int run_stress_test=0;
-    int dotls=0, dossl=0, docompress=0;
+    int dotls WITH_SSL_ONLY = 0, dossl=0, docompress=0;
     unsigned long capabilities = 0;
     char str[1024];
     const char *pidfile = NULL;
@@ -2375,6 +2381,8 @@ int main(int argc, char **argv)
     int reauth = 1;
     int dochallenge = 0, noinitresp = 0;
     char *val;
+
+#undef WITH_SSL_ONLY
 
     if (!construct_hash_table(&confighash, CONFIGHASHSIZE, 1)) {
 	imtest_fatal("could not construct config hash table");

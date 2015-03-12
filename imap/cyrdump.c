@@ -166,6 +166,7 @@ static int dump_me(char *name, int matchlen __attribute__((unused)),
     unsigned *uids;
     unsigned *uidseq;
     int i, n, numuids;
+    unsigned msgno;
 
     r = index_open(name, NULL, &state);
     if (r) {
@@ -225,31 +226,46 @@ static int dump_me(char *name, int matchlen __attribute__((unused)),
 
     printf("</imapdump>\n");
 
-    for (i = 0; i < numuids; i++) {
-	const char *base;
-	size_t len;
+    i = 0;
+    while (uids[i] < irec->incruid && i < numuids) {
+	/* already dumped this message */
+	/* xxx could do binary search to get to the first
+	   undumped uid */
+	i++;
+    }
 
-	if (uids[i] < irec->incruid) {
-	    /* already dumped this message */
-	    /* xxx could do binary search to get to the first
-	       undumped uid */
+    for (msgno = 1; msgno <= state->exists; msgno++) {
+	struct index_map *im = &state->map[msgno-1];
+	struct buf buf = BUF_INITIALIZER;
+	struct index_record record;
+
+	while (im->uid > uids[i] && i < numuids)
+	    i++;
+	if (i >= numuids)
+	    break;
+
+	if (im->uid < uids[i])
 	    continue;
-	}
+
+	/* got a match */
+	i++;
+	if (mailbox_read_index_record(state->mailbox, im->recno, &record))
+	    continue;
 
 	printf("\n--%s\n", boundary);
 	printf("Content-Type: message/rfc822\n");
 	printf("Content-ID: %d\n", uids[i]);
 	printf("\n");
-	r = mailbox_map_message(state->mailbox, uids[i], &base, &len);
+	r = mailbox_map_record(state->mailbox, &record, &buf);
 	if (r) {
 	    if (verbose) {
-		printf("error mapping message %d: %s\n", uids[i], 
+		printf("error mapping message %u: %s\n", record.uid,
 		       error_message(r));
 	    }
 	    break;
 	}
-	fwrite(base, 1, len, stdout);
-	mailbox_unmap_message(state->mailbox, uids[i], &base, &len);
+	fwrite(buf.s, 1, buf.len, stdout);
+	buf_free(&buf);
     }
 
     printf("\n--%s--\n", boundary);

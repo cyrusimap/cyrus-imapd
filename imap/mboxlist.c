@@ -1356,7 +1356,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 
     /* special case: same mailbox, must be a partition move */
     if (!strcmp(oldname, newname)) {
-	char *oldpath = mailbox_datapath(oldmailbox);
+	const char *oldpath = mailbox_datapath(oldmailbox);
 
 	/* Only admin can move mailboxes between partitions */
 	if (!isadmin) {
@@ -1554,6 +1554,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 		    mboxevent_extract_mailbox(mboxevent, newmailbox);
 		    mboxevent_extract_old_mailbox(mboxevent, oldmailbox);
 		}
+
 		mboxevent_set_access(mboxevent, NULL, NULL, userid, newmailbox->name, 1);
 	    }
 
@@ -2838,10 +2839,15 @@ EXPORTED int mboxlist_setquotas(const char *root,
 	    if (q.limits[res] != newquotas[res]) {
 		underquota = 0;
 
-		/* prepare a QuotaChange event notification */
-		if (quotachange_event == NULL)
+		/* Prepare a QuotaChange event notification *now*.
+		 * 
+		 * This is to ensure the QuotaChange is emitted before the
+		 * subsequent QuotaWithin (if the latter becomes applicable).
+		 */
+		if (quotachange_event == NULL) {
 		    quotachange_event = mboxevent_enqueue(EVENT_QUOTA_CHANGE,
 		                                          &mboxevents);
+		}
 
 		/* prepare a QuotaWithin event notification if now under quota */
 		if (quota_is_overquota(&q, res, NULL) &&
@@ -2860,10 +2866,21 @@ EXPORTED int mboxlist_setquotas(const char *root,
 		    mboxevent_extract_quota(quotawithin_event, &q, res);
 	    }
 	}
-	if (changed)
+	if (changed) {
 	    r = quota_write(&q, &tid);
+
+	    if (quotachange_event == NULL) {
+		quotachange_event = mboxevent_enqueue(EVENT_QUOTA_CHANGE, &mboxevents);
+	    }
+
+	    for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+		mboxevent_extract_quota(quotachange_event, &q, res);
+	    }
+	}
+
 	if (!r)
 	    quota_commit(&tid);
+
 	goto done;
     }
 
@@ -2916,10 +2933,11 @@ EXPORTED int mboxlist_setquotas(const char *root,
     if (r) goto done;
 
     /* prepare a QuotaChange event notification */
-    quotachange_event = mboxevent_enqueue(EVENT_QUOTA_CHANGE, &mboxevents);
-    for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
-    	if (q.limits[res] != QUOTA_UNLIMITED)
-    	    mboxevent_extract_quota(quotachange_event, &q, res);
+    if (quotachange_event == NULL)
+	quotachange_event = mboxevent_enqueue(EVENT_QUOTA_CHANGE, &mboxevents);
+
+    for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+	mboxevent_extract_quota(quotachange_event, &q, res);
     }
 
     quota_commit(&tid);
