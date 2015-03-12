@@ -217,15 +217,15 @@ extern int cyrusdb_copyfile(const char *srcname, const char *dstname);
 extern int cyrusdb_convert(const char *fromfname, const char *tofname,
 			   const char *frombackend, const char *tobackend);
 
-int cyrusdb_dumpfile(struct db *db,
-		     const char *prefix, size_t prefixlen,
-		     FILE *f,
-		     struct txn **tid);
-int cyrusdb_truncate(struct db *db,
-		     struct txn **tid);
-int cyrusdb_undumpfile(struct db *db,
-		       FILE *f,
-		       struct txn **tid);
+extern int cyrusdb_dumpfile(struct db *db,
+			    const char *prefix, size_t prefixlen,
+			    FILE *f,
+			    struct txn **tid);
+extern int cyrusdb_truncate(struct db *db,
+			    struct txn **tid);
+extern int cyrusdb_undumpfile(struct db *db,
+			      FILE *f,
+			      struct txn **tid);
 
 
 extern const char *cyrusdb_detect(const char *fname);
