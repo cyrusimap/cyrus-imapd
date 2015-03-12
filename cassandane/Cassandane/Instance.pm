@@ -340,6 +340,35 @@ sub set_config
     map { $_->set_config($conf); } (values %{$self->{services}}, values %{$self->{daemons}});
 }
 
+sub _find_binary
+{
+    my ($self, $name) = @_;
+
+    return $name if $name =~ m/^\//;
+
+    my $base = $self->{cyrus_destdir} . $self->{cyrus_prefix};
+    foreach (qw( bin sbin libexec lib cyrus/bin ))
+    {
+	my $dir = "$base/$_";
+	if (opendir my $dh, $dir)
+	{
+	    if (grep { $_ eq $name } readdir $dh) {
+		xlog "Found binary $name in $dir";
+		closedir $dh;
+		return "$dir/$name";
+	    }
+	    closedir $dh;
+	}
+	else
+	{
+	    xlog "Couldn't opendir $dir: $!";
+	    next;
+	}
+    }
+
+    die "Couldn't locate $name under $base";
+}
+
 sub _binary
 {
     my ($self, $name) = @_;
@@ -368,9 +397,7 @@ sub _binary
 	$valground = 1;
     }
 
-    my $bin = $name;
-    $bin = $self->{cyrus_destdir} . $self->{cyrus_prefix} . '/bin/' . $bin
-	unless $bin =~ m/^\//;
+    my $bin = $self->_find_binary($name);
     push(@cmd, $bin);
 
     if (!$valground && $cassini->bool_val('gdb', $name))
