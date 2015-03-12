@@ -115,7 +115,20 @@ static int rscale_cmp(const void *a, const void *b)
 #endif /* HAVE_RSCALE */
 
 
-#ifndef HAVE_MANAGED_ATTACH_PARAMS
+#ifdef HAVE_MANAGED_ATTACH_PARAMS
+
+/* Wrappers to fetch managed attachment parameters by kind */
+
+#define icalproperty_get_filename_parameter(prop) \
+    icalproperty_get_first_parameter(prop, ICAL_FILENAME_PARAMETER)
+
+#define icalproperty_get_managedid_parameter(prop) \
+    icalproperty_get_first_parameter(prop, ICAL_MANAGEDID_PARAMETER)
+
+#define icalproperty_get_size_parameter(prop) \
+    icalproperty_get_first_parameter(prop, ICAL_SIZE_PARAMETER)
+
+#elif defined(HAVE_IANA_PARAMS)
 
 /* Functions to replace those not available in libical < v2.0 */
 
@@ -192,23 +205,47 @@ static void icalparameter_set_size(icalparameter *param, const char *sz)
 #define icalproperty_get_size_parameter(prop) \
     icalproperty_get_iana_parameter_by_name(prop, "SIZE")
 
-#else
+#else /* !HAVE_IANA_PARAMS */
 
-/* Wrappers to fetch managed attachment parameters by kind */
+/* Functions to replace those not available in libical < v0.48 */
 
-#define icalproperty_get_filename_parameter(prop) \
-    icalproperty_get_first_parameter(prop, ICAL_FILENAME_PARAMETER)
+#define icalparameter_new_filename(fname) NULL
 
-#define icalproperty_get_managedid_parameter(prop) \
-    icalproperty_get_first_parameter(prop, ICAL_MANAGEDID_PARAMETER)
+#define icalparameter_set_filename(param, fname) (void) param
 
-#define icalproperty_get_size_parameter(prop) \
-    icalproperty_get_first_parameter(prop, ICAL_SIZE_PARAMETER)
+#define icalparameter_new_managedid(id) NULL
+
+#define icalparameter_get_managedid(param) ""
+
+#define icalparameter_set_managedid(param, id) (void) param
+
+#define icalparameter_new_size(sz) NULL
+
+#define icalparameter_set_size(param, sz) (void) param
+
+#define icalproperty_get_filename_parameter(prop) NULL
+
+#define icalproperty_get_managedid_parameter(prop) NULL
+
+#define icalproperty_get_size_parameter(prop) NULL
 
 #endif /* HAVE_MANAGED_ATTACH_PARAMS */
 
 
-#ifndef HAVE_SCHEDULING_PARAMS
+#ifdef HAVE_SCHEDULING_PARAMS
+
+/* Wrappers to fetch scheduling parameters by kind */
+
+#define icalproperty_get_scheduleagent_parameter(prop) \
+    icalproperty_get_first_parameter(prop, ICAL_SCHEDULEAGENT_PARAMETER)
+
+#define icalproperty_get_scheduleforcesend_parameter(prop) \
+    icalproperty_get_first_parameter(prop, ICAL_SCHEDULEFORCESEND_PARAMETER)
+
+#define icalproperty_get_schedulestatus_parameter(prop) \
+    icalproperty_get_first_parameter(prop, ICAL_SCHEDULESTATUS_PARAMETER)
+
+#elif defined(HAVE_IANA_PARAMS)
 
 /* Functions to replace those not available in libical < v1.0 */
 
@@ -259,18 +296,22 @@ static icalparameter *icalparameter_new_schedulestatus(const char *stat)
 #define icalproperty_get_schedulestatus_parameter(prop) \
     icalproperty_get_iana_parameter_by_name(prop, "SCHEDULE-STATUS")
 
-#else
+#else /* !HAVE_IANA_PARAMS */
 
-/* Wrappers to fetch scheduling parameters by kind */
+/* Functions to replace those not available in libical < v0.48 */
 
-#define icalproperty_get_scheduleagent_parameter(prop) \
-    icalproperty_get_first_parameter(prop, ICAL_SCHEDULEAGENT_PARAMETER)
+#define icalparameter_get_scheduleagent(param) ICAL_SCHEDULEAGENT_NONE
 
-#define icalproperty_get_scheduleforcesend_parameter(prop) \
-    icalproperty_get_first_parameter(prop, ICAL_SCHEDULEFORCESEND_PARAMETER)
+#define icalparameter_get_scheduleforcesend(param) ICAL_SCHEDULEFORCESEND_NONE
 
-#define icalproperty_get_schedulestatus_parameter(prop) \
-    icalproperty_get_first_parameter(prop, ICAL_SCHEDULESTATUS_PARAMETER)
+#define icalparameter_new_schedulestatus(stat) NULL; \
+    (void) stat  /* silence compiler */
+
+#define icalproperty_get_scheduleagent_parameter(prop) NULL
+
+#define icalproperty_get_scheduleforcesend_parameter(prop) NULL
+
+#define icalproperty_get_schedulestatus_parameter(prop) NULL
 
 #endif /* HAVE_SCHEDULING_PARAMS */
 
@@ -786,6 +827,7 @@ static void my_caldav_init(struct buf *serverinfo)
     caldav_init();
     webdav_init();
 
+#ifdef HAVE_IANA_PARAMS
     config_allowsched = config_getenum(IMAPOPT_CALDAV_ALLOWSCHEDULING);
     if (config_allowsched) {
 	namespace_calendar.allow |= ALLOW_CAL_SCHED;
@@ -795,6 +837,9 @@ static void my_caldav_init(struct buf *serverinfo)
 	ical_set_unknown_token_handling_setting(ICAL_ASSUME_IANA_TOKEN);
 #endif
     }
+
+    namespace_calendar.allow |= ALLOW_CAL_ATTACH;
+#endif /* HAVE_IANA_PARAMS */
 
 #ifdef HAVE_TZ_BY_REF
     if (namespace_tzdist.enabled) {
@@ -2254,6 +2299,8 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     icalproperty *aprop, *prop;
     icalparameter *param;
     unsigned op, return_rep;
+
+    if (!(namespace_calendar.allow & ALLOW_CAL_ATTACH)) return HTTP_NOT_ALLOWED;
 
     /* Check ACL for current user */
     if (!(rights & DACL_WRITECONT)) {

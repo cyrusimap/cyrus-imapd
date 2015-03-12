@@ -288,8 +288,10 @@ struct namespace_t *namespaces[] = {
     &namespace_calendar,
     &namespace_freebusy,
     &namespace_addressbook,
+#ifdef HAVE_IANA_PARAMS
     &namespace_ischedule,
     &namespace_domainkey,
+#endif /* HAVE_IANA_PARAMS */
 #endif /* WITH_DAV */
 #ifdef WITH_JSON
     &namespace_jmap,
@@ -1973,8 +1975,11 @@ void response_header(long code, struct transaction_t *txn)
 				", calendar-auto-schedule" : "",
 				(txn->req_tgt.allow & ALLOW_CAL_NOTZ) ?
 				", calendar-no-timezone" : "");
-		    prot_puts(httpd_out, "DAV: calendar-managed-attachments"
-			      ", calendar-managed-attachments-no-recurrence\r\n");
+		    if (txn->req_tgt.allow & ALLOW_CAL_ATTACH) {
+			prot_puts(httpd_out,
+				  "DAV: calendar-managed-attachments, "
+				  "calendar-managed-attachments-no-recurrence\r\n");
+		    }
 
 		    /* Backwards compatibility with older Apple VAV clients */
 		    if ((txn->req_tgt.allow &

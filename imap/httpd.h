@@ -135,8 +135,9 @@ enum {
     ALLOW_CAL_AVAIL =	(1<<8),	/* CalDAV Availability specific features */
     ALLOW_CAL_SCHED =	(1<<9),	/* CalDAV Scheduling specific features */
     ALLOW_CAL_NOTZ =	(1<<10),/* CalDAV TZ by Ref specific features */
-    ALLOW_CARD =	(1<<11),/* CardDAV specific methods/features */
-    ALLOW_ISCHEDULE =	(1<<12)	/* iSchedule specific methods/features */
+    ALLOW_CAL_ATTACH =	(1<<11),/* CalDAV Managed Attachments features */
+    ALLOW_CARD =	(1<<12),/* CardDAV specific methods/features */
+    ALLOW_ISCHEDULE =	(1<<13)	/* iSchedule specific methods/features */
 };
 
 struct auth_scheme_t {
