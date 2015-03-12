@@ -58,9 +58,15 @@ extern const char *lock_method_desc;
 extern int lock_reopen (int fd, const char *filename,
 			struct stat *sbuf, const char **failaction);
 
-extern int lock_blocking (int fd, const char *filename);
-extern int lock_shared (int fd, const char *filename);
-extern int lock_nonblocking(int fd, const char *filename);
+extern int lock_setlock (int fd, int ex, int nb, const char *filename);
 extern int lock_unlock (int fd, const char *filename);
+
+/* compatibility defines for the older API */
+#define lock_blocking(fd, fn) \
+    lock_setlock((fd), /*exclusive*/1, /*blocking*/0, (fn))
+#define lock_nonblocking(fd, fn) \
+    lock_setlock((fd), /*exclusive*/1, /*nonblocking*/1, (fn))
+#define lock_shared(fd, fn) \
+    lock_setlock((fd), /*exclusive*/0, /*nonblocking*/0, (fn))
 
 #endif /* INCLUDED_LOCK_H */

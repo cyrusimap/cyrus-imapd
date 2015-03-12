@@ -106,50 +106,23 @@ EXPORTED int lock_reopen(int fd, const char *filename,
 }
 
 /*
- * Obtain an exclusive lock on 'fd'.
+ * Obtain a lock on 'fd'.  The lock is exclusive if 'exclusive'
+ * is true, otherwise shared.  Normally blocks until a lock is
+ * obtained, but if 'nonblock' is true does not block and instead
+ * fails with errno=EWOUDBLOCK if the lock cannot be obtained.
+ *
  * Returns 0 for success, -1 for failure, with errno set to an
  * appropriate error code.
  */
-EXPORTED int lock_blocking(int fd, const char *filename __attribute__((unused)))
+EXPORTED int lock_setlock(int fd, int exclusive, int nonblock,
+			  const char *filename __attribute__((unused)))
 {
     int r;
+    int op = (exclusive ? LOCK_EX : LOCK_SH);
+    if (nonblock) op |= LOCK_NB;
 
     for (;;) {
-	r = flock(fd, LOCK_EX);
-	if (r != -1) return 0;
-	if (errno == EINTR) continue;
-	return -1;
-    }
-}
-
-/*
- * Obtain a shared lock on 'fd'.
- * Returns 0 for success, -1 for failure, with errno set to an
- * appropriate error code.
- */
-EXPORTED int lock_shared(int fd, const char *filename __attribute__((unused)))
-{
-    int r;
-
-    for (;;) {
-	r = flock(fd, LOCK_SH);
-	if (r != -1) return 0;
-	if (errno == EINTR) continue;
-	return -1;
-    }
-}
-
-/*
- * Attempt to get an exclusive lock on 'fd' without blocking.
- * Returns 0 for success, -1 for failure, with errno set to an
- * appropriate error code.
- */
-EXPORTED int lock_nonblocking(int fd, const char *filename __attribute__((unused)))
-{
-    int r;
-
-    for (;;) {
-	r = flock(fd, LOCK_EX|LOCK_NB);
+	r = flock(fd, op);
 	if (r != -1) return 0;
 	if (errno == EINTR) continue;
 	return -1;
