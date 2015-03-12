@@ -42,7 +42,7 @@ static inline int u64cmp(uint64_t a, uint64_t b)
     return (a < b ? -1 : (a > b ? 1 : 0));
 }
 
-hashu64_table *construct_hashu64_table(hashu64_table *table, size_t size, int use_mpool)
+EXPORTED hashu64_table *construct_hashu64_table(hashu64_table *table, size_t size, int use_mpool)
 {
       assert(table);
       assert(size);
@@ -74,7 +74,7 @@ hashu64_table *construct_hashu64_table(hashu64_table *table, size_t size, int us
 ** or, if there was already an entry for @key, the old data pointer.
 */
 
-void *hashu64_insert(uint64_t key, void *data, hashu64_table *table)
+EXPORTED void *hashu64_insert(uint64_t key, void *data, hashu64_table *table)
 {
       unsigned val = key % table->size;
       bucketu64 *ptr, *newptr;
@@ -155,7 +155,7 @@ void *hashu64_insert(uint64_t key, void *data, hashu64_table *table)
 ** the key is not in the table.
 */
 
-void *hashu64_lookup(uint64_t key, hashu64_table *table)
+EXPORTED void *hashu64_lookup(uint64_t key, hashu64_table *table)
 {
       unsigned val = key % table->size;
       bucketu64 *ptr;
@@ -180,7 +180,7 @@ void *hashu64_lookup(uint64_t key, hashu64_table *table)
 */
 /* Warning: use this function judiciously if you are using memory pools,
  * since it will leak memory until you get rid of the entire hash table */
-void *hashu64_del(uint64_t key, hashu64_table *table)
+EXPORTED void *hashu64_del(uint64_t key, hashu64_table *table)
 {
       unsigned val = key % table->size;
       void *data;
@@ -252,7 +252,7 @@ void *hashu64_del(uint64_t key, hashu64_table *table)
 ** it.
 */
 
-void free_hashu64_table(hashu64_table *table, void (*func)(void *))
+EXPORTED void free_hashu64_table(hashu64_table *table, void (*func)(void *))
 {
       unsigned i;
       bucketu64 *ptr, *temp;
@@ -293,8 +293,9 @@ void free_hashu64_table(hashu64_table *table, void (*func)(void *))
 ** node in the table, passing it the key, the associated data and 'rock'.
 */
 
-void hashu64_enumerate(hashu64_table *table, void (*func)(uint64_t, void *, void *),
-		    void *rock)
+EXPORTED void hashu64_enumerate(hashu64_table *table, 
+				void (*func)(uint64_t, void *, void *),
+				void *rock)
 {
       unsigned i;
       bucketu64 *temp, *temp_next;
