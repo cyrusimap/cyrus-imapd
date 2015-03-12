@@ -249,9 +249,11 @@ static void icalparameter_as_json_object_member(icalparameter *param,
         kind_string = icalparameter_get_xname(param);
 	break;
 
+#ifdef HAVE_IANA_PARAMS
     case ICAL_IANA_PARAMETER:
 	kind_string = icalparameter_get_iana_name(param);
 	break;
+#endif
 
     default:
 	kind_string = icalparameter_kind_to_string(kind);
