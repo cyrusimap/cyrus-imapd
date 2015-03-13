@@ -5364,14 +5364,33 @@ int report_expand_prop(struct transaction_t *txn __attribute__((unused)),
 int report_acl_prin_prop(struct transaction_t *txn, xmlNodePtr inroot,
 			 struct propfind_ctx *fctx)
 {
-    int ret = 0;
+    int ret = 0, r;
     struct request_target_t req_tgt;
-    char *aclstr, *userid, *nextid;
+    mbentry_t *mbentry = NULL;
+    char *userid, *nextid;
     xmlNodePtr cur;
 
     /* Get ACL of resource */
-    http_mlookup(txn->req_tgt.mboxname, NULL, &aclstr, NULL);
-    if (!aclstr) goto done;
+    r = http_mlookup(txn->req_tgt.mboxname, &mbentry, NULL);
+    if (r) {
+	syslog(LOG_ERR, "mlookup(%s) failed: %s",
+	       txn->req_tgt.mboxname, error_message(r));
+	txn->error.desc = error_message(r);
+
+	switch (r) {
+	case IMAP_PERMISSION_DENIED:
+	    ret = HTTP_FORBIDDEN;
+	    break;
+	case IMAP_MAILBOX_NONEXISTENT:
+	    ret = HTTP_NOT_FOUND;
+	    break;
+	default:
+	    ret = HTTP_SERVER_ERROR;
+	    break;
+	}
+
+	goto done;
+    }
 
     /* Generate URL for user principal collection */
     buf_reset(&fctx->buf);
@@ -5395,7 +5414,7 @@ int report_acl_prin_prop(struct transaction_t *txn, xmlNodePtr inroot,
     }
 
     /* Parse the ACL string (userid/rights pairs) */
-    for (userid = aclstr = xstrdup(aclstr); userid; userid = nextid) {
+    for (userid = mbentry->acl; userid; userid = nextid) {
 	char *rightstr;
 
 	rightstr = strchr(userid, '\t');
@@ -5416,9 +5435,10 @@ int report_acl_prin_prop(struct transaction_t *txn, xmlNodePtr inroot,
 	    xml_add_response(fctx, 0, 0);
 	}
     }
-    free(aclstr);
 
   done:
+    mboxlist_entry_free(&mbentry);
+
     return (ret ? ret : HTTP_MULTI_STATUS);
 }
 
