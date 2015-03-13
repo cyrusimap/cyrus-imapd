@@ -50,6 +50,7 @@ AM_CPPFLAGS = \
 	-I${top_builddir}/lib \
 	-I${top_srcdir} \
 	-I${top_srcdir}/lib \
+	-DLIBEXEC_DIR=\"$(libexecdir)\" \
 	${DEFS} \
 	${LOCALDEFS} \
 	$(SASLFLAGS) \
@@ -108,8 +109,8 @@ dist_sysconf_DATA =
 lib_LTLIBRARIES = lib/libcyrus_min.la lib/libcyrus.la
 EXTRA_PROGRAMS = doc/text/htmlstrip
 check_PROGRAMS =
-service_PROGRAMS =
-user_PROGRAMS =
+libexec_PROGRAMS =
+sbin_PROGRAMS =
 CLEANFILES =
 EXTRA_DIST = \
 	$(wildcard tools/vzic/*)
@@ -133,13 +134,13 @@ BUILT_SOURCES += \
 
 lib_LTLIBRARIES += imap/libcyrus_imap.la
 
-service_PROGRAMS += \
+libexec_PROGRAMS += \
 	imap/imapd \
 	imap/lmtpd \
 	imap/pop3d \
 	imap/smmapd
 
-user_PROGRAMS += \
+sbin_PROGRAMS += \
 	imap/arbitron \
 	imap/chk_cyrus \
 	imap/ctl_cyrusdb \
@@ -165,22 +166,22 @@ user_PROGRAMS += \
 	imap/squatter
 
 if HAVE_CLAMAV
-user_PROGRAMS += imap/cyr_virusscan
+sbin_PROGRAMS += imap/cyr_virusscan
 endif # HAVE_CLAMAV
 
 if NNTPD
-service_PROGRAMS += imap/nntpd
-user_PROGRAMS += imap/fetchnews
+libexec_PROGRAMS += imap/nntpd
+sbin_PROGRAMS += imap/fetchnews
 endif # NNTPD
 
-service_PROGRAMS += imap/fud
+libexec_PROGRAMS += imap/fud
 
 if IDLED
-user_PROGRAMS += imap/idled
+sbin_PROGRAMS += imap/idled
 endif # IDLED
 
 if MURDER
-service_PROGRAMS += imap/mupdate
+libexec_PROGRAMS += imap/mupdate
 endif # MURDER
 
 if HTTPD
@@ -193,27 +194,27 @@ BUILT_SOURCES += \
 	imap/tz_err.c \
 	imap/tz_err.h
 
-service_PROGRAMS += imap/httpd
-user_PROGRAMS += \
+libexec_PROGRAMS += imap/httpd
+sbin_PROGRAMS += \
 	imap/ctl_zoneinfo \
 	imap/dav_reconstruct
 
 endif # HTTPD
 
 if REPLICATION
-user_PROGRAMS += imap/sync_client imap/sync_reset
-service_PROGRAMS += imap/sync_server
+sbin_PROGRAMS += imap/sync_client imap/sync_reset
+libexec_PROGRAMS += imap/sync_server
 endif # REPLICATION
 
 if HAVE_SSL
-user_PROGRAMS += imap/tls_prune
+sbin_PROGRAMS += imap/tls_prune
 endif # HAVE_SSL
 
-user_PROGRAMS += imap/unexpunge master/master
+sbin_PROGRAMS += imap/unexpunge master/master
 
 if SIEVE
 check_PROGRAMS += notifyd/notifytest
-service_PROGRAMS += notifyd/notifyd
+libexec_PROGRAMS += notifyd/notifyd
 endif # SIEVE
 
 else # SERVER
@@ -237,12 +238,12 @@ endif # SERVER
 
 if CMULOCAL
 dist_sysconf_DATA += depot/rc.local.imap depot/rc.local.ptclient
-user_PROGRAMS += netnews/remotepurge
+sbin_PROGRAMS += netnews/remotepurge
 endif # CMULOCAL
 
 if PTCLIENT
-user_PROGRAMS += ptclient/ptdump ptclient/ptexpire
-service_PROGRAMS += \
+sbin_PROGRAMS += ptclient/ptdump ptclient/ptexpire
+libexec_PROGRAMS += \
 	ptclient/ptloader
 endif # PTCLIENT
 
@@ -261,10 +262,10 @@ endif # PERL
 BUILT_SOURCES += sieve/addr.c sieve/sieve.c sieve/sieve_err.c
 lib_LTLIBRARIES += sieve/libcyrus_sieve.la
 check_PROGRAMS += sieve/test
-user_PROGRAMS += sieve/sievec sieve/sieved
+sbin_PROGRAMS += sieve/sievec sieve/sieved
 
 if SERVER
-service_PROGRAMS += timsieved/timsieved
+libexec_PROGRAMS += timsieved/timsieved
 endif # SERVER
 
 endif # SIEVE
@@ -1587,10 +1588,9 @@ if PERL
 endif
 
 ## The @$(MKDIR_P) line is added due to a bug in Automake 1.10 and can be removed if using Automake 1.12.
-	@$(MKDIR_P) $(DESTDIR)$(userdir)
-	@$(MKDIR_P) $(DESTDIR)$(servicedir)
+	@$(MKDIR_P) $(DESTDIR)$(libexecdir)
 if SERVER
-	cd $(DESTDIR)$(servicedir) && \
+	cd $(DESTDIR)$(libexecdir) && \
 	  $(LN_S) -f pop3d pop3proxyd && \
 	  $(LN_S) -f imapd proxyd && \
 	  $(LN_S) -f lmtpd lmtpproxyd

@@ -56,11 +56,11 @@ sub quote {
 }
 
 sub usage {
-    die "Usage: $0 cyrus_prefix cyrus_bindir";
+    die "Usage: $0 configure_prefix configure_bindir";
 }
 
-my $cyrus_prefix = normalise(shift || usage);
-my $cyrus_bindir = normalise(shift || usage);
+my $configure_prefix = normalise(shift || usage);
+my $configure_bindir = normalise(shift || usage);
 my $perl_prefix = normalise($Config{prefix});
 
 # These directories are listed in the reverse of the order that we want
@@ -81,7 +81,7 @@ BEGIN {
 	my $d = $0;
 EOT
 ;
-$boilerplate .= "	my \$bindir = " . quote($cyrus_bindir) . ";\n";
+$boilerplate .= "	my \$bindir = " . quote($configure_bindir) . ";\n";
 $boilerplate .= << 'EOT'
 	# remove the filename, $d is now the installed bindir
 	$d =~ s/\/[^\/]+$//;
@@ -98,11 +98,11 @@ EOT
 
 foreach my $dv (@dirvars) {
     my $dir = $Config{$dv->{dir}};
-    if ($cyrus_prefix ne $perl_prefix) {
+    if ($configure_prefix ne $perl_prefix) {
 	# Expect to be installed into a non-default location
 	# because Cyrus was built with a non-default --prefix
 	my $install_prefix = normalise($Config{$dv->{prefix}});
-	$dir = $cyrus_prefix . substr($dir, length($install_prefix))
+	$dir = $configure_prefix . substr($dir, length($install_prefix))
     }
     $boilerplate .= 'use lib $__cyrus_destdir . ' . quote($dir) .  ";\n";
 }
