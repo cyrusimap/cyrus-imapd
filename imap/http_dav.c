@@ -4749,50 +4749,54 @@ int meth_put(struct transaction_t *txn, void *params)
 
     if ((precond == HTTP_PRECOND_FAILED) &&
 	(get_preferences(txn) & PREFER_REP)) {
-	const char *msg_base = NULL, *data = NULL;
-	unsigned long msg_size = 0, datalen, offset;
-	struct resp_body_t *resp_body = &txn->resp_body;
-	char *freeme = NULL;
+	struct buf msg_buf = BUF_INITIALIZER;
 
 	/* Load message containing the resource */
-	mailbox_map_message(mailbox, oldrecord.uid, &msg_base, &msg_size);
+	r = mailbox_map_record(mailbox, &oldrecord, &msg_buf);
 
-	/* Resource length doesn't include RFC 5322 header */
-	offset = oldrecord.header_size;
-	data = msg_base + offset;
-	datalen = oldrecord.size - offset;
+	if (!r) {
+	    const char *data = NULL;
+	    unsigned long datalen, offset;
+	    struct resp_body_t *resp_body = &txn->resp_body;
+	    char *freeme = NULL;
 
-	if (mime != pparams->mime_types) {
-	    /* Not the storage format - convert into requested MIME type */
-	    void *obj = pparams->mime_types[0].from_string(data);
+	    /* Resource length doesn't include RFC 5322 header */
+	    offset = oldrecord.header_size;
+	    data = buf_base(&msg_buf) + offset;
+	    datalen = oldrecord.size - offset;
 
-	    data = freeme = mime->to_string(obj);
-	    datalen = strlen(data);
-	    pparams->mime_types[0].free(obj);
+	    if (mime != pparams->mime_types) {
+		/* Not the storage format - convert into requested MIME type */
+		void *obj = pparams->mime_types[0].from_string(data);
+
+		data = freeme = mime->to_string(obj);
+		datalen = strlen(data);
+		pparams->mime_types[0].free(obj);
+	    }
+
+	    /* Fill in Content-Type, Content-Length */
+	    resp_body->type = mime->content_type;
+	    resp_body->len = datalen;
+
+	    /* Fill in Content-Location */
+	    resp_body->loc = txn->req_tgt.path;
+
+	    /* Fill in ETag, Last-Modified, Expires, and Cache-Control */
+	    resp_body->etag = etag;
+	    resp_body->lastmod = lastmod;
+	    resp_body->maxage = 3600;	/* 1 hr */
+	    txn->flags.cc = CC_MAXAGE
+		| CC_REVALIDATE		/* don't use stale data */
+		| CC_NOTRANSFORM;	/* don't alter iCal data */
+
+	    /* Output current representation */
+	    write_body(precond, txn, data, datalen);
+
+	    buf_free(&msg_buf);
+	    free(freeme);
+
+	    precond = 0;
 	}
-
-	/* Fill in Content-Type, Content-Length */
-	resp_body->type = mime->content_type;
-	resp_body->len = datalen;
-
-	/* Fill in Content-Location */
-	resp_body->loc = txn->req_tgt.path;
-
-	/* Fill in ETag, Last-Modified, Expires, and Cache-Control */
-	resp_body->etag = etag;
-	resp_body->lastmod = lastmod;
-	resp_body->maxage = 3600;	/* 1 hr */
-	txn->flags.cc = CC_MAXAGE
-	    | CC_REVALIDATE		/* don't use stale data */
-	    | CC_NOTRANSFORM;		/* don't alter iCal data */
-
-	/* Output current representation */
-	write_body(precond, txn, data, datalen);
-
-	mailbox_unmap_message(mailbox, oldrecord.uid, &msg_base, &msg_size);
-	if (freeme) free(freeme);
-
-	precond = 0;
     }
 
     /* Finished our initial read */
