@@ -115,7 +115,7 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "ctl_deliver -E is deprecated: "
 		"using cyr_expire -E instead\n");
 
-	r = snprintf(buf, sizeof(buf), "%s/cyr_expire", SERVICE_DIR);
+	r = snprintf(buf, sizeof(buf), "%s/cyr_expire", LIBEXEC_DIR);
 	if(r < 0 || r >= (int) sizeof(buf)) {
 	    fatal("cyr_expire command buffer not sufficiently big", EC_CONFIG);
 	}

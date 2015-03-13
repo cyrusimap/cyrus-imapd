@@ -103,26 +103,6 @@ AC_SUBST(COV_LDFLAGS)
 AC_ARG_WITH(login,,AC_MSG_ERROR([--with-login is no longer supported.
 Configure SASL appropriately instead.]))
 
-dnl We need to derive default values for --with-cyrus-prefix and
-dnl --with-service-path based on $prefix, but $prefix may currently
-dnl be set to "NONE" for autoconf reasons, so work around that.
-if test "x$prefix" = "xNONE"; then
-    myprefix="$ac_default_prefix"
-else
-    myprefix="$prefix"
-fi
-
-AC_ARG_WITH(cyrus-prefix,
-	[AS_HELP_STRING([--with-cyrus-prefix=DIR], [use DIR as cyrus server install directory [PREFIX/cyrus]])],
-	cyrus_prefix="$withval",cyrus_prefix="$myprefix/cyrus")
-AC_DEFINE_UNQUOTED(CYRUS_PATH,"$cyrus_prefix",[Where will we be installed?])
-AC_ARG_WITH(service-path,
-	[AS_HELP_STRING([--with-service-path=DIR], [use DIR as service install directory [CYRUSPREFIX/bin]])],
-	servicedir="$withval",servicedir="$cyrus_prefix/bin")
-userdir=$servicedir
-AC_SUBST(userdir)
-AC_SUBST(servicedir)
-AC_DEFINE_UNQUOTED(SERVICE_DIR,"$servicedir",[Directory to use for service binaries])
 AC_ARG_WITH(cyrus-user,
 	[AS_HELP_STRING([--with-cyrus-user=USERID], [use USERID cyrus userid])],
 	cyrus_user="$withval",cyrus_user="cyrus")
@@ -1443,7 +1423,7 @@ dnl -- this is needed on NetBSD and Linux, but seems to cause problems on atleas
             AC_MSG_WARN(skipping check for perl cccdlflags on "${target_os}")
     esac
 
-    PERL_PREINSTALL="${PERL} ${srctoolsdir}/fixsearchpath.pl ${cyrus_prefix} ${bindir}"
+    PERL_PREINSTALL="${PERL} ${srctoolsdir}/fixsearchpath.pl ${prefix} ${bindir}"
     AC_SUBST(PERL_PREINSTALL)
 fi
 
