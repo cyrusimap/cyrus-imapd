@@ -328,7 +328,6 @@ sub _is_listening_af
 	'netstat',
 	'-l',		# listening ports only
 	'-n',		# numeric output
-	"-A$af",
 	);
     my $parser = $netstat_parse{$af};
     my $found = 0;
@@ -396,7 +395,7 @@ sub kill_processes_on_ports
 	# Silly netstat -p on Linux prints a warning to stderr
 	# -n	    numeric output
 	# -p	    show pid & program
-	my $cmd = "netstat -np -A$af 2>/dev/null";
+	my $cmd = "netstat -np 2>/dev/null";
 
 	my $parser = $netstat_parse{$af};
 	open NETSTAT,'-|',$cmd
