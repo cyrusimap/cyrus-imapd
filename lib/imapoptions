@@ -1945,7 +1945,7 @@ product version in the capabilities */
    for later reuse.  The maximum value is 1440 (24 hours), the
    default.  A value of 0 will disable session caching. */
 
-{ "tls_versions", "ssl2 ssl3 tls1_0 tls1_1 tls1_2", STRING }
+{ "tls_versions", "tls1_0 tls1_1 tls1_2", STRING }
 /* A list of SSL/TLS versions to not disable. Cyrus IMAP SSL/TLS starts
    with all protocols, and substracts protocols not in this list. Newer
    versions of SSL/TLS will need to be added here to allow them to get
