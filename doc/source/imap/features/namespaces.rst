@@ -73,7 +73,8 @@ configured:
 
 .. seealso::
 
-    *   Check configuration settings with :ref:`admin-cyr_info`
+    *   Check configuration settings with
+        :ref:`imap-admin-commands-cyr_info`
 
 We'll attempt to create a mailbox for the user
 *John Doe <john@example.org>* using the shorthand qualifier (e.g.
@@ -98,7 +99,7 @@ The mailbox ``user.john`` has been created succesfully using the
 shorthand qualifier, and could not be created using the unix hierarchy
 separator.
 
-However, realmed mailboxes cannot be created:
+However, realmed mailboxes can also not be created:
 
 .. parsed-literal::
 
@@ -127,7 +128,12 @@ An alternative hierarchy separator can be used to allow the use of ``.``
 The UNIX hierarchy separator is a ``/`` (forward slash) character, and
 is configured by setting in :manpage:`imapd.conf(5)`:
 
-*   ``unixhierarchysep``: ``1``
+*   ``unixhierarchysep: 1``
+
+.. seealso::
+
+    *   Check configuration settings with
+        :ref:`imap-admin-commands-cyr_info`
 
 Restart the **cyrus-imapd** service and attempt to create a mailbox for
 user ``john@example.org`` using the shorthand qualifier (e.g. ``john``),
@@ -167,8 +173,8 @@ Alternate Namespace
 In a default situation, with Cyrus IMAP versions prior to version
 |imap_version_unixhierarchysep_default_on| using the *netnews* namespace
 convention, a user *John Doe <john@example.org>* would start out with a
-mailbox ``INBOX``, and will quickly want to create sub-folders such for
-drafts and sent messages.
+mailbox ``INBOX``, and will quickly want to create sub-folders such as
+for drafted and sent messages.
 
 These mailboxes will be presented to John's client as follows:
 
@@ -195,6 +201,11 @@ hierarchy separator):
 To configure the use of the alternative namespace, use the
 ``altnamespace`` setting in :manpage:`imapd.conf(5)` and set it to
 ``1``.
+
+.. NOTE::
+
+    Changing ``altnamespace`` in a currently operating environment will
+    cause all IMAP clients to need to resync the entire hierarchy.
 
 Internal Namespace
 ==================
