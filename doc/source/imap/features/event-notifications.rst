@@ -214,7 +214,11 @@ MessageExpunge
 MessageMove
 -----------
 
-.. literalinclude:: ../../_static/event_notifications/NessageMove.json
+.. IMPORTANT::
+
+    The ``MessageMove`` event is an event type not documented in an RFC.
+
+.. literalinclude:: ../../_static/event_notifications/MessageMove.json
     :language: json
     :linenos:
 
