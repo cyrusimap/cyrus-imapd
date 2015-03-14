@@ -1968,8 +1968,7 @@ static void cmd_starttls(struct conn *C, const char *tag)
 
     result=tls_init_serverengine("mupdate",
 				 5,        /* depth to verify */
-				 1,        /* can client auth? */
-				 1);       /* TLS only? */
+				 1);       /* can client auth? */
 
     if (result == -1) {
 
