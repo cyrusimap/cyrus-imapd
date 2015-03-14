@@ -56,9 +56,9 @@ Individual Rights Reference
         .. parsed-literal::
 
             C: A777 LIST "" *
-            S: * LIST (\NoInferiors) "/" "A/B"
+            S: * LIST (\\NoInferiors) "/" "A/B"
             S: * LIST () "/" "C"
-            S: * LIST (\NoInferiors) "/" "C/D"
+            S: * LIST (\\NoInferiors) "/" "C/D"
             S: A777 OK LIST completed
 
     .. seealso::
