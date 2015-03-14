@@ -196,10 +196,6 @@ int mboxname_same_userid(const char *mboxname1, const char *mboxname2);
  * Access files (or directories by leaving last parameter
  * zero) for a particular mailbox on partition.
  */
-void mboxname_hash(char *buf, size_t buf_len,
-		   const char *root,
-		   const char *name);
-
 char *mboxname_datapath(const char *partition, 
 			const char *mboxname,
 			unsigned long uid);

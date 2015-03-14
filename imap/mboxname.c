@@ -1313,9 +1313,9 @@ EXPORTED int mboxname_is_prefix(const char *longstr, const char *shortstr)
 }
 
 
-void mboxname_hash(char *buf, size_t buf_len,
-		   const char *root,
-		   const char *name)
+static void mboxname_hash(char *buf, size_t buf_len,
+			  const char *root,
+			  const char *name)
 {
     const char *idx;
     char c, *p;
