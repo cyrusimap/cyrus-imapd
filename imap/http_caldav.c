@@ -5430,13 +5430,15 @@ int caladdress_lookup(const char *addr, struct sched_param *param)
 	    param->server = xstrdupnull(mbentry->server); /* XXX - memory leak */
 	    mboxlist_entry_free(&mbentry);
 	    if (param->server) param->flags |= SCHEDTYPE_ISCHEDULE;
+	    return 0;
 	}
 	/* Fall through and try remote */
     }
 
     /* User is outside of our domain(s) -
        Do remote scheduling (default = iMIP) */
-    param->userid = userid;
+    if (param->userid) free(param->userid);
+    param->userid = xstrdupnull(userid); /* XXX - memleak */
     param->flags |= SCHEDTYPE_REMOTE;
 
 #ifdef WITH_DKIM
