@@ -134,6 +134,7 @@ BUILT_SOURCES += \
 lib_LTLIBRARIES += imap/libcyrus_imap.la
 
 libexec_PROGRAMS += \
+	master/master \
 	imap/imapd \
 	imap/lmtpd \
 	imap/pop3d \
@@ -209,7 +210,7 @@ if HAVE_SSL
 sbin_PROGRAMS += imap/tls_prune
 endif # HAVE_SSL
 
-sbin_PROGRAMS += imap/unexpunge master/master
+sbin_PROGRAMS += imap/unexpunge
 
 if SIEVE
 check_PROGRAMS += notifyd/notifytest
