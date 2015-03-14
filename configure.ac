@@ -196,6 +196,8 @@ AM_CONDITIONAL([IPV6_noGETNAMEINFO], [test $cyrus_cv_getnameinfo = no])
 IPv6_CHECK_SS_FAMILY()
 IPv6_CHECK_SA_LEN()
 
+AC_DEFINE_UNQUOTED(LIBEXEC_DIR,"$libexecdir",[Use libexecdir=DIR])
+
 dnl this is to check for time things
 AC_CHECK_HEADERS(sys/time.h)
 AC_HEADER_TIME
