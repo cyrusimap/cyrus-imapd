@@ -60,8 +60,7 @@ int tls_enabled(void);
 /* init tls */
 int tls_init_serverengine(const char *ident,
 			  int verifydepth, /* depth to verify */
-			  int askcert,     /* 1 = client auth */
-			  int tlsonly);
+			  int askcert);    /* 1 = client auth */
 
 int tls_init_clientengine(int verifydepth,
 			  const char *var_server_cert,
