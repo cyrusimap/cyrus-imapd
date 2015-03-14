@@ -670,3 +670,9 @@ RFC Wishlist
 
     Support for Internet Message Access Protocol (IMAP) Events in Sieve,
     tracked in :task:`64`.
+
+:rfc:`6851`
+
+    Internet Message Access Protocol (IMAP) - MOVE Extension
+
+    .. versionadded:: 2.5.0
