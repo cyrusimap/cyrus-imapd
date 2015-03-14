@@ -7470,8 +7470,7 @@ static void cmd_starttls(char *tag, int imaps)
 
     result=tls_init_serverengine("imap",
 				 5,        /* depth to verify */
-				 !imaps,   /* can client auth? */
-				 !imaps);  /* TLS only? */
+				 !imaps);  /* can client auth? */
 
     if (result == -1) {
 
