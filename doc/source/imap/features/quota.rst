@@ -1,8 +1,8 @@
 .. _imap-features-quota:
 
-=========================
-Storage and Message Quota
-=========================
+=====
+Quota
+=====
 
 .. NOTE::
 
