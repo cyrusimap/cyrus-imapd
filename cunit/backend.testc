@@ -918,7 +918,7 @@ static void cmd_starttls(struct server_state *state)
     sasl_ssf_t ssf;
 
     r = tls_init_serverengine("backend_test", /*verifydepth*/5,
-			      /*askcert*/1, /*tlsonly*/1);
+			      /*askcert*/1);
     if (r < 0) {
 	server_printf(state, "BAD error initializing TLS\r\n");
 	server_flush(state);
