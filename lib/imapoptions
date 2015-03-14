@@ -510,15 +510,21 @@ Blank lines and lines beginning with ``#'' are ignored.
    mailboxes. */
 
 { "deletedprefix", "DELETED", STRING }
-/* If "delete_mode" set to be "delayed", the prefix for the deleted
-   mailboxes hierarchy.  The hierarchy delimiter will be automatically
-   appended. */
+/*  With \fBdelete_mode\fR set to \fIdelayed\fR, the
+    \fBdeletedprefix\fR setting defines the prefix for the hierarchy of
+    deleted mailboxes.
+.PP
+    The hierarchy delimiter will be automatically appended.
+*/
 
 { "delete_mode", "delayed", ENUM("immediate", "delayed") }
-/*  The manner in which mailboxes are deleted. "immediate" mode is the
-    default behavior in which mailboxes are removed immediately.  In
-    "delayed" mode, mailboxes are renamed to a special hiearchy defined
-    by the "deletedprefix" option to be removed later by cyr_expire.
+/*  The manner in which mailboxes are deleted. In the default
+    \fIdelayed\fR mode, mailboxes that are being deleted are renamed to
+    a special mailbox hierarchy under the \fBdeletedprefix\fR, to be
+    removed later by \fBcyr_expire(8)\fR.
+.PP
+    In \fIimmediate\fR mode, the mailbox is removed from the filesystem
+    immediately.
 */
 
 { "deleteright", "c", STRING }
