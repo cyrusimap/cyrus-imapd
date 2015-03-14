@@ -830,6 +830,7 @@ static int fetch_file(struct mailbox *mailbox, unsigned long uid,
     kl = dlist_newkvlist(NULL, cmd);
     dlist_setatom(kl, "MBOXNAME", mailbox->name);
     dlist_setatom(kl, "PARTITION", mailbox->part);
+    dlist_setatom(kl, "UNIQUEID", mailbox->uniqueid);
     dlist_setguid(kl, "GUID", &rp->guid);
     dlist_setnum32(kl, "UID", uid);
     sync_send_lookup(kl, sync_out);

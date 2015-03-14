@@ -395,7 +395,7 @@ static int squat_single(struct index_state *state, int incremental)
 	fatal_syserror("Unable to create temporary index file");
 
     options.option_mask = SQUAT_OPTION_TMP_PATH | SQUAT_OPTION_STATISTICS;
-    options.tmp_path = mailbox_datapath(mailbox);
+    options.tmp_path = mailbox_datapath(mailbox, 0);
     options.stats_callback = stats_callback;
     options.stats_callback_closure = NULL;
     data.index = squat_index_init(new_index_fd, &options);

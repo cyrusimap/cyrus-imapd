@@ -525,8 +525,7 @@ static int annotate_dbname_mbentry(const mbentry_t *mbentry,
 
     if (mbentry) {
 	/* per-mbox database */
-	conf_fname = mboxname_metapath(mbentry->partition, mbentry->name,
-				       META_ANNOTATIONS, /*isnew*/0);
+	conf_fname = mbentry_metapath(mbentry, META_ANNOTATIONS, /*isnew*/0);
 	if (!conf_fname)
 	    return IMAP_MAILBOX_BADNAME;
 	*fnamep = xstrdup(conf_fname);
@@ -550,8 +549,7 @@ static int annotate_dbname_mailbox(struct mailbox *mailbox, char **fnamep)
 
     if (!mailbox) return annotate_dbname_mbentry(NULL, fnamep);
 
-    conf_fname = mboxname_metapath(mailbox->part, mailbox->name,
-				   META_ANNOTATIONS, /*isnew*/0);
+    conf_fname = mailbox_meta_fname(mailbox, META_ANNOTATIONS);
     if (!conf_fname) return IMAP_MAILBOX_BADNAME;
     *fnamep = xstrdup(conf_fname);
 
@@ -1539,8 +1537,7 @@ static void annotation_get_lastupdate(annotate_state_t *state,
     if (r)
 	goto out;
 
-    fname = mboxname_metapath(state->mbentry->partition,
-			      state->mbentry->name, META_INDEX, 0);
+    fname = mbentry_metapath(state->mbentry, META_INDEX, 0);
     if (!fname)
 	goto out;
     if (stat(fname, &sbuf) == -1)

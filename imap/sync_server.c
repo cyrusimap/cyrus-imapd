@@ -2208,6 +2208,7 @@ static int do_fetch(struct dlist *kin)
 {
     const char *mboxname;
     const char *partition;
+    const char *uniqueid;
     const char *guid;
     uint32_t uid;
     const char *fname;
@@ -2219,6 +2220,8 @@ static int do_fetch(struct dlist *kin)
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getatom(kin, "PARTITION", &partition))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
+    if (!dlist_getatom(kin, "UNIQUEID", &uniqueid))
+	return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getatom(kin, "GUID", &guid))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getnum32(kin, "UID", &uid))
@@ -2226,7 +2229,7 @@ static int do_fetch(struct dlist *kin)
     if (!message_guid_decode(&tmp_guid, guid))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
-    fname = mboxname_datapath(partition, mboxname, uid);
+    fname = mboxname_datapath(partition, mboxname, uniqueid, uid);
     if (stat(fname, &sbuf) == -1)
 	return IMAP_MAILBOX_NONEXISTENT;
 

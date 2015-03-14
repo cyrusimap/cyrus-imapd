@@ -822,6 +822,7 @@ static void test_rename(void)
     struct buf val2 = BUF_INITIALIZER;
     struct mailbox *mailbox1 = NULL;
     struct mailbox *mailbox2 = NULL;
+    const char *uniqueid = makeuuid();
 
     annotate_init(NULL, NULL);
 
@@ -910,7 +911,7 @@ static void test_rename(void)
 
     r = annotate_rename_mailbox(mailbox1, mailbox2);
     CU_ASSERT_EQUAL(r, 0);
-    r = mailbox_copy_files(mailbox1, PARTITION, MBOXNAME2_INT);
+    r = mailbox_copy_files(mailbox1, PARTITION, MBOXNAME2_INT, uniqueid);
     CU_ASSERT_EQUAL(r, 0);
     r = mailbox_rename_cleanup(&mailbox1, 0);
     CU_ASSERT_EQUAL(r, 0);

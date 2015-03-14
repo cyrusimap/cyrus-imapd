@@ -1361,7 +1361,10 @@ static void mboxname_hash(char *buf, size_t buf_len,
 }
 
 /* note: mboxname must be internal */
-EXPORTED char *mboxname_datapath(const char *partition, const char *mboxname, unsigned long uid)
+EXPORTED char *mboxname_datapath(const char *partition,
+				 const char *mboxname,
+				 const char *uniqueid __attribute__((unused)),
+				 unsigned long uid)
 {
     static char pathresult[MAX_MAILBOX_PATH+1];
     const char *root;
@@ -1414,8 +1417,11 @@ char *mboxname_lockpath(const char *mboxname)
     return lockresult;
 }
 
-EXPORTED char *mboxname_metapath(const char *partition, const char *mboxname,
-			int metafile, int isnew)
+EXPORTED char *mboxname_metapath(const char *partition,
+				 const char *mboxname,
+				 const char *uniqueid __attribute__((unused)),
+				 int metafile,
+				 int isnew)
 {
     static char metaresult[MAX_MAILBOX_PATH];
     int metaflag = 0;

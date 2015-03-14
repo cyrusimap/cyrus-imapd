@@ -215,13 +215,13 @@ static int do_examine(char *name,
     r = mailbox_open_irl(name, &mailbox);
     if (r) return r;
 
-    if (chdir(mailbox_datapath(mailbox)) == -1) {
+    if (chdir(mailbox_datapath(mailbox, 0)) == -1) {
 	r = IMAP_IOERROR;
 	goto done;
     }
 
     printf(" Mailbox Header Info:\n");
-    printf("  Path to mailbox: %s\n", mailbox_datapath(mailbox));
+    printf("  Path to mailbox: %s\n", mailbox_datapath(mailbox, 0));
     printf("  Mailbox ACL: %s\n", mailbox->acl); /* xxx parse */
     printf("  Unique ID: %s\n", mailbox->uniqueid);
     printf("  User Flags: ");
@@ -372,7 +372,7 @@ static int do_quota(char *name,
     r = mailbox_open_irl(name, &mailbox);
     if (r) return r;
 
-    if (chdir(mailbox_datapath(mailbox)) == -1) {
+    if (chdir(mailbox_datapath(mailbox, 0)) == -1) {
 	r = IMAP_IOERROR;
 	goto done;
     }

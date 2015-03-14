@@ -177,7 +177,7 @@ EXPORTED const char *mailbox_meta_fname(struct mailbox *mailbox, int metafile)
     static char fnamebuf[MAX_MAILBOX_PATH];
     const char *src;
 
-    src = mboxname_metapath(mailbox->part, mailbox->name, metafile, 0);
+    src = mboxname_metapath(mailbox->part, mailbox->name, mailbox->uniqueid, metafile, 0);
     if (!src) return NULL;
 
     xstrncpy(fnamebuf, src, MAX_MAILBOX_PATH);
@@ -189,7 +189,7 @@ EXPORTED const char *mailbox_meta_newfname(struct mailbox *mailbox, int metafile
     static char fnamebuf[MAX_MAILBOX_PATH];
     const char *src;
 
-    src = mboxname_metapath(mailbox->part, mailbox->name, metafile, 1);
+    src = mboxname_metapath(mailbox->part, mailbox->name, mailbox->uniqueid, metafile, 1);
     if (!src) return NULL;
 
     xstrncpy(fnamebuf, src, MAX_MAILBOX_PATH);
@@ -210,15 +210,15 @@ EXPORTED int mailbox_meta_rename(struct mailbox *mailbox, int metafile)
 EXPORTED const char *mailbox_record_fname(struct mailbox *mailbox,
 					  struct index_record *record)
 {
-    return mboxname_datapath(mailbox->part, mailbox->name, record->uid);
+    return mboxname_datapath(mailbox->part, mailbox->name, mailbox->uniqueid, record->uid);
 }
 
-EXPORTED const char *mailbox_datapath(struct mailbox *mailbox)
+EXPORTED const char *mailbox_datapath(struct mailbox *mailbox, uint32_t uid)
 {
     static char localbuf[MAX_MAILBOX_PATH];
     const char *src;
 
-    src = mboxname_datapath(mailbox->part, mailbox->name, 0);
+    src = mboxname_datapath(mailbox->part, mailbox->name, mailbox->uniqueid, uid);
     if (!src) return NULL;
 
     xstrncpy(localbuf, src, MAX_MAILBOX_PATH);
@@ -714,11 +714,10 @@ mailbox_notifyproc_t *mailbox_get_updatenotifier(void)
  * uidvalidity 'uidvalidity'.  We use Ted Ts'o's libuuid if available,
  * otherwise we use some random bits.
  */
-
 EXPORTED void mailbox_make_uniqueid(struct mailbox *mailbox)
 {
     free(mailbox->uniqueid);
-    mailbox->uniqueid = makeuuid();
+    mailbox->uniqueid = xstrdup(makeuuid());
     mailbox->header_dirty = 1;
 }
 
@@ -1029,7 +1028,7 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
 	if (!r) {
 	    /* finish cleaning up */
 	    if (mailbox->i.options & OPT_MAILBOX_DELETED)
-		mailbox_delete_cleanup(mailbox->part, mailbox->name);
+		mailbox_delete_cleanup(mailbox->part, mailbox->name, mailbox->uniqueid);
 	    else if (mailbox->i.options & OPT_MAILBOX_NEEDS_REPACK)
 		mailbox_index_repack(mailbox, mailbox->i.minor_version);
 	    else if (mailbox->i.options & OPT_MAILBOX_NEEDS_UNLINK)
@@ -3494,6 +3493,8 @@ EXPORTED int mailbox_create(const char *name,
     struct mailboxlist *listitem;
     strarray_t *initial_flags = NULL;
 
+    if (!uniqueid) uniqueid = makeuuid();
+
     /* if we already have this name open then that's an error too */
     listitem = find_listitem(name);
     if (listitem) return IMAP_MAILBOX_LOCKED;
@@ -3509,6 +3510,7 @@ EXPORTED int mailbox_create(const char *name,
     mailbox->part = xstrdup(part);
     mailbox->acl = xstrdup(acl);
     mailbox->mbtype = mbtype;
+    mailbox->uniqueid = xstrdup(uniqueid);
 
     hasquota = quota_findroot(quotaroot, sizeof(quotaroot), name);
 
@@ -3528,7 +3530,7 @@ EXPORTED int mailbox_create(const char *name,
     }
 
     /* ensure we can fit the longest possible file name */
-    fname = mailbox_datapath(mailbox);
+    fname = mailbox_datapath(mailbox, 0);
     if (!fname) {
 	syslog(LOG_ERR, "IOERROR: Mailbox name too long (%s)", mailbox->name);
 	r = IMAP_MAILBOX_BADNAME;
@@ -3597,11 +3599,6 @@ EXPORTED int mailbox_create(const char *name,
     mailbox->index_size = INDEX_HEADER_SIZE;
 
     mailbox->header_dirty = 1;
-    if (!uniqueid) {
-	mailbox_make_uniqueid(mailbox);
-    } else {
-	mailbox->uniqueid = xstrdup(uniqueid);
-    }
 
     /* pre-set any required permanent flags */
     if (config_getstring(IMAPOPT_MAILBOX_INITIAL_FLAGS)) {
@@ -3789,7 +3786,7 @@ EXPORTED int mailbox_delete(struct mailbox **mailboxptr)
  * try to create a mailbox while the delete is underway.
  * VERY tight race condition exists right now... */
 /* we need an exclusive namelock for this */
-HIDDEN int mailbox_delete_cleanup(const char *part, const char *name)
+HIDDEN int mailbox_delete_cleanup(const char *part, const char *name, const char *uniqueid)
 {
     char nbuf[MAX_MAILBOX_BUFFER];
     char pbuf[MAX_MAILBOX_PATH+1], mbuf[MAX_MAILBOX_PATH+1];
@@ -3801,13 +3798,13 @@ HIDDEN int mailbox_delete_cleanup(const char *part, const char *name)
     /* XXX - use explicit paths to each type of file */
 
     /* Flush data (message file) directory */
-    path = mboxname_datapath(part, name, 0);
+    path = mboxname_datapath(part, name, uniqueid, 0);
     mailbox_delete_files(path);
     strlcpy(pbuf, path, sizeof(pbuf));
     ptail = pbuf + strlen(pbuf);
 
     /* Flush metadata directory */
-    mpath = mboxname_metapath(part, name, 0, 0);
+    mpath = mboxname_metapath(part, name, uniqueid, 0, 0);
     if (strcmp(path, mpath)) {
 	mailbox_delete_files(mpath);
 	strlcpy(mbuf, mpath, sizeof(mbuf));
@@ -3885,7 +3882,7 @@ static struct meta_file meta_files[] = {
 };
 
 EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
-		       const char *newname)
+				const char *newname, const char *newuniqueid)
 {
     char oldbuf[MAX_MAILBOX_PATH], newbuf[MAX_MAILBOX_PATH];
     struct meta_file *mf;
@@ -3899,7 +3896,7 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
 
 	xstrncpy(oldbuf, mailbox_meta_fname(mailbox, mf->metaflag),
 		MAX_MAILBOX_PATH);
-	xstrncpy(newbuf, mboxname_metapath(newpart, newname, mf->metaflag, 0),
+	xstrncpy(newbuf, mboxname_metapath(newpart, newname, newuniqueid, mf->metaflag, 0),
 		MAX_MAILBOX_PATH);
 
 	unlink(newbuf); /* Make link() possible */
@@ -3919,7 +3916,7 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
 
 	xstrncpy(oldbuf, mailbox_record_fname(mailbox, &record),
 		MAX_MAILBOX_PATH);
-	xstrncpy(newbuf, mboxname_datapath(newpart, newname, record.uid),
+	xstrncpy(newbuf, mboxname_datapath(newpart, newname, newuniqueid, record.uid),
 		MAX_MAILBOX_PATH);
 
 	r = mailbox_copyfile(oldbuf, newbuf, 0);
@@ -3971,7 +3968,8 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
     }
     newquotaroot = xstrdupnull(newmailbox->quotaroot);
 
-    r = mailbox_copy_files(oldmailbox, newpartition, newname);
+    /* XXX  - calculate new uniqueid somehow */
+    r = mailbox_copy_files(oldmailbox, newpartition, newname, NULL);
     if (r) goto fail;
 
     /* Re-open index file  */
@@ -4027,7 +4025,7 @@ fail:
     /* first unlock so we don't need to write anything new down */
     mailbox_unlock_index(newmailbox, NULL);
     /* then remove all the files */
-    mailbox_delete_cleanup(newmailbox->part, newmailbox->name);
+    mailbox_delete_cleanup(newmailbox->part, newmailbox->name, newmailbox->uniqueid);
     /* and finally, abort */
     mailbox_close(&newmailbox);
     free(newquotaroot);
@@ -4143,7 +4141,7 @@ static int find_files(struct mailbox *mailbox, struct found_uids *files,
     struct stat sbuf;
     int r;
 
-    dirpath = mailbox_datapath(mailbox);
+    dirpath = mailbox_datapath(mailbox, 0);
     if (!dirpath) return IMAP_MAILBOX_BADNAME;
 
     dirp = opendir(dirpath);
@@ -4308,7 +4306,7 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
          * no point trying to rescue anything else... */
 	mailbox_close(&mailbox);
 	r = mailbox_create(name, mbentry->mbtype, mbentry->partition, mbentry->acl,
-			   NULL, options, 0, mbptr);
+			   mbentry->uniqueid, options, 0, mbptr);
 	mboxlist_entry_free(&mbentry);
 	return r;
     }
@@ -4652,13 +4650,13 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid,
     struct stat sbuf;
     int make_changes = flags & RECONSTRUCT_MAKE_CHANGES;
 
-    fname = mboxname_datapath(mailbox->part, mailbox->name, uid);
+    fname = mboxname_datapath(mailbox->part, mailbox->name, mailbox->uniqueid, uid);
 
     /* possible if '0.' file exists */
     if (!uid) {
 	/* filthy hack - copy the path to '1.' and replace 1 with 0 */
 	char *hack;
-	fname = mboxname_datapath(mailbox->part, mailbox->name, 1);
+	fname = mboxname_datapath(mailbox->part, mailbox->name, mailbox->uniqueid, 1);
 	hack = (char *)fname;
 	hack[strlen(fname)-2] = '0';
     }

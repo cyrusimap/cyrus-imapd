@@ -433,7 +433,7 @@ extern int mailbox_meta_rename(struct mailbox *mailbox, int metafile);
 
 extern const char *mailbox_record_fname(struct mailbox *mailbox,
 					struct index_record *record);
-extern const char *mailbox_datapath(struct mailbox *mailbox);
+extern const char *mailbox_datapath(struct mailbox *mailbox, uint32_t uid);
 
 /* map individual messages in */
 extern int mailbox_map_record(struct mailbox *mailbox, struct index_record *record, struct buf *buf);
@@ -512,10 +512,10 @@ extern int mailbox_create(const char *name, uint32_t mbtype, const char *part, c
 			  struct mailbox **mailboxptr);
 
 extern int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
-			      const char *newname);
-extern int mailbox_delete_cleanup(const char *part, const char *name);
+			      const char *newname, const char *newuniqueid);
+extern int mailbox_delete_cleanup(const char *part, const char *name, const char *uniqueid);
 
-extern int mailbox_rename_copy(struct mailbox *oldmailbox, 
+extern int mailbox_rename_copy(struct mailbox *oldmailbox,
 			       const char *newname, const char *newpart,
 			       unsigned uidvalidity,
 			       const char *userid, int ignorequota,

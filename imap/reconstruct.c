@@ -131,7 +131,6 @@ int main(int argc, char **argv)
     int fflag = 0;
     int xflag = 0;
     char buf[MAX_MAILBOX_PATH+1];
-    char *fname;
     strarray_t discovered = STRARRAY_INITIALIZER;
     char *alt_config = NULL;
     char *start_part = NULL;
@@ -266,8 +265,6 @@ int main(int argc, char **argv)
 	/* do any of the mailboxes exist in mboxlist already? */
 	/* Do they look like mailboxes? */
 	for (i = optind; i < argc; i++) {
-	    struct stat sbuf;
-
 	    if (strchr(argv[i],'%') || strchr(argv[i],'*')) {
 		fprintf(stderr, "Using wildcards with -p is not supported.\n");
 		exit(EC_USAGE);
@@ -286,15 +283,6 @@ int main(int argc, char **argv)
 		fprintf(stderr,
 			"Mailbox %s already exists.  Cannot specify -p.\n",
 			argv[i]);
-		exit(EC_USAGE);
-	    }
-
-	    /* Does the suspected path *look* like a mailbox? */
-	    fname = mboxname_metapath(start_part, buf, META_HEADER, 0);
-	    if (stat(fname, &sbuf) < 0) {
-		fprintf(stderr,
-			"%s does not appear to be a mailbox (no %s).\n",
-			argv[i], fname);
 		exit(EC_USAGE);
 	    }
 	}

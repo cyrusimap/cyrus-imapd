@@ -483,7 +483,7 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
     struct quota q;
     struct data_file *df;
     struct seqset *expunged_seq = NULL;
-    const char *dirpath = mailbox_datapath(mailbox);
+    const char *dirpath = mailbox_datapath(mailbox, 0);
 
     /* XXX - archivepath */
 
@@ -892,7 +892,7 @@ EXPORTED int undump_mailbox(const char *mbname,
 	r = mboxlist_lookup(mbname, &mbentry, NULL);
 	if (!r) r = mailbox_create(mbname, mbentry->mbtype,
 				   mbentry->partition, mbentry->acl,
-				   NULL, 0, 0, &mailbox);
+				   mbentry->uniqueid, 0, 0, &mailbox);
 	mboxlist_entry_free(&mbentry);
     }
     if(r) goto done;
@@ -1146,7 +1146,7 @@ EXPORTED int undump_mailbox(const char *mbname,
 		if (!parseuint32(file.s, &ptr, &uid)) {
 		    /* is it really a data file? */
 		    if (ptr && ptr[0] == '.' && ptr[1] == '\0')
-			path = mboxname_datapath(mailbox->part, mailbox->name, uid);
+			path = mboxname_datapath(mailbox->part, mailbox->name, mailbox->uniqueid, uid);
 		}
 	    }
 	    if (!path) {

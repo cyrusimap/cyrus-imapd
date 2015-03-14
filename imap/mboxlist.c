@@ -214,6 +214,23 @@ EXPORTED char *mboxlist_entry_cstring(mbentry_t *mbentry)
     return buf_release(&buf);
 }
 
+EXPORTED char *mbentry_metapath(const struct mboxlist_entry *mbentry, int metatype, int isnew)
+{
+    return mboxname_metapath(mbentry->partition,
+			     mbentry->name,
+			     mbentry->uniqueid,
+			     metatype,
+			     isnew);
+}
+
+EXPORTED char *mbentry_datapath(const struct mboxlist_entry *mbentry, uint32_t uid)
+{
+    return mboxname_datapath(mbentry->partition,
+			     mbentry->name,
+			     mbentry->uniqueid,
+			     uid);
+}
+
 /*
  * read a single record from the mailboxes.db and return a pointer to it
  */
@@ -878,7 +895,7 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
 	/* Filesystem Operations */
 	r = mailbox_create(mboxname, mbtype, newpartition, acl, uniqueid,
 			   options, uidvalidity, &newmailbox);
-	if (r) goto done; /* CREATE failed */ 
+	if (r) goto done; /* CREATE failed */
     }
 
     /* all is well - activate the mailbox */
@@ -1356,7 +1373,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 
     /* special case: same mailbox, must be a partition move */
     if (!strcmp(oldname, newname)) {
-	const char *oldpath = mailbox_datapath(oldmailbox);
+	const char *oldpath = mailbox_datapath(oldmailbox, 0);
 
 	/* Only admin can move mailboxes between partitions */
 	if (!isadmin) {
@@ -1392,15 +1409,16 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 	 * codepaths: INBOX -> INBOX.foo, user rename, regular rename
 	 * and of course this one, partition move */
 	newpartition = xstrdup(partition);
-	r = mailbox_copy_files(oldmailbox, newpartition, newname);
+	r = mailbox_copy_files(oldmailbox, newpartition, newname, oldmailbox->uniqueid);
 	if (r) goto done;
 	newmbentry = mboxlist_entry_create();
 	newmbentry->mbtype = oldmailbox->mbtype;
 	newmbentry->partition = xstrdupnull(newpartition);
 	newmbentry->acl = xstrdupnull(oldmailbox->acl);
 	newmbentry->uidvalidity = oldmailbox->i.uidvalidity;
+	newmbentry->uniqueid = xstrdupnull(oldmailbox->uniqueid);
 	mboxent = mboxlist_entry_cstring(newmbentry);
-	r = cyrusdb_store(mbdb, newname, strlen(newname), 
+	r = cyrusdb_store(mbdb, newname, strlen(newname),
 		          mboxent, strlen(mboxent), &tid);
 	if (r) goto done;
 
@@ -1540,7 +1558,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 	/* XXX - rollback DB changes if it was an mupdate failure */
 	if (newmailbox) mailbox_delete(&newmailbox);
 	if (partitionmove && newpartition)
-	    mailbox_delete_cleanup(newpartition, newname);
+	    mailbox_delete_cleanup(newpartition, newname, oldmailbox->uniqueid);
 	mailbox_close(&oldmailbox);
     } else {
 	if (newmailbox) {
@@ -1563,6 +1581,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 	}
 	else if (partitionmove) {
 	    char *oldpartition = xstrdup(oldmailbox->part);
+	    char *olduniqueid = xstrdup(oldmailbox->uniqueid);
 	    if (config_auditlog)
 		syslog(LOG_NOTICE, "auditlog: partitionmove sessionid=<%s> "
 		       "mailbox=<%s> uniqueid=<%s> oldpart=<%s> newpart=<%s>",
@@ -1570,9 +1589,9 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 		       oldmailbox->name, oldmailbox->uniqueid,
 		       oldpartition, partition);
 	    mailbox_close(&oldmailbox);
-	    mailbox_delete_cleanup(oldpartition, oldname);
+	    mailbox_delete_cleanup(oldpartition, oldname, olduniqueid);
+	    free(olduniqueid);
 	    free(oldpartition);
-
 	}
 	else
 	    abort(); /* impossible, in theory */
