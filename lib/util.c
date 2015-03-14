@@ -1639,10 +1639,11 @@ EXPORTED int warmup_file(const char *filename,
     return r;
 }
 
-EXPORTED char *makeuuid()
+EXPORTED const char *makeuuid()
 {
     /* 36 bytes of uuid plus \0 */
-    char *res = xzmalloc(37);
+    static char res[37];
+    memset(res, 0, 37);
 #ifdef HAVE_LIBUUID
     uuid_t uu;
     uuid_clear(uu); /* Just In Case */
