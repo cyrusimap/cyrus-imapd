@@ -11,7 +11,8 @@ the GIT repository's branches, or a tarball of a released version.
     Cyrus IMAP versions is **high**.
 
     You are specifically requested **not** to build your own unless you
-    have an appropriate comprehension
+    have an appropriate comprehension of dependencies and building those
+    yourself if you have to.
 
 From GIT
 ========
@@ -74,7 +75,7 @@ Required Build Dependencies
 The following list includes the names of packages used in RPM-based
 distributions:
 
-**autoconf**
+**autoconf** 2.63 or higher
 
     from http://www.gnu.org/software/autoconf/
 
@@ -102,7 +103,7 @@ distributions:
 
     from http://www.gnu.org/software/gperf/
 
-**libtool**
+**libtool** version 2.2.6 or higher
 
     from http://www.gnu.org/software/libtool/
 
@@ -184,7 +185,10 @@ Cyrus IMAP code maintenance tasks or documentation rendering.
     Development headers for Jansson, a C-library for JSON, from
     http://www.digip.org/jansson/.
 
-    Required for the event notifications feature.
+    Version 2.0 or higher is required for the event notifications
+    feature.
+
+    Version 2.3 or higher is required for HTTP.
 
     Configure options: ``--enable-event-notifications`` and
     ``--enable-http``.
@@ -334,4 +338,3 @@ please see:
 .. parsed-literal::
 
     # :command:`./configure --help`
-
