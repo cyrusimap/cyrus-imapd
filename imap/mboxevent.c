@@ -146,9 +146,7 @@ static struct mboxevent event_template =
 };
 
 static char *json_formatter(enum event_type type, struct event_parameter params[]);
-#ifndef NDEBUG
 static int filled_params(enum event_type type, struct mboxevent *mboxevent);
-#endif
 static int mboxevent_expected_param(enum event_type type, enum event_param param);
 
 EXPORTED void mboxevent_init(void)
@@ -1218,7 +1216,16 @@ static char *json_formatter(enum event_type type, struct event_parameter params[
 
 }
 
-#ifndef NDEBUG
+#ifdef NDEBUG
+static int filled_params(
+	enum event_type type __attribute__((unused)),
+	struct mboxevent *event __attribute__((unused))
+    )
+{
+    return 1;
+}
+
+#else /* NDEBUG */
 /* overrides event->type with event_type because FlagsSet may be derived to
  * MessageTrash or MessageRead */
 static int filled_params(enum event_type type, struct mboxevent *event)
