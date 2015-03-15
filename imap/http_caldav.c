@@ -3452,14 +3452,13 @@ static int caldav_propfind_by_resource(void *rock, void *data)
 
 	    ical = icalparser_parse_string(buf_base(&msg_buf)
 					   + fctx->record->header_size);
+	    buf_free(&msg_buf);
 	    if (!ical) {
 		syslog(LOG_NOTICE,
 		       "Unable to parse iCal %s:%u prior to stripping TZ",
 		       fctx->mailbox->name, fctx->record->uid);
 		goto done;
 	    }
-
-	    buf_free(&msg_buf);
 
 	    memset(&txn, 0, sizeof(struct transaction_t));
 	    txn.req_hdrs = spool_new_hdrcache();
