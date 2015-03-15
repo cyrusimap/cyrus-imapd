@@ -14,6 +14,7 @@ Installation Using Packages
     :glob:
 
     installation/distributions/*
+    installation/obs
 
 Build and Install Yourself
 ==========================
@@ -21,4 +22,4 @@ Build and Install Yourself
 .. toctree::
     :maxdepth: 2
 
-    installation/diy.rst
+    installation/diy
