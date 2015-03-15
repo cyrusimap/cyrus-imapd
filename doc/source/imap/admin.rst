@@ -11,6 +11,7 @@ Administrator Guide
     admin/tweaking
     admin/sop
     admin/commands
+    admin/pycommands
     admin/access-control
 
 References
