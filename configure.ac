@@ -1163,7 +1163,7 @@ dnl
 	PKG_CHECK_MODULES([XML2], [libxml-2.0],,AC_MSG_ERROR([Need libxml-2.0 for http]))
 	PKG_CHECK_MODULES([ICAL], [libical],,AC_MSG_ERROR([Need libical for http]))
 	PKG_CHECK_MODULES([SQLITE3], [sqlite3],,AC_MSG_ERROR([Need sqlite3 for http]))
-	PKG_CHECK_MODULES([JSON], [jansson],,AC_MSG_ERROR([Need jansson for http]))
+	PKG_CHECK_MODULES([JSON], [jansson >= 2.3],,AC_MSG_ERROR([Need jansson for http]))
 
 	HTTP_LIBS="${XML2_LIBS} ${ICAL_LIBS} ${SQLITE3_LIBS} ${JSON_LIBS}"
 	HTTP_CPPFLAGS="${JSON_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${XML2_CFLAGS}"
