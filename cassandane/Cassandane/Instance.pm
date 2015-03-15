@@ -347,7 +347,7 @@ sub _find_binary
     return $name if $name =~ m/^\//;
 
     my $base = $self->{cyrus_destdir} . $self->{cyrus_prefix};
-    foreach (qw( bin sbin libexec lib cyrus/bin ))
+    foreach (qw( bin sbin libexec libexec/cyrus-imapd lib cyrus/bin ))
     {
 	my $dir = "$base/$_";
 	if (opendir my $dh, $dir)
