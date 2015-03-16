@@ -464,7 +464,6 @@ extern void mailbox_close(struct mailbox **mailboxptr);
 extern int mailbox_delete(struct mailbox **mailboxptr);
 
 /* reading bits and pieces */
-extern int mailbox_read_header(struct mailbox *mailbox, char **aclptr);
 extern int mailbox_refresh_index_header(struct mailbox *mailbox);
 extern int mailbox_write_header(struct mailbox *mailbox, int force);
 extern void mailbox_index_dirty(struct mailbox *mailbox);

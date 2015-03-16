@@ -1068,7 +1068,7 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
  * userflag1 SPACE userflag2 SPACE userflag3 [...] (with no trailing space)
  * user1 TAB user1acl TAB user2 TAB user2acl TAB (with trailing tab!)
  */
-HIDDEN int mailbox_read_header(struct mailbox *mailbox, char **aclptr)
+static int mailbox_read_header(struct mailbox *mailbox, char **aclptr)
 {
     int r = 0;
     int flag;
