@@ -95,9 +95,9 @@ the Cyrus IMAP software that is no longer mainstream, and as such the
 level of technical detail is advanced.
 
 *   :ref:`installation-centos-cyrus-imapd-last-stable`
-*   :ref:`installation-centos-cyrus-imapd-last-next-stable`
-*   :ref:`installation-centos-cyrus-imapd-latest-stable`
-*   :ref:`installation-centos-cyrus-imapd-next-stable`
+*   :ref:`installation-centos-cyrus-imapd-last-stable-next`
+*   :ref:`installation-centos-cyrus-imapd-current-stable`
+*   :ref:`installation-centos-cyrus-imapd-current-stable-next`
 *   :ref:`installation-centos-cyrus-imapd-latest-development`
 
 .. toctree::

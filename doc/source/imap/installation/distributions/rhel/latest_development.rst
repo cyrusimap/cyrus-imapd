@@ -1,11 +1,11 @@
-.. _installation-centos-cyrus-imapd-latest-stable:
+.. _installation-rhel-cyrus-imapd-latest-development:
 
-Installation of Cyrus IMAP |imap_latest_stable_version| on CentOS
-=================================================================
+Installation of Cyrus IMAP |imap_latest_development_version| on Red Hat Enterprise Linux
+========================================================================================
 
 .. NOTE::
 
-    Packages for Cyrs IMAP version |imap_latest_stable_version| can
+    Packages for Cyrs IMAP version |imap_latest_development_version| can
     be obtained from the :ref:`imap-installation-obs`.
 
 #.  Clone the GIT repository:
@@ -13,13 +13,6 @@ Installation of Cyrus IMAP |imap_latest_stable_version| on CentOS
     .. parsed-literal::
 
         $ :command:`git clone` |git_cyrus_imapd_url|
-
-#.  Checkout the tag for version |imap_latest_stable_version| of Cyrus
-    IMAP:
-
-    .. parsed-literal::
-
-        $ :command:`git checkout` |imap_latest_stable_version|
 
 #.  Install the build dependencies:
 
@@ -65,9 +58,8 @@ Installation of Cyrus IMAP |imap_latest_stable_version| on CentOS
 
     .. NOTE::
 
-        We recommend at least specifying ``--prefix=/usr``,
-        ``--with-cyrus-prefix=/usr/lib/cyrus-imapd`` and
-        ``--with-service-path=/usr/lib/cyrus-imapd``.
+        We recommend at least specifying ``--prefix=/usr`` and
+        ``--libexecdir=/usr/libexec/cyrus-imapd``.
 
 #.  Build Cyrus IMAP:
 

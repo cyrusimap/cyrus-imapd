@@ -1,12 +1,12 @@
-.. _installation-centos-cyrus-imapd-last-next-stable:
+.. _installation-centos-cyrus-imapd-next-stable:
 
-Installation of Cyrus IMAP |imap_last_next_stable_version| on CentOS
-====================================================================
+Installation of Cyrus IMAP |imap_current_stable_next_version| on CentOS
+=======================================================================
 
 .. NOTE::
 
-    Packages for Cyrs IMAP version |imap_last_next_stable_version| can
-    be obtained from the :ref:`imap-installation-obs`.
+    Packages for Cyrs IMAP version |imap_current_stable_next_version|
+    can be obtained from the :ref:`imap-installation-obs`.
 
 #.  Clone the GIT repository:
 
@@ -14,12 +14,11 @@ Installation of Cyrus IMAP |imap_last_next_stable_version| on CentOS
 
         $ :command:`git clone` |git_cyrus_imapd_url|
 
-#.  Checkout the branch for the current stable version series of Cyrus
-    IMAP:
+#.  Checkout the branch for the current stable series of Cyrus IMAP:
 
     .. parsed-literal::
 
-        $ :command:`git checkout` |imap_last_stable_branch|
+        $ :command:`git checkout` |imap_current_stable_branch|
 
 #.  Install the build dependencies:
 
@@ -29,30 +28,36 @@ Installation of Cyrus IMAP |imap_last_next_stable_version| on CentOS
             autoconf \\
             automake \\
             bison \\
+            CUnit-devel \\
             cyrus-sasl-devel \\
+            cyrus-sasl-md5 \\
+            cyrus-sasl-plain \\
             flex \\
+            gcc \\
             groff \\
+            jansson-devel \\
             krb5-devel \\
+            libical-devel \\
+            libxml2-devel \\
+            libtool \\
+            libuuid-devel \\
             mysql-devel \\
+            net-snmp-devel \\
+            openldap-devel \\
             openssl-devel \\
             "perl(ExtUtils::MakeMaker)" \\
+            perl-devel \\
             pkgconfig \\
             postgresql-devel \\
-            net-snmp-devel \\
-            transfig \\
-            perl-devel \\
-            db4-devel \\
-            openldap-devel \\
-            tcp_wrappers`
+            sqlite-devel \\
+            tcp_wrappers \\
+            transfig`
 
 #.  Execute the following commands:
 
     .. parsed-literal::
 
-        $ :command:`automake -a -f -c`
-        $ :command:`aclocal -I cmulocal/`
-        $ :command:`autoheader`
-        $ :command:`autoconf -f`
+        $ :command:`autoreconf -vi`
         $ :command:`./configure` [options]
 
     For a full list of options, see ``./configure --help``.

@@ -1,11 +1,11 @@
-.. _installation-fedora-cyrus-imapd-latest-development:
+.. _installation-centos-cyrus-imapd-last-next-stable:
 
-Installation of Cyrus IMAP |imap_latest_development_version| on Fedora
-======================================================================
+Installation of Cyrus IMAP |imap_last_stable_next_version| on CentOS
+====================================================================
 
 .. NOTE::
 
-    Packages for Cyrs IMAP version |imap_latest_development_version| can
+    Packages for Cyrs IMAP version |imap_last_stable_next_version| can
     be obtained from the :ref:`imap-installation-obs`.
 
 #.  Clone the GIT repository:
@@ -13,6 +13,12 @@ Installation of Cyrus IMAP |imap_latest_development_version| on Fedora
     .. parsed-literal::
 
         $ :command:`git clone` |git_cyrus_imapd_url|
+
+#.  Checkout the branch for the stable version series of Cyrus IMAP:
+
+    .. parsed-literal::
+
+        $ :command:`git checkout` |imap_last_stable_branch|
 
 #.  Install the build dependencies:
 
@@ -22,44 +28,39 @@ Installation of Cyrus IMAP |imap_latest_development_version| on Fedora
             autoconf \\
             automake \\
             bison \\
-            CUnit-devel \\
             cyrus-sasl-devel \\
-            cyrus-sasl-md5 \\
-            cyrus-sasl-plain \\
             flex \\
-            gcc \\
             groff \\
-            jansson-devel \\
             krb5-devel \\
-            libical-devel \\
-            libxml2-devel \\
-            libtool \\
-            libuuid-devel \\
             mysql-devel \\
-            net-snmp-devel \\
-            openldap-devel \\
             openssl-devel \\
             "perl(ExtUtils::MakeMaker)" \\
-            perl-devel \\
             pkgconfig \\
             postgresql-devel \\
-            sqlite-devel \\
-            tcp_wrappers \\
-            transfig`
+            net-snmp-devel \\
+            transfig \\
+            perl-devel \\
+            db4-devel \\
+            openldap-devel \\
+            tcp_wrappers`
 
 #.  Execute the following commands:
 
     .. parsed-literal::
 
-        $ :command:`autoreconf -vi`
+        $ :command:`automake -a -f -c`
+        $ :command:`aclocal -I cmulocal/`
+        $ :command:`autoheader`
+        $ :command:`autoconf -f`
         $ :command:`./configure` [options]
 
     For a full list of options, see ``./configure --help``.
 
     .. NOTE::
 
-        We recommend at least specifying ``--prefix=/usr`` and
-        ``--libexecdir=/usr/libexec/cyrus-imapd``.
+        We recommend at least specifying ``--prefix=/usr``,
+        ``--with-cyrus-prefix=/usr/lib/cyrus-imapd`` and
+        ``--with-service-path=/usr/lib/cyrus-imapd``.
 
 #.  Build Cyrus IMAP:
 
