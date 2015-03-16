@@ -8,7 +8,7 @@ by the `Cyrus Foundation`_.
 Cyrus IMAP
 ==========
 
-The latest stable version of Cyrus IMAP is |imap_latest_stable_version|.
+The latest stable version of Cyrus IMAP is |imap_current_stable_version|.
 
 .. toctree::
     :maxdepth: 1
