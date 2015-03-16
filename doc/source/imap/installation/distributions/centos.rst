@@ -94,11 +94,11 @@ The following guides walk you through providing you with a version of
 the Cyrus IMAP software that is no longer mainstream, and as such the
 level of technical detail is advanced.
 
-*   :ref:`installation-centos-cyrus-imapd-last-stable`
-*   :ref:`installation-centos-cyrus-imapd-last-stable-next`
-*   :ref:`installation-centos-cyrus-imapd-current-stable`
-*   :ref:`installation-centos-cyrus-imapd-current-stable-next`
-*   :ref:`installation-centos-cyrus-imapd-latest-development`
+*   :ref:`imap-installation-centos-last-stable`
+*   :ref:`imap-installation-centos-last-stable-next`
+*   :ref:`imap-installation-centos-current-stable`
+*   :ref:`imap-installation-centos-current-stable-next`
+*   :ref:`imap-installation-centos-latest-development`
 
 .. toctree::
     :glob:

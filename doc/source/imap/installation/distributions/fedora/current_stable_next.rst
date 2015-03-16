@@ -1,4 +1,4 @@
-.. _installation-fedora-cyrus-imapd-next-stable:
+.. _imap-installation-fedora-current-stable-next:
 
 Installation of Cyrus IMAP |imap_current_stable_next_version| on Fedora
 =======================================================================

@@ -1,4 +1,4 @@
-.. _installation-centos-cyrus-imapd-latest-stable:
+.. _imap-installation-centos-current-stable:
 
 Installation of Cyrus IMAP |imap_current_stable_version| on CentOS
 ==================================================================

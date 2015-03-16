@@ -91,11 +91,11 @@ The following guides walk you through providing you with a version of
 the Cyrus IMAP software that is no longer mainstream, and as such the
 level of technical detail is advanced.
 
-*   :ref:`installation-fedora-cyrus-imapd-last-stable`
-*   :ref:`installation-fedora-cyrus-imapd-last-next-stable`
-*   :ref:`installation-fedora-cyrus-imapd-latest-stable`
-*   :ref:`installation-fedora-cyrus-imapd-next-stable`
-*   :ref:`installation-fedora-cyrus-imapd-latest-development`
+*   :ref:`imap-installation-fedora-last-stable`
+*   :ref:`imap-installation-fedora-last-stable-next`
+*   :ref:`imap-installation-fedora-current-stable`
+*   :ref:`imap-installation-fedora-current-stable-next`
+*   :ref:`imap-installation-fedora-latest-development`
 
 .. toctree::
     :glob:

@@ -101,11 +101,11 @@ The following guides walk you through providing you with a version of
 the Cyrus IMAP software that is no longer mainstream, and as such the
 level of technical detail is advanced.
 
-*   :ref:`installation-rhel-cyrus-imapd-last-stable`
-*   :ref:`installation-rhel-cyrus-imapd-last-next-stable`
-*   :ref:`installation-rhel-cyrus-imapd-latest-stable`
-*   :ref:`installation-rhel-cyrus-imapd-next-stable`
-*   :ref:`installation-rhel-cyrus-imapd-latest-development`
+*   :ref:`imap-installation-rhel-last-stable`
+*   :ref:`imap-installation-rhel-last-stable-next`
+*   :ref:`imap-installation-rhel-current-stable`
+*   :ref:`imap-installation-rhel-current-stable-next`
+*   :ref:`imap-installation-rhel-latest-development`
 
 .. toctree::
     :glob:
