@@ -234,14 +234,263 @@ latex_documents = [
 # If false, no module index is generated.
 #latex_domain_indices = True
 
-
 # -- Options for manual page output ---------------------------------------
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('index', 'cyrus', u'Cyrus Documentation',
-     [u'The Cyrus Team'], 1)
+        (
+            'imap/admin/commands/arbitron',
+            'arbitron',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Jeroen van Meeuwen (Kolab Systems)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/chk_cyrus',
+            'chk_cyrus',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Jeroen van Meeuwen (Kolab Systems)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/ctl_cyrusdb',
+            'ctl_cyrusdb',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Jeroen van Meeuwen (Kolab Systems)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/ctl_deliver',
+            'ctl_deliver',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Jeroen van Meeuwen (Kolab Systems)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/ctl_mboxlist',
+            'ctl_mboxlist',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Jeroen van Meeuwen (Kolab Systems)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/cvt_cyrusdb',
+            'cvt_cyrusdb',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Jeroen van Meeuwen (Kolab Systems)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/cyr_dbtool',
+            'cyr_dbtool',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Jeroen van Meeuwen (Kolab Systems)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/cyr_df',
+            'cyr_df',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Jeroen van Meeuwen (Kolab Systems)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/cyr_expire',
+            'cyr_expire',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Jeroen van Meeuwen (Kolab Systems)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/cyr_info',
+            'cyr_info',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Jeroen van Meeuwen (Kolab Systems)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/cyradm',
+            'cyradm',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Jeroen van Meeuwen (Kolab Systems)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/ipurge',
+            'ipurge',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Jeroen van Meeuwen (Kolab Systems)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/mbexamine',
+            'mbexamine',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Jeroen van Meeuwen (Kolab Systems)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/mbpath',
+            'mbpath',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Jeroen van Meeuwen (Kolab Systems)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/mbtool',
+            'mbtool',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Jeroen van Meeuwen (Kolab Systems)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/mkimap',
+            'mkimap',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Jeroen van Meeuwen (Kolab Systems)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/ptdump',
+            'ptdump',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Jeroen van Meeuwen (Kolab Systems)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/ptexpire',
+            'ptexpire',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Jeroen van Meeuwen (Kolab Systems)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/ptloader',
+            'ptloader',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Jeroen van Meeuwen (Kolab Systems)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/quota',
+            'quota',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Jeroen van Meeuwen (Kolab Systems)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/reconstruct',
+            'reconstruct',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Jeroen van Meeuwen (Kolab Systems)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/tls_prune',
+            'tls_prune',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Jeroen van Meeuwen (Kolab Systems)'
+                ],
+            8
+    ),
+
+        (
+            'imap/admin/commands/unexpunge',
+            'unexpunge',
+            u'Cyrus IMAP Documentation',
+            [
+                    u'The Cyrus Team',
+                    u'Jeroen van Meeuwen (Kolab Systems)'
+                ],
+            8
+    ),
 ]
 
 # If true, show URL addresses after external links.
@@ -342,6 +591,9 @@ epub_exclude_files = ['search.html']
 #epub_use_index = True
 
 rst_prolog = """
+.. |imap_last_stable_version| replace:: 2.4.17
+.. |imap_last_stable_branch| replace:: `cyrus-imapd-2.4`
+.. |imap_last_next_stable_version| replace:: 2.4.17 + patches
 .. |imap_latest_stable_version| replace:: 2.5.0
 .. |imap_next_stable_version| replace:: 2.5.0 + patches
 .. |imap_latest_stable_branch| replace:: `cyrus-imapd-2.5`
@@ -350,6 +602,10 @@ rst_prolog = """
 .. |imap_tikanga_stock_version| replace:: 2.3.7
 .. |imap_santiago_stock_version| replace:: 2.3.16
 .. |imap_maipo_stock_version| replace:: 2.4.17
+"""
+
+rst_prolog += """
+.. |git_cyrus_imapd_url| replace:: https://git.cyrus.foundation/diffusion/I/cyrus-imapd.git
 """
 
 # The version in which compatibility support for RFC 2086 (the 'c' and
@@ -368,6 +624,15 @@ rst_prolog += """
 # off).
 rst_prolog += """
 .. |imap_version_unixhierarchysep_default_on| replace:: 3.0
+"""
+
+# The version in which the master process was renamed to cyrus-master.
+rst_prolog += """
+.. |imap_version_master_renamed| replace:: 3.0
+"""
+
+rst_prolog += """
+.. |cli-dash-c-text| replace:: Use the specified configuration file ``config-file`` rather than the default :manpage:`imapd.conf(5)`.
 """
 
 rst_prolog += """
