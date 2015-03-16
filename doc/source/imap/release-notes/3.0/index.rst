@@ -1,7 +1,7 @@
-.. _imap-release-notes-2.5:
+.. _imap-release-notes-3.0:
 
 =============================
-Other Cyrus IMAP 2.5 Releases
+Other Cyrus IMAP 3.0 Releases
 =============================
 
 .. toctree::

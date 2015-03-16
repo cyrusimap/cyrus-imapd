@@ -5,7 +5,7 @@ Other Cyrus IMAP 2.3 Releases
 =============================
 
 .. toctree::
-       :maxdepth: 1
+    :maxdepth: 1
     :glob:
 
     x/?.?.?
