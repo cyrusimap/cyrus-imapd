@@ -1,16 +1,22 @@
-============
-OBS Packages
-============
+.. _imap-installation-obs:
+
+==========================
+Open Build System Packages
+==========================
 
 `Kolab Systems AG`_ provides `the existing Open Build Service`_ instance
 also used for the `Kolab Groupware solution`_ to build packages for
 Cyrus IMAP on a regular basis [#]_.
 
+Using these packages is recommended, because they install the necessary
+SysVinit or Systemd files.
+
 The following packages are built:
 
 *   `Cyrus IMAP master`_ (from GIT)
 
-    The latest and greatest and most volatile.
+    The latest and greatest but also most volatile version of Cyrus
+    IMAP.
 
     .. WARNING::
 
