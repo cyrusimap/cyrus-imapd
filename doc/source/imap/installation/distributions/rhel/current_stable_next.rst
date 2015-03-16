@@ -1,7 +1,7 @@
 .. _imap-installation-rhel-current-stable-next:
 
 Installation of Cyrus IMAP |imap_current_stable_next_version| on Red Hat Enterprise Linux
-=======================================================================
+=========================================================================================
 
 .. NOTE::
 

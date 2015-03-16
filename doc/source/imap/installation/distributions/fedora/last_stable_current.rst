@@ -19,7 +19,7 @@ Installation of Cyrus IMAP |imap_last_stable_version| on Fedora
 
     .. parsed-literal::
 
-        $ :command:`git checkout` |imap_last_stable_version|
+        $ :command:`git checkout` cyrus-imapd-|imap_last_stable_version|
 
 #.  Install the build dependencies:
 

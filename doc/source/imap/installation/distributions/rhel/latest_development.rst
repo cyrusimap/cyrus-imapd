@@ -1,7 +1,7 @@
 .. _imap-installation-rhel-latest-development:
 
 Installation of Cyrus IMAP |imap_latest_development_version| on Red Hat Enterprise Linux
-======================================================================
+========================================================================================
 
 .. NOTE::
 

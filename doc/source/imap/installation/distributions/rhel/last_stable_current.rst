@@ -1,7 +1,7 @@
 .. _imap-installation-rhel-last-stable:
 
 Installation of Cyrus IMAP |imap_last_stable_version| on Red Hat Enterprise Linux
-===============================================================
+=================================================================================
 
 .. NOTE::
 
@@ -19,7 +19,7 @@ Installation of Cyrus IMAP |imap_last_stable_version| on Red Hat Enterprise Linu
 
     .. parsed-literal::
 
-        $ :command:`git checkout` |imap_last_stable_version|
+        $ :command:`git checkout` cyrus-imapd-|imap_last_stable_version|
 
 #.  Install the build dependencies:
 
