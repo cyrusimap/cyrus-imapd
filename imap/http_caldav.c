@@ -4849,7 +4849,6 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     const char *prop_annot =
 	ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
     struct buf attrib = BUF_INITIALIZER;
-    struct buf headbuf = BUF_INITIALIZER;
     struct caldav_data *cdata;
     const char *uid;
     struct index_record *oldrecord = NULL, record;
