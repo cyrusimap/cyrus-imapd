@@ -1737,17 +1737,12 @@ EXPORTED int mailbox_find_index_record(struct mailbox *mailbox, uint32_t uid,
     const char *mem, *base = mailbox->index_base + mailbox->i.start_offset;
     size_t num_records = mailbox->i.num_records;
     size_t size = mailbox->i.record_size;
-    int r;
 
     mem = bsearch(&uid, base, num_records, size, rec_compar);
     if (!mem) return CYRUSDB_NOTFOUND;
 
-    if ((r = mailbox_buf_to_index_record(mem, mailbox->i.minor_version, record)))
-	return r;
-
-    record->recno = ((mem - base) / size) + 1;
-
-    return 0;
+    int recno = ((mem - base) / size) + 1;
+    return mailbox_read_index_record(mailbox, recno, record);
 }
 
 /*
@@ -2125,6 +2120,9 @@ EXPORTED int mailbox_commit(struct mailbox *mailbox)
 	return 0;
 
     assert(mailbox_index_islocked(mailbox, 1));
+
+    r = _commit_changes(mailbox);
+    if (r) return r;
 
     mailbox_index_header_to_buf(&mailbox->i, buf);
 
