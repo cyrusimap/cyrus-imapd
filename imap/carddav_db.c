@@ -835,7 +835,9 @@ EXPORTED int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, struct
     int r;
     json_t *since = json_object_get(req->args, "sinceState");
     if (!since) return -1;
-    modseq_t oldmodseq = str2uint64(json_string_value(since));
+    const char *since_str = json_string_value(since);
+    if (!since_str) return -1;
+    modseq_t oldmodseq = str2uint64(since_str);
     rock.changed = json_array();
     rock.removed = json_array();
     struct bind_val bval[] = {
@@ -854,7 +856,7 @@ EXPORTED int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, struct
 
     json_t *contactGroupUpdates = json_pack("{}");
     json_object_set_new(contactGroupUpdates, "accountId", json_string(req->userid));
-    json_object_set_new(contactGroupUpdates, "oldState", json_string(json_string_value(since))); // XXX - just use refcounted
+    json_object_set_new(contactGroupUpdates, "oldState", json_string(since_str)); // XXX - just use refcounted
     json_object_set_new(contactGroupUpdates, "newState", json_string(req->state));
     json_object_set(contactGroupUpdates, "changed", rock.changed);
     json_object_set(contactGroupUpdates, "removed", rock.removed);
@@ -1553,7 +1555,9 @@ EXPORTED int carddav_getContactUpdates(struct carddav_db *carddavdb, struct jmap
     int r;
     json_t *since = json_object_get(req->args, "sinceState");
     if (!since) return -1;
-    modseq_t oldmodseq = str2uint64(json_string_value(since));
+    const char *since_str = json_string_value(since);
+    if (!since_str) return -1;
+    modseq_t oldmodseq = str2uint64(since_str);
     rock.changed = json_array();
     rock.removed = json_array();
     struct bind_val bval[] = {
@@ -1572,7 +1576,7 @@ EXPORTED int carddav_getContactUpdates(struct carddav_db *carddavdb, struct jmap
 
     json_t *contactUpdates = json_pack("{}");
     json_object_set_new(contactUpdates, "accountId", json_string(req->userid));
-    json_object_set_new(contactUpdates, "oldState", json_string(json_string_value(since)));
+    json_object_set_new(contactUpdates, "oldState", json_string(since_str));
     json_object_set_new(contactUpdates, "newState", json_string(req->state));
     json_object_set(contactUpdates, "changed", rock.changed);
     json_object_set(contactUpdates, "removed", rock.removed);
