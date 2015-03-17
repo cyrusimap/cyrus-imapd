@@ -4801,8 +4801,6 @@ int meth_put(struct transaction_t *txn, void *params)
     unsigned flags = 0;
     void *davdb = NULL, *obj = NULL;
     struct buf msg_buf = BUF_INITIALIZER;
-    char *data;
-    unsigned long datalen;
 
     if (txn->meth == METH_PUT) {
 	/* Response should not be cached */
@@ -4967,11 +4965,10 @@ int meth_put(struct transaction_t *txn, void *params)
 
 	    /* Resource length doesn't include RFC 5322 header */
 	    offset = oldrecord.header_size;
-	    data = buf_base(&msg_buf) + offset;
-	    datalen = oldrecord.size - offset;
 
 	    /* Parse existing resource */
-	    obj = pparams->mime_types[0].from_string(data);
+	    obj =
+		pparams->mime_types[0].from_string(buf_base(&msg_buf) + offset);
 
 	    /* Fill in ETag and Last-Modified */
 	    txn->resp_body.etag = etag;
@@ -4991,6 +4988,8 @@ int meth_put(struct transaction_t *txn, void *params)
     if (flags & PREFER_REP) {
 	struct resp_body_t *resp_body = &txn->resp_body;
 	const char **hdr;
+	char *data;
+	unsigned long datalen;
 
 	if ((hdr = spool_getheader(txn->req_hdrs, "Accept"))) {
 	    mime = get_accept_type(hdr, pparams->mime_types);
