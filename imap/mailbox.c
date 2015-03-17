@@ -2139,6 +2139,11 @@ EXPORTED int mailbox_abort(struct mailbox *mailbox)
     mailbox->modseq_dirty = 0;
     mailbox->header_dirty = 0;
 
+    /* removed cached changes */
+    _cleanup_changes(mailbox);
+
+    /* we re-read the header and index header to wipe
+     * away all the changed values */
     r = mailbox_read_header(mailbox, NULL);
     if (r) return r;
 
