@@ -193,6 +193,16 @@ struct index_header {
     quota_t quota_annot_used;
 };
 
+#define CHANGE_ISAPPEND (1<<0)
+#define CHANGE_WASEXPUNGED (1<<1)
+#define CHANGE_WASUNLINKED (1<<2)
+
+struct index_change {
+    struct index_record record;
+    uint32_t mapnext;
+    uint32_t flags;
+};
+
 struct mailbox {
     int index_fd;
     int cache_fd;
@@ -240,6 +250,12 @@ struct mailbox {
     int has_changed;
     time_t last_updated; /* for appends*/
     quota_t quota_previously_used[QUOTA_NUMRESOURCES]; /* for quota change */
+
+    /* index change map */
+    uint32_t index_change_map[256];
+    struct index_change *index_changes;
+    uint32_t index_change_alloc;
+    uint32_t index_change_count;
 };
 
 /* Offsets of index/expunge header fields
