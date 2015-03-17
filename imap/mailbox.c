@@ -590,7 +590,9 @@ int mailbox_append_cache(struct mailbox *mailbox,
 	return r;
     }
 
-    mailbox->cache_dirty = 1;
+    /* keep track of the length of the file for truncation */
+    if (!mailbox->cache_dirty)
+	mailbox->cache_dirty = record->cache_offset;
 
     /* and now read it straight back in to ensure we're always
      * fresh */
@@ -675,6 +677,22 @@ int cache_append_record(int fd, struct index_record *record)
     return 0;
 }
 
+static int mailbox_abort_cache(struct mailbox *mailbox)
+{
+    if (!mailbox->cache_dirty)
+	return 0;
+
+    /* not open! That's bad */
+    if (mailbox->cache_fd == -1)
+	abort();
+
+    /* just truncate to the old length and fsync is all that's needed to abort */
+    (void)ftruncate(mailbox->cache_fd, mailbox->cache_dirty);
+    (void)fsync(mailbox->cache_fd);
+
+    return 0;
+}
+
 static int mailbox_commit_cache(struct mailbox *mailbox)
 {
     if (!mailbox->cache_dirty)
@@ -684,7 +702,7 @@ static int mailbox_commit_cache(struct mailbox *mailbox)
 
     /* not open! That's bad */
     if (mailbox->cache_fd == -1)
-	abort(); 
+	abort();
 
     /* just fsync is all that's needed to commit */
     (void)fsync(mailbox->cache_fd);
@@ -1863,6 +1881,10 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
     int r;
     const char *index_fname = mailbox_meta_fname(mailbox, META_INDEX);
 
+    /* this is kinda awful, but too much code expects it to work, and the
+     * refcounting isn't good about partial commit/abort and all the
+     * unwinding, so here you are.  At least if you mailbox_abort, then
+     * it resets the dirty flags, so this becomes a NOOP during close */
     /* naughty - you can't unlock a dirty mailbox! */
     r = mailbox_commit(mailbox);
     if (r) {
@@ -2090,6 +2112,38 @@ HIDDEN int mailbox_commit_quota(struct mailbox *mailbox)
 
     quota_update_useds(mailbox->quotaroot, quota_usage, mailbox->name);
     /* XXX - fail upon issue?  It's tempting */
+
+    return 0;
+}
+
+/*
+ * Abort the changes to a mailbox
+ */
+EXPORTED int mailbox_abort(struct mailbox *mailbox)
+{
+    int r;
+
+    /* try to commit sub parts first */
+    r = mailbox_abort_cache(mailbox);
+    if (r) return r;
+
+    annotate_state_abort(&mailbox->annot_state);
+
+    if (!mailbox->i.dirty)
+	return 0;
+
+    assert(mailbox_index_islocked(mailbox, 1));
+
+    /* remove all dirty flags! */
+    mailbox->i.dirty = 0;
+    mailbox->modseq_dirty = 0;
+    mailbox->header_dirty = 0;
+
+    r = mailbox_read_header(mailbox, NULL);
+    if (r) return r;
+
+    r = mailbox_read_index_header(mailbox);
+    if (r) return r;
 
     return 0;
 }
@@ -3820,16 +3874,16 @@ EXPORTED int mailbox_delete(struct mailbox **mailboxptr)
     mailbox_index_dirty(mailbox);
     mailbox->i.options |= OPT_MAILBOX_DELETED;
 
+    /* clean up annotations */
+    r = annotate_delete_mailbox(mailbox);
+    if (r) return r;
+
     /* commit the changes */
     r = mailbox_commit(mailbox);
     if (r) return r;
 
     /* remove any seen */
     seen_delete_mailbox(NULL, mailbox);
-
-    /* clean up annotations */
-    r = annotate_delete_mailbox(mailbox);
-    if (r) return r;
 
     /* can't unlink any files yet, because our promise to other
      * users of the mailbox applies! Can only unlink with an
@@ -4098,6 +4152,7 @@ fail:
     /* then remove all the files */
     mailbox_delete_cleanup(newmailbox->part, newmailbox->name, newmailbox->uniqueid);
     /* and finally, abort */
+    mailbox_abort(newmailbox);
     mailbox_close(&newmailbox);
     free(newquotaroot);
 
@@ -5175,13 +5230,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
 	r = mailbox_commit(mailbox);
     }
     else {
-	/* undo any dirtyness before we close, we didn't actually
-	 * write any changes */
-	mailbox->i.dirty = 0;
-	mailbox->quota_dirty = 0;
-	mailbox->cache_dirty = 0;
-	mailbox->modseq_dirty = 0;
-	mailbox->header_dirty = 0;
+	r = mailbox_abort(mailbox);
     }
 
 close:

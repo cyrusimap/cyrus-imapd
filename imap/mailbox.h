@@ -245,7 +245,7 @@ struct mailbox {
     /* change management */
     int modseq_dirty;
     int header_dirty;
-    int cache_dirty;
+    size_t cache_dirty; /* offset of old size */
     int quota_dirty;
     int has_changed;
     time_t last_updated; /* for appends*/
@@ -504,6 +504,7 @@ extern int mailbox_record_hasflag(struct mailbox *mailbox,
 				  struct index_record *record,
 				  const char *flag);
 extern int mailbox_commit(struct mailbox *mailbox);
+extern int mailbox_abort(struct mailbox *mailbox);
 
 /* seen state check */
 extern int mailbox_internal_seen(struct mailbox *mailbox, const char *userid);
