@@ -153,6 +153,7 @@ int main(int argc, char **argv)
 #ifdef HAVE_TZ_BY_REF
     /* Use TZdist VTIMEZONEs if we have them */
     if (config_getbitfield(IMAPOPT_HTTPMODULES) & IMAP_ENUM_HTTPMODULES_TZDIST) {
+	char buf[MAX_MAILBOX_PATH];
 	snprintf(buf, MAX_MAILBOX_PATH, "%s%s", config_dir, FNAME_ZONEINFODIR);
 	set_zone_directory(buf);
 	icaltimezone_set_tzid_prefix("");
