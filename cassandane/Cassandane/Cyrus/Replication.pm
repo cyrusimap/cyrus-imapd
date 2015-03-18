@@ -96,4 +96,252 @@ sub test_append
     $self->check_messages(\%exp, store => $replica_store);
 }
 
+#
+# Test replication of messages APPENDed to the master
+#
+sub test_splitbrain
+{
+    my ($self) = @_;
+
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
+
+    xlog "generating messages A..D";
+    my %exp;
+    $exp{A} = $self->make_message("Message A", store => $master_store);
+    $exp{B} = $self->make_message("Message B", store => $master_store);
+    $exp{C} = $self->make_message("Message C", store => $master_store);
+    $exp{D} = $self->make_message("Message D", store => $master_store);
+
+    xlog "Before replication, the master should have all four messages";
+    $self->check_messages(\%exp, store => $master_store);
+    xlog "Before replication, the replica should have no messages";
+    $self->check_messages({}, store => $replica_store);
+
+    $self->run_replication();
+
+    xlog "After replication, the master should still have all four messages";
+    $self->check_messages(\%exp, store => $master_store);
+    xlog "After replication, the replica should now have all four messages";
+    $self->check_messages(\%exp, store => $replica_store);
+
+    my %mexp = %exp;
+    my %rexp = %exp;
+
+    $mexp{E} = $self->make_message("Message E", store => $master_store);
+    $rexp{F} = $self->make_message("Message F", store => $replica_store);
+
+    # uid is 5 at both ends
+    $rexp{F}->set_attribute(uid => 5);
+
+    xlog "No replication, the master should have its 5 messages";
+    $self->check_messages(\%mexp, store => $master_store);
+    xlog "No replication, the replica should have the other 5 messages";
+    $self->check_messages(\%rexp, store => $replica_store);
+
+    $self->run_replication();
+
+    %exp = (%mexp, %rexp);
+    # we could calculate 6 and 7 by sorting from GUID, but easiest is to ignore UIDs
+    $exp{E}->set_attribute(uid => undef);
+    $exp{F}->set_attribute(uid => undef);
+    xlog "After replication, the master should have all 6 messages";
+    $self->check_messages(\%exp, store => $master_store);
+    xlog "After replication, the replica should have all 6 messages";
+    $self->check_messages(\%exp, store => $replica_store);
+}
+
+#
+# Test replication of messages APPENDed to the master
+#
+sub test_splitbrain_masterexpunge
+{
+    my ($self) = @_;
+
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
+
+    xlog "generating messages A..D";
+    my %exp;
+    $exp{A} = $self->make_message("Message A", store => $master_store);
+    $exp{B} = $self->make_message("Message B", store => $master_store);
+    $exp{C} = $self->make_message("Message C", store => $master_store);
+    $exp{D} = $self->make_message("Message D", store => $master_store);
+
+    xlog "Before replication, the master should have all four messages";
+    $self->check_messages(\%exp, store => $master_store);
+    xlog "Before replication, the replica should have no messages";
+    $self->check_messages({}, store => $replica_store);
+
+    $self->run_replication();
+
+    xlog "After replication, the master should still have all four messages";
+    $self->check_messages(\%exp, store => $master_store);
+    xlog "After replication, the replica should now have all four messages";
+    $self->check_messages(\%exp, store => $replica_store);
+
+    my %mexp = %exp;
+    my %rexp = %exp;
+
+    $mexp{E} = $self->make_message("Message E", store => $master_store);
+    $rexp{F} = $self->make_message("Message F", store => $replica_store);
+
+    # uid is 5 at both ends
+    $rexp{F}->set_attribute(uid => 5);
+
+    xlog "No replication, the master should have its 5 messages";
+    $self->check_messages(\%mexp, store => $master_store);
+    xlog "No replication, the replica should have the other 5 messages";
+    $self->check_messages(\%rexp, store => $replica_store);
+
+    xlog "Delete and expunge the message on the master";
+    my $talk = $master_store->get_client();
+    $master_store->_select();
+    $talk->store('5', '+flags', '(\\Deleted)');
+    $talk->expunge();
+    delete $mexp{E};
+
+    xlog "No replication, the master now only has 4 messages";
+    $self->check_messages(\%mexp, store => $master_store);
+
+    $self->run_replication();
+
+    %exp = (%mexp, %rexp);
+    # we know that the message should be prompoted to UID 6
+    $exp{F}->set_attribute(uid => 6);
+    xlog "After replication, the master should have all 5 messages";
+    $self->check_messages(\%exp, store => $master_store);
+    xlog "After replication, the replica should have the same 5 messages";
+    $self->check_messages(\%exp, store => $replica_store);
+}
+
+#
+# Test replication of messages APPENDed to the master
+#
+sub test_splitbrain_replicaexpunge
+{
+    my ($self) = @_;
+
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
+
+    xlog "generating messages A..D";
+    my %exp;
+    $exp{A} = $self->make_message("Message A", store => $master_store);
+    $exp{B} = $self->make_message("Message B", store => $master_store);
+    $exp{C} = $self->make_message("Message C", store => $master_store);
+    $exp{D} = $self->make_message("Message D", store => $master_store);
+
+    xlog "Before replication, the master should have all four messages";
+    $self->check_messages(\%exp, store => $master_store);
+    xlog "Before replication, the replica should have no messages";
+    $self->check_messages({}, store => $replica_store);
+
+    $self->run_replication();
+
+    xlog "After replication, the master should still have all four messages";
+    $self->check_messages(\%exp, store => $master_store);
+    xlog "After replication, the replica should now have all four messages";
+    $self->check_messages(\%exp, store => $replica_store);
+
+    my %mexp = %exp;
+    my %rexp = %exp;
+
+    $mexp{E} = $self->make_message("Message E", store => $master_store);
+    $rexp{F} = $self->make_message("Message F", store => $replica_store);
+
+    # uid is 5 at both ends
+    $rexp{F}->set_attribute(uid => 5);
+
+    xlog "No replication, the master should have its 5 messages";
+    $self->check_messages(\%mexp, store => $master_store);
+    xlog "No replication, the replica should have the other 5 messages";
+    $self->check_messages(\%rexp, store => $replica_store);
+
+    xlog "Delete and expunge the message on the master";
+    my $rtalk = $replica_store->get_client();
+    $replica_store->_select();
+    $rtalk->store('5', '+flags', '(\\Deleted)');
+    $rtalk->expunge();
+    delete $rexp{F};
+
+    xlog "No replication, the replica now only has 4 messages";
+    $self->check_messages(\%rexp, store => $replica_store);
+
+    $self->run_replication();
+
+    %exp = (%mexp, %rexp);
+    # we know that the message should be prompoted to UID 6
+    $exp{E}->set_attribute(uid => 6);
+    xlog "After replication, the master should have all 5 messages";
+    $self->check_messages(\%exp, store => $master_store);
+    xlog "After replication, the replica should have the same 5 messages";
+    $self->check_messages(\%exp, store => $replica_store);
+}
+
+#
+# Test replication of messages APPENDed to the master
+#
+sub test_splitbrain_bothexpunge
+{
+    my ($self) = @_;
+
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
+
+    xlog "generating messages A..D";
+    my %exp;
+    $exp{A} = $self->make_message("Message A", store => $master_store);
+    $exp{B} = $self->make_message("Message B", store => $master_store);
+    $exp{C} = $self->make_message("Message C", store => $master_store);
+    $exp{D} = $self->make_message("Message D", store => $master_store);
+
+    xlog "Before replication, the master should have all four messages";
+    $self->check_messages(\%exp, store => $master_store);
+    xlog "Before replication, the replica should have no messages";
+    $self->check_messages({}, store => $replica_store);
+
+    $self->run_replication();
+
+    xlog "After replication, the master should still have all four messages";
+    $self->check_messages(\%exp, store => $master_store);
+    xlog "After replication, the replica should now have all four messages";
+    $self->check_messages(\%exp, store => $replica_store);
+
+    my %mexp = %exp;
+    my %rexp = %exp;
+
+    $mexp{E} = $self->make_message("Message E", store => $master_store);
+    $rexp{F} = $self->make_message("Message F", store => $replica_store);
+
+    # uid is 5 at both ends
+    $rexp{F}->set_attribute(uid => 5);
+
+    xlog "No replication, the master should have its 5 messages";
+    $self->check_messages(\%mexp, store => $master_store);
+    xlog "No replication, the replica should have the other 5 messages";
+    $self->check_messages(\%rexp, store => $replica_store);
+
+    xlog "Delete and expunge the message on the master";
+    my $talk = $master_store->get_client();
+    $master_store->_select();
+    $talk->store('5', '+flags', '(\\Deleted)');
+    $talk->expunge();
+    delete $mexp{E};
+
+    xlog "Delete and expunge the message on the master";
+    my $rtalk = $replica_store->get_client();
+    $replica_store->_select();
+    $rtalk->store('5', '+flags', '(\\Deleted)');
+    $rtalk->expunge();
+    delete $rexp{F};
+
+    $self->run_replication();
+
+    xlog "After replication, the master should have just the original 4 messages";
+    $self->check_messages(\%exp, store => $master_store);
+    xlog "After replication, the replica should have the same 4 messages";
+    $self->check_messages(\%exp, store => $replica_store);
+}
+
 1;
