@@ -7650,7 +7650,8 @@ static int imapd_statusdata(const char *mailboxname, unsigned statusitems,
 {
     /* use the index status if we can so we get the 'alive' Recent count */
     if (!strcmpsafe(mailboxname, index_mboxname(imapd_index)))
-	return index_status(imapd_index, sd);
+	if (imapd_index->mailbox)
+	    return index_status(imapd_index, sd);
 
     /* fall back to generic lookup */
     return status_lookup(mailboxname, imapd_userid, statusitems, sd);
