@@ -2719,7 +2719,6 @@ static int caldav_post(struct transaction_t *txn)
 	syslog(LOG_ERR, "mlookup(%s) failed: %s",
 	       txn->req_tgt.mboxname, error_message(r));
 	txn->error.desc = error_message(r);
-	mboxlist_entry_free(&mbentry);
 
 	switch (r) {
 	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
@@ -5909,7 +5908,6 @@ int sched_busytime_query(struct transaction_t *txn,
 	    /* Local attendee on this server */
 	    xmlNodePtr resp;
 	    const char *userid = sparam.userid;
-	    mbentry_t *mbentry = NULL;
 	    icalcomponent *busy = NULL;
 
 	    resp =
@@ -5923,7 +5921,7 @@ int sched_busytime_query(struct transaction_t *txn,
 	    snprintf(mailboxname, sizeof(mailboxname),
 		     "user.%s.%s.Inbox", userid, calendarprefix);
 
-	    r = mboxlist_lookup(mailboxname, &mbentry, NULL);
+	    r = mboxlist_lookup(mailboxname, NULL, NULL);
 	    if (r) {
 		syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
 		       mailboxname, error_message(r));
@@ -7443,8 +7441,8 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 	}
 	else {
 	    rights = cyrus_acl_myrights(httpd_authstate, mbentry->acl);
-	    mboxlist_entry_free(&mbentry);
 	}
+	mboxlist_entry_free(&mbentry);
 
 	if (!(rights & DACL_INVITE)) {
 	    /* DAV:need-privileges */
@@ -7813,8 +7811,8 @@ static void sched_reply(const char *userid,
     }
     else {
 	rights = cyrus_acl_myrights(httpd_authstate, mbentry->acl);
-	mboxlist_entry_free(&mbentry);
     }
+    mboxlist_entry_free(&mbentry);
 
     if (!(rights & DACL_REPLY)) {
 	/* DAV:need-privileges */
@@ -8025,12 +8023,12 @@ static int meth_get_fb(struct transaction_t *txn,
 
     /* Check ACL for current user */
     rights = mbentry->acl ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
-    mboxlist_entry_free(&mbentry);
     if (!(rights & DACL_READFB)) {
 	/* DAV:need-privileges */
 	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
 	txn->error.rights = DACL_READFB;
+	mboxlist_entry_free(&mbentry);
 	return HTTP_NO_PRIVS;
     }
 
@@ -8045,6 +8043,8 @@ static int meth_get_fb(struct transaction_t *txn,
 
 	return http_pipe_req_resp(be, txn);
     }
+
+    mboxlist_entry_free(&mbentry);
 
     /* Local Mailbox */
 
