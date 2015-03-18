@@ -1755,9 +1755,21 @@ EXPORTED int mailbox_find_index_record(struct mailbox *mailbox, uint32_t uid,
     const char *mem, *base = mailbox->index_base + mailbox->i.start_offset;
     size_t num_records = mailbox->i.num_records;
     size_t size = mailbox->i.record_size;
+    size_t i;
+
+    /* first we need to search the in-memory cache */
+    for (i = 0; i < mailbox->index_change_count; i++) {
+	if (uid == mailbox->index_changes[i].record.uid) {
+	    *record = mailbox->index_changes[i].record;
+	    return 0;
+	}
+    }
 
     mem = bsearch(&uid, base, num_records, size, rec_compar);
     if (!mem) return CYRUSDB_NOTFOUND;
+
+    /* XXX - could avoid the secondary lookup here by parsing out the record
+     * directly from the disk */
 
     int recno = ((mem - base) / size) + 1;
     return mailbox_read_index_record(mailbox, recno, record);
