@@ -839,6 +839,8 @@ static void my_caldav_init(struct buf *serverinfo)
 	ical_set_unknown_token_handling_setting(ICAL_ASSUME_IANA_TOKEN);
 #endif
     }
+
+    namespace_calendar.allow |= ALLOW_CAL_ATTACH;
 #endif /* HAVE_IANA_PARAMS */
 
 #ifdef HAVE_TZ_BY_REF
@@ -2264,6 +2266,8 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     icalproperty *aprop, *prop;
     icalparameter *param;
     unsigned op, return_rep;
+
+    if (!(namespace_calendar.allow & ALLOW_CAL_ATTACH)) return HTTP_NOT_ALLOWED;
 
     /* Check ACL for current user */
     if (!(rights & DACL_WRITECONT)) {

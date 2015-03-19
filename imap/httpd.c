@@ -1971,8 +1971,11 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 				", calendar-auto-schedule" : "",
 				(txn->req_tgt.allow & ALLOW_CAL_NOTZ) ?
 				", calendar-no-timezone" : "");
-		    prot_puts(httpd_out, "DAV: calendar-managed-attachments"
-			      ", calendar-managed-attachments-no-recurrence\r\n");
+		    if (txn->req_tgt.allow & ALLOW_CAL_ATTACH) {
+			prot_puts(httpd_out,
+				  "DAV: calendar-managed-attachments, "
+				  "calendar-managed-attachments-no-recurrence\r\n");
+		    }
 
 		    /* Backwards compatibility with older Apple VAV clients */
 		    if ((txn->req_tgt.allow &
