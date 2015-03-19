@@ -489,6 +489,10 @@ of the way, Cyrus IMAP 2.5.0 adds the following configuration options:
     Server SSL certificate and key to use for connections from
     clients.
 
+**tls_sessions_db** (was: ``tlscache_db``)
+
+**tls_sessions_db_path** (was: ``tlscache_db_path``)
+
 New Options for ``tls_*``
 -------------------------
 
