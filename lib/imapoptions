@@ -1852,6 +1852,12 @@ product version in the capabilities */
 { "tls_ca_path", "DEFAULT", STRING }
 /* Deprecated in favor of \fItls_client_ca_dir\fR. */
 
+{ "tlscache_db", "DEFAULT", STRING }
+/* Deprecated in favor of \fItls_sessions_db\fR. */
+
+{ "tlscache_db_path", "DEFAULT", STRING }
+/* Deprecated in favor of \fItls_sessions_db_path\fR. */
+
 { "tls_cert_file", "DEFAULT", STRING }
 /* Deprecated in favor of \fItls_server_cert\fR. */
 

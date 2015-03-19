@@ -347,6 +347,14 @@ static void config_option_deprecated(const int opt)
 	    config_option_deprecate(opt, IMAPOPT_TLS_SERVER_KEY, "2.5.0");
 	    break;
 	}
+	case IMAPOPT_TLSCACHE_DB: {
+	    config_option_deprecate(opt, IMAPOPT_TLS_SESSIONS_DB, "2.5.0");
+	    break;
+	}
+	case IMAPOPT_TLSCACHE_DB_PATH: {
+	    config_option_deprecate(opt, IMAPOPT_TLS_SESSIONS_DB_PATH, "2.5.0");
+	    break;
+	}
     }
 }
 
