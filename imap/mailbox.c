@@ -1597,7 +1597,7 @@ static void _store_change(struct mailbox *mailbox, struct index_record *record, 
 	}
 
 	/* stitch into place */
-	mailbox->index_changes[mailbox->index_change_count].mapnext = mailbox->index_change_map[record->recno % 256];
+	mailbox->index_changes[mailbox->index_change_count-1].mapnext = mailbox->index_change_map[record->recno % 256];
 	mailbox->index_change_map[record->recno % 256] = mailbox->index_change_count; /* always non-zero */
 	change = &mailbox->index_changes[mailbox->index_change_count-1];
     }
@@ -1759,9 +1759,9 @@ EXPORTED int mailbox_find_index_record(struct mailbox *mailbox, uint32_t uid,
     size_t i;
 
     /* first we need to search the in-memory cache */
-    for (i = 0; i < mailbox->index_change_count; i++) {
-	if (uid == mailbox->index_changes[i].record.uid) {
-	    *record = mailbox->index_changes[i].record;
+    for (i = 1; i <= mailbox->index_change_count; i++) {
+	if (uid == mailbox->index_changes[i-1].record.uid) {
+	    *record = mailbox->index_changes[i-1].record;
 	    return 0;
 	}
     }
