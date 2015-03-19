@@ -506,7 +506,7 @@ New Options for ``tls_*``
     Certificate Authority file or directory used to verify client SSL
     certificates.
 
-**tls_client_certs** (``off``)
+**tls_client_certs** (``optional``)
 
     Disable (``off``), allow (``optional``) or require (``require``)
     clients authenticate with an SSL certificate.
