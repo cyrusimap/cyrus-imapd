@@ -58,6 +58,9 @@
 #include "xstrlcat.h"
 
 
+#ifndef json_boolean
+#define json_boolean(val)	((val) ? json_true() : json_false())
+
 #ifndef json_object_foreach
 #define json_object_foreach(obj, key, val)			\
      void *_iter_;		     	  			\
@@ -66,7 +69,8 @@
 	      && (key = json_object_iter_key(_iter_))	 	\
 	      && (val = json_object_iter_value(_iter_));	\
 	  _iter_ = json_object_iter_next(obj, _iter_))
-#endif
+#endif /* json_object_foreach */
+#endif /* json_boolean */
 
 
 /*
@@ -167,7 +171,7 @@ static json_t *icalvalue_as_json_object(const icalvalue *value)
 
     switch (icalvalue_isa(value)) {
     case ICAL_BOOLEAN_VALUE:
-	return (icalvalue_get_integer(value) ? json_true() : json_false());
+	return json_boolean(icalvalue_get_integer(value));
 
     case ICAL_DATE_VALUE:
 	str = icaltime_as_iso_string(icalvalue_get_date(value));
