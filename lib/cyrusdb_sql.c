@@ -1,4 +1,4 @@
-my/*  cyrusdb_sql: SQL db backends
+/*  cyrusdb_sql: SQL db backends
  *
  * Copyright (c) 1998-2004 Carnegie Mellon University.  All rights reserved.
  *
