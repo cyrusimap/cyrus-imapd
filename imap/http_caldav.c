@@ -104,6 +104,7 @@
 
 
 #ifdef HAVE_RSCALE
+#include <unicode/ucal.h>
 #include <unicode/uversion.h>
 
 static int rscale_cmp(const void *a, const void *b)
@@ -111,8 +112,6 @@ static int rscale_cmp(const void *a, const void *b)
     /* Convert to uppercase since that's what we prefer to output */
     return strcmp(ucase(*((char **) a)), ucase(*((char **) b)));
 }
-
-static icalarray *rscale_calendars = NULL;
 #endif /* HAVE_RSCALE */
 
 
@@ -2657,13 +2656,12 @@ static int caldav_put(struct transaction_t *txn,
 #ifdef HAVE_RSCALE
     /* Make sure we support the provided RSCALE in an RRULE */
     prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
-    if (prop) {
+    if (prop && rscale_calendars) {
 	struct icalrecurrencetype rt = icalproperty_get_rrule(prop);
 
-	if (*rt.rscale) {
-	    UEnumeration *en;
-	    UErrorCode stat = U_ZERO_ERROR;
-	    const char *rscale;
+	if (rt.rscale) {
+	    /* Perform binary search on sorted icalarray */
+	    unsigned found = 0, start = 0, end = rscale_calendars->num_elements;
 
 	    ucase(rt.rscale);
 	    while (!found && start < end) {
@@ -2675,9 +2673,8 @@ static int caldav_put(struct transaction_t *txn,
 		else if (r < 0) end = mid;
 		else start = mid + 1;
 	    }
-	    uenum_close(en);
 
-	    if (!rscale) {
+	    if (!found) {
 		txn->error.precond = CALDAV_SUPP_RSCALE;
 		ret = HTTP_FORBIDDEN;
 		goto done;
@@ -4358,26 +4355,22 @@ static int propfind_rscaleset(const xmlChar *name, xmlNsPtr ns,
 
     if (fctx->req_tgt->resource) return HTTP_NOT_FOUND;
 
-#ifdef HAVE_RSCALE
-    if (icalrecur_rscale_token_handling_is_supported()) {
+    if (rscale_calendars) {
 	xmlNodePtr top;
-	UEnumeration *en;
-	UErrorCode status = U_ZERO_ERROR;
-	const char *rscale;
+	int i, n;
 
 	top = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			   name, ns, NULL, 0);
 
-	en = ucal_getKeywordValuesForLocale("calendar", NULL, FALSE, &status);
-	while ((rscale = uenum_next(en, NULL, &status))) {
+	for (i = 0, n = rscale_calendars->num_elements; i < n; i++) {
+	    const char **rscale = icalarray_element_at(rscale_calendars, i);
+
 	    xmlNewChild(top, fctx->ns[NS_CALDAV],
-			BAD_CAST "supported-rscale", BAD_CAST rscale);
+			BAD_CAST "supported-rscale", BAD_CAST *rscale);
 	}
-	uenum_close(en);
 
 	return 0;
     }
-#endif
 
     return HTTP_NOT_FOUND;
 }
