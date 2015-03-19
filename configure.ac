@@ -1158,71 +1158,71 @@ if test "$enable_http" != no; then
 dnl
 dnl make sure all the modules we need are present
 dnl
-	ENABLE_RSS=yes
-	ENABLE_DAV=yes
-	PKG_CHECK_MODULES([XML2], [libxml-2.0],,AC_MSG_ERROR([Need libxml-2.0 for http]))
-	PKG_CHECK_MODULES([ICAL], [libical],,AC_MSG_ERROR([Need libical for http]))
-	PKG_CHECK_MODULES([SQLITE3], [sqlite3],,AC_MSG_ERROR([Need sqlite3 for http]))
-	PKG_CHECK_MODULES([JSON], [jansson >= 2.3],,AC_MSG_ERROR([Need jansson for http]))
-
-	HTTP_LIBS="${XML2_LIBS} ${ICAL_LIBS} ${SQLITE3_LIBS} ${JSON_LIBS}"
-	HTTP_CPPFLAGS="${JSON_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${XML2_CFLAGS}"
-
-	AC_DEFINE(HAVE_XML2,[],[Build in libxml support?])
-	AC_DEFINE(HAVE_ICAL,[],[Build in ical support?])
-	AC_DEFINE(HAVE_SQLITE3,[],[Build in SQLite support?])
-
-	AC_DEFINE(WITH_DAV,[],[Build DAV support into httpd?])
-	AC_DEFINE(WITH_JSON,[],[Build jCal/jCard/TZdist support into httpd?])
+	PKG_CHECK_MODULES([XML2], [libxml-2.0],,
+		AC_MSG_ERROR([Need libxml-2.0 for http]))
 
 	AC_CHECK_LIB(xml2, xmlFirstElementChild,
 		AC_DEFINE(HAVE_XML_FIRSTCHILD,[],
 			[Do we have support for xmlFirstElementChild()?]))
 
-	AC_CHECK_LIB(ical, icaltimezone_set_builtin_tzdata,
-		AC_DEFINE(HAVE_TZ_BY_REF,[],
-			[Build TZ by ref support into httpd?]))
+	PKG_CHECK_MODULES([SQLITE3], [sqlite3],
+		AC_DEFINE(WITH_DAV,[],[Build *DAV support into httpd?]),
+		AC_MSG_ERROR([Need sqlite3 for http]))
 
-	AC_EGREP_HEADER(ICAL_TZUNTIL_PROPERTY, ical.h,
-		AC_DEFINE(HAVE_TZDIST_PROPS,[],
-			[Do we have built-in support for TZdist props?]))
+	PKG_CHECK_MODULES([ICAL], [libical],
+		AC_DEFINE(HAVE_ICAL,[],[Build CalDAV support into httpd?]),
+		AC_MSG_ERROR([Need libical for http]))
 
-	CYRUS_OPENDKIM_CHK()
-	if test "$opendkimlib" = "yes"; then
-	    AC_SUBST(DKIM_CFLAGS)
-	    AC_SUBST(DKIM_LIBS)
-	    AC_DEFINE(WITH_DKIM,[],[Build DKIM support into iSchedule?]) 
-	fi
-
-	AC_EGREP_HEADER(ICAL_IANA_PARAMETER, ical.h,
+	AC_CHECK_LIB(ical, icalparameter_new_iana, [
 		AC_DEFINE(HAVE_IANA_PARAMS,[],
-			[Do we have support for IANA params?]),
+			[Do we have support for IANA params?])
+
+		AC_CHECK_LIB(ical, icalparameter_new_schedulestatus,
+			AC_DEFINE(HAVE_SCHEDULING_PARAMS,[],
+				[Do we have built-in support for scheduling params?]))
+
+		AC_CHECK_LIB(ical, icalparameter_new_managedid,
+			AC_DEFINE(HAVE_MANAGED_ATTACH_PARAMS,[],
+				[Do we have built-in support for managed attachment params?]))
+
+		AC_CHECK_LIB(ical, icalproperty_new_tzuntil,
+			AC_DEFINE(HAVE_TZDIST_PROPS,[],
+				[Do we have built-in support for TZdist props?]))
+		],
 		AC_MSG_WARN([Your version of libical can not support scheduling or managed attachments.  Consider upgrading to libical >= 0.48]))
 
-	AC_EGREP_HEADER(ICAL_SCHEDULESTATUS_PARAMETER, ical.h,
-		AC_DEFINE(HAVE_SCHEDULING_PARAMS,[],
-			[Do we have built-in support for scheduling params?]))
+	AC_CHECK_LIB(ical, icaltimezone_set_builtin_tzdata,
+		AC_DEFINE(HAVE_TZ_BY_REF,[],
+			[Build timezones by reference support into httpd?]),
+		AC_MSG_WARN([Your version of libical can not support timezones by reference.  Consider upgrading to libical >= 1.0.1]))
 
-	AC_EGREP_HEADER(ICAL_MANAGEDID_PARAMETER, ical.h,
-		AC_DEFINE(HAVE_MANAGED_ATTACH_PARAMS,[],
-			[Do we have built-in support for managed attachment params?]))
-
-	AC_EGREP_HEADER(ICAL_VAVAILABILITY_COMPONENT, ical.h,
+	AC_CHECK_LIB(ical, icalcomponent_new_vavailability,
 		AC_DEFINE(HAVE_VAVAILABILITY,[],
-			[Build VAVAILABILITY support into httpd?]))
+			[Build VAVAILABILITY support into httpd?]),
+		AC_MSG_WARN([Your version of libical can not support availability.  Consider upgrading to libical >= 1.0.1]))
 
-	AC_EGREP_HEADER(ICAL_VVOTER_COMPONENT, ical.h,
-		AC_DEFINE(HAVE_VPOLL,[],
-			[Build VPOLL support into httpd?]))
+	AC_CHECK_LIB(ical, icalcomponent_new_vvoter,
+		AC_DEFINE(HAVE_VPOLL,[], [Build VPOLL support into httpd?]),
+		AC_MSG_WARN([Your version of libical can not support consensus scheduling.  Consider upgrading to libical >= 2.0]))
 
-	ENABLE_RSCALE=yes
-	PKG_CHECK_MODULES([ICU], [icu-i18n],, ENABLE_RSCALE=no)
-	if test "$ENABLE_RSCALE" != no; then
-	     AC_SUBST(ICU_CFLAGS)
-	     AC_SUBST(ICU_LIBS)
-	     AC_CHECK_LIB(ical, icalrecur_rscale_token_handling_is_supported,
-		    AC_DEFINE(HAVE_RSCALE,[], [Build RSCALE support into httpd?]))
-	fi
+	AC_CHECK_LIB(ical, icalrecurrencetype_rscale_is_supported,
+		AC_DEFINE(HAVE_RSCALE,[], [Build RSCALE support into httpd?]),
+		AC_MSG_WARN([Your version of libical can not support non-gregorian recurrences.  Consider upgrading to libical >= 2.0]))
+
+	PKG_CHECK_MODULES([JANSSON], [jansson],
+		AC_DEFINE(WITH_JSON,[],
+			[Build jCal/jCard/TZdist support into httpd?]),
+		AC_MSG_ERROR([Need jansson for http]))
+
+	PKG_CHECK_MODULES([DKIM], [opendkim >= 2.7.0],
+		AC_EGREP_HEADER(DKIM_CANON_ISCHEDULE, dkim.h,
+			AC_DEFINE(WITH_DKIM,[],
+				[Build DKIM support into iSchedule?]),
+			AC_MSG_WARN([Your version of OpenDKIM can not support iSchedule.  Consider patching OpenDKIM with contrib/dkim_canon_ischedule.patch])),
+		AC_MSG_WARN([Your version of OpenDKIM can not support iSchedule.  Consider upgrading to OpenDKIM >= 2.7.0]))
+
+	HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${JSON_CFLAGS}"
+	HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${JSON_LIBS}"
 fi
 AC_SUBST(HTTP_CPPFLAGS)
 AC_SUBST(HTTP_LIBS)

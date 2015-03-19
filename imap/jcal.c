@@ -58,6 +58,17 @@
 #include "xstrlcat.h"
 
 
+#ifndef json_object_foreach
+#define json_object_foreach(obj, key, val)			\
+     void *_iter_;		     	  			\
+     for (_iter_ = json_object_iter(obj);			\
+	  _iter_						\
+	      && (key = json_object_iter_key(_iter_))	 	\
+	      && (val = json_object_iter_value(_iter_));	\
+	  _iter_ = json_object_iter_next(obj, _iter_))
+#endif
+
+
 /*
  * Construct a JSON string for an iCalendar Period.
  */
