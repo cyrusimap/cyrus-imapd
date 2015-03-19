@@ -1,4 +1,4 @@
-.. _howto-nginx-proxy:
+.. _imap-howto-nginx-proxy:
 
 ================================
 HOWTO: Using an NGINX IMAP Proxy
