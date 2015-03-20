@@ -6365,7 +6365,8 @@ int dav_store_resource(struct transaction_t *txn,
 
 	/* Append the message to the mailbox */
 	if ((r = append_fromstage(&as, &body, stage, now, imapflags, 0, 0))) {
-	    syslog(LOG_ERR, "append_fromstage() failed");
+	    syslog(LOG_ERR, "append_fromstage(%s) failed: %s",
+		   mailbox->name, error_message(r));
 	    ret = HTTP_SERVER_ERROR;
 	    txn->error.desc = "append_fromstage() failed\r\n";
 	}
@@ -6378,7 +6379,8 @@ int dav_store_resource(struct transaction_t *txn,
 	else {
 	    /* Commit the append to the mailbox */
 	    if ((r = append_commit(&as))) {
-		syslog(LOG_ERR, "append_commit() failed");
+		syslog(LOG_ERR, "append_commit(%s) failed: %s",
+		       mailbox->name, error_message(r));
 		ret = HTTP_SERVER_ERROR;
 		txn->error.desc = "append_commit() failed\r\n";
 	    }
