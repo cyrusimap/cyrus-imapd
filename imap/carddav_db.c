@@ -1395,6 +1395,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    /* is it a valid group? */
 	    if (r || !cdata || !cdata->dav.imap_uid || !cdata->dav.resource
 		  || cdata->kind != CARDDAV_KIND_GROUP) {
+		r = 0;
 		json_t *err = json_pack("{s:s}", "type", "notFound");
 		json_object_set_new(notUpdated, uid, err);
 		continue;
@@ -1490,11 +1491,12 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	for (index = 0; index < json_array_size(delete); index++) {
 	    const char *uid = json_string_value(json_array_get(delete, index));
 	    struct carddav_data *cdata = NULL;
-	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
 	    uint32_t olduid;
+	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
 
 	    /* is it a valid group? */
 	    if (r || !cdata || !cdata->dav.imap_uid || cdata->kind != CARDDAV_KIND_GROUP) {
+		r = 0;
 		json_t *err = json_pack("{s:s}", "type", "notFound");
 		json_object_set_new(notDeleted, uid, err);
 		continue;
@@ -2042,6 +2044,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 
 	    if (r || !cdata || !cdata->dav.imap_uid
 		  || cdata->kind != CARDDAV_KIND_CONTACT) {
+		r = 0;
 		json_t *err = json_pack("{s:s}", "type", "notFound");
 		json_object_set_new(notUpdated, uid, err);
 		continue;
@@ -2078,6 +2081,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 	    r = vparse_parse(&vparser, 0);
 	    buf_free(&msg_buf);
 	    if (r || !vparser.card || !vparser.card->objects) {
+		r = 0;
 		json_t *err = json_pack("{s:s}", "type", "parseError");
 		json_object_set_new(notUpdated, uid, err);
 		vparse_free(&vparser);
@@ -2121,11 +2125,12 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 	for (index = 0; index < json_array_size(delete); index++) {
 	    const char *uid = json_string_value(json_array_get(delete, index));
 	    struct carddav_data *cdata = NULL;
-	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
 	    uint32_t olduid;
+	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
 
 	    if (r || !cdata || !cdata->dav.imap_uid
 		  || cdata->kind != CARDDAV_KIND_CONTACT) {
+		r = 0;
 		json_t *err = json_pack("{s:s}", "type", "notFound");
 		json_object_set_new(notDeleted, uid, err);
 		continue;
