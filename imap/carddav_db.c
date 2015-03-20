@@ -917,6 +917,29 @@ static void _date_to_jmap(const char *date, struct buf *buf)
 	buf_setcstr(buf, "0000-00-00");
 }
 
+static const char *_servicetype(const char *type)
+{
+    /* add new services here */
+    if (!strcasecmp(type, "aim")) return "AIM";
+    if (!strcasecmp(type, "facebook")) return "Facebook";
+    if (!strcasecmp(type, "flickr")) return "Flickr";
+    if (!strcasecmp(type, "gadugadu")) return "GaduGadu";
+    if (!strcasecmp(type, "github")) return "GitHub";
+    if (!strcasecmp(type, "googletalk")) return "GoogleTalk";
+    if (!strcasecmp(type, "icq")) return "ICQ";
+    if (!strcasecmp(type, "jabber")) return "Jabber";
+    if (!strcasecmp(type, "linkedin")) return "LinkedIn";
+    if (!strcasecmp(type, "msn")) return "MSN";
+    if (!strcasecmp(type, "myspace")) return "MySpace";
+    if (!strcasecmp(type, "qq")) return "QQ";
+    if (!strcasecmp(type, "skype")) return "Skype";
+    if (!strcasecmp(type, "twitter")) return "Twitter";
+    if (!strcasecmp(type, "yahoo")) return "Yahoo";
+
+    syslog(LOG_NOTICE, "unknown service type %s", type);
+    return type;
+}
+
 static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 {
     struct contacts_rock *grock = (struct contacts_rock *)rock;
@@ -1156,12 +1179,43 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 			label = param->value;
 		    }
 		}
-		json_object_set_new(item, "type", json_string("web"));
+		json_object_set_new(item, "type", json_string("uri"));
 		if (label) json_object_set_new(item, "label", json_string(label));
 		json_object_set_new(item, "value", json_string(entry->v.value));
 	        json_array_append_new(online, item);
 	    }
-
+	    if (!strcasecmp(entry->name, "impp")) {
+		json_t *item = json_pack("{}");
+		const struct vparse_param *param;
+		const char *label = NULL;
+		for (param = entry->params; param; param = param->next) {
+		    if (!strcasecmp(param->name, "x-service-type")) {
+			label = _servicetype(param->value);
+		    }
+		}
+		json_object_set_new(item, "type", json_string("username"));
+		if (label) json_object_set_new(item, "label", json_string(label));
+		json_object_set_new(item, "value", json_string(entry->v.value));
+	        json_array_append_new(online, item);
+	    }
+	    if (!strcasecmp(entry->name, "x-social-profile")) {
+		json_t *item = json_pack("{}");
+		const struct vparse_param *param;
+		const char *label = NULL;
+		const char *value = NULL;
+		for (param = entry->params; param; param = param->next) {
+		    if (!strcasecmp(param->name, "type")) {
+			label = _servicetype(param->value);
+		    }
+		    if (!strcasecmp(param->name, "x-user")) {
+			value = param->value;
+		    }
+		}
+		json_object_set_new(item, "type", json_string("username"));
+		if (label) json_object_set_new(item, "label", json_string(label));
+		json_object_set_new(item, "value", json_string(value ? value : entry->v.value));
+	        json_array_append_new(online, item);
+	    }
 	}
 
 	json_object_set_new(obj, "online", online);
