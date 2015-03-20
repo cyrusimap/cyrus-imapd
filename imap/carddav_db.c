@@ -1049,13 +1049,14 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 	json_t *emails = json_array();
 
 	struct vparse_entry *entry;
+	int defaultIndex = -1;
+	int i = 0;
 	for (entry = card->properties; entry; entry = entry->next) {
 	    if (strcasecmp(entry->name, "email")) continue;
 	    json_t *item = json_pack("{}");
 	    const struct vparse_param *param;
 	    const char *type = "other";
 	    const char *label = NULL;
-	    int is_default = 0;
 	    for (param = entry->params; param; param = param->next) {
 		if (!strcasecmp(param->name, "type")) {
 		    if (!strcasecmp(param->value, "personal")) {
@@ -1064,8 +1065,9 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 		    else if (!strcasecmp(param->value, "work")) {
 			type = "work";
 		    }
-		    else if (!strcasecmp(param->value, "prev")) {
-			is_default = 1;
+		    else if (!strcasecmp(param->value, "pref")) {
+			if (defaultIndex < 0)
+			    defaultIndex = i;
 		    }
 		}
 		else if (!strcasecmp(param->name, "label")) {
@@ -1073,12 +1075,20 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 		}
 	    }
 	    json_object_set_new(item, "type", json_string(type));
-	    json_object_set_new(item, "isDefault", is_default ? json_true() : json_false());
 	    if (label) json_object_set_new(item, "label", json_string(label));
 
 	    json_object_set_new(item, "value", json_string(entry->v.value));
 
 	    json_array_append_new(emails, item);
+	    i++;
+	}
+
+	if (defaultIndex < 0)
+	    defaultIndex = 0;
+	int size = json_array_size(emails);
+	for (i = 0; i < size; i++) {
+	    json_t *item = json_array_get(emails, i);
+	    json_object_set_new(item, "isDefault", i == defaultIndex ? json_true() : json_false());
 	}
 
 	json_object_set_new(obj, "emails", emails);
