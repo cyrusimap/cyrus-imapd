@@ -940,6 +940,24 @@ static const char *_servicetype(const char *type)
     return type;
 }
 
+static int _is_im(const char *type)
+{
+    /* add new services here */
+    if (!strcasecmp(type, "aim")) return 1;
+    if (!strcasecmp(type, "facebook")) return 1;
+    if (!strcasecmp(type, "gadugadu")) return 1;
+    if (!strcasecmp(type, "googletalk")) return 1;
+    if (!strcasecmp(type, "icq")) return 1;
+    if (!strcasecmp(type, "jabber")) return 1;
+    if (!strcasecmp(type, "msn")) return 1;
+    if (!strcasecmp(type, "qq")) return 1;
+    if (!strcasecmp(type, "skype")) return 1;
+    if (!strcasecmp(type, "twitter")) return 1;
+    if (!strcasecmp(type, "yahoo")) return 1;
+
+    return 0;
+}
+
 static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 {
     struct contacts_rock *grock = (struct contacts_rock *)rock;
@@ -1691,14 +1709,16 @@ static struct vparse_entry *_card_multi(struct vparse_card *card, const char *na
 static int _emails_to_card(struct vparse_card *card, json_t *arg)
 {
     vparse_delete_entries(card, NULL, "email");
-    size_t index;
-    for (index = 0; index < json_array_size(arg); index++) {
-	json_t *item = json_array_get(arg, index);
+
+    int i;
+    int size = json_array_size(arg);
+    for (i = 0; i < size; i++) {
+	json_t *item = json_array_get(arg, i);
 	json_t *jvalue = json_object_get(item, "value");
 	if (!jvalue) return -1;
-	struct vparse_entry *entry = vparse_add_entry(card, NULL, "email", json_string_value(jvalue));
 	json_t *jtype = json_object_get(item, "type");
 	if (!jtype) return -1;
+	struct vparse_entry *entry = vparse_add_entry(card, NULL, "email", json_string_value(jvalue));
 	const char *type = json_string_value(jtype);
 	if (!strcmp(type, "personal"))
 	    vparse_add_param(entry, "type", type);
@@ -1717,16 +1737,77 @@ static int _emails_to_card(struct vparse_card *card, json_t *arg)
 
 static int _phones_to_card(struct vparse_card *card, json_t *arg)
 {
-    if (card && arg)
-	return 0;
-    return 1;
+    vparse_delete_entries(card, NULL, "tel");
+
+    int i;
+    int size = json_array_size(arg);
+    for (i = 0; i < size; i++) {
+	json_t *item = json_array_get(arg, i);
+	json_t *jvalue = json_object_get(item, "value");
+	if (!jvalue) return -1;
+	json_t *jtype = json_object_get(item, "type");
+	if (!jtype) return -1;
+	struct vparse_entry *entry = vparse_add_entry(card, NULL, "tel", json_string_value(jvalue));
+	const char *type = json_string_value(jtype);
+	if (!strcmp(type, "home"))
+	    vparse_add_param(entry, "type", type);
+	else if (!strcmp(type, "work"))
+	    vparse_add_param(entry, "type", type);
+	else if (!strcmp(type, "mobile"))
+	    vparse_add_param(entry, "type", "cell");
+	else if (!strcmp(type, "fax"))
+	    vparse_add_param(entry, "type", type);
+	else if (!strcmp(type, "pager"))
+	    vparse_add_param(entry, "type", type);
+	else if (!strcmp(type, "other"))
+	    {} // no param
+	else
+	    return -1;  // all other types
+	json_t *jlabel = json_object_get(item, "label");
+	if (jlabel)
+	    vparse_add_param(entry, "label", json_string_value(jlabel));
+    }
+    return 0;
 }
 
 static int _online_to_card(struct vparse_card *card, json_t *arg)
 {
-    if (card && arg)
-	return 0;
-    return 1;
+    vparse_delete_entries(card, NULL, "url");
+    vparse_delete_entries(card, NULL, "impp");
+    vparse_delete_entries(card, NULL, "x-social-profile");
+
+    int i;
+    int size = json_array_size(arg);
+    for (i = 0; i < size; i++) {
+	json_t *item = json_array_get(arg, i);
+	json_t *jvalue = json_object_get(item, "value");
+	if (!jvalue) return -1;
+	json_t *jtype = json_object_get(item, "type");
+	if (!jtype) return -1;
+	json_t *jlabel = json_object_get(item, "label");
+
+	const char *type = json_string_value(jtype);
+	if (!strcmp(type, "uri")) {
+	    struct vparse_entry *entry = vparse_add_entry(card, NULL, "url", json_string_value(jvalue));
+	    if (jlabel)
+		vparse_add_param(entry, "label", json_string_value(jlabel));
+	}
+	else if (!strcmp(type, "username")) {
+	    const char *label = json_string_value(jlabel);
+	    if (!label) return -1;
+	    if (_is_im(label)) {
+		struct vparse_entry *entry = vparse_add_entry(card, NULL, "impp", json_string_value(jvalue));
+		vparse_add_param(entry, "x-type", label);
+	    }
+	    else {
+		struct vparse_entry *entry = vparse_add_entry(card, NULL, "x-social-profile", ""); // XXX - URL calculated, ick
+		vparse_add_param(entry, "type", label);
+		vparse_add_param(entry, "x-user", json_string_value(jvalue));
+	    }
+	}
+	/* XXX other? */
+    }
+    return 0;
 }
 
 static int _addresses_to_card(struct vparse_card *card, json_t *arg)
