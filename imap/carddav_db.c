@@ -2147,7 +2147,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 
 	    r = carddav_remove(mailbox, olduid);
 	    if (r) {
-		syslog(LOG_ERR, "IOERROR: setContactGroups remove failed for %s %u", mailbox->name, olduid);
+		syslog(LOG_ERR, "IOERROR: setContacts remove failed for %s %u", mailbox->name, olduid);
 		goto done;
 	    }
 
@@ -2175,7 +2175,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
     buf_free(&buf);
 
     json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("contactGroupsSet"));
+    json_array_append_new(item, json_string("contactsSet"));
     json_array_append_new(item, set);
     json_array_append_new(item, json_string(req->tag));
 
