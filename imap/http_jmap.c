@@ -176,7 +176,7 @@ static int meth_post(struct transaction_t *txn,
 	return ret;
     }
 
-    if (!buf_len(&txn->req_body.payload)) return 0;
+    if (!buf_len(&txn->req_body.payload)) return HTTP_BAD_REQUEST;
 
     /* Check Content-Type */
     if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
