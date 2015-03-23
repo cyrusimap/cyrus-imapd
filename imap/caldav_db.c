@@ -77,7 +77,7 @@ enum {
 
 struct caldav_db {
     sqlite3 *db;			/* DB handle */
-    char sched_inbox[MAX_MAILBOX_BUFFER];/* DB owner's scheduling Inbox */
+    char *sched_inbox;			/* DB owner's scheduling Inbox */
     sqlite3_stmt *stmt[NUM_STMT];	/* prepared statements */
     struct buf mailbox;			/* buffers for copies of column text */
     struct buf resource;
@@ -182,7 +182,7 @@ EXPORTED struct caldav_db *caldav_open_userid(const char *userid, int flags)
     buf_free(&fname);
 
     /* Construct mbox name corresponding to userid's scheduling Inbox */
-    strncpy(caldavdb->sched_inbox, caldav_mboxname(userid, SCHED_INBOX), sizeof(caldavdb->sched_inbox));
+    caldavdb->sched_inbox = caldav_mboxname(userid, SCHED_INBOX);
 
     return caldavdb;
 }
@@ -214,6 +214,7 @@ EXPORTED int caldav_close(struct caldav_db *caldavdb)
 
     if (!caldavdb) return 0;
 
+    free(caldavdb->sched_inbox);
     buf_free(&caldavdb->mailbox);
     buf_free(&caldavdb->resource);
     buf_free(&caldavdb->lock_token);
@@ -909,10 +910,10 @@ EXPORTED void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata)
 }
 
 
-EXPORTED const char *caldav_mboxname(const char *userid, const char *name)
+EXPORTED char *caldav_mboxname(const char *userid, const char *name)
 {
     struct buf boxbuf = BUF_INITIALIZER;
-    const char *res = NULL;
+    char *res = NULL;
 
     buf_setcstr(&boxbuf, config_getstring(IMAPOPT_CALENDARPREFIX));
 
