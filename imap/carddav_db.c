@@ -1328,6 +1328,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
     if (create) {
 	json_t *created = json_pack("{}");
 	json_t *notCreated = json_pack("{}");
+	json_t *record;
 	/* XXX - default name finding */
 	const char *mboxname = mboxname_user_mbox(req->userid, "#addressbooks.Default");
 
@@ -1380,7 +1381,9 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 		goto done;
 	    }
 
-	    json_object_set(created, key, json_string(uid));
+	    record = json_pack("{s:s}", "id", uid);
+	    json_object_set_new(created, key, record);
+
 	    /* hash_insert takes ownership of uid here, skanky I know */
 	    hash_insert(key, uid, req->idmap);
 	}
@@ -1988,6 +1991,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
     if (create) {
 	json_t *created = json_pack("{}");
 	json_t *notCreated = json_pack("{}");
+	json_t *record;
 	/* XXX - default name finding */
 	const char *mboxname = mboxname_user_mbox(req->userid, "#addressbooks.Default");
 
@@ -2030,7 +2034,9 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 		goto done;
 	    }
 
-	    json_object_set(created, key, json_string(uid));
+	    record = json_pack("{s:s}", "id", uid);
+	    json_object_set_new(created, key, record);
+
 	    /* hash_insert takes ownership of uid here, skanky I know */
 	    hash_insert(key, uid, req->idmap);
 	}
