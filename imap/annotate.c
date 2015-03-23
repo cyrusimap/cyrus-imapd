@@ -2306,6 +2306,9 @@ EXPORTED int annotatemore_msg_lookupmask(const char *mboxname, uint32_t uid, con
 	r = annotatemore_msg_lookup(mboxname, uid, entry, userid, value);
     /* and if there isn't one, we fall through to the shared value */
     if (value->len == 0)
+	r = annotatemore_msg_lookup(mboxname, uid, entry, "", value);
+    /* and because of Bron's use of NULL rather than "" at FastMail... */
+    if (value->len == 0)
 	r = annotatemore_msg_lookup(mboxname, uid, entry, NULL, value);
     return r;
 }
