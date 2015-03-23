@@ -8107,6 +8107,8 @@ static int parse_metadata_string_or_list(const char *tag,
 	    goto baddata;
 	}
 
+	*is_list = 0;
+
 	c = prot_getc(imapd_in);
     }
     else {
