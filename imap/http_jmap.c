@@ -373,6 +373,7 @@ static int getContactGroups(struct jmap_req *req)
     struct carddav_db *db = carddav_open_userid(req->userid);
     if (!db) return -1;
     int r = carddav_getContactGroups(db, req);
+    carddav_close(db);
     return r;
 }
 
@@ -382,6 +383,7 @@ static int getContactGroupUpdates(struct jmap_req *req)
     struct carddav_db *db = carddav_open_userid(req->userid);
     if (!db) return -1;
     int r = carddav_getContactGroupUpdates(db, req);
+    carddav_close(db);
     return r;
 }
 
@@ -390,6 +392,7 @@ static int setContactGroups(struct jmap_req *req)
     struct carddav_db *db = carddav_open_userid(req->userid);
     if (!db) return -1;
     int r = carddav_setContactGroups(db, req);
+    carddav_close(db);
     return r;
 }
 
@@ -398,6 +401,7 @@ static int getContacts(struct jmap_req *req)
     struct carddav_db *db = carddav_open_userid(req->userid);
     if (!db) return -1;
     int r = carddav_getContacts(db, req);
+    carddav_close(db);
     return r;
 }
 
@@ -406,6 +410,7 @@ static int getContactUpdates(struct jmap_req *req)
     struct carddav_db *db = carddav_open_userid(req->userid);
     if (!db) return -1;
     int r = carddav_getContactUpdates(db, req);
+    carddav_close(db);
     return r;
 }
 
@@ -414,6 +419,7 @@ static int setContacts(struct jmap_req *req)
     struct carddav_db *db = carddav_open_userid(req->userid);
     if (!db) return -1;
     int r = carddav_setContacts(db, req);
+    carddav_close(db);
     return r;
 }
 
