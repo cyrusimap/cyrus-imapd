@@ -1496,14 +1496,14 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	json_decref(notUpdated);
     }
 
-    json_t *delete = json_object_get(req->args, "delete");
-    if (delete) {
-	json_t *deleted = json_pack("[]");
-	json_t *notDeleted = json_pack("{}");
+    json_t *destroy = json_object_get(req->args, "destroy");
+    if (destroy) {
+	json_t *destroyed = json_pack("[]");
+	json_t *notDestroyed = json_pack("{}");
 
 	size_t index;
-	for (index = 0; index < json_array_size(delete); index++) {
-	    const char *uid = json_string_value(json_array_get(delete, index));
+	for (index = 0; index < json_array_size(destroy); index++) {
+	    const char *uid = json_string_value(json_array_get(destroy, index));
 	    struct carddav_data *cdata = NULL;
 	    uint32_t olduid;
 	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
@@ -1512,7 +1512,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    if (r || !cdata || !cdata->dav.imap_uid || cdata->kind != CARDDAV_KIND_GROUP) {
 		r = 0;
 		json_t *err = json_pack("{s:s}", "type", "notFound");
-		json_object_set_new(notDeleted, uid, err);
+		json_object_set_new(notDestroyed, uid, err);
 		continue;
 	    }
 	    olduid = cdata->dav.imap_uid;
@@ -1531,15 +1531,15 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 		goto done;
 	    }
 
-	    json_array_append_new(deleted, json_string(uid));
+	    json_array_append_new(destroyed, json_string(uid));
 	}
 
-	if (json_array_size(deleted))
-	    json_object_set(set, "deleted", deleted);
-	json_decref(deleted);
-	if (json_object_size(notDeleted))
-	    json_object_set(set, "notDeleted", notDeleted);
-	json_decref(notDeleted);
+	if (json_array_size(destroyed))
+	    json_object_set(set, "destroyed", destroyed);
+	json_decref(destroyed);
+	if (json_object_size(notDestroyed))
+	    json_object_set(set, "notDestroyed", notDestroyed);
+	json_decref(notDestroyed);
     }
 
     /* force modseq to stable */
@@ -2130,14 +2130,14 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 	json_decref(notUpdated);
     }
 
-    json_t *delete = json_object_get(req->args, "delete");
-    if (delete) {
-	json_t *deleted = json_pack("[]");
-	json_t *notDeleted = json_pack("{}");
+    json_t *destroy = json_object_get(req->args, "destroy");
+    if (destroy) {
+	json_t *destroyed = json_pack("[]");
+	json_t *notDestroyed = json_pack("{}");
 
 	size_t index;
-	for (index = 0; index < json_array_size(delete); index++) {
-	    const char *uid = json_string_value(json_array_get(delete, index));
+	for (index = 0; index < json_array_size(destroy); index++) {
+	    const char *uid = json_string_value(json_array_get(destroy, index));
 	    struct carddav_data *cdata = NULL;
 	    uint32_t olduid;
 	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
@@ -2146,7 +2146,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 		  || cdata->kind != CARDDAV_KIND_CONTACT) {
 		r = 0;
 		json_t *err = json_pack("{s:s}", "type", "notFound");
-		json_object_set_new(notDeleted, uid, err);
+		json_object_set_new(notDestroyed, uid, err);
 		continue;
 	    }
 	    olduid = cdata->dav.imap_uid;
@@ -2165,15 +2165,15 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 		goto done;
 	    }
 
-	    json_array_append_new(deleted, json_string(uid));
+	    json_array_append_new(destroyed, json_string(uid));
 	}
 
-	if (json_array_size(deleted))
-	    json_object_set(set, "deleted", deleted);
-	json_decref(deleted);
-	if (json_object_size(notDeleted))
-	    json_object_set(set, "notDeleted", notDeleted);
-	json_decref(notDeleted);
+	if (json_array_size(destroyed))
+	    json_object_set(set, "destroyed", destroyed);
+	json_decref(destroyed);
+	if (json_object_size(notDestroyed))
+	    json_object_set(set, "notDestroyed", notDestroyed);
+	json_decref(notDestroyed);
     }
 
     /* force modseq to stable */
