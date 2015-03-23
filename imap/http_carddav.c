@@ -1158,9 +1158,16 @@ static int store_resource(struct transaction_t *txn, struct vparse_card *vcard,
     }
     else {
 	struct body *body = NULL;
+	strarray_t *flaglist = NULL;
+	struct entryattlist *annots = NULL;
+
+	if (expunge_uid) {
+	    flaglist = mailbox_extract_flags(mailbox, &oldrecord, httpd_userid);
+	    annots = mailbox_extract_annots(mailbox, &oldrecord);
+	}
 
 	/* Append the iMIP file to the calendar mailbox */
-	if ((r = append_fromstage(&as, &body, stage, now, NULL, 0, 0))) {
+	if ((r = append_fromstage(&as, &body, stage, now, flaglist, 0, annots))) {
 	    syslog(LOG_ERR, "append_fromstage() failed");
 	    ret = HTTP_SERVER_ERROR;
 	    txn->error.desc = "append_fromstage() failed\r\n";
@@ -1169,6 +1176,8 @@ static int store_resource(struct transaction_t *txn, struct vparse_card *vcard,
 	    message_free_body(body);
 	    free(body);
 	}
+	strarray_free(flaglist);
+	freeentryatts(annots);
 
 	if (r) append_abort(&as);
 	else {
