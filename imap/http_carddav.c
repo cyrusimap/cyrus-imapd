@@ -1150,7 +1150,7 @@ static int store_resource(struct transaction_t *txn, struct vparse_card *vcard,
     fclose(f);
 
     /* Prepare to append the iMIP message to calendar mailbox */
-    if ((r = append_setup_mbox(&as, mailbox, NULL, NULL, 0, qdiffs, 0, 0, EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
+    if ((r = append_setup_mbox(&as, mailbox, httpd_userid, httpd_authstate, 0, qdiffs, 0, 0, EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
 	syslog(LOG_ERR, "append_setup(%s) failed: %s",
 	       mailbox->name, error_message(r));
 	ret = HTTP_SERVER_ERROR;

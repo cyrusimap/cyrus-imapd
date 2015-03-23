@@ -2341,7 +2341,7 @@ EXPORTED int carddav_store(struct mailbox *mailbox, uint32_t olduid,
 
     fclose(f);
 
-    if ((r = append_setup_mbox(&as, mailbox, NULL, NULL, 0, qdiffs, 0, 0, EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
+    if ((r = append_setup_mbox(&as, mailbox, httpd_userid, httpd_authstate, 0, qdiffs, 0, 0, EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
 	syslog(LOG_ERR, "append_setup(%s) failed: %s",
 	       mailbox->name, error_message(r));
 	goto done;
