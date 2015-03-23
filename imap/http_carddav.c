@@ -443,6 +443,7 @@ static void my_carddav_reset(void)
 
 static void my_carddav_shutdown(void)
 {
+    my_carddav_reset();
     carddav_done();
 }
 
