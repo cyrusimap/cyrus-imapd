@@ -1016,6 +1016,20 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 	json_object_set_new(obj, "isFlagged", record.system_flags & FLAG_FLAGGED ? json_true() : json_false());
     }
 
+    if (_wantprop(grock->props, "x-importance")) {
+	double val = 0;
+	struct buf buf = BUF_INITIALIZER;
+	const char *ns = ANNOT_NS "<" XML_NS_CYRUS ">importance";
+
+	annotatemore_msg_lookupmask(grock->mailbox->name, record.uid,
+				    ns, httpd_userid, &buf);
+	if (buf.len)
+	    val = strtod(buf_cstring(&buf), NULL);
+	buf_free(&buf);
+
+	json_object_set_new(obj, "x-importance", json_real(val));
+    }
+
     const strarray_t *n = vparse_multival(card, "n");
     const strarray_t *org = vparse_multival(card, "org");
     if (!n) n = empty ? empty : (empty = strarray_new());
