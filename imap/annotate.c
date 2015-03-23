@@ -2575,6 +2575,7 @@ static int annotate_canon_value(struct buf *value, int type)
     case ATTRIB_TYPE_UINT:
 	/* make sure its a valid ulong ( >= 0 ) */
 	errno = 0;
+	buf_cstring(value);
 	uwhatever = strtoul(value->s, &p, 10);
 	if ((p == value->s)		/* no value */
 	    || (*p != '\0')		/* illegal char */
@@ -2589,6 +2590,7 @@ static int annotate_canon_value(struct buf *value, int type)
     case ATTRIB_TYPE_INT:
 	/* make sure its a valid long */
 	errno = 0;
+	buf_cstring(value);
 	whatever = strtol(value->s, &p, 10);
 	if ((p == value->s)		/* no value */
 	    || (*p != '\0')		/* illegal char */
