@@ -1021,8 +1021,8 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 	struct buf buf = BUF_INITIALIZER;
 	const char *ns = ANNOT_NS "<" XML_NS_CYRUS ">importance";
 
-	annotatemore_msg_lookupmask(grock->mailbox->name, record.uid,
-				    ns, httpd_userid, &buf);
+	annotatemore_msg_lookup(grock->mailbox->name, record.uid,
+				ns, NULL, &buf);
 	if (buf.len)
 	    val = strtod(buf_cstring(&buf), NULL);
 	buf_free(&buf);
