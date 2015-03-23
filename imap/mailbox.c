@@ -1403,7 +1403,28 @@ EXPORTED strarray_t *mailbox_extract_flags(const struct mailbox *mailbox,
     }
 
     return flags;
+}
 
+static int load_annot_cb(const char *mailbox __attribute__((unused)),
+			 uint32_t uid __attribute__((unused)),
+			 const char *entry, const char *userid,
+			 const struct buf *value, void *rock)
+{
+    struct entryattlist **eal = (struct entryattlist **)rock;
+    const char *attrib = (userid[0] ? "value.priv" : "value.shared");
+    setentryatt(eal, entry, attrib, value);
+    return 0;
+}
+
+
+EXPORTED struct entryattlist *mailbox_extract_annots(const struct mailbox *mailbox,
+						     const struct index_record *record)
+{
+    struct entryattlist *annots = NULL;
+    int r = annotatemore_findall(mailbox->name, record->uid, "*",
+				 load_annot_cb, &annots);
+    if (r) return NULL;
+    return annots;
 }
 
 static int mailbox_buf_to_index_header(const char *buf, size_t len,

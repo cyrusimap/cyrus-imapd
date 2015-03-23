@@ -499,6 +499,8 @@ extern int mailbox_record_hasflag(struct mailbox *mailbox,
 extern strarray_t *mailbox_extract_flags(const struct mailbox *mailbox,
 					 const struct index_record *record,
 					 const char *userid);
+extern struct entryattlist *mailbox_extract_annots(const struct mailbox *mailbox,
+						   const struct index_record *record);
 extern int mailbox_commit(struct mailbox *mailbox);
 
 /* seen state check */

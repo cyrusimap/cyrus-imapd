@@ -1356,7 +1356,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 		r = mailbox_open_iwl(mboxname, &mailbox);
 	    }
 
-	    if (!r) r = carddav_store(mailbox, 0, card, NULL);
+	    if (!r) r = carddav_store(mailbox, 0, card, NULL, NULL, NULL);
 
 	    vparse_free_card(card);
 
@@ -1465,7 +1465,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 		}
 	    }
 
-	    r = carddav_store(mailbox, olduid, card, resource);
+	    r = carddav_store(mailbox, olduid, card, resource, NULL, NULL);
 
 	    vparse_free(&vparser);
 	    free(resource);
@@ -2008,7 +2008,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 		continue;
 	    }
 
-	    r = carddav_store(mailbox, 0, card, NULL);
+	    r = carddav_store(mailbox, 0, card, NULL, NULL, NULL);
 	    vparse_free_card(card);
 
 	    if (r) {
@@ -2098,7 +2098,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 		vparse_free(&vparser);
 		continue;
 	    }
-	    r = carddav_store(mailbox, olduid, card, resource);
+	    r = carddav_store(mailbox, olduid, card, resource, NULL, NULL);
 
 	    vparse_free(&vparser);
 	    free(resource);
@@ -2223,13 +2223,14 @@ EXPORTED void carddav_make_entry(struct vparse_card *vcard, struct carddav_data 
 }
 
 EXPORTED int carddav_store(struct mailbox *mailbox, uint32_t olduid,
-			   struct vparse_card *vcard, const char *resource)
+			   struct vparse_card *vcard, const char *resource,
+			   strarray_t *flags, struct entryattlist *annots)
 {
     int r = 0;
     FILE *f = NULL;
     struct stagemsg *stage;
     char *header;
-    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;   
+    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
     struct appendstate as;
     time_t now = time(0);
     char *freeme = NULL;
@@ -2293,7 +2294,7 @@ EXPORTED int carddav_store(struct mailbox *mailbox, uint32_t olduid,
 
     struct body *body = NULL;
 
-    r = append_fromstage(&as, &body, stage, now, NULL, 0, 0);
+    r = append_fromstage(&as, &body, stage, now, flags, 0, annots);
     if (body) {
 	message_free_body(body);
 	free(body);

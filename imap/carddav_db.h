@@ -46,6 +46,7 @@
 
 #include <config.h>
 
+#include "annotate.h"
 #include "dav_db.h"
 #include "jmap.h"
 #include "strarray.h"
@@ -144,7 +145,8 @@ int carddav_abort(struct carddav_db *carddavdb);
 void carddav_make_entry(struct vparse_card *vcard, struct carddav_data *cdata);
 
 int carddav_store(struct mailbox *mailbox, uint32_t olduid,
-		  struct vparse_card *card, const char *resource);
+		  struct vparse_card *card, const char *resource,
+		  strarray_t *flags, struct entryattlist *annots);
 int carddav_remove(struct mailbox *mailbox, uint32_t olduid);
 
 

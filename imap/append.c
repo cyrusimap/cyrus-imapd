@@ -1097,17 +1097,6 @@ out:
     return 0;
 }
 
-static int load_annot_cb(const char *mailbox __attribute__((unused)),
-			 uint32_t uid __attribute__((unused)),
-			 const char *entry, const char *userid,
-			 const struct buf *value, void *rock)
-{
-    struct entryattlist **eal = (struct entryattlist **)rock;
-    const char *attrib = (userid[0] ? "value.priv" : "value.shared");
-    setentryatt(eal, entry, attrib, value);
-    return 0;
-}
-
 HIDDEN int append_run_annotator(struct appendstate *as,
 			 struct index_record *record)
 {
@@ -1124,10 +1113,7 @@ HIDDEN int append_run_annotator(struct appendstate *as,
 	return 0;
 
     flags = mailbox_extract_flags(as->mailbox, record, as->userid);
-
-    r = annotatemore_findall(as->mailbox->name, record->uid, "*",
-			     load_annot_cb, &user_annots);
-    if (r) goto out;
+    user_annots = mailbox_extract_annots(as->mailbox, record);
 
     fname = mailbox_record_fname(as->mailbox, record);
     if (!fname) goto out;
