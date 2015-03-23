@@ -542,11 +542,12 @@ static int carddav_parse_path(const char *path,
         buf_putc(&boxbuf, '.');
         buf_appendmap(&boxbuf, tgt->collection, tgt->collen);
     }
-    parts.box = buf_release(&boxbuf);
+    parts.box = buf_cstring(&boxbuf);
 
     mboxname_parts_to_internal(&parts, tgt->mboxname);
 
     mboxname_free_parts(&parts);
+    buf_free(&boxbuf);
 
     return 0;
 }
