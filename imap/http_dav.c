@@ -1971,7 +1971,7 @@ static int proppatch_toresource(xmlNodePtr prop, unsigned set,
     }
 
     r = mailbox_get_annotate_state(pctx->mailbox, pctx->record->uid, &astate);
-    if (!r) r = annotate_state_writemask(astate, buf_cstring(&pctx->buf), httpd_userid, &value);
+    if (!r) r = annotate_state_write(astate, buf_cstring(&pctx->buf), NULL, &value);
     /* we need to rewrite the record to update the modseq because the layering
      * of annotations and mailboxes is broken */
     if (!r) r = mailbox_rewrite_index_record(pctx->mailbox, pctx->record);
@@ -2034,8 +2034,8 @@ static int propfind_fromresource(const xmlChar *name, xmlNsPtr ns,
     buf_printf(&fctx->buf, ANNOT_NS "<%s>%s",
 	       (const char *) ns->href, name);
 
-    r = annotatemore_msg_lookupmask(fctx->mailbox->name, fctx->record->uid,
-				    buf_cstring(&fctx->buf), httpd_userid, &attrib);
+    r = annotatemore_msg_lookup(fctx->mailbox->name, fctx->record->uid,
+				buf_cstring(&fctx->buf), NULL, &attrib);
 
 done:
     if (r) return HTTP_SERVER_ERROR;
