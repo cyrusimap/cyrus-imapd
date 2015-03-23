@@ -983,6 +983,7 @@ static void my_caldav_reset(void)
 
 static void my_caldav_shutdown(void)
 {
+    if (rscale_calendars) icalarray_free(rscale_calendars);
     buf_free(&ical_prodid_buf);
     freestrlist(cua_domains);
 
