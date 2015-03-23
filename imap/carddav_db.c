@@ -1022,7 +1022,7 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 	const char *ns = ANNOT_NS "<" XML_NS_CYRUS ">importance";
 
 	annotatemore_msg_lookup(grock->mailbox->name, record.uid,
-				ns, NULL, &buf);
+				ns, "", &buf);
 	if (buf.len)
 	    val = strtod(buf_cstring(&buf), NULL);
 	buf_free(&buf);

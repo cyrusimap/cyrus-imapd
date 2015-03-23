@@ -1971,7 +1971,7 @@ static int proppatch_toresource(xmlNodePtr prop, unsigned set,
     }
 
     r = mailbox_get_annotate_state(pctx->mailbox, pctx->record->uid, &astate);
-    if (!r) r = annotate_state_write(astate, buf_cstring(&pctx->buf), NULL, &value);
+    if (!r) r = annotate_state_write(astate, buf_cstring(&pctx->buf), "", &value);
     /* we need to rewrite the record to update the modseq because the layering
      * of annotations and mailboxes is broken */
     if (!r) r = mailbox_rewrite_index_record(pctx->mailbox, pctx->record);

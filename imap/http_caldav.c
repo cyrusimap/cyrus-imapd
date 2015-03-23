@@ -4295,7 +4295,7 @@ static int proppatch_tzid(xmlNodePtr prop, unsigned set,
 	    annotate_state_t *astate = NULL;
 
 	    r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
-	    if (!r) r = annotate_state_write(astate, prop_annot, /*userid*/NULL, NULL);
+	    if (!r) r = annotate_state_writemask(astate, prop_annot, httpd_userid, NULL);
 
 	    if (r) {
 		xml_add_prop(HTTP_SERVER_ERROR, pctx->ns[NS_DAV],
