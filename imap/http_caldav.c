@@ -2147,13 +2147,10 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 	}
 	else if (namespace_calendar.allow & ALLOW_CAL_NOTZ) {
 	    /* Strip known VTIMEZONEs */
-	    struct buf msg_buf = BUF_INITIALIZER;
 	    icalcomponent *ical;
 	    struct caldav_db *caldavdb = my_caldav_open(mailbox);
 
-	    mailbox_map_record(mailbox, record, &msg_buf);
-	    ical = icalparser_parse_string(buf_base(&msg_buf) + record->header_size);
-	    buf_free(&msg_buf);
+	    ical = record_to_ical(mailbox, record);
 
 	    mailbox_unlock_index(mailbox, NULL);
 	    r = mailbox_lock_index(mailbox, LOCK_EXCLUSIVE);
