@@ -1879,7 +1879,8 @@ static void _make_fn(struct vparse_card *card)
      _card_val(card, "fn", fn);
 }
 
-static int _json_to_card(struct vparse_card *card, json_t *arg)
+static int _json_to_card(struct vparse_card *card, json_t *arg, strarray_t *flags,
+			 struct entryattlist **annotsp)
 {
     const char *key;
     json_t *val;
@@ -1894,7 +1895,26 @@ static int _json_to_card(struct vparse_card *card, json_t *arg)
 
     json_object_foreach(arg, key, val) {
 	if (!strcmp(key, "isFlagged")) {
-	    /* XXX - way to add flagged info? */
+	    if (json_is_true(val)) {
+		strarray_add_case(flags, "\\Flagged");
+	    }
+	    else {
+		strarray_remove_all_case(flags, "\\Flagged");
+	    }
+	}
+	else if (!strcmp(key, "x-importance")) {
+	    double dval = json_number_value(val);
+	    const char *ns = ANNOT_NS "<" XML_NS_CYRUS ">importance";
+	    const char *attrib = "value.shared";
+	    if (dval) {
+		struct buf buf = BUF_INITIALIZER;
+		buf_printf(&buf, "%e", dval);
+		setentryatt(annotsp, ns, attrib, &buf);
+		buf_free(&buf);
+	    }
+	    else {
+		clearentryatt(annotsp, ns, attrib);
+	    }
 	}
 	else if (!strcmp(key, "avatar")) {
 	    /* XXX - file handling */
@@ -1999,6 +2019,8 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 	json_t *arg;
 	json_object_foreach(create, key, arg) {
 	    char *uid = makeuuid();
+	    strarray_t *flags = strarray_new();
+	    struct entryattlist *annots = NULL;
 
 	    struct vparse_card *card = vparse_new_card("VCARD");
 	    vparse_add_entry(card, NULL, "VERSION", "3.0");
@@ -2015,19 +2037,23 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 		}
 	    }
 
-	    r = _json_to_card(card, arg);
+	    r = _json_to_card(card, arg, flags, &annots);
 	    if (r) {
 		/* this is just a failure */
 		r = 0;
 		json_t *err = json_pack("{s:s}", "type", "invalidParameters");
 		json_object_set_new(notCreated, key, err);
+		strarray_free(flags);
+		freeentryatts(annots);
 		free(uid);
 		vparse_free_card(card);
 		continue;
 	    }
 
-	    r = carddav_store(mailbox, 0, card, NULL, NULL, NULL);
+	    r = carddav_store(mailbox, 0, card, NULL, flags, annots);
 	    vparse_free_card(card);
+	    strarray_free(flags);
+	    freeentryatts(annots);
 
 	    if (r) {
 		free(uid);
@@ -2093,6 +2119,9 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 	    r = mailbox_map_record(mailbox, &record, &msg_buf);
 	    if (r) goto done;
 
+	    strarray_t *flags = mailbox_extract_flags(mailbox, &record, httpd_userid);
+	    struct entryattlist *annots = mailbox_extract_annots(mailbox, &record);
+
 	    memset(&vparser, 0, sizeof(struct vparse_state));
 	    vparser.base = buf_cstring(&msg_buf) + record.header_size;
 	    vparse_set_multival(&vparser, "adr");
@@ -2105,20 +2134,26 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 		json_t *err = json_pack("{s:s}", "type", "parseError");
 		json_object_set_new(notUpdated, uid, err);
 		vparse_free(&vparser);
+		strarray_free(flags);
+		freeentryatts(annots);
 		continue;
 	    }
 	    struct vparse_card *card = vparser.card->objects;
 
-	    r = _json_to_card(card, arg);
+	    r = _json_to_card(card, arg, flags, &annots);
 	    if (r) {
 		/* this is just a failure to create the JSON, not an error */
 		r = 0;
 		json_t *err = json_pack("{s:s}", "type", "invalidParameters");
 		json_object_set_new(notUpdated, uid, err);
 		vparse_free(&vparser);
+		strarray_free(flags);
+		freeentryatts(annots);
 		continue;
 	    }
-	    r = carddav_store(mailbox, olduid, card, resource, NULL, NULL);
+	    r = carddav_store(mailbox, olduid, card, resource, flags, annots);
+	    strarray_free(flags);
+	    freeentryatts(annots);
 
 	    vparse_free(&vparser);
 	    free(resource);
