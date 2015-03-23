@@ -4593,7 +4593,7 @@ int meth_proppatch(struct transaction_t *txn, void *params)
     if ((r = pparams->parse_path(txn->req_uri->path,
 				 &txn->req_tgt, &txn->error.desc))) return r;
 
-    if (!txn->req_tgt.collection) {
+    if (!txn->req_tgt.collection && !txn->req_tgt.user) {
 	txn->error.desc = "PROPPATCH requires a collection";
 	return HTTP_NOT_ALLOWED;
     }
