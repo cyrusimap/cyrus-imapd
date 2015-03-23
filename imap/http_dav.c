@@ -2166,7 +2166,8 @@ int propfind_fromdb(const xmlChar *name, xmlNsPtr ns,
 	       (const char *) ns->href, name);
 
     if (fctx->mailbox && !fctx->record &&
-	!(r = annotatemore_lookupmask(fctx->mailbox->name, buf_cstring(&fctx->buf),
+	!(r = annotatemore_lookupmask(fctx->mailbox->name,
+				      buf_cstring(&fctx->buf),
 				      httpd_userid, &attrib))) {
 	if (!buf_len(&attrib) &&
 	    !xmlStrcmp(name, BAD_CAST "displayname")) {
@@ -2181,7 +2182,10 @@ int propfind_fromdb(const xmlChar *name, xmlNsPtr ns,
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			name, ns, NULL, 0);
     xmlAddChild(node, xmlNewCDataBlock(fctx->root->doc,
-				       BAD_CAST buf_cstring(&attrib), buf_len(&attrib)));
+				       BAD_CAST buf_cstring(&attrib),
+				       buf_len(&attrib)));
+
+    buf_free(&attrib);
 
     return 0;
 }
