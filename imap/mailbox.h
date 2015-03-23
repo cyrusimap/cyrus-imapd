@@ -496,10 +496,13 @@ extern int mailbox_remove_user_flag(struct mailbox *mailbox, int flagnum);
 extern int mailbox_record_hasflag(struct mailbox *mailbox,
 				  struct index_record *record,
 				  const char *flag);
+extern strarray_t *mailbox_extract_flags(const struct mailbox *mailbox,
+					 const struct index_record *record,
+					 const char *userid);
 extern int mailbox_commit(struct mailbox *mailbox);
 
 /* seen state check */
-extern int mailbox_internal_seen(struct mailbox *mailbox, const char *userid);
+extern int mailbox_internal_seen(const struct mailbox *mailbox, const char *userid);
 
 extern unsigned mailbox_count_unseen(struct mailbox *mailbox);
 

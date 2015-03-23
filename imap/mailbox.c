@@ -1374,6 +1374,38 @@ int mailbox_record_hasflag(struct mailbox *mailbox,
     return ((record->user_flags[userflag/32] & (1<<(userflag&31))) ? 1 : 0);
 }
 
+EXPORTED strarray_t *mailbox_extract_flags(const struct mailbox *mailbox,
+					   const struct index_record *record,
+					   const char *userid)
+{
+    int i;
+    strarray_t *flags = strarray_new();
+
+    /* Note: we don't handle the external seen db here, on
+     * the grounds that it would add complexity without
+     * actually being useful to annotators */
+    if (mailbox_internal_seen(mailbox, userid) && (record->system_flags & FLAG_SEEN))
+	strarray_append(flags, "\\Seen");
+
+    if ((record->system_flags & FLAG_DELETED))
+	strarray_append(flags, "\\Deleted");
+    if ((record->system_flags & FLAG_DRAFT))
+	strarray_append(flags, "\\Draft");
+    if ((record->system_flags & FLAG_FLAGGED))
+	strarray_append(flags, "\\Flagged");
+    if ((record->system_flags & FLAG_ANSWERED))
+	strarray_append(flags, "\\Answered");
+
+    for (i = 0 ; i < MAX_USER_FLAGS ; i++) {
+	if (mailbox->flagname[i] &&
+	    (record->user_flags[i/32] & 1<<(i&31)))
+	    strarray_append(flags, mailbox->flagname[i]);
+    }
+
+    return flags;
+
+}
+
 static int mailbox_buf_to_index_header(const char *buf, size_t len,
 				       struct index_header *i)
 {
@@ -4068,7 +4100,7 @@ EXPORTED int mailbox_expunge_cleanup(struct mailbox *mailbox, time_t expunge_mar
     return r;
 }
 
-EXPORTED int mailbox_internal_seen(struct mailbox *mailbox, const char *userid)
+EXPORTED int mailbox_internal_seen(const struct mailbox *mailbox, const char *userid)
 {
     /* old mailboxes don't have internal seen at all */
     if (mailbox->i.minor_version < 12)

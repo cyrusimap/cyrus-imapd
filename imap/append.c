@@ -815,36 +815,6 @@ out:
     return r;
 }
 
-static void append_make_flags(struct appendstate *as,
-			      struct index_record *record,
-			      strarray_t *flags)
-{
-    int i;
-
-    assert(flags);
-
-    /* Note: we don't handle the external seen db here, on
-     * the grounds that it would add complexity without
-     * actually being useful to annotators */
-    if (as->internalseen && (record->system_flags & FLAG_SEEN))
-	strarray_append(flags, "\\Seen");
-
-    if ((record->system_flags & FLAG_DELETED))
-	strarray_append(flags, "\\Deleted");
-    if ((record->system_flags & FLAG_DRAFT))
-	strarray_append(flags, "\\Draft");
-    if ((record->system_flags & FLAG_FLAGGED))
-	strarray_append(flags, "\\Flagged");
-    if ((record->system_flags & FLAG_ANSWERED))
-	strarray_append(flags, "\\Answered");
-
-    for (i = 0 ; i < MAX_USER_FLAGS ; i++) {
-	if (as->mailbox->flagname[i] &&
-	    (record->user_flags[i/32] & 1<<(i&31)))
-	    strarray_append(flags, as->mailbox->flagname[i]);
-    }
-}
-
 /*
  * staging, to allow for single-instance store.  the complication here
  * is multiple partitions.
@@ -1145,7 +1115,7 @@ HIDDEN int append_run_annotator(struct appendstate *as,
     const char *fname;
     struct entryattlist *user_annots = NULL;
     struct entryattlist *system_annots = NULL;
-    strarray_t flags = STRARRAY_INITIALIZER;
+    strarray_t *flags = NULL;
     annotate_state_t *astate = NULL;
     struct body *body = NULL;
     int r;
@@ -1153,7 +1123,7 @@ HIDDEN int append_run_annotator(struct appendstate *as,
     if (!config_getstring(IMAPOPT_ANNOTATION_CALLOUT))
 	return 0;
 
-    append_make_flags(as, record, &flags);
+    flags = mailbox_extract_flags(as->mailbox, record, as->userid);
 
     r = annotatemore_findall(as->mailbox->name, record->uid, "*",
 			     load_annot_cb, &user_annots);
@@ -1174,12 +1144,12 @@ HIDDEN int append_run_annotator(struct appendstate *as,
     fclose(f);
     f = NULL;
 
-    r = callout_run(fname, body, &user_annots, &system_annots, &flags);
+    r = callout_run(fname, body, &user_annots, &system_annots, flags);
     if (r) goto out;
 
     record->system_flags &= (FLAG_SEEN | FLAGS_INTERNAL);
     memset(&record->user_flags, 0, sizeof(record->user_flags));
-    r = append_apply_flags(as, NULL, record, &flags);
+    r = append_apply_flags(as, NULL, record, flags);
     if (r) goto out;
 
     r = mailbox_get_annotate_state(as->mailbox, record->uid, &astate);
@@ -1207,7 +1177,7 @@ out:
     if (f) fclose(f);
     freeentryatts(user_annots);
     freeentryatts(system_annots);
-    strarray_fini(&flags);
+    strarray_free(flags);
     if (body) {
 	message_free_body(body);
 	free(body);
