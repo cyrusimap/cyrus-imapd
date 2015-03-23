@@ -1591,6 +1591,11 @@ EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, struct jmap_req *
 	int size = json_array_size(want);
 	for (i = 0; i < size; i++) {
 	    const char *id = json_string_value(json_array_get(want, i));
+	    if (id == NULL) {
+		free_hash_table(rock.need, NULL);
+		free(rock.need);
+		return -1; /* XXX - need codes */
+	    }
 	    /* 1 == want */
 	    hash_insert(id, (void *)1, rock.need);
 	}
@@ -1604,6 +1609,11 @@ EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, struct jmap_req *
 	int size = json_array_size(properties);
 	for (i = 0; i < size; i++) {
 	    const char *id = json_string_value(json_array_get(properties, i));
+	    if (id == NULL) {
+		free_hash_table(rock.need, NULL);
+		free(rock.need);
+		return -1; /* XXX - need codes */
+	    }
 	    /* 1 == properties */
 	    hash_insert(id, (void *)1, rock.props);
 	}
