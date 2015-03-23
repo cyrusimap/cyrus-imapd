@@ -8789,7 +8789,7 @@ static void cmd_getmetadata(const char *tag)
     if (nlists == 2) {
 	/* no options */
 	mboxes = &lists[0];
-	mbox_is_pattern = !is_list[0];
+	mbox_is_pattern = is_list[0];
     }
     if (nlists == 3) {
 	/* options, either before or after */
