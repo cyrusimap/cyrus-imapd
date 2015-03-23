@@ -240,6 +240,7 @@ static int meth_post(struct transaction_t *txn,
 
 	struct jmap_req req;
 	req.userid = httpd_userid;
+	req.authstate = httpd_authstate;
 	req.args = args;
 	req.state = buf_cstring(&buf);
 	req.response = resp;

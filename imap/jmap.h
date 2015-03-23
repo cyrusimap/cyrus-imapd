@@ -55,6 +55,7 @@
 
 struct jmap_req {
     const char *userid;
+    struct auth_state *authstate;
     struct hash_table *idmap;
     json_t *args;
     json_t *response;

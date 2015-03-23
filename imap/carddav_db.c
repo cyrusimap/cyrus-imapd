@@ -1371,7 +1371,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 		r = mailbox_open_iwl(mboxname, &mailbox);
 	    }
 
-	    if (!r) r = carddav_store(mailbox, 0, card, NULL, NULL, NULL);
+	    if (!r) r = carddav_store(mailbox, 0, card, NULL, NULL, NULL, req->userid, req->authstate);
 
 	    vparse_free_card(card);
 
@@ -1482,7 +1482,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 		}
 	    }
 
-	    r = carddav_store(mailbox, olduid, card, resource, NULL, NULL);
+	    r = carddav_store(mailbox, olduid, card, resource, NULL, NULL, req->userid, req->authstate);
 
 	    vparse_free(&vparser);
 	    free(resource);
@@ -2060,7 +2060,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 		continue;
 	    }
 
-	    r = carddav_store(mailbox, 0, card, NULL, flags, annots);
+	    r = carddav_store(mailbox, 0, card, NULL, flags, annots, req->userid, req->authstate);
 	    vparse_free_card(card);
 	    strarray_free(flags);
 	    freeentryatts(annots);
@@ -2129,7 +2129,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 	    r = mailbox_map_record(mailbox, &record, &msg_buf);
 	    if (r) goto done;
 
-	    strarray_t *flags = mailbox_extract_flags(mailbox, &record, httpd_userid);
+	    strarray_t *flags = mailbox_extract_flags(mailbox, &record, req->userid);
 	    struct entryattlist *annots = mailbox_extract_annots(mailbox, &record);
 
 	    memset(&vparser, 0, sizeof(struct vparse_state));
@@ -2161,7 +2161,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 		freeentryatts(annots);
 		continue;
 	    }
-	    r = carddav_store(mailbox, olduid, card, resource, flags, annots);
+	    r = carddav_store(mailbox, olduid, card, resource, flags, annots, req->userid, req->authstate);
 	    strarray_free(flags);
 	    freeentryatts(annots);
 
@@ -2289,7 +2289,8 @@ EXPORTED void carddav_make_entry(struct vparse_card *vcard, struct carddav_data 
 
 EXPORTED int carddav_store(struct mailbox *mailbox, uint32_t olduid,
 			   struct vparse_card *vcard, const char *resource,
-			   strarray_t *flags, struct entryattlist *annots)
+			   strarray_t *flags, struct entryattlist *annots,
+			   const char *userid, struct auth_state *authstate)
 {
     int r = 0;
     FILE *f = NULL;
@@ -2314,10 +2315,10 @@ EXPORTED int carddav_store(struct mailbox *mailbox, uint32_t olduid,
     time_to_rfc822(now, datestr, sizeof(datestr));
     struct buf buf = BUF_INITIALIZER;
     vparse_tobuf(vcard, &buf);
-    const char *userid = mboxname_to_userid(mailbox->name);
+    const char *mbuserid = mboxname_to_userid(mailbox->name);
 
     /* XXX  This needs to be done via an LDAP/DB lookup */
-    header = charset_encode_mimeheader(userid, 0);
+    header = charset_encode_mimeheader(mbuserid, 0);
     fprintf(f, "From: %s <>\r\n", header);
     free(header);
 
@@ -2351,7 +2352,7 @@ EXPORTED int carddav_store(struct mailbox *mailbox, uint32_t olduid,
 
     fclose(f);
 
-    if ((r = append_setup_mbox(&as, mailbox, httpd_userid, httpd_authstate, 0, qdiffs, 0, 0, EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
+    if ((r = append_setup_mbox(&as, mailbox, userid, authstate, 0, qdiffs, 0, 0, EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
 	syslog(LOG_ERR, "append_setup(%s) failed: %s",
 	       mailbox->name, error_message(r));
 	goto done;
