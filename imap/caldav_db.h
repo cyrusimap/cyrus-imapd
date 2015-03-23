@@ -167,6 +167,6 @@ int caldav_abort(struct caldav_db *caldavdb);
 /* create caldav_data from icalcomponent */
 void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata);
 
-const char *caldav_mboxname(const char *userid, const char *name);
+char *caldav_mboxname(const char *userid, const char *name);
 
 #endif /* CALDAV_DB_H */
