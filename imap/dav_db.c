@@ -114,6 +114,7 @@
     " objid INTEGER,"							\
     " pos INTEGER NOT NULL," /* for sorting */				\
     " email TEXT NOT NULL COLLATE NOCASE,"				\
+    " ispref INTEGER NOT NULL DEFAULT 0,"				\
     " FOREIGN KEY (objid) REFERENCES vcard_objs (rowid) ON DELETE CASCADE );" \
     "CREATE INDEX IF NOT EXISTS idx_vcard_email ON vcard_emails ( email COLLATE NOCASE );"
 
@@ -123,30 +124,35 @@
     " objid INTEGER,"							\
     " pos INTEGER NOT NULL," /* for sorting */				\
     " member_uid TEXT NOT NULL,"					\
+    " otheruser TEXT NOT NULL DEFAULT \"\","				\
     " FOREIGN KEY (objid) REFERENCES vcard_objs (rowid) ON DELETE CASCADE );"
 
 #define CMD_CREATE CMD_CREATE_CAL CMD_CREATE_OBJ CMD_CREATE_EM CMD_CREATE_GR
 
 /* leaves these unused columns around, but that's life.  A dav_reconstruct
  * will fix them */
-#define CMD_DBUPDGRADEv2						\
-    "ALTER TABLE ical_objs ADD COLUMN comp_flags INTEGER;"		\
+#define CMD_DBUPGRADEv2						\
+    "ALTER TABLE ical_objs ADD COLUMN comp_flags INTEGER;"	\
     "UPDATE ical_objs SET comp_flags = recurring + 2 * transp;"
 
-#define CMD_DBUPDGRADEv3					\
+#define CMD_DBUPGRADEv3						\
     "ALTER TABLE ical_objs ADD COLUMN modseq INTEGER;"		\
     "UPDATE ical_objs SET modseq = 1;"				\
     "ALTER TABLE vcard_objs ADD COLUMN modseq INTEGER;"		\
     "UPDATE vcard_objs SET modseq = 1;"
 
-#define CMD_DBUPDGRADEv4					\
+#define CMD_DBUPGRADEv4						\
     "ALTER TABLE ical_objs ADD COLUMN alive INTEGER;"		\
     "UPDATE ical_objs SET alive = 1;"				\
     "ALTER TABLE vcard_objs ADD COLUMN alive INTEGER;"		\
     "UPDATE vcard_objs SET alive = 1;"
 
+#define CMD_DBUPGRADEv5						\
+    "ALTER TABLE vcard_emails ADD COLUMN ispref INTEGER NOT NULL DEFAULT 0;"	\
+    "ALTER TABLE vcard_groups ADD COLUMN otheruser TEXT NOT NULL DEFAULT \"\";"
 
-#define DB_VERSION 4
+
+#define DB_VERSION 5
 
 struct open_davdb {
     sqlite3 *db;
@@ -330,7 +336,7 @@ static sqlite3 *dav_open(const char *fname)
 
 	case 1:
 	    syslog(LOG_NOTICE, "upgrading dav_db to v2 %s", open->path);
-	    rc = sqlite3_exec(open->db, CMD_DBUPDGRADEv2, NULL, NULL, NULL);
+	    rc = sqlite3_exec(open->db, CMD_DBUPGRADEv2, NULL, NULL, NULL);
 	    if (rc != SQLITE_OK) {
 		syslog(LOG_ERR, "dav_open(%s) upgrade v2: %s",
 		    open->path, sqlite3_errmsg(open->db));
@@ -342,7 +348,7 @@ static sqlite3 *dav_open(const char *fname)
 
 	case 2:
 	    syslog(LOG_NOTICE, "upgrading dav_db to v3 %s", open->path);
-	    rc = sqlite3_exec(open->db, CMD_DBUPDGRADEv3, NULL, NULL, NULL);
+	    rc = sqlite3_exec(open->db, CMD_DBUPGRADEv3, NULL, NULL, NULL);
 	    if (rc != SQLITE_OK) {
 		syslog(LOG_ERR, "dav_open(%s) upgrade v3: %s",
 		    open->path, sqlite3_errmsg(open->db));
@@ -354,9 +360,21 @@ static sqlite3 *dav_open(const char *fname)
 
 	case 3:
 	    syslog(LOG_NOTICE, "upgrading dav_db to v4 %s", open->path);
-	    rc = sqlite3_exec(open->db, CMD_DBUPDGRADEv4, NULL, NULL, NULL);
+	    rc = sqlite3_exec(open->db, CMD_DBUPGRADEv4, NULL, NULL, NULL);
 	    if (rc != SQLITE_OK) {
 		syslog(LOG_ERR, "dav_open(%s) upgrade v4: %s",
+		    open->path, sqlite3_errmsg(open->db));
+		sqlite3_close(open->db);
+		free_dav_open(open);
+		return NULL;
+	    }
+	    break;
+
+	case 4:
+	    syslog(LOG_NOTICE, "upgrading dav_db to v5 %s", open->path);
+	    rc = sqlite3_exec(open->db, CMD_DBUPGRADEv5, NULL, NULL, NULL);
+	    if (rc != SQLITE_OK) {
+		syslog(LOG_ERR, "dav_open(%s) upgrade v5: %s",
 		    open->path, sqlite3_errmsg(open->db));
 		sqlite3_close(open->db);
 		free_dav_open(open);
