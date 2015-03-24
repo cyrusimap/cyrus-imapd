@@ -2399,7 +2399,14 @@ EXPORTED void carddav_make_entry(struct vparse_card *vcard, struct carddav_data 
 	}
 	else if (!strcmp(name, "email")) {
 	    /* XXX - insert if primary */
+	    int ispref = 0;
+	    struct vparse_param *param;
+	    for (param = ventry->params; param; param = param->next) {
+		if (!strcasecmp(param->name, "type") && !strcasecmp(param->value, "pref"))
+		    ispref = 1;
+	    }
 	    strarray_append(&cdata->emails, propval);
+	    strarray_append(&cdata->emails, ispref ? "1" : "");
 	}
 	else if (!strcmp(name, "x-addressbookserver-member")) {
 	    if (strncmp(propval, "urn:uuid:", 9)) continue;
