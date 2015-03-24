@@ -1351,7 +1351,8 @@ done:
     return r;
 }
 
-static int _add_othergroup_entries(struct carddav_db *carddavdb, struct jmap_req *req,
+static int _add_othergroup_entries(struct carddav_db *carddavdb __attribute__((unused)),
+				   struct jmap_req *req,
 				   struct vparse_card *card, json_t *members)
 {
     vparse_delete_entries(card, NULL, "X-ADDRESSBOOKSERVER-MEMBER");
@@ -1366,7 +1367,6 @@ static int _add_othergroup_entries(struct carddav_db *carddavdb, struct jmap_req
 	struct vparse_entry *entry = vparse_add_entry(card, NULL, "X-ADDRESSBOOKSERVER-MEMBER", buf_cstring(&buf));
 	vparse_add_param(entry, "userid", key);
     }
-done:
     buf_free(&buf);
     return r;
 }
