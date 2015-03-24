@@ -1264,6 +1264,11 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 	json_object_set_new(obj, "birthday", json_string(buf_cstring(&tmp_buf)));
     }
 
+    if (_wantprop(grock->props, "notes")) {
+	const char *item = vparse_stringval(card, "note");
+	json_object_set_new(obj, "notes", json_string(item ? item : ""));
+    }
+
     /* XXX - other fields */
 
     json_array_append_new(grock->array, obj);
