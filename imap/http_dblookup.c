@@ -116,6 +116,89 @@ done:
     return ret;
 }
 
+static int get_email2uids(struct transaction_t *txn __attribute__((unused)),
+			  const char *userid, const char *key)
+{
+    struct carddav_db *db = NULL;
+    strarray_t *array = NULL;
+    char *result = NULL;
+    json_t *json;
+    int ret = HTTP_NO_CONTENT;
+    int i;
+
+    /* XXX init just incase carddav not enabled? */
+    db = carddav_open_userid(userid);
+    if (!db) goto done;
+
+    array = carddav_getemail2uids(db, key);
+    if (!array) goto done;
+
+    json = json_array();
+    for (i = 0; i < strarray_size(array); i++) {
+	json_array_append_new(json, json_string(strarray_nth(array, i)));
+    }
+
+    result = json_dumps(json, JSON_PRESERVE_ORDER|JSON_COMPACT);
+    json_decref(json);
+
+    txn->resp_body.type = "application/json";
+    txn->resp_body.len = strlen(result);
+
+    write_body(HTTP_OK, txn, result, txn->resp_body.len);
+    ret = 0;
+
+done:
+    free(result);
+    if (array) strarray_free(array);
+    if (db) carddav_close(db);
+    return ret;
+}
+
+static int get_uid2groups(struct transaction_t *txn,
+			  const char *userid, const char *key)
+{
+    struct carddav_db *db = NULL;
+    strarray_t *array = NULL;
+    char *result = NULL;
+    json_t *json;
+    int ret = HTTP_NO_CONTENT;
+    int i;
+    const char **otheruserhdrs;
+    const char *otheruser = "";
+
+    otheruserhdrs = spool_getheader(txn->req_hdrs, "OtherUser");
+    if (otheruserhdrs) {
+	otheruser = otheruserhdrs[0];
+    }
+
+    /* XXX init just incase carddav not enabled? */
+    db = carddav_open_userid(userid);
+    if (!db) goto done;
+
+    array = carddav_getuid2groups(db, key, otheruser);
+    if (!array) goto done;
+
+    json = json_array();
+    for (i = 0; i < strarray_size(array); i++) {
+	json_array_append_new(json, json_string(strarray_nth(array, i)));
+    }
+
+    result = json_dumps(json, JSON_PRESERVE_ORDER|JSON_COMPACT);
+    json_decref(json);
+
+    txn->resp_body.type = "application/json";
+    txn->resp_body.len = strlen(result);
+
+    write_body(HTTP_OK, txn, result, txn->resp_body.len);
+    ret = 0;
+
+done:
+    free(result);
+    if (array) strarray_free(array);
+    if (db) carddav_close(db);
+    return ret;
+}
+
 static int get_group(struct transaction_t *txn, const char *userid, const char *mboxname, const char *group)
 {
     struct carddav_db *db = NULL;
@@ -175,6 +258,12 @@ static int meth_get_db(struct transaction_t *txn,
 
     if (!strcmp(txn->req_uri->path, "/dblookup/email"))
 	return get_email(txn, userhdrs[0], keyhdrs[0]);
+
+    if (!strcmp(txn->req_uri->path, "/dblookup/email2uids"))
+	return get_email2uids(txn, userhdrs[0], keyhdrs[0]);
+
+    if (!strcmp(txn->req_uri->path, "/dblookup/uid2groups"))
+	return get_uid2groups(txn, userhdrs[0], keyhdrs[0]);
 
     strlcpy(path, keyhdrs[0], sizeof(path));
     p = path + strlen(path);

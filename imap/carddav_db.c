@@ -75,6 +75,8 @@ enum {
     STMT_GETEMAIL_GROUPS,
     STMT_GETGROUP_EXISTS,
     STMT_GETGROUP_MEMBERS,
+    STMT_GETEMAIL2UIDS,
+    STMT_GETUID2GROUPS,
     STMT_GETCARDS,
     STMT_GETUPDATES,
     NUM_STMT
@@ -410,6 +412,18 @@ EXPORTED strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const c
     " AND G.objid = GO.rowid AND E.email = :email" \
     " AND GO.alive = 1 AND CO.alive = 1;"
 
+#define CMD_GETEMAIL2UIDS \
+    "SELECT DISTINCT vcard_uid " \
+    " FROM vcard_objs CO JOIN vcard_emails E" \
+    " WHERE E.objid = CO.rowid AND CO.alive = 1" \
+    " AND E.email = :email;"
+
+#define CMD_GETUID2GROUPS \
+    "SELECT DISTINCT GO.name" \
+    " FROM vcard_objs GO JOIN vcard_groups G" \
+    " WHERE G.objid = GO.rowid AND GO.alive = 1" \
+    " AND G.member_uid = :member_uid AND G.otheruser = :otheruser;"
+
 static int emailexists_cb(sqlite3_stmt *stmt, void *rock)
 {
     int *exists = (int *)rock;
@@ -418,7 +432,7 @@ static int emailexists_cb(sqlite3_stmt *stmt, void *rock)
     return 0;
 }
 
-static int emailgroups_cb(sqlite3_stmt *stmt, void *rock)
+static int addarray_cb(sqlite3_stmt *stmt, void *rock)
 {
     strarray_t *array = (strarray_t *)rock;
     strarray_add(array, (const char *)sqlite3_column_text(stmt, 0));
@@ -448,7 +462,7 @@ EXPORTED strarray_t *carddav_getemail(struct carddav_db *carddavdb, const char *
 
     groups = strarray_new();
 
-    r = dav_exec(carddavdb->db, CMD_GETEMAIL_GROUPS, bval, &emailgroups_cb, groups,
+    r = dav_exec(carddavdb->db, CMD_GETEMAIL_GROUPS, bval, &addarray_cb, groups,
 		 &carddavdb->stmt[STMT_GETEMAIL_GROUPS]);
     if (r) {
 	/* XXX syslog */
@@ -456,6 +470,37 @@ EXPORTED strarray_t *carddav_getemail(struct carddav_db *carddavdb, const char *
 
     return groups;
 }
+
+EXPORTED strarray_t *carddav_getemail2uids(struct carddav_db *carddavdb, const char *email)
+{
+    struct bind_val bval[] = {
+	{ ":email", SQLITE_TEXT, { .s = email } },
+	{ NULL,     SQLITE_NULL, { .s = NULL  } }
+    };
+    strarray_t *uids = strarray_new();
+
+    dav_exec(carddavdb->db, CMD_GETEMAIL2UIDS, bval, &addarray_cb, &uids,
+	     &carddavdb->stmt[STMT_GETEMAIL2UIDS]);
+
+    return uids;
+}
+
+EXPORTED strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb,
+					   const char *member_uid, const char *otheruser)
+{
+    struct bind_val bval[] = {
+	{ ":member_uid", SQLITE_TEXT, { .s = member_uid } },
+	{ ":otheruser",  SQLITE_TEXT, { .s = otheruser } },
+	{ NULL,          SQLITE_NULL, { .s = NULL  } }
+    };
+    strarray_t *groups = strarray_new();
+
+    dav_exec(carddavdb->db, CMD_GETUID2GROUPS, bval, &addarray_cb, &groups,
+	     &carddavdb->stmt[STMT_GETUID2GROUPS]);
+
+    return groups;
+}
+
 
 #define CMD_GETGROUP_EXISTS \
     "SELECT rowid " \
