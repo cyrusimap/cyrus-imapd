@@ -378,7 +378,6 @@ static void my_carddav_auth(const char *userid)
     buf_setcstr(&boxbuf, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
     mailboxname = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
     r = mboxlist_lookup(mailboxname, NULL, NULL);
-    free(mailboxname);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	if (config_mupdate_server) {
 	    /* Find location of INBOX */
@@ -391,13 +390,12 @@ static void my_carddav_auth(const char *userid)
 		proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
 				 &backend_cached, NULL, NULL, httpd_in);
 		mboxlist_entry_free(&mbentry);
+		free(mailboxname);
 		return;
 	    }
 	    mboxlist_entry_free(&mbentry);
 	}
 	else r = 0;
-
-	mailboxname = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
 
 	/* XXX - set rights */
 	r = mboxlist_createmailbox(mailboxname, MBTYPE_ADDRESSBOOK,
@@ -406,12 +404,11 @@ static void my_carddav_auth(const char *userid)
 				   0, 0, 0, 0, NULL);
 	if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
 		      mailboxname, error_message(r));
-	free(mailboxname);
     }
+    free(mailboxname);
     if (r) return;
 
     /* Default addressbook */
-    buf_setcstr(&boxbuf, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
     buf_printf(&boxbuf, ".%s", DEFAULT_ADDRBOOK);
     mailboxname = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
     r = mboxlist_lookup(mailboxname, NULL, NULL);
@@ -425,6 +422,8 @@ static void my_carddav_auth(const char *userid)
 		      mailboxname, error_message(r));
     }
     free(mailboxname);
+
+    buf_free(&boxbuf);
 }
 
 

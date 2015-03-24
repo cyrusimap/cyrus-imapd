@@ -905,7 +905,6 @@ static void my_caldav_auth(const char *userid)
     /* calendar-home-set */
     mailboxname = caldav_mboxname(userid, NULL);
     r = mboxlist_lookup(mailboxname, NULL, NULL);
-    free(mailboxname);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	if (config_mupdate_server) {
 	    /* Find location of INBOX */
@@ -918,14 +917,12 @@ static void my_caldav_auth(const char *userid)
 		proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
 				 &backend_cached, NULL, NULL, httpd_in);
 		mboxlist_entry_free(&mbentry);
+		free(mailboxname);
 		return;
 	    }
 	    mboxlist_entry_free(&mbentry);
 	}
 	else r = 0;
-
-	/* will have been overwritten */
-	mailboxname = caldav_mboxname(userid, NULL);
 
 	/* Create locally */
 	r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR,
@@ -934,8 +931,9 @@ static void my_caldav_auth(const char *userid)
 				   0, 0, 0, 0, NULL);
 	if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
 		      mailboxname, error_message(r));
-	free(mailboxname);
     }
+    free(mailboxname);
+    if (r) return;
 
     /* Default calendar */
     mailboxname = caldav_mboxname(userid, SCHED_DEFAULT);
