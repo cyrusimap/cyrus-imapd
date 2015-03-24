@@ -374,7 +374,8 @@ EXPORTED int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
 static int addarray_cb(sqlite3_stmt *stmt, void *rock)
 {
     strarray_t *array = (strarray_t *)rock;
-    strarray_add(array, (const char *)sqlite3_column_text(stmt, 0));
+    const char *value = (const char *)sqlite3_column_text(stmt, 0);
+    if (value) strarray_add(array, value);
     return 0;
 }
 
@@ -419,7 +420,7 @@ EXPORTED strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const c
     " AND E.email = :email;"
 
 #define CMD_GETUID2GROUPS \
-    "SELECT DISTINCT GO.name" \
+    "SELECT DISTINCT GO.fullname" \
     " FROM vcard_objs GO JOIN vcard_groups G" \
     " WHERE G.objid = GO.rowid AND GO.alive = 1" \
     " AND G.member_uid = :member_uid AND G.otheruser = :otheruser;"
