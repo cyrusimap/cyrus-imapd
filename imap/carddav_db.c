@@ -2285,9 +2285,12 @@ EXPORTED void carddav_make_entry(struct vparse_card *vcard, struct carddav_data 
 	    strarray_append(&cdata->emails, propval);
 	}
 	else if (!strcmp(name, "x-addressbookserver-member")) {
-	    const char *item = propval;
-	    if (!strncmp(item, "urn:uuid:", 9))
-		strarray_append(&cdata->member_uids, item+9);
+	    if (!strncmp(propval, "urn:uuid:", 9))
+		strarray_append(&cdata->member_uids, propval+9);
+	}
+	else if (!strcmp(name, "x-addressbookserver-kind")) {
+	    if (!strcasecmp(propval, "group"))
+		cdata->kind = CARDDAV_KIND_GROUP;
 	}
     }
 }

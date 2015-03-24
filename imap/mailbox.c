@@ -2693,12 +2693,6 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 	    goto done;
 	}
 
-	/* default of 0 is unknown kind */
-	const char *kind = vparse_stringval(vparser.card->objects, "X-ADDRESSBOOKSERVER-KIND");
-	if (kind && !strcasecmp(kind, "group"))
-	    cdata->kind = CARDDAV_KIND_GROUP;
-	/* XXX - other kinds? */
-
 	/* Create mapping entry from resource name to UID */
 	cdata->dav.mailbox = mailbox->name;
 	cdata->dav.resource = resource;
