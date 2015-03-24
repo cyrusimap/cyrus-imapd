@@ -371,7 +371,7 @@ EXPORTED int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
     " WHERE G.objid = GO.rowid" \
     " AND G.member_uid = :uid AND GO.alive = 1;"
 
-static int uidgroups_cb(sqlite3_stmt *stmt, void *rock)
+static int addarray_cb(sqlite3_stmt *stmt, void *rock)
 {
     strarray_t *array = (strarray_t *)rock;
     strarray_add(array, (const char *)sqlite3_column_text(stmt, 0));
@@ -390,7 +390,7 @@ EXPORTED strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const c
 
     groups = strarray_new();
 
-    r = dav_exec(carddavdb->db, CMD_GETUID_GROUPS, bval, &uidgroups_cb, groups,
+    r = dav_exec(carddavdb->db, CMD_GETUID_GROUPS, bval, &addarray_cb, groups,
 		 &carddavdb->stmt[STMT_GETUID_GROUPS]);
     if (r) {
 	/* XXX syslog */
@@ -429,13 +429,6 @@ static int emailexists_cb(sqlite3_stmt *stmt, void *rock)
     int *exists = (int *)rock;
     if (sqlite3_column_int(stmt, 0))
 	*exists = 1;
-    return 0;
-}
-
-static int addarray_cb(sqlite3_stmt *stmt, void *rock)
-{
-    strarray_t *array = (strarray_t *)rock;
-    strarray_add(array, (const char *)sqlite3_column_text(stmt, 0));
     return 0;
 }
 
@@ -479,7 +472,7 @@ EXPORTED strarray_t *carddav_getemail2uids(struct carddav_db *carddavdb, const c
     };
     strarray_t *uids = strarray_new();
 
-    dav_exec(carddavdb->db, CMD_GETEMAIL2UIDS, bval, &addarray_cb, &uids,
+    dav_exec(carddavdb->db, CMD_GETEMAIL2UIDS, bval, &addarray_cb, uids,
 	     &carddavdb->stmt[STMT_GETEMAIL2UIDS]);
 
     return uids;
@@ -495,7 +488,7 @@ EXPORTED strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb,
     };
     strarray_t *groups = strarray_new();
 
-    dav_exec(carddavdb->db, CMD_GETUID2GROUPS, bval, &addarray_cb, &groups,
+    dav_exec(carddavdb->db, CMD_GETUID2GROUPS, bval, &addarray_cb, groups,
 	     &carddavdb->stmt[STMT_GETUID2GROUPS]);
 
     return groups;
