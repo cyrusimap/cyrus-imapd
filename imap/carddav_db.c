@@ -816,6 +816,7 @@ EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb, struct jmap_
 
     r = dav_exec(carddavdb->db, CMD_GETCARDS, bval, &getgroups_cb, &rock,
 		 &carddavdb->stmt[STMT_GETCARDS]);
+    mailbox_close(&rock.mailbox);
     if (r) {
 	syslog(LOG_ERR, "caldav error %s", error_message(r));
 	/* XXX - free memory */
@@ -1699,13 +1700,12 @@ EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, struct jmap_req *
 
     r = dav_exec(carddavdb->db, CMD_GETCARDS, bval, &getcontacts_cb, &rock,
 		 &carddavdb->stmt[STMT_GETCARDS]);
+    mailbox_close(&rock.mailbox);
     if (r) {
 	syslog(LOG_ERR, "caldav error %s", error_message(r));
 	/* XXX - free memory */
 	return r;
     }
-
-    mailbox_close(&rock.mailbox);
 
     json_t *contacts = json_pack("{}");
     json_object_set_new(contacts, "accountId", json_string(req->userid));
