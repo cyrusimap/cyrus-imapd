@@ -87,11 +87,9 @@ EXPORTED void strarray_free(strarray_t *sa)
 #define QUANTUM	    16
 static void ensure_alloc(strarray_t *sa, int newalloc)
 {
-    if (newalloc)
-	newalloc++;	/* allow for the NULL terminator */
-    if (newalloc <= sa->alloc)
+    if (newalloc < sa->alloc)
 	return;
-    newalloc = ((newalloc + QUANTUM-1) / QUANTUM) * QUANTUM;
+    newalloc = ((newalloc + QUANTUM) / QUANTUM) * QUANTUM;
     sa->data = xrealloc(sa->data, sizeof(char *) * newalloc);
     memset(sa->data+sa->alloc, 0, sizeof(char *) * (newalloc-sa->alloc));
     sa->alloc = newalloc;
