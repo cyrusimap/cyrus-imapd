@@ -4338,6 +4338,8 @@ static int proppatch_timezone(xmlNodePtr prop, unsigned set,
 	    else {
 		buf_setcstr(&buf, (const char *)freeme);
 	    }
+
+	    if (ical) icalcomponent_free(ical);
 	}
 
 	if (valid) {
@@ -4484,6 +4486,7 @@ static int proppatch_availability(xmlNodePtr prop, unsigned set,
 	if (freeme) xmlFree(freeme);
 	if (type) xmlFree(type);
 	if (ver) xmlFree(ver);
+	buf_free(&buf);
     }
     else {
 	xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
