@@ -790,6 +790,7 @@ static void _add_notfound(const char *key, void *data, void *rock)
 EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb, struct jmap_req *req)
 {
     struct bind_val bval[] = {
+	{ ":kind",   SQLITE_INTEGER, { .i = 1 } },
 	{ NULL,     SQLITE_NULL, { .s = NULL  } }
     };
     struct cards_rock rock;
@@ -1614,7 +1615,7 @@ done:
 EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, struct jmap_req *req)
 {
     struct bind_val bval[] = {
-	{ "kind",   SQLITE_INTEGER, { .i = 0 } },
+	{ ":kind",   SQLITE_INTEGER, { .i = 0 } },
 	{ NULL,     SQLITE_NULL, { .s = NULL  } }
     };
     struct cards_rock rock;
