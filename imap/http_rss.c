@@ -848,6 +848,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 			  buf_cstring(&attrib),
 			  max_items ? (unsigned) max_items : mailbox->i.exists);
     }
+    buf_free(&attrib);
 
     /* <link> - optional */
     buf_printf_markup(buf, level,
