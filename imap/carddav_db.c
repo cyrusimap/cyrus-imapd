@@ -1356,7 +1356,7 @@ static int _add_othergroup_entries(struct carddav_db *carddavdb __attribute__((u
 				   struct jmap_req *req,
 				   struct vparse_card *card, json_t *members)
 {
-    vparse_delete_entries(card, NULL, "X-ADDRESSBOOKSERVER-MEMBER");
+    vparse_delete_entries(card, NULL, "X-FM-OTHERACCOUNT-MEMBER");
     int r = 0;
     struct buf buf = BUF_INITIALIZER;
     const char *key;
@@ -1365,7 +1365,7 @@ static int _add_othergroup_entries(struct carddav_db *carddavdb __attribute__((u
 	const char *uid = _resolveid(req, json_string_value(arg));
 	buf_setcstr(&buf, "urn:uuid:");
 	buf_appendcstr(&buf, uid);
-	struct vparse_entry *entry = vparse_add_entry(card, NULL, "X-ADDRESSBOOKSERVER-MEMBER", buf_cstring(&buf));
+	struct vparse_entry *entry = vparse_add_entry(card, NULL, "X-FM-OTHERACCOUNT-MEMBER", buf_cstring(&buf));
 	vparse_add_param(entry, "userid", key);
     }
     buf_free(&buf);
