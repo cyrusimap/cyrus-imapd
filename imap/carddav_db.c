@@ -1343,8 +1343,28 @@ static int _add_group_entries(struct carddav_db *carddavdb, struct jmap_req *req
 	    goto done;
 	}
 	buf_setcstr(&buf, "urn:uuid:");
-	buf_appendcstr(&buf, json_string_value(item));
+	buf_appendcstr(&buf, uid);
 	vparse_add_entry(card, NULL, "X-ADDRESSBOOKSERVER-MEMBER", buf_cstring(&buf));
+    }
+done:
+    buf_free(&buf);
+    return r;
+}
+
+static int _add_othergroup_entries(struct carddav_db *carddavdb, struct jmap_req *req,
+				   struct vparse_card *card, json_t *members)
+{
+    vparse_delete_entries(card, NULL, "X-ADDRESSBOOKSERVER-MEMBER");
+    int r = 0;
+    struct buf buf = BUF_INITIALIZER;
+    const char *key;
+    json_t *arg;
+    json_object_foreach(members, key, arg) {
+	const char *uid = _resolveid(req, json_string_value(arg));
+	buf_setcstr(&buf, "urn:uuid:");
+	buf_appendcstr(&buf, uid);
+	struct vparse_entry *entry = vparse_add_entry(card, NULL, "X-ADDRESSBOOKSERVER-MEMBER", buf_cstring(&buf));
+	vparse_add_param(entry, "userid", key);
     }
 done:
     buf_free(&buf);
@@ -1396,6 +1416,21 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    json_t *members = json_object_get(arg, "contactIds");
 	    if (members) {
 		r = _add_group_entries(carddavdb, req, card, members);
+		if (r) {
+		    /* this one is legit - it just means we'll be adding an error instead */
+		    r = 0;
+		    json_t *err = json_pack("{s:s}", "type", "invalidContactId");
+		    json_object_set_new(notCreated, key, err);
+		    free(uid);
+		    vparse_free_card(card);
+		    continue;
+		}
+	    }
+
+	    /* it's legal to create an empty group */
+	    json_t *others = json_object_get(arg, "otherAccountContactIds");
+	    if (others) {
+		r = _add_othergroup_entries(carddavdb, req, card, others);
 		if (r) {
 		    /* this one is legit - it just means we'll be adding an error instead */
 		    r = 0;
