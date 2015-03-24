@@ -5622,7 +5622,9 @@ localcreate:
     // Clausing autocreate for the INBOX
     if (r == IMAP_PERMISSION_DENIED) {
 	if (strcasecmp(name, "INBOX")) {
-	    if ((int autocreatequotastorage = config_getint(IMAPOPT_AUTOCREATE_QUOTA))) {
+	    int autocreatequotastorage = config_getint(IMAPOPT_AUTOCREATE_QUOTA);
+
+	    if (autocreatequotastorage > 0) {
 		r = mboxlist_createmailbox(
 			mailboxname,
 			0,
@@ -5645,7 +5647,7 @@ localcreate:
 		int autocreatequotamessage = config_getint(IMAPOPT_AUTOCREATE_QUOTA_MESSAGES);
 
 		if ((autocreatequotastorage > 0) || (autocreatequotamessage > 0)) {
-		    int newquotas[QUOTA_NUMRESOURCES];
+		    quota_t newquotas[QUOTA_NUMRESOURCES];
 		    int res;
 
 		    for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
