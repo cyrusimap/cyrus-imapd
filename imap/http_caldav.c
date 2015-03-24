@@ -882,11 +882,8 @@ static void my_caldav_init(struct buf *serverinfo)
 
 static void my_caldav_auth(const char *userid)
 {
-    const char *mailboxname;
+    char *mailboxname;
     int r;
-
-    /* Generate mailboxname of calendar-home-set */
-    mailboxname = caldav_mboxname(userid, NULL);
 
     if (httpd_userisadmin ||
 	global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
@@ -906,14 +903,17 @@ static void my_caldav_auth(const char *userid)
     /* Auto-provision calendars for 'userid' */
 
     /* calendar-home-set */
+    mailboxname = caldav_mboxname(userid, NULL);
     r = mboxlist_lookup(mailboxname, NULL, NULL);
+    free(mailboxname);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	if (config_mupdate_server) {
 	    /* Find location of INBOX */
-	    const char *inboxname = mboxname_user_mbox(userid, NULL);
+	    char *inboxname = mboxname_user_mbox(userid, NULL);
 	    mbentry_t *mbentry = NULL;
 
 	    r = http_mlookup(inboxname, &mbentry, NULL);
+	    free(inboxname);
 	    if (!r && mbentry->server) {
 		proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
 				 &backend_cached, NULL, NULL, httpd_in);
@@ -934,6 +934,7 @@ static void my_caldav_auth(const char *userid)
 				   0, 0, 0, 0, NULL);
 	if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
 		      mailboxname, error_message(r));
+	free(mailboxname);
     }
 
     /* Default calendar */
@@ -947,6 +948,7 @@ static void my_caldav_auth(const char *userid)
 	if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
 		      mailboxname, error_message(r));
     }
+    free(mailboxname);
 
     /* Scheduling Inbox */
     mailboxname = caldav_mboxname(userid, SCHED_INBOX);
@@ -959,6 +961,7 @@ static void my_caldav_auth(const char *userid)
 	if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
 		      mailboxname, error_message(r));
     }
+    free(mailboxname);
 
     /* Scheduling Outbox */
     mailboxname = caldav_mboxname(userid, SCHED_OUTBOX);
@@ -971,6 +974,7 @@ static void my_caldav_auth(const char *userid)
 	if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
 		      mailboxname, error_message(r));
     }
+    free(mailboxname);
 }
 
 

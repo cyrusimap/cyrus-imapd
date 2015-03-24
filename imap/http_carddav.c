@@ -355,9 +355,7 @@ static void my_carddav_auth(const char *userid)
 {
     int r;
     struct buf boxbuf = BUF_INITIALIZER;
-    const char *mailboxname;
-
-    mailboxname = mboxname_user_mbox(userid, NULL);
+    char *mailboxname;
 
     if (httpd_userisadmin ||
 	global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
@@ -374,19 +372,21 @@ static void my_carddav_auth(const char *userid)
 	if (!auth_carddavdb) fatal("Unable to open CardDAV DB", EC_IOERR);
     }
 
-    buf_setcstr(&boxbuf, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
-
-    mailboxname = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
-
     /* Auto-provision an addressbook for 'userid' */
+
+    /* addressbook-home-set */
+    buf_setcstr(&boxbuf, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
+    mailboxname = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
     r = mboxlist_lookup(mailboxname, NULL, NULL);
+    free(mailboxname);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	if (config_mupdate_server) {
 	    /* Find location of INBOX */
-	    const char *inboxname = mboxname_user_mbox(userid, NULL);
+	    char *inboxname = mboxname_user_mbox(userid, NULL);
 	    mbentry_t *mbentry = NULL;
 
 	    r = http_mlookup(inboxname, &mbentry, NULL);
+	    free(inboxname);
 	    if (!r && mbentry->server) {
 		proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
 				 &backend_cached, NULL, NULL, httpd_in);
@@ -406,6 +406,7 @@ static void my_carddav_auth(const char *userid)
 				   0, 0, 0, 0, NULL);
 	if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
 		      mailboxname, error_message(r));
+	free(mailboxname);
     }
     if (r) return;
 
@@ -423,6 +424,7 @@ static void my_carddav_auth(const char *userid)
 	if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
 		      mailboxname, error_message(r));
     }
+    free(mailboxname);
 }
 
 
