@@ -1161,6 +1161,9 @@ dnl
 AC_ARG_ENABLE(autocreate,
         [AS_HELP_STRING([--enable-autocreate], [enable autocreate support])],,[enable_autocreate="no";])
 AM_CONDITIONAL([AUTOCREATE], [test "$enable_autocreate" != "no"])
+if test "x$enable_autocreate" = "xyes"; then
+	AC_DEFINE(USE_AUTOCREATE,[],[Build with autocreate functionality])
+fi
 dnl
 dnl see if we're compiling with IMAP idled support
 dnl
