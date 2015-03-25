@@ -575,9 +575,9 @@ static int carddav_write_emails(struct carddav_db *carddavdb, struct carddav_dat
     int i;
 
     for (i = 0; i < strarray_size(&cdata->emails)/2; i++) {
-	const char *pref = strarray_nth(&cdata->emails, i*2+1);
+	const char *pref = strarray_safenth(&cdata->emails, i*2+1);
 	bval[1].val.i = i;
-	bval[2].val.s = strarray_nth(&cdata->emails, i*2);
+	bval[2].val.s = strarray_safenth(&cdata->emails, i*2);
 	bval[3].val.i = *pref ? 1 : 0;
 	r = dav_exec(carddavdb->db, CMD_INSERT_EMAIL, bval, NULL, NULL,
 		    &carddavdb->stmt[STMT_INSERT_EMAIL]);
@@ -605,8 +605,8 @@ static int carddav_write_groups(struct carddav_db *carddavdb, struct carddav_dat
 
     for (i = 0; i < strarray_size(&cdata->member_uids)/2; i++) {
 	bval[1].val.i = i;
-	bval[2].val.s = strarray_nth(&cdata->member_uids, 2*i);
-	bval[3].val.s = strarray_nth(&cdata->member_uids, 2*i+1);
+	bval[2].val.s = strarray_safenth(&cdata->member_uids, 2*i);
+	bval[3].val.s = strarray_safenth(&cdata->member_uids, 2*i+1);
 	r = dav_exec(carddavdb->db, CMD_INSERT_GROUP, bval, NULL, NULL,
 		    &carddavdb->stmt[STMT_INSERT_GROUP]);
 	if (r) return r;
@@ -1003,11 +1003,6 @@ static int _wantprop(hash_table *props, const char *name)
     return 0;
 }
 
-static json_t *_optstring(const char *str)
-{
-    return json_string(str ? str : "");
-}
-
 static void _date_to_jmap(const char *date, struct buf *buf)
 {
     if (date)
@@ -1087,7 +1082,6 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
     /* XXX - this could definitely be refactored from here and mailbox.c */
     struct buf msg_buf = BUF_INITIALIZER;
     struct vparse_state vparser;
-    struct buf tmp_buf = BUF_INITIALIZER;
 
     /* Load message containing the resource and parse vcard data */
     r = mailbox_map_record(grock->mailbox, &record, &msg_buf);
@@ -1115,16 +1109,17 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 	json_object_set_new(obj, "isFlagged", record.system_flags & FLAG_FLAGGED ? json_true() : json_false());
     }
 
+    struct buf buf = BUF_INITIALIZER;
+
     if (_wantprop(grock->props, "x-importance")) {
 	double val = 0;
-	struct buf buf = BUF_INITIALIZER;
 	const char *ns = ANNOT_NS "<" XML_NS_CYRUS ">importance";
 
+	buf_reset(&buf);
 	annotatemore_msg_lookup(grock->mailbox->name, record.uid,
 				ns, "", &buf);
 	if (buf.len)
 	    val = strtod(buf_cstring(&buf), NULL);
-	buf_free(&buf);
 
 	json_object_set_new(obj, "x-importance", json_real(val));
     }
@@ -1134,19 +1129,39 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
     if (!n) n = empty ? empty : (empty = strarray_new());
     if (!org) org = empty ? empty : (empty = strarray_new());
 
-    /* name fields */
-    if (_wantprop(grock->props, "lastName"))
-	json_object_set_new(obj, "lastName", _optstring(strarray_nth(n, 0)));
-    if (_wantprop(grock->props, "firstName"))
-	json_object_set_new(obj, "firstName", _optstring(strarray_nth(n, 1)));
-    if (_wantprop(grock->props, "prefix"))
-	json_object_set_new(obj, "prefix", _optstring(strarray_nth(n, 3)));
+    /* name fields: Family; Given; Middle; Prefix; Suffix. */
+
+    if (_wantprop(grock->props, "lastName")) {
+	const char *family = strarray_safenth(n, 0);
+	const char *suffix = strarray_safenth(n, 4);
+	buf_setcstr(&buf, family);
+	if (*suffix) {
+	    buf_putc(&buf, ' ');
+	    buf_appendcstr(&buf, suffix);
+	}
+	json_object_set_new(obj, "lastName", json_string(buf_cstring(&buf)));
+    }
+
+    if (_wantprop(grock->props, "firstName")) {
+	const char *given = strarray_safenth(n, 1);
+	const char *middle = strarray_safenth(n, 2);
+	buf_setcstr(&buf, given);
+	if (*middle) {
+	    buf_putc(&buf, ' ');
+	    buf_appendcstr(&buf, middle);
+	}
+	json_object_set_new(obj, "firstName", json_string(buf_cstring(&buf)));
+    }
+    if (_wantprop(grock->props, "prefix")) {
+	const char *prefix = strarray_safenth(n, 3);
+	json_object_set_new(obj, "prefix", json_string(prefix)); /* just prefix */
+    }
 
     /* org fields */
     if (_wantprop(grock->props, "company"))
-	json_object_set_new(obj, "company", _optstring(strarray_nth(org, 0)));
+	json_object_set_new(obj, "company", json_string(strarray_safenth(org, 0)));
     if (_wantprop(grock->props, "department"))
-	json_object_set_new(obj, "department", _optstring(strarray_nth(org, 1)));
+	json_object_set_new(obj, "department", json_string(strarray_safenth(org, 1)));
     /* XXX - position? */
 
     /* address - we need to open code this, because it's repeated */
@@ -1186,11 +1201,27 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 	    json_object_set_new(item, "type", json_string(type));
 	    if (label) json_object_set_new(item, "label", json_string(label));
 
-	    json_object_set_new(item, "street", _optstring(strarray_nth(a, 2)));
-	    json_object_set_new(item, "locality", _optstring(strarray_nth(a, 3)));
-	    json_object_set_new(item, "region", _optstring(strarray_nth(a, 4)));
-	    json_object_set_new(item, "postcode", _optstring(strarray_nth(a, 5)));
-	    json_object_set_new(item, "country", _optstring(strarray_nth(a, 6)));
+	    const char *pobox = strarray_safenth(a, 0);
+	    const char *extended = strarray_safenth(a, 1);
+	    const char *street = strarray_safenth(a, 2);
+	    buf_reset(&buf);
+	    if (*pobox) {
+		buf_appendcstr(&buf, pobox);
+		if (extended || street) buf_putc(&buf, '\n');
+	    }
+	    if (*extended) {
+		buf_appendcstr(&buf, extended);
+		if (street) buf_putc(&buf, '\n');
+	    }
+	    if (*street) {
+		buf_appendcstr(&buf, street);
+	    }
+
+	    json_object_set_new(item, "street", json_string(buf_cstring(&buf)));
+	    json_object_set_new(item, "locality", json_string(strarray_safenth(a, 3)));
+	    json_object_set_new(item, "region", json_string(strarray_safenth(a, 4)));
+	    json_object_set_new(item, "postcode", json_string(strarray_safenth(a, 5)));
+	    json_object_set_new(item, "country", json_string(strarray_safenth(a, 6)));
 
 	    json_array_append_new(adr, item);
 	}
@@ -1359,8 +1390,8 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 
     if (_wantprop(grock->props, "birthday")) {
 	const char *item = vparse_stringval(card, "bday");
-	_date_to_jmap(item, &tmp_buf);
-	json_object_set_new(obj, "birthday", json_string(buf_cstring(&tmp_buf)));
+	_date_to_jmap(item, &buf);
+	json_object_set_new(obj, "birthday", json_string(buf_cstring(&buf)));
     }
 
     if (_wantprop(grock->props, "notes")) {
@@ -1374,7 +1405,7 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 
     if (empty) strarray_free(empty);
 
-    buf_free(&tmp_buf);
+    buf_free(&buf);
 
     return 0;
 }
@@ -2058,20 +2089,20 @@ static void _make_fn(struct vparse_card *card)
     const char *v;
 
     if (n) {
-	v = strarray_nth(n->v.values, 3); // prefix
-	if (v && v[0]) strarray_append(name, v);
+	v = strarray_safenth(n->v.values, 3); // prefix
+	if (*v) strarray_append(name, v);
 
-	v = strarray_nth(n->v.values, 1); // first
-	if (v && v[0]) strarray_append(name, v);
+	v = strarray_safenth(n->v.values, 1); // first
+	if (*v) strarray_append(name, v);
 
-	v = strarray_nth(n->v.values, 2); // middle
-	if (v && v[0]) strarray_append(name, v);
+	v = strarray_safenth(n->v.values, 2); // middle
+	if (*v) strarray_append(name, v);
 
-	v = strarray_nth(n->v.values, 0); // last
-	if (v && v[0]) strarray_append(name, v);
+	v = strarray_safenth(n->v.values, 0); // last
+	if (*v) strarray_append(name, v);
 
-	v = strarray_nth(n->v.values, 4); // suffix
-	if (v && v[0]) strarray_append(name, v);
+	v = strarray_safenth(n->v.values, 4); // suffix
+	if (*v) strarray_append(name, v);
     }
 
     if (!strarray_size(name)) {
