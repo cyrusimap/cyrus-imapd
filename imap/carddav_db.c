@@ -860,7 +860,7 @@ EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb, struct jmap_
     };
     struct cards_rock rock;
     int r;
-    const char *abookname = mboxname_user_mbox(req->userid, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
+    const char *abookname = mboxname_abook(req->userid, NULL);
 
     rock.array = json_pack("[]");
     rock.need = NULL;
@@ -1785,7 +1785,7 @@ EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, struct jmap_req *
     };
     struct cards_rock rock;
     int r;
-    const char *abookname = mboxname_user_mbox(req->userid, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
+    const char *abookname = mboxname_abook(req->userid, NULL);
 
     rock.array = json_pack("[]");
     rock.need = NULL;

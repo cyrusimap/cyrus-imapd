@@ -128,17 +128,13 @@ static int get_email2uids(struct transaction_t *txn __attribute__((unused)),
     const char *mboxname = NULL;
     const char **mailboxhdrs;
     const char *mailbox = "Default";
-    struct buf boxbuf = BUF_INITIALIZER;
 
     mailboxhdrs = spool_getheader(txn->req_hdrs, "Mailbox");
     if (mailboxhdrs) {
 	mailbox = mailboxhdrs[0];
     }
 
-    buf_setcstr(&boxbuf, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
-    buf_putc(&boxbuf, '.');
-    buf_appendcstr(&boxbuf, mailbox);
-    mboxname = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
+    mboxname = mboxname_abook(userid, mailbox);
 
     /* XXX init just incase carddav not enabled? */
     db = carddav_open_userid(userid);
@@ -182,7 +178,6 @@ static int get_uid2groups(struct transaction_t *txn,
     const char *otheruser = "";
     const char **mailboxhdrs;
     const char *mailbox = "Default";
-    struct buf boxbuf = BUF_INITIALIZER;
 
     otheruserhdrs = spool_getheader(txn->req_hdrs, "OtherUser");
     if (otheruserhdrs) {
@@ -194,10 +189,7 @@ static int get_uid2groups(struct transaction_t *txn,
 	mailbox = mailboxhdrs[0];
     }
 
-    buf_setcstr(&boxbuf, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
-    buf_putc(&boxbuf, '.');
-    buf_appendcstr(&boxbuf, mailbox);
-    mboxname = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
+    mboxname = mboxname_abook(userid, mailbox);
 
     /* XXX init just incase carddav not enabled? */
     db = carddav_open_userid(userid);
@@ -224,7 +216,6 @@ done:
     free(result);
     if (array) strarray_free(array);
     if (db) carddav_close(db);
-    buf_free(&boxbuf);
     return ret;
 }
 
