@@ -2014,9 +2014,48 @@ static int _online_to_card(struct vparse_card *card, json_t *arg)
 
 static int _addresses_to_card(struct vparse_card *card, json_t *arg)
 {
-    if (card && arg)
-	return 0;
-    return 1;
+    vparse_delete_entries(card, NULL, "adr");
+
+    int i;
+    int size = json_array_size(arg);
+    for (i = 0; i < size; i++) {
+	json_t *item = json_array_get(arg, i);
+
+	const char *type = _json_object_get_string(item, "type");
+	if (!type) return -1;
+	/* optional */
+	const char *label = _json_object_get_string(item, "label");
+	const char *street = _json_object_get_string(item, "street");
+	if (!street) return -1;
+	const char *locality = _json_object_get_string(item, "locality");
+	if (!locality) return -1;
+	const char *region = _json_object_get_string(item, "region");
+	if (!region) return -1;
+	const char *postcode = _json_object_get_string(item, "postcode");
+	if (!postcode) return -1;
+	const char *country = _json_object_get_string(item, "country");
+	if (!country) return -1;
+
+	struct vparse_entry *entry = vparse_add_entry(card, NULL, "adr", NULL);
+
+	if (!strcmpsafe(type, "other"))
+	    vparse_add_param(entry, "type", type);
+
+	if (label)
+	    vparse_add_param(entry, "label", label);
+
+	entry->multivalue = 1;
+	entry->v.values = strarray_new();
+	strarray_append(entry->v.values, ""); // PO Box
+	strarray_append(entry->v.values, ""); // Extended Address
+	strarray_append(entry->v.values, street);
+	strarray_append(entry->v.values, locality);
+	strarray_append(entry->v.values, region);
+	strarray_append(entry->v.values, postcode);
+	strarray_append(entry->v.values, country);
+    }
+
+    return 0;
 }
 
 static int _kv_to_card(struct vparse_card *card, const char *key, json_t *jval) {
