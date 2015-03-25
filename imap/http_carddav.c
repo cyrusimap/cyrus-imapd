@@ -345,6 +345,7 @@ static void my_carddav_init(struct buf *serverinfo __attribute__((unused)))
     carddav_init();
 
     namespace_principal.enabled = 1;
+    /* Apple clients check principal resources for these DAV tokens */
     namespace_principal.allow |= ALLOW_CARD;
 }
 

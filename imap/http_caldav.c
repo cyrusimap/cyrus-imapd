@@ -858,8 +858,9 @@ static void my_caldav_init(struct buf *serverinfo)
 #endif
 
     namespace_principal.enabled = 1;
+    /* Apple clients check principal resources for these DAV tokens */
     namespace_principal.allow |= namespace_calendar.allow &
-	(ALLOW_CAL | ALLOW_CAL_AVAIL | ALLOW_CAL_SCHED);
+	(ALLOW_CAL | ALLOW_CAL_AVAIL | ALLOW_CAL_SCHED | ALLOW_CAL_ATTACH);
 
     namespace_freebusy.enabled =
 	config_httpmodules & IMAP_ENUM_HTTPMODULES_FREEBUSY;
@@ -948,31 +949,48 @@ static void my_caldav_auth(const char *userid)
     }
     free(mailboxname);
 
-    /* Scheduling Inbox */
-    mailboxname = caldav_mboxname(userid, SCHED_INBOX);
-    r = mboxlist_lookup(mailboxname, NULL, NULL);
-    if (r == IMAP_MAILBOX_NONEXISTENT) {
-	r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR,
-				   NULL, 0,
-				   userid, httpd_authstate,
-				   0, 0, 0, 0, NULL);
-	if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-		      mailboxname, error_message(r));
-    }
-    free(mailboxname);
+    if (namespace_calendar.allow & ALLOW_CAL_SCHED) {
+	/* Scheduling Inbox */
+	mailboxname = caldav_mboxname(userid, SCHED_INBOX);
+	r = mboxlist_lookup(mailboxname, NULL, NULL);
+	if (r == IMAP_MAILBOX_NONEXISTENT) {
+	    r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR,
+				       NULL, 0,
+				       userid, httpd_authstate,
+				       0, 0, 0, 0, NULL);
+	    if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+			  mailboxname, error_message(r));
+	}
+	free(mailboxname);
 
-    /* Scheduling Outbox */
-    mailboxname = caldav_mboxname(userid, SCHED_OUTBOX);
-    r = mboxlist_lookup(mailboxname, NULL, NULL);
-    if (r == IMAP_MAILBOX_NONEXISTENT) {
-	r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR,
-				   NULL, 0,
-				   userid, httpd_authstate,
-				   0, 0, 0, 0, NULL);
-	if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-		      mailboxname, error_message(r));
+	/* Scheduling Outbox */
+	mailboxname = caldav_mboxname(userid, SCHED_OUTBOX);
+	r = mboxlist_lookup(mailboxname, NULL, NULL);
+	if (r == IMAP_MAILBOX_NONEXISTENT) {
+	    r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR,
+				       NULL, 0,
+				       userid, httpd_authstate,
+				       0, 0, 0, 0, NULL);
+	    if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+			  mailboxname, error_message(r));
+	}
+	free(mailboxname);
     }
-    free(mailboxname);
+
+    if (namespace_calendar.allow & ALLOW_CAL_ATTACH) {
+	/* Managed Attachment Collection */
+	mailboxname = caldav_mboxname(userid, MANAGED_ATTACH);
+	r = mboxlist_lookup(mailboxname, NULL, NULL);
+	if (r == IMAP_MAILBOX_NONEXISTENT) {
+	    r = mboxlist_createmailbox(mailboxname, MBTYPE_COLLECTION,
+				       NULL, 0,
+				       userid, httpd_authstate,
+				       0, 0, 0, 0, NULL);
+	    if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+			  mailboxname, error_message(r));
+	}
+	free(mailboxname);
+    }
 }
 
 
@@ -2258,8 +2276,8 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     struct webdav_db *webdavdb = NULL;
     struct webdav_data *wdata;
     struct index_record record;
-    const char *etag = NULL, **hdr, *resource, *mailboxname = NULL;
-    char namebuf[MAX_MAILBOX_NAME+1];
+    const char *etag = NULL, **hdr, *resource;
+    char namebuf[MAX_MAILBOX_NAME+1], *mailboxname = NULL;
     time_t lastmod = 0;
     static unsigned post_count = 0;
     icalcomponent *ical = NULL, *comp;
@@ -2375,11 +2393,13 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     r = mailbox_open_iwl(mailboxname, &attachments);
     if (r) {
 	syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
+	       mailboxname, error_message(r));
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
+	free(mailboxname);
 	goto done;
     }
+    free(mailboxname);
 
     /* Open the WebDAV DB corresponding to the attachments collection */
     webdavdb = webdav_open_mailbox(attachments, WEBDAV_CREATE);
@@ -2407,6 +2427,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 
 	aprop = icalproperty_new_attach(attach);
 	icalcomponent_add_property(comp, aprop);
+	icalattach_unref(attach);
 	break;
     }
 

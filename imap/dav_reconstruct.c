@@ -220,7 +220,7 @@ static int do_reconstruct(void *rock __attribute__((unused)),
 					   "cyrus", ext_name_buf);
 
 #ifdef WITH_DAV
-    if (mbentry->mbtype & (MBTYPE_CALENDAR|MBTYPE_ADDRESSBOOK)) {
+    if (mbentry->mbtype & MBTYPES_DAV) {
 	printf("Inserting DAV DB entries for %s...\n", ext_name_buf);
 
 	/* Open/lock header */
