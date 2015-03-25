@@ -750,6 +750,7 @@ struct cards_rock {
     struct hash_table *need;
     struct hash_table *props;
     struct mailbox *mailbox;
+    int mboxoffset;
 };
 
 static int getgroups_cb(sqlite3_stmt *stmt, void *rock)
@@ -801,6 +802,8 @@ static int getgroups_cb(sqlite3_stmt *stmt, void *rock)
     json_t *obj = json_pack("{}");
 
     json_object_set_new(obj, "id", json_string(group_uid));
+
+    json_object_set_new(obj, "addressbookId", json_string(mboxname+grock->mboxoffset));
 
     json_t *contactids = json_pack("[]");
     json_t *otherids = json_pack("{}");
@@ -857,11 +860,13 @@ EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb, struct jmap_
     };
     struct cards_rock rock;
     int r;
+    const char *abookname = mboxname_user_mbox(req->userid, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
 
     rock.array = json_pack("[]");
     rock.need = NULL;
     rock.props = NULL;
     rock.mailbox = NULL;
+    rock.mboxoffset = strlen(abookname) + 1;
 
     json_t *want = json_object_get(req->args, "ids");
     if (want) {
@@ -1108,6 +1113,8 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
     json_t *obj = json_pack("{}");
 
     json_object_set_new(obj, "id", json_string(card_uid));
+
+    json_object_set_new(obj, "addressbookId", json_string(mboxname+grock->mboxoffset));
 
     if (_wantprop(grock->props, "isFlagged")) {
 	json_object_set_new(obj, "isFlagged", record.system_flags & FLAG_FLAGGED ? json_true() : json_false());
@@ -1778,11 +1785,13 @@ EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, struct jmap_req *
     };
     struct cards_rock rock;
     int r;
+    const char *abookname = mboxname_user_mbox(req->userid, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
 
     rock.array = json_pack("[]");
     rock.need = NULL;
     rock.props = NULL;
     rock.mailbox = NULL;
+    rock.mboxoffset = strlen(abookname) + 1;
 
     json_t *want = json_object_get(req->args, "ids");
     if (want) {
