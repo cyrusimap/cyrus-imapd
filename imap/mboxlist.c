@@ -176,6 +176,8 @@ EXPORTED const char *mboxlist_mbtype_to_string(uint32_t mbtype)
 	buf_putc(&buf, 'z');
     if (mbtype & MBTYPE_CALENDAR)
 	buf_putc(&buf, 'c');
+    if (mbtype & MBTYPE_COLLECTION)
+	buf_putc(&buf, 'b');
     if (mbtype & MBTYPE_ADDRESSBOOK)
 	buf_putc(&buf, 'a');
 
@@ -283,6 +285,9 @@ EXPORTED uint32_t mboxlist_string_to_mbtype(const char *string)
 	switch (*string) {
 	case 'a':
 	    mbtype |= MBTYPE_ADDRESSBOOK;
+	    break;
+	case 'b':
+	    mbtype |= MBTYPE_COLLECTION;
 	    break;
 	case 'c':
 	    mbtype |= MBTYPE_CALENDAR;
@@ -1884,7 +1889,7 @@ EXPORTED int mboxlist_setacl(struct namespace *namespace, const char *name,
 	struct mboxevent *mboxevent = mboxevent_new(EVENT_ACL_CHANGE);
 	mboxevent_extract_mailbox(mboxevent, mailbox);
 	mboxevent_set_acl(mboxevent, identifier, rights);
-	mboxevent_set_access(mboxevent, NULL, NULL, userid, mailbox->name, 1);
+	mboxevent_set_access(mboxevent, NULL, NULL, userid, mailbox->name, 0);
 
 	mboxevent_notify(mboxevent);
 	mboxevent_free(&mboxevent);

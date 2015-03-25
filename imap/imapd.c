@@ -6197,6 +6197,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     dlist_getatom(extargs, "SERVER", &server);
     if (dlist_getatom(extargs, "TYPE", &type)) {
 	if (!strcasecmp(type, "CALENDAR")) mbtype |= MBTYPE_CALENDAR;
+	else if (!strcasecmp(type, "COLLECTION")) mbtype |= MBTYPE_COLLECTION;
 	else if (!strcasecmp(type, "ADDRESSBOOK")) mbtype |= MBTYPE_ADDRESSBOOK;
 	else {
 	    r = IMAP_MAILBOX_BADTYPE;
@@ -6780,7 +6781,7 @@ static int renmbox(char *name,
 	    user_renameacl(text->namespace, text->newmailboxname,
 			   text->acl_olduser, text->acl_newuser);
 #ifdef WITH_DAV
-	    if (mbentry->mbtype & (MBTYPE_CALENDAR|MBTYPE_ADDRESSBOOK)) {
+	    if (mbentry->mbtype & MBTYPES_DAV) {
 		struct mailbox *mailbox = NULL;
 		r = mailbox_open_irl(text->newmailboxname, &mailbox);
 		if (!r) r = mailbox_add_dav(mailbox);
