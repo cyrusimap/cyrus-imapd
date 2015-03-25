@@ -720,6 +720,20 @@ EXPORTED int carddav_delmbox(struct carddav_db *carddavdb, const char *mailbox, 
     return 0;
 }
 
+static const char *_json_object_get_string(const json_t *obj, const char *key) {
+    const json_t *jval = json_object_get(obj, key);
+    if (!jval) return NULL;
+    const char *val = json_string_value(jval);
+    return val;
+}
+
+static const char *_json_array_get_string(const json_t *obj, size_t index) {
+    const json_t *jval = json_array_get(obj, index);
+    if (!jval) return NULL;
+    const char *val = json_string_value(jval);
+    return val;
+}
+
 #define CMD_GETCARDS \
   "SELECT vcard_uid, mailbox, imap_uid" \
   " FROM vcard_objs" \
@@ -853,6 +867,11 @@ EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb, struct jmap_
 	int size = json_array_size(want);
 	for (i = 0; i < size; i++) {
 	    const char *id = json_string_value(json_array_get(want, i));
+	    if (id == NULL) {
+		free_hash_table(rock.need, NULL);
+		free(rock.need);
+		return -1; /* XXX - need codes */
+	    }
 	    /* 1 == want */
 	    hash_insert(id, (void *)1, rock.need);
 	}
@@ -929,11 +948,9 @@ EXPORTED int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, struct
 {
     struct updates_rock rock;
     int r;
-    json_t *since = json_object_get(req->args, "sinceState");
+    const char *since = _json_object_get_string(req->args, "sinceState");
     if (!since) return -1;
-    const char *since_str = json_string_value(since);
-    if (!since_str) return -1;
-    modseq_t oldmodseq = str2uint64(since_str);
+    modseq_t oldmodseq = str2uint64(since);
     rock.changed = json_array();
     rock.removed = json_array();
     struct bind_val bval[] = {
@@ -952,7 +969,7 @@ EXPORTED int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, struct
 
     json_t *contactGroupUpdates = json_pack("{}");
     json_object_set_new(contactGroupUpdates, "accountId", json_string(req->userid));
-    json_object_set_new(contactGroupUpdates, "oldState", json_string(since_str)); // XXX - just use refcounted
+    json_object_set_new(contactGroupUpdates, "oldState", json_string(since)); // XXX - just use refcounted
     json_object_set_new(contactGroupUpdates, "newState", json_string(req->state));
     json_object_set(contactGroupUpdates, "changed", rock.changed);
     json_object_set(contactGroupUpdates, "removed", rock.removed);
@@ -1377,8 +1394,10 @@ static int _add_group_entries(struct carddav_db *carddavdb, struct jmap_req *req
     size_t index;
     struct buf buf = BUF_INITIALIZER;
     for (index = 0; index < json_array_size(members); index++) {
-	json_t *item = json_array_get(members, index);
-	const char *uid = _resolveid(req, json_string_value(item));
+	const char *item = _json_array_get_string(members, index);
+	if (!item)
+	    return -1;
+	const char *uid = _resolveid(req, item);
 	struct carddav_data *cdata = NULL;
 	r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
 	if (r) goto done;
@@ -1406,7 +1425,10 @@ static int _add_othergroup_entries(struct carddav_db *carddavdb __attribute__((u
     const char *key;
     json_t *arg;
     json_object_foreach(members, key, arg) {
-	const char *uid = _resolveid(req, json_string_value(arg));
+	const char *item = json_string_value(arg);
+	if (!item)
+	    return -1;
+	const char *uid = _resolveid(req, item);
 	buf_setcstr(&buf, "urn:uuid:");
 	buf_appendcstr(&buf, uid);
 	struct vparse_entry *entry = vparse_add_entry(card, NULL, "X-FM-OTHERACCOUNT-MEMBER", buf_cstring(&buf));
@@ -1419,11 +1441,14 @@ static int _add_othergroup_entries(struct carddav_db *carddavdb __attribute__((u
 EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_req *req)
 {
     int r = 0;
-    json_t *checkState = json_object_get(req->args, "ifInState");
-    if (checkState && strcmp(req->state, json_string_value(checkState))) {
-	json_t *item = json_pack("[s, {s:s}, s]", "error", "type", "stateMismatch", req->tag);
-	json_array_append_new(req->response, item);
-	return 0;
+    json_t *jcheckState = json_object_get(req->args, "ifInState");
+    if (jcheckState) {
+	const char *checkState = json_string_value(jcheckState);
+	if (!checkState ||strcmp(req->state, checkState)) {
+	    json_t *item = json_pack("[s, {s:s}, s]", "error", "type", "stateMismatch", req->tag);
+	    json_array_append_new(req->response, item);
+	    return 0;
+	}
     }
     json_t *set = json_pack("{s:s,s:s}",
 			    "oldState", req->state,
@@ -1443,9 +1468,16 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	json_t *arg;
 	json_object_foreach(create, key, arg) {
 	    char *uid = makeuuid();
-	    json_t *name = json_object_get(arg, "name");
-	    if (!name) {
+	    json_t *jname = json_object_get(arg, "name");
+	    if (!jname) {
 		json_t *err = json_pack("{s:s}", "type", "missingParameters");
+		json_object_set_new(notCreated, key, err);
+		free(uid);
+		continue;
+	    }
+	    const char *name = json_string_value(jname);
+	    if (!name) {
+		json_t *err = json_pack("{s:s}", "type", "invalidArguments");
 		json_object_set_new(notCreated, key, err);
 		free(uid);
 		continue;
@@ -1453,7 +1485,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    // XXX - no name => notCreated
 	    struct vparse_card *card = vparse_new_card("VCARD");
 	    vparse_add_entry(card, NULL, "VERSION", "3.0");
-	    vparse_add_entry(card, NULL, "FN", json_string_value(name));
+	    vparse_add_entry(card, NULL, "FN", name);
 	    vparse_add_entry(card, NULL, "UID", uid);
 	    vparse_add_entry(card, NULL, "X-ADDRESSBOOKSERVER-KIND", "group");
 
@@ -1581,6 +1613,12 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    json_t *namep = json_object_get(arg, "name");
 	    if (namep) {
 		const char *name = json_string_value(namep);
+		if (!name) {
+		    json_t *err = json_pack("{s:s}", "type", "invalidArguments");
+		    json_object_set_new(notUpdated, uid, err);
+		    vparse_free(&vparser);
+		    continue;
+		}
 		struct vparse_entry *entry = vparse_get_entry(card, NULL, "FN");
 		if (entry) {
 		    free(entry->v.value);
@@ -1628,7 +1666,12 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 
 	size_t index;
 	for (index = 0; index < json_array_size(destroy); index++) {
-	    const char *uid = json_string_value(json_array_get(destroy, index));
+	    const char *uid = _json_array_get_string(destroy, index);
+	    if (!uid) {
+		json_t *err = json_pack("{s:s}", "type", "invalidArguments");
+		json_object_set_new(notDestroyed, uid, err);
+		continue;
+	    }
 	    struct carddav_data *cdata = NULL;
 	    uint32_t olduid;
 	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
@@ -1786,11 +1829,9 @@ EXPORTED int carddav_getContactUpdates(struct carddav_db *carddavdb, struct jmap
 {
     struct updates_rock rock;
     int r;
-    json_t *since = json_object_get(req->args, "sinceState");
+    const char *since = _json_object_get_string(req->args, "sinceState");
     if (!since) return -1;
-    const char *since_str = json_string_value(since);
-    if (!since_str) return -1;
-    modseq_t oldmodseq = str2uint64(since_str);
+    modseq_t oldmodseq = str2uint64(since);
     rock.changed = json_array();
     rock.removed = json_array();
     struct bind_val bval[] = {
@@ -1809,7 +1850,7 @@ EXPORTED int carddav_getContactUpdates(struct carddav_db *carddavdb, struct jmap
 
     json_t *contactUpdates = json_pack("{}");
     json_object_set_new(contactUpdates, "accountId", json_string(req->userid));
-    json_object_set_new(contactUpdates, "oldState", json_string(since_str));
+    json_object_set_new(contactUpdates, "oldState", json_string(since));
     json_object_set_new(contactUpdates, "newState", json_string(req->state));
     json_object_set(contactUpdates, "changed", rock.changed);
     json_object_set(contactUpdates, "removed", rock.removed);
@@ -1865,12 +1906,11 @@ static int _emails_to_card(struct vparse_card *card, json_t *arg)
     int size = json_array_size(arg);
     for (i = 0; i < size; i++) {
 	json_t *item = json_array_get(arg, i);
-	json_t *jvalue = json_object_get(item, "value");
-	if (!jvalue) return -1;
-	json_t *jtype = json_object_get(item, "type");
-	if (!jtype) return -1;
-	struct vparse_entry *entry = vparse_add_entry(card, NULL, "email", json_string_value(jvalue));
-	const char *type = json_string_value(jtype);
+	const char *value = _json_object_get_string(item, value);
+	if (!value) return -1;
+	struct vparse_entry *entry = vparse_add_entry(card, NULL, "email", value);
+	const char *type = _json_object_get_string(item, "type");
+	if (!type) return -1;
 	if (!strcmp(type, "personal"))
 	    vparse_add_param(entry, "type", type);
 	else if (!strcmp(type, "work"))
@@ -1880,8 +1920,12 @@ static int _emails_to_card(struct vparse_card *card, json_t *arg)
 	else
 	    return -1;  // all other types
 	json_t *jlabel = json_object_get(item, "label");
-	if (jlabel)
-	    vparse_add_param(entry, "label", json_string_value(jlabel));
+	if (jlabel) {
+	    const char *label = json_string_value(jlabel);
+	    if (!label)
+		return -1;
+	    vparse_add_param(entry, "label", label);
+	}
     }
     return 0;
 }
@@ -1894,12 +1938,11 @@ static int _phones_to_card(struct vparse_card *card, json_t *arg)
     int size = json_array_size(arg);
     for (i = 0; i < size; i++) {
 	json_t *item = json_array_get(arg, i);
-	json_t *jvalue = json_object_get(item, "value");
-	if (!jvalue) return -1;
-	json_t *jtype = json_object_get(item, "type");
-	if (!jtype) return -1;
-	struct vparse_entry *entry = vparse_add_entry(card, NULL, "tel", json_string_value(jvalue));
-	const char *type = json_string_value(jtype);
+	const char *value = _json_object_get_string(item, value);
+	if (!value) return -1;
+	struct vparse_entry *entry = vparse_add_entry(card, NULL, "tel", value);
+	const char *type = _json_object_get_string(item, "type");
+	if (!type) return -1;
 	if (!strcmp(type, "home"))
 	    vparse_add_param(entry, "type", type);
 	else if (!strcmp(type, "work"))
@@ -1915,8 +1958,12 @@ static int _phones_to_card(struct vparse_card *card, json_t *arg)
 	else
 	    return -1;  // all other types
 	json_t *jlabel = json_object_get(item, "label");
-	if (jlabel)
-	    vparse_add_param(entry, "label", json_string_value(jlabel));
+	if (jlabel) {
+	    const char *label = json_string_value(jlabel);
+	    if (!label)
+		return -1;
+	    vparse_add_param(entry, "label", label);
+	}
     }
     return 0;
 }
@@ -1931,29 +1978,33 @@ static int _online_to_card(struct vparse_card *card, json_t *arg)
     int size = json_array_size(arg);
     for (i = 0; i < size; i++) {
 	json_t *item = json_array_get(arg, i);
-	json_t *jvalue = json_object_get(item, "value");
-	if (!jvalue) return -1;
-	json_t *jtype = json_object_get(item, "type");
-	if (!jtype) return -1;
+	const char *value = _json_object_get_string(item, value);
+	if (!value) return -1;
+	const char *type = _json_object_get_string(item, "type");
+	if (!type) return -1;
 	json_t *jlabel = json_object_get(item, "label");
+	const char *label = NULL;
+	if (jlabel) {
+	    const char *label = json_string_value(jlabel);
+	    if (!label)
+		return -1;
+	}
 
-	const char *type = json_string_value(jtype);
 	if (!strcmp(type, "uri")) {
-	    struct vparse_entry *entry = vparse_add_entry(card, NULL, "url", json_string_value(jvalue));
-	    if (jlabel)
-		vparse_add_param(entry, "label", json_string_value(jlabel));
+	    struct vparse_entry *entry = vparse_add_entry(card, NULL, "url", value);
+	    if (label)
+		vparse_add_param(entry, "label", label);
 	}
 	else if (!strcmp(type, "username")) {
-	    const char *label = json_string_value(jlabel);
-	    if (!label) return -1;
-	    if (_is_im(label)) {
-		struct vparse_entry *entry = vparse_add_entry(card, NULL, "impp", json_string_value(jvalue));
+	    if (label && _is_im(label)) {
+		struct vparse_entry *entry = vparse_add_entry(card, NULL, "impp", value);
 		vparse_add_param(entry, "x-type", label);
 	    }
 	    else {
 		struct vparse_entry *entry = vparse_add_entry(card, NULL, "x-social-profile", ""); // XXX - URL calculated, ick
-		vparse_add_param(entry, "type", label);
-		vparse_add_param(entry, "x-user", json_string_value(jvalue));
+		if (label)
+		    vparse_add_param(entry, "type", label);
+		vparse_add_param(entry, "x-user", value);
 	    }
 	}
 	/* XXX other? */
@@ -1966,6 +2017,16 @@ static int _addresses_to_card(struct vparse_card *card, json_t *arg)
     if (card && arg)
 	return 0;
     return 1;
+}
+
+static int _kv_to_card(struct vparse_card *card, const char *key, json_t *jval) {
+    if (!jval)
+	return -1;
+    const char *val = json_string_value(jval);
+    if (!val)
+	return -1;
+    _card_val(card, key, val);
+    return 0;
 }
 
 static void _make_fn(struct vparse_card *card)
@@ -2015,7 +2076,7 @@ static int _json_to_card(struct vparse_card *card, json_t *arg, strarray_t *flag
 			 struct entryattlist **annotsp)
 {
     const char *key;
-    json_t *val;
+    json_t *jval;
     struct vparse_entry *fn = vparse_get_entry(card, NULL, "fn");
     int name_is_dirty = 0;
     /* we'll be updating you later anyway... create early so that it's
@@ -2025,9 +2086,9 @@ static int _json_to_card(struct vparse_card *card, json_t *arg, strarray_t *flag
 	name_is_dirty = 1;
     }
 
-    json_object_foreach(arg, key, val) {
+    json_object_foreach(arg, key, jval) {
 	if (!strcmp(key, "isFlagged")) {
-	    if (json_is_true(val)) {
+	    if (json_is_true(jval)) {
 		strarray_add_case(flags, "\\Flagged");
 	    }
 	    else {
@@ -2035,7 +2096,7 @@ static int _json_to_card(struct vparse_card *card, json_t *arg, strarray_t *flag
 	    }
 	}
 	else if (!strcmp(key, "x-importance")) {
-	    double dval = json_number_value(val);
+	    double dval = json_number_value(jval);
 	    const char *ns = ANNOT_NS "<" XML_NS_CYRUS ">importance";
 	    const char *attrib = "value.shared";
 	    if (dval) {
@@ -2052,64 +2113,89 @@ static int _json_to_card(struct vparse_card *card, json_t *arg, strarray_t *flag
 	    /* XXX - file handling */
 	}
 	else if (!strcmp(key, "prefix")) {
+	    const char *val = json_string_value(jval);
+	    if (!val)
+		return -1;
 	    name_is_dirty = 1;
 	    struct vparse_entry *n = _card_multi(card, "n");
-	    strarray_set(n->v.values, 3, json_string_value(val));
+	    strarray_set(n->v.values, 3, val);
 	}
 	else if (!strcmp(key, "firstName")) {
+	    const char *val = json_string_value(jval);
+	    if (!val)
+		return -1;
 	    name_is_dirty = 1;
 	    struct vparse_entry *n = _card_multi(card, "n");
-	    strarray_set(n->v.values, 1, json_string_value(val));
+	    strarray_set(n->v.values, 1, val);
 	}
 	else if (!strcmp(key, "lastName")) {
+	    const char *val = json_string_value(jval);
+	    if (!val)
+		return -1;
 	    name_is_dirty = 1;
 	    struct vparse_entry *n = _card_multi(card, "n");
-	    strarray_set(n->v.values, 0, json_string_value(val));
+	    strarray_set(n->v.values, 0, val);
 	}
 	else if (!strcmp(key, "suffix")) {
+	    const char *val = json_string_value(jval);
+	    if (!val)
+		return -1;
 	    name_is_dirty = 1;
 	    struct vparse_entry *n = _card_multi(card, "n");
-	    strarray_set(n->v.values, 4, json_string_value(val));
+	    strarray_set(n->v.values, 4, val);
 	}
 	else if (!strcmp(key, "nickname")) {
-	    _card_val(card, "nickname", json_string_value(val));
+	    int r = _kv_to_card(card, "nickname", jval);
+	    if (r) return r;
 	}
 	else if (!strcmp(key, "birthday")) {
-	    _card_val(card, "bday", json_string_value(val));
+	    int r = _kv_to_card(card, "bday", jval);
+	    if (r) return r;
 	}
 	else if (!strcmp(key, "anniversary")) {
-	    _card_val(card, "anniversary", json_string_value(val));
+	    int r = _kv_to_card(card, "anniversary", jval);
+	    if (r) return r;
 	}
 	else if (!strcmp(key, "company")) {
+	    const char *val = json_string_value(jval);
+	    if (!val)
+		return -1;
 	    struct vparse_entry *org = _card_multi(card, "org");
-	    strarray_set(org->v.values, 0, json_string_value(val));
+	    strarray_set(org->v.values, 0, val);
 	}
 	else if (!strcmp(key, "department")) {
+	    const char *val = json_string_value(jval);
+	    if (!val)
+		return -1;
 	    struct vparse_entry *org = _card_multi(card, "org");
-	    strarray_set(org->v.values, 1, json_string_value(val));
+	    strarray_set(org->v.values, 1, val);
 	}
 	else if (!strcmp(key, "jobTitle")) {
+	    const char *val = json_string_value(jval);
+	    if (!val)
+		return -1;
 	    struct vparse_entry *org = _card_multi(card, "org");
-	    strarray_set(org->v.values, 2, json_string_value(val));
+	    strarray_set(org->v.values, 2, val);
 	}
 	else if (!strcmp(key, "emails")) {
-	    int r = _emails_to_card(card, val);
+	    int r = _emails_to_card(card, jval);
 	    if (r) return r;
 	}
 	else if (!strcmp(key, "phones")) {
-	    int r = _phones_to_card(card, val);
+	    int r = _phones_to_card(card, jval);
 	    if (r) return r;
 	}
 	else if (!strcmp(key, "online")) {
-	    int r = _online_to_card(card, val);
+	    int r = _online_to_card(card, jval);
 	    if (r) return r;
 	}
 	else if (!strcmp(key, "addresses")) {
-	    int r = _addresses_to_card(card, val);
+	    int r = _addresses_to_card(card, jval);
 	    if (r) return r;
 	}
 	else if (!strcmp(key, "notes")) {
-	    _card_val(card, "note", json_string_value(val));
+	    int r = _kv_to_card(card, "note", jval);
+	    if (r) return r;
 	}
 
 	else {
@@ -2127,11 +2213,14 @@ static int _json_to_card(struct vparse_card *card, json_t *arg, strarray_t *flag
 EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *req)
 {
     int r = 0;
-    json_t *checkState = json_object_get(req->args, "ifInState");
-    if (checkState && strcmp(req->state, json_string_value(checkState))) {
-	json_t *item = json_pack("[s, {s:s}, s]", "error", "type", "stateMismatch", req->tag);
-	json_array_append_new(req->response, item);
-	return 0;
+    json_t *jcheckState = json_object_get(req->args, "ifInState");
+    if (jcheckState) {
+	const char *checkState = json_string_value(jcheckState);
+	if (!checkState ||strcmp(req->state, checkState)) {
+	    json_t *item = json_pack("[s, {s:s}, s]", "error", "type", "stateMismatch", req->tag);
+	    json_array_append_new(req->response, item);
+	    return 0;
+	}
     }
     json_t *set = json_pack("{s:s,s:s}",
 			    "oldState", req->state,
@@ -2310,7 +2399,12 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 
 	size_t index;
 	for (index = 0; index < json_array_size(destroy); index++) {
-	    const char *uid = json_string_value(json_array_get(destroy, index));
+	    const char *uid = _json_array_get_string(destroy, index);
+	    if (!uid) {
+		json_t *err = json_pack("{s:s}", "type", "invalidArguments");
+		json_object_set_new(notDestroyed, uid, err);
+		continue;
+	    }
 	    struct carddav_data *cdata = NULL;
 	    uint32_t olduid;
 	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
