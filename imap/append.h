@@ -50,22 +50,13 @@
 #include "sequence.h"
 #include "strarray.h"
 #include "annotate.h"
+#include "conversations.h"
 
 struct copymsg {
-    unsigned long uid;
-    time_t internaldate;
-    time_t sentdate;
-    time_t gmtime;
-    unsigned long size;
-    unsigned long header_size;
-    unsigned long content_lines;
-    unsigned long cache_version;
-    unsigned long cache_crc;
-    struct cacherecord crec;
-    int seen;
-    struct message_guid guid;
-    bit32 system_flags;
-    char *flag[MAX_USER_FLAGS+1];
+    uint32_t olduid;
+    int seen:1;
+    struct index_record record;
+    strarray_t flags;
 };
 
 /* it's ridiculous i have to expose this structure if i want to allow
@@ -157,5 +148,7 @@ extern int append_collectnews(struct appendstate *mailbox,
 
 extern int append_run_annotator(struct appendstate *as,
 				struct index_record *record);
+
+extern const char *append_stagefname(struct stagemsg *stage);
 
 #endif /* INCLUDED_APPEND_H */

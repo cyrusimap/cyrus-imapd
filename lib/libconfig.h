@@ -62,6 +62,7 @@ extern void config_foreachoverflowstring(
     void (*func)(const char *, const char *, void *), void *rock);
 extern const char *config_partitiondir(const char *partition);
 extern const char *config_metapartitiondir(const char *partition);
+extern const char *config_archivepartitiondir(const char *partition);
 
 /* cached configuration variables accessable to external world */
 extern const char *config_filename;

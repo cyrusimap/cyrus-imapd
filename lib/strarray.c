@@ -87,11 +87,9 @@ EXPORTED void strarray_free(strarray_t *sa)
 #define QUANTUM	    16
 static void ensure_alloc(strarray_t *sa, int newalloc)
 {
-    if (newalloc)
-	newalloc++;	/* allow for the NULL terminator */
-    if (newalloc <= sa->alloc)
+    if (newalloc < sa->alloc)
 	return;
-    newalloc = ((newalloc + QUANTUM-1) / QUANTUM) * QUANTUM;
+    newalloc = ((newalloc + QUANTUM) / QUANTUM) * QUANTUM;
     sa->data = xrealloc(sa->data, sizeof(char *) * newalloc);
     memset(sa->data+sa->alloc, 0, sizeof(char *) * (newalloc-sa->alloc));
     sa->alloc = newalloc;
@@ -286,6 +284,12 @@ EXPORTED const char *strarray_nth(const strarray_t *sa, int idx)
     if ((idx = adjust_index_ro(sa, idx)) < 0)
 	return NULL;
     return sa->data[idx];
+}
+
+EXPORTED const char *strarray_safenth(const strarray_t *sa, int idx)
+{
+    const char *v = strarray_nth(sa, idx);
+    return v ? v : "";
 }
 
 EXPORTED char *strarray_join(const strarray_t *sa, const char *sep)

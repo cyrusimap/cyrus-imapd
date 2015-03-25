@@ -50,12 +50,17 @@
 #define CHARSET_SKIPDIACRIT (1<<0)
 #define CHARSET_SKIPSPACE (1<<1)
 #define CHARSET_MERGESPACE (1<<2)
+#define CHARSET_SKIPHTML (1<<3)
+#define CHARSET_SNIPPET (1<<4)
 
 #define CHARSET_UNKNOWN_CHARSET (-1)
+
+#include "util.h"
 
 typedef int comp_pat;
 typedef int charset_index;
 
+extern int encoding_lookupname(const char *name);
 extern const char *encoding_name(int);
 
 /* ensure up to MAXTRANSLATION times expansion into buf */
@@ -83,57 +88,15 @@ extern char *charset_to_utf8(const char *msg_base, size_t len, charset_index cha
 extern int charset_search_mimeheader(const char *substr, comp_pat *pat, const char *s, int flags);
 
 extern char *charset_encode_mimeheader(const char *header, size_t len);
-/* Definitions for charset_extractfile */
-
-/* These constants are passed into the index_search_text_receiver_t callback to
-   tell it which part of the message is being sent down */
-#define SEARCHINDEX_PART_FROM    1
-#define SEARCHINDEX_PART_TO      2
-#define SEARCHINDEX_PART_CC      3
-#define SEARCHINDEX_PART_BCC     4
-#define SEARCHINDEX_PART_SUBJECT 5
-#define SEARCHINDEX_PART_HEADERS 6 /* headers OTHER than the above headers */
-#define SEARCHINDEX_PART_BODY    7
-
-/* These constants tell the index_search_text_receiver_t callback what is happening. */
-#define SEARCHINDEX_CMD_BEGINPART  0x01 /* starting a new part */
-#define SEARCHINDEX_CMD_APPENDPART 0x02 /* recording some text that belongs to the part */
-#define SEARCHINDEX_CMD_ENDPART    0x04 /* done with the part */
-#define SEARCHINDEX_CMD_STUFFPART  0x07 /* All of the above in one invocation */
-
-/* This function gets called at least once for each part of every message.
-   The invocations form a sequence:
-       CMD_BEGINPART <part1>
-       CMD_APPENDPART <part1, text, text_len>     (1 or more times)
-       CMD_ENDPART <part1>
-       ...
-       CMD_BEGINPART <partN>
-       CMD_APPENDPART <partN, text, text_len>     (1 or more times)
-       CMD_ENDPART <partN>
-   BEGIN, APPEND and/or END operations on the same part may be combined into one call by
-   ORing the 'cmds' flags.
-
-   The parts need not arrive in any particular order, but each part
-   can only participate in one BEGIN ... APPEND ... END sequence, and
-   the sequences for different parts cannot be interleaved.
-*/
-typedef void index_search_text_receiver_t(int UID, int part, int cmds,
-  char const* text, int text_len, void* rock);
 
 /* Extract the body text for the message denoted by 'uid', convert its
-   text to the canonical form for searching, and pass the converted
-   text down in a series of invocations to the callback function with
-   part=SEARCHINDEX_PART_BODY and cmds=CMD_APPENDPART.  This is called
-   by index_getsearchtextmsg to extract the MIME body parts. */ 
-extern int charset_extractitem(index_search_text_receiver_t receiver,
-			       void* rock, int uid, const char *msg_base,
-			       size_t len, charset_index charset,
-			       int encoding, int flags,
-			       int rpart, int rcmd);
-extern int charset_extractfile(index_search_text_receiver_t receiver,
-			       void* rock, int uid, const char *msg_base,
-			       size_t len, charset_index charset,
-			       int encoding, int flags);
-
+   text to the canonical form for searching, and pass the converted text
+   down in a series of invocations of the callback 'cb'.  This is
+   called by index_getsearchtext to extract the MIME body parts. */
+extern int charset_extract(void (*cb)(const struct buf *text, void *rock),
+			   void *rock,
+			   const struct buf *data,
+			   charset_index charset, int encoding,
+			   const char *subtype, int flags);
 
 #endif /* INCLUDED_CHARSET_H */

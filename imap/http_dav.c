@@ -229,6 +229,7 @@ static struct meth_params princ_params = {
 /* Namespace for WebDAV principals */
 struct namespace_t namespace_principal = {
     URL_NS_PRINCIPAL, 0, "/dav/principals", NULL, 1 /* auth */,
+    /*mbtype */ 0,
     ALLOW_READ | ALLOW_DAV,
     NULL, NULL, NULL, NULL,
     {
@@ -298,6 +299,8 @@ static const struct precond_t {
     { "no-abstract", NS_DAV },
     { "not-supported-privilege", NS_DAV },
     { "recognized-principal", NS_DAV },
+    { "allowed-principal", NS_DAV },
+    { "grant-only", NS_DAV },
 
     /* WebDAV Quota (RFC 4331) preconditions */
     { "quota-not-exceeded", NS_DAV },
@@ -381,6 +384,8 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
 	return HTTP_FORBIDDEN;
     }
 
+    tgt->prefix = namespace_principal.prefix;
+
     /* Skip namespace */
     p += len;
     if (!*p || !*++p) return 0;
@@ -393,8 +398,7 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
 
 	/* Get user id */
 	len = strcspn(p, "/");
-	tgt->user = p;
-	tgt->userlen = len;
+	tgt->userid = xstrndup(p, len);
 
 	p += len;
 	if (!*p || !*++p) return 0;
@@ -988,6 +992,8 @@ int xml_add_response(struct propfind_ctx *fctx, long code, unsigned precond)
 	}
     }
 
+    fctx->record = NULL;
+
     return 0;
 }
 
@@ -1104,10 +1110,9 @@ static int propfind_displayname(const xmlChar *name, xmlNsPtr ns,
     /* XXX  Do LDAP/SQL lookup here */
 
     buf_reset(&fctx->buf);
-    if (fctx->req_tgt->user) {
-	buf_printf(&fctx->buf, "%.*s",
-		   (int) fctx->req_tgt->userlen, fctx->req_tgt->user);
-    }
+
+    if (fctx->req_tgt->userid)
+	buf_printf(&fctx->buf, "%s", fctx->req_tgt->userid);
 
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 		 name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
@@ -1218,7 +1223,7 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
     xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
 				   &propstat[PROPSTAT_OK], name, ns, NULL, 0);
 
-    if (fctx->req_tgt->user)
+    if (fctx->req_tgt->userid)
 	xmlNewChild(node, NULL, BAD_CAST "principal", NULL);
 
     return 0;
@@ -1346,12 +1351,11 @@ static int propfind_principalurl(const xmlChar *name, xmlNsPtr ns,
 				   &propstat[PROPSTAT_OK], name, ns, NULL, 0);
 
     buf_reset(&fctx->buf);
-    if (fctx->req_tgt->user) {
+    if (fctx->req_tgt->userid) {
 	xmlNodePtr expand = (xmlNodePtr) rock;
 
-	buf_printf(&fctx->buf, "%s/user/%.*s/",
-		   namespace_principal.prefix,
-		   (int) fctx->req_tgt->userlen, fctx->req_tgt->user);
+	buf_printf(&fctx->buf, "%s/user/%s/",
+		   namespace_principal.prefix, fctx->req_tgt->userid);
 
 	if (expand) {
 	    /* Return properties for this URL */
@@ -1378,13 +1382,12 @@ int propfind_owner(const xmlChar *name, xmlNsPtr ns,
     xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
 				   &propstat[PROPSTAT_OK], name, ns, NULL, 0);
 
-    if (fctx->req_tgt->user) {
+    if (fctx->req_tgt->userid) {
 	xmlNodePtr expand = (xmlNodePtr) rock;
 
 	buf_reset(&fctx->buf);
-	buf_printf(&fctx->buf, "%s/user/%.*s/",
-		   namespace_principal.prefix,
-		   (int) fctx->req_tgt->userlen, fctx->req_tgt->user);
+	buf_printf(&fctx->buf, "%s/user/%s/",
+		   namespace_principal.prefix, fctx->req_tgt->userid);
 
 	if (expand) {
 	    /* Return properties for this URL */
@@ -1628,8 +1631,8 @@ int propfind_curprivset(const xmlChar *name, xmlNsPtr ns,
     xmlNodePtr set;
 
     if (!fctx->mailbox) return HTTP_NOT_FOUND;
-    if (((rights = cyrus_acl_myrights(fctx->authstate, fctx->mailbox->acl))
-	 & DACL_READ) != DACL_READ) {
+    rights = httpd_myrights(fctx->authstate, fctx->mailbox->acl);
+    if ((rights & DACL_READ) != DACL_READ) {
 	return HTTP_UNAUTHORIZED;
     }
 
@@ -1639,6 +1642,8 @@ int propfind_curprivset(const xmlChar *name, xmlNsPtr ns,
     }
     else if (mboxname_userownsmailbox(httpd_userid, fctx->mailbox->name)) {
 	rights |= config_implicitrights;
+	/* we always allow admin by the owner in DAV */
+	rights |= DACL_ADMIN;
     }
 
     /* Build the rest of the XML response */
@@ -1671,18 +1676,17 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
 		 struct propstat propstat[],
 		 void *rock __attribute__((unused)))
 {
-    int rights;
     xmlNodePtr acl;
     char *aclstr, *userid;
     unsigned flags = 0;
 
     if (!fctx->mailbox) return HTTP_NOT_FOUND;
-    /* owner has explicit admin rights */
+
+    /* owner has implicit admin rights */
     if (!mboxname_userownsmailbox(httpd_userid, fctx->mailbox->name)) {
-	if (!((rights = cyrus_acl_myrights(fctx->authstate, fctx->mailbox->acl))
-	       & DACL_ADMIN)) {
+	int rights = httpd_myrights(fctx->authstate, fctx->mailbox->acl);
+	if (!(rights & DACL_ADMIN))
 	    return HTTP_UNAUTHORIZED;
-	}
     }
 
     if (fctx->req_tgt->namespace == URL_NS_CALENDAR) {
@@ -1704,9 +1708,9 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
     userid = aclstr = xstrdup(fctx->mailbox->acl);
 
     while (userid) {
+	int rights;
 	char *rightstr, *nextid;
 	xmlNodePtr ace, node;
-	int deny = 0;
 
 	rightstr = strchr(userid, '\t');
 	if (!rightstr) break;
@@ -1719,8 +1723,8 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
 	/* Check for negative rights */
 	/* XXX  Does this correspond to DAV:deny? */
 	if (*userid == '-') {
-	    deny = 1;
-	    userid++;
+	    userid = nextid;
+	    continue;
 	}
 
 	rights = cyrus_acl_strtomask(rightstr);
@@ -1728,21 +1732,28 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
 	/* Add ace XML element for this userid/right pair */
 	ace = xmlNewChild(acl, NULL, BAD_CAST "ace", NULL);
 
-	/* XXX  Need to check for groups.
-	 * Is there any IMAP equivalent to "unauthenticated"?
-	 * Is there any DAV equivalent to "anonymous"?
-	 */
-
 	node = xmlNewChild(ace, NULL, BAD_CAST "principal", NULL);
 	if (!strcmp(userid, fctx->userid))
 	    xmlNewChild(node, NULL, BAD_CAST "self", NULL);
-	else if (mboxname_userownsmailbox(userid, fctx->mailbox->name))
+	else if (mboxname_userownsmailbox(userid, fctx->mailbox->name)) {
 	    xmlNewChild(node, NULL, BAD_CAST "owner", NULL);
+	    /* we always allow admin by the owner in DAV */
+	    rights |= DACL_ADMIN;
+	}
 	else if (!strcmp(userid, "anyone"))
 	    xmlNewChild(node, NULL, BAD_CAST "authenticated", NULL);
-	/* XXX - well, it's better than a user called 'anonymous' */
+	/* XXX - well, it's better than a user called 'anonymous'
+	 * Is there any IMAP equivalent to "unauthenticated"?
+	 * Is there any DAV equivalent to "anonymous"?
+	 */
 	else if (!strcmp(userid, "anonymous"))
 	    xmlNewChild(node, NULL, BAD_CAST "unauthenticated", NULL);
+	else if (!strncmp(userid, "group:", 6)) {
+	    buf_reset(&fctx->buf);
+	    buf_printf(&fctx->buf, "%s/group/%s/",
+		       namespace_principal.prefix, userid+6);
+	    xml_add_href(node, NULL, buf_cstring(&fctx->buf));
+	}
 	else {
 	    buf_reset(&fctx->buf);
 	    buf_printf(&fctx->buf, "%s/user/%s/",
@@ -1750,9 +1761,12 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
 	    xml_add_href(node, NULL, buf_cstring(&fctx->buf));
 	}
 
-	node = xmlNewChild(ace, NULL,
-			   BAD_CAST (deny ? "deny" : "grant"), NULL);
+	node = xmlNewChild(ace, NULL, BAD_CAST "grant", NULL);
 	add_privs(rights, flags, node, resp->parent, fctx->ns);
+
+	/* system userids are protected */
+	if (is_system_user(userid))
+	    xmlNewChild(ace, NULL, BAD_CAST "protected", NULL);
 
 	if (fctx->req_tgt->resource) {
 	    node = xmlNewChild(ace, NULL, BAD_CAST "inherited", NULL);
@@ -1878,12 +1892,23 @@ EXPORTED int propfind_curprin(const xmlChar *name, xmlNsPtr ns,
     xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
 				   &propstat[PROPSTAT_OK], name, ns, NULL, 0);
 
-    if (fctx->userid) {
+    if (httpd_userid) {
 	xmlNodePtr expand = (xmlNodePtr) rock;
 
 	buf_reset(&fctx->buf);
-	buf_printf(&fctx->buf, "%s/user/%s/",
-		   namespace_principal.prefix, fctx->userid);
+
+	if (strchr(httpd_userid, '@')) {
+	    buf_printf(&fctx->buf, "%s/user/%s/",
+		    namespace_principal.prefix, httpd_userid);
+	}
+	else if (httpd_extradomain) {
+	    buf_printf(&fctx->buf, "%s/user/%s@%s/",
+		       namespace_principal.prefix, httpd_userid, httpd_extradomain);
+	}
+	else {
+	    buf_printf(&fctx->buf, "%s/user/%s@%s/",
+		       namespace_principal.prefix, httpd_userid, config_defdomain);
+	}
 
 	if (expand) {
 	    /* Return properties for this URL */
@@ -1935,6 +1960,16 @@ int propfind_addmember(const xmlChar *name, xmlNsPtr ns,
 }
 
 
+static int get_synctoken(struct mailbox *mailbox, struct buf *buf)
+{
+    buf_reset(buf);
+    buf_printf(buf, SYNC_TOKEN_URL_SCHEME "%u-" MODSEQ_FMT,
+	       mailbox->i.uidvalidity,
+	       mailbox->i.highestmodseq);
+
+    return 0;
+}
+
 /* Callback to fetch DAV:sync-token and CS:getctag */
 int propfind_sync_token(const xmlChar *name, xmlNsPtr ns,
 			struct propfind_ctx *fctx,
@@ -1948,10 +1983,7 @@ int propfind_sync_token(const xmlChar *name, xmlNsPtr ns,
     /* not defined on the top-level collection either (aka #calendars) */
     if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
 
-    buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, SYNC_TOKEN_URL_SCHEME "%u-" MODSEQ_FMT,
-	       fctx->mailbox->i.uidvalidity,
-	       fctx->mailbox->i.highestmodseq);
+    get_synctoken(fctx->mailbox, &fctx->buf);
 
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 		 name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
@@ -2071,7 +2103,10 @@ static int proppatch_toresource(xmlNodePtr prop, unsigned set,
     }
 
     r = mailbox_get_annotate_state(pctx->mailbox, pctx->record->uid, &astate);
-    if (!r) r = annotate_state_writemask(astate, buf_cstring(&pctx->buf), httpd_userid, &value);
+    if (!r) r = annotate_state_write(astate, buf_cstring(&pctx->buf), "", &value);
+    /* we need to rewrite the record to update the modseq because the layering
+     * of annotations and mailboxes is broken */
+    if (!r) r = mailbox_rewrite_index_record(pctx->mailbox, pctx->record);
 
  done:
 
@@ -2131,8 +2166,8 @@ static int propfind_fromresource(const xmlChar *name, xmlNsPtr ns,
     buf_printf(&fctx->buf, ANNOT_NS "<%s>%s",
 	       (const char *) ns->href, name);
 
-    r = annotatemore_msg_lookupmask(fctx->mailbox->name, fctx->record->uid,
-				    buf_cstring(&fctx->buf), httpd_userid, &attrib);
+    r = annotatemore_msg_lookup(fctx->mailbox->name, fctx->record->uid,
+				buf_cstring(&fctx->buf), NULL, &attrib);
 
 done:
     if (r) return HTTP_SERVER_ERROR;
@@ -2337,7 +2372,7 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 			      known_namespaces[entry->ns].href,
 			      known_namespaces[entry->ns].prefix);
 
-		    nentry->name = BAD_CAST entry->name;
+		    nentry->name = xmlStrdup(BAD_CAST entry->name);
 		    nentry->ns = fctx->ns[entry->ns];
 		    if (allowed) {
 			nentry->flags = entry->flags;
@@ -2615,6 +2650,33 @@ int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
     return 0;
 }
 
+static void set_system_acls(struct buf *buf, mbentry_t *mbentry)
+{
+    char *userid, *aclstr;
+
+    /* Parse the ACL string (userid/rights pairs) */
+    userid = aclstr = xstrdup(mbentry->acl);
+
+    while (userid) {
+	char *rightstr, *nextid;
+
+	rightstr = strchr(userid, '\t');
+	if (!rightstr) break;
+	*rightstr++ = '\0';
+
+	nextid = strchr(rightstr, '\t');
+	if (!nextid) break;
+	*nextid++ = '\0';
+
+	/* we only want system users */
+	if (is_system_user(userid))
+	    buf_printf(buf, "%s\t%s\t", userid, rightstr);
+
+	userid = nextid;
+    }
+
+    free(aclstr);
+}
 
 /* Perform an ACL request
  *
@@ -2673,7 +2735,7 @@ int meth_acl(struct transaction_t *txn, void *params)
 
     if (!mboxname_userownsmailbox(httpd_userid, mbentry->name)) {
 	/* Check ACL for current user */
-	rights = mbentry->acl ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
+	rights = httpd_myrights(httpd_authstate, mbentry->acl);
 	if (!(rights & DACL_ADMIN)) {
 	    /* DAV:need-privileges */
 	    txn->error.precond = DAV_NEED_PRIVS;
@@ -2695,8 +2757,6 @@ int meth_acl(struct transaction_t *txn, void *params)
 
 	return http_pipe_req_resp(be, txn);
     }
-
-    mboxlist_entry_free(&mbentry);
 
     /* Local Mailbox */
 
@@ -2735,12 +2795,14 @@ int meth_acl(struct transaction_t *txn, void *params)
 	goto done;
     }
 
+    set_system_acls(&acl, mbentry);
+
     /* Parse the DAV:ace elements */
     for (ace = root->children; ace; ace = ace->next) {
 	if (ace->type == XML_ELEMENT_NODE) {
 	    xmlNodePtr child = NULL, prin = NULL, privs = NULL;
 	    const char *userid = NULL;
-	    int deny = 0, rights = 0;
+	    int rights = 0;
 	    char rightstr[100];
 	    struct request_target_t tgt;
 
@@ -2767,15 +2829,10 @@ int meth_acl(struct transaction_t *txn, void *params)
 			     privs->type != XML_ELEMENT_NODE; privs = privs->next);
 		    }
 		    else if (!xmlStrcmp(child->name, BAD_CAST "deny")) {
-			if (privs) {
-			    txn->error.desc = "Multiple grant|deny in ACE\r\n";
-			    ret = HTTP_BAD_REQUEST;
-			    goto done;
-			}
-
-			for (privs = child->children; privs &&
-			     privs->type != XML_ELEMENT_NODE; privs = privs->next);
-			deny = 1;
+			/* DAV:grant-only */
+			txn->error.precond = DAV_GRANT_ONLY;
+			ret = HTTP_FORBIDDEN;
+			goto done;
 		    }
 		    else if (!xmlStrcmp(child->name, BAD_CAST "invert")) {
 			/* DAV:no-invert */
@@ -2817,7 +2874,7 @@ int meth_acl(struct transaction_t *txn, void *params)
 		    tgt.namespace = URL_NS_PRINCIPAL;
 		    /* XXX: there is no doubt that this leaks memory */
 		    r = principal_parse_path(uri->path, &tgt, &errstr);
-		    if (!r && tgt.user) userid = tgt.user;
+		    if (!r && tgt.userid) userid = tgt.userid;
 		}
 		if (uri) xmlFreeURI(uri);
 		xmlFree(href);
@@ -2826,6 +2883,13 @@ int meth_acl(struct transaction_t *txn, void *params)
 	    if (!userid) {
 		/* DAV:recognized-principal */
 		txn->error.precond = DAV_RECOG_PRINC;
+		ret = HTTP_FORBIDDEN;
+		goto done;
+	    }
+
+	    if (is_system_user(userid)) {
+		/* DAV:allowed-principal */
+		txn->error.precond = DAV_ALLOW_PRINC;
 		ret = HTTP_FORBIDDEN;
 		goto done;
 	    }
@@ -2848,17 +2912,11 @@ int meth_acl(struct transaction_t *txn, void *params)
 			/* WebDAV privileges */
 			if (!xmlStrcmp(priv->name,
 				       BAD_CAST "all")) {
-			    if (deny)
-				rights |= ACL_FULL; /* wipe EVERYTHING */
-			    else
-				rights |= DACL_ALL;
+			    rights |= DACL_ALL;
 			}
 			else if (!xmlStrcmp(priv->name,
 					    BAD_CAST "read"))
 			    rights |= DACL_READ;
-			else if (!xmlStrcmp(priv->name,
-					    BAD_CAST "read-free-busy"))
-			    rights |= DACL_READFB;
 			else if (!xmlStrcmp(priv->name,
 					    BAD_CAST "write"))
 			    rights |= DACL_WRITE;
@@ -2868,12 +2926,6 @@ int meth_acl(struct transaction_t *txn, void *params)
 			else if (!xmlStrcmp(priv->name,
 					    BAD_CAST "write-properties"))
 			    rights |= DACL_WRITEPROPS;
-			else if (!xmlStrcmp(priv->name,
-					    BAD_CAST "remove-resource"))
-			    rights |= DACL_RMRSRC;
-			else if (!xmlStrcmp(priv->name,
-					    BAD_CAST "remove-collection"))
-			    rights |= DACL_RMCOL;
 			else if (!xmlStrcmp(priv->name,
 					    BAD_CAST "bind"))
 			    rights |= DACL_BIND;
@@ -2893,6 +2945,18 @@ int meth_acl(struct transaction_t *txn, void *params)
 			    ret = HTTP_FORBIDDEN;
 			    goto done;
 			}
+			else {
+			    /* DAV:not-supported-privilege */
+			    txn->error.precond = DAV_SUPP_PRIV;
+			    ret = HTTP_FORBIDDEN;
+			    goto done;
+			}
+		    }
+		    else if (!xmlStrcmp(priv->ns->href,
+				   BAD_CAST XML_NS_CALDAV)) {
+			if (!xmlStrcmp(priv->name,
+				       BAD_CAST "read-free-busy"))
+			    rights |= DACL_READFB;
 			else {
 			    /* DAV:not-supported-privilege */
 			    txn->error.precond = DAV_SUPP_PRIV;
@@ -2937,40 +3001,18 @@ int meth_acl(struct transaction_t *txn, void *params)
 	    /* gotta have something to do! */
 	    if (rights) {
 		cyrus_acl_masktostr(rights, rightstr);
-		if (overwrite) {
-		    buf_printf(&acl, "%s%s\t%s\t",
-			       deny ? "-" : "", userid, rightstr);
-		}
-		else {
-		    buf_reset(&acl);
-		    buf_printf(&acl, "%s%s", deny ? "-" : "+", rightstr);
-
-		    r = mboxlist_setacl(&httpd_namespace, txn->req_tgt.mboxname,
-					userid, buf_cstring(&acl),
-					httpd_userisadmin || httpd_userisproxyadmin,
-					httpd_userid, httpd_authstate);
-		    if (r) {
-			syslog(LOG_ERR, "mboxlist_setacl(%s) failed: %s",
-			       txn->req_tgt.mboxname, error_message(r));
-			txn->error.desc = error_message(r);
-			ret = HTTP_SERVER_ERROR;
-			goto done;
-		    }
-		}
+		buf_printf(&acl, "%s\t%s\t", userid, rightstr);
 	    }
 	}
     }
 
-    if (overwrite) {
-	r = mboxlist_sync_setacls(txn->req_tgt.mboxname, buf_cstring(&acl));
-	if (r) {
-	    syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
-		   txn->req_tgt.mboxname, error_message(r));
-	    txn->error.desc = error_message(r);
-	    ret = HTTP_SERVER_ERROR;
-	    goto done;
-	}
-	mailbox_set_acl(mailbox, buf_cstring(&acl), 0);
+    r = mboxlist_sync_setacls(mbentry->name, buf_cstring(&acl));
+    if (r) {
+	syslog(LOG_ERR, "mboxlist_setacl(%s) failed: %s",
+	       mbentry->name, error_message(r));
+	txn->error.desc = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
     }
 
     response_header(HTTP_OK, txn);
@@ -2978,7 +3020,7 @@ int meth_acl(struct transaction_t *txn, void *params)
   done:
     buf_free(&acl);
     if (indoc) xmlFreeDoc(indoc);
-    mailbox_close(&mailbox);
+    mboxlist_entry_free(&mbentry);
 
     return ret;
 }
@@ -3060,7 +3102,7 @@ int meth_copy(struct transaction_t *txn, void *params)
     }
 
     /* Check ACL for current user on source mailbox */
-    rights = mbentry->acl ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
+    rights = httpd_myrights(httpd_authstate, mbentry->acl);
     if (((rights & DACL_READ) != DACL_READ) ||
 	((txn->meth == METH_MOVE) && !(rights & DACL_RMRSRC))) {
 	/* DAV:need-privileges */
@@ -3097,7 +3139,7 @@ int meth_copy(struct transaction_t *txn, void *params)
     }
 
     /* Check ACL for current user on destination */
-    rights = mbentry->acl ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
+    rights = httpd_myrights(httpd_authstate, mbentry->acl);
     if (!(rights & DACL_ADDRSRC) || !(rights & DACL_WRITECONT)) {
 	/* DAV:need-privileges */
 	txn->error.precond = DAV_NEED_PRIVS;
@@ -3147,6 +3189,29 @@ int meth_copy(struct transaction_t *txn, void *params)
 	/* Open source mailbox for reading */
 	r = mailbox_open_irl(txn->req_tgt.mboxname, &src_mbox);
     }
+
+    /* Open the DAV DB corresponding to the dest mailbox */
+    dest_davdb = cparams->davdb.open_db(dest_mbox);
+
+    /* Find message UID for the dest resource, if exists */
+    cparams->davdb.lookup_resource(dest_davdb, dest_tgt.mboxname,
+				   dest_tgt.resource, 0, (void **) &ddata, 0);
+    /* XXX  Check errors */
+
+    /* Finished our initial read of dest mailbox */
+    mailbox_unlock_index(dest_mbox, NULL);
+
+    /* Check any preconditions on destination */
+    if ((hdr = spool_getheader(txn->req_hdrs, "Overwrite")) &&
+	!strcmp(hdr[0], "F")) {
+
+	if (ddata->rowid) {
+	    /* Don't overwrite the destination resource */
+	    ret = HTTP_PRECOND_FAILED;
+	    goto done;
+	}
+	overwrite = OVERWRITE_NO;
+    }
     if (r) {
 	syslog(LOG_ERR, "mailbox_open_%s(%s) failed: %s",
 	       txn->meth == METH_MOVE ? "iwl" : "irl",
@@ -3161,7 +3226,7 @@ int meth_copy(struct transaction_t *txn, void *params)
 
     /* Find message UID for the source resource */
     cparams->davdb.lookup_resource(src_davdb, txn->req_tgt.mboxname,
-				   txn->req_tgt.resource, 0, (void **) &ddata);
+				   txn->req_tgt.resource, 0, (void **) &ddata, 0);
     if (!ddata->rowid) {
 	ret = HTTP_NOT_FOUND;
 	goto done;
@@ -3169,7 +3234,7 @@ int meth_copy(struct transaction_t *txn, void *params)
 
     if (ddata->imap_uid) {
 	/* Mapped URL - Fetch index record for the resource */
-	r = mailbox_find_index_record(src_mbox, ddata->imap_uid, &src_rec);
+	r = mailbox_find_index_record(src_mbox, ddata->imap_uid, &src_rec, NULL);
 	if (r) {
 	    txn->error.desc = error_message(r);
 	    ret = HTTP_SERVER_ERROR;
@@ -3257,13 +3322,24 @@ int meth_copy(struct transaction_t *txn, void *params)
     if ((txn->meth == METH_MOVE) &&
 	(ret == HTTP_CREATED || ret == HTTP_NO_CONTENT)) {
 
-	/* Expunge the source message */
-	src_rec.system_flags |= FLAG_EXPUNGED;
-	if ((r = mailbox_rewrite_index_record(src_mbox, &src_rec))) {
-	    syslog(LOG_ERR, "expunging src record (%s) failed: %s",
-		   txn->req_tgt.mboxname, error_message(r));
-	    txn->error.desc = error_message(r);
-	    ret = HTTP_SERVER_ERROR;
+	/* Find message UID for the source resource */
+	cparams->davdb.lookup_resource(src_davdb, txn->req_tgt.mboxname,
+				       txn->req_tgt.resource, 0, (void **) &ddata, 0);
+	/* XXX  Check errors */
+
+	/* Fetch index record for the source resource */
+	if (ddata->imap_uid &&
+	    !mailbox_find_index_record(src_mbox, ddata->imap_uid, &src_rec, NULL)) {
+
+	    /* Expunge the source message */
+	    src_rec.system_flags |= FLAG_EXPUNGED;
+	    if ((r = mailbox_rewrite_index_record(src_mbox, &src_rec))) {
+		syslog(LOG_ERR, "expunging src record (%s) failed: %s",
+		       txn->req_tgt.mboxname, error_message(r));
+		txn->error.desc = error_message(r);
+		ret = HTTP_SERVER_ERROR;
+		goto done;
+	    }
 	}
     }
 
@@ -3286,12 +3362,20 @@ int meth_copy(struct transaction_t *txn, void *params)
     return ret;
 }
 
+/* this is when a user tries to delete a mailbox that they don't own, and don't
+ * have permission to delete */
+static int remove_user_acl(const char *userid, const char *mboxname)
+{
+    return mboxlist_setacl(&httpd_namespace, mboxname, userid, /*rights*/NULL,
+			   /*isadmin*/1, httpd_userid, httpd_authstate);
+}
 
 /* Perform a DELETE request */
 int meth_delete(struct transaction_t *txn, void *params)
 {
     struct meth_params *dparams = (struct meth_params *) params;
-    int ret = HTTP_NO_CONTENT, r = 0, precond, rights;
+    int ret = HTTP_NO_CONTENT, r = 0, precond, rights, needrights;
+    struct buf synctoken = BUF_INITIALIZER;
     struct mboxevent *mboxevent = NULL;
     struct mailbox *mailbox = NULL;
     mbentry_t *mbentry = NULL;
@@ -3310,7 +3394,7 @@ int meth_delete(struct transaction_t *txn, void *params)
     if (r) return r;
 
     /* Make sure method is allowed */
-    if (!(txn->req_tgt.allow & ALLOW_DELETE)) return HTTP_NOT_ALLOWED; 
+    if (!(txn->req_tgt.allow & ALLOW_DELETE)) return HTTP_NOT_ALLOWED;
 
     /* Locate the mailbox */
     r = http_mlookup(txn->req_tgt.mboxname, &mbentry, NULL);
@@ -3327,13 +3411,17 @@ int meth_delete(struct transaction_t *txn, void *params)
     }
 
     /* Check ACL for current user */
-    rights = mbentry->acl ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
-    if ((txn->req_tgt.resource && !(rights & DACL_RMRSRC)) ||
-	!(rights & DACL_RMCOL)) {
+    rights = httpd_myrights(httpd_authstate, mbentry->acl);
+    needrights = txn->req_tgt.resource ? DACL_RMRSRC : DACL_RMCOL;
+    if (!(rights & needrights)) {
+	mboxlist_entry_free(&mbentry);
+	/* special case delete mailbox where not the owner */
+	if (!txn->req_tgt.resource && !mboxname_userownsmailbox(httpd_userid, txn->req_tgt.mboxname))
+	    if (!remove_user_acl(httpd_userid, txn->req_tgt.mboxname))
+		return HTTP_OK;
 	/* DAV:need-privileges */
 	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
-	mboxlist_entry_free(&mbentry);
 	return HTTP_NO_PRIVS;
     }
 
@@ -3387,12 +3475,9 @@ int meth_delete(struct transaction_t *txn, void *params)
 				       httpd_userid, httpd_authstate, mboxevent,
 				       /*checkack*/1, /*localonly*/0, /*force*/0);
 	}
-	if (!r) dparams->davdb.delete_mbox(davdb, txn->req_tgt.mboxname, 0);
 	if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
 	else if (r == IMAP_MAILBOX_NONEXISTENT) ret = HTTP_NOT_FOUND;
 	else if (r) ret = HTTP_SERVER_ERROR;
-
-	dparams->davdb.close_db(davdb);
 
 	goto done;
     }
@@ -3414,7 +3499,7 @@ int meth_delete(struct transaction_t *txn, void *params)
 
     /* Find message UID for the resource, if exists */
     dparams->davdb.lookup_resource(davdb, txn->req_tgt.mboxname,
-				   txn->req_tgt.resource, 0, (void **) &ddata);
+				   txn->req_tgt.resource, 0, (void **) &ddata, 0);
     if (!ddata->rowid) {
 	ret = HTTP_NOT_FOUND;
 	goto done;
@@ -3423,7 +3508,7 @@ int meth_delete(struct transaction_t *txn, void *params)
     memset(&record, 0, sizeof(struct index_record));
     if (ddata->imap_uid) {
 	/* Mapped URL - Fetch index record for the resource */
-	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &record);
+	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &record, NULL);
 	if (r) {
 	    txn->error.desc = error_message(r);
 	    ret = HTTP_SERVER_ERROR;
@@ -3481,6 +3566,13 @@ int meth_delete(struct transaction_t *txn, void *params)
     /* Do any special processing */
     if (dparams->delete) dparams->delete(txn, mailbox, &record, ddata);
 
+    get_synctoken(mailbox, &synctoken);
+    txn->resp_body.synctoken = buf_cstring(&synctoken);
+
+    write_body(ret, txn, NULL, 0);
+
+    buf_free(&synctoken);
+
   done:
     if (davdb) dparams->davdb.close_db(davdb);
     mailbox_close(&mailbox);
@@ -3503,6 +3595,7 @@ int meth_get_dav(struct transaction_t *txn, void *params)
     const char *data = NULL;
     unsigned long datalen = 0, offset = 0;
     struct buf msg_buf = BUF_INITIALIZER;
+    struct buf synctoken = BUF_INITIALIZER;
     struct resp_body_t *resp_body = &txn->resp_body;
     struct mailbox *mailbox = NULL;
     mbentry_t *mbentry = NULL;
@@ -3550,7 +3643,7 @@ int meth_get_dav(struct transaction_t *txn, void *params)
     }
 
     /* Check ACL for current user */
-    rights = mbentry->acl ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
+    rights = httpd_myrights(httpd_authstate, mbentry->acl);
     if (!(rights & DACL_READ)) {
 	/* DAV:need-privileges */
 	txn->error.precond = DAV_NEED_PRIVS;
@@ -3589,7 +3682,7 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 
     /* Find message UID for the resource */
     gparams->davdb.lookup_resource(davdb, txn->req_tgt.mboxname,
-				   txn->req_tgt.resource, 0, (void **) &ddata);
+				   txn->req_tgt.resource, 0, (void **) &ddata, 0);
     if (!ddata->rowid) {
 	ret = HTTP_NOT_FOUND;
 	goto done;
@@ -3598,7 +3691,7 @@ int meth_get_dav(struct transaction_t *txn, void *params)
     memset(&record, 0, sizeof(struct index_record));
     if (ddata->imap_uid) {
 	/* Mapped URL - Fetch index record for the resource */
-	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &record);
+	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &record, NULL);
 	if (r) {
 	    txn->error.desc = error_message(r);
 	    ret = HTTP_SERVER_ERROR;
@@ -3674,11 +3767,17 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 	}
     }
 
+    r = get_synctoken(mailbox, &synctoken);
+    if (r) goto done;
+    resp_body->synctoken = buf_cstring(&synctoken);
+
     write_body(precond, txn, data, datalen);
 
     buf_free(&msg_buf);
 
   done:
+    buf_free(&synctoken);
+
     if (davdb) gparams->davdb.close_db(davdb);
     if (r) {
 	txn->error.desc = error_message(r);
@@ -3742,7 +3841,7 @@ int meth_lock(struct transaction_t *txn, void *params)
     }
 
     /* Check ACL for current user */
-    rights = mbentry->acl ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
+    rights = httpd_myrights(httpd_authstate, mbentry->acl);
     if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRSRC)) {
 	/* DAV:need-privileges */
 	txn->error.precond = DAV_NEED_PRIVS;
@@ -3784,13 +3883,13 @@ int meth_lock(struct transaction_t *txn, void *params)
 
     /* Find message UID for the resource, if exists */
     lparams->davdb.lookup_resource(davdb, txn->req_tgt.mboxname,
-				   txn->req_tgt.resource, 1, (void *) &ddata);
+				   txn->req_tgt.resource, 1, (void *) &ddata, 0);
 
     if (ddata->imap_uid) {
 	/* Locking existing resource */
 
 	/* Fetch index record for the resource */
-	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &oldrecord);
+	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &oldrecord, NULL);
 	if (r) {
 	    txn->error.desc = error_message(r);
 	    ret = HTTP_SERVER_ERROR;
@@ -3927,7 +4026,7 @@ int meth_lock(struct transaction_t *txn, void *params)
     root = xmlNewChild(root, NULL, BAD_CAST "lockdiscovery", NULL);
     xml_add_lockdisc(root, txn->req_tgt.path, (struct dav_data *) ddata);
 
-    lparams->davdb.write_resource(davdb, ddata, 1);
+    lparams->davdb.write_resourceLOCKONLY(davdb, ddata, 1);
 
     txn->resp_body.lock = ddata->lock_token;
 
@@ -4168,7 +4267,7 @@ int propfind_by_resource(void *rock, void *data)
     fctx->data = data;
     if (ddata->imap_uid && !fctx->record) {
 	/* Fetch index record for the resource */
-	r = mailbox_find_index_record(fctx->mailbox, ddata->imap_uid, &record);
+	r = mailbox_find_index_record(fctx->mailbox, ddata->imap_uid, &record, NULL);
 	/* XXX  Check errors */
 
 	fctx->record = r ? NULL : &record;
@@ -4198,17 +4297,35 @@ int propfind_by_collection(char *mboxname, int matchlen,
 {
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
     mbentry_t *mbentry = NULL;
+    struct buf writebuf = BUF_INITIALIZER;
+    struct mboxname_parts parts;
     struct mailbox *mailbox = NULL;
     char *p;
     size_t len;
-    int r = 0, rights, root;
+    int r = 0, rights, root = 1;
+
+    mboxname_init_parts(&parts);
 
     /* If this function is called outside of mboxlist_findall()
-       with matchlen == 0, this is the root resource of the PROPFIND */
-    root = !matchlen;
+     * with matchlen == 0, this is the root resource of the PROPFIND,
+     * otherwise it's just one of many found.  Inbox and Outbox can't
+     * appear unless they are the root */
+    if (matchlen) {
+	p = strrchr(mboxname, '.');
+	if (!p) goto done;
+	p++; /* skip dot */
+	if (!strncmp(p, SCHED_INBOX, strlen(SCHED_INBOX) - 1)) goto done;
+	if (!strncmp(p, SCHED_OUTBOX, strlen(SCHED_OUTBOX) - 1)) goto done;
+	/* and while we're at it, reject the fricking top-level folders too.
+	 * XXX - this is evil and bad and wrong */
+	if (*p == '#') goto done;
+	root = 0;
+    }
 
     /* Check ACL on mailbox for current user */
-    if ((r = mboxlist_lookup(mboxname, &mbentry, NULL))) {
+    r = mboxlist_lookup(mboxname, &mbentry, NULL);
+    if (r == IMAP_MAILBOX_NONEXISTENT) return 0;
+    if (r) {
 	syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
 	       mboxname, error_message(r));
 	fctx->err->desc = error_message(r);
@@ -4216,7 +4333,11 @@ int propfind_by_collection(char *mboxname, int matchlen,
 	goto done;
     }
 
-    rights = mbentry->acl ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
+    /* if finding all, we only match known types */
+    if (matchlen && !(mbentry->mbtype & fctx->req_tgt->mboxtype))
+	goto done;
+
+    rights = httpd_myrights(httpd_authstate, mbentry->acl);
     if ((rights & fctx->reqd_privs) != fctx->reqd_privs) goto done;
 
     /* Open mailbox for reading */
@@ -4232,22 +4353,35 @@ int propfind_by_collection(char *mboxname, int matchlen,
     fctx->record = NULL;
 
     if (!fctx->req_tgt->resource) {
-	/* Append collection name to URL path */
-	if (!fctx->req_tgt->collection) {
-	    len = strlen(fctx->req_tgt->path);
-	    p = fctx->req_tgt->path + len;
-	}
-	else {
-	    p = fctx->req_tgt->collection;
-	    len = p - fctx->req_tgt->path;
-	}
+	mboxname_to_parts(mboxname, &parts);
 
-	if (p[-1] != '/') {
-	    *p++ = '/';
-	    len++;
+	buf_setcstr(&writebuf, fctx->req_tgt->prefix);
+
+	if (parts.userid) {
+	    buf_printf(&writebuf, "/user/%s", parts.userid);
+	    /* XXX - only if a domain... */
+	    buf_printf(&writebuf, "@%s", parts.domain ? parts.domain : httpd_extradomain ? httpd_extradomain : config_defdomain);
 	}
-	strlcpy(p, strrchr(mboxname, '.') + 1, MAX_MAILBOX_PATH - len);
-	strlcat(p, "/", MAX_MAILBOX_PATH - len - 1);
+	buf_putc(&writebuf, '/');
+
+	len = writebuf.len;
+
+	/* one day this will just be the final element of 'boxes' hopefully */
+	if (!parts.box) goto done;
+	p = strrchr(parts.box, '.');
+	if (!p) goto done;
+
+	/* OK, we're doing this mailbox */
+	buf_appendcstr(&writebuf, p+1);
+
+	/* don't forget the trailing slash */
+	buf_putc(&writebuf, '/');
+
+	/* copy it all back into place... in theory we should check against
+	 * 'last' and make sure it doesn't change from the original request.
+	 * yay for micro-optimised memory usage... */
+	strlcpy(fctx->req_tgt->path, buf_cstring(&writebuf), MAX_MAILBOX_PATH);
+	p = fctx->req_tgt->path + len;
 	fctx->req_tgt->collection = p;
 	fctx->req_tgt->collen = strlen(p);
 
@@ -4258,7 +4392,7 @@ int propfind_by_collection(char *mboxname, int matchlen,
 	    (r = xml_add_response(fctx, 0, 0))) goto done;
     }
 
-    if (fctx->depth > 1) {
+    if (fctx->depth > 1 && fctx->open_db) { // can't do davdb searches if no dav db
 	/* Resource(s) */
 
 	/* Open the DAV DB corresponding to the mailbox.
@@ -4275,7 +4409,7 @@ int propfind_by_collection(char *mboxname, int matchlen,
 
 	    /* Find message UID for the resource */
 	    fctx->lookup_resource(fctx->davdb,
-				  mboxname, fctx->req_tgt->resource, 0, &data);
+				  mboxname, fctx->req_tgt->resource, 0, &data, 0);
 	    /* XXX  Check errors */
 
 	    r = fctx->proc_by_resource(rock, data);
@@ -4292,6 +4426,8 @@ int propfind_by_collection(char *mboxname, int matchlen,
     }
 
   done:
+    buf_free(&writebuf);
+    mboxname_free_parts(&parts);
     mboxlist_entry_free(&mbentry);
     if (mailbox) mailbox_close(&mailbox);
 
@@ -4328,7 +4464,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     /* Check Depth */
     hdr = spool_getheader(txn->req_hdrs, "Depth");
     if (!hdr || !strcmp(hdr[0], "infinity")) {
-	depth = 2;
+	depth = 3;
     }
     else if (!strcmp(hdr[0], "1")) {
 	depth = 1;
@@ -4341,7 +4477,8 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 	return HTTP_BAD_REQUEST;
     }
 
-    if ((txn->req_tgt.namespace != URL_NS_PRINCIPAL) && txn->req_tgt.user) {
+    if ((txn->req_tgt.namespace != URL_NS_PRINCIPAL) && txn->req_tgt.userid
+	&& txn->req_tgt.mboxname && txn->req_tgt.mboxname[0]) {
 	mbentry_t *mbentry = NULL;
 	int rights;
 
@@ -4360,7 +4497,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 	}
 
 	/* Check ACL for current user */
-	rights = mbentry->acl ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
+	rights = httpd_myrights(httpd_authstate, mbentry->acl);
 	if ((rights & DACL_READ) != DACL_READ) {
 	    /* DAV:need-privileges */
 	    txn->error.precond = DAV_NEED_PRIVS;
@@ -4391,7 +4528,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     /* Principal or Local Mailbox */
 
     /* Normalize depth so that:
-     * 0 = home-set collection, 1+ = calendar collection, 2+ = calendar resource
+     * 0 = home-set collection, 1+ = calendar collection, 2+ = calendar resource, 3+ = infinity!
      */
     if (txn->req_tgt.collection) depth++;
     if (txn->req_tgt.resource) depth++;
@@ -4528,11 +4665,19 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 	    propfind_by_collection(txn->req_tgt.mboxname, 0, 0, &fctx);
 	}
 	else {
+	    char *base = NULL;
 	    /* Add responses for all contained calendar collections */
-	    strlcat(txn->req_tgt.mboxname, ".%", sizeof(txn->req_tgt.mboxname));
+	    struct mboxname_parts parts;
+	    mboxname_userid_to_parts(httpd_userid, &parts);
+	    if (parts.domain)
+		base = strconcat(parts.domain, "!user.*", (const char *)NULL);
+	    else
+		base = xstrdup("user.*");
+	    mboxname_free_parts(&parts);
 	    r = mboxlist_findall(NULL,  /* internal namespace */
-				 txn->req_tgt.mboxname, 1, httpd_userid, 
+				 base, 1, NULL,
 				 httpd_authstate, propfind_by_collection, &fctx);
+	    free(base);
 	}
 
 	if (fctx.davdb) fctx.close_db(fctx.davdb);
@@ -4617,7 +4762,7 @@ int meth_proppatch(struct transaction_t *txn, void *params)
     }
 
     /* Check ACL for current user */
-    rights = mbentry->acl ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
+    rights = httpd_myrights(httpd_authstate, mbentry->acl);
     if (!(rights & DACL_WRITEPROPS)) {
 	/* DAV:need-privileges */
 	txn->error.precond = DAV_NEED_PRIVS;
@@ -4702,7 +4847,7 @@ int meth_proppatch(struct transaction_t *txn, void *params)
 
 	/* Find message UID for the resource */
 	pparams->davdb.lookup_resource(davdb, txn->req_tgt.mboxname,
-				       txn->req_tgt.resource, 0, (void **) &ddata);
+				       txn->req_tgt.resource, 0, (void **) &ddata, 0);
 	if (!ddata->imap_uid) {
 	    ret = HTTP_NOT_FOUND;
 	    goto done;
@@ -4710,7 +4855,7 @@ int meth_proppatch(struct transaction_t *txn, void *params)
 
 	memset(&record, 0, sizeof(struct index_record));
 	/* Mapped URL - Fetch index record for the resource */
-	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &record);
+	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &record, NULL);
 	if (r) {
 	    ret = HTTP_NOT_FOUND;
 	    goto done;
@@ -4801,6 +4946,7 @@ int meth_put(struct transaction_t *txn, void *params)
     int ret, r, precond, rights;
     const char **hdr, *etag;
     struct mime_type_t *mime = NULL;
+    struct buf synctoken = BUF_INITIALIZER;
     struct mailbox *mailbox = NULL;
     mbentry_t *mbentry = NULL;
     struct dav_data *ddata;
@@ -4855,7 +5001,7 @@ int meth_put(struct transaction_t *txn, void *params)
     }
 
     /* Check ACL for current user */
-    rights = mbentry->acl ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
+    rights = httpd_myrights(httpd_authstate, mbentry->acl);
     if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRSRC)) {
 	/* DAV:need-privileges */
 	txn->error.precond = DAV_NEED_PRIVS;
@@ -4921,14 +5067,14 @@ int meth_put(struct transaction_t *txn, void *params)
 
     /* Find message UID for the resource, if exists */
     pparams->davdb.lookup_resource(davdb, txn->req_tgt.mboxname,
-				   txn->req_tgt.resource, 0, (void *) &ddata);
+				   txn->req_tgt.resource, 0, (void *) &ddata, 0);
     /* XXX  Check errors */
 
     if (ddata->imap_uid) {
 	/* Overwriting existing resource */
 
 	/* Fetch index record for the resource */
-	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &oldrecord);
+	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &oldrecord, NULL);
 	if (r) {
 	    syslog(LOG_ERR, "mailbox_find_index_record(%s, %u) failed: %s",
 		   txn->req_tgt.mboxname, ddata->imap_uid, error_message(r));
@@ -5040,6 +5186,13 @@ int meth_put(struct transaction_t *txn, void *params)
 	    break;
 	}
     }
+
+    get_synctoken(mailbox, &synctoken);
+    txn->resp_body.synctoken = buf_cstring(&synctoken);
+
+    write_body(ret, txn, NULL, 0);
+
+    buf_free(&synctoken);
 
   done:
     if (obj) {
@@ -5197,6 +5350,7 @@ int report_sync_col(struct transaction_t *txn,
 			   &uidvalidity, &syncmodseq, &basemodseq,
 			   tokenuri /* test for trailing junk */);
 
+		syslog(LOG_ERR, "scanned token %s to %d %u %llu %llu", str, r, uidvalidity, syncmodseq, basemodseq);
 		/* Sanity check the token components */
 		if (r < 2 || r > 3 ||
 		    (uidvalidity != mailbox->i.uidvalidity) ||
@@ -5310,6 +5464,7 @@ int report_sync_col(struct transaction_t *txn,
 	istate.map[nresp].system_flags = record.system_flags;
 	for (i = 0; i < MAX_USER_FLAGS/32; i++)
 	    istate.map[nresp].user_flags[i] = record.user_flags[i];
+	istate.map[nresp].cache_offset = record.cache_offset;
 
 	nresp++;
     }
@@ -5618,14 +5773,10 @@ static int principal_search(char *mboxname,
 			    void *rock)
 {
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
-    char userid[MAX_MAILBOX_NAME+1], *p;
+    const char *userid = mboxname_to_userid(mboxname);
     struct search_crit *search_crit;
     size_t len;
-
-    if (!(p = mboxname_isusermailbox(mboxname, 1))) return 0;
-
-    strlcpy(userid, p, MAX_MAILBOX_NAME+1);
-    mboxname_hiersep_toexternal(&httpd_namespace, userid, 0);
+    char *p;
 
     for (search_crit = (struct search_crit *) fctx->filter_crit;
 	 search_crit; search_crit = search_crit->next) {
@@ -5651,22 +5802,16 @@ static int principal_search(char *mboxname,
 	}
     }
 
-
     /* Append principal name to URL path */
-    if (!fctx->req_tgt->user) {
-	len = strlen(namespace_principal.prefix);
-	p = fctx->req_tgt->path + len;
-	len += strlcpy(p, "/user/", MAX_MAILBOX_PATH - len);
-	p = fctx->req_tgt->path + len;
-    }
-    else {
-	p = fctx->req_tgt->user;
-	len = p - fctx->req_tgt->path;
-    }
+    len = strlen(namespace_principal.prefix);
+    p = fctx->req_tgt->path + len;
+    len += strlcpy(p, "/user/", MAX_MAILBOX_PATH - len);
+    p = fctx->req_tgt->path + len;
     strlcpy(p, userid, MAX_MAILBOX_PATH - len);
+    strlcpy(p, "/", MAX_MAILBOX_PATH - len);
 
-    fctx->req_tgt->user = p;
-    fctx->req_tgt->userlen = strlen(p);
+    free(fctx->req_tgt->userid);
+    fctx->req_tgt->userid = xstrdup(userid);
 
     return xml_add_response(fctx, 0, 0);
 }
@@ -5789,7 +5934,7 @@ static int report_prin_prop_search(struct transaction_t *txn,
     }
 
     /* Only search DAV:principal-collection-set */
-    if (apply_prin_set || !fctx->req_tgt->user) {
+    if (apply_prin_set || !fctx->req_tgt->userid) {
 	/* XXX  Do LDAP/SQL lookup of CN/email-address(es) here */
 
 	ret = mboxlist_findall(NULL,  /* internal namespace */
@@ -5933,7 +6078,7 @@ int meth_report(struct transaction_t *txn, void *params)
 	}
 
 	/* Check ACL for current user */
-	rights = mbentry->acl ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
+	rights = httpd_myrights(httpd_authstate, mbentry->acl);
 	if ((rights & report->reqd_privs) != report->reqd_privs) {
 	    if (report->reqd_privs == DACL_READFB) ret = HTTP_NOT_FOUND;
 	    else {
@@ -6124,7 +6269,7 @@ int meth_unlock(struct transaction_t *txn, void *params)
 	}
     }
 
-    rights = mbentry->acl ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
+    rights = httpd_myrights(httpd_authstate, mbentry->acl);
 
     if (mbentry->server) {
 	/* Remote mailbox */
@@ -6157,7 +6302,7 @@ int meth_unlock(struct transaction_t *txn, void *params)
 
     /* Find message UID for the resource, if exists */
     lparams->davdb.lookup_resource(davdb, txn->req_tgt.mboxname,
-				   txn->req_tgt.resource, 1, (void **) &ddata);
+				   txn->req_tgt.resource, 1, (void **) &ddata, 0);
     if (!ddata->rowid) {
 	ret = HTTP_NOT_FOUND;
 	goto done;
@@ -6196,7 +6341,7 @@ int meth_unlock(struct transaction_t *txn, void *params)
 
     if (ddata->imap_uid) {
 	/* Mapped URL - Fetch index record for the resource */
-	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &record);
+	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &record, NULL);
 	if (r) {
 	    txn->error.desc = error_message(r);
 	    ret = HTTP_SERVER_ERROR;
@@ -6228,11 +6373,11 @@ int meth_unlock(struct transaction_t *txn, void *params)
 	ddata->lock_ownerid = NULL;
 	ddata->lock_expire = 0;
 
-	lparams->davdb.write_resource(davdb, ddata, 1);
+	lparams->davdb.write_resourceLOCKONLY(davdb, ddata, 1);
     }
     else {
 	/* Unmapped URL - Treat as lock-null and delete mapping entry */
-	lparams->davdb.delete_resource(davdb, ddata->rowid, 1);
+	lparams->davdb.delete_resourceLOCKONLY(davdb, ddata->rowid, 1);
     }
 
   done:

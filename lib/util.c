@@ -1314,12 +1314,12 @@ EXPORTED void buf_init_ro_cstr(struct buf *buf, const char *str)
  * This buf is CoW, and if written to the data will be freed
  * using map_free().
  */
-EXPORTED void buf_init_mmap(struct buf *buf, const char *base, int len)
+EXPORTED void buf_init_mmap(struct buf *buf, int onceonly, int fd,
+			    const char *fname, size_t size, const char *mboxname)
 {
-    buf->alloc = 0;
-    buf->len = len;
     buf->flags = BUF_MMAP;
-    buf->s = (char *)base;
+    map_refresh(fd, onceonly, (const char **)&buf->s, &buf->len,
+		size, fname, mboxname);
 }
 
 static void _buf_free_data(struct buf *buf)

@@ -54,7 +54,7 @@ typedef struct {
     char *(*notify)(const char *class, const char *priority,
 		    const char *user, const char *mailbox,
 		    int nopt, char **options,
-		    const char *message);	/* notification function */
+		    const char *message, const char *fname);	/* notification function */
 } notifymethod_t;
 
 /* array of supported notification methods */

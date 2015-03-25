@@ -77,6 +77,7 @@
 #include "mboxname.h"
 #include "proc.h"
 #include "quota.h"
+#include "search_engines.h"
 #include "seen.h"
 #include "user.h"
 #include "util.h"
@@ -203,6 +204,34 @@ EXPORTED int user_deletedata(const char *userid, int wipe_user)
 
     /* delete sieve scripts */
     user_deletesieve(userid);
+
+    /* NOTE: even if conversations aren't enabled, we want to clean up */
+
+    /* delete conversations file */
+    fname = conversations_getuserpath(userid);
+    (void) unlink(fname);
+    free(fname);
+
+    /* delete highestmodseq file */
+    fname = user_hash_meta(userid, "modseq");
+    (void) unlink(fname);
+    free(fname);
+
+    /* XXX: one could make an argument for keeping the UIDVALIDITY
+     * file forever, so that UIDVALIDITY never gets reused. */
+
+    /* delete uidvalidity file */
+    fname = user_hash_meta(userid, "uidvalidity");
+    (void) unlink(fname);
+    free(fname);
+
+    /* delete all the search engine data (if any) */
+    search_deluser(userid);
+
+    /* delete all the calendar alarms for the user */
+    struct caldav_alarm_db *alarmdb = caldav_alarm_open();
+    caldav_alarm_delete_user(alarmdb, userid);
+    caldav_alarm_close(alarmdb);
 
     proc_killuser(userid);
 
@@ -366,7 +395,7 @@ EXPORTED int user_renamedata(char *olduser, char *newuser,
 	/* move sieve scripts */
 	user_renamesieve(olduser, newuser);
     }
-    
+
     return r;
 }
 
@@ -475,7 +504,7 @@ int user_deletequotaroots(const char *user)
     return r;
 }
 
-static char *user_hash_meta(const char *userid, const char *suffix)
+EXPORTED char *user_hash_meta(const char *userid, const char *suffix)
 {
     struct mboxname_parts parts;
     const char *domain;

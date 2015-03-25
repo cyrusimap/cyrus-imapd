@@ -73,7 +73,8 @@
 char* notify_zephyr(const char *class, const char *priority,
 		    const char *user, const char *mailbox,
 		    int nopt, char **options,
-		    const char *message)
+		    const char *message,
+		    const char *fname __attribute__((unused)))
 {
     ZNotice_t notice;
     int retval;

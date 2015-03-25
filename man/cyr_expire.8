@@ -48,6 +48,9 @@ cyr_expire \- expire messages and duplicate delivery database entries
 .I config-file
 ]
 [
+.BI \-A " archive-duration"
+]
+[
 .BI \-D " delete-duration"
 ]
 [
@@ -80,7 +83,9 @@ expire entries from the duplicate delivery database, and
 cleanse mailboxes of partially expunged messages (when
 using the "delayed" expunge mode), and
 .IP \(bu 2m
-remove deleted mailboxes (when using the "delayed" delete mode).
+remove deleted mailboxes (when using the "delayed" delete mode), and
+.IP \(bu 2m
+expire entries from conversations databases.
 .PP
 The expiration of messages is controlled by the
 \fB/vendor/cmu/cyrus-imapd/expire\fR mailbox annotation which
@@ -105,6 +110,12 @@ which applies to that mailbox.  Unlike message expiration, if no
 annotation applies to the mailbox then duplicate database entries are
 expired using the value given to the \fB-E\fR option.
 .PP
+Expiration of conversations database entries occurs if the
+\fBconversations\fP option is present in \fIimapd.conf\fP.  Expiration
+can be disabled using the \fB\-c\fP option.  The period used to
+expire entries is controlled by the \fBconversations_expire_days\fP
+option in \fIimapd.conf\fP.
+.PP
 \fBCyr_expire\fR reads its configuration options out of the \fIimapd.conf\fR(5)
 file unless specified otherwise by \fB-C\fR.
 .PP
@@ -115,6 +126,11 @@ file unless specified otherwise by \fB-C\fR.
 \fB\-C\fI config-file\fR
 Read configuration options from \fIconfig-file\fR.
 .TP
+\fB\-A \fIarchive-duration\fR
+Archive non-flagged messages older than \fIarchive-duration\fR to the
+archive partition, allowing mailbox messages to be split between fast
+storage and slow large storage.  Only does anything if archivepartition-*
+has been set in your config.
 \fB\-D \fIdelete-duration\fR
 Remove previously deleted mailboxes older than \fIdelete-duration\fR
 (when using the "delayed" delete mode).
@@ -134,7 +150,11 @@ Expunge previously deleted messages older than \fIexpunge-duration\fR
 (when using the "delayed" expunge mode).
 Format is the same as delete-duration.
 .TP
-\fB\-x
+\fB-c\fR
+Do not expire conversation database entries, even if the conversations
+feature is enabled.
+.TP
+\fB\-x\fR
 Do not expunge messages even if using delayed expunge mode.  This reduces IO
 traffic considerably, allowing \fBcyr_expire\fR to be run frequently to clean
 up the duplicate database without overloading the machine.

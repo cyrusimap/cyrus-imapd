@@ -102,9 +102,6 @@ struct mappedfile {
 
 static void _ensure_mapped(struct mappedfile *mf, size_t offset, int update)
 {
-    const char *base = NULL;
-    size_t len = 0;
-
     /* we may be rewriting inside a file, so don't shrink, only extend */
     if (update) {
 	if (offset > mf->map_size)
@@ -114,9 +111,9 @@ static void _ensure_mapped(struct mappedfile *mf, size_t offset, int update)
     }
 
     /* always give refresh another go, we may be map_nommap */
-    map_refresh(mf->fd, 0, &base, &len, offset, mf->fname, 0);
+    buf_init_mmap(&mf->map_buf, /*onceonly*/0, mf->fd, mf->fname,
+		  offset, /*mboxname*/NULL);
 
-    buf_init_mmap(&mf->map_buf, base, len);
     mf->map_size = offset;
 }
 

@@ -336,7 +336,7 @@ void sync_msgid_list_free(struct sync_msgid_list **lp)
     *lp = NULL;
 }
 
-struct sync_msgid *sync_msgid_lookup(struct sync_msgid_list *l,
+struct sync_msgid *sync_msgid_lookup(const struct sync_msgid_list *l,
 				     struct message_guid *guid)
 {
     int offset = message_guid_hash(guid, l->hash_size);
@@ -432,7 +432,8 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
 					 time_t recenttime,
 					 time_t pop3_last_login,
 					 time_t pop3_show_after,
-					 struct sync_annot_list *annots)
+					 struct sync_annot_list *annots,
+					 modseq_t xconvmodseq)
 {
     struct sync_folder *result = xzmalloc(sizeof(struct sync_folder));
 
@@ -460,6 +461,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
     result->pop3_last_login = pop3_last_login;
     result->pop3_show_after = pop3_show_after;
     result->annots = annots; /* NOTE: not a copy! */
+    result->xconvmodseq = xconvmodseq;
 
     result->mark     = 0;
     result->reserve  = 0;
@@ -1336,24 +1338,29 @@ static int sync_send_file(struct mailbox *mailbox,
 			  struct sync_msgid_list *part_list,
 			  struct dlist *kupload)
 {
-    struct sync_msgid *msgid = sync_msgid_insert(part_list, &record->guid);
+    struct sync_msgid *msgid;
     const char *fname;
-
-    /* already uploaded, great */
-    if (!msgid->need_upload)
-	return 0;
 
     /* we'll trust that it exists - if not, we'll bail later,
      * but right now we're under locks, so be fast */
     fname = mailbox_record_fname(mailbox, record);
     if (!fname) return IMAP_MAILBOX_BADNAME;
 
+    msgid = sync_msgid_insert(part_list, &record->guid);
+
+    /* already uploaded, great */
+    if (!msgid->need_upload)
+	return 0;
+
     dlist_setfile(kupload, "MESSAGE", mailbox->part,
 		  &record->guid, record->size, fname);
 
     /* note that we will be sending it, so it doesn't need to be
      * sent again */
+    msgid->size = record->size;
+    msgid->fname = xstrdup(fname);
     msgid->need_upload = 0;
+    msgid->is_archive = record->system_flags & FLAG_ARCHIVED ? 1 : 0;
     part_list->toupload--;
 
     return 0;
@@ -1367,6 +1374,7 @@ int sync_mailbox(struct mailbox *mailbox,
 {
     struct sync_annot_list *annots = NULL;
     struct synccrcs synccrcs = mailbox_synccrcs(mailbox, /*force*/0);
+    modseq_t xconvmodseq = 0;
     int r = 0;
 
     dlist_setatom(kl, "UNIQUEID", mailbox->uniqueid);
@@ -1388,6 +1396,11 @@ int sync_mailbox(struct mailbox *mailbox,
     dlist_setnum32(kl, "SYNC_CRC_ANNOT", synccrcs.annot);
     if (mailbox->quotaroot)
 	dlist_setatom(kl, "QUOTAROOT", mailbox->quotaroot);
+    if (mailbox_has_conversations(mailbox)) {
+	r = mailbox_get_xconvmodseq(mailbox, &xconvmodseq);
+	if (!r && xconvmodseq)
+	    dlist_setnum64(kl, "XCONVMODSEQ", xconvmodseq);
+    }
 
     /* always send mailbox annotations */
     r = read_annotations(mailbox, NULL, &annots);
@@ -1532,45 +1545,53 @@ int sync_parse_response(const char *cmd, struct protstream *in,
 
 int sync_append_copyfile(struct mailbox *mailbox,
 			 struct index_record *record,
-			 const struct sync_annot_list *annots)
+			 const struct sync_annot_list *annots,
+			 const struct sync_msgid_list *part_list)
 {
-    const char *fname, *destname;
+    const char *destname;
     struct message_guid tmp_guid;
+    struct sync_msgid *item;
     int r;
 
     message_guid_copy(&tmp_guid, &record->guid);
 
-    fname = dlist_reserve_path(mailbox->part, &tmp_guid);
-    if (!fname) {
+    item = sync_msgid_lookup(part_list, &record->guid);
+
+    if (!item || !item->fname) {
 	r = IMAP_IOERROR;
 	syslog(LOG_ERR, "IOERROR: Failed to reserve file %s",
 	       message_guid_encode(&tmp_guid));
 	return r;
     }
 
-    r = message_parse(fname, record);
+    r = message_parse(item->fname, record);
     if (r) {
 	/* deal with unlinked master records */
 	if (record->system_flags & FLAG_EXPUNGED) {
+	    /* no need to set 'needs cleanup' here, it's already expunged */
 	    record->system_flags |= FLAG_UNLINKED;
 	    goto just_write;
 	}
-	syslog(LOG_ERR, "IOERROR: failed to parse %s", fname);
+	syslog(LOG_ERR, "IOERROR: failed to parse %s", item->fname);
 	return r;
     }
 
     if (!message_guid_equal(&tmp_guid, &record->guid)) {
 	syslog(LOG_ERR, "IOERROR: guid mismatch on parse %s (%s)",
-	       fname, message_guid_encode(&record->guid));
+	       item->fname, message_guid_encode(&record->guid));
 	return IMAP_IOERROR;
     }
 
+    /* put back to archive if original was archived, gain single instance store  */
+    if (item->is_archive)
+	record->system_flags |= FLAG_ARCHIVED;
+
     destname = mailbox_record_fname(mailbox, record);
     cyrus_mkdir(destname, 0755);
-    r = mailbox_copyfile(fname, destname, 0);
+    r = mailbox_copyfile(item->fname, destname, 0);
     if (r) {
 	syslog(LOG_ERR, "IOERROR: Failed to copy %s to %s",
-	       fname, destname);
+	       item->fname, destname);
 	return r;
     }
 
@@ -1649,13 +1670,13 @@ void encode_annotations(struct dlist *parent,
 	}
     }
 
-    if (record && record->thrid) {
+    if (record && record->cid) {
 	if (!annots)
 	    annots = dlist_newlist(parent, "ANNOTATIONS");
 	aa = dlist_newkvlist(annots, NULL);
 	dlist_setatom(aa, "ENTRY", "/vendor/cmu/cyrus-imapd/thrid");
 	dlist_setatom(aa, "USERID", NULL);
-	dlist_sethex64(aa, "VALUE", record->thrid);
+	dlist_sethex64(aa, "VALUE", record->cid);
     }
 }
 
@@ -1691,7 +1712,7 @@ int decode_annotations(/*const*/struct dlist *annots,
 	if (!strcmp(entry, "/vendor/cmu/cyrus-imapd/thrid")) {
 	    if (record) {
 		const char *p = buf_cstring(&value);
-		parsehex(p, &p, 16, &record->thrid);
+		parsehex(p, &p, 16, &record->cid);
 		/* XXX - check on p? */
 	    }
 	}

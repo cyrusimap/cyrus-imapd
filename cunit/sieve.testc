@@ -655,7 +655,7 @@ static void context_cleanup(sieve_test_context_t *ctx)
 }
 
 
-static sieve_test_message_t *message_new(const char *text, int len)
+static sieve_test_message_t *sieve_test_message_new(const char *text, int len)
 {
     sieve_test_message_t *msg;
     struct protstream *pin;
@@ -711,7 +711,7 @@ static void run_message(sieve_test_context_t *ctx,
     sieve_test_message_t *msg;
     int r;
 
-    msg = message_new(text, strlen(text));
+    msg = sieve_test_message_new(text, strlen(text));
     CU_ASSERT_PTR_NOT_NULL(msg);
 
     r = sieve_execute_bytecode(ctx->exe, ctx->interp, ctx, msg);

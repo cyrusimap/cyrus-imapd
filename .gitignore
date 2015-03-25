@@ -11,6 +11,7 @@
 *.gcno
 *.gcda
 .deps
+.libs
 .dirstamp
 .libs
 Makefile.in
@@ -30,6 +31,7 @@ config.status
 config.status.lineno
 config.sub
 configure
+debian/
 com_err/et/compile_et
 coverage.xml
 cscope.out
@@ -37,6 +39,7 @@ depcomp
 doc/man/
 doc/text/
 imap/arbitron
+imap/ctl_conversationsdb
 imap/chk_cyrus
 imap/ctl_cyrusdb
 imap/ctl_deliver
@@ -50,6 +53,7 @@ imap/cyr_df
 imap/cyr_expire
 imap/cyr_info
 imap/cyr_sequence
+imap/cyr_sphinxmgr
 imap/cyr_synclog
 imap/cyr_userseen
 imap/cyrdump
@@ -60,6 +64,7 @@ imap/fud
 imap/http_err.c
 imap/http_err.h
 imap/httpd
+imap/hammer_cyrusdb
 imap/idled
 imap/imap_err.c
 imap/imap_err.h
@@ -71,6 +76,7 @@ imap/lmtpstats.h
 imap/mbexamine
 imap/mbpath
 imap/mbtool
+imap/message_test
 imap/mupdate_err.c
 imap/mupdate_err.h
 imap/mupdate
@@ -82,8 +88,10 @@ imap/pushstats.c
 imap/pushstats.h
 imap/quota
 imap/reconstruct
+imap/search_test
 imap/smmapd
 imap/squatter
+imap/squat_dump
 imap/sync_client
 imap/sync_reset
 imap/sync_server

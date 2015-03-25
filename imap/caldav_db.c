@@ -121,65 +121,27 @@ EXPORTED int caldav_init(void)
     }
     if (caldav_eternity == -1) caldav_eternity = INT_MAX;
 
-    return dav_init();
+    r = dav_init();
+    caldav_alarm_init();
+    return r;
 }
 
 
 EXPORTED int caldav_done(void)
 {
+    caldav_alarm_done();
     return dav_done();
 }
 
-
-#define CMD_DROP "DROP TABLE IF EXISTS ical_objs;"
-
-#define CMD_CREATE							\
-    "CREATE TABLE IF NOT EXISTS ical_objs ("				\
-    " rowid INTEGER PRIMARY KEY,"					\
-    " creationdate INTEGER,"						\
-    " mailbox TEXT NOT NULL,"						\
-    " resource TEXT NOT NULL,"						\
-    " imap_uid INTEGER,"						\
-    " lock_token TEXT,"							\
-    " lock_owner TEXT,"							\
-    " lock_ownerid TEXT,"						\
-    " lock_expire INTEGER,"						\
-    " comp_type INTEGER,"						\
-    " ical_uid TEXT,"							\
-    " organizer TEXT,"							\
-    " dtstart TEXT,"							\
-    " dtend TEXT,"							\
-    " comp_flags INTEGER,"						\
-    " sched_tag TEXT,"							\
-    " UNIQUE( mailbox, resource ) );"					\
-    "CREATE INDEX IF NOT EXISTS idx_ical_uid ON ical_objs ( ical_uid );"
-
-static struct caldav_db *caldav_open_fname(const char *fname, int flags)
-{
-    sqlite3 *db;
-    struct caldav_db *caldavdb = NULL;
-    const char *cmds = CMD_CREATE;
-
-    if (flags & CALDAV_TRUNC) cmds = CMD_DROP CMD_CREATE;
-
-    db = dav_open(fname, cmds);
-
-    if (db) {
-	caldavdb = xzmalloc(sizeof(struct caldav_db));
-	caldavdb->db = db;
-    }
-
-    return caldavdb;
-}
-
-EXPORTED struct caldav_db *caldav_open_userid(const char *userid, int flags)
+EXPORTED struct caldav_db *caldav_open_userid(const char *userid)
 {
     struct caldav_db *caldavdb = NULL;
-    struct buf fname = BUF_INITIALIZER;
 
-    dav_getpath_byuserid(&fname, userid);
-    caldavdb = caldav_open_fname(buf_cstring(&fname), flags);
-    buf_free(&fname);
+    sqlite3 *db = dav_open_userid(userid);
+    if (!db) return NULL;
+
+    caldavdb = xzmalloc(sizeof(struct caldav_db));
+    caldavdb->db = db;
 
     /* Construct mbox name corresponding to userid's scheduling Inbox */
     caldavdb->sched_inbox = caldav_mboxname(userid, SCHED_INBOX);
@@ -188,24 +150,22 @@ EXPORTED struct caldav_db *caldav_open_userid(const char *userid, int flags)
 }
 
 /* Open DAV DB corresponding to userid */
-EXPORTED struct caldav_db *caldav_open_mailbox(struct mailbox *mailbox, int flags)
+EXPORTED struct caldav_db *caldav_open_mailbox(struct mailbox *mailbox)
 {
     struct caldav_db *caldavdb = NULL;
     const char *userid = mboxname_to_userid(mailbox->name);
 
-    if (userid) {
-	caldavdb = caldav_open_userid(userid, flags);
-    }
-    else {
-	struct buf fname = BUF_INITIALIZER;
-	dav_getpath(&fname, mailbox);
-	caldavdb = caldav_open_fname(buf_cstring(&fname), flags);
-	buf_free(&fname);
-    }
+    if (userid)
+	return caldav_open_userid(userid);
+
+    sqlite3 *db = dav_open_mailbox(mailbox);
+    if (!db) return NULL;
+
+    caldavdb = xzmalloc(sizeof(struct caldav_db));
+    caldavdb->db = db;
 
     return caldavdb;
 }
-
 
 /* Close DAV DB */
 EXPORTED int caldav_close(struct caldav_db *caldavdb)
@@ -266,9 +226,11 @@ EXPORTED int caldav_abort(struct caldav_db *caldavdb)
 }
 
 
+#define RROCK_FLAG_TOMBSTONES (1<<0)
 struct read_rock {
     struct caldav_db *db;
     struct caldav_data *cdata;
+    int flags;
     int (*cb)(void *rock, void *data);
     void *rock;
 };
@@ -283,23 +245,46 @@ static const char *column_text_to_buf(const char *text, struct buf *buf)
     return text;
 }
 
+static void _num_to_comp_flags(struct comp_flags *flags, unsigned num)
+{
+    flags->recurring = num & 1;
+    flags->transp = (num<<1) & 1;
+    flags->status = (num<<2) & 3;
+}
+
+static unsigned _comp_flags_to_num(struct comp_flags *flags)
+{
+   return (flags->recurring & 1)
+       + ((flags->transp & 1) >> 1)
+       + ((flags->status & 3) >> 2);
+}
+
+#define CMD_READFIELDS							\
+    "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
+    "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
+    "  comp_type, ical_uid, organizer, dtstart, dtend,"			\
+    "  comp_flags, sched_tag, alive"					\
+    " FROM ical_objs"							\
+
 static int read_cb(sqlite3_stmt *stmt, void *rock)
 {
     struct read_rock *rrock = (struct read_rock *) rock;
     struct caldav_db *db = rrock->db;
     struct caldav_data *cdata = rrock->cdata;
-    unsigned flags;
     int r = 0;
 
     memset(cdata, 0, sizeof(struct caldav_data));
+
+    cdata->dav.alive = sqlite3_column_int(stmt, 16);
+    if (!(rrock->flags && RROCK_FLAG_TOMBSTONES) && !cdata->dav.alive)
+	return 0;
 
     cdata->dav.rowid = sqlite3_column_int(stmt, 0);
     cdata->dav.creationdate = sqlite3_column_int(stmt, 1);
     cdata->dav.imap_uid = sqlite3_column_int(stmt, 4);
     cdata->dav.lock_expire = sqlite3_column_int(stmt, 8);
     cdata->comp_type = sqlite3_column_int(stmt, 9);
-    flags = sqlite3_column_int(stmt, 14);
-    memcpy(&cdata->comp_flags, &flags, sizeof(struct comp_flags));
+    _num_to_comp_flags(&cdata->comp_flags, sqlite3_column_int(stmt, 14));
 
     if (rrock->cb) {
 	/* We can use the column data directly for the callback */
@@ -355,24 +340,20 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 }
 
 
-#define CMD_SELRSRC							\
-    "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
-    "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
-    "  comp_type, ical_uid, organizer, dtstart, dtend,"			\
-    "  comp_flags, sched_tag"				   		\
-    " FROM ical_objs"							\
-    " WHERE ( mailbox = :mailbox AND resource = :resource );"
+#define CMD_SELRSRC CMD_READFIELDS \
+    " WHERE mailbox = :mailbox AND resource = :resource;"
 
 EXPORTED int caldav_lookup_resource(struct caldav_db *caldavdb,
 			   const char *mailbox, const char *resource,
-			   int lock, struct caldav_data **result)
+			   int lock, struct caldav_data **result,
+			   int tombstones)
 {
     struct bind_val bval[] = {
 	{ ":mailbox",  SQLITE_TEXT, { .s = mailbox	 } },
 	{ ":resource", SQLITE_TEXT, { .s = resource	 } },
 	{ NULL,	       SQLITE_NULL, { .s = NULL		 } } };
     static struct caldav_data cdata;
-    struct read_rock rrock = { caldavdb, &cdata, NULL, NULL };
+    struct read_rock rrock = { caldavdb, &cdata, tombstones, NULL, NULL };
     int r;
 
     *result = memset(&cdata, 0, sizeof(struct caldav_data));
@@ -397,13 +378,8 @@ EXPORTED int caldav_lookup_resource(struct caldav_db *caldavdb,
 }
 
 
-#define CMD_SELUID							\
-    "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
-    "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
-    "  comp_type, ical_uid, organizer, dtstart, dtend,"			\
-    "  comp_flags, sched_tag"				   		\
-    " FROM ical_objs"							\
-    " WHERE ( ical_uid = :ical_uid AND mailbox != :inbox);"
+#define CMD_SELUID CMD_READFIELDS \
+    " WHERE ical_uid = :ical_uid AND mailbox != :inbox;"
 
 EXPORTED int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
 		      int lock, struct caldav_data **result)
@@ -413,8 +389,10 @@ EXPORTED int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
 	{ ":inbox",    SQLITE_TEXT, { .s = caldavdb->sched_inbox } },
 	{ NULL,	       SQLITE_NULL, { .s = NULL			 } } };
     static struct caldav_data cdata;
-    struct read_rock rrock = { caldavdb, &cdata, NULL, NULL };
+    struct read_rock rrock = { caldavdb, &cdata, 0, NULL, NULL };
     int r;
+
+    /* XXX - ability to pass through the tombstones flag */
 
     *result = memset(&cdata, 0, sizeof(struct caldav_data));
 
@@ -433,12 +411,8 @@ EXPORTED int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
 }
 
 
-#define CMD_SELMBOX							\
-    "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
-    "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
-    "  comp_type, ical_uid, organizer, dtstart, dtend,"			\
-    "  comp_flags, sched_tag"				   	    	\
-    " FROM ical_objs WHERE mailbox = :mailbox;"
+#define CMD_SELMBOX CMD_READFIELDS \
+    " WHERE mailbox = :mailbox AND alive = 1;"
 
 EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
 		   int (*cb)(void *rock, void *data),
@@ -448,7 +422,9 @@ EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
 	{ ":mailbox", SQLITE_TEXT, { .s = mailbox } },
 	{ NULL,	      SQLITE_NULL, { .s = NULL    } } };
     struct caldav_data cdata;
-    struct read_rock rrock = { caldavdb, &cdata, cb, rock };
+    struct read_rock rrock = { caldavdb, &cdata, 0, cb, rock };
+
+    /* XXX - tombstones */
 
     return dav_exec(caldavdb->db, CMD_SELMBOX, bval, &read_cb, &rrock,
 		    &caldavdb->stmt[STMT_SELMBOX]);
@@ -457,25 +433,27 @@ EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
 
 #define CMD_INSERT							\
     "INSERT INTO ical_objs ("						\
-    "  creationdate, mailbox, resource, imap_uid,"			\
+    "  alive, creationdate, mailbox, resource, imap_uid, modseq,"	\
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
     "  comp_type, ical_uid, organizer, dtstart, dtend,"			\
-    "  comp_flags, sched_tag )"	      			   	    	\
+    "  comp_flags, sched_tag )"					\
     " VALUES ("								\
-    "  :creationdate, :mailbox, :resource, :imap_uid,"			\
+    "  :alive, :creationdate, :mailbox, :resource, :imap_uid, :modseq,"\
     "  :lock_token, :lock_owner, :lock_ownerid, :lock_expire,"		\
     "  :comp_type, :ical_uid, :organizer, :dtstart, :dtend,"		\
     "  :comp_flags, :sched_tag );"
 
-#define CMD_UPDATE		   	\
+#define CMD_UPDATE			\
     "UPDATE ical_objs SET"		\
+    "  alive        = :alive,"		\
     "  imap_uid     = :imap_uid,"	\
     "  lock_token   = :lock_token,"	\
     "  lock_owner   = :lock_owner,"	\
     "  lock_ownerid = :lock_ownerid,"	\
-    "  lock_expire = :lock_expire,"	\
+    "  lock_expire  = :lock_expire,"	\
     "  comp_type    = :comp_type,"	\
     "  ical_uid     = :ical_uid,"	\
+    "  modseq       = :modseq,"		\
     "  organizer    = :organizer,"	\
     "  dtstart      = :dtstart,"	\
     "  dtend        = :dtend,"		\
@@ -487,7 +465,9 @@ EXPORTED int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata,
 		 int commit)
 {
     struct bind_val bval[] = {
+	{ ":alive",	   SQLITE_INTEGER, { .i = cdata->dav.alive	  } },
 	{ ":imap_uid",	   SQLITE_INTEGER, { .i = cdata->dav.imap_uid	  } },
+	{ ":modseq",	   SQLITE_INTEGER, { .i = cdata->dav.modseq	  } },
 	{ ":lock_token",   SQLITE_TEXT,	   { .s = cdata->dav.lock_token	  } },
 	{ ":lock_owner",   SQLITE_TEXT,	   { .s = cdata->dav.lock_owner	  } },
 	{ ":lock_ownerid", SQLITE_TEXT,	   { .s = cdata->dav.lock_ownerid } },
@@ -505,35 +485,33 @@ EXPORTED int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata,
 	{ NULL,		   SQLITE_NULL,	   { .s = NULL			  } } };
     const char *cmd;
     sqlite3_stmt **stmt;
-    unsigned flags;
     int r;
 
-    memcpy(&flags, &cdata->comp_flags, sizeof(struct comp_flags));
-    bval[11].name = ":comp_flags";
-    bval[11].type = SQLITE_INTEGER;
-    bval[11].val.i = flags;
+    bval[12].name = ":comp_flags";
+    bval[12].type = SQLITE_INTEGER;
+    bval[12].val.i = _comp_flags_to_num(&cdata->comp_flags);
 
     if (cdata->dav.rowid) {
 	cmd = CMD_UPDATE;
 	stmt = &caldavdb->stmt[STMT_UPDATE];
 
-	bval[12].name = ":rowid";
-	bval[12].type = SQLITE_INTEGER;
-	bval[12].val.i = cdata->dav.rowid;
+	bval[13].name = ":rowid";
+	bval[13].type = SQLITE_INTEGER;
+	bval[13].val.i = cdata->dav.rowid;
     }
     else {
 	cmd = CMD_INSERT;
 	stmt = &caldavdb->stmt[STMT_INSERT];
 
-	bval[12].name = ":creationdate";
-	bval[12].type = SQLITE_INTEGER;
-	bval[12].val.i = cdata->dav.creationdate;
-	bval[13].name = ":mailbox";
-	bval[13].type = SQLITE_TEXT;
-	bval[13].val.s = cdata->dav.mailbox;
-	bval[14].name = ":resource";
+	bval[13].name = ":creationdate";
+	bval[13].type = SQLITE_INTEGER;
+	bval[13].val.i = cdata->dav.creationdate;
+	bval[14].name = ":mailbox";
 	bval[14].type = SQLITE_TEXT;
-	bval[14].val.s = cdata->dav.resource;
+	bval[14].val.s = cdata->dav.mailbox;
+	bval[15].name = ":resource";
+	bval[15].type = SQLITE_TEXT;
+	bval[15].val.s = cdata->dav.resource;
     }
 
     r = dav_exec(caldavdb->db, cmd, bval, NULL, NULL, stmt);
@@ -593,7 +571,7 @@ EXPORTED int caldav_delmbox(struct caldav_db *caldavdb, const char *mailbox, int
 
 
 /* Get time period (start/end) of a component based in RFC 4791 Sec 9.9 */
-static void get_period(icalcomponent *comp, icalcomponent_kind kind,
+EXPORTED void caldav_get_period(icalcomponent *comp, icalcomponent_kind kind,
 		       struct icalperiodtype *period)
 {
     icaltimezone *utc = icaltimezone_get_utc_timezone();
@@ -835,6 +813,7 @@ EXPORTED void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata)
 	    break;
 	}
     }
+
     cdata->comp_flags.transp = transp;
 
     /* Initialize span to be nothing */
@@ -847,7 +826,7 @@ EXPORTED void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata)
 	icalproperty *rrule;
 
 	/* Get base dtstart and dtend */
-	get_period(comp, kind, &period);
+	caldav_get_period(comp, kind, &period);
 
 	/* See if its a recurring event */
 	rrule = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
@@ -918,9 +897,8 @@ EXPORTED char *caldav_mboxname(const char *userid, const char *name)
     buf_setcstr(&boxbuf, config_getstring(IMAPOPT_CALENDARPREFIX));
 
     if (name) {
-	size_t len = strcspn(name, "/");
 	buf_putc(&boxbuf, '.');
-	buf_appendmap(&boxbuf, name, len);
+	buf_appendcstr(&boxbuf, name);
     }
 
     res = mboxname_user_mbox(userid, buf_cstring(&boxbuf));

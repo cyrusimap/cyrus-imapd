@@ -107,6 +107,7 @@ static int do_notify(void)
     strarray_t options = STRARRAY_INITIALIZER;
     long nopt;
     char *reply;
+    char *fname;
     notifymethod_t *nmethod;
 
     while (1) {
@@ -147,6 +148,7 @@ static int do_notify(void)
 	    strarray_appendm(&options, cp = fetch_arg(cp, tail));
 
 	if (cp) message = (cp = fetch_arg(cp, tail));
+	if (cp) fname = (cp = fetch_arg(cp, tail));
 
 	if (!message) {
 	    syslog(LOG_ERR, "malformed notify request");
@@ -169,7 +171,7 @@ static int do_notify(void)
 
 	if (nmethod->name) {
 	    reply = nmethod->notify(class, priority, user, mailbox,
-				    nopt, options.data, message);
+				    nopt, options.data, message, fname);
 	}
 #if 0  /* we don't care about responses right now */
 	else {

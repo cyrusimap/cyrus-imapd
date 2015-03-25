@@ -153,6 +153,14 @@ static void generate_boundary(char *boundary, size_t size)
 	     (long) getpid(), (long) time(NULL), (long) rand());
 }
 
+static search_expr_t *systemflag_match(int flag)
+{
+    search_expr_t *e = search_expr_new(NULL, SEOP_MATCH);
+    e->attr = search_attr_find("systemflags");
+    e->value.u = flag;
+    return e;
+}
+
 static int dump_me(char *name, int matchlen __attribute__((unused)),
 		   int maycreate __attribute__((unused)), void *rock)
 {
@@ -196,28 +204,29 @@ static int dump_me(char *name, int matchlen __attribute__((unused)),
     printf("\n");
 
     memset(&searchargs, 0, sizeof(struct searchargs));
+    searchargs.root = search_expr_new(NULL, SEOP_TRUE);
     numuids = index_getuidsequence(state, &searchargs, &uids);
     print_seq("uidlist", NULL, uids, numuids);
     printf("\n");
 
     printf("  <flags>\n");
 
-    searchargs.system_flags_set = FLAG_ANSWERED;
+    searchargs.root = systemflag_match(FLAG_ANSWERED);
     n = index_getuidsequence(state, &searchargs, &uidseq);
     print_seq("flag", "name=\"\\Answered\" user=\"*\"", uidseq, n);
     if (uidseq) free(uidseq);
 
-    searchargs.system_flags_set = FLAG_DELETED;
+    searchargs.root = systemflag_match(FLAG_DELETED);
     n = index_getuidsequence(state, &searchargs, &uidseq);
     print_seq("flag", "name=\"\\Deleted\" user=\"*\"", uidseq, n);
     if (uidseq) free(uidseq);
 
-    searchargs.system_flags_set = FLAG_DRAFT;
+    searchargs.root = systemflag_match(FLAG_DRAFT);
     n = index_getuidsequence(state, &searchargs, &uidseq);
     print_seq("flag", "name=\"\\Draft\" user=\"*\"", uidseq, n);
     if (uidseq) free(uidseq);
 
-    searchargs.system_flags_set = FLAG_FLAGGED;
+    searchargs.root = systemflag_match(FLAG_FLAGGED);
     n = index_getuidsequence(state, &searchargs, &uidseq);
     print_seq("flag", "name=\"\\Flagged\" user=\"*\"", uidseq, n);
     if (uidseq) free(uidseq);
@@ -235,8 +244,8 @@ static int dump_me(char *name, int matchlen __attribute__((unused)),
     }
 
     for (msgno = 1; msgno <= state->exists; msgno++) {
-	struct index_map *im = &state->map[msgno-1];
 	struct buf buf = BUF_INITIALIZER;
+	struct index_map *im = &state->map[msgno-1];
 	struct index_record record;
 
 	while (im->uid > uids[i] && i < numuids)

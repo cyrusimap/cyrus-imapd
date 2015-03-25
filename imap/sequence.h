@@ -59,7 +59,6 @@ struct seqset {
     unsigned prev;
     unsigned maxval;
     int flags;
-    struct seqset *nextseq;
 };
 
 #define SEQ_SPARSE 1
@@ -75,12 +74,13 @@ extern struct seqset *seqset_parse(const char *sequence,
 				   struct seqset *set,
 				   unsigned maxval);
 extern void seqset_join(struct seqset *a, const struct seqset *b);
-extern void seqset_append(struct seqset **l, char *sequence, unsigned maxval);
 extern int seqset_ismember(struct seqset *set, unsigned num);
 extern unsigned seqset_getnext(struct seqset *set);
 extern unsigned seqset_first(const struct seqset *set);
+extern unsigned seqset_firstnonmember(const struct seqset *set);
 extern unsigned seqset_last(const struct seqset *set);
 extern char *seqset_cstring(const struct seqset *set);
 extern void seqset_free(struct seqset *set);
+extern struct seqset *seqset_dup(const struct seqset *);
 
 #endif /* SEQUENCE_H */

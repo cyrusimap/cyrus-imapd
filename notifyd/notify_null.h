@@ -45,12 +45,9 @@
 
 #include <config.h>
 
-char* notify_null(const char *class __attribute__((unused)),
-		  const char *priority __attribute__((unused)),
-		  const char *user __attribute__((unused)),
-		  const char *mailbox __attribute__((unused)),
-		  int nopt __attribute__((unused)),
-		  char **options __attribute__((unused)),
-		  const char *message __attribute__((unused)));
+char* notify_null(const char *class, const char *priority,
+		  const char *user, const char *mailbox,
+		  int nopt, char **options,
+		  const char *message, const char *fname);
 
 #endif /* _NOTIFY_NULL_H_ */

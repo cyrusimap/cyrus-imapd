@@ -65,7 +65,8 @@ char* notify_mailto(const char *class,
 		    const char *user __attribute__((unused)),
 		    const char *mailbox __attribute__((unused)),
 		    int nopt, char **options,
-		    const char *message)
+		    const char *message,
+		    const char *fname __attribute__((unused)))
 {
     FILE *sm;
     const char *smbuf[7];
@@ -109,14 +110,14 @@ char* notify_mailto(const char *class,
 	return strdup("NO mailto could not spawn sendmail process");
 
     t = time(NULL);
-    snprintf(outmsgid, sizeof(outmsgid), "<cmu-sieve-%d-%lu-%d@%s>", 
+    snprintf(outmsgid, sizeof(outmsgid), "<cmu-sieve-%d-%lu-%d@%s>",
 	     (int) sm_pid, t, global_outgoing_count++, config_servername);
-    
+
     fprintf(sm, "Message-ID: %s\r\n", outmsgid);
 
     time_to_rfc822(t, datestr, sizeof(datestr));
     fprintf(sm, "Date: %s\r\n", datestr);
-    
+
     fprintf(sm, "X-Sieve: %s\r\n", SIEVE_VERSION);
     fprintf(sm, "From: Mail Sieve Subsystem <%s>\r\n", config_getstring(IMAPOPT_POSTMASTER));
     fprintf(sm, "To: <%s>\r\n", options[0]);
@@ -146,7 +147,7 @@ static int contains_8bit(const char * msg)
 
     if (msg) {
 	const unsigned char *s = (const unsigned char *)msg;
-	
+
 	while (*s) {
 	    if (0 != (*s & 0x80)) {
 		result = 1;

@@ -57,6 +57,7 @@ struct sieve_interp {
     sieve_get_envelope *getenvelope;
     sieve_get_body *getbody;
     sieve_get_include *getinclude;
+    sieve_get_fname *getfname;
 
     sieve_parse_error *err;
 

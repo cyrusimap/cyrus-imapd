@@ -46,15 +46,17 @@
 
 #include <config.h>
 
+#include "annotate.h"
 #include "dav_db.h"
+#include "jmap.h"
 #include "strarray.h"
+#include "util.h"
 #include "vparse.h"
 
 struct carddav_db;
 
-#define CARDDAV_CREATE 0x01
-#define CARDDAV_TRUNC  0x02
-
+#define CARDDAV_KIND_CONTACT 0
+#define CARDDAV_KIND_GROUP 1
 struct carddav_data {
     struct dav_data dav;  /* MUST be first so we can typecast */
     unsigned version;
@@ -74,8 +76,8 @@ int carddav_init(void);
 int carddav_done(void);
 
 /* get a database handle corresponding to mailbox */
-struct carddav_db *carddav_open_mailbox(struct mailbox *mailbox, int flags);
-struct carddav_db *carddav_open_userid(const char *userid, int flags);
+struct carddav_db *carddav_open_mailbox(struct mailbox *mailbox);
+struct carddav_db *carddav_open_userid(const char *userid);
 
 /* close this handle */
 int carddav_close(struct carddav_db *carddavdb);
@@ -84,16 +86,40 @@ int carddav_close(struct carddav_db *carddavdb);
    (optionally inside a transaction for updates) */
 int carddav_lookup_resource(struct carddav_db *carddavdb,
 			   const char *mailbox, const char *resource,
-			   int lock, struct carddav_data **result);
+			   int lock, struct carddav_data **result,
+			   int tombstones);
 
 /* lookup an entry from 'carddavdb' by iCal UID
    (optionally inside a transaction for updates) */
 int carddav_lookup_uid(struct carddav_db *carddavdb, const char *ical_uid,
 		      int lock, struct carddav_data **result);
 
-/* check if an email address exists on any card */
-int carddav_getemail(struct carddav_db *carddavdb, const char *key);
-strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *key);
+/* check if an email address exists on any card.
+   returns the groups its in (if any) */
+strarray_t *carddav_getemail(struct carddav_db *carddavdb, const char *key);
+strarray_t *carddav_getemail2uids(struct carddav_db *carddavdb, const char *key,
+				  const char *mboxname);
+strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb, const char *key,
+				  const char *mboxname, const char *otheruser);
+
+/* checks if a group exists (by id).
+   returns emails of its members (if any) */
+strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *mailbox, const char *group);
+
+/* get a list of groups the given uid is a member of */
+strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const char *uid);
+
+/* get a list of groups the given uid is a member of */
+strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const char *uid);
+
+/* jmap contact APIs */
+int carddav_getContactGroups(struct carddav_db *carddavdb, struct jmap_req *req);
+int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, struct jmap_req *req);
+int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_req *req);
+
+int carddav_getContacts(struct carddav_db *carddavdb, struct jmap_req *req);
+int carddav_getContactUpdates(struct carddav_db *carddavdb, struct jmap_req *req);
+int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *req);
 
 /* process each entry for 'mailbox' in 'carddavdb' with cb() */
 int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
@@ -121,5 +147,12 @@ int carddav_abort(struct carddav_db *carddavdb);
 
 /* create carddav_data from vparse_card */
 void carddav_make_entry(struct vparse_card *vcard, struct carddav_data *cdata);
+
+int carddav_store(struct mailbox *mailbox, uint32_t olduid,
+		  struct vparse_card *card, const char *resource,
+		  strarray_t *flags, struct entryattlist *annots,
+		  const char *userid, struct auth_state *authstate);
+int carddav_remove(struct mailbox *mailbox, uint32_t olduid);
+
 
 #endif /* CARDDAV_DB_H */

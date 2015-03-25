@@ -823,8 +823,6 @@ EXPORTED int mboxlist_createmailboxcheck(const char *name, int mbtype __attribut
 	if (r) goto done;
     }
 
-    r = 0;
-
  done:
     if (r || !newacl) free(acl);
     else *newacl = acl;
@@ -851,6 +849,7 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
 				int isadmin, const char *userid,
 				struct auth_state *auth_state,
 				int options, unsigned uidvalidity,
+				modseq_t highestmodseq,
 				const char *copyacl, const char *uniqueid,
 				int localonly, int forceuser, int dbonly,
 				struct mailbox **mboxptr)
@@ -891,10 +890,9 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
     if (r) goto done;
 
     if (!dbonly && !isremote) {
-
 	/* Filesystem Operations */
 	r = mailbox_create(mboxname, mbtype, newpartition, acl, uniqueid,
-			   options, uidvalidity, &newmailbox);
+			   options, uidvalidity, highestmodseq, &newmailbox);
 	if (r) goto done; /* CREATE failed */
     }
 
@@ -964,7 +962,7 @@ EXPORTED int mboxlist_createmailbox(const char *name, int mbtype,
 
     r = mboxlist_createmailbox_full(name, mbtype, partition,
 				    isadmin, userid, auth_state,
-				    options, 0, NULL, NULL, localonly,
+				    options, 0, 0, NULL, NULL, localonly,
 				    forceuser, dbonly, &mailbox);
 
     if (notify && !r) {
@@ -987,12 +985,14 @@ EXPORTED int mboxlist_createsync(const char *name, int mbtype,
 			const char *partition,
 			const char *userid, struct auth_state *auth_state,
 			int options, unsigned uidvalidity,
+			modseq_t highestmodseq,
 			const char *acl, const char *uniqueid,
 			struct mailbox **mboxptr)
 {
     return mboxlist_createmailbox_full(name, mbtype, partition,
 				       1, userid, auth_state,
-				       options, uidvalidity, acl, uniqueid,
+				       options, uidvalidity,
+				       highestmodseq, acl, uniqueid,
 				       0, 1, 0, mboxptr);
 }
 
@@ -1598,6 +1598,8 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 
 	/* log the rename */
 	sync_log_mailbox_double(oldname, newname);
+	/* and log an append so that squatter indexes it */
+	sync_log_append(newname);
     }
 
     /* free memory */

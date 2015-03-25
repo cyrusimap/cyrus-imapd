@@ -1,0 +1,125 @@
+#include "config.h"
+#include <stdio.h>
+#include "cunit/cunit.h"
+#include <sys/stat.h>
+#include "command.h"
+
+const char canary[] = "canary.txt";
+
+static void test_run(void)
+{
+    int r;
+    struct stat sb;
+
+    /* make sure the file isnt there */
+    r = unlink(canary);
+    if (r < 0) r = errno;
+    if (r == ENOENT) r = 0;
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    r = run_command("/usr/bin/touch", canary, NULL);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    r = stat(canary, &sb);
+    if (r < 0) r = errno;
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    unlink(canary);
+}
+
+static void test_popen_r(void)
+{
+#define WORD0	"dreamcatcher"
+    int r;
+    struct command *cmd = NULL;
+    char buf[32];
+
+    r = command_popen(&cmd, "r", "/bin/echo", WORD0, NULL);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(cmd);
+    CU_ASSERT_PTR_NULL_FATAL(cmd->stdin_prot);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(cmd->stdout_prot);
+
+    memset(buf, 0, sizeof(buf));
+    r = prot_read(cmd->stdout_prot, buf, sizeof(buf));
+    CU_ASSERT_EQUAL(r, sizeof(WORD0));
+    CU_ASSERT_STRING_EQUAL(buf, WORD0 "\n");
+
+    r = command_pclose(&cmd);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    CU_ASSERT_PTR_NULL_FATAL(cmd);
+#undef WORD0
+}
+
+static void test_popen_w(void)
+{
+#define WORD0	"semiotics"
+    int r;
+    struct command *cmd = NULL;
+    FILE *fp;
+    char buf[32];
+
+    /* make sure the file isnt there */
+    r = unlink(canary);
+    if (r < 0) r = errno;
+    if (r == ENOENT) r = 0;
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    snprintf(buf, sizeof(buf), "cat > %s", canary);
+    r = command_popen(&cmd, "w", "/bin/sh", "-c", buf, NULL);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(cmd);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(cmd->stdin_prot);
+    CU_ASSERT_PTR_NULL_FATAL(cmd->stdout_prot);
+
+    r = prot_write(cmd->stdin_prot, WORD0, sizeof(WORD0)-1);
+    CU_ASSERT_EQUAL(r, 0);
+
+    r = command_pclose(&cmd);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    CU_ASSERT_PTR_NULL_FATAL(cmd);
+
+    fp = fopen(canary, "r");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(fp);
+    memset(buf, 0, sizeof(buf));
+    r = fread(buf, 1, sizeof(buf), fp);
+    CU_ASSERT_EQUAL_FATAL(r, sizeof(WORD0)-1);
+    CU_ASSERT_STRING_EQUAL(buf, WORD0);
+    fclose(fp);
+
+    unlink(canary);
+#undef WORD0
+}
+
+static void test_popen_rw(void)
+{
+#define WORD0		"cosby sweater"
+#define WORD0_CAP	"COSBY SWEATER"
+    int r;
+    struct command *cmd = NULL;
+    char buf[32];
+
+    r = command_popen(&cmd, "rw", "/usr/bin/tr", "a-z", "A-Z", NULL);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(cmd);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(cmd->stdin_prot);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(cmd->stdout_prot);
+
+    r = prot_write(cmd->stdin_prot, WORD0, sizeof(WORD0)-1);
+    CU_ASSERT_EQUAL(r, 0);
+
+    r = command_done_stdin(cmd);
+    CU_ASSERT_EQUAL(r, 0);
+
+    memset(buf, 0, sizeof(buf));
+    r = prot_read(cmd->stdout_prot, buf, sizeof(buf));
+    CU_ASSERT_EQUAL(r, sizeof(WORD0_CAP)-1);
+    CU_ASSERT_STRING_EQUAL(buf, WORD0_CAP);
+
+    r = command_pclose(&cmd);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    CU_ASSERT_PTR_NULL_FATAL(cmd);
+#undef WORD0
+#undef WORD0_CAP
+}
+
+/* vim: set ft=c: */

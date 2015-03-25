@@ -452,6 +452,25 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "createonpost", 0, SWITCH }
 /* Deprecated in favor of \fIautocreate_post\fR. */
 
+{ "conversations", 0, SWITCH }
+/* Enable the XCONVERSATIONS extensions.  Extract conversation
+   tracking information from incoming messages and track them
+   in per-user databases. */
+
+{ "conversations_counted_flags", NULL, STRING }
+/* space-separated list of flags for which per-conversation counts
+   will be kept.  Note that you need to reconstruct the conversations
+   database with ctl_conversationsdb if you change this option on a
+   running server, or the counts will be wrong.  */
+
+{ "conversations_db", "skiplist", STRINGLIST("skiplist", "sql", "twoskip")}
+/* The cyrusdb backend to use for the per-user conversations database. */
+
+{ "conversations_expire_days", 90, INT }
+/* How long the conversations database keeps the message tracking
+   information needed for receiving new messages in existing
+   conversations, in days. */
+
 { "dav_realm", NULL, STRING }
 /* The realm to present for HTTP authentication of generic DAV
    resources (principals).  If not set (the default), the value of the
@@ -569,10 +588,10 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Don't send event notification for folder with given special-use attributes.
    Set ALL for any folder */
 
-{ "event_extra_params", "timestamp", BITFIELD("bodyStructure", "clientAddress", "diskUsed", "flagNames", "messageContent", "messageSize", "messages", "modseq", "service", "timestamp", "uidnext", "vnd.cmu.midset", "vnd.cmu.unseenMessages", "vnd.cmu.envelope", "vnd.cmu.sessionId", "vnd.cmu.mbtype", "vnd.cmu.davFilename", "vnd.cmu.davUid") }
+{ "event_extra_params", "timestamp", BITFIELD("bodyStructure", "clientAddress", "diskUsed", "flagNames", "messageContent", "messageSize", "messages", "modseq", "service", "timestamp", "uidnext", "vnd.cmu.midset", "vnd.cmu.unseenMessages", "vnd.cmu.envelope", "vnd.cmu.sessionId", "vnd.cmu.mailboxACL", "vnd.cmu.mbtype", "vnd.cmu.davFilename", "vnd.cmu.davUid", "vnd.fastmail.clientId", "vnd.fastmail.sessionId", "vnd.fastmail.convExists", "vnd.fastmail.convUnseen", "vnd.fastmail.cid", "vnd.fastmail.counters") }
 /* Space-separated list of extra parameters to add to any appropriated event. */
 
-{ "event_groups", "message mailbox", BITFIELD("message", "quota", "flags", "access", "mailbox", "subscription") }
+{ "event_groups", "message mailbox", BITFIELD("message", "quota", "flags", "access", "mailbox", "subscription", "calendar") }
 /* Space-separated list of groups of related events to turn on notification */
 
 { "event_notifier", NULL, STRING }
@@ -696,7 +715,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    provisional responses every \fIhttpkeepalive\fR seconds until the
    final response can be sent */
 
-{ "httpmodules", "", BITFIELD("caldav", "carddav", "domainkey", "freebusy", "ischedule", "rss", "tzdist") }
+{ "httpmodules", "", BITFIELD("caldav", "carddav", "domainkey", "freebusy", "ischedule", "jmap", "rss", "tzdist") }
 /* Space-separated list of HTTP modules that will be enabled in
    httpd(8).  This option has no effect on modules that are disabled
    at compile time due to missing dependencies (e.g. libical).
@@ -1057,10 +1076,13 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "mboxname_lockpath", NULL, STRING }
 /* Path to mailbox name lock files (default $conf/lock) */
 
-{ "metapartition_files", "", BITFIELD("header", "index", "cache", "expunge", "squat", "annotations", "lock", "dav") }
+{ "metapartition_files", "", BITFIELD("header", "index", "cache", "expunge", "squat", "annotations", "lock", "dav", "archivecache") }
 /* Space-separated list of metadata files to be stored on a
    \fImetapartition\fR rather than in the mailbox directory on a spool
    partition. */
+
+{ "me_secret", NULL, STRING }
+/* messagingengine.com x-sasl-enc secret key */
 
 # Commented out - there's no such thing as "metapartition-name",
 # but we need this for the man page
@@ -1537,11 +1559,39 @@ If all partitions are over that limit, this feature is not used anymore.
 /* The mechanism used by the server to verify plaintext passwords.
    Possible values include "auxprop", "saslauthd", and "pwcheck". */
 
+{ "search_batchsize", 20, INT }
+/* The number of messages to be indexed in one batch (default 20).
+   Note that long batches may delay user commands or mail delivery. */
+
+{ "search_normalisation_max", 1000, INT }
+/* A resource bound for the combinatorial explosion of search expression
+ * tree complexity caused by normalising expressions with many OR nodes.
+ * These can use more CPU time to optimise than they save IO time in scanning
+ * folders. */
+
+{ "search_engine", "none", ENUM("none", "squat", "sphinx", "xapian") }
+/* The indexing engine used to speed up searching.  */
+
+{ "search_index_headers", 1, SWITCH }
+/* Whether to index headers other than From, To, Cc, Bcc, and Subject.
+ * Experiment shows that some headers such as Received and DKIM-Signature
+ * can contribute up to 2/3rds of the index size but almost nothing to
+ * the utility of searching.  Note that is header indexing is disabled,
+ * headers can still be searched, the searches will just be slower.
+ */
+
+{ "search_indexed_db", "twoskip", STRINGLIST("flat", "skiplist", "twoskip")}
+/* The cyrusdb backend to use for the search latest indexed uid state. */
+
 { "search_skipdiacrit", 1, SWITCH }
 /* When searching, should diacriticals be stripped from the search
    terms.  The default is "true", a search for "hav" will match
    "Håvard".  This is not RFC5051 complient, but it backwards
    compatible, and may be preferred by some sites. */
+
+{ "search_skiphtml", 0, SWITCH }
+/* If enabled, HTML parts of messages are skipped, i.e. not indexed and
+   not searchable.  Otherwise, they're indexed.  */
 
 { "search_whitespace", "merge", ENUM("skip", "merge", "keep") }
 /* When searching, how whitespace should be handled.  Options are:
@@ -1693,6 +1743,10 @@ product version in the capabilities */
    successfully authenticate.  Otherwise lmtpd returns permanent failures
    (causing the mail to bounce immediately). */
 
+{ "sortcache_db", "twoskip", STRINGLIST("skiplist", "twoskip")}
+/* The cyrusdb backend to use for caching sort results (currently only
+   used for xconvmultisort) */
+
 { "specialuse_extra", NULL, STRING }
 /* Whitespace separated list of extra special-use attributes
    that can be set on a mailbox. RFC 6154 currently lists
@@ -1703,6 +1757,19 @@ product version in the capabilities */
 { "specialusealways", 0, SWITCH }
 /* If enabled, this option causes LIST and LSUB output to always include
    the XLIST "special-use" flags */
+
+{ "sphinx_text_excludes_odd_headers", 0, SWITCH }
+/* If enabled, Sphinx will perform a TEXT search as if it matches
+   FROM, TO, CC, BCC or SUBJECT but not any other headers.  This
+   is contrary to the RFC but a more useful behaviour for most
+   users.  Default: disabled. */
+
+{ "sphinx_socket", "{configdirectory}/socket/sphinx", STRING }
+/* Unix domain socket that the Sphinx searchd
+   daemons listens on. */
+
+{ "sphinx_pidfile", "/var/run/sphinx.pid", STRING }
+/* File where the Sphinx searchd daemon writes its pid. */
 
 { "sql_database", NULL, STRING }
 /* Name of the database which contains the cyrusdb table(s). */
@@ -1980,6 +2047,9 @@ product version in the capabilities */
 /* Mail sent to mailboxes which do not exist, will be delivered to
    this user.  NOTE: This must be an existing local user name with an
    INBOX, NOT an email address! */
+
+{ "defaultsearchtier", "", STRING }
+/* Name of the default tier that messages will be indexed to */
 
 { "zoneinfo_db", "twoskip", STRINGLIST("flat", "skiplist", "twoskip")}
 /* The cyrusdb backend to use for zoneinfo. */

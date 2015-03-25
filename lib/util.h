@@ -290,7 +290,8 @@ void buf_init(struct buf *buf);
 void buf_init_ro(struct buf *buf, const char *base, size_t len);
 void buf_initm(struct buf *buf, char *base, int len);
 void buf_init_ro_cstr(struct buf *buf, const char *str);
-void buf_init_mmap(struct buf *buf, const char *base, int len);
+void buf_init_mmap(struct buf *buf, int onceonly, int fd,
+		   const char *fname, size_t size, const char *mboxname);
 void buf_free(struct buf *buf);
 void buf_move(struct buf *dst, struct buf *src);
 

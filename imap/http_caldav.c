@@ -692,6 +692,7 @@ static struct meth_params caldav_params = {
 /* Namespace for CalDAV collections */
 struct namespace_t namespace_calendar = {
     URL_NS_CALENDAR, 0, "/dav/calendars", "/.well-known/caldav", 1 /* auth */,
+    MBTYPE_CALENDAR,
     (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DELETE |
 #ifdef HAVE_VAVAILABILITY
      ALLOW_CAL_AVAIL |
@@ -783,18 +784,13 @@ static int meth_get_cal(struct transaction_t *txn, void *gparams)
 
 static struct caldav_db *my_caldav_open(struct mailbox *mailbox)
 {
-    if (httpd_userid && mboxname_userownsmailbox(httpd_userid, mailbox->name)) {
-	return auth_caldavdb;
-    }
-    else {
-	return caldav_open_mailbox(mailbox, CALDAV_CREATE);
-    }
+    return caldav_open_mailbox(mailbox);
 }
 
 
 static void my_caldav_close(struct caldav_db *caldavdb)
 {
-    if (caldavdb && (caldavdb != auth_caldavdb)) caldav_close(caldavdb);
+    caldav_close(caldavdb);
 }
 
 
@@ -890,13 +886,14 @@ static void my_caldav_auth(const char *userid)
 	/* admin or proxy from frontend - won't have DAV database */
 	return;
     }
-    else if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
+    if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
 	/* proxy-only server - won't have DAV database */
+	return;
     }
     else {
 	/* Open CalDAV DB for 'userid' */
 	my_caldav_reset();
-	auth_caldavdb = caldav_open_userid(userid, CALDAV_CREATE);
+	auth_caldavdb = caldav_open_userid(userid);
 	if (!auth_caldavdb) fatal("Unable to open CalDAV DB", EC_IOERR);
     }
 
@@ -922,7 +919,6 @@ static void my_caldav_auth(const char *userid)
 	    }
 	    mboxlist_entry_free(&mbentry);
 	}
-	else r = 0;
 
 	/* Create locally */
 	r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR,
@@ -932,46 +928,7 @@ static void my_caldav_auth(const char *userid)
 	if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
 		      mailboxname, error_message(r));
     }
-    free(mailboxname);
-    if (r) return;
 
-    /* Default calendar */
-    mailboxname = caldav_mboxname(userid, SCHED_DEFAULT);
-    r = mboxlist_lookup(mailboxname, NULL, NULL);
-    if (r == IMAP_MAILBOX_NONEXISTENT) {
-	r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR,
-				   NULL, 0,
-				   userid, httpd_authstate,
-				   0, 0, 0, 0, NULL);
-	if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-		      mailboxname, error_message(r));
-    }
-    free(mailboxname);
-
-    /* Scheduling Inbox */
-    mailboxname = caldav_mboxname(userid, SCHED_INBOX);
-    r = mboxlist_lookup(mailboxname, NULL, NULL);
-    if (r == IMAP_MAILBOX_NONEXISTENT) {
-	r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR,
-				   NULL, 0,
-				   userid, httpd_authstate,
-				   0, 0, 0, 0, NULL);
-	if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-		      mailboxname, error_message(r));
-    }
-    free(mailboxname);
-
-    /* Scheduling Outbox */
-    mailboxname = caldav_mboxname(userid, SCHED_OUTBOX);
-    r = mboxlist_lookup(mailboxname, NULL, NULL);
-    if (r == IMAP_MAILBOX_NONEXISTENT) {
-	r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR,
-				   NULL, 0,
-				   userid, httpd_authstate,
-				   0, 0, 0, 0, NULL);
-	if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-		      mailboxname, error_message(r));
-    }
     free(mailboxname);
 }
 
@@ -990,6 +947,7 @@ static void my_caldav_shutdown(void)
     freestrlist(cua_domains);
 
     webdav_done();
+    my_caldav_reset();
     caldav_done();
 }
 
@@ -1023,6 +981,8 @@ static int caldav_parse_path(const char *path,
 	return HTTP_FORBIDDEN;
     }
 
+    tgt->prefix = namespace_calendar.prefix;
+
     /* Default to bare-bones Allow bits for toplevel collections */
     tgt->allow &= ~(ALLOW_POST|ALLOW_WRITE|ALLOW_DELETE);
 
@@ -1038,8 +998,7 @@ static int caldav_parse_path(const char *path,
 
 	/* Get user id */
 	len = strcspn(p, "/");
-	tgt->user = p;
-	tgt->userlen = len;
+	tgt->userid = xstrndup(p, len);
 
 	p += len;
 	if (!*p || !*++p) {
@@ -1096,23 +1055,19 @@ static int caldav_parse_path(const char *path,
 	}
 	else if (tgt->flags != TGT_SCHED_INBOX) {
 	    tgt->allow |= ALLOW_POST;
-
-	    if (strcmp(tgt->collection, SCHED_DEFAULT))
-		tgt->allow |= ALLOW_DELETE;
+	    tgt->allow |= ALLOW_DELETE;
 	}
+	else
+	    tgt->allow |= (ALLOW_POST|ALLOW_DELETE);
     }
-    else if (tgt->user) tgt->allow |= ALLOW_DELETE;
+    else if (tgt->userid) tgt->allow |= ALLOW_DELETE;
 
     /* Create mailbox name from the parsed path */
 
     mboxname_init_parts(&parts);
 
-    if (tgt->user && tgt->userlen) {
-	/* holy "avoid copying" batman */
-	char *userid = xstrndup(tgt->user, tgt->userlen);
-	mboxname_userid_to_parts(userid, &parts);
-	free(userid);
-    }
+    if (tgt->userid)
+	mboxname_userid_to_parts(tgt->userid, &parts);
 
     buf_setcstr(&boxbuf, config_getstring(IMAPOPT_CALENDARPREFIX));
     if (tgt->collen) {
@@ -1120,6 +1075,15 @@ static int caldav_parse_path(const char *path,
 	buf_appendmap(&boxbuf, tgt->collection, tgt->collen);
     }
     parts.box = buf_cstring(&boxbuf);
+
+    /* XXX - hack to allow @domain parts for non-domain-split users */
+    if (httpd_extradomain) {
+	/* not allowed to be cross domain */
+	if (parts.userid && strcmpsafe(parts.domain, httpd_extradomain))
+	    return HTTP_NOT_FOUND;
+	//free(parts.domain); - XXX - fix when converting to real parts
+	parts.domain = NULL;
+    }
 
     mboxname_parts_to_internal(&parts, tgt->mboxname);
 
@@ -1610,7 +1574,10 @@ static int list_cal_cb(char *name,
 
     /* Lookup the mailbox and make sure its readable */
     r = http_mlookup(name, &mbentry, NULL);
-    if (r || !((rights = cyrus_acl_myrights(httpd_authstate, mbentry->acl)) & ACL_READ))
+    if (r) goto done;
+
+    rights = httpd_myrights(httpd_authstate, mbentry->acl);
+    if ((rights & DACL_READ) != DACL_READ)
 	goto done;
 
     /* Lookup DAV:displayname */
@@ -1708,6 +1675,8 @@ static int list_calendars(struct transaction_t *txn, int rights)
     unsigned level = 0, i;
     struct buf *body = &txn->resp_body.payload;
     struct list_cal_rock lrock;
+    const char *proto = NULL;
+    const char *host = NULL;
 
     /* Check rights */
     if ((rights & DACL_READ) != DACL_READ) {
@@ -1776,7 +1745,10 @@ static int list_calendars(struct transaction_t *txn, int rights)
     write_body(HTTP_OK, txn, buf_cstring(body), buf_len(body));
     buf_reset(body);
 
-    http_proto_host(txn->req_hdrs, NULL, &host);
+    /* Create base URL for calendars */
+    http_proto_host(txn->req_hdrs, &proto, &host);
+    buf_reset(&txn->buf);
+    buf_printf(&txn->buf, "%s://%s%s", proto, host, txn->req_tgt.path);
 
     /* Generate list of calendars */
     strlcat(txn->req_tgt.mboxname, ".%", sizeof(txn->req_tgt.mboxname));
@@ -1955,7 +1927,6 @@ static struct icaltimetype icaltime_from_rfc3339_string(const char *str)
   fail:
     return icaltime_null_time();
 }
-
 
 static int server_info(struct transaction_t *txn)
 {
@@ -2678,7 +2649,7 @@ static int caldav_post_outbox(struct transaction_t *txn, int rights)
 	}
     }
 
-    if (strncmp(orgid, txn->req_tgt.user, txn->req_tgt.userlen)) {
+    if (strcasecmp(orgid, txn->req_tgt.userid)) {
 	txn->error.precond = CALDAV_VALID_ORGANIZER;
 	ret = HTTP_FORBIDDEN;
 	goto done;
@@ -2786,25 +2757,18 @@ const char *get_icalcomponent_errstr(icalcomponent *ical)
 	     prop = icalcomponent_get_next_property(comp, ICAL_ANY_PROPERTY)) {
 
 	    if (icalproperty_isa(prop) == ICAL_XLICERROR_PROPERTY) {
-		icalparameter *param;
 		const char *errstr = icalproperty_get_xlicerror(prop);
+		char propname[256];
 
 		if (!errstr) return "Unknown iCal parsing error";
 
-		param = icalproperty_get_first_parameter(
-		    prop, ICAL_XLICERRORTYPE_PARAMETER);
-
-		if (icalparameter_get_xlicerrortype(param) ==
-		    ICAL_XLICERRORTYPE_VALUEPARSEERROR) {
-		    /* Check if this is an empty property error */
-		    char propname[256];
-		    if (sscanf(errstr,
-			       "No value for %s property", propname) == 1) {
-			/* Empty LOCATION, COMMENT, DESCRIPTION is OK */
-			if (!strcasecmp(propname, "LOCATION")) continue;
-			if (!strcasecmp(propname, "COMMENT")) continue;
-			if (!strcasecmp(propname, "DESCRIPTION")) continue;
-		    }
+		/* Check if this is an empty property error */
+		if (sscanf(errstr,
+			   "No value for %s property", propname) == 1) {
+		    /* Empty LOCATION is OK */
+		    if (!strcasecmp(propname, "LOCATION")) continue;
+		    if (!strcasecmp(propname, "COMMENT")) continue;
+		    if (!strcasecmp(propname, "DESCRIPTION")) continue;
 		}
 		else if (icalparameter_get_xlicerrortype(param) ==
 			 ICAL_XLICERRORTYPE_PROPERTYPARSEERROR) {
@@ -2922,7 +2886,6 @@ static int caldav_put(struct transaction_t *txn, icalcomponent *ical,
 
     icalrestriction_check(ical);
     if ((txn->error.desc = get_icalcomponent_errstr(ical))) {
-	assert(!buf_len(&txn->buf));
 	buf_setcstr(&txn->buf, txn->error.desc);
 	txn->error.desc = buf_cstring(&txn->buf);
 	txn->error.precond = CALDAV_VALID_DATA;
@@ -3021,6 +2984,7 @@ static int caldav_put(struct transaction_t *txn, icalcomponent *ical,
 		strlcpy(ext_userid, userid, sizeof(ext_userid));
 		mboxname_hiersep_toexternal(&httpd_namespace, ext_userid, 0);
 
+		buf_reset(&txn->buf);
 		buf_printf(&txn->buf, "%s/user/%s/%s/%s",
 			   namespace_calendar.prefix,
 			   userid, strrchr(cdata->dav.mailbox, '.')+1,
@@ -3049,7 +3013,7 @@ static int caldav_put(struct transaction_t *txn, icalcomponent *ical,
 		struct index_record record;
 
 		/* Load message containing the resource and parse iCal data */
-		r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
+		r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record, NULL);
 		if (r) {
 		    txn->error.desc = "Failed to read record \r\n";
 		    ret = HTTP_SERVER_ERROR;
@@ -3719,11 +3683,15 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 {
     xmlNodePtr prop = (xmlNodePtr) rock;
     struct buf buf = BUF_INITIALIZER;
+    const char *data = NULL;
+    size_t datalen = 0;
     int r = 0;
 
     if (propstat) {
 	if (!fctx->record) return HTTP_NOT_FOUND;
 	mailbox_map_record(fctx->mailbox, fctx->record, &buf);
+	data = buf_cstring(&buf) + fctx->record->header_size;
+	datalen = buf_len(&buf) - fctx->record->header_size;
     }
     else if (namespace_calendar.allow & ALLOW_CAL_NOTZ) {
 	/* We want to strip known VTIMEZONEs */
@@ -3731,7 +3699,7 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
     }
 
     r = propfind_getdata(name, ns, fctx, propstat, prop, caldav_mime_types,
-			 CALDAV_SUPP_DATA, buf_cstring(&buf), buf_len(&buf));
+			 CALDAV_SUPP_DATA, data, datalen);
 
     buf_free(&buf);
 
@@ -3751,34 +3719,71 @@ static int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
 			   const char *cal)
 {
     xmlNodePtr node;
+    struct buf calbuf = BUF_INITIALIZER;
+    int r = HTTP_NOT_FOUND; /* error condition if we bail early */
 
-    if (!(namespace_calendar.enabled && fctx->req_tgt->user))
-	return HTTP_NOT_FOUND;
+    if (!(namespace_calendar.enabled && fctx->req_tgt->userid))
+	goto done;
+
+    if (cal) {
+	const char *annotname = NULL;
+	const char *mailboxname;
+
+	/* named calendars are only used for scheduling */
+	if (!(namespace_calendar.allow & ALLOW_CAL_SCHED))
+	    goto done;
+
+	/* check for renamed calendars - property on the homeset */
+	mailboxname = caldav_mboxname(httpd_userid, NULL);
+	if (!strcmp(cal, SCHED_DEFAULT))
+	    annotname = ANNOT_NS "<" XML_NS_CALDAV ">schedule-default-calendar";
+	else if (!strcmp(cal, SCHED_INBOX))
+	    annotname = ANNOT_NS "<" XML_NS_CALDAV ">schedule-inbox";
+	else if (!strcmp(cal, SCHED_OUTBOX))
+	    annotname = ANNOT_NS "<" XML_NS_CALDAV ">schedule-outbox";
+
+	if (annotname) {
+	    r = annotatemore_lookupmask(mailboxname, annotname, fctx->req_tgt->userid, &calbuf);
+	    if (!r) cal = calbuf.len ? buf_cstring(&calbuf) : NULL;
+	}
+
+	/* make sure the mailbox exists */
+	mailboxname = caldav_mboxname(fctx->req_tgt->userid, cal);
+	r = mboxlist_lookup(mailboxname, NULL, NULL);
+	if (r == IMAP_MAILBOX_NONEXISTENT) {
+	    r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR,
+				       NULL, 0,
+				       fctx->req_tgt->userid, httpd_authstate,
+				       0, 0, 0, 0, NULL);
+	    if (r) {
+		syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+		       mailboxname, error_message(r));
+		goto done;
+	    }
+	}
+    }
 
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			name, ns, NULL, 0);
 
-    /* named calendars are only used for scheduling */
-    if (cal && !(namespace_calendar.allow & ALLOW_CAL_SCHED))
-	return HTTP_NOT_FOUND;
-
     buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, "%s/user/%.*s/%s", namespace_calendar.prefix,
-	       (int) fctx->req_tgt->userlen, fctx->req_tgt->user,
-	       cal ? cal : "");
+    buf_printf(&fctx->buf, "%s/user/%s/", namespace_calendar.prefix,
+	       fctx->req_tgt->userid);
+    if (cal) buf_printf(&fctx->buf, "%s/", cal);
 
     if (expand) {
 	/* Return properties for this URL */
 	expand_property(expand, fctx, buf_cstring(&fctx->buf),
 			&caldav_parse_path, caldav_props, node, cal ? 1 : 0);
-
-    }
-    else {
-	/* Return just the URL */
-	xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
     }
 
-    return 0;
+    xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+
+    r = 0;
+done:
+    buf_free(&calbuf);
+
+    return r;
 }
 
 
@@ -4059,27 +4064,23 @@ int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
 			 void *rock __attribute__((unused)))
 {
     xmlNodePtr node;
-    struct strlist *domains;
 
-    if (!(namespace_calendar.enabled && fctx->req_tgt->user))
+    if (!(namespace_calendar.enabled && fctx->req_tgt->userid))
 	return HTTP_NOT_FOUND;
 
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			name, ns, NULL, 0);
 
-    /* XXX  This needs to be done via an LDAP/DB lookup */
-    for (domains = cua_domains; domains; domains = domains->next) {
-	buf_reset(&fctx->buf);
-	buf_printf(&fctx->buf, "mailto:%.*s@%s", (int) fctx->req_tgt->userlen,
-		   fctx->req_tgt->user, domains->s);
+    buf_reset(&fctx->buf);
+    if (strchr(fctx->req_tgt->userid, '@'))
+	buf_printf(&fctx->buf, "mailto:%s", fctx->req_tgt->userid);
+    else
+	buf_printf(&fctx->buf, "mailto:%s@%s", fctx->req_tgt->userid, config_defdomain);
 
-	xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "href",
-		    BAD_CAST buf_cstring(&fctx->buf));
-    }
+    xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
 
     return 0;
 }
-
 
 /* Callback to fetch CALDAV:calendar-user-type */
 int propfind_calusertype(const xmlChar *name, xmlNsPtr ns,
@@ -4088,7 +4089,7 @@ int propfind_calusertype(const xmlChar *name, xmlNsPtr ns,
 			 struct propstat propstat[],
 			 void *rock __attribute__((unused)))
 {
-    const char *type = fctx->req_tgt->user ? "INDIVIDUAL" : "UNKNOWN";
+    const char *type = fctx->req_tgt->userid ? "INDIVIDUAL" : "UNKNOWN";
 
     if (!namespace_calendar.enabled) return HTTP_NOT_FOUND;
 
@@ -4630,7 +4631,7 @@ static int proppatch_tzid(xmlNodePtr prop, unsigned set,
 	    annotate_state_t *astate = NULL;
 
 	    r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
-	    if (!r) r = annotate_state_write(astate, prop_annot, /*userid*/NULL, NULL);
+	    if (!r) r = annotate_state_writemask(astate, prop_annot, httpd_userid, NULL);
 
 	    if (r) {
 		xml_add_prop(HTTP_SERVER_ERROR, pctx->ns[NS_DAV],
@@ -4708,6 +4709,8 @@ static int report_cal_query(struct transaction_t *txn,
     fctx->close_db = (db_close_proc_t) &my_caldav_close;
     fctx->lookup_resource = (db_lookup_proc_t) &caldav_lookup_resource;
     fctx->foreach_resource = (db_foreach_proc_t) &caldav_foreach;
+    fctx->proc_by_resource = &propfind_by_resource;
+    fctx->davdb = NULL;
 
     /* Parse children element of report */
     for (node = inroot->children; node; node = node->next) {
@@ -4770,8 +4773,6 @@ static int report_cal_query(struct transaction_t *txn,
 			     httpd_authstate, propfind_by_collection, fctx);
 	}
 
-	if (fctx->davdb) my_caldav_close(fctx->davdb);
-
 	ret = *fctx->ret;
     }
 
@@ -4779,6 +4780,11 @@ static int report_cal_query(struct transaction_t *txn,
 
     /* Expanded recurrences still populate busytime array */
     if (calfilter.freebusy.fb) free(calfilter.freebusy.fb);
+
+    if (fctx->davdb) {
+	my_caldav_close(fctx->davdb);
+	fctx->davdb = NULL;
+    }
 
     return (ret ? ret : HTTP_MULTI_STATUS);
 }
@@ -4837,7 +4843,7 @@ static int busytime_by_resource(void *rock, void *data)
     if (!cdata->dav.imap_uid) return 0;
 
     /* Fetch index record for the resource */
-    r = mailbox_find_index_record(fctx->mailbox, cdata->dav.imap_uid, &record);
+    r = mailbox_find_index_record(fctx->mailbox, cdata->dav.imap_uid, &record, NULL);
     if (r) return 0;
 
     fctx->record = &record;
@@ -5361,6 +5367,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 
     /* Check for duplicate iCalendar UID */
     uid = icalcomponent_get_uid(comp);
+
     caldav_lookup_uid(caldavdb, uid, 0, &cdata);
     if (!(flags & NO_DUP_CHECK) &&
 	cdata->dav.mailbox && !strcmp(cdata->dav.mailbox, mailbox->name) &&
@@ -5482,17 +5489,35 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     spool_cache_header(xstrdup("Content-Disposition"),
 		       buf_release(&txn->buf), txn->req_hdrs);
 
-    /* Store the resource */
-    ret = dav_store_resource(txn, icalcomponent_as_ical_string(ical), 0,
-			     mailbox, oldrecord, &imapflags);
-    strarray_fini(&imapflags);
+    /* Prepare to append the iMIP message to calendar mailbox */
+    if ((r = append_setup_mbox(&as, mailbox, httpd_userid, httpd_authstate, 0, qdiffs, 0, 0, EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
+	syslog(LOG_ERR, "append_setup(%s) failed: %s",
+	       mailbox->name, error_message(r));
+	ret = HTTP_SERVER_ERROR;
+	txn->error.desc = "append_setup() failed\r\n";
+    }
+    else {
+	struct body *body = NULL;
+	strarray_t *flaglist = NULL;
+	struct entryattlist *annots = NULL;
 
-    switch (ret) {
-    case HTTP_CREATED:
-    case HTTP_NO_CONTENT:
-	if (cdata->organizer && (flags & NEW_STAG)) {
-	    txn->resp_body.stag = sched_tag;
+	if (expunge_uid) {
+	    flaglist = mailbox_extract_flags(mailbox, &oldrecord, httpd_userid);
+	    annots = mailbox_extract_annots(mailbox, &oldrecord);
 	}
+
+	/* Append the iMIP file to the calendar mailbox */
+	if ((r = append_fromstage(&as, &body, stage, now, flaglist, 0, annots))) {
+	    syslog(LOG_ERR, "append_fromstage() failed");
+	    ret = HTTP_SERVER_ERROR;
+	    txn->error.desc = "append_fromstage() failed\r\n";
+	}
+	if (body) {
+	    message_free_body(body);
+	    free(body);
+	}
+	strarray_free(flaglist);
+	freeentryatts(annots);
 
 	if (!(flags & PREFER_REP)) {
 	    /* iCal data has been rewritten - don't return validators */
@@ -6717,7 +6742,7 @@ static void sched_deliver_local(const char *recipient,
 	goto done;
     }
 
-    rights = cyrus_acl_myrights(authstate, mbentry->acl);
+    rights = httpd_myrights(authstate, mbentry->acl);
     mboxlist_entry_free(&mbentry);
 
     reqd_privs = sched_data->is_reply ? DACL_REPLY : DACL_INVITE;
@@ -6742,7 +6767,7 @@ static void sched_deliver_local(const char *recipient,
     method = icalcomponent_get_method(sched_data->itip);
 
     /* Search for iCal UID in recipient's calendars */
-    caldavdb = caldav_open_userid(userid, CALDAV_CREATE);
+    caldavdb = caldav_open_userid(userid);
     if (!caldavdb) {
 	sched_data->status =
 	    sched_data->ischedule ? REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
@@ -6811,7 +6836,7 @@ static void sched_deliver_local(const char *recipient,
 	struct index_record record;
 
 	/* Load message containing the resource and parse iCal data */
-	r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
+	r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record, NULL);
 	ical = record_to_ical(mailbox, &record);
 
 	for (comp = icalcomponent_get_first_component(sched_data->itip,
@@ -7331,7 +7356,7 @@ static void sched_request(const char *organizer, struct sched_param *sparam,
 		   outboxname, error_message(r));
 	}
 	else {
-	    rights = cyrus_acl_myrights(httpd_authstate, mbentry->acl);
+	    rights = httpd_myrights(httpd_authstate, mbentry->acl);
 	}
 	mboxlist_entry_free(&mbentry);
 
@@ -7674,7 +7699,7 @@ static void sched_reply(const char *userid,
 	       outboxname, error_message(r));
     }
     else {
-	rights = cyrus_acl_myrights(httpd_authstate, mbentry->acl);
+	rights = httpd_myrights(httpd_authstate, mbentry->acl);
     }
     mboxlist_entry_free(&mbentry);
 

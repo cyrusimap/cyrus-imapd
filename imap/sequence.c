@@ -332,7 +332,7 @@ EXPORTED int seqset_ismember(struct seqset *seq, unsigned num)
  * Return the first number in the sequence, or 0
  * if the sequence is empty.
  */
-HIDDEN unsigned seqset_first(const struct seqset *seq)
+EXPORTED unsigned seqset_first(const struct seqset *seq)
 {
     return (seq->len ? seq->set[0].low : 0);
 }
@@ -344,6 +344,15 @@ HIDDEN unsigned seqset_first(const struct seqset *seq)
 EXPORTED unsigned seqset_last(const struct seqset *seq)
 {
     return (seq->len ? seq->set[seq->len-1].high : 0);
+}
+
+/* NOTE: this assumes normalised, and also assumes that '1' is
+ * the first element */
+EXPORTED unsigned seqset_firstnonmember(const struct seqset *seq)
+{
+    if (!seq->len) return 1;
+    if (seq->set[0].low != 1) return 1;
+    return seq->set[0].high + 1;
 }
 
 /*
@@ -399,23 +408,13 @@ EXPORTED void seqset_join(struct seqset *a, const struct seqset *b)
     seqset_simplify(a);
 }
 
-/*
- * Parse a seqset from the given string and append it to the chain
- * of seqsets at `*l'.
- */
-HIDDEN void seqset_append(struct seqset **l, char *sequence, unsigned maxval)
+static void format_num(struct buf *buf, unsigned i)
 {
-    struct seqset **tail = l;
-
-    while (*tail) {
-	if (!maxval) maxval = (*tail)->maxval;
-	tail = &(*tail)->nextseq;
-    }
-
-    *tail = seqset_parse(sequence, NULL, maxval);
+    if (i == UINT_MAX)
+	buf_putc(buf, '*');
+    else
+	buf_printf(buf, "%u", i);
 }
-
-#define SEQGROW 300
 
 /*
  * Format the seqset `seq' as a string.  Returns a newly allocated
@@ -423,41 +422,43 @@ HIDDEN void seqset_append(struct seqset **l, char *sequence, unsigned maxval)
  */
 EXPORTED char *seqset_cstring(const struct seqset *seq)
 {
-    unsigned alloc = 0;
-    unsigned offset = 0;
-    char *base = NULL;
+    struct buf buf = BUF_INITIALIZER;
     unsigned i;
 
     if (!seq) return NULL;
+    if (!seq->len) return NULL;
 
     for (i = 0; i < seq->len; i++) {
-	/* ensure we have space */
-	if (alloc < offset + 30) {
-	    alloc += SEQGROW;
-	    base = xrealloc(base, alloc);
-	}
-
 	/* join with comma if not the first item */
-	if (i) base[offset++] = ',';
+	if (i) buf_putc(&buf, ',');
 
 	/* single value only */
 	if (seq->set[i].low == seq->set[i].high)
-	    sprintf(base+offset, "%u", seq->set[i].low);
-
-	/* special case - end of the list */
-	else if (seq->set[i].high == UINT_MAX)
-	    sprintf(base+offset, "%u:*", seq->set[i].low);
+	    format_num(&buf, seq->set[i].low);
 
 	/* value range */
-	else
-	    sprintf(base+offset, "%u:%u", seq->set[i].low,
-					  seq->set[i].high);
-
-	/* find the end */
-	while (base[offset]) offset++;
+	else {
+	    format_num(&buf, seq->set[i].low);
+	    buf_putc(&buf, ':');
+	    format_num(&buf, seq->set[i].high);
+	}
     }
 
-    return base;
+    return buf_release(&buf);
+}
+
+/*
+ * Duplicate the given seqset.
+ */
+EXPORTED struct seqset *seqset_dup(const struct seqset *l)
+{
+    struct seqset *newl;
+
+    newl = (struct seqset *)xmemdup(l, sizeof(*l));
+    newl->set = (struct seq_range *)xmemdup(newl->set,
+		    newl->alloc * sizeof(struct seq_range));
+
+    return newl;
 }
 
 /*
@@ -465,12 +466,8 @@ EXPORTED char *seqset_cstring(const struct seqset *seq)
  */
 EXPORTED void seqset_free(struct seqset *l)
 {
-    struct seqset *n;
+    if (!l) return;
 
-    while(l) {
-	n = l->nextseq;
-	free(l->set);
-	free(l);
-	l = n;
-    }
+    free(l->set);
+    free(l);
 }

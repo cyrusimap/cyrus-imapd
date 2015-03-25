@@ -96,7 +96,7 @@ struct dlist {
     char *part; /* so what if we're big! */
 };
 
-const char *dlist_reserve_path(const char *part, struct message_guid *guid);
+const char *dlist_reserve_path(const char *part, int isarchive, struct message_guid *guid);
 
 /* set fields */
 void dlist_makeatom(struct dlist *dl, const char *val);
@@ -164,10 +164,6 @@ struct dlist *dlist_setguid(struct dlist *parent, const char *name,
 struct dlist *dlist_setfile(struct dlist *parent, const char *name,
 			    const char *part, struct message_guid *guid,
 			    size_t size, const char *fname);
-
-/* special number and string readers - return 0 and "" if nothing */
-bit64 dlist_childvaln(struct dlist *parent, const char *name);
-const char *dlist_childvalcstring(struct dlist *parent, const char *name);
 
 struct dlist *dlist_updateatom(struct dlist *parent, const char *name,
 			       const char *val);

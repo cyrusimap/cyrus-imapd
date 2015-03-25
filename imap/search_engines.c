@@ -43,8 +43,6 @@
 #include <config.h>
 
 #include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
 #include <stdlib.h>
 #include <syslog.h>
 #include <string.h>
@@ -52,285 +50,282 @@
 #include <unistd.h>
 #endif
 
+#include "imap_err.h"
 #include "index.h"
+#include "message.h"
 #include "global.h"
-#include "xmalloc.h"
+#include "search_engines.h"
+#include "ptrarray.h"
 
-#include "squat.h"
+#ifdef USE_SQUAT
+extern const struct search_engine squat_search_engine;
+#endif
+#ifdef USE_SPHINX
+extern const struct search_engine sphinx_search_engine;
+#endif
+#ifdef USE_XAPIAN
+extern const struct search_engine xapian_search_engine;
+#endif
 
-typedef struct {
-    unsigned char	*vector;
-    struct index_state	*state;
-    const char		*part_types;
-    int			found_validity;
-} SquatSearchResult;
+static const struct search_engine default_search_engine = {
+    "default",
+    0,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL
+};
 
-static int vector_len(struct index_state *state)
+static const struct search_engine *engine(void)
 {
-    return (state->exists >> 3) + 1;
+    switch (config_getenum(IMAPOPT_SEARCH_ENGINE)) {
+#ifdef USE_XAPIAN
+    case IMAP_ENUM_SEARCH_ENGINE_XAPIAN:
+	return &xapian_search_engine;
+#endif
+#ifdef USE_SPHINX
+    case IMAP_ENUM_SEARCH_ENGINE_SPHINX:
+	return &sphinx_search_engine;
+#endif
+#ifdef USE_SQUAT
+    case IMAP_ENUM_SEARCH_ENGINE_SQUAT:
+	return &squat_search_engine;
+#endif
+    default:
+	return &default_search_engine;
+    }
 }
 
-/* The document name is of the form
-
-   pnnn.vvv
-
-   Where p is a part_type character (denoting which segment of the message
-   is represented by the document), nnn is the UID of the message, and vvv
-   is the UID validity value.
-
-   This function parses the document name and returns the message
-   UID only if the name has the right part type and it corresponds
-   to a real message UID.
-*/
-static int parse_doc_name(SquatSearchResult *r, const char *doc_name)
+EXPORTED const char *search_part_as_string(int part)
 {
-    int ch = doc_name[0];
-    const char *t = r->part_types;
-    int doc_UID, index;
+    static const char *names[SEARCH_NUM_PARTS] = {
+	/* ANY */NULL, "FROM", "TO", "CC",
+	"BCC", "SUBJECT", "LISTID", "TYPE",
+	"HEADERS", "BODY"
+    };
 
-    if (ch == 'v' && strncmp(doc_name, "validity.", 9) == 0) {
-	if ((unsigned) atoi(doc_name + 9) == r->state->mailbox->i.uidvalidity) {
-	    r->found_validity = 1;
-	}
-	return -1;
-    }
-
-    /* make sure that the document part type is one of the ones we're
-     accepting */
-    while (*t != 0 && *t != ch) {
-	t++;
-    }
-    if (*t == 0) {
-	return -1;
-    }
-
-    doc_UID = atoi(++doc_name);
-    while ((*doc_name >= '0' && *doc_name <= '9') || *doc_name == '-') {
-	++doc_name;
-    }
-    if (*doc_name != 0) {
-	return -1;
-    }
-
-    index = index_finduid(r->state, doc_UID);
-
-    return index;
+    return (part < 0 || part >= SEARCH_NUM_PARTS ? NULL : names[part]);
 }
 
-static int drop_indexed_docs(void* closure, const SquatListDoc *doc)
-{
-    SquatSearchResult* r = (SquatSearchResult*)closure;
-    int doc_uid = parse_doc_name(r, doc->doc_name);
 
-    if (doc_uid >= 0) {
-	unsigned char* vect = r->vector;
-	vect[doc_uid >> 3] &= ~(1 << (doc_uid & 0x7));
-    }
-    return SQUAT_CALLBACK_CONTINUE;
+EXPORTED search_builder_t *search_begin_search(struct mailbox *mailbox, int opts)
+{
+    const struct search_engine *se = engine();
+    return (se->begin_search ?
+	    se->begin_search(mailbox, opts) : NULL);
 }
 
-static int fill_with_hits(void* closure, char const* doc)
+EXPORTED void search_end_search(search_builder_t *bx)
 {
-    SquatSearchResult* r = (SquatSearchResult*)closure;
-    int doc_uid = parse_doc_name(r, doc);
-
-    if (doc_uid >= 0) {
-	unsigned char* vect = r->vector;
-	vect[doc_uid >> 3] |= 1 << (doc_uid & 0x7);
-    }
-    return SQUAT_CALLBACK_CONTINUE;
+    const struct search_engine *se = engine();
+    if (se->end_search) se->end_search(bx);
 }
 
-static int search_strlist(SquatSearchIndex* index, struct index_state *state,
-			  unsigned char* output, unsigned char* tmp,
-			  struct strlist* strs, char const* part_types)
+EXPORTED search_text_receiver_t *search_begin_update(int verbose)
 {
-    SquatSearchResult r;
+    const struct search_engine *se = engine();
+    /* We don't fallback to the default search engine here
+     * because the default behaviour is not to index anything */
+    return (se->begin_update ? se->begin_update(verbose) : NULL);
+}
+
+static int search_batch_size(void)
+{
+    const struct search_engine *se = engine();
+    return (se->flags & SEARCH_FLAG_CAN_BATCH ?
+	    config_getint(IMAPOPT_SEARCH_BATCHSIZE) : INT_MAX);
+}
+
+/*
+ * Flush a batch of messages to the search engine's indexer code.  We
+ * drop the index lock during the presumably CPU and IO heavy parts of
+ * the procedure and re-acquire it afterward, to avoid delaying other
+ * processes like imapds.  The reacquisition may of course fail.
+ * Returns an IMAP error code or 0 on success.
+ */
+static int flush_batch(search_text_receiver_t *rx,
+		       struct mailbox *mailbox,
+		       ptrarray_t *batch)
+{
     int i;
-    int len = vector_len(state);
+    int r = 0;
 
-    r.part_types = part_types;
-    r.vector = tmp;
-    r.state = state;
-    while (strs != NULL) {
-	char const* s = strs->s;
+    /* give someone else a chance */
+    mailbox_unlock_index(mailbox, NULL);
 
-	memset(tmp, 0, len);
-	if (squat_search_execute(index, s, strlen(s), fill_with_hits, &r)
-	    != SQUAT_OK) {
-	    if (squat_get_last_error() == SQUAT_ERR_SEARCH_STRING_TOO_SHORT)
-		return 1; /* The rest of the search is still viable */
-	    syslog(LOG_DEBUG, "SQUAT string list search failed on string %s "
-			      "with part types %s", s, part_types);
-	    return 0;
-	}
-	for (i = 0; i < len; i++) {
-	    output[i] &= tmp[i];
-	}
+    /* prefetch files */
+    for (i = 0 ; i < batch->count ; i++) {
+	message_t *msg = ptrarray_nth(batch, i);
+	const char *fname;
 
-	strs = strs->next;
+	r = message_get_fname(msg, &fname);
+	if (r) return r;
+	r = warmup_file(fname, 0, 0);
+	if (r) return r; /* means we failed to open a file,
+			    so we'll fail later anyway */
     }
-    return 1;
+
+    for (i = 0 ; i < batch->count ; i++) {
+	message_t *msg = ptrarray_nth(batch, i);
+	if (!r)
+	    r = index_getsearchtext(msg, rx, 0);
+	message_unref(&msg);
+    }
+    ptrarray_truncate(batch, 0);
+
+    if (r) return r;
+
+    if (rx->flush) {
+	r = rx->flush(rx);
+	if (r) return r;
+    }
+
+    return r;
 }
 
-static unsigned char* search_squat_do_query(SquatSearchIndex* index,
-					    struct index_state *state,
-					    const struct searchargs* args)
+EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
+				   struct mailbox *mailbox,
+				   int flags)
 {
-    int vlen = vector_len(state);
-    unsigned char* vect = xmalloc(vlen);
-    unsigned char* t_vect = xmalloc(vlen);
-    struct searchsub* sub;
-    int found_something = 1;
+    uint32_t recno;
+    int r = 0;			/* Using IMAP_* not SQUAT_* return codes here */
+    int r2;
+    int first = 1;
+    int was_partial = 0;
+    int batch_size = search_batch_size();
+    ptrarray_t batch = PTRARRAY_INITIALIZER;
+    struct index_record record;
+    int incremental = (flags & SEARCH_UPDATE_INCREMENTAL);
 
-    memset(vect, 255, vlen);
+    r = rx->begin_mailbox(rx, mailbox, flags);
+    if (r) goto done;
 
-    if (!(search_strlist(index, state, vect, t_vect, args->to, "t")
-	&& search_strlist(index, state, vect, t_vect, args->from, "f")
-	&& search_strlist(index, state, vect, t_vect, args->cc, "c")
-	&& search_strlist(index, state, vect, t_vect, args->bcc, "b")
-	&& search_strlist(index, state, vect, t_vect, args->subject, "s")
-	&& search_strlist(index, state, vect, t_vect, args->header_name, "h")
-	&& search_strlist(index, state, vect, t_vect, args->header, "h")
-	&& search_strlist(index, state, vect, t_vect, args->body, "m")
-	&& search_strlist(index, state, vect, t_vect, args->text, "mh"))) {
-	found_something = 0;
-	goto cleanup;
-    }
+    first = mailbox_finduid(mailbox, rx->first_unindexed_uid(rx));
+    if (!first) first = 1; /* empty mailbox */
 
-    sub = args->sublist;
-    while (sub != NULL) {
-	if (args->sublist->sub2 == NULL) {
-	    /* do nothing; because our search is conservative (may include false
-	       positives) we can't compute the NOT (since the result might include
-	       false negatives, which we do not allow) */
-	    /* Note that it's OK to do nothing. We'll just be returning more
-	       false positives. */
-	} else {
-	    unsigned char* sub1_vect =
-		    search_squat_do_query(index, state, args->sublist->sub1);
-	    unsigned char* sub2_vect;
-	    int i;
+    for (recno = first; recno <= mailbox->i.num_records; recno++) {
+	r = mailbox_read_index_record(mailbox, recno, &record);
+	if (r) continue;
 
-	    if (sub1_vect == NULL) {
-		found_something = 0;
-		goto cleanup;
-	    }
+	if (record.system_flags & FLAG_EXPUNGED)
+	    continue;
 
-	    sub2_vect = search_squat_do_query(index, state, args->sublist->sub2);
+	if (rx->is_indexed(rx, record.uid))
+	    continue;
 
-	    if (sub2_vect == NULL) {
-		found_something = 0;
-		free(sub1_vect);
-		goto cleanup;
-	    }
-
-	    for (i = 0; i < vlen; i++) {
-		vect[i] &= sub1_vect[i] | sub2_vect[i];
-	    }
-
-	    free(sub1_vect);
-	    free(sub2_vect);
+	if (incremental && batch.count >= batch_size) {
+	    syslog(LOG_INFO, "search_update_mailbox batching %u messages to %s",
+		   batch.count, mailbox->name);
+	    was_partial = 1;
+	    break;
 	}
 
-	sub = sub->next;
+	ptrarray_append(&batch, message_new_from_record(mailbox, &record));
     }
 
-cleanup:
-    free(t_vect);
-    if (!found_something) {
-	free(vect);
-	return NULL;
-    }
+    if (batch.count)
+	r = flush_batch(rx, mailbox, &batch);
 
-    return vect;
+ done:
+    ptrarray_fini(&batch);
+    r2 = rx->end_mailbox(rx, mailbox);
+    if (r) return r;
+    if (r2) return r2;
+    if (was_partial) return IMAP_AGAIN;
+    return 0;
 }
 
-static int search_squat(unsigned* msg_list, struct index_state *state,
-			const struct searchargs *searchargs)
+EXPORTED int search_end_update(search_text_receiver_t *rx)
 {
-    const char *fname;
-    int fd;
-    SquatSearchIndex* index;
-    unsigned char* msg_vector;
-    int result;
-
-    fname = mailbox_meta_fname(state->mailbox, META_SQUAT);
-    if ((fd = open(fname, O_RDONLY)) < 0) {
-	syslog(LOG_DEBUG, "SQUAT failed to open index file");
-	return -1;   /* probably not found. Just bail */
-    }
-    if ((index = squat_search_open(fd)) == NULL) {
-	syslog(LOG_DEBUG, "SQUAT failed to open index");
-	close(fd);
-	return -1;
-    }
-    if ((msg_vector = search_squat_do_query(index, state, searchargs))
-	    == NULL) {
-	result = -1;
-    } else {
-	unsigned i;
-	unsigned vlen = vector_len(state);
-	unsigned char* unindexed_vector = xmalloc(vlen);
-	SquatSearchResult r;
-
-	memset(unindexed_vector, 255, vlen);
-	r.vector = unindexed_vector;
-	r.state = state;
-	r.part_types = "tfcbsmh";
-	r.found_validity = 0;
-	if (squat_search_list_docs(index, drop_indexed_docs, &r) != SQUAT_OK) {
-	    syslog(LOG_DEBUG, "SQUAT failed to get list of indexed documents");
-	    result = -1;
-	} else if (!r.found_validity) {
-	    syslog(LOG_DEBUG, "SQUAT didn't find validity record");
-	    result = -1;
-	} else {
-	    /* Add in any unindexed messages. They must be searched manually. */
-	    for (i = 0; i < vlen; i++) {
-		msg_vector[i] |= unindexed_vector[i];
-	    }
-
-	    result = 0;
-	    for (i = 1; i <= state->exists; i++) {
-	        if ((msg_vector[i >> 3] & (1 << (i & 7))) != 0) {
-		    msg_list[result] = i;
-		    result++;
-		}
-	    }
-	}
-	free(msg_vector);
-	free(unindexed_vector);
-    }
-    squat_search_close(index);
-    close(fd);
-    return result;
+    const struct search_engine *se = engine();
+    /* We don't fallback to the default search engine here
+     * because the default behaviour is not to index anything */
+    return (se->end_update ? se->end_update(rx) : 0);
 }
 
-HIDDEN int search_prefilter_messages(unsigned *msgno_list,
-				     struct index_state *state,
-				     const struct searchargs *searchargs)
+EXPORTED search_text_receiver_t *search_begin_snippets(void *internalised,
+						       int verbose,
+						       search_snippet_cb_t proc,
+						       void *rock)
 {
-    unsigned i;
-    int count;
+    const struct search_engine *se = engine();
+    return (se->begin_snippets ? se->begin_snippets(internalised,
+				    verbose, proc, rock) : NULL);
+}
 
-    if (SQUAT_ENGINE) {
-	count = search_squat(msgno_list, state, searchargs);
-	if (count >= 0) {
-	    syslog(LOG_DEBUG, "SQUAT returned %d messages", count);
-	    return count;
-	} else {
-	    /* otherwise, we failed for some reason, so do the default */
-	    syslog(LOG_DEBUG, "SQUAT failed");
-	}
+EXPORTED int search_end_snippets(search_text_receiver_t *rx)
+{
+    const struct search_engine *se = engine();
+    return (se->end_snippets ? se->end_snippets(rx) : 0);
+}
+
+EXPORTED char *search_describe_internalised(void *internalised)
+{
+    const struct search_engine *se = engine();
+    return (se->describe_internalised ?
+	    se->describe_internalised(internalised) : 0);
+}
+
+EXPORTED void search_free_internalised(void *internalised)
+{
+    const struct search_engine *se = engine();
+    if (se->free_internalised) se->free_internalised(internalised);
+}
+
+EXPORTED int search_start_daemon(int verbose)
+{
+    const struct search_engine *se = engine();
+    return (se->start_daemon ? se->start_daemon(verbose) : 0);
+}
+
+EXPORTED int search_stop_daemon(int verbose)
+{
+    const struct search_engine *se = engine();
+    return (se->stop_daemon ? se->stop_daemon(verbose) : 0);
+}
+
+EXPORTED int search_list_files(const char *userid,
+			       strarray_t *files)
+{
+    const struct search_engine *se = engine();
+    return (se->list_files ? se->list_files(userid, files) : 0);
+}
+
+EXPORTED int search_compact(const char *userid,
+			    const char *tempdir,
+			    const strarray_t *srctiers,
+			    const char *desttier,
+			    int flags)
+{
+    const struct search_engine *se = engine();
+    return (se->compact ? se->compact(userid, tempdir, srctiers, desttier, flags) : 0);
+}
+
+EXPORTED int search_deluser(const char *userid)
+{
+    const struct search_engine *se = engine();
+    return (se->deluser ? se->deluser(userid) : 0);
+}
+
+const char *search_op_as_string(int op)
+{
+    static char buf[33];
+
+    switch (op) {
+    case SEARCH_OP_AND: return "AND";
+    case SEARCH_OP_OR: return "OR";
+    case SEARCH_OP_NOT: return "NOT";
+    default:
+	snprintf(buf, sizeof(buf), "(%d)", op);
+	return buf;
     }
-  
-    /* Just put in all possible messages. This falls back to Cyrus' default
-     * search. */
-
-    for (i = 0; i < state->exists; i++) {
-	msgno_list[i] = i + 1;
-    }
-
-    return state->exists;
 }

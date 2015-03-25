@@ -153,6 +153,7 @@ EXPORTED void fatal(const char *s, int code)
 {
     fprintf(stderr, "Fatal error: %s\n", s);
     syslog(LOG_ERR, "Fatal error: %s", s);
+    abort();
     exit(code);
 }
 
@@ -197,12 +198,13 @@ static int find_reserve_messages(struct mailbox *mailbox,
 static int find_reserve_all(struct sync_name_list *mboxname_list,
 			    struct sync_folder_list *master_folders,
 			    struct sync_folder_list *replica_folders,
-			    struct sync_reserve_list *reserve_guids)
+			    struct sync_reserve_list *reserve_list)
 {
     struct sync_name *mbox;
     struct sync_folder *rfolder;
     struct sync_msgid_list *part_list;
     struct mailbox *mailbox = NULL;
+    modseq_t xconvmodseq;
     int r = 0;
 
     /* Find messages we want to upload that are available on server */
@@ -226,9 +228,19 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
 	    goto bail;
 	}
 
+	xconvmodseq = 0;
+	if (mailbox_has_conversations(mailbox)) {
+	    r = mailbox_get_xconvmodseq(mailbox, &xconvmodseq);
+	    if (r) {
+		syslog(LOG_ERR, "IOERROR: Failed to get xconvmodseq %s: %s",
+		       mbox->name, error_message(r));
+		goto bail;
+	    }
+	}
+
 	/* mailbox is open from here, no exiting without closing it! */
 
-	part_list = sync_reserve_partlist(reserve_guids, mailbox->part);
+	part_list = sync_reserve_partlist(reserve_list, mailbox->part);
 
 	sync_folder_list_add(master_folders, mailbox->uniqueid, mailbox->name,
 			     mailbox->mbtype,
@@ -237,7 +249,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
 			     mailbox->i.highestmodseq, mailbox->i.synccrcs,
 			     mailbox->i.recentuid, mailbox->i.recenttime,
 			     mailbox->i.pop3_last_login,
-			     mailbox->i.pop3_show_after, NULL);
+			     mailbox->i.pop3_show_after, NULL, xconvmodseq);
 
 	rfolder = sync_folder_lookup(replica_folders, mailbox->uniqueid);
 	if (rfolder)
@@ -349,16 +361,16 @@ done:
 static int reserve_messages(struct sync_name_list *mboxname_list,
 			    struct sync_folder_list *master_folders,
 			    struct sync_folder_list *replica_folders,
-			    struct sync_reserve_list *reserve_guids)
+			    struct sync_reserve_list *reserve_list)
 {
     struct sync_reserve *reserve;
     int r;
 
     r = find_reserve_all(mboxname_list, master_folders,
-			 replica_folders, reserve_guids);
+			 replica_folders, reserve_list);
     if (r) return r;
 
-    for (reserve = reserve_guids->head; reserve; reserve = reserve->next) {
+    for (reserve = reserve_list->head; reserve; reserve = reserve->next) {
 	r = reserve_partition(reserve->part, replica_folders, reserve->list);
 	if (r) return r;
     }
@@ -458,6 +470,8 @@ static int response_parse(const char *cmd,
 	    time_t pop3_show_after = 0;
 	    struct dlist *al = NULL;
 	    struct sync_annot_list *annots = NULL;
+	    modseq_t xconvmodseq = 0;
+
 	    if (!folder_list) goto parse_err;
 	    if (!dlist_getatom(kl, "UNIQUEID", &uniqueid)) goto parse_err;
 	    if (!dlist_getatom(kl, "MBOXNAME", &mboxname)) goto parse_err;
@@ -475,9 +489,11 @@ static int response_parse(const char *cmd,
 	    dlist_getdate(kl, "POP3_SHOW_AFTER", &pop3_show_after);
 	    dlist_getatom(kl, "MBOXTYPE", &mboxtype);
 	    dlist_getnum32(kl, "SYNC_CRC_ANNOT", &synccrcs.annot);
+	    dlist_getnum64(kl, "XCONVMODSEQ", &xconvmodseq);
 
 	    if (dlist_getlist(kl, "ANNOTATIONS", &al))
 		decode_annotations(al, &annots, NULL);
+
 
 	    sync_folder_list_add(folder_list, uniqueid, mboxname,
 				 mboxlist_string_to_mbtype(mboxtype),
@@ -487,7 +503,8 @@ static int response_parse(const char *cmd,
 				 highestmodseq, synccrcs,
 				 recentuid, recenttime,
 				 pop3_last_login,
-				 pop3_show_after, annots);
+				 pop3_show_after, annots,
+				 xconvmodseq);
 	}
 	else
 	    goto parse_err;
@@ -755,7 +772,7 @@ static int user_sub(const char *userid, const char *mboxname)
     }
 }
 
-static int copy_local(struct mailbox *mailbox, unsigned long uid)
+static int copy_local(struct mailbox *mailbox, unsigned uid)
 {
     uint32_t recno;
     struct index_record oldrecord;
@@ -809,23 +826,29 @@ static int copy_local(struct mailbox *mailbox, unsigned long uid)
     }
 
     /* not finding the record is an error! (should never happen) */
+    syslog(LOG_ERR, "IOERROR: copy_local didn't find the record for %u", uid);
     return IMAP_MAILBOX_NONEXISTENT;
 }
 
-static int fetch_file(struct mailbox *mailbox, unsigned long uid,
-		      struct index_record *rp)
+static int fetch_file(struct mailbox *mailbox, unsigned uid,
+		      struct index_record *rp, struct sync_msgid_list *part_list)
 {
     const char *cmd = "FETCH";
     struct dlist *kin = NULL;
     struct dlist *kl;
     int r = 0;
-    const char *fname = dlist_reserve_path(mailbox->part, &rp->guid);
+    struct sync_msgid *msgid;
     struct message_guid *guid = NULL;
-    struct stat sbuf;
+    size_t size = 0;
+    const char *fname = NULL;
+
+    msgid = sync_msgid_lookup(part_list, &rp->guid);
 
     /* already reserved? great */
-    if (stat(fname, &sbuf) == 0)
+    if (msgid && msgid->fname) {
+	syslog(LOG_NOTICE, "trying to get already uploaded %u: %s", uid, message_guid_encode(&rp->guid));
 	return 0;
+    }
 
     kl = dlist_newkvlist(NULL, cmd);
     dlist_setatom(kl, "MBOXNAME", mailbox->name);
@@ -837,15 +860,29 @@ static int fetch_file(struct mailbox *mailbox, unsigned long uid,
     dlist_free(&kl);
 
     r = sync_parse_response(cmd, sync_in, &kin);
-    if (r) return r;
+    if (r) {
+	syslog(LOG_ERR, "IOERROR: fetch_file failed %s", error_message(r));
+	return r;
+    }
 
-    if (!dlist_tofile(kin->head, NULL, &guid, NULL, NULL)) {
+    if (!dlist_tofile(kin->head, NULL, &guid, &size, &fname)) {
 	r = IMAP_MAILBOX_NONEXISTENT;
+	syslog(LOG_ERR, "IOERROR: fetch_file failed tofile %s", error_message(r));
 	goto done;
     }
 
-    if (!message_guid_equal(guid, &rp->guid))
+    /* well, we can copy it back or we can re-reserve... */
+    if (message_guid_equal(guid, &rp->guid) && (size == rp->size)) {
+	msgid = sync_msgid_insert(part_list, &rp->guid);
+	msgid->need_upload = 1;
+	msgid->size = size;
+	msgid->fname = xstrdup(fname);
+    }
+    else {
+	r = IMAP_MAILBOX_NONEXISTENT;
+	syslog(LOG_ERR, "IOERROR: fetch_file GUID MISMATCH %s", error_message(r));
 	r = IMAP_IOERROR;
+    }
 
 done:
     dlist_free(&kin);
@@ -853,7 +890,7 @@ done:
 }
 
 static int copy_remote(struct mailbox *mailbox, uint32_t uid,
-		       struct dlist *kr)
+		       struct dlist *kr, struct sync_msgid_list *part_list)
 {
     struct index_record record;
     struct dlist *ki;
@@ -862,15 +899,16 @@ static int copy_remote(struct mailbox *mailbox, uint32_t uid,
 
     for (ki = kr->head; ki; ki = ki->next) {
 	r = parse_upload(ki, mailbox, &record, &annots);
-	if (r) return r;
+	if (r) {
+	    syslog(LOG_ERR, "IOERROR: failed to parse upload for %u", uid);
+	    return r;
+	}
 	if (record.uid == uid) {
 	    /* choose the destination UID */
 	    record.uid = mailbox->i.last_uid + 1;
 
-	    /* already fetched the file in the parse phase */
-
 	    /* append the file */
-	    r = sync_append_copyfile(mailbox, &record, annots);
+	    r = sync_append_copyfile(mailbox, &record, annots, part_list);
 
 	    sync_annot_list_free(&annots);
 
@@ -879,13 +917,15 @@ static int copy_remote(struct mailbox *mailbox, uint32_t uid,
 	sync_annot_list_free(&annots);
     }
     /* not finding the record is an error! (should never happen) */
+    syslog(LOG_ERR, "IOERROR: copy_remote didn't find the record for %u", uid);
     return IMAP_MAILBOX_NONEXISTENT;
 }
 
 static int copyback_one_record(struct mailbox *mailbox,
 			       struct index_record *rp,
 			       const struct sync_annot_list *annots,
-			       struct dlist *kaction)
+			       struct dlist *kaction,
+			       struct sync_msgid_list *part_list)
 {
     int r;
 
@@ -905,7 +945,7 @@ static int copyback_one_record(struct mailbox *mailbox,
 		dlist_setnum32(kaction, "EXPUNGE", rp->uid);
 	}
 	else {
-	    r = fetch_file(mailbox, rp->uid, rp);
+	    r = fetch_file(mailbox, rp->uid, rp, part_list);
 	    if (r) return r;
 	    if (kaction)
 		dlist_setnum32(kaction, "COPYBACK", rp->uid);
@@ -917,12 +957,12 @@ static int copyback_one_record(struct mailbox *mailbox,
      * end, so is preferable */
     else {
 	/* grab the file */
-	r = fetch_file(mailbox, rp->uid, rp);
+	r = fetch_file(mailbox, rp->uid, rp, part_list);
 	if (r) return r;
 	/* make sure we're actually making changes now */
 	if (!kaction) return 0;
 	/* append the file */
-	r = sync_append_copyfile(mailbox, rp, annots);
+	r = sync_append_copyfile(mailbox, rp, annots, part_list);
 	if (r) return r;
     }
 
@@ -990,10 +1030,10 @@ static void log_record(const char *name, struct mailbox *mailbox,
 		       struct index_record *record)
 {
     syslog(LOG_NOTICE, "SYNCNOTICE: %s uid:%u modseq:" MODSEQ_FMT " "
-	  "last_updated:%lu internaldate:%lu flags:(%s)",
+	  "last_updated:%lu internaldate:%lu flags:(%s) cid:" CONV_FMT,
 	   name, record->uid, record->modseq,
 	   record->last_updated, record->internaldate,
-	   make_flags(mailbox, record));
+	   make_flags(mailbox, record), record->cid);
 }
 
 static void log_mismatch(const char *reason, struct mailbox *mailbox,
@@ -1011,7 +1051,8 @@ static int compare_one_record(struct mailbox *mailbox,
 			      struct index_record *rp,
 			      const struct sync_annot_list *mannots,
 			      const struct sync_annot_list *rannots,
-			      struct dlist *kaction)
+			      struct dlist *kaction,
+			      struct sync_msgid_list *part_list)
 {
     int i;
     int r;
@@ -1042,12 +1083,12 @@ static int compare_one_record(struct mailbox *mailbox,
 
 	/* ORDERING - always lower GUID first */
 	if (message_guid_cmp(&mp->guid, &rp->guid) > 0) {
-	    r = copyback_one_record(mailbox, rp, rannots, kaction);
+	    r = copyback_one_record(mailbox, rp, rannots, kaction, part_list);
 	    if (!r) r = renumber_one_record(mp, kaction);
 	}
 	else {
 	    r = renumber_one_record(mp, kaction);
-	    if (!r) r = copyback_one_record(mailbox, rp, rannots, kaction);
+	    if (!r) r = copyback_one_record(mailbox, rp, rannots, kaction, part_list);
 	}
 
 	return r;
@@ -1062,7 +1103,7 @@ static int compare_one_record(struct mailbox *mailbox,
 	goto diff;
     if ((mp->system_flags & FLAGS_GLOBAL) != rp->system_flags)
 	goto diff;
-    if (mp->thrid != rp->thrid)
+    if (mp->cid != rp->cid)
 	goto diff;
     if (diff_annotations(mannots, rannots))
 	goto diff;
@@ -1097,7 +1138,7 @@ static int compare_one_record(struct mailbox *mailbox,
 	    /* then copy all the flag data over from the replica */
 	    mp->system_flags = (rp->system_flags & FLAGS_GLOBAL) |
 			       (mp->system_flags & FLAGS_LOCAL);
-	    mp->thrid = rp->thrid;
+	    mp->cid = rp->cid;
 	    for (i = 0; i < MAX_USER_FLAGS/32; i++)
 		mp->user_flags[i] = rp->user_flags[i];
 	}
@@ -1119,7 +1160,8 @@ static int mailbox_update_loop(struct mailbox *mailbox,
 			       struct dlist *ki,
 			       uint32_t last_uid,
 			       modseq_t highestmodseq,
-			       struct dlist *kaction)
+			       struct dlist *kaction,
+			       struct sync_msgid_list *part_list)
 {
     struct index_record mrecord;
     struct index_record rrecord;
@@ -1150,7 +1192,7 @@ static int mailbox_update_loop(struct mailbox *mailbox,
 		r = compare_one_record(mailbox,
 				       &mrecord, &rrecord,
 				       mannots, rannots,
-				       kaction);
+				       kaction, part_list);
 		if (r) goto out;
 		/* increment both */
 		recno++;
@@ -1175,7 +1217,7 @@ static int mailbox_update_loop(struct mailbox *mailbox,
 			syslog(LOG_ERR, "SYNCERROR: only exists on replica %s %u (%s)",
 			       mailbox->name, rrecord.uid,
 			       message_guid_encode(&rrecord.guid));
-		    r = copyback_one_record(mailbox, &rrecord, rannots, kaction);
+		    r = copyback_one_record(mailbox, &rrecord, rannots, kaction, part_list);
 		    if (r) goto out;
 		}
 		/* only increment replica */
@@ -1215,7 +1257,7 @@ static int mailbox_update_loop(struct mailbox *mailbox,
 		       mailbox->name, rrecord.uid);
 
 	    /* going to need this one */
-	    r = copyback_one_record(mailbox, &rrecord, rannots, kaction);
+	    r = copyback_one_record(mailbox, &rrecord, rannots, kaction, part_list);
 	    if (r) goto out;
 
 	    ki = ki->next;
@@ -1229,7 +1271,8 @@ out:
     return r;
 }
 
-static int mailbox_full_update(const char *mboxname)
+static int mailbox_full_update(const char *mboxname,
+			       struct sync_reserve_list *reserve_list)
 {
     const char *cmd = "FULLMAILBOX";
     struct mailbox *mailbox = NULL;
@@ -1247,6 +1290,8 @@ static int mailbox_full_update(const char *mboxname)
     struct sync_annot_list *mannots = NULL;
     struct sync_annot_list *rannots = NULL;
     int remote_modseq_was_higher = 0;
+    modseq_t xconvmodseq = 0;
+    struct sync_msgid_list *part_list;
 
     kl = dlist_setatom(NULL, cmd, mboxname);
     sync_send_lookup(kl, sync_out);
@@ -1290,9 +1335,14 @@ static int mailbox_full_update(const char *mboxname)
 	goto done;
     }
 
+    /* optional */
+    dlist_getnum64(kl, "XCONVMODSEQ", &xconvmodseq);
+
     /* we'll be updating it! */
     r = mailbox_open_iwl(mboxname, &mailbox);
     if (r) goto done;
+
+    part_list = sync_reserve_partlist(reserve_list, mailbox->part);
 
     /* if local UIDVALIDITY is lower, copy from remote, otherwise
      * remote will copy ours when we sync */
@@ -1301,6 +1351,7 @@ static int mailbox_full_update(const char *mboxname)
 	       ", updating %u => %u",
 	       mailbox->name, mailbox->i.uidvalidity, uidvalidity);
 	mailbox_index_dirty(mailbox);
+	mboxname_setuidvalidity(mailbox->name, uidvalidity, mailbox->mbtype);
 	mailbox->i.uidvalidity = uidvalidity;
     }
 
@@ -1317,7 +1368,7 @@ static int mailbox_full_update(const char *mboxname)
     }
 
     r = mailbox_update_loop(mailbox, kr->head, last_uid,
-			    highestmodseq, NULL);
+			    highestmodseq, NULL, part_list);
     if (r) {
 	syslog(LOG_ERR, "SYNCNOTICE: failed to prepare update for %s: %s",
 	       mailbox->name, error_message(r));
@@ -1326,9 +1377,16 @@ static int mailbox_full_update(const char *mboxname)
 
     /* OK - now we're committed to make changes! */
 
+    /* this is safe because "larger than" logic is embedded
+     * inside update_xconvmodseq */
+    if (mailbox_has_conversations(mailbox)) {
+	r = mailbox_update_xconvmodseq(mailbox, xconvmodseq, /*force */0);
+	if (r) goto done;
+    }
+
     kaction = dlist_newlist(NULL, "ACTION");
     r = mailbox_update_loop(mailbox, kr->head, last_uid,
-			    highestmodseq, kaction);
+			    highestmodseq, kaction, part_list);
     if (r) goto cleanup;
 
     /* if replica still has a higher last_uid, bump our local
@@ -1356,7 +1414,7 @@ static int mailbox_full_update(const char *mboxname)
 	    dlist_setnum32(kuids, "UID", dlist_num(ka));
 	}
 	else if (!strcmp(ka->name, "COPYBACK")) {
-	    r = copy_remote(mailbox, dlist_num(ka), kr);
+	    r = copy_remote(mailbox, dlist_num(ka), kr, part_list);
 	    if (r) goto cleanup;
 	    dlist_setnum32(kuids, "UID", dlist_num(ka));
 	}
@@ -1404,7 +1462,8 @@ done:
 static int crceq(struct synccrcs a, struct synccrcs b)
 {
     if (a.basic != b.basic) return 0;
-    if (a.annot != b.annot) return 0;
+    // XXX - ignore annot CRC match errors
+    //if (a.annot != b.annot) return 0;
     return 1;
 }
 
@@ -1412,6 +1471,7 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
 {
     /* look for any mismatches */
     unsigned options = mailbox->i.options & MAILBOX_OPTIONS_MASK;
+    modseq_t xconvmodseq = 0;
 
     if (!remote) return 0;
     if (remote->mbtype != mailbox->mbtype) return 0;
@@ -1424,6 +1484,13 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
     if (remote->pop3_show_after != mailbox->i.pop3_show_after) return 0;
     if (remote->options != options) return 0;
     if (strcmp(remote->acl, mailbox->acl)) return 0;
+
+    if (mailbox_has_conversations(mailbox)) {
+	int r = mailbox_get_xconvmodseq(mailbox, &xconvmodseq);
+	if (r) return 0;
+
+	if (remote->xconvmodseq != xconvmodseq) return 0;
+    }
 
     /* compare annotations */
     {
@@ -1449,7 +1516,7 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
 
 static int update_mailbox_once(struct sync_folder *local,
 			       struct sync_folder *remote,
-			       struct sync_reserve_list *reserve_guids,
+			       struct sync_reserve_list *reserve_list,
 			       int is_repeat)
 {
     struct sync_msgid_list *part_list;
@@ -1509,7 +1576,7 @@ static int update_mailbox_once(struct sync_folder *local,
     if (is_unchanged(mailbox, remote))
 	goto done;
 
-    part_list = sync_reserve_partlist(reserve_guids, mailbox->part);
+    part_list = sync_reserve_partlist(reserve_list, mailbox->part);
     r = sync_mailbox(mailbox, remote, part_list, kl, kupload, 1);
     if (r) goto done;
 
@@ -1544,22 +1611,22 @@ done:
 
 static int update_mailbox(struct sync_folder *local,
 			  struct sync_folder *remote,
-			  struct sync_reserve_list *reserve_guids)
+			  struct sync_reserve_list *reserve_list)
 {
-    int r = update_mailbox_once(local, remote, reserve_guids, 0);
+    int r = update_mailbox_once(local, remote, reserve_list, 0);
 
     /* never retry - other end should always sync cleanly */
     if (no_copyback) return r;
 
     if (r == IMAP_AGAIN) {
-	r = mailbox_full_update(local->name);
-	if (!r) r = update_mailbox_once(local, remote, reserve_guids, 1);
+	r = mailbox_full_update(local->name, reserve_list);
+	if (!r) r = update_mailbox_once(local, remote, reserve_list, 1);
     }
     else if (r == IMAP_SYNC_CHECKSUM) {
 	syslog(LOG_ERR, "CRC failure on sync for %s, trying full update",
 	       local->name);
-	r = mailbox_full_update(local->name);
-	if (!r) r = update_mailbox_once(local, remote, reserve_guids, 1);
+	r = mailbox_full_update(local->name, reserve_list);
+	if (!r) r = update_mailbox_once(local, remote, reserve_list, 1);
     }
 
     return r;
@@ -1755,15 +1822,15 @@ static int do_folders(struct sync_name_list *mboxname_list,
     int r;
     struct sync_folder_list *master_folders;
     struct sync_rename_list *rename_folders;
-    struct sync_reserve_list *reserve_guids;
+    struct sync_reserve_list *reserve_list;
     struct sync_folder *mfolder, *rfolder;
 
     master_folders = sync_folder_list_create();
     rename_folders = sync_rename_list_create();
-    reserve_guids = sync_reserve_list_create(SYNC_MSGID_LIST_HASH_SIZE);
+    reserve_list = sync_reserve_list_create(SYNC_MSGID_LIST_HASH_SIZE);
 
     r = reserve_messages(mboxname_list, master_folders,
-			 replica_folders, reserve_guids);
+			 replica_folders, reserve_list);
     if (r) {
 	syslog(LOG_ERR, "reserve messages: failed: %s", error_message(r));
 	goto bail;
@@ -1832,8 +1899,10 @@ static int do_folders(struct sync_name_list *mboxname_list,
 
 	if (!rename_success) {
 	    /* Scanned entire list without a match */
+	    const char *name = "unknown";
+	    if (item2) name = item2->oldname;
 	    syslog(LOG_ERR,
-		   "do_folders(): failed to order folders correctly");
+		   "do_folders(): failed to order folders correctly at %s", name);
 	    r = IMAP_AGAIN;
 	    goto bail;
 	}
@@ -1845,7 +1914,7 @@ static int do_folders(struct sync_name_list *mboxname_list,
 	 * it was successfully renamed above, so just use mfolder->name for
 	 * all commands */
 	rfolder = sync_folder_lookup(replica_folders, mfolder->uniqueid);
-	r = update_mailbox(mfolder, rfolder, reserve_guids);
+	r = update_mailbox(mfolder, rfolder, reserve_list);
 	if (r) {
 	    syslog(LOG_ERR, "do_folders(): update failed: %s '%s'",
 		   mfolder->name, error_message(r));
@@ -1856,7 +1925,7 @@ static int do_folders(struct sync_name_list *mboxname_list,
  bail:
     sync_folder_list_free(&master_folders);
     sync_rename_list_free(&rename_folders);
-    sync_reserve_list_free(&reserve_guids);
+    sync_reserve_list_free(&reserve_list);
     return r;
 }
 
@@ -2348,6 +2417,8 @@ static int do_sync(sync_log_reader_t *slr)
 	    sync_action_list_add(meta_list, NULL, args[1]);
 	else if (!strcmp(args[0], "SIEVE"))
 	    sync_action_list_add(meta_list, NULL, args[1]);
+	else if (!strcmp(args[0], "APPEND")) /* just a mailbox event */
+	    sync_action_list_add(mailbox_list, args[1], NULL);
 	else if (!strcmp(args[0], "MAILBOX"))
 	    sync_action_list_add(mailbox_list, args[1], NULL);
 	else if (!strcmp(args[0], "UNMAILBOX"))

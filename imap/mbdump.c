@@ -534,9 +534,13 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
 	    break;
 
 	case META_CACHE:
-	    if (mailbox->cache_buf.s) {
-		fbase = mailbox->cache_buf.s;
-		flen = mailbox->cache_buf.len;
+	    {
+		/* XXX - multi-cache-file support */
+		struct mappedfile *cachefile = ptrarray_nth(&mailbox->caches, 0);
+		if (cachefile) {
+		    fbase = mappedfile_base(cachefile);
+		    flen = mappedfile_size(cachefile);
+		}
 	    }
 	    break;
 
@@ -892,7 +896,7 @@ EXPORTED int undump_mailbox(const char *mbname,
 	r = mboxlist_lookup(mbname, &mbentry, NULL);
 	if (!r) r = mailbox_create(mbname, mbentry->mbtype,
 				   mbentry->partition, mbentry->acl,
-				   mbentry->uniqueid, 0, 0, &mailbox);
+				   mbentry->uniqueid, 0, 0, 0, &mailbox);
 	mboxlist_entry_free(&mbentry);
     }
     if(r) goto done;

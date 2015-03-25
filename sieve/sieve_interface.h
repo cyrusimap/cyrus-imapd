@@ -67,6 +67,7 @@ typedef int sieve_get_size(void *message_context, int *size);
 typedef int sieve_get_header(void *message_context, 
 			     const char *header,
 			     const char ***contents);
+typedef int sieve_get_fname(void *message_context, const char **fname);
 typedef int sieve_get_envelope(void *message_context, 
 			       const char *field,
 			       const char ***contents);
@@ -120,6 +121,7 @@ typedef struct sieve_notify_context {
     const char **options;
     const char *priority;
     const char *message;
+    const char *fname;
 } sieve_notify_context_t;
 
 #define SIEVE_HASHLEN 16
@@ -157,6 +159,7 @@ void sieve_register_include(sieve_interp_t *interp, sieve_get_include *f);
    sieve_script_parse */
 void sieve_register_size(sieve_interp_t *interp, sieve_get_size *f);
 void sieve_register_header(sieve_interp_t *interp, sieve_get_header *f);
+void sieve_register_fname(sieve_interp_t *interp, sieve_get_fname *f);
 void sieve_register_envelope(sieve_interp_t *interp, sieve_get_envelope *f);
 void sieve_register_body(sieve_interp_t *interp, sieve_get_body *f);
 

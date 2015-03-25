@@ -313,3 +313,19 @@ EXPORTED void hash_enumerate(hash_table *table, void (*func)(const char *, void 
       }
 }
 
+EXPORTED int hash_numrecords(hash_table *table)
+{
+    unsigned i;
+    bucket *temp;
+    int count = 0;
+
+    for (i = 0; i < table->size; i++) {
+	temp = (table->table)[i];
+	while (temp) {
+	    count++;
+	    temp = temp->next;
+	}
+    }
+
+    return count;
+}

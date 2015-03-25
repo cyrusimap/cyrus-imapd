@@ -77,6 +77,10 @@ void *hash_del(const char *key,hash_table *table);
 void hash_enumerate(hash_table *table,void (*func)(const char *,void *,void *),
 		    void *rock);
 
+/* counts the number of nodes in the hash table */
+
+int hash_numrecords(hash_table *table);
+
 /*
 ** Frees a hash table.  For each node that was inserted in the table,
 ** it calls the function whose address it was passed, with a pointer

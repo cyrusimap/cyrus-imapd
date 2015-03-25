@@ -111,6 +111,9 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
 static int propfind_suppaddrdata(const xmlChar *name, xmlNsPtr ns,
 				 struct propfind_ctx *fctx, xmlNodePtr resp,
 				 struct propstat propstat[], void *rock);
+static int propfind_addrgroups(const xmlChar *name, xmlNsPtr ns,
+			       struct propfind_ctx *fctx, xmlNodePtr resp,
+			       struct propstat propstat[], void *rock);
 
 static int report_card_query(struct transaction_t *txn,
 			     struct meth_params *rparams,
@@ -250,6 +253,11 @@ static const struct prop_entry carddav_props[] = {
     { "getctag", NS_CS, PROP_ALLPROP | PROP_COLLECTION,
       propfind_sync_token, NULL, NULL },
 
+    /* Cyrus properties */
+    { "address-groups", NS_CYRUS,
+      PROP_RESOURCE,
+      propfind_addrgroups, NULL, NULL },
+
     { NULL, 0, 0, NULL, NULL, NULL }
 };
 
@@ -278,8 +286,8 @@ static struct meth_params carddav_params = {
 
 /* Namespace for Carddav collections */
 struct namespace_t namespace_addressbook = {
-    URL_NS_ADDRESSBOOK, 0, "/dav/addressbooks", "/.well-known/carddav",
-    1 /* auth */,
+    URL_NS_ADDRESSBOOK, 0, "/dav/addressbooks", "/.well-known/carddav", 1 /* auth */,
+    MBTYPE_ADDRESSBOOK,
 #if 0 /* Until Apple Contacts fixes their add-member implementation */
     (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DELETE |
      ALLOW_DAV | ALLOW_WRITECOL | ALLOW_CARD),
@@ -316,18 +324,13 @@ struct namespace_t namespace_addressbook = {
 
 static struct carddav_db *my_carddav_open(struct mailbox *mailbox)
 {
-    if (httpd_userid && mboxname_userownsmailbox(httpd_userid, mailbox->name)) {
-	return auth_carddavdb;
-    }
-    else {
-	return carddav_open_mailbox(mailbox, CARDDAV_CREATE);
-    }
+    return carddav_open_mailbox(mailbox);
 }
 
 
 static void my_carddav_close(struct carddav_db *carddavdb)
 {
-    if (carddavdb && (carddavdb != auth_carddavdb)) carddav_close(carddavdb);
+    carddav_close(carddavdb);
 }
 
 
@@ -368,7 +371,7 @@ static void my_carddav_auth(const char *userid)
     else {
 	/* Open CardDAV DB for 'userid' */
 	my_carddav_reset();
-	auth_carddavdb = carddav_open_userid(userid, CARDDAV_CREATE);
+	auth_carddavdb = carddav_open_userid(userid);
 	if (!auth_carddavdb) fatal("Unable to open CardDAV DB", EC_IOERR);
     }
 
@@ -436,6 +439,7 @@ static void my_carddav_reset(void)
 
 static void my_carddav_shutdown(void)
 {
+    my_carddav_reset();
     carddav_done();
 }
 
@@ -464,6 +468,8 @@ static int carddav_parse_path(const char *path,
 	return HTTP_FORBIDDEN;
     }
 
+    tgt->prefix = namespace_addressbook.prefix;
+
     /* Default to bare-bones Allow bits for toplevel collections */
     tgt->allow &= ~(ALLOW_POST|ALLOW_WRITE|ALLOW_DELETE);
 
@@ -479,8 +485,7 @@ static int carddav_parse_path(const char *path,
 
 	/* Get user id */
 	len = strcspn(p, "/");
-	tgt->user = p;
-	tgt->userlen = len;
+	tgt->userid = xstrndup(p, len);
 
 	p += len;
 	if (!*p || !*++p) goto done;
@@ -524,19 +529,15 @@ static int carddav_parse_path(const char *path,
 	else tgt->allow |= ALLOW_DELETE;
 #endif
     }
-    else if (tgt->user) tgt->allow |= ALLOW_DELETE;
+    else if (tgt->userid) tgt->allow |= ALLOW_DELETE;
 
 
     /* Create mailbox name from the parsed path */
 
     mboxname_init_parts(&parts);
 
-    if (tgt->user && tgt->userlen) {
-        /* holy "avoid copying" batman */
-        char *userid = xstrndup(tgt->user, tgt->userlen);
-        mboxname_userid_to_parts(userid, &parts);
-        free(userid);
-    }
+    if (tgt->userid)
+        mboxname_userid_to_parts(tgt->userid, &parts);
 
     buf_setcstr(&boxbuf, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
     if (tgt->collen) {
@@ -544,6 +545,15 @@ static int carddav_parse_path(const char *path,
         buf_appendmap(&boxbuf, tgt->collection, tgt->collen);
     }
     parts.box = buf_cstring(&boxbuf);
+
+    /* XXX - hack to allow @domain parts for non-domain-split users */
+    if (httpd_extradomain) {
+	/* not allowed to be cross domain */
+	if (parts.userid && strcmpsafe(parts.domain, httpd_extradomain))
+	    return HTTP_NOT_FOUND;
+	//free(parts.domain); - XXX fix when converting to real parts
+	parts.domain = NULL;
+    }
 
     mboxname_parts_to_internal(&parts, tgt->mboxname);
 
@@ -741,15 +751,15 @@ int propfind_abookhome(const xmlChar *name, xmlNsPtr ns,
     xmlNodePtr node;
     xmlNodePtr expand = (xmlNodePtr) rock;
 
-    if (!(namespace_addressbook.enabled && fctx->req_tgt->user))
+    if (!(namespace_addressbook.enabled && fctx->req_tgt->userid))
 	return HTTP_NOT_FOUND;
 
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			name, ns, NULL, 0);
 
     buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, "%s/user/%.*s/", namespace_addressbook.prefix,
-	       (int) fctx->req_tgt->userlen, fctx->req_tgt->user);
+    buf_printf(&fctx->buf, "%s/user/%s/", namespace_addressbook.prefix,
+	       fctx->req_tgt->userid);
 
     if (expand) {
 	/* Return properties for this URL */
@@ -802,6 +812,57 @@ static int propfind_suppaddrdata(const xmlChar *name, xmlNsPtr ns,
     return 0;
 }
 
+/* Callback to fetch CY:address-groups */
+int propfind_addrgroups(const xmlChar *name, xmlNsPtr ns,
+		        struct propfind_ctx *fctx,
+		        xmlNodePtr resp __attribute__((unused)),
+		        struct propstat propstat[],
+		        void *rock __attribute__((unused)))
+{
+    int r = 0;
+    struct carddav_db *davdb = NULL;
+    struct carddav_data *cdata = NULL;
+    strarray_t *groups;
+    xmlNodePtr node;
+    int i;
+
+    if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
+
+    /* If we're here via report_sync_col then we don't have a db handle yet, so
+     * lets just manage this ourselves */
+    davdb = my_carddav_open(fctx->mailbox);
+    if (davdb == NULL) {
+	r = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
+    r = carddav_lookup_resource(davdb, fctx->req_tgt->mboxname, fctx->req_tgt->resource, 0, &cdata, 0);
+    if (r)
+	goto done;
+
+    node = xml_add_prop(HTTP_OK, fctx->ns[NS_CYRUS], &propstat[PROPSTAT_OK],
+			name, ns, NULL, 0);
+
+    groups = carddav_getuid_groups(davdb, cdata->vcard_uid);
+    if (groups == NULL)
+	goto done;
+
+    for (i = 0; i < strarray_size(groups); i++) {
+	const char *group_uid = strarray_nth(groups, i);
+
+	xmlNodePtr group = xmlNewChild(node, fctx->ns[NS_CYRUS],
+				       BAD_CAST "address-group", NULL);
+	xmlAddChild(group,
+		    xmlNewCDataBlock(fctx->root->doc,
+				     BAD_CAST group_uid, strlen(group_uid)));
+    }
+
+    strarray_free(groups);
+
+done:
+    my_carddav_close(davdb);
+    return r;
+}
 
 static int report_card_query(struct transaction_t *txn,
 			     struct meth_params *rparams __attribute__((unused)),
@@ -816,6 +877,7 @@ static int report_card_query(struct transaction_t *txn,
     fctx->lookup_resource = (db_lookup_proc_t) &carddav_lookup_resource;
     fctx->foreach_resource = (db_foreach_proc_t) &carddav_foreach;
     fctx->proc_by_resource = &propfind_by_resource;
+    fctx->davdb = NULL;
 
     /* Parse children element of report */
     for (node = inroot->children; node; node = node->next) {
@@ -835,15 +897,19 @@ static int report_card_query(struct transaction_t *txn,
 	}
 	else {
 	    /* Add responses for all contained addressbook collections */
+	    /* XXX - support cross-user propfind here, just like caldav */
 	    strlcat(txn->req_tgt.mboxname, ".%", sizeof(txn->req_tgt.mboxname));
 	    mboxlist_findall(NULL,  /* internal namespace */
-			     txn->req_tgt.mboxname, 1, httpd_userid, 
+			     txn->req_tgt.mboxname, 1, httpd_userid,
 			     httpd_authstate, propfind_by_collection, fctx);
 	}
 
-	if (fctx->davdb) my_carddav_close(fctx->davdb);
-
 	ret = *fctx->ret;
+    }
+
+    if (fctx->davdb) {
+	fctx->close_db(fctx->davdb);
+	fctx->davdb = NULL;
     }
 
     return (ret ? ret : HTTP_MULTI_STATUS);

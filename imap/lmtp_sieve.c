@@ -76,6 +76,7 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "me.h"
 
 static int sieve_usehomedir = 0;
 static const char *sieve_dir = NULL;
@@ -115,6 +116,16 @@ static int getheader(void *v, const char *phead, const char ***body)
     } else {
 	return SIEVE_FAIL;
     }
+}
+
+static int getfname(void *v, const char **fnamep)
+{
+    deliver_data_t *d = (deliver_data_t *)v;
+    *fnamep = NULL;
+    if (d->stage)
+	*fnamep = append_stagefname(d->stage);
+    /* XXX GLOBAL STUFF HERE */
+    return 0;
 }
 
 static int getsize(void *mc, int *size)
@@ -288,7 +299,7 @@ static int send_rejection(const char *origid,
 	    config_servername, cyrus_version(), SIEVE_VERSION);
     if (origreceip)
 	fprintf(sm, "Original-Recipient: rfc822; %s\r\n", origreceip);
-    fprintf(sm, "Final-Recipient: rfc822; %s\r\n", mailreceip);
+    fprintf(sm, "Final-Recipient: rfc822; %s\r\n", me_create_sasl_enc(mailreceip));
     if (origid)
 	fprintf(sm, "Original-Message-ID: %s\r\n", origid);
     fprintf(sm, "Disposition: "
@@ -460,7 +471,7 @@ static int sieve_reject(void *ac,
 	return SIEVE_OK;
     }
 
-    body = msg_getheader(md, "original-recipient");
+    body = msg_getheader(md, "x-delivered-to");
     origreceip = body ? body[0] : NULL;
     if ((res = send_rejection(md->id, md->return_path, 
 			      origreceip, sd->username,
@@ -485,7 +496,7 @@ static int sieve_reject(void *ac,
 static int sieve_fileinto(void *ac, 
 			  void *ic __attribute__((unused)),
 			  void *sc, 
-			  void *mc __attribute__((unused)), 
+			  void *mc,
 			  const char **errmsg __attribute__((unused)))
 {
     sieve_fileinto_context_t *fc = (sieve_fileinto_context_t *) ac;
@@ -571,9 +582,9 @@ static int sieve_notify(void *ac,
 	/* "default" is a magic value that implies the default */
 	notify(!strcmp("default",nc->method) ? notifier : nc->method,
 	       "SIEVE", nc->priority, sd->username, NULL,
-	       nopt, nc->options, nc->message);
+	       nopt, nc->options, nc->message, nc->fname);
     }
-    
+
     return SIEVE_OK;
 }
 
@@ -779,6 +790,7 @@ sieve_interp_t *setup_sieve(void)
     sieve_register_notify(interp, &sieve_notify);
     sieve_register_size(interp, &getsize);
     sieve_register_header(interp, &getheader);
+    sieve_register_fname(interp, &getfname);
 
     sieve_register_envelope(interp, &getenvelope);
     sieve_register_body(interp, &getbody);

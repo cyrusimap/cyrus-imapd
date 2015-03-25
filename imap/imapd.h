@@ -46,17 +46,17 @@
 #include "annotate.h"
 #include "hash.h"
 #include "mailbox.h"
+#include "message.h"
 #include "prot.h"
 #include "strarray.h"
+#include "search_expr.h"
+#include "conversations.h"
 
 /* Userid client has logged in as */
 extern char *imapd_userid;
 
 /* Authorization state for logged in userid */
 extern struct auth_state *imapd_authstate;
-
-/* Client capabilities (via ENABLE) */
-extern unsigned imapd_client_capa;
 
 struct octetinfo
 {
@@ -103,6 +103,7 @@ struct fetchargs {
     strarray_t attribs;
     int isadmin;
     struct auth_state *authstate;
+    hash_table *cidhash;          /* for XCONVFETCH */
 };
 
 /* Bitmasks for fetchitems */
@@ -121,7 +122,13 @@ enum {
 /*     FETCH_UNCACHEDHEADER =      (1<<11) -- obsolete */
     FETCH_IS_PARTIAL =          (1<<12), /* this is the PARTIAL command */
     FETCH_MODSEQ =		(1<<13),
-    FETCH_ANNOTATION =		(1<<14)
+    FETCH_ANNOTATION =		(1<<14),
+    FETCH_GUID   =		(1<<15),
+    FETCH_SHA1   =		(1<<16),
+    FETCH_FILESIZE =		(1<<17),
+    FETCH_CID =			(1<<18),
+    FETCH_FOLDER =		(1<<19),
+    FETCH_UIDVALIDITY =		(1<<20)
 };
 
 enum {
@@ -167,73 +174,48 @@ enum {
 };
 
 struct searchannot {
-    struct searchannot *next;
+    struct searchannot *next;	    /* gnb:TODO remove */
     char *entry;
     char *attrib;
-    struct namespace *namespace;
-    int isadmin;
-    const char *userid;
-    struct auth_state *auth_state;
+    struct namespace *namespace;    /* gnb:TODO get this from searchargs */
+    int isadmin;		    /* gnb:TODO get this from searchargs */
+    const char *userid;		    /* gnb:TODO get this from searchargs */
+    struct auth_state *auth_state;  /* gnb:TODO get this from searchargs */
     struct buf value;
 };
 
-struct searchsub {
-    struct searchsub *next;
-    struct searchargs *sub1;
-    /*
-     * If sub2 is null, then sub1 is NOT'ed.
-     * Otherwise sub1 and sub2 are OR'ed.
-     */
-    struct searchargs *sub2;
+/* Flags for searchargs.state */
+enum {
+    GETSEARCH_CHARSET_KEYWORD = 0x01,
+    GETSEARCH_RETURN = 0x02,
+    GETSEARCH_CHARSET_FIRST = 0x04,
 };
 
-/* Bitmasks for search flags */
-enum {
-    SEARCH_RECENT_SET =         (1<<0),
-    SEARCH_RECENT_UNSET	=       (1<<1),
-    SEARCH_SEEN_SET =           (1<<2),
-    SEARCH_SEEN_UNSET =	        (1<<3)
-/*    SEARCH_UNCACHEDHEADER =	(1<<4) -- obsolete */
-};
 
 /* Bitmasks for search return options */
 enum {
     SEARCH_RETURN_MIN =		(1<<0),
     SEARCH_RETURN_MAX =		(1<<1),
     SEARCH_RETURN_ALL =		(1<<2),
-    SEARCH_RETURN_COUNT =	(1<<3)
+    SEARCH_RETURN_COUNT =	(1<<3),
+    SEARCH_RETURN_RELEVANCY =	(1<<4)
 };
 
 /* Things that may be searched for */
 struct searchargs {
-    int flags;
-    unsigned smaller, larger;
-    time_t before, after;
-    time_t sentbefore, sentafter;
-    bit32 system_flags_set;
-    bit32 system_flags_unset;
-    bit32 user_flags_set[MAX_USER_FLAGS/32];
-    bit32 user_flags_unset[MAX_USER_FLAGS/32];
-    struct seqset *sequence;
-    struct seqset *uidsequence;
-    struct strlist *from;
-    struct strlist *to;
-    struct strlist *cc;
-    struct strlist *bcc;
-    struct strlist *subject;
-    struct strlist *messageid;
-    struct strlist *body;
-    struct strlist *text;
-    struct strlist *header_name, *header;
-    struct searchsub *sublist;
-    modseq_t modseq;
-    struct searchannot *annotations;
+    struct search_expr *root;
+    int charset;
+    int state;
+    /* used only during parsing */
+    int fuzzy_depth;
 
-    bit32 cache_atleast;
-
-    /* For ESEARCH */
+    /* For ESEARCH & XCONVMULTISORT */
     const char *tag;
     int returnopts;
+    struct namespace *namespace;
+    const char *userid;
+    struct auth_state *authstate;
+    int isadmin;
 };
 
 /* Sort criterion */
@@ -245,39 +227,98 @@ struct sortcrit {
 	    char *entry;
 	    char *userid;
 	} annot;
+	struct {
+	    char *name;
+	} flag;
     } args;
 };
 
 /* Values for sort keys */
 enum {
     SORT_SEQUENCE = 0,
-    SORT_ARRIVAL,
-    SORT_CC,
-    SORT_DATE,
-    SORT_DISPLAYFROM,
-    SORT_DISPLAYTO,
-    SORT_FROM,
-    SORT_SIZE,
-    SORT_SUBJECT,
-    SORT_TO,
-    SORT_ANNOTATION,
-    SORT_MODSEQ,
-    SORT_UID
+    SORT_ARRIVAL,	/* RFC 5256 */
+    SORT_CC,		/* RFC 5256 */
+    SORT_DATE,		/* RFC 5256 */
+    SORT_DISPLAYFROM,	/* RFC 5957 */
+    SORT_DISPLAYTO,	/* RFC 5957 */
+    SORT_FROM,		/* RFC 5256 */
+    SORT_SIZE,		/* RFC 5256 */
+    SORT_SUBJECT,	/* RFC 5256 */
+    SORT_TO,		/* RFC 5256 */
+    SORT_ANNOTATION,	/* RFC 5257 */
+    SORT_MODSEQ,	/* nonstandard */
+    SORT_UID,		/* nonstandard */
+    SORT_HASFLAG,	/* nonstandard */
+    SORT_CONVMODSEQ,	/* nonstandard */
+    SORT_CONVEXISTS,	/* nonstandard */
+    SORT_CONVSIZE,	/* nonstandard */
+    SORT_HASCONVFLAG,	/* nonstandard */
+    SORT_FOLDER,	/* nonstandard */
+    SORT_RELEVANCY	/* RFC 6203 */
     /* values > 255 are reserved for internal use */
 };
 
 /* Sort key modifier flag bits */
-#define SORT_REVERSE		(1<<0)
+#define SORT_REVERSE		(1<<0)	    /* RFC 5256 */
+
+/* Windowing arguments for the XCONVSORT command */
+struct windowargs {
+    int conversations;		/* whether to limit the results by
+				   conversation id */
+    uint32_t limit;		/* limit on how many messages to return,
+				 * 0 means unlimited. */
+    uint32_t position;		/* 1-based index into results of first
+				 * message to return.  0 means not
+				 * specified which is the same as 1.
+				 * Mutually exclusive with @anchor */
+    uint32_t anchor;		/* UID of a message used to locate the
+				 * start of the window; 0 means not
+				 * specified.  If the anchor is found,
+				 * the first message reported will be
+				 * the largest of 1 and the anchor minus
+				 * @offset.  If specified but not found,
+				 * an error will be returned.  Mutually
+				 * exclusive with @position.*/
+    char *anchorfolder;		/* internal mboxname of a folder to
+				 * which the anchor applies; only used
+				 * for XCONVMULTISORT. */
+    uint32_t offset;
+    int changedsince;		/* if 1, show messages a) added since @uidnext,
+				 * b) removed since @modseq, or c) modified
+				 * since @modseq */
+    modseq_t modseq;
+    uint32_t uidnext;
+    uint32_t upto;		/* UID of a message used to terminate an
+				 * XCONVUPDATES early, 0 means not
+				 * specified.  */
+};
+
+struct snippetargs
+{
+    struct snippetargs *next;
+    char *mboxname;		/* internal */
+    uint32_t uidvalidity;
+    struct {
+	uint32_t *data;
+	int count;
+	int alloc;
+    } uids;
+};
 
 /* Bitmask for status queries */
 enum {
-    STATUS_MESSAGES =	        (1<<0),
+    STATUS_MESSAGES =		(1<<0),
     STATUS_RECENT =		(1<<1),
     STATUS_UIDNEXT =		(1<<2),
     STATUS_UIDVALIDITY =	(1<<3),
     STATUS_UNSEEN =		(1<<4),
-    STATUS_HIGHESTMODSEQ =	(1<<5)
+    STATUS_HIGHESTMODSEQ =	(1<<5),
+    STATUS_XCONVEXISTS =	(1<<6),
+    STATUS_XCONVUNSEEN =	(1<<7),
+    STATUS_XCONVMODSEQ =	(1<<8)
 };
+
+#define STATUS_CONVITEMS (STATUS_XCONVEXISTS|STATUS_XCONVUNSEEN|STATUS_XCONVMODSEQ)
 
 /* Arguments to List functions */
 struct listargs {
@@ -288,7 +329,7 @@ struct listargs {
     strarray_t pat;		/* Mailbox pattern(s) */
     const char *scan;		/* SCAN content */
     hash_table server_table;	/* for proxying SCAN */
-    unsigned statusitems;       /* for RETURN STATUS */
+    unsigned statusitems;	/* for RETURN STATUS */
 };
 
 /* Value for List command variant */

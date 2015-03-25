@@ -1,6 +1,6 @@
 /* squatter.c -- SQUAT-based message indexing tool
  *
- * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2012 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -41,30 +41,10 @@
  */
 
 /*
-  This is the tool that creates SQUAT indexes for Cyrus mailboxes.
+  This is the tool that creates/updates search indexes for Cyrus mailboxes.
 
-  SQUAT index files are organised as follows:
-
-  There is (at most) one index file for each Cyrus mailbox, named
-  "cyrus.squat", stored in the mailbox directory.
-
-  Source documents are named 'xUID' where UID is the numeric UID of a
-  message and x is a character denoting a part of the message: 'f' ==
-  FROM, 't' == TO, 'b' == BCC, 'c' == CC, 's' == SUBJECT, 'h' == other
-  headers, 'm' == the body. So, a messge with UID 331 could give rise
-  to several source documents named "f331", "t331", "b331", "c331",
-  "s331", "h331"  and "m331".
-
-  There is also a special source document named "validity.N" where N
-  is the validitity nonce for the mailbox. We use this to detect when
-  the UIDs have been renumbered since we created the index (in which
-  case the index is useless and is ignored).
-
-  This tool creates new indexes for one or more mailboxes. (We do not
-  support incremental updates to an index yet.) The index is created
-  in "cyrus.squat.tmp" and then, if creation was successful, it is
-  atomically renamed to "cyrus.squat". This guarantees that we don't
-  interfere with anyone who has the old index open.
+  Despite the name, it handles whichever search engine in configured
+  by the 'search_engine' option in imapd.conf.
 */
 
 #include <config.h>
@@ -76,25 +56,32 @@
 #include <stdio.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/poll.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <syslog.h>
 #include <string.h>
 
 #include "annotate.h"
 #include "assert.h"
+#include "bsearch.h"
 #include "mboxlist.h"
 #include "global.h"
 #include "exitcodes.h"
 #include "imap/imap_err.h"
+#include "search_engines.h"
+#include "sync_log.h"
 #include "mailbox.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "ptrarray.h"
+#include "tok.h"
+#include "acl.h"
 #include "seen.h"
 #include "mboxname.h"
-#include "map.h"
-#include "squat.h"
 #include "index.h"
+#include "message.h"
 #include "util.h"
 
 extern char *optarg;
@@ -103,438 +90,85 @@ extern int optind;
 /* current namespace */
 static struct namespace squat_namespace;
 
-/* These stats are gathered 1) per mailbox and 2) for the whole operation. */
-typedef struct {
-  unsigned long indexed_bytes;    /* How many bytes of processed message text
-			   have we indexed? */
-  unsigned long indexed_messages; /* How many messages have we indexed? */
-  unsigned long index_size;       /* How many bytes is the index using? */
-  time_t start_time;    /* When did this operation start? */
-  time_t end_time;      /* When did it end? */
-} SquatStats;
-
 const int SKIP_FUZZ = 60;
 
 static int verbose = 0;
-static int mailbox_count = 0;
-static int skip_unmodified = 0;
 static int incremental_mode = 0;
-static SquatStats total_stats;
+static int recursive_flag = 0;
+static int annotation_flag = 0;
+static int running_daemon = 0;
+static int sleepmicroseconds = 0;
+static const char *temp_root_dir = NULL;
+static search_text_receiver_t *rx = NULL;
 
-static void start_stats(SquatStats *stats)
-{
-    stats->index_size = 0;
-    stats->indexed_bytes = 0;
-    stats->indexed_messages = 0;
-    stats->start_time = time(NULL);
-}
+static const char *name_starts_from = NULL;
 
-static void stop_stats(SquatStats *stats)
-{
-    stats->end_time = time(NULL);
-}
-
-static void print_stats(FILE *out, SquatStats *stats)
-{
-    fprintf(out, "Indexed %lu messages (%lu bytes) "
-	    "into %lu index bytes in %d seconds\n",
-	    stats->indexed_messages, stats->indexed_bytes,
-	    stats->index_size, (int)(stats->end_time - stats->start_time));
-}
+static void shut_down(int code) __attribute__((noreturn));
 
 static int usage(const char *name)
 {
     fprintf(stderr,
-	    "usage: %s [-C <alt_config>] [-r] [-s] [-a] [-v] [mailbox...]\n",
+	    "usage: %s [-C <alt_config>] [-v] [-s] [-a] [mailbox...]\n",
 	    name);
- 
+    fprintf(stderr,
+	    "usage: %s [-C <alt_config>] [-v] [-s] [-a] -u user...\n",
+	    name);
+    fprintf(stderr,
+	    "       %s [-C <alt_config>] [-v] [-s] [-a] -r mailbox [...]\n",
+	    name);
+    fprintf(stderr,
+	    "       %s [-C <alt_config>] [-v] [-s] [-d] [-n channel] -R\n",
+	    name);
+    fprintf(stderr,
+	    "       %s [-C <alt_config>] [-v] [-s] -f synclogfile\n",
+	    name);
+
     exit(EC_USAGE);
 }
 
-static void fatal_syserror(const char *s)
-{
-    perror(s);
-    exit(99);
-}
+/* ====================================================================== */
 
-static void fatal_squat_error(const char *s)
+static void become_daemon(void)
 {
-    int err = squat_get_last_error();
+    pid_t pid;
+    int nfds = getdtablesize();
+    int nullfd;
+    int fd;
 
-    switch (err) {
-    case SQUAT_ERR_SYSERR:
-	perror(s);
-	break;
-    default:
-	/* There are other error codes, but they only apply for searching,
-	   not index construction */
-	fprintf(stderr, "SQUAT: Unknown error %d (%s)\n", err, s);
+    nullfd = open("/dev/null", O_RDWR, 0);
+    if (nullfd < 0) {
+	perror("/dev/null");
+	exit(1);
+    }
+    dup2(nullfd, 0);
+    dup2(nullfd, 1);
+    dup2(nullfd, 2);
+    for (fd = 3 ; fd < nfds ; fd++)
+	close(fd);	    /* this will close nullfd too */
+
+    pid = fork();
+    if (pid == -1) {
+	perror("fork");
+	exit(1);
     }
 
-    exit(98);
+    if (pid)
+	exit(0); /* parent */
 }
 
 /* ====================================================================== */
-
-/* uid_info is used to track which messages exist in old squat index, by
- * parsing document names (e.g: m456. is part of message UID 456).
- */
-
-struct uid_item {
-    unsigned long uid;
-    int flagged;
-};
-
-struct uid_info {
-    struct uid_item *list;
-    unsigned long len;
-    unsigned long uidvalidity;
-    int valid;
-};
-
-static void uid_info_init(struct uid_info *uid_info, unsigned long exists)
-{
-    uid_info->list = xmalloc((exists + 1) * sizeof(struct uid_item));
-    uid_info->len = exists;
-    uid_info->uidvalidity = 0L;
-    uid_info->valid = 1;
-}
-
-static void uid_info_free(struct uid_info *uid_info)
-{
-    if (uid_info->list != NULL)
-	free(uid_info->list);
-
-    uid_info->list = NULL;
-}
-
-static void uid_item_init(struct uid_item *uid_item, unsigned long uid)
-{
-    uid_item->uid = uid;
-    uid_item->flagged = 0;
-}
-
-static struct uid_item *find_uid_item(struct uid_info *uid_info,
-				      unsigned long uid)
-{
-    struct uid_item *list = uid_info->list;
-    unsigned long first = 0;
-    unsigned long last = uid_info->len;
-
-    /* Binary chop on sorted array */
-    while (first < last) {
-	unsigned long middle = (first + last) / 2;
-
-	if (list[middle].uid == uid)
-	    return (&list[middle]);
-	if (list[middle].uid < uid)
-	    first = middle + 1;
-	else
-	    last = middle;
-    }
-    return (NULL);
-}
-
-/* Populate uid_info map using document names from SquatSearchIndex backend */
-static int doc_check(void *closure, const SquatListDoc *doc)
-{
-    struct uid_info *uid_info = (struct uid_info *)closure;
-    struct uid_item *uid_item;
-    unsigned long uid;
-
-    /* validity will be replaced with new value in same slot */
-    if (!strncmp(doc->doc_name, "validity.", 9)) {
-	uid_info->uidvalidity = strtoul(doc->doc_name + 9, NULL, 10);
-	return (1);
-    }
-
-    if (!strchr("tfcbsmh", doc->doc_name[0])) {
-	syslog(LOG_ERR, "Invalid document name: %s", doc->doc_name);
-	uid_info->valid = 0;
-	return (1);
-    }
-
-    uid = strtoul(doc->doc_name + 1, NULL, 10);
-    if ((uid > 0) && (uid_item = find_uid_item(uid_info, uid))) {
-	uid_item->flagged = 1;
-	return (1);
-    }
-
-    /* Remove this UID from the index */
-    return (0);
-}
-
-/* ====================================================================== */
-
-
-typedef struct {
-    SquatStats *mailbox_stats;
-    SquatIndex *index;
-    struct mailbox *mailbox;
-} SquatReceiverData;
-
-/* Cyrus passes the text to index in here, after it has canonicalized
-   the text. We figure out what source document the text belongs to,
-   and update the index. */
-static void search_text_receiver(int uid, int part, int cmd,
-				 char const *text, int text_len,
-				 void *rock)
-{
-    SquatReceiverData *d = (SquatReceiverData *) rock;
-
-    if ((cmd & SEARCHINDEX_CMD_BEGINPART) != 0) {
-	char buf[100];
-	char part_char = 0;
-
-	/* Figure out what the name of the source document is going to be. */
-	switch (part) {
-	case SEARCHINDEX_PART_FROM: part_char = 'f'; break;
-	case SEARCHINDEX_PART_TO: part_char = 't'; break;
-	case SEARCHINDEX_PART_CC: part_char = 'c'; break;
-	case SEARCHINDEX_PART_BCC: part_char = 'b'; break;
-	case SEARCHINDEX_PART_SUBJECT: part_char = 's'; break;
-	case SEARCHINDEX_PART_HEADERS: part_char = 'h'; break;
-	case SEARCHINDEX_PART_BODY:
-	    part_char = 'm';
-	    d->mailbox_stats->indexed_messages++;
-	    total_stats.indexed_messages++;
-	    break;
-	default:
-	    fatal("Unknown search_text part", EC_SOFTWARE);
-	}
-
-	snprintf(buf, sizeof(buf), "%c%d", part_char, uid);
-
-	/* don't index document parts that are going to be empty (or too
-	   short to search) */
-	if ((cmd & SEARCHINDEX_CMD_ENDPART) != 0
-	    && ((cmd & SEARCHINDEX_CMD_APPENDPART) == 0
-		|| text_len < SQUAT_WORD_SIZE)) {
-	    if (verbose > 2) {
-		printf("Skipping tiny document part '%s' (size %d)\n", buf,
-		       (cmd & SEARCHINDEX_CMD_APPENDPART) ==
-		       0 ? 0 : text_len);
-	    }
-	    return;
-	}
-
-	if (verbose > 2) {
-	    printf("Opening document part '%s'\n", buf);
-	}
-
-	if (squat_index_open_document(d->index, buf) != SQUAT_OK) {
-	    fatal_squat_error("Writing index");
-	}
-    }
-
-    if ((cmd & SEARCHINDEX_CMD_APPENDPART) != 0) {
-	if (verbose > 3) {
-	    printf("Writing %d bytes into message %d\n", text_len, uid);
-	}
-
-	if (squat_index_append_document(d->index, text, text_len) != SQUAT_OK) {
-	    fatal_squat_error("Writing index data");
-	}
-	d->mailbox_stats->indexed_bytes += text_len;
-	total_stats.indexed_bytes += text_len;
-    }
-
-    if ((cmd & SEARCHINDEX_CMD_ENDPART) != 0) {
-	if (squat_index_close_document(d->index) != SQUAT_OK) {
-	    fatal_squat_error("Writing index update");
-	}
-    }
-}
-
-/* Let SQUAT tell us what's going on in the expensive
-   squat_index_finish function. */
-static void stats_callback(void *closure __attribute__ ((unused)),
-			   SquatStatsEvent *params)
-{
-    switch (params->generic.type) {
-    case SQUAT_STATS_COMPLETED_INITIAL_CHAR:
-	if (verbose > 1) {
-	    if (params->completed_initial_char.num_words > 0) {
-		printf("Processing index character %d, %d total words, "
-		       "temp file size is %d\n",
-		       params->completed_initial_char.completed_char,
-		       params->completed_initial_char.num_words,
-		       params->completed_initial_char.temp_file_size);
-	    }
-	}
-	break;
-
-    default:
-	;			/* do nothing */
-    }
-}
-
-/* Squat a single open mailbox */
-static int squat_single(struct index_state *state, int incremental)
-{
-    struct mailbox *mailbox = state->mailbox;
-    const char *fname;
-    const char *newfname;
-    SquatStats stats;
-    SquatOptions options;
-    SquatReceiverData data;
-    SquatSearchIndex *old_index = NULL;
-    char uid_validity_buf[30];
-    struct uid_info uid_info;
-    struct uid_item *uid_item;
-    struct stat index_file_info;
-    uint32_t msgno;
-    int new_index_fd = -1;
-    int old_index_fd = -1;
-    int r = 0;			/* Using IMAP_* not SQUAT_* return codes here */
-
-    uid_info_init(&uid_info, state->exists);
-
-    newfname = mailbox_meta_newfname(mailbox, META_SQUAT);
-    if ((new_index_fd = open(newfname, O_CREAT | O_TRUNC | O_WRONLY, 0666)) < 0)
-	fatal_syserror("Unable to create temporary index file");
-
-    options.option_mask = SQUAT_OPTION_TMP_PATH | SQUAT_OPTION_STATISTICS;
-    options.tmp_path = mailbox_datapath(mailbox, 0);
-    options.stats_callback = stats_callback;
-    options.stats_callback_closure = NULL;
-    data.index = squat_index_init(new_index_fd, &options);
-    if (data.index == NULL)
-	fatal_squat_error("Initializing index");
-
-    uid_item = uid_info.list;
-    for (msgno = 1; msgno <= state->exists; msgno++) {
-	uid_item_init(&uid_item[msgno - 1], index_getuid(state, msgno));
-    }
-    /* Add zero UID as an end of list marker: uid_info_init() assigned space */
-    uid_item_init(&uid_item[state->exists], 0);
-
-    /* Open existing index if it exists */
-    fname = mailbox_meta_fname(mailbox, META_SQUAT);
-    old_index_fd = -1;
-    old_index = NULL;
-    if (incremental &&
-	((old_index_fd = open(fname, O_RDONLY)) >= 0) &&
-	(old_index = squat_search_open(old_index_fd)) == NULL) {
-	close(old_index_fd);
-	old_index_fd = -1;
-    }
-
-    /* Fall back to full update if open() or squat_search_open() failed */
-    if (!old_index)
-	incremental = 0;
-
-    if (incremental) {
-	/* Copy existing document names verbatim. They end up with the same
-	 * doc_IDs as in the old index, which makes trie copying much simpler.
-	 */
-	uid_info.valid = 1;
-	uid_info.uidvalidity = 0L;
-	squat_index_add_existing(data.index, old_index, doc_check,
-				 &uid_info);
-
-	if (!uid_info.valid) {
-	    syslog(LOG_ERR,
-		   "Corrupt squat index for %s, retrying without incremental",
-		   mailbox->name);
-	    r = IMAP_IOERROR;
-	    goto bail;
-	}
-
-	if (uid_info.uidvalidity != mailbox->i.uidvalidity) {
-	    /* Squat file refers to old mailbox: force full rebuild */
-	    r = IMAP_IOERROR;
-	    goto bail;
-	}
-    } else {
-	/* write an empty document at the beginning to record the validity
-	   nonce */
-	snprintf(uid_validity_buf, sizeof(uid_validity_buf),
-		 "validity.%u", mailbox->i.uidvalidity);
-	if (squat_index_open_document(data.index, uid_validity_buf) != SQUAT_OK
-	    || squat_index_close_document(data.index) != SQUAT_OK) {
-	    fatal_squat_error("Writing index");
-	}
-    }
-
-    data.mailbox = mailbox;
-    data.mailbox_stats = &stats;
-    start_stats(&stats);
-
-    uid_item = uid_info.list;
-    for (msgno = 1; msgno <= state->exists; msgno++) {
-	uint32_t uid = index_getuid(state, msgno);
-	/* Scan uid_item list for matching UID (ascending order, 0 termination) */
-	while (uid_item->uid && (uid_item->uid < uid))
-	    uid_item++;
-
-	if ((uid_item->uid == uid) && uid_item->flagged)
-	    continue;
-
-	/* This UID didn't appear in the old index file */
-	index_getsearchtext_single(state, msgno, search_text_receiver,
-				   &data);
-	uid_item->flagged = 1;
-    }
-
-    if (squat_index_finish(data.index) != SQUAT_OK) {
-	if (incremental) {
-	    syslog(LOG_ERR,
-		   "Corrupt squat index %s, retrying without incremental update",
-		   mailbox->name);
-	    r = IMAP_IOERROR;
-	    goto bail;
-	}
-	/* Just give up if not incremental */
-	fatal_squat_error("Closing index");
-    }
-
-    /* Check how big the resulting file is */
-    if (fstat(new_index_fd, &index_file_info) < 0) {
-	fatal_syserror("Unable to stat temporary index file");
-    }
-    stats.index_size = index_file_info.st_size;
-    total_stats.index_size += index_file_info.st_size;
-
-    if (close(new_index_fd) < 0) {
-	fatal_syserror("Unable to complete writing temporary index file");
-    }
-    new_index_fd = -1;
-
-    /* OK, we successfully created the index under the temporary file name.
-       Let's rename it to make it the real index. */
-    if (mailbox_meta_rename(mailbox, META_SQUAT) < 0) {
-	fatal_syserror("Unable to rename temporary index file");
-    }
-
-    stop_stats(&stats);
-    if (verbose > 0) {
-	print_stats(stdout, &stats);
-    }
-
-bail:
-    if (old_index)
-	squat_search_close(old_index);
-    if (old_index_fd >= 0)
-	close(old_index_fd);
-    if (new_index_fd >= 0)
-	close(new_index_fd);
-    uid_info_free(&uid_info);
-
-    return (r);
-}
 
 /* This is called once for each mailbox we're told to index. */
-static int index_me(char *name, int matchlen __attribute__((unused)),
-		    int maycreate __attribute__((unused)),
-		    void *rock) {
+static int index_one(const char *name, int blocking)
+{
     mbentry_t *mbentry = NULL;
-    struct index_state *state = NULL;
+    struct mailbox *mailbox = NULL;
     int r;
-    const char *fname;
-    struct stat sbuf;
     char extname[MAX_MAILBOX_BUFFER];
-    int use_annot = *((int *) rock);
+    int flags = 0;
+
+    if (incremental_mode)
+	flags |= SEARCH_UPDATE_INCREMENTAL;
 
     /* Convert internal name to external */
     (*squat_namespace.mboxname_toexternal)(&squat_namespace, name,
@@ -543,14 +177,14 @@ static int index_me(char *name, int matchlen __attribute__((unused)),
     /* Skip remote mailboxes */
     r = mboxlist_lookup(name, &mbentry, NULL);
     if (r) {
-        if (verbose) {
-            printf("error opening looking up %s: %s\n",
+	if (verbose) {
+	    printf("error looking up %s: %s\n",
 		   extname, error_message(r));
-        }
-        syslog(LOG_INFO, "error opening looking up %s: %s\n",
-               extname, error_message(r));
+	}
+	syslog(LOG_INFO, "error looking up %s: %s\n",
+	       extname, error_message(r));
 
-        return 1;
+	return r;
     }
     if (mbentry->mbtype & MBTYPE_REMOTE) {
 	mboxlist_entry_free(&mbentry);
@@ -561,7 +195,7 @@ static int index_me(char *name, int matchlen __attribute__((unused)),
 
     /* make sure the mailbox (or an ancestor) has
        /vendor/cmu/cyrus-imapd/squat set to "true" */
-    if (use_annot) {
+    if (annotation_flag) {
 	char buf[MAX_MAILBOX_BUFFER] = "", *p;
 	struct buf attrib = BUF_INITIALIZER;
 	int domainlen = 0;
@@ -600,44 +234,40 @@ static int index_me(char *name, int matchlen __attribute__((unused)),
 	buf_free(&attrib);
     }
 
-    r = index_open(name, NULL, &state);
-    if (r) {
-        if (verbose) {
-            printf("error opening %s: %s\n", extname, error_message(r));
-        }
-        syslog(LOG_INFO, "error opening %s: %s\n", extname, error_message(r));
+again:
+    if (blocking)
+	r = mailbox_open_irl(name, &mailbox);
+    else
+	r = mailbox_open_irlnb(name, &mailbox);
 
-        return 1;
+    if (r == IMAP_MAILBOX_LOCKED) {
+	if (verbose) syslog(LOG_INFO, "mailbox %s locked, retrying", extname);
+	return r;
     }
+    if (r) {
+	if (verbose) {
+	    printf("error opening %s: %s\n", extname, error_message(r));
+	}
+	syslog(LOG_INFO, "error opening %s: %s\n", extname, error_message(r));
 
-    fname = mailbox_meta_fname(state->mailbox, META_SQUAT);
-
-    /* process only changed mailboxes if skip option delected. */
-    if (skip_unmodified && !stat(fname, &sbuf)) {
-        if (SKIP_FUZZ + state->mailbox->index_mtime < sbuf.st_mtime) {
-            syslog(LOG_DEBUG, "skipping mailbox %s", extname);
-            if (verbose > 0) {
-                printf("Skipping mailbox %s\n", extname);
-            }
-            index_close(&state);
-            return 0;
-        }
+	return r;
     }
 
     syslog(LOG_INFO, "indexing mailbox %s... ", extname);
     if (verbose > 0) {
-      printf("Indexing mailbox %s... ", extname);
+	printf("Indexing mailbox %s... ", extname);
     }
 
-    if (!incremental_mode || (squat_single(state, 1) != 0)) {
-      /* Fall back to complete squat */
-      squat_single(state, 0);
-    }
+    r = search_update_mailbox(rx, mailbox, flags);
 
-    index_close(&state);
-    mailbox_count++;
+    mailbox_close(&mailbox);
 
-    return 0;
+    /* in non-blocking (rolling) mode, only do one batch per mailbox at
+     * a time for fairness [IRIS-2471].  The squatter will re-insert the
+     * mailbox in the queue */
+    if (blocking && r == IMAP_AGAIN) goto again;
+
+    return r;
 }
 
 static int addmbox(char *name,
@@ -646,18 +276,538 @@ static int addmbox(char *name,
 		   void *rock)
 {
     strarray_t *sa = (strarray_t *) rock;
+
+    if (strcmpsafe(name, name_starts_from) < 0)
+	return 0;
+    if (mboxname_isdeletedmailbox(name, NULL))
+	return 0;
+
     strarray_append(sa, name);
     return 0;
+}
+
+static void expand_mboxnames(strarray_t *sa, int nmboxnames,
+			     const char **mboxnames, int user_mode)
+{
+    int i;
+    char buf[MAX_MAILBOX_PATH + 1];
+
+    if (!nmboxnames) {
+	assert(!recursive_flag);
+	strlcpy(buf, "*", sizeof(buf));
+	(*squat_namespace.mboxlist_findall) (&squat_namespace, buf, 1,
+					     0, 0, addmbox, sa);
+    }
+
+    for (i = 0; i < nmboxnames; i++) {
+	if (user_mode) {
+	    char *mbox = mboxname_user_mbox(mboxnames[i], NULL);
+	    strlcpy(buf, mbox, sizeof(buf));
+	    free(mbox);
+	}
+	else {
+	    /* Translate any separators in mailboxname */
+	    (*squat_namespace.mboxname_tointernal) (&squat_namespace,
+						    mboxnames[i], NULL, buf);
+	}
+	strarray_append(sa, buf);
+	if (recursive_flag || user_mode) {
+	    strlcat(buf, ".*", sizeof(buf));
+	    (*squat_namespace.mboxlist_findall) (&squat_namespace, buf, 1,
+						 0, 0, addmbox, sa);
+	}
+    }
+}
+
+static int do_indexer(const strarray_t *sa)
+{
+    int r = 0;
+    int i;
+
+    rx = search_begin_update(verbose);
+    if (rx == NULL)
+	return 0;	/* no indexer defined */
+
+    for (i = 0 ; i < sa->count ; i++) {
+	r = index_one(sa->data[i], /*blocking*/1);
+	if (r == IMAP_MAILBOX_NONEXISTENT)
+	    r = 0;
+	if (r == IMAP_MAILBOX_LOCKED)
+	    r = 0; /* XXX - try again? */
+	if (r) break;
+	if (sleepmicroseconds)
+	    usleep(sleepmicroseconds);
+    }
+
+    search_end_update(rx);
+
+    return r;
+}
+
+static int index_single_message(const char *mboxname, uint32_t uid)
+{
+    int r;
+    struct mailbox *mailbox = NULL;
+    message_t *msg = NULL;
+    int begun = 0;
+    struct index_record record;
+
+    r = mailbox_open_irl(mboxname, &mailbox);
+    if (r) goto out;
+
+    r = rx->begin_mailbox(rx, mailbox, /*incremental*/1);
+    if (r) goto out;
+    begun = 1;
+
+    if (rx->is_indexed(rx, uid)) goto out;
+
+    r = mailbox_find_index_record(mailbox, uid, &record, NULL);
+    if (r) goto out;
+
+    if (record.system_flags & (FLAG_EXPUNGED|FLAG_UNLINKED)) goto out;
+
+    msg = message_new_from_record(mailbox, &record);
+    if (!msg) goto out;
+
+    if (verbose) fprintf(stderr, "squatter: indexing mailbox:%s uid:%u\n",
+			 mboxname, uid);
+
+    r = index_getsearchtext(msg, rx, 0);
+
+out:
+    if (begun) {
+	int r2 = rx->end_mailbox(rx, mailbox);
+	if (r2 && !r) r = r2;
+    }
+    message_unref(&msg);
+    mailbox_close(&mailbox);
+    return r;
+}
+
+static int do_indexfrom(const char *fromfile)
+{
+    int r;
+    FILE *fp;
+    unsigned lineno = 0;
+    const char *p;
+    tok_t tok;
+    const char *mboxname;
+    uint32_t uid;
+    char buf[MAX_MAILBOX_BUFFER+128];
+
+    rx = search_begin_update(verbose);
+    if (rx == NULL) /* no indexer defined */
+	return 0;
+
+    fp = fopen(fromfile, "r");
+    if (!fp) {
+	r = errno;
+	perror(fromfile);
+	goto out;
+    }
+
+    while (fgets(buf, sizeof(buf), fp)) {
+	lineno++;
+	if (buf[0] == '#') continue;
+	tok_initm(&tok, buf, "\t", TOK_EMPTY|TOK_TRIMRIGHT);
+
+	/* first token is an mboxname */
+	mboxname = tok_next(&tok);
+	if (!mboxname) {
+syntax_error:
+	    fprintf(stderr, "%s:%u: syntax error, skipping\n",
+		    fromfile, lineno);
+	    continue;
+	}
+
+	/* 2nd token is a uid */
+	p = tok_next(&tok);
+	if (!p) goto syntax_error;
+	uid = strtoul(p, NULL, 0);
+	if (!uid) goto syntax_error;
+
+	/* no more tokens on the line */
+	p = tok_next(&tok);
+	if (p) goto syntax_error;
+
+	r = index_single_message(mboxname, uid);
+	if (r) {
+	    fprintf(stderr, "Failed to index mailbox \"%s\" uid %u: %s\n",
+		    mboxname, uid, error_message(r));
+	    /* ignore errors */
+	    r = 0;
+	}
+    }
+
+out:
+    if (fp) fclose(fp);
+    search_end_update(rx);
+    return r;
+}
+
+static int squatter_build_query(search_builder_t *bx, const char *query)
+{
+    tok_t tok = TOK_INITIALIZER(query, NULL, 0);
+    char *p;
+    char *q;
+    int r = 0;
+    int part;
+    int utf8 = charset_lookupname("utf-8");
+
+    while ((p = tok_next(&tok))) {
+	if (!strncasecmp(p, "__begin:", 8)) {
+	    q = p + 8;
+	    if (!strcasecmp(q, "and"))
+		bx->begin_boolean(bx, SEARCH_OP_AND);
+	    else if (!strcasecmp(q, "or"))
+		bx->begin_boolean(bx, SEARCH_OP_OR);
+	    else if (!strcasecmp(q, "not"))
+		bx->begin_boolean(bx, SEARCH_OP_NOT);
+	    else
+		goto error;
+	    continue;
+	}
+	if (!strncasecmp(p, "__end:", 6)) {
+	    q = p + 6;
+	    if (!strcasecmp(q, "and"))
+		bx->end_boolean(bx, SEARCH_OP_AND);
+	    else if (!strcasecmp(q, "or"))
+		bx->end_boolean(bx, SEARCH_OP_OR);
+	    else if (!strcasecmp(q, "not"))
+		bx->end_boolean(bx, SEARCH_OP_NOT);
+	    else
+		goto error;
+	    continue;
+	}
+
+	/* everything else is a ->match() of some kind */
+	q = strchr(p, ':');
+	if (q) q++;
+	if (!q) {
+	    part = SEARCH_PART_ANY;
+	    q = p;
+	}
+	else if (!strncasecmp(p, "to:", 3))
+	    part = SEARCH_PART_TO;
+	else if (!strncasecmp(p, "from:", 5))
+	    part = SEARCH_PART_FROM;
+	else if (!strncasecmp(p, "cc:", 3))
+	    part = SEARCH_PART_CC;
+	else if (!strncasecmp(p, "bcc:", 4))
+	    part = SEARCH_PART_BCC;
+	else if (!strncasecmp(p, "subject:", 8))
+	    part = SEARCH_PART_SUBJECT;
+	else if (!strncasecmp(p, "listid:", 7))
+	    part = SEARCH_PART_LISTID;
+	else if (!strncasecmp(p, "contenttype:", 12))
+	    part = SEARCH_PART_TYPE;
+	else if (!strncasecmp(p, "header:", 7))
+	    part = SEARCH_PART_HEADERS;
+	else if (!strncasecmp(p, "body:", 5))
+	    part = SEARCH_PART_BODY;
+	else
+	    goto error;
+
+	q = charset_convert(q, utf8, charset_flags);
+	bx->match(bx, part, q);
+	free(q);
+    }
+    r = 0;
+
+out:
+    tok_fini(&tok);
+    return r;
+
+error:
+    syslog(LOG_ERR, "bad query expression at \"%s\"", p);
+    r = IMAP_PROTOCOL_ERROR;
+    goto out;
+}
+
+static int print_search_hit(const char *mboxname, uint32_t uidvalidity,
+			    uint32_t uid, void *rock)
+{
+    int single = *(int *)rock;
+
+    if (single)
+	printf("uid %u\n", uid);
+    else
+	printf("mailbox %s\nuidvalidity %u\nuid %u\n", mboxname, uidvalidity, uid);
+    return 0;
+}
+
+static int compact_mbox(const char *userid, const strarray_t *srctiers,
+			const char *desttier, int flags)
+{
+    return search_compact(userid, temp_root_dir, srctiers, desttier, flags);
+}
+
+static int do_compact(const strarray_t *mboxnames, const strarray_t *srctiers,
+		      const char *desttier, int flags)
+{
+    char *prev_userid = NULL;
+    int i;
+    int r = 0;
+
+    for (i = 0 ; i < mboxnames->count ; i++) {
+	const char *userid = mboxname_to_userid(mboxnames->data[i]);
+	if (!userid) continue;
+
+	if (!strcmpsafe(prev_userid, userid))
+	    continue;
+
+	r = compact_mbox(userid, srctiers, desttier, flags);
+	if (r) break;
+
+	free(prev_userid);
+	prev_userid = xstrdupnull(userid);
+
+	if (sleepmicroseconds)
+	    usleep(sleepmicroseconds);
+    }
+
+    free(prev_userid);
+    return r;
+}
+
+static int do_search(const char *query, int single, const strarray_t *mboxnames)
+{
+    struct mailbox *mailbox = NULL;
+    int i;
+    int r;
+    search_builder_t *bx;
+    int opts = SEARCH_VERBOSE(verbose);
+
+    if (!single)
+	opts |= SEARCH_MULTIPLE;
+
+    for (i = 0 ; i < mboxnames->count ; i++) {
+	const char *mboxname = mboxnames->data[i];
+
+	r = mailbox_open_irl(mboxname, &mailbox);
+	if (r) {
+	    fprintf(stderr, "Cannot open mailbox %s: %s\n",
+		    mboxname, error_message(r));
+	    continue;
+	}
+	if (single)
+	    printf("mailbox %s\n", mboxname);
+
+	bx = search_begin_search(mailbox, opts);
+	if (bx) {
+	    r = squatter_build_query(bx, query);
+	    if (!r)
+		r = bx->run(bx, print_search_hit, &single);
+	    search_end_search(bx);
+	}
+
+	mailbox_close(&mailbox);
+    }
+
+    return 0;
+}
+
+static void add_user(strarray_t *folders, const char *user)
+{
+    char *mbox = mboxname_user_mbox(user, NULL);
+    char *expr = strconcat(mbox, ".*", (char *)NULL);
+
+    strarray_append(folders, mbox);
+    (*squat_namespace.mboxlist_findall) (&squat_namespace, expr, 1,
+					 0, 0, addmbox, folders);
+
+    free(expr);
+    free(mbox);
+}
+
+static strarray_t *read_sync_log_items(sync_log_reader_t *slr)
+{
+    const char *args[3];
+    strarray_t *folders = strarray_new();
+
+    while (sync_log_reader_getitem(slr, args) == 0) {
+	if (!strcmp(args[0], "APPEND")) {
+	    if (!mboxname_isdeletedmailbox(args[1], NULL))
+		strarray_add(folders, args[1]);
+	}
+	else if (!strcmp(args[0], "USER"))
+	    add_user(folders, args[1]);
+    }
+
+    return folders;
+}
+
+static int do_synclogfile(const char *synclogfile)
+{
+    strarray_t *folders = NULL;
+    sync_log_reader_t *slr;
+    int nskipped = 0;
+    int i;
+    int r;
+
+    slr = sync_log_reader_create_with_filename(synclogfile);
+    r = sync_log_reader_begin(slr);
+    if (r) goto out;
+    folders = read_sync_log_items(slr);
+    sync_log_reader_end(slr);
+
+    /* sort folders for locality of reference in file processing mode */
+    strarray_sort(folders, cmpstringp_raw);
+
+    signals_poll();
+
+    /* have some due items in the queue, try to index them */
+    rx = search_begin_update(verbose);
+    for (i = 0; i < folders->count; i++) {
+	const char *mboxname = strarray_nth(folders, i);
+	if (verbose > 1)
+	    syslog(LOG_INFO, "do_synclogfile: indexing %s", mboxname);
+	r = index_one(mboxname, /*blocking*/1);
+	if (r == IMAP_MAILBOX_NONEXISTENT)
+	    r = 0;
+	if (r == IMAP_MAILBOX_LOCKED || r == IMAP_AGAIN) {
+	    nskipped++;
+	    if (nskipped > 10000) {
+		syslog(LOG_ERR, "IOERROR: skipped too many times at %s", mboxname);
+		break;
+	    }
+	    r = 0;
+	    /* try again at the end */
+	    strarray_append(folders, mboxname);
+	}
+	if (r) {
+	    syslog(LOG_ERR, "IOERROR: failed to index %s: %s",
+		   mboxname, error_message(r));
+	    break;
+	}
+	if (sleepmicroseconds)
+	    usleep(sleepmicroseconds);
+    }
+    search_end_update(rx);
+    rx = NULL;
+
+out:
+    strarray_free(folders);
+    sync_log_reader_free(slr);
+    return r;
+}
+
+static void do_rolling(const char *channel)
+{
+    strarray_t *folders = NULL;
+    sync_log_reader_t *slr;
+    int i;
+    int r;
+
+    slr = sync_log_reader_create_with_channel(channel);
+
+    for (;;) {
+	signals_poll();
+	if (shutdown_file(NULL, 0))
+	    shut_down(EC_TEMPFAIL);
+
+	r = sync_log_reader_begin(slr);
+	if (r) { /* including IMAP_AGAIN */
+	    usleep(100000);    /* 1/10th second */
+	    continue;
+	}
+
+	folders = read_sync_log_items(slr);
+
+	if (folders->count) {
+	    /* have some due items in the queue, try to index them */
+	    rx = search_begin_update(verbose);
+	    for (i = 0; i < folders->count; i++) {
+		const char *mboxname = strarray_nth(folders, i);
+		if (verbose > 1)
+		    syslog(LOG_INFO, "do_rolling: indexing %s", mboxname);
+		r = index_one(mboxname, /*blocking*/0);
+		if (r == IMAP_AGAIN || r == IMAP_MAILBOX_LOCKED) {
+		    /* XXX: alternative, just append to strarray_t *folders ... */
+		    sync_log_channel(channel, "APPEND %s", mboxname);
+		}
+		if (sleepmicroseconds)
+		    usleep(sleepmicroseconds);
+	    }
+	    search_end_update(rx);
+	    rx = NULL;
+	}
+
+	strarray_free(folders);
+	folders = NULL;
+    }
+
+    /* XXX - we don't really get here... */
+    strarray_free(folders);
+    sync_log_reader_free(slr);
+}
+
+/*
+ * Run a search daemon in such a way that the natural shutdown
+ * mechanism for Cyrus (sending a SIGTERM to the master process)
+ * will cleanly shut down the search daemon too.  For Sphinx
+ * this currently means running a loop in a forked process whose
+ * job it is to live in the master process' process group and thus
+ * receive the SIGTERM that master re-sends.
+ */
+static void do_run_daemon(void)
+{
+    int r;
+
+    /* We start the daemon before forking.  This eliminates a
+     * race condition during slot startup by ensuring that
+     * Sphinx is fully running before the rolling squatter
+     * tries to use it. */
+    r = search_start_daemon(verbose);
+    if (r) exit(EC_TEMPFAIL);
+
+    /* tell shut_down() to shut down the searchd too */
+    running_daemon = 1;
+
+    become_daemon();
+    signals_set_shutdown(&shut_down);
+    signals_add_handlers(0);
+
+    for (;;) {
+	signals_poll();		/* will call shut_down() after SIGTERM */
+	poll(NULL, 0, -1);	/* sleeps until signalled */
+    }
+}
+
+static void shut_down(int code)
+{
+    if (running_daemon)
+	search_stop_daemon(verbose);
+    seen_done();
+    mboxlist_close();
+    mboxlist_done();
+    annotatemore_close();
+    annotate_done();
+
+    cyrus_done();
+
+    exit(code);
 }
 
 int main(int argc, char **argv)
 {
     int opt;
     char *alt_config = NULL;
-    int rflag = 0, use_annot = 0;
-    int i;
-    char buf[MAX_MAILBOX_PATH + 1];
-    int r;
+    int r = IMAP_NOTFOUND;
+    strarray_t mboxnames = STRARRAY_INITIALIZER;
+    const char *query = NULL;
+    int background = 1;
+    const char *channel = "squatter";
+    const char *synclogfile = NULL;
+    int init_flags = CYRUSINIT_PERROR;
+    int multi_folder = 0;
+    int user_mode = 0;
+    int compact_flags = 0;
+    const char *fromfile = NULL;
+    strarray_t *srctiers = NULL;
+    const char *desttier;
+    enum { UNKNOWN, INDEXER, INDEXFROM, SEARCH, ROLLING, SYNCLOG,
+	   START_DAEMON, STOP_DAEMON, RUN_DAEMON, COMPACT } mode = UNKNOWN;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
 	fatal("must run as the Cyrus user", EC_USAGE);
@@ -665,10 +815,90 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:rsiav")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:I:N:RAXT:S:Fc:de:f:mn:rsiavz:t:ou")) != EOF) {
 	switch (opt) {
 	case 'C':		/* alt config file */
 	    alt_config = optarg;
+	    break;
+
+	case 'A':
+	    compact_flags |= SEARCH_COMPACT_AUDIT;
+	    break;
+
+	case 'F':
+	    compact_flags |= SEARCH_COMPACT_FILTER;
+	    break;
+
+	case 'X':
+	    compact_flags |= SEARCH_COMPACT_REINDEX;
+	    break;
+
+	case 'N':
+	    name_starts_from = optarg;
+	    break;
+
+	case 'I':		/* indexer, using specified mbox/uids in file */
+	    if (mode != UNKNOWN && mode != INDEXFROM) usage(argv[0]);
+	    fromfile = optarg;
+	    mode = INDEXFROM;
+	    break;
+
+	case 'R':		/* rolling indexer */
+	    if (mode != UNKNOWN) usage(argv[0]);
+	    mode = ROLLING;
+	    incremental_mode = 1; /* always incremental if rolling */
+	    break;
+
+	case 'S':		/* sleep time in seconds */
+	    sleepmicroseconds = (atof(optarg) * 1000000);
+	    break;
+
+	case 'T':		/* temporary root directory for search */
+	    temp_root_dir = optarg;
+	    break;
+
+	/* This option is deliberately undocumented, for testing only */
+	case 'c':		/* daemon control mode */
+	    if (mode != UNKNOWN) usage(argv[0]);
+	    if (!strcmp(optarg, "start"))
+		mode = START_DAEMON;
+	    else if (!strcmp(optarg, "stop"))
+		mode = STOP_DAEMON;
+	    else if (!strcmp(optarg, "run"))
+		mode = RUN_DAEMON;
+	    else
+		usage(argv[0]);
+	    break;
+
+	case 'd':		/* foreground (with -R) */
+	    background = 0;
+	    break;
+
+	/* This option is deliberately undocumented, for testing only */
+	case 'e':		/* add a search term */
+	    if (mode != UNKNOWN && mode != SEARCH) usage(argv[0]);
+	    query = optarg;
+	    mode = SEARCH;
+	    break;
+
+	case 'f': /* alternate synclogfile used in SYNCLOG mode */
+	    synclogfile = optarg;
+	    mode = SYNCLOG;
+	    break;
+
+	/* This option is deliberately undocumented, for testing only */
+	case 'm':		/* multi-folder in SEARCH mode */
+	    if (mode != UNKNOWN && mode != SEARCH) usage(argv[0]);
+	    multi_folder = 1;
+	    mode = SEARCH;
+	    break;
+
+	case 'n':		/* sync channel name (with -R) */
+	    channel = optarg;
+	    break;
+
+	case 'o':		/* copy one DB rather than compressing */
+	    compact_flags |= SEARCH_COMPACT_COPYONE;
 	    break;
 
 	case 'v':		/* verbose */
@@ -676,11 +906,9 @@ int main(int argc, char **argv)
 	    break;
 
 	case 'r':		/* recurse */
-	    rflag = 1;
-	    break;
-
-	case 's':		/* skip unmodifed */
-	    skip_unmodified = 1;
+	    if (mode != UNKNOWN && mode != INDEXER) usage(argv[0]);
+	    recursive_flag = 1;
+	    mode = INDEXER;
 	    break;
 
 	case 'i':		/* incremental mode */
@@ -688,7 +916,25 @@ int main(int argc, char **argv)
 	    break;
 
 	case 'a':		/* use /squat annotation */
-	    use_annot = 1;
+	    if (mode != UNKNOWN && mode != INDEXER) usage(argv[0]);
+	    annotation_flag = 1;
+	    mode = INDEXER;
+	    break;
+
+	case 'z':
+	    if (mode != UNKNOWN && mode != COMPACT) usage(argv[0]);
+	    desttier = optarg;
+	    mode = COMPACT;
+	    break;
+
+	case 't':
+	    if (mode != UNKNOWN && mode != COMPACT) usage(argv[0]);
+	    srctiers = strarray_split(optarg, ",", 0);
+	    mode = COMPACT;
+	    break;
+
+	case 'u':
+	    user_mode = 1;
 	    break;
 
 	default:
@@ -696,9 +942,23 @@ int main(int argc, char **argv)
 	}
     }
 
-    cyrus_init(alt_config, "squatter", 0, CONFIG_NEED_PARTITION_DATA);
+    compact_flags |= SEARCH_VERBOSE(verbose);
 
-    syslog(LOG_NOTICE, "indexing mailboxes");
+    if (mode == UNKNOWN)
+	mode = INDEXER;
+
+    /* fork and close fds if required */
+    if (mode == ROLLING && background) {
+	become_daemon();
+	init_flags &= ~CYRUSINIT_PERROR;
+    }
+
+    if (mode == COMPACT && (!desttier || !srctiers)) {
+	/* need both src and dest for compact */
+	usage("squatter");
+    }
+
+    cyrus_init(alt_config, "squatter", init_flags, CONFIG_NEED_PARTITION_DATA);
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&squat_namespace, 1)) != 0) {
@@ -711,55 +971,58 @@ int main(int argc, char **argv)
     mboxlist_init(0);
     mboxlist_open(NULL);
 
-    start_stats(&total_stats);
-
-    if (optind == argc) {
-	strarray_t sa = STRARRAY_INITIALIZER;
-
-	if (rflag) {
-	    fprintf(stderr, "please specify a mailbox to recurse from\n");
-	    exit(EC_USAGE);
-	}
-	assert(!rflag);
-	strlcpy(buf, "*", sizeof(buf));
-	(*squat_namespace.mboxlist_findall) (&squat_namespace, buf, 1,
-					     0, 0, addmbox, &sa);
-
-	for (i = 0 ; i < sa.count ; i++) {
-	    index_me(sa.data[i], strlen(sa.data[i]), 0, &use_annot);
-	    /* Ignore errors: most will be mailboxes moving around */
-	}
-	strarray_fini(&sa);
+    if (mode == ROLLING || mode == SYNCLOG) {
+	signals_set_shutdown(&shut_down);
+	signals_add_handlers(0);
     }
 
-    for (i = optind; i < argc; i++) {
-	/* Translate any separators in mailboxname */
-	(*squat_namespace.mboxname_tointernal) (&squat_namespace, argv[i],
-						NULL, buf);
-	index_me(buf, 0, 0, &use_annot);
-	if (rflag) {
-	    strlcat(buf, ".*", sizeof(buf));
-	    (*squat_namespace.mboxlist_findall) (&squat_namespace, buf, 1,
-						 0, 0, index_me,
-						 &use_annot);
-	}
+    switch (mode) {
+    case UNKNOWN:
+	break;
+    case INDEXER:
+	/* -r requires at least one mailbox */
+	if (recursive_flag && optind == argc) usage(argv[0]);
+	expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind, user_mode);
+	syslog(LOG_NOTICE, "indexing mailboxes");
+	r = do_indexer(&mboxnames);
+	syslog(LOG_NOTICE, "done indexing mailboxes");
+	break;
+    case INDEXFROM:
+	syslog(LOG_NOTICE, "indexing messages");
+	r = do_indexfrom(fromfile);
+	syslog(LOG_NOTICE, "done indexing messages");
+	break;
+    case SEARCH:
+	if (recursive_flag && optind == argc) usage(argv[0]);
+	expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind, user_mode);
+	r = do_search(query, !multi_folder, &mboxnames);
+	break;
+    case ROLLING:
+	do_rolling(channel);
+	/* never returns */
+	break;
+    case SYNCLOG:
+	r = do_synclogfile(synclogfile);
+	break;
+    case START_DAEMON:
+	if (optind != argc) usage("squatter");
+	search_start_daemon(verbose);
+	break;
+    case STOP_DAEMON:
+	if (optind != argc) usage("squatter");
+	search_stop_daemon(verbose);
+	break;
+    case RUN_DAEMON:
+	if (optind != argc) usage("squatter");
+	do_run_daemon();
+	break;
+    case COMPACT:
+	if (recursive_flag && optind == argc) usage(argv[0]);
+	expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind, user_mode);
+	r = do_compact(&mboxnames, srctiers, desttier, compact_flags);
+	break;
     }
 
-    if (verbose > 0 && mailbox_count > 1) {
-	stop_stats(&total_stats);
-	printf("Total over all mailboxes: ");
-	print_stats(stdout, &total_stats);
-    }
-
-    syslog(LOG_NOTICE, "done indexing mailboxes");
-
-    seen_done();
-    mboxlist_close();
-    mboxlist_done();
-    annotatemore_close();
-    annotate_done();
-
-    cyrus_done();
-
-    return 0;
+    strarray_fini(&mboxnames);
+    shut_down(r ? EC_TEMPFAIL : 0);
 }

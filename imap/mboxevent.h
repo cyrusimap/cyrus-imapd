@@ -49,7 +49,8 @@
 
 #include "mailbox.h"
 #include "mboxname.h"
-
+#include "caldav_db.h"
+#include "caldav_alarm.h"
 
 /*
  * event types defined in RFC 5423 - Internet Message Store Events
@@ -81,13 +82,9 @@ enum event_type {
     EVENT_MAILBOX_SUBSCRIBE   = (1<<18),
     EVENT_MAILBOX_UNSUBSCRIBE = (1<<19),
     EVENT_ACL_CHANGE          = (1<<20),
-    EVENT_CALENDAR            = (1<<21)
+    EVENT_CALENDAR            = (1<<21),
+    EVENT_CALENDAR_ALARM      = (1<<22)
 };
-
-/* The number representing the last available position in
- * event_param, which should always be messageContent.
- */
-#define MAX_PARAM 29
 
 /*
  * event parameters defined in RFC 5423 - Internet Message Store Events
@@ -122,14 +119,41 @@ enum event_param {
     /* 21 */ EVENT_USER,
     /* 22 */ EVENT_MESSAGE_SIZE,
     /* 23 */ EVENT_MBTYPE,
+    EVENT_SERVERFQDN,
+    EVENT_MAILBOX_ACL,
     /* 24 */ EVENT_DAV_FILENAME,
     /* 25 */ EVENT_DAV_UID,
     /* 26 */ EVENT_ENVELOPE,
     /* 27 */ EVENT_SESSIONID,
     /* 28 */ EVENT_BODYSTRUCTURE,
-    /* 29 */ EVENT_MESSAGE_CONTENT
+    /* 29 */ EVENT_CLIENT_ID,
+    /* 30 */ EVENT_SESSION_ID,
+    EVENT_CONVEXISTS,
+    EVENT_CONVUNSEEN,
+    EVENT_MESSAGE_CID,
+    EVENT_COUNTERS,
+    EVENT_CALENDAR_ALARM_TIME,
+    EVENT_CALENDAR_ALARM_RECIPIENTS,
+    EVENT_CALENDAR_USER_ID,
+    EVENT_CALENDAR_CALENDAR_NAME,
+    EVENT_CALENDAR_UID,
+    EVENT_CALENDAR_ACTION,
+    EVENT_CALENDAR_SUMMARY,
+    EVENT_CALENDAR_DESCRIPTION,
+    EVENT_CALENDAR_LOCATION,
+    EVENT_CALENDAR_TIMEZONE,
+    EVENT_CALENDAR_START,
+    EVENT_CALENDAR_END,
+    EVENT_CALENDAR_ALLDAY,
+    EVENT_CALENDAR_ATTENDEE_NAMES,
+    EVENT_CALENDAR_ATTENDEE_EMAILS,
+    EVENT_CALENDAR_ATTENDEE_STATUS,
+    EVENT_CALENDAR_ORGANIZER,
+    /* 31 */ EVENT_MESSAGE_CONTENT
 };
 
+/* messageContent number that is always the last */
+#define MAX_PARAM EVENT_MESSAGE_CONTENT
 
 enum event_param_type {
     EVENT_PARAM_INT,
@@ -291,4 +315,26 @@ void mboxevent_extract_mailbox(struct mboxevent *event, struct mailbox *mailbox)
  */
 void mboxevent_extract_old_mailbox(struct mboxevent *event,
                                    const struct mailbox *mailbox);
+
+/*
+ * Extract data from the given ical object
+ */
+void mboxevent_extract_icalcomponent(struct mboxevent *event,
+                                     icalcomponent *ical,
+                                     const char *userid,
+                                     const char *calname,
+                                     enum caldav_alarm_action action,
+                                     icaltimetype alarmtime,
+                                     const char *timezone,
+                                     icaltimetype start,
+                                     icaltimetype end,
+                                     strarray_t *recipients
+                                     );
+
+
+/*
+ * set the client tag used by vnd.fastmail.clientTagj
+ */
+void mboxevent_set_client_id(const char *);
+
 #endif /* _MBOXEVENT_H */

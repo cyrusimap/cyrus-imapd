@@ -44,6 +44,7 @@
 #define INCLUDED_MBOXNAME_H
 
 #include "auth.h"
+#include "util.h"
 
 #define MAX_NAMESPACE_PREFIX 40
 
@@ -86,7 +87,7 @@ struct namespace {
 struct mboxlock {
     char *name;
     int lock_fd;
-    int locktype;
+    int locktype;	/* LOCK_NONE or LOCK_SHARED or LOCK_EXCLUSIVE */
 };
 
 struct mboxname_parts {
@@ -183,6 +184,8 @@ int mboxname_is_prefix(const char *longstr, const char *shortstr);
 const char *mboxname_to_userid(const char *mboxname);
 /* returns a malloc'd mailbox */
 char *mboxname_user_mbox(const char *userid, const char *subfolder);
+char *mboxname_abook(const char *userid, const char *collection);
+char *mboxname_cal(const char *userid, const char *collection);
 
 /*
  * Check whether two mboxnames have the same userid.
@@ -201,12 +204,18 @@ char *mboxname_datapath(const char *partition,
 			const char *uniqueid,
 			unsigned long uid);
 
+char *mboxname_archivepath(const char *partition,
+			   const char *mboxname,
+			   const char *uniqueid,
+			   unsigned long uid);
+
 char *mboxname_metapath(const char *partition,
 			const char *mboxname,
 			const char *uniqueid,
 			int metafile, int isnew);
 
 char *mboxname_lockpath(const char *mboxname);
+char *mboxname_lockpath_suffix(const char *mboxname, const char *suffix);
 
 /*
  * Return nonzero if (internal) mailbox 'name' consists of legal characters.
@@ -226,4 +235,26 @@ int mboxname_make_parent(char *namebuf);
 
 char *mboxname_conf_getpath(struct mboxname_parts *parts,
 			    const char *suffix);
+
+/* ======================== COUNTERS ==================== */
+
+struct mboxname_counters {
+    uint32_t generation;
+    uint32_t version;
+    modseq_t highestmodseq;
+    modseq_t mailmodseq;
+    modseq_t caldavmodseq;
+    modseq_t carddavmodseq;
+    uint32_t uidvalidity;
+    uint32_t crc;
+};
+
+int mboxname_read_counters(const char *mboxname, struct mboxname_counters *vals);
+modseq_t mboxname_readmodseq(const char *mboxname);
+modseq_t mboxname_nextmodseq(const char *mboxname, modseq_t last, int mbtype);
+modseq_t mboxname_setmodseq(const char *mboxname, modseq_t val, int mbtype);
+uint32_t mboxname_readuidvalidity(const char *mboxname);
+uint32_t mboxname_nextuidvalidity(const char *mboxname, uint32_t last, int mbtype);
+uint32_t mboxname_setuidvalidity(const char *mboxname, uint32_t val, int mbtype);
+
 #endif

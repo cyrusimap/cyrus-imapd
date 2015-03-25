@@ -49,6 +49,11 @@
 #define FNAME_STATUSCACHEDB "/statuscache.db"
 #define STATUSCACHE_VERSION 4
 
+/* Return the filename of the statuscache database,
+ * used for XWARMUP.  Returns a new string which must
+ * be free()d by the caller. */
+extern char *statuscache_filename(void);
+
 /* open the statuscache db */
 extern void statuscache_open(void);
 

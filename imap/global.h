@@ -49,9 +49,13 @@
 #include "prot.h"
 #include "mboxname.h"
 #include "signals.h"
+#include "imapparse.h"
 #include "util.h"
 
 #define MAX_SESSIONID_SIZE 256
+
+/* This is a string because we only ever use it as a string */
+#define SPHINX_MAX_MATCHES	    "1000000"
 
 /* Flags for cyrus_init() */
 enum {
@@ -118,50 +122,6 @@ struct proxy_context {
     int *userisproxyadmin;
 };
 
-/* imap parsing functions (imapparse.c) */
-int getword(struct protstream *in, struct buf *buf);
-
-/* Flags for getxstring() */
-/* IMAP_BIN_ASTRING is an IMAP_ASTRING that does not perform the
- * does-not-contain-a-NULL check (in the case of a literal) */
-enum getxstring_flags {
-    GXS_ATOM	= (1<<0),   /* result may be a bare atom */
-    GXS_QUOTED	= (1<<1),   /* result may be "quoted" */
-    GXS_LITERAL	= (1<<2),   /* result may be {N}literal */
-    GXS_NIL	= (1<<3),   /* result may be the special atom NIL */
-    GXS_BINARY	= (1<<4),   /* result may contain embedded NULs */
-
-    IMAP_ASTRING = GXS_ATOM|GXS_QUOTED|GXS_LITERAL,
-    IMAP_BIN_ASTRING = IMAP_ASTRING|GXS_BINARY,
-    IMAP_NSTRING = GXS_NIL|GXS_QUOTED|GXS_LITERAL,
-    IMAP_BIN_NSTRING = IMAP_NSTRING|GXS_BINARY,
-    IMAP_QSTRING = GXS_QUOTED,
-    IMAP_STRING = GXS_QUOTED|GXS_LITERAL,
-
-    /* note: there's some consistency issues here... the special
-     * value "NIL" must be quoted to get returned as a string */
-    IMAP_NASTRING = GXS_NIL|GXS_ATOM|GXS_QUOTED|GXS_LITERAL,
-};
-
-int getxstring(struct protstream *pin, struct protstream *pout,
-	       struct buf *buf, enum getxstring_flags);
-#define getastring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_ASTRING)
-#define getbastring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_BIN_ASTRING)
-#define getnstring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_NSTRING)
-#define getbnstring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_BIN_NSTRING)
-#define getqstring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_QSTRING)
-#define getstring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_STRING)
-#define getnastring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_NASTRING)
-int getint32(struct protstream *pin, int *num);
-int getsint32(struct protstream *pin, int *num);
-int getuint32(struct protstream *pin, unsigned int *num);
-int getint64(struct protstream *pin, int64_t *num);
-int getsint64(struct protstream *pin, int64_t *num);
-int getuint64(struct protstream *pin, uint64_t *num);
-int getmodseq(struct protstream *pin, modseq_t *num);
-
-void eatline(struct protstream *pin, int c);
-
 /* Misc utils */
 extern int shutdown_file(char *buf, int size);
 extern char *find_msgid(char *, char **);
@@ -186,6 +146,7 @@ extern const char *config_ptscache_db;
 extern const char *config_statuscache_db;
 extern const char *config_userdeny_db;
 extern const char *config_zoneinfo_db;
+extern const char *config_conversations_db;
 extern int charset_flags;
 
 /* Session ID */
@@ -195,5 +156,7 @@ extern void parse_sessionid(const char *str, char *sessionid);
 
 /* Capability suppression */
 extern int capa_is_disabled(const char *str);
+
+extern int cmd_cancelled();
 
 #endif /* INCLUDED_GLOBAL_H */

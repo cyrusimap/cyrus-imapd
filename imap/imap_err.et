@@ -225,6 +225,22 @@ ec IMAP_NO_NOSUCHANNOTATION,
 ec IMAP_NO_UNKNOWN_CTE,
    "[UNKNOWN-CTE] Can not process the binary data"
 
+# For conversations
+
+ec IMAP_CONVERSATIONS_ALREADY_OPEN,
+   "Conversation DB is already opened"
+
+ec IMAP_CONVERSATIONS_NOT_OPEN,
+   "Conversation DB is not opened"
+
+ec IMAP_ANCHOR_NOT_FOUND,
+   "Anchor not found"
+
+ec IMAP_CANCELLED,
+   "Command cancelled by user"
+
+# Used for search engine integration
+
 # Following used for internationalization of untagged BYE response
 
 ec IMAP_BYE_LOGOUT,

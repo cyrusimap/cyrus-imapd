@@ -46,6 +46,8 @@
 
 #include <sqlite3.h>
 #include "dav_util.h"
+#include "mailbox.h"
+#include "util.h"
 
 struct dav_data {
     unsigned rowid;
@@ -53,10 +55,12 @@ struct dav_data {
     const char *mailbox;
     const char *resource;
     uint32_t imap_uid;		/* zero (0) until URL is mapped */
+    modseq_t modseq;
     const char *lock_token;
     const char *lock_owner;
     const char *lock_ownerid;
     time_t lock_expire;
+    int alive;
 };
 
 struct bind_val {
@@ -75,7 +79,8 @@ int dav_init(void);
 int dav_done(void);
 
 /* get a database handle corresponding to mailbox */
-sqlite3 *dav_open(const char *fname, const char *cmds);
+sqlite3 *dav_open_userid(const char *userid);
+sqlite3 *dav_open_mailbox(struct mailbox *mailbox);
 
 /* close this handle */
 int dav_close(sqlite3 *davdb);
@@ -88,5 +93,7 @@ int dav_exec(sqlite3 *davdb, const char *cmd, struct bind_val bval[],
 
 /* delete database corresponding to mailbox */
 int dav_delete(struct mailbox *mailbox);
+
+int dav_reconstruct_user(const char *userid);
 
 #endif /* DAV_DB_H */

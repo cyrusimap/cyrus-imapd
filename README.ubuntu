@@ -1,0 +1,7 @@
+# to install from Ubuntu you will need the following packages
+
+sudo apt-get -y install build-essential automake libtool \
+    libdb5.3-dev libsasl2-dev zlib1g-dev libssl-dev libpcre3-dev \
+    uuid-dev comerr-dev libcunit1-dev valgrind libsnmp-dev \
+    bison flex libjansson-dev
+

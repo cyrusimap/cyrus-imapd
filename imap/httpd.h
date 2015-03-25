@@ -118,7 +118,8 @@ enum {
     URL_NS_DOMAINKEY,
     URL_NS_TZDIST,
     URL_NS_RSS,
-    URL_NS_DBLOOKUP
+    URL_NS_DBLOOKUP,
+    URL_NS_JMAP
 };
 
 /* Bitmask of features/methods to allow, based on URL */
@@ -186,15 +187,16 @@ struct request_target_t {
     char path[MAX_MAILBOX_PATH+1]; /* working copy of URL path */
     char *tail;			/* tail of original request path */
     unsigned namespace;		/* namespace of path */
-    char *user;			/* ptr to owner of collection (NULL = shared) */
-    size_t userlen;
+    char *userid;		/* owner of collection (needs freeing) */
     char *collection;		/* ptr to collection name */
     size_t collen;
     char *resource;		/* ptr to resource name */
     size_t reslen;
     unsigned flags;		/* target-specific flags/meta-data */
     unsigned long allow;	/* bitmask of allowed features/methods */
+    int mboxtype;		/* mailbox types to match on findall */
     char mboxname[MAX_MAILBOX_BUFFER+1];
+    const char *prefix;		/* namespace prefix */
 };
 
 /* Request target flags */
@@ -231,7 +233,7 @@ struct range {
 
 /* Meta-data for response body (payload & representation headers) */
 struct resp_body_t {
-    ulong len; 		/* Content-Length   */
+    ulong len;		/* Content-Length   */
     struct range *range;/* Content-Range    */
     const char *fname;	/* Content-Dispo    */
     unsigned char enc;	/* Content-Encoding */
@@ -358,6 +360,7 @@ struct namespace_t {
     const char *prefix;		/* Prefix of URL path denoting namespace */
     const char *well_known;	/* Any /.well-known/ URI */
     unsigned need_auth;		/* Do we need to auth for this namespace? */
+    int mboxtype;		/* what type of mailbox can be seen in this namespace? */
     unsigned long allow;	/* Bitmask of allowed features/methods */
     void (*init)(struct buf *serverinfo);
     void (*auth)(const char *userid);
@@ -386,6 +389,7 @@ extern struct namespace_t namespace_addressbook;
 extern struct namespace_t namespace_ischedule;
 extern struct namespace_t namespace_domainkey;
 extern struct namespace_t namespace_tzdist;
+extern struct namespace_t namespace_jmap;
 extern struct namespace_t namespace_rss;
 extern struct namespace_t namespace_dblookup;
 
@@ -402,6 +406,7 @@ extern int httpd_userisadmin;
 extern int httpd_userisproxyadmin;
 extern int httpd_userisanonymous;
 extern char *httpd_userid, *proxy_userid;
+extern char *httpd_extradomain;
 extern struct auth_state *httpd_authstate;
 extern struct namespace httpd_namespace;
 extern struct sockaddr_storage httpd_localaddr, httpd_remoteaddr;

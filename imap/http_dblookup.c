@@ -47,12 +47,14 @@
 #include "http_dav.h"
 #include <jansson.h>
 #include "util.h"
+#include "xstrlcpy.h"
 
 static int meth_get_db(struct transaction_t *txn, void *params);
 
 /* Namespace for DB lookups */
 struct namespace_t namespace_dblookup = {
     URL_NS_DBLOOKUP, /*enabled*/1, "/dblookup", NULL, 0 /* auth */,
+    /*mbtype*/0,
     ALLOW_READ,
     NULL, NULL, NULL, NULL,
     {
@@ -80,34 +82,157 @@ static int get_email(struct transaction_t *txn __attribute__((unused)),
 		     const char *userid, const char *key)
 {
     struct carddav_db *db = NULL;
-    int ret = HTTP_NOT_FOUND;
+    strarray_t *array = NULL;
+    char *result = NULL;
+    json_t *json;
+    int ret = HTTP_NO_CONTENT;
+    int i;
 
     /* XXX init just incase carddav not enabled? */
-    db = carddav_open_userid(userid, /*flags*/0);
+    db = carddav_open_userid(userid);
     if (!db) goto done;
 
-    if (carddav_getemail(db, key))
-	ret = HTTP_NO_CONTENT;
+    array = carddav_getemail(db, key);
+    if (!array) goto done;
+
+    json = json_array();
+    for (i = 0; i < strarray_size(array); i++) {
+	json_array_append_new(json, json_string(strarray_nth(array, i)));
+    }
+
+    result = json_dumps(json, JSON_PRESERVE_ORDER|JSON_COMPACT);
+    json_decref(json);
+
+    txn->resp_body.type = "application/json";
+    txn->resp_body.len = strlen(result);
+
+    write_body(HTTP_OK, txn, result, txn->resp_body.len);
+    ret = 0;
 
 done:
+    free(result);
+    if (array) strarray_free(array);
     if (db) carddav_close(db);
     return ret;
 }
 
-static int get_group(struct transaction_t *txn, const char *userid, const char *key)
+static int get_email2uids(struct transaction_t *txn __attribute__((unused)),
+			  const char *userid, const char *key)
 {
     struct carddav_db *db = NULL;
     strarray_t *array = NULL;
     char *result = NULL;
     json_t *json;
-    int ret = HTTP_NOT_FOUND;
+    int ret = HTTP_NO_CONTENT;
+    int i;
+    const char *mboxname = NULL;
+    const char **mailboxhdrs;
+    const char *mailbox = "Default";
+
+    mailboxhdrs = spool_getheader(txn->req_hdrs, "Mailbox");
+    if (mailboxhdrs) {
+	mailbox = mailboxhdrs[0];
+    }
+
+    mboxname = mboxname_abook(userid, mailbox);
+
+    /* XXX init just incase carddav not enabled? */
+    db = carddav_open_userid(userid);
+    if (!db) goto done;
+
+    array = carddav_getemail2uids(db, key, mboxname);
+    if (!array) goto done;
+
+    json = json_array();
+    for (i = 0; i < strarray_size(array); i++) {
+	json_array_append_new(json, json_string(strarray_nth(array, i)));
+    }
+
+    result = json_dumps(json, JSON_PRESERVE_ORDER|JSON_COMPACT);
+    json_decref(json);
+
+    txn->resp_body.type = "application/json";
+    txn->resp_body.len = strlen(result);
+
+    write_body(HTTP_OK, txn, result, txn->resp_body.len);
+    ret = 0;
+
+done:
+    free(result);
+    if (array) strarray_free(array);
+    if (db) carddav_close(db);
+    return ret;
+}
+
+static int get_uid2groups(struct transaction_t *txn,
+			  const char *userid, const char *key)
+{
+    struct carddav_db *db = NULL;
+    strarray_t *array = NULL;
+    char *result = NULL;
+    json_t *json;
+    int ret = HTTP_NO_CONTENT;
+    int i;
+    const char *mboxname = NULL;
+    const char **otheruserhdrs;
+    const char *otheruser = "";
+    const char **mailboxhdrs;
+    const char *mailbox = "Default";
+
+    otheruserhdrs = spool_getheader(txn->req_hdrs, "OtherUser");
+    if (otheruserhdrs) {
+	otheruser = otheruserhdrs[0];
+    }
+
+    mailboxhdrs = spool_getheader(txn->req_hdrs, "Mailbox");
+    if (mailboxhdrs) {
+	mailbox = mailboxhdrs[0];
+    }
+
+    mboxname = mboxname_abook(userid, mailbox);
+
+    /* XXX init just incase carddav not enabled? */
+    db = carddav_open_userid(userid);
+    if (!db) goto done;
+
+    array = carddav_getuid2groups(db, key, mboxname, otheruser);
+    if (!array) goto done;
+
+    json = json_array();
+    for (i = 0; i < strarray_size(array); i++) {
+	json_array_append_new(json, json_string(strarray_nth(array, i)));
+    }
+
+    result = json_dumps(json, JSON_PRESERVE_ORDER|JSON_COMPACT);
+    json_decref(json);
+
+    txn->resp_body.type = "application/json";
+    txn->resp_body.len = strlen(result);
+
+    write_body(HTTP_OK, txn, result, txn->resp_body.len);
+    ret = 0;
+
+done:
+    free(result);
+    if (array) strarray_free(array);
+    if (db) carddav_close(db);
+    return ret;
+}
+
+static int get_group(struct transaction_t *txn, const char *userid, const char *mboxname, const char *group)
+{
+    struct carddav_db *db = NULL;
+    strarray_t *array = NULL;
+    char *result = NULL;
+    json_t *json;
+    int ret = HTTP_NO_CONTENT;
     int i;
 
     /* XXX init just incase carddav not enabled? */
-    db = carddav_open_userid(userid, /*flags*/0);
+    db = carddav_open_userid(userid);
     if (!db) goto done;
 
-    array = carddav_getgroup(db, key);
+    array = carddav_getgroup(db, mboxname, group);
     if (!array) goto done;
 
     json = json_array();
@@ -136,6 +261,11 @@ static int meth_get_db(struct transaction_t *txn,
 {
     const char **userhdrs;
     const char **keyhdrs;
+    char path[MAX_MAILBOX_PATH+1];
+    char *p;
+    struct mboxname_parts parts;
+    struct buf boxbuf = BUF_INITIALIZER;
+    char mboxname[MAX_MAILBOX_BUFFER+1];
 
     userhdrs = spool_getheader(txn->req_hdrs, "User");
     keyhdrs = spool_getheader(txn->req_hdrs, "Key");
@@ -149,8 +279,40 @@ static int meth_get_db(struct transaction_t *txn,
     if (!strcmp(txn->req_uri->path, "/dblookup/email"))
 	return get_email(txn, userhdrs[0], keyhdrs[0]);
 
+    if (!strcmp(txn->req_uri->path, "/dblookup/email2uids"))
+	return get_email2uids(txn, userhdrs[0], keyhdrs[0]);
+
+    if (!strcmp(txn->req_uri->path, "/dblookup/uid2groups"))
+	return get_uid2groups(txn, userhdrs[0], keyhdrs[0]);
+
+    strlcpy(path, keyhdrs[0], sizeof(path));
+    p = path + strlen(path);
+    while (p >= path && *p != '/') { p--; }
+    if (p < path)
+	return HTTP_BAD_REQUEST;
+    *p++ = '\0';
+
+    mboxname_init_parts(&parts);
+    mboxname_userid_to_parts(userhdrs[0], &parts);
+    buf_setcstr(&boxbuf, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
+    buf_putc(&boxbuf, '.');
+    buf_appendmap(&boxbuf, path, strlen(path));
+    parts.box = buf_release(&boxbuf);
+
+    /* XXX - hack to allow @domain parts for non-domain-split users */
+    if (httpd_extradomain) {
+	/* not allowed to be cross domain */
+	if (parts.userid && strcmpsafe(parts.domain, httpd_extradomain))
+	    return HTTP_NOT_FOUND;
+	//free(parts.domain); - XXX fix when converting to real parts
+	parts.domain = NULL;
+    }
+
+    mboxname_parts_to_internal(&parts, mboxname);
+    mboxname_free_parts(&parts);
+
     if (!strcmp(txn->req_uri->path, "/dblookup/group"))
-	return get_group(txn, userhdrs[0], keyhdrs[0]);
+	return get_group(txn, userhdrs[0], mboxname, p);
 
     return HTTP_NOT_FOUND;
 }

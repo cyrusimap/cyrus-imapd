@@ -87,9 +87,6 @@ enum {
 
 struct caldav_db;
 
-#define CALDAV_CREATE 0x01
-#define CALDAV_TRUNC  0x02
-
 struct comp_flags {
     unsigned recurring	  : 1;
     unsigned transp	  : 1;
@@ -123,8 +120,8 @@ int caldav_init(void);
 int caldav_done(void);
 
 /* get a database handle corresponding to mailbox */
-struct caldav_db *caldav_open_mailbox(struct mailbox *mailbox, int flags);
-struct caldav_db *caldav_open_userid(const char *userid, int flags);
+struct caldav_db *caldav_open_mailbox(struct mailbox *mailbox);
+struct caldav_db *caldav_open_userid(const char *userid);
 
 /* close this handle */
 int caldav_close(struct caldav_db *caldavdb);
@@ -133,7 +130,8 @@ int caldav_close(struct caldav_db *caldavdb);
    (optionally inside a transaction for updates) */
 int caldav_lookup_resource(struct caldav_db *caldavdb,
 			   const char *mailbox, const char *resource,
-			   int lock, struct caldav_data **result);
+			   int lock, struct caldav_data **result,
+			   int tombstones);
 
 /* lookup an entry from 'caldavdb' by iCal UID
    (optionally inside a transaction for updates) */
@@ -168,5 +166,8 @@ int caldav_abort(struct caldav_db *caldavdb);
 void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata);
 
 char *caldav_mboxname(const char *userid, const char *name);
+
+/* Get time period (start/end) of a component based in RFC 4791 Sec 9.9 */
+void caldav_get_period(icalcomponent *comp, icalcomponent_kind kind, struct icalperiodtype *period);
 
 #endif /* CALDAV_DB_H */

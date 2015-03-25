@@ -44,9 +44,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "assert.h"
 #include "charset.h"
 #include "xmalloc.h"
 #include "chartable.h"
+#include "hash.h"
+#include "htmlchar.h"
 #include "util.h"
 
 #define U_REPLACEMENT	0xfffd
@@ -81,12 +84,16 @@ char QPSAFECHAR[256] = {
 struct qp_state {
     int isheader;
     int bytesleft;
-    int codepoint;
+    unsigned char lastoctet;
 };
 
 struct b64_state {
     int bytesleft;
     int codepoint;
+};
+
+struct unfold_state {
+    int state;
 };
 
 struct table_state {
@@ -117,6 +124,42 @@ struct search_state {
     size_t offset;
 };
 
+enum html_state {
+    HDATA,
+    HTAGOPEN,
+    HENDTAGOPEN,
+    HTAGNAME,
+    HSCTAG,
+    HTAGPARAMS,
+    HCHARACTER,
+    HCHARACTER2,
+    HCHARACTERHASH,
+    HCHARACTERHEX,
+    HCHARACTERDEC,
+    HSCRIPTDATA,
+    HSCRIPTLT,
+    HSTYLEDATA,
+    HSTYLELT,
+    HBOGUSCOMM,
+    HMUDECOPEN,
+    HCOMMSTART,
+    HCOMMSTARTDASH,
+    HCOMM,
+    HCOMMENDDASH,
+    HCOMMEND,
+    HCOMMENDBANG
+};
+
+struct striphtml_state {
+    struct buf name;
+#define HBEGIN		(1<<0)
+#define HEND		(1<<1)
+    unsigned int ends;
+    /* state stack */
+    int depth;
+    enum html_state stack[2];
+};
+
 struct convert_rock;
 
 typedef void convertproc_t(struct convert_rock *rock, int c);
@@ -131,11 +174,14 @@ struct convert_rock {
 
 #define GROWSIZE 100
 
+int charset_debug;
+static const char *convert_name(struct convert_rock *rock);
+
 #define XX 127
 /*
  * Table for decoding hexadecimal in quoted-printable
  */
-static const char index_hex[256] = {
+static const unsigned char index_hex[256] = {
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
@@ -178,19 +224,52 @@ static const char index_64[256] = {
 };
 #define CHAR64(c)  (index_64[(unsigned char)(c)])
 
+EXPORTED int encoding_lookupname(const char *s)
+{
+    switch (s[0]) {
+    case '7':
+	if (!strcasecmp(s, "7BIT"))
+	    return ENCODING_NONE;
+	break;
+    case '8':
+	if (!strcasecmp(s, "8BIT"))
+	    return ENCODING_NONE;
+	break;
+    case 'B':
+    case 'b':
+	if (!strcasecmp(s, "BASE64"))
+	    return ENCODING_BASE64;
+	if (!strcasecmp(s, "BINARY"))
+	    return ENCODING_NONE;
+	break;
+    case 'Q':
+    case 'q':
+	if (!strcasecmp(s, "QUOTED-PRINTABLE"))
+	    return ENCODING_QP;
+	break;
+    }
+    return ENCODING_UNKNOWN;
+}
+
 EXPORTED const char *encoding_name(int encoding)
 {
     switch (encoding) {
-    case ENCODING_NONE: return "none";
-    case ENCODING_QP: return "quoted-printable";
-    case ENCODING_BASE64: return "base64";
-    case ENCODING_UNKNOWN: return "unknown";
-    default: return "wtf";
+    case ENCODING_NONE: return "NONE";
+    case ENCODING_QP: return "QUOTED-PRINTABLE";
+    case ENCODING_BASE64: return "BASE64";
+    case ENCODING_UNKNOWN: return "UNKNOWN";
+    default: return "WTF";
     }
 }
 
 static inline void convert_putc(struct convert_rock *rock, int c)
 {
+    if (charset_debug) {
+	if ((unsigned)c < 0xff)
+	    fprintf(stderr, "%s(0x%x = '%c')\n", convert_name(rock), c, c);
+	else
+	    fprintf(stderr, "%s(0x%x)\n", convert_name(rock), c);
+    }
     rock->f(rock, c);
 }
 
@@ -217,32 +296,54 @@ static void qp2byte(struct convert_rock *rock, int c)
     struct qp_state *s = (struct qp_state *)rock->state;
     int val;
 
+    assert(c == U_REPLACEMENT || (unsigned)c <= 0xff);
+
     if (s->bytesleft) {
 	s->bytesleft--;
-	val = HEXCHAR(c);
-	if (val == XX) {
-	    /* mark invalid regardless */
-	    s->codepoint = -1;
+
+	 /* the replacement char is not part of a valid sequence */
+	if (c == U_REPLACEMENT) {
+invalid:
+	    /* RFC2045 says "...A reasonable approach by a robust
+	     * implementation might be to include the "=" character
+	     * and the following character in the decoded data without
+	     * any transformation..." */
+	    convert_putc(rock->next, '=');
+	    if (!s->bytesleft)
+		convert_putc(rock->next, s->lastoctet);
+	    convert_putc(rock->next, c);
+	    s->bytesleft = 0;
 	    return;
 	}
-	if (s->codepoint != -1) {
-	    /* don't blat the invalid marker, but still absorb
-	     * the second char */
-	    s->codepoint = (s->codepoint << 4) + val;
+
+	/* detect and swallow soft line breaks */
+	if (s->bytesleft == 1 && c == '\r') {
+	    s->lastoctet = c;
+	    return;
 	}
+	if (s->bytesleft == 0 && s->lastoctet == '\r') {
+	    if (c == '\n')
+		return;
+	    goto invalid;
+	}
+
+	val = HEXCHAR(c);
+	if (val == XX)
+	    goto invalid;
+	/* if we got this far, we have two valid hex chars */
 	if (!s->bytesleft) {
-	    if (s->codepoint == -1)
-		convert_putc(rock->next, 0xfffd);
-	    else
-		convert_putc(rock->next, s->codepoint & 0xff);
+	    val |= (HEXCHAR(s->lastoctet) << 4);
+	    assert((unsigned)val <= 0xff);
+	    convert_putc(rock->next, val);
 	}
+	s->lastoctet = c;
 	return;
     }
 
     /* start an encoded byte */
     if (c == '=') {
 	s->bytesleft = 2;
-	s->codepoint = 0;
+	s->lastoctet = 0;
 	return;
     }
 
@@ -282,51 +383,132 @@ static void b64_2byte(struct convert_rock *rock, int c)
     }
 }
 
-static void stripnl2uni(struct convert_rock *rock, int c)
+/*
+ * This filter unfolds folded RFC2822 header field lines, i.e. it strips
+ * a CRLF pair only if the first character after the CRLF is LWS, and
+ * leaves other CRLF or lone CR or LF alone.  In particular the CRLFs
+ * which *separate* different header fields are preserved.  This allows
+ * the 'keep' and 'merge' whitespace options to behave as expected when
+ * the search engine is term-based, i.e. uses whitespace and punctuation
+ * to find indexing terms.
+ */
+static void unfold2uni(struct convert_rock *rock, int c)
 {
-    if (c != '\r' && c != '\n')
+    struct unfold_state *s = (struct unfold_state *)rock->state;
+
+    switch (s->state) {
+    case 0:
+	if (c == '\r')
+	    s->state = 1;
+	else
+	    convert_putc(rock->next, c);
+	break;
+    case 1:
+	if (c == '\n')
+	    s->state = 2;
+	else {
+	    convert_putc(rock->next, '\r');
+	    convert_putc(rock->next, c);
+	    s->state = 0;
+	}
+	break;
+    case 2:
+	if (c != ' ' && c != '\t') {
+	    convert_putc(rock->next, '\r');
+	    convert_putc(rock->next, '\n');
+	}
 	convert_putc(rock->next, c);
+	s->state = 0;
+	break;
+    }
 }
 
+/* Given an octet which is a codepoint in some 7bit or 8bit character
+ * set, or the Unicode replacement character, emit the corresponding
+ * Unicode codepoint. */
 static void table2uni(struct convert_rock *rock, int c)
 {
     struct table_state *s = (struct table_state *)rock->state;
-    struct charmap *map = (struct charmap *)&s->curtable[0][c & 0xff];
+    struct charmap *map;
 
-    /* propagate errors */
-    if (c == 0xfffd) {
+    if (c == U_REPLACEMENT) {
 	convert_putc(rock->next, c);
 	return;
     }
 
+    assert((unsigned)c <= 0xff);
+    map = (struct charmap *)&s->curtable[0][c & 0xff];
     if (map->c)
 	convert_putc(rock->next, map->c);
 
     s->curtable = s->initialtable + map->next;
 }
 
+/* Given an octet in a UTF-8 encoded string, possibly emit a Unicode
+ * code point */
 static void utf8_2uni(struct convert_rock *rock, int c)
 {
     struct table_state *s = (struct table_state *)rock->state;
 
-    /* propagate errors */
-    if (c == 0xfffd) {
-	convert_putc(rock->next, c);
+    if (c == U_REPLACEMENT) {
+emit_replacement:
+	convert_putc(rock->next, U_REPLACEMENT);
+	s->bytesleft = 0;
+	s->codepoint = 0;
 	return;
     }
 
+    assert((unsigned)c <= 0xff);
+
+    /*
+     * The following bytes are never valid in UTF-8 streams:
+     *
+     * C0-C1	could only be used for overlong encoding of
+     *		basic ASCII characters
+     * F5-FD	start bytes of sequences that could only encode
+     *		numbers larger than the 0x10FFFF limit of Unicode
+     * FE-FF	not valid start bytes or anything else
+     *
+     * Thanks to http://en.wikipedia.org/wiki/UTF-8
+     *
+     * These checks are interspersed with bitwise checks below.
+     *
+     * When we see a valid leading character but a sequence has
+     * not finished, we have detected an ill-formed sequence.  The
+     * correct thing to do according to Section 3.9 of the Unicode
+     * standard 6.0 is to jettison the current sequence, emit the
+     * Replacement character and begin a new sequence with the new
+     * character.  From the standard:
+     *
+     *	    For example, with the input UTF-8 code unit sequence
+     *	    <C2 41 42>, such a UTF-8 conversion process must not
+     *	    return <U+FFFD> or <U+FFFD, U+0042>, because either of
+     *	    those outputs would be the result of misinterpreting
+     *	    a well-formed subsequence as being part of the ill-formed
+     *	    subsequence. The expected return value for such a process
+     *	    would instead be <U+FFFD, U+0041, U+0042>.
+     */
+
     if ((c & 0xf8) == 0xf0) { /* 11110xxx */
 	/* first of a 4 char sequence */
+	if (s->bytesleft)	/* incomplete sequence */
+	    convert_putc(rock->next, U_REPLACEMENT);
+	if (c >= 0xf5 && c <= 0xf7) goto emit_replacement;
 	s->bytesleft = 3;
 	s->codepoint = c & 0x07; /* 00000111 */
     }
     else if ((c & 0xf0) == 0xe0) { /* 1110xxxx */
 	/* first of a 3 char sequence */
+	if (s->bytesleft)	/* incomplete sequence */
+	    convert_putc(rock->next, U_REPLACEMENT);
 	s->bytesleft = 2;
 	s->codepoint = c & 0x0f; /* 00001111 */
     }
     else if ((c & 0xe0) == 0xc0) { /* 110xxxxx */
 	/* first of a 2 char sequence */
+	if (s->bytesleft)	/* incomplete sequence */
+	    convert_putc(rock->next, U_REPLACEMENT);
+	if (c == 0xc0 || c == 0xc1) goto emit_replacement;
 	s->bytesleft = 1;
 	s->codepoint = c & 0x1f; /* 00011111 */
     }
@@ -336,30 +518,40 @@ static void utf8_2uni(struct convert_rock *rock, int c)
 	    s->codepoint = (s->codepoint << 6) + (c & 0x3f); /* 00111111 */
 	    s->bytesleft--;
 	    if (!s->bytesleft) {
-	        convert_putc(rock->next, s->codepoint);
+		convert_putc(rock->next, s->codepoint);
 		s->codepoint = 0;
 	    }
 	}
+	else
+	    goto emit_replacement;
+    }
+    else if (c >= 0xf8 && c <= 0xff) {
+	goto emit_replacement;
     }
     else { /* plain ASCII char */
+	if (s->bytesleft)	/* incomplete sequence */
+	    convert_putc(rock->next, U_REPLACEMENT);
 	convert_putc(rock->next, c);
 	s->bytesleft = 0;
 	s->codepoint = 0;
     }
 }
 
+/* Given an octet in a UTF-7 encoded string, possibly emit a Unicode
+ * code point */
 static void utf7_2uni (struct convert_rock *rock, int c)
 {
     struct table_state *s = (struct table_state *)rock->state;
 
-    /* propagate errors */
-    if (c == 0xfffd) {
+    if (c == U_REPLACEMENT) {
 	convert_putc(rock->next, c);
 	return;
     }
 
+    assert((unsigned)c <= 0xff);
+
     if (c & 0x80) { /* skip 8-bit chars */
-	convert_putc(rock->next, 0xfffd);
+	convert_putc(rock->next, U_REPLACEMENT);
 	return;
     }
 
@@ -416,6 +608,12 @@ static void utf7_2uni (struct convert_rock *rock, int c)
     }
 }
 
+/*
+ * Given a Unicode codepoint, emit one or more Unicode codepoints in
+ * search-normalised form (having applied recursive Unicode
+ * decomposition, like U+2026 HORIZONTAL ELLIPSIS to the three
+ * characters U+2E U+2E U+2E).
+ */
 static void uni2searchform(struct convert_rock *rock, int c)
 {
     struct canon_state *s = (struct canon_state *)rock->state;
@@ -423,10 +621,8 @@ static void uni2searchform(struct convert_rock *rock, int c)
     int code;
     unsigned char table16, table8;
 
-    /* invalid character becomes an Oxff - that's illegal utf-8,
-     * so it won't match */
-    if (c == 0xfffd) {
-	convert_putc(rock->next, 0xff);
+    if (c == U_REPLACEMENT) {
+	convert_putc(rock->next, c);
 	return;
     }
 
@@ -489,8 +685,62 @@ static void uni2searchform(struct convert_rock *rock, int c)
     }
 }
 
+/*
+ * Given a Unicode codepoint, emit one or more Unicode codepoints in
+ * HTML form, suitable for generating search snippets.
+ */
+static void uni2html(struct convert_rock *rock, int c)
+{
+    struct canon_state *s = (struct canon_state *)rock->state;
+
+    if (c == U_REPLACEMENT) {
+	convert_putc(rock->next, c);
+	return;
+    }
+
+    if (c == '<') {
+	convert_cat(rock->next, "&lt;");
+	return;
+    }
+
+    if (c == '>') {
+	convert_cat(rock->next, "&gt;");
+	return;
+    }
+
+    if (c == '&') {
+	convert_cat(rock->next, "&amp;");
+	return;
+    }
+
+    /* special case: whitespace or control characters */
+    if (c == ' ' || c == '\r' || c == '\n') {
+	if (s->flags & CHARSET_SKIPSPACE) {
+	    return;
+	}
+	if (s->flags & CHARSET_MERGESPACE) {
+	    if (s->seenspace)
+		return;
+	    s->seenspace = 1;
+	    c = ' '; /* one SPACE char */
+	}
+    }
+    else
+	s->seenspace = 0;
+
+    convert_putc(rock->next, c);
+}
+
+/* Given a Unicode codepoint, emit valid UTF-8 encoded octets */
 static void uni2utf8(struct convert_rock *rock, int c)
 {
+    if (!unicode_isvalid(c))
+	c = U_REPLACEMENT;
+
+    /* UTF-8 can encode code points up to 0x7fffffff, but the currently
+     * defined last valid codepoint is 0x10ffff so we only handle that
+     * range. */
+
     if (c > 0xffff) {
 	convert_putc(rock->next, 0xF0 + ((c >> 18) & 0x07));
 	convert_putc(rock->next, 0x80 + ((c >> 12) & 0x3f));
@@ -517,7 +767,7 @@ static void byte2search(struct convert_rock *rock, int c)
     int i, cur;
     unsigned char b = (unsigned char)c;
 
-    if (c == 0xfffd) {
+    if (c == U_REPLACEMENT) {
 	c = 0xff; /* searchable by invalid character! */
     }
 
@@ -558,11 +808,582 @@ static void byte2search(struct convert_rock *rock, int c)
     s->offset++;
 }
 
+/* Given an octet, append it to a buffer */
 static void byte2buffer(struct convert_rock *rock, int c)
 {
     struct buf *buf = (struct buf *)rock->state;
 
     buf_putc(buf, c & 0xff);
+}
+
+/*
+ * The HTML5 standard mandates that certain Unicode code points
+ * cannot be generated using &#nnn; numerical character references,
+ * and should generate a parse error.  This function detects them.
+ */
+static int html_uiserror(int c)
+{
+    static const struct {
+	unsigned int mask, lo, hi;
+    } ranges[] = {
+	{ ~0U,    0x0001, 0x0008 },
+	{ ~0U,    0x000b, 0x000b },
+	{ ~0U,    0x000e, 0x001f },
+	{ ~0U,    0x007f, 0x009f },
+	{ ~0U,    0xfdd0, 0xfdef },
+	{ 0xffff, 0xfffe, 0xffff }
+    };
+    unsigned int i;
+
+    for (i = 0 ; i < VECTOR_SIZE(ranges) ; i++) {
+	unsigned c2 = (unsigned)c & ranges[i].mask;
+	if (c2 >= ranges[i].lo && c2 <= ranges[i].hi)
+	    return 1;
+    }
+    return 0;
+}
+
+static void html_saw_character(struct convert_rock *rock)
+{
+    struct striphtml_state *s = (struct striphtml_state *)rock->state;
+    const char *ent = buf_cstring(&s->name);
+    int c;
+    static const int compat_chars[] = {
+	/* Mappings of old numeric character codepoints between 0x80 and
+	 * 0x9f inclusive, defined for backwards compatibility by HTML5,
+	 * to Unicode code points.  Note that some of these are mapped
+	 * to codepoints which are mandated to be parse errors. */
+	0x20AC, /* EURO SIGN (€) */
+	0x0081, /* <control> */
+	0x201A, /* SINGLE LOW-9 QUOTATION MARK (‚) */
+	0x0192, /* LATIN SMALL LETTER F WITH HOOK (ƒ) */
+	0x201E, /* DOUBLE LOW-9 QUOTATION MARK („) */
+	0x2026, /* HORIZONTAL ELLIPSIS (…) */
+	0x2020, /* DAGGER (†) */
+	0x2021, /* DOUBLE DAGGER (‡) */
+	0x02C6, /* MODIFIER LETTER CIRCUMFLEX ACCENT (ˆ) */
+	0x2030, /* PER MILLE SIGN (‰) */
+	0x0160, /* LATIN CAPITAL LETTER S WITH CARON (Š) */
+	0x2039, /* SINGLE LEFT-POINTING ANGLE QUOTATION MARK (‹) */
+	0x0152, /* LATIN CAPITAL LIGATURE OE (Œ) */
+	0x008D, /* <control> */
+	0x017D, /* LATIN CAPITAL LETTER Z WITH CARON (Ž) */
+	0x008F, /* <control> */
+	0x0090, /* <control> */
+	0x2018, /* LEFT SINGLE QUOTATION MARK (‘) */
+	0x2019, /* RIGHT SINGLE QUOTATION MARK (’) */
+	0x201C, /* LEFT DOUBLE QUOTATION MARK (“) */
+	0x201D, /* RIGHT DOUBLE QUOTATION MARK (”) */
+	0x2022, /* BULLET (•) */
+	0x2013, /* EN DASH (–) */
+	0x2014, /* EM DASH (—) */
+	0x02DC, /* SMALL TILDE (˜) */
+	0x2122, /* TRADE MARK SIGN (™) */
+	0x0161, /* LATIN SMALL LETTER S WITH CARON (š) */
+	0x203A, /* SINGLE RIGHT-POINTING ANGLE QUOTATION MARK (›) */
+	0x0153, /* LATIN SMALL LIGATURE OE (œ) */
+	0x009D, /* <control> */
+	0x017E, /* LATIN SMALL LETTER Z WITH CARON (ž) */
+	0x0178  /* LATIN CAPITAL LETTER Y WITH DIAERESIS (Ÿ) */
+    };
+
+    if (charset_debug)
+	fprintf(stderr, "html_saw_character(%s)\n", ent);
+
+    if (ent[0] == '#') {
+	if (ent[1] == 'x' || ent[1] == 'X')
+	    c = strtoul(ent+2, NULL, 16);
+	else
+	    c = strtoul(ent+1, NULL, 10);
+	/* no need for format error checking, the lexer did that */
+
+	/* Perform character mapping and validation per
+	 * http://dev.w3.org/html5/spec/tokenization.html#consume-a-character-reference
+	 */
+	if (c == 0)
+	    c = U_REPLACEMENT;
+	else if (c >= 0x80 && c <= 0x9f)
+	    c = compat_chars[c-0x80];
+	else if (!unicode_isvalid(c))
+	    c = U_REPLACEMENT;	/* invalid Unicode codepoint */
+
+	if (html_uiserror(c)) {
+	    /* the HTML5 spec says this is a parse error, but it's
+	     * unclear what that means for us; we choose to strip the
+	     * character but could also emit the replacement character.  */
+	    return;
+	}
+    }
+    else {
+	c = htmlchar_from_string(ent);
+	if (c == -1) {
+	    c = U_REPLACEMENT;	    /* unknown character */
+	}
+	else if (c > 0xffff) {
+	    /* Hack to handle a small minority of named characters
+	     * which map to a sequence of two Unicode codepoints. */
+	    convert_putc(rock->next, (c>>16) & 0xffff);
+	    convert_putc(rock->next, c & 0xffff);
+	    return;
+	}
+    }
+    convert_putc(rock->next, c);
+}
+
+static const char *html_state_as_string(enum html_state state)
+{
+    switch (state) {
+    case HDATA: return "HDATA";
+    case HTAGOPEN: return "HTAGOPEN";
+    case HENDTAGOPEN: return "HENDTAGOPEN";
+    case HTAGNAME: return "HTAGNAME";
+    case HSCTAG: return "HSCTAG";
+    case HTAGPARAMS: return "HTAGPARAMS";
+    case HCHARACTER: return "HCHARACTER";
+    case HCHARACTER2: return "HCHARACTER2";
+    case HCHARACTERHASH: return "HCHARACTERHASH";
+    case HCHARACTERHEX: return "HCHARACTERHEX";
+    case HCHARACTERDEC: return "HCHARACTERDEC";
+    case HSCRIPTDATA: return "HSCRIPTDATA";
+    case HSCRIPTLT: return "HSCRIPTLT";
+    case HSTYLEDATA: return "HSTYLEDATA";
+    case HSTYLELT: return "HSTYLELT";
+    case HBOGUSCOMM: return "HBOGUSCOMM";
+    case HMUDECOPEN: return "HMUDECOPEN";
+    case HCOMMSTART: return "HCOMMSTART";
+    case HCOMMSTARTDASH: return "HCOMMSTARTDASH";
+    case HCOMM: return "HCOMM";
+    case HCOMMENDDASH: return "HCOMMENDDASH";
+    case HCOMMEND: return "HCOMMEND";
+    case HCOMMENDBANG: return "HCOMMENDBANG";
+    }
+    return "wtf?";
+}
+
+static void html_push(struct striphtml_state *s, enum html_state state)
+{
+    assert(s->depth < (int)(sizeof(s->stack)/sizeof(s->stack[0])));
+    if (charset_debug)
+	fprintf(stderr, "html_push(%s)\n", html_state_as_string(state));
+    s->stack[s->depth++] = state;
+}
+
+static int html_pop(struct striphtml_state *s)
+{
+    assert(s->depth > 0);
+    if (charset_debug)
+	fprintf(stderr, "html_pop()\n");
+    return s->stack[--s->depth];
+}
+
+static void html_go(struct striphtml_state *s, enum html_state state)
+{
+    assert(s->depth > 0);
+    if (charset_debug)
+	fprintf(stderr, "html_go(%s)\n", html_state_as_string(state));
+    s->stack[s->depth-1] = state;
+}
+
+static enum html_state html_top(struct striphtml_state *s)
+{
+    assert(s->depth > 0);
+    return s->stack[s->depth-1];
+}
+
+static int is_phrasing(char *tag)
+{
+    static const char * const phrasing_tags[] = {
+	"a", "q", "cite", "em", "strong", "small",
+	"mark", "dfn", "abbr", "time", "progress",
+	"meter", "code", "var", "samp", "kbd",
+	"sub", "sup", "span", "i", "b", "bdo",
+	"ruby", "ins", "del"
+    };
+    static struct hash_table hash = HASH_TABLE_INITIALIZER;
+
+    if (hash.table == NULL) {
+	unsigned int i;
+	construct_hash_table(&hash, VECTOR_SIZE(phrasing_tags), 0);
+	for (i = 0 ; i < VECTOR_SIZE(phrasing_tags) ; i++)
+	    hash_insert(phrasing_tags[i], (void *)1, &hash);
+    }
+
+    return (hash_lookup(lcase(tag), &hash) == (void *)1);
+}
+
+static void html_saw_tag(struct convert_rock *rock)
+{
+    struct striphtml_state *s = (struct striphtml_state *)rock->state;
+    char *tag;
+    enum html_state state = html_top(s);
+
+    buf_cstring(&s->name);
+    tag = s->name.s;
+
+    if (charset_debug)
+	fprintf(stderr, "html_saw_tag() state=%s tag=\"%s\" ends=%s,%s\n",
+		html_state_as_string(state), tag,
+		(s->ends & HBEGIN ? "BEGIN" : "-"),
+		(s->ends & HEND ? "END" : "-"));
+
+    /* gnb:TODO: what are we supposed to do with a nested <script> tag? */
+
+    if (!strcasecmp(tag, "script")) {
+	if (state == HDATA && s->ends == HBEGIN)
+	    html_go(s, HSCRIPTDATA);
+	else if (state == HSCRIPTDATA && s->ends == HEND)
+	    html_go(s, HDATA);
+	/* BEGIN,END pair is doesn't affect state */
+    }
+    else if (!strcasecmp(tag, "style")) {
+	if (state == HDATA && s->ends == HBEGIN)
+	    html_go(s, HSTYLEDATA);
+	else if (state == HSTYLEDATA && s->ends == HEND)
+	    html_go(s, HDATA);
+	/* BEGIN,END pair is doesn't affect state */
+    }
+    else if (!is_phrasing(tag)) {
+	convert_putc(rock->next, ' ');
+    }
+    /* otherwise, no change */
+}
+
+/*
+ * Note we don't use isalnum - the test has to be in US-ASCII always
+ * regardless of the charset of the text or the locale of this process
+ */
+#define html_isalpha(c) \
+    (((c) >= 'a' && (c) <= 'z') || \
+     ((c) >= 'A' && (c) <= 'Z'))
+#define html_isxdigit(c) \
+    (((c) >= '0' && (c) <= '9') || \
+     ((c) >= 'a' && (c) <= 'f') || \
+     ((c) >= 'A' && (c) <= 'F'))
+#define html_isdigit(c) \
+    (((c) >= '0' && (c) <= '9'))
+#define html_isspace(c) \
+    ((c) == ' ' || (c) == '\t' || (c) == '\r' || (c) == '\n')
+
+void striphtml2uni(struct convert_rock *rock, int c)
+{
+    struct striphtml_state *s = (struct striphtml_state *)rock->state;
+
+restart:
+    switch (html_top(s)) {
+    case HDATA:
+	if (c == '<') {
+	    html_push(s, HTAGOPEN);
+	    buf_reset(&s->name);
+	}
+	else if (c == '&') {
+	    html_go(s, HCHARACTER);
+	    buf_reset(&s->name);
+	}
+	else {
+	    convert_putc(rock->next, c);
+	}
+	break;
+
+    case HSCRIPTDATA:	    /* 8.2.4.6 Script data state */
+	if (c == '<') {
+	    html_push(s, HSCRIPTLT);
+	}
+	/* else, strip the character */
+	break;
+
+    case HSCRIPTLT:	    /* 8.2.4.17 Script data less-than sign state */
+	/* TODO: deal with <! inside SCRIPT tags properly per
+	 * http://dev.w3.org/html5/spec/tokenization.html#script-data-less-than-sign-state
+	 */
+	if (c == '/') {
+	    s->ends = HEND;
+	    html_go(s, HTAGNAME);
+	    buf_reset(&s->name);
+	}
+	else {
+	    /* naked <, emit it and restart with current character */
+	    convert_putc(rock->next, c);
+	    html_pop(s);
+	    goto restart;
+	}
+	break;
+
+    case HSTYLEDATA:
+	if (c == '<') {
+	    html_push(s, HSTYLELT);
+	}
+	/* else, strip the character */
+	break;
+
+    case HSTYLELT:
+	if (c == '/') {
+	    s->ends = HEND;
+	    html_go(s, HTAGNAME);
+	    buf_reset(&s->name);
+	}
+	else {
+	    /* naked <, emit it and restart with current character */
+	    convert_putc(rock->next, c);
+	    html_pop(s);
+	    goto restart;
+	}
+	break;
+
+    case HCHARACTER:	/* 8.2.4.2 Character reference in data state */
+	/* This is the "consume a character reference" algorithm
+	 * rewritten to use additional lexical states */
+	if (c == '#') {
+	    buf_putc(&s->name, c);
+	    html_go(s, HCHARACTERHASH);
+	}
+	else if (html_isalpha(c)) {
+	    buf_putc(&s->name, c);
+	    html_go(s, HCHARACTER2);
+	}
+	else {
+	    /* naked & - emit the & and restart */
+	    convert_putc(rock->next, '&');
+	    html_go(s, HDATA);
+	    goto restart;
+	}
+	break;
+
+    case HCHARACTERHASH:
+	/* '&' then '#' */
+	if (c == 'x' || c == 'X') {
+	    buf_putc(&s->name, c);
+	    html_go(s, HCHARACTERHEX);
+	}
+	else if (html_isdigit(c)) {
+	    buf_putc(&s->name, c);
+	    html_go(s, HCHARACTERDEC);
+	}
+	else {
+	    /* naked &# - emit the &# and restart */
+	    convert_putc(rock->next, '&');
+	    convert_putc(rock->next, '#');
+	    html_go(s, HDATA);
+	    goto restart;
+	}
+	break;
+
+    case HCHARACTER2:
+	if (html_isalpha(c)) {
+	    buf_putc(&s->name, c);
+	    /* TODO: we're supposed to look this up
+	     * to see if it's an known character so that
+	     * &notit; is parsed as the 4 chars
+	     * '¬' 'i' 't' ';' */
+	}
+	else {
+	    html_saw_character(rock);
+	    html_go(s, HDATA);
+	    if (c != ';') {
+		/* character reference not correctly terminated -
+		 * restart with the next character */
+		goto restart;
+	    }
+	}
+	break;
+
+    case HCHARACTERHEX:
+	if (html_isxdigit(c)) {
+	    buf_putc(&s->name, c);
+	}
+	else {
+	    html_saw_character(rock);
+	    html_go(s, HDATA);
+	    if (c != ';') {
+		/* character reference not correctly terminated -
+		 * restart with the next character */
+		goto restart;
+	    }
+	}
+	break;
+
+    case HCHARACTERDEC:
+	if (html_isdigit(c)) {
+	    buf_putc(&s->name, c);
+	}
+	else {
+	    html_saw_character(rock);
+	    html_go(s, HDATA);
+	    if (c != ';') {
+		/* character reference not correctly terminated -
+		 * restart with the next character */
+		goto restart;
+	    }
+	}
+	break;
+
+    case HTAGOPEN:  /* 8.2.4.8 Tag open state */
+	if (c == '!') {
+	    /* markup declaration open delimiter - let's just assume
+	     * it's a comment */
+	    html_pop(s);
+	    html_go(s, HMUDECOPEN);
+	    buf_reset(&s->name);
+	}
+	else if (c == '/') {
+	    html_go(s, HENDTAGOPEN);
+	}
+	else if (html_isalpha(c)) {
+	    s->ends = HBEGIN;
+	    buf_putc(&s->name, c);
+	    html_go(s, HTAGNAME);
+	}
+	else {
+	    /* apparently a naked <, emit the < and restart */
+	    convert_putc(rock->next, '<');
+	    html_pop(s);
+	    goto restart;
+	}
+	break;
+
+    case HENDTAGOPEN:	/* 8.2.4.9 End tag open state */
+	if (html_isalpha(c)) {
+	    s->ends = HEND;
+	    buf_putc(&s->name, c);
+	    html_go(s, HTAGNAME);
+	}
+	else {
+	    /* error */
+	    html_pop(s);
+	}
+	break;
+
+    case HTAGNAME:  /* 8.2.4.10 Tag name state */
+	/* gnb:TODO handle > embedded in "param" */
+	if (html_isspace(c)) {
+	    html_go(s, HTAGPARAMS);
+	}
+	else if (c == '/') {
+	    html_go(s, HSCTAG);
+	}
+	else if (c == '>') {
+	    html_pop(s);
+	    html_saw_tag(rock);
+	}
+	else if (html_isalpha(c)) {
+	    buf_putc(&s->name, c);
+	}
+	else {
+	    /* error */
+	    html_pop(s);
+	}
+	break;
+
+    case HSCTAG:    /* 8.2.4.43 Self-closing start tag state */
+	if (c == '>') {
+	    s->ends = HBEGIN|HEND;
+	    html_pop(s);
+	    html_saw_tag(rock);
+	}
+	else {
+	    /* whatever, keep stripping tag parameters */
+	    html_go(s, HTAGPARAMS);
+	}
+	break;
+
+    case HTAGPARAMS:	    /* ignores all text until next '>' */
+	if (c == '>') {
+	    html_pop(s);
+	    html_saw_tag(rock);
+	}
+	else if (c == '/') {
+	    html_go(s, HSCTAG);
+	}
+	break;
+
+    case HBOGUSCOMM:	    /* 8.2.4.44 Bogus comment state */
+	/* strip all text until closing > */
+	if (c == '>') {
+	    html_go(s, HDATA);
+	}
+	break;
+
+    case HMUDECOPEN:	    /* 8.2.4.45 Markup declaration open state */
+	if (c == '-') {
+	    buf_putc(&s->name, c);
+	    if (s->name.len == 2)
+		html_go(s, HCOMMSTART);
+	}
+	else {
+	    /* ignore DOCTYPE or CDATA */
+	    html_go(s, HBOGUSCOMM);
+	    goto restart;   /* in case it's a > */
+	}
+	break;
+
+    case HCOMMSTART:	    /* 8.2.4.46 Comment start state */
+	if (c == '-')
+	    html_go(s, HCOMMSTARTDASH);
+	else if (c == '>')
+	    html_go(s, HDATA);	/* very short comment <!-->  */
+	else
+	    html_go(s, HCOMM);
+	break;
+
+    case HCOMMSTARTDASH:    /* 8.2.4.47 Comment start dash state */
+	if (c == '-')
+	    html_go(s, HCOMMEND);
+	else if (c == '>')
+	    html_go(s, HDATA);	/* incorrectly formed -> comment end */
+	else
+	    html_go(s, HCOMM);
+	/* else strip */
+	break;
+
+    case HCOMM:		    /* 8.2.4.48 Comment state */
+	if (c == '-')
+	    html_go(s, HCOMMENDDASH);
+	/* else strip */
+	break;
+
+    case HCOMMENDDASH:	    /* 8.2.4.49 Comment end dash state */
+	if (c == '-')
+	    html_go(s, HCOMMEND);   /* -- pair in comment */
+	else
+	    html_go(s, HCOMM);	    /* lone - in comment */
+	break;
+
+    case HCOMMEND:	    /* 8.2.4.50 Comment end state */
+	if (c == '>')
+	    html_go(s, HDATA);	/* correctly formed --> comment end */
+	else if (c == '!')
+	    html_go(s, HCOMMENDBANG);	/* --! in a comment */
+	else if (c != '-')
+	    html_go(s, HCOMM);	/* -- in the middle of a comment */
+	/* else, --- in comment, strip */
+	break;
+
+    case HCOMMENDBANG:	    /* 8.2.4.51 Comment end bang state */
+	if (c == '-')
+	    html_go(s, HCOMMENDDASH);	/* --!- in comment */
+	else if (c == '>')
+	    html_go(s, HDATA);	/* --!> at end of comment */
+	else
+	    html_go(s, HCOMM);	/* --! in the middle of a comment */
+	break;
+
+    }
+}
+
+static const char *convert_name(struct convert_rock *rock)
+{
+    if (rock->f == b64_2byte) return "b64_2byte";
+    if (rock->f == byte2buffer) return "byte2buffer";
+    if (rock->f == byte2search) return "byte2search";
+    if (rock->f == qp2byte) return "qp2byte";
+    if (rock->f == striphtml2uni) return "striphtml2uni";
+    if (rock->f == unfold2uni) return "unfold2uni";
+    if (rock->f == table2uni) return "table2uni";
+    if (rock->f == uni2searchform) return "uni2searchform";
+    if (rock->f == uni2html) return "uni2html";
+    if (rock->f == uni2utf8) return "uni2utf8";
+    if (rock->f == utf7_2uni) return "utf7_2uni";
+    if (rock->f == utf8_2uni) return "utf8_2uni";
+    return "wtf";
 }
 
 /* convert_rock manipulation routines */
@@ -572,7 +1393,7 @@ static void table_switch(struct convert_rock *rock, int charset_num)
     struct table_state *state = (struct table_state *)rock->state;
 
     /* wipe any current state */
-    memset(state, 0, sizeof(struct table_state)); 
+    memset(state, 0, sizeof(struct table_state));
 
     /* it's a table based lookup */
     if (chartables_charset_table[charset_num].table) {
@@ -643,6 +1464,15 @@ static void buffer_free(struct convert_rock *rock)
     basic_free(rock);
 }
 
+static void striphtml_free(struct convert_rock *rock)
+{
+    if (rock && rock->state) {
+	struct striphtml_state *s = (struct striphtml_state *)rock->state;
+	buf_free(&s->name);
+    }
+    basic_free(rock);
+}
+
 static void convert_free(struct convert_rock *rock) {
     struct convert_rock *next;
     while (rock) {
@@ -677,10 +1507,11 @@ static struct convert_rock *b64_init(struct convert_rock *next)
     return rock;
 }
 
-static struct convert_rock *stripnl_init(struct convert_rock *next)
+static struct convert_rock *unfold_init(struct convert_rock *next)
 {
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
-    rock->f = stripnl2uni;
+    rock->state = xzmalloc(sizeof(struct unfold_state));
+    rock->f = unfold2uni;
     rock->next = next;
     return rock;
 }
@@ -690,7 +1521,10 @@ static struct convert_rock *canon_init(int flags, struct convert_rock *next)
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
     struct canon_state *s = xzmalloc(sizeof(struct canon_state));
     s->flags = flags;
-    rock->f = uni2searchform;
+    if ((flags & CHARSET_SNIPPET))
+	rock->f = uni2html;
+    else
+	rock->f = uni2searchform;
     rock->state = s;
     rock->next = next;
     return rock;
@@ -749,6 +1583,20 @@ static struct convert_rock *buffer_init(void)
 
     return rock;
 }
+
+struct convert_rock *striphtml_init(struct convert_rock *next)
+{
+    struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
+    struct striphtml_state *s = xzmalloc(sizeof(struct striphtml_state));
+    /* gnb:TODO: if a DOCTYPE is present, sniff it to detect XHTML rules */
+    html_push(s, HDATA);
+    rock->state = (void *)s;
+    rock->f = striphtml2uni;
+    rock->cleanup = striphtml_free;
+    rock->next = next;
+    return rock;
+}
+
 
 /* API */
 
@@ -884,7 +1732,7 @@ EXPORTED char *charset_to_utf8(const char *msg_base, size_t len, int charset, in
 
 static void mimeheader_cat(struct convert_rock *target, const char *s)
 {
-    struct convert_rock *input, *stripnl;
+    struct convert_rock *input, *unfold;
     int eatspace = 0;
     const char *start, *endcharset, *encoding, *end;
     int len;
@@ -897,7 +1745,7 @@ static void mimeheader_cat(struct convert_rock *target, const char *s)
     input = table_init(0, target);
     /* note: we assume the caller of this function has already 
      * determined that all newlines are followed by whitespace */
-    stripnl = stripnl_init(input);
+    unfold = unfold_init(input);
 
     start = s;
     while ((start = (const char*) strchr(start, '=')) != 0) {
@@ -926,7 +1774,7 @@ static void mimeheader_cat(struct convert_rock *target, const char *s)
 	if (!eatspace) {
 	    len = start - s - 1;
 	    table_switch(input, 0); /* US_ASCII */
-	    convert_catn(stripnl, s, len);
+	    convert_catn(unfold, s, len);
 	}
 
 	/*
@@ -936,7 +1784,7 @@ static void mimeheader_cat(struct convert_rock *target, const char *s)
 	charset = lookup_buf(start, endcharset-start);
 	if (charset < 0) {
 	    /* Unrecognized charset, nothing will match here */
-	    convert_putc(input, 0xfffd); /* unknown character */
+	    convert_putc(input, U_REPLACEMENT); /* unknown character */
 	}
 	else {
 	    struct convert_rock *extract;
@@ -965,11 +1813,11 @@ static void mimeheader_cat(struct convert_rock *target, const char *s)
     /* Copy over the tail part of the input string */
     if (*s) {
 	table_switch(input, 0); /* US_ASCII */
-	convert_cat(stripnl, s);
+	convert_cat(unfold, s);
     }
 
     /* just free these ones, the rest can be cleaned up by the sender */
-    basic_free(stripnl);
+    basic_free(unfold);
     basic_free(input);
 }
 
@@ -1162,7 +2010,7 @@ EXPORTED int charset_searchfile(const char *substr, comp_pat *pat,
 
     /* implement the loop here so we can check on the search each time */
     for (i = 0; i < len; i++) {
-	convert_putc(input, msg_base[i]);
+	convert_putc(input, (unsigned char)msg_base[i]);
 	if (search_havematch(tosearch)) break;
     }
 
@@ -1174,15 +2022,18 @@ EXPORTED int charset_searchfile(const char *substr, comp_pat *pat,
 }
 
 /* This is based on charset_searchfile above. */
-EXPORTED int charset_extractitem(index_search_text_receiver_t receiver,
-			void *rock, int uid,
-			const char *msg_base, size_t len,
-			int charset, int encoding, int flags,
-			int rpart, int rcmd)
+EXPORTED int charset_extract(void (*cb)(const struct buf *, void *),
+			     void *rock,
+			     const struct buf *data,
+			     int charset, int encoding,
+			     const char *subtype, int flags)
 {
     struct convert_rock *input, *tobuffer;
     struct buf *out;
     size_t i;
+
+    if (charset_debug)
+	fprintf(stderr, "charset_extract()\n");
 
     /* Initialize character set mapping */
     if (charset < 0 || charset >= chartables_num_charsets) 
@@ -1192,6 +2043,18 @@ EXPORTED int charset_extractitem(index_search_text_receiver_t receiver,
     tobuffer = buffer_init();
     input = uni_init(tobuffer);
     input = canon_init(flags, input);
+
+    if (!strcmpsafe(subtype, "HTML")) {
+	if ((flags & CHARSET_SKIPHTML)) {
+	    /* silently pretend we indexed it, but actually ignore it */
+	    convert_free(input);
+	    return 1;
+	}
+	/* this is text/html data, so we can make ourselves useful by
+	 * stripping html tags, css and js. */
+	input = striphtml_init(input);
+    }
+
     input = table_init(charset, input);
 
     switch (encoding) {
@@ -1218,32 +2081,22 @@ EXPORTED int charset_extractitem(index_search_text_receiver_t receiver,
     /* point to the buffer for easy block sending */
     out = (struct buf *)tobuffer->state;
 
-    for (i = 0; i < len; i++) {
-	convert_putc(input, msg_base[i]);
+    for (i = 0; i < data->len; i++) {
+	convert_putc(input, (unsigned char)data->s[i]);
 
 	/* process a block of output every so often */
 	if (buf_len(out) > 4096) {
-	    receiver(uid, rpart, rcmd, out->s, out->len, rock);
+	    cb(out, rock);
 	    buf_reset(out);
 	}
     }
     if (out->len) { /* finish it */
-	receiver(uid, rpart, rcmd, out->s, out->len, rock);
+	cb(out, rock);
     }
 
     convert_free(input);
 
     return 1;
-}
-
-EXPORTED int charset_extractfile(index_search_text_receiver_t receiver, void *rock,
-			int uid, const char *msg_base, size_t len, 
-			int charset, int encoding, int flags)
-{
-    return charset_extractitem(receiver, rock, uid, msg_base, len,
-			       charset, encoding, flags,
-			       SEARCHINDEX_PART_BODY,
-			       SEARCHINDEX_CMD_APPENDPART);
 }
 
 /*

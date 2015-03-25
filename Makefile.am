@@ -128,6 +128,8 @@ BUILT_SOURCES += \
 	imap/nntp_err.c \
 	imap/lmtpstats.c \
 	imap/pushstats.c \
+	lib/htmlchar.c \
+	lib/htmlchar.h \
 	imap/rfc822_header.c \
 	imap/rfc822_header.h
 
@@ -143,6 +145,7 @@ libexec_PROGRAMS += \
 sbin_PROGRAMS += \
 	imap/arbitron \
 	imap/chk_cyrus \
+	imap/ctl_conversationsdb \
 	imap/ctl_cyrusdb \
 	imap/ctl_deliver \
 	imap/ctl_mboxlist \
@@ -157,17 +160,27 @@ sbin_PROGRAMS += \
 	imap/cyr_synclog \
 	imap/cyr_userseen \
 	imap/deliver \
+	imap/hammer_cyrusdb \
 	imap/ipurge \
 	imap/mbexamine \
 	imap/mbpath \
 	imap/mbtool \
+	imap/message_test \
 	imap/quota \
 	imap/reconstruct \
-	imap/squatter
+	imap/search_test
 
 if HAVE_CLAMAV
 sbin_PROGRAMS += imap/cyr_virusscan
 endif # HAVE_CLAMAV
+
+if USE_SQUAT
+libexec_PROGRAMS += imap/squat_dump
+endif
+if SQUATTER
+# Despite the name, the squatter program handles any search engine
+libexec_PROGRAMS += imap/squatter
+endif
 
 if NNTPD
 libexec_PROGRAMS += imap/nntpd
@@ -183,6 +196,14 @@ endif # IDLED
 if MURDER
 libexec_PROGRAMS += imap/mupdate
 endif # MURDER
+
+if NNTPD
+libexec_PROGRAMS += imap/nntpd
+endif
+
+if CALALARMD
+sbin_PROGRAMS += imap/calalarmd
+endif
 
 if HTTPD
 AM_CPPFLAGS += $(HTTP_CPPFLAGS)
@@ -350,6 +371,7 @@ EXTRA_DIST += \
 	lib/charset/windows-1252.t \
 	lib/charset/windows-1255.t \
 	lib/charset/windows-1256.t \
+	lib/htmlchar.st \
 	lib/imapoptions \
 	lib/test/cyrusdb.c \
 	lib/test/cyrusdb.INPUT \
@@ -575,7 +597,11 @@ cunit_FRAMEWORK = \
 	cunit/syslog.c \
 	cunit/cunit-syslog.h \
 	cunit/timeout.c \
-	cunit/timeout.h
+	cunit/timeout.h \
+	cunit/timezones.c \
+	cunit/timezones.h \
+	cunit/timeofday.c \
+	cunit/timeofday.h
 
 cunit_TESTS = \
 	cunit/annotate.testc \
@@ -585,6 +611,8 @@ cunit_TESTS = \
 	cunit/buf.testc \
 	cunit/byteorder64.testc \
 	cunit/charset.testc \
+	cunit/command.testc \
+	cunit/conversations.testc \
 	cunit/crc32.testc \
 	cunit/db.testc \
 	cunit/dlist.testc \
@@ -603,7 +631,9 @@ cunit_TESTS = \
 	cunit/prot.testc \
 	cunit/ptrarray.testc \
 	cunit/quota.testc \
-	cunit/rfc822tok.testc
+	cunit/rfc822tok.testc \
+	cunit/search_expr.testc \
+	cunit/seqset.testc
 
 if SIEVE
 cunit_TESTS += cunit/sieve.testc
@@ -692,6 +722,7 @@ include_HEADERS = \
 	lib/lsort.h \
 	lib/map.h \
 	lib/mappedfile.h \
+	lib/me.h \
 	lib/mkgmtime.h \
 	lib/mpool.h \
 	lib/nonblock.h \
@@ -728,6 +759,9 @@ imap_arbitron_LDADD = $(LD_UTILITY_ADD)
 
 imap_chk_cyrus_SOURCES = imap/chk_cyrus.c imap/cli_fatal.c imap/mutex_fake.c
 imap_chk_cyrus_LDADD = $(LD_UTILITY_ADD)
+
+imap_ctl_conversationsdb_SOURCES = imap/ctl_conversationsdb.c imap/mutex_fake.c
+imap_ctl_conversationsdb_LDADD = $(LD_UTILITY_ADD)
 
 imap_ctl_cyrusdb_SOURCES = imap/cli_fatal.c imap/ctl_cyrusdb.c imap/mutex_fake.c
 imap_ctl_cyrusdb_LDADD = $(LD_UTILITY_ADD)
@@ -802,8 +836,14 @@ imap_fetchnews_LDADD = $(LD_UTILITY_ADD)
 imap_fud_SOURCES = imap/fud.c imap/mutex_fake.c master/service.c
 imap_fud_LDADD = $(LD_SERVER_ADD)
 
+imap_hammer_cyrusdb_SOURCES = imap/cli_fatal.c imap/hammer_cyrusdb.c imap/mutex_fake.c
+imap_hammer_cyrusdb_LDADD = $(LD_UTILITY_ADD)
+
 imap_idled_SOURCES = imap/idled.c imap/mutex_fake.c
 imap_idled_LDADD = $(LD_UTILITY_ADD)
+
+imap_calalarmd_SOURCES = imap/calalarmd.c imap/mutex_fake.c
+imap_calalarmd_LDADD = $(LD_UTILITY_ADD)
 
 imap_imapd_SOURCES = \
 	imap/imap_proxy.c \
@@ -841,6 +881,10 @@ nodist_imap_libcyrus_imap_la_SOURCES = \
 
 dist_imap_libcyrus_imap_la_SOURCES =
 
+imap_libcyrus_imap_la_LIBADD = $(COM_ERR_LIBS) $(LIB_UUID) lib/libcyrus_min.la lib/libcyrus.la
+imap_libcyrus_imap_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
+imap_libcyrus_imap_la_CXXFLAGS =
+
 imap_libcyrus_imap_la_SOURCES = \
 	imap/annotate.c \
 	imap/annotate.h \
@@ -848,6 +892,7 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/append.h \
 	imap/backend.c \
 	imap/backend.h \
+	imap/conversations.c \
 	imap/convert_code.c \
 	imap/convert_code.h \
 	imap/dlist.c \
@@ -861,6 +906,7 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/idlemsg.c \
 	imap/idlemsg.h \
 	imap/imapparse.c \
+	imap/imapparse.h \
 	imap/index.c \
 	imap/index.h \
 	imap/mailbox.c \
@@ -897,15 +943,15 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/saslserver.c \
 	imap/search_engines.c \
 	imap/search_engines.h \
+	imap/search_expr.c \
+	imap/search_expr.h \
+	imap/search_query.c \
+	imap/search_query.h \
 	imap/seen.h \
 	imap/seen_db.c \
 	imap/sequence.c \
 	imap/sequence.h \
 	imap/setproctitle.c \
-	imap/squat.c \
-	imap/squat.h \
-	imap/squat_internal.c \
-	imap/squat_internal.h \
 	imap/statuscache.h \
 	imap/statuscache_db.c \
 	imap/sync_log.c \
@@ -921,10 +967,25 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/userdeny_db.c \
 	imap/userdeny.h \
 	imap/version.c \
-	imap/version.h
+	imap/version.h \
+	imap/xstats.c \
+	imap/xstats.h \
+	imap/xstats_metrics.h
 
-imap_libcyrus_imap_la_LIBADD = $(COM_ERR_LIBS) lib/libcyrus_min.la lib/libcyrus.la
-imap_libcyrus_imap_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
+if USE_SQUAT
+imap_libcyrus_imap_la_SOURCES += \
+	imap/search_squat.c \
+	imap/squat.c \
+	imap/squat.h \
+	imap/squat_build.c \
+	imap/squat_internal.c \
+	imap/squat_internal.h
+endif
+
+if USE_SPHINX
+imap_libcyrus_imap_la_SOURCES += \
+	imap/search_sphinx.c
+endif
 
 if JANSSON
 imap_libcyrus_imap_la_LIBADD += $(JANSSON_LIBS)
@@ -933,6 +994,7 @@ endif
 
 if HTTPD
 imap_libcyrus_imap_la_SOURCES += \
+	imap/caldav_alarm.c \
 	imap/caldav_db.c \
 	imap/caldav_db.h \
 	imap/carddav_db.c \
@@ -950,6 +1012,7 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/http_dav.h \
 	imap/http_dblookup.c \
 	imap/http_ischedule.c \
+	imap/http_jmap.c \
 	imap/http_proxy.c \
 	imap/http_proxy.h \
 	imap/http_rss.c \
@@ -977,6 +1040,15 @@ nodist_imap_libcyrus_imap_la_SOURCES += \
 	imap/tz_err.c
 
 endif # HTTPD
+
+if USE_XAPIAN
+imap_libcyrus_imap_la_SOURCES += \
+	imap/search_xapian.c \
+	imap/xapian_wrap.h \
+	imap/xapian_wrap.cpp
+imap_libcyrus_imap_la_LIBADD += $(XAPIAN_LIBS)
+imap_libcyrus_imap_la_CXXFLAGS += $(XAPIAN_CXXFLAGS)
+endif
 
 imap_lmtpd_SOURCES = \
 	imap/lmtpd.c \
@@ -1020,6 +1092,9 @@ imap_mbpath_LDADD = $(LD_UTILITY_ADD)
 imap_mbtool_SOURCES = imap/cli_fatal.c imap/mbtool.c imap/mutex_fake.c
 imap_mbtool_LDADD = $(LD_UTILITY_ADD)
 
+imap_message_test_SOURCES = imap/message_test.c imap/mutex_fake.c
+imap_message_test_LDADD = $(LD_UTILITY_ADD)
+
 imap_mupdate_SOURCES = \
 	imap/mupdate.c \
 	imap/mupdate.h \
@@ -1050,6 +1125,7 @@ nodist_imap_httpd_SOURCES = \
 	imap/tz_err.h
 
 imap_httpd_SOURCES = \
+	imap/caldav_alarm.c \
 	imap/caldav_db.c \
 	imap/carddav_db.c \
 	imap/carddav_db.h \
@@ -1061,6 +1137,7 @@ imap_httpd_SOURCES = \
 	imap/http_dav.c \
 	imap/http_dblookup.c \
 	imap/http_ischedule.c \
+	imap/http_jmap.c \
 	imap/http_proxy.c \
 	imap/http_rss.c \
 	imap/http_tzdist.c \
@@ -1107,17 +1184,22 @@ imap_reconstruct_LDADD = $(LD_UTILITY_ADD)
 imap_dav_reconstruct_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/dav_reconstruct.c
 imap_dav_reconstruct_LDADD = $(LD_UTILITY_ADD)
 
+imap_search_test_SOURCES = imap/search_test.c imap/mutex_fake.c
+imap_search_test_LDADD = $(LD_UTILITY_ADD)
+
 imap_smmapd_SOURCES = imap/mutex_fake.c imap/proxy.c imap/smmapd.c master/service.c
 imap_smmapd_LDADD = $(LD_SERVER_ADD)
 
-imap_squatter_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/squatter.c imap/squat_build.c
+imap_squatter_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/squatter.c
 imap_squatter_LDADD = $(LD_UTILITY_ADD)
 
-imap_sync_client_SOURCES = imap/mutex_fake.c imap/sync_client.c \
-	imap/sync_support.c imap/sync_support.h
+imap_squat_dump_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/squat_dump.c
+imap_squat_dump_LDADD = $(LD_UTILITY_ADD)
+
+imap_sync_client_SOURCES = imap/mutex_fake.c imap/sync_client.c imap/sync_support.c imap/sync_support.h
 imap_sync_client_LDADD = $(LD_UTILITY_ADD)
 
-imap_sync_reset_SOURCES = imap/mutex_fake.c imap/sync_reset.c imap/sync_support.c
+imap_sync_reset_SOURCES = imap/mutex_fake.c imap/sync_reset.c imap/sync_support.c imap/sync_support.h
 imap_sync_reset_LDADD = $(LD_UTILITY_ADD)
 
 imap_sync_server_SOURCES = imap/mutex_fake.c imap/sync_server.c imap/sync_support.c master/service.c
@@ -1150,6 +1232,12 @@ imap/rfc822_header.c: imap/rfc822_header.st
 
 imap/rfc822_header.h: imap/rfc822_header.st
 	${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
+
+lib/htmlchar.c: lib/htmlchar.st
+	${top_srcdir}/tools/compile_st.pl -c $< > $@.NEW && mv $@.NEW $@
+
+lib/htmlchar.h: lib/htmlchar.st
+	${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
 endif
 
 imtest_imtest_SOURCES = imtest/imtest.c
@@ -1177,6 +1265,8 @@ lib_libcyrus_la_SOURCES = \
 	lib/cyrusdb_skiplist.c \
 	lib/cyrusdb_twoskip.c \
 	lib/glob.c \
+	lib/htmlchar.c \
+	lib/htmlchar.h \
 	lib/imapurl.c \
 	lib/imclient.c \
 	lib/imparse.c \
@@ -1218,6 +1308,7 @@ lib_libcyrus_min_la_SOURCES = \
 	lib/hashu64.c \
 	lib/imapopts.c \
 	lib/libconfig.c \
+	lib/me.c \
 	lib/mpool.c \
 	lib/retry.c \
 	lib/strarray.c \
@@ -1310,13 +1401,17 @@ dist_man_MANS = \
 	man/reconstruct.8 \
 	man/rmnews.8 \
 	man/smmapd.8 \
-	man/squatter.8 \
 	man/sync_client.8 \
 	man/sync_reset.8 \
 	man/sync_server.8 \
 	man/timsieved.8 \
 	man/tls_prune.8 \
 	man/unexpunge.8
+
+if USE_SQUAT
+dist_man_MANS += \
+	man/squatter.8
+endif
 
 if NNTPD
 dist_man_MANS += \
@@ -1621,3 +1716,7 @@ valgrind:
 
 libtool: $(LIBTOOL_DEPS)
 	$(SHELL) ./config.status libtool
+
+# Install for Cassandane
+cassandane:
+	$(MAKE) DESTDIR=`cd ../inst ; /bin/pwd` install

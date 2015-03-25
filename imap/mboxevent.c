@@ -66,10 +66,11 @@
 #include "times.h"
 #include "xmalloc.h"
 
-#include "imap/mboxname.h"
-#include "imap/notify.h"
-#include "imap/message.h"
-
+#include "map.h"
+#include "mboxevent.h"
+#include "mboxname.h"
+#include "notify.h"
+#include "global.h"
 
 #define MESSAGE_EVENTS (EVENT_MESSAGE_APPEND|EVENT_MESSAGE_EXPIRE|\
 			EVENT_MESSAGE_EXPUNGE|EVENT_MESSAGE_NEW|\
@@ -85,6 +86,8 @@
 
 #define QUOTA_EVENTS   (EVENT_QUOTA_EXCEED|EVENT_QUOTA_WITHIN|EVENT_QUOTA_CHANGE)
 
+#define CALENDAR_EVENTS (EVENT_CALENDAR_ALARM)
+
 
 #define FILL_STRING_PARAM(e,p,v) e->params[p].value = (uint64_t)v; \
 				 e->params[p].type = EVENT_PARAM_STRING; \
@@ -98,6 +101,8 @@
 
 static const char *notifier = NULL;
 static struct namespace namespace;
+
+static const char *client_id = NULL;
 
 static strarray_t *excluded_flags;
 static strarray_t *excluded_specialuse;
@@ -134,13 +139,41 @@ static struct mboxevent event_template =
     /* 21 */ { EVENT_USER, "user", EVENT_PARAM_STRING, 0, 0 },
     /* 22 */ { EVENT_MESSAGE_SIZE, "messageSize", EVENT_PARAM_INT, 0, 0 },
     /* 23 */ { EVENT_MBTYPE, "vnd.cmu.mbtype", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_SERVERFQDN, "serverFQDN", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_MAILBOX_ACL, "vnd.cmu.mailboxACL", EVENT_PARAM_STRING, 0, 0 },
     /* 24 */ { EVENT_DAV_FILENAME, "vnd.cmu.davFilename", EVENT_PARAM_STRING, 0, 0 },
     /* 25 */ { EVENT_DAV_UID, "vnd.cmu.davUid", EVENT_PARAM_STRING, 0, 0 },
     /* 26 */ { EVENT_ENVELOPE, "vnd.cmu.envelope", EVENT_PARAM_STRING, 0, 0 },
     /* 27 */ { EVENT_SESSIONID, "vnd.cmu.sessionId", EVENT_PARAM_STRING, 0, 0 },
     /* 28 */ { EVENT_BODYSTRUCTURE, "bodyStructure", EVENT_PARAM_STRING, 0, 0 },
+    /* 29 */ { EVENT_CLIENT_ID, "vnd.fastmail.clientId", EVENT_PARAM_STRING, 0, 0 },
+    /* 30 */ { EVENT_SESSION_ID, "vnd.fastmail.sessionId", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_CONVEXISTS, "vnd.fastmail.convExists", EVENT_PARAM_INT, 0, 0 },
+    { EVENT_CONVUNSEEN, "vnd.fastmail.convUnseen", EVENT_PARAM_INT, 0, 0 },
+    { EVENT_MESSAGE_CID, "vnd.fastmail.cid", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_COUNTERS, "vnd.fastmail.counters", EVENT_PARAM_STRING, 0, 0 },
+
+    /* calendar params for calalarmd/notifyd */
+    { EVENT_CALENDAR_ALARM_TIME, "alarmTime", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_CALENDAR_ALARM_RECIPIENTS, "alarmRecipients", EVENT_PARAM_ARRAY, 0, 0 },
+    { EVENT_CALENDAR_USER_ID, "userId", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_CALENDAR_CALENDAR_NAME, "calendarName", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_CALENDAR_UID, "uid", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_CALENDAR_ACTION, "action", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_CALENDAR_SUMMARY, "summary", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_CALENDAR_DESCRIPTION, "description", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_CALENDAR_LOCATION, "location", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_CALENDAR_TIMEZONE, "timezone", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_CALENDAR_START, "start", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_CALENDAR_END, "end", EVENT_PARAM_STRING, 0, 0 },
+    { EVENT_CALENDAR_ALLDAY, "allDay", EVENT_PARAM_INT, 0, 0 },
+    { EVENT_CALENDAR_ATTENDEE_NAMES, "attendeeNames", EVENT_PARAM_ARRAY, 0, 0 },
+    { EVENT_CALENDAR_ATTENDEE_EMAILS, "attendeeEmails", EVENT_PARAM_ARRAY, 0, 0 },
+    { EVENT_CALENDAR_ATTENDEE_STATUS, "attendeeStatus", EVENT_PARAM_ARRAY, 0, 0 },
+    { EVENT_CALENDAR_ORGANIZER, "organizer", EVENT_PARAM_STRING, 0, 0 },
+
     /* always at end to let the parser to easily truncate this part */
-    /* 29 */ { EVENT_MESSAGE_CONTENT, "messageContent", EVENT_PARAM_STRING, 0, 0 }
+    /* 31 */ { EVENT_MESSAGE_CONTENT, "messageContent", EVENT_PARAM_STRING, 0, 0 }
   },
   STRARRAY_INITIALIZER, { 0, 0 }, NULL, STRARRAY_INITIALIZER, NULL, NULL, NULL
 };
@@ -192,6 +225,9 @@ EXPORTED void mboxevent_init(void)
 
     if (groups & IMAP_ENUM_EVENT_GROUPS_MAILBOX)
 	enabled_events |= MAILBOX_EVENTS;
+
+    if (groups & IMAP_ENUM_EVENT_GROUPS_CALENDAR)
+	enabled_events |= CALENDAR_EVENTS;
 }
 
 EXPORTED void mboxevent_setnamespace(struct namespace *n)
@@ -268,6 +304,12 @@ EXPORTED struct mboxevent *mboxevent_new(enum event_type type)
     if (mboxevent_expected_param(type, EVENT_SESSIONID))
 	FILL_STRING_PARAM(mboxevent, EVENT_SESSIONID, xstrdup(session_id()));
 
+    if (mboxevent_expected_param(type, EVENT_CLIENT_ID) && client_id)
+	FILL_STRING_PARAM(mboxevent, EVENT_CLIENT_ID, xstrdup(client_id));
+
+    if (mboxevent_expected_param(type, EVENT_SESSION_ID))
+	FILL_STRING_PARAM(mboxevent, EVENT_SESSION_ID, xstrdup(session_id()));
+
     return mboxevent;
 }
 
@@ -341,8 +383,39 @@ void mboxevent_freequeue(struct mboxevent **mboxevent)
     *mboxevent = NULL;
 }
 
+static int mboxevent_expected_calendar_param(enum event_param param)
+{
+    switch (param) {
+    case EVENT_CALENDAR_ALARM_TIME:
+    case EVENT_CALENDAR_ALARM_RECIPIENTS:
+    case EVENT_CALENDAR_USER_ID:
+    case EVENT_CALENDAR_CALENDAR_NAME:
+    case EVENT_CALENDAR_UID:
+    case EVENT_CALENDAR_ACTION:
+    case EVENT_CALENDAR_SUMMARY:
+    case EVENT_CALENDAR_DESCRIPTION:
+    case EVENT_CALENDAR_LOCATION:
+    case EVENT_CALENDAR_TIMEZONE:
+    case EVENT_CALENDAR_START:
+    case EVENT_CALENDAR_END:
+    case EVENT_CALENDAR_ALLDAY:
+    case EVENT_CALENDAR_ATTENDEE_NAMES:
+    case EVENT_CALENDAR_ATTENDEE_EMAILS:
+    case EVENT_CALENDAR_ATTENDEE_STATUS:
+    case EVENT_CALENDAR_ORGANIZER:
+	return 1;
+    case EVENT_SERVERFQDN: /* needed to see who is master */
+	return 1;
+    default:
+	return 0;
+    }
+}
+
 static int mboxevent_expected_param(enum event_type type, enum event_param param)
 {
+    if (type == EVENT_CALENDAR_ALARM)
+	return mboxevent_expected_calendar_param(param);
+
     switch (param) {
     case EVENT_BODYSTRUCTURE:
 	return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_BODYSTRUCTURE) &&
@@ -367,14 +440,16 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
 	return (type & (EVENT_FLAGS_SET|EVENT_FLAGS_CLEAR)) ||
 	       ((extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_FLAGNAMES) &&
 		(type & (EVENT_MESSAGE_APPEND|EVENT_MESSAGE_NEW)));
+    case EVENT_CLIENT_ID:
+	return extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_CLIENTID;
+    case EVENT_SESSION_ID:
+	return extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_SESSIONID;
     case EVENT_MAILBOX_ID:
 	return (type & MAILBOX_EVENTS);
     case EVENT_MBTYPE:
-#ifdef WITH_DAV
 	return (type & MAILBOX_EVENTS);
-#else
-	return 0;
-#endif
+    case EVENT_MAILBOX_ACL:
+	return (type & MAILBOX_EVENTS);
     case EVENT_QUOTA_MESSAGES:
 	return type & QUOTA_EVENTS;
     case EVENT_MESSAGE_CONTENT:
@@ -389,6 +464,9 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
     case EVENT_DAV_UID:
 	return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_DAVUID) &&
 	       (type & EVENT_CALENDAR);
+    case EVENT_MESSAGE_CID:
+	return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_CID) &&
+	       (type & (EVENT_MESSAGE_APPEND|EVENT_MESSAGE_NEW));
     case EVENT_MESSAGES:
 	if (type & (EVENT_QUOTA_EXCEED|EVENT_QUOTA_WITHIN))
 	    return 1;
@@ -423,6 +501,8 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
 	return 1;
     case EVENT_PID:
 	return 1;
+    case EVENT_SERVERFQDN:
+	return 1;
     case EVENT_USER:
 	return (
 		type & MESSAGE_EVENTS ||
@@ -441,8 +521,16 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
 	if (!(extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_UNSEENMESSAGES))
 	    return 0;
 	break;
+    case EVENT_CONVEXISTS:
+	return extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_CONVEXISTS;
+    case EVENT_CONVUNSEEN:
+	return extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_CONVUNSEEN;
+    case EVENT_COUNTERS:
+	return extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_COUNTERS;
     case EVENT_OLD_UIDSET:
 	return type & (EVENT_MESSAGE_COPY|EVENT_MESSAGE_MOVE);
+    default:
+	return 0;
     }
 
     /* test if the parameter is related to a message event */
@@ -456,6 +544,7 @@ EXPORTED void mboxevent_notify(struct mboxevent *mboxevents)
     struct mboxevent *event;
     char stimestamp[TIMESTAMP_MAX+1];
     char *formatted_message;
+    const char *fname = NULL;
 
     /* nothing to notify */
     if (!mboxevents)
@@ -501,6 +590,10 @@ EXPORTED void mboxevent_notify(struct mboxevent *mboxevents)
 
 	if (mboxevent_expected_param(event->type, EVENT_SERVICE)) {
 	    FILL_STRING_PARAM(event, EVENT_SERVICE, xstrdup(config_ident));
+	}
+
+	if (mboxevent_expected_param(event->type, EVENT_SERVERFQDN)) {
+	    FILL_STRING_PARAM(event, EVENT_SERVERFQDN, xstrdup(config_servername));
 	}
 
 	if (mboxevent_expected_param(event->type, EVENT_TIMESTAMP)) {
@@ -554,7 +647,7 @@ EXPORTED void mboxevent_notify(struct mboxevent *mboxevents)
 
 	    /* notification is ready to send */
 	    formatted_message = json_formatter(type, event->params);
-	    notify(notifier, "EVENT", NULL, NULL, NULL, 0, NULL, formatted_message);
+	    notify(notifier, "EVENT", NULL, NULL, NULL, 0, NULL, formatted_message, fname);
 
 	    free(formatted_message);
 	}
@@ -619,12 +712,10 @@ void mboxevent_add_flag(struct mboxevent *event, const char *flag)
 EXPORTED void mboxevent_set_access(struct mboxevent *event,
 				   const char *serveraddr, const char *clientaddr,
 				   const char *userid, const char *mailboxname,
-				   const int ext_name)
+				   const int ext_name __attribute__((unused)))
 {
     char url[MAX_MAILBOX_PATH+1];
     struct imapurl imapurl;
-    char extname[MAX_MAILBOX_NAME];
-    char *userbuf;
 
     if (!event)
 	return;
@@ -636,34 +727,23 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
     }
 
     /* all events needs uri parameter */
-    if (!event->params[EVENT_URI].filled) {
-	memset(&imapurl, 0, sizeof(struct imapurl));
-	imapurl.server = config_servername;
+    memset(&imapurl, 0, sizeof(struct imapurl));
+    imapurl.server = config_servername;
 
-	if (mailboxname != NULL) {
-	    /* translate internal mailbox name to external */
-	    assert(namespace.mboxname_toexternal != NULL);
-	    (*namespace.mboxname_toexternal)(&namespace, mailboxname,
-					     mboxname_to_userid(mailboxname),
-					     extname);
+    if (mailboxname != NULL) {
+	struct mboxname_parts parts;
+	mboxname_to_parts(mailboxname, &parts);
 
-	    /* translate any separators in user */
-	    userbuf = (char *)mboxname_to_userid(mailboxname);
-	    if (userbuf != NULL && ext_name)
-		mboxname_hiersep_toexternal(&namespace, userbuf,
-					    config_virtdomains ? strcspn(userbuf, "@") : 0);
+	imapurl.mailbox = parts.box;
 
-	    imapurl.mailbox = extname;
-	    imapurl.user = userbuf;
-	}
-
-	imapurl_toURL(url, &imapurl);
-	FILL_STRING_PARAM(event, EVENT_URI, xstrdup(url));
-
-	if (event->type & MAILBOX_EVENTS) {
-	    FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(url));
+	if (parts.userid) {
+	    imapurl.user = parts.userid;
+	    if (parts.domain) imapurl.server = parts.domain;
 	}
     }
+
+    imapurl_toURL(url, &imapurl);
+    FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(url));
 
     if (serveraddr && mboxevent_expected_param(event->type, EVENT_SERVER_ADDRESS)) {
 	FILL_STRING_PARAM(event, EVENT_SERVER_ADDRESS, xstrdup(serveraddr));
@@ -673,12 +753,10 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
     }
     if (userid && mboxevent_expected_param(event->type, EVENT_USER)) {
 	/* translate any separators in user */
-	userbuf = xstrdup(userid);
-	if (userbuf != NULL && ext_name)
-	    mboxname_hiersep_toexternal(&namespace, userbuf,
-				    config_virtdomains ? strcspn(userbuf, "@") : 0);
-
-	FILL_STRING_PARAM(event, EVENT_USER, userbuf);
+	char *user = xstrdup(userid);
+	mboxname_hiersep_toexternal(&namespace, user,
+				    config_virtdomains ? strcspn(user, "@") : 0);
+	FILL_STRING_PARAM(event, EVENT_USER, user); /* note, absorbs the user */
     }
 }
 
@@ -747,6 +825,12 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 	FILL_UNSIGNED_PARAM(event, EVENT_MESSAGE_SIZE, record->size);
     }
 
+    /* add message CID */
+    if (mboxevent_expected_param(event->type, EVENT_MESSAGE_CID)) {
+	FILL_STRING_PARAM(event, EVENT_MESSAGE_CID,
+			  xstrdup(conversation_id_encode(record->cid)));
+    }
+
     /* add vnd.cmu.envelope */
     if (mboxevent_expected_param(event->type, EVENT_ENVELOPE)) {
 	FILL_STRING_PARAM(event, EVENT_ENVELOPE,
@@ -787,22 +871,103 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 	    if (mailbox->mbtype & MBTYPE_ADDRESSBOOK) {
 		struct carddav_db *carddavdb = NULL;
 		struct carddav_data *cdata = NULL;
-		carddavdb = carddav_open_mailbox(mailbox, 0);
-		carddav_lookup_resource(carddavdb, mailbox->name, resource, 0, &cdata);
+		carddavdb = carddav_open_mailbox(mailbox);
+		carddav_lookup_resource(carddavdb, mailbox->name, resource, 0, &cdata, 0);
 		FILL_STRING_PARAM(event, EVENT_DAV_UID, xstrdup(cdata->vcard_uid));
 		carddav_close(carddavdb);
 	    }
 	    if (mailbox->mbtype & MBTYPE_CALENDAR) {
 		struct caldav_db *caldavdb = NULL;
 		struct caldav_data *cdata = NULL;
-		caldavdb = caldav_open_mailbox(mailbox, 0);
-		caldav_lookup_resource(caldavdb, mailbox->name, resource, 0, &cdata);
+		caldavdb = caldav_open_mailbox(mailbox);
+		caldav_lookup_resource(caldavdb, mailbox->name, resource, 0, &cdata, 0);
 		FILL_STRING_PARAM(event, EVENT_DAV_UID, xstrdup(cdata->ical_uid));
 		caldav_close(caldavdb);
 	    }
 	}
     }
 #endif // WITH_DAV
+}
+
+EXPORTED void mboxevent_extract_icalcomponent(struct mboxevent *event,
+					      icalcomponent *ical,
+					      const char *userid,
+					      const char *calname,
+					      enum caldav_alarm_action action,
+					      icaltimetype alarmtime,
+					      const char *timezone,
+					      icaltimetype start,
+					      icaltimetype end,
+					      strarray_t *recipients)
+{
+    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+
+    icalproperty *prop;
+
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_ALARM_TIME,
+		      xstrdup(icaltime_as_ical_string(alarmtime)));
+
+    FILL_ARRAY_PARAM(event, EVENT_CALENDAR_ALARM_RECIPIENTS, recipients);
+
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_USER_ID, xstrdup(userid));
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_CALENDAR_NAME, xstrdup(calname));
+
+    prop = icalcomponent_get_first_property(comp, ICAL_UID_PROPERTY);
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_UID,
+		      xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
+
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_ACTION, xstrdup(
+	action == CALDAV_ALARM_ACTION_DISPLAY	? "display" :
+	action == CALDAV_ALARM_ACTION_EMAIL	? "email" :
+						  ""));
+
+    prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_SUMMARY,
+		      xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
+
+    prop = icalcomponent_get_first_property(comp, ICAL_DESCRIPTION_PROPERTY);
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_DESCRIPTION,
+		      xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
+
+    prop = icalcomponent_get_first_property(comp, ICAL_LOCATION_PROPERTY);
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_LOCATION,
+		      xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
+
+    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_ORGANIZER,
+		      xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
+
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_TIMEZONE,
+		      xstrdup(timezone));
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_START,
+		      xstrdup(icaltime_as_ical_string(start)));
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_END,
+		      xstrdup(icaltime_as_ical_string(end)));
+    FILL_UNSIGNED_PARAM(event, EVENT_CALENDAR_ALLDAY,
+		        icaltime_is_date(start) ? 1 : 0);
+
+    strarray_t *attendee_names = strarray_new();
+    strarray_t *attendee_emails = strarray_new();
+    strarray_t *attendee_status = strarray_new();
+    prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+    while (prop) {
+	const char *email = icalproperty_get_value_as_string(prop);
+	if (!email)
+	    continue;
+	strarray_append(attendee_emails, email);
+
+	const char *name = icalproperty_get_parameter_as_string(prop, "CN");
+	strarray_append(attendee_names, name ? name : "");
+
+	const char *partstat = icalproperty_get_parameter_as_string(prop, "PARTSTAT");
+	strarray_append(attendee_status, partstat ? partstat : "");
+
+	prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY);
+    }
+
+    FILL_ARRAY_PARAM(event, EVENT_CALENDAR_ATTENDEE_NAMES, attendee_names);
+    FILL_ARRAY_PARAM(event, EVENT_CALENDAR_ATTENDEE_EMAILS, attendee_emails);
+    FILL_ARRAY_PARAM(event, EVENT_CALENDAR_ATTENDEE_STATUS, attendee_status);
 }
 
 void mboxevent_extract_copied_record(struct mboxevent *event,
@@ -893,7 +1058,6 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
     struct imapurl imapurl;
     char url[MAX_MAILBOX_PATH+1];
     char extname[MAX_MAILBOX_NAME];
-    char *userbuf;
 
     if (!event)
 	return;
@@ -925,23 +1089,24 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
      * It seems that it does not correspond to the concept of
      * quota root specified in RFC 2087. Thus we fill uri with quota root
      */
-    if (event->type & QUOTA_EVENTS) {
-	/* translate internal mailbox name to external */
-	assert(namespace.mboxname_toexternal != NULL);
-	(*namespace.mboxname_toexternal)(&namespace, quota->root,
-					 mboxname_to_userid(quota->root),
-					 extname);
-
-	/* translate any separators in user */
-	userbuf = (char *)mboxname_to_userid(quota->root);
-	if (userbuf != NULL)
-	    mboxname_hiersep_toexternal(&namespace, userbuf,
-					config_virtdomains ? strcspn(userbuf, "@") : 0);
+    if (!event->params[EVENT_URI].filled && event->type & QUOTA_EVENTS) {
+	char *user = (char *)mboxname_to_userid(quota->root);
 
 	memset(&imapurl, 0, sizeof(struct imapurl));
 	imapurl.server = config_servername;
+
+	/* translate internal mailbox name to external */
+	assert(namespace.mboxname_toexternal != NULL);
+	(*namespace.mboxname_toexternal)(&namespace, quota->root, user, extname);
 	imapurl.mailbox = extname;
-	imapurl.user = userbuf;
+
+	if (user) {
+	    /* translate any separators in user */
+	    mboxname_hiersep_toexternal(&namespace, user,
+					config_virtdomains ? strcspn(user, "@") : 0);
+	    imapurl.user = user;
+	}
+
 	imapurl_toURL(url, &imapurl);
 
 	if (!event->params[EVENT_URI].filled) {
@@ -955,7 +1120,7 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
 	 */
 
 	if (!event->params[EVENT_USER].filled) {
-	    FILL_STRING_PARAM(event, EVENT_USER, (userbuf == NULL ? '\0' : xstrdup(userbuf)));
+	    FILL_STRING_PARAM(event, EVENT_USER, xstrdupsafe(user));
 	}
     }
 }
@@ -982,7 +1147,7 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     struct imapurl imapurl;
     char url[MAX_MAILBOX_PATH+1];
     char extname[MAX_MAILBOX_NAME];
-    char *userbuf;
+    char *user;
 
     if (!event)
 	return;
@@ -998,22 +1163,23 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     }
 
     /* translate internal mailbox name to external */
-    assert(namespace.mboxname_toexternal != NULL);
-    (*namespace.mboxname_toexternal)(&namespace, mailbox->name,
-				     mboxname_to_userid(mailbox->name), extname);
-
-    /* translate any separators in user */
-    userbuf = (char *)mboxname_to_userid(mailbox->name);
-    if (userbuf != NULL)
-	mboxname_hiersep_toexternal(&namespace, userbuf,
-				    config_virtdomains ? strcspn(userbuf, "@") : 0);
-
-    /* all events needs uri parameter */
+    user = (char *)mboxname_to_userid(mailbox->name);
     memset(&imapurl, 0, sizeof(struct imapurl));
     imapurl.server = config_servername;
-    imapurl.mailbox = extname;
-    imapurl.user = userbuf;
     imapurl.uidvalidity = mailbox->i.uidvalidity;
+
+    assert(namespace.mboxname_toexternal != NULL);
+    (*namespace.mboxname_toexternal)(&namespace, mailbox->name, user, extname);
+    imapurl.mailbox = extname;
+
+    if (user) {
+	/* translate any separators in user */
+	mboxname_hiersep_toexternal(&namespace, user,
+				    config_virtdomains ? strcspn(user, "@") : 0);
+
+	imapurl.user = user;
+    }
+
     if (event->type & (EVENT_MESSAGE_NEW|EVENT_MESSAGE_APPEND) && event->uidset) {
 	imapurl.uid = seqset_first(event->uidset);
 	/* don't add uidset parameter to MessageNew and MessageAppend events */
@@ -1021,6 +1187,7 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
 	event->uidset = NULL;
     }
 
+    /* all events needs uri parameter */
     imapurl_toURL(url, &imapurl);
     FILL_STRING_PARAM(event, EVENT_URI, xstrdup(url));
 
@@ -1028,6 +1195,8 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     FILL_STRING_PARAM(event, EVENT_MBTYPE,
 	xstrdup(mboxlist_mbtype_to_string(mailbox->mbtype)));
 #endif
+
+    FILL_STRING_PARAM(event, EVENT_MAILBOX_ACL, xstrdup(mailbox->acl));
 
     /* mailbox related events also require mailboxID */
     if (event->type & MAILBOX_EVENTS) {
@@ -1052,6 +1221,33 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     if (mboxevent_expected_param(event->type, EVENT_MESSAGES)) {
 	FILL_UNSIGNED_PARAM(event, EVENT_MESSAGES, mailbox->i.exists);
     }
+
+    if (mboxevent_expected_param(event->type, EVENT_CONVEXISTS) ||
+	mboxevent_expected_param(event->type, EVENT_CONVUNSEEN)) {
+	conv_status_t status = CONV_STATUS_INIT;
+
+	if (mailbox->local_cstate)
+	    conversation_getstatus(mailbox->local_cstate, mailbox->name, &status);
+
+	if (mboxevent_expected_param(event->type, EVENT_CONVEXISTS))
+	    FILL_UNSIGNED_PARAM(event, EVENT_CONVEXISTS, status.exists);
+
+	if (mboxevent_expected_param(event->type, EVENT_CONVUNSEEN))
+	    FILL_UNSIGNED_PARAM(event, EVENT_CONVUNSEEN, status.unseen);
+    }
+
+    if (mboxevent_expected_param(event->type, EVENT_COUNTERS)) {
+	struct mboxname_counters counters;
+	struct buf value = BUF_INITIALIZER;
+
+	mboxname_read_counters(mailbox->name, &counters);
+	buf_printf(&value, "%u %llu %llu %llu %llu %u",
+	           counters.version, counters.highestmodseq,
+	           counters.mailmodseq, counters.caldavmodseq,
+	           counters.carddavmodseq, counters.uidvalidity);
+
+	FILL_STRING_PARAM(event, EVENT_COUNTERS, buf_release(&value));
+    }
 }
 
 void mboxevent_extract_old_mailbox(struct mboxevent *event,
@@ -1060,30 +1256,38 @@ void mboxevent_extract_old_mailbox(struct mboxevent *event,
     struct imapurl imapurl;
     char url[MAX_MAILBOX_PATH+1];
     char extname[MAX_MAILBOX_NAME];
-    char *userbuf;
+    char *user;
 
     if (!event)
 	return;
 
-    /* translate internal mailbox name to external */
-    assert(namespace.mboxname_toexternal != NULL);
-    (*namespace.mboxname_toexternal)(&namespace, mailbox->name,
-				     mboxname_to_userid(mailbox->name), extname);
-
-    /* translate any separators in user */
-    userbuf = (char *)mboxname_to_userid(mailbox->name);
-    if (userbuf != NULL)
-	mboxname_hiersep_toexternal(&namespace, userbuf,
-				    config_virtdomains ? strcspn(userbuf, "@") : 0);
+    user = (char *)mboxname_to_userid(mailbox->name);
 
     memset(&imapurl, 0, sizeof(struct imapurl));
     imapurl.server = config_servername;
-    imapurl.mailbox = extname;
-    imapurl.user = userbuf;
     imapurl.uidvalidity = mailbox->i.uidvalidity;
+
+    /* translate internal mailbox name to external */
+    assert(namespace.mboxname_toexternal != NULL);
+    (*namespace.mboxname_toexternal)(&namespace, mailbox->name, user, extname);
+    imapurl.mailbox = extname;
+
+    if (user) {
+    /* translate any separators in user */
+	mboxname_hiersep_toexternal(&namespace, user,
+				    config_virtdomains ? strcspn(user, "@") : 0);
+	imapurl.user = user;
+    }
 
     imapurl_toURL(url, &imapurl);
     FILL_STRING_PARAM(event, EVENT_OLD_MAILBOX_ID, xstrdup(url));
+}
+
+EXPORTED void mboxevent_set_client_id(const char *id)
+{
+    if (client_id)
+	free((char *)client_id);
+    client_id = xstrdupnull(id);
 }
 
 static const char *event_to_name(enum event_type type)
@@ -1134,6 +1338,8 @@ static const char *event_to_name(enum event_type type)
 	return "MailboxUnSubscribe";
     case EVENT_ACL_CHANGE:
 	return "AclChange";
+    case EVENT_CALENDAR_ALARM:
+	return "CalendarAlarm";
     default:
 	fatal("Unknown message event", EC_SOFTWARE);
     }
@@ -1371,6 +1577,10 @@ EXPORTED void mboxevent_set_numunseen(struct mboxevent *event __attribute__((unu
 
 EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event __attribute__((unused)),
 					struct mailbox *mailbox __attribute__((unused)))
+{
+}
+
+EXPORTED void mboxevent_set_client_id(const char *id)
 {
 }
 

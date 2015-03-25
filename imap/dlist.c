@@ -135,11 +135,14 @@ static void printfile(struct protstream *out, const struct dlist *dl)
 
 /* XXX - these two functions should be out in append.c or reserve.c
  * or something more general */
-EXPORTED const char *dlist_reserve_path(const char *part, struct message_guid *guid)
+EXPORTED const char *dlist_reserve_path(const char *part, int isarchive,
+					struct message_guid *guid)
 {
     static char buf[MAX_MAILBOX_PATH];
+    const char *base = isarchive ? config_archivepartitiondir(part)
+				 : config_partitiondir(part);
     snprintf(buf, MAX_MAILBOX_PATH, "%s/sync./%lu/%s",
-		  config_partitiondir(part), (unsigned long)getpid(),
+		  base, (unsigned long)getpid(),
 		  message_guid_encode(guid));
     /* gotta make sure we can create files */
     if (cyrus_mkdir(buf, 0755)) {
@@ -159,7 +162,7 @@ static int reservefile(struct protstream *in, const char *part,
     int r = 0, n;
 
     /* XXX - write to a temporary file then move in to place! */
-    *fname = dlist_reserve_path(part, guid);
+    *fname = dlist_reserve_path(part, /*isarchive*/0, guid);
 
     /* remove any duplicates if they're still here */
     unlink(*fname);

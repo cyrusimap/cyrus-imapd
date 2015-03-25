@@ -54,7 +54,9 @@
 #define MAX(a,b)    ((a)>(b)?(a):(b))
 #endif
 
+#define BITS_PER_UNIT	8
 #define vidx(x)		((x) >> 3)
+#define visaligned(x)	(!((x) & 0x7))
 #define vmask(x)	(1 << ((x) & 0x7))
 #define vtailmask(x)	((unsigned char)(0xff << ((x) & 0x7)))
 #define vlen(x)		vidx((x)+7)
@@ -158,12 +160,97 @@ EXPORTED void bv_oreq(bitvector_t *a, const bitvector_t *b)
     unsigned int i;
 
     bv_ensure(a, b->length);
-    if (!a->length)
-	return;
     n = vlen(b->length+1);
     for (i = 0 ; i <= n ; i++)
 	a->bits[i] |= b->bits[i];
     a->length = MAX(a->length, b->length);
+}
+
+/*
+ * Returns the bit position of the next set bit which is after or equal
+ * to position 'start'.  Passing start = 0 returns the first set bit.
+ * Returns a bit position or -1 if there are no more set bits.
+ */
+EXPORTED int bv_next_set(const bitvector_t *bv, int start)
+{
+    int i;
+
+    if (start < 0 || start >= (int)bv->length) return -1;
+
+    for (i = start ; i < (int)bv->length && !visaligned(i) ; i++)
+	if (bv->bits[vidx(i)] & vmask(i))
+	    return i;
+
+    while (i < (int)bv->length) {
+	if (!bv->bits[vidx(i)]) {
+	    i += BITS_PER_UNIT;
+	}
+	else {
+	    if (bv->bits[vidx(i)] & vmask(i))
+		return i;
+	    i++;
+	}
+    }
+
+    return -1;
+}
+
+/*
+ * Returns the bit position of the previous set bit which is before or
+ * equal to position 'start'.  Passing start = bv->vector-1 returns the
+ * last set bit.  Returns a bit position or -1 if there are no more set
+ * bits.
+ */
+EXPORTED int bv_prev_set(const bitvector_t *bv, int start)
+{
+    int i;
+
+    if (start < 0 || start >= (int)bv->length) return -1;
+
+    for (i = start ; i < (int)bv->length && !visaligned(i) ; i--)
+	if (bv->bits[vidx(i)] & vmask(i))
+	    return i;
+
+    while (i >= 0) {
+	if (!bv->bits[vidx(i)]) {
+	    i -= BITS_PER_UNIT;
+	}
+	else {
+	    if (bv->bits[vidx(i)] & vmask(i))
+		return i;
+	    i--;
+	}
+    }
+
+    return -1;
+}
+
+EXPORTED int bv_first_set(const bitvector_t *bv)
+{
+    return bv_next_set(bv, 0);
+}
+
+EXPORTED int bv_last_set(const bitvector_t *bv)
+{
+    return bv_prev_set(bv, bv->length-1);
+}
+
+static unsigned int bitcount(unsigned int i)
+{
+    /* http://stackoverflow.com/questions/109023/how-to-count-the-number-of-set-bits-in-a-32-bit-integer */
+    i = i - ((i >> 1) & 0x55555555);
+    i = (i & 0x33333333) + ((i >> 2) & 0x33333333);
+    return (((i + (i >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
+}
+
+EXPORTED unsigned bv_count(const bitvector_t *bv)
+{
+    unsigned i;
+    unsigned int n = 0;
+
+    for (i = 0 ; i < bv->length ; i += BITS_PER_UNIT)
+	n += bitcount(bv->bits[vidx(i)]);
+    return n;
 }
 
 /* Returns a string which describes the state of the bitvector,

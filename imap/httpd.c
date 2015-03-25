@@ -68,6 +68,7 @@
 #include "httpd.h"
 #include "http_proxy.h"
 
+#include "acl.h"
 #include "assert.h"
 #include "util.h"
 #include "iptostring.h"
@@ -130,6 +131,7 @@ sasl_conn_t *httpd_saslconn; /* the sasl connection context */
 static struct wildmat *allow_cors = NULL;
 int httpd_timeout, httpd_keepalive;
 char *httpd_userid = NULL, *proxy_userid = NULL;
+char *httpd_extradomain = NULL;
 struct auth_state *httpd_authstate = 0;
 int httpd_userisadmin = 0;
 int httpd_userisproxyadmin = 0;
@@ -252,7 +254,9 @@ const struct known_meth_t http_methods[] = {
 
 /* Namespace to fetch static content from filesystem */
 struct namespace_t namespace_default = {
-    URL_NS_DEFAULT, 1, "", NULL, 0 /* no auth */, ALLOW_READ,
+    URL_NS_DEFAULT, 1, "", NULL, 0 /* no auth */,
+    /*mbtype*/0,
+    ALLOW_READ,
     NULL, NULL, NULL, NULL,
     {
 	{ NULL,			NULL },			/* ACL		*/
@@ -290,6 +294,9 @@ struct namespace_t *namespaces[] = {
     &namespace_domainkey,
 #endif /* HAVE_IANA_PARAMS */
 #endif /* WITH_DAV */
+#ifdef WITH_JSON
+    &namespace_jmap,
+#endif /* WITH_JSON */
     &namespace_rss,
     &namespace_dblookup,
     &namespace_default,		/* MUST be present and be last!! */
@@ -365,6 +372,10 @@ static void httpd_reset(void)
 	httpd_userid = NULL;
     }
     httpd_userisanonymous = 1;
+    if (httpd_extradomain != NULL) {
+	free(httpd_extradomain);
+	httpd_extradomain = NULL;
+    }
     if (proxy_userid != NULL) {
 	free(proxy_userid);
 	proxy_userid = NULL;
@@ -1182,6 +1193,7 @@ static void cmdloop(void)
 	if ((namespace = namespaces[i])) {
 	    txn.req_tgt.namespace = namespace->id;
 	    txn.req_tgt.allow = namespace->allow;
+	    txn.req_tgt.mboxtype = namespace->mboxtype;
 
 	    /* Check if method is supported in this namespace */
 	    meth_t = &namespace->methods[txn.meth];
@@ -1362,7 +1374,7 @@ static void cmdloop(void)
 
 		if (!value) value = "";
 		len = strlen(value);
-		buf_ensure(&txn.buf, len);
+		buf_ensure(&txn.buf, len+1);
 
 		vals = hash_lookup(key, &txn.req_qparams);
 		appendstrlist(&vals,
@@ -1450,6 +1462,9 @@ static void cmdloop(void)
 	if (txn.req_uri) xmlFreeURI(txn.req_uri);
 	if (txn.req_hdrs) spool_free_hdrcache(txn.req_hdrs);
 	free_hash_table(&txn.req_qparams, (void (*)(void *)) &freestrlist);
+
+	/* XXX - split this into a req_tgt cleanup */
+	free(txn.req_tgt.userid);
 
 	if (txn.flags.conn & CONN_CLOSE) {
 	    buf_free(&txn.buf);
@@ -2085,6 +2100,9 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 	httpdate_gen(datestr, sizeof(datestr), resp_body->lastmod);
 	prot_printf(httpd_out, "Last-Modified: %s\r\n", datestr);
     }
+    if (resp_body->synctoken) {
+	prot_printf(httpd_out, "X-Sync-Token: %s\r\n", resp_body->synctoken);
+    }
 
 
     /* Representation Metadata */
@@ -2708,6 +2726,10 @@ static int proxy_authz(const char **authzid, struct transaction_t *txn)
 	free(httpd_userid);
 	httpd_userid = NULL;
     }
+    if (httpd_extradomain) {
+	free(httpd_extradomain);
+	httpd_extradomain = NULL;
+    }
     if (httpd_authstate) {
 	auth_freestate(httpd_authstate);
 	httpd_authstate = NULL;
@@ -2872,6 +2894,10 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 	free(httpd_userid);
 	httpd_userid = NULL;
     }
+    if (httpd_extradomain) {
+	free(httpd_extradomain);
+	httpd_extradomain = NULL;
+    }
     if (httpd_authstate) {
 	auth_freestate(httpd_authstate);
 	httpd_authstate = NULL;
@@ -2962,6 +2988,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
     if (scheme->idx == AUTH_BASIC) {
 	/* Basic (plaintext) authentication */
 	char *pass;
+	char *extra;
 
 	if (!clientin) {
 	    /* Create initial challenge (base64 buffer is static) */
@@ -2981,7 +3008,8 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 	    return SASL_BADPARAM;
 	}
 	*pass++ = '\0';
-	
+	extra = strchr(user, '%');
+	if (extra) *extra++ = '\0';
 	/* Verify the password */
 	status = sasl_checkpass(httpd_saslconn, user, strlen(user),
 				pass, strlen(pass));
@@ -2997,6 +3025,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 	}
 
 	/* Successful authentication - fall through */
+	httpd_extradomain = xstrdupnull(extra);
     }
     else {
 	/* SASL-based authentication (Digest, Negotiate, NTLM) */

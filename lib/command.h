@@ -49,7 +49,18 @@
 #include <config.h>
 #include <sys/types.h>
 #include <stdarg.h>
+#include "prot.h"
+
+struct command {
+    char *argv0;
+    pid_t pid;
+    struct protstream *stdin_prot;
+    struct protstream *stdout_prot;
+};
 
 extern int run_command(const char *argv0, ...);
+extern int command_popen(struct command **cmdp, const char *mode, const char *argv0, ...);
+extern int command_pclose(struct command **cmdp);
+extern int command_done_stdin(struct command *);
 
 #endif /* INCLUDED_COMMAND_H */

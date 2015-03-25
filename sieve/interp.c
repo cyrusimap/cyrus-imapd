@@ -220,6 +220,11 @@ EXPORTED void sieve_register_header(sieve_interp_t *interp, sieve_get_header *f)
     interp->getheader = f;
 }
 
+EXPORTED void sieve_register_fname(sieve_interp_t *interp, sieve_get_fname *f)
+{
+    interp->getfname = f;
+}
+
 EXPORTED void sieve_register_envelope(sieve_interp_t *interp, sieve_get_envelope *f)
 {
     interp->getenvelope = f;

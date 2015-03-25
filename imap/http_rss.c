@@ -109,6 +109,7 @@ static void fetch_part(struct transaction_t *txn, struct body *body,
 /* Namespace for RSS feeds of mailboxes */
 struct namespace_t namespace_rss = {
     URL_NS_RSS, 0, "/rss", NULL, 1 /* auth */, ALLOW_READ,
+    /*mbtype*/0,
     rss_init, NULL, NULL, NULL,
     {
 	{ NULL,			NULL },			/* ACL		*/
@@ -376,6 +377,7 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
     struct buf *buf = &lrock->txn->resp_body.payload;
 
     if (name) {
+	int rights;
 	mbentry_t *mbentry = NULL;
 	int r;
 
@@ -387,11 +389,13 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
 
 	/* Lookup the mailbox and make sure its readable */
 	r = http_mlookup(name, &mbentry, NULL);
-	if (r || !mbentry->acl || !(cyrus_acl_myrights(httpd_authstate, mbentry->acl) & ACL_READ)) {
-	    mboxlist_entry_free(&mbentry);
-	    return 0;
-	}
+	if (r) return 0;
+
+	rights = httpd_myrights(httpd_authstate, mbentry->acl);
 	mboxlist_entry_free(&mbentry);
+
+	if ((rights & ACL_READ) != ACL_READ)
+	    return 0;
     }
 
     if (name &&
@@ -615,7 +619,7 @@ static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
     buf_reset(msg_buf);
 
     /* Fetch index record for the message */
-    if (uid) r = mailbox_find_index_record(mailbox, uid, record);
+    if (uid) r = mailbox_find_index_record(mailbox, uid, record, NULL);
     else r = mailbox_read_index_record(mailbox, recno, record);
     if ((r == CYRUSDB_NOTFOUND) ||
 	(record->system_flags & (FLAG_DELETED|FLAG_EXPUNGED))) {

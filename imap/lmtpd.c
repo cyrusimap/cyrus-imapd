@@ -657,7 +657,7 @@ int deliver_mailbox(FILE *f,
 					config_virtdomains ?
 					strcspn(userbuf, "@") : 0);
 	    notify(notifier, "MAIL", NULL, userbuf, namebuf, 0, NULL,
-		   notifyheader ? notifyheader : "");
+		   notifyheader ? notifyheader : "", /*fname*/NULL);
 	}
     }
 
@@ -1005,7 +1005,8 @@ EXPORTED void fatal(const char* s, int code)
     if (stage) append_removestage(stage);
 
     syslog(LOG_ERR, "FATAL: %s", s);
-
+    
+    abort();
     /* shouldn't return */
     shut_down(code);
 

@@ -174,6 +174,8 @@ enum {
     DAV_NO_ABSTRACT,
     DAV_SUPP_PRIV,
     DAV_RECOG_PRINC,
+    DAV_ALLOW_PRINC,
+    DAV_GRANT_ONLY,
 
     /* WebDAV Quota (RFC 4331) preconditions */
     DAV_OVER_QUOTA,
@@ -251,7 +253,8 @@ typedef void (*db_close_proc_t)(void *davdb);
  * placing the record in 'data'
  */
 typedef int (*db_lookup_proc_t)(void *davdb, const char *mailbox,
-				const char *resource, int lock, void **data);
+				const char *resource, int lock, void **data,
+				int tombstones);
 
 /* Function to process each DAV resource in 'mailbox' with 'cb' */
 typedef int (*db_foreach_proc_t)(void *davdb, const char *mailbox,
@@ -264,7 +267,7 @@ struct error_t;
 
 struct propfind_ctx {
     struct request_target_t *req_tgt;	/* parsed request target URL */
-    unsigned mode;	    		/* none, allprop, propname, prop */
+    unsigned mode;			/* none, allprop, propname, prop */
     unsigned depth;	    		/* 0 = root, 1 = calendar, 2 = resrc */
     unsigned prefer;			/* bitmask of client preferences */
     hdrcache_t req_hdrs;    		/* Cached HTTP headers */
@@ -380,9 +383,11 @@ struct davdb_params {
     db_close_proc_t close_db;		/* close DAV DB for a given mailbox */
     db_lookup_proc_t lookup_resource;	/* lookup a specific resource */
     db_foreach_proc_t foreach_resource;	/* process all resources in a mailbox */
-    db_write_proc_t write_resource;	/* write a specific resource */
-    db_delete_proc_t delete_resource;	/* delete a specific resource */
-    db_delmbox_proc_t delete_mbox;	/* delete all resources in mailbox */
+    /* XXX - convert these to lock management only.  For everything else,
+     * we need to go via mailbox.c for replication support */
+    db_write_proc_t write_resourceLOCKONLY;	/* write a specific resource */
+    db_delete_proc_t delete_resourceLOCKONLY;	/* delete a specific resource */
+    db_delmbox_proc_t delete_mboxDONTUSE;	/* delete all resources in mailbox */
 };
 
 /*

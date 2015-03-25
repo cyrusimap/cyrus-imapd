@@ -62,6 +62,98 @@
 
 #define FNAME_DAVSUFFIX ".dav" /* per-user DAV DB extension */
 
+#define CMD_CREATE_CAL							\
+    "CREATE TABLE IF NOT EXISTS ical_objs ("				\
+    " rowid INTEGER PRIMARY KEY,"					\
+    " creationdate INTEGER,"						\
+    " mailbox TEXT NOT NULL,"						\
+    " resource TEXT NOT NULL,"						\
+    " imap_uid INTEGER,"						\
+    " modseq INTEGER,"							\
+    " lock_token TEXT,"							\
+    " lock_owner TEXT,"							\
+    " lock_ownerid TEXT,"						\
+    " lock_expire INTEGER,"						\
+    " comp_type INTEGER,"						\
+    " ical_uid TEXT,"							\
+    " organizer TEXT,"							\
+    " dtstart TEXT,"							\
+    " dtend TEXT,"							\
+    " comp_flags INTEGER,"						\
+    " sched_tag TEXT,"							\
+    " alive INTEGER,"							\
+    " UNIQUE( mailbox, resource ) );"					\
+    "CREATE INDEX IF NOT EXISTS idx_ical_uid ON ical_objs ( ical_uid );"
+
+#define CMD_CREATE_OBJ							\
+    "CREATE TABLE IF NOT EXISTS vcard_objs ("				\
+    " rowid INTEGER PRIMARY KEY,"					\
+    " creationdate INTEGER,"						\
+    " mailbox TEXT NOT NULL,"						\
+    " resource TEXT NOT NULL,"						\
+    " imap_uid INTEGER,"						\
+    " modseq INTEGER,"							\
+    " lock_token TEXT,"							\
+    " lock_owner TEXT,"							\
+    " lock_ownerid TEXT,"						\
+    " lock_expire INTEGER,"						\
+    " version INTEGER,"							\
+    " vcard_uid TEXT,"							\
+    " kind INTEGER,"							\
+    " fullname TEXT,"							\
+    " name TEXT,"							\
+    " nickname TEXT,"							\
+    " alive INTEGER,"							\
+    " UNIQUE( mailbox, resource ) );"					\
+    "CREATE INDEX IF NOT EXISTS idx_vcard_fn ON vcard_objs ( fullname );" \
+    "CREATE INDEX IF NOT EXISTS idx_vcard_uid ON vcard_objs ( vcard_uid );"
+
+#define CMD_CREATE_EM							\
+    "CREATE TABLE IF NOT EXISTS vcard_emails ("				\
+    " rowid INTEGER PRIMARY KEY,"					\
+    " objid INTEGER,"							\
+    " pos INTEGER NOT NULL," /* for sorting */				\
+    " email TEXT NOT NULL COLLATE NOCASE,"				\
+    " ispref INTEGER NOT NULL DEFAULT 0,"				\
+    " FOREIGN KEY (objid) REFERENCES vcard_objs (rowid) ON DELETE CASCADE );" \
+    "CREATE INDEX IF NOT EXISTS idx_vcard_email ON vcard_emails ( email COLLATE NOCASE );"
+
+#define CMD_CREATE_GR							\
+    "CREATE TABLE IF NOT EXISTS vcard_groups ("				\
+    " rowid INTEGER PRIMARY KEY,"					\
+    " objid INTEGER,"							\
+    " pos INTEGER NOT NULL," /* for sorting */				\
+    " member_uid TEXT NOT NULL,"					\
+    " otheruser TEXT NOT NULL DEFAULT \"\","				\
+    " FOREIGN KEY (objid) REFERENCES vcard_objs (rowid) ON DELETE CASCADE );"
+
+#define CMD_CREATE CMD_CREATE_CAL CMD_CREATE_OBJ CMD_CREATE_EM CMD_CREATE_GR
+
+/* leaves these unused columns around, but that's life.  A dav_reconstruct
+ * will fix them */
+#define CMD_DBUPGRADEv2						\
+    "ALTER TABLE ical_objs ADD COLUMN comp_flags INTEGER;"	\
+    "UPDATE ical_objs SET comp_flags = recurring + 2 * transp;"
+
+#define CMD_DBUPGRADEv3						\
+    "ALTER TABLE ical_objs ADD COLUMN modseq INTEGER;"		\
+    "UPDATE ical_objs SET modseq = 1;"				\
+    "ALTER TABLE vcard_objs ADD COLUMN modseq INTEGER;"		\
+    "UPDATE vcard_objs SET modseq = 1;"
+
+#define CMD_DBUPGRADEv4						\
+    "ALTER TABLE ical_objs ADD COLUMN alive INTEGER;"		\
+    "UPDATE ical_objs SET alive = 1;"				\
+    "ALTER TABLE vcard_objs ADD COLUMN alive INTEGER;"		\
+    "UPDATE vcard_objs SET alive = 1;"
+
+#define CMD_DBUPGRADEv5						\
+    "ALTER TABLE vcard_emails ADD COLUMN ispref INTEGER NOT NULL DEFAULT 0;"	\
+    "ALTER TABLE vcard_groups ADD COLUMN otheruser TEXT NOT NULL DEFAULT \"\";"
+
+
+#define DB_VERSION 5
+
 struct open_davdb {
     sqlite3 *db;
     char *path;
@@ -113,8 +205,29 @@ static void free_dav_open(struct open_davdb *open)
     free(open);
 }
 
+static int version_cb(void *rock, int ncol, char **vals, char **names __attribute__((unused)))
+{
+    int *vptr = (int *)rock;
+    if (ncol == 1 && vals[0])
+	*vptr = atoi(vals[0]);
+    else
+	abort();
+    return 0;
+}
+
+/* this is only called if there's some schema with the old-style value */
+static int synthetic_cb(void *rock, int ncol, char **vals, char **names __attribute__((unused)))
+{
+    int *vptr = (int *)rock;
+    if (ncol == 2 && vals[0])
+	*vptr = 1;
+    else
+	abort();
+    return 0;
+}
+
 /* Open DAV DB corresponding in file */
-EXPORTED sqlite3 *dav_open(const char *fname, const char *cmds)
+static sqlite3 *dav_open(const char *fname)
 {
     int rc = SQLITE_OK;
     struct stat sbuf;
@@ -124,7 +237,7 @@ EXPORTED sqlite3 *dav_open(const char *fname, const char *cmds)
 	if (!strcmp(open->path, fname)) {
 	    /* already open! */
 	    open->refcount++;
-	    goto docmds;
+	    return open->db;
 	}
     }
 
@@ -156,24 +269,173 @@ EXPORTED sqlite3 *dav_open(const char *fname, const char *cmds)
 	sqlite3_trace(open->db, dav_debug, open->path);
     }
 
+    sqlite3_busy_timeout(open->db, 20*1000); /* 20 seconds is an eternity */
+
+    rc = sqlite3_exec(open->db, "PRAGMA foreign_keys = ON;", NULL, NULL, NULL);
+    if (rc != SQLITE_OK) {
+	syslog(LOG_ERR, "dav_open(%s) enable foreign_keys: %s",
+	    open->path, sqlite3_errmsg(open->db));
+	sqlite3_close(open->db);
+	free_dav_open(open);
+	return NULL;
+    }
+
+    int current_version = 0;
+    int i;
+    for (i = 0; i < 10; i++) {
+	rc = sqlite3_exec(open->db, "PRAGMA user_version;", version_cb, &current_version, NULL);
+	if (rc == SQLITE_OK) break;
+    }
+    if (rc != SQLITE_OK) {
+	syslog(LOG_ERR, "dav_open(%s) get user_version: %s (%d)",
+	    open->path, sqlite3_errmsg(open->db), rc);
+	sqlite3_close(open->db);
+	free_dav_open(open);
+	return NULL;
+    }
+    if (current_version == DB_VERSION) goto out;
+
+    rc = sqlite3_exec(open->db, "BEGIN IMMEDIATE;", NULL, NULL, NULL);
+    if (rc != SQLITE_OK) {
+	syslog(LOG_ERR, "dav_open(%s) begin: %s",
+	    open->path, sqlite3_errmsg(open->db));
+	sqlite3_close(open->db);
+	free_dav_open(open);
+	return NULL;
+    }
+
+    rc = sqlite3_exec(open->db, "PRAGMA user_version;", version_cb, &current_version, NULL);
+    if (rc != SQLITE_OK) {
+	syslog(LOG_ERR, "dav_open(%s) get user_version locked: %s",
+	    open->path, sqlite3_errmsg(open->db));
+	sqlite3_close(open->db);
+	free_dav_open(open);
+	return NULL;
+    }
+    if (current_version == DB_VERSION) goto out;
+    /* check for synthetic v1 - exists but not the right format */
+    if (!current_version) {
+	sqlite3_exec(open->db, "SELECT COUNT(*),transp FROM ical_objs;", synthetic_cb, &current_version, NULL);
+    }
+
+    if (current_version != DB_VERSION) {
+	struct buf buf = BUF_INITIALIZER;
+
+	switch (current_version) {
+	case 0:
+	    syslog(LOG_NOTICE, "creating dav_db %s", open->path);
+	    rc = sqlite3_exec(open->db, CMD_CREATE, NULL, NULL, NULL);
+	    if (rc != SQLITE_OK) {
+		syslog(LOG_ERR, "dav_open(%s) create: %s",
+		    open->path, sqlite3_errmsg(open->db));
+		sqlite3_close(open->db);
+		free_dav_open(open);
+		return NULL;
+	    }
+	    break;
+
+	case 1:
+	    syslog(LOG_NOTICE, "upgrading dav_db to v2 %s", open->path);
+	    rc = sqlite3_exec(open->db, CMD_DBUPGRADEv2, NULL, NULL, NULL);
+	    if (rc != SQLITE_OK) {
+		syslog(LOG_ERR, "dav_open(%s) upgrade v2: %s",
+		    open->path, sqlite3_errmsg(open->db));
+		sqlite3_close(open->db);
+		free_dav_open(open);
+		return NULL;
+	    }
+	    /* fall through */
+
+	case 2:
+	    syslog(LOG_NOTICE, "upgrading dav_db to v3 %s", open->path);
+	    rc = sqlite3_exec(open->db, CMD_DBUPGRADEv3, NULL, NULL, NULL);
+	    if (rc != SQLITE_OK) {
+		syslog(LOG_ERR, "dav_open(%s) upgrade v3: %s",
+		    open->path, sqlite3_errmsg(open->db));
+		sqlite3_close(open->db);
+		free_dav_open(open);
+		return NULL;
+	    }
+	    /* fall through */
+
+	case 3:
+	    syslog(LOG_NOTICE, "upgrading dav_db to v4 %s", open->path);
+	    rc = sqlite3_exec(open->db, CMD_DBUPGRADEv4, NULL, NULL, NULL);
+	    if (rc != SQLITE_OK) {
+		syslog(LOG_ERR, "dav_open(%s) upgrade v4: %s",
+		    open->path, sqlite3_errmsg(open->db));
+		sqlite3_close(open->db);
+		free_dav_open(open);
+		return NULL;
+	    }
+	    break;
+
+	case 4:
+	    syslog(LOG_NOTICE, "upgrading dav_db to v5 %s", open->path);
+	    rc = sqlite3_exec(open->db, CMD_DBUPGRADEv5, NULL, NULL, NULL);
+	    if (rc != SQLITE_OK) {
+		syslog(LOG_ERR, "dav_open(%s) upgrade v5: %s",
+		    open->path, sqlite3_errmsg(open->db));
+		sqlite3_close(open->db);
+		free_dav_open(open);
+		return NULL;
+	    }
+	    break;
+
+	default:
+	    abort();  /* unknown version */
+	}
+
+	buf_printf(&buf, "PRAGMA user_version = %d;", DB_VERSION);
+	rc = sqlite3_exec(open->db, buf_cstring(&buf), NULL, NULL, NULL);
+	buf_free(&buf);
+	if (rc != SQLITE_OK) {
+	    /* XXX - fatal? */
+	    syslog(LOG_ERR, "dav_open(%s) user_version: %s",
+		  open->path, sqlite3_errmsg(open->db));
+	    sqlite3_close(open->db);
+	    free_dav_open(open);
+	    return NULL;
+	}
+    }
+
+    rc = sqlite3_exec(open->db, "COMMIT;", NULL, NULL, NULL);
+    if (rc != SQLITE_OK) {
+	syslog(LOG_ERR, "dav_open(%s) commit: %s",
+	    open->path, sqlite3_errmsg(open->db));
+	sqlite3_close(open->db);
+	free_dav_open(open);
+	return NULL;
+    }
+
+out:
     /* stitch on up */
     open->refcount = 1;
     open->next = open_davdbs;
     open_davdbs = open;
 
-  docmds:
-    if (cmds) {
-	rc = sqlite3_exec(open->db, cmds, NULL, NULL, NULL);
-	if (rc != SQLITE_OK) {
-	    /* XXX - fatal? */
-	    syslog(LOG_ERR, "dav_open(%s) cmds: %s",
-		   open->path, sqlite3_errmsg(open->db));
-	}
-    }
-
     return open->db;
 }
 
+EXPORTED sqlite3 *dav_open_userid(const char *userid)
+{
+    sqlite3 *db = NULL;
+    struct buf fname = BUF_INITIALIZER;
+    dav_getpath_byuserid(&fname, userid);
+    db = dav_open(buf_cstring(&fname));
+    buf_free(&fname);
+    return db;
+}
+
+EXPORTED sqlite3 *dav_open_mailbox(struct mailbox *mailbox)
+{
+    sqlite3 *db = NULL;
+    struct buf fname = BUF_INITIALIZER;
+    dav_getpath(&fname, mailbox);
+    db = dav_open(buf_cstring(&fname));
+    buf_free(&fname);
+    return db;
+}
 
 /* Close DAV DB */
 EXPORTED int dav_close(sqlite3 *davdb)
@@ -277,4 +539,61 @@ EXPORTED int dav_delete(struct mailbox *mailbox)
     buf_free(&fname);
 
     return r;
+}
+
+/*
+ * mboxlist_findall() callback function to create DAV DB entries for a mailbox
+ */
+static int _dav_reconstruct_mb(void *rock __attribute__((unused)),
+			       const char *key,
+			       size_t keylen,
+			       const char *data __attribute__((unused)),
+			       size_t datalen __attribute__((unused)))
+{
+    int r = 0;
+    char *name = xstrndup(key, keylen);
+    mbentry_t *mbentry = NULL;
+
+    signals_poll();
+
+    r = mboxlist_lookup(name, &mbentry, NULL);
+    if (r) goto done;
+
+#ifdef WITH_DAV
+    if (mbentry->mbtype & MBTYPES_DAV) {
+	struct mailbox *mailbox = NULL;
+	/* Open/lock header */
+	r = mailbox_open_irl(mbentry->name, &mailbox);
+	if (!r) r = mailbox_add_dav(mailbox);
+	mailbox_close(&mailbox);
+    }
+#endif
+
+done:
+    mboxlist_entry_free(&mbentry);
+    return r;
+}
+
+EXPORTED int dav_reconstruct_user(const char *userid)
+{
+    struct buf fnamebuf = BUF_INITIALIZER;
+
+    syslog(LOG_NOTICE, "dav_reconstruct_user: %s", userid);
+
+    /* remove existing database entirely */
+    /* XXX - build a new file and rename into place? */
+    dav_getpath_byuserid(&fnamebuf, userid);
+    if (buf_len(&fnamebuf))
+	unlink(buf_cstring(&fnamebuf));
+    buf_free(&fnamebuf);
+
+    struct caldav_alarm_db *alarmdb = caldav_alarm_open();
+
+    caldav_alarm_delete_user(alarmdb, userid);
+
+    mboxlist_allusermbox(userid, _dav_reconstruct_mb, NULL, 0);
+
+    caldav_alarm_close(alarmdb);
+
+    return 0;
 }
