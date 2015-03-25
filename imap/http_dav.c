@@ -3201,26 +3201,6 @@ int meth_copy(struct transaction_t *txn, void *params)
     /* Finished our initial read of dest mailbox */
     mailbox_unlock_index(dest_mbox, NULL);
 
-    /* Check any preconditions on destination */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Overwrite")) &&
-	!strcmp(hdr[0], "F")) {
-
-	if (ddata->rowid) {
-	    /* Don't overwrite the destination resource */
-	    ret = HTTP_PRECOND_FAILED;
-	    goto done;
-	}
-	overwrite = OVERWRITE_NO;
-    }
-    if (r) {
-	syslog(LOG_ERR, "mailbox_open_%s(%s) failed: %s",
-	       txn->meth == METH_MOVE ? "iwl" : "irl",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
-    }
-
     /* Open the DAV DB corresponding to the src mailbox */
     src_davdb = cparams->davdb.open_db(src_mbox);
 
@@ -3293,7 +3273,7 @@ int meth_copy(struct transaction_t *txn, void *params)
 
     /* Find message UID for the dest resource, if exists */
     cparams->davdb.lookup_resource(dest_davdb, dest_tgt.mboxname,
-				   dest_tgt.resource, 0, (void **) &ddata);
+				   dest_tgt.resource, 0, (void **) &ddata, 0);
     /* XXX  Check errors */
 
     /* Check any preconditions on destination */
@@ -3375,7 +3355,6 @@ int meth_delete(struct transaction_t *txn, void *params)
 {
     struct meth_params *dparams = (struct meth_params *) params;
     int ret = HTTP_NO_CONTENT, r = 0, precond, rights, needrights;
-    struct buf synctoken = BUF_INITIALIZER;
     struct mboxevent *mboxevent = NULL;
     struct mailbox *mailbox = NULL;
     mbentry_t *mbentry = NULL;
@@ -3566,12 +3545,7 @@ int meth_delete(struct transaction_t *txn, void *params)
     /* Do any special processing */
     if (dparams->delete) dparams->delete(txn, mailbox, &record, ddata);
 
-    get_synctoken(mailbox, &synctoken);
-    txn->resp_body.synctoken = buf_cstring(&synctoken);
-
     write_body(ret, txn, NULL, 0);
-
-    buf_free(&synctoken);
 
   done:
     if (davdb) dparams->davdb.close_db(davdb);
@@ -3595,7 +3569,6 @@ int meth_get_dav(struct transaction_t *txn, void *params)
     const char *data = NULL;
     unsigned long datalen = 0, offset = 0;
     struct buf msg_buf = BUF_INITIALIZER;
-    struct buf synctoken = BUF_INITIALIZER;
     struct resp_body_t *resp_body = &txn->resp_body;
     struct mailbox *mailbox = NULL;
     mbentry_t *mbentry = NULL;
@@ -3767,17 +3740,11 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 	}
     }
 
-    r = get_synctoken(mailbox, &synctoken);
-    if (r) goto done;
-    resp_body->synctoken = buf_cstring(&synctoken);
-
     write_body(precond, txn, data, datalen);
 
     buf_free(&msg_buf);
 
   done:
-    buf_free(&synctoken);
-
     if (davdb) gparams->davdb.close_db(davdb);
     if (r) {
 	txn->error.desc = error_message(r);
@@ -4742,7 +4709,7 @@ int meth_proppatch(struct transaction_t *txn, void *params)
     if ((r = pparams->parse_path(txn->req_uri->path,
 				 &txn->req_tgt, &txn->error.desc))) return r;
 
-    if (!txn->req_tgt.collection && !txn->req_tgt.user) {
+    if (!txn->req_tgt.collection && !txn->req_tgt.userid) {
 	txn->error.desc = "PROPPATCH requires a collection";
 	return HTTP_NOT_ALLOWED;
     }
@@ -4946,7 +4913,6 @@ int meth_put(struct transaction_t *txn, void *params)
     int ret, r, precond, rights;
     const char **hdr, *etag;
     struct mime_type_t *mime = NULL;
-    struct buf synctoken = BUF_INITIALIZER;
     struct mailbox *mailbox = NULL;
     mbentry_t *mbentry = NULL;
     struct dav_data *ddata;
@@ -5187,12 +5153,7 @@ int meth_put(struct transaction_t *txn, void *params)
 	}
     }
 
-    get_synctoken(mailbox, &synctoken);
-    txn->resp_body.synctoken = buf_cstring(&synctoken);
-
     write_body(ret, txn, NULL, 0);
-
-    buf_free(&synctoken);
 
   done:
     if (obj) {
@@ -5277,7 +5238,7 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
 
 	    /* Find message UID for the resource */
 	    rparams->davdb.lookup_resource(fctx->davdb, tgt.mboxname,
-					   tgt.resource, 0, (void **) &ddata);
+					   tgt.resource, 0, (void **) &ddata, 0);
 	    ddata->resource = tgt.resource;
 	    /* XXX  Check errors */
 
@@ -5744,8 +5705,7 @@ int report_acl_prin_prop(struct transaction_t *txn,
 	if (strcmp(userid, "anyone") && strcmp(userid, "anonymous")) {
 	    /* Add userid to principal URL */
 	    strcpy(req_tgt.tail, userid);
-	    req_tgt.user = userid;
-	    req_tgt.userlen = strlen(userid);
+	    req_tgt.userid = xstrdup(userid);
 
 	    /* Add response for URL */
 	    xml_add_response(fctx, 0, 0);
@@ -6517,8 +6477,19 @@ int dav_store_resource(struct transaction_t *txn,
     else {
 	struct body *body = NULL;
 
+	strarray_t *flaglist = NULL;
+	struct entryattlist *annots = NULL;
+
+	if (oldrecord) {
+	    flaglist = mailbox_extract_flags(mailbox, oldrecord, httpd_userid);
+	    annots = mailbox_extract_annots(mailbox, oldrecord);
+	}
+
+	/* XXX - casemerge?  Doesn't matter with flags */
+	strarray_cat(flaglist, imapflags);
+
 	/* Append the message to the mailbox */
-	if ((r = append_fromstage(&as, &body, stage, now, imapflags, 0, 0))) {
+	if ((r = append_fromstage(&as, &body, stage, now, flaglist, 0, annots))) {
 	    syslog(LOG_ERR, "append_fromstage(%s) failed: %s",
 		   mailbox->name, error_message(r));
 	    ret = HTTP_SERVER_ERROR;
@@ -6528,6 +6499,8 @@ int dav_store_resource(struct transaction_t *txn,
 	    message_free_body(body);
 	    free(body);
 	}
+	strarray_free(flaglist);
+	freeentryatts(annots);
 
 	if (r) append_abort(&as);
 	else {

@@ -71,10 +71,10 @@ struct webdav_data {
 };
 
 /* get a database handle corresponding to userid */
-struct webdav_db *webdav_open_userid(const char *userid, int flags);
+struct webdav_db *webdav_open_userid(const char *userid);
 
 /* get a database handle corresponding to mailbox */
-struct webdav_db *webdav_open_mailbox(struct mailbox *mailbox, int flags);
+struct webdav_db *webdav_open_mailbox(struct mailbox *mailbox);
 
 /* close this handle */
 int webdav_close(struct webdav_db *webdavdb);

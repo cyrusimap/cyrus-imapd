@@ -75,6 +75,7 @@ enum {
 
 struct webdav_db {
     sqlite3 *db;			/* DB handle */
+    char *userid;
     sqlite3_stmt *stmt[NUM_STMT];	/* prepared statements */
     struct buf mailbox;			/* buffers for copies of column text */
     struct buf resource;
@@ -100,10 +101,7 @@ EXPORTED int webdav_done(void)
     return dav_done();
 }
 
-
-#define CMD_DROP "DROP TABLE IF EXISTS dav_objs;"
-
-#define CMD_CREATE							\
+#define CMD_CREATE_OBJS							\
     "CREATE TABLE IF NOT EXISTS dav_objs ("				\
     " rowid INTEGER PRIMARY KEY,"					\
     " creationdate INTEGER,"						\
@@ -122,46 +120,36 @@ EXPORTED int webdav_done(void)
     " UNIQUE( mailbox, resource ) );"					\
     "CREATE INDEX IF NOT EXISTS idx_res_uid ON dav_objs ( res_uid );"
 
-static struct webdav_db *webdav_open_fname(const char *fname, int flags)
-{
-    sqlite3 *db;
-    struct webdav_db *webdavdb = NULL;
-    const char *cmds = CMD_CREATE;
-
-    if (flags & WEBDAV_TRUNC) cmds = CMD_DROP CMD_CREATE;
-
-    db = dav_open(fname, cmds);
-
-    if (db) {
-	webdavdb = xzmalloc(sizeof(struct webdav_db));
-	webdavdb->db = db;
-    }
-
-    return webdavdb;
-}
-
 /* Open DAV DB corresponding to userid */
-EXPORTED struct webdav_db *webdav_open_userid(const char *userid, int flags)
+EXPORTED struct webdav_db *webdav_open_userid(const char *userid)
 {
-    struct buf fname = BUF_INITIALIZER;
     struct webdav_db *webdavdb = NULL;
 
-    dav_getpath_byuserid(&fname, userid);
-    webdavdb = webdav_open_fname(buf_cstring(&fname), flags);
-    buf_free(&fname);
+    sqlite3 *db = dav_open_userid(userid);
+    if (!db) return NULL;
+
+    webdavdb = xzmalloc(sizeof(struct webdav_db));
+    webdavdb->userid = xstrdup(userid);
+    webdavdb->db = db;
 
     return webdavdb;
 }
 
 /* Open DAV DB corresponding to mailbox */
-EXPORTED struct webdav_db *webdav_open_mailbox(struct mailbox *mailbox, int flags)
+EXPORTED struct webdav_db *webdav_open_mailbox(struct mailbox *mailbox)
 {
-    struct buf fname = BUF_INITIALIZER;
     struct webdav_db *webdavdb = NULL;
+    const char *userid = mboxname_to_userid(mailbox->name);
 
-    dav_getpath(&fname, mailbox);
-    webdavdb = webdav_open_fname(buf_cstring(&fname), flags);
-    buf_free(&fname);
+    if (userid)
+	return webdav_open_userid(userid);
+
+    sqlite3 *db = dav_open_mailbox(mailbox);
+    if (!db) return NULL;
+
+    webdavdb = xzmalloc(sizeof(struct webdav_db));
+    webdavdb->userid = xstrdup(userid);
+    webdavdb->db = db;
 
     return webdavdb;
 }
@@ -190,6 +178,7 @@ EXPORTED int webdav_close(struct webdav_db *webdavdb)
 
     r = dav_close(webdavdb->db);
 
+    free(webdavdb->userid);
     free(webdavdb);
 
     return r;

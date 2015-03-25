@@ -723,7 +723,9 @@ struct namespace_t namespace_calendar = {
 
 /* Namespace for Freebusy Read URL */
 struct namespace_t namespace_freebusy = {
-    URL_NS_FREEBUSY, 0, "/freebusy", NULL, 1 /* auth */, ALLOW_READ,
+    URL_NS_FREEBUSY, 0, "/freebusy", NULL, 1 /* auth */, 
+    MBTYPE_CALENDAR,
+    ALLOW_READ,
     NULL, NULL, NULL, NULL,
     {
 	{ NULL,			NULL },			/* ACL		*/
@@ -1671,7 +1673,7 @@ static int list_calendars(struct transaction_t *txn, int rights)
     char mboxlist[MAX_MAILBOX_PATH+1];
     struct stat sbuf;
     time_t lastmod;
-    const char *etag, *host, *base_path = txn->req_tgt.path;
+    const char *etag, *base_path = txn->req_tgt.path;
     unsigned level = 0, i;
     struct buf *body = &txn->resp_body.payload;
     struct list_cal_rock lrock;
@@ -2142,9 +2144,9 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 
 	    /* Fetch the new DAV and index records */
 	    caldav_lookup_resource(caldavdb, mailbox->name,
-				  cdata->dav.resource, 0, data);
+				   cdata->dav.resource, 0, data, /*tombstones*/0);
 
-	    mailbox_find_index_record(mailbox, cdata->dav.imap_uid, record);
+	    mailbox_find_index_record(mailbox, cdata->dav.imap_uid, record, NULL);
 
 	    /* Fill in new ETag and Last-Modified */
 	    txn->resp_body.etag = message_guid_encode(&record->guid);
@@ -2158,7 +2160,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
     }
 
     /* Get on a user/collection */
-    if (!(txn->req_tgt.collection || txn->req_tgt.user)) {
+    if (!(txn->req_tgt.collection || txn->req_tgt.userid)) {
 	/* GET server-info resource */
 	return server_info(txn);
     }
@@ -2199,7 +2201,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 	/* Download an entire calendar collection */ 
 	return dump_calendar(txn, rights);
     }
-    else if (txn->req_tgt.user) {
+    else if (txn->req_tgt.userid) {
 	/* GET a list of calendars under calendar-home-set */
 	return list_calendars(txn, rights);
     }
@@ -2300,14 +2302,14 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 
     /* Find message UID for the cal resource */
     caldav_lookup_resource(caldavdb, txn->req_tgt.mboxname,
-			   txn->req_tgt.resource, 0, &cdata);
+			   txn->req_tgt.resource, 0, &cdata, 0);
     if (!cdata->dav.rowid) ret = HTTP_NOT_FOUND;
     else if (!cdata->dav.imap_uid) ret = HTTP_CONFLICT;
     if (ret) goto done;
 
     /* Fetch index record for the cal resource */
     memset(&record, 0, sizeof(struct index_record));
-    r = mailbox_find_index_record(calendar, cdata->dav.imap_uid, &record);
+    r = mailbox_find_index_record(calendar, cdata->dav.imap_uid, &record, NULL);
     if (r) {
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
@@ -2353,7 +2355,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     }
 
     /* Open the WebDAV DB corresponding to the attachments collection */
-    webdavdb = webdav_open_mailbox(attachments, WEBDAV_CREATE);
+    webdavdb = webdav_open_mailbox(attachments);
 
     switch (op) {
     case ATTACH_ADD: {
@@ -2369,9 +2371,9 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 	/* Create new ATTACH property */
 	assert(!buf_len(&txn->buf));
 	http_proto_host(txn->req_hdrs, &proto, &host);
-	buf_printf(&txn->buf, "%s://%s%s/user/%.*s/%s%s",
+	buf_printf(&txn->buf, "%s://%s%s/user/%s/%s%s",
 		   proto, host, namespace_calendar.prefix,
-		   (int) txn->req_tgt.userlen, txn->req_tgt.user,
+		   txn->req_tgt.userid,
 		   MANAGED_ATTACH, resource);
 	attach = icalattach_new_from_url(buf_cstring(&txn->buf));
 	buf_reset(&txn->buf);
@@ -2770,8 +2772,7 @@ const char *get_icalcomponent_errstr(icalcomponent *ical)
 		    if (!strcasecmp(propname, "COMMENT")) continue;
 		    if (!strcasecmp(propname, "DESCRIPTION")) continue;
 		}
-		else if (icalparameter_get_xlicerrortype(param) ==
-			 ICAL_XLICERRORTYPE_PROPERTYPARSEERROR) {
+		else {
 		    /* Ignore unknown property errors */
 		    if (!strncmp(errstr, "Parse error in property name", 28))
 			continue;
@@ -3561,7 +3562,7 @@ static int caldav_propfind_by_resource(void *rock, void *data)
 	if (!fctx->record) {
 	    /* Fetch index record for the resource */
 	    r = mailbox_find_index_record(fctx->mailbox,
-					  cdata->dav.imap_uid, &record);
+					  cdata->dav.imap_uid, &record, NULL);
 	    /* XXX  Check errors */
 
 	    fctx->record = r ? NULL : &record;
@@ -3596,7 +3597,7 @@ static int caldav_propfind_by_resource(void *rock, void *data)
 	    icalcomponent_free(ical);
 
 	    caldav_lookup_resource(fctx->davdb, fctx->mailbox->name,
-				   cdata->dav.resource, 0, &cdata);
+				   cdata->dav.resource, 0, &cdata, 0);
 	}
 
 	fctx->record = NULL;
@@ -5385,7 +5386,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     }
 
     /* Find message UID for the resource, if exists */
-    caldav_lookup_resource(caldavdb, mailbox->name, resource, 0, &cdata);
+    caldav_lookup_resource(caldavdb, mailbox->name, resource, 0, &cdata, 0);
 
     /* Check for change of iCalendar UID */
     if (cdata->ical_uid && strcmp(cdata->ical_uid, uid)) {
@@ -5399,7 +5400,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     if (cdata->dav.imap_uid) {
 	/* Fetch index record for the resource */
 	oldrecord = &record;
-	mailbox_find_index_record(mailbox, cdata->dav.imap_uid, oldrecord);
+	mailbox_find_index_record(mailbox, cdata->dav.imap_uid, oldrecord, NULL);
     }
 
     /* Remove all X-LIC-ERROR properties */
@@ -7873,7 +7874,7 @@ static int meth_get_fb(struct transaction_t *txn,
 			       &txn->req_tgt, &txn->error.desc))) return r;
 
     if (txn->req_tgt.resource ||
-	!(txn->req_tgt.user || txn->req_tgt.collection)) {
+	!(txn->req_tgt.userid)) {
 	/* We don't handle GET on a resources or non-calendar collections */
 	return HTTP_NO_CONTENT;
     }
@@ -8026,8 +8027,8 @@ static int meth_get_fb(struct transaction_t *txn,
 
 	/* Set filename of resource */
 	buf_reset(&txn->buf);
-	buf_printf(&txn->buf, "%.*s.%s",
-		   (int) txn->req_tgt.userlen, txn->req_tgt.user,
+	buf_printf(&txn->buf, "%s.%s",
+		   txn->req_tgt.userid,
 		   mime->file_ext);
 	txn->resp_body.fname = buf_cstring(&txn->buf);
 

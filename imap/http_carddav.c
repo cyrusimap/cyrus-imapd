@@ -640,7 +640,7 @@ static int carddav_put(struct transaction_t *txn, struct vparse_state *vparser,
     if (cdata->dav.imap_uid) {
 	/* Fetch index record for the resource */
 	oldrecord = &record;
-	mailbox_find_index_record(mailbox, cdata->dav.imap_uid, oldrecord);
+	mailbox_find_index_record(mailbox, cdata->dav.imap_uid, oldrecord, 0);
     }
 
     /* Create and cache RFC 5322 header fields for resource */

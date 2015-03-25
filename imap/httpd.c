@@ -2100,9 +2100,6 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 	httpdate_gen(datestr, sizeof(datestr), resp_body->lastmod);
 	prot_printf(httpd_out, "Last-Modified: %s\r\n", datestr);
     }
-    if (resp_body->synctoken) {
-	prot_printf(httpd_out, "X-Sync-Token: %s\r\n", resp_body->synctoken);
-    }
 
 
     /* Representation Metadata */

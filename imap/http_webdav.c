@@ -92,7 +92,7 @@ static int webdav_parse_path(const char *path __attribute__((unused)),
 /* Open DAV DB corresponding to mailbox */
 static struct webdav_db *my_webdav_open(struct mailbox *mailbox)
 {
-    return webdav_open_mailbox(mailbox, WEBDAV_CREATE);
+    return webdav_open_mailbox(mailbox);
 }
 
 
@@ -138,7 +138,7 @@ static int webdav_put(struct transaction_t *txn, struct buf *obj,
     if (wdata->dav.imap_uid) {
 	/* Fetch index record for the resource */
 	oldrecord = &record;
-	mailbox_find_index_record(mailbox, wdata->dav.imap_uid, oldrecord);
+	mailbox_find_index_record(mailbox, wdata->dav.imap_uid, oldrecord, 0);
     }
 
     /* Get filename of attachment */

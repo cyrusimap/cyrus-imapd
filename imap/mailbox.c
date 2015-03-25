@@ -3095,7 +3095,7 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
         }
     }
 
-    webdavdb = webdav_open_mailbox(mailbox, 0);
+    webdavdb = webdav_open_mailbox(mailbox);
 
     /* Find existing record for this resource */
     webdav_lookup_resource(webdavdb, mailbox->name, resource, 1, &wdata);

@@ -155,6 +155,13 @@ EXPORTED int strarray_append(strarray_t *sa, const char *s)
     return strarray_appendm(sa, xstrdup(s));
 }
 
+EXPORTED void strarray_cat(strarray_t *dest, const strarray_t *src)
+{
+    int i;
+    for (i = 0 ; i < src->count ; i++)
+	strarray_append(dest, strarray_nth(src, i));
+}
+
 EXPORTED int strarray_add(strarray_t *sa, const char *s)
 {
     int pos = strarray_find(sa, s, 0);

@@ -2291,7 +2291,7 @@ static int do_fetch(struct dlist *kin)
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
     fname = mboxname_datapath(partition, mboxname, uniqueid, uid);
-    if (stat(fname, &sbuf) == -1)
+    if (stat(fname, &sbuf) == -1) {
 	fname = mboxname_archivepath(partition, mboxname, uniqueid, uid);
 	if (stat(fname, &sbuf) == -1)
 	    return IMAP_MAILBOX_NONEXISTENT;
