@@ -125,12 +125,26 @@ static int get_email2uids(struct transaction_t *txn __attribute__((unused)),
     json_t *json;
     int ret = HTTP_NO_CONTENT;
     int i;
+    const char *mboxname = NULL;
+    const char **mailboxhdrs;
+    const char *mailbox = "Default";
+    struct buf boxbuf = BUF_INITIALIZER;
+
+    mailboxhdrs = spool_getheader(txn->req_hdrs, "Mailbox");
+    if (mailboxhdrs) {
+	mailbox = mailboxhdrs[0];
+    }
+
+    buf_setcstr(&boxbuf, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
+    buf_putc(&boxbuf, '.');
+    buf_appendcstr(&boxbuf, mailbox);
+    mboxname = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
 
     /* XXX init just incase carddav not enabled? */
     db = carddav_open_userid(userid);
     if (!db) goto done;
 
-    array = carddav_getemail2uids(db, key);
+    array = carddav_getemail2uids(db, key, mboxname);
     if (!array) goto done;
 
     json = json_array();
@@ -163,19 +177,33 @@ static int get_uid2groups(struct transaction_t *txn,
     json_t *json;
     int ret = HTTP_NO_CONTENT;
     int i;
+    const char *mboxname = NULL;
     const char **otheruserhdrs;
     const char *otheruser = "";
+    const char **mailboxhdrs;
+    const char *mailbox = "Default";
+    struct buf boxbuf = BUF_INITIALIZER;
 
     otheruserhdrs = spool_getheader(txn->req_hdrs, "OtherUser");
     if (otheruserhdrs) {
 	otheruser = otheruserhdrs[0];
     }
 
+    mailboxhdrs = spool_getheader(txn->req_hdrs, "Mailbox");
+    if (mailboxhdrs) {
+	mailbox = mailboxhdrs[0];
+    }
+
+    buf_setcstr(&boxbuf, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
+    buf_putc(&boxbuf, '.');
+    buf_appendcstr(&boxbuf, mailbox);
+    mboxname = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
+
     /* XXX init just incase carddav not enabled? */
     db = carddav_open_userid(userid);
     if (!db) goto done;
 
-    array = carddav_getuid2groups(db, key, otheruser);
+    array = carddav_getuid2groups(db, key, mboxname, otheruser);
     if (!array) goto done;
 
     json = json_array();
@@ -196,6 +224,7 @@ done:
     free(result);
     if (array) strarray_free(array);
     if (db) carddav_close(db);
+    buf_free(&boxbuf);
     return ret;
 }
 

@@ -97,8 +97,10 @@ int carddav_lookup_uid(struct carddav_db *carddavdb, const char *ical_uid,
 /* check if an email address exists on any card.
    returns the groups its in (if any) */
 strarray_t *carddav_getemail(struct carddav_db *carddavdb, const char *key);
-strarray_t *carddav_getemail2uids(struct carddav_db *carddavdb, const char *key);
-strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb, const char *key, const char *otheruser);
+strarray_t *carddav_getemail2uids(struct carddav_db *carddavdb, const char *key,
+				  const char *mboxname);
+strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb, const char *key,
+				  const char *mboxname, const char *otheruser);
 
 /* checks if a group exists (by id).
    returns emails of its members (if any) */

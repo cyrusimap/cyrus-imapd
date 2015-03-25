@@ -417,13 +417,14 @@ EXPORTED strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const c
     "SELECT DISTINCT vcard_uid " \
     " FROM vcard_objs CO JOIN vcard_emails E" \
     " WHERE E.objid = CO.rowid AND CO.alive = 1" \
-    " AND E.email = :email;"
+    " AND E.email = :email AND CO.mailbox = :mailbox;"
 
 #define CMD_GETUID2GROUPS \
     "SELECT DISTINCT GO.fullname" \
     " FROM vcard_objs GO JOIN vcard_groups G" \
     " WHERE G.objid = GO.rowid AND GO.alive = 1" \
-    " AND G.member_uid = :member_uid AND G.otheruser = :otheruser;"
+    " AND G.member_uid = :member_uid AND G.otheruser = :otheruser" \
+    " AND GO.mailbox = :mailbox;"
 
 static int emailexists_cb(sqlite3_stmt *stmt, void *rock)
 {
@@ -465,11 +466,13 @@ EXPORTED strarray_t *carddav_getemail(struct carddav_db *carddavdb, const char *
     return groups;
 }
 
-EXPORTED strarray_t *carddav_getemail2uids(struct carddav_db *carddavdb, const char *email)
+EXPORTED strarray_t *carddav_getemail2uids(struct carddav_db *carddavdb, const char *email,
+					   const char *mboxname)
 {
     struct bind_val bval[] = {
-	{ ":email", SQLITE_TEXT, { .s = email } },
-	{ NULL,     SQLITE_NULL, { .s = NULL  } }
+	{ ":email", SQLITE_TEXT,   { .s = email } },
+	{ ":mailbox", SQLITE_TEXT, { .s = mboxname } },
+	{ NULL,     SQLITE_NULL,   { .s = NULL  } }
     };
     strarray_t *uids = strarray_new();
 
@@ -479,11 +482,12 @@ EXPORTED strarray_t *carddav_getemail2uids(struct carddav_db *carddavdb, const c
     return uids;
 }
 
-EXPORTED strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb,
-					   const char *member_uid, const char *otheruser)
+EXPORTED strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb, const char *member_uid,
+					   const char *mboxname, const char *otheruser)
 {
     struct bind_val bval[] = {
 	{ ":member_uid", SQLITE_TEXT, { .s = member_uid } },
+	{ ":mailbox", SQLITE_TEXT,    { .s = mboxname } },
 	{ ":otheruser",  SQLITE_TEXT, { .s = otheruser } },
 	{ NULL,          SQLITE_NULL, { .s = NULL  } }
     };
