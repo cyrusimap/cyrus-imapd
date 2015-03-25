@@ -1503,8 +1503,6 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	json_t *created = json_pack("{}");
 	json_t *notCreated = json_pack("{}");
 	json_t *record;
-	/* XXX - default name finding */
-	const char *mboxname = mboxname_user_mbox(req->userid, "#addressbooks.Default");
 
 	const char *key;
 	json_t *arg;
@@ -1560,6 +1558,14 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 		    continue;
 		}
 	    }
+
+	    const char *addressbookId = "Default";
+	    json_t *abookid = json_object_get(arg, "addressbookId");
+	    if (abookid && json_string_value(abookid)) {
+		/* XXX - invalid arguments */
+		addressbookId = json_string_value(abookid);
+	    }
+	    const char *mboxname = mboxname_abook(req->userid, addressbookId);
 
 	    /* we need to create and append a record */
 	    if (!mailbox || strcmp(mailbox->name, mboxname)) {
@@ -2299,8 +2305,6 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 	json_t *created = json_pack("{}");
 	json_t *notCreated = json_pack("{}");
 	json_t *record;
-	/* XXX - default name finding */
-	const char *mboxname = mboxname_user_mbox(req->userid, "#addressbooks.Default");
 
 	const char *key;
 	json_t *arg;
@@ -2308,6 +2312,14 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 	    char *uid = makeuuid();
 	    strarray_t *flags = strarray_new();
 	    struct entryattlist *annots = NULL;
+
+	    const char *addressbookId = "Default";
+	    json_t *abookid = json_object_get(arg, "addressbookId");
+	    if (abookid && json_string_value(abookid)) {
+		/* XXX - invalid arguments */
+		addressbookId = json_string_value(abookid);
+	    }
+	    const char *mboxname = mboxname_abook(req->userid, addressbookId);
 
 	    struct vparse_card *card = vparse_new_card("VCARD");
 	    vparse_add_entry(card, NULL, "VERSION", "3.0");
