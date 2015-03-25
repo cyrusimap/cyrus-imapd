@@ -184,6 +184,8 @@ int mboxname_is_prefix(const char *longstr, const char *shortstr);
 const char *mboxname_to_userid(const char *mboxname);
 /* returns a malloc'd mailbox */
 char *mboxname_user_mbox(const char *userid, const char *subfolder);
+char *mboxname_abook(const char *userid, const char *collection);
+char *mboxname_cal(const char *userid, const char *collection);
 
 /*
  * Check whether two mboxnames have the same userid.

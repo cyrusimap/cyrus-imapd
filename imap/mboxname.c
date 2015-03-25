@@ -1038,6 +1038,32 @@ EXPORTED char *mboxname_user_mbox(const char *userid, const char *subfolder)
     return buf_release(&mbox);
 }
 
+EXPORTED char *mboxname_abook(const char *userid, const char *collection)
+{
+    struct buf name = BUF_INITIALIZER;
+    buf_setcstr(&name, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
+    if (collection) {
+	buf_putc(&name, '.');
+	buf_appendcstr(&name, collection);
+    }
+    char *res = mboxname_user_mbox(userid, buf_cstring(&name));
+    buf_free(&name);
+    return res;
+}
+
+EXPORTED char *mboxname_cal(const char *userid, const char *collection)
+{
+    struct buf name = BUF_INITIALIZER;
+    buf_setcstr(&name, config_getstring(IMAPOPT_CALENDARPREFIX));
+    if (collection) {
+	buf_putc(&name, '.');
+	buf_appendcstr(&name, collection);
+    }
+    char *res = mboxname_user_mbox(userid, buf_cstring(&name));
+    buf_free(&name);
+    return res;
+}
+
 /*
  * Check whether two parts have the same userid.
  * Returns: 1 if the userids are the same, 0 if not.
