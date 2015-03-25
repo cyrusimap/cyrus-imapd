@@ -286,6 +286,12 @@ EXPORTED const char *strarray_nth(const strarray_t *sa, int idx)
     return sa->data[idx];
 }
 
+EXPORTED const char *strarray_safenth(const strarray_t *sa, int idx)
+{
+    const char *v = strarray_nth(sa, idx);
+    return v ? v : "";
+}
+
 EXPORTED char *strarray_join(const strarray_t *sa, const char *sep)
 {
     int seplen = (sep ? strlen(sep) : 0);

@@ -76,6 +76,7 @@ char *strarray_remove(strarray_t *, int idx);
 void strarray_remove_all(strarray_t *sa, const char *s);
 void strarray_remove_all_case(strarray_t *sa, const char *s);
 const char *strarray_nth(const strarray_t *sa, int idx);
+const char *strarray_safenth(const strarray_t *sa, int idx);
 void strarray_truncate(strarray_t *sa, int newlen);
 strarray_t *strarray_dup(const strarray_t *);
 
