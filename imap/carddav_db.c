@@ -1961,7 +1961,7 @@ static int _emails_to_card(struct vparse_card *card, json_t *arg)
 	if (!type) return -1;
 	/*optional*/
 	const char *label = _json_object_get_string(item, "label");
-	const char *value = _json_object_get_string(item, value);
+	const char *value = _json_object_get_string(item, "value");
 	if (!value) return -1;
 	json_t *jisDefault = json_object_get(item, "isDefault");
 
@@ -2017,7 +2017,7 @@ static int _online_to_card(struct vparse_card *card, json_t *arg)
     int size = json_array_size(arg);
     for (i = 0; i < size; i++) {
 	json_t *item = json_array_get(arg, i);
-	const char *value = _json_object_get_string(item, value);
+	const char *value = _json_object_get_string(item, "value");
 	if (!value) return -1;
 	const char *type = _json_object_get_string(item, "type");
 	if (!type) return -1;
