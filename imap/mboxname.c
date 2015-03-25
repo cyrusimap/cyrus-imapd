@@ -641,7 +641,7 @@ static int mboxname_toexternal_alt(struct namespace *namespace, const char *mbox
 	    sprintf(result, "%s%s", namespace->prefix[NAMESPACE_USER], iresult+5);
 	/* special case:  LIST/LSUB "" % */
 	} else {
-	    sprintf(result, "%.*s", strlen(namespace->prefix[NAMESPACE_USER])-1, namespace->prefix[NAMESPACE_USER]);
+	    sprintf(result, "%.*s", (int)strlen(namespace->prefix[NAMESPACE_USER])-1, namespace->prefix[NAMESPACE_USER]);
 	}
 
 	return 0;
