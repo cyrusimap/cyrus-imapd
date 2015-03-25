@@ -5489,35 +5489,17 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     spool_cache_header(xstrdup("Content-Disposition"),
 		       buf_release(&txn->buf), txn->req_hdrs);
 
-    /* Prepare to append the iMIP message to calendar mailbox */
-    if ((r = append_setup_mbox(&as, mailbox, httpd_userid, httpd_authstate, 0, qdiffs, 0, 0, EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
-	syslog(LOG_ERR, "append_setup(%s) failed: %s",
-	       mailbox->name, error_message(r));
-	ret = HTTP_SERVER_ERROR;
-	txn->error.desc = "append_setup() failed\r\n";
-    }
-    else {
-	struct body *body = NULL;
-	strarray_t *flaglist = NULL;
-	struct entryattlist *annots = NULL;
+    /* Store the resource */
+    ret = dav_store_resource(txn, icalcomponent_as_ical_string(ical), 0,
+			     mailbox, oldrecord, &imapflags);
+    strarray_fini(&imapflags);
 
-	if (expunge_uid) {
-	    flaglist = mailbox_extract_flags(mailbox, &oldrecord, httpd_userid);
-	    annots = mailbox_extract_annots(mailbox, &oldrecord);
+    switch (ret) {
+    case HTTP_CREATED:
+    case HTTP_NO_CONTENT:
+	if (cdata->organizer && (flags & NEW_STAG)) {
+	    txn->resp_body.stag = sched_tag;
 	}
-
-	/* Append the iMIP file to the calendar mailbox */
-	if ((r = append_fromstage(&as, &body, stage, now, flaglist, 0, annots))) {
-	    syslog(LOG_ERR, "append_fromstage() failed");
-	    ret = HTTP_SERVER_ERROR;
-	    txn->error.desc = "append_fromstage() failed\r\n";
-	}
-	if (body) {
-	    message_free_body(body);
-	    free(body);
-	}
-	strarray_free(flaglist);
-	freeentryatts(annots);
 
 	if (!(flags & PREFER_REP)) {
 	    /* iCal data has been rewritten - don't return validators */
