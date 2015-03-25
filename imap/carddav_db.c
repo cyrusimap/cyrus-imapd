@@ -1906,26 +1906,25 @@ static int _emails_to_card(struct vparse_card *card, json_t *arg)
     int size = json_array_size(arg);
     for (i = 0; i < size; i++) {
 	json_t *item = json_array_get(arg, i);
-	const char *value = _json_object_get_string(item, value);
-	if (!value) return -1;
-	struct vparse_entry *entry = vparse_add_entry(card, NULL, "email", value);
+
 	const char *type = _json_object_get_string(item, "type");
 	if (!type) return -1;
-	if (!strcmp(type, "personal"))
+	/*optional*/
+	const char *label = _json_object_get_string(item, "label");
+	const char *value = _json_object_get_string(item, value);
+	if (!value) return -1;
+	json_t *jisDefault = json_object_get(item, "isDefault");
+
+	struct vparse_entry *entry = vparse_add_entry(card, NULL, "email", value);
+
+	if (strcmpsafe(type, "other"))
 	    vparse_add_param(entry, "type", type);
-	else if (!strcmp(type, "work"))
-	    vparse_add_param(entry, "type", type);
-	else if (!strcmp(type, "other"))
-	    {} // no param
-	else
-	    return -1;  // all other types
-	json_t *jlabel = json_object_get(item, "label");
-	if (jlabel) {
-	    const char *label = json_string_value(jlabel);
-	    if (!label)
-		return -1;
+
+	if (label)
 	    vparse_add_param(entry, "label", label);
-	}
+
+	if (jisDefault && json_is_true(jisDefault))
+	    vparse_add_param(entry, "type", "pref");
     }
     return 0;
 }
@@ -1938,32 +1937,22 @@ static int _phones_to_card(struct vparse_card *card, json_t *arg)
     int size = json_array_size(arg);
     for (i = 0; i < size; i++) {
 	json_t *item = json_array_get(arg, i);
-	const char *value = _json_object_get_string(item, value);
-	if (!value) return -1;
-	struct vparse_entry *entry = vparse_add_entry(card, NULL, "tel", value);
 	const char *type = _json_object_get_string(item, "type");
 	if (!type) return -1;
-	if (!strcmp(type, "home"))
-	    vparse_add_param(entry, "type", type);
-	else if (!strcmp(type, "work"))
-	    vparse_add_param(entry, "type", type);
-	else if (!strcmp(type, "mobile"))
+	/* optional */
+	const char *label = _json_object_get_string(item, "label");
+	const char *value = _json_object_get_string(item, "value");
+	if (!value) return -1;
+
+	struct vparse_entry *entry = vparse_add_entry(card, NULL, "tel", value);
+
+	if (!strcmp(type, "mobile"))
 	    vparse_add_param(entry, "type", "cell");
-	else if (!strcmp(type, "fax"))
+	else if (strcmp(type, "other"))
 	    vparse_add_param(entry, "type", type);
-	else if (!strcmp(type, "pager"))
-	    vparse_add_param(entry, "type", type);
-	else if (!strcmp(type, "other"))
-	    {} // no param
-	else
-	    return -1;  // all other types
-	json_t *jlabel = json_object_get(item, "label");
-	if (jlabel) {
-	    const char *label = json_string_value(jlabel);
-	    if (!label)
-		return -1;
+
+	if (label)
 	    vparse_add_param(entry, "label", label);
-	}
     }
     return 0;
 }
@@ -1982,13 +1971,7 @@ static int _online_to_card(struct vparse_card *card, json_t *arg)
 	if (!value) return -1;
 	const char *type = _json_object_get_string(item, "type");
 	if (!type) return -1;
-	json_t *jlabel = json_object_get(item, "label");
-	const char *label = NULL;
-	if (jlabel) {
-	    const char *label = json_string_value(jlabel);
-	    if (!label)
-		return -1;
-	}
+	const char *label = _json_object_get_string(item, "label");
 
 	if (!strcmp(type, "uri")) {
 	    struct vparse_entry *entry = vparse_add_entry(card, NULL, "url", value);
@@ -2038,7 +2021,7 @@ static int _addresses_to_card(struct vparse_card *card, json_t *arg)
 
 	struct vparse_entry *entry = vparse_add_entry(card, NULL, "adr", NULL);
 
-	if (!strcmpsafe(type, "other"))
+	if (strcmpsafe(type, "other"))
 	    vparse_add_param(entry, "type", type);
 
 	if (label)
