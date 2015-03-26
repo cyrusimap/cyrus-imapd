@@ -3789,7 +3789,7 @@ static int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
 
     if (cal) {
 	const char *annotname = NULL;
-	const char *mailboxname;
+	char *mailboxname;
 
 	/* named calendars are only used for scheduling */
 	if (!(namespace_calendar.allow & ALLOW_CAL_SCHED))
