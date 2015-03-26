@@ -91,6 +91,7 @@ binary-arch: build
 	dh_installchangelogs
 
 	make install DESTDIR=\$(CURDIR)/debian/$basename
+	make install-binsymlinks DESTDIR=\$(CURDIR)/debian/$basename
 	/bin/bash ./libtool --mode=install install -o root -m 755 sieve/test \$(PWD)/debian/$basename/$basedir/bin/sieve-test
 	install -o root -m 755 tools/rehash debian/$basename/$basedir/bin/rehash
 	install -o root -m 755 tools/mkimap debian/$basename/$basedir/bin/mkimap
