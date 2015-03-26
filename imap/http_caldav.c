@@ -3805,9 +3805,14 @@ static int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
 	    annotname = ANNOT_NS "<" XML_NS_CALDAV ">schedule-outbox";
 
 	if (annotname) {
-	    r = annotatemore_lookupmask(mailboxname, annotname, fctx->req_tgt->userid, &calbuf);
-	    if (!r) cal = calbuf.len ? buf_cstring(&calbuf) : NULL;
+	    r = annotatemore_lookupmask(mailboxname, annotname,
+					fctx->req_tgt->userid, &calbuf);
+	    if (!r && calbuf.len) {
+		buf_putc(&calbuf, '/');
+		cal = buf_cstring(&calbuf);
+	    }
 	}
+	free(mailboxname);
 
 	/* make sure the mailbox exists */
 	mailboxname = caldav_mboxname(fctx->req_tgt->userid, cal);
@@ -3823,6 +3828,7 @@ static int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
 		goto done;
 	    }
 	}
+	free(mailboxname);
     }
 
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
@@ -3831,7 +3837,7 @@ static int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
     buf_reset(&fctx->buf);
     buf_printf(&fctx->buf, "%s/user/%s/", namespace_calendar.prefix,
 	       fctx->req_tgt->userid);
-    if (cal) buf_printf(&fctx->buf, "%s/", cal);
+    if (cal) buf_appendcstr(&fctx->buf, cal);
 
     if (expand) {
 	/* Return properties for this URL */
