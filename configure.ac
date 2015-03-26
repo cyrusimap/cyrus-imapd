@@ -1868,4 +1868,9 @@ Database support:
    mysql:              $with_mysql
    postgresql:         $use_pgsql
    sqlite:             $use_sqlite
+
+Search engine:
+   squat:              $enable_squat
+   sphinx:             $enable_sphinx
+   xapian:             $enable_xapian
 "
