@@ -196,6 +196,7 @@ EXPORTED int webdav_abort(struct webdav_db *webdavdb)
 struct read_rock {
     struct webdav_db *db;
     struct webdav_data *wdata;
+    int tombstones;
     int (*cb)(void *rock, void *data);
     void *rock;
 };
@@ -216,6 +217,10 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     struct webdav_db *db = rrock->db;
     struct webdav_data *wdata = rrock->wdata;
     int r = 0;
+
+    wdata->dav.alive = sqlite3_column_int(stmt, 14);
+    if (!rrock->tombstones && !wdata->dav.alive)
+	return 0;
 
     memset(wdata, 0, sizeof(struct webdav_data));
 
@@ -274,24 +279,27 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     return r;
 }
 
-
-#define CMD_SELRSRC							\
-    "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
+#define CMD_GETFIELDS							\
+    "SELECT rowid, creationdate, mailbox, resource, imap_uid, modseq"	\
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
     "  filename, type, subtype, res_uid, ref_count"			\
     " FROM dav_objs"							\
+
+
+#define CMD_SELRSRC CMD_GETFIELDS					\
     " WHERE ( mailbox = :mailbox AND resource = :resource );"
 
 EXPORTED int webdav_lookup_resource(struct webdav_db *webdavdb,
 				    const char *mailbox, const char *resource,
-				    int lock, struct webdav_data **result)
+				    int lock, struct webdav_data **result,
+				    int tombstones)
 {
     struct bind_val bval[] = {
 	{ ":mailbox",  SQLITE_TEXT, { .s = mailbox	 } },
 	{ ":resource", SQLITE_TEXT, { .s = resource	 } },
 	{ NULL,	       SQLITE_NULL, { .s = NULL		 } } };
     static struct webdav_data wdata;
-    struct read_rock rrock = { webdavdb, &wdata, NULL, NULL };
+    struct read_rock rrock = { webdavdb, &wdata, tombstones, NULL, NULL };
     int r;
 
     *result = memset(&wdata, 0, sizeof(struct webdav_data));
@@ -311,11 +319,7 @@ EXPORTED int webdav_lookup_resource(struct webdav_db *webdavdb,
 }
 
 
-#define CMD_SELUID							\
-    "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
-    "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
-    "  filename, type, subtype, res_uid, ref_count"			\
-    " FROM dav_objs"							\
+#define CMD_SELUID CMD_GETFIELDS					\
     " WHERE ( res_uid = :res_uid );"
 
 EXPORTED int webdav_lookup_uid(struct webdav_db *webdavdb, const char *res_uid,
@@ -325,7 +329,7 @@ EXPORTED int webdav_lookup_uid(struct webdav_db *webdavdb, const char *res_uid,
 	{ ":res_uid",    SQLITE_TEXT, { .s = res_uid		 } },
 	{ NULL,	         SQLITE_NULL, { .s = NULL		 } } };
     static struct webdav_data wdata;
-    struct read_rock rrock = { webdavdb, &wdata, NULL, NULL };
+    struct read_rock rrock = { webdavdb, &wdata, 0, NULL, NULL };
     int r;
 
     *result = memset(&wdata, 0, sizeof(struct webdav_data));
@@ -345,11 +349,8 @@ EXPORTED int webdav_lookup_uid(struct webdav_db *webdavdb, const char *res_uid,
 }
 
 
-#define CMD_SELMBOX							\
-    "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
-    "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
-    "  filename, type, subtype, res_uid, ref_count"			\
-    " FROM dav_objs WHERE mailbox = :mailbox;"
+#define CMD_SELMBOX CMD_GETFIELDS					\
+    " WHERE mailbox = :mailbox;"
 
 EXPORTED int webdav_foreach(struct webdav_db *webdavdb, const char *mailbox,
 			    int (*cb)(void *rock, void *data),
@@ -359,7 +360,7 @@ EXPORTED int webdav_foreach(struct webdav_db *webdavdb, const char *mailbox,
 	{ ":mailbox", SQLITE_TEXT, { .s = mailbox } },
 	{ NULL,	      SQLITE_NULL, { .s = NULL    } } };
     struct webdav_data wdata;
-    struct read_rock rrock = { webdavdb, &wdata, cb, rock };
+    struct read_rock rrock = { webdavdb, &wdata, 0, cb, rock };
 
     return dav_exec(webdavdb->db, CMD_SELMBOX, bval, &read_cb, &rrock,
 		    &webdavdb->stmt[STMT_SELMBOX]);

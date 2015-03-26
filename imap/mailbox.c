@@ -3098,7 +3098,7 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
     webdavdb = webdav_open_mailbox(mailbox);
 
     /* Find existing record for this resource */
-    webdav_lookup_resource(webdavdb, mailbox->name, resource, 1, &wdata);
+    webdav_lookup_resource(webdavdb, mailbox->name, resource, 1, &wdata, 0);
 
     /* XXX - if not matching by UID, skip - this record doesn't refer to the current item */
 

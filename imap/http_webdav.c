@@ -133,7 +133,7 @@ static int webdav_put(struct transaction_t *txn, struct buf *obj,
 
     /* Find message UID for the resource */
     webdav_lookup_resource(webdavdb, txn->req_tgt.mboxname,
-			   txn->req_tgt.resource, 0, &wdata);
+			   txn->req_tgt.resource, 0, &wdata, 0);
 
     if (wdata->dav.imap_uid) {
 	/* Fetch index record for the resource */

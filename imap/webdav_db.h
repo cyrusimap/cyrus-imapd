@@ -83,7 +83,8 @@ int webdav_close(struct webdav_db *webdavdb);
    (optionally inside a transaction for updates) */
 int webdav_lookup_resource(struct webdav_db *webdavdb,
 			   const char *mailbox, const char *resource,
-			   int lock, struct webdav_data **result);
+			   int lock, struct webdav_data **result,
+			   int tombstones);
 
 /* lookup an entry from 'webdavdb' by resource UID
    (optionally inside a transaction for updates) */

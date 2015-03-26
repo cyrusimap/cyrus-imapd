@@ -2512,7 +2512,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 
 	/* Lookup new/updated resource record */
 	webdav_lookup_resource(webdavdb, attachments->name,
-			       resource, 0, &wdata);
+			       resource, 0, &wdata, 0);
 
 	/* Update ATTACH parameters */
 	param = icalproperty_get_managedid_parameter(aprop);
