@@ -55,7 +55,7 @@
 #define FNAME_LEAPSECFILE "/leap-seconds.list"
 
 /* offset between NIST and UNIX epochs (in seconds) */
-#define NIST_EPOCH_OFFSET 2208988800
+#define NIST_EPOCH_OFFSET 2208988800U
 
 /* name of the zoneinfo database */
 #define FNAME_ZONEINFODB "/zoneinfo.db"
