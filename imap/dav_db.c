@@ -368,7 +368,7 @@ static sqlite3 *dav_open(const char *fname)
 		free_dav_open(open);
 		return NULL;
 	    }
-	    break;
+	    /* fall through */
 
 	case 4:
 	    syslog(LOG_NOTICE, "upgrading dav_db to v5 %s", open->path);
@@ -380,6 +380,9 @@ static sqlite3 *dav_open(const char *fname)
 		free_dav_open(open);
 		return NULL;
 	    }
+	    /* fall through */
+
+	    /* AND NOW... (to avoid copy-paste of previous leaving two breaks */
 	    break;
 
 	default:
