@@ -1219,7 +1219,7 @@ static int action_get(struct transaction_t *txn)
     if (txn->meth != METH_HEAD) {
 	static struct buf pathbuf = BUF_INITIALIZER;
 	const char *p, *path, *proto, *host, *msg_base = NULL;
-	unsigned long msg_size = 0;
+	size_t msg_size = 0;
 	icalcomponent *ical, *vtz;
 	icalproperty *prop;
 	int fd;
@@ -1411,7 +1411,7 @@ static int action_expand(struct transaction_t *txn)
     if (txn->meth != METH_HEAD) {
 	static struct buf pathbuf = BUF_INITIALIZER;
 	const char *path, *msg_base = NULL;
-	unsigned long msg_size = 0;
+	size_t msg_size = 0;
 	icalcomponent *ical, *vtz;
 	const struct observance *proleptic;
 	icalarray *obsarray;

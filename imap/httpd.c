@@ -3442,7 +3442,7 @@ static int meth_get(struct transaction_t *txn,
     static struct buf pathbuf = BUF_INITIALIZER;
     struct stat sbuf;
     const char *msg_base = NULL;
-    unsigned long msg_size = 0;
+    size_t msg_size = 0;
     struct resp_body_t *resp_body = &txn->resp_body;
 
     /* Check if this is a request for /.well-known/ listing */

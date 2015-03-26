@@ -981,7 +981,7 @@ static int meth_get_domainkey(struct transaction_t *txn,
     static struct buf pathbuf = BUF_INITIALIZER;
     struct stat sbuf;
     const char *msg_base = NULL;
-    unsigned long msg_size = 0;
+    size_t msg_size = 0;
     struct resp_body_t *resp_body = &txn->resp_body;
 
     /* See if file exists and get Content-Length & Last-Modified time */
@@ -1114,7 +1114,7 @@ static void isched_init(struct buf *serverinfo)
 	/* Fetch DKIM private key for signing */
 	if (keyfile && (fd = open(keyfile, O_RDONLY)) != -1) {
 	    const char *base = NULL;
-	    unsigned long len = 0;
+	    size_t len = 0;
 
 	    map_refresh(fd, 1, &base, &len, MAP_UNKNOWN_LEN, keyfile, NULL);
 	    buf_setmap(&privkey, base, len);

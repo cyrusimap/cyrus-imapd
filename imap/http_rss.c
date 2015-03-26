@@ -483,7 +483,7 @@ static int list_feeds(struct transaction_t *txn)
 {
     const char *template_file = config_getstring(IMAPOPT_RSS_FEEDLIST_TEMPLATE);
     const char *var = NULL, *template = NULL, *prefix, *suffix;
-    unsigned long template_len = 0, prefix_len, suffix_len;
+    size_t template_len = 0, prefix_len, suffix_len;
     size_t varlen = strlen(FEEDLIST_VAR);
     int fd = -1;
     struct message_guid guid;
