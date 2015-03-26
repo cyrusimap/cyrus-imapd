@@ -1706,6 +1706,8 @@ endif
 	  $(LN_S) -f imtest sivtest && \
 	  $(LN_S) -f imtest smtptest && \
 	  $(LN_S) -f imtest synctest
+
+install-binsymlinks:
 ## Let's symlink everything else
 	for prog in $(sbin_PROGRAMS); do $(LN_S) -f $(sbindir)/`basename $$prog` $(DESTDIR)$(bindir)/; done
 	for prog in $(libexec_PROGRAMS); do $(LN_S) -f $(libexecdir)/`basename $$prog` $(DESTDIR)$(bindir)/; done
