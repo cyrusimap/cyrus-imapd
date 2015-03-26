@@ -85,7 +85,7 @@
     " UNIQUE( mailbox, resource ) );"					\
     "CREATE INDEX IF NOT EXISTS idx_ical_uid ON ical_objs ( ical_uid );"
 
-#define CMD_CREATE_OBJ							\
+#define CMD_CREATE_CARD							\
     "CREATE TABLE IF NOT EXISTS vcard_objs ("				\
     " rowid INTEGER PRIMARY KEY,"					\
     " creationdate INTEGER,"						\
@@ -149,7 +149,7 @@
     "CREATE INDEX IF NOT EXISTS idx_res_uid ON dav_objs ( res_uid );"
 
 
-#define CMD_CREATE CMD_CREATE_CAL CMD_CREATE_OBJ CMD_CREATE_EM CMD_CREATE_GR \
+#define CMD_CREATE CMD_CREATE_CAL CMD_CREATE_CARD CMD_CREATE_EM CMD_CREATE_GR \
 		   CMD_CREATE_OBJS
 
 /* leaves these unused columns around, but that's life.  A dav_reconstruct
