@@ -1424,6 +1424,7 @@ static int load_annot_cb(const char *mailbox __attribute__((unused)),
 			 const struct buf *value, void *rock)
 {
     struct entryattlist **eal = (struct entryattlist **)rock;
+    if (!userid) userid = "";
     const char *attrib = (userid[0] ? "value.priv" : "value.shared");
     setentryatt(eal, entry, attrib, value);
     return 0;
