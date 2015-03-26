@@ -456,8 +456,8 @@ static int cache_parserecord(struct mappedfile *cachefile, size_t cache_offset,
     offset = cache_offset;
 
     if (offset >= buf_size) {
-	syslog(LOG_ERR, "IOERROR: offset greater than cache size %lu %lu",
-	       offset, buf_size);
+	syslog(LOG_ERR, "IOERROR: offset greater than cache size "
+	       SIZE_T_FMT " " SIZE_T_FMT, offset, buf_size);
 	return IMAP_IOERROR;
     }
 
