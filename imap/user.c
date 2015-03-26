@@ -228,10 +228,12 @@ EXPORTED int user_deletedata(const char *userid, int wipe_user)
     /* delete all the search engine data (if any) */
     search_deluser(userid);
 
+#ifdef WITH_DAV
     /* delete all the calendar alarms for the user */
     struct caldav_alarm_db *alarmdb = caldav_alarm_open();
     caldav_alarm_delete_user(alarmdb, userid);
     caldav_alarm_close(alarmdb);
+#endif /* WITH_DAV */
 
     proc_killuser(userid);
 

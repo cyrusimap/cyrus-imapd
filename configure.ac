@@ -360,6 +360,7 @@ dnl
 dnl Search engines - SQUAT
 dnl
 
+enable_squat=yes
 AC_ARG_ENABLE(squat,
 	[  --disable-squat         disable Squat support])
 if test "x$enable_squat" != xno ; then
@@ -371,6 +372,7 @@ dnl
 dnl Search engines - Sphinx
 dnl
 
+enable_squat=no
 AC_ARG_ENABLE(sphinx,
 	[  --enable-sphinx         disable Sphinx support],[
 	    enable_sphinx=$enableval

@@ -889,6 +889,7 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 #endif // WITH_DAV
 }
 
+#ifdef WITH_DAV
 EXPORTED void mboxevent_extract_icalcomponent(struct mboxevent *event,
 					      icalcomponent *ical,
 					      const char *userid,
@@ -969,6 +970,7 @@ EXPORTED void mboxevent_extract_icalcomponent(struct mboxevent *event,
     FILL_ARRAY_PARAM(event, EVENT_CALENDAR_ATTENDEE_EMAILS, attendee_emails);
     FILL_ARRAY_PARAM(event, EVENT_CALENDAR_ATTENDEE_STATUS, attendee_status);
 }
+#endif /* WITH_DAV */
 
 void mboxevent_extract_copied_record(struct mboxevent *event,
 				     const struct mailbox *mailbox, uint32_t uid)

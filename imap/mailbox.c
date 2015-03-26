@@ -4628,6 +4628,7 @@ EXPORTED int mailbox_add_dav(struct mailbox *mailbox)
 
     return 0;
 }
+#endif /* WITH_DAV */
 
 EXPORTED int mailbox_add_conversations(struct mailbox *mailbox)
 {
@@ -4652,7 +4653,6 @@ EXPORTED int mailbox_add_conversations(struct mailbox *mailbox)
 
     return 0;
 }
-#endif
 
 static int mailbox_delete_conversations(struct mailbox *mailbox)
 {
@@ -4727,6 +4727,7 @@ static int mailbox_delete_internal(struct mailbox **mailboxptr)
     return 0;
 }
 
+#ifdef WITH_DAV
 static int mailbox_delete_caldav(struct mailbox *mailbox)
 {
     struct caldav_db *caldavdb = NULL;
@@ -4770,6 +4771,7 @@ static int mailbox_delete_dav(struct mailbox *mailbox)
 	return mailbox_delete_caldav(mailbox);
     return 0;
 }
+#endif /* WITH_DAV */
 
 /*
  * Delete and close the mailbox 'mailbox'.  Closes 'mailbox' whether
@@ -4783,8 +4785,10 @@ EXPORTED int mailbox_delete(struct mailbox **mailboxptr)
     r = mailbox_delete_conversations(mailbox);
     if (r) return r;
 
+#ifdef WITH_DAV
     r = mailbox_delete_dav(mailbox);
     if (r) return r;
+#endif /* WITH_DAV */
 
     return mailbox_delete_internal(mailboxptr);
 }

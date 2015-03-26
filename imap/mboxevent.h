@@ -316,6 +316,7 @@ void mboxevent_extract_mailbox(struct mboxevent *event, struct mailbox *mailbox)
 void mboxevent_extract_old_mailbox(struct mboxevent *event,
                                    const struct mailbox *mailbox);
 
+#ifdef WITH_DAV
 /*
  * Extract data from the given ical object
  */
@@ -330,6 +331,7 @@ void mboxevent_extract_icalcomponent(struct mboxevent *event,
                                      icaltimetype end,
                                      strarray_t *recipients
                                      );
+#endif /* WITH_DAV */
 
 
 /*
