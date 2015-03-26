@@ -900,6 +900,7 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/backend.c \
 	imap/backend.h \
 	imap/conversations.c \
+	imap/conversations.h \
 	imap/convert_code.c \
 	imap/convert_code.h \
 	imap/dlist.c \
@@ -932,6 +933,7 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/message_guid.h \
 	imap/message.c \
 	imap/message.h \
+	imap/message_priv.h \
 	imap/mupdate-client.c \
 	imap/mupdate-client.h \
 	imap/mutex.h \
@@ -1002,6 +1004,7 @@ endif
 if HTTPD
 imap_libcyrus_imap_la_SOURCES += \
 	imap/caldav_alarm.c \
+	imap/caldav_alarm.h \
 	imap/caldav_db.c \
 	imap/caldav_db.h \
 	imap/carddav_db.c \
