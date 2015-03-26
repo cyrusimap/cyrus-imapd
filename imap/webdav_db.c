@@ -101,25 +101,6 @@ EXPORTED int webdav_done(void)
     return dav_done();
 }
 
-#define CMD_CREATE_OBJS							\
-    "CREATE TABLE IF NOT EXISTS dav_objs ("				\
-    " rowid INTEGER PRIMARY KEY,"					\
-    " creationdate INTEGER,"						\
-    " mailbox TEXT NOT NULL,"						\
-    " resource TEXT NOT NULL,"						\
-    " imap_uid INTEGER,"						\
-    " lock_token TEXT,"							\
-    " lock_owner TEXT,"							\
-    " lock_ownerid TEXT,"						\
-    " lock_expire INTEGER,"						\
-    " filename TEXT,"							\
-    " type TEXT,"							\
-    " subtype TEXT,"							\
-    " res_uid TEXT,"							\
-    " ref_count INTEGER,"						\
-    " UNIQUE( mailbox, resource ) );"					\
-    "CREATE INDEX IF NOT EXISTS idx_res_uid ON dav_objs ( res_uid );"
-
 /* Open DAV DB corresponding to userid */
 EXPORTED struct webdav_db *webdav_open_userid(const char *userid)
 {

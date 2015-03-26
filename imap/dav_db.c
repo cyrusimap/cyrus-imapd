@@ -127,7 +127,28 @@
     " otheruser TEXT NOT NULL DEFAULT \"\","				\
     " FOREIGN KEY (objid) REFERENCES vcard_objs (rowid) ON DELETE CASCADE );"
 
-#define CMD_CREATE CMD_CREATE_CAL CMD_CREATE_OBJ CMD_CREATE_EM CMD_CREATE_GR
+#define CMD_CREATE_OBJS							\
+    "CREATE TABLE IF NOT EXISTS dav_objs ("				\
+    " rowid INTEGER PRIMARY KEY,"					\
+    " creationdate INTEGER,"						\
+    " mailbox TEXT NOT NULL,"						\
+    " resource TEXT NOT NULL,"						\
+    " imap_uid INTEGER,"						\
+    " lock_token TEXT,"							\
+    " lock_owner TEXT,"							\
+    " lock_ownerid TEXT,"						\
+    " lock_expire INTEGER,"						\
+    " filename TEXT,"							\
+    " type TEXT,"							\
+    " subtype TEXT,"							\
+    " res_uid TEXT,"							\
+    " ref_count INTEGER,"						\
+    " UNIQUE( mailbox, resource ) );"					\
+    "CREATE INDEX IF NOT EXISTS idx_res_uid ON dav_objs ( res_uid );"
+
+
+#define CMD_CREATE CMD_CREATE_CAL CMD_CREATE_OBJ CMD_CREATE_EM CMD_CREATE_GR \
+		   CMD_CREATE_OBJS
 
 /* leaves these unused columns around, but that's life.  A dav_reconstruct
  * will fix them */
@@ -151,8 +172,9 @@
     "ALTER TABLE vcard_emails ADD COLUMN ispref INTEGER NOT NULL DEFAULT 0;"	\
     "ALTER TABLE vcard_groups ADD COLUMN otheruser TEXT NOT NULL DEFAULT \"\";"
 
+#define CMD_DBUPGRADEv6 CMD_CREATE_OBJS
 
-#define DB_VERSION 5
+#define DB_VERSION 6
 
 struct open_davdb {
     sqlite3 *db;
@@ -375,6 +397,18 @@ static sqlite3 *dav_open(const char *fname)
 	    rc = sqlite3_exec(open->db, CMD_DBUPGRADEv5, NULL, NULL, NULL);
 	    if (rc != SQLITE_OK) {
 		syslog(LOG_ERR, "dav_open(%s) upgrade v5: %s",
+		    open->path, sqlite3_errmsg(open->db));
+		sqlite3_close(open->db);
+		free_dav_open(open);
+		return NULL;
+	    }
+	    /* fall through */
+
+	case 5:
+	    syslog(LOG_NOTICE, "upgrading dav_db to v6 %s", open->path);
+	    rc = sqlite3_exec(open->db, CMD_DBUPGRADEv6, NULL, NULL, NULL);
+	    if (rc != SQLITE_OK) {
+		syslog(LOG_ERR, "dav_open(%s) upgrade v6: %s",
 		    open->path, sqlite3_errmsg(open->db));
 		sqlite3_close(open->db);
 		free_dav_open(open);
