@@ -53,11 +53,11 @@ WriteMakefile(
     'VERSION_FROM' => "@top_srcdir@/perl/sieve/managesieve/managesieve.pm", # finds $VERSION
     'MYEXTLIB'  => '../lib/libisieve.a @top_builddir@/perl/.libs/libcyrus.a @top_builddir@/perl/.libs/libcyrus_min.a',
     'LIBS'	=> ["$LIB_SASL @SSL_LIBS@ @LIB_RT@ @LIB_UUID@ @ZLIB@"],
-    'CCFLAGS'	=> '@COV_CFLAGS@',
+    'CCFLAGS'	=> '@GCOV_CFLAGS@',
     'DEFINE'	=> '-DPERL_POLLUTE',     # e.g., '-DHAVE_SOMETHING' 
     'INC'	=> "-I@top_srcdir@/lib -I@top_srcdir@/perl/sieve/lib @SASLFLAGS@ @SSL_CPPFLAGS@",
     'OBJECT'    => 'managesieve.o',
-    'LD'	=> $Config{ld} . ' @COV_LDFLAGS@',
+    'LD'	=> $Config{ld} . ' @GCOV_LDFLAGS@',
     # This is a disgusting hack to effectively disable the stupid
     # behaviour of the generated Makefile which moves itself aside
     # on a 'make clean' instead of on 'make distclean'.

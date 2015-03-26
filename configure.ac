@@ -91,14 +91,20 @@ AM_MAINTAINER_MODE
 
 AC_ARG_ENABLE(coverage,
 	[AS_HELP_STRING([--enable-coverage],[enable C test coverage])],
-	[COV_CFLAGS="--coverage"
-	 COV_LDFLAGS="--coverage"
+	[GCOV_CFLAGS="--coverage"
+	 GCOV_CXXFLAGS="--coverage"
+	 GCOV_LDFLAGS="--coverage"
+	 GCOV_LIBS="-lgcov"
 	],[
-	 COV_CFLAGS=
-	 COV_LDFLAGS=
+	 GCOV_CFLAGS=
+	 GCOV_CXXFLAGS=
+	 GCOV_LDFLAGS=
+	 GCOV_LIBS=
 	])
-AC_SUBST(COV_CFLAGS)
-AC_SUBST(COV_LDFLAGS)
+AC_SUBST(GCOV_CFLAGS)
+AC_SUBST(GCOV_CXXFLAGS)
+AC_SUBST(GCOV_LDFLAGS)
+AC_SUBST(GCOV_LIBS)
 
 AC_ARG_WITH(login,,AC_MSG_ERROR([--with-login is no longer supported.
 Configure SASL appropriately instead.]))

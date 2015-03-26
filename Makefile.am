@@ -43,6 +43,7 @@
 
 ACLOCAL_AMFLAGS = -I cmulocal
 AM_CFLAGS = @PERL_CCCDLFLAGS@ $(COV_CFLAGS)
+AM_CXXFLAGS = $(COV_CXXFLAGS)
 
 AM_CPPFLAGS = \
 	$(COM_ERR_CPPFLAGS) \
@@ -883,7 +884,7 @@ dist_imap_libcyrus_imap_la_SOURCES =
 
 imap_libcyrus_imap_la_LIBADD = $(COM_ERR_LIBS) $(LIB_UUID) lib/libcyrus_min.la lib/libcyrus.la
 imap_libcyrus_imap_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
-imap_libcyrus_imap_la_CXXFLAGS =
+imap_libcyrus_imap_la_CXXFLAGS = $(AM_CXXFLAGS)
 
 imap_libcyrus_imap_la_SOURCES = \
 	imap/annotate.c \
