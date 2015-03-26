@@ -354,7 +354,7 @@ static void test_get_search_program(void)
 	     "(and (match folder \"user.fred\"))");
     TESTCASE("folder inbox\r\n",
 	     "(and (match folder \"user.fred\"))");
-    TESTCASE("folder inbox/GastroPub\r\n",
+    TESTCASE("folder inbox.GastroPub\r\n",
 	     "(and (match folder \"user.fred.GastroPub\"))");
 
     /* XLISTID <string> */
