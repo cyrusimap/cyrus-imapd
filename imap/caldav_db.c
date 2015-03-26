@@ -897,8 +897,9 @@ EXPORTED char *caldav_mboxname(const char *userid, const char *name)
     buf_setcstr(&boxbuf, config_getstring(IMAPOPT_CALENDARPREFIX));
 
     if (name) {
+	size_t len = strcspn(name, "/");
 	buf_putc(&boxbuf, '.');
-	buf_appendcstr(&boxbuf, name);
+	buf_appendmap(&boxbuf, name, len);
     }
 
     res = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
