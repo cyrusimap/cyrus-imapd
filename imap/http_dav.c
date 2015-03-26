@@ -1894,20 +1894,18 @@ EXPORTED int propfind_curprin(const xmlChar *name, xmlNsPtr ns,
 
     if (httpd_userid) {
 	xmlNodePtr expand = (xmlNodePtr) rock;
+	const char *domain =
+	    httpd_extradomain ? httpd_extradomain : config_defdomain;
 
 	buf_reset(&fctx->buf);
 
-	if (strchr(httpd_userid, '@')) {
+	if (strchr(httpd_userid, '@') || !domain) {
 	    buf_printf(&fctx->buf, "%s/user/%s/",
 		    namespace_principal.prefix, httpd_userid);
 	}
-	else if (httpd_extradomain) {
-	    buf_printf(&fctx->buf, "%s/user/%s@%s/",
-		       namespace_principal.prefix, httpd_userid, httpd_extradomain);
-	}
 	else {
 	    buf_printf(&fctx->buf, "%s/user/%s@%s/",
-		       namespace_principal.prefix, httpd_userid, config_defdomain);
+		       namespace_principal.prefix, httpd_userid, domain);
 	}
 
 	if (expand) {
@@ -4325,9 +4323,12 @@ int propfind_by_collection(char *mboxname, int matchlen,
 	buf_setcstr(&writebuf, fctx->req_tgt->prefix);
 
 	if (parts.userid) {
+	    const char *domain =
+		parts.domain ? parts.domain :
+		httpd_extradomain ? httpd_extradomain : config_defdomain;
+	    
 	    buf_printf(&writebuf, "/user/%s", parts.userid);
-	    /* XXX - only if a domain... */
-	    buf_printf(&writebuf, "@%s", parts.domain ? parts.domain : httpd_extradomain ? httpd_extradomain : config_defdomain);
+	    if (domain) buf_printf(&writebuf, "@%s", domain);
 	}
 	buf_putc(&writebuf, '/');
 
