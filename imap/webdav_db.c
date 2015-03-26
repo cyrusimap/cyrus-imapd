@@ -368,17 +368,18 @@ EXPORTED int webdav_foreach(struct webdav_db *webdavdb, const char *mailbox,
 
 #define CMD_INSERT							\
     "INSERT INTO dav_objs ("						\
-    "  creationdate, mailbox, resource, imap_uid,"			\
+    "  creationdate, mailbox, resource, imap_uid, modseq,"		\
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
-    "  filename, type, subtype, res_uid, ref_count )"			\
+    "  filename, type, subtype, res_uid, ref_count, alive )"		\
     " VALUES ("								\
     "  :creationdate, :mailbox, :resource, :imap_uid,"			\
     "  :lock_token, :lock_owner, :lock_ownerid, :lock_expire,"		\
-    "  :filename, :type, :subtype, :res_uid, :ref_count );"
+    "  :filename, :type, :subtype, :res_uid, :ref_count, :alive );"
 
-#define CMD_UPDATE		   	\
+#define CMD_UPDATE			\
     "UPDATE dav_objs SET"		\
     "  imap_uid     = :imap_uid,"	\
+    "  modseq       = :modseq,"		\
     "  lock_token   = :lock_token,"	\
     "  lock_owner   = :lock_owner,"	\
     "  lock_ownerid = :lock_ownerid,"	\
@@ -387,7 +388,8 @@ EXPORTED int webdav_foreach(struct webdav_db *webdavdb, const char *mailbox,
     "  type         = :type,"		\
     "  subtype      = :subtype,"	\
     "  res_uid      = :res_uid,"	\
-    "  ref_count    = :ref_count"	\
+    "  ref_count    = :ref_count,"	\
+    "  alive        = :alive"		\
     " WHERE rowid = :rowid;"
 
 EXPORTED int webdav_write(struct webdav_db *webdavdb, struct webdav_data *wdata,
@@ -395,6 +397,7 @@ EXPORTED int webdav_write(struct webdav_db *webdavdb, struct webdav_data *wdata,
 {
     struct bind_val bval[] = {
 	{ ":imap_uid",	   SQLITE_INTEGER, { .i = wdata->dav.imap_uid	  } },
+	{ ":modseq",	   SQLITE_INTEGER, { .i = wdata->dav.modseq	  } },
 	{ ":lock_token",   SQLITE_TEXT,	   { .s = wdata->dav.lock_token	  } },
 	{ ":lock_owner",   SQLITE_TEXT,	   { .s = wdata->dav.lock_owner	  } },
 	{ ":lock_ownerid", SQLITE_TEXT,	   { .s = wdata->dav.lock_ownerid } },
@@ -404,8 +407,7 @@ EXPORTED int webdav_write(struct webdav_db *webdavdb, struct webdav_data *wdata,
 	{ ":subtype",	   SQLITE_TEXT,	   { .s = wdata->subtype	  } },
 	{ ":res_uid",	   SQLITE_TEXT,	   { .s = wdata->res_uid	  } },
 	{ ":ref_count",	   SQLITE_INTEGER, { .i = wdata->ref_count	  } },
-	{ NULL,		   SQLITE_NULL,	   { .s = NULL			  } },
-	{ NULL,		   SQLITE_NULL,	   { .s = NULL			  } },
+	{ ":alive",	   SQLITE_INTEGER, { .i = wdata->dav.alive	  } },
 	{ NULL,		   SQLITE_NULL,	   { .s = NULL			  } },
 	{ NULL,		   SQLITE_NULL,	   { .s = NULL			  } } };
     const char *cmd;
