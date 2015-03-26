@@ -134,6 +134,7 @@
     " mailbox TEXT NOT NULL,"						\
     " resource TEXT NOT NULL,"						\
     " imap_uid INTEGER,"						\
+    " modseq INTEGER,"							\
     " lock_token TEXT,"							\
     " lock_owner TEXT,"							\
     " lock_ownerid TEXT,"						\
@@ -143,6 +144,7 @@
     " subtype TEXT,"							\
     " res_uid TEXT,"							\
     " ref_count INTEGER,"						\
+    " alive INTEGER,"							\
     " UNIQUE( mailbox, resource ) );"					\
     "CREATE INDEX IF NOT EXISTS idx_res_uid ON dav_objs ( res_uid );"
 
