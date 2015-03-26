@@ -1074,7 +1074,7 @@ int propfind_creationdate(const xmlChar *name, xmlNsPtr ns,
 			  void *rock __attribute__((unused)))
 {
     time_t t = 0;
-    char datestr[21];
+    char datestr[RFC3339_DATETIME_MAX];
 
     if (fctx->data) {
 	struct dav_data *ddata = (struct dav_data *) fctx->data;
@@ -1091,7 +1091,7 @@ int propfind_creationdate(const xmlChar *name, xmlNsPtr ns,
 
     if (!t) return HTTP_NOT_FOUND;
 
-    rfc3339date_gen(datestr, sizeof(datestr), t);
+    time_to_rfc3339(t, datestr, RFC3339_DATETIME_MAX);
 
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 		 name, ns, BAD_CAST datestr, 0);

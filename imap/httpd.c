@@ -1691,19 +1691,6 @@ struct accept *parse_accept(const char **hdr)
 /****************************  Response Routines  *****************************/
 
 
-/* Create RFC3339 date ('buf' must be at least 21 characters) */
-EXPORTED char *rfc3339date_gen(char *buf, size_t len, time_t t)
-{
-    struct tm *tm = gmtime(&t);
-
-    snprintf(buf, len, "%4d-%02d-%02dT%02d:%02d:%02dZ",
-	     tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, 
-	     tm->tm_hour, tm->tm_min, tm->tm_sec);
-
-    return buf;
-}
-
-
 /* Create HTTP-date ('buf' must be at least 30 characters) */
 EXPORTED char *httpdate_gen(char *buf, size_t len, time_t t)
 {

@@ -64,8 +64,9 @@
 #include "http_proxy.h"
 #include "jcal.h"
 #include "map.h"
-#include "tok.h"
 #include "strhash.h"
+#include "times.h"
+#include "tok.h"
 #include "tz_err.h"
 #include "util.h"
 #include "version.h"
@@ -471,9 +472,9 @@ static int action_leap(struct transaction_t *txn)
 		if (buf[1] == '@') {
 		    /* expires */
 		    sscanf(buf+2, "\t%lu", &epoch);
-		    json_string_set(expires,
-				    rfc3339date_gen(buf, 11, /* clip time */
-						    epoch - NIST_EPOCH_OFFSET));
+		    time_to_rfc3339(epoch - NIST_EPOCH_OFFSET,
+				    buf, 11 /* clip time */);
+		    json_string_set(expires, buf);
 		}
 	    }
 	    else if (isdigit(buf[0])) {
@@ -482,9 +483,10 @@ static int action_leap(struct transaction_t *txn)
 		json_t *leap;
 
 		sscanf(buf, "%lu\t%d", &epoch, &utcoff);
-		leap = json_pack("{s:i s:s}", "utc-offset", utcoff, "onset",
-				 rfc3339date_gen(buf, 11, /* clip time */
-						 epoch - NIST_EPOCH_OFFSET));
+		time_to_rfc3339(epoch - NIST_EPOCH_OFFSET,
+				buf, 11 /* clip time */);
+		leap = json_pack("{s:i s:s}",
+				 "utc-offset", utcoff, "onset", buf);
 		json_array_append_new(leapseconds, leap);
 	    }
 	}
@@ -511,7 +513,7 @@ static int list_cb(const char *tzid, int tzidlen,
 		   struct zoneinfo *zi, void *rock)
 {
     struct list_rock *lrock = (struct list_rock *) rock;
-    char tzidbuf[200], etag[32], lastmod[21];
+    char tzidbuf[200], etag[32], lastmod[RFC3339_DATETIME_MAX];
     json_t *tz;
 
     if (lrock->tztable) {
@@ -521,7 +523,7 @@ static int list_cb(const char *tzid, int tzidlen,
 
     strlcpy(tzidbuf, tzid, tzidlen+1);
     sprintf(etag, "%u-%ld", strhash(tzid), zi->dtstamp);
-    rfc3339date_gen(lastmod, sizeof(lastmod), zi->dtstamp);
+    time_to_rfc3339(zi->dtstamp, lastmod, RFC3339_DATETIME_MAX);
 
     tz = json_pack("{s:s s:s s:s s:s s:s}",
 		   "tzid", tzidbuf, "etag", etag, "last-modified", lastmod,
