@@ -5245,7 +5245,10 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
 
 	    fctx->proc_by_resource(fctx, ddata);
 
-	    rparams->davdb.close_db(fctx->davdb);
+	    /* XXX - split this into a req_tgt cleanup */
+	    free(tgt.userid);
+
+	rparams->davdb.close_db(fctx->davdb);
 	}
     }
 
