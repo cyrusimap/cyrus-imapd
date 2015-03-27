@@ -3035,7 +3035,8 @@ int meth_copy(struct transaction_t *txn, void *params)
     int ret = HTTP_CREATED, r, precond, rights;
     const char **hdr;
     xmlURIPtr dest_uri;
-    static struct request_target_t dest_tgt;  /* Parsed destination URL */
+    static struct request_target_t dest_tgt;  /* Parsed destination URL -
+						 static for Location resp hdr */
     struct backend *src_be = NULL, *dest_be = NULL;
     struct mailbox *src_mbox = NULL, *dest_mbox = NULL;
     mbentry_t *mbentry = NULL;
@@ -3043,7 +3044,7 @@ int meth_copy(struct transaction_t *txn, void *params)
     struct index_record src_rec;
     const char *etag = NULL;
     time_t lastmod = 0;
-    unsigned flags = 0;
+    unsigned flags = 0, meth_move = (txn->meth == METH_MOVE);
     void *src_davdb = NULL, *dest_davdb = NULL, *obj = NULL;
     struct buf msg_buf = BUF_INITIALIZER;
 
@@ -3077,7 +3078,9 @@ int meth_copy(struct transaction_t *txn, void *params)
 
     /* Parse the destination path */
     if (!r) {
+	memset(&dest_tgt, 0, sizeof(struct request_target_t));
 	r = cparams->parse_path(dest_uri->path, &dest_tgt, &txn->error.desc);
+	free(dest_tgt.userid);
     }
     xmlFreeURI(dest_uri);
 
@@ -3102,7 +3105,7 @@ int meth_copy(struct transaction_t *txn, void *params)
     /* Check ACL for current user on source mailbox */
     rights = httpd_myrights(httpd_authstate, mbentry->acl);
     if (((rights & DACL_READ) != DACL_READ) ||
-	((txn->meth == METH_MOVE) && !(rights & DACL_RMRSRC))) {
+	(meth_move && !(rights & DACL_RMRSRC))) {
 	/* DAV:need-privileges */
 	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
@@ -3179,32 +3182,29 @@ int meth_copy(struct transaction_t *txn, void *params)
 
     /* Local Mailbox */
 
-    if (txn->meth == METH_MOVE) {
-	/* Open source mailbox for writiing */
+    if (meth_move) {
+	/* Open source mailbox for writing */
 	r = mailbox_open_iwl(txn->req_tgt.mboxname, &src_mbox);
     }
     else {
 	/* Open source mailbox for reading */
 	r = mailbox_open_irl(txn->req_tgt.mboxname, &src_mbox);
     }
-
-    /* Open the DAV DB corresponding to the dest mailbox */
-    dest_davdb = cparams->davdb.open_db(dest_mbox);
-
-    /* Find message UID for the dest resource, if exists */
-    cparams->davdb.lookup_resource(dest_davdb, dest_tgt.mboxname,
-				   dest_tgt.resource, 0, (void **) &ddata, 0);
-    /* XXX  Check errors */
-
-    /* Finished our initial read of dest mailbox */
-    mailbox_unlock_index(dest_mbox, NULL);
+    if (r) {
+	syslog(LOG_ERR, "mailbox_open_i%cl(%s) failed: %s",
+	       meth_move ? 'w' : 'r', txn->req_tgt.mboxname, error_message(r));
+	txn->error.desc = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
 
     /* Open the DAV DB corresponding to the src mailbox */
     src_davdb = cparams->davdb.open_db(src_mbox);
 
     /* Find message UID for the source resource */
     cparams->davdb.lookup_resource(src_davdb, txn->req_tgt.mboxname,
-				   txn->req_tgt.resource, 0, (void **) &ddata, 0);
+				   txn->req_tgt.resource, 0,
+				   (void **) &ddata, 0);
     if (!ddata->rowid) {
 	ret = HTTP_NOT_FOUND;
 	goto done;
@@ -3251,7 +3251,7 @@ int meth_copy(struct transaction_t *txn, void *params)
 					     src_rec.header_size);
     buf_free(&msg_buf);
 
-    if (txn->meth != METH_MOVE) {
+    if (!meth_move) {
 	/* Done with source mailbox */
 	mailbox_unlock_index(src_mbox, NULL);
     }
@@ -3286,29 +3286,19 @@ int meth_copy(struct transaction_t *txn, void *params)
     }
 
     if (get_preferences(txn) & PREFER_REP) flags |= PREFER_REP;
-    if ((txn->meth == METH_MOVE) && (dest_mbox == src_mbox))
-	flags |= NO_DUP_CHECK;
+    if (meth_move && (dest_mbox == src_mbox)) flags |= NO_DUP_CHECK;
 
     /* Store the resource at destination */
     ret = cparams->copy(txn, obj, dest_mbox,
 			dest_tgt.resource, dest_davdb, flags);
 
-    /* we're done, no need to keep this */
+    /* Done with destination mailbox */
     mailbox_unlock_index(dest_mbox, NULL);
 
-    /* For MOVE, we need to delete the source resource */
-    if ((txn->meth == METH_MOVE) &&
-	(ret == HTTP_CREATED || ret == HTTP_NO_CONTENT)) {
-
-	/* Find message UID for the source resource */
-	cparams->davdb.lookup_resource(src_davdb, txn->req_tgt.mboxname,
-				       txn->req_tgt.resource, 0, (void **) &ddata, 0);
-	/* XXX  Check errors */
-
-	/* Fetch index record for the source resource */
-	if (ddata->imap_uid &&
-	    !mailbox_find_index_record(src_mbox, ddata->imap_uid, &src_rec, NULL)) {
-
+    switch (ret) {
+    case HTTP_CREATED:
+    case HTTP_NO_CONTENT:
+	if (meth_move) {
 	    /* Expunge the source message */
 	    src_rec.system_flags |= FLAG_EXPUNGED;
 	    if ((r = mailbox_rewrite_index_record(src_mbox, &src_rec))) {
@@ -5315,7 +5305,8 @@ int report_sync_col(struct transaction_t *txn,
 			   &uidvalidity, &syncmodseq, &basemodseq,
 			   tokenuri /* test for trailing junk */);
 
-		syslog(LOG_ERR, "scanned token %s to %d %u %llu %llu", str, r, uidvalidity, syncmodseq, basemodseq);
+		syslog(LOG_ERR, "scanned token %s to %d %u %llu %llu",
+		       str, r, uidvalidity, syncmodseq, basemodseq);
 		/* Sanity check the token components */
 		if (r < 2 || r > 3 ||
 		    (uidvalidity != mailbox->i.uidvalidity) ||
