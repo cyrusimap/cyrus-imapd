@@ -849,8 +849,12 @@ imap_hammer_cyrusdb_LDADD = $(LD_UTILITY_ADD)
 imap_idled_SOURCES = imap/idled.c imap/mutex_fake.c
 imap_idled_LDADD = $(LD_UTILITY_ADD)
 
+if CALALARMD
 imap_calalarmd_SOURCES = imap/calalarmd.c imap/mutex_fake.c
-imap_calalarmd_LDADD = $(LD_SERVER_ADD)
+imap_calalarmd_LDADD = $(LD_SERVER_ADD) -lm
+else
+EXTRA_DIST += imap/calalarmd.c
+endif # CALALARMD
 
 imap_imapd_SOURCES = \
 	imap/imap_proxy.c \
