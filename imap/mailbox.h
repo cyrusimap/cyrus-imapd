@@ -459,6 +459,9 @@ extern int mailbox_meta_rename(struct mailbox *mailbox, int metafile);
 extern const char *mailbox_record_fname(struct mailbox *mailbox,
 					struct index_record *record);
 extern const char *mailbox_datapath(struct mailbox *mailbox, uint32_t uid);
+extern unsigned mailbox_should_archive(struct mailbox *mailbox,
+				       struct index_record *record,
+				       void *rock);
 
 /* map individual messages in */
 extern int mailbox_map_record(struct mailbox *mailbox, struct index_record *record, struct buf *buf);

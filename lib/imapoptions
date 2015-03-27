@@ -261,6 +261,24 @@ Blank lines and lines beginning with ``#'' are ignored.
    be either an executable (including a script), or a UNIX domain
    socket.  */
 
+{ "archive_enabled", 0, SWITCH }
+/* Is archiving enabled for this server.  You also need to have an
+   archivepartition for the mailbox.  Archiving allows older email
+   to be stored on slower, cheaper disks - even within a the same
+   mailbox, as distinct from partitions. */
+
+{ "archive_days", 7, INT }
+/* The number of days after which to move messages to the archive partition
+   if archiving is enabled */
+
+{ "archive_maxsize", 1024, INT }
+/* The size in kilobytes of the largest message that won't be archived
+   immediately.  Default is 1Mb */
+
+{ "archive_keepflagged", 0, SWITCH }
+/* if set, keep messages with \Flagged system flag on the archive
+   partition forever, so long as they are smaller than maxsize */
+
 { "auditlog", 0, SWITCH }
 /* Should cyrus output log entries for every action taken on a message
    file or mailboxes list entry?  It's noisy so disabled by default, but

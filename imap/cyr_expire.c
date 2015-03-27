@@ -74,7 +74,6 @@
 static volatile sig_atomic_t sigquit = 0;
 static int verbose = 0;
 static int keep_flagged = 1;
-static size_t max_archive_size = 0;
 
 /* current namespace */
 static struct namespace expire_namespace;
@@ -219,42 +218,6 @@ static unsigned userflag_cb(struct mailbox *mailbox __attribute__((unused)),
     return 0;	/* always keep the message */
 }
 
-static unsigned archive_cb(struct mailbox *mailbox,
-			   struct index_record *record,
-			   void *rock)
-{
-    time_t cutoff = *((time_t *)rock);
-
-    /* never pull messages back from the archives */
-    if (record->system_flags & FLAG_ARCHIVED)
-	return 1;
-
-    /* always archive big messages */
-    if (max_archive_size && max_archive_size <= record->size)
-	return 1;
-
-    /* archive everything in DELETED mailboxes */
-    if (mboxname_isdeletedmailbox(mailbox->name, NULL))
-	return 1;
-
-    /* Calendar and Addressbook are small files and need to be hot */
-    if (mailbox->mbtype & MBTYPE_ADDRESSBOOK)
-	return 0;
-    if (mailbox->mbtype & MBTYPE_CALENDAR)
-	return 0;
-
-    /* don't archive flagged messages - XXX, optional? */
-    if (keep_flagged && (record->system_flags & FLAG_FLAGGED))
-	return 0;
-
-    /* archive all other old messages */
-    if (record->internaldate < cutoff)
-	return 1;
-
-    /* and don't archive anything else! */
-    return 0;
-}
-
 static int archive(void *rock, const char *key, size_t keylen,
 			       const char *data, size_t datalen)
 {
@@ -280,7 +243,7 @@ static int archive(void *rock, const char *key, size_t keylen,
     if (verbose)
 	fprintf(stderr, "archiving mailbox %s\n", mbentry->name);
 
-    mailbox_archive(mailbox, archive_cb, rock);
+    mailbox_archive(mailbox, NULL, rock);
 
 done:
     mailbox_close(&mailbox);
@@ -572,10 +535,6 @@ int main(int argc, char *argv[])
 
 	case 'F':
 	    keep_flagged = 0;
-	    break;
-
-	case 'S':
-	    max_archive_size = atoi(optarg); /* bytes, yo */
 	    break;
 
 	case 'p':

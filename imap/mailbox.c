@@ -4085,6 +4085,53 @@ static unsigned expungedeleted(struct mailbox *mailbox __attribute__((unused)),
     return 0;
 }
 
+EXPORTED unsigned mailbox_should_archive(struct mailbox *mailbox,
+					 struct index_record *record,
+					 void *rock)
+{
+    int archive_days = config_getint(IMAPOPT_ARCHIVE_DAYS);
+    if (rock) archive_days = *((int *)rock);
+    time_t cutoff = time(0) - (archive_days * 86400);
+
+    int archive_size = config_getint(IMAPOPT_ARCHIVE_MAXSIZE);
+    size_t maxsize = archive_size * 1024;
+
+    int keepflagged = config_getswitch(IMAPOPT_ARCHIVE_KEEPFLAGGED);
+
+    /* never pull messages back from the archives */
+    if (record->system_flags & FLAG_ARCHIVED)
+	return 1;
+
+    /* first check if we're archiving anything */
+    if (!config_getswitch(IMAPOPT_ARCHIVE_ENABLED))
+	return 0;
+
+    /* always archive big messages */
+    if (record->size >= maxsize)
+	return 1;
+
+    /* archive everything in DELETED mailboxes */
+    if (mboxname_isdeletedmailbox(mailbox->name, NULL))
+	return 1;
+
+    /* Calendar and Addressbook are small files and need to be hot */
+    if (mailbox->mbtype & MBTYPE_ADDRESSBOOK)
+	return 0;
+    if (mailbox->mbtype & MBTYPE_CALENDAR)
+	return 0;
+
+    /* don't archive flagged messages */
+    if (keepflagged && (record->system_flags & FLAG_FLAGGED))
+	return 0;
+
+    /* archive all other old messages */
+    if (record->internaldate < cutoff)
+	return 1;
+
+    /* and don't archive anything else! */
+    return 0;
+}
+
 /*
  * Move messages between spool and archive partition
  * function pointed to by 'decideproc' is called (with 'deciderock') to
@@ -4107,7 +4154,7 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
     free(archivecache);
 
     assert(mailbox_index_islocked(mailbox, 1));
-    assert(decideproc);
+    if (!decideproc) decideproc = &mailbox_should_archive;
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	const char *action = NULL;
