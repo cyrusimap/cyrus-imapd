@@ -1107,7 +1107,7 @@ HIDDEN int append_run_annotator(struct appendstate *as,
     strarray_t *flags = NULL;
     annotate_state_t *astate = NULL;
     struct body *body = NULL;
-    int r;
+    int r = 0;
 
     if (!config_getstring(IMAPOPT_ANNOTATION_CALLOUT))
 	return 0;
