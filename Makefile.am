@@ -203,7 +203,7 @@ libexec_PROGRAMS += imap/nntpd
 endif
 
 if CALALARMD
-sbin_PROGRAMS += imap/calalarmd
+libexec_PROGRAMS += imap/calalarmd
 endif
 
 if HTTPD
@@ -850,7 +850,7 @@ imap_idled_SOURCES = imap/idled.c imap/mutex_fake.c
 imap_idled_LDADD = $(LD_UTILITY_ADD)
 
 imap_calalarmd_SOURCES = imap/calalarmd.c imap/mutex_fake.c
-imap_calalarmd_LDADD = $(LD_UTILITY_ADD)
+imap_calalarmd_LDADD = $(LD_SERVER_ADD)
 
 imap_imapd_SOURCES = \
 	imap/imap_proxy.c \
