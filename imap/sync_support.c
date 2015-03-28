@@ -1586,6 +1586,10 @@ int sync_append_copyfile(struct mailbox *mailbox,
     if (item->is_archive)
 	record->system_flags |= FLAG_ARCHIVED;
 
+    /* push it to archive if it should be anyway */
+    if (mailbox_should_archive(mailbox, record, NULL))
+	record->system_flags |= FLAG_ARCHIVED;
+
     destname = mailbox_record_fname(mailbox, record);
     cyrus_mkdir(destname, 0755);
     r = mailbox_copyfile(item->fname, destname, 0);
