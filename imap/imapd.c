@@ -11719,7 +11719,7 @@ static void list_response(const char *name, int attributes,
     if (!name) return;
 
     /* first convert "INBOX" to "user.<userid>" */
-    if (!strncasecmp(name, "inbox", 5)
+    if (!strchr(name, '!') && !strncasecmp(name, "inbox", 5)
 	&& (!name[5] || name[5] == '.') ) {
 	(*imapd_namespace.mboxname_tointernal)(&imapd_namespace, "INBOX",
 					       imapd_userid, internal_name);
