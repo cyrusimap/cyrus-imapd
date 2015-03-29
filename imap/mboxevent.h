@@ -273,7 +273,7 @@ void mboxevent_extract_record(struct mboxevent *event,
  * Called once per message and always before mboxevent_extract_mailbox
  */
 void mboxevent_extract_copied_record(struct mboxevent *event,
-				     const struct mailbox *mailbox, uint32_t uid);
+				     const struct mailbox *mailbox, struct index_record *record);
 
 /*
  * Extract message content to include to event notification

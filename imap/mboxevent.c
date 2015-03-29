@@ -973,7 +973,8 @@ EXPORTED void mboxevent_extract_icalcomponent(struct mboxevent *event,
 #endif /* WITH_DAV */
 
 void mboxevent_extract_copied_record(struct mboxevent *event,
-				     const struct mailbox *mailbox, uint32_t uid)
+				     const struct mailbox *mailbox,
+				     struct index_record *record)
 {
     int first = 0;
 
@@ -985,7 +986,7 @@ void mboxevent_extract_copied_record(struct mboxevent *event,
 	event->olduidset = seqset_init(0, SEQ_SPARSE);
 	first = 1;
     }
-    seqset_add(event->olduidset, uid, 1);
+    seqset_add(event->olduidset, record->uid, 1);
 
     /* generate an IMAP URL to reference the old mailbox */
     if (first)
@@ -1555,7 +1556,7 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event __attribute__((un
 
 void mboxevent_extract_copied_record(struct mboxevent *event __attribute__((unused)),
 				     const struct mailbox *mailbox __attribute__((unused)),
-				     uint32_t uid __attribute__((unused)))
+				     struct index_record *record __attribute__((unused)))
 {
 }
 

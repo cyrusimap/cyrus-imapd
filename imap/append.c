@@ -1177,16 +1177,14 @@ out:
 
 /*
  * Append to 'as->mailbox' the 'nummsg' messages from the
- * mailbox 'mailbox' listed in the array pointed to by 'copymsg'.
+ * mailbox 'mailbox' listed in the array pointed to by 'records'.
  * 'as' must have been opened with append_setup().  If the '\Seen'
  * flag is to be set anywhere then 'userid' passed to append_setup()
- * contains the name of the user whose \Seen flag gets set.  
+ * contains the name of the user whose \Seen flag gets set.
  */
-EXPORTED int append_copy(struct mailbox *mailbox,
-		struct appendstate *as,
-		int nummsg, 
-		struct copymsg *copymsg,
-		int nolink)
+EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
+			 int nummsg, struct index_record *records,
+			 int nolink, int is_same_user)
 {
     int msg;
     struct index_record record;
@@ -1210,7 +1208,21 @@ EXPORTED int append_copy(struct mailbox *mailbox,
 
     /* Copy/link all files and cache info */
     for (msg = 0; msg < nummsg; msg++) {
-	record = copymsg[msg].record;
+	/* read in existing cache record BEFORE we copy data, so that the
+	 * mmap will be up to date even if it's the same mailbox for source
+	 * and destination */
+	r = mailbox_cacherecord(mailbox, &records[msg]);
+	if (r) goto out;
+
+	record = records[msg]; /* copy data */
+
+	/* wipe out the bits that aren't magically copied */
+	record.system_flags &= ~FLAG_SEEN;
+	for (i = 0; i < MAX_USER_FLAGS/32; i++)
+	    record.user_flags[i] = 0;
+	if (!is_same_user)
+	    record.cid = NULLCONVERSATION;
+	record.cache_offset = 0;
 
 	/* renumber the message into the new mailbox */
 	record.uid = as->mailbox->i.last_uid + 1;
@@ -1218,11 +1230,18 @@ EXPORTED int append_copy(struct mailbox *mailbox,
 
 	/* user flags are special - different numbers, so look them up */
 	if (as->myrights & ACL_WRITE) {
-	    for (i = 0; i < strarray_size(&copymsg[msg].flags); i++) {
-		const char *flag = strarray_nth(&copymsg[msg].flags, i);
-		r = mailbox_user_flag(as->mailbox, flag, &userflag, 1);
-		if (r) goto out;
-		record.user_flags[userflag/32] |= 1<<(userflag&31);
+	    for (userflag = 0; userflag < MAX_USER_FLAGS; userflag++) {
+		bit32 flagmask = records[msg].user_flags[userflag/32];
+		if (mailbox->flagname[userflag] && (flagmask & (1<<(userflag&31)))) {
+		    int num;
+		    r = mailbox_user_flag(as->mailbox, mailbox->flagname[userflag], &num, 1);
+		    if (r)
+			syslog(LOG_ERR, "IOERROR: unable to copy flag %s from %s to %s for UID %u: %s",
+			       mailbox->flagname[userflag], mailbox->name, as->mailbox->name,
+			       records[msg].uid, error_message(r));
+		    else
+			record.user_flags[num/32] |= 1<<(num&31);
+		}
 	    }
 	}
 	else {
@@ -1236,20 +1255,19 @@ EXPORTED int append_copy(struct mailbox *mailbox,
 	}
 
 	/* should this message be marked \Seen? */
-	if (copymsg[msg].seen) {
+	if (records[msg].system_flags & FLAG_SEEN) {
 	    append_setseen(as, &record);
 	}
+
+	/* we're not modifying the ARCHIVED flag here, just keeping it */
 
 	/* Link/copy message file */
 	free(srcfname);
 	free(destfname);
-	srcfname = xstrdup(mailbox_record_fname(mailbox, &copymsg[msg].record));
+	srcfname = xstrdup(mailbox_record_fname(mailbox, &records[msg]));
 	destfname = xstrdup(mailbox_record_fname(as->mailbox, &record));
 	r = mailbox_copyfile(srcfname, destfname, nolink);
 	if (r) goto out;
-
-	/* wipe out the cache offset so it rewrites */
-	record.cache_offset = 0;
 
 	/* Write out index file entry */
 	r = mailbox_append_index_record(as->mailbox, &record);
@@ -1261,13 +1279,13 @@ EXPORTED int append_copy(struct mailbox *mailbox,
 	r = mailbox_get_annotate_state(as->mailbox, record.uid, &astate);
 	if (r) goto out;
 
-	r = annotate_msg_copy(mailbox, copymsg[msg].olduid,
+	r = annotate_msg_copy(mailbox, records[msg].uid,
 			      as->mailbox, record.uid,
 			      as->userid);
 	if (r) goto out;
 
 	mboxevent_extract_record(mboxevent, as->mailbox, &record);
-	mboxevent_extract_copied_record(mboxevent, mailbox, copymsg[msg].olduid);
+	mboxevent_extract_copied_record(mboxevent, mailbox, &records[msg]);
     }
 
 out:

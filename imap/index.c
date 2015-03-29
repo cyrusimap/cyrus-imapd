@@ -133,7 +133,7 @@ static void index_listflags(struct index_state *state);
 static void index_fetchflags(struct index_state *state, uint32_t msgno);
 
 static int index_copysetup(struct index_state *state, uint32_t msgno,
-			   struct copyargs *copyargs, int is_same_user);
+			   struct copyargs *copyargs);
 static int index_storeflag(struct index_state *state,
 			   struct index_modified_flags *modified_flags,
 			   uint32_t msgno, struct index_record *record,
@@ -2836,7 +2836,7 @@ index_copy(struct index_state *state,
 	checkval = usinguid ? im->uid : msgno;
 	if (!seqset_ismember(seq, checkval))
 	    continue;
-	index_copysetup(state, msgno, &copyargs, is_same_user);
+	index_copysetup(state, msgno, &copyargs);
     }
 
     seqset_free(seq);
@@ -2852,7 +2852,7 @@ index_copy(struct index_state *state,
     /* not moving or different quota root - need to check quota */
     if (!ismove || strcmpsafe(srcmailbox->quotaroot, destmailbox->quotaroot)) {
 	for (i = 0; i < copyargs.nummsg; i++)
-	    qdiffs[QUOTA_STORAGE] += copyargs.copymsg[i].record.size;
+	    qdiffs[QUOTA_STORAGE] += copyargs.records[i].size;
 	qdiffs[QUOTA_MESSAGE] = copyargs.nummsg;
 	qptr = qdiffs;
     }
@@ -2866,7 +2866,7 @@ index_copy(struct index_state *state,
     docopyuid = (appendstate.myrights & ACL_READ);
 
     r = append_copy(srcmailbox, &appendstate, copyargs.nummsg,
-		    copyargs.copymsg, nolink);
+		    copyargs.records, nolink, is_same_user);
     if (r) {
 	append_abort(&appendstate);
 	goto done;
@@ -2887,7 +2887,7 @@ index_copy(struct index_state *state,
 	seq = seqset_init(0, SEQ_SPARSE);
 
 	for (i = 0; i < copyargs.nummsg; i++)
-	    seqset_add(seq, copyargs.copymsg[i].olduid, 1);
+	    seqset_add(seq, copyargs.records[i].uid, 1);
 
 	source = seqset_cstring(seq);
 
@@ -2916,10 +2916,7 @@ index_copy(struct index_state *state,
 	sync_log_mailbox_double(index_mboxname(state), name);
 
 done:
-    for (i = 0; i < copyargs.nummsg; i++) {
-	strarray_fini(&copyargs.copymsg[i].flags);
-    }
-    free(copyargs.copymsg);
+    free(copyargs.records);
     mailbox_close(&destmailbox);
 
     return r;
@@ -4702,58 +4699,26 @@ EXPORTED int index_getsearchtext(message_t *msg,
  */
 #define COPYARGSGROW 30
 static int index_copysetup(struct index_state *state, uint32_t msgno,
-			   struct copyargs *copyargs, int is_same_user)
+			   struct copyargs *copyargs)
 {
-    int userflag;
-    bit32 flagmask = 0;
-    int i;
-    int r;
-    struct mailbox *mailbox = state->mailbox;
     struct index_map *im = &state->map[msgno-1];
-    struct index_record record;
-
-    r = index_reload_record(state, msgno, &record);
-    if (r) return 0;
-
-    r = mailbox_cacherecord(mailbox, &record);
-    if (r) return r;
+    int r;
 
     if (copyargs->nummsg == copyargs->msgalloc) {
 	copyargs->msgalloc += COPYARGSGROW;
-	copyargs->copymsg = (struct copymsg *)
-	  xrealloc((char *)copyargs->copymsg,
-		   copyargs->msgalloc * sizeof(struct copymsg));
+	copyargs->records = (struct index_record *)
+	  xrealloc((char *)copyargs->records,
+		   copyargs->msgalloc * sizeof(struct index_record));
     }
 
-    copyargs->copymsg[copyargs->nummsg].olduid = record.uid;
-    copyargs->copymsg[copyargs->nummsg].record = record;
+    r = index_reload_record(state, msgno, &copyargs->records[copyargs->nummsg]);
+    if (r) return r;
 
-    /* copy the names of all user flags */
-    strarray_init(&copyargs->copymsg[copyargs->nummsg].flags);
-    for (userflag = 0; userflag < MAX_USER_FLAGS; userflag++) {
-	if ((userflag & 31) == 0) {
-	    flagmask = record.user_flags[userflag/32];
-	}
-	if (mailbox->flagname[userflag] && (flagmask & (1<<(userflag&31)))) {
-	    strarray_append(&copyargs->copymsg[copyargs->nummsg].flags, mailbox->flagname[userflag]);
-	}
-    }
-
-    /* grab seen from our state - it's different for different users */
-    copyargs->copymsg[copyargs->nummsg].seen = im->isseen;
-
-    /* zero out the seen flag in the system record, it may be different */
-    copyargs->copymsg[copyargs->nummsg].record.system_flags &= ~FLAG_SEEN;
-
-    /* zero out the user_flags - they might be different in the destination */
-    for (i = 0; i < MAX_USER_FLAGS/32; i++)
-	copyargs->copymsg[copyargs->nummsg].record.user_flags[i] = 0;
-
-    /* CIDs are per-user, so we can reuse the cid if we're copying
-     * between mailboxes owned by the same user.  Otherwise we need
-     * to zap the cid and let append_copy() recalculate it. */
-    if (!is_same_user)
-	copyargs->copymsg[copyargs->nummsg].record.cid = NULLCONVERSATION;
+    /* seen is per user - embed it in the record */
+    if (im->isseen)
+	copyargs->records[copyargs->nummsg].system_flags |= FLAG_SEEN;
+    else
+	copyargs->records[copyargs->nummsg].system_flags &= ~FLAG_SEEN;
 
     copyargs->nummsg++;
 

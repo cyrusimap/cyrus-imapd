@@ -133,7 +133,7 @@ struct index_state {
 };
 
 struct copyargs {
-    struct copymsg *copymsg;
+    struct index_record *records;
     int nummsg;
     int msgalloc;
 };

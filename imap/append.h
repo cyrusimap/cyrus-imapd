@@ -52,13 +52,6 @@
 #include "annotate.h"
 #include "conversations.h"
 
-struct copymsg {
-    uint32_t olduid;
-    int seen:1;
-    struct index_record record;
-    strarray_t flags;
-};
-
 /* it's ridiculous i have to expose this structure if i want to allow
    clients to stack-allocate it */
 struct appendstate {
@@ -138,7 +131,8 @@ extern int append_fromstream(struct appendstate *as, struct body **body,
 
 extern int append_copy(struct mailbox *mailbox,
 		       struct appendstate *append_mailbox,
-		       int nummsg, struct copymsg *copymsg, int nolink);
+		       int nummsg, struct index_record *records,
+		       int nolink, int is_same_user);
 
 extern int append_collectnews(struct appendstate *mailbox,
 			      const char *group, unsigned long feeduid);
