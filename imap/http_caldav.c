@@ -1022,6 +1022,8 @@ static int caldav_parse_path(const char *path,
     struct mboxname_parts parts;
     struct buf boxbuf = BUF_INITIALIZER;
 
+    if (*tgt->path) return 0;  /* Already parsed */
+
     /* Make a working copy of target path */
     strlcpy(tgt->path, path, sizeof(tgt->path));
     tgt->tail = tgt->path + strlen(tgt->path);
