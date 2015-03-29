@@ -4752,8 +4752,6 @@ static int index_copysetup(struct index_state *state, uint32_t msgno,
     /* CIDs are per-user, so we can reuse the cid if we're copying
      * between mailboxes owned by the same user.  Otherwise we need
      * to zap the cid and let append_copy() recalculate it. */
-    /* XXX: really??? surely it can't hurt if they happen to match up.
-     * Double-check this */
     if (!is_same_user)
 	copyargs->copymsg[copyargs->nummsg].record.cid = NULLCONVERSATION;
 
