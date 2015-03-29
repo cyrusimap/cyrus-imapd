@@ -248,15 +248,17 @@ static const char *column_text_to_buf(const char *text, struct buf *buf)
 static void _num_to_comp_flags(struct comp_flags *flags, unsigned num)
 {
     flags->recurring = num & 1;
-    flags->transp = (num<<1) & 1;
-    flags->status = (num<<2) & 3;
+    flags->transp = (num >> 1) & 1;
+    flags->status = (num >> 2) & 3;
+    flags->tzbyref = (num >> 4) & 1;
 }
 
 static unsigned _comp_flags_to_num(struct comp_flags *flags)
 {
    return (flags->recurring & 1)
-       + ((flags->transp & 1) >> 1)
-       + ((flags->status & 3) >> 2);
+       + ((flags->transp & 1) << 1)
+       + ((flags->status & 3) << 2)
+       + ((flags->tzbyref & 1) << 4);
 }
 
 #define CMD_READFIELDS							\
