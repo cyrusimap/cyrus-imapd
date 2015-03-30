@@ -597,9 +597,9 @@ my %aclalias = (none => '',
 		read => 'lrs',
 		post => 'lrsp',
 		append => 'lrsip',
-		write => 'lrswipkxte',
-		delete => 'lrxte',
-		all => 'lrswipkxtea');
+		write => 'lrswipkxten',
+		delete => 'lrxten',
+		all => 'lrswipkxtean');
 
 sub setaclmailbox {
   my ($self, $mbx, %acl) = @_;
@@ -721,8 +721,9 @@ sub getinfo {
 			# but since we send only the latest form command,
 			# this is the only possible response.
 
-		        if ($text =~
-			       /^\s*\"([^\"]*)\"\s+\"([^\"]*)\"\s+\(\"([^\"]*)\"\s+\"([^\"]*)\"\)/) {
+		        if (($text =~
+			       /^\s*\"([^\"]*)\"\s+\"([^\"]*)\"\s+\(\"([^\"]*)\"\s+\"?(\S*?)\"?\)/) or
+                           ($text =~ /^\s*(\S*?)\s+\"([^\"]*)\"\s+\(\"([^\"]*)\"\s+\"?(\S*?)\"?\)/)) {
 			  # note that we require mailbox and entry to be qstrings
 			  # Single annotation, not literal,
 			  # but possibly multiple values
@@ -751,7 +752,7 @@ sub getinfo {
 			  }
 			  $d{-rock}{$1} = $text;
 			} else {
-			  next;
+			  1;
 			}
 		      },
 		      -rock => \%info});
@@ -787,6 +788,7 @@ sub mboxconfig {
 		 "news2mail" => "/vendor/cmu/cyrus-imapd/news2mail",
 		 "sharedseen" => "/vendor/cmu/cyrus-imapd/sharedseen",
 		 "sieve" => "/vendor/cmu/cyrus-imapd/sieve",
+		 "specialuse" => "/specialuse",
 		 "squat" => "/vendor/cmu/cyrus-imapd/squat",
 		 "pop3showafter" => "/vendor/cmu/cyrus-imapd/pop3showafter" );
 
@@ -1089,7 +1091,7 @@ Renames the specified mailbox, optionally moving it to a different partition.
 
 Set ACLs on a mailbox.  The ACL may be one of the special strings C<none>,
 C<read> (C<lrs>), C<post> (C<lrsp>), C<append> (C<lrsip>), C<write>
-(C<lrswipkxte>), C<delete> (C<lrxte>), or C<all> (C<lrswipkxte>), or
+(C<lrswipkxten>), C<delete> (C<lrxten>), or C<all> (C<lrswipkxten>), or
 any combinations of the ACL codes:
 
 =over 4
@@ -1139,6 +1141,10 @@ Perform EXPUNGE and expunge as part of CLOSE
 =item a
 
 Administer (SETACL/DELETEACL/GETACL/LISTRIGHTS)
+
+=item n
+
+Add, delete or modify annotations
 
 =back
 
