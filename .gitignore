@@ -64,7 +64,6 @@ imap/fud
 imap/http_err.c
 imap/http_err.h
 imap/httpd
-imap/hammer_cyrusdb
 imap/idled
 imap/imap_err.c
 imap/imap_err.h
