@@ -935,7 +935,7 @@ static void my_caldav_auth(const char *userid)
     free(mailboxname);
     if (r) return;
 
-    if (config_getstring(IMAPOPT_CALDAV_CREATE_DEFAULT)) {
+    if (config_getswitch(IMAPOPT_CALDAV_CREATE_DEFAULT)) {
 	/* Default calendar */
 	mailboxname = caldav_mboxname(userid, SCHED_DEFAULT);
 	r = mboxlist_lookup(mailboxname, NULL, NULL);
@@ -950,7 +950,7 @@ static void my_caldav_auth(const char *userid)
 	free(mailboxname);
     }
 
-    if (config_getstring(IMAPOPT_CALDAV_CREATE_SCHED) &&
+    if (config_getswitch(IMAPOPT_CALDAV_CREATE_SCHED) &&
 	namespace_calendar.allow & ALLOW_CAL_SCHED) {
 	/* Scheduling Inbox */
 	mailboxname = caldav_mboxname(userid, SCHED_INBOX);
@@ -979,7 +979,7 @@ static void my_caldav_auth(const char *userid)
 	free(mailboxname);
     }
 
-    if (config_getstring(IMAPOPT_CALDAV_CREATE_ATTACH) &&
+    if (config_getswitch(IMAPOPT_CALDAV_CREATE_ATTACH) &&
 	namespace_calendar.allow & ALLOW_CAL_ATTACH) {
 	/* Managed Attachment Collection */
 	mailboxname = caldav_mboxname(userid, MANAGED_ATTACH);
