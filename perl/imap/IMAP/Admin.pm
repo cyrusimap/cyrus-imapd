@@ -721,37 +721,74 @@ sub getinfo {
 			# but since we send only the latest form command,
 			# this is the only possible response.
 
+			# Regex 1 (Shared-Folder, user folder looks similar):
+			# cyrus imapd 2.5.0
+			# folder "/vendor/cmu/cyrus-imapd/expire" ("value.shared" "90")
+			# 1      2                                 3              4
+			# folder "/vendor/cmu/cyrus-imapd/pop3showafter" ("value.shared" NIL)
+			# 1      2                                        3              4
+			# folder "/specialuse" ("value.priv" NIL "value.shared" NIL)
+			# 1      2              3            4   5              6
+
+			# cyrus imapd 2.4.17
+			# "folder" "/vendor/cmu/cyrus-imapd/partition" ("value.shared" "default")
+			# 1        2                                    3              4
+
+			# cyrus imapd 2.2.13
+			# "folder" "/vendor/cmu/cyrus-imapd/expire" ("value.shared" "90")
+			# 1        2                                 3              4
+
+			# Regex 1: server info
+			# cyrus imapd 2.5.0
+			# "" "/comment" ("value.shared" "test")
+			# 1  2           3              4
+			# "" "/motd" ("value.shared" NIL)
+			# 1  2        3              4
+			# "" "/vendor/cmu/cyrus-imapd/expire" ("value.priv" NIL "value.shared" NIL)
+			# 1  2                                 3            4   5              6
+
+			# cyrus imapd 2.4.17
+			# "" "/vendor/cmu/cyrus-imapd/freespace" ("value.shared" "3122744")
+			# 1  2                                    3              4
+
+			# Regex 2
+			# cyrus imapd 2.5.0 (user folder, authorized as user)
+			# Note: two lines
+			# INBOX.Sent "/specialuse" ("value.priv" {5}\r\n
+			# \Sent)>
+			# 1          2              3            4\r\n
+			# 5
+
 		        if ($text =~
-			       /^\s*\"([^\"]*)\"\s+\"([^\"]*)\"\s+\(\"([^\"]*)\"\s+\"([^\"]*)\"\)/) {
-			  # note that we require mailbox and entry to be qstrings
-			  # Single annotation, not literal,
-			  # but possibly multiple values
-			  # however, we are only asking for one value, so...
+			       /^\s*(?|"([^"]*)"|([^\s]+))\s+"([^"]*)"\s+\("([^"]*)"\s+(?|"([^"]*)"|(NIL))(?:\s+"([^"]*)"\s+(?|"([^"]*)"|(NIL)))*\)/) {
 			  my $key;
 			  if($1 ne "") {
 				$key = "/mailbox/{$1}$2";
 			  } else {
 				$key = "/server$2";
 			  }
-			  $d{-rock}{$key} = $4;
+			  $d{-rock}{$3}->{$key} = $4;
+			  $d{-rock}{$5}->{$key} = $6 if (defined ($5) && defined ($6));
 		        }  elsif ($text =~
-			       /^\s*\"([^\"]*)\"\s+\"([^\"]*)\"\s+\(\"([^\"]*)\"\s+\{(.*)\}\r\n/) {
-			  my $len = $3;
-			  $text =~ s/^\s*\"([^\"]*)\"\s+\"([^\"]*)\"\s+\(\"([^\"]*)\"\s+\{(.*)\}\r\n//s;
+			       /^\s*"([^"]*)"\s+"([^"]*)"\s+\("([^"]*)"\s+\{(.*)\}\r\n/ ||
+			   $text =~ 
+			       /^\s*([^\s]+)\s+"([^"]*)"\s+\("([^"]*)"\s+\{(.*)\}\r\n/) {
+			  my $len = $4;
+			  $text =~ s/^\s*"*([^"\s]*)"*\s+"([^"]*)"\s+\("([^"]*)"\s+\{(.*)\}\r\n//s;
 			  $text = substr($text, 0, $len);
-			  # note that we require mailbox and entry to be qstrings
 			  # Single annotation (literal style),
-			  # possibly multiple values
-			  # however, we are only asking for one value, so...
+			  # possibly multiple values -- multiple
+			  # values not tested.
+
 			  my $key;
 			  if($1 ne "") {
 				$key = "/mailbox/{$1}$2";
 			  } else {
 				$key = "/server$2";
 			  }
-			  $d{-rock}{$1} = $text;
+			  $d{-rock}{$3}->{$key} = $text;
 			} else {
-			  next;
+			  ; # XXX: unrecognized line, how to notify caller?
 			}
 		      },
 		      -rock => \%info});
@@ -760,12 +797,12 @@ sub getinfo {
   my($rc, $msg);
   if(scalar(@entries)) {
     foreach my $annot (@entries) {
-      ($rc, $msg) = $self->send('', '', "GETANNOTATION %s %q \"value.shared\"",
+      ($rc, $msg) = $self->send('', '', 'GETANNOTATION %s %q ("value.priv" "value.shared")',
 				$box, $annot);
       last if($rc ne 'OK');
     }
   } else {
-    ($rc, $msg) = $self->send('', '', "GETANNOTATION %s \"*\" \"value.shared\"",
+    ($rc, $msg) = $self->send('', '', 'GETANNOTATION %s "*" ("value.priv" "value.shared")',
 			      $box);
   }
   $self->addcallback({-trigger => 'ANNOTATION'});
