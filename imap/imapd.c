@@ -10877,7 +10877,12 @@ static int xfer_initialsync(struct xfer_header *xfer)
     return r;
 }
 
-static int sync_mailbox(struct mailbox *mailbox,
+/*
+ * FIXME sync_mailbox is duplicated (quite differently) in sync_support.c
+ * it's not immediately apparent which implementation is the better, nor
+ * which alterations need to be merged in from the other
+ */
+static int FIXME_sync_mailbox(struct mailbox *mailbox,
 			struct sync_folder_list *replica_folders,
 			struct backend *be)
 {
@@ -10906,7 +10911,8 @@ static int sync_mailbox(struct mailbox *mailbox,
 			 mailbox->i.recenttime,
 			 mailbox->i.pop3_last_login,
 			 mailbox->i.pop3_show_after,
-			 NULL /* FIXME annotations */);
+			 NULL /* FIXME annotations */,
+			 0 /* FIXME xconvmodseq */);
 
     mfolder = master_folders->head;
     mfolder->mailbox = mailbox;
@@ -10935,7 +10941,7 @@ static int sync_mailbox(struct mailbox *mailbox,
     r = sync_reserve_partition(reserve->part, replica_folders,
 			       reserve->list, be);
     if (r) {
-	syslog(LOG_ERR, "sync_mailbox(): reserve partition failed: %s '%s'", 
+	syslog(LOG_ERR, "FIXME_sync_mailbox(): reserve partition failed: %s '%s'",
 	       mfolder->name, error_message(r));
 	goto cleanup;
     }
@@ -10943,7 +10949,7 @@ static int sync_mailbox(struct mailbox *mailbox,
     r = sync_update_mailbox(mfolder, rfolder, reserve_guids, be,
 			    SYNC_FLAG_LOCALONLY);
     if (r) {
-	syslog(LOG_ERR, "sync_mailbox(): update failed: %s '%s'",
+	syslog(LOG_ERR, "FIXME_sync_mailbox(): update failed: %s '%s'",
 		mfolder->name, error_message(r));
     }
 
@@ -11026,10 +11032,10 @@ static int xfer_finalsync(struct xfer_header *xfer)
 
 	/* Step 4: Sync local -> remote */
 	if (!r) {
-	    r = sync_mailbox(mailbox, replica_folders, xfer->be);
+	    r = FIXME_sync_mailbox(mailbox, replica_folders, xfer->be);
 	    if (r) {
 		syslog(LOG_ERR,
-		       "Could not move mailbox: %s, sync_mailbox() failed %s",
+		       "Could not move mailbox: %s, FIXME_sync_mailbox() failed %s",
 		       item->mbentry->name, error_message(r));
 	    }
 	    else {
