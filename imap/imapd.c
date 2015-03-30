@@ -13396,7 +13396,7 @@ static void cmd_syncapply(const char *tag, struct dlist *kin, struct sync_reserv
     else if (!strcmp(kin->name, "ANNOTATION"))
 	r = sync_apply_annotation(kin, &sync_state);
     else if (!strcmp(kin->name, "MAILBOX"))
-	r = sync_apply_mailbox(kin, &sync_state);
+	r = sync_apply_mailbox(kin, reserve_list, &sync_state);
     else if (!strcmp(kin->name, "LOCAL_MAILBOX")) {
 	sync_state.local_only = 1;
 	r = sync_apply_mailbox(kin, &sync_state);
@@ -13533,16 +13533,15 @@ static void cmd_syncrestart(const char *tag, struct sync_reserve_list **reserve_
     struct sync_reserve *res;
     struct sync_reserve_list *l = *reserve_listp;
     struct sync_msgid *msg;
-    const char *fname;
     int hash_size = l->hash_size;
     struct partition_list *p, *pl = NULL;
 
     for (res = l->head; res; res = res->next) {
 	for (msg = res->list->head; msg; msg = msg->next) {
+	    if (!msg->fname) continue;
 	    pl = partition_list_add(res->part, pl);
 
-	    fname = dlist_reserve_path(res->part, &msg->guid);
-	    unlink(fname);
+	    unlink(msg->fname);
 	}
     }
     sync_reserve_list_free(reserve_listp);
@@ -13553,6 +13552,11 @@ static void cmd_syncrestart(const char *tag, struct sync_reserve_list **reserve_
 
 	snprintf(buf, MAX_MAILBOX_PATH, "%s/sync./%lu",
 		 config_partitiondir(p->name), (unsigned long)getpid());
+	rmdir(buf);
+
+	/* and the archive partition too */
+	snprintf(buf, MAX_MAILBOX_PATH, "%s/sync./%lu",
+		 config_archivepartitiondir(p->name), (unsigned long)getpid());
 	rmdir(buf);
     }
     partition_list_free(pl);
