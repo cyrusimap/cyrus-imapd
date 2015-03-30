@@ -121,9 +121,13 @@ my %builtins = (exit =>
 		  [\&_sc_delete, 'mailbox [host]', 'delete mailbox'],
 		delete => 'deletemailbox',
 		dm => 'deletemailbox',
+		getmetadata =>
+		  [\&_sc_getmetadata, '[mailbox]',
+		   'display mailbox/server metadata'],
+		getmd => 'getmetadata',
 		info =>
 		  [\&_sc_info, '[mailbox]',
-		   'display mailbox/server metadata'],
+		   'display mailbox/server annotations'],
 		mboxcfg =>
 		  [\&_sc_mboxcfg, 'mailbox [comment|expire|news2mail|sieve|squat|/<explicit annotation>] value',
 		   'configure mailbox'],
@@ -144,6 +148,10 @@ my %builtins = (exit =>
 		setinfo =>
 		  [\&_sc_setinfo, '[motd|comment|admin|shutdown|expire|squat] text',
 		   'set server metadata'],
+		setmetadata =>
+		  [\&_sc_setmetadata, 'mailbox [comment|expire|news2mail|sieve|squat|/<explicit annotation>] value',
+		   'set metadata to mailbox'],
+		setmd => 'setmetadata',
 		setquota =>
 		  [\&_sc_setquota,
 		   'mailbox resource value [resource value ...]',
@@ -1411,6 +1419,77 @@ sub _sc_info {
       $lfh->[1]->print("    ", $attrname, ": ", $info{$attribname}->{$attrib}, "\n");
     }
   }
+  0;
+}
+
+sub _sc_getmetadata {
+  my ($cyrref, $name, $fh, $lfh, @argv) = @_;
+  my (@nargv, $opt);
+  shift(@argv);
+  while (defined ($opt = shift(@argv))) {
+    # gack.  bloody tcl.
+    last if $opt eq '--';
+    if ($opt =~ /^-/) {
+      die "usage: getmetadata [mailbox]\n";
+    }
+    else {
+      push(@nargv, $opt);
+      last;
+    }
+  }
+  push(@nargv, @argv);
+  if (!$cyrref || !$$cyrref) {
+    die "info: no connection to server\n";
+  }
+  my %info = $$cyrref->getmetadata(@nargv);
+  if (defined $$cyrref->error) {
+    $lfh->[2]->print($$cyrref->error, "\n");
+    return 1;
+  }
+
+  # keep track of what mailboxes we've printed a header for already
+  my %section = ();
+  foreach my $attrib (sort keys %info) {
+    $attrib =~ /(\{.*\})/;
+    my $sect = $1;
+    if(!defined($sect)) {
+	$sect = "Server Wide";
+    }
+
+    if(!exists $section{$sect}) {
+	$section{$sect} = 'x';
+	print "$sect:\n";
+    }
+
+    $attrib =~ /([^\/]*)$/;
+    my $attrname = $1;
+
+    $lfh->[1]->print("  ", $attrname, ": ", $info{$attrib}, "\n");
+  }
+}
+
+sub _sc_setmetadata {
+  my ($cyrref, $name, $fh, $lfh, @argv) = @_;
+  my (@nargv, $opt);
+  shift(@argv);
+  while (defined ($opt = shift(@argv))) {
+    last if $opt eq '--';
+    if ($opt =~ /^-/) {
+      die "usage: setmetadata mailbox [comment|expire|news2mail|pop3showafter|sharedseen|sieve|specialuse|squat|/<explicit metadata>] value\n";
+    }
+    else {
+      push(@nargv, $opt);
+      last;
+    }
+  }
+  push(@nargv, @argv);
+  if (@nargv < 2) {
+    die "usage: setmetadata mailbox [comment|expire|news2mail|pop3showafter|sharedseen|sieve|specialuse|squat|/<explicit metadata>] value\n";
+  }
+  if (!$cyrref || !$$cyrref) {
+    die "setmetadata: no connection to server\n";
+  }
+  $$cyrref->setmetadata(@nargv) || die "setmetadata: " . $$cyrref->error . "\n";
   0;
 }
 
