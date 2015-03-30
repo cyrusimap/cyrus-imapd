@@ -411,7 +411,7 @@ static int verify_service_file(const strarray_t *filename)
     char path[PATH_MAX];
     struct stat statbuf;
 
-    get_prog(path, sizeof(path), filename);
+    get_daemon(path, sizeof(path), filename);
     if (stat(path, &statbuf)) return 0;
     if (! S_ISREG(statbuf.st_mode)) return 0;
     return statbuf.st_mode & S_IXUSR;
