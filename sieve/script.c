@@ -332,7 +332,7 @@ static int build_notify_message(sieve_interp_t *i,
 static int send_notify_callback(sieve_interp_t *interp,
 				void *message_context,
 				void *script_context, notify_list_t *notify,
-				char *actions_string __attribute__((unused)),
+				char *actions_string,
 				const char **errmsg)
 {
     sieve_notify_context_t nc;
@@ -357,7 +357,7 @@ static int send_notify_callback(sieve_interp_t *interp,
     build_notify_message(interp, notify->message, message_context,
 			 &out);
     buf_appendcstr(&out, "\n\n");
-    /* buf_appendcstr(&out, actions_string); */
+    buf_appendcstr(&out, actions_string);
 
     nc.message = buf_cstring(&out);
     nc.fname = NULL;
