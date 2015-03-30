@@ -86,6 +86,7 @@ static struct auth_state *sync_authstate = NULL;
 static char *sync_userid = NULL;
 
 static int verbose = 0;
+static int local_only = 0;
 
 static void shut_down(int code) __attribute__((noreturn));
 static void shut_down(int code)
@@ -187,7 +188,7 @@ main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:vf")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:vfL")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -200,6 +201,10 @@ main(int argc, char **argv)
         case 'f': /* force: confirm option */
             force++;
             break;
+
+	case 'L': /* local mailbox operations only */
+	    local_only++;
+	    break;
 
         default:
             usage("sync_reset");
