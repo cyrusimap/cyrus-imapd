@@ -817,7 +817,7 @@ sub getinfo {
 *info = *getinfo;
 
 sub mboxconfig {
-  my ($self, $mailbox, $entry, $value) = @_;
+  my ($self, $mailbox, $entry, $value, $attribname) = @_;
 
   my %values = ( "comment" => "/comment",
 		 "expire" => "/vendor/cmu/cyrus-imapd/expire",
@@ -841,15 +841,16 @@ sub mboxconfig {
   my ($rc, $msg);
 
   $value = undef if($value eq "none");
+  $attribname = "value.shared" unless defined ($attribname);
 
   if(defined($value)) {
     ($rc, $msg) = $self->send('', '',
-			      "SETANNOTATION %q %q (\"value.shared\" %q)",
-		              $mailbox, $entry, $value);
+			      'SETANNOTATION %q %q (%q %q)',
+		              $mailbox, $entry, $attribname, $value);
   } else {
     ($rc, $msg) = $self->send('', '',
-                              "SETANNOTATION %q %q (\"value.shared\" NIL)",
-		              $mailbox, $entry);
+                              'SETANNOTATION %q %q (%q NIL)',
+		              $mailbox, $entry, $attribname);
   }
 
   if ($rc eq 'OK') {
