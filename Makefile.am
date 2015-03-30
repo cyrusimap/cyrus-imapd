@@ -177,11 +177,11 @@ sbin_PROGRAMS += imap/cyr_virusscan
 endif # HAVE_CLAMAV
 
 if USE_SQUAT
-libexec_PROGRAMS += imap/squat_dump
+sbin_PROGRAMS += imap/squat_dump
 endif
 if SQUATTER
 # Despite the name, the squatter program handles any search engine
-libexec_PROGRAMS += imap/squatter
+sbin_PROGRAMS += imap/squatter
 endif
 
 if NNTPD
@@ -192,11 +192,11 @@ endif # NNTPD
 libexec_PROGRAMS += imap/fud
 
 if IDLED
-libexec_PROGRAMS += imap/idled
+sbin_PROGRAMS += imap/idled
 endif # IDLED
 
 if MURDER
-libexec_PROGRAMS += imap/mupdate
+sbin_PROGRAMS += imap/mupdate
 endif # MURDER
 
 if NNTPD
