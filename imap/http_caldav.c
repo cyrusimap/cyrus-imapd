@@ -1010,8 +1010,8 @@ static void my_caldav_shutdown(void)
     buf_free(&ical_prodid_buf);
     freestrlist(cua_domains);
 
-    webdav_done();
     my_caldav_reset();
+    webdav_done();
     caldav_done();
 }
 
