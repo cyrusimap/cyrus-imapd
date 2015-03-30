@@ -466,7 +466,9 @@ int sync_apply_reserve(struct dlist *kl,
 		       struct sync_state *sstate);
 int sync_apply_unquota(struct dlist *kin, struct sync_state *sstate);
 int sync_apply_quota(struct dlist *kin, struct sync_state *sstate);
-int sync_apply_mailbox(struct dlist *kin, struct sync_state *sstate);
+int sync_apply_mailbox(struct dlist *kin,
+		       struct sync_reserve_list *reserve_list,
+		       struct sync_state *sstate);
 int sync_apply_unmailbox(struct dlist *kin, struct sync_state *sstate);
 int sync_apply_rename(struct dlist *kin, struct sync_state *sstate);
 int sync_apply_changesub(struct dlist *kin, struct sync_state *sstate);
