@@ -4784,7 +4784,7 @@ int sync_update_mailbox(struct sync_folder *local,
 			struct backend *sync_be,
 			unsigned flags)
 {
-    int r = update_mailbox_once(local, remote, reserve_guids, sync_be, flags);
+    int r = update_mailbox_once(local, remote, reserve_list, sync_be, flags);
 
     /* never retry - other end should always sync cleanly */
     if (flags & SYNC_FLAG_NO_COPYBACK) return r;
