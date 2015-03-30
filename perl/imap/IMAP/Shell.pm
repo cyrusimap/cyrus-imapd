@@ -1387,8 +1387,9 @@ sub _sc_info {
   # keep track of what mailboxes we've printed a header for already
   my %section = ();
   foreach my $attrib (sort keys %info) {
-    $attrib =~ /(\{.*\})/;
-    my $sect = $1;
+    # server metadata does not contain '{}'
+    my $sect = undef;
+    $sect = $1 if $attrib =~ /(\{.*\})/;
     if(!defined($sect)) {
 	$sect = "Server Wide";
     }
