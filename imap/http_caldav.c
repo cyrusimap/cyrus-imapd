@@ -935,20 +935,23 @@ static void my_caldav_auth(const char *userid)
     free(mailboxname);
     if (r) return;
 
-    /* Default calendar */
-    mailboxname = caldav_mboxname(userid, SCHED_DEFAULT);
-    r = mboxlist_lookup(mailboxname, NULL, NULL);
-    if (r == IMAP_MAILBOX_NONEXISTENT) {
-	r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR,
-				   NULL, 0,
-				   userid, httpd_authstate,
-				   0, 0, 0, 0, NULL);
-	if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-		      mailboxname, error_message(r));
+    if (config_getstring(IMAPOPT_CALDAV_CREATE_DEFAULT)) {
+	/* Default calendar */
+	mailboxname = caldav_mboxname(userid, SCHED_DEFAULT);
+	r = mboxlist_lookup(mailboxname, NULL, NULL);
+	if (r == IMAP_MAILBOX_NONEXISTENT) {
+	    r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR,
+				    NULL, 0,
+				    userid, httpd_authstate,
+				    0, 0, 0, 0, NULL);
+	    if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+			mailboxname, error_message(r));
+	}
+	free(mailboxname);
     }
-    free(mailboxname);
 
-    if (namespace_calendar.allow & ALLOW_CAL_SCHED) {
+    if (config_getstring(IMAPOPT_CALDAV_CREATE_SCHED) &&
+	namespace_calendar.allow & ALLOW_CAL_SCHED) {
 	/* Scheduling Inbox */
 	mailboxname = caldav_mboxname(userid, SCHED_INBOX);
 	r = mboxlist_lookup(mailboxname, NULL, NULL);
@@ -976,7 +979,8 @@ static void my_caldav_auth(const char *userid)
 	free(mailboxname);
     }
 
-    if (namespace_calendar.allow & ALLOW_CAL_ATTACH) {
+    if (config_getstring(IMAPOPT_CALDAV_CREATE_ATTACH) &&
+	namespace_calendar.allow & ALLOW_CAL_ATTACH) {
 	/* Managed Attachment Collection */
 	mailboxname = caldav_mboxname(userid, MANAGED_ATTACH);
 	r = mboxlist_lookup(mailboxname, NULL, NULL);

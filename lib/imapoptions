@@ -418,6 +418,15 @@ Blank lines and lines beginning with ``#'' are ignored.
    server will emulate Apple CalendarServer behavior as closely as
    possible. */
 
+{ "caldav_create_attach", 1, SWITCH }
+/* Create the 'Attachments' calendar if it doesn't already exist */
+
+{ "caldav_create_default", 1, SWITCH }
+/* Create the 'Default' calendar if it doesn't already exist */
+
+{ "caldav_create_sched", 1, SWITCH }
+/* Create the 'Inbox' and 'Outbox' calendars if they don't already exist */
+
 { "caldav_maxdatetime", "20380119T031407Z", STRING }
 /* The latest date and time accepted by the server (ISO format).  This
    value is also used for expanding non-terminating recurrence rules.
