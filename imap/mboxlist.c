@@ -992,13 +992,13 @@ EXPORTED int mboxlist_createsync(const char *name, int mbtype,
 			int options, unsigned uidvalidity,
 			modseq_t highestmodseq,
 			const char *acl, const char *uniqueid,
-			struct mailbox **mboxptr)
+			int local_only, struct mailbox **mboxptr)
 {
     return mboxlist_createmailbox_full(name, mbtype, partition,
 				       1, userid, auth_state,
 				       options, uidvalidity,
 				       highestmodseq, acl, uniqueid,
-				       0, 1, 0, mboxptr);
+				       local_only, 1, 0, mboxptr);
 }
 
 /* insert an entry for the proxy */
@@ -1184,6 +1184,7 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
                                1 /* isadmin */, userid,
                                auth_state,
 			       mboxevent,
+			       0 /* local_only */,
                                force, 1);
 
     mboxlist_entry_free(&mbentry);
@@ -1343,7 +1344,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 			   int isadmin, const char *userid,
 			   struct auth_state *auth_state,
 			   struct mboxevent *mboxevent,
-			   int forceuser, int ignorequota)
+			   int local_only, int forceuser, int ignorequota)
 {
     int r;
     long myrights;
@@ -1535,7 +1536,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 	goto done;
     }
 
-    if (config_mupdate_server) {
+    if (!local_only && config_mupdate_server) {
 	/* commit the mailbox in MUPDATE */
 	char *loc = strconcat(config_servername, "!", newpartition, (char *)NULL);
 
