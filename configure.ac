@@ -204,6 +204,7 @@ IPv6_CHECK_SS_FAMILY()
 IPv6_CHECK_SA_LEN()
 
 AC_DEFINE_UNQUOTED(LIBEXEC_DIR,"$libexecdir",[Use libexecdir=DIR])
+AC_DEFINE_UNQUOTED(SBIN_DIR,"$sbindir",[Use sbindir=DIR])
 
 dnl this is to check for time things
 AC_CHECK_HEADERS(sys/time.h)

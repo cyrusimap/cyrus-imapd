@@ -223,13 +223,22 @@ static void event_free(struct event *a)
     free(a);
 }
 
-static void get_prog(char *path, unsigned size, const strarray_t *cmd)
+static void get_daemon(char *path, unsigned size, const strarray_t *cmd)
 {
     if (cmd->data[0][0] == '/') {
 	/* master lacks strlcpy, due to no libcyrus */
 	snprintf(path, size, "%s", cmd->data[0]);
     }
     else snprintf(path, size, "%s/%s", LIBEXEC_DIR, cmd->data[0]);
+}
+
+static void get_prog(char *path, unsigned size, const strarray_t *cmd)
+{
+    if (cmd->data[0][0] == '/') {
+	/* master lacks strlcpy, due to no libcyrus */
+	snprintf(path, size, "%s", cmd->data[0]);
+    }
+    else snprintf(path, size, "%s/%s", SBIN_DIR, cmd->data[0]);
 }
 
 static void get_statsock(int filedes[2])
@@ -796,7 +805,7 @@ static void spawn_service(int si)
     if (service_is_fork_limited(s))
 	return;
 
-    get_prog(path, sizeof(path), s->exec);
+    get_daemon(path, sizeof(path), s->exec);
 
     switch (p = fork()) {
     case -1:
