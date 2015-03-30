@@ -197,11 +197,15 @@ find the quota root for a mailbox.
 
 show quota roots and quotas for mailbox
 
-=item C<mboxconfig> I<mailbox> I<attribute> I<value>
+=item C<mboxconfig> I<mailbox> I<attribute> I<value> [I<attributname>]
 
-=item C<mboxcfg> I<mailbox> I<attribute> I<value>
+=item C<mboxcfg> I<mailbox> I<attribute> I<value> [I<attributname>]
 
 Set mailbox metadata.  A value of "none" will remove the attribute.
+The optional attributname allows to switch from the default attribute
+name and prefix "value.shared" to "value.priv" which is required to
+set for example the /specialuse annotation on a mailbox.
+
 The currently supported attributes are:
 
 =over 4
