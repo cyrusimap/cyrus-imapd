@@ -462,6 +462,17 @@ static int done(void)
     return 0;
 }
 
+static struct txn *start_txn(struct dbengine *db)
+{
+    /* start a transaction */
+    if (dbengine->sql_begin_txn(db->conn)) {
+	syslog(LOG_ERR, "DBERROR: failed to start txn on %s",
+	       db->table);
+	return NULL;
+    }
+    return xzmalloc(sizeof(struct txn));
+}
+
 static int myopen(const char *fname, int flags, struct dbengine **ret, struct txn **mytid)
 {
     const char *database, *hostnames, *user, *passwd;
@@ -575,17 +586,6 @@ static int myclose(struct dbengine *db)
     free(db);
 
     return 0;
-}
-
-static struct txn *start_txn(struct dbengine *db)
-{
-    /* start a transaction */
-    if (dbengine->sql_begin_txn(db->conn)) {
-	syslog(LOG_ERR, "DBERROR: failed to start txn on %s",
-	       db->table);
-	return NULL;
-    }
-    return xzmalloc(sizeof(struct txn));
 }
 
 struct select_rock {
