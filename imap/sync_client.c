@@ -2389,6 +2389,13 @@ static int do_sync_mailboxes(struct sync_name_list *mboxname_list,
     return r;
 }
 
+static int do_restart()
+{
+    prot_printf(sync_out, "RESTART\r\n");
+    prot_flush(sync_out);
+    return sync_parse_response("RESTART", sync_in, NULL);
+}
+
 static int do_sync(sync_log_reader_t *slr)
 {
     struct sync_action_list *user_list = sync_action_list_create();
@@ -2561,12 +2568,16 @@ static int do_sync(sync_log_reader_t *slr)
 	    syslog(LOG_NOTICE, "sync_mailboxes: doing 1000");
 	    r = do_sync_mailboxes(mboxname_list, user_list);
 	    if (r) goto cleanup;
+	    r = do_restart();
+	    if (r) goto cleanup;
 	    sync_name_list_free(&mboxname_list);
 	    mboxname_list = sync_name_list_create();
 	}
     }
 
     r = do_sync_mailboxes(mboxname_list, user_list);
+    if (r) goto cleanup;
+    r = do_restart();
     if (r) goto cleanup;
 
     for (action = unmailbox_list->head; action; action = action->next) {
@@ -2600,6 +2611,8 @@ static int do_sync(sync_log_reader_t *slr)
 	if (!action->active)
 	    continue;
 	r = do_user(action->user);
+	if (r) goto cleanup;
+	r = do_restart();
 	if (r) goto cleanup;
     }
 
@@ -2724,11 +2737,7 @@ static int do_daemon_work(const char *channel, const char *sync_shutdown_file,
     sync_log_reader_free(slr);
 
     if (*restartp == RESTART_NORMAL) {
-	prot_printf(sync_out, "RESTART\r\n");
-	prot_flush(sync_out);
-
-	r = sync_parse_response("RESTART", sync_in, NULL);
-
+	r = do_restart();
 	if (r) {
 	    syslog(LOG_ERR, "sync_client RESTART failed: %s",
 		   error_message(r));
