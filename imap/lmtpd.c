@@ -1005,8 +1005,7 @@ EXPORTED void fatal(const char* s, int code)
     if (stage) append_removestage(stage);
 
     syslog(LOG_ERR, "FATAL: %s", s);
-    
-    abort();
+
     /* shouldn't return */
     shut_down(code);
 
