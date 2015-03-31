@@ -12862,7 +12862,7 @@ static void cmd_syncapply(const char *tag, struct dlist *kin, struct sync_reserv
     int r;
     struct sync_state sync_state = {
 	imapd_userid, imapd_userisadmin, imapd_authstate,
-	&imapd_namespace, imapd_out
+	&imapd_namespace, imapd_out, 0,
     };
 
     if (!strcmp(kin->name, "MESSAGE"))
