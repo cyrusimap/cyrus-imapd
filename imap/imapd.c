@@ -8160,9 +8160,9 @@ static int parse_metadata_string_or_list(const char *tag,
 
 	strarray_append(entries, arg.s);
 
-	// It is only not a list if there are no wildcards
-	if (!strchr(arg.s, '*') && !strchr(arg.s, '%')) {
-	    // Not a list
+	// It is only not a list if there are wildcards,
+	// otherwise it's just a list of 1 item
+	if (strchr(arg.s, '*') || strchr(arg.s, '%')) {
 	    *is_list = 0;
 	}
     }
@@ -8828,7 +8828,7 @@ static void cmd_getmetadata(const char *tag)
     if (nlists == 2) {
 	/* no options */
 	mboxes = &lists[0];
-	mbox_is_pattern = is_list[0];
+	mbox_is_pattern = !is_list[0];
     }
     if (nlists == 3) {
 	/* options, either before or after */
@@ -8842,12 +8842,12 @@ static void cmd_getmetadata(const char *tag)
 	    /* (options) (mailboxes) */
 	    options = &lists[0];
 	    mboxes = &lists[1];
-	    mbox_is_pattern = is_list[1];
+	    mbox_is_pattern = !is_list[1];
 	    break;
 	case 2:
 	    /* (mailboxes) (options) */
 	    mboxes = &lists[0];
-	    mbox_is_pattern = is_list[0];
+	    mbox_is_pattern = !is_list[0];
 	    options = &lists[1];
 	    break;
 	case 3:
