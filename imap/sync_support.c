@@ -1551,20 +1551,17 @@ int sync_append_copyfile(struct mailbox *mailbox,
     const char *destname;
     struct message_guid tmp_guid;
     struct sync_msgid *item;
-    int r;
+    int r = 0;
 
     message_guid_copy(&tmp_guid, &record->guid);
 
     item = sync_msgid_lookup(part_list, &record->guid);
 
-    if (!item || !item->fname) {
+    if (!item || !item->fname)
 	r = IMAP_IOERROR;
-	syslog(LOG_ERR, "IOERROR: Failed to reserve file %s",
-	       message_guid_encode(&tmp_guid));
-	return r;
-    }
+    else
+	r = message_parse(item->fname, record);
 
-    r = message_parse(item->fname, record);
     if (r) {
 	/* deal with unlinked master records */
 	if (record->system_flags & FLAG_EXPUNGED) {
@@ -1572,10 +1569,11 @@ int sync_append_copyfile(struct mailbox *mailbox,
 	    record->system_flags |= FLAG_UNLINKED;
 	    goto just_write;
 	}
-	syslog(LOG_ERR, "IOERROR: failed to parse %s", item->fname);
+	syslog(LOG_ERR, "IOERROR: failed to parse %s", message_guid_encode(&record->guid));
 	return r;
     }
 
+    /* record->guid was rewritten in the parse, see if it changed */
     if (!message_guid_equal(&tmp_guid, &record->guid)) {
 	syslog(LOG_ERR, "IOERROR: guid mismatch on parse %s (%s)",
 	       item->fname, message_guid_encode(&record->guid));
@@ -1586,7 +1584,7 @@ int sync_append_copyfile(struct mailbox *mailbox,
     if (item->is_archive)
 	record->system_flags |= FLAG_ARCHIVED;
 
-    /* push it to archive if it should be anyway */
+    /* push it to archive if it should be archived now anyway */
     if (mailbox_should_archive(mailbox, record, NULL))
 	record->system_flags |= FLAG_ARCHIVED;
 
