@@ -5053,15 +5053,16 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
 	    struct request_target_t tgt;
 	    struct dav_data *ddata;
 
-	    buf_ensure(&uri, len);
+	    buf_ensure(&uri, len+1);
 	    xmlURIUnescapeString((const char *) href, len, uri.s);
+	    uri.len = strlen(uri.s);
 	    xmlFree(href);
 
 	    /* Parse the path */
 	    memset(&tgt, 0, sizeof(struct request_target_t));
 	    tgt.namespace = txn->req_tgt.namespace;
 
-	    if ((r = rparams->parse_path(uri.s, &tgt, &fctx->err->desc))) {
+	    if ((r = rparams->parse_path(buf_cstring(&uri), &tgt, &fctx->err->desc))) {
 		ret = r;
 		goto done;
 	    }
