@@ -6481,7 +6481,7 @@ int dav_store_resource(struct transaction_t *txn,
 	}
 
 	/* XXX - casemerge?  Doesn't matter with flags */
-	strarray_cat(flaglist, imapflags);
+	if (imapflags) strarray_cat(flaglist, imapflags);
 
 	/* Append the message to the mailbox */
 	if ((r = append_fromstage(&as, &body, stage, now, flaglist, 0, annots))) {
