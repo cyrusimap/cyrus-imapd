@@ -93,7 +93,7 @@ static int expire_cb(void *rockp,
 		     size_t datalen __attribute__((unused)))
 {
     /* We only get called when we want to delete it */
-    syslog(LOG_DEBUG, "deleteing entry for %s", key);
+    syslog(LOG_DEBUG, "deleting entry for %s", key);
 
     /* xxx maybe we should use transactions for this */
     cyrusdb_delete((struct db *)rockp, key, keylen, NULL, 0);
