@@ -83,7 +83,7 @@ uint64_t arrayu64_max(const arrayu64_t *);
 #define arrayu64_pop(sa)	    arrayu64_remove((sa), -1)
 #define arrayu64_push(sa, s)	    arrayu64_append((sa), (s))
 
-void arrayu64_sort(arrayu64_t *, compar_t *);
+void arrayu64_sort(arrayu64_t *, compar_t);
 void arrayu64_uniq(arrayu64_t *);
 
 int arrayu64_size(const arrayu64_t *);

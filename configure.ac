@@ -25,6 +25,7 @@ AS_IF([test "$prefix" = 'NONE'],[
 ],[
 	prefix_copy="$prefix"
 ])
+AC_SUBST(prefix_copy)
 
 AC_CONFIG_SRCDIR([imap/imapd.c])
 AC_CONFIG_HEADERS([config.h])
@@ -38,7 +39,7 @@ AC_CONFIG_FILES([
 ])
 AC_CANONICAL_TARGET
 
-AM_INIT_AUTOMAKE([-Wall -Werror -Wno-portability foreign dist-bzip2 no-installinfo subdir-objects])
+AM_INIT_AUTOMAKE([-Wall -Werror -Wno-portability foreign dist-bzip2 no-define no-installinfo subdir-objects])
 
 #######################################################################
 # Check build environemnt.
@@ -58,34 +59,6 @@ AS_CASE([$target_os],
 ])
 AC_MSG_RESULT([$target_os "$CPPFLAGS" "$LDFLAGS"])
 
-dnl AS_CASE([$build_os],
-dnl [netbsd*],[
-dnl 	AC_PATH_PROG(PERL,[perl],[false],[/usr/bin])
-dnl 	AS_IF([ ! $PERL ],[
-dnl 		AC_MSG_ERROR([
-dnl
-dnl As root, please
-dnl
-dnl     pkgin install perl
-dnl     ln -s /usr/pkg/bin/perl /usr/bin/perl
-dnl
-dnl so that scripts that hardcoded #!/usr/bin/perl work.
-dnl 		])
-dnl 	])
-dnl 	AC_PATH_PROG(BASH,[bash],[false],[/bin])
-dnl 	AS_IF([ ! $BASH ],[
-dnl 		AC_MSG_ERROR([
-dnl
-dnl As root, please
-dnl
-dnl     pkgin install bash
-dnl     ln -s /usr/pkg/bin/bash /bin/bash
-dnl
-dnl so that scripts that hardcoded #!/bin/bash work.
-dnl 		])
-dnl 	])
-dnl ])
-
 #######################################################################
 # Package configuration.  All are required for standard build.
 #######################################################################
@@ -98,7 +71,6 @@ AC_ARG_ENABLE(krb5afspts,[AS_HELP_STRING([--disable-krb5afspts],[disable afskrb 
 AC_ARG_ENABLE(event-notification,[AS_HELP_STRING([--disable-event-notification], [disable compiling of mailbox event notification (needs jansson library)])],[],[enable_event_notification="yes"])
 CYRUS_OPTION_ENABLE_GSSAPI
 AC_ARG_ENABLE(http,[AS_HELP_STRING([--disable-http],[disable HTTP support])],[],[enable_http="yes"])
-CYRUS_OPTION_ENABLE_KERBEROS_DES
 AC_ARG_ENABLE(lock,[AS_HELP_STRING([--enable-lock=METHOD],[force use of METHOD for locking (flock or fcntl)])],,[enable_lock='fcntl'])
 AC_ARG_ENABLE(mmap,[AS_HELP_STRING([--enable-mmap=TYPE],[force shared / stupidshared / nommap; JUST FOR TESTING])],,[enable_mmap='auto'])
 AC_ARG_ENABLE(syslog-facility,[AS_HELP_STRING([--enable-syslog-facility=FACILITY], [the syslog facility to use (default LOCAL6)])],[],[enable_syslog_facility="LOG_LOCAL6"])
@@ -115,15 +87,8 @@ dnl AC_ARG_ENABLE(pcre, [AS_HELP_STRING([--disable-pcre],[disable PCRE library])
 #######################################################################
 
 CYRUS_OPTION_WITH_CLAMAV
-dnl
-dnl Try and find a system version of com_err.
-dnl If we see something that looks a little wacky, ignore it (there are many
-dnl deficient installs of com_err, unfortunately, which leave out compile_et)
-dnl There is also a broken re-implementation of compile_et, apparently derived
-dnl from the Kerberos project, being shipped in /usr/bin on MacOS X, see Bug #3711.
-dnl
 AC_ARG_WITH(libcap,[AS_HELP_STRING([--with-libcap],[Enable libcap system capabilities handling (Linux systems only)])])
-AC_ARG_WITH(com_err,[AS_HELP_STRING([--with-com_err=DIR],[use com_err from path -- includes in DIR/include, libs in DIR/lib, and compile_et in DIR/bin])])
+CYRUS_OPTION_WITH_COM_ERR
 CYRUS_OPTION_WITH_CUNIT
 AC_ARG_WITH(egd-socket,[AC_HELP_STRING([--with-egd-socket=FILE], [Entropy Gathering Daemon socket pathname for systems without /dev/urandom])],[
 	AC_DEFINE_UNQUOTED(EGD_SOCKET, "$with_egd_socket", [Alternative to /dev/urandom?])
@@ -142,15 +107,9 @@ SNERT_OPTION_WITH_OPENSSL
 
 AC_ARG_WITH([perl],[AS_HELP_STRING([--with-perl=PROG],[absolute program path for perl])],[
 	dnl Override detected system perl.
-	PERL=$with_perl
+	PERL="$with_perl"
 ],[
-	AS_IF([test "$PERL" != 'false'],[
-		dnl Use default system Perl found earlier.
-		with_perl=$PERL
-	],[
-		dnl No system Perl.
-		with_perl='no'
-	])
+	with_perl='yes'
 ])
 AC_ARG_WITH(pid-file,[AS_HELP_STRING([--with-pid-file=DIR],[pidfile in DIR [/var/run/cyrus-master.pid]])],[],[with_pid_file="$withval"])
 
@@ -195,6 +154,17 @@ AS_IF([test "$ac_cv_sizeof_long_long_int" -eq 8 -a "$ac_cv_sizeof_unsigned_long_
 
 dnl AC_CHECK_TYPES([mode_t, off_t, pid_t, uid_t, gid_t, size_t, ssize_t, time_t, intptr_t, uintptr_t])
 
+gl_VISIBILITY
+AH_BOTTOM([
+#if HAVE_VISIBILITY
+# define EXPORTED __attribute__((__visibility__("default")))
+# define HIDDEN   __attribute__((__visibility__("hidden")))
+#else
+# define EXPORTED
+# define HIDDEN
+#endif
+])
+
 #######################################################################
 # Check for programs.
 #######################################################################
@@ -208,8 +178,24 @@ AC_PROG_INSTALL
 AC_PROG_YACC
 AC_PROG_LEX
 AC_PATH_PROGS([MD5SUM],[md5sum md5])
-AC_PATH_PROGS([PERL],[perl],[false])
-AC_PATH_PROGS([BASH],[bash],[false],[/usr/pkg/bin /usr/local/bin /bin])
+
+AC_PATH_PROGS([BASH],[bash],[false])
+AS_IF([test "$BASH" != '/bin/bash'],[
+	AC_MSG_WARN([Some shell scripts assume [#]!/bin/bash.])
+])
+
+AS_IF([test "$with_perl" = 'yes'],[
+	AC_PATH_PROGS([PERL],[perl],[false])
+	dnl Update the option to reflect the found Perl.
+	AS_IF([test "$PERL" = 'false'],[
+		with_perl='no'
+	],[
+		with_perl="$PERL"
+	])
+	AS_IF([test "$PERL" != '/usr/bin/perl'],[
+		AC_MSG_WARN([The Perl administration scripts assume [#]!/usr/bin/perl.])
+	])
+])
 
 LT_PREREQ([2.2.6])
 LT_INIT([disable-static])
@@ -328,11 +314,7 @@ AS_IF([test "$with_sqlite3" = 'no'],[
 	AC_MSG_ERROR([SQLite is a required package.])
 ])
 
-AS_IF([test ! -e "$PERL"],[
-	AC_MSG_WARN(Perl not found, administrative tools will not be available.)
-])
-AC_SUBST(PERL)
-AS_IF([test "$with_perl" != 'no'],[
+AS_IF([test -e "$PERL"],[
 	dnl Add perl cccdlflags when building libraries.  This ensures
 	dnl that the libraries will be compiled as PIC, if perl requires
 	dnl PIC objects.  This is needed on *BSD and Linux, but seems to
@@ -340,13 +322,20 @@ AS_IF([test "$with_perl" != 'no'],[
 	dnl
 	dnl PERL_CCCDLFLAGS will be undefined or empty, if no cccdlflags.
 	AC_MSG_CHECKING([for Perl cccdlflags needed on "${target_os}"])
-	PERL_CCCDLFLAGS=`${PERL} -V:cccdlflags | sed -e's/cccdlflags=//'`
+	eval `${PERL} -V:cccdlflags`
+	PERL_CCCDLFLAGS="$cccdlflags"
 	AC_SUBST(PERL_CCCDLFLAGS)
 	AC_MSG_RESULT($PERL_CCCDLFLAGS)
 
-	PERL_PREINSTALL="${PERL} ${srctoolsdir}/fixsearchpath.pl ${prefix_copy} ${bindir}"
+	dnl This is not the ideal way to make the substitution in
+	dnl perl/imap/Makefile.PL.in.
+	here=`pwd`
+	PERL_PREINSTALL="${PERL} ${here}/tools/fixsearchpath.pl ${prefix_copy} ${bindir}"
 	AC_SUBST(PERL_PREINSTALL)
+],[
+	AC_MSG_WARN(Perl not found, administrative tools will not be available.)
 ])
+AC_SUBST(PERL)
 
 dnl AS_IF([test "$enable_sieve" != "no"],[
 	AC_DEFINE(USE_SIEVE,[],[Build in Sieve support?])
@@ -371,6 +360,7 @@ dnl ])
 AS_IF([test "$enable_afs" != 'no' -a "$snert_find_file_afs_libkauth" != 'no'],[
 	AS_IF([test "$enable_krb5afspts" = "yes"], [
 		AC_DEFINE(AFSPTS_USE_KRB5,[],[Should the AFS PTS plugin use krb5?])
+		AC_CHECK_LIB([krb5],[krb5_init_context])
 	])
 
 	dnl Does AFS need sigvec?  We have to link against lwp and see
@@ -418,7 +408,7 @@ AS_IF([test "${with_com_err}" = "no"],[
 	AC_MSG_WARN([com_err is required, included version will be used.])
 	with_com_err="yes"
 ])
-AS_IF([test "${COMPILE_ET}" = "no"],[
+AS_IF([test "${COMPILE_ET}" = "false"],[
 	AC_MSG_WARN([Parts of com_err distribuion were found, but not compile_et.])
 	AC_MSG_WARN([Will build com_err from included sources.])
 	dnl build it ourselves
@@ -433,21 +423,12 @@ AS_CASE(["$with_com_err"],
 	LDFLAGS_COM_ERR=''
 	LIBS_COM_ERR="com_err/et/libcyrus_com_err.la"
 	COMPILE_ET="\${abs_top_builddir}/com_err/et/compile_et"
-],
-[/*],[
-	dnl use whatever they told us, or whatever we found
-	COMPILE_ET="${with_com_err}/bin/compile_et"
-	CPPFLAGS_COM_ERR="-I${with_com_err}/include"
-	LDFLAGS_COM_ERR=''
-	LIBS_COM_ERR="${with_com_err}/lib/libcom_err.a"
-	dnl Ever get the feeling people hide this stuff on purpose?
-	AS_IF([test -d "${with_com_err}/include/et"],[
-		CPPFLAGS_COM_ERR="-I${with_com_err}/include/et"
-	])
 ],[
 	dnl We already have it in the paths. Hope its not shared.
 ])
 AS_IF([test "$with_com_err" != 'yes'],[
+	AC_MSG_CHECKING([if compile_et produces correct code])
+
 	dnl Test that the specified compile_et produces correct output
 	dnl See bug #3711 for why this is necessary
 	TEST1="compile_et-test"
@@ -457,7 +438,8 @@ AS_IF([test "$with_com_err" != 'yes'],[
 	echo "   \"Testing\"" >> $TEST1.et
 	echo "end" >> $TEST1.et
 	"${COMPILE_ET}" $TEST1.et > /dev/null
-	compile_et_ok=no
+
+	compile_et_ok='no'
 	AS_IF([test -f $TEST1.h],[
 		AS_IF([test `awk '/IMAP_TESTING/{print $3}' $TEST1.h 2>/dev/null` = "-1904809472"],[
 			compile_et_ok=yes
@@ -465,7 +447,9 @@ AS_IF([test "$with_com_err" != 'yes'],[
 		dnl Broken compile_et produces (2390157824L)
 	])
 	/bin/rm -f $TEST1.et $TEST1.h $TEST1.c
-	AS_IF([test "$compile_et_ok" = no],[
+	AC_MSG_RESULT($compile_et_ok)
+
+	AS_IF([test "$compile_et_ok" = 'no'],[
 		dnl revert to the built-in compile_et
 		AC_MSG_WARN([It seems $COMPILE_ET is buggy, building our own])
 		CPPFLAGS_COM_ERR="-I\${top_srcdir}/com_err/et"
@@ -554,6 +538,14 @@ AS_IF([test "$enable_mmap" = 'auto' -a "$cyrus_cv_func_mmap_stupidshared" = 'yes
 	enable_mmap='nomap'
 ])
 
+HAVE_SQL='no'
+AC_MSG_CHECKING([for at least one supported SQL package])
+AS_IF([test -n "$LIBS_MYSQL" -o -n "$LIBS_PGSQL" -o -n "$LIBS_SQLITE3"],[
+	AC_DEFINE(HAVE_SQL,[1],[Enable SQL support with one of the supported libraries.])
+	HAVE_SQL='yes'
+])
+AC_MSG_RESULT($HAVE_SQL)
+
 AC_DEFINE_UNQUOTED(CYRUS_USER, "$enable_cyrus_user",[What user will we run as?])
 AC_DEFINE_UNQUOTED(CYRUS_GROUP, "$enable_cyrus_group",[What group will we run as?])
 AC_SUBST(enable_cyrus_user)
@@ -583,6 +575,18 @@ AC_DEFINE_UNQUOTED(SYSLOG_FACILITY, $enable_syslog_facility, [Syslog facility to
 
 AC_SUBST(userdir,[$bindir])
 AC_SUBST(servicedir,[$SERVICE_DIR])
+
+dnl
+dnl Berkeley DB has been dropped, but some substitions references
+dnl haven't been removed and don't get replaced properly unless,
+dnl declared leaving spurious at-signs (@).
+dnl
+AC_SUBST(BDB_INC)
+AC_SUBST(BDB_LIB)
+
+dnl --coverage has been dropped, but need the substitions to work.
+AC_SUBST(COV_CFLAGS)
+AC_SUBST(COV_LDFLAGS)
 
 AC_SUBST(AFS_CFLAGS, $CPPFLAGS_AFS)
 AC_SUBST(AFS_LDFLAGS, $LDFLAGS_AFS)
@@ -631,7 +635,7 @@ AC_SUBST(ZLIB, $LIBS_ZLIB)
 #######################################################################
 
 AM_CONDITIONAL([CMULOCAL],[false]) 	dnl replaced by acsite.m4
-AM_CONDITIONAL([USE_BERKELEY], [false])	dnl Berkeley DB support removed.
+AM_CONDITIONAL([USE_BERKELEY],[false])	dnl Berkeley DB support removed.
 
 dnl Always built in, controlled by imapd.conf or cyrus.conf.
 AM_CONDITIONAL([AUTOCREATE], [true])
@@ -644,7 +648,7 @@ AM_CONDITIONAL([SIEVE],[true])
 
 AM_CONDITIONAL([IPV6_noGETADDRINFO],[test "$ac_cv_func_getaddrinfo" = 'no'])
 AM_CONDITIONAL([IPV6_noGETNAMEINFO],[test "$ac_cv_func_getnameinfo" = 'no'])
-AM_CONDITIONAL([USE_SQL], [test -n "$HAVE_LIB_SQLITE3"])
+AM_CONDITIONAL([USE_SQL], [test "$HAVE_SQL" = 'yes'])
 AM_CONDITIONAL([USE_AFSKRB], [test -n "$LIBS_AFS"])
 AM_CONDITIONAL([HAVE_CLAMAV], [test "$ac_cv_func_cl_init" = "yes"])
 AM_CONDITIONAL([COM_ERR], [test "$with_com_err" = "yes"])
@@ -660,7 +664,7 @@ AM_CONDITIONAL([MAP_SHARED], [test "$with_map" = "shared"])
 AM_CONDITIONAL([MAP_STUPIDSHARED], [test "$with_map" = "stupidshared"])
 dnl AM_CONDITIONAL([MURDER], [test "$enable_murder" != "no"])
 dnl AM_CONDITIONAL([NNTPD], [test "$enable_nntp" != "no"])
-AM_CONDITIONAL([PERL], [test "$with_perl" != "no"])
+AM_CONDITIONAL([PERL], [test "$PERL" != 'false'])
 dnl AM_CONDITIONAL([REPLICATION], [test "$enable_replication" != 'no'])
 dnl AM_CONDITIONAL([SERVER], [test "$enable_server" != "no"])
 dnl AM_CONDITIONAL([SIEVE], [test "$enable_sieve" != "no"])
@@ -672,13 +676,168 @@ AM_CONDITIONAL([ZEPHYR], [test "$ac_cv_func_ZInitialize" != "no"])
 #######################################################################
 
 AH_TOP([
+#ifndef _CYRUS_IMAPD_CONFIG_H_
+#define _CYRUS_IMAPD_CONFIG_H_
 ])
+
 AH_BOTTOM([
+/* This allows us to work even when we don't have an fdatasync */
+#ifndef HAVE_FDATASYNC
+#define fdatasync(fd) fsync(fd)
+#endif
+
+/* A similar setup for not having O_DSYNC */
+#include <fcntl.h>
+
+#ifndef O_DSYNC
+#  ifdef O_SYNC
+#    define O_DSYNC     O_SYNC          /* POSIX */
+#  else
+#    define O_DSYNC     O_FSYNC         /* BSD */
+#  endif
+#endif
+
+#ifndef HAVE_SOCKLEN_T
+typedef unsigned int socklen_t;
+#endif
+
+#ifndef HAVE_RLIM_T
+typedef int rlim_t;
+#endif
+
+
+/* some potentially memory saving tradeoffs,
+   preconfigured in memory-saving mode */
+
+/* save the cmdlines for the ID command */
+#undef ID_SAVE_CMDLINE
+
+/* IPv6 things */
+#include <netdb.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+
+#ifndef HAVE_STRUCT_SOCKADDR_STORAGE
+#define	_SS_MAXSIZE	128	/* Implementation specific max size */
+#define	_SS_PADSIZE	(_SS_MAXSIZE - sizeof (struct sockaddr))
+
+struct sockaddr_storage {
+	struct	sockaddr ss_sa;
+	char		__ss_pad2[_SS_PADSIZE];
+};
+# define ss_family ss_sa.sa_family
+# define HAVE_SS_FAMILY
+#endif /* !HAVE_STRUCT_SOCKADDR_STORAGE */
+
+#ifndef AF_INET6
+/* Define it to something that should never appear */
+#define	AF_INET6	AF_MAX
+#endif
+
+#if !defined(HAVE_GETADDRINFO) || !defined(HAVE_GETNAMEINFO)
+#include "gai.h"
+#endif
+
+/* End IPv6 things */
+
+#ifdef OLD_SIEVE_SERVICE_NAME
+#define SIEVE_SERVICE_NAME "imap"
+#else
+#define SIEVE_SERVICE_NAME "sieve"
+#endif
+
+/* filenames */
+#define FNAME_DBDIR "/db"
+#define FNAME_USERDIR "/user/"
+#define FNAME_DOMAINDIR "/domain/"
+#define FNAME_LOGDIR "/log/"
+#define FNAME_PTSDB "/ptclient/ptscache.db"
+#define CONFIG_FILENAME (SYSCONFDIR "/imapd.conf")
+#define DEFAULT_MASTER_CONFIG_FILENAME (SYSCONFDIR "/cyrus.conf")
+
+#ifndef HAVE_SHUTDOWN
+#define shutdown(fd, mode) 0
+#endif
+
+/* *printf() macros */
+#if (SIZEOF_SIZE_T == SIZEOF_INT)
+#define SIZE_T_FMT "%u"
+#elif (SIZEOF_SIZE_T == SIZEOF_LONG)
+#define SIZE_T_FMT "%lu"
+#elif (SIZEOF_SIZE_T == SIZEOF_LONG_LONG_INT)
+#define SIZE_T_FMT "%llu"
+#else
+#error dont know what to use for SIZE_T_FMT
+#endif
+
+#if (SIZEOF_OFF_T == SIZEOF_LONG)
+#define OFF_T_FMT "%ld"
+#define strtoofft(nptr, endptr, base) strtol(nptr, endptr, base)
+#elif (SIZEOF_OFF_T == SIZEOF_LONG_LONG_INT)
+#define OFF_T_FMT "%lld"
+#define strtoofft(nptr, endptr, base) strtoll(nptr, endptr, base)
+#else
+#error dont know what to use for OFF_T_FMT
+#endif
+
+#ifndef HAVE_POSIX_FADVISE
+#define POSIX_FADV_WILLNEED 0
+extern int posix_fadvise(int fd, off_t offset, off_t len, int advice);
+#endif
+
+#ifndef HAVE_STRSEP
+extern char *strsep(char **, const char *);
+#endif
+
+#ifndef HAVE_MEMMEM
+extern void *memmem(const void *, size_t, const void *, size_t);
+#endif
+
+/* compile time options; think carefully before modifying */
+enum {
+    /* should we send an UNAVAILABLE message to master when
+     * a service is exiting (master is already going to be
+     * informed of the exit by the SIGCHLD signal anyway) ? */
+    MESSAGE_MASTER_ON_EXIT = 0,
+
+    /* should a hierarchical rename stop on error? */
+    RENAME_STOP_ON_ERROR = 1,
+
+    /* should we call fsync() to maybe help with softupdates? (it should) */
+    APPEND_ULTRA_PARANOID = 1,
+
+    /* should we log extra information at the DEBUG level for DB stuff?
+     * 0 -> nothing; 1 -> some; higher -> even more */
+    CONFIG_DB_VERBOSE = 1,
+
+    /* log timing information to LOG_DEBUG */
+    CONFIG_TIMING_VERBOSE = 0,
+
+    /* should we be pedantic about namespace or sleezy? */
+    SLEEZY_NAMESPACE = 1,
+
+    /* should we do a fast TLS session shutdown? */
+    TLS_FAST_SHUTDOWN = 1,
+
+    /* should we use the SQUAT engine to accelerate SEARCH? */
+    SQUAT_ENGINE = 1,
+
+    /* should we have long LMTP error messages? */
+    LMTP_LONG_ERROR_MSGS = 1
+};
+
+#endif /* _CYRUS_IMAPD_CONFIG_H_ */
 ])
 
 AS_ECHO()
 AS_ECHO("Generating files...")
 AS_ECHO()
+
+CMU_PERL_MAKEMAKER(perl/annotator)
+CMU_PERL_MAKEMAKER(perl/imap)
+CMU_PERL_MAKEMAKER(perl/sieve/managesieve)
+
 AC_OUTPUT()
 
 AS_ECHO()
@@ -696,11 +855,12 @@ AC_MSG_RESULT([  sysconfdir..........: $sysconfdir])
 AC_MSG_RESULT([  localstatedir.......: $localstatedir])
 AS_ECHO()
 AC_MSG_RESULT([Configuration])
+AC_MSG_RESULT([  CUnit...............: $with_cunit])
 AC_MSG_RESULT([  User & Group........: $enable_cyrus_user:$enable_cyrus_group])
 AC_MSG_RESULT([  Event notification..: $enable_event_notification])
 AC_MSG_RESULT([  GSSAPI impl.........: $enable_gssapi])
 AC_MSG_RESULT([  Http................: $enable_http])
-AC_MSG_RESULT([  Kerberos 4 impl.....: $enable_krb with DES $enable_krb_des])
+AC_MSG_RESULT([  Kerberos 4 impl.....: $with_krb with DES $with_krb_des])
 AC_MSG_RESULT([  Lock................: $enable_lock])
 AC_MSG_RESULT([  Mmap................: $enable_mmap])
 AC_MSG_RESULT([  pid file............: $with_pid_file])
@@ -729,7 +889,7 @@ AC_MSG_RESULT([  OpenAFS.............: "$CPPFLAGS_AFS" "$LDFLAGS_AFS" "$LIBS_AFS
 AC_MSG_RESULT([  OpenDKIM............: "$CPPFLAGS_DKIM" "$LDFLAGS_DKIM" "$LIBS_DKIM"])
 AC_MSG_RESULT([  OpenLDAP............: "$CPPFLAGS_LDAP" "$LDFLAGS_LDAP" "$LIBS_LDAP"])
 AC_MSG_RESULT([  OpenSSL.............: "$CPPFLAGS_SSL" "$LDFLAGS_SSL" "$LIBS_SSL"])
-AC_MSG_RESULT([  Perl................: "$PERL"])
+AC_MSG_RESULT([  Perl................: "$with_perl"])
 AC_MSG_RESULT([  SASL2...............: "$CPPFLAGS_SASL2" "$LDFLAGS_SASL2" "$LIBS_SASL2"])
 AC_MSG_RESULT([  SQLite3.............: "$CPPFLAGS_SQLITE3" "$LDFLAGS_SQLITE3" "$LIBS_SQLITE3"])
 AC_MSG_RESULT([  Zephyr..............: "$CPPFLAGS_ZEPHYR" "$LDFLAGS_ZEPHYR" "$LIBS_ZEPHYR"])

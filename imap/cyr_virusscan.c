@@ -111,8 +111,7 @@ struct scan_engine {
 };
 
 
-#define HAVE_CLAMAV
-#ifdef HAVE_CLAMAV
+#ifdef HAVE_CLAMAV_H
 /* ClamAV implementation */
 #include <clamav.h>
 
@@ -216,7 +215,7 @@ struct scan_engine engine =
 #else
 /* NO configured virus scanner */
 struct scan_engine engine = { NULL, NULL, NULL, NULL, NULL };
-#endif
+#endif /* HAVE_CLAMAV_H */
 
 
 /* forward declarations */

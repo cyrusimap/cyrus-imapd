@@ -45,8 +45,13 @@
 #define HTTPD_H
 
 #include <sasl/sasl.h>
-#include <libxml/tree.h>
-#include <libxml/uri.h>
+
+#ifdef HAVE_LIBXML_TREE_H
+# include <libxml/tree.h>
+# include <libxml/uri.h>
+#else
+# error "Cannot find libxml2 headers. See ./configure options."
+#endif
 
 #ifdef HAVE_ZLIB
 #include <zlib.h>

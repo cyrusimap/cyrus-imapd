@@ -49,7 +49,11 @@
 #include <libical/ical.h>
 
 #ifdef WITH_DKIM
-#include <dkim.h>
+# ifdef HAVE_OPENDKIM_DKIM_H
+#  include <opendkim/dkim.h>
+# elif HAVE_DKIM_H
+#  include <dkim.h>
+# endif
 
 #ifndef DKIM_CANON_ISCHEDULE
 #undef WITH_DKIM
@@ -110,7 +114,7 @@ struct proplist {
 
 /* Each calendar user address has the following scheduling protocol params */
 struct sched_param {
-    char *userid;	/* Userid corresponding to calendar address */ 
+    char *userid;	/* Userid corresponding to calendar address */
     char *server;	/* Remote server user lives on */
     unsigned port;	/* Remote server port, default = 80 */
     unsigned flags;	/* Flags dictating protocol to use for scheduling */
