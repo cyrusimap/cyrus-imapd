@@ -3,12 +3,19 @@
 #######################################################################
 
 dnl
-dnl SNERT_JOIN_UNIQ(var, word_list)
+dnl SNERT_JOIN_UNIQ(var, word_list,[head|tail])
 dnl
 AC_DEFUN([SNERT_JOIN_UNIQ],[
-	list=`eval echo \"\$$1\"`
+	list=`eval echo \$$1`
 	for w in $2; do
-		AS_IF([expr "$list" : ".*$w" >/dev/null],[],[list="${list:+$list }$w"])
+		AS_IF([expr "$list" : ".*$w" >/dev/null],[
+		],[
+			AS_IF([test "$3" = 'head'],[
+				list="$w${list:+ $list}"
+			],[
+				list="${list:+$list }$w"
+			])
+		])
 	done
 	eval $1="\"$list\""
 ])
@@ -137,7 +144,11 @@ AC_DEFUN([SNERT_DEFINE],[
 ])
 
 dnl
-dnl SNERT_CHECK_PACKAGE(name, headers, libs, funcs, with_base, with_inc, with_lib, extra_includes)
+dnl SNERT_CHECK_PACKAGE(
+dnl	name, headers, libs, [funcs],
+dnl	with_base, with_inc, with_lib,
+dnl	[extra_includes], [define_and_subst=true]
+dnl )
 dnl
 AC_DEFUN([SNERT_CHECK_PACKAGE],[
 	AS_ECHO()
@@ -175,8 +186,6 @@ AS_IF([test "$with_base" != 'no'],[
 			])
 		],[],[${with_base:+$with_base/include} $6])
 	done
-	SNERT_DEFINE(CPPFLAGS_[$1])
-	AC_SUBST(CPPFLAGS_[$1])
 
 	for f in $3; do
 		SNERT_CHECK_PACKAGE_LIB([$f],[
@@ -202,10 +211,23 @@ AS_IF([test "$with_base" != 'no'],[
 			])
 		],[],[${with_base:+$with_base/lib} $7])
 	done
-	SNERT_DEFINE(LDFLAGS_[$1])
-	SNERT_DEFINE(LIBS_[$1])
-	AC_SUBST(LDFLAGS_[$1])
-	AC_SUBST(LIBS_[$1])
+
+	define_and_subst=`AS_ECHO([$9])`
+	AS_CASE([$define_and_subst],
+	[false|no|0],[
+		dnl Caller wants to take care of this, possibly
+		dnl to append extra flags before committing the
+		dnl defines and substutions.
+		:
+	],[
+		dnl Default.
+		SNERT_DEFINE(CPPFLAGS_[$1])
+		SNERT_DEFINE(LDFLAGS_[$1])
+		SNERT_DEFINE(LIBS_[$1])
+		AC_SUBST(CPPFLAGS_[$1])
+		AC_SUBST(LDFLAGS_[$1])
+		AC_SUBST(LIBS_[$1])
+	])
 
 	AS_IF([test -n "$4"],[
 		save_LIBS="$LIBS"
@@ -963,6 +985,71 @@ dnl 	AC_SUBST(LDFLAGS_SQLITE3)
 	])
 ])
 
+AC_DEFUN(SNERT_OPTION_WITH_MYSQL,[
+	AC_ARG_WITH([mysql],[AS_HELP_STRING([--with-mysql=DIR],[MySQL package, optional base directory])])
+	AC_ARG_WITH([mysql-inc],[AS_HELP_STRING([--with-mysql-inc=DIR],[specific MySQL include directory])])
+	AC_ARG_WITH([mysql-lib],[AS_HELP_STRING([--with-mysql-lib=DIR],[specific MySQL library directory])])
+])
+AC_DEFUN(SNERT_MYSQL,[
+	SNERT_CHECK_PACKAGE([MYSQL],[mysql.h mysql/mysql.h],[libmysqlclient mysql/libmysqlclient ],[mysql_select_db], dnl
+		[$with_mysql],[$with_mysql_inc],[$with_mysql_lib],[],[no]dnl
+	)
+
+	AC_PATH_PROG([MYSQL_CONFIG],[mysql_config],[false])
+	AS_IF([test "$MYSQL_CONFIG" = 'false'],[
+		with_mysql='no'
+		AS_UNSET([LIBS_MYSQL])
+		AS_UNSET([LDFLAGS_MYSQL])
+		AS_UNSET([CPPFLAGS_MYSQL])
+		AC_MSG_WARN([mysql_config not found, disabling MySQL support.])
+	],[
+		dnl Override found flags with those supplied by tool.
+		CPPFLAGS_MYSQL=`$MYSQL_CONFIG --include`
+		LIBS_MYSQL=`$MYSQL_CONFIG --libs`
+	])
+
+	SNERT_DEFINE([LIBS_MYSQL])
+	SNERT_DEFINE([LDFLAGS_MYSQL])
+	SNERT_DEFINE([CPPFLAGS_MYSQL])
+
+ 	AC_SUBST(LIBS_MYSQL)
+ 	AC_SUBST(LDFLAGS_MYSQL)
+ 	AC_SUBST(CPPFLAGS_MYSQL)
+
+	AH_VERBATIM(LIBS_MYSQL,[
+#undef HAVE_MYSQL_LIBMYSQLCLIENT
+#undef HAVE_LIBMYSQLCLIENT
+#undef HAVE_MYSQL_MYSQL_H
+#undef HAVE_MYSQL_H
+#undef HAVE_MYSQL_SELECT_DB
+#undef CPPFLAGS_MYSQL
+#undef LDFLAGS_MYSQL
+#undef LIBS_MYSQL
+	])
+])
+
+AC_DEFUN(SNERT_OPTION_WITH_PGSQL,[
+	AC_ARG_WITH([pgsql],[AS_HELP_STRING([--with-pgsql=DIR],[PostgreSQL package, optional base directory])])
+	AC_ARG_WITH([pgsql-inc],[AS_HELP_STRING([--with-pgsql-inc=DIR],[specific PostgreSQL include directory])])
+	AC_ARG_WITH([pgsql-lib],[AS_HELP_STRING([--with-pgsql-lib=DIR],[specific PostgreSQL library directory])])
+])
+AC_DEFUN(SNERT_PGSQL,[
+	SNERT_CHECK_PACKAGE([PGSQL],[libpq-fe.h],[libpq],[PQconnectdb],dnl
+		[$with_pgsql],[$with_pgsql_inc],[$with_pgsql_lib]dnl
+	)
+dnl 	AC_SUBST(LIBS_PGSQL)
+dnl 	AC_SUBST(CPPFLAGS_PGSQL)
+dnl 	AC_SUBST(LDFLAGS_PGSQL)
+	AH_VERBATIM(LIBS_PGSQL,[
+#undef HAVE_LIBPQ
+#undef HAVE_LIBPQ_FE_H
+#undef HAVE_PQCONNECTDB
+#undef CPPFLAGS_PGSQL
+#undef LDFLAGS_PGSQL
+#undef LIBS_PGSQL
+	])
+])
+
 AC_DEFUN([SNERT_OPTION_WITH_SASL2],[
 	AC_ARG_WITH([sasl2],[AS_HELP_STRING([--with-sasl2=DIR],[SASL2 package, optional base directory])])
 	AC_ARG_WITH([sasl2-inc],[AS_HELP_STRING([--with-sasl2-inc=DIR],[specific SASL2 include directory])])
@@ -1341,8 +1428,6 @@ AC_DEFUN([CYRUS_OPTION_WITH_COM_ERR],[
 	AC_ARG_WITH([com_err-lib],[AS_HELP_STRING([--with-com_err-lib=dir],[specific com_err library directory])])
 ])
 AC_DEFUN([CYRUS_COM_ERR],[
-	AS_ECHO()
-
 	dnl
 	dnl Try and find a system version of com_err.
 	dnl If we see something that looks a little wacky, ignore it (there are many
@@ -1350,6 +1435,15 @@ AC_DEFUN([CYRUS_COM_ERR],[
 	dnl There is also a broken re-implementation of compile_et, apparently derived
 	dnl from the Kerberos project, being shipped in /usr/bin on MacOS X, see Bug #3711.
 	dnl
+	SNERT_CHECK_PACKAGE([COM_ERR], dnl
+		[et/com_err.h krb5/com_err.h com_err.h],[libcom_err],[com_err], dnl
+		[$with_com_err],[$with_com_err_inc],[$with_com_err_lib],[[
+#ifdef __NetBSD__
+/* NetBSD /usr/include/krb5/com_err.h requires these extras. */
+#include <stdlib.h>
+#include <stdarg.h>
+#endif
+	]],[no])
 
 	dnl Search for compile_et(1), but if not found fall back to false(1),
 	dnl force the use of the builtin version.
@@ -1357,29 +1451,30 @@ AC_DEFUN([CYRUS_COM_ERR],[
 	AS_IF([test "$COMPILE_ET" = '/usr/pkg/bin/compile_et'],[
 		dnl NetBSD: Part of kth-krb4 required by Zephyr.  Suspect?
 		dnl What of OpenAFS com_err library and its tool?
+		dnl
+		dnl Discard any found flags in favour of built-in.
+		AS_UNSET([LIBS_COM_ERR])
+		AS_UNSET([LDFLAGS_COM_ERR])
+		AS_UNSET([CPPFLAGS_COM_ERR])
 		COMPILE_ET='false'
 	])
-	AC_SUBST(COMPILE_ET)
 
-	AS_IF([test "$COMPILE_ET" != 'false'],[
-		SNERT_CHECK_PACKAGE([COM_ERR], dnl
-			[et/com_err.h krb5/com_err.h com_err.h],[libcom_err],[com_err], dnl
-			[$with_com_err],[$with_com_err_inc],[$with_com_err_lib],[[
-#ifdef __NetBSD__
-/* NetBSD /usr/include/krb5/com_err.h requires these extras. */
-#include <stdlib.h>
-#include <stdarg.h>
-#endif
-		]])
-	])
-dnl 	AC_SUBST(LIBS_COM_ERR)
-dnl 	AC_SUBST(CPPFLAGS_COM_ERR)
-dnl 	AC_SUBST(LDFLAGS_COM_ERR)
+	SNERT_DEFINE([COMPILE_ET])
+	SNERT_DEFINE([LIBS_COM_ERR])
+	SNERT_DEFINE([LDFLAGS_COM_ERR])
+	SNERT_DEFINE([CPPFLAGS_COM_ERR])
+
+	AC_SUBST(COMPILE_ET)
+ 	AC_SUBST(LIBS_COM_ERR)
+ 	AC_SUBST(LDFLAGS_COM_ERR)
+ 	AC_SUBST(CPPFLAGS_COM_ERR)
+
 	AH_VERBATIM(LIBS_COM_ERR,[
 #undef HAVE_ET_COM_ERR_H
 #undef HAVE_KRB5_COM_ERR_H
 #undef HAVE_COM_ERR_H
 #undef HAVE_COM_ERR
+#undef COMPILE_ET
 #undef CPPFLAGS_COM_ERR
 #undef LDFLAGS_COM_ERR
 #undef LIBS_COM_ERR
@@ -1656,3 +1751,55 @@ AC_DEFUN([CMU_PERL_MAKEMAKER],[
 		])
 	])
 ])
+
+AC_DEFUN(CYRUS_OPTION_WITH_XAPIAN,[
+	AC_ARG_WITH([xapian],[AS_HELP_STRING([--with-xapian=DIR],[Xapian package, optional base directory])])
+	AC_ARG_WITH([xapian-inc],[AS_HELP_STRING([--with-xapian-inc=dir],[specific Xapian include directory])])
+	AC_ARG_WITH([xapian-lib],[AS_HELP_STRING([--with-xapian-lib=dir],[specific Xapian library directory])])
+])
+AC_DEFUN(CYRUS_XAPIAN,[
+	SNERT_CHECK_PACKAGE([XAPIAN],[xapian.h],[libxapian],[], dnl
+		[$with_xapian],[$with_xapian_inc],[$with_xapian_lib],[],[no]dnl
+	)
+
+	AC_ARG_VAR([XAPIAN_CONFIG],[Location of xapian-config])
+	AC_PATH_PROG([XAPIAN_CONFIG],[xapian-config],[false])
+	AS_IF([test "$XAPIAN_CONFIG" = 'false'],[
+		with_xapian='no'
+		AS_UNSET([LIBS_XAPIAN])
+		AS_UNSET([LDFLAGS_XAPIAN])
+		AS_UNSET([CPPFLAGS_XAPIAN])
+		AC_MSG_WARN([xapian-config not found, disabling.])
+	],[
+		dnl Override found flags with those supplied by tool.
+		CXXFLAGS_XAPIAN=`$XAPIAN_CONFIG --cxxflags`
+		CPPFLAGS_XAPIAN="$CXXFLAGS_XAPIAN"
+
+		dnl Pass magic option so xapian-config knows we called it (so it
+		dnl can choose a more appropriate error message if asked to link
+		dnl with an uninstalled libxapian). Also pass ac_top_srcdir
+		dnl so the error message can correctly say "configure.ac" or
+		dnl "configure.in" according to which is in use.
+		LIBS_XAPIAN=`ac_top_srcdir="$ac_top_srcdir" $XAPIAN_CONFIG --from-xo-lib-xapian --libs`
+	])
+
+	SNERT_DEFINE([LIBS_XAPIAN])
+	SNERT_DEFINE([LDFLAGS_XAPIAN])
+	SNERT_DEFINE([CPPFLAGS_XAPIAN])
+	SNERT_DEFINE([CXXFLAGS_XAPIAN])
+
+ 	AC_SUBST(LIBS_XAPIAN)
+ 	AC_SUBST(LDFLAGS_XAPIAN)
+ 	AC_SUBST(CPPFLAGS_XAPIAN)
+ 	AC_SUBST(CXXFLAGS_XAPIAN)
+
+	AH_VERBATIM(LIBS_XAPIAN,[
+#undef HAVE_LIBXAPIAN
+#undef HAVE_XAPIAN_H
+#undef CXXFLAGS_XAPIAN
+#undef CPPFLAGS_XAPIAN
+#undef LDFLAGS_XAPIAN
+#undef LIBS_XAPIAN
+	])
+])
+
