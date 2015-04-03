@@ -2455,8 +2455,8 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 	    /* Look for a match against our known properties */
 	    for (entry = fctx->lprops;
 		 entry->name &&
-		     (strcmp((const char *) prop->name, entry->name) ||
-		      strcmp((const char *) prop->ns->href,
+		     (strcmp((const char *) name, entry->name) ||
+		      strcmp((const char *) ns->href,
 			     known_namespaces[entry->ns].href));
 		 entry++);
 
@@ -2486,6 +2486,7 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 		 * resources */
 		nentry->flags = PROP_COLLECTION | PROP_RESOURCE;
 		nentry->get = propfind_fromdb;
+		nentry->rock = NULL;
 	    }
 
 	    /* Append new entry to linked list */
@@ -5525,11 +5526,11 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
     struct request_target_t req_tgt;
 
     memcpy(&prev_ctx, fctx, sizeof(struct propfind_ctx));
+    memset(&req_tgt, 0, sizeof(struct request_target_t));
 
     fctx->mode = PROPFIND_EXPAND;
     if (href) {
 	/* Parse the URL */
-	memset(&req_tgt, 0, sizeof(struct request_target_t));
 	parse_path(href, &req_tgt, &fctx->err->desc);
 
 	fctx->req_tgt = &req_tgt;
@@ -5593,6 +5594,8 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
 	xmlFree(freeme->name);
 	free(freeme);
     }
+
+    free(req_tgt.userid);
 
     fctx->mailbox = prev_ctx.mailbox;
     fctx->depth = prev_ctx.depth;
