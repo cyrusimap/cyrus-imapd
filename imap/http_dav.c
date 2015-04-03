@@ -5707,6 +5707,8 @@ int report_acl_prin_prop(struct transaction_t *txn,
 
 	    /* Add response for URL */
 	    xml_add_response(fctx, 0, 0);
+
+	    free(req_tgt.userid);
 	}
     }
 
