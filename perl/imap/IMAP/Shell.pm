@@ -1392,31 +1392,25 @@ sub _sc_info {
     return 1;
   }
 
-  # keep track of what mailboxes we've printed a header for already
-  my %section = ();
-  my %attribname = ();
-  foreach my $attribname (sort keys %info) {
-    foreach my $attrib (sort keys %{$info{$attribname}}) {
-      # server metadata does not contain '{}'
-      my $sect = undef;
-      $sect = $1 if $attrib =~ /(\{.*\})/;
-      if(!defined($sect)) {
-	  $sect = "Server Wide";
+  foreach my $mailbox (sort keys %info) {
+      if($mailbox eq "") {
+        print "{Server Wide}\n";
+      } else {
+        print "{$mailbox}:\n";
       }
 
-      if(!exists $section{$sect}) {
-	  $section{$sect} = 'x';
-	  print "$sect:\n";
-      }
-
-      if(!exists $attribname{$attribname}) {
+    my %attribname = ();
+    foreach my $attribname (sort keys %{$info{$mailbox}}) {
+      foreach my $attrib (sort keys %{$info{$mailbox}->{$attribname}}) {
+        if(!exists $attribname{$attribname}) {
 	  $attribname{$attribname} = 'x';
 	  print "  $attribname:\n";
-      }
-      $attrib =~ /([^\/]*)$/;
-      my $attrname = $1;
+        }
+        $attrib =~ /([^\/]*)$/;
+        my $attrname = $1;
 
-      $lfh->[1]->print("    ", $attrname, ": ", $info{$attribname}->{$attrib}, "\n");
+        $lfh->[1]->print("    ", $attrname, ": ", $info{$mailbox}->{$attribname}->{$attrib}, "\n");
+      }
     }
   }
   0;
