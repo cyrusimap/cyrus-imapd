@@ -129,7 +129,7 @@ my %builtins = (exit =>
 		  [\&_sc_info, '[mailbox]',
 		   'display mailbox/server annotations'],
 		mboxcfg =>
-		  [\&_sc_mboxcfg, 'mailbox [comment|expire|news2mail|sieve|squat|/<explicit annotation>] value',
+		  [\&_sc_mboxcfg, '[--private] mailbox [comment|expire|news2mail|sieve|squat|/<explicit annotation>] value',
 		   'configure mailbox'],
 		mboxconfig => 'mboxcfg',
 		reconstruct =>
@@ -1549,12 +1549,14 @@ sub _sc_unsubscribe {
 
 sub _sc_mboxcfg {
   my ($cyrref, $name, $fh, $lfh, @argv) = @_;
-  my (@nargv, $opt);
+  my (@nargv, $opt, $private);
   shift(@argv);
   while (defined ($opt = shift(@argv))) {
     last if $opt eq '--';
-    if ($opt =~ /^-/) {
-      die "usage: mboxconfig mailbox [comment|expire|news2mail|pop3showafter|sharedseen|sieve|squat|/<explicit annotation>] value [attributename]\n";
+    if ($opt ne '' && '-private' =~ /^\Q$opt/ || $opt eq '--private') {
+      $private = 1;
+    } elsif ($opt =~ /^-/) {
+      die "usage: mboxconfig [--private] mailbox [comment|expire|news2mail|pop3showafter|sharedseen|sieve|squat|/<explicit annotation>] value\n";
     }
     else {
       push(@nargv, $opt);
@@ -1563,7 +1565,10 @@ sub _sc_mboxcfg {
   }
   push(@nargv, @argv);
   if (@nargv < 2) {
-    die "usage: mboxconfig mailbox [comment|expire|news2mail|pop3showafter|sharedseen|sieve|squat|/<explicit annotation>] value [attributename]\n";
+    die "usage: mboxconfig [--private] mailbox [comment|expire|news2mail|pop3showafter|sharedseen|sieve|squat|/<explicit annotation>] value\n";
+  }
+  if (defined ($private)) {
+    push(@nargv, $private);
   }
   if (!$cyrref || !$$cyrref) {
     die "mboxconfig: no connection to server\n";
@@ -1780,12 +1785,14 @@ find the quota root for a mailbox.
 
 show quota roots and quotas for mailbox
 
-=item C<mboxconfig> I<mailbox> I<attribute> I<value>
+=item C<mboxconfig> [C<--private>] I<mailbox> I<attribute> I<value>
 
-=item C<mboxcfg> I<mailbox> I<attribute> I<value>
+=item C<mboxcfg> [C<--private>] I<mailbox> I<attribute> I<value>
 
-Set mailbox metadata.  A value of "none" will remove the attribute.
-The currently supported attributes are: 
+Set mailbox metadata, optionally set the private instead of the shared
+version of the metadata. A value of "none" will remove the attribute.
+
+The currently supported attributes are:
 
 =over 4
 

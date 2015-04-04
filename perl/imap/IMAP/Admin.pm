@@ -699,6 +699,20 @@ sub setquota {
   }
 }
 
+
+# map protocol name to user visible name
+sub _attribname2access {
+  my $k = shift;
+
+  if ($k eq 'value.priv' ) {
+     return 'private';
+  } elsif ($k eq 'value.shared') {
+     return 'shared';
+  } else {
+    return $k;
+  }
+}
+
 sub getinfo {
   my $self = shift;
   my $box = shift;
@@ -769,8 +783,8 @@ sub getinfo {
 			  } else {
 				$key = "/server$2";
 			  }
-			  $d{-rock}{$3}->{$key} = $4;
-			  $d{-rock}{$5}->{$key} = $6 if (defined ($5) && defined ($6));
+			  $d{-rock}{_attribname2access($3)}->{$key} = $4;
+			  $d{-rock}{_attribname2access($5)}->{$key} = $6 if (defined ($5) && defined ($6));
 		        }  elsif ($text =~
 			       /^\s*"([^"]*)"\s+"([^"]*)"\s+\("([^"]*)"\s+\{(.*)\}\r\n/ ||
 			   $text =~ 
@@ -788,7 +802,7 @@ sub getinfo {
 			  } else {
 				$key = "/server$2";
 			  }
-			  $d{-rock}{$3}->{$key} = $text;
+			  $d{-rock}{_attribname2access($3)}->{$key} = $text;
 			} else {
 			  ; # XXX: unrecognized line, how to notify caller?
 			  1;
@@ -820,7 +834,7 @@ sub getinfo {
 *info = *getinfo;
 
 sub mboxconfig {
-  my ($self, $mailbox, $entry, $value, $attribname) = @_;
+  my ($self, $mailbox, $entry, $value, $private) = @_;
 
   my %values = ( "comment" => "/comment",
 		 "expire" => "/vendor/cmu/cyrus-imapd/expire",
@@ -845,7 +859,12 @@ sub mboxconfig {
   my ($rc, $msg);
 
   $value = undef if($value eq "none");
-  $attribname = "value.shared" unless defined ($attribname);
+  my $attribname;
+  if (defined ($private)) {
+    $attribname = "value.priv";
+  } else {
+    $attribname = "value.shared";
+  }
 
   if(defined($value)) {
     ($rc, $msg) = $self->send('', '',
