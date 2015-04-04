@@ -777,12 +777,12 @@ sub getinfo {
 			       /^\s*(?|"([^"]*)"|([^\s]+))\s+"([^"]*)"\s+\("([^"]*)"\s+(?|"([^"]*)"|(NIL))(?:\s+"([^"]*)"\s+(?|"([^"]*)"|(NIL)))*\)/) {
 			  my $key;
 			  if($1 ne "") {
-				$key = "/mailbox/{$1}$2";
+				$key = "/mailbox$2";
 			  } else {
 				$key = "/server$2";
 			  }
-			  $d{-rock}{_attribname2access($3)}->{$key} = $4;
-			  $d{-rock}{_attribname2access($5)}->{$key} = $6 if (defined ($5) && defined ($6));
+			  $d{-rock}->{"$1"}->{_attribname2access($3)}->{$key} = $4;
+			  $d{-rock}->{"$1"}->{_attribname2access($5)}->{$key} = $6 if (defined ($5) && defined ($6));
 		        }  elsif ($text =~
 			       /^\s*"([^"]*)"\s+"([^"]*)"\s+\("([^"]*)"\s+\{(.*)\}\r\n/ ||
 			   $text =~ 
@@ -796,11 +796,11 @@ sub getinfo {
 
 			  my $key;
 			  if($1 ne "") {
-				$key = "/mailbox/{$1}$2";
+				$key = "/mailbox/$2";
 			  } else {
 				$key = "/server$2";
 			  }
-			  $d{-rock}{_attribname2access($3)}->{$key} = $text;
+			  $d{-rock}{"$1"}->{_attribname2access($3)}->{$key} = $text;
 			} else {
 			  ; # XXX: unrecognized line, how to notify caller?
 			}
