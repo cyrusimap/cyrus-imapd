@@ -3536,8 +3536,6 @@ int meth_delete(struct transaction_t *txn, void *params)
     /* Do any special processing */
     if (dparams->delete) dparams->delete(txn, mailbox, &record, ddata);
 
-    write_body(ret, txn, NULL, 0);
-
   done:
     if (davdb) dparams->davdb.close_db(davdb);
     mailbox_close(&mailbox);
@@ -5146,8 +5144,6 @@ int meth_put(struct transaction_t *txn, void *params)
 	    break;
 	}
     }
-
-    write_body(ret, txn, NULL, 0);
 
   done:
     if (obj) {
