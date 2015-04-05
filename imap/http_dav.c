@@ -2461,8 +2461,10 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 		 entry++);
 
 	    /* Skip properties already included by allprop */
-	    if (fctx->mode == PROPFIND_ALL && (entry->flags & PROP_ALLPROP))
+	    if (fctx->mode == PROPFIND_ALL && (entry->flags & PROP_ALLPROP)) {
+		xmlFree(name);
 		continue;
+	    }
 
 	    nentry = xzmalloc(sizeof(struct propfind_entry_list));
 	    nentry->name = name;
