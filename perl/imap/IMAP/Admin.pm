@@ -78,6 +78,7 @@ sub new {
     $self->{support_annotatatemore} = 0;
     $self->{support_list_extended} = 0;
     $self->{support_list_special_use} = 0;
+    $self->{support_create_special_use} = 0;
     $self->{authopts} = [];
     $self->addcallback({-trigger => 'CAPABILITY',
 			-callback => sub {my %a = @_;
@@ -95,6 +96,9 @@ sub new {
 						# RFC 6154 - IMAP LIST Extension for Special-Use Mailboxes
 						$self->{support_list_special_use} = 1
 						  if /^SPECIAL-USE$/i;
+						# RFC 6154 - IMAP LIST Extension for Special-Use Mailboxes
+						$self->{support_create_special_use} = 1
+						  if /^CREATE-SPECIAL-USE$/i;
 					      }
 					  split(/ /, $a{-text})}});
     $self->send(undef, undef, 'CAPABILITY');
@@ -190,10 +194,29 @@ sub reconstruct {
 }
 
 sub createmailbox {
-  my ($self, $mbx, $partition) = @_;
-  $partition = '' if !defined($partition);
-  my ($rc, $msg) = $self->send('', '', 'CREATE %s%a%a', $mbx,
-			       $partition? ' ': '', $partition);
+  my ($self, $mbx, $partition, $opts) = @_;
+  my $cmd = "CREATE %s";
+  my @args = ();
+  # RFC 3501 + cyrus:    CREATE mailbox [partition]
+  # RFC 4466 + RFC 6154: CREATE mailbox ([PARTITION partition ]USE (special-use))
+  if (defined ($$opts{'-specialuse'})) {
+    if($self->{support_create_special_use}) {
+      if (defined ($partition)) {
+        $cmd .= " (PARTITION %a USE (%a))" ;
+        push @args, ($partition, $$opts{'-specialuse'});
+      } else {
+        $cmd .= " (USE (%a))" ;
+        push @args, $$opts{'-specialuse'};
+      }
+    } else {
+      $self->{error} = "Remote does not support CREATE-SPECIAL-USE.";
+      return undef;
+    }
+  } elsif (defined ($partition)) {
+    $cmd .= " %a";
+    push @args, $partition;
+  }
+  my ($rc, $msg) = $self->send('', '', $cmd, $mbx, @args);
   if ($rc eq 'OK') {
     $self->{error} = undef;
     1;
@@ -1163,7 +1186,7 @@ Calling C<error> does not reset the error state, so it is legal to write:
     @folders = $cyradm->list($spec);
     print STDERR "Error: ", $cyradm->error if $cyradm->error;
 
-=item createmailbox($mailbox[, $partition])
+=item createmailbox($mailbox[[, $partition], \%opts])
 
 =item create($mailbox[, $partition])
 

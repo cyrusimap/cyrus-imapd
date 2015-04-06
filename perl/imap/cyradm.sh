@@ -92,20 +92,19 @@ authenticated once.
 Change directory.  A C<pwd> builtin is not provided, but the default command
 action will run C<pwd> from a shell if invoked.
 
-=item C<createmailbox> [C<--partition> I<partition>] I<mailbox>
+=item C<createmailbox> [C<--partition> I<partition>] [C<--specialuse> I<specialuse>] I<mailbox>
 
-=item C<createmailbox> I<mailbox> I<partition>
+=item C<create> [C<--partition> I<partition>] [C<--specialuse> I<specialuse>] I<mailbox>
 
-=item C<create> [C<--partition> I<partition>] I<mailbox>
+=item C<create> [C<--specialuse> I<specialuse>] I<mailbox> I<partition>
 
-=item C<create> I<mailbox> I<partition>
+=item C<cm> [C<--partition> I<partition>] [C<--specialuse> I<specialuse>] I<mailbox>
 
-=item C<cm> [C<--partition> I<partition>] I<mailbox>
-
-=item C<cm> I<mailbox> I<partition>
+=item C<cm> [C<--specialuse> I<specialuse>] I<mailbox> I<partition>
 
 Create a mailbox on the default or a specified partition.  Both old-style
 and getopt-style usages are accepted (combining them will produce an error).
+Optionally assign a special use to the mailbox.
 
 =item C<deleteaclmailbox> I<mailbox> I<id> [...]
 
