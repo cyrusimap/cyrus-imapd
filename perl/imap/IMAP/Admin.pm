@@ -76,15 +76,25 @@ sub new {
   if(defined($self)) {
     $self->{support_referrals} = 0;
     $self->{support_annotatatemore} = 0;
+    $self->{support_list_extended} = 0;
+    $self->{support_list_special_use} = 0;
     $self->{authopts} = [];
     $self->addcallback({-trigger => 'CAPABILITY',
 			-callback => sub {my %a = @_;
-					  map { $self->{support_referrals} = 1
+					  map {
+						# RFC 2193 IMAP4 Mailbox Referrals
+						$self->{support_referrals} = 1
 						  if /^MAILBOX-REFERRALS$/i;
 						$self->{support_annotatemore} = 1
 						  if /^ANNOTATEMORE$/i;
 						$self->{support_metadata} = 1
 						  if /^METADATA$/i;
+						# RFC 5258 IMAPv4 - LIST Command Extensions
+						$self->{support_list_extended} = 1
+						  if /^LIST-EXTENDED$/i;
+						# RFC 6154 - IMAP LIST Extension for Special-Use Mailboxes
+						$self->{support_list_special_use} = 1
+						  if /^SPECIAL-USE$/i;
 					      }
 					  split(/ /, $a{-text})}});
     $self->send(undef, undef, 'CAPABILITY');
@@ -324,15 +334,65 @@ sub listaclmailbox {
 *listacl = *listaclmailbox;
 
 sub listmailbox {
-  my ($self, $pat, $ref) = @_;
+  my ($self, $pat, $ref, $opts) = @_;
   $ref ||= "";
   my @info = ();
   my $list_cmd;
+  my @list_sel;
+  my @list_ret;
   if($self->{support_referrals}) {
-    $list_cmd = 'RLIST';
-  } else {
-    $list_cmd = 'LIST';
+    if ($self->{support_list_extended}) {
+      $list_cmd = 'LIST';
+      push @list_sel, "REMOTE";
+    } else {
+      $list_cmd = 'RLIST';
+    }
   }
+
+  if(defined ($$opts{'-sel-special-use'}) && !$self->{support_list_special_use}) {
+    $self->{error} = "Remote does not support SPECIAL-USE.";
+    return undef;
+  }
+
+  if((defined ($$opts{'-sel-special-use'}) ||
+      defined ($$opts{'-sel-recursivematch'}) ||
+      defined ($$opts{'-sel-subscribed'}))
+     && !$self->{support_list_extended}) {
+    $self->{error} = "Remote does not support LIST-EXTENDED.";
+    return undef;
+  }
+
+  if ($self->{support_list_extended}) {
+    push @list_ret, "SUBSCRIBED";
+    # "The RECURSIVEMATCH option MUST NOT occur as the only selection
+    #  option (or only with REMOTE), as it only makes sense when other
+    #  selection options are also used."
+    push @list_sel, "RECURSIVEMATCH"
+      if defined ($$opts{'-sel-recursivematch'});
+
+    push @list_sel, "SUBSCRIBED"
+      if defined ($$opts{'-sel-subscribed'});
+
+    if($self->{support_list_special_use}) {
+      # always return special-use flags
+      push @list_ret, "SPECIAL-USE";
+      push @list_sel, "SPECIAL-USE"
+        if defined ($$opts{'-sel-special-use'});
+    }
+  }
+
+  # RFC 5258:
+  # "By adding options to the LIST command, we are announcing the intent
+  # to phase out and eventually to deprecate the RLIST and RLSUB commands
+  # described in [MBRef])."
+  #
+  # This should never trigger: MAILBOX-REFERRALS and SPECIAL-USE but no
+  # LIST-EXTENDED.
+  if ($list_cmd eq "RLIST" && (scalar (@list_ret) > 0 || scalar (@list_sel) > 0)) {
+    $self->{error} = "Invalid capabilities: MAILBOX-REFERRALS and SPECIAL-USE but no LIST-EXTENDED.";
+    return undef;
+  }
+
   $self->addcallback({-trigger => 'LIST',
 		      -callback => sub {
 			my %d = @_;
@@ -340,6 +400,7 @@ sub listmailbox {
 			my $attrs = $1;
 			my $sep = '';
 			my $mbox;
+			my $extended;
 			# NIL or (attrs) "sep" "str"
 			if ($d{-text} =~ /^N/) {
 			  return if $d{-text} !~ s/^NIL//;
@@ -351,16 +412,36 @@ sub listmailbox {
                         if ($d{-text} =~ /{\d+}(.*)/) {
 			  # cope with literals (?)
 			  (undef, $mbox) = split(/\n/, $d{-text});
-                        } elsif ($d{-text} =~ /\"(([^\\\"]*\\)*[^\\\"]*)\"/) {
+                        } elsif ($d{-text} =~ /^\"(([^\\\"]*\\)*[^\\\"]*)\"/) {
 			  ($mbox = $1) =~ s/\\(.)/$1/g;
 			} else {
-			  $d{-text} =~ /^([]!\#-[^-~]+)/;
+			  $d{-text} =~ s/^([]!\#-[^-~]+)//;
 			  $mbox = $1;
 			}
-			push @{$d{-rock}}, [$mbox, $attrs, $sep];
+			if ($d{-text} =~ s/^ \(("{0,1}[^" ]+"{0,1} \("[^"]*"\))\)//) {
+			  # RFC 5258: mbox-list-extended =  "(" [mbox-list-extended-item
+			  #              *(SP mbox-list-extended-item)] ")"
+			  $extended = $1;
+			}
+			push @{$d{-rock}}, [$mbox, $attrs, $sep, $extended];
 		      },
 		      -rock => \@info});
-  my ($rc, $msg) = $self->send('', '', "$list_cmd %s %s", $ref, $pat);
+
+  # list =      "LIST" [SP list-select-opts] SP mailbox SP mbox-or-pat
+  #             [SP list-return-opts]
+  my @args = ();
+  my $cmd = $list_cmd;
+  if (scalar (@list_sel) > 0) {
+    $cmd .= " (%a)";
+    push @args, join (" ", @list_sel);
+  }
+  $cmd .= " %s %s";
+  push @args, ($ref, $pat);
+  if (scalar (@list_ret) > 0) {
+    $cmd .= " RETURN (%a)";
+    push @args, join (" ", @list_ret);
+  }
+  my ($rc, $msg) = $self->send('', '', $cmd, @args);
   $self->addcallback({-trigger => $list_cmd});
   if ($rc eq 'OK') {
     $self->{error} = undef;
@@ -1278,9 +1359,9 @@ Delete one or more ACL from a mailbox.
 Returns a hash of mailbox ACLs, with each key being a Cyrus user and the
 corresponding value being the ACL.
 
-=item listmailbox($pattern[, $reference])
+=item listmailbox($pattern[[, $reference], \%opts])
 
-=item list($pattern[, $reference])
+=item list($pattern[[, $reference], \%opts])
 
 List mailboxes matching the specified pattern, starting from the specified
 reference.  The result is a list; each element is an array containing the
