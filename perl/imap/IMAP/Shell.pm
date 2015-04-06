@@ -80,7 +80,7 @@ my %builtins = (exit =>
 		listaclmailbox => 'listacl',
 		lm => 'listmailbox',
 		listmailbox =>
-		  [\&_sc_list, '[-subscribed] [pattern [base]]',
+		  [\&_sc_list, '[-subscribed] [-specialuse] [pattern [base]]',
 		   'list mailboxes'],
 		server =>
 		  [\&_sc_server, '[-noauthenticate] [server]',
@@ -600,27 +600,45 @@ sub _sc_exit {
 sub _sc_list {
   my ($cyrref, $name, $fh, $lfh, @argv) = @_;
   my $cmd = 'listmailbox';
-  my (@nargv, $opt);
+  my (@nargv, $opt, %opts, $subscribed);
   shift(@argv);
   while (defined ($opt = shift(@argv))) {
     # gack.  bloody tcl.
     last if $opt eq '--';
     if ($opt ne '' && '-subscribed' =~ /^\Q$opt/ || $opt eq '--subscribed') {
-      $cmd = 'listsubscribed';
+      $subscribed = 1;
+    } elsif ($opt ne '' && '-specialuse' =~ /^\Q$opt/ || $opt eq '--specialuse') {
+      $opts{'-sel-special-use'} = 1;
+    } elsif ($opt ne '' && '-recursivematch' =~ /^\Q$opt/ || $opt eq '--recursivematch') {
+      $opts{'-sel-recursivematch'} = 1;
     }
     elsif ($opt =~ /^-/) {
-      die "usage: listmailbox [-subscribed] [pattern [base]]\n";
+      die "usage: listmailbox [-subscribed] [-specialuse] [pattern [base]]\n";
     }
     else {
       push(@nargv, $opt);
       last;
     }
   }
+
+  if ($subscribed) {
+    if (scalar (keys %opts) > 0 ) {
+      # LIST + LIST-EXTENED
+      $opts{'-sel-subscribed'} = 1;
+    } else {
+      # LSUB
+      $cmd = 'listsubscribed';
+      # undef %opts;
+    }
+  }
+
   push(@nargv, @argv);
   if (@nargv > 2) {
-    die "usage: listmailbox [-subscribed] [pattern [base]]\n";
+    die "usage: listmailbox [-subscribed] [-specialuse] [pattern [base]]\n";
   }
   push(@nargv, '*') if !@nargv;
+  push(@nargv, undef) if scalar (@nargv) < 2; # no ref
+  push(@nargv, \%opts);
   if (!$cyrref || !$$cyrref) {
     die "listmailbox: no connection to server\n";
   }
@@ -634,6 +652,9 @@ sub _sc_list {
     $l = $mbx->[0];
     if ($mbx->[1] ne '') {
       $l .= ' (' . $mbx->[1] . ')';
+    }
+    if (defined ($mbx->[3])) {
+      $l .= ' (' . $mbx->[3] . ')';
     }
     if (length($l) + 1 > $w) {
       $w = length($l) + 1;
@@ -1665,15 +1686,15 @@ Display the mailbox/server metadata.
 
 List ACLs on the specified mailbox.
 
-=item C<listmailbox> [C<--subscribed>] [I<pattern> [I<reference>]]
+=item C<listmailbox> [C<--subscribed>] [C<--specialuse>] [I<pattern> [I<reference>]]
 
-=item C<list> [C<--subscribed>] [I<pattern> [I<reference>]]
+=item C<list> [C<--subscribed>] [C<--specialuse>] [I<pattern> [I<reference>]]
 
-=item C<lm> [C<--subscribed>] [I<pattern> [I<reference>]]
+=item C<lm> [C<--subscribed>] [C<--specialuse>] [I<pattern> [I<reference>]]
 
-List all, or all subscribed, mailboxes matching the specified pattern.
-The pattern may have embedded wildcards C<'*'> or C<'%'>, which match
-anything or anything except the separator character, respectively.
+List all, or all subscribed or special-use, mailboxes matching the specified
+pattern.  The pattern may have embedded wildcards C<'*'> or C<'%'>, which
+match anything or anything except the separator character, respectively.
 
 Mailboxes returned will be relative to the specified reference if one
 is specified.  This allows a mailbox list to be limited to a particular

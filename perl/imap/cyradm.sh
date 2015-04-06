@@ -162,15 +162,15 @@ Display the mailbox/server metadata.
 
 List ACLs on the specified mailbox.
 
-=item C<listmailbox> [C<--subscribed>] [I<pattern> [I<reference>]]
+=item C<listmailbox> [C<--subscribed>] [C<--specialuse>] [I<pattern> [I<reference>]]
 
-=item C<list> [C<--subscribed>] [I<pattern> [I<reference>]]
+=item C<list> [C<--subscribed>] [C<--specialuse>] [I<pattern> [I<reference>]]
 
-=item C<lm> [C<--subscribed>] [I<pattern> [I<reference>]]
+=item C<lm> [C<--subscribed>] [C<--specialuse>] [I<pattern> [I<reference>]]
 
-List all, or all subscribed, mailboxes matching the specified pattern.
-The pattern may have embedded wildcards C<'*'> or C<'%'>, which match
-anything or anything except the separator character, respectively.
+List all, or all subscribed or special-use, mailboxes matching the specified
+pattern.  The pattern may have embedded wildcards C<'*'> or C<'%'>, which
+match anything or anything except the separator character, respectively.
 
 Mailboxes returned will be relative to the specified reference if one
 is specified.  This allows a mailbox list to be limited to a particular
