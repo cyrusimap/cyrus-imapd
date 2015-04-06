@@ -1020,7 +1020,7 @@ static void my_caldav_shutdown(void)
 static int caldav_parse_path(const char *path,
 			     struct request_target_t *tgt, const char **errstr)
 {
-    char *p;
+    char *p, mboxname[MAX_MAILBOX_BUFFER+1] = "";
     size_t len;
     const char *nameprefix;
     struct mboxname_parts parts;
@@ -1151,10 +1151,30 @@ static int caldav_parse_path(const char *path,
 	parts.domain = NULL;
     }
 
-    mboxname_parts_to_internal(&parts, tgt->mboxname);
+    mboxname_parts_to_internal(&parts, mboxname);
 
     mboxname_free_parts(&parts);
     buf_free(&boxbuf);
+
+    if (tgt->mbentry) {
+	/* Just return the mboxname */
+	tgt->mbentry->name = xstrdup(mboxname);
+    }
+    else if (*mboxname) {
+	/* Locate the mailbox */
+	int r = http_mlookup(mboxname, &tgt->mbentry, NULL);
+	if (r) {
+	    syslog(LOG_ERR, "mlookup(%s) failed: %s",
+		   mboxname, error_message(r));
+	    *errstr = error_message(r);
+
+	    switch (r) {
+	    case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	    case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	    default: return HTTP_SERVER_ERROR;
+	    }
+	}
+    }
 
     return 0;
 }
@@ -1363,12 +1383,12 @@ static int caldav_delete_sched(struct transaction_t *txn,
 	if (!ical) {
 	    syslog(LOG_ERR,
 		   "meth_delete: failed to parse iCalendar object %s:%u",
-		   txn->req_tgt.mboxname, record->uid);
+		   txn->req_tgt.mbentry->name, record->uid);
 	    return HTTP_SERVER_ERROR;
 	}
 
 	/* Construct userid corresponding to mailbox */
-	userid = mboxname_to_userid(txn->req_tgt.mboxname);
+	userid = mboxname_to_userid(txn->req_tgt.mbentry->name);
 
 	/* Grab the organizer */
 	comp = icalcomponent_get_first_real_component(ical);
@@ -1384,7 +1404,7 @@ static int caldav_delete_sched(struct transaction_t *txn,
 	    syslog(LOG_ERR,
 		   "meth_delete: failed to process scheduling message in %s"
 		   " (org=%s, att=%s)",
-		   txn->req_tgt.mboxname, organizer, userid);
+		   txn->req_tgt.mbentry->name, organizer, userid);
 	    txn->error.desc = "Failed to lookup organizer address\r\n";
 	    r = HTTP_SERVER_ERROR;
 	    goto done;
@@ -1456,10 +1476,10 @@ static int dump_calendar(struct transaction_t *txn, int rights)
     if (!mime) return HTTP_NOT_ACCEPTABLE;
 
     /* Open mailbox for reading */
-    r = mailbox_open_irl(txn->req_tgt.mboxname, &mailbox);
+    r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
     if (r) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
+	       txn->req_tgt.mbentry->name, error_message(r));
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
@@ -1817,10 +1837,12 @@ static int list_calendars(struct transaction_t *txn, int rights)
     buf_printf(&txn->buf, "%s://%s%s", proto, host, txn->req_tgt.path);
 
     /* Generate list of calendars */
-    strlcat(txn->req_tgt.mboxname, ".%", sizeof(txn->req_tgt.mboxname));
+    txn->req_tgt.mbentry->name = xrealloc(txn->req_tgt.mbentry->name,
+					  strlen(txn->req_tgt.mbentry->name)+3);
+    strcat(txn->req_tgt.mbentry->name, ".%");
 
     memset(&lrock, 0, sizeof(struct list_cal_rock));
-    mboxlist_findall(NULL, txn->req_tgt.mboxname, 1, httpd_userid,
+    mboxlist_findall(NULL, txn->req_tgt.mbentry->name, 1, httpd_userid,
 		     httpd_authstate, list_cal_cb, &lrock);
 
     /* Sort calendars by displayname */
@@ -2165,7 +2187,6 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 		      struct index_record *record, void *data)
 {
     int r, rights;
-    mbentry_t *mbentry = NULL;
 
     if (record && record->uid) {
 	/* GET on a resource */
@@ -2229,27 +2250,13 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 	return server_info(txn);
     }
 
-    /* Locate the mailbox */
-    r = http_mlookup(txn->req_tgt.mboxname, &mbentry, NULL);
-    if (r) {
-	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-
-	switch (r) {
-	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	default: return HTTP_SERVER_ERROR;
-	}
-    }
-
-    if (mbentry->server) {
+    if (txn->req_tgt.mbentry->server) {
 	/* Remote mailbox */
 	struct backend *be;
 
-	be = proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
+	be = proxy_findserver(txn->req_tgt.mbentry->server,
+			      &http_protocol, proxy_userid,
 			      &backend_cached, NULL, NULL, httpd_in);
-	mboxlist_entry_free(&mbentry);
 	if (!be) return HTTP_UNAVAILABLE;
 
 	return http_pipe_req_resp(be, txn);
@@ -2258,8 +2265,8 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
     /* Local Mailbox */
 
     /* Check ACL for current user */
-    rights = mbentry->acl ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
-    mboxlist_entry_free(&mbentry);
+    rights = txn->req_tgt.mbentry->acl ?
+	cyrus_acl_myrights(httpd_authstate, txn->req_tgt.mbentry->acl) : 0;
 
     if (txn->req_tgt.collection) {
 	/* Download an entire calendar collection */ 
@@ -2352,10 +2359,10 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     }
 
     /* Open calendar for writing */
-    r = mailbox_open_iwl(txn->req_tgt.mboxname, &calendar);
+    r = mailbox_open_iwl(txn->req_tgt.mbentry->name, &calendar);
     if (r) {
 	syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
+	       txn->req_tgt.mbentry->name, error_message(r));
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
@@ -2365,7 +2372,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     caldavdb = my_caldav_open(calendar);
 
     /* Find message UID for the cal resource */
-    caldav_lookup_resource(caldavdb, txn->req_tgt.mboxname,
+    caldav_lookup_resource(caldavdb, txn->req_tgt.mbentry->name,
 			   txn->req_tgt.resource, 0, &cdata, 0);
     if (!cdata->dav.rowid) ret = HTTP_NOT_FOUND;
     else if (!cdata->dav.imap_uid) ret = HTTP_CONFLICT;
@@ -2755,35 +2762,23 @@ static int caldav_post_outbox(struct transaction_t *txn, int rights)
 
 static int caldav_post(struct transaction_t *txn)
 {
-    mbentry_t *mbentry = NULL;
-    int ret, r, rights;
-
-    /* Locate the mailbox */
-    if ((r = http_mlookup(txn->req_tgt.mboxname, &mbentry, NULL))) {
-	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-
-	switch (r) {
-	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	default: return HTTP_SERVER_ERROR;
-	}
-    }
+    int ret, rights;
 
     /* Get rights for current user */
-    rights = mbentry->acl ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
+    rights = txn->req_tgt.mbentry->acl ?
+	cyrus_acl_myrights(httpd_authstate, txn->req_tgt.mbentry->acl) : 0;
 
     if (txn->req_tgt.resource) {
 	if (txn->req_tgt.flags) {
 	    /* Don't allow POST on resources in special collections */
 	    ret = HTTP_NOT_ALLOWED;
 	}
-	else if (mbentry->server) {
+	else if (txn->req_tgt.mbentry->server) {
 	    /* Remote mailbox */
 	    struct backend *be;
 
-	    be = proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
+	    be = proxy_findserver(txn->req_tgt.mbentry->server,
+				  &http_protocol, proxy_userid,
 				  &backend_cached, NULL, NULL, httpd_in);
 	    if (!be) ret = HTTP_UNAVAILABLE;
 	    else ret = http_pipe_req_resp(be, txn);
@@ -2807,7 +2802,6 @@ static int caldav_post(struct transaction_t *txn)
 	ret = HTTP_CONTINUE;
     }
 
-    mboxlist_entry_free(&mbentry);
     return ret;
 }
 
@@ -3070,7 +3064,7 @@ static int caldav_put(struct transaction_t *txn, icalcomponent *ical,
 		syslog(LOG_ERR,
 		       "meth_put: failed to process scheduling message in %s"
 		       " (org=%s)",
-		       txn->req_tgt.mboxname, organizer);
+		       txn->req_tgt.mbentry->name, organizer);
 		txn->error.desc = "Failed to lookup organizer address\r\n";
 		ret = HTTP_SERVER_ERROR;
 		goto done;
@@ -4841,13 +4835,16 @@ static int report_cal_query(struct transaction_t *txn,
 	/* Calendar collection(s) */
 	if (txn->req_tgt.collection) {
 	    /* Add response for target calendar collection */
-	    propfind_by_collection(txn->req_tgt.mboxname, 0, 0, fctx);
+	    propfind_by_collection(txn->req_tgt.mbentry->name, 0, 0, fctx);
 	}
 	else {
 	    /* Add responses for all contained calendar collections */
-	    strlcat(txn->req_tgt.mboxname, ".%", sizeof(txn->req_tgt.mboxname));
+	    txn->req_tgt.mbentry->name =
+		xrealloc(txn->req_tgt.mbentry->name,
+			 strlen(txn->req_tgt.mbentry->name)+3);
+	    strcat(txn->req_tgt.mbentry->name, ".%");
 	    mboxlist_findall(NULL,  /* internal namespace */
-			     txn->req_tgt.mboxname, 1, httpd_userid, 
+			     txn->req_tgt.mbentry->name, 1, httpd_userid, 
 			     httpd_authstate, propfind_by_collection, fctx);
 	}
 
@@ -5179,9 +5176,10 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
 	}
 	else {
 	    /* Get busytime for all contained calendar collections */
-	    strlcat(mailboxname, ".%", MAX_MAILBOX_PATH);
+	    char mboxpat[MAX_MAILBOX_BUFFER+1];
+	    snprintf(mboxpat, sizeof(mboxpat), "%s.%%", mailboxname);
 	    mboxlist_findall(NULL,  /* internal namespace */
-			     mailboxname, 1, httpd_userid, 
+			     mboxpat, 1, httpd_userid, 
 			     httpd_authstate, busytime_by_collection, fctx);
 	}
 
@@ -5368,7 +5366,7 @@ static int report_fb_query(struct transaction_t *txn,
 	}
     }
 
-    cal = busytime_query_local(txn, fctx, txn->req_tgt.mboxname,
+    cal = busytime_query_local(txn, fctx, txn->req_tgt.mbentry->name,
 			       0, NULL, NULL, NULL);
 
     if (calfilter.freebusy.fb) free(calfilter.freebusy.fb);
@@ -7935,7 +7933,6 @@ static int meth_get_fb(struct transaction_t *txn,
 
 {
     int ret = 0, r, rights;
-    mbentry_t *mbentry = NULL;
     struct tm *tm;
     struct strlist *param;
     struct mime_type_t *mime = NULL;
@@ -7956,43 +7953,28 @@ static int meth_get_fb(struct transaction_t *txn,
 	return HTTP_NO_CONTENT;
     }
 
-    /* Locate the mailbox */
-    if ((r = http_mlookup(txn->req_tgt.mboxname, &mbentry, NULL))) {
-	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-
-	switch (r) {
-	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	default: return HTTP_SERVER_ERROR;
-	}
-    }
-
     /* Check ACL for current user */
-    rights = mbentry->acl ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
+    rights = txn->req_tgt.mbentry->acl ?
+	cyrus_acl_myrights(httpd_authstate, txn->req_tgt.mbentry->acl) : 0;
     if (!(rights & DACL_READFB)) {
 	/* DAV:need-privileges */
 	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
 	txn->error.rights = DACL_READFB;
-	mboxlist_entry_free(&mbentry);
 	return HTTP_NO_PRIVS;
     }
 
-    if (mbentry->server) {
+    if (txn->req_tgt.mbentry->server) {
 	/* Remote mailbox */
 	struct backend *be;
 
-	be = proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
+	be = proxy_findserver(txn->req_tgt.mbentry->server,
+			      &http_protocol, proxy_userid,
 			      &backend_cached, NULL, NULL, httpd_in);
-	mboxlist_entry_free(&mbentry);
 	if (!be) return HTTP_UNAVAILABLE;
 
 	return http_pipe_req_resp(be, txn);
     }
-
-    mboxlist_entry_free(&mbentry);
 
     /* Local Mailbox */
 
@@ -8079,7 +8061,7 @@ static int meth_get_fb(struct transaction_t *txn,
     fctx.ret = &ret;
     fctx.fetcheddata = 0;
 
-    cal = busytime_query_local(txn, &fctx, txn->req_tgt.mboxname,
+    cal = busytime_query_local(txn, &fctx, txn->req_tgt.mbentry->name,
 			       0, NULL, NULL, NULL);
 
     if (calfilter.freebusy.fb) free(calfilter.freebusy.fb);

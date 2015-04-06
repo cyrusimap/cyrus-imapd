@@ -449,7 +449,7 @@ static void my_carddav_shutdown(void)
 static int carddav_parse_path(const char *path,
 			      struct request_target_t *tgt, const char **errstr)
 {
-    char *p;
+    char *p, mboxname[MAX_MAILBOX_BUFFER+1] = "";
     size_t len;
     struct mboxname_parts parts;
     struct buf boxbuf = BUF_INITIALIZER;
@@ -556,10 +556,30 @@ static int carddav_parse_path(const char *path,
 	parts.domain = NULL;
     }
 
-    mboxname_parts_to_internal(&parts, tgt->mboxname);
+    mboxname_parts_to_internal(&parts, mboxname);
 
     mboxname_free_parts(&parts);
     buf_free(&boxbuf);
+
+    if (tgt->mbentry) {
+	/* Just return the mboxname */
+	tgt->mbentry->name = xstrdup(mboxname);
+    }
+    else if (*mboxname) {
+	/* Locate the mailbox */
+	int r = http_mlookup(mboxname, &tgt->mbentry, NULL);
+	if (r) {
+	    syslog(LOG_ERR, "mlookup(%s) failed: %s",
+		   mboxname, error_message(r));
+	    *errstr = error_message(r);
+
+	    switch (r) {
+	    case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	    case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	    default: return HTTP_SERVER_ERROR;
+	    }
+	}
+    }
 
     return 0;
 }
@@ -837,7 +857,8 @@ int propfind_addrgroups(const xmlChar *name, xmlNsPtr ns,
 	goto done;
     }
 
-    r = carddav_lookup_resource(davdb, fctx->req_tgt->mboxname, fctx->req_tgt->resource, 0, &cdata, 0);
+    r = carddav_lookup_resource(davdb, fctx->req_tgt->mbentry->name,
+				fctx->req_tgt->resource, 0, &cdata, 0);
     if (r)
 	goto done;
 
@@ -894,14 +915,17 @@ static int report_card_query(struct transaction_t *txn,
 	/* Addressbook collection(s) */
 	if (txn->req_tgt.collection) {
 	    /* Add response for target addressbook collection */
-	    propfind_by_collection(txn->req_tgt.mboxname, 0, 0, fctx);
+	    propfind_by_collection(txn->req_tgt.mbentry->name, 0, 0, fctx);
 	}
 	else {
 	    /* Add responses for all contained addressbook collections */
 	    /* XXX - support cross-user propfind here, just like caldav */
-	    strlcat(txn->req_tgt.mboxname, ".%", sizeof(txn->req_tgt.mboxname));
+	    txn->req_tgt.mbentry->name =
+		xrealloc(txn->req_tgt.mbentry->name,
+			 strlen(txn->req_tgt.mbentry->name)+3);
+	    strcat(txn->req_tgt.mbentry->name, ".%");
 	    mboxlist_findall(NULL,  /* internal namespace */
-			     txn->req_tgt.mboxname, 1, httpd_userid,
+			     txn->req_tgt.mbentry->name, 1, httpd_userid, 
 			     httpd_authstate, propfind_by_collection, fctx);
 	}
 

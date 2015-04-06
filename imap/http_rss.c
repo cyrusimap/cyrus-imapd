@@ -151,7 +151,6 @@ static int meth_get(struct transaction_t *txn,
     char *section = NULL;
     uint32_t uid = 0;
     struct mailbox *mailbox = NULL;
-    mbentry_t *mbentry = NULL;
 
     /* Construct mailbox name corresponding to request target URI */
     if ((r = rss_parse_path(txn->req_uri->path,
@@ -161,50 +160,35 @@ static int meth_get(struct transaction_t *txn,
     }
 
     /* If no mailboxname, list all available feeds */
-    if (!*txn->req_tgt.mboxname) return list_feeds(txn);
+    if (!txn->req_tgt.mbentry) return list_feeds(txn);
 
     /* Make sure its a mailbox that we are treating as an RSS feed */
-    if (!is_feed(txn->req_tgt.mboxname)) return HTTP_NOT_FOUND;
-
-    /* Locate the mailbox */
-    r = http_mlookup(txn->req_tgt.mboxname, &mbentry, NULL);
-    if (r) {
-	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-
-	switch (r) {
-	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	default: return HTTP_SERVER_ERROR;
-	}
-    }
+    if (!is_feed(txn->req_tgt.mbentry->name)) return HTTP_NOT_FOUND;
 
     /* Check ACL for current user */
-    rights = mbentry ? cyrus_acl_myrights(httpd_authstate, mbentry->acl) : 0;
+    rights = txn->req_tgt.mbentry->acl ?
+	cyrus_acl_myrights(httpd_authstate, txn->req_tgt.mbentry->acl) : 0;
     if (!(rights & ACL_READ)) return HTTP_NO_PRIVS;
 
-    if (mbentry->server) {
+    if (txn->req_tgt.mbentry->server) {
 	/* Remote mailbox */
 	struct backend *be;
 
-	be = proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
+	be = proxy_findserver(txn->req_tgt.mbentry->server,
+			      &http_protocol, proxy_userid,
 			      &backend_cached, NULL, NULL, httpd_in);
-	mboxlist_entry_free(&mbentry);
 	if (!be) return HTTP_UNAVAILABLE;
 
 	return http_pipe_req_resp(be, txn);
     }
 
-    mboxlist_entry_free(&mbentry);
-
     /* Local Mailbox */
 
     /* Open mailbox for reading */
-    r = mailbox_open_irl(txn->req_tgt.mboxname, &mailbox);
+    r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
     if (r) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
+	       txn->req_tgt.mbentry->name, error_message(r));
 	txn->error.desc = error_message(r);
 
 	switch (r) {
@@ -303,11 +287,11 @@ static int meth_get(struct transaction_t *txn,
 
 
 /* Create a mailbox name from the request URL */ 
-static int rss_parse_path(const char *path,
-			  struct request_target_t *tgt,
-			  const char **errstr __attribute__((unused)))
+static int rss_parse_path(const char *path, struct request_target_t *tgt,
+			  const char **errstr)
 {
     const char *start, *end;
+    char mboxname[MAX_MAILBOX_BUFFER+1];
     size_t len;
 
     /* Clip off RSS prefix */
@@ -320,10 +304,26 @@ static int rss_parse_path(const char *path,
     len = end - start;
     if (len > MAX_MAILBOX_BUFFER) return IMAP_MAILBOX_BADNAME;
 
-    strncpy(tgt->mboxname, start, len);
-    tgt->mboxname[len] = '\0';
+    strncpy(mboxname, start, len);
+    mboxname[len] = '\0';
 
-    mboxname_hiersep_tointernal(&httpd_namespace, tgt->mboxname, len);
+    mboxname_hiersep_tointernal(&httpd_namespace, mboxname, len);
+
+    /* Locate the mailbox */
+    if (*mboxname) {
+	int r = http_mlookup(mboxname, &tgt->mbentry, NULL);
+	if (r) {
+	    syslog(LOG_ERR, "mlookup(%s) failed: %s",
+		   mboxname, error_message(r));
+	    *errstr = error_message(r);
+
+	    switch (r) {
+	    case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	    case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	    default: return HTTP_SERVER_ERROR;
+	    }
+	}
+    }
 
     return 0;
 }

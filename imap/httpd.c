@@ -1465,6 +1465,7 @@ static void cmdloop(void)
 
 	/* XXX - split this into a req_tgt cleanup */
 	free(txn.req_tgt.userid);
+	mboxlist_entry_free(&txn.req_tgt.mbentry);
 
 	if (txn.flags.conn & CONN_CLOSE) {
 	    buf_free(&txn.buf);
@@ -3687,39 +3688,19 @@ EXPORTED int meth_trace(struct transaction_t *txn, void *params)
 	if ((r = parse_path(txn->req_uri->path,
 			    &txn->req_tgt, &txn->error.desc))) return r;
 
-	if (*txn->req_tgt.mboxname) {
-	    /* Locate the mailbox */
-	    mbentry_t *mbentry = NULL;
+	if (txn->req_tgt.mbentry && txn->req_tgt.mbentry->server) {
+	    /* Remote mailbox */
+	    struct backend *be;
 
-	    r = http_mlookup(txn->req_tgt.mboxname, &mbentry, NULL);
-	    if (r) {
-		syslog(LOG_ERR, "mlookup(%s) failed: %s",
-		       txn->req_tgt.mboxname, error_message(r));
-		txn->error.desc = error_message(r);
+	    be = proxy_findserver(txn->req_tgt.mbentry->server,
+				  &http_protocol, proxy_userid,
+				  &backend_cached, NULL, NULL, httpd_in);
+	    if (!be) return HTTP_UNAVAILABLE;
 
-		switch (r) {
-		case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-		case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-		default: return HTTP_SERVER_ERROR;
-		}
-	    }
-
-	    if (mbentry->server) {
-		/* Remote mailbox */
-		struct backend *be;
-
-		be = proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
-				      &backend_cached, NULL, NULL, httpd_in);
-		mboxlist_entry_free(&mbentry);
-		if (!be) return HTTP_UNAVAILABLE;
-
-		return http_pipe_req_resp(be, txn);
-	    }
-
-	    mboxlist_entry_free(&mbentry);
-
-	    /* Local mailbox */
+	    return http_pipe_req_resp(be, txn);
 	}
+
+	/* Local mailbox */
     }
 
     /* Echo the request back to the client as a message/http:

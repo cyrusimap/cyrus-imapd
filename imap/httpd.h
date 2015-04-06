@@ -195,7 +195,7 @@ struct request_target_t {
     unsigned flags;		/* target-specific flags/meta-data */
     unsigned long allow;	/* bitmask of allowed features/methods */
     int mboxtype;		/* mailbox types to match on findall */
-    char mboxname[MAX_MAILBOX_BUFFER+1];
+    mbentry_t *mbentry;		/* mboxlist entry of target collection */
     const char *prefix;		/* namespace prefix */
 };
 

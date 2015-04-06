@@ -1836,7 +1836,8 @@ EXPORTED int propfind_quota(const xmlChar *name, xmlNsPtr ns,
     }
     else {
 	/* Find the quotaroot governing this hierarchy */
-	if (quota_findroot(foundroot, sizeof(foundroot), fctx->req_tgt->mboxname)) {
+	if (quota_findroot(foundroot, sizeof(foundroot),
+			   fctx->req_tgt->mbentry->name)) {
 	    qr = foundroot;
 	}
     }
@@ -2702,7 +2703,6 @@ int meth_acl(struct transaction_t *txn, void *params)
     xmlDocPtr indoc = NULL;
     xmlNodePtr root, ace;
     struct mailbox *mailbox = NULL;
-    mbentry_t *mbentry = NULL;
     struct buf acl = BUF_INITIALIZER;
     const char **hdr;
 
@@ -2720,40 +2720,25 @@ int meth_acl(struct transaction_t *txn, void *params)
 	return HTTP_NOT_ALLOWED;
     }
 
-    /* Locate the mailbox */
-    r = http_mlookup(txn->req_tgt.mboxname, &mbentry, NULL);
-    if (r) {
-	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-
-	switch (r) {
-	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	default: return HTTP_SERVER_ERROR;
-	}
-    }
-
-    if (!mboxname_userownsmailbox(httpd_userid, mbentry->name)) {
+    if (!mboxname_userownsmailbox(httpd_userid, txn->req_tgt.mbentry->name)) {
 	/* Check ACL for current user */
-	rights = httpd_myrights(httpd_authstate, mbentry->acl);
+	rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
 	if (!(rights & DACL_ADMIN)) {
 	    /* DAV:need-privileges */
 	    txn->error.precond = DAV_NEED_PRIVS;
 	    txn->error.resource = txn->req_tgt.path;
 	    txn->error.rights = DACL_ADMIN;
-	    mboxlist_entry_free(&mbentry);
 	    return HTTP_NO_PRIVS;
 	}
     }
 
-    if (mbentry->server) {
+    if (txn->req_tgt.mbentry->server) {
 	/* Remote mailbox */
 	struct backend *be;
 
-	be = proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
+	be = proxy_findserver(txn->req_tgt.mbentry->server,
+			      &http_protocol, proxy_userid,
 			      &backend_cached, NULL, NULL, httpd_in);
-	mboxlist_entry_free(&mbentry);
 	if (!be) return HTTP_UNAVAILABLE;
 
 	return http_pipe_req_resp(be, txn);
@@ -2769,10 +2754,10 @@ int meth_acl(struct transaction_t *txn, void *params)
 
     if (overwrite) {
 	/* Open mailbox for writing */
-	r = mailbox_open_iwl(txn->req_tgt.mboxname, &mailbox);
+	r = mailbox_open_iwl(txn->req_tgt.mbentry->name, &mailbox);
 	if (r) {
 	    syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-		   txn->req_tgt.mboxname, error_message(r));
+		   txn->req_tgt.mbentry->name, error_message(r));
 	    txn->error.desc = error_message(r);
 	    ret = HTTP_SERVER_ERROR;
 	    goto done;
@@ -2796,7 +2781,7 @@ int meth_acl(struct transaction_t *txn, void *params)
 	goto done;
     }
 
-    set_system_acls(&acl, mbentry);
+    set_system_acls(&acl, txn->req_tgt.mbentry);
 
     /* Parse the DAV:ace elements */
     for (ace = root->children; ace; ace = ace->next) {
@@ -2853,7 +2838,7 @@ int meth_acl(struct transaction_t *txn, void *params)
 		userid = proxy_userid;
 	    }
 	    else if (!xmlStrcmp(prin->name, BAD_CAST "owner")) {
-		userid = mboxname_to_userid(txn->req_tgt.mboxname);
+		userid = mboxname_to_userid(txn->req_tgt.mbentry->name);
 	    }
 	    else if (!xmlStrcmp(prin->name, BAD_CAST "authenticated")) {
 		userid = "anyone";
@@ -3007,10 +2992,10 @@ int meth_acl(struct transaction_t *txn, void *params)
 	}
     }
 
-    r = mboxlist_sync_setacls(mbentry->name, buf_cstring(&acl));
+    r = mboxlist_sync_setacls(txn->req_tgt.mbentry->name, buf_cstring(&acl));
     if (r) {
 	syslog(LOG_ERR, "mboxlist_setacl(%s) failed: %s",
-	       mbentry->name, error_message(r));
+	       txn->req_tgt.mbentry->name, error_message(r));
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
@@ -3021,7 +3006,6 @@ int meth_acl(struct transaction_t *txn, void *params)
   done:
     buf_free(&acl);
     if (indoc) xmlFreeDoc(indoc);
-    mboxlist_entry_free(&mbentry);
 
     return ret;
 }
@@ -3042,7 +3026,6 @@ int meth_copy(struct transaction_t *txn, void *params)
 						 static for Location resp hdr */
     struct backend *src_be = NULL, *dest_be = NULL;
     struct mailbox *src_mbox = NULL, *dest_mbox = NULL;
-    mbentry_t *mbentry = NULL;
     struct dav_data *ddata;
     struct index_record src_rec;
     const char *etag = NULL;
@@ -3050,6 +3033,8 @@ int meth_copy(struct transaction_t *txn, void *params)
     unsigned flags = 0, meth_move = (txn->meth == METH_MOVE);
     void *src_davdb = NULL, *dest_davdb = NULL, *obj = NULL;
     struct buf msg_buf = BUF_INITIALIZER;
+
+    memset(&dest_tgt, 0, sizeof(struct request_target_t));
 
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
@@ -3061,9 +3046,21 @@ int meth_copy(struct transaction_t *txn, void *params)
     /* Make sure method is allowed (not allowed on collections yet) */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
 
+    /* Check ACL for current user on source mailbox */
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
+    if (((rights & DACL_READ) != DACL_READ) ||
+	(meth_move && !(rights & DACL_RMRSRC))) {
+	/* DAV:need-privileges */
+	txn->error.precond = DAV_NEED_PRIVS;
+	txn->error.resource = txn->req_tgt.path;
+	txn->error.rights =
+	    (rights & DACL_READ) != DACL_READ ? DACL_READ : DACL_RMRSRC;
+	return HTTP_NO_PRIVS;
+    }
+
     /* Check for mandatory Destination header */
     if (!(hdr = spool_getheader(txn->req_hdrs, "Destination"))) {
-	txn->error.desc = "Missing Destination header\r\n";
+	txn->error.desc = "Missing Destination header";
 	return HTTP_BAD_REQUEST;
     }
 
@@ -3075,127 +3072,97 @@ int meth_copy(struct transaction_t *txn, void *params)
 
     /* Make sure source and dest resources are NOT the same */
     if (!strcmp(txn->req_uri->path, dest_uri->path)) {
-	txn->error.desc = "Source and destination resources are the same\r\n";
-	r = HTTP_FORBIDDEN;
+	txn->error.desc = "Source and destination resources are the same";
+	ret = HTTP_FORBIDDEN;
+	goto done;
     }
 
     /* Parse the destination path */
-    if (!r) {
-	memset(&dest_tgt, 0, sizeof(struct request_target_t));
-	r = cparams->parse_path(dest_uri->path, &dest_tgt, &txn->error.desc);
-	free(dest_tgt.userid);
+    r = cparams->parse_path(dest_uri->path, &dest_tgt, &txn->error.desc);
+    if (r) {
+	ret = HTTP_FORBIDDEN;
+	goto done;
     }
-    xmlFreeURI(dest_uri);
-
-    if (r) return HTTP_FORBIDDEN;
 
     /* We don't yet handle COPY/MOVE on collections */
-    if (!dest_tgt.resource) return HTTP_NOT_ALLOWED;
-
-    /* Locate the source mailbox */
-    if ((r = http_mlookup(txn->req_tgt.mboxname, &mbentry, NULL))) {
-	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-
-	switch (r) {
-	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	default: return HTTP_SERVER_ERROR;
-	}
-    }
-
-    /* Check ACL for current user on source mailbox */
-    rights = httpd_myrights(httpd_authstate, mbentry->acl);
-    if (((rights & DACL_READ) != DACL_READ) ||
-	(meth_move && !(rights & DACL_RMRSRC))) {
-	/* DAV:need-privileges */
-	txn->error.precond = DAV_NEED_PRIVS;
-	txn->error.resource = txn->req_tgt.path;
-	txn->error.rights =
-	    (rights & DACL_READ) != DACL_READ ? DACL_READ : DACL_RMRSRC;
-	mboxlist_entry_free(&mbentry);
-	return HTTP_NO_PRIVS;
-    }
-
-    if (mbentry->server) {
-	/* Remote source mailbox */
-	src_be = proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
-				  &backend_cached, NULL, NULL, httpd_in);
-	mboxlist_entry_free(&mbentry);
-	if (!src_be) return HTTP_UNAVAILABLE;
-    }
-
-    mboxlist_entry_free(&mbentry);
-
-    /* Locate the destination mailbox */
-    r = http_mlookup(dest_tgt.mboxname, &mbentry, NULL);
-    if (r) {
-	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       dest_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-
-	switch (r) {
-	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	default: return HTTP_SERVER_ERROR;
-	}
+    if (!dest_tgt.resource) {
+	ret = HTTP_NOT_ALLOWED;
+	goto done;
     }
 
     /* Check ACL for current user on destination */
-    rights = httpd_myrights(httpd_authstate, mbentry->acl);
+    rights = httpd_myrights(httpd_authstate, dest_tgt.mbentry->acl);
     if (!(rights & DACL_ADDRSRC) || !(rights & DACL_WRITECONT)) {
 	/* DAV:need-privileges */
 	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = dest_tgt.path;
 	txn->error.rights =
 	    !(rights & DACL_ADDRSRC) ? DACL_ADDRSRC : DACL_WRITECONT;
-	mboxlist_entry_free(&mbentry);
-	return HTTP_NO_PRIVS;
+	ret = HTTP_NO_PRIVS;
+	goto done;
     }
 
-    if (mbentry->server) {
-	/* Remote destination mailbox */
-	dest_be = proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
-				   &backend_cached, NULL, NULL, httpd_in);
-	mboxlist_entry_free(&mbentry);
-	if (!dest_be) return HTTP_UNAVAILABLE;
-    }
-
-    mboxlist_entry_free(&mbentry);
-
-    if (src_be) {
+    if (txn->req_tgt.mbentry->server) {
 	/* Remote source mailbox */
-	/* XXX  Currently only supports standard Murder */
-
-	if (!dest_be) return HTTP_NOT_ALLOWED;
 
 	/* Replace cached Destination header with just the absolute path */
 	hdr = spool_getheader(txn->req_hdrs, "Destination");
 	strcpy((char *) hdr[0], dest_tgt.path);
 
-	if (src_be == dest_be) {
+	if (!dest_tgt.mbentry->server) {
+	    /* Local destination mailbox */
+
+	    /* XXX  Currently only supports standard Murder */
+	    txn->error.desc = "COPY/MOVE only supported in a standard Murder";
+	    ret = HTTP_NOT_ALLOWED;
+	}
+	else if (!(src_be = proxy_findserver(txn->req_tgt.mbentry->server,
+					     &http_protocol, proxy_userid,
+					     &backend_cached, NULL, NULL,
+					     httpd_in))) {
+	    txn->error.desc = "Unable to connect to source backend";
+	    ret = HTTP_UNAVAILABLE;
+	}
+	else if (!(dest_be = proxy_findserver(dest_tgt.mbentry->server,
+					      &http_protocol, proxy_userid,
+					      &backend_cached, NULL, NULL,
+					      httpd_in))) {
+	    txn->error.desc = "Unable to connect to destination backend";
+	    ret = HTTP_UNAVAILABLE;
+	}
+	else if (src_be == dest_be) {
 	    /* Simply send the COPY to the backend */
-	    return http_pipe_req_resp(src_be, txn);
+	    ret = http_pipe_req_resp(src_be, txn);
+	}
+	else {
+	    /* This is the harder case: GET from source and PUT on dest */
+	    ret = http_proxy_copy(src_be, dest_be, txn);
 	}
 
-	/* This is the harder case: GET from source and PUT on destination */
-	return http_proxy_copy(src_be, dest_be, txn);
+	goto done;
+    }
+    else if (dest_tgt.mbentry->server) {
+	/* Local source and remote destination mailbox */
+
+	/* XXX  Currently only supports standard Murder */
+	txn->error.desc = "COPY/MOVE only supported in a standard Murder";
+	ret = HTTP_NOT_ALLOWED;
+	goto done;
     }
 
-    /* Local Mailbox */
+    /* Local source and destination mailboxes */
 
     if (meth_move) {
 	/* Open source mailbox for writing */
-	r = mailbox_open_iwl(txn->req_tgt.mboxname, &src_mbox);
+	r = mailbox_open_iwl(txn->req_tgt.mbentry->name, &src_mbox);
     }
     else {
 	/* Open source mailbox for reading */
-	r = mailbox_open_irl(txn->req_tgt.mboxname, &src_mbox);
+	r = mailbox_open_irl(txn->req_tgt.mbentry->name, &src_mbox);
     }
     if (r) {
 	syslog(LOG_ERR, "mailbox_open_i%cl(%s) failed: %s",
-	       meth_move ? 'w' : 'r', txn->req_tgt.mboxname, error_message(r));
+	       meth_move ? 'w' : 'r', txn->req_tgt.mbentry->name, error_message(r));
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
@@ -3205,7 +3172,7 @@ int meth_copy(struct transaction_t *txn, void *params)
     src_davdb = cparams->davdb.open_db(src_mbox);
 
     /* Find message UID for the source resource */
-    cparams->davdb.lookup_resource(src_davdb, txn->req_tgt.mboxname,
+    cparams->davdb.lookup_resource(src_davdb, txn->req_tgt.mbentry->name,
 				   txn->req_tgt.resource, 0,
 				   (void **) &ddata, 0);
     if (!ddata->rowid) {
@@ -3260,10 +3227,10 @@ int meth_copy(struct transaction_t *txn, void *params)
     }
 
     /* Open dest mailbox for writing */
-    r = mailbox_open_iwl(dest_tgt.mboxname, &dest_mbox);
+    r = mailbox_open_iwl(dest_tgt.mbentry->name, &dest_mbox);
     if (r) {
 	syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-	       dest_tgt.mboxname, error_message(r));
+	       dest_tgt.mbentry->name, error_message(r));
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
@@ -3273,7 +3240,7 @@ int meth_copy(struct transaction_t *txn, void *params)
     dest_davdb = cparams->davdb.open_db(dest_mbox);
 
     /* Find message UID for the dest resource, if exists */
-    cparams->davdb.lookup_resource(dest_davdb, dest_tgt.mboxname,
+    cparams->davdb.lookup_resource(dest_davdb, dest_tgt.mbentry->name,
 				   dest_tgt.resource, 0, (void **) &ddata, 0);
     /* XXX  Check errors */
 
@@ -3306,7 +3273,7 @@ int meth_copy(struct transaction_t *txn, void *params)
 	    src_rec.system_flags |= FLAG_EXPUNGED;
 	    if ((r = mailbox_rewrite_index_record(src_mbox, &src_rec))) {
 		syslog(LOG_ERR, "expunging src record (%s) failed: %s",
-		       txn->req_tgt.mboxname, error_message(r));
+		       txn->req_tgt.mbentry->name, error_message(r));
 		txn->error.desc = error_message(r);
 		ret = HTTP_SERVER_ERROR;
 		goto done;
@@ -3326,9 +3293,13 @@ int meth_copy(struct transaction_t *txn, void *params)
 
     if (obj) cparams->mime_types[0].free(obj);
     if (dest_davdb) cparams->davdb.close_db(dest_davdb);
-    mailbox_close(&dest_mbox);
+    if (dest_mbox) mailbox_close(&dest_mbox);
     if (src_davdb) cparams->davdb.close_db(src_davdb);
-    mailbox_close(&src_mbox);
+    if (src_mbox) mailbox_close(&src_mbox);
+
+    xmlFreeURI(dest_uri);
+    free(dest_tgt.userid);
+    mboxlist_entry_free(&dest_tgt.mbentry);
 
     return ret;
 }
@@ -3348,7 +3319,6 @@ int meth_delete(struct transaction_t *txn, void *params)
     int ret = HTTP_NO_CONTENT, r = 0, precond, rights, needrights;
     struct mboxevent *mboxevent = NULL;
     struct mailbox *mailbox = NULL;
-    mbentry_t *mbentry = NULL;
     struct dav_data *ddata;
     struct index_record record;
     const char *etag = NULL;
@@ -3366,48 +3336,34 @@ int meth_delete(struct transaction_t *txn, void *params)
     /* Make sure method is allowed */
     if (!(txn->req_tgt.allow & ALLOW_DELETE)) return HTTP_NOT_ALLOWED;
 
-    /* Locate the mailbox */
-    r = http_mlookup(txn->req_tgt.mboxname, &mbentry, NULL);
-    if (r) {
-	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-
-	switch (r) {
-	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	default: return HTTP_SERVER_ERROR;
-	}
-    }
-
     /* Check ACL for current user */
-    rights = httpd_myrights(httpd_authstate, mbentry->acl);
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
     needrights = txn->req_tgt.resource ? DACL_RMRSRC : DACL_RMCOL;
     if (!(rights & needrights)) {
-	mboxlist_entry_free(&mbentry);
 	/* special case delete mailbox where not the owner */
-	if (!txn->req_tgt.resource && !mboxname_userownsmailbox(httpd_userid, txn->req_tgt.mboxname))
-	    if (!remove_user_acl(httpd_userid, txn->req_tgt.mboxname))
-		return HTTP_OK;
+	if (!txn->req_tgt.resource &&
+	    !mboxname_userownsmailbox(httpd_userid, txn->req_tgt.mbentry->name) &&
+	    !remove_user_acl(httpd_userid, txn->req_tgt.mbentry->name)) {
+	    return HTTP_OK;
+	}
+	
 	/* DAV:need-privileges */
 	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
 	return HTTP_NO_PRIVS;
     }
 
-    if (mbentry->server) {
+    if (txn->req_tgt.mbentry->server) {
 	/* Remote mailbox */
 	struct backend *be;
 
-	be = proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
+	be = proxy_findserver(txn->req_tgt.mbentry->server,
+			      &http_protocol, proxy_userid,
 			      &backend_cached, NULL, NULL, httpd_in);
-	mboxlist_entry_free(&mbentry);
 	if (!be) return HTTP_UNAVAILABLE;
 
 	return http_pipe_req_resp(be, txn);
     }
-
-    mboxlist_entry_free(&mbentry);
 
     /* Local Mailbox */
 
@@ -3415,10 +3371,10 @@ int meth_delete(struct transaction_t *txn, void *params)
 	/* DELETE collection */
 
 	/* Open mailbox for reading */
-	r = mailbox_open_irl(txn->req_tgt.mboxname, &mailbox);
+	r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
 	if (r) {
 	    syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-		   txn->req_tgt.mboxname, error_message(r));
+		   txn->req_tgt.mbentry->name, error_message(r));
 	    txn->error.desc = error_message(r);
 	    return HTTP_SERVER_ERROR;
 	}
@@ -3434,13 +3390,13 @@ int meth_delete(struct transaction_t *txn, void *params)
 	mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
 
 	if (mboxlist_delayed_delete_isenabled()) {
-	    r = mboxlist_delayed_deletemailbox(txn->req_tgt.mboxname,
+	    r = mboxlist_delayed_deletemailbox(txn->req_tgt.mbentry->name,
 				       httpd_userisadmin || httpd_userisproxyadmin,
 				       httpd_userid, httpd_authstate, mboxevent,
 				       /*checkack*/1, /*force*/0);
 	}
 	else {
-	    r = mboxlist_deletemailbox(txn->req_tgt.mboxname,
+	    r = mboxlist_deletemailbox(txn->req_tgt.mbentry->name,
 				       httpd_userisadmin || httpd_userisproxyadmin,
 				       httpd_userid, httpd_authstate, mboxevent,
 				       /*checkack*/1, /*localonly*/0, /*force*/0);
@@ -3455,10 +3411,10 @@ int meth_delete(struct transaction_t *txn, void *params)
     /* DELETE resource */
 
     /* Open mailbox for writing */
-    r = mailbox_open_iwl(txn->req_tgt.mboxname, &mailbox);
+    r = mailbox_open_iwl(txn->req_tgt.mbentry->name, &mailbox);
     if (r) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
+	       txn->req_tgt.mbentry->name, error_message(r));
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
@@ -3468,7 +3424,7 @@ int meth_delete(struct transaction_t *txn, void *params)
     davdb = dparams->davdb.open_db(mailbox);
 
     /* Find message UID for the resource, if exists */
-    dparams->davdb.lookup_resource(davdb, txn->req_tgt.mboxname,
+    dparams->davdb.lookup_resource(davdb, txn->req_tgt.mbentry->name,
 				   txn->req_tgt.resource, 0, (void **) &ddata, 0);
     if (!ddata->rowid) {
 	ret = HTTP_NOT_FOUND;
@@ -3521,7 +3477,7 @@ int meth_delete(struct transaction_t *txn, void *params)
 
 	if (r) {
 	    syslog(LOG_ERR, "expunging record (%s) failed: %s",
-		   txn->req_tgt.mboxname, error_message(r));
+		   txn->req_tgt.mbentry->name, error_message(r));
 	    txn->error.desc = error_message(r);
 	    ret = HTTP_SERVER_ERROR;
 	    goto done;
@@ -3530,7 +3486,8 @@ int meth_delete(struct transaction_t *txn, void *params)
 	mboxevent_extract_record(mboxevent, mailbox, &record);
 	mboxevent_extract_mailbox(mboxevent, mailbox);
 	mboxevent_set_numunseen(mboxevent, mailbox, -1);
-	mboxevent_set_access(mboxevent, NULL, NULL, httpd_userid, txn->req_tgt.mboxname, 0);
+	mboxevent_set_access(mboxevent, NULL, NULL, httpd_userid,
+			     txn->req_tgt.mbentry->name, 0);
     }
 
     /* Do any special processing */
@@ -3560,7 +3517,6 @@ int meth_get_dav(struct transaction_t *txn, void *params)
     struct buf msg_buf = BUF_INITIALIZER;
     struct resp_body_t *resp_body = &txn->resp_body;
     struct mailbox *mailbox = NULL;
-    mbentry_t *mbentry = NULL;
     struct dav_data *ddata;
     struct index_record record;
     const char *etag = NULL;
@@ -3590,52 +3546,35 @@ int meth_get_dav(struct transaction_t *txn, void *params)
 	if (!mime) return HTTP_NOT_ACCEPTABLE;
     }
 
-    /* Locate the mailbox */
-    r = http_mlookup(txn->req_tgt.mboxname, &mbentry, NULL);
-    if (r) {
-	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-
-	switch (r) {
-	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	default: return HTTP_SERVER_ERROR;
-	}
-    }
-
     /* Check ACL for current user */
-    rights = httpd_myrights(httpd_authstate, mbentry->acl);
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
     if (!(rights & DACL_READ)) {
 	/* DAV:need-privileges */
 	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
 	txn->error.rights = DACL_READ;
-	mboxlist_entry_free(&mbentry);
 	return HTTP_NO_PRIVS;
     }
 
-    if (mbentry->server) {
+    if (txn->req_tgt.mbentry->server) {
 	/* Remote mailbox */
 	struct backend *be;
 
-	be = proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
+	be = proxy_findserver(txn->req_tgt.mbentry->server,
+			      &http_protocol, proxy_userid,
 			      &backend_cached, NULL, NULL, httpd_in);
-	mboxlist_entry_free(&mbentry);
 	if (!be) return HTTP_UNAVAILABLE;
 
 	return http_pipe_req_resp(be, txn);
     }
 
-    mboxlist_entry_free(&mbentry);
-
     /* Local Mailbox */
 
     /* Open mailbox for reading */
-    r = mailbox_open_irl(txn->req_tgt.mboxname, &mailbox);
+    r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
     if (r) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
+	       txn->req_tgt.mbentry->name, error_message(r));
 	goto done;
     }
 
@@ -3643,7 +3582,7 @@ int meth_get_dav(struct transaction_t *txn, void *params)
     davdb = gparams->davdb.open_db(mailbox);
 
     /* Find message UID for the resource */
-    gparams->davdb.lookup_resource(davdb, txn->req_tgt.mboxname,
+    gparams->davdb.lookup_resource(davdb, txn->req_tgt.mbentry->name,
 				   txn->req_tgt.resource, 0, (void **) &ddata, 0);
     if (!ddata->rowid) {
 	ret = HTTP_NOT_FOUND;
@@ -3758,7 +3697,6 @@ int meth_lock(struct transaction_t *txn, void *params)
     struct meth_params *lparams = (struct meth_params *) params;
     int ret = HTTP_OK, r, precond, rights;
     struct mailbox *mailbox = NULL;
-    mbentry_t *mbentry = NULL;
     struct dav_data *ddata;
     struct index_record oldrecord;
     const char *etag;
@@ -3782,53 +3720,36 @@ int meth_lock(struct transaction_t *txn, void *params)
     /* Make sure method is allowed (only allowed on resources) */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
 
-    /* Locate the mailbox */
-    r = http_mlookup(txn->req_tgt.mboxname, &mbentry, NULL);
-    if (r) {
-	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-
-	switch (r) {
-	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	default: return HTTP_SERVER_ERROR;
-	}
-    }
-
     /* Check ACL for current user */
-    rights = httpd_myrights(httpd_authstate, mbentry->acl);
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
     if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRSRC)) {
 	/* DAV:need-privileges */
 	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
 	txn->error.rights =
 	    !(rights & DACL_WRITECONT) ? DACL_WRITECONT : DACL_ADDRSRC;
-	mboxlist_entry_free(&mbentry);
 	return HTTP_NO_PRIVS;
     }
 
-    if (mbentry->server) {
+    if (txn->req_tgt.mbentry->server) {
 	/* Remote mailbox */
 	struct backend *be;
 
-	be = proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
+	be = proxy_findserver(txn->req_tgt.mbentry->server,
+			      &http_protocol, proxy_userid,
 			      &backend_cached, NULL, NULL, httpd_in);
-	mboxlist_entry_free(&mbentry);
 	if (!be) return HTTP_UNAVAILABLE;
 
 	return http_pipe_req_resp(be, txn);
     }
 
-    mboxlist_entry_free(&mbentry);
-
     /* Local Mailbox */
 
     /* Open mailbox for reading */
-    r = mailbox_open_irl(txn->req_tgt.mboxname, &mailbox);
+    r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
     if (r) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
+	       txn->req_tgt.mbentry->name, error_message(r));
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
@@ -3838,7 +3759,7 @@ int meth_lock(struct transaction_t *txn, void *params)
     davdb = lparams->davdb.open_db(mailbox);
 
     /* Find message UID for the resource, if exists */
-    lparams->davdb.lookup_resource(davdb, txn->req_tgt.mboxname,
+    lparams->davdb.lookup_resource(davdb, txn->req_tgt.mbentry->name,
 				   txn->req_tgt.resource, 1, (void *) &ddata, 0);
 
     if (ddata->imap_uid) {
@@ -4036,7 +3957,8 @@ int meth_mkcol(struct transaction_t *txn, void *params)
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
 
-    /* Parse the path */
+    /* Parse the path (use our own entry to suppress lookup) */
+    txn->req_tgt.mbentry = mboxlist_entry_create();
     if ((r = mparams->parse_path(txn->req_uri->path,
 				 &txn->req_tgt, &txn->error.desc))) {
 	txn->error.precond = CALDAV_LOCATION_OK;
@@ -4050,7 +3972,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
     }
 
     /* Check if we are allowed to create the mailbox */
-    r = mboxlist_createmailboxcheck(txn->req_tgt.mboxname, 0, NULL,
+    r = mboxlist_createmailboxcheck(txn->req_tgt.mbentry->name, 0, NULL,
 				    httpd_userisadmin || httpd_userisproxyadmin,
 				    httpd_userid, httpd_authstate,
 				    NULL, &partition, 0);
@@ -4115,7 +4037,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
     }
 
     /* Create the mailbox */
-    r = mboxlist_createmailbox(txn->req_tgt.mboxname, mparams->mkcol.mbtype,
+    r = mboxlist_createmailbox(txn->req_tgt.mbentry->name, mparams->mkcol.mbtype,
 			       partition,
 			       httpd_userisadmin || httpd_userisproxyadmin,
 			       httpd_userid, httpd_authstate,
@@ -4412,13 +4334,13 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 
     /* Parse the path */
     if (fparams->parse_path) {
-	r = fparams->parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
+	r = fparams->parse_path(txn->req_uri->path,
+				&txn->req_tgt, &txn->error.desc);
 	if (r) return r;
     }
 
     /* Make sure method is allowed */
-    if (!(txn->req_tgt.allow & ALLOW_DAV))
-	return HTTP_NOT_ALLOWED;
+    if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED;
 
     /* Check Depth */
     hdr = spool_getheader(txn->req_hdrs, "Depth");
@@ -4436,50 +4358,31 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 	return HTTP_BAD_REQUEST;
     }
 
-    if ((txn->req_tgt.namespace != URL_NS_PRINCIPAL) && txn->req_tgt.userid
-	&& txn->req_tgt.mboxname && txn->req_tgt.mboxname[0]) {
-	mbentry_t *mbentry = NULL;
+    if (txn->req_tgt.mbentry) {
 	int rights;
 
-	/* Locate the mailbox */
-	r = http_mlookup(txn->req_tgt.mboxname, &mbentry, NULL);
-	if (r) {
-	    syslog(LOG_ERR, "mlookup(%s) failed: %s",
-		   txn->req_tgt.mboxname, error_message(r));
-	    txn->error.desc = error_message(r);
-
-	    switch (r) {
-	    case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	    case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	    default: return HTTP_SERVER_ERROR;
-	    }
-	}
-
 	/* Check ACL for current user */
-	rights = httpd_myrights(httpd_authstate, mbentry->acl);
+	rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
 	if ((rights & DACL_READ) != DACL_READ) {
 	    /* DAV:need-privileges */
 	    txn->error.precond = DAV_NEED_PRIVS;
 	    txn->error.resource = txn->req_tgt.path;
 	    txn->error.rights = DACL_READ;
-	    mboxlist_entry_free(&mbentry);
 	    ret = HTTP_NO_PRIVS;
 	    goto done;
 	}
 
-	if (mbentry->server) {
+	if (txn->req_tgt.mbentry->server) {
 	    /* Remote mailbox */
 	    struct backend *be;
 
-	    be = proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
+	    be = proxy_findserver(txn->req_tgt.mbentry->server,
+				  &http_protocol, proxy_userid,
 				  &backend_cached, NULL, NULL, httpd_in);
-	    mboxlist_entry_free(&mbentry);
 	    if (!be) return HTTP_UNAVAILABLE;
 
 	    return http_pipe_req_resp(be, txn);
 	}
-
-	mboxlist_entry_free(&mbentry);
 
 	/* Local Mailbox */
     }
@@ -4487,7 +4390,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     /* Principal or Local Mailbox */
 
     /* Normalize depth so that:
-     * 0 = home-set collection, 1+ = calendar collection, 2+ = calendar resource, 3+ = infinity!
+     * 0 = home-set, 1+ = collection, 2+ = resource, 3+ = infinity!
      */
     if (txn->req_tgt.collection) depth++;
     if (txn->req_tgt.resource) depth++;
@@ -4505,7 +4408,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 
 	/* Make sure its a propfind element */
 	if (xmlStrcmp(root->name, BAD_CAST "propfind")) {
-	    txn->error.desc = "Missing propfind element in PROPFIND request\r\n";
+	    txn->error.desc = "Missing propfind element in PROPFIND request";
 	    ret = HTTP_BAD_REQUEST;
 	    goto done;
 	}
@@ -4515,7 +4418,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 	     cur && cur->type != XML_ELEMENT_NODE; cur = cur->next);
 
 	if (!cur) {
-	    txn->error.desc = "Missing child node element in PROPFIND request\r\n";
+	    txn->error.desc = "Missing child node element in PROPFIND request";
 	    ret = HTTP_BAD_REQUEST;
 	    goto done;
 	}
@@ -4561,7 +4464,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     root = init_xml_response("multistatus", NS_DAV, root, ns);
     if (!root) {
 	ret = HTTP_SERVER_ERROR;
-	txn->error.desc = "Unable to create XML response\r\n";
+	txn->error.desc = "Unable to create XML response";
 	goto done;
     }
 
@@ -4600,11 +4503,11 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     if (!txn->req_tgt.collection &&
 	(!depth || !(fctx.prefer & PREFER_NOROOT))) {
 	/* Add response for principal or home-set collection */
-	if (*txn->req_tgt.mboxname) {
+	if (txn->req_tgt.mbentry) {
 	    /* Open mailbox for reading */
-	    if ((r = mailbox_open_irl(txn->req_tgt.mboxname, &fctx.mailbox))) {
+	    if ((r = mailbox_open_irl(txn->req_tgt.mbentry->name, &fctx.mailbox))) {
 		syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
-		       txn->req_tgt.mboxname, error_message(r));
+		       txn->req_tgt.mbentry->name, error_message(r));
 		txn->error.desc = error_message(r);
 		ret = HTTP_SERVER_ERROR;
 		goto done;
@@ -4621,7 +4524,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 
 	if (txn->req_tgt.collection) {
 	    /* Add response for target calendar collection */
-	    propfind_by_collection(txn->req_tgt.mboxname, 0, 0, &fctx);
+	    propfind_by_collection(txn->req_tgt.mbentry->name, 0, 0, &fctx);
 	}
 	else {
 	    char *base = NULL;
@@ -4687,7 +4590,6 @@ int meth_proppatch(struct transaction_t *txn, void *params)
     xmlNodePtr root, instr, resp;
     xmlNsPtr ns[NUM_NAMESPACE];
     struct mailbox *mailbox = NULL;
-    mbentry_t *mbentry = NULL;
     struct proppatch_ctx pctx;
     struct index_record record;
     void *davdb = NULL;
@@ -4706,50 +4608,34 @@ int meth_proppatch(struct transaction_t *txn, void *params)
 	return HTTP_NOT_ALLOWED;
     }
 
-    /* Locate the mailbox */
-    r = http_mlookup(txn->req_tgt.mboxname, &mbentry, NULL);
-    if (r) {
-	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-
-	switch (r) {
-	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	default: return HTTP_SERVER_ERROR;
-	}
-    }
-
     /* Check ACL for current user */
-    rights = httpd_myrights(httpd_authstate, mbentry->acl);
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
     if (!(rights & DACL_WRITEPROPS)) {
 	/* DAV:need-privileges */
 	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
 	txn->error.rights = DACL_WRITEPROPS;
-	mboxlist_entry_free(&mbentry);
 	return HTTP_NO_PRIVS;
     }
 
-    if (mbentry->server) {
+    if (txn->req_tgt.mbentry->server) {
 	/* Remote mailbox */
 	struct backend *be;
 
-	be = proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
+	be = proxy_findserver(txn->req_tgt.mbentry->server,
+			      &http_protocol, proxy_userid,
 			      &backend_cached, NULL, NULL, httpd_in);
-	mboxlist_entry_free(&mbentry);
 	if (!be) return HTTP_UNAVAILABLE;
 
 	return http_pipe_req_resp(be, txn);
     }
 
-    mboxlist_entry_free(&mbentry);
-
     /* Local Mailbox */
 
-    r = mailbox_open_iwl(txn->req_tgt.mboxname, &mailbox);
+    r = mailbox_open_iwl(txn->req_tgt.mbentry->name, &mailbox);
     if (r) {
-	syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for proppatch", txn->req_tgt.mboxname);
+	syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for proppatch",
+	       txn->req_tgt.mbentry->name);
 	return HTTP_SERVER_ERROR;
     }
 
@@ -4805,7 +4691,7 @@ int meth_proppatch(struct transaction_t *txn, void *params)
 	davdb = pparams->davdb.open_db(mailbox);
 
 	/* Find message UID for the resource */
-	pparams->davdb.lookup_resource(davdb, txn->req_tgt.mboxname,
+	pparams->davdb.lookup_resource(davdb, txn->req_tgt.mbentry->name,
 				       txn->req_tgt.resource, 0, (void **) &ddata, 0);
 	if (!ddata->imap_uid) {
 	    ret = HTTP_NOT_FOUND;
@@ -4906,7 +4792,6 @@ int meth_put(struct transaction_t *txn, void *params)
     const char **hdr, *etag;
     struct mime_type_t *mime = NULL;
     struct mailbox *mailbox = NULL;
-    mbentry_t *mbentry = NULL;
     struct dav_data *ddata;
     struct index_record oldrecord;
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
@@ -4944,45 +4829,28 @@ int meth_put(struct transaction_t *txn, void *params)
 	return HTTP_FORBIDDEN;
     }
 
-    /* Locate the mailbox */
-    r = http_mlookup(txn->req_tgt.mboxname, &mbentry, NULL);
-    if (r) {
-	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-
-	switch (r) {
-	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	default: return HTTP_SERVER_ERROR;
-	}
-    }
-
     /* Check ACL for current user */
-    rights = httpd_myrights(httpd_authstate, mbentry->acl);
+    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
     if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRSRC)) {
 	/* DAV:need-privileges */
 	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
 	txn->error.rights =
 	    !(rights & DACL_WRITECONT) ? DACL_WRITECONT : DACL_ADDRSRC;
-	mboxlist_entry_free(&mbentry);
 	return HTTP_NO_PRIVS;
     }
 
-    if (mbentry->server) {
+    if (txn->req_tgt.mbentry->server) {
 	/* Remote mailbox */
 	struct backend *be;
 
-	be = proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
+	be = proxy_findserver(txn->req_tgt.mbentry->server,
+			      &http_protocol, proxy_userid,
 			      &backend_cached, NULL, NULL, httpd_in);
-	mboxlist_entry_free(&mbentry);
 	if (!be) return HTTP_UNAVAILABLE;
 
 	return http_pipe_req_resp(be, txn);
     }
-
-    mboxlist_entry_free(&mbentry);
 
     /* Local Mailbox */
 
@@ -5003,19 +4871,19 @@ int meth_put(struct transaction_t *txn, void *params)
     }
 
     /* Check if we can append a new message to mailbox */
-    if ((r = append_check(txn->req_tgt.mboxname,
+    if ((r = append_check(txn->req_tgt.mbentry->name,
 			  httpd_authstate, ACL_INSERT, qdiffs))) {
 	syslog(LOG_ERR, "append_check(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
+	       txn->req_tgt.mbentry->name, error_message(r));
 	txn->error.desc = error_message(r);
 	return HTTP_SERVER_ERROR;
     }
 
     /* Open mailbox for writing */
-    r = mailbox_open_iwl(txn->req_tgt.mboxname, &mailbox);
+    r = mailbox_open_iwl(txn->req_tgt.mbentry->name, &mailbox);
     if (r) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
+	       txn->req_tgt.mbentry->name, error_message(r));
 	txn->error.desc = error_message(r);
 	return HTTP_SERVER_ERROR;
     }
@@ -5024,7 +4892,7 @@ int meth_put(struct transaction_t *txn, void *params)
     davdb = pparams->davdb.open_db(mailbox);
 
     /* Find message UID for the resource, if exists */
-    pparams->davdb.lookup_resource(davdb, txn->req_tgt.mboxname,
+    pparams->davdb.lookup_resource(davdb, txn->req_tgt.mbentry->name,
 				   txn->req_tgt.resource, 0, (void *) &ddata, 0);
     /* XXX  Check errors */
 
@@ -5035,7 +4903,7 @@ int meth_put(struct transaction_t *txn, void *params)
 	r = mailbox_find_index_record(mailbox, ddata->imap_uid, &oldrecord, NULL);
 	if (r) {
 	    syslog(LOG_ERR, "mailbox_find_index_record(%s, %u) failed: %s",
-		   txn->req_tgt.mboxname, ddata->imap_uid, error_message(r));
+		   txn->req_tgt.mbentry->name, ddata->imap_uid, error_message(r));
 	    txn->error.desc = error_message(r);
 	    ret = HTTP_SERVER_ERROR;
 	    goto done;
@@ -5201,14 +5069,14 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
 	    fctx->req_tgt = &tgt;
 
 	    /* Check if we already have this mailbox open */
-	    if (!mailbox || strcmp(mailbox->name, tgt.mboxname)) {
+	    if (!mailbox || strcmp(mailbox->name, tgt.mbentry->name)) {
 		if (mailbox) mailbox_close(&mailbox);
 
 		/* Open mailbox for reading */
-		r = mailbox_open_irl(tgt.mboxname, &mailbox);
+		r = mailbox_open_irl(tgt.mbentry->name, &mailbox);
 		if (r && r != IMAP_MAILBOX_NONEXISTENT) {
 		    syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-			   tgt.mboxname, error_message(r));
+			   tgt.mbentry->name, error_message(r));
 		    txn->error.desc = error_message(r);
 		    ret = HTTP_SERVER_ERROR;
 		    goto done;
@@ -5227,7 +5095,7 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
 	    fctx->davdb = rparams->davdb.open_db(fctx->mailbox);
 
 	    /* Find message UID for the resource */
-	    rparams->davdb.lookup_resource(fctx->davdb, tgt.mboxname,
+	    rparams->davdb.lookup_resource(fctx->davdb, tgt.mbentry->name,
 					   tgt.resource, 0, (void **) &ddata, 0);
 	    ddata->resource = tgt.resource;
 	    /* XXX  Check errors */
@@ -5236,6 +5104,7 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
 
 	    /* XXX - split this into a req_tgt cleanup */
 	    free(tgt.userid);
+	    mboxlist_entry_free(&tgt.mbentry);
 
 	    rparams->davdb.close_db(fctx->davdb);
 	}
@@ -5276,10 +5145,10 @@ int report_sync_col(struct transaction_t *txn,
     istate.map = NULL;
 
     /* Open mailbox for reading */
-    r = mailbox_open_irl(txn->req_tgt.mboxname, &mailbox);
+    r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
     if (r) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
+	       txn->req_tgt.mbentry->name, error_message(r));
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
@@ -5546,11 +5415,11 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
 	/* Add response for principal or home-set collection */
 	struct mailbox *mailbox = NULL;
 
-	if (*fctx->req_tgt->mboxname) {
+	if (fctx->req_tgt->mbentry) {
 	    /* Open mailbox for reading */
-	    if ((r = mailbox_open_irl(fctx->req_tgt->mboxname, &mailbox))) {
+	    if ((r = mailbox_open_irl(fctx->req_tgt->mbentry->name, &mailbox))) {
 		syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
-		       fctx->req_tgt->mboxname, error_message(r));
+		       fctx->req_tgt->mbentry->name, error_message(r));
 		fctx->err->desc = error_message(r);
 		ret = HTTP_SERVER_ERROR;
 		goto done;
@@ -5568,14 +5437,16 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
 
 	if (fctx->req_tgt->collection) {
 	    /* Add response for target calendar collection */
-	    propfind_by_collection(fctx->req_tgt->mboxname, 0, 0, fctx);
+	    propfind_by_collection(fctx->req_tgt->mbentry->name, 0, 0, fctx);
 	}
 	else {
 	    /* Add responses for all contained calendar collections */
-	    strlcat(fctx->req_tgt->mboxname, ".%",
-		    sizeof(fctx->req_tgt->mboxname));
+	    fctx->req_tgt->mbentry->name =
+		xrealloc(fctx->req_tgt->mbentry->name,
+			 strlen(fctx->req_tgt->mbentry->name)+3);
+	    strcat(fctx->req_tgt->mbentry->name, ".%");
 	    r = mboxlist_findall(NULL,  /* internal namespace */
-				 fctx->req_tgt->mboxname, 1, httpd_userid, 
+				 fctx->req_tgt->mbentry->name, 1, httpd_userid, 
 				 httpd_authstate, propfind_by_collection, fctx);
 	}
 
@@ -5633,37 +5504,15 @@ int report_expand_prop(struct transaction_t *txn __attribute__((unused)),
 
 
 /* DAV:acl-principal-prop-set REPORT */
-int report_acl_prin_prop(struct transaction_t *txn,
+int report_acl_prin_prop(struct transaction_t *txn __attribute__((unused)),
 			 struct meth_params *rparams __attribute__((unused)),
 			 xmlNodePtr inroot, struct propfind_ctx *fctx)
 {
-    int ret = 0, r;
+    int ret = 0;
     struct request_target_t req_tgt;
-    mbentry_t *mbentry = NULL;
+    mbentry_t *mbentry = fctx->req_tgt->mbentry;
     char *userid, *nextid;
     xmlNodePtr cur;
-
-    /* Get ACL of resource */
-    r = http_mlookup(txn->req_tgt.mboxname, &mbentry, NULL);
-    if (r) {
-	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-
-	switch (r) {
-	case IMAP_PERMISSION_DENIED:
-	    ret = HTTP_FORBIDDEN;
-	    break;
-	case IMAP_MAILBOX_NONEXISTENT:
-	    ret = HTTP_NOT_FOUND;
-	    break;
-	default:
-	    ret = HTTP_SERVER_ERROR;
-	    break;
-	}
-
-	goto done;
-    }
 
     /* Generate URL for user principal collection */
     buf_reset(&fctx->buf);
@@ -5711,8 +5560,6 @@ int report_acl_prin_prop(struct transaction_t *txn,
     }
 
   done:
-    mboxlist_entry_free(&mbentry);
-
     return (ret ? ret : HTTP_MULTI_STATUS);
 }
 
@@ -6018,25 +5865,10 @@ int meth_report(struct transaction_t *txn, void *params)
 
     /* Check ACL and location of mailbox */
     if (report->flags & REPORT_NEED_MBOX) {
-	mbentry_t *mbentry = NULL;
 	int rights;
 
-	/* Locate the mailbox */
-	if ((r = http_mlookup(txn->req_tgt.mboxname, &mbentry, NULL))) {
-	    syslog(LOG_ERR, "mlookup(%s) failed: %s",
-		   txn->req_tgt.mboxname, error_message(r));
-	    txn->error.desc = error_message(r);
-
-	    switch (r) {
-	    case IMAP_PERMISSION_DENIED: ret = HTTP_FORBIDDEN;
-	    case IMAP_MAILBOX_NONEXISTENT: ret = HTTP_NOT_FOUND;
-	    default: ret = HTTP_SERVER_ERROR;
-	    }
-	    goto done;
-	}
-
 	/* Check ACL for current user */
-	rights = httpd_myrights(httpd_authstate, mbentry->acl);
+	rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
 	if ((rights & report->reqd_privs) != report->reqd_privs) {
 	    if (report->reqd_privs == DACL_READFB) ret = HTTP_NOT_FOUND;
 	    else {
@@ -6046,23 +5878,20 @@ int meth_report(struct transaction_t *txn, void *params)
 		txn->error.rights = report->reqd_privs;
 		ret = HTTP_NO_PRIVS;
 	    }
-	    mboxlist_entry_free(&mbentry);
 	    goto done;
 	}
 
-	if (mbentry->server) {
+	if (txn->req_tgt.mbentry->server) {
 	    /* Remote mailbox */
 	    struct backend *be;
 
-	    be = proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
+	    be = proxy_findserver(txn->req_tgt.mbentry->server,
+				  &http_protocol, proxy_userid,
 				  &backend_cached, NULL, NULL, httpd_in);
-	    mboxlist_entry_free(&mbentry);
 	    if (!be) ret = HTTP_UNAVAILABLE;
 	    else ret = http_pipe_req_resp(be, txn);
 	    goto done;
 	}
-
-	mboxlist_entry_free(&mbentry);
 
 	/* Local Mailbox */
     }
@@ -6185,10 +6014,9 @@ int meth_report(struct transaction_t *txn, void *params)
 int meth_unlock(struct transaction_t *txn, void *params)
 {
     struct meth_params *lparams = (struct meth_params *) params;
-    int ret = HTTP_NO_CONTENT, r, precond, rights;
+    int ret = HTTP_NO_CONTENT, r, precond;
     const char **hdr, *token;
     struct mailbox *mailbox = NULL;
-    mbentry_t *mbentry = NULL;
     struct dav_data *ddata;
     struct index_record record;
     const char *etag;
@@ -6213,43 +6041,25 @@ int meth_unlock(struct transaction_t *txn, void *params)
     }
     token = hdr[0];
 
-    /* Locate the mailbox */
-    r = http_mlookup(txn->req_tgt.mboxname, &mbentry, NULL);
-    if (r) {
-	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-
-	switch (r) {
-	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	default: return HTTP_SERVER_ERROR;
-	}
-    }
-
-    rights = httpd_myrights(httpd_authstate, mbentry->acl);
-
-    if (mbentry->server) {
+    if (txn->req_tgt.mbentry->server) {
 	/* Remote mailbox */
 	struct backend *be;
 
-	be = proxy_findserver(mbentry->server, &http_protocol, proxy_userid,
+	be = proxy_findserver(txn->req_tgt.mbentry->server,
+			      &http_protocol, proxy_userid,
 			      &backend_cached, NULL, NULL, httpd_in);
-	mboxlist_entry_free(&mbentry);
 	if (!be) return HTTP_UNAVAILABLE;
 
 	return http_pipe_req_resp(be, txn);
     }
 
-    mboxlist_entry_free(&mbentry);
-
     /* Local Mailbox */
 
     /* Open mailbox for reading */
-    r = mailbox_open_irl(txn->req_tgt.mboxname, &mailbox);
+    r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
     if (r) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-	       txn->req_tgt.mboxname, error_message(r));
+	       txn->req_tgt.mbentry->name, error_message(r));
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
@@ -6259,7 +6069,7 @@ int meth_unlock(struct transaction_t *txn, void *params)
     davdb = lparams->davdb.open_db(mailbox);
 
     /* Find message UID for the resource, if exists */
-    lparams->davdb.lookup_resource(davdb, txn->req_tgt.mboxname,
+    lparams->davdb.lookup_resource(davdb, txn->req_tgt.mbentry->name,
 				   txn->req_tgt.resource, 1, (void **) &ddata, 0);
     if (!ddata->rowid) {
 	ret = HTTP_NOT_FOUND;
@@ -6277,6 +6087,8 @@ int meth_unlock(struct transaction_t *txn, void *params)
     /* Check if current user owns the lock */
     if (strcmp(ddata->lock_ownerid, httpd_userid)) {
 	/* Check ACL for current user */
+	int rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry->acl);
+
 	if (!(rights & DACL_ADMIN)) {
 	    /* DAV:need-privileges */
 	    txn->error.precond = DAV_NEED_PRIVS;

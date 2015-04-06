@@ -132,7 +132,7 @@ static int webdav_put(struct transaction_t *txn, struct buf *obj,
     if (!obj || !obj->s) return HTTP_FORBIDDEN;
 
     /* Find message UID for the resource */
-    webdav_lookup_resource(webdavdb, txn->req_tgt.mboxname,
+    webdav_lookup_resource(webdavdb, txn->req_tgt.mbentry->name,
 			   txn->req_tgt.resource, 0, &wdata, 0);
 
     if (wdata->dav.imap_uid) {
