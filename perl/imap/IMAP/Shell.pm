@@ -108,7 +108,7 @@ my %builtins = (exit =>
 		  [\&_sc_chdir, 'directory', 'change current directory'],
 		cd => 'chdir',
 		createmailbox =>
-		  [\&_sc_create, '[--partition partition] mailbox [partition]',
+		  [\&_sc_create, '[--partition partition] [--specialuse specialuse] mailbox [partition]',
 		   'create mailbox'],
 		create => 'createmailbox',
 		cm => 'createmailbox',
@@ -993,21 +993,29 @@ sub _sc_chdir {
 
 sub _sc_create {
   my ($cyrref, $name, $fh, $lfh, @argv) = @_;
-  my (@nargv, $opt, $part, $want);
+  my (@nargv, $opt, $part, $want, %opts);
   shift(@argv);
   while (defined ($opt = shift(@argv))) {
     if ($want) {
-      $part = $opt;
+      if ($want eq '-partition') {
+        $part = $opt;
+      } else {
+        $opts{$want} = $opt;
+      }
       $want = undef;
       next;
     }
     if ($opt ne '' && '-partition' =~ /^\Q$opt/ || $opt eq '--partition') {
-      $want = 1;
+      $want = '-partition';
+      next;
+    }
+    if ($opt ne '' && '-specialuse' =~ /^\Q$opt/ || $opt eq '--specialuse') {
+      $want = '-specialuse';
       next;
     }
     last if $opt eq '--';
     if ($opt =~ /^-/) {
-      die "usage: createmailbox [--partition partition] mailbox [partition]\n";
+      die "usage: createmailbox [--partition partition] [--specialuse specialuse] mailbox [partition]\n";
     }
     else {
       push(@nargv, $opt);
@@ -1018,9 +1026,9 @@ sub _sc_create {
   if (!@nargv || @nargv > 2) {
     die "usage: createmailbox [--partition partition] mailbox [partition]\n";
   }
-  if (defined($part)) {
-      push(@nargv, $part)
-  }
+  push(@nargv, $part) if (defined ($part));
+  push(@nargv, undef) if (@nargv < 2);
+  push(@nargv, \%opts);
   if (!$cyrref || !$$cyrref) {
     die "createmailbox: no connection to server\n";
   }
@@ -1695,20 +1703,21 @@ authenticated once.
 Change directory.  A C<pwd> builtin is not provided, but the default command
 action will run C<pwd> from a shell if invoked.
 
-=item C<createmailbox> [C<--partition> I<partition>] I<mailbox>
+=item C<createmailbox> [C<--partition> I<partition>] [C<--specialuse> I<specialuse>] I<mailbox>
 
-=item C<createmailbox> I<mailbox> I<partition>
+=item C<createmailbox> [C<--specialuse> I<specialuse>] I<mailbox> I<partition>
 
-=item C<create> [C<--partition> I<partition>] I<mailbox>
+=item C<create> [C<--partition> I<partition>] [C<--specialuse> I<specialuse>] I<mailbox>
 
-=item C<create> I<mailbox> I<partition>
+=item C<create> [C<--specialuse> I<specialuse>] I<mailbox> I<partition>
 
-=item C<cm> [C<--partition> I<partition>] I<mailbox>
+=item C<cm> [C<--partition> I<partition>] [C<--specialuse> I<specialuse>] I<mailbox>
 
-=item C<cm> I<mailbox> I<partition>
+=item C<cm> [C<--specialuse> I<specialuse>] I<mailbox> I<partition>
 
 Create a mailbox on the default or a specified partition.  Both old-style
 and getopt-style usages are accepted (combining them will produce an error).
+Optionally assign a special use to the mailbox.
 
 =item C<deleteaclmailbox> I<mailbox> I<id> [...]
 
