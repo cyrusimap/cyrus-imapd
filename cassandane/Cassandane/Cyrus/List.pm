@@ -71,38 +71,31 @@ sub new
 # tests based on rfc 5258 examples:
 # https://tools.ietf.org/html/rfc5258#section-5
 
+sub _install_test_data
+{
+    my ($self, $test_data) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    foreach my $row (@{$test_data}) {
+	my ($cmd, $arg) = @{$row};
+	if (ref $arg) {
+	    foreach (@{$arg}) {
+		$imaptalk->$cmd($_) || die;
+	    }
+	}
+	else {
+	    $imaptalk->$cmd($arg) || die;
+	}
+    }
+}
+
 sub set_up
 {
     my ($self) = @_;
 
     $self->{instance}->start();
     $self->{store} = $self->{instance}->get_service('altimap')->create_store();
-
-    my $imaptalk = $self->{store}->get_client();
-
-    $imaptalk->subscribe("INBOX") || die;
-
-    $imaptalk->create("Fruit") || die;
-    $imaptalk->create("Fruit/Apple") || die;
-    $imaptalk->create("Fruit/Banana") || die;
-    $imaptalk->create("Fruit/Peach") || die;
-
-    # n.b. Fruit is not subscribed
-    # n.b. Fruit/Apple is not subscribed
-    $imaptalk->subscribe("Fruit/Banana") || die;
-    $imaptalk->subscribe("Fruit/Peach") || die;
-    $imaptalk->delete("Fruit/Peach") || die;
-
-    $imaptalk->create("Tofu") || die;
-    # n.b. Tofu is not subscribed
-
-    $imaptalk->create("Vegetable") || die;
-    $imaptalk->create("Vegetable/Broccoli") || die;
-    $imaptalk->create("Vegetable/Corn") || die;
-
-    $imaptalk->subscribe("Vegetable") || die;
-    $imaptalk->subscribe("Vegetable/Broccoli") || die;
-    # n.b  Vegetable/Corn is not subscribed
 }
 
 sub tear_down
@@ -120,6 +113,15 @@ sub tear_down
 sub test_imap4_list_all
 {
     my ($self) = @_;
+
+    $self->_install_test_data([
+	[ 'subscribe' => 'INBOX' ],
+	[ 'create' => [qw( Fruit Fruit/Apple Fruit/Banana Fruit/Peach)] ],
+	[ 'subscribe' => [qw( Fruit/Banana Fruit/Peach )] ],
+	[ 'delete' => 'Fruit/Peach' ],
+	[ 'create' => [qw( Tofu Vegetable Vegetable/Broccoli Vegetable/Corn )] ],
+	[ 'subscribe' => [qw( Vegetable Vegetable/Broccoli )] ],
+    ]);
 
     my $imaptalk = $self->{store}->get_client();
 
@@ -190,6 +192,15 @@ sub test_5258_list_subscribed
 {
     my ($self) = @_;
 
+    $self->_install_test_data([
+	[ 'subscribe' => 'INBOX' ],
+	[ 'create' => [qw( Fruit Fruit/Apple Fruit/Banana Fruit/Peach)] ],
+	[ 'subscribe' => [qw( Fruit/Banana Fruit/Peach )] ],
+	[ 'delete' => 'Fruit/Peach' ],
+	[ 'create' => [qw( Tofu Vegetable Vegetable/Broccoli Vegetable/Corn )] ],
+	[ 'subscribe' => [qw( Vegetable Vegetable/Broccoli )] ],
+    ]);
+
     my $imaptalk = $self->{store}->get_client();
 
     my $subdata = $imaptalk->list([qw(SUBSCRIBED)], "", "*");
@@ -239,6 +250,15 @@ sub test_5258_list_subscribed
 sub test_5258_children
 {
     my ($self) = @_;
+
+    $self->_install_test_data([
+	[ 'subscribe' => 'INBOX' ],
+	[ 'create' => [qw( Fruit Fruit/Apple Fruit/Banana Fruit/Peach)] ],
+	[ 'subscribe' => [qw( Fruit/Banana Fruit/Peach )] ],
+	[ 'delete' => 'Fruit/Peach' ],
+	[ 'create' => [qw( Tofu Vegetable Vegetable/Broccoli Vegetable/Corn )] ],
+	[ 'subscribe' => [qw( Vegetable Vegetable/Broccoli )] ],
+    ]);
 
     my $imaptalk = $self->{store}->get_client();
 
