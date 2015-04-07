@@ -233,4 +233,46 @@ sub test_5258_list_subscribed
     ], "LIST data mismatch: "  . Dumper($subdata));
 }
 
+sub test_5258_children
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $data = $imaptalk->list(
+	[qw()], "", "%", 'RETURN', [qw(CHILDREN)],
+    );
+
+    $self->assert_deep_equals($data, [
+	[
+	    [
+		'\\Noinferiors',
+	    ],
+	    '/',
+	    'INBOX'
+	],
+	[
+	    [
+		'\\HasChildren',
+	    ],
+	    '/',
+	    'Fruit'
+	],
+	[
+	    [
+		'\\HasNoChildren',
+	    ],
+	    '/',
+	    'Tofu'
+	],
+	[
+	    [
+		'\\HasChildren',
+	    ],
+	    '/',
+	    'Vegetable'
+	],
+    ], "LIST data mismatch: "  . Dumper($data));
+}
+
 1;
