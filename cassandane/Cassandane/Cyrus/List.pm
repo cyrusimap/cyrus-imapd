@@ -68,6 +68,9 @@ sub new
     return $self;
 }
 
+# tests based on rfc 5258 examples:
+# https://tools.ietf.org/html/rfc5258#section-5
+
 sub set_up
 {
     my ($self) = @_;
@@ -274,5 +277,24 @@ sub test_5258_children
 	],
     ], "LIST data mismatch: "  . Dumper($data));
 }
+
+# TODO not sure how to set up test data for remote mailboxes...
+#sub test_5258_remote_children
+#{
+#    my ($self) = @_;
+#    $self->assert(0, 'FIXME test not implemented');
+#}
+
+#sub test_5258_remote_subscribed
+#{
+#    my ($self) = @_;
+#    $self->assert(0, 'FIXME test not implemented');
+#}
+
+#sub test_5258_remote_return_subscribed
+#{
+#    my ($self) = @_;
+#    $self->assert(0, 'FIXME test not implemented');
+#}
 
 1;
