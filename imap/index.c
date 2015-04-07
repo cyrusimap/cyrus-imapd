@@ -2593,8 +2593,7 @@ EXPORTED int index_convupdates(struct index_state *state,
 	in_search = index_search_evaluate(state, searchargs->root, msg->msgno);
 	is_deleted = !!(im->system_flags & FLAG_EXPUNGED);
 	is_new = (im->uid >= windowargs->uidnext);
-	is_changed = (im->modseq > windowargs->modseq);
-	was_deleted = is_deleted && !is_changed;
+	was_deleted = is_deleted && (im->modseq <= windowargs->modseq);
 
 	/* is this message a current exemplar? */
 	if (!is_deleted &&
@@ -2610,6 +2609,9 @@ EXPORTED int index_convupdates(struct index_state *state,
 	 * not known but we've hit 'upto' */
 	if (upto_pos)
 	    continue;
+
+	modseq_t modseq = get_modseq_of(msg, cstate);
+	is_changed = (modseq > windowargs->modseq);
 
 	/* was this message an old exemplar, or in the case of mutable
 	 * searches, possible an old exemplar? */
@@ -2628,8 +2630,7 @@ EXPORTED int index_convupdates(struct index_state *state,
 	    msg->msgno = pos;   /* hacky: reuse ->msgno for pos */
 	    ptrarray_push(&added, msg);
 	} else if (was_old_exemplar && is_new_exemplar) {
-	    modseq_t modseq = get_modseq_of(msg, cstate);
-	    if (modseq > windowargs->modseq) {
+	    if (is_changed) {
 		ptrarray_push(&changed, msg);
 		if (search_is_mutable) {
 		    /* is the search is mutable, we're in a whole world of
