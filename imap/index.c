@@ -2617,7 +2617,7 @@ EXPORTED int index_convupdates(struct index_state *state,
 	 * searches, possible an old exemplar? */
 	if (!is_new &&
 	    !was_deleted &&
-	    (in_search || search_is_mutable) &&
+	    (in_search || (search_is_mutable && is_changed)) &&
 	    (!windowargs->conversations || !hashu64_lookup(msg->cid, &old_seen_cids))) {
 	    was_old_exemplar = 1;
 	    if (windowargs->conversations)
