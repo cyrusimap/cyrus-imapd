@@ -339,4 +339,22 @@ sub test_5258_08_haschildren_childinfo
     $self->assert(0, 'FIXME more to test here...');
 }
 
+sub test_5258_09_childinfo
+{
+    my ($self) = @_;
+    $self->assert(0, 'FIXME test not implemented');
+}
+
+sub test_5258_10_multiple_mailbox_patterns_childinfo
+{
+    my ($self) = @_;
+    $self->assert(0, 'FIXME test not implemented');
+}
+
+sub test_5258_11_missing_hierarchy_elements
+{
+    my ($self) = @_;
+    $self->assert(0, 'FIXME test not implemented');
+}
+
 1;
