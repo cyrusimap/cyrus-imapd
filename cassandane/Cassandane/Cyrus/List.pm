@@ -89,11 +89,11 @@ sub _install_test_data
 	my ($cmd, $arg) = @{$row};
 	if (ref $arg) {
 	    foreach (@{$arg}) {
-		$imaptalk->$cmd($_) || die;
+		$imaptalk->$cmd($_) || die "$cmd '$_': $@";
 	    }
 	}
 	else {
-	    $imaptalk->$cmd($arg) || die;
+	    $imaptalk->$cmd($arg) || die "$cmd '$_': $@";
 	}
     }
 }
