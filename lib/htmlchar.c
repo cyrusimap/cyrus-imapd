@@ -1,5 +1,5 @@
-/* ANSI-C code produced by gperf version 3.0.3 */
-/* Command-line: gperf /tmp/compile_st_9xQvtm.gperf  */
+/* ANSI-C code produced by gperf version 3.0.4 */
+/* Command-line: gperf /tmp/compile_st_QivIke.gperf  */
 /* Computed positions: -k'1-7,10,12,$' */
 
 #if !((' ' == 32) && ('!' == 33) && ('"' == 34) && ('#' == 35) \
@@ -121,7 +121,7 @@ hash (register const char *str, register unsigned int len)
 
 #ifdef __GNUC__
 __inline
-#ifdef __GNUC_STDC_INLINE__
+#if defined __GNUC_STDC_INLINE__ || defined __GNUC_GNU_INLINE__
 __attribute__ ((__gnu_inline__))
 #endif
 #endif
