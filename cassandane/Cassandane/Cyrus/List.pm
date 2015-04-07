@@ -39,9 +39,6 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
-# tests based on rfc 5258 examples:
-# https://tools.ietf.org/html/rfc5258#section-5
-
 use strict;
 use warnings;
 package Cassandane::Cyrus::List;
@@ -119,13 +116,13 @@ sub _assert_list_data
         xlog "expect mailbox: $mailbox";
         $self->assert(
             exists $actual_hash{$mailbox},
-            "$mailbox: mailbox not found"
+            "'$mailbox': mailbox not found"
         );
 
         $self->assert_str_equals(
             $actual_hash{$mailbox}->{hiersep},
             $expected_hiersep,
-            "$mailbox: got hierarchy separator '"
+            "'$mailbox': got hierarchy separator '"
                 . $actual_hash{$mailbox}->{hiersep}
                 . "', expected '$expected_hiersep'"
         );
@@ -141,7 +138,7 @@ sub _assert_list_data
         $self->assert_str_equals(
             $actual_hash{$mailbox}->{flags},
             $expected_flag_str,
-            "$mailbox: got flags '"
+            "'$mailbox': got flags '"
                 . $actual_hash{$mailbox}->{flags}
                 . "', expected '$expected_flag_str'"
         )
@@ -151,10 +148,13 @@ sub _assert_list_data
     foreach my $mailbox (keys %actual_hash) {
         $self->assert(
             exists $expected_mailbox_flags->{$mailbox},
-            "$mailbox: found unexpected extra mailbox"
+            "'$mailbox': found unexpected extra mailbox"
         );
     }
 }
+
+# tests based on rfc 5258 examples:
+# https://tools.ietf.org/html/rfc5258#section-5
 
 sub test_5258_01_list_all
 {
