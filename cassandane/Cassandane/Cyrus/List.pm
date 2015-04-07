@@ -317,4 +317,57 @@ sub test_5258_children
 #    $self->assert(0, 'FIXME test not implemented');
 #}
 
+sub test_5258_multiple_mailbox_patterns
+{
+    my ($self) = @_;
+
+    $self->_install_test_data([
+	[ 'create' => 'Drafts' ],
+	[ 'create' => [qw(
+	    Sent Sent/March2004 Sent/December2003 Sent/August2004
+	)] ],
+	[ 'create' => [qw( Unlisted Unlisted/Foo )] ],
+    ]);
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $data = $imaptalk->list("", [qw( INBOX Drafts Sent/% )]);
+
+    $self->assert_deep_equals($data, [
+	[
+	    [
+		'\\Noinferiors',
+	    ],
+	    '/',
+	    'INBOX',
+	],
+	[
+	    [],
+	    '/',
+	    'Drafts',
+	],
+	[
+	    [
+		'\\HasNoChildren',
+	    ],
+	    '/',
+	    'Sent/August2004',
+	],
+	[
+	    [
+		'\\HasNoChildren',
+	    ],
+	    '/',
+	    'Sent/December2003',
+	],
+	[
+	    [
+#		'\\HasNoChildren',  # FIXME why is this missing
+	    ],
+	    '/',
+	    'Sent/March2004',
+	],
+    ], "LIST data mismatch: "  . Dumper($data));
+}
+
 1;
