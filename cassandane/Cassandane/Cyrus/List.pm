@@ -153,6 +153,34 @@ sub _assert_list_data
     }
 }
 
+sub test_empty_mailbox
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $data = $imaptalk->list("", "");
+
+    $self->_assert_list_data($data, '/', {
+        '' => [ '\\Noselect' ],
+    });
+}
+
+sub test_outlook_compatible_xlist_empty_mailbox
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $data = $imaptalk->xlist("", "");
+
+    $self->assert(ref $data, "expected list response, got scalar: $data");
+
+    $self->_assert_list_data($data, '/', {
+        '' => [ '\\Noselect' ],
+    });
+}
+
 # tests based on rfc 5258 examples:
 # https://tools.ietf.org/html/rfc5258#section-5
 
