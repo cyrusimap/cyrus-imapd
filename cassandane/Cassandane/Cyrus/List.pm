@@ -279,7 +279,7 @@ sub test_5258_07_multiple_mailbox_patterns
         'Drafts' => [],
         'Sent/August2004' => [ '\\HasNoChildren' ],
         'Sent/December2003' => [ '\\HasNoChildren' ],
-        'Sent/March2004' => [], # FIXME why is this missing \HasNoChildren?
+        'Sent/March2004' => [ '\\HasNoChildren' ], # FIXME why is this missing \HasNoChildren?
     });
 }
 
