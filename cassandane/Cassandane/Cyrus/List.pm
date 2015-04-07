@@ -39,6 +39,9 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+# tests based on rfc 5258 examples:
+# https://tools.ietf.org/html/rfc5258#section-5
+
 use strict;
 use warnings;
 package Cassandane::Cyrus::List;
@@ -67,9 +70,6 @@ sub new
 
     return $self;
 }
-
-# tests based on rfc 5258 examples:
-# https://tools.ietf.org/html/rfc5258#section-5
 
 sub _install_test_data
 {
@@ -168,7 +168,7 @@ sub tear_down
     $self->{instance} = undef;
 }
 
-sub test_imap4_list_all
+sub test_5258_01_list_all
 {
     my ($self) = @_;
 
@@ -197,7 +197,7 @@ sub test_imap4_list_all
     });
 }
 
-sub test_5258_list_subscribed
+sub test_5258_02_list_subscribed
 {
     my ($self) = @_;
 
@@ -224,7 +224,7 @@ sub test_5258_list_subscribed
     });
 }
 
-sub test_5258_children
+sub test_5258_03_children
 {
     my ($self) = @_;
 
@@ -252,25 +252,25 @@ sub test_5258_children
 }
 
 # TODO not sure how to set up test data for remote mailboxes...
-#sub test_5258_remote_children
+#sub test_5258_04_remote_children
 #{
 #    my ($self) = @_;
 #    $self->assert(0, 'FIXME test not implemented');
 #}
 
-#sub test_5258_remote_subscribed
+#sub test_5258_05_remote_subscribed
 #{
 #    my ($self) = @_;
 #    $self->assert(0, 'FIXME test not implemented');
 #}
 
-#sub test_5258_remote_return_subscribed
+#sub test_5258_06_remote_return_subscribed
 #{
 #    my ($self) = @_;
 #    $self->assert(0, 'FIXME test not implemented');
 #}
 
-sub test_5258_multiple_mailbox_patterns
+sub test_5258_07_multiple_mailbox_patterns
 {
     my ($self) = @_;
 
@@ -295,7 +295,7 @@ sub test_5258_multiple_mailbox_patterns
     });
 }
 
-sub test_5258_haschildren_childinfo
+sub test_5258_08_haschildren_childinfo
 {
     my ($self) = @_;
 
@@ -334,6 +334,9 @@ sub test_5258_haschildren_childinfo
     $self->_assert_list_data($data, '/', {
         'Foo' => [],
     });
+
+    # TODO a bunch more to test here...
+    $self->assert(0, 'FIXME more to test here...');
 }
 
 1;
