@@ -259,6 +259,7 @@ SNERT_PCRE
 SNERT_REGEX
 SNERT_SASL2
 SNERT_SQLITE3
+CYRUS_UUID
 CYRUS_XAPIAN
 CYRUS_ZEPHYR
 SNERT_ZLIB
@@ -276,14 +277,6 @@ AC_SEARCH_LIBS([fdatasync],[rt],[
 	AS_IF([expr "$ac_cv_search_fdatasync" : '-l' >/dev/null],[
 		LIB_RT="$ac_cv_search_fdatasync"
 		AC_SUBST(LIB_RT)
-	])
-])
-
-dnl check for libuuid (used when generating mailbox uniqueids)
-AC_SEARCH_LIBS([uuid_generate],[uuid],[
-	AS_IF([expr "$ac_cv_search_uuid_generate" : '-l' >/dev/null],[
-		LIB_UUID="$ac_cv_search_uuid_generate"
-		AC_SUBST(LIB_UUID)
 	])
 ])
 
@@ -327,6 +320,13 @@ AS_IF([test "$with_krb" != 'no'],[
 
 AS_IF([test "$with_sqlite3" = 'no'],[
 	AC_MSG_ERROR([SQLite is a required package.])
+])
+
+AS_IF([test -n "$LIBS_UUID"],[
+	LIB_UUID="$LIBS_UUID"
+	AC_SUBST(LIB_UUID)
+],[
+	AC_MSG_ERROR([libuuid is a required package.])
 ])
 
 AS_IF([test -e "$PERL"],[
@@ -475,12 +475,11 @@ AS_IF([test "$with_com_err" != 'yes'],[
 	])
 ])
 
-AS_IF([test "$ac_cv_header_jansson_h" = 'yes'],[
+AS_IF([expr "$ac_cv_header_jansson_h" : '/' >/dev/null],[
 	AC_MSG_CHECKING([jansson version])
-	HDR_DIR=`echo "$CPPFLAGS_JANSSON" | sed -e's/-I//'`
-	JANSSON_MAJOR=`sed -n -e's/#define JANSSON_MAJOR_VERSION.*\([0-9][0-9]*\)/\1/p' $HDR_DIR/jansson.h`
-	JANSSON_MINOR=`sed -n -e's/#define JANSSON_MINOR_VERSION.*\([0-9][0-9]*\)/\1/p' $HDR_DIR/jansson.h`
-	JANSSON_MICRO=`sed -n -e's/#define JANSSON_MICRO_VERSION.*\([0-9][0-9]*\)/\1/p' $HDR_DIR/jansson.h`
+	JANSSON_MAJOR=`sed -n -e's/#define JANSSON_MAJOR_VERSION.*\([0-9][0-9]*\)/\1/p' $ac_cv_header_jansson_h`
+	JANSSON_MINOR=`sed -n -e's/#define JANSSON_MINOR_VERSION.*\([0-9][0-9]*\)/\1/p' $ac_cv_header_jansson_h`
+	JANSSON_MICRO=`sed -n -e's/#define JANSSON_MICRO_VERSION.*\([0-9][0-9]*\)/\1/p' $ac_cv_header_jansson_h`
 	AC_MSG_RESULT([${JANSSON_MAJOR}.${JANSSON_MINOR}.${JANSSON_MICRO}])
 
 	AS_IF([test "$JANSSON_MAJOR" -ge 2 -a "$JANSSON_MINOR" -ge 0],[
@@ -575,9 +574,10 @@ AS_IF([test "$XAPIAN_CONFIG" != 'false'],[
 	AC_DEFINE(USE_XAPIAN,[1],[Build in Xapian support?])
 ])
 
-SNERT_JOIN_UNIQ([LIBS],[$LIBS_PGSQL $LIBS_MYSQL],[head])
-SNERT_JOIN_UNIQ([LDFLAGS],[])
-SNERT_JOIN_UNIQ([CPPFLAGS],[$CPPFLAGS_PGSQL $CPPFLAGS_MYSQL])
+dnl Things we always need?
+SNERT_JOIN_UNIQ([LIBS],[$LIBS_ZLIB $LIBS_PGSQL $LIBS_MYSQL $LIBS_SQLITE3 $LIBS_UUID],[head])
+SNERT_JOIN_UNIQ([LDFLAGS],[$LDFLAGS_ZLIB $LDFLAGS_PGSQL $LDFLAGS_MYSQL $LDFLAGS_SQLITE3 $LDFLAGS_UUID])
+SNERT_JOIN_UNIQ([CPPFLAGS],[$CPPFLAGS_ZLIB $CPPFLAGS_PGSQL $CPPFLAGS_MYSQL $CPPFLAGS_SQLITE3 $LIBS_UUID])
 
 AC_DEFINE_UNQUOTED(CYRUS_USER, "$enable_cyrus_user",[What user will we run as?])
 AC_DEFINE_UNQUOTED(CYRUS_GROUP, "$enable_cyrus_group",[What group will we run as?])
@@ -946,6 +946,7 @@ AC_MSG_RESULT([  Jansson.............: "$CPPFLAGS_JANSSON" "$LDFLAGS_JANSSON" "$
 AC_MSG_RESULT([  Kerberos 4..........: "$CPPFLAGS_KRB" "$LDFLAGS_KRB" "$LIBS_KRB"])
 AC_MSG_RESULT([  libical.............: "$CPPFLAGS_ICAL" "$LDFLAGS_ICAL" "$LIBS_ICAL"])
 AC_MSG_RESULT([  libicu..............: "$CPPFLAGS_ICU" "$LDFLAGS_ICU" "$LIBS_ICU"])
+AC_MSG_RESULT([  libuuid.............: "$CPPFLAGS_UUID" "$LDFLAGS_UUID" "$LIBS_UUID"])
 AC_MSG_RESULT([  libxml2.............: "$CPPFLAGS_XML2" "$LDFLAGS_XML2" "$LIBS_XML2"])
 AC_MSG_RESULT([  MySQL...............: "$CPPFLAGS_MYSQL" "$LDFLAGS_MYSQL" "$LIBS_MYSQL"])
 AC_MSG_RESULT([  PostgreSQL..........: "$CPPFLAGS_PGSQL" "$LDFLAGS_PGSQL" "$LIBS_PGSQL"])
