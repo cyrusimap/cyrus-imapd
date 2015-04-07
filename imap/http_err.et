@@ -44,7 +44,7 @@ error_table http
 
 # HTTP/1.1 Response Status Codes (RFC 7231)
 
-# Informational 1xx (Request received, continuing process)
+# Informational 1xx (Interim connection status or request progress)
 
 ec HTTP_CONTINUE,
    "100 Continue"
