@@ -42,19 +42,18 @@
 
 error_table http
 
-# HTTP/1.1 Status Codes (draft-ietf-httpbis-*)
-#
-# 1xx: Informational - Request received, continuing process
-# 2xx: Successful    - Request successfully received, understood, and accepted
-# 3xx: Redirection   - Further action must be taken to complete the request
-# 4xx: Client Error  - The request contains bad syntax or cannot be fulfilled
-# 5xx: Server Error  - The server is incapable of performing the request
+# HTTP/1.1 Response Status Codes (RFC 7231)
+
+# Informational 1xx (Request received, continuing process)
 
 ec HTTP_CONTINUE,
    "100 Continue"
 
 ec HTTP_SWITCH_PROT,
    "101 Switching Protocols"
+
+
+# Successful 2xx (Request successfully received, understood, and accepted)
 
 ec HTTP_OK,
    "200 OK"
@@ -65,32 +64,41 @@ ec HTTP_CREATED,
 ec HTTP_ACCEPTED,
    "202 Accepted"
 
+ec HTTP_NON_AUTHORITATIVE,
+   "203 Non-Authoritative Information"
+
 ec HTTP_NO_CONTENT,
    "204 No Content"
 
 ec HTTP_RESET_CONTENT,
    "205 Reset Content"
 
-ec HTTP_PARTIAL,
-   "206 Partial Content"
+
+# Redirection 3xx (Further action must be taken to complete the request)
+
+ec HTTP_MULTIPLE,
+   "300 Multiple Choices"
 
 ec HTTP_MOVED,
    "301 Moved Permanently"
 
+ec HTTP_FOUND,
+   "302 Found"
+
 ec HTTP_SEE_OTHER,
    "303 See Other"
-
-ec HTTP_NOT_MODIFIED,
-   "304 Not Modified"
 
 ec HTTP_TEMP_REDIRECT,
    "307 Temporary Redirect"
 
+
+# Client Error 4xx (The request contains bad syntax or cannot be fulfilled)
+
 ec HTTP_BAD_REQUEST,
    "400 Bad Request"
 
-ec HTTP_UNAUTHORIZED,
-   "401 Unauthorized"
+ec HTTP_PAYMENT_REQUIRED,
+   "402 Payment Required"
 
 ec HTTP_FORBIDDEN,
    "403 Forbidden"
@@ -116,26 +124,23 @@ ec HTTP_GONE,
 ec HTTP_LENGTH_REQUIRED,
    "411 Length Required"
 
-ec HTTP_PRECOND_FAILED,
-   "412 Precondition Failed"
-
-ec HTTP_TOO_LARGE,
+ec HTTP_PAYLOAD_TOO_LARGE,
    "413 Payload Too Large"
 
-ec HTTP_TOO_LONG,
+ec HTTP_URI_TOO_LONG,
    "414 URI Too Long"
 
 ec HTTP_BAD_MEDIATYPE,
    "415 Unsupported Media Type"
-
-ec HTTP_UNSAT_RANGE,
-   "416 Range Not Satisfiable"
 
 ec HTTP_EXPECT_FAILED,
    "417 Expectation Failed"
 
 ec HTTP_UPGRADE,
    "426 Upgrade Required"
+
+
+# Server Error 5xx (The server is incapable of performing the request)
 
 ec HTTP_SERVER_ERROR,
    "500 Internal Server Error"
@@ -154,6 +159,36 @@ ec HTTP_GATEWAY_TIMEOUT,
 
 ec HTTP_BAD_VERSION,
    "505 HTTP Version Not Supported"
+
+
+
+# Conditional Requests (RFC 7232)
+
+ec HTTP_NOT_MODIFIED,
+   "304 Not Modified"
+
+ec HTTP_PRECOND_FAILED,
+   "412 Precondition Failed"
+
+
+
+# Range Requests (RFC 7233)
+
+ec HTTP_PARTIAL,
+   "206 Partial Content"
+
+ec HTTP_BAD_RANGE,
+   "416 Range Not Satisfiable"
+
+
+
+# Authentication (RFC 7235)
+
+ec HTTP_UNAUTHORIZED,
+   "401 Unauthorized"
+
+ec HTTP_PROXY_AUTH,
+   "407 Proxy Authentication Required"
 
 
 
@@ -179,7 +214,7 @@ ec HTTP_NO_STORAGE,
 
 
 
-# Permanent Redirect (RFC 7238)
+# Permanent Redirect (RFC 7538)
 
 ec HTTP_PERM_REDIRECT,
    "308 Permanent Redirect"
@@ -190,6 +225,16 @@ ec HTTP_PERM_REDIRECT,
 
 ec HTTP_PRECOND_REQUIRED,
    "428 Precondition Required"
+
+ec HTTP_TOO_MANY_REQUESTS,
+   "429 Too Many Requests"
+
+ec HTTP_HEADERS_TOO_LARGE,
+   "431 Request Header Fields Too Large"
+
+ec HTTP_NETWORK_AUTH,
+   "511 Network Authentication Required"
+
 
 
 end

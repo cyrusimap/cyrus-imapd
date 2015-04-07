@@ -1026,7 +1026,7 @@ static void cmdloop(void)
 	}
 	else if ((size_t) (p - req_line->buf) > MAX_REQ_LINE - 2) {
 	    /* request-line overran the size of our buffer */
-	    ret = HTTP_TOO_LONG;
+	    ret = HTTP_URI_TOO_LONG;
 	    buf_printf(&txn.buf,
 		       "Length of request-line MUST be less than %u octets",
 		       MAX_REQ_LINE);
@@ -2126,7 +2126,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 	/* MUST NOT include a body */
 	break;
 
-    case HTTP_UNSAT_RANGE:
+    case HTTP_BAD_RANGE:
 	prot_printf(httpd_out, "Content-Range: bytes */%lu\r\n",
 		    resp_body->len);
 	resp_body->len = 0;  /* No content */
@@ -2199,7 +2199,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 	    buf_printf(&log, " %s", txn->req_line.uri);
 	    if (txn->req_line.ver) {
 		buf_printf(&log, " %s", txn->req_line.ver);
-		if (code != HTTP_TOO_LONG) {
+		if (code != HTTP_URI_TOO_LONG) {
 		    char *p = txn->req_line.ver + strlen(txn->req_line.ver) + 1;
 		    if (*p) buf_printf(&log, " %s", p);
 		}
@@ -2472,7 +2472,7 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
 		    }
 		    break;
 
-		case HTTP_UNSAT_RANGE:
+		case HTTP_BAD_RANGE:
 		    /* No valid ranges */
 		    outlen = 0;
 		    break;
@@ -3139,7 +3139,7 @@ static unsigned etag_match(const char *hdr[], const char *etag)
 static int parse_ranges(const char *hdr, unsigned long len,
 			struct range **ranges)
 {
-    int ret = HTTP_UNSAT_RANGE;
+    int ret = HTTP_BAD_RANGE;
     struct range *new, *tail = *ranges = NULL;
     tok_t tok;
     char *token;

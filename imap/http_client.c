@@ -169,7 +169,7 @@ int http_parse_framing(hdrcache_t hdrs, struct body_t *body,
 	}
 
 	body->len = strtoul(hdr[0], NULL, 10);
-	if (body->len > max_msgsize) return HTTP_TOO_LARGE;
+	if (body->len > max_msgsize) return HTTP_PAYLOAD_TOO_LARGE;
 
 	body->framing = FRAMING_LENGTH;
     }
@@ -256,7 +256,9 @@ int http_read_body(struct protstream *pin, struct protstream *pout,
 
 		/* XXX  Do we need to parse chunk-ext? */
 	    }
-	    else if (chunk > body->max - body->len) return HTTP_TOO_LARGE;
+	    else if (chunk > body->max - body->len) {
+		return HTTP_PAYLOAD_TOO_LARGE;
+	    }
 
 	    if (!chunk) {
 		/* last-chunk */
@@ -302,7 +304,7 @@ int http_read_body(struct protstream *pin, struct protstream *pout,
 	    else
 		n = prot_readbuf(pin, &body->payload, PROT_BUFSIZE);
 
-	    if (n > body->max - body->len) return HTTP_TOO_LARGE;
+	    if (n > body->max - body->len) return HTTP_PAYLOAD_TOO_LARGE;
 	    body->len += n;
 
 	} while (n);
