@@ -295,4 +295,45 @@ sub test_5258_multiple_mailbox_patterns
     });
 }
 
+sub test_5258_haschildren_childinfo
+{
+    my ($self) = @_;
+
+    $self->_install_test_data([
+        [ 'create' => [qw( Foo Foo/Bar Foo/Baz Moo )] ],
+    ]);
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $data = $imaptalk->list("", "%", "RETURN", [qw( CHILDREN )]);
+
+    $self->_assert_list_data($data, '/', {
+        'INBOX' => '\\Noinferiors',
+        'Foo'   => '\\HasChildren',
+        'Moo'   => '\\HasNoChildren',
+    });
+
+    $self->_install_test_data([
+        [ 'subscribe' => 'Foo/Baz' ],
+    ]);
+
+    $data = $imaptalk->list(['SUBSCRIBED'], "", "*");
+
+    $self->_assert_list_data($data, '/', {
+        'Foo/Baz'   => '\\Subscribed',
+    });
+
+    $data = $imaptalk->list(['SUBCRIBED'], "", "%");
+
+    $self->_assert_list_data($data, '/', {
+    });
+
+    $data = $imaptalk->list([qw( SUBSCRIBED RECURSIVEMATCH )], "", "%");
+    xlog(Dumper $data);
+
+    $self->_assert_list_data($data, '/', {
+        'Foo' => [],
+    });
+}
+
 1;
