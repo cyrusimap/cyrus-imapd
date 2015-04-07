@@ -45,7 +45,7 @@
 use strict;
 use warnings;
 package Cassandane::Cyrus::List;
-use base qw(Cassandane::Unit::TestCase);
+use base qw(Cassandane::Cyrus::TestCase);
 use DateTime;
 use Cassandane::Util::Log;
 use Cassandane::Generator;
@@ -55,20 +55,28 @@ use Data::Dumper;
 
 sub new
 {
-    my $class = shift;
-    my $self = $class->SUPER::new(@_);
+    my ($class, @args) = @_;
 
     my $config = Cassandane::Config->default()->clone();
-    $config->set(altimap_virtdomains => 'userid');
-    $config->set(altimap_unixhierarchysep => 'on');
-    $config->set(altimap_altnamespace => 'yes');
-    $self->{instance} = Cassandane::Instance->new(config => $config);
-    $self->{instance}->add_service(name => 'imap');
-    $self->{instance}->add_service(name => 'altimap');
+    $config->set(virtdomains => 'userid');
+    $config->set(unixhierarchysep => 'on');
+    $config->set(altnamespace => 'yes');
 
-    $self->{gen} = Cassandane::Generator->new();
+    return $class->SUPER::new({ config => $config }, @args);
+}
 
-    return $self;
+sub set_up
+{
+    my ($self) = @_;
+
+    $self->SUPER::set_up();
+}
+
+sub tear_down
+{
+    my ($self) = @_;
+
+    $self->SUPER::tear_down();
 }
 
 sub _install_test_data
@@ -146,26 +154,6 @@ sub _assert_list_data
             "$mailbox: found unexpected extra mailbox"
         );
     }
-}
-
-sub set_up
-{
-    my ($self) = @_;
-
-    $self->{instance}->start();
-    $self->{store} = $self->{instance}->get_service('altimap')->create_store();
-}
-
-sub tear_down
-{
-    my ($self) = @_;
-
-    $self->{store}->disconnect()
-	if defined $self->{store};
-    $self->{store} = undef;
-    $self->{instance}->stop();
-    $self->{instance}->cleanup();
-    $self->{instance} = undef;
 }
 
 sub test_5258_01_list_all
