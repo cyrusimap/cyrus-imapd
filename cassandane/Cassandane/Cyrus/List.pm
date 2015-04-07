@@ -90,6 +90,64 @@ sub _install_test_data
     }
 }
 
+sub _assert_list_data
+{
+    my ($self, $actual, $expected_hiersep, $expected_mailbox_flags, $msg) = @_;
+
+    # rearrange list output into order-agnostic format
+    my %actual_hash;
+    foreach my $row (@{$actual}) {
+        my ($flags, $hiersep, $mailbox) = @{$row};
+
+        $actual_hash{$mailbox} = {
+            flags => join(q{ }, sort @{$flags} ),
+            hiersep => $hiersep,
+            mailbox => $mailbox,
+        }
+    }
+
+    # check that expected data exists
+    foreach my $mailbox (keys %{$expected_mailbox_flags}) {
+        xlog "expect mailbox: $mailbox";
+        $self->assert(
+            exists $actual_hash{$mailbox},
+            "$mailbox: mailbox not found"
+        );
+
+        $self->assert_str_equals(
+            $actual_hash{$mailbox}->{hiersep},
+            $expected_hiersep,
+            "$mailbox: got hierarchy separator '"
+                . $actual_hash{$mailbox}->{hiersep}
+                . "', expected '$expected_hiersep'"
+        );
+
+        my $expected_flag_str;
+        if (ref $expected_mailbox_flags->{$mailbox}) {
+            $expected_flag_str = join q{ }, sort @{$expected_mailbox_flags->{$mailbox}};
+        }
+        else {
+            $expected_flag_str = $expected_mailbox_flags->{$mailbox};
+        }
+
+        $self->assert_str_equals(
+            $actual_hash{$mailbox}->{flags},
+            $expected_flag_str,
+            "$mailbox: got flags '"
+                . $actual_hash{$mailbox}->{flags}
+                . "', expected '$expected_flag_str'"
+        )
+    }
+
+    # check that unexpected data does not exist
+    foreach my $mailbox (keys %actual_hash) {
+        $self->assert(
+            exists $expected_mailbox_flags->{$mailbox},
+            "$mailbox: found unexpected extra mailbox"
+        );
+    }
+}
+
 sub set_up
 {
     my ($self) = @_;
@@ -127,65 +185,16 @@ sub test_imap4_list_all
 
     my $alldata = $imaptalk->list("", "*");
 
-    $self->assert_deep_equals($alldata, [
-	[
-	    [
-		'\\Noinferiors',
-		'\\HasNoChildren'
-	    ],
-	    '/',
-	    'INBOX'
-	],
-	[
-	    [
-		'\\HasChildren',
-	    ],
-	    '/',
-	    'Fruit',
-	],
-	[
-	    [
-		'\\HasNoChildren'
-	    ],
-	    '/',
-	    'Fruit/Apple',
-	],
-	[
-	    [
-		'\\HasNoChildren'
-	    ],
-	    '/',
-	    'Fruit/Banana',
-	],
-	[
-	    [
-		'\\HasNoChildren'
-	    ],
-	    '/',
-	    'Tofu',
-	],
-	[
-	    [
-		'\\HasChildren',
-	    ],
-	    '/',
-	    'Vegetable',
-	],
-	[
-	    [
-		'\\HasNoChildren'
-	    ],
-	    '/',
-	    'Vegetable/Broccoli',
-	],
-	[
-	    [
-		'\\HasNoChildren'
-	    ],
-	    '/',
-	    'Vegetable/Corn',
-	],
-    ], "LIST data mismatch: "  . Dumper($alldata));
+    $self->_assert_list_data($alldata, '/', {
+        'INBOX'                 => [qw( \\Noinferiors \\HasNoChildren )],
+        'Fruit'                 => [qw( \\HasChildren )],
+        'Fruit/Apple'           => [qw( \\HasNoChildren )],
+        'Fruit/Banana'          => [qw( \\HasNoChildren )],
+        'Tofu'                  => [qw( \\HasNoChildren )],
+        'Vegetable'             => [qw( \\HasChildren )],
+        'Vegetable/Broccoli'    => [qw( \\HasNoChildren )],
+        'Vegetable/Corn'        => [qw( \\HasNoChildren )],
+    });
 }
 
 sub test_5258_list_subscribed
@@ -205,46 +214,14 @@ sub test_5258_list_subscribed
 
     my $subdata = $imaptalk->list([qw(SUBSCRIBED)], "", "*");
 
-    $self->assert_deep_equals($subdata, [
-	[
-	    [
-		'\\Noinferiors',
-		'\\Subscribed',
-	    ],
-	    '/',
-	    'INBOX'
-	],
-	[
-	    [
-		'\\Subscribed',
-	    ],
-	    '/',
-	    'Fruit/Banana',
-	],
-	[
-	    [
-		'\\NonExistent',
-		'\\Subscribed',
-	    ],
-	    '/',
-	    'Fruit/Peach',
-	],
-	[
-	    [
-		'\\Subscribed',
-		'\\HasChildren', # not required by spec, but cyrus tells us
-	    ],
-	    '/',
-	    'Vegetable',
-	],
-	[
-	    [
-		'\\Subscribed',
-	    ],
-	    '/',
-	    'Vegetable/Broccoli',
-	],
-    ], "LIST data mismatch: "  . Dumper($subdata));
+    xlog(Dumper $subdata);
+    $self->_assert_list_data($subdata, '/', {
+        'INBOX'                 => [qw( \\Noinferiors \\Subscribed )],
+        'Fruit/Banana'          => '\\Subscribed',
+        'Fruit/Peach'           => [qw( \\NonExistent \\Subscribed )],
+        'Vegetable'             => [qw( \\Subscribed \\HasChildren )], # HasChildren not required by spec, but cyrus tells us
+        'Vegetable/Broccoli'    => '\\Subscribed',
+    });
 }
 
 sub test_5258_children
@@ -266,36 +243,12 @@ sub test_5258_children
 	[qw()], "", "%", 'RETURN', [qw(CHILDREN)],
     );
 
-    $self->assert_deep_equals($data, [
-	[
-	    [
-		'\\Noinferiors',
-	    ],
-	    '/',
-	    'INBOX'
-	],
-	[
-	    [
-		'\\HasChildren',
-	    ],
-	    '/',
-	    'Fruit'
-	],
-	[
-	    [
-		'\\HasNoChildren',
-	    ],
-	    '/',
-	    'Tofu'
-	],
-	[
-	    [
-		'\\HasChildren',
-	    ],
-	    '/',
-	    'Vegetable'
-	],
-    ], "LIST data mismatch: "  . Dumper($data));
+    $self->_assert_list_data($data, '/', {
+        'INBOX' => [ '\\Noinferiors' ],
+        'Fruit' => [ '\\HasChildren' ],
+        'Tofu'  => [ '\\HasNoChildren' ],
+        'Vegetable' => [ '\\HasChildren' ],
+    });
 }
 
 # TODO not sure how to set up test data for remote mailboxes...
@@ -333,41 +286,13 @@ sub test_5258_multiple_mailbox_patterns
 
     my $data = $imaptalk->list("", [qw( INBOX Drafts Sent/% )]);
 
-    $self->assert_deep_equals($data, [
-	[
-	    [
-		'\\Noinferiors',
-	    ],
-	    '/',
-	    'INBOX',
-	],
-	[
-	    [],
-	    '/',
-	    'Drafts',
-	],
-	[
-	    [
-		'\\HasNoChildren',
-	    ],
-	    '/',
-	    'Sent/August2004',
-	],
-	[
-	    [
-		'\\HasNoChildren',
-	    ],
-	    '/',
-	    'Sent/December2003',
-	],
-	[
-	    [
-#		'\\HasNoChildren',  # FIXME why is this missing
-	    ],
-	    '/',
-	    'Sent/March2004',
-	],
-    ], "LIST data mismatch: "  . Dumper($data));
+    $self->_assert_list_data($data, '/', {
+        'INBOX' => [ '\\Noinferiors' ],
+        'Drafts' => [],
+        'Sent/August2004' => [ '\\HasNoChildren' ],
+        'Sent/December2003' => [ '\\HasNoChildren' ],
+        'Sent/March2004' => [], # FIXME why is this missing \HasNoChildren?
+    });
 }
 
 1;
