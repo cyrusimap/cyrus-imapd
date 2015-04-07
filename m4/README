@@ -1,6 +1,7 @@
-This tool holds extra m4 files used by autoreconf to generate aclocal.m4. 
+This directory holds extra m4 files used by autoreconf to generate aclocal.m4.
 At the moment these are the libtoolize copied files that should be supplied
-with source distributions.  To add or refresh the libtool files:
+with source distributions and/or before autoreconf is applied.  To add or
+refresh the libtool files:
 
 	$ cd /directory/with/configure
 	$ libtoolize --copy --install
