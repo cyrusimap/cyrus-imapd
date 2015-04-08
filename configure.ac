@@ -572,7 +572,7 @@ AS_IF([test X"$enable_sphinx" = X'yes' -a -n "$LIBS_MYSQL"],[
 AS_IF([test X"$enable_squat" = X'yes'],[
 	AC_DEFINE(USE_SQUAT,[1],[Build in Squat support?])
 ])
-AS_IF([test "$XAPIAN_CONFIG" != 'false'],[
+AS_IF([test "$with_xapian" != 'no' "$XAPIAN_CONFIG" != 'false'],[
 	XAPIAN_VERSION=`$XAPIAN_CONFIG --version | sed -e's/.* //'`
 	AC_DEFINE(USE_XAPIAN,[1],[Build in Xapian support?])
 ])
