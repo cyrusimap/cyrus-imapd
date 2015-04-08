@@ -634,7 +634,7 @@ static const struct prop_entry caldav_props[] = {
     { "schedule-calendar-transp", NS_CALDAV, PROP_COLLECTION,
       propfind_caltransp, proppatch_caltransp, NULL },
 
-    /* Calendar Availability (draft-daboo-calendar-availability) properties */
+    /* Calendar Availability (draft-ietf-calext-availability) properties */
     { "calendar-availability", NS_CALDAV,
       PROP_COLLECTION | PROP_PRESCREEN | PROP_NEEDPROP,
       propfind_availability, proppatch_availability, NULL },
@@ -650,7 +650,7 @@ static const struct prop_entry caldav_props[] = {
     { "calendar-timezone-id", NS_CALDAV, PROP_COLLECTION,
       propfind_tzid, proppatch_tzid, NULL },
 
-    /* RSCALE (draft-daboo-icalendar-rscale) properties */
+    /* RSCALE (draft-ietf-calext-rscale) properties */
     { "supported-rscale-set", NS_CALDAV, PROP_COLLECTION,
       propfind_rscaleset, NULL, NULL },
 
