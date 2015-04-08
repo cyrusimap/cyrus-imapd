@@ -3006,7 +3006,7 @@ int meth_acl(struct transaction_t *txn, void *params)
   done:
     buf_free(&acl);
     if (indoc) xmlFreeDoc(indoc);
-
+    mailbox_close(&mailbox);
     return ret;
 }
 
