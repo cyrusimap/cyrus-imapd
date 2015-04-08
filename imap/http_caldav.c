@@ -871,6 +871,7 @@ static void my_caldav_init(struct buf *serverinfo)
 
     /* Create an array of calendar-user-adddress-set domains */
     domains = config_getstring(IMAPOPT_CALENDAR_USER_ADDRESS_SET);
+    if (!domains) domains = config_defdomain;
     if (!domains) domains = config_servername;
 
     tok_init(&tok, domains, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
@@ -4133,6 +4134,7 @@ int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
 			 void *rock __attribute__((unused)))
 {
     xmlNodePtr node;
+    struct strlist *domains;
 
     if (!(namespace_calendar.enabled && fctx->req_tgt->userid))
 	return HTTP_NOT_FOUND;
@@ -4140,13 +4142,20 @@ int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			name, ns, NULL, 0);
 
-    buf_reset(&fctx->buf);
-    if (strchr(fctx->req_tgt->userid, '@'))
+    /* XXX  This needs to be done via an LDAP/DB lookup */
+    if (strchr(fctx->req_tgt->userid, '@')) {
+	buf_reset(&fctx->buf);
 	buf_printf(&fctx->buf, "mailto:%s", fctx->req_tgt->userid);
-    else
-	buf_printf(&fctx->buf, "mailto:%s@%s", fctx->req_tgt->userid, config_defdomain);
+	xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+    }
 
-    xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+    for (domains = cua_domains; domains; domains = domains->next) {
+	buf_reset(&fctx->buf);
+	buf_printf(&fctx->buf, "mailto:%s@%s",
+		   fctx->req_tgt->userid, domains->s);
+
+	xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+    }
 
     return 0;
 }
@@ -5591,17 +5600,27 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 
 int caladdress_lookup(const char *addr, struct sched_param *param)
 {
-    const char *userid = addr;
+    const char *userid = addr, *p;
     int islocal = 1, found = 1;
+    size_t len;
 
     memset(param, 0, sizeof(struct sched_param));
 
     if (!addr) return HTTP_NOT_FOUND;
 
     if (!strncasecmp(userid, "mailto:", 7)) userid += 7;
+    len = strlen(userid);
 
     /* XXX  Do LDAP/DB/socket lookup to see if user is local */
     /* XXX  Hack until real lookup stuff is written */
+    if ((p = strchr(userid, '@')) && *++p) {
+	struct strlist *domains = cua_domains;
+
+	for (; domains && strcmp(p, domains->s); domains = domains->next);
+
+	if (!domains) islocal = 0;
+	else if (!config_virtdomains) len = p - userid - 1;
+    }
 
     if (islocal) {
 	/* User is in a local domain */
@@ -5611,11 +5630,11 @@ int caladdress_lookup(const char *addr, struct sched_param *param)
 	struct mboxname_parts parts;
 
 	if (!found) return HTTP_NOT_FOUND;
-	else param->userid = xstrdupnull(userid); /* XXX - memleak */
+	else param->userid = xstrndup(userid, len); /* XXX - memleak */
 
 	/* Lookup user's cal-home-set to see if its on this server */
 
-	mboxname_userid_to_parts(userid, &parts);
+	mboxname_userid_to_parts(param->userid, &parts);
 	parts.box = xstrdupnull(config_getstring(IMAPOPT_CALENDARPREFIX));
 	mboxname_parts_to_internal(&parts, mailboxname);
 	mboxname_free_parts(&parts);
