@@ -366,8 +366,8 @@ static const char *ical_prodid = NULL;
 static struct strlist *cua_domains = NULL;
 icalarray *rscale_calendars = NULL;
 
-static int meth_get_cal(struct transaction_t *txn, void *params);
-static int meth_get_fb(struct transaction_t *txn, void *params);
+static int meth_get_head_cal(struct transaction_t *txn, void *params);
+static int meth_get_head_fb(struct transaction_t *txn, void *params);
 
 static struct caldav_db *my_caldav_open(struct mailbox *mailbox);
 static void my_caldav_close(struct caldav_db *caldavdb);
@@ -701,14 +701,14 @@ struct namespace_t namespace_calendar = {
     &my_caldav_init, &my_caldav_auth, my_caldav_reset, &my_caldav_shutdown,
     { 
 	{ &meth_acl,		&caldav_params },	/* ACL		*/
-	{ &meth_copy,		&caldav_params },	/* COPY		*/
+	{ &meth_copy_move,	&caldav_params },	/* COPY		*/
 	{ &meth_delete,		&caldav_params },	/* DELETE	*/
-	{ &meth_get_cal,	&caldav_params },	/* GET		*/
-	{ &meth_get_cal,	&caldav_params },	/* HEAD		*/
+	{ &meth_get_head_cal,	NULL },	       		/* GET		*/
+	{ &meth_get_head_cal,	NULL },			/* HEAD		*/
 	{ &meth_lock,		&caldav_params },	/* LOCK		*/
 	{ &meth_mkcol,		&caldav_params },	/* MKCALENDAR	*/
 	{ &meth_mkcol,		&caldav_params },	/* MKCOL	*/
-	{ &meth_copy,		&caldav_params },	/* MOVE		*/
+	{ &meth_copy_move,	&caldav_params },	/* MOVE		*/
 	{ &meth_options,	&caldav_parse_path },	/* OPTIONS	*/
 	{ &meth_post,		&caldav_params },	/* POST		*/
 	{ &meth_propfind,	&caldav_params },	/* PROPFIND	*/
@@ -731,8 +731,8 @@ struct namespace_t namespace_freebusy = {
 	{ NULL,			NULL },			/* ACL		*/
 	{ NULL,			NULL },			/* COPY		*/
 	{ NULL,			NULL },			/* DELETE	*/
-	{ &meth_get_fb,		NULL },			/* GET		*/
-	{ &meth_get_fb,		NULL },			/* HEAD		*/
+	{ &meth_get_head_fb,	NULL },			/* GET		*/
+	{ &meth_get_head_fb,	NULL },			/* HEAD		*/
 	{ NULL,			NULL },			/* LOCK		*/
 	{ NULL,			NULL },			/* MKCALENDAR	*/
 	{ NULL,			NULL },			/* MKCOL	*/
@@ -769,7 +769,8 @@ static const struct cal_comp_t {
 };
 
 
-static int meth_get_cal(struct transaction_t *txn, void *gparams)
+static int meth_get_head_cal(struct transaction_t *txn,
+			     void *gparams __attribute__((unused)))
 
 {
     int r;
@@ -778,9 +779,8 @@ static int meth_get_cal(struct transaction_t *txn, void *gparams)
     if ((r = caldav_parse_path(txn->req_uri->path,
 			       &txn->req_tgt, &txn->error.desc))) return r;
 
-    if (txn->req_tgt.flags == TGT_MANAGED_ATTACH) gparams = &webdav_params;
-
-    return meth_get_dav(txn, gparams);
+    return meth_get_head(txn, (txn->req_tgt.flags == TGT_MANAGED_ATTACH) ?
+			 &webdav_params : &caldav_params);
 }
 
 
@@ -7928,8 +7928,8 @@ static struct mime_type_t freebusy_mime_types[] = {
 
 /* Execute a free/busy query per
    http://www.calconnect.org/pubdocs/CD0903%20Freebusy%20Read%20URL.pdf */
-static int meth_get_fb(struct transaction_t *txn,
-		       void *params __attribute__((unused)))
+static int meth_get_head_fb(struct transaction_t *txn,
+			    void *params __attribute__((unused)))
 
 {
     int ret = 0, r, rights;

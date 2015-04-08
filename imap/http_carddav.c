@@ -298,14 +298,14 @@ struct namespace_t namespace_addressbook = {
     &my_carddav_init, &my_carddav_auth, my_carddav_reset, &my_carddav_shutdown,
     { 
 	{ &meth_acl,		&carddav_params },	/* ACL		*/
-	{ &meth_copy,		&carddav_params },	/* COPY		*/
+	{ &meth_copy_move,	&carddav_params },	/* COPY		*/
 	{ &meth_delete,		&carddav_params },	/* DELETE	*/
-	{ &meth_get_dav,	&carddav_params },	/* GET		*/
-	{ &meth_get_dav,	&carddav_params },	/* HEAD		*/
+	{ &meth_get_head,	&carddav_params },	/* GET		*/
+	{ &meth_get_head,	&carddav_params },	/* HEAD		*/
 	{ &meth_lock,		&carddav_params },	/* LOCK		*/
 	{ NULL,			NULL },			/* MKCALENDAR	*/
 	{ &meth_mkcol,		&carddav_params },	/* MKCOL	*/
-	{ &meth_copy,		&carddav_params },	/* MOVE		*/
+	{ &meth_copy_move,	&carddav_params },	/* MOVE		*/
 	{ &meth_options,	&carddav_parse_path },	/* OPTIONS	*/
 #if 0 /* Until Apple Contacts fixes their add-member implementation */
 	{ &meth_post,		&carddav_params },	/* POST		*/

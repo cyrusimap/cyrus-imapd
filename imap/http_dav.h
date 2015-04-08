@@ -538,9 +538,9 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
 
 /* DAV method processing functions */
 int meth_acl(struct transaction_t *txn, void *params);
-int meth_copy(struct transaction_t *txn, void *params);
+int meth_copy_move(struct transaction_t *txn, void *params);
 int meth_delete(struct transaction_t *txn, void *params);
-int meth_get_dav(struct transaction_t *txn, void *params);
+int meth_get_head(struct transaction_t *txn, void *params);
 int meth_lock(struct transaction_t *txn, void *params);
 int meth_mkcol(struct transaction_t *txn, void *params);
 int meth_propfind(struct transaction_t *txn, void *params);

@@ -221,7 +221,6 @@ static const struct prop_entry principal_props[] = {
 
 static struct meth_params princ_params = {
     .parse_path = &principal_parse_path,
-    .get = NULL,
     .lprops = principal_props,
     .reports = principal_reports
 };
@@ -236,8 +235,8 @@ struct namespace_t namespace_principal = {
 	{ NULL,			NULL },			/* ACL		*/
 	{ NULL,			NULL },			/* COPY		*/
 	{ NULL,			NULL },			/* DELETE	*/
-	{ &meth_get_dav,	&princ_params },	/* GET		*/
-	{ &meth_get_dav,	&princ_params },	/* HEAD		*/
+	{ &meth_get_head,	&princ_params },	/* GET		*/
+	{ &meth_get_head,	&princ_params },	/* HEAD		*/
 	{ NULL,			NULL },			/* LOCK		*/
 	{ NULL,			NULL },			/* MKCALENDAR	*/
 	{ NULL,			NULL },			/* MKCOL	*/
@@ -3016,7 +3015,7 @@ int meth_acl(struct transaction_t *txn, void *params)
  * preconditions:
  *   *DAV:need-privileges
  */
-int meth_copy(struct transaction_t *txn, void *params)
+int meth_copy_move(struct transaction_t *txn, void *params)
 {
     struct meth_params *cparams = (struct meth_params *) params;
     int ret = HTTP_CREATED, r, precond, rights;
@@ -3506,7 +3505,7 @@ int meth_delete(struct transaction_t *txn, void *params)
 
 
 /* Perform a GET/HEAD request on a DAV resource */
-int meth_get_dav(struct transaction_t *txn, void *params)
+int meth_get_head(struct transaction_t *txn, void *params)
 {
     struct meth_params *gparams = (struct meth_params *) params;
     const char **hdr;
@@ -3528,6 +3527,11 @@ int meth_get_dav(struct transaction_t *txn, void *params)
     ret = gparams->parse_path(txn->req_uri->path,
 			      &txn->req_tgt, &txn->error.desc);
     if (ret) return ret;
+
+    if (txn->req_tgt.namespace == URL_NS_PRINCIPAL) {
+	/* No content for principals (yet) */
+	return HTTP_NO_CONTENT;
+    }
 
     if (!txn->req_tgt.resource) {
 	/* Do any collection processing */
