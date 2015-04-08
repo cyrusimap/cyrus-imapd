@@ -4473,12 +4473,7 @@ static int propfind_availability(const xmlChar *name, xmlNsPtr ns,
 					httpd_userid, &attrib);
 	}
 
-	if (r) r = HTTP_SERVER_ERROR;
-	else if (attrib.len) {
-	    data = buf_cstring(&attrib);
-	    datalen = attrib.len;
-	}
-	else if (xmlStrcmp(ns->href, XML_NS_CALDAV)) {
+	if (!attrib.len && xmlStrcmp(ns->href, BAD_CAST XML_NS_CALDAV)) {
 	    /* Check for CALDAV:calendar-availability */
 	    buf_reset(&fctx->buf);
 	    buf_printf(&fctx->buf, ANNOT_NS "<%s>%s", XML_NS_CALDAV, name);
@@ -4488,15 +4483,14 @@ static int propfind_availability(const xmlChar *name, xmlNsPtr ns,
 					    buf_cstring(&fctx->buf),
 					    httpd_userid, &attrib);
 	    }
-
-	    if (r) r = HTTP_SERVER_ERROR;
-	    else if (attrib.len) {
-		data = buf_cstring(&attrib);
-		datalen = attrib.len;
-	    }
-	    else r = HTTP_NOT_FOUND;
 	}
-	else r = HTTP_NOT_FOUND;
+
+	if (r) r = HTTP_SERVER_ERROR;
+	else if (!attrib.len) r = HTTP_NOT_FOUND;
+	else {
+	    data = buf_cstring(&attrib);
+	    datalen = attrib.len;
+	}
     }
 
     if (!r) r = propfind_getdata(name, ns, fctx, propstat, prop,
