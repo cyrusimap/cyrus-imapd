@@ -4449,7 +4449,7 @@ static int proppatch_timezone(xmlNodePtr prop, unsigned set,
 }
 
 
-/* Callback to prescreen/fetch CALDAV:calendar-availability */
+/* Callback to prescreen/fetch CALDAV/CS:calendar-availability */
 static int propfind_availability(const xmlChar *name, xmlNsPtr ns,
 				 struct propfind_ctx *fctx,
 				 xmlNodePtr resp __attribute__((unused)),
@@ -4463,20 +4463,40 @@ static int propfind_availability(const xmlChar *name, xmlNsPtr ns,
     int r = 0;
 
     if (propstat) {
-	const char *prop_annot =
-	    ANNOT_NS "<" XML_NS_CALDAV ">calendar-availability";
+	buf_reset(&fctx->buf);
+	buf_printf(&fctx->buf, ANNOT_NS "<%s>%s",
+		   (const char *) ns->href, name);
 
 	if (fctx->mailbox && !fctx->record) {
-	    r = annotatemore_lookup(fctx->mailbox->name, prop_annot,
-				    /* shared */ NULL, &attrib);
+	    r = annotatemore_lookupmask(fctx->mailbox->name,
+					buf_cstring(&fctx->buf),
+					httpd_userid, &attrib);
 	}
 
 	if (r) r = HTTP_SERVER_ERROR;
-	else if (!attrib.len) r = HTTP_NOT_FOUND;
-	else {
+	else if (attrib.len) {
 	    data = buf_cstring(&attrib);
 	    datalen = attrib.len;
 	}
+	else if (xmlStrcmp(ns->href, XML_NS_CALDAV)) {
+	    /* Check for CALDAV:calendar-availability */
+	    buf_reset(&fctx->buf);
+	    buf_printf(&fctx->buf, ANNOT_NS "<%s>%s", XML_NS_CALDAV, name);
+
+	    if (fctx->mailbox && !fctx->record) {
+		r = annotatemore_lookupmask(fctx->mailbox->name,
+					    buf_cstring(&fctx->buf),
+					    httpd_userid, &attrib);
+	    }
+
+	    if (r) r = HTTP_SERVER_ERROR;
+	    else if (attrib.len) {
+		data = buf_cstring(&attrib);
+		datalen = attrib.len;
+	    }
+	    else r = HTTP_NOT_FOUND;
+	}
+	else r = HTTP_NOT_FOUND;
     }
 
     if (!r) r = propfind_getdata(name, ns, fctx, propstat, prop,
