@@ -478,7 +478,7 @@ AS_IF([test "$with_com_err" != 'yes'],[
 	])
 ])
 
-AS_IF([expr "$ac_cv_header_jansson_h" : '/' >/dev/null],[
+AS_IF([test "$ac_cv_header_jansson_h" != 'no'],[
 	AC_MSG_CHECKING([jansson version])
 	JANSSON_MAJOR=`sed -n -e's/#define JANSSON_MAJOR_VERSION.*\([0-9][0-9]*\)/\1/p' $ac_cv_header_jansson_h`
 	JANSSON_MINOR=`sed -n -e's/#define JANSSON_MINOR_VERSION.*\([0-9][0-9]*\)/\1/p' $ac_cv_header_jansson_h`
@@ -702,9 +702,9 @@ AM_CONDITIONAL([HAVE_CLAMAV], [test "$ac_cv_func_cl_init" = "yes"])
 AM_CONDITIONAL([COM_ERR], [test "$with_com_err" = "yes"])
 AM_CONDITIONAL([CUNIT],[test "$with_cunit" != "no"])
 AM_CONDITIONAL([GMTOFF_TM], [test "$ac_cv_member_struct_tm_tm_gmtoff" = 'yes'])
-AM_CONDITIONAL([HTTPD], [test "$enable_http" != "no" -a "$ac_cv_header_jansson_h" = 'yes'])
+AM_CONDITIONAL([HTTPD], [test "$enable_http" != "no" -a "$ac_cv_header_jansson_h" != 'no'])
 AM_CONDITIONAL([CALALARMD], [test "$enable_http" != "no"])
-AM_CONDITIONAL([JANSSON], [test "$enable_event_notification" != 'no' -a "$ac_cv_header_jansson_h" = 'yes'])
+AM_CONDITIONAL([JANSSON], [test "$enable_event_notification" != 'no' -a "$ac_cv_header_jansson_h" != 'no'])
 AM_CONDITIONAL([HAVE_LDAP], [test "$HAVE_LIBLDAP" = "yes"])
 AM_CONDITIONAL([PTCLIENT], [test "$HAVE_LIBLDAP" = "yes" -a -n "$LIBS_AFS"])
 AM_CONDITIONAL([LOCK_FCNTL], [test "$enable_lock" = "fcntl"])

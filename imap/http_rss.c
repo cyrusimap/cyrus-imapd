@@ -740,7 +740,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     	etag, sizeof (etag), "%u-%u-%u",
 	mailbox->i.uidvalidity, mailbox->i.last_uid, mailbox->i.exists
     );
-    precond = check_precond(txn, NULL, etag, lastmod);
+    precond = check_precond(txn, etag, lastmod);
 
     switch (precond) {
     case HTTP_OK:
