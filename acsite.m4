@@ -1328,21 +1328,41 @@ AC_DEFUN(CYRUS_OPTION_WITH_OPENAFS,[
 AC_DEFUN(CYRUS_OPENAFS,[
 	AC_REQUIRE([CYRUS_KRB5])
 	SNERT_CHECK_PACKAGE([AFS], dnl
-		[afs/afs.h afs/auth.h afs/cellconfig.h afs/com_err.h afs/ptserver.h afs/pterror.h], dnl
-		[afs/libkauth.a afs/libafscom_err afs/libauth afs/libprot afs/libsys afs/util.a dnl
-		libafslwp liblwp librxkad librx libubik],[], dnl
-		[$with_openafs],[$with_openafs_inc],[$with_openafs_lib] dnl
+		[afs/afs.h afs/afsutil.h afs/auth.h afs/cellconfig.h afs/com_err.h afs/ptserver.h afs/pterror.h], dnl
+		[afs/libkauth.a afs/libafscom_err afs/libauth afs/libprot afs/libsys dnl
+		 afs/libafsutil afs/util.a libafslwp liblwp librxkad librx libubik],[], dnl
+		[$with_openafs],[$with_openafs_inc],[$with_openafs_lib],[],[no]dnl
 	)
+
+	dnl Do we have BOTH libafsutil and util.a, which are the same library? Remove the latter.
+	AS_IF([test "$HAVE_AFS_LIBAFSUTIL" != 'no' -a "$HAVE_AFS_UTIL_A" != 'no'],[
+		LIBS_AFS=`echo $LIBS_AFS | sed -e's, [[^ ]][[^ ]]*afs/util\.a,,'`
+	])
+
+	AS_IF([test "$HAVE_AFS_LIBAFSUTIL" != 'no' -o "$HAVE_AFS_UTIL_A" != 'no'],[
+		dnl libafsutil references krb5_* functions.
+		SNERT_JOIN_UNIQ([LIBS_AFS],[$LIBS_KRB5])
+		SNERT_JOIN_UNIQ([LDFLAGS_AFS],[$LDFLAGS_KRB5])
+		SNERT_JOIN_UNIQ([CPPFLAGS_AFS],[$CPPFLAGS_KRB5])
+	])
+
 	AC_PATH_PROG([AFS_COMPILE_ET],[afs_compile_et],[false])
 	AC_DEFINE_UNQUOTED([HAVE_AFS_COMPILE_ET],[$AFS_COMPILE_ET],[OpenAFS supplies a compile_et.])
 	AC_SUBST([AFS_COMPILE_ET])
 
-dnl 	AC_SUBST(LIBS_AFS)
-dnl 	AC_SUBST(CPPFLAGS_AFS)
-dnl 	AC_SUBST(LDFLAGS_AFS)
+ 	SNERT_DEFINE(LIBS_AFS)
+ 	SNERT_DEFINE(LDFLAGS_AFS)
+ 	SNERT_DEFINE(CPPFLAGS_AFS)
+
+ 	AC_SUBST(LIBS_AFS)
+ 	AC_SUBST(LDFLAGS_AFS)
+ 	AC_SUBST(CPPFLAGS_AFS)
+
+	dnl Note libafsutil.a same as util.a.
  	AH_VERBATIM(CPPFLAGS_AFS,[
 #undef HAVE_AFS_AFS_H
 #undef HAVE_AFS_AUTH_H
+#undef HAVE_AFS_AFSUTIL_H
 #undef HAVE_AFS_CELLCONFIG_H
 #undef HAVE_AFS_COM_ERR_H
 #undef HAVE_AFS_COMPILE_ET
@@ -1353,6 +1373,7 @@ dnl 	AC_SUBST(LDFLAGS_AFS)
 #undef HAVE_AFS_LIBAUTH
 #undef HAVE_AFS_LIBPROT
 #undef HAVE_AFS_LIBSYS
+#undef HAVE_AFS_LIBAFSUTIL
 #undef HAVE_AFS_UTIL_A
 #undef HAVE_LIBAFSLWP
 #undef HAVE_LIBLWP
