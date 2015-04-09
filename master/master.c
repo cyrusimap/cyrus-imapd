@@ -2300,7 +2300,7 @@ int main(int argc, char **argv)
     init_snmp("cyrusMaster");
 #endif
 
-#if defined(__linux__) && defined(HAVE_LIBCAP)
+#if defined(__linux__) && defined(HAVE_SYS_CAPABILITY_H)
     if (become_cyrus(/*is_master*/1) != 0) {
 	syslog(LOG_ERR, "can't change to the cyrus user: %m");
 	exit(1);
@@ -2325,7 +2325,7 @@ int main(int argc, char **argv)
 		   Services[i].stat[0], Services[i].stat[1]);
     }
 
-#if !defined(__linux__) || !defined(HAVE_LIBCAP)
+#if !defined(__linux__) || !defined(HAVE_SYS_CAPABILITY_H)
     if (become_cyrus(/*is_master*/1) != 0) {
 	syslog(LOG_ERR, "can't change to the cyrus user: %m");
 	exit(1);
