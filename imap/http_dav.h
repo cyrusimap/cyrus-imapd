@@ -80,6 +80,7 @@
 
 /* Index into known namespace array */
 enum {
+    NS_REQ_ROOT = -1,	/* special case: ns of request root (not an index) */
     NS_DAV,
     NS_CALDAV,
     NS_CARDDAV,
@@ -418,14 +419,6 @@ struct mime_type_t {
     void (*end_stream)(struct buf *);
 };
 
-/* meth_mkcol() parameters */
-struct mkcol_params {
-    unsigned mbtype;			/* mbtype to use for created mailbox */
-    const char *xml_req;		/* toplevel XML request element */
-    const char *xml_resp;		/* toplevel XML response element */
-    unsigned xml_ns;			/* namespace of response element */
-};
-
 /*
  * Function to do special processing for POST method (optional).
  * Returns HTTP_CONTINUE if processing should continue in meth_post(),
@@ -481,7 +474,7 @@ struct meth_params {
     put_proc_t copy;			/* function to process & COPY a rsrc */
     delete_proc_t delete;		/* special DELETE handling (optional) */
     get_proc_t get;			/* special GET handling (optional) */
-    struct mkcol_params mkcol;		/* params for creating collection */
+    uint32_t mkcol_mbtype;		/* mbtype for MKCOL/MKCALENDAR */
     post_proc_t post;			/* special POST handling (optional) */
     struct put_params put;		/* params for putting a resource */
     const struct prop_entry *lprops;	/* array of "live" properties */

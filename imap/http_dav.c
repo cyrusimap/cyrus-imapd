@@ -721,9 +721,12 @@ xmlNodePtr init_xml_response(const char *resp, int ns,
     xml_add_ns(req, respNs, root);
 
     /* Set namespace of root node */
-    ensure_ns(respNs, ns, root,
-	      known_namespaces[ns].href, known_namespaces[ns].prefix);
-    xmlSetNs(root, respNs[ns]);
+    if (ns == NS_REQ_ROOT) xmlSetNs(root, req->ns);
+    else {
+	ensure_ns(respNs, ns, root,
+		  known_namespaces[ns].href, known_namespaces[ns].prefix);
+	xmlSetNs(root, respNs[ns]);
+    }
 
     return root;
 }
@@ -4024,13 +4027,12 @@ int meth_mkcol(struct transaction_t *txn, void *params)
     if (ret) goto done;
 
     if (root) {
-	/* Check for correct root element */
+	/* Check for correct root element (lowercase method name ) */
 	indoc = root->doc;
 
-	if (txn->meth == METH_MKCOL)
-	    r = xmlStrcmp(root->name, BAD_CAST "mkcol");
-	else
-	    r = xmlStrcmp(root->name, BAD_CAST mparams->mkcol.xml_req);
+	buf_setcstr(&txn->buf, http_methods[txn->meth].name);
+	lcase(txn->buf.s);
+	r = xmlStrcmp(root->name, BAD_CAST buf_cstring(&txn->buf));
 	if (r) {
 	    txn->error.desc = "Incorrect root element in XML request\r\n";
 	    ret = HTTP_BAD_MEDIATYPE;
@@ -4041,8 +4043,8 @@ int meth_mkcol(struct transaction_t *txn, void *params)
     }
 
     /* Create the mailbox */
-    r = mboxlist_createmailbox(txn->req_tgt.mbentry->name, mparams->mkcol.mbtype,
-			       partition,
+    r = mboxlist_createmailbox(txn->req_tgt.mbentry->name,
+			       mparams->mkcol_mbtype, partition,
 			       httpd_userisadmin || httpd_userisproxyadmin,
 			       httpd_userid, httpd_authstate,
 			       /*localonly*/0, /*forceuser*/0,
@@ -4051,11 +4053,8 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 
     if (instr && !r) {
 	/* Start construction of our mkcol/mkcalendar response */
-	if (txn->meth == METH_MKCOL)
-	    root = init_xml_response("mkcol-response", NS_DAV, root, ns);
-	else
-	    root = init_xml_response(mparams->mkcol.xml_resp,
-				     mparams->mkcol.xml_ns, root, ns);
+	buf_appendcstr(&txn->buf, "-response");
+	root = init_xml_response(buf_cstring(&txn->buf), NS_REQ_ROOT, root, ns);
 	if (!root) {
 	    ret = HTTP_SERVER_ERROR;
 	    txn->error.desc = "Unable to create XML response\r\n";
@@ -4076,19 +4075,18 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 	pctx.ret = &r;
 
 	/* Execute the property patch instructions */
-	if (!r) ret = do_proppatch(&pctx, instr);
+	ret = do_proppatch(&pctx, instr);
 
 	if (ret || r) {
-	    /* Something failed.  Abort the txn and change the OK status */
+	    /* Setting properties failed - delete mailbox */
+	    mailbox_close(&mailbox);
+	    mboxlist_deletemailbox(txn->req_tgt.mbentry->name,
+				   /*isadmin*/1, NULL, NULL, NULL,
+				   /*checkacl*/0, /*localonly*/0, /*force*/1);
 
 	    if (!ret) {
-		/* Error response MUST be a multistatus */
-		xmlNodeSetName(root, BAD_CAST "multistatus");
-		xmlSetNs(root, ns[NS_DAV]);
-
 		/* Output the XML response */
-		xml_response(HTTP_MULTI_STATUS, txn, outdoc);
-		ret = 0;
+		xml_response(r, txn, outdoc);
 	    }
 
 	    goto done;
@@ -4101,7 +4099,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 	txn->error.precond = DAV_RSRC_EXISTS;
 	ret = HTTP_FORBIDDEN;
     }
-    else if (r) {
+    else {
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
     }

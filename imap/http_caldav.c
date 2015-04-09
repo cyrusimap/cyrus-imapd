@@ -681,7 +681,7 @@ static struct meth_params caldav_params = {
     (put_proc_t) &caldav_copy,
     &caldav_delete_sched,
     &caldav_get,
-    { MBTYPE_CALENDAR, "mkcalendar", "mkcalendar-response", NS_CALDAV },
+    MBTYPE_CALENDAR,
     &caldav_post,
     { CALDAV_SUPP_DATA, (put_proc_t) &caldav_put },
     caldav_props,

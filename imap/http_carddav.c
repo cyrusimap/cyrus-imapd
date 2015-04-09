@@ -276,7 +276,7 @@ static struct meth_params carddav_params = {
     (put_proc_t) &carddav_put,
     NULL,		  	      		/* No special DELETE handling */
     NULL,		  	      		/* No special GET handling */
-    { MBTYPE_ADDRESSBOOK, NULL, NULL, 0 },	/* No special MK* method */
+    MBTYPE_ADDRESSBOOK,
     NULL,		  	      		/* No special POST handling */
     { CARDDAV_SUPP_DATA, (put_proc_t) &carddav_put },
     carddav_props,
