@@ -67,6 +67,13 @@
 # endif /* HAVE_PCREPOSIX_H */
 #endif /* ENABLE_REGEX */
 
+#ifndef HAVE_STRLCPY
+# include "xstrlcpy.h"
+#endif
+#ifndef HAVE_STRLCAT
+# include "xstrlcat.h"
+#endif
+
 #ifndef __GNUC__
 typedef int (*__compar_fn_t)(const void *, const void *);
 #endif
