@@ -8,7 +8,9 @@ dnl
 AC_DEFUN([SNERT_JOIN_UNIQ],[
 	list=`eval echo \$$1`
 	for w in $2; do
-		AS_IF([expr "$list" : ".*$w" >/dev/null],[
+		dnl Look for the whole word in the list.
+		AS_IF([expr " $list " : ".* $w " >/dev/null],[
+			:
 		],[
 			AS_IF([test "$3" = 'head'],[
 				list="$w${list:+ $list}"
