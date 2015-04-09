@@ -3053,6 +3053,7 @@ static int caldav_put(struct transaction_t *txn, icalcomponent *ical,
 			   userid, strrchr(cdata->dav.mailbox, '.')+1,
 			   cdata->dav.resource);
 		txn->error.resource = buf_cstring(&txn->buf);
+		txn->error.precond = CALDAV_UNIQUE_OBJECT;
 		ret = HTTP_FORBIDDEN;
 		goto done;
 	    }
