@@ -438,9 +438,9 @@ EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
     "  alive, creationdate, mailbox, resource, imap_uid, modseq,"	\
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
     "  comp_type, ical_uid, organizer, dtstart, dtend,"			\
-    "  comp_flags, sched_tag )"					\
+    "  comp_flags, sched_tag )"						\
     " VALUES ("								\
-    "  :alive, :creationdate, :mailbox, :resource, :imap_uid, :modseq,"\
+    "  :alive, :creationdate, :mailbox, :resource, :imap_uid, :modseq,"	\
     "  :lock_token, :lock_owner, :lock_ownerid, :lock_expire,"		\
     "  :comp_type, :ical_uid, :organizer, :dtstart, :dtend,"		\
     "  :comp_flags, :sched_tag );"
@@ -489,31 +489,31 @@ EXPORTED int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata,
     sqlite3_stmt **stmt;
     int r;
 
-    bval[12].name = ":comp_flags";
-    bval[12].type = SQLITE_INTEGER;
-    bval[12].val.i = _comp_flags_to_num(&cdata->comp_flags);
+    bval[13].name = ":comp_flags";
+    bval[13].type = SQLITE_INTEGER;
+    bval[13].val.i = _comp_flags_to_num(&cdata->comp_flags);
 
     if (cdata->dav.rowid) {
 	cmd = CMD_UPDATE;
 	stmt = &caldavdb->stmt[STMT_UPDATE];
 
-	bval[13].name = ":rowid";
-	bval[13].type = SQLITE_INTEGER;
-	bval[13].val.i = cdata->dav.rowid;
+	bval[14].name = ":rowid";
+	bval[14].type = SQLITE_INTEGER;
+	bval[14].val.i = cdata->dav.rowid;
     }
     else {
 	cmd = CMD_INSERT;
 	stmt = &caldavdb->stmt[STMT_INSERT];
 
-	bval[13].name = ":creationdate";
-	bval[13].type = SQLITE_INTEGER;
-	bval[13].val.i = cdata->dav.creationdate;
-	bval[14].name = ":mailbox";
-	bval[14].type = SQLITE_TEXT;
-	bval[14].val.s = cdata->dav.mailbox;
-	bval[15].name = ":resource";
+	bval[14].name = ":creationdate";
+	bval[14].type = SQLITE_INTEGER;
+	bval[14].val.i = cdata->dav.creationdate;
+	bval[15].name = ":mailbox";
 	bval[15].type = SQLITE_TEXT;
-	bval[15].val.s = cdata->dav.resource;
+	bval[15].val.s = cdata->dav.mailbox;
+	bval[16].name = ":resource";
+	bval[16].type = SQLITE_TEXT;
+	bval[16].val.s = cdata->dav.resource;
     }
 
     r = dav_exec(caldavdb->db, cmd, bval, NULL, NULL, stmt);
