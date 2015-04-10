@@ -189,7 +189,7 @@ static int dump_cb(void *rockp,
 
     // this is a dlist
     if (data[0] == '%') {
-	char *mbtype_str = '\0';    // placeholder for string obtained from dlist
+	char *mbtype_str = NULL;    // placeholder for string obtained from dlist
 
 	r = dlist_parsemap(&dl, 0, data, datalen);
 
