@@ -1768,11 +1768,15 @@ AC_DEFUN([CYRUS_CUNIT],[
 	LDFLAGS="$LDFLAGS_CUNIT $LDFLAGS"
 	CPPFLAGS="$CPPFLAGS_CUNIT $CPPFLAGS"
 
-	AC_CHECK_HEADER([CUnit/Basic.h],[
-		AC_CHECK_TYPES([CU_SetUpFunc],[],[],[
-#include <CUnit/Basic.h>
-		])
-	])
+	AC_CHECK_HEADER(
+		[CUnit/Basic.h],
+		AC_CHECK_TYPE(
+			[CU_SetUpFunc],
+			AC_DEFINE(HAVE_CU_SETUPFUNC,[],[Do we have CU_SetUpFunc?]),
+			[],
+			[#include <CUnit/Basic.h>]
+		),
+	)
 
 	CPPFLAGS="$save_CPPFLAGS"
 	LDFLAGS="$save_LDFLAGS"
