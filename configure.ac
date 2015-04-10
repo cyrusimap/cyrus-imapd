@@ -580,13 +580,14 @@ AS_IF([test -n "$LIBS_MYSQL" -o -n "$LIBS_PGSQL" -o -n "$LIBS_SQLITE3"],[
 ])
 AC_MSG_RESULT($HAVE_SQL)
 
-AS_IF([test X"$enable_sphinx" = X'yes' -a X"$LIBS_MYSQL" = X],[
+dnl Sphinx can only be enabled if you also have MySQL
+AS_IF([test "$enable_sphinx" != 'no' -a X"$LIBS_MYSQL" != X],[
 	AC_DEFINE(USE_SPHINX,[1],[Build in Sphinx support?])
 ],[
 	AC_MSG_WARN([Sphinx requires MySQL, but MySQL not available; disabled.])
 	enable_sphinx='no'
 ])
-AS_IF([test X"$enable_squat" = X'yes'],[
+AS_IF([test "$enable_squat" != 'no'],[
 	AC_DEFINE(USE_SQUAT,[1],[Build in Squat support?])
 ])
 AS_IF([test "$with_xapian" != 'no' -a "$XAPIAN_CONFIG" != 'false'],[
