@@ -529,6 +529,10 @@ HIDDEN const struct charset chartables_charset_table[] = {
     { "iso-8859-13", chartables_iso_8859_13 },
     { "iso-8859-14", chartables_iso_8859_14 },
     { "iso-8859-16", chartables_iso_8859_16 },
+    { "windows-1254", chartables_windows_1254 },
+    { "windows-1258", chartables_windows_1258 },
+    { "windows-874", chartables_windows_874 },
+
     /* New character sets should only be added to end so that
      * cache files stay with valid information */
 };
