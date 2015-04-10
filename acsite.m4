@@ -1897,7 +1897,7 @@ AC_DEFUN(CYRUS_XAPIAN,[
 
 	AC_ARG_VAR([XAPIAN_CONFIG],[Location of xapian-config])
 	AC_PATH_PROG([XAPIAN_CONFIG],[xapian-config],[false])
-	AS_IF([test "$XAPIAN_CONFIG" = 'false'],[
+	AS_IF([test "$XAPIAN_CONFIG" = 'false' -o "$ac_cv_header_xapian_h" = "no"],[
 		with_xapian='no'
 		AS_UNSET([LIBS_XAPIAN])
 		AS_UNSET([LDFLAGS_XAPIAN])
