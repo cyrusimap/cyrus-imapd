@@ -3298,6 +3298,7 @@ static void index_fetchfsection(struct index_state *state,
     const char *p;
     int32_t skip = 0;
     int fields_not = 0;
+    const char *crlf = "\r\n";
     unsigned crlf_start = 0;
     unsigned crlf_size = 2;
     char *buf;
@@ -3387,7 +3388,7 @@ static void index_fetchfsection(struct index_state *state,
     /* Write literal */
     prot_printf(state->out, "{%u}\r\n", size + crlf_size);
     prot_write(state->out, buf + start_octet, size);
-    prot_write(state->out, "\r\n" + crlf_start, crlf_size);
+    prot_write(state->out, crlf + crlf_start, crlf_size);
 
     return;
 
@@ -3456,6 +3457,7 @@ index_fetchcacheheader(struct index_state *state, struct index_record *record,
 {
     static struct buf buf = BUF_INITIALIZER;
     unsigned size;
+    const char *crlf = "\r\n";
     unsigned crlf_start = 0;
     unsigned crlf_size = 2;
     struct mailbox *mailbox = state->mailbox;
@@ -3504,7 +3506,7 @@ index_fetchcacheheader(struct index_state *state, struct index_record *record,
     else {
 	prot_printf(state->out, "{%u}\r\n", size + crlf_size);
 	prot_write(state->out, buf.s + start_octet, size);
-	prot_write(state->out, "\r\n" + crlf_start, crlf_size);
+	prot_write(state->out, crlf + crlf_start, crlf_size);
     }
 }
 
