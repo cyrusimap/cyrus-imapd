@@ -6614,7 +6614,6 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
     char mailboxname[MAX_MAILBOX_BUFFER];
     mbentry_t *mbentry = NULL;
     struct mboxevent *mboxevent = NULL;
-    char *p;
 
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 					       imapd_userid, mailboxname);
