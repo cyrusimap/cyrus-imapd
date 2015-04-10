@@ -101,7 +101,6 @@ CYRUS_OPTION_WITH_GSSAPI
 AC_ARG_WITH(ldap,[AS_HELP_STRING([--with-ldap=DIR],[LDAP support])],,[with_ldap='yes'])
 
 CYRUS_OPTION_WITH_JANSSON
-CYRUS_OPTION_WITH_KRB4
 CYRUS_OPTION_WITH_KRB5
 SNERT_OPTION_WITH_MYSQL
 SNERT_OPTION_WITH_PGSQL
@@ -121,7 +120,6 @@ AC_ARG_WITH(pid-file,[AS_HELP_STRING([--with-pid-file=DIR],[pidfile in DIR [/var
 SNERT_OPTION_WITH_SASL2
 SNERT_OPTION_WITH_SQLITE3
 CYRUS_OPTION_WITH_XAPIAN
-CYRUS_OPTION_WITH_ZEPHYR
 SNERT_OPTION_WITH_ZLIB
 
 #######################################################################
@@ -259,7 +257,6 @@ CYRUS_CUNIT
 CYRUS_ICAL
 CYRUS_ICU
 CYRUS_JANSSON
-CYRUS_KRB4
 CYRUS_KRB5
 CYRUS_GSSAPI
 CYRUS_XML2
@@ -275,7 +272,6 @@ SNERT_SASL2
 SNERT_SQLITE3
 CYRUS_UUID
 CYRUS_XAPIAN
-CYRUS_ZEPHYR
 SNERT_ZLIB
 
 AS_ECHO()
@@ -622,7 +618,6 @@ AS_IF([test -n "$LIBS_LDAP"],[AC_DEFINE_UNQUOTED(HAVE_LDAP,"$LIBS_LDAP",[Should 
 AS_IF([test -n "$LIBS_MYSQL"],[AC_DEFINE_UNQUOTED(HAVE_MYSQL,"$LIBS_MYSQL",[Build in MySQL support?])])
 AS_IF([test -n "$LIBS_PGSQL"],[AC_DEFINE_UNQUOTED(HAVE_PGSQL,"$LIBS_PGSQL",[Build in PostgreSQL support?])])
 AS_IF([test -n "$LIBS_SQLITE3"],[AC_DEFINE_UNQUOTED(HAVE_SQLITE,"$LIBS_SQLITE3",[Build in SQLite support?])])
-AS_IF([test -n "$LIBS_ZEPHYR"],[AC_DEFINE_UNQUOTED(HAVE_ZEPHYR,"$LIBS_ZEPHYR",[Build with Zephyr support?])])
 AS_IF([test -n "$LIBS_ZLIB"],[AC_DEFINE_UNQUOTED(HAVE_ZLIB, "$LIBS_ZLIB",[Do we have zlib?])])
 AS_IF([test -n "$HAVE_SYS_ERRLIST"],[AC_DEFINE_UNQUOTED(NEED_SYS_ERRLIST, $HAVE_SYS_ERRLIST, [Do we have a sys_errlist?])])
 AC_DEFINE_UNQUOTED(MASTER_PIDFILE, "$with_pid_file",[File path of the PID file for master])
@@ -648,6 +643,10 @@ AC_SUBST(GCOV_CFLAGS)
 AC_SUBST(GCOV_CXXFLAGS)
 AC_SUBST(GCOV_LDFLAGS)
 AC_SUBST(GCOV_LIBS)
+
+dnl --with-zephyr has been dropped, but need the substitions to work.
+AC_SUBST(HAVE_KRB)
+AC_SUBST(ZEPHYR_LIBS)
 
 AC_SUBST(AFS_CFLAGS, $CPPFLAGS_AFS)
 AC_SUBST(AFS_LDFLAGS, $LDFLAGS_AFS)
@@ -678,8 +677,6 @@ AC_SUBST([JANSSON_LIBS], $LIBS_JANSSON)
 AC_SUBST([JANSSON_LDFLAGS], $LDFLAGS_JANSSON)
 AC_SUBST([JANSSON_CFLAGS], $CPPFLAGS_JANSSON)
 
-AC_SUBST(HAVE_KRB, $LIBS_KRB4)
-
 AC_SUBST(SASLFLAGS, $CPPFLAGS_SASL2)
 AC_SUBST(LIB_SASL, $LIBS_SASL2)
 AC_SUBST(LIB_DYN_SASL, $LIBS_SASL2)
@@ -700,8 +697,6 @@ AC_SUBST(PGSQL_LIBS, $LIBS_PGSQL)
 AC_SUBST(XAPIAN_LIBS, $LIBS_XAPAIN)
 AC_SUBST(XAPIAN_CXXFLAGS, $CXXFLAGS_XAPIAN)
 AC_SUBST(XAPIAN_VERSION)
-
-AC_SUBST(ZEPHYR_LIBS, $LIBS_ZEPHYR)
 
 AC_SUBST(ZLIB, $LIBS_ZLIB)
 
@@ -951,7 +946,6 @@ AC_MSG_RESULT([  User & Group........: $enable_cyrus_user:$enable_cyrus_group])
 AC_MSG_RESULT([  Event notification..: $enable_event_notification])
 AC_MSG_RESULT([  GSSAPI impl.........: $enable_gssapi])
 AC_MSG_RESULT([  Http................: $enable_http])
-AC_MSG_RESULT([  Kerberos 4 impl.....: $with_krb with DES $with_krb_des])
 AC_MSG_RESULT([  Lock................: $enable_lock])
 AC_MSG_RESULT([  Mmap................: $enable_mmap])
 AC_MSG_RESULT([  pid file............: $with_pid_file])
@@ -974,7 +968,6 @@ AC_MSG_RESULT([  com_err.............: "$CPPFLAGS_COM_ERR" "$LDFLAGS_COM_ERR" "$
 AC_MSG_RESULT([  CUnit...............: "$CPPFLAGS_CUNIT" "$LDFLAGS_CUNIT" "$LIBS_CUNIT"])
 AC_MSG_RESULT([  GSSAPI..............: "$CPPFLAGS_GSSAPI" "$LDFLAGS_GSSAPI" "$LIBS_GSSAPI"])
 AC_MSG_RESULT([  Jansson.............: "$CPPFLAGS_JANSSON" "$LDFLAGS_JANSSON" "$LIBS_JANSSON"])
-AC_MSG_RESULT([  Kerberos 4..........: "$CPPFLAGS_KRB4" "$LDFLAGS_KRB4" "$LIBS_KRB4"])
 AC_MSG_RESULT([  Kerberos 5..........: "$CPPFLAGS_KRB5" "$LDFLAGS_KRB5" "$LIBS_KRB5"])
 AC_MSG_RESULT([  libical.............: "$CPPFLAGS_ICAL" "$LDFLAGS_ICAL" "$LIBS_ICAL"])
 AC_MSG_RESULT([  libicu..............: "$CPPFLAGS_ICU" "$LDFLAGS_ICU" "$LIBS_ICU"])
@@ -991,7 +984,6 @@ AC_MSG_RESULT([  Perl................: "$with_perl"])
 AC_MSG_RESULT([  SASL2...............: "$CPPFLAGS_SASL2" "$LDFLAGS_SASL2" "$LIBS_SASL2"])
 AC_MSG_RESULT([  SQLite3.............: "$CPPFLAGS_SQLITE3" "$LDFLAGS_SQLITE3" "$LIBS_SQLITE3"])
 AC_MSG_RESULT([  Xapian..............: "$CXXFLAGS_XAPIAN" "$LDFLAGS_XAPIAN" "$LIBS_XAPIAN"])
-AC_MSG_RESULT([  Zephyr..............: "$CPPFLAGS_ZEPHYR" "$LDFLAGS_ZEPHYR" "$LIBS_ZEPHYR"])
 AC_MSG_RESULT([  zlib................: "$CPPFLAGS_ZLIB" "$LDFLAGS_ZLIB" "$LIBS_ZLIB"])
 AS_ECHO()
 
