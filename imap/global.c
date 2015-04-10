@@ -777,10 +777,10 @@ EXPORTED void session_new_id(void)
     if (!base) base = config_servername;
 
     #ifdef HAVE_SSL
-    unsigned char random[8];
-    RAND_bytes(random, sizeof(random));
+    unsigned long long random;
+    RAND_bytes((unsigned char *)&random, sizeof(random));
     snprintf(session_id_buf, MAX_SESSIONID_SIZE, "%.128s-%d-%d-%d-%llu",
-             base, getpid(), session_id_time, session_id_count, (unsigned long long)(*((uint64_t *)random)));
+             base, getpid(), session_id_time, session_id_count, random);
     #else
     snprintf(session_id_buf, MAX_SESSIONID_SIZE, "%.128s-%d-%d-%d",
              base, getpid(), session_id_time, session_id_count);
