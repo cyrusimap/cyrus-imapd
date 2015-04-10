@@ -75,6 +75,7 @@ DISTCLEANFILES = \
 	imap/mupdate_err.h \
 	imap/nntp_err.c \
 	imap/nntp_err.h \
+	imap/http_caldav_js.h \
 	imap/http_err.c \
 	imap/http_err.h \
 	imap/tz_err.c \
@@ -212,6 +213,7 @@ AM_CPPFLAGS += $(HTTP_CPPFLAGS)
 AM_LDFLAGS += $(HTTP_LIBS)
 
 BUILT_SOURCES += \
+	imap/http_caldav_js.h \
 	imap/http_err.c \
 	imap/http_err.h \
 	imap/tz_err.c \
@@ -251,6 +253,7 @@ EXTRA_DIST += \
 
 if !HTTPD
 EXTRA_DIST += \
+	imap/http_caldav_js.h \
 	imap/http_err.c \
 	imap/http_err.h \
 	imap/tz_err.c \
@@ -338,6 +341,7 @@ EXTRA_DIST += \
 	cunit/vg.supp \
 	doc \
 	imap/dav_util.h \
+	imap/http_caldav_js \
 	imap/http_err.et \
 	imap/imap_err.et \
 	imap/mupdate_err.et \
@@ -1135,6 +1139,7 @@ imap_nntpd_SOURCES = \
 imap_nntpd_LDADD = $(LD_SERVER_ADD)
 
 nodist_imap_httpd_SOURCES = \
+	imap/http_caldav_js.h \
 	imap/http_err.c \
 	imap/http_err.h \
 	imap/tz_err.c \
@@ -1235,6 +1240,9 @@ imap/mupdate_err.h imap/mupdate_err.c: imap/mupdate_err.et $(COMPILE_ET_DEP)
 
 imap/nntp_err.h imap/nntp_err.c: imap/nntp_err.et $(COMPILE_ET_DEP)
 	cd imap && $(COMPILE_ET) ../$(top_srcdir)/imap/nntp_err.et
+
+imap/http_caldav_js.h: imap/http_caldav.js
+	cd imap && xxd -i http_caldav.js > http_caldav_js.h
 
 imap/http_err.h imap/http_err.c: imap/http_err.et $(COMPILE_ET_DEP)
 	cd imap && $(COMPILE_ET) ../$(top_srcdir)/imap/http_err.et

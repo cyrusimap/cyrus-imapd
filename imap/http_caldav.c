@@ -1767,6 +1767,7 @@ static int list_calendars(struct transaction_t *txn, int rights)
     struct list_cal_rock lrock;
     const char *proto = NULL;
     const char *host = NULL;
+#include "http_caldav_js.h"
 
     /* Check rights */
     if ((rights & DACL_READ) != DACL_READ) {
@@ -1826,8 +1827,14 @@ static int list_calendars(struct transaction_t *txn, int rights)
     buf_printf_markup(body, level++, "<html>");
     buf_printf_markup(body, level++, "<head>");
     buf_printf_markup(body, level, "<title>%s</title>", "Available Calendars");
-    buf_printf_markup(body, level++, "<script src=\"/http_caldav.js\">");
+    buf_printf_markup(body, level++, "<script type=\"text/javascript\">");
+    buf_printf(body, "//<![CDATA[\n%.*s//]]>\n",
+	       http_caldav_js_len, (const char *) http_caldav_js);
     buf_printf_markup(body, --level, "</script>");
+    buf_printf_markup(body, level++, "<noscript>");
+    buf_printf_markup(body, level, "<i>*** %s ***</i>",
+		      "JavaScript required to create/modify/delete calendars");
+    buf_printf_markup(body, --level, "</noscript>");
     buf_printf_markup(body, --level, "</head>");
     buf_printf_markup(body, level++, "<body>");
     buf_printf_markup(body, level, "<h2>%s</h2>", "Available Calendars");
