@@ -601,11 +601,7 @@ log_cwd(void)
 		syslog(LOG_WARNING, "Unable to determine system PATH_MAX. Using POSIX default.");
 		path_max = _POSIX_PATH_MAX;
 	}
-	if ((path = malloc(path_max)) == NULL) {
-		syslog(LOG_ERR, "%s:%d %s", __FILE__, __LINE__, strerror(errno));
-		exit(EXIT_FAILURE);
-	}
-
+	path = xmalloc(path_max);
 	*path = '\0';
 	(void) getcwd(path, path_max);
 	syslog(LOG_DEBUG, "cwd=\"%s\"", path);
