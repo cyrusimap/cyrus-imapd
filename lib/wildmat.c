@@ -83,8 +83,8 @@
 
 #include "config.h"
 #include "wildmat.h"
+#include "util.h"
 #include "xmalloc.h"
-
 
 #define TRUE			1
 #define FALSE			0
