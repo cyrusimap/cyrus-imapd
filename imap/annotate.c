@@ -555,7 +555,7 @@ static int annotate_dbname_mailbox(struct mailbox *mailbox, char **fnamep)
 
     return 0;
 }
- 
+
 
 static int annotate_dbname(const char *mboxname, char **fnamep)
 {
@@ -2187,7 +2187,7 @@ EXPORTED int annotate_state_fetch(annotate_state_t *state,
 	 * actually illegal in attribute names.
 	 */
 	g = glob_init(s, GLOB_HIERARCHY);
-	
+
 	for (attribcount = 0;
 	     annotation_attributes[attribcount].name;
 	     attribcount++) {
@@ -2202,7 +2202,7 @@ EXPORTED int annotate_state_fetch(annotate_state_t *state,
 		    state->attribs |= annotation_attributes[attribcount].entry;
 	    }
 	}
-	
+
 	glob_free(&g);
     }
 
@@ -2273,7 +2273,7 @@ EXPORTED int annotate_state_fetch(annotate_state_t *state,
 	    /* Add the db entry to our list */
 	    _annotate_state_add_entry(state, db_entry, s);
 	}
-	    
+
 	glob_free(&g);
     }
 
@@ -2368,7 +2368,7 @@ EXPORTED int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const c
 EXPORTED int annotatemore_msg_lookupmask(const char *mboxname, uint32_t uid, const char *entry,
 					 const char *userid, struct buf *value)
 {
-    int r;
+    int r = 0;
     value->len = 0; /* just in case! */
     /* only if the user isn't the owner, we look for a masking value */
     if (!mboxname_userownsmailbox(userid, mboxname))
@@ -3315,7 +3315,7 @@ EXPORTED int annotate_msg_copy(struct mailbox *oldmailbox, uint32_t olduid,
 
 static int cleanup_cb(void *rock,
 		      const char *key, size_t keylen,
-		      const char *data __attribute__((unused)), 
+		      const char *data __attribute__((unused)),
 		      size_t datalen __attribute__((unused)))
 {
     annotate_db_t *d = (annotate_db_t *)rock;

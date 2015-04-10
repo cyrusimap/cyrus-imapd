@@ -594,7 +594,6 @@ EXPORTED void
 log_cwd(void)
 {
 	char *path;
-	size_t length;
 	long path_max;
 
 	if ((path_max = pathconf("/", _PC_PATH_MAX)) == -1) {
