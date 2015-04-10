@@ -1151,7 +1151,13 @@ dnl
 dnl The choice is reflected in GSSAPIBASE_LIBS
 dnl
 AC_DEFUN([CYRUS_OPTION_ENABLE_GSSAPI],[
-	AC_ARG_ENABLE([gssapi],[AS_HELP_STRING([--enable-gssapi=IMPL],[GSSAPI implementation: auto, heimdal, mit, cybersafe, seam])],[],[enable_gssapi='auto'])
+	AC_ARG_ENABLE([gssapi],[AS_HELP_STRING([--enable-gssapi=IMPL],[GSSAPI implementation: auto, heimdal, mit, cybersafe, or seam])],[
+		AS_IF([test "$enable_gssapi" = 'yes'],[
+			enable_gssapi='auto'
+		])
+	],[
+		enable_gssapi='auto'
+	])
 ])
 AC_DEFUN([CYRUS_OPTION_WITH_GSSAPI],[
 	AC_ARG_WITH([gssapi],[AS_HELP_STRING([--with-gssapi=DIR],[GSSAPI package, optional base directory])])
