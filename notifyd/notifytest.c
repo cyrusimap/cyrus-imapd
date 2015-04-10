@@ -55,6 +55,7 @@
 #ifdef HAVE_UNISTD_H
 # include <unistd.h>
 #endif
+#include "util.h"
 
 #define MAX_OPT 10
 #define MAXSIZE 8192
