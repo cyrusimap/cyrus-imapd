@@ -100,20 +100,6 @@ struct observance {
     int is_daylight;
 };
 
-static const struct action_t {
-    const char *path;
-    int need_tzid;
-    int (*proc)(struct transaction_t *txn);
-} actions[] = {
-    { "capabilities",	0,	&action_capa },
-    { "leapseconds",	0,	&action_leap },
-    { "zones",		0,	&action_list },
-    { "zones",		1,	&action_get },
-    { "observances",	1,	&action_expand },
-    { NULL,		0,	NULL}
-};
-
-
 static struct mime_type_t tz_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { "text/calendar; charset=utf-8", "2.0", "ics",
