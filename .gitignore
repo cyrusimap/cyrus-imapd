@@ -39,6 +39,7 @@ depcomp
 doc/man/
 doc/text/
 imap/arbitron
+imap/calalarmd
 imap/ctl_conversationsdb
 imap/chk_cyrus
 imap/ctl_cyrusdb
