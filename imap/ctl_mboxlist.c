@@ -338,7 +338,7 @@ static int dump_cb(void *rockp,
 
 	char *realpart = xmalloc(strlen(config_servername) + 1
 				 + strlen(part) + 1);
-	int skip_flag;
+	int skip_flag = 0;
 
 	/* If it is marked MBTYPE_MOVING, and it DOES match the entry,
 	 * we need to unmark it.  If it does not match the entry in our
@@ -385,8 +385,6 @@ static int dump_cb(void *rockp,
 
 		    skip_flag = 1;
 		}
-	    } else {
-		skip_flag = 0;
 	    }
 
 	    /* in any case, free the node. */
@@ -465,9 +463,6 @@ static int dump_cb(void *rockp,
 		    /* No need to update mupdate now, we'll get it when we
 		     * untag the mailbox */
 		    skip_flag = 1;
-		} else {
-		    /* we should just push the change to mupdate now */
-		    skip_flag = 0;
 		}
 	    }
 	}
