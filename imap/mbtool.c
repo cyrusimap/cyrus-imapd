@@ -199,7 +199,7 @@ static int do_timestamp(char *name)
 	    continue;
 
 	/* 1 day is close enough */
-	if (abs(record.internaldate - record.gmtime) < 86400)
+	if (labs(record.internaldate - record.gmtime) < 86400)
 	    continue;
 
 	time_to_rfc822(record.internaldate, olddate, sizeof(olddate));
