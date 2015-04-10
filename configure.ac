@@ -468,7 +468,7 @@ AS_IF([test "$with_com_err" != 'yes'],[
 
 	compile_et_ok='no'
 	AS_IF([test -f $TEST1.h],[
-		AS_IF([test `awk '/IMAP_TESTING/{print $3}' $TEST1.h 2>/dev/null` = "-1904809472"],[
+		AS_IF([test `awk '/IMAP_TESTING/{print $3}' $TEST1.h 2>/dev/null` = "(-1904809472L)"],[
 			compile_et_ok=yes
 		])
 		dnl Broken compile_et produces (2390157824L)
