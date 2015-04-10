@@ -82,13 +82,6 @@ AC_DEFUN(SNERT_CHECK_PREDEFINE,[
 ])
 
 dnl
-dnl SNERT_IF_SYSTEM_DIR(word, if-system, not-system)
-dnl
-m4_define([SNERT_IF_SYSTEM_DIR],[
-	AS_CASE([$1],[/usr/include|/usr/lib64|/usr/lib/x86_64-linux-gnu|/usr/lib|/lib64|/lib/x86_64-linux-gnu|/lib],[$2],[$3])
-])
-
-dnl
 dnl SNERT_FIND_FILE(wild_file, directories, if-found, not-found)
 dnl if-found can reference the found $dir_val
 dnl
@@ -137,6 +130,13 @@ AC_DEFUN([SNERT_CHECK_PACKAGE_LIB],[
 ])
 
 dnl
+dnl SNERT_IF_SYSTEM_DIR(word, if-system, not-system)
+dnl
+m4_define([SNERT_IF_SYSTEM_DIR],[
+	AS_CASE([$1],[/usr/include|/usr/lib64|/usr/lib/x86_64-linux-gnu|/usr/lib|/lib64|/lib/x86_64-linux-gnu|/lib],[$2],[$3])
+])
+
+dnl
 dnl SNERT_DEFINE(name[, value])
 dnl
 AC_DEFUN([SNERT_DEFINE],[
@@ -176,7 +176,14 @@ AS_IF([test "$with_base" != 'no'],[
 			dnl Remember the location we found the header
 			dnl even if its a system directory.
 			have=AS_TR_CPP(HAVE_$f)
-			AC_DEFINE_UNQUOTED($have,["$dir_val/$f"])
+			dnl Wanted to have the filepath saved in the
+			dnl macro, but for backwards compatibility with
+			dnl HAVE_header_h defines set by other tests best
+			dnl keep it the same value to avoid warnings (or
+			dnl error with -Werror).
+			AC_DEFINE_UNQUOTED($have,[1])
+			dnl Here we REALLY need the filepath for other
+			dnl potential configure tests.
 			AC_CACHE_VAL($cache_id,[eval $cache_id="\"$dir_val/$f\""])
 
 			SNERT_IF_SYSTEM_DIR([$dir_val],[
