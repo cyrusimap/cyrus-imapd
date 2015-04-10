@@ -218,11 +218,11 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     struct webdav_data *wdata = rrock->wdata;
     int r = 0;
 
+    memset(wdata, 0, sizeof(struct webdav_data));
+
     wdata->dav.alive = sqlite3_column_int(stmt, 14);
     if (!rrock->tombstones && !wdata->dav.alive)
 	return 0;
-
-    memset(wdata, 0, sizeof(struct webdav_data));
 
     wdata->dav.rowid = sqlite3_column_int(stmt, 0);
     wdata->dav.creationdate = sqlite3_column_int(stmt, 1);
@@ -280,9 +280,9 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 }
 
 #define CMD_GETFIELDS							\
-    "SELECT rowid, creationdate, mailbox, resource, imap_uid, modseq"	\
+    "SELECT rowid, creationdate, mailbox, resource, imap_uid,"		\
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
-    "  filename, type, subtype, res_uid, ref_count"			\
+    "  filename, type, subtype, res_uid, ref_count, alive"		\
     " FROM dav_objs"							\
 
 
@@ -373,7 +373,7 @@ EXPORTED int webdav_foreach(struct webdav_db *webdavdb, const char *mailbox,
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"		\
     "  filename, type, subtype, res_uid, ref_count, alive )"		\
     " VALUES ("								\
-    "  :creationdate, :mailbox, :resource, :imap_uid,"			\
+    "  :creationdate, :mailbox, :resource, :imap_uid, :modseq,"		\
     "  :lock_token, :lock_owner, :lock_ownerid, :lock_expire,"		\
     "  :filename, :type, :subtype, :res_uid, :ref_count, :alive );"
 
@@ -410,6 +410,8 @@ EXPORTED int webdav_write(struct webdav_db *webdavdb, struct webdav_data *wdata,
 	{ ":ref_count",	   SQLITE_INTEGER, { .i = wdata->ref_count	  } },
 	{ ":alive",	   SQLITE_INTEGER, { .i = wdata->dav.alive	  } },
 	{ NULL,		   SQLITE_NULL,	   { .s = NULL			  } },
+	{ NULL,		   SQLITE_NULL,	   { .s = NULL			  } },
+	{ NULL,		   SQLITE_NULL,	   { .s = NULL			  } },
 	{ NULL,		   SQLITE_NULL,	   { .s = NULL			  } } };
     const char *cmd;
     sqlite3_stmt **stmt;
@@ -419,23 +421,23 @@ EXPORTED int webdav_write(struct webdav_db *webdavdb, struct webdav_data *wdata,
 	cmd = CMD_UPDATE;
 	stmt = &webdavdb->stmt[STMT_UPDATE];
 
-	bval[10].name = ":rowid";
-	bval[10].type = SQLITE_INTEGER;
-	bval[10].val.i = wdata->dav.rowid;
+	bval[12].name = ":rowid";
+	bval[12].type = SQLITE_INTEGER;
+	bval[12].val.i = wdata->dav.rowid;
     }
     else {
 	cmd = CMD_INSERT;
 	stmt = &webdavdb->stmt[STMT_INSERT];
 
-	bval[10].name = ":creationdate";
-	bval[10].type = SQLITE_INTEGER;
-	bval[10].val.i = wdata->dav.creationdate;
-	bval[11].name = ":mailbox";
-	bval[11].type = SQLITE_TEXT;
-	bval[11].val.s = wdata->dav.mailbox;
-	bval[12].name = ":resource";
-	bval[12].type = SQLITE_TEXT;
-	bval[12].val.s = wdata->dav.resource;
+	bval[12].name = ":creationdate";
+	bval[12].type = SQLITE_INTEGER;
+	bval[12].val.i = wdata->dav.creationdate;
+	bval[13].name = ":mailbox";
+	bval[13].type = SQLITE_TEXT;
+	bval[13].val.s = wdata->dav.mailbox;
+	bval[14].name = ":resource";
+	bval[14].type = SQLITE_TEXT;
+	bval[14].val.s = wdata->dav.resource;
     }
 
     r = dav_exec(webdavdb->db, cmd, bval, NULL, NULL, stmt);

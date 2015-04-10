@@ -3117,6 +3117,8 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
 	wdata->dav.creationdate = new->internaldate;
 	wdata->dav.mailbox = mailbox->name;
 	wdata->dav.imap_uid = new->uid;
+	wdata->dav.modseq = new->modseq;
+	wdata->dav.alive = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
 	wdata->dav.resource = resource;
 	wdata->filename = body->description;
 	wdata->type = lcase(body->type);
