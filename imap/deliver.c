@@ -351,14 +351,14 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
 	/* setup each recipient */
 	for (j = 0; j < numusers; j++) {
 	    if (mailbox) {
-		int ulen;
+		size_t ulen;
 
 		size = strlen(users[j]) + ml + 2;
 		txn->rcpt[j].addr = (char *) xmalloc(size);
 
 		/* find the length of the userid minus the domain */
 		ulen = strcspn(users[j], "@");
-		SNPRINTF_LOG(txn->rcpt[j].addr, size, "%.*s+%s", ulen, users[j], mailbox);
+		SNPRINTF_LOG(txn->rcpt[j].addr, size, "%.*s+%s", (int)ulen, users[j], mailbox);
 
 		/* add the domain if we have one */
 		if (ulen < strlen(users[j]))
