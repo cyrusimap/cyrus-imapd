@@ -209,7 +209,11 @@ typedef unsigned int	*pt_entry_t;
 
 /*VARARGS1*/
 HIDDEN void
+#if SPT_TYPE != SPT_NONE
 setproctitle(const char *fmt, ...)
+#else
+setproctitle(const char *fmt __attribute__((__unused__)), ...)
+#endif
 {
 # if SPT_TYPE != SPT_NONE
 	register char *p;
