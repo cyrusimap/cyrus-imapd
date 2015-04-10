@@ -783,6 +783,13 @@ AH_BOTTOM([
 # endif
 #endif /* IN_COM_ERR */
 
+#ifndef HAVE_STRLCPY
+# include "xstrlcpy.h"
+#endif
+#ifndef HAVE_STRLCAT
+# include "xstrlcat.h"
+#endif
+
 /* This allows us to work even when we don't have an fdatasync */
 #ifndef HAVE_FDATASYNC
 #define fdatasync(fd) fsync(fd)
