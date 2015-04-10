@@ -805,7 +805,7 @@ int main(int argc, char **argv)
     int compact_flags = 0;
     const char *fromfile = NULL;
     strarray_t *srctiers = NULL;
-    const char *desttier;
+    const char *desttier = NULL;
     enum { UNKNOWN, INDEXER, INDEXFROM, SEARCH, ROLLING, SYNCLOG,
 	   START_DAEMON, STOP_DAEMON, RUN_DAEMON, COMPACT } mode = UNKNOWN;
 
