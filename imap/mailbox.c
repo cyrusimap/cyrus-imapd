@@ -4090,8 +4090,8 @@ EXPORTED unsigned mailbox_should_archive(struct mailbox *mailbox,
 					 void *rock)
 {
     int archive_days = config_getint(IMAPOPT_ARCHIVE_DAYS);
-    if (rock) archive_days = *((int *)rock);
     time_t cutoff = time(0) - (archive_days * 86400);
+    if (rock) cutoff = *((time_t *)rock);
 
     int archive_size = config_getint(IMAPOPT_ARCHIVE_MAXSIZE);
     size_t maxsize = archive_size * 1024;
