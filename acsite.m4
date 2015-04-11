@@ -847,7 +847,7 @@ AC_DEFUN(CYRUS_MMAP,[
 #ifdef HAVE_FCNTL_H
 # include <fcntl.h>
 #endif
-#ifdef HAVE_MMAN_H
+#ifdef HAVE_SYS_MMAN_H
 # include <sys/mman.h>
 #endif
 #ifdef HAVE_UNISTD_H
