@@ -73,8 +73,6 @@ CYRUS_OPTION_ENABLE_GSSAPI
 AC_ARG_ENABLE(http,[AS_HELP_STRING([--disable-http],[disable HTTP support])],[],[enable_http="yes"])
 AC_ARG_ENABLE(lock,[AS_HELP_STRING([--enable-lock=METHOD],[force use of METHOD for locking (flock or fcntl)])],,[enable_lock='fcntl'])
 AC_ARG_ENABLE(mmap,[AS_HELP_STRING([--enable-mmap=TYPE],[force shared / stupidshared / nommap; JUST FOR TESTING])],,[enable_mmap='auto'])
-AC_ARG_ENABLE(sphinx,[AS_HELP_STRING([--enable-sphinx],[Enable Sphinx search support.])],,[enable_sphinx='no'])
-AC_ARG_ENABLE(squat,[AS_HELP_STRING([--enable-squat],[Enable Squat search support.])],,[enable_squat='no'])
 AC_ARG_ENABLE(syslog-facility,[AS_HELP_STRING([--enable-syslog-facility=FACILITY], [the syslog facility to use (default LOCAL6)])],[],[enable_syslog_facility="LOG_LOCAL6"])
 
 dnl AC_ARG_ENABLE(murder,[AS_HELP_STRING([--disable-murder], [disable IMAP Murder support])],[],[enable_murder="yes";])
@@ -102,8 +100,6 @@ AC_ARG_WITH(ldap,[AS_HELP_STRING([--with-ldap=DIR],[LDAP support])],,[with_ldap=
 
 CYRUS_OPTION_WITH_JANSSON
 CYRUS_OPTION_WITH_KERBEROS
-SNERT_OPTION_WITH_MYSQL
-SNERT_OPTION_WITH_PGSQL
 CYRUS_OPTION_WITH_OPENAFS
 CYRUS_OPTION_WITH_OPENLDAP
 CYRUS_OPTION_WITH_OPENDKIM
@@ -115,11 +111,10 @@ AC_ARG_WITH([perl],[AS_HELP_STRING([--with-perl=PROG],[absolute program path for
 ],[
 	with_perl='yes'
 ])
-AC_ARG_WITH(pid-file,[AS_HELP_STRING([--with-pid-file=DIR],[pidfile in DIR [/var/run/cyrus-master.pid]])],[],[with_pid_file="/var/run/cyrus-master.pid"])
+AC_ARG_WITH(pid-file,[AS_HELP_STRING([--with-pid-file=DIR],[pidfile in DIR [/var/run/cyrus-master.pid]])],[],[with_pid_file="$withval"])
 
 SNERT_OPTION_WITH_SASL2
 SNERT_OPTION_WITH_SQLITE3
-CYRUS_OPTION_WITH_XAPIAN
 CYRUS_OPTION_WITH_ZEPHYR
 SNERT_OPTION_WITH_ZLIB
 
@@ -177,8 +172,6 @@ AH_BOTTOM([
 AS_ECHO()
 AS_ECHO("Checking for assorted tools...")
 AS_ECHO()
-
-AC_PROG_CXX
 AC_PROG_LN_S
 AC_PROG_MAKE_SET
 AC_PROG_INSTALL
@@ -186,13 +179,8 @@ AC_PROG_YACC
 AC_PROG_LEX
 AC_PATH_PROGS([MD5SUM],[md5sum md5])
 
-AC_PATH_PROGS([GPERF],[gperf],[false])
-AS_IF([test "$GPERF" = 'false'],[
-	AC_MSG_WARN([Some Perl scripts require gperf.])
-])
-
 AC_PATH_PROGS([BASH],[bash],[false])
-AS_IF([test "$BASH" = 'false'],[
+AS_IF([test "$BASH" != '/bin/bash'],[
 	AC_MSG_WARN([Some shell scripts assume [#]!/bin/bash.])
 ])
 
@@ -210,7 +198,7 @@ AS_IF([test "$with_perl" = 'yes'],[
 ])
 
 LT_PREREQ([2.2.6])
-LT_INIT([disable-static disable-fast-install pic-only])
+LT_INIT([disable-static])
 AC_SUBST([LIBTOOL_DEPS])
 
 #######################################################################
@@ -249,8 +237,6 @@ CYRUS_ICU
 CYRUS_JANSSON
 CYRUS_KERBEROS
 CYRUS_XML2
-SNERT_MYSQL
-SNERT_PGSQL
 CYRUS_OPENAFS
 CYRUS_OPENDKIM
 CYRUS_OPENLDAP
@@ -259,7 +245,6 @@ SNERT_PCRE
 SNERT_REGEX
 SNERT_SASL2
 SNERT_SQLITE3
-CYRUS_XAPIAN
 CYRUS_ZEPHYR
 SNERT_ZLIB
 
@@ -561,24 +546,6 @@ AS_IF([test -n "$LIBS_MYSQL" -o -n "$LIBS_PGSQL" -o -n "$LIBS_SQLITE3"],[
 ])
 AC_MSG_RESULT($HAVE_SQL)
 
-AS_IF([test X"$enable_sphinx" = X'yes' -a -n "$LIBS_MYSQL"],[
-	AC_DEFINE(USE_SPHINX,[1],[Build in Sphinx support?])
-],[
-	AC_MSG_WARN([Sphinx requires MySQL, but MySQL not available; disabled.])
-	enable_sphinx='no'
-])
-AS_IF([test X"$enable_squat" = X'yes'],[
-	AC_DEFINE(USE_SQUAT,[1],[Build in Squat support?])
-])
-AS_IF([test "$XAPIAN_CONFIG" != 'false'],[
-	XAPIAN_VERSION=`$XAPIAN_CONFIG --version | sed -e's/.* //'`
-	AC_DEFINE(USE_XAPIAN,[1],[Build in Xapian support?])
-])
-
-SNERT_JOIN_UNIQ([LIBS],[$LIBS_PGSQL $LIBS_MYSQL],[head])
-SNERT_JOIN_UNIQ([LDFLAGS],[])
-SNERT_JOIN_UNIQ([CPPFLAGS],[$CPPFLAGS_PGSQL $CPPFLAGS_MYSQL])
-
 AC_DEFINE_UNQUOTED(CYRUS_USER, "$enable_cyrus_user",[What user will we run as?])
 AC_DEFINE_UNQUOTED(CYRUS_GROUP, "$enable_cyrus_group",[What group will we run as?])
 AC_SUBST(enable_cyrus_user)
@@ -596,7 +563,7 @@ AS_IF([test -n "$HAVE_STRERROR"],[AC_DEFINE_UNQUOTED(HAS_STRERROR, $HAVE_STRERRO
 AS_IF([test -n "$LIBS_CLAMAV"],[AC_DEFINE_UNQUOTED(HAVE_CLAMAV,"$LIBS_CLAMAV",[Do we have ClamAV?])])
 AS_IF([test -n "$LIBS_LDAP"],[AC_DEFINE_UNQUOTED(HAVE_LDAP,"$LIBS_LDAP",[Should we build the LDAP pts module?])])
 AS_IF([test -n "$LIBS_MYSQL"],[AC_DEFINE_UNQUOTED(HAVE_MYSQL,"$LIBS_MYSQL",[Build in MySQL support?])])
-AS_IF([test -n "$LIBS_PGSQL"],[AC_DEFINE_UNQUOTED(HAVE_PGSQL,"$LIBS_PGSQL",[Build in PostgreSQL support?])])
+AS_IF([test -n "$LIBS_PGSQL"],[AC_DEFINE_UNQUOTED(HAVE_PGSQL,"$LIBS_PGSQL",[Build in PgSQL support?])])
 AS_IF([test -n "$LIBS_SQLITE3"],[AC_DEFINE_UNQUOTED(HAVE_SQLITE,"$LIBS_SQLITE3",[Build in SQLite support?])])
 AS_IF([test -n "$LIBS_ZEPHYR"],[AC_DEFINE_UNQUOTED(HAVE_ZEPHYR,"$LIBS_ZEPHYR",[Build with Zephyr support?])])
 AS_IF([test -n "$LIBS_ZLIB"],[AC_DEFINE_UNQUOTED(HAVE_ZLIB, "$LIBS_ZLIB",[Do we have zlib?])])
@@ -659,18 +626,6 @@ AC_SUBST(SSL_CPPFLAGS, $CPPFLAGS_SSL)
 AC_SUBST(SSL_LDFLAGS, $LDFLAGS_SSL)
 AC_SUBST(SSL_LIBS, $LIBS_SSL)
 
-AC_SUBST(MYSQL_CPPFLAGS, $CPPFLAGS_MYSQL)
-AC_SUBST(MYSQL_LDFLAGS, $LDFLAGS_MYSQL)
-AC_SUBST(MYSQL_LIBS, $LIBS_MYSQL)
-
-AC_SUBST(PGSQL_CPPFLAGS, $CPPFLAGS_PGSQL)
-AC_SUBST(PGSQL_LDFLAGS, $LDFLAGS_PGSQL)
-AC_SUBST(PGSQL_LIBS, $LIBS_PGSQL)
-
-AC_SUBST(XAPIAN_LIBS, LIBS_XAPAIN)
-AC_SUBST(XAPIAN_CXXFLAGS, CXXFLAGS_XAPIAN)
-AC_SUBST(XAPIAN_VERSION)
-
 AC_SUBST(ZEPHYR_LIBS, $LIBS_ZEPHYR)
 
 AC_SUBST(ZLIB, $LIBS_ZLIB)
@@ -679,7 +634,7 @@ AC_SUBST(ZLIB, $LIBS_ZLIB)
 # automake conditionals
 #######################################################################
 
-AM_CONDITIONAL([CMULOCAL],[false]) 	dnl replaced by acsite.m4 and m4/*
+AM_CONDITIONAL([CMULOCAL],[false]) 	dnl replaced by acsite.m4
 AM_CONDITIONAL([USE_BERKELEY],[false])	dnl Berkeley DB support removed.
 
 dnl Always built in, controlled by imapd.conf or cyrus.conf.
@@ -714,10 +669,6 @@ dnl AM_CONDITIONAL([REPLICATION], [test "$enable_replication" != 'no'])
 dnl AM_CONDITIONAL([SERVER], [test "$enable_server" != "no"])
 dnl AM_CONDITIONAL([SIEVE], [test "$enable_sieve" != "no"])
 AM_CONDITIONAL([HAVE_SSL], [test "$with_openssl" != "no"])
-AM_CONDITIONAL([USE_SPHINX], [test "${enable_sphinx}" != "no"])
-AM_CONDITIONAL([USE_SQUAT], [test "${enable_squat}" != "no"])
-AM_CONDITIONAL([SQUATTER],[test "${enable_squat}" != "no" -o "${enable_sphinx}" != "no" -o "${with_xapian}" != "no" ])
-AM_CONDITIONAL([USE_XAPIAN], [test "${with_xapian}" != "no"])
 AM_CONDITIONAL([ZEPHYR], [test "$ac_cv_func_ZInitialize" != "no"])
 
 #######################################################################
@@ -904,6 +855,7 @@ AC_MSG_RESULT([  sysconfdir..........: $sysconfdir])
 AC_MSG_RESULT([  localstatedir.......: $localstatedir])
 AS_ECHO()
 AC_MSG_RESULT([Configuration])
+AC_MSG_RESULT([  CUnit...............: $with_cunit])
 AC_MSG_RESULT([  User & Group........: $enable_cyrus_user:$enable_cyrus_group])
 AC_MSG_RESULT([  Event notification..: $enable_event_notification])
 AC_MSG_RESULT([  GSSAPI impl.........: $enable_gssapi])
@@ -916,8 +868,6 @@ dnl AC_MSG_RESULT([  Murder..............: $enable_murder])
 dnl AC_MSG_RESULT([  Nntpd...............: $enable_nntp])
 dnl AC_MSG_RESULT([  Replication.........: $enable_replication])
 dnl AC_MSG_RESULT([  Sieve...............: $enable_sieve])
-AC_MSG_RESULT([  Sphinx..............: $enable_sphinx])
-AC_MSG_RESULT([  Squat...............: $enable_squat])
 AC_MSG_RESULT([  syslog facility.....: $enable_syslog_facility])
 AC_MSG_RESULT([  CFLAGS..............: $CFLAGS])
 AC_MSG_RESULT([  CPPFLAGS............: $CPPFLAGS])
@@ -935,8 +885,6 @@ AC_MSG_RESULT([  Kerberos 4..........: "$CPPFLAGS_KRB" "$LDFLAGS_KRB" "$LIBS_KRB
 AC_MSG_RESULT([  libical.............: "$CPPFLAGS_ICAL" "$LDFLAGS_ICAL" "$LIBS_ICAL"])
 AC_MSG_RESULT([  libicu..............: "$CPPFLAGS_ICU" "$LDFLAGS_ICU" "$LIBS_ICU"])
 AC_MSG_RESULT([  libxml2.............: "$CPPFLAGS_XML2" "$LDFLAGS_XML2" "$LIBS_XML2"])
-AC_MSG_RESULT([  MySQL...............: "$CPPFLAGS_MYSQL" "$LDFLAGS_MYSQL" "$LIBS_MYSQL"])
-AC_MSG_RESULT([  PostgreSQL..........: "$CPPFLAGS_PGSQL" "$LDFLAGS_PGSQL" "$LIBS_PGSQL"])
 AC_MSG_RESULT([  OpenAFS.............: "$CPPFLAGS_AFS" "$LDFLAGS_AFS" "$LIBS_AFS"])
 AC_MSG_RESULT([  OpenDKIM............: "$CPPFLAGS_DKIM" "$LDFLAGS_DKIM" "$LIBS_DKIM"])
 AC_MSG_RESULT([  OpenLDAP............: "$CPPFLAGS_LDAP" "$LDFLAGS_LDAP" "$LIBS_LDAP"])
@@ -944,7 +892,6 @@ AC_MSG_RESULT([  OpenSSL.............: "$CPPFLAGS_SSL" "$LDFLAGS_SSL" "$LIBS_SSL
 AC_MSG_RESULT([  Perl................: "$with_perl"])
 AC_MSG_RESULT([  SASL2...............: "$CPPFLAGS_SASL2" "$LDFLAGS_SASL2" "$LIBS_SASL2"])
 AC_MSG_RESULT([  SQLite3.............: "$CPPFLAGS_SQLITE3" "$LDFLAGS_SQLITE3" "$LIBS_SQLITE3"])
-AC_MSG_RESULT([  Xapian..............: "$CXXFLAGS_XAPIAN" "$LDFLAGS_XAPIAN" "$LIBS_XAPIAN"])
 AC_MSG_RESULT([  Zephyr..............: "$CPPFLAGS_ZEPHYR" "$LDFLAGS_ZEPHYR" "$LIBS_ZEPHYR"])
 AC_MSG_RESULT([  zlib................: "$CPPFLAGS_ZLIB" "$LDFLAGS_ZLIB" "$LIBS_ZLIB"])
 AS_ECHO()
