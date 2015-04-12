@@ -928,7 +928,7 @@ EXPORTED void vparse_delete_entries(struct vparse_card *card, const char *group,
     struct vparse_entry **entryp = &card->properties;
     while (*entryp) {
 	struct vparse_entry *entry = *entryp;
-	if (!strcasecmpsafe(entry->group, group) && !strcasecmpsafe(entry->name, name)) {
+	if ((!group || !strcasecmpsafe(entry->group, group)) && !strcasecmpsafe(entry->name, name)) {
 	    *entryp = entry->next;
 	    entry->next = NULL; /* so free doesn't walk the chain */
 	    _free_entry(entry);
