@@ -198,9 +198,6 @@ dnl appear to symlink /bin to /usr/bin, which creates some false
 dnl warnings.  Typically we'd only care about searching /bin and
 dnl /usr/bin, but the others common locations are included so we
 dnl can log the information for developer/installer.
-dnl
-dnl http://www.freedesktop.org/wiki/Software/systemd/TheCaseForTheUsrMerge/
-dnl
 bash_search_PATH="/bin$PATH_SEPARATOR/usr/bin$PATH_SEPARATOR/usr/local/bin$PATH_SEPARATOR/usr/pkg/bin"
 perl_search_PATH="/usr/bin$PATH_SEPARATOR/usr/local/bin$PATH_SEPARATOR/usr/pkg/bin"
 
@@ -560,20 +557,12 @@ AS_IF([test "$enable_http" = 'yes'],[
 	AC_SUBST(HTTP_LIBS)
 ])
 
-AC_MSG_CHECKING([mmap() behaviour])
-AS_IF([test "$enable_mmap" = 'auto'],[
-	AS_IF([test "$cyrus_cv_func_mmap_shared" = 'yes'],[
-		enable_mmap='shared'
-	],[test "$cyrus_cv_func_mmap_stupidshared" = 'yes'],[
-		enable_mmap='stupidshared'
-	],[
-		enable_mmap='nomap'
-	])
-])
-AC_MSG_RESULT([$enable_mmap])
-AS_IF([test "$enable_mmap" = 'nomap'],[
+AS_IF([test "$enable_mmap" = 'auto' -a "$cyrus_cv_func_mmap_stupidshared" = 'yes'],[
+	enable_mmap='stupidshared'
+],[
 	AC_MSG_WARN([*** This system does not have a working mmap().])
 	AC_MSG_WARN([*** Expect a considerable performance penalty])
+	enable_mmap='nomap'
 ])
 
 HAVE_SQL='no'
