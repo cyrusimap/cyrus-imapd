@@ -477,7 +477,7 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
 	 *    that is malloced has room for the '\0' */
 	if (!strncasecmp(imapopts[opt].val.s,"{configdirectory}",STRLEN("{configdirectory}"))) {
 	    const char *str = imapopts[opt].val.s;
-	    size_t size = strlen(config_dir) + strlen(str) - STRLEN("{configdirectory}")+1;
+	    size_t size = strlen(config_dir) + strlen(str) - STRLEN("{configdirectory}")-1;
 	    char *newstring = xmalloc(size);
 	    char *freeme = NULL;
 
