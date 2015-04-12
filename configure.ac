@@ -101,7 +101,7 @@ CYRUS_OPTION_WITH_GSSAPI
 AC_ARG_WITH(ldap,[AS_HELP_STRING([--with-ldap=DIR],[LDAP support])],,[with_ldap='yes'])
 
 CYRUS_OPTION_WITH_JANSSON
-CYRUS_OPTION_WITH_KRB4
+CYRUS_OPTION_WITH_KRB4	dnl for Zephyr?
 CYRUS_OPTION_WITH_KRB5
 SNERT_OPTION_WITH_MYSQL
 SNERT_OPTION_WITH_PGSQL
@@ -187,27 +187,18 @@ AC_PROG_YACC
 AC_PROG_LEX
 AC_PATH_PROGS([MD5SUM],[md5sum md5])
 
-AC_PATH_PROG([GPERF],[gperf],[false])
+AC_PATH_PROGS([GPERF],[gperf],[false])
 AS_IF([test "$GPERF" = 'false'],[
 	AC_MSG_WARN([Some Perl scripts require gperf.])
 ])
 
-dnl Typically PATH defines these in reverse order, but here the
-dnl order is in expected location prefernce.  Some Linux distros
-dnl appear to symlink /bin to /usr/bin, which creates some false
-dnl warnings.  Typically we'd only care about searching /bin and
-dnl /usr/bin, but the others common locations are included so we
-dnl can log the information for developer/installer.
-bash_search_PATH="/bin$PATH_SEPARATOR/usr/bin$PATH_SEPARATOR/usr/local/bin$PATH_SEPARATOR/usr/pkg/bin"
-perl_search_PATH="/usr/bin$PATH_SEPARATOR/usr/local/bin$PATH_SEPARATOR/usr/pkg/bin"
-
-AC_PATH_PROG([BASH],[bash],[false],[$bash_search_PATH])
+AC_PATH_PROGS([BASH],[bash],[false])
 AS_IF([test "$BASH" != '/bin/bash'],[
 	AC_MSG_WARN([Some shell scripts assume [#]!/bin/bash.])
 ])
 
 AS_IF([test "$with_perl" = 'yes'],[
-	AC_PATH_PROG([PERL],[perl],[false],[$perl_search_PATH])
+	AC_PATH_PROGS([PERL],[perl],[false])
 	dnl Update the option to reflect the found Perl.
 	AS_IF([test "$PERL" = 'false'],[
 		with_perl='no'
