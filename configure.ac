@@ -335,10 +335,6 @@ AS_IF([test "$with_sqlite3" = 'no'],[
 	AC_MSG_ERROR([SQLite is a required package.])
 ])
 
-AS_IF([test "$ac_cv_header_pcreposix_h" != "yes"],[
-	AC_MSG_ERROR([PCRE is a required package.])
-])
-
 AS_IF([test -n "$LIBS_UUID"],[
 	LIB_UUID="$LIBS_UUID"
 	AC_SUBST(LIB_UUID)
