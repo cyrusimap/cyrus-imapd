@@ -169,13 +169,13 @@ AS_IF([test "$with_base" != 'no'],[
 	])
 
 	for f in $2; do
-		cache_id=AS_TR_SH(ac_cv_header_$f)
 		SNERT_CHECK_PACKAGE_HEADER([$f],[
 			dnl Remember the location we found the header
 			dnl even if its a system directory.
 			have=AS_TR_CPP(HAVE_$f)
 			AC_DEFINE_UNQUOTED($have,["$dir_val/$f"])
-			AC_CACHE_VAL($cache_id,[eval $cache_id="\"$dir_val/$f\""])
+			cache_id=AS_TR_SH(ac_cv_header_$f)
+			AC_CACHE_VAL($cache_id, eval $cache_id="$dir_val/$f")
 
 			SNERT_IF_SYSTEM_DIR([$dir_val],[
 				dnl Ignore system directories.
@@ -184,7 +184,7 @@ AS_IF([test "$with_base" != 'no'],[
 				SNERT_JOIN_UNIQ([CPPFLAGS_$1],["-I$dir_val"],[head])
 			])
 		],[
-			AC_CACHE_VAL($cache_id,[eval $cache_id='no'])
+			AC_CACHE_VAL($cache_id,'no')
 		],[${with_base:+$with_base/include} $6])
 	done
 
@@ -194,16 +194,16 @@ AS_IF([test "$with_base" != 'no'],[
 			AC_DEFINE_UNQUOTED($have,["$dir_val"])
 			SNERT_IF_SYSTEM_DIR([$dir_val],[
 				lib=`basename -- $f | sed -e's/^lib//'`
-				SNERT_JOIN_UNIQ([LIBS_$1],["-l$lib"],[tail])
+				SNERT_JOIN_UNIQ([LIBS_$1],["-l$lib"],[head])
 			],[
 				dnl Add only one -Ldir instance.
 				SNERT_JOIN_UNIQ([LDFLAGS_$1],["-L$dir_val"])
 				AS_IF([expr "$f" : '.*\.a$' >/dev/null],[
 					dnl Explicit static library.
-					SNERT_JOIN_UNIQ([LIBS_$1],["$dir_val/$f"],[tail])
+					SNERT_JOIN_UNIQ([LIBS_$1],["$dir_val/$f"],[head])
 				],[
 					lib=`basename -- $f | sed -e's/^lib//'`
-					SNERT_JOIN_UNIQ([LIBS_$1],["-l$lib"],[tail])
+					SNERT_JOIN_UNIQ([LIBS_$1],["-l$lib"],[head])
 				])
 			])
 		],[],[${with_base:+$with_base/lib} $7])
@@ -964,8 +964,8 @@ dnl SNERT_SQLITE3
 dnl
 AC_DEFUN(SNERT_OPTION_WITH_SQLITE3,[
 	AC_ARG_WITH([sqlite3],[AS_HELP_STRING([--with-sqlite3=DIR],[SQLite3 package, optional base directory])])
-	AC_ARG_WITH([sqlite3-inc],[AS_HELP_STRING([--with-sqlite3-inc=DIR],[...specific SQLite3 include directory])])
-	AC_ARG_WITH([sqlite3-lib],[AS_HELP_STRING([--with-sqlite3-lib=DIR],[...specific SQLite3 library directory])])
+	AC_ARG_WITH([sqlite3-inc],[AS_HELP_STRING([--with-sqlite3-inc=DIR],[specific SQLite3 include directory])])
+	AC_ARG_WITH([sqlite3-lib],[AS_HELP_STRING([--with-sqlite3-lib=DIR],[specific SQLite3 library directory])])
 ])
 AC_DEFUN(SNERT_SQLITE3,[
 	SNERT_CHECK_PACKAGE([SQLITE3],[sqlite3.h],[libsqlite3],[sqlite3_open], dnl
@@ -986,8 +986,8 @@ dnl 	AC_SUBST(LDFLAGS_SQLITE3)
 
 AC_DEFUN(SNERT_OPTION_WITH_MYSQL,[
 	AC_ARG_WITH([mysql],[AS_HELP_STRING([--with-mysql=DIR],[MySQL package, optional base directory])])
-	AC_ARG_WITH([mysql-inc],[AS_HELP_STRING([--with-mysql-inc=DIR],[...specific MySQL include directory])])
-	AC_ARG_WITH([mysql-lib],[AS_HELP_STRING([--with-mysql-lib=DIR],[...specific MySQL library directory])])
+	AC_ARG_WITH([mysql-inc],[AS_HELP_STRING([--with-mysql-inc=DIR],[specific MySQL include directory])])
+	AC_ARG_WITH([mysql-lib],[AS_HELP_STRING([--with-mysql-lib=DIR],[specific MySQL library directory])])
 ])
 AC_DEFUN(SNERT_MYSQL,[
 	SNERT_CHECK_PACKAGE([MYSQL],[mysql.h mysql/mysql.h],[libmysqlclient mysql/libmysqlclient ],[mysql_select_db], dnl
@@ -1029,8 +1029,8 @@ AC_DEFUN(SNERT_MYSQL,[
 
 AC_DEFUN(SNERT_OPTION_WITH_PGSQL,[
 	AC_ARG_WITH([pgsql],[AS_HELP_STRING([--with-pgsql=DIR],[PostgreSQL package, optional base directory])])
-	AC_ARG_WITH([pgsql-inc],[AS_HELP_STRING([--with-pgsql-inc=DIR],[...specific PostgreSQL include directory])])
-	AC_ARG_WITH([pgsql-lib],[AS_HELP_STRING([--with-pgsql-lib=DIR],[...specific PostgreSQL library directory])])
+	AC_ARG_WITH([pgsql-inc],[AS_HELP_STRING([--with-pgsql-inc=DIR],[specific PostgreSQL include directory])])
+	AC_ARG_WITH([pgsql-lib],[AS_HELP_STRING([--with-pgsql-lib=DIR],[specific PostgreSQL library directory])])
 ])
 AC_DEFUN(SNERT_PGSQL,[
 	SNERT_CHECK_PACKAGE([PGSQL],[libpq-fe.h],[libpq],[PQconnectdb],dnl
@@ -1051,8 +1051,8 @@ dnl 	AC_SUBST(LDFLAGS_PGSQL)
 
 AC_DEFUN([SNERT_OPTION_WITH_SASL2],[
 	AC_ARG_WITH([sasl2],[AS_HELP_STRING([--with-sasl2=DIR],[SASL2 package, optional base directory])])
-	AC_ARG_WITH([sasl2-inc],[AS_HELP_STRING([--with-sasl2-inc=DIR],[...specific SASL2 include directory])])
-	AC_ARG_WITH([sasl2-lib],[AS_HELP_STRING([--with-sasl2-lib=DIR],[...specific SASL2 library directory])])
+	AC_ARG_WITH([sasl2-inc],[AS_HELP_STRING([--with-sasl2-inc=DIR],[specific SASL2 include directory])])
+	AC_ARG_WITH([sasl2-lib],[AS_HELP_STRING([--with-sasl2-lib=DIR],[specific SASL2 library directory])])
 ])
 AC_DEFUN([SNERT_SASL2],[
 	AC_REQUIRE([SNERT_NETWORK])
@@ -1075,30 +1075,30 @@ dnl 	AC_SUBST(LDFLAGS_SASL2)
 	])
 ])
 
-AC_DEFUN([CYRUS_OPTION_WITH_KRB4],[
-	AC_ARG_WITH([krb4],[AS_HELP_STRING([--with-krb4=DIR],[Kerberos 4 package, optional base directory])])
-	AC_ARG_WITH([krb4-inc],[AS_HELP_STRING([--with-krb4-inc=DIR],[...specific Kerberos 4 include directory])])
-	AC_ARG_WITH([krb4-lib],[AS_HELP_STRING([--with-krb4-lib=DIR],[...specific Kerberos 4 library directory])])
-	AC_ARG_WITH([krb4-des],[AS_HELP_STRING([--with-krb4-des],[use Kerberos DES implementation])],[],[with_krb_des='yes'])
+AC_DEFUN([CYRUS_OPTION_WITH_KERBEROS],[
+	AC_ARG_WITH([krb],[AS_HELP_STRING([--with-krb=DIR],[Kerberos 4 package, optional base directory])])
+	AC_ARG_WITH([krb-inc],[AS_HELP_STRING([--with-krb-inc=DIR],[specific Kerberos 4 include directory])])
+	AC_ARG_WITH([krb-lib],[AS_HELP_STRING([--with-krb-lib=DIR],[specific Kerberos 4 library directory])])
+	AC_ARG_WITH([krb-des],[AS_HELP_STRING([--with-krb-des],[use Kerberos DES implementation])],[],[with_krb_des='yes'])
 ])
-AC_DEFUN([CYRUS_KRB4],[
+AC_DEFUN([CYRUS_KERBEROS],[
 	AC_REQUIRE([SNERT_NETWORK])
 	AC_REQUIRE([CYRUS_COM_ERR])
-	SNERT_CHECK_PACKAGE([KRB4], dnl
+	SNERT_CHECK_PACKAGE([KRB], dnl
 		[kerberosIV/krb.h krb.h], dnl
 		[libkrb4 libkrb libdes], dnl
 		[krb_mk_priv des_ecb_encrypt], dnl
-		[$with_krb4],[$with_krb4_inc],[$with_krb4_lib] dnl
+		[$with_krb],[$with_krb_inc],[$with_krb_lib] dnl
 	)
 
 	AS_IF([test "$enable_krb_des" = 'yes' -a "$snert_find_file_libdes" = 'no'],[
 		AC_MSG_ERROR([The Kerberos DES library is required for Kerberos support.])
 	])
 
-dnl 	AC_SUBST(LIBS_KRB4)
-dnl 	AC_SUBST(CPPFLAGS_KRB4)
-dnl 	AC_SUBST(LDFLAGS_KRB4)
-	AH_VERBATIM(LIBS_KRB4,[
+dnl 	AC_SUBST(LIBS_KRB)
+dnl 	AC_SUBST(CPPFLAGS_KRB)
+dnl 	AC_SUBST(LDFLAGS_KRB)
+	AH_VERBATIM(LIBS_KRB,[
 #undef HAVE_LIBKRB4
 #undef HAVE_LIBKRB
 #undef HAVE_LIBDES
@@ -1106,34 +1106,9 @@ dnl 	AC_SUBST(LDFLAGS_KRB4)
 #undef HAVE_KERBEROSIV_KRB_H
 #undef HAVE_KRB_MK_PRIV
 #undef HAVE_DES_ECB_ENCRYPT
-#undef CPPFLAGS_KRB4
-#undef LDFLAGS_KRB4
-#undef LIBS_KRB4
-	])
-])
-
-AC_DEFUN([CYRUS_OPTION_WITH_KRB5],[
-	AC_ARG_WITH([krb5],[AS_HELP_STRING([--with-krb5=DIR],[Kerberos 5 package, optional base directory])])
-	AC_ARG_WITH([krb5-inc],[AS_HELP_STRING([--with-krb5-inc=DIR],[...specific Kerberos 5 include directory])])
-	AC_ARG_WITH([krb5-lib],[AS_HELP_STRING([--with-krb5-lib=DIR],[...specific Kerberos 5 library directory])])
-])
-AC_DEFUN([CYRUS_KRB5],[
-	AC_REQUIRE([SNERT_NETWORK])
-	SNERT_CHECK_PACKAGE([KRB5],[krb5.h krb5/krb5.h],[libkrb5],dnl
-		[krb5_init_context krb5_mk_priv], dnl
-		[$with_krb5],[$with_krb5_inc],[$with_krb5_lib] dnl
-	)
-dnl 	AC_SUBST(LIBS_KRB5)
-dnl 	AC_SUBST(CPPFLAGS_KRB5)
-dnl 	AC_SUBST(LDFLAGS_KRB5)
-	AH_VERBATIM(LIBS_KRB5,[
-#undef HAVE_LIBKRB5
-#undef HAVE_KRB5_H
-#undef HAVE_KRB5_KRB5_H
-#undef HAVE_KRB5_MK_PRIV
-#undef CPPFLAGS_KRB5
-#undef LDFLAGS_KRB5
-#undef LIBS_KRB5
+#undef CPPFLAGS_KRB
+#undef LDFLAGS_KRB
+#undef LIBS_KRB
 	])
 ])
 
@@ -1153,17 +1128,18 @@ AC_DEFUN([CYRUS_OPTION_ENABLE_GSSAPI],[
 ])
 AC_DEFUN([CYRUS_OPTION_WITH_GSSAPI],[
 	AC_ARG_WITH([gssapi],[AS_HELP_STRING([--with-gssapi=DIR],[GSSAPI package, optional base directory])])
-	AC_ARG_WITH([gssapi-inc],[AS_HELP_STRING([--with-gssapi-inc=DIR],[...specific GSSAPI include directory])])
-	AC_ARG_WITH([gssapi-lib],[AS_HELP_STRING([--with-gssapi-lib=DIR],[...specific GSSAPI library directory])])
+	AC_ARG_WITH([gssapi-inc],[AS_HELP_STRING([--with-gssapi-inc=DIR],[specific GSSAPI include directory])])
+	AC_ARG_WITH([gssapi-lib],[AS_HELP_STRING([--with-gssapi-lib=DIR],[specific GSSAPI library directory])])
 ])
 AC_DEFUN([CYRUS_GSSAPI],[
-	AC_REQUIRE([CYRUS_KRB5])
+	AC_REQUIRE([SNERT_NETWORK])
 	AC_REQUIRE([CYRUS_COM_ERR])
 	SNERT_CHECK_PACKAGE([GSSAPI], dnl
 		[gssapi/gssapi.h gssapi/gssapi_ext.h gssapi.h appsec-sdk/include/gssapi.h], dnl
-		[libgssapi libasn1 libroken libgssapi_krb5 libkrb5support appsec-rt/lib/libgss], dnl
+		[libgssapi libkrb5 libasn1 libroken dnl
+		 libgssapi_krb5 libkrb5support appsec-rt/lib/libgss], dnl
 		[gss_unwrap krb5int_getspecific csf_gss_acq_user], dnl
-		[$with_gssapi],[$with_gssapi_inc],[$with_gssapi_lib],[],[no]dnl
+		[$with_gssapi],[$with_gssapi_inc],[$with_gssapi_lib] dnl
 	)
 
 	save_LIBS="$LIBS"
@@ -1181,37 +1157,31 @@ AC_DEFUN([CYRUS_GSSAPI],[
 	AC_CHECK_LIB([gssapi],[gss_unwrap],[
 		AS_IF([test "$enable_gssapi" = 'auto' -o "$enable_gssapi" = 'heimdal'],[
 dnl			-lkrb5 -lasn1 -lroken ${LIB_CRYPT} ${LIB_DES} -lcom_err
-			SNERT_JOIN_UNIQ([LIBS_GSSAPI],[$LIBS_KRB5 $LIBS_COM_ERR $NETWORK_LIBS])
-			SNERT_JOIN_UNIQ([CPPFLAGS_GSSAPI],[$CPPFLAGS_KRB5 $CPPFLAGS_COM_ERR])
-			SNERT_JOIN_UNIQ([LDFLAGS_GSSAPI],[$LDFLAGS_KRB5 $LDFLAGS_COM_ERR])
+			LIBS_GSSAPI="$LIBS_GSSAPI $LIBS_COM_ERR $NETWORK_LIBS"
 			enable_gssapi='heimdal'
 		])
-	],[],[$LIBS_KRB5 $LIBS_COM_ERR $NETWORK_LIBS])
+	])
 
 	AS_UNSET([ac_cv_lib_gssapi_gss_unwrap])
 	AC_CHECK_LIB([krb5support],[krb5int_getspecific],[
-		SNERT_JOIN_UNIQ([LIBS_GSSAPI],[-lkrb5support])
+		LIBS_GSSAPI="$LIBS_GSSAPI -lkrb5support"
 	])
 	AC_CHECK_LIB([gssapi_krb5],[gss_unwrap],[
 		AS_IF([test "$enable_gssapi" = 'auto' -o "$enable_gssapi" = 'mit'],[
-			SNERT_JOIN_UNIQ([LIBS_GSSAPI],[-lgssapi_krb5 $LIBS_KRB5 -lk5crypto $LIBS_COM_ERR $NETWORK_LIBS])
-			SNERT_JOIN_UNIQ([CPPFLAGS_GSSAPI],[$CPPFLAGS_KRB5 $CPPFLAGS_COM_ERR])
-			SNERT_JOIN_UNIQ([LDFLAGS_GSSAPI],[$LDFLAGS_KRB5 $LDFLAGS_COM_ERR])
+			LIBS_GSSAPI="$LIBS_GSSAPI -lkrb5 -lk5crypto $LIBS_COM_ERR $NETWORK_LIBS"
 			enable_gssapi="mit"
 		])
-	],[],[-lgssapi_krb5 $LIBS_KRB5 -lk5crypto $LIBS_COM_ERR $NETWORK_LIBS])
+	])
 
 	AS_UNSET([ac_cv_lib_gss_csf_gss_acq_user])
 	AC_CHECK_LIB([gss],[csf_gss_acq_user],[
 		AS_IF([test "$enable_gssapi" = 'auto' -o "$enable_gssapi" = 'cybersafe'],[
-			SNERT_JOIN_UNIQ([LIBS_GSSAPI],[-lgss -lcstbk5 $NETWORK_LIBS])
 			enable_gssapi="cybersafe03"
 		])
 	],[],[-lcstbk5])
 	AS_UNSET([ac_cv_lib_gss_csf_gss_acq_user])
 	AC_CHECK_LIB([gss],[csf_gss_acq_user],[
 		AS_IF([test "$enable_gssapi" = 'auto' -o "$enable_gssapi" = 'cybersafe'],[
-			SNERT_JOIN_UNIQ([LIBS_GSSAPI],[-lgss $NETWORK_LIBS])
 			enable_gssapi="cybersafe"
 		])
 	])
@@ -1219,7 +1189,6 @@ dnl			-lkrb5 -lasn1 -lroken ${LIB_CRYPT} ${LIB_DES} -lcom_err
 	AS_UNSET([ac_cv_lib_gssapi_gss_unwrap])
 	AC_CHECK_LIB([gss],[gss_unwrap],[
 		AS_IF([test "$enable_gssapi" = 'auto' -o "$enable_gssapi" = 'seam'],[
-			SNERT_JOIN_UNIQ([LIBS_GSSAPI],[-lgss $NETWORK_LIBS])
 			enable_gssapi="seam"
 		])
 	])
@@ -1231,22 +1200,14 @@ dnl			-lkrb5 -lasn1 -lroken ${LIB_CRYPT} ${LIB_DES} -lcom_err
 	LDFLAGS="$save_LDFLAGS"
 	LIBS="$save_LIBS"
 
-	SNERT_DEFINE([LIBS_GSSAPI])
-	SNERT_DEFINE([LDFLAGS_GSSAPI])
-	SNERT_DEFINE([CPPFLAGS_GSSAPI])
-
- 	AC_SUBST(LIBS_GSSAPI)
- 	AC_SUBST(LDFLAGS_GSSAPI)
- 	AC_SUBST(CPPFLAGS_GSSAPI)
-
+dnl 	AC_SUBST(LIBS_GSSAPI)
+dnl 	AC_SUBST(CPPFLAGS_GSSAPI)
+dnl 	AC_SUBST(LDFLAGS_GSSAPI)
 	AH_VERBATIM(LIBS_GSSAPI,[
 #undef HAVE_LIBGSS
 #undef HAVE_LIBGSSAPI
-#undef HAVE_LIBASN1
-#undef HAVE_LIBROKEN
 #undef HAVE_LIBGSSAPI_KRB5
 #undef HAVE_LIBKRB5SUPPORT
-#undef HAVE_APPSEC_RT_LIB_LIBGSS
 #undef HAVE_GSSAPI_H
 #undef HAVE_GSSAPI_GSSAPI_H
 #undef HAVE_GSSAPI_GSSAPI_EXT_H
@@ -1261,14 +1222,14 @@ dnl			-lkrb5 -lasn1 -lroken ${LIB_CRYPT} ${LIB_DES} -lcom_err
 
 AC_DEFUN([SNERT_OPTION_WITH_OPENSSL],[
 	AC_ARG_WITH([openssl],[AS_HELP_STRING([--with-openssl=DIR],[OpenSSL package, optional base directory])])
-	AC_ARG_WITH([openssl-inc],[AS_HELP_STRING([--with-openssl-inc=DIR],[...specific OpenSSL include directory])])
-	AC_ARG_WITH([openssl-lib],[AS_HELP_STRING([--with-openssl-lib=DIR],[...specific OpenSSL library directory])])
+	AC_ARG_WITH([openssl-inc],[AS_HELP_STRING([--with-openssl-inc=DIR],[specific OpenSSL include directory])])
+	AC_ARG_WITH([openssl-lib],[AS_HELP_STRING([--with-openssl-lib=DIR],[specific OpenSSL library directory])])
 ])
 AC_DEFUN([SNERT_OPENSSL],[
 	AC_REQUIRE([SNERT_NETWORK])
 	SNERT_CHECK_PACKAGE([SSL], dnl
 		[openssl/ssl.h openssl/bio.h openssl/err.h openssl/crypto.h], dnl
-		[libssl libcrypto],[SSL_library_init EVP_cleanup] dnl
+		[libcrypto libssl],[SSL_library_init EVP_cleanup] dnl
 		[$with_openssl],[$with_openssl_inc],[$with_openssl_lib] dnl
 	)
 	SNERT_CHECK_DEFINE(OpenSSL_add_all_algorithms, openssl/evp.h)
@@ -1293,8 +1254,8 @@ dnl 	AC_SUBST(LDFLAGS_SSL)
 
 AC_DEFUN(CYRUS_OPTION_WITH_OPENLDAP,[
 	AC_ARG_WITH([openldap],[AS_HELP_STRING([--with-openldap=DIR],[OpenLDAP package, optional base directory])])
-	AC_ARG_WITH([openldap-inc],[AS_HELP_STRING([--with-openldap-inc=DIR],[...specific OpenLDAP include directory])])
-	AC_ARG_WITH([openldap-lib],[AS_HELP_STRING([--with-openldap-lib=DIR],[...specific OpenLDAP library directory])])
+	AC_ARG_WITH([openldap-inc],[AS_HELP_STRING([--with-openldap-inc=DIR],[specific OpenLDAP include directory])])
+	AC_ARG_WITH([openldap-lib],[AS_HELP_STRING([--with-openldap-lib=DIR],[specific OpenLDAP library directory])])
 ])
 AC_DEFUN(CYRUS_OPENLDAP,[
 	SNERT_CHECK_PACKAGE([LDAP], dnl
@@ -1325,11 +1286,10 @@ dnl 	AC_SUBST(LDFLAGS_LDAP)
 
 AC_DEFUN(CYRUS_OPTION_WITH_OPENAFS,[
 	AC_ARG_WITH([openafs],[AS_HELP_STRING([--with-openafs=DIR],[OpenAFS package, optional base directory])])
-	AC_ARG_WITH([openafs-inc],[AS_HELP_STRING([--with-openafs-inc=DIR],[...specific OpenAFS include directory])])
-	AC_ARG_WITH([openafs-lib],[AS_HELP_STRING([--with-openafs-lib=DIR],[...specific OpenAFS library directory])])
+	AC_ARG_WITH([openafs-inc],[AS_HELP_STRING([--with-openafs-inc=DIR],[specific OpenAFS include directory])])
+	AC_ARG_WITH([openafs-lib],[AS_HELP_STRING([--with-openafs-lib=DIR],[specific OpenAFS library directory])])
 ])
 AC_DEFUN(CYRUS_OPENAFS,[
-	AC_REQUIRE([CYRUS_KRB5])
 	SNERT_CHECK_PACKAGE([AFS], dnl
 		[afs/afs.h afs/auth.h afs/cellconfig.h afs/com_err.h afs/ptserver.h afs/pterror.h], dnl
 		[afs/libkauth.a afs/libafscom_err afs/libauth afs/libprot afs/libsys afs/util.a dnl
@@ -1370,8 +1330,8 @@ dnl 	AC_SUBST(LDFLAGS_AFS)
 
 AC_DEFUN(CYRUS_OPTION_WITH_OPENDKIM,[
 	AC_ARG_WITH([opendkim],[AS_HELP_STRING([--with-opendkim=DIR],[OpenDKIM package, optional base directory])])
-	AC_ARG_WITH([opendkim-inc],[AS_HELP_STRING([--with-opendkim-inc=DIR],[...specific OpenDKIM include directory])])
-	AC_ARG_WITH([opendkim-lib],[AS_HELP_STRING([--with-opendkim-lib=DIR],[...specific OpenDKIM library directory])])
+	AC_ARG_WITH([opendkim-inc],[AS_HELP_STRING([--with-opendkim-inc=DIR],[specific OpenDKIM include directory])])
+	AC_ARG_WITH([opendkim-lib],[AS_HELP_STRING([--with-opendkim-lib=DIR],[specific OpenDKIM library directory])])
 ])
 AC_DEFUN(CYRUS_OPENDKIM,[
 	SNERT_CHECK_PACKAGE([DKIM],[opendkim/dkim.h dkim.h],[libopendkim],[dkim_init], dnl
@@ -1393,8 +1353,8 @@ dnl 	AC_SUBST(LDFLAGS_DKIM)
 
 AC_DEFUN([CYRUS_OPTION_WITH_CLAMAV],[
 	AC_ARG_WITH([clamav],[AS_HELP_STRING([--with-clamav=DIR],[ClamAV package, optional base directory])])
-	AC_ARG_WITH([clamav-inc],[AS_HELP_STRING([--with-clamav-inc=DIR],[...specific ClamAV include directory])])
-	AC_ARG_WITH([clamav-lib],[AS_HELP_STRING([--with-clamav-lib=DIR],[...specific ClamAV library directory])])
+	AC_ARG_WITH([clamav-inc],[AS_HELP_STRING([--with-clamav-inc=DIR],[specific ClamAV include directory])])
+	AC_ARG_WITH([clamav-lib],[AS_HELP_STRING([--with-clamav-lib=DIR],[specific ClamAV library directory])])
 ])
 AC_DEFUN([CYRUS_CLAMAV],[
 	SNERT_CHECK_PACKAGE([CLAMAV],[clamav.h],[libclamav],[cl_init cl_engine_new], dnl
@@ -1415,32 +1375,20 @@ dnl 	AC_SUBST(LDFLAGS_CLAMAV)
 
 AC_DEFUN([CYRUS_OPTION_WITH_ZEPHYR],[
 	AC_ARG_WITH([zephyr],[AS_HELP_STRING([--with-zephyr=DIR],[Zephyr notification package, optional base directory])])
-	AC_ARG_WITH([zephyr-inc],[AS_HELP_STRING([--with-zephyr-inc=DIR],[...specific Zephyr include directory])])
-	AC_ARG_WITH([zephyr-lib],[AS_HELP_STRING([--with-zephyr-lib=DIR],[...specific Zephyr library directory])])
+	AC_ARG_WITH([zephyr-inc],[AS_HELP_STRING([--with-zephyr-inc=DIR],[specific Zephyr include directory])])
+	AC_ARG_WITH([zephyr-lib],[AS_HELP_STRING([--with-zephyr-lib=DIR],[specific Zephyr library directory])])
 ])
 AC_DEFUN([CYRUS_ZEPHYR],[
-	AC_REQUIRE([CYRUS_KRB4])
 	save_zephyr_LIBS="$LIBS"
-	LIBS="$LIBS_KRB4 $LIBS"
+	LIBS="-lkrb $LIBS"
 	SNERT_CHECK_PACKAGE([ZEPHYR],[zephyr/zephyr.h],[libzephyr],[ZInitialize], dnl
-		[$with_zephyr],[$with_zephyr_inc],[$with_zephyr_lib],[],[no] dnl
+		[$with_zephyr],[$with_zephyr_inc],[$with_zephyr_lib] dnl
 	)
+	LIBS_ZEPHYR="$LIBS_ZEPHYR -lkrb"
 	LIBS="$save_zephyr_LIBS"
-
-	AS_IF([test "$ac_cv_func_ZInitialize" = 'yes'],[
-		SNERT_JOIN_UNIQ([CPPFLAGS_ZEPHYR],[$CPPFLAGS_KRB4])
-		SNERT_JOIN_UNIQ([LDFLAGS_ZEPHYR],[$LDFLAGS_KRB4])
-		SNERT_JOIN_UNIQ([LIBS_ZEPHYR],[$LIBS_KRB4])
-	])
-
- 	SNERT_DEFINE(LIBS_ZEPHYR)
- 	SNERT_DEFINE(LDFLAGS_ZEPHYR)
- 	SNERT_DEFINE(CPPFLAGS_ZEPHYR)
-
- 	AC_SUBST(LIBS_ZEPHYR)
- 	AC_SUBST(LDFLAGS_ZEPHYR)
- 	AC_SUBST(CPPFLAGS_ZEPHYR)
-
+dnl 	AC_SUBST(LIBS_ZEPHYR)
+dnl 	AC_SUBST(CPPFLAGS_ZEPHYR)
+dnl 	AC_SUBST(LDFLAGS_ZEPHYR)
 	AH_VERBATIM(LIBS_ZEPHYR,[
 #undef HAVE_ZEPHYR_ZEPHYR_H
 #undef HAVE_ZINITIALIZE
@@ -1452,8 +1400,8 @@ AC_DEFUN([CYRUS_ZEPHYR],[
 
 AC_DEFUN([CYRUS_OPTION_WITH_JANSSON],[
 	AC_ARG_WITH([jansson],[AS_HELP_STRING([--with-jansson=dir],[Jansson package, optional base directory])])
-	AC_ARG_WITH([jansson-inc],[AS_HELP_STRING([--with-jansson-inc=dir],[...specific Jansson include directory])])
-	AC_ARG_WITH([jansson-lib],[AS_HELP_STRING([--with-jansson-lib=dir],[...specific Jansson library directory])])
+	AC_ARG_WITH([jansson-inc],[AS_HELP_STRING([--with-jansson-inc=dir],[specific Jansson include directory])])
+	AC_ARG_WITH([jansson-lib],[AS_HELP_STRING([--with-jansson-lib=dir],[specific Jansson library directory])])
 ])
 AC_DEFUN([CYRUS_JANSSON],[
 	SNERT_CHECK_PACKAGE([JANSSON],[jansson.h],[libjansson],[json_object json_string], dnl
@@ -1474,9 +1422,9 @@ dnl 	AC_SUBST(LDFLAGS_JANSSON)
 
 AC_DEFUN([CYRUS_OPTION_WITH_COM_ERR],[
 	AC_ARG_WITH([com_err],[AS_HELP_STRING([--with-com_err=dir],[com_err API, optional base directory])])
-	AC_ARG_WITH([com_err-bin],[AS_HELP_STRING([--with-com_err-bin=dir],[...specific com_err binary directory])])
-	AC_ARG_WITH([com_err-inc],[AS_HELP_STRING([--with-com_err-inc=dir],[...specific com_err include directory])])
-	AC_ARG_WITH([com_err-lib],[AS_HELP_STRING([--with-com_err-lib=dir],[...specific com_err library directory])])
+	AC_ARG_WITH([com_err-bin],[AS_HELP_STRING([--with-com_err-bin=dir],[specific com_err binary directory])])
+	AC_ARG_WITH([com_err-inc],[AS_HELP_STRING([--with-com_err-inc=dir],[specific com_err include directory])])
+	AC_ARG_WITH([com_err-lib],[AS_HELP_STRING([--with-com_err-lib=dir],[specific com_err library directory])])
 ])
 AC_DEFUN([CYRUS_COM_ERR],[
 	dnl
@@ -1569,8 +1517,8 @@ dnl 	AC_SUBST(LDFLAGS_PCRE)
 
 AC_DEFUN([SNERT_OPTION_WITH_ZLIB],[
 	AC_ARG_WITH([zlib],[AS_HELP_STRING([--with-zlib=dir],[zlib package, optional base directory])])
-	AC_ARG_WITH([zlib-inc],[AS_HELP_STRING([--with-zlib-inc=dir],[...specific zlib include directory])])
-	AC_ARG_WITH([zlib-lib],[AS_HELP_STRING([--with-zlib-lib=dir],[...specific zlib library directory])])
+	AC_ARG_WITH([zlib-inc],[AS_HELP_STRING([--with-zlib-inc=dir],[specific zlib include directory])])
+	AC_ARG_WITH([zlib-lib],[AS_HELP_STRING([--with-zlib-lib=dir],[specific zlib library directory])])
 ])
 AC_DEFUN([SNERT_ZLIB],[
 	SNERT_CHECK_PACKAGE([ZLIB],[zlib.h],[libz],[deflate], dnl
@@ -1690,11 +1638,7 @@ dnl 	AC_SUBST(LDFLAGS_ICU)
 
 AC_DEFUN([CYRUS_CAP],[
 	dnl Linux specific library.
-	SNERT_CHECK_PACKAGE([CAP],[sys/capability.h sys/prctl.h],[libcap],dnl
-		[cap_free cap_from_name cap_from_text cap_get_pid cap_get_proc dnl
-		 cap_set_proc cap_to_name cap_to_text],dnl
-		[$with_libcap]
-	)
+	SNERT_CHECK_PACKAGE([CAP],[sys/capability.h sys/prctl.h],[libcap],[cap_get_proc],[$with_libcap])
 dnl 	AC_SUBST(LIBS_CAP)
 dnl 	AC_SUBST(CPPFLAGS_CAP)
 dnl 	AC_SUBST(LDFLAGS_CAP)
@@ -1702,14 +1646,7 @@ dnl 	AC_SUBST(LDFLAGS_CAP)
 #undef HAVE_SYS_CAPABILITY_H
 #undef HAVE_SYS_PRCTL_H
 #undef HAVE_LIBCAP
-#undef HAVE_CAP_FREE
-#undef HAVE_CAP_FROM_NAME
-#undef HAVE_CAP_FROM_TEXT
-#undef HAVE_CAP_GET_PID
 #undef HAVE_CAP_GET_PROC
-#undef HAVE_CAP_SET_PROC
-#undef HAVE_CAP_TO_NAME
-#undef HAVE_CAP_TO_TEXT
 #undef CPPFLAGS_CAP
 #undef LDFLAGS_CAP
 #undef LIBS_CAP
@@ -1718,8 +1655,8 @@ dnl 	AC_SUBST(LDFLAGS_CAP)
 
 AC_DEFUN([CYRUS_OPTION_WITH_CUNIT],[
 	AC_ARG_WITH([cunit],[AS_HELP_STRING([--with-cunit=dir],[CUnit package, optional base directory])])
-	AC_ARG_WITH([cunit-inc],[AS_HELP_STRING([--with-cunit-inc=dir],[...specific CUnit include directory])])
-	AC_ARG_WITH([cunit-lib],[AS_HELP_STRING([--with-cunit-lib=dir],[...specific CUnit library directory])])
+	AC_ARG_WITH([cunit-inc],[AS_HELP_STRING([--with-cunit-inc=dir],[specific CUnit include directory])])
+	AC_ARG_WITH([cunit-lib],[AS_HELP_STRING([--with-cunit-lib=dir],[specific CUnit library directory])])
 ])
 AC_DEFUN([CYRUS_CUNIT],[
 	SNERT_CHECK_PACKAGE([CUNIT], dnl
@@ -1855,8 +1792,8 @@ AC_DEFUN([CMU_PERL_MAKEMAKER],[
 
 AC_DEFUN(CYRUS_OPTION_WITH_XAPIAN,[
 	AC_ARG_WITH([xapian],[AS_HELP_STRING([--with-xapian=DIR],[Xapian package, optional base directory])])
-	AC_ARG_WITH([xapian-inc],[AS_HELP_STRING([--with-xapian-inc=dir],[...specific Xapian include directory])])
-	AC_ARG_WITH([xapian-lib],[AS_HELP_STRING([--with-xapian-lib=dir],[...specific Xapian library directory])])
+	AC_ARG_WITH([xapian-inc],[AS_HELP_STRING([--with-xapian-inc=dir],[specific Xapian include directory])])
+	AC_ARG_WITH([xapian-lib],[AS_HELP_STRING([--with-xapian-lib=dir],[specific Xapian library directory])])
 ])
 AC_DEFUN(CYRUS_XAPIAN,[
 	SNERT_CHECK_PACKAGE([XAPIAN],[xapian.h],[libxapian],[], dnl
