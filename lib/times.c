@@ -92,7 +92,7 @@ EXPORTED int time_to_rfc822(time_t t, char *buf, size_t len)
     gmtoff /= 60;
 
     return snprintf(buf, len, "%s, %02d %s %4d %02d:%02d:%02d %c%.2lu%.2lu",
-	     wday[tm->tm_wday],
+	     wday[tm->tm_wday], 
 	     tm->tm_mday, monthname[tm->tm_mon], tm->tm_year + 1900,
 	     tm->tm_hour, tm->tm_min, tm->tm_sec,
 	     gmtnegative ? '-' : '+', gmtoff / 60, gmtoff % 60);
@@ -395,7 +395,7 @@ EXPORTED int time_from_iso8601(const char *s, time_t *tp)
     /* parse the ISO 8601 date/time */
     /* XXX should use strptime ? */
     memset(&exp, 0, sizeof(struct tm));
-    n = sscanf(s, "%4d-%2d-%2dT%2d:%2d:%2d",
+    n = sscanf(s, "%4d-%2d-%2dT%2d:%2d:%2d", 
 	       &exp.tm_year, &exp.tm_mon, &exp.tm_mday,
 	       &exp.tm_hour, &exp.tm_min, &exp.tm_sec);
     if (n != 6)
@@ -461,10 +461,10 @@ static int breakdown_time_to_iso8601(const struct timeval *t, struct tm *tm,
     if (rlen > 0) {
 	switch(tv_precision) {
 	case timeval_ms:
-	    rlen += snprintf(buf+rlen, len-rlen, ".%.3lu", (unsigned long)t->tv_usec/1000);
+	    rlen += snprintf(buf+rlen, len-rlen, ".%.3lu", t->tv_usec/1000);
 	    break;
 	case timeval_us:
-	    rlen += snprintf(buf+rlen, len-rlen, ".%.6lu", (unsigned long)t->tv_usec);
+	    rlen += snprintf(buf+rlen, len-rlen, ".%.6lu", t->tv_usec);
 	    break;
 	case timeval_s:
 	    break;
