@@ -179,10 +179,11 @@ AS_IF([test "$with_base" != 'no'],[
 
 			SNERT_IF_SYSTEM_DIR([$dir_val],[
 				dnl Ignore system directories.
-				SNERT_JOIN_UNIQ([CPPFLAGS_$1])
+				eval CPPFLAGS_$1=''
 			],[
 				SNERT_JOIN_UNIQ([CPPFLAGS_$1],["-I$dir_val"],[head])
 			])
+			break
 		],[],[${with_base:+$with_base/include} $6])
 	done
 
@@ -204,6 +205,7 @@ AS_IF([test "$with_base" != 'no'],[
 					SNERT_JOIN_UNIQ([LIBS_$1],["-l$lib"],[head])
 				])
 			])
+			break
 		],[],[${with_base:+$with_base/lib} $7])
 	done
 
