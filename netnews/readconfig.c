@@ -262,7 +262,7 @@ BOOL EXPreadfile(FILE *F)
     patterns = NEW(char*, nGroups);
     for (i = 0; i < NUM_STORAGE_CLASSES; i++)
 	EXPclasses[i].ReportedMissing = EXPclasses[i].Missing = TRUE;
-
+    
     for (i = 1; fgets(buff, sizeof buff, F) != NULL; i++) {
 	if ((p = strchr(buff, '\n')) == NULL) {
 	    (void)fprintf(stderr, "Line %d too long\n", i);
@@ -308,7 +308,7 @@ BOOL EXPreadfile(FILE *F)
 	    if ((j < 0) || (j > NUM_STORAGE_CLASSES)) {
 		fprintf(stderr, "Line %d bad storage class %d\n", i, j);
 	    }
-
+	
 	    if (!EXPgetnum(i, fields[1], &EXPclasses[j].Keep,    "keep")
 		|| !EXPgetnum(i, fields[2], &EXPclasses[j].Default, "default")
 		|| !EXPgetnum(i, fields[3], &EXPclasses[j].Purge,   "purge"))
@@ -463,7 +463,7 @@ callback_list(struct imclient *imclient,
     int c;
 
     s = reply->text;
-
+    
     if (*s++ != '(') return;
     end = strchr(s, ')');
     if (!end) return;
@@ -493,7 +493,8 @@ callback_list(struct imclient *imclient,
     if ((strncasecmp(mailbox,"INBOX",5)!=0) && (strncasecmp(mailbox,"user.",5)!=0))
     {
 
-	Groups[nGroups].Name = strdup(mailbox);
+	Groups[nGroups].Name = malloc( strlen(mailbox)+1);
+	strcpy(Groups[nGroups].Name, mailbox);
 	nGroups++;
 
 	if (nGroups >= nGroups_alloc)

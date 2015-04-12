@@ -42,7 +42,7 @@
 /* This program purges old entries from the database. It holds an exclusive
  * lock throughout the process.
  *
- * NOTE: by adding the alt_file flag, we let exit() handle the cleanup of
+ * NOTE: by adding the alt_file flag, we let exit() handle the cleanup of 
  *       the lock file's fd. That's bad in principal but not in practice. We do
  *       to make the code easier to read.
  */
@@ -112,7 +112,7 @@ int main(int argc, char *argv[])
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
 	fatal("must run as the Cyrus user", EC_USAGE);
     }
-
+    
     openlog("ptexpire", LOG_PID, SYSLOG_FACILITY);
 
     while ((opt = getopt(argc, argv, "C:E:")) != EOF) {
@@ -141,10 +141,10 @@ int main(int argc, char *argv[])
     syslog(LOG_INFO, "Expiring entries older than %d seconds (currently %d)",
 	   (int)expire_time, (int)timenow);
     syslog(LOG_DEBUG, "%s", "ptexpire.c,v " _CYRUS_VERSION " " CYRUS_GITVERSION);
-
+    
     /* open database */
-    (void) strlcpy(fnamebuf, config_dir, sizeof (fnamebuf));
-    STRLCAT_LOG(fnamebuf, PTS_DBFIL, sizeof (fnamebuf));
+    strcpy(fnamebuf, config_dir);
+    strcat(fnamebuf, PTS_DBFIL);
     r = cyrusdb_open(config_ptscache_db, fnamebuf, CYRUSDB_CREATE, &ptdb);
     if(r != CYRUSDB_OK) {
 	syslog(LOG_ERR, "error opening %s (%s)", fnamebuf,
@@ -161,4 +161,4 @@ int main(int argc, char *argv[])
 
     syslog(LOG_INFO, "finished");
     return 0;
-}
+}      

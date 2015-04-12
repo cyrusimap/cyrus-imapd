@@ -56,7 +56,7 @@ static int dump_cb(void *rockp __attribute__((unused)),
 {
     struct auth_state *authstate = (struct auth_state *)data;
     int i;
-
+    
     printf("user: ");
     fwrite(key, keylen, 1, stdout);
     printf(" time: %d groups: %d\n",
@@ -64,7 +64,7 @@ static int dump_cb(void *rockp __attribute__((unused)),
 
     for (i=0; i < authstate->ngroups; i++)
 	printf("  %s\n",authstate->groups[i].id);
-
+    
     return 0;
 }
 
@@ -95,8 +95,8 @@ int main(int argc, char *argv[])
     cyrus_init(alt_config, "ptdump", 0, 0);
 
     /* open database */
-    (void) strlcpy(fnamebuf, config_dir, sizeof (fnamebuf));
-    STRLCAT_LOG(fnamebuf, PTS_DBFIL, sizeof (fnamebuf));
+    strcpy(fnamebuf, config_dir);
+    strcat(fnamebuf, PTS_DBFIL);
     r = cyrusdb_open(config_ptscache_db, fnamebuf, CYRUSDB_CREATE, &ptdb);
     if(r != CYRUSDB_OK) {
 	fprintf(stderr,"error opening %s (%s)", fnamebuf,

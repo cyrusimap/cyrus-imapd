@@ -84,7 +84,7 @@ typedef struct mbox_stats_s {
 
     int total;         /* total including those deleted */
     int total_bytes;
-    int deleted;
+    int deleted;       
     int deleted_bytes;
 
 } mbox_stats_t;
@@ -191,12 +191,12 @@ int main (int argc, char *argv[]) {
   sync_log_init();
 
   if (optind == argc) { /* do the whole partition */
-    (void) strcpy(buf, "*");
+    strcpy(buf, "*");
     (*purge_namespace.mboxlist_findall)(&purge_namespace, buf, 1, 0, 0,
 					purge_me, NULL);
   } else {
     for (; optind < argc; optind++) {
-      STRLCPY_ERR(buf, argv[optind], sizeof (buf));
+      strncpy(buf, argv[optind], MAX_MAILBOX_BUFFER);
       /* Translate any separators in mailboxname */
       mboxname_hiersep_tointernal(&purge_namespace, buf,
 				  config_virtdomains ?

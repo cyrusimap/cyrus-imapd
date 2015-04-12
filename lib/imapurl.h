@@ -82,16 +82,7 @@ extern int URLtoMailbox(char *dst, const char *src);
  *     (worst case: 8 octets UTF-7 becomes 9 octets UTF-8)
  *
  *  it is valid for mechname to be NULL (implies anonymous mech)
- *
- * @param dst
- *	Pointer to buffer in which URL C string is saved.
- *
- * @param dst_size
- *	Size of dst buffer, including terminating NUL byte.
- *
- * @param url
- *	Pointer to URL information to convert to a string.
  */
-extern void imapurl_toURL(char *dst, size_t dst_size, struct imapurl *url);
+extern void imapurl_toURL(char *dst, const struct imapurl *url);
 
 #endif /* IMAPURL_H */

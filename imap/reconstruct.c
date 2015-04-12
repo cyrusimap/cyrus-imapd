@@ -447,7 +447,7 @@ static int do_reconstruct(const char *name,
     if (matchlen >= (int) sizeof(lastname))
 	matchlen = sizeof(lastname) - 1;
 
-    (void) strncpy(lastname, name, matchlen);
+    strncpy(lastname, name, matchlen);
     lastname[matchlen] = '\0';
 
     r = mailbox_reconstruct(lastname, reconstruct_flags);
@@ -479,7 +479,7 @@ static int do_reconstruct(const char *name,
     if (!(reconstruct_flags & RECONSTRUCT_QUIET))
 	printf("%s\n", buf);
 
-    STRLCPY_LOG(outpath, mailbox_meta_fname(mailbox, META_HEADER), sizeof (outpath));
+    strncpy(outpath, mailbox_meta_fname(mailbox, META_HEADER), MAX_MAILBOX_NAME);
 
     if (setversion) {
 	/* need to re-set the version! */

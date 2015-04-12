@@ -93,7 +93,7 @@ static int perlsieve_getpass(sasl_conn_t *conn, void *context,
 
     /* copy result */
     *psecret = xmalloc(sizeof(sasl_secret_t) + strlen(tmp) + 2);
-    (void) strcpy((char *) (*psecret)->data ,tmp);
+    strcpy((char *) (*psecret)->data ,tmp);
     (*psecret)->len = strlen(tmp);
 
     PUTBACK ;
@@ -139,7 +139,7 @@ static int perlsieve_simple(void *context, int id,
 
     /* copy result */
     *result = xmalloc(strlen(tmp) + 2);
-    (void) strcpy((char *) *result, tmp);
+    strcpy((char *) *result, tmp);
     if (len) *len = strlen((char *) *result);
 
     PUTBACK ;
@@ -241,7 +241,7 @@ sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *passwor
 
     ret = xmalloc(sizeof(struct xscyrus));
     ret->class = safemalloc(20);
-    (void) strcpy(ret->class,"managesieve");
+    strcpy(ret->class,"managesieve");
     ret->isieve = obj;
     ret->errstr = NULL;
 
@@ -262,20 +262,19 @@ sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *passwor
 	if (r) init_sasl(obj, 128, callbacks);
 
 	if (mtried) {
-	    size_t size = strlen(mlist)+1;
-	    char *newlist = (char*) xmalloc(size);
+	    char *newlist = (char*) xmalloc(strlen(mlist)+1);
 	    char *mtr = (char*) xstrdup(mtried);
 	    char *tmp;
 
 	    ucase(mtr);
 	    tmp = strstr(mlist,mtr);
 	    *tmp ='\0';
-	    (void) strlcpy(newlist, mlist, size);
+	    strcpy(newlist, mlist);
 	    tmp++;
 
 	    tmp = strchr(tmp,' ');
 	    if (tmp) {
-		(void) strlcat(newlist,tmp, size);
+		strcat(newlist,tmp);
 	    }
 
 	    free(mtr);

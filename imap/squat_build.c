@@ -187,7 +187,7 @@ typedef struct {
 			       array scanning dominates the CPU
 			       consumption of the indexer. We get
 			       major speedup by maintaining these
-			       entries on the fly. */
+			       entries on the fly. */ 
   short last_valid_entry;
   WordDocEntry* docs[256];  /* Pointers to the document ID lists for
 			       each of the 256 words rooted at this
@@ -267,7 +267,7 @@ struct _SquatIndex {
 					 document. */
   int current_doc_len;                /* The total number of bytes
 					 processed in the current
-					 source document. */
+					 source document. */ 
   SquatWordTable *doc_word_table;     /* The root of the trie being
 					 built for the current
 					 document or for the current
@@ -583,7 +583,7 @@ int squat_index_open_document(SquatIndex *index, char const *name)
     if ((buf = prepare_buffered_write(&index->out, name_len)) == NULL) {
 	return SQUAT_ERR;
     }
-    /* ACH: DANGER unknown size of buf? name_len or other? */ strcpy(buf, name);
+    strcpy(buf, name);
     complete_buffered_write(&index->out, buf + name_len);
 
     index->current_doc_len = 0;

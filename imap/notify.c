@@ -71,7 +71,7 @@ static int add_arg(char *buf, int max_size, const char *arg, int *buflen)
 
     if (*buflen + len > max_size) return -1;
 
-    (void) strcat(buf+*buflen, myarg);
+    strcat(buf+*buflen, myarg);
     *buflen += len;
 
     return 0;

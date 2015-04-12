@@ -114,7 +114,7 @@ int main(int argc,char **argv)
     char *alt_config = NULL;
     time_t now = time(0);
 
-    (void) strcpy(pattern, "*");
+    strcpy(pattern, "*");
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
 	fatal("must run as the Cyrus user", EC_USAGE);
@@ -189,7 +189,7 @@ int main(int argc,char **argv)
 
     mboxlist_init(0);
     mboxlist_open(NULL);
-
+    
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&arb_namespace, 1)) != 0) {
 	syslog(LOG_ERR, "%s", error_message(r));
@@ -212,28 +212,28 @@ int main(int argc,char **argv)
 
     /* Translate any separators in mailboxname */
     mboxname_hiersep_tointernal(&arb_namespace, pattern, 0);
-
+    
     /* Get the mailbox list */
     fprintf(stderr, "Loading Mailboxes...");
     (*arb_namespace.mboxlist_findall)(&arb_namespace, pattern, 1, 0, 0,
 				      do_mailbox, NULL);
 
     fprintf(stderr, "Done\nLoading Users");
-
+    
     /* Now do all the users */
     run_users();
 
-    fprintf(stderr, "Done\n");
+    fprintf(stderr, "Done\n");    
 
     /* And print the report */
-    hash_enumerate(&mboxname_table, make_report, NULL);
+    hash_enumerate(&mboxname_table, make_report, NULL);    
 
     /* Free Resources */
-    free_hash_table(&mailbox_table, NULL);
+    free_hash_table(&mailbox_table, NULL);    
     free_hash_table(&mboxname_table, NULL);
-    free_mpool(arb_pool);
+    free_mpool(arb_pool);    
     mboxlist_close();
-    mboxlist_done();
+    mboxlist_done();    
 
     cyrus_done();
 
@@ -247,7 +247,7 @@ static void usage(void)
 	    "[-d days | -D mmddyyy[:mmddyyyy]]\n"
             "                [-p months] [mboxpattern]\n");
     exit(EC_USAGE);
-}
+}    
 
 static int do_mailbox(const char *name, int matchlen __attribute__((unused)),
 		      int maycreate __attribute__((unused)),
@@ -261,7 +261,7 @@ static int do_mailbox(const char *name, int matchlen __attribute__((unused)),
 
     struct arb_mailbox_data *d = mpool_malloc(arb_pool,
 					      sizeof(struct arb_mailbox_data));
-
+    
     d->nreaders = 0;
     d->nsubscribers = 0;
     d->readers = NULL;
@@ -278,12 +278,12 @@ static int do_mailbox(const char *name, int matchlen __attribute__((unused)),
 static void run_users(void)
 {
     char prefix[MAX_MAILBOX_PATH+1],path[MAX_MAILBOX_PATH+1],
-	file[MAX_MAILBOX_PATH+1];
+	file[MAX_MAILBOX_PATH+1];    
     DIR *dirp, *dirq;
     struct dirent *dirent1, *dirent2;
-
+    
     snprintf(prefix, sizeof(prefix), "%s%s", config_dir, FNAME_USERDIR);
-
+    
     dirp = opendir(prefix);
     if(!dirp) {
 	fatal("can't open user directory", EC_SOFTWARE);
@@ -291,21 +291,21 @@ static void run_users(void)
 
     while((dirent1 = readdir(dirp)) != NULL) {
 	if(!strcmp(dirent1->d_name, ".") || !strcmp(dirent1->d_name,"..")) {
-	    continue;
+	    continue;	    
 	}
-
+	
 	snprintf(path, sizeof(path), "%s%s", prefix, dirent1->d_name);
 /*	printf("trying %s\n",path); */
-
+	
 	dirq = opendir(path);
-	if(dirq) {
-	    fprintf(stderr, ".");
+	if(dirq) {	    
+	    fprintf(stderr, ".");	    
 	    while(dirq && ((dirent2 = readdir(dirq)) != NULL)) {
 		size_t len;
-
+		
 		if(!strcmp(dirent2->d_name, ".") ||
 		   !strcmp(dirent2->d_name,"..")) {
-		    continue;
+		    continue;	    
 		}
 
 		len = strlen(dirent2->d_name);
@@ -337,8 +337,8 @@ static void run_users(void)
 	    }
 	    closedir(dirq);
 	}
-
-    }
+	    
+    }    
     closedir(dirp);
 
 }
@@ -346,14 +346,14 @@ static void run_users(void)
 static int process_user_cb(void *rockp,
 			   const char *key, size_t keylen,
 			   const char *tmpdata __attribute__((unused)),
-			   size_t tmpdatalen __attribute__((unused)))
+			   size_t tmpdatalen __attribute__((unused))) 
 {
     /* Only called to do deletes */
 /*    printf("pruning entry\n"); */
+    
+    cyrusdb_delete((struct db *)rockp, key, keylen, NULL, 0);    
 
-    cyrusdb_delete((struct db *)rockp, key, keylen, NULL, 0);
-
-    return 0;
+    return 0;    
 }
 
 /* We can cheat and do all we need to in this function */
@@ -361,11 +361,11 @@ static int process_user_p(void *rockp,
 			  const char *key,
 			  size_t keylen,
 			  const char *data,
-			  size_t datalen __attribute__((unused)))
+			  size_t datalen __attribute__((unused))) 
 {
-    int ret = 0;
+    int ret = 0;    
     long version, lastread;
-    char *p;
+    char *p;    
     char buf[64];
     struct arb_mailbox_data *mbox;
     const char *user = (const char *) rockp;
@@ -375,7 +375,7 @@ static int process_user_p(void *rockp,
     if (version < 0) abort();
     /* xxx not checking version */
     lastread = strtol(data, &p, 10); data = p;
-
+    
     memcpy(buf, key, keylen);
     buf[keylen] = '\0';
 
@@ -398,20 +398,20 @@ static int process_user_p(void *rockp,
     /* Check for pruning even if mailbox isn't valid */
     if(lastread < prune_time) {
 	ret = 1;
-    }
+    }	
 
     /* Only return true if we need to prune this guy */
-    return ret;
+    return ret;    
 }
 
 static void process_seen(const char *path, const char *user)
 {
-    int r;
+    int r;    
     struct db *tmp = NULL;
 
     r = cyrusdb_open(DB, path, 0, &tmp);
     if(r) goto done;
-
+    
     cyrusdb_foreach(tmp, "", 0, process_user_p, process_user_cb,
 		(void *) user, NULL);
 
@@ -423,7 +423,7 @@ static int process_subs_cb(void *rockp __attribute__((unused)),
 			   const char *key __attribute__((unused)),
 			   size_t keylen __attribute__((unused)),
 			   const char *tmpdata __attribute__((unused)),
-			   size_t tmpdatalen __attribute__((unused)))
+			   size_t tmpdatalen __attribute__((unused))) 
 {
     return 0;
 }
@@ -431,7 +431,7 @@ static int process_subs_cb(void *rockp __attribute__((unused)),
 static int process_subs_p(void *rockp,
 			  const char *key, size_t keylen,
 			  const char *tmpdata __attribute__((unused)),
-			  size_t tmpdatalen __attribute__((unused)))
+			  size_t tmpdatalen __attribute__((unused))) 
 {
     struct arb_mailbox_data *mbox;
     char buf[MAX_MAILBOX_BUFFER];
@@ -462,12 +462,12 @@ static int process_subs_p(void *rockp,
 
 static void process_subs(const char *path, const char *user)
 {
-    int r;
+    int r;    
     struct db *tmp = NULL;
 
     r = cyrusdb_open(SUBDB, path, 0, &tmp);
     if(r) goto done;
-
+    
     cyrusdb_foreach(tmp, "", 0, process_subs_p, process_subs_cb,
 		   (void *) user, NULL);
 
@@ -511,7 +511,7 @@ static void make_report(const char *key, void *data, void *rock __attribute__((u
 
     /* Skip underread user mailboxes */
     if(!strncasecmp(key, "user.", 5) && mbox->nreaders <= 1)
-	return;
+	return;    
 
     extkey = xstrdup(key);
     mboxname_hiersep_toexternal(&arb_namespace, extkey, 0);

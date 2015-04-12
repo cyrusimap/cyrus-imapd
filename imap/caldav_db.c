@@ -19,7 +19,7 @@
  *    prior written permission. For permission or any legal
  *    details, please contact
  *      Carnegie Mellon University
- *      Centerfor Technology Transfer and Enterprise Creation
+ *      Center for Technology Transfer and Enterprise Creation
  *      4615 Forbes Avenue
  *      Suite 302
  *      Pittsburgh, PA  15213

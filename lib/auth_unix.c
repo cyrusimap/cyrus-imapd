@@ -75,7 +75,7 @@ static int mymemberof(struct auth_state *auth_state, const char *identifier)
     int i;
 
     if (!auth_state) auth_state = &auth_anonymous;
-
+ 
     if (strcmp(identifier, "anyone") == 0) return 1;
 
     if (strcmp(identifier, auth_state->userid) == 0) return 3;
@@ -160,20 +160,20 @@ static const char *mycanonifyid(const char *identifier, size_t len)
     memmove(retbuf, identifier, len);
     retbuf[len] = '\0';
 
-    /* This used to be far more restrictive, but many sites seem to ignore the
+    /* This used to be far more restrictive, but many sites seem to ignore the 
      * ye olde Unix conventions of username.  Specifically, we used to
      * - drop case on the buffer
      * - disallow lots of non-alpha characters ('-', '_', others)
-     * Now we do neither of these, but impose a very different policy based on
+     * Now we do neither of these, but impose a very different policy based on 
      * the character map above.
      */
-
-    if (!strncmp(retbuf, "group:", STRLEN("group:"))) {
-	grp = getgrnam(retbuf+STRLEN("group:"));
+    
+    if (!strncmp(retbuf, "group:", 6)) {
+	grp = getgrnam(retbuf+6);
 	if (!grp) return NULL;
-	if (strlen(grp->gr_name) >= sizeof(retbuf)-STRLEN("group:"))
+	if (strlen(grp->gr_name) >= sizeof(retbuf)-6)
 		return NULL;
-	(void) strcpy(retbuf+STRLEN("group:"), grp->gr_name);
+	strcpy(retbuf+6, grp->gr_name);
 	return retbuf;
     }
 
@@ -217,12 +217,12 @@ static struct auth_state *mynewstate(const char *identifier)
     identifier = mycanonifyid(identifier, 0);
     if (!identifier) return 0;
     if (!strncmp(identifier, "group:", 6)) return 0;
-
+    
     newstate = (struct auth_state *)xmalloc(sizeof(struct auth_state));
 
-    STRLCPY_LOG(newstate->userid, identifier, sizeof (newstate->userid));
+    strcpy(newstate->userid, identifier);
     strarray_init(&newstate->groups);
-
+    
     if(!libcyrus_config_getswitch(CYRUSOPT_AUTH_UNIX_GROUP_ENABLE))
 	return newstate;
 

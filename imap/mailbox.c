@@ -363,7 +363,7 @@ EXPORTED unsigned mailbox_cached_header(const char *s)
     int i;
 
     /* Generate lower case copy of string */
-    /* xxx sometimes the caller has already generated this ..
+    /* xxx sometimes the caller has already generated this .. 
      * maybe we can just require callers to do it? */
     for (i=0 ; *s && (i < (MAX_CACHED_HEADER_SIZE - 1)) ; i++)
 	hdr[i] = tolower(*s++);
@@ -1091,7 +1091,7 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
 	    /* anyway, unlock again */
 	    mailbox_unlock_index(mailbox, NULL);
 	}
-	/* otherwise someone else has the mailbox locked
+	/* otherwise someone else has the mailbox locked 
 	 * already, so they can handle the cleanup in
 	 * THEIR mailbox_close call */
     }
@@ -1272,7 +1272,7 @@ EXPORTED int mailbox_set_quotaroot(struct mailbox *mailbox, const char *quotaroo
 	    return 0; /* no change */
     }
 
-    if (quotaroot)
+    if (quotaroot) 
 	mailbox->quotaroot = xstrdup(quotaroot);
 
     /* either way, it's changed, so dirty */
@@ -1626,7 +1626,7 @@ static int mailbox_buf_to_index_record(const char *buf,
 
     if (version < 10) {
 	/* modseq was at 72 before the GUID move */
-	record->modseq = ntohll(*((bit64 *)(buf+72)));
+	record->modseq = ntohll(*((bit64 *)(buf+72))); 
 	return 0;
     }
 
@@ -1697,7 +1697,7 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
 {
     indexbuffer_t ibuf;
     unsigned char *buf = ibuf.buf;
-    size_t offset;
+    size_t offset; 
     struct index_record *record = &change->record;
     uint32_t recno = record->recno;
 
@@ -2124,7 +2124,7 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
 
     if (mailbox->index_locktype) {
 	if (lock_unlock(mailbox->index_fd, index_fname))
-	    syslog(LOG_ERR, "IOERROR: unlocking index of %s: %m",
+	    syslog(LOG_ERR, "IOERROR: unlocking index of %s: %m", 
 		mailbox->name);
 	mailbox->index_locktype = 0;
     }
@@ -2579,7 +2579,7 @@ static uint32_t crc_basic(const struct mailbox *mailbox,
 	return 0;
 
     /* calculate an XORed CRC32 over all the flags on the message, so no
-     * matter what order they are store in the header, the final value
+     * matter what order they are store in the header, the final value 
      * is the same */
     if (record->system_flags & FLAG_DELETED)
 	flagcrc ^= crc32_cstring("\\deleted");
@@ -4625,7 +4625,7 @@ static void mailbox_delete_files(const char *path)
 		       buf, f->d_name);
 		fatal("Path too long", EC_OSFILE);
 	    }
-	    (void) strcpy(tail, f->d_name);
+	    strcpy(tail, f->d_name);
 	    unlink(buf);
 	    *tail = '\0';
 	}
@@ -4756,7 +4756,7 @@ static int mailbox_delete_internal(struct mailbox **mailboxptr)
 
     /* can't unlink any files yet, because our promise to other
      * users of the mailbox applies! Can only unlink with an
-     * exclusive lock.  mailbox_close will try to get one of
+     * exclusive lock.  mailbox_close will try to get one of 
      * those.
      */
 
@@ -4765,7 +4765,7 @@ static int mailbox_delete_internal(struct mailbox **mailboxptr)
     if (config_auditlog)
 	syslog(LOG_NOTICE, "auditlog: delete sessionid=<%s> "
 			   "mailbox=<%s> uniqueid=<%s>",
-			   session_id(),
+			   session_id(), 
 			   mailbox->name, mailbox->uniqueid);
 
     proc_killmbox(mailbox->name);
@@ -4897,7 +4897,7 @@ HIDDEN int mailbox_delete_cleanup(const char *part, const char *name, const char
 
     do {
 	/* Check if the mailbox has children */
-	STRLCPY_LOG(ntail, ".*", sizeof (nbuf) - (ntail - nbuf));
+	strcpy(ntail, ".*");
 	r = mboxlist_findall(NULL, nbuf, 1, NULL, NULL, chkchildren, (void *)part);
 	if (r != 0) break; /* We short-circuit with CYRUSDB_DONE */
 
@@ -4994,7 +4994,7 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
 /* if 'userid' is set, we perform the funky RENAME INBOX INBOX.old
    semantics, regardless of whether or not the name of the mailbox is
    'user.foo'.*/
-/* requires a write-locked oldmailbox pointer, since we delete it
+/* requires a write-locked oldmailbox pointer, since we delete it 
    immediately afterwards */
 HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
 			const char *newname,
@@ -5408,7 +5408,7 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
     mailbox->mbtype = mbentry->mbtype;
 
     syslog(LOG_NOTICE, "create new mailbox %s", name);
-
+ 
     /* Attempt to open index */
     r = mailbox_open_index(mailbox);
     if (!r) r = mailbox_read_index_header(mailbox);

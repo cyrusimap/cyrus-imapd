@@ -69,17 +69,13 @@ EXPORTED glob *glob_init_suppress(const char *str, int flags,
 {
     glob *g;
     char *dst;
-    size_t gstr_size;
     int slen = 0, newglob;
 
     newglob = flags & GLOB_HIERARCHY;
     if (suppress) slen = strlen(suppress);
-    gstr_size = slen + strlen(str) + 1;
-    g = (glob *) xmalloc(sizeof (glob) + gstr_size);
-    gstr_size += sizeof (g->str);
-
+    g = (glob *) xmalloc(sizeof (glob) + slen + strlen(str) + 1);
     if (g != 0) {
-        (void) strlcpy(g->inbox, inbox, sizeof (g->inbox));
+        strcpy(g->inbox, inbox);
 	g->sep_char = '.';
 	dst = g->str;
 	/* if we're doing a substring match, put a '*' prefix (1) */
@@ -166,7 +162,7 @@ EXPORTED glob *glob_init_suppress(const char *str, int flags,
 	g->suppress = 0;
 	if (suppress) {
 	    dst = g->str + strlen(g->str) + 1;
-	    STRLCPY_LOG(dst, suppress, gstr_size - (dst - g->str));
+	    strcpy(dst, suppress);
 	    str = g->str;
 	    if (strncmp(suppress, str, slen) ||
 		(str[slen] != '\0' && str[slen] != g->sep_char
@@ -246,7 +242,7 @@ EXPORTED int glob_test(glob* g, const char* ptr,
 	ghier = g->ghier;
 	gptr = g->gptr;
     }
-
+    
     /* main globbing loops */
     if (!(g->flags & GLOB_ICASE)) {
 	/* case sensitive version */
@@ -263,7 +259,7 @@ EXPORTED int glob_test(glob* g, const char* ptr,
 	    if (*gptr == '\0' && ptr == pend) {
 		/* End of pattern and end of string -- match! */
 		break;
-	    }
+	    }  	    
 
 	    if (*gptr == '*') {
 		ghier = NULL;
@@ -274,7 +270,7 @@ EXPORTED int glob_test(glob* g, const char* ptr,
 		ghier = ++gptr;
 		phier = ptr;
 	    }
-
+	    
 	    if (ghier) {
 		/* look for a match with first char following '%',
 		 * stop at a sep_char unless we're doing "*%"
@@ -311,7 +307,7 @@ EXPORTED int glob_test(glob* g, const char* ptr,
 		    ptr = pend;
 		    break;
 		}
-
+		
 		/* look for a match with first char following '*' */
 		while (pstar != pend && *gstar != *pstar) ++pstar;
 		if (pstar == pend) {
@@ -348,7 +344,7 @@ EXPORTED int glob_test(glob* g, const char* ptr,
 	    sepfound = 0;
 	    /* see if we match to the next '%' or '*' wildcard */
 	    while (*gptr != '*' && *gptr != '%' && ptr != pend
-		   && ((unsigned char) *gptr == TOLOWER(*ptr) ||
+		   && ((unsigned char) *gptr == TOLOWER(*ptr) || 
 			(!newglob && *gptr == '?'))) {
 		++ptr, ++gptr;
 	    }
@@ -403,7 +399,7 @@ EXPORTED int glob_test(glob* g, const char* ptr,
 		    break;
 		}
 		/* look for a match with first char following '*' */
-		while (pstar != pend &&
+		while (pstar != pend && 
 		       (unsigned char) *gstar != TOLOWER(*pstar)) ++pstar;
 		if (pstar == pend) {
 		    if (*gptr == '\0' && min && *min < ptr - start && ptr != pend &&

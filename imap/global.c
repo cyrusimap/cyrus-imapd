@@ -179,7 +179,7 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
 	fatal("service name was not specified to cyrus_init", EC_CONFIG);
 
     config_ident = ident;
-
+    
     /* xxx we lose here since we can't have the prefix until we load the
      * config file */
     openlog(config_ident, syslog_opts, SYSLOG_FACILITY);
@@ -316,17 +316,17 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
 	/* Not until all configuration parameters are set! */
 	libcyrus_init();
     }
-
+    
     return 0;
 }
 
 EXPORTED void global_sasl_init(int client, int server, const sasl_callback_t *callbacks)
 {
     static int called_already = 0;
-
+    
     assert(client || server);
     assert(!called_already);
-
+    
     called_already = 1;
 
     /* set the SASL allocation functions */
@@ -387,14 +387,14 @@ EXPORTED int mysasl_config(void *context __attribute__((unused)),
 }
 
 /* This creates a structure that defines the allowable
- *   security properties
+ *   security properties 
  */
 EXPORTED sasl_security_properties_t *mysasl_secprops(int flags)
 {
     static sasl_security_properties_t ret;
 
     ret.maxbufsize = PROT_BUFSIZE;
-    ret.min_ssf = config_getint(IMAPOPT_SASL_MINIMUM_LAYER);
+    ret.min_ssf = config_getint(IMAPOPT_SASL_MINIMUM_LAYER);	
 				/* minimum allowable security strength */
     ret.max_ssf = config_getint(IMAPOPT_SASL_MAXIMUM_LAYER);
 				/* maximum allowable security strength */
@@ -424,7 +424,7 @@ EXPORTED int global_authisa(struct auth_state *authstate, enum imapopt opt)
 
     while (*val) {
 	char *p;
-
+	
 	for (p = (char *) val; *p && !Uisspace(*p); p++);
 	len = p-val;
 	if(len >= sizeof(buf))
@@ -485,7 +485,7 @@ EXPORTED const char *canonify_userid(char *user, const char *loginid,
 	    int error;
 	    struct sockaddr_storage localaddr;
 	    char hbuf[NI_MAXHOST];
-
+	    
 	    salen = sizeof(localaddr);
 	    if (getsockname(0, (struct sockaddr *)&localaddr, &salen) == 0) {
 		error = getnameinfo((struct sockaddr *)&localaddr, salen,
@@ -495,7 +495,7 @@ EXPORTED const char *canonify_userid(char *user, const char *loginid,
 		    /* append the domain from our IP */
 		    snprintf(buf, sizeof(buf), "%s@%s", user, domain+1);
 		    user = buf;
-
+		    
 		    if (domain_from_ip) *domain_from_ip = 1;
 		}
 	    }
@@ -538,8 +538,8 @@ EXPORTED int mysasl_canon_user(sasl_conn_t *conn,
 	sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
 	return SASL_BUFOVER;
     }
-
-    (void) strcpy(out, canonuser);
+    
+    strcpy(out, canonuser);
 
     return SASL_OK;
 }
@@ -649,7 +649,7 @@ EXPORTED int mysasl_proxy_policy(sasl_conn_t *conn,
     if (!ctx) {
 	/* for now only admins are allowed */
 	auth_freestate(authstate);
-
+    
 	if (!userisadmin) {
 	    syslog(LOG_ERR, "%s is not an admin", auth_identity);
 	    sasl_seterror(conn, SASL_NOLOG, "only admins may authenticate");
@@ -685,7 +685,7 @@ EXPORTED int mysasl_proxy_policy(sasl_conn_t *conn,
 
 	    userisadmin = 0;	/* no longer admin */
 	    auth_freestate(authstate);
-
+	    
 	    authstate = auth_newstate(requested_user);
 
 	    /* are we a proxy admin? */
@@ -704,7 +704,7 @@ EXPORTED int mysasl_proxy_policy(sasl_conn_t *conn,
 
     if (ctx->authstate)
 	*(ctx->authstate) = authstate;
-    else
+    else 
 	auth_freestate(authstate);
     if (ctx->userisadmin) *(ctx->userisadmin) = userisadmin;
 
@@ -733,9 +733,9 @@ EXPORTED int shutdown_file(char *buf, int size)
     static char shutdownfilename[1024] = "";
     char *p;
     char tmpbuf[1024];
-
+    
     if (!shutdownfilename[0])
-	snprintf(shutdownfilename, sizeof(shutdownfilename),
+	snprintf(shutdownfilename, sizeof(shutdownfilename), 
 		 "%s/msg/shutdown", config_dir);
 
     f = fopen(shutdownfilename, "r");
@@ -790,7 +790,7 @@ EXPORTED void session_new_id(void)
 /* Return the session id */
 EXPORTED const char *session_id(void)
 {
-    if (!session_id_count)
+    if (!session_id_count) 
         session_new_id();
     return (const char *)session_id_buf;
 }
@@ -803,19 +803,19 @@ EXPORTED void parse_sessionid(const char *str, char *sessionid)
 
     if ((str) && (sp = strstr(str, "SESSIONID=<")) && (ep = strchr(sp, '>')))
     {
-	sp += STRLEN("SESSIONID=<");
+	sp += 11;
 	len = ep - sp;
 	if (len < MAX_SESSIONID_SIZE)
 	{
-	    (void) strncpy(sessionid, sp, len);
+	    strncpy(sessionid, sp, len);
 	    ep = sessionid + len;
 	    *ep = '\0';
 	}
 	else
-	    (void) strcpy(sessionid, "invalid");
+	    strcpy(sessionid, "invalid");
     }
     else
-	(void) strcpy(sessionid, "unknown");
+	strcpy(sessionid, "unknown");
 }
 
 EXPORTED int capa_is_disabled(const char *str)

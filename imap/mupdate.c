@@ -1,4 +1,4 @@
-/* mupdate.c -- cyrus murder database master
+/* mupdate.c -- cyrus murder database master 
  *
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *
@@ -116,7 +116,7 @@ struct pending {
 struct conn {
     int fd;
     int logfd;
-
+    
     struct protstream *pin;
     struct protstream *pout;
     sasl_conn_t *saslconn;
@@ -131,10 +131,10 @@ struct conn {
     int compress_done;  /* have we done a successful compress? */
 
     int idle;
-
+    
     char clienthost[NI_MAXHOST*2+1];
 
-    struct
+    struct 
     {
 	char *ipremoteport;
 	char ipremoteport_buf[60];
@@ -243,14 +243,14 @@ static struct conn *conn_new(int fd)
 {
     struct conn *C = xzmalloc(sizeof(struct conn));
     const char *clienthost, *localip, *remoteip;
-    int r;
+    int r;    
 
     C->fd = fd;
     C->logfd = -1;
 
     C->pin = prot_new(C->fd, 0);
     C->pout = prot_new(C->fd, 1);
-
+    
     prot_setflushonread(C->pin, C->pout);
     prot_settimeout(C->pin, 180*60);
 
@@ -283,11 +283,11 @@ static struct conn *conn_new(int fd)
 			config_servername, NULL,
 			C->saslprops.iplocalport,
 			C->saslprops.ipremoteport,
-			NULL, 0,
+			NULL, 0, 
 			&C->saslconn);
     if (r != SASL_OK) {
 	syslog(LOG_ERR, "failed to start sasl for connection: %s",
-	       sasl_errstring(r, NULL, NULL));
+	       sasl_errstring(r, NULL, NULL));	
 	prot_printf(C->pout, SERVER_UNABLE_STRING);
 
 	C->idle = 0;
@@ -311,7 +311,7 @@ static struct conn *conn_new(int fd)
 static void conn_free(struct conn *C)
 {
     assert(!C->idle); /* Not allowed to free idle connections */
-
+    
     if (C->streaming) {		/* remove from updatelist */
 	struct conn *upc;
 
@@ -322,7 +322,7 @@ static void conn_free(struct conn *C)
 	    updatelist = C->updatelist_next;
 	} else {
 	    /* find in update list */
-	    for (upc = updatelist; upc->updatelist_next != NULL;
+	    for (upc = updatelist; upc->updatelist_next != NULL; 
 		 upc = upc->updatelist_next) {
 		if (upc->updatelist_next == C) break;
 	    }
@@ -338,7 +338,7 @@ static void conn_free(struct conn *C)
     /* decrease connection counter */
     pthread_mutex_lock(&connection_count_mutex);
     connection_count--;
-    pthread_mutex_unlock(&connection_count_mutex);
+    pthread_mutex_unlock(&connection_count_mutex); 
 
     /* remove from connlist */
     pthread_mutex_lock(&connlist_mutex); /* LOCK */
@@ -369,7 +369,7 @@ static void conn_free(struct conn *C)
 
     cyrus_close_sock(C->fd);
     if (C->logfd != -1) close(C->logfd);
-
+    
     if (C->saslconn) sasl_dispose(&C->saslconn);
 
     if (C->saslprops.authid) free(C->saslprops.authid);
@@ -445,7 +445,7 @@ static int islocalip(const char *hostname)
 
     ifc.ifc_buf = buf;
     ifc.ifc_len = sizeof(buf);
-
+    
     if (ioctl(sock, SIOCGIFCONF, &ifc) != 0) {
 	fprintf(stderr, "ioctl(SIOCGIFCONF) failed: %d\n", errno);
 	close(sock);
@@ -574,7 +574,7 @@ int service_init(int argc, char **argv,
 	pthread_mutex_unlock(&synced_mutex);
     } else {
 	pthread_t t;
-
+	
 	r = pthread_create(&t, NULL, &mupdate_placebo_kick_start, NULL);
 	if (r == 0) {
 	    pthread_detach(t);
@@ -588,7 +588,7 @@ int service_init(int argc, char **argv,
 
     /* Now create the worker thread pool */
     for(i=0; i < workers_to_start; i++) {
-	r = pthread_create(&t, NULL, &thread_main, NULL);
+	r = pthread_create(&t, NULL, &thread_main, NULL);  
         if (r == 0) {
             pthread_detach(t);
         } else {
@@ -615,7 +615,7 @@ EXPORTED void fatal(const char *s, int code)
 
     if (recurse_code) exit(code);
     else recurse_code = code;
-
+    
     syslog(LOG_ERR, "%s", s);
     shut_down(code);
 
@@ -643,7 +643,7 @@ static mupdate_docmd_result_t docmd(struct conn *c)
     /* First we do a check for input */
     prot_NONBLOCK(c->pin);
     ch = prot_getc(c->pin);
-
+        
     if (ch == EOF && errno == EAGAIN) {
 	/* no input from client */
 	goto done;
@@ -660,13 +660,13 @@ static mupdate_docmd_result_t docmd(struct conn *c)
   cmd:
     ch = getword(c->pin, &(c->tag));
     if (ch == EOF) goto lost_conn;
-
+    
     if (ch != ' ') {
 	prot_printf(c->pout, "* BAD \"Need command\"\r\n");
 	eatline(c->pin, ch);
 	goto nextcmd;
     }
-
+    
     /* parse command name */
     ch = getword(c->pin, &(c->cmd));
     if (ch == EOF) {
@@ -676,19 +676,19 @@ static mupdate_docmd_result_t docmd(struct conn *c)
 	eatline(c->pin, ch);
 	goto nextcmd;
     }
-
+    
     if (Uislower(c->cmd.s[0])) {
 	c->cmd.s[0] = toupper((unsigned char) c->cmd.s[0]);
     }
     for (p = &(c->cmd.s[1]); *p; p++) {
 	if (Uisupper(*p)) *p = tolower((unsigned char) *p);
     }
-
+    
     switch (c->cmd.s[0]) {
     case 'A':
 	if (!strcmp(c->cmd.s, "Authenticate")) {
 	    int opt = 0;
-
+	    
 	    if (ch != ' ') goto missingargs;
 	    ch = getstring(c->pin, c->pout, &(c->arg1));
 	    if (ch == ' ') {
@@ -696,14 +696,14 @@ static mupdate_docmd_result_t docmd(struct conn *c)
 		opt = 1;
 	    }
 	    CHECKNEWLINE(c, ch);
-
+	    
 	    if (c->userid) {
 		prot_printf(c->pout,
 			    "%s BAD \"already authenticated\"\r\n",
 			    c->tag.s);
 		goto nextcmd;
 	    }
-
+	    
 	    cmd_authenticate(c, c->tag.s, c->arg1.s,
 			     opt ? c->arg2.s : NULL);
 	}
@@ -716,10 +716,10 @@ static mupdate_docmd_result_t docmd(struct conn *c)
 	    if (ch != ' ') goto missingargs;
 	    ch = getstring(c->pin, c->pout, &(c->arg3));
 	    CHECKNEWLINE(c, ch);
-
+	    
 	    if (c->streaming) goto notwhenstreaming;
 	    if (!masterp) goto masteronly;
-
+	    
 	    cmd_set(c, c->tag.s, c->arg1.s, c->arg2.s,
 		    c->arg3.s, SET_ACTIVE);
 	}
@@ -734,7 +734,7 @@ static mupdate_docmd_result_t docmd(struct conn *c)
 	    CHECKNEWLINE(c, ch);
 
 	    cmd_compress(c, c->tag.s, c->arg1.s);
-	}
+	}	
 	else goto badcmd;
 	break;
 #endif
@@ -747,10 +747,10 @@ static mupdate_docmd_result_t docmd(struct conn *c)
 	    if (ch != ' ') goto missingargs;
 	    ch = getstring(c->pin, c->pout, &(c->arg2));
 	    CHECKNEWLINE(c, ch);
-
+	    
 	    if (c->streaming) goto notwhenstreaming;
 	    if (!masterp) goto masteronly;
-
+	    
 	    cmd_set(c, c->tag.s, c->arg1.s, c->arg2.s,
 		    NULL, SET_DEACTIVATE);
 	}
@@ -758,33 +758,33 @@ static mupdate_docmd_result_t docmd(struct conn *c)
 	    if (ch != ' ') goto missingargs;
 	    ch = getstring(c->pin, c->pout, &(c->arg1));
 	    CHECKNEWLINE(c, ch);
-
+	    
 	    if (c->streaming) goto notwhenstreaming;
 	    if (!masterp) goto masteronly;
-
+	    
 	    cmd_set(c, c->tag.s, c->arg1.s, NULL, NULL, SET_DELETE);
 	}
 	else goto badcmd;
 	break;
-
+	
     case 'F':
 	if (!c->userid) goto nologin;
 	else if (!strcmp(c->cmd.s, "Find")) {
 	    if (ch != ' ') goto missingargs;
 	    ch = getstring(c->pin, c->pout, &(c->arg1));
 	    CHECKNEWLINE(c, ch);
-
+	    
 	    if (c->streaming) goto notwhenstreaming;
-
+	    
 	    cmd_find(c, c->tag.s, c->arg1.s, 1, 0);
 	}
 	else goto badcmd;
 	break;
-
+	
     case 'L':
 	if (!strcmp(c->cmd.s, "Logout")) {
 	    CHECKNEWLINE(c, ch);
-
+	    
 	    prot_printf(c->pout, "%s OK \"bye-bye\"\r\n", c->tag.s);
 	    ret = DOCMD_CONN_FINISHED;
 	    goto done;
@@ -792,39 +792,39 @@ static mupdate_docmd_result_t docmd(struct conn *c)
 	else if (!c->userid) goto nologin;
 	else if (!strcmp(c->cmd.s, "List")) {
 	    int opt = 0;
-
+	    
 	    if (ch == ' ') {
 		/* Optional partition/host prefix parameter */
 		ch = getstring(c->pin, c->pout, &(c->arg1));
 		opt = 1;
 	    }
 	    CHECKNEWLINE(c, ch);
-
+	    
 	    if (c->streaming) goto notwhenstreaming;
-
+	    
 	    cmd_list(c, c->tag.s, opt ? c->arg1.s : NULL);
-
+	    
 	    prot_printf(c->pout, "%s OK \"list complete\"\r\n", c->tag.s);
 	}
 	else goto badcmd;
 	break;
-
+	
     case 'N':
 	if (!c->userid) goto nologin;
 	else if (!strcmp(c->cmd.s, "Noop")) {
 	    CHECKNEWLINE(c, ch);
-
+	    
 	    if (c->streaming) {
 		/* Make *very* sure we are up-to-date */
 		kick_mupdate();
 		sendupdates(c, 0); /* don't flush pout though */
 	    }
-
+	    
 	    prot_printf(c->pout, "%s OK \"Noop done\"\r\n", c->tag.s);
 	}
 	else goto badcmd;
 	break;
-
+	
     case 'R':
 	if (!c->userid) goto nologin;
 	else if (!strcmp(c->cmd.s, "Reserve")) {
@@ -833,19 +833,19 @@ static mupdate_docmd_result_t docmd(struct conn *c)
 	    if (ch != ' ') goto missingargs;
 	    ch = getstring(c->pin, c->pout, &(c->arg2));
 	    CHECKNEWLINE(c, ch);
-
+	    
 	    if (c->streaming) goto notwhenstreaming;
 	    if (!masterp) goto masteronly;
-
+	    
 	    cmd_set(c, c->tag.s, c->arg1.s, c->arg2.s, NULL, SET_RESERVE);
 	}
 	else goto badcmd;
 	break;
-
+	
     case 'S':
 	if (!strcmp(c->cmd.s, "Starttls")) {
 	    CHECKNEWLINE(c, ch);
-
+	    
 	    /* XXX  discard any input pipelined after STARTTLS */
 	    prot_flush(c->pin);
 
@@ -856,23 +856,23 @@ static mupdate_docmd_result_t docmd(struct conn *c)
 
 	    /* if we've already done SASL fail */
 	    if (c->userid) {
-		prot_printf(c->pout,
+		prot_printf(c->pout, 
 			    "%s BAD Can't Starttls after authentication\r\n",
 			    c->tag.s);
 		goto nextcmd;
 	    }
-
+		
 	    /* if we've already done COMPRESS fail */
 	    if (c->compress_done) {
-		prot_printf(c->pout,
+		prot_printf(c->pout, 
 			    "%s BAD Can't Starttls after Compress\r\n",
 			    c->tag.s);
 		goto nextcmd;
 	    }
-
+		
 	    /* check if already did a successful tls */
 	    if (c->tlsconn) {
-		prot_printf(c->pout,
+		prot_printf(c->pout, 
 			    "%s BAD Already did a successful Starttls\r\n",
 			    c->tag.s);
 		goto nextcmd;
@@ -881,13 +881,13 @@ static mupdate_docmd_result_t docmd(struct conn *c)
 	}
 	else goto badcmd;
 	break;
-
+	
     case 'U':
 	if (!c->userid) goto nologin;
 	else if (!strcmp(c->cmd.s, "Update")) {
 	    strarray_t *arg = NULL;
 	    int counter = 30; /* limit on number of processed hosts */
-
+	    
 	    while(ch == ' ') {
 		/* Hey, look, more bits of a PARTIAL-UPDATE command */
 		ch = getstring(c->pin, c->pout, &(c->arg1));
@@ -905,19 +905,19 @@ static mupdate_docmd_result_t docmd(struct conn *c)
 
 	    CHECKNEWLINE(c, ch);
 	    if (c->streaming) goto notwhenstreaming;
-
+	    
 	    cmd_startupdate(c, c->tag.s, arg);
 	}
 	else goto badcmd;
 	break;
-
+	
     default:
     badcmd:
 	prot_printf(c->pout, "%s BAD \"Unrecognized command\"\r\n",
 		    c->tag.s);
 	eatline(c->pin, ch);
 	break;
-
+	
     extraargs:
 	prot_printf(c->pout, "%s BAD \"Extra arguments\"\r\n",
 		    c->tag.s);
@@ -929,18 +929,18 @@ static mupdate_docmd_result_t docmd(struct conn *c)
 		    c->tag.s);
 	eatline(c->pin, ch);
 	break;
-
+	
     missingargs:
 	prot_printf(c->pout, "%s BAD \"Missing arguments\"\r\n",
 		    c->tag.s);
 	eatline(c->pin, ch);
 	break;
-
+	
     notwhenstreaming:
 	prot_printf(c->pout, "%s BAD \"not legal when streaming\"\r\n",
 		    c->tag.s);
 	break;
-
+	
     masteronly:
 	prot_printf(c->pout,
 		    "%s BAD \"read-only session\"\r\n",
@@ -959,27 +959,27 @@ static mupdate_docmd_result_t docmd(struct conn *c)
  lost_conn:
     {
 	const char *err;
-
+	
 	if ((err = prot_error(c->pin)) != NULL
 	    && strcmp(err, PROT_EOF_STRING)) {
 	    syslog(LOG_WARNING, "%s, closing connection", err);
 	    prot_printf(c->pout, "* BYE \"%s\"\r\n", err);
 	}
-
+	
 	ret = DOCMD_CONN_FINISHED;
     }
-
+    
  done:
     /* Restore the state of the input stream */
     if (was_blocking)
 	prot_BLOCK(c->pin);
     else
-	prot_NONBLOCK(c->pin);
+	prot_NONBLOCK(c->pin);    
 
     /* Necessary since we don't ever do a prot_read on an idle connection
      * in mupdate */
     prot_flush(c->pout);
-
+    
     return ret;
 }
 
@@ -1040,11 +1040,11 @@ static void dobanner(struct conn *c)
 	if (!config_mupdate_server)
 	    fatal("mupdate server was not specified for slave",
 		  EC_TEMPFAIL);
-
+		
 	snprintf(slavebuf, sizeof(slavebuf), "mupdate://%s",
 		 config_mupdate_server);
     }
-
+	    
     prot_printf(c->pout, "%s\r\n",
 		(ret == SASL_OK && mechcount > 0) ? mechs : "* AUTH");
 
@@ -1073,7 +1073,7 @@ static void dobanner(struct conn *c)
  */
 /* Note that You Must Lock Listen mutex before idle worker mutex,
  * though you can lock them individually too */
-static void *thread_main(void *rock __attribute__((unused)))
+static void *thread_main(void *rock __attribute__((unused))) 
 {
     struct conn *C; /* used for loops */
     struct conn *currConn = NULL; /* the connection we care about currently */
@@ -1084,7 +1084,7 @@ static void *thread_main(void *rock __attribute__((unused)))
     int need_workers, too_many;
     int max_worker_flag;
     int do_a_command;
-    int send_a_banner;
+    int send_a_banner;    
     int connflag;
     int new_fd;
     int ret = 0;
@@ -1098,11 +1098,11 @@ static void *thread_main(void *rock __attribute__((unused)))
 	   "New worker thread started, for a total of %d", worker_count);
     /* Unlock Worker Count Mutex */
     pthread_mutex_unlock(&worker_count_mutex); /* UNLOCK */
-
+    
     /* This is a big infinite loop */
     while (1) {
 	send_a_banner = do_a_command = 0;
-
+	
 	pthread_mutex_lock(&idle_worker_mutex);
 	/* If we are over the limit on idle threads, die. */
 	max_worker_flag = (idle_worker_count >=
@@ -1143,7 +1143,7 @@ static void *thread_main(void *rock __attribute__((unused)))
 		/* Decrement Idle Worker Count */
 		idle_worker_count--;
 		pthread_mutex_unlock(&idle_worker_mutex); /* UNLOCK */
-
+		
 		syslog(LOG_DEBUG,
 		       "Thread timed out waiting for listener_lock");
 		goto worker_thread_done;
@@ -1169,7 +1169,7 @@ static void *thread_main(void *rock __attribute__((unused)))
 	/* Clear protout if needed */
 	protgroup_free(protout);
 	protout = NULL;
-
+	
 	/* Build list of idle protstreams */
 	pthread_mutex_lock(&idle_connlist_mutex); /* LOCK */
 	for (C=idle_connlist; C; C=C->next_idle) {
@@ -1178,7 +1178,7 @@ static void *thread_main(void *rock __attribute__((unused)))
 	    protgroup_insert(protin, C->pin);
 	}
 	pthread_mutex_unlock(&idle_connlist_mutex); /* UNLOCK */
-
+	
 	/* Select on Idle Conns + conn_pipe */
 	if (prot_select(protin, conn_pipe[0],
 		       &protout, &connflag, NULL) == -1) {
@@ -1190,7 +1190,7 @@ static void *thread_main(void *rock __attribute__((unused)))
 	pthread_mutex_lock(&idle_worker_mutex); /* LOCK */
 	idle_worker_count--;
 	pthread_mutex_unlock(&idle_worker_mutex); /* UNLOCK */
-
+	 
 	/* If we've been signaled to be unready, drop all current connections
 	 * in the idle list */
 	pthread_mutex_lock(&ready_for_connections_mutex); /* LOCK */
@@ -1216,7 +1216,7 @@ static void *thread_main(void *rock __attribute__((unused)))
 	    goto nextlistener;
 	}
 	pthread_mutex_unlock(&ready_for_connections_mutex); /* UNLOCK */
-
+	
 	if (connflag) {
 	    /* read the fd from the pipe, if needed */
 	    if (read(conn_pipe[0], &new_fd, sizeof(new_fd)) == -1) {
@@ -1227,7 +1227,7 @@ static void *thread_main(void *rock __attribute__((unused)))
 	} else {
 	    new_fd = NO_NEW_CONNECTION;
 	}
-
+	
 	if (new_fd != NO_NEW_CONNECTION) {
 	    /* new_fd indicates a new connection */
 	    currConn = conn_new(new_fd);
@@ -1259,7 +1259,7 @@ static void *thread_main(void *rock __attribute__((unused)))
 	    }
 	    pthread_mutex_unlock(&idle_connlist_mutex); /* UNLOCK */
 
-	    do_a_command = 1;
+	    do_a_command = 1;	    
 	}
 
 	/*
@@ -1274,12 +1274,12 @@ static void *thread_main(void *rock __attribute__((unused)))
 
 	    pthread_mutex_lock(&worker_count_mutex); /* LOCK */
 	    if (need_workers > 0) {
-		too_many = (need_workers + worker_count) -
+		too_many = (need_workers + worker_count) - 
 		    config_getint(IMAPOPT_MUPDATE_WORKERS_MAX);
 		if (too_many > 0) need_workers -= too_many;
 	    }
 	    pthread_mutex_unlock(&worker_count_mutex); /* UNLOCK */
-
+	    
 	    /* Do we need a new worker (or two, or three...)?
 	     * (are we allowed to create one?) */
 	    while (need_workers > 0) {
@@ -1309,7 +1309,7 @@ static void *thread_main(void *rock __attribute__((unused)))
 	    dobanner(currConn);
 	} else if (do_a_command) {
 	    assert(currConn);
-
+	    
 	    if (docmd(currConn) == DOCMD_CONN_FINISHED) {
 		conn_free(currConn);
 		/* continue to top of loop here since we won't be adding
@@ -1349,7 +1349,7 @@ static void *thread_main(void *rock __attribute__((unused)))
 		      EC_TEMPFAIL);
 	    }
 	}
-
+	
     } /* while(1) */
 
  worker_thread_done:
@@ -1458,7 +1458,7 @@ static struct mbent *database_lookup(const char *name, struct mpool *pool)
 	if (!pool) out = xmalloc(sizeof(struct mbent) + strlen(mbentry->acl));
 	else out = mpool_malloc(pool, sizeof(struct mbent) + strlen(mbentry->acl));
 	out->t = SET_ACTIVE;
-	(void) strcpy(out->acl, mbentry->acl);
+	strcpy(out->acl, mbentry->acl);
     }
 
     if (mbentry->server && mbentry->partition)
@@ -1511,7 +1511,7 @@ static void cmd_authenticate(struct conn *C,
 	    if (failedloginpause != 0) {
 	        sleep(failedloginpause);
 	    }
-
+	
 	    syslog(LOG_ERR, "badlogin: %s %s %s",
 		   C->clienthost,
 		   mech, sasl_errdetail(C->saslconn));
@@ -1556,13 +1556,13 @@ static void log_update(const char *mailbox,
 		const char *thislocation)
 {
     struct conn *upc;
-
+    
     for (upc = updatelist; upc != NULL; upc = upc->updatelist_next) {
 	/* for each connection, add to pending list */
 	struct pending *p = (struct pending *) xmalloc(sizeof(struct pending));
 	p->next = NULL;
 	strlcpy(p->mailbox, mailbox, sizeof(p->mailbox));
-
+	
 	/* this might need to be inside the mutex, but I doubt it */
 	if (upc->streaming_hosts
 	   && (!oldlocation || strarray_find(upc->streaming_hosts,
@@ -1599,7 +1599,7 @@ static void cmd_set(struct conn *C,
     enum {
 	EXISTS, NOTACTIVE, DOESNTEXIST, ISOK, NOOUTPUT
     } msg = NOOUTPUT;
-
+    
     syslog(LOG_DEBUG, "cmd_set(fd:%d, %s)", C->fd, mailbox);
 
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
@@ -1621,7 +1621,7 @@ static void cmd_set(struct conn *C,
     } else if (t == SET_DEACTIVATE) {
 	t = SET_RESERVE;
     }
-
+    
     if (t == SET_DELETE) {
 	if (!m) {
 	    if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD) {
@@ -1643,13 +1643,13 @@ static void cmd_set(struct conn *C,
 	if (m && (!acl || strlen(acl) < strlen(m->acl))) {
 	    /* change what's already there -- the acl is smaller */
 	    m->location = xstrdup(location);
-	    if (acl) (void) strcpy(m->acl, acl);
+	    if (acl) strcpy(m->acl, acl);
 	    else m->acl[0] = '\0';
 
 	    m->t = t;
 	} else {
 	    struct mbent *newm;
-
+	    
 	    /* allocate new mailbox */
 	    if (acl) {
 		newm = xrealloc(m, sizeof(struct mbent) + strlen(acl));
@@ -1660,7 +1660,7 @@ static void cmd_set(struct conn *C,
 	    newm->location = xstrdup(location);
 
 	    if (acl) {
-		(void) strcpy(newm->acl, acl);
+		strcpy(newm->acl, acl);
 	    } else {
 		newm->acl[0] = '\0';
 	    }
@@ -1714,14 +1714,14 @@ static void cmd_set(struct conn *C,
 	break;
     default:
 	break;
-    }
+    }    
 }
 
 static void cmd_find(struct conn *C, const char *tag, const char *mailbox,
 	      int send_ok, int send_delete)
 {
     struct mbent *m;
-
+    
     syslog(LOG_DEBUG, "cmd_find(fd:%d, %s)", C->fd, mailbox);
 
     /* Only hold the mutex around database_lookup,
@@ -1761,7 +1761,7 @@ static void cmd_find(struct conn *C, const char *tag, const char *mailbox,
 		strlen(mailbox), mailbox
 	    );
     }
-
+    
     free_mbent(m);
 
     if (send_ok) {
@@ -1778,10 +1778,10 @@ static int sendupdate(char *name,
 {
     struct conn *C = (struct conn *)rock;
     struct mbent *m;
-    char *location = NULL;
-
+    char *location = NULL; 
+    
     if (!C) return -1;
-
+    
     m = database_lookup(name, NULL);
     if (!m) return -1;
 
@@ -1789,13 +1789,13 @@ static int sendupdate(char *name,
        !strncmp(m->location, C->list_prefix, C->list_prefix_len)) {
 	/* Either there is not a prefix to test, or we matched it */
 	char *tmp;
-
+	
 	if (C->streaming_hosts) {
 	    location = xstrdup(m->location);
 	    tmp = strchr(location, '!');
 	    if (tmp) *tmp = '\0';
 	}
-
+	
 	if (!C->streaming_hosts ||
 	   strarray_find(C->streaming_hosts, location, 0) >= 0) {
 	    switch (m->t) {
@@ -1823,7 +1823,7 @@ static int sendupdate(char *name,
 		    );
 
 		break;
-
+		
 	    case SET_DELETE:
 		/* deleted item in the list !?! */
 	    case SET_DEACTIVATE:
@@ -1854,14 +1854,14 @@ static void cmd_list(struct conn *C, const char *tag, const char *host_prefix)
     C->list_prefix = host_prefix;
     if (C->list_prefix) C->list_prefix_len = strlen(C->list_prefix);
     else C->list_prefix_len = 0;
-
+    
     mboxlist_findall(NULL, pattern, 1, NULL,
 		     NULL, sendupdate, (void*)C);
 
     C->streaming = NULL;
     C->list_prefix = NULL;
     C->list_prefix_len = 0;
-
+    
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 
     prot_BLOCK(C->pout);
@@ -1869,7 +1869,7 @@ static void cmd_list(struct conn *C, const char *tag, const char *host_prefix)
 }
 
 
-/*
+/* 
  * we've registered this connection for streaming, and every X seconds
  * this will be invoked.  note that we always send out updates as soon
  * as we get a noop: that resets this counter back */
@@ -1916,7 +1916,7 @@ static void cmd_startupdate(struct conn *C, const char *tag,
     prot_flush(C->pout);
 
     /* schedule our first update */
-    C->ev = prot_addwaitevent(C->pin, time(NULL) + update_wait,
+    C->ev = prot_addwaitevent(C->pin, time(NULL) + update_wait, 
 			      sendupdates_evt, C);
 }
 
@@ -1982,7 +1982,7 @@ static void cmd_starttls(struct conn *C, const char *tag)
     prot_printf(C->pout, "%s OK Begin TLS negotiation now\r\n", tag);
     /* must flush our buffers before starting tls */
     prot_flush(C->pout);
-
+  
     result=tls_start_servertls(C->pin->fd, /* read */
 			       C->pout->fd, /* write */
 			       180, /* 3 minutes */
@@ -1992,9 +1992,9 @@ static void cmd_starttls(struct conn *C, const char *tag)
 
     /* if error */
     if (result==-1) {
-	prot_printf(C->pout, "%s NO Starttls negotiation failed\r\n",
+	prot_printf(C->pout, "%s NO Starttls negotiation failed\r\n", 
 		    tag);
-	syslog(LOG_NOTICE, "STARTTLS negotiation failed: %s",
+	syslog(LOG_NOTICE, "STARTTLS negotiation failed: %s", 
 	       C->clienthost);
 	return;
     }
@@ -2085,7 +2085,7 @@ void shut_down(int code)
     in_shutdown = 1;
 
     cyrus_done();
-
+    
     exit(code);
 }
 
@@ -2106,12 +2106,12 @@ static int reset_saslconn(struct conn *c)
        ret = sasl_setprop(c->saslconn, SASL_IPREMOTEPORT,
                           c->saslprops.ipremoteport);
     if (ret != SASL_OK) return ret;
-
+    
     if (c->saslprops.iplocalport)
        ret = sasl_setprop(c->saslconn, SASL_IPLOCALPORT,
                           c->saslprops.iplocalport);
     if (ret != SASL_OK) return ret;
-
+    
     secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
     ret = sasl_setprop(c->saslconn, SASL_SEC_PROPS, secprops);
     if (ret != SASL_OK) return ret;
@@ -2171,7 +2171,7 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
             /* old m->location freed when oldlocation is freed */
 	    m->location = xstrdup(mdata->location);
 
-	    if (mdata->acl) (void) strcpy(m->acl, mdata->acl);
+	    if (mdata->acl) strcpy(m->acl, mdata->acl);
 	    else m->acl[0] = '\0';
 
 	    if (!strncmp(rock, "MAILBOX", 6)) {
@@ -2203,14 +2203,14 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 	    newm->location = xstrdup(mdata->location);
 
 	    if (mdata->acl) {
-		(void) strcpy(newm->acl, mdata->acl);
+		strcpy(newm->acl, mdata->acl);
 	    } else {
 		newm->acl[0] = '\0';
 	    }
 
-	    if (!strncmp(rock, "MAILBOX", STRLEN("MAILBOX"))) {
+	    if (!strncmp(rock, "MAILBOX", 6)) {
 		newm->t = t = SET_ACTIVE;
-	    } else if (!strncmp(rock, "RESERVE", STRLEN("RESERVE"))) {
+	    } else if (!strncmp(rock, "RESERVE", 7)) {
 		newm->t = t = SET_RESERVE;
 	    } else {
 		syslog(LOG_DEBUG,
@@ -2218,7 +2218,7 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 		ret = 1;
 		goto done;
 	    }
-
+	    
 	    /* Bring it back into scope */
 	    m = newm;
 	}
@@ -2226,7 +2226,7 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 
     /* write to disk */
     database_log(m, NULL);
-
+    
     if (oldlocation) {
 	tmp = strchr(oldlocation, '!');
 	if (tmp) *tmp = '\0';
@@ -2244,14 +2244,14 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
  done:
     if (oldlocation) free(oldlocation);
     if (thislocation) free(thislocation);
-
+    
     free_mbent(m);
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 
     return ret;
 }
 
-struct sync_rock
+struct sync_rock 
 {
     struct mpool *pool;
     struct mbent_queue *boxes;
@@ -2279,11 +2279,11 @@ static int cmd_resync(struct mupdate_mailboxdata *mdata,
     newm->location = mpool_strdup(r->pool, mdata->location);
 
     if (mdata->acl) {
-	(void) strcpy(newm->acl, mdata->acl);
+	strcpy(newm->acl, mdata->acl);
     } else {
 	newm->acl[0] = '\0';
     }
-
+	
     if (!strncmp(rock, "MAILBOX", 6)) {
 	newm->t = SET_ACTIVE;
     } else if (!strncmp(rock, "RESERVE", 7)) {
@@ -2298,7 +2298,7 @@ static int cmd_resync(struct mupdate_mailboxdata *mdata,
     newm->next = NULL;
     *(remote_boxes->tail) = newm;
     remote_boxes->tail = &(newm->next);
-
+    
     return 0;
 }
 
@@ -2317,7 +2317,7 @@ static int sync_findall_cb(char *name,
     m = database_lookup(name, r->pool);
     /* If it doesn't exist, fine... */
     if (!m) return 0;
-
+    
     m->next = NULL;
     *(local_boxes->tail) = m;
     local_boxes->tail = &(m->next);
@@ -2330,22 +2330,22 @@ int mupdate_synchronize_remote(mupdate_handle *handle,
 			       struct mpool *pool)
 {
     struct sync_rock rock;
-
+  
     if (!handle || !handle->saslcompleted) return 1;
 
     rock.pool = pool;
-
+  
     /* ask mupdate master for updates and set nonblocking */
     prot_printf(handle->conn->out, "U01 UPDATE\r\n");
-
+  
     syslog(LOG_NOTICE,
 	   "scarfing mailbox list from master mupdate server");
 
     remote_boxes->head = NULL;
     remote_boxes->tail = &(remote_boxes->head);
-
+  
     rock.boxes = remote_boxes;
-
+  
     /* If there is a fatal error, return, other errors ignore */
     if (mupdate_scarf(handle, cmd_resync, &rock, 1, NULL) != 0) {
 	struct mbent *p=remote_boxes->head, *p_next=NULL;
@@ -2369,16 +2369,16 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
     struct sync_rock rock;
     char pattern[] = { '*', '\0' };
     struct txn *tid = NULL;
-    int ret = 0;
+    int ret = 0;    
     int err = 0;
     char *c;
 
     rock.pool = pool;
-
+    
     /* Note that this prevents other people from running an UPDATE against
      * us for the duration.  this is a GOOD THING */
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
-
+    
     syslog(LOG_NOTICE,
 	   "synchronizing mailbox list with master mupdate server");
 
@@ -2396,7 +2396,7 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
     /* If the local is before the next remote, delete it */
     /* If the next remote is before theis local, insert it and try again */
     for(l = local_boxes.head, r = remote_boxes->head; l && r;
-	l = local_boxes.head, r = remote_boxes->head)
+	l = local_boxes.head, r = remote_boxes->head) 
     {
 	int ret = strcmp(l->mailbox, r->mailbox);
 	if (!ret) {
@@ -2443,7 +2443,7 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
 		 * probably requires an operator to review it --
 		 * ctl_mboxlist is the right place to fix the kind
 		 * of configuration error implied.
-		 *
+		 * 
 		 * A similar problem exists when the location thinks
 		 * it is locally hosting a mailbox, but mupdate master
 		 * thinks it's somewhere else.
@@ -2527,7 +2527,7 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
     return ret;
 }
 
-void mupdate_signal_db_synced(void)
+void mupdate_signal_db_synced(void) 
 {
     pthread_mutex_lock(&synced_mutex);
     synced = 1;
@@ -2535,7 +2535,7 @@ void mupdate_signal_db_synced(void)
     pthread_mutex_unlock(&synced_mutex);
 }
 
-void mupdate_ready(void)
+void mupdate_ready(void) 
 {
     pthread_mutex_lock(&ready_for_connections_mutex);
 

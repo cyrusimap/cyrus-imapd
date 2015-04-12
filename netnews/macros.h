@@ -82,7 +82,7 @@ extern int (*xmemfailure)();
 **  Copy a string to allocated memory.
 */
 #define COPY(p)				\
-	(void) strcpy(NEW(char, strlen(p) + 1), p)
+	strcpy(NEW(char, strlen(p) + 1), p)
 
 
 /*
@@ -136,7 +136,7 @@ extern int (*xmemfailure)();
 **  Get the size when binding an AF_UNIX socket.
 */
 #if	defined(DO_BIND_USE_SIZEOF)
-#define AF_UNIX_SOCKSIZE(S)	(sizeof S)
+#define AF_UNIX_SOCKSIZE(S)	(sizeof S)  
 #else
 #define AF_UNIX_SOCKSIZE(S)	(sizeof S.sun_family + strlen(S.sun_path) + 1)
 #endif	/* defined(DO_BIND_USE_SIZEOF) */

@@ -89,7 +89,7 @@ static void abortcurrent(struct mboxkey *s)
     if (s && s->tid) {
 	int r = cyrusdb_abort(s->db, s->tid);
 	if (r) {
-	    syslog(LOG_ERR, "DBERROR: error aborting txn: %s",
+	    syslog(LOG_ERR, "DBERROR: error aborting txn: %s", 
 		   cyrusdb_strerror(r));
 	}
 	s->tid = NULL;
@@ -98,23 +98,22 @@ static void abortcurrent(struct mboxkey *s)
 
 HIDDEN char *mboxkey_getpath(const char *userid)
 {
-    size_t size = strlen(config_dir) + sizeof(FNAME_DOMAINDIR) +
+    char *fname = xmalloc(strlen(config_dir) + sizeof(FNAME_DOMAINDIR) +
 			  sizeof(FNAME_USERDIR) + strlen(userid) +
-			  sizeof(FNAME_MBOXKEYSUFFIX) + 10;
-    char *fname = xmalloc(size);
+			  sizeof(FNAME_MBOXKEYSUFFIX) + 10);
     char c, *domain;
 
     if (config_virtdomains && (domain = strchr(userid, '@'))) {
 	char d = (char) dir_hash_c(domain+1, config_fulldirhash);
 	*domain = '\0';  /* split user@domain */
 	c = (char) dir_hash_c(userid, config_fulldirhash);
-	SNPRINTF_LOG(fname, size, "%s%s%c/%s%s%c/%s%s", config_dir, FNAME_DOMAINDIR, d,
+	sprintf(fname, "%s%s%c/%s%s%c/%s%s", config_dir, FNAME_DOMAINDIR, d,
 		domain+1, FNAME_USERDIR, c, userid, FNAME_MBOXKEYSUFFIX);
 	*domain = '@';  /* reassemble user@domain */
     }
     else {
 	c = (char) dir_hash_c(userid, config_fulldirhash);
-	SNPRINTF_LOG(fname, size, "%s%s%c/%s%s", config_dir, FNAME_USERDIR, c, userid,
+	sprintf(fname, "%s%s%c/%s%s", config_dir, FNAME_USERDIR, c, userid,
 		FNAME_MBOXKEYSUFFIX);
     }
 
@@ -151,7 +150,7 @@ EXPORTED int mboxkey_open(const char *user,
 	abortcurrent(mboxkeydb);
 	r = cyrusdb_close(mboxkeydb->db);
 	if (r) {
-	    syslog(LOG_ERR, "DBERROR: error closing mboxkeydb: %s",
+	    syslog(LOG_ERR, "DBERROR: error closing mboxkeydb: %s", 
 		   cyrusdb_strerror(r));
 	}
 	free(mboxkeydb->user);
@@ -167,7 +166,7 @@ EXPORTED int mboxkey_open(const char *user,
 		 &mboxkeydb->db);
     if (r != 0) {
 	int level = (flags & MBOXKEY_CREATE) ? LOG_ERR : LOG_DEBUG;
-	syslog(level, "DBERROR: opening %s: %s", fname,
+	syslog(level, "DBERROR: opening %s: %s", fname, 
 	       cyrusdb_strerror(r));
 	r = IMAP_IOERROR;
 	free(mboxkeydb);
@@ -236,7 +235,7 @@ EXPORTED int mboxkey_read(struct mboxkey *mboxkeydb, const char *mailbox,
 		 const char **mboxkey, size_t *mboxkeylen)
 {
     if (MBOXKEY_DEBUG) {
-	syslog(LOG_DEBUG, "mboxkey_db: mboxkey_read(%s, %s)",
+	syslog(LOG_DEBUG, "mboxkey_db: mboxkey_read(%s, %s)", 
 	       mboxkeydb->user, mailbox);
     }
 
@@ -247,7 +246,7 @@ int mboxkey_lockread(struct mboxkey *mboxkeydb, const char *mailbox,
 		     const char **mboxkey, size_t *mboxkeylen)
 {
     if (MBOXKEY_DEBUG) {
-	syslog(LOG_DEBUG, "mboxkey_db: mboxkey_lockread(%s, %s)",
+	syslog(LOG_DEBUG, "mboxkey_db: mboxkey_lockread(%s, %s)", 
 	       mboxkeydb->user, mailbox);
     }
 
@@ -263,7 +262,7 @@ EXPORTED int mboxkey_write(struct mboxkey *mboxkeydb, const char *mailbox,
 /*    assert(mboxkeydb->tid);*/
 
     if (MBOXKEY_DEBUG) {
-	syslog(LOG_DEBUG, "mboxkey_db: mboxkey_write(%s, %s, %s)",
+	syslog(LOG_DEBUG, "mboxkey_db: mboxkey_write(%s, %s, %s)", 
 	       mboxkeydb->user, mailbox, mboxkey ? "KEY" : "NIL");
     }
 
@@ -292,7 +291,7 @@ EXPORTED int mboxkey_write(struct mboxkey *mboxkeydb, const char *mailbox,
 	r = IMAP_AGAIN;
 	break;
     default:
-	syslog(LOG_ERR, "DBERROR: error updating database: %s",
+	syslog(LOG_ERR, "DBERROR: error updating database: %s", 
 	       cyrusdb_strerror(r));
 	r = IMAP_IOERROR;
 	break;
@@ -306,7 +305,7 @@ EXPORTED int mboxkey_close(struct mboxkey *mboxkeydb)
     int r;
 
     if (MBOXKEY_DEBUG) {
-	syslog(LOG_DEBUG, "mboxkey_db: mboxkey_close(%s)",
+	syslog(LOG_DEBUG, "mboxkey_db: mboxkey_close(%s)", 
 	       mboxkeydb->user);
     }
 
@@ -348,7 +347,7 @@ EXPORTED int mboxkey_delete_user(const char *user)
     int r = 0;
 
     if (MBOXKEY_DEBUG) {
-	syslog(LOG_DEBUG, "mboxkey_db: mboxkey_delete_user(%s)",
+	syslog(LOG_DEBUG, "mboxkey_db: mboxkey_delete_user(%s)", 
 	       user);
     }
 
@@ -422,7 +421,7 @@ EXPORTED int mboxkey_done(void)
     return r;
 }
 
-struct mboxkey_merge_rock
+struct mboxkey_merge_rock 
 {
     struct db *db;
     struct txn *tid;
@@ -434,7 +433,7 @@ struct mboxkey_merge_rock
  */
 static int mboxkey_merge_cb(void *rockp,
 			 const char *key, size_t keylen,
-			 const char *tmpdata, size_t tmpdatalen)
+			 const char *tmpdata, size_t tmpdatalen) 
 {
     int r;
     struct mboxkey_merge_rock *rockdata = (struct mboxkey_merge_rock *)rockp;
@@ -449,7 +448,7 @@ static int mboxkey_merge_cb(void *rockp,
     if(!r && tgtdata) {
 	unsigned short version, s;
 	const char *tmp = tmpdata, *tgt = tgtdata;
-
+	
 	/* get version */
 	memcpy(&s, tgt, sizeof(s));
 	version = ntohs(s);
@@ -460,7 +459,7 @@ static int mboxkey_merge_cb(void *rockp,
 	version = ntohs(s);
 	assert(version == MBOXKEY_VERSION);
     }
-
+    
     return cyrusdb_store(tgtdb, key, keylen, tmpdata, tmpdatalen,
 		     &(rockdata->tid));
 }
@@ -474,13 +473,13 @@ HIDDEN int mboxkey_merge(const char *tmpfile, const char *tgtfile)
     /* xxx does this need to be CYRUSDB_CREATE? */
     r = cyrusdb_open(DB, tmpfile, CYRUSDB_CREATE, &tmp);
     if(r) goto done;
-
+	    
     r = cyrusdb_open(DB, tgtfile, CYRUSDB_CREATE, &tgt);
     if(r) goto done;
 
     rock.db = tgt;
     rock.tid = NULL;
-
+    
     r = cyrusdb_foreach(tmp, "", 0, NULL, mboxkey_merge_cb, &rock, &rock.tid);
 
     if(r) cyrusdb_abort(rock.db, rock.tid);
@@ -490,6 +489,6 @@ HIDDEN int mboxkey_merge(const char *tmpfile, const char *tgtfile)
 
     if(tgt) cyrusdb_close(tgt);
     if(tmp) cyrusdb_close(tmp);
-
+    
     return r;
 }

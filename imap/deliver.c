@@ -110,7 +110,7 @@ static struct backend *init_net(const char *sockaddr);
 
 static void usage(void)
 {
-    fprintf(stderr,
+    fprintf(stderr, 
 	    "421-4.3.0 usage: deliver [-C <alt_config> ] [-m mailbox]"
 	    " [-a auth] [-r return_path] [-l] [-D]\r\n");
     fprintf(stderr, "421 4.3.0 %s\n", cyrus_version());
@@ -120,10 +120,10 @@ static void usage(void)
 EXPORTED void fatal(const char* s, int code)
 {
     static int recurse_code = 0;
-
+    
     if(recurse_code) exit(code);
     else recurse_code = 0;
-
+    
     prot_printf(deliver_out,"421 4.3.0 deliver: %s\r\n", s);
     prot_flush(deliver_out);
     cyrus_done();
@@ -240,7 +240,7 @@ int main(int argc, char **argv)
     cyrus_init(alt_config, "deliver", CYRUSINIT_NODB, CONFIG_NEED_PARTITION_DATA);
 
     sockaddr = config_getstring(IMAPOPT_LMTPSOCKET);
-    if (!sockaddr) {
+    if (!sockaddr) {	
 	strlcpy(buf, config_dir, sizeof(buf));
 	strlcat(buf, "/socket/lmtp", sizeof(buf));
 	sockaddr = buf;
@@ -278,7 +278,7 @@ static void just_exit(const char *msg)
     fatal(msg, EC_CONFIG);
 }
 
-/* initialize the network
+/* initialize the network 
  * we talk on unix sockets
  */
 static struct backend *init_net(const char *unixpath)
@@ -294,7 +294,7 @@ static struct backend *init_net(const char *unixpath)
   addr.sun_family = AF_UNIX;
   strlcpy(addr.sun_path, unixpath, sizeof(addr.sun_path));
 
-  if (connect(lmtpdsock, (struct sockaddr *) &addr,
+  if (connect(lmtpdsock, (struct sockaddr *) &addr, 
 	      sizeof(addr.sun_family) + strlen(addr.sun_path) + 1) < 0) {
       just_exit("connect failed");
   }
@@ -314,7 +314,6 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
 		       char **users, int numusers, char *mailbox)
 {
     int r;
-    size_t size;
     struct backend *conn;
     struct lmtp_txn *txn = LMTP_TXN_ALLOC(numusers ? numusers : 1);
     int j;
@@ -343,26 +342,26 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
     if (numusers == 0) {
 	/* just deliver to mailbox 'mailbox' */
 	const char *BB = config_getstring(IMAPOPT_POSTUSER);
-	size = ml + strlen(BB) + 2;
-	txn->rcpt[0].addr = (char *) xmalloc(size); /* xxx leaks! */
-	SNPRINTF_LOG(txn->rcpt[0].addr, size, "%s+%s", BB, mailbox);
+	txn->rcpt[0].addr = (char *) xmalloc(ml + strlen(BB) + 2); /* xxx leaks! */
+	sprintf(txn->rcpt[0].addr, "%s+%s", BB, mailbox);
 	txn->rcpt[0].ignorequota = ignorequota;
     } else {
 	/* setup each recipient */
 	for (j = 0; j < numusers; j++) {
 	    if (mailbox) {
-		int ulen;
+		size_t ulen;
 
-		size = strlen(users[j]) + ml + 2;
-		txn->rcpt[j].addr = (char *) xmalloc(size);
+		txn->rcpt[j].addr = 
+		    (char *) xmalloc(strlen(users[j]) + ml + 2);
 
 		/* find the length of the userid minus the domain */
 		ulen = strcspn(users[j], "@");
-		SNPRINTF_LOG(txn->rcpt[j].addr, size, "%.*s+%s", ulen, users[j], mailbox);
+		sprintf(txn->rcpt[j].addr, "%.*s+%s",
+			(int) ulen, users[j], mailbox);
 
 		/* add the domain if we have one */
 		if (ulen < strlen(users[j]))
-		    STRLCAT_LOG(txn->rcpt[j].addr, users[j]+ulen, sizeof (txn->rcpt[j].addr));
+		    strcat(txn->rcpt[j].addr, users[j]+ulen);
 	    } else {
 		txn->rcpt[j].addr = xstrdup(users[j]);
 	    }
@@ -391,7 +390,7 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
 	case RCPT_PERMFAIL:
 	    /* we just need any permanent failure, though we should
 	       probably return data from the client-side LMTP info */
-	    printf("%s: %s\n",
+	    printf("%s: %s\n", 
 		   txn->rcpt[j].addr, error_message(txn->rcpt[j].r));
 	    if (r != EC_TEMPFAIL) {
 		r = EC_DATAERR;

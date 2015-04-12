@@ -266,11 +266,11 @@ EXPORTED int message_copy_strict(struct protstream *from, FILE *to,
 	    }
 	}
 
-	/* Used to be some 8bit checks here but those were moved above so that
+	/* Used to be some 8bit checks here but those were moved above so that 
 	   we could do something other than refuse the message.
 	   Unfortunately, we still need to look for the end of the string. */
 	for(p = (unsigned char*) buf; *p; p++);
-
+	
 	sawnl = (p > (unsigned char *)buf) && (p[-1] == '\n');
     }
 }
@@ -573,7 +573,7 @@ HIDDEN int message_create_record(struct index_record *record,
 {
     if (!record->internaldate) {
 	if (body->received_date &&
-		config_getenum(IMAPOPT_INTERNALDATE_HEURISTIC)
+		config_getenum(IMAPOPT_INTERNALDATE_HEURISTIC) 
 		== IMAP_ENUM_INTERNALDATE_HEURISTIC_RECEIVEDHEADER)
 	    time_from_rfc822(body->received_date, &record->internaldate);
     }
@@ -899,7 +899,7 @@ static void message_parse_encoding(const char *hdr, char **hdrp)
     *hdrp = message_ucase(xstrndup(hdr, len));
 }
 
-/*
+/* 
  * parse a charset and encoding out of a body structure
  */
 static void message_parse_charset(const struct body *body,
@@ -913,25 +913,25 @@ static void message_parse_charset(const struct body *body,
 	switch (body->encoding[0]) {
 	case '7':
 	case '8':
-	    if (!strcmp(body->encoding+1, "BIT"))
+	    if (!strcmp(body->encoding+1, "BIT")) 
 		encoding = ENCODING_NONE;
-	    else
+	    else 
 		encoding = ENCODING_UNKNOWN;
 	    break;
 
 	case 'B':
-	    if (!strcmp(body->encoding, "BASE64"))
+	    if (!strcmp(body->encoding, "BASE64")) 
 		encoding = ENCODING_BASE64;
 	    else if (!strcmp(body->encoding, "BINARY"))
 		encoding = ENCODING_NONE;
-	    else
+	    else 
 		encoding = ENCODING_UNKNOWN;
 	    break;
 
 	case 'Q':
 	    if (!strcmp(body->encoding, "QUOTED-PRINTABLE"))
 		encoding = ENCODING_QP;
-	    else
+	    else 
 		encoding = ENCODING_UNKNOWN;
 	    break;
 
@@ -1208,7 +1208,7 @@ skip:
 	    if (*hdr == ';') hdr++;
 	    continue;
 	}
-
+		  
 	/* Save attribute/value pair */
 	*paramp = param = (struct param *)xzmalloc(sizeof(struct param));
 	param->attribute = message_ucase(xstrndup(attribute, attributelen));
@@ -1236,7 +1236,7 @@ skip:
  * Decode RFC-2231 parameter continuations
  *
  * Algorithm: Run down the list of parameters looking for
- * an attribute of the form "foo*0" or "foo*0*".  When we find
+ * an attribute of the form "foo*0" or "foo*0*".  When we find 
  * such an attribute, we look for "foo*1"/"foo*1*", "foo*2"/"foo*2*"
  * etc, appending each value to that of "foo*0" and then removing the
  * parameter we just appended from the list.  When appending values,
@@ -1296,7 +1296,7 @@ static void message_fold_params(struct param **params)
 
 		/* No more continuations to find */
 		if (!*continuation) break;
-
+		
 		if ((*continuation)->attribute[attributelen+sectionbuflen] == '\0') {
 		    /* Continuation is simple */
 		    if (is_extended) {
@@ -1393,7 +1393,7 @@ static void message_fold_params(struct param **params)
 	    }
 	}
     }
-}
+}	 
 
 
 /*
@@ -1426,7 +1426,7 @@ static void message_parse_language(const char *hdr, struct param **paramp)
 
 	/* Ignore parameter if not at end of header or language delimiter */
 	if (hdr && *hdr++ != ',') return;
-
+		  
 	/* Save value pair */
 	*paramp = param = (struct param *)xzmalloc(sizeof(struct param));
 	param->value = message_ucase(xstrndup(value, valuelen));
@@ -1465,7 +1465,7 @@ static void message_parse_rfc822space(const char **s)
 		case '\0':
 		    *s = 0;
 		    return;
-
+		    
 		case '\\':
 		    p++;
 		    break;
@@ -1514,7 +1514,7 @@ static void message_parse_multipart(struct msg *msg, struct body *body,
     while(boundary && strcmp(boundary->attribute, "BOUNDARY") != 0) {
 	boundary = boundary->next;
     }
-
+    
     if (!boundary) {
 	/* Invalid MIME--treat as zero-part multipart */
 	message_parse_content(msg, body, boundaries);
@@ -1679,7 +1679,7 @@ static void message_parse_content(struct msg *msg, struct body *body,
 	msg->len += delta;
 
 	/* Adjust body structure to account for encoding */
-	/* ACH: DANGER unknown size */ strcpy(body->encoding, "BASE64");
+	strcpy(body->encoding, "BASE64");
 	body->content_size = b64_size;
 	body->content_lines += b64_lines;
     }
@@ -2239,7 +2239,7 @@ static void message_write_section(struct buf *buf, const struct body *body)
 	 * Cannot fetch part 0 of a multipart.
 	 * Nested parts of a multipart are the sub-parts.
 	 */
-	buf_appendbit32(buf, body->numparts+1);
+	buf_appendbit32(buf, body->numparts+1);	
 	buf_appendbit32(buf, 0);
 	buf_appendbit32(buf, -1);
 	buf_appendbit32(buf, 0);
@@ -2299,13 +2299,13 @@ static void message_write_searchaddr(struct buf *buf,
 	if (!addrlist->domain) {
 	    if (addrlist->mailbox) {
 		if (prevaddr) buf_putc(buf, ',');
-
+		
 		tmp = charset_parse_mimeheader(addrlist->mailbox);
 		buf_appendcstr(buf, tmp);
 		free(tmp);
 		tmp = NULL;
 		buf_putc(buf, ':');
-
+	
 		/* Suppress a trailing comma */
 		prevaddr = 0;
 	    }

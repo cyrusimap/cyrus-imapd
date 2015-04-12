@@ -154,7 +154,7 @@ parse_krbequiv_line(const char *src, char *principal, char *localuser)
     if (!Uisspace(*src)) return 0; /* Need at least one separator */
     while (Uisspace(*src)) src++;
     if (!*src) return 0;
-
+  
     for (i = 0; *src && !Uisspace(*src); i++) {
 	if (i >= MAX_K_NAME_SZ) return 0;
 	*localuser++ = *src++;
@@ -221,16 +221,16 @@ const char *real_realm;
 		}
 	    }
 
-	    STRLCPY_LOG(localuser, aname, sizeof (localuser));
+	    strcpy(localuser, aname);
 	    if (*inst) {
-		(void) strlcat(localuser, ".", sizeof (localuser));
-		STRLCAT_LOG(localuser, inst, sizeof (localuser));
+		strcat(localuser, ".");
+		strcat(localuser, inst);
 	    }
 	    if (*realm) {
-		(void) strlcat(localuser, "@", sizeof (localuser));
-		STRLCAT_LOG(localuser, realm, sizeof (localuser));
+		strcat(localuser, "@");
+		strcat(localuser, realm);
 	    }
-
+	    
 	    return localuser;
 	}
     }
@@ -261,7 +261,7 @@ static const char *mycanonifyid(const char *identifier, size_t len)
     if(!canon_buf) return 0;
     memcpy(canon_buf, identifier, len);
     canon_buf[len] = '\0';
-
+   
     aname[0] = inst[0] = realm[0] = '\0';
     if (kname_parse(aname, inst, realm, canon_buf) != 0) {
 	free(canon_buf);
@@ -287,18 +287,18 @@ static const char *mycanonifyid(const char *identifier, size_t len)
 
     /* Check for krb.equiv remappings. */
     if ((p = auth_map_krbid(aname, inst, realm)) ) {
-        STRLCPY_LOG(retbuf, p, sizeof (retbuf));
+        strcpy(retbuf, p);
         return retbuf;
     }
 
-    STRLCPY_LOG(retbuf, aname, sizeof (retbuf));
+    strcpy(retbuf, aname);
     if (*inst) {
-	(void) strlcat(retbuf, ".", sizeof (retbuf));
-	STRLCAT_LOG(retbuf, inst, sizeof (retbuf));
+	strcat(retbuf, ".");
+	strcat(retbuf, inst);
     }
     if (*realm) {
-	(void) strlcat(retbuf, "@", sizeof (retbuf));
-	STRLCAT_LOG(retbuf, realm, sizeof (retbuf));
+	strcat(retbuf, "@");
+	strcat(retbuf, realm);
     }
 
     return retbuf;
@@ -318,7 +318,7 @@ static struct auth_state *mynewstate(const char *identifier)
 
     newstate = (struct auth_state *)xmalloc(sizeof(struct auth_state));
 
-    STRLCPY_LOG(newstate->userid, identifier, sizeof (newstate->userid));
+    strcpy(newstate->userid, identifier);
     newstate->aname[0] = newstate->inst[0] = newstate->realm[0] = '\0';
     kname_parse(newstate->aname, newstate->inst, newstate->realm, (char *) identifier);
 
@@ -333,7 +333,7 @@ static void myfreestate(struct auth_state *auth_state)
 #else /* HAVE_KRB */
 
 static int mymemberof(
-    struct auth_state *auth_state __attribute__((unused)),
+    struct auth_state *auth_state __attribute__((unused)), 
     const char *identifier __attribute__((unused)))
 {
 	fatal("Authentication mechanism (krb) not compiled in", EC_CONFIG);
@@ -341,7 +341,7 @@ static int mymemberof(
 }
 
 static const char *mycanonifyid(
-    const char *identifier __attribute__((unused)),
+    const char *identifier __attribute__((unused)), 
     size_t len __attribute__((unused)))
 {
 	fatal("Authentication mechanism (krb) not compiled in", EC_CONFIG);

@@ -143,11 +143,11 @@ static int roundToK(int x)
 {
     double rd = (x*1.0)/1024.0;
     int ri = x/1024;
-
+    
     if (rd-ri < 0.5)
 	return ri;
     else
-	return ri+1;
+	return ri+1;    
 }
 #else
 #define roundToK(x)
@@ -182,12 +182,12 @@ static void send_lmtp_error(struct protstream *pout, int r)
 
     case IMAP_PERMISSION_DENIED:
 	if (LMTP_LONG_ERROR_MSGS) {
-	    prot_printf(pout,
+	    prot_printf(pout, 
 "550-You do not have permission to post a message to this mailbox.\r\n"
 "550-Please contact the owner of this mailbox in order to submit\r\n"
 "550-your message, or %s if you believe you\r\n"
 "550-received this message in error.\r\n"
-"550 5.7.1 Permission denied\r\n",
+"550 5.7.1 Permission denied\r\n", 
 			config_getstring(IMAPOPT_POSTMASTER));
 	} else {
 	    prot_printf(pout, "550 5.7.1 Permission denied\r\n");
@@ -239,14 +239,14 @@ static void send_lmtp_error(struct protstream *pout, int r)
 	break;
 
     case IMAP_MESSAGE_NOBLANKLINE:
-	prot_printf(pout,
+	prot_printf(pout, 
 		    "554 5.6.0 Message has no header/body separator\r\n");
 	break;
 
     case IMAP_MAILBOX_NONEXISTENT:
 	/* XXX Might have been moved to other server */
 	if (LMTP_LONG_ERROR_MSGS) {
-	    prot_printf(pout,
+	    prot_printf(pout, 
 "550-Mailbox unknown.  Either there is no mailbox associated with this\r\n"
 "550-name or you do not have authorization to see it.\r\n"
 "550 5.1.1 User unknown\r\n");
@@ -416,7 +416,7 @@ static char *parseautheq(char **strp)
 	    int lup;
 	    *str = '\0';
 	    s++;
-
+	    
 	    for (lup=0;lup<2;lup++)
 	    {
 		if ((*s>='0') && (*s<='9'))
@@ -432,7 +432,7 @@ static char *parseautheq(char **strp)
 		{
 		    (*str) = (*str) << 4;
 		    s++;
-		}
+		}		
 	    }
 	    str++;
 
@@ -486,7 +486,7 @@ static char *parseaddr(char *s)
 	else if (*p == ':' && p[1] != '@') p++;
 	else return 0;
     }
-
+    
     /* local-part */
     if (*p == '\"') {
 	p++;
@@ -623,7 +623,7 @@ static int savemsg(struct clientdata *cd,
     /* Copy to spool file */
     f = func->spoolfile(m);
     if (!f) {
-	prot_printf(cd->pout,
+	prot_printf(cd->pout, 
 		    "451 4.3.%c cannot create temporary file: %s\r\n",
 		    (
 #ifdef EDQUOT
@@ -649,7 +649,7 @@ static int savemsg(struct clientdata *cd,
 
 	addlen = 2 + strlen(rpath) + (hostname ? 1 + strlen(hostname) : 0);
 	addbody = xmalloc(addlen + 1);
-	(void) sprintf(addbody, "<%s%s%s>",
+	sprintf(addbody, "<%s%s%s>",
 		rpath, hostname ? "@" : "", hostname ? hostname : "");
 	fprintf(f, "Return-Path: %s\r\n", addbody);
 	spool_cache_header(xstrdup("Return-Path"), addbody, m->hdrcache);
@@ -665,39 +665,39 @@ static int savemsg(struct clientdata *cd,
 	addlen += 3 + tls_get_info(cd->tls_conn, tls_info, sizeof(tls_info));
     }
 #endif
-    addlen += 2 + strlen(datestr) + 1;
-    p = addbody = xmalloc(addlen);
+    addlen += 2 + strlen(datestr);
+    p = addbody = xmalloc(addlen + 1);
 
     nfold = 0;
-    p += snprintf(p, addlen, "from %s (%s)", cd->lhlo_param, cd->clienthost);
+    p += sprintf(p, "from %s (%s)", cd->lhlo_param, cd->clienthost);
     fold[nfold++] = p;
     if (m->authuser) {
 	const void *ssfp;
 	sasl_ssf_t ssf;
 	sasl_getprop(cd->conn, SASL_SSF, &ssfp);
 	ssf = *((sasl_ssf_t *) ssfp);
-	p += snprintf(p, addlen, " (authenticated user=%s bits=%d)", m->authuser, ssf);
+	p += sprintf(p, " (authenticated user=%s bits=%d)", m->authuser, ssf);
 	fold[nfold++] = p;
     }
 
     /* We are always atleast "with LMTPA" -- no unauth delivery */
-    p += snprintf(p, addlen, " by %s", config_servername);
+    p += sprintf(p, " by %s", config_servername);
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	p += snprintf(p, addlen, " (Cyrus %s)", cyrus_version());
+	p += sprintf(p, " (Cyrus %s)", cyrus_version());
     }
-    p += snprintf(p, addlen, " with LMTP%s%s",
+    p += sprintf(p, " with LMTP%s%s",
 		 cd->starttls_done ? "S" : "",
 		 cd->authenticated != NOAUTH ? "A" : "");
 
     if (*tls_info) {
 	fold[nfold++] = p;
-	p += snprintf(p, addlen, " (%s)", tls_info);
+	p += sprintf(p, " (%s)", tls_info);
     }
 
-    (void) strlcat(p++, ";", addlen);
+    strcat(p++, ";");
     fold[nfold++] = p;
-    p += snprintf(p, addlen, " %s", datestr);
-
+    p += sprintf(p, " %s", datestr);
+ 
     fprintf(f, "Received: ");
     for (i = 0, p = addbody; i < nfold; p = fold[i], i++) {
 	fprintf(f, "%.*s\r\n\t", (int) (fold[i] - p), p);
@@ -731,10 +731,9 @@ static int savemsg(struct clientdata *cd,
     } else {
 	/* no message-id, create one */
 	pid_t p = getpid();
-	size_t size = 40 + strlen(config_servername);
 
-	m->id = xmalloc(size);
-	SNPRINTF_LOG(m->id, size, "<cmu-lmtpd-%d-%d-%u@%s>", p, (int) now,
+	m->id = xmalloc(40 + strlen(config_servername));
+	sprintf(m->id, "<cmu-lmtpd-%d-%d-%u@%s>", p, (int) now,
 		msgid_count++, config_servername);
 	fprintf(f, "Message-ID: %s\r\n", m->id);
 	spool_cache_header(xstrdup("Message-ID"), xstrdup(m->id), m->hdrcache);
@@ -828,7 +827,7 @@ static int process_recipient(char *addr, struct namespace *namespace,
 
     if (*addr == '<') addr++;
     dest = rcpt = addr;
-
+    
     /* preserve the entire address */
     ret->all = xstrdup(addr);
     sl = strlen(ret->all);
@@ -836,7 +835,7 @@ static int process_recipient(char *addr, struct namespace *namespace,
 	ret->all[sl-1] = '\0';
 
     /* now find just the user */
-
+    
     /* Skip at-domain-list */
     if (*addr == '@') {
 	addr = strchr(addr, ':');
@@ -847,7 +846,7 @@ static int process_recipient(char *addr, struct namespace *namespace,
 	}
 	addr++;
     }
-
+    
     quoted = detail = 0;
     while (*addr &&
 	   (quoted ||
@@ -878,7 +877,7 @@ static int process_recipient(char *addr, struct namespace *namespace,
 	    *dest++ = *addr++;
     }
     *dest = '\0';
-
+	
     /* make a working copy of rcpt */
     ret->user = ret->rcpt = xstrdup(rcpt);
 
@@ -935,7 +934,7 @@ static int process_recipient(char *addr, struct namespace *namespace,
 }
 
 static int localauth_mechlist_override(
-    void *context __attribute__((unused)),
+    void *context __attribute__((unused)), 
     const char *plugin_name __attribute__((unused)),
     const char *option,
     const char **result,
@@ -961,7 +960,7 @@ static struct sasl_callback localauth_override_cb[] = {
 };
 
 /* Reset the given sasl_conn_t to a sane state */
-static int reset_saslconn(sasl_conn_t **conn)
+static int reset_saslconn(sasl_conn_t **conn) 
 {
     int ret;
     sasl_security_properties_t *secprops = NULL;
@@ -977,12 +976,12 @@ static int reset_saslconn(sasl_conn_t **conn)
        ret = sasl_setprop(*conn, SASL_IPREMOTEPORT,
                           saslprops.ipremoteport);
     if(ret != SASL_OK) return ret;
-
+    
     if(saslprops.iplocalport)
        ret = sasl_setprop(*conn, SASL_IPLOCALPORT,
                           saslprops.iplocalport);
     if(ret != SASL_OK) return ret;
-
+    
     secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
     ret = sasl_setprop(*conn, SASL_SEC_PROPS, secprops);
     if(ret != SASL_OK) return ret;
@@ -1004,7 +1003,7 @@ static int reset_saslconn(sasl_conn_t **conn)
 }
 
 void lmtpmode(struct lmtp_func *func,
-	      struct protstream *pin,
+	      struct protstream *pin, 
 	      struct protstream *pout,
 	      int fd)
 {
@@ -1058,8 +1057,8 @@ void lmtpmode(struct lmtp_func *func,
 	func->preauth = 1;
     }
 
-    syslog(LOG_DEBUG, "connection from %s%s",
-	   cd.clienthost,
+    syslog(LOG_DEBUG, "connection from %s%s", 
+	   cd.clienthost, 
 	   func->preauth ? " preauth'd as postman" : "");
 
     /* Setup SASL to go.  We need to do this *after* we decide if
@@ -1076,7 +1075,7 @@ void lmtpmode(struct lmtp_func *func,
     sasl_setprop(cd.conn, SASL_SEC_PROPS, secprops);
 
     if (func->preauth) {
-	cd.authenticated = EXTERNAL_AUTHED;	/* we'll allow commands,
+	cd.authenticated = EXTERNAL_AUTHED;	/* we'll allow commands, 
 						   but we still accept
 						   the AUTH command */
 	ssf = 2;
@@ -1089,7 +1088,7 @@ void lmtpmode(struct lmtp_func *func,
 	deliver_logfd = telemetry_log(auth_id, pin, pout, 0);
     } else {
 	if(localip) sasl_setprop(cd.conn, SASL_IPLOCALPORT,  &localip );
-	if(remoteip) sasl_setprop(cd.conn, SASL_IPREMOTEPORT, &remoteip);
+	if(remoteip) sasl_setprop(cd.conn, SASL_IPREMOTEPORT, &remoteip);  
     }
 
     prot_printf(pout, "220 %s", config_servername);
@@ -1105,7 +1104,7 @@ void lmtpmode(struct lmtp_func *func,
 
       if (!prot_fgets(buf, sizeof(buf), pin)) {
 	  const char *err = prot_error(pin);
-
+	  
 	  if (err != NULL) {
 	      prot_printf(pout, "421 4.4.1 bye %s\r\n", err);
 	      prot_flush(pout);
@@ -1137,7 +1136,7 @@ void lmtpmode(struct lmtp_func *func,
 	      int sasl_result;
 	      const void *val;
 	      const char *user;
-
+	      
 	      if (cd.authenticated > 0) {
 		  prot_printf(pout,
 			      "503 5.5.0 already authenticated\r\n");
@@ -1148,7 +1147,7 @@ void lmtpmode(struct lmtp_func *func,
 			      "503 5.5.0 AUTH not permitted now\r\n");
 		  continue;
 	      }
-
+	      
 	      /* ok, what mechanism ? */
 	      p = buf + 5;
 	      while ((*p != ' ') && (*p != '\0')) {
@@ -1182,16 +1181,16 @@ void lmtpmode(struct lmtp_func *func,
 		      break;
 		  default:
 		      if (sasl_result == SASL_NOMECH) {
-			  prot_printf(pout,
+			  prot_printf(pout, 
 				      "504 Unrecognized authentication type.\r\n");
 			  continue;
 		      }
 		      else {
 			  syslog(LOG_ERR, "badlogin: %s %s %s",
 				 cd.clienthost, mech, sasl_errdetail(cd.conn));
-
+		  
 			  snmp_increment_args(AUTHENTICATION_NO, 1,
-					      VARIABLE_AUTH, hash_simple(mech),
+					      VARIABLE_AUTH, hash_simple(mech), 
 					      VARIABLE_LISTEND);
 
 			  prot_printf(pout, "501 5.5.4 %s\r\n",
@@ -1225,7 +1224,7 @@ void lmtpmode(struct lmtp_func *func,
 
 	      /* authenticated successfully! */
 	      snmp_increment_args(AUTHENTICATION_YES,1,
-				  VARIABLE_AUTH, hash_simple(mech),
+				  VARIABLE_AUTH, hash_simple(mech), 
 				  VARIABLE_LISTEND);
 	      syslog(LOG_NOTICE, "login: %s %s %s%s %s",
 		     cd.clienthost, user, mech,
@@ -1258,7 +1257,7 @@ void lmtpmode(struct lmtp_func *func,
 		}
 
 		if (msg->size > max_msgsize) {
-		    prot_printf(pout,
+		    prot_printf(pout, 
 				"552 5.2.3 Message size (%d) exceeds fixed "
 				"maximum message size (%d)\r\n",
 				msg->size, max_msgsize);
@@ -1277,7 +1276,7 @@ void lmtpmode(struct lmtp_func *func,
 		}
 
 		snmp_increment(mtaTransmittedMessages, delivered);
-		snmp_increment(mtaTransmittedVolume,
+		snmp_increment(mtaTransmittedVolume, 
 			       roundToK(delivered * msg->size));
 		goto rset;
 	    }
@@ -1288,7 +1287,7 @@ void lmtpmode(struct lmtp_func *func,
 	  if (!strncasecmp(buf, "lhlo ", 5)) {
 	      int mechcount;
 	      const char *mechs;
-
+	      
 	      prot_printf(pout, "250-%s\r\n"
 			  "250-8BITMIME\r\n"
 			  "250-ENHANCEDSTATUSCODES\r\n"
@@ -1303,20 +1302,20 @@ void lmtpmode(struct lmtp_func *func,
 		  prot_printf(pout, "250-STARTTLS\r\n");
 	      }
 	      if ((cd.authenticated <= 0) &&
-		  sasl_listmech(cd.conn, NULL, "AUTH ", " ", "", &mechs,
-				NULL, &mechcount) == SASL_OK &&
+		  sasl_listmech(cd.conn, NULL, "AUTH ", " ", "", &mechs, 
+				NULL, &mechcount) == SASL_OK && 
 		  mechcount > 0) {
 		  prot_printf(pout,"250-%s\r\n", mechs);
 	      }
 	      prot_printf(pout, "250 IGNOREQUOTA\r\n");
 
 	      strlcpy(cd.lhlo_param, buf + 5, sizeof(cd.lhlo_param));
-
+	      
 	      session_new_id();
 	      continue;
 	  }
 	  goto syntaxerr;
-
+    
       case 'm':
       case 'M':
 	    if (!cd.authenticated) {
@@ -1331,7 +1330,7 @@ void lmtpmode(struct lmtp_func *func,
 	    if (!strncasecmp(buf, "mail ", 5)) {
 		char *tmp;
 		if (msg->return_path) {
-		    prot_printf(pout,
+		    prot_printf(pout, 
 				"503 5.5.1 Nested MAIL command\r\n");
 		    continue;
 		}
@@ -1339,7 +1338,7 @@ void lmtpmode(struct lmtp_func *func,
 		 * +10 to get past "mail from:" */
 		if (strncasecmp(buf+5, "from:", 5) != 0 ||
 		    !(msg->return_path = parseaddr(buf+10))) {
-		    prot_printf(pout,
+		    prot_printf(pout, 
 				"501 5.5.4 Syntax error in parameters\r\n");
 		    continue;
 		}
@@ -1369,14 +1368,14 @@ void lmtpmode(struct lmtp_func *func,
 			    goto badparam;
 			}
 			tmp += 5;
-			/* just verify it's one of
+			/* just verify it's one of 
 			   body-value ::= "7BIT" / "8BITMIME" */
 			if (!strncasecmp(tmp, "7bit", 4)) {
 			    tmp += 4;
 			} else if (!strncasecmp(tmp, "8bitmime", 8)) {
 			    tmp += 8;
 			} else {
-			    prot_printf(pout,
+			    prot_printf(pout, 
 			      "501 5.5.4 Unrecognized BODY type\r\n");
 			    goto nextcmd;
 			}
@@ -1389,7 +1388,7 @@ void lmtpmode(struct lmtp_func *func,
 			tmp += 5;
 			/* make sure we have a value */
 			if (!Uisdigit(*tmp)) {
-				prot_printf(pout,
+				prot_printf(pout, 
 					    "501 5.5.2 SIZE requires a value\r\n");
 				goto nextcmd;
 			}
@@ -1398,7 +1397,7 @@ void lmtpmode(struct lmtp_func *func,
 			/* make sure the value is in range */
 			if (errno == ERANGE || msg->size < 0 ||
 			    msg->size > max_msgsize) {
-			    prot_printf(pout,
+			    prot_printf(pout, 
 					"552 5.2.3 Message SIZE exceeds fixed "
 					"maximum message size (%d)\r\n",
 					max_msgsize);
@@ -1406,16 +1405,16 @@ void lmtpmode(struct lmtp_func *func,
 			}
 			break;
 
-		    default:
+		    default: 
 		    badparam:
-			prot_printf(pout,
+			prot_printf(pout, 
 				    "501 5.5.4 Unrecognized parameters\r\n");
 			goto nextcmd;
 		    }
-		}
+		} 
 		if (*tmp != '\0') {
-		    prot_printf(pout,
-				"501 5.5.4 Syntax error in parameters\r\n");
+		    prot_printf(pout, 
+				"501 5.5.4 Syntax error in parameters\r\n");  
 		    continue;
 		}
 
@@ -1440,7 +1439,7 @@ void lmtpmode(struct lmtp_func *func,
 		goto cleanup;
 	    }
 	    goto syntaxerr;
-
+	    
       case 'r':
       case 'R':
 	    if (!strncasecmp(buf, "rcpt ", 5)) {
@@ -1454,7 +1453,7 @@ void lmtpmode(struct lmtp_func *func,
 		}
 		if (!(msg->rcpt_num % RCPT_GROW)) { /* time to alloc more */
 		    msg->rcpt = (address_data_t **)
-			xrealloc(msg->rcpt, (msg->rcpt_num + RCPT_GROW + 1) *
+			xrealloc(msg->rcpt, (msg->rcpt_num + RCPT_GROW + 1) * 
 				 sizeof(address_data_t *));
 		}
 		/* +5 to get past "rcpt "
@@ -1478,16 +1477,16 @@ void lmtpmode(struct lmtp_func *func,
 			ignorequota = 1;
 			break;
 
-		    default:
+		    default: 
 		    badrparam:
-			prot_printf(pout,
+			prot_printf(pout, 
 				    "501 5.5.4 Unrecognized parameters\r\n");
 			goto nextcmd;
 		    }
-		}
+		} 
 		if (*tmp != '\0') {
-		    prot_printf(pout,
-				"501 5.5.4 Syntax error in parameters\r\n");
+		    prot_printf(pout, 
+				"501 5.5.4 Syntax error in parameters\r\n");  
 		    continue;
 		}
 
@@ -1513,7 +1512,7 @@ void lmtpmode(struct lmtp_func *func,
 	      rset:
 		if (msg) msg_free(msg);
 		msg_new(&msg);
-
+		
 		continue;
 	    }
 	    goto syntaxerr;
@@ -1535,7 +1534,7 @@ void lmtpmode(struct lmtp_func *func,
 		layerp = (int *) &ssf;
 
 		if (cd.starttls_done == 1) {
-		    prot_printf(pout, "454 4.3.3 %s\r\n",
+		    prot_printf(pout, "454 4.3.3 %s\r\n", 
 				"Already successfully executed STARTTLS");
 		    continue;
 		}
@@ -1560,7 +1559,7 @@ void lmtpmode(struct lmtp_func *func,
 		prot_printf(pout, "220 %s\r\n", "Begin TLS negotiation now");
 		/* must flush our buffers before starting tls */
 		prot_flush(pout);
-
+  
 		r=tls_start_servertls(0, /* read */
 				      1, /* write */
 				      360, /* 6 minutes */
@@ -1591,7 +1590,7 @@ void lmtpmode(struct lmtp_func *func,
 		    saslprops.authid = NULL;
 		}
 		if(auth_id) {
-		    saslprops.authid = xstrdup(auth_id);
+		    saslprops.authid = xstrdup(auth_id);		
 		    cd.authenticated = TLSCERT_AUTHED;
 		}
 
@@ -1706,7 +1705,7 @@ static int revconvert_lmtp(const char *code)
 static int ask_code(const char *s)
 {
     int ret = 0;
-
+    
     if (s==NULL) return -1;
 
     if (strlen(s) < 3) return -1;
@@ -1720,7 +1719,7 @@ static int ask_code(const char *s)
     }
 
     ret = ((s[0]-'0')*100)+((s[1]-'0')*10)+(s[2]-'0');
-
+    
     return ret;
 }
 
@@ -1728,7 +1727,7 @@ static int ask_code(const char *s)
    it puts it in 'buf', which must be at least 'len' big.
 
    '*code' will contain the integer three digit response code.
-   if a read failed, '*code == 400', a temporary failure.
+   if a read failed, '*code == 400', a temporary failure. 
 
    returns an IMAP error code. */
 static int getlastresp(char *buf, int len, int *code, struct protstream *pin)
@@ -1835,7 +1834,7 @@ int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
 	prot_printf(conn->out, "MAIL FROM:<%s>", txn->from);
     }
     if (CAPA(conn, CAPA_AUTH)) {
-	prot_printf(conn->out, " AUTH=%s",
+	prot_printf(conn->out, " AUTH=%s", 
 		    txn->auth && txn->auth[0] ? txn->auth : "<>");
     }
     prot_printf(conn->out, "\r\n");
@@ -1905,7 +1904,7 @@ int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
 	    /* expecting a status code for this recipient */
 	    r = getlastresp(buf, sizeof(buf)-1, &code, conn->in);
 	    if (r) {
-		/* technically, some recipients might've succeeded here,
+		/* technically, some recipients might've succeeded here, 
 		   but we'll be paranoid */
 		goto failall;
 	    }
@@ -1923,10 +1922,10 @@ int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
 	    }
 	}
     }
-
+    
     /* done with txn */
     return 0;
-
+    
  failall:
     /* something fatal happened during the transaction; we should assign
        'code' to all recipients and return */

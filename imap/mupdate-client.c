@@ -403,7 +403,7 @@ static int mupdate_find_cb(struct mupdate_mailboxdata *mdata,
 
     if (!strncmp(cmd, "MAILBOX", 7)) {
 	h->mailboxdata_buf.t = ACTIVE;
-
+	
 	free(h->acl);
 	h->acl = xstrdup(mdata->acl);
     } else if (!strncmp(cmd, "RESERVE", 7)) {
@@ -606,7 +606,7 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
 	    r = MUPDATE_PROTOCOL_ERROR;
 	    break;
 	}
-
+	
 	if (Uislower(handle->cmd.s[0])) {
 	    handle->cmd.s[0] = toupper((unsigned char) handle->cmd.s[0]);
 	}
@@ -614,7 +614,7 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
 	    if (Uislower(*p))
 		*p = toupper((unsigned char) *p);
 	}
-
+	
 	switch(handle->cmd.s[0]) {
 	case 'B':
 	    if (!strncmp(handle->cmd.s, "BAD", 3)) {
@@ -629,7 +629,7 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
 	    } else if (!strncmp(handle->cmd.s, "BYE", 3)) {
 		ch = getstring(handle->conn->in, handle->conn->out, &(handle->arg1));
 		CHECKNEWLINE(handle, ch);
-
+		
 		syslog(LOG_ERR, "mupdate BYE response: %s", handle->arg1.s);
 		if (wait_for_ok && response) {
 		    *response = MUPDATE_BYE;
@@ -665,18 +665,18 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
 		    r = MUPDATE_PROTOCOL_ERROR;
 		    goto done;
 		}
-
+		
 		/* Server */
 		ch = getstring(handle->conn->in, handle->conn->out, &(handle->arg2));
 		if (ch != ' ') {
 		    r = MUPDATE_PROTOCOL_ERROR;
 		    goto done;
 		}
-
+		
 		/* ACL */
 		ch = getstring(handle->conn->in, handle->conn->out, &(handle->arg3));
 		CHECKNEWLINE(handle, ch);
-
+		
 		/* Handle mailbox command */
 		memset(&box, 0, sizeof(box));
 		box.mailbox = handle->arg1.s;
@@ -708,7 +708,7 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
 	    if (!strncmp(handle->cmd.s, "OK", 2)) {
 		/* It's all good, grab the attached string and move on */
 		ch = getstring(handle->conn->in, handle->conn->out, &(handle->arg1));
-
+		
 		CHECKNEWLINE(handle, ch);
 		if (wait_for_ok) {
 		    if (response) *response = MUPDATE_OK;
@@ -725,11 +725,11 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
 		    r = MUPDATE_PROTOCOL_ERROR;
 		    goto done;
 		}
-
+		
 		/* Server */
 		ch = getstring(handle->conn->in, handle->conn->out, &(handle->arg2));
 		CHECKNEWLINE(handle, ch);
-
+		
 		/* Handle reserve command */
 		memset(&box, 0, sizeof(box));
 		box.mailbox = handle->arg1.s;
@@ -740,7 +740,7 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
 			   "error reserving mailbox: callback returned %d", r);
 		    goto done;
 		}
-
+		
 		break;
 	    }
 	    goto badcmd;
@@ -788,7 +788,7 @@ EXPORTED void kick_mupdate(void)
     strlcat(buf, FNAME_MUPDATE_TARGET_SOCK, sizeof(buf));
     memset((char *)&srvaddr, 0, sizeof(srvaddr));
     srvaddr.sun_family = AF_UNIX;
-    STRLCPY_LOG(srvaddr.sun_path, buf, sizeof (srvaddr.sun_path));
+    strcpy(srvaddr.sun_path, buf);
     len = sizeof(srvaddr.sun_family) + strlen(srvaddr.sun_path) + 1;
 
     r = connect(s, (struct sockaddr *)&srvaddr, len);

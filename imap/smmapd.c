@@ -135,7 +135,7 @@ static void smmapd_reset(void)
 
     map_in = map_out = NULL;
 
-    cyrus_reset_stdio();
+    cyrus_reset_stdio(); 
 }
 
 void shut_down(int code) __attribute__((noreturn));
@@ -238,7 +238,7 @@ static int check_quotas(const char *name)
 {
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
     char root[MAX_MAILBOX_NAME+1];
-
+    
     /* just check the quotas we care about */
     qdiffs[QUOTA_STORAGE] = 0;
     qdiffs[QUOTA_MESSAGE] = 1;
@@ -346,7 +346,7 @@ static int verify_user(const char *key, struct auth_state *authstate)
 	 * would also do a quotacheck.
 	 */
 
-	/* proxy the request to the real backend server to
+	/* proxy the request to the real backend server to 
 	 * check the quota.  if this fails, just return 0
 	 * (asuume under quota)
 	 */
@@ -364,7 +364,7 @@ static int verify_user(const char *key, struct auth_state *authstate)
 
 	soc = socket(PF_INET, SOCK_STREAM, 0);
 	if (soc < 0) {
-	    syslog(LOG_ERR, "verify_user(%s) failed: can't connect to %s",
+	    syslog(LOG_ERR, "verify_user(%s) failed: can't connect to %s", 
 		   namebuf, mbentry->server);
 	    mboxlist_entry_free(&mbentry);
 	    return r;
@@ -375,15 +375,15 @@ static int verify_user(const char *key, struct auth_state *authstate)
 	/* XXX port should be configurable */
 	sin.sin_port = htons(12345);
 
-	if (connect(soc,(struct sockaddr *) &sin, sizeof(sin)) < 0) {
-	    syslog(LOG_ERR, "verify_user(%s) failed: can't connect to %s",
+	if (connect(soc,(struct sockaddr *) &sin, sizeof(sin)) < 0) { 
+	    syslog(LOG_ERR, "verify_user(%s) failed: can't connect to %s", 
 		   namebuf, mbentry->server);
 	    close(soc);
 	    mboxlist_entry_free(&mbentry);
 	    return r;
 	}
 
-	SNPRINTF_LOG(buf, sizeof (buf),SIZE_T_FMT ":cyrus %s,%c",strlen(key)+6,key,4);
+	sprintf(buf,SIZE_T_FMT ":cyrus %s,%c",strlen(key)+6,key,4);
 	sendto(soc,buf,strlen(buf),0,(struct sockaddr *)&sin,sizeof(sin));
 
 	x = sizeof(sfrom);

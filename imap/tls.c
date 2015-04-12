@@ -169,7 +169,7 @@ EXPORTED int tls_enabled(void)
     return 1;
 }
 
-/* taken from OpenSSL apps/s_cb.c
+/* taken from OpenSSL apps/s_cb.c 
  * tim - this seems to just be giving logging messages
  */
 
@@ -241,7 +241,7 @@ static DH *get_dh1024(void)
     if ((dh->p == NULL) || (dh->g == NULL)) return(NULL);
 
     return(dh);
-
+	
 }
 static DH *load_dh_param(const char *keyfile, const char *certfile)
 {
@@ -287,7 +287,7 @@ static int verify_callback(int ok, X509_STORE_CTX * ctx)
     {
       syslog(LOG_ERR, "verify error:num=%d:%s", err,
 	     X509_verify_cert_error_string(err));
-
+      
 	if (verify_depth >= depth) {
 	    ok = 0;
 	    verify_error = X509_V_OK;
@@ -368,17 +368,17 @@ static int tls_dump(const char *s, int len)
 
 	val = i * DUMP_WIDTH;
 	assert(val <= 0xFFFF);
-	SNPRINTF_LOG(ss, sizeof (buf), "%04x ", i * DUMP_WIDTH);
+	sprintf(ss, "%04x ", i * DUMP_WIDTH);
 	ss += strlen(ss);
 
 	for (j = 0; j < DUMP_WIDTH; j++) {
 	    if (((i * DUMP_WIDTH) + j) >= len) {
-		STRLCPY_LOG(ss, "   ", sizeof (buf)-(ss-buf));
+		strcpy(ss, "   ");
 	    } else {
 		ch = ((unsigned char) *((char *) (s) + i * DUMP_WIDTH + j))
 		    & 0xFF;
 
-		SNPRINTF_LOG(ss, sizeof (buf)-(ss-buf), "%02x%c", ch, j == 7 ? '|' : ' ');
+		sprintf(ss, "%02x%c", ch, j == 7 ? '|' : ' ');
 		ss += 3;
 	    }
 	}
@@ -392,17 +392,17 @@ static int tls_dump(const char *s, int len)
 	    if (j == 7) *ss+= ' ';
 	}
 	*ss = 0;
-	/*
+	/* 
 	 * if this is the last call then update the ddt_dump thing so that
          * we will move the selection point in the debug window
-         */
+         */	
 	if (var_imapd_tls_loglevel>0)
 	  syslog(LOG_DEBUG, "%s", buf);
 	ret += strlen(buf);
     }
 #ifdef TRUNCATE
     if (trunc > 0) {
-	SNPRINTF_LOG(buf, sizeof(buf), "%04x - <SPACES/NULS>\n", len+ trunc);
+	snprintf(buf, sizeof(buf), "%04x - <SPACES/NULS>\n", len+ trunc);
 	if (var_imapd_tls_loglevel>0)
 	  syslog(LOG_DEBUG, "%s", buf);
 	ret += strlen(buf);
@@ -457,8 +457,8 @@ static int set_cert_stuff(SSL_CTX * ctx,
 /*
  * The new_session_cb() is called, whenever a new session has been
  * negotiated and session caching is enabled.  We save the session in
- * a database so that we can share sessions between processes.
- */
+ * a database so that we can share sessions between processes. 
+ */ 
 static int new_session_cb(SSL *ssl __attribute__((unused)),
 			  SSL_SESSION *sess)
 {
@@ -506,7 +506,7 @@ static int new_session_cb(SSL *ssl __attribute__((unused)),
 	unsigned int i;
 	char idstr[SSL_MAX_SSL_SESSION_ID_LENGTH*2 + 1];
 	for (i = 0; i < sess->session_id_length; i++) {
-	    SNPRINTF_LOG(idstr+i*2, sizeof (idstr) - i*2, "%02X", sess->session_id[i]);
+	    sprintf(idstr+i*2, "%02X", sess->session_id[i]);
 	}
 	syslog(LOG_DEBUG, "new TLS session: id=%s, expire=%s, status=%s",
 	       idstr, ctime(&expire), ret ? "failed" : "ok");
@@ -524,7 +524,7 @@ static void remove_session(unsigned char *id, int idlen)
 
     assert(id);
     assert(idlen <= SSL_MAX_SSL_SESSION_ID_LENGTH);
-
+    
     if (!sess_dbopen) return;
 
     do {
@@ -602,7 +602,7 @@ static SSL_SESSION *get_session_cb(SSL *ssl __attribute__((unused)),
 	int i;
 	char idstr[SSL_MAX_SSL_SESSION_ID_LENGTH*2 + 1];
 	for (i = 0; i < idlen; i++)
-	    SNPRINTF_LOG(idstr+i*2, sizeof (idstr) - i*2, "%02X", id[i]);
+	    sprintf(idstr+i*2, "%02X", id[i]);
 
 	syslog(LOG_DEBUG, "get TLS session: id=%s, expire=%s, status=%s",
 	       idstr, ctime(&expire),
@@ -721,7 +721,7 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 	syslog(LOG_DEBUG, "TLS client engine: Setting SSL_OP_NO_COMPRESSION");
     }
 #endif // (OPENSSL_VERSION_NUMBER >= 0x1000000fL)
-
+    
     SSL_CTX_set_options(s_ctx, off);
     SSL_CTX_set_info_callback(s_ctx, apps_ssl_info_callback);
 
@@ -1020,9 +1020,9 @@ EXPORTED int tls_start_servertls(int readfd, int writefd, int timeout,
 	goto done;
     }
     SSL_clear(tls_conn);
-
+    
     /* set the file descriptors for SSL to use */
-    if ((SSL_set_rfd(tls_conn, readfd) == 0) ||
+    if ((SSL_set_rfd(tls_conn, readfd) == 0) || 
 	(SSL_set_wfd(tls_conn, writefd) == 0)) {
 	r = -1;
 	goto done;
@@ -1156,7 +1156,7 @@ EXPORTED int tls_start_servertls(int readfd, int writefd, int timeout,
 	X509_NAME_get_text_by_NID(X509_get_issuer_name(peer),
 			  NID_commonName, issuer_CN, CCERT_BUFSIZ);
 	if (var_imapd_tls_loglevel >= 3)
-	    syslog(LOG_DEBUG, "subject_CN=%s, issuer_CN=%s",
+	    syslog(LOG_DEBUG, "subject_CN=%s, issuer_CN=%s", 
 		   peer_CN, issuer_CN);
 
 	/* xxx verify that we like the peer_issuer/issuer_CN */
@@ -1184,7 +1184,7 @@ EXPORTED int tls_start_servertls(int readfd, int writefd, int timeout,
 		tls_protocol,
 		tls_cipher_name,
 		tls_cipher_usebits,
-		tls_cipher_algbits,
+		tls_cipher_algbits, 
 		SSL_session_reused(tls_conn) ? "reused" : "new",
 		*authid
 	    );
@@ -1241,7 +1241,7 @@ EXPORTED int tls_reset_servertls(SSL **conn)
 	}
 	SSL_free(*conn);
     }
-
+    
     return r;
 }
 
@@ -1298,9 +1298,9 @@ static int prune_p(void *rock, const char *id, size_t idlen,
 	assert(idlen <= SSL_MAX_SSL_SESSION_ID_LENGTH);
 
 	for (i = 0; i < idlen; i++) {
-	    SNPRINTF_LOG(idstr+i*2, sizeof (idstr) - i*2, "%02X", (unsigned char) id[i]);
+	    sprintf(idstr+i*2, "%02X", (unsigned char) id[i]);
 	}
-
+	
 	syslog(LOG_DEBUG, "found TLS session: id=%s, expire=%s",
 	       idstr, ctime(&expire));
     }
@@ -1310,7 +1310,7 @@ static int prune_p(void *rock, const char *id, size_t idlen,
 }
 
 static int prune_cb(void *rock, const char *id, size_t idlen,
-		    const char *data __attribute__((unused)),
+		    const char *data __attribute__((unused)), 
                     size_t datalen __attribute__((unused)))
 {
     struct prunerock *prock = (struct prunerock *) rock;
@@ -1388,7 +1388,7 @@ HIDDEN int tls_init_clientengine(int verifydepth,
     const char   *server_ca_file;
     char   *client_cert;
     char   *client_key;
-
+    
     if (tls_clientengine)
 	return (0);				/* already running */
 
@@ -1407,7 +1407,7 @@ HIDDEN int tls_init_clientengine(int verifydepth,
     if (c_ctx == NULL) {
 	return (-1);
     };
-
+    
     off |= SSL_OP_ALL;		/* Work around all known bugs */
     off |= SSL_OP_NO_SSLv2;
     off |= SSL_OP_NO_SSLv3;
@@ -1421,7 +1421,7 @@ HIDDEN int tls_init_clientengine(int verifydepth,
 	syslog(LOG_DEBUG, "TLS client engine: Setting SSL_OP_NO_COMPRESSION");
     }
 #endif // (OPENSSL_VERSION_NUMBER >= 0x1000000fL)
-
+    
     server_ca_dir = config_getstring(IMAPOPT_TLS_SERVER_CA_DIR);
     server_ca_file = config_getstring(IMAPOPT_TLS_SERVER_CA_FILE);
 
@@ -1449,7 +1449,7 @@ HIDDEN int tls_init_clientengine(int verifydepth,
 	client_key = NULL;
     else
 	client_key = xstrdup(var_server_key);
-
+    
     if (client_cert || client_key) {
 	if (!set_cert_stuff(c_ctx, client_cert, client_key)) {
 	    syslog(LOG_ERR,"TLS client engine: cannot load client cert/key data");
@@ -1458,10 +1458,10 @@ HIDDEN int tls_init_clientengine(int verifydepth,
     }
 
     SSL_CTX_set_tmp_rsa_callback(c_ctx, tmp_rsa_cb);
-
+    
     verify_depth = verifydepth;
     SSL_CTX_set_verify(c_ctx, verify_flags, verify_callback);
-
+    
     tls_clientengine = 1;
     return (0);
 }
@@ -1479,7 +1479,7 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
     int tls_cipher_algbits = 0;
     SSL *tls_conn;
     int r = 0;
-
+    
     assert(tls_clientengine);
     assert(ret);
     if (var_proxy_tls_loglevel >= 1)
@@ -1494,9 +1494,9 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
 	goto done;
     }
     SSL_clear(tls_conn);
-
+    
     /* set the file descriptors for SSL to use */
-    if ((SSL_set_rfd(tls_conn, readfd) == 0) ||
+    if ((SSL_set_rfd(tls_conn, readfd) == 0) || 
 	(SSL_set_wfd(tls_conn, writefd) == 0)) {
 	r = -1;
 	goto done;
@@ -1507,7 +1507,7 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
      * and will check the client cert etc.
      */
     SSL_set_connect_state(tls_conn);
-
+    
     /*
      * We do have an SSL_set_fd() and now suddenly a BIO_ routine is called?
      * Well there is a BIO below the SSL routines that is automatically
@@ -1537,7 +1537,7 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
     /* Only loglevel==4 dumps everything */
     if (var_proxy_tls_loglevel < 4)
 	do_dump = 0;
-
+    
     /*
      * Lets see, whether a peer certificate is available and what is
      * the actual information. We want to save it for later use.
@@ -1554,7 +1554,7 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
 	X509_NAME_get_text_by_NID(X509_get_issuer_name(peer),
 				  NID_commonName, issuer_CN, CCERT_BUFSIZ);
 	if (var_proxy_tls_loglevel >= 3)
-	    syslog(LOG_DEBUG, "subject_CN=%s, issuer_CN=%s",
+	    syslog(LOG_DEBUG, "subject_CN=%s, issuer_CN=%s", 
 		   peer_CN, issuer_CN);
 
 	/* xxx verify that we like the peer_issuer/issuer_CN */
@@ -1569,12 +1569,12 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
     cipher = SSL_get_current_cipher(tls_conn);
     tls_cipher_name = SSL_CIPHER_get_name(cipher);
     tls_cipher_usebits = SSL_CIPHER_get_bits(cipher, &tls_cipher_algbits);
-
+    
     if (layerbits != NULL)
 	*layerbits = tls_cipher_usebits;
-
+    
     syslog(LOG_DEBUG, "starttls: %s with cipher %s (%d/%d bits %s client)"
-	   " no authentication",
+	   " no authentication", 
 	   tls_protocol, tls_cipher_name,
 	   tls_cipher_usebits, tls_cipher_algbits,
 	   SSL_session_reused(tls_conn) ? "reused" : "new");

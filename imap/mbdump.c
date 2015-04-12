@@ -221,7 +221,7 @@ static int dump_index(struct mailbox *mailbox, int oldversion,
 
     fname = mailbox_meta_fname(mailbox, META_INDEX);
     snprintf(oldname, MAX_MAILBOX_PATH, "%s.OLD", fname);
-
+    
     oldindex_fd = open(oldname, O_RDWR|O_TRUNC|O_CREAT, 0666);
     if (oldindex_fd == -1) goto fail;
 
@@ -261,7 +261,7 @@ static int dump_index(struct mailbox *mailbox, int oldversion,
 	int nexpunge = mailbox->i.num_records - mailbox->i.exists;
 	fname = mailbox_meta_fname(mailbox, META_EXPUNGE);
 	snprintf(oldname, MAX_MAILBOX_PATH, "%s.OLD", fname);
-
+	
 	oldindex_fd = open(oldname, O_RDWR|O_TRUNC|O_CREAT, 0666);
 	if (oldindex_fd == -1) goto fail;
 
@@ -317,7 +317,7 @@ static int sieve_isactive(const char *sievepath, const char *name)
     }
 
     activelink[len] = '\0';
-
+    
     /* Only compare the part of the file after the last /,
      * since that is what timsieved does */
     file = strrchr(filename, '/');
@@ -406,11 +406,11 @@ static int dump_file(int first, int sync,
 	    syslog(LOG_ERR, "IOERROR: open on %s: %m", filename);
 	    return IMAP_SYS_ERROR;
 	}
-
+    
 	if (fstat(filefd, &sbuf) == -1) {
 	    syslog(LOG_ERR, "IOERROR: fstat on %s: %m", filename);
 	    fatal("can't fstat message file", EC_OSFILE);
-	}
+	}	
 
 	base = NULL;
 	len = 0;
@@ -665,7 +665,7 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
 			   "could not dump sieve scripts in %s: %m)", sieve_path);
 	    } else {
 		char tag_fname[2048];
-
+	    
 		while((next = readdir(mbdir)) != NULL) {
 		    int length=strlen(next->d_name);
 		    /* 7 == strlen(".script"); 3 == strlen(".bc") */
@@ -697,7 +697,7 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
 		mbdir = NULL;
 	    }
 	} /* end if !sieve_userhomedir */
-
+	    
     } /* end if user INBOX */
 
     /* Dump quota data */
@@ -862,7 +862,7 @@ EXPORTED int undump_mailbox(const char *mbname,
 	eatline(pin, c);
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     }
-
+    
     /* We should now have a number or a NIL */
     c = getword(pin, &data);
     if (!strcmp(data.s, "NIL")) {
@@ -889,7 +889,7 @@ EXPORTED int undump_mailbox(const char *mbname,
     } else if(c == ')') {
 	goto done;
     }
-
+    
     r = mailbox_open_exclusive(mbname, &mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	mbentry_t *mbentry = NULL;
@@ -918,7 +918,7 @@ EXPORTED int undump_mailbox(const char *mbname,
 	buf_reset(&content);
 	seen_file = NULL;
 	mboxkey_file = NULL;
-
+	
 	c = getastring(pin, pout, &file);
 	if(c != ' ') {
 	    r = IMAP_PROTOCOL_ERROR;
@@ -938,17 +938,17 @@ EXPORTED int undump_mailbox(const char *mbname,
 		goto done;
 	    }
 	    tmpuserid = xmalloc(i-2+1);
-
+	    
 	    memcpy(tmpuserid, &(file.s[2]), i-2);
 	    tmpuserid[i-2] = '\0';
-
+	    
 	    annotation = xstrdup(&(file.s[i]));
 
 	    if(prot_getc(pin) != '(') {
 		r = IMAP_PROTOCOL_ERROR;
 		free(tmpuserid);
 		goto done;
-	    }
+	    }	    
 
 	    /* Parse the modtime...and ignore it */
 	    c = getword(pin, &data);
@@ -969,7 +969,7 @@ EXPORTED int undump_mailbox(const char *mbname,
 
 	    /* got the contenttype...and ignore it */
 	    c = getastring(pin, pout, &data);
-
+	    
 	    if(c != ')') {
 		r = IMAP_PROTOCOL_ERROR;
 		free(tmpuserid);
@@ -978,7 +978,7 @@ EXPORTED int undump_mailbox(const char *mbname,
 
 	    annotate_state_write(astate, annotation, tmpuserid,
 				     &content);
-
+    
 	    free(tmpuserid);
 	    free(annotation);
 	    annotation = NULL;
@@ -1099,7 +1099,7 @@ EXPORTED int undump_mailbox(const char *mbname,
 	    int isdefault = !strncmp(file.s, "SIEVED", 6);
 	    char *realname;
 	    int ret;
-
+	    
 	    /* skip prefixes */
 	    if(isdefault) realname = file.s + 7;
 	    else realname = file.s + 6;
@@ -1118,7 +1118,7 @@ EXPORTED int undump_mailbox(const char *mbname,
 		    goto done;
 		} else if(isdefault) {
 		    char linkbuf[2048];
-
+		    		    
 		    snprintf(linkbuf, sizeof(linkbuf), "%s/defaultbc",
 			     sieve_path);
 		    ret = symlink(realname, linkbuf);
@@ -1157,7 +1157,7 @@ EXPORTED int undump_mailbox(const char *mbname,
 		r = IMAP_PROTOCOL_ERROR;
 		goto done;
 	    }
-	    STRLCPY_LOG(fnamebuf, path, sizeof (fnamebuf));
+	    strncpy(fnamebuf, path, MAX_MAILBOX_PATH);
 	}
 
 	/* if we haven't opened it, do so */
@@ -1217,7 +1217,7 @@ EXPORTED int undump_mailbox(const char *mbname,
 
 	    unlink(fnamebuf);
 	}
-
+	
 	c = prot_getc(pin);
 	if (c == ')') break;
 	if (c != ' ') {

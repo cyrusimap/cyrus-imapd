@@ -91,17 +91,17 @@
 
 static const char *localrealms = NULL;
 
-int is_local_realm(const char *realm)
+int is_local_realm(const char *realm) 
 {
     const char *val = localrealms;
-
+    
     if(!val || !realm) return 0;
 
     while (*val) {
 	char buf[1024];
 	size_t len;
 	char *p;
-
+	
 	for (p = (char *) val; *p && !Uisspace(*p); p++);
 	len = p-val;
 	if(len >= sizeof(buf))
@@ -145,8 +145,8 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
 
     if (strcasecmp(identifier, "anonymous") == 0)
 	return "anonymous";
-
-    if (strcasecmp(identifier, "anyone") == 0)
+    
+    if (strcasecmp(identifier, "anyone") == 0) 
 	return "anyone";
 
     identifier2 = strdup(identifier);
@@ -179,7 +179,7 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
             syslog(LOG_ERR, "afspts_canonifyid krb5_get_default_realm failed");
 	    return NULL;
 	}
-
+	
 	/* build dummy princ to compare realms */
 	if (krb5_build_principal(context,&princ_dummy,
 				 strlen(realm),realm,"dummy",0))
@@ -190,13 +190,13 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
             syslog(LOG_ERR, "afspts_canonifyid krb5_build_principal failed");
 	    return NULL;
 	}
-
+	
 	/* is this principal local ? */
 	if (krb5_realm_compare(context,princ,princ_dummy))
 	{
 	    striprealm = 1;
 	}
-
+	
 	/* done w/ dummy princ free it & realm */
 	krb5_free_principal(context,princ_dummy);
 	free(realm);
@@ -212,7 +212,7 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
 	}
 
 	retbuf = xmalloc(3*64 + 3);
-	SNPRINTF_LOG(retbuf, 3*64 + 3, "%s%s%s%s%s", nbuf,
+	sprintf(retbuf, "%s%s%s%s%s", nbuf,
 		ibuf[0] ? "." : "", ibuf,
 		rbuf[0] ? "@" : "", rbuf);
     } else {
@@ -234,7 +234,7 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
 	    if(is_local_realm(realm))
 		striprealm = 1;
 	}
-
+	
 	if(striprealm) {
 	    *realmbegin = '\0';
 	} else {
@@ -242,11 +242,11 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
 	    while(*(++realmbegin)) {
 		*realmbegin = toupper(*realmbegin);
 	    }
-	}
+	}	
     }
-
+    
     krb5_free_principal(context,princ);
-    krb5_free_context(context);
+    krb5_free_context(context);	
     return retbuf;
 }
 
@@ -270,12 +270,12 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
  * be the local user.  Both buffers must be of size one larger than
  * MAX_K_NAME_SZ.  Returns 1 on success, 0 on failure.
  */
-static int parse_krbequiv_line(const char *src,
-			       char *principal,
+static int parse_krbequiv_line(const char *src, 
+			       char *principal, 
 			       char *localuser)
 {
     int i;
-
+    
     while (Uisspace(*src)) src++;
     if (!*src) return 0;
 
@@ -284,11 +284,11 @@ static int parse_krbequiv_line(const char *src,
         *principal++ = *src++;
     }
     *principal = 0;
-
+    
     if (!Uisspace(*src)) return 0; /* Need at least one separator */
     while (Uisspace(*src)) src++;
     if (!*src) return 0;
-
+  
     for (i = 0; *src && !Uisspace(*src); i++) {
         if (i >= MAX_K_NAME_SZ) return 0;
         *localuser++ = *src++;
@@ -322,7 +322,7 @@ static char *auth_map_krbid(const char *real_aname,
         /* If the file can't be opened, don't do mappings */
         return 0;
     }
-
+    
     for (;;) {
         if (!fgets(buf, sizeof(buf), mapfile)) break;
         if (parse_krbequiv_line(buf, principal, localuser) == 0 ||
@@ -333,17 +333,17 @@ static char *auth_map_krbid(const char *real_aname,
         if (!strcmp(aname, real_aname) && !strcmp(inst, real_inst) &&
             !strcmp(realm, real_realm)) {
             fclose(mapfile);
-
+            
             aname[0] = inst[0] = realm[0] = '\0';
             if (kname_parse(aname, inst, realm, localuser) != 0) {
                 return 0;
             }
-
+            
             /* Upcase realm name */
             for (p = realm; *p; p++) {
                 if (Uislower(*p)) *p = toupper(*p);
             }
-
+            
             if (*realm) {
                 if (krb_get_lrealm(lrealm,1) == 0 &&
 		    strcmp(lrealm, realm) == 0) {
@@ -353,17 +353,17 @@ static char *auth_map_krbid(const char *real_aname,
                     return 0;           /* Unknown realm */
                 }
             }
-
-            STRLCPY_LOG(localuser, aname, sizeof (localuser));
+            
+            strcpy(localuser, aname);
             if (*inst) {
-                (void) strlcat(localuser, ".", sizeof (localuser));
-                STRLCAT_LOG(localuser, inst, sizeof (localuser));
+                strcat(localuser, ".");
+                strcat(localuser, inst);
             }
             if (*realm) {
-                (void) strlcat(localuser, "@", sizeof (localuser));
-                STRLCAT_LOG(localuser, realm, sizeof (localuser));
+                strcat(localuser, "@");
+                strcat(localuser, realm);
             }
-
+            
             return localuser;
         }
     }
@@ -393,7 +393,7 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
     canon_buf = xmalloc(len + 1);
     memcpy(canon_buf, identifier, len);
     canon_buf[len] = '\0';
-
+   
     aname[0] = inst[0] = realm[0] = '\0';
     if (kname_parse(aname, inst, realm, canon_buf) != 0) {
 	free(canon_buf);
@@ -401,12 +401,12 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
     }
 
     free(canon_buf);
-
+    
     /* Upcase realm name */
     for (p = realm; *p; p++) {
         if (Uislower(*p)) *p = toupper(*p);
     }
-
+    
     if (*realm) {
         if (krb_get_lrealm(lrealm,1) == 0 &&
 	    strcmp(lrealm, realm) == 0) {
@@ -420,18 +420,18 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
     /* Check for krb.equiv remappings. */
     p = auth_map_krbid(aname, inst, realm);
     if (p) {
-        STRLCPY_LOG(retbuf, p, sizeof (retbuf));
+        strcpy(retbuf, p);
         return retbuf;
     }
-
-    STRLCPY_LOG(retbuf, aname, sizeof (retbuf));
+    
+    strcpy(retbuf, aname);
     if (*inst) {
-        (void) strlcat(retbuf, ".", sizeof (retbuf));
-        STRLCAT_LOG(retbuf, inst, sizeof (retbuf));
+        strcat(retbuf, ".");
+        strcat(retbuf, inst);
     }
     if (*realm && !is_local_realm(realm)) {
-        (void) strlcat(retbuf, "@", sizeof (retbuf));
-        STRLCAT_LOG(retbuf, realm, sizeof (retbuf));
+        strcat(retbuf, "@");
+        strcat(retbuf, realm);
     }
 
     return retbuf;
@@ -440,7 +440,7 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
 
 /* API */
 
-static void myinit(void)
+static void myinit(void) 
 {
     int r = pr_Initialize (1L, AFSCONF_CLIENTNAME, config_getstring(IMAPOPT_AFSPTS_MYCELL));
     if (r) {
@@ -455,7 +455,7 @@ static void myinit(void)
 
 static struct auth_state *myauthstate(const char *identifier,
 					    size_t size,
-					    const char **reply, int *dsize)
+					    const char **reply, int *dsize) 
 {
     const char *canon_id = afspts_canonifyid(identifier, size);
     char canon_id_tmp[PTS_DB_KEYSIZE+1];
@@ -474,7 +474,7 @@ static struct auth_state *myauthstate(const char *identifier,
     memset(&groups, 0, sizeof(groups));
     groups.namelist_len = 0;
     groups.namelist_val = NULL;
-
+    
     /* canon_id_tmp is used because AFS would otherwise trample
      * on our nice canonical user id */
     strlcpy(canon_id_tmp,canon_id,sizeof(canon_id_tmp));
@@ -496,18 +496,18 @@ static struct auth_state *myauthstate(const char *identifier,
     }
 
     /* fill in our new state structure */
-    *dsize = sizeof(struct auth_state) +
+    *dsize = sizeof(struct auth_state) + 
 	(groups.namelist_len * sizeof(struct auth_ident));
     newstate = (struct auth_state *) xzmalloc(*dsize);
 
-    STRLCPY_LOG(newstate->userid.id, canon_id, sizeof (newstate->userid.id));
+    strcpy(newstate->userid.id, canon_id);
     newstate->userid.hash = strhash(canon_id);
 
-    /* If we get a permission error, assume it may be temporary
+    /* If we get a permission error, assume it may be temporary 
        authentication problem, and cache only for a minute.
        Should negative cache time be configurable? */
     if (rc == PRPERM) {
-	newstate->mark = time(0) + 60 -
+	newstate->mark = time(0) + 60 - 
 	    (config_getint(IMAPOPT_PTSCACHE_TIMEOUT) > 60)?
 	    config_getint(IMAPOPT_PTSCACHE_TIMEOUT) : 60;
     } else
@@ -521,7 +521,7 @@ static struct auth_state *myauthstate(const char *identifier,
 		sizeof(newstate->groups[i].id));
 	newstate->groups[i].hash = strhash(groups.namelist_val[i]);
 	/* don't free groups.namelist_val[i]. Something else currently
-	 * takes care of that data.
+	 * takes care of that data. 
 	 */
     }
     if (groups.namelist_val != NULL) {
@@ -541,8 +541,8 @@ static void myinit(void)
 static struct auth_state *myauthstate(
     const char *identifier __attribute__((unused)),
     size_t size __attribute__((unused)),
-    const char **reply __attribute__((unused)),
-    int *dsize __attribute__((unused)))
+    const char **reply __attribute__((unused)), 
+    int *dsize __attribute__((unused))) 
 {
 	fatal("PTS module (afskrb) not compiled in", EC_CONFIG);
 	return NULL;
@@ -550,7 +550,7 @@ static struct auth_state *myauthstate(
 
 #endif /* HAVE_AFSKRB */
 
-struct pts_module pts_afskrb =
+struct pts_module pts_afskrb = 
 {
     "afskrb",		/* name */
 

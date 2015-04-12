@@ -491,7 +491,7 @@ static void service_create(struct service *s)
 	sunsock.sun_len = res0->ai_addrlen;
 #endif
 	sunsock.sun_family = AF_UNIX;
-	STRLCPY_LOG(sunsock.sun_path, s->listen, sizeof (sunsock.sun_path));
+	strcpy(sunsock.sun_path, s->listen);
 	unlink(s->listen);
     } else { /* inet socket */
 	char *port;

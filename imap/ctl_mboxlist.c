@@ -108,7 +108,7 @@ struct dumprock {
     mupdate_handle *h;
 };
 
-struct mb_node
+struct mb_node 
 {
     char mailbox[MAX_MAILBOX_BUFFER];
     char location[MAX_MAILBOX_BUFFER];
@@ -140,7 +140,7 @@ static int interactive = 0;
  */
 static int mupdate_list_cb(struct mupdate_mailboxdata *mdata,
 			   const char *cmd,
-			   void *context __attribute__((unused)))
+			   void *context __attribute__((unused))) 
 {
     int ret;
 
@@ -148,10 +148,10 @@ static int mupdate_list_cb(struct mupdate_mailboxdata *mdata,
     ret = mboxlist_lookup(mdata->mailbox, NULL, NULL);
     if (ret) {
 	struct mb_node *next;
-
+	
 	next = xzmalloc(sizeof(struct mb_node));
 	strlcpy(next->mailbox, mdata->mailbox, sizeof(next->mailbox));
-
+	
 	next->next = del_head;
 	del_head = next;
     } else {
@@ -159,7 +159,7 @@ static int mupdate_list_cb(struct mupdate_mailboxdata *mdata,
 	/* throw it onto the back of the activate queue */
 	/* we may or may not need to send an update */
 	struct mb_node *next;
-
+	
 	next = xzmalloc(sizeof(struct mb_node));
 	strlcpy(next->mailbox, mdata->mailbox, sizeof(next->mailbox));
 	strlcpy(next->location, mdata->location, sizeof(next->location));
@@ -220,11 +220,11 @@ static int dump_cb(void *rockp,
 			    // Temporary placeholder for the original
 			    char *_acl = xstrdup(acl);
 			    acl = xmalloc(strlen(acl) + 2 + strlen(dl_ace->name) + strlen(tmp) + 1);
-			    (void) sprintf(acl, "%s\t%s\t%s", _acl, dl_ace->name, tmp);
+			    sprintf(acl, "%s\t%s\t%s", _acl, dl_ace->name, tmp);
 			    free(_acl);
 			} else {
 			    acl = xmalloc(1 + strlen(dl_ace->name) + strlen(tmp) + 1);
-			    (void) sprintf(acl, "%s\t%s", dl_ace->name, tmp);
+			    sprintf(acl, "%s\t%s", dl_ace->name, tmp);
 			}
 		    }
 		}
@@ -331,7 +331,7 @@ static int dump_cb(void *rockp,
 	    }
 	}
 	break;
-    case M_POPULATE:
+    case M_POPULATE: 
     {
 	if (mbtype & MBTYPE_DELETED)
 	    return 0;
@@ -344,9 +344,9 @@ static int dump_cb(void *rockp,
 	 * we need to unmark it.  If it does not match the entry in our
 	 * list, then we assume that it successfully made the move and
 	 * we delete it from the local disk */
-
+	
 	/* realpart is 'hostname!partition' */
-	(void) sprintf(realpart, "%s!%s", config_servername, part);
+	sprintf(realpart, "%s!%s", config_servername, part);
 
 	/* If they match, then we should check that we actually need
 	 * to update it.  If they *don't* match, then we believe that we
@@ -355,7 +355,7 @@ static int dump_cb(void *rockp,
 	 * is a condition of being in the act_head list */
 	if (act_head && !strcmp(name, act_head->mailbox)) {
 	    struct mb_node *tmp;
-
+	    
 	    /* If this mailbox was moving, we want to unmark the movingness,
 	     * since the MUPDATE server agreed that it lives here. */
 	    /* (and later also force an mupdate push) */
@@ -370,7 +370,7 @@ static int dump_cb(void *rockp,
 		    next->next = unflag_head;
 		    unflag_head = next;
 		}
-
+		
 		/* No need to update mupdate NOW, we'll get it when we
 		 * untag the mailbox */
 		skip_flag = 1;
@@ -425,14 +425,14 @@ static int dump_cb(void *rockp,
 			    mdata->mailbox, mdata->location, mdata->acl );
 		    fatal("mupdate said not us before it said us", EC_SOFTWARE);
 		}
-
+		
 		/*
 		 * Where does "unified" murder fit into ctl_mboxlist?
 		 * 1. Only check locally hosted mailboxes.
 		 * 2. Check everything.
 		 * Either way, this check is just wrong!
 		 */
-		if (config_mupdate_config !=
+		if (config_mupdate_config != 
 		    IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
 		    /* But not for a unified configuration */
 		    if (warn_only) {
@@ -444,15 +444,15 @@ static int dump_cb(void *rockp,
 			wipe_head = next;
 		    }
 		}
-
-		skip_flag = 1;
+		
+		skip_flag = 1;		
 	    } else {
 		/* Check that it isn't flagged moving */
 		if (mbtype & MBTYPE_MOVING) {
 		    /* it's flagged moving, we'll fix it later (and
 		     * push it then too) */
 		    struct mb_node *next;
-
+		    
 		    if (warn_only) {
 			printf("Remove remote flag on: %s\n", name);
 		    } else {
@@ -461,7 +461,7 @@ static int dump_cb(void *rockp,
 			next->next = unflag_head;
 			unflag_head = next;
 		    }
-
+		    
 		    /* No need to update mupdate now, we'll get it when we
 		     * untag the mailbox */
 		    skip_flag = 1;
@@ -501,7 +501,7 @@ static int dump_cb(void *rockp,
                );
            r = 0;
 	}
-
+	    
 	free(realpart);
 
 	break;
@@ -529,7 +529,7 @@ static int yes(void)
     c = getchar();
     if (c == 'Y' || c == 'y') {
 	answer = 1;
-
+	
 	while ((c = getchar()) != EOF) {
 	    if (c == '\n') {
 		break;
@@ -561,12 +561,12 @@ static void do_dump(enum mboxop op, const char *part, int purge)
     assert(op == DUMP || op == M_POPULATE);
     assert(op == DUMP || !purge);
     assert(op == DUMP || !part);
-
+    
     d.op = op;
     d.partition = part;
     d.purge = purge;
     d.tid = NULL;
-
+    
     if (op == M_POPULATE) {
 	ret = mupdate_connect(NULL, NULL, &(d.h), NULL);
 	if (ret) {
@@ -583,7 +583,7 @@ static void do_dump(enum mboxop op, const char *part, int purge)
 	    fprintf(stderr, "couldn't do LIST command on mupdate server\n");
 	    exit(1);
 	}
-
+	
 	/* Run pending mupdate deletes */
 	while (del_head) {
 	    struct mb_node *me = del_head;
@@ -599,7 +599,7 @@ static void do_dump(enum mboxop op, const char *part, int purge)
 		    exit(1);
 		}
 	    }
-
+		
 	    free(me);
 	}
     }
@@ -638,7 +638,7 @@ static void do_dump(enum mboxop op, const char *part, int purge)
 			"couldn't perform update to un-remote-flag %s\n",
 			me->mailbox);
 		exit(1);
-	    }
+	    } 
 
 	    /* force a push to mupdate */
 	    snprintf(buf, sizeof(buf), "%s!%s", config_servername, mbentry->partition);
@@ -672,7 +672,7 @@ static void do_dump(enum mboxop op, const char *part, int purge)
 
 	while (wipe_head) {
 	    struct mb_node *me = wipe_head;
-
+	    
 	    wipe_head = wipe_head->next;
 	    ret = mboxlist_deletemailbox(me->mailbox, 1, "", NULL, NULL, 0, 1, 1);
 	    if (ret) {
@@ -683,12 +683,12 @@ static void do_dump(enum mboxop op, const char *part, int purge)
 
 	    free(me);
 	}
-
+    
 	/* Done with mupdate */
 	mupdate_disconnect(&(d.h));
 	sasl_done();
     }
-
+    
     return;
 }
 
@@ -702,7 +702,7 @@ static void do_undump(void)
     int keylen, datalen;
     int untilCommit = PER_COMMIT;
     struct txn *tid = NULL;
-
+    
     last_commit[0] = '\0';
 
     while (fgets(buf, sizeof(buf), stdin)) {
@@ -806,13 +806,13 @@ static void do_undump(void)
 				   last_commit);
 	else fprintf(stderr, "no commits\n");
     }
-
+    
 
     return;
 }
 
 enum {
-    ROOT =	(1<<0),
+    ROOT =	(1<<0), 
     DOMAIN =	(1<<1),
     MBOX =	(1<<2)
 };
@@ -846,9 +846,9 @@ static void add_path(struct found_list *found, int type,
     /* add our new node to the end of the array */
     new = &found->data[found->size++];
     new->type = type;
-    STRLCPY_LOG(new->mboxname, name, sizeof (new->mboxname));
-    STRLCPY_LOG(new->partition, part, sizeof (new->partition));
-    STRLCPY_LOG(new->path, path, sizeof (new->path));
+    strcpy(new->mboxname, name);
+    strcpy(new->partition, part);
+    strcpy(new->path, path);
 }
 
 static void add_part(struct found_list *found,
@@ -862,7 +862,7 @@ static void add_part(struct found_list *found,
 	    /* found it */
 	    if (override) {
 		/* replace the path with the one containing cyrus.header */
-		STRLCPY_LOG(found->data[i].path, path, sizeof (found->data[i].path));
+		strcpy(found->data[i].path, path);
 	    }
 
 	    /* we already have the proper path, so we're done */
@@ -998,7 +998,7 @@ static void do_verify(void)
 	DIR *dirp;
 	struct dirent *dirent;
 	char name[MAX_MAILBOX_BUFFER];
-	char part[MAX_MAILBOX_BUFFER];
+	char part[MAX_MAILBOX_BUFFER]; 
 	char path[MAX_MAILBOX_PATH+1];
 	int type;
 
@@ -1010,18 +1010,18 @@ static void do_verify(void)
 
 	    /* make the toplevel partition /a */
 	    if (config_fulldirhash) {
-		STRLCAT_LOG(found.data[i].path, "/A", sizeof (found.data[i].path));
+		strcat(found.data[i].path, "/A");
 		c = 'B';
 	    } else {
-		STRLCAT_LOG(found.data[i].path, "/a", sizeof (found.data[i].path));
+		strcat(found.data[i].path, "/a");
 		c = 'b';
 	    }
 	    type = (found.data[i].type &= ~ROOT);
 
 	    /* make a template path for /b - /z */
-	    STRLCPY_LOG(name, found.data[i].mboxname, sizeof (name));
-	    STRLCPY_LOG(part, found.data[i].partition, sizeof (part));
-	    STRLCPY_LOG(path, found.data[i].path, sizeof (path));
+	    strcpy(name, found.data[i].mboxname);
+	    strcpy(part, found.data[i].partition);
+	    strcpy(path, found.data[i].path);
 	    tail = path + strlen(path) - 1;
 
 	    for (j = 1; j < 26; j++, c++) {
@@ -1031,7 +1031,7 @@ static void do_verify(void)
 
 	    if (config_virtdomains && !type) {
 		/* need to add root domain directory */
-		STRLCPY_LOG(tail, "domain", sizeof (path) - (tail - path));
+		strcpy(tail, "domain");
 		add_path(&found, DOMAIN | ROOT, name, part, path);
 	    }
 	}
@@ -1047,7 +1047,7 @@ static void do_verify(void)
 		     (found.data[i].type & DOMAIN)) {
 		/* probably a directory, add it to the array */
 		type = 0;
-		STRLCPY_LOG(name, found.data[i].mboxname, sizeof (name));
+		strcpy(name, found.data[i].mboxname);
 
 		if (config_virtdomains &&
 		    (found.data[i].type == ROOT) &&
@@ -1057,21 +1057,20 @@ static void do_verify(void)
 		}
 		else if (!name[0] && found.data[i].type & DOMAIN) {
 		    /* toplevel domain directory */
-		    STRLCAT_LOG(name, dirent->d_name, sizeof (name));
-		    STRLCAT_LOG(name, "!", sizeof (name));
+		    strcat(name, dirent->d_name);
+		    strcat(name, "!");
 		    type = DOMAIN | ROOT;
 		}
 		else {
 		    /* possibly a mailbox directory */
-		    if (name[0] && !(found.data[i].type & DOMAIN))
-		    	STRLCAT_LOG(name, ".", sizeof (name));
-		    STRLCAT_LOG(name, dirent->d_name, sizeof (name));
+		    if (name[0] && !(found.data[i].type & DOMAIN)) strcat(name, ".");
+		    strcat(name, dirent->d_name);
 		}
 
-		STRLCPY_LOG(part, found.data[i].partition, sizeof (part));
-		(void) strlcpy(path, found.data[i].path, sizeof (path));
-		(void) strlcat(path, "/", sizeof (path));
-		STRLCAT_LOG(path, dirent->d_name, sizeof (path));
+		strcpy(part, found.data[i].partition);
+		strcpy(path, found.data[i].path);
+		strcat(path, "/");
+		strcat(path, dirent->d_name);
 		add_path(&found, type, name, part, path);
 	    }
 	}
@@ -1200,7 +1199,7 @@ int main(int argc, char *argv[])
 	syslog(LOG_NOTICE, "running mboxlist recovery");
 	libcyrus_config_setint(CYRUSOPT_DB_INIT_FLAGS, CYRUSDB_RECOVER);
     }
-
+    
     cyrus_init(alt_config, "ctl_mboxlist", 0, 0);
     global_sasl_init(1,0,NULL);
 
@@ -1234,7 +1233,7 @@ int main(int argc, char *argv[])
 
 	quotadb_close();
 	quotadb_done();
-
+	
 	mboxlist_close();
 	mboxlist_done();
 	break;
@@ -1256,7 +1255,7 @@ int main(int argc, char *argv[])
 
 	quotadb_close();
 	quotadb_done();
-
+	
 	mboxlist_close();
 	mboxlist_done();
 	break;

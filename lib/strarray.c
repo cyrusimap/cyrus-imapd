@@ -321,10 +321,10 @@ EXPORTED char *strarray_join(const strarray_t *sa, const char *sep)
     for (i = 0, j = 0 ; i < sa->count ; i++) {
 	if (sa->data[i]) {
 	    if (j++ && sep) {
-		(void) strlcpy(p, sep, len);
+		strcpy(p, sep);
 		p += strlen(p);
 	    }
-	    (void) strlcpy(p, sa->data[i], len);
+	    strcpy(p, sa->data[i]);
 	    p += strlen(p);
 	}
     }

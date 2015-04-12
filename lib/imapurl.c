@@ -245,7 +245,7 @@ EXPORTED int URLtoMailbox(char *dst, const char *src)
 
         /* finished with UTF-8 character. make sure it isn't an
            overlong sequence. if it is, drop that character */
-        if ((ucs4 < 0x80 && utf8total > 1) ||
+        if ((ucs4 < 0x80 && utf8total > 1) || 
             (ucs4 < 0x0800 && utf8total > 2) ||
             (ucs4 < 0x00010000 && utf8total > 3) ||
             (ucs4 < 0x00200000 && utf8total > 4) ||
@@ -449,26 +449,16 @@ EXPORTED int imapurl_fromURL(struct imapurl *url, const char *s)
     return 0;
 }
 
-/**
- * @param dst
- *	Pointer to buffer in which URL C string is saved.
- *
- * @param dst_size
- *	Size of dst buffer, including terminating NUL byte.
- *
- * @param url
- *	Pointer to URL information to convert to a string.
- */
-EXPORTED void imapurl_toURL(char *dst, size_t dst_size, struct imapurl *url)
+EXPORTED void imapurl_toURL(char *dst, const struct imapurl *url)
 {
-    char *tail = dst;
+
     if (url->server) {
-	SNPRINTF_APPEND_LOG(dst, dst_size, tail, "imap://");
-	if (url->user) SNPRINTF_APPEND_LOG(dst, dst_size, tail, "%s", url->user);
-	if (url->auth) SNPRINTF_APPEND_LOG(dst, dst_size, tail, ";AUTH=%s", url->auth);
+	dst += sprintf(dst, "imap://");
+	if (url->user) dst += sprintf(dst, "%s", url->user);
+	if (url->auth) dst += sprintf(dst, ";AUTH=%s", url->auth);
 	if (url->user || url->auth)
 	    *dst++ = '@';
-	SNPRINTF_APPEND_LOG(dst, dst_size, tail, "%s", url->server);
+	dst += sprintf(dst, "%s", url->server);
     }
     if (url->mailbox) {
 	*dst++ = '/';
@@ -477,13 +467,13 @@ EXPORTED void imapurl_toURL(char *dst, size_t dst_size, struct imapurl *url)
     }
 
     if (url->uidvalidity)
-	SNPRINTF_APPEND_LOG(dst, dst_size, tail, ";UIDVALIDITY=%lu", url->uidvalidity);
+	dst += sprintf(dst, ";UIDVALIDITY=%lu", url->uidvalidity);
     if (url->uid) {
-	SNPRINTF_APPEND_LOG(dst, dst_size, tail, "/;UID=%lu", url->uid);
-	if (url->section) SNPRINTF_APPEND_LOG(dst, dst_size, tail, "/;SECTION=%s", url->section);
+	dst += sprintf(dst, "/;UID=%lu", url->uid);
+	if (url->section) dst += sprintf(dst, "/;SECTION=%s", url->section);
 	if (url->start_octet || url->octet_count) {
-	    SNPRINTF_APPEND_LOG(dst, dst_size, tail, "/;PARTIAL=%lu", url->start_octet);
-	    if (url->octet_count) SNPRINTF_APPEND_LOG(dst, dst_size, tail, ".%lu", url->octet_count);
+	    dst += sprintf(dst, "/;PARTIAL=%lu", url->start_octet);
+	    if (url->octet_count) dst += sprintf(dst, ".%lu", url->octet_count);
 	}
     }
     if (url->urlauth.access) {
@@ -492,10 +482,10 @@ EXPORTED void imapurl_toURL(char *dst, size_t dst_size, struct imapurl *url)
 	    dst += strlen(dst);
 	    dst += time_to_iso8601(url->urlauth.expire, dst, INT_MAX);
 	}
-	SNPRINTF_APPEND_LOG(dst, dst_size, tail, ";URLAUTH=%s", url->urlauth.access);
+	dst += sprintf(dst, ";URLAUTH=%s", url->urlauth.access);
 	if (url->urlauth.mech) {
-	    SNPRINTF_APPEND_LOG(dst, dst_size, tail, ":%s", url->urlauth.mech);
-	    if (url->urlauth.token) SNPRINTF_APPEND_LOG(dst, dst_size, tail, ":%s", url->urlauth.token);
+	    dst += sprintf(dst, ":%s", url->urlauth.mech);
+	    if (url->urlauth.token) dst += sprintf(dst, ":%s", url->urlauth.token);
 	}
     }
 }

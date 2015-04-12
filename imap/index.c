@@ -442,7 +442,7 @@ static char *index_buildseen(struct index_state *state, const char *oldseenuids)
     struct index_map *im;
     char *out;
 
-    outlist = seqset_init(0, SEQ_MERGE);
+    outlist = seqset_init(0, SEQ_MERGE); 
     for (msgno = 1; msgno <= state->exists; msgno++) {
 	im = &state->map[msgno-1];
 	seqset_add(outlist, im->uid, im->isseen);
@@ -730,7 +730,7 @@ static void index_refresh_locked(struct index_state *state)
 	/* make sure we don't overflow the memory we mapped */
 	if (msgno > state->mapsize) {
 	    char buf[2048];
-	    SNPRINTF_LOG(buf, sizeof (buf), "Exists wrong %u %u %u %u", msgno,
+	    sprintf(buf, "Exists wrong %u %u %u %u", msgno,
 		    state->mapsize, mailbox->i.exists, mailbox->i.num_records);
 	    fatal(buf, EC_IOERR);
 	}
@@ -786,7 +786,7 @@ EXPORTED void index_select(struct index_state *state, struct index_init *init)
     index_checkflags(state, 1, 1);
 
     if (state->firstnotseen)
-	prot_printf(state->out, "* OK [UNSEEN %u] Ok\r\n",
+	prot_printf(state->out, "* OK [UNSEEN %u] Ok\r\n", 
 		    state->firstnotseen);
     prot_printf(state->out, "* OK [UIDVALIDITY %u] Ok\r\n",
 		state->mailbox->i.uidvalidity);
@@ -2457,6 +2457,7 @@ EXPORTED int index_snippets(struct index_state *state,
     if (!rx) goto out;
 
     for ( ; snippetargs ; snippetargs = snippetargs->next) {
+
 	mailbox = NULL;
 	if (!strcmp(snippetargs->mboxname, index_mboxname(state))) {
 	    mailbox = state->mailbox;
@@ -2787,9 +2788,9 @@ out:
  */
 EXPORTED int
 index_copy(struct index_state *state,
-	   char *sequence,
+	   char *sequence, 
 	   int usinguid,
-	   char *name,
+	   char *name, 
 	   char **copyuidp,
 	   int nolink,
 	   struct namespace *namespace,
@@ -2895,14 +2896,13 @@ index_copy(struct index_state *state,
 	    r = index_expunge(state, source, 0);
 
 	if (docopyuid) {
-	    size_t size = strlen(source) + 50;
-	    *copyuidp = xmalloc(size);
+	    *copyuidp = xmalloc(strlen(source) + 50);
 
 	    if (appendstate.nummsg == 1)
-		SNPRINTF_LOG(*copyuidp, size, "%u %s %u", uidvalidity, source,
+		sprintf(*copyuidp, "%u %s %u", uidvalidity, source,
 			appendstate.baseuid);
 	    else
-		SNPRINTF_LOG(*copyuidp, size, "%u %s %u:%u", uidvalidity, source,
+		sprintf(*copyuidp, "%u %s %u:%u", uidvalidity, source,
 			appendstate.baseuid,
 			appendstate.baseuid + appendstate.nummsg - 1);
 	}
@@ -2925,7 +2925,7 @@ done:
 /*
  * Helper function to multiappend a message to remote mailbox
  */
-static int index_appendremote(struct index_state *state, uint32_t msgno,
+static int index_appendremote(struct index_state *state, uint32_t msgno, 
 			      struct protstream *pout)
 {
     struct mailbox *mailbox = state->mailbox;
@@ -3059,7 +3059,7 @@ static int data_domain(const char *p, size_t n)
 	if (*p & 0x80) return DOMAIN_8BIT;
 	p++;
     }
-
+ 
     return DOMAIN_7BIT;
 }
 
@@ -3200,7 +3200,7 @@ static int index_fetchsection(struct index_state *state, const char *resp,
 		fetchmime++;	/* .0 maps internally to .0.MIME */
 		break;
 	    }
-	}
+	} 
 
 	/* section number too large */
 	if (skip >= num_parts) goto badpart;
@@ -3228,7 +3228,7 @@ static int index_fetchsection(struct index_state *state, const char *resp,
     if (*p == 'M') fetchmime++;
 
     cachestr += skip * 5 * 4 + CACHE_ITEM_SIZE_SKIP + (fetchmime ? 0 : 2 * 4);
-
+    
     if (CACHE_ITEM_BIT32(cachestr + CACHE_ITEM_SIZE_SKIP) == (bit32) -1)
 	goto badpart;
 
@@ -3337,10 +3337,10 @@ static void index_fetchfsection(struct index_state *state,
 
     if (CACHE_ITEM_BIT32(cachestr+CACHE_ITEM_SIZE_SKIP) == (bit32) -1)
 	goto badpart;
-
+	
     if (p[13]) fields_not++;	/* Check for "." after "HEADER.FIELDS" */
 
-    buf = index_readheader(msg_base, msg_size,
+    buf = index_readheader(msg_base, msg_size, 
 			   CACHE_ITEM_BIT32(cachestr),
 			   CACHE_ITEM_BIT32(cachestr+CACHE_ITEM_SIZE_SKIP));
 
@@ -3496,7 +3496,7 @@ index_fetchcacheheader(struct index_state *state, struct index_record *record,
 	    crlf_size = octet_count - size;
 	}
     }
-
+	
     if (size + crlf_size == 0) {
 	prot_printf(state->out, "\"\"");
     }
@@ -3884,7 +3884,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 	sepchar = ' ';
     }
     if (fetchitems & FETCH_SIZE) {
-	prot_printf(state->out, "%cRFC822.SIZE %u",
+	prot_printf(state->out, "%cRFC822.SIZE %u", 
 		    sepchar, record.size);
 	sepchar = ' ';
     }
@@ -4034,7 +4034,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 				      fetchargs->octet_count : oi->octet_count);
 	    else
 		prot_printf(state->out, "NIL");
-
+	    
 	}
 	else {
 	    index_fetchcacheheader(state, &record, fsection->fields,
@@ -4231,7 +4231,7 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
 
 	cacheitem += skip * 5 * 4 + CACHE_ITEM_SIZE_SKIP +
 	    (fetchmime ? 0 : 2 * 4);
-
+    
 	if (CACHE_ITEM_BIT32(cacheitem + CACHE_ITEM_SIZE_SKIP) == (bit32) -1) {
 	    r = IMAP_BADURL;
 	    goto done;
@@ -4803,7 +4803,7 @@ MsgData **index_msgdata_load(struct index_state *state,
 		/* make a working copy of envelope -- strip outer ()'s */
 		/* +1 -> skip the leading paren */
 		/* -2 -> don't include the size of the outer parens */
-		tmpenv = xstrndup(cacheitem_base(&record, CACHE_ENVELOPE) + 1,
+		tmpenv = xstrndup(cacheitem_base(&record, CACHE_ENVELOPE) + 1, 
 				  cacheitem_size(&record, CACHE_ENVELOPE) - 2);
 
 		/* parse envelope into tokens */
@@ -5062,7 +5062,7 @@ static char *_index_extract_subject(char *s, int *is_refwd)
 		 (!strncasecmp(base, "fw", 2) &&	/* "fw"? */
 		  (x = base + 2))) {			/* yes, skip past it */
 	    int count = 0;				/* init counter */
-
+	    
 	    while (Uisspace(*x)) x++;			/* skip whitespace */
 
 	    if (*x == '[') {				/* start of blob? */
@@ -5455,7 +5455,7 @@ static void index_thread_orderedsubj(struct index_state *state,
     /* Sort threads by date */
     index_thread_sort(head, sortcrit+1);
 
-    /* Output the threaded messages */
+    /* Output the threaded messages */ 
     index_thread_print(state, head, usinguid);
 
     /* free the thread array */
@@ -5643,11 +5643,11 @@ static void ref_link_messages(MsgData **msgdata, unsigned int nmsg,
 	     * on the old one.
 	     */
 	    if (cur->msgdata) {
-		(void) snprintf(buf, sizeof(buf), "-dup%d", dup_count++);
+		snprintf(buf, sizeof(buf), "-dup%d", dup_count++);
 		msg->msgid =
 		    (char *) xrealloc(msg->msgid,
 				      strlen(msg->msgid) + strlen(buf) + 1);
-		(void) strcat(msg->msgid, buf);
+		strcat(msg->msgid, buf);
 		/* clear cur so that we create a new container */
 		cur = NULL;
 	    }
@@ -5887,7 +5887,7 @@ static void ref_group_subjects(Thread *root, unsigned nroot, Thread **newnode)
     /* 5.C - group containers with the same subject together */
     for (prev = NULL, cur = root->child, next = cur->next;
 	 cur;
-	 prev = cur, cur = next, next = (next ? next->next : NULL)) {
+	 prev = cur, cur = next, next = (next ? next->next : NULL)) {	
 	/* Step 5.C.i: find subject of the thread
 	 *
 	 * if container is not empty, use it's subject
@@ -6118,7 +6118,7 @@ static void _index_thread_ref(struct index_state *state, unsigned *msgno_list,
     /* Step 6: sort threads */
     if (sortcrit) index_thread_sort(rootset.root, sortcrit);
 
-    /* Output the threaded messages */
+    /* Output the threaded messages */ 
     index_thread_print(state, rootset.root, usinguid);
 
     /* free the thread array */
@@ -6260,10 +6260,8 @@ EXPORTED extern struct nntp_overview *index_overview(struct index_state *state,
 	    from = xrealloc(from, fromsize);
 	}
 	from[0] = '\0';
-	size_t from_length = 0;
-	if (addr.name)
-		from_length = snprintf(from, fromsize, "\"%s\" ", addr.name);
-	SNPRINTF_LOG(from + from_length, fromsize - from_length,
+	if (addr.name) sprintf(from, "\"%s\" ", addr.name);
+	snprintf(from + strlen(from), fromsize - strlen(from),
 		 "<%s@%s>", addr.mailbox, addr.domain);
 
 	over.from = from;
