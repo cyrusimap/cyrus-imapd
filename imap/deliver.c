@@ -86,7 +86,7 @@ static struct protocol_t lmtp_protocol =
 { "lmtp", "lmtp", TYPE_STD,
   { { { 0, "220 " },
       { "LHLO", "deliver", "250 ", NULL,
-	CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD,
+	CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD|CAPAF_DASH_STUFFING,
 	{ { "AUTH", CAPA_AUTH },
 	  { "STARTTLS", CAPA_STARTTLS },
 	  { "PIPELINING", CAPA_PIPELINING },
