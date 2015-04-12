@@ -1,4 +1,4 @@
-/* sync_support.h -- Cyrus synchronization support functions
+/* sync_support.h -- Cyrus synchonization support functions
  *
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *
@@ -46,7 +46,6 @@
 #ifndef INCLUDED_SYNC_SUPPORT_H
 #define INCLUDED_SYNC_SUPPORT_H
 
-#include "backend.h"
 #include "dlist.h"
 #include "prot.h"
 #include "mailbox.h"
@@ -138,7 +137,6 @@ void sync_reserve_list_free(struct sync_reserve_list **list);
 
 struct sync_folder {
     struct sync_folder *next;
-    struct mailbox *mailbox;
     char *uniqueid;
     char *name;
     uint32_t mbtype;
@@ -440,96 +438,6 @@ int apply_annotations(struct mailbox *mailbox,
 		      int local_wins);
 int diff_annotations(const struct sync_annot_list *local_annots,
 		     const struct sync_annot_list *remote_annots);
-
-/* =====================  server-side sync  ============================= */
-
-struct sync_state {
-    char *userid;
-    int userisadmin;
-    struct auth_state *authstate;
-    struct namespace *namespace;
-    struct protstream *pout;
-    int local_only;
-};
-
-int sync_get_message(struct dlist *kin, struct sync_state *sstate);
-int sync_get_sieve(struct dlist *kin, struct sync_state *sstate);
-int sync_get_annotation(struct dlist *kin, struct sync_state *sstate);
-int sync_get_quota(struct dlist *kin, struct sync_state *sstate);
-int sync_get_fullmailbox(struct dlist *kin, struct sync_state *sstate);
-int sync_get_mailboxes(struct dlist *kin, struct sync_state *sstate);
-int sync_get_meta(struct dlist *kin, struct sync_state *sstate);
-int sync_get_user(struct dlist *kin, struct sync_state *sstate);
-
-int sync_apply_reserve(struct dlist *kl,
-		       struct sync_reserve_list *reserve_list,
-		       struct sync_state *sstate);
-int sync_apply_unquota(struct dlist *kin, struct sync_state *sstate);
-int sync_apply_quota(struct dlist *kin, struct sync_state *sstate);
-int sync_apply_mailbox(struct dlist *kin, struct sync_state *sstate);
-int sync_apply_unmailbox(struct dlist *kin, struct sync_state *sstate);
-int sync_apply_rename(struct dlist *kin, struct sync_state *sstate);
-int sync_apply_changesub(struct dlist *kin, struct sync_state *sstate);
-int sync_apply_annotation(struct dlist *kin, struct sync_state *sstate);
-int sync_apply_unannotation(struct dlist *kin, struct sync_state *sstate);
-int sync_apply_sieve(struct dlist *kin, struct sync_state *sstate);
-int sync_apply_unsieve(struct dlist *kin, struct sync_state *sstate);
-int sync_apply_activate_sieve(struct dlist *kin, struct sync_state *sstate);
-int sync_apply_unactivate_sieve(struct dlist *kin, struct sync_state *sstate);
-int sync_apply_seen(struct dlist *kin, struct sync_state *sstate);
-int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate);
-int sync_apply_expunge(struct dlist *kin, struct sync_state *sstate);
-int sync_apply_message(struct dlist *kin,
-		       struct sync_reserve_list *reserve_list,
-		       struct sync_state *sstate);
-
-void sync_print_response(const char *tag, int r, struct protstream *out);
-
-/* =====================  client-side sync  ============================= */
-
-#define SYNC_FLAG_VERBOSE   (1<<0)
-#define SYNC_FLAG_LOGGING   (1<<1)
-#define SYNC_FLAG_LOCALONLY (1<<2)
-#define SYNC_FLAG_DELETE_REMOTE (1<<3)
-#define SYNC_FLAG_NO_COPYBACK (1<<4)
-
-int sync_do_seen(char *user, char *uniqueid, struct backend *sync_be,
-		 unsigned flags);
-int sync_do_quota(const char *root, struct backend *sync_be, unsigned flags);
-int sync_do_annotation(char *mboxname, struct backend *sync_be, unsigned flags);
-int sync_do_mailboxes(struct sync_name_list *mboxname_list,
-		      struct backend *sync_be, unsigned flags);
-int sync_do_user(const char *userid, struct backend *sync_be, unsigned flags);
-int sync_do_meta(char *userid, struct backend *sync_be, unsigned flags);
-int sync_set_sub(const char *userid, const char *mboxname, int add,
-		 struct backend *sync_be, unsigned flags);
-int sync_response_parse(struct protstream *sync_in, const char *cmd,
-			struct sync_folder_list *folder_list,
-			struct sync_name_list *sub_list,
-			struct sync_sieve_list *sieve_list,
-			struct sync_seen_list *seen_list,
-			struct sync_quota_list *quota_list);
-int sync_find_reserve_messages(struct mailbox *mailbox,
-			       unsigned last_uid,
-			       struct sync_msgid_list *part_list);
-int sync_reserve_partition(char *partition,
-			   struct sync_folder_list *replica_folders,
-			   struct sync_msgid_list *part_list,
-			   struct backend *sync_be);
-int sync_update_mailbox(struct sync_folder *local,
-			struct sync_folder *remote,
-			struct sync_reserve_list *reserve_guids,
-			struct backend *sync_be, unsigned flags);
-int sync_folder_delete(const char *mboxname, struct backend *sync_be, unsigned flags);
-int sync_do_user_quota(struct sync_name_list *master_quotaroots,
-		       struct sync_quota_list *replica_quota,
-		       struct backend *sync_be);
-int sync_do_user_sub(const char *userid, struct sync_name_list *replica_subs,
-		     struct backend *sync_be, unsigned flags);
-int sync_do_user_seen(const char *user, struct sync_seen_list *replica_seen,
-		      struct backend *sync_be);
-int sync_do_user_sieve(const char *userid, struct sync_sieve_list *replica_sieve,
-		       struct backend *sync_be);
 
 /* ====================================================================== */
 
