@@ -183,9 +183,7 @@ AS_IF([test "$with_base" != 'no'],[
 			],[
 				SNERT_JOIN_UNIQ([CPPFLAGS_$1],["-I$dir_val"],[head])
 			])
-		],[
-			AC_CACHE_VAL($cache_id,'no')
-		],[${with_base:+$with_base/include} $6])
+		],[],[${with_base:+$with_base/include} $6])
 	done
 
 	for f in $3; do
