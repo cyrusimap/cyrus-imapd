@@ -6702,11 +6702,11 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
 	const char *userid = mboxname_to_userid(mailboxname);
 
 	/* If we aren't too close to MAX_MAILBOX_BUFFER, append .* */
-	p = mailboxname + mailboxname_len; /* end of mailboxname */
+	char *p = mailboxname + mailboxname_len; /* end of mailboxname */
 	if (mailboxname_len < sizeof(mailboxname) - 3) {
 	    strcpy(p, ".*");
 	}
-	
+
 	/* build a list of mailboxes - we're using internal names here */
 	mboxlist_findall(NULL, mailboxname,
 			 imapd_userisadmin || imapd_userisproxyadmin,
