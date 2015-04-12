@@ -1270,26 +1270,22 @@ AC_DEFUN([CYRUS_GSSAPI],[
 	])
 ])
 
-AC_DEFUN([CYRUS_OPTION_WITH_OPENSSL],[
+AC_DEFUN([SNERT_OPTION_WITH_OPENSSL],[
 	AC_ARG_WITH([openssl],[AS_HELP_STRING([--with-openssl=DIR],[OpenSSL package, optional base directory])])
 	AC_ARG_WITH([openssl-inc],[AS_HELP_STRING([--with-openssl-inc=DIR],[...specific OpenSSL include directory])])
 	AC_ARG_WITH([openssl-lib],[AS_HELP_STRING([--with-openssl-lib=DIR],[...specific OpenSSL library directory])])
 ])
-AC_DEFUN([CYRUS_OPENSSL],[
+AC_DEFUN([SNERT_OPENSSL],[
 	AC_REQUIRE([SNERT_NETWORK])
-
 	SNERT_CHECK_PACKAGE([SSL], dnl
 		[openssl/ssl.h openssl/bio.h openssl/err.h openssl/crypto.h], dnl
 		[libssl libcrypto],[SSL_library_init EVP_cleanup] dnl
 		[$with_openssl],[$with_openssl_inc],[$with_openssl_lib] dnl
 	)
-
 	SNERT_CHECK_DEFINE(OpenSSL_add_all_algorithms, openssl/evp.h)
-
-	AS_IF([test "$ac_cv_header_openssl_ssl_h" = 'no'],[
-		AC_MSG_ERROR([OpenSSL development headers are required.])
-	])
-
+dnl 	AC_SUBST(LIBS_SSL)
+dnl 	AC_SUBST(CPPFLAGS_SSL)
+dnl 	AC_SUBST(LDFLAGS_SSL)
 	AH_VERBATIM(LIBS_SSL,[
 #undef HAVE_LIBSSL
 #undef HAVE_LIBCRYPTO
