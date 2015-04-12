@@ -3895,6 +3895,36 @@ static int copy_local(struct mailbox *mailbox, unsigned long uid)
     return IMAP_MAILBOX_NONEXISTENT;
 }
 
+static int copy_remote(struct mailbox *mailbox, uint32_t uid,
+		       struct dlist *kr)
+{
+    struct index_record record;
+    struct dlist *ki;
+    int r;
+    struct sync_annot_list *annots = NULL;
+
+    for (ki = kr->head; ki; ki = ki->next) {
+	r = parse_upload(ki, mailbox, &record, &annots);
+	if (r) return r;
+	if (record.uid == uid) {
+	    /* choose the destination UID */
+	    record.uid = mailbox->i.last_uid + 1;
+
+	    /* already fetched the file in the parse phase */
+
+	    /* append the file */
+	    r = sync_append_copyfile(mailbox, &record, annots);
+
+	    sync_annot_list_free(&annots);
+
+	    return r;
+	}
+	sync_annot_list_free(&annots);
+    }
+    /* not finding the record is an error! (should never happen) */
+    return IMAP_MAILBOX_NONEXISTENT;
+}
+
 static int fetch_file(struct mailbox *mailbox, unsigned long uid,
 		      struct index_record *rp, struct backend *sync_be)
 {
@@ -3932,36 +3962,6 @@ static int fetch_file(struct mailbox *mailbox, unsigned long uid,
 done:
     dlist_free(&kin);
     return r;
-}
-
-static int copy_remote(struct mailbox *mailbox, uint32_t uid,
-		       struct dlist *kr)
-{
-    struct index_record record;
-    struct dlist *ki;
-    int r;
-    struct sync_annot_list *annots = NULL;
-
-    for (ki = kr->head; ki; ki = ki->next) {
-	r = parse_upload(ki, mailbox, &record, &annots);
-	if (r) return r;
-	if (record.uid == uid) {
-	    /* choose the destination UID */
-	    record.uid = mailbox->i.last_uid + 1;
-
-	    /* already fetched the file in the parse phase */
-
-	    /* append the file */
-	    r = sync_append_copyfile(mailbox, &record, annots);
-
-	    sync_annot_list_free(&annots);
-
-	    return r;
-	}
-	sync_annot_list_free(&annots);
-    }
-    /* not finding the record is an error! (should never happen) */
-    return IMAP_MAILBOX_NONEXISTENT;
 }
 
 static int copyback_one_record(struct mailbox *mailbox,
