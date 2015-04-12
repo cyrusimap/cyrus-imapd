@@ -7492,13 +7492,9 @@ static void cmd_list(char *tag, struct listargs *listargs)
 
     list_callback_calls = 0;
 
-    if (listargs->pat.count && !*(listargs->pat.data[0]) && (listargs->cmd == LIST_CMD_LIST)) {
+    if (listargs->pat.count && !*(listargs->pat.data[0]) && !(listargs->cmd & LIST_CMD_LSUB)) {
 	/* special case: query top-level hierarchy separator */
 	prot_printf(imapd_out, "* LIST (\\Noselect) \"%c\" \"\"\r\n",
-		    imapd_namespace.hier_sep);
-    } else if (listargs->pat.count && !*(listargs->pat.data[0]) && (listargs->cmd == LIST_CMD_XLIST)) {
-	/* special case: query top-level hierarchy separator */
-	prot_printf(imapd_out, "* XLIST (\\Noselect) \"%c\" \"\"\r\n",
 		    imapd_namespace.hier_sep);
     } else if (((listargs->sel & LIST_SEL_SUBSCRIBED) ||
 		(listargs->ret & LIST_RET_SUBSCRIBED)) &&
