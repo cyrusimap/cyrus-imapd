@@ -192,7 +192,7 @@ AS_IF([test "$GPERF" = 'false'],[
 ])
 
 AC_PATH_PROGS([BASH],[bash],[false])
-AS_IF([test "$BASH" != '/bin/bash'],[
+AS_IF([test "$BASH" = 'false'],[
 	AC_MSG_WARN([Some shell scripts assume [#]!/bin/bash.])
 ])
 
