@@ -170,42 +170,45 @@ AS_IF([test "$with_base" != 'no'],[
 
 	for f in $2; do
 		SNERT_CHECK_PACKAGE_HEADER([$f],[
-			dnl Remember the location we found the header
-			dnl even if its a system directory.
 			have=AS_TR_CPP(HAVE_$f)
-			AC_DEFINE_UNQUOTED($have,["$dir_val/$f"])
+			AC_DEFINE_UNQUOTED($have,[1])
 			cache_id=AS_TR_SH(ac_cv_header_$f)
-			AC_CACHE_VAL($cache_id, eval $cache_id="$dir_val/$f")
-
+			AC_CACHE_VAL($cache_id, eval $cache_id='yes')
 			SNERT_IF_SYSTEM_DIR([$dir_val],[
 				dnl Ignore system directories.
-				eval CPPFLAGS_$1=''
 			],[
-				SNERT_JOIN_UNIQ([CPPFLAGS_$1],["-I$dir_val"],[head])
+				dnl Add only one -Idir instance.
+				AS_IF([eval expr "\"\$CPPFLAGS_$1\"" : "\".*\\(-I$dir_val\\)\"" >/dev/null],[
+					dnl
+				],[
+					eval CPPFLAGS_$1=\"\${CPPFLAGS_$1:+\$CPPFLAGS_$1 }-I$dir_val\"
+				])
 			])
-			break
 		],[],[${with_base:+$with_base/include} $6])
 	done
 
 	for f in $3; do
 		SNERT_CHECK_PACKAGE_LIB([$f],[
 			have=AS_TR_CPP(HAVE_$f)
-			AC_DEFINE_UNQUOTED($have,["$dir_val"])
+			AC_DEFINE_UNQUOTED($have,[1])
 			SNERT_IF_SYSTEM_DIR([$dir_val],[
 				lib=`basename -- $f | sed -e's/^lib//'`
-				SNERT_JOIN_UNIQ([LIBS_$1],["-l$lib"],[head])
+				eval LIBS_$1=\"\${LIBS_$1:+\$LIBS_$1 }-l\"$lib
 			],[
 				dnl Add only one -Ldir instance.
-				SNERT_JOIN_UNIQ([LDFLAGS_$1],["-L$dir_val"])
+				AS_IF([eval expr "\"\$LDFLAGS_$1\"" : "\".*\\(-L$dir_val\\)\"" >/dev/null],[
+					dnl
+				],[
+					eval LDFLAGS_$1=\"\${LDFLAGS_$1:+\$LDFLAGS_$1 }-L$dir_val\"
+				])
 				AS_IF([expr "$f" : '.*\.a$' >/dev/null],[
 					dnl Explicit static library.
-					SNERT_JOIN_UNIQ([LIBS_$1],["$dir_val/$f"],[head])
+					eval LIBS_$1=\"\${LIBS_$1:+\$LIBS_$1 }$dir_val/$f\"
 				],[
 					lib=`basename -- $f | sed -e's/^lib//'`
-					SNERT_JOIN_UNIQ([LIBS_$1],["-l$lib"],[head])
+					eval LIBS_$1=\"\${LIBS_$1:+\$LIBS_$1 }-l\"$lib
 				])
 			])
-			break
 		],[],[${with_base:+$with_base/lib} $7])
 	done
 
@@ -1535,39 +1538,6 @@ dnl 	AC_SUBST(LDFLAGS_ZLIB)
 	])
 ])
 
-AC_DEFUN([CYRUS_UUID],[
-	SNERT_CHECK_PACKAGE([UUID],[uuid/uuid.h uuid.h],[libuuid],[uuid_generate], dnl
-		[$with_uuid],[$with_uuid_inc],[$with_uuid_lib],[],[no] dnl
-	)
-
-	dnl NetBSD comes with a stock libuuid with a different API
-	dnl from the Linux version, which is a 3rd party package.
-	AS_IF([test "$ac_cv_func_uuid_generate" = 'no'],[
-		AS_UNSET([LIBS_UUID])
-		AS_UNSET([LDFLAGS_UUID])
-		AS_UNSET([CPPFLAGS_UUID])
-		AC_MSG_WARN([Did not find Linux libuuid API.])
-	])
-
-	SNERT_DEFINE([LIBS_UUID])
-	SNERT_DEFINE([LDFLAGS_UUID])
-	SNERT_DEFINE([CPPFLAGS_UUID])
-
-	AC_SUBST(LIBS_UUID)
- 	AC_SUBST(CPPFLAGS_UUID)
- 	AC_SUBST(LDFLAGS_UUID)
-
-	AH_VERBATIM(LIBS_UUID,[
-#undef HAVE_UUID_H
-#undef HAVE_UUID_UUID_H
-#undef HAVE_LIBUUID
-#undef HAVE_UUID_GENERATE
-#undef CPPFLAGS_UUID
-#undef LDFLAGS_UUID
-#undef LIBS_UUID
-	])
-])
-
 AC_DEFUN([CYRUS_ICAL],[
 	SNERT_CHECK_PACKAGE([ICAL],[libical/ical.h ical.h],[libical],[icalcomponent_new], dnl
 		[$with_ical],[$with_ical_inc],[$with_ical_lib] dnl
@@ -1589,15 +1559,9 @@ dnl 	AC_SUBST(LDFLAGS_ICAL)
 AC_DEFUN([CYRUS_XML2],[
 	dnl Some odd reason we have two directory levels for the package,
 	dnl but refer to in package source as #include <libxml/tree.h>.
-	dnl The package's own headers reference themselves by
-	dnl #include <libxml/SOME_HEADER>, so we need an explicit -I
-	dnl include directory.
 	AS_CASE([$target_os],
 	[netbsd*],[
 		with_xml2_inc='/usr/pkg/include/libxml2'
-	],[
-		dnl Assuming Linux layout.
-		with_xml2_inc='/usr/include/libxml2'
 	])
 
 	SNERT_CHECK_PACKAGE([XML2],[libxml/tree.h],[libxml2],[xmlNewParserCtxt], dnl
