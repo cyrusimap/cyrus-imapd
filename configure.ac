@@ -280,15 +280,12 @@ AC_SEARCH_LIBS([fdatasync],[rt],[
 	])
 ])
 
-dnl Unset casched result so we can do a more comprehensive test.
-AS_UNSET([ac_cv_func_setproctitle])
-spt_type=SPT_NONE
 AC_CHECK_FUNC([setproctitle],[
 	spt_type=SPT_BUILTIN
 ],[
 	AC_CHECK_LIB([util],[setproctitle],[
 		spt_type=SPT_BUILTIN
-		SNERT_JOIN_UNIQ([LIBS],[-lutil])
+		LIBS="$LIBS -lutil"
 	],[
 		AC_CHECK_HEADERS([sys/pstat.h],[spt_type=SPT_PSTAT])
 		AC_CHECK_HEADERS([sys/sysnews.h],[spt_type=SPT_SYSMIPS])
