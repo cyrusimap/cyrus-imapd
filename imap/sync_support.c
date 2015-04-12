@@ -1955,8 +1955,6 @@ static void reserve_folder(const char *part, const char *mboxname,
 
     if (r) return;
 
-    /* XXX - this is just on the replica, but still - we shouldn't hold
-     * the lock for so long */
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	/* ok to skip errors here - just means they'll be uploaded
 	 * rather than reserved */
@@ -1976,8 +1974,8 @@ static void reserve_folder(const char *part, const char *mboxname,
 	    continue;
 
 	/* Attempt to reserve this message */
-	mailbox_msg_path = mailbox_record_fname(mailbox, &record);
-	stage_msg_path = dlist_reserve_path(part, record.system_flags & FLAG_ARCHIVED, &record.guid);
+	mailbox_msg_path = mailbox_message_fname(mailbox, record.uid);
+	stage_msg_path = dlist_reserve_path(part, &record.guid);
 
 	/* check that the sha1 of the file on disk is correct */
 	memset(&record2, 0, sizeof(struct index_record));
@@ -1999,9 +1997,6 @@ static void reserve_folder(const char *part, const char *mboxname,
 	    continue;
 	}
 
-	item->size = record.size;
-	item->fname = xstrdup(stage_msg_path); /* track the correct location */
-	item->is_archive = record.system_flags & FLAG_ARCHIVED ? 1 : 0;
 	item->need_upload = 0;
 	part_list->toupload--;
 
@@ -2116,8 +2111,7 @@ int sync_apply_quota(struct dlist *kin,
 /* ====================================================================== */
 
 static int mailbox_compare_update(struct mailbox *mailbox,
-				  struct dlist *kr, int doupdate,
-				  struct sync_msgid_list *part_list)
+				  struct dlist *kr, int doupdate)
 {
     struct index_record mrecord;
     struct index_record rrecord;
@@ -2127,7 +2121,6 @@ static int mailbox_compare_update(struct mailbox *mailbox,
     struct sync_annot_list *rannots = NULL;
     int r;
     int i;
-    int has_append = 0;
 
     rrecord.uid = 0;
     for (ki = kr->head; ki; ki = ki->next) {
@@ -2164,15 +2157,6 @@ static int mailbox_compare_update(struct mailbox *mailbox,
 		(rrecord.system_flags & FLAG_EXPUNGED))
 		continue;
 
-	    /* GUID mismatch is an error straight away, it only ever happens if we
-	     * had a split brain - and it will take a full sync to sort out the mess */
-	    if (!message_guid_equal(&mrecord.guid, &rrecord.guid)) {
-		syslog(LOG_ERR, "SYNCERROR: guid mismatch %s %u",
-		       mailbox->name, mrecord.uid);
-		r = IMAP_SYNC_CHECKSUM;
-		goto out;
-	    }
-
 	    /* higher modseq on the replica is an error */
 	    if (rrecord.modseq > mrecord.modseq) {
 		if (opt_force) {
@@ -2185,6 +2169,15 @@ static int mailbox_compare_update(struct mailbox *mailbox,
 		    r = IMAP_SYNC_CHECKSUM;
 		    goto out;
 		}
+	    }
+
+	    /* GUID mismatch is an error straight away, it only ever happens if we
+	     * had a split brain - and it will take a full sync to sort out the mess */
+	    if (!message_guid_equal(&mrecord.guid, &rrecord.guid)) {
+		syslog(LOG_ERR, "SYNCERROR: guid mismatch %s %u",
+		       mailbox->name, mrecord.uid);
+		r = IMAP_SYNC_CHECKSUM;
+		goto out;
 	    }
 
 	    /* if it's already expunged on the replica, but alive on the master,
@@ -2200,7 +2193,6 @@ static int mailbox_compare_update(struct mailbox *mailbox,
 	    /* skip out on the first pass */
 	    if (!doupdate) continue;
 
-	    rrecord.cid = mrecord.cid;
 	    rrecord.modseq = mrecord.modseq;
 	    rrecord.last_updated = mrecord.last_updated;
 	    rrecord.internaldate = mrecord.internaldate;
@@ -2247,19 +2239,14 @@ static int mailbox_compare_update(struct mailbox *mailbox,
 	    if (!doupdate) continue;
 
 	    mrecord.silent = 1;
-	    r = sync_append_copyfile(mailbox, &mrecord, mannots, part_list);
+	    r = sync_append_copyfile(mailbox, &mrecord, mannots);
 	    if (r) {
 		syslog(LOG_ERR, "IOERROR: failed to append file %s %d",
 		       mailbox->name, recno);
 		goto out;
 	    }
-
-	    has_append = 1;
 	}
     }
-
-    if (has_append)
-	sync_log_append(mailbox->name);
 
     r = 0;
 
@@ -2277,11 +2264,8 @@ static int crceq(struct synccrcs a, struct synccrcs b)
     return 1;
 }
 
-int sync_apply_mailbox(struct dlist *kin,
-		       struct sync_reserve_list *reserve_list,
-		       struct sync_state *sstate)
+int sync_apply_mailbox(struct dlist *kin, struct sync_state *sstate)
 {
-    struct sync_msgid_list *part_list;
     /* fields from the request */
     const char *uniqueid;
     const char *partition;
@@ -2301,9 +2285,6 @@ int sync_apply_mailbox(struct dlist *kin,
     struct synccrcs synccrcs;
 
     uint32_t options;
-
-    /* optional fields */
-    modseq_t xconvmodseq = 0;
 
     struct mailbox *mailbox = NULL;
     struct dlist *kr;
@@ -2351,7 +2332,6 @@ int sync_apply_mailbox(struct dlist *kin,
     dlist_getdate(kin, "POP3_SHOW_AFTER", &pop3_show_after);
     dlist_getatom(kin, "MBOXTYPE", &mboxtype);
     dlist_getnum32(kin, "SYNC_CRC_ANNOT", &synccrcs.annot);
-    dlist_getnum64(kin, "XCONVMODSEQ", &xconvmodseq);
 
     options = sync_parse_options(options_str);
     mbtype = mboxlist_string_to_mbtype(mboxtype);
@@ -2360,8 +2340,7 @@ int sync_apply_mailbox(struct dlist *kin,
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	r = mboxlist_createsync(mboxname, mbtype, partition,
 				sstate->userid, sstate->authstate,
-				options, uidvalidity,
-				highestmodseq, acl,
+				options, uidvalidity, acl,
 				uniqueid, sstate->local_only, &mailbox);
 	/* set a highestmodseq of 0 so ALL changes are future
 	 * changes and get applied */
@@ -2379,8 +2358,6 @@ int sync_apply_mailbox(struct dlist *kin,
 	r = IMAP_MAILBOX_BADTYPE;
 	goto done;
     }
-
-    part_list = sync_reserve_partlist(reserve_list, mailbox->part);
 
     /* hold the annotate state open */
     mailbox_get_annotate_state(mailbox, ANNOTATE_ANY_UID, &astate);
@@ -2447,43 +2424,15 @@ int sync_apply_mailbox(struct dlist *kin,
 	}
     }
 
-    /* NOTE - this is optional */
-    if (mailbox_has_conversations(mailbox) && xconvmodseq) {
-	modseq_t ourxconvmodseq = 0;
-
-	r = mailbox_get_xconvmodseq(mailbox, &ourxconvmodseq);
-	if (r) {
-	    syslog(LOG_ERR, "Failed to read xconvmodseq for %s: %s",
-		   mboxname, error_message(r));
-	    goto done;
-	}
-
-	/* skip out now, it's going to mismatch for sure! */
-	if (xconvmodseq < ourxconvmodseq) {
-	    if (opt_force) {
-		syslog(LOG_NOTICE, "forcesync: higher xconvmodseq on replica %s - %llu < %llu",
-		       mboxname, xconvmodseq, ourxconvmodseq);
-	    }
-	    else {
-		syslog(LOG_ERR, "higher xconvmodseq on replica %s - %llu < %llu",
-		       mboxname, xconvmodseq, ourxconvmodseq);
-		r = IMAP_SYNC_CHECKSUM;
-		goto done;
-	    }
-	}
-    }
-
-    r = mailbox_compare_update(mailbox, kr, 0, part_list);
-    if (r) goto done;
-
-    /* now we're committed to writing something no matter what happens! */
-
     /* always take the ACL from the master, it's not versioned */
     if (strcmp(mailbox->acl, acl)) {
 	mailbox_set_acl(mailbox, acl, 0);
 	r = mboxlist_sync_setacls(mboxname, acl);
 	if (r) goto done;
     }
+
+    r = mailbox_compare_update(mailbox, kr, 0);
+    if (r) goto done;
 
     /* take all mailbox (not message) annotations - aka metadata,
      * they're not versioned either */
@@ -2499,7 +2448,7 @@ int sync_apply_mailbox(struct dlist *kin,
 	goto done;
     }
 
-    r = mailbox_compare_update(mailbox, kr, 1, part_list);
+    r = mailbox_compare_update(mailbox, kr, 1);
     if (r) {
 	abort();
 	return r;
@@ -2520,8 +2469,7 @@ int sync_apply_mailbox(struct dlist *kin,
 			 (mailbox->i.options & ~MAILBOX_OPTIONS_MASK);
 
     /* this happens all the time! */
-    if (mailbox->i.highestmodseq != highestmodseq) {
-	mboxname_setmodseq(mailbox->name, highestmodseq, mailbox->mbtype);
+    if (mailbox->i.highestmodseq < highestmodseq) {
 	mailbox->i.highestmodseq = highestmodseq;
     }
 
@@ -2529,13 +2477,7 @@ int sync_apply_mailbox(struct dlist *kin,
     if (mailbox->i.uidvalidity != uidvalidity) {
 	syslog(LOG_NOTICE, "%s uidvalidity changed, updating %u => %u",
 	       mailbox->name, mailbox->i.uidvalidity, uidvalidity);
-	/* make sure nothing new gets created with a lower value */
-	mboxname_setuidvalidity(mailbox->name, uidvalidity, mailbox->mbtype);
 	mailbox->i.uidvalidity = uidvalidity;
-    }
-
-    if (mailbox_has_conversations(mailbox)) {
-	r = mailbox_update_xconvmodseq(mailbox, xconvmodseq, opt_force);
     }
 
 done:
@@ -3189,7 +3131,6 @@ int sync_get_message(struct dlist *kin, struct sync_state *sstate)
 {
     const char *mboxname;
     const char *partition;
-    const char *uniqueid;
     const char *guid;
     uint32_t uid;
     const char *fname;
@@ -3201,8 +3142,6 @@ int sync_get_message(struct dlist *kin, struct sync_state *sstate)
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getatom(kin, "PARTITION", &partition))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getatom(kin, "UNIQUEID", &uniqueid))
-	return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getatom(kin, "GUID", &guid))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getnum32(kin, "UID", &uid))
@@ -3210,12 +3149,9 @@ int sync_get_message(struct dlist *kin, struct sync_state *sstate)
     if (!message_guid_decode(&tmp_guid, guid))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
-    fname = mboxname_datapath(partition, mboxname, uniqueid, uid);
-    if (stat(fname, &sbuf) == -1) {
-	fname = mboxname_archivepath(partition, mboxname, uniqueid, uid);
-	if (stat(fname, &sbuf) == -1)
-	    return IMAP_MAILBOX_NONEXISTENT;
-    }
+    fname = mboxname_datapath(partition, mboxname, uid);
+    if (stat(fname, &sbuf) == -1)
+	return IMAP_MAILBOX_NONEXISTENT;
 
     kl = dlist_setfile(NULL, "MESSAGE", partition, &tmp_guid, sbuf.st_size, fname);
     sync_send_response(kl, sstate->pout);
@@ -3284,22 +3220,17 @@ int sync_apply_message(struct dlist *kin,
     for (ki = kin->head; ki; ki = ki->next) {
 	struct message_guid *guid;
 	const char *part;
-	size_t size;
-	const char *fname;
 
 	/* XXX - complain more? */
-	if (!dlist_tofile(ki, &part, &guid, &size, &fname))
+	if (!dlist_tofile(ki, &part, &guid, NULL, NULL))
 	    continue;
 
 	part_list = sync_reserve_partlist(reserve_list, part);
 	msgid = sync_msgid_insert(part_list, guid);
-	if (!msgid->need_upload)
-	    continue;
-
-	msgid->size = size;
-	msgid->fname = xstrdup(fname);
-	msgid->need_upload = 0;
-	part_list->toupload--;
+	if (msgid->need_upload) {
+	    msgid->need_upload = 0;
+	    part_list->toupload--;
+	}
     }
 
     return 0;
