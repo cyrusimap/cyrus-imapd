@@ -95,7 +95,7 @@ strarray_t *strarray_splitm(char *buf, const char *sep, int flags);
 strarray_t *strarray_split(const char *buf, const char *sep, int flags);
 strarray_t *strarray_nsplit(const char *buf, size_t len, const char *sep, int flags);
 
-void strarray_sort(strarray_t *, compar_t);
+void strarray_sort(strarray_t *, compar_t *);
 void strarray_uniq(strarray_t *);
 
 char **strarray_takevf(strarray_t *sa);

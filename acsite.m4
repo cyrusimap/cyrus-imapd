@@ -144,19 +144,6 @@ AC_DEFUN([SNERT_CHECK_PACKAGE],[
 	AS_ECHO("Checking for $1 package...")
 	AS_ECHO()
 
-	dnl Watch out for leading and trailing whitespace with m4 macros;
-	dnl everything delimited by open/close paren and/or commas is
-	dnl part of the argument, so pretty formatting for readability
-	dnl can screw with string compares.  Use echo to trim whitespace.
-	with_base=`AS_ECHO([$5])`
-
-AS_IF([test "$with_base" != 'no'],[
-	dnl Careful with --with options as they can be specified,
-	dnl without a base directory path, in which case ignore it.
-	AS_IF([test "$with_base" = 'yes'],[
-		with_base=''
-	])
-
 	for f in $2; do
 		SNERT_CHECK_PACKAGE_HEADER([$f],[
 			have=AS_TR_CPP(HAVE_$f)
@@ -173,7 +160,7 @@ AS_IF([test "$with_base" != 'no'],[
 					eval CPPFLAGS_$1=\"\${CPPFLAGS_$1:+\$CPPFLAGS_$1 }-I$dir_val\"
 				])
 			])
-		],[],[${with_base:+$with_base/include} $6])
+		],[],[${5:+$5/include} $6])
 	done
 	SNERT_DEFINE(CPPFLAGS_[$1])
 	AC_SUBST(CPPFLAGS_[$1])
@@ -200,7 +187,7 @@ AS_IF([test "$with_base" != 'no'],[
 					eval LIBS_$1=\"\${LIBS_$1:+\$LIBS_$1 }-l\"$lib
 				])
 			])
-		],[],[${with_base:+$with_base/lib} $7])
+		],[],[${5:+$5/lib} $7])
 	done
 	SNERT_DEFINE(LDFLAGS_[$1])
 	SNERT_DEFINE(LIBS_[$1])
@@ -222,9 +209,6 @@ AS_IF([test "$with_base" != 'no'],[
 		LDFLAGS="$save_LDFLAGS"
 		LIBS="$save_LIBS"
 	])
-],[
-	AC_MSG_NOTICE([Package $1 has been explicitly disabled.])
-])
 ])
 
 dnl
@@ -240,7 +224,7 @@ AC_DEFUN(SNERT_OPTION_ENABLE_DEBUG,[
 
 	AC_ARG_ENABLE(debug,[AC_HELP_STRING([--enable-debug],[enable compiler debug option])],[
 	],[
-		AC_DEFINE(NDEBUG,[1],[Disable debug code])
+		AC_DEFINE(NDEBUG,[],[Disable debug code])
 	])
 ])
 
@@ -280,6 +264,9 @@ AC_DEFUN([SNERT_CC_INFO],[
 	AC_SUBST(CC_E_NAME)
 	AC_SUBST(CC_O)
 	AC_SUBST(CC_O_NAME)
+	AC_SUBST(COMPILE)
+	AC_SUBST(ARCHIVE)
+	AC_SUBST(LIBEXT)
 
 	dnl Check for recent ANSI C additions that HAVE_HEADER_STDC check
 	dnl doesn't distinguish between C89 and C99.
@@ -616,7 +603,7 @@ dnl #endif
 		AC_SUBST(NETWORK_LIBS, ${NETWORK_LIBS})
 	])
 
-	AC_CHECK_TYPES([struct sockaddr_in6, struct in6_addr, struct sockaddr_un, socklen_t, struct sockaddr_storage],[],[],[
+	AC_CHECK_TYPES([struct sockaddr_in6, struct in6_addr, struct sockaddr_un, socklen_t, sockaddr_storage],[],[],[
 #if defined(__WIN32__)
 # define WINVER	0x0501
 # if defined(HAVE_WINDOWS_H)
@@ -989,11 +976,13 @@ dnl 	AC_SUBST(LDFLAGS_SASL2)
 	])
 ])
 
+AC_DEFUN([CYRUS_OPTION_ENABLE_KERBEROS_DES],[
+	AC_ARG_ENABLE([krb_des],[AS_HELP_STRING([--disable-krb-des],[use Kerberos DES implementation])],[],[enable_krb_des='yes'])
+])
 AC_DEFUN([CYRUS_OPTION_WITH_KERBEROS],[
 	AC_ARG_WITH([krb],[AS_HELP_STRING([--with-krb=DIR],[Kerberos 4 package, optional base directory])])
 	AC_ARG_WITH([krb-inc],[AS_HELP_STRING([--with-krb-inc=DIR],[specific Kerberos 4 include directory])])
 	AC_ARG_WITH([krb-lib],[AS_HELP_STRING([--with-krb-lib=DIR],[specific Kerberos 4 library directory])])
-	AC_ARG_WITH([krb-des],[AS_HELP_STRING([--with-krb-des],[use Kerberos DES implementation])],[],[with_krb_des='yes'])
 ])
 AC_DEFUN([CYRUS_KERBEROS],[
 	AC_REQUIRE([SNERT_NETWORK])
@@ -1205,15 +1194,11 @@ AC_DEFUN(CYRUS_OPTION_WITH_OPENAFS,[
 ])
 AC_DEFUN(CYRUS_OPENAFS,[
 	SNERT_CHECK_PACKAGE([AFS], dnl
-		[afs/afs.h afs/auth.h afs/cellconfig.h afs/com_err.h afs/ptserver.h afs/pterror.h], dnl
+		[afs/afs.h afs/auth.h afs/cellconfig.h afs/ptserver.h afs/pterror.h], dnl
 		[afs/libkauth.a afs/libafscom_err afs/libauth afs/libprot afs/libsys afs/util.a dnl
 		libafslwp liblwp librxkad librx libubik],[], dnl
 		[$with_openafs],[$with_openafs_inc],[$with_openafs_lib] dnl
 	)
-	AC_PATH_PROG([AFS_COMPILE_ET],[afs_compile_et],[false])
-	AC_DEFINE_UNQUOTED([HAVE_AFS_COMPILE_ET],[$AFS_COMPILE_ET],[OpenAFS supplies a compile_et.])
-	AC_SUBST([AFS_COMPILE_ET])
-
 dnl 	AC_SUBST(LIBS_AFS)
 dnl 	AC_SUBST(CPPFLAGS_AFS)
 dnl 	AC_SUBST(LDFLAGS_AFS)
@@ -1221,8 +1206,6 @@ dnl 	AC_SUBST(LDFLAGS_AFS)
 #undef HAVE_AFS_AFS_H
 #undef HAVE_AFS_AUTH_H
 #undef HAVE_AFS_CELLCONFIG_H
-#undef HAVE_AFS_COM_ERR_H
-#undef HAVE_AFS_COMPILE_ET
 #undef HAVE_AFS_PTSERVER_H
 #undef HAVE_AFS_PTERROR_H
 #undef HAVE_AFS_LIBKAUTH_A
@@ -1248,7 +1231,7 @@ AC_DEFUN(CYRUS_OPTION_WITH_OPENDKIM,[
 	AC_ARG_WITH([opendkim-lib],[AS_HELP_STRING([--with-opendkim-lib=DIR],[specific OpenDKIM library directory])])
 ])
 AC_DEFUN(CYRUS_OPENDKIM,[
-	SNERT_CHECK_PACKAGE([DKIM],[opendkim/dkim.h dkim.h],[libopendkim],[dkim_init], dnl
+	SNERT_CHECK_PACKAGE([DKIM],[opendkim/dkim.h],[libopendkim],[dkim_init], dnl
 		[$with_opendkim],[$with_opendkim_inc],[$with_opendkim_lib] dnl
 	)
 dnl 	AC_SUBST(LIBS_DKIM)
@@ -1257,7 +1240,6 @@ dnl 	AC_SUBST(LDFLAGS_DKIM)
 	AH_VERBATIM(LIBS_DKIM,[
 #undef HAVE_LIBOPENDKIM
 #undef HAVE_OPENDKIM_DKIM_H
-#undef HAVE_DKIM_H
 #undef HAVE_DKIM_INIT
 #undef CPPFLAGS_DKIM
 #undef LDFLAGS_DKIM
@@ -1271,7 +1253,7 @@ AC_DEFUN([CYRUS_OPTION_WITH_CLAMAV],[
 	AC_ARG_WITH([clamav-lib],[AS_HELP_STRING([--with-clamav-lib=DIR],[specific ClamAV library directory])])
 ])
 AC_DEFUN([CYRUS_CLAMAV],[
-	SNERT_CHECK_PACKAGE([CLAMAV],[clamav.h],[libclamav],[cl_init cl_engine_new], dnl
+	SNERT_CHECK_PACKAGE([CLAMAV],[clamav.h],[libclamav],[cl_init], dnl
 		[$with_clamav],[$with_clamav_inc],[$with_clamav_lib] dnl
 	)
 dnl 	AC_SUBST(LIBS_CLAMAV)
@@ -1280,7 +1262,6 @@ dnl 	AC_SUBST(LDFLAGS_CLAMAV)
 	AH_VERBATIM(LIBS_CLAMAV,[
 #undef HAVE_CLAMAV_H
 #undef HAVE_CL_INIT
-#undef HAVE_CL_ENGINE_NEW
 #undef CPPFLAGS_CLAMAV
 #undef LDFLAGS_CLAMAV
 #undef LIBS_CLAMAV
@@ -1341,8 +1322,6 @@ AC_DEFUN([CYRUS_OPTION_WITH_COM_ERR],[
 	AC_ARG_WITH([com_err-lib],[AS_HELP_STRING([--with-com_err-lib=dir],[specific com_err library directory])])
 ])
 AC_DEFUN([CYRUS_COM_ERR],[
-	AS_ECHO()
-
 	dnl
 	dnl Try and find a system version of com_err.
 	dnl If we see something that looks a little wacky, ignore it (there are many
@@ -1350,28 +1329,20 @@ AC_DEFUN([CYRUS_COM_ERR],[
 	dnl There is also a broken re-implementation of compile_et, apparently derived
 	dnl from the Kerberos project, being shipped in /usr/bin on MacOS X, see Bug #3711.
 	dnl
-
-	dnl Search for compile_et(1), but if not found fall back to false(1),
-	dnl force the use of the builtin version.
-	AC_PATH_PROG([COMPILE_ET],[compile_et],[false],[${with_com_err_bin:+$with_com_err_bin$PATH_SEPARATOR}$PATH])
-	AS_IF([test "$COMPILE_ET" = '/usr/pkg/bin/compile_et'],[
-		dnl NetBSD: Part of kth-krb4 required by Zephyr.  Suspect?
-		dnl What of OpenAFS com_err library and its tool?
-		COMPILE_ET='false'
-	])
-	AC_SUBST(COMPILE_ET)
-
-	AS_IF([test "$COMPILE_ET" != 'false'],[
-		SNERT_CHECK_PACKAGE([COM_ERR], dnl
-			[et/com_err.h krb5/com_err.h com_err.h],[libcom_err],[com_err], dnl
-			[$with_com_err],[$with_com_err_inc],[$with_com_err_lib],[[
+	SNERT_CHECK_PACKAGE([COM_ERR], dnl
+		[et/com_err.h krb5/com_err.h com_err.h],[libcom_err],[com_err], dnl
+		[$with_com_err],[$with_com_err_inc],[$with_com_err_lib],[[
 #ifdef __NetBSD__
 /* NetBSD /usr/include/krb5/com_err.h requires these extras. */
 #include <stdlib.h>
 #include <stdarg.h>
 #endif
-		]])
-	])
+	]])
+	dnl Search for compile_et(1), but if not found fall back to false(1),
+	dnl When false(1), it will force the use of the builtin version.
+	AC_PATH_PROG([COMPILE_ET],[compile_et],[no],[/usr/pkg/bin /usr/local/bin /usr/bin])
+	AC_SUBST(COMPILE_ET)
+
 dnl 	AC_SUBST(LIBS_COM_ERR)
 dnl 	AC_SUBST(CPPFLAGS_COM_ERR)
 dnl 	AC_SUBST(LDFLAGS_COM_ERR)
@@ -1462,21 +1433,14 @@ dnl 	AC_SUBST(LDFLAGS_ICAL)
 ])
 
 AC_DEFUN([CYRUS_XML2],[
-	dnl Some odd reason we have two directory levels for the package,
-	dnl but refer to in package source as #include <libxml/tree.h>.
-	AS_CASE([$target_os],
-	[netbsd*],[
-		with_xml2_inc='/usr/pkg/include/libxml2'
-	])
-
-	SNERT_CHECK_PACKAGE([XML2],[libxml/tree.h],[libxml2],[xmlNewParserCtxt], dnl
+	SNERT_CHECK_PACKAGE([XML2],[libxml2/libxml/tree.h libxml/tree.h],[libxml2],[xmlNewParserCtxt], dnl
 		[$with_xml2],[$with_xml2_inc],[$with_xml2_lib] dnl
 	)
 dnl 	AC_SUBST(LIBS_XML2)
 dnl 	AC_SUBST(CPPFLAGS_XML2)
 dnl 	AC_SUBST(LDFLAGS_XML2)
-
 	AH_VERBATIM(LIBS_XML2,[
+#undef HAVE_LIBXML2_LIBXML_TREE_H
 #undef HAVE_LIBXML_TREE_H
 #undef HAVE_LIBXML2
 #undef HAVE_XMLNEWPARSERCTXT
@@ -1560,99 +1524,5 @@ dnl 	AC_SUBST(LDFLAGS_CUNIT)
 #undef CPPFLAGS_CUNIT
 #undef LDFLAGS_CUNIT
 #undef LIBS_CUNIT
-	])
-])
-
-# visibility.m4 serial 5 (gettext-0.18.2)
-dnl Copyright (C) 2005, 2008, 2010-2012 Free Software Foundation, Inc.
-dnl This file is free software; the Free Software Foundation
-dnl gives unlimited permission to copy and/or distribute it,
-dnl with or without modifications, as long as this notice is preserved.
-
-dnl From Bruno Haible.
-
-dnl Tests whether the compiler supports the command-line option
-dnl -fvisibility=hidden and the function and variable attributes
-dnl __attribute__((__visibility__("hidden"))) and
-dnl __attribute__((__visibility__("default"))).
-dnl Does *not* test for __visibility__("protected") - which has tricky
-dnl semantics (see the 'vismain' test in glibc) and does not exist e.g. on
-dnl Mac OS X.
-dnl Does *not* test for __visibility__("internal") - which has processor
-dnl dependent semantics.
-dnl Does *not* test for #pragma GCC visibility push(hidden) - which is
-dnl "really only recommended for legacy code".
-dnl Set the variable CFLAG_VISIBILITY.
-dnl Defines and sets the variable HAVE_VISIBILITY.
-
-AC_DEFUN([gl_VISIBILITY],
-[
-  AC_REQUIRE([AC_PROG_CC])
-  CFLAG_VISIBILITY=
-  HAVE_VISIBILITY=0
-  if test -n "$GCC"; then
-    dnl First, check whether -Werror can be added to the command line, or
-    dnl whether it leads to an error because of some other option that the
-    dnl user has put into $CC $CFLAGS $CPPFLAGS.
-    AC_MSG_CHECKING([whether the -Werror option is usable])
-    AC_CACHE_VAL([gl_cv_cc_vis_werror], [
-      gl_save_CFLAGS="$CFLAGS"
-      CFLAGS="$CFLAGS -Werror"
-      AC_COMPILE_IFELSE(
-        [AC_LANG_PROGRAM([[]], [[]])],
-        [gl_cv_cc_vis_werror=yes],
-        [gl_cv_cc_vis_werror=no])
-      CFLAGS="$gl_save_CFLAGS"])
-    AC_MSG_RESULT([$gl_cv_cc_vis_werror])
-    dnl Now check whether visibility declarations are supported.
-    AC_MSG_CHECKING([for simple visibility declarations])
-    AC_CACHE_VAL([gl_cv_cc_visibility], [
-      gl_save_CFLAGS="$CFLAGS"
-      CFLAGS="$CFLAGS -fvisibility=hidden"
-      dnl We use the option -Werror and a function dummyfunc, because on some
-      dnl platforms (Cygwin 1.7) the use of -fvisibility triggers a warning
-      dnl "visibility attribute not supported in this configuration; ignored"
-      dnl at the first function definition in every compilation unit, and we
-      dnl don't want to use the option in this case.
-      if test $gl_cv_cc_vis_werror = yes; then
-        CFLAGS="$CFLAGS -Werror"
-      fi
-      AC_COMPILE_IFELSE(
-        [AC_LANG_PROGRAM(
-           [[extern __attribute__((__visibility__("hidden"))) int hiddenvar;
-             extern __attribute__((__visibility__("default"))) int exportedvar;
-             extern __attribute__((__visibility__("hidden"))) int hiddenfunc (void);
-             extern __attribute__((__visibility__("default"))) int exportedfunc (void);
-             void dummyfunc (void) {}
-           ]],
-           [[]])],
-        [gl_cv_cc_visibility=yes],
-        [gl_cv_cc_visibility=no])
-      CFLAGS="$gl_save_CFLAGS"])
-    AC_MSG_RESULT([$gl_cv_cc_visibility])
-    if test $gl_cv_cc_visibility = yes; then
-      CFLAG_VISIBILITY="-fvisibility=hidden"
-      HAVE_VISIBILITY=1
-    fi
-  fi
-  AC_SUBST([CFLAG_VISIBILITY])
-  AC_SUBST([HAVE_VISIBILITY])
-  AC_DEFINE_UNQUOTED([HAVE_VISIBILITY], [$HAVE_VISIBILITY],
-    [Define to 1 or 0, depending whether the compiler supports simple visibility declarations.])
-])
-
-dnl
-dnl CMU_PERL_MAKEMAKER(perl_pkg)
-dnl
-AC_DEFUN([CMU_PERL_MAKEMAKER],[
-	AS_IF([test -e "$PERL"],[
-		AS_ECHO("Preparing $1 ...")
-		AC_CONFIG_FILES([$1/Makefile.PL])
-		AC_CONFIG_COMMANDS($1/Makefile,[
-			( cd $1; $PERL Makefile.PL $MAKE_MAKER_ARGS )
-		],[
-			PERL="${PERL}"
-			MAKE_MAKER_ARGS="PREFIX=${prefix}"
-		])
 	])
 ])

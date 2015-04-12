@@ -642,10 +642,9 @@ EXPORTED void mboxevent_notify(struct mboxevent *mboxevents)
 		}
 	    }
 
-#ifndef NDEBUG
 	    /* check if expected event parameters are filled */
 	    assert(filled_params(type, event));
-#endif
+
 	    /* notification is ready to send */
 	    formatted_message = json_formatter(type, event->params);
 	    notify(notifier, "EVENT", NULL, NULL, NULL, 0, NULL, formatted_message, fname);
