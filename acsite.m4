@@ -1170,16 +1170,17 @@ AC_DEFUN([CYRUS_GSSAPI],[
 	save_LDFLAGS="$LDFLAGS"
 	save_CPPFLAGS="$CPPFLAGS"
 
-	LIBS="$LIBS_GSSAPI $LIBS"
+	AC_SEARCH_LIBS([res_search],[resolv])
+
+	LIBS="$LIBS_GSSAPI $NETWORK_LIBS $LIBS"
 	LDFLAGS="$LDFLAGS_GSSAPI $LDFLAGS"
 	CPPFLAGS="$CPPFLAGS_GSSAPI $CPPFLAGS"
-
-	AC_SEARCH_LIBS([res_search],[resolv])
 
 	dnl We'll test for all supported implementations.
 	AS_UNSET([ac_cv_lib_gssapi_gss_unwrap])
 	AC_CHECK_LIB([gssapi],[gss_unwrap],[
 		AS_IF([test "$enable_gssapi" = 'auto' -o "$enable_gssapi" = 'heimdal'],[
+dnl			-lkrb5 -lasn1 -lroken ${LIB_CRYPT} ${LIB_DES} -lcom_err
 			SNERT_JOIN_UNIQ([LIBS_GSSAPI],[$LIBS_KRB5 $LIBS_COM_ERR $NETWORK_LIBS])
 			SNERT_JOIN_UNIQ([CPPFLAGS_GSSAPI],[$CPPFLAGS_KRB5 $CPPFLAGS_COM_ERR])
 			SNERT_JOIN_UNIQ([LDFLAGS_GSSAPI],[$LDFLAGS_KRB5 $LDFLAGS_COM_ERR])
