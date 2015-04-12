@@ -1565,25 +1565,22 @@ AC_DEFUN([CYRUS_COM_ERR],[
 ])
 
 dnl
-dnl CYRUS_PCRE
+dnl SNERT_PCRE
 dnl
-AC_DEFUN(CYRUS_PCRE,[
+AC_DEFUN(SNERT_PCRE,[
 	dnl Redo function tests; see SNERT_REGEX.
 	AS_UNSET(ac_cv_func_regcomp)
 	AS_UNSET(ac_cv_func_regexec)
 	AS_UNSET(ac_cv_func_regerror)
 	AS_UNSET(ac_cv_func_regfree)
-
-	SNERT_CHECK_PACKAGE([PCRE], dnl name
-		[pcre.h pcreposix.h],[libpcre libpcreposix], dnl headers, libs
-		[pcre_compile pcre_exec pcre_free regcomp regexec regerror regfree] dnl funcs
-		[$with_pcre],[$with_pcre_inc],[$with_pcre_lib] dnl base, inc, lib
+	SNERT_CHECK_PACKAGE([PCRE], dnl
+		[pcre.h pcreposix.h],[libpcre libpcreposix], dnl
+		[pcre_compile pcre_exec pcre_free regcomp regexec regerror regfree] dnl
+		[$with_pcre],[$with_pcre_inc],[$with_pcre_lib] dnl
 	)
-
-	AS_IF([test "$ac_cv_header_pcre_h" = 'no' -o "$ac_cv_header_pcreposix_h" = 'no'],[
-		AC_MSG_ERROR([PCRE development headers are required.])
-	])
-
+dnl 	AC_SUBST(LIBS_PCRE)
+dnl 	AC_SUBST(CPPFLAGS_PCRE)
+dnl 	AC_SUBST(LDFLAGS_PCRE)
 	AH_VERBATIM(LIBS_PCRE,[
 #undef HAVE_PCRE_H
 #undef HAVE_PCREPOSIX_H

@@ -82,6 +82,7 @@ dnl AC_ARG_ENABLE(nntp,[AS_HELP_STRING([--disable-nntp],[disable NNTP support])]
 dnl AC_ARG_ENABLE(replication,[AS_HELP_STRING([--disable-replication], [disable replication support])],[],[enable_replication="yes";])
 dnl AC_ARG_ENABLE(server,[AS_HELP_STRING([--disable-server], [disable compiling servers])],[],[enable_server="yes"])
 dnl AC_ARG_ENABLE(sieve,[AS_HELP_STRING([--disable-sieve],[disable Sieve support])],[],[enable_sieve="yes"])
+dnl AC_ARG_ENABLE(pcre, [AS_HELP_STRING([--disable-pcre],[disable PCRE library])])
 
 #######################################################################
 # Optional third party packages.
@@ -265,7 +266,7 @@ CYRUS_OPENAFS
 CYRUS_OPENDKIM
 CYRUS_OPENLDAP
 SNERT_OPENSSL
-CYRUS_PCRE
+SNERT_PCRE
 SNERT_REGEX
 SNERT_SASL2
 SNERT_SQLITE3
