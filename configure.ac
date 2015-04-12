@@ -706,7 +706,6 @@ AC_SUBST(ZLIB, $LIBS_ZLIB)
 
 AM_CONDITIONAL([CMULOCAL],[false]) 	dnl replaced by acsite.m4 and m4/*
 AM_CONDITIONAL([USE_BERKELEY],[false])	dnl Berkeley DB support removed.
-AM_CONDITIONAL([ZEPHYR], [false])	dnl Zephyr supporot dropped along with krb4.
 
 dnl Always built in, controlled by imapd.conf or cyrus.conf.
 AM_CONDITIONAL([AUTOCREATE], [true])
@@ -745,6 +744,7 @@ AM_CONDITIONAL([USE_SPHINX], [test "${enable_sphinx}" != "no"])
 AM_CONDITIONAL([USE_SQUAT], [test "${enable_squat}" != "no"])
 AM_CONDITIONAL([SQUATTER],[test "${enable_squat}" != "no" -o "${enable_sphinx}" != "no" -o "${with_xapian}" != "no" ])
 AM_CONDITIONAL([USE_XAPIAN], [test "${with_xapian}" != "no"])
+AM_CONDITIONAL([ZEPHYR], [test "$ac_cv_func_ZInitialize" != "no"])
 
 #######################################################################
 # Finally generate headers and makefiles.
@@ -767,21 +767,6 @@ AH_BOTTOM([
 #  include <time.h>
 # endif
 #endif
-
-/* com_err.h, as needed */
-#ifndef IN_COM_ERR
-# if defined(HAVE_ET_COM_ERR_H)
-#  include <et/com_err.h>
-# elif defined(HAVE_KRB5_COM_ERR_H)
-#  include <stdlib.h>
-#  include <stdarg.h>
-#  include <krb5/com_err.h>
-# elif defined(HAVE_COM_ERR_H)
-#  include <com_err.h>
-# else
-#  error "no local com_err.h"
-# endif
-#endif /* IN_COM_ERR */
 
 /* This allows us to work even when we don't have an fdatasync */
 #ifndef HAVE_FDATASYNC
