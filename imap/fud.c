@@ -94,15 +94,15 @@ static void send_reply(struct sockaddr *sfrom, socklen_t sfromsiz, int status,
 
 static int soc = 0; /* inetd (master) has handed us the port as stdin */
 
-#define MAX_LOG_NAME 16		/* should find out for real */
-#define MAX_DOM_NAME 20		/* should find out for real */
+#define MAXLOGNAME 16		/* should find out for real */
+#define MAXDOMNAME 20		/* should find out for real */
 
 static int begin_handling(void)
 {
     struct sockaddr_storage sfrom_storage;
     struct sockaddr *sfrom = (struct sockaddr *)&sfrom_storage;
     socklen_t sfromsiz;
-    char buf[MAX_LOG_NAME + MAX_DOM_NAME + MAX_MAILBOX_BUFFER];
+    char buf[MAXLOGNAME + MAXDOMNAME + MAX_MAILBOX_BUFFER];
     char *mbox;
     int r;
 

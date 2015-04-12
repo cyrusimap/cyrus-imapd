@@ -645,7 +645,7 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     int     verify_flags = SSL_VERIFY_NONE;
     const char   *cipher_list;
     const char   *client_ca_dir;
-    const char   *client_ca_file = "";
+    const char   *client_ca_file;
     const char   *server_ca_file;
     const char   *server_cert_file;
     const char   *server_key_file;
