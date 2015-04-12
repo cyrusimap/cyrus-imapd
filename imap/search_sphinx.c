@@ -42,7 +42,6 @@
 
 #include <config.h>
 
-#include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -851,7 +850,7 @@ static int check_directory(const char *dir, int verbose, int create)
 
     r = stat(dir, &sb);
     if (r < 0) {
-	if (r != ENOENT) {
+	if (errno != ENOENT) {
 	    /* something went wrong - permissions problem most likely */
 	    syslog(LOG_ERR, "IOERROR: unable to stat %s: %m", dir);
 	    r = IMAP_IOERROR;
@@ -891,7 +890,7 @@ static int sphinx_signal(int sig, int verbose)
 
     fd = open(pidfile, O_RDONLY, 0);
     if (fd < 0) {
-	if (fd == ENOENT) {
+	if (errno == ENOENT) {
 	    r = IMAP_NOTFOUND;
 	}
 	else {
@@ -927,7 +926,7 @@ static int sphinx_signal(int sig, int verbose)
 
     r = kill(pid, sig);
     if (r < 0) {
-	if (r == ESRCH) {
+	if (errno == ESRCH) {
 	    r = IMAP_NOTFOUND;
 	}
 	else {
@@ -1503,10 +1502,10 @@ static int sphinx_setup(const struct mailbox *mailbox, int verbose, int create)
 	fd = -1;
 
 	if (verbose)
-	    syslog(LOG_INFO, "Sphinx read %ld bytes of config file %s",
+	    syslog(LOG_INFO, "Sphinx read %d bytes of config file %s",
 		    bits.len, config_file);
     }
-    else if (fd != ENOENT) {
+    else if (errno != ENOENT) {
 	/* it's ok to be missing the file - we build it from scratch */
 	syslog(LOG_ERR, "IOERROR: unable to open %s for reading: %m",
 	       config_file);
@@ -1938,7 +1937,7 @@ static void end_part(search_text_receiver_t *rx,
     sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
 
     if (tr->verbose > 1)
-	syslog(LOG_NOTICE, "Sphinx: %ld bytes in part %s",
+	syslog(LOG_NOTICE, "Sphinx: %u bytes in part %s",
 	       tr->parts[tr->part].len, search_part_as_string(tr->part));
 
     tr->part = 0;
