@@ -1879,6 +1879,64 @@ out:
     return r;
 }
 
+int sync_append_copyfile(struct mailbox *mailbox,
+			 struct index_record *record,
+			 const struct sync_annot_list *annots)
+{
+    const char *fname, *destname;
+    struct message_guid tmp_guid;
+    int r;
+
+    message_guid_copy(&tmp_guid, &record->guid);
+
+    fname = dlist_reserve_path(mailbox->part, &tmp_guid);
+    if (!fname) {
+	r = IMAP_IOERROR;
+	syslog(LOG_ERR, "IOERROR: Failed to reserve file %s",
+	       message_guid_encode(&tmp_guid));
+	return r;
+    }
+
+    r = message_parse(fname, record);
+    if (r) {
+	/* deal with unlinked master records */
+	if (record->system_flags & FLAG_EXPUNGED) {
+	    record->system_flags |= FLAG_UNLINKED;
+	    goto just_write;
+	}
+	syslog(LOG_ERR, "IOERROR: failed to parse %s", fname);
+	return r;
+    }
+
+    if (!message_guid_equal(&tmp_guid, &record->guid)) {
+	syslog(LOG_ERR, "IOERROR: guid mismatch on parse %s (%s)",
+	       fname, message_guid_encode(&record->guid));
+	return IMAP_IOERROR;
+    }
+
+    destname = mailbox_message_fname(mailbox, record->uid);
+    cyrus_mkdir(destname, 0755);
+    r = mailbox_copyfile(fname, destname, 0);
+    if (r) {
+	syslog(LOG_ERR, "IOERROR: Failed to copy %s to %s",
+	       fname, destname);
+	return r;
+    }
+
+ just_write:
+    r = mailbox_append_index_record(mailbox, record);
+    if (r) return r;
+
+    /* apply the remote annotations */
+    r = apply_annotations(mailbox, record, NULL, annots, 0);
+    if (r) {
+	syslog(LOG_ERR, "Failed to apply annotations: %s",
+	       error_message(r));
+    }
+
+    return r;
+}
+
 /* =======================  server-side sync  =========================== */
 
 static void reserve_folder(const char *part, const char *mboxname,
