@@ -130,10 +130,10 @@ extern const unsigned char convert_to_uppercase[256];
 #endif
 
 #define LOG_OVERFLOW	syslog(LOG_ERR, "%s:%d buffer overflow", __FILE__, __LINE__)
-#define STRLCPY_LOG(d,s,n)	do { if ((int)(n) <= strlcpy((d),(s),(n))) LOG_OVERFLOW; } while (0)
-#define STRLCAT_LOG(d,s,n)	do { if ((int)(n) <= strlcat((d),(s),(n))) LOG_OVERFLOW; } while (0)
-#define VSNPRINTF_LOG(d,n,f,a)	do { if ((int)(n) <= vsnprintf((d),(n),(f),(a))) LOG_OVERFLOW; } while (0)
-#define SNPRINTF_LOG(d,n,...) do { if ((int)(n) <= snprintf((d),(n),__VA_ARGS__)) LOG_OVERFLOW; } while (0)
+#define STRLCPY_LOG(d,s,n)	do { if ((n) <= strlcpy((d),(s),(n))) LOG_OVERFLOW; } while (0)
+#define STRLCAT_LOG(d,s,n)	do { if ((n) <= strlcat((d),(s),(n))) LOG_OVERFLOW; } while (0)
+#define VSNPRINTF_LOG(d,n,f,a)	do { if ((n) <= vsnprintf((d),(n),(f),(a))) LOG_OVERFLOW; } while (0)
+#define SNPRINTF_LOG(d,n,...) do { if ((n) <= snprintf((d),(n),__VA_ARGS__)) LOG_OVERFLOW; } while (0)
 
 /* Special version for chaining appends to end of buffer. */
 #define SNPRINTF_APPEND_LOG(buf, size, end, ...) \
@@ -145,10 +145,10 @@ do { \
 } while (0)
 
 #define ERR_OVERFLOW	(void) fprintf(stderr, "%s:%d buffer overflow\n", __FILE__, __LINE__)
-#define STRLCPY_ERR(d,s,n)	do { if ((int)(n) <= strlcpy((d),(s),(n))) ERR_OVERFLOW; } while (0)
-#define STRLCAT_ERR(d,s,n)	do { if ((int)(n) <= strlcat((d),(s),(n))) ERR_OVERFLOW; } while (0)
-#define VSNPRINTF_ERR(d,n,f,a)	do { if ((int)(n) <= vsnprintf((d),(n),(f),(a))) ERR_OVERFLOW; } while (0)
-#define SNPRINTF_ERR(d,n,f,...) do { if ((int)(n) <= snprintf((d),(n),(f),__VA_ARGS__)) ERR_OVERFLOW; } while (0)
+#define STRLCPY_ERR(d,s,n)	do { if ((n) <= strlcpy((d),(s),(n))) ERR_OVERFLOW; } while (0)
+#define STRLCAT_ERR(d,s,n)	do { if ((n) <= strlcat((d),(s),(n))) ERR_OVERFLOW; } while (0)
+#define VSNPRINTF_ERR(d,n,f,a)	do { if ((n) <= vsnprintf((d),(n),(f),(a))) ERR_OVERFLOW; } while (0)
+#define SNPRINTF_ERR(d,n,f,...) do { if ((n) <= snprintf((d),(n),(f),__VA_ARGS__)) ERR_OVERFLOW; } while (0)
 
 /* Length of a static string. */
 #ifndef STRLEN
