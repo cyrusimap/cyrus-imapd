@@ -85,7 +85,7 @@ dnl
 dnl SNERT_IF_SYSTEM_DIR(word, if-system, not-system)
 dnl
 m4_define([SNERT_IF_SYSTEM_DIR],[
-	AS_CASE([$1],[/usr/include|/usr/lib64|/usr/lib/x86_64-linux-gnu|/usr/lib|/lib64|/lib/x86_64-linux-gnu|/lib],[$2],[$3])
+	AS_CASE([$1],[/usr/include|/usr/lib64|/usr/lib],[$2],[$3])
 ])
 
 dnl
@@ -133,7 +133,7 @@ dnl
 dnl SNERT_CHECK_PACKAGE_LIB(library, if-found, not-found[, extra_dirs])
 dnl
 AC_DEFUN([SNERT_CHECK_PACKAGE_LIB],[
-	SNERT_FIND_FILE([$1],[$4 /usr/pkg/lib /usr/local/lib /usr/lib64 /usr/lib/x86_64-linux-gnu /usr/lib /lib64 /lib/x86_64-linux-gnu /lib],[$2],[$3])
+	SNERT_FIND_FILE([$1],[$4 /usr/pkg/lib /usr/local/lib /usr/lib64 /usr/lib],[$2],[$3])
 ])
 
 dnl
