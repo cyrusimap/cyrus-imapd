@@ -4997,7 +4997,7 @@ static int do_folders(struct sync_name_list *mboxname_list,
 
     while (rename_folders->done < rename_folders->count) {
 	int rename_success = 0;
-	struct sync_rename *item, *item2 = NULL;
+	struct sync_rename *item, *item2;
 
 	for (item = rename_folders->head; item; item = item->next) {
 	    if (item->done) continue;
