@@ -573,7 +573,7 @@ AS_IF([test -n "$LIBS_MYSQL" -o -n "$LIBS_PGSQL" -o -n "$LIBS_SQLITE3"],[
 ])
 AC_MSG_RESULT($HAVE_SQL)
 
-AS_IF([test X"$enable_sphinx" = X'yes' -a X"$LIBS_MYSQL" = X],[
+AS_IF([test X"$enable_sphinx" = X'yes' -a -n "$LIBS_MYSQL"],[
 	AC_DEFINE(USE_SPHINX,[1],[Build in Sphinx support?])
 ],[
 	AC_MSG_WARN([Sphinx requires MySQL, but MySQL not available; disabled.])
