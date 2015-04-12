@@ -195,7 +195,7 @@ static void test_tourl(void)
     iurl.mailbox = "deverill";
 
     memset(buf, 0x45, sizeof(buf));
-    imapurl_toURL(buf, sizeof (buf), &iurl);
+    imapurl_toURL(buf, &iurl);
     CU_ASSERT_STRING_EQUAL(buf, URL);
 }
 
@@ -209,7 +209,7 @@ static void test_tourl_server(void)
     iurl.server = "jeeves";
 
     memset(buf, 0x45, sizeof(buf));
-    imapurl_toURL(buf, sizeof (buf), &iurl);
+    imapurl_toURL(buf, &iurl);
     CU_ASSERT_STRING_EQUAL(buf, URL);
 }
 
@@ -224,7 +224,7 @@ static void test_tourl_user(void)
     iurl.server = "jeeves";
     iurl.mailbox = "deverill";
     memset(buf, 0x45, sizeof(buf));
-    imapurl_toURL(buf, sizeof (buf), &iurl);
+    imapurl_toURL(buf, &iurl);
     CU_ASSERT_STRING_EQUAL(buf, URL);
 }
 
@@ -248,7 +248,7 @@ static void test_tourl_options(void)
     iurl.octet_count = 1023;
 
     memset(buf, 0x45, sizeof(buf));
-    imapurl_toURL(buf, sizeof (buf), &iurl);
+    imapurl_toURL(buf, &iurl);
     CU_ASSERT_STRING_EQUAL(buf, URL);
 }
 
@@ -271,7 +271,7 @@ static void test_tourl_urlauth(void)
     iurl.urlauth.expire = 1290581846;
 
     memset(buf, 0x45, sizeof(buf));
-    imapurl_toURL(buf, sizeof (buf), &iurl);
+    imapurl_toURL(buf, &iurl);
     CU_ASSERT_STRING_EQUAL(buf, URL);
 }
 
@@ -291,7 +291,7 @@ static void test_tourl_ampersand(void)
     iurl.mailbox = "Goosey&-Bawks";
 
     memset(buf, 0x45, sizeof(buf));
-    imapurl_toURL(buf, sizeof (buf), &iurl);
+    imapurl_toURL(buf, &iurl);
     CU_ASSERT_STRING_EQUAL(buf, URL);
 }
 
@@ -310,7 +310,7 @@ static void test_tourl_urlunsafe(void)
     iurl.mailbox = " \"#%+:;<=>?@[\\]^`{|}";
 
     memset(buf, 0x45, sizeof(buf));
-    imapurl_toURL(buf, sizeof (buf), &iurl);
+    imapurl_toURL(buf, &iurl);
     CU_ASSERT_STRING_EQUAL(buf, URL);
 }
 
@@ -338,7 +338,7 @@ static void test_tourl_utf7_high(void)
     iurl.mailbox = "&2Ajcc9gI3CDYCN0p-";
 
     memset(buf, 0x45, sizeof(buf));
-    imapurl_toURL(buf, sizeof (buf), &iurl);
+    imapurl_toURL(buf, &iurl);
     CU_ASSERT_STRING_EQUAL(buf, URL);
 }
 
@@ -385,7 +385,7 @@ static void test_cycle(void)
     iurl.uidvalidity = 1234567890;
 
     memset(url, 0x45, sizeof(url));
-    imapurl_toURL(url, sizeof (url), &iurl);
+    imapurl_toURL(url, &iurl);
     CU_ASSERT_STRING_EQUAL(url, URL);
 
     r = imapurl_fromURL(&iurl2, url);
