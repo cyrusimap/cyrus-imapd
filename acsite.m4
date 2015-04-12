@@ -1161,7 +1161,7 @@ AC_DEFUN([CYRUS_GSSAPI],[
 	AC_REQUIRE([CYRUS_COM_ERR])
 	SNERT_CHECK_PACKAGE([GSSAPI], dnl
 		[gssapi/gssapi.h gssapi/gssapi_ext.h gssapi.h appsec-sdk/include/gssapi.h], dnl
-		[libgssapi libgssapi_krb5 libkrb5support appsec-rt/lib/libgss], dnl
+		[libgssapi libasn1 libroken libgssapi_krb5 libkrb5support appsec-rt/lib/libgss], dnl
 		[gss_unwrap krb5int_getspecific csf_gss_acq_user], dnl
 		[$with_gssapi],[$with_gssapi_inc],[$with_gssapi_lib],[],[no]dnl
 	)
@@ -1189,14 +1189,17 @@ dnl			-lkrb5 -lasn1 -lroken ${LIB_CRYPT} ${LIB_DES} -lcom_err
 	],[],[$LIBS_KRB5 $LIBS_COM_ERR $NETWORK_LIBS])
 
 	AS_UNSET([ac_cv_lib_gssapi_gss_unwrap])
+	AC_CHECK_LIB([krb5support],[krb5int_getspecific],[
+		SNERT_JOIN_UNIQ([LIBS_GSSAPI],[-lkrb5support])
+	])
 	AC_CHECK_LIB([gssapi_krb5],[gss_unwrap],[
 		AS_IF([test "$enable_gssapi" = 'auto' -o "$enable_gssapi" = 'mit'],[
-			SNERT_JOIN_UNIQ([LIBS_GSSAPI],[$LIBS_KRB5 -lk5crypto $LIBS_COM_ERR $NETWORK_LIBS])
+			SNERT_JOIN_UNIQ([LIBS_GSSAPI],[-lgssapi_krb5 $LIBS_KRB5 -lk5crypto $LIBS_COM_ERR $NETWORK_LIBS])
 			SNERT_JOIN_UNIQ([CPPFLAGS_GSSAPI],[$CPPFLAGS_KRB5 $CPPFLAGS_COM_ERR])
 			SNERT_JOIN_UNIQ([LDFLAGS_GSSAPI],[$LDFLAGS_KRB5 $LDFLAGS_COM_ERR])
 			enable_gssapi="mit"
 		])
-	],[],[$LIBS_KRB5 -lk5crypto $LIBS_COM_ERR $NETWORK_LIBS])
+	],[],[-lgssapi_krb5 $LIBS_KRB5 -lk5crypto $LIBS_COM_ERR $NETWORK_LIBS])
 
 	AS_UNSET([ac_cv_lib_gss_csf_gss_acq_user])
 	AC_CHECK_LIB([gss],[csf_gss_acq_user],[
