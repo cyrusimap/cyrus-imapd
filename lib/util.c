@@ -54,11 +54,9 @@
 #include <syslog.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#ifdef HAVE_SYS_CAPABILITY_H
-# include <sys/capability.h>
-#endif
-#ifdef HAVE_SYS_PRCTL_H
-# include <sys/prctl.h>
+#if defined(__linux__) && defined(HAVE_LIBCAP)
+#include <sys/capability.h>
+#include <sys/prctl.h>
 #endif
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -526,7 +524,7 @@ EXPORTED int cyrus_copyfile(const char *from, const char *to, int flags)
     return r;
 }
 
-#if defined(__linux__) && defined(HAVE_SYS_CAPABILITY_H)
+#if defined(__linux__) && defined(HAVE_LIBCAP)
 EXPORTED int set_caps(int stage, int is_master)
 {
     cap_t cap = NULL;
