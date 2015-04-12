@@ -365,8 +365,6 @@ AC_DEFUN(SNERT_FILE_LOCKS,[
 		SNERT_CHECK_DEFINE(FNDELAY, fcntl.h)
 	])
 	AH_VERBATIM(HAVE_LOCK_SH,[
-#undef HAVE_MACRO_LOCK_SH
-
 /*
  * Define the flock() constants separately, since some systems
  * have flock(), but fail to define the constants in a header.
