@@ -3934,6 +3934,7 @@ static int fetch_file(struct mailbox *mailbox, unsigned uid,
     int r = 0;
     struct sync_msgid *msgid;
     struct message_guid *guid = NULL;
+    struct stat sbuf;
     size_t size = 0;
     const char *fname = NULL;
 
