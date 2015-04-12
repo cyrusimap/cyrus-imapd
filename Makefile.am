@@ -179,7 +179,6 @@ endif # HAVE_CLAMAV
 if USE_SQUAT
 sbin_PROGRAMS += imap/squat_dump
 endif
-
 if SQUATTER
 # Despite the name, the squatter program handles any search engine
 sbin_PROGRAMS += imap/squatter
@@ -648,14 +647,8 @@ cunit_TESTS += cunit/sieve.testc
 endif
 
 cunit_TESTS += \
-	cunit/spool.testc
-
-if USE_SQUAT
-cunit_TESTS += \
-	cunit/squat.testc
-endif # USE_SQUAT
-
-cunit_TESTS += \
+	cunit/spool.testc \
+	cunit/squat.testc \
 	cunit/strarray.testc \
 	cunit/strconcat.testc \
 	cunit/times.testc \
@@ -1210,21 +1203,11 @@ imap_search_test_LDADD = $(LD_UTILITY_ADD)
 imap_smmapd_SOURCES = imap/mutex_fake.c imap/proxy.c imap/smmapd.c master/service.c
 imap_smmapd_LDADD = $(LD_SERVER_ADD)
 
-if SQUATTER
 imap_squatter_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/squatter.c
 imap_squatter_LDADD = $(LD_UTILITY_ADD)
-else # SQUATTER
-EXTRA_DIST += \
-	imap/squatter.c
-endif # SQUATTER
 
-if USE_SQUAT
 imap_squat_dump_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/squat_dump.c
 imap_squat_dump_LDADD = $(LD_UTILITY_ADD)
-else # USE_SQUAT
-EXTRA_DIST += \
-	imap/squat_dump.c
-endif # USE_SQUAT
 
 imap_sync_client_SOURCES = imap/mutex_fake.c imap/sync_client.c imap/sync_support.c imap/sync_support.h
 imap_sync_client_LDADD = $(LD_UTILITY_ADD)
@@ -1435,7 +1418,7 @@ dist_man_MANS = \
 	man/tls_prune.8 \
 	man/unexpunge.8
 
-if SQUATTER
+if USE_SQUAT
 dist_man_MANS += \
        man/squatter.8
 endif
