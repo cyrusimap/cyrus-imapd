@@ -145,8 +145,8 @@ do { \
 } while (0)
 
 #define ERR_OVERFLOW	(void) fprintf(stderr, "%s:%d buffer overflow\n", __FILE__, __LINE__)
-#define STRLCPY_ERR(d,s,n)	do { if ((unsigned int)(n) <= strlcpy((d),(s),(n))) ERR_OVERFLOW; } while (0)
-#define STRLCAT_ERR(d,s,n)	do { if ((unsigned int)(n) <= strlcat((d),(s),(n))) ERR_OVERFLOW; } while (0)
+#define STRLCPY_ERR(d,s,n)	do { if ((int)n <= strlcpy((d),(s),(n))) ERR_OVERFLOW; } while (0)
+#define STRLCAT_ERR(d,s,n)	do { if ((int)n <= strlcat((d),(s),(n))) ERR_OVERFLOW; } while (0)
 #define VSNPRINTF_ERR(d,n,f,a)	do { if ((int)(n) <= vsnprintf((d),(n),(f),(a))) ERR_OVERFLOW; } while (0)
 #define SNPRINTF_ERR(d,n,f,...) do { if ((int)(n) <= snprintf((d),(n),(f),__VA_ARGS__)) ERR_OVERFLOW; } while (0)
 
