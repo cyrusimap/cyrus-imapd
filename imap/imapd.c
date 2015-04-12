@@ -13401,7 +13401,7 @@ static void cmd_syncapply(const char *tag, struct dlist *kin, struct sync_reserv
 	r = sync_apply_mailbox(kin, reserve_list, &sync_state);
     else if (!strcmp(kin->name, "LOCAL_MAILBOX")) {
 	sync_state.local_only = 1;
-	r = sync_apply_mailbox(kin, reserve_list, &sync_state);
+	r = sync_apply_mailbox(kin, &sync_state);
     }
     else if (!strcmp(kin->name, "QUOTA"))
 	r = sync_apply_quota(kin, &sync_state);
