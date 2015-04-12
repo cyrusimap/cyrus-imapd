@@ -392,8 +392,6 @@ static int do_sync_mailboxes(struct sync_name_list *mboxname_list,
 
 static int do_restart()
 {
-    static int restartcnt = 0;
-
     if (sync_out->userdata) {
 	/* IMAP flavor (w/ tag) */
 	prot_printf(sync_out, "R%d SYNC", restartcnt++);
@@ -691,6 +689,7 @@ static int do_daemon_work(const char *channel, const char *sync_shutdown_file,
     int    delta;
     struct stat sbuf;
     sync_log_reader_t *slr;
+    int restartcnt = 0;
 
     *restartp = RESTART_NONE;
     slr = sync_log_reader_create_with_channel(channel);
