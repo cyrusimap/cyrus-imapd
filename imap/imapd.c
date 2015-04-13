@@ -13389,7 +13389,7 @@ static void cmd_xmeid(const char *tag, const char *id)
 
 static void cmd_syncapply(const char *tag, struct dlist *kin, struct sync_reserve_list *reserve_list)
 {
-    int r;
+    int r = IMAP_PROTOCOL_ERROR;
     struct sync_state sync_state = {
 	    imapd_userid,
 	    imapd_userisadmin,
@@ -13398,6 +13398,15 @@ static void cmd_syncapply(const char *tag, struct dlist *kin, struct sync_reserv
 	    imapd_out,
 	    0
     };
+
+    /* administrators only please */
+    if (!imapd_userisadmin) {
+	syslog(LOG_ERR, "SYNCERROR: invalid user %s trying to sync", imapd_userid);
+	r = IMAP_PERMISSION_DENIED;
+	goto done;
+    }
+
+    ucase(kin->name);
 
     if (!strcmp(kin->name, "MESSAGE"))
 	r = sync_apply_message(kin, reserve_list, &sync_state);
@@ -13464,6 +13473,7 @@ static void cmd_syncapply(const char *tag, struct dlist *kin, struct sync_reserv
 	r = IMAP_PROTOCOL_ERROR;
     }
 
+done:
     sync_print_response(tag, r, imapd_out);
 
     /* Reset inactivity timer in case we spent a long time processing data */
@@ -13472,11 +13482,18 @@ static void cmd_syncapply(const char *tag, struct dlist *kin, struct sync_reserv
 
 static void cmd_syncget(const char *tag, struct dlist *kin)
 {
-    int r;
+    int r = IMAP_PROTOCOL_ERROR;
     struct sync_state sync_state = {
 	imapd_userid, imapd_userisadmin || imapd_userisproxyadmin,
 	imapd_authstate, &imapd_namespace, imapd_out, 0 /* local_only */
     };
+
+    /* administrators only please */
+    if (!imapd_userisadmin) {
+	syslog(LOG_ERR, "SYNCERROR: invalid user %s trying to sync", imapd_userid);
+	r = IMAP_PERMISSION_DENIED;
+	goto done;
+    }
 
     ucase(kin->name);
 
@@ -13499,7 +13516,11 @@ static void cmd_syncget(const char *tag, struct dlist *kin)
     else
 	r = IMAP_PROTOCOL_ERROR;
 
+done:
     sync_print_response(tag, r, imapd_out);
+
+    /* Reset inactivity timer in case we spent a long time processing data */
+    prot_resettimeout(imapd_in);
 }
 
 
