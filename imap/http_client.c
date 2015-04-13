@@ -145,7 +145,7 @@ int http_parse_framing(hdrcache_t hdrs, struct body_t *body,
 	if (*hdr) {
 	    body->te = TE_UNKNOWN;
 	    *errstr = "Specified Transfer-Encoding not implemented";
-	    return HTTP_BAD_MEDIATYPE;
+	    return HTTP_NOT_IMPLEMENTED;
 	}
 
 	/* Check if this is a non-chunked response */
@@ -156,7 +156,7 @@ int http_parse_framing(hdrcache_t hdrs, struct body_t *body,
 	    else {
 		body->te = TE_UNKNOWN;
 		*errstr = "Final Transfer-Encoding MUST be \"chunked\"";
-		return HTTP_BAD_MEDIATYPE;
+		return HTTP_NOT_IMPLEMENTED;
 	    }
 	}
     }
@@ -358,7 +358,7 @@ int http_read_body(struct protstream *pin, struct protstream *pout,
 #endif
 	    else {
 		*errstr = "Specified Content-Encoding not accepted";
-		return HTTP_BAD_MEDIATYPE;
+		return HTTP_BAD_CE;
 	    }
 
 	    if (r) {

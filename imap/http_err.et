@@ -133,6 +133,10 @@ ec HTTP_URI_TOO_LONG,
 ec HTTP_BAD_MEDIATYPE,
    "415 Unsupported Media Type"
 
+# Used to differentiate between unsupported Content-Encoding and Content-Type
+ec HTTP_BAD_CE,
+   "415 Unsupported Media Type"
+
 ec HTTP_EXPECT_FAILED,
    "417 Expectation Failed"
 
