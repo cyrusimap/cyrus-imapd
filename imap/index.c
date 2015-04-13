@@ -682,7 +682,8 @@ static void index_refresh_locked(struct index_state *state)
 	    im->user_flags[i] = record.user_flags[i];
 
 	/* for expunged records, just track the modseq */
-	if (!state->want_expunged && (im->system_flags & FLAG_EXPUNGED)) {
+	if (im->system_flags & FLAG_EXPUNGED) {
+	    num_expunged++;
 	    /* http://www.rfc-editor.org/errata_search.php?rfc=5162
 	     * Errata ID: 1809 - if there are expunged records we
 	     * aren't telling about, need to make the highestmodseq
@@ -721,9 +722,6 @@ static void index_refresh_locked(struct index_state *state)
 		numrecent++;
 	    }
 	}
-
-	if (im->system_flags & FLAG_EXPUNGED)
-	    num_expunged++;
 
 	msgno++;
 
