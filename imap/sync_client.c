@@ -813,11 +813,30 @@ static void replica_connect(const char *channel)
 
     /* get the right port */
     port = get_config(channel, "sync_port");
-    if (port) imap_csync_protocol.service = port;
+    if (port) {
+	imap_csync_protocol.service = port;
+	csync_protocol.service = port;
+    }
 
     for (wait = 15;; wait *= 2) {
 	sync_backend = backend_connect(sync_backend, servername,
 				       &imap_csync_protocol, "", cb, &auth_status,
+				       (verbose > 1 ? fileno(stderr) : -1));
+
+	if (sync_backend) {
+	    if (sync_backend->capability & CAPA_REPLICATION) {
+		/* attach our IMAP tag buffer to our protstreams as userdata */
+		sync_backend->in->userdata = sync_backend->out->userdata = &tagbuf;
+		break;
+	    }
+	    else {
+		backend_disconnect(sync_backend);
+		sync_backend = NULL;
+	    }
+	}
+
+	sync_backend = backend_connect(sync_backend, servername,
+				       &csync_protocol, "", cb, NULL,
 				       (verbose > 1 ? fileno(stderr) : -1));
 
 	if (sync_backend || auth_status || connect_once || wait > 1000) break;
@@ -826,34 +845,6 @@ static void replica_connect(const char *channel)
 		"Can not connect to server '%s', retrying in %d seconds\n",
 		servername, wait);
 	sleep(wait);
-    }
-
-    if (sync_backend) {
-	if (sync_backend->capability & CAPA_REPLICATION) {
-	    /* attach our IMAP tag buffer to our protstreams as userdata */
-	    sync_backend->in->userdata = sync_backend->out->userdata = &tagbuf;
-	}
-	else {
-	    backend_disconnect(sync_backend);
-	    sync_backend = NULL;
-	}
-    }
-
-    if (!sync_backend) {
-	if (port) csync_protocol.service = port;
-
-	for (wait = 15;; wait *= 2) {
-	    sync_backend = backend_connect(sync_backend, servername,
-					   &csync_protocol, "", cb, NULL,
-					   (verbose > 1 ? fileno(stderr) : -1));
-
-	    if (sync_backend || connect_once || wait > 1000) break;
-
-	    fprintf(stderr,
-		"Can not connect to server '%s', retrying in %d seconds\n",
-		servername, wait);
-	    sleep(wait);
-	}
     }
 
     free_callbacks(cb);
