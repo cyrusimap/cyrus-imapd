@@ -177,6 +177,10 @@ if HAVE_CLAMAV
 sbin_PROGRAMS += imap/cyr_virusscan
 endif # HAVE_CLAMAV
 
+if USE_SPHINX
+sbin_PROGRAMS += imap/cyr_sphinxmgr
+endif
+
 if USE_SQUAT
 sbin_PROGRAMS += imap/squat_dump
 endif
@@ -816,6 +820,11 @@ imap_cyr_synclog_LDADD = $(LD_UTILITY_ADD)
 imap_cyr_userseen_SOURCES = imap/cli_fatal.c imap/cyr_userseen.c imap/mutex_fake.c
 imap_cyr_userseen_LDADD = $(LD_UTILITY_ADD)
 
+if USE_SPHINX
+imap_cyr_sphinxmgr_SOURCES = imap/cli_fatal.c imap/cyr_sphinxmgr.c imap/mutex_fake.c
+imap_cyr_sphinxmgr_LDADD = $(LD_UTILITY_ADD)
+endif
+
 if HAVE_CLAMAV
 imap_cyr_virusscan_SOURCES = imap/cli_fatal.c imap/cyr_virusscan.c imap/mutex_fake.c
 imap_cyr_virusscan_LDADD = $(LD_UTILITY_ADD) -lclamav
@@ -1003,7 +1012,9 @@ endif
 
 if USE_SPHINX
 imap_libcyrus_imap_la_SOURCES += \
-	imap/search_sphinx.c
+	imap/search_sphinx.c \
+	imap/sphinxmgr_client.c \
+	imap/sphinxmgr_client.h
 endif
 
 if JANSSON
@@ -1160,6 +1171,7 @@ imap_httpd_SOURCES = \
 	imap/http_dblookup.c \
 	imap/http_ischedule.c \
 	imap/http_jmap.c \
+	imap/http_jmap.h \
 	imap/http_proxy.c \
 	imap/http_rss.c \
 	imap/http_tzdist.c \
@@ -1218,6 +1230,7 @@ imap_squatter_LDADD = $(LD_UTILITY_ADD)
 imap_squat_dump_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/squat_dump.c
 imap_squat_dump_LDADD = $(LD_UTILITY_ADD)
 
+if REPLICATION
 imap_sync_client_SOURCES = imap/mutex_fake.c imap/sync_client.c imap/sync_support.c imap/sync_support.h
 imap_sync_client_LDADD = $(LD_UTILITY_ADD)
 
@@ -1226,6 +1239,15 @@ imap_sync_reset_LDADD = $(LD_UTILITY_ADD)
 
 imap_sync_server_SOURCES = imap/mutex_fake.c imap/sync_server.c imap/sync_support.c imap/sync_support.h master/service.c
 imap_sync_server_LDADD = $(LD_SERVER_ADD)
+else
+EXTRA_DIST += \
+	imap/sync_client.c \
+	imap/sync_reset.c \
+	imap/sync_server.c \
+	imap/sync_support.c \
+	imap/sync_support.h
+
+endif # REPLICATION
 
 imap_tls_prune_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/tls_prune.c
 imap_tls_prune_LDADD = $(LD_UTILITY_ADD)
@@ -1399,6 +1421,7 @@ dist_man_MANS = \
 	man/imapd.conf.5 \
 	man/krb.equiv.5 \
 	man/arbitron.8 \
+	man/ctl_conversationsdb.8 \
 	man/chk_cyrus.8 \
 	man/ctl_cyrusdb.8 \
 	man/ctl_deliver.8 \
@@ -1425,8 +1448,6 @@ dist_man_MANS = \
 	man/reconstruct.8 \
 	man/rmnews.8 \
 	man/smmapd.8 \
-	man/sync_client.8 \
-	man/sync_reset.8 \
 	man/timsieved.8 \
 	man/tls_prune.8 \
 	man/unexpunge.8
@@ -1434,7 +1455,12 @@ dist_man_MANS = \
 if USE_SQUAT
 dist_man_MANS += \
 	man/squatter.8
-endif
+
+else
+EXTRA_DIST += \
+	man/squatter.8
+
+endif # USE_SQUAT
 
 if NNTPD
 dist_man_MANS += \
@@ -1459,6 +1485,20 @@ EXTRA_DIST += \
 	man/httpd.8
 
 endif # HTTPD
+
+if REPLICATION
+dist_man_MANS += \
+	man/sync_client.8 \
+	man/sync_reset.8 \
+	man/sync_server.8
+
+else
+EXTRA_DIST += \
+	man/sync_client.8 \
+	man/sync_reset.8 \
+	man/sync_server.8
+
+endif
 
 master_master_SOURCES = \
 	master/cyrusMasterMIB.c \

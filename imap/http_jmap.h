@@ -1,4 +1,4 @@
-/* jmap.h -- data structures for jmap
+/* http_jmap.h -- data structures for jmap
  *
  * Copyright (c) 1994-2013 Carnegie Mellon University.  All rights reserved.
  *

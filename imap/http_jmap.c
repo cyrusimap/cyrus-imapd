@@ -59,7 +59,7 @@
 #include "httpd.h"
 #include "http_err.h"
 #include "http_proxy.h"
-#include "jmap.h"
+#include "http_jmap.h"
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "statuscache.h"

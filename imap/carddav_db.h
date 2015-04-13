@@ -48,7 +48,7 @@
 
 #include "annotate.h"
 #include "dav_db.h"
-#include "jmap.h"
+#include "http_jmap.h"
 #include "strarray.h"
 #include "util.h"
 #include "vparse.h"
