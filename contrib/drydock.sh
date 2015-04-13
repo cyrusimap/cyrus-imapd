@@ -9,6 +9,10 @@ if [ -z "${commit}" ]; then
     export commit
 fi
 
+# Once with -Werror
+CFLAGS="-g -fPIC -W -Wall -Wextra -Werror"
+export CFLAGS
+
 for script in `find contrib/drydock-tests/ -type f -name "*.sh" | sort`; do
     if [ -x $script ]; then
         echo "Running script $script"

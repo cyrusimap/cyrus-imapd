@@ -9,9 +9,6 @@ _git_clean
 
 _git_checkout_commit
 
-CFLAGS="-g -fPIC -W -Wall -Wextra -Werror"
-export CFLAGS
-
 [ -z "${commit}" ] && commit="HEAD"
 
 # Figure out the branch so we can figure out the product series

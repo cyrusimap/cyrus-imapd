@@ -15,31 +15,7 @@ _autoreconf
 
 ./configure \
     --enable-autocreate \
-    --enable-coverage \
-    --enable-gssapi \
-    --enable-http \
-    --enable-idled \
-    --enable-maintainer-mode \
-    --enable-murder \
-    --enable-nntp \
-    --enable-replication \
-    --enable-unit-tests \
-    --with-ldap=/usr || \
-    exit 124
-
-make lex-fix
-make -j4 || exit 5
-
-make check || exit 19
-
-# Once with -Werror
-CFLAGS="-g -fPIC -W -Wall -Wextra -Werror"
-export CFLAGS
-
-_autoreconf
-
-./configure \
-    --enable-autocreate \
+    --enable-calalarmd \
     --enable-coverage \
     --enable-gssapi \
     --enable-http \
