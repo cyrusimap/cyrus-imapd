@@ -741,7 +741,7 @@ static const char *_json_array_get_string(const json_t *obj, size_t index) {
 #define CMD_GETCARDS \
   "SELECT vcard_uid, mailbox, imap_uid" \
   " FROM vcard_objs" \
-  " WHERE kind = :kind AND alive = 1" \
+  " WHERE mailbox = :mailbox AND kind = :kind AND alive = 1" \
   " ORDER BY mailbox, imap_uid;"
 
 struct cards_rock {
@@ -854,19 +854,27 @@ static void _add_notfound(const char *key, void *data, void *rock)
 /* jmap contact APIs */
 EXPORTED int carddav_getContactGroups(struct carddav_db *carddavdb, struct jmap_req *req)
 {
+    const char *addressbookId = "Default";
+    json_t *abookid = json_object_get(req->args, "addressbookId");
+    if (abookid && json_string_value(abookid)) {
+	/* XXX - invalid arguments */
+	addressbookId = json_string_value(abookid);
+    }
+    const char *abookname = mboxname_abook(req->userid, addressbookId);
+
     struct bind_val bval[] = {
-	{ ":kind",   SQLITE_INTEGER, { .i = 1 } },
-	{ NULL,     SQLITE_NULL, { .s = NULL  } }
+	{ ":kind",    SQLITE_INTEGER, { .i = 1         } },
+	{ ":mailbox", SQLITE_TEXT,    { .s = abookname } },
+	{ NULL,       SQLITE_NULL,    { .s = NULL      } }
     };
     struct cards_rock rock;
     int r;
-    const char *abookname = mboxname_abook(req->userid, NULL);
 
     rock.array = json_pack("[]");
     rock.need = NULL;
     rock.props = NULL;
     rock.mailbox = NULL;
-    rock.mboxoffset = strlen(abookname) + 1;
+    rock.mboxoffset = strlen(abookname) - strlen(addressbookId);
 
     json_t *want = json_object_get(req->args, "ids");
     if (want) {
@@ -1780,19 +1788,27 @@ done:
 
 EXPORTED int carddav_getContacts(struct carddav_db *carddavdb, struct jmap_req *req)
 {
+    const char *addressbookId = "Default";
+    json_t *abookid = json_object_get(req->args, "addressbookId");
+    if (abookid && json_string_value(abookid)) {
+	/* XXX - invalid arguments */
+	addressbookId = json_string_value(abookid);
+    }
+    const char *abookname = mboxname_abook(req->userid, addressbookId);
+
     struct bind_val bval[] = {
-	{ ":kind",   SQLITE_INTEGER, { .i = 0 } },
-	{ NULL,     SQLITE_NULL, { .s = NULL  } }
+	{ ":kind",    SQLITE_INTEGER, { .i = 0         } },
+	{ ":mailbox", SQLITE_TEXT,    { .s = abookname } },
+	{ NULL,       SQLITE_NULL,    { .s = NULL      } }
     };
     struct cards_rock rock;
     int r;
-    const char *abookname = mboxname_abook(req->userid, NULL);
 
     rock.array = json_pack("[]");
     rock.need = NULL;
     rock.props = NULL;
     rock.mailbox = NULL;
-    rock.mboxoffset = strlen(abookname) + 1;
+    rock.mboxoffset = strlen(abookname) - strlen(addressbookId);
 
     json_t *want = json_object_get(req->args, "ids");
     if (want) {
