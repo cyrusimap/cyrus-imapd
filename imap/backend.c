@@ -275,26 +275,36 @@ static int parse_capability(struct backend *s, const char *str)
     int matches = 0;
     char *(*tok)(char *) = ws_tok;
     static const char code[] = "CAPABILITY";
+    int flags = s->prot->u.std.capa_cmd.formatflags;
 
     if (s->prot->type != TYPE_STD) return 0;
 
     /* save the buffer, we're going to be destructively parsing it */
     buf = xstrdup(str);
 
-    if ((s->prot->u.std.capa_cmd.formatflags & CAPAF_ONE_PER_LINE)) {
+    /* sync_client might be connecting to either an imapd or a sync_server.
+     * If sync_server, then it will get a different first line, if imapd,
+     * the banner will start with "* OK [CAPABILITY" */
+    if (flags & CAPAF_SYNC_MAGIC) {
+	if (!strncmp(str, "* OK [CAPABILITY", 16)) {
+	    flags |= CAPAF_ONE_PER_LINE;
+	}
+    }
+
+    if ((flags & CAPAF_ONE_PER_LINE)) {
 	/*
 	 * POP3, LMTP and sync protocol style: one capability per line.
 	 */
-	if ((s->prot->u.std.capa_cmd.formatflags & CAPAF_QUOTE_WORDS))
+	if ((flags & CAPAF_QUOTE_WORDS))
 	    tok = quote_tok;
 
-	if ((s->prot->u.std.capa_cmd.formatflags & CAPAF_DASH_STUFFING))
+	if ((flags & CAPAF_DASH_STUFFING))
 	    word = dash_tok(buf);
 	else
 	    word = tok(buf);
 
 	/* Ignore the first word of the line.  Used for LMTP and POP3 */
-	if (word && (s->prot->u.std.capa_cmd.formatflags & CAPAF_SKIP_FIRST_WORD))
+	if (word && (flags & CAPAF_SKIP_FIRST_WORD))
 	    word = tok(NULL);
 
 	if (!word)
