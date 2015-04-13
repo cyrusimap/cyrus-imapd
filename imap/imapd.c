@@ -13406,7 +13406,7 @@ static void cmd_syncapply(const char *tag, struct dlist *kin, struct sync_reserv
     }
 
     const char *resp = sync_apply(kin, reserve_list, &sync_state);
-    prot_printf(imapd_out, "%s %s", tag, resp);
+    prot_printf(imapd_out, "%s %s\r\n", tag, resp);
 
     /* Reset inactivity timer in case we spent a long time processing data */
     prot_resettimeout(imapd_in);
@@ -13431,7 +13431,7 @@ static void cmd_syncget(const char *tag, struct dlist *kin)
     }
 
     const char *resp = sync_get(kin, &sync_state);
-    prot_printf(imapd_out, "%s %s", tag, resp);
+    prot_printf(imapd_out, "%s %s\r\n", tag, resp);
 
     /* Reset inactivity timer in case we spent a long time processing data */
     prot_resettimeout(imapd_in);
