@@ -354,8 +354,11 @@ EXTRA_DIST += \
 	lib/charset/windows-1250.t \
 	lib/charset/windows-1251.t \
 	lib/charset/windows-1252.t \
+	lib/charset/windows-1254.t \
 	lib/charset/windows-1255.t \
 	lib/charset/windows-1256.t \
+	lib/charset/windows-1258.t \
+	lib/charset/windows-874.t \
 	lib/imapoptions \
 	lib/test/cyrusdb.c \
 	lib/test/cyrusdb.INPUT \
