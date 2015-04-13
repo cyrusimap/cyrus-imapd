@@ -666,27 +666,30 @@ static int carddav_put(struct transaction_t *txn, struct vparse_state *vparser,
 
     /* Create and cache RFC 5322 header fields for resource */
     mimehdr = charset_encode_mimeheader(fullname, 0);
-    spool_cache_header(xstrdup("Subject"), mimehdr, txn->req_hdrs);
-
+    spool_replace_header(xstrdup("Subject"), mimehdr, txn->req_hdrs);
+    
     /* XXX - validate uid for mime safety? */
     if (strchr(uid, '@')) {
-	spool_cache_header(xstrdup("Message-ID"), xstrdup(uid), txn->req_hdrs);
+	spool_replace_header(xstrdup("Message-ID"),
+			     xstrdup(uid), txn->req_hdrs);
     }
     else {
 	assert(!buf_len(&txn->buf));
 	buf_printf(&txn->buf, "<%s@%s>", uid, config_servername);
-	spool_cache_header(xstrdup("Message-ID"),
-			   buf_release(&txn->buf), txn->req_hdrs);
+	spool_replace_header(xstrdup("Message-ID"),
+			     buf_release(&txn->buf), txn->req_hdrs);
     }
 
     assert(!buf_len(&txn->buf));
     buf_printf(&txn->buf, "text/vcard; version=%s; charset=utf-8", version);
-    spool_cache_header(xstrdup("Content-Type"),
-		       buf_release(&txn->buf), txn->req_hdrs);
+    spool_replace_header(xstrdup("Content-Type"),
+			 buf_release(&txn->buf), txn->req_hdrs);
 
     buf_printf(&txn->buf, "attachment;\r\n\tfilename=\"%s\"", resource);
-    spool_cache_header(xstrdup("Content-Disposition"),
-		       buf_release(&txn->buf), txn->req_hdrs);
+    spool_replace_header(xstrdup("Content-Disposition"),
+			 buf_release(&txn->buf), txn->req_hdrs);
+
+    spool_remove_header(xstrdup("Content-Description"), txn->req_hdrs);
 
     /* Store the resource */
     return dav_store_resource(txn, buf_cstring(&txn->req_body.payload), 0,

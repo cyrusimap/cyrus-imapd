@@ -3108,8 +3108,7 @@ int meth_copy_move(struct transaction_t *txn, void *params)
 	/* Remote source mailbox */
 
 	/* Replace cached Destination header with just the absolute path */
-	hdr = spool_getheader(txn->req_hdrs, "Destination");
-	strcpy((char *) hdr[0], dest_tgt.path);
+	spool_replace_header("Destination", dest_tgt.path, txn->req_hdrs);
 
 	if (!dest_tgt.mbentry->server) {
 	    /* Local destination mailbox */
@@ -6170,15 +6169,6 @@ static char *strnchr(const char *s, int c, size_t n)
     return NULL;
 }
 
-static const char *spool_getheader_last(hdrcache_t cache, const char *phead)
-{
-    const char **hdr = spool_getheader(cache, phead);
-
-    if (!hdr) return NULL;
-    while (*(hdr+1)) hdr++;
-    return *hdr;
-}
-
 
 int dav_store_resource(struct transaction_t *txn,
 		       const char *data, size_t datalen,
@@ -6189,7 +6179,7 @@ int dav_store_resource(struct transaction_t *txn,
     hdrcache_t hdrcache = txn->req_hdrs;
     struct stagemsg *stage;
     FILE *f = NULL;
-    const char *hdr, *cte;
+    const char **hdr, *cte;
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
     time_t now = time(NULL);
     struct appendstate as;
@@ -6202,12 +6192,12 @@ int dav_store_resource(struct transaction_t *txn,
     }
 
     /* Create RFC 5322 header for resource */
-    if ((hdr = spool_getheader_last(hdrcache, "User-Agent"))) {
-	fprintf(f, "User-Agent: %s\r\n", hdr);
+    if ((hdr = spool_getheader(hdrcache, "User-Agent"))) {
+	fprintf(f, "User-Agent: %s\r\n", hdr[0]);
     }
 
-    if ((hdr = spool_getheader_last(hdrcache, "From"))) {
-	fprintf(f, "From: %s\r\n", hdr);
+    if ((hdr = spool_getheader(hdrcache, "From"))) {
+	fprintf(f, "From: %s\r\n", hdr[0]);
     }
     else {
 	char *mimehdr;
@@ -6228,12 +6218,12 @@ int dav_store_resource(struct transaction_t *txn,
 	buf_reset(&txn->buf);
     }
 
-    if ((hdr = spool_getheader_last(hdrcache, "Subject"))) {
-	fprintf(f, "Subject: %s\r\n", hdr);
+    if ((hdr = spool_getheader(hdrcache, "Subject"))) {
+	fprintf(f, "Subject: %s\r\n", hdr[0]);
     }
 
-    if ((hdr = spool_getheader_last(hdrcache, "Date"))) {
-	fprintf(f, "Date: %s\r\n", hdr);
+    if ((hdr = spool_getheader(hdrcache, "Date"))) {
+	fprintf(f, "Date: %s\r\n", hdr[0]);
     }
     else {
 	char datestr[80];
@@ -6241,12 +6231,12 @@ int dav_store_resource(struct transaction_t *txn,
 	fprintf(f, "Date: %s\r\n", datestr);
     }
 
-    if ((hdr = spool_getheader_last(hdrcache, "Message-ID"))) {
-	fprintf(f, "Message-ID: %s\r\n", hdr);
+    if ((hdr = spool_getheader(hdrcache, "Message-ID"))) {
+	fprintf(f, "Message-ID: %s\r\n", hdr[0]);
     }
 
-    if ((hdr = spool_getheader_last(hdrcache, "Content-Type"))) {
-	fprintf(f, "Content-Type: %s\r\n", hdr);
+    if ((hdr = spool_getheader(hdrcache, "Content-Type"))) {
+	fprintf(f, "Content-Type: %s\r\n", hdr[0]);
     }
     else fputs("Content-Type: application/octet-stream\r\n", f);
 
@@ -6259,12 +6249,12 @@ int dav_store_resource(struct transaction_t *txn,
     }
     fprintf(f, "Content-Transfer-Encoding: %s\r\n", cte);
 
-    if ((hdr = spool_getheader_last(hdrcache, "Content-Disposition"))) {
-	fprintf(f, "Content-Disposition: %s\r\n", hdr);
+    if ((hdr = spool_getheader(hdrcache, "Content-Disposition"))) {
+	fprintf(f, "Content-Disposition: %s\r\n", hdr[0]);
     }
 
-    if ((hdr = spool_getheader_last(hdrcache, "Content-Description"))) {
-	fprintf(f, "Content-Description: %s\r\n", hdr);
+    if ((hdr = spool_getheader(hdrcache, "Content-Description"))) {
+	fprintf(f, "Content-Description: %s\r\n", hdr[0]);
     }
 
     fprintf(f, "Content-Length: %u\r\n", (unsigned) datalen);
