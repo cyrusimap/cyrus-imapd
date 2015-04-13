@@ -13389,92 +13389,24 @@ static void cmd_xmeid(const char *tag, const char *id)
 
 static void cmd_syncapply(const char *tag, struct dlist *kin, struct sync_reserve_list *reserve_list)
 {
-    int r = IMAP_PROTOCOL_ERROR;
     struct sync_state sync_state = {
-	    imapd_userid,
-	    imapd_userisadmin,
-	    imapd_authstate,
-	    &imapd_namespace,
-	    imapd_out,
-	    0
+	imapd_userid,
+	imapd_userisadmin || imapd_userisproxyadmin,
+	imapd_authstate,
+	&imapd_namespace,
+	imapd_out,
+	0 /* local_only */
     };
 
     /* administrators only please */
     if (!imapd_userisadmin) {
 	syslog(LOG_ERR, "SYNCERROR: invalid user %s trying to sync", imapd_userid);
-	r = IMAP_PERMISSION_DENIED;
-	goto done;
+	prot_printf(imapd_out, "%s NO only admininstrators may use sync commands\r\n", tag);
+	return;
     }
 
-    ucase(kin->name);
-
-    if (!strcmp(kin->name, "MESSAGE"))
-	r = sync_apply_message(kin, reserve_list, &sync_state);
-    else if (!strcmp(kin->name, "EXPUNGE"))
-	r = sync_apply_expunge(kin, &sync_state);
-
-    /* dump protocol */
-    else if (!strcmp(kin->name, "ACTIVATE_SIEVE"))
-	r = sync_apply_activate_sieve(kin, &sync_state);
-    else if (!strcmp(kin->name, "ANNOTATION"))
-	r = sync_apply_annotation(kin, &sync_state);
-    else if (!strcmp(kin->name, "MAILBOX"))
-	r = sync_apply_mailbox(kin, reserve_list, &sync_state);
-    else if (!strcmp(kin->name, "LOCAL_MAILBOX")) {
-	sync_state.local_only = 1;
-	r = sync_apply_mailbox(kin, reserve_list, &sync_state);
-    }
-    else if (!strcmp(kin->name, "QUOTA"))
-	r = sync_apply_quota(kin, &sync_state);
-    else if (!strcmp(kin->name, "SEEN"))
-	r = sync_apply_seen(kin, &sync_state);
-    else if (!strcmp(kin->name, "RENAME"))
-	r = sync_apply_rename(kin, &sync_state);
-    else if (!strcmp(kin->name, "LOCAL_RENAME")) {
-	sync_state.local_only = 1;
-	r = sync_apply_rename(kin, &sync_state);
-    }
-    else if (!strcmp(kin->name, "RESERVE"))
-	r = sync_apply_reserve(kin, reserve_list, &sync_state);
-    else if (!strcmp(kin->name, "SIEVE"))
-	r = sync_apply_sieve(kin, &sync_state);
-    else if (!strcmp(kin->name, "SUB"))
-	r = sync_apply_changesub(kin, &sync_state);
-
-    /* "un"dump protocol ;) */
-    else if (!strcmp(kin->name, "UNACTIVATE_SIEVE"))
-	r = sync_apply_unactivate_sieve(kin, &sync_state);
-    else if (!strcmp(kin->name, "UNANNOTATION"))
-	r = sync_apply_unannotation(kin, &sync_state);
-    else if (!strcmp(kin->name, "UNMAILBOX"))
-	r = sync_apply_unmailbox(kin, &sync_state);
-    else if (!strcmp(kin->name, "LOCAL_UNMAILBOX")) {
-	sync_state.local_only = 1;
-	r = sync_apply_unmailbox(kin, &sync_state);
-    }
-    else if (!strcmp(kin->name, "UNQUOTA"))
-	r = sync_apply_unquota(kin, &sync_state);
-    else if (!strcmp(kin->name, "UNSIEVE"))
-	r = sync_apply_unsieve(kin, &sync_state);
-    else if (!strcmp(kin->name, "UNSUB"))
-	r = sync_apply_changesub(kin, &sync_state);
-
-    /* user is a special case that's not paired, there's no "upload user"
-     * as such - we just call the individual commands with their items */
-    else if (!strcmp(kin->name, "UNUSER"))
-	r = sync_apply_unuser(kin, &sync_state);
-    else if (!strcmp(kin->name, "LOCAL_UNUSER")) {
-	sync_state.local_only = 1;
-	r = sync_apply_unuser(kin, &sync_state);
-    }
-
-    else {
-	syslog(LOG_ERR, "SYNCERROR: unknown command %s", kin->name);
-	r = IMAP_PROTOCOL_ERROR;
-    }
-
-done:
-    sync_print_response(tag, r, imapd_out);
+    const char *resp = sync_apply(kin, reserve_list, &sync_state);
+    prot_printf(imapd_out, "%s %s", tag, resp);
 
     /* Reset inactivity timer in case we spent a long time processing data */
     prot_resettimeout(imapd_in);
@@ -13482,47 +13414,28 @@ done:
 
 static void cmd_syncget(const char *tag, struct dlist *kin)
 {
-    int r = IMAP_PROTOCOL_ERROR;
     struct sync_state sync_state = {
-	imapd_userid, imapd_userisadmin || imapd_userisproxyadmin,
-	imapd_authstate, &imapd_namespace, imapd_out, 0 /* local_only */
+	imapd_userid,
+	imapd_userisadmin || imapd_userisproxyadmin,
+	imapd_authstate,
+	&imapd_namespace,
+	imapd_out,
+	0 /* local_only */
     };
 
     /* administrators only please */
     if (!imapd_userisadmin) {
 	syslog(LOG_ERR, "SYNCERROR: invalid user %s trying to sync", imapd_userid);
-	r = IMAP_PERMISSION_DENIED;
-	goto done;
+	prot_printf(imapd_out, "%s NO only admininstrators may use sync commands\r\n", tag);
+	return;
     }
 
-    ucase(kin->name);
-
-    if (!strcmp(kin->name, "ANNOTATION"))
-	r = sync_get_annotation(kin, &sync_state);
-    else if (!strcmp(kin->name, "FETCH"))
-	r = sync_get_message(kin, &sync_state);
-    else if (!strcmp(kin->name, "FETCH_SIEVE"))
-	r = sync_get_sieve(kin, &sync_state);
-    else if (!strcmp(kin->name, "FULLMAILBOX"))
-	r = sync_get_fullmailbox(kin, &sync_state);
-    else if (!strcmp(kin->name, "MAILBOXES"))
-	r = sync_get_mailboxes(kin, &sync_state);
-    else if (!strcmp(kin->name, "META"))
-	r = sync_get_meta(kin, &sync_state);
-    else if (!strcmp(kin->name, "QUOTA"))
-	r = sync_get_quota(kin, &sync_state);
-    else if (!strcmp(kin->name, "USER"))
-	r = sync_get_user(kin, &sync_state);
-    else
-	r = IMAP_PROTOCOL_ERROR;
-
-done:
-    sync_print_response(tag, r, imapd_out);
+    const char *resp = sync_get(kin, &sync_state);
+    prot_printf(imapd_out, "%s %s", tag, resp);
 
     /* Reset inactivity timer in case we spent a long time processing data */
     prot_resettimeout(imapd_in);
 }
-
 
 /* partition_list is simple linked list of names used by cmd_syncrestart */
 

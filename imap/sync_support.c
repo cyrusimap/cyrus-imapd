@@ -3239,7 +3239,7 @@ int sync_apply_message(struct dlist *kin,
     return 0;
 }
 
-void sync_print_response(const char *tag, int r, struct protstream *out)
+static const char *sync_response(int r)
 {
     const char *resp;
 
@@ -3264,10 +3264,10 @@ void sync_print_response(const char *tag, int r, struct protstream *out)
 //	XXX resp = "NO IMAP_PROTOCOL_BAD_PARAMETERS near %s\r\n", dlist_lastkey());
 	break;
     default:
-	resp = "NO";
+	resp = "NO Unknown error";
     }
 
-    prot_printf(out, "%s %s %s\r\n", tag, resp, error_message(r));
+    return resp;
 }
 
 /* =======================  client-side sync  =========================== */
@@ -5456,4 +5456,108 @@ int sync_do_meta(char *userid, struct backend *sync_be, unsigned flags)
     sync_sieve_list_free(&replica_sieve);
 
     return r;
+}
+
+/* ====================================================================== */
+
+EXPORTED const char *sync_apply(struct dlist *kin, struct sync_reserve_list *reserve_list, struct sync_state *state)
+{
+    int r = IMAP_PROTOCOL_ERROR;
+
+    ucase(kin->name);
+
+    if (!strcmp(kin->name, "MESSAGE"))
+	r = sync_apply_message(kin, reserve_list, state);
+    else if (!strcmp(kin->name, "EXPUNGE"))
+	r = sync_apply_expunge(kin, state);
+
+    /* dump protocol */
+    else if (!strcmp(kin->name, "ACTIVATE_SIEVE"))
+	r = sync_apply_activate_sieve(kin, state);
+    else if (!strcmp(kin->name, "ANNOTATION"))
+	r = sync_apply_annotation(kin, state);
+    else if (!strcmp(kin->name, "MAILBOX"))
+	r = sync_apply_mailbox(kin, reserve_list, state);
+    else if (!strcmp(kin->name, "LOCAL_MAILBOX")) {
+	state->local_only = 1;
+	r = sync_apply_mailbox(kin, reserve_list, state);
+    }
+    else if (!strcmp(kin->name, "QUOTA"))
+	r = sync_apply_quota(kin, state);
+    else if (!strcmp(kin->name, "SEEN"))
+	r = sync_apply_seen(kin, state);
+    else if (!strcmp(kin->name, "RENAME"))
+	r = sync_apply_rename(kin, state);
+    else if (!strcmp(kin->name, "LOCAL_RENAME")) {
+	state->local_only = 1;
+	r = sync_apply_rename(kin, state);
+    }
+    else if (!strcmp(kin->name, "RESERVE"))
+	r = sync_apply_reserve(kin, reserve_list, state);
+    else if (!strcmp(kin->name, "SIEVE"))
+	r = sync_apply_sieve(kin, state);
+    else if (!strcmp(kin->name, "SUB"))
+	r = sync_apply_changesub(kin, state);
+
+    /* "un"dump protocol ;) */
+    else if (!strcmp(kin->name, "UNACTIVATE_SIEVE"))
+	r = sync_apply_unactivate_sieve(kin, state);
+    else if (!strcmp(kin->name, "UNANNOTATION"))
+	r = sync_apply_unannotation(kin, state);
+    else if (!strcmp(kin->name, "UNMAILBOX"))
+	r = sync_apply_unmailbox(kin, state);
+    else if (!strcmp(kin->name, "LOCAL_UNMAILBOX")) {
+	state->local_only = 1;
+	r = sync_apply_unmailbox(kin, state);
+    }
+    else if (!strcmp(kin->name, "UNQUOTA"))
+	r = sync_apply_unquota(kin, state);
+    else if (!strcmp(kin->name, "UNSIEVE"))
+	r = sync_apply_unsieve(kin, state);
+    else if (!strcmp(kin->name, "UNSUB"))
+	r = sync_apply_changesub(kin, state);
+
+    /* user is a special case that's not paired, there's no "upload user"
+     * as such - we just call the individual commands with their items */
+    else if (!strcmp(kin->name, "UNUSER"))
+	r = sync_apply_unuser(kin, state);
+    else if (!strcmp(kin->name, "LOCAL_UNUSER")) {
+	state->local_only = 1;
+	r = sync_apply_unuser(kin, state);
+    }
+
+    else {
+	syslog(LOG_ERR, "SYNCERROR: unknown command %s", kin->name);
+	r = IMAP_PROTOCOL_ERROR;
+    }
+
+    return sync_response(r);
+}
+
+EXPORTED const char *sync_get(struct dlist *kin, struct sync_state *state)
+{
+    int r = IMAP_PROTOCOL_ERROR;
+
+    ucase(kin->name);
+
+    if (!strcmp(kin->name, "ANNOTATION"))
+	r = sync_get_annotation(kin, state);
+    else if (!strcmp(kin->name, "FETCH"))
+	r = sync_get_message(kin, state);
+    else if (!strcmp(kin->name, "FETCH_SIEVE"))
+	r = sync_get_sieve(kin, state);
+    else if (!strcmp(kin->name, "FULLMAILBOX"))
+	r = sync_get_fullmailbox(kin, state);
+    else if (!strcmp(kin->name, "MAILBOXES"))
+	r = sync_get_mailboxes(kin, state);
+    else if (!strcmp(kin->name, "META"))
+	r = sync_get_meta(kin, state);
+    else if (!strcmp(kin->name, "QUOTA"))
+	r = sync_get_quota(kin, state);
+    else if (!strcmp(kin->name, "USER"))
+	r = sync_get_user(kin, state);
+    else
+	r = IMAP_PROTOCOL_ERROR;
+
+    return sync_response(r);
 }

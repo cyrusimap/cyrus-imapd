@@ -484,7 +484,8 @@ int sync_apply_message(struct dlist *kin,
 		       struct sync_reserve_list *reserve_list,
 		       struct sync_state *sstate);
 
-void sync_print_response(const char *tag, int r, struct protstream *out);
+const char *sync_apply(struct dlist *kin, struct sync_reserve_list *reserve_list, struct sync_state *state);
+const char *sync_get(struct dlist *kin, struct sync_state *state);
 
 /* =====================  client-side sync  ============================= */
 
@@ -531,6 +532,8 @@ int sync_do_user_seen(const char *user, struct sync_seen_list *replica_seen,
 		      struct backend *sync_be);
 int sync_do_user_sieve(const char *userid, struct sync_sieve_list *replica_sieve,
 		       struct backend *sync_be);
+
+
 
 /* ====================================================================== */
 
