@@ -183,7 +183,7 @@ struct protocol_t imap_csync_protocol =
 { "imap", "imap", TYPE_STD,
   { { { 1, NULL },
       { "C01 CAPABILITY", NULL, "C01 ", imap_postcapability,
-	CAPAF_SYNC_MAGIC,
+	CAPAF_MANY_PER_LINE,
 	{ { "AUTH", CAPA_AUTH },
 	  { "STARTTLS", CAPA_STARTTLS },
 // FIXME doesn't work with compress at the moment for some reason
