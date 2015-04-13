@@ -1270,7 +1270,7 @@ static void cmdloop(void)
 		syslog(LOG_WARNING, "%s, closing connection", err);
 		prot_printf(imapd_out, "* BYE %s\r\n", err);
 	    }
-	    break;
+	    goto done;
 	}
 	if (c != ' ' || !imparse_isatom(tag.s) || (tag.s[0] == '*' && !tag.s[1])) {
 	    prot_printf(imapd_out, "* BAD Invalid tag\r\n");
@@ -1630,7 +1630,7 @@ static void cmdloop(void)
 		    mboxname_hiersep_tointernal(&imapd_namespace, imapd_userid, config_virtdomains ? strcspn(imapd_userid, "@") : 0);
 		}
 
-		break;
+		goto done;
 	    }
 	    else if (!imapd_userid) goto nologin;
 	    else if (!strcmp(cmd.s, "List")) {
@@ -2372,6 +2372,7 @@ static void cmdloop(void)
 	continue;
     }
 
+done:
     cmd_syncrestart(NULL, &reserve_list, 0);
 }
 
