@@ -341,7 +341,7 @@ EXTRA_DIST += \
 	cunit/vg.supp \
 	doc \
 	imap/dav_util.h \
-	imap/http_caldav_js \
+	imap/http_caldav.js \
 	imap/http_err.et \
 	imap/imap_err.et \
 	imap/mupdate_err.et \
@@ -1056,6 +1056,7 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/zoneinfo_db.h
 
 nodist_imap_libcyrus_imap_la_SOURCES += \
+	imap/http_caldav_js.h \
 	imap/http_err.c \
 	imap/tz_err.c
 
