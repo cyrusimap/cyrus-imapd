@@ -1331,14 +1331,6 @@ void sync_send_lookup(struct dlist *kl, struct protstream *out)
     prot_flush(out);
 }
 
-void sync_send_set(struct dlist *kl, struct protstream *out)
-{
-    prot_printf(out, "SET ");
-    dlist_print(kl, 1, out);
-    prot_printf(out, "\r\n");
-    prot_flush(out);
-}
-
 struct dlist *sync_parseline(struct protstream *in)
 {
     struct dlist *dl = NULL;
