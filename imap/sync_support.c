@@ -1380,7 +1380,7 @@ static int sync_send_file(struct mailbox *mailbox,
     return 0;
 }
 
-int sync_mailbox(struct mailbox *mailbox,
+static int sync_mailbox(struct mailbox *mailbox,
 		        struct sync_folder *remote,
 			struct sync_msgid_list *part_list,
 			struct dlist *kl, struct dlist *kupload,
