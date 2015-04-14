@@ -10894,9 +10894,29 @@ static int FIXME_sync_mailbox(struct mailbox *mailbox,
     struct sync_msgid_list *part_list;
     struct sync_reserve *reserve;
     struct sync_folder *mfolder, *rfolder;
+    struct sync_annot_list *annots = NULL;
+    modseq_t xconvmodseq = 0;
 
     reserve_guids = sync_reserve_list_create(SYNC_MSGID_LIST_HASH_SIZE);
     part_list = sync_reserve_partlist(reserve_guids, mailbox->part);
+
+    /* always send mailbox annotations */
+    r = read_annotations(mailbox, NULL, &annots);
+    if (r) {
+	syslog(LOG_ERR, "FIXME_sync_mailbox(): read annotations failed: %s '%s'",
+	       mailbox->name, error_message(r));
+	goto cleanup;
+    }
+
+    /* xconvmodseq */
+    if (mailbox_has_conversations(mailbox)) {
+	r = mailbox_get_xconvmodseq(mailbox, &xconvmodseq);
+	if (r) {
+	    syslog(LOG_ERR, "FIXME_sync_mailbox(): mailbox get xconvmodseq failed: %s '%s'",
+		mailbox->name, error_message(r));
+	    goto cleanup;
+	}
+    }
 
     master_folders = sync_folder_list_create();
     sync_folder_list_add(master_folders,
@@ -10913,8 +10933,8 @@ static int FIXME_sync_mailbox(struct mailbox *mailbox,
 			 mailbox->i.recenttime,
 			 mailbox->i.pop3_last_login,
 			 mailbox->i.pop3_show_after,
-			 NULL /* FIXME annotations */,
-			 0 /* FIXME xconvmodseq */);
+			 annots,
+			 xconvmodseq);
 
     mfolder = master_folders->head;
     mfolder->mailbox = mailbox;
@@ -10958,6 +10978,7 @@ static int FIXME_sync_mailbox(struct mailbox *mailbox,
   cleanup:
     sync_reserve_list_free(&reserve_guids);
     sync_folder_list_free(&master_folders);
+    sync_annot_list_free(&annots);
 
     return r;
 }
