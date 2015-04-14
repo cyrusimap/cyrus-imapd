@@ -2867,16 +2867,22 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
     carddav_lookup_resource(carddavdb, mailbox->name, resource, /*lock*/1, &cdata, /*tombstones*/1);
 
     /* does it still come from this UID? */
-    if (cdata && cdata->dav.imap_uid > new->uid) goto done;
+    if (cdata->dav.imap_uid > new->uid) goto done;
 
     if (new->system_flags & FLAG_UNLINKED) {
 	/* is there an existing record? */
-	if (!cdata) goto done;
+	if (!cdata->dav.imap_uid) goto done;
 
 	/* delete entry */
 	r = carddav_delete(carddavdb, cdata->dav.rowid, 0);
     }
-    else if (!cdata || cdata->dav.imap_uid != new->uid) {
+    else if (cdata->dav.imap_uid == new->uid) {
+	/* just a flag change on an existing record */
+	cdata->dav.modseq = new->modseq;
+	cdata->dav.alive = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
+	r = carddav_write(carddavdb, cdata, 0);
+    }
+    else {
 	struct buf msg_buf = BUF_INITIALIZER;
 	struct vparse_state vparser;
 	int vr;
@@ -2910,11 +2916,6 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 	r = carddav_write(carddavdb, cdata, 0);
 
 	vparse_free(&vparser);
-    } else {
-	/* just a flag change on an existing record */
-	cdata->dav.modseq = new->modseq;
-	cdata->dav.alive = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
-	r = carddav_write(carddavdb, cdata, 0);
     }
 
 done:
@@ -2922,7 +2923,8 @@ done:
     free(body);
 
     if (carddavdb) {
-	carddav_commit(carddavdb);
+	if (r) carddav_abort(carddavdb);
+	else carddav_commit(carddavdb);
 	carddav_close(carddavdb);
     }
 
@@ -2973,12 +2975,12 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
     /* Find existing record for this resource */
     caldav_lookup_resource(caldavdb, mailbox->name, resource, 1, &cdata, 1);
 
-    /* does it still come from this UID? */
-    if (cdata && cdata->dav.imap_uid > new->uid) goto done;
+    /* has this record already been replaced?  Don't write anything */
+    if (cdata->dav.imap_uid > new->uid) goto done;
 
     if (new->system_flags & FLAG_UNLINKED) {
 	/* is there an existing record? */
-	if (!cdata) goto done;
+	if (!cdata->dav.imap_uid) goto done;
 
 	/* remove associated alarms */
 	struct caldav_alarm_db *alarmdb = caldav_alarm_open();
@@ -2992,7 +2994,13 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 	/* delete entry */
 	r = caldav_delete(caldavdb, cdata->dav.rowid, 0);
     }
-    else if (!cdata || cdata->dav.imap_uid != new->uid) {
+    else if (cdata->dav.imap_uid == new->uid) {
+	/* just a flags update to an existing record */
+	cdata->dav.modseq = new->modseq;
+	cdata->dav.alive = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
+	r = caldav_write(caldavdb, cdata, 0);
+    }
+    else {
 	struct buf msg_buf = BUF_INITIALIZER;
 	icalcomponent *ical = NULL;
 
@@ -3001,7 +3009,10 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 
 	ical = icalparser_parse_string(buf_cstring(&msg_buf) + new->header_size);
 	buf_free(&msg_buf);
-	if (!ical) goto done;
+	if (!ical) {
+	    r = IMAP_MAILBOX_BADFORMAT; // XXX better error?
+	    goto done;
+	}
 
 	cdata->dav.creationdate = new->internaldate;
 	cdata->dav.mailbox = mailbox->name;
@@ -3039,20 +3050,12 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 	    }
 	}
 
-	if (rc)
-	    caldav_alarm_rollback(alarmdb);
-	else
-	    caldav_alarm_commit(alarmdb);
+	if (rc) caldav_alarm_rollback(alarmdb);
+	else caldav_alarm_commit(alarmdb);
 	caldav_alarm_close(alarmdb);
 
 	r = caldav_write(caldavdb, cdata, 0);
 	icalcomponent_free(ical);
-    }
-    else {
-	/* just a flags update to an existing record */
-	cdata->dav.modseq = new->modseq;
-	cdata->dav.alive = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
-	r = caldav_write(caldavdb, cdata, 0);
     }
 
 done:
@@ -3060,7 +3063,8 @@ done:
     free(body);
 
     if (caldavdb) {
-	caldav_commit(caldavdb);
+	if (r) caldav_abort(caldavdb);
+	else caldav_commit(caldavdb);
 	caldav_close(caldavdb);
     }
 
