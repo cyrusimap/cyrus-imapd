@@ -407,12 +407,6 @@ int addmbox_sub(void *rockp, const char *key, size_t keylen,
 		const char *data __attribute__((unused)),
 		size_t datalen __attribute__((unused)));
 
-int sync_mailbox(struct mailbox *mailbox,
-		 struct sync_folder *remote,
-		 struct sync_msgid_list *part_list,
-		 struct dlist *kl, struct dlist *kupload,
-		 int printrecords);
-
 int parse_upload(struct dlist *kr, struct mailbox *mailbox,
 		 struct index_record *record,
 		 struct sync_annot_list **annotsp);

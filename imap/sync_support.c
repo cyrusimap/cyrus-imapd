@@ -1380,11 +1380,11 @@ static int sync_send_file(struct mailbox *mailbox,
     return 0;
 }
 
-static int sync_mailbox(struct mailbox *mailbox,
-		        struct sync_folder *remote,
-			struct sync_msgid_list *part_list,
-			struct dlist *kl, struct dlist *kupload,
-			int printrecords)
+static int sync_prepare_dlists(struct mailbox *mailbox,
+			       struct sync_folder *remote,
+			       struct sync_msgid_list *part_list,
+			       struct dlist *kl, struct dlist *kupload,
+			       int printrecords)
 {
     struct sync_annot_list *annots = NULL;
     struct synccrcs synccrcs = mailbox_synccrcs(mailbox, /*force*/0);
@@ -2583,7 +2583,7 @@ static int mailbox_cb(char *name,
 	 !sync_name_lookup(qrl, mailbox->quotaroot))
 	sync_name_list_add(qrl, mailbox->quotaroot);
 
-    r = sync_mailbox(mailbox, NULL, NULL, kl, NULL, 0);
+    r = sync_prepare_dlists(mailbox, NULL, NULL, kl, NULL, 0);
     if (!r) sync_send_response(kl, mrock->pout);
 
 out:
@@ -2605,7 +2605,7 @@ int sync_get_fullmailbox(struct dlist *kin, struct sync_state *sstate)
     r = mailbox_open_iwl(kin->sval, &mailbox);
     if (r) goto out;
 
-    r = sync_mailbox(mailbox, NULL, NULL, kl, NULL, 1);
+    r = sync_prepare_dlists(mailbox, NULL, NULL, kl, NULL, 1);
     if (r) goto out;
 
     sync_send_response(kl, sstate->pout);
@@ -4679,7 +4679,7 @@ static int update_mailbox_once(struct sync_folder *local,
 	goto done;
 
     part_list = sync_reserve_partlist(reserve_list, mailbox->part);
-    r = sync_mailbox(mailbox, remote, part_list, kl, kupload, 1);
+    r = sync_prepare_dlists(mailbox, remote, part_list, kl, kupload, 1);
     if (r) goto done;
 
     /* keep the mailbox locked for shorter time! Unlock the index now
