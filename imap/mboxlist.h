@@ -154,11 +154,11 @@ int mboxlist_createmailbox(const char *name, int mbtype,
 			   int notify, struct mailbox **mailboxptr);
 
 /* create mailbox from sync */
-int mboxlist_createsync(const char *name, int mbtype, const char *partition,
+int mboxlist_createsync(const char *name, int mbtype,
+			const char *partition, 
 			const char *userid, struct auth_state *auth_state,
 			int options, unsigned uidvalidity, const char *acl,
-			const char *uniqueid, int local_only,
-			struct mailbox **mboxptr);
+			const char *uniqueid, struct mailbox **mboxptr);
 
 /* delated delete */
 /* Translate delete into rename */
@@ -189,7 +189,7 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 			   int isadmin, const char *userid,
 			   struct auth_state *auth_state,
 			   struct mboxevent *mboxevent,
-			   int local_only, int forceuser, int ignorequota);
+			   int forceuser, int ignorequota);
 
 /* change ACL */
 int mboxlist_setacl(struct namespace *namespace, const char *name,

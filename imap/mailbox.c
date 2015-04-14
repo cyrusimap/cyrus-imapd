@@ -990,7 +990,7 @@ EXPORTED int mailbox_open_iwl(const char *name, struct mailbox **mailboxptr)
 				 mailboxptr);
 }
 
-EXPORTED int mailbox_open_exclusive(const char *name, struct mailbox **mailboxptr)
+HIDDEN int mailbox_open_exclusive(const char *name, struct mailbox **mailboxptr)
 {
     return mailbox_open_advanced(name, LOCK_EXCLUSIVE, LOCK_EXCLUSIVE,
 				 mailboxptr);

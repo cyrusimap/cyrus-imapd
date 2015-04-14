@@ -202,6 +202,7 @@ endif # HTTPD
 
 if REPLICATION
 user_PROGRAMS += imap/sync_client imap/sync_reset
+service_PROGRAMS += imap/sync_server
 endif # REPLICATION
 
 if HAVE_SSL
@@ -813,8 +814,6 @@ imap_imapd_SOURCES = \
 	imap/pushstats.h \
 	imap/proxy.c \
 	imap/proxy.h \
-	imap/sync_support.c \
-	imap/sync_support.h \
 	master/service.c
 
 if AUTOCREATE
@@ -1115,6 +1114,9 @@ imap_sync_client_LDADD = $(LD_UTILITY_ADD)
 imap_sync_reset_SOURCES = imap/mutex_fake.c imap/sync_reset.c imap/sync_support.c
 imap_sync_reset_LDADD = $(LD_UTILITY_ADD)
 
+imap_sync_server_SOURCES = imap/mutex_fake.c imap/sync_server.c imap/sync_support.c master/service.c
+imap_sync_server_LDADD = $(LD_SERVER_ADD)
+
 imap_tls_prune_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/tls_prune.c
 imap_tls_prune_LDADD = $(LD_UTILITY_ADD)
 
@@ -1308,6 +1310,7 @@ dist_man_MANS = \
 	man/squatter.8 \
 	man/sync_client.8 \
 	man/sync_reset.8 \
+	man/sync_server.8 \
 	man/timsieved.8 \
 	man/tls_prune.8 \
 	man/unexpunge.8
@@ -1579,7 +1582,6 @@ if SERVER
 	cd $(DESTDIR)$(servicedir) && \
 	  $(LN_S) -f pop3d pop3proxyd && \
 	  $(LN_S) -f imapd proxyd && \
-	  $(LN_S) -f imapd sync_server && \
 	  $(LN_S) -f lmtpd lmtpproxyd
 endif
 ## The @$(MKDIR_P) line is added due to a bug in Automake 1.10 and can be removed if using Automake 1.12.
