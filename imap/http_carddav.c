@@ -85,8 +85,6 @@
 
 static struct carddav_db *auth_carddavdb = NULL;
 
-static struct carddav_db *my_carddav_open(struct mailbox *mailbox);
-static void my_carddav_close(struct carddav_db *carddavdb);
 static void my_carddav_init(struct buf *serverinfo);
 static void my_carddav_auth(const char *userid);
 static void my_carddav_reset(void);
@@ -265,8 +263,8 @@ static struct meth_params carddav_params = {
     carddav_mime_types,
     &carddav_parse_path,
     &dav_check_precond,
-    { (db_open_proc_t) &my_carddav_open,
-      (db_close_proc_t) &my_carddav_close,
+    { (db_open_proc_t) &carddav_open_mailbox,
+      (db_close_proc_t) &carddav_close,
       (db_lookup_proc_t) &carddav_lookup_resource,
       (db_foreach_proc_t) &carddav_foreach,
       (db_write_proc_t) &carddav_write,
@@ -320,19 +318,6 @@ struct namespace_t namespace_addressbook = {
 	{ &meth_unlock,		&carddav_params } 	/* UNLOCK	*/
     }
 };
-
-
-static struct carddav_db *my_carddav_open(struct mailbox *mailbox)
-{
-    return carddav_open_mailbox(mailbox);
-}
-
-
-static void my_carddav_close(struct carddav_db *carddavdb)
-{
-    carddav_close(carddavdb);
-}
-
 
 static void my_carddav_init(struct buf *serverinfo __attribute__((unused)))
 {
@@ -854,7 +839,7 @@ int propfind_addrgroups(const xmlChar *name, xmlNsPtr ns,
 
     /* If we're here via report_sync_col then we don't have a db handle yet, so
      * lets just manage this ourselves */
-    davdb = my_carddav_open(fctx->mailbox);
+    davdb = carddav_open_mailbox(fctx->mailbox);
     if (davdb == NULL) {
 	r = HTTP_SERVER_ERROR;
 	goto done;
@@ -885,7 +870,7 @@ int propfind_addrgroups(const xmlChar *name, xmlNsPtr ns,
     strarray_free(groups);
 
 done:
-    my_carddav_close(davdb);
+    carddav_close(davdb);
     return r;
 }
 
@@ -897,8 +882,8 @@ static int report_card_query(struct transaction_t *txn,
     xmlNodePtr node;
 
     fctx->filter_crit = (void *) 0xDEADBEEF;  /* placeholder until we filter */
-    fctx->open_db = (db_open_proc_t) &my_carddav_open;
-    fctx->close_db = (db_close_proc_t) &my_carddav_close;
+    fctx->open_db = (db_open_proc_t) &carddav_open_mailbox;
+    fctx->close_db = (db_close_proc_t) &carddav_close;
     fctx->lookup_resource = (db_lookup_proc_t) &carddav_lookup_resource;
     fctx->foreach_resource = (db_foreach_proc_t) &carddav_foreach;
     fctx->proc_by_resource = &propfind_by_resource;
