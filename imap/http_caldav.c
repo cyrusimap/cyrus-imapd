@@ -369,8 +369,6 @@ icalarray *rscale_calendars = NULL;
 static int meth_get_head_cal(struct transaction_t *txn, void *params);
 static int meth_get_head_fb(struct transaction_t *txn, void *params);
 
-static struct caldav_db *my_caldav_open(struct mailbox *mailbox);
-static void my_caldav_close(struct caldav_db *caldavdb);
 static void my_caldav_init(struct buf *serverinfo);
 static void my_caldav_auth(const char *userid);
 static void my_caldav_reset(void);
@@ -670,8 +668,8 @@ static struct meth_params caldav_params = {
     caldav_mime_types,
     &caldav_parse_path,
     &caldav_check_precond,
-    { (db_open_proc_t) &my_caldav_open,
-      (db_close_proc_t) &my_caldav_close,
+    { (db_open_proc_t) &caldav_open_mailbox,
+      (db_close_proc_t) &caldav_close,
       (db_lookup_proc_t) &caldav_lookup_resource,
       (db_foreach_proc_t) &caldav_foreach,
       (db_write_proc_t) &caldav_write,
@@ -782,19 +780,6 @@ static int meth_get_head_cal(struct transaction_t *txn,
     return meth_get_head(txn, (txn->req_tgt.flags == TGT_MANAGED_ATTACH) ?
 			 &webdav_params : &caldav_params);
 }
-
-
-static struct caldav_db *my_caldav_open(struct mailbox *mailbox)
-{
-    return caldav_open_mailbox(mailbox);
-}
-
-
-static void my_caldav_close(struct caldav_db *caldavdb)
-{
-    caldav_close(caldavdb);
-}
-
 
 static void my_caldav_init(struct buf *serverinfo)
 {
@@ -2221,7 +2206,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 	else if (namespace_calendar.allow & ALLOW_CAL_NOTZ) {
 	    /* Strip known VTIMEZONEs */
 	    icalcomponent *ical;
-	    struct caldav_db *caldavdb = my_caldav_open(mailbox);
+	    struct caldav_db *caldavdb = caldav_open_mailbox(mailbox);
 
 	    ical = record_to_ical(mailbox, record);
 
@@ -2248,7 +2233,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 	    txn->resp_body.etag = message_guid_encode(&record->guid);
 	    txn->resp_body.lastmod = record->internaldate;
 
-	    my_caldav_close(caldavdb);
+	    caldav_close(caldavdb);
 	}
 
       done:
@@ -2380,7 +2365,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     }
 
     /* Open the CalDAV DB corresponding to the calendar */
-    caldavdb = my_caldav_open(calendar);
+    caldavdb = caldav_open_mailbox(calendar);
 
     /* Find message UID for the cal resource */
     caldav_lookup_resource(caldavdb, txn->req_tgt.mbentry->name,
@@ -2655,7 +2640,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
   done:
     if (ical) icalcomponent_free(ical);
     if (webdavdb) webdav_close(webdavdb);
-    if (caldavdb) my_caldav_close(caldavdb);
+    if (caldavdb) caldav_close(caldavdb);
     mailbox_close(&attachments);
     mailbox_close(&calendar);
 
@@ -4811,8 +4796,8 @@ static int report_cal_query(struct transaction_t *txn,
     memset(&calfilter, 0, sizeof(struct calquery_filter));
 
     fctx->filter_crit = &calfilter;
-    fctx->open_db = (db_open_proc_t) &my_caldav_open;
-    fctx->close_db = (db_close_proc_t) &my_caldav_close;
+    fctx->open_db = (db_open_proc_t) &caldav_open_mailbox;
+    fctx->close_db = (db_close_proc_t) &caldav_close;
     fctx->lookup_resource = (db_lookup_proc_t) &caldav_lookup_resource;
     fctx->foreach_resource = (db_foreach_proc_t) &caldav_foreach;
     fctx->proc_by_resource = &propfind_by_resource;
@@ -5194,8 +5179,8 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
     icalproperty *prop;
     unsigned n;
 
-    fctx->open_db = (db_open_proc_t) &my_caldav_open;
-    fctx->close_db = (db_close_proc_t) &my_caldav_close;
+    fctx->open_db = (db_open_proc_t) &caldav_open_mailbox;
+    fctx->close_db = (db_close_proc_t) &caldav_close;
     fctx->lookup_resource = (db_lookup_proc_t) &caldav_lookup_resource;
     fctx->foreach_resource = (db_foreach_proc_t) &caldav_foreach;
     fctx->proc_by_resource = &busytime_by_resource;
