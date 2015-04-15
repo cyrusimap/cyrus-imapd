@@ -4146,6 +4146,14 @@ int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
 	buf_reset(&fctx->buf);
 	buf_printf(&fctx->buf, "mailto:%s", fctx->req_tgt->userid);
 	xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+	return 0;
+    }
+
+    if (httpd_extradomain) {
+	buf_reset(&fctx->buf);
+	buf_printf(&fctx->buf, "mailto:%s@%s", fctx->req_tgt->userid, httpd_extradomain);
+	xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+	return 0;
     }
 
     for (domains = cua_domains; domains; domains = domains->next) {
