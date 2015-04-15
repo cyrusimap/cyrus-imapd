@@ -3108,19 +3108,25 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
     webdav_begin(webdavdb);
 
     /* Find existing record for this resource */
-    webdav_lookup_resource(webdavdb, mailbox->name, resource, &wdata, 0);
+    webdav_lookup_resource(webdavdb, mailbox->name, resource, &wdata, /*tombstones*/1);
 
-    /* does it still come from this UID? */
-    if (wdata && wdata->dav.imap_uid > new->uid) goto done;
+    /* if updated by a newer UID, skip - this record doesn't refer to the current item */
+    if (wdata->dav.imap_uid > new->uid) goto done;
 
     if (new->system_flags & FLAG_UNLINKED) {
 	/* is there an existing record? */
-	if (!wdata) goto done;
+	if (!wdata->dav.imap_uid) goto done;
 
 	/* delete entry */
 	r = webdav_delete(webdavdb, wdata->dav.rowid);
     }
-    else if (!wdata || wdata->dav.imap_uid != new->uid) {
+    else if (wdata->dav.imap_uid == new->uid) {
+	/* just a flags update to an existing record */
+	wdata->dav.modseq = new->modseq;
+	wdata->dav.alive = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
+	r = webdav_write(webdavdb, wdata);
+    }
+    else {
 	struct buf msg_buf = BUF_INITIALIZER;
 	struct message_guid guid;
 
