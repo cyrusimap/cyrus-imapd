@@ -562,7 +562,7 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
     if (config_iolog) {
         if (access("/proc/self/io", R_OK)) {
             config_iolog = 0;
-            syslog(LOG_WARNING,"iolog directive need a kernel builded with I/O account");
+            syslog(LOG_WARNING,"iolog directive needs a kernel built with I/O accounting");
         }
     }
 
