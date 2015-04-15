@@ -10024,11 +10024,18 @@ static int backend_version(struct backend *be)
     const char *minor;
 
     /* master branch? */
-    if (strstr(be->banner, "git2.5")) {
+    if (strstr(be->banner, "git3.0")) {
 	return 13;
     }
 
-    /* check for current version */
+    /* version 2.5 is 13 */
+    if (strstr(be->banner, "Cyrus IMAP 2.5.")
+     || strstr(be->banner, "Cyrus IMAP Murder 2.5.")
+     || strstr(be->banner, "git2.5.")) {
+	return 13;
+    }
+
+    /* version 2.4 was all 12 */
     if (strstr(be->banner, "v2.4.") || strstr(be->banner, "git2.4.")) {
 	return 12;
     }
