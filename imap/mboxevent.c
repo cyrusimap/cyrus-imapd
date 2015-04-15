@@ -871,18 +871,16 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 	    if (mailbox->mbtype & MBTYPE_ADDRESSBOOK) {
 		struct carddav_db *carddavdb = NULL;
 		struct carddav_data *cdata = NULL;
-		carddavdb = carddav_open_mailbox(mailbox);
-		carddav_lookup_resource(carddavdb, mailbox->name, resource, &cdata, 0);
+		carddavdb = mailbox_open_carddav(mailbox);
+		carddav_lookup_resource(carddavdb, mailbox->name, resource, &cdata, 1);
 		FILL_STRING_PARAM(event, EVENT_DAV_UID, xstrdup(cdata->vcard_uid));
-		carddav_close(carddavdb);
 	    }
 	    if (mailbox->mbtype & MBTYPE_CALENDAR) {
 		struct caldav_db *caldavdb = NULL;
 		struct caldav_data *cdata = NULL;
-		caldavdb = caldav_open_mailbox(mailbox);
-		caldav_lookup_resource(caldavdb, mailbox->name, resource, &cdata, 0);
+		caldavdb = mailbox_open_caldav(mailbox);
+		caldav_lookup_resource(caldavdb, mailbox->name, resource, &cdata, 1);
 		FILL_STRING_PARAM(event, EVENT_DAV_UID, xstrdup(cdata->ical_uid));
-		caldav_close(caldavdb);
 	    }
 	}
     }

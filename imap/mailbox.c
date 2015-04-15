@@ -143,6 +143,11 @@ static void cleanup_stale_expunged(struct mailbox *mailbox);
 static bit32 mailbox_index_record_to_buf(struct index_record *record, int version,
 					 unsigned char *buf);
 
+#ifdef WITH_DAV
+static int mailbox_commit_dav(struct mailbox *mailbox);
+static int mailbox_abort_dav(struct mailbox *mailbox);
+#endif
+
 static struct mailboxlist *create_listitem(const char *name)
 {
     struct mailboxlist *item = xmalloc(sizeof(struct mailboxlist));
@@ -1854,6 +1859,62 @@ static int mailbox_lock_conversations(struct mailbox *mailbox)
     return conversations_open_mbox(mailbox->name, &mailbox->local_cstate);
 }
 
+EXPORTED struct caldav_db *mailbox_open_caldav(struct mailbox *mailbox)
+{
+    if (!mailbox->local_caldav) {
+	mailbox->local_caldav = caldav_open_mailbox(mailbox);
+	int r = caldav_begin(mailbox->local_caldav);
+	if (r) {
+	    caldav_abort(mailbox->local_caldav);
+	    caldav_close(mailbox->local_caldav);
+	    mailbox->local_caldav = NULL;
+	}
+    }
+    return mailbox->local_caldav;
+}
+
+EXPORTED struct caldav_alarm_db *mailbox_open_caldav_alarm(struct mailbox *mailbox)
+{
+    if (!mailbox->local_caldav_alarm) {
+	mailbox->local_caldav_alarm = caldav_alarm_open();
+	int r = caldav_alarm_begin(mailbox->local_caldav_alarm);
+	if (r) {
+	    caldav_alarm_rollback(mailbox->local_caldav_alarm);
+	    caldav_alarm_close(mailbox->local_caldav_alarm);
+	    mailbox->local_caldav_alarm = NULL;
+	}
+    }
+    return mailbox->local_caldav_alarm;
+}
+
+EXPORTED struct carddav_db *mailbox_open_carddav(struct mailbox *mailbox)
+{
+    if (!mailbox->local_carddav) {
+	mailbox->local_carddav = carddav_open_mailbox(mailbox);
+	int r = carddav_begin(mailbox->local_carddav);
+	if (r) {
+	    carddav_abort(mailbox->local_carddav);
+	    carddav_close(mailbox->local_carddav);
+	    mailbox->local_carddav = NULL;
+	}
+    }
+    return mailbox->local_carddav;
+}
+
+EXPORTED struct webdav_db *mailbox_open_webdav(struct mailbox *mailbox)
+{
+    if (!mailbox->local_webdav) {
+	mailbox->local_webdav = webdav_open_mailbox(mailbox);
+	int r = webdav_begin(mailbox->local_webdav);
+	if (r) {
+	    webdav_abort(mailbox->local_webdav);
+	    webdav_close(mailbox->local_webdav);
+	    mailbox->local_webdav = NULL;
+	}
+    }
+    return mailbox->local_webdav;
+}
+
 /*
  * bsearch() comparison function for searching on UID.
  */
@@ -2351,13 +2412,17 @@ HIDDEN int mailbox_commit_quota(struct mailbox *mailbox)
 }
 
 
-
 /*
  * Abort the changes to a mailbox
  */
 EXPORTED int mailbox_abort(struct mailbox *mailbox)
 {
     int r;
+
+#ifdef WITH_DAV
+    r = mailbox_abort_dav(mailbox);
+    if (r) return r;
+#endif
 
     /* try to commit sub parts first */
     r = mailbox_abort_cache(mailbox);
@@ -2399,6 +2464,11 @@ EXPORTED int mailbox_commit(struct mailbox *mailbox)
     int n, r;
 
     /* try to commit sub parts first */
+#ifdef WITH_DAV
+    r = mailbox_commit_dav(mailbox);
+    if (r) return r;
+#endif
+
     r = mailbox_commit_cache(mailbox);
     if (r) return r;
 
@@ -2861,8 +2931,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 
     assert(resource);
 
-    carddavdb = carddav_open_mailbox(mailbox);
-    carddav_begin(carddavdb);
+    carddavdb = mailbox_open_carddav(mailbox);
 
     /* find existing record for this resource */
     carddav_lookup_resource(carddavdb, mailbox->name, resource, &cdata, /*tombstones*/1);
@@ -2923,12 +2992,6 @@ done:
     message_free_body(body);
     free(body);
 
-    if (carddavdb) {
-	if (r) carddav_abort(carddavdb);
-	else carddav_commit(carddavdb);
-	carddav_close(carddavdb);
-    }
-
     return r;
 }
 
@@ -2971,11 +3034,10 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 	}
     }
 
-    caldavdb = caldav_open_mailbox(mailbox);
-    caldav_begin(caldavdb);
+    caldavdb = mailbox_open_caldav(mailbox);
 
     /* Find existing record for this resource */
-    caldav_lookup_resource(caldavdb, mailbox->name, resource, &cdata, 1);
+    caldav_lookup_resource(caldavdb, mailbox->name, resource, &cdata, /*tombstones*/1);
 
     /* has this record already been replaced?  Don't write anything */
     if (cdata->dav.imap_uid > new->uid) goto done;
@@ -3027,8 +3089,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 
 	caldav_make_entry(ical, cdata);
 
-	struct caldav_alarm_db *alarmdb = caldav_alarm_open();
-	caldav_alarm_begin(alarmdb);
+	struct caldav_alarm_db *alarmdb = mailbox_open_caldav_alarm(mailbox);
 
 	struct caldav_alarm_data alarmdata = {
 	    .mailbox    = cdata->dav.mailbox,
@@ -3036,25 +3097,22 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 	};
 
 	/* remove old ones */
-	int rc = caldav_alarm_delete_all(alarmdb, &alarmdata);
+	r = caldav_alarm_delete_all(alarmdb, &alarmdata);
+	if (r) goto done;
 
 	/* add new ones unless this record is expunged */
 	if (cdata->dav.alive) {
 	    int i;
 	    for (i = CALDAV_ALARM_ACTION_FIRST; i <= CALDAV_ALARM_ACTION_LAST; i++) {
 		/* prepare alarm data */
-		if (!rc &&
-		    !caldav_alarm_prepare(ical, &alarmdata, i,
+		if (!caldav_alarm_prepare(ical, &alarmdata, i,
 					icaltime_current_time_with_zone(icaltimezone_get_utc_timezone()))) {
-		    rc = caldav_alarm_add(alarmdb, &alarmdata);
+		    r = caldav_alarm_add(alarmdb, &alarmdata);
 		    caldav_alarm_fini(&alarmdata);
+		    if (r) goto done;
 		}
 	    }
 	}
-
-	if (rc) caldav_alarm_rollback(alarmdb);
-	else caldav_alarm_commit(alarmdb);
-	caldav_alarm_close(alarmdb);
 
 	r = caldav_write(caldavdb, cdata);
 	icalcomponent_free(ical);
@@ -3063,12 +3121,6 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 done:
     message_free_body(body);
     free(body);
-
-    if (caldavdb) {
-	if (r) caldav_abort(caldavdb);
-	else caldav_commit(caldavdb);
-	caldav_close(caldavdb);
-    }
 
     return r;
 }
@@ -3104,8 +3156,7 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
         }
     }
 
-    webdavdb = webdav_open_mailbox(mailbox);
-    webdav_begin(webdavdb);
+    webdavdb = mailbox_open_webdav(mailbox);
 
     /* Find existing record for this resource */
     webdav_lookup_resource(webdavdb, mailbox->name, resource, &wdata, /*tombstones*/1);
@@ -3164,12 +3215,6 @@ done:
 	free(body);
     }
 
-    if (webdavdb) {
-	if (r) webdav_abort(webdavdb);
-	else webdav_commit(webdavdb);
-	webdav_close(webdavdb);
-    }
-
     return r;
 }
 
@@ -3186,6 +3231,77 @@ static int mailbox_update_dav(struct mailbox *mailbox,
 
     return 0;
 }
+
+static int mailbox_commit_dav(struct mailbox *mailbox)
+{
+    int r;
+
+    if (mailbox->local_caldav) {
+	r = caldav_commit(mailbox->local_caldav);
+	if (r) return r;
+	caldav_close(mailbox->local_caldav);
+	mailbox->local_caldav = NULL;
+    }
+
+    if (mailbox->local_caldav_alarm) {
+	r = caldav_alarm_commit(mailbox->local_caldav_alarm);
+	if (r) return r;
+	caldav_alarm_close(mailbox->local_caldav_alarm);
+	mailbox->local_caldav_alarm = NULL;
+    }
+
+    if (mailbox->local_carddav) {
+	r = carddav_commit(mailbox->local_carddav);
+	if (r) return r;
+	carddav_close(mailbox->local_carddav);
+	mailbox->local_carddav = NULL;
+    }
+
+    if (mailbox->local_webdav) {
+	r = webdav_commit(mailbox->local_webdav);
+	if (r) return r;
+	webdav_close(mailbox->local_webdav);
+	mailbox->local_webdav = NULL;
+    }
+
+    return 0;
+}
+
+static int mailbox_abort_dav(struct mailbox *mailbox)
+{
+    int r;
+
+    if (mailbox->local_caldav) {
+	r = caldav_abort(mailbox->local_caldav);
+	if (r) return r;
+	caldav_close(mailbox->local_caldav);
+	mailbox->local_caldav = NULL;
+    }
+
+    if (mailbox->local_caldav_alarm) {
+	r = caldav_alarm_rollback(mailbox->local_caldav_alarm);
+	if (r) return r;
+	caldav_alarm_close(mailbox->local_caldav_alarm);
+	mailbox->local_caldav_alarm = NULL;
+    }
+
+    if (mailbox->local_carddav) {
+	r = carddav_abort(mailbox->local_carddav);
+	if (r) return r;
+	carddav_close(mailbox->local_carddav);
+	mailbox->local_carddav = NULL;
+    }
+
+    if (mailbox->local_webdav) {
+	r = webdav_abort(mailbox->local_webdav);
+	if (r) return r;
+	webdav_close(mailbox->local_webdav);
+	mailbox->local_webdav = NULL;
+    }
+
+    return 0;
+}
+
 #endif // WITH_DAV
 
 EXPORTED int mailbox_update_conversations(struct mailbox *mailbox,

@@ -254,6 +254,11 @@ struct mailbox {
     /* conversations */
     struct conversations_state *local_cstate;
 
+    struct caldav_db *local_caldav;
+    struct caldav_alarm_db *local_caldav_alarm;
+    struct carddav_db *local_carddav;
+    struct webdav_db *local_webdav;
+
     /* change management */
     int modseq_dirty;
     int header_dirty;
@@ -491,6 +496,11 @@ extern int mailbox_open_exclusive(const char *name,
 			          struct mailbox **mailboxptr);
 extern void mailbox_close(struct mailbox **mailboxptr);
 extern int mailbox_delete(struct mailbox **mailboxptr);
+
+struct caldav_db *mailbox_open_caldav(struct mailbox *mailbox);
+struct caldav_alarm_db *mailbox_open_caldav_alarm(struct mailbox *mailbox);
+struct carddav_db *mailbox_open_carddav(struct mailbox *mailbox);
+struct webdav_db *mailbox_open_webdav(struct mailbox *mailbox);
 
 /* reading bits and pieces */
 extern int mailbox_refresh_index_header(struct mailbox *mailbox);
