@@ -212,16 +212,14 @@ EXPORTED int user_deletedata(const char *userid, int wipe_user)
     (void) unlink(fname);
     free(fname);
 
-    /* delete highestmodseq file */
-    fname = user_hash_meta(userid, "modseq");
+    /* XXX: one could make an argument for keeping the counters
+     * file forever, so that UIDVALIDITY never gets reused. */
+    fname = user_hash_meta(userid, "counters");
     (void) unlink(fname);
     free(fname);
 
-    /* XXX: one could make an argument for keeping the UIDVALIDITY
-     * file forever, so that UIDVALIDITY never gets reused. */
-
-    /* delete uidvalidity file */
-    fname = user_hash_meta(userid, "uidvalidity");
+    /* delete dav database (even if DAV is turned off, this is fine) */
+    fname = user_hash_meta(userid, "dav");
     (void) unlink(fname);
     free(fname);
 
