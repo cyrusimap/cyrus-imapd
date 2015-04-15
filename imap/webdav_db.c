@@ -291,7 +291,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 
 EXPORTED int webdav_lookup_resource(struct webdav_db *webdavdb,
 				    const char *mailbox, const char *resource,
-				    int lock, struct webdav_data **result,
+				    struct webdav_data **result,
 				    int tombstones)
 {
     struct bind_val bval[] = {
@@ -303,13 +303,6 @@ EXPORTED int webdav_lookup_resource(struct webdav_db *webdavdb,
     int r;
 
     *result = memset(&wdata, 0, sizeof(struct webdav_data));
-
-    if (lock) {
-	/* begin a transaction */
-	r = dav_exec(webdavdb->db, CMD_BEGIN, NULL, NULL, NULL,
-		     &webdavdb->stmt[STMT_BEGIN]);
-	if (r) return r;
-    }
 
     r = dav_exec(webdavdb->db, CMD_SELRSRC, bval, &read_cb, &rrock,
 		 &webdavdb->stmt[STMT_SELRSRC]);
@@ -323,7 +316,7 @@ EXPORTED int webdav_lookup_resource(struct webdav_db *webdavdb,
     " WHERE ( res_uid = :res_uid );"
 
 EXPORTED int webdav_lookup_uid(struct webdav_db *webdavdb, const char *res_uid,
-			       int lock, struct webdav_data **result)
+			       struct webdav_data **result)
 {
     struct bind_val bval[] = {
 	{ ":res_uid",    SQLITE_TEXT, { .s = res_uid		 } },
@@ -333,13 +326,6 @@ EXPORTED int webdav_lookup_uid(struct webdav_db *webdavdb, const char *res_uid,
     int r;
 
     *result = memset(&wdata, 0, sizeof(struct webdav_data));
-
-    if (lock) {
-	/* begin a transaction */
-	r = dav_exec(webdavdb->db, CMD_BEGIN, NULL, NULL, NULL,
-		     &webdavdb->stmt[STMT_BEGIN]);
-	if (r) return r;
-    }
 
     r = dav_exec(webdavdb->db, CMD_SELUID, bval, &read_cb, &rrock,
 		 &webdavdb->stmt[STMT_SELUID]);
@@ -393,8 +379,7 @@ EXPORTED int webdav_foreach(struct webdav_db *webdavdb, const char *mailbox,
     "  alive        = :alive"		\
     " WHERE rowid = :rowid;"
 
-EXPORTED int webdav_write(struct webdav_db *webdavdb, struct webdav_data *wdata,
-			  int commit)
+EXPORTED int webdav_write(struct webdav_db *webdavdb, struct webdav_data *wdata)
 {
     struct bind_val bval[] = {
 	{ ":imap_uid",	   SQLITE_INTEGER, { .i = wdata->dav.imap_uid	  } },
@@ -442,20 +427,13 @@ EXPORTED int webdav_write(struct webdav_db *webdavdb, struct webdav_data *wdata,
 
     r = dav_exec(webdavdb->db, cmd, bval, NULL, NULL, stmt);
 
-    if (!r && commit) {
-	/* commit transaction */
-	return dav_exec(webdavdb->db, CMD_COMMIT, NULL, NULL, NULL,
-			&webdavdb->stmt[STMT_COMMIT]);
-    }
-
     return r;
 }
 
 
 #define CMD_DELETE "DELETE FROM dav_objs WHERE rowid = :rowid;"
 
-EXPORTED int webdav_delete(struct webdav_db *webdavdb, unsigned rowid,
-			   int commit)
+EXPORTED int webdav_delete(struct webdav_db *webdavdb, unsigned rowid)
 {
     struct bind_val bval[] = {
 	{ ":rowid", SQLITE_INTEGER, { .i = rowid } },
@@ -465,20 +443,13 @@ EXPORTED int webdav_delete(struct webdav_db *webdavdb, unsigned rowid,
     r = dav_exec(webdavdb->db, CMD_DELETE, bval, NULL, NULL,
 		 &webdavdb->stmt[STMT_DELETE]);
 
-    if (!r && commit) {
-	/* commit transaction */
-	return dav_exec(webdavdb->db, CMD_COMMIT, NULL, NULL, NULL,
-			&webdavdb->stmt[STMT_COMMIT]);
-    }	
-
     return r;
 }
 
 
 #define CMD_DELMBOX "DELETE FROM dav_objs WHERE mailbox = :mailbox;"
 
-EXPORTED int webdav_delmbox(struct webdav_db *webdavdb, const char *mailbox,
-			    int commit)
+EXPORTED int webdav_delmbox(struct webdav_db *webdavdb, const char *mailbox)
 {
     struct bind_val bval[] = {
 	{ ":mailbox", SQLITE_TEXT, { .s = mailbox } },
@@ -487,12 +458,6 @@ EXPORTED int webdav_delmbox(struct webdav_db *webdavdb, const char *mailbox,
 
     r = dav_exec(webdavdb->db, CMD_DELMBOX, bval, NULL, NULL,
 		 &webdavdb->stmt[STMT_DELMBOX]);
-
-    if (!r && commit) {
-	/* commit transaction */
-	return dav_exec(webdavdb->db, CMD_COMMIT, NULL, NULL, NULL,
-			&webdavdb->stmt[STMT_COMMIT]);
-    }	
 
     return r;
 }

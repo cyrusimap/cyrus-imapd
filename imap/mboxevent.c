@@ -872,7 +872,7 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 		struct carddav_db *carddavdb = NULL;
 		struct carddav_data *cdata = NULL;
 		carddavdb = carddav_open_mailbox(mailbox);
-		carddav_lookup_resource(carddavdb, mailbox->name, resource, 0, &cdata, 0);
+		carddav_lookup_resource(carddavdb, mailbox->name, resource, &cdata, 0);
 		FILL_STRING_PARAM(event, EVENT_DAV_UID, xstrdup(cdata->vcard_uid));
 		carddav_close(carddavdb);
 	    }
@@ -880,7 +880,7 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 		struct caldav_db *caldavdb = NULL;
 		struct caldav_data *cdata = NULL;
 		caldavdb = caldav_open_mailbox(mailbox);
-		caldav_lookup_resource(caldavdb, mailbox->name, resource, 0, &cdata, 0);
+		caldav_lookup_resource(caldavdb, mailbox->name, resource, &cdata, 0);
 		FILL_STRING_PARAM(event, EVENT_DAV_UID, xstrdup(cdata->ical_uid));
 		caldav_close(caldavdb);
 	    }

@@ -86,13 +86,13 @@ int carddav_close(struct carddav_db *carddavdb);
    (optionally inside a transaction for updates) */
 int carddav_lookup_resource(struct carddav_db *carddavdb,
 			   const char *mailbox, const char *resource,
-			   int lock, struct carddav_data **result,
+			   struct carddav_data **result,
 			   int tombstones);
 
 /* lookup an entry from 'carddavdb' by iCal UID
    (optionally inside a transaction for updates) */
 int carddav_lookup_uid(struct carddav_db *carddavdb, const char *ical_uid,
-		      int lock, struct carddav_data **result);
+		       struct carddav_data **result);
 
 /* check if an email address exists on any card.
    returns the groups its in (if any) */
@@ -127,14 +127,13 @@ int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
 		   void *rock);
 
 /* write an entry to 'carddavdb' */
-int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cdata,
-		 int commit);
+int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cdata);
 
 /* delete an entry from 'carddavdb' */
-int carddav_delete(struct carddav_db *carddavdb, unsigned rowid, int commit);
+int carddav_delete(struct carddav_db *carddavdb, unsigned rowid);
 
 /* delete all entries for 'mailbox' from 'carddavdb' */
-int carddav_delmbox(struct carddav_db *carddavdb, const char *mailbox, int commit);
+int carddav_delmbox(struct carddav_db *carddavdb, const char *mailbox);
 
 /* begin transaction */
 int carddav_begin(struct carddav_db *carddavdb);

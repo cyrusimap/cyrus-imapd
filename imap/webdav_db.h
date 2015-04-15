@@ -83,13 +83,13 @@ int webdav_close(struct webdav_db *webdavdb);
    (optionally inside a transaction for updates) */
 int webdav_lookup_resource(struct webdav_db *webdavdb,
 			   const char *mailbox, const char *resource,
-			   int lock, struct webdav_data **result,
+			   struct webdav_data **result,
 			   int tombstones);
 
 /* lookup an entry from 'webdavdb' by resource UID
    (optionally inside a transaction for updates) */
 int webdav_lookup_uid(struct webdav_db *webdavdb, const char *res_uid,
-		      int lock, struct webdav_data **result);
+		      struct webdav_data **result);
 
 /* process each entry for 'mailbox' in 'webdavdb' with cb() */
 int webdav_foreach(struct webdav_db *webdavdb, const char *mailbox,
@@ -97,14 +97,13 @@ int webdav_foreach(struct webdav_db *webdavdb, const char *mailbox,
 		   void *rock);
 
 /* write an entry to 'webdavdb' */
-int webdav_write(struct webdav_db *webdavdb, struct webdav_data *cdata,
-		 int commit);
+int webdav_write(struct webdav_db *webdavdb, struct webdav_data *cdata);
 
 /* delete an entry from 'webdavdb' */
-int webdav_delete(struct webdav_db *webdavdb, unsigned rowid, int commit);
+int webdav_delete(struct webdav_db *webdavdb, unsigned rowid);
 
 /* delete all entries for 'mailbox' from 'webdavdb' */
-int webdav_delmbox(struct webdav_db *webdavdb, const char *mailbox, int commit);
+int webdav_delmbox(struct webdav_db *webdavdb, const char *mailbox);
 
 /* begin transaction */
 int webdav_begin(struct webdav_db *webdavdb);

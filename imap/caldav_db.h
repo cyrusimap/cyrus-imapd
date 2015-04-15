@@ -130,13 +130,13 @@ int caldav_close(struct caldav_db *caldavdb);
    (optionally inside a transaction for updates) */
 int caldav_lookup_resource(struct caldav_db *caldavdb,
 			   const char *mailbox, const char *resource,
-			   int lock, struct caldav_data **result,
+			   struct caldav_data **result,
 			   int tombstones);
 
 /* lookup an entry from 'caldavdb' by iCal UID
    (optionally inside a transaction for updates) */
 int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
-		      int lock, struct caldav_data **result);
+		      struct caldav_data **result);
 
 /* process each entry for 'mailbox' in 'caldavdb' with cb() */
 int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
@@ -144,14 +144,13 @@ int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
 		   void *rock);
 
 /* write an entry to 'caldavdb' */
-int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata,
-		 int commit);
+int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata);
 
 /* delete an entry from 'caldavdb' */
-int caldav_delete(struct caldav_db *caldavdb, unsigned rowid, int commit);
+int caldav_delete(struct caldav_db *caldavdb, unsigned rowid);
 
 /* delete all entries for 'mailbox' from 'caldavdb' */
-int caldav_delmbox(struct caldav_db *caldavdb, const char *mailbox, int commit);
+int caldav_delmbox(struct caldav_db *caldavdb, const char *mailbox);
 
 /* begin transaction */
 int caldav_begin(struct caldav_db *caldavdb);

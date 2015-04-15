@@ -254,7 +254,7 @@ typedef void (*db_close_proc_t)(void *davdb);
  * placing the record in 'data'
  */
 typedef int (*db_lookup_proc_t)(void *davdb, const char *mailbox,
-				const char *resource, int lock, void **data,
+				const char *resource, void **data,
 				int tombstones);
 
 /* Function to process each DAV resource in 'mailbox' with 'cb' */
@@ -370,18 +370,23 @@ enum {
 typedef int (*check_precond_t)(struct transaction_t *txn, const void *data,
 			       const char *etag, time_t lastmod);
 
-/* Function to insert/update DAV resource in 'data', optionally commiting txn */
-typedef int (*db_write_proc_t)(void *davdb, void *data, int commit);
+/* Function to insert/update DAV resource in 'data' */
+typedef int (*db_write_proc_t)(void *davdb, void *data);
 
-/* Function to delete resource in 'rowid', optionally commiting txn */
-typedef int (*db_delete_proc_t)(void *davdb, unsigned rowid, int commit);
+/* Function to delete resource in 'rowid' */
+typedef int (*db_delete_proc_t)(void *davdb, unsigned rowid);
 
-/* Function to delete all entries in 'mailbox', optionally commiting txn */
-typedef int (*db_delmbox_proc_t)(void *davdb, const char *mailbox, int commit);
+/* Function to delete all entries in 'mailbox' */
+typedef int (*db_delmbox_proc_t)(void *davdb, const char *mailbox);
+
+typedef int (*db_proc_t)(void *davdb);
 
 struct davdb_params {
     db_open_proc_t open_db;		/* open DAV DB for a given mailbox */
     db_close_proc_t close_db;		/* close DAV DB for a given mailbox */
+    db_proc_t begin_transaction;
+    db_proc_t commit_transaction;
+    db_proc_t abort_transaction;
     db_lookup_proc_t lookup_resource;	/* lookup a specific resource */
     db_foreach_proc_t foreach_resource;	/* process all resources in a mailbox */
     /* XXX - convert these to lock management only.  For everything else,

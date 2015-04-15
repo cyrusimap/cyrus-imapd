@@ -670,6 +670,9 @@ static struct meth_params caldav_params = {
     &caldav_check_precond,
     { (db_open_proc_t) &caldav_open_mailbox,
       (db_close_proc_t) &caldav_close,
+      (db_proc_t) &caldav_begin,
+      (db_proc_t) &caldav_commit,
+      (db_proc_t) &caldav_abort,
       (db_lookup_proc_t) &caldav_lookup_resource,
       (db_foreach_proc_t) &caldav_foreach,
       (db_write_proc_t) &caldav_write,
@@ -2225,7 +2228,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 
 	    /* Fetch the new DAV and index records */
 	    caldav_lookup_resource(caldavdb, mailbox->name,
-				   cdata->dav.resource, 0, data, /*tombstones*/0);
+				   cdata->dav.resource, data, /*tombstones*/0);
 
 	    mailbox_find_index_record(mailbox, cdata->dav.imap_uid, record, NULL);
 
@@ -2369,7 +2372,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 
     /* Find message UID for the cal resource */
     caldav_lookup_resource(caldavdb, txn->req_tgt.mbentry->name,
-			   txn->req_tgt.resource, 0, &cdata, 0);
+			   txn->req_tgt.resource, &cdata, 0);
     if (!cdata->dav.rowid) ret = HTTP_NOT_FOUND;
     else if (!cdata->dav.imap_uid) ret = HTTP_CONFLICT;
     if (ret) goto done;
@@ -2471,7 +2474,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 	}
 
 	/* Find DAV record for the attachment */
-	webdav_lookup_uid(webdavdb, mid->s, 0, &wdata);
+	webdav_lookup_uid(webdavdb, mid->s, &wdata);
 	if (!wdata->dav.rowid) {
 	    txn->error.precond = CALDAV_VALID_MANAGEDID;
 	    ret = HTTP_BAD_REQUEST;
@@ -2521,7 +2524,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 
 	/* Lookup new/updated resource record */
 	webdav_lookup_resource(webdavdb, attachments->name,
-			       resource, 0, &wdata, 0);
+			       resource, &wdata, 0);
 
 	/* Update ATTACH parameters */
 	param = icalproperty_get_managedid_parameter(aprop);
@@ -3030,7 +3033,7 @@ static int caldav_put(struct transaction_t *txn, icalcomponent *ical,
 	    userid = mboxname_to_userid(mailbox->name);
 
 	    /* Make sure iCal UID is unique for this user */
-	    caldav_lookup_uid(davdb, uid, 0, &cdata);
+	    caldav_lookup_uid(davdb, uid, &cdata);
 	    /* XXX  Check errors */
 
 	    if (cdata->dav.mailbox &&
@@ -3655,7 +3658,7 @@ static int caldav_propfind_by_resource(void *rock, void *data)
 	    icalcomponent_free(ical);
 
 	    caldav_lookup_resource(fctx->davdb, fctx->mailbox->name,
-				   cdata->dav.resource, 0, &cdata, 0);
+				   cdata->dav.resource, &cdata, 0);
 	}
 
 	fctx->record = NULL;
@@ -4876,7 +4879,7 @@ static int report_cal_query(struct transaction_t *txn,
     if (calfilter.freebusy.fb) free(calfilter.freebusy.fb);
 
     if (fctx->davdb) {
-	my_caldav_close(fctx->davdb);
+	caldav_close(fctx->davdb);
 	fctx->davdb = NULL;
     }
 
@@ -5202,7 +5205,7 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
 			     httpd_authstate, busytime_by_collection, fctx);
 	}
 
-	if (fctx->davdb) my_caldav_close(fctx->davdb);
+	if (fctx->davdb) caldav_close(fctx->davdb);
     }
 
     if (*fctx->ret) return NULL;
@@ -5463,7 +5466,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     /* Check for duplicate iCalendar UID */
     uid = icalcomponent_get_uid(comp);
 
-    caldav_lookup_uid(caldavdb, uid, 0, &cdata);
+    caldav_lookup_uid(caldavdb, uid, &cdata);
     if (!(flags & NO_DUP_CHECK) &&
 	cdata->dav.mailbox && !strcmp(cdata->dav.mailbox, mailbox->name) &&
 	strcmp(cdata->dav.resource, resource)) {
@@ -5480,7 +5483,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     }
 
     /* Find message UID for the resource, if exists */
-    caldav_lookup_resource(caldavdb, mailbox->name, resource, 0, &cdata, 0);
+    caldav_lookup_resource(caldavdb, mailbox->name, resource, &cdata, 0);
 
     /* Check for change of iCalendar UID */
     if (cdata->ical_uid && strcmp(cdata->ical_uid, uid)) {
@@ -6865,7 +6868,7 @@ static void sched_deliver_local(const char *recipient,
     }
 
     caldav_lookup_uid(caldavdb,
-		      icalcomponent_get_uid(sched_data->itip), 0, &cdata);
+		      icalcomponent_get_uid(sched_data->itip), &cdata);
 
     if (cdata->dav.mailbox) {
 	mailboxname = cdata->dav.mailbox;

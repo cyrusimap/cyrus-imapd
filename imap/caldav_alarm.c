@@ -753,7 +753,7 @@ EXPORTED int caldav_alarm_process()
 	}
 
 	struct caldav_data *cdata = NULL;
-	caldav_lookup_resource(caldavdb, mailbox->name, scan->data.resource, 0, &cdata, 0);
+	caldav_lookup_resource(caldavdb, mailbox->name, scan->data.resource, &cdata, 0);
 	if (!cdata || !cdata->ical_uid)
 	    /* resource not found, nothing we can do */
 	    goto done_item;

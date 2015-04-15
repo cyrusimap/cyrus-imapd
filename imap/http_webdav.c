@@ -55,8 +55,6 @@
 #include "util.h"
 #include "webdav_db.h"
 
-static struct webdav_db *my_webdav_open(struct mailbox *mailbox);
-
 static int webdav_parse_path(const char *path,
 			     struct request_target_t *tgt, const char **errstr);
 
@@ -70,7 +68,7 @@ struct meth_params webdav_params = {
     .mime_types = NULL,
     .parse_path = &webdav_parse_path,
     .check_precond = &dav_check_precond,
-    .davdb = { .open_db = (db_open_proc_t) &my_webdav_open,
+    .davdb = { .open_db = (db_open_proc_t) &webdav_open_mailbox,
 	       .close_db = (db_close_proc_t) &webdav_close,
 	       .lookup_resource = (db_lookup_proc_t) &webdav_lookup_resource },
     .get = &webdav_get,
@@ -87,14 +85,6 @@ static int webdav_parse_path(const char *path __attribute__((unused)),
     *errstr = "Can't parse WebDAV request target path";
     return HTTP_SERVER_ERROR;
 }
-
-
-/* Open DAV DB corresponding to mailbox */
-static struct webdav_db *my_webdav_open(struct mailbox *mailbox)
-{
-    return webdav_open_mailbox(mailbox);
-}
-
 
 /* Perform a GET/HEAD request on a WebDAV resource */
 static int webdav_get(struct transaction_t *txn,
@@ -133,7 +123,7 @@ static int webdav_put(struct transaction_t *txn, struct buf *obj,
 
     /* Find message UID for the resource */
     webdav_lookup_resource(webdavdb, txn->req_tgt.mbentry->name,
-			   txn->req_tgt.resource, 0, &wdata, 0);
+			   txn->req_tgt.resource, &wdata, 0);
 
     if (wdata->dav.imap_uid) {
 	/* Fetch index record for the resource */

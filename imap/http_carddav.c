@@ -265,6 +265,9 @@ static struct meth_params carddav_params = {
     &dav_check_precond,
     { (db_open_proc_t) &carddav_open_mailbox,
       (db_close_proc_t) &carddav_close,
+      (db_proc_t) &carddav_begin,
+      (db_proc_t) &carddav_commit,
+      (db_proc_t) &carddav_abort,
       (db_lookup_proc_t) &carddav_lookup_resource,
       (db_foreach_proc_t) &carddav_foreach,
       (db_write_proc_t) &carddav_write,
@@ -627,7 +630,7 @@ static int carddav_put(struct transaction_t *txn, struct vparse_state *vparser,
     }
 
     /* Check for existing vCard UID */
-    carddav_lookup_uid(davdb, uid, 0, &cdata);
+    carddav_lookup_uid(davdb, uid, &cdata);
     if (!(flags & NO_DUP_CHECK) &&
 	cdata->dav.mailbox && !strcmp(cdata->dav.mailbox, mailbox->name) &&
 	strcmp(cdata->dav.resource, resource)) {
@@ -846,7 +849,7 @@ int propfind_addrgroups(const xmlChar *name, xmlNsPtr ns,
     }
 
     r = carddav_lookup_resource(davdb, fctx->req_tgt->mbentry->name,
-				fctx->req_tgt->resource, 0, &cdata, 0);
+				fctx->req_tgt->resource, &cdata, 0);
     if (r)
 	goto done;
 

@@ -347,7 +347,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 
 EXPORTED int caldav_lookup_resource(struct caldav_db *caldavdb,
 			   const char *mailbox, const char *resource,
-			   int lock, struct caldav_data **result,
+			   struct caldav_data **result,
 			   int tombstones)
 {
     struct bind_val bval[] = {
@@ -359,13 +359,6 @@ EXPORTED int caldav_lookup_resource(struct caldav_db *caldavdb,
     int r;
 
     *result = memset(&cdata, 0, sizeof(struct caldav_data));
-
-    if (lock) {
-	/* begin a transaction */
-	r = dav_exec(caldavdb->db, CMD_BEGIN, NULL, NULL, NULL,
-		     &caldavdb->stmt[STMT_BEGIN]);
-	if (r) return r;
-    }
 
     r = dav_exec(caldavdb->db, CMD_SELRSRC, bval, &read_cb, &rrock,
 		 &caldavdb->stmt[STMT_SELRSRC]);
@@ -384,7 +377,7 @@ EXPORTED int caldav_lookup_resource(struct caldav_db *caldavdb,
     " WHERE ical_uid = :ical_uid AND mailbox != :inbox;"
 
 EXPORTED int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
-		      int lock, struct caldav_data **result)
+			       struct caldav_data **result)
 {
     struct bind_val bval[] = {
 	{ ":ical_uid", SQLITE_TEXT, { .s = ical_uid		 } },
@@ -397,13 +390,6 @@ EXPORTED int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
     /* XXX - ability to pass through the tombstones flag */
 
     *result = memset(&cdata, 0, sizeof(struct caldav_data));
-
-    if (lock) {
-	/* begin a transaction */
-	r = dav_exec(caldavdb->db, CMD_BEGIN, NULL, NULL, NULL,
-		     &caldavdb->stmt[STMT_BEGIN]);
-	if (r) return r;
-    }
 
     r = dav_exec(caldavdb->db, CMD_SELUID, bval, &read_cb, &rrock,
 		 &caldavdb->stmt[STMT_SELUID]);
@@ -463,8 +449,7 @@ EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
     "  sched_tag    = :sched_tag"	\
     " WHERE rowid = :rowid;"
 
-EXPORTED int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata,
-		 int commit)
+EXPORTED int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata)
 {
     struct bind_val bval[] = {
 	{ ":alive",	   SQLITE_INTEGER, { .i = cdata->dav.alive	  } },
@@ -518,19 +503,13 @@ EXPORTED int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata,
 
     r = dav_exec(caldavdb->db, cmd, bval, NULL, NULL, stmt);
 
-    if (!r && commit) {
-	/* commit transaction */
-	return dav_exec(caldavdb->db, CMD_COMMIT, NULL, NULL, NULL,
-			&caldavdb->stmt[STMT_COMMIT]);
-    }
-
     return r;
 }
 
 
 #define CMD_DELETE "DELETE FROM ical_objs WHERE rowid = :rowid;"
 
-EXPORTED int caldav_delete(struct caldav_db *caldavdb, unsigned rowid, int commit)
+EXPORTED int caldav_delete(struct caldav_db *caldavdb, unsigned rowid)
 {
     struct bind_val bval[] = {
 	{ ":rowid", SQLITE_INTEGER, { .i = rowid } },
@@ -540,19 +519,13 @@ EXPORTED int caldav_delete(struct caldav_db *caldavdb, unsigned rowid, int commi
     r = dav_exec(caldavdb->db, CMD_DELETE, bval, NULL, NULL,
 		 &caldavdb->stmt[STMT_DELETE]);
 
-    if (!r && commit) {
-	/* commit transaction */
-	return dav_exec(caldavdb->db, CMD_COMMIT, NULL, NULL, NULL,
-			&caldavdb->stmt[STMT_COMMIT]);
-    }
-
     return r;
 }
 
 
 #define CMD_DELMBOX "DELETE FROM ical_objs WHERE mailbox = :mailbox;"
 
-EXPORTED int caldav_delmbox(struct caldav_db *caldavdb, const char *mailbox, int commit)
+EXPORTED int caldav_delmbox(struct caldav_db *caldavdb, const char *mailbox)
 {
     struct bind_val bval[] = {
 	{ ":mailbox", SQLITE_TEXT, { .s = mailbox } },
@@ -561,12 +534,6 @@ EXPORTED int caldav_delmbox(struct caldav_db *caldavdb, const char *mailbox, int
 
     r = dav_exec(caldavdb->db, CMD_DELMBOX, bval, NULL, NULL,
 		 &caldavdb->stmt[STMT_DELMBOX]);
-
-    if (!r && commit) {
-	/* commit transaction */
-	return dav_exec(caldavdb->db, CMD_COMMIT, NULL, NULL, NULL,
-			&caldavdb->stmt[STMT_COMMIT]);
-    }
 
     return r;
 }

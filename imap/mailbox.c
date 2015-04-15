@@ -2862,9 +2862,10 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
     assert(resource);
 
     carddavdb = carddav_open_mailbox(mailbox);
+    carddav_begin(carddavdb);
 
     /* find existing record for this resource */
-    carddav_lookup_resource(carddavdb, mailbox->name, resource, /*lock*/1, &cdata, /*tombstones*/1);
+    carddav_lookup_resource(carddavdb, mailbox->name, resource, &cdata, /*tombstones*/1);
 
     /* does it still come from this UID? */
     if (cdata->dav.imap_uid > new->uid) goto done;
@@ -2874,13 +2875,13 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 	if (!cdata->dav.imap_uid) goto done;
 
 	/* delete entry */
-	r = carddav_delete(carddavdb, cdata->dav.rowid, 0);
+	r = carddav_delete(carddavdb, cdata->dav.rowid);
     }
     else if (cdata->dav.imap_uid == new->uid) {
 	/* just a flag change on an existing record */
 	cdata->dav.modseq = new->modseq;
 	cdata->dav.alive = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
-	r = carddav_write(carddavdb, cdata, 0);
+	r = carddav_write(carddavdb, cdata);
     }
     else {
 	struct buf msg_buf = BUF_INITIALIZER;
@@ -2913,7 +2914,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 
 	carddav_make_entry(vparser.card->objects, cdata);
 
-	r = carddav_write(carddavdb, cdata, 0);
+	r = carddav_write(carddavdb, cdata);
 
 	vparse_free(&vparser);
     }
@@ -2971,9 +2972,10 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
     }
 
     caldavdb = caldav_open_mailbox(mailbox);
+    caldav_begin(caldavdb);
 
     /* Find existing record for this resource */
-    caldav_lookup_resource(caldavdb, mailbox->name, resource, 1, &cdata, 1);
+    caldav_lookup_resource(caldavdb, mailbox->name, resource, &cdata, 1);
 
     /* has this record already been replaced?  Don't write anything */
     if (cdata->dav.imap_uid > new->uid) goto done;
@@ -2992,13 +2994,13 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 	caldav_alarm_close(alarmdb);
 
 	/* delete entry */
-	r = caldav_delete(caldavdb, cdata->dav.rowid, 0);
+	r = caldav_delete(caldavdb, cdata->dav.rowid);
     }
     else if (cdata->dav.imap_uid == new->uid) {
 	/* just a flags update to an existing record */
 	cdata->dav.modseq = new->modseq;
 	cdata->dav.alive = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
-	r = caldav_write(caldavdb, cdata, 0);
+	r = caldav_write(caldavdb, cdata);
     }
     else {
 	struct buf msg_buf = BUF_INITIALIZER;
@@ -3054,7 +3056,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 	else caldav_alarm_commit(alarmdb);
 	caldav_alarm_close(alarmdb);
 
-	r = caldav_write(caldavdb, cdata, 0);
+	r = caldav_write(caldavdb, cdata);
 	icalcomponent_free(ical);
     }
 
@@ -3103,10 +3105,10 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
     }
 
     webdavdb = webdav_open_mailbox(mailbox);
+    webdav_begin(webdavdb);
 
     /* Find existing record for this resource */
-    webdav_lookup_resource(webdavdb, mailbox->name, resource, /*lock*/1,
-			   &wdata, /*tombstones*/1);
+    webdav_lookup_resource(webdavdb, mailbox->name, resource, &wdata, 0);
 
     /* does it still come from this UID? */
     if (wdata && wdata->dav.imap_uid > new->uid) goto done;
@@ -3116,7 +3118,7 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
 	if (!wdata) goto done;
 
 	/* delete entry */
-	r = webdav_delete(webdavdb, wdata->dav.rowid, 0);
+	r = webdav_delete(webdavdb, wdata->dav.rowid);
     }
     else if (!wdata || wdata->dav.imap_uid != new->uid) {
 	struct buf msg_buf = BUF_INITIALIZER;
@@ -3142,12 +3144,12 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
 	wdata->subtype = lcase(body->subtype);
 	wdata->res_uid = message_guid_encode(&guid);
 
-	r = webdav_write(webdavdb, wdata, 0);
+	r = webdav_write(webdavdb, wdata);
     } else {
 	/* just a flag change on an existing record */
 	wdata->dav.modseq = new->modseq;
 	wdata->dav.alive = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
-	r = webdav_write(webdavdb, wdata, 0);
+	r = webdav_write(webdavdb, wdata);
     }
 
 done:
@@ -3157,7 +3159,8 @@ done:
     }
 
     if (webdavdb) {
-	webdav_commit(webdavdb);
+	if (r) webdav_abort(webdavdb);
+	else webdav_commit(webdavdb);
 	webdav_close(webdavdb);
     }
 
@@ -4806,7 +4809,7 @@ static int mailbox_delete_caldav(struct mailbox *mailbox)
 
     caldavdb = caldav_open_mailbox(mailbox);
     if (caldavdb) {
-	int r = caldav_delmbox(caldavdb, mailbox->name, 0);
+	int r = caldav_delmbox(caldavdb, mailbox->name);
 	caldav_close(caldavdb);
 	if (r) return r;
     }
@@ -4827,7 +4830,7 @@ static int mailbox_delete_carddav(struct mailbox *mailbox)
 
     carddavdb = carddav_open_mailbox(mailbox);
     if (carddavdb) {
-	int r = carddav_delmbox(carddavdb, mailbox->name, 0);
+	int r = carddav_delmbox(carddavdb, mailbox->name);
 	carddav_close(carddavdb);
 	if (r) return r;
     }

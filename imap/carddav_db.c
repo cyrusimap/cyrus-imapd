@@ -286,7 +286,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 
 EXPORTED int carddav_lookup_resource(struct carddav_db *carddavdb,
 			   const char *mailbox, const char *resource,
-			   int lock, struct carddav_data **result,
+			   struct carddav_data **result,
 			   int tombstones)
 {
     struct bind_val bval[] = {
@@ -298,13 +298,6 @@ EXPORTED int carddav_lookup_resource(struct carddav_db *carddavdb,
     int r;
 
     *result = memset(&cdata, 0, sizeof(struct carddav_data));
-
-    if (lock) {
-	/* begin a transaction */
-	r = dav_exec(carddavdb->db, CMD_BEGIN, NULL, NULL, NULL,
-		     &carddavdb->stmt[STMT_BEGIN]);
-	if (r) return r;
-    }
 
     r = dav_exec(carddavdb->db, CMD_SELRSRC, bval, &read_cb, &rrock,
 		 &carddavdb->stmt[STMT_SELRSRC]);
@@ -322,7 +315,7 @@ EXPORTED int carddav_lookup_resource(struct carddav_db *carddavdb,
     " WHERE vcard_uid = :vcard_uid;"
 
 EXPORTED int carddav_lookup_uid(struct carddav_db *carddavdb, const char *vcard_uid,
-		      int lock, struct carddav_data **result)
+		                struct carddav_data **result)
 {
     struct bind_val bval[] = {
 	{ ":vcard_uid", SQLITE_TEXT, { .s = vcard_uid		 } },
@@ -332,13 +325,6 @@ EXPORTED int carddav_lookup_uid(struct carddav_db *carddavdb, const char *vcard_
     int r;
 
     *result = memset(&cdata, 0, sizeof(struct carddav_data));
-
-    if (lock) {
-	/* begin a transaction */
-	r = dav_exec(carddavdb->db, CMD_BEGIN, NULL, NULL, NULL,
-		     &carddavdb->stmt[STMT_BEGIN]);
-	if (r) return r;
-    }
 
     r = dav_exec(carddavdb->db, CMD_SELUID, bval, &read_cb, &rrock,
 		 &carddavdb->stmt[STMT_SELUID]);
@@ -566,7 +552,6 @@ EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *
     "INSERT INTO vcard_emails ( objid, pos, email, ispref )"		\
     " VALUES ( :objid, :pos, :email, :ispref );"
 
-/* no commit */
 static int carddav_write_emails(struct carddav_db *carddavdb, struct carddav_data *cdata)
 {
     struct bind_val bval[] = {
@@ -595,7 +580,6 @@ static int carddav_write_emails(struct carddav_db *carddavdb, struct carddav_dat
     "INSERT INTO vcard_groups ( objid, pos, member_uid, otheruser )"	\
     " VALUES ( :objid, :pos, :member_uid, :otheruser );"
 
-/* no commit */
 static int carddav_write_groups(struct carddav_db *carddavdb, struct carddav_data *cdata)
 {
     struct bind_val bval[] = {
@@ -629,8 +613,7 @@ static int carddav_write_groups(struct carddav_db *carddavdb, struct carddav_dat
     "  :lock_token, :lock_owner, :lock_ownerid, :lock_expire,"		\
     "  :version, :vcard_uid, :kind, :fullname, :name, :nickname );"
 
-EXPORTED int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cdata,
-		 int commit)
+EXPORTED int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cdata)
 {
     struct bind_val bval[] = {
 	{ ":alive",	   SQLITE_INTEGER, { .i = cdata->dav.alive	  } },
@@ -653,7 +636,7 @@ EXPORTED int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cd
     int r;
 
     if (cdata->dav.rowid) {
-	r = carddav_delete(carddavdb, cdata->dav.rowid, /*commit*/0);
+	r = carddav_delete(carddavdb, cdata->dav.rowid);
 	if (r) return r;
     }
 
@@ -669,19 +652,13 @@ EXPORTED int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cd
     r = carddav_write_groups(carddavdb, cdata);
     if (r) return r;
 
-    /* commit transaction */
-    if (commit) {
-	r = carddav_commit(carddavdb);
-	if (r) return r;
-    }
-
     return 0;
 }
 
 
 #define CMD_DELETE "DELETE FROM vcard_objs WHERE rowid = :rowid;"
 
-EXPORTED int carddav_delete(struct carddav_db *carddavdb, unsigned rowid, int commit)
+EXPORTED int carddav_delete(struct carddav_db *carddavdb, unsigned rowid)
 {
     struct bind_val bval[] = {
 	{ ":rowid", SQLITE_INTEGER, { .i = rowid } },
@@ -692,19 +669,13 @@ EXPORTED int carddav_delete(struct carddav_db *carddavdb, unsigned rowid, int co
 		 &carddavdb->stmt[STMT_DELETE]);
     if (r) return r;
 
-    /* commit transaction */
-    if (commit) {
-	r = carddav_commit(carddavdb);
-	if (r) return r;
-    }
-
     return 0;
 }
 
 
 #define CMD_DELMBOX "DELETE FROM vcard_objs WHERE mailbox = :mailbox;"
 
-EXPORTED int carddav_delmbox(struct carddav_db *carddavdb, const char *mailbox, int commit)
+EXPORTED int carddav_delmbox(struct carddav_db *carddavdb, const char *mailbox)
 {
     struct bind_val bval[] = {
 	{ ":mailbox", SQLITE_TEXT, { .s = mailbox } },
@@ -714,12 +685,6 @@ EXPORTED int carddav_delmbox(struct carddav_db *carddavdb, const char *mailbox, 
     r = dav_exec(carddavdb->db, CMD_DELMBOX, bval, NULL, NULL,
 		 &carddavdb->stmt[STMT_DELMBOX]);
     if (r) return r;
-
-    /* commit transaction */
-    if (commit) {
-	r = carddav_commit(carddavdb);
-	if (r) return r;
-    }
 
     return 0;
 }
@@ -1449,7 +1414,7 @@ static int _add_group_entries(struct carddav_db *carddavdb, struct jmap_req *req
 	    return -1;
 	const char *uid = _resolveid(req, item);
 	struct carddav_data *cdata = NULL;
-	r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
+	r = carddav_lookup_uid(carddavdb, uid, &cdata);
 	if (r) goto done;
 	if (!cdata || !cdata->dav.imap_uid || !cdata->dav.alive
 	    || cdata->kind != CARDDAV_KIND_CONTACT) {
@@ -1610,7 +1575,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	json_t *arg;
 	json_object_foreach(update, uid, arg) {
 	    struct carddav_data *cdata = NULL;
-	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
+	    r = carddav_lookup_uid(carddavdb, uid, &cdata);
 	    uint32_t olduid;
 	    char *resource = NULL;
 
@@ -1725,7 +1690,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    }
 	    struct carddav_data *cdata = NULL;
 	    uint32_t olduid;
-	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
+	    r = carddav_lookup_uid(carddavdb, uid, &cdata);
 
 	    /* is it a valid group? */
 	    if (r || !cdata || !cdata->dav.imap_uid || cdata->kind != CARDDAV_KIND_GROUP) {
@@ -2391,7 +2356,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 	json_t *arg;
 	json_object_foreach(update, uid, arg) {
 	    struct carddav_data *cdata = NULL;
-	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
+	    r = carddav_lookup_uid(carddavdb, uid, &cdata);
 	    uint32_t olduid;
 	    char *resource = NULL;
 
@@ -2493,7 +2458,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 	    }
 	    struct carddav_data *cdata = NULL;
 	    uint32_t olduid;
-	    r = carddav_lookup_uid(carddavdb, uid, 0, &cdata);
+	    r = carddav_lookup_uid(carddavdb, uid, &cdata);
 
 	    if (r || !cdata || !cdata->dav.imap_uid
 		  || cdata->kind != CARDDAV_KIND_CONTACT) {
