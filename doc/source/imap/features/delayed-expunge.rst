@@ -27,6 +27,6 @@ ensure messages remain available for includion in the next backup cycle.
 .. seealso::
 
     *   :ref:`imap-features-delayed-delete`
-    *   :ref:`imap-admin-deleted-expunged-expired-purged`
+    *   :ref:`imap-admin-deleted-expired-expunged-purged`
 
 Back to :ref:`imap-features`

@@ -35,6 +35,6 @@ purging the folder hierarchy from the filesystem;
 .. seealso::
 
     *   :ref:`imap-features-delayed-expunge`
-    *   :ref:`imap-admin-deleted-expunged-expired-purged`
+    *   :ref:`imap-admin-deleted-expired-expunged-purged`
 
 Back to :ref:`imap-features`
