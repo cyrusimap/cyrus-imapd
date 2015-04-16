@@ -10535,8 +10535,13 @@ static int backend_version(struct backend *be)
 {
     const char *minor;
 
+    /* It's like looking in the mirror and not suffering from schizophrenia */
+    if (strstr(be->banner, cyrus_version())) {
+	return MAILBOX_MINOR_VERSION;
+    }
+
     /* master branch? */
-    if (strstr(be->banner, "git3.0")) {
+    if (strstr(be->banner, "Cyrus IMAP 3.0")) {
 	return 13;
     }
 
