@@ -81,8 +81,10 @@
 #define FNAME_CACHE "/cyrus.cache"
 #define FNAME_SQUAT "/cyrus.squat"
 #define FNAME_EXPUNGE "/cyrus.expunge"
-#define FNAME_ANNOTATIONS "/cyrus.annotations"
+#ifdef WITH_DAV
 #define FNAME_DAV "/cyrus.dav"
+#endif
+#define FNAME_ANNOTATIONS "/cyrus.annotations"
 
 enum meta_filename {
   META_HEADER = 1,
@@ -91,7 +93,9 @@ enum meta_filename {
   META_SQUAT,
   META_EXPUNGE,
   META_ANNOTATIONS,
+#ifdef WITH_DAV
   META_DAV,
+#endif
   META_ARCHIVECACHE
 };
 

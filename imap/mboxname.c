@@ -1510,11 +1510,13 @@ EXPORTED char *mboxname_metapath(const char *partition,
 	metaflag = IMAP_ENUM_METAPARTITION_FILES_ANNOTATIONS;
 	filename = FNAME_ANNOTATIONS;
 	break;
+#ifdef WITH_DAV
     case META_DAV:
 	snprintf(confkey, 256, "metadir-dav-%s", partition);
 	metaflag = IMAP_ENUM_METAPARTITION_FILES_DAV;
 	filename = FNAME_DAV;
 	break;
+#endif
     case META_ARCHIVECACHE:
 	snprintf(confkey, 256, "metadir-archivecache-%s", partition);
 	metaflag = IMAP_ENUM_METAPARTITION_FILES_ARCHIVECACHE;
