@@ -631,6 +631,8 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
 		dav_getpath_byuserid(&dav_file, userid);
 		fname = (char *) buf_cstring(&dav_file);
 		ftag = "DAV";
+#else
+		continue;
 #endif
 		break;
 	    }
