@@ -634,16 +634,16 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
 		fname = mboxkey_getpath(userid);
 		ftag = "MBOXKEY";
 		break;
-#ifdef WITH_DAV
 	    case DAV_DB: {
+#ifdef WITH_DAV
 		struct buf dav_file = BUF_INITIALIZER;
 
 		dav_getpath_byuserid(&dav_file, userid);
 		fname = (char *) buf_cstring(&dav_file);
 		ftag = "DAV";
+#endif
 		break;
 	    }
-#endif
 	    default:
 		fatal("unknown user data file", EC_OSFILE);
 	    }
