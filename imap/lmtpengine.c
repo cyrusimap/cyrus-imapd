@@ -1093,8 +1093,7 @@ void lmtpmode(struct lmtp_func *func,
 
     prot_printf(pout, "220 %s", config_servername);
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	prot_printf(pout, " Cyrus LMTP%s %s",
-		    config_mupdate_server ? " Murder" : "", cyrus_version());
+	prot_printf(pout, " Cyrus LMTP %s", cyrus_version());
     }
     prot_printf(pout, " server ready\r\n");
 

@@ -1061,7 +1061,7 @@ static void dobanner(struct conn *c)
     prot_printf(c->pout, "* PARTIAL-UPDATE\r\n");
 
     prot_printf(c->pout,
-		"* OK MUPDATE \"%s\" \"Cyrus Murder\" \"%s\" \"%s\"\r\n",
+		"* OK MUPDATE \"%s\" \"Cyrus IMAP\" \"%s\" \"%s\"\r\n",
 		config_servername,
 		cyrus_version(), masterp ? "(master)" : slavebuf);
 

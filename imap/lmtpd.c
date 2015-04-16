@@ -345,8 +345,7 @@ int service_main(int argc, char **argv,
 	prot_printf(deliver_out, "451");
 	if (config_serverinfo) prot_printf(deliver_out, " %s", config_servername);
 	if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	    prot_printf(deliver_out, " Cyrus LMTP%s %s",
-			config_mupdate_server ? " Murder" : "", cyrus_version());
+	    prot_printf(deliver_out, " Cyrus LMTP %s", cyrus_version());
 	}
 	prot_printf(deliver_out, " %s\r\n", error_message(r));
     }

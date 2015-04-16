@@ -1213,8 +1213,7 @@ static void cmdloop(void)
     prot_printf(imapd_out, "]");
     if (config_serverinfo) prot_printf(imapd_out, " %s", config_servername);
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	prot_printf(imapd_out, " Cyrus IMAP%s %s",
-		    config_mupdate_server ? " Murder" : "", cyrus_version());
+	prot_printf(imapd_out, " Cyrus IMAP %s", cyrus_version());
     }
     prot_printf(imapd_out, " server ready\r\n");
 
