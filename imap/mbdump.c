@@ -460,7 +460,9 @@ static struct data_file data_files[] = {
     { META_INDEX,   "cyrus.index"   },
     { META_CACHE,   "cyrus.cache"   },
     { META_EXPUNGE, "cyrus.expunge" },
+#ifdef WITH_DAV
     { META_DAV,     "cyrus.dav"     },
+#endif
     { 0, NULL }
 };
 

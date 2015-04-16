@@ -80,7 +80,9 @@
 #define FNAME_SQUAT "/cyrus.squat"
 #define FNAME_EXPUNGE "/cyrus.expunge"
 #define FNAME_ANNOTATIONS "/cyrus.annotations"
+#ifdef WITH_DAV
 #define FNAME_DAV "/cyrus.dav"
+#endif
 
 enum meta_filename {
   META_HEADER = 1,
@@ -88,8 +90,12 @@ enum meta_filename {
   META_CACHE,
   META_SQUAT,
   META_EXPUNGE,
+#ifdef WITH_DAV
   META_ANNOTATIONS,
   META_DAV
+#else
+  META_ANNOTATIONS
+#endif
 };
 
 #define MAILBOX_FNAME_LEN 256
