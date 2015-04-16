@@ -49,8 +49,10 @@
 
 #include "mailbox.h"
 #include "mboxname.h"
+#ifdef WITH_DAV
 #include "caldav_db.h"
 #include "caldav_alarm.h"
+#endif
 
 /*
  * event types defined in RFC 5423 - Internet Message Store Events
