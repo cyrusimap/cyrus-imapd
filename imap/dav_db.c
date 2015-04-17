@@ -217,7 +217,6 @@ EXPORTED int dav_done(void)
     return 0;
 }
 
-
 static void dav_debug(void *fname, const char *sql)
 {
     syslog(LOG_DEBUG, "dav_exec(%s): %s", (const char *) fname, sql);
@@ -251,11 +250,13 @@ static int synthetic_cb(void *rock, int ncol, char **vals, char **names __attrib
 }
 
 /* Open DAV DB corresponding in file */
-static sqlite3 *dav_open(const char *fname)
+#define DAV_OPEN_REBUILD (1<<0)
+static sqlite3 *dav_open(const char *fname, int flags)
 {
     int rc = SQLITE_OK;
     struct stat sbuf;
     struct open_davdb *open;
+    char *path = NULL;
 
     for (open = open_davdbs; open; open = open->next) {
 	if (!strcmp(open->path, fname)) {
@@ -267,30 +268,34 @@ static sqlite3 *dav_open(const char *fname)
 
     open = xzmalloc(sizeof(struct open_davdb));
     open->path = xstrdup(fname);
+    path = flags & DAV_OPEN_REBUILD
+	 ? strconcat(fname, ".NEW", NULL)
+	 : xstrdup(fname);
 
-    rc = stat(open->path, &sbuf);
+    rc = stat(path, &sbuf);
     if (rc == -1 && errno == ENOENT) {
-	rc = cyrus_mkdir(open->path, 0755);
+	rc = cyrus_mkdir(path, 0755);
     }
 
 #if SQLITE_VERSION_NUMBER >= 3006000
-    rc = sqlite3_open_v2(open->path, &open->db,
+    rc = sqlite3_open_v2(path, &open->db,
 			 SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL);
 #else
-    rc = sqlite3_open(open->path, &open->db);
+    rc = sqlite3_open(path, &open->db);
 #endif
     if (rc != SQLITE_OK) {
 	syslog(LOG_ERR, "dav_open(%s) open: %s",
-	       open->path, open->db ? sqlite3_errmsg(open->db) : "failed");
+	       path, open->db ? sqlite3_errmsg(open->db) : "failed");
 	sqlite3_close(open->db);
 	free_dav_open(open);
+	free(path);
 	return NULL;
     }
     else {
 #if SQLITE_VERSION_NUMBER >= 3006000
 	sqlite3_extended_result_codes(open->db, 1);
 #endif
-	sqlite3_trace(open->db, dav_debug, open->path);
+	sqlite3_trace(open->db, dav_debug, path);
     }
 
     sqlite3_busy_timeout(open->db, 20*1000); /* 20 seconds is an eternity */
@@ -298,9 +303,10 @@ static sqlite3 *dav_open(const char *fname)
     rc = sqlite3_exec(open->db, "PRAGMA foreign_keys = ON;", NULL, NULL, NULL);
     if (rc != SQLITE_OK) {
 	syslog(LOG_ERR, "dav_open(%s) enable foreign_keys: %s",
-	    open->path, sqlite3_errmsg(open->db));
+	    path, sqlite3_errmsg(open->db));
 	sqlite3_close(open->db);
 	free_dav_open(open);
+	free(path);
 	return NULL;
     }
 
@@ -312,9 +318,10 @@ static sqlite3 *dav_open(const char *fname)
     }
     if (rc != SQLITE_OK) {
 	syslog(LOG_ERR, "dav_open(%s) get user_version: %s (%d)",
-	    open->path, sqlite3_errmsg(open->db), rc);
+	    path, sqlite3_errmsg(open->db), rc);
 	sqlite3_close(open->db);
 	free_dav_open(open);
+	free(path);
 	return NULL;
     }
     if (current_version == DB_VERSION) goto out;
@@ -322,18 +329,20 @@ static sqlite3 *dav_open(const char *fname)
     rc = sqlite3_exec(open->db, "BEGIN IMMEDIATE;", NULL, NULL, NULL);
     if (rc != SQLITE_OK) {
 	syslog(LOG_ERR, "dav_open(%s) begin: %s",
-	    open->path, sqlite3_errmsg(open->db));
+	    path, sqlite3_errmsg(open->db));
 	sqlite3_close(open->db);
 	free_dav_open(open);
+	free(path);
 	return NULL;
     }
 
     rc = sqlite3_exec(open->db, "PRAGMA user_version;", version_cb, &current_version, NULL);
     if (rc != SQLITE_OK) {
 	syslog(LOG_ERR, "dav_open(%s) get user_version locked: %s",
-	    open->path, sqlite3_errmsg(open->db));
+	    path, sqlite3_errmsg(open->db));
 	sqlite3_close(open->db);
 	free_dav_open(open);
+	free(path);
 	return NULL;
     }
     if (current_version == DB_VERSION) goto out;
@@ -347,73 +356,79 @@ static sqlite3 *dav_open(const char *fname)
 
 	switch (current_version) {
 	case 0:
-	    syslog(LOG_NOTICE, "creating dav_db %s", open->path);
+	    syslog(LOG_NOTICE, "creating dav_db %s", path);
 	    rc = sqlite3_exec(open->db, CMD_CREATE, NULL, NULL, NULL);
 	    if (rc != SQLITE_OK) {
 		syslog(LOG_ERR, "dav_open(%s) create: %s",
-		    open->path, sqlite3_errmsg(open->db));
+		    path, sqlite3_errmsg(open->db));
 		sqlite3_close(open->db);
 		free_dav_open(open);
+		free(path);
 		return NULL;
 	    }
 	    break;
 
 	case 1:
-	    syslog(LOG_NOTICE, "upgrading dav_db to v2 %s", open->path);
+	    syslog(LOG_NOTICE, "upgrading dav_db to v2 %s", path);
 	    rc = sqlite3_exec(open->db, CMD_DBUPGRADEv2, NULL, NULL, NULL);
 	    if (rc != SQLITE_OK) {
 		syslog(LOG_ERR, "dav_open(%s) upgrade v2: %s",
-		    open->path, sqlite3_errmsg(open->db));
+		    path, sqlite3_errmsg(open->db));
 		sqlite3_close(open->db);
 		free_dav_open(open);
+		free(path);
 		return NULL;
 	    }
 	    /* fall through */
 
 	case 2:
-	    syslog(LOG_NOTICE, "upgrading dav_db to v3 %s", open->path);
+	    syslog(LOG_NOTICE, "upgrading dav_db to v3 %s", path);
 	    rc = sqlite3_exec(open->db, CMD_DBUPGRADEv3, NULL, NULL, NULL);
 	    if (rc != SQLITE_OK) {
 		syslog(LOG_ERR, "dav_open(%s) upgrade v3: %s",
-		    open->path, sqlite3_errmsg(open->db));
+		    path, sqlite3_errmsg(open->db));
 		sqlite3_close(open->db);
 		free_dav_open(open);
+		free(path);
 		return NULL;
 	    }
 	    /* fall through */
 
 	case 3:
-	    syslog(LOG_NOTICE, "upgrading dav_db to v4 %s", open->path);
+	    syslog(LOG_NOTICE, "upgrading dav_db to v4 %s", path);
 	    rc = sqlite3_exec(open->db, CMD_DBUPGRADEv4, NULL, NULL, NULL);
 	    if (rc != SQLITE_OK) {
 		syslog(LOG_ERR, "dav_open(%s) upgrade v4: %s",
-		    open->path, sqlite3_errmsg(open->db));
+		    path, sqlite3_errmsg(open->db));
 		sqlite3_close(open->db);
 		free_dav_open(open);
+		free(path);
 		return NULL;
 	    }
 	    /* fall through */
 
 	case 4:
-	    syslog(LOG_NOTICE, "upgrading dav_db to v5 %s", open->path);
+	    syslog(LOG_NOTICE, "upgrading dav_db to v5 %s", path);
 	    rc = sqlite3_exec(open->db, CMD_DBUPGRADEv5, NULL, NULL, NULL);
 	    if (rc != SQLITE_OK) {
 		syslog(LOG_ERR, "dav_open(%s) upgrade v5: %s",
-		    open->path, sqlite3_errmsg(open->db));
+		    path, sqlite3_errmsg(open->db));
 		sqlite3_close(open->db);
 		free_dav_open(open);
+		free(path);
 		return NULL;
 	    }
 	    /* fall through */
 
 	case 5:
-	    syslog(LOG_NOTICE, "upgrading dav_db to v6 %s", open->path);
+	    syslog(LOG_NOTICE, "upgrading dav_db to v6 %s", path);
 	    rc = sqlite3_exec(open->db, CMD_DBUPGRADEv6, NULL, NULL, NULL);
 	    if (rc != SQLITE_OK) {
 		syslog(LOG_ERR, "dav_open(%s) upgrade v6: %s",
-		    open->path, sqlite3_errmsg(open->db));
+		    path, sqlite3_errmsg(open->db));
 		sqlite3_close(open->db);
 		free_dav_open(open);
+		free(path);
 		return NULL;
 	    }
 	    /* fall through */
@@ -431,9 +446,10 @@ static sqlite3 *dav_open(const char *fname)
 	if (rc != SQLITE_OK) {
 	    /* XXX - fatal? */
 	    syslog(LOG_ERR, "dav_open(%s) user_version: %s",
-		  open->path, sqlite3_errmsg(open->db));
+		  path, sqlite3_errmsg(open->db));
 	    sqlite3_close(open->db);
 	    free_dav_open(open);
+	    free(path);
 	    return NULL;
 	}
     }
@@ -441,9 +457,10 @@ static sqlite3 *dav_open(const char *fname)
     rc = sqlite3_exec(open->db, "COMMIT;", NULL, NULL, NULL);
     if (rc != SQLITE_OK) {
 	syslog(LOG_ERR, "dav_open(%s) commit: %s",
-	    open->path, sqlite3_errmsg(open->db));
+	    path, sqlite3_errmsg(open->db));
 	sqlite3_close(open->db);
 	free_dav_open(open);
+	free(path);
 	return NULL;
     }
 
@@ -452,6 +469,7 @@ out:
     open->refcount = 1;
     open->next = open_davdbs;
     open_davdbs = open;
+    free(path);
 
     return open->db;
 }
@@ -461,7 +479,7 @@ EXPORTED sqlite3 *dav_open_userid(const char *userid)
     sqlite3 *db = NULL;
     struct buf fname = BUF_INITIALIZER;
     dav_getpath_byuserid(&fname, userid);
-    db = dav_open(buf_cstring(&fname));
+    db = dav_open(buf_cstring(&fname), 0);
     buf_free(&fname);
     return db;
 }
@@ -471,7 +489,7 @@ EXPORTED sqlite3 *dav_open_mailbox(struct mailbox *mailbox)
     sqlite3 *db = NULL;
     struct buf fname = BUF_INITIALIZER;
     dav_getpath(&fname, mailbox);
-    db = dav_open(buf_cstring(&fname));
+    db = dav_open(buf_cstring(&fname), 0);
     buf_free(&fname);
     return db;
 }
@@ -615,24 +633,30 @@ done:
 
 EXPORTED int dav_reconstruct_user(const char *userid)
 {
-    struct buf fnamebuf = BUF_INITIALIZER;
-
     syslog(LOG_NOTICE, "dav_reconstruct_user: %s", userid);
 
-    /* remove existing database entirely */
-    /* XXX - build a new file and rename into place? */
-    dav_getpath_byuserid(&fnamebuf, userid);
-    if (buf_len(&fnamebuf))
-	unlink(buf_cstring(&fnamebuf));
-    buf_free(&fnamebuf);
-
+    /* XXX - this still means that alarms can go missing if this
+     * task is interrupted, but we can't afford to keep the
+     * alarm database locked for the entire time, it's a single
+     * blocking database over the entire server */
     struct caldav_alarm_db *alarmdb = caldav_alarm_open();
-
     caldav_alarm_delete_user(alarmdb, userid);
+    caldav_alarm_close(alarmdb);
+
+    struct buf fname = BUF_INITIALIZER;
+    dav_getpath_byuserid(&fname, userid);
+    sqlite3 *userdb = dav_open(buf_cstring(&fname), DAV_OPEN_REBUILD);
 
     mboxlist_allusermbox(userid, _dav_reconstruct_mb, NULL, 0);
 
-    caldav_alarm_close(alarmdb);
+    char *dstname = xstrdup(buf_cstring(&fname));
+    buf_appendcstr(&fname, ".NEW");
+
+    /* this actually works before close according to the internets */
+    rename(buf_cstring(&fname), dstname);
+    buf_free(&fname);
+
+    dav_close(userdb);
 
     return 0;
 }
