@@ -645,18 +645,25 @@ EXPORTED int dav_reconstruct_user(const char *userid)
 
     struct buf fname = BUF_INITIALIZER;
     dav_getpath_byuserid(&fname, userid);
-    sqlite3 *userdb = dav_open(buf_cstring(&fname), DAV_OPEN_REBUILD);
-
-    mboxlist_allusermbox(userid, _dav_reconstruct_mb, NULL, 0);
-
     char *dstname = xstrdup(buf_cstring(&fname));
+
+    sqlite3 *userdb = dav_open(dstname, DAV_OPEN_REBUILD);
+    int r = mboxlist_allusermbox(userid, _dav_reconstruct_mb, NULL, 0);
+    dav_close(userdb);
+
     buf_appendcstr(&fname, ".NEW");
 
     /* this actually works before close according to the internets */
-    rename(buf_cstring(&fname), dstname);
-    buf_free(&fname);
+    if (r) {
+	syslog(LOG_ERR, "dav_reconstruct_user: %s FAILED %s", userid, error_message(r));
+	unlink(buf_cstring(&fname));
+    }
+    else {
+	syslog(LOG_NOTICE, "dav_reconstruct_user: %s SUCCEEDED", userid);
+	rename(buf_cstring(&fname), dstname);
+    }
 
-    dav_close(userdb);
+    buf_free(&fname);
 
     return 0;
 }
