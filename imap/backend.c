@@ -414,24 +414,7 @@ static int ask_capability(struct backend *s, int dobanner, int automatic)
 	    prot_NONBLOCK(pin);
 	}
 
-	if (dobanner) {
-
-	    // This routine would always take the last line, which for
-	    // starttls against backends would amount to a tagged
-	    // "ok completed" response.
-
-	    // Banner is always untagged
-	    if (!strncmp(str, "* ", 2)) {
-
-		// The last untagged response however is a new set
-		// of capabilities, and not the banner.
-		//
-		// Banner also has "server ready" some place
-		if (strstr(str, "server ready")) {
-		    xstrncpy(s->banner, str, sizeof(s->banner));
-		}
-	    }
-	}
+	if (dobanner) xstrncpy(s->banner, str, sizeof(s->banner));
 
 	/* look for the end of the capabilities */
     } while (!resp || strncasecmp(str, resp, strlen(resp)));
