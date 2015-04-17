@@ -533,7 +533,7 @@ EXPORTED int backend_starttls(	struct backend *s,
     prot_settls(s->in,  s->tlsconn);
     prot_settls(s->out, s->tlsconn);
 
-    ask_capability(s, 0, 0);
+    ask_capability(s, /*dobanner*/1, tls_cmd->auto_capa);
 
     return 0;
 #endif /* HAVE_SSL */
