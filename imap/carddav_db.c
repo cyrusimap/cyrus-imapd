@@ -1383,6 +1383,11 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
 	json_object_set_new(obj, "notes", json_string(item ? item : ""));
     }
 
+    if (_wantprop(grock->props, "x-hasPhoto")) {
+	const char *item = vparse_stringval(card, "photo");
+	json_object_set_new(obj, "x-hasPhoto", item ? json_true() : json_false());
+    }
+
     /* XXX - other fields */
 
     json_array_append_new(grock->array, obj);
