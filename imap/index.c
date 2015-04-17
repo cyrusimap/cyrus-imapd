@@ -2726,7 +2726,7 @@ int index_urlfetch(struct index_state *state, uint32_t msgno,
     struct mailbox *mailbox = state->mailbox;
     struct index_map *im = &state->map[msgno-1];
 
-    if (!strcasecmp(section, "TEXT.MIME"))
+    if (!strcasecmpsafe(section, "TEXT.MIME"))
 	section = text_mime;
 
     if (outsize) *outsize = 0;
