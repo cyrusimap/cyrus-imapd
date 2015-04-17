@@ -3402,7 +3402,9 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
     struct caldav_data *cdata = (struct caldav_data *) data;
     int match = 1;
 
-    if (calfilter->comp) {
+    /* https://tools.ietf.org/html/rfc4791#section-9.7.1 says that just
+     * VCALENDAR by itself with no sub keys should match too */
+    if (calfilter->comp && calfilter->comp != CAL_COMP_VCALENDAR) {
 	/* Perform CALDAV:comp-filter filtering */
 	if (!(cdata->comp_type & calfilter->comp)) return 0;
     }
