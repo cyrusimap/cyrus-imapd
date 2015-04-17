@@ -3233,7 +3233,7 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
     struct mailbox *mailbox = state->mailbox;
     struct index_record record;
 
-    if (!strcasecmp(section, "TEXT.MIME"))
+    if (!strcasecmpsafe(section, "TEXT.MIME"))
 	section = text_mime;
 
     if (outsize) *outsize = 0;
