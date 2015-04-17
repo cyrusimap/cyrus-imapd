@@ -3071,6 +3071,7 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
 				 struct index_record *old,
 				 struct index_record *new)
 {
+    const char *userid = mboxname_to_userid(mailbox->name);
     struct webdav_db *webdavdb = NULL;
     struct param *param;
     struct body *body = NULL;
@@ -3080,6 +3081,7 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
 
     /* conditions in which there's nothing to do */
     if (!new) goto done;
+    if (!userid) goto done;
 
     /* phantom record - never really existed here */
     if (!old && (new->system_flags & FLAG_EXPUNGED))
@@ -3099,21 +3101,32 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
     webdavdb = webdav_open_mailbox(mailbox);
 
     /* Find existing record for this resource */
-    webdav_lookup_resource(webdavdb, mailbox->name, resource, 1, &wdata, 0);
+    webdav_lookup_resource(webdavdb, mailbox->name, resource, /*lock*/1,
+			   &wdata, /*tombstones*/1);
 
-    /* XXX - if not matching by UID, skip - this record doesn't refer to the current item */
+    /* does it still come from this UID? */
+    if (wdata && wdata->dav.imap_uid > new->uid) goto done;
 
-    if (new->system_flags & FLAG_EXPUNGED) {
+    if (new->system_flags & FLAG_UNLINKED) {
 	/* is there an existing record? */
 	if (!wdata) goto done;
-
-	/* does it still come from this UID? */
-	if (wdata->dav.imap_uid != new->uid) goto done;
 
 	/* delete entry */
 	r = webdav_delete(webdavdb, wdata->dav.rowid, 0);
     }
-    else {
+    else if (!wdata || wdata->dav.imap_uid != new->uid) {
+	struct buf msg_buf = BUF_INITIALIZER;
+	struct message_guid guid;
+
+	/* Load message containing the resource */
+	r = mailbox_map_record(mailbox, new, &msg_buf);
+	if (r) goto done;
+
+	/* Calculate GUID for body content only */
+	message_guid_generate(&guid, buf_base(&msg_buf) + new->header_size,
+			      buf_len(&msg_buf) - new->header_size);
+	buf_free(&msg_buf);
+
 	wdata->dav.creationdate = new->internaldate;
 	wdata->dav.mailbox = mailbox->name;
 	wdata->dav.imap_uid = new->uid;
@@ -3123,8 +3136,13 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
 	wdata->filename = body->description;
 	wdata->type = lcase(body->type);
 	wdata->subtype = lcase(body->subtype);
-	wdata->res_uid = message_guid_encode(&new->guid);
+	wdata->res_uid = message_guid_encode(&guid);
 
+	r = webdav_write(webdavdb, wdata, 0);
+    } else {
+	/* just a flag change on an existing record */
+	wdata->dav.modseq = new->modseq;
+	wdata->dav.alive = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
 	r = webdav_write(webdavdb, wdata, 0);
     }
 
