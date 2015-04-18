@@ -254,10 +254,12 @@ struct mailbox {
     /* conversations */
     struct conversations_state *local_cstate;
 
+#ifdef WITH_DAV
     struct caldav_db *local_caldav;
     struct caldav_alarm_db *local_caldav_alarm;
     struct carddav_db *local_carddav;
     struct webdav_db *local_webdav;
+#endif
 
     /* change management */
     int modseq_dirty;

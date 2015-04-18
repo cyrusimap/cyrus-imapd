@@ -1859,6 +1859,7 @@ static int mailbox_lock_conversations(struct mailbox *mailbox)
     return conversations_open_mbox(mailbox->name, &mailbox->local_cstate);
 }
 
+#ifdef WITH_DAV
 EXPORTED struct caldav_db *mailbox_open_caldav(struct mailbox *mailbox)
 {
     if (!mailbox->local_caldav) {
@@ -1914,6 +1915,7 @@ EXPORTED struct webdav_db *mailbox_open_webdav(struct mailbox *mailbox)
     }
     return mailbox->local_webdav;
 }
+#endif
 
 /*
  * bsearch() comparison function for searching on UID.
