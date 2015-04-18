@@ -86,11 +86,11 @@ void shut_down(int code);
 
 static int code = 0;
 
-static int do_user(const char *userid, void *rock __attribute__((unused)))
+static int do_user(const char *userid, void *rock)
 {
     printf("Reconstructing DAV DB for %s...\n", userid);
 
-    return dav_reconstruct_user(userid);
+    return dav_reconstruct_user(userid, (const char *)rock);
 }
 
 int main(int argc, char **argv)
@@ -98,12 +98,13 @@ int main(int argc, char **argv)
     int opt, r;
     char *alt_config = NULL;
     int allusers = 0;
+    const char *audit_tool = NULL;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
 	fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((opt = getopt(argc, argv, "C:a")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:A:a")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -111,6 +112,10 @@ int main(int argc, char **argv)
 
 	case 'a':
 	    allusers = 1;
+	    break;
+
+	case 'A':
+	    audit_tool = optarg;
 	    break;
 
 	default:
@@ -147,7 +152,7 @@ int main(int argc, char **argv)
     carddav_init();
 
     if (allusers) {
-	mboxlist_alluser(do_user, NULL);
+	mboxlist_alluser(do_user, (void *)audit_tool);
     }
     else if (optind == argc) {
 	 usage();
@@ -155,7 +160,7 @@ int main(int argc, char **argv)
     else {
 	int i;
 	for (i = optind; i < argc; i++)
-	    do_user(argv[i], NULL);
+	    do_user(argv[i], (void *)audit_tool);
     }
 
     carddav_done();

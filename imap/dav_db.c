@@ -52,6 +52,7 @@
 #endif
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 
 #include "assert.h"
 #include "cyrusdb.h"
@@ -251,6 +252,7 @@ static int synthetic_cb(void *rock, int ncol, char **vals, char **names __attrib
 
 /* Open DAV DB corresponding in file */
 #define DAV_OPEN_REBUILD (1<<0)
+#define DAV_OPEN_FORCE   (1<<1) /* skip refcount check */
 static sqlite3 *dav_open(const char *fname, int flags)
 {
     int rc = SQLITE_OK;
@@ -258,11 +260,13 @@ static sqlite3 *dav_open(const char *fname, int flags)
     struct open_davdb *open;
     char *path = NULL;
 
-    for (open = open_davdbs; open; open = open->next) {
-	if (!strcmp(open->path, fname)) {
-	    /* already open! */
-	    open->refcount++;
-	    return open->db;
+    if (!(flags & DAV_OPEN_FORCE)) {
+	for (open = open_davdbs; open; open = open->next) {
+	    if (!strcmp(open->path, fname)) {
+		/* already open! */
+		open->refcount++;
+		return open->db;
+	    }
 	}
     }
 
@@ -631,7 +635,23 @@ done:
     return r;
 }
 
-EXPORTED int dav_reconstruct_user(const char *userid)
+static void run_audit_tool(const char *tool, const char *srcdb, const char *dstdb)
+{
+    pid_t pid = fork();
+    if (pid < 0)
+	return;
+
+    if (pid == 0) {
+	/* child */
+	execl(tool, srcdb, dstdb, (void *)NULL);
+	exit(-1);
+    }
+
+    int status;
+    while (waitpid(pid, &status, 0) < 0);
+}
+
+EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
 {
     syslog(LOG_NOTICE, "dav_reconstruct_user: %s", userid);
 
@@ -656,11 +676,20 @@ EXPORTED int dav_reconstruct_user(const char *userid)
     /* this actually works before close according to the internets */
     if (r) {
 	syslog(LOG_ERR, "dav_reconstruct_user: %s FAILED %s", userid, error_message(r));
+	if (audit_tool) {
+	    printf("Not auditing %s, reconstruct failed %s\n", userid, error_message(r));
+	}
 	unlink(buf_cstring(&fname));
     }
     else {
 	syslog(LOG_NOTICE, "dav_reconstruct_user: %s SUCCEEDED", userid);
-	rename(buf_cstring(&fname), dstname);
+	if (audit_tool) {
+	    run_audit_tool(audit_tool, dstname, buf_cstring(&fname));
+	    unlink(buf_cstring(&fname));
+	}
+	else {
+	    rename(buf_cstring(&fname), dstname);
+	}
     }
 
     buf_free(&fname);
