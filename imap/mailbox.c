@@ -3204,11 +3204,6 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
 	wdata->res_uid = message_guid_encode(&guid);
 
 	r = webdav_write(webdavdb, wdata);
-    } else {
-	/* just a flag change on an existing record */
-	wdata->dav.modseq = new->modseq;
-	wdata->dav.alive = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
-	r = webdav_write(webdavdb, wdata);
     }
 
 done:
