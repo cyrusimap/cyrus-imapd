@@ -287,7 +287,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 
 
 #define CMD_SELRSRC CMD_GETFIELDS					\
-    " WHERE ( mailbox = :mailbox AND resource = :resource );"
+    " WHERE mailbox = :mailbox AND resource = :resource;"
 
 EXPORTED int webdav_lookup_resource(struct webdav_db *webdavdb,
 				    const char *mailbox, const char *resource,
@@ -313,7 +313,7 @@ EXPORTED int webdav_lookup_resource(struct webdav_db *webdavdb,
 
 
 #define CMD_SELUID CMD_GETFIELDS					\
-    " WHERE ( res_uid = :res_uid );"
+    " WHERE res_uid = :res_uid AND alive = 1;"
 
 EXPORTED int webdav_lookup_uid(struct webdav_db *webdavdb, const char *res_uid,
 			       struct webdav_data **result)
@@ -336,7 +336,7 @@ EXPORTED int webdav_lookup_uid(struct webdav_db *webdavdb, const char *res_uid,
 
 
 #define CMD_SELMBOX CMD_GETFIELDS					\
-    " WHERE mailbox = :mailbox;"
+    " WHERE mailbox = :mailbox AND alive = 1;"
 
 EXPORTED int webdav_foreach(struct webdav_db *webdavdb, const char *mailbox,
 			    int (*cb)(void *rock, void *data),

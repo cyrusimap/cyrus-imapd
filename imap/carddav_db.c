@@ -312,7 +312,7 @@ EXPORTED int carddav_lookup_resource(struct carddav_db *carddavdb,
 
 
 #define CMD_SELUID CMD_GETFIELDS \
-    " WHERE vcard_uid = :vcard_uid;"
+    " WHERE vcard_uid = :vcard_uid AND alive = 1;"
 
 EXPORTED int carddav_lookup_uid(struct carddav_db *carddavdb, const char *vcard_uid,
 		                struct carddav_data **result)
@@ -335,7 +335,7 @@ EXPORTED int carddav_lookup_uid(struct carddav_db *carddavdb, const char *vcard_
 
 
 #define CMD_SELMBOX CMD_GETFIELDS \
-    " WHERE mailbox = :mailbox;"
+    " WHERE mailbox = :mailbox AND alive = 1;"
 
 EXPORTED int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
 		   int (*cb)(void *rock, void *data),

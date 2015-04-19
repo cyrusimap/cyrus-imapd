@@ -374,7 +374,7 @@ EXPORTED int caldav_lookup_resource(struct caldav_db *caldavdb,
 
 
 #define CMD_SELUID CMD_READFIELDS \
-    " WHERE ical_uid = :ical_uid AND mailbox != :inbox;"
+    " WHERE ical_uid = :ical_uid AND mailbox != :inbox AND alive = 1;"
 
 EXPORTED int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
 			       struct caldav_data **result)
