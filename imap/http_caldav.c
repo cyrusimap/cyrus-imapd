@@ -2281,13 +2281,6 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 }
 
 
-enum {
-    ATTACH_ADD,
-    ATTACH_UPDATE,
-    ATTACH_REMOVE
-};
-
-
 /* Manage attachment */
 static int caldav_post_attach(struct transaction_t *txn, int rights)
 {
@@ -2301,15 +2294,19 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     struct webdav_db *webdavdb = NULL;
     struct webdav_data *wdata;
     struct index_record record;
-    const char *etag = NULL, **hdr, *resource;
-    char namebuf[MAX_MAILBOX_NAME+1], *mailboxname = NULL;
+    const char *etag = NULL, **hdr;
+    char *mailboxname = NULL, *resource = NULL;
     time_t lastmod = 0;
-    static unsigned post_count = 0;
     icalcomponent *ical = NULL, *comp;
     icalcomponent_kind kind;
-    icalproperty *aprop, *prop;
+    icalproperty *aprop = NULL, *prop;
     icalparameter *param;
-    unsigned op, return_rep;
+    unsigned op, return_rep, ref_count = 0;
+    enum {
+	ATTACH_ADD,
+	ATTACH_UPDATE,
+	ATTACH_REMOVE
+    };
 
     if (!(namespace_calendar.allow & ALLOW_CAL_ATTACH)) return HTTP_NOT_ALLOWED;
 
@@ -2336,26 +2333,21 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     mid = hash_lookup("managed-id", &txn->req_qparams);
     rid = hash_lookup("rid", &txn->req_qparams);
 
-    if (rid) return HTTP_BAD_REQUEST;  /* not supported (yet) */
-
     if (!action || action->next) return HTTP_BAD_REQUEST;
-    else if (!strcmp(action->s, "attachment-add")) op = ATTACH_ADD;
-    else if (!strcmp(action->s, "attachment-update")) op = ATTACH_UPDATE;
-    else if (!strcmp(action->s, "attachment-remove")) op = ATTACH_REMOVE;
-    else return HTTP_BAD_REQUEST;
-
-    switch (op) {
-    case ATTACH_ADD:
-	if (mid) return HTTP_BAD_REQUEST;
-	break;
-
-    case ATTACH_UPDATE:
-	if (rid) return HTTP_BAD_REQUEST;
-
-    case ATTACH_REMOVE:
-	if (!mid || mid->next) return HTTP_BAD_REQUEST;
-	break;
+    else if (!strcmp(action->s, "attachment-add")) {
+	op = ATTACH_ADD;
+	if (rid || mid) return HTTP_BAD_REQUEST;
     }
+    else if (!strcmp(action->s, "attachment-update")) {
+	op = ATTACH_UPDATE;
+	if (rid  /* not supported (yet) */
+	    || !mid || mid->next) return HTTP_BAD_REQUEST;
+    }
+    else if (!strcmp(action->s, "attachment-remove")) {
+	op = ATTACH_REMOVE;
+	if (rid || !mid || mid->next) return HTTP_BAD_REQUEST;
+    }
+    else return HTTP_BAD_REQUEST;
 
     /* Open calendar for writing */
     r = mailbox_open_iwl(txn->req_tgt.mbentry->name, &calendar);
@@ -2430,35 +2422,9 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     webdavdb = webdav_open_mailbox(attachments);
 
     switch (op) {
-    case ATTACH_ADD: {
-	const char *proto = NULL, *host = NULL;
-	icalattach *attach;
-
-	/* Create resource name for attachment */
-	hdr = spool_getheader(txn->req_hdrs, "Content-Disposition");
-	snprintf(namebuf, MAX_MAILBOX_NAME, "%s-%ld-%d-%u",
-		 cdata->ical_uid, time(0), getpid(), post_count++);
-	resource = namebuf;
-
-	/* Create new ATTACH property */
-	assert(!buf_len(&txn->buf));
-	http_proto_host(txn->req_hdrs, &proto, &host);
-	buf_printf(&txn->buf, "%s://%s%s/user/%s/%s%s",
-		   proto, host, namespace_calendar.prefix,
-		   txn->req_tgt.userid,
-		   MANAGED_ATTACH, resource);
-	attach = icalattach_new_from_url(buf_cstring(&txn->buf));
-	buf_reset(&txn->buf);
-
-	aprop = icalproperty_new_attach(attach);
-	icalcomponent_add_property(comp, aprop);
-	icalattach_unref(attach);
-	break;
-    }
-
     case ATTACH_UPDATE:
     case ATTACH_REMOVE:
-	/* Verify managed-id */
+	/* Locate ATTACH property with this managed-id */
 	for (aprop = icalcomponent_get_first_property(comp,
 						      ICAL_ATTACH_PROPERTY);
 	     aprop;
@@ -2473,7 +2439,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 	    goto done;
 	}
 
-	/* Find DAV record for the attachment */
+	/* Find DAV record for the attachment with this managed-id */
 	webdav_lookup_uid(webdavdb, mid->s, &wdata);
 	if (!wdata->dav.rowid) {
 	    txn->error.precond = CALDAV_VALID_MANAGEDID;
@@ -2481,12 +2447,16 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 	    goto done;
 	}
 
-	resource = wdata->dav.resource;
+	resource = xstrdup(wdata->dav.resource);
+	ref_count = wdata->ref_count;
     }
 
     switch (op) {
     case ATTACH_ADD:
     case ATTACH_UPDATE: {
+	struct message_guid guid;
+	static char uid[2*MESSAGE_GUID_SIZE+1];
+
 	/* Read body */
 	txn->req_body.flags |= BODY_DECODE;
 	r = http_read_body(httpd_in, httpd_out,
@@ -2503,17 +2473,38 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 	    goto done;
 	}
 
+	/* Generate UID of body content */
+	message_guid_generate(&guid, buf_base(&txn->req_body.payload),
+			      buf_len(&txn->req_body.payload));
+	strcpy(uid, message_guid_encode(&guid));
+
+	/* Look for an existing attachment with this UID */
+	webdav_lookup_uid(webdavdb, uid, &wdata);
+
+	if (wdata->dav.rowid) {
+	    /* Found attachment with this UID -- reuse it and bump ref count */
+	    resource = xstrdup(wdata->dav.resource);
+	    ref_count = wdata->ref_count + 1;
+	}
+	else if ((op == ATTACH_ADD) || (ref_count > 1)) {
+	    /* Adding new attachment or updating one with other references */
+	    free(resource);
+	    resource = xstrdup(uid);
+	    ref_count = 1;
+	}
+	else {
+	    /* Updating an attachment with no other references -
+	       keep existing resource and ref_count */
+	}
+
 	/* Store the new/updated attachment using WebDAV callback */
 	ret = webdav_params.put.proc(txn, &txn->req_body.payload,
 				     attachments, resource, webdavdb, 0);
 
-	/* Finished with attachment collection */
-	mailbox_unlock_index(attachments, NULL);
-
 	switch (ret) {
 	case HTTP_CREATED:
 	case HTTP_NO_CONTENT:
-	    resp_body->cmid = resp_body->etag;
+	    resp_body->cmid = uid;
 	    resp_body->etag = NULL;
 	    break;
 
@@ -2525,6 +2516,24 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 	/* Lookup new/updated resource record */
 	webdav_lookup_resource(webdavdb, attachments->name,
 			       resource, &wdata, 0);
+
+	if (!aprop) {
+	    /* Create new ATTACH property */
+	    const char *proto = NULL, *host = NULL;
+	    icalattach *attach;
+
+	    assert(!buf_len(&txn->buf));
+	    http_proto_host(txn->req_hdrs, &proto, &host);
+	    buf_printf(&txn->buf, "%s://%s%s/user/%s/%s%s",
+		       proto, host, namespace_calendar.prefix,
+		       txn->req_tgt.userid, MANAGED_ATTACH, resource);
+	    attach = icalattach_new_from_url(buf_cstring(&txn->buf));
+	    buf_reset(&txn->buf);
+
+	    aprop = icalproperty_new_attach(attach);
+	    icalcomponent_add_property(comp, aprop);
+	    icalattach_unref(attach);
+	}
 
 	/* Update ATTACH parameters */
 	param = icalproperty_get_managedid_parameter(aprop);
@@ -2583,7 +2592,21 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     }
 
     case ATTACH_REMOVE:
-	/* XXX  Delete attachment resource? */
+	if (!--ref_count) {
+	    /* Delete attachment resource */
+	    struct index_record record;
+
+	    mailbox_find_index_record(attachments, wdata->dav.imap_uid,
+				      &record, 0);
+	    record.system_flags |= FLAG_EXPUNGED;
+
+	    r = mailbox_rewrite_index_record(attachments, &record);
+
+	    if (r) {
+		syslog(LOG_ERR, "expunging record (%s) failed: %s",
+		       attachments->name, error_message(r));
+	    }
+	}
 
 	/* Remove ATTACH properties */
 	icalcomponent_remove_property(comp, aprop);
@@ -2606,6 +2629,15 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 	}
 	break;
     }
+
+    if (ref_count) {
+	/* Update reference count */
+	wdata->ref_count = ref_count;
+	r = webdav_write(webdavdb, wdata);
+    }
+
+    /* Finished with attachment collection */
+    mailbox_unlock_index(attachments, NULL);
 
     /* Store updated calendar resource */
     ret = store_resource(txn, ical, calendar,
@@ -2646,6 +2678,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     if (caldavdb) caldav_close(caldavdb);
     mailbox_close(&attachments);
     mailbox_close(&calendar);
+    free(resource);
 
     return ret;
 }
