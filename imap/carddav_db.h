@@ -147,8 +147,8 @@ int carddav_abort(struct carddav_db *carddavdb);
 /* create carddav_data from vparse_card */
 void carddav_make_entry(struct vparse_card *vcard, struct carddav_data *cdata);
 
-int carddav_store(struct mailbox *mailbox, uint32_t olduid,
-		  struct vparse_card *card, const char *resource,
+int carddav_store(struct mailbox *mailbox, struct vparse_card *card,
+		  const char *resource,
 		  strarray_t *flags, struct entryattlist *annots,
 		  const char *userid, struct auth_state *authstate);
 int carddav_remove(struct mailbox *mailbox, uint32_t olduid);

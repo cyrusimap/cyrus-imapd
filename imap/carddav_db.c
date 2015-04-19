@@ -1475,6 +1475,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 			    "accountId", req->userid);
 
     struct mailbox *mailbox = NULL;
+    struct mailbox *newmailbox = NULL;
 
     json_t *create = json_object_get(req->args, "create");
     if (create) {
@@ -1547,7 +1548,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 		r = mailbox_open_iwl(mboxname, &mailbox);
 	    }
 
-	    if (!r) r = carddav_store(mailbox, 0, card, NULL, NULL, NULL, req->userid, req->authstate);
+	    if (!r) r = carddav_store(mailbox, card, NULL, NULL, NULL, req->userid, req->authstate);
 
 	    vparse_free_card(card);
 
@@ -1604,6 +1605,19 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 		}
 	    }
 
+	    json_t *abookid = json_object_get(arg, "addressbookId");
+	    if (abookid && json_string_value(abookid)) {
+		const char *mboxname = mboxname_abook(req->userid, json_string_value(abookid));
+		if (strcmp(mboxname, cdata->dav.mailbox)) {
+		    /* move */
+		    r = mailbox_open_iwl(mboxname, &newmailbox);
+		    if (r) {
+			syslog(LOG_ERR, "IOERROR: failed to open %s", mboxname);
+			goto done;
+		    }
+		}
+	    }
+
 	    /* XXX - this could definitely be refactored from here and mailbox.c */
 	    struct buf msg_buf = BUF_INITIALIZER;
 	    struct vparse_state vparser;
@@ -1627,6 +1641,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 		json_t *err = json_pack("{s:s}", "type", "parseError");
 		json_object_set_new(notUpdated, uid, err);
 		vparse_free(&vparser);
+		mailbox_close(&newmailbox);
 		continue;
 	    }
 	    struct vparse_card *card = vparser.card->objects;
@@ -1638,6 +1653,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 		    json_t *err = json_pack("{s:s}", "type", "invalidArguments");
 		    json_object_set_new(notUpdated, uid, err);
 		    vparse_free(&vparser);
+		    mailbox_close(&newmailbox);
 		    continue;
 		}
 		struct vparse_entry *entry = vparse_get_entry(card, NULL, "FN");
@@ -1659,11 +1675,14 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 		    json_t *err = json_pack("{s:s}", "type", "invalidContactId");
 		    json_object_set_new(notUpdated, uid, err);
 		    vparse_free(&vparser);
+		    mailbox_close(&newmailbox);
 		    continue;
 		}
 	    }
 
-	    r = carddav_store(mailbox, olduid, card, resource, NULL, NULL, req->userid, req->authstate);
+	    r = carddav_store(newmailbox ? newmailbox : mailbox, card, resource, NULL, NULL, req->userid, req->authstate);
+	    if (!r) r = carddav_remove(mailbox, olduid);
+	    mailbox_close(&newmailbox);
 
 	    vparse_free(&vparser);
 	    free(resource);
@@ -1751,6 +1770,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
     json_array_append_new(req->response, item);
 
 done:
+    mailbox_close(&newmailbox);
     mailbox_close(&mailbox);
 
     return r;
@@ -2280,6 +2300,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 			    "accountId", req->userid);
 
     struct mailbox *mailbox = NULL;
+    struct mailbox *newmailbox = NULL;
 
     json_t *create = json_object_get(req->args, "create");
     if (create) {
@@ -2328,7 +2349,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 		continue;
 	    }
 
-	    r = carddav_store(mailbox, 0, card, NULL, flags, annots, req->userid, req->authstate);
+	    r = carddav_store(mailbox, card, NULL, flags, annots, req->userid, req->authstate);
 	    vparse_free_card(card);
 	    strarray_free(flags);
 	    freeentryatts(annots);
@@ -2384,6 +2405,19 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 		}
 	    }
 
+	    json_t *abookid = json_object_get(arg, "addressbookId");
+	    if (abookid && json_string_value(abookid)) {
+		const char *mboxname = mboxname_abook(req->userid, json_string_value(abookid));
+		if (strcmp(mboxname, cdata->dav.mailbox)) {
+		    /* move */
+		    r = mailbox_open_iwl(mboxname, &newmailbox);
+		    if (r) {
+			syslog(LOG_ERR, "IOERROR: failed to open %s", mboxname);
+			goto done;
+		    }
+		}
+	    }
+
 	    /* XXX - this could definitely be refactored from here and mailbox.c */
 	    struct buf msg_buf = BUF_INITIALIZER;
 	    struct vparse_state vparser;
@@ -2413,6 +2447,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 		vparse_free(&vparser);
 		strarray_free(flags);
 		freeentryatts(annots);
+		mailbox_close(&newmailbox);
 		continue;
 	    }
 	    struct vparse_card *card = vparser.card->objects;
@@ -2426,9 +2461,12 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 		vparse_free(&vparser);
 		strarray_free(flags);
 		freeentryatts(annots);
+		mailbox_close(&newmailbox);
 		continue;
 	    }
-	    r = carddav_store(mailbox, olduid, card, resource, flags, annots, req->userid, req->authstate);
+	    r = carddav_store(newmailbox ? newmailbox : mailbox, card, resource, flags, annots, req->userid, req->authstate);
+	    if (!r) r = carddav_remove(mailbox, olduid);
+	    mailbox_close(&newmailbox);
 	    strarray_free(flags);
 	    freeentryatts(annots);
 
@@ -2519,6 +2557,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
     json_array_append_new(req->response, item);
 
 done:
+    mailbox_close(&newmailbox);
     mailbox_close(&mailbox);
 
     return r;
@@ -2577,8 +2616,8 @@ EXPORTED void carddav_make_entry(struct vparse_card *vcard, struct carddav_data 
     }
 }
 
-EXPORTED int carddav_store(struct mailbox *mailbox, uint32_t olduid,
-			   struct vparse_card *vcard, const char *resource,
+EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
+			   const char *resource,
 			   strarray_t *flags, struct entryattlist *annots,
 			   const char *userid, struct auth_state *authstate)
 {
@@ -2667,28 +2706,6 @@ EXPORTED int carddav_store(struct mailbox *mailbox, uint32_t olduid,
     if (r) {
 	syslog(LOG_ERR, "append_commit() failed");
 	goto done;
-    }
-
-    if (olduid) {
-	/* Now that we have the replacement message in place
-	   and the mailbox locked, re-read the old record
-	   and see if we should overwrite it.  Either way,
-	   one of our records will have to be expunged.
-	*/
-	struct index_record oldrecord;
-	int userflag;
-	r = mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag, 1);
-	if (!r) r = mailbox_find_index_record(mailbox, olduid, &oldrecord, NULL);
-	if (!r) {
-	    oldrecord.user_flags[userflag/32] |= 1<<(userflag&31);
-	    oldrecord.system_flags |= FLAG_EXPUNGED;
-	    r = mailbox_rewrite_index_record(mailbox, &oldrecord);
-	}
-	if (r) {
-	    syslog(LOG_ERR, "expunging record (%s) failed: %s",
-		   mailbox->name, error_message(r));
-	    goto done;
-	}
     }
 
 done:
