@@ -3104,6 +3104,14 @@ int meth_copy_move(struct transaction_t *txn, void *params)
 	goto done;
     }
 
+    /* Check we're not copying within the same user */
+    if (!meth_move && mboxname_same_userid(dest_tgt.mbentry->name, txn->req_tgt.mbentry->name)) {
+	/* XXX - need generic error for uid-conflict */
+	txn->error.desc = "Can only move within same user";
+	ret = HTTP_NOT_ALLOWED;
+	goto done;
+    }
+
     if (txn->req_tgt.mbentry->server) {
 	/* Remote source mailbox */
 
