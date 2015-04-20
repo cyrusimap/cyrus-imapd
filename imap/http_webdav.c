@@ -62,7 +62,7 @@ static int webdav_get(struct transaction_t *txn, struct mailbox *mailbox,
 		      struct index_record *record, void *data);
 static int webdav_put(struct transaction_t *txn, struct buf *obj,
 		      struct mailbox *mailbox, const char *resource,
-		      struct webdav_db *davdb, unsigned flags);
+		      struct webdav_db *davdb);
 
 struct meth_params webdav_params = {
     .mime_types = NULL,
@@ -110,8 +110,7 @@ static int webdav_get(struct transaction_t *txn,
 /* Perform a PUT request on a WebDAV resource */
 static int webdav_put(struct transaction_t *txn, struct buf *obj,
 		      struct mailbox *mailbox, const char *resource,
-		      struct webdav_db *webdavdb,
-		      unsigned flags __attribute__((unused)))
+		      struct webdav_db *webdavdb)
 {
     struct webdav_data *wdata;
     struct index_record *oldrecord = NULL, record;

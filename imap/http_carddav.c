@@ -93,9 +93,13 @@ static void my_carddav_shutdown(void);
 static int carddav_parse_path(const char *path,
 			      struct request_target_t *tgt, const char **errstr);
 
+static int carddav_copy(struct transaction_t *txn, struct vparse_state *vparser,
+		       struct mailbox *mailbox, const char *resource,
+		       struct carddav_db *davdb);
+
 static int carddav_put(struct transaction_t *txn, struct vparse_state *vparser,
 		       struct mailbox *mailbox, const char *resource,
-		       struct carddav_db *davdb, unsigned flags);
+		       struct carddav_db *davdb);
 
 static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
 				   struct propfind_ctx *fctx, xmlNodePtr resp,
@@ -274,7 +278,7 @@ static struct meth_params carddav_params = {
       (db_delete_proc_t) &carddav_delete,
       (db_delmbox_proc_t) &carddav_delmbox },
     NULL,					/* No ACL extensions */
-    (put_proc_t) &carddav_put,
+    (put_proc_t) &carddav_copy,
     NULL,		  	      		/* No special DELETE handling */
     NULL,		  	      		/* No special GET handling */
     MBTYPE_ADDRESSBOOK,
@@ -579,16 +583,16 @@ static int carddav_parse_path(const char *path,
  *   CARDDAV:no-uid-conflict (DAV:href)
  *   CARDDAV:max-resource-size
  */
-static int carddav_put(struct transaction_t *txn, struct vparse_state *vparser,
-		       struct mailbox *mailbox, const char *resource,
-		       struct carddav_db *davdb, unsigned flags)
+static int store_resource(struct transaction_t *txn, struct vparse_state *vparser,
+			  struct mailbox *mailbox, const char *resource,
+			  struct carddav_db *davdb, int dupcheck)
 {
     struct vparse_card *vcard;
     struct vparse_entry *ventry;
     struct carddav_data *cdata;
+    const char *version = NULL, *uid = NULL, *fullname = NULL;
     struct index_record *oldrecord = NULL, record;
     char *mimehdr;
-    const char *version = NULL, *uid = NULL, *fullname = NULL;
 
     /* Validate the vCard data */
     if (!vparser ||
@@ -629,23 +633,30 @@ static int carddav_put(struct transaction_t *txn, struct vparse_state *vparser,
 	return HTTP_FORBIDDEN;
     }
 
-    /* Check for existing vCard UID */
-    carddav_lookup_uid(davdb, uid, &cdata);
-    if (!(flags & NO_DUP_CHECK) &&
-	cdata->dav.mailbox && !strcmp(cdata->dav.mailbox, mailbox->name) &&
-	strcmp(cdata->dav.resource, resource)) {
-	/* CARDDAV:no-uid-conflict */
-	const char *owner = mboxname_to_userid(cdata->dav.mailbox);
+    if (dupcheck) {
+	/* Check for existing vCard UID */
+	carddav_lookup_uid(davdb, uid, &cdata);
 
-	txn->error.precond = CARDDAV_UID_CONFLICT;
-	assert(!buf_len(&txn->buf));
-	buf_printf(&txn->buf, "%s/user/%s/%s/%s",
-		   namespace_addressbook.prefix, owner,
-		   strrchr(cdata->dav.mailbox, '.')+1, cdata->dav.resource);
-	txn->error.resource = buf_cstring(&txn->buf);
-	return HTTP_FORBIDDEN;
+	if (cdata->dav.imap_uid) {
+	    /* is it the same one? */
+	    if (strcmp(cdata->dav.mailbox, mailbox->name) || strcmp(cdata->dav.resource, resource)) {
+		/* CARDDAV:no-uid-conflict */
+		const char *owner = mboxname_to_userid(cdata->dav.mailbox);
+
+		txn->error.precond = CARDDAV_UID_CONFLICT;
+		assert(!buf_len(&txn->buf));
+		buf_printf(&txn->buf, "%s/user/%s/%s/%s",
+			   namespace_addressbook.prefix, owner,
+			   strrchr(cdata->dav.mailbox, '.')+1, cdata->dav.resource);
+		txn->error.resource = buf_cstring(&txn->buf);
+		return HTTP_FORBIDDEN;
+	    }
+	}
     }
-
+    else {
+	/* Check for existing vCard UID */
+	carddav_lookup_resource(davdb, mailbox->name, resource, &cdata, 0);
+    }
     if (cdata->dav.imap_uid) {
 	/* Fetch index record for the resource */
 	oldrecord = &record;
@@ -655,7 +666,7 @@ static int carddav_put(struct transaction_t *txn, struct vparse_state *vparser,
     /* Create and cache RFC 5322 header fields for resource */
     mimehdr = charset_encode_mimeheader(fullname, 0);
     spool_replace_header(xstrdup("Subject"), mimehdr, txn->req_hdrs);
-    
+
     /* XXX - validate uid for mime safety? */
     if (strchr(uid, '@')) {
 	spool_replace_header(xstrdup("Message-ID"),
@@ -682,6 +693,20 @@ static int carddav_put(struct transaction_t *txn, struct vparse_state *vparser,
     /* Store the resource */
     return dav_store_resource(txn, buf_cstring(&txn->req_body.payload), 0,
 			      mailbox, oldrecord, NULL);
+}
+
+static int carddav_copy(struct transaction_t *txn, struct vparse_state *vparser,
+			struct mailbox *mailbox, const char *resource,
+			struct carddav_db *davdb)
+{
+    return store_resource(txn, vparser, mailbox, resource, davdb, /*dupcheck*/0);
+}
+
+static int carddav_put(struct transaction_t *txn, struct vparse_state *vparser,
+		       struct mailbox *mailbox, const char *resource,
+		       struct carddav_db *davdb)
+{
+    return store_resource(txn, vparser, mailbox, resource, davdb, /*dupcheck*/1);
 }
 
 

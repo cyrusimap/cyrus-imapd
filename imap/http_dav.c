@@ -3032,7 +3032,7 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     struct index_record src_rec;
     const char *etag = NULL;
     time_t lastmod = 0;
-    unsigned flags = 0, meth_move = (txn->meth == METH_MOVE);
+    unsigned meth_move = (txn->meth == METH_MOVE);
     void *src_davdb = NULL, *dest_davdb = NULL, *obj = NULL;
     struct buf msg_buf = BUF_INITIALIZER;
 
@@ -3264,12 +3264,8 @@ int meth_copy_move(struct transaction_t *txn, void *params)
 	}
     }
 
-    if (get_preferences(txn) & PREFER_REP) flags |= PREFER_REP;
-    if (meth_move && (dest_mbox == src_mbox)) flags |= NO_DUP_CHECK;
-
     /* Store the resource at destination */
-    ret = cparams->copy(txn, obj, dest_mbox,
-			dest_tgt.resource, dest_davdb, flags);
+    ret = cparams->copy(txn, obj, dest_mbox, dest_tgt.resource, dest_davdb);
 
     /* Done with destination mailbox */
     mailbox_unlock_index(dest_mbox, NULL);
@@ -4947,8 +4943,7 @@ int meth_put(struct transaction_t *txn, void *params)
     case HTTP_OK:
 	/* Parse, validate, and store the resource */
 	obj = mime->from_string(buf_cstring(&txn->req_body.payload));
-	ret = pparams->put.proc(txn, obj, mailbox,
-				txn->req_tgt.resource, davdb, flags);
+	ret = pparams->put.proc(txn, obj, mailbox, txn->req_tgt.resource, davdb);
 	break;
 
     case HTTP_PRECOND_FAILED:

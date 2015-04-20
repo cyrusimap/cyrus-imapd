@@ -383,7 +383,7 @@ static int caldav_check_precond(struct transaction_t *txn, const void *data,
 static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights);
 static int caldav_copy(struct transaction_t *txn, void *obj,
 		       struct mailbox *dest_mbox, const char *dest_rsrc,
-		       struct caldav_db *dest_davdb, unsigned flags);
+		       struct caldav_db *dest_davdb);
 static int caldav_delete_sched(struct transaction_t *txn,
 			       struct mailbox *mailbox,
 			       struct index_record *record, void *data);
@@ -392,7 +392,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 static int caldav_post(struct transaction_t *txn);
 static int caldav_put(struct transaction_t *txn, icalcomponent *ical,
 		      struct mailbox *mailbox, const char *resource,
-		      struct caldav_db *caldavdb, unsigned flags);
+		      struct caldav_db *caldavdb);
 
 static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
 				   struct propfind_ctx *fctx, xmlNodePtr resp,
@@ -1316,13 +1316,14 @@ static icalcomponent *record_to_ical(struct mailbox *mailbox, struct index_recor
  */
 static int caldav_copy(struct transaction_t *txn, void *obj,
 		       struct mailbox *dest_mbox, const char *dest_rsrc,
-		       struct caldav_db *dest_davdb, unsigned flags)
+		       struct caldav_db *dest_davdb)
 {
     int r;
 
     icalcomponent *comp, *ical = (icalcomponent *) obj;
     const char *organizer = NULL;
     icalproperty *prop;
+    int flags = 0;
 
     if (!ical) {
 	txn->error.precond = CALDAV_VALID_DATA;
@@ -2499,7 +2500,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 
 	/* Store the new/updated attachment using WebDAV callback */
 	ret = webdav_params.put.proc(txn, &txn->req_body.payload,
-				     attachments, resource, webdavdb, 0);
+				     attachments, resource, webdavdb);
 
 	switch (ret) {
 	case HTTP_CREATED:
@@ -2963,13 +2964,15 @@ const char *icalproperty_get_invitee(icalproperty *prop)
  */
 static int caldav_put(struct transaction_t *txn, icalcomponent *ical,
 		      struct mailbox *mailbox, const char *resource,
-		      struct caldav_db *davdb, unsigned flags)
+		      struct caldav_db *davdb)
 {
     int ret = 0;
     icalcomponent *comp, *nextcomp;
     icalcomponent_kind kind;
     icalproperty *prop;
     const char *uid, *organizer = NULL;
+    struct caldav_data *cdata;
+    int flags = 0;
 
     /* Validate the iCal data */
     if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {
@@ -3048,6 +3051,21 @@ static int caldav_put(struct transaction_t *txn, icalcomponent *ical,
 	}
     }
 
+    /* Check for duplicate iCalendar UID */
+    caldav_lookup_uid(davdb, uid, &cdata);
+    if (cdata->dav.imap_uid && (strcmp(cdata->dav.mailbox, mailbox->name) || strcmp(cdata->dav.resource, resource))) {
+	/* CALDAV:no-uid-conflict */
+	const char *owner = mboxname_to_userid(cdata->dav.mailbox);
+
+	txn->error.precond = CALDAV_UID_CONFLICT;
+	buf_reset(&txn->buf);
+	buf_printf(&txn->buf, "%s/user/%s/%s/%s",
+		   namespace_calendar.prefix, owner,
+		   strrchr(cdata->dav.mailbox, '.')+1, cdata->dav.resource);
+	txn->error.resource = buf_cstring(&txn->buf);
+	return HTTP_FORBIDDEN;
+    }
+
     switch (kind) {
     case ICAL_VEVENT_COMPONENT:
     case ICAL_VTODO_COMPONENT:
@@ -3057,37 +3075,12 @@ static int caldav_put(struct transaction_t *txn, icalcomponent *ical,
 	    && icalcomponent_get_first_invitee(comp)) {
 	    /* Scheduling object resource */
 	    const char *userid;
-	    struct caldav_data *cdata;
 	    struct sched_param sparam;
 	    icalcomponent *oldical = NULL;
 	    int r;
 
 	    /* Construct userid corresponding to mailbox */
 	    userid = mboxname_to_userid(mailbox->name);
-
-	    /* Make sure iCal UID is unique for this user */
-	    caldav_lookup_uid(davdb, uid, &cdata);
-	    /* XXX  Check errors */
-
-	    if (cdata->dav.mailbox &&
-		(strcmp(cdata->dav.mailbox, mailbox->name) ||
-		 strcmp(cdata->dav.resource, resource))) {
-		/* CALDAV:unique-scheduling-object-resource */
-		char ext_userid[MAX_MAILBOX_NAME+1];
-
-		strlcpy(ext_userid, userid, sizeof(ext_userid));
-		mboxname_hiersep_toexternal(&httpd_namespace, ext_userid, 0);
-
-		buf_reset(&txn->buf);
-		buf_printf(&txn->buf, "%s/user/%s/%s/%s",
-			   namespace_calendar.prefix,
-			   userid, strrchr(cdata->dav.mailbox, '.')+1,
-			   cdata->dav.resource);
-		txn->error.resource = buf_cstring(&txn->buf);
-		txn->error.precond = CALDAV_UNIQUE_OBJECT;
-		ret = HTTP_FORBIDDEN;
-		goto done;
-	    }
 
 	    /* Lookup the organizer */
 	    r = caladdress_lookup(organizer, &sparam);
@@ -5479,6 +5472,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 
     /* Check for supported component type */
     comp = icalcomponent_get_first_real_component(ical);
+    uid = icalcomponent_get_uid(comp);
     kind = icalcomponent_isa(comp);
     switch (kind) {
     case ICAL_VEVENT_COMPONENT: mykind = CAL_COMP_VEVENT; break;
@@ -5506,38 +5500,17 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 	}
     }
 
-    /* Check for duplicate iCalendar UID */
-    uid = icalcomponent_get_uid(comp);
-
-    caldav_lookup_uid(caldavdb, uid, &cdata);
-    if (!(flags & NO_DUP_CHECK) &&
-	cdata->dav.mailbox && !strcmp(cdata->dav.mailbox, mailbox->name) &&
-	strcmp(cdata->dav.resource, resource)) {
-	/* CALDAV:no-uid-conflict */
-	const char *owner = mboxname_to_userid(cdata->dav.mailbox);
-
-	txn->error.precond = CALDAV_UID_CONFLICT;
-	buf_reset(&txn->buf);
-	buf_printf(&txn->buf, "%s/user/%s/%s/%s",
-		   namespace_calendar.prefix, owner,
-		   strrchr(cdata->dav.mailbox, '.')+1, cdata->dav.resource);
-	txn->error.resource = buf_cstring(&txn->buf);
-	return HTTP_FORBIDDEN;
-    }
-
     /* Find message UID for the resource, if exists */
     caldav_lookup_resource(caldavdb, mailbox->name, resource, &cdata, 0);
 
-    /* Check for change of iCalendar UID */
-    if (cdata->ical_uid && strcmp(cdata->ical_uid, uid)) {
-	/* CALDAV:no-uid-conflict */
-	txn->error.precond = CALDAV_UID_CONFLICT;
-	return HTTP_FORBIDDEN;
-    }
-
-    /* XXX - theoretical race, but the mailbox is locked, so nothing
-     * else can ACTUALLY change it */
+    /* does it already exist? */
     if (cdata->dav.imap_uid) {
+	/* Check for change of iCalendar UID */
+	if (strcmp(cdata->ical_uid, uid)) {
+	    /* CALDAV:no-uid-conflict */
+	    txn->error.precond = CALDAV_UID_CONFLICT;
+	    return HTTP_FORBIDDEN;
+	}
 	/* Fetch index record for the resource */
 	oldrecord = &record;
 	mailbox_find_index_record(mailbox, cdata->dav.imap_uid, oldrecord, NULL);

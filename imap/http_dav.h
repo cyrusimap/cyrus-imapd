@@ -434,7 +434,7 @@ typedef int (*post_proc_t)(struct transaction_t *txn);
 /* meth_put() parameters */
 typedef int (*put_proc_t)(struct transaction_t *txn, void *obj,
 			  struct mailbox *mailbox, const char *resource,
-			  void *davdb, unsigned flags);
+			  void *davdb);
 
 struct put_params {
     unsigned supp_data_precond;		/* precond code for unsupported data */
