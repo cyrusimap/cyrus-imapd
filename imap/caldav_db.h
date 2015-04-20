@@ -88,10 +88,11 @@ enum {
 struct caldav_db;
 
 struct comp_flags {
-    unsigned recurring	  : 1;
-    unsigned transp	  : 1;
-    unsigned status	  : 2;
-    unsigned tzbyref	  : 1;
+    unsigned recurring	  : 1;		/* Has RRULE property */
+    unsigned transp	  : 1;		/* Is TRANSParent */
+    unsigned status	  : 2;		/* STATUS property value (see below) */
+    unsigned tzbyref	  : 1;		/* VTIMEZONEs by reference */
+    unsigned mattach	  : 1;		/* Has managed ATTACHment(s) */
 };
 
 /* Status values */

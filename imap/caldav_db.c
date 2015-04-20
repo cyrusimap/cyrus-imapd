@@ -53,6 +53,7 @@
 #include "exitcodes.h"
 #include "httpd.h"
 #include "http_dav.h"
+#include "ical_support.h"
 #include "libconfig.h"
 #include "mboxname.h"
 #include "util.h"
@@ -251,6 +252,7 @@ static void _num_to_comp_flags(struct comp_flags *flags, unsigned num)
     flags->transp = (num >> 1) & 1;
     flags->status = (num >> 2) & 3;
     flags->tzbyref = (num >> 4) & 1;
+    flags->mattach = (num >> 5) & 1;
 }
 
 static unsigned _comp_flags_to_num(struct comp_flags *flags)
@@ -258,7 +260,8 @@ static unsigned _comp_flags_to_num(struct comp_flags *flags)
    return (flags->recurring & 1)
        + ((flags->transp & 1) << 1)
        + ((flags->status & 3) << 2)
-       + ((flags->tzbyref & 1) << 4);
+       + ((flags->tzbyref & 1) << 4)
+       + ((flags->mattach & 1) << 5);
 }
 
 #define CMD_READFIELDS							\
@@ -732,7 +735,7 @@ EXPORTED void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata)
     icalcomponent *comp = icalcomponent_get_first_real_component(ical);
     icalcomponent_kind kind;
     icalproperty *prop;
-    unsigned mykind = 0, recurring = 0, transp = 0, status = 0;
+    unsigned mykind = 0, recurring = 0, transp = 0, status = 0, mattach = 0;
     struct icalperiodtype span;
 
     /* Get iCalendar UID */
@@ -782,8 +785,15 @@ EXPORTED void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata)
 	    break;
 	}
     }
-
     cdata->comp_flags.transp = transp;
+
+    /* Check for managed attachment */
+    prop = icalcomponent_get_first_property(comp, ICAL_ATTACH_PROPERTY);
+    if (prop) {
+	icalparameter *param = icalproperty_get_managedid_parameter(prop);
+	if (param) mattach = 1;
+    }
+    cdata->comp_flags.mattach = mattach;
 
     /* Initialize span to be nothing */
     span.start = icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);

@@ -1051,6 +1051,8 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/http_webdav.c \
 	imap/httpd.c \
 	imap/httpd.h \
+	imap/ical_support.c \
+	imap/ical_support.h \
 	imap/jcal.c \
 	imap/jcal.h \
 	imap/proxy.c \
@@ -1177,6 +1179,7 @@ imap_httpd_SOURCES = \
 	imap/http_tzdist.c \
 	imap/http_webdav.c \
 	imap/httpd.c \
+	imap/ical_support.c \
 	imap/jcal.c \
 	imap/mutex_fake.c \
 	imap/proxy.c \

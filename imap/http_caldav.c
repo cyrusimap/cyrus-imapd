@@ -77,6 +77,7 @@
 #include "http_proxy.h"
 #include "imap_err.h"
 #include "index.h"
+#include "ical_support.h"
 #include "jcal.h"
 #include "xcal.h"
 #include "map.h"
@@ -115,207 +116,6 @@ static int rscale_cmp(const void *a, const void *b)
     return strcmp(ucase(*((char **) a)), ucase(*((char **) b)));
 }
 #endif /* HAVE_RSCALE */
-
-
-#ifdef HAVE_MANAGED_ATTACH_PARAMS
-
-/* Wrappers to fetch managed attachment parameters by kind */
-
-#define icalproperty_get_filename_parameter(prop) \
-    icalproperty_get_first_parameter(prop, ICAL_FILENAME_PARAMETER)
-
-#define icalproperty_get_managedid_parameter(prop) \
-    icalproperty_get_first_parameter(prop, ICAL_MANAGEDID_PARAMETER)
-
-#define icalproperty_get_size_parameter(prop) \
-    icalproperty_get_first_parameter(prop, ICAL_SIZE_PARAMETER)
-
-#elif defined(HAVE_IANA_PARAMS)
-
-/* Functions to replace those not available in libical < v2.0 */
-
-static icalparameter*
-icalproperty_get_iana_parameter_by_name(icalproperty *prop, const char *name)
-{
-    icalparameter *param;
-
-    for (param = icalproperty_get_first_parameter(prop, ICAL_IANA_PARAMETER);
-	 param && strcmp(icalparameter_get_iana_name(param), name);
-	 param = icalproperty_get_next_parameter(prop, ICAL_IANA_PARAMETER));
-
-    return param;
-}
-
-static icalparameter *icalparameter_new_filename(const char *fname)
-{
-    icalparameter *param = icalparameter_new(ICAL_IANA_PARAMETER);
-
-    icalparameter_set_iana_name(param, "FILENAME");
-    icalparameter_set_iana_value(param, fname);
-
-    return param;
-}
-
-static void icalparameter_set_filename(icalparameter *param, const char *fname)
-{
-    icalparameter_set_iana_value(param, fname);
-}
-
-static icalparameter *icalparameter_new_managedid(const char *id)
-{
-    icalparameter *param = icalparameter_new(ICAL_IANA_PARAMETER);
-
-    icalparameter_set_iana_name(param, "MANAGED-ID");
-    icalparameter_set_iana_value(param, id);
-
-    return param;
-}
-
-static const char *icalparameter_get_managedid(icalparameter *param)
-{
-    return icalparameter_get_iana_value(param);
-}
-
-static void icalparameter_set_managedid(icalparameter *param, const char *id)
-{
-    icalparameter_set_iana_value(param, id);
-}
-
-static icalparameter *icalparameter_new_size(const char *sz)
-{
-    icalparameter *param = icalparameter_new(ICAL_IANA_PARAMETER);
-
-    icalparameter_set_iana_name(param, "SIZE");
-    icalparameter_set_iana_value(param, sz);
-
-    return param;
-}
-
-static void icalparameter_set_size(icalparameter *param, const char *sz)
-{
-    icalparameter_set_iana_value(param, sz);
-}
-
-/* Wrappers to fetch managed attachment parameters by kind */
-
-#define icalproperty_get_filename_parameter(prop) \
-    icalproperty_get_iana_parameter_by_name(prop, "FILENAME")
-
-#define icalproperty_get_managedid_parameter(prop) \
-    icalproperty_get_iana_parameter_by_name(prop, "MANAGED-ID")
-
-#define icalproperty_get_size_parameter(prop) \
-    icalproperty_get_iana_parameter_by_name(prop, "SIZE")
-
-#else /* !HAVE_IANA_PARAMS */
-
-/* Dummy functions to allow compilation with libical < v0.48 */
-
-#define icalparameter_new_filename(fname) NULL
-
-#define icalparameter_set_filename(param, fname) (void) param
-
-#define icalparameter_new_managedid(id) NULL
-
-#define icalparameter_get_managedid(param) ""
-
-#define icalparameter_set_managedid(param, id) (void) param
-
-#define icalparameter_new_size(sz) NULL
-
-#define icalparameter_set_size(param, sz) (void) param
-
-#define icalproperty_get_filename_parameter(prop) NULL
-
-#define icalproperty_get_managedid_parameter(prop) NULL
-
-#define icalproperty_get_size_parameter(prop) NULL
-
-#endif /* HAVE_MANAGED_ATTACH_PARAMS */
-
-
-#ifdef HAVE_SCHEDULING_PARAMS
-
-/* Wrappers to fetch scheduling parameters by kind */
-
-#define icalproperty_get_scheduleagent_parameter(prop) \
-    icalproperty_get_first_parameter(prop, ICAL_SCHEDULEAGENT_PARAMETER)
-
-#define icalproperty_get_scheduleforcesend_parameter(prop) \
-    icalproperty_get_first_parameter(prop, ICAL_SCHEDULEFORCESEND_PARAMETER)
-
-#define icalproperty_get_schedulestatus_parameter(prop) \
-    icalproperty_get_first_parameter(prop, ICAL_SCHEDULESTATUS_PARAMETER)
-
-#elif defined(HAVE_IANA_PARAMS)
-
-/* Functions to replace those not available in libical < v1.0 */
-
-static icalparameter_scheduleagent
-icalparameter_get_scheduleagent(icalparameter *param)
-{
-    const char *agent = NULL;
-
-    if (param) agent = icalparameter_get_iana_value(param);
-
-    if (!agent) return ICAL_SCHEDULEAGENT_NONE;
-    else if (!strcmp(agent, "SERVER")) return ICAL_SCHEDULEAGENT_SERVER;
-    else if (!strcmp(agent, "CLIENT")) return ICAL_SCHEDULEAGENT_CLIENT;
-    else return ICAL_SCHEDULEAGENT_X;
-}
-
-static icalparameter_scheduleforcesend
-icalparameter_get_scheduleforcesend(icalparameter *param)
-{
-    const char *force = NULL;
-
-    if (param) force = icalparameter_get_iana_value(param);
-
-    if (!force) return ICAL_SCHEDULEFORCESEND_NONE;
-    else if (!strcmp(force, "REQUEST")) return ICAL_SCHEDULEFORCESEND_REQUEST;
-    else if (!strcmp(force, "REPLY")) return ICAL_SCHEDULEFORCESEND_REPLY;
-    else return ICAL_SCHEDULEFORCESEND_X;
-}
-
-static icalparameter *icalparameter_new_schedulestatus(const char *stat)
-{
-    icalparameter *param = icalparameter_new(ICAL_IANA_PARAMETER);
-
-    icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
-    icalparameter_set_iana_value(param, stat);
-
-    return param;
-}
-
-/* Wrappers to fetch scheduling parameters by kind */
-
-#define icalproperty_get_scheduleagent_parameter(prop) \
-    icalproperty_get_iana_parameter_by_name(prop, "SCHEDULE-AGENT")
-
-#define icalproperty_get_scheduleforcesend_parameter(prop) \
-    icalproperty_get_iana_parameter_by_name(prop, "SCHEDULE-FORCE-SEND")
-
-#define icalproperty_get_schedulestatus_parameter(prop) \
-    icalproperty_get_iana_parameter_by_name(prop, "SCHEDULE-STATUS")
-
-#else /* !HAVE_IANA_PARAMS */
-
-/* Dummy functions to allow compilation with libical < v0.48 */
-
-#define icalparameter_get_scheduleagent(param) ICAL_SCHEDULEAGENT_NONE
-
-#define icalparameter_get_scheduleforcesend(param) ICAL_SCHEDULEFORCESEND_NONE
-
-#define icalparameter_new_schedulestatus(stat) NULL; \
-    (void) stat  /* silence compiler */
-
-#define icalproperty_get_scheduleagent_parameter(prop) NULL
-
-#define icalproperty_get_scheduleforcesend_parameter(prop) NULL
-
-#define icalproperty_get_schedulestatus_parameter(prop) NULL
-
-#endif /* HAVE_SCHEDULING_PARAMS */
 
 
 struct freebusy {
@@ -384,9 +184,9 @@ static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights);
 static int caldav_copy(struct transaction_t *txn, void *obj,
 		       struct mailbox *dest_mbox, const char *dest_rsrc,
 		       struct caldav_db *dest_davdb);
-static int caldav_delete_sched(struct transaction_t *txn,
-			       struct mailbox *mailbox,
-			       struct index_record *record, void *data);
+static int caldav_delete_cal(struct transaction_t *txn,
+			     struct mailbox *mailbox,
+			     struct index_record *record, void *data);
 static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 		      struct index_record *record, void *data);
 static int caldav_post(struct transaction_t *txn);
@@ -680,7 +480,7 @@ static struct meth_params caldav_params = {
       (db_delmbox_proc_t) &caldav_delmbox },
     &caldav_acl,
     (put_proc_t) &caldav_copy,
-    &caldav_delete_sched,
+    &caldav_delete_cal,
     &caldav_get,
     MBTYPE_CALENDAR,
     &caldav_post,
@@ -1345,30 +1145,114 @@ static int caldav_copy(struct transaction_t *txn, void *obj,
 
 
 /* Perform scheduling actions for a DELETE request */
-static int caldav_delete_sched(struct transaction_t *txn,
-			       struct mailbox *mailbox,
-			       struct index_record *record, void *data)
+static int caldav_delete_cal(struct transaction_t *txn,
+			     struct mailbox *mailbox,
+			     struct index_record *record, void *data)
 {
     struct caldav_data *cdata = (struct caldav_data *) data;
+    icalcomponent *ical = NULL, *comp;
+    icalproperty *prop;
     int r = 0;
-
-    if (!(namespace_calendar.allow & ALLOW_CAL_SCHED)) return 0;
 
     /* Only process deletes on regular calendar collections */
     if (txn->req_tgt.flags) return 0;
 
     if (!record) {
 	/* XXX  DELETE collection - check all resources for sched objects */
+	return 0;
     }
-    else if (cdata->organizer) {
-	/* Scheduling object resource */
-	const char *userid, *organizer, **hdr;
-	icalcomponent *ical, *comp;
-	icalproperty *prop;
-	struct sched_param sparam;
+
+    if (cdata->comp_flags.mattach) {
+	char *mailboxname = NULL;
+	struct mailbox *attachments = NULL;
+	struct webdav_db *webdavdb = NULL;
 
 	/* Load message containing the resource and parse iCal data */
 	ical = record_to_ical(mailbox, record);
+
+	if (!ical) {
+	    syslog(LOG_ERR,
+		   "meth_delete: failed to parse iCalendar object %s:%u",
+		   txn->req_tgt.mbentry->name, record->uid);
+	    return HTTP_SERVER_ERROR;
+	}
+
+	/* XXX  Need this because of nested txns - should fix *dav_db.c
+	   so that txn is per DB, NOT per table. */
+	mailbox_unlock_index(mailbox, NULL);
+
+	/* Open attachments collection for writing */
+	mailboxname = caldav_mboxname(httpd_userid, MANAGED_ATTACH);
+	r = mailbox_open_iwl(mailboxname, &attachments);
+	if (r) {
+	    syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+		   mailboxname, error_message(r));
+	    free(mailboxname);
+	    return HTTP_SERVER_ERROR;
+	}
+	free(mailboxname);
+
+	/* Open the WebDAV DB corresponding to the attachments collection */
+	webdavdb = webdav_open_mailbox(attachments);
+	if (!webdavdb) {
+	    syslog(LOG_ERR, "webdav_open_mailbox(%s) failed", attachments->name);
+	    mailbox_close(&attachments);
+	    return HTTP_SERVER_ERROR;
+	}
+
+	/* Locate managed ATTACHment properties */
+	comp = icalcomponent_get_first_real_component(ical);
+	for (prop = icalcomponent_get_first_property(comp, ICAL_ATTACH_PROPERTY);
+	     prop;
+	     prop = icalcomponent_get_next_property(comp, ICAL_ATTACH_PROPERTY)){
+
+	    struct webdav_data *wdata;
+	    icalparameter *param = icalproperty_get_managedid_parameter(prop);
+	    
+	    if (!param) continue;
+	    
+	    /* Find DAV record for the attachment with this managed-id */
+	    webdav_lookup_uid(webdavdb,
+			      icalparameter_get_managedid(param), &wdata);
+
+	    if (!wdata->dav.rowid) continue;
+	    else if (!--wdata->ref_count) {
+		/* Delete attachment resource */
+		struct index_record att_record;
+
+		mailbox_find_index_record(attachments, wdata->dav.imap_uid,
+					  &att_record, 0);
+		att_record.system_flags |= FLAG_EXPUNGED;
+
+		r = mailbox_rewrite_index_record(attachments, &att_record);
+
+		if (r) {
+		    syslog(LOG_ERR, "expunging record (%s) failed: %s",
+			   attachments->name, error_message(r));
+		}
+	    }
+	    else {
+		/* Update reference count */
+		r = webdav_write(webdavdb, wdata);
+
+		if (r) {
+		    syslog(LOG_ERR, "updating ref count (%s) failed: %s",
+			   wdata->dav.resource, error_message(r));
+		}
+	    }
+	}
+
+	webdav_close(webdavdb);
+	mailbox_close(&attachments);
+    }
+
+    if ((namespace_calendar.allow & ALLOW_CAL_SCHED) && cdata->organizer) {
+	/* Scheduling object resource */
+	const char *userid, *organizer, **hdr;
+	struct sched_param sparam;
+
+	/* Load message containing the resource and parse iCal data */
+	if (!ical) ical = record_to_ical(mailbox, record);
 
 	if (!ical) {
 	    syslog(LOG_ERR,
@@ -1409,10 +1293,10 @@ static int caldav_delete_sched(struct transaction_t *txn,
 	    /* Attendee scheduling object resource */
 	    sched_reply(userid, ical, NULL);
 	}
-
-      done:
-	icalcomponent_free(ical);
     }
+
+  done:
+    if (ical) icalcomponent_free(ical);
 
     return r;
 }
