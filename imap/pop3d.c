@@ -1276,7 +1276,7 @@ static void cmd_starttls(int pop3s)
 	if (pop3s == 0)
 	    prot_printf(popd_out, "-ERR [SYS/PERM] %s\r\n", "Error initializing TLS");
 	else
-	    fatal("tls_init() failed",EC_TEMPFAIL);
+	    shut_down(0);
 
 	return;
     }
@@ -1302,22 +1302,27 @@ static void cmd_starttls(int pop3s)
 	    syslog(LOG_NOTICE, "[pop3d] STARTTLS failed: %s", popd_clienthost);
 	} else {
 	    syslog(LOG_NOTICE, "pop3s failed: %s", popd_clienthost);
-	    fatal("tls_start_servertls() failed", EC_TEMPFAIL);
+	    shut_down(0);
 	}
 	return;
     }
 
     /* tell SASL about the negotiated layer */
     result = sasl_setprop(popd_saslconn, SASL_SSF_EXTERNAL, &ssf);
-    if (result != SASL_OK) {
-	fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
-    }
-    saslprops.ssf = ssf;
+    if (result == SASL_OK) {
+	saslprops.ssf = ssf;
 
-    result = sasl_setprop(popd_saslconn, SASL_AUTH_EXTERNAL, auth_id);
-    if (result != SASL_OK) {
-	fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
+	result = sasl_setprop(popd_saslconn, SASL_AUTH_EXTERNAL, auth_id);
     }
+    if (result != SASL_OK) {
+	syslog(LOG_NOTICE, "sasl_setprop() failed: cmd_starttls()");
+	if (pop3s == 0) {
+	    fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
+	} else {
+	    shut_down(0);
+	}
+    }
+
     if(saslprops.authid) {
 	free(saslprops.authid);
 	saslprops.authid = NULL;

@@ -7486,7 +7486,7 @@ static void cmd_starttls(char *tag, int imaps)
 	if (imaps == 0) {
 	    prot_printf(imapd_out, "%s NO Error initializing TLS\r\n", tag);
  	} else {
-	    fatal("tls_init() failed", EC_CONFIG);
+	    shut_down(0);
 	}
 
 	return;
@@ -7509,30 +7509,31 @@ static void cmd_starttls(char *tag, int imaps)
     /* if error */
     if (result==-1) {
 	if (imaps == 0)	{
-	    prot_printf(imapd_out, "%s NO Starttls negotiation failed\r\n", 
-			tag);
-	    syslog(LOG_NOTICE, "STARTTLS negotiation failed: %s", 
-		   imapd_clienthost);
+	    prot_printf(imapd_out, "%s NO Starttls negotiation failed\r\n", tag);
+	    syslog(LOG_NOTICE, "STARTTLS negotiation failed: %s", imapd_clienthost);
 	    return;
 	} else {
-	    syslog(LOG_NOTICE, "imaps TLS negotiation failed: %s", 
-		   imapd_clienthost);
-	    fatal("tls_start_servertls() failed", EC_TEMPFAIL);
-	    return;
+	    syslog(LOG_NOTICE, "imaps TLS negotiation failed: %s", imapd_clienthost);
+	    shut_down(0);
 	}
     }
 
     /* tell SASL about the negotiated layer */
     result = sasl_setprop(imapd_saslconn, SASL_SSF_EXTERNAL, &ssf);
-    if (result != SASL_OK) {
-	fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
-    }
-    saslprops.ssf = ssf;
+    if (result == SASL_OK) {
+	saslprops.ssf = ssf;
 
-    result = sasl_setprop(imapd_saslconn, SASL_AUTH_EXTERNAL, auth_id);
-    if (result != SASL_OK) {
-	fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
+	result = sasl_setprop(imapd_saslconn, SASL_AUTH_EXTERNAL, auth_id);
     }
+    if (result != SASL_OK) {
+	syslog(LOG_NOTICE, "sasl_setprop() failed: cmd_starttls()");
+	if (imaps == 0) {
+	    fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
+	} else {
+	    shut_down(0);
+	}
+    }
+
     if(saslprops.authid) {
 	free(saslprops.authid);
 	saslprops.authid = NULL;

@@ -4107,28 +4107,33 @@ static void cmd_starttls(int nntps)
 			       &tls_conn);
 
     /* if error */
-    if (result==-1) {
+    if (result == -1) {
 	if (nntps == 0) {
 	    prot_printf(nntp_out, "580 Starttls failed\r\n");
 	    syslog(LOG_NOTICE, "[nntpd] STARTTLS failed: %s", nntp_clienthost);
+	    return;
 	} else {
 	    syslog(LOG_NOTICE, "nntps failed: %s", nntp_clienthost);
-	    fatal("tls_start_servertls() failed", EC_TEMPFAIL);
+	    shut_down(0);
 	}
-	return;
     }
 
     /* tell SASL about the negotiated layer */
     result = sasl_setprop(nntp_saslconn, SASL_SSF_EXTERNAL, &ssf);
-    if (result != SASL_OK) {
-	fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
+    if (result == SASL_OK) {
+	saslprops.ssf = ssf;
+	result = sasl_setprop(nntp_saslconn, SASL_AUTH_EXTERNAL, auth_id);
     }
-    saslprops.ssf = ssf;
 
-    result = sasl_setprop(nntp_saslconn, SASL_AUTH_EXTERNAL, auth_id);
     if (result != SASL_OK) {
-        fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
+	syslog(LOG_NOTICE, "sasl_setprop() failed: cmd_starttls()");
+	if (nntps == 0) {
+	    fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
+	} else {
+	    shut_down(0);
+	}
     }
+
     if(saslprops.authid) {
 	free(saslprops.authid);
 	saslprops.authid = NULL;
