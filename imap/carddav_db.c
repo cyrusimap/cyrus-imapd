@@ -2092,7 +2092,8 @@ static int _addresses_to_card(struct vparse_card *card, json_t *arg)
     return 0;
 }
 
-static int _kv_to_card(struct vparse_card *card, const char *key, json_t *jval) {
+static int _kv_to_card(struct vparse_card *card, const char *key, json_t *jval)
+{
     if (!jval)
 	return -1;
     const char *val = json_string_value(jval);
