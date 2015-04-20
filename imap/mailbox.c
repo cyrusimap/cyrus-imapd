@@ -4147,7 +4147,7 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
 
 	/* version changes? */
 	if (repack->old_version < 12 && repack->i.minor_version >= 12) {
-	    const char *fname = mailbox_message_fname(mailbox, record.uid);
+	    const char *fname = mailbox_record_fname(mailbox, &record);
 
 	    if (seqset_ismember(repack->seqset, record.uid))
 		record.system_flags |= FLAG_SEEN;
