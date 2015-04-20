@@ -3177,6 +3177,7 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
 	/* just a flags update to an existing record */
 	wdata->dav.modseq = new->modseq;
 	wdata->dav.alive = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
+	wdata->ref_count *= wdata->dav.alive;
 	r = webdav_write(webdavdb, wdata);
     }
     else {
@@ -3197,6 +3198,7 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
 	wdata->dav.imap_uid = new->uid;
 	wdata->dav.modseq = new->modseq;
 	wdata->dav.alive = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
+	wdata->ref_count *= wdata->dav.alive;
 	wdata->dav.resource = resource;
 	wdata->filename = body->description;
 	wdata->type = lcase(body->type);
