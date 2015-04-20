@@ -4146,21 +4146,8 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
 	if (!record.uid) continue;
 
 	/* version changes? */
-	if (repack->old_version < 10 && repack->i.minor_version >= 10 && !repack->seqset && record.guid.status == GUID_NULL) {
+	if (repack->old_version < 12 && repack->i.minor_version >= 12) {
 	    const char *fname = mailbox_message_fname(mailbox, record.uid);
-
-	    /* XXX - re-parse the record iff upgrading past 12 */
-	    if (message_parse(fname, &record)) {
-		/* failed to parse, don't try to write out record */
-		record.crec.len = 0;
-		/* and the record is expunged too! */
-		record.system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
-		syslog(LOG_ERR, "IOERROR: FATAL - failed to parse file for %s %u, expunging",
-		       repack->mailbox->name, record.uid);
-	    }
-	}
-	if (repack->old_version < 12 && repack->i.minor_version >= 12 && repack->seqset) {
-	    const char *fname = mailbox_record_fname(mailbox, &record);
 
 	    if (seqset_ismember(repack->seqset, record.uid))
 		record.system_flags |= FLAG_SEEN;
@@ -4177,8 +4164,9 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
 		       repack->mailbox->name, record.uid);
 	    }
 	}
-	if (repack->old_version >= 12 && repack->i.minor_version < 12 && repack->seqset) {
-	    seqset_add(repack->seqset, record.uid, record.system_flags & FLAG_SEEN ? 1 : 0);
+	if (repack->old_version >= 12 && repack->i.minor_version < 12) {
+	    if (repack->seqset)
+		seqset_add(repack->seqset, record.uid, record.system_flags & FLAG_SEEN ? 1 : 0);
 	    record.system_flags &= ~FLAG_SEEN;
 	}
 
