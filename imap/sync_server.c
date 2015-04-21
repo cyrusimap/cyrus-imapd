@@ -1898,7 +1898,7 @@ static int do_rename(struct dlist *kin)
 
     return mboxlist_renamemailbox(oldmboxname, newmboxname, partition,
 				  uidvalidity,
-				  1, sync_userid, sync_authstate, NULL, 1, 1);
+				  1, sync_userid, sync_authstate, NULL, 0, 1, 1);
 }
 
 static int do_changesub(struct dlist *kin)

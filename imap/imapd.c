@@ -5942,7 +5942,7 @@ static int renmbox(char *name,
     /* don't notify implied rename in mailbox hierarchy */
     r = mboxlist_renamemailbox(name, text->newmailboxname,
 			       text->partition, 0 /* uidvalidity */,
-			       1, imapd_userid, imapd_authstate, NULL, 0,
+			       1, imapd_userid, imapd_authstate, NULL, 0, 0,
                                text->rename_user);
     
     (*imapd_namespace.mboxname_toexternal)(&imapd_namespace,
@@ -6252,7 +6252,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
 	r = mboxlist_renamemailbox(oldmailboxname, newmailboxname, location,
 				   0 /* uidvalidity */, imapd_userisadmin,
 				   imapd_userid, imapd_authstate, mboxevent,
-				   0, rename_user);
+				   0, 0, rename_user);
 	/* it's OK to not exist if there are subfolders */
 	if (r == IMAP_MAILBOX_NONEXISTENT && subcount && !rename_user &&
 	   mboxname_userownsmailbox(imapd_userid, oldmailboxname) &&

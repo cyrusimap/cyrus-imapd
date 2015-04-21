@@ -1323,7 +1323,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 			   int isadmin, const char *userid,
 			   struct auth_state *auth_state,
 			   struct mboxevent *mboxevent,
-			   int forceuser, int ignorequota)
+			   int local_only, int forceuser, int ignorequota)
 {
     int r;
     long myrights;
@@ -1514,7 +1514,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 	goto done;
     }
 
-    if (config_mupdate_server) {
+    if (!local_only && config_mupdate_server) {
 	/* commit the mailbox in MUPDATE */
 	char *loc = strconcat(config_servername, "!", newpartition, (char *)NULL);
 
