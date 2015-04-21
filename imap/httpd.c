@@ -195,7 +195,7 @@ struct backend **backend_cached = NULL;
 
 /* end PROXY stuff */
 
-static void starttls(int https);
+static int starttls(int https, struct transaction_t *txn);
 void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
 
@@ -631,7 +631,7 @@ int service_main(int argc __attribute__((unused)),
 
     /* we were connected on https port so we should do 
        TLS negotiation immediatly */
-    if (https == 1) starttls(1);
+    if (https == 1) starttls(1, NULL);
 
     /* Setup the signal handler for keepalive heartbeat */
     httpd_keepalive = config_getint(IMAPOPT_HTTPKEEPALIVE);
@@ -782,7 +782,7 @@ void fatal(const char* s, int code)
 
 
 #ifdef HAVE_SSL
-static void starttls(int https)
+static int starttls(int https, struct transaction_t *txn)
 {
     int result;
     int *layerp;
@@ -797,13 +797,17 @@ static void starttls(int https)
 				 !https);  /* can client auth? */
 
     if (result == -1) {
-	syslog(LOG_ERR, "[httpd] error initializing TLS");
-	fatal("tls_init() failed",EC_TEMPFAIL);
+	syslog(LOG_ERR, "error initializing TLS");
+
+	if (https) shut_down(0);
+
+	txn->error.desc = "Error initializing TLS";
+	return HTTP_SERVER_ERROR;
     }
 
     if (!https) {
 	/* tell client to start TLS upgrade (RFC 2817) */
-	response_header(HTTP_SWITCH_PROT, NULL);
+	response_header(HTTP_SWITCH_PROT, txn);
     }
   
     result=tls_start_servertls(0, /* read */
@@ -815,20 +819,27 @@ static void starttls(int https)
 
     /* if error */
     if (result == -1) {
-	syslog(LOG_NOTICE, "https failed: %s", httpd_clienthost);
-	fatal("tls_start_servertls() failed", EC_TEMPFAIL);
+	syslog(LOG_NOTICE, "starttls failed: %s", httpd_clienthost);
+
+	if (https) shut_down(0);
+
+	txn->error.desc = "Error negotiating TLS";
+	return HTTP_BAD_REQUEST;
     }
 
     /* tell SASL about the negotiated layer */
     result = sasl_setprop(httpd_saslconn, SASL_SSF_EXTERNAL, &ssf);
-    if (result != SASL_OK) {
-	fatal("sasl_setprop() failed: starttls()", EC_TEMPFAIL);
-    }
-    saslprops.ssf = ssf;
+    if (result == SASL_OK) {
+	saslprops.ssf = ssf;
 
-    result = sasl_setprop(httpd_saslconn, SASL_AUTH_EXTERNAL, auth_id);
+	result = sasl_setprop(httpd_saslconn, SASL_AUTH_EXTERNAL, auth_id);
+    }
     if (result != SASL_OK) {
-        fatal("sasl_setprop() failed: starttls()", EC_TEMPFAIL);
+        syslog(LOG_NOTICE, "sasl_setprop() failed: starttls()");
+
+	if (https) shut_down(0);
+
+	fatal("sasl_setprop() failed: starttls()", EC_TEMPFAIL);
     }
     if (saslprops.authid) {
 	free(saslprops.authid);
@@ -844,10 +855,13 @@ static void starttls(int https)
     httpd_tls_required = 0;
 
     avail_auth_schemes |= (1 << AUTH_BASIC);
+
+    return 0;
 }
 #else
-static void starttls(int https __attribute__((unused)))
-{
+static int starttls(int https __attribute__((unused)),
+		    struct transaction_t *txn __attribute__((unused)))
+		     {
     fatal("starttls() called, but no OpenSSL", EC_SOFTWARE);
 }
 #endif /* HAVE_SSL */
@@ -1090,8 +1104,12 @@ static void cmdloop(void)
 	/* Check for Connection options */
 	parse_connection(&txn);
 	if (txn.flags.conn & CONN_UPGRADE) {
-	    starttls(0);
 	    txn.flags.conn &= ~CONN_UPGRADE;
+
+	    if ((ret = starttls(0, &txn))) {
+		txn.flags.conn = CONN_CLOSE;
+		goto done;
+	    }
 	}
 
 	/* Check for HTTP method override */
