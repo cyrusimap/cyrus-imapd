@@ -8,7 +8,7 @@ Cyrus IMAP 2.5.1 Release Notes
 
     This is a bug-fix release in the stable 2.5 series.
 
-    Refer to the release notes for 2.5.0 for important information
+    Refer to the Cyrus IMAP 2.5.0 Release Notes for important information
     about the 2.5 series, including upgrading instructions.
 
 Download via HTTP:
