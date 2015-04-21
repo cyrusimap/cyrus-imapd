@@ -17,13 +17,30 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
     Standard for the format of ARPA Internet text messages, obsoleted by
     :rfc:`2822`.
 
+:rfc:`0977`
+
+    Network News Transfer Protocol
+
+:rfc:`1036`
+
+    Standard for interchange of USENET messages
+
+:rfc:`1176`
+
+    Interactive Mail Access Protocol: Version 2
+
+:rfc:`1342`
+
+    Representation of Non-ASCII Text in Internet Message Headers
+
 :rfc:`1652`
 
     SMTP Service Extension for 8bit-MIMEtransport
 
 :rfc:`1730`
 
-    Internet Message Access Protocol - version 4
+    Internet Message Access Protocol - version 4, obsoleted by 
+    :rfc:`2060`, :rfc:`2061`, :rfc:`3501`.
 
 :rfc:`1869`
 
@@ -37,6 +54,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Post Office Protocol - Version 3 (POP3)
 
+:rfc:`1951`
+
+    DEFLATE Compressed Data Format Specification version 1.3
+
 :rfc:`2033`
 
     Local Mail Transfer Protocol
@@ -44,6 +65,25 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`2034`
 
     SMTP Service Extension for Returning Enhanced Error Codes
+
+:rfc:`2045`
+
+    Multipurpose Internet Mail Extensions (MIME) Part One: Format of 
+    Internet Message Bodies
+
+:rfc:`2046`
+
+    Multipurpose Internet Mail Extensions (MIME) Part Two: Media Types
+
+:rfc:`2047`
+
+    MIME (Multipurpose Internet Mail Extensions) Part Three: Message 
+    Header Extensions for Non-ASCII Text
+
+:rfc:`2060`
+
+    Internet Message Access Protocol - Version 4rev1, obsoleted by 
+    :rfc:`3501`.
 
 :rfc:`2086`
 
@@ -68,7 +108,8 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
 :rfc:`2192`
 
-    IMAP URL Scheme
+    IMAP URL Scheme, obsoleted by
+    :rfc:`5092`.
 
 :rfc:`2193`
 
@@ -91,13 +132,26 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     IMAP4 Namespace
 
+:rfc:`2359`
+
+    IMAP4 UIDPLUS extension, obsoleted by :rfc:`4315`
+
 :rfc:`2444`
 
     The One-Time-Password SASL Mechanism
 
+:rfc:`2445`
+
+    Internet Calendaring and Scheduling Core Object Specification 
+    (iCalendar)
+
 :rfc:`2449`
 
     POP3 Extension Mechanism
+
+:rfc:`2518`
+
+    HTTP Extensions for Distributed Authoring -- WEBDAV
 
 :rfc:`2595`
 
@@ -114,6 +168,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`2818`
 
     HTTP Over TLS
+
+:rfc:`2821`
+
+    Simple Mail Transfer Protocol
 
 :rfc:`2822`
 
@@ -135,6 +193,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Common NNTP Extensions
 
+:rfc:`3028`
+
+    Sieve: A Mail Filtering Language
+
 :rfc:`3206`
 
     The SYS and AUTH POP Response Codes
@@ -148,9 +210,17 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
     Versioning Extensions to WebDAV (Web Distributed Authoring and
     Versioning)
 
+:rfc:`3339`
+
+    Date and Time on the Internet: Timestamps
+
 :rfc:`3348`
 
     IMAP4 Child Mailbox Extension
+
+:rfc:`3431`
+
+    Sieve Extension: Relational Tests
 
 :rfc:`3463`
 
@@ -233,7 +303,8 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
 :rfc:`4467`
 
-    Internet Message Access Protocol (IMAP) - URLAUTH Extension
+    Internet Message Access Protocol (IMAP) - URLAUTH Extension, updated
+    by :rfc:`5092`.
 
 :rfc:`4469`
 
@@ -247,6 +318,11 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Internet Email to Support Diverse Service Environments (Lemonade)
     Profile
+
+:rfc:`4551`
+
+    IMAP Extension for Conditional STORE Operation or Quick Flag Changes 
+    Resynchronization
 
 :rfc:`4559`
 
@@ -269,10 +345,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`4644`
 
     Network News Transfer Protocol (NNTP) Extension for Streaming Feeds
-
-:rfc:`4551`
-
-    IMAP Extension for Conditional STORE operation
 
 :rfc:`4731`
 
@@ -310,6 +382,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
     The Post Office Protocol (POP3) Simple Authentication and Security
     Layer (SASL) Authentication Mechanism
 
+:rfc:`5092`
+
+    IMAP URL Scheme, updated by :rfc:`5593`.
+
 :rfc:`5161`
 
     The IMAP ENABLE Extension
@@ -344,17 +420,13 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Sieve Email Filtering: Subaddress Extension
 
-:rfc:`5257`
-
-    Internet Message Access Protocol - ANNOTATE Extension
-
-:rfc:`5260`
-
-    Sieve Email Filtering: Date and Index Extensions
-
 :rfc:`5256`
 
     Internet Message Access Protocol - SORT and THREAD Extensions
+
+:rfc:`5257`
+
+    Internet Message Access Protocol - ANNOTATE Extension
 
 :rfc:`5258`
 
@@ -398,10 +470,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Sieve Notification Mechanism: mailto
 
-:rfc:`5524`
-
-    Extended URLFETCH for Binary and Converted Parts
-
 :rfc:`5464`
 
     The IMAP METADATA Extension
@@ -409,6 +477,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`5465`
 
     The IMAP NOTIFY Extension
+
+:rfc:`5524`
+
+    Extended URLFETCH for Binary and Converted Parts
 
 :rfc:`5536`
 
@@ -426,6 +498,11 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`5546`
 
     iCalendar Transport-Independent Interoperability Protocol (iTIP)
+
+:rfc:`5593`
+
+    Internet Message Access Protocol (IMAP) - URL Access Identifier 
+    Extension
 
 :rfc:`5689`
 
@@ -493,6 +570,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
     Collection Synchronization for Web Distributed Authoring and
     Versioning (WebDAV)
 
+:rfc:`6585`
+
+    Additional HTTP Status Codes
+
 :rfc:`6609`
 
     Sieve Email Filtering: Include Extension
@@ -533,6 +614,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`7235`
 
     Hypertext Transfer Protocol (HTTP/1.1): Authentication
+
+:rfc:`7238`
+
+    The Hypertext Transfer Protocol Status Code 308 (Permanent Redirect)
 
 :rfc:`7239`
 
@@ -605,7 +690,29 @@ draft-thomson-hybi-http-timeout
 
 draft-murchison-webdav-prefer
 
-    Use of the Prefer Header Field in Web Distributed Authoring and Versioning (WebDAV)
+    Use of the Prefer Header Field in Web Distributed Authoring and 
+    Versioning (WebDAV)
+
+draft-ietf-calext-availability
+
+    Calendar Availability
+
+draft-ietf-httpauth-basicauth-update
+
+    The 'Basic' HTTP Authentication Scheme
+
+draft-ietf-httpauth-digest
+
+    HTTP Digest Access Authentication
+
+draft-ietf-httpbis-auth-info
+
+    The Hypertext Transfer Protocol (HTTP) Authentication-Info and 
+    Proxy- Authentication-Info Response Header Fields
+
+draft-ietf-httpbis-cice
+
+    Hypertext Transfer Protocol (HTTP) Client-Initiated Content-Encoding
 
 ..
 
