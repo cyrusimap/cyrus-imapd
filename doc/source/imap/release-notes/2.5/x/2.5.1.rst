@@ -1,0 +1,63 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 2.5.1 Release Notes
+==============================
+
+.. IMPORTANT::
+
+    This is a bug-fix release in the stable 2.5 series.
+
+    Refer to the release notes for 2.5.0 for important information
+    about the 2.5 series, including upgrading instructions.
+
+Download via HTTP:
+
+    *   http://www.cyrusimap.org/releases/cyrus-imapd-2.5.1.tar.gz
+    *   http://www.cyrusimap.org/releases/cyrus-imapd-2.5.1.tar.gz.sig
+
+Download via FTP:
+
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-2.5.1.tar.gz
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-2.5.1.tar.gz.sig
+
+.. _relnotes-2.5.1-changes:
+
+Changes Since 2.5.0
+===================
+
+Bug fixes
+---------
+
+* Fixed T117: now error out silently on non-TLS connections to services with implicit TLS
+* Fixed reconstruct bug: upgrading mailbox format now adds GUIDs to shared folders (Thanks Norbert Warmuth)
+* Fixed T165: xfer no longer fails due to bad version comparison
+* Fixed xfer bug: version 2.5 is now detected properly
+* Fixed T109: XLIST behaviour is now compatible with Outlook 2013 (Thanks Leena Heino)
+* Fixed T116: LIST now correctly handles domains starting with "inbox."
+* Fixed T120: admin users can now SETANNOTATION correctly
+* Fixed T118: imapd no longer crashes when selected mailbox is listed
+* Fixed T156: LMTP no longer incorrectly rejects messages delivered using 'deliver'
+* Fixed T76: lmtpd no longer crashes when delivering to a shared mailbox (Thanks Leena Heino)
+* Fixed quota bug: no longer crash when setting quotas on shared folder hierarchies
+* Fixed compilation problem on Solaris 10 (Thanks Leena Heino)
+* Fixed bug: QuotaChange event notification now always includes maxMessages parameter
+* Fixed bug: event notifications now include paths for shared folders
+* Fixed bug: GETMETADATA now handles mailbox patterns correctly
+* Various fixes to compiling and tool chains
+
+Changes to cyradm
+-----------------
+
+With thanks to Leena Heino and Norbert Warmuth for their contributions
+
+* createmailbox command now accepts --specialuse flag if server supports CREATE-SPECIAL-USE
+* listmailbox command now returns special-use attribute if server supports SPECIAL-USE
+* listmailbox command now accepts --specialuse flag to list only mailboxes with special-use attribute
+* cyradm now uses LIST and REMOTE rather than RLIST if server supports LIST-EXTENDED
+* mboxconfig now accepts --private flag to switch from default shared to private version of an annotation
+* getmetadata: new command
+* setmetadata: new command
+
+* Cyrus::IMAP::Admin::getinfo now returns a different data structure to support the above
+* Cyrus::IMAP::Admin new ACL flag for modifying annotations
