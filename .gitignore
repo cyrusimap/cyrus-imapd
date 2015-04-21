@@ -8,6 +8,7 @@
 *.orig
 *.rej
 *.tar.gz
+*.tar.bz2
 *.gcno
 *.gcda
 .deps
