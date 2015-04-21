@@ -669,7 +669,14 @@ static void do_dump(enum mboxop op, const char *part, int purge)
 	    struct mb_node *me = wipe_head;
 	    
 	    wipe_head = wipe_head->next;
-	    ret = mboxlist_deletemailbox(me->mailbox, 1, "", NULL, NULL, 0, 1, 1);
+	    if (!mboxlist_delayed_delete_isenabled()) {
+		ret = mboxlist_deletemailbox(me->mailbox, 1, "", NULL, NULL, 0, 1, 1);
+	    } else if (mboxname_isdeletedmailbox(me->mailbox, NULL)) {
+		ret = mboxlist_deletemailbox(me->mailbox, 1, "", NULL, NULL, 0, 1, 1);
+	    } else {
+		ret = mboxlist_delayed_deletemailbox(me->mailbox, 1, "", NULL, NULL, 0, 1, 1);
+	    }
+
 	    if (ret) {
 		fprintf(stderr, "couldn't delete defunct mailbox %s\n",
 			me->mailbox);
