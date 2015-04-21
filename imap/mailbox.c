@@ -1755,11 +1755,9 @@ static int mailbox_lock_index_internal(struct mailbox *mailbox, int locktype)
     /* check the CRC */
     if (mailbox->header_file_crc && mailbox->i.header_file_crc &&
 	mailbox->header_file_crc != mailbox->i.header_file_crc) {
-	syslog(LOG_ERR, "IOERROR: header CRC mismatch %s: %08X %08X",
+	syslog(LOG_WARNING, "Header CRC mismatch for mailbox %s: %08X %08X",
 	       mailbox->name, (unsigned int)mailbox->header_file_crc,
 	       (unsigned int)mailbox->i.header_file_crc);
-	mailbox_unlock_index(mailbox, NULL);
-	return IMAP_MAILBOX_CHECKSUM;
     }
 
     return 0;
