@@ -67,6 +67,8 @@
 
 /* Functions to replace those not available in libical < v2.0 */
 
+extern icalparameter* icalproperty_get_iana_parameter_by_name(icalproperty *prop, const char *name);
+
 extern icalparameter *icalparameter_new_filename(const char *fname);
 
 extern void icalparameter_set_filename(icalparameter *param, const char *fname);
@@ -79,7 +81,7 @@ extern void icalparameter_set_managedid(icalparameter *param, const char *id);
 
 extern icalparameter *icalparameter_new_size(const char *sz);
 
-extern icalparameter_set_size(icalparameter *param, const char *sz);
+extern void icalparameter_set_size(icalparameter *param, const char *sz);
 
 /* Wrappers to fetch managed attachment parameters by kind */
 

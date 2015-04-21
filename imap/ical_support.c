@@ -53,8 +53,7 @@
 
 #ifndef HAVE_MANAGED_ATTACH_PARAMS
 
-static icalparameter*
-icalproperty_get_iana_parameter_by_name(icalproperty *prop, const char *name)
+icalparameter* icalproperty_get_iana_parameter_by_name(icalproperty *prop, const char *name)
 {
     icalparameter *param;
 
