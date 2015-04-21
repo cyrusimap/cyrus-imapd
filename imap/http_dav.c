@@ -3206,7 +3206,7 @@ int meth_delete(struct transaction_t *txn, void *params)
 	    r = mboxlist_delayed_deletemailbox(txn->req_tgt.mboxname,
 				       httpd_userisadmin || httpd_userisproxyadmin,
 				       httpd_userid, httpd_authstate, mboxevent,
-				       /*checkack*/1, /*force*/0);
+				       /*checkack*/1, /*localonly*/0, /*force*/0);
 	}
 	else {
 	    r = mboxlist_deletemailbox(txn->req_tgt.mboxname,

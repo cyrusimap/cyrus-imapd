@@ -1103,6 +1103,7 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
 			       struct auth_state *auth_state,
 			       struct mboxevent *mboxevent,
 			       int checkacl,
+			       int localonly,
 			       int force)
 {
     mbentry_t *mbentry = NULL;
@@ -1162,6 +1163,7 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
                                1 /* isadmin */, userid,
                                auth_state,
 			       mboxevent,
+			       localonly /* local_only */,
                                force, 1);
 
     mboxlist_entry_free(&mbentry);
