@@ -2368,7 +2368,7 @@ EXPORTED int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const c
 EXPORTED int annotatemore_msg_lookupmask(const char *mboxname, uint32_t uid, const char *entry,
 					 const char *userid, struct buf *value)
 {
-    int r;
+    int r = 0;
     value->len = 0; /* just in case! */
     /* only if the user isn't the owner, we look for a masking value */
     if (!mboxname_userownsmailbox(userid, mboxname))

@@ -557,7 +557,6 @@ static struct mappedfile *cache_getfile(ptrarray_t *list, const char *fname,
     struct mappedfile *cachefile = NULL;
     int openflags = readonly ? 0 : MAPPEDFILE_CREATE | MAPPEDFILE_RW;
     int i;
-    char buf[4];
 
     for (i = 0; i < list->count; i++) {
 	cachefile = ptrarray_nth(list, i);
@@ -574,8 +573,8 @@ static struct mappedfile *cache_getfile(ptrarray_t *list, const char *fname,
 
     if (!readonly && !mappedfile_size(cachefile)) {
 	/* zero byte file?  Set the generation */
-	*((uint32_t *)buf) = htonl(generation);
-	mappedfile_pwrite(cachefile, buf, 4, 0);
+	uint32_t netgen = htonl(generation);
+	mappedfile_pwrite(cachefile, (const char *) &netgen, 4, 0);
 	mappedfile_commit(cachefile);
     }
 

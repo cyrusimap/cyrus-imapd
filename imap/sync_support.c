@@ -57,6 +57,7 @@
 #include <errno.h>
 #include <dirent.h>
 #include <utime.h>
+#include <limits.h>
 
 #include "assert.h"
 #include "global.h"
@@ -679,7 +680,7 @@ void sync_decode_quota_limits(/*const*/ struct dlist *kl, quota_t limits[QUOTA_N
 
     /* For backwards compatibility */
     if (dlist_getnum32(kl, "LIMIT", &limit)) {
-	if (limit == 4294967295)
+	if (limit == UINT_MAX)
 	    limits[QUOTA_STORAGE] = -1;
 	else
 	    limits[QUOTA_STORAGE] = limit;
@@ -3222,7 +3223,7 @@ int sync_apply_message(struct dlist *kin,
 	const char *fname;
 
 	/* XXX - complain more? */
-	if (!dlist_tofile(ki, &part, &guid, &size, &fname))
+	if (!dlist_tofile(ki, &part, &guid, (ulong *) &size, &fname))
 	    continue;
 
 	part_list = sync_reserve_partlist(reserve_list, part);
@@ -3952,7 +3953,7 @@ static int fetch_file(struct mailbox *mailbox, unsigned uid,
 	return r;
     }
 
-    if (!dlist_tofile(kin->head, NULL, &guid, &size, &fname)) {
+    if (!dlist_tofile(kin->head, NULL, &guid, (ulong *) &size, &fname)) {
 	r = IMAP_MAILBOX_NONEXISTENT;
 	syslog(LOG_ERR, "IOERROR: fetch_file failed tofile %s", error_message(r));
 	goto done;
