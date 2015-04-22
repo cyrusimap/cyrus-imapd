@@ -1238,7 +1238,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
 	if (!isadmin) { r = IMAP_PERMISSION_DENIED; goto done; }
     }
 
-    r = mboxlist_lookup(name, &mbentry, NULL);
+    r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
     if (r) goto done;
 
     isremote = mbentry->mbtype & MBTYPE_REMOTE;
