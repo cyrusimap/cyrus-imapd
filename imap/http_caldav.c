@@ -2260,16 +2260,17 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     if (!action || action->next) return HTTP_BAD_REQUEST;
     else if (!strcmp(action->s, "attachment-add")) {
 	op = ATTACH_ADD;
-	if (rid || mid) return HTTP_BAD_REQUEST;
+	if (rid  /* not supported (yet) */
+	    || mid) return HTTP_BAD_REQUEST;
     }
     else if (!strcmp(action->s, "attachment-update")) {
 	op = ATTACH_UPDATE;
-	if (rid  /* not supported (yet) */
-	    || !mid || mid->next) return HTTP_BAD_REQUEST;
+	if (rid || !mid || mid->next) return HTTP_BAD_REQUEST;
     }
     else if (!strcmp(action->s, "attachment-remove")) {
 	op = ATTACH_REMOVE;
-	if (rid || !mid || mid->next) return HTTP_BAD_REQUEST;
+	if (rid  /* not supported (yet) */
+	    || !mid || mid->next) return HTTP_BAD_REQUEST;
     }
     else return HTTP_BAD_REQUEST;
 
