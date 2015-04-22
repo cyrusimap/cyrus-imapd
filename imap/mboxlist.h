@@ -118,7 +118,7 @@ uint32_t mboxlist_string_to_mbtype(const char *string);
 /* Lookup 'name' in the mailbox list. */
 int mboxlist_lookup(const char *name, mbentry_t **mbentryptr,
 		    struct txn **tid);
-int mboxlist_lookup_allow_reserved(const char *name,
+int mboxlist_lookup_allow_all(const char *name,
 				   mbentry_t **mbentryptr,
 				   struct txn **tid);
 

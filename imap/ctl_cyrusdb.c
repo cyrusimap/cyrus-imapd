@@ -127,7 +127,7 @@ static int fixmbox(char *name,
     mbentry_t *mbentry = NULL;
     int r;
 
-    r = mboxlist_lookup_allow_reserved(name, &mbentry, NULL);
+    r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
     if (r) return 0;
 
     if (mbentry->legacy_specialuse) {
