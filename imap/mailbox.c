@@ -925,7 +925,7 @@ static int mailbox_open_advanced(const char *name,
 	goto done;
     }
 
-    r = mboxlist_lookup(name, &mbentry, NULL);
+    r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
     if (r) goto done;
 
     if (mbentry->mbtype & MBTYPE_MOVING) {
