@@ -8,42 +8,6 @@
 </head>
 <body>
 
-<h1>Changes to the Cyrus IMAP Server since 2.5.0</h1>
-<ul>
-<li>Fixed T117: now error out silently on non-TLS connections to services with implicit TLS</li>
-<li>Fixed reconstruct bug: upgrading mailbox format now adds GUIDs to shared folders (Thanks Norbert Warmuth)</li>
-<li>Fixed T165: xfer no longer fails due to bad version comparison</li>
-<li>Fixed xfer bug: version 2.5 is now detected properly</li>
-<li>Fixed T109: XLIST behaviour is now compatible with Outlook 2013 (Thanks Leena Heino)</li>
-<li>Fixed T116: LIST now correctly handles domains starting with "inbox."</li>
-<li>Fixed T120: admin users can now SETANNOTATION correctly</li>
-<li>Fixed T118: imapd no longer crashes when selected mailbox is listed</li>
-<li>Fixed T156: LMTP no longer incorrectly rejects messages delivered using 'deliver'</li>
-<li>Fixed T76: lmtpd no longer crashes when delivering to a shared mailbox (Thanks Leena Heino)</li>
-<li>Fixed quota bug: no longer crash when setting quotas on shared folder hierarchies</li>
-<li>Fixed compilation problem on Solaris 10 (Thanks Leena Heino)</li>
-<li>Fixed bug: QuotaChange event notification now always includes maxMessages parameter</li>
-<li>Fixed bug: event notifications now include paths for shared folders</li>
-<li>Fixed bug: GETMETADATA now handles mailbox patterns correctly</li>
-<li>Various fixes to compiling and tool chains</li>
-<li>Fixed T117: now error out silently on non-TLS connections to services with implicit TLS</li>
-<li>Fixed reconstruct bug: upgrading mailbox format now adds GUIDs to shared folders (Thanks Norbert Warmuth)</li>
-<li>Fixed T165: xfer no longer fails due to bad version comparison</li>
-<li>Fixed xfer bug: version 2.5 is now detected properly</li>
-<li>Fixed T109: XLIST behaviour is now compatible with Outlook 2013 (Thanks Leena Heino)</li>
-<li>Fixed T116: LIST now correctly handles domains starting with "inbox."</li>
-<li>Fixed T120: admin users can now SETANNOTATION correctly</li>
-<li>Fixed T118: imapd no longer crashes when selected mailbox is listed</li>
-<li>Fixed T156: LMTP no longer incorrectly rejects messages delivered using 'deliver'</li>
-<li>Fixed T76: lmtpd no longer crashes when delivering to a shared mailbox (Thanks Leena Heino)</li>
-<li>Fixed quota bug: no longer crash when setting quotas on shared folder hierarchies</li>
-<li>Fixed compilation problem on Solaris 10 (Thanks Leena Heino)</li>
-<li>Fixed bug: QuotaChange event notification now always includes maxMessages parameter</li>
-<li>Fixed bug: event notifications now include paths for shared folders</li>
-<li>Fixed bug: GETMETADATA now handles mailbox patterns correctly</li>
-<li>Various fixes to compiling and tool chains</li>
-</ul>
-
 <h1>Changes from 2.4 to 2.5</h1>
 <ul>
 <li>Check the release notes online at <a href="https://docs.cyrus.foundation/imap/release-notes/2.5.0.html">https://docs.cyrus.foundation/imap/release-notes/2.5.0.html</a></li>
