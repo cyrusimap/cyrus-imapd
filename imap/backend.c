@@ -782,7 +782,7 @@ static int backend_login(struct backend *ret, const char *userid,
        unless we're doing LMTP/CSYNC on a UNIX socket (deliver/sync_client) */
     if (!noauth) {
 	char *old_mechlist = backend_get_cap_params(ret, CAPA_AUTH);
-	const char *my_status;
+	const char *my_status = NULL;
 
 	if ((r = backend_authenticate(ret, userid, cb, &my_status))) {
 	    syslog(LOG_ERR, "couldn't authenticate to backend server: %s",
