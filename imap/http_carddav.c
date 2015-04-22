@@ -121,7 +121,15 @@ static int report_card_query(struct transaction_t *txn,
 			     struct meth_params *rparams,
 			     xmlNodePtr inroot, struct propfind_ctx *fctx);
 
-static struct vparse_state *vcard_string_as_vparser(const char *str) {
+#define vparser_as_vcard_string(vparser) (vparser->base)
+
+static char *vparser_as_vcard_string_r(struct vparse_state *vparser)
+{
+    return xstrdup(vparser_as_vcard_string(vparser));
+}
+
+static struct vparse_state *vcard_string_as_vparser(const char *str)
+{
     struct vparse_state *vparser;
     int vr;
 
@@ -140,7 +148,8 @@ static void free_vparser(void *vparser) {
 
 static struct mime_type_t carddav_mime_types[] = {
     /* First item MUST be the default type and storage format */
-    { "text/vcard; charset=utf-8", "3.0", "vcf", NULL,
+    { "text/vcard; charset=utf-8", "3.0", "vcf",
+      (char* (*)(void *)) &vparser_as_vcard_string_r,
       (void * (*)(const char*)) &vcard_string_as_vparser,
       (void (*)(void *)) &free_vparser, NULL, NULL
     },
@@ -691,7 +700,7 @@ static int store_resource(struct transaction_t *txn, struct vparse_state *vparse
     spool_remove_header(xstrdup("Content-Description"), txn->req_hdrs);
 
     /* Store the resource */
-    return dav_store_resource(txn, buf_cstring(&txn->req_body.payload), 0,
+    return dav_store_resource(txn, vparser_as_vcard_string(vparser), 0,
 			      mailbox, oldrecord, NULL);
 }
 
