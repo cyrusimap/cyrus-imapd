@@ -1443,7 +1443,7 @@ static struct mbent *database_lookup(const char *name, struct mpool *pool)
 
     if (!name) return NULL;
 
-    r = mboxlist_lookup_allow_reserved(name, &mbentry, NULL);
+    r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
     if (r) return NULL;
 
     /* XXX - if mbtype & MBTYPE_DELETED, maybe set a delete */

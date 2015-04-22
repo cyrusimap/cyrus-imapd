@@ -485,8 +485,7 @@ EXPORTED int mboxlist_lookup(const char *name, mbentry_t **entryptr,
     return 0;
 }
 
-/* now this is just silly, but hey */
-EXPORTED int mboxlist_lookup_allow_reserved(const char *name,
+EXPORTED int mboxlist_lookup_allow_all(const char *name,
 				   mbentry_t **entryptr,
 				   struct txn **tid)
 {
