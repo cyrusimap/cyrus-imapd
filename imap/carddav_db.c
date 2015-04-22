@@ -919,6 +919,24 @@ struct updates_rock {
     json_t *removed;
 };
 
+static void strip_spurious_deletes(struct updates_rock *grock)
+{
+    /* if something is mentioned in both DELETEs and UPDATEs, it's probably
+     * a move.  O(N*M) algorithm, but there are rarely many, and the alternative
+     * of a hash will cost more */
+    unsigned i, j;
+    for (i = 0; i < json_array_size(grock->removed); i++) {
+	const char *del = json_string_value(json_array_get(grock->removed, i));
+	for (j = 0; j < json_array_size(grock->changed); j++) {
+	    const char *up = json_string_value(json_array_get(grock->changed, j));
+	    if (!strcmpsafe(del, up)) {
+		json_array_remove(grock->removed, i--);
+		break;
+	    }
+	}
+    }
+}
+
 static int getupdates_cb(sqlite3_stmt *stmt, void *rock)
 {
     struct updates_rock *grock = (struct updates_rock *)rock;
@@ -957,6 +975,8 @@ EXPORTED int carddav_getContactGroupUpdates(struct carddav_db *carddavdb, struct
 	/* XXX - free memory */
 	return r;
     }
+
+    strip_spurious_deletes(&rock);
 
     json_t *contactGroupUpdates = json_pack("{}");
     json_object_set_new(contactGroupUpdates, "accountId", json_string(req->userid));
@@ -1917,6 +1937,8 @@ EXPORTED int carddav_getContactUpdates(struct carddav_db *carddavdb, struct jmap
 	/* XXX - free memory */
 	return r;
     }
+
+    strip_spurious_deletes(&rock);
 
     json_t *contactUpdates = json_pack("{}");
     json_object_set_new(contactUpdates, "accountId", json_string(req->userid));
