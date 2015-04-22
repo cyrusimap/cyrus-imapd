@@ -3226,10 +3226,6 @@ int meth_copy_move(struct transaction_t *txn, void *params)
 
     /* Load message containing the resource and parse data */
     mailbox_map_record(src_mbox, &src_rec, &msg_buf);
-    /* take a copy to save later */
-    buf_setmap(&txn->req_body.payload,
-	       buf_base(&msg_buf) + src_rec.header_size,
-	       buf_len(&msg_buf) - src_rec.header_size);
     obj = cparams->mime_types[0].from_string(buf_base(&msg_buf) +
 					     src_rec.header_size);
     buf_free(&msg_buf);
