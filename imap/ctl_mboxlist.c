@@ -324,7 +324,7 @@ static int dump_cb(void *rockp,
 
     switch (d->op) {
     case DUMP:
-	if (!d->partition || !strcmp(d->partition, part)) {
+	if (!d->partition || !strcmpsafe(d->partition, part)) {
 	    printf("%s\t%d %s %s\n", name, mbtype, part, acl);
 	    if (d->purge) {
 		cyrusdb_delete(mbdb, key, keylen, &(d->tid), 0);
