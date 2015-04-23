@@ -934,7 +934,7 @@ static int mailbox_open_advanced(const char *name,
 	goto done;
     }
 
-    mailbox->part = xstrdup(mbentry->partition);
+    mailbox->part = xstrdupnull(mbentry->partition);
 
     /* Note that the header does have the ACL information, but it is only
      * a backup, and the mboxlist data is considered authoritative, so
