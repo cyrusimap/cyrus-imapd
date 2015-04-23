@@ -1484,14 +1484,17 @@ static int _add_othergroup_entries(struct carddav_db *carddavdb __attribute__((u
     const char *key;
     json_t *arg;
     json_object_foreach(members, key, arg) {
-	const char *item = json_string_value(arg);
-	if (!item)
-	    return -1;
-	const char *uid = _resolveid(req, item);
-	buf_setcstr(&buf, "urn:uuid:");
-	buf_appendcstr(&buf, uid);
-	struct vparse_entry *entry = vparse_add_entry(card, NULL, "X-FM-OTHERACCOUNT-MEMBER", buf_cstring(&buf));
-	vparse_add_param(entry, "userid", key);
+	unsigned i;
+	for (i = 0; i < json_array_size(arg); i++) {
+	    const char *item = json_string_value(json_array_get(arg, i));
+	    if (!item)
+		return -1;
+	    const char *uid = _resolveid(req, item);
+	    buf_setcstr(&buf, "urn:uuid:");
+	    buf_appendcstr(&buf, uid);
+	    struct vparse_entry *entry = vparse_add_entry(card, NULL, "X-FM-OTHERACCOUNT-MEMBER", buf_cstring(&buf));
+	    vparse_add_param(entry, "userid", key);
+	}
     }
     buf_free(&buf);
     return r;
