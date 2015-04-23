@@ -934,6 +934,12 @@ static int mailbox_open_advanced(const char *name,
 	goto done;
     }
 
+    if (!mbentry->partition) {
+	mboxlist_entry_free(&mbentry);
+	r = IMAP_MAILBOX_NONEXISTENT;
+	goto done;
+    }
+
     mailbox->part = xstrdup(mbentry->partition);
 
     /* Note that the header does have the ACL information, but it is only
