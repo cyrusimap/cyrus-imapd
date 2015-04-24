@@ -1353,10 +1353,16 @@ out:
     return r;
 }
 
+
+/* if either CRC is zero for a field, then we consider it to match.
+ * this lets us bootstrap the case where CRCs weren't being calculated,
+ * and also allows a client with incomplete local information to request
+ * a change be made on a sync_server without having to fetch all the
+ * data first just to calculate the CRC */
 static int crceq(struct synccrcs a, struct synccrcs b)
 {
-    if (a.basic != b.basic) return 0;
-    if (a.annot != b.annot) return 0;
+    if (a.basic && b.basic && a.basic != b.basic) return 0;
+    if (a.annot && b.annot && a.annot != b.annot) return 0;
     return 1;
 }
 
@@ -1378,7 +1384,7 @@ static int do_mailbox(struct dlist *kin)
     uint32_t uidvalidity;
     const char *acl;
     const char *options_str;
-    struct synccrcs synccrcs;
+    struct synccrcs synccrcs = { 0, 0 };
 
     uint32_t options;
 
@@ -1419,14 +1425,13 @@ static int do_mailbox(struct dlist *kin)
     if (!dlist_getlist(kin, "RECORD", &kr))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
-    /* Get the CRC */
-    if (!dlist_getnum32(kin, "SYNC_CRC", &synccrcs.basic))
-	return IMAP_PROTOCOL_BAD_PARAMETERS;
-
     /* optional */
     dlist_getlist(kin, "ANNOTATIONS", &ka);
     dlist_getdate(kin, "POP3_SHOW_AFTER", &pop3_show_after);
     dlist_getatom(kin, "MBOXTYPE", &mboxtype);
+
+    /* Get the CRCs */
+    dlist_getnum32(kin, "SYNC_CRC", &synccrcs.basic);
     dlist_getnum32(kin, "SYNC_CRC_ANNOT", &synccrcs.annot);
 
     options = sync_parse_options(options_str);

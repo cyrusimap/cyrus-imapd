@@ -467,13 +467,14 @@ static int response_parse(const char *cmd,
 	    if (!dlist_getnum64(kl, "HIGHESTMODSEQ", &highestmodseq)) goto parse_err;
 	    if (!dlist_getnum32(kl, "UIDVALIDITY", &uidvalidity)) goto parse_err;
 	    if (!dlist_getnum32(kl, "LAST_UID", &last_uid)) goto parse_err;
-	    if (!dlist_getnum32(kl, "SYNC_CRC", &synccrcs.basic)) goto parse_err;
 	    if (!dlist_getnum32(kl, "RECENTUID", &recentuid)) goto parse_err;
 	    if (!dlist_getdate(kl, "RECENTTIME", &recenttime)) goto parse_err;
 	    if (!dlist_getdate(kl, "POP3_LAST_LOGIN", &pop3_last_login)) goto parse_err;
 	    /* optional */
 	    dlist_getdate(kl, "POP3_SHOW_AFTER", &pop3_show_after);
 	    dlist_getatom(kl, "MBOXTYPE", &mboxtype);
+
+	    dlist_getnum32(kl, "SYNC_CRC", &synccrcs.basic);
 	    dlist_getnum32(kl, "SYNC_CRC_ANNOT", &synccrcs.annot);
 
 	    if (dlist_getlist(kl, "ANNOTATIONS", &al))
@@ -1400,10 +1401,12 @@ done:
     return r;
 }
 
+/* this should be in sync_support, but that becomes Ellie's
+ * problem later */
 static int crceq(struct synccrcs a, struct synccrcs b)
 {
-    if (a.basic != b.basic) return 0;
-    if (a.annot != b.annot) return 0;
+    if (a.basic && b.basic && a.basic != b.basic) return 0;
+    if (a.annot && b.annot && a.annot != b.annot) return 0;
     return 1;
 }
 
