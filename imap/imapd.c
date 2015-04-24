@@ -6814,14 +6814,6 @@ static int renmbox(char *name,
 	    user_copyquotaroot(name, text->newmailboxname);
 	    user_renameacl(text->namespace, text->newmailboxname,
 			   text->acl_olduser, text->acl_newuser);
-#ifdef WITH_DAV
-	    if (mbentry->mbtype & MBTYPES_DAV) {
-		struct mailbox *mailbox = NULL;
-		r = mailbox_open_irl(text->newmailboxname, &mailbox);
-		if (!r) r = mailbox_add_dav(mailbox);
-		mailbox_close(&mailbox);
-	    }
-#endif
 	}
 
 

@@ -1580,6 +1580,11 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 	    }
 
 	    mailbox_rename_cleanup(&oldmailbox, isusermbox);
+
+#ifdef WITH_DAV
+	    mailbox_add_dav(newmailbox);
+#endif
+
 	    mailbox_close(&newmailbox);
 	}
 	else if (partitionmove) {

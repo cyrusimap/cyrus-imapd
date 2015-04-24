@@ -146,6 +146,7 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record, int versio
 #ifdef WITH_DAV
 static int mailbox_commit_dav(struct mailbox *mailbox);
 static int mailbox_abort_dav(struct mailbox *mailbox);
+static int mailbox_delete_dav(struct mailbox *mailbox);
 #endif
 
 static struct mailboxlist *create_listitem(const char *name)
@@ -4818,6 +4819,9 @@ EXPORTED int mailbox_add_dav(struct mailbox *mailbox)
     if (!(mailbox->mbtype & (MBTYPES_DAV)))
 	return 0;
 
+    if (mboxname_isdeletedmailbox(mailbox->name, NULL))
+	return 0;
+
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	r = mailbox_read_index_record(mailbox, recno, &record);
 	if (r) return r;
@@ -4828,6 +4832,7 @@ EXPORTED int mailbox_add_dav(struct mailbox *mailbox)
 
     return 0;
 }
+
 #endif /* WITH_DAV */
 
 EXPORTED int mailbox_add_conversations(struct mailbox *mailbox)
@@ -4894,6 +4899,12 @@ static int mailbox_delete_internal(struct mailbox **mailboxptr)
     /* mark the mailbox deleted */
     mailbox_index_dirty(mailbox);
     mailbox->i.options |= OPT_MAILBOX_DELETED;
+
+#ifdef WITH_DAV
+    /* remove any DAV records */
+    r = mailbox_delete_dav(mailbox);
+    if (r) return r;
+#endif
 
     /* clean up annotations */
     r = annotate_delete_mailbox(mailbox);
