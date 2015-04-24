@@ -1445,31 +1445,23 @@ static const char *_resolveid(struct jmap_req *req, const char *id)
     return id;
 }
 
-static int _add_group_entries(struct carddav_db *carddavdb, struct jmap_req *req,
+static int _add_group_entries(struct jmap_req *req,
 			      struct vparse_card *card, json_t *members)
 {
     vparse_delete_entries(card, NULL, "X-ADDRESSBOOKSERVER-MEMBER");
     int r = 0;
     size_t index;
     struct buf buf = BUF_INITIALIZER;
+
     for (index = 0; index < json_array_size(members); index++) {
 	const char *item = _json_array_get_string(members, index);
-	if (!item)
-	    return -1;
+	if (!item) continue;
 	const char *uid = _resolveid(req, item);
-	struct carddav_data *cdata = NULL;
-	r = carddav_lookup_uid(carddavdb, uid, &cdata);
-	if (r) goto done;
-	if (!cdata || !cdata->dav.imap_uid || !cdata->dav.alive
-	    || cdata->kind != CARDDAV_KIND_CONTACT) {
-	    r = -1;
-	    goto done;
-	}
 	buf_setcstr(&buf, "urn:uuid:");
 	buf_appendcstr(&buf, uid);
 	vparse_add_entry(card, NULL, "X-ADDRESSBOOKSERVER-MEMBER", buf_cstring(&buf));
     }
-done:
+
     buf_free(&buf);
     return r;
 }
@@ -1551,7 +1543,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 	    /* it's legal to create an empty group */
 	    json_t *members = json_object_get(arg, "contactIds");
 	    if (members) {
-		r = _add_group_entries(carddavdb, req, card, members);
+		r = _add_group_entries(req, card, members);
 		if (r) {
 		    /* this one is legit - it just means we'll be adding an error instead */
 		    r = 0;
@@ -1710,7 +1702,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 
 	    json_t *members = json_object_get(arg, "contactIds");
 	    if (members) {
-		r = _add_group_entries(carddavdb, req, card, members);
+		r = _add_group_entries(req, card, members);
 		if (r) {
 		    /* this one is legit - it just means we'll be adding an error instead */
 		    r = 0;
