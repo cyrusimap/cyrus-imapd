@@ -2212,8 +2212,7 @@ out:
 static int crceq(struct synccrcs a, struct synccrcs b)
 {
     if (a.basic && b.basic && a.basic != b.basic) return 0;
-    // XXX - ignore annot CRC match errors
-    //if (a.annot && b.annot && a.annot != b.annot) return 0;
+    if (a.annot && b.annot && a.annot != b.annot) return 0;
     return 1;
 }
 
