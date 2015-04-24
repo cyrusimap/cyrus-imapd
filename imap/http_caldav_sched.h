@@ -58,6 +58,7 @@
 #endif /* WITH_DKIM */
 
 #include "http_dav.h"
+#include "ical_support.h"
 
 
 #define REQSTAT_PENDING		"1.0;Pending"
