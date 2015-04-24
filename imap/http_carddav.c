@@ -93,13 +93,13 @@ static void my_carddav_shutdown(void);
 static int carddav_parse_path(const char *path,
 			      struct request_target_t *tgt, const char **errstr);
 
-static int carddav_copy(struct transaction_t *txn, struct vparse_state *vparser,
+static int carddav_copy(struct transaction_t *txn, void *obj,
 		       struct mailbox *mailbox, const char *resource,
-		       struct carddav_db *davdb);
+		       void *destdb);
 
-static int carddav_put(struct transaction_t *txn, struct vparse_state *vparser,
+static int carddav_put(struct transaction_t *txn, void *obj,
 		       struct mailbox *mailbox, const char *resource,
-		       struct carddav_db *davdb);
+		       void *destdb);
 
 static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
 				   struct propfind_ctx *fctx, xmlNodePtr resp,
@@ -287,12 +287,12 @@ static struct meth_params carddav_params = {
       (db_delete_proc_t) &carddav_delete,
       (db_delmbox_proc_t) &carddav_delmbox },
     NULL,					/* No ACL extensions */
-    (put_proc_t) &carddav_copy,
-    NULL,		  	      		/* No special DELETE handling */
-    NULL,		  	      		/* No special GET handling */
+    &carddav_copy,
+    NULL,					/* No special DELETE handling */
+    NULL,					/* No special GET handling */
     MBTYPE_ADDRESSBOOK,
-    NULL,		  	      		/* No special POST handling */
-    { CARDDAV_SUPP_DATA, (put_proc_t) &carddav_put },
+    NULL,					/* No special POST handling */
+    { CARDDAV_SUPP_DATA, &carddav_put },
     carddav_props,
     carddav_reports
 };
@@ -704,18 +704,22 @@ static int store_resource(struct transaction_t *txn, struct vparse_state *vparse
 			      mailbox, oldrecord, NULL);
 }
 
-static int carddav_copy(struct transaction_t *txn, struct vparse_state *vparser,
+static int carddav_copy(struct transaction_t *txn, void *obj,
 			struct mailbox *mailbox, const char *resource,
-			struct carddav_db *davdb)
+			void *destdb)
 {
-    return store_resource(txn, vparser, mailbox, resource, davdb, /*dupcheck*/0);
+    struct carddav_db *db = (struct carddav_db *)destdb;
+    struct vparse_state *vparser = (struct vparse_state *)obj;
+    return store_resource(txn, vparser, mailbox, resource, db, /*dupcheck*/0);
 }
 
-static int carddav_put(struct transaction_t *txn, struct vparse_state *vparser,
+static int carddav_put(struct transaction_t *txn, void *obj,
 		       struct mailbox *mailbox, const char *resource,
-		       struct carddav_db *davdb)
+		       void *destdb)
 {
-    return store_resource(txn, vparser, mailbox, resource, davdb, /*dupcheck*/1);
+    struct carddav_db *db = (struct carddav_db *)destdb;
+    struct vparse_state *vparser = (struct vparse_state *)obj;
+    return store_resource(txn, vparser, mailbox, resource, db, /*dupcheck*/1);
 }
 
 

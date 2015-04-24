@@ -183,16 +183,16 @@ static int caldav_check_precond(struct transaction_t *txn, const void *data,
 static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights);
 static int caldav_copy(struct transaction_t *txn, void *obj,
 		       struct mailbox *dest_mbox, const char *dest_rsrc,
-		       struct caldav_db *dest_davdb);
+		       void *destdb);
 static int caldav_delete_cal(struct transaction_t *txn,
 			     struct mailbox *mailbox,
 			     struct index_record *record, void *data);
 static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 		      struct index_record *record, void *data);
 static int caldav_post(struct transaction_t *txn);
-static int caldav_put(struct transaction_t *txn, icalcomponent *ical,
+static int caldav_put(struct transaction_t *txn, void *obj,
 		      struct mailbox *mailbox, const char *resource,
-		      struct caldav_db *caldavdb);
+		      void *destdb);
 
 static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
 				   struct propfind_ctx *fctx, xmlNodePtr resp,
@@ -479,12 +479,12 @@ static struct meth_params caldav_params = {
       (db_delete_proc_t) &caldav_delete,
       (db_delmbox_proc_t) &caldav_delmbox },
     &caldav_acl,
-    (put_proc_t) &caldav_copy,
+    &caldav_copy,
     &caldav_delete_cal,
     &caldav_get,
     MBTYPE_CALENDAR,
     &caldav_post,
-    { CALDAV_SUPP_DATA, (put_proc_t) &caldav_put },
+    { CALDAV_SUPP_DATA, &caldav_put },
     caldav_props,
     caldav_reports
 };
@@ -1116,9 +1116,10 @@ static icalcomponent *record_to_ical(struct mailbox *mailbox, struct index_recor
  */
 static int caldav_copy(struct transaction_t *txn, void *obj,
 		       struct mailbox *dest_mbox, const char *dest_rsrc,
-		       struct caldav_db *dest_davdb)
+		       void *destdb)
 {
     int r;
+    struct caldav_db *db = (struct caldav_db *)destdb;
 
     icalcomponent *comp, *ical = (icalcomponent *) obj;
     const char *organizer = NULL;
@@ -1138,7 +1139,7 @@ static int caldav_copy(struct transaction_t *txn, void *obj,
     }
 
     /* Store source resource at destination */
-    r = store_resource(txn, ical, dest_mbox, dest_rsrc, dest_davdb, flags);
+    r = store_resource(txn, ical, dest_mbox, dest_rsrc, db, flags);
 
     return r;
 }
@@ -2834,11 +2835,13 @@ const char *icalproperty_get_invitee(icalproperty *prop)
  *   CALDAV:max-instances
  *   CALDAV:max-attendees-per-instance
  */
-static int caldav_put(struct transaction_t *txn, icalcomponent *ical,
+static int caldav_put(struct transaction_t *txn, void *obj,
 		      struct mailbox *mailbox, const char *resource,
-		      struct caldav_db *davdb)
+		      void *destdb)
 {
     int ret = 0;
+    struct caldav_db *db = (struct caldav_db *)destdb;
+    icalcomponent *ical = (icalcomponent *)obj;
     icalcomponent *oldical = NULL;
     icalcomponent *comp, *nextcomp;
     icalcomponent_kind kind;
@@ -2925,7 +2928,7 @@ static int caldav_put(struct transaction_t *txn, icalcomponent *ical,
     }
 
     /* Check for duplicate iCalendar UID */
-    caldav_lookup_uid(davdb, uid, &cdata);
+    caldav_lookup_uid(db, uid, &cdata);
     if (cdata->dav.imap_uid && (strcmp(cdata->dav.mailbox, mailbox->name) ||
 				strcmp(cdata->dav.resource, resource))) {
 	/* CALDAV:no-uid-conflict */
@@ -3150,7 +3153,7 @@ static int caldav_put(struct transaction_t *txn, icalcomponent *ical,
     }
 
     /* Store resource at target */
-    if (!ret) ret = store_resource(txn, ical, mailbox, resource, davdb, flags);
+    if (!ret) ret = store_resource(txn, ical, mailbox, resource, db, flags);
 
   done:
     if (oldical) icalcomponent_free(oldical);

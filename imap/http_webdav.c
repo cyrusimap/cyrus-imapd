@@ -60,9 +60,9 @@ static int webdav_parse_path(const char *path,
 
 static int webdav_get(struct transaction_t *txn, struct mailbox *mailbox,
 		      struct index_record *record, void *data);
-static int webdav_put(struct transaction_t *txn, struct buf *obj,
+static int webdav_put(struct transaction_t *txn, void *obj,
 		      struct mailbox *mailbox, const char *resource,
-		      struct webdav_db *davdb);
+		      void *davdb);
 
 struct meth_params webdav_params = {
     .mime_types = NULL,
@@ -72,7 +72,7 @@ struct meth_params webdav_params = {
 	       .close_db = (db_close_proc_t) &webdav_close,
 	       .lookup_resource = (db_lookup_proc_t) &webdav_lookup_resource },
     .get = &webdav_get,
-    .put = { 0, (put_proc_t) &webdav_put }
+    .put = { 0, &webdav_put }
 };
 
 
@@ -108,20 +108,22 @@ static int webdav_get(struct transaction_t *txn,
 
 
 /* Perform a PUT request on a WebDAV resource */
-static int webdav_put(struct transaction_t *txn, struct buf *obj,
+static int webdav_put(struct transaction_t *txn, void *obj,
 		      struct mailbox *mailbox, const char *resource,
-		      struct webdav_db *webdavdb)
+		      void *destdb)
 {
+    struct webdav_db *db = (struct webdav_db *)destdb;
+    struct buf *buf = (struct buf *)obj;
     struct webdav_data *wdata;
     struct index_record *oldrecord = NULL, record;
     const char **hdr;
     char *filename = NULL;
 
     /* Validate the data */
-    if (!obj || !obj->s) return HTTP_FORBIDDEN;
+    if (!buf || !buf->s) return HTTP_FORBIDDEN;
 
     /* Find message UID for the resource */
-    webdav_lookup_resource(webdavdb, mailbox->name, resource, &wdata, 0);
+    webdav_lookup_resource(db, mailbox->name, resource, &wdata, 0);
 
     if (wdata->dav.imap_uid) {
 	/* Fetch index record for the resource */
@@ -133,7 +135,7 @@ static int webdav_put(struct transaction_t *txn, struct buf *obj,
     if ((hdr = spool_getheader(txn->req_hdrs, "Content-Disposition"))) {
 	char *dparam;
 	tok_t tok;
-	
+
 	tok_initm(&tok, (char *) *hdr, ";", TOK_TRIMLEFT|TOK_TRIMRIGHT);
 	while ((dparam = tok_next(&tok))) {
 	    if (!strncasecmp(dparam, "filename=", 9)) {
@@ -163,6 +165,6 @@ static int webdav_put(struct transaction_t *txn, struct buf *obj,
 			 buf_release(&txn->buf), txn->req_hdrs);
 
     /* Store the resource */
-    return dav_store_resource(txn, buf_cstring(obj), buf_len(obj),
+    return dav_store_resource(txn, buf_cstring(buf), buf_len(obj),
 			      mailbox, oldrecord, NULL);
 }
