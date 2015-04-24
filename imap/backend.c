@@ -279,7 +279,7 @@ static int parse_capability(struct backend *s, const char *str)
     if (s->prot->type != TYPE_STD) return 0;
 
     /* save the buffer, we're going to be destructively parsing it */
-    buf = xstrdup(str);
+    buf = xstrdupsafe(str);
 
     if ((s->prot->u.std.capa_cmd.formatflags & CAPAF_ONE_PER_LINE)) {
 	/*
