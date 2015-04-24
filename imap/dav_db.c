@@ -643,7 +643,7 @@ static void run_audit_tool(const char *tool, const char *srcdb, const char *dstd
 
     if (pid == 0) {
 	/* child */
-	execl(tool, srcdb, dstdb, (void *)NULL);
+	execl(tool, tool, srcdb, dstdb, (void *)NULL);
 	exit(-1);
     }
 
