@@ -167,6 +167,8 @@ static int expunge_userflags(struct mailbox *mailbox, struct expire_rock *erock)
     for (i = 0; i < MAX_USER_FLAGS; i++) {
 	if (erock->userflags[i/32] & 1<<(i&31))
 	    continue;
+	if (!mailbox->flagname[i])
+	    continue;
 	if (verbose)
 	    fprintf(stderr, "Expunging userflag %u (%s) from %s\n",
 		    i, mailbox->flagname[i], mailbox->name);
