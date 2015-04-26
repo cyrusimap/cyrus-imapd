@@ -628,7 +628,9 @@ static void my_caldav_init(struct buf *serverinfo)
 #endif
     }
 
-    namespace_calendar.allow |= ALLOW_CAL_ATTACH;
+    if (config_getswitch(IMAPOPT_CALDAV_ALLOWATTACH))
+	namespace_calendar.allow |= ALLOW_CAL_ATTACH;
+
 #endif /* HAVE_IANA_PARAMS */
 
 #ifdef HAVE_TZ_BY_REF
@@ -1169,7 +1171,7 @@ static int caldav_delete_cal(struct transaction_t *txn,
 	return 0;
     }
 
-    if (cdata->comp_flags.mattach) {
+    if ((namespace_calendar.allow & ALLOW_CAL_ATTACH) && cdata->comp_flags.mattach) {
 	char *mailboxname = NULL;
 	struct mailbox *attachments = NULL;
 	struct webdav_db *webdavdb = NULL;
@@ -3039,6 +3041,10 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 	icalparameter *param;
 	const char *mid;
 	int r;
+
+	/* we're not managing attachments */
+	if (!(namespace_calendar.allow & ALLOW_CAL_ATTACH))
+	    break;
 
 	comp = icalcomponent_get_first_real_component(ical);
 	prop = icalcomponent_get_first_property(comp, ICAL_ATTACH_PROPERTY);
