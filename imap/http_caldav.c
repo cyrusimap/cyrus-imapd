@@ -5677,6 +5677,7 @@ static void HTMLencode(struct buf *output, const char *input)
     buf_replace_all(output, "\n", "\n  <br>");
 }
 
+#define RFC822_DATETIME_MAX 31
 #define TEXT_INDENT	"             "
 #define HTML_ROW	"<tr><td><b>%s</b></td><td>%s</td></tr>\r\n"
 
