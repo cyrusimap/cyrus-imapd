@@ -1575,6 +1575,8 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 		addressbookId = json_string_value(abookid);
 	    }
 	    const char *mboxname = mboxname_abook(req->userid, addressbookId);
+	    json_object_del(arg, "addressbookId");
+	    addressbookId = NULL;
 
 	    /* we need to create and append a record */
 	    if (!mailbox || strcmp(mailbox->name, mboxname)) {
@@ -1650,6 +1652,7 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 			goto done;
 		    }
 		}
+		json_object_del(arg, "addressbookId");
 	    }
 
 	    /* XXX - this could definitely be refactored from here and mailbox.c */
@@ -2359,6 +2362,8 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 		addressbookId = json_string_value(abookid);
 	    }
 	    const char *mboxname = mboxname_abook(req->userid, addressbookId);
+	    json_object_del(arg, "addressbookId");
+	    addressbookId = NULL;
 
 	    struct vparse_card *card = vparse_new_card("VCARD");
 	    vparse_add_entry(card, NULL, "VERSION", "3.0");
@@ -2453,6 +2458,7 @@ EXPORTED int carddav_setContacts(struct carddav_db *carddavdb, struct jmap_req *
 			goto done;
 		    }
 		}
+		json_object_del(arg, "addressbookId");
 	    }
 
 	    /* XXX - this could definitely be refactored from here and mailbox.c */
