@@ -684,11 +684,11 @@ CUNIT_PL = cunit/cunit.pl --project $(CUNIT_PROJECT)
 	$(RM) $<-cunit.c
 
 $(CUNIT_PROJECT):
-	$(RM) $@
-	$(CUNIT_PL) --add-sources $(cunit_TESTS)
+	@$(RM) $@
+	$(AM_V_GEN)$(CUNIT_PL) --add-sources $(cunit_TESTS)
 
 cunit/registers.h: $(CUNIT_PROJECT)
-	$(CUNIT_PL) --generate-register-function $@
+	$(AM_V_GEN)$(CUNIT_PL) --generate-register-function $@
 
 # To run under Valgrind, do: make VG=1 check
 VALGRIND = valgrind --tool=memcheck --leak-check=full --suppressions=vg.supp
@@ -1112,10 +1112,10 @@ endif # SIEVE
 imap_lmtpd_LDADD += $(LD_SERVER_ADD)
 
 imap/lmtpstats.c: imap/lmtpstats.snmp snmp/snmpgen
-	cd imap && ../${top_srcdir}/snmp/snmpgen ../${top_srcdir}/imap/lmtpstats.snmp
+	$(AM_V_GEN)cd imap && ../${top_srcdir}/snmp/snmpgen ../${top_srcdir}/imap/lmtpstats.snmp
 
 imap/pushstats.c: imap/pushstats.snmp snmp/snmpgen
-	cd imap && ../${top_srcdir}/snmp/snmpgen ../${top_srcdir}/imap/pushstats.snmp
+	$(AM_V_GEN)cd imap && ../${top_srcdir}/snmp/snmpgen ../${top_srcdir}/imap/pushstats.snmp
 
 imap_mbexamine_SOURCES = imap/cli_fatal.c imap/mbexamine.c imap/mutex_fake.c
 imap_mbexamine_LDADD = $(LD_UTILITY_ADD)
@@ -1259,35 +1259,35 @@ imap_unexpunge_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/unexpunge.c
 imap_unexpunge_LDADD = $(LD_UTILITY_ADD)
 
 imap/imap_err.h imap/imap_err.c: imap/imap_err.et $(COMPILE_ET_DEP)
-	cd imap && $(COMPILE_ET) ../$(top_srcdir)/imap/imap_err.et
+	$(AM_V_GEN)cd imap && $(COMPILE_ET) ../$(top_srcdir)/imap/imap_err.et
 
 imap/mupdate_err.h imap/mupdate_err.c: imap/mupdate_err.et $(COMPILE_ET_DEP)
-	cd imap && $(COMPILE_ET) ../$(top_srcdir)/imap/mupdate_err.et
+	$(AM_V_GEN)cd imap && $(COMPILE_ET) ../$(top_srcdir)/imap/mupdate_err.et
 
 imap/nntp_err.h imap/nntp_err.c: imap/nntp_err.et $(COMPILE_ET_DEP)
-	cd imap && $(COMPILE_ET) ../$(top_srcdir)/imap/nntp_err.et
+	$(AM_V_GEN)cd imap && $(COMPILE_ET) ../$(top_srcdir)/imap/nntp_err.et
 
 imap/http_caldav_js.h: imap/http_caldav.js
-	cd imap && xxd -i http_caldav.js > http_caldav_js.h
+	$(AM_V_GEN)cd imap && xxd -i http_caldav.js > http_caldav_js.h
 
 imap/http_err.h imap/http_err.c: imap/http_err.et $(COMPILE_ET_DEP)
-	cd imap && $(COMPILE_ET) ../$(top_srcdir)/imap/http_err.et
+	$(AM_V_GEN)cd imap && $(COMPILE_ET) ../$(top_srcdir)/imap/http_err.et
 
 imap/tz_err.h imap/tz_err.c: imap/tz_err.et $(COMPILE_ET_DEP)
-	cd imap && $(COMPILE_ET) ../$(top_srcdir)/imap/tz_err.et
+	$(AM_V_GEN)cd imap && $(COMPILE_ET) ../$(top_srcdir)/imap/tz_err.et
 
 if MAINTAINER_MODE
 imap/rfc822_header.c: imap/rfc822_header.st
-	${top_srcdir}/tools/compile_st.pl -c $< > $@.NEW && mv $@.NEW $@
+	$(AM_V_GEN)${top_srcdir}/tools/compile_st.pl -c $< > $@.NEW && mv $@.NEW $@
 
 imap/rfc822_header.h: imap/rfc822_header.st
-	${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
+	$(AM_V_GEN)${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
 
 lib/htmlchar.c: lib/htmlchar.st
-	${top_srcdir}/tools/compile_st.pl -c $< > $@.NEW && mv $@.NEW $@
+	$(AM_V_GEN)${top_srcdir}/tools/compile_st.pl -c $< > $@.NEW && mv $@.NEW $@
 
 lib/htmlchar.h: lib/htmlchar.st
-	${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
+	$(AM_V_GEN)${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
 endif
 
 imtest_imtest_SOURCES = imtest/imtest.c
@@ -1394,13 +1394,13 @@ lib/chartable.c: lib/mkchartable.pl lib/charset/unifix.txt \
 	$(top_srcdir)/lib/charset/*.t lib/charset/UnicodeData.txt \
 	lib/charset/aliases.txt
 	@echo "### Building chartables..."
-	perl $(top_srcdir)/lib/mkchartable.pl -m $(top_srcdir)/lib/charset/unifix.txt -m $(top_srcdir)/lib/charset/UnicodeData.txt -a $(top_srcdir)/lib/charset/aliases.txt -o $@ $(top_srcdir)/lib/charset/*.t || (rm -f $@ && exit 1)
+	$(AM_V_GEN)perl $(top_srcdir)/lib/mkchartable.pl -m $(top_srcdir)/lib/charset/unifix.txt -m $(top_srcdir)/lib/charset/UnicodeData.txt -a $(top_srcdir)/lib/charset/aliases.txt -o $@ $(top_srcdir)/lib/charset/*.t || (rm -f $@ && exit 1)
 	@echo "### Done building chartables."
 
 lib/imapopts.h: lib/imapopts.c
 
 lib/imapopts.c: lib/imapoptions tools/config2header
-	$(top_srcdir)/tools/config2header CC="$(CC)" $(top_builddir)/lib/imapopts.c $(top_builddir)/lib/imapopts.h < $(top_srcdir)/lib/imapoptions
+	$(AM_V_GEN)$(top_srcdir)/tools/config2header CC="$(CC)" $(top_builddir)/lib/imapopts.c $(top_builddir)/lib/imapopts.h < $(top_srcdir)/lib/imapoptions
 
 #this is from lib/test/Makefile.in, however testglob.c does not exist in
 #/lib/test, instead testglob2.c is there.
@@ -1617,7 +1617,7 @@ sieve_sievec_LDADD = $(LD_SIEVE_ADD)
 sieve_sieved_LDADD = $(LD_SIEVE_ADD)
 
 sieve/sieve_err.h sieve/sieve_err.c: sieve/sieve_err.et $(COMPILE_ET_DEP)
-	cd sieve && $(COMPILE_ET) ../$(top_srcdir)/sieve/sieve_err.et
+	$(AM_V_GEN)cd sieve && $(COMPILE_ET) ../$(top_srcdir)/sieve/sieve_err.et
 
 sieve_test_SOURCES = sieve/test.c imap/mutex_fake.c
 sieve_test_LDADD = sieve/libcyrus_sieve.la $(LD_UTILITY_ADD)
@@ -1669,21 +1669,21 @@ snapshot::
 man/imapd.conf.5: $(top_srcdir)/tools/config2man $(top_srcdir)/lib/imapoptions
 	@echo creating man/imapd.conf.5
 	@$(MKDIR_P) man
-	$(top_srcdir)/tools/config2man $(top_srcdir)/lib/imapoptions > $@
+	$(AM_V_GEN)$(top_srcdir)/tools/config2man $(top_srcdir)/lib/imapoptions > $@
 
 man/sieveshell.1: $(top_srcdir)/perl/sieve/scripts/sieveshell.pl
 	@echo creating man/sieveshell.1
 	@$(MKDIR_P) man
-	pod2man $(top_srcdir)/perl/sieve/scripts/sieveshell.pl > $@
+	$(AM_V_GEN)pod2man $(top_srcdir)/perl/sieve/scripts/sieveshell.pl > $@
 
 doc/man/cyradm.1.html: $(top_srcdir)/perl/imap/cyradm.sh
 	@$(MKDIR_P) doc/man
-	pod2html $(top_srcdir)/perl/imap/cyradm.sh > $@
+	$(AM_V_GEN)pod2html $(top_srcdir)/perl/imap/cyradm.sh > $@
 	rm pod2htm*
 
 doc/man/sieveshell.1.html: $(top_srcdir)/perl/sieve/scripts/sieveshell.pl
 	@$(MKDIR_P) doc/man
-	pod2html $(top_srcdir)/perl/sieve/scripts/sieveshell.pl > $@
+	$(AM_V_GEN)pod2html $(top_srcdir)/perl/sieve/scripts/sieveshell.pl > $@
 	rm pod2htm*
 
 
