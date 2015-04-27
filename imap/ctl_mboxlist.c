@@ -194,6 +194,18 @@ static int dump_cb(void *rockp,
 	r = dlist_parsemap(&dl, 0, data, datalen);
 
 	if (!r) {
+	    // The mailbox type is always there too... as a string
+	    //
+	    // Do this here first, then see below for ACL and partition
+	    r = dlist_getatom(dl, "T", (const char **)&mbtype_str);
+
+	    if (!r) {
+		// That's OK, the mailbox is local (0)
+		mbtype = 0;
+	    }
+
+	    mbtype = mboxlist_string_to_mbtype(mbtype_str);
+
 	    struct dlist *dl_acl = dlist_getchild(dl, "A");
 	    struct dlist *dl_ace;
 
@@ -229,13 +241,14 @@ static int dump_cb(void *rockp,
 		    }
 		}
 	    } else { // (dl_acl)
-		syslog(LOG_NOTICE, "Mailbox without an ACL: '%s'", name);
+		if (!(mbtype & MBTYPE_DELETED))
+		    syslog(LOG_NOTICE, "Mailbox without an ACL: '%s'", name);
 	    }
 
 	    // The partition is always there...
 	    r = dlist_getatom(dl, "P", (const char **)&part);
 
-	    if (!r) {
+	    if (!r && !(mbtype & MBTYPE_DELETED)) {
 		syslog(
 			LOG_ERR,
 			"No partition for mailbox '%s'",
@@ -244,16 +257,6 @@ static int dump_cb(void *rockp,
 
 		part = NULL;
 	    }
-
-	    // The mailbox type is always there too... as a string
-	    r = dlist_getatom(dl, "T", (const char **)&mbtype_str);
-
-	    if (!r) {
-		// That's OK, the mailbox is local (0)
-		mbtype = 0;
-	    }
-
-	    mbtype = mboxlist_string_to_mbtype(mbtype_str);
 
 	    // If the mailbox is 'remote', the 'server' field matters
 	    if (mbtype & MBTYPE_REMOTE) {
