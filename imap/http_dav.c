@@ -101,29 +101,24 @@ static const struct dav_namespace_t {
     { XML_NS_SYSFLAG, "SF" },
 };
 
-/* PROPFIND modes */
-enum {
-    PROPFIND_NONE = 0,			/* only used with REPORT */
-    PROPFIND_ALL,
-    PROPFIND_NAME,
-    PROPFIND_PROP,
-    PROPFIND_EXPAND			/* only used with expand-prop REPORT */
-};
-
 static int server_info(struct transaction_t *txn);
 static int principal_parse_path(const char *path, struct request_target_t *tgt,
 				const char **errstr);
 static int propfind_displayname(const xmlChar *name, xmlNsPtr ns,
-				struct propfind_ctx *fctx, xmlNodePtr resp,
+				struct propfind_ctx *fctx,
+				xmlNodePtr prop, xmlNodePtr resp,
 				struct propstat propstat[], void *rock);
 static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
-			    struct propfind_ctx *fctx, xmlNodePtr resp,
+			    struct propfind_ctx *fctx,
+			    xmlNodePtr prop, xmlNodePtr resp,
 			    struct propstat propstat[], void *rock);
 static int propfind_alturiset(const xmlChar *name, xmlNsPtr ns,
-			      struct propfind_ctx *fctx, xmlNodePtr resp,
+			      struct propfind_ctx *fctx,
+			      xmlNodePtr prop, xmlNodePtr resp,
 			      struct propstat propstat[], void *rock);
 static int propfind_principalurl(const xmlChar *name, xmlNsPtr ns,
-				 struct propfind_ctx *fctx, xmlNodePtr resp,
+				 struct propfind_ctx *fctx,
+				 xmlNodePtr prop, xmlNodePtr resp,
 				 struct propstat propstat[], void *rock);
 
 static int report_prin_prop_search(struct transaction_t *txn,
@@ -184,7 +179,7 @@ static const struct prop_entry principal_props[] = {
     /* WebDAV ACL (RFC 3744) properties */
     { "alternate-URI-set", NS_DAV, PROP_COLLECTION,
       propfind_alturiset, NULL, NULL },
-    { "principal-URL", NS_DAV, PROP_COLLECTION | PROP_EXPAND,
+    { "principal-URL", NS_DAV, PROP_COLLECTION,
       propfind_principalurl, NULL, NULL },
     { "group-member-set", NS_DAV, 0, NULL, NULL, NULL },
     { "group-membership", NS_DAV, 0, NULL, NULL, NULL },
@@ -192,7 +187,7 @@ static const struct prop_entry principal_props[] = {
       propfind_princolset, NULL, NULL },
 
     /* WebDAV Current Principal (RFC 5397) properties */
-    { "current-user-principal", NS_DAV, PROP_COLLECTION | PROP_EXPAND,
+    { "current-user-principal", NS_DAV, PROP_COLLECTION,
       propfind_curprin, NULL, NULL },
 
     /* draft-douglass-server-info */
@@ -200,21 +195,21 @@ static const struct prop_entry principal_props[] = {
       propfind_serverinfo, NULL, NULL },
 
     /* CalDAV (RFC 4791) properties */
-    { "calendar-home-set", NS_CALDAV, PROP_COLLECTION | PROP_EXPAND,
-      propfind_calhome, NULL, NULL },
+    { "calendar-home-set", NS_CALDAV, PROP_COLLECTION,
+      propfind_calurl, NULL, NULL },
 
     /* CalDAV Scheduling (RFC 6638) properties */
-    { "schedule-inbox-URL", NS_CALDAV, PROP_COLLECTION | PROP_EXPAND,
-      propfind_schedinbox, NULL, NULL },
-    { "schedule-outbox-URL", NS_CALDAV, PROP_COLLECTION | PROP_EXPAND,
-      propfind_schedoutbox, NULL, NULL },
+    { "schedule-inbox-URL", NS_CALDAV, PROP_COLLECTION,
+      propfind_calurl, NULL, SCHED_INBOX },
+    { "schedule-outbox-URL", NS_CALDAV, PROP_COLLECTION,
+      propfind_calurl, NULL, SCHED_OUTBOX },
     { "calendar-user-address-set", NS_CALDAV, PROP_COLLECTION,
       propfind_caluseraddr, NULL, NULL },
     { "calendar-user-type", NS_CALDAV, PROP_COLLECTION,
       propfind_calusertype, NULL, NULL },
 
     /* CardDAV (RFC 6352) properties */
-    { "addressbook-home-set", NS_CARDDAV, PROP_COLLECTION | PROP_EXPAND,
+    { "addressbook-home-set", NS_CARDDAV, PROP_COLLECTION,
       propfind_abookhome, NULL, NULL },
 
     /* Apple Calendar Server properties */
@@ -264,8 +259,9 @@ struct propfind_entry_list {
     xmlNsPtr ns;			/* Property namespace */
     unsigned char flags;		/* Flags for how/where prop apply */
     int (*get)(const xmlChar *name,	/* Callback to fetch property */
-	       xmlNsPtr ns, struct propfind_ctx *fctx, xmlNodePtr resp,
-	       struct propstat propstat[], void *rock);
+	       xmlNsPtr ns, struct propfind_ctx *fctx, xmlNodePtr prop,
+	       xmlNodePtr resp, struct propstat propstat[], void *rock);
+    xmlNodePtr prop;			/* Property node from request */
     void *rock;				/* Add'l data to pass to callback */
     struct propfind_entry_list *next;
 };
@@ -932,8 +928,8 @@ int xml_add_response(struct propfind_ctx *fctx, long code, unsigned precond)
 				     e->name, e->ns, NULL, 0);
 		    }
 		    else {
-			r = e->get(e->name, e->ns,
-				   fctx, resp, propstat, e->rock);
+			r = e->get(e->name, e->ns, fctx,
+				   e->prop, resp, propstat, e->rock);
 		    }
 		}
 	    }
@@ -1015,7 +1011,7 @@ int xml_add_response(struct propfind_ctx *fctx, long code, unsigned precond)
 /* Helper function to prescreen/fetch resource data */
 int propfind_getdata(const xmlChar *name, xmlNsPtr ns,
 		     struct propfind_ctx *fctx,
-		     struct propstat propstat[], xmlNodePtr prop,
+		     xmlNodePtr prop, struct propstat propstat[],
 		     struct mime_type_t *mime_types, int precond,
 		     const char *data, unsigned long datalen)
 {
@@ -1083,6 +1079,7 @@ int propfind_getdata(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch DAV:creationdate */
 int propfind_creationdate(const xmlChar *name, xmlNsPtr ns,
 			  struct propfind_ctx *fctx,
+			  xmlNodePtr prop __attribute__((unused)),
 			  xmlNodePtr resp __attribute__((unused)),
 			  struct propstat propstat[],
 			  void *rock __attribute__((unused)))
@@ -1117,6 +1114,7 @@ int propfind_creationdate(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch DAV:displayname */
 static int propfind_displayname(const xmlChar *name, xmlNsPtr ns,
 				struct propfind_ctx *fctx,
+				xmlNodePtr prop __attribute__((unused)),
 				xmlNodePtr resp __attribute__((unused)),
 				struct propstat propstat[],
 				void *rock __attribute__((unused)))
@@ -1138,6 +1136,7 @@ static int propfind_displayname(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch DAV:getcontentlength */
 int propfind_getlength(const xmlChar *name, xmlNsPtr ns,
 		       struct propfind_ctx *fctx,
+		       xmlNodePtr prop __attribute__((unused)),
 		       xmlNodePtr resp __attribute__((unused)),
 		       struct propstat propstat[],
 		       void *rock __attribute__((unused)))
@@ -1159,6 +1158,7 @@ int propfind_getlength(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch DAV:getetag */
 int propfind_getetag(const xmlChar *name, xmlNsPtr ns,
 		     struct propfind_ctx *fctx,
+		     xmlNodePtr prop __attribute__((unused)),
 		     xmlNodePtr resp __attribute__((unused)),
 		     struct propstat propstat[],
 		     void *rock __attribute__((unused)))
@@ -1188,6 +1188,7 @@ int propfind_getetag(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch DAV:getlastmodified */
 int propfind_getlastmod(const xmlChar *name, xmlNsPtr ns,
 			struct propfind_ctx *fctx,
+			xmlNodePtr prop __attribute__((unused)),
 			xmlNodePtr resp __attribute__((unused)),
 			struct propstat propstat[],
 			void *rock __attribute__((unused)))
@@ -1210,6 +1211,7 @@ int propfind_getlastmod(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch DAV:lockdiscovery */
 int propfind_lockdisc(const xmlChar *name, xmlNsPtr ns,
 		      struct propfind_ctx *fctx,
+		      xmlNodePtr prop __attribute__((unused)),
 		      xmlNodePtr resp __attribute__((unused)),
 		      struct propstat propstat[],
 		      void *rock __attribute__((unused)))
@@ -1230,6 +1232,7 @@ int propfind_lockdisc(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch DAV:resourcetype */
 static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
 			    struct propfind_ctx *fctx,
+			    xmlNodePtr prop __attribute__((unused)),
 			    xmlNodePtr resp __attribute__((unused)),
 			    struct propstat propstat[],
 			    void *rock __attribute__((unused)))
@@ -1292,6 +1295,7 @@ int proppatch_restype(xmlNodePtr prop, unsigned set,
 /* Callback to fetch DAV:supportedlock */
 int propfind_suplock(const xmlChar *name, xmlNsPtr ns,
 		     struct propfind_ctx *fctx,
+		     xmlNodePtr prop __attribute__((unused)),
 		     xmlNodePtr resp __attribute__((unused)),
 		     struct propstat propstat[],
 		     void *rock __attribute__((unused)))
@@ -1315,9 +1319,10 @@ int propfind_suplock(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch DAV:supported-report-set */
 int propfind_reportset(const xmlChar *name, xmlNsPtr ns,
 		       struct propfind_ctx *fctx,
+		       xmlNodePtr prop __attribute__((unused)),
 		       xmlNodePtr resp __attribute__((unused)),
 		       struct propstat propstat[],
-		       void *rock __attribute__((unused)))
+		       void *rock)
 {
     xmlNodePtr top, node;
     const struct report_type_t *report;
@@ -1343,6 +1348,7 @@ int propfind_reportset(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch DAV:alternate-URI-set */
 static int propfind_alturiset(const xmlChar *name, xmlNsPtr ns,
 			      struct propfind_ctx *fctx,
+			      xmlNodePtr prop __attribute__((unused)),
 			      xmlNodePtr resp __attribute__((unused)),
 			      struct propstat propstat[],
 			      void *rock __attribute__((unused)))
@@ -1357,6 +1363,7 @@ static int propfind_alturiset(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch DAV:principal-URL */
 static int propfind_principalurl(const xmlChar *name, xmlNsPtr ns,
 				 struct propfind_ctx *fctx,
+				 xmlNodePtr prop,
 				 xmlNodePtr resp __attribute__((unused)),
 				 struct propstat propstat[],
 				 void *rock __attribute__((unused)))
@@ -1366,14 +1373,12 @@ static int propfind_principalurl(const xmlChar *name, xmlNsPtr ns,
 
     buf_reset(&fctx->buf);
     if (fctx->req_tgt->userid) {
-	xmlNodePtr expand = (xmlNodePtr) rock;
-
 	buf_printf(&fctx->buf, "%s/user/%s/",
 		   namespace_principal.prefix, fctx->req_tgt->userid);
 
-	if (expand) {
+	if (fctx->mode == PROPFIND_EXPAND) {
 	    /* Return properties for this URL */
-	    expand_property(expand, fctx, buf_cstring(&fctx->buf),
+	    expand_property(prop, fctx, buf_cstring(&fctx->buf),
 			    &principal_parse_path, principal_props, node, 0);
 	    return 0;
 	}
@@ -1389,6 +1394,7 @@ static int propfind_principalurl(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch DAV:owner */
 int propfind_owner(const xmlChar *name, xmlNsPtr ns,
 		   struct propfind_ctx *fctx,
+		   xmlNodePtr prop,
 		   xmlNodePtr resp __attribute__((unused)),
 		   struct propstat propstat[],
 		   void *rock __attribute__((unused)))
@@ -1397,15 +1403,13 @@ int propfind_owner(const xmlChar *name, xmlNsPtr ns,
 				   &propstat[PROPSTAT_OK], name, ns, NULL, 0);
 
     if (fctx->req_tgt->userid) {
-	xmlNodePtr expand = (xmlNodePtr) rock;
-
 	buf_reset(&fctx->buf);
 	buf_printf(&fctx->buf, "%s/user/%s/",
 		   namespace_principal.prefix, fctx->req_tgt->userid);
 
-	if (expand) {
+	if (fctx->mode == PROPFIND_EXPAND) {
 	    /* Return properties for this URL */
-	    expand_property(expand, fctx, buf_cstring(&fctx->buf),
+	    expand_property(prop, fctx, buf_cstring(&fctx->buf),
 			    &principal_parse_path, principal_props, node, 0);
 	}
 	else {
@@ -1441,6 +1445,7 @@ static xmlNodePtr add_suppriv(xmlNodePtr root, const char *priv_name,
 /* Callback to fetch DAV:supported-privilege-set */
 int propfind_supprivset(const xmlChar *name, xmlNsPtr ns,
 			struct propfind_ctx *fctx,
+			xmlNodePtr prop __attribute__((unused)),
 			xmlNodePtr resp,
 			struct propstat propstat[],
 			void *rock __attribute__((unused)))
@@ -1636,6 +1641,7 @@ static int add_privs(int rights, unsigned flags,
 /* Callback to fetch DAV:current-user-privilege-set */
 int propfind_curprivset(const xmlChar *name, xmlNsPtr ns,
 			struct propfind_ctx *fctx,
+			xmlNodePtr prop __attribute__((unused)),
 			xmlNodePtr resp,
 			struct propstat propstat[],
 			void *rock __attribute__((unused)))
@@ -1686,6 +1692,7 @@ int propfind_curprivset(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch DAV:acl */
 int propfind_acl(const xmlChar *name, xmlNsPtr ns,
 		 struct propfind_ctx *fctx,
+		 xmlNodePtr prop __attribute__((unused)),
 		 xmlNodePtr resp,
 		 struct propstat propstat[],
 		 void *rock __attribute__((unused)))
@@ -1803,6 +1810,7 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch DAV:acl-restrictions */
 int propfind_aclrestrict(const xmlChar *name, xmlNsPtr ns,
 			 struct propfind_ctx *fctx,
+			 xmlNodePtr prop __attribute__((unused)),
 			 xmlNodePtr resp __attribute__((unused)),
 			 struct propstat propstat[],
 			 void *rock __attribute__((unused)))
@@ -1818,17 +1826,18 @@ int propfind_aclrestrict(const xmlChar *name, xmlNsPtr ns,
 
 /* Callback to fetch DAV:principal-collection-set */
 EXPORTED int propfind_princolset(const xmlChar *name, xmlNsPtr ns,
-			struct propfind_ctx *fctx,
-			xmlNodePtr resp __attribute__((unused)),
-			struct propstat propstat[],
-			void *rock __attribute__((unused)))
+				 struct propfind_ctx *fctx,
+				 xmlNodePtr prop __attribute__((unused)),
+				 xmlNodePtr resp __attribute__((unused)),
+				 struct propstat propstat[],
+				 void *rock __attribute__((unused)))
 {
     xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
 				   &propstat[PROPSTAT_OK], name, ns, NULL, 0);
 
     buf_reset(&fctx->buf);
     buf_printf(&fctx->buf, "%s/", namespace_principal.prefix);
-    xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST buf_cstring(&fctx->buf));
+    xml_add_href(node, NULL, buf_cstring(&fctx->buf));
 
     return 0;
 }
@@ -1836,10 +1845,11 @@ EXPORTED int propfind_princolset(const xmlChar *name, xmlNsPtr ns,
 
 /* Callback to fetch DAV:quota-available-bytes and DAV:quota-used-bytes */
 EXPORTED int propfind_quota(const xmlChar *name, xmlNsPtr ns,
-		   struct propfind_ctx *fctx,
-		   xmlNodePtr resp __attribute__((unused)),
-		   struct propstat propstat[],
-		   void *rock __attribute__((unused)))
+			    struct propfind_ctx *fctx,
+			    xmlNodePtr prop __attribute__((unused)),
+			    xmlNodePtr resp __attribute__((unused)),
+			    struct propstat propstat[],
+			    void *rock __attribute__((unused)))
 {
     static char prevroot[MAX_MAILBOX_BUFFER];
     char foundroot[MAX_MAILBOX_BUFFER], *qr = NULL;
@@ -1899,16 +1909,16 @@ EXPORTED int propfind_quota(const xmlChar *name, xmlNsPtr ns,
 
 /* Callback to fetch DAV:current-user-principal */
 EXPORTED int propfind_curprin(const xmlChar *name, xmlNsPtr ns,
-		     struct propfind_ctx *fctx,
-		     xmlNodePtr resp __attribute__((unused)),
-		     struct propstat propstat[],
-		     void *rock)
+			      struct propfind_ctx *fctx,
+			      xmlNodePtr prop,
+			      xmlNodePtr resp __attribute__((unused)),
+			      struct propstat propstat[],
+			      void *rock __attribute__((unused)))
 {
     xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
 				   &propstat[PROPSTAT_OK], name, ns, NULL, 0);
 
     if (httpd_userid) {
-	xmlNodePtr expand = (xmlNodePtr) rock;
 	const char *domain =
 	    httpd_extradomain ? httpd_extradomain : config_defdomain;
 
@@ -1923,9 +1933,9 @@ EXPORTED int propfind_curprin(const xmlChar *name, xmlNsPtr ns,
 		       namespace_principal.prefix, httpd_userid, domain);
 	}
 
-	if (expand) {
+	if (fctx->mode == PROPFIND_EXPAND) {
 	    /* Return properties for this URL */
-	    expand_property(expand, fctx, buf_cstring(&fctx->buf),
+	    expand_property(prop, fctx, buf_cstring(&fctx->buf),
 			    &principal_parse_path, principal_props, node, 0);
 	}
 	else {
@@ -1944,6 +1954,7 @@ EXPORTED int propfind_curprin(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch DAV:server-info-href */
 EXPORTED int propfind_serverinfo(const xmlChar *name, xmlNsPtr ns,
 				 struct propfind_ctx *fctx,
+				 xmlNodePtr prop __attribute__((unused)),
 				 xmlNodePtr resp __attribute__((unused)),
 				 struct propstat propstat[],
 				 void *rock __attribute__((unused)))
@@ -1962,6 +1973,7 @@ EXPORTED int propfind_serverinfo(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch DAV:add-member */
 int propfind_addmember(const xmlChar *name, xmlNsPtr ns,
 		       struct propfind_ctx *fctx,
+		       xmlNodePtr prop __attribute__((unused)),
 		       xmlNodePtr resp __attribute__((unused)),
 		       struct propstat propstat[],
 		       void *rock __attribute__((unused)))
@@ -2004,6 +2016,7 @@ static int get_synctoken(struct mailbox *mailbox, struct buf *buf)
 /* Callback to fetch DAV:sync-token and CS:getctag */
 int propfind_sync_token(const xmlChar *name, xmlNsPtr ns,
 			struct propfind_ctx *fctx,
+			xmlNodePtr prop __attribute__((unused)),
 			xmlNodePtr resp __attribute__((unused)),
 			struct propstat propstat[],
 			void *rock __attribute__((unused)))
@@ -2026,6 +2039,7 @@ int propfind_sync_token(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch properties from resource header */
 int propfind_fromhdr(const xmlChar *name, xmlNsPtr ns,
 		     struct propfind_ctx *fctx,
+		     xmlNodePtr prop __attribute__((unused)),
 		     xmlNodePtr resp __attribute__((unused)),
 		     struct propstat propstat[],
 		     void *rock)
@@ -2158,10 +2172,11 @@ static int proppatch_toresource(xmlNodePtr prop, unsigned set,
 
 /* Callback to read a property from annotation DB */
 static int propfind_fromresource(const xmlChar *name, xmlNsPtr ns,
-		    struct propfind_ctx *fctx,
-		    xmlNodePtr resp __attribute__((unused)),
-		    struct propstat propstat[],
-		    void *rock __attribute__((unused)))
+				 struct propfind_ctx *fctx,
+				 xmlNodePtr prop __attribute__((unused)),
+				 xmlNodePtr resp __attribute__((unused)),
+				 struct propstat propstat[],
+				 void *rock __attribute__((unused)))
 {
     struct buf attrib = BUF_INITIALIZER;
     xmlNodePtr node;
@@ -2216,16 +2231,15 @@ done:
 /* Callback to read a property from annotation DB */
 int propfind_fromdb(const xmlChar *name, xmlNsPtr ns,
 		    struct propfind_ctx *fctx,
-		    xmlNodePtr resp __attribute__((unused)),
-		    struct propstat propstat[],
-		    void *rock __attribute__((unused)))
+		    xmlNodePtr prop, xmlNodePtr resp,
+		    struct propstat propstat[], void *rock)
 {
     struct buf attrib = BUF_INITIALIZER;
     xmlNodePtr node;
     int r = 0;
 
     if (fctx->req_tgt->resource)
-	return propfind_fromresource(name, ns, fctx, NULL, propstat, NULL);
+	return propfind_fromresource(name, ns, fctx, prop, resp, propstat, rock);
 
     buf_reset(&fctx->buf);
     buf_printf(&fctx->buf, ANNOT_NS "<%s>%s",
@@ -2285,7 +2299,8 @@ int proppatch_todb(xmlNodePtr prop, unsigned set,
     }
 
     r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
-    if (!r) r = annotate_state_writemask(astate, buf_cstring(&pctx->buf), httpd_userid, &value);
+    if (!r) r = annotate_state_writemask(astate, buf_cstring(&pctx->buf),
+					 httpd_userid, &value);
 
     if (!r) {
 	xml_add_prop(HTTP_OK, pctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
@@ -2367,9 +2382,8 @@ static int prescreen_prop(const struct prop_entry *entry,
 
     if (fctx->req_tgt->resource && !(entry->flags & PROP_RESOURCE)) allowed = 0;
     else if (entry->flags & PROP_PRESCREEN) {
-	void *rock = (entry->flags & PROP_NEEDPROP) ? prop : entry->rock;
-
-	allowed = !entry->get(prop->name, NULL, fctx, NULL, NULL, rock);
+	allowed = !entry->get(prop->name, NULL, fctx,
+			      prop, NULL, NULL, entry->rock);
     }
 
     return allowed;
@@ -2395,7 +2409,7 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 		/* Pre-screen request based on prop flags */
 		int allowed = prescreen_prop(entry, NULL, fctx);
 
-		if (allowed || fctx->mode == PROP_ALLPROP) {
+		if (allowed || fctx->mode == PROPFIND_ALL) {
 		    struct propfind_entry_list *nentry =
 			xzmalloc(sizeof(struct propfind_entry_list));
 
@@ -2408,6 +2422,7 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 		    if (allowed) {
 			nentry->flags = entry->flags;
 			nentry->get = entry->get;
+			nentry->prop = NULL;
 			nentry->rock = entry->rock;
 		    }
 
@@ -2507,12 +2522,8 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 		if (prescreen_prop(entry, prop, fctx)) {
 		    nentry->flags = entry->flags;
 		    nentry->get = entry->get;
-		    if ((entry->flags & PROP_NEEDPROP) ||
-			((entry->flags & PROP_EXPAND) &&
-			 fctx->mode == PROPFIND_EXPAND))
-			nentry->rock = prop;
-		    else
-			nentry->rock = entry->rock;
+		    nentry->prop = prop;
+		    nentry->rock = entry->rock;
 		}
 		ret = *fctx->ret;
 	    }
@@ -2521,6 +2532,7 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 		 * resources */
 		nentry->flags = PROP_COLLECTION | PROP_RESOURCE;
 		nentry->get = propfind_fromdb;
+		nentry->prop = NULL;
 		nentry->rock = NULL;
 	    }
 

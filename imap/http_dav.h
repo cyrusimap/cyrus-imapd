@@ -247,6 +247,15 @@ enum {
 
 #define NO_DUP_CHECK (1<<7)
 
+/* PROPFIND modes */
+enum {
+    PROPFIND_NONE = 0,			/* only used with REPORT */
+    PROPFIND_ALL,
+    PROPFIND_NAME,
+    PROPFIND_PROP,
+    PROPFIND_EXPAND			/* only used with expand-prop REPORT */
+};
+
 
 typedef void *(*db_open_proc_t)(struct mailbox *mailbox);
 typedef void (*db_close_proc_t)(void *davdb);
@@ -348,8 +357,8 @@ struct prop_entry {
     unsigned ns;			/* Property namespace */
     unsigned char flags;		/* Flags for how/where props apply */
     int (*get)(const xmlChar *name,	/* Callback to fetch property */
-	       xmlNsPtr ns, struct propfind_ctx *fctx, xmlNodePtr resp,
-	       struct propstat *propstat, void *rock);
+	       xmlNsPtr ns, struct propfind_ctx *fctx, xmlNodePtr prop,
+	       xmlNodePtr resp, struct propstat *propstat, void *rock);
     int (*put)(xmlNodePtr prop,		/* Callback to write property */
 	       unsigned set, struct proppatch_ctx *pctx,
 	       struct propstat *propstat, void *rock);
@@ -361,9 +370,7 @@ enum {
     PROP_ALLPROP =	(1<<0),		/* Returned in <allprop> request */
     PROP_COLLECTION = 	(1<<1),		/* Returned for collection */
     PROP_RESOURCE =	(1<<2),		/* Returned for resource */
-    PROP_PRESCREEN =	(1<<3),		/* Prescreen property using callback */
-    PROP_NEEDPROP =	(1<<4),		/* Pass property node into callback */
-    PROP_EXPAND =	(1<<5)		/* Property is expandable (href) */
+    PROP_PRESCREEN =	(1<<3)		/* Prescreen property using callback */
 };
 
 
@@ -553,94 +560,112 @@ int meth_unlock(struct transaction_t *txn, void *params);
 /* PROPFIND callbacks */
 int propfind_getdata(const xmlChar *name, xmlNsPtr ns,
 		     struct propfind_ctx *fctx,
-		     struct propstat propstat[], xmlNodePtr prop,
+		     xmlNodePtr prop, struct propstat propstat[],
 		     struct mime_type_t *mime_types, int precond,
 		     const char *data, unsigned long datalen);
 int propfind_fromdb(const xmlChar *name, xmlNsPtr ns,
-		    struct propfind_ctx *fctx, xmlNodePtr resp,
+		    struct propfind_ctx *fctx,
+		    xmlNodePtr prop, xmlNodePtr resp,
 		    struct propstat propstat[], void *rock);
 int propfind_fromhdr(const xmlChar *name, xmlNsPtr ns,
-		     struct propfind_ctx *fctx, xmlNodePtr resp,
+		     struct propfind_ctx *fctx,
+		     xmlNodePtr prop, xmlNodePtr resp,
 		     struct propstat propstat[], void *rock);
 int propfind_creationdate(const xmlChar *name, xmlNsPtr ns,
-			  struct propfind_ctx *fctx, xmlNodePtr resp,
+			  struct propfind_ctx *fctx,
+			  xmlNodePtr prop, xmlNodePtr resp,
 			  struct propstat propstat[], void *rock);
 int propfind_getlength(const xmlChar *name, xmlNsPtr ns,
-		       struct propfind_ctx *fctx, xmlNodePtr resp,
+		       struct propfind_ctx *fctx,
+		       xmlNodePtr prop, xmlNodePtr resp,
 		       struct propstat propstat[], void *rock);
 int propfind_getetag(const xmlChar *name, xmlNsPtr ns,
-		     struct propfind_ctx *fctx, xmlNodePtr resp,
+		     struct propfind_ctx *fctx,
+		     xmlNodePtr prop, xmlNodePtr resp,
 		     struct propstat propstat[], void *rock);
 int propfind_getlastmod(const xmlChar *name, xmlNsPtr ns,
-			struct propfind_ctx *fctx, xmlNodePtr resp,
+			struct propfind_ctx *fctx,
+			xmlNodePtr prop, xmlNodePtr resp,
 			struct propstat propstat[], void *rock);
 int propfind_lockdisc(const xmlChar *name, xmlNsPtr ns,
-		      struct propfind_ctx *fctx, xmlNodePtr resp,
+		      struct propfind_ctx *fctx,
+		      xmlNodePtr prop, xmlNodePtr resp,
 		      struct propstat propstat[], void *rock);
 int propfind_suplock(const xmlChar *name, xmlNsPtr ns,
-		     struct propfind_ctx *fctx, xmlNodePtr resp,
+		     struct propfind_ctx *fctx,
+		     xmlNodePtr prop, xmlNodePtr resp,
 		     struct propstat propstat[], void *rock);
 
 int propfind_reportset(const xmlChar *name, xmlNsPtr ns,
-		       struct propfind_ctx *fctx, xmlNodePtr resp,
+		       struct propfind_ctx *fctx,
+		       xmlNodePtr prop, xmlNodePtr resp,
 		       struct propstat propstat[], void *rock);
 
 int propfind_owner(const xmlChar *name, xmlNsPtr ns,
-		   struct propfind_ctx *fctx, xmlNodePtr resp,
+		   struct propfind_ctx *fctx,
+		   xmlNodePtr prop, xmlNodePtr resp,
 		   struct propstat propstat[], void *rock);
 int propfind_supprivset(const xmlChar *name, xmlNsPtr ns,
-			struct propfind_ctx *fctx, xmlNodePtr resp,
+			struct propfind_ctx *fctx,
+			xmlNodePtr prop, xmlNodePtr resp,
 			struct propstat propstat[], void *rock);
 int propfind_curprivset(const xmlChar *name, xmlNsPtr ns,
-			struct propfind_ctx *fctx, xmlNodePtr resp,
+			struct propfind_ctx *fctx,
+			xmlNodePtr prop, xmlNodePtr resp,
 			struct propstat propstat[], void *rock);
 int propfind_acl(const xmlChar *name, xmlNsPtr ns,
-		 struct propfind_ctx *fctx, xmlNodePtr resp,
+		 struct propfind_ctx *fctx,
+		 xmlNodePtr prop, xmlNodePtr resp,
 		 struct propstat propstat[], void *rock);
 int propfind_aclrestrict(const xmlChar *name, xmlNsPtr ns,
-			 struct propfind_ctx *fctx, xmlNodePtr resp,
+			 struct propfind_ctx *fctx,
+			 xmlNodePtr prop, xmlNodePtr resp,
 			 struct propstat propstat[], void *rock);
 int propfind_princolset(const xmlChar *name, xmlNsPtr ns,
-			struct propfind_ctx *fctx, xmlNodePtr resp,
+			struct propfind_ctx *fctx,
+			xmlNodePtr prop, xmlNodePtr resp,
 			struct propstat propstat[], void *rock);
 
 int propfind_quota(const xmlChar *name, xmlNsPtr ns,
-		   struct propfind_ctx *fctx, xmlNodePtr resp,
+		   struct propfind_ctx *fctx,
+		   xmlNodePtr prop, xmlNodePtr resp,
 		   struct propstat propstat[], void *rock);
 
 int propfind_curprin(const xmlChar *name, xmlNsPtr ns,
-		     struct propfind_ctx *fctx, xmlNodePtr resp,
+		     struct propfind_ctx *fctx,
+		     xmlNodePtr prop, xmlNodePtr resp,
 		     struct propstat propstat[], void *rock);
 
 int propfind_serverinfo(const xmlChar *name, xmlNsPtr ns,
-			struct propfind_ctx *fctx, xmlNodePtr resp,
+			struct propfind_ctx *fctx,
+			xmlNodePtr prop, xmlNodePtr resp,
 			struct propstat propstat[], void *rock);
 
 int propfind_addmember(const xmlChar *name, xmlNsPtr ns,
-		       struct propfind_ctx *fctx, xmlNodePtr resp,
+		       struct propfind_ctx *fctx,
+		       xmlNodePtr prop, xmlNodePtr resp,
 		       struct propstat propstat[], void *rock);
 
 int propfind_sync_token(const xmlChar *name, xmlNsPtr ns,
-			struct propfind_ctx *fctx, xmlNodePtr resp,
+			struct propfind_ctx *fctx,
+			xmlNodePtr prop, xmlNodePtr resp,
 			struct propstat propstat[], void *rock);
 
-int propfind_calhome(const xmlChar *name, xmlNsPtr ns,
-		     struct propfind_ctx *fctx, xmlNodePtr resp,
-		     struct propstat propstat[], void *rock);
-int propfind_schedinbox(const xmlChar *name, xmlNsPtr ns,
-			struct propfind_ctx *fctx, xmlNodePtr resp,
-			struct propstat propstat[], void *rock);
-int propfind_schedoutbox(const xmlChar *name, xmlNsPtr ns,
-			 struct propfind_ctx *fctx, xmlNodePtr resp,
-			 struct propstat propstat[], void *rock);
+int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
+		    struct propfind_ctx *fctx,
+		    xmlNodePtr prop, xmlNodePtr resp,
+		    struct propstat propstat[], void *rock);
 int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
-			 struct propfind_ctx *fctx, xmlNodePtr resp,
+			 struct propfind_ctx *fctx,
+			 xmlNodePtr prop, xmlNodePtr resp,
 			 struct propstat propstat[], void *rock);
 int propfind_calusertype(const xmlChar *name, xmlNsPtr ns,
-			 struct propfind_ctx *fctx, xmlNodePtr resp,
+			 struct propfind_ctx *fctx,
+			 xmlNodePtr prop, xmlNodePtr resp,
 			 struct propstat propstat[], void *rock);
 int propfind_abookhome(const xmlChar *name, xmlNsPtr ns,
-		       struct propfind_ctx *fctx, xmlNodePtr resp,
+		       struct propfind_ctx *fctx,
+		       xmlNodePtr prop, xmlNodePtr resp,
 		       struct propstat propstat[], void *rock);
 
 /* PROPPATCH callbacks */

@@ -197,64 +197,79 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 		      void *destdb);
 
 static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
-				   struct propfind_ctx *fctx, xmlNodePtr resp,
+				   struct propfind_ctx *fctx,
+				   xmlNodePtr prop, xmlNodePtr resp,
 				   struct propstat propstat[], void *rock);
 static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
-			    struct propfind_ctx *fctx, xmlNodePtr resp,
+			    struct propfind_ctx *fctx,
+			    xmlNodePtr prop, xmlNodePtr resp,
 			    struct propstat propstat[], void *rock);
 static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
-			    struct propfind_ctx *fctx, xmlNodePtr resp,
+			    struct propfind_ctx *fctx,
+			    xmlNodePtr prop, xmlNodePtr resp,
 			    struct propstat propstat[], void *rock);
 static int propfind_calcompset(const xmlChar *name, xmlNsPtr ns,
-			       struct propfind_ctx *fctx, xmlNodePtr resp,
+			       struct propfind_ctx *fctx,
+			       xmlNodePtr prop, xmlNodePtr resp,
 			       struct propstat propstat[], void *rock);
 static int proppatch_calcompset(xmlNodePtr prop, unsigned set,
 				struct proppatch_ctx *pctx,
 				struct propstat propstat[], void *rock);
 static int propfind_suppcaldata(const xmlChar *name, xmlNsPtr ns,
-				struct propfind_ctx *fctx, xmlNodePtr resp,
+				struct propfind_ctx *fctx,
+				xmlNodePtr prop, xmlNodePtr resp,
 				struct propstat propstat[], void *rock);
 static int propfind_maxsize(const xmlChar *name, xmlNsPtr ns,
-			    struct propfind_ctx *fctx, xmlNodePtr resp,
+			    struct propfind_ctx *fctx,
+			    xmlNodePtr prop, xmlNodePtr resp,
 			    struct propstat propstat[], void *rock);
 static int propfind_minmaxdate(const xmlChar *name, xmlNsPtr ns,
-			       struct propfind_ctx *fctx, xmlNodePtr resp,
+			       struct propfind_ctx *fctx,
+			       xmlNodePtr prop, xmlNodePtr resp,
 			       struct propstat propstat[], void *rock);
 static int propfind_scheddefault(const xmlChar *name, xmlNsPtr ns,
-				 struct propfind_ctx *fctx, xmlNodePtr resp,
+				 struct propfind_ctx *fctx,
+				 xmlNodePtr prop, xmlNodePtr resp,
 				 struct propstat propstat[], void *rock);
 static int propfind_schedtag(const xmlChar *name, xmlNsPtr ns,
-			     struct propfind_ctx *fctx, xmlNodePtr resp,
+			     struct propfind_ctx *fctx,
+			     xmlNodePtr prop, xmlNodePtr resp,
 			     struct propstat propstat[], void *rock);
 static int propfind_caltransp(const xmlChar *name, xmlNsPtr ns,
-			      struct propfind_ctx *fctx, xmlNodePtr resp,
+			      struct propfind_ctx *fctx,
+			      xmlNodePtr prop, xmlNodePtr resp,
 			      struct propstat propstat[], void *rock);
 static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
 			       struct proppatch_ctx *pctx,
 			       struct propstat propstat[], void *rock);
 static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
-			     struct propfind_ctx *fctx, xmlNodePtr resp,
+			     struct propfind_ctx *fctx,
+			     xmlNodePtr prop, xmlNodePtr resp,
 			     struct propstat propstat[], void *rock);
 static int proppatch_timezone(xmlNodePtr prop, unsigned set,
 			      struct proppatch_ctx *pctx,
 			      struct propstat propstat[], void *rock);
 static int propfind_availability(const xmlChar *name, xmlNsPtr ns,
-				 struct propfind_ctx *fctx, xmlNodePtr resp,
+				 struct propfind_ctx *fctx,
+				 xmlNodePtr prop, xmlNodePtr resp,
 				 struct propstat propstat[], void *rock);
 static int proppatch_availability(xmlNodePtr prop, unsigned set,
 				  struct proppatch_ctx *pctx,
 				  struct propstat propstat[], void *rock);
 static int propfind_tzservset(const xmlChar *name, xmlNsPtr ns,
-			      struct propfind_ctx *fctx, xmlNodePtr resp,
+			      struct propfind_ctx *fctx,
+			      xmlNodePtr prop, xmlNodePtr resp,
 			      struct propstat propstat[], void *rock);
 static int propfind_tzid(const xmlChar *name, xmlNsPtr ns,
-			 struct propfind_ctx *fctx, xmlNodePtr resp,
+			 struct propfind_ctx *fctx,
+			 xmlNodePtr prop, xmlNodePtr resp,
 			 struct propstat propstat[], void *rock);
 static int proppatch_tzid(xmlNodePtr prop, unsigned set,
 			  struct proppatch_ctx *pctx,
 			  struct propstat propstat[], void *rock);
 static int propfind_rscaleset(const xmlChar *name, xmlNsPtr ns,
-			      struct propfind_ctx *fctx, xmlNodePtr resp,
+			      struct propfind_ctx *fctx,
+			      xmlNodePtr prop, xmlNodePtr resp,
 			      struct propstat propstat[], void *rock);
 
 static int report_cal_query(struct transaction_t *txn,
@@ -370,7 +385,7 @@ static const struct prop_entry caldav_props[] = {
       propfind_reportset, NULL, (void *) caldav_reports },
 
     /* WebDAV ACL (RFC 3744) properties */
-    { "owner", NS_DAV, PROP_COLLECTION | PROP_RESOURCE | PROP_EXPAND,
+    { "owner", NS_DAV, PROP_COLLECTION | PROP_RESOURCE,
       propfind_owner, NULL, NULL },
     { "group", NS_DAV, 0, NULL, NULL, NULL },
     { "supported-privilege-set", NS_DAV, PROP_COLLECTION | PROP_RESOURCE,
@@ -392,8 +407,7 @@ static const struct prop_entry caldav_props[] = {
       propfind_quota, NULL, NULL },
 
     /* WebDAV Current Principal (RFC 5397) properties */
-    { "current-user-principal", NS_DAV,
-      PROP_COLLECTION | PROP_RESOURCE | PROP_EXPAND,
+    { "current-user-principal", NS_DAV, PROP_COLLECTION | PROP_RESOURCE,
       propfind_curprin, NULL, NULL },
 
     /* WebDAV POST (RFC 5995) properties */
@@ -409,13 +423,11 @@ static const struct prop_entry caldav_props[] = {
       propfind_serverinfo, NULL, NULL },
 
     /* CalDAV (RFC 4791) properties */
-    { "calendar-data", NS_CALDAV,
-      PROP_RESOURCE | PROP_PRESCREEN | PROP_NEEDPROP,
+    { "calendar-data", NS_CALDAV, PROP_RESOURCE | PROP_PRESCREEN,
       propfind_caldata, NULL, NULL },
     { "calendar-description", NS_CALDAV, PROP_COLLECTION,
       propfind_fromdb, proppatch_todb, NULL },
-    { "calendar-timezone", NS_CALDAV,
-      PROP_COLLECTION | PROP_PRESCREEN | PROP_NEEDPROP,
+    { "calendar-timezone", NS_CALDAV, PROP_COLLECTION | PROP_PRESCREEN,
       propfind_timezone, proppatch_timezone, NULL },
     { "supported-calendar-component-set", NS_CALDAV, PROP_COLLECTION,
       propfind_calcompset, proppatch_calcompset, NULL },
@@ -433,19 +445,17 @@ static const struct prop_entry caldav_props[] = {
     /* CalDAV Scheduling (RFC 6638) properties */
     { "schedule-tag", NS_CALDAV, PROP_RESOURCE,
       propfind_schedtag, NULL, NULL },
-    { "schedule-default-calendar-URL", NS_CALDAV, PROP_COLLECTION | PROP_EXPAND,
+    { "schedule-default-calendar-URL", NS_CALDAV, PROP_COLLECTION,
       propfind_scheddefault, NULL, NULL },
     { "schedule-calendar-transp", NS_CALDAV, PROP_COLLECTION,
       propfind_caltransp, proppatch_caltransp, NULL },
 
     /* Calendar Availability (draft-ietf-calext-availability) properties */
-    { "calendar-availability", NS_CALDAV,
-      PROP_COLLECTION | PROP_PRESCREEN | PROP_NEEDPROP,
+    { "calendar-availability", NS_CALDAV, PROP_COLLECTION | PROP_PRESCREEN,
       propfind_availability, proppatch_availability, NULL },
 
     /* Backwards compatibility with Apple VAVAILABILITY clients */
-    { "calendar-availability", NS_CS,
-      PROP_COLLECTION | PROP_PRESCREEN | PROP_NEEDPROP,
+    { "calendar-availability", NS_CS, PROP_COLLECTION | PROP_PRESCREEN,
       propfind_availability, proppatch_availability, NULL },
 
     /* TZ by Ref (draft-ietf-tzdist-caldav-timezone-ref) properties */
@@ -3533,6 +3543,7 @@ static int caldav_propfind_by_resource(void *rock, void *data)
 /* Callback to fetch DAV:getcontenttype */
 static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
 				   struct propfind_ctx *fctx,
+				   xmlNodePtr prop __attribute__((unused)),
 				   xmlNodePtr resp __attribute__((unused)),
 				   struct propstat propstat[],
 				   void *rock __attribute__((unused)))
@@ -3565,6 +3576,7 @@ static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch DAV:resourcetype */
 static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
 			    struct propfind_ctx *fctx,
+			    xmlNodePtr prop __attribute__((unused)),
 			    xmlNodePtr resp,
 			    struct propstat propstat[],
 			    void *rock __attribute__((unused)))
@@ -3600,11 +3612,11 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
 /* Callback to prescreen/fetch CALDAV:calendar-data */
 static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 			    struct propfind_ctx *fctx,
+			    xmlNodePtr prop,
 			    xmlNodePtr resp __attribute__((unused)),
 			    struct propstat propstat[],
-			    void *rock)
+			    void *rock __attribute__((unused)))
 {
-    xmlNodePtr prop = (xmlNodePtr) rock;
     struct buf buf = BUF_INITIALIZER;
     const char *data = NULL;
     size_t datalen = 0;
@@ -3621,7 +3633,7 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 	fctx->proc_by_resource = &caldav_propfind_by_resource;
     }
 
-    r = propfind_getdata(name, ns, fctx, propstat, prop, caldav_mime_types,
+    r = propfind_getdata(name, ns, fctx, prop, propstat, caldav_mime_types,
 			 CALDAV_SUPP_DATA, data, datalen);
 
     buf_free(&buf);
@@ -3630,20 +3642,20 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 }
 
 
-/* Helper function to fetch CALDAV:calendar-home-set,
+/* Callback to fetch CALDAV:calendar-home-set,
  * CALDAV:schedule-inbox-URL, CALDAV:schedule-outbox-URL,
  * and CALDAV:schedule-default-calendar-URL
  */
-static int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
-			   struct propfind_ctx *fctx,
-			   xmlNodePtr resp __attribute__((unused)),
-			   struct propstat propstat[],
-			   xmlNodePtr expand,
-			   const char *cal)
+int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
+		    struct propfind_ctx *fctx,
+		    xmlNodePtr prop,
+		    xmlNodePtr resp __attribute__((unused)),
+		    struct propstat propstat[], void *rock)
 {
+    const char *cal = (const char *) rock;
     xmlNodePtr node;
     struct buf calbuf = BUF_INITIALIZER;
-    int r = HTTP_NOT_FOUND; /* error condition if we bail early */
+    int ret = HTTP_NOT_FOUND; /* error condition if we bail early */
 
     if (!(namespace_calendar.enabled && fctx->req_tgt->userid))
 	goto done;
@@ -3651,6 +3663,7 @@ static int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
     if (cal) {
 	const char *annotname = NULL;
 	char *mailboxname;
+	int r;
 
 	/* named calendars are only used for scheduling */
 	if (!(namespace_calendar.allow & ALLOW_CAL_SCHED))
@@ -3700,9 +3713,9 @@ static int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
 	       fctx->req_tgt->userid);
     if (cal) buf_appendcstr(&fctx->buf, cal);
 
-    if (expand) {
+    if (fctx->mode == PROPFIND_EXPAND) {
 	/* Return properties for this URL */
-	expand_property(expand, fctx, buf_cstring(&fctx->buf),
+	expand_property(prop, fctx, buf_cstring(&fctx->buf),
 			&caldav_parse_path, caldav_props, node, cal ? 1 : 0);
     }
     else {
@@ -3710,58 +3723,33 @@ static int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
 	xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
     }
 
-    r = 0;
+    ret = 0;
 done:
     buf_free(&calbuf);
 
-    return r;
-}
-
-
-/* Callback to fetch CALDAV:calendar-home-set */
-int propfind_calhome(const xmlChar *name, xmlNsPtr ns,
-		     struct propfind_ctx *fctx, xmlNodePtr resp,
-		     struct propstat propstat[], void *rock)
-{
-    return propfind_calurl(name, ns, fctx, resp, propstat, rock, NULL);
-}
-
-
-/* Callback to fetch CALDAV:schedule-inbox-URL */
-int propfind_schedinbox(const xmlChar *name, xmlNsPtr ns,
-			struct propfind_ctx *fctx, xmlNodePtr resp,
-			struct propstat propstat[], void *rock)
-{
-    return propfind_calurl(name, ns, fctx, resp, propstat, rock, SCHED_INBOX);
-}
-
-
-/* Callback to fetch CALDAV:schedule-outbox-URL */
-int propfind_schedoutbox(const xmlChar *name, xmlNsPtr ns,
-			 struct propfind_ctx *fctx, xmlNodePtr resp,
-			 struct propstat propstat[], void *rock)
-{
-    return propfind_calurl(name, ns, fctx, resp, propstat, rock, SCHED_OUTBOX);
+    return ret;
 }
 
 
 /* Callback to fetch CALDAV:schedule-default-calendar-URL */
 static int propfind_scheddefault(const xmlChar *name, xmlNsPtr ns,
-				 struct propfind_ctx *fctx, xmlNodePtr resp,
-				 struct propstat propstat[], void *rock)
+				 struct propfind_ctx *fctx,
+				 xmlNodePtr prop, xmlNodePtr resp,
+				 struct propstat propstat[],
+				 void *rock __attribute__((unused)))
 {
     /* Only defined on CALDAV:schedule-inbox-URL */
-    if (!fctx->req_tgt->collection ||
-	strcmp(fctx->req_tgt->collection, SCHED_INBOX))
-	return HTTP_NOT_FOUND;
+    if (fctx->req_tgt->flags != TGT_SCHED_INBOX) return HTTP_NOT_FOUND;
 
-    return propfind_calurl(name, ns, fctx, resp, propstat, rock, SCHED_DEFAULT);
+    return propfind_calurl(name, ns, fctx,
+			   prop, resp, propstat, SCHED_DEFAULT);
 }
 
 
 /* Callback to fetch CALDAV:supported-calendar-component-set[s] */
 static int propfind_calcompset(const xmlChar *name, xmlNsPtr ns,
 			       struct propfind_ctx *fctx,
+			       xmlNodePtr prop __attribute__((unused)),
 			       xmlNodePtr resp __attribute__((unused)),
 			       struct propstat propstat[],
 			       void *rock __attribute__((unused)))
@@ -3852,7 +3840,8 @@ static int proppatch_calcompset(xmlNodePtr prop, unsigned set,
 	    buf_printf(&pctx->buf, "%lu", types);
 
 	    r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
-	    if (!r) r = annotate_state_writemask(astate, prop_annot, httpd_userid, &pctx->buf);
+	    if (!r) r = annotate_state_writemask(astate, prop_annot,
+						 httpd_userid, &pctx->buf);
 
 	    if (!r) {
 		xml_add_prop(HTTP_OK, pctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
@@ -3886,6 +3875,7 @@ static int proppatch_calcompset(xmlNodePtr prop, unsigned set,
 /* Callback to fetch CALDAV:supported-calendar-data */
 static int propfind_suppcaldata(const xmlChar *name, xmlNsPtr ns,
 				struct propfind_ctx *fctx,
+				xmlNodePtr prop __attribute__((unused)),
 				xmlNodePtr resp __attribute__((unused)),
 				struct propstat propstat[],
 				void *rock __attribute__((unused)))
@@ -3921,6 +3911,7 @@ static int propfind_suppcaldata(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch CALDAV:max-resource-size */
 static int propfind_maxsize(const xmlChar *name, xmlNsPtr ns,
 			    struct propfind_ctx *fctx,
+			    xmlNodePtr prop __attribute__((unused)),
 			    xmlNodePtr resp __attribute__((unused)),
 			    struct propstat propstat[],
 			    void *rock __attribute__((unused)))
@@ -3946,6 +3937,7 @@ static int propfind_maxsize(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch CALDAV:min/max-date-time */
 static int propfind_minmaxdate(const xmlChar *name, xmlNsPtr ns,
 			       struct propfind_ctx *fctx,
+			       xmlNodePtr prop __attribute__((unused)),
 			       xmlNodePtr resp __attribute__((unused)),
 			       struct propstat propstat[],
 			       void *rock)
@@ -3967,6 +3959,7 @@ static int propfind_minmaxdate(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch CALDAV:schedule-tag */
 static int propfind_schedtag(const xmlChar *name, xmlNsPtr ns,
 			     struct propfind_ctx *fctx,
+			     xmlNodePtr prop __attribute__((unused)),
 			     xmlNodePtr resp __attribute__((unused)),
 			     struct propstat propstat[],
 			     void *rock __attribute__((unused)))
@@ -3989,6 +3982,7 @@ static int propfind_schedtag(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch CALDAV:calendar-user-address-set */
 int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
 			 struct propfind_ctx *fctx,
+			 xmlNodePtr prop __attribute__((unused)),
 			 xmlNodePtr resp __attribute__((unused)),
 			 struct propstat propstat[],
 			 void *rock __attribute__((unused)))
@@ -4012,7 +4006,8 @@ int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
 
     if (httpd_extradomain) {
 	buf_reset(&fctx->buf);
-	buf_printf(&fctx->buf, "mailto:%s@%s", fctx->req_tgt->userid, httpd_extradomain);
+	buf_printf(&fctx->buf, "mailto:%s@%s",
+		   fctx->req_tgt->userid, httpd_extradomain);
 	xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
 	return 0;
     }
@@ -4031,6 +4026,7 @@ int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch CALDAV:calendar-user-type */
 int propfind_calusertype(const xmlChar *name, xmlNsPtr ns,
 			 struct propfind_ctx *fctx,
+			 xmlNodePtr prop __attribute__((unused)),
 			 xmlNodePtr resp __attribute__((unused)),
 			 struct propstat propstat[],
 			 void *rock __attribute__((unused)))
@@ -4049,6 +4045,7 @@ int propfind_calusertype(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch CALDAV:schedule-calendar-transp */
 static int propfind_caltransp(const xmlChar *name, xmlNsPtr ns,
 			      struct propfind_ctx *fctx,
+			      xmlNodePtr prop __attribute__((unused)),
 			      xmlNodePtr resp __attribute__((unused)),
 			      struct propstat propstat[],
 			      void *rock __attribute__((unused)))
@@ -4061,7 +4058,8 @@ static int propfind_caltransp(const xmlChar *name, xmlNsPtr ns,
 
     if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
 
-    r = annotatemore_lookupmask(fctx->mailbox->name, prop_annot, httpd_userid, &attrib);
+    r = annotatemore_lookupmask(fctx->mailbox->name, prop_annot,
+				httpd_userid, &attrib);
 
     if (r) return HTTP_SERVER_ERROR;
     if (!attrib.len) return HTTP_NOT_FOUND;
@@ -4117,7 +4115,8 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
 	}
 
 	r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
-	if (!r) r = annotate_state_writemask(astate, prop_annot, httpd_userid, &pctx->buf);
+	if (!r) r = annotate_state_writemask(astate, prop_annot,
+					     httpd_userid, &pctx->buf);
 	if (!r) {
 	    xml_add_prop(HTTP_OK, pctx->ns[NS_DAV],
 			 &propstat[PROPSTAT_OK], prop->name, prop->ns, NULL, 0);
@@ -4143,11 +4142,11 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
 /* Callback to prescreen/fetch CALDAV:calendar-timezone */
 static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
 			     struct propfind_ctx *fctx,
+			     xmlNodePtr prop,
 			     xmlNodePtr resp __attribute__((unused)),
 			     struct propstat propstat[],
-			     void *rock)
+			     void *rock __attribute__((unused)))
 {
-    xmlNodePtr prop = (xmlNodePtr) rock;
     struct buf attrib = BUF_INITIALIZER;
     const char *data = NULL, *msg_base = NULL;
     size_t datalen = 0;
@@ -4201,7 +4200,7 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
 	else r = HTTP_NOT_FOUND;
     }
 
-    if (!r) r = propfind_getdata(name, ns, fctx, propstat, prop,
+    if (!r) r = propfind_getdata(name, ns, fctx, prop, propstat,
 				 caldav_mime_types, CALDAV_SUPP_DATA,
 				 data, datalen);
 
@@ -4320,11 +4319,11 @@ static int proppatch_timezone(xmlNodePtr prop, unsigned set,
 /* Callback to prescreen/fetch CALDAV/CS:calendar-availability */
 static int propfind_availability(const xmlChar *name, xmlNsPtr ns,
 				 struct propfind_ctx *fctx,
+				 xmlNodePtr prop,
 				 xmlNodePtr resp __attribute__((unused)),
 				 struct propstat propstat[],
-				 void *rock)
+				 void *rock __attribute__((unused)))
 {
-    xmlNodePtr prop = (xmlNodePtr) rock;
     struct buf attrib = BUF_INITIALIZER;
     const char *data = NULL;
     unsigned long datalen = 0;
@@ -4361,7 +4360,7 @@ static int propfind_availability(const xmlChar *name, xmlNsPtr ns,
 	}
     }
 
-    if (!r) r = propfind_getdata(name, ns, fctx, propstat, prop,
+    if (!r) r = propfind_getdata(name, ns, fctx, prop, propstat,
 				 caldav_mime_types, CALDAV_SUPP_DATA,
 				 data, datalen);
     buf_free(&attrib);
@@ -4459,6 +4458,7 @@ static int proppatch_availability(xmlNodePtr prop, unsigned set,
 /* Callback to fetch CALDAV:timezone-service-set */
 static int propfind_tzservset(const xmlChar *name, xmlNsPtr ns,
 			      struct propfind_ctx *fctx,
+			      xmlNodePtr prop __attribute__((unused)),
 			      xmlNodePtr resp __attribute__((unused)),
 			      struct propstat propstat[],
 			      void *rock __attribute__((unused)))
@@ -4494,6 +4494,7 @@ static int propfind_tzservset(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch CALDAV:calendar-timezone-id property */
 static int propfind_tzid(const xmlChar *name, xmlNsPtr ns,
 			 struct propfind_ctx *fctx,
+			 xmlNodePtr prop __attribute__((unused)),
 			 xmlNodePtr resp __attribute__((unused)),
 			 struct propstat propstat[],
 			 void *rock __attribute__((unused)))
@@ -4628,6 +4629,7 @@ static int proppatch_tzid(xmlNodePtr prop, unsigned set,
 /* Callback to fetch CALDAV:supported-rscale-set */
 static int propfind_rscaleset(const xmlChar *name, xmlNsPtr ns,
 			      struct propfind_ctx *fctx,
+			      xmlNodePtr prop __attribute__((unused)),
 			      xmlNodePtr resp __attribute__((unused)),
 			      struct propstat propstat[],
 			      void *rock __attribute__((unused)))

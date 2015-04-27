@@ -102,19 +102,24 @@ static int carddav_put(struct transaction_t *txn, void *obj,
 		       void *destdb);
 
 static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
-				   struct propfind_ctx *fctx, xmlNodePtr resp,
+				   struct propfind_ctx *fctx,
+				   xmlNodePtr prop, xmlNodePtr resp,
 				   struct propstat propstat[], void *rock);
 static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
-			    struct propfind_ctx *fctx, xmlNodePtr resp,
+			    struct propfind_ctx *fctx,
+			    xmlNodePtr prop, xmlNodePtr resp,
 			    struct propstat propstat[], void *rock);
 static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
-			     struct propfind_ctx *fctx, xmlNodePtr resp,
+			     struct propfind_ctx *fctx,
+			     xmlNodePtr prop, xmlNodePtr resp,
 			     struct propstat propstat[], void *rock);
 static int propfind_suppaddrdata(const xmlChar *name, xmlNsPtr ns,
-				 struct propfind_ctx *fctx, xmlNodePtr resp,
+				 struct propfind_ctx *fctx,
+				 xmlNodePtr prop, xmlNodePtr resp,
 				 struct propstat propstat[], void *rock);
 static int propfind_addrgroups(const xmlChar *name, xmlNsPtr ns,
-			       struct propfind_ctx *fctx, xmlNodePtr resp,
+			       struct propfind_ctx *fctx,
+			       xmlNodePtr prop, xmlNodePtr resp,
 			       struct propstat propstat[], void *rock);
 
 static int report_card_query(struct transaction_t *txn,
@@ -216,7 +221,7 @@ static const struct prop_entry carddav_props[] = {
       propfind_reportset, NULL, (void *) carddav_reports },
 
     /* WebDAV ACL (RFC 3744) properties */
-    { "owner", NS_DAV, PROP_COLLECTION | PROP_RESOURCE | PROP_EXPAND,
+    { "owner", NS_DAV, PROP_COLLECTION | PROP_RESOURCE,
       propfind_owner, NULL, NULL },
     { "group", NS_DAV, 0, NULL, NULL, NULL },
     { "supported-privilege-set", NS_DAV, PROP_COLLECTION | PROP_RESOURCE,
@@ -239,7 +244,7 @@ static const struct prop_entry carddav_props[] = {
 
     /* WebDAV Current Principal (RFC 5397) properties */
     { "current-user-principal", NS_DAV,
-      PROP_COLLECTION | PROP_RESOURCE | PROP_EXPAND,
+      PROP_COLLECTION | PROP_RESOURCE,
       propfind_curprin, NULL, NULL },
 
     /* WebDAV POST (RFC 5995) properties */
@@ -255,8 +260,7 @@ static const struct prop_entry carddav_props[] = {
       propfind_serverinfo, NULL, NULL },
 
     /* CardDAV (RFC 6352) properties */
-    { "address-data", NS_CARDDAV,
-      PROP_RESOURCE | PROP_PRESCREEN | PROP_NEEDPROP,
+    { "address-data", NS_CARDDAV, PROP_RESOURCE | PROP_PRESCREEN,
       propfind_addrdata, NULL, NULL },
     { "addressbook-description", NS_CARDDAV, PROP_COLLECTION,
       propfind_fromdb, proppatch_todb, NULL },
@@ -269,8 +273,7 @@ static const struct prop_entry carddav_props[] = {
       propfind_sync_token, NULL, NULL },
 
     /* Cyrus properties */
-    { "address-groups", NS_CYRUS,
-      PROP_RESOURCE,
+    { "address-groups", NS_CYRUS, PROP_RESOURCE,
       propfind_addrgroups, NULL, NULL },
 
     { NULL, 0, 0, NULL, NULL, NULL }
@@ -730,6 +733,7 @@ static int carddav_put(struct transaction_t *txn, void *obj,
 /* Callback to fetch DAV:getcontenttype */
 static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
 				   struct propfind_ctx *fctx,
+				   xmlNodePtr prop __attribute__((unused)),
 				   xmlNodePtr resp __attribute__((unused)),
 				   struct propstat propstat[],
 				   void *rock __attribute__((unused)))
@@ -746,6 +750,7 @@ static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch DAV:resourcetype */
 static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
 			    struct propfind_ctx *fctx,
+			    xmlNodePtr prop __attribute__((unused)),
 			    xmlNodePtr resp,
 			    struct propstat propstat[],
 			    void *rock __attribute__((unused)))
@@ -771,11 +776,11 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
 /* Callback to prescreen/fetch CARDDAV:address-data */
 static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
 			     struct propfind_ctx *fctx,
+			     xmlNodePtr prop,
 			     xmlNodePtr resp __attribute__((unused)),
 			     struct propstat propstat[],
-			     void *rock)
+			     void *rock __attribute__((unused)))
 {
-    xmlNodePtr prop = (xmlNodePtr) rock;
     const char *data = NULL;
     size_t datalen = 0;
 
@@ -790,7 +795,7 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
 	datalen = fctx->record->size - fctx->record->header_size;
     }
 
-    return propfind_getdata(name, ns, fctx, propstat, prop, carddav_mime_types,
+    return propfind_getdata(name, ns, fctx, prop, propstat, carddav_mime_types,
 			    CARDDAV_SUPP_DATA, data, datalen);
 }
 
@@ -798,12 +803,12 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch CARDDAV:addressbook-home-set */
 int propfind_abookhome(const xmlChar *name, xmlNsPtr ns,
 		       struct propfind_ctx *fctx,
+		       xmlNodePtr prop,
 		       xmlNodePtr resp __attribute__((unused)),
 		       struct propstat propstat[],
-		       void *rock)
+		       void *rock __attribute__((unused)))
 {
     xmlNodePtr node;
-    xmlNodePtr expand = (xmlNodePtr) rock;
 
     if (!(namespace_addressbook.enabled && fctx->req_tgt->userid))
 	return HTTP_NOT_FOUND;
@@ -815,9 +820,9 @@ int propfind_abookhome(const xmlChar *name, xmlNsPtr ns,
     buf_printf(&fctx->buf, "%s/user/%s/", namespace_addressbook.prefix,
 	       fctx->req_tgt->userid);
 
-    if (expand) {
+    if (fctx->mode == PROPFIND_EXPAND) {
 	/* Return properties for this URL */
-	expand_property(expand, fctx, buf_cstring(&fctx->buf),
+	expand_property(prop, fctx, buf_cstring(&fctx->buf),
 			&carddav_parse_path, carddav_props, node, 0);
 
     }
@@ -833,6 +838,7 @@ int propfind_abookhome(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch CARDDAV:supported-address-data */
 static int propfind_suppaddrdata(const xmlChar *name, xmlNsPtr ns,
 				 struct propfind_ctx *fctx,
+				 xmlNodePtr prop __attribute__((unused)),
 				 xmlNodePtr resp __attribute__((unused)),
 				 struct propstat propstat[],
 				 void *rock __attribute__((unused)))
@@ -869,6 +875,7 @@ static int propfind_suppaddrdata(const xmlChar *name, xmlNsPtr ns,
 /* Callback to fetch CY:address-groups */
 int propfind_addrgroups(const xmlChar *name, xmlNsPtr ns,
 		        struct propfind_ctx *fctx,
+			xmlNodePtr prop __attribute__((unused)),
 		        xmlNodePtr resp __attribute__((unused)),
 		        struct propstat propstat[],
 		        void *rock __attribute__((unused)))
