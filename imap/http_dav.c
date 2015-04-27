@@ -110,6 +110,7 @@ enum {
     PROPFIND_EXPAND			/* only used with expand-prop REPORT */
 };
 
+static int server_info(struct transaction_t *txn);
 static int principal_parse_path(const char *path, struct request_target_t *tgt,
 				const char **errstr);
 static int propfind_displayname(const xmlChar *name, xmlNsPtr ns,
@@ -193,6 +194,10 @@ static const struct prop_entry principal_props[] = {
     /* WebDAV Current Principal (RFC 5397) properties */
     { "current-user-principal", NS_DAV, PROP_COLLECTION | PROP_EXPAND,
       propfind_curprin, NULL, NULL },
+
+    /* draft-douglass-server-info */
+    { "server-info-href", NS_DAV, PROP_COLLECTION,
+      propfind_serverinfo, NULL, NULL },
 
     /* CalDAV (RFC 4791) properties */
     { "calendar-home-set", NS_CALDAV, PROP_COLLECTION | PROP_EXPAND,
@@ -401,6 +406,13 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
 
 	p += len;
 	if (!*p || !*++p) return 0;
+    }
+    else if (!strncmp(p, SERVER_INFO, len)) {
+	p += len;
+	if (!*p || !*++p) {
+	    tgt->flags = TGT_SERVER_INFO;
+	    return 0;
+	}
     }
     else return HTTP_NOT_FOUND;  /* need to specify a userid */
 
@@ -1924,6 +1936,24 @@ EXPORTED int propfind_curprin(const xmlChar *name, xmlNsPtr ns,
     else {
 	xmlNewChild(node, NULL, BAD_CAST "unauthenticated", NULL);
     }
+
+    return 0;
+}
+
+
+/* Callback to fetch DAV:server-info-href */
+EXPORTED int propfind_serverinfo(const xmlChar *name, xmlNsPtr ns,
+				 struct propfind_ctx *fctx,
+				 xmlNodePtr resp __attribute__((unused)),
+				 struct propstat propstat[],
+				 void *rock __attribute__((unused)))
+{
+    xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
+				   &propstat[PROPSTAT_OK], name, ns, NULL, 0);
+
+    buf_reset(&fctx->buf);
+    buf_printf(&fctx->buf, "%s/%s", namespace_principal.prefix, SERVER_INFO);
+    xml_add_href(node, NULL, buf_cstring(&fctx->buf));
 
     return 0;
 }
@@ -3535,6 +3565,9 @@ int meth_get_head(struct transaction_t *txn, void *params)
     if (ret) return ret;
 
     if (txn->req_tgt.namespace == URL_NS_PRINCIPAL) {
+	/* Special "principal" */
+	if (txn->req_tgt.flags == TGT_SERVER_INFO) return server_info(txn);
+	
 	/* No content for principals (yet) */
 	return HTTP_NO_CONTENT;
     }
@@ -6370,4 +6403,211 @@ int dav_store_resource(struct transaction_t *txn,
     append_removestage(stage);
 
     return ret;
+}
+
+
+static int server_info(struct transaction_t *txn)
+{
+    int precond;
+    static struct message_guid prev_guid;
+    struct message_guid guid;
+    const char *etag;
+    static time_t compile_time = 0, lastmod;
+    struct stat sbuf;
+    static xmlChar *buf = NULL;
+    static int bufsiz = 0;
+
+    if (!httpd_userid) return HTTP_UNAUTHORIZED;
+
+    /* Initialize */
+    if (!compile_time) {
+	compile_time = calc_compile_time(__TIME__, __DATE__);
+	message_guid_set_null(&prev_guid);
+    }
+
+    /* Generate ETag based on compile date/time of this source file,
+       the number of available RSCALEs and the config file size/mtime */
+    stat(config_filename, &sbuf);
+    lastmod = MAX(compile_time, sbuf.st_mtime);
+
+    assert(!buf_len(&txn->buf));
+    buf_printf(&txn->buf, "%ld-%ld-%ld", (long) compile_time,
+	       sbuf.st_mtime, sbuf.st_size);
+
+    message_guid_generate(&guid, buf_cstring(&txn->buf), buf_len(&txn->buf));
+    etag = message_guid_encode(&guid);
+
+    /* Check any preconditions, including range request */
+    txn->flags.ranges = 1;
+    precond = check_precond(txn, etag, lastmod);
+
+    switch (precond) {
+    case HTTP_OK:
+    case HTTP_PARTIAL:
+    case HTTP_NOT_MODIFIED:
+	/* Fill in Etag,  Last-Modified, and Expires */
+	txn->resp_body.etag = etag;
+	txn->resp_body.lastmod = lastmod;
+	txn->resp_body.maxage = 86400;  /* 24 hrs */
+	txn->flags.cc |= CC_MAXAGE;
+
+	if (precond != HTTP_NOT_MODIFIED) break;
+
+    default:
+	/* We failed a precondition - don't perform the request */
+	return precond;
+    }
+
+    if (!message_guid_equal(&prev_guid, &guid)) {
+	const char **hdr = spool_getheader(txn->req_hdrs, "Host");
+	xmlNodePtr root, node, services, service;
+	xmlNsPtr ns[NUM_NAMESPACE];
+
+	/* Start construction of our query-result */
+	if (!(root = init_xml_response("server-info", NS_DAV, NULL, ns))) {
+	    txn->error.desc = "Unable to create XML response";
+	    return HTTP_SERVER_ERROR;
+	}
+
+	/* Add global DAV features */
+	node = xmlNewChild(root, NULL, BAD_CAST "features", NULL);
+	xmlNewChild(node, ns[NS_DAV], BAD_CAST "feature", BAD_CAST "class-1");
+	xmlNewChild(node, ns[NS_DAV], BAD_CAST "feature", BAD_CAST "class-2");
+	xmlNewChild(node, ns[NS_DAV], BAD_CAST "feature", BAD_CAST "class-3");
+	xmlNewChild(node, ns[NS_DAV], BAD_CAST "feature",
+		    BAD_CAST "access-control");
+	xmlNewChild(node, ns[NS_DAV], BAD_CAST "feature",
+		    BAD_CAST "extended-mkcol");
+	xmlNewChild(node, ns[NS_DAV], BAD_CAST "feature",
+		    BAD_CAST "quota");
+	xmlNewChild(node, ns[NS_DAV], BAD_CAST "feature",
+		    BAD_CAST "sync-collection");
+	xmlNewChild(node, ns[NS_DAV], BAD_CAST "feature",
+		    BAD_CAST "add-member");
+
+	services = xmlNewChild(root, NULL, BAD_CAST "services", NULL);
+
+	if (namespace_calendar.enabled) {
+	    service = xmlNewChild(services, NULL, BAD_CAST "service", NULL);
+	    ensure_ns(ns, NS_CALDAV, service, XML_NS_CALDAV, "C");
+	    xmlNewChild(service, ns[NS_CALDAV],
+			BAD_CAST "name", BAD_CAST "caldav");
+
+	    /* Add href */
+	    buf_reset(&txn->buf);
+	    buf_printf(&txn->buf, "%s://%s", https? "https" : "http", hdr[0]);
+	    buf_appendcstr(&txn->buf, namespace_calendar.prefix);
+	    xml_add_href(service, ns[NS_DAV], buf_cstring(&txn->buf));
+
+	    /* Add CalDAV features */
+	    node = xmlNewChild(service, NULL, BAD_CAST "features", NULL);
+	    xmlNewChild(node, ns[NS_CALDAV], BAD_CAST "feature",
+			BAD_CAST "calendar-access");
+	    if (namespace_calendar.allow & ALLOW_CAL_AVAIL)
+		xmlNewChild(node, ns[NS_CALDAV], BAD_CAST "feature",
+			    BAD_CAST "calendar-availability");
+	    if (namespace_calendar.allow & ALLOW_CAL_SCHED)
+		xmlNewChild(node, ns[NS_CALDAV], BAD_CAST "feature",
+			    BAD_CAST "calendar-auto-schedule");
+	    if (namespace_calendar.allow & ALLOW_CAL_NOTZ)
+		xmlNewChild(node, ns[NS_CALDAV], BAD_CAST "feature",
+			    BAD_CAST "calendar-no-timezone");
+	    if (namespace_calendar.allow & ALLOW_CAL_ATTACH) {
+		xmlNewChild(node, ns[NS_CALDAV], BAD_CAST "feature",
+			    BAD_CAST "calendar-managed-attachments");
+		xmlNewChild(node, ns[NS_CALDAV], BAD_CAST "feature",
+			    BAD_CAST "calendar-managed-attachments-no-recurrence");
+	    }
+#if 0
+	    /* Add properties */
+	    {
+		struct propfind_ctx fctx;
+		struct request_target_t req_tgt;
+		struct mailbox mailbox;
+		struct index_record record;
+		struct propstat propstat[PROPSTAT_OK+1];
+
+		/* Setup a dummy propfind_ctx and propstat */
+		memset(&fctx, 0, sizeof(struct propfind_ctx));
+		memset(&req_tgt, 0, sizeof(struct request_target_t));
+		fctx.req_tgt = &req_tgt;
+		fctx.req_tgt->collection = "";
+		fctx.req_hdrs = txn->req_hdrs;
+		fctx.mailbox = &mailbox;
+		fctx.mailbox->name = "";
+		fctx.record = &record;
+		fctx.ns = ns;
+
+		propstat[PROPSTAT_OK].root = xmlNewNode(NULL, BAD_CAST "");
+		node = xmlNewChild(propstat[PROPSTAT_OK].root,
+				   ns[NS_DAV], BAD_CAST "properties", NULL);
+
+		propfind_suplock(BAD_CAST "supportedlock", ns[NS_DAV],
+				 &fctx, NULL, &propstat[PROPSTAT_OK], NULL);
+		propfind_aclrestrict(BAD_CAST "acl-restrictions", ns[NS_DAV],
+				     &fctx, NULL, &propstat[PROPSTAT_OK], NULL);
+		propfind_suppcaldata(BAD_CAST "supported-calendar-data",
+				     ns[NS_CALDAV],
+				     &fctx, NULL, &propstat[PROPSTAT_OK], NULL);
+		propfind_calcompset(BAD_CAST "supported-calendar-component-sets",
+				    ns[NS_CALDAV],
+				    &fctx, NULL, &propstat[PROPSTAT_OK], NULL);
+		propfind_rscaleset(BAD_CAST "supported-rscale-set", ns[NS_CALDAV],
+				   &fctx, NULL, &propstat[PROPSTAT_OK], NULL);
+		propfind_maxsize(BAD_CAST "max-resource-size", ns[NS_CALDAV],
+				 &fctx, NULL, &propstat[PROPSTAT_OK], NULL);
+		propfind_minmaxdate(BAD_CAST "min-date-time", ns[NS_CALDAV],
+				    &fctx, NULL, &propstat[PROPSTAT_OK],
+				    &caldav_epoch);
+		propfind_minmaxdate(BAD_CAST "max-date-time", ns[NS_CALDAV],
+				    &fctx, NULL, &propstat[PROPSTAT_OK],
+				    &caldav_eternity);
+
+		/* Unlink properties from propstat and link to service */
+		xmlUnlinkNode(node);
+		xmlAddChild(service, node);
+
+		/* Cleanup */
+		xmlFreeNode(propstat[PROPSTAT_OK].root);
+		buf_free(&fctx.buf);
+	    }
+#endif
+	}
+	
+	if (namespace_addressbook.enabled) {
+	    service = xmlNewChild(services, NULL, BAD_CAST "service", NULL);
+	    ensure_ns(ns, NS_CARDDAV, service, XML_NS_CARDDAV, "A");
+	    xmlNewChild(service, ns[NS_CARDDAV],
+			BAD_CAST "name", BAD_CAST "carddav");
+
+	    /* Add href */
+	    buf_reset(&txn->buf);
+	    buf_printf(&txn->buf, "%s://%s", https? "https" : "http", hdr[0]);
+	    buf_appendcstr(&txn->buf, namespace_addressbook.prefix);
+	    xml_add_href(service, ns[NS_DAV], buf_cstring(&txn->buf));
+
+	    /* Add CardDAV features */
+	    node = xmlNewChild(service, NULL, BAD_CAST "features", NULL);
+	    xmlNewChild(node, ns[NS_CARDDAV], BAD_CAST "feature",
+			BAD_CAST "addressbook");
+	}
+
+	/* Dump XML response tree into a text buffer */
+	if (buf) xmlFree(buf);
+	xmlDocDumpFormatMemoryEnc(root->doc, &buf, &bufsiz, "utf-8", 1);
+	xmlFreeDoc(root->doc);
+
+	if (!buf) {
+	    txn->error.desc = "Error dumping XML tree";
+	    return HTTP_SERVER_ERROR;
+	}
+
+	message_guid_copy(&prev_guid, &guid);
+    }
+
+    /* Output the XML response */
+    txn->resp_body.type = "application/xml; charset=utf-8";
+    write_body(precond, txn, (char *) buf, bufsiz);
+
+    return 0;
 }

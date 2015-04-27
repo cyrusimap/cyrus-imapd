@@ -201,7 +201,8 @@ struct request_target_t {
 
 /* Request target flags */
 enum {
-    TGT_SCHED_INBOX = 1,
+    TGT_SERVER_INFO = 1,
+    TGT_SCHED_INBOX,
     TGT_SCHED_OUTBOX,
     TGT_MANAGED_ATTACH
 };

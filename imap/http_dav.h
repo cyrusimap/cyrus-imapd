@@ -63,6 +63,7 @@
 
 #define ANNOT_NS	"/vendor/cmu/cyrus-httpd/"
 
+#define SERVER_INFO	".server-info"
 #define SCHED_INBOX	"Inbox/"
 #define SCHED_OUTBOX	"Outbox/"
 #define SCHED_DEFAULT	"Default/"
@@ -610,6 +611,10 @@ int propfind_quota(const xmlChar *name, xmlNsPtr ns,
 int propfind_curprin(const xmlChar *name, xmlNsPtr ns,
 		     struct propfind_ctx *fctx, xmlNodePtr resp,
 		     struct propstat propstat[], void *rock);
+
+int propfind_serverinfo(const xmlChar *name, xmlNsPtr ns,
+			struct propfind_ctx *fctx, xmlNodePtr resp,
+			struct propstat propstat[], void *rock);
 
 int propfind_addmember(const xmlChar *name, xmlNsPtr ns,
 		       struct propfind_ctx *fctx, xmlNodePtr resp,

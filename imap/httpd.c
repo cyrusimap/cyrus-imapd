@@ -1980,7 +1980,8 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
 	    if (txn->req_tgt.allow & ALLOW_DAV) {
 		/* Construct DAV header(s) based on namespace of request URL */
-		prot_printf(httpd_out, "DAV: 1,%s 3, access-control%s\r\n",
+		prot_printf(httpd_out,
+			    "DAV: 1,%s 3, access-control%s, server-info\r\n",
 			    (txn->req_tgt.allow & ALLOW_WRITE) ? " 2," : "",
 			    (txn->req_tgt.allow & ALLOW_WRITECOL) ?
 			    ", extended-mkcol" : "");
