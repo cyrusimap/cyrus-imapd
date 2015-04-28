@@ -911,23 +911,8 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
      * It seems that it does not correspond to the concept of
      * quota root specified in RFC 2087. Thus we fill uri with quota root
      */
-<<<<<<< HEAD
-    if (event->type & QUOTA_EVENTS) {
-	/* translate internal mailbox name to external */
-	assert(namespace.mboxname_toexternal != NULL);
-	(*namespace.mboxname_toexternal)(&namespace, quota->root,
-					 mboxname_to_userid(quota->root),
-					 extname);
-
-	/* translate any separators in user */
-	userbuf = (char *)mboxname_to_userid(quota->root);
-	if (userbuf != NULL)
-	    mboxname_hiersep_toexternal(&namespace, userbuf,
-					config_virtdomains ? strcspn(userbuf, "@") : 0);
-=======
     if (!event->params[EVENT_URI].filled && event->type & QUOTA_EVENTS) {
 	char *user = (char *)mboxname_to_userid(quota->root);
->>>>>>> mboxevent: don't crash on mailboxes without associated userid
 
 	memset(&imapurl, 0, sizeof(struct imapurl));
 	imapurl.server = config_servername;
@@ -956,7 +941,7 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
 	 */
 
 	if (!event->params[EVENT_USER].filled) {
-	    FILL_STRING_PARAM(event, EVENT_USER, (userbuf == NULL ? '\0' : xstrdup(userbuf)));
+	    FILL_STRING_PARAM(event, EVENT_USER, xstrdupsafe(user));
 	}
     }
 }
