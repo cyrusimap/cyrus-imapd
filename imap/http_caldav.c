@@ -5766,7 +5766,7 @@ static int imip_send(icalcomponent *ical)
     buf_printf(&plainbuf, "You have received %s from %s <%s>\r\n\r\n", msg_type,
 	       originator->name ? originator->name : "", originator->addr);
     if (summary) {
-	buf_setcstr(&tmpbuf, location);
+	buf_setcstr(&tmpbuf, summary);
 	buf_replace_all(&tmpbuf, "\n", "\r\n" TEXT_INDENT);
 	buf_printf(&plainbuf, "Summary    : %s\r\n", buf_cstring(&tmpbuf));
     }
