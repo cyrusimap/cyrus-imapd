@@ -99,6 +99,7 @@
 #include "version.h"
 #include "webdav_db.h"
 #include "xmalloc.h"
+#include "xml_support.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 #include "zoneinfo_db.h"
@@ -3713,7 +3714,7 @@ int propfind_calurl(const xmlChar *name, xmlNsPtr ns,
 	       fctx->req_tgt->userid);
     if (cal) buf_appendcstr(&fctx->buf, cal);
 
-    if (fctx->mode == PROPFIND_EXPAND) {
+    if ((fctx->mode == PROPFIND_EXPAND) && xmlFirstElementChild(prop)) {
 	/* Return properties for this URL */
 	expand_property(prop, fctx, buf_cstring(&fctx->buf),
 			&caldav_parse_path, caldav_props, node, cal ? 1 : 0);

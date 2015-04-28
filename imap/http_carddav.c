@@ -80,6 +80,7 @@
 #include "version.h"
 #include "vparse.h"
 #include "xmalloc.h"
+#include "xml_support.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 
@@ -820,7 +821,7 @@ int propfind_abookhome(const xmlChar *name, xmlNsPtr ns,
     buf_printf(&fctx->buf, "%s/user/%s/", namespace_addressbook.prefix,
 	       fctx->req_tgt->userid);
 
-    if (fctx->mode == PROPFIND_EXPAND) {
+    if ((fctx->mode == PROPFIND_EXPAND) && xmlFirstElementChild(prop)) {
 	/* Return properties for this URL */
 	expand_property(prop, fctx, buf_cstring(&fctx->buf),
 			&carddav_parse_path, carddav_props, node, 0);

@@ -79,6 +79,7 @@
 #include "strhash.h"
 #include "tok.h"
 #include "xmalloc.h"
+#include "xml_support.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 
@@ -1384,7 +1385,7 @@ int propfind_owner(const xmlChar *name, xmlNsPtr ns,
 		       namespace_principal.prefix, userid, domain);
 	}
 
-	if (fctx->mode == PROPFIND_EXPAND) {
+	if ((fctx->mode == PROPFIND_EXPAND) && xmlFirstElementChild(prop)) {
 	    /* Return properties for this URL */
 	    expand_property(prop, fctx, buf_cstring(&fctx->buf),
 			    &principal_parse_path, principal_props, node, 0);
