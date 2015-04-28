@@ -116,10 +116,7 @@ static int propfind_alturiset(const xmlChar *name, xmlNsPtr ns,
 			      struct propfind_ctx *fctx,
 			      xmlNodePtr prop, xmlNodePtr resp,
 			      struct propstat propstat[], void *rock);
-static int propfind_principalurl(const xmlChar *name, xmlNsPtr ns,
-				 struct propfind_ctx *fctx,
-				 xmlNodePtr prop, xmlNodePtr resp,
-				 struct propstat propstat[], void *rock);
+#define propfind_principalurl  propfind_owner
 
 static int report_prin_prop_search(struct transaction_t *txn,
 				   struct meth_params *rparams,
@@ -1360,52 +1357,32 @@ static int propfind_alturiset(const xmlChar *name, xmlNsPtr ns,
 }
 
 
-/* Callback to fetch DAV:principal-URL */
-static int propfind_principalurl(const xmlChar *name, xmlNsPtr ns,
-				 struct propfind_ctx *fctx,
-				 xmlNodePtr prop,
-				 xmlNodePtr resp __attribute__((unused)),
-				 struct propstat propstat[],
-				 void *rock __attribute__((unused)))
-{
-    xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
-				   &propstat[PROPSTAT_OK], name, ns, NULL, 0);
-
-    buf_reset(&fctx->buf);
-    if (fctx->req_tgt->userid) {
-	buf_printf(&fctx->buf, "%s/user/%s/",
-		   namespace_principal.prefix, fctx->req_tgt->userid);
-
-	if (fctx->mode == PROPFIND_EXPAND) {
-	    /* Return properties for this URL */
-	    expand_property(prop, fctx, buf_cstring(&fctx->buf),
-			    &principal_parse_path, principal_props, node, 0);
-	    return 0;
-	}
-    }
-
-    /* Return just the URL */
-    xml_add_href(node, NULL, buf_cstring(&fctx->buf));
-
-    return 0;
-}
-
-
-/* Callback to fetch DAV:owner */
+/* Callback to fetch DAV:owner, DAV:principal-URL */
 int propfind_owner(const xmlChar *name, xmlNsPtr ns,
-		   struct propfind_ctx *fctx,
-		   xmlNodePtr prop,
-		   xmlNodePtr resp __attribute__((unused)),
-		   struct propstat propstat[],
-		   void *rock __attribute__((unused)))
+			  struct propfind_ctx *fctx,
+			  xmlNodePtr prop,
+			  xmlNodePtr resp __attribute__((unused)),
+			  struct propstat propstat[],
+			  void *rock)
 {
     xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
 				   &propstat[PROPSTAT_OK], name, ns, NULL, 0);
+    const char *userid = rock ? (const char *) rock : fctx->req_tgt->userid;
 
-    if (fctx->req_tgt->userid) {
+    if (userid) {
+	const char *domain =
+	    httpd_extradomain ? httpd_extradomain : config_defdomain;
+
 	buf_reset(&fctx->buf);
-	buf_printf(&fctx->buf, "%s/user/%s/",
-		   namespace_principal.prefix, fctx->req_tgt->userid);
+
+	if (strchr(userid, '@') || !domain) {
+	    buf_printf(&fctx->buf, "%s/user/%s/",
+		       namespace_principal.prefix, userid);
+	}
+	else {
+	    buf_printf(&fctx->buf, "%s/user/%s@%s/",
+		       namespace_principal.prefix, userid, domain);
+	}
 
 	if (fctx->mode == PROPFIND_EXPAND) {
 	    /* Return properties for this URL */
@@ -1882,9 +1859,11 @@ EXPORTED int propfind_quota(const xmlChar *name, xmlNsPtr ns,
     buf_reset(&fctx->buf);
     if (!xmlStrcmp(name, BAD_CAST "quota-available-bytes")) {
 	/* Calculate limit in bytes and subtract usage */
-	quota_t limit = fctx->quota.limits[QUOTA_STORAGE] * quota_units[QUOTA_STORAGE];
+	quota_t limit =
+	    fctx->quota.limits[QUOTA_STORAGE] * quota_units[QUOTA_STORAGE];
 
-	buf_printf(&fctx->buf, QUOTA_T_FMT, limit - fctx->quota.useds[QUOTA_STORAGE]);
+	buf_printf(&fctx->buf, QUOTA_T_FMT,
+		   limit - fctx->quota.useds[QUOTA_STORAGE]);
     }
     else if (fctx->record) {
 	/* Bytes used by resource */
@@ -1911,39 +1890,19 @@ EXPORTED int propfind_quota(const xmlChar *name, xmlNsPtr ns,
 EXPORTED int propfind_curprin(const xmlChar *name, xmlNsPtr ns,
 			      struct propfind_ctx *fctx,
 			      xmlNodePtr prop,
-			      xmlNodePtr resp __attribute__((unused)),
+			      xmlNodePtr resp,
 			      struct propstat propstat[],
 			      void *rock __attribute__((unused)))
 {
-    xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
-				   &propstat[PROPSTAT_OK], name, ns, NULL, 0);
-
     if (httpd_userid) {
-	const char *domain =
-	    httpd_extradomain ? httpd_extradomain : config_defdomain;
-
-	buf_reset(&fctx->buf);
-
-	if (strchr(httpd_userid, '@') || !domain) {
-	    buf_printf(&fctx->buf, "%s/user/%s/",
-		    namespace_principal.prefix, httpd_userid);
-	}
-	else {
-	    buf_printf(&fctx->buf, "%s/user/%s@%s/",
-		       namespace_principal.prefix, httpd_userid, domain);
-	}
-
-	if (fctx->mode == PROPFIND_EXPAND) {
-	    /* Return properties for this URL */
-	    expand_property(prop, fctx, buf_cstring(&fctx->buf),
-			    &principal_parse_path, principal_props, node, 0);
-	}
-	else {
-	    /* Return just the URL */
-	    xml_add_href(node, NULL, buf_cstring(&fctx->buf));
-	}
+	propfind_principalurl(name, ns, fctx,
+			      prop, resp, propstat, httpd_userid);
     }
     else {
+	xmlNodePtr node =
+	    xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
+			 &propstat[PROPSTAT_OK], name, ns, NULL, 0);
+
 	xmlNewChild(node, NULL, BAD_CAST "unauthenticated", NULL);
     }
 
