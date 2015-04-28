@@ -127,11 +127,11 @@ static int report_card_query(struct transaction_t *txn,
 			     struct meth_params *rparams,
 			     xmlNodePtr inroot, struct propfind_ctx *fctx);
 
-#define vparser_as_vcard_string(vparser) (vparser->base)
-
 static char *vparser_as_vcard_string_r(struct vparse_state *vparser)
 {
-    return xstrdup(vparser_as_vcard_string(vparser));
+    struct buf buf = BUF_INITIALIZER;
+    vparse_tobuf(vparser->card, &buf);
+    return buf_release(&buf);
 }
 
 static struct vparse_state *vcard_string_as_vparser(const char *str)
@@ -708,8 +708,12 @@ static int store_resource(struct transaction_t *txn, struct vparse_state *vparse
     spool_remove_header(xstrdup("Content-Description"), txn->req_hdrs);
 
     /* Store the resource */
-    return dav_store_resource(txn, vparser_as_vcard_string(vparser), 0,
+    struct buf buf = BUF_INITIALIZER;
+    vparse_tobuf(vparser->card, &buf);
+    int r = dav_store_resource(txn, buf_cstring(&buf), 0,
 			      mailbox, oldrecord, NULL);
+    buf_free(&buf);
+    return r;
 }
 
 static int carddav_copy(struct transaction_t *txn, void *obj,
