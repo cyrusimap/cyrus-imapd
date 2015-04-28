@@ -595,10 +595,16 @@ static int mboxname_toexternal(struct namespace *namespace, const char *mboxname
     mboxname_hiersep_toexternal(namespace, result, 0);
 
     /* Append domain - only if not the same as the user */
-    if (mbparts.domain &&
-	strcmpsafe(userparts.domain, mbparts.domain)) {
-	strcat(result, "@");
-	strcat(result, mbparts.domain);
+    if (mbparts.domain) {
+	if (strcmpsafe(userparts.domain, mbparts.domain)) {
+	    strcat(result, "@");
+	    strcat(result, mbparts.domain);
+	} else {
+	    if (namespace->isadmin && !userparts.domain) {
+		strcat(result, "@");
+		strcat(result, mbparts.domain);
+	    }
+	}
     }
 
     mboxname_free_parts(&mbparts);
@@ -618,6 +624,19 @@ static int mboxname_toexternal_alt(struct namespace *namespace, const char *mbox
 
     // Make this abundantly simple
     mboxname_toexternal(namespace, mboxname, userid, iresult);
+
+    if (namespace->isadmin) {
+	sprintf(result, "%s", iresult);
+    }
+
+    // If an administrator view, such as intended with event
+    // notifications, then the translation to external is
+    // sufficient (omit the "Other Users/" and "Shared Folders/"
+    // prefixes for regular users).
+    if (namespace->isadmin) {
+	sprintf(result, "%s", iresult);
+	return 0;
+    }
 
     r = strncasecmp(iresult, "inbox", 5);
 
@@ -701,8 +720,11 @@ EXPORTED int mboxname_init_namespace(struct namespace *namespace, int isadmin)
 	    strchr(prefix, namespace->hier_sep) != NULL ||
 	    !strncmp(namespace->prefix[NAMESPACE_USER], prefix, strlen(prefix)))
 	    return IMAP_NAMESPACE_BADPREFIX;
-	sprintf(namespace->prefix[NAMESPACE_SHARED], "%.*s%c",
+
+	if (!isadmin) {
+	    sprintf(namespace->prefix[NAMESPACE_SHARED], "%.*s%c",
 		MAX_NAMESPACE_PREFIX-1, prefix, namespace->hier_sep); 
+	}
 
 	namespace->mboxname_tointernal = mboxname_tointernal_alt;
 	namespace->mboxname_toexternal = mboxname_toexternal_alt;
