@@ -64,6 +64,7 @@
 #include "map.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xml_support.h"
 #include "zoneinfo_db.h"
 
 extern int optind;
@@ -81,20 +82,6 @@ void store_zoneinfo(const char *tzid, void *data, void *rock);
 void do_zonedir(const char *prefix, struct hash_table *tzentries,
 		struct zoneinfo *info);
 void shut_down(int code);
-
-#ifndef HAVE_XML_FIRSTCHILD
-xmlNodePtr xmlGetNextNode(xmlNodePtr node)
-{
-    for (; node && node->type != XML_ELEMENT_NODE; node = node->next);
-    return node;
-}
-
-#define xmlFirstElementChild(parent) \
-    xmlGetNextNode(parent->children)
-
-#define xmlNextElementSibling(node) \
-    xmlGetNextNode(node->next)
-#endif
 
 
 int main(int argc, char **argv)

@@ -54,6 +54,7 @@
 #include "util.h"
 #include "version.h"
 #include "xcal.h"
+#include "xml_support.h"
 
 
 extern icalvalue_kind icalproperty_kind_to_value_kind(icalproperty_kind kind);
@@ -1245,46 +1246,3 @@ void end_xcal(struct buf *buf)
     buf_printf_markup(buf, 1, "</vcalendar>");
     buf_printf_markup(buf, 0, "</icalendar>");
 }
-
-
-/* libxml2 replacement functions for those missing in older versions */
-#if (LIBXML_VERSION < 20800)
-xmlChar *xmlBufferDetach(xmlBufferPtr buf)
-{
-    xmlChar *ret;
-
-    if (!buf) return NULL;
-
-    ret = buf->content;
-    buf->content = NULL;
-    buf->use = buf->size = 0;
-
-    return ret;
-}
-
-
-#if (LIBXML_VERSION < 20703)
-xmlNodePtr xmlFirstElementChild(xmlNodePtr node)
-{
-    if (!node) return NULL;
-
-    for (node = node->children; node; node = node->next) {
-	if (node->type == XML_ELEMENT_NODE) return (node);
-    }
-
-    return NULL;
-}
-
-
-xmlNodePtr xmlNextElementSibling(xmlNodePtr node)
-{
-    if (!node) return NULL;
-
-    for (node = node->next; node; node = node->next) {
-	if (node->type == XML_ELEMENT_NODE) return (node);
-    }
-
-    return NULL;
-}
-#endif /* < 2.7.3 */
-#endif /* < 2.8.0 */

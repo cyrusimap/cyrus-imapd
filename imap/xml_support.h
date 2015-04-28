@@ -1,6 +1,6 @@
-/* xcal.h -- Routines for converting iCalendar to/from xCal
+/* xml_support.h -- Helper functions for libxml2
  *
- * Copyright (c) 1994-2013 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2015 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -41,40 +41,30 @@
  *
  */
 
-#ifndef XCAL_H
-#define XCAL_H
+
+#ifndef XML_SUPPORT_H
+#define XML_SUPPORT_H
 
 #include <config.h>
 
-#include <libical/ical.h>
+#include <libxml/tree.h>
 
-#include "util.h"
+/* libxml2 replacement functions for those missing in older versions */
 
-#ifndef HAVE_VPOLL
-/* Allow us to compile without #ifdef HAVE_VPOLL everywhere */
-#define ICAL_POLLPROPERTIES_PROPERTY  ICAL_NO_PROPERTY
-#endif
+#ifndef HAVE_XML_BUFFERDETACH
 
-#define XML_NS_ICALENDAR	"urn:ietf:params:xml:ns:icalendar-2.0"
+extern xmlChar *xmlBufferDetach(xmlBufferPtr buf);
 
-extern const char *icalproperty_value_kind_as_string(icalproperty *prop);
-extern const char *icaltime_as_iso_string(const struct icaltimetype tt);
-extern const char *icalvalue_utcoffset_as_iso_string(const icalvalue* value);
-extern void icalrecurrencetype_add_as_xxx(struct icalrecurrencetype *recur,
-					  void *obj,
-					  void (*add_int)(void *, const char *,
-							  int),
-					  void (*add_str)(void *, const char *,
-							  const char *));
-extern struct icalrecurrencetype *
-icalrecur_add_rule(struct icalrecurrencetype **rt,
-		   const char *rpart, void *data,
-		   int (*get_int)(void *),
-		   const char* (*get_str)(void *));
+#ifndef HAVE_XML_FIRSTCHILD
 
-extern char *icalcomponent_as_xcal_string(icalcomponent* comp);
-extern icalcomponent *xcal_string_as_icalcomponent(const char *str);
-extern const char *begin_xcal(struct buf *buf);
-extern void end_xcal(struct buf *buf);
+extern xmlNodePtr xmlGetNextNode(xmlNodePtr node);
 
-#endif /* XCAL_H */
+#define xmlFirstElementChild(parent) xmlGetNextNode(parent->children)
+
+#define xmlNextElementSibling(node) xmlGetNextNode(node->next)
+
+#endif /* HAVE_XML_FIRSTCHILD */
+
+#endif /* HAVE_XML_BUFFERDETACH */
+
+#endif /* XML_SUPPORT_H */

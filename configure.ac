@@ -1269,9 +1269,14 @@ dnl
 	PKG_CHECK_MODULES([XML2], [libxml-2.0],,
 		AC_MSG_ERROR([Need libxml-2.0 for http]))
 
-	AC_CHECK_LIB(xml2, xmlFirstElementChild,
+	AC_CHECK_LIB(xml2, xmlFirstElementChild, [
 		AC_DEFINE(HAVE_XML_FIRSTCHILD,[],
-			[Do we have support for xmlFirstElementChild()?]))
+			[Do we have support for xmlFirstElementChild()?])
+
+		AC_CHECK_LIB(xml2, xmlBufferDetach,
+			AC_DEFINE(HAVE_XML_BUFFERDETACH,[],
+				[Do we have support for xmlBufferDetach()?]))
+		])
 
 	PKG_CHECK_MODULES([SQLITE3], [sqlite3],
 		AC_DEFINE(WITH_DAV,[],[Build *DAV support into httpd?]),

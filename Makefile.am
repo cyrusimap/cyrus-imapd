@@ -1066,6 +1066,8 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/webdav_db.h \
 	imap/xcal.c \
 	imap/xcal.h \
+	imap/xml_support.c \
+	imap/xml_support.h \
 	imap/zoneinfo_db.c \
 	imap/zoneinfo_db.h
 
@@ -1188,6 +1190,7 @@ imap_httpd_SOURCES = \
 	imap/spool.c \
 	imap/webdav_db.c \
 	imap/xcal.c \
+	imap/xml_support.c \
 	imap/zoneinfo_db.c \
 	master/service.c
 
