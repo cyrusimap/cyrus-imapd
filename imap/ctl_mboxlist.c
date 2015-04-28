@@ -285,7 +285,7 @@ static int dump_cb(void *rockp,
 		}
 
 		// Since we have a server, make it part of the location
-		sprintf(part, "%s!%s", xstrdup(server), xstrdup(part));
+		part = strconcat(server, "!", xstrdup(part));
 
 	    } // (mbtype & MBTYPE_REMOTE)
 
