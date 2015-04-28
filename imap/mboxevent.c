@@ -623,6 +623,8 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
 {
     char url[MAX_MAILBOX_PATH+1];
     struct imapurl imapurl;
+    mbentry_t *mbentry;
+    int r;
 
     if (!event)
 	return;
@@ -645,7 +647,12 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
     }
 
     imapurl_toURL(url, &imapurl);
-    FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(url));
+
+    r = mboxlist_lookup(mailboxname, &mbentry, NULL);
+
+    FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(mbentry->uniqueid));
+
+    mboxlist_entry_free(&mbentry);
 
     if (serveraddr && mboxevent_expected_param(event->type, EVENT_SERVER_ADDRESS)) {
 	FILL_STRING_PARAM(event, EVENT_SERVER_ADDRESS, xstrdup(serveraddr));
@@ -1017,8 +1024,9 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
 
     /* mailbox related events also require mailboxID */
     if (event->type & MAILBOX_EVENTS) {
-	FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(url));
+	FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(mailbox->uniqueid));
     }
+
     if (mboxevent_expected_param(event->type, EVENT_UIDNEXT)) {
 	FILL_UNSIGNED_PARAM(event, EVENT_UIDNEXT, mailbox->i.last_uid+1);
     }
