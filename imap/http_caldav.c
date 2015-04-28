@@ -167,6 +167,7 @@ static time_t compile_time;
 static struct buf ical_prodid_buf = BUF_INITIALIZER;
 static const char *ical_prodid = NULL;
 static struct strlist *cua_domains = NULL;
+static icaltimezone *utc_zone = NULL;
 icalarray *rscale_calendars = NULL;
 
 static int meth_get_head_cal(struct transaction_t *txn, void *params);
@@ -684,6 +685,8 @@ static void my_caldav_init(struct buf *serverinfo)
     tok_init(&tok, domains, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
     while ((domain = tok_next(&tok))) appendstrlist(&cua_domains, domain);
     tok_fini(&tok);
+
+    utc_zone = icaltimezone_get_utc_timezone();
 }
 
 
@@ -3039,8 +3042,7 @@ static void add_freebusy(struct icaltimetype *start,
 	newfb->per.duration = icaltime_subtract(*end, *start);
 	newfb->per.end = icaltime_null_time();
 	start->is_date = 0;  /* MUST be DATE-TIME */
-	newfb->per.start =
-	    icaltime_convert_to_zone(*start, icaltimezone_get_utc_timezone());
+	newfb->per.start = icaltime_convert_to_zone(*start, utc_zone);
     }
     else {
 	newfb->per.duration = icaldurationtype_null_duration();
@@ -3059,13 +3061,12 @@ static void add_freebusy_comp(icalcomponent *comp, struct icaltime_span *span,
 {
     struct calquery_filter *calfilter = (struct calquery_filter *) rock;
     int is_date = icaltime_is_date(icalcomponent_get_dtstart(comp));
-    icaltimezone *utc = icaltimezone_get_utc_timezone();
     struct icaltimetype start, end;
     icalparameter_fbtype fbtype;
 
     /* Set start and end times */
-    start = icaltime_from_timet_with_zone(span->start, is_date, utc);
-    end = icaltime_from_timet_with_zone(span->end, is_date, utc);
+    start = icaltime_from_timet_with_zone(span->start, is_date, utc_zone);
+    end = icaltime_from_timet_with_zone(span->end, is_date, utc_zone);
 
     /* Set FBTYPE */
     switch (icalcomponent_isa(comp)) {
@@ -3163,7 +3164,6 @@ static int expand_occurrences(icalcomponent *ical, icalcomponent_kind kind,
 {
     struct freebusy_array *freebusy = &calfilter->freebusy;
     icalcomponent *comp;
-    icaltimezone *utc = icaltimezone_get_utc_timezone();
     icaltime_span rangespan;
     unsigned firstr, lastr;
 
@@ -3171,10 +3171,8 @@ static int expand_occurrences(icalcomponent *ical, icalcomponent_kind kind,
     if (!(calfilter->flags & BUSYTIME_QUERY)) freebusy->len = 0;
 
     /* Create a span for the given time-range */
-    rangespan.start =
-	icaltime_as_timet_with_zone(calfilter->start, utc);
-    rangespan.end =
-	icaltime_as_timet_with_zone(calfilter->end, utc);
+    rangespan.start = icaltime_as_timet_with_zone(calfilter->start, utc_zone);
+    rangespan.end = icaltime_as_timet_with_zone(calfilter->end, utc_zone);
 
     /* Mark start of where recurrences will be added */
     firstr = freebusy->len;
@@ -3229,9 +3227,7 @@ static int expand_occurrences(icalcomponent *ical, icalcomponent_kind kind,
 	    if (tz) icaltime_set_timezone(&recurid, tz);
 	}
 
-	recurid =
-	    icaltime_convert_to_zone(recurid,
-				     icaltimezone_get_utc_timezone());
+	recurid = icaltime_convert_to_zone(recurid, utc_zone);
 	recurid.is_date = 0;  /* make DATE-TIME for comparison */
 
 	/* Check if this overridden instance is in our array */
@@ -3417,7 +3413,6 @@ static int parse_comp_filter(xmlNodePtr root, struct calquery_filter *filter,
 		if (ret) return ret;
 	    }
 	    else if (!xmlStrcmp(node->name, BAD_CAST "time-range")) {
-		icaltimezone *utc = icaltimezone_get_utc_timezone();
 		xmlChar *start, *end;
 
 		if (!(filter->comp & (CAL_COMP_VEVENT | CAL_COMP_VTODO))) {
@@ -3432,7 +3427,7 @@ static int parse_comp_filter(xmlNodePtr root, struct calquery_filter *filter,
 		}
 		else {
 		    filter->start =
-			icaltime_from_timet_with_zone(caldav_epoch, 0, utc);
+			icaltime_from_timet_with_zone(caldav_epoch, 0, utc_zone);
 		}
 
 		end = xmlGetProp(node, BAD_CAST "end");
@@ -3442,7 +3437,7 @@ static int parse_comp_filter(xmlNodePtr root, struct calquery_filter *filter,
 		}
 		else {
 		    filter->end =
-			icaltime_from_timet_with_zone(caldav_eternity, 0, utc);
+			icaltime_from_timet_with_zone(caldav_eternity, 0, utc_zone);
 		}
 
 		if (!is_valid_timerange(filter->start, filter->end)) {
@@ -3947,8 +3942,7 @@ static int propfind_minmaxdate(const xmlChar *name, xmlNsPtr ns,
 
     if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
 
-    date = icaltime_from_timet_with_zone(*((time_t *) rock), 0,
-					 icaltimezone_get_utc_timezone());
+    date = icaltime_from_timet_with_zone(*((time_t *) rock), 0, utc_zone);
 
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 		 name, ns, BAD_CAST icaltime_as_ical_string(date), 0);
@@ -4763,7 +4757,6 @@ static int report_cal_query(struct transaction_t *txn,
 static void
 add_vavailability(struct vavailability_array *vavail, icalcomponent *ical)
 {
-    icaltimezone *utc = icaltimezone_get_utc_timezone();
     struct vavailability *newav;
     icalcomponent *vav;
     icalproperty *prop;
@@ -4783,15 +4776,21 @@ add_vavailability(struct vavailability_array *vavail, icalcomponent *ical)
 
     /* Set period */
     newav->per.start = icalcomponent_get_dtstart(vav);
-    if (icaltime_is_null_time(newav->per.start))
-	newav->per.start = icaltime_from_timet_with_zone(caldav_epoch, 0, utc);
-    else
-	newav->per.start = icaltime_convert_to_zone(newav->per.start, utc),
+    if (icaltime_is_null_time(newav->per.start)) {
+	newav->per.start =
+	    icaltime_from_timet_with_zone(caldav_epoch, 0, utc_zone);
+    }
+    else {
+	newav->per.start = icaltime_convert_to_zone(newav->per.start, utc_zone);
+    }
     newav->per.end = icalcomponent_get_dtend(vav);
-    if (icaltime_is_null_time(newav->per.end))
-	newav->per.end = icaltime_from_timet_with_zone(caldav_eternity, 0, utc);
-    else
-	newav->per.end = icaltime_convert_to_zone(newav->per.end, utc),
+    if (icaltime_is_null_time(newav->per.end)) {
+	newav->per.end =
+	    icaltime_from_timet_with_zone(caldav_eternity, 0, utc_zone);
+    }
+    else {
+	newav->per.end = icaltime_convert_to_zone(newav->per.end, utc_zone);
+    }
     newav->per.duration = icaldurationtype_null_duration();
 
     /* Set PRIORITY - 0 (or none) has lower priority than 9 */
@@ -5167,9 +5166,7 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
     fbcomp = icalcomponent_vanew(ICAL_VFREEBUSY_COMPONENT,
 				 icalproperty_new_dtstamp(
 				     icaltime_from_timet_with_zone(
-					 time(0),
-					 0,
-					 icaltimezone_get_utc_timezone())),
+					 time(0), 0, utc_zone)),
 				 icalproperty_new_dtstart(calfilter->start),
 				 icalproperty_new_dtend(calfilter->end),
 				 0);
@@ -5214,7 +5211,6 @@ static int report_fb_query(struct transaction_t *txn,
     struct calquery_filter calfilter;
     xmlNodePtr node;
     icalcomponent *cal;
-    icaltimezone *utc = icaltimezone_get_utc_timezone();
 
     /* Can not be run against a resource */
     if (txn->req_tgt.resource) return HTTP_FORBIDDEN;
@@ -5229,8 +5225,8 @@ static int report_fb_query(struct transaction_t *txn,
     memset(&calfilter, 0, sizeof(struct calquery_filter));
     calfilter.comp =
 	CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY | CAL_COMP_VAVAILABILITY;
-    calfilter.start = icaltime_from_timet_with_zone(caldav_epoch, 0, utc);
-    calfilter.end = icaltime_from_timet_with_zone(caldav_eternity, 0, utc);
+    calfilter.start = icaltime_from_timet_with_zone(caldav_epoch, 0, utc_zone);
+    calfilter.end = icaltime_from_timet_with_zone(caldav_eternity, 0, utc_zone);
     calfilter.flags = BUSYTIME_QUERY;
     fctx->filter = apply_calfilter;
     fctx->filter_crit = &calfilter;
@@ -5409,7 +5405,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			    txn->req_hdrs);
 
     time_to_rfc822(icaltime_as_timet_with_zone(icalcomponent_get_dtstamp(comp),
-					       icaltimezone_get_utc_timezone()),
+					       utc_zone),
 		   datestr, sizeof(datestr));
     spool_replace_header(xstrdup("Date"), xstrdup(datestr), txn->req_hdrs);
 
@@ -5613,7 +5609,6 @@ static int imip_send(icalcomponent *ical)
     const char *argv[7], *msg_type, *summary, *location, *descrip, *status;
     struct address_t *recipients = NULL, *originator = NULL, *recip;
     struct icaltimetype start, end;
-    icaltimezone *utc = icaltimezone_get_utc_timezone();
     char *cp, when[2*RFC822_DATETIME_MAX+4], datestr[RFC822_DATETIME_MAX+1];
     char boundary[100], *ical_str;
     size_t outlen;
@@ -5685,8 +5680,8 @@ static int imip_send(icalcomponent *ical)
     }
     else status = NULL;
 
-    start = icaltime_convert_to_zone(icalcomponent_get_dtstart(comp), utc);
-    end = icaltime_convert_to_zone(icalcomponent_get_dtend(comp), utc);
+    start = icaltime_convert_to_zone(icalcomponent_get_dtstart(comp), utc_zone);
+    end = icaltime_convert_to_zone(icalcomponent_get_dtend(comp), utc_zone);
 
     cp = when;
     cp += sprintf(cp, "%s, %02u %s %04u",
@@ -7271,8 +7266,6 @@ static void clean_component(icalcomponent *comp, int clean_org)
 {
     icalcomponent *alarm, *next;
     icalproperty *prop;
-    icaltimezone *utc = icaltimezone_get_utc_timezone();
-    time_t now = time(NULL);
 
     /* Replace DTSTAMP on component */
     prop = icalcomponent_get_first_property(comp,
@@ -7280,7 +7273,7 @@ static void clean_component(icalcomponent *comp, int clean_org)
     icalcomponent_remove_property(comp, prop);
     icalproperty_free(prop);
     prop =
-	icalproperty_new_dtstamp(icaltime_from_timet_with_zone(now, 0, utc));
+	icalproperty_new_dtstamp(icaltime_current_time_with_zone(utc_zone));
     icalcomponent_add_property(comp, prop);
 
     /* Remove any VALARM components */
@@ -8091,7 +8084,6 @@ static int meth_get_head_fb(struct transaction_t *txn,
     struct calquery_filter calfilter;
     time_t start;
     struct icaldurationtype period = icaldurationtype_null_duration();
-    icaltimezone *utc = icaltimezone_get_utc_timezone();
     icalcomponent *cal;
 
     /* Parse the path */
@@ -8156,7 +8148,7 @@ static int meth_get_head_fb(struct transaction_t *txn,
 	if (icaltime_is_null_time(calfilter.start)) return HTTP_BAD_REQUEST;
 
 	/* Default to end of given day */	
-	start = icaltime_as_timet_with_zone(calfilter.start, utc);
+	start = icaltime_as_timet_with_zone(calfilter.start, utc_zone);
 	tm = localtime(&start);
 
 	period.seconds = 60 - tm->tm_sec;
@@ -8168,7 +8160,7 @@ static int meth_get_head_fb(struct transaction_t *txn,
 	start = time(0);
 	tm = localtime(&start);
 	tm->tm_hour = tm->tm_min = tm->tm_sec = 0;
-	calfilter.start = icaltime_from_timet_with_zone(mktime(tm), 0, utc);
+	calfilter.start = icaltime_from_timet_with_zone(mktime(tm), 0, utc_zone);
 
 	/* Default to 42 day period */
 	period.days = 42;
