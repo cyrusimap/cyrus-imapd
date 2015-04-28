@@ -3319,6 +3319,37 @@ static int remove_user_acl(const char *userid, const char *mboxname)
 			   /*isadmin*/1, httpd_userid, httpd_authstate);
 }
 
+struct delete_rock {
+    struct transaction_t *txn;
+    struct mailbox *mailbox;
+    delete_proc_t deletep;
+};
+
+static int delete_cb(void *rock, void *data)
+{
+    struct delete_rock *drock = (struct delete_rock *) rock;
+    struct dav_data *ddata = (struct dav_data *) data;
+    struct index_record record;
+    int r;
+    
+    if (!ddata->imap_uid) {
+	/* Unmapped URL (empty resource) */
+	return 0;
+    }
+
+    /* Fetch index record for the resource */
+    r = mailbox_find_index_record(drock->mailbox, ddata->imap_uid,
+				  &record, NULL);
+    if (r) {
+	drock->txn->error.desc = error_message(r);
+	return HTTP_SERVER_ERROR;
+    }
+
+    r = drock->deletep(drock->txn, drock->mailbox, &record, data);
+	
+    return r;
+}
+
 /* Perform a DELETE request */
 int meth_delete(struct transaction_t *txn, void *params)
 {
@@ -3377,22 +3408,27 @@ int meth_delete(struct transaction_t *txn, void *params)
     if (!txn->req_tgt.resource) {
 	/* DELETE collection */
 
-	/* Open mailbox for reading */
-	r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
-	if (r) {
-	    syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-		   txn->req_tgt.mbentry->name, error_message(r));
-	    txn->error.desc = error_message(r);
-	    return HTTP_SERVER_ERROR;
+	if (dparams->delete) {
+	    /* Do special processing on all resources */
+	    struct delete_rock drock = { txn, NULL, dparams->delete };
+
+	    /* Open mailbox for reading */
+	    r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
+	    if (r) {
+		syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+		       txn->req_tgt.mbentry->name, error_message(r));
+		txn->error.desc = error_message(r);
+		return HTTP_SERVER_ERROR;
+	    }
+
+	    /* Open the DAV DB corresponding to the mailbox */
+	    davdb = dparams->davdb.open_db(mailbox);
+
+	    drock.mailbox = mailbox;
+	    ret = dparams->davdb.foreach_resource(davdb, mailbox->name,
+						  &delete_cb, &drock);
+	    if (ret) goto done;
 	}
-
-	/* Open the DAV DB corresponding to the mailbox */
-	davdb = dparams->davdb.open_db(mailbox);
-
-	/* Do any special processing */
-	if (dparams->delete) dparams->delete(txn, mailbox, NULL, NULL);
-
-	mailbox_close(&mailbox);
 
 	mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
 

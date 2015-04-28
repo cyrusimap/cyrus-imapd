@@ -1184,11 +1184,6 @@ static int caldav_delete_cal(struct transaction_t *txn,
     /* Only process deletes on regular calendar collections */
     if (txn->req_tgt.flags) return 0;
 
-    if (!record) {
-	/* XXX  DELETE collection - check all resources for sched objects */
-	return 0;
-    }
-
     if ((namespace_calendar.allow & ALLOW_CAL_ATTACH) && cdata->comp_flags.mattach) {
 	char *mailboxname = NULL;
 	struct mailbox *attachments = NULL;
