@@ -124,7 +124,6 @@ dnl if not specified
 if test $sysconfdir = '${prefix}/etc'; then
   sysconfdir="/etc"
 fi
-AC_DEFINE_UNQUOTED(SYSCONFDIR,"$sysconfdir",[Config File Location])
 
 AC_PROG_CC
 AC_PROG_CXX
@@ -1761,8 +1760,8 @@ struct sockaddr_storage {
 #define FNAME_DOMAINDIR "/domain/"
 #define FNAME_LOGDIR "/log/"
 #define FNAME_PTSDB "/ptclient/ptscache.db"
-#define CONFIG_FILENAME (SYSCONFDIR "/imapd.conf")
-#define DEFAULT_MASTER_CONFIG_FILENAME (SYSCONFDIR "/cyrus.conf")
+#define CONFIG_FILENAME (SYSCONF_DIR "/imapd.conf")
+#define DEFAULT_MASTER_CONFIG_FILENAME (SYSCONF_DIR "/cyrus.conf")
 
 #ifndef HAVE_SHUTDOWN
 #define shutdown(fd, mode) 0

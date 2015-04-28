@@ -53,6 +53,7 @@ AM_CPPFLAGS = \
 	-I${top_srcdir}/lib \
 	-DLIBEXEC_DIR=\"$(libexecdir)\" \
 	-DSBIN_DIR=\"$(sbindir)\" \
+	-DSYSCONF_DIR=\"$(sysconfdir)\" \
 	${DEFS} \
 	${LOCALDEFS} \
 	$(SASLFLAGS) \

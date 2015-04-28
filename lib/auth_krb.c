@@ -69,7 +69,7 @@
 #include <krb.h>
 
 #ifndef KRB_MAPNAME
-#define KRB_MAPNAME (SYSCONFDIR "/krb.equiv")
+#define KRB_MAPNAME (SYSCONF_DIR "/krb.equiv")
 #endif
 
 struct auth_state {

@@ -260,7 +260,7 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
 
 /* where is krb.equiv? */
 # ifndef KRB_MAPNAME
-#  define KRB_MAPNAME (SYSCONFDIR "/krb.equiv")
+#  define KRB_MAPNAME (SYSCONF_DIR "/krb.equiv")
 # endif
 
 /*
