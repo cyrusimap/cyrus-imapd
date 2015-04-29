@@ -141,6 +141,9 @@ static struct vparse_state *vcard_string_as_vparser(const char *str)
 
     vparser = (struct vparse_state *) xzmalloc(sizeof(struct vparse_state));
     vparser->base = str;
+    vparse_set_multival(vparser, "adr");
+    vparse_set_multival(vparser, "org");
+    vparse_set_multival(vparser, "n");
     vr = vparse_parse(vparser, 0);
     if (vr) return NULL; // XXX report error
 
