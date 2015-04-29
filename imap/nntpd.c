@@ -1888,7 +1888,7 @@ static void cmd_article(int part, char *msgid, unsigned long uid)
     int msgno, by_msgid = (msgid != NULL);
     const char *fname;
     FILE *msgfile;
-    message_t *msg;
+    struct index_record record;
 
     msgno = index_finduid(group_state, uid);
     if (!msgno || index_getuid(group_state, msgno) != uid) {
@@ -1896,17 +1896,12 @@ static void cmd_article(int part, char *msgid, unsigned long uid)
 	return;
     }
 
-    msg = index_get_message(group_state, msgno);
-
-    if (!msg) {
+    if (mailbox_read_index_record(group_state->mailbox, msgno, &record)) {
 	prot_printf(nntp_out, "403 Could not read index record\r\n");
 	return;
     }
 
-    if (message_get_fname(msg, &fname)) {
-	prot_printf(nntp_out, "403 Could not read index record\r\n");
-	return;
-    }
+    fname = mailbox_record_fname(group_state->mailbox, &record);
 
     msgfile = fopen(fname, "r");
     if (!msgfile) {
