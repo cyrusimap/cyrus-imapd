@@ -1717,6 +1717,20 @@ EXPORTED int carddav_setContactGroups(struct carddav_db *carddavdb, struct jmap_
 		}
 	    }
 
+	    json_t *others = json_object_get(arg, "otherAccountContactIds");
+	    if (others) {
+		r = _add_othergroup_entries(carddavdb, req, card, others);
+		if (r) {
+		    /* this one is legit - it just means we'll be adding an error instead */
+		    r = 0;
+		    json_t *err = json_pack("{s:s}", "type", "invalidContactId");
+		    json_object_set_new(notUpdated, uid, err);
+		    vparse_free(&vparser);
+		    mailbox_close(&newmailbox);
+		    continue;
+		}
+	    }
+
 	    r = carddav_store(newmailbox ? newmailbox : mailbox, card, resource, NULL, NULL, req->userid, req->authstate);
 	    if (!r) r = carddav_remove(mailbox, olduid);
 	    mailbox_close(&newmailbox);
