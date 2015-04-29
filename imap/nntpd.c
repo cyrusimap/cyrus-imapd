@@ -1899,18 +1899,18 @@ static void cmd_article(int part, char *msgid, unsigned long uid)
     msg = index_get_message(group_state, msgno);
 
     if (!msg) {
-	prot_printf(nntp_out, "502 Could not read index record\r\n");
+	prot_printf(nntp_out, "403 Could not read index record\r\n");
 	return;
     }
 
     if (message_get_fname(msg, &fname)) {
-	prot_printf(nntp_out, "502 Could not read index record\r\n");
+	prot_printf(nntp_out, "403 Could not read index record\r\n");
 	return;
     }
 
     msgfile = fopen(fname, "r");
     if (!msgfile) {
-	prot_printf(nntp_out, "502 Could not read message file\r\n");
+	prot_printf(nntp_out, "403 Could not read message file\r\n");
 	return;
     }
 
@@ -2246,7 +2246,7 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
     if (proc_checklimits(&limits)) {
 	const char *sep = "";
 	prot_printf(nntp_out,
-		    "452 Too many open connections (");
+		    "400 Too many open connections (");
 	if (limits.maxhost) {
 	    prot_printf(nntp_out, "%s%d of %d from %s", sep,
 			limits.host, limits.maxhost, nntp_clienthost);
