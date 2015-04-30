@@ -1014,12 +1014,81 @@ static int _wantprop(hash_table *props, const char *name)
     return 0;
 }
 
-static void _date_to_jmap(const char *date, struct buf *buf)
+/* convert YYYY-MM-DD to separate y,m,d */
+static int _parse_date(const char *date, unsigned *y, unsigned *m, unsigned *d)
 {
-    if (date)
-	buf_setcstr(buf, date);
-    else
-	buf_setcstr(buf, "0000-00-00");
+    /* there isn't a convenient libc function that will let us convert parts of
+     * a string to integer and only take digit characters, so we just pull it
+     * apart ourselves */
+
+    /* format check. no need to strlen() beforehand, it will fall out of this */
+    if (date[0] < '0' || date[0] > '9' ||
+	date[1] < '0' || date[1] > '9' ||
+	date[2] < '0' || date[2] > '9' ||
+	date[3] < '0' || date[3] > '9' ||
+	date[4] != '-' ||
+	date[5] < '0' || date[5] > '9' ||
+	date[6] < '0' || date[6] > '9' ||
+	date[7] != '-' ||
+	date[8] < '0' || date[8] > '9' ||
+	date[9] < '0' || date[9] > '9' ||
+	date[10] != '\0')
+
+	return -1;
+
+    /* convert to integer. ascii digits are 0x30-0x37, so we can take bottom
+     * four bits and multiply */
+    *y =
+	(date[0] & 0xf) * 1000 +
+	(date[1] & 0xf) * 100 +
+	(date[2] & 0xf) * 10 +
+	(date[3] & 0xf);
+
+    *m =
+	(date[5] & 0xf) * 10 +
+	(date[6] & 0xf);
+
+    *d =
+	(date[8] & 0xf) * 10 +
+	(date[9] & 0xf);
+
+    return 0;
+}
+
+static void _date_to_jmap(struct vparse_entry *entry, struct buf *buf)
+{
+    if (!entry)
+	goto no_date;
+
+    unsigned y, m, d;
+    if (_parse_date(entry->v.value, &y, &m, &d))
+	goto no_date;
+
+    if (y < 1604 || m > 12 || d > 31)
+	goto no_date;
+
+    const struct vparse_param *param;
+    for (param = entry->params; param; param = param->next) {
+	if (!strcasecmp(param->name, "x-apple-omit-year"))
+	    /* XXX compare value with actual year? */
+	    y = 0;
+	if (!strcasecmp(param->name, "x-fm-no-month"))
+	    m = 0;
+	if (!strcasecmp(param->name, "x-fm-no-day"))
+	    d = 0;
+    }
+
+    /* sigh, magic year 1604 has been seen without X-APPLE-OMIT-YEAR, making
+     * me wonder what the bloody point is */
+    if (y == 1604)
+	y = 0;
+
+    buf_reset(buf);
+    buf_printf(buf, "%04d-%02d-%02d", y, m, d);
+    return;
+
+no_date:
+    buf_setcstr(buf, "0000-00-00");
 }
 
 static const char *_servicetype(const char *type)
@@ -1412,8 +1481,8 @@ static int getcontacts_cb(sqlite3_stmt *stmt, void *rock)
     }
 
     if (_wantprop(grock->props, "birthday")) {
-	const char *item = vparse_stringval(card, "bday");
-	_date_to_jmap(item, &buf);
+	struct vparse_entry *entry = vparse_get_entry(card, NULL, "bday");
+	_date_to_jmap(entry, &buf);
 	json_object_set_new(obj, "birthday", json_string(buf_cstring(&buf)));
     }
 
@@ -2145,6 +2214,79 @@ static int _addresses_to_card(struct vparse_card *card, json_t *arg)
     return 0;
 }
 
+static int _date_to_card(struct vparse_card *card, const char *key, json_t *jval)
+{
+    if (!jval)
+	return -1;
+    const char *val = json_string_value(jval);
+    if (!val)
+	return -1;
+
+    /* JMAP dates are always YYYY-MM-DD */
+    unsigned y, m, d;
+    if (_parse_date(val, &y, &m, &d))
+	return -1;
+
+    /* range checks. month and day just get basic sanity checks because we're
+     * not carrying a full calendar implementation here. JMAP says zero is valid
+     * so we'll allow that and deal with it later on */
+    if (m > 12 || d > 31)
+	return -1;
+
+    /* all years are valid in JMAP, but ISO8601 only allows Gregorian ie >= 1583.
+     * moreover, iOS uses 1604 as a magic number for "unknown", so we'll say 1605
+     * is the minimum */
+    if (y > 0 && y < 1605)
+	return -1;
+
+    /* everything in range. now comes the fun bit. vCard v3 says BDAY is
+     * YYYY-MM-DD. It doesn't reference ISO8601 (vCard v4 does) and make no
+     * provision for "unknown" date components, so there's no way to represent
+     * JMAP's "unknown" values. Apple worked around this for year by using the
+     * year 1604 and adding the parameter X-APPLE-OMIT-YEAR=1604 (value
+     * apparently ignored). We will use a similar hack for month and day so we
+     * can convert it back into a JMAP date */
+
+    int no_year = 0;
+    if (y == 0) {
+	no_year = 1;
+	y = 1604;
+    }
+
+    int no_month = 0;
+    if (m == 0) {
+	no_month = 1;
+	m = 1;
+    }
+
+    int no_day = 0;
+    if (d == 0) {
+	no_day = 1;
+	d = 1;
+    }
+
+    vparse_delete_entries(card, NULL, key);
+
+    /* no values, we're done! */
+    if (no_year && no_month && no_day)
+	return 0;
+
+    /* build the value */
+    static char buf[11];
+    snprintf(buf, sizeof(buf), "%04d-%02d-%02d", y, m, d);
+    struct vparse_entry *entry = vparse_add_entry(card, NULL, key, buf);
+
+    /* set all the round-trip flags, sigh */
+    if (no_year)
+	vparse_add_param(entry, "x-apple-omit-year", "1604");
+    if (no_month)
+	vparse_add_param(entry, "x-fm-no-month", "1");
+    if (no_day)
+	vparse_add_param(entry, "x-fm-no-day", "1");
+
+    return 0;
+}
+
 static int _kv_to_card(struct vparse_card *card, const char *key, json_t *jval)
 {
     if (!jval)
@@ -2276,7 +2418,7 @@ static int _json_to_card(struct vparse_card *card, json_t *arg, strarray_t *flag
 	    if (r) return r;
 	}
 	else if (!strcmp(key, "birthday")) {
-	    int r = _kv_to_card(card, "bday", jval);
+	    int r = _date_to_card(card, "bday", jval);
 	    if (r) return r;
 	}
 	else if (!strcmp(key, "anniversary")) {
