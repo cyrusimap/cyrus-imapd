@@ -807,7 +807,7 @@ EXPORTED int mailbox_map_record(struct mailbox *mailbox, struct index_record *re
 	fatal("can't fstat message file", EC_OSFILE);
     }
 
-    buf_init_mmap(&buf, /*onceonly*/1, msgfd, fname, sbuf.st_size, mailbox->name);
+    buf_init_mmap(buf, /*onceonly*/1, msgfd, fname, sbuf.st_size, mailbox->name);
     close(msgfd);
 
     return 0;
