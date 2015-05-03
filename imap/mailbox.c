@@ -1795,6 +1795,12 @@ static int _commit_changes(struct mailbox *mailbox)
 
     _cleanup_changes(mailbox);
 
+    /* recalculate the size */
+    mailbox->index_size = mailbox->i.start_offset + (mailbox->i.num_records * mailbox->i.record_size);
+
+    r = mailbox_refresh_index_map(mailbox);
+    if (r) return r;
+
     return 0;
 }
 
@@ -3738,7 +3744,6 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
 
     mailbox->i.last_uid = record->uid;
     mailbox->i.num_records = record->recno;
-    mailbox->index_size += INDEX_RECORD_SIZE;
 
     /* expunged tracking */
     if (record->system_flags & FLAG_EXPUNGED && (!mailbox->i.first_expunged || mailbox->i.first_expunged > record->last_updated))
