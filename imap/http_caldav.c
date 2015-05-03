@@ -5605,7 +5605,7 @@ static int imip_send(icalcomponent *ical)
     struct address_t *recipients = NULL, *originator = NULL, *recip;
     struct icaltimetype start, end;
     char *cp, when[2*RFC822_DATETIME_MAX+4], datestr[RFC822_DATETIME_MAX+1];
-    char boundary[100], *ical_str;
+    char boundary[100], *mimebody, *ical_str;
     size_t outlen;
     struct buf plainbuf = BUF_INITIALIZER, tmpbuf = BUF_INITIALIZER;
     FILE *sm;
@@ -5732,7 +5732,7 @@ static int imip_send(icalcomponent *ical)
 	    p, t, send_count++, config_servername);
 
     /* Create multipart boundary */
-    snprintf(boundary, sizeof(boundary), "%s-%ld-%ld-%ld",
+    snprintf(boundary, sizeof(boundary), "%s=_%ld=_%ld=_%ld",
 	     config_servername, (long) p, (long) t, (long) rand());
 
     fprintf(sm, "Content-Type: multipart/alternative;"
@@ -5749,7 +5749,7 @@ static int imip_send(icalcomponent *ical)
     fprintf(sm, "\r\n--%s\r\n", boundary);
 
     fputs("Content-Type: text/plain; charset=utf-8\r\n", sm);
-    fputs("Content-Transfer-Encoding: base64\r\n", sm);
+    fputs("Content-Transfer-Encoding: quoted-printable\r\n", sm);
     fputs("Content-Disposition: inline\r\n", sm);
     fputs("\r\n", sm);
 
@@ -5789,12 +5789,11 @@ static int imip_send(icalcomponent *ical)
 	}
     }
 
-    charset_encode_mimebody(NULL, buf_len(&plainbuf), NULL, &outlen, NULL);
-    buf_ensure(&tmpbuf, outlen);
-    charset_encode_mimebody(buf_base(&plainbuf), buf_len(&plainbuf),
-			    (char *) buf_base(&tmpbuf), &outlen, NULL);
+    mimebody = charset_qpencode_mimebody(buf_base(&plainbuf),
+					 buf_len(&plainbuf), &outlen);
     buf_free(&plainbuf);
-    fwrite(buf_base(&tmpbuf), outlen, 1, sm);
+    fwrite(mimebody, outlen, 1, sm);
+    free(mimebody);
 
     /* HTML part */
     fprintf(sm, "\r\n--%s\r\n", boundary);
