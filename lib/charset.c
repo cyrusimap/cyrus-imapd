@@ -1329,41 +1329,140 @@ char *charset_encode_mimebody(const char *msg_base, size_t len,
     return (b64_len ? retval : NULL);
 }
 
-/* returns a buffer which the caller must free */
-char *charset_encode_mimeheader(const char *header, size_t len)
+/*
+ * If 'isheader' is non-zero "Q" encode (per RFC 2047), otherwise
+ * quoted-printable encode (per RFC 2045), the 'data' of 'len' bytes.
+ * Returns a buffer which the caller must free.
+ * Returns the number of encoded bytes in 'outlen'.
+ */
+static char *qp_encode(const char *data, size_t len, int isheader,
+		       size_t *outlen)
 {
     struct buf buf = BUF_INITIALIZER;
     size_t n;
     int need_quote = 0;
 
-    if (!header) return NULL;
-
-    if (!len) len = strlen(header);
-
     for (n = 0; n < len; n++) {
-	unsigned char this = header[n];
-	if (QPSAFECHAR[this] || this == ' ') continue;
+	unsigned char this = data[n];
+	unsigned char next = (n < len - 1) ? data[n+1] : '\0';
+
+	if (QPSAFECHAR[this] || this == '=' || this == ' ' || this == '\t') {
+	    /* per RFC 5322: printable ASCII (decimal 33 - 126), SP, HTAB */
+	    continue;
+	}
+	else if (this == '\r' && next == '\n') {
+	    /* line break (CRLF) */
+	    n++;
+	    continue;
+	}
 	need_quote = 1;
 	break;
     }
 
     if (need_quote) {
-	buf_printf(&buf, "=?UTF-8?Q?");
+	int cnt = 0;
+
+	if (isheader) {
+	    buf_appendcstr(&buf, "=?UTF-8?Q?");
+	    cnt = 10;
+	}
+
 	for (n = 0; n < len; n++) {
-	    unsigned char this = header[n];
-	    if (QPSAFECHAR[this]) {
+	    unsigned char this = data[n];
+	    unsigned char next = (n < len - 1) ? data[n+1] : '\0';
+
+	    if (cnt >= BASE64_MAX_LINE_LEN) {
+		if (isheader) {
+		    /* split encoded token with fold */
+		    buf_appendcstr(&buf, "?=");
+		    buf_appendcstr(&buf, "\r\n ");
+		    buf_appendcstr(&buf, "=?UTF-8?Q?");
+		    cnt = 11;
+		}
+		else {
+		    /* add soft line break to body */
+		    buf_appendcstr(&buf, "=\r\n");
+		    cnt = 0;
+		}
+	    }
+
+	    if ((QPSAFECHAR[this]
+		 /* per RFC 2047: '?' and '_' in header aren't safe */
+		 && !(isheader && (this == '?' || this == '_')))
+
+		/* per RFC 2045: non-trailing whitespace in body is safe */
+		|| (!isheader && (this == ' ' || this == '\t') &&
+		    !(next == '\0' || next == '\r' || next == '\n'))) {
+
+		/* literal representation */
 		buf_putc(&buf, (char)this);
+		cnt++;
+	    }
+	    else if (isheader && this == ' ') {
+		/* per RFC 2047: represent SP in header as '_' for legibility */
+		buf_putc(&buf, '_');
+		cnt++;
+	    }
+	    else if (this == '\r' && next == '\n') {
+		if (isheader) {
+		    /* folded header, split encoded token */
+		    buf_appendcstr(&buf, "?=");
+		    buf_appendcstr(&buf, "\r\n");
+		    buf_putc(&buf, data[n+2]);
+		    buf_appendcstr(&buf, "=?UTF-8?Q?");
+		    cnt = 11;
+		    n += 2;
+		}
+		else {
+		    /* line break (CRLF) in body */
+		    buf_appendcstr(&buf, "\r\n");
+		    cnt = 0;
+		    n++;
+		}
 	    }
 	    else {
+		/* 8-bit representation */
 		buf_printf(&buf, "=%02X", this);
+		cnt += 3;
 	    }
 	}
-	buf_printf(&buf, "?=");
+
+	if (isheader) buf_appendcstr(&buf, "?=");
     }
     else {
-	buf_setmap(&buf, header, len);
+	buf_setmap(&buf, data, len);
     }
 
+    if (outlen) *outlen = buf_len(&buf);
+
     return buf_release(&buf);
+}
+
+/*
+ * Quoted-Printable encode the MIME body part (per RFC 2045) of 'len' bytes
+ * located at 'msg_base'.
+ * Returns a buffer which the caller must free.
+ * Returns the number of encoded bytes in 'outlen'.
+ */
+char *charset_qpencode_mimebody(const char *msg_base, size_t len,
+					 size_t *outlen)
+{
+    if (!msg_base) return NULL;
+
+    return qp_encode(msg_base, len, 0, outlen);
+}
+
+
+/* "Q" encode the header field body (per RFC 2047) of 'len' bytes
+ * located at 'header'.
+ * Returns a buffer which the caller must free.
+ */
+char *charset_encode_mimeheader(const char *header, size_t len)
+{
+    if (!header) return NULL;
+
+    if (!len) len = strlen(header);
+
+    return qp_encode(header, len, 1, NULL);
 }
 
