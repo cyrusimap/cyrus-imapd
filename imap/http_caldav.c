@@ -5689,7 +5689,7 @@ static int imip_send(icalcomponent *ical)
     icalproperty *prop;
     icalproperty_method meth;
     icalcomponent_kind kind;
-    const char *argv[7], *msg_type, *summary, *location, *descrip, *status;
+    const char *argv[7], *uid, *msg_type, *summary, *location, *descrip, *status;
     struct address_t *recipients = NULL, *originator = NULL, *recip;
     struct icaltimetype start, end;
     icaltimezone *utc = icaltimezone_get_utc_timezone();
@@ -5712,6 +5712,7 @@ static int imip_send(icalcomponent *ical)
     meth = icalcomponent_get_method(ical);
     comp = icalcomponent_get_first_real_component(ical);
     kind = icalcomponent_isa(comp);
+    uid = icalcomponent_get_uid(comp);
 
     /* Determine Originator and Recipient(s) based on method and component */
     if (meth == ICAL_METHOD_REPLY) {
@@ -5826,6 +5827,8 @@ static int imip_send(icalcomponent *ical)
 
     fprintf(sm, "Content-Type: multipart/alternative;"
 	    "\r\n\tboundary=\"%s\"\r\n", boundary);
+
+    fprintf(sm, "iMIP-Content-ID: <%s@%s>\r\n", uid, config_servername);
 
     fputs("Auto-Submitted: auto-generated\r\n", sm);
     fputs("MIME-Version: 1.0\r\n", sm);
@@ -5953,6 +5956,9 @@ static int imip_send(icalcomponent *ical)
 
     fputs("Content-Transfer-Encoding: base64\r\n", sm);
     fputs("Content-Disposition: attachment\r\n", sm);
+
+    fprintf(sm, "iMIP-Content-ID: <%s@%s>\r\n", uid, config_servername);
+
     fputs("\r\n", sm);
 
     ical_str = icalcomponent_as_ical_string(ical);
