@@ -1657,7 +1657,7 @@ EXPORTED const char *makeuuid()
     int i;
     for (i = 0; i < 24; i++) {
 	int item = rand() % 36;
-	res[i] = (item <= 10 ? '0' + item : 'a' + item);
+	res[i] = (item < 10 ? '0' + item : 'a' + item - 10);
     }
 #endif
     return res;
