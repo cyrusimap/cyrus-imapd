@@ -5868,7 +5868,7 @@ static int imip_send(icalcomponent *ical)
     fputs("Content-Transfer-Encoding: base64\r\n", sm);
     fputs("Content-Disposition: attachment\r\n", sm);
 
-    fprintf(sm, "iMIP-Content-ID: <%s@%s>\r\n", uid, config_servername);
+    fprintf(sm, "Content-ID: <%s@%s>\r\n", uid, config_servername);
 
     fputs("\r\n", sm);
 
