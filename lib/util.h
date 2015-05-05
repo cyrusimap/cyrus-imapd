@@ -294,6 +294,7 @@ void buf_init_mmap(struct buf *buf, int onceonly, int fd,
 		   const char *fname, size_t size, const char *mboxname);
 void buf_free(struct buf *buf);
 void buf_move(struct buf *dst, struct buf *src);
+const char *buf_lcase(struct buf *buf);
 
 /*
  * Given a list of strings, terminated by (char *)NULL,

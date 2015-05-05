@@ -1424,6 +1424,13 @@ EXPORTED char *strconcat(const char *s1, ...)
     return buf;
 }
 
+EXPORTED const char *buf_lcase(struct buf *buf)
+{
+    buf_cstring(buf);
+    lcase(buf->s);
+    return buf->s;
+}
+
 EXPORTED int bin_to_hex(const void *bin, size_t binlen, char *hex, int flags)
 {
     const unsigned char *v = bin;
