@@ -2247,6 +2247,14 @@ static int compact_dbs(const char *userid, const char *tempdir,
     tochange = activefile_filter(active, srctiers, mbentry->partition);
     if (!tochange || !tochange->count) goto out;
 
+    if (tochange->count == 1 && srctiers->count == 1 &&
+        (flags & SEARCH_COMPACT_COPYONE) && !strcmp(desttier, strarray_nth(srctiers, 0))) {
+	if (verbose) {
+	    printf("Skipping %s for %s, only one\n", strarray_nth(tochange, 0), mboxname);
+	}
+	goto out;
+    }
+
     /* find out which items actually exist from the set to be compressed - first pass */
     dirs = activefile_resolve(mboxname, mbentry->partition, tochange, /*dostat*/1);
     if (!dirs || !dirs->count) goto out;
