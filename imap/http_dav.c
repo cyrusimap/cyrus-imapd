@@ -4077,8 +4077,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
 	indoc = root->doc;
 
 	buf_setcstr(&txn->buf, http_methods[txn->meth].name);
-	lcase(txn->buf.s);
-	r = xmlStrcmp(root->name, BAD_CAST buf_cstring(&txn->buf));
+	r = xmlStrcmp(root->name, BAD_CAST buf_lcase(&txn->buf));
 	if (r) {
 	    txn->error.desc = "Incorrect root element in XML request\r\n";
 	    ret = HTTP_BAD_MEDIATYPE;
