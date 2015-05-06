@@ -48,6 +48,7 @@
 #include <libical/ical.h>
 #include <libxml/tree.h>
 
+#include "acl.h"
 #include "annotate.h"
 #include "caldav_db.h"
 #include "httpd.h"

@@ -1036,6 +1036,7 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/dav_util.c \
 	imap/dav_util.h \
 	imap/http_caldav.c \
+	imap/http_caldav_sched.c \
 	imap/http_caldav_sched.h \
 	imap/http_carddav.c \
 	imap/http_client.c \
@@ -1170,6 +1171,7 @@ imap_httpd_SOURCES = \
 	imap/dav_db.c \
 	imap/dav_util.c \
 	imap/http_caldav.c \
+	imap/http_caldav_sched.c \
 	imap/http_carddav.c \
 	imap/http_client.c \
 	imap/http_dav.c \

@@ -62,6 +62,7 @@
 #include "http_dav.h"
 #include "http_err.h"
 #include "http_proxy.h"
+#include "ical_support.h"
 #include "jcal.h"
 #include "map.h"
 #include "strhash.h"
@@ -1110,22 +1111,6 @@ static const struct observance *truncate_vtimezone(icalcomponent *vtz,
 
     return &tombstone;
 }
-
-#ifndef HAVE_TZDIST_PROPS
-static icalproperty *icalproperty_new_tzidaliasof(const char *v)
-{
-    icalproperty *prop = icalproperty_new_x(v);
-    icalproperty_set_x_name(prop, "TZID-ALIAS-OF");
-    return prop;
-}
-
-static icalproperty *icalproperty_new_tzuntil(struct icaltimetype v)
-{
-    icalproperty *prop = icalproperty_new_x(icaltime_as_ical_string(v));
-    icalproperty_set_x_name(prop, "TZUNTIL");
-    return prop;
-}
-#endif /* HAVE_TZDIST_PROPS */
 
 /* Perform a get action */
 static int action_get(struct transaction_t *txn)

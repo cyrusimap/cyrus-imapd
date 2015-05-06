@@ -46,14 +46,160 @@
 #include <string.h>
 
 #include "ical_support.h"
+#include "util.h"
 
 #ifdef HAVE_ICAL
+
+icalcomponent *record_to_ical(struct mailbox *mailbox,
+			      struct index_record *record)
+{
+    struct buf buf = BUF_INITIALIZER;
+    icalcomponent *ical = NULL;
+
+    /* Load message containing the resource and parse iCal data */
+    if (!mailbox_map_record(mailbox, record, &buf)) {
+	ical = icalparser_parse_string(buf_cstring(&buf) + record->header_size);
+	buf_free(&buf);
+    }
+
+    return ical;
+}
+
+const char *get_icalcomponent_errstr(icalcomponent *ical)
+{
+    icalcomponent *comp;
+
+    for (comp = icalcomponent_get_first_component(ical, ICAL_ANY_COMPONENT);
+	 comp;
+	 comp = icalcomponent_get_next_component(ical, ICAL_ANY_COMPONENT)) {
+	icalproperty *prop;
+
+	for (prop = icalcomponent_get_first_property(comp, ICAL_ANY_PROPERTY);
+	     prop;
+	     prop = icalcomponent_get_next_property(comp, ICAL_ANY_PROPERTY)) {
+
+	    if (icalproperty_isa(prop) == ICAL_XLICERROR_PROPERTY) {
+		const char *errstr = icalproperty_get_xlicerror(prop);
+		char propname[256];
+
+		if (!errstr) return "Unknown iCal parsing error";
+
+		/* Check if this is an empty property error */
+		if (sscanf(errstr,
+			   "No value for %s property", propname) == 1) {
+		    /* Empty LOCATION is OK */
+		    if (!strcasecmp(propname, "LOCATION")) continue;
+		    if (!strcasecmp(propname, "COMMENT")) continue;
+		    if (!strcasecmp(propname, "DESCRIPTION")) continue;
+		}
+		else {
+		    /* Ignore unknown property errors */
+		    if (!strncmp(errstr, "Parse error in property name", 28))
+			continue;
+		}
+
+		return errstr;
+	    }
+	}
+    }
+
+    return NULL;
+}
+
+
+extern icalcomponent* icalproperty_get_parent(const icalproperty*);
+
+void icalcomponent_remove_invitee(icalcomponent *comp, icalproperty *prop)
+{
+    if (icalcomponent_isa(comp) == ICAL_VPOLL_COMPONENT) {
+	icalcomponent *vvoter = icalproperty_get_parent(prop);
+
+	icalcomponent_remove_component(comp, vvoter);
+	icalcomponent_free(vvoter);
+    }
+    else {
+	icalcomponent_remove_property(comp, prop);
+	icalproperty_free(prop);
+    }
+}
+
+
+icalproperty *icalcomponent_get_first_invitee(icalcomponent *comp)
+{
+    icalproperty *prop;
+
+    if (icalcomponent_isa(comp) == ICAL_VPOLL_COMPONENT) {
+	icalcomponent *vvoter =
+	    icalcomponent_get_first_component(comp, ICAL_VVOTER_COMPONENT);
+
+	prop = icalcomponent_get_first_property(vvoter, ICAL_VOTER_PROPERTY);
+    }
+    else {
+	prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+    }
+
+    return prop;
+}
+
+icalproperty *icalcomponent_get_next_invitee(icalcomponent *comp)
+{
+    icalproperty *prop;
+
+    if (icalcomponent_isa(comp) == ICAL_VPOLL_COMPONENT) {
+	icalcomponent *vvoter =
+	    icalcomponent_get_next_component(comp, ICAL_VVOTER_COMPONENT);
+
+	prop = icalcomponent_get_first_property(vvoter, ICAL_VOTER_PROPERTY);
+    }
+    else {
+	prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY);
+    }
+
+    return prop;
+}
+
+const char *icalproperty_get_invitee(icalproperty *prop)
+{
+    const char *recip;
+
+    if (icalproperty_isa(prop) == ICAL_VOTER_PROPERTY) {
+	recip = icalproperty_get_voter(prop);
+    }
+    else {
+	recip = icalproperty_get_attendee(prop);
+    }
+
+    return recip;
+}
+
+
+#ifndef HAVE_TZDIST_PROPS
+
+/* Functions to replace those not available in libical < v2.0 */
+
+icalproperty *icalproperty_new_tzidaliasof(const char *v)
+{
+    icalproperty *prop = icalproperty_new_x(v);
+    icalproperty_set_x_name(prop, "TZID-ALIAS-OF");
+    return prop;
+}
+
+icalproperty *icalproperty_new_tzuntil(struct icaltimetype v)
+{
+    icalproperty *prop = icalproperty_new_x(icaltime_as_ical_string(v));
+    icalproperty_set_x_name(prop, "TZUNTIL");
+    return prop;
+}
+
+#endif /* HAVE_TZDIST_PROPS */
+
 
 #ifdef HAVE_IANA_PARAMS
 
 #ifndef HAVE_MANAGED_ATTACH_PARAMS
 
-icalparameter* icalproperty_get_iana_parameter_by_name(icalproperty *prop, const char *name)
+icalparameter* icalproperty_get_iana_parameter_by_name(icalproperty *prop,
+						       const char *name)
 {
     icalparameter *param;
 
@@ -123,7 +269,8 @@ void icalparameter_set_size(icalparameter *param, const char *sz)
 
 /* Functions to replace those not available in libical < v1.0 */
 
-icalparameter_scheduleagent icalparameter_get_scheduleagent(icalparameter *param)
+icalparameter_scheduleagent
+icalparameter_get_scheduleagent(icalparameter *param)
 {
     const char *agent = NULL;
 

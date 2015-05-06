@@ -50,6 +50,29 @@
 
 #include <libical/ical.h>
 
+#include "mailbox.h"
+
+extern icalcomponent *record_to_ical(struct mailbox *mailbox,
+				     struct index_record *record);
+
+extern const char *get_icalcomponent_errstr(icalcomponent *ical);
+
+extern void icalcomponent_remove_invitee(icalcomponent *comp,
+					 icalproperty *prop);
+extern icalproperty *icalcomponent_get_first_invitee(icalcomponent *comp);
+extern icalproperty *icalcomponent_get_next_invitee(icalcomponent *comp);
+extern const char *icalproperty_get_invitee(icalproperty *prop);
+
+#ifndef HAVE_TZDIST_PROPS
+
+/* Functions to replace those not available in libical < v2.0 */
+
+extern icalproperty *icalproperty_new_tzidaliasof(const char *v);
+extern icalproperty *icalproperty_new_tzuntil(struct icaltimetype v);
+
+#endif /* HAVE_TZDIST_PROPS */
+
+
 #ifdef HAVE_MANAGED_ATTACH_PARAMS
 
 /* Wrappers to fetch managed attachment parameters by kind */
@@ -67,7 +90,8 @@
 
 /* Functions to replace those not available in libical < v2.0 */
 
-extern icalparameter* icalproperty_get_iana_parameter_by_name(icalproperty *prop, const char *name);
+extern icalparameter* icalproperty_get_iana_parameter_by_name(icalproperty *prop,
+							      const char *name);
 
 extern icalparameter *icalparameter_new_filename(const char *fname);
 

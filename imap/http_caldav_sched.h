@@ -46,6 +46,8 @@
 
 //#define IOPTEST
 
+#include <config.h>
+
 #include <libical/ical.h>
 
 #ifdef WITH_DKIM
@@ -60,6 +62,8 @@
 #include "http_dav.h"
 #include "ical_support.h"
 
+
+#define NEW_STAG (1<<8)		/* Make sure we skip over PREFER bits */
 
 #define REQSTAT_PENDING		"1.0;Pending"
 #define REQSTAT_SENT		"1.1;Sent"
@@ -100,18 +104,78 @@ struct sched_param {
     struct proplist *props; /* List of attendee iCal properties */
 };
 
+struct freebusy {
+    struct icalperiodtype per;
+    icalparameter_fbtype type;
+};
+
+struct freebusy_array {
+    struct freebusy *fb;
+    unsigned len;
+    unsigned alloc;
+};
+
+struct vavailability {
+    int priority;
+    struct icalperiodtype per;
+    icalcomponent *ical;
+};
+
+struct vavailability_array {
+    struct vavailability *vav;
+    unsigned len;
+    unsigned alloc;
+};
+
+struct calquery_filter {
+    unsigned comp;
+    unsigned flags;
+    struct icaltimetype start;
+    struct icaltimetype end;
+    icaltimezone *tz;
+    struct freebusy_array freebusy;	/* array of found freebusy periods */
+    struct vavailability_array vavail;	/* array of found vavail components */
+};
+
+/* Bitmask of calquery flags */
+enum {
+    BUSYTIME_QUERY =		(1<<0),
+    CHECK_CAL_TRANSP =		(1<<1),
+    CHECK_USER_AVAIL =		(1<<2)
+};
+
+extern unsigned config_allowsched;
+extern const char *ical_prodid;
+extern icaltimezone *utc_zone;
+extern struct strlist *cua_domains;
 extern icalarray *rscale_calendars;
-extern const char *get_icalcomponent_errstr(icalcomponent *ical);
+
+extern int apply_calfilter(struct propfind_ctx *fctx, void *data);
+extern icalcomponent *busytime_query_local(struct transaction_t *txn,
+					   struct propfind_ctx *fctx,
+					   char mailboxname[],
+					   icalproperty_method method,
+					   const char *uid,
+					   const char *organizer,
+					   const char *attendee);
+
+extern int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
+				 struct mailbox *mailbox, const char *resource,
+				 struct caldav_db *caldavdb, unsigned flags);
+
 extern int isched_send(struct sched_param *sparam, const char *recipient,
 		       icalcomponent *ical, xmlNodePtr *xml);
 
 extern int sched_busytime_query(struct transaction_t *txn,
 				struct mime_type_t *mime, icalcomponent *comp);
+extern void sched_request(const char *organizer, struct sched_param *sparam,
+			  icalcomponent *oldical, icalcomponent *newical,
+			  const char *att_update);
+extern void sched_reply(const char *userid,
+			icalcomponent *oldical, icalcomponent *newical);
 extern void sched_deliver(const char *recipient, void *data, void *rock);
 extern xmlNodePtr xml_add_schedresponse(xmlNodePtr root, xmlNsPtr dav_ns,
 					xmlChar *recipient, xmlChar *status);
 extern int caladdress_lookup(const char *addr, struct sched_param *param);
-extern icalproperty *icalcomponent_get_first_invitee(icalcomponent *comp);
-extern const char *icalproperty_get_invitee(icalproperty *prop);
 
 #endif /* HTTP_CALDAV_SCHED_H */
