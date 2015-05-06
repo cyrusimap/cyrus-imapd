@@ -101,9 +101,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox);
 static void display_message(struct transaction_t *txn,
 			    const char *mboxname, const struct index_record *record,
 			    struct body *body, const struct buf *msg_buf);
-static void fetch_part(struct transaction_t *txn, struct body *body,
-		       const char *findsection, const char *cursection,
-		       struct buf *msg_buf);
+static struct body *body_fetch_section(struct body *body, const char *section);
 
 
 /* Namespace for RSS feeds of mailboxes */
@@ -266,7 +264,33 @@ static int meth_get(struct transaction_t *txn,
 	    }
 	    else {
 		/* Fetch, decode, and return the specified MIME message part */
-		fetch_part(txn, body, section, "1", &msg_buf);
+		struct body *part;
+		const char *outbuf;
+		size_t outsize;
+
+		part = body_fetch_section(body, section);
+		if (!part) {
+		    ret = HTTP_NOT_FOUND;
+		    goto done;
+		}
+
+		outbuf = charset_decode_mimebody(buf_base(&msg_buf) +
+						 part->content_offset,
+						 part->content_size,
+						 part->charset_cte & 0xff,
+						 &part->decoded_body, &outsize);
+
+		if (!outbuf) {
+		    txn->error.desc = "Unknown MIME encoding";
+		    ret = HTTP_SERVER_ERROR;
+		    goto done;
+		}
+
+		assert(!buf_len(&txn->buf));
+		buf_printf(&txn->buf, "%s/%s", part->type, part->subtype);
+		txn->resp_body.type = buf_cstring(&txn->buf);
+
+		write_body(precond, txn, outbuf, outsize);
 	    }
 
 	  done:
@@ -1024,34 +1048,30 @@ static void display_part(struct transaction_t *txn,
     struct buf *buf = &txn->resp_body.payload;
     char nextsection[MAX_SECTION_LEN+1];
 
-    if (!strcmp(body->type, "MULTIPART")) {
-	int i;
+    if (body->numparts) {
+	/* multipart */
+	int i = 0;
 
 	if (!strcmp(body->subtype, "ALTERNATIVE") &&
 	    !strcmp(body->subpart[0].type, "TEXT")) {
-	    /* Display a multpart/ or text/html subpart,
-	       otherwise display first subpart */
+	    /* Look for a multipart/ or text/html subpart to display first,
+	       otherwise start with first subpart */
 	    for (i = body->numparts; --i;) {
 		if (!strcmp(body->subpart[i].type, "MULTIPART") ||
 		    !strcmp(body->subpart[i].subtype, "HTML")) break;
 	    }
+	}
+
+	/* Display all/remaining subparts */
+	for (; i < body->numparts; i++) {
 	    snprintf(nextsection, sizeof(nextsection), "%s%s%d",
 		     cursection, *cursection ? "." : "", i+1);
 	    display_part(txn, &body->subpart[i],
 			 record, nextsection, msg_buf, level);
 	}
-	else {
-	    /* Display all subparts */
-	    for (i = 0; i < body->numparts; i++) {
-		snprintf(nextsection, sizeof(nextsection), "%s%s%d",
-			 cursection, *cursection ? "." : "", i+1);
-		display_part(txn, &body->subpart[i],
-			     record, nextsection, msg_buf, level);
-	    }
-	}
     }
-    else if (!strcmp(body->type, "MESSAGE") &&
-	     !strcmp(body->subtype, "RFC822")) {
+    else if (body->subpart) {
+	/* message/rfc822 */
 	struct body *subpart = body->subpart;
 	struct address *addr;
 	char *sep;
@@ -1144,15 +1164,16 @@ static void display_part(struct transaction_t *txn,
 //	buf_printf_markup(buf, level, "<br>");
 
 	/* Display subpart */
-	snprintf(nextsection, sizeof(nextsection), "%s%s%d",
-		 cursection, *cursection ? "." : "", 1);
+	snprintf(nextsection, sizeof(nextsection), "%s%s", cursection,
+		 subpart->numparts ? "" : (*cursection ? ".1" : "1"));
 	display_part(txn, subpart, record, nextsection, msg_buf, level);
     }
     else {
 	/* Leaf part - display something */
 
-	if (!strcmp(body->type, "TEXT")) {
-	    /* Display text part */
+	if (!strcmp(body->type, "TEXT") &&
+	    (!body->disposition || !strcmp(body->disposition, "INLINE"))) {
+	    /* Display non-attachment text part */
 	    int ishtml = !strcmp(body->subtype, "HTML");
 	    int charset = body->charset_cte >> 16;
 	    int encoding = body->charset_cte & 0xff;
@@ -1283,50 +1304,33 @@ static void display_message(struct transaction_t *txn,
 
 
 /* Fetch, decode, and return the specified MIME message part */
-static void fetch_part(struct transaction_t *txn, struct body *body,
-		       const char *findsection, const char *cursection,
-		       struct buf *msg_buf)
+static struct body *body_fetch_section(struct body *body, const char *section)
 {
-    char nextsection[MAX_SECTION_LEN+1];
+    const char *p = section;
 
-    if (!strcmp(body->type, "MULTIPART")) {
-	int i;
+    while (*p) {
+	int32_t skip = 0;
+	int r = parseint32(p, &p, &skip);
 
-	/* Recurse through all subparts */
-	for (i = 0; i < body->numparts; i++) {
-	    snprintf(nextsection, sizeof(nextsection), "%s%s%d",
-		     cursection, *cursection ? "." : "", i+1);
-	    fetch_part(txn, &body->subpart[i],
-		       findsection, nextsection, msg_buf);
-	}
-    }
-    else if (!strcmp(body->type, "MESSAGE") &&
-	     !strcmp(body->subtype, "RFC822")) {
-	/* Recurse into supbart */
-	snprintf(nextsection, sizeof(nextsection), "%s%s%d",
-		 cursection, *cursection ? "." : "", 1);
-	fetch_part(txn, body->subpart, findsection, nextsection, msg_buf);
-    }
-    else if (!strcmp(findsection, cursection)) {
-	int encoding = body->charset_cte & 0xff;
-	const char *outbuf;
-	size_t outsize;
+	if (r || !skip) return NULL;
 
-	outbuf = charset_decode_mimebody(buf_base(msg_buf) + body->content_offset,
-					 body->content_size, encoding,
-					 &body->decoded_body, &outsize);
-
-	if (!outbuf) {
-	    txn->error.desc = "Unknown MIME encoding\r\n";
-	    error_response(HTTP_SERVER_ERROR, txn);
-	    return;
-
+	if (body->subpart && !body->numparts) {
+	    /* step inside message/rfc822 */
+	    body = body->subpart;
 	}
 
-	assert(!buf_len(&txn->buf));
-	buf_printf(&txn->buf, "%s/%s", body->type, body->subtype);
-	txn->resp_body.type = buf_cstring(&txn->buf);
+	if ((skip > 1) && (skip > body->numparts)) return NULL;
 
-	write_body(HTTP_OK, txn, outbuf, outsize);
+	if (body->numparts) {
+	    /* step inside multipart */
+	    body = &body->subpart[--skip];
+	}
+
+	if (*p == '.') {
+	    if (!body->subpart) return NULL;
+	    p++;
+	}
     }
+
+    return (*p ? NULL : body);
 }
