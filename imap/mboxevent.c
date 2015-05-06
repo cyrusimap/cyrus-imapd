@@ -742,6 +742,7 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
     imapurl_toURL(url, &imapurl);
 
     r = mboxlist_lookup(mailboxname, &mbentry, NULL);
+    if (r) return;
 
     FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(mbentry->uniqueid));
 
