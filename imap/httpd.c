@@ -1376,7 +1376,7 @@ static void cmdloop(void)
 
 	    assert(!buf_len(&txn.buf));  /* Unescape buffer */
 
-	    tok_init(&tok, (char *) query, ";&",
+	    tok_init(&tok, (char *) query, "&",
 		     TOK_TRIMLEFT|TOK_TRIMRIGHT|TOK_EMPTY);
 	    while ((param = tok_next(&tok))) {
 		struct strlist *vals;
