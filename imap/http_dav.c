@@ -2414,51 +2414,48 @@ static int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
     for (prop = proplist; !*fctx->ret && prop; prop = prop->next) {
 	if (prop->type == XML_ELEMENT_NODE) {
 	    struct propfind_entry_list *nentry;
-	    xmlChar *name;
-	    xmlNsPtr ns = prop->ns;
+	    xmlChar *name, *namespace = NULL;
+	    const char *ns_href;
+	    xmlNsPtr ns;
+	    unsigned i;
 
 	    if (fctx->mode == PROPFIND_EXPAND) {
 		/* Get name/namespace from <property> */
-		xmlChar *namespace;
-
 		name = xmlGetProp(prop, BAD_CAST "name");
 		namespace = xmlGetProp(prop, BAD_CAST "namespace");
-
-		if (namespace) {
-		    const char *ns_href = (const char *) namespace;
-		    unsigned i;
-
-		    /* Look for this namespace in our known array */
-		    for (i = 0; i < NUM_NAMESPACE; i++) {
-			if (!strcmp(ns_href, known_namespaces[i].href)) {
-			    ensure_ns(fctx->ns, i, fctx->root,
-				      known_namespaces[i].href,
-				      known_namespaces[i].prefix);
-			    ns = fctx->ns[i];
-			    break;
-			}
-		    }
-
-		    if (i >= NUM_NAMESPACE) {
-			/* Look for this namespace in hash table */
-			ns = hash_lookup(ns_href, fctx->ns_table);
-			if (!ns) {
-			    char prefix[6];
-			    snprintf(prefix, sizeof(prefix),
-				     "X%X", strhash(ns_href) & 0xffff);
-			    ns = xmlNewNs(fctx->root,
-					  BAD_CAST ns_href, BAD_CAST prefix);
-			    hash_insert(ns_href, ns, fctx->ns_table);
-			}
-		    }
-
-		    xmlFree(namespace);
-		}
 	    }
 	    else {
 		/* node IS the property */
 		name = xmlStrdup(prop->name);
 	    }
+
+	    ns_href = (const char *) (namespace ? namespace : prop->ns->href);
+	    
+	    /* Look for this namespace in our known array */
+	    for (i = 0; i < NUM_NAMESPACE; i++) {
+		if (!strcmp(ns_href, known_namespaces[i].href)) {
+		    ensure_ns(fctx->ns, i, fctx->root,
+			      known_namespaces[i].href,
+			      known_namespaces[i].prefix);
+		    ns = fctx->ns[i];
+		    break;
+		}
+	    }
+
+	    if (i >= NUM_NAMESPACE) {
+		/* Look for this namespace in hash table */
+		ns = hash_lookup(ns_href, fctx->ns_table);
+		if (!ns) {
+		    char prefix[6];
+		    snprintf(prefix, sizeof(prefix),
+			     "X%X", strhash(ns_href) & 0xffff);
+		    ns = xmlNewNs(fctx->root,
+				  BAD_CAST ns_href, BAD_CAST prefix);
+		    hash_insert(ns_href, ns, fctx->ns_table);
+		}
+	    }
+
+	    if (namespace) xmlFree(namespace);
 
 	    /* Look for a match against our known properties */
 	    for (entry = fctx->lprops;
