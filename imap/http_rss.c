@@ -196,12 +196,12 @@ static int meth_get(struct transaction_t *txn,
 	}
     }
 
-    /* Check query params, if any */    
-    param = hash_lookup("uid", &txn->req_qparams);
-    if (param) {
-	uid = strtoul(param->s, NULL, 10);
+    /* Check for UID, if any */    
+    if (txn->req_tgt.resource) {
+	uid = strtoul(txn->req_tgt.resource, NULL, 10);
 	if (!uid) uid = -1;
 
+	/* Check for section query param, if any */
 	param = hash_lookup("section", &txn->req_qparams);
 	if (param) section = param->s;
     }
@@ -324,6 +324,17 @@ static int rss_parse_path(const char *path, struct request_target_t *tgt,
     end = start + strlen(start);
 
     if ((end > start) && (end[-1] == '/')) end--;
+
+    /* Check for UID */
+    if (end > start && end[-1] == '.') {
+	const char *p;
+
+	for (p = end-2; p > start && isdigit((int) *p); p--);
+	if (*p == '/') {
+	    end = p;
+	    tgt->resource = (char *) ++p;
+	}
+    }
 
     len = end - start;
     if (len > MAX_MAILBOX_BUFFER) return IMAP_MAILBOX_BADNAME;
@@ -951,7 +962,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
 	/* <link> - optional */
 	buf_truncate(url, url_len);
-	buf_printf(url, "?uid=%u", record.uid);
+	buf_printf(url, "/%u.", record.uid);
 	buf_printf_markup(buf, level, "<link rel=\"alternate\""
 			  " type=\"text/html\" href=\"%s\"/>",
 			  buf_cstring(url));
@@ -1210,8 +1221,8 @@ static void display_part(struct transaction_t *txn,
 
 	    /* Create link */
 	    buf_printf_markup(buf, level++,
-			      "<a href=\"%s?uid=%u;section=%s\" type=\"%s/%s\">",
-			      txn->req_tgt.path, record->uid, cursection,
+			      "<a href=\"%s?section=%s\" type=\"%s/%s\">",
+			      txn->req_tgt.path, cursection,
 			      body->type, body->subtype);
 
 	    if (config_httpprettytelemetry)
@@ -1219,8 +1230,8 @@ static void display_part(struct transaction_t *txn,
 
 	    /* Add image */
 	    if (is_image) {
-		buf_printf(buf, "<img src=\"%s?uid=%u;section=%s\" alt=\"",
-			   txn->req_tgt.path, record->uid, cursection);
+		buf_printf(buf, "<img src=\"%s?section=%s\" alt=\"",
+			   txn->req_tgt.path, cursection);
 	    }
 
 	    /* Create text for link or alternative text for image */
@@ -1275,9 +1286,9 @@ static void display_message(struct transaction_t *txn,
     /* Create link to message source */
     buf_printf_markup(buf, level++, "<div align=center>");
     buf_printf_markup(buf, level,
-		      "<a href=\"%s?uid=%u;section=0\" type=\"plain/text\">"
+		      "<a href=\"%s?section=0\" type=\"plain/text\">"
 		      "[View message source]</a>",
-		      txn->req_tgt.path, record->uid);
+		      txn->req_tgt.path);
     buf_printf_markup(buf, --level, "</div>");
     buf_printf_markup(buf, level, "<hr>");
 
