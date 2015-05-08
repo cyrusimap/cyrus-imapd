@@ -969,10 +969,8 @@ static int ptsmodule_get_dn(
 			ptsm->base = vals[0];
 			rc = PTSM_OK;
 		    } else if ((vals = ldap_get_values(ptsm->ld, entry, ptsm->domain_name_attribute)) != NULL) {
-			char *new_domain = xstrdup(vals[0]);
-			syslog(LOG_DEBUG, "Domain %s is an alias domain for parent domain %s", domain, new_domain);
-			rc = ptsmodule_standard_root_dn(new_domain, &ptsm->base);
-			free(new_domain);
+			syslog(LOG_DEBUG, "Domain %s is an alias domain for parent domain %s", domain, vals[0]);
+			rc = ptsmodule_standard_root_dn(vals[0], &ptsm->base);
 		    } else {
 			rc = ptsmodule_standard_root_dn(domain, &ptsm->base);
 		    }
