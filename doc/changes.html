@@ -8,6 +8,14 @@
 </head>
 <body>
 
+<h1>Changes to the Cyrus IMAP Server since 2.5.1</h1>
+<ul>
+<li>Fixed T179: ptloader should no longer crash in ptsmodule_standard_root_dn</li>
+<li>Improved consistency of event notification parameters</li>
+<li>Fixed bug: no longer run out of memory in mupdate with twoskip (mmap leak)</li>
+<li>Fixed bug: no longer crash on ctl_mboxlist -d for remote mailboxes</li>
+</ul>
+
 <h1>Changes to the Cyrus IMAP Server since 2.5.0</h1>
 <ul>
 <li>Fixed: allow SYNC_CRC to be optional, making upgrades easier in future</li>
