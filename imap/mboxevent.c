@@ -649,10 +649,14 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
     imapurl_toURL(url, &imapurl);
 
     r = mboxlist_lookup(mailboxname, &mbentry, NULL);
-
-    FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(mbentry->uniqueid));
-
-    mboxlist_entry_free(&mbentry);
+    if (r) {
+	/* couldn't look up mailboxname -- fall back to old url behaviour */
+	FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(url));
+    }
+    else {
+	FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(mbentry->uniqueid));
+	mboxlist_entry_free(&mbentry);
+    }
 
     if (serveraddr && mboxevent_expected_param(event->type, EVENT_SERVER_ADDRESS)) {
 	FILL_STRING_PARAM(event, EVENT_SERVER_ADDRESS, xstrdup(serveraddr));
