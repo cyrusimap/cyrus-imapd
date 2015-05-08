@@ -45,6 +45,7 @@
 
 #include <string.h>
 
+#include "caldav_db.h"
 #include "ical_support.h"
 #include "util.h"
 
