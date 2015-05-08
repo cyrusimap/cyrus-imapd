@@ -631,6 +631,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     jCal: The JSON Format for iCalendar
 
+:rfc:`7529`
+
+    Non-Gregorian Recurrence Rules in the Internet Calendaring and Scheduling Core Object Specification (iCalendar) (obsoletes draft-ietf-calext-rscale)
+
 IETF RFC Drafts
 ===============
 
@@ -656,10 +660,6 @@ draft-martin-sieve-notify
 
     Sieve -- An extension for providing instant notifications
 
-draft-ietf-sieve-managesieve
-
-    A Protocol for Remotely Managing Sieve Scripts
-
 draft-ietf-tzdist-service
 
     Time Zone Data Distribution Service
@@ -667,10 +667,6 @@ draft-ietf-tzdist-service
 draft-ietf-tzdist-caldav-timezone-ref
 
     CalDAV: Time Zones by Reference
-
-draft-ietf-calext-rscale
-
-    Non-Gregorian Recurrence Rules in iCalendar
 
 draft-daboo-calendar-availability
 
