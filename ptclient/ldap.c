@@ -631,40 +631,31 @@ static int ptsmodule_escape(
 
 static int ptsmodule_standard_root_dn(char *domain, const char **result)
 {
-    /* number of dots */
-    int dots;
     /* the expected length of the result */
-    int root_dn_len;
 
     char *buf;
     char *part;
     char *ptr;
+    char *dc=",dc=";
+    char *dn;
+    dn =  xzmalloc(1024);
+    buf = xzmalloc(1024);
+    buf[0] = '\0'; // (?)
+    dn[0] = '\0'; // (?)
 
     syslog(LOG_DEBUG, "ptsmodule_standard_root_dn called for domain %s", domain);
 
-    for (dots = 0, buf=(char *)domain; *buf; buf++) {
-	if (*buf == '.') {
-	    dots++;
-	}
-    }
+    strncpy(dn, domain, strlen(domain));
 
-    /* Each dot is to be replaced with ',dc=' (length 4), so add
-     * length 3 for each of them.
-     */
-    root_dn_len = strlen(domain) + (dots * 3);
-
-    buf = xmalloc(root_dn_len);
-    buf[0] = '\0'; // (?)
-    /* AM: Above: Terminate the string by default, so strlen won't buffer-overflow later */
 
     /* AM: No need for another allocation/dup */
-    part = strtok_r(domain, ".", &ptr);
+    part = strtok_r(dn, ".", &ptr);
 
     while (part != NULL) {
 	syslog(LOG_DEBUG, "Root DN now %s", buf);
-	strcat(buf, ",dc=");
+	strncat(buf, dc, strlen(dc));
 	syslog(LOG_DEBUG, "Root DN now %s", buf);
-	strcat(buf, part);
+	strncat(buf, part, strlen(part));
 	syslog(LOG_DEBUG, "Root DN now %s", buf);
 	part = strtok_r(NULL, ".", &ptr);
     }
@@ -678,8 +669,8 @@ static int ptsmodule_standard_root_dn(char *domain, const char **result)
 
     free(buf);
     free(part);
+    free(dn);
 /*    free(ptr);
-    free(root_dn_len);
 */
     syslog(LOG_DEBUG, "Root DN now %s", *result);
 
