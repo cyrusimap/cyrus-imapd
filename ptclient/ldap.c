@@ -45,6 +45,7 @@
 #include "ptloader.h"
 #include "exitcodes.h"
 #include "util.h"
+#include "assert.h"
 
 #ifdef HAVE_LDAP
 
@@ -629,49 +630,44 @@ static int ptsmodule_escape(
     return PTSM_OK;
 }
 
-static int ptsmodule_standard_root_dn(char *domain, const char **result)
+static int ptsmodule_standard_root_dn(const char *domain, const char **result)
 {
-    /* the expected length of the result */
+    const char *dc = ",dc=";
+    char *domain_copy;
+    char *part, *tok_state;
+    struct buf buf = BUF_INITIALIZER;
 
-    char *buf;
-    char *part;
-    char *ptr;
-    char *dc=",dc=";
-    char *dn;
-    dn =  xzmalloc(1024);
-    buf = xzmalloc(1024);
-    buf[0] = '\0'; // (?)
-    dn[0] = '\0'; // (?)
+    assert(domain != NULL && domain[0] != '\0');
 
     syslog(LOG_DEBUG, "ptsmodule_standard_root_dn called for domain %s", domain);
 
-    strncpy(dn, domain, strlen(domain));
-
-
-    /* AM: No need for another allocation/dup */
-    part = strtok_r(dn, ".", &ptr);
+    /* Each dot is to be replaced with ',dc='.
+     * We also need a leading 'dc=' at the start.
+     */
+    domain_copy = xstrdup(domain);
+    part = strtok_r(domain_copy, ".", &tok_state);
 
     while (part != NULL) {
-	syslog(LOG_DEBUG, "Root DN now %s", buf);
-	strncat(buf, dc, strlen(dc));
-	syslog(LOG_DEBUG, "Root DN now %s", buf);
-	strncat(buf, part, strlen(part));
-	syslog(LOG_DEBUG, "Root DN now %s", buf);
-	part = strtok_r(NULL, ".", &ptr);
+	syslog(LOG_DEBUG, "Root DN now %s", buf_cstring(&buf));
+
+	buf_appendcstr(&buf, dc);
+	syslog(LOG_DEBUG, "Root DN now %s", buf_cstring(&buf));
+
+	buf_appendcstr(&buf, part);
+	syslog(LOG_DEBUG, "Root DN now %s", buf_cstring(&buf));
+
+	part = strtok_r(NULL, ".", &tok_state);
     }
 
-    syslog(LOG_DEBUG, "Root DN now %s", buf);
+    free(domain_copy);
 
-    if (buf[0] == ',')
-	memmove(buf, buf+1, strlen(buf));
+    syslog(LOG_DEBUG, "Root DN now %s", buf_cstring(&buf));
 
-    *result = xstrdup(buf);
+    /* we now have a leading ',' that we don't want */
+    buf_remove(&buf, 0, 1);
 
-    free(buf);
-    free(part);
-    free(dn);
-/*    free(ptr);
-*/
+    *result = buf_release(&buf);
+
     syslog(LOG_DEBUG, "Root DN now %s", *result);
 
     return PTSM_OK;
