@@ -653,7 +653,7 @@ static int ptsmodule_standard_root_dn(char *domain, const char **result)
      */
     root_dn_len = strlen(domain) + (dots * 3);
 
-    buf = xmalloc(root_dn_len);
+    buf = xmalloc(root_dn_len + 1);
     buf[0] = '\0'; // (?)
     /* AM: Above: Terminate the string by default, so strlen won't buffer-overflow later */
 
