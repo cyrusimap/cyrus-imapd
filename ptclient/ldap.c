@@ -632,7 +632,7 @@ static int ptsmodule_escape(
 
 static int ptsmodule_standard_root_dn(const char *domain, const char **result)
 {
-    const char *dc = ",dc=";
+    const char *dc_sep = ",dc=";
     char *domain_copy;
     char *part, *tok_state;
     struct buf buf = BUF_INITIALIZER;
@@ -646,25 +646,23 @@ static int ptsmodule_standard_root_dn(const char *domain, const char **result)
      */
     domain_copy = xstrdup(domain);
     part = strtok_r(domain_copy, ".", &tok_state);
+    buf_setcstr(&buf, "dc=");
 
     while (part != NULL) {
-	syslog(LOG_DEBUG, "Root DN now %s", buf_cstring(&buf));
-
-	buf_appendcstr(&buf, dc);
 	syslog(LOG_DEBUG, "Root DN now %s", buf_cstring(&buf));
 
 	buf_appendcstr(&buf, part);
 	syslog(LOG_DEBUG, "Root DN now %s", buf_cstring(&buf));
 
 	part = strtok_r(NULL, ".", &tok_state);
+	
+	if (part != NULL)
+	    buf_appendcstr(&buf, dc_sep);
     }
 
     free(domain_copy);
 
     syslog(LOG_DEBUG, "Root DN now %s", buf_cstring(&buf));
-
-    /* we now have a leading ',' that we don't want */
-    buf_remove(&buf, 0, 1);
 
     *result = buf_release(&buf);
 
