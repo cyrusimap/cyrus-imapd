@@ -650,8 +650,14 @@ static int ptsmodule_standard_root_dn(char *domain, const char **result)
 
     /* Each dot is to be replaced with ',dc=' (length 4), so add
      * length 3 for each of them.
+     * Also adds ",dc=" to start (and strips the comma later), so include
+     * space for that too.
+     * e.g. "foo.example.com"
+     *      => ",dc=foo,dc=example,dc=com"
+     *      => "dc=foo,dc=example,dc=com"
      */
-    root_dn_len = strlen(domain) + (dots * 3);
+    const int new_chars_per_dot = strlen(",dc=") - strlen(".");
+    root_dn_len = strlen(domain) + strlen(",dc=") + (dots * new_chars_per_dot);
 
     buf = xmalloc(root_dn_len + 1);
     buf[0] = '\0'; // (?)
