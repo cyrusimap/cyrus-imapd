@@ -741,19 +741,31 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
 
     imapurl_toURL(url, &imapurl);
 
-    r = mboxlist_lookup(mailboxname, &mbentry, NULL);
-    if (r) return;
+    // All events want a URI parameter, which in the case of Login/Logout
+    // might be useful if it took in to account TLS SNI for example.
+    if (!event->params[EVENT_URI].filled) {
+	FILL_STRING_PARAM(event, EVENT_URI, xstrdup(url));
+    }
 
-    FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(mbentry->uniqueid));
+    // Login and Logout events do not have a mailboxname, so avoid looking that up...
+    if (mailboxname) {
+	r = mboxlist_lookup(mailboxname, &mbentry, NULL);
+    }
 
-    mboxlist_entry_free(&mbentry);
+    // ... and otherwise set the mailbox ID
+    if (!r) {
+	FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(mbentry->uniqueid));
+	mboxlist_entry_free(&mbentry);
+    }
 
     if (serveraddr && mboxevent_expected_param(event->type, EVENT_SERVER_ADDRESS)) {
 	FILL_STRING_PARAM(event, EVENT_SERVER_ADDRESS, xstrdup(serveraddr));
     }
+
     if (clientaddr && mboxevent_expected_param(event->type, EVENT_CLIENT_ADDRESS)) {
 	FILL_STRING_PARAM(event, EVENT_CLIENT_ADDRESS, xstrdup(clientaddr));
     }
+
     if (userid && mboxevent_expected_param(event->type, EVENT_USER)) {
 	/* translate any separators in user */
 	char *user = xstrdup(userid);
