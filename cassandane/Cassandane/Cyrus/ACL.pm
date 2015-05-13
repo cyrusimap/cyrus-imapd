@@ -118,4 +118,19 @@ sub test_xmove
     $self->assert($talk->get_last_error() =~ m/permission denied/i);
 }
 
+sub test_reconstruct
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    my $talk = $self->{store}->get_client();
+
+    my $oldacl = $admintalk->getacl("user.archive.cassandane.sent");
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct');
+
+    my $newacl = $admintalk->getacl("user.archive.cassandane.sent");
+    $self->assert_deep_equals($oldacl, $newacl);
+}
+
 1;
