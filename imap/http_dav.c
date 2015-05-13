@@ -3511,6 +3511,9 @@ int meth_delete(struct transaction_t *txn, void *params)
     }
 
     if (record.uid) {
+	/* Do any special processing */
+	if (dparams->delete) dparams->delete(txn, mailbox, &record, ddata);
+
 	/* Expunge the resource */
 	record.system_flags |= FLAG_EXPUNGED;
 
@@ -3532,9 +3535,6 @@ int meth_delete(struct transaction_t *txn, void *params)
 	mboxevent_set_access(mboxevent, NULL, NULL, httpd_userid,
 			     txn->req_tgt.mbentry->name, 0);
     }
-
-    /* Do any special processing */
-    if (dparams->delete) dparams->delete(txn, mailbox, &record, ddata);
 
   done:
     if (davdb) dparams->davdb.close_db(davdb);
