@@ -3422,9 +3422,12 @@ int meth_delete(struct transaction_t *txn, void *params)
 	    davdb = dparams->davdb.open_db(mailbox);
 
 	    drock.mailbox = mailbox;
-	    ret = dparams->davdb.foreach_resource(davdb, mailbox->name,
+	    r = dparams->davdb.foreach_resource(davdb, mailbox->name,
 						  &delete_cb, &drock);
-	    if (ret) goto done;
+	    if (r) {
+		txn->error.desc = error_message(r);
+		return HTTP_SERVER_ERROR;
+	    }
 	}
 
 	/* we need the mailbox closed before we delete it */
