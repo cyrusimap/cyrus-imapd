@@ -749,6 +749,7 @@ include_HEADERS = \
 	lib/retry.h \
 	lib/rfc822tok.h \
 	lib/signals.h \
+	lib/sqldb.h \
 	lib/strarray.h \
 	lib/strhash.h \
 	lib/stristr.h \
@@ -1337,6 +1338,7 @@ lib_libcyrus_la_SOURCES = \
 	lib/ptrarray.c \
 	lib/rfc822tok.c \
 	lib/signals.c \
+	lib/sqldb.c \
 	lib/stristr.c \
 	lib/times.c \
 	lib/tok.c \
