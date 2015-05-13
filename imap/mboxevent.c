@@ -716,7 +716,7 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
 {
     char url[MAX_MAILBOX_PATH+1];
     struct imapurl imapurl;
-    mbentry_t *mbentry;
+    mbentry_t *mbentry = NULL;
     int r;
 
     if (!event)
