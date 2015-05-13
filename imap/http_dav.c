@@ -3427,6 +3427,9 @@ int meth_delete(struct transaction_t *txn, void *params)
 	    if (ret) goto done;
 	}
 
+	/* we need the mailbox closed before we delete it */
+	mailbox_close(&mailbox);
+
 	mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
 
 	if (mboxlist_delayed_delete_isenabled()) {
