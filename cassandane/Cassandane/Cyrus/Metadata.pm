@@ -276,6 +276,7 @@ sub test_shared
     $self->assert_deep_equals({
 	    '/shared/vendor/cmu/cyrus-imapd/squat' => undef,
 	    '/shared/vendor/cmu/cyrus-imapd/size' => '0',
+	    '/shared/vendor/cmu/cyrus-imapd/annotsize' => '0',
 	    '/shared/vendor/cmu/cyrus-imapd/sieve' => undef,
 	    '/shared/vendor/cmu/cyrus-imapd/sharedseen' => 'false',
 	    '/shared/vendor/cmu/cyrus-imapd/pop3showafter' => undef,
