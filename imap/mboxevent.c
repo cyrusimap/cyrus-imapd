@@ -716,7 +716,6 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
 {
     char url[MAX_MAILBOX_PATH+1];
     struct imapurl imapurl;
-    mbentry_t *mbentry = NULL;
     int r;
 
     if (!event)
@@ -749,12 +748,10 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
 
     // Login and Logout events do not have a mailboxname, so avoid looking that up...
     if (mailboxname) {
+	mbentry_t *mbentry = NULL;
 	r = mboxlist_lookup(mailboxname, &mbentry, NULL);
-    }
-
-    // ... and otherwise set the mailbox ID
-    if (!r) {
-	FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(mbentry->uniqueid));
+	if (!r)
+	    FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(mbentry->uniqueid));
 	mboxlist_entry_free(&mbentry);
     }
 
