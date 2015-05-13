@@ -3424,14 +3424,13 @@ int meth_delete(struct transaction_t *txn, void *params)
 	    drock.mailbox = mailbox;
 	    r = dparams->davdb.foreach_resource(davdb, mailbox->name,
 						  &delete_cb, &drock);
+	    /* we need the mailbox closed before we delete it */
+	    mailbox_close(&mailbox);
 	    if (r) {
 		txn->error.desc = error_message(r);
 		return HTTP_SERVER_ERROR;
 	    }
 	}
-
-	/* we need the mailbox closed before we delete it */
-	mailbox_close(&mailbox);
 
 	mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
 
